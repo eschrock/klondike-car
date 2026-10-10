@@ -28,6 +28,14 @@ describe('validateParams', () => {
       expect.arrayContaining(['riderGoalMassLb', 'noseWidthIn']),
     );
   });
+  it('flags front tires hitting the nose or cabin shoulder at full lock', () => {
+    const issues = validateParams({ ...defaultParams(), noseWidthIn: 18, noseTaperStartIn: 12 });
+    expect(issues.filter((i) => i.message.startsWith('Front tires hit'))).toHaveLength(2);
+  });
+  it('warns when the cart is too wide for the wheel wells', () => {
+    const issues = validateParams({ ...defaultParams(), rearTrackIn: 40 });
+    expect(issues.some((i) => i.message.startsWith('Overall width'))).toBe(true);
+  });
   it('flags a deck too low for the front axle stack', () => {
     const issues = validateParams({ ...defaultParams(), deckHeightIn: 6, frontDeckRaiseIn: 0 });
     expect(issues.some((i) => i.message.startsWith('Front axle stack'))).toBe(true);
@@ -40,8 +48,6 @@ describe('sanitizeParam', () => {
     expect(sanitizeParam('wheelbaseIn', -5)).toBe(PARAM_DEFS.wheelbaseIn.min);
   });
   it('snaps option params to the nearest option', () => {
-    expect(sanitizeParam('wheelDiameterIn', 11)).toBe(10);
-    expect(sanitizeParam('wheelDiameterIn', 12.5)).toBe(13);
     expect(sanitizeParam('deckPlyIn', 0.4)).toBe(0.354);
   });
   it('falls back to the default for non-finite input', () => {

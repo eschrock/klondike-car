@@ -37,7 +37,7 @@ export function buildModel(p: Params, view: ViewState = {}): Part[] {
   // Front wheels pivot about the kingpin at (wheelbase, 0): T(kingpin) · Rz(steer) · T(local offset).
   const kingpin = multiply(translation(p.wheelbaseIn, 0, 0), rotationZ(steer));
 
-  const deckLen = d.overallLengthIn;
+  const deckLen = d.bodyLengthIn;
   const deckX = (-p.rearOverhangIn + p.wheelbaseIn + p.frontOverhangIn) / 2;
   const deckVolIn3 = deckLen * p.bodyWidthIn * p.deckPlyIn;
 

@@ -125,12 +125,12 @@ const defs = {
   },
   rearTrackIn: {
     label: 'Rear track (wheel centre to centre)', group: 'layout', unit: 'in',
-    default: 36.5, min: 26, max: 52, step: 0.25, status: 'explore', primary: true, ref: 'D-6',
-    note: 'Wheels beside the wheel wells: track + tire width + 2 × clearance ≤ well gap (36.5"). Wider only with "straddle" stowage.',
+    default: 35.5, min: 26, max: 52, step: 0.25, status: 'explore', primary: true, ref: 'D-6',
+    note: 'Wheels beside the wheel wells: track + outer width (tire or hub + axle end) + 2 × clearance ≤ well gap → 35.5". Wider only with "straddle" stowage.',
   },
   frontTrackIn: {
     label: 'Front track', group: 'layout', unit: 'in',
-    default: 36.5, min: 26, max: 52, step: 0.25, status: 'explore', primary: true, ref: 'D-6',
+    default: 35.5, min: 26, max: 52, step: 0.25, status: 'explore', primary: true, ref: 'D-6',
   },
   rearOverhangIn: {
     label: 'Body overhang behind rear axle', group: 'layout', unit: 'in',
@@ -182,11 +182,17 @@ const defs = {
   noseWidthIn: {
     label: 'Hull width in the front-wheel swing zone', group: 'body', unit: 'in',
     default: 14, min: 8, max: 30, step: 0.25, status: 'explore', ref: 'D-15',
-    note: 'At 40° lock the inner tire corner reaches y ≈ ±8.3" about 15" behind the front axle.',
+    note: 'Must be ≤ 2 × (inner tire corner y at full lock − steering clearance); see A-4.',
   },
   noseTaperStartIn: {
     label: 'Nose taper starts this far behind front axle', group: 'body', unit: 'in',
-    default: 18, min: 0, max: 30, step: 0.5, status: 'explore', ref: 'D-15',
+    default: 18.5, min: 0, max: 30, step: 0.5, status: 'explore', ref: 'A-4',
+    note: 'Full-width cabin must end behind the rear-most tire corner at full lock + steering clearance (A-4).',
+  },
+  steeringClearanceIn: {
+    label: 'Tire-to-hull clearance at full lock', group: 'body', unit: 'in',
+    default: 0.75, min: 0.25, max: 2, step: 0.125, status: 'assumed', ref: 'A-4',
+    note: 'Covers tire bulge, mud, and turntable/kingpin play.',
   },
   sideHeightIn: {
     label: 'Side height above deck', group: 'body', unit: 'in',
@@ -237,11 +243,8 @@ const defs = {
   // ── Wheels & axles ───────────────────────────────────────────────────────
   wheelDiameterIn: {
     label: 'Wheel (tire OD) diameter', group: 'wheels', unit: 'in',
-    default: 13, min: 10, max: 13, step: 3, status: 'explore', primary: true, ref: 'D-11',
-    options: [
-      { value: 10, label: '10" (4.10/3.50-4)' },
-      { value: 13, label: '13" (4.10/3.50-6)' },
-    ],
+    default: 13, min: 10, max: 13, step: 0.5, status: 'explore', primary: true, ref: 'D-11',
+    note: 'Stock sizes: 10" (4.10/3.50-4), ~12" (2.80/2.50-4 or 3.00-4), 13" (4.10/3.50-6). Mass interpolates between the 10" and 13" values.',
   },
   tireType: {
     label: 'Tire type', group: 'wheels', unit: '',
@@ -359,7 +362,7 @@ const defs = {
   },
   brakeLeverRatio: {
     label: 'Brake linkage mechanical advantage', group: 'brake', unit: ':1',
-    default: 9, min: 2, max: 14, step: 0.5, status: 'explore', ref: 'D-13',
+    default: 10, min: 2, max: 14, step: 0.5, status: 'explore', ref: 'D-13',
   },
   brakeEfficiency: {
     label: 'Brake linkage efficiency', group: 'brake', unit: '×',
@@ -514,9 +517,10 @@ const defs = {
     label: 'Steel modulus of elasticity', group: 'materials', unit: 'psi',
     default: 29000000, min: 28000000, max: 30000000, step: 100000, status: 'locked',
   },
-  finishAllowancePct: {
-    label: 'Epoxy + varnish mass allowance on wood', group: 'materials', unit: '%',
-    default: 5, min: 0, max: 15, step: 0.5, status: 'assumed',
+  finishLbPerFt2: {
+    label: 'Finish mass per ft² of wood surface', group: 'materials', unit: 'lb/ft²',
+    default: 0.09, min: 0, max: 0.2, step: 0.005, status: 'assumed', ref: 'D-20',
+    note: '2 epoxy coats (~0.03 lb/ft² each) + 3 spar-varnish coats (~0.01 each).',
   },
 
   // ── Design factors & check limits ────────────────────────────────────────
@@ -647,9 +651,18 @@ export function sanitizeParams(p: Partial<Params>): Params {
 /** Derived quantities that many modules need; no geometry here. */
 export function derived(p: Params) {
   const okoume = p.plySpecies === PLY_SPECIES.okoumeMarine;
+  const t = (p.wheelDiameterIn - 10) / 3;
   const wheelMassLb =
-    (p.wheelDiameterIn <= 10 ? p.wheelMass10Lb : p.wheelMass13Lb) +
+    p.wheelMass10Lb + t * (p.wheelMass13Lb - p.wheelMass10Lb) +
     (p.tireType === TIRE_TYPE.flatFree ? p.flatFreeExtraLb : 0);
+  // Half-width of a wheel assembly beyond its centre plane: tire, or hub + axle end.
+  const wheelOuterHalfIn = Math.max(p.tireWidthIn / 2, p.hubLengthIn / 2 + p.axleEndExtraIn);
+  // Front-wheel swing at full lock (A-4): inner tire's rear-inner corner, relative to the kingpin.
+  const lk = (p.steerLockDeg * Math.PI) / 180;
+  const a = p.frontTrackIn / 2;
+  const r = p.wheelDiameterIn / 2;
+  const swingInnerYIn = (a - p.tireWidthIn / 2) * Math.cos(lk) - r * Math.sin(lk);
+  const swingRearXIn = (a + p.tireWidthIn / 2) * Math.sin(lk) + r * Math.cos(lk);
   const tongueOnFront = p.drawbar === DRAWBAR.woodTongue ? p.tongueLengthIn : 0;
   return {
     plyDensityPcf: okoume ? p.okoumeDensityPcf : p.birchDensityPcf,
@@ -661,7 +674,13 @@ export function derived(p: Params) {
     bodyLengthIn: p.rearOverhangIn + p.wheelbaseIn + p.frontOverhangIn,
     /** Rear of body to tip of tongue (or body front, whichever is further). */
     overallLengthIn: p.rearOverhangIn + p.wheelbaseIn + Math.max(p.frontOverhangIn, tongueOnFront),
-    maxTrackBesideWells: p.truckWellGapIn - p.tireWidthIn - 2 * p.truckClearanceIn,
+    wheelOuterHalfIn,
+    /** Overall width across the wider axle, outside the wheel assemblies. */
+    overallWidthIn: Math.max(p.frontTrackIn, p.rearTrackIn) + 2 * wheelOuterHalfIn,
+    maxTrackBesideWells: p.truckWellGapIn - 2 * wheelOuterHalfIn - 2 * p.truckClearanceIn,
+    /** A-4: inner tire corner |y| and rear-most tire extent behind the kingpin, at full lock. */
+    swingInnerYIn,
+    swingRearXIn,
     truckUsableLengthIn: p.truckBedLengthIn + p.truckTailgateLengthIn,
     oakDesignMorPsi: (p.oakMorPsi * p.wetServiceFactorStrength) / p.woodSafetyFactor,
     oakDesignMoePsi: p.oakMoePsi * p.wetServiceFactorStiffness,
@@ -730,11 +749,23 @@ export function validateParams(p: Params): ParamIssue[] {
   if (rearStackTop > p.deckHeightIn + 0.01)
     warn(['deckHeightIn', 'axleBeamDepthIn'],
       `Rear axle beam + ply needs the deck at ≥ ${rearStackTop.toFixed(2)}"; it is ${p.deckHeightIn}".`);
-  if (p.wheelDiameterIn > p.deckHeightIn + p.frontDeckRaiseIn && p.noseWidthIn / 2 > p.frontTrackIn / 2 - p.tireWidthIn / 2 - 0.75)
-    err(['noseWidthIn', 'frontTrackIn'], 'Nose does not clear the front tires even straight ahead.');
+  // Front-wheel swing at full lock (A-4). Only matters if the tire reaches up to the hull.
+  const d = derived(p);
+  if (p.wheelDiameterIn > p.deckHeightIn + p.frontDeckRaiseIn - p.deckPlyIn - p.crossmemberDepthIn) {
+    const allowedHalf = d.swingInnerYIn - p.steeringClearanceIn;
+    if (p.noseWidthIn / 2 > allowedHalf)
+      err(['noseWidthIn', 'steerLockDeg', 'frontTrackIn'],
+        `Front tires hit the nose at full lock: nose must be ≤ ${(2 * allowedHalf).toFixed(2)}" wide (is ${p.noseWidthIn}").`);
+    const neededTaper = d.swingRearXIn + p.steeringClearanceIn;
+    if (p.noseTaperStartIn < neededTaper)
+      err(['noseTaperStartIn', 'steerLockDeg'],
+        `Front tires hit the cabin shoulder at full lock: full width must end ≥ ${neededTaper.toFixed(2)}" behind the front axle (is ${p.noseTaperStartIn}").`);
+  }
 
   // Truck.
-  const d = derived(p);
+  if (d.overallWidthIn + 2 * p.truckClearanceIn > p.truckWellGapIn)
+    warn(['rearTrackIn', 'frontTrackIn'],
+      `Overall width ${d.overallWidthIn.toFixed(2)}" does not fit between the wheel wells with clearance (max track ${d.maxTrackBesideWells.toFixed(2)}"); only "straddle" stowage would work (D-6).`);
   if (d.bodyLengthIn > d.truckUsableLengthIn - p.truckClearanceIn)
     err(['wheelbaseIn', 'rearOverhangIn', 'frontOverhangIn'], 'Body is longer than bed + tailgate.');
   return issues;
