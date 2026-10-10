@@ -192,15 +192,24 @@ const defs = {
     label: 'Cabin outside width (at deck)', group: 'body', unit: 'in',
     default: 28, min: 18, max: 36, step: 0.25, status: 'explore', primary: true,
   },
+  autoNoseGeometry: {
+    label: 'Auto nose width & shoulder', group: 'body', unit: '',
+    default: 1, min: 0, max: 1, step: 1, status: 'explore', ref: 'A-4',
+    options: [
+      { value: 0, label: 'Manual (use the two values below)' },
+      { value: 1, label: 'Auto (derive from front track, lock, lead)' },
+    ],
+    note: 'Auto sets the nose width to the widest the swing limit allows (1/8" down, ≤ cabin width) and the shoulder to the nearest valid 1/8" behind the swing; resolveParams() applies it everywhere (D-26).',
+  },
   noseWidthIn: {
     label: 'Hull width in the front-wheel swing zone', group: 'body', unit: 'in',
     default: 13.5, min: 12, max: 18, step: 0.25, status: 'explore', ref: 'D-15',
-    note: 'Must hold the rider\'s feet + boots (bootAllowanceIn) and be ≤ 2 × (inner tire corner y at full lock − steering clearance); see A-4.',
+    note: 'Overridden while "Auto nose width & shoulder" is on (resolveParams). Must hold the rider\'s feet + boots (bootAllowanceIn) and be ≤ 2 × (inner tire corner y at full lock − steering clearance); see A-4.',
   },
   noseTaperStartIn: {
     label: 'Nose taper starts this far behind front axle', group: 'body', unit: 'in',
     default: 18, min: 14, max: 26, step: 0.5, status: 'explore', ref: 'A-4',
-    note: 'Measured from the front AXLE. The full-width cabin must end behind the rear-most tire corner at full lock + steering clearance; that corner is (swing rear extent − kingpin lead) behind the axle (A-4).',
+    note: 'Overridden while "Auto nose width & shoulder" is on (resolveParams). Measured from the front AXLE. The full-width cabin must end behind the rear-most tire corner at full lock + steering clearance; that corner is (swing rear extent − kingpin lead) behind the axle (A-4).',
   },
   steeringClearanceIn: {
     label: 'Tire-to-hull clearance at full lock', group: 'body', unit: 'in',
@@ -484,8 +493,13 @@ const defs = {
   },
   kingpinLeadIn: {
     label: 'Kingpin ahead of front axle (trail)', group: 'steering', unit: 'in',
-    default: 1, min: 0.875, max: 1.5, step: 0.125, status: 'explore', ref: 'D-25',
-    note: 'Kingpin must clear the axle rod; the trailing axle self-centres under pull like a caster.',
+    default: 1.125, min: 0.875, max: 1.5, step: 0.125, status: 'explore', ref: 'D-25',
+    note: 'Needs ≥ rod radius + kingpin radius + rodKingpinWebMinIn (1.125" for ¾" rod, ½" bolt, ½" web). Kingpin must clear the axle rod; the trailing axle self-centres under pull like a caster.',
+  },
+  rodKingpinWebMinIn: {
+    label: 'Min web between axle-rod groove and kingpin hole', group: 'steering', unit: 'in',
+    default: 0.5, min: 0.25, max: 1, step: 0.125, status: 'assumed', ref: 'D-25',
+    note: 'Short-grain oak where the tongue pull reacts into the rod (Phase 1 r3 carry item 3). Lead ≥ rod radius + kingpin radius + this.',
   },
   kingpinDiameterIn: {
     label: 'Kingpin bolt diameter', group: 'steering', unit: 'in',
@@ -956,6 +970,55 @@ export function steerStopPlan(p: Params) {
   return { ...b, size: s, cx, cy, rotZ: -L, lockX, lockY, ok, why };
 }
 
+/** Largest overlap a tilted (flared) side panel may have with its chine/gunwale grooves, in the block model (inches). */
+const FLARE_BITE_MAX_IN = 0.05;
+
+/** Front-wheel swing at full lock (A-4, D-25): inner tire corner |y| (kingpin frame) and rear-most extent behind the axle. */
+function swingGeometry(p: Params) {
+  const lk = (p.steerLockDeg * Math.PI) / 180;
+  const a = p.frontTrackIn / 2;
+  const r = p.wheelDiameterIn / 2;
+  // The kingpin leads the axle by `kingpinLeadIn` (D-25), so the tire's rear edge is (lead + r) behind the pivot.
+  const swingInnerYIn = (a - p.tireWidthIn / 2) * Math.cos(lk) - (p.kingpinLeadIn + r) * Math.sin(lk);
+  const swingRearXIn = (a + p.tireWidthIn / 2) * Math.sin(lk) + (p.kingpinLeadIn + r) * Math.cos(lk);
+  // Referenced to the front AXLE: the kingpin is `kingpinLeadIn` ahead of it (D-25), so the rear-most tire corner is
+  // swingRear − lead behind the axle (critic r2 M2).
+  return { swingInnerYIn, swingRearXIn, swingRearBehindAxleIn: swingRearXIn - p.kingpinLeadIn };
+}
+
+/** Auto nose geometry rounds to this (inches). */
+const AUTO_NOSE_STEP_IN = 0.125;
+/** Auto shoulder keeps at least this much spare behind the swing rule (the Phase 1 default carried ~0.09"). */
+const AUTO_SHOULDER_MARGIN_IN = 0.0625;
+
+/**
+ * Resolve derived-by-rule params (A-4, D-26). With `autoNoseGeometry` = 1, `noseWidthIn` becomes the widest hull that
+ * clears the front tires at full lock (2·(swingInnerY − steeringClearance), rounded DOWN to 1/8", ≤ bodyWidthIn) and
+ * `noseTaperStartIn` the shortest valid shoulder distance (swingRearBehindAxle + steeringClearance + margin, rounded UP
+ * to 1/8"). Pure and idempotent. If the auto nose is narrower than the rider's feet + boots need, it is left narrow:
+ * validateParams then reports the boot error, which is the honest outcome. Does nothing when the tires cannot reach
+ * the hull (no swing rule applies) or when auto is off. Every consumer (buildModel, computeLayout, validateParams)
+ * sees the resolved values; the manual nose params are ignored while auto is on.
+ */
+export function resolveParams(p: Params): Params {
+  if (p.autoNoseGeometry !== 1) return p;
+  if (!(p.wheelDiameterIn > p.deckHeightIn + p.frontDeckRaiseIn - p.deckPlyIn - p.crossmemberDepthIn)) return p;
+  const sw = swingGeometry(p);
+  const maxNose = 2 * (sw.swingInnerYIn - p.steeringClearanceIn);
+  // Floor keeps the model non-degenerate (a nose thinner than its own side boards); the validator still flags it.
+  const nose = Math.max(
+    2 * p.sideThicknessIn + 0.5,
+    Math.min(p.bodyWidthIn, Math.floor((maxNose + 1e-9) / AUTO_NOSE_STEP_IN) * AUTO_NOSE_STEP_IN),
+  );
+  const shoulderNeed = sw.swingRearBehindAxleIn + p.steeringClearanceIn + AUTO_SHOULDER_MARGIN_IN;
+  const shoulder = Math.min(
+    p.wheelbaseIn + p.rearOverhangIn - 2 * p.sideThicknessIn,
+    Math.ceil((shoulderNeed - 1e-9) / AUTO_NOSE_STEP_IN) * AUTO_NOSE_STEP_IN,
+  );
+  if (nose === p.noseWidthIn && shoulder === p.noseTaperStartIn) return p;
+  return { ...p, noseWidthIn: nose, noseTaperStartIn: shoulder };
+}
+
 /** Derived quantities that many modules need; no geometry here. */
 export function derived(p: Params) {
   const okoume = p.plySpecies === PLY_SPECIES.okoumeMarine;
@@ -965,16 +1028,7 @@ export function derived(p: Params) {
     (p.tireType === TIRE_TYPE.flatFree ? p.flatFreeExtraLb : 0);
   // Half-width of a wheel assembly beyond its centre plane: tire, or hub + axle end.
   const wheelOuterHalfIn = Math.max(p.tireWidthIn / 2, p.hubLengthIn / 2 + p.axleEndExtraIn);
-  // Front-wheel swing at full lock (A-4): inner tire's rear-inner corner, relative to the kingpin.
-  const lk = (p.steerLockDeg * Math.PI) / 180;
-  const a = p.frontTrackIn / 2;
-  const r = p.wheelDiameterIn / 2;
-  // The kingpin leads the axle by `kingpinLeadIn` (D-25), so the tire's rear edge is (lead + r) behind the pivot.
-  const swingInnerYIn = (a - p.tireWidthIn / 2) * Math.cos(lk) - (p.kingpinLeadIn + r) * Math.sin(lk);
-  const swingRearXIn = (a + p.tireWidthIn / 2) * Math.sin(lk) + (p.kingpinLeadIn + r) * Math.cos(lk);
-  // Referenced to the front AXLE: the kingpin is `kingpinLeadIn` ahead of it (D-25), so the rear-most tire corner is
-  // swingRear − lead behind the axle (critic r2 M2).
-  const swingRearBehindAxleIn = swingRearXIn - p.kingpinLeadIn;
+  const { swingInnerYIn, swingRearXIn, swingRearBehindAxleIn } = swingGeometry(p);
   const rodR = p.axleDiameterIn / 2;
   const kpR = p.kingpinDiameterIn / 2;
   const tongueOnFront = p.drawbar === DRAWBAR.woodTongue ? p.tongueLengthIn : 0;
@@ -1020,7 +1074,8 @@ export interface ParamIssue {
  * degenerate; warnings mean a check is likely to fail. The full pass/fail
  * engineering checks live in src/analysis (Phase 2).
  */
-export function validateParams(p: Params): ParamIssue[] {
+export function validateParams(input: Params): ParamIssue[] {
+  const p = resolveParams(input);
   const issues: ParamIssue[] = [];
   const err = (keys: ParamKey[], message: string) => issues.push({ keys, severity: 'error', message });
   const warn = (keys: ParamKey[], message: string) => issues.push({ keys, severity: 'warn', message });
@@ -1062,6 +1117,19 @@ export function validateParams(p: Params): ParamIssue[] {
     if (room < MIN_REAR_STORAGE_LENGTH_IN)
       err(['seatXIn', 'rearOverhangIn', 'storageLocation'],
         `Only ${room.toFixed(1)}" between the rear transom and the seat back; a rear storage box needs ≥ ${MIN_REAR_STORAGE_LENGTH_IN}". Move the seat forward or choose another storage location.`);
+  }
+  // The foot stop (a board of footStopThickIn at seatX + leg reach) must end inside the front transom's inner face.
+  const footStopFront = p.seatXIn + p.riderLegReachIn + p.footStopThickIn / 2;
+  if (footStopFront > p.wheelbaseIn + p.frontOverhangIn - p.sideThicknessIn + 1e-9)
+    err(['seatXIn', 'riderLegReachIn', 'frontOverhangIn', 'wheelbaseIn'],
+      `The foot stop reaches ${footStopFront.toFixed(2)}" ahead of the rear axle, into the front transom (its inner face is at ${(p.wheelbaseIn + p.frontOverhangIn - p.sideThicknessIn).toFixed(2)}"). Move the seat back or lengthen the front overhang.`);
+  // A flared captured-ply side (D-6): the tilted panel's end corners bite into the chine/gunwale; the overlap test tolerates 0.05" (groove depth is Phase 3).
+  if (p.sideConstruction === SIDE_CONSTRUCTION.capturedPly && p.gunwaleFlareIn > 0) {
+    const webH = Math.max(0.1, p.sideHeightIn + p.deckPlyIn - 2 * p.railBandIn);
+    const bite = (p.panelPlyIn / 2) * Math.sin(Math.atan2(p.gunwaleFlareIn, webH));
+    if (bite > FLARE_BITE_MAX_IN)
+      err(['gunwaleFlareIn', 'sideHeightIn', 'railBandIn', 'panelPlyIn'],
+        `The ${p.gunwaleFlareIn}" gunwale flare over a ${webH.toFixed(2)}" tall side panel tilts it so its corners overlap the chine and gunwale by ${bite.toFixed(3)}" (max ${FLARE_BITE_MAX_IN}"). Use a taller side, a thinner panel, or less flare.`);
   }
   // The rider's feet go through the nose to the foot stop.
   const footSpan = (2 * RIDER_LEG_Y_FRAC + RIDER_FOOT_Y_FRAC) * p.riderStatureIn;
@@ -1121,6 +1189,12 @@ export function validateParams(p: Params): ParamIssue[] {
       err(['noseTaperStartIn', 'steerLockDeg', 'kingpinLeadIn'],
         `Front tires hit the cabin shoulder at full lock: full width must end ≥ ${neededTaper.toFixed(2)}" behind the front axle (is ${p.noseTaperStartIn}").`);
   }
+
+  // Web of short-grain oak between the rod groove and the kingpin hole (Phase 1 r3 carry item 3).
+  const rodKpWeb = p.kingpinLeadIn - p.axleDiameterIn / 2 - p.kingpinDiameterIn / 2;
+  if (rodKpWeb < p.rodKingpinWebMinIn - 1e-9)
+    err(['kingpinLeadIn', 'rodKingpinWebMinIn', 'axleDiameterIn', 'kingpinDiameterIn'],
+      `Only ${rodKpWeb.toFixed(3)}" of wood between the axle-rod groove and the kingpin hole; it needs ≥ ${p.rodKingpinWebMinIn}" (kingpin lead ≥ ${(p.axleDiameterIn / 2 + p.kingpinDiameterIn / 2 + p.rodKingpinWebMinIn).toFixed(3)}").`);
 
   // Axle beams (critic r2 H2): wood left behind the rod groove and ahead of the kingpin hole must be real wood.
   if (d.frontBeamLigamentIn < p.beamLigamentMinIn - 1e-9)

@@ -23,13 +23,13 @@ describe('validateParams', () => {
     expect(validateParams(defaultParams())).toEqual([]);
   });
   it('flags crossed rider masses and an over-wide nose', () => {
-    const issues = validateParams({ ...defaultParams(), riderGoalMassLb: 150, riderMassLb: 200, noseWidthIn: 30 });
+    const issues = validateParams({ ...defaultParams(), riderGoalMassLb: 150, riderMassLb: 200, autoNoseGeometry: 0, noseWidthIn: 30 });
     expect(issues.filter((i) => i.severity === 'error').map((i) => i.keys[0])).toEqual(
       expect.arrayContaining(['riderGoalMassLb', 'noseWidthIn']),
     );
   });
   it('flags front tires hitting the nose or cabin shoulder at full lock', () => {
-    const issues = validateParams({ ...defaultParams(), noseWidthIn: 18, noseTaperStartIn: 12 });
+    const issues = validateParams({ ...defaultParams(), autoNoseGeometry: 0, noseWidthIn: 18, noseTaperStartIn: 12 });
     expect(issues.filter((i) => i.message.startsWith('Front tires hit'))).toHaveLength(2);
   });
   it('warns when the cart is too wide for the wheel wells', () => {

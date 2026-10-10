@@ -2,7 +2,7 @@
  * Shared helpers for the subsystem builders: build context, part factories (box / cylinder),
  * wood / steel mass with finish (D-20), and steer-body placement about the kingpin.
  */
-import { derived, PLY_SPECIES, type Params } from '../params';
+import { derived, PLY_SPECIES, resolveParams, type Params } from '../params';
 import { computeLayout, type Layout } from './layout';
 import { compose, multiply, rotationX, rotationY, rotationZ, translation } from './mat4';
 import type { Dims, EdgeCondition, Fab, Joint, Mat4, Part, PartGroup, PartKind, RigidBody, Vec3 } from './types';
@@ -33,7 +33,8 @@ export interface Ctx {
 /** Assembly step numbers (build order). */
 export const STEP = { gear: 1, steering: 2, frame: 3, body: 4, seatStorage: 5, brake: 6, finish: 7, payload: 8 } as const;
 
-export function makeCtx(p: Params, v: ViewState = {}): Ctx {
+export function makeCtx(input: Params, v: ViewState = {}): Ctx {
+  const p = resolveParams(input); // every part sees the auto-resolved nose width / shoulder (A-4, D-26)
   const L = computeLayout(p);
   const lock = Math.abs(p.steerLockDeg);
   const deg = Math.min(lock, Math.max(-lock, v.steerDeg ?? 0));

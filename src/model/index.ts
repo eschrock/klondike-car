@@ -18,8 +18,8 @@ export type { ViewState } from './build-utils';
  * Front steer-body parts rotate about the kingpin by view.steerDeg (clamped to ± lock).
  * `removed: true` omits `removable` parts (transport configuration, D-9).
  */
-export function buildModel(p: Params, view: ViewState = {}): Part[] {
-  const ctx = makeCtx(p, view);
+export function buildModel(input: Params, view: ViewState = {}): Part[] {
+  const ctx = makeCtx(input, view); // resolves auto nose geometry (resolveParams) so every part and ctx.p agree
   const tip = prowTop(ctx);
   const parts = [
     ...buildRunningGear(ctx),

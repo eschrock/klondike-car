@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { PARAM_DEFS, RIDER_FOOT_Y_FRAC, RIDER_LEG_Y_FRAC, defaultParams, derived, validateParams, type ParamKey, type Params } from '../params';
+import { PARAM_DEFS, RIDER_FOOT_Y_FRAC, RIDER_LEG_Y_FRAC, defaultParams, derived, resolveParams, validateParams, type ParamKey, type Params } from '../params';
 import { buildModel } from './index';
+import { computeLayout } from './layout';
 import { obbOverlap, partOBB, worldAABB } from './bounds';
 import { centerOfGravity, totalMass } from './mass';
 import type { Part, PartGroup } from './types';
@@ -451,13 +452,13 @@ describe('rider and tire clearance consistency', () => {
     // Rule is tight, not slack: a nose 1" wider than the limit really is hit.
     // (Rule: nose ≤ 2 × (swing − clearance). The tire itself touches at 2 × swing.)
     const limit = 2 * (derivedSwing() - defaults.steeringClearanceIn);
-    const tight = { ...defaults, noseWidthIn: limit + 0.5 };
+    const tight = { ...defaults, autoNoseGeometry: 0, noseWidthIn: limit + 0.5 };
     expect(errorsOf(tight).some((i) => i.keys.includes('noseWidthIn'))).toBe(true);
     expect(tireBody(tight, defaults.steerLockDeg)).toBeLessThan(0);
-    const wide = { ...defaults, noseWidthIn: 2 * derivedSwing() + 0.5 };
+    const wide = { ...defaults, autoNoseGeometry: 0, noseWidthIn: 2 * derivedSwing() + 0.5 };
     expect(errorsOf(wide).some((i) => i.keys.includes('noseWidthIn'))).toBe(true);
     expect(tireBody(wide, defaults.steerLockDeg)).toBeGreaterThan(0);
-    expect(tireBody({ ...defaults, noseWidthIn: limit }, defaults.steerLockDeg)).toBeCloseTo(-defaults.steeringClearanceIn, 6);
+    expect(tireBody({ ...defaults, autoNoseGeometry: 0, noseWidthIn: limit }, defaults.steerLockDeg)).toBeCloseTo(-defaults.steeringClearanceIn, 6);
   });
 });
 function derivedSwing(): number {
@@ -573,8 +574,8 @@ describe('round-2 validator rules', () => {
     expect(defaults.noseTaperStartIn).toBeGreaterThanOrEqual(need);
     expect(defaults.noseTaperStartIn - need).toBeLessThan(0.5);
     const shoulderErr = (p: Params) => errorsOf(p).some((i) => i.message.startsWith('Front tires hit the cabin shoulder'));
-    expect(shoulderErr({ ...defaults, noseTaperStartIn: need + 0.001 })).toBe(false);
-    expect(shoulderErr({ ...defaults, noseTaperStartIn: need - 0.01 })).toBe(true);
+    expect(shoulderErr({ ...defaults, autoNoseGeometry: 0, noseTaperStartIn: need + 0.001 })).toBe(false);
+    expect(shoulderErr({ ...defaults, autoNoseGeometry: 0, noseTaperStartIn: need - 0.01 })).toBe(true);
     // The lead moves the rule the right way: more lead = tire corner further forward of the kingpin pivot but the pivot is further forward of the axle.
     const tireGap = (p: Params, deg: number) => {
       const m = buildModel(p, { steerDeg: deg });
@@ -585,12 +586,12 @@ describe('round-2 validator rules', () => {
       return worst;
     };
     // At exactly `need` the tire is `steeringClearanceIn` clear of the shoulder (x-separation), and 0.25" less taper reaches into it.
-    const atNeed = { ...defaults, noseTaperStartIn: need };
+    const atNeed = { ...defaults, autoNoseGeometry: 0, noseTaperStartIn: need };
     expect(tireGap(atNeed, defaults.steerLockDeg)).toBeCloseTo(-defaults.steeringClearanceIn, 6);
-    expect(tireGap({ ...defaults, noseTaperStartIn: need - defaults.steeringClearanceIn - 0.25 }, defaults.steerLockDeg)).toBeGreaterThan(0);
+    expect(tireGap({ ...defaults, autoNoseGeometry: 0, noseTaperStartIn: need - defaults.steeringClearanceIn - 0.25 }, defaults.steerLockDeg)).toBeGreaterThan(0);
     // Several leads: whenever the rule passes, the tires clear the body at both locks.
-    for (const kingpinLeadIn of [0.875, 1, 1.5]) {
-      const p = { ...defaults, kingpinLeadIn, noseTaperStartIn: derived({ ...defaults, kingpinLeadIn }).swingRearBehindAxleIn + defaults.steeringClearanceIn };
+    for (const kingpinLeadIn of [1.125, 1.25, 1.5]) {
+      const p = { ...defaults, autoNoseGeometry: 0, kingpinLeadIn, noseTaperStartIn: derived({ ...defaults, kingpinLeadIn }).swingRearBehindAxleIn + defaults.steeringClearanceIn };
       if (errorsOf(p).length) continue;
       for (const deg of [p.steerLockDeg, -p.steerLockDeg]) expect(tireGap(p, deg), `lead ${kingpinLeadIn}`).toBeLessThanOrEqual(0);
     }
@@ -602,7 +603,7 @@ describe('round-2 validator rules', () => {
     const noseErr = (p: Params) => errorsOf(p).some((i) => i.message.startsWith('The nose is'));
     expect(noseErr({ ...defaults, bootAllowanceIn: 1.5 })).toBe(true);
     expect(noseErr({ ...defaults, bootAllowanceIn: 0 })).toBe(false);
-    expect(noseErr({ ...defaults, noseWidthIn: 2 * defaults.sideThicknessIn + foot + 2 * defaults.bootAllowanceIn + 0.25 - 0.01 })).toBe(true);
+    expect(noseErr({ ...defaults, autoNoseGeometry: 0, noseWidthIn: 2 * defaults.sideThicknessIn + foot + 2 * defaults.bootAllowanceIn + 0.25 - 0.01 })).toBe(true);
   });
   it('front transom may not hang into the turntable or tongue (M3)', () => {
     const deckErr = (p: Params) => errorsOf(p).some((i) => i.message.startsWith('The front transom hangs'));
@@ -647,6 +648,7 @@ describe('fuzz: validator-clean designs have no unintended overlaps', () => {
     'seatXIn', 'wheelDiameterIn', 'steerLockDeg', 'kingpinLeadIn', 'rearOverhangIn', 'frontOverhangIn', 'sideHeightIn', 'tireWidthIn',
     'axleBeamThicknessIn', 'frontAxleBeamThicknessIn', 'axleBeamDepthIn', 'railDepthIn', 'crossmemberDepthIn', 'turntableSizeIn',
     'steerStopSizeIn', 'sideBearerWidthIn', 'gunwaleFlareIn', 'seatDepthIn', 'hubLengthIn', 'tongueLengthIn',
+    'riderStatureIn', 'seatBackAngleDeg', 'storageVolumeIn3', 'footStopThickIn', 'panelPlyIn', 'riderLegReachIn',
   ];
   const OPTION_KEYS: ParamKey[] = ['frameStyle', 'sideConstruction', 'storageLocation', 'axleBeamPosition', 'axleStyle', 'drawbar', 'tireType'];
   const N = 300; // raise (and change the seed) to hunt; 24,000 designs over 8 seeds were clean when this was written
@@ -654,7 +656,7 @@ describe('fuzz: validator-clean designs have no unintended overlaps', () => {
     const rnd = mulberry32(455);
     const out: Params[] = [];
     for (let i = 0; i < N; i++) {
-      const p = { ...defaults };
+      const p = { ...defaults, autoNoseGeometry: 0 }; // this sample set repairs nose width / shoulder by hand (see below)
       // Jitter a random subset of keys around the defaults (±20% of each range), then with probability 0.75 "repair" the
       // swing-zone rules (nose width, shoulder position) the way a designer would, so many samples pass validation.
       for (const k of FUZZ_KEYS) {
@@ -681,7 +683,7 @@ describe('fuzz: validator-clean designs have no unintended overlaps', () => {
     for (const p of samples) {
       if (errorsOf(p).length) continue;
       clean++;
-      for (const view of [{ steerDeg: 0 }, { steerDeg: p.steerLockDeg }, { steerDeg: -p.steerLockDeg }]) {
+      for (const view of [{ steerDeg: 0 }, { steerDeg: p.steerLockDeg }, { steerDeg: -p.steerLockDeg }, { removed: true }]) {
         const bad = overlaps(buildModel(p, view));
         if (bad.length) failures.push(`${bad.slice(0, 3).join('; ')} @${JSON.stringify(view)} :: ${JSON.stringify(Object.fromEntries([...FUZZ_KEYS, ...OPTION_KEYS].filter((k) => p[k] !== defaults[k]).map((k) => [k, p[k]])))}`);
       }
@@ -690,6 +692,130 @@ describe('fuzz: validator-clean designs have no unintended overlaps', () => {
     expect(failures.slice(0, 5)).toEqual([]);
     expect(clean).toBeGreaterThanOrEqual(40);
     expect(Date.now() - t0).toBeLessThan(10000);
+  });
+});
+
+// ── Auto nose geometry (A-4, D-26): front track / lock / lead jitter with the nose derived, transport config included ──
+describe('autoNoseGeometry and resolveParams', () => {
+  it('defaults: auto reproduces (or widens) the Phase 1 nose and shoulder and stays validator-clean', () => {
+    expect(defaults.autoNoseGeometry).toBe(1);
+    const r = resolveParams(defaults);
+    expect(r.noseWidthIn).toBeGreaterThanOrEqual(13.5);
+    expect(r.noseWidthIn * 8 % 1).toBe(0);
+    expect(r.noseTaperStartIn).toBe(18);
+    expect(validateParams(defaults)).toEqual([]);
+    expect(validateParams({ ...defaults, autoNoseGeometry: 0 })).toEqual([]);
+  });
+  it('is idempotent, pure, and a no-op when off', () => {
+    const p = { ...defaults, frontTrackIn: 44, steerLockDeg: 33 };
+    const once = resolveParams(p);
+    expect(resolveParams(once)).toEqual(once);
+    expect(p.noseWidthIn).toBe(defaults.noseWidthIn);
+    const off = { ...p, autoNoseGeometry: 0, noseWidthIn: 14, noseTaperStartIn: 20 };
+    expect(resolveParams(off)).toBe(off);
+    expect(resolveParams(off).noseWidthIn).toBe(14);
+  });
+  it('nose is the widest 1/8" step under the swing limit, capped at the cabin; shoulder the smallest above it', () => {
+    for (const frontTrackIn of [32, 35.5, 40, 48]) {
+      const p = { ...defaults, frontTrackIn };
+      const r = resolveParams(p);
+      const d = derived(p);
+      const limit = 2 * (d.swingInnerYIn - p.steeringClearanceIn);
+      expect(r.noseWidthIn).toBeLessThanOrEqual(Math.min(limit, p.bodyWidthIn) + 1e-9);
+      expect(r.noseWidthIn).toBeGreaterThan(Math.min(limit, p.bodyWidthIn) - 0.125 - 1e-9);
+      const need = d.swingRearBehindAxleIn + p.steeringClearanceIn;
+      expect(r.noseTaperStartIn).toBeGreaterThanOrEqual(need);
+      expect(r.noseTaperStartIn).toBeLessThan(need + 0.0625 + 0.125 + 1e-9);
+    }
+  });
+  it('buildModel / computeLayout / validateParams all see the resolved nose', () => {
+    const p = { ...defaults, frontTrackIn: 40, noseWidthIn: 12, noseTaperStartIn: 14 };
+    const r = resolveParams(p);
+    const L = computeLayout(p);
+    expect(L.hwN).toBeCloseTo(r.noseWidthIn / 2 - p.sideThicknessIn, 9);
+    expect(L.xs).toBeCloseTo(p.wheelbaseIn - r.noseTaperStartIn, 9);
+    expect(validateParams(p)).toEqual(validateParams(r));
+    const deckNose = buildModel(p).find((x) => x.id === 'deck-nose')!;
+    expect(worldAABB(deckNose).max[1] - worldAABB(deckNose).min[1]).toBeCloseTo(2 * L.hwN, 6);
+  });
+  it('an auto nose too narrow for the rider reports the boot error (honest outcome)', () => {
+    const errs = errorsOf({ ...defaults, steerLockDeg: 45 });
+    expect(errs.some((i) => i.message.startsWith('The nose is'))).toBe(true);
+  });
+  it('front track and lock sliders are now mostly valid with auto on', () => {
+    for (const k of ['frontTrackIn', 'steerLockDeg'] as const) {
+      const d = PARAM_DEFS[k];
+      let ok = 0, n = 0;
+      for (let v = d.min; v <= d.max + 1e-9; v += d.step) { n++; if (!errorsOf({ ...defaults, [k]: v }).length) ok++; }
+      expect(ok / n, k).toBeGreaterThanOrEqual(0.3);
+    }
+  });
+
+  const N = 400;
+  const J = ['frontTrackIn', 'steerLockDeg', 'kingpinLeadIn'] as const;
+  const OTHERS: ParamKey[] = ['wheelbaseIn', 'rearTrackIn', 'deckHeightIn', 'bodyWidthIn', 'seatXIn', 'wheelDiameterIn', 'frontOverhangIn', 'rearOverhangIn', 'riderStatureIn', 'seatBackAngleDeg', 'storageVolumeIn3', 'sideHeightIn', 'gunwaleFlareIn'];
+  const samples = (() => {
+    const rnd = mulberry32(2026);
+    const out: Params[] = [];
+    for (let i = 0; i < N; i++) {
+      const p = { ...defaults };
+      for (const k of J) { const d = PARAM_DEFS[k]; p[k] = Math.min(d.max, Math.max(d.min, Math.round((d.min + rnd() * (d.max - d.min)) / d.step) * d.step)); }
+      for (const k of OTHERS) {
+        if (rnd() > 0.15) continue;
+        const d = PARAM_DEFS[k];
+        const v = d.default + (rnd() * 2 - 1) * 0.2 * (d.max - d.min);
+        p[k] = Math.min(d.max, Math.max(d.min, Math.round(v / d.step) * d.step));
+      }
+      p.frontAxleBeamThicknessIn = Math.max(p.frontAxleBeamThicknessIn, Math.ceil((p.kingpinLeadIn + (p.axleDiameterIn + p.kingpinDiameterIn) / 2 + 2 * p.beamLigamentMinIn + p.sideBearerLengthIn - 1.5) * 8) / 8);
+      out.push(p);
+    }
+    return out;
+  })();
+  it('jittering track, lock and lead: auto makes far more of the sweep valid, and every valid design is overlap-free (incl. transport)', () => {
+    const t0 = Date.now();
+    const validOff = samples.filter((p) => !errorsOf({ ...p, autoNoseGeometry: 0 }).length).length;
+    const clean = samples.filter((p) => !errorsOf(p).length);
+    console.log(`auto-nose fuzz: valid ${validOff}/${N} with auto off -> ${clean.length}/${N} with auto on`);
+    const failures: string[] = [];
+    for (const p of clean)
+      for (const view of [{ steerDeg: 0 }, { steerDeg: p.steerLockDeg }, { steerDeg: -p.steerLockDeg }, { removed: true }]) {
+        const bad = overlaps(buildModel(p, view));
+        if (bad.length) failures.push(`${bad.slice(0, 3).join('; ')} @${JSON.stringify(view)} :: ${JSON.stringify(Object.fromEntries(([...J, ...OTHERS] as ParamKey[]).filter((k) => p[k] !== defaults[k]).map((k) => [k, p[k]])))}`);
+      }
+    expect(failures.slice(0, 5)).toEqual([]);
+    expect(clean.length).toBeGreaterThan(validOff * 2);
+    expect(clean.length).toBeGreaterThanOrEqual(0.2 * N);
+    expect(Date.now() - t0).toBeLessThan(15000);
+  });
+});
+
+describe('round-3 carry-over validator rules', () => {
+  it('rod-to-kingpin web >= rodKingpinWebMinIn', () => {
+    const webErr = (p: Params) => errorsOf(p).some((i) => i.keys.includes('rodKingpinWebMinIn'));
+    expect(webErr(defaults)).toBe(false);
+    expect(webErr({ ...defaults, kingpinLeadIn: 1 })).toBe(true); // 1 - 0.375 - 0.25 = 0.375" < 0.5"
+    expect(webErr({ ...defaults, kingpinLeadIn: 1, rodKingpinWebMinIn: 0.375 })).toBe(false);
+  });
+  it('foot stop must end inside the front transom inner face', () => {
+    const stopErr = (p: Params) => errorsOf(p).some((i) => i.message.startsWith('The foot stop reaches'));
+    expect(stopErr(defaults)).toBe(false);
+    expect(stopErr({ ...defaults, wheelbaseIn: 40.5, rearOverhangIn: 14 })).toBe(true);
+    // At the limit the model really has no foot-stop / front-transom overlap.
+    const p = { ...defaults, frontOverhangIn: defaults.seatXIn + defaults.riderLegReachIn + defaults.footStopThickIn / 2 + defaults.sideThicknessIn - defaults.wheelbaseIn };
+    if (!errorsOf(p).length) expect(overlaps(buildModel(p))).toEqual([]);
+    expect(stopErr({ ...p, frontOverhangIn: p.frontOverhangIn - 0.01 })).toBe(true);
+  });
+  it('flared captured-ply sides may not bite into the chine/gunwale', () => {
+    const flareErr = (p: Params) => errorsOf(p).some((i) => i.keys.includes('gunwaleFlareIn') && i.message.includes('tilts'));
+    const bad = { ...defaults, bodyWidthIn: 25, sideHeightIn: 4.5, gunwaleFlareIn: 1 };
+    expect(flareErr(bad)).toBe(true);
+    expect(flareErr({ ...defaults, gunwaleFlareIn: 0 })).toBe(false);
+    expect(flareErr({ ...defaults, gunwaleFlareIn: 1 })).toBe(false);
+    expect(flareErr({ ...bad, sideConstruction: 0 })).toBe(false);
+    for (const gunwaleFlareIn of [0.5, 1, 2, 3, 4]) for (const sideHeightIn of [3, 4.5, 7, 12]) {
+      const p = { ...defaults, gunwaleFlareIn, sideHeightIn };
+      if (!errorsOf(p).length) expect(overlaps(buildModel(p)), `flare ${gunwaleFlareIn} side ${sideHeightIn}`).toEqual([]);
+    }
   });
 });
 

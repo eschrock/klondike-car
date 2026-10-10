@@ -218,7 +218,7 @@ describe('window validity (round-2 M1)', () => {
     }
   }, 60000);
   it('reports nothing feasible (and why) when the current design itself fails validation', async () => {
-    const p = { ...defaultParams(), noseWidthIn: defaultParams().bodyWidthIn + 2 };
+    const p = { ...defaultParams(), autoNoseGeometry: 0, noseWidthIn: defaultParams().bodyWidthIn + 2 };
     expect(validatorError(p)).not.toBeNull();
     const w = await computeFeasibleWindows(p, buildQ);
     for (const x of w!.windows) {

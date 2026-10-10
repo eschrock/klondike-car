@@ -9,6 +9,7 @@ import {
   SIDE_CONSTRUCTION,
   STORAGE_LOCATION,
   derived,
+  resolveParams,
   type Params,
 } from '../params';
 import { riderLegTopZ } from './rider-geom';
@@ -106,7 +107,8 @@ function evenInterior(a: number, b: number, spacing: number, joistT: number): nu
   return Array.from({ length: n }, (_, i) => a + (L * (i + 1)) / (n + 1));
 }
 
-export function computeLayout(p: Params): Layout {
+export function computeLayout(input: Params): Layout {
+  const p = resolveParams(input); // auto nose width / shoulder (A-4, D-26)
   const d = derived(p);
   const r = d.wheelRadiusIn;
   const WB = p.wheelbaseIn;
