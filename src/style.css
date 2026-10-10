@@ -123,6 +123,19 @@ select { width: 100%; }
 @media (max-width: 1100px) {
   #app { grid-template-columns: 250px minmax(0, 1fr) 260px; }
 }
+/* Narrow windows: viewer on top at a fixed share of the height, panels stacked below; the page scrolls. */
+@media (max-width: 900px) {
+  #app {
+    height: auto;
+    min-height: 100vh;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 65vh auto auto;
+    grid-template-areas: 'top' 'main' 'right' 'left';
+  }
+  .sidebar { overflow: visible; }
+  .sidebar.left, .sidebar.right { border: 0; border-top: 1px solid var(--border); }
+  .viewer-toolbar { flex-wrap: wrap; right: 10px; }
+}
 
 .steer-ctl { display: flex; align-items: center; gap: 6px; margin-left: 8px; font-size: 12px;
   background: color-mix(in srgb, var(--panel) 85%, transparent); border: 1px solid var(--border);
