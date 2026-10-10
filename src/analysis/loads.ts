@@ -27,6 +27,8 @@ export interface LoadModel {
   empty: CaseData;
   operating: CaseData;
   goal: CaseData;
+  /** Lightest rider (BRIEF §4.1) + cargo, for rows that degrade with a light rider (rearward pitch). */
+  light: CaseData;
   /** Empty mass of the removable parts (transport configuration, D-9). */
   removableLb: number;
   /** Mass per part group for the empty cart. */
@@ -71,6 +73,7 @@ export function buildLoadModel(p: Params, parts: Part[], kingpinX: number): Load
     empty: make('empty', 0, 0, 'empty'),
     operating: make('operating', p.riderMassLb, p.cargoMassLb, `operating (${p.riderMassLb} lb rider + ${p.cargoMassLb} lb cargo)`),
     goal: make('goal', p.riderGoalMassLb, p.cargoMassLb, `goal (${p.riderGoalMassLb} lb rider + ${p.cargoMassLb} lb cargo)`),
+    light: make('light', p.riderMinMassLb, p.cargoMassLb, `lightest rider (${p.riderMinMassLb} lb rider + ${p.cargoMassLb} lb cargo)`),
     removableLb: removable,
     emptyMassLb: m,
   };

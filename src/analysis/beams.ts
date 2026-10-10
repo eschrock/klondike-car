@@ -31,6 +31,11 @@ export function ssPointMid(P: number, L: number, EI: number): { M: number; V: nu
   return { M: (P * L) / 4, V: P / 2, defl: (P * L ** 3) / (48 * EI) };
 }
 
+/** Simply supported span, total load W spread uniformly over the whole span: M = WL/8, V = W/2, δ = 5WL³ / 384EI. */
+export function ssUdlFull(W: number, L: number, EI: number): { M: number; V: number; defl: number } {
+  return { M: (W * L) / 8, V: W / 2, defl: (5 * W * L ** 3) / (384 * EI) };
+}
+
 /** Simply supported span, uniformly distributed load of intensity w over length a, centred. */
 export function ssUdlCentered(w: number, a: number, L: number, EI: number): { M: number; V: number; defl: number } {
   const aa = Math.min(a, L);

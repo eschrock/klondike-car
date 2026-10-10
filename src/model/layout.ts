@@ -164,12 +164,14 @@ export function computeLayout(input: Params): Layout {
   // They also skip the brake cross shaft when it runs through their depth.
   const shaftX = -(r + p.brakeShaftBehindTireIn);
   const shaftThroughJoists = r + p.brakeShaftDiameterIn / 2 > deckTop - ply - jD + 0.01 && r - p.brakeShaftDiameterIn / 2 < deckTop - ply;
-  const cabinJoistX = evenInterior(xRear + side, xs, p.crossmemberSpacingIn, joistT).map((x) => {
+  // A joist that would hit the beam is replaced by one on each side of it (not pushed to one side only), so a thicker
+  // deck ply never lengthens the panel span next to the beam (critic Phase 2 r1, D1 oddity).
+  const cabinJoistX = evenInterior(xRear + side, xs, p.crossmemberSpacingIn, joistT).flatMap((x) => {
     const half = (beamR.thick + joistT) / 2 + 0.05;
-    if (beamR.top > deckTop - ply - jD + 0.01 && Math.abs(x - beamR.x) < half) return x < beamR.x ? beamR.x - half : beamR.x + half;
+    if (beamR.top > deckTop - ply - jD + 0.01 && Math.abs(x - beamR.x) < half) return [beamR.x - half, beamR.x + half];
     const sh = (p.brakeShaftDiameterIn + joistT) / 2 + 0.05;
-    if (shaftThroughJoists && Math.abs(x - shaftX) < sh) return x < shaftX ? shaftX - sh : shaftX + sh;
-    return x;
+    if (shaftThroughJoists && Math.abs(x - shaftX) < sh) return [x < shaftX ? shaftX - sh : shaftX + sh];
+    return [x];
   });
   const noseJoistX = evenInterior(xs, noseRailEnd, p.crossmemberSpacingIn, joistT);
 

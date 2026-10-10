@@ -125,6 +125,21 @@ const defs = {
     label: 'Cargo (10 Essentials + team gear)', group: 'loads', unit: 'lb',
     default: 25, min: 0, max: 60, step: 1, status: 'locked',
   },
+  riderMinMassLb: {
+    label: 'Lightest rider mass (pitch-back case)', group: 'loads', unit: 'lb',
+    default: 80, min: 40, max: 150, step: 5, status: 'assumed', ref: 'D-1',
+    note: 'BRIEF §4.1: scouts run 80–150 lb. Rows that get worse with a lighter rider (rearward pitch) are also evaluated here (critic Phase 2 r1, H3).',
+  },
+  curbHeightIn: {
+    label: 'Curb height (front-wheel strike)', group: 'loads', unit: 'in',
+    default: 3, min: 1, max: 5, step: 0.5, status: 'assumed', ref: 'D-2',
+    note: 'Step the front wheel(s) strike at walking speed; same as the Phase 2 sim curb. Horizontal force = V·tan φ, cos φ = (r − h)/r.',
+  },
+  rootHeightIn: {
+    label: 'Root height (front-wheel strike)', group: 'loads', unit: 'in',
+    default: 2, min: 0.5, max: 4, step: 0.5, status: 'assumed', ref: 'D-2',
+    note: 'Same as the Phase 2 sim root. Struck by both front wheels (a root runs across the trail) or by one.',
+  },
   pullForceLbf: {
     label: 'Design bridle pull (peak)', group: 'loads', unit: 'lbf',
     default: 150, min: 50, max: 400, step: 10, status: 'assumed', ref: 'D-14',
@@ -363,10 +378,13 @@ const defs = {
   },
   axleDiameterIn: {
     label: 'Axle diameter', group: 'wheels', unit: 'in',
-    default: 0.75, min: 0.625, max: 0.75, step: 0.125, status: 'explore', ref: 'D-10',
+    default: 0.75, min: 0.625, max: 1, step: 0.125, status: 'explore', ref: 'D-10',
+    note: 'Hand-truck wheels come with 5/8" or 3/4" bearings as standard; 1" bore versions exist, and 7/8"/1" bores need sourced bearings.',
     options: [
       { value: 0.625, label: '5/8"' },
       { value: 0.75, label: '3/4"' },
+      { value: 0.875, label: '7/8"' },
+      { value: 1, label: '1"' },
     ],
   },
   axleStyle: {
@@ -503,7 +521,7 @@ const defs = {
   },
   kingpinDiameterIn: {
     label: 'Kingpin bolt diameter', group: 'steering', unit: 'in',
-    default: 0.5, min: 0.375, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-12',
+    default: 0.5, min: 0.375, max: 1, step: 0.0625, status: 'explore', ref: 'D-12',
   },
   kingpinYieldPsi: {
     label: 'Kingpin bolt yield strength', group: 'steering', unit: 'psi',
@@ -525,6 +543,35 @@ const defs = {
   pullerHandHeightIn: {
     label: 'Puller hand height', group: 'steering', unit: 'in',
     default: 30, min: 20, max: 40, step: 1, status: 'assumed', ref: 'D-14',
+  },
+  bridleRopeRunIn: {
+    label: 'Bridle rope run (tongue tip to puller hands)', group: 'steering', unit: 'in',
+    default: 72, min: 36, max: 144, step: 6, status: 'assumed', ref: 'D-14',
+    note: 'A 6 ft rope sets the pull angle α = atan((hand height − tongue tip height) / run) used by the rearward-pitch check.',
+  },
+  kingpinWasherDiameterIn: {
+    label: 'Kingpin washer outside diameter (under the beam)', group: 'steering', unit: 'in',
+    default: 1.25, min: 0.75, max: 2.5, step: 0.125, status: 'assumed', ref: 'D-12',
+    note: 'Fender washer between the bolt head/nut and the oak beam underside; carries the kingpin tension (bump-roll uplift).',
+  },
+  uhmwBearingPsi: {
+    label: 'UHMW-PE design bearing stress (side-bearer wear strip)', group: 'steering', unit: 'psi',
+    default: 1000, min: 300, max: 3000, step: 50, status: 'assumed', ref: 'D-12',
+    note: 'Compressive yield of UHMW-PE is ~2,500–3,000 psi at 10% strain; 1,000 psi is a creep-limited design value.',
+  },
+  bolsterFastenerDiameterIn: {
+    label: 'Bolster-to-chassis fastener diameter', group: 'steering', unit: 'in',
+    default: 0.25, min: 0.1875, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-12',
+    note: 'Assumed: ¼" A307 carriage/machine bolts through the bolster rails into the nose rails and deck, count below.',
+  },
+  bolsterFastenerCount: {
+    label: 'Bolster-to-chassis fastener count', group: 'steering', unit: '',
+    default: 4, min: 2, max: 12, step: 1, status: 'assumed', ref: 'D-12',
+  },
+  bolsterFastenerYieldPsi: {
+    label: 'Bolster fastener yield strength', group: 'steering', unit: 'psi',
+    default: 36000, min: 30000, max: 130000, step: 1000, status: 'assumed', ref: 'D-12',
+    note: 'ASTM A307 / low-carbon steel bolt: 36 ksi. Allowable shear = 0.577·yield / kingpin margin.',
   },
 
   // ── Brake & rear handle ──────────────────────────────────────────────────
@@ -713,6 +760,16 @@ const defs = {
     label: 'Wet-service factor on stiffness', group: 'materials', unit: '×',
     default: 0.9, min: 0.5, max: 1, step: 0.01, status: 'assumed', ref: 'D-4',
   },
+  wetServiceFactorCompPerp: {
+    label: 'Wet-service factor on compression ⊥ (bearing)', group: 'materials', unit: '×',
+    default: 0.67, min: 0.5, max: 1, step: 0.01, status: 'assumed', ref: 'D-4',
+    note: 'NDS wet-service factor C_M for F_c⊥ is 0.67 (not the 0.85 used on bending and shear). Used for every compression-⊥ check.',
+  },
+  oakDowelBearingPsi: {
+    label: 'White oak bolt (dowel) bearing ⊥ grain, clear', group: 'materials', unit: 'psi',
+    default: 4000, min: 1500, max: 8000, step: 100, status: 'assumed', ref: 'D-4',
+    note: 'Bolt bearing in a drilled hole is far above the area-bearing C⊥ (NDS Fe⊥ ≈ 6100·G^1.45/√D ≈ 5,700 psi for G = 0.68, ⅜" bolt); 4,000 psi is a conservative round figure. Used only for the bolster fastener bearing.',
+  },
   plySpecies: {
     label: 'Plywood', group: 'materials', unit: '',
     default: PLY_SPECIES.okoumeMarine, min: 0, max: 1, step: 1, status: 'explore', ref: 'D-5',
@@ -822,6 +879,11 @@ const defs = {
   kingpinMargin: {
     label: 'Kingpin / turntable required margin', group: 'factors', unit: '×',
     default: 2, min: 1, max: 4, step: 0.25, status: 'locked',
+  },
+  pitchPullMarginMin: {
+    label: 'Rearward pitch: lift pull / peak pull', group: 'factors', unit: '×',
+    default: 1.25, min: 1, max: 2.5, step: 0.05, status: 'assumed', ref: 'D-14',
+    note: 'The pull that would lift the front wheels on the design slope must exceed the 150 lbf surge peak by this factor.',
   },
 
   // ── Truck bed ────────────────────────────────────────────────────────────

@@ -12,7 +12,7 @@ import { brakeForce, brakeTraction } from './brake';
 import { makeContext } from './context';
 import { steerClearance, steerSweep } from './steering';
 import { pitchForward, pitchRear, slideBeforeTip, tipLock, tipStraight, turnRadius, vRollover } from './stability';
-import { axleStress, bearingGroove, beamFront, beamRear, deckCheck, kingpinCheck, railsCheck, tongueCheck, turntableCheck } from './structure';
+import { axleStress, bearingGroove, beamFront, beamRear, deckCheck, kingpinCheck, kingpinStrikeCheck, railsCheck, rollBolsterAttachCheck, rollKingpinUpliftCheck, rollSideBearerCheck, tongueCheck, turntableCheck } from './structure';
 import { cgCheck, massEmpty, truckFit, truckSkipped } from './transport';
 import type { AnalysisCheck } from './types';
 
@@ -63,6 +63,10 @@ export function runChecks(input: Params, opts: RunOptions = {}): AnalysisCheck[]
     railsCheck(ctx),
     deckCheck(ctx),
     kingpinCheck(ctx),
+    kingpinStrikeCheck(ctx),
+    rollSideBearerCheck(ctx),
+    rollKingpinUpliftCheck(ctx),
+    rollBolsterAttachCheck(ctx),
     turntableCheck(ctx),
     tongueCheck(ctx),
     includeTruck ? truckFit(opts.fit ?? checkTruckFit(p, (v) => buildModel(p, v))) : truckSkipped(),

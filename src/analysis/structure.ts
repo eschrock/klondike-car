@@ -11,11 +11,11 @@ import { worldAABB } from '../model/bounds';
 import type { Part } from '../model/types';
 import type { Ctx } from './context';
 import { dualCheck, singleCheck, detail, governing, type CaseEval } from './dual';
-import { axleLoads, contactsAt } from './geometry';
+import { DEG, RAD, axleLoads, contactsAt } from './geometry';
 import { f } from './format';
 import type { CaseData } from './loads';
-import { bendingStress, cantileverTip, circleSection, rectSection, rectShear, ssPointMid, ssUdlCentered, transformedSection, type Layer } from './beams';
-import { evalBoth } from './stability';
+import { bendingStress, cantileverTip, circleSection, rectSection, rectShear, ssPointMid, ssUdlCentered, ssUdlFull, transformedSection, type Layer } from './beams';
+import { evalBoth, rearNormalNoseDown } from './stability';
 import type { AnalysisCheck, Detail } from './types';
 
 export function allowables(ctx: Ctx) {
@@ -23,7 +23,12 @@ export function allowables(ctx: Ctx) {
   return {
     oakBend: d.oakDesignMorPsi,
     oakShear: (p.oakShearPsi * p.wetServiceFactorStrength) / p.woodSafetyFactor,
-    oakPerp: (p.oakCompPerpPsi * p.wetServiceFactorStrength) / p.woodSafetyFactor,
+    // Compression ⊥ uses its own wet-service factor (NDS C_M for F_c⊥ = 0.67), not the 0.85 on bending and shear (M2).
+    oakPerp: (p.oakCompPerpPsi * p.wetServiceFactorCompPerp) / p.woodSafetyFactor,
+    oakDowel: (p.oakDowelBearingPsi * p.wetServiceFactorStrength) / p.woodSafetyFactor,
+    uhmw: p.uhmwBearingPsi,
+    fastShear: (0.577 * p.bolsterFastenerYieldPsi) / p.kingpinMargin,
+    fastTens: p.bolsterFastenerYieldPsi / p.kingpinMargin,
     plyBend: d.plyDesignMorPsi,
     steel: d.axleAllowablePsi,
     kpShear: (0.577 * p.kingpinYieldPsi) / p.kingpinMargin,
@@ -35,18 +40,30 @@ export function allowables(ctx: Ctx) {
 
 const part = (ctx: Ctx, id: string): Part | undefined => ctx.byId.get(id);
 
-/** Ground reaction per axle and the heavier wheel of each axle for a load case (static, δ = 0). */
+/**
+ * Ground reaction per axle and the heavier wheel of each axle for a load case (static, δ = 0). The FRONT axle takes the
+ * worse of the level distribution and the nose-down distribution on the design slope, N_f = W·cosθ − N_r (M4); rear is level.
+ */
 function wheelLoads(ctx: Ctx, c: CaseData) {
   const ct = contactsAt(ctx.contact, 0);
-  const a = axleLoads(c.massLb, c.cg[0], (ct.FL[0] + ct.FR[0]) / 2);
+  const xfc = (ct.FL[0] + ct.FR[0]) / 2;
+  const a = axleLoads(c.massLb, c.cg[0], xfc);
+  const th = ctx.p.designSlopeDeg * RAD;
+  const frontSlope = c.massLb * Math.cos(th) - Math.max(0, rearNormalNoseDown(c.massLb, c.cg[0], c.cg[2], th, xfc));
+  const front = Math.max(a.front, frontSlope);
   const share = (T: number) => 0.5 + Math.abs(c.cg[1]) / T;
   return {
-    frontAxle: a.front,
+    frontAxle: front,
+    frontLevel: a.front,
+    frontSlope,
     rearAxle: a.rear,
-    frontWheel: a.front * share(ctx.p.frontTrackIn),
+    frontWheel: front * share(ctx.p.frontTrackIn),
     rearWheel: a.rear * share(ctx.p.rearTrackIn),
   };
 }
+
+const frontLoadText = (ctx: Ctx, w: ReturnType<typeof wheelLoads>) =>
+  `front axle ${f(w.frontAxle)} lb = worse of level ${f(w.frontLevel)} and nose-down on ${f(ctx.p.designSlopeDeg)}° ${f(w.frontSlope)} (M4)`;
 
 const payload = (ctx: Ctx, c: CaseData) => (c.riderLb + c.cargoLb) * ctx.p.dynamicFactor;
 
@@ -73,6 +90,7 @@ export function axleStress(ctx: Ctx): AnalysisCheck {
   const sec = circleSection(p.axleDiameterIn);
   const E = p.steelMoePsi;
   const stub = p.axleStyle === AXLE_STYLE.stubAxles;
+  const wheelR = ctx.d.wheelRadiusIn;
   const ev = (c: CaseData): CaseEval => {
     const w = wheelLoads(ctx, c);
     const rows = (['F', 'R'] as const).map((tag) => {
@@ -87,19 +105,30 @@ export function axleStress(ctx: Ctx): AnalysisCheck {
       const Pdes = Pstatic * p.dynamicFactor;
       const des = cantileverTip(Pdes, a, E * sec.I);
       const stat = cantileverTip(Pstatic, a, E * sec.I);
-      return { tag, a, Pstatic, Pdes, M: des.M, sigma: bendingStress(des.M, sec), defl: stat.defl };
+      // M5: a tyre friction force H = μ·P_des acts at the contact patch (arm r below the axle) at angle ψ from the axle axis.
+      // Its axial part H·cosψ bends the rod in the vertical plane through the arm r (adds to P·a, either sign) and loads it axially;
+      // its fore-aft part H·sinψ bends the rod in the orthogonal plane with arm a. Worst ψ over 0…90°.
+      const H = p.tireGroundMu * Pstatic;
+      let sigma = 0, psiW = 0, Mv = des.M, Mh = 0;
+      for (let psi = 0; psi <= 90; psi += 1) {
+        const Hy = H * Math.cos(psi * RAD), Hx = H * Math.sin(psi * RAD);
+        const mv = des.M + Hy * wheelR, mh = Hx * a;
+        const sg = Math.hypot(mv, mh) * sec.c / sec.I + Hy / sec.A;
+        if (sg > sigma) { sigma = sg; psiW = psi; Mv = mv; Mh = mh; }
+      }
+      return { tag, a, Pstatic, Pdes, H, M: des.M, Mv, Mh, psiW, sigma, sigmaV: bendingStress(des.M, sec), defl: stat.defl };
     });
-    const ds: Detail[] = rows.map((r) => detail(`${r.tag === 'F' ? 'front' : 'rear'} axle bending`, r.sigma, 'psi', al.steel, '<='));
+    const ds: Detail[] = rows.map((r) => detail(`${r.tag === 'F' ? 'front' : 'rear'} axle bending (vertical + tyre friction, resultant)`, r.sigma, 'psi', al.steel, '<='));
     const extra: Detail[] = rows.map((r) => detail(`${r.tag === 'F' ? 'front' : 'rear'} axle tip deflection (static)`, r.defl, 'in', 0.05, '<='));
     const how = rows
-      .map((r) => `${r.tag === 'F' ? 'Front' : 'Rear'}: P = ${f(r.Pstatic)} lb static wheel load × ${p.dynamicFactor} = ${f(r.Pdes)} lbf at the hub; cantilever a = ${f(r.a, 2)}" from the ${stub ? 'beam face (stub axle)' : 'clamp plate outer edge (through rod)'}; M = P·a = ${f(r.M)} lb·in; σ = M·c/I = ${f(r.M)} × ${f(sec.c, 3)} / ${sec.I.toFixed(5)} = ${f(r.sigma, 0)} psi; tip deflection P_static·a³/3EI = ${r.defl.toFixed(4)}" (guide ≤ 0.05", info).`)
+      .map((r) => `${r.tag === 'F' ? 'Front' : 'Rear'}: P = ${f(r.Pstatic)} lb static wheel load${r.tag === 'F' ? ` (${frontLoadText(ctx, w)})` : ''} × ${p.dynamicFactor} = ${f(r.Pdes)} lbf at the hub; cantilever a = ${f(r.a, 2)}" from the ${stub ? 'beam face (stub axle)' : 'clamp plate outer edge (through rod)'} (the pressure peak is ~0.4" outboard of the clamp edge, so a is a conservative simplification, D3); vertical-only M = P·a = ${f(r.M)} lb·in, σ = ${f(r.sigmaV, 0)} psi. With the tyre friction force H = μ·P_static = ${f(p.tireGroundMu, 2)} × ${f(r.Pstatic)} = ${f(r.H)} lbf (cornering / side-slope limit on the static normal load; using the ×${p.dynamicFactor} design load instead would give ${f(p.tireGroundMu * r.Pdes)} lbf) at the contact radius r = ${f(wheelR, 2)}" (worst angle ${f(r.psiW, 0)}° from the axle axis): M_vertical-plane = ${f(r.Mv)}, M_fore-aft = ${f(r.Mh)} lb·in, resultant σ = √(Mv²+Mh²)·c/I + H_axial/A = ${f(r.sigma, 0)} psi; tip deflection P_static·a³/3EI = ${r.defl.toFixed(4)}" (guide ≤ 0.05", info).`)
       .join(' | ') + ` Allowable ${f(al.steel, 0)} psi (yield ${f(p.axleYieldPsi, 0)} / SF ${p.steelSafetyFactor}).`;
     const e = governing(ds, how);
     e.details = [...ds, ...extra];
     return e;
   };
   return dualCheck({
-    id: 'axle-stress', label: stub ? 'Stub axle bending' : 'Axle bending (through rod)', group: 'Structure', refs: ['D-2', 'D-4', 'D-10'], primary: 'goal',
+    id: 'axle-stress', label: stub ? 'Stub axle bending' : 'Axle bending (through rod)', group: 'Structure', refs: ['D-2', 'D-4', 'D-10', 'D-16'], primary: 'goal',
     ...evalBoth(ctx, ev),
   });
 }
@@ -122,7 +151,7 @@ function beamEval(ctx: Ctx, kind: 'front' | 'rear', c: CaseData): CaseEval {
   if (kind === 'front') {
     const yl = p.turntableSizeIn / 2;
     M = (F / 2) * Math.abs(ys - yl);
-    load = `Turntable load F = axle load ${f(F / p.dynamicFactor)} lb × ${p.dynamicFactor} = ${f(F)} lbf as two loads F/2 = ${f(F / 2)} at y = ±${f(yl)}" (turntable edges), reactions at the clamp plates (y = ±${f(ys, 2)}")`;
+    load = `Turntable load F = ${frontLoadText(ctx, w)} × ${p.dynamicFactor} = ${f(F)} lbf as two loads F/2 = ${f(F / 2)} at y = ±${f(yl)}" (turntable edges), reactions at the clamp plates (y = ±${f(ys, 2)}")`;
   } else {
     const rail = part(ctx, 'rail-cabin-L') ?? part(ctx, 'girder-cabin-L');
     const yr = rail ? (worldAABB(rail).min[1] + worldAABB(rail).max[1]) / 2 : ctx.L.hwC;
@@ -167,7 +196,7 @@ export function bearingGroove(ctx: Ctx): AnalysisCheck {
     const s = Pw / area;
     return {
       value: s, unit: 'psi', limit: al.oakPerp, sense: '<=',
-      how: `${worstTag === 'R' ? 'Rear' : 'Front'} wheel design load ${f(Pw)} lbf (static ${f(Pw / p.dynamicFactor)} × ${p.dynamicFactor}) bears on the groove over rod dia × clamp-plate length along the rod = ${f(p.axleDiameterIn, 3)}" × ${f(len, 2)}" = ${f(area, 2)} in² (the two U-bolt plates straddle the same rod length, so they are counted once; conservative against 2 plates): ${f(s, 0)} psi vs compression ⊥ design ${f(al.oakPerp, 0)} psi (${p.oakCompPerpPsi} × ${p.wetServiceFactorStrength} / ${p.woodSafetyFactor}).`,
+      how: `${worstTag === 'R' ? 'Rear' : 'Front'} wheel design load ${f(Pw)} lbf (static ${f(Pw / p.dynamicFactor)} × ${p.dynamicFactor}) ${worstTag === 'F' ? '(front: worse of level and nose-down on the design slope, M4) ' : ''}bears on the groove over rod dia × clamp-plate length along the rod = ${f(p.axleDiameterIn, 3)}" × ${f(len, 2)}" = ${f(area, 2)} in² (the two U-bolt plates straddle the same rod length, so they are counted once; conservative against 2 plates): ${f(s, 0)} psi vs compression ⊥ design ${f(al.oakPerp, 0)} psi (${p.oakCompPerpPsi} × C_M ${p.wetServiceFactorCompPerp} (NDS F_c⊥ wet service, M2) / ${p.woodSafetyFactor}).`,
     };
   };
   return dualCheck({
@@ -211,10 +240,15 @@ export function railsCheck(ctx: Ctx): AnalysisCheck {
   const al = allowables(ctx);
   const hull = p.frameStyle === FRAME_STYLE.hullBeam;
   const span = L.kx - 0;
+  // Sprung chassis weight the rails also carry (deck, sides, seat, storage, fittings; axles/beams/clamps are carried directly), M3.
+  const selfLb = ctx.parts.reduce((m, x) => (x.body === 'chassis' && !x.payload && x.group !== 'reference' && x.group !== 'running-gear' ? m + x.massLb : m), 0);
   const ev = (c: CaseData): CaseEval => {
     const Pdyn = payload(ctx, c);
     const Pstat = c.riderLb + c.cargoLb;
     const Pm = Pdyn / 2;
+    const Wm = (selfLb * p.dynamicFactor) / 2; // chassis self-weight × dynamic factor, per rail, uniform over the span
+    const Ws = selfLb / 2; // static, for deflection
+    const selfTxt = `Chassis self-weight ${f(selfLb)} lb (all chassis parts above the axles, M3) × ${p.dynamicFactor} = ${f(selfLb * p.dynamicFactor)} lbf as a UDL, ${f(Wm)} lbf per member (static ${f(Ws)} lb in deflection).`;
     const ds: Detail[] = [];
     let how: string;
     if (!hull) {
@@ -223,12 +257,14 @@ export function railsCheck(ctx: Ctx): AnalysisCheck {
       const b = bb ? bb.max[1] - bb.min[1] : p.railThicknessIn;
       const h = bb ? bb.max[2] - bb.min[2] : p.railDepthIn;
       const sec = rectSection(b, h);
-      const r = ssPointMid(Pm, span, al.Eoak * sec.I);
+      const r0 = ssPointMid(Pm, span, al.Eoak * sec.I);
+      const u0 = ssUdlFull(Wm, span, al.Eoak * sec.I);
+      const r = { M: r0.M + u0.M, V: r0.V + u0.V };
       const sigma = bendingStress(r.M, sec);
       const tau = rectShear(r.V, b, h);
-      const defl = ssPointMid(Pstat / 2, span, al.Eoak * sec.I).defl;
+      const defl = ssPointMid(Pstat / 2, span, al.Eoak * sec.I).defl + ssUdlFull(Ws, span, al.Eoak * sec.I).defl;
       ds.push(detail('bending', sigma, 'psi', al.oakBend, '<='), detail('shear', tau, 'psi', al.oakShear, '<='), detail('static deflection', defl, 'in', span / p.deflectionLimitRatio, '<='));
-      how = `Ladder rails ${f(b, 2)}" × ${f(h, 2)}" (2 members). Payload (${c.riderLb} + ${c.cargoLb}) × ${p.dynamicFactor} = ${f(Pdyn)} lbf as a point load at midspan of the ${f(span)}" span (rear beam to kingpin), ${f(Pm)} lbf per rail: M = PL/4 = ${f(r.M)} lb·in, σ = M/S = ${f(sigma, 0)} psi (≤ ${f(al.oakBend, 0)}); τ = 1.5V/A = ${f(tau, 0)} psi (≤ ${f(al.oakShear, 0)}); static δ = P·L³/48EI with P = ${f(Pstat / 2)} lb: ${defl.toFixed(3)}" (≤ L/${p.deflectionLimitRatio} = ${(span / p.deflectionLimitRatio).toFixed(3)}").`;
+      how = `Ladder rails ${f(b, 2)}" × ${f(h, 2)}" (2 members). Payload (${c.riderLb} + ${c.cargoLb}) × ${p.dynamicFactor} = ${f(Pdyn)} lbf as a point load at midspan of the ${f(span)}" span (rear beam to kingpin), ${f(Pm)} lbf per rail: M = PL/4 + wL²/8 = ${f(r0.M)} + ${f(u0.M)} = ${f(r.M)} lb·in. ${selfTxt} σ = M/S = ${f(sigma, 0)} psi (≤ ${f(al.oakBend, 0)}); τ = 1.5V/A = ${f(tau, 0)} psi (≤ ${f(al.oakShear, 0)}); static δ = P·L³/48EI + 5WL³/384EI with P = ${f(Pstat / 2)} lb, W = ${f(Ws)} lb: ${defl.toFixed(3)}" (≤ L/${p.deflectionLimitRatio} = ${(span / p.deflectionLimitRatio).toFixed(3)}").`;
     } else {
       const lay = hullLayers(ctx, 'cabin');
       if (!lay) {
@@ -236,27 +272,29 @@ export function railsCheck(ctx: Ctx): AnalysisCheck {
         how = 'Hull-beam girder section not found in the parts list.';
       } else {
         const ts = transformedSection(lay, al.Eoak);
-        const r = ssPointMid(Pm, span, ts.EI);
+        const r0 = ssPointMid(Pm, span, ts.EI);
+        const u0 = ssUdlFull(Wm, span, ts.EI);
+        const r = { M: r0.M + u0.M };
         const cOak = Math.max(...ts.layers.filter((q) => q.kind === 'oak').map((q) => q.cMax), 0);
         const cPly = Math.max(...ts.layers.filter((q) => q.kind === 'ply').map((q) => q.cMax), 0);
         const nPly = ts.layers.find((q) => q.kind === 'ply')?.n ?? 0;
         const sOak = (r.M * cOak) / ts.I;
         ds.push(detail('girder bending (oak)', sOak, 'psi', al.oakBend, '<='));
         if (cPly > 0) ds.push(detail('girder bending (ply web)', (nPly * r.M * cPly) / ts.I, 'psi', al.plyBend, '<='));
-        const defl = ssPointMid(Pstat / 2, span, ts.EI).defl;
+        const defl = ssPointMid(Pstat / 2, span, ts.EI).defl + ssUdlFull(Ws, span, ts.EI).defl;
         ds.push(detail('static deflection', defl, 'in', span / p.deflectionLimitRatio, '<='));
         // Nose section (no deepened girder) at the shoulder, with the load just aft of it.
         let noseTxt = '';
         const nose = L.xs < L.kx ? hullLayers(ctx, 'nose') : null;
         if (nose) {
           const tn = transformedSection(nose, al.Eoak);
-          const Mn = (Pm * L.xs * (L.kx - L.xs)) / L.kx;
+          const Mn = (Pm * L.xs * (L.kx - L.xs)) / L.kx + ((Wm / L.kx) * L.xs * (L.kx - L.xs)) / 2;
           const cn = Math.max(...tn.layers.filter((q) => q.kind === 'oak').map((q) => q.cMax), 0);
           const sn = (Mn * cn) / tn.I;
           ds.push(detail('nose side bending at the shoulder (oak)', sn, 'psi', al.oakBend, '<='));
-          noseTxt = ` Nose side section at the shoulder (load just aft of it, M = P·xs(L−xs)/L = ${f(Mn)} lb·in): σ = ${f(sn, 0)} psi.`;
+          noseTxt = ` Nose side section at the shoulder (load just aft of it plus the self-weight UDL, M = P·xs(L−xs)/L + w·xs(L−xs)/2 = ${f(Mn)} lb·in): σ = ${f(sn, 0)} psi.`;
         }
-        how = `Hull-beam girders (2 members), transformed I-section from the actual parts (oak girder + chine + gunwale flanges, ply web, n_ply = E_ply/E_oak = ${f(nPly, 2)}): NA at z = ${f(ts.zNa, 2)}", I_tr = ${f(ts.I, 1)} in⁴. Payload × ${p.dynamicFactor} = ${f(Pdyn)} lbf at midspan of ${f(span)}", ${f(Pm)} lbf per girder: M = ${f(r.M)} lb·in, σ_oak = ${f(sOak, 0)} psi (≤ ${f(al.oakBend, 0)}); static δ = ${defl.toFixed(3)}" (≤ L/${p.deflectionLimitRatio} = ${(span / p.deflectionLimitRatio).toFixed(3)}").${noseTxt}`;
+        how = `Hull-beam girders (2 members), transformed I-section from the actual parts (oak girder + chine + gunwale flanges, ply web, n_ply = E_ply/E_oak = ${f(nPly, 2)}): NA at z = ${f(ts.zNa, 2)}", I_tr = ${f(ts.I, 1)} in⁴. Payload × ${p.dynamicFactor} = ${f(Pdyn)} lbf at midspan of ${f(span)}", ${f(Pm)} lbf per girder: M = ${f(r0.M)} + ${f(u0.M)} (self-weight) = ${f(r.M)} lb·in. ${selfTxt} σ_oak = ${f(sOak, 0)} psi (≤ ${f(al.oakBend, 0)}); static δ = ${defl.toFixed(3)}" (≤ L/${p.deflectionLimitRatio} = ${(span / p.deflectionLimitRatio).toFixed(3)}").${noseTxt}`;
       }
     }
     return governing(ds, how);
@@ -281,29 +319,62 @@ export function maxDeckSpan(ctx: Ctx): number {
   return Math.max(1, m);
 }
 
+/** Standing-scout foot patch: 4" along the span × 10" across (spec). */
+const FOOT_ALONG_IN = 4;
+const FOOT_ACROSS_IN = 10;
+const STOCK_PLY_MM = [6, 9, 12, 18];
+
+/**
+ * Effective strip width of a one-way plate under a patch load at midspan, simply supported (D1): b_eff = b_patch + 2.5·x(1 − x/L)
+ * at x = L/2, i.e. b_patch + 0.625·L (EN 1992-1-1 / BS 8110 effective-width rule for concentrated loads on a one-way slab).
+ */
+export const effectiveStripWidth = (patchAcross: number, span: number): number => patchAcross + 0.625 * span;
+
 export function deckCheck(ctx: Ctx): AnalysisCheck {
   const { p, L } = ctx;
   const al = allowables(ctx);
   const span = maxDeckSpan(ctx);
   const t = p.deckPlyIn;
   const b = 12;
-  const sec = rectSection(b, t);
-  const EI = al.Eply * sec.I;
-  const ev = (c: CaseData): CaseEval => {
+  const lim = span / p.deflectionLimitRatio;
+  const beff = effectiveStripWidth(FOOT_ACROSS_IN, span);
+  const beffAlt = FOOT_ACROSS_IN + span;
+  // Standing-scout response for a ply thickness: bending stress and static deflection of the b_eff strip.
+  const standing = (th: number, footLb: number, width = beff) => {
+    const sec = rectSection(width, th);
+    const r = ssUdlCentered(footLb / FOOT_ALONG_IN, FOOT_ALONG_IN, span, al.Eply * sec.I);
+    return { M: r.M, sigma: r.M / sec.S, defl: r.defl };
+  };
+  const seatCase = (th: number, c: CaseData) => {
+    const sec = rectSection(b, th);
     const seatArea = p.seatDepthIn * L.seat.width;
     const wSeat = ((c.riderLb * p.dynamicFactor) / seatArea) * Math.min(b, L.seat.width);
-    const a = ssUdlCentered(wSeat, p.seatDepthIn, span, EI);
-    const sA = a.M / sec.S;
-    const footLb = c.riderLb;
-    const patch = 4;
-    const s = ssUdlCentered(footLb / patch, patch, span, EI);
-    const sB = s.M / sec.S;
+    const a = ssUdlCentered(wSeat, p.seatDepthIn, span, al.Eply * sec.I);
+    return { wSeat, M: a.M, sigma: a.M / sec.S };
+  };
+  const passes = (th: number, c: CaseData) => {
+    const st = standing(th, c.riderLb);
+    return seatCase(th, c).sigma <= al.plyBend && st.sigma <= al.plyBend && st.defl <= lim;
+  };
+  const needed = (c: CaseData): number => {
+    let lo = 0.05, hi = 3;
+    if (!passes(hi, c)) return Infinity;
+    for (let i = 0; i < 50; i++) { const mid = (lo + hi) / 2; if (passes(mid, c)) hi = mid; else lo = mid; }
+    return hi;
+  };
+  const ev = (c: CaseData): CaseEval => {
+    const sa = seatCase(t, c);
+    const s = standing(t, c.riderLb);
     const ds = [
-      detail('seat case bending', sA, 'psi', al.plyBend, '<='),
-      detail('standing scout bending', sB, 'psi', al.plyBend, '<='),
-      detail('standing scout deflection', s.defl, 'in', span / p.deflectionLimitRatio, '<='),
+      detail('seat case bending', sa.sigma, 'psi', al.plyBend, '<='),
+      detail('standing scout bending', s.sigma, 'psi', al.plyBend, '<='),
+      detail('standing scout deflection', s.defl, 'in', lim, '<='),
     ];
-    const how = `12" strip of ${f(t, 3)}" ply on the largest crossmember span ${f(span, 2)}" (simply supported, conservative): (a) seat: ${c.riderLb} lb × ${p.dynamicFactor} spread over ${f(p.seatDepthIn)}" × ${f(L.seat.width)}" → ${f(wSeat, 1)} lb/in on the strip, M = ${f(a.M)} lb·in, σ = M/S = ${f(sA, 0)} psi; (b) standing scout ${c.riderLb} lb static on a 4" × 10" patch at midspan (4" along the span): M = ${f(s.M)} lb·in, σ = ${f(sB, 0)} psi, δ = ${s.defl.toFixed(3)}" vs span/${p.deflectionLimitRatio} = ${(span / p.deflectionLimitRatio).toFixed(3)}". Ply design stress ${f(al.plyBend, 0)} psi, E = ${f(al.Eply, 0)} psi (E × C_M). A 12" strip ignores plate action and load spreading across the panel (conservative).`;
+    const tReq = needed(c);
+    const stock = STOCK_PLY_MM.find((mm) => mm / 25.4 >= tReq - 1e-9);
+    const sens = STOCK_PLY_MM.map((mm) => `${mm} mm: ${standing(mm / 25.4, c.riderLb).defl.toFixed(3)}"`).join(', ');
+    const alt = standing(t, c.riderLb, beffAlt).defl;
+    const how = `Ply ${f(t, 3)}" (${f(t * 25.4, 1)} mm) on the largest crossmember span ${f(span, 2)}" (panel simply supported: the captured/glued edges give some fixity that is not counted). (a) Seat: ${c.riderLb} lb × ${p.dynamicFactor} spread over ${f(p.seatDepthIn)}" × ${f(L.seat.width)}" → ${f(sa.wSeat, 1)} lb/in on a 12" strip, M = ${f(sa.M)} lb·in, σ = ${f(sa.sigma, 0)} psi. (b) Standing scout: ${c.riderLb} lb static on a ${FOOT_ALONG_IN}" (along the span) × ${FOOT_ACROSS_IN}" patch at midspan, treated as a one-way plate with effective strip width b_eff = b_patch + 2.5·x(1−x/L) = ${FOOT_ACROSS_IN} + 0.625 × ${f(span, 2)} = ${f(beff, 1)}" (EN 1992 / BS 8110 rule for a point load on a one-way slab at x = L/2): M = ${f(s.M)} lb·in, σ = ${f(s.sigma, 0)} psi, δ = ${s.defl.toFixed(3)}" vs span/${p.deflectionLimitRatio} = ${lim.toFixed(3)}". Ply design stress ${f(al.plyBend, 0)} psi, E = ${f(al.Eply, 0)} psi (E × C_M ${p.wetServiceFactorStiffness}). Thickness that passes all three: ≥ ${Number.isFinite(tReq) ? `${f(tReq * 25.4, 1)} mm (${f(tReq, 3)}")` : 'more than 3"'}${stock ? `, so the next stock ply is ${stock} mm` : ''}. Standing-scout deflection by stock ply (same b_eff, this load): ${sens}. For reference, the looser b_eff = patch + span = ${f(beffAlt, 1)}" would give ${alt.toFixed(3)}" at the current ply.`;
     return governing(ds, how);
   };
   return dualCheck({
@@ -314,28 +385,219 @@ export function deckCheck(ctx: Ctx): AnalysisCheck {
 
 // ── steering structure ───────────────────────────────────────────────────────────────────────────────────────
 
-export function kingpinCheck(ctx: Ctx): AnalysisCheck {
+/** Kingpin geometry shared by the pull, strike and roll rows: the stack the bolt crosses and the shear arrangement. */
+function kingpinGeom(ctx: Ctx) {
   const { p, L } = ctx;
-  const al = allowables(ctx);
   const sec = circleSection(p.kingpinDiameterIn);
-  const H = p.pullForceLbf;
   const stack = Math.max(0.1, L.kingpin.z1 - L.kingpin.z0);
   const double = L.kingpin.z1 >= L.bolster.z1 - 1e-6;
-  const tau = H / ((double ? 2 : 1) * sec.A);
-  const M = double ? (H * stack) / 4 : H * stack;
-  const sigma = bendingStress(M, sec);
-  const beamDepth = L.beamF.depth;
-  const bearing = H / (p.kingpinDiameterIn * beamDepth);
+  return { sec, stack, double, beamDepth: L.beamF.depth };
+}
+
+/** Kingpin stresses for a horizontal load H at the turntable plane (single shear + cantilever over the stack, or double shear). */
+function kingpinStress(ctx: Ctx, H: number) {
+  const g = kingpinGeom(ctx);
+  const tau = H / ((g.double ? 2 : 1) * g.sec.A);
+  const M = g.double ? (H * g.stack) / 4 : H * g.stack;
+  return { ...g, tau, M, sigma: bendingStress(M, g.sec), bearing: H / (ctx.p.kingpinDiameterIn * g.beamDepth) };
+}
+
+const SHEAR_TXT = 'the shear plane is the turntable interface between the steer body (beam + lazy-susan bottom plate) and the chassis side (top plate/bolster); the bolt is a cantilever fixed at the beam-underside washer over the whole stack s';
+
+export function kingpinCheck(ctx: Ctx): AnalysisCheck {
+  const { p } = ctx;
+  const al = allowables(ctx);
+  const H = p.pullForceLbf;
+  const k = kingpinStress(ctx, H);
   const ds = [
-    detail('shear', tau, 'psi', al.kpShear, '<='),
-    detail('bending', sigma, 'psi', al.kpBend, '<='),
-    detail('bore bearing in the beam (oak ⊥)', bearing, 'psi', al.oakPerp, '<='),
+    detail('shear', k.tau, 'psi', al.kpShear, '<='),
+    detail('bending', k.sigma, 'psi', al.kpBend, '<='),
+    detail('bore bearing in the beam (oak ⊥)', k.bearing, 'psi', al.oakPerp, '<='),
   ];
-  const how = `Horizontal pull ${H} lbf (D-14 design peak) at the turntable plane. ${double ? 'Bolt passes the beam and the bolster: double shear, M = H·s/4.' : 'Bolt passes the beam and turntable only: single shear, plus cantilever bending over the stack'} s = ${f(stack, 3)}" (layout.kingpin): τ = H/A = ${f(H)}/${f(sec.A, 3)} = ${f(tau, 0)} psi (≤ 0.577·${f(p.kingpinYieldPsi, 0)}/${p.kingpinMargin} = ${f(al.kpShear, 0)}); M = ${f(M)} lb·in, σ = ${f(sigma, 0)} psi (≤ ${f(al.kpBend, 0)}); bearing on the oak bore H/(d·depth) = ${f(bearing, 0)} psi (≤ ${f(al.oakPerp, 0)}).`;
+  const how = `Horizontal pull ${H} lbf (D-14 design peak) at the turntable plane. ${k.double ? 'Bolt passes the beam and the bolster: double shear, M = H·s/4.' : `Bolt passes the beam and turntable only: single shear (${SHEAR_TXT}), M = H·s.`} s = ${f(k.stack, 3)}" (layout.kingpin): τ = H/A = ${f(H)}/${f(k.sec.A, 3)} = ${f(k.tau, 0)} psi (≤ 0.577·${f(p.kingpinYieldPsi, 0)}/${p.kingpinMargin} = ${f(al.kpShear, 0)}); M = ${f(k.M)} lb·in, σ = ${f(k.sigma, 0)} psi (≤ ${f(al.kpBend, 0)}); bearing on the oak bore H/(d·depth) = ${f(k.bearing, 0)} psi (≤ ${f(al.oakPerp, 0)} = ${p.oakCompPerpPsi} × C_M ${p.wetServiceFactorCompPerp} / ${p.woodSafetyFactor}; average over the bore, a rigid pin peaks higher, D6). The bridle pull is the lighter horizontal case: see 'kingpin-strike' for curb/root strikes.`;
   const ev = governing(ds, how);
   return dualCheck({
-    id: 'kingpin', label: 'Kingpin bolt', group: 'Structure', refs: ['D-12', 'D-14', 'D-4'], primary: 'goal',
+    id: 'kingpin', label: 'Kingpin bolt (bridle pull)', group: 'Structure', refs: ['D-12', 'D-14', 'D-4'], primary: 'goal',
     ...evalBoth(ctx, () => ev),
+  });
+}
+
+// ── front-wheel obstacle strike (H1) and the D-12 roll path (H2) ────────────────────────────────────────────────
+
+/**
+ * Horizontal force at which a wheel of radius r climbs a step of height h under vertical load V: the contact normal is
+ * tilted by φ with cos φ = (r − h)/r, so H = V·tanφ (h capped at 0.9 r: a taller step is a wall).
+ */
+export function obstacleForce(r: number, h: number, V: number): { H: number; phi: number; tan: number; hEff: number } {
+  const hEff = Math.min(h, 0.9 * r);
+  const cos = (r - hEff) / r;
+  const phi = Math.acos(cos);
+  const tan = Math.sqrt(1 - cos * cos) / cos;
+  return { H: V * tan, phi, tan, hEff };
+}
+
+/** Roll balance of the steer body with one wheel loaded (P at y_w) and the bearer at y_sb: F_sb = P·y_w/y_sb, uplift U = F_sb − P. */
+export function rollBalance(P: number, yw: number, ysb: number): { Fsb: number; U: number } {
+  const Fsb = (P * yw) / ysb;
+  return { Fsb, U: Math.max(0, Fsb - P) };
+}
+
+interface Strike { name: string; both: boolean; h: number; hEff: number; phi: number; tan: number; Vw: number; Hw: number; H: number }
+
+/**
+ * Curb and root strikes by the front wheel(s). The wheel climbs the obstacle when the horizontal force reaches V·tanφ with
+ * cos φ = (r − h)/r (h capped at 0.9 r: a taller step is a wall). V is the design (×dynamicFactor) front wheel load: the
+ * heavier wheel alone, or both wheels at half the axle each. Both wheels: H = 2·H_w; one wheel: H = H_w.
+ */
+function strikeCases(ctx: Ctx, c: CaseData): Strike[] {
+  const { p, d } = ctx;
+  const w = wheelLoads(ctx, c);
+  const r = d.wheelRadiusIn;
+  const out: Strike[] = [];
+  for (const [name, h] of [['curb', p.curbHeightIn], ['root', p.rootHeightIn]] as const) {
+    for (const both of [true, false]) {
+      const Vw = (both ? w.frontAxle / 2 : w.frontWheel) * p.dynamicFactor;
+      const { H: Hw, phi, tan, hEff } = obstacleForce(r, h, Vw);
+      out.push({ name: `${name} ${both ? 'both wheels' : 'one wheel'}`, both, h, hEff, phi, tan, Vw, Hw, H: both ? 2 * Hw : Hw });
+    }
+  }
+  return out;
+}
+
+const STD_KINGPIN_IN = [0.375, 0.5, 0.625, 0.75, 0.875, 1, 1.25];
+
+export function kingpinStrikeCheck(ctx: Ctx): AnalysisCheck {
+  const { p, L } = ctx;
+  const al = allowables(ctx);
+  const sec = circleSection(p.axleDiameterIn);
+  const ev = (c: CaseData): CaseEval => {
+    const w = wheelLoads(ctx, c);
+    const cases = strikeCases(ctx, c);
+    const clamp = clampGeometry(ctx, 'F');
+    const wheel = part(ctx, 'wheel-FL');
+    const yw = wheel ? Math.abs(wheel.transform[13]) : p.frontTrackIn / 2;
+    const stub = p.axleStyle === AXLE_STYLE.stubAxles;
+    const aAx = Math.max(0.01, yw - (stub ? L.beamF.len / 2 : clamp.outerY));
+    const hEffBeam = Math.max(0.1, L.beamF.depth - p.axleDiameterIn);
+    const netX = Math.max(0.1, L.beamF.thick - p.kingpinDiameterIn);
+    // Evaluate every case against the kingpin criteria; the governing case is the one with the highest utilisation.
+    const rows = cases.map((s) => {
+      const k = kingpinStress(ctx, s.H);
+      const Mbeam = s.Hw * clamp.centreY;
+      const sBeam = (6 * Mbeam) / (hEffBeam * netX * netX);
+      const sAxle = (Math.hypot(s.Vw, s.Hw) * aAx * sec.c) / sec.I;
+      const kp = [k.tau / al.kpShear, k.sigma / al.kpBend, k.bearing / al.oakPerp];
+      return { s, k, sBeam, sAxle, util: Math.max(...kp, sBeam / al.oakBend, sAxle / al.steel) };
+    });
+    const g = rows.reduce((a, b) => (b.util > a.util ? b : a), rows[0]);
+    const ds: Detail[] = [
+      detail('kingpin shear', g.k.tau, 'psi', al.kpShear, '<='),
+      detail('kingpin bending (cantilever over the stack)', g.k.sigma, 'psi', al.kpBend, '<='),
+      detail('kingpin bore bearing in the beam (oak ⊥)', g.k.bearing, 'psi', al.oakPerp, '<='),
+      detail('front beam fore-aft bending at the kingpin hole', g.sBeam, 'psi', al.oakBend, '<='),
+      detail('front axle bending, vertical + fore-aft resultant', g.sAxle, 'psi', al.steel, '<='),
+    ];
+    // Smallest kingpin that passes shear, bending and bore bearing for the governing H (and the next standard size).
+    const Hg = g.s.H, s = g.k.stack, dbl = g.k.double;
+    const dBend = Math.cbrt((32 * (dbl ? (Hg * s) / 4 : Hg * s)) / (Math.PI * al.kpBend));
+    const dShear = Math.sqrt((4 * Hg) / ((dbl ? 2 : 1) * Math.PI * al.kpShear));
+    const dBear = Hg / (al.oakPerp * g.k.beamDepth);
+    const dMin = Math.max(dBend, dShear, dBear);
+    const dStd = STD_KINGPIN_IN.find((x) => x >= dMin - 1e-9);
+    const table = rows.map((r) => `${r.s.name}: H = ${f(r.s.H)} lbf (V_w ${f(r.s.Vw)}, tanφ ${f(r.s.tan, 2)}, φ ${f(r.s.phi * DEG, 1)}°) → kingpin σ ${f(r.k.sigma / 1000, 1)} ksi, bearing ${f(r.k.bearing, 0)} psi`).join('; ');
+    const how = `Front wheel(s) strike a ${p.curbHeightIn}" curb or ${p.rootHeightIn}" root (loaded wheel radius r = ${f(ctx.d.wheelRadiusIn, 2)}"): cos φ = (r − h)/r, horizontal force H = V·tanφ on the design wheel load V = static × ${p.dynamicFactor} (${frontLoadText(ctx, w)}). ${table}. Governing: ${g.s.name}, H = ${f(g.s.H)} lbf. The kingpin and the beam are the only horizontal link between the axle and the chassis (stops and side-bearers resist only rotation), so H goes through the ${f(p.kingpinDiameterIn, 3)}" bolt: ${SHEAR_TXT}, s = ${f(g.k.stack, 3)}", ${g.k.double ? 'double' : 'single'} shear: τ = ${f(g.k.tau, 0)} psi (≤ ${f(al.kpShear, 0)}), M = H·s = ${f(g.k.M)} lb·in, σ = ${f(g.k.sigma, 0)} psi (≤ ${f(al.kpBend, 0)} = yield ${f(p.kingpinYieldPsi, 0)} / ${p.kingpinMargin}); bore bearing H/(d·beam depth ${f(g.k.beamDepth, 2)}") = ${f(g.k.bearing, 0)} psi (≤ ${f(al.oakPerp, 0)}, C_M ${p.wetServiceFactorCompPerp}). Beam: the wheel force enters at the clamps (y = ±${f(clamp.centreY, 2)}") and is reacted at the kingpin, fore-aft bending ${f(g.sBeam, 0)} psi on the net section ${f(hEffBeam, 2)}" × (${f(L.beamF.thick, 2)}" − ${f(p.kingpinDiameterIn, 2)}" hole). Axle: ${f(g.s.Vw)} lbf vertical with ${f(g.s.Hw)} lbf fore-aft on the ${f(aAx, 2)}" cantilever: ${f(g.sAxle, 0)} psi. The turntable carries no horizontal rating (D-12), so the kingpin takes it all; the yaw torque of a one-wheel strike swings the steer body into its stop. Minimum kingpin for this H: bending d ≥ ${f(dBend, 3)}", shear ≥ ${f(dShear, 3)}", bore bearing ≥ ${f(dBear, 3)}" → ${Number.isFinite(dMin) ? `${f(dMin, 3)}"` : '?'}, i.e. ${dStd ? `${dStd}" bolt (at the same grade and stack)` : 'more than 1¼"'}; a shorter stack s or a stronger bolt grade also works.`;
+    return governing(ds, how);
+  };
+  return dualCheck({
+    id: 'kingpin-strike', label: 'Front obstacle strike: kingpin, beam, axle', group: 'Structure', refs: ['D-2', 'D-12', 'D-14', 'H1'], primary: 'goal',
+    ...evalBoth(ctx, ev),
+  });
+}
+
+/** One front wheel at the dynamic load, the other unloaded: bearer force and kingpin uplift from the beam's moment balance. */
+function rollLoads(ctx: Ctx, c: CaseData) {
+  const { p, L } = ctx;
+  const w = wheelLoads(ctx, c);
+  const P = w.frontWheel * p.dynamicFactor;
+  const yw = p.frontTrackIn / 2;
+  const sb = L.sideBearer;
+  const ysb = (sb.y0 + sb.y1) / 2;
+  const { Fsb, U } = rollBalance(P, yw, ysb);
+  return { w, P, yw, ysb, Fsb, U, area: (sb.y1 - sb.y0) * (sb.x1 - sb.x0) };
+}
+
+const ROLL_TXT = (ctx: Ctx, r: ReturnType<typeof rollLoads>) =>
+  `One front wheel carries the design load P = ${f(r.w.frontWheel)} lb static (${frontLoadText(ctx, r.w)}, heavier wheel) × ${ctx.p.dynamicFactor} = ${f(r.P)} lbf at y = ${f(r.yw, 2)}"; the other is unloaded. Moment balance of the steer body about its centreline: F_sb = P·y_w/y_sb = ${f(r.P)} × ${f(r.yw, 2)} / ${f(r.ysb, 2)}" (centroid of the bearer block) = ${f(r.Fsb)} lbf down on the bearer; vertical balance leaves ${f(r.U)} lbf of UPLIFT that the kingpin must carry in tension (D-12: the turntable is not moment-rated).`;
+
+export function rollSideBearerCheck(ctx: Ctx): AnalysisCheck {
+  const { p, L } = ctx;
+  const al = allowables(ctx);
+  const ev = (c: CaseData): CaseEval => {
+    const r = rollLoads(ctx, c);
+    const sOak = r.Fsb / r.area;
+    const ds = [
+      detail('bearer oak block / bolster rail bearing (⊥)', sOak, 'psi', al.oakPerp, '<='),
+      detail('UHMW wear strip bearing', sOak, 'psi', al.uhmw, '<='),
+    ];
+    const sb = L.sideBearer;
+    const how = `${ROLL_TXT(ctx, r)} Bearer face ${f(sb.y1 - sb.y0, 2)}" (across) × ${f(sb.x1 - sb.x0, 2)}" (fore-aft) = ${f(r.area, 2)} in²: ${f(r.Fsb)} / ${f(r.area, 2)} = ${f(sOak, 0)} psi against oak ⊥ ${f(al.oakPerp, 0)} psi (${p.oakCompPerpPsi} × C_M ${p.wetServiceFactorCompPerp} / ${p.woodSafetyFactor}; the bolster rail underside bears on the strip at the same stress) and UHMW ${f(al.uhmw, 0)} psi (creep-limited design value). Uniform pressure across the face is assumed; a one-wheel bump loads one side only.`;
+    return governing(ds, how);
+  };
+  return dualCheck({
+    id: 'roll-side-bearer', label: 'Bump roll: side-bearer bearing', group: 'Structure', refs: ['D-12', 'D-2', 'H2'], primary: 'goal',
+    ...evalBoth(ctx, ev),
+  });
+}
+
+export function rollKingpinUpliftCheck(ctx: Ctx): AnalysisCheck {
+  const { p } = ctx;
+  const al = allowables(ctx);
+  const sec = circleSection(p.kingpinDiameterIn);
+  const ev = (c: CaseData): CaseEval => {
+    const r = rollLoads(ctx, c);
+    const Aw = Math.max(1e-6, (Math.PI / 4) * (p.kingpinWasherDiameterIn ** 2 - p.kingpinDiameterIn ** 2));
+    const sW = r.U / Aw;
+    const sT = r.U / sec.A;
+    const ds = [
+      detail('washer bearing on the beam underside (oak ⊥)', sW, 'psi', al.oakPerp, '<='),
+      detail('kingpin tension', sT, 'psi', al.kpBend, '<='),
+    ];
+    const how = `${ROLL_TXT(ctx, r)} The bolt head/washer under the beam pushes the beam up: a ${f(p.kingpinWasherDiameterIn, 2)}" OD washer on a ${f(p.kingpinDiameterIn, 3)}" bolt has ${f(Aw, 2)} in², so ${f(r.U)} / ${f(Aw, 2)} = ${f(sW, 0)} psi on the oak ⊥ (≤ ${f(al.oakPerp, 0)}); bolt tension ${f(r.U)} / ${f(sec.A, 3)} = ${f(sT, 0)} psi (≤ ${f(al.kpBend, 0)}). The uplift then goes up through the nut and turntable top plate into the bolster (see 'roll-bolster-attach').`;
+    return governing(ds, how);
+  };
+  return dualCheck({
+    id: 'roll-kingpin-uplift', label: 'Bump roll: kingpin uplift and washer', group: 'Structure', refs: ['D-12', 'H2'], primary: 'goal',
+    ...evalBoth(ctx, ev),
+  });
+}
+
+export function rollBolsterAttachCheck(ctx: Ctx): AnalysisCheck {
+  const { p, L } = ctx;
+  const al = allowables(ctx);
+  const n = Math.max(1, Math.round(p.bolsterFastenerCount));
+  const dia = p.bolsterFastenerDiameterIn;
+  const Ab = (Math.PI * dia * dia) / 4;
+  const At = 0.75 * Ab; // threaded tensile stress area ≈ 0.75 × gross area
+  const tb = Math.max(0.1, L.bolster.z1 - L.bolster.z0);
+  const ev = (c: CaseData): CaseEval => {
+    const r = rollLoads(ctx, c);
+    const H = Math.max(...strikeCases(ctx, c).map((s) => s.H));
+    const tau = H / (n * Ab);
+    const sT = r.U / (n * At);
+    const brg = H / (n * dia * tb);
+    const inter = (tau / al.fastShear) ** 2 + (sT / al.fastTens) ** 2;
+    const ds = [
+      detail('fastener shear (horizontal strike load)', tau, 'psi', al.fastShear, '<='),
+      detail('fastener tension (roll uplift)', sT, 'psi', al.fastTens, '<='),
+      detail('shear + tension interaction (ellipse)', Math.sqrt(inter), '', 1, '<='),
+      detail('fastener bearing in the bolster oak (⊥, dowel)', brg, 'psi', al.oakDowel, '<='),
+    ];
+    const how = `Assumed attachment: ${n} × ${f(dia, 3)}" bolts (yield ${f(p.bolsterFastenerYieldPsi, 0)} psi, A307-type) clamping the turntable top plate and bolster rails to the nose rails/deck; bolster depth ${f(tb, 2)}". Loads: the governing strike H = ${f(H)} lbf horizontally (kingpin-strike) and the roll uplift U = ${f(r.U)} lbf. Shear τ = H/(n·A) = ${f(H)}/(${n} × ${f(Ab, 4)}) = ${f(tau, 0)} psi (≤ 0.577·yield/${p.kingpinMargin} = ${f(al.fastShear, 0)}); tension σ = U/(n·A_t), A_t ≈ 0.75·A = ${f(sT, 0)} psi (≤ yield/${p.kingpinMargin} = ${f(al.fastTens, 0)}); interaction √((τ/τ_a)² + (σ/σ_a)²) = ${f(Math.sqrt(inter), 2)} (≤ 1); bearing on the bolster oak H/(n·d·t) = ${f(brg, 0)} psi (≤ ${f(al.oakDowel, 0)} = ${p.oakDowelBearingPsi} dowel bearing × C_M ${p.wetServiceFactorStrength} / ${p.woodSafetyFactor}). The fasteners' pull-through and the bolster's own bending are not modelled.`;
+    return governing(ds, how);
+  };
+  return dualCheck({
+    id: 'roll-bolster-attach', label: 'Bolster-to-chassis fasteners (strike shear + roll uplift)', group: 'Structure', refs: ['D-12', 'H1', 'H2'], primary: 'goal',
+    ...evalBoth(ctx, ev),
   });
 }
 
@@ -347,7 +609,7 @@ export function turntableCheck(ctx: Ctx): AnalysisCheck {
     const F = w.frontAxle * p.dynamicFactor;
     return {
       value: F, unit: 'lbf', limit: cap, sense: '<=',
-      how: `Front axle load ${f(w.frontAxle)} lb × ${p.dynamicFactor} = ${f(F)} lbf vs rating ${p.turntableRatingLb} lb / margin ${p.kingpinMargin} = ${f(cap)} lbf. (The turntable is not moment-rated: roll goes through the side-bearers, D-12.)`,
+      how: `Front axle load (${frontLoadText(ctx, w)}) × ${p.dynamicFactor} = ${f(F)} lbf vs rating ${p.turntableRatingLb} lb / margin ${p.kingpinMargin} = ${f(cap)} lbf. (The turntable is not moment-rated: roll goes through the side-bearers, D-12.)`,
     };
   };
   return dualCheck({

@@ -4,9 +4,9 @@
  */
 import { worldAABB, partOBB } from '../model/bounds';
 import type { Ctx } from './context';
-import { dualCheck, singleCheck, type CaseEval } from './dual';
+import { dualCheck, singleCheck, detail, type CaseEval } from './dual';
 import { DEG, RAD, contactsAt, instantCentreY, lateralTip, outerEdgeDistance, sideEdges, turnGeometry, axleLoads } from './geometry';
-import { f, g } from './format';
+import { f } from './format';
 import type { CaseData } from './loads';
 import type { AnalysisCheck } from './types';
 
@@ -117,16 +117,27 @@ export function vRollover(ctx: Ctx): AnalysisCheck {
   });
 }
 
-/** Turning radius at full lock (A-2): outer front tyre centre about the instant centre. */
+/**
+ * Turning radius at full lock (A-2): swept radius of the outer front tyre EDGE (curb to curb). The instant centre lies on
+ * the front axle line, so the radial direction at the front wheel is the axle direction and the outer edge is exactly
+ * centreline + w/2. (A-2 originally called the tyre centre "conservative"; it is the less conservative reading.)
+ */
 export function turnRadius(ctx: Ctx): AnalysisCheck {
   const { p, contact } = ctx;
   const t = turnGeometry(contact, Math.abs(p.steerLockDeg) * RAD);
-  const outer = t ? t.outerFront : Infinity;
+  const half = p.tireWidthIn / 2;
+  const edge = t ? t.outerFront + half : Infinity;
+  const lim = p.turnRadiusMaxIn;
   return singleCheck({
-    id: 'turn-radius', label: 'Turning radius (outer front tyre)', group: 'Steering', refs: ['A-2', 'D-26'],
-    value: outer, unit: 'in', limit: p.turnRadiusMaxIn, sense: '<=',
+    id: 'turn-radius', label: 'Turning radius (outer tyre edge, curb to curb)', group: 'Steering', refs: ['A-2', 'D-26'],
+    value: edge, unit: 'in', limit: lim, sense: '<=',
+    details: t ? [
+      detail('outer front tyre edge (pass/fail)', edge, 'in', lim, '<='),
+      detail('outer front tyre centreline', t.outerFront, 'in', lim, '<='),
+      detail('rear-axle centre', t.rearCentre, 'in', lim, '<='),
+    ] : undefined,
     how: t
-      ? `Instant centre at y = ${f(t.icY)}" on the rear axle line (front axle line through the axle centre, which trails the kingpin by ${f(p.kingpinLeadIn, 2)}", meets x = 0 at ${f(p.steerLockDeg)}° lock). Outer front tyre-centre radius = ${f(t.outerFront)}" (${f(t.outerFront / 12, 2)} ft); rear-axle centre radius = ${f(t.rearCentre)}" (${f(t.rearCentre / 12, 2)} ft); inner front ${f(t.innerFront)}". Limit ≤ ${p.turnRadiusMaxIn}" (${f(p.turnRadiusMaxIn / 12, 1)} ft).`
+      ? `Instant centre at y = ${f(t.icY)}" on the rear axle line (the front axle line, through the axle centre that trails the kingpin by ${f(p.kingpinLeadIn, 2)}", meets x = 0 at ${f(p.steerLockDeg)}° lock). Pass/fail is the outer front tyre EDGE swept radius (A-2, curb to curb) = centreline ${f(t.outerFront)}" + w/2 ${f(half, 2)}" = ${f(edge)}" (${f(edge / 12, 2)} ft); because the centre lies on the axle line, the edge is exactly w/2 beyond the tyre centreline (so the tyre-centre reading in A-2 is the LESS conservative one). Details: tyre centreline ${f(t.outerFront)}" (${f(t.outerFront / 12, 2)} ft), rear-axle centre ${f(t.rearCentre)}" (${f(t.rearCentre / 12, 2)} ft), inner front ${f(t.innerFront)}". Limit ≤ ${lim}" (${f(lim / 12, 1)} ft). Body corners and the tongue sweep wider than the tyres and are not counted.`
       : 'No steering lock.',
   });
 }
@@ -146,12 +157,15 @@ export function pitchForward(ctx: Ctx): AnalysisCheck {
     const Nr = Math.max(0, rearNormalNoseDown(c.massLb, x, h, th, xfc));
     const aOverG = (p.tireGroundMu * Nr) / c.massLb;
     const geo = (xfc - x) / h;
-    const margin = geo - (Math.tan(th) + aOverG);
-    const tipSlope = Math.atan(geo - aOverG) * DEG;
-    const deg = tipSlope - p.designSlopeDeg;
+    // Incipient front-over-the-axle tip in the slope frame (D'Alembert): forward force at the CG equals the ground braking force F_b,
+    // so W cosθ (x_fc − x) = F_b h → tips when F_b/W exceeds geo·cosθ. The grade term is already inside F_b (no separate tanθ).
+    const tipLimit = geo * Math.cos(th);
+    const margin = tipLimit - aOverG;
+    const thetaStar = Math.acos(Math.min(1, aOverG / geo)) * DEG;
+    const deg = thetaStar - p.designSlopeDeg;
     return {
       value: deg, unit: '°', limit: 0, sense: '>=', marginalAbs: 5,
-      how: `On ${f(p.designSlopeDeg)}° nose down, rear-only braking at its traction limit: N_r = W(cosθ·(L−x)/L − sinθ·h/L) = ${f(Nr)} lb, a/g = μ·N_r/W = ${f(p.tireGroundMu, 2)}·${f(Nr)}/${f(c.massLb)} = ${f(aOverG, 3)}. Margin (x_fc−x_cg)/h − (tanθ + a/g) = ${f(xfc - x, 1)}/${f(h, 2)} − (${f(Math.tan(th), 3)} + ${f(aOverG, 3)}) = ${f(margin, 3)}; equivalent slope angle atan((x_fc−x_cg)/h − a/g) − θ = ${f(tipSlope)}° − ${f(p.designSlopeDeg)}° = ${f(deg)}°. Must be > 0 (a is the traction limit, ignoring grade assist and load transfer: conservative).`,
+      how: `On ${f(p.designSlopeDeg)}° nose down, rear-only braking at its traction limit: N_r = W(cosθ·(L−x)/L − sinθ·h/L) = ${f(Nr)} lb, F_b/W = μ·N_r/W = ${f(p.tireGroundMu, 2)}·${f(Nr)}/${f(c.massLb)} = ${f(aOverG, 3)}. Tip threshold F_b/W = (x_fc−x_cg)/h · cosθ = ${f(xfc - x, 1)}/${f(h, 2)} · ${f(Math.cos(th), 3)} = ${f(tipLimit, 3)} (the grade is already inside F_b, so no tanθ term). Margin ${f(margin, 3)}. Equivalent angle = the slope at which that braking force would equal the threshold, acos((F_b/W)/geo) = ${f(thetaStar)}°, minus the design slope ${f(p.designSlopeDeg)}° = ${f(deg)}° (> 0 passes; F_b held at its design-slope value; static N_r ignores braking load transfer: conservative). Other forward-pitch loads: a front-wheel curb/root strike is checked in 'kingpin-strike'; a rear handler holding the cart back on the ${f(p.rearHandleHeightIn)}" handle (about W·sinθ = ${f(c.massLb * Math.sin(th))} lbf) is reacted by the handler and is not checked here.`,
     };
   };
   return dualCheck({
@@ -183,24 +197,41 @@ export function tipBackAngle(W: number, x: number, h: number, T: number, xp: num
   return { deg: (Math.acos(arg) - beta) * DEG, liftMoment: C };
 }
 
+/**
+ * Pull needed to lift the front wheels at slope θ (balance about the rear contact):
+ * T_lift = W(x cosθ − h sinθ) / (x_p sinα − z_p cosα). Returns Infinity when the pull has no lift moment arm.
+ */
+export function liftPull(W: number, x: number, h: number, theta: number, xp: number, zp: number, alpha: number): number {
+  const num = W * (x * Math.cos(theta) - h * Math.sin(theta));
+  const den = xp * Math.sin(alpha) - zp * Math.cos(alpha);
+  return den > 1e-9 ? num / den : num > 0 ? Infinity : 0;
+}
+
 export function pitchRear(ctx: Ctx): AnalysisCheck {
   const { p } = ctx;
   const pt = pullPoint(ctx);
-  const ROPE_RUN_IN = 72;
-  const alpha = Math.atan2(p.pullerHandHeightIn - pt.z, ROPE_RUN_IN);
-  const limit = 2 * p.designSlopeDeg;
+  const run = p.bridleRopeRunIn;
+  const alpha = Math.atan2(p.pullerHandHeightIn - pt.z, run);
+  const th = p.designSlopeDeg * RAD;
+  const limit = p.pitchPullMarginMin;
+  const CAP = 99;
   const ev = (c: CaseData): CaseEval => {
     const [x, , h] = c.cg;
+    const Tl = liftPull(c.massLb, x, h, th, pt.x, pt.z, alpha);
+    const ratio = Math.min(CAP, Tl / p.pullForceLbf);
     const plain = Math.atan2(x, h) * DEG;
     const r = tipBackAngle(c.massLb, x, h, p.pullForceLbf, pt.x, pt.z, alpha);
+    const steady = c.massLb * (Math.sin(th) + 0.06 * Math.cos(th));
     return {
-      value: r.deg, unit: '°', limit, sense: '>=',
-      how: `Nose up, pivot at the rear contacts. No pull: atan(x_cg/h) = atan(${f(x)}/${f(h, 2)}) = ${f(plain)}°. With the design pull T = ${p.pullForceLbf} lbf (D-14) at the tongue tip (${f(pt.x)}", ${f(pt.z, 2)}") angled α = atan((${p.pullerHandHeightIn}" hand − ${f(pt.z, 2)}")/72" rope) = ${f(alpha * DEG)}° above the ground, its lift moment is T(x_p sinα − z_p cosα) = ${g(r.liftMoment)} lb·in against W·√(x²+h²) = ${g(c.massLb * Math.hypot(x, h))}: tip-back slope = acos(M_lift/(W·ρ)) − atan(h/x) = ${f(r.deg)}°. Limit ≥ 2 × design slope = ${f(limit)}°.`,
+      value: ratio, unit: '×', limit, sense: '>=',
+      details: [detail('tip-back slope with the 150 lbf peak held constant', r.deg, '°', p.designSlopeDeg, '>=')],
+      how: `Nose up on ${f(p.designSlopeDeg)}°, pivot at the rear contacts, W = ${f(c.massLb)} lb, CG (${f(x)}", ${f(h, 2)}"). The pull is at the tongue tip (${f(pt.x)}", ${f(pt.z, 2)}") angled α = atan((${p.pullerHandHeightIn}" hand − ${f(pt.z, 2)}") / ${p.bridleRopeRunIn}" rope run) = ${f(alpha * DEG)}° above the cart (D-14; rope run is the bridleRopeRunIn param). Pull needed to lift the front wheels: T_lift = W(x·cosθ − h·sinθ)/(x_p·sinα − z_p·cosα) = ${f(c.massLb * (x * Math.cos(th) - h * Math.sin(th)))} / ${f(pt.x * Math.sin(alpha) - pt.z * Math.cos(alpha), 2)} = ${Number.isFinite(Tl) ? f(Tl) : '∞'} lbf vs the ${p.pullForceLbf} lbf design peak (D-14): ${f(ratio, 2)}×. Limit ≥ ${f(limit, 2)}× (a surge that tries to lift the front must be this much bigger than the design peak). Details: with the peak pull held constant the tip-back slope is ${f(r.deg)}° (no pull: ${f(plain)}°); the steady pull on the slope is only ~${f(steady)} lbf.`,
     };
   };
   return dualCheck({
-    id: 'pitch-rear', label: 'Rearward pitch, climbing', group: 'Stability', refs: ['BRIEF §7', 'D-14'], primary: 'operating',
+    id: 'pitch-rear', label: 'Rearward pitch: pull to lift the front (design slope)', group: 'Stability', refs: ['BRIEF §7', 'BRIEF §4.1', 'D-14'], primary: 'operating',
     ...evalBoth(ctx, ev),
+    light: ev(ctx.loads.light), lightLabel: cap(ctx.loads.light.label),
   });
 }
 

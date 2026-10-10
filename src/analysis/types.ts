@@ -4,7 +4,7 @@
 import type { CheckResult } from '../model/types';
 
 export type Status = CheckResult['status'];
-export type LoadKind = 'empty' | 'operating' | 'goal';
+export type LoadKind = 'empty' | 'operating' | 'goal' | 'light';
 export type CheckGroup = 'Stability' | 'Steering' | 'Braking' | 'Structure' | 'Mass & transport';
 export const CHECK_GROUPS: CheckGroup[] = ['Stability', 'Steering', 'Braking', 'Structure', 'Mass & transport'];
 
@@ -26,6 +26,9 @@ export interface CaseResult {
   unit: string;
   limit: number;
   status: Status;
+  /** Demand / capacity (1 = at the limit). */
+  util: number;
+  sense: '>=' | '<=';
 }
 
 export interface AnalysisCheck extends CheckResult {
@@ -34,7 +37,11 @@ export interface AnalysisCheck extends CheckResult {
   statusOperating: Status;
   statusGoal: Status;
   /** Per-case values, for rows evaluated at both riders. */
-  cases?: { operating?: CaseResult; goal?: CaseResult };
+  cases?: { operating?: CaseResult; goal?: CaseResult; /** Lightest-rider case (BRIEF §4.1), for rows that get worse with a lighter rider. */ light?: CaseResult };
+  /** The case whose result sets the row status (worst status, then highest utilisation). */
+  governingLoad?: LoadKind;
+  /** Highest demand / capacity over the evaluated cases (1 = at the limit). */
+  util?: number;
   /** True when the operating case passes but the goal rider fails (status is then 'fail', D-1). */
   goalFlag?: boolean;
   /** All criteria evaluated in the governing case (structure rows). */
@@ -71,6 +78,7 @@ export const GROUP_OF_ID: Record<string, CheckGroup> = {
   'tip-straight': 'Stability', 'tip-lock': 'Stability', 'slide-before-tip': 'Stability', 'v-rollover': 'Stability', 'pitch-fwd': 'Stability', 'pitch-rear': 'Stability',
   'turn-radius': 'Steering', 'steer-clear': 'Steering',
   'brake-force': 'Braking', 'brake-traction': 'Braking',
+  'kingpin-strike': 'Structure', 'roll-side-bearer': 'Structure', 'roll-kingpin-uplift': 'Structure', 'roll-bolster-attach': 'Structure',
   'axle-stress': 'Structure', 'beam-front': 'Structure', 'beam-rear': 'Structure', 'bearing-groove': 'Structure', rails: 'Structure', deck: 'Structure',
   kingpin: 'Structure', turntable: 'Structure', tongue: 'Structure',
 };

@@ -39,6 +39,16 @@
 .ap-chip.info { color: var(--ap-info); }
 .ap-name { min-width: 0; overflow-wrap: anywhere; }
 .ap-name .ap-load { display: block; color: var(--muted); font-size: 11px; }
+.ap-cases { display: flex; flex-wrap: wrap; gap: 2px 6px; margin-top: 1px; }
+.ap-cc { font-size: 10.5px; white-space: nowrap; font-variant-numeric: tabular-nums; border: 1px solid currentColor; border-radius: 8px; padding: 0 5px; line-height: 15px; }
+.ap-cc b { font-weight: 700; letter-spacing: 0.03em; }
+.ap-cc.pass { color: var(--ap-pass); }
+.ap-cc.marginal { color: var(--ap-marg); }
+.ap-cc.fail { color: var(--ap-fail); background: color-mix(in srgb, var(--ap-fail) 10%, transparent); }
+.ap-cc.info { color: var(--ap-info); }
+.ap-cc.gov { border-width: 2px; line-height: 13px; }
+.ap-util { display: block; color: var(--muted); font-size: 11px; }
+.ap-util.over { color: var(--ap-fail); font-weight: 600; }
 .ap-flag { color: var(--ap-fail); font-weight: 600; }
 .ap-val { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ap-val b { font-weight: 600; }

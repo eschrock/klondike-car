@@ -3,7 +3,10 @@ import { PARAM_DEFS, defaultParams, validateParams, type ParamKey, type Params }
 import { buildModel } from '../model';
 import { checkTruckFit } from '../truck/fit';
 import { dualCheck, type CaseEval } from './dual';
+import { computeLayout } from '../model/layout';
 import { runChecks, type AnalysisCheck } from './index';
+import { liftPull } from './stability';
+import { effectiveStripWidth, maxDeckSpan, obstacleForce, rollBalance } from './structure';
 import { judge } from './types';
 
 const defaults = defaultParams();
@@ -17,7 +20,7 @@ describe('runChecks at the defaults', () => {
     for (const id of [
       'mass-empty', 'cg', 'tip-straight', 'tip-lock', 'slide-before-tip', 'v-rollover', 'turn-radius', 'steer-clear', 'pitch-fwd', 'pitch-rear',
       'brake-force', 'brake-traction', 'axle-stress', 'beam-front', 'beam-rear', 'bearing-groove', 'rails', 'deck', 'kingpin', 'turntable',
-      'tongue', 'truck-fit',
+      'tongue', 'truck-fit', 'kingpin-strike', 'roll-side-bearer', 'roll-kingpin-uplift', 'roll-bolster-attach',
     ]) expect(ids, id).toContain(id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const c of cs) {
@@ -38,10 +41,15 @@ describe('runChecks at the defaults', () => {
     expect(ssf).toBeGreaterThan(0.95);
     expect(ssf).toBeLessThan(1.2);
   });
-  it('turn radius: 95.2" at the Phase 1 lock (D-26), and within 1" of the table 7.7 ft at 40° lock', () => {
-    expect(byId(cs, 'turn-radius').value).toBeCloseTo(95.2, 1);
-    const r40 = byId(run({ ...defaults, steerLockDeg: 40 }), 'turn-radius').value;
-    expect(Math.abs(r40 - 7.7 * 12)).toBeLessThan(1);
+  it('turn radius (A-2, M1): tyre-centreline 95.2" at the Phase 1 lock (D-26), the pass/fail value is the outer EDGE = centreline + w/2 = 97.2"', () => {
+    const t = byId(cs, 'turn-radius');
+    const centre = t.details!.find((d) => d.name.includes('centreline'))!.value;
+    expect(centre).toBeCloseTo(95.25, 1);
+    expect(t.value).toBeCloseTo(centre + defaults.tireWidthIn / 2, 6);
+    expect(t.value).toBeCloseTo(97.25, 1);
+    expect(t.status).toBe('fail'); // 97.25" > 96"
+    const r40 = byId(run({ ...defaults, steerLockDeg: 40 }), 'turn-radius').details!.find((d) => d.name.includes('centreline'))!.value;
+    expect(Math.abs(r40 - 7.7 * 12)).toBeLessThan(1); // DECISIONS hand-calc table, tyre centre
   });
   it('goal rider is heavier and tips earlier than the operating rider', () => {
     const t = byId(cs, 'tip-straight').cases!;
@@ -60,8 +68,10 @@ describe('runChecks at the defaults', () => {
   it('through-rod axle stress matches the closed-form cantilever for the rear wheel', () => {
     const c = byId(cs, 'axle-stress');
     const rear = c.details!.find((d) => d.name.startsWith('rear axle bending'))!;
-    expect(rear.value).toBeGreaterThan(5000);
-    expect(rear.value).toBeLessThan(25000);
+    // hand (goal, rear): P = 114.7 lb × 3 = 344.1 lbf, a = 2.0", M = 688.3 lb·in → 16.6 ksi vertical; with the tyre friction force
+    // (0.5 × 114.7 lb at r = 6.5") M = 1061 lb·in → σ = 1061 × 0.375 / 0.015531 + 57.4/0.4418 = 25.75 ksi
+    expect(rear.value).toBeGreaterThan(25000);
+    expect(rear.value).toBeLessThan(26500);
     expect(c.details!.some((d) => d.name.includes('deflection'))).toBe(true);
   });
 });
@@ -123,9 +133,9 @@ describe('parameter response', () => {
     expect(byId(run({ ...defaults, rearTrackIn: 33, frontTrackIn: 33 }), 'tip-straight').value).toBeLessThan(base);
     expect(byId(run({ ...defaults, deckHeightIn: 12 }), 'tip-straight').value).toBeLessThan(base);
   });
-  it('a thicker deck ply passes the standing-scout deflection that the 9 mm ply fails', () => {
+  it('a 12 mm deck ply passes the standing-scout deflection that the 9 mm ply fails (D1)', () => {
     const thin = byId(run(defaults), 'deck');
-    const thick = byId(run({ ...defaults, deckPlyIn: 0.709 }), 'deck');
+    const thick = byId(run({ ...defaults, deckPlyIn: 0.472 }), 'deck');
     expect(thin.details!.find((d) => d.name.includes('deflection'))!.util).toBeGreaterThan(1);
     expect(thick.status).not.toBe('fail');
   });
@@ -227,5 +237,140 @@ describe('every variant the validator accepts yields finite checks', () => {
     console.log(`analysis sweep: ${clean}/${samples.length} validator-clean designs checked`);
     expect(bad.slice(0, 5)).toEqual([]);
     expect(clean).toBeGreaterThanOrEqual(30);
+  });
+});
+
+describe('critic round 1 fixes: hand-calculated numbers at the defaults', () => {
+  const cs = run(defaults);
+  const goal = (id: string) => byId(cs, id).cases!.goal!;
+  const op = (id: string) => byId(cs, id).cases!.operating!;
+  const det = (id: string, name: string, k: 'goal' | 'operating' = 'goal') => {
+    const c = byId(cs, id);
+    const d = (k === 'goal' ? c : byId(run(defaults), id)).details!.find((x) => x.name.includes(name))!;
+    return d;
+  };
+
+  it('obstacleForce: r = 6.5", 3" curb: cos φ = 3.5/6.5, tan φ = 1.565, H = 156.5 lbf per 100 lbf', () => {
+    const o = obstacleForce(6.5, 3, 100);
+    expect(o.phi * (180 / Math.PI)).toBeCloseTo(57.4, 1);
+    expect(o.tan).toBeCloseTo(1.5647, 3);
+    expect(o.H).toBeCloseTo(156.47, 1);
+    expect(obstacleForce(6.5, 2, 100).H).toBeCloseTo(103.9, 0); // root: cos φ = 4.5/6.5, tan = 1.039
+  });
+  it('H1 kingpin-strike: goal front axle 144 lb (nose-down governs, M4) → both wheels over a 3" curb H = 144 × 3 × 1.565 = 676 lbf; σ = H·s/S = 676 × 2.875 / 0.012272 = 158 ksi → FAIL; ¾"–⅞" needed', () => {
+    const c = byId(cs, 'kingpin-strike');
+    expect(c.status).toBe('fail');
+    expect(c.statusOperating).toBe('fail'); // fails at the 150 lb rider too, so not a goal-only flag
+    const sigma = det('kingpin-strike', 'kingpin bending').value;
+    expect(sigma).toBeGreaterThan(155000);
+    expect(sigma).toBeLessThan(162000);
+    expect(det('kingpin-strike', 'kingpin shear').value).toBeCloseTo(676 / (Math.PI * 0.25 * 0.25), -2); // τ = H/A = 3443 psi
+    expect(c.how).toMatch(/0\.875" bolt/); // minimum bolt text
+    expect(c.how).toMatch(/curb both wheels/);
+  });
+  it('H1: a ¾" kingpin passes the strike bending (σ = 676 × 2.875 / 0.04141 = 47 ksi < 65)', () => {
+    const c = byId(run({ ...defaults, kingpinDiameterIn: 0.75 }), 'kingpin-strike');
+    expect(c.details!.find((d) => d.name.includes('kingpin bending'))!.util).toBeLessThan(1);
+  });
+  it('rollBalance: P = 100 lbf at y = 17.75" with the bearer at 6.8": F_sb = 261.0, uplift 161.0 lbf', () => {
+    const r = rollBalance(100, 17.75, 6.8);
+    expect(r.Fsb).toBeCloseTo(261.03, 1);
+    expect(r.U).toBeCloseTo(161.03, 1);
+    expect(rollBalance(100, 5, 6.8).U).toBe(0);
+  });
+  it('H2 roll path at the defaults (goal): P = 72.2 × 3 = 216.6 lbf, F_sb = 564 lbf on 2.25 in² = 251 psi, uplift 348 lbf on a 1.25" washer (1.03 in²) = 337 psi vs 358', () => {
+    expect(det('roll-side-bearer', 'bearer oak').value).toBeCloseTo(250.8, 0);
+    expect(det('roll-side-bearer', 'UHMW').value).toBeCloseTo(250.8, 0);
+    expect(det('roll-kingpin-uplift', 'washer').value).toBeCloseTo(337.3, 0);
+    expect(byId(cs, 'roll-bolster-attach').how).toMatch(/4 × 0\.250" bolts/);
+    expect(det('roll-bolster-attach', 'fastener shear').value).toBeCloseTo(676.1 / (4 * 0.0490874), -1); // 3443 psi
+  });
+  it('M2: compression ⊥ allowable is 1070 × 0.67 / 2 = 358.45 psi', () => {
+    expect(goal('bearing-groove').limit).toBeCloseTo(358.45, 2);
+    // 144 lb front axle × share → rear heavier: groove stress 306 psi → 85% utilised
+    expect(goal('bearing-groove').util).toBeCloseTo(306 / 358.45, 1);
+    expect(byId(run({ ...defaults, wetServiceFactorCompPerp: 0.85 }), 'bearing-groove').cases!.goal!.limit).toBeCloseTo(454.75, 2);
+  });
+  it('M3 rails: M = P·L/4 + w·L²/8 = 337.5 × 49.125 / 4 + 100.9 × 49.125 / 8 = 4145 + 620 = 4765 lb·in → σ = M/S = 4765 / 1.125 = 4235 psi', () => {
+    expect(det('rails', 'bending').value).toBeCloseTo(4235, -1);
+    expect(byId(cs, 'rails').how).toMatch(/self-weight/);
+  });
+  it('M4: turntable load = worse of level (118.3 lb) and nose-down on 15° (144.0 lb) × 3 = 432 lbf (goal)', () => {
+    expect(goal('turntable').value).toBeCloseTo(432, 0);
+    // hand: W = 347.2, x = 16.4, h = 15.86, L = 48: W (cos15 · x/L + sin15 · h/L) = 144.3
+    expect(byId(cs, 'turntable').how).toMatch(/nose-down/);
+  });
+  it('M5 axle: rear wheel, operating: P = 98.0 lb × 3 = 294.1; vertical M = 588 lb·in; + μP·r = 0.5 × 98.0 × 6.5 = 318.5 → 906.8 lb·in; σ = 906.8 × 0.375 / 0.015531 + 49.0/0.4418 = 22.0 ksi', () => {
+    const rear = byId(cs, 'axle-stress').cases!.operating!;
+    expect(rear.value).toBeGreaterThan(21500);
+    expect(rear.value).toBeLessThan(22500);
+    expect(byId(cs, 'axle-stress').how).toMatch(/resultant/);
+  });
+  it('D1 deck: b_eff = 10 + 0.625 × 9.5 = 15.94"; 200 lb on 4" at midspan of 9.5": δ = 0.069" (fails L/300 = 0.032"); 12 mm gives 0.029" (passes); needed ≥ 11.7 mm', () => {
+    expect(effectiveStripWidth(10, 9.5)).toBeCloseTo(15.94, 2);
+    const c = byId(cs, 'deck');
+    expect(c.details!.find((d) => d.name.includes('deflection'))!.value).toBeCloseTo(0.069, 3);
+    expect(c.how).toMatch(/≥ 11\.7 mm/);
+    expect(c.how).toMatch(/12 mm: 0\.029/);
+    const t12 = byId(run({ ...defaults, deckPlyIn: 0.472 }), 'deck').details!.find((d) => d.name.includes('deflection'))!.value;
+    expect(t12).toBeCloseTo(0.029, 3);
+  });
+  it('layout: a thicker deck ply no longer lengthens the span next to the rear beam (D1 oddity)', () => {
+    const span = (t: number) => maxDeckSpan({ L: computeLayout({ ...defaults, deckPlyIn: t }) } as never);
+    expect(span(0.472)).toBeLessThan(span(0.354) + 0.1);
+  });
+  it('liftPull: W = 100 lb, x = 20", h = 10", θ = 0, pull point 60" ahead at ground level at α = 30°: T = 100 × 20 / (60 × 0.5) = 66.7 lbf', () => {
+    expect(liftPull(100, 20, 10, 0, 60, 0, Math.PI / 6)).toBeCloseTo(66.67, 1);
+    expect(liftPull(100, 20, 10, 0, 0, 0, 0)).toBe(Infinity);
+  });
+  it('H3 pitch-rear: T_lift/T_peak = 200 / 150 = 1.33 (operating), 1.52 (goal), 160 / 150 = 1.07 (80 lb rider) → FAIL at the lightest rider only', () => {
+    const c = byId(cs, 'pitch-rear');
+    expect(c.cases!.operating!.value).toBeCloseTo(1.334, 2);
+    expect(c.cases!.goal!.value).toBeCloseTo(1.525, 2);
+    expect(c.cases!.light!.value).toBeCloseTo(1.067, 2);
+    expect(c.cases!.light!.limit).toBe(defaults.pitchPullMarginMin);
+    expect(c.statusOperating).toBe('fail'); // the 80 lb rider is part of the operating envelope
+    expect(c.status).toBe('fail');
+    expect(c.governingLoad).toBe('light');
+    expect(c.how).toMatch(/Lightest rider/);
+    expect(c.how).toMatch(/72" rope run/);
+  });
+  it('H3: a lower design slope or a heavier lightest rider raises the lift ratio; the rope run is a param', () => {
+    const v = (q: Partial<Params>) => byId(run({ ...defaults, ...q }), 'pitch-rear').cases!.light!.value;
+    expect(v({ riderMinMassLb: 100 })).toBeGreaterThan(v({}));
+    expect(v({ designSlopeDeg: 10 })).toBeGreaterThan(v({}));
+    expect(v({ bridleRopeRunIn: 120 })).not.toBeCloseTo(v({}), 2);
+    expect(byId(run({ ...defaults, riderMinMassLb: 150 }), 'pitch-rear').status).not.toBe('fail');
+  });
+  it('L1 pitch-fwd: F_b/W = 0.5 × 164.8 / 297.2 = 0.277 vs tip threshold (31.6/15.08) cos15° = 2.02; equivalent angle acos(0.277/2.095) − 15° = 67.4°', () => {
+    expect(op('pitch-fwd').value).toBeCloseTo(67.4, 0);
+    expect(byId(cs, 'pitch-fwd').how).not.toMatch(/tanθ \+ a/);
+  });
+  it('L2 brake: wet shoes μ 0.25 give 24.04 × 0.4 / 0.25 = 38.5 lbf (sensitivity only; status follows the design μ)', () => {
+    const c = byId(cs, 'brake-force');
+    const wet = c.details!.find((d) => d.name.includes('wet'))!;
+    expect(wet.value).toBeCloseTo(38.46, 1);
+    expect(c.how).toMatch(/TOTAL shoe normal force/);
+    expect(c.statusOperating).not.toBe('fail');
+  });
+});
+
+describe('status chips and per-case results (P1/P2)', () => {
+  const cs = run(defaults);
+  it('every dual row carries per-case value/limit/util and a governing case; singles carry util', () => {
+    for (const c of cs) {
+      if (c.cases) {
+        for (const r of Object.values(c.cases)) expect(Number.isFinite(r!.util) || r!.util === Infinity, c.id).toBe(true);
+        expect(c.governingLoad, c.id).toBeDefined();
+        expect(c.util, c.id).toBeGreaterThanOrEqual(0);
+      }
+    }
+    expect(byId(cs, 'turn-radius').util).toBeCloseTo(97.25 / 96, 2);
+  });
+  it('the governing case of a failing row is the failing case (so the chip matches the value shown)', () => {
+    const c = byId(cs, 'pitch-rear');
+    expect(c.cases![c.governingLoad as 'light']!.status).toBe('fail');
+    const a = byId(cs, 'axle-stress');
+    expect(a.cases![a.governingLoad as 'goal']!.status).toBe(a.status);
   });
 });

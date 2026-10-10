@@ -1,6 +1,6 @@
 /** Braking checks: lever force to hold on the design slope (D-13) and rear-only traction when parked nose-down (D-24, info). */
 import type { Ctx } from './context';
-import { dualCheck, type CaseEval } from './dual';
+import { dualCheck, detail, type CaseEval } from './dual';
 import { RAD, contactsAt } from './geometry';
 import { f } from './format';
 import type { CaseData } from './loads';
@@ -14,9 +14,15 @@ export function brakeForce(ctx: Ctx): AnalysisCheck {
     const down = c.massLb * Math.sin(th);
     const shoeN = down / p.brakePadMu;
     const F = shoeN / (p.brakeLeverRatio * p.brakeEfficiency);
+    const WET_MU = 0.25;
+    const Fwet = down / WET_MU / (p.brakeLeverRatio * p.brakeEfficiency);
     return {
       value: F, unit: 'lbf', limit: p.handleForceLimitLbf, sense: '<=',
-      how: `F = W·sinθ / μ_pad / (ratio · η) = ${f(c.massLb)} × sin ${f(p.designSlopeDeg)}° / ${f(p.brakePadMu, 2)} / (${f(p.brakeLeverRatio, 1)} × ${f(p.brakeEfficiency, 2)}) = ${f(down)} lbf downslope → ${f(shoeN)} lbf shoe normal force → ${f(F)} lbf at the handle. Limit ≤ ${p.handleForceLimitLbf} lbf. (Shoe friction acts at the tyre radius, 1:1 with ground force, D-13.)`,
+      details: [
+        detail('handle force at the design pad μ', F, 'lbf', p.handleForceLimitLbf, '<='),
+        detail(`sensitivity: wet / snowy shoes μ ${WET_MU} (not pass/fail)`, Fwet, 'lbf', p.handleForceLimitLbf, '<='),
+      ],
+      how: `F = W·sinθ / μ_pad / (ratio · η) = ${f(c.massLb)} × sin ${f(p.designSlopeDeg)}° / ${f(p.brakePadMu, 2)} / (${f(p.brakeLeverRatio, 1)} × ${f(p.brakeEfficiency, 2)}) = ${f(down)} lbf downslope → ${f(shoeN)} lbf shoe normal force → ${f(F)} lbf at the handle. Limit ≤ ${p.handleForceLimitLbf} lbf. (Shoe friction acts at the tyre radius, 1:1 with ground force, D-13. Lever ratio ${f(p.brakeLeverRatio, 1)}:1 is read as handle force to TOTAL shoe normal force: one lever on a cross shaft drives both shoes, each seeing half the shaft torque. Sensitivity: wet or snow-contaminated shoes at μ 0.25 need ${f(Fwet)} lbf at the handle.)`,
     };
   };
   return dualCheck({
