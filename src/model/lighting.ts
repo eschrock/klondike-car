@@ -1,5 +1,6 @@
 /** Lighting (D-9) and the hardware allowance. */
 import { STEP, box, SIDES, type Ctx } from './build-utils';
+import { cabinSidePoint } from './layout';
 import type { Part } from './types';
 
 // ── Estimates / placeholders (spec) ──
@@ -8,11 +9,11 @@ const LANTERN_MOUNT_SIZE = [2, 1.5, 1.5] as const;
 const REAR_LIGHT_MASS_LB = 0.3;
 const REAR_LIGHT_SIZE = [0.75, 2, 1.5] as const;
 const REFLECTOR_MASS_LB = 0.05;
-const REFLECTOR_SIZE = [2, 0.25, 1] as const;
+export const REFLECTOR_SIZE = [2, 0.25, 1] as const;
 const HARDWARE_MASS_LB = 2.5;
 const HARDWARE_SIZE = [2, 2, 1.25] as const;
 /** Cabin reflectors at these fore-aft fractions of the cabin length (clear of the signs and the nose). */
-const REFLECTOR_FRACS = [0.1, 0.88] as const;
+export const REFLECTOR_FRACS = [0.1, 0.95] as const;
 
 export function buildLighting(ctx: Ctx, prowTipX: number, prowTipZ: number): Part[] {
   const { L } = ctx;
@@ -28,12 +29,13 @@ export function buildLighting(ctx: Ctx, prowTipX: number, prowTipZ: number): Par
     center: [L.xRear - REAR_LIGHT_SIZE[0] / 2, 0, L.deckTop + L.sideH - REAR_LIGHT_SIZE[2] / 2], notes: 'On the rear transom; mass includes the light (estimate).',
   }));
   const cabinLen = L.xs - L.xRear;
+  const rp = cabinSidePoint(L, L.deckTop + L.sideH / 2, L.side / 2 + REFLECTOR_SIZE[1] / 2, REFLECTOR_SIZE[2] / 2);
   for (const { s, tag } of SIDES) {
     REFLECTOR_FRACS.forEach((f, i) => {
       parts.push(box(ctx, {
         id: `reflector-${tag}${i + 1}`, partNo: 'reflector', name: `Side reflector ${tag}${i + 1}`, group: 'lighting', mat: 'fixed', massLb: REFLECTOR_MASS_LB,
         kind: 'purchased', material: 'reflector', fab: 'buy', step: STEP.finish, size: [...REFLECTOR_SIZE],
-        center: [L.xRear + cabinLen * f, s * (L.hwC + L.side + REFLECTOR_SIZE[1] / 2 + ctx.p.gunwaleFlareIn / 2), L.deckTop + L.sideH / 2],
+        center: [L.xRear + cabinLen * f, s * rp.y, rp.z], rot: { x: -s * rp.phi },
       }));
     });
   }

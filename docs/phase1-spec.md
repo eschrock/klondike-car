@@ -1,5 +1,14 @@
 # Phase 1 spec: block model
 
+> **Superseded in places by the critic round-1 fixes** (see `docs/reviews/phase1-round1.md`):
+> - The kingpin now leads the front axle (D-25).
+> - The seat base ring is gone; the cushion sits on the deck, and the seat back is a frame plus panel.
+> - The bolster is now rails over the turntable, with side-bearers.
+> - Storage is a tray with a lid.
+> - Explode directions are set per subsystem.
+>
+> The code in `src/model/` is authoritative.
+
 Goal (BRIEF §10, Phase 1): simple boxes, cylinders and extrusions at **real dimensions**, all driven by `src/params.ts`.
 - The steering axle articulates with lock.
 - Includes wheels, seat, rider mannequin, cargo/storage box and a truck bed model.

@@ -108,33 +108,36 @@ select { width: 100%; }
 .placeholder h3 { margin: 0 0 6px; }
 .muted { color: var(--muted); }
 
-.viewer-host { position: relative; overflow: hidden; background: var(--viewer-bg); }
-.viewer-canvas { position: absolute; inset: 0; }
-.viewer-canvas canvas { display: block; }
-.viewer-toolbar { position: absolute; top: 10px; left: 10px; display: flex; gap: 4px; }
-.viewer-toggles {
-  position: absolute; bottom: 10px; left: 10px; display: flex; flex-wrap: wrap; gap: 4px 12px;
-  background: color-mix(in srgb, var(--panel) 85%, transparent); border: 1px solid var(--border);
-  border-radius: 6px; padding: 5px 9px; font-size: 12px; max-width: calc(100% - 20px);
+.viewer-host { display: flex; flex-direction: column; overflow: hidden; background: var(--viewer-bg); }
+.viewer-bar {
+  flex: none; display: flex; flex-direction: column; gap: 4px; padding: 6px 10px;
+  background: var(--panel); border-bottom: 1px solid var(--border);
 }
+.viewer-stage { position: relative; flex: 1 1 auto; min-height: 0; }
+.viewer-canvas { position: absolute; inset: 0; overflow: hidden; }
+.viewer-canvas canvas { display: block; }
+.viewer-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.dim-label {
+  font-size: 11px; font-weight: 600; color: #1f6feb; white-space: nowrap; padding: 0 4px; border-radius: 3px;
+  background: color-mix(in srgb, var(--panel) 80%, transparent);
+}
+.dim-label.cg-label { color: #e5322d; }
+.viewer-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 4px; }
+.viewer-toggles { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12px; color: var(--muted); }
 .viewer-toggles:empty { display: none; }
 .viewer-toggles label { cursor: pointer; white-space: nowrap; }
 
-@media (max-width: 1100px) {
-  #app { grid-template-columns: 250px minmax(0, 1fr) 260px; }
-}
-/* Narrow windows: viewer on top at a fixed share of the height, panels stacked below; the page scrolls. */
-@media (max-width: 900px) {
+/* Below 1200px the three columns squeeze the viewer, so stack: viewer, parameters, analysis. */
+@media (max-width: 1200px) {
   #app {
     height: auto;
     min-height: 100vh;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto 65vh auto auto;
-    grid-template-areas: 'top' 'main' 'right' 'left';
+    grid-template-rows: auto minmax(480px, 74vh) auto auto;
+    grid-template-areas: 'top' 'main' 'left' 'right';
   }
   .sidebar { overflow: visible; }
   .sidebar.left, .sidebar.right { border: 0; border-top: 1px solid var(--border); }
-  .viewer-toolbar { flex-wrap: wrap; right: 10px; }
 }
 
 .steer-ctl { display: flex; align-items: center; gap: 6px; margin-left: 8px; font-size: 12px;
@@ -152,8 +155,7 @@ select { width: 100%; }
 }
 
 /* Viewer toolbar + summary + truck fit */
-.viewer-toolbar { flex-wrap: wrap; align-items: center; max-width: calc(100% - 20px); }
-.viewer-toolbar .steer-ctl { margin-left: 0; }
+.steer-ctl { margin-left: 0; }
 .viewer-toolbar select { width: auto; padding: 1px 4px; }
 .viewer-toolbar [hidden] { display: none; }
 .summary-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
@@ -165,8 +167,27 @@ select { width: 100%; }
 .pass { color: #1f8f4e; font-weight: 600; }
 .fail { color: #d1352b; font-weight: 600; }
 @media (prefers-color-scheme: dark) { .pass { color: #4cc784; } .fail { color: #f87171; } }
-.fit-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
-.fit-table th { text-align: left; color: var(--muted); font-weight: 400; font-size: 11px; padding: 2px 4px; border-bottom: 1px solid var(--border); }
-.fit-table td { padding: 5px 4px; vertical-align: top; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
-.fit-table tr.active td { background: var(--panel-2); }
-.fit-table button { padding: 2px 6px; font-size: 11px; }
+.small { font-size: 11px; }
+.summary-extra { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; margin: 8px 0 0; }
+.summary-extra dt { color: var(--muted); }
+.summary-extra dd { margin: 0; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.summary-table thead th { white-space: nowrap; }
+
+/* Truck fit: a card per case, readable from ~300px */
+.fit-config { margin-top: 14px; }
+.fit-config h4 { margin: 0; font-size: 13px; }
+.fit-card, .win-card {
+  margin-top: 6px; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg);
+  min-width: 0; overflow-wrap: anywhere;
+}
+.fit-card.active { border-color: var(--accent); background: var(--panel-2); }
+.fc-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.fc-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; margin-top: 3px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.fc-meta button { margin-left: auto; padding: 2px 8px; font-size: 11px; }
+.pill { flex: none; font-size: 11px; padding: 0 8px; border: 1px solid currentColor; border-radius: 9px; line-height: 17px; }
+.win-card { border-style: dashed; }
+.win-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 3px; }
+.win-row { padding: 3px 0; border-top: 1px solid var(--border); font-size: 12px; }
+.win-row:first-child { border-top: 0; }
+.win-mode { font-weight: 600; }
+.steer-ctl input[type='checkbox'] { width: auto; }

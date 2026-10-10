@@ -1,7 +1,8 @@
 /** Body: decks, sides, shoulder panels, transoms, prow ornament, signs, grab handles (D-22). */
 import { SIDE_CONSTRUCTION } from '../params';
 import { STEP, box, span, SIDES, woodMassLb, type Ctx } from './build-utils';
-import { RAIL_BAND_IN } from './layout';
+import { cabinSidePoint } from './layout';
+import { REFLECTOR_FRACS, REFLECTOR_SIZE } from './lighting';
 import { compose } from './mat4';
 import type { Part, Vec2 } from './types';
 
@@ -19,6 +20,8 @@ const PROW_BASE_SETBACK_IN = 1;
 /** Side sign blank (spec: 20 × 6, 6 mm ply). */
 const SIGN_LEN_IN = 20;
 const SIGN_HEIGHT_IN = 6;
+const SIGN_MIN_LEN_IN = 4;
+const SIGN_TIRE_GAP_IN = 0.25;
 /** Grab handle (spec: 1 × 1.5 × 8): along x, y, z. */
 const GRAB_SIZE = [8, 1.5, 1] as const;
 const GRAB_AHEAD_OF_SEAT_IN = 6;
@@ -67,7 +70,7 @@ export function buildBody(ctx: Ctx): Part[] {
   const parts: Part[] = [];
   const pl = p.panelPlyIn;
   const H = L.sideH;
-  const flare = p.gunwaleFlareIn;
+  const flare = L.flare;
 
   // ── Decks ──
   parts.push(box(ctx, {
@@ -86,6 +89,7 @@ export function buildBody(ctx: Ctx): Part[] {
   ] as const;
   for (const run of runs) {
     const zTop = run.top + H;
+    const runFlare = run.zone === 'cabin' ? flare : 0;
     for (const { s, tag } of SIDES) {
       const yc = s * (run.hw + L.side / 2);
       const id = `side-${run.zone}-${tag}`;
@@ -96,28 +100,28 @@ export function buildBody(ctx: Ctx): Part[] {
           ...span([run.x0, run.x1], yr(yc - L.side / 2, yc + L.side / 2), [run.bot, zTop]) }));
       } else if (p.sideConstruction === SIDE_CONSTRUCTION.capturedPly) {
         parts.push(box(ctx, { id: `${id}-chine`, partNo: `side-${run.zone}-chine`, name: `${nm} chine`, group: 'body', mat: 'oak', step: STEP.body,
-          ...span([run.x0, run.x1], yr(yc - L.side / 2, yc + L.side / 2), [run.bot, run.bot + RAIL_BAND_IN]) }));
+          ...span([run.x0, run.x1], yr(yc - L.side / 2, yc + L.side / 2), [run.bot, run.bot + L.railBand]) }));
         parts.push(box(ctx, { id: `${id}-gunwale`, partNo: `side-${run.zone}-gunwale`, name: `${nm} gunwale`, group: 'body', mat: 'oak', step: STEP.body,
-          ...span([run.x0, run.x1], yr(yc + s * flare - L.side / 2, yc + s * flare + L.side / 2), [zTop - RAIL_BAND_IN, zTop]) }));
-        const z0 = run.bot + RAIL_BAND_IN;
-        const z1 = zTop - RAIL_BAND_IN;
+          ...span([run.x0, run.x1], yr(yc + s * runFlare - L.side / 2, yc + s * runFlare + L.side / 2), [zTop - L.railBand, zTop]) }));
+        const z0 = run.bot + L.railBand;
+        const z1 = zTop - L.railBand;
         const hW = Math.max(0.1, z1 - z0);
-        const phi = Math.atan2(flare, hW);
+        const phi = Math.atan2(runFlare, hW);
         parts.push(box(ctx, {
           id: `${id}-web`, partNo: `side-${run.zone}-web`, name: `${nm} side panel`, group: 'body', mat: 'ply', edges: 'captured', step: STEP.body,
-          size: [Math.max(0.01, run.x1 - run.x0), pl, Math.hypot(hW, flare)],
-          center: [(run.x0 + run.x1) / 2, yc + (s * flare) / 2, (z0 + z1) / 2], rot: { x: -s * phi },
+          size: [Math.max(0.01, run.x1 - run.x0), pl, Math.hypot(hW, runFlare)],
+          center: [(run.x0 + run.x1) / 2, yc + (s * runFlare) / 2, (z0 + z1) / 2], rot: { x: -s * phi },
           grain: 'x', notes: 'Captured in chine and gunwale grooves (D-22); groove depth is Phase 3.',
         }));
       } else {
         // Open frame: gunwale on posts every 12".
         parts.push(box(ctx, { id: `${id}-gunwale`, partNo: `side-${run.zone}-gunwale`, name: `${nm} gunwale`, group: 'body', mat: 'oak', step: STEP.body,
-          ...span([run.x0, run.x1], yr(yc - L.side / 2, yc + L.side / 2), [zTop - RAIL_BAND_IN, zTop]) }));
+          ...span([run.x0, run.x1], yr(yc - L.side / 2, yc + L.side / 2), [zTop - L.railBand, zTop]) }));
         const n = Math.max(2, Math.ceil((run.x1 - run.x0) / POST_SPACING_IN) + 1);
         for (let i = 0; i < n; i++) {
           const x = run.x0 + POST_X_IN / 2 + ((run.x1 - run.x0 - POST_X_IN) * i) / (n - 1);
           parts.push(box(ctx, { id: `${id}-post-${i + 1}`, partNo: `side-${run.zone}-post`, name: `${nm} post ${i + 1}`, group: 'body', mat: 'oak', step: STEP.body,
-            ...span([x - POST_X_IN / 2, x + POST_X_IN / 2], yr(yc - L.side / 2, yc + L.side / 2), [run.bot, zTop - RAIL_BAND_IN]), grain: 'z' }));
+            ...span([x - POST_X_IN / 2, x + POST_X_IN / 2], yr(yc - L.side / 2, yc + L.side / 2), [run.bot, zTop - L.railBand]), grain: 'z' }));
         }
       }
     }
@@ -155,18 +159,23 @@ export function buildBody(ctx: Ctx): Part[] {
     geometry: { type: 'extrusion', outline, depth: PROW_THICK_IN },
     transform: compose([L.xFront - PROW_BASE_SETBACK_IN, PROW_THICK_IN / 2, prowTopZ], { x: Math.PI / 2 }),
     body: 'chassis', massLb: woodMassLb(p, prowVol, 2 * area + perim * PROW_THICK_IN, p.oakDensityPcf),
-    fab: 'bentlam', step: STEP.body, removable: true, explode: [0.3, 0, 1],
+    fab: 'bentlam', step: STEP.body, removable: true, explode: [0.3 / Math.hypot(0.3, 1), 0, 1 / Math.hypot(0.3, 1)],
     stock: { t: PROW_THICK_IN, w: PROW_REACH_IN, l: PROW_HEIGHT_IN }, grain: 'z',
     notes: 'TODO bentlam: simple curved stem for Phase 1; real laminated profile in Phase 3.',
   });
 
-  // ── Signs ──
-  const signX = (L.xRear + L.xs) / 2;
+  // ── Signs (leaning with the flared panel) ──
+  // The sign sits between the rear tire's front edge and the forward reflector, so a flared side never pushes it into the tire.
+  const signX0 = L.r + SIGN_TIRE_GAP_IN;
+  const signX1 = L.xRear + (L.xs - L.xRear) * REFLECTOR_FRACS[1] - REFLECTOR_SIZE[0] / 2 - SIGN_TIRE_GAP_IN;
+  const signLen = Math.max(SIGN_MIN_LEN_IN, Math.min(SIGN_LEN_IN, signX1 - signX0));
+  const signX = signX0 + signLen / 2;
+  const signPt = cabinSidePoint(L, L.deckTop + H / 2, L.side / 2 + pl / 2, SIGN_HEIGHT_IN / 2);
   for (const { s, tag } of SIDES) {
     parts.push(box(ctx, {
       id: `sign-${tag}`, partNo: 'sign', name: `Side sign ${tag}`, group: 'removable', mat: 'ply', removable: true, edges: 'exposed', step: STEP.finish,
-      size: [SIGN_LEN_IN, pl, SIGN_HEIGHT_IN], center: [signX, s * (L.hwC + L.side + pl / 2 + flare / 2), L.deckTop + H / 2],
-      explode: [0, s, 0.2], notes: 'Edge treatment to be decided in Phase 3.',
+      size: [signLen, pl, SIGN_HEIGHT_IN], center: [signX, s * signPt.y, signPt.z], rot: { x: -s * signPt.phi },
+      notes: 'Edge treatment to be decided in Phase 3.',
     }));
   }
 
@@ -178,7 +187,7 @@ export function buildBody(ctx: Ctx): Part[] {
   for (const { s, tag } of SIDES) {
     parts.push(box(ctx, {
       id: `grab-${tag}`, partNo: 'grab-handle', name: `Grab handle ${tag}`, group: 'body', mat: 'oak', step: STEP.finish,
-      size: [...GRAB_SIZE], center: [gx, s * (gw + L.side / 2 + flare), gTop + GRAB_SIZE[2] / 2],
+      size: [...GRAB_SIZE], center: [gx, s * (gw + L.side / 2 + (nose ? 0 : flare)), gTop + GRAB_SIZE[2] / 2],
     }));
   }
   return parts;

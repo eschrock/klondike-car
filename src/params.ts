@@ -78,6 +78,14 @@ export const FRAME_STYLE = { ladder: 0, hullBeam: 1 } as const;
 export const SIDE_CONSTRUCTION = { solidOak: 0, capturedPly: 1, openFrame: 2 } as const;
 export const STORAGE_LOCATION = { rearOverAxle: 0, forwardRaised: 1, underSeat: 2 } as const;
 
+/** Mannequin proportions (fractions of stature, D-3) that the nose-width validator also needs: hip separation and foot width. */
+/** A rear box shorter than this is not a box (critic H3). */
+const MIN_REAR_STORAGE_LENGTH_IN = 6;
+export const RIDER_LEG_Y_FRAC = 0.05;
+export const RIDER_FOOT_Y_FRAC = 0.06;
+/** Pelvis block height (fraction of stature): the seat-back pad starts above it. */
+export const RIDER_PELVIS_Z_FRAC = 0.075;
+
 const defs = {
   // ── Rider & loads ────────────────────────────────────────────────────────
   riderMassLb: {
@@ -181,12 +189,12 @@ const defs = {
   },
   noseWidthIn: {
     label: 'Hull width in the front-wheel swing zone', group: 'body', unit: 'in',
-    default: 14, min: 8, max: 30, step: 0.25, status: 'explore', ref: 'D-15',
-    note: 'Must be ≤ 2 × (inner tire corner y at full lock − steering clearance); see A-4.',
+    default: 12.5, min: 8, max: 30, step: 0.25, status: 'explore', ref: 'D-15',
+    note: 'Must be ≤ 2 × (inner tire corner y at full lock − steering clearance); see A-4. The D-25 kingpin lead cut the allowance from 14" to 12.67".',
   },
   noseTaperStartIn: {
     label: 'Nose taper starts this far behind front axle', group: 'body', unit: 'in',
-    default: 18.5, min: 0, max: 30, step: 0.5, status: 'explore', ref: 'A-4',
+    default: 19.5, min: 0, max: 30, step: 0.5, status: 'explore', ref: 'A-4',
     note: 'Full-width cabin must end behind the rear-most tire corner at full lock + steering clearance (A-4).',
   },
   steeringClearanceIn: {
@@ -197,6 +205,11 @@ const defs = {
   sideHeightIn: {
     label: 'Side height above deck', group: 'body', unit: 'in',
     default: 7, min: 3, max: 12, step: 0.25, status: 'explore',
+  },
+  railBandIn: {
+    label: 'Chine / gunwale height', group: 'body', unit: 'in',
+    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-22',
+    note: 'Oak chine and gunwale section height; the side panel is captured between them.',
   },
   gunwaleFlareIn: {
     label: 'Gunwale outward flare (each side)', group: 'body', unit: 'in',
@@ -220,12 +233,72 @@ const defs = {
     label: 'Storage box interior volume', group: 'body', unit: 'in³',
     default: 1800, min: 800, max: 4000, step: 50, status: 'assumed', ref: 'D-19',
   },
+  storageOverSideIn: {
+    label: 'Storage box max height above the side top', group: 'body', unit: 'in',
+    default: 2, min: 0, max: 6, step: 0.25, status: 'assumed', ref: 'D-19',
+    note: 'Caps the box height; the box is a flat tray, so the volume target spreads over its length and width.',
+  },
+  storageRaisedClearIn: {
+    label: 'Raised storage box clearance above tires and knees', group: 'body', unit: 'in',
+    default: 0.75, min: 0.25, max: 3, step: 0.25, status: 'assumed', ref: 'D-19',
+    note: 'forwardRaised only: box bottom = the higher of (wheel diameter, rider knee top) + this.',
+  },
+  storageLidRimWidthIn: {
+    label: 'Storage lid oak rim width', group: 'body', unit: 'in',
+    default: 1, min: 0.5, max: 2, step: 0.25, status: 'assumed', ref: 'D-19',
+    note: 'Oak perimeter strip under the ply lid; the box walls end on it.',
+  },
+  storageLidRimThickIn: {
+    label: 'Storage lid oak rim thickness', group: 'body', unit: 'in',
+    default: 0.5, min: 0.375, max: 1, step: 0.125, status: 'assumed', ref: 'D-19',
+  },
 
   // ── Seat & rider position ────────────────────────────────────────────────
   seatXIn: {
     label: 'Seat H-point ahead of rear axle', group: 'seat', unit: 'in',
     default: 12, min: -4, max: 36, step: 0.5, status: 'explore', primary: true,
     note: 'Forward → more front load, better lock stability; aft → more rear-brake traction.',
+  },
+  seatDepthIn: {
+    label: 'Seat cushion depth (fore-aft)', group: 'seat', unit: 'in',
+    default: 16, min: 10, max: 22, step: 0.5, status: 'assumed', ref: 'D-18',
+  },
+  seatWidthIn: {
+    label: 'Seat cushion width', group: 'seat', unit: 'in',
+    default: 18, min: 12, max: 26, step: 0.5, status: 'assumed', ref: 'D-18',
+    note: 'Clamped to the cabin inside width. Rider hips are about 12" wide.',
+  },
+  seatBehindHpointIn: {
+    label: 'Cushion rear edge behind H-point', group: 'seat', unit: 'in',
+    default: 4, min: 2, max: 8, step: 0.5, status: 'assumed', ref: 'D-18',
+  },
+  seatRiserIn: {
+    label: 'Seat riser under the cushion', group: 'seat', unit: 'in',
+    default: 0, min: 0, max: 3, step: 0.25, status: 'explore', ref: 'D-18',
+    note: 'The cushion sits directly on the deck by default (the old 1.5" base ring was redundant). A riser is two oak runners.',
+  },
+  seatBackWidthIn: {
+    label: 'Seat-back width', group: 'seat', unit: 'in',
+    default: 16, min: 12, max: 26, step: 0.5, status: 'assumed', ref: 'D-18',
+    note: 'About stature × 0.19 + margin for a 13" torso.',
+  },
+  seatBackThickIn: {
+    label: 'Seat-back frame thickness', group: 'seat', unit: 'in',
+    default: 0.75, min: 0.5, max: 1.25, step: 0.0625, status: 'assumed', ref: 'D-18',
+    note: 'Oak frame (2 stiles + 2 rails) with a ply or fabric panel captured in it.',
+  },
+  seatBackFrameWidthIn: {
+    label: 'Seat-back frame member width', group: 'seat', unit: 'in',
+    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-18',
+  },
+  footStopHeightIn: {
+    label: 'Foot stop height above deck', group: 'seat', unit: 'in',
+    default: 4, min: 2, max: 8, step: 0.5, status: 'assumed', ref: 'D-3',
+  },
+  footStopThickIn: {
+    label: 'Foot stop thickness', group: 'seat', unit: 'in',
+    default: 0.75, min: 0.5, max: 2, step: 0.25, status: 'assumed', ref: 'D-3',
+    note: 'An oak board across the nose, braced by the nose sides.',
   },
   seatCushionIn: {
     label: 'Seat cushion thickness', group: 'seat', unit: 'in',
@@ -321,6 +394,38 @@ const defs = {
     label: 'Turntable bearing stack height', group: 'steering', unit: 'in',
     default: 0.375, min: 0.25, max: 1, step: 0.0625, status: 'verify', ref: 'D-12',
   },
+  turntableMassLb: {
+    label: 'Turntable bearing mass', group: 'steering', unit: 'lb',
+    default: 3.5, min: 1, max: 8, step: 0.25, status: 'verify', ref: 'D-12',
+    note: 'Estimate for a 12" lazy-susan plate pair; replace with the catalog value.',
+  },
+  bolsterRailWidthIn: {
+    label: 'Bolster rail width (fore-aft)', group: 'steering', unit: 'in',
+    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-12',
+    note: 'Two oak rails fore and aft of the kingpin plus two end rails carry the nose deck on the turntable plate.',
+  },
+  bolsterMinDepthIn: {
+    label: 'Bolster minimum depth', group: 'steering', unit: 'in',
+    default: 0.75, min: 0.5, max: 2, step: 0.25, status: 'assumed', ref: 'D-12',
+  },
+  sideBearerWidthIn: {
+    label: 'Side-bearer rub block width (across)', group: 'steering', unit: 'in',
+    default: 1.5, min: 0.75, max: 3, step: 0.25, status: 'assumed', ref: 'D-12',
+    note: 'Rub blocks beside the turntable carry roll moment between bolster and axle beam.',
+  },
+  sideBearerClearanceIn: {
+    label: 'Side-bearer running clearance', group: 'steering', unit: 'in',
+    default: 0.0625, min: 0.03125, max: 0.25, step: 0.03125, status: 'assumed', ref: 'D-12',
+  },
+  tongueThickIn: {
+    label: 'Tongue width (across)', group: 'steering', unit: 'in',
+    default: 1, min: 0.75, max: 2, step: 0.25, status: 'assumed', ref: 'D-14',
+  },
+  tongueDepthIn: {
+    label: 'Tongue depth (vertical)', group: 'steering', unit: 'in',
+    default: 2.5, min: 1, max: 3.5, step: 0.25, status: 'assumed', ref: 'D-14',
+    note: 'Clamped to the front beam depth so the tongue never reaches the turntable.',
+  },
   turntableRatingLb: {
     label: 'Turntable load rating', group: 'steering', unit: 'lb',
     default: 1000, min: 1000, max: 2000, step: 50, status: 'locked', ref: 'D-12',
@@ -348,7 +453,7 @@ const defs = {
     ],
   },
   tongueLengthIn: {
-    label: 'Tongue length ahead of kingpin', group: 'steering', unit: 'in',
+    label: 'Tongue length ahead of front axle', group: 'steering', unit: 'in',
     default: 24, min: 12, max: 48, step: 1, status: 'explore', ref: 'D-14',
   },
   pullerHandHeightIn: {
@@ -368,6 +473,39 @@ const defs = {
   brakeLeverRatio: {
     label: 'Brake linkage mechanical advantage', group: 'brake', unit: ':1',
     default: 10, min: 2, max: 14, step: 0.5, status: 'explore', ref: 'D-13',
+  },
+  brakeShoeThickIn: {
+    label: 'Brake shoe radial thickness', group: 'brake', unit: 'in',
+    default: 1.5, min: 0.75, max: 3, step: 0.25, status: 'assumed', ref: 'D-13',
+  },
+  brakeShoeWidthIn: {
+    label: 'Brake shoe width (across the tread)', group: 'brake', unit: 'in',
+    default: 3, min: 1.5, max: 4, step: 0.25, status: 'assumed', ref: 'D-13',
+  },
+  brakeShoeLengthIn: {
+    label: 'Brake shoe length (along the tread)', group: 'brake', unit: 'in',
+    default: 2, min: 1, max: 5, step: 0.25, status: 'assumed', ref: 'D-13',
+  },
+  brakeShoeAngleDeg: {
+    label: 'Brake shoe position above the axle line', group: 'brake', unit: '°',
+    default: 45, min: 20, max: 70, step: 5, status: 'assumed', ref: 'D-13',
+  },
+  brakeDrumDiameterFrac: {
+    label: 'Wooden drum diameter ÷ wheel diameter', group: 'brake', unit: '×',
+    default: 0.5, min: 0.3, max: 0.7, step: 0.05, status: 'assumed', ref: 'D-13',
+    note: 'The drum must stay above the minimum ground clearance (validator warning).',
+  },
+  brakeDrumWidthIn: {
+    label: 'Wooden drum width (along the axle)', group: 'brake', unit: 'in',
+    default: 1, min: 0.5, max: 2, step: 0.25, status: 'assumed', ref: 'D-13',
+  },
+  brakeLeverWidthIn: {
+    label: 'Brake lever width (across)', group: 'brake', unit: 'in',
+    default: 1.5, min: 1, max: 2.5, step: 0.25, status: 'assumed', ref: 'D-13',
+  },
+  brakeLeverThickIn: {
+    label: 'Brake lever thickness (fore-aft)', group: 'brake', unit: 'in',
+    default: 1, min: 0.75, max: 2, step: 0.25, status: 'assumed', ref: 'D-13',
   },
   brakeEfficiency: {
     label: 'Brake linkage efficiency', group: 'brake', unit: '×',
@@ -396,6 +534,15 @@ const defs = {
     default: 34, min: 26, max: 42, step: 0.5, status: 'assumed',
     note: 'Adult hip-to-waist height for holding back on descents.',
   },
+  handleUprightInsetIn: {
+    label: 'Push-handle upright inset from the body edge', group: 'brake', unit: 'in',
+    default: 2, min: 0.5, max: 5, step: 0.5, status: 'assumed', ref: 'D-9',
+  },
+  handleBarDiameterIn: {
+    label: 'Push-handle crossbar diameter', group: 'brake', unit: 'in',
+    default: 1.25, min: 1, max: 2, step: 0.125, status: 'assumed', ref: 'D-9',
+    note: 'Modelled as a square block.',
+  },
 
   // ── Stock thicknesses (finished) ─────────────────────────────────────────
   railThicknessIn: {
@@ -409,6 +556,10 @@ const defs = {
   crossmemberDepthIn: {
     label: 'Crossmember / deck joist depth', group: 'stock', unit: 'in',
     default: 1.75, min: 0.75, max: 3.5, step: 0.125, status: 'explore',
+  },
+  crossmemberThickIn: {
+    label: 'Crossmember / deck joist thickness', group: 'stock', unit: 'in',
+    default: 0.75, min: 0.5, max: 1.5, step: 0.0625, status: 'explore',
   },
   sideThicknessIn: {
     label: 'Side / gunwale stock thickness', group: 'stock', unit: 'in',
@@ -681,8 +832,9 @@ export function derived(p: Params) {
   const lk = (p.steerLockDeg * Math.PI) / 180;
   const a = p.frontTrackIn / 2;
   const r = p.wheelDiameterIn / 2;
-  const swingInnerYIn = (a - p.tireWidthIn / 2) * Math.cos(lk) - r * Math.sin(lk);
-  const swingRearXIn = (a + p.tireWidthIn / 2) * Math.sin(lk) + r * Math.cos(lk);
+  // The kingpin leads the axle by `kingpinLeadIn` (D-25), so the tire's rear edge is (lead + r) behind the pivot.
+  const swingInnerYIn = (a - p.tireWidthIn / 2) * Math.cos(lk) - (p.kingpinLeadIn + r) * Math.sin(lk);
+  const swingRearXIn = (a + p.tireWidthIn / 2) * Math.sin(lk) + (p.kingpinLeadIn + r) * Math.cos(lk);
   const tongueOnFront = p.drawbar === DRAWBAR.woodTongue ? p.tongueLengthIn : 0;
   return {
     plyDensityPcf: okoume ? p.okoumeDensityPcf : p.birchDensityPcf,
@@ -698,10 +850,10 @@ export function derived(p: Params) {
     /** Overall width across the wider axle, outside the wheel assemblies. */
     overallWidthIn: Math.max(p.frontTrackIn, p.rearTrackIn) + 2 * wheelOuterHalfIn,
     maxTrackBesideWells: p.truckWellGapIn - 2 * wheelOuterHalfIn - 2 * p.truckClearanceIn,
-    /** A-4: inner tire corner |y| and rear-most tire extent behind the kingpin, at full lock. */
+    /** A-4 (with the D-25 lead): inner tire corner |y| and rear-most tire extent behind the kingpin, at full lock. */
     swingInnerYIn,
     swingRearXIn,
-    truckUsableLengthIn: p.truckBedLengthIn + p.truckTailgateLengthIn,
+    truckUsableLengthIn: p.truckBedLengthIn + p.truckTailgateGapIn + p.truckTailgateLengthIn,
     oakDesignMorPsi: (p.oakMorPsi * p.wetServiceFactorStrength) / p.woodSafetyFactor,
     oakDesignMoePsi: p.oakMoePsi * p.wetServiceFactorStiffness,
     axleAllowablePsi: p.axleYieldPsi / p.steelSafetyFactor,
@@ -742,6 +894,34 @@ export function validateParams(p: Params): ParamIssue[] {
     err(['seatXIn', 'rearOverhangIn'], 'Seat hangs off the back of the body.');
   if (p.seatXIn + p.riderLegReachIn > p.wheelbaseIn + p.frontOverhangIn)
     err(['seatXIn', 'riderLegReachIn', 'frontOverhangIn'], 'Rider\'s feet extend past the front of the body.');
+  if (p.kingpinLeadIn + p.turntableSizeIn / 2 + p.sideThicknessIn > p.frontOverhangIn)
+    err(['kingpinLeadIn', 'turntableSizeIn', 'frontOverhangIn'],
+      `The turntable (kingpin at ${p.kingpinLeadIn}" ahead of the axle, ${p.turntableSizeIn}" plate) pokes out of the front of the body; the front overhang must be ≥ ${(p.kingpinLeadIn + p.turntableSizeIn / 2 + p.sideThicknessIn).toFixed(2)}".`);
+  // Seat geometry (critic H3): the cushion must end before the shoulder panel, the leaning back must stay inside the rear
+  // transom, and a rear storage box needs room between the transom and the seat back.
+  const xsShoulder = p.wheelbaseIn - p.noseTaperStartIn;
+  const cushionFront = p.seatXIn - p.seatBehindHpointIn + p.seatDepthIn;
+  if (cushionFront > xsShoulder - p.panelPlyIn - 0.01)
+    err(['seatXIn', 'seatDepthIn', 'noseTaperStartIn', 'wheelbaseIn'],
+      `The seat cushion runs into the cabin shoulder (cabin ends ${xsShoulder.toFixed(1)}" ahead of the rear axle; the cushion front is at ${cushionFront.toFixed(1)}"). Move the seat back or shorten it.`);
+  const a = (p.seatBackAngleDeg * Math.PI) / 180;
+  const backRear = p.seatXIn - p.seatBehindHpointIn - p.seatBackThickIn * Math.cos(a) - p.seatBackHeightIn * Math.sin(a);
+  const transomFront = -p.rearOverhangIn + p.sideThicknessIn;
+  if (backRear < transomFront + 0.01)
+    err(['seatXIn', 'rearOverhangIn', 'seatBackHeightIn', 'seatBackAngleDeg'],
+      `The leaning seat back would hit the rear transom (its top reaches ${backRear.toFixed(1)}" from the rear axle; the transom is at ${transomFront.toFixed(1)}").`);
+  if (p.storageLocation === STORAGE_LOCATION.rearOverAxle) {
+    const room = p.seatXIn - p.seatBehindHpointIn - p.seatBackThickIn * Math.cos(a) - transomFront;
+    if (room < MIN_REAR_STORAGE_LENGTH_IN)
+      err(['seatXIn', 'rearOverhangIn', 'storageLocation'],
+        `Only ${room.toFixed(1)}" between the rear transom and the seat back; a rear storage box needs ≥ ${MIN_REAR_STORAGE_LENGTH_IN}". Move the seat forward or choose another storage location.`);
+  }
+  // The rider's feet go through the nose to the foot stop.
+  const footSpan = (2 * RIDER_LEG_Y_FRAC + RIDER_FOOT_Y_FRAC) * p.riderStatureIn;
+  const noseInner = p.noseWidthIn - 2 * p.sideThicknessIn;
+  if (noseInner < footSpan + 0.25)
+    err(['noseWidthIn', 'riderStatureIn'],
+      `The nose is ${noseInner.toFixed(1)}" wide inside; the rider's feet need ≥ ${(footSpan + 0.25).toFixed(1)}" at this stature.`);
   if (p.truckWellStartIn + p.truckWellLengthIn > p.truckBedLengthIn)
     err(['truckWellStartIn', 'truckWellLengthIn', 'truckBedLengthIn'], 'Wheel wells extend past the bed.');
   if (p.truckWellGapIn > p.truckBedWidthIn)
@@ -760,6 +940,11 @@ export function validateParams(p: Params): ParamIssue[] {
     warn(['axleBeamDepthIn', 'axleBeamPosition', 'minGroundClearanceIn'],
       `Axle beam bottom at ${beamBottom.toFixed(2)}" is below the ${p.minGroundClearanceIn}" ground clearance.`);
   const beamTop = beamBottom + p.axleBeamDepthIn;
+  // The bolster must fit between the turntable top and the nose deck underside (the model would otherwise poke through the deck).
+  const frontDeckBot = p.deckHeightIn + p.frontDeckRaiseIn - p.deckPlyIn;
+  if (beamTop + p.turntableThicknessIn + p.bolsterMinDepthIn > frontDeckBot + 0.01)
+    err(['deckHeightIn', 'frontDeckRaiseIn', 'axleBeamPosition', 'axleBeamDepthIn', 'turntableThicknessIn', 'bolsterMinDepthIn'],
+      `Front axle beam + turntable + ${p.bolsterMinDepthIn}" bolster needs the nose deck underside at ≥ ${(beamTop + p.turntableThicknessIn + p.bolsterMinDepthIn).toFixed(2)}"; it is ${frontDeckBot.toFixed(2)}". Raise the deck or the forward deck raise, or use an underslung beam.`);
   const frontStackTop = beamTop + p.turntableThicknessIn + p.crossmemberDepthIn + p.deckPlyIn;
   const frontDeck = p.deckHeightIn + p.frontDeckRaiseIn;
   if (frontStackTop > frontDeck + 0.01)
@@ -769,6 +954,12 @@ export function validateParams(p: Params): ParamIssue[] {
   if (rearStackTop > p.deckHeightIn + 0.01)
     warn(['deckHeightIn', 'axleBeamDepthIn'],
       `Rear axle beam + ply needs the deck at ≥ ${rearStackTop.toFixed(2)}"; it is ${p.deckHeightIn}".`);
+  if (p.brakeType === BRAKE_TYPE.woodDrum) {
+    const drumBottom = r - (p.wheelDiameterIn * p.brakeDrumDiameterFrac) / 2;
+    if (drumBottom < p.minGroundClearanceIn)
+      warn(['brakeDrumDiameterFrac', 'minGroundClearanceIn'],
+        `Brake drum bottom at ${drumBottom.toFixed(2)}" is below the ${p.minGroundClearanceIn}" ground clearance.`);
+  }
   // Front-wheel swing at full lock (A-4). Only matters if the tire reaches up to the hull.
   const d = derived(p);
   if (p.wheelDiameterIn > p.deckHeightIn + p.frontDeckRaiseIn - p.deckPlyIn - p.crossmemberDepthIn) {

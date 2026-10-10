@@ -1,30 +1,45 @@
-/** Storage box (hollow ply shell + oak lid frame, D-19). Mass uses the shell area, not the box volume. */
-import { STEP, box, woodMassLb, type Ctx } from './build-utils';
+/**
+ * Storage box (D-19): a ply tray (bottom, 2 sides, 2 ends), a ply lid, and an oak rim under the lid that the walls
+ * end on. Built from real panels so the cut list and mass are honest (critic M3); interior volume is set in layout.ts.
+ */
+import { STEP, box, span, type Ctx } from './build-utils';
 import type { Part } from './types';
-
-// ── Block-model placeholders ──
-/** Lid frame strip section (width × thickness). */
-const LID_STRIP_W_IN = 1.5;
-const LID_STRIP_T_IN = 0.75;
 
 export function buildStorage(ctx: Ctx): Part[] {
   const { p, L } = ctx;
   const st = L.storage;
-  const lx = Math.max(0.5, st.x1 - st.x0);
-  const w = 2 * st.hw;
-  const h = Math.max(0.5, st.zTop - st.zBot);
   const pl = p.panelPlyIn;
-  // Five-sided shell (open top) of ply; the lid is an oak perimeter frame.
-  const shellArea = lx * w + 2 * lx * h + 2 * w * h;
-  const lidPerim = 2 * (lx + w);
-  const lidVol = lidPerim * LID_STRIP_W_IN * LID_STRIP_T_IN;
-  const lidArea = 2 * lidPerim * LID_STRIP_W_IN + lidPerim * LID_STRIP_T_IN;
-  const mass =
-    woodMassLb(p, shellArea * pl, 2 * shellArea, ctx.d.plyDensityPcf) + woodMassLb(p, lidVol, lidArea, p.oakDensityPcf);
-  return [box(ctx, {
-    id: 'storage-box', name: 'Storage box', group: 'storage', mat: 'fixed', massLb: mass, kind: 'sheet', material: `${ctx.plyName} + white oak lid frame`,
-    fab: 'table-saw', step: STEP.seatStorage, edges: 'captured', stock: { t: pl, w, l: lx }, size: [lx, w, h],
-    center: [(st.x0 + st.x1) / 2, 0, (st.zBot + st.zTop) / 2],
-    notes: `Hollow: mass from shell area × panel thickness. Interior volume target ${p.storageVolumeIn3} in³ (D-19).`,
-  })];
+  const rimW = p.storageLidRimWidthIn;
+  const rimT = p.storageLidRimThickIn;
+  const x0 = st.x0, x1 = Math.max(st.x0 + 0.5, st.x1);
+  const hw = st.hw;
+  const zTop = Math.max(st.zBot + 3 * pl + rimT, st.zTop);
+  const zWallTop = zTop - pl - rimT;
+  const common = { group: 'storage', step: STEP.seatStorage } as const;
+  const parts: Part[] = [];
+
+  parts.push(box(ctx, { ...common, id: 'storage-bottom', name: 'Storage box bottom', mat: 'ply', edges: 'captured',
+    ...span([x0, x1], [-hw, hw], [st.zBot, st.zBot + pl]),
+    notes: `Interior volume target ${p.storageVolumeIn3} in³ (D-19).` }));
+  for (const [tag, y] of [['L', hw - pl / 2], ['R', -(hw - pl / 2)]] as const) {
+    parts.push(box(ctx, { ...common, id: `storage-side-${tag}`, partNo: 'storage-side', name: `Storage box side ${tag}`, mat: 'ply', edges: 'captured',
+      ...span([x0, x1], [y - pl / 2, y + pl / 2], [st.zBot + pl, zWallTop]) }));
+  }
+  for (const [tag, xa, xb] of [['aft', x0, x0 + pl], ['fore', x1 - pl, x1]] as const) {
+    parts.push(box(ctx, { ...common, id: `storage-end-${tag}`, partNo: 'storage-end', name: `Storage box ${tag} end`, mat: 'ply', edges: 'captured',
+      ...span([xa, xb], [-(hw - pl), hw - pl], [st.zBot + pl, zWallTop]) }));
+  }
+  parts.push(box(ctx, { ...common, id: 'storage-lid', name: 'Storage lid panel', mat: 'ply', edges: 'edged',
+    ...span([x0, x1], [-hw, hw], [zTop - pl, zTop]), notes: 'Ply lid; the oak rim under it seals the edge and gives the walls a seat.' }));
+  // Oak rim under the lid, flush with the outside of the walls.
+  const rz: [number, number] = [zTop - pl - rimT, zTop - pl];
+  for (const [tag, y] of [['L', hw - rimW / 2], ['R', -(hw - rimW / 2)]] as const) {
+    parts.push(box(ctx, { ...common, id: `storage-rim-side-${tag}`, partNo: 'storage-rim-side', name: `Storage lid rim side ${tag}`, mat: 'oak', grain: 'x',
+      ...span([x0, x1], [y - rimW / 2, y + rimW / 2], rz) }));
+  }
+  for (const [tag, xa, xb] of [['aft', x0, x0 + rimW], ['fore', x1 - rimW, x1]] as const) {
+    parts.push(box(ctx, { ...common, id: `storage-rim-end-${tag}`, partNo: 'storage-rim-end', name: `Storage lid rim ${tag} end`, mat: 'oak', grain: 'y',
+      ...span([xa, xb], [-(hw - rimW), hw - rimW], rz) }));
+  }
+  return parts;
 }

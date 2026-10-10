@@ -1,7 +1,6 @@
 /** Frame: ladder rails or hull-beam girders, plus crossmembers/joists (D-17). */
 import { FRAME_STYLE } from '../params';
 import { STEP, box, span, SIDES, type Ctx } from './build-utils';
-import { JOIST_THICK_IN } from './layout';
 import type { Part } from './types';
 
 export function buildFrame(ctx: Ctx): Part[] {
@@ -43,13 +42,13 @@ export function buildFrame(ctx: Ctx): Part[] {
   L.cabinJoistX.forEach((x, i) => {
     parts.push(box(ctx, {
       id: `joist-cabin-${i + 1}`, partNo: 'joist-cabin', name: `Cabin crossmember ${i + 1}`, group: 'frame', mat: 'oak', step: STEP.frame, grain: 'y',
-      ...span([x - JOIST_THICK_IN / 2, x + JOIST_THICK_IN / 2], [-cabinSpan, cabinSpan], [L.deckBot - jD, L.deckBot]),
+      ...span([x - L.joistT / 2, x + L.joistT / 2], [-cabinSpan, cabinSpan], [L.deckBot - jD, L.deckBot]),
     }));
   });
   L.noseJoistX.forEach((x, i) => {
     parts.push(box(ctx, {
       id: `joist-nose-${i + 1}`, partNo: 'joist-nose', name: `Nose crossmember ${i + 1}`, group: 'frame', mat: 'oak', step: STEP.frame, grain: 'y',
-      ...span([x - JOIST_THICK_IN / 2, x + JOIST_THICK_IN / 2], [-noseSpan, noseSpan], [L.noseBot - jD, L.noseBot]),
+      ...span([x - L.joistT / 2, x + L.joistT / 2], [-noseSpan, noseSpan], [L.noseBot - jD, L.noseBot]),
     }));
   });
   return parts;

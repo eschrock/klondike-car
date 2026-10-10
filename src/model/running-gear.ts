@@ -43,7 +43,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
     massLb: d.wheelMassLb,
     fab: 'buy',
     step: STEP.gear,
-    explode: [0, id.endsWith('L') ? 1 : -1, 0],
+    explode: [0, (id.endsWith('L') ? 1 : -1) / Math.hypot(1, 0.25), -0.25 / Math.hypot(1, 0.25)],
     notes: 'Catalog wheel mass from params (D-11).',
   });
   const ry = p.rearTrackIn / 2;
@@ -84,8 +84,8 @@ export function buildRunningGear(ctx: Ctx): Part[] {
     const b = ax.beam;
     parts.push(box(ctx, {
       id: `beam-${ax.tag}`, name: `${name} axle beam`, group: 'running-gear', steer: ax.steer, mat: 'oak',
-      size: [b.thick, b.len, b.depth], center: [ax.x, 0, (b.top + b.bot) / 2], grain: 'y', fab: 'table-saw',
-      step: STEP.gear, notes: p.axleBeamPosition === AXLE_BEAM_POSITION.underslung ? 'Underslung (D-15).' : 'Overslung (D-15).',
+      size: [b.thick, b.len, b.depth], center: [b.x, 0, (b.top + b.bot) / 2], grain: 'y', fab: 'table-saw',
+      step: STEP.gear, notes: (p.axleBeamPosition === AXLE_BEAM_POSITION.underslung ? 'Underslung (D-15).' : 'Overslung (D-15).') + (ax.tag === 'F' ? ' Centred between the axle and the kingpin (D-25).' : ''),
     }));
     // Clamps: 2 plates per wheel side, on the side of the rod away from the beam.
     const under = p.axleBeamPosition === AXLE_BEAM_POSITION.underslung;
@@ -94,7 +94,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
     const zc = under ? b.top + CLAMP_PLATE.z / 2 : b.bot - CLAMP_PLATE.z / 2;
     for (const { s, tag } of SIDES) {
       for (const [i, sx] of [[1, 1], [2, -1]] as const) {
-        const sp = span([ax.x + sx * CLAMP_X_OFFSET_IN - CLAMP_PLATE.x / 2, ax.x + sx * CLAMP_X_OFFSET_IN + CLAMP_PLATE.x / 2],
+        const sp = span([b.x + sx * CLAMP_X_OFFSET_IN - CLAMP_PLATE.x / 2, b.x + sx * CLAMP_X_OFFSET_IN + CLAMP_PLATE.x / 2],
           [s * yc - CLAMP_PLATE.y / 2, s * yc + CLAMP_PLATE.y / 2], [zc - CLAMP_PLATE.z / 2, zc + CLAMP_PLATE.z / 2]);
         parts.push(box(ctx, {
           id: `clamp-${ax.tag}${tag}${i}`, partNo: 'axle-clamp', name: `${name} ${tag === 'L' ? 'left' : 'right'} U-bolt + plate ${i}`,

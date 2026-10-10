@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { centerOfGravity } from '../model/mass';
-import { partCentroid } from '../model/bounds';
+import { partCentroid, worldAABB } from '../model/bounds';
 import type { Geometry, Mat4, Part, PartGroup, Vec3 } from '../model/types';
 
 type ViewName = 'iso' | 'top' | 'side' | 'front';
@@ -155,6 +156,11 @@ export class Viewer {
   private highlightColor = '#ff3b30';
   private readonly sectionPlane = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0);
   private sectionOut!: HTMLOutputElement;
+  private readonly overlay = new THREE.Group();
+  private readonly labelRenderer = new CSS2DRenderer();
+  private showCg = true;
+  private showDims = false;
+  private lastParts: Part[] = [];
   private truckFrameKey: string | null = null;
   private inTruck = false;
 
@@ -168,7 +174,12 @@ export class Viewer {
     this.canvasHost = el('div', 'viewer-canvas');
     const toolbar = (this.toolbar = el('div', 'viewer-toolbar'));
     this.toggleHost = el('div', 'viewer-toggles');
-    container.append(this.canvasHost, toolbar, this.toggleHost);
+    // The controls live in their own bar above the canvas (never overlaying the cart).
+    const bar = el('div', 'viewer-bar');
+    bar.append(toolbar, this.toggleHost);
+    const stage = el('div', 'viewer-stage');
+    stage.append(this.canvasHost);
+    container.append(bar, stage);
 
     for (const name of Object.keys(VIEW_DIRS) as ViewName[]) {
       const b = el('button', '');
@@ -179,12 +190,16 @@ export class Viewer {
     }
     this.buildExplodeControl();
     this.buildSectionControl();
+    this.buildOverlayControls();
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.canvasHost.append(this.renderer.domElement);
+    const ld = this.labelRenderer.domElement;
+    ld.className = 'viewer-labels';
+    this.canvasHost.append(ld);
 
     // Model frame is Z-up: +X forward, +Y left.
     this.camera.up.set(0, 0, 1);
@@ -203,6 +218,7 @@ export class Viewer {
     const loop = () => {
       this.controls.update();
       this.renderer.render(this.scene, this.camera);
+      this.labelRenderer.render(this.scene, this.camera);
       requestAnimationFrame(loop);
     };
     loop();
@@ -223,7 +239,7 @@ export class Viewer {
       out.textContent = `${r.value}"`;
     });
     const label = el('label', 'steer-ctl');
-    label.title = 'Exploded view: each part moves away from the centre of gravity (or along its own explode direction)';
+    label.title = 'Exploded view: each part moves along its own explode vector (radially from the centre of gravity if it has none)';
     label.append('Explode', r, out);
     this.toolbar.append(label);
   }
@@ -262,10 +278,104 @@ export class Viewer {
     this.toolbar.append(label);
   }
 
+  private buildOverlayControls(): void {
+    const mk = (text: string, title: string, checked: boolean, on: (v: boolean) => void) => {
+      const cb = el('input', '');
+      cb.type = 'checkbox';
+      cb.checked = checked;
+      cb.addEventListener('change', () => on(cb.checked));
+      const label = el('label', 'steer-ctl');
+      label.title = title;
+      label.append(cb, text);
+      this.toolbar.append(label);
+    };
+    mk('CG', 'Centre-of-gravity marker and drop line for what is shown (empty, or with rider and cargo)', true, (v) => {
+      this.showCg = v;
+      this.rebuildOverlay();
+    });
+    mk('Dimensions', 'Overall length, width and height, wheelbase, track and deck height', false, (v) => {
+      this.showDims = v;
+      this.rebuildOverlay();
+    });
+  }
+
+  /** CG marker + drop line and the dimension lines, in the (possibly truck-placed) model frame. */
+  private rebuildOverlay(): void {
+    for (const c of [...this.overlay.children]) {
+      this.overlay.remove(c);
+      const o = c as THREE.Mesh;
+      o.geometry?.dispose();
+    }
+    const parts = this.lastParts;
+    if (!parts.length || this.explodeAmount > 0) return;
+    const hot = new THREE.LineBasicMaterial({ color: 0xe5322d, depthTest: false });
+    const dimMat = new THREE.LineBasicMaterial({ color: 0x1f6feb, depthTest: false });
+    const label = (text: string, at: Vec3, cls: string) => {
+      const d = document.createElement('div');
+      d.className = cls;
+      d.textContent = text;
+      const o = new CSS2DObject(d);
+      o.position.set(...at);
+      this.overlay.add(o);
+    };
+    const line = (pts: Vec3[], mat: THREE.Material) => {
+      const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts.map((p) => new THREE.Vector3(...p))), mat);
+      l.renderOrder = 999;
+      this.overlay.add(l);
+    };
+
+    if (this.showCg) {
+      const cg = centerOfGravity(parts, { includePayload: true });
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(1.3, 16, 12), new THREE.MeshBasicMaterial({ color: 0xe5322d, depthTest: false }));
+      ball.position.set(...cg);
+      ball.renderOrder = 1000;
+      this.overlay.add(ball);
+      line([cg, [cg[0], cg[1], 0]], hot);
+      label(`CG ${cg[0].toFixed(1)}, ${cg[1].toFixed(1)}, ${cg[2].toFixed(1)}`, [cg[0], cg[1], cg[2] + 3], 'dim-label cg-label');
+    }
+
+    if (this.showDims) {
+      const cart = parts.filter((x) => !x.payload && x.group !== 'reference' && !/bridle|rope/i.test(x.id + x.name));
+      if (!cart.length) return;
+      const bb = worldAABB(cart);
+      const [x0, y0, z0] = bb.min;
+      const [x1, y1, z1] = bb.max;
+      const o = 5; // offset of the dimension lines from the cart
+      const dim = (a: Vec3, b: Vec3, text: string) => {
+        line([a, b], dimMat);
+        const ticks = 1.2;
+        for (const e of [a, b]) line([[e[0] - ticks, e[1] - ticks, e[2]], [e[0] + ticks, e[1] + ticks, e[2]]], dimMat);
+        label(text, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], 'dim-label');
+      };
+      const f = (v: number) => `${v.toFixed(1)}"`;
+      dim([x0, y0 - o, 0], [x1, y0 - o, 0], `Length ${f(x1 - x0)}`);
+      dim([x1 + o, y0, 0], [x1 + o, y1, 0], `Width ${f(y1 - y0)}`);
+      dim([x0 - o, y1 + o, 0], [x0 - o, y1 + o, z1], `Height ${f(z1 - 0)}`);
+      const wheels = cart.filter((x) => x.geometry.type === 'wheel').map((x) => partCentroid(x));
+      if (wheels.length >= 2) {
+        const xs = wheels.map((c) => c[0]);
+        const rearX = Math.min(...xs), frontX = Math.max(...xs);
+        const ys = wheels.filter((c) => Math.abs(c[0] - rearX) < 3).map((c) => c[1]);
+        const wz = wheels[0][2];
+        if (frontX - rearX > 1) dim([rearX, y1 + o + 6, wz], [frontX, y1 + o + 6, wz], `Wheelbase ${f(frontX - rearX)}`);
+        if (ys.length >= 2) dim([rearX, Math.min(...ys), 0], [rearX, Math.max(...ys), 0], `Track ${f(Math.max(...ys) - Math.min(...ys))}`);
+      }
+      const deck = cart.filter((x) => /deck/i.test(x.id));
+      if (deck.length) {
+        const db = worldAABB(deck);
+        const cx = (db.min[0] + db.max[0]) / 2;
+        dim([cx, y1 + o, 0], [cx, y1 + o, db.max[2]], `Deck ${f(db.max[2])}`);
+      }
+      void z0;
+    }
+  }
+
   /** Exploded distance in inches (part.explode × amount). */
   setExplode(amount: number): void {
+    const was = this.explodeAmount > 0;
     this.explodeAmount = amount;
     this.applyMatrices();
+    if (was !== amount > 0) this.rebuildOverlay(); // the CG / dimension overlay is hidden while exploded
   }
 
   setSection(axis: SectionAxis, pos: number): void {
@@ -332,8 +442,9 @@ export class Viewer {
     this.scene.add(sun);
 
     this.partsGroup.matrixAutoUpdate = false;
+    this.overlay.matrixAutoUpdate = false;
     this.truckGroup.visible = false;
-    this.scene.add(this.partsGroup, this.truckGroup);
+    this.scene.add(this.partsGroup, this.truckGroup, this.overlay);
   }
 
   private applyTheme(): void {
@@ -345,6 +456,7 @@ export class Viewer {
     const w = this.canvasHost.clientWidth || 1;
     const h = this.canvasHost.clientHeight || 1;
     this.renderer.setSize(w, h, false);
+    this.labelRenderer.setSize(w, h);
     this.renderer.domElement.style.width = '100%';
     this.renderer.domElement.style.height = '100%';
     this.camera.aspect = w / h;
@@ -382,6 +494,8 @@ export class Viewer {
     this.applyMatrices();
     this.applyHighlight();
     this.refreshToggles(parts);
+    this.lastParts = parts;
+    this.rebuildOverlay();
     if (!this.framed && parts.length) {
       this.framed = true;
       // Wait a frame so the canvas has its laid-out size (aspect) before framing.
@@ -400,6 +514,8 @@ export class Viewer {
         this.inTruck = false;
         this.truckFrameKey = null;
         this.partsGroup.matrix.identity();
+        this.overlay.matrix.identity();
+        this.overlay.matrixWorldNeedsUpdate = true;
         this.truckGroup.visible = false;
         for (const o of this.envObjects) o.visible = true;
         this.setView('iso');
@@ -418,6 +534,8 @@ export class Viewer {
     }
     this.partsGroup.matrix.fromArray(cartTransform ?? [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
     this.partsGroup.matrixWorldNeedsUpdate = true;
+    this.overlay.matrix.copy(this.partsGroup.matrix);
+    this.overlay.matrixWorldNeedsUpdate = true;
     this.truckGroup.visible = true;
     for (const o of this.envObjects) o.visible = false;
     const entering = !this.inTruck;
@@ -478,13 +596,14 @@ export class Viewer {
   }
 }
 
-/** Unit explode direction: the part's own, else away from the model centre of gravity (up if coincident). */
+/**
+ * Explode vector (inches per unit of the slider). A part's own `explode` wins, including the zero vector
+ * (= does not move); only when it is undefined does the part move radially away from the centre of gravity.
+ */
 function explodeDir(part: Part, cg: Vec3): Vec3 {
-  let d: Vec3 = part.explode ?? [0, 0, 0];
-  if (Math.hypot(...d) < 1e-9) {
-    const c = part.cgIn ?? partCentroid(part);
-    d = [c[0] - cg[0], c[1] - cg[1], c[2] - cg[2]];
-  }
+  if (part.explode !== undefined) return [part.explode[0], part.explode[1], part.explode[2]];
+  const c = part.cgIn ?? partCentroid(part);
+  const d: Vec3 = [c[0] - cg[0], c[1] - cg[1], c[2] - cg[2]];
   const n = Math.hypot(...d);
   return n < 1e-6 ? [0, 0, 1] : [d[0] / n, d[1] / n, d[2] / n];
 }

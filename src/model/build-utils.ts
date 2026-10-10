@@ -25,7 +25,7 @@ export interface Ctx {
   view: Required<ViewState>;
   /** Steer angle in radians, clamped to ± lock. */
   steerRad: number;
-  /** T(kingpin)·Rz(steer)·T(−kingpin): moves a neutral-frame steer-body part to its steered pose. */
+  /** T(kingpin)·Rz(steer)·T(−kingpin), kingpin at x = WB + kingpinLeadIn (D-25): moves a neutral-frame steer-body part to its steered pose. */
   pivot: Mat4;
   plyName: string;
 }
@@ -38,7 +38,7 @@ export function makeCtx(p: Params, v: ViewState = {}): Ctx {
   const lock = Math.abs(p.steerLockDeg);
   const deg = Math.min(lock, Math.max(-lock, v.steerDeg ?? 0));
   const steerRad = (deg * Math.PI) / 180;
-  const pivot = multiply(translation(L.WB, 0, 0), multiply(rotationZ(steerRad), translation(-L.WB, 0, 0)));
+  const pivot = multiply(translation(L.kx, 0, 0), multiply(rotationZ(steerRad), translation(-L.kx, 0, 0)));
   return {
     p,
     d: derived(p),
@@ -108,11 +108,67 @@ function placement(ctx: Ctx, s: PartSpec): Mat4 {
   return s.steer ? multiply(ctx.pivot, m) : m;
 }
 
-function defaultExplode(group: PartGroup, c: Vec3): Vec3 {
-  const z = group === 'running-gear' || group === 'steering' ? -1 : 1;
-  const y = Math.abs(c[1]) > 6 ? Math.sign(c[1]) * 0.6 : 0;
-  const n = Math.hypot(y, z);
-  return [0, y / n, z / n];
+/**
+ * Exploded-view direction by subsystem (unit vector, model frame). Parts separate along the way they would
+ * come apart: running gear down and outward, steering forward-down, frame down and spread fore/aft, sides outward,
+ * seat and storage up, removable parts outward, payload none.
+ */
+function defaultExplode(ctx: Ctx, s: PartSpec): Vec3 {
+  const { L } = ctx;
+  const c = s.center;
+  const unit = (v: Vec3): Vec3 => {
+    const n = Math.hypot(...v);
+    return n < 1e-9 ? [0, 0, 0] : [v[0] / n, v[1] / n, v[2] / n];
+  };
+  if (s.payload) return [0, 0, 0];
+  const sy = c[1] >= 0 ? 1 : -1;
+  const mid = (L.xRear + L.xFront) / 2;
+  const half = Math.max(1, (L.xFront - L.xRear) / 2);
+  const fx = Math.max(-1, Math.min(1, (c[0] - mid) / half));
+  const id = s.id;
+  switch (s.group) {
+    case 'running-gear':
+      if (id.startsWith('wheel')) return unit([0, sy * 1, -0.25]);
+      if (id.startsWith('clamp')) return unit([0, sy * 0.6, -1]);
+      return unit([fx * 0.3, 0, -1]);
+    case 'steering':
+      if (/^(tongue|bridle)/.test(id)) return unit([1, 0, -0.1]);
+      if (id === 'kingpin') return unit([0.3, 0, -1]);
+      if (/^steer-stop/.test(id)) return unit([0.3, sy * 0.8, -0.6]);
+      if (/^side-bearer/.test(id)) return unit([0.3, sy * 0.6, -0.8]);
+      return unit([0.6, 0, -0.5]);
+    case 'frame':
+      return unit([fx * 0.6, Math.abs(c[1]) > 4 ? sy * 0.3 : 0, -0.6]);
+    case 'body':
+      if (/^deck/.test(id)) return unit([fx * 0.3, 0, 1]);
+      if (/^side-/.test(id) || /^shoulder/.test(id)) return unit([0, sy * 1, 0.25]);
+      if (/^transom-rear/.test(id)) return unit([-1, 0, 0.3]);
+      if (/^transom-front/.test(id)) return unit([1, 0, 0.3]);
+      if (/^prow/.test(id)) return unit([0.5, 0, 1]);
+      if (/^grab/.test(id)) return unit([0, sy * 0.7, 1]);
+      return unit([0, sy * 0.5, 0.8]);
+    case 'seat':
+      if (/^foot-stop/.test(id)) return unit([0.6, 0, 0.8]);
+      if (/^seat-back/.test(id)) return unit([-0.7, 0, 1]);
+      return unit([0, 0, 1]);
+    case 'storage':
+      if (/^storage-lid/.test(id)) return unit([-0.3, 0, 1]);
+      return unit([-0.5, 0, 0.7]);
+    case 'brake':
+      if (/^brake-shoe|^brake-drum/.test(id)) return unit([0.2, sy * 1, 0.2]);
+      return unit([-1, 0, -0.3]);
+    case 'removable':
+      if (/^handle/.test(id)) return unit([-1, 0, 0.3]);
+      return unit([0, sy * 1, 0.4]);
+    case 'lighting':
+      if (id === 'rear-light') return unit([-1, 0, 0.5]);
+      if (id === 'lantern-mount') return unit([0.6, 0, 1]);
+      return unit([0, sy * 1, 0.2]);
+    case 'hardware':
+      return [0, 0, -1];
+    default:
+      return [0, 0, 0];
+  }
 }
 
 function finalize(ctx: Ctx, s: PartSpec, geometry: Part['geometry'], massLb: number, dimsSorted: [number, number, number]): Part {
@@ -139,7 +195,7 @@ function finalize(ctx: Ctx, s: PartSpec, geometry: Part['geometry'], massLb: num
     massLb,
     fab,
     step: s.step,
-    explode: s.explode ?? defaultExplode(s.group, s.center),
+    explode: s.explode ?? defaultExplode(ctx, s),
   };
   if (s.partNo) out.partNo = s.partNo;
   if (stock) out.stock = stock;

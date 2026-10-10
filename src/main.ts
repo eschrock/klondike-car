@@ -4,7 +4,7 @@ import { buildModel, type ViewState } from './model';
 import { h } from './ui/dom';
 import { Viewer } from './viewer/viewer';
 import { buildTruckBed } from './truck/bed';
-import { checkTruckFit, type CartView, type FitResult } from './truck/fit';
+import { checkTruckFit, computeFeasibleWindows, configParts, type CartView, type FitResult, type FitWindows } from './truck/fit';
 import type { Part } from './model/types';
 import { mountParamsPanel } from './ui/params-panel';
 import { mountRightPanel } from './ui/right-panel';
@@ -13,11 +13,42 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 
 mountParamsPanel($('params'), store);
 let truckKey: string | null = null; // case shown in the Truck view, if any
+let truckTabOpen = false;
+
+// Feasible windows (D-23) are expensive (rebuilds the model ~70x), so they are computed lazily, only while the
+// Truck fit tab is open, asynchronously, and cached per parameter set.
+let windowsKey = '';
+let windowsDone: FitWindows | null = null;
+let windowsTimer: ReturnType<typeof setTimeout> | undefined;
+let windowsRun = 0;
+function scheduleWindows(delayMs: number) {
+  if (!truckTabOpen) return;
+  const p = store.get();
+  const key = JSON.stringify(p);
+  if (key === windowsKey && windowsDone) {
+    right.setWindows(windowsDone);
+    return;
+  }
+  const run = ++windowsRun;
+  right.setWindows('computing');
+  clearTimeout(windowsTimer);
+  windowsTimer = setTimeout(async () => {
+    const w = await computeFeasibleWindows(p, (q, v) => buildModel(q, v as ViewState), () => run !== windowsRun);
+    if (run !== windowsRun || !w) return;
+    windowsKey = key;
+    windowsDone = w;
+    right.setWindows(w);
+  }, delayMs);
+}
 const right = mountRightPanel($('right'), {
   onShowTruck(c) {
     truckKey = c.key;
     right.setActiveTruckKey(truckKey);
     render();
+  },
+  onTab(id) {
+    truckTabOpen = id === 'truck';
+    if (truckTabOpen) scheduleWindows(0);
   },
 });
 const viewer = new Viewer($('viewer'));
@@ -82,15 +113,20 @@ const render = () => {
         empty: build(p, { steerDeg: 0, rider: 'none', cargo: false }),
         operating: build(p, { steerDeg: 0, rider: 'operating', cargo: true }),
         goal: build(p, { steerDeg: 0, rider: 'goal', cargo: true }),
+        transport: build(p, { steerDeg: 0, rider: 'none', cargo: false, removed: true }),
       },
       fit,
+      { track: p.rearTrackIn, wb: p.wheelbaseIn },
     );
+    windowsDone = null;
+    right.setWindows(null);
+    scheduleWindows(400);
   }
 
   const tc = truckKey ? fit.cases.find((c) => c.key === truckKey) : undefined;
   exitTruck.hidden = !tc;
   if (tc && tc.placement) {
-    viewer.update(build(p, { steerDeg: 0, rider: 'none', cargo: false, removed: tc.config === 'removed' }));
+    viewer.update(configParts(tc.config, (v) => build(p, v)));
     viewer.setTruck(buildTruckBed(p, { ground: true }), tc.placement.transform, `${tc.key}|${tc.placement.txIn}`);
     viewer.highlight([...new Set(tc.colliding.map((q) => q.partId))], '#ff3b30');
   } else {

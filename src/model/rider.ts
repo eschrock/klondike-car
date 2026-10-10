@@ -1,32 +1,13 @@
 /** Payload: rider mannequin (D-3) and cargo block. Reference parts, excluded from empty mass. */
 import { STEP, box, segment, type Ctx } from './build-utils';
-import { BACK_PAD_THICK_IN, FOOT_STOP_X_IN } from './seat';
+import { ANKLE_DROP_IN, ANKLE_INSET_IN, FOOT, HEAD, LEG_Y_FRAC, PELVIS, SHIN, THIGH, TORSO, knee } from './rider-geom';
+import { BACK_PAD_THICK_IN } from './seat';
 import type { Part, Vec3 } from './types';
 
-// ── Block-model placeholders: segment sizes as fractions of stature (D-3, anthropometric approximations) ──
-const PELVIS = { x: 0.115, y: 0.18, z: 0.075 } as const;
-const TORSO = { len: 0.28, x: 0.115, y: 0.19 } as const;
-const HEAD = { x: 0.1, y: 0.09, z: 0.13 } as const;
-const THIGH = { len: 0.26, y: 0.09, z: 0.085 } as const;
-const SHIN = { len: 0.24, y: 0.07, z: 0.065 } as const;
-const FOOT = { len: 0.14, y: 0.06, z: 0.05 } as const;
-/** Hip separation (each leg's y offset) as a fraction of stature. */
-const LEG_Y_FRAC = 0.05;
 /** Cargo fills this fraction of the storage box interior. */
 const CARGO_FILL = 0.8;
 
 const add = (a: Vec3, b: Vec3, k = 1): Vec3 => [a[0] + k * b[0], a[1] + k * b[1], a[2] + k * b[2]];
-
-/** Knee position for a two-link leg (hip → knee → ankle) in the XZ plane, knee above the hip–ankle line. */
-function knee(h: Vec3, a: Vec3, l1: number, l2: number): Vec3 {
-  const dx = a[0] - h[0], dz = a[2] - h[2];
-  const D = Math.hypot(dx, dz) || 1e-6;
-  const ux = dx / D, uz = dz / D;
-  if (D >= l1 + l2) return [h[0] + ux * l1, 0, h[2] + uz * l1];
-  const along = (l1 * l1 - l2 * l2 + D * D) / (2 * D);
-  const up = Math.sqrt(Math.max(0, l1 * l1 - along * along));
-  return [h[0] + ux * along - uz * up, 0, h[2] + uz * along + ux * up];
-}
 
 export function buildPayload(ctx: Ctx): Part[] {
   const { p, L, view } = ctx;
@@ -56,12 +37,12 @@ export function buildPayload(ctx: Ctx): Part[] {
   parts.push(box(ctx, { ...common, id: 'rider-head', name: 'Rider head', massLb: 0, size: [HEAD.x * S, HEAD.y * S, HEAD.z * S], center: headC, rot: { y: -lean } }));
 
   // Legs reach the foot stop.
-  const stopRear = p.seatXIn + p.riderLegReachIn - FOOT_STOP_X_IN / 2;
+  const stopRear = p.seatXIn + p.riderLegReachIn - p.footStopThickIn / 2;
   const deckZ = p.seatXIn + p.riderLegReachIn >= L.xs ? L.noseTop : L.deckTop;
   for (const sy of [1, -1]) {
     const y = sy * LEG_Y_FRAC * S;
     const hip: Vec3 = [H[0], y, H[2] + (THIGH.z * S) / 2];
-    const ankle: Vec3 = [stopRear - (FOOT.len * S) + 2, y, deckZ + FOOT.z * S - 0.5];
+    const ankle: Vec3 = [stopRear - (FOOT.len * S) + ANKLE_INSET_IN, y, deckZ + FOOT.z * S - ANKLE_DROP_IN];
     const k = knee(hip, ankle, THIGH.len * S, SHIN.len * S);
     k[1] = y;
     const tag = sy > 0 ? 'L' : 'R';

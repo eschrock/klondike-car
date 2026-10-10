@@ -1,6 +1,6 @@
 import type { Part } from '../model/types';
 import { centerOfGravity, totalMass } from '../model/mass';
-import type { FitCase, FitResult } from '../truck/fit';
+import { CONFIGS, type Config, type FitCase, type FitResult, type FitWindow, type FitWindows } from '../truck/fit';
 import { h } from './dom';
 
 const TABS: { id: string; label: string; phase: number; blurb: string }[] = [
@@ -20,21 +20,32 @@ export interface SummaryInput {
   operating: Part[];
   /** Goal rider + cargo (200 lb). */
   goal: Part[];
+  /** Transport configuration, no rider (removables off): the two-person lift (D-7, D-9). */
+  transport: Part[];
 }
 
 export interface RightPanel {
-  update(summary: SummaryInput, fit: FitResult): void;
+  update(summary: SummaryInput, fit: FitResult, params: { track: number; wb: number }): void;
   /** Mark the row currently shown in the Truck view (null = none). */
   setActiveTruckKey(key: string | null): void;
+  /** Feasible-window search state: computing, done, or not available. */
+  setWindows(w: FitWindows | 'computing' | null): void;
 }
 
 export interface RightPanelOptions {
   onShowTruck(c: FitCase): void;
+  /** A tab became active (the Truck fit tab starts the lazy window search). */
+  onTab(id: string): void;
 }
 
 const MODE_LABEL = { beside: 'Beside wells', straddle: 'Straddle wells' } as const;
 const ORIENT_LABEL = { 'nose-tailgate': 'Nose to tailgate', 'nose-bulkhead': 'Nose to bulkhead' } as const;
-const CONFIG_LABEL = { installed: 'Installed', removed: 'Removed' } as const;
+const CONFIG_LABEL: Record<Config, string> = { installed: 'Installed', 'tongue-off': 'Tongue off', removed: 'Removed (transport)' };
+const CONFIG_HELP: Record<Config, string> = {
+  installed: 'Everything fitted, including the tongue',
+  'tongue-off': 'Only the tongue and bridle removed',
+  removed: 'All removable parts off (D-9)',
+};
 
 export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): RightPanel {
   const cell = () => h('td', {}, '–');
@@ -42,6 +53,14 @@ export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): Rig
     label,
     cells: [cell(), cell(), cell()],
   }));
+  const lift = h('dd', {}, '–');
+  const sizeInstalled = h('dd', {}, '–');
+  const sizeTransport = h('dd', {}, '–');
+  const extra = h('dl', { class: 'summary-extra' },
+    h('dt', { title: 'Empty mass with the removable parts off: what two people lift onto the truck (D-7, D-9)' }, 'Lift weight (transport config)'), lift,
+    h('dt', {}, 'Overall L × W × H, installed'), sizeInstalled,
+    h('dt', {}, 'Overall L × W × H, transport'), sizeTransport,
+  );
   const summary = h(
     'section',
     { class: 'summary' },
@@ -49,9 +68,10 @@ export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): Rig
     h(
       'table',
       { class: 'summary-table' },
-      h('thead', {}, h('tr', {}, h('th', {}, ''), h('th', {}, 'Empty'), h('th', { title: 'Operating rider + cargo (150 lb must pass)' }, '+ Operating'), h('th', { title: 'Goal rider + cargo (200 lb)' }, '+ Goal'))),
+      h('thead', {}, h('tr', {}, h('th', {}, ''), h('th', {}, 'Empty'), h('th', { title: 'Empty + operating rider + cargo (150 lb must pass)' }, 'Operating'), h('th', { title: 'Empty + goal rider + cargo (200 lb)' }, 'Goal'))),
       h('tbody', {}, ...rows.map((r) => h('tr', {}, h('th', {}, r.label), ...r.cells))),
     ),
+    extra,
   );
 
   const tablist = h('div', { class: 'tabs', role: 'tablist' });
@@ -59,7 +79,9 @@ export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): Rig
   const buttons: HTMLButtonElement[] = [];
   const bodies: HTMLElement[] = [];
 
+  let truckIndex = -1;
   const select = (i: number) => {
+    opts.onTab(TABS[i].id);
     buttons.forEach((b, j) => {
       b.setAttribute('aria-selected', String(i === j));
       b.tabIndex = i === j ? 0 : -1;
@@ -68,6 +90,7 @@ export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): Rig
   };
 
   const truckBody = h('div', { class: 'truck-fit' });
+  truckIndex = TABS.findIndex((t) => t.id === 'truck');
   TABS.forEach((t, i) => {
     const b = h('button', { role: 'tab', type: 'button', id: `tab-${t.id}`, 'aria-controls': `panel-${t.id}` }, t.label);
     b.addEventListener('click', () => select(i));
@@ -95,40 +118,80 @@ export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): Rig
   let activeKey: string | null = null;
   let lastFit: FitResult | null = null;
 
+  let windows: FitWindows | 'computing' | null = null;
+
+  const fmtRange = (lo: number | null, hi: number | null) => (lo === null || hi === null ? 'none' : lo === hi ? `${f1(lo)}"` : `${f1(lo)}-${f1(hi)}"`);
+
+  function windowRow(w: FitWindow, p: { track: number; wb: number }): HTMLElement {
+    const track = w.maxTrackIn === null ? 'no track fits' : `max track ${f1(w.maxTrackIn)}" (now ${f1(p.track)}")`;
+    const wb = w.wheelbaseMinIn === null ? 'no wheelbase fits' : `wheelbase ${fmtRange(w.wheelbaseMinIn, w.wheelbaseMaxIn)} (now ${f1(p.wb)}")`;
+    const why = [w.maxTrackIn !== null && w.trackLimitedBy ? `track limit: ${w.trackLimitedBy}` : '', w.wheelbaseLimitedBy ? `wheelbase limit: ${w.wheelbaseLimitedBy}` : ''].filter(Boolean).join('. ');
+    return h('div', { class: 'win-row' },
+      h('div', { class: 'win-mode' }, MODE_LABEL[w.mode]),
+      h('div', {}, track),
+      h('div', {}, wb),
+      why ? h('div', { class: 'muted small' }, why) : h('span', {}),
+    );
+  }
+
+  let lastParams = { track: 0, wb: 0 };
+
   function renderTruck(fit: FitResult) {
     const L = fit.usableLengthIn;
-    const dimLine = (c: 'installed' | 'removed') => {
-      const d = fit.dims[c];
-      return `${CONFIG_LABEL[c]}: ${f1(d.lengthIn)} × ${f1(d.widthIn)} × ${f1(d.heightIn)} in`;
-    };
     const head = h('div', { class: 'truck-head' },
       h('h3', {}, 'Truck fit (tailgate down)'),
-      h('p', { class: fit.anyFits ? 'pass' : 'fail' }, fit.anyFits ? `Fits: ${fit.cases.filter((c) => c.fits).length} of ${fit.cases.length} stowage cases.` : 'Does not fit in any stowage case.'),
-      h('p', { class: 'muted' }, `Cart L × W × H. ${dimLine('installed')}; ${dimLine('removed')}. Usable bed + tailgate length ${f1(L)} in; required clearance ${fit.requiredClearanceIn} in.`),
-      h('p', { class: 'muted' }, 'Beside: wheels between the wells (track limited by the well gap). Straddle: front axle ahead of the wells, rear behind them (D-6, D-23).'),
+      h('p', { class: fit.anyFits ? 'pass' : 'fail' }, fit.anyFits ? `Fits: ${fit.cases.filter((c) => c.fits).length} of ${fit.cases.length} cases.` : 'Does not fit in any case.'),
+      h('p', { class: 'muted' }, `Usable length (bed + hinge gap + tailgate) ${f1(L)} in; required clearance ${fit.requiredClearanceIn} in to everything (walls, wells, bulkhead, cab wall).`),
+      h('p', { class: 'muted' }, 'Beside: wheels pass beside the wells (wheel width inside the well gap, any fore-aft position). Straddle: one axle wholly ahead of the wells, the other wholly behind (D-6, D-23). Gap = true minimum separation.'),
     );
-    const tbody = h('tbody', {});
-    for (const c of fit.cases) {
-      const btn = h('button', { type: 'button', title: 'Show this placement in the 3D viewer' }, activeKey === c.key ? 'Showing' : 'Show');
-      btn.addEventListener('click', () => opts.onShowTruck(c));
-      const limiting = (c.fits ? c.limiting.slice(0, 2) : c.colliding.slice(0, 3)).map((q) => `${q.partId} / ${q.solidId.replace('truck-', '')} ${q.clearanceIn.toFixed(2)}`).join('; ');
-      const tr = h('tr', { class: activeKey === c.key ? 'active' : '' },
-        h('td', {}, h('div', {}, `${MODE_LABEL[c.mode]}, ${CONFIG_LABEL[c.config]}`), h('div', { class: 'muted' }, ORIENT_LABEL[c.orientation])),
-        h('td', { class: c.fits ? 'pass' : 'fail' }, c.fits ? 'Fits' : 'No'),
-        h('td', {}, c.placement ? `${c.minClearanceIn.toFixed(2)}"` : '–'),
-        h('td', { class: 'muted' }, c.note && !c.fits && !c.colliding.length ? c.note : limiting),
-        h('td', {}, btn),
+    const blocks: HTMLElement[] = [head];
+    for (const config of CONFIGS) {
+      const d = fit.dims[config];
+      const sec = h('section', { class: 'fit-config' },
+        h('h4', { title: CONFIG_HELP[config] }, CONFIG_LABEL[config]),
+        h('div', { class: 'muted small' }, `${f1(d.lengthIn)} × ${f1(d.widthIn)} × ${f1(d.heightIn)} in`),
       );
-      tbody.append(tr);
+      const wins = windows && windows !== 'computing' ? windows.windows.filter((w) => w.config === config) : [];
+      sec.append(
+        h('div', { class: 'win-card' },
+          h('div', { class: 'win-title' }, 'Feasible window'),
+          windows === 'computing' ? h('div', { class: 'muted small' }, 'computing…')
+            : wins.length ? h('div', {}, ...wins.map((w) => windowRow(w, lastParams)))
+            : h('div', { class: 'muted small' }, 'not computed'),
+        ),
+      );
+      for (const c of fit.cases.filter((x) => x.config === config)) {
+        const btn = h('button', { type: 'button', title: 'Show this placement in the 3D viewer' }, activeKey === c.key ? 'Showing' : 'Show');
+        btn.addEventListener('click', () => {
+          opts.onShowTruck(c);
+          select(truckIndex);
+        });
+        const q = c.fits ? c.limiting[0] : (c.colliding[0] ?? c.limiting[0]);
+        const lim = c.fits || c.colliding.length
+          ? q ? `${q.partId} / ${q.solidId.replace('truck-', '')} ${q.clearanceIn.toFixed(2)}"` : ''
+          : c.modeIssue ?? '';
+        const card = h('div', { class: `fit-card${activeKey === c.key ? ' active' : ''}` },
+          h('div', { class: 'fc-head' },
+            h('div', { class: 'fc-title' }, h('strong', {}, MODE_LABEL[c.mode]), h('span', { class: 'muted' }, ` · ${ORIENT_LABEL[c.orientation]}`)),
+            h('span', { class: `pill ${c.fits ? 'pass' : 'fail'}` }, c.fits ? 'Fits' : 'No'),
+          ),
+          h('div', { class: 'fc-meta' },
+            h('span', {}, c.placement ? `min gap ${c.minClearanceIn.toFixed(2)}"` : '–'),
+            h('span', { class: 'muted' }, lim),
+            btn,
+          ),
+          c.note && !c.fits ? h('div', { class: 'muted small' }, c.note) : h('span', {}),
+        );
+        sec.append(card);
+      }
+      blocks.push(sec);
     }
-    const table = h('table', { class: 'fit-table' },
-      h('thead', {}, h('tr', {}, h('th', {}, 'Case'), h('th', {}, 'Fit'), h('th', {}, 'Min gap'), h('th', {}, 'Limiting (part / solid gap in)'), h('th', {}, ''))),
-      tbody);
-    truckBody.replaceChildren(head, table);
+    truckBody.replaceChildren(...blocks);
   }
 
   return {
-    update(sum, fit) {
+    update(sum, fit, params) {
+      lastParams = params;
       const cases = [
         { parts: sum.empty, payload: false },
         { parts: sum.operating, payload: true },
@@ -139,8 +202,16 @@ export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): Rig
         const [x, y, z] = centerOfGravity(c.parts, { includePayload: c.payload });
         [m, x, y, z].forEach((v, r) => (rows[r].cells[j].textContent = f1(v)));
       });
+      const sz = (d: { lengthIn: number; widthIn: number; heightIn: number }) => `${f1(d.lengthIn)} × ${f1(d.widthIn)} × ${f1(d.heightIn)} in`;
+      lift.textContent = `${f1(totalMass(sum.transport))} lb`;
+      sizeInstalled.textContent = sz(fit.dims.installed);
+      sizeTransport.textContent = sz(fit.dims.removed);
       lastFit = fit;
       renderTruck(fit);
+    },
+    setWindows(w) {
+      windows = w;
+      if (lastFit) renderTruck(lastFit);
     },
     setActiveTruckKey(key) {
       activeKey = key;
