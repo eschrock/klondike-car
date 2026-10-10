@@ -168,7 +168,7 @@ const defs = {
   },
   sideConstruction: {
     label: 'Side construction', group: 'body', unit: '',
-    default: SIDE_CONSTRUCTION.solidOak, min: 0, max: 2, step: 1, status: 'explore', ref: 'Q-2',
+    default: SIDE_CONSTRUCTION.capturedPly, min: 0, max: 2, step: 1, status: 'explore', ref: 'D-22',
     options: [
       { value: SIDE_CONSTRUCTION.solidOak, label: 'Solid oak boards' },
       { value: SIDE_CONSTRUCTION.capturedPly, label: 'Okoume panel captured in oak frame' },
@@ -537,12 +537,13 @@ const defs = {
     default: 2, min: 1, max: 4, step: 0.25, status: 'locked', ref: 'D-2',
   },
   targetMassMinLb: {
-    label: 'Empty-mass target, low', group: 'factors', unit: 'lb',
-    default: 60, min: 30, max: 100, step: 1, status: 'locked', ref: 'W-1',
+    label: 'Lightweight-variant mass target, low', group: 'factors', unit: 'lb',
+    default: 60, min: 30, max: 100, step: 1, status: 'locked', ref: 'D-21',
+    note: 'The full-featured design reports its weight only (D-21).',
   },
   targetMassMaxLb: {
-    label: 'Empty-mass target, high', group: 'factors', unit: 'lb',
-    default: 70, min: 30, max: 120, step: 1, status: 'locked', ref: 'W-1',
+    label: 'Lightweight-variant mass target, high', group: 'factors', unit: 'lb',
+    default: 70, min: 30, max: 120, step: 1, status: 'locked', ref: 'D-21',
   },
   tipStraightMinDeg: {
     label: 'Min lateral tip angle, straight (loaded)', group: 'factors', unit: '°',
@@ -558,8 +559,12 @@ const defs = {
   },
   rolloverSpeedFactor: {
     label: 'Required rollover speed ÷ jog speed', group: 'factors', unit: '×',
-    default: 1.5, min: 1, max: 3, step: 0.1, status: 'assumed', ref: 'A-1',
-    note: 'The brief asks 3×; that needs ~4.4 g and is unreachable (A-1).',
+    default: 1.5, min: 1, max: 3, step: 0.1, status: 'locked', ref: 'A-1',
+    note: 'Reported, not pass/fail (A-1). Pass/fail is SSF ≥ slideMarginFactor × μ.',
+  },
+  slideMarginFactor: {
+    label: 'Required SSF ÷ tire-ground μ (slide before tip)', group: 'factors', unit: '×',
+    default: 1.5, min: 1, max: 3, step: 0.1, status: 'locked', ref: 'A-1',
   },
   turnRadiusMaxIn: {
     label: 'Max turning radius (outer front tire)', group: 'factors', unit: 'in',

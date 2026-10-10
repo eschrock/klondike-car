@@ -52,12 +52,21 @@ Units are inches, pounds and degrees throughout.
 | D-20 | **Finish mass is computed from surface area**, not as a percentage. Two epoxy saturation coats come to ~0.03 lb/ft² each (WEST System: ~1 gal ≈ 9 lb mixed covers ~300 ft² per coat on sanded hardwood). Three spar-varnish coats add ~0.01 lb/ft² each. Total ≈ **0.09 lb/ft²**, times the total wood surface (both faces, edges included), which is ~60–70 ft² here, or **~6 lb**. | 🔶 |
 | D-19 | **Storage:** about **1,800 in³** (~1 ft³) of interior volume for the patrol's shared kit: first-aid kit ~150, 4 L of water ~300, 6 rain shells ~400, lights ~60, food ~200, spare layers ~600, map, compass and fire kit ~60. Default location is **behind the seat, over the rear axle**. Space there is about 24" wide × 12" fore-aft, so the box is ~6½" tall, and it doubles as the seat-back base. Moving the 25 lb from mid-cart to over the axle adds only ~8 lb of rear-wheel load. It's a small help to the rear brake, not a fix. Over the front wheels the box would have to sit above the 13" tire. | 🔶 |
 
+## Decisions from the Phase 0 checkpoint (Eric, 2026-10-10)
+
+| ID | Decision | Status |
+|---|---|---|
+| D-21 | **Build the full-featured ("heavy") design first.** Empty weight is **reported, not pass/fail**. The realistic expectation is ~90–120 lb. Once a design we like is working, make a **lightweight variant** as a second param preset aimed at the original 60–70 lb (10" wheels, lean beams, no rigid box, and so on). The `targetMass*` params now describe that variant's target. | ✅ |
+| D-22 | **Captured okoume side panels are allowed** (6 mm in an oak chine/gunwale frame, no exposed edges). This is now the default side construction, and it makes hull-as-beam (D-17) a real option. Solid oak and open frame stay selectable. | ✅ |
+| D-23 | **Bed dimensions stay fully parametric.** The truck-fit view (Phase 1/4) tries **both** stowage modes, wheels beside the wells and straddling them. It reports which fits and how much track or stability each allows, so plugging in measured values shows the tradeoff directly. | ✅ |
+| D-24 | **Parking on a hill is not a design driver.** The ≤ 30 lbf lever-force check stays pass/fail. **Rear-wheel traction on a 15° slope becomes info only** (reported, never a fail). | ✅ |
+
 ## Analysis-criterion interpretations
 
 | ID | Decision | Status |
 |---|---|---|
 | A-4 | **Front-wheel swing clearance.** At lock δ, with a = front track / 2, w = tire width and r = tire radius, all relative to the kingpin: the inner tire's rear-inner corner sits at **y = (a − w/2)·cos δ − r·sin δ**. The rear-most tire extent behind the kingpin is **(a + w/2)·sin δ + r·cos δ**. Both are worst at full lock, since δ stays below atan((a + w/2)/r) ≈ 72°. Requirements: nose half-width ≤ y − c, and the full-width cabin ends ≥ (rear extent + c) behind the front axle, with c = steering clearance 0.75". Defaults (35.5" track, 40°): y = 7.89, so nose ≤ 14.3" (14 ✅). Rear extent = 17.67, so the shoulder must be ≥ 18.42" back (18.5 ✅). The tire is treated as a rectangle at full radius, which is conservative. `validateParams` enforces both. | ✅ |
-| A-1 | **The brief's turn-rollover target can't be reached.** The brief asks for v_rollover ≥ 3 × 6 mph at minimum radius. Rollover lateral acceleration is (T/2)/h ≈ **1.05 g** here, and 18 mph at a ~5 ft radius needs **~4.4 g**. **Proposed replacement:** (i) v_rollover ≥ **1.5 × jog speed** at minimum radius, evaluated on the **outer** support edge; (ii) **slide before tip**: μ_ground < (T/2)/h, so on flat ground the cart skids rather than rolls; (iii) a plot of v_rollover against radius. **Current hand calc: 1.44–1.52×** depending on mass (table below), so it **straddles the 1.5× line**. But at μ 0.5 the cart *slides* at ~6 mph in that 5 ft turn, well before it could roll at ~9 mph. Untripped rollover on flat ground can't happen while μ < (T/2)/h. **Alternative criterion** (critic round 2): **static stability factor (T/2)/h ≥ 1.5 × μ_ground**, i.e. slides with 50% margin before tipping. Current value is 1.00–1.11 against 0.75 ✅. Recommend making this the pass/fail check and reporting v_roll as information. Fixes if Eric prefers the speed criterion: wider track (straddle, D-6), lower CG, or a 35° lock. A trip on a curb or root can't be checked statically, so the sim covers it qualitatively. | ❓ |
+| A-1 | ✅ **Accepted by Eric 2026-10-10: pass/fail = static stability factor (T/2)/h ≥ 1.5 × μ_ground; v_rollover against radius is reported for assessment in the final version.** Background: **the brief's turn-rollover target can't be reached.** The brief asks for v_rollover ≥ 3 × 6 mph at minimum radius. Rollover lateral acceleration is (T/2)/h ≈ **1.05 g** here, and 18 mph at a ~5 ft radius needs **~4.4 g**. **Proposed replacement:** (i) v_rollover ≥ **1.5 × jog speed** at minimum radius, evaluated on the **outer** support edge; (ii) **slide before tip**: μ_ground < (T/2)/h, so on flat ground the cart skids rather than rolls; (iii) a plot of v_rollover against radius. **Current hand calc: 1.44–1.52×** depending on mass (table below), so it **straddles the 1.5× line**. But at μ 0.5 the cart *slides* at ~6 mph in that 5 ft turn, well before it could roll at ~9 mph. Untripped rollover on flat ground can't happen while μ < (T/2)/h. **Alternative criterion** (critic round 2): **static stability factor (T/2)/h ≥ 1.5 × μ_ground**, i.e. slides with 50% margin before tipping. Current value is 1.00–1.11 against 0.75 ✅. Recommend making this the pass/fail check and reporting v_roll as information. Fixes if Eric prefers the speed criterion: wider track (straddle, D-6), lower CG, or a 35° lock. A trip on a curb or root can't be checked statically, so the sim covers it qualitatively. | ❓ |
 | A-2 | **Turning radius (≤ 8 ft)** is measured to the outer front tire centre (curb to curb), the conservative reading. The rear-axle-centre radius L / tan δ is reported too. | 🔶 |
 | A-3 | **Full-lock static tip** uses the actual support polygon. Rear contacts are at (0, ±T_r/2), and the front contacts are rotated about the kingpin by the lock angle. The tip margin is the CG's distance to the *nearest* polygon edge. The turn check (A-1) uses the *outer* edge. | ✅ |
 
@@ -90,7 +99,7 @@ Units are inches, pounds and degrees throughout.
 | **Wood + finish** | **74.3** | **46.6** |
 | **Total** | **~121 lb** | **~82 lb (10") / ~88 lb (13")** |
 
-**Takeaway:** 60–70 lb can't be reached with every feature in the brief, even with a lean design. The lean design's non-wood alone is 35–41 lb. Getting to 70 lb means dropping about 12–18 lb more, for example:
+**Superseded by D-21 (heavy first). Kept for the later lightweight variant.** **Takeaway:** 60–70 lb can't be reached with every feature in the brief, even with a lean design. The lean design's non-wood alone is 35–41 lb. Getting to 70 lb means dropping about 12–18 lb more, for example:
 - 10" wheels (−6);
 - stowing the 10 Essentials in a lashed dry bag instead of a box (−3.5);
 - open-frame sides (−5);
@@ -113,17 +122,17 @@ These are computed by a script, not by Phase 2 code. Inputs: 35.5" track, 48" wh
 - **Brake ratio** = downslope force (W·sin 15°) / μ_pad 0.4 / 30 lbf / efficiency 0.8.
 - ⚠️ **Rear-only braking, parked nose-down on 15°.** The rear wheels carry N_r = W·(cos θ·(L − x)/L − sin θ·h/L). That is **only 2–5% above** the downslope force at μ 0.5, and it **fails at μ 0.3** (wet leaves) in every case. Parked nose-up it holds (N_r ≈ 184–240 lb).
   - **Phase 2 options:** move the seat or CG aft; front parking chock or pin; four-wheel parking brake; or park across the slope as the procedure.
-  - **This is the check most likely to drive the layout.**
+  - **Per D-24 this is info only. Parking on a hill isn't expected to matter.**
 - A heavier cart is slightly *more* stable here, because its CG is low. Weight is still the enemy for lifting, pulling and braking.
 
 ## Open questions for Eric
 
 | ID | Question |
 |---|---|
-| Q-1 | Measured bed dimensions, especially the **fore-aft positions of the wheel wells** (settles D-6, straddle vs. beside the wells). Also: bedliner type, and the cab configuration. |
-| Q-2 | **Side panels:** the brief limits plywood to the deck, floor and bulkheads, and makes the sides oak. Is **6 mm okoume captured in an oak chine/gunwale frame** (no exposed edges) acceptable for the sides? It saves ~3–5 lb and makes hull-as-beam possible (D-17). |
-| Q-3 | Accept the A-1 replacement turn criterion? Note that it currently fails marginally at the default layout. |
+| Q-1 | **Partly resolved (Eric, 2026-10-10):** every bed dimension stays a live param, and the final truck-fit view must show the weight and stability effect of changing them, including the straddle mode (D-6). Still wanted: measured bed dimensions, especially the **fore-aft positions of the wheel wells** (settles D-6, straddle vs. beside the wells). Also: bedliner type, and the cab configuration. |
+| Q-2 | **Resolved: yes** (Eric, 2026-10-10) → D-22. Original question: **Side panels:** the brief limits plywood to the deck, floor and bulkheads, and makes the sides oak. Is **6 mm okoume captured in an oak chine/gunwale frame** (no exposed edges) acceptable for the sides? It saves ~3–5 lb and makes hull-as-beam possible (D-17). |
+| Q-3 | **Resolved: yes** (Eric, 2026-10-10) → A-1. Original question: accept the A-1 replacement turn criterion? Note that it currently fails marginally at the default layout. |
 | Q-4 | Course details (steepest hill, surface, roots/curbs), and a preferred wheel source or bore. |
 | Q-5 | Signage: "Troop 455 / Wilderness Rangers" as in the renders? |
-| Q-6 | **The weight target:** accept ~80 lb with every feature, or set priorities, e.g. 10" wheels, no rigid storage box, open-frame sides? |
+| Q-6 | **Resolved: heavy first** (Eric, 2026-10-10) → D-21. Original question: **the weight target:** accept ~80 lb with every feature, or set priorities, e.g. 10" wheels, no rigid storage box, open-frame sides? |
 | Q-7 | Team logistics: how many pullers, and who lifts the cart into the truck (two adults, or scouts)? This sets the design pull and the lift points. |
