@@ -5,6 +5,7 @@
  */
 import {
   AXLE_BEAM_POSITION,
+  bolsterPlan,
   SIDE_CONSTRUCTION,
   STORAGE_LOCATION,
   derived,
@@ -46,8 +47,12 @@ export interface Layout {
   turntable: { z0: number; z1: number };
   /** Bolster ring: x0..x1 fore-aft, ±halfY across, z0..z1 depth, rail width rw. */
   bolster: { x0: number; x1: number; z0: number; z1: number; halfY: number; rw: number };
-  /** Side-bearer rub blocks: y range [y0, y1] each side, z range. Steer body, on the beam top. */
-  sideBearer: { y0: number; y1: number; z0: number; z1: number };
+  /**
+   * Side-bearer blocks (steer body, D-12): |y| range [y0, y1] each side; oak z range [z0, z1] (housed `embed` into the beam
+   * top), UHMW wear strip [z1, zw]; x range [x0, x1] ahead of the front rod groove. The chassis-side bearer face is the
+   * bolster rail underside at turntable.z1, `clr` above the wear strip.
+   */
+  sideBearer: { y0: number; y1: number; z0: number; z1: number; zw: number; x0: number; x1: number };
   kingpin: { z0: number; z1: number };
   /** Nose rails/joists stop here so the swinging turntable corners clear them. */
   noseRailEnd: number;
@@ -119,36 +124,49 @@ export function computeLayout(p: Params): Layout {
   const joistT = p.crossmemberThickIn;
   const clr = p.sideBearerClearanceIn;
 
-  const mkBeam = (x: number, track: number): Beam => {
+  const mkBeam = (x: number, track: number, thick: number): Beam => {
     const depth = p.axleBeamDepthIn;
     const top = p.axleBeamPosition === AXLE_BEAM_POSITION.underslung ? r + rodR : r - rodR + depth;
-    return { x, len: Math.max(1, track - p.hubLengthIn - 0.25), thick: p.axleBeamThicknessIn, depth, top, bot: top - depth };
+    return { x, len: Math.max(1, track - p.hubLengthIn - 0.25), thick, depth, top, bot: top - depth };
   };
-  const beamR = mkBeam(0, p.rearTrackIn);
-  // The front beam spans the axle (x = WB) and the kingpin (x = WB + lead): centred between them (D-25), so the
-  // kingpin runs through solid wood and the rod lies in its groove behind it.
-  const beamF = mkBeam(WB + p.kingpinLeadIn / 2, p.frontTrackIn);
+  const beamR = mkBeam(0, p.rearTrackIn, p.axleBeamThicknessIn);
+  // The front beam is centred on the rod + kingpin pair (D-25, critic r2 H2): from the rod's rear edge (WB − rodR) to the
+  // kingpin's front edge (WB + lead + kpR), so both holes keep ≥ beamLigamentMinIn of wood on their outer side.
+  const beamF = mkBeam(WB + d.frontBeamOffsetIn, p.frontTrackIn, p.frontAxleBeamThicknessIn);
 
   // Turntable on the front beam, centred on the kingpin; bolster fills up to the nose deck (min depth).
   const ts = p.turntableSizeIn;
   const tz0 = beamF.top;
   const tz1 = tz0 + p.turntableThicknessIn;
   const bolsterTop = Math.max(noseTop - ply, tz1 + p.bolsterMinDepthIn);
+  const bp = bolsterPlan(p);
   const sbY0 = ts / 2 + clr;
-  const sbY1 = sbY0 + p.sideBearerWidthIn;
-  const bolster = { x0: kx - ts / 2, x1: kx + ts / 2, z0: tz1, z1: bolsterTop, halfY: sbY1, rw: Math.min(p.bolsterRailWidthIn, ts / 2 - 0.25) };
-  const sideBearer = { y0: sbY0, y1: sbY1, z0: tz0, z1: Math.max(tz0 + clr, tz1 - clr) };
+  const sbY1 = bp.halfY;
+  const bolster = { x0: kx - ts / 2, x1: kx + ts / 2, z0: tz1, z1: bolsterTop, halfY: sbY1, rw: bp.rw };
+  // Oak block housed in the beam top; UHMW strip on it; running clearance `clr` to the bolster rail underside (tz1).
+  const sbZw = tz1 - clr;
+  const sbZ1 = sbZw - p.sideBearerWearIn;
+  const sbX0 = WB + rodR + p.sideBearerSetbackIn;
+  const sideBearer = { y0: sbY0, y1: sbY1, z0: tz0 - p.sideBearerEmbedIn, z1: sbZ1, zw: sbZw, x0: sbX0, x1: sbX0 + p.sideBearerLengthIn };
 
-  // Rotated square turntable reaches ts/2·(cos+sin) fore-aft at lock (peaks at 45°).
+  // Rotated square turntable reaches ts/2·(cos+sin) fore-aft at lock (peaks at 45°). The swinging axle beam's aft face
+  // also sweeps under the rail y-band: at |y| = hwN it reaches |xa|/cos + hwN·tan behind the kingpin (xa = beam aft face, kingpin-relative).
   const lk = (Math.min(Math.abs(p.steerLockDeg), 45) * Math.PI) / 180;
-  const swingX = (ts / 2) * (Math.cos(lk) + Math.sin(lk));
-  const noseRailEnd = kx - swingX - p.steeringClearanceIn;
+  const plateSwingX = (ts / 2) * (Math.cos(lk) + Math.sin(lk));
+  const beamAft = Math.abs(beamF.x - beamF.thick / 2 - kx);
+  const beamSwingX = beamAft / Math.cos(lk) + hwN * Math.tan(lk);
+  const noseRailEnd = kx - Math.max(plateSwingX, beamSwingX) - p.steeringClearanceIn;
 
   // Joists skip the rear axle beam when it stands taller than their underside (overslung beam).
   const jD = p.crossmemberDepthIn;
+  // They also skip the brake cross shaft when it runs through their depth.
+  const shaftX = -(r + p.brakeShaftBehindTireIn);
+  const shaftThroughJoists = r + p.brakeShaftDiameterIn / 2 > deckTop - ply - jD + 0.01 && r - p.brakeShaftDiameterIn / 2 < deckTop - ply;
   const cabinJoistX = evenInterior(xRear + side, xs, p.crossmemberSpacingIn, joistT).map((x) => {
     const half = (beamR.thick + joistT) / 2 + 0.05;
     if (beamR.top > deckTop - ply - jD + 0.01 && Math.abs(x - beamR.x) < half) return x < beamR.x ? beamR.x - half : beamR.x + half;
+    const sh = (p.brakeShaftDiameterIn + joistT) / 2 + 0.05;
+    if (shaftThroughJoists && Math.abs(x - shaftX) < sh) return x < shaftX ? shaftX - sh : shaftX + sh;
     return x;
   });
   const noseJoistX = evenInterior(xs, noseRailEnd, p.crossmemberSpacingIn, joistT);

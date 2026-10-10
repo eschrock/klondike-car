@@ -169,12 +169,14 @@ export function buildBody(ctx: Ctx): Part[] {
   const signX0 = L.r + SIGN_TIRE_GAP_IN;
   const signX1 = L.xRear + (L.xs - L.xRear) * REFLECTOR_FRACS[1] - REFLECTOR_SIZE[0] / 2 - SIGN_TIRE_GAP_IN;
   const signLen = Math.max(SIGN_MIN_LEN_IN, Math.min(SIGN_LEN_IN, signX1 - signX0));
+  // Never taller than the side (a short side would push the sign above the gunwale and into the grab handles).
+  const signH = Math.max(1, Math.min(SIGN_HEIGHT_IN, H - 0.25));
   const signX = signX0 + signLen / 2;
-  const signPt = cabinSidePoint(L, L.deckTop + H / 2, L.side / 2 + pl / 2, SIGN_HEIGHT_IN / 2);
+  const signPt = cabinSidePoint(L, L.deckTop + H / 2, L.side / 2 + pl / 2, signH / 2);
   for (const { s, tag } of SIDES) {
     parts.push(box(ctx, {
       id: `sign-${tag}`, partNo: 'sign', name: `Side sign ${tag}`, group: 'removable', mat: 'ply', removable: true, edges: 'exposed', step: STEP.finish,
-      size: [signLen, pl, SIGN_HEIGHT_IN], center: [signX, s * signPt.y, signPt.z], rot: { x: -s * signPt.phi },
+      size: [signLen, pl, signH], center: [signX, s * signPt.y, signPt.z], rot: { x: -s * signPt.phi },
       notes: 'Edge treatment to be decided in Phase 3.',
     }));
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PARAM_DEFS, defaultParams, validateParams, type ParamKey, type Params } from '../params';
+import { PARAM_DEFS, RIDER_FOOT_Y_FRAC, RIDER_LEG_Y_FRAC, defaultParams, derived, validateParams, type ParamKey, type Params } from '../params';
 import { buildModel } from './index';
 import { obbOverlap, partOBB, worldAABB } from './bounds';
 import { centerOfGravity, totalMass } from './mass';
@@ -20,7 +20,7 @@ const ALLOW: Allow[] = [
   { a: /^brake-shoe-/, b: /^wheel-/, why: 'shoe presses on the tread; the tire OBB corner is not tire' },
   { a: /^(rail-cabin|girder-cabin)-/, b: /^(beam-R|axle-R|brake-shaft)/, why: 'rails/girders are notched or drilled for the rear axle and brake-shaft journals (D-15); joinery is Phase 3' },
   { a: /^kingpin$/, b: /^(beam-F|turntable)$/, why: 'kingpin passes through the solid beam and the turntable centre (D-25); it leads the axle rod, so axle-F is NOT allowed' },
-  { a: /^steer-stop-/, b: /^bolster-/, why: 'stops bear on the bolster at lock; counter-stop geometry is Phase 2/3' },
+  { a: /^side-bearer-[LR]$/, b: /^beam-F$/, why: 'the bearer block is housed in a mortise in the beam top (M5); only the mortise volume overlaps' },
   { a: /^axle-R$/, b: /^brake-drum-/, why: 'wooden drum is bored onto the live rear axle (D-13)' },
 ];
 const matches = (r: Allow, a: Part, b: Part) => (r.a.test(a.id) && r.b.test(b.id)) || (r.a.test(b.id) && r.b.test(a.id));
@@ -65,7 +65,8 @@ describe('buildModel structure', () => {
     const fl = big.find((x) => x.id === 'wheel-FL')!;
     expect(fl.transform[0]).toBeCloseTo(Math.cos((20 * Math.PI) / 180), 6);
     expect(fl.transform[1]).toBeCloseTo(s20, 6);
-    for (const part of big.filter((x) => x.body === 'steer')) expect(part.transform[1], part.id).toBeCloseTo(s20, 6);
+    // The steering-stop posts are pre-rotated by ∓lock so they land axis-aligned (flat on the bolster face) at lock.
+    for (const part of big.filter((x) => x.body === 'steer' && !x.id.startsWith('steer-stop-'))) expect(part.transform[1], part.id).toBeCloseTo(s20, 6);
     expect(big.filter((x) => x.body === 'steer').length).toBeGreaterThan(8);
     const neg = buildModel(p, { steerDeg: -50 }).find((x) => x.id === 'wheel-FL')!;
     expect(neg.transform[1]).toBeCloseTo(-s20, 6);
@@ -96,20 +97,66 @@ describe('buildModel structure', () => {
     expect(k.min[0]).toBeGreaterThanOrEqual(beam.min[0]);
     expect(k.max[0]).toBeLessThanOrEqual(beam.max[0]);
   });
-  it('side bearers bear on the beam with the configured running clearance under the bolster (M5, D-12)', () => {
+  it('side bearers are real blocks: housed in the beam, UHMW-faced, 1/16" under the bolster rail (M5, D-12)', () => {
     const m = buildModel(defaults);
     const beam = worldAABB(m.find((x) => x.id === 'beam-F')!);
+    const rod = worldAABB(m.find((x) => x.id === 'axle-F')!);
     const plate = worldAABB(m.find((x) => x.id === 'turntable')!);
     for (const tag of ['L', 'R']) {
-      const sb = worldAABB(m.find((x) => x.id === `side-bearer-${tag}`)!);
+      const blockPart = m.find((x) => x.id === `side-bearer-${tag}`)!;
+      const sb = worldAABB(blockPart);
+      const wear = worldAABB(m.find((x) => x.id === `side-bearer-wear-${tag}`)!);
       const end = worldAABB(m.find((x) => x.id === `bolster-end-${tag}`)!);
-      expect(m.find((x) => x.id === `side-bearer-${tag}`)!.body).toBe('steer');
-      expect(sb.min[2]).toBeCloseTo(beam.max[2], 6);
-      expect(end.min[2] - sb.max[2]).toBeCloseTo(defaults.sideBearerClearanceIn, 6);
-      // Outside the turntable plate, under the bolster end rail.
+      expect(blockPart.body).toBe('steer');
+      // Plan size: at least 1.5" square; real depth: housed into the beam, well beyond the ~3/8" stack.
+      expect(sb.max[0] - sb.min[0]).toBeGreaterThanOrEqual(1.5 - 1e-9);
+      expect(sb.max[1] - sb.min[1]).toBeGreaterThanOrEqual(1.5 - 1e-9);
+      expect(beam.max[2] - sb.min[2]).toBeCloseTo(defaults.sideBearerEmbedIn, 6);
+      expect(sb.max[2] - sb.min[2]).toBeGreaterThan(0.75);
+      // UHMW strip on top; running clearance from the strip to the bolster rail underside (the chassis-side bearer face).
+      expect(wear.min[2]).toBeCloseTo(sb.max[2], 6);
+      expect(wear.max[2] - wear.min[2]).toBeCloseTo(defaults.sideBearerWearIn, 6);
+      expect(end.min[2] - wear.max[2]).toBeCloseTo(defaults.sideBearerClearanceIn, 6);
+      expect(m.find((x) => x.id === `side-bearer-wear-${tag}`)!.material).toMatch(/UHMW/);
+      // Outside the turntable plate, under the bolster end rail, clear of the axle rod's groove.
       expect(Math.abs(sb.min[1])).toBeGreaterThanOrEqual(defaults.turntableSizeIn / 2);
       expect(sb.min[1] >= end.min[1] - 1e-9 && sb.max[1] <= end.max[1] + 1e-9).toBe(true);
+      expect(sb.min[0]).toBeGreaterThan(rod.max[0] - 1e-9);
+      expect(sb.max[0]).toBeLessThanOrEqual(beam.max[0] + 1e-9);
       expect(plate.max[2]).toBeCloseTo(end.min[2], 6);
+    }
+  });
+  it('front beam keeps real wood around the rod groove and the kingpin hole (H2, D-25)', () => {
+    const m = buildModel(defaults);
+    const beam = worldAABB(m.find((x) => x.id === 'beam-F')!);
+    const rod = worldAABB(m.find((x) => x.id === 'axle-F')!);
+    const kp = worldAABB(m.find((x) => x.id === 'kingpin')!);
+    expect(rod.min[0] - beam.min[0]).toBeGreaterThanOrEqual(defaults.beamLigamentMinIn - 1e-9);
+    expect(beam.max[0] - kp.max[0]).toBeGreaterThanOrEqual(defaults.beamLigamentMinIn - 1e-9);
+    // The beam is centred on the rod + kingpin pair, so the two ligaments are equal.
+    expect(rod.min[0] - beam.min[0]).toBeCloseTo(beam.max[0] - kp.max[0], 6);
+    const rear = worldAABB(m.find((x) => x.id === 'beam-R')!);
+    const rodR = worldAABB(m.find((x) => x.id === 'axle-R')!);
+    expect(rodR.min[0] - rear.min[0]).toBeGreaterThanOrEqual(defaults.beamLigamentMinIn - 1e-9);
+    // Validator: a front beam narrower than lead + rod + kingpin radii + 2 ligaments is rejected, the minimum is accepted.
+    const need = defaults.kingpinLeadIn + defaults.axleDiameterIn / 2 + defaults.kingpinDiameterIn / 2 + 2 * defaults.beamLigamentMinIn;
+    const ligErr = (t: number) => errorsOf({ ...defaults, frontAxleBeamThicknessIn: t }).some((i) => i.message.startsWith('Front axle beam is'));
+    expect(ligErr(need - 0.125)).toBe(true);
+    expect(ligErr(need)).toBe(false);
+    // ...and the old 2.5" beam (the round-2 H2 defect) is rejected.
+    expect(errorsOf({ ...defaults, frontAxleBeamThicknessIn: 2.5 }).length).toBeGreaterThan(0);
+  });
+  it('U-bolt clamp plates straddle the rod: legs at rod x ± (rod radius + leg gap) (H2)', () => {
+    const m = buildModel(defaults);
+    for (const [ax, rodX] of [['R', 0], ['F', defaults.wheelbaseIn]] as const) {
+      for (const tag of ['L', 'R']) {
+        const a = worldAABB(m.find((x) => x.id === `clamp-${ax}${tag}1`)!);
+        const b = worldAABB(m.find((x) => x.id === `clamp-${ax}${tag}2`)!);
+        const off = defaults.axleDiameterIn / 2 + defaults.clampLegGapIn;
+        expect((a.min[0] + a.max[0]) / 2).toBeCloseTo(rodX + off, 6);
+        expect((b.min[0] + b.max[0]) / 2).toBeCloseTo(rodX - off, 6);
+        expect(((a.min[0] + a.max[0]) / 2 + (b.min[0] + b.max[0]) / 2) / 2).toBeCloseTo(rodX, 6);
+      }
     }
   });
 });
@@ -136,9 +183,9 @@ describe('overlaps', () => {
 });
 
 /** Documented empty masses at defaults (heavy design, D-21), lb. Printed by the breakdown test below. */
-const EXPECTED_EMPTY_LB = 119.2;
+const EXPECTED_EMPTY_LB = 122.1;
 const EXPECTED_GROUP_LB: Record<string, number> = {
-  'running-gear': 46.3, steering: 10.4, frame: 9.5, body: 27.5, seat: 5.8, storage: 8.1, brake: 3.5, removable: 4.9,
+  'running-gear': 48.6, steering: 10.5, frame: 9.5, body: 28.0, seat: 5.9, storage: 8.1, brake: 3.5, removable: 5.0,
 };
 
 describe('masses', () => {
@@ -445,5 +492,217 @@ describe('explode directions (M7)', () => {
     // Not all one direction: the exploded view separates the assembly.
     const distinct = new Set(parts.filter((x) => !x.payload).map((x) => x.explode!.map((v) => v.toFixed(1)).join(',')));
     expect(distinct.size).toBeGreaterThan(15);
+  });
+});
+
+// ── Steering stops and sweep (critic r2 H1) ─────────────────────────────────────────────────────────────────────
+describe('steering sweep', () => {
+  const steerish = (x: Part) => x.body === 'steer' || x.id === 'wheel-FL' || x.id === 'wheel-FR';
+  const sweepAngles = (lock: number) => {
+    const out: number[] = [];
+    for (let d = -lock; d <= lock + 1e-9; d += 0.5) out.push(Math.min(lock, Math.round(d * 2) / 2));
+    return [...new Set([-lock, ...out, lock])].sort((a, b) => a - b);
+  };
+  const sweep = (p: Params, label: string) => {
+    const lock = p.steerLockDeg;
+    for (const deg of sweepAngles(lock)) {
+      const parts = buildModel(p, { steerDeg: deg });
+      const moving = parts.filter((x) => !x.payload && steerish(x));
+      const fixed = parts.filter((x) => !x.payload && x.body === 'chassis' && SOLID.includes(x.group));
+      for (const a of moving) {
+        const oa = partOBB(a);
+        for (const b of fixed) {
+          const o = obbOverlap(oa, partOBB(b));
+          const isStop = a.id.startsWith('steer-stop-');
+          // Every steer-body part (tongue, beam, bearers, clamps, wheels, ...) stays clear of the chassis all the way round.
+          // The stop posts must be strictly clear until the last half degree; the only contact allowed is at lock.
+          if (isStop) {
+            const left = a.id.endsWith('L');
+            const atLock = left ? deg >= lock - 1e-9 : deg <= -lock + 1e-9;
+            const nearLock = left ? deg > lock - 0.5 - 1e-9 : deg < -lock + 0.5 + 1e-9;
+            if (!nearLock) expect(o, `${label} ${a.id} x ${b.id} @${deg}`).toBeLessThanOrEqual(0);
+            else expect(o, `${label} ${a.id} x ${b.id} @${deg}`).toBeLessThanOrEqual(1e-6);
+            void atLock;
+          } else if (!ALLOW.some((r) => matches(r, a, b))) expect(o, `${label} ${a.id} x ${b.id} @${deg}`).toBeLessThanOrEqual(TOL);
+        }
+      }
+    }
+  };
+  it('the stops first touch the chassis exactly at lock, and nothing else on the steer body hits the chassis anywhere in the sweep', () => {
+    sweep(defaults, 'defaults');
+    for (const patch of [{ steerLockDeg: 30 }, { steerLockDeg: 36 }, { turntableSizeIn: 14 }, { steerStopSizeIn: 2 }, { bolsterRailWidthIn: 2 }, { storageLocation: 1 }]) {
+      const p = { ...defaults, ...patch };
+      if (!errorsOf(p).length) sweep(p, JSON.stringify(patch));
+    }
+  });
+  it.each([['L', 1], ['R', -1]] as const)('stop %s: zero overlap for |δ| < lock − 0.5°, flat contact with the aft bolster rail at lock', (tag, sign) => {
+    const lock = defaults.steerLockDeg;
+    const rail = (m: Part[]) => partOBB(m.find((x) => x.id === 'bolster-aft')!);
+    for (let k = 0; k * 0.5 <= lock - 0.5 + 1e-9; k++) {
+      const deg = sign * k * 0.5;
+      const m = buildModel(defaults, { steerDeg: deg });
+      const o = obbOverlap(partOBB(m.find((x) => x.id === `steer-stop-${tag}`)!), rail(m));
+      expect(o, `δ=${deg}`).toBeLessThan(0);
+    }
+    const m = buildModel(defaults, { steerDeg: sign * lock });
+    const stop = m.find((x) => x.id === `steer-stop-${tag}`)!;
+    const o = obbOverlap(partOBB(stop), rail(m));
+    expect(Math.abs(o)).toBeLessThan(1e-6);
+    // Flat: the post is axis-aligned at lock (face on face).
+    expect(Math.abs(stop.transform[1])).toBeLessThan(1e-9);
+    // It also touches nothing else (end rails, deck, ...) at lock.
+    for (const b of m.filter((x) => !x.payload && x.body === 'chassis' && x.id !== 'bolster-aft'))
+      expect(obbOverlap(partOBB(stop), partOBB(b)), b.id).toBeLessThanOrEqual(1e-6);
+  });
+  it('without the stops the lock would be reached first: the other direction never touches either', () => {
+    const lock = defaults.steerLockDeg;
+    for (const tag of ['L', 'R']) {
+      const m = buildModel(defaults, { steerDeg: tag === 'L' ? -lock : lock });
+      const stop = m.find((x) => x.id === `steer-stop-${tag}`)!;
+      for (const b of m.filter((x) => !x.payload && x.body === 'chassis')) expect(obbOverlap(partOBB(stop), partOBB(b)), b.id).toBeLessThan(0);
+    }
+  });
+});
+
+// ── Validator rules added in round 2 ──────────────────────────────────────────────────────────────────────────
+describe('round-2 validator rules', () => {
+  it('shoulder rule uses the axle-referenced swing (M2): exact at the limit, tight against the OBB tire check', () => {
+    const d = derived(defaults);
+    const need = d.swingRearBehindAxleIn + defaults.steeringClearanceIn;
+    expect(need).toBeCloseTo(d.swingRearXIn - defaults.kingpinLeadIn + defaults.steeringClearanceIn, 9);
+    expect(defaults.noseTaperStartIn).toBeGreaterThanOrEqual(need);
+    expect(defaults.noseTaperStartIn - need).toBeLessThan(0.5);
+    const shoulderErr = (p: Params) => errorsOf(p).some((i) => i.message.startsWith('Front tires hit the cabin shoulder'));
+    expect(shoulderErr({ ...defaults, noseTaperStartIn: need + 0.001 })).toBe(false);
+    expect(shoulderErr({ ...defaults, noseTaperStartIn: need - 0.01 })).toBe(true);
+    // The lead moves the rule the right way: more lead = tire corner further forward of the kingpin pivot but the pivot is further forward of the axle.
+    const tireGap = (p: Params, deg: number) => {
+      const m = buildModel(p, { steerDeg: deg });
+      const tires = m.filter((x) => x.id === 'wheel-FL' || x.id === 'wheel-FR');
+      const body = m.filter((x) => !x.payload && /^(side-|shoulder|deck-|transom|rail-|joist-|bolster|foot-stop|storage|seat-|sign|reflector|grab)/.test(x.id));
+      let worst = -Infinity;
+      for (const t of tires) for (const b of body) worst = Math.max(worst, obbOverlap(partOBB(t), partOBB(b)));
+      return worst;
+    };
+    // At exactly `need` the tire is `steeringClearanceIn` clear of the shoulder (x-separation), and 0.25" less taper reaches into it.
+    const atNeed = { ...defaults, noseTaperStartIn: need };
+    expect(tireGap(atNeed, defaults.steerLockDeg)).toBeCloseTo(-defaults.steeringClearanceIn, 6);
+    expect(tireGap({ ...defaults, noseTaperStartIn: need - defaults.steeringClearanceIn - 0.25 }, defaults.steerLockDeg)).toBeGreaterThan(0);
+    // Several leads: whenever the rule passes, the tires clear the body at both locks.
+    for (const kingpinLeadIn of [0.875, 1, 1.5]) {
+      const p = { ...defaults, kingpinLeadIn, noseTaperStartIn: derived({ ...defaults, kingpinLeadIn }).swingRearBehindAxleIn + defaults.steeringClearanceIn };
+      if (errorsOf(p).length) continue;
+      for (const deg of [p.steerLockDeg, -p.steerLockDeg]) expect(tireGap(p, deg), `lead ${kingpinLeadIn}`).toBeLessThanOrEqual(0);
+    }
+  });
+  it('boot allowance is part of the nose foot-span rule (M4)', () => {
+    const noseInner = defaults.noseWidthIn - 2 * defaults.sideThicknessIn;
+    const foot = (2 * RIDER_LEG_Y_FRAC + RIDER_FOOT_Y_FRAC) * defaults.riderStatureIn;
+    expect(noseInner).toBeGreaterThanOrEqual(foot + 2 * defaults.bootAllowanceIn + 0.25);
+    const noseErr = (p: Params) => errorsOf(p).some((i) => i.message.startsWith('The nose is'));
+    expect(noseErr({ ...defaults, bootAllowanceIn: 1.5 })).toBe(true);
+    expect(noseErr({ ...defaults, bootAllowanceIn: 0 })).toBe(false);
+    expect(noseErr({ ...defaults, noseWidthIn: 2 * defaults.sideThicknessIn + foot + 2 * defaults.bootAllowanceIn + 0.25 - 0.01 })).toBe(true);
+  });
+  it('front transom may not hang into the turntable or tongue (M3)', () => {
+    const deckErr = (p: Params) => errorsOf(p).some((i) => i.message.startsWith('The front transom hangs'));
+    expect(deckErr(defaults)).toBe(false);
+    for (const deckHeightIn of [7.5, 8, 8.1]) expect(deckErr({ ...defaults, deckHeightIn }), `deck ${deckHeightIn}`).toBe(true);
+    // Whatever deck height passes the rules builds without a transom/turntable/tongue clash.
+    for (let deckHeightIn = 6; deckHeightIn <= 16; deckHeightIn += 0.25) {
+      const p = { ...defaults, deckHeightIn };
+      if (errorsOf(p).length) continue;
+      for (const deg of [0, p.steerLockDeg, -p.steerLockDeg]) expect(overlaps(buildModel(p, { steerDeg: deg })), `deck ${deckHeightIn}`).toEqual([]);
+    }
+  });
+  it('rear U-bolt plates stay clear of the cabin rails (M3)', () => {
+    const railErr = (p: Params) => errorsOf(p).some((i) => i.message.startsWith('The cabin rails/sides reach'));
+    expect(railErr({ ...defaults, bodyWidthIn: 30, rearTrackIn: 35.5 })).toBe(true);
+    for (const bodyWidthIn of [26, 28, 29, 29.5, 30]) {
+      const p = { ...defaults, bodyWidthIn };
+      if (!errorsOf(p).length) expect(overlaps(buildModel(p)), `body ${bodyWidthIn}`).toEqual([]);
+    }
+  });
+  it('steering stops must fit the bolster opening', () => {
+    expect(errorsOf({ ...defaults, steerStopSizeIn: 3 }).some((i) => i.message.startsWith('Steering stop posts'))).toBe(true);
+    expect(errorsOf({ ...defaults, turntableSizeIn: 6 }).some((i) => i.message.startsWith('Steering stop posts'))).toBe(true);
+  });
+});
+
+// ── Seeded fuzz (critic r2 M3): every validator-clean design has zero unintended overlaps ──────────────────────────
+function mulberry32(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+describe('fuzz: validator-clean designs have no unintended overlaps', () => {
+  const FUZZ_KEYS: ParamKey[] = [
+    'wheelbaseIn', 'rearTrackIn', 'frontTrackIn', 'deckHeightIn', 'frontDeckRaiseIn', 'bodyWidthIn', 'noseWidthIn', 'noseTaperStartIn',
+    'seatXIn', 'wheelDiameterIn', 'steerLockDeg', 'kingpinLeadIn', 'rearOverhangIn', 'frontOverhangIn', 'sideHeightIn', 'tireWidthIn',
+    'axleBeamThicknessIn', 'frontAxleBeamThicknessIn', 'axleBeamDepthIn', 'railDepthIn', 'crossmemberDepthIn', 'turntableSizeIn',
+    'steerStopSizeIn', 'sideBearerWidthIn', 'gunwaleFlareIn', 'seatDepthIn', 'hubLengthIn', 'tongueLengthIn',
+  ];
+  const OPTION_KEYS: ParamKey[] = ['frameStyle', 'sideConstruction', 'storageLocation', 'axleBeamPosition', 'axleStyle', 'drawbar', 'tireType'];
+  const N = 300; // raise (and change the seed) to hunt; 24,000 designs over 8 seeds were clean when this was written
+  const samples = (() => {
+    const rnd = mulberry32(455);
+    const out: Params[] = [];
+    for (let i = 0; i < N; i++) {
+      const p = { ...defaults };
+      // Jitter a random subset of keys around the defaults (±20% of each range), then with probability 0.75 "repair" the
+      // swing-zone rules (nose width, shoulder position) the way a designer would, so many samples pass validation.
+      for (const k of FUZZ_KEYS) {
+        if (rnd() > 0.3) continue;
+        const d = PARAM_DEFS[k];
+        const v = d.default + (rnd() * 2 - 1) * 0.2 * (d.max - d.min);
+        p[k] = Math.min(d.max, Math.max(d.min, Math.round(v / d.step) * d.step));
+      }
+      if (rnd() < 0.75) {
+        const dv = derived(p);
+        p.noseTaperStartIn = Math.min(PARAM_DEFS.noseTaperStartIn.max, Math.ceil((dv.swingRearBehindAxleIn + p.steeringClearanceIn) * 2) / 2 + (rnd() < 0.5 ? 0 : 0.5));
+        p.noseWidthIn = Math.min(p.bodyWidthIn, Math.max(PARAM_DEFS.noseWidthIn.min, Math.floor((2 * (dv.swingInnerYIn - p.steeringClearanceIn)) * 4) / 4));
+        p.frontAxleBeamThicknessIn = Math.max(p.frontAxleBeamThicknessIn, Math.ceil((p.kingpinLeadIn + (p.axleDiameterIn + p.kingpinDiameterIn) / 2 + 2 * p.beamLigamentMinIn + p.sideBearerLengthIn - 1.5) * 8) / 8);
+      }
+      for (const k of OPTION_KEYS) if (rnd() < 0.35) p[k] = PARAM_DEFS[k].options![Math.floor(rnd() * PARAM_DEFS[k].options!.length)].value;
+      out.push(p);
+    }
+    return out;
+  })();
+  it(`${N} seeded designs: no errors => no unintended overlaps (neutral, both locks, transport)`, () => {
+    const t0 = Date.now();
+    let clean = 0;
+    const failures: string[] = [];
+    for (const p of samples) {
+      if (errorsOf(p).length) continue;
+      clean++;
+      for (const view of [{ steerDeg: 0 }, { steerDeg: p.steerLockDeg }, { steerDeg: -p.steerLockDeg }]) {
+        const bad = overlaps(buildModel(p, view));
+        if (bad.length) failures.push(`${bad.slice(0, 3).join('; ')} @${JSON.stringify(view)} :: ${JSON.stringify(Object.fromEntries([...FUZZ_KEYS, ...OPTION_KEYS].filter((k) => p[k] !== defaults[k]).map((k) => [k, p[k]])))}`);
+      }
+    }
+    console.log(`fuzz: ${clean}/${N} validator-clean designs checked in ${Date.now() - t0} ms; ${failures.length} failures`);
+    expect(failures.slice(0, 5)).toEqual([]);
+    expect(clean).toBeGreaterThanOrEqual(40);
+    expect(Date.now() - t0).toBeLessThan(10000);
+  });
+});
+
+describe('slider ranges (L1)', () => {
+  it.each(['seatXIn', 'steerLockDeg', 'kingpinLeadIn', 'noseTaperStartIn'] as const)('%s: most of its range is valid at the other defaults', (k) => {
+    const d = PARAM_DEFS[k];
+    let ok = 0, n = 0;
+    for (let v = d.min; v <= d.max + 1e-9; v += d.step) {
+      n++;
+      if (!errorsOf({ ...defaults, [k]: v }).length) ok++;
+    }
+    expect(ok / n, `${k} valid fraction`).toBeGreaterThanOrEqual(0.25);
+    expect(['seatXIn', 'steerLockDeg'].includes(k) ? ok / n : 1, k).toBeGreaterThanOrEqual(0.7);
+    expect(errorsOf({ ...defaults, [k]: defaults[k] })).toEqual([]);
   });
 });

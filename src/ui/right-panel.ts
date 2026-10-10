@@ -1,6 +1,6 @@
-import type { Part } from '../model/types';
+import type { Part, PartGroup } from '../model/types';
 import { centerOfGravity, totalMass } from '../model/mass';
-import { CONFIGS, type Config, type FitCase, type FitResult, type FitWindow, type FitWindows } from '../truck/fit';
+import { CONFIGS, type AxleMargin, type Config, type FitCase, type FitResult, type FitWindow, type FitWindows } from '../truck/fit';
 import { h } from './dom';
 
 const TABS: { id: string; label: string; phase: number; blurb: string }[] = [
@@ -24,8 +24,29 @@ export interface SummaryInput {
   transport: Part[];
 }
 
+/** Design numbers the truck view quotes next to its results. */
+export interface TruckParams {
+  track: number;
+  wb: number;
+  /** `derived().maxTrackBesideWells`: the purely lateral beside limit (D-6). */
+  lateralBesideLimit: number;
+}
+
+const GROUP_LABEL: Record<PartGroup, string> = {
+  frame: 'Frame', body: 'Body (sides, deck, bulkheads)', steering: 'Steering', 'running-gear': 'Running gear (wheels, axles)',
+  seat: 'Seat', brake: 'Brake', storage: 'Storage', lighting: 'Lighting', removable: 'Removable (tongue, handle, signs)',
+  hardware: 'Hardware', reference: 'Reference',
+};
+
+/** Empty mass per part group, heaviest first (payload and reference parts excluded). */
+export function massByGroup(parts: Part[]): { group: PartGroup; massLb: number }[] {
+  const m = new Map<PartGroup, number>();
+  for (const p of parts) if (!p.payload && p.group !== 'reference') m.set(p.group, (m.get(p.group) ?? 0) + p.massLb);
+  return [...m.entries()].map(([group, massLb]) => ({ group, massLb })).sort((a, b) => b.massLb - a.massLb);
+}
+
 export interface RightPanel {
-  update(summary: SummaryInput, fit: FitResult, params: { track: number; wb: number }): void;
+  update(summary: SummaryInput, fit: FitResult, params: TruckParams): void;
   /** Mark the row currently shown in the Truck view (null = none). */
   setActiveTruckKey(key: string | null): void;
   /** Feasible-window search state: computing, done, or not available. */
@@ -61,6 +82,11 @@ export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): Rig
     h('dt', {}, 'Overall L × W × H, installed'), sizeInstalled,
     h('dt', {}, 'Overall L × W × H, transport'), sizeTransport,
   );
+  const groupBody = h('tbody', {});
+  const groupTable = h('table', { class: 'summary-table group-table', 'aria-label': 'Empty mass by part group' },
+    h('thead', {}, h('tr', {}, h('th', {}, 'Mass by group'), h('th', {}, 'lb'), h('th', {}, '%'))),
+    groupBody,
+  );
   const summary = h(
     'section',
     { class: 'summary' },
@@ -72,6 +98,7 @@ export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): Rig
       h('tbody', {}, ...rows.map((r) => h('tr', {}, h('th', {}, r.label), ...r.cells))),
     ),
     extra,
+    groupTable,
   );
 
   const tablist = h('div', { class: 'tabs', role: 'tablist' });
@@ -121,20 +148,53 @@ export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): Rig
   let windows: FitWindows | 'computing' | null = null;
 
   const fmtRange = (lo: number | null, hi: number | null) => (lo === null || hi === null ? 'none' : lo === hi ? `${f1(lo)}"` : `${f1(lo)}-${f1(hi)}"`);
+  const f2 = (v: number) => v.toFixed(2);
 
-  function windowRow(w: FitWindow, p: { track: number; wb: number }): HTMLElement {
-    const track = w.maxTrackIn === null ? 'no track fits' : `max track ${f1(w.maxTrackIn)}" (now ${f1(p.track)}")`;
+  /** Beside mode: why the max track at this wheelbase differs from the purely lateral limit (D-6). */
+  function besideExplain(w: FitWindow, p: TruckParams): string {
+    if (w.maxTrackIn === null) return '';
+    const d = w.maxTrackIn - p.lateralBesideLimit;
+    const lat = `${f2(p.lateralBesideLimit)}"`;
+    if (d > 0.01) {
+      return w.axlesClearWellsAtMax
+        ? `${f2(d)}" more than the lateral-only limit (${lat}): at this wheelbase the axle ends (hub + rod, wider than the tires) sit fore/aft of the wells, so only the tires must fit beside them. A different wheelbase moves this limit.`
+        : `${f2(d)}" more than the lateral-only limit (${lat}); within the 0.25" search step.`;
+    }
+    if (d < -0.01) return `${f2(-d)}" below the lateral-only limit (${lat}): ${w.trackLimitedBy ?? 'limited by another part'}.`;
+    return w.axlesClearWellsAtMax === false
+      ? `Equals the lateral-only limit (${lat}): the axle ends are beside the wells too, so they set it (D-6).`
+      : `Matches the lateral-only limit (${lat}).`;
+  }
+
+  function windowRow(w: FitWindow, p: TruckParams): HTMLElement {
+    const bedOnly = w.trackBoundedByValidator && w.maxTrackBedOnlyIn !== null ? ` Bed alone would allow ~${f1(w.maxTrackBedOnlyIn)}".` : '';
+    const track = w.maxTrackIn === null
+      ? (w.invalidNow ? 'design invalid at the current parameters (validator)' : 'no track fits')
+      : `max track ${f1(w.maxTrackIn)}" at wheelbase ${f1(p.wb)}" (now ${f1(p.track)}")${w.trackBoundedByValidator ? ' · limited by the validator' : ''}`;
     const wb = w.wheelbaseMinIn === null ? 'no wheelbase fits' : `wheelbase ${fmtRange(w.wheelbaseMinIn, w.wheelbaseMaxIn)} (now ${f1(p.wb)}")`;
-    const why = [w.maxTrackIn !== null && w.trackLimitedBy ? `track limit: ${w.trackLimitedBy}` : '', w.wheelbaseLimitedBy ? `wheelbase limit: ${w.wheelbaseLimitedBy}` : ''].filter(Boolean).join('. ');
+    const why = [w.maxTrackIn !== null && w.trackLimitedBy ? `track limit: ${w.trackLimitedBy}.${bedOnly}` : '', w.wheelbaseLimitedBy ? `wheelbase limit: ${w.wheelbaseLimitedBy}` : ''].filter(Boolean).join(' ');
+    const stab = w.ssfAtMax === null ? '' :
+      `Stability preview (D-23): SSF (T/2)/h ${f2(w.ssfNow)} now → ${f2(w.ssfAtMax)} at max track (${w.ssfAtMax >= w.ssfNow ? '+' : ''}${f2(w.ssfAtMax - w.ssfNow)}), loaded CG ${f1(w.cgHeightNowIn)}" → ${f1(w.cgHeightAtMaxIn ?? 0)}" (operating rider + cargo). Preview only; Phase 2 does the full check.`;
     return h('div', { class: 'win-row' },
       h('div', { class: 'win-mode' }, MODE_LABEL[w.mode]),
       h('div', {}, track),
+      w.mode === 'beside' && w.maxTrackIn !== null ? h('div', { class: 'muted small' }, besideExplain(w, p)) : h('span', {}),
+      stab ? h('div', { class: 'muted small' }, stab) : h('span', {}),
       h('div', {}, wb),
       why ? h('div', { class: 'muted small' }, why) : h('span', {}),
     );
   }
 
-  let lastParams = { track: 0, wb: 0 };
+  const gapText = (a: AxleMargin) =>
+    a.relation === 'beside'
+      ? `tires overlap the well span ${f1(a.wheelWellOverlapIn)}" fore-aft (beside the wells)`
+      : `tires ${f2(a.wheelWellGapIn)}\" ${a.relation === 'ahead' ? 'ahead of' : 'behind'} the wells`;
+  const axleLine = (a: AxleMargin, req: number) =>
+    h('div', { class: 'muted small' },
+      `${a.side === 'bulkhead' ? 'Bulkhead' : 'Tailgate'}-side axle (${a.cartAxle}): ${gapText(a)}; axle ends ${a.rodWellGapIn >= 0 ? `${f2(a.rodWellGapIn)}" clear of the well span` : 'over the well span'}; tire patch ${f2(a.hingeGapIn)}" from the hinge gap${a.hingeGapIn < req ? ' (tight)' : ''}`);
+
+  let lastParams: TruckParams = { track: 0, wb: 0, lateralBesideLimit: 0 };
+  const cardEls = new Map<string, HTMLElement>();
 
   function renderTruck(fit: FitResult) {
     const L = fit.usableLengthIn;
@@ -142,8 +202,9 @@ export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): Rig
       h('h3', {}, 'Truck fit (tailgate down)'),
       h('p', { class: fit.anyFits ? 'pass' : 'fail' }, fit.anyFits ? `Fits: ${fit.cases.filter((c) => c.fits).length} of ${fit.cases.length} cases.` : 'Does not fit in any case.'),
       h('p', { class: 'muted' }, `Usable length (bed + hinge gap + tailgate) ${f1(L)} in; required clearance ${fit.requiredClearanceIn} in to everything (walls, wells, bulkhead, cab wall).`),
-      h('p', { class: 'muted' }, 'Beside: wheels pass beside the wells (wheel width inside the well gap, any fore-aft position). Straddle: one axle wholly ahead of the wells, the other wholly behind (D-6, D-23). Gap = true minimum separation.'),
+      h('p', { class: 'muted' }, 'Beside: the wheels pass beside the wells (tires inside the well gap, any fore-aft position). At some wheelbases the axles also clear the wells fore-aft, so only the tires are beside them and the axle ends (hub + rod, wider than the tires) are not limited by the wells: the beside max track therefore depends on the wheelbase, and can exceed the purely lateral limit of ' + f2(lastParams.lateralBesideLimit) + '" (D-6). Straddle: one axle wholly ahead of the wells, the other wholly behind (D-6, D-23). Min gap = true minimum separation; slack = how far the cart can slide fore/aft and still fit.'),
     );
+    cardEls.clear();
     const blocks: HTMLElement[] = [head];
     for (const config of CONFIGS) {
       const d = fit.dims[config];
@@ -164,7 +225,8 @@ export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): Rig
         const btn = h('button', { type: 'button', title: 'Show this placement in the 3D viewer' }, activeKey === c.key ? 'Showing' : 'Show');
         btn.addEventListener('click', () => {
           opts.onShowTruck(c);
-          select(truckIndex);
+          select(truckIndex); // the panel may have been hidden; reveal it, then bring the card into view
+          cardEls.get(c.key)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
         });
         const q = c.fits ? c.limiting[0] : (c.colliding[0] ?? c.limiting[0]);
         const lim = c.fits || c.colliding.length
@@ -180,8 +242,18 @@ export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): Rig
             h('span', { class: 'muted' }, lim),
             btn,
           ),
+          c.fits && c.slack
+            ? h('div', { class: 'small' }, c.slack.totalIn < 1e-9
+                ? 'Fore-aft slack: none (this is the only position that fits).'
+                : `Fore-aft slack: ${f2(c.slack.totalIn)}" total (${f2(c.slack.toBulkheadIn)}" toward the bulkhead, ${f2(c.slack.toTailgateIn)}" toward the tailgate).`)
+            : h('span', {}),
+          ...c.axles.map((a) => axleLine(a, fit.requiredClearanceIn)),
+          c.mode === 'beside' && c.axlesClearWells !== null
+            ? h('div', { class: 'muted small' }, c.axlesClearWells ? 'Axle ends clear the wells fore-aft; only the tires are beside them.' : 'Axle ends are beside the wells too.')
+            : h('span', {}),
           c.note && !c.fits ? h('div', { class: 'muted small' }, c.note) : h('span', {}),
         );
+        cardEls.set(c.key, card);
         sec.append(card);
       }
       blocks.push(sec);
@@ -203,6 +275,12 @@ export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): Rig
         [m, x, y, z].forEach((v, r) => (rows[r].cells[j].textContent = f1(v)));
       });
       const sz = (d: { lengthIn: number; widthIn: number; heightIn: number }) => `${f1(d.lengthIn)} × ${f1(d.widthIn)} × ${f1(d.heightIn)} in`;
+      const groups = massByGroup(sum.empty);
+      const total = groups.reduce((t, g) => t + g.massLb, 0);
+      groupBody.replaceChildren(
+        ...groups.map((g) => h('tr', {}, h('th', {}, GROUP_LABEL[g.group] ?? g.group), h('td', {}, f1(g.massLb)), h('td', { class: 'muted' }, total > 0 ? `${Math.round((100 * g.massLb) / total)}` : '–'))),
+        h('tr', { class: 'total' }, h('th', {}, 'Total (empty)'), h('td', {}, f1(total)), h('td', {}, '')),
+      );
       lift.textContent = `${f1(totalMass(sum.transport))} lb`;
       sizeInstalled.textContent = sz(fit.dims.installed);
       sizeTransport.textContent = sz(fit.dims.removed);

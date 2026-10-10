@@ -4,9 +4,6 @@ import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
 import type { Part } from './types';
 
 // ── Block-model placeholders (spec) ──
-/** Cross shaft: ½" steel rod, this far behind the tire. */
-const SHAFT_DIAMETER_IN = 0.5;
-const SHAFT_BEHIND_TIRE_IN = 1.5;
 /** Lever clearance outboard of the hull; how far below the handle height the lever top ends. */
 const LEVER_HULL_GAP_IN = 0.5;
 const LEVER_BELOW_HANDLE_IN = 4;
@@ -42,7 +39,8 @@ export function buildBrake(ctx: Ctx): Part[] {
     }
   }
 
-  const sx = -(r + SHAFT_BEHIND_TIRE_IN);
+  const sx = -(r + p.brakeShaftBehindTireIn);
+  const SHAFT_DIAMETER_IN = p.brakeShaftDiameterIn;
   parts.push(cylinder(ctx, {
     id: 'brake-shaft', name: 'Brake cross shaft', group: 'brake', mat: 'steel', step: STEP.brake,
     center: [sx, 0, r], axis: 'y', radius: SHAFT_DIAMETER_IN / 2, length: p.rearTrackIn, notes: 'Pivots in the frame rails.',

@@ -21,7 +21,8 @@
  * `computeFeasibleWindows` finds, per mode and configuration, the largest track at the current wheelbase and
  * the wheelbase range at the current track that still fit, by rebuilding the model with modified params.
  */
-import { PARAM_DEFS, type Params } from '../params';
+import { PARAM_DEFS, derived, validateParams, type Params } from '../params';
+import { centerOfGravity } from '../model/mass';
 import { obbOverlap, partOBB, type OBB } from '../model/bounds';
 import { multiply, rotationZ, translation } from '../model/mat4';
 import type { Mat4, Part, Vec3 } from '../model/types';
@@ -57,6 +58,33 @@ export interface PairInfo {
   clearanceIn: number;
 }
 
+/** Fore-aft position of one axle's wheels relative to the well zone and the tailgate hinge gap (truck frame). */
+export interface AxleMargin {
+  /** 'bulkhead' = the axle nearer the bulkhead, 'tailgate' = the other one. */
+  side: 'bulkhead' | 'tailgate';
+  /** Which cart axle that is at this placement (depends on the orientation). */
+  cartAxle: 'front' | 'rear';
+  /** Fore-aft extent of the tire footprints, truck frame. */
+  wheelX: [number, number];
+  /** Fore-aft gap of the tires to the well zone (>= 0: wholly ahead of / behind it; < 0: overlaps its span). */
+  wheelWellGapIn: number;
+  /** Fore-aft length of the tire/well-span overlap (0 when the tires are clear of the wells fore-aft). */
+  wheelWellOverlapIn: number;
+  /** Same for the axle rod / stub ends (narrower fore-aft than the tires; they are wider laterally, D-6). */
+  rodWellGapIn: number;
+  /** Fore-aft gap of the tire contact patch to the tailgate hinge gap (< 0: rests over it). */
+  hingeGapIn: number;
+  relation: 'ahead' | 'behind' | 'beside';
+}
+
+export interface Slack {
+  /** How far the cart can slide toward the bulkhead from the placement and still fit, inches (to the search step). */
+  toBulkheadIn: number;
+  /** ... toward the tailgate. */
+  toTailgateIn: number;
+  totalIn: number;
+}
+
 export interface Placement {
   /** Cart x-shift along the bed after the yaw, inches. */
   txIn: number;
@@ -81,6 +109,14 @@ export interface FitCase {
   colliding: PairInfo[];
   /** False when no placement can put the wheels where the mode needs them (wheelbase vs. wells). */
   modeFeasible: boolean;
+  /** Fore-aft slack: contiguous range of positions around the placement that still fit. Null when the case does not fit
+   * (or in the window search, which skips it). */
+  slack: Slack | null;
+  /** Per-axle fore-aft margins to the well zone / hinge gap at the placement (two entries; empty without wheels). */
+  axles: AxleMargin[];
+  /** True when no axle (rod ends included) sits fore-aft over the well span: the wells only limit the wheelbase/zone,
+   * not the track (D-6). Null without wheels. */
+  axlesClearWells: boolean | null;
   note?: string;
   /** Short reason when the mode is infeasible (for compact lists). */
   modeIssue?: string;
@@ -208,13 +244,13 @@ function overallOf(items: Item[]): Overall {
   return { lengthIn: mx[0] - mn[0], widthIn: mx[1] - mn[1], heightIn: mx[2] - mn[2] };
 }
 
-function evaluate(p: Params, items: Item[], solids: SolidItem[], mode: Stowage, orientation: Orientation, config: Config, usable: number, step: number): FitCase {
+function evaluate(p: Params, items: Item[], solids: SolidItem[], mode: Stowage, orientation: Orientation, config: Config, usable: number, step: number, detail: boolean): FitCase {
   const req = p.truckClearanceIn;
   const cap = req + 2;
   const key = caseKey(mode, orientation, config);
   const yaw = orientation === 'nose-bulkhead' ? Math.PI : 0;
   if (!items.length) {
-    return { key, mode, orientation, config, fits: false, placement: null, minClearanceIn: 0, limiting: [], colliding: [], modeFeasible: false, note: 'No cart parts.' };
+    return { key, mode, orientation, config, fits: false, placement: null, minClearanceIn: 0, limiting: [], colliding: [], modeFeasible: false, slack: null, axles: [], axlesClearWells: null, note: 'No cart parts.' };
   }
   let a = Infinity, b = -Infinity;
   for (const it of items) {
@@ -284,6 +320,20 @@ function evaluate(p: Params, items: Item[], solids: SolidItem[], mode: Stowage, 
     }
   }
 
+  /** Min clearance of the whole cart at a shift (no early exit). */
+  const clearanceAt = (tx: number) => {
+    let m = Math.min(cap, usable - (b + tx));
+    for (const it of items) {
+      for (const s of solids) {
+        const gap = aabbGap(it, s, tx);
+        if (gap >= cap || (s.floor && gap >= FLOOR_PENETRATION_IN)) continue;
+        const c = pairClearance(it, s, tx, scratch);
+        if (c < m) m = c;
+      }
+    }
+    return m;
+  };
+
   // Exact detail at the chosen placement.
   const pairs: PairInfo[] = [];
   for (const it of items) {
@@ -297,6 +347,53 @@ function evaluate(p: Params, items: Item[], solids: SolidItem[], mode: Stowage, 
   const minClr = pairs.length ? pairs[0].clearanceIn : 0;
   const fits = modeFeasible && minClr >= req - 1e-9;
   const colliding = fits ? [] : pairs.filter((q) => q.clearanceIn < req - 1e-9).slice(0, 12);
+
+  // True fore-aft slack: slide the cart each way from the placement while it still fits.
+  let slack: Slack | null = null;
+  if (fits && detail) {
+    const walk = (dir: 1 | -1) => {
+      let n = 0;
+      for (let k = 1; k * step <= usable; k++) {
+        const tx = bestTx + dir * k * step;
+        if (!okMode(tx) || clearanceAt(tx) < req - 1e-9) break;
+        n = k;
+      }
+      return n * step;
+    };
+    const toBulkheadIn = walk(-1), toTailgateIn = walk(1);
+    slack = { toBulkheadIn, toTailgateIn, totalIn: toBulkheadIn + toTailgateIn };
+  }
+
+  // Per-axle fore-aft margins (truck frame) at the placement.
+  const axles: AxleMargin[] = [];
+  let axlesClearWells: boolean | null = null;
+  if (wheelItems.length) {
+    const rods = items.filter((i) => !i.isWheel && /^axle/i.test(i.id));
+    axlesClearWells = true;
+    for (const side of ['bulkhead', 'tailgate'] as const) {
+      const ws_ = wheelItems.filter((i) => (side === 'bulkhead') === (i.obb.center[0] <= wmid));
+      if (!ws_.length) continue;
+      const x0 = Math.min(...ws_.map((i) => i.min[0])) + bestTx;
+      const x1 = Math.max(...ws_.map((i) => i.max[0])) + bestTx;
+      const cx = ws_.reduce((t, i) => t + i.obb.center[0], 0) / ws_.length + bestTx;
+      const mine = rods.filter((i) => (side === 'bulkhead') === (i.obb.center[0] <= wmid));
+      const r0 = mine.length ? Math.min(...mine.map((i) => i.min[0])) + bestTx : cx;
+      const r1 = mine.length ? Math.max(...mine.map((i) => i.max[0])) + bestTx : cx;
+      const gap = Math.max(ws - x1, x0 - we);
+      const rodGap = Math.max(ws - r1, r0 - we);
+      if (rodGap < 0) axlesClearWells = false;
+      axles.push({
+        side,
+        cartAxle: (side === 'bulkhead') === (orientation === 'nose-tailgate') ? 'rear' : 'front',
+        wheelX: [x0, x1],
+        wheelWellGapIn: gap,
+        wheelWellOverlapIn: Math.max(0, Math.min(x1, we) - Math.max(x0, ws)),
+        rodWellGapIn: rodGap,
+        hingeGapIn: Math.max(gapLo - (cx + TIRE_PATCH_HALF_IN), cx - TIRE_PATCH_HALF_IN - gapHi),
+        relation: gap < 0 ? 'beside' : x1 <= ws ? 'ahead' : 'behind',
+      });
+    }
+  }
   return {
     key, mode, orientation, config, fits,
     placement: { txIn: bestTx, yawDeg: (yaw * 180) / Math.PI, transform: multiply(translation(bestTx, 0, 0), rotationZ(yaw)) },
@@ -304,13 +401,16 @@ function evaluate(p: Params, items: Item[], solids: SolidItem[], mode: Stowage, 
     limiting: pairs.slice(0, 4),
     colliding,
     modeFeasible,
+    slack,
+    axles,
+    axlesClearWells,
     note: modeFeasible ? undefined : modeNote,
     modeIssue: modeFeasible ? undefined : modeIssue,
   };
 }
 
 /** All 12 cases for one parameter set (cheap path used by the window search too). */
-function evaluateAll(p: Params, buildParts: (view: CartView) => Part[], step: number): { cases: FitCase[]; dims: Record<Config, Overall> } {
+function evaluateAll(p: Params, buildParts: (view: CartView) => Part[], step: number, detail: boolean): { cases: FitCase[]; dims: Record<Config, Overall> } {
   const usable = truckUsableLength(p);
   const solids = makeSolids(p);
   const cases: FitCase[] = [];
@@ -320,7 +420,7 @@ function evaluateAll(p: Params, buildParts: (view: CartView) => Part[], step: nu
     dims[config] = overallOf(prepare(parts, 0));
     for (const orientation of ['nose-tailgate', 'nose-bulkhead'] as Orientation[]) {
       const items = prepare(parts, orientation === 'nose-bulkhead' ? Math.PI : 0);
-      for (const mode of ['beside', 'straddle'] as Stowage[]) cases.push(evaluate(p, items, solids, mode, orientation, config, usable, step));
+      for (const mode of ['beside', 'straddle'] as Stowage[]) cases.push(evaluate(p, items, solids, mode, orientation, config, usable, step, detail));
     }
   }
   return { cases, dims };
@@ -328,7 +428,7 @@ function evaluateAll(p: Params, buildParts: (view: CartView) => Part[], step: nu
 
 export function checkTruckFit(p: Params, buildParts: (view: CartView) => Part[]): FitResult {
   const t0 = performance.now();
-  const { cases, dims } = evaluateAll(p, buildParts, STEP_IN);
+  const { cases, dims } = evaluateAll(p, buildParts, STEP_IN, true);
   const fitting = cases.filter((c) => c.fits).sort((x, y) => y.minClearanceIn - x.minClearanceIn);
   const best = fitting[0] ?? [...cases].sort((x, y) => y.minClearanceIn - x.minClearanceIn)[0] ?? null;
   return {
@@ -357,6 +457,22 @@ export interface FitWindow {
   wheelbaseMinIn: number | null;
   wheelbaseMaxIn: number | null;
   wheelbaseLimitedBy?: string;
+  /** Largest track the bed alone would accept if the validator were ignored (null = none). */
+  maxTrackBedOnlyIn: number | null;
+  /** Set when the validator (not the bed) bounds the window on that axis. */
+  trackBoundedByValidator: boolean;
+  wheelbaseBoundedByValidator: boolean;
+  /** Set when the current design itself fails `validateParams` (no window can be reported). */
+  invalidNow?: string;
+  /** Beside mode: at the max track, do the axle ends also clear the wells fore-aft (so only the tires are beside)? */
+  axlesClearWellsAtMax: boolean | null;
+  /** Purely lateral beside limit, `derived().maxTrackBesideWells` (the validator's number). */
+  lateralLimitIn: number;
+  /** Static stability factor preview (D-23): (track / 2) / loaded CG height, operating rider + cargo. Phase 2 does the full check. */
+  ssfNow: number;
+  ssfAtMax: number | null;
+  cgHeightNowIn: number;
+  cgHeightAtMaxIn: number | null;
 }
 
 export interface FitWindows {
@@ -366,27 +482,45 @@ export interface FitWindows {
 }
 
 type Build = (p: Params, view: CartView) => Part[];
-type Verdict = Map<string, { fits: boolean; limiter: string }>;
+interface VerdictEntry {
+  fits: boolean;
+  limiter: string;
+  /** `validateParams` rejects the design (not buildable), so it was not evaluated against the bed. */
+  invalid: boolean;
+  /** Would the bed accept it if the validator were ignored? (Shows what the validator, not the truck, is costing.) */
+  bedFits: boolean;
+  axlesClear: boolean | null;
+}
+type Verdict = Map<string, VerdictEntry>;
 
 const WINDOW_STEP_IN = 0.5; // fore-aft search step inside the window scan
 const verdictKey = (mode: Stowage, config: Config) => `${mode}|${config}`;
 
+/** First validator error for a parameter set, or null (M1: designs the validator rejects are not buildable). */
+export function validatorError(p: Params): string | null {
+  const e = validateParams(p).find((i) => i.severity === 'error');
+  return e ? e.message : null;
+}
+
 function verdicts(p: Params, build: Build): Verdict {
   const out: Verdict = new Map();
+  const bad = validatorError(p);
   let cases: FitCase[];
   try {
-    cases = evaluateAll(p, (v) => build(p, v), WINDOW_STEP_IN).cases;
+    cases = evaluateAll(p, (v) => build(p, v), WINDOW_STEP_IN, false).cases;
   } catch {
     cases = [];
   }
   for (const mode of ['beside', 'straddle'] as Stowage[]) {
     for (const config of CONFIGS) {
       const cs = cases.filter((c) => c.mode === mode && c.config === config);
-      const fits = cs.some((c) => c.fits);
+      const fitting = cs.filter((c) => c.fits).sort((x, y) => y.minClearanceIn - x.minClearanceIn);
       const worst = [...cs].sort((x, y) => y.minClearanceIn - x.minClearanceIn)[0];
       const q = worst?.colliding[0];
-      const limiter = !worst ? 'model invalid' : q ? `${q.partId} / ${q.solidId.replace('truck-', '')}` : worst.modeIssue ?? '';
-      out.set(verdictKey(mode, config), { fits, limiter });
+      const limiter = bad ? `${bad} (validator)` : !worst ? 'model invalid' : q ? `${q.partId} / ${q.solidId.replace('truck-', '')}` : worst.modeIssue ?? '';
+      out.set(verdictKey(mode, config), {
+        fits: !bad && fitting.length > 0, limiter, invalid: !!bad, bedFits: fitting.length > 0, axlesClear: fitting[0]?.axlesClearWells ?? null,
+      });
     }
   }
   return out;
@@ -401,6 +535,21 @@ const tick = () => new Promise<void>((r) => setTimeout(r, 0));
  */
 export async function computeFeasibleWindows(p: Params, build: Build, cancelled: () => boolean = () => false): Promise<FitWindows | null> {
   const t0 = performance.now();
+  // Loaded CG height (operating rider + cargo) at a given track, from the model's own mass functions.
+  const cgCache = new Map<number, number>();
+  const cgHeight = (track: number) => {
+    const k = Math.round(track * 1000);
+    let h = cgCache.get(k);
+    if (h === undefined) {
+      const q = { ...p, rearTrackIn: track, frontTrackIn: track };
+      h = centerOfGravity(build(q, { steerDeg: 0, rider: 'operating', cargo: true, removed: false }), { includePayload: true })[2];
+      cgCache.set(k, h);
+    }
+    return h;
+  };
+  const ssf = (track: number) => track / 2 / cgHeight(track);
+  const invalidNow = validatorError(p);
+  const lateralLimitIn = derived(p).maxTrackBesideWells;
   let evals = 0;
   const run = async (q: Params): Promise<Verdict | null> => {
     await tick();
@@ -464,14 +613,32 @@ export async function computeFeasibleWindows(p: Params, build: Build, cancelled:
       const wmax = fitW.length ? fitW[fitW.length - 1].v : null;
       const wLimit = wmax === null ? null : ws.find((x) => x.v > wmax && !x.r.fits);
       const wLimitLo = wmin === null ? null : [...ws].reverse().find((x) => x.v < wmin && !x.r.fits);
+      const what = (e: VerdictEntry | undefined) => e?.limiter;
+      const trackLimit = nextT && maxT !== null
+        ? nextT.r.invalid ? `track > ${maxT.toFixed(2)}": ${nextT.r.limiter}` : nextT.r.limiter
+        : undefined;
+      const wbLimits = [
+        wLimitLo && (wLimitLo.r.invalid ? `wheelbase < ${wmin!.toFixed(2)}": ${what(wLimitLo.r)}` : `shorter: ${wLimitLo.r.limiter}`),
+        wLimit && (wLimit.r.invalid ? `wheelbase > ${wmax!.toFixed(2)}": ${what(wLimit.r)}` : `longer: ${wLimit.r.limiter}`),
+      ].filter(Boolean);
       windows.push({
         mode, config,
         fitsNow: ts.find((x) => Math.abs(x.v - p.rearTrackIn) < 1e-6)?.r.fits ?? false,
         maxTrackIn: maxT,
-        trackLimitedBy: nextT?.r.limiter,
+        trackLimitedBy: trackLimit,
         wheelbaseMinIn: wmin,
         wheelbaseMaxIn: wmax,
-        wheelbaseLimitedBy: [wLimitLo && `shorter: ${wLimitLo.r.limiter}`, wLimit && `longer: ${wLimit.r.limiter}`].filter(Boolean).join('; ') || undefined,
+        wheelbaseLimitedBy: wbLimits.join('; ') || undefined,
+        maxTrackBedOnlyIn: ts.filter((x) => x.r.bedFits).pop()?.v ?? null,
+        trackBoundedByValidator: !!nextT?.r.invalid,
+        wheelbaseBoundedByValidator: !!(wLimit?.r.invalid || wLimitLo?.r.invalid),
+        invalidNow: invalidNow ?? undefined,
+        axlesClearWellsAtMax: maxT === null ? null : fitT[fitT.length - 1].r.axlesClear,
+        lateralLimitIn,
+        ssfNow: ssf(p.rearTrackIn),
+        ssfAtMax: maxT === null ? null : ssf(maxT),
+        cgHeightNowIn: cgHeight(p.rearTrackIn),
+        cgHeightAtMaxIn: maxT === null ? null : cgHeight(maxT),
       });
     }
   }

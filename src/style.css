@@ -129,13 +129,13 @@ select { width: 100%; }
 
 /* Below 1200px the three columns squeeze the viewer, so stack: viewer, parameters, analysis. */
 @media (max-width: 1200px) {
-  #app {
-    height: auto;
-    min-height: 100vh;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(480px, 74vh) auto auto;
-    grid-template-areas: 'top' 'main' 'left' 'right';
-  }
+  /* Flex column (not grid) so the viewer can stay pinned (sticky) at the top while the panels scroll under it. */
+  #app { display: flex; flex-direction: column; height: auto; min-height: 100vh; }
+  .topbar { order: 0; }
+  .viewer { order: 1; position: sticky; top: 0; z-index: 20; flex: none; height: 45vh; min-height: 260px; border-bottom: 1px solid var(--border); }
+  .sidebar.left { order: 2; }
+  .sidebar.right { order: 3; }
+  .fit-card { scroll-margin-top: calc(45vh + 12px); }
   .sidebar { overflow: visible; }
   .sidebar.left, .sidebar.right { border: 0; border-top: 1px solid var(--border); }
 }
@@ -191,3 +191,9 @@ select { width: 100%; }
 .win-row:first-child { border-top: 0; }
 .win-mode { font-weight: 600; }
 .steer-ctl input[type='checkbox'] { width: auto; }
+
+.group-table { margin-top: 10px; }
+.group-table thead th:first-child { text-align: left; }
+.group-table td.muted { font-weight: 400; min-width: 2.5ch; }
+.group-table tr.total th, .group-table tr.total td { border-top: 1px solid var(--border); color: var(--text); font-weight: 600; }
+.win-row > div { margin-top: 2px; }

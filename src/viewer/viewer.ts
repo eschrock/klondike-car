@@ -239,7 +239,7 @@ export class Viewer {
       out.textContent = `${r.value}"`;
     });
     const label = el('label', 'steer-ctl');
-    label.title = 'Exploded view: each part moves along its own explode vector (radially from the centre of gravity if it has none)';
+    label.title = 'Exploded view: each part moves along its own explode vector (radially from the centre of gravity if it has none), farther the farther it is from the CG. The CG marker and dimensions are hidden while exploded';
     label.append('Explode', r, out);
     this.toolbar.append(label);
   }
@@ -348,9 +348,9 @@ export class Viewer {
         label(text, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], 'dim-label');
       };
       const f = (v: number) => `${v.toFixed(1)}"`;
-      dim([x0, y0 - o, 0], [x1, y0 - o, 0], `Length ${f(x1 - x0)}`);
+      dim([x0, y0 - o, 0], [x1, y0 - o, 0], `Length ${f(x1 - x0)} overall`);
       dim([x1 + o, y0, 0], [x1 + o, y1, 0], `Width ${f(y1 - y0)}`);
-      dim([x0 - o, y1 + o, 0], [x0 - o, y1 + o, z1], `Height ${f(z1 - 0)}`);
+      dim([x0 - o, y1 + o, 0], [x0 - o, y1 + o, z1], `Height ${f(z1 - 0)} overall`);
       const wheels = cart.filter((x) => x.geometry.type === 'wheel').map((x) => partCentroid(x));
       if (wheels.length >= 2) {
         const xs = wheels.map((c) => c[0]);
@@ -596,16 +596,27 @@ export class Viewer {
   }
 }
 
+/** Explode distance scaling: a part moves in proportion to its distance from the CG, clamped (so small parts near
+ * the middle do not fly as far as big, far-flung assemblies). */
+const EXPLODE_REF_IN = 30;
+const EXPLODE_MIN_SCALE = 0.25;
+const EXPLODE_MAX_SCALE = 1.5;
+export function explodeScale(distFromCgIn: number): number {
+  return Math.min(EXPLODE_MAX_SCALE, Math.max(EXPLODE_MIN_SCALE, distFromCgIn / EXPLODE_REF_IN));
+}
+
 /**
- * Explode vector (inches per unit of the slider). A part's own `explode` wins, including the zero vector
- * (= does not move); only when it is undefined does the part move radially away from the centre of gravity.
+ * Explode vector (inches per unit of the slider). A part's own `explode` wins as the direction, including the zero
+ * vector (= does not move); only when it is undefined does the part move radially away from the centre of gravity.
+ * The length is scaled by the part's distance from the CG (`explodeScale`).
  */
 function explodeDir(part: Part, cg: Vec3): Vec3 {
-  if (part.explode !== undefined) return [part.explode[0], part.explode[1], part.explode[2]];
   const c = part.cgIn ?? partCentroid(part);
   const d: Vec3 = [c[0] - cg[0], c[1] - cg[1], c[2] - cg[2]];
   const n = Math.hypot(...d);
-  return n < 1e-6 ? [0, 0, 1] : [d[0] / n, d[1] / n, d[2] / n];
+  const k = explodeScale(n);
+  if (part.explode !== undefined) return [part.explode[0] * k, part.explode[1] * k, part.explode[2] * k];
+  return n < 1e-6 ? [0, 0, k] : [(d[0] / n) * k, (d[1] / n) * k, (d[2] / n) * k];
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string): HTMLElementTagNameMap[K] {

@@ -44,14 +44,26 @@ export function buildLighting(ctx: Ctx, prowTipX: number, prowTipZ: number): Par
 
 export function buildHardware(ctx: Ctx): Part[] {
   const { L } = ctx;
-  // Under the deck, centred in the widest gap between cabin crossmembers.
-  const xs = [L.xRear + L.side, ...L.cabinJoistX, L.xs];
-  let best = 0;
-  for (let i = 1; i < xs.length - 1; i++) if (xs[i + 1] - xs[i] > xs[best + 1] - xs[best]) best = i;
-  const cx = (xs[best] + xs[best + 1]) / 2;
+  // Under the deck, centred in the widest gap between cabin crossmembers (and clear of a tall rear axle beam).
+  const zBot = L.deckBot - HARDWARE_SIZE[2];
+  const blockers: Array<[number, number]> = L.cabinJoistX.map((x) => [x - L.joistT / 2, x + L.joistT / 2]);
+  const p = ctx.p;
+  if (L.r + p.brakeShaftDiameterIn / 2 > zBot && L.r - p.brakeShaftDiameterIn / 2 < L.deckBot) {
+    const sx = -(L.r + p.brakeShaftBehindTireIn);
+    blockers.push([sx - p.brakeShaftDiameterIn / 2, sx + p.brakeShaftDiameterIn / 2]);
+  }
+  if (L.beamR.top > zBot) blockers.push([L.beamR.x - L.beamR.thick / 2, L.beamR.x + L.beamR.thick / 2]);
+  blockers.sort((a, b) => a[0] - b[0]);
+  let lo = L.xRear + L.side, bestLo = lo, bestHi = lo;
+  for (const [b0, b1] of [...blockers, [L.xs, L.xs] as [number, number]]) {
+    if (b0 - lo > bestHi - bestLo) { bestLo = lo; bestHi = b0; }
+    lo = Math.max(lo, b1);
+  }
+  const gap = Math.max(0.1, bestHi - bestLo);
+  const sx = Math.min(HARDWARE_SIZE[0], gap);
   return [box(ctx, {
     id: 'hardware', name: 'Fasteners, inserts & misc', group: 'hardware', mat: 'fixed', massLb: HARDWARE_MASS_LB, kind: 'purchased', fab: 'buy',
-    step: STEP.finish, size: [...HARDWARE_SIZE], center: [cx, 0, L.deckBot - HARDWARE_SIZE[2] / 2],
+    step: STEP.finish, size: [sx, HARDWARE_SIZE[1], HARDWARE_SIZE[2]], center: [(bestLo + bestHi) / 2, 0, L.deckBot - HARDWARE_SIZE[2] / 2],
     notes: 'Allowance (estimate): bolts, nuts, washers, threaded inserts, glue. Parked under the deck centre.',
   })];
 }

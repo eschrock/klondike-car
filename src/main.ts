@@ -1,5 +1,6 @@
 import './style.css';
 import { store } from './state';
+import { derived } from './params';
 import { buildModel, type ViewState } from './model';
 import { h } from './ui/dom';
 import { Viewer } from './viewer/viewer';
@@ -116,7 +117,7 @@ const render = () => {
         transport: build(p, { steerDeg: 0, rider: 'none', cargo: false, removed: true }),
       },
       fit,
-      { track: p.rearTrackIn, wb: p.wheelbaseIn },
+      { track: p.rearTrackIn, wb: p.wheelbaseIn, lateralBesideLimit: derived(p).maxTrackBesideWells },
     );
     windowsDone = null;
     right.setWindows(null);

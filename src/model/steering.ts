@@ -1,12 +1,9 @@
 /** Steering: turntable, bolster, kingpin, stops, tongue, bridle (D-12, D-14). */
-import { DRAWBAR } from '../params';
+import { DRAWBAR, steerStopPlan } from '../params';
 import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
 import type { Part } from './types';
 
 // ── Block-model placeholders ──
-/** Steering stop block (x, y, z); its gap outboard of the bolster end (spec). */
-const STOP_SIZE = [1.5, 1.5, 1] as const;
-const STOP_GAP_IN = 0.125;
 /** Bridle rope: reach ahead of the tongue tip, section, mass (spec). */
 const BRIDLE_LEN_IN = 18;
 const BRIDLE_SECTION_IN = 0.5;
@@ -43,14 +40,23 @@ export function buildSteering(ctx: Ctx): Part[] {
     }));
   }
 
-  // Side bearers (D-12, critic M5): rub blocks on the beam top beside the turntable plate. They turn with the
-  // beam and stand `sideBearerClearanceIn` below the bolster end rails, so roll moment goes bolster -> block -> beam.
+  // Side bearers (D-12, critic r2 M5): oak blocks housed in the beam top beside the turntable plate, just ahead of the rod
+  // groove, each with a UHMW wear strip. They turn with the beam and stand `sideBearerClearanceIn` below the bolster rails,
+  // so roll moment goes bolster rail -> wear strip -> block -> beam (the turntable is not moment-rated).
   const sb = L.sideBearer;
   for (const { s, tag } of SIDES) {
+    const yr: [number, number] = [Math.min(s * sb.y0, s * sb.y1), Math.max(s * sb.y0, s * sb.y1)];
     parts.push(box(ctx, {
-      id: `side-bearer-${tag}`, partNo: 'side-bearer', name: `Side-bearer rub block ${tag}`, group: 'steering', steer: true, mat: 'oak', grain: 'x', step: STEP.steering,
-      ...span([L.beamF.x - L.beamF.thick / 2, L.beamF.x + L.beamF.thick / 2], [Math.min(s * sb.y0, s * sb.y1), Math.max(s * sb.y0, s * sb.y1)], [sb.z0, sb.z1]),
-      notes: `${p.sideBearerClearanceIn}" running clearance to the bolster end rail; carries roll and pitch moment (D-12).`,
+      id: `side-bearer-${tag}`, partNo: 'side-bearer', name: `Side-bearer block ${tag}`, group: 'steering', steer: true, mat: 'oak', grain: 'z', step: STEP.steering,
+      ...span([sb.x0, sb.x1], yr, [sb.z0, sb.z1]),
+      notes: `Housed ${p.sideBearerEmbedIn}" into a mortise in the beam top (glued + screwed); carries roll and pitch moment under the bolster rail (D-12).`,
+    }));
+    const wearVol = (sb.x1 - sb.x0) * (sb.y1 - sb.y0) * p.sideBearerWearIn;
+    parts.push(box(ctx, {
+      id: `side-bearer-wear-${tag}`, partNo: 'side-bearer-wear', name: `Side-bearer UHMW wear strip ${tag}`, group: 'steering', steer: true, mat: 'fixed',
+      massLb: (wearVol / 1728) * p.uhmwDensityPcf, kind: 'purchased', material: 'UHMW-PE strip', fab: 'buy', step: STEP.steering,
+      ...span([sb.x0, sb.x1], yr, [sb.z1, sb.zw]),
+      notes: `${p.sideBearerClearanceIn}" running clearance to the bolster rail underside (the chassis-side bearer face); screwed to the block.`,
     }));
   }
 
@@ -61,12 +67,16 @@ export function buildSteering(ctx: Ctx): Part[] {
     length: L.kingpin.z1 - L.kingpin.z0, notes: 'Mass is the steel shank only; nut and washers are in the hardware allowance. Head is let into the turntable plate.',
   }));
 
-  // Steering stops stand on the beam just outboard of the bolster ends and bear on them at lock.
+  // Steering stops (H1): square oak posts on the turntable plate inside the bolster opening. Each lands flat on the aft
+  // bolster rail's inner face exactly at lock (derived analytically in steerStopPlan); the left post stops +steer, the
+  // right post (mirror) stops −steer.
+  const stop = steerStopPlan(p);
+  const stopH = Math.max(0.25, Math.min(p.steerStopHeightIn, bo.z1 - bo.z0 - p.sideBearerClearanceIn));
   for (const { s, tag } of SIDES) {
-    const y = s * (bo.halfY + STOP_GAP_IN + STOP_SIZE[1] / 2);
     parts.push(box(ctx, {
-      id: `steer-stop-${tag}`, partNo: 'steer-stop', name: `Steering stop ${tag}`, group: 'steering', steer: true, mat: 'oak',
-      size: [...STOP_SIZE], center: [L.beamF.x, y, L.beamF.top + STOP_SIZE[2] / 2], step: STEP.steering,
+      id: `steer-stop-${tag}`, partNo: 'steer-stop', name: `Steering stop post ${tag}`, group: 'steering', steer: true, mat: 'oak', grain: 'z', step: STEP.steering,
+      size: [stop.size, stop.size, stopH], center: [kx + stop.cx, s * stop.cy, bo.z0 + stopH / 2], rot: { z: s * stop.rotZ },
+      notes: `Bears flat on the aft bolster rail face at exactly ±${p.steerLockDeg}° of lock; bolted through the turntable plate (D-12).`,
     }));
   }
 

@@ -116,6 +116,11 @@ const defs = {
     default: 36, min: 24, max: 44, step: 0.5, status: 'assumed', ref: 'D-3',
     note: 'Knees slightly bent on a low seat; ≈ 0.53 × stature.',
   },
+  bootAllowanceIn: {
+    label: 'Boot allowance per side (nose width)', group: 'loads', unit: 'in',
+    default: 0.5, min: 0, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-3',
+    note: 'Winter boots add about ½" per boot to the foot span the nose must hold (critic Phase 1 r2, M4).',
+  },
   cargoMassLb: {
     label: 'Cargo (10 Essentials + team gear)', group: 'loads', unit: 'lb',
     default: 25, min: 0, max: 60, step: 1, status: 'locked',
@@ -189,13 +194,13 @@ const defs = {
   },
   noseWidthIn: {
     label: 'Hull width in the front-wheel swing zone', group: 'body', unit: 'in',
-    default: 12.5, min: 8, max: 30, step: 0.25, status: 'explore', ref: 'D-15',
-    note: 'Must be ≤ 2 × (inner tire corner y at full lock − steering clearance); see A-4. The D-25 kingpin lead cut the allowance from 14" to 12.67".',
+    default: 13.5, min: 12, max: 18, step: 0.25, status: 'explore', ref: 'D-15',
+    note: 'Must hold the rider\'s feet + boots (bootAllowanceIn) and be ≤ 2 × (inner tire corner y at full lock − steering clearance); see A-4.',
   },
   noseTaperStartIn: {
     label: 'Nose taper starts this far behind front axle', group: 'body', unit: 'in',
-    default: 19.5, min: 0, max: 30, step: 0.5, status: 'explore', ref: 'A-4',
-    note: 'Full-width cabin must end behind the rear-most tire corner at full lock + steering clearance (A-4).',
+    default: 18, min: 14, max: 26, step: 0.5, status: 'explore', ref: 'A-4',
+    note: 'Measured from the front AXLE. The full-width cabin must end behind the rear-most tire corner at full lock + steering clearance; that corner is (swing rear extent − kingpin lead) behind the axle (A-4).',
   },
   steeringClearanceIn: {
     label: 'Tire-to-hull clearance at full lock', group: 'body', unit: 'in',
@@ -256,7 +261,7 @@ const defs = {
   // ── Seat & rider position ────────────────────────────────────────────────
   seatXIn: {
     label: 'Seat H-point ahead of rear axle', group: 'seat', unit: 'in',
-    default: 12, min: -4, max: 36, step: 0.5, status: 'explore', primary: true,
+    default: 12, min: 1.5, max: 17.5, step: 0.5, status: 'explore', primary: true,
     note: 'Forward → more front load, better lock stability; aft → more rear-brake traction.',
   },
   seatDepthIn: {
@@ -375,6 +380,23 @@ const defs = {
     label: 'Axle beyond hub (collar + cotter)', group: 'wheels', unit: 'in',
     default: 1, min: 0.5, max: 2, step: 0.125, status: 'assumed',
   },
+  clampLegGapIn: {
+    label: 'U-bolt leg gap beside the axle rod', group: 'wheels', unit: 'in',
+    default: 0.25, min: 0.125, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-10',
+    note: 'Clamp legs straddle the rod at rod centre ± (rod radius + gap) (critic r2, H2).',
+  },
+  clampPlateWidthIn: {
+    label: 'U-bolt plate width (across the beam)', group: 'wheels', unit: 'in',
+    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-10',
+  },
+  clampPlateLengthIn: {
+    label: 'U-bolt plate length (fore-aft)', group: 'wheels', unit: 'in',
+    default: 0.8, min: 0.5, max: 1.5, step: 0.1, status: 'assumed', ref: 'D-10',
+  },
+  clampPlateThickIn: {
+    label: 'U-bolt plate thickness', group: 'wheels', unit: 'in',
+    default: 0.375, min: 0.1875, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-10',
+  },
   axleYieldPsi: {
     label: 'Axle steel yield strength', group: 'wheels', unit: 'psi',
     default: 50000, min: 30000, max: 120000, step: 1000, status: 'assumed', ref: 'D-4',
@@ -384,7 +406,8 @@ const defs = {
   // ── Steering & pull ──────────────────────────────────────────────────────
   steerLockDeg: {
     label: 'Steering lock (each side)', group: 'steering', unit: '°',
-    default: 40, min: 20, max: 50, step: 1, status: 'explore', primary: true, ref: 'D-12',
+    default: 38.5, min: 30, max: 40, step: 0.5, status: 'explore', primary: true, ref: 'D-12',
+    note: 'Limited above by the nose width the rider\'s boots need (A-4) and below by the 96" turning radius (A-2).',
   },
   turntableSizeIn: {
     label: 'Turntable bearing size (square)', group: 'steering', unit: 'in',
@@ -409,13 +432,42 @@ const defs = {
     default: 0.75, min: 0.5, max: 2, step: 0.25, status: 'assumed', ref: 'D-12',
   },
   sideBearerWidthIn: {
-    label: 'Side-bearer rub block width (across)', group: 'steering', unit: 'in',
-    default: 1.5, min: 0.75, max: 3, step: 0.25, status: 'assumed', ref: 'D-12',
-    note: 'Rub blocks beside the turntable carry roll moment between bolster and axle beam.',
+    label: 'Side-bearer block width (across)', group: 'steering', unit: 'in',
+    default: 1.5, min: 1.5, max: 3, step: 0.25, status: 'assumed', ref: 'D-12',
+    note: 'Oak blocks housed in the beam top beside the turntable plate carry the roll moment between the bolster rails and the axle beam (M5).',
+  },
+  sideBearerLengthIn: {
+    label: 'Side-bearer block length (fore-aft)', group: 'steering', unit: 'in',
+    default: 1.5, min: 1.5, max: 6, step: 0.25, status: 'assumed', ref: 'D-12',
+  },
+  sideBearerEmbedIn: {
+    label: 'Side-bearer block depth housed in the beam', group: 'steering', unit: 'in',
+    default: 0.75, min: 0.25, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-12',
+    note: 'The turntable stack is only ~⅜" tall, so the block is let into a mortise in the beam top to get real shear depth.',
+  },
+  sideBearerSetbackIn: {
+    label: 'Wood wall between the axle groove and the side-bearer housing', group: 'steering', unit: 'in',
+    default: 0.25, min: 0.125, max: 1, step: 0.125, status: 'assumed', ref: 'D-12',
+    note: 'The bearer blocks sit just ahead of the rod groove, in the beam wood between the rod and the beam front face.',
+  },
+  sideBearerWearIn: {
+    label: 'Side-bearer UHMW wear strip thickness', group: 'steering', unit: 'in',
+    default: 0.125, min: 0.0625, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-12',
+    note: 'UHMW-PE strip on top of the oak block; the bolster rail underside is the chassis-side bearer face.',
   },
   sideBearerClearanceIn: {
     label: 'Side-bearer running clearance', group: 'steering', unit: 'in',
     default: 0.0625, min: 0.03125, max: 0.25, step: 0.03125, status: 'assumed', ref: 'D-12',
+  },
+  steerStopSizeIn: {
+    label: 'Steering stop post size (square)', group: 'steering', unit: 'in',
+    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-12',
+    note: 'Oak posts on the turntable plate inside the bolster opening; each turns until it lands flat on the bolster rail face exactly at lock.',
+  },
+  steerStopHeightIn: {
+    label: 'Steering stop post height', group: 'steering', unit: 'in',
+    default: 1, min: 0.5, max: 2, step: 0.25, status: 'assumed', ref: 'D-12',
+    note: 'Clamped to the bolster depth minus the running clearance.',
   },
   tongueThickIn: {
     label: 'Tongue width (across)', group: 'steering', unit: 'in',
@@ -432,7 +484,7 @@ const defs = {
   },
   kingpinLeadIn: {
     label: 'Kingpin ahead of front axle (trail)', group: 'steering', unit: 'in',
-    default: 1.25, min: 0.875, max: 4, step: 0.125, status: 'explore', ref: 'D-25',
+    default: 1, min: 0.875, max: 1.5, step: 0.125, status: 'explore', ref: 'D-25',
     note: 'Kingpin must clear the axle rod; the trailing axle self-centres under pull like a caster.',
   },
   kingpinDiameterIn: {
@@ -498,6 +550,15 @@ const defs = {
   brakeDrumWidthIn: {
     label: 'Wooden drum width (along the axle)', group: 'brake', unit: 'in',
     default: 1, min: 0.5, max: 2, step: 0.25, status: 'assumed', ref: 'D-13',
+  },
+  brakeShaftBehindTireIn: {
+    label: 'Brake cross shaft behind the rear tire', group: 'brake', unit: 'in',
+    default: 1.5, min: 1, max: 4, step: 0.25, status: 'assumed', ref: 'D-13',
+    note: 'The shaft sits this far behind the tread; the rear transom must stay behind it (validator).',
+  },
+  brakeShaftDiameterIn: {
+    label: 'Brake cross shaft diameter', group: 'brake', unit: 'in',
+    default: 0.5, min: 0.375, max: 1, step: 0.125, status: 'assumed', ref: 'D-13',
   },
   brakeLeverWidthIn: {
     label: 'Brake lever width (across)', group: 'brake', unit: 'in',
@@ -566,8 +627,13 @@ const defs = {
     default: 0.5, min: 0.375, max: 1, step: 0.0625, status: 'explore',
   },
   axleBeamThicknessIn: {
-    label: 'Axle beam width (fore-aft)', group: 'stock', unit: 'in',
+    label: 'Rear axle beam width (fore-aft)', group: 'stock', unit: 'in',
     default: 2.5, min: 1.5, max: 4, step: 0.125, status: 'explore',
+  },
+  frontAxleBeamThicknessIn: {
+    label: 'Front axle beam width (fore-aft)', group: 'stock', unit: 'in',
+    default: 3.5, min: 1.5, max: 5, step: 0.125, status: 'explore', ref: 'D-25',
+    note: 'Holds the rod groove AND the kingpin hole: needs ≥ lead + rod radius + kingpin radius + 2 × beamLigamentMinIn (H2).',
   },
   axleBeamDepthIn: {
     label: 'Axle beam depth (vertical)', group: 'stock', unit: 'in',
@@ -665,6 +731,10 @@ const defs = {
     label: 'Baltic birch effective MOR (face grain ∥ span)', group: 'materials', unit: 'psi',
     default: 7000, min: 4000, max: 10000, step: 100, status: 'assumed', ref: 'D-5',
   },
+  uhmwDensityPcf: {
+    label: 'UHMW-PE density', group: 'materials', unit: 'lb/ft³',
+    default: 58.5, min: 55, max: 62, step: 0.5, status: 'assumed',
+  },
   steelDensityPcf: {
     label: 'Steel density', group: 'materials', unit: 'lb/ft³',
     default: 490, min: 480, max: 500, step: 1, status: 'locked',
@@ -729,6 +799,11 @@ const defs = {
   deflectionLimitRatio: {
     label: 'Static deflection limit L/n', group: 'factors', unit: 'n',
     default: 300, min: 120, max: 600, step: 10, status: 'locked',
+  },
+  beamLigamentMinIn: {
+    label: 'Min wood ligament around axle groove / kingpin hole', group: 'factors', unit: 'in',
+    default: 0.75, min: 0.5, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-4',
+    note: 'Short-grain wood behind the rod groove and ahead of the kingpin hole carries pull and bump loads in bearing (D-12, D-14).',
   },
   kingpinMargin: {
     label: 'Kingpin / turntable required margin', group: 'factors', unit: '×',
@@ -819,6 +894,68 @@ export function sanitizeParams(p: Partial<Params>): Params {
   return out;
 }
 
+/** Bolster opening the steering stops live in (kingpin-relative, neutral frame): ring rails around the turntable plate. */
+export function bolsterPlan(p: Params) {
+  const ts = p.turntableSizeIn;
+  const rw = Math.min(p.bolsterRailWidthIn, ts / 2 - 0.25);
+  const halfY = ts / 2 + p.sideBearerClearanceIn + p.sideBearerWidthIn;
+  return {
+    rw,
+    halfY,
+    /** Inner face of the aft rail (x) and of the fore rail; the end rails' inner faces are at ±openHalfY. */
+    aftFaceX: -(ts / 2 - rw),
+    foreFaceX: ts / 2 - rw,
+    openHalfY: halfY - rw,
+  };
+}
+
+/**
+ * Steering stops (D-12, critic r2 H1): square oak posts on the turntable plate inside the bolster opening. The left
+ * post turns aft with +steer and lands flat on the aft bolster rail's inner face exactly at +lock; the right post is the
+ * mirror image for −lock. At lock the post is axis-aligned, so its neutral pose is rotated by −lock and centred at
+ * R(−lock)·(face + s/2, openHalfY/2). All numbers are kingpin-relative (+x forward). `ok` is false when the posts do
+ * not stay inside the opening over the whole sweep or would touch the kingpin.
+ */
+export function steerStopPlan(p: Params) {
+  const b = bolsterPlan(p);
+  const s = p.steerStopSizeIn;
+  const L = (Math.min(Math.abs(p.steerLockDeg), 60) * Math.PI) / 180;
+  const lockX = b.aftFaceX + s / 2;
+  const lockY = b.openHalfY / 2;
+  const cx = Math.cos(L) * lockX + Math.sin(L) * lockY;
+  const cy = -Math.sin(L) * lockX + Math.cos(L) * lockY;
+  // Sweep −L..L: every corner of the (rotating) post must stay inside the opening and clear the kingpin.
+  const gap = 0.03125;
+  let ok = true;
+  let why = '';
+  const h = s / 2;
+  const kpR = p.kingpinDiameterIn / 2;
+  const steps = 2 * Math.max(1, Math.round((L * 180) / Math.PI));
+  for (let i = 0; i <= steps && ok; i++) {
+    const d = -L + (2 * L * i) / steps;
+    let minX = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const [qx, qy] of [[-h, -h], [h, -h], [h, h], [-h, h]]) {
+      const lx = cx + Math.cos(-L) * qx - Math.sin(-L) * qy;
+      const ly = cy + Math.sin(-L) * qx + Math.cos(-L) * qy;
+      const x = Math.cos(d) * lx - Math.sin(d) * ly;
+      const y = Math.sin(d) * lx + Math.cos(d) * ly;
+      minX = Math.min(minX, x); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+    }
+    // Distance from the kingpin (origin) to the post, in the post's own frame.
+    const wx = -(Math.cos(d) * cx - Math.sin(d) * cy);
+    const wy = -(Math.sin(d) * cx + Math.cos(d) * cy);
+    const a = -(d - L);
+    const px = Math.cos(a) * wx - Math.sin(a) * wy;
+    const py = Math.sin(a) * wx + Math.cos(a) * wy;
+    const kd = Math.hypot(Math.max(Math.abs(px) - h, 0), Math.max(Math.abs(py) - h, 0));
+    if (minX < b.aftFaceX - 1e-6) { ok = false; why = 'the post would pass through the aft bolster rail before lock'; }
+    else if (maxX > b.foreFaceX - gap) { ok = false; why = 'the post would hit the fore bolster rail when steering the other way'; }
+    else if (maxY > b.openHalfY - gap) { ok = false; why = 'the post would hit the bolster end rail'; }
+    else if (kd < kpR + gap) { ok = false; why = 'the post would hit the kingpin'; }
+  }
+  return { ...b, size: s, cx, cy, rotZ: -L, lockX, lockY, ok, why };
+}
+
 /** Derived quantities that many modules need; no geometry here. */
 export function derived(p: Params) {
   const okoume = p.plySpecies === PLY_SPECIES.okoumeMarine;
@@ -835,6 +972,11 @@ export function derived(p: Params) {
   // The kingpin leads the axle by `kingpinLeadIn` (D-25), so the tire's rear edge is (lead + r) behind the pivot.
   const swingInnerYIn = (a - p.tireWidthIn / 2) * Math.cos(lk) - (p.kingpinLeadIn + r) * Math.sin(lk);
   const swingRearXIn = (a + p.tireWidthIn / 2) * Math.sin(lk) + (p.kingpinLeadIn + r) * Math.cos(lk);
+  // Referenced to the front AXLE: the kingpin is `kingpinLeadIn` ahead of it (D-25), so the rear-most tire corner is
+  // swingRear − lead behind the axle (critic r2 M2).
+  const swingRearBehindAxleIn = swingRearXIn - p.kingpinLeadIn;
+  const rodR = p.axleDiameterIn / 2;
+  const kpR = p.kingpinDiameterIn / 2;
   const tongueOnFront = p.drawbar === DRAWBAR.woodTongue ? p.tongueLengthIn : 0;
   return {
     plyDensityPcf: okoume ? p.okoumeDensityPcf : p.birchDensityPcf,
@@ -853,6 +995,11 @@ export function derived(p: Params) {
     /** A-4 (with the D-25 lead): inner tire corner |y| and rear-most tire extent behind the kingpin, at full lock. */
     swingInnerYIn,
     swingRearXIn,
+    swingRearBehindAxleIn,
+    /** Front beam: centred on the rod + kingpin pair; centre offset from the axle and the wood left beyond each hole edge. */
+    frontBeamOffsetIn: (p.kingpinLeadIn + kpR - rodR) / 2,
+    frontBeamLigamentIn: (p.frontAxleBeamThicknessIn - p.kingpinLeadIn - rodR - kpR) / 2,
+    rearBeamLigamentIn: (p.axleBeamThicknessIn - 2 * rodR) / 2,
     truckUsableLengthIn: p.truckBedLengthIn + p.truckTailgateGapIn + p.truckTailgateLengthIn,
     oakDesignMorPsi: (p.oakMorPsi * p.wetServiceFactorStrength) / p.woodSafetyFactor,
     oakDesignMoePsi: p.oakMoePsi * p.wetServiceFactorStiffness,
@@ -919,9 +1066,10 @@ export function validateParams(p: Params): ParamIssue[] {
   // The rider's feet go through the nose to the foot stop.
   const footSpan = (2 * RIDER_LEG_Y_FRAC + RIDER_FOOT_Y_FRAC) * p.riderStatureIn;
   const noseInner = p.noseWidthIn - 2 * p.sideThicknessIn;
-  if (noseInner < footSpan + 0.25)
-    err(['noseWidthIn', 'riderStatureIn'],
-      `The nose is ${noseInner.toFixed(1)}" wide inside; the rider's feet need ≥ ${(footSpan + 0.25).toFixed(1)}" at this stature.`);
+  const footNeed = footSpan + 2 * p.bootAllowanceIn + 0.25;
+  if (noseInner < footNeed)
+    err(['noseWidthIn', 'riderStatureIn', 'bootAllowanceIn'],
+      `The nose is ${noseInner.toFixed(1)}" wide inside; the rider's feet need ≥ ${footNeed.toFixed(1)}" at this stature (feet ${footSpan.toFixed(1)}" + ${p.bootAllowanceIn}" boot allowance per side + ¼" play).`);
   if (p.truckWellStartIn + p.truckWellLengthIn > p.truckBedLengthIn)
     err(['truckWellStartIn', 'truckWellLengthIn', 'truckBedLengthIn'], 'Wheel wells extend past the bed.');
   if (p.truckWellGapIn > p.truckBedWidthIn)
@@ -952,7 +1100,7 @@ export function validateParams(p: Params): ParamIssue[] {
       `Front axle stack (beam + turntable + crossmember + ply) needs the deck at ≥ ${frontStackTop.toFixed(2)}" over the front axle; it is ${frontDeck.toFixed(2)}".`);
   const rearStackTop = beamTop + p.deckPlyIn;
   if (rearStackTop > p.deckHeightIn + 0.01)
-    warn(['deckHeightIn', 'axleBeamDepthIn'],
+    err(['deckHeightIn', 'axleBeamDepthIn'],
       `Rear axle beam + ply needs the deck at ≥ ${rearStackTop.toFixed(2)}"; it is ${p.deckHeightIn}".`);
   if (p.brakeType === BRAKE_TYPE.woodDrum) {
     const drumBottom = r - (p.wheelDiameterIn * p.brakeDrumDiameterFrac) / 2;
@@ -967,11 +1115,66 @@ export function validateParams(p: Params): ParamIssue[] {
     if (p.noseWidthIn / 2 > allowedHalf)
       err(['noseWidthIn', 'steerLockDeg', 'frontTrackIn'],
         `Front tires hit the nose at full lock: nose must be ≤ ${(2 * allowedHalf).toFixed(2)}" wide (is ${p.noseWidthIn}").`);
-    const neededTaper = d.swingRearXIn + p.steeringClearanceIn;
+    // swingRearXIn is kingpin-referenced; the shoulder (noseTaperStartIn) is axle-referenced, so subtract the lead (M2).
+    const neededTaper = d.swingRearBehindAxleIn + p.steeringClearanceIn;
     if (p.noseTaperStartIn < neededTaper)
-      err(['noseTaperStartIn', 'steerLockDeg'],
+      err(['noseTaperStartIn', 'steerLockDeg', 'kingpinLeadIn'],
         `Front tires hit the cabin shoulder at full lock: full width must end ≥ ${neededTaper.toFixed(2)}" behind the front axle (is ${p.noseTaperStartIn}").`);
   }
+
+  // Axle beams (critic r2 H2): wood left behind the rod groove and ahead of the kingpin hole must be real wood.
+  if (d.frontBeamLigamentIn < p.beamLigamentMinIn - 1e-9)
+    err(['frontAxleBeamThicknessIn', 'kingpinLeadIn', 'beamLigamentMinIn'],
+      `Front axle beam is ${p.frontAxleBeamThicknessIn}" wide: with the rod groove and the kingpin hole (${p.kingpinLeadIn}" apart) only ${d.frontBeamLigamentIn.toFixed(2)}" of wood is left behind the rod and ahead of the kingpin; it needs ≥ ${p.beamLigamentMinIn}" (width ≥ ${(p.kingpinLeadIn + p.axleDiameterIn / 2 + p.kingpinDiameterIn / 2 + 2 * p.beamLigamentMinIn).toFixed(2)}").`);
+  if (d.rearBeamLigamentIn < p.beamLigamentMinIn - 1e-9)
+    err(['axleBeamThicknessIn', 'beamLigamentMinIn'],
+      `Rear axle beam is ${p.axleBeamThicknessIn}" wide: only ${d.rearBeamLigamentIn.toFixed(2)}" of wood is left each side of the rod groove; it needs ≥ ${p.beamLigamentMinIn}".`);
+  // Side bearers sit in the beam wood just ahead of the rod groove.
+  const bearerEnd = p.axleDiameterIn / 2 + p.sideBearerSetbackIn + p.sideBearerLengthIn;
+  const beamFrontFromAxle = d.frontBeamOffsetIn + p.frontAxleBeamThicknessIn / 2;
+  if (bearerEnd > beamFrontFromAxle + 1e-9)
+    err(['sideBearerLengthIn', 'sideBearerSetbackIn', 'frontAxleBeamThicknessIn'],
+      `The ${p.sideBearerLengthIn}" side-bearer block does not fit between the rod groove and the beam's front face (needs the beam front ≥ ${bearerEnd.toFixed(2)}" ahead of the axle; is ${beamFrontFromAxle.toFixed(2)}").`);
+  if (p.sideBearerEmbedIn > p.axleBeamDepthIn - p.beamLigamentMinIn)
+    err(['sideBearerEmbedIn', 'axleBeamDepthIn'], 'The side-bearer housing is too deep for the axle beam.');
+
+  // Front transom hangs below the nose deck; the swinging turntable corners and the tongue pass under it (critic r2 M3).
+  const transomBottom = p.deckHeightIn + p.frontDeckRaiseIn - p.crossmemberDepthIn;
+  const turntableTop = beamTop + p.turntableThicknessIn;
+  if (transomBottom < turntableTop - 0.01)
+    err(['deckHeightIn', 'frontDeckRaiseIn', 'crossmemberDepthIn', 'turntableThicknessIn'],
+      `The front transom hangs to ${transomBottom.toFixed(2)}", below the top of the turntable (${turntableTop.toFixed(2)}") and the tongue; raise the nose deck to ≥ ${(turntableTop + p.crossmemberDepthIn).toFixed(2)}".`);
+
+  // Rear U-bolt plates sit at the beam ends; the rails/girders above must stay inboard of them (critic r2 M3).
+  {
+    const under = p.axleBeamPosition === AXLE_BEAM_POSITION.underslung;
+    const clampLo = under ? beamTop : beamBottom - p.clampPlateThickIn;
+    const clampHi = under ? beamTop + p.clampPlateThickIn : beamBottom;
+    const railBot = p.deckHeightIn - p.deckPlyIn - p.railDepthIn;
+    const railTop = p.deckHeightIn - p.deckPlyIn;
+    if ((railBot < clampHi - 0.01 && railTop > clampLo + 0.01) || p.deckHeightIn - p.deckPlyIn < clampHi - 0.01) {
+      const beamLen = Math.max(1, p.rearTrackIn - p.hubLengthIn - 0.25);
+      const clampInner = Math.min(beamLen / 2 - 0.25, p.rearTrackIn / 2 - p.tireWidthIn / 2) - p.clampPlateWidthIn;
+      // The side panels / girders (outer face at bodyWidth/2) also reach the plates when the deck underside is that low.
+      const sideLow = p.deckHeightIn - p.deckPlyIn < clampHi - 0.01;
+      const railOuter = p.bodyWidthIn / 2 - (p.frameStyle === FRAME_STYLE.ladder && !sideLow ? p.sideThicknessIn : 0);
+      if (railOuter > clampInner + 1e-6)
+        err(['bodyWidthIn', 'rearTrackIn', 'clampPlateWidthIn'],
+          `The cabin rails/sides reach ${railOuter.toFixed(2)}" off centre but the rear U-bolt plates start at ${clampInner.toFixed(2)}"; narrow the body or widen the track.`);
+    }
+  }
+
+  // The brake cross shaft runs behind the rear tire and must stay in front of the rear transom (and the push handle behind it).
+  const shaftBack = r + p.brakeShaftBehindTireIn + p.brakeShaftDiameterIn / 2;
+  if (p.rearOverhangIn < shaftBack + p.sideThicknessIn)
+    err(['rearOverhangIn', 'brakeShaftBehindTireIn', 'wheelDiameterIn'],
+      `The brake cross shaft reaches ${shaftBack.toFixed(2)}" behind the rear axle, into the rear transom; the rear overhang must be ≥ ${(shaftBack + p.sideThicknessIn).toFixed(2)}".`);
+
+  // Steering stops live inside the bolster opening (H1).
+  const stop = steerStopPlan(p);
+  if (!stop.ok)
+    err(['steerStopSizeIn', 'turntableSizeIn', 'bolsterRailWidthIn', 'steerLockDeg'],
+      `Steering stop posts do not fit the bolster opening over the ±${p.steerLockDeg}° sweep: ${stop.why}.`);
 
   // Truck.
   if (d.overallWidthIn + 2 * p.truckClearanceIn > p.truckWellGapIn)

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { defaultParams } from '../params';
+import { defaultParams, validateParams } from '../params';
 import { buildModel, type ViewState } from '../model';
 import { translation } from '../model/mat4';
 import type { Part } from '../model/types';
 import { buildTruckBed } from './bed';
-import { checkTruckFit, computeFeasibleWindows, configParts, type CartView } from './fit';
+import { checkTruckFit, computeFeasibleWindows, configParts, validatorError, type CartView } from './fit';
 
 const stub = (p = defaultParams()) => (v: CartView) => buildModel(p, v as ViewState);
 
@@ -159,7 +159,9 @@ describe('real cart (D-6, D-23)', () => {
     expect(find(checkTruckFit(wider, build(wider)), 'beside', 'removed').some((x) => x.fits)).toBe(false);
     const st = w!.windows.find((x) => x.mode === 'straddle' && x.config === 'removed')!;
     expect(st.wheelbaseMinIn!).toBeLessThanOrEqual(p.wheelbaseIn);
-    expect(st.maxTrackIn!).toBeGreaterThan(beside.maxTrackIn!);
+    // The validator may cap both at the same track (M1); the bed alone is what separates the modes.
+    expect(st.maxTrackIn!).toBeGreaterThanOrEqual(beside.maxTrackIn!);
+    expect(st.maxTrackBedOnlyIn!).toBeGreaterThan(beside.maxTrackBedOnlyIn!);
   }, 60000);
 });
 
@@ -189,5 +191,101 @@ describe('fit timing', () => {
     const r = checkTruckFit(p, stub(p));
     console.log('warm real-cart fit ms:', r.evalMs.toFixed(1));
     expect(r.evalMs).toBeLessThan(150);
+  });
+});
+
+describe('window validity (round-2 M1)', () => {
+  const buildQ = (q: ReturnType<typeof defaultParams>, v: CartView) => buildModel(q, v as ViewState);
+  it('never reports a track or wheelbase the validator rejects, and names the validator when it bounds the window', async () => {
+    const p = defaultParams();
+    expect(validatorError(p)).toBeNull();
+    const w = await computeFeasibleWindows(p, buildQ);
+    expect(w).not.toBeNull();
+    for (const x of w!.windows) {
+      if (x.maxTrackIn !== null) {
+        const q = { ...p, rearTrackIn: x.maxTrackIn, frontTrackIn: x.maxTrackIn };
+        expect(validateParams(q).some((i) => i.severity === 'error')).toBe(false);
+        // Bed alone is never tighter than bed + validator.
+        expect(x.maxTrackBedOnlyIn!).toBeGreaterThanOrEqual(x.maxTrackIn - 1e-9);
+        expect(x.trackBoundedByValidator).toBe((x.trackLimitedBy ?? '').includes('(validator)'));
+      }
+      if (x.wheelbaseMinIn !== null) {
+        for (const wb of [x.wheelbaseMinIn, x.wheelbaseMaxIn!]) {
+          expect(validatorError({ ...p, wheelbaseIn: wb })).toBeNull();
+        }
+      }
+      expect(x.wheelbaseBoundedByValidator).toBe((x.wheelbaseLimitedBy ?? '').includes('(validator)'));
+    }
+  }, 60000);
+  it('reports nothing feasible (and why) when the current design itself fails validation', async () => {
+    const p = { ...defaultParams(), noseWidthIn: defaultParams().bodyWidthIn + 2 };
+    expect(validatorError(p)).not.toBeNull();
+    const w = await computeFeasibleWindows(p, buildQ);
+    for (const x of w!.windows) {
+      expect(x.maxTrackIn).toBeNull();
+      expect(x.wheelbaseMinIn).toBeNull();
+      expect(x.invalidNow).toBeTruthy();
+    }
+  }, 60000);
+  it('windows carry a stability preview that follows the model CG', async () => {
+    const p = defaultParams();
+    const w = await computeFeasibleWindows(p, buildQ);
+    const x = w!.windows.find((y) => y.mode === 'beside' && y.config === 'removed')!;
+    expect(x.cgHeightNowIn).toBeGreaterThan(5);
+    expect(x.ssfNow).toBeCloseTo(p.rearTrackIn / 2 / x.cgHeightNowIn, 9);
+    if (x.maxTrackIn !== null) expect(x.ssfAtMax!).toBeCloseTo(x.maxTrackIn / 2 / x.cgHeightAtMaxIn!, 9);
+  }, 60000);
+});
+
+describe('honest mode reporting (round-2 beside/straddle)', () => {
+  it('reports true fore-aft slack for a box in an open bed', () => {
+    const p = defaultParams();
+    const L = 20;
+    const r = checkTruckFit(p, () => [box('a', [L, 20, 6], [0, 0, 3])]);
+    const c = r.cases.find((x) => x.mode === 'beside' && x.orientation === 'nose-tailgate' && x.config === 'installed')!;
+    expect(c.fits).toBe(true);
+    const expected = r.usableLengthIn - L - 2 * p.truckClearanceIn;
+    expect(Math.abs(c.slack!.totalIn - expected)).toBeLessThanOrEqual(0.5 + 1e-9);
+    expect(c.slack!.toBulkheadIn + c.slack!.toTailgateIn).toBeCloseTo(c.slack!.totalIn, 9);
+  });
+  it('straddle: reports each axle fore-aft margin to the well zone and the slack equals the wheelbase excess', () => {
+    const p = { ...defaultParams(), truckTailgateGapIn: 0 };
+    const D = 13, W = 4, excess = 3;
+    const wells = p.truckWellLengthIn;
+    const wb = wells + 2 * p.truckClearanceIn + D + excess;
+    const wheel = (id: string, x: number, y: number): Part => ({
+      ...box(id, [D, W, D], [x, y, D / 2]),
+      geometry: { type: 'wheel', diameter: D, width: W, hubDiameter: 4, hubLength: 4, bore: 1 },
+    });
+    const parts = [wheel('wheel-RL', 0, 15), wheel('wheel-RR', 0, -15), wheel('wheel-FL', wb, 15), wheel('wheel-FR', wb, -15)];
+    const r = checkTruckFit(p, () => parts);
+    const c = r.cases.find((x) => x.mode === 'straddle' && x.orientation === 'nose-tailgate' && x.config === 'installed')!;
+    expect(c.fits).toBe(true);
+    expect(c.axles).toHaveLength(2);
+    const [low, high] = c.axles;
+    expect(low.side).toBe('bulkhead');
+    expect(low.relation).toBe('ahead');
+    expect(high.relation).toBe('behind');
+    expect(low.wheelWellGapIn).toBeGreaterThanOrEqual(p.truckClearanceIn - 1e-9);
+    expect(high.wheelWellGapIn).toBeGreaterThanOrEqual(p.truckClearanceIn - 1e-9);
+    // The two margins add up to the wheelbase excess plus the two required clearances, and the slack equals the excess.
+    expect(low.wheelWellGapIn + high.wheelWellGapIn).toBeCloseTo(2 * p.truckClearanceIn + excess, 9);
+    expect(Math.abs(c.slack!.totalIn - excess)).toBeLessThanOrEqual(0.5 + 1e-9);
+    // With no excess the straddle has no slack (D-6: zero fore-aft slack).
+    const tight = [wheel('wheel-RL', 0, 15), wheel('wheel-FL', wells + 2 * p.truckClearanceIn + D, 15)];
+    const t = checkTruckFit(p, () => tight).cases.find((x) => x.mode === 'straddle' && x.orientation === 'nose-tailgate' && x.config === 'installed')!;
+    expect(t.fits).toBe(true);
+    expect(t.slack!.totalIn).toBeLessThan(1e-9);
+  });
+  it('real cart: a fitting straddle case reports both axles clear of the wells; non-fitting cases have no slack', () => {
+    const p = defaultParams();
+    const r = checkTruckFit(p, (v) => buildModel(p, v as ViewState));
+    for (const c of r.cases) {
+      if (!c.fits) expect(c.slack).toBeNull();
+      else {
+        expect(c.slack!.totalIn).toBeGreaterThanOrEqual(0);
+        if (c.mode === 'straddle') for (const a of c.axles) expect(a.wheelWellGapIn).toBeGreaterThanOrEqual(p.truckClearanceIn - 1e-9);
+      }
+    }
   });
 });

@@ -10,9 +10,6 @@ const HUB_DIA_FRAC = 0.5;
 const HUB_DIA_MAX_IN = 6;
 /** Stub axle embedment into the beam (spec: hub + end extra + 4). */
 const STUB_EMBED_IN = 4;
-/** U-bolt plate size and fore-aft offset from the beam centreline (placeholders). */
-const CLAMP_PLATE = { x: 0.8, y: 1.5, z: 0.375 } as const;
-const CLAMP_X_OFFSET_IN = 0.8;
 /** U-bolt + plate mass, estimate (spec). */
 const CLAMP_MASS_LB = 0.35;
 
@@ -85,17 +82,19 @@ export function buildRunningGear(ctx: Ctx): Part[] {
     parts.push(box(ctx, {
       id: `beam-${ax.tag}`, name: `${name} axle beam`, group: 'running-gear', steer: ax.steer, mat: 'oak',
       size: [b.thick, b.len, b.depth], center: [b.x, 0, (b.top + b.bot) / 2], grain: 'y', fab: 'table-saw',
-      step: STEP.gear, notes: (p.axleBeamPosition === AXLE_BEAM_POSITION.underslung ? 'Underslung (D-15).' : 'Overslung (D-15).') + (ax.tag === 'F' ? ' Centred between the axle and the kingpin (D-25).' : ''),
+      step: STEP.gear, notes: (p.axleBeamPosition === AXLE_BEAM_POSITION.underslung ? 'Underslung (D-15).' : 'Overslung (D-15).') + (ax.tag === 'F' ? ' Centred on the rod + kingpin pair (D-25).' : ''),
     }));
-    // Clamps: 2 plates per wheel side, on the side of the rod away from the beam.
+    // Clamps: 2 plates per wheel side (one per U-bolt leg), straddling the rod: legs at rod x ± (rod radius + leg gap).
     const under = p.axleBeamPosition === AXLE_BEAM_POSITION.underslung;
+    const plate = { x: p.clampPlateLengthIn, y: p.clampPlateWidthIn, z: p.clampPlateThickIn };
+    const legOffset = rodR + p.clampLegGapIn;
     const yEdge = Math.min(b.len / 2 - 0.25, ax.track / 2 - p.tireWidthIn / 2);
-    const yc = yEdge - CLAMP_PLATE.y / 2;
-    const zc = under ? b.top + CLAMP_PLATE.z / 2 : b.bot - CLAMP_PLATE.z / 2;
+    const yc = yEdge - plate.y / 2;
+    const zc = under ? b.top + plate.z / 2 : b.bot - plate.z / 2;
     for (const { s, tag } of SIDES) {
       for (const [i, sx] of [[1, 1], [2, -1]] as const) {
-        const sp = span([b.x + sx * CLAMP_X_OFFSET_IN - CLAMP_PLATE.x / 2, b.x + sx * CLAMP_X_OFFSET_IN + CLAMP_PLATE.x / 2],
-          [s * yc - CLAMP_PLATE.y / 2, s * yc + CLAMP_PLATE.y / 2], [zc - CLAMP_PLATE.z / 2, zc + CLAMP_PLATE.z / 2]);
+        const sp = span([ax.x + sx * legOffset - plate.x / 2, ax.x + sx * legOffset + plate.x / 2],
+          [s * yc - plate.y / 2, s * yc + plate.y / 2], [zc - plate.z / 2, zc + plate.z / 2]);
         parts.push(box(ctx, {
           id: `clamp-${ax.tag}${tag}${i}`, partNo: 'axle-clamp', name: `${name} ${tag === 'L' ? 'left' : 'right'} U-bolt + plate ${i}`,
           group: 'running-gear', steer: ax.steer, mat: 'fixed', massLb: CLAMP_MASS_LB, kind: 'purchased', material: 'zinc steel U-bolt + plate',

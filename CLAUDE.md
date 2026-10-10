@@ -13,6 +13,7 @@ Parametric design app for Troop 455's Klondike Derby cart. **BRIEF.md** is the s
 - Use cheaper subagents (Sonnet/Haiku) for mechanical work. Any optimization or verification gets a **critic agent** that grades it 1–10 with concrete fixes. Iterate until ≥ 8 or 3 rounds, and record the reviews in `docs/reviews/`.
 - Phase status and scratch notes live in `docs/` (`docs/STATUS.md` is the current-phase tracker).
 - Rider loads: 150 lb must pass everything; 200 lb is the goal (DECISIONS D-1).
+- **Parallel agents must never run `git stash`, `checkout`, `reset` or `commit`.** Other agents share the working tree. Only the orchestrating session commits.
 - Commit at milestones. Always commit `package-lock.json` changes.
 
 ## Commands

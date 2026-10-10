@@ -57,6 +57,16 @@ Units are inches, pounds and degrees throughout.
 | ID | Decision | Status |
 |---|---|---|
 | D-25 | **Kingpin leads the front axle by 1.25"** (critic Phase 1 r1, H1). A kingpin on the axle centreline would have to pass through the ¾" axle rod. Moving it ahead clears the rod (≥ ⅞" between centres for ½" + ¾" plus web), and gives the trailing axle caster-like **self-centring under pull**, which the bridle steering wants anyway. The wheelbase is still measured axle to axle. The turntable centres on the kingpin. | ✅ |
+| D-26 | **Front geometry after the Phase 1 critic rounds** (supersedes the numbers in D-12, D-15, D-25 and A-4; those entries keep their reasoning):
+- **Kingpin lead** is **1.0"**.
+- **Front axle beam** is **3.5"** fore-aft. It is centred on the rod + kingpin pair, which leaves ≥ ¾" of wood at each end. The rear beam stays 2½".
+- **Steering stops** are square posts on the turntable plate. They land flat on the aft bolster rail at exactly ± lock.
+- **Side-bearers** are 1½" oak blocks mortised into the beam, with a UHMW face and 1/16" running clearance.
+- **Boot allowance** is ½" per side, which sets the nose at **13.5"**. The A-4 swing limit at 38.5° is 13.8".
+- **Lock** is **38.5°**, the largest that still fits the nose. The turning radius at the outer front tire is **95.2"**, against ≤ 96" (marginal).
+- The **cabin shoulder** sits **18.0" behind the front axle**. A-4's rear extent is now measured from the axle, i.e. the kingpin value minus the lead.
+
+**Tension to resolve in Phase 2:** lock, nose width (feet), turning radius and track all trade against each other. A wider track (straddle stowage) also pushes the shoulder aft. | 🔶 |
 | D-21 | **Build the full-featured ("heavy") design first.** Empty weight is **reported, not pass/fail**. The realistic expectation is ~90–120 lb. Once a design we like is working, make a **lightweight variant** as a second param preset aimed at the original 60–70 lb (10" wheels, lean beams, no rigid box, and so on). The `targetMass*` params now describe that variant's target. | ✅ |
 | D-22 | **Captured okoume side panels are allowed** (6 mm in an oak chine/gunwale frame, no exposed edges). This is now the default side construction, and it makes hull-as-beam (D-17) a real option. Solid oak and open frame stay selectable. | ✅ |
 | D-23 | **Bed dimensions stay fully parametric.** The truck-fit view (Phase 1/4) tries **both** stowage modes, wheels beside the wells and straddling them. It reports which fits and how much track or stability each allows, so plugging in measured values shows the tradeoff directly. | ✅ |
