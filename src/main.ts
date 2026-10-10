@@ -10,6 +10,7 @@ import type { Part } from './model/types';
 import { mountParamsPanel } from './ui/params-panel';
 import { mountRightPanel } from './ui/right-panel';
 import { mountAnalysisPanel } from './ui/analysis-panel';
+import { mountSimPanel } from './ui/sim-panel';
 import { runChecks } from './analysis';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -43,6 +44,8 @@ function scheduleWindows(delayMs: number) {
     right.setWindows(w);
   }, delayMs);
 }
+// Declared before the right panel so its onTab callback can reach it.
+let sim: ReturnType<typeof mountSimPanel> | undefined;
 const right = mountRightPanel($('right'), {
   onShowTruck(c) {
     truckKey = c.key;
@@ -50,6 +53,7 @@ const right = mountRightPanel($('right'), {
     render();
   },
   onTab(id) {
+    sim?.setActive(id === 'simulation');
     truckTabOpen = id === 'truck';
     if (truckTabOpen) scheduleWindows(0);
   },
@@ -132,16 +136,25 @@ const render = () => {
   const tc = truckKey ? fit.cases.find((c) => c.key === truckKey) : undefined;
   exitTruck.hidden = !tc;
   if (tc && tc.placement) {
-    viewer.update(configParts(tc.config, (v) => build(p, v)));
+    if (!sim?.active) viewer.update(configParts(tc.config, (v) => build(p, v)));
     viewer.setTruck(buildTruckBed(p, { ground: true }), tc.placement.transform, `${tc.key}|${tc.placement.txIn}`);
     viewer.highlight([...new Set(tc.colliding.map((q) => q.partId))], '#ff3b30');
   } else {
     viewer.setTruck(null);
-    viewer.update(build(p, view));
+    if (!sim?.active) viewer.update(build(p, view));
     viewer.highlight([]);
   }
 };
-store.subscribe(render);
+sim = mountSimPanel(right.panelHost('simulation'), {
+  viewer,
+  getParams: () => store.get(),
+  buildModel: (p, v) => buildModel(p, v),
+  restoreView: () => render(),
+});
+store.subscribe(() => {
+  sim?.paramsChanged();
+  render();
+});
 render();
 
 $('btn-reset').addEventListener('click', () => store.reset());

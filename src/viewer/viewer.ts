@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { centerOfGravity } from '../model/mass';
 import { partCentroid, worldAABB } from '../model/bounds';
-import type { Geometry, Mat4, Part, PartGroup, Vec3 } from '../model/types';
+import type { Geometry, Mat4, Part, PartGroup, RigidBody, Vec3 } from '../model/types';
 
 type ViewName = 'iso' | 'top' | 'side' | 'front';
 
@@ -135,6 +135,15 @@ interface MeshInfo {
 
 export type SectionAxis = 'off' | 'x' | 'y' | 'z';
 
+/** A static piece of the simulation scene, in the ground frame (inches): the slab, a root or a curb. */
+export interface SimSceneShape {
+  id: string;
+  kind: 'box' | 'cylinder';
+  /** Box: half extents. Cylinder (axis Y): [radius, halfLength, radius]. */
+  half: Vec3;
+  center: Vec3;
+}
+
 export class Viewer {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
@@ -163,6 +172,15 @@ export class Viewer {
   private lastParts: Part[] = [];
   private truckFrameKey: string | null = null;
   private inTruck = false;
+  /** Physics sim: per-rigid-body pose (relative to the build pose), the posed ground group and the camera follow point. */
+  private bodyPoses: Map<RigidBody, Mat4> | null = null;
+  private readonly simGroup = new THREE.Group();
+  private simGrid: THREE.GridHelper | null = null;
+  private simActive = false;
+  private lastFollow: Vec3 | null = null;
+  private sun!: THREE.DirectionalLight;
+  private readonly tmpA = new THREE.Matrix4();
+  private readonly tmpB = new THREE.Matrix4();
 
   /** Append a control (e.g. the view-only steer slider) to the toolbar. */
   addToolbarControl(node: HTMLElement): void {
@@ -405,6 +423,13 @@ export class Viewer {
 
   private applyMatrices(): void {
     for (const i of this.infos) {
+      const pose = this.bodyPoses?.get(i.part.body);
+      if (pose) {
+        // Simulation: world = body pose (relative to its build pose) · the part's build transform; no explode.
+        i.mesh.matrix.multiplyMatrices(this.tmpA.fromArray(pose), this.tmpB.fromArray(i.part.transform));
+        i.mesh.matrixWorldNeedsUpdate = true;
+        continue;
+      }
       i.mesh.matrix.fromArray(i.part.transform);
       i.mesh.matrix.elements[12] += i.dir[0] * this.explodeAmount;
       i.mesh.matrix.elements[13] += i.dir[1] * this.explodeAmount;
@@ -439,12 +464,15 @@ export class Viewer {
     const sc = sun.shadow.camera;
     sc.left = -90; sc.right = 90; sc.top = 90; sc.bottom = -90; sc.near = 10; sc.far = 500;
     sun.shadow.bias = -0.0005;
-    this.scene.add(sun);
+    this.sun = sun;
+    this.scene.add(sun, sun.target);
 
     this.partsGroup.matrixAutoUpdate = false;
     this.overlay.matrixAutoUpdate = false;
     this.truckGroup.visible = false;
-    this.scene.add(this.partsGroup, this.truckGroup, this.overlay);
+    this.simGroup.matrixAutoUpdate = false;
+    this.simGroup.visible = false;
+    this.scene.add(this.partsGroup, this.truckGroup, this.overlay, this.simGroup);
   }
 
   private applyTheme(): void {
@@ -544,6 +572,113 @@ export class Viewer {
       this.truckFrameKey = frameKey;
       this.setView('iso', this.truckBox());
     }
+  }
+
+  /**
+   * Physics sim: pose each rendered part by its rigid body's transform (a column-major 4x4 relative to the part's build
+   * pose, inches). Pass null to return to the static model. Parts must have been built with the neutral steer angle.
+   */
+  setBodyPoses(poses: Map<RigidBody, Mat4> | null): void {
+    this.bodyPoses = poses;
+    this.applyMatrices();
+  }
+
+  /**
+   * Show (or, with null, remove) the simulation ground and obstacles. While shown, the static grid, axes, shadow plane
+   * and the CG / dimension overlay are hidden; the shapes live in the ground frame set by `setSimGroundPose`.
+   */
+  setSimEnvironment(shapes: SimSceneShape[] | null): void {
+    for (const c of [...this.simGroup.children]) {
+      this.simGroup.remove(c);
+      (c as THREE.Mesh).geometry?.dispose();
+    }
+    this.simGrid = null;
+    this.simActive = shapes !== null;
+    this.simGroup.visible = this.simActive;
+    this.overlay.visible = !this.simActive;
+    for (const o of this.envObjects) o.visible = !this.simActive;
+    if (!shapes) {
+      this.lastFollow = null;
+      this.sun.position.set(90, -70, 160);
+      this.sun.target.position.set(0, 0, 0);
+      this.sun.target.updateMatrixWorld();
+      return;
+    }
+    const mat = (color: number) => {
+      const m = new THREE.MeshStandardMaterial({ color, roughness: 1 });
+      m.side = THREE.DoubleSide;
+      return m;
+    };
+    for (const s of shapes) {
+      let mesh: THREE.Mesh;
+      if (s.kind === 'box') {
+        // The slab is huge; clamp the drawn size so depth precision holds, the physics slab stays large.
+        const hx = Math.min(s.half[0], 3000), hy = Math.min(s.half[1], 3000);
+        mesh = new THREE.Mesh(new THREE.BoxGeometry(2 * hx, 2 * hy, 2 * s.half[2]), mat(s.id === 'ground' ? 0xa79a78 : 0x8d8f94));
+        const cx = s.id === 'ground' ? 0 : Math.min(s.center[0], 3000 - hx + s.center[0]);
+        mesh.position.set(cx, s.center[1], s.center[2]);
+        if (s.id === 'curb') {
+          // The curb is an endless step: draw only 3000" of it from its face.
+          mesh.geometry.dispose();
+          mesh.geometry = new THREE.BoxGeometry(3000, 2 * hy, 2 * s.half[2]);
+          mesh.position.set(s.center[0] - s.half[0] + 1500, s.center[1], s.center[2]);
+        }
+      } else {
+        const g = new THREE.CylinderGeometry(s.half[0], s.half[0], 2 * Math.min(s.half[1], 3000), 24); // axis Y
+        mesh = new THREE.Mesh(g, mat(0x6b4a2b));
+        mesh.position.set(...s.center);
+      }
+      mesh.receiveShadow = true;
+      mesh.castShadow = s.id !== 'ground';
+      this.simGroup.add(mesh);
+    }
+    const grid = new THREE.GridHelper(4800, 100, 0x5b5f55, 0x7b7e73);
+    grid.rotation.x = Math.PI / 2;
+    grid.position.z = 0.06;
+    const gm = grid.material as THREE.Material;
+    gm.transparent = true;
+    gm.opacity = 0.5;
+    this.simGroup.add(grid);
+    this.simGrid = grid;
+  }
+
+  /**
+   * Orientation of the sim ground (a column-major 4x4 about the origin, inches). `focus` is the cart's world position:
+   * the grid is re-centred under it (snapped to its 48" cells) and the sun's shadow box follows it.
+   */
+  setSimGroundPose(pose: Mat4, focus?: Vec3): void {
+    this.simGroup.matrix.fromArray(pose);
+    this.simGroup.matrixWorldNeedsUpdate = true;
+    if (focus && this.simGrid) {
+      const local = new THREE.Vector3(...focus).applyMatrix4(this.tmpA.fromArray(pose).invert());
+      this.simGrid.position.x = Math.round(local.x / 48) * 48;
+      this.simGrid.position.y = Math.round(local.y / 48) * 48;
+    }
+  }
+
+  /**
+   * Keep the orbit camera on a moving point (e.g. the cart in the sim) while leaving the user's view angle alone.
+   * `snap` first jumps the orbit target onto the point (a new run).
+   */
+  followPoint(p: Vec3 | null, snap = false): void {
+    if (!p) {
+      this.lastFollow = null;
+      return;
+    }
+    if (snap) {
+      // Jump the orbit target to the point, keeping the viewing direction and distance.
+      const d = new THREE.Vector3(p[0], p[1], p[2]).sub(this.controls.target);
+      this.controls.target.add(d);
+      this.camera.position.add(d);
+    } else if (this.lastFollow) {
+      const d = new THREE.Vector3(p[0] - this.lastFollow[0], p[1] - this.lastFollow[1], p[2] - this.lastFollow[2]);
+      this.controls.target.add(d);
+      this.camera.position.add(d);
+    }
+    this.lastFollow = [...p];
+    this.sun.position.set(p[0] + 90, p[1] - 70, p[2] + 160);
+    this.sun.target.position.set(p[0], p[1], 0);
+    this.sun.target.updateMatrixWorld();
   }
 
   private refreshToggles(parts: Part[]): void {

@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
     plugins: single ? [viteSingleFile()] : [],
     build: {
       outDir: single ? 'dist-single' : 'dist',
-      chunkSizeWarningLimit: 1200,
+      chunkSizeWarningLimit: 5000,
     },
     test: {
       include: ['src/**/*.test.ts'],
