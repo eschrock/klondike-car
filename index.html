@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Troop 455 Klondike Cart</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <h1>Troop 455 Klondike Cart</h1>
+        <span class="topbar-sub">Parametric design tool</span>
+        <span class="spacer"></span>
+        <button id="btn-copy-link" type="button" title="Copy a shareable link to this exact design">Copy link</button>
+        <button id="btn-reset" type="button" title="Reset every parameter to its default">Reset to defaults</button>
+      </header>
+      <aside id="params" class="sidebar left" aria-label="Parameters"></aside>
+      <main id="viewer" class="viewer" aria-label="3D viewer"></main>
+      <aside id="right" class="sidebar right" aria-label="Analysis"></aside>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
