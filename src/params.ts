@@ -323,7 +323,7 @@ const defs = {
   },
   turntableRatingLb: {
     label: 'Turntable load rating', group: 'steering', unit: 'lb',
-    default: 1000, min: 500, max: 2000, step: 50, status: 'locked', ref: 'D-12',
+    default: 1000, min: 1000, max: 2000, step: 50, status: 'locked', ref: 'D-12',
   },
   kingpinDiameterIn: {
     label: 'Kingpin bolt diameter', group: 'steering', unit: 'in',
