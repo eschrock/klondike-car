@@ -471,6 +471,8 @@ export interface FitWindow {
   /** Static stability factor preview (D-23): (track / 2) / loaded CG height, operating rider + cargo. Phase 2 does the full check. */
   ssfNow: number;
   ssfAtMax: number | null;
+  /** SSF at the bed-only max track; reaching it needs nose width and shoulder re-derived (Phase 2). */
+  ssfAtBedMax: number | null;
   cgHeightNowIn: number;
   cgHeightAtMaxIn: number | null;
 }
@@ -637,6 +639,7 @@ export async function computeFeasibleWindows(p: Params, build: Build, cancelled:
         lateralLimitIn,
         ssfNow: ssf(p.rearTrackIn),
         ssfAtMax: maxT === null ? null : ssf(maxT),
+        ssfAtBedMax: (() => { const b = ts.filter((x) => x.r.bedFits).pop()?.v; return b === undefined ? null : ssf(b); })(),
         cgHeightNowIn: cgHeight(p.rearTrackIn),
         cgHeightAtMaxIn: maxT === null ? null : cgHeight(maxT),
       });

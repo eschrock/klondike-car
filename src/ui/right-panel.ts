@@ -174,7 +174,7 @@ export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): Rig
     const wb = w.wheelbaseMinIn === null ? 'no wheelbase fits' : `wheelbase ${fmtRange(w.wheelbaseMinIn, w.wheelbaseMaxIn)} (now ${f1(p.wb)}")`;
     const why = [w.maxTrackIn !== null && w.trackLimitedBy ? `track limit: ${w.trackLimitedBy}.${bedOnly}` : '', w.wheelbaseLimitedBy ? `wheelbase limit: ${w.wheelbaseLimitedBy}` : ''].filter(Boolean).join(' ');
     const stab = w.ssfAtMax === null ? '' :
-      `Stability preview (D-23): SSF (T/2)/h ${f2(w.ssfNow)} now → ${f2(w.ssfAtMax)} at max track (${w.ssfAtMax >= w.ssfNow ? '+' : ''}${f2(w.ssfAtMax - w.ssfNow)}), loaded CG ${f1(w.cgHeightNowIn)}" → ${f1(w.cgHeightAtMaxIn ?? 0)}" (operating rider + cargo). Preview only; Phase 2 does the full check.`;
+      `Stability preview (D-23): SSF (T/2)/h ${f2(w.ssfNow)} now → ${f2(w.ssfAtMax)} at max track (${w.ssfAtMax >= w.ssfNow ? '+' : ''}${f2(w.ssfAtMax - w.ssfNow)}), loaded CG ${f1(w.cgHeightNowIn)}" → ${f1(w.cgHeightAtMaxIn ?? 0)}" (operating rider + cargo).${w.trackBoundedByValidator && w.ssfAtBedMax !== null && w.maxTrackBedOnlyIn !== null ? ` At the bed-only max track ${f1(w.maxTrackBedOnlyIn)}" SSF would be ${f2(w.ssfAtBedMax)}, but only once the nose width and shoulder are re-derived for that track (Phase 2).` : ''} Preview only; Phase 2 does the full check.`;
     return h('div', { class: 'win-row' },
       h('div', { class: 'win-mode' }, MODE_LABEL[w.mode]),
       h('div', {}, track),
