@@ -1,0 +1,61 @@
+/* Analysis panel (Phase 2). Uses the app's colour tokens; status colours are local with a dark-mode override. */
+.ap {
+  --ap-pass: #1f8f4e; --ap-marg: #b26a00; --ap-fail: #d1352b; --ap-info: var(--muted);
+  font-size: 12px; line-height: 1.4; min-width: 0;
+}
+@media (prefers-color-scheme: dark) {
+  .ap { --ap-pass: #4cc784; --ap-marg: #f0a73a; --ap-fail: #f87171; }
+}
+.ap-summary { display: grid; gap: 4px; padding: 8px 10px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
+.ap-sumrow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.ap-sumrow b { min-width: 7.5em; font-weight: 600; }
+.ap-count { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ap-count.pass { color: var(--ap-pass); }
+.ap-count.marginal { color: var(--ap-marg); }
+.ap-count.fail { color: var(--ap-fail); }
+.ap-count.zero { color: var(--muted); }
+.ap-flags { margin: 0 0 8px; padding: 6px 10px; border: 1px solid color-mix(in srgb, var(--ap-fail) 45%, transparent); border-radius: 6px; background: color-mix(in srgb, var(--ap-fail) 8%, transparent); }
+.ap-flags strong { display: block; margin-bottom: 2px; }
+.ap-flags ul { margin: 0; padding-left: 16px; }
+
+.ap-group { margin: 0 0 10px; }
+.ap-group > h3 { margin: 0 0 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); display: flex; gap: 8px; }
+.ap-group > h3 span { font-weight: 400; text-transform: none; letter-spacing: 0; }
+.ap-row { border-top: 1px solid var(--border); }
+.ap-row:last-child { border-bottom: 1px solid var(--border); }
+.ap-head {
+  all: unset; box-sizing: border-box; display: grid; width: 100%; cursor: pointer; padding: 5px 2px;
+  grid-template-columns: 3.9em minmax(0, 1fr) auto; column-gap: 8px; align-items: start;
+}
+.ap-head:hover { background: var(--panel-2); }
+.ap-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ap-chip {
+  display: inline-block; text-align: center; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; line-height: 16px;
+  border: 1px solid currentColor; border-radius: 8px; padding: 0 4px; margin-top: 1px;
+}
+.ap-chip.pass { color: var(--ap-pass); }
+.ap-chip.marginal { color: var(--ap-marg); }
+.ap-chip.fail { color: var(--ap-fail); background: color-mix(in srgb, var(--ap-fail) 12%, transparent); }
+.ap-chip.info { color: var(--ap-info); }
+.ap-name { min-width: 0; overflow-wrap: anywhere; }
+.ap-name .ap-load { display: block; color: var(--muted); font-size: 11px; }
+.ap-flag { color: var(--ap-fail); font-weight: 600; }
+.ap-val { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ap-val b { font-weight: 600; }
+.ap-val .ap-limit { display: block; color: var(--muted); font-size: 11px; }
+.ap-body { padding: 2px 4px 8px 4.9em; font-size: 11.5px; }
+.ap-body[hidden] { display: none; }
+.ap-how { margin: 0 0 4px; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.ap-refs { color: var(--muted); font-size: 11px; }
+.ap-details { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 1px; font-variant-numeric: tabular-nums; }
+.ap-details li { display: flex; justify-content: space-between; gap: 8px; }
+.ap-details .over { color: var(--ap-fail); font-weight: 600; }
+.ap-foot { margin-top: 12px; border: 1px solid var(--border); border-radius: 6px; }
+.ap-foot > summary { cursor: pointer; padding: 6px 10px; font-weight: 600; }
+.ap-foot > div { padding: 0 10px 8px; }
+.ap-foot table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.ap-foot th { text-align: left; font-weight: 400; color: var(--muted); padding: 1px 6px 1px 0; vertical-align: top; }
+.ap-foot td { text-align: right; padding: 1px 0; }
+.ap-foot td.src { text-align: left; color: var(--muted); padding-left: 8px; }
+.ap-foot h4 { margin: 8px 0 2px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.ap-empty { color: var(--muted); }

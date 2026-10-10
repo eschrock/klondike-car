@@ -51,6 +51,8 @@ export interface RightPanel {
   setActiveTruckKey(key: string | null): void;
   /** Feasible-window search state: computing, done, or not available. */
   setWindows(w: FitWindows | 'computing' | null): void;
+  /** Empty tab body for a self-contained panel (analysis, simulation) to mount into. */
+  panelHost(id: 'analysis' | 'simulation'): HTMLElement;
 }
 
 export interface RightPanelOptions {
@@ -58,6 +60,9 @@ export interface RightPanelOptions {
   /** A tab became active (the Truck fit tab starts the lazy window search). */
   onTab(id: string): void;
 }
+
+/** Tabs whose content is mounted by another module via panelHost(). */
+const MOUNTED = new Set(['analysis', 'simulation']);
 
 const MODE_LABEL = { beside: 'Beside wells', straddle: 'Straddle wells' } as const;
 const ORIENT_LABEL = { 'nose-tailgate': 'Nose to tailgate', 'nose-bulkhead': 'Nose to bulkhead' } as const;
@@ -130,6 +135,8 @@ export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): Rig
     const body =
       t.id === 'truck'
         ? h('div', { role: 'tabpanel', id: `panel-${t.id}`, 'aria-labelledby': `tab-${t.id}` }, truckBody)
+        : MOUNTED.has(t.id)
+        ? h('div', { role: 'tabpanel', id: `panel-${t.id}`, 'aria-labelledby': `tab-${t.id}` })
         : h('div', { role: 'tabpanel', id: `panel-${t.id}`, 'aria-labelledby': `tab-${t.id}`, class: 'placeholder' },
             h('h3', {}, t.label), h('p', {}, t.blurb), h('p', { class: 'muted' }, `Coming in Phase ${t.phase}.`));
     buttons.push(b);
@@ -262,6 +269,9 @@ export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): Rig
   }
 
   return {
+    panelHost(id) {
+      return bodies[TABS.findIndex((t) => t.id === id)];
+    },
     update(sum, fit, params) {
       lastParams = params;
       const cases = [

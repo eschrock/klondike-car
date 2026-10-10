@@ -9,6 +9,8 @@ import { checkTruckFit, computeFeasibleWindows, configParts, type CartView, type
 import type { Part } from './model/types';
 import { mountParamsPanel } from './ui/params-panel';
 import { mountRightPanel } from './ui/right-panel';
+import { mountAnalysisPanel } from './ui/analysis-panel';
+import { runChecks } from './analysis';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -93,6 +95,8 @@ exitTruck.addEventListener('click', () => {
 });
 viewer.addToolbarControl(exitTruck);
 
+const analysis = mountAnalysisPanel(right.panelHost('analysis'));
+
 // The summary and the fit depend only on the design parameters, so they are cached across view-only changes.
 let cacheKey = '';
 let fit: FitResult;
@@ -119,6 +123,7 @@ const render = () => {
       fit,
       { track: p.rearTrackIn, wb: p.wheelbaseIn, lateralBesideLimit: derived(p).maxTrackBesideWells },
     );
+    analysis.update(p, runChecks(p, { fit }));
     windowsDone = null;
     right.setWindows(null);
     scheduleWindows(400);
