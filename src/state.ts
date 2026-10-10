@@ -1,4 +1,4 @@
-import { PARAM_DEFS, defaultParams, sanitizeParam, type ParamKey, type Params } from './params';
+import { PARAM_DEFS, defaultParams, sanitizeParam, sanitizeParams, type ParamKey, type Params } from './params';
 
 const KEYS = Object.keys(PARAM_DEFS) as ParamKey[];
 
@@ -39,6 +39,7 @@ export interface Store {
   get(): Params;
   set(key: ParamKey, value: number): void;
   reset(): void;
+  replace(next: Partial<Params>): void;
   subscribe(fn: Listener): () => void;
 }
 
@@ -69,6 +70,10 @@ export function createStore(opts: StoreOptions = {}): Store {
       params = defaultParams();
       emit('all');
     },
+    replace(next) {
+      params = sanitizeParams(next);
+      emit('all');
+    },
     subscribe(fn) {
       listeners.add(fn);
       return () => listeners.delete(fn);
@@ -88,3 +93,10 @@ export const store: Store = createStore({
       }
     : undefined,
 });
+
+// A pasted/edited link (hash change without reload) replaces the whole design.
+if (hasWindow) {
+  window.addEventListener('hashchange', () => {
+    if (window.location.hash.replace(/^#/, '') !== encodeHash(store.get())) store.replace(decodeHash(window.location.hash));
+  });
+}

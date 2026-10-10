@@ -105,14 +105,20 @@ export class Viewer {
   private readonly partsGroup = new THREE.Group();
   private readonly canvasHost: HTMLElement;
   private readonly toggleHost: HTMLElement;
+  private readonly toolbar: HTMLElement;
   private readonly hidden = new Set<PartGroup>();
   private framed = false;
   private lastGroups: PartGroup[] = [];
 
+  /** Append a control (e.g. the view-only steer slider) to the toolbar. */
+  addToolbarControl(node: HTMLElement): void {
+    this.toolbar.append(node);
+  }
+
   constructor(container: HTMLElement) {
     container.classList.add('viewer-host');
     this.canvasHost = el('div', 'viewer-canvas');
-    const toolbar = el('div', 'viewer-toolbar');
+    const toolbar = (this.toolbar = el('div', 'viewer-toolbar'));
     this.toggleHost = el('div', 'viewer-toggles');
     container.append(this.canvasHost, toolbar, this.toggleHost);
 

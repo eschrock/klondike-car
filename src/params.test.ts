@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PARAM_DEFS, defaultParams, sanitizeParam, type ParamKey } from './params';
+import { PARAM_DEFS, defaultParams, sanitizeParam, validateParams, type ParamKey } from './params';
 import { createStore, decodeHash, encodeHash } from './state';
 import { buildModel } from './model';
 import { centerOfGravity, totalMass } from './model/mass';
@@ -15,6 +15,22 @@ describe('PARAM_DEFS', () => {
 
   it.each(keys.filter((k) => PARAM_DEFS[k].options))('%s options contain the default', (k) => {
     expect(PARAM_DEFS[k].options!.map((o) => o.value)).toContain(PARAM_DEFS[k].default);
+  });
+});
+
+describe('validateParams', () => {
+  it('defaults are free of errors and warnings', () => {
+    expect(validateParams(defaultParams())).toEqual([]);
+  });
+  it('flags crossed rider masses and an over-wide nose', () => {
+    const issues = validateParams({ ...defaultParams(), riderGoalMassLb: 150, riderMassLb: 200, noseWidthIn: 30 });
+    expect(issues.filter((i) => i.severity === 'error').map((i) => i.keys[0])).toEqual(
+      expect.arrayContaining(['riderGoalMassLb', 'noseWidthIn']),
+    );
+  });
+  it('flags a deck too low for the front axle stack', () => {
+    const issues = validateParams({ ...defaultParams(), deckHeightIn: 6, frontDeckRaiseIn: 0 });
+    expect(issues.some((i) => i.message.startsWith('Front axle stack'))).toBe(true);
   });
 });
 
@@ -41,7 +57,6 @@ describe('state hash', () => {
     const s = createStore();
     s.set('wheelbaseIn', 52.5);
     s.set('wheelDiameterIn', 10);
-    s.set('steerAngleDeg', -12);
     const hash = encodeHash(s.get());
     expect(hash).toContain('wheelbaseIn=52.5');
     expect(hash).not.toContain('riderMassLb');
@@ -80,8 +95,8 @@ describe('buildModel (phase 0 stub)', () => {
     }
   });
   it('clamps the steer angle to lock', () => {
-    const p = { ...defaultParams(), steerLockDeg: 20, steerAngleDeg: 50 };
-    const fl = buildModel(p).find((x) => x.id === 'wheel-FL')!;
+    const p = { ...defaultParams(), steerLockDeg: 20 };
+    const fl = buildModel(p, { steerDeg: 50 }).find((x) => x.id === 'wheel-FL')!;
     // Rz(20°): column 0 = [cos, sin, 0]
     expect(fl.transform[0]).toBeCloseTo(Math.cos((20 * Math.PI) / 180), 6);
     expect(fl.transform[1]).toBeCloseTo(Math.sin((20 * Math.PI) / 180), 6);

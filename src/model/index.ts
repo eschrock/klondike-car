@@ -6,21 +6,28 @@ import type { Part } from './types';
  * Phase 0 placeholder: four wheels and a deck. Real geometry replaces this in Phase 1,
  * but the signature (Params -> Part[]) is the contract every view depends on.
  */
-export function buildModel(p: Params): Part[] {
+export interface ViewState {
+  /** Displayed steer angle, degrees (+ = turning left). Clamped to ± lock. */
+  steerDeg?: number;
+}
+
+export function buildModel(p: Params, view: ViewState = {}): Part[] {
   const d = derived(p);
   const r = d.wheelRadiusIn;
   const lock = Math.abs(p.steerLockDeg);
-  const steer = (Math.min(lock, Math.max(-lock, p.steerAngleDeg)) * Math.PI) / 180;
+  const steer = (Math.min(lock, Math.max(-lock, (view.steerDeg ?? 0))) * Math.PI) / 180;
 
-  const wheel = (id: string, name: string, transform: number[]): Part => ({
+  const wheel = (id: 'wheel-FL' | 'wheel-FR' | 'wheel-RL' | 'wheel-RR', name: string, transform: number[]): Part => ({
     id,
     name,
     group: 'running-gear',
     kind: 'purchased',
     material: 'pneumatic tire + hub',
-    geometry: { type: 'wheel', diameter: p.wheelDiameterIn, width: p.tireWidthIn, hubDiameter: Math.min(p.wheelDiameterIn * 0.5, 6) },
+    geometry: { type: 'wheel', diameter: p.wheelDiameterIn, width: p.tireWidthIn, hubDiameter: Math.min(p.wheelDiameterIn * 0.5, 6), hubLength: p.hubLengthIn, bore: p.axleDiameterIn },
+    body: id,
+    partNo: 'wheel',
     transform,
-    massLb: p.wheelMassLb,
+    massLb: d.wheelMassLb,
     fab: 'buy',
     step: 3,
   });
@@ -45,6 +52,7 @@ export function buildModel(p: Params): Part[] {
     transform: compose([deckX, 0, p.deckHeightIn - p.deckPlyIn / 2]),
     massLb: (deckVolIn3 / 1728) * d.plyDensityPcf,
     fab: 'table-saw',
+    body: 'chassis',
     step: 1,
   };
 

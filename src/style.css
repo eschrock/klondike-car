@@ -123,3 +123,17 @@ select { width: 100%; }
 @media (max-width: 1100px) {
   #app { grid-template-columns: 250px minmax(0, 1fr) 260px; }
 }
+
+.steer-ctl { display: flex; align-items: center; gap: 6px; margin-left: 8px; font-size: 12px;
+  background: color-mix(in srgb, var(--panel) 85%, transparent); border: 1px solid var(--border);
+  border-radius: 6px; padding: 2px 8px; }
+.steer-ctl input { width: 110px; }
+.steer-out { min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
+.issues { display: flex; flex-direction: column; gap: 6px; }
+.issue { font-size: 12px; line-height: 1.35; padding: 6px 8px; border-radius: 6px; border: 1px solid; }
+.issue.error { color: #f87171; border-color: color-mix(in srgb, #f87171 50%, transparent); background: color-mix(in srgb, #f87171 10%, transparent); }
+.issue.warn { color: #fbbf24; border-color: color-mix(in srgb, #fbbf24 50%, transparent); background: color-mix(in srgb, #fbbf24 10%, transparent); }
+@media (prefers-color-scheme: light) {
+  .issue.error { color: #b91c1c; }
+  .issue.warn { color: #92400e; }
+}

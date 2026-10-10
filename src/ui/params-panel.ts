@@ -1,4 +1,4 @@
-import { GROUP_LABELS, PARAM_DEFS, type ParamGroup, type ParamKey } from '../params';
+import { GROUP_LABELS, PARAM_DEFS, validateParams, type ParamGroup, type ParamKey } from '../params';
 import type { Store } from '../state';
 import { h } from './dom';
 
@@ -58,6 +58,9 @@ export function mountParamsPanel(host: HTMLElement, store: Store): void {
   const syncs = new Map<ParamKey, Sync>();
   const keys = Object.keys(PARAM_DEFS) as ParamKey[];
 
+  const issuesBox = h('section', { class: 'panel-section issues', 'aria-live': 'polite' });
+  host.append(issuesBox);
+
   const key = h('section', { class: 'panel-section' }, h('h2', {}, 'Key parameters'));
   for (const k of keys) if (PARAM_DEFS[k].primary) key.append(buildRow(k, store, syncs));
   host.append(key);
@@ -73,6 +76,14 @@ export function mountParamsPanel(host: HTMLElement, store: Store): void {
   const sync = () => {
     const p = store.get();
     for (const [k, fn] of syncs) fn(p[k]);
+    const issues = validateParams(p);
+    issuesBox.replaceChildren(
+      ...issues.map((i) =>
+        h('div', { class: `issue ${i.severity}`, title: i.keys.map((k) => PARAM_DEFS[k].label).join(', ') },
+          i.severity === 'error' ? '✖ ' : '⚠ ', i.message),
+      ),
+    );
+    issuesBox.hidden = issues.length === 0;
   };
   store.subscribe(sync);
   sync();
