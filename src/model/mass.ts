@@ -1,5 +1,5 @@
 import type { Part, Vec3 } from './types';
-import { translationOf } from './mat4';
+import { partCentroid } from './bounds';
 
 export interface MassOptions {
   /** Include rider/cargo/other payload parts. Default false (empty cart). */
@@ -10,7 +10,7 @@ function counted(parts: Part[], opts?: MassOptions): Part[] {
   return opts?.includePayload ? parts : parts.filter((p) => !p.payload);
 }
 
-/** Sum of part.massLb (the part's total mass; `qty` is informational). */
+/** Sum of part.massLb (one Part = one physical piece, C-5). */
 export function totalMass(parts: Part[], opts: MassOptions = {}): number {
   return counted(parts, opts).reduce((s, p) => s + p.massLb, 0);
 }
@@ -19,7 +19,7 @@ export function totalMass(parts: Part[], opts: MassOptions = {}): number {
 export function centerOfGravity(parts: Part[], opts: MassOptions = {}): Vec3 {
   let m = 0, x = 0, y = 0, z = 0;
   for (const p of counted(parts, opts)) {
-    const c = p.cgIn ?? translationOf(p.transform);
+    const c = p.cgIn ?? partCentroid(p);
     m += p.massLb;
     x += p.massLb * c[0];
     y += p.massLb * c[1];
