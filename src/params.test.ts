@@ -90,10 +90,10 @@ describe('state hash', () => {
   });
 });
 
-describe('buildModel (phase 0 stub)', () => {
+describe('buildModel (block model)', () => {
   const parts = buildModel(defaultParams());
-  it('returns 4 wheels and a deck with finite transforms', () => {
-    expect(parts).toHaveLength(5);
+  it('returns 4 wheels and a full part set with finite transforms', () => {
+    expect(parts.length).toBeGreaterThan(50);
     expect(parts.filter((p) => p.geometry.type === 'wheel')).toHaveLength(4);
     for (const p of parts) {
       expect(p.transform).toHaveLength(16);
@@ -111,7 +111,7 @@ describe('buildModel (phase 0 stub)', () => {
     expect(totalMass(parts)).toBeGreaterThan(20);
     const [x, y, z] = centerOfGravity(parts);
     expect(x).toBeGreaterThan(0);
-    expect(Math.abs(y)).toBeLessThan(1e-9);
+    expect(Math.abs(y)).toBeLessThan(0.5); // brake lever is one-sided
     expect(z).toBeGreaterThan(0);
   });
 });

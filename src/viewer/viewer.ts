@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import type { Geometry, Part, PartGroup } from '../model/types';
+import { centerOfGravity } from '../model/mass';
+import { partCentroid } from '../model/bounds';
+import type { Geometry, Mat4, Part, PartGroup, Vec3 } from '../model/types';
 
 type ViewName = 'iso' | 'top' | 'side' | 'front';
 
@@ -23,6 +25,12 @@ function materialFor(part: Part): THREE.Material {
     case 'metal': m = new THREE.MeshStandardMaterial({ color: 0x8c9199, roughness: 0.35, metalness: 0.8 }); break;
     case 'tire': m = new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: 0.9 }); break;
     case 'printed': m = new THREE.MeshStandardMaterial({ color: 0xf26a1b, roughness: 0.5 }); break;
+    case 'truck':
+      m = new THREE.MeshStandardMaterial({ color: 0x8f9bb0, transparent: true, opacity: 0.35, roughness: 0.7, depthWrite: false });
+      break;
+    case 'ground':
+      m = new THREE.MeshStandardMaterial({ color: 0x7f8a7a, roughness: 1 });
+      break;
     case 'reference':
       m = new THREE.MeshStandardMaterial({ color: 0x4d8dff, transparent: true, opacity: 0.25, roughness: 0.6, depthWrite: false });
       break;
@@ -36,6 +44,8 @@ function materialFor(part: Part): THREE.Material {
 const materialCache = new Map<string, THREE.Material>();
 
 function materialKey(part: Part): string {
+  if (part.id === 'truck-ground') return 'ground';
+  if (part.body === 'truck') return 'truck';
   if (part.group === 'reference' || part.kind === 'reference') return 'reference';
   if (part.geometry.type === 'wheel') return 'tire';
   if (part.kind === 'printed') return 'printed';
@@ -97,18 +107,56 @@ function buildGeometry(g: Geometry): THREE.BufferGeometry | null {
   }
 }
 
+const HIGHLIGHT_CACHE = new Map<string, THREE.Material>();
+
+function highlightMaterial(base: THREE.Material, key: string, color: string): THREE.Material {
+  const k = `${key}|${color}`;
+  let m = HIGHLIGHT_CACHE.get(k);
+  if (!m) {
+    const c = base.clone() as THREE.MeshStandardMaterial;
+    c.color = new THREE.Color(color);
+    c.emissive = new THREE.Color(color);
+    c.emissiveIntensity = 0.45;
+    c.side = THREE.DoubleSide;
+    HIGHLIGHT_CACHE.set(k, c);
+    m = c;
+  }
+  return m;
+}
+
+interface MeshInfo {
+  mesh: THREE.Mesh;
+  part: Part;
+  dir: Vec3;
+  baseMat: THREE.Material;
+  key: string;
+}
+
+export type SectionAxis = 'off' | 'x' | 'y' | 'z';
+
 export class Viewer {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(40, 1, 1, 5000);
   private readonly controls: OrbitControls;
+  /** Cart meshes. In truck view its matrix is the cart-to-truck transform. */
   private readonly partsGroup = new THREE.Group();
+  private readonly truckGroup = new THREE.Group();
+  private readonly envObjects: THREE.Object3D[] = [];
   private readonly canvasHost: HTMLElement;
   private readonly toggleHost: HTMLElement;
   private readonly toolbar: HTMLElement;
   private readonly hidden = new Set<PartGroup>();
+  private infos: MeshInfo[] = [];
   private framed = false;
   private lastGroups: PartGroup[] = [];
+  private explodeAmount = 0;
+  private highlighted = new Set<string>();
+  private highlightColor = '#ff3b30';
+  private readonly sectionPlane = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0);
+  private sectionOut!: HTMLOutputElement;
+  private truckFrameKey: string | null = null;
+  private inTruck = false;
 
   /** Append a control (e.g. the view-only steer slider) to the toolbar. */
   addToolbarControl(node: HTMLElement): void {
@@ -129,6 +177,8 @@ export class Viewer {
       b.addEventListener('click', () => this.setView(name));
       toolbar.append(b);
     }
+    this.buildExplodeControl();
+    this.buildSectionControl();
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -158,6 +208,101 @@ export class Viewer {
     loop();
   }
 
+  private buildExplodeControl(): void {
+    const out = el('output', 'steer-out');
+    out.textContent = '0"';
+    const r = el('input', '');
+    r.type = 'range';
+    r.min = '0';
+    r.max = '36';
+    r.step = '0.5';
+    r.value = '0';
+    r.setAttribute('aria-label', 'Exploded view distance');
+    r.addEventListener('input', () => {
+      this.setExplode(Number(r.value));
+      out.textContent = `${r.value}"`;
+    });
+    const label = el('label', 'steer-ctl');
+    label.title = 'Exploded view: each part moves away from the centre of gravity (or along its own explode direction)';
+    label.append('Explode', r, out);
+    this.toolbar.append(label);
+  }
+
+  private buildSectionControl(): void {
+    const sel = el('select', '');
+    sel.setAttribute('aria-label', 'Section plane axis');
+    for (const [v, t] of [['off', 'Off'], ['x', 'X'], ['y', 'Y'], ['z', 'Z']]) {
+      const o = el('option', '');
+      o.value = v;
+      o.textContent = t;
+      sel.append(o);
+    }
+    const r = el('input', '');
+    r.type = 'range';
+    r.step = '0.5';
+    r.disabled = true;
+    r.setAttribute('aria-label', 'Section plane position');
+    const out = (this.sectionOut = el('output', 'steer-out'));
+    sel.addEventListener('change', () => {
+      const axis = sel.value as SectionAxis;
+      if (axis !== 'off') {
+        const k = 'xyz'.indexOf(axis);
+        const box = this.modelBox();
+        r.min = String(Math.floor(box.min.getComponent(k)));
+        r.max = String(Math.ceil(box.max.getComponent(k)));
+        r.value = r.max;
+      }
+      r.disabled = axis === 'off';
+      this.setSection(axis, Number(r.value));
+    });
+    r.addEventListener('input', () => this.setSection(sel.value as SectionAxis, Number(r.value)));
+    const label = el('label', 'steer-ctl');
+    label.title = 'Section plane: hides everything beyond the plane (keeps the low side)';
+    label.append('Section', sel, r, out);
+    this.toolbar.append(label);
+  }
+
+  /** Exploded distance in inches (part.explode × amount). */
+  setExplode(amount: number): void {
+    this.explodeAmount = amount;
+    this.applyMatrices();
+  }
+
+  setSection(axis: SectionAxis, pos: number): void {
+    this.sectionOut.textContent = axis === 'off' ? '' : `${pos}"`;
+    if (axis === 'off') {
+      this.renderer.clippingPlanes = [];
+      return;
+    }
+    const n = new THREE.Vector3();
+    n.setComponent('xyz'.indexOf(axis), -1);
+    this.sectionPlane.set(n, pos); // keeps points with coordinate <= pos
+    this.renderer.clippingPlanes = [this.sectionPlane];
+  }
+
+  /** Tint the given part ids (cart parts). Pass [] to clear. */
+  highlight(ids: string[], color = '#ff3b30'): void {
+    this.highlighted = new Set(ids);
+    this.highlightColor = color;
+    this.applyHighlight();
+  }
+
+  private applyHighlight(): void {
+    for (const i of this.infos) {
+      i.mesh.material = this.highlighted.has(i.part.id) ? highlightMaterial(i.baseMat, i.key, this.highlightColor) : i.baseMat;
+    }
+  }
+
+  private applyMatrices(): void {
+    for (const i of this.infos) {
+      i.mesh.matrix.fromArray(i.part.transform);
+      i.mesh.matrix.elements[12] += i.dir[0] * this.explodeAmount;
+      i.mesh.matrix.elements[13] += i.dir[1] * this.explodeAmount;
+      i.mesh.matrix.elements[14] += i.dir[2] * this.explodeAmount;
+      i.mesh.matrixWorldNeedsUpdate = true;
+    }
+  }
+
   private buildScene(): void {
     // Units are inches. 20 ft grid in 1 ft squares, rotated from three's XZ default into the XY plane.
     const grid = new THREE.GridHelper(240, 20, 0x8a8f98, 0x8a8f98);
@@ -174,6 +319,7 @@ export class Viewer {
     ground.position.z = -0.05;
     ground.receiveShadow = true;
     this.scene.add(ground);
+    this.envObjects.push(grid, axes, ground);
 
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0x666a73, 1.1));
     const sun = new THREE.DirectionalLight(0xffffff, 2.2);
@@ -185,7 +331,9 @@ export class Viewer {
     sun.shadow.bias = -0.0005;
     this.scene.add(sun);
 
-    this.scene.add(this.partsGroup);
+    this.partsGroup.matrixAutoUpdate = false;
+    this.truckGroup.visible = false;
+    this.scene.add(this.partsGroup, this.truckGroup);
   }
 
   private applyTheme(): void {
@@ -203,31 +351,80 @@ export class Viewer {
     this.camera.updateProjectionMatrix();
   }
 
+  private clearGroup(g: THREE.Group): void {
+    for (const child of [...g.children]) {
+      (child as THREE.Mesh).geometry?.dispose();
+      g.remove(child);
+    }
+  }
+
   /** Rebuild meshes from the part list; disposes old geometry. Frames the model on first call. */
   update(parts: Part[]): void {
-    for (const child of [...this.partsGroup.children]) {
-      (child as THREE.Mesh).geometry?.dispose();
-      this.partsGroup.remove(child);
-    }
+    this.clearGroup(this.partsGroup);
+    this.infos = [];
+    const cg = centerOfGravity(parts);
     for (const part of parts) {
       const geo = buildGeometry(part.geometry);
       if (!geo) continue;
-      const mesh = new THREE.Mesh(geo, materialFor(part));
+      const key = materialKey(part);
+      const baseMat = materialFor(part);
+      const mesh = new THREE.Mesh(geo, baseMat);
       mesh.name = part.id;
       mesh.userData.partId = part.id;
       mesh.userData.group = part.group;
       mesh.castShadow = part.group !== 'reference';
       mesh.receiveShadow = true;
       mesh.matrixAutoUpdate = false;
-      mesh.matrix.fromArray(part.transform);
-      mesh.matrixWorldNeedsUpdate = true;
       mesh.visible = !this.hidden.has(part.group);
       this.partsGroup.add(mesh);
+      this.infos.push({ mesh, part, dir: explodeDir(part, cg), baseMat, key });
     }
+    this.applyMatrices();
+    this.applyHighlight();
     this.refreshToggles(parts);
     if (!this.framed && parts.length) {
       this.framed = true;
-      this.setView('iso');
+      // Wait a frame so the canvas has its laid-out size (aspect) before framing.
+      requestAnimationFrame(() => this.setView('iso'));
+    }
+  }
+
+  /**
+   * Truck view: show the bed parts (TRUCK frame) and place the cart with `cartTransform` (cart frame -> truck
+   * frame). `frameKey` re-frames the camera when it changes. Pass null to return to the normal view.
+   */
+  setTruck(bed: Part[] | null, cartTransform?: Mat4, frameKey = ''): void {
+    this.clearGroup(this.truckGroup);
+    if (!bed) {
+      if (this.inTruck) {
+        this.inTruck = false;
+        this.truckFrameKey = null;
+        this.partsGroup.matrix.identity();
+        this.truckGroup.visible = false;
+        for (const o of this.envObjects) o.visible = true;
+        this.setView('iso');
+      }
+      return;
+    }
+    for (const part of bed) {
+      const geo = buildGeometry(part.geometry);
+      if (!geo) continue;
+      const mesh = new THREE.Mesh(geo, materialFor(part));
+      mesh.matrixAutoUpdate = false;
+      mesh.matrix.fromArray(part.transform);
+      mesh.receiveShadow = true;
+      mesh.matrixWorldNeedsUpdate = true;
+      this.truckGroup.add(mesh);
+    }
+    this.partsGroup.matrix.fromArray(cartTransform ?? [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+    this.partsGroup.matrixWorldNeedsUpdate = true;
+    this.truckGroup.visible = true;
+    for (const o of this.envObjects) o.visible = false;
+    const entering = !this.inTruck;
+    this.inTruck = true;
+    if (entering || frameKey !== this.truckFrameKey) {
+      this.truckFrameKey = frameKey;
+      this.setView('iso', this.truckBox());
     }
   }
 
@@ -252,13 +449,15 @@ export class Viewer {
 
   private modelBox(): THREE.Box3 {
     const box = new THREE.Box3();
+    this.scene.updateMatrixWorld(true);
     for (const m of this.partsGroup.children) if (m.visible) box.expandByObject(m);
     if (box.isEmpty()) box.set(new THREE.Vector3(-10, -24, 0), new THREE.Vector3(60, 24, 30));
     return box;
   }
 
-  setView(name: ViewName, box: THREE.Box3 = this.modelBox()): void {
-    const sphere = box.getBoundingSphere(new THREE.Sphere());
+  setView(name: ViewName, box?: THREE.Box3): void {
+    const b = box ?? (this.inTruck ? this.truckBox() : this.modelBox());
+    const sphere = b.getBoundingSphere(new THREE.Sphere());
     const dir = new THREE.Vector3(...VIEW_DIRS[name]).normalize();
     const fov = THREE.MathUtils.degToRad(this.camera.fov);
     const aspect = this.camera.aspect;
@@ -270,6 +469,24 @@ export class Viewer {
     this.camera.lookAt(sphere.center);
     this.controls.update();
   }
+
+  /** Bed (without the big ground plane) plus the cart. */
+  private truckBox(): THREE.Box3 {
+    const box = this.modelBox();
+    for (const m of this.truckGroup.children) if (m.matrix.elements[14] > -5) box.expandByObject(m);
+    return box;
+  }
+}
+
+/** Unit explode direction: the part's own, else away from the model centre of gravity (up if coincident). */
+function explodeDir(part: Part, cg: Vec3): Vec3 {
+  let d: Vec3 = part.explode ?? [0, 0, 0];
+  if (Math.hypot(...d) < 1e-9) {
+    const c = part.cgIn ?? partCentroid(part);
+    d = [c[0] - cg[0], c[1] - cg[1], c[2] - cg[2]];
+  }
+  const n = Math.hypot(...d);
+  return n < 1e-6 ? [0, 0, 1] : [d[0] / n, d[1] / n, d[2] / n];
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string): HTMLElementTagNameMap[K] {

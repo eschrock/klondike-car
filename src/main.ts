@@ -3,17 +3,29 @@ import { store } from './state';
 import { buildModel, type ViewState } from './model';
 import { h } from './ui/dom';
 import { Viewer } from './viewer/viewer';
+import { buildTruckBed } from './truck/bed';
+import { checkTruckFit, type CartView, type FitResult } from './truck/fit';
+import type { Part } from './model/types';
 import { mountParamsPanel } from './ui/params-panel';
 import { mountRightPanel } from './ui/right-panel';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 mountParamsPanel($('params'), store);
-const right = mountRightPanel($('right'));
+let truckKey: string | null = null; // case shown in the Truck view, if any
+const right = mountRightPanel($('right'), {
+  onShowTruck(c) {
+    truckKey = c.key;
+    right.setActiveTruckKey(truckKey);
+    render();
+  },
+});
 const viewer = new Viewer($('viewer'));
 
 // View-only articulation: not a design parameter, never persisted.
-const view: ViewState = { steerDeg: 0 };
+// `rider`/`cargo`/`removed` are consumed by the Phase 1 model (missing fields = defaults).
+const view: CartView = { steerDeg: 0, rider: 'operating', cargo: true, removed: false };
+const build = (p: ReturnType<typeof store.get>, v: CartView): Part[] => buildModel(p, v as ViewState);
 const steerOut = h('output', { class: 'steer-out' }, '0°');
 const steer = h('input', { type: 'range', min: '-50', max: '50', step: '1', value: '0', 'aria-label': 'Displayed steer angle' });
 steer.addEventListener('input', () => {
@@ -22,6 +34,36 @@ steer.addEventListener('input', () => {
 });
 viewer.addToolbarControl(h('label', { class: 'steer-ctl', title: 'Displayed steer angle (view only; clamped to the steering lock)' }, 'Steer', steer, steerOut));
 
+const checkbox = (label: string, title: string, checked: boolean, onChange: (v: boolean) => void) => {
+  const cb = h('input', { type: 'checkbox' });
+  cb.checked = checked;
+  cb.addEventListener('change', () => onChange(cb.checked));
+  return h('label', { class: 'steer-ctl', title }, cb, label);
+};
+viewer.addToolbarControl(
+  checkbox('Rider & cargo', 'Show the operating rider and cargo (view only; ignored in the Truck view)', true, (v) => {
+    view.rider = v ? 'operating' : 'none';
+    view.cargo = v;
+    render();
+  }),
+);
+viewer.addToolbarControl(
+  checkbox('Transport config', 'Remove the removable parts (rear handle, seat back, tongue, ornaments; D-9)', false, (v) => {
+    view.removed = v;
+    render();
+  }),
+);
+const exitTruck = h('button', { type: 'button', hidden: '' }, 'Exit truck view');
+exitTruck.addEventListener('click', () => {
+  truckKey = null;
+  right.setActiveTruckKey(null);
+  render();
+});
+viewer.addToolbarControl(exitTruck);
+
+// The summary and the fit depend only on the design parameters, so they are cached across view-only changes.
+let cacheKey = '';
+let fit: FitResult;
 const render = () => {
   const p = store.get();
   const lock = p.steerLockDeg;
@@ -30,9 +72,32 @@ const render = () => {
   view.steerDeg = Math.max(-lock, Math.min(lock, view.steerDeg ?? 0));
   steer.value = String(view.steerDeg);
   steerOut.textContent = `${view.steerDeg}°`;
-  const parts = buildModel(p, view);
-  viewer.update(parts);
-  right.update(parts);
+
+  const key = JSON.stringify(p);
+  if (key !== cacheKey) {
+    cacheKey = key;
+    fit = checkTruckFit(p, (v) => build(p, v));
+    right.update(
+      {
+        empty: build(p, { steerDeg: 0, rider: 'none', cargo: false }),
+        operating: build(p, { steerDeg: 0, rider: 'operating', cargo: true }),
+        goal: build(p, { steerDeg: 0, rider: 'goal', cargo: true }),
+      },
+      fit,
+    );
+  }
+
+  const tc = truckKey ? fit.cases.find((c) => c.key === truckKey) : undefined;
+  exitTruck.hidden = !tc;
+  if (tc && tc.placement) {
+    viewer.update(build(p, { steerDeg: 0, rider: 'none', cargo: false, removed: tc.config === 'removed' }));
+    viewer.setTruck(buildTruckBed(p, { ground: true }), tc.placement.transform, `${tc.key}|${tc.placement.txIn}`);
+    viewer.highlight([...new Set(tc.colliding.map((q) => q.partId))], '#ff3b30');
+  } else {
+    viewer.setTruck(null);
+    viewer.update(build(p, view));
+    viewer.highlight([]);
+  }
 };
 store.subscribe(render);
 render();

@@ -137,3 +137,23 @@ select { width: 100%; }
   .issue.error { color: #b91c1c; }
   .issue.warn { color: #92400e; }
 }
+
+/* Viewer toolbar + summary + truck fit */
+.viewer-toolbar { flex-wrap: wrap; align-items: center; max-width: calc(100% - 20px); }
+.viewer-toolbar .steer-ctl { margin-left: 0; }
+.viewer-toolbar select { width: auto; padding: 1px 4px; }
+.viewer-toolbar [hidden] { display: none; }
+.summary-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.summary-table th { text-align: left; font-weight: 400; color: var(--muted); padding: 1px 4px 1px 0; }
+.summary-table thead th { text-align: right; font-size: 11px; }
+.summary-table td { text-align: right; font-weight: 600; padding: 1px 0 1px 6px; }
+.truck-head h3 { margin: 0 0 6px; }
+.truck-head p { margin: 0 0 6px; }
+.pass { color: #1f8f4e; font-weight: 600; }
+.fail { color: #d1352b; font-weight: 600; }
+@media (prefers-color-scheme: dark) { .pass { color: #4cc784; } .fail { color: #f87171; } }
+.fit-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+.fit-table th { text-align: left; color: var(--muted); font-weight: 400; font-size: 11px; padding: 2px 4px; border-bottom: 1px solid var(--border); }
+.fit-table td { padding: 5px 4px; vertical-align: top; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.fit-table tr.active td { background: var(--panel-2); }
+.fit-table button { padding: 2px 6px; font-size: 11px; }
