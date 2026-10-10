@@ -56,6 +56,7 @@ Units are inches, pounds and degrees throughout.
 
 | ID | Decision | Status |
 |---|---|---|
+| D-25 | **Kingpin leads the front axle by 1.25"** (critic Phase 1 r1, H1). A kingpin on the axle centreline would have to pass through the ¾" axle rod. Moving it ahead clears the rod (≥ ⅞" between centres for ½" + ¾" plus web), and gives the trailing axle caster-like **self-centring under pull**, which the bridle steering wants anyway. The wheelbase is still measured axle to axle. The turntable centres on the kingpin. | ✅ |
 | D-21 | **Build the full-featured ("heavy") design first.** Empty weight is **reported, not pass/fail**. The realistic expectation is ~90–120 lb. Once a design we like is working, make a **lightweight variant** as a second param preset aimed at the original 60–70 lb (10" wheels, lean beams, no rigid box, and so on). The `targetMass*` params now describe that variant's target. | ✅ |
 | D-22 | **Captured okoume side panels are allowed** (6 mm in an oak chine/gunwale frame, no exposed edges). This is now the default side construction, and it makes hull-as-beam (D-17) a real option. Solid oak and open frame stay selectable. | ✅ |
 | D-23 | **Bed dimensions stay fully parametric.** The truck-fit view (Phase 1/4) tries **both** stowage modes, wheels beside the wells and straddling them. It reports which fits and how much track or stability each allows, so plugging in measured values shows the tradeoff directly. | ✅ |

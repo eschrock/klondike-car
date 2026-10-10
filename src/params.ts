@@ -325,6 +325,11 @@ const defs = {
     label: 'Turntable load rating', group: 'steering', unit: 'lb',
     default: 1000, min: 1000, max: 2000, step: 50, status: 'locked', ref: 'D-12',
   },
+  kingpinLeadIn: {
+    label: 'Kingpin ahead of front axle (trail)', group: 'steering', unit: 'in',
+    default: 1.25, min: 0.875, max: 4, step: 0.125, status: 'explore', ref: 'D-25',
+    note: 'Kingpin must clear the axle rod; the trailing axle self-centres under pull like a caster.',
+  },
   kingpinDiameterIn: {
     label: 'Kingpin bolt diameter', group: 'steering', unit: 'in',
     default: 0.5, min: 0.375, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-12',
@@ -615,6 +620,16 @@ const defs = {
   truckLoadHeightIn: {
     label: 'Ground to bed floor / tailgate top', group: 'truck', unit: 'in',
     default: 32, min: 24, max: 40, step: 0.25, status: 'verify', ref: 'Q-1',
+  },
+  truckCabHeightIn: {
+    label: 'Cab back wall height above bed floor', group: 'truck', unit: 'in',
+    default: 40, min: 18, max: 60, step: 0.5, status: 'verify', ref: 'Q-1',
+    note: 'The bulkhead/cab rear wall stops parts above the bed walls from sliding forward.',
+  },
+  truckTailgateGapIn: {
+    label: 'Hinge gap between bed floor and lowered tailgate', group: 'truck', unit: 'in',
+    default: 1, min: 0, max: 3, step: 0.125, status: 'verify', ref: 'Q-1',
+    note: 'Tires should not rest in this gap.',
   },
   truckClearanceIn: {
     label: 'Required clearance to bed/wells (incl. liner)', group: 'truck', unit: 'in',
