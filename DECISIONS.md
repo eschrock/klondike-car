@@ -67,7 +67,7 @@ Units are inches, pounds and degrees throughout.
 - The **cabin shoulder** sits **18.0" behind the front axle**. A-4's rear extent is now measured from the axle, i.e. the kingpin value minus the lead.
 
 **Tension to resolve in Phase 2:** lock, nose width (feet), turning radius and track all trade against each other. A wider track (straddle stowage) also pushes the shoulder aft. | 🔶 |
-| D-27 | **Phase 2 recommended configuration** (`docs/phase2-recommendation.md`, **pending Eric's approval**). Once approved, it supersedes:
+| D-27 | **Phase 2 recommended configuration** (`docs/phase2-recommendation.md`). **Approved by Eric 2026-10-10, with the rope bridle; these are now the params defaults.** Once approved, it supersedes:
 - **D-8/D-9 (stowage length / removable parts):** no tongue; the cart fits the truck fully assembled.
 - **D-14 (pull loads):** rope bridle to the axle ends, 8 ft tails tied low; the tongue stays an option.
 - **D-12/D-25/D-26 (steering, kingpin lead, front geometry):**
@@ -78,7 +78,10 @@ Units are inches, pounds and degrees throughout.
 - **D-17 (primary structure / deck span):** 12 mm deck on 8" joists.
 - **D-13 (brake):** brake lever 12:1.
 
-The params defaults change to match on approval. | 🔶 |
+The params defaults now match. | ✅ |
+| D-28 | **The turntable is a selectable part** (Eric, 2026-10-10). Presets set size, stack height, mass and rating: 12" lazy-susan 1000 lb (default), 12" heavy-duty ball bearing 1500 lb, and a steel fifth-wheel ring at 2000 lb. "Custom" exposes the four values. All preset values are catalog estimates (status *verify*). | ✅ |
+| D-29 | **The truck bed stays fully parametric. There's no plan to measure it now** (Eric, 2026-10-10). The defaults remain estimates. The Truck fit tab shows the margin, so changing the bed params shows the effect immediately. Q-1 is closed as "measure when convenient". | ✅ |
+| D-30 | **A Simple view is the default; Advanced is one click away** (Eric, 2026-10-10). Its primary question is *"is this safe, and for what rider weights?"*, answered by a rider-weight sweep (50–250 lb) with a safe-range bar, six plain-English traffic lights, a spec card and "watch it" sim demos. Secondary, later: scenario A vs. B, e.g. the lightweight variant (D-21). Spec: `docs/simple-view-spec.md`. | 🔶 |
 | D-21 | **Build the full-featured ("heavy") design first.** Empty weight is **reported, not pass/fail**. The realistic expectation is ~90–120 lb. Once a design we like is working, make a **lightweight variant** as a second param preset aimed at the original 60–70 lb (10" wheels, lean beams, no rigid box, and so on). The `targetMass*` params now describe that variant's target. | ✅ |
 | D-22 | **Captured okoume side panels are allowed** (6 mm in an oak chine/gunwale frame, no exposed edges). This is now the default side construction, and it makes hull-as-beam (D-17) a real option. Solid oak and open frame stay selectable. | ✅ |
 | D-23 | **Bed dimensions stay fully parametric.** The truck-fit view (Phase 1/4) tries **both** stowage modes, wheels beside the wells and straddling them. It reports which fits and how much track or stability each allows, so plugging in measured values shows the tradeoff directly. | ✅ |
