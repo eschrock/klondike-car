@@ -651,7 +651,7 @@ describe('fuzz: validator-clean designs have no unintended overlaps', () => {
     console.log(`fuzz: ${clean}/${N} validator-clean designs checked in ${Date.now() - t0} ms; ${failures.length} failures`);
     expect([...new Set(failures.flatMap((x) => x.split(' @')[0].split('; ').map((b) => b.replace(/:.*/, ''))))].slice(0, 30)).toEqual([]);
     expect(clean).toBeGreaterThanOrEqual(15); // D-52: the bow constraints (seat, bend radius, tire sweep) reject much of the wild jitter
-    expect(Date.now() - t0).toBeLessThan(10000);
+    expect(Date.now() - t0).toBeLessThan(40000); // ~6 s locally, ~18 s on shared CI runners
   }, 60000); // heavy sweep; shared CI runners are 2-3x slower
 });
 
