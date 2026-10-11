@@ -20,6 +20,9 @@ const ALLOW: Allow[] = [
   { a: /^beam-/, b: /^wheel-/, why: 'tire OBB is a conservative box; the beam ends sit inside the rim, 1/8" short of the hub face' },
   { a: /^brake-shoe-/, b: /^wheel-/, why: 'shoe presses on the tread; the tire OBB corner is not tire' },
   { a: /^(rail-cabin|girder-cabin)-/, b: /^(beam-R|axle-R|brake-shaft)/, why: 'rails/girders are notched or drilled for the rear axle and brake-shaft journals (D-15); joinery is Phase 3' },
+  { a: /^kingpin$/, b: /^kingpin-crossbar$/, why: 'the kingpin passes up through the crossbar bore (D-12)' },
+  { a: /^kingpin-crossbar$/, b: /^bolster-(fore|aft)$/, why: 'the crossbar ends are let into notches in the bolster rails (D-12)' },
+  { a: /^kingpin-sleeve-/, b: /^(kingpin|beam-F|turntable|kingpin-crossbar)$/, why: 'the steel sleeve is a tube pressed into the beam / crossbar bore around the pin (drawn solid)' },
   { a: /^kingpin$/, b: /^(beam-F|turntable)$/, why: 'kingpin passes through the solid beam and the turntable centre (D-25); it leads the axle rod, so axle-F is NOT allowed' },
   { a: /^side-bearer-[LR]$/, b: /^beam-F$/, why: 'the bearer block is housed in a mortise in the beam top (M5); only the mortise volume overlaps' },
   { a: /^axle-R$/, b: /^brake-drum-/, why: 'wooden drum is bored onto the live rear axle (D-13)' },
@@ -184,9 +187,9 @@ describe('overlaps', () => {
 });
 
 /** Documented empty masses at defaults (heavy design, D-21), lb. Printed by the breakdown test below. */
-const EXPECTED_EMPTY_LB = 122.1;
+const EXPECTED_EMPTY_LB = 123.9; // 122.1 + the kingpin crossbar (kingpinThroughBolster, D-12)
 const EXPECTED_GROUP_LB: Record<string, number> = {
-  'running-gear': 48.6, steering: 10.5, frame: 9.5, body: 28.0, seat: 5.9, storage: 8.1, brake: 3.5, removable: 5.0,
+  'running-gear': 48.6, steering: 12.2, frame: 9.5, body: 28.0, seat: 5.9, storage: 8.1, brake: 3.5, removable: 5.0,
 };
 
 describe('masses', () => {
@@ -531,7 +534,7 @@ describe('steering sweep', () => {
   };
   it('the stops first touch the chassis exactly at lock, and nothing else on the steer body hits the chassis anywhere in the sweep', () => {
     sweep(defaults, 'defaults');
-    for (const patch of [{ steerLockDeg: 30 }, { steerLockDeg: 36 }, { turntableSizeIn: 14 }, { steerStopSizeIn: 2 }, { bolsterRailWidthIn: 2 }, { storageLocation: 1 }]) {
+    for (const patch of [{ steerLockDeg: 30 }, { steerLockDeg: 36 }, { turntableSizeIn: 14 }, { steerStopSizeIn: 2 }, { bolsterRailWidthIn: 2 }, { storageLocation: 1 }, { kingpinCrossbarWidthIn: 4.5 }, { kingpinSleeveOdIn: 1.25, kingpinDiameterIn: 0.625, kingpinLeadIn: 1.5, frontAxleBeamThicknessIn: 4, frontTrackIn: 36.5 }]) {
       const p = { ...defaults, ...patch };
       if (!errorsOf(p).length) sweep(p, JSON.stringify(patch));
     }
@@ -830,5 +833,68 @@ describe('slider ranges (L1)', () => {
     expect(ok / n, `${k} valid fraction`).toBeGreaterThanOrEqual(0.25);
     expect(['seatXIn', 'steerLockDeg'].includes(k) ? ok / n : 1, k).toBeGreaterThanOrEqual(0.7);
     expect(errorsOf({ ...defaults, [k]: defaults[k] })).toEqual([]);
+  });
+});
+
+describe('kingpin through the bolster (D-12)', () => {
+  const m = buildModel(defaults);
+  const L = computeLayout(defaults);
+  it('is on by default: an oak crossbar spans the bolster opening flush with the rails and the kingpin ends at its top', () => {
+    expect(defaults.kingpinThroughBolster).toBe(1);
+    const cb = m.find((x) => x.id === 'kingpin-crossbar')!;
+    expect(cb).toBeDefined();
+    const bb = worldAABB(cb);
+    expect(bb.max[2]).toBeCloseTo(L.bolster.z1, 6);
+    expect(bb.min[2]).toBeCloseTo(L.bolster.z0, 6);
+    expect(L.kingpin.z1).toBeCloseTo(L.bolster.z1, 6);
+    const kp = worldAABB(m.find((x) => x.id === 'kingpin')!);
+    expect(kp.max[2]).toBeCloseTo(bb.max[2], 6);
+    // centred on the kingpin, ends let into the fore/aft rails by kingpinCrossbarLetInIn
+    expect((bb.min[0] + bb.max[0]) / 2).toBeCloseTo(L.kx, 6);
+    expect(bb.max[0] - L.kx).toBeCloseTo(L.bolster.x1 - L.kx - L.bolster.rw + defaults.kingpinCrossbarLetInIn, 6);
+    expect(bb.max[1] - bb.min[1]).toBeCloseTo(defaults.kingpinCrossbarWidthIn, 6);
+  });
+  it('off: no crossbar, the kingpin stops at the turntable top as before', () => {
+    const p = { ...defaults, kingpinThroughBolster: 0 };
+    const parts = buildModel(p);
+    expect(parts.some((x) => x.id === 'kingpin-crossbar')).toBe(false);
+    expect(computeLayout(p).kingpin.z1).toBeCloseTo(computeLayout(p).turntable.z1, 6);
+    expect(validateParams(p)).toEqual([]);
+  });
+  it('the steering stops clear the crossbar over the whole sweep; a crossbar wide enough to be hit is rejected', () => {
+    expect(errorsOf(defaults)).toEqual([]);
+    const fat = { ...defaults, bolsterRailWidthIn: 2.5, kingpinCrossbarWidthIn: 4 };
+    expect(errorsOf(fat).some((i) => i.message.includes('crossbar'))).toBe(true);
+  });
+  it('sleeve: steel tube mass in the beam and crossbar bores; validator rules use the bore', () => {
+    const p = { ...defaults, kingpinDiameterIn: 0.75, kingpinSleeveOdIn: 1.25, kingpinLeadIn: 1.5, frontAxleBeamThicknessIn: 4 };
+    const parts = buildModel(p);
+    const sb = parts.find((x) => x.id === 'kingpin-sleeve-beam')!, sc = parts.find((x) => x.id === 'kingpin-sleeve-bar')!;
+    const Lp = computeLayout(p);
+    const tube = (len: number) => ((Math.PI / 4) * (1.25 ** 2 - 0.75 ** 2) * len * p.steelDensityPcf) / 1728;
+    expect(sb.massLb).toBeCloseTo(tube(Lp.beamF.depth), 6);
+    expect(sc.massLb).toBeCloseTo(tube(Lp.crossbar!.z1 - Lp.crossbar!.z0), 6);
+    expect(sb.body).toBe('steer');
+    expect(sc.body).toBe('chassis');
+    expect(buildModel({ ...p, kingpinSleeveOdIn: 0 }).some((x) => x.id.startsWith('kingpin-sleeve'))).toBe(false);
+    // sleeve OD must exceed the pin
+    expect(errorsOf({ ...defaults, kingpinSleeveOdIn: 0.5 }).some((i) => i.keys.includes('kingpinSleeveOdIn'))).toBe(true);
+    // web rule uses the sleeve OD: lead 1.25 is enough for a ¾" pin alone but not for its 1¼" sleeve
+    expect(errorsOf({ ...defaults, kingpinDiameterIn: 0.75, kingpinLeadIn: 1.25 })).toEqual([]);
+    expect(errorsOf({ ...defaults, kingpinDiameterIn: 0.75, kingpinSleeveOdIn: 1.25, kingpinLeadIn: 1.25 }).some((i) => i.keys.includes('kingpinLeadIn'))).toBe(true);
+    // crossbar must leave the ligament around the bore
+    expect(errorsOf({ ...p, kingpinCrossbarWidthIn: 2 }).some((i) => i.keys.includes('kingpinCrossbarWidthIn'))).toBe(true);
+  });
+  it('auto nose: the swinging beam end never reaches the nose rail end (the tilted face needs clearance / cos(lock))', () => {
+    for (const frontTrackIn of [34.5, 36.5, 38.5]) for (const frontAxleBeamThicknessIn of [3.5, 4]) {
+      const p = { ...defaults, frontTrackIn, frontAxleBeamThicknessIn };
+      if (errorsOf(p).length) continue;
+      const lk = (p.steerLockDeg * Math.PI) / 180;
+      const Lp = computeLayout(p);
+      const beamAft = Math.abs(Lp.beamF.x - Lp.beamF.thick / 2 - Lp.kx);
+      // perpendicular distance from the rail's outer end corner to the tilted aft face at lock
+      const reach = beamAft / Math.cos(lk) + Lp.hwN * Math.tan(lk);
+      expect((Lp.kx - Lp.noseRailEnd - reach) * Math.cos(lk)).toBeGreaterThanOrEqual(p.steeringClearanceIn - 1e-6);
+    }
   });
 });

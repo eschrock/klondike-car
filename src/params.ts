@@ -528,6 +528,35 @@ const defs = {
     default: 130000, min: 30000, max: 150000, step: 5000, status: 'assumed', ref: 'D-12',
     note: 'SAE grade 8 = 130 ksi. 18-8 stainless ≈ 30–65 ksi depending on temper.',
   },
+  kingpinThroughBolster: {
+    label: 'Kingpin through a chassis crossbar', group: 'steering', unit: '',
+    default: 1, min: 0, max: 1, step: 1, status: 'assumed', ref: 'D-12',
+    options: [
+      { value: 0, label: 'No: kingpin stops at the turntable top (single-shear cantilever)' },
+      { value: 1, label: 'Yes: kingpin runs up through an oak crossbar let into the bolster (real wagon practice)' },
+    ],
+    note: 'A kingpin must tie the steer beam to the chassis. With 1, an oak crossbar spans the bolster opening over the turntable centre, flush with the bolster rails and let into them, and the kingpin (and its nut) end at its top. The pin is then held in two members, one on each side of the turntable interface.',
+  },
+  kingpinCrossbarWidthIn: {
+    label: 'Kingpin crossbar width (across the cart)', group: 'steering', unit: 'in',
+    default: 3, min: 1.5, max: 4.5, step: 0.25, status: 'assumed', ref: 'D-12',
+    note: 'Oak bar running fore-aft across the bolster opening (depth = the bolster depth), kingpin at its centre. Needs ≥ bore diameter + 2 × beamLigamentMinIn and must stay clear of the swinging steer stops.',
+  },
+  kingpinCrossbarLetInIn: {
+    label: 'Kingpin crossbar let-in depth into each bolster rail', group: 'steering', unit: 'in',
+    default: 0.5, min: 0.25, max: 1, step: 0.125, status: 'assumed', ref: 'D-12',
+    note: 'The crossbar ends are notched into the fore and aft bolster rails by this much; the end faces bear on the rail notch faces (fore-aft strike load).',
+  },
+  kingpinSleeveOdIn: {
+    label: 'Kingpin steel sleeve outside diameter (0 = none)', group: 'steering', unit: 'in',
+    default: 0, min: 0, max: 2, step: 0.0625, status: 'explore', ref: 'D-12',
+    note: 'A steel tube sleeve (inside diameter = the kingpin) in the beam bore and the crossbar bore, e.g. 1.25" OD for a ¾" pin. The oak bore bearing then acts on the sleeve OD; the pin bears on the steel sleeve. Must exceed the kingpin diameter. The rod-to-kingpin web and beam ligament rules use the sleeve OD.',
+  },
+  sleeveYieldPsi: {
+    label: 'Kingpin sleeve steel yield strength', group: 'steering', unit: 'psi',
+    default: 36000, min: 20000, max: 100000, step: 1000, status: 'assumed', ref: 'D-12',
+    note: 'A36 / 1018 tube. Pin-on-sleeve bearing allowable = 0.9 · Fy / steel safety factor.',
+  },
   drawbar: {
     label: 'Pull attachment', group: 'steering', unit: '',
     default: DRAWBAR.woodTongue, min: 0, max: 1, step: 1, status: 'explore', ref: 'D-14',
@@ -970,6 +999,16 @@ export function sanitizeParams(p: Partial<Params>): Params {
   return out;
 }
 
+/** Diameter of the bore the kingpin sits in: the steel sleeve OD when a sleeve is fitted, else the pin itself. */
+export function kingpinBoreIn(p: Params): number {
+  return p.kingpinSleeveOdIn > 0 ? Math.max(p.kingpinSleeveOdIn, p.kingpinDiameterIn) : p.kingpinDiameterIn;
+}
+
+/** Effective washer OD under the beam / over the crossbar: the param, but never less than 2.25 × the pin diameter (so a fatter pin is not starved of bearing area). */
+export function kingpinWasherEffectiveIn(p: Params): number {
+  return Math.max(p.kingpinWasherDiameterIn, 2.25 * p.kingpinDiameterIn);
+}
+
 /** Bolster opening the steering stops live in (kingpin-relative, neutral frame): ring rails around the turntable plate. */
 export function bolsterPlan(p: Params) {
   const ts = p.turntableSizeIn;
@@ -1024,10 +1063,25 @@ export function steerStopPlan(p: Params) {
     const px = Math.cos(a) * wx - Math.sin(a) * wy;
     const py = Math.sin(a) * wx + Math.cos(a) * wy;
     const kd = Math.hypot(Math.max(Math.abs(px) - h, 0), Math.max(Math.abs(py) - h, 0));
+    // The kingpin crossbar (kingpinThroughBolster) runs fore-aft across the opening, |y| ≤ half its width, and is as deep as the
+    // posts are tall: a swinging post must stay clear of it over the whole sweep (min |y| over the post's corners; a post that
+    // straddles y = 0 would cut straight through it).
+    let cbHit = false;
+    if (p.kingpinThroughBolster === 1) {
+      const ys = [[-h, -h], [h, -h], [h, h], [-h, h]].map(([qx, qy]) => {
+        const lx = cx + Math.cos(-L) * qx - Math.sin(-L) * qy;
+        const ly = cy + Math.sin(-L) * qx + Math.cos(-L) * qy;
+        return Math.sin(d) * lx + Math.cos(d) * ly;
+      });
+      const yLo = Math.min(...ys), yHi = Math.max(...ys);
+      const gapY = yLo <= 0 && yHi >= 0 ? 0 : Math.min(Math.abs(yLo), Math.abs(yHi));
+      cbHit = gapY < p.kingpinCrossbarWidthIn / 2 + gap;
+    }
     if (minX < b.aftFaceX - 1e-6) { ok = false; why = 'the post would pass through the aft bolster rail before lock'; }
     else if (maxX > b.foreFaceX - gap) { ok = false; why = 'the post would hit the fore bolster rail when steering the other way'; }
     else if (maxY > b.openHalfY - gap) { ok = false; why = 'the post would hit the bolster end rail'; }
     else if (kd < kpR + gap) { ok = false; why = 'the post would hit the kingpin'; }
+    else if (cbHit) { ok = false; why = 'the post would hit the kingpin crossbar'; }
   }
   return { ...b, size: s, cx, cy, rotZ: -L, lockX, lockY, ok, why };
 }
@@ -1092,7 +1146,7 @@ export function derived(p: Params) {
   const wheelOuterHalfIn = Math.max(p.tireWidthIn / 2, p.hubLengthIn / 2 + p.axleEndExtraIn);
   const { swingInnerYIn, swingRearXIn, swingRearBehindAxleIn } = swingGeometry(p);
   const rodR = p.axleDiameterIn / 2;
-  const kpR = p.kingpinDiameterIn / 2;
+  const kpR = kingpinBoreIn(p) / 2; // the wood is cut for the bore (sleeve OD when fitted), not the pin
   const tongueOnFront = p.drawbar === DRAWBAR.woodTongue ? p.tongueLengthIn : 0;
   return {
     plyDensityPcf: okoume ? p.okoumeDensityPcf : p.birchDensityPcf,
@@ -1252,16 +1306,32 @@ export function validateParams(input: Params): ParamIssue[] {
         `Front tires hit the cabin shoulder at full lock: full width must end ≥ ${neededTaper.toFixed(2)}" behind the front axle (is ${p.noseTaperStartIn}").`);
   }
 
+  // Kingpin sleeve (steel tube, ID = pin) and the bore the wood is cut for.
+  const bore = kingpinBoreIn(p);
+  if (p.kingpinSleeveOdIn > 0 && p.kingpinSleeveOdIn <= p.kingpinDiameterIn + 1e-9)
+    err(['kingpinSleeveOdIn', 'kingpinDiameterIn'],
+      `The kingpin sleeve OD (${p.kingpinSleeveOdIn}") must be larger than the kingpin (${p.kingpinDiameterIn}"); use 0 for no sleeve.`);
+  if (p.kingpinThroughBolster === 1) {
+    const needW = bore + 2 * p.beamLigamentMinIn;
+    if (p.kingpinCrossbarWidthIn < needW - 1e-9)
+      err(['kingpinCrossbarWidthIn', 'kingpinDiameterIn', 'kingpinSleeveOdIn', 'beamLigamentMinIn'],
+        `The kingpin crossbar is ${p.kingpinCrossbarWidthIn}" wide: a ${bore}" bore leaves ${((p.kingpinCrossbarWidthIn - bore) / 2).toFixed(2)}" of wood each side; it needs ≥ ${p.beamLigamentMinIn}" (width ≥ ${needW.toFixed(2)}").`);
+    const bp = bolsterPlan(p);
+    if (p.kingpinCrossbarLetInIn > bp.rw - 0.25 + 1e-9)
+      err(['kingpinCrossbarLetInIn', 'bolsterRailWidthIn'],
+        `The crossbar is let ${p.kingpinCrossbarLetInIn}" into each bolster rail but the rails are only ${bp.rw}" wide; at most ${(bp.rw - 0.25).toFixed(2)}" (¼" of rail must remain).`);
+  }
+
   // Web of short-grain oak between the rod groove and the kingpin hole (Phase 1 r3 carry item 3).
-  const rodKpWeb = p.kingpinLeadIn - p.axleDiameterIn / 2 - p.kingpinDiameterIn / 2;
+  const rodKpWeb = p.kingpinLeadIn - p.axleDiameterIn / 2 - bore / 2;
   if (rodKpWeb < p.rodKingpinWebMinIn - 1e-9)
-    err(['kingpinLeadIn', 'rodKingpinWebMinIn', 'axleDiameterIn', 'kingpinDiameterIn'],
-      `Only ${rodKpWeb.toFixed(3)}" of wood between the axle-rod groove and the kingpin hole; it needs ≥ ${p.rodKingpinWebMinIn}" (kingpin lead ≥ ${(p.axleDiameterIn / 2 + p.kingpinDiameterIn / 2 + p.rodKingpinWebMinIn).toFixed(3)}").`);
+    err(['kingpinLeadIn', 'rodKingpinWebMinIn', 'axleDiameterIn', 'kingpinDiameterIn', 'kingpinSleeveOdIn'],
+      `Only ${rodKpWeb.toFixed(3)}" of wood between the axle-rod groove and the kingpin ${p.kingpinSleeveOdIn > 0 ? 'sleeve bore' : 'hole'}; it needs ≥ ${p.rodKingpinWebMinIn}" (kingpin lead ≥ ${(p.axleDiameterIn / 2 + bore / 2 + p.rodKingpinWebMinIn).toFixed(3)}").`);
 
   // Axle beams (critic r2 H2): wood left behind the rod groove and ahead of the kingpin hole must be real wood.
   if (d.frontBeamLigamentIn < p.beamLigamentMinIn - 1e-9)
-    err(['frontAxleBeamThicknessIn', 'kingpinLeadIn', 'beamLigamentMinIn'],
-      `Front axle beam is ${p.frontAxleBeamThicknessIn}" wide: with the rod groove and the kingpin hole (${p.kingpinLeadIn}" apart) only ${d.frontBeamLigamentIn.toFixed(2)}" of wood is left behind the rod and ahead of the kingpin; it needs ≥ ${p.beamLigamentMinIn}" (width ≥ ${(p.kingpinLeadIn + p.axleDiameterIn / 2 + p.kingpinDiameterIn / 2 + 2 * p.beamLigamentMinIn).toFixed(2)}").`);
+    err(['frontAxleBeamThicknessIn', 'kingpinLeadIn', 'beamLigamentMinIn', 'kingpinSleeveOdIn'],
+      `Front axle beam is ${p.frontAxleBeamThicknessIn}" wide: with the rod groove and the kingpin hole (${p.kingpinLeadIn}" apart) only ${d.frontBeamLigamentIn.toFixed(2)}" of wood is left behind the rod and ahead of the kingpin; it needs ≥ ${p.beamLigamentMinIn}" (width ≥ ${(p.kingpinLeadIn + p.axleDiameterIn / 2 + bore / 2 + 2 * p.beamLigamentMinIn).toFixed(2)}").`);
   if (d.rearBeamLigamentIn < p.beamLigamentMinIn - 1e-9)
     err(['axleBeamThicknessIn', 'beamLigamentMinIn'],
       `Rear axle beam is ${p.axleBeamThicknessIn}" wide: only ${d.rearBeamLigamentIn.toFixed(2)}" of wood is left each side of the rod groove; it needs ≥ ${p.beamLigamentMinIn}".`);

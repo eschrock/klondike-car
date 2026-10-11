@@ -241,12 +241,15 @@ describe('every variant the validator accepts yields finite checks', () => {
 });
 
 describe('critic round 1 fixes: hand-calculated numbers at the defaults', () => {
-  const cs = run(defaults);
+  // The hand calcs below were done for the original steering layout (kingpin ending at the turntable top, D-12); the crossbar
+  // option adds ~1.5 lb and moves the CG, so they pin that configuration (kingpinThroughBolster = 0). The crossbar has its own tests below.
+  const legacy = { ...defaults, kingpinThroughBolster: 0 };
+  const cs = run(legacy);
   const goal = (id: string) => byId(cs, id).cases!.goal!;
   const op = (id: string) => byId(cs, id).cases!.operating!;
   const det = (id: string, name: string, k: 'goal' | 'operating' = 'goal') => {
     const c = byId(cs, id);
-    const d = (k === 'goal' ? c : byId(run(defaults), id)).details!.find((x) => x.name.includes(name))!;
+    const d = (k === 'goal' ? c : byId(run(legacy), id)).details!.find((x) => x.name.includes(name))!;
     return d;
   };
 
@@ -269,7 +272,7 @@ describe('critic round 1 fixes: hand-calculated numbers at the defaults', () => 
     expect(c.how).toMatch(/curb both wheels/);
   });
   it('H1: a ¾" kingpin passes the strike bending (σ = 676 × 2.875 / 0.04141 = 47 ksi < 65)', () => {
-    const c = byId(run({ ...defaults, kingpinDiameterIn: 0.75 }), 'kingpin-strike');
+    const c = byId(run({ ...legacy, kingpinDiameterIn: 0.75 }), 'kingpin-strike');
     expect(c.details!.find((d) => d.name.includes('kingpin bending'))!.util).toBeLessThan(1);
   });
   it('rollBalance: P = 100 lbf at y = 17.75" with the bearer at 6.8": F_sb = 261.0, uplift 161.0 lbf', () => {
@@ -372,5 +375,50 @@ describe('status chips and per-case results (P1/P2)', () => {
     expect(c.cases![c.governingLoad as 'light']!.status).toBe('fail');
     const a = byId(cs, 'axle-stress');
     expect(a.cases![a.governingLoad as 'goal']!.status).toBe(a.status);
+  });
+});
+
+describe('kingpin through the bolster: single shear with two bearing members, sleeve, washer rule (D-12)', () => {
+  const det = (cs: AnalysisCheck[], id: string, name: string) => byId(cs, id).details!.find((x) => x.name.includes(name))!;
+  it('crossbar: τ = H/A (one shear plane at the turntable), M = H·(g/2 + D_min/2), bearing in beam and crossbar', () => {
+    const cs = run(defaults);
+    const L = computeLayout(defaults);
+    const kp = byId(cs, 'kingpin');
+    const H = defaults.pullForceLbf;
+    const A = Math.PI * 0.25 * 0.25;
+    const g = L.turntable.z1 - L.turntable.z0, D2 = L.crossbar!.z1 - L.crossbar!.z0;
+    expect(det(cs, 'kingpin', 'shear').value).toBeCloseTo(H / A, 0);
+    const arm = g / 2 + Math.min(L.beamF.depth, D2) / 2;
+    expect(det(cs, 'kingpin', 'bending').value).toBeCloseTo((H * arm) / (Math.PI * 0.5 ** 3 / 32), -1);
+    expect(det(cs, 'kingpin', 'beam').value).toBeCloseTo(H / (0.5 * L.beamF.depth), 0);
+    expect(det(cs, 'kingpin', 'crossbar (oak').value).toBeCloseTo(H / (0.5 * D2), 0);
+    expect(kp.how).toMatch(/single shear/);
+  });
+  it('the crossbar bore (bolster depth) is shallower than the beam, so it governs the oak bearing without a sleeve', () => {
+    const p = { ...defaults, kingpinDiameterIn: 0.75, kingpinLeadIn: 1.25 };
+    const cs = run(p);
+    expect(det(cs, 'kingpin-strike', 'crossbar (oak').util!).toBeGreaterThan(det(cs, 'kingpin-strike', 'in the beam').util!);
+  });
+  it('a sleeve moves the oak bearing to its OD and adds a pin-on-sleeve steel bearing row (0.9·36 ksi / 2 = 16.2 ksi)', () => {
+    const p = { ...defaults, kingpinDiameterIn: 0.625, kingpinSleeveOdIn: 1.25, kingpinLeadIn: 1.5, frontAxleBeamThicknessIn: 4 };
+    const cs = run(p);
+    const L = computeLayout(p);
+    const s = byId(cs, 'kingpin-strike');
+    const sl = s.details!.find((d) => d.name.includes('steel sleeve'))!;
+    expect(sl.limit).toBeCloseTo((0.9 * 36000) / p.steelSafetyFactor, 6);
+    const H = byId(cs, 'kingpin-strike').how.match(/Governing: [^,]+, H = (\d+)/)![1];
+    const brgBeam = s.details!.find((d) => d.name.includes('in the beam'))!;
+    expect(brgBeam.value).toBeCloseTo(Number(H) / (1.25 * L.beamF.depth), -1);
+    expect(s.cases!.goal!.util).toBeLessThan(0.9); // ≥ 10% margin at the goal rider
+    expect(run({ ...p, sleeveYieldPsi: 20000 }).find((c) => c.id === 'kingpin-strike')!.details!.find((d) => d.name.includes('steel sleeve'))!.limit).toBeCloseTo(9000, 6);
+  });
+  it('the washer is at least 2.25 × the pin: a 1" pin gets a 2.25" washer even with the 1.25" param', () => {
+    const p = { ...defaults, kingpinDiameterIn: 1, kingpinLeadIn: 1.375, frontAxleBeamThicknessIn: 3.75 };
+    const cs = run(p);
+    const w = det(cs, 'roll-kingpin-uplift', 'washer bearing');
+    const U = byId(cs, 'roll-kingpin-uplift').how.match(/leaves ([\d.]+) lbf of UPLIFT/)![1];
+    const area = (Math.PI / 4) * (2.25 ** 2 - 1);
+    expect(w.value).toBeCloseTo(Number(U) / area, -1);
+    expect(byId(cs, 'roll-kingpin-uplift').how).toMatch(/2\.25 × the 1\.000" pin/);
   });
 });

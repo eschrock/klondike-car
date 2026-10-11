@@ -6,7 +6,7 @@
  * turntable) use the axle's static ground reaction × dynamicFactor, which already contains the cart mass (D-2).
  * Wood allowables are MOR/MOE × wet-service factors, with the wood safety factor; steel is yield / steel SF.
  */
-import { FRAME_STYLE, AXLE_STYLE, DRAWBAR, SIDE_CONSTRUCTION } from '../params';
+import { FRAME_STYLE, AXLE_STYLE, DRAWBAR, SIDE_CONSTRUCTION, kingpinBoreIn, kingpinWasherEffectiveIn, type Params } from '../params';
 import { worldAABB } from '../model/bounds';
 import type { Part } from '../model/types';
 import type { Ctx } from './context';
@@ -33,6 +33,8 @@ export function allowables(ctx: Ctx) {
     steel: d.axleAllowablePsi,
     kpShear: (0.577 * p.kingpinYieldPsi) / p.kingpinMargin,
     kpBend: p.kingpinYieldPsi / p.kingpinMargin,
+    /** Steel sleeve (A36 / 1018 tube): bearing allowable 0.9·Fy / steel SF. */
+    sleeve: (0.9 * p.sleeveYieldPsi) / p.steelSafetyFactor,
     Eoak: d.oakDesignMoePsi,
     Eply: d.plyMoePsi * p.wetServiceFactorStiffness,
   };
@@ -385,24 +387,80 @@ export function deckCheck(ctx: Ctx): AnalysisCheck {
 
 // ── steering structure ───────────────────────────────────────────────────────────────────────────────────────
 
-/** Kingpin geometry shared by the pull, strike and roll rows: the stack the bolt crosses and the shear arrangement. */
+/**
+ * Kingpin geometry shared by the pull, strike and roll rows.
+ *
+ * Without the crossbar (kingpinThroughBolster = 0) the pin stops at the turntable top: single shear at the turntable interface,
+ * a cantilever over the whole stack s (beam underside to turntable top), M = H·s (the old model, kept for comparison).
+ *
+ * With the crossbar (= 1) the pin is held in two members, the steer beam below and the chassis crossbar above, with the
+ * turntable (thickness g) between them. The horizontal force enters the pin from one member and leaves into the other, so it
+ * crosses the pin ONCE, at the turntable plane: that is SINGLE shear (a double-shear pin needs a fork of two chassis members
+ * either side of the beam; the load point is not "midway between two supports" here, so M = H·s/4 does not apply).
+ * Each member bears over its own depth D (beam D1, crossbar D2). Moment equilibrium of the pin needs the two bearing
+ * resultants to sit the same distance a from the shear plane; a uniform bearing puts them at g/2 + D/2, and the shallower
+ * member cannot shift its resultant much closer or further, so a = g/2 + min(D1, D2)/2 and the peak bending moment (at the
+ * shear plane) is M = H·a. This is the elastic equal-lever estimate for a pin in two bearing members, far below the cantilever
+ * H·s because the bearing spreads the load along the pin instead of acting at the tip.
+ */
 function kingpinGeom(ctx: Ctx) {
   const { p, L } = ctx;
   const sec = circleSection(p.kingpinDiameterIn);
   const stack = Math.max(0.1, L.kingpin.z1 - L.kingpin.z0);
-  const double = L.kingpin.z1 >= L.bolster.z1 - 1e-6;
-  return { sec, stack, double, beamDepth: L.beamF.depth };
+  const cb = L.crossbar;
+  const through = cb !== null;
+  const D1 = L.beamF.depth;
+  const D2 = cb ? cb.z1 - cb.z0 : 0;
+  const g = L.turntable.z1 - L.turntable.z0;
+  const arm = through ? g / 2 + Math.min(D1, D2) / 2 : stack;
+  const bore = kingpinBoreIn(p);
+  return { sec, stack, through, D1, D2, g, arm, bore, sleeve: p.kingpinSleeveOdIn > 0, cbWidth: cb ? 2 * cb.hw : 0 };
 }
 
-/** Kingpin stresses for a horizontal load H at the turntable plane (single shear + cantilever over the stack, or double shear). */
+/** Kingpin stresses for a horizontal load H at the turntable plane (single shear; see kingpinGeom for the moment arm). */
 function kingpinStress(ctx: Ctx, H: number) {
   const g = kingpinGeom(ctx);
-  const tau = H / ((g.double ? 2 : 1) * g.sec.A);
-  const M = g.double ? (H * g.stack) / 4 : H * g.stack;
-  return { ...g, tau, M, sigma: bendingStress(M, g.sec), bearing: H / (ctx.p.kingpinDiameterIn * g.beamDepth) };
+  const d = ctx.p.kingpinDiameterIn;
+  const M = H * g.arm;
+  return {
+    ...g,
+    tau: H / g.sec.A,
+    M,
+    sigma: bendingStress(M, g.sec),
+    /** Oak bore bearing in the beam (on the sleeve OD when fitted), average over the bore. */
+    bearing: H / (g.bore * g.D1),
+    /** Same in the crossbar (through only). */
+    bearingBar: g.through ? H / (g.bore * g.D2) : 0,
+    /** Pin on the steel sleeve (sleeve only): the pin diameter over the shallower member. */
+    sleeveBrg: g.sleeve ? H / (d * (g.through ? Math.min(g.D1, g.D2) : g.D1)) : 0,
+    /** Crossbar end face on the bolster rail notch (fore-aft load, rails run across: oak ⊥). */
+    endBrg: g.through ? H / (g.cbWidth * g.D2) : 0,
+  };
 }
 
-const SHEAR_TXT = 'the shear plane is the turntable interface between the steer body (beam + lazy-susan bottom plate) and the chassis side (top plate/bolster); the bolt is a cantilever fixed at the beam-underside washer over the whole stack s';
+type KpStress = ReturnType<typeof kingpinStress>;
+
+/** The bearing rows shared by the pull and strike checks (the ones that exist for this configuration). */
+function kingpinBearingDetails(k: KpStress, al: ReturnType<typeof allowables>, prefix: string): Detail[] {
+  const out: Detail[] = [detail(`${prefix} in the beam (oak ⊥)`, k.bearing, 'psi', al.oakPerp, '<=')];
+  if (k.through) {
+    out.push(detail(`${prefix} in the crossbar (oak ⊥)`, k.bearingBar, 'psi', al.oakPerp, '<='));
+    out.push(detail('crossbar end bearing on the bolster rail (oak ⊥)', k.endBrg, 'psi', al.oakPerp, '<='));
+  }
+  if (k.sleeve) out.push(detail('pin on steel sleeve bearing', k.sleeveBrg, 'psi', al.sleeve, '<='));
+  return out;
+}
+
+const kingpinUtil = (k: KpStress, al: ReturnType<typeof allowables>) =>
+  Math.max(k.tau / al.kpShear, k.sigma / al.kpBend, k.bearing / al.oakPerp, k.through ? Math.max(k.bearingBar, k.endBrg) / al.oakPerp : 0, k.sleeve ? k.sleeveBrg / al.sleeve : 0);
+
+const SHEAR_TXT = (k: KpStress) => k.through
+  ? `the pin is held in the beam below and the chassis crossbar above the turntable (g = ${f(k.g, 3)}"), so the force crosses it once at the turntable plane: single shear, with the bearing spread over the member depths (beam ${f(k.D1, 2)}", crossbar ${f(k.D2, 2)}"); equal-lever moment M = H·(g/2 + D_min/2) = H·${f(k.arm, 3)}"`
+  : 'the shear plane is the turntable interface between the steer body (beam + lazy-susan bottom plate) and the chassis side (top plate/bolster); the bolt is a cantilever fixed at the beam-underside washer over the whole stack s';
+
+const BORE_TXT = (p: Params, k: KpStress) => k.sleeve
+  ? `${f(k.bore, 3)}" steel sleeve OD (pin ${f(p.kingpinDiameterIn, 3)}")`
+  : `${f(k.bore, 3)}" bore`;
 
 export function kingpinCheck(ctx: Ctx): AnalysisCheck {
   const { p } = ctx;
@@ -412,9 +470,9 @@ export function kingpinCheck(ctx: Ctx): AnalysisCheck {
   const ds = [
     detail('shear', k.tau, 'psi', al.kpShear, '<='),
     detail('bending', k.sigma, 'psi', al.kpBend, '<='),
-    detail('bore bearing in the beam (oak ⊥)', k.bearing, 'psi', al.oakPerp, '<='),
+    ...kingpinBearingDetails(k, al, 'bore bearing'),
   ];
-  const how = `Horizontal pull ${H} lbf (D-14 design peak) at the turntable plane. ${k.double ? 'Bolt passes the beam and the bolster: double shear, M = H·s/4.' : `Bolt passes the beam and turntable only: single shear (${SHEAR_TXT}), M = H·s.`} s = ${f(k.stack, 3)}" (layout.kingpin): τ = H/A = ${f(H)}/${f(k.sec.A, 3)} = ${f(k.tau, 0)} psi (≤ 0.577·${f(p.kingpinYieldPsi, 0)}/${p.kingpinMargin} = ${f(al.kpShear, 0)}); M = ${f(k.M)} lb·in, σ = ${f(k.sigma, 0)} psi (≤ ${f(al.kpBend, 0)}); bearing on the oak bore H/(d·depth) = ${f(k.bearing, 0)} psi (≤ ${f(al.oakPerp, 0)} = ${p.oakCompPerpPsi} × C_M ${p.wetServiceFactorCompPerp} / ${p.woodSafetyFactor}; average over the bore, a rigid pin peaks higher, D6). The bridle pull is the lighter horizontal case: see 'kingpin-strike' for curb/root strikes.`;
+  const how = `Horizontal pull ${H} lbf (D-14 design peak) at the turntable plane. ${k.through ? 'Bolt passes the beam, the turntable and the oak crossbar over it.' : 'Bolt passes the beam and turntable only.'} Single shear (${SHEAR_TXT(k)}): τ = H/A = ${f(H)}/${f(k.sec.A, 3)} = ${f(k.tau, 0)} psi (≤ 0.577·${f(p.kingpinYieldPsi, 0)}/${p.kingpinMargin} = ${f(al.kpShear, 0)}); M = ${f(k.M)} lb·in, σ = ${f(k.sigma, 0)} psi (≤ ${f(al.kpBend, 0)}); bearing on the oak of the ${BORE_TXT(p, k)}: beam H/(d·depth) = ${f(k.bearing, 0)} psi${k.through ? `, crossbar ${f(k.bearingBar, 0)} psi, crossbar end on the rail ${f(k.endBrg, 0)} psi` : ''} (≤ ${f(al.oakPerp, 0)} = ${p.oakCompPerpPsi} × C_M ${p.wetServiceFactorCompPerp} / ${p.woodSafetyFactor}; average over the bore, a rigid pin peaks higher, D6)${k.sleeve ? `; pin on the steel sleeve ${f(k.sleeveBrg, 0)} psi (≤ 0.9·${f(p.sleeveYieldPsi, 0)}/${p.steelSafetyFactor} = ${f(al.sleeve, 0)})` : ''}. The bridle pull is the lighter horizontal case: see 'kingpin-strike' for curb/root strikes.`;
   const ev = governing(ds, how);
   return dualCheck({
     id: 'kingpin', label: 'Kingpin bolt (bridle pull)', group: 'Structure', refs: ['D-12', 'D-14', 'D-4'], primary: 'goal',
@@ -479,33 +537,33 @@ export function kingpinStrikeCheck(ctx: Ctx): AnalysisCheck {
     const stub = p.axleStyle === AXLE_STYLE.stubAxles;
     const aAx = Math.max(0.01, yw - (stub ? L.beamF.len / 2 : clamp.outerY));
     const hEffBeam = Math.max(0.1, L.beamF.depth - p.axleDiameterIn);
-    const netX = Math.max(0.1, L.beamF.thick - p.kingpinDiameterIn);
+    const netX = Math.max(0.1, L.beamF.thick - kingpinBoreIn(p));
     // Evaluate every case against the kingpin criteria; the governing case is the one with the highest utilisation.
     const rows = cases.map((s) => {
       const k = kingpinStress(ctx, s.H);
       const Mbeam = s.Hw * clamp.centreY;
       const sBeam = (6 * Mbeam) / (hEffBeam * netX * netX);
       const sAxle = (Math.hypot(s.Vw, s.Hw) * aAx * sec.c) / sec.I;
-      const kp = [k.tau / al.kpShear, k.sigma / al.kpBend, k.bearing / al.oakPerp];
-      return { s, k, sBeam, sAxle, util: Math.max(...kp, sBeam / al.oakBend, sAxle / al.steel) };
+      return { s, k, sBeam, sAxle, util: Math.max(kingpinUtil(k, al), sBeam / al.oakBend, sAxle / al.steel) };
     });
     const g = rows.reduce((a, b) => (b.util > a.util ? b : a), rows[0]);
     const ds: Detail[] = [
       detail('kingpin shear', g.k.tau, 'psi', al.kpShear, '<='),
-      detail('kingpin bending (cantilever over the stack)', g.k.sigma, 'psi', al.kpBend, '<='),
-      detail('kingpin bore bearing in the beam (oak ⊥)', g.k.bearing, 'psi', al.oakPerp, '<='),
+      detail(g.k.through ? 'kingpin bending (equal-lever, beam + crossbar)' : 'kingpin bending (cantilever over the stack)', g.k.sigma, 'psi', al.kpBend, '<='),
+      ...kingpinBearingDetails(g.k, al, 'kingpin bore bearing'),
       detail('front beam fore-aft bending at the kingpin hole', g.sBeam, 'psi', al.oakBend, '<='),
       detail('front axle bending, vertical + fore-aft resultant', g.sAxle, 'psi', al.steel, '<='),
     ];
     // Smallest kingpin that passes shear, bending and bore bearing for the governing H (and the next standard size).
-    const Hg = g.s.H, s = g.k.stack, dbl = g.k.double;
-    const dBend = Math.cbrt((32 * (dbl ? (Hg * s) / 4 : Hg * s)) / (Math.PI * al.kpBend));
-    const dShear = Math.sqrt((4 * Hg) / ((dbl ? 2 : 1) * Math.PI * al.kpShear));
-    const dBear = Hg / (al.oakPerp * g.k.beamDepth);
-    const dMin = Math.max(dBend, dShear, dBear);
+    const Hg = g.s.H;
+    const dBend = Math.cbrt((32 * Hg * g.k.arm) / (Math.PI * al.kpBend));
+    const dShear = Math.sqrt((4 * Hg) / (Math.PI * al.kpShear));
+    // Bore (pin, or the sleeve OD when fitted) for the oak bearing in the shallowest member.
+    const dBear = Hg / (al.oakPerp * (g.k.through ? Math.min(g.k.D1, g.k.D2) : g.k.D1));
+    const dMin = Math.max(dBend, dShear, g.k.sleeve ? 0 : dBear);
     const dStd = STD_KINGPIN_IN.find((x) => x >= dMin - 1e-9);
     const table = rows.map((r) => `${r.s.name}: H = ${f(r.s.H)} lbf (V_w ${f(r.s.Vw)}, tanφ ${f(r.s.tan, 2)}, φ ${f(r.s.phi * DEG, 1)}°) → kingpin σ ${f(r.k.sigma / 1000, 1)} ksi, bearing ${f(r.k.bearing, 0)} psi`).join('; ');
-    const how = `Front wheel(s) strike a ${p.curbHeightIn}" curb or ${p.rootHeightIn}" root (loaded wheel radius r = ${f(ctx.d.wheelRadiusIn, 2)}"): cos φ = (r − h)/r, horizontal force H = V·tanφ on the design wheel load V = static × ${p.dynamicFactor} (${frontLoadText(ctx, w)}). ${table}. Governing: ${g.s.name}, H = ${f(g.s.H)} lbf. The kingpin and the beam are the only horizontal link between the axle and the chassis (stops and side-bearers resist only rotation), so H goes through the ${f(p.kingpinDiameterIn, 3)}" bolt: ${SHEAR_TXT}, s = ${f(g.k.stack, 3)}", ${g.k.double ? 'double' : 'single'} shear: τ = ${f(g.k.tau, 0)} psi (≤ ${f(al.kpShear, 0)}), M = H·s = ${f(g.k.M)} lb·in, σ = ${f(g.k.sigma, 0)} psi (≤ ${f(al.kpBend, 0)} = yield ${f(p.kingpinYieldPsi, 0)} / ${p.kingpinMargin}); bore bearing H/(d·beam depth ${f(g.k.beamDepth, 2)}") = ${f(g.k.bearing, 0)} psi (≤ ${f(al.oakPerp, 0)}, C_M ${p.wetServiceFactorCompPerp}). Beam: the wheel force enters at the clamps (y = ±${f(clamp.centreY, 2)}") and is reacted at the kingpin, fore-aft bending ${f(g.sBeam, 0)} psi on the net section ${f(hEffBeam, 2)}" × (${f(L.beamF.thick, 2)}" − ${f(p.kingpinDiameterIn, 2)}" hole). Axle: ${f(g.s.Vw)} lbf vertical with ${f(g.s.Hw)} lbf fore-aft on the ${f(aAx, 2)}" cantilever: ${f(g.sAxle, 0)} psi. The turntable carries no horizontal rating (D-12), so the kingpin takes it all; the yaw torque of a one-wheel strike swings the steer body into its stop. Minimum kingpin for this H: bending d ≥ ${f(dBend, 3)}", shear ≥ ${f(dShear, 3)}", bore bearing ≥ ${f(dBear, 3)}" → ${Number.isFinite(dMin) ? `${f(dMin, 3)}"` : '?'}, i.e. ${dStd ? `${dStd}" bolt (at the same grade and stack)` : 'more than 1¼"'}; a shorter stack s or a stronger bolt grade also works.`;
+    const how = `Front wheel(s) strike a ${p.curbHeightIn}" curb or ${p.rootHeightIn}" root (loaded wheel radius r = ${f(ctx.d.wheelRadiusIn, 2)}"): cos φ = (r − h)/r, horizontal force H = V·tanφ on the design wheel load V = static × ${p.dynamicFactor} (${frontLoadText(ctx, w)}). ${table}. Governing: ${g.s.name}, H = ${f(g.s.H)} lbf. The kingpin and the beam are the only horizontal link between the axle and the chassis (stops and side-bearers resist only rotation), so H goes through the ${f(p.kingpinDiameterIn, 3)}" bolt: ${SHEAR_TXT(g.k)}${g.k.through ? '' : `, s = ${f(g.k.stack, 3)}"`}. Single shear: τ = ${f(g.k.tau, 0)} psi (≤ ${f(al.kpShear, 0)}), M = H·${f(g.k.arm, 3)}" = ${f(g.k.M)} lb·in, σ = ${f(g.k.sigma, 0)} psi (≤ ${f(al.kpBend, 0)} = yield ${f(p.kingpinYieldPsi, 0)} / ${p.kingpinMargin}); oak bearing on the ${BORE_TXT(p, g.k)}: beam H/(d·depth ${f(g.k.D1, 2)}") = ${f(g.k.bearing, 0)} psi${g.k.through ? `, crossbar (depth ${f(g.k.D2, 2)}") ${f(g.k.bearingBar, 0)} psi, crossbar end on the bolster rail H/(${f(g.k.cbWidth, 2)}" × ${f(g.k.D2, 2)}") ${f(g.k.endBrg, 0)} psi` : ''} (≤ ${f(al.oakPerp, 0)}, C_M ${p.wetServiceFactorCompPerp})${g.k.sleeve ? `; pin on the steel sleeve ${f(g.k.sleeveBrg, 0)} psi (≤ 0.9·${f(p.sleeveYieldPsi, 0)}/${p.steelSafetyFactor} = ${f(al.sleeve, 0)})` : ''}. Beam: the wheel force enters at the clamps (y = ±${f(clamp.centreY, 2)}") and is reacted at the kingpin, fore-aft bending ${f(g.sBeam, 0)} psi on the net section ${f(hEffBeam, 2)}" × (${f(L.beamF.thick, 2)}" − ${f(kingpinBoreIn(p), 2)}" bore). Axle: ${f(g.s.Vw)} lbf vertical with ${f(g.s.Hw)} lbf fore-aft on the ${f(aAx, 2)}" cantilever: ${f(g.sAxle, 0)} psi. The turntable carries no horizontal rating (D-12), so the kingpin takes it all; the yaw torque of a one-wheel strike swings the steer body into its stop. Minimum kingpin for this H: bending d ≥ ${f(dBend, 3)}", shear ≥ ${f(dShear, 3)}", oak bore (pin or sleeve OD) ≥ ${f(dBear, 3)}"${g.k.sleeve ? ' (met by the sleeve OD, not the pin)' : ''} → ${Number.isFinite(dMin) ? `${f(dMin, 3)}"` : '?'}, i.e. ${dStd ? `${dStd}" bolt (at the same grade and arm)` : 'more than 1¼"'}; a steel sleeve, a deeper member or a stronger bolt grade also works.`;
     return governing(ds, how);
   };
   return dualCheck({
@@ -555,14 +613,17 @@ export function rollKingpinUpliftCheck(ctx: Ctx): AnalysisCheck {
   const sec = circleSection(p.kingpinDiameterIn);
   const ev = (c: CaseData): CaseEval => {
     const r = rollLoads(ctx, c);
-    const Aw = Math.max(1e-6, (Math.PI / 4) * (p.kingpinWasherDiameterIn ** 2 - p.kingpinDiameterIn ** 2));
+    // The washer is never smaller than 2.25 × the pin (kingpinWasherEffectiveIn), so a fatter pin does not starve its own washer.
+    const wOd = kingpinWasherEffectiveIn(p);
+    const Aw = Math.max(1e-6, (Math.PI / 4) * (wOd ** 2 - p.kingpinDiameterIn ** 2));
     const sW = r.U / Aw;
     const sT = r.U / sec.A;
     const ds = [
       detail('washer bearing on the beam underside (oak ⊥)', sW, 'psi', al.oakPerp, '<='),
+      ...(ctx.L.crossbar ? [detail('nut washer bearing on the crossbar top (oak ⊥)', sW, 'psi', al.oakPerp, '<=')] : []),
       detail('kingpin tension', sT, 'psi', al.kpBend, '<='),
     ];
-    const how = `${ROLL_TXT(ctx, r)} The bolt head/washer under the beam pushes the beam up: a ${f(p.kingpinWasherDiameterIn, 2)}" OD washer on a ${f(p.kingpinDiameterIn, 3)}" bolt has ${f(Aw, 2)} in², so ${f(r.U)} / ${f(Aw, 2)} = ${f(sW, 0)} psi on the oak ⊥ (≤ ${f(al.oakPerp, 0)}); bolt tension ${f(r.U)} / ${f(sec.A, 3)} = ${f(sT, 0)} psi (≤ ${f(al.kpBend, 0)}). The uplift then goes up through the nut and turntable top plate into the bolster (see 'roll-bolster-attach').`;
+    const how = `${ROLL_TXT(ctx, r)} The bolt head/washer under the beam pushes the beam up: a ${f(wOd, 2)}" OD washer (rule: max(${f(p.kingpinWasherDiameterIn, 2)}" param, 2.25 × the ${f(p.kingpinDiameterIn, 3)}" pin)) on a ${f(p.kingpinDiameterIn, 3)}" bolt has ${f(Aw, 2)} in², so ${f(r.U)} / ${f(Aw, 2)} = ${f(sW, 0)} psi on the oak ⊥ (≤ ${f(al.oakPerp, 0)}); bolt tension ${f(r.U)} / ${f(sec.A, 3)} = ${f(sT, 0)} psi (≤ ${f(al.kpBend, 0)}). ${ctx.L.crossbar ? 'The pin passes up through the oak crossbar and the same-size washer and nut on its top hold it down (the beam is pulled up by the washer below, the crossbar is held by the bolster fasteners).' : ''} The uplift then goes up through the nut and turntable top plate into the bolster (see 'roll-bolster-attach').`;
     return governing(ds, how);
   };
   return dualCheck({

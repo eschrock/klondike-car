@@ -1,6 +1,6 @@
 /** Steering: turntable, bolster, kingpin, stops, tongue, bridle (D-12, D-14). */
 import { DRAWBAR, steerStopPlan } from '../params';
-import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
+import { IN3_PER_FT3, STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
 import type { Part } from './types';
 
 // ── Block-model placeholders ──
@@ -60,12 +60,42 @@ export function buildSteering(ctx: Ctx): Part[] {
     }));
   }
 
-  // Kingpin: ahead of the axle (D-25), through the solid beam and the turntable centre.
+  // Kingpin: ahead of the axle (D-25), through the solid beam and the turntable centre and, with kingpinThroughBolster (D-12),
+  // on up through the oak crossbar let into the bolster, where the nut and washer sit on the crossbar top.
+  const cb = L.crossbar;
   parts.push(cylinder(ctx, {
     id: 'kingpin', name: 'Kingpin (grade-8 bolt)', group: 'steering', mat: 'steel', kind: 'purchased', fab: 'buy', step: STEP.steering,
     center: [kx, 0, (L.kingpin.z0 + L.kingpin.z1) / 2], axis: 'z', radius: p.kingpinDiameterIn / 2,
-    length: L.kingpin.z1 - L.kingpin.z0, notes: 'Mass is the steel shank only; nut and washers are in the hardware allowance. Head is let into the turntable plate.',
+    length: L.kingpin.z1 - L.kingpin.z0,
+    notes: cb
+      ? 'Mass is the steel shank only; nut and washers are in the hardware allowance. Washer under the beam, nut + washer on the crossbar top (counterbored flush).'
+      : 'Mass is the steel shank only; nut and washers are in the hardware allowance. Head is let into the turntable plate.',
   }));
+
+  // Chassis-side kingpin crossbar (D-12): fore-aft oak bar across the bolster opening, ends let into the bolster rails, top flush with them.
+  if (cb) {
+    parts.push(box(ctx, {
+      id: 'kingpin-crossbar', name: 'Kingpin crossbar', group: 'steering', mat: 'oak', grain: 'x', step: STEP.steering,
+      ...span([cb.x0, cb.x1], [-cb.hw, cb.hw], [cb.z0, cb.z1]),
+      notes: `Ties the kingpin to the chassis (real wagon practice). Ends let ${p.kingpinCrossbarLetInIn}" into the fore and aft bolster rails, top flush; bolted down to the turntable top plate. Clear of the steering stops over the full ±${p.steerLockDeg}° sweep.`,
+    }));
+  }
+
+  // Steel sleeves (kingpinSleeveOdIn > 0): tube with ID = pin, pressed into the beam bore and the crossbar bore.
+  if (p.kingpinSleeveOdIn > 0) {
+    const od = p.kingpinSleeveOdIn, id = p.kingpinDiameterIn;
+    const tube = (len: number) => (Math.PI / 4) * (od * od - id * id) * len;
+    const ends: Array<[string, string, number, number, boolean]> = [['beam', 'beam', L.beamF.bot, L.beamF.top, true]];
+    if (cb) ends.push(['bar', 'crossbar', cb.z0, cb.z1, false]);
+    for (const [tag, where, z0, z1, steer] of ends) {
+      parts.push(cylinder(ctx, {
+        id: `kingpin-sleeve-${tag}`, partNo: 'kingpin-sleeve', name: `Kingpin sleeve (${where} bore)`, group: 'steering', steer, mat: 'fixed',
+        massLb: (tube(z1 - z0) / IN3_PER_FT3) * p.steelDensityPcf, kind: 'purchased', material: 'steel tube (A36 / 1018)', fab: 'buy', step: STEP.steering,
+        center: [kx, 0, (z0 + z1) / 2], axis: 'z', radius: od / 2, length: z1 - z0,
+        notes: `${od}" OD × ${id}" ID steel tube, ${(z1 - z0).toFixed(2)}" long, pressed into the ${where} bore; the oak bears on the OD and the pin on the bore. Drawn solid.`,
+      }));
+    }
+  }
 
   // Steering stops (H1): square oak posts on the turntable plate inside the bolster opening. Each lands flat on the aft
   // bolster rail's inner face exactly at lock (derived analytically in steerStopPlan); the left post stops +steer, the

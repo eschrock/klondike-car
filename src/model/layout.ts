@@ -54,7 +54,10 @@ export interface Layout {
    * bolster rail underside at turntable.z1, `clr` above the wear strip.
    */
   sideBearer: { y0: number; y1: number; z0: number; z1: number; zw: number; x0: number; x1: number };
+  /** Kingpin ends: beam underside (washer) to the turntable top, or to the crossbar top when kingpinThroughBolster = 1. */
   kingpin: { z0: number; z1: number };
+  /** Chassis-side oak crossbar over the turntable centre (kingpinThroughBolster = 1), fore-aft across the bolster opening: x range, half width |y|, z range (flush with the bolster rails). Null when off. */
+  crossbar: { x0: number; x1: number; hw: number; z0: number; z1: number } | null;
   /** Nose rails/joists stop here so the swinging turntable corners clear them. */
   noseRailEnd: number;
   cabinJoistX: number[];
@@ -145,6 +148,12 @@ export function computeLayout(input: Params): Layout {
   const sbY0 = ts / 2 + clr;
   const sbY1 = bp.halfY;
   const bolster = { x0: kx - ts / 2, x1: kx + ts / 2, z0: tz1, z1: bolsterTop, halfY: sbY1, rw: bp.rw };
+  // Kingpin crossbar (kingpinThroughBolster): fore-aft bar across the opening over the pin, ends let into the bolster rails,
+  // top flush with the rails; the kingpin ends here (nut + washer on the crossbar top).
+  const through = p.kingpinThroughBolster === 1;
+  const crossbar = through
+    ? { x0: bolster.x0 + bolster.rw - p.kingpinCrossbarLetInIn, x1: bolster.x1 - bolster.rw + p.kingpinCrossbarLetInIn, hw: p.kingpinCrossbarWidthIn / 2, z0: tz1, z1: bolsterTop }
+    : null;
   // Oak block housed in the beam top; UHMW strip on it; running clearance `clr` to the bolster rail underside (tz1).
   const sbZw = tz1 - clr;
   const sbZ1 = sbZw - p.sideBearerWearIn;
@@ -157,7 +166,13 @@ export function computeLayout(input: Params): Layout {
   const plateSwingX = (ts / 2) * (Math.cos(lk) + Math.sin(lk));
   const beamAft = Math.abs(beamF.x - beamF.thick / 2 - kx);
   const beamSwingX = beamAft / Math.cos(lk) + hwN * Math.tan(lk);
-  const noseRailEnd = kx - Math.max(plateSwingX, beamSwingX) - p.steeringClearanceIn;
+  // The beam's aft face is TILTED by the lock angle, so the perpendicular distance from the rail's end corner to it is the
+  // fore-aft gap × cos(lock): the gap must be clearance / cos(lock), not the clearance itself (the exploration found beam-F
+  // 0.75·cos 38.5° = 0.59" from the nose rail at track ≥ 36.5" or wider beams, where the beam rather than the plate governs).
+  // The U-bolt clamps sit at |y| beyond the rails' y-band, so they cannot reach the rail end; the nose side panels are covered
+  // by the auto shoulder rule (resolveParams). Moving the rail end back (rather than narrowing the nose) is the physical fix:
+  // the beam corner at |y| = hwN is what sweeps aft, and the nose width is already the widest the tyres allow (A-4).
+  const noseRailEnd = kx - Math.max(plateSwingX + p.steeringClearanceIn, beamSwingX + p.steeringClearanceIn / Math.cos(lk));
 
   // Joists skip the rear axle beam when it stands taller than their underside (overslung beam).
   const jD = p.crossmemberDepthIn;
@@ -229,7 +244,7 @@ export function computeLayout(input: Params): Layout {
     r, WB, xs, xRear, xFront, kx, railBand: p.railBandIn, joistT, flare, web, side, ply, deckTop, deckBot: deckTop - ply, noseTop, noseBot: noseTop - ply,
     hwC, hwN, sideH: p.sideHeightIn, beamR, beamF,
     turntable: { z0: tz0, z1: tz1 },
-    bolster, sideBearer, kingpin: { z0: beamF.bot, z1: tz1 },
+    bolster, sideBearer, kingpin: { z0: beamF.bot, z1: through ? bolsterTop : tz1 }, crossbar,
     noseRailEnd, cabinJoistX, noseJoistX, seat, storage,
   };
 }

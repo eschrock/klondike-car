@@ -134,7 +134,8 @@ function defaultExplode(ctx: Ctx, s: PartSpec): Vec3 {
       return unit([fx * 0.3, 0, -1]);
     case 'steering':
       if (/^(tongue|bridle)/.test(id)) return unit([1, 0, -0.1]);
-      if (id === 'kingpin') return unit([0.3, 0, -1]);
+      if (id === 'kingpin' || /^kingpin-sleeve-beam/.test(id)) return unit([0.3, 0, -1]);
+      if (id === 'kingpin-crossbar' || /^kingpin-sleeve-bar/.test(id)) return unit([0.3, 0, 1]);
       if (/^steer-stop/.test(id)) return unit([0.3, sy * 0.8, -0.6]);
       if (/^side-bearer/.test(id)) return unit([0.3, sy * 0.6, -0.8]);
       return unit([0.6, 0, -0.5]);
