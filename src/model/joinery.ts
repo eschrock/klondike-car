@@ -9,7 +9,7 @@
  */
 import { FRAME_STYLE, SIDE_CONSTRUCTION, type Params } from '../params';
 import { SIDES, type Ctx } from './build-utils';
-import { innerHalfWidth, sheerRise } from './layout';
+import { innerHalfWidth, sheerRise, sidePath } from './layout';
 import { fingerAnalysis, guardInsertZ, scupperSites } from './body';
 import { worldAABB } from './bounds';
 import type { Joint, JointType, Mat4, Part, Vec3 } from './types';
@@ -343,7 +343,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     }
   }
 
-  // ── Finger guards: strap on two inserts in the nose gunwale ──
+  // ── Finger guards: the strap on stainless inserts in the gunwale, one on the curved cabin gunwale and the rest on the straight nose gunwale (r3 N-9) ──
   {
     const fa = fingerAnalysis(ctx);
     for (const { s, tag } of SIDES) {
@@ -351,10 +351,16 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
       if (!guard || !fa.hazard) continue;
       const zc = guardInsertZ(L, p); // above the gunwale's web groove (M2, D-43)
       const x0 = fa.hazard.x0, len = fa.hazard.x1 - fa.hazard.x0;
-      add({
-        a: guard.id, b: captured || openFrame ? `side-nose-${tag}-gunwale` : `side-nose-${tag}-board`, typeA: 'screw', typeB: 'threaded-insert', size: '#10-32 × 5/8 SS button-head screw', sizeB: '#10-32 × 3/8 flanged 316 stainless insert (above the web groove, not into it)',
-        pts: [0.25, 0.75].map((f) => [x0 + len * f, s * (L.hwN + L.side), zc] as Vec3), noteA: 'Strap on the gunwale outer face; the leg lies in the web recess. The inserts sit in the solid oak above the groove (build review M2); print with the extrusion profile in the bed plane (layers parallel to the profile), ASA, 4+ perimeters, and add ribs under the hood flange.',
-      });
+      const fracs = [0.15, 0.4, 0.65, 0.9];
+      const yAt = (x: number) => s * sidePath(L, L.side / 2, x, x + 1e-6)[0][1];
+      const hostOf = (x: number) => (x >= L.xn ? (captured || openFrame ? `side-nose-${tag}-gunwale` : `side-nose-${tag}-board`) : (captured || openFrame ? `side-cabin-${tag}-gunwale` : `side-cabin-${tag}-board`));
+      for (const host of new Set(fracs.map((f) => hostOf(x0 + len * f)))) {
+        const xs = fracs.map((f) => x0 + len * f).filter((x) => hostOf(x) === host);
+        add({
+          a: guard.id, b: host, typeA: 'screw', typeB: 'threaded-insert', size: '#10-32 × 5/8 SS button-head screw', sizeB: '#10-32 × 3/8 flanged 316 stainless insert (above the web groove, not into it)',
+          pts: xs.map((x) => [x, yAt(x), zc] as Vec3), noteA: 'Strap on the gunwale outer face; the leg lies in the web recess. The inserts sit in the solid oak above the groove (build review M2); print the guard hood face down, ASA, 4+ perimeters, and add ribs under the hood flange.',
+        });
+      }
     }
   }
 

@@ -24,6 +24,8 @@ export interface KingpinPlatePlan {
   barX: number[];
   /** Half sizes (x across / y along for the beam plates, x along / y across for the crossbar plate). */
   carrier: { hx: number; hy: number };
+  /** The plate under the beam (narrower than the carrier since r3 fittings N-5). */
+  under: { hx: number; hy: number };
   bar: { hx: number; hy: number };
   /** y of the fore-aft cross-bolts through the beam (at beam mid depth), x of the cross-bolts across the crossbar. */
   crossBeamY: number[];
@@ -51,10 +53,11 @@ export function kingpinPlatePlan(p: Params): KingpinPlatePlan {
   const barX = [-3, -1, 1, 3].map((k) => (k * barPitch) / 2);
   const edge = Math.ceil(2.67 * D * 16) / 16; // plate edge distance beyond a bolt hole (≈ 2.7D)
   const carrier = { hx: Math.max(edge, p.kingpinPlateWidthIn / 2), hy: beamY[beamY.length - 1] + 0.5 };
+  const under = { hx: Math.max(edge, p.kingpinUnderPlateWidthIn / 2), hy: carrier.hy };
   const bar = { hx: barX[barX.length - 1] + 0.75, hy: Math.max(edge, 1) };
   const crossBeamY = [-2, -1, 1, 2].map((k) => k * pitch); // between the pin and the first bolt, and between the first two
   const crossBarX = [-1, 1].map((k) => k * barPitch); // midway between the inner and outer plate bolts
-  return { on, D, beamY, beamX, barX, carrier, bar, crossBeamY, crossBarX, holeR: p.turntableCenterHoleIn / 2 };
+  return { on, D, beamY, beamX, barX, carrier, under, bar, crossBeamY, crossBarX, holeR: p.turntableCenterHoleIn / 2 };
 }
 
 /**

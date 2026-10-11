@@ -18,6 +18,8 @@ import { leftTirePolys } from './hull-curve';
 import { cabinSidePoint, innerHalfWidth, sheerRise, sidePath, type Layout } from './layout';
 import { REFLECTOR_FRACS, REFLECTOR_SIZE } from './lighting';
 import { compose } from './mat4';
+import { customPart } from './mesh-utils';
+import { roundedRectCCW } from './steering';
 import type { Dims, EdgeCondition, Mat4, Part, PartGroup, Vec2, Vec3 } from './types';
 
 // ── Block-model placeholders (not design numbers: open-frame post pitch, sign fit gaps) ──
@@ -327,7 +329,7 @@ const fingerCache = new Map<string, FingerAnalysis>();
 export function fingerAnalysis(ctx: Ctx): FingerAnalysis {
   const { p, L } = ctx;
   const key = [p.wheelDiameterIn, p.tireWidthIn, p.frontTrackIn, p.steerLockDeg, p.fingerGapMinIn, p.fingerGuardClearIn, p.steeringClearanceIn, p.fingerGuardThickIn,
-    L.WB, L.kx, L.xs, L.xc0, L.xn, L.xFront, L.xRear, L.hwN, L.hwC, L.side, L.railBand, L.sideTop, L.sheer.x0, L.sheer.riseIn].join('|');
+    L.WB, L.kx, L.xs, L.xc0, L.xn, L.xFront, L.xRear, L.hwN, L.hwC, L.side, L.railBand, L.sideTop, L.sheer.x0, L.sheer.riseIn, L.web.z0].join('|');
   const hit = fingerCache.get(key);
   if (hit) return hit;
   const out = computeFinger(ctx);
@@ -349,19 +351,18 @@ function computeFinger(ctx: Ctx, stepDeg = 1): FingerAnalysis {
   const hoodZ = tireTopZ + Math.max(p.fingerGuardClearIn, p.steeringClearanceIn);
   const out: FingerAnalysis = { minGapIn: minGap, guardNeeded: minGap < p.fingerGapMinIn - 1e-9, hazard: null, tireTopZ, hoodZ };
   if (!out.guardNeeded) return out;
-  // Hazard zone: nose-side points (x >= xn, where the side is straight) that come within the threshold of a tire at some angle. Behind xn the
-  // side curves away from the tire (an open wedge that widens aft); the guard covers the straight nose side from xn forward (D-45).
-  const yoN = L.hwN + L.side;
+  // Hazard zone (r3 fittings, eng N-9): EVERY point of the hull outline, curved or straight, that comes within the no-pinch gap of a tire at some steering
+  // angle. At the defaults the tire's rear inner corner sweeps in at x = 28-31, half on the S-curve and half on the straight nose side, so the guard
+  // follows the real outline across xn (hazard.path in buildBody) instead of stopping at the straight part.
   const gapMin = p.fingerGapMinIn;
   const boxes = tires.map((t) => [Math.min(...t.map((q) => q[0])), Math.max(...t.map((q) => q[0])), Math.min(...t.map((q) => q[1])), Math.max(...t.map((q) => q[1]))]);
   let x0 = Infinity, x1 = -Infinity, outMax = 0;
   for (const sg of segs) {
-    if (sg[1][0] <= L.xn - 1e-9) continue;
     const len = Math.hypot(sg[1][0] - sg[0][0], sg[1][1] - sg[0][1]);
     const n = Math.max(2, Math.ceil(len / 0.25));
     for (let i = 0; i <= n; i++) {
       const q: Vec2 = [sg[0][0] + ((sg[1][0] - sg[0][0]) * i) / n, sg[0][1] + ((sg[1][1] - sg[0][1]) * i) / n];
-      if (q[0] < L.xn - 1e-9) continue;
+      if (q[1] < 1) continue; // the front transom edge across the end
       let near = false;
       for (let k = 0; k < tires.length && !near; k++) {
         const b = boxes[k];
@@ -371,14 +372,15 @@ function computeFinger(ctx: Ctx, stepDeg = 1): FingerAnalysis {
       if (near) {
         x0 = Math.min(x0, q[0]);
         x1 = Math.max(x1, q[0]);
-        outMax = Math.max(outMax, q[1] - yoN);
       }
     }
   }
   if (!(x1 >= x0)) { x0 = L.xn; x1 = L.xn; }
-  out.hazard = { x0: Math.max(L.xn, x0), x1: x1 + GUARD_X_MARGIN_IN, outMax: Math.max(p.fingerGapMinIn, outMax + GUARD_OUT_MARGIN_IN) };
+  out.hazard = { x0: x0 - GUARD_X_MARGIN_IN, x1: x1 + GUARD_X_MARGIN_IN, outMax: Math.max(p.fingerGapMinIn, outMax + GUARD_OUT_MARGIN_IN) };
   const zg = L.sideTop - L.railBand;
-  if (hoodZ + (HOOD_FACTOR + 1) * p.fingerGuardThickIn > zg) out.infeasible = `the ${tireTopZ}" tire tops out too close to the gunwale for a hood (needs ≤ ${(zg - (HOOD_FACTOR + 1) * p.fingerGuardThickIn - Math.max(p.fingerGuardClearIn, p.steeringClearanceIn)).toFixed(2)}")`;
+  if (L.sheer.riseIn > 1e-9 && out.hazard.x1 > L.sheer.x0 + 1e-9) out.infeasible = `the pinch zone (to x = ${out.hazard.x1.toFixed(1)}") reaches the start of the sheer rise (x = ${L.sheer.x0.toFixed(1)}"), where the gunwale is no longer flat under the guard strap: shorten sheerLengthIn or move the curve (r3 N-9)`;
+  else if (hoodZ < L.web.z0 + 1e-9) out.infeasible = `the ${tireTopZ}" tire tops out below the web recess (z = ${L.web.z0.toFixed(2)}"): the hood would sit against the chine, the rail and the scuppers instead of in the recess; raise the deck or use a smaller wheel (r3 N-9)`;
+  else if (hoodZ + (HOOD_FACTOR + 1) * p.fingerGuardThickIn > zg) out.infeasible = `the ${tireTopZ}" tire tops out too close to the gunwale for a hood (needs ≤ ${(zg - (HOOD_FACTOR + 1) * p.fingerGuardThickIn - Math.max(p.fingerGuardClearIn, p.steeringClearanceIn)).toFixed(2)}")`;
   return out;
 }
 
@@ -406,6 +408,71 @@ function guardProfile(ctx: Ctx, g: number, hoodZ: number, strapTop: number): Vec
     ]);
   }
   return ccw([[0, hoodZ], [g, hoodZ], [g, hoodZ + HOOD_FACTOR * tw], [tw, hoodZ + HOOD_FACTOR * tw], [tw, strapTop], [0, strapTop]]);
+}
+
+/** Ear-clipping triangulation of a simple counter-clockwise polygon: index triples. */
+function earClip(poly: Vec2[]): number[] {
+  const idx = poly.map((_, i) => i);
+  const out: number[] = [];
+  const cross = (a: Vec2, b: Vec2, c: Vec2) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  const inTri = (p: Vec2, a: Vec2, b: Vec2, c: Vec2) => cross(a, b, p) >= -1e-12 && cross(b, c, p) >= -1e-12 && cross(c, a, p) >= -1e-12;
+  let guard = 0;
+  while (idx.length > 3 && guard++ < 1000) {
+    let clipped = false;
+    for (let i = 0; i < idx.length; i++) {
+      const ia = idx[(i + idx.length - 1) % idx.length], ib = idx[i], ic = idx[(i + 1) % idx.length];
+      const a = poly[ia], b = poly[ib], c = poly[ic];
+      if (cross(a, b, c) <= 1e-12) continue;
+      if (idx.some((k) => k !== ia && k !== ib && k !== ic && inTri(poly[k], a, b, c))) continue;
+      out.push(ia, ib, ic);
+      idx.splice(i, 1);
+      clipped = true;
+      break;
+    }
+    if (!clipped) break;
+  }
+  if (idx.length === 3) out.push(idx[0], idx[1], idx[2]);
+  return out;
+}
+
+/**
+ * The finger guard as ONE printed part that follows the hull outline (r3 fittings, eng N-9): the (out from the hull face, z) profile of `guardProfile`
+ * is swept along the outer face of the chine from x0 to x1 (the S-curve and then the straight nose side), each ring offset along the local outward normal.
+ * Left side, then mirrored for the right (winding flipped). Returns the mesh and the swept volume (profile area x face length).
+ */
+export function guardMesh(prof: Vec2[], face: Vec2[], s: 1 | -1): { positions: number[]; indices: number[]; volIn3: number; lengthIn: number } {
+  const n = face.length, m = prof.length;
+  const tan = (i: number): Vec2 => {
+    const a = face[Math.max(0, i - 1)], b = face[Math.min(n - 1, i + 1)];
+    const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    return [(b[0] - a[0]) / l, (b[1] - a[1]) / l];
+  };
+  const positions: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const t = tan(i);
+    const nx = -t[1], ny = t[0]; // outward (+y side for the left hull)
+    for (const [u, z] of prof) positions.push(face[i][0] + u * nx, s * (face[i][1] + u * ny), z);
+  }
+  const idx: number[] = [];
+  const tri = (a: number, b: number, c: number) => (s > 0 ? idx.push(a, b, c) : idx.push(a, c, b));
+  for (let i = 0; i + 1 < n; i++) {
+    for (let k = 0; k < m; k++) {
+      const k2 = (k + 1) % m;
+      const A = i * m + k, A2 = i * m + k2, B = (i + 1) * m + k, B2 = (i + 1) * m + k2;
+      tri(A, B2, B);
+      tri(A, A2, B2);
+    }
+  }
+  const cap = earClip(prof);
+  for (let q = 0; q < cap.length; q += 3) {
+    tri((n - 1) * m + cap[q], (n - 1) * m + cap[q + 1], (n - 1) * m + cap[q + 2]); // front cap, normal +t
+    tri(cap[q], cap[q + 2], cap[q + 1]); // rear cap, normal −t
+  }
+  let area = 0;
+  for (let k = 0; k < m; k++) { const a = prof[k], b = prof[(k + 1) % m]; area += a[0] * b[1] - b[0] * a[1]; }
+  let len = 0;
+  for (let i = 1; i < n; i++) len += Math.hypot(face[i][0] - face[i - 1][0], face[i][1] - face[i - 1][1]);
+  return { positions, indices: idx, volIn3: (Math.abs(area) / 2) * len, lengthIn: len };
 }
 
 // ── Body ──
@@ -463,16 +530,16 @@ export function buildBody(ctx: Ctx): Part[] {
     const nR = Math.floor(e0.length / 2);
     const edges = e0.map((c, k) => (k === nR ? 'captured' : k === e0.length - 1 ? 'edged' : c)) as EdgeCondition[];
     const holes: Vec2[][] = [];
-    if (na && na.x1 > na.x0 && na.hw > 0) holes.push(cw(rectCCW(na.x0, na.x1, -na.hw, na.hw)));
-    const rim = holes.length ? 2 * (na!.x1 - na!.x0 + 2 * na!.hw) : 0;
+    if (na && na.x1 > na.x0 && na.hw > 0) holes.push(cw(roundedRectCCW(na.x0, na.x1, -na.hw, na.hw, p.accessOpeningCornerRadiusIn))); // corner radius: r3 build S12, D-47
+    const rim = holes.length ? polyAreaPerim(holes[0]).perim : 0;
     const rearW = 2 * Math.abs(outline[0][1]);
     parts.push(extPart(ctx, {
       id: 'deck-nose', name: 'Nose deck', group: 'body', mat: 'ply', step: HULL_STEP.deck, grain: 'x', center: [(x0 + x1) / 2, 0, L.noseTop],
       outline, ...(holes.length ? { holes } : {}), depth: L.ply, transform: compose([0, 0, L.noseBot]),
-      edges: [...edges, ...(holes.length ? (['edged', 'edged', 'edged', 'edged'] as EdgeCondition[]) : [])],
+      edges: [...edges, ...holes.flatMap((h) => h.map((): EdgeCondition => 'edged'))],
       extraLb: edgeBandLb(ctx, rearW + rim, L.ply),
       notes: `Sits on the shoulder beam and the nose joists, 1" above the cabin deck, in a ${dd}" × ${rabbetH(L.noseTop, L.noseBot).toFixed(3)}" rabbet in the underside of the chines (the chine bottom is at the nose deck level all along, D-45) and a dado in the front transom; the rear (step) edge is banded with ${p.edgeBandIn}" oak. ${DECK_ASSEMBLY_NOTE}`
-        + (holes.length ? ' The kingpin-access opening (Layout.accessPanel, M10) is cut through it; the opening rim is banded with oak and the removable panel lies flush in it. Edge conditions: outline edges first, then the four rim edges.' : ' No kingpin-access opening without the kingpin crossbar (Layout.accessPanel is null).'),
+        + (holes.length ? ` The kingpin-access opening (Layout.accessPanel, M10) is cut through it with ${p.accessOpeningCornerRadiusIn}" corner radii (router template with a 1/2" bit, D-47); the opening rim is banded with 1/16" oak edge veneer (the straight rear edge with ${p.edgeBandIn}" oak strips, 5/16" wide, epoxied, flush-trimmed) and the removable panel lies flush in it. Edge conditions: outline edges first, then the rim edges.` : ' No kingpin-access opening without the kingpin crossbar (Layout.accessPanel is null).'),
     }));
   }
 
@@ -554,12 +621,23 @@ export function buildBody(ctx: Ctx): Part[] {
           const lo: Vec2[] = sxs.map((x): Vec2 => [x, zTop - L.railBand + sheerRise(L, x)]);
           const hi: Vec2[] = sxs.map((x): Vec2 => [x, zTop + sheerRise(L, x)]).reverse();
           const curveGrooveLb = oakLb(ctx, polyLen(lo) * (pl + slop) * g);
+          const nLam = 3;
+          const rMin = (() => { // smallest radius of curvature of the sheer line (three-point circles)
+            let r = Infinity;
+            for (let i = 1; i + 1 < lo.length; i++) {
+              const [ax, ay] = lo[i - 1], [bx, by] = lo[i], [cx, cy] = lo[i + 1];
+              const ab = Math.hypot(bx - ax, by - ay), bc = Math.hypot(cx - bx, cy - by), ca = Math.hypot(ax - cx, ay - cy);
+              const area2 = Math.abs((bx - ax) * (cy - ay) - (by - ay) * (cx - ax));
+              if (area2 > 1e-9) r = Math.min(r, (ab * bc * ca) / (2 * area2));
+            }
+            return Number.isFinite(r) ? r : Infinity;
+          })();
           parts.push(extPart(ctx, {
             id: `${id}-gunwale`, partNo: 'side-nose-gunwale', name: `${name} gunwale`, group: 'body', mat: 'oak', step: HULL_STEP.sides, grain: 'x', fab: 'bentlam',
             center: [(L.xn + frontTx) / 2, yc, zTop + L.sheer.riseIn / 2],
             outline: [...lo, ...hi], depth: L.side,
             transform: frameMat([1, 0, 0], [0, 0, 1], [0, -1, 0], [0, yc + L.side / 2, 0]), extraLb: -curveGrooveLb,
-            notes: `Laminated flat from three ${(L.railBand / 3).toFixed(2)}" layers around a simple sheer form (long grain follows the rise: no short grain at the bow, build review S4; rises ${L.sheer.riseIn}" over the forward ${(L.sheer.x1 - L.sheer.x0).toFixed(1)}", flat before it; D-44), the groove routed with a bearing-guided slot cutter riding the curved edge, board lying flat, two passes. ${gunNote}`,
+            notes: `LAMINATED, not sawn from a board (build review S4, D-47): ${nLam} flat layers of ${(L.railBand / nLam).toFixed(2)}" × ${L.side}" oak, each cut from straight-grain stock, glued up around a simple plywood sheer form (the same form for the web: the rise is ${L.sheer.riseIn}" over the forward ${(L.sheer.x1 - L.sheer.x0).toFixed(1)}", flat before it, D-44). The tightest radius of the sheer is ${rMin.toFixed(0)}" (the layer is ${(L.railBand / nLam).toFixed(2)}" thick: R/t = ${(rMin / (L.railBand / nLam)).toFixed(0)}, cold bend, no steaming), so the grain follows the rise everywhere and there is no short grain at the bow. GROOVE METHOD: plow the ${(pl + slop).toFixed(3)}" × ${g}" web groove in the face of the BOTTOM layer while it is still a straight strip (router table, fence, 1/4" straight bit, two passes with the fence moved ${(pl + slop - 0.25).toFixed(3)}"; the layer is ${(L.railBand / nLam).toFixed(2)}" thick, so a ${g}" groove leaves ${(L.railBand / nLam - g).toFixed(3)}"), then laminate: the groove follows the curve with no template and no curved-edge routing, and the layers above close it. ${gunNote}`
           }));
         } else {
           const gun = box(ctx, { id: `${id}-gunwale`, partNo: 'side-nose-gunwale', name: `${name} gunwale`, group: 'body', mat: 'oak', step: HULL_STEP.sides,
@@ -672,23 +750,24 @@ export function buildBody(ctx: Ctx): Part[] {
     }
   }
 
-  // ── Finger guards over the front-tire pinch zone (M5) ──
+  // ── Finger guards over the front-tire pinch zone (M5, r3 N-9): one printed piece per side following the hull outline (S-curve, then the straight nose side) ──
   const fa = fingerAnalysis(ctx);
   if (fa.guardNeeded && fa.hazard && !fa.infeasible) {
     const hz = fa.hazard;
-    const gl = hz.x1 - hz.x0;
     const zg = L.sideTop - L.railBand;
     const strapTop = Math.min(zg + GUARD_STRAP_IN, L.sideTop - 0.25);
     const prof = guardProfile(ctx, hz.outMax, fa.hoodZ, strapTop);
-    const yoN = L.hwN + L.side;
+    const face = sidePath(L, L.side / 2, hz.x0, hz.x1); // outer face of the chine / gunwale, left side, |y|
     for (const { s, tag } of SIDES) {
-      // local x → s·Y (outboard), local y → Z, local z → s·X; origin at the forward-most or rear-most end accordingly.
-      const org: Vec3 = [s > 0 ? hz.x0 : hz.x1, s * yoN, 0];
-      parts.push(extPart(ctx, {
-        id: `guard-${tag}`, partNo: 'finger-guard', name: `Finger guard ${tag}`, group: 'body', mat: 'printed', step: STEP.finish,
-        center: [(hz.x0 + hz.x1) / 2, s * (yoN + hz.outMax / 2), fa.hoodZ],
-        outline: prof, depth: gl, transform: frameMat([0, s, 0], [0, 0, 1], [s, 0, 0], org),
-        notes: `Printed ASA (${p.fingerGuardThickIn}" leg and strap, ${HOOD_FACTOR * p.fingerGuardThickIn}" hood flange) hood ${fa.hoodZ.toFixed(2)}" above the ground, ${(fa.hoodZ - fa.tireTopZ).toFixed(2)}" over the ${fa.tireTopZ}" tire top, covering the plan zone where the tire comes within ${p.fingerGapMinIn}" of the hull at any steering angle (min gap ${fa.minGapIn.toFixed(2)}"); the leg sits in the web recess and the strap screws to threaded inserts in the nose gunwale. It shields the pocket from above and behind; the open front of the sweep stays as it is (M5, D-37).`,
+      const m = guardMesh(prof, face, s);
+      const mass = (m.volIn3 / IN3_PER_FT3) * p.printedDensityPcf;
+      const yMid = s * face[Math.floor(face.length / 2)][1];
+      parts.push(customPart(ctx, {
+        id: `guard-${tag}`, partNo: 'finger-guard', name: `Finger guard ${tag}`, group: 'body', kind: 'printed', material: 'ASA', fab: 'print', step: STEP.finish,
+        geometry: { type: 'mesh', positions: m.positions, indices: m.indices }, transform: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+        massLb: mass, explode: [0, s * 0.8, 0.6],
+        cgIn: [(hz.x0 + hz.x1) / 2, yMid + s * hz.outMax / 3, fa.hoodZ],
+        notes: `Printed ASA in one piece, ${m.lengthIn.toFixed(1)}" long along the hull face (x ${hz.x0.toFixed(1)}…${hz.x1.toFixed(1)}", the S-curve and then the straight nose side: the tire's rear inner corner sweeps in at the end of the curve, so the zone straddles x = ${L.xn.toFixed(1)}"): ${p.fingerGuardThickIn}" leg and strap, ${HOOD_FACTOR * p.fingerGuardThickIn}" hood flange ${hz.outMax.toFixed(2)}" wide at ${fa.hoodZ.toFixed(2)}" above the ground, ${(fa.hoodZ - fa.tireTopZ).toFixed(2)}" over the ${fa.tireTopZ}" tire top, covering every hull point that comes within ${p.fingerGapMinIn}" of the tire at any steering angle (min gap ${fa.minGapIn.toFixed(2)}"); the leg sits in the web recess and the strap screws to threaded inserts in the gunwale (cabin gunwale on the curve, nose gunwale on the straight). It shields the pocket from above and behind; the front of the sweep is open, but the neck there is wider than the pinch limit (D-37, D-47). PRINT: the part is only ${m.lengthIn.toFixed(1)}" long and fits any bed; hood face down on the bed (layers parallel to the hood, strong in bending), 4+ perimeters, ribs under the hood flange.`,
       }));
     }
   }

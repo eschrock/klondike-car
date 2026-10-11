@@ -121,7 +121,7 @@ export class Viewer {
   private contactGroup = new THREE.Group();
   private edgeLines: THREE.LineSegments[] = [];
   private showEdges = true;
-  /** Shop aids (jigs and forms such as the prow form) are hidden until the Advanced "Shop aids" toggle asks for them. */
+  /** Shop aids (jigs and forms such as a lamination form) are hidden until the Advanced "Shop aids" toggle asks for them. */
   private showShopAids = false;
   private sunDir = new THREE.Vector3(-10, -90, 150).normalize();
   private currentView: ViewName = 'iso';
@@ -374,7 +374,7 @@ export class Viewer {
       this.showEdges = v;
       for (const l of this.edgeLines) l.visible = v;
     }, true);
-    mk('Shop aids', 'Show shop jigs and forms (for example the prow lamination form) as faint gray wireframes', false, (v) => {
+    mk('Shop aids', 'Show shop jigs and forms (for example a lamination form) as faint gray wireframes', false, (v) => {
       this.showShopAids = v;
       this.refreshVisibility();
     });
@@ -756,7 +756,7 @@ export class Viewer {
       mesh.name = part.id;
       mesh.userData.partId = part.id;
       mesh.userData.group = part.group;
-      // Shop aids (e.g. the bent-lam prow form): reference parts that are fabricated, unlike the rider/cargo figures.
+      // Shop aids (e.g. a bent-lam form): reference parts that are fabricated, unlike the rider/cargo figures.
       mesh.userData.shopAid = isShopAid(part);
       mesh.castShadow = !mesh.userData.shopAid;
       mesh.receiveShadow = true;
@@ -1000,7 +1000,7 @@ export class Viewer {
     };
     if (box || this.inTruck) addCorners(b);
     else {
-      // Per-part boxes hug the silhouette far better than one big box (the rear handle and prow would otherwise shrink the cart).
+      // Per-part boxes hug the silhouette far better than one big box (the rear handle would otherwise shrink the cart).
       this.scene.updateMatrixWorld(true);
       const pb = new THREE.Box3();
       for (const m of this.partsGroup.children) if (m.visible) addCorners(pb.setFromObject(m));

@@ -13,7 +13,7 @@ import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
 import { curveHeading } from './hull-curve';
 import { sidePath, type Layout } from './layout';
 import { frameJoint, gunwaleId, seatBackSupport } from './seat';
-import type { Joint, Part } from './types';
+import type { Joint, Part, Vec3 } from './types';
 
 // ── Hardware and detail dimensions (estimates, D-41) ──
 const HINGE_MASS_LB = 0.15;
@@ -42,6 +42,9 @@ export const LASH_SCREW_DIA_IN = 0.19;
 export const LASH_SCREW_LEN_IN = 1.25;
 export const LASH_PLATE_T_IN = 0.125;
 export const LASH_TIP_IN = 0.25;
+/** Half the screw spacing of the 4-hole plate along (x) and across (y) it: 1.125" × 0.5" holes in the 1.5" × 0.9" plate. */
+export const LASH_HOLE_DX_IN = 0.5625;
+export const LASH_HOLE_DY_IN = 0.25;
 const BACKER_IN = 1;
 const BACKER_W_IN = 1.5;
 /** Oak block under each lid latch (#8 screws need more than the 6 mm end ply or a thin transom): thickness, and width across. */
@@ -442,17 +445,23 @@ export function buildStorage(ctx: Ctx): Part[] {
       const yg = sidePath(L, 0, x, x + 1e-6)[0][1];
       const h = curveHeading(L.hull, x);
       const rot = h === 0 ? undefined : { z: sg * h };
-      const inN = L.side / 2 + p.blockingThickIn / 2; // doubler center, inboard of the web plane
-      // Doubler: oak blocking on the inboard face of the gunwale under the plate; the plate screws straddle the glue line (>= 3/4" engagement, no split-out of the thin rail).
+      // r3 build S8: the plate is centered on a 1" oak DOUBLER glued to the inboard face of the gunwale (not on the 5/8" gunwale, which has the web groove under it);
+      // its four screws go straight down into the doubler, 1/4" either side of the plate centerline, so every screw is in solid oak 1/4" from a doubler face.
+      const T = p.lashDoublerThickIn;
+      const inN = L.side / 2 + T / 2; // doubler (and plate) center, inboard of the web plane
+      const cx = x + inN * Math.sin(h), cy = sg * (yg - inN * Math.cos(h));
+      const pat = [[-1, -1], [-1, 1], [1, -1], [1, 1]] as const;
+      const screwAt = (z: number): Vec3[] => pat.map(([a, b]): Vec3 => [a * LASH_HOLE_DX_IN, b * LASH_HOLE_DY_IN, z]);
       parts.push(box(ctx, { id: dId, partNo: 'doubler-lash', name: `Lash point doubler ${tag}${i + 1}`, group: 'storage', mat: 'oak', grain: 'x', step: STEP.finish,
-        size: [LASH_SIZE[0] + 0.5, p.blockingThickIn, L.railBand], center: [x + inN * Math.sin(h), sg * (yg - inN * Math.cos(h)), gTop - L.railBand / 2], ...(rot ? { rot } : {}),
-        joints: [{ type: 'glue', to: gunwaleId(p, tag), count: 1, note: 'epoxy, full face' }, { type: 'screw', to: `lash-${tag}${i + 1}`, count: LASH_SCREWS, size: '#10 × 1-1/4 stainless, through the plate on the glue line' }],
-        notes: `Blocking behind the thin gunwale under the lash plate (D-41).${h !== 0 ? ' On the S-curve: plane its back to the gunwale curve (the 2" chord leaves up to 0.12" of gap or overlap).' : ''}` }));
+        size: [LASH_SIZE[0] + 0.5, T, L.railBand], center: [cx, cy, gTop - L.railBand / 2], ...(rot ? { rot } : {}),
+        joints: [{ type: 'glue', to: gunwaleId(p, tag), count: 1, size: `${(LASH_SIZE[0] + 0.5).toFixed(1)}" × ${L.railBand}" face, epoxy`, note: `Epoxy, full face, against the gunwale's inner face (the web groove is behind it, the screws never reach it). The vertical shear of a ${p.lashLoadLbf} lbf pull at ${p.lashPullAngleDeg}° on ${((LASH_SIZE[0] + 0.5) * L.railBand).toFixed(1)} in² of glue is a few tens of psi.` },
+          { type: 'screw', to: `lash-${tag}${i + 1}`, count: LASH_SCREWS, size: '#10 × 1-1/4 stainless, straight down from the plate into the doubler', diaIn: LASH_SCREW_DIA_IN, at: screwAt(L.railBand / 2) }],
+        notes: `${T}" oak doubler on the inboard face of the gunwale under the lash plate (D-41, D-47): ${(LASH_SIZE[0] + 0.5).toFixed(1)}" long, the full ${L.railBand}" band tall. The four #10 screws sit ${LASH_HOLE_DY_IN}" either side of its centerline (${(T / 2 - LASH_HOLE_DY_IN).toFixed(2)}" from each face) and end ${(L.railBand - (LASH_SCREW_LEN_IN - LASH_PLATE_T_IN)).toFixed(2)}" above its bottom.${h !== 0 ? ' On the S-curve: plane its back to the gunwale curve (the 2" chord leaves up to 0.12" of gap or overlap).' : ''}` }));
       parts.push(box(ctx, { id: `lash-${tag}${i + 1}`, partNo: 'lash-point', name: `Lash point ${tag}${i + 1}`, group: 'hardware', mat: 'fixed', massLb: LASH_MASS_LB, kind: 'purchased',
-        material: 'stainless D-ring on a bolt plate', fab: 'buy', step: STEP.finish, size: [LASH_SIZE[0], LASH_SIZE[1], LASH_SIZE[2]], center: [x, sg * yg, gTop + LASH_SIZE[2] / 2], ...(rot ? { rot } : {}),
+        material: 'stainless D-ring on a bolt plate', fab: 'buy', step: STEP.finish, size: [LASH_SIZE[0], LASH_SIZE[1], LASH_SIZE[2]], center: [cx, cy, gTop + LASH_SIZE[2] / 2], ...(rot ? { rot } : {}),
         sourcing: { vendor: 'McMaster-Carr (316 stainless 4-hole D-ring bolt plate, 300 lbf working load)', costUsd: 7 },
-        joints: [{ type: 'screw', to: dId, count: LASH_SCREWS, size: '#10 × 1-1/4 stainless, down on the glue line of the doubler and gunwale' }],
-        notes: `Rated for tie-down straps on coolers, duffels and firewood (post-race hauling, BRIEF §4.9). Four screws land in the oak doubler and gunwale under the plate; the lash-load check pulls it at 300 lbf and 45° (D-41, S-9).${h !== 0 ? ` This plate stands on the S-curve and is turned ${((Math.abs(h) * 180) / Math.PI).toFixed(0)}° to follow the gunwale.` : ''}` }));
+        joints: [{ type: 'screw', to: dId, count: LASH_SCREWS, size: '#10 × 1-1/4 stainless, straight down into the oak doubler', diaIn: LASH_SCREW_DIA_IN, at: screwAt(-LASH_SIZE[2] / 2) }],
+        notes: `Rated for tie-down straps on coolers, duffels and firewood (post-race hauling, BRIEF §4.9). The plate (${LASH_SIZE[0]}" × ${LASH_SIZE[1]}", holes ${2 * LASH_HOLE_DX_IN}" × ${2 * LASH_HOLE_DY_IN}") lies on the top of the ${T}" doubler, entirely inboard of the gunwale; four screws land in the doubler; the lash-load check pulls it at ${p.lashLoadLbf} lbf and ${p.lashPullAngleDeg}° (D-41, S-9).${h !== 0 ? ` This plate stands on the S-curve and is turned ${((Math.abs(h) * 180) / Math.PI).toFixed(0)}° to follow the gunwale.` : ''}` }));
     });
   }
   return parts;

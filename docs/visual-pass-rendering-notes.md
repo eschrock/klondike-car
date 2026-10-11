@@ -112,3 +112,17 @@ Files: `src/viewer/{textures,materials,partMesh,sweep,wheel,viewer}.ts`, new `sr
 Performance: `benchmark(60)` about 3.7 ms (budget 30).
 Tests: see the final summary; `round3.test.ts` covers the rounded sweep (bounds, winding) and the lash mesh bounds.
 Left for the owner / model side: prow crest size, green powdercoat handles, rider figure shape.
+
+## Round 4 (curved hull, D-45)
+
+Files: `src/viewer/{sweep,partMesh,materials,viewer}.ts` (comments only in the last two), `sweep.test.ts`, `round3.test.ts`. No model changes.
+
+- **Plan-path sweeps.** The mesh is built in the sweep's local space (path in XZ, width along local y), and the part transform `[1,0,0 / 0,0,1 / 0,-1,0]` (a proper rotation, so winding is unchanged) places it, so nothing needed to assume a path that rises in z. For the chine, gunwale and rail, local y is the member height, so the "width" faces are the visible outer and inner sides, and the long glue lines of the bent lamination sit on the top and bottom faces (subtle, `PLY_LINE_MAT`); the web (plies 2) draws one line on its top and bottom edge.
+- **Grain.** UVs are arc length along the path (u) and across the face (v), per face, so grain follows the curve with no stretching; verified at the S-curve.
+- **Roundover (D-44).** The viewer now uses the model's `finish.roundoverIn` (0.208" on the chine; before it was a fixed 30% of the thinner side, tuned for the prow). All four long edges of an oak sweep are rolled, so the gunwale top edges are covered. Normals are analytic: smooth along the path, crisp across the roundover.
+- **End grain.** Both ends are now flat end-grain caps (the old domed prow tip is off: `dome` defaults to 0 and is kept only as an option). Sweeps get two material groups: long grain, and end grain (oak) or ply edge (okoume end caps and the thin top and bottom faces of the web) with the matching tile scale. This also fixed a back-facing start cap in the old rounded sweep (the winding test tolerated it).
+- **Decks, shoulder beam.** `deck-cabin` and `deck-nose` (46 and about 50 vertices) go through the extrusion grain path: grain along x, no stretching, no seams in Top view. The shoulder beam is a plain box with oak grain across (`grain: y`).
+- **Prow.** No viewer code expects it any more (the only leftovers were comments, reworded). The bridle-hiding rule for rope is unchanged.
+- **Seam note (model side, optional).** The curved sweeps end at x = 30.375 where the nose side continues as straight parts (`side-nose-*`: a box chine and extrusion gunwale and web). Their roundover and the extrusion web's grain tile differ slightly from the sweeps, so a faint vertical joint shows there from Iso. It reads as the scarf joint it is; a model-side option is to extend the same sweep through the nose (one part per side) if a continuous look is wanted. No z-fighting or gaps were visible at the transoms or the S-curve.
+
+Performance: `benchmark(60)` about 3.5 ms (budget 30). Checked Iso, Side, Top, light and dark, desktop and the 375x812 mobile preset (after reload).

@@ -43,4 +43,19 @@ describe('buildSweepMesh', () => {
   it('is empty for a degenerate path', () => {
     expect(buildSweepMesh([[0, 0]], 1, 1, 1).positions.length).toBe(0);
   });
+
+  it('has flat end caps in edge ranges, and top/bottom faces as edge for okoume', () => {
+    expect(m.edgeRanges.length).toBe(2);
+    const web = buildSweepMesh(g.path, g.width, g.thickness, 2, true);
+    expect(web.edgeRanges.length).toBe(4);
+  });
+
+  it('works for a path in plan (local y is up): width stays along y', () => {
+    const plan: Vec2[] = [];
+    for (let i = 0; i <= 20; i++) plan.push([i * 2, 3 * Math.sin(i / 3)]);
+    const p = buildSweepMesh(plan, 4.2, 0.236, 2, true);
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 1; i < p.positions.length; i += 3) { lo = Math.min(lo, p.positions[i]); hi = Math.max(hi, p.positions[i]); }
+    expect(hi - lo).toBeCloseTo(4.2, 6);
+  });
 });

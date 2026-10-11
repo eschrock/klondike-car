@@ -4,7 +4,7 @@ import { oakEndTexture, pebbleBump, plyEdgeTexture, signTexture, woodTextures } 
 
 /** What a part looks like. The viewer reads `part.finish.surface` first, then falls back to the material name (D-44). */
 export type Surface = 'oak' | 'okoume' | 'vinyl' | 'rubber' | 'steel' | 'aluminum' | 'asa' | 'rope';
-/** 'sign' = painted side sign (review r1 MUST 4); 'mannequin' = rider and cargo; 'jig' = shop aids such as the prow form. */
+/** 'sign' = painted side sign (review r1 MUST 4); 'mannequin' = rider and cargo; 'jig' = shop aids such as a lamination form. */
 export type Look = Surface | 'truck' | 'ground' | 'sign' | 'mannequin' | 'jig' | 'other';
 
 /** Pushes solid surfaces back a hair so the edge lines drawn on top never z-fight. */

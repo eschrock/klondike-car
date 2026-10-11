@@ -334,7 +334,8 @@ describe('the steering parts at the defaults', () => {
     const sl = byId('kingpin-sleeve-beam');
     expect(sl.material).toMatch(/1-1\/4" OD × 1\/4" wall DOM/);
     expect(sl.sourcing!.vendor).toMatch(/DOM/);
-    expect(sl.sourcing!.vendor).toMatch(/ID 0\.750"/);
+    expect(sl.sourcing!.vendor).toMatch(/ream or hone the bore to 0\.756"/); // r3 build S8: a realistic fit, not a zero-clearance 0.750"
+    expect(sl.sourcing!.vendor).toMatch(/SMALLER than a grade-8 pin body/);
     expect(sl.joints!.some((j) => j.to === 'beam-F')).toBe(true);
     expect(sl.joints!.some((j) => j.type === 'pin' && j.to === 'kp-carrier')).toBe(true); // D-43: the sleeve spigots into both beam plates
     expect(sl.joints!.some((j) => j.type === 'pin' && j.to === 'kp-under')).toBe(true);
@@ -445,8 +446,9 @@ describe('kingpin steel plates and the plate bolt groups (D-43)', () => {
     expect(frontDist).toBeGreaterThanOrEqual(4 * kp.D - 1e-9);
     // crossbar bolts: 4D = 1.25" in the row but the pin hole (0.766") plus bolt and 0.2" web need 2 × (0.383 + 0.156 + 0.2) = 1.48" across the pin → pitch 1.5"
     expect(kp.barX).toEqual([-2.25, -0.75, 0.75, 2.25]);
-    // the carrier is 2.5" wide (param) and reaches 0.5" past the last bolt: 5.46875 + 0.5
-    expect(kp.carrier.hx).toBeCloseTo(1.25, 9);
+    // the carrier is 4" wide (param, r3 N-5) and reaches 0.5" past the last bolt: 5.46875 + 0.5; the plate under the beam keeps 2.5"
+    expect(kp.carrier.hx).toBeCloseTo(2, 9);
+    expect(kp.under.hx).toBeCloseTo(1.25, 9);
     expect(kp.carrier.hy).toBeCloseTo(5.96875, 9);
     // M12: the whole carrier strip fits under the 12" plate (half length 5.97" ≤ 6")
     expect(kp.carrier.hy).toBeLessThanOrEqual(defaults.turntableSizeIn / 2);
@@ -474,8 +476,8 @@ describe('kingpin steel plates and the plate bolt groups (D-43)', () => {
     expect(L.crossbar!.z0).toBeCloseTo(7.9375, 9); // the crossbar oak starts above its plate
     expect(L.kpPlates!.under.z0).toBeCloseTo(4.1875, 9);
     expect(L.kingpin.z0).toBeCloseTo(4.1875, 9); // the pin head and its washer bear under the beam plate
-    // masses: carrier 2.5 × 11.9375 × 0.375 = 11.19 in³ × 0.2836 = 3.17 lb; beam plate 2.5 × 11.9375 × 3/16 = 5.60 in³ = 1.59 lb; crossbar plate 2 × (2.25 + 0.75) = 6.0" × 2.0" × 3/16 = 2.25 in³ = 0.638 lb
-    expect(carrier.massLb).toBeCloseTo(3.17, 2);
+    // masses: carrier 4 × 11.9375 × 0.375 = 17.91 in³ × 0.2836 = 5.08 lb (was 3.17 at 2.5" wide); beam plate 2.5 × 11.9375 × 3/16 = 5.60 in³ = 1.59 lb; crossbar plate 2 × (2.25 + 0.75) = 6.0" × 2.0" × 3/16 = 2.25 in³ = 0.638 lb
+    expect(carrier.massLb).toBeCloseTo(5.08, 2);
     expect(under.massLb).toBeCloseTo(1.59, 2);
     expect(bar.massLb).toBeCloseTo(0.638, 3);
     // the one sleeve runs plate to plate: 7.25 − 4.1875 = 3.0625" × π/4 (1.25² − 0.75²) = 2.405 in³ × 0.2836 = 0.682 lb

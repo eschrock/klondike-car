@@ -8,7 +8,7 @@
  * No lathe, mill, broach or welder (build review M10): the collars are bought, the shaft joints are drill-press cross-pins
  * (a heavy-duty roll pin through collar and shaft, drilled together), and the steel plate (ratchet quadrant) is cut by a
  * waterjet / laser service (`fab: 'outsource'`).
- * The lever pivots on a bolt + bronze sleeve in an oak block bolted to the outside of the left rear rail. The shoes sit on the
+ * The lever pivots on a 3/4" post (bronze sleeve) welded to the ear of the left steel bearing plate; both bearings are bronze flanged sleeves pressed into 3/16" plates bolted to the outside of the rail band (rear-mount.ts, D-48). The shoes sit on the
  * REAR of each tread just below the axle line (shaft is 1.5" behind the tire), so the arms are short and nearly tangent
  * to the tread: the friction force then passes almost through the shaft and the servo effect stays small (see `brakeGeometry`).
  *
@@ -20,6 +20,7 @@ import { BRAKE_TYPE, FRAME_STYLE, PARAM_DEFS, type Params } from '../params';
 import { STEP, box, cylinder, span, segment, SIDES, woodMassLb, IN3_PER_FT3, type Ctx } from './build-utils';
 import type { Layout } from './layout';
 import { compose, multiply, rotationX, translation } from './mat4';
+import { BEARING_STANDOFF_IN, HEAD_HEIGHT_D, bearingMount, boltLength, inchesText, localPoint } from './rear-mount';
 import type { Joint, Mat4, Part, Vec2, Vec3 } from './types';
 
 const RAD = Math.PI / 180;
@@ -59,8 +60,12 @@ const PAD_INSET_BARS = 0.6;
 const RETURN_SPRING_MASS_LB = 0.12;
 const PAWL_SPRING_MASS_LB = 0.03;
 const SLEEVE_MASS_LB = 0.05;
+/** 5052 aluminum sheet density (0.098 lb/in³) for the splash shield mass. */
+const ALUMINUM_LB_PER_IN3 = 0.098;
 /** Bronze / steel sleeve wall (both sides) around a pin or bolt in an oak bore. */
-export const SLEEVE_WALL_IN = 0.1875;
+export const SLEEVE_WALL_IN = 0.375;
+/** Wall of the bronze sleeve in the lever bore around the 3/4" pivot post (3/4" ID × 1" OD). */
+export const PIVOT_SLEEVE_WALL_IN = 0.125;
 
 // ── 2D helpers on (x, z) ──
 export type V2 = [number, number];
@@ -152,7 +157,7 @@ export interface BrakeGeom {
 export interface BrakeY {
   /** Outer face of the rail band the shaft crosses. */
   rail: number;
-  /** Oak lever-pivot / shaft-bearing block on the rail band. */
+  /** Steel bearing plate on the rail band (build r2 MUST-3: replaces the oak block): carries the shaft bearing and (left) the lever pivot. */
   block: [number, number];
   /** Lever (bottom of its lean) and crank / link plane centre. */
   lever: [number, number];
@@ -323,13 +328,15 @@ function geometryWithTail(p: Params, L: Layout, tailIn: number, crankIn: number)
   const armOut: [number, number] = [padY1 + STACK_GAP_IN * 0.4, padY1 + STACK_GAP_IN * 0.4 + barT];
   const hubIn: [number, number] = [armIn[0] - hubLen, armIn[0]];
   const hubOut: [number, number] = [armOut[1], armOut[1] + hubLen];
-  const bt = Math.max(0.45, leverY0 - STACK_GAP_IN - rail);
+  const bt = p.brakePlateThickIn;
+  const headH = HEAD_HEIGHT_D * p.brakeBearingBoltDiameterIn;
   const y: BrakeY = {
     rail,
     block: [rail, rail + bt],
     lever: [leverY0, leverY0 + leverW],
     plane,
-    crank: ((): [number, number] => { const y0 = Math.max(rail + bt, leverY0 - 0.5) + STACK_GAP_IN; return [y0, 2 * plane - y0]; })(),
+    // The crank starts just outside the plate's bolt heads (heads stand HEAD_HEIGHT_D × D proud of the plate) and is centred on the link plane.
+    crank: ((): [number, number] => { const y0 = Math.max(rail + bt + headH + 0.1, leverY0); return [y0, 2 * plane - y0]; })(),
     pad: [padY0, padY1],
     armIn, armOut, hubIn, hubOut,
     shaftHalf: hubOut[1],
@@ -498,10 +505,10 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
   // ── Cross shaft ──
   add1(fixed(cylinder(ctx, {
     id: 'brake-shaft', name: 'Brake cross shaft', group: 'brake', mat: 'steel', step: STEP.brake, center: [g.S[0], 0, g.S[1]], axis: 'y',
-    radius: D / 2, length: 2 * Y.shaftHalf, material: 'ground 4140 pre-hard steel rod (zinc-plated)',
+    radius: D / 2, length: 2 * Y.shaftHalf, material: 'ground 4140 pre-hardened alloy steel rod (28-32 HRC)',
     stock: bar(p, D, D, 2 * Y.shaftHalf),
-    sourcing: { vendor: `McMaster-Carr (${D}" precision ground 4140 pre-hardened alloy rod, 36" lengths, cut on the bandsaw with a metal blade; zinc-plated or greased)` },
-    notes: `Turns ±~11° in two flange bearings. Each collar and the crank are cross-drilled with the shaft on the drill press (clamp the assembly in a V-block, drill ${p.brakeRollPinDiameterIn}" through both) and a heavy-duty roll pin is driven in: no keyseat, lathe or mill (build review M10). Shaft ground rod (D-38). ${STEEL_FINISH} Both ends carry a rubber / nylon dome cap (shin height).`,
+    sourcing: { vendor: `McMaster-Carr (${D}" precision ground 4140 pre-hardened alloy rod, 72" (6 ft) length: the cut shaft is ${f2(2 * Y.shaftHalf)}", so the 36" length is too short; cut on the bandsaw with a bi-metal blade and cutting fluid, chamfer both ends, grease it)` },
+    notes: `Turns ±~11° in two flange bearings. CROSS-DRILLING A 28-32 HRC ROD ON A DRILL PRESS (build review r2 S9): the six ${p.brakeRollPinDiameterIn}" holes (one per arm collar, two at 90° in the crank) are drilled with each collar or the crank clamped on the shaft in a V-block in the drill-press vise: center-punch, 1/8" pilot, then a ${p.brakeRollPinDiameterIn}" cobalt (M42) bit, about 300 rpm, cutting fluid, peck every 1/16"; ream to the roll-pin size; drill collar and shaft TOGETHER so the holes line up. Plan on one dull bit; if the shop would rather not, a machine shop will cross-drill the rod cheaply, or step up to a 7/8" 1045 shaft (+1.8 lb) that drills like mild steel. No keyseat, lathe or mill (build review M10). Shaft ground rod (D-38). ${STEEL_FINISH} Both ends carry a rubber / nylon dome cap (shin height).`,
     joints: [
       { type: 'pin', to: 'brake-hub-L-in', count: 1, size: `${p.brakeRollPinDiameterIn}" heavy-duty roll pin`, note: 'cross-drilled through the collar and shaft together' },
       { type: 'pin', to: 'brake-hub-L-out', count: 1, size: `${p.brakeRollPinDiameterIn}" heavy-duty roll pin` },
@@ -512,32 +519,60 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
     explode: [0, 0, -1],
   })));
 
+  const mount = bearingMount(p, L, g.S, g.Q);
+  const rail0 = mount.rail;
+  const plateT = p.brakePlateThickIn;
+  const bolts = mount.bolts;
+  const nB = bolts.length;
+  const bolt = p.brakeBearingBoltDiameterIn;
+  const dbl = mount.doubler;
+  const grip = plateT + rail0.t + dbl.t;
+  const bLen = boltLength(grip, bolt);
+
   for (const { s: sgn, tag } of SIDES) {
-    // Bronze bushing through the rail band and the oak block (steel-backed bearing length = rail + block), pressed in from outside.
+    // Steel bearing plate on the OUTSIDE of the rail band (build r2 MUST-3, D-48): bolted in the solid rail forward of the shaft notch; the flanged
+    // bronze bearing is pressed into it and stands into the notch; the left plate has an ear that reaches behind the rail end for the lever pivot.
     {
-      const railIn = ladder ? L.hwC - p.railThicknessIn : L.hwC;
-      const [b0, b1] = yRange(sgn, railIn, Y.block[1]);
-      add1(fixed(cylY(ctx, {
-        id: `brake-bushing-${tag}`, partNo: 'brake-bushing', name: `Cross shaft bushing ${tag}`, c: g.S, y0: b0, y1: b1, radius: (D + HUB_WALL_IN) / 2, mat: 'fixed', kind: 'purchased',
-        material: 'oil-impregnated bronze sleeve bearing', massLb: BUSHING_MASS_LB_PER_IN * Math.abs(b1 - b0), fab: 'buy', explode: [0, sgn, -0.3],
-        sourcing: { vendor: 'McMaster-Carr (SAE 841 flanged sleeve bearing or sleeve, bore = shaft; two per side)' },
-        joints: [
-          { type: 'bolt', to: railId(tag), count: 4, size: `${p.brakeBearingBoltDiameterIn}" carriage bolts on a ${p.brakeBearingBoltSpacingIn}" square, fender washers and nuts inside the rail`, note: 'through the steel bearing plate, the oak block and the rail band' },
-        ],
-        notes: 'Bronze sleeve bearing pressed into a 1/4" steel bearing plate set flush in the oak block (plate not drawn): the bolt pattern, not the oak, resists the overturning moment of the crank and shoe-arm loads (checked in brake-shaft, D-38).',
-      })));
-    }
-    if (sgn < 0) {
-      const [k0, k1] = yRange(sgn, Y.block[0], Y.block[1]);
-      add1(fixed(box(ctx, {
-        id: 'brake-bearing-block-R', name: 'Brake shaft bearing block R', group: 'brake', mat: 'oak', step: STEP.brake, grain: 'x',
-        ...span([g.S[0] - 1.25, g.S[0] + 1], [k0, k1], [g.S[1] - 1, Math.min(g.S[1] + 1, L.deckTop - p.crossmemberDepthIn - 0.02)]),
-        joints: [
-          { type: 'bolt', to: railId(tag), count: 2, size: '5/16-18 × 3 carriage bolts, washers and nuts inside the rail' },
-          { type: 'bolt', to: 'brake-bushing-R', count: 4, size: 'bearing-plate bolts (see the bushing)' },
-        ],
-        notes: 'Oak bearing pad on the outside of the right rail band: carries the shaft bearing plate (D-38).', explode: [0, sgn, -0.3],
-      })));
+      const plateId = `brake-bearing-plate-${tag}`;
+      const [pl0, pl1] = yRange(sgn, Y.block[0], Y.block[1]);
+      const yMid = sgn * (Y.rail + plateT / 2);
+      const plate = planarExtrusion(ctx, {
+        id: plateId, partNo: 'brake-bearing-plate', name: `Brake bearing plate ${tag}`, mat: 'steel', outline: tag === 'L' ? mount.outlineL : mount.outlineR, origin: [0, 0],
+        yHi: Math.max(pl0, pl1), depth: plateT, fab: 'outsource', explode: [-0.3, sgn, -0.2],
+        sourcing: { vendor: `Waterjet / laser cutting service (SendCutSend, OSH Cut or a local shop): ${f2(plateT)}" A36 plate from the DXF, ${nB} × ${f2(mount.boltHole)}" bolt holes, ${f2(mount.bearingOd)}" bearing bore (reamed to a press fit)${tag === 'L' ? `; the ${f2(p.brakePivotBoltDiameterIn)}" pivot post is welded to the ear` : ''}; hot-dip galvanize or zinc-rich primer + paint (steel against wet oak, epoxy the contact face)` },
+        joints: [],
+        notes: `${f2(plateT)}" A36 plate on the outside of the ${rail0.ladder ? 'cabin rail' : 'side girder'}, ${bolts.length} bolts (${mount.xCols.length} columns × 2 rows) in the solid wood FORWARD of the shaft notch, ${f2(mount.dist.end)}" from the rail end (≥ 7D) and ${f2(mount.dist.bottom)}" / ${f2(mount.dist.top)}" from the rail bottom / the deck ledge. The bronze bearing (${f2(mount.bearingOd)}" OD) is pressed in and stands ${f2(BEARING_STANDOFF_IN)}" into the ${f2(mount.notch.x1 - mount.notch.x0)}" shaft notch cut up from the rail bottom (the shaft passes through the notch, not through the rail).${tag === 'L' ? ` The ear behind the rail end carries the welded lever pivot post at x = ${f2(g.Q[0])}" (the plate overhangs the rear transom's end, which has no bolts in end grain).` : ''} ${STEEL_FINISH}`,
+      });
+      const world = bolts.map(([x, z]): Vec3 => [x, yMid, z]);
+      plate.joints!.push({
+        type: 'bolt', to: railId(tag), count: bolts.length, diaIn: bolt, at: world.map((w) => localPoint(plate.transform, w)),
+        size: `${f2(bolt)}" × ${inchesText(bLen)} 316 hex bolts (head outside, ${f2(HEAD_HEIGHT_D * bolt)}" proud), 1-1/2" fender washer + nylock nut inside the rail`,
+        note: `grid ${mount.xCols.length} × 2 at ${f2(p.brakeBearingBoltSpacingIn)}" × ${f2(p.brakeBearingBoltRowGapIn)}"; grip ${f2(grip)}" (plate + rail + oak doubler)`,
+      });
+      plate.joints!.push({ type: 'pin', to: `brake-bushing-${tag}`, count: 1, size: `${f2(mount.bearingOd)}" bore, press fit with retaining compound`, at: [localPoint(plate.transform, [g.S[0], yMid, g.S[1]])] });
+      if (tag === 'L') plate.joints!.push({ type: 'pin', to: 'brake-lever-pin', count: 1, size: '3/16" fillet weld all round (outsourced)', at: [localPoint(plate.transform, [g.Q[0], sgn * Y.block[1], g.Q[1]])] });
+      add1(fixed(plate));
+      if (dbl.t > 1e-6) {
+        const dy: [number, number] = yRange(sgn, rail0.yIn - dbl.t, rail0.yIn);
+        const doubler = box(ctx, {
+          id: `brake-rail-doubler-${tag}`, partNo: 'brake-rail-doubler', name: `Bearing-plate oak doubler ${tag}`, group: 'brake', mat: 'oak', step: STEP.brake, grain: 'x',
+          ...span([dbl.x0, dbl.x1], dy, [dbl.z0, dbl.z1]), explode: [0.2, -sgn, -0.3],
+          joints: [{ type: 'glue', to: railId(tag), count: 1, size: 'epoxy, full face, clamped with the bearing-plate bolts' }],
+          notes: `${f2(dbl.t)}" oak doubler glued to the INSIDE of the ${rail0.ladder ? 'rail' : 'girder'} behind the bolt grid (x ${f2(dbl.x0)} to ${f2(dbl.x1)}), so the ${nB} bearing-plate bolts go through ${f2(rail0.t + dbl.t)}" of oak (more bolt capacity and a cleavage limit that a 3/4" rail alone cannot meet at these edge distances, build MUST-3, D-48). It starts forward of the shaft's path and stops short of the rear-axle-beam hold-down angle; the deck rests on its top.`,
+        });
+        doubler.joints!.push({ type: 'bolt', to: plateId, count: nB, diaIn: bolt, size: 'the plate bolts pass through (see the plate)', at: bolts.map(([x, z]) => localPoint(doubler.transform, [x, sgn * (rail0.yIn - dbl.t / 2), z])) });
+        add1(fixed(doubler));
+      }
+      // Flanged bronze bearing: pressed into the plate, stands into the notch (steel-backed length = plate + standoff).
+      const [b0, b1] = yRange(sgn, Y.rail - BEARING_STANDOFF_IN, Y.block[1]);
+      const bush = cylY(ctx, {
+        id: `brake-bushing-${tag}`, partNo: 'brake-bushing', name: `Cross shaft bearing ${tag}`, c: g.S, y0: b0, y1: b1, radius: mount.bearingOd / 2, mat: 'fixed', kind: 'purchased',
+        material: 'oil-impregnated bronze flanged sleeve bearing', massLb: BUSHING_MASS_LB_PER_IN * Math.abs(b1 - b0), fab: 'buy', explode: [0, sgn, -0.3],
+        sourcing: { vendor: `McMaster-Carr (SAE 841 flanged sleeve bearing, ${f2(D)}" ID × ${f2(mount.bearingOd)}" OD × ${f2(Math.abs(b1 - b0))}" long; confirm the stocked length, the ID is what matters; flange against the plate's outer face)` },
+        notes: `Bronze sleeve bearing pressed into the ${f2(plateT)}" steel plate (the plate, not the oak, carries the overturning moment of the crank and shoe-arm loads to the bolt grid: brake-shaft, D-38/D-48); it stands ${f2(BEARING_STANDOFF_IN)}" into the shaft notch in the rail.`,
+      });
+      bush.joints = [{ type: 'pin', to: plateId, count: 1, size: `${f2(mount.bearingOd)}" press fit`, at: [localPoint(bush.transform, [g.S[0], yMid, g.S[1]])] }];
+      add1(fixed(bush));
     }
     // Shoe assembly: hubs, arms, pin, pad, spring.
     const arm = (which: 'in' | 'out') => {
@@ -610,6 +645,32 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
       joints: [{ type: 'glue', to: `brake-shoe-${tag}`, count: 1, size: 'contact / epoxy adhesive + 2 stainless pan-head screws, countersunk', note: 'cut on the bandsaw to the arc, bonded to the oak pad face' }],
       notes: `${f2(lt)}" lining, ${f2(p.brakeShoeLengthIn)}" long × ${f2(Y.pad[1] - Y.pad[0])}" wide, bonded to the pad face with contact or epoxy adhesive and held by two countersunk stainless screws (so a peeled bond cannot drop it onto the tire). Design μ ${f2(p.brakePadMu)} wet; ${f2(p.brakePadMuFouled)} mud-fouled (pass/fail). Test a lining sample on a wet tire first.`,
     }));
+    // Splash shield (build review r1 S10, r2): a bent 1/16" aluminum (or HDPE) hood on the BACK of the shoe, reaching up past the shoe's upper end, that keeps
+    // tire spray and thrown stones off the pad back, the pin and the pivot region. It sits on the pad (no extra bracket), does not touch the tread and stays above the pad's
+    // lowest corner so the ground clearance does not change. Limited help by design: the mud-fouled lining case remains the pass/fail one.
+    if (p.brakeShieldThickIn > 1e-6) {
+      const st = p.brakeShieldThickIn, ext = 0.2;
+      const rIn = r + p.brakeShoeThickIn, rMid = rIn + st / 2;
+      const depthY = Y.pad[1] - Y.pad[0];
+      const a0 = g.beta - delta - ext, a1 = g.beta + delta;
+      const nSeg = 8;
+      const path: Vec2[] = Array.from({ length: nSeg + 1 }, (_, i) => {
+        const a = a0 + ((a1 - a0) * i) / nSeg;
+        return [g.O[0] + shift[0] - rMid * Math.cos(a), g.O[1] + shift[1] - rMid * Math.sin(a)] as Vec2;
+      });
+      const arcLen = (a1 - a0) * rMid;
+      const shield = box(ctx, {
+        id: `brake-shoe-shield-${tag}`, partNo: 'brake-shoe-shield', name: `Brake shoe splash shield ${tag}`, group: 'brake', mat: 'fixed', kind: 'metal', material: '5052 aluminum sheet 1/16", bent over a form (or 1/16" HDPE)',
+        size: [arcLen, depthY, st], center: [path[nSeg >> 1][0], (py0 + py1) / 2, path[nSeg >> 1][1]], massLb: arcLen * depthY * st * ALUMINUM_LB_PER_IN3,
+        fab: 'bandsaw', step: STEP.brake, explode: [0.4, sgn, 0.3], stock: { t: st, w: depthY, l: arcLen },
+        sourcing: { vendor: `McMaster-Carr (5052 aluminum sheet ${f2(st)}" thick, or HDPE; cut ${f2(depthY)}" × ${f2(arcLen)}" blank, bent over a ${f2(rIn)}"-radius form or a wood block, 2 × #8 316 pan-head screws into the oak)` },
+        joints: [{ type: 'screw', to: `brake-shoe-${tag}`, count: 2, size: '#8 × 5/8 316 pan-head screws into the pad back', note: 'pre-drill the oak; the screws stop short of the lining' }],
+        notes: `Splash hood: bent ${f2(st)}" sheet on the pad back, ${f2(ext * rIn)}" longer than the pad toward the axle line (its low end stops at the pad's lowest corner, so ground clearance is unchanged). Keeps tire spray, mud and stones off the pad back and pin; it does not touch the tread. Moves with the shoe.`,
+      });
+      shield.geometry = { type: 'sweep', path, width: depthY, thickness: st, plies: 1 };
+      shield.transform = translation(0, (py0 + py1) / 2, 0);
+      add1(shield);
+    }
   }
 
   // ── Return spring (single torsion spring on the shaft, right side) ──
@@ -660,7 +721,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
       return part;
     };
     const joints: Joint[] = [
-      { type: 'bolt', to: 'brake-lever-pin', count: 1, size: `${p.brakePivotBoltDiameterIn}" pivot bolt through a bronze sleeve`, note: 'bore at the pivot; sleeve pressed in' },
+      { type: 'pin', to: 'brake-lever-pin', count: 1, size: `${p.brakePivotBoltDiameterIn}" pivot post through a bronze sleeve`, note: 'bore at the pivot; sleeve pressed in' },
       { type: 'bolt', to: 'brake-link-clevis-lever', count: 1, size: `${p.brakeClevisPinDiameterIn}" clevis pin`, note: 'tail bore, fork straddles the lever' },
       { type: 'bolt', to: 'brake-pawl-pin', count: 1, size: `${p.brakePawlPinDiameterIn}" shoulder screw into a threaded insert` },
     ];
@@ -675,29 +736,29 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
       add1(lever3('brake-lever-upper', 'Brake lever (upper, leaning)', knee, leverTop, { joints: [joints[2], { type: 'glue', to: 'brake-lever', count: 1, size: 'one blank, bent at the knee', note: 'shown as two bars' }], notes: 'Leans out parallel to the flared side web so the grip clears the gunwale (D-38).' }));
     }
   }
-  // Pivot block, sleeve and bolt (fixed) — the block is the lever's mount on the rail band.
-  const [pb0, pb1] = Y.block;
-  const blockTop = Math.min(Math.max(g.Q[1] + 1.2, g.S[1] + 0.75), L.deckTop - p.crossmemberDepthIn - 0.02);
-  add1(fixed(box(ctx, {
-    id: 'brake-pivot-block', name: 'Brake pivot / bearing block', group: 'brake', mat: 'oak', step: STEP.brake, grain: 'x',
-    ...span([Math.max(g.Q[0] - 0.75, L.xRear), g.S[0] + 1], [pb0, pb1], [Math.min(g.Q[1] - 1.2, g.S[1] - 0.75), Math.max(blockTop, g.Q[1] + 0.5)]),
-    joints: [
-      { type: 'bolt', to: railId('L'), count: 3, size: '5/16-18 × 3 carriage bolts, washers and nuts inside the rail', note: 'through the rail band' },
-      { type: 'bolt', to: 'brake-lever-pin', count: 1, size: '3/8 pivot bolt through block and rail' },
-      { type: 'bolt', to: 'brake-bushing-L', count: 4, size: 'bearing-plate bolts (see the bushing)' },
-    ],
-    notes: 'Oak block on the outside of the left rail band: carries the shaft bearing plate and the lever pivot bolt, and stands the lever off the hull top (D-38).',
-    explode: [-1, 0.5, -0.3],
-  })));
-  const pinY1 = lv1 + 0.3;
+  // Lever pivot (build r2 MUST-3, D-48): a 3/4" A36 post welded to the left bearing plate's ear (behind the rail end), thrust washers to stand the lever off
+  // the hull by the finger-gap distance, the bronze lever sleeve, a washer and a cotter pin. No hole in the rail; a stout post because it is a cantilever.
+  const spacerLen = Math.max(0.1, lv0 - Y.block[1]);
+  const pivD = p.brakePivotBoltDiameterIn;
+  const pinY1 = lv1 + 0.4;
   add1(fixed(cylY(ctx, {
-    id: 'brake-lever-pin', name: 'Lever pivot bolt', c: g.Q, y0: Y.rail - 0.3, y1: pinY1, radius: p.brakePivotBoltDiameterIn / 2, mat: 'fixed', kind: 'purchased', material: '316 stainless bolt', massLb: 0.07, fab: 'buy', explode: [-1, 0.5, -0.3],
-    sourcing: { vendor: 'McMaster-Carr (3/8-16 316 stainless hex bolt, 3" long, nut, washers and a 316 acorn nut on the lever side)' },
-    notes: '3/8-16 stainless bolt, nut and washer inside the rail band; a bronze sleeve in the lever bore carries it. The outboard end is covered with a stainless acorn (dome) nut: no bare thread at hand height.',
+    id: 'brake-lever-spacer', partNo: 'brake-lever-spacer', name: 'Lever pivot thrust washers', c: g.Q, y0: Y.block[1], y1: lv0, radius: (pivD + 0.5) / 2, mat: 'fixed', kind: 'purchased',
+    material: '316 stainless thrust washers', massLb: (Math.PI / 4) * (((pivD + 0.5) ** 2) - (pivD + 0.03) ** 2) * spacerLen * 0.289, fab: 'buy', explode: [-1, 0.5, -0.3],
+    sourcing: { vendor: `McMaster-Carr (316 stainless flat washers ${f2(pivD + 0.03)}" ID × ${f2(pivD + 0.5)}" OD, stacked to ${f2(spacerLen)}")` },
+    notes: `Stand the lever ${f2(spacerLen)}" off the bearing plate's outer face so its inboard face is ${f2(lv0 - L.hwC - L.side)}" off the hull (outside the 3/16" to 1/2" finger band, D-38).`,
   })));
+  const pin = cylY(ctx, {
+    id: 'brake-lever-pin', partNo: 'brake-lever-pin', name: 'Lever pivot post', c: g.Q, y0: Y.block[1], y1: pinY1, radius: pivD / 2, mat: 'steel', kind: 'metal', material: 'A36 round bar, welded to the plate', fab: 'drill-tap', explode: [-1, 0.5, -0.3],
+    stock: bar(p, pivD, pivD, Math.abs(pinY1 - Y.block[1]) + 0.25),
+    sourcing: { vendor: `Local steel yard or McMaster-Carr (A36 or 1018 round bar ${f2(pivD)}", cut ${f2(Math.abs(pinY1 - Y.block[1]) + 0.25)}"; 1/8" cross-hole for a 316 cotter pin; welded to the bearing plate ear by the fab shop that cuts the plate: 3/16" fillet all round, then galvanized or zinc-rich primer and paint)` },
+    joints: [{ type: 'pin', to: 'brake-bearing-plate-L', count: 1, size: '3/16" fillet weld all round (outsourced), square to the plate', at: [[0, 0, 0]] }],
+    notes: `${f2(pivD)}" post, ${f2(Math.abs(pinY1 - Y.block[1]))}" proud of the plate: it is a cantilever carrying the lever pivot reaction (about 570 lbf at the 2× hold load, ${f2(spacerLen + (lv1 - lv0) / 2)}" from the plate), so it is a stout steel post, not a bolt (brake-lever checks its bending and weld). A cotter pin through a cross hole and a washer keep the lever on; cap the end with a rubber dome so no bare steel stands at hand height. ${STEEL_FINISH}`,
+  });
+  pin.joints![0].at = [localPoint(pin.transform, [g.Q[0], Y.block[1], g.Q[1]])];
+  add1(fixed(pin));
   add1(fixed(cylY(ctx, {
-    id: 'brake-lever-sleeve', name: 'Lever pivot sleeve', c: g.Q, y0: lv0, y1: lv1, radius: (p.brakePivotBoltDiameterIn + SLEEVE_WALL_IN) / 2, mat: 'fixed', kind: 'purchased', material: 'oil-impregnated bronze sleeve',
-    massLb: SLEEVE_MASS_LB, fab: 'buy', explode: [-1, 0.5, -0.3], sourcing: { vendor: 'McMaster-Carr (SAE 841 sleeve bearing, 3/8 ID)' },
+    id: 'brake-lever-sleeve', name: 'Lever pivot sleeve', c: g.Q, y0: lv0, y1: lv1, radius: (pivD + 2 * PIVOT_SLEEVE_WALL_IN) / 2, mat: 'fixed', kind: 'purchased', material: 'oil-impregnated bronze sleeve',
+    massLb: SLEEVE_MASS_LB * 2, fab: 'buy', explode: [-1, 0.5, -0.3], sourcing: { vendor: `McMaster-Carr (SAE 841 sleeve bearing, ${f2(pivD)}" ID × ${f2(pivD + 2 * PIVOT_SLEEVE_WALL_IN)}" OD × ${f2(lv1 - lv0)}" long)` },
   })));
 
   // Crank: a thick keyed plate (S → link pin), link rod and clevises.
@@ -781,14 +842,28 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
     const zTopT = L.deckTop + L.sideH;
     const bz0 = Math.max(quadZ[0], zTopT - 2.5), bz1 = Math.min(quadZ[1], zTopT);
     const bY: [number, number] = [L.hwC - 1, Y.quad[1]];
+    // Bracket bolts (build review r2 S2): stack = angle leg + transom (+ the corner backer where there is one); length = stack + washer + nut + two threads, rounded up.
+    const hgB = handleGeometry(p, L);
+    const backerY: [number, number] = [Math.max(0.5, hgB.yPost - hgB.socketY / 2 - 0.5), L.hwC];
+    const zBr = (bz0 + Math.max(bz0 + 0.5, bz1)) / 2;
+    const xBr = L.xRear - p.brakeRatchetPlateThickIn / 2;
+    const bkBolt = (y: number) => {
+      const inBacker = y >= backerY[0] && y <= backerY[1];
+      const grip = p.brakeRatchetPlateThickIn + L.transom + (inBacker ? p.blockingThickIn : 0);
+      return { y, inBacker, grip, len: boltLength(grip, 0.25, 1) };
+    };
+    const bA = bkBolt(L.hwC - 0.5), bB = bkBolt(Y.quad[1] - 0.6);
+    const brCenter: Vec3 = [xBr, ((L.hwC - 1) + Y.quad[1]) / 2, zBr];
+    const bracketBolts: Joint[] = [bA, bB].map((bb) => ({
+      type: 'bolt' as const, to: 'transom-rear', count: 1, diaIn: 0.25,
+      size: `1/4-20 × ${inchesText(bb.len)} 316 hex bolt (stack ${f2(bb.grip)}" = angle ${f2(p.brakeRatchetPlateThickIn)}" + transom ${f2(L.transom)}"${bb.inBacker ? ` + backer ${f2(p.blockingThickIn)}"` : ', no backer here'}), fender washer + nylock nut inside`,
+      at: [[0, bb.y - brCenter[1], 0] as Vec3], note: bb.inBacker ? 'through the corner backer' : 'outboard of the corner backer: transom only',
+    }));
     add1(fixed(box(ctx, {
       id: 'brake-quadrant-bracket', name: 'Ratchet bracket (cut angle)', group: 'brake', mat: 'steel', step: STEP.brake, fab: 'drill-tap',
       sourcing: YARD('A36 angle iron, 2" × 2" × 1/4", cut on the bandsaw with a metal blade and drilled'),
       ...span([L.xRear - p.brakeRatchetPlateThickIn, L.xRear], bY, [bz0, Math.max(bz0 + 0.5, bz1)]),
-      joints: [
-        { type: 'bolt', to: 'transom-rear', count: 2, size: '1/4-20 × 1-1/2 carriage bolts, fender washers inside', note: 'through the rear transom, near the left corner' },
-        { type: 'bolt', to: 'brake-quadrant', count: 2, size: '1/4-20 machine screws' },
-      ],
+      joints: bracketBolts,
       notes: `Cut from 1/4" angle iron (a bought L, not bent: one leg against the outer face of the rear transom, the other carrying the toothed quadrant). The ratchet load presses it onto the transom. Sits where the rear transom backer goes (hull workstream): bolts pass through the backer. ${STEEL_FINISH}`,
       explode: [-1, 0.5, 0.5],
     })));
@@ -905,10 +980,11 @@ export function handleGeometry(p: Params, L: Layout): HandleGeom {
   const zTop = L.deckTop + L.sideH;
   const zBot = zTop - p.handleSocketDepthIn;
   const xo = L.xRear;
-  const postX: [number, number] = [xo - w - p.handlePostThickIn, xo - w];
+  const slip = p.handleSocketSlipIn;
+  const postX: [number, number] = [xo - w - slip - p.handlePostThickIn, xo - w - slip];
   const barZ = p.rearHandleHeightIn;
   return {
-    zTop, zBot, socketX: p.handlePostThickIn + 2 * w, socketY: p.handlePostWidthIn + 2 * w, postX,
+    zTop, zBot, socketX: p.handlePostThickIn + 2 * (w + slip), socketY: p.handlePostWidthIn + 2 * (w + slip), postX,
     zPin: zBot + Math.min(1, p.handleSocketDepthIn / 4), zFoot: zBot + 0.5, zPostTop: barZ - p.handleBarDiameterIn / 2,
     gripArm: barZ - zTop, yPost: L.hwC - p.handleUprightInsetIn, xBar: (postX[0] + postX[1]) / 2,
   };
@@ -921,7 +997,9 @@ function buildHandle(ctx: Ctx): Part[] {
   const w = p.handleSocketWallIn;
   const barZ = p.rearHandleHeightIn;
   // Hollow 6061 aluminum tube (plan item 5, −1.5 lb vs steel): wall area × length × density.
-  const tubeLb = ((h.socketX * h.socketY - p.handlePostThickIn * p.handlePostWidthIn) * p.handleSocketDepthIn / IN3_PER_FT3) * p.aluminumDensityPcf;
+  const tubeLb = ((h.socketX * h.socketY - (h.socketX - 2 * w) * (h.socketY - 2 * w)) * p.handleSocketDepthIn / IN3_PER_FT3) * p.aluminumDensityPcf;
+  const sockGrip = w + L.transom + p.blockingThickIn;
+  const sockLen = boltLength(sockGrip, 0.25, 2);
   for (const { s, tag } of SIDES) {
     const y = s * h.yPost;
     parts.push(box(ctx, {
@@ -930,10 +1008,11 @@ function buildHandle(ctx: Ctx): Part[] {
       ...span([L.xRear - h.socketX, L.xRear], [y - h.socketY / 2, y + h.socketY / 2], [h.zBot, h.zTop]),
       material: '6061-T6 aluminum rectangular tube, anodized',
       joints: [
-        { type: 'bolt', to: 'transom-rear', count: 2, size: '1/4-20 × 1-1/2 stainless carriage bolt, fender washers inside, nylon washer under the head', note: 'two bolts through the oak transom (and its backer)' },
+        { type: 'bolt', to: 'transom-rear', count: 2, diaIn: 0.25, size: `1/4-20 × ${inchesText(sockLen)} 316 button-head cap screws (round holes: a carriage-bolt square neck will not seat in a 1/8" aluminum wall), nylon washer under the head, fender washer + nylock nut inside the backer`,
+          at: [h.zBot + 1.2, h.zTop - 1.2].map((z): Vec3 => [h.socketX / 2 - w / 2, 0, z - (h.zBot + h.zTop) / 2]), note: `grip = socket wall ${f2(w)}" + transom ${f2(L.transom)}" + backer ${f2(p.blockingThickIn)}" = ${f2(sockGrip)}"; ${f2(sockLen)}" bolt: grip + 2 washers + nut + two threads` },
         { type: 'pin', to: `handle-post-${tag}`, count: 1, size: `${p.handlePinDiameterIn}" clevis pin through both walls and the post` },
       ],
-      notes: `Aluminum 6061-T6 rectangular tube ${f2(h.socketX)} × ${f2(h.socketY)} × ${f2(p.handleSocketDepthIn)} (wall ${f2(w)}), cut on the bandsaw and drilled on the drill press; the post is a close slip fit. Lighter than steel (about 0.4 lb vs 1.2 lb each, plan item 5). Anodized or epoxy-coated, and bedded in epoxy / sealant against the transom: bare aluminum corrodes against wet tannin oak. Stays on the cart when the handle is removed (D-9).`,
+      notes: `Aluminum 6061-T6 rectangular tube ${f2(h.socketX)} × ${f2(h.socketY)} × ${f2(p.handleSocketDepthIn)} (wall ${f2(w)}), cut on the bandsaw and drilled on the drill press; the 15/16" × 1-7/16" post is a slip fit (1/32" a side) in the 1.0" × 1.5" inside. Lighter than steel (about 0.4 lb vs 1.2 lb each, plan item 5). Anodized or epoxy-coated, and bedded in epoxy / sealant against the transom: bare aluminum corrodes against wet tannin oak. Stays on the cart when the handle is removed (D-9).`,
       sourcing: { vendor: `McMaster-Carr (6061-T6 aluminum rectangular tube, ${f2(h.socketX)}" × ${f2(h.socketY)}" outside, ${f2(w)}" wall)` }, explode: [-1, 0, 0.3],
     }));
     parts.push(box(ctx, {
@@ -941,9 +1020,10 @@ function buildHandle(ctx: Ctx): Part[] {
       ...span(h.postX, [y - p.handlePostWidthIn / 2, y + p.handlePostWidthIn / 2], [h.zFoot, h.zPostTop]),
       joints: [
         { type: 'pin', to: `handle-socket-${tag}`, count: 1, size: `${p.handlePinDiameterIn}" clevis pin, cross-bored ${f2(h.zPin - h.zBot)}" above the socket bottom` },
-        { type: 'bolt', to: 'handle-bar', count: 1, size: '3/8-16 × 3 carriage bolt, wing nut (hand-removable)' },
+        { type: 'pin', to: 'handle-bar', count: 1, diaIn: 0.375, size: '3/8" × 2-1/4" 316 stainless rod (or an oak dowel) epoxied into a stopped 3/8" hole 1-1/2" deep in the post top and 3/4" deep in the bar underside', note: 'permanent: the posts and the bar come out of the sockets as one U' },
+        { type: 'glue', to: 'handle-bar', count: 1, size: 'epoxy on the post top and the pin' },
       ],
-      notes: 'Lifts straight out of the socket once the pin is out (D-9); the crossbar stays on the uprights.',
+      notes: `Planed ${f2(p.handlePostThickIn)}" × ${f2(p.handlePostWidthIn)}" from 1" × 1-1/2" stock so it slides in the socket (inside ${f2(h.socketX - 2 * w)}" × ${f2(h.socketY - 2 * w)}", build review r2 S7). Lifts straight out of the socket once the clevis pin is out (D-9); the crossbar is epoxied to the two uprights, so the handle comes off as ONE U (no wing nut inside the aluminum socket).`,
     }));
     parts.push(cylinder(ctx, {
       id: `handle-pin-${tag}`, partNo: 'handle-pin', name: `Push handle retaining pin ${tag}`, group: 'removable', mat: 'fixed', kind: 'purchased', material: 'clevis pin + lynch pin', massLb: 0.05,
@@ -955,9 +1035,11 @@ function buildHandle(ctx: Ctx): Part[] {
   const bar = cylinder(ctx, {
     id: 'handle-bar', name: 'Push handle crossbar', group: 'removable', mat: 'oak', removable: true, step: STEP.brake, axis: 'y',
     radius: p.handleBarDiameterIn / 2, length: 2 * (L.hwC + L.side), center: [h.xBar, 0, barZ],
-    notes: `Round ${p.handleBarDiameterIn}" white-oak bar (a dowel or turned stock), ends eased over; bolted to the two uprights (D-44).`,
+    notes: `Round ${p.handleBarDiameterIn}" white-oak dowel (bought, no lathe), ends eased over; pinned and epoxied to the tops of the two uprights (build review r2 S7, D-44). Drill the two blind 3/8" holes in its underside with the dowel in a V-block.`,
+    sourcing: { vendor: `McMaster-Carr or Rockler (${p.handleBarDiameterIn}" white-oak dowel rod, 36" length, cut to ${f2(2 * (L.hwC + L.side))}")` },
   });
   bar.grain = 'z'; // the cylinder's own axis (it lies along Y in the model)
+  bar.joints = SIDES.map(({ s: sg, tag }) => ({ type: 'pin' as const, to: `handle-post-${tag}`, count: 1, diaIn: 0.375, size: '3/8" × 2-1/4" 316 stainless rod epoxied, blind hole 3/4" deep in the bar', at: [localPoint(bar.transform, [h.xBar, sg * h.yPost, barZ - p.handleBarDiameterIn / 2 + 0.375])] }));
   parts.push(bar);
   return parts;
 }

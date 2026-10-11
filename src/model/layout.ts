@@ -233,7 +233,8 @@ export function computeLayout(input: Params): Layout {
   // deck ply never lengthens the panel span next to the beam (critic Phase 2 r1, D1 oddity).
   const cabinJoistX = evenInterior(xRear + transom, xs, p.crossmemberSpacingIn, joistT).flatMap((x) => {
     const half = (beamR.thick + joistT) / 2 + 0.05;
-    if (beamR.top > deckTop - ply - jD + 0.01 && Math.abs(x - beamR.x) < half) return [beamR.x - half, beamR.x + half];
+    // (Always, for an underslung beam: its hold-down angles stand on the beam top between the straddling joists, D-47.)
+    if ((beamR.top > deckTop - ply - jD + 0.01 || p.axleBeamPosition === AXLE_BEAM_POSITION.underslung) && Math.abs(x - beamR.x) < half) return [beamR.x - half, beamR.x + half];
     const sh = (p.brakeShaftDiameterIn + joistT) / 2 + 0.05;
     if (shaftThroughJoists && Math.abs(x - shaftX) < sh) return [x < shaftX ? shaftX - sh : shaftX + sh];
     return [x];
@@ -269,7 +270,7 @@ export function computeLayout(input: Params): Layout {
   } else if (p.storageLocation === STORAGE_LOCATION.forwardRaised) {
     const x0 = xn;
     const x1 = Math.max(x0 + 1, xFront - side - 1.5);
-    const w = Math.max(1, 2 * hwN);
+    const w = Math.max(1, 2 * (hwN - p.storageSideClearIn)); // clearance to the chine (r3 build S3, D-47)
     // Over the nose the box must clear the tires and also the rider's knees (the legs pass under it to the foot stop).
     const footDeck = p.seatXIn + p.riderLegReachIn >= xs ? noseTop : deckTop;
     const zBot = Math.max(2 * r + p.storageRaisedClearIn, riderLegTopZ(p, surface, footDeck) + p.storageRaisedClearIn);
@@ -277,11 +278,12 @@ export function computeLayout(input: Params): Layout {
   } else {
     // Behind the seat back: its rear face leans back as it rises, so the box end follows it.
     const x0 = xRear + transom + rearLane;
+    const hwB = hwC - p.storageSideClearIn; // the box stands this far off the chine inner face (r3 build S3, D-47)
     const backX = (zTop: number) => Pr[0] - Math.max(0, zTop - Pr[2]) * (-col2[0] / col2[2]);
-    let h = Math.min(hCap, p.storageVolumeIn3 / (Math.max(0.5, seatRear - x0) * Math.max(0.5, 2 * hwC)));
-    for (let i = 0; i < 6; i++) h = boxHeight(Math.max(1, backX(deckTop + h) - x0), 2 * hwC);
+    let h = Math.min(hCap, p.storageVolumeIn3 / (Math.max(0.5, seatRear - x0) * Math.max(0.5, 2 * hwB)));
+    for (let i = 0; i < 6; i++) h = boxHeight(Math.max(1, backX(deckTop + h) - x0), 2 * hwB);
     const x1 = Math.max(x0 + 1, backX(deckTop + h));
-    storage = { location: p.storageLocation, x0, x1, zBot: deckTop, zTop: deckTop + boxHeight(x1 - x0, 2 * hwC), hw: hwC };
+    storage = { location: p.storageLocation, x0, x1, zBot: deckTop, zTop: deckTop + boxHeight(x1 - x0, 2 * hwB), hw: hwB };
   }
 
   // D-45: the sides are vertical (the S-curve web is laminated around a plan-view form), so there is no flare; the chine bottom, the web

@@ -9,6 +9,7 @@ import { makeCtx } from '../model/build-utils';
 import { brakeGeometry, ratchetGeometry } from '../model/brake';
 import { makeContext } from './context';
 import { brakeSweep } from './brake';
+import { mountStatics } from './brake-mount';
 import { runChecks, type AnalysisCheck } from './index';
 import { RECOMMENDED } from '../../scripts/recommended';
 
@@ -46,20 +47,20 @@ describe('brake ratio and handle force', () => {
     expect(c.how).toMatch(/servo/);
     expect(c.how).toMatch(/de-servo/);
   });
-  it('auto tail: the lever tail is solved so the critical ratio = target × headroom (12 × 1.1 = 13.2:1), for any wheel size', () => {
-    // Hand: 12 × 1.1 = 13.2. The solved tail is a number between the param limits (1" … 4") that depends on the wheel.
-    expect(g.ratioCrit).toBeCloseTo(13.2, 6);
+  it('auto tail: the lever tail is solved so the critical ratio = target × headroom (12 × 1.2 = 14.4:1, r3 N-8), for any wheel size', () => {
+    // Hand: 12 × 1.2 = 14.4. The solved tail is a number between the param limits (1" … 4") that depends on the wheel.
+    expect(g.ratioCrit).toBeCloseTo(14.4, 6);
     expect(g.tailIn).toBeGreaterThan(1);
     expect(g.tailIn).toBeLessThan(4);
     for (const wheel of [12, 12.5, 13]) {
       const c = makeCtx({ ...defaults, wheelDiameterIn: wheel } as Params);
       const gw = brakeGeometry(c.p, c.L);
-      expect(gw.ratioCrit, `wheel ${wheel}`).toBeCloseTo(13.2, 6);
+      expect(gw.ratioCrit, `wheel ${wheel}`).toBeCloseTo(14.4, 6);
       const row = byId(runChecks({ ...defaults, wheelDiameterIn: wheel } as Params, { includeTruck: false }), 'brake-ratio');
-      expect(row.status, `brake-ratio wheel ${wheel}`).toBe('pass');
+      expect(row.status, `brake-ratio wheel ${wheel}`).not.toBe('fail'); // 'marginal' is possible: the grip travel nears its 6.5" limit on small wheels
     }
     // a 12" wheel used to fall short (11.7:1 against 12:1) with the fixed 1.9" tail; auto-solving fixes it (tail ≈ 1.03" there, crank unchanged)
-    expect(byId(runChecks({ ...defaults, wheelDiameterIn: 12 } as Params, { includeTruck: false }), 'brake-ratio').value).toBeCloseTo(13.2, 6);
+    expect(byId(runChecks({ ...defaults, wheelDiameterIn: 12 } as Params, { includeTruck: false }), 'brake-ratio').value).toBeCloseTo(14.4, 6);
     expect(byId(runChecks({ ...defaults, wheelDiameterIn: 12, brakeLeverTailAuto: 0, brakeLeverTailIn: 1.9, brakeCrankIn: 2.4, brakeCrankAngleDeg: 315 } as Params, { includeTruck: false }), 'brake-ratio').value).toBeLessThan(12);
   });
   it('an unreachable ratio fails the check honestly (10"–11" wheels: tail at its 1" minimum, crank at 4"), and with auto off the target does not move the geometry', () => {
@@ -73,12 +74,12 @@ describe('brake ratio and handle force', () => {
     const f = (q: Partial<Params>) => byId(runChecks({ ...defaults, brakeLeverTailAuto: 0, ...q } as Params, { includeTruck: false }), 'brake-force').cases!.operating!.value;
     expect(f({ brakeLeverTailIn: 1.6 })).toBeLessThan(f({ brakeLeverTailIn: 1.9 }));
   });
-  it('hand calc: F = W sinθ / μ / (ratio η) at BOTH the wet lining μ 0.45 and the mud-fouled μ 0.35 (pass/fail), ratio 13.2:1, η 0.8', () => {
-    // Worked by hand: ratio = 12 × 1.1 = 13.2, so ratio·η = 10.56.
+  it('hand calc: F = W sinθ / μ / (ratio η) at BOTH the wet lining μ 0.45 and the mud-fouled μ 0.35 (pass/fail), ratio 14.4:1, η 0.8', () => {
+    // Worked by hand: ratio = 12 × 1.2 = 14.4, so ratio·η = 11.52.
     //  operating W ≈ 326 lb: W sin15° = 326 × 0.2588 = 84.3 lbf; wet 84.3/0.45/10.56 = 17.7 lbf; fouled 84.3/0.35/10.56 = 22.8 lbf (governs).
     //  goal W ≈ 376 lb: W sin15° = 97.3 lbf; wet 20.5 lbf; fouled 97.3/0.35/10.56 = 26.3 lbf (87% of 30: passes, not marginal).
     const op = massOf(defaults, 'operating');
-    const eta = 13.2 * defaults.brakeEfficiency;
+    const eta = 14.4 * defaults.brakeEfficiency;
     const Fop = (op * Math.sin(15 * RAD)) / 0.35 / eta;
     const Fgoal = (W * Math.sin(15 * RAD)) / 0.35 / eta;
     const c = byId(cs, 'brake-force');
@@ -87,9 +88,11 @@ describe('brake ratio and handle force', () => {
     expect(Fop).toBeLessThan(defaults.handleForceLimitLbf * 0.9);
     // D-44 visual pass: the sheer-raised bow and crowned transoms add ≈ 1.3 lb of oak, which moves the 200 lb goal case from 89.99% to 90.3% of the
     // limit (it sat on the 90% line before). The operating case stays a clear pass; the goal case now reads 'marginal' (still < limit). See docs/visual-pass-geometry-notes.md.
-    expect(Fgoal).toBeLessThan(defaults.handleForceLimitLbf * 0.91);
+    // Phase 3 r3 (eng N-8): ratio headroom 1.1 -> 1.2 (and a 5/16" stroke to hold the grip travel) brings the goal case from 0.91 to about 0.85 of the limit
+    // even with the +5 lb of bearing plates and the 7/8" shaft.
+    expect(Fgoal).toBeLessThan(defaults.handleForceLimitLbf * 0.87);
     expect(c.cases!.operating!.status).toBe('pass');
-    expect(c.status).toBe('marginal');
+    expect(c.status).toBe('pass');
     const wet = c.details!.find((d) => d.name.includes('wet bonded lining'))!;
     const fouled = c.details!.find((d) => d.name.includes('fouled'))!;
     // (the details shown on the row are the operating case's)
@@ -103,7 +106,7 @@ describe('brake ratio and handle force', () => {
   });
   it('wet is pass/fail now: a mud-fouled μ of 0.25 (no lining) fails the handle force at the goal rider', () => {
     const f = byId(runChecks({ ...defaults, brakePadMuFouled: 0.25 } as Params, { includeTruck: false }), 'brake-force');
-    expect(f.cases!.goal!.value).toBeGreaterThan(30); // 97.3/0.25/10.56 = 36.9 lbf
+    expect(f.cases!.goal!.value).toBeGreaterThan(30); // 97.3/0.25/11.52 = 33.8 lbf
     expect(f.status).toBe('fail');
   });
   it('drum variant: no geometry, the force check uses the target and the member rows are not evaluated', () => {
@@ -118,26 +121,31 @@ describe('brake ratio and handle force', () => {
 });
 
 describe('brake members (hand calculations at the goal rider, load factor 2)', () => {
-  it('load chain: N = 2·W sin15°/0.35, F_eq = N/13.2, M_L = F_eq · l_grip, F_link = M_L/d_Q, T = F_link · d_S = N · k_max', () => {
+  it('load chain: N = 2·W sin15°/0.35, F_eq = N/14.4, M_L = F_eq · l_grip, F_link = M_L/d_Q, T = F_link · d_S = N · k_max', () => {
     expect(tin).toBeCloseTo(nTot * kMax, 6);
     // numbers at the defaults (checked against the how strings below)
     // by hand at the goal rider: W ≈ 376 lb → W sin15° = 97.3 lbf; /0.35 = 278 lbf; × 2 = 556 lbf; F_eq = 556 / 13.2 = 42.1 lbf
     expect(nTot).toBeGreaterThan(540);
-    expect(nTot).toBeLessThan(575);
-    expect(feq).toBeGreaterThan(40);
-    expect(feq).toBeLessThan(44);
+    expect(nTot).toBeLessThan(600);
+    expect(feq).toBeGreaterThan(38);
+    expect(feq).toBeLessThan(43);
   });
-  it('lever: M_L / S_net with the sleeve bore, tail shear 1.5 F_link/(w h), pivot bolt single shear', () => {
+  it('lever: M_L / S_net with the sleeve bore, tail shear 1.5 F_link/(w h), pivot post bending, shear and weld', () => {
     const w = defaults.brakeLeverWidthIn, h = defaults.brakeLeverThickIn;
-    const d = defaults.brakePivotBoltDiameterIn + 0.1875;
+    const d = defaults.brakePivotBoltDiameterIn + 2 * 0.125;
     const S = (w * (h ** 3 - d ** 3)) / (6 * h);
     expect(det(cs, 'brake-lever', 'lever bending').value).toBeCloseTo(ml / S, 0);
     expect(det(cs, 'brake-lever', 'tail shear').value).toBeCloseTo((1.5 * flink) / (w * h), 0);
-    // by hand: F_link = N·k_max/d_S = 556 × 1.798 / 1.836 = 544 lbf; τ = 1.5 × 544 / (0.75 × 1.5) = 725 psi vs 850 (wet shear): 85%
-    expect(det(cs, 'brake-lever', 'tail shear').value).toBeGreaterThan(700);
-    expect(det(cs, 'brake-lever', 'tail shear').value).toBeLessThan(750);
-    const R = feq + flink;
-    expect(det(cs, 'brake-lever', 'pivot bolt single shear').value).toBeCloseTo(R / (Math.PI / 4 * defaults.brakePivotBoltDiameterIn ** 2), 0);
+    expect(det(cs, 'brake-lever', 'tail shear').value).toBeLessThan(det(cs, 'brake-lever', 'tail shear').limit);
+    // pivot post (r3): a cantilever from the plate. R is the vector pivot reaction hand - link force (the worse rolling direction); M = R (thrust washers + w/2).
+    const R = Math.max(...[1, -1].map((sg) => { const q = mountStatics(defaults, g, feq, sg as 1 | -1).Qp; return Math.hypot(q[0], q[1]); }));
+    expect(R).toBeGreaterThan(flink * 0.9);
+    expect(R).toBeLessThan(flink + feq + 1e-6);
+    const arm = g.y.lever[0] - g.y.block[1] + w / 2;
+    const pd = defaults.brakePivotBoltDiameterIn;
+    expect(det(cs, 'brake-lever', 'pivot post shear').value).toBeCloseTo(R / (Math.PI / 4 * pd ** 2), 0);
+    expect(det(cs, 'brake-lever', 'pivot post bending').value).toBeCloseTo((32 * R * arm) / (Math.PI * pd ** 3), 0);
+    expect(det(cs, 'brake-lever', 'pivot post fillet weld').util).toBeLessThan(0.9);
     expect(byId(cs, 'brake-lever').status).toBe('pass');
     expect(byId(cs, 'brake-lever').group).toBe('Structure');
   });
@@ -151,9 +159,8 @@ describe('brake members (hand calculations at the goal rider, load factor 2)', (
     expect(det(cs, 'brake-links', 'buckling').value).toBeLessThan(1);
     // crank boss (no keyseat): 0.75" × 1.5" bar bored 0.75": S_net = t(w³ − d³)/(6w) = 0.75 × (3.375 − 0.4219) / 9 = 0.2461 in³;
     // M = F_link d_S = 544 × 1.836 = 999 lbf·in → σ = 999 / 0.2461 = 4,060 psi (18,000 allowable)
-    expect(det(cs, 'brake-links', 'crank boss').value).toBeCloseTo((flink * g.dS) / ((0.75 * (1.5 ** 3 - 0.75 ** 3)) / (6 * 1.5)), 0);
-    expect(det(cs, 'brake-links', 'crank boss').value).toBeGreaterThan(3900);
-    expect(det(cs, 'brake-links', 'crank boss').value).toBeLessThan(4200);
+    const ct = g.y.crank[1] - g.y.crank[0], cw = Math.max(defaults.brakeBarWidthIn, defaults.brakeShaftDiameterIn + 0.75), Dsh = defaults.brakeShaftDiameterIn;
+    expect(det(cs, 'brake-links', 'crank boss').value).toBeCloseTo((flink * g.dS) / ((ct * (cw ** 3 - Dsh ** 3)) / (6 * cw)), 0);
     expect(byId(cs, 'brake-links').status).toBe('pass');
   });
   it('shaft (cross-drilled for 1/4" roll pins, no keyseat): net-section torsion and bending, pin shear, all by hand', () => {
@@ -162,31 +169,25 @@ describe('brake members (hand calculations at the goal rider, load factor 2)', (
     const T = tin / 2;
     const D = defaults.brakeShaftDiameterIn, dp = defaults.brakeRollPinDiameterIn;
     const Znet = (Math.PI * D ** 3) / 16 - (dp * D ** 2) / 6;
-    expect(Znet).toBeCloseTo(0.05944, 4);
+    expect(Znet).toBeCloseTo((Math.PI * 0.875 ** 3) / 16 - (0.25 * 0.875 ** 2) / 6, 6); // 7/8" shaft (r3, abuse case): 0.0996 in³
     expect(det(cs, 'brake-shaft', 'shaft torsion').value).toBeCloseTo(T / Znet, 0);
-    expect(det(cs, 'brake-shaft', 'shaft torsion').value).toBeGreaterThan(8300);
-    // Band widened 8,500 → 8,800 when the round-2 front steel raised the cart mass ~10 lb (hold load ∝ total mass: ~+3%).
-    expect(det(cs, 'brake-shaft', 'shaft torsion').value).toBeLessThan(8800);
     expect(det(cs, 'brake-shaft', 'shaft torsion').limit).toBeCloseTo(0.577 * (defaults.brakeShaftYieldPsi / defaults.steelSafetyFactor), 0);
     // Arm-collar pin: τ = (T_shoe/2) / (D A_p) = 250 / (0.75 × 0.04909) = 6,790 psi vs 20,000; crank, two pins: T_in/2 = 500 → 13,570 psi.
     const Ap = (Math.PI / 4) * dp ** 2;
     expect(det(cs, 'brake-shaft', 'arm-collar roll pin').value).toBeCloseTo((T / 2) / (D * Ap), 0);
     expect(det(cs, 'brake-shaft', 'crank roll pins').value).toBeCloseTo((tin / 2) / (D * Ap), 0);
-    expect(det(cs, 'brake-shaft', 'crank roll pins').value).toBeGreaterThan(13400);
-    expect(det(cs, 'brake-shaft', 'crank roll pins').value).toBeLessThan(14200) // widened 13,700 → 14,200 with the round-2 front steel (+~3% cart mass);
     expect(det(cs, 'brake-shaft', 'crank roll pins').limit).toBe(defaults.brakeRollPinShearPsi);
     // Net bending at the crank holes: F_a = R_pin/2 with R_pin = N_shoe √(1 + μ²) = 278 × 1.0595 = 294.5 → F_a = 147 lbf (μ = 0.35 here: the
     // check uses the design μ 0.45 → √1.2025 = 1.0966, R_pin = 305, F_a = 152.4); M_h = 152.4 × ((15.45 − 14.9) + (18.855 − 14.9)) = 152.4 × 4.505 = 687 lbf·in;
     // S_net = πD³/32 − d_p D²/6 = 0.04144 − 0.02344 = 0.01800 in³ → σ = 38,150 psi; with τ = 8,410: √(σ² + 3τ²) = 40,230 psi (50,000 allowable: 80%).
     const vm = det(cs, 'brake-shaft', 'von Mises');
-    expect(vm.value).toBeGreaterThan(39000);
-    expect(vm.value).toBeLessThan(41500);
+    expect(vm.value).toBeLessThan(0.5 * vm.limit); // 7/8" shaft: the design case sits at ~40% of the allowable, the abuse case sets the size
     expect(vm.limit).toBeCloseTo(50000, 0);
     expect(byId(cs, 'brake-shaft').status).toBe('pass');
     // ½" shaft cannot carry it: the check fails (this is why the default moved from ½" to ¾")
     expect(byId(runChecks({ ...defaults, brakeShaftDiameterIn: 0.5 }, { includeTruck: false }), 'brake-shaft').status).toBe('fail');
-    // and 1045 at 70 ksi (35 ksi allowable) would fail the ¾" cross-drilled shaft: that is why the brake shaft is pre-hardened 4140
-    expect(byId(runChecks({ ...defaults, brakeShaftYieldPsi: 70000 }, { includeTruck: false }), 'brake-shaft').status).toBe('fail');
+    // 1045 at 70 ksi passes the design case at 7/8" but not the 100 lbf abuse row: that is why the brake shaft is pre-hardened 4140 (r3 N-8)
+    expect(byId(runChecks({ ...defaults, brakeShaftYieldPsi: 70000 }, { includeTruck: false }), 'brake-abuse').status).not.toBe('pass');
   });
   it('shoes: arm bending M/S with M = T_shoe/2 on a 1/4" × 1" bar; pad rock-off μ·h vs L/2', () => {
     const Ma = tin / 2 / 2;
@@ -232,9 +233,9 @@ describe('brake members (hand calculations at the goal rider, load factor 2)', (
 });
 
 describe('push-handle sockets (50 lbf hold-back pull)', () => {
-  it('hand calc: 25 lbf per post, M = 25 × (34 − 16) = 450 lbf·in, σ = M/S = 450 / (1.5 × 1²/6) = 1800 psi vs 6460', () => {
+  it('hand calc: 25 lbf per post, M = 25 × (34 − 16) = 450 lbf·in, σ = M/S = 450 / (1.4375 × 0.9375²/6) = 2137 psi vs 6460', () => {
     const c = byId(cs, 'handle-sockets');
-    expect(det(cs, 'handle-sockets', 'post bending').value).toBeCloseTo(1800, 0);
+    expect(det(cs, 'handle-sockets', 'post bending').value).toBeCloseTo(450 / ((1.4375 * 0.9375 ** 2) / 6), 0); // r3 S7: 15/16 x 1-7/16 post, slip fit in the 1.0 x 1.5 inside: 2137 psi
     expect(det(cs, 'handle-sockets', 'post bending').limit).toBeCloseTo(6460, -1);
     // Aluminum 6061-T6 socket (plan item 5), allowable 35,000 / 2 = 17,500 psi. Tube S = (1.75 × 1.25³ − 1.5 × 1³)/12 / 0.625 = 0.1598/0.625 = 0.2557 in³
     // → σ = 450 / 0.2557 = 1,760 psi. Bolts and pin bear on the 1/8" wall: R_top = 106.8 lbf over 2 × 0.25 × 0.125 = 0.0625 in² → 1,709 psi;

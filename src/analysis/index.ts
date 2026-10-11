@@ -8,12 +8,13 @@
 import { resolveParams, type Params } from '../params';
 import { buildModel } from '../model';
 import { checkTruckFit, type FitResult } from '../truck/fit';
-import { brakeClearance, brakeForce, brakeLever, brakeLinks, brakeRatchet, brakeRatio, brakeShaft, brakeShoes, brakeTraction, handleSockets } from './brake';
+import { brakeAbuse, brakeClearance, brakeForce, brakeLever, brakeLinks, brakeRatchet, brakeRatio, brakeShaft, brakeShoes, brakeTraction, handleSockets } from './brake';
 import { makeContext } from './context';
+import { rearBeamSeat, wheelRating } from './rear';
 import { steerClearance, steerSweep } from './steering';
 import { pitchForward, pitchRear, slideBeforeTip, tipLock, tipStraight, turnRadius, vRollover } from './stability';
 import { axleStress, bearingGroove, beamFront, beamRear, deckCheck, kingpinCheck, kingpinStrikeCheck, railsCheck, rollBolsterAttachCheck, rollKingpinUpliftCheck, rollSideBearerCheck, tongueCheck, turntableCheck } from './structure';
-import { bridleTieCheck, kingpinBoltsCheck, kingpinPeakCheck, kingpinPlatesCheck, kingpinSplitCheck, pitchPathCheck, steerStopsBoundCheck, steerStopsCheck } from './front';
+import { bridleTieCheck, kingpinBoltsCheck, kingpinPeakCheck, kingpinPlatesCheck, kingpinSplitCheck, pitchPathCheck, steerStopsBoundCheck, steerStopsCheck, turntableRingCheck } from './front';
 import { seatChecks } from './seat';
 import { hullChecks } from './hull';
 import { cgCheck, massEmpty, truckFit, truckSkipped } from './transport';
@@ -67,6 +68,9 @@ export function runChecks(input: Params, opts: RunOptions = {}): AnalysisCheck[]
     brakeShoes(ctx),
     brakeRatchet(ctx),
     handleSockets(ctx),
+    brakeAbuse(ctx),
+    wheelRating(ctx),
+    rearBeamSeat(ctx),
     axleStress(ctx),
     beamFront(ctx),
     beamRear(ctx),
@@ -84,6 +88,7 @@ export function runChecks(input: Params, opts: RunOptions = {}): AnalysisCheck[]
     kingpinBoltsCheck(ctx),
     kingpinPeakCheck(ctx),
     pitchPathCheck(ctx),
+    turntableRingCheck(ctx),
     kingpinSplitCheck(ctx),
     bridleTieCheck(ctx),
     turntableCheck(ctx),

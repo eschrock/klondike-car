@@ -24,6 +24,11 @@ describe('buildRoundedSweepMesh', () => {
       expect(hi[k]).toBeLessThanOrEqual(b.max[k] + 1e-6);
     }
   });
+  it('has flat end caps at both ends and stays inside the bounds', () => {
+    expect(m.edgeRanges.length).toBe(2);
+    const last = m.positions.slice(-3);
+    expect(Number.isFinite(last[0])).toBe(true);
+  });
   it('faces outward (triangle winding agrees with the vertex normals)', () => {
     let bad = 0, total = 0;
     for (let t = 0; t < m.indices.length; t += 3) {

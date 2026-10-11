@@ -30,8 +30,14 @@ export interface Ctx {
   plyName: string;
 }
 
-/** Assembly step numbers (build order). */
-export const STEP = { gear: 1, steering: 2, frame: 3, body: 4, seatStorage: 5, brake: 6, finish: 7, payload: 8 } as const;
+/**
+ * Assembly step numbers (build order). The hull comes first (frame 3, then the fractional hull steps 4.0-4.4 below); the front stack (beam, turntable,
+ * bolster ring, kingpin plates and pin: 4.5) and then the axles (gear 4.6) are fitted to it afterwards, while the hull is still upside down: the bolster
+ * ring bolts up through the nose deck (D-33) and the rear beam bolts to the rail undersides, both reachable only after the deck exists (r3 build S10).
+ * Then the hull is turned upright, the kingpin goes in from below and its nut on from above through the access opening (4.9), and the seat and storage (5),
+ * the brake (6) and the finish (7) follow.
+ */
+export const STEP = { frame: 3, body: 4, steering: 4.5, gear: 4.6, kingpin: 4.9, seatStorage: 5, brake: 6, finish: 7, payload: 8 } as const;
 
 /**
  * Hull assembly sequence (build review M4 / MUST-2, D-43, D-45). `Part.step` is where a part is INSTALLED; the hull sequence is fractional
@@ -47,6 +53,8 @@ export const STEP = { gear: 1, steering: 2, frame: 3, body: 4, seatStorage: 5, b
  *   4. (4.3) Shoulder beam: already part of the frame; its Dominos engage in step 3.
  *   5. (4.4) The transoms go on LAST, sliding in X onto the deck edge, web ends, chine and gunwale tenons and rail tenons in one
  *      glue-up (slow 120-minute epoxy, rehearse twice); the vent holes let the dados breathe. Backers are glued to the transom first.
+ *   6. (STEP.steering 4.5, STEP.gear 4.6) With the hull still inverted and the deck underside facing up: bolt the bolster ring through the nose deck, fit the
+ *      beam, turntable and kingpin plates, then the axles and wheels. THEN turn the hull upright and drop in the kingpin (head from below, castle nut through the access opening, STEP.kingpin 4.9).
  */
 export const HULL_STEP = { deck: 4, sides: 4.2, shoulder: 4.3, transom: 4.4 } as const;
 

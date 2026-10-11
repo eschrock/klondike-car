@@ -5,6 +5,7 @@ import { buildModel } from './index';
 import { buildBody, fingerAnalysis, frontTirePlan, guardInsertZ, liftBarStressPsi, liftSlot, scupperSites } from './body';
 import { chooseDomino, DOMINOS, endJoint, frac, joinerySummary } from './joinery';
 import { HULL_STEP, box, makeCtx } from './build-utils';
+import { sidePath } from './layout';
 import { localBounds, worldAABB } from './bounds';
 import { totalMass } from './mass';
 import type { EdgeCondition, Part, Vec2 } from './types';
@@ -324,6 +325,41 @@ describe('finger guard (M5, D-37)', () => {
     expect(a.hazard).not.toBeNull();
     expect(sideGap(defaults)).toBeGreaterThan(0.7);
   });
+  it('r3 N-9: the hazard zone is found on the S-curve as well as on the straight side, and the guard (one mesh per side) spans it across x = xn', () => {
+    const c = makeCtx(defaults);
+    const a = fingerAnalysis(c);
+    const hz = a.hazard!;
+    expect(hz.x0).toBeLessThan(c.L.xn - 1); // behind the end of the curve: the pocket opens aft
+    expect(hz.x1).toBeGreaterThan(c.L.xn + 0.4); // and forward onto the straight nose side
+    // independent brute force: every sampled hull-face point within the no-pinch gap of a swept tire lies inside the guard's x range
+    const face = sidePath(c.L, c.L.side / 2, c.L.xs - 2, c.L.xn + 8);
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i + 1 < face.length; i++) for (let k = 0; k <= 10; k++) {
+      const q: [number, number] = [face[i][0] + ((face[i + 1][0] - face[i][0]) * k) / 10, face[i][1] + ((face[i + 1][1] - face[i][1]) * k) / 10];
+      for (let d = -defaults.steerLockDeg; d <= defaults.steerLockDeg; d += 1) {
+        const t = frontTirePlan(c, 1, d);
+        let m = Infinity;
+        for (let j = 0; j < 4; j++) {
+          const A = t[j], B = t[(j + 1) % 4];
+          const dx = B[0] - A[0], dy = B[1] - A[1];
+          const u = Math.max(0, Math.min(1, ((q[0] - A[0]) * dx + (q[1] - A[1]) * dy) / (dx * dx + dy * dy)));
+          m = Math.min(m, Math.hypot(q[0] - A[0] - u * dx, q[1] - A[1] - u * dy));
+        }
+        if (m < defaults.fingerGapMinIn - 1e-9) { lo = Math.min(lo, q[0]); hi = Math.max(hi, q[0]); }
+      }
+    }
+    expect(hi).toBeGreaterThan(lo);
+    for (const tag of ['L', 'R'] as const) {
+      const g = get(buildModel(defaults), `guard-${tag}`);
+      const b = worldAABB(g);
+      expect(b.min[0], tag).toBeLessThanOrEqual(lo + 1e-6);
+      expect(b.max[0], tag).toBeGreaterThanOrEqual(hi - 1e-6);
+      expect(g.geometry.type).toBe('mesh'); // one printed piece that follows the outline
+      expect(g.kind).toBe('printed');
+      const ys = b.max[1] - b.min[1];
+      expect(ys).toBeGreaterThan(defaults.fingerGapMinIn + 0.3);
+    }
+  });
   it.each(VARIANTS.map((v) => [v.name, v.p] as const))('%s: min tire-to-hull gap ≥ no-pinch OR a guard covers the pinch zone', (_n, p) => {
     const parts = buildModel(p);
     const c = makeCtx(p);
@@ -348,7 +384,7 @@ describe('finger guard (M5, D-37)', () => {
       // Above the tire top by at least the steering clearance, so the sweep cannot touch it.
       expect(b.min[2] - p.wheelDiameterIn, `${tag} clear of the tire`).toBeGreaterThanOrEqual(p.steeringClearanceIn - 1e-6);
       expect(guard.kind).toBe('printed');
-      expect(guard.joints!.some((j) => j.type === 'screw' && j.count === 2)).toBe(true);
+      expect(guard.joints!.filter((j) => j.type === 'screw').reduce((n, j) => n + j.count, 0)).toBeGreaterThanOrEqual(3); // strap inserts: cabin gunwale on the curve, nose gunwale on the straight
     }
   });
   it('opening the gap is the other route: a wide-enough threshold-free gap builds no guard', () => {

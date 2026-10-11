@@ -25,8 +25,8 @@ const ALLOW: Allow[] = [
   { a: /^brake-/, b: /^brake-/, why: 'pins, bolts, hubs and the shaft pass through bored holes in the arms, bushings, blocks and pads; the pawl sits in a tooth valley (D-38, D-39). Moving-part clearances are swept in src/analysis/brake.test.ts' },
   { a: /^(transom-rear|side-cabin-[LR]-web)$/, b: /^brake-(lever|pawl|quadrant)/, why: 'flared gunwale: the transom / web OBBs are conservative boxes over the flared outline; the lever leans out parallel to the web and stays 1/2" clear of it, and the pawl sits on the plate outside the flare (D-38, D-39)' },
   { a: /^handle-(socket|post|pin)-/, b: /^handle-(socket|post|pin)-/, why: 'the post is a slip fit in the socket tube and the clevis pin passes through both (D-9, D-39)' },
-  { a: /^(rail-cabin|girder-cabin)-/, b: /^brake-(bushing|lever-pin)/, why: 'the shaft bushing and the lever pivot bolt pass through the rail band (D-38)' },
-  { a: /^(rail-cabin|girder-cabin)-/, b: /^(beam-R|axle-R|brake-shaft)/, why: 'rails/girders are notched or drilled for the rear axle and brake-shaft journals (D-15); joinery is Phase 3' },
+  { a: /^(rail-cabin|girder-cabin)-/, b: /^brake-(bushing-[LR]|shaft)$/, why: 'the brake shaft passes through a 1.25" x 1.45" notch cut up from the rail bottom and the bearing stands 1/2" into it (D-47); the sweep has no notch geometry. Bounded by the \'rear mounts\' tests in rear-mount.test.ts (overlap <= the notch volume, bolts clear of it)' },
+  { a: /^(rail-cabin|girder-cabin)-/, b: /^(beam-R|axle-R[LR]?)$/, why: 'the rail is notched 2.63" x 1.35" on its underside and bears on the beam top (D-47, build r2 MUST-4); the sweep has no notch geometry, so the beam top and the axle rod look like they overlap the rail. Bounded by the rear mounts tests (the overlap is at most the notch box)' },
   { a: /^kingpin$/, b: /^kingpin-crossbar$/, why: 'the kingpin passes up through the crossbar bore (D-12)' },
   { a: /^kingpin-crossbar$/, b: /^bolster-(fore|aft)$/, why: 'the crossbar ends are let into notches in the bolster rails (D-12)' },
   { a: /^kingpin-sleeve-/, b: /^(kingpin|beam-F|turntable|kingpin-crossbar)$/, why: 'the steel sleeve is a tube pressed into the beam / crossbar bore around the pin (drawn solid)' },
@@ -51,7 +51,7 @@ const ALLOW: Allow[] = [
   { a: /^deck-cabin$/, b: /^side-cabin-[LR]-post-\d+$/, why: 'open-frame posts stand outside the deck edge on the S-curve; the deck is checked in 1.25" slabs, whose boxes over-cover a diagonal edge by up to the slope x 1.25" (D-45)' },
   { a: /^(rail|girder)-cabin-[LR]$/, b: /^(transom-backer-|storage-(side|end)|foot-stop-cleat-|seat-wedge-)/, why: 'above the cabin deck the rail\'s inner face is relieved flush with the chine\'s inner face (a 1/8" router rabbet, D-45); the rail drawn is its full section' },
   { a: /^scupper-/, b: /^(side-(cabin|nose)-[LR]-(chine|board)|(rail|girder)-cabin-[LR])$/, why: 'the 3/8" stainless drain nipple passes through its hole in the chine / side board at deck level (M7, D-43)' },
-  { a: /^guard-[LR]$/, b: /^side-nose-[LR]-gunwale$/, why: 'the finger guard is a joggled L whose OBB is its full bounding box; the strap lies on the gunwale face and the leg in the web recess (D-37)' },
+  { a: /^guard-[LR]$/, b: /^side-(cabin|nose)-[LR]-(gunwale|web|chine|board|post-\d+)$/, why: 'the finger guard is one printed mesh that follows the S-curve and the straight nose side (D-47); its OBB is its full bounding box, which over-covers the curve; the strap lies on the gunwale face and the leg in the web recess (D-37)' },
 ];
 const matches = (r: Allow, a: Part, b: Part) => (r.a.test(a.id) && r.b.test(b.id)) || (r.a.test(b.id) && r.b.test(a.id));
 
@@ -285,9 +285,10 @@ describe('overlaps', () => {
 //   is now 0.68 lb, plate to plate, vs 0.56 + 0.40); the crossbar is 3/16" shallower (−0.1). The plate bolts, cross-bolts and screws are in the computed hardware.
 //   hardware 5.4 → 6.8 (F1 share ≈ +1.0: 10 plate bolts, 10 stainless cross-bolts, 8 stop screws, 12 washers and nuts, 2 tapped-hole screws).
 // Group totals are therefore within a few percent of the sums above; the test band is ±15% per group and ±10% overall.
-const EXPECTED_EMPTY_LB = 150.6;
+// Phase 3 r3 rear/brake (D-47): brake 11.0 -> 16.0 lb (steel bearing plates 2 x 1.0, oak doublers 2 x 0.75, 7/8" shaft +1.9, post, shield), hardware +0.7.
+const EXPECTED_EMPTY_LB = 166;
 const EXPECTED_GROUP_LB: Record<string, number> = {
-  'running-gear': 51.0, steering: 22.7, frame: 13.5, body: 33.3, seat: 8.7, storage: 8.7, brake: 11.0, removable: 3.8, hardware: 6.8, lighting: 1.3,
+  'running-gear': 51.0, steering: 22.7, frame: 13.5, body: 33.3, seat: 8.7, storage: 8.7, brake: 16.0, removable: 3.6, hardware: 7.5, lighting: 1.3,
 };
 
 describe('masses', () => {
@@ -1005,7 +1006,9 @@ describe('kingpin through the bolster (D-12)', () => {
     expect(L.kpPlates!.bar.z0).toBeCloseTo(L.bolster.z0, 6);
     expect(L.kingpin.z1).toBeCloseTo(L.bolster.z1, 6);
     const kp = worldAABB(m.find((x) => x.id === 'kingpin')!);
-    expect(kp.max[2]).toBeCloseTo(bb.max[2], 6);
+    // r3 N-5/S5: the bolt tail is cut at the nut, 0.35" below the crossbar top (the nut sits in a counterbore), never above it
+    expect(kp.max[2]).toBeLessThanOrEqual(bb.max[2] + 1e-6);
+    expect(kp.max[2]).toBeGreaterThan(L.kpPlates!.bar.z1 + 1);
     // centerd on the kingpin, ends let into the fore/aft rails by kingpinCrossbarLetInIn
     expect((bb.min[0] + bb.max[0]) / 2).toBeCloseTo(L.kx, 6);
     expect(bb.max[0] - L.kx).toBeCloseTo(L.bolster.x1 - L.kx - L.bolster.rw + defaults.kingpinCrossbarLetInIn, 6);

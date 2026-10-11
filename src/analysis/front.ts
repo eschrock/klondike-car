@@ -45,7 +45,8 @@ export interface PlateModel {
   beam: { n: number; D: number; ys: number[]; x: number; lm: number; tTop: number; tBot: number; frontDist: number; grooveDist: number; pitch: number; nCross: number; crossD: number; crossWasher: number };
   bar: { n: number; D: number; xs: number[]; lm: number; t: number; pitch: number; endDist: number; edgeDist: number; nCross: number; crossD: number; crossWasher: number };
   /** Plate thicknesses and footprints (in). */
-  carrier: { t: number; hx: number; hy: number };
+  /** xa..xb: the part of the carrier that lies on the beam top (it overhangs the beam's front face since r3 N-5), absolute x. */
+  carrier: { t: number; hx: number; hy: number; xa: number; xb: number };
   barPlate: { t: number; hx: number; hy: number };
   holeD: number;
   /** Shear ears tying the carrier to the beam plate (r3 N-1), the countersink depth of the crossbar plate bolts (r3 N-2). */
@@ -96,7 +97,13 @@ export function plateModel(ctx: Ctx): PlateModel | null {
       n: bPlate.count, D: barBoltD, xs, lm: cb.z1 - cb.z0, t: kpl.bar.z1 - kpl.bar.z0, pitch: barPitch, endDist, edgeDist: cb.hw,
       nCross: bCross?.count ?? 0, crossD: bCross?.diaIn ?? p.kingpinCrossBoltDiameterIn, crossWasher: p.kingpinCrossBoltWasherIn,
     },
-    carrier: { t: kpl.carrier.z1 - kpl.carrier.z0, hx: (carSize?.[0] ?? 2 * kp.carrier.hx) / 2, hy: (carSize?.[1] ?? 2 * kp.carrier.hy) / 2 },
+    carrier: (() => {
+      const hx = (carSize?.[0] ?? 2 * kp.carrier.hx) / 2;
+      return {
+        t: kpl.carrier.z1 - kpl.carrier.z0, hx, hy: (carSize?.[1] ?? 2 * kp.carrier.hy) / 2,
+        xa: Math.max(L.kx - hx, L.beamF.x - L.beamF.thick / 2), xb: Math.min(L.kx + hx, L.beamF.x + L.beamF.thick / 2),
+      };
+    })(),
     barPlate: { t: kpl.bar.z1 - kpl.bar.z0, hx: (barSize?.[0] ?? 2 * kp.bar.hx) / 2, hy: (barSize?.[1] ?? 2 * kp.bar.hy) / 2 },
     holeD: p.kingpinDiameterIn + 1 / 64,
     ear: { n: ['kp-ear-L', 'kp-ear-R'].filter((id) => part(ctx, id)).length, yE: kp.carrier.hy - 0.5, proj: p.kingpinEarProjectIn, t: p.kingpinEarThickIn, h: kpl.carrier.z0 - kpl.under.z1 },
@@ -452,16 +459,18 @@ export function beamBoltDetails(ctx: Ctx, pm: PlateModel, ld: PinLoad): { detail
   // resist the resulting moment by bearing alone, so it goes into bolt tension and plate-edge contact. No preload credit: the bolts carry it alone.
   const zT = bm.lm / 2 + bm.tTop / 2, zB = bm.lm / 2 + bm.tBot / 2;
   const Mc = Math.abs(rx.Rtop) * zT + Math.abs(rx.Rbot) * zB;
-  const leverC = Math.max(0.1, pm.carrier.hx - Math.abs(bm.x));
+  const wOnBeam = Math.max(0.1, pm.carrier.xb - pm.carrier.xa); // the carrier overhangs the beam's front face: only this much lies on the oak
+  const xBolt = ctx.L.kx + bm.x;
+  const leverC = Math.max(0.1, Math.min(xBolt - pm.carrier.xa, pm.carrier.xb - xBolt));
   const Tc = Mc / leverC;
   const AtB = STEEL_TENSILE_AREA_FRAC * (Math.PI * bm.D * bm.D) / 4;
   const boltTenAllow = p.kingpinPlateBoltYieldPsi / p.steelSafetyFactor;
   // Plate-edge contact: the retained preload clamp plus the couple on the footprint (Z = 2hy·(2hx)²/6); separation when the couple exceeds the clamp.
-  const clampRet = (bm.n * p.kingpinPlateBoltPreloadLb * p.kingpinPlatePreloadRetainedFrac) / (4 * pm.carrier.hx * pm.carrier.hy);
-  const Zfoot = (2 * pm.carrier.hy * (2 * pm.carrier.hx) ** 2) / 6;
+  const clampRet = (bm.n * p.kingpinPlateBoltPreloadLb * p.kingpinPlatePreloadRetainedFrac) / (wOnBeam * 2 * pm.carrier.hy);
+  const Zfoot = (2 * pm.carrier.hy * wOnBeam ** 2) / 6;
   const edgeBrg = clampRet + Mc / Zfoot;
   const edgeSep = Mc / Zfoot - clampRet; // > 0 means the edge lifts and the bolts alone carry the couple (the tension row has no preload credit)
-  const clampP = (bm.n * p.kingpinPlateBoltPreloadLb) / (4 * pm.carrier.hx * pm.carrier.hy);
+  const clampP = (bm.n * p.kingpinPlateBoltPreloadLb) / (wOnBeam * 2 * pm.carrier.hy);
   // Shear ears: the beam-plane share of the torque as a force pair at the ears.
   const Fe = pm.ear.n > 0 ? ((1 - topShare) * ld.T) / (2 * pm.ear.yE) : 0;
   const earWebTau = pm.ear.n > 0 ? Fe / (pm.ear.proj * pm.ear.t) : 0;
@@ -558,13 +567,64 @@ export function kingpinPeakCheck(ctx: Ctx): AnalysisCheck {
   });
 }
 
+/**
+ * The turntable's ball ring and what carries it (r3 fittings, eng N-5, D-47): the ring (pitch circle D_p) rides on the bearing's lower plate, which stands on the
+ * carrier plate (hx wide along the fore-aft axis); the lower plate overhangs the carrier on both sides, so the part of the ring outside the carrier bends it.
+ * The carrier lies on the beam top. Shared by the pitch-path row and the ring row.
+ */
+export function ringGeometry(ctx: Ctx) {
+  const { p, L } = ctx;
+  const Dp = p.turntableRaceDiaIn, Rr = Dp / 2;
+  const car = part(ctx, 'kp-carrier');
+  const carHx = car && car.geometry.type === 'box' ? car.geometry.size[0] / 2 : p.kingpinPlateWidthIn / 2;
+  const carHy = car && car.geometry.type === 'box' ? car.geometry.size[1] / 2 : p.turntableSizeIn / 2;
+  const hc = Math.min(Rr - 1e-6, carHx);
+  const tPlate = p.turntablePlateThickIn;
+  const plateAllow = p.kingpinPlateYieldPsi / p.steelSafetyFactor;
+  // Beam top under the carrier (the carrier overhangs the front face of the beam): overlap in x.
+  const beamX0 = L.beamF.x - L.beamF.thick / 2, beamX1 = L.beamF.x + L.beamF.thick / 2;
+  const bearX = Math.max(0, Math.min(L.kx + carHx, beamX1) - Math.max(L.kx - carHx, beamX0));
+  const carArea = Math.max(1e-6, bearX * 2 * Math.min(carHy, L.beamF.len / 2));
+  /** Moment about the carrier edge of the ring load that falls outside the carrier, worst side (lb·in), and the width of plate that carries it. */
+  const overhang = (V: number, M: number) => {
+    // Ring line load per radian at angle psi from the fore axis: q = [V + (4M/Dp)·cos psi]/(2π) (linear contact distribution on the ring, valid while the ring stays in compression).
+    let worst = 0;
+    const n = 720;
+    for (const sgn of [1, -1]) {
+      let m = 0;
+      for (let k = 0; k < n; k++) {
+        const psi = (2 * Math.PI * (k + 0.5)) / n;
+        const x = sgn * Rr * Math.cos(psi);
+        if (x <= hc) continue;
+        const q = Math.max(0, V + ((4 * M) / Dp) * Math.cos(psi)) / (2 * Math.PI);
+        m += q * (x - hc) * ((2 * Math.PI) / n);
+      }
+      worst = Math.max(worst, m);
+    }
+    const width = Math.min(p.turntableSizeIn, 2 * Math.sqrt(Math.max(0, Rr * Rr - hc * hc)));
+    return { M: worst, width: Math.max(0.5, width) };
+  };
+  const unsupportedFrac = Math.max(0, 1 - (2 * Math.asin(Math.min(1, hc / Rr))) / Math.PI);
+  return { Dp, Rr, carHx, carHy, hc, tPlate, plateAllow, bearX, carArea, overhang, unsupportedFrac };
+}
+
 // ── M3: pitch-moment path ───────────────────────────────────────────────────────────────────────────────────────
+
+/** Pitch moment of the strike (H at the axle height against the pin reaction at the crossbar plate) and the vertical design load on the front, for one load case. */
+export function pitchTerms(ctx: Ctx, c: CaseData) {
+  const { p, L } = ctx;
+  const w = wheelLoads(ctx, c);
+  const H = Math.max(...strikeCases(ctx, c).map((s) => s.H));
+  const V = w.frontAxle * p.dynamicFactor;
+  const zAxle = L.r;
+  // The pin force reaches the steer body at the beam plates (R_top above, R_bot below); equivalently H at the crossbar plate's mid height (D-43).
+  const zLoad = L.kpPlates ? (L.kpPlates.bar.z0 + L.kpPlates.bar.z1) / 2 : (L.beamF.top + L.beamF.bot) / 2;
+  return { w, H, V, zAxle, zLoad, arm: Math.abs(zAxle - zLoad), Mp: H * Math.abs(zAxle - zLoad) };
+}
 
 export function pitchPathCheck(ctx: Ctx): AnalysisCheck {
   const { p, L } = ctx;
   const al = allowables(ctx);
-  const ts = p.turntableSizeIn;
-  const rw = L.bolster.rw;
   const uA = part(ctx, 'clamp-FL1');
   const plateY = p.clampPlateWidthIn;
   const legC = uA && uA.geometry.type === 'mesh' ? (() => {
@@ -575,34 +635,58 @@ export function pitchPathCheck(ctx: Ctx): AnalysisCheck {
   })() : L.beamF.thick + 2 * p.uboltBeamClearIn + p.uboltRodDiameterIn;
   const rr = p.uboltRodDiameterIn;
   const Aleg = STEEL_TENSILE_AREA_FRAC * ((Math.PI * rr * rr) / 4);
-  const zAxle = L.r;
-  // The pin force reaches the steer body at the beam plates (R_top above, R_bot below); equivalently H at the crossbar plate's mid height (D-43).
-  const zLoad = L.kpPlates ? (L.kpPlates.bar.z0 + L.kpPlates.bar.z1) / 2 : (L.beamF.top + L.beamF.bot) / 2;
+  const rg = ringGeometry(ctx);
+  const { Dp, carHx, carHy, tPlate, plateAllow, bearX, carArea, overhang } = rg;
   const ev = (c: CaseData): CaseEval => {
-    const w = wheelLoads(ctx, c);
-    const cases = strikeCases(ctx, c);
-    const H = Math.max(...cases.map((s) => s.H));
-    const V = w.frontAxle * p.dynamicFactor;
-    const Mp = H * Math.abs(zAxle - zLoad);
-    const lever = ts - rw; // centers of the fore and aft bolster rails
-    const Fc = Mp / lever;
-    const Arail = rw * ts;
-    const pRail = Fc / Arail;
+    const { w, H, V, zAxle, zLoad, Mp } = pitchTerms(ctx, c);
+    const Peq = V + (4 * Mp) / Dp;
+    const oh = overhang(V, Mp);
+    const sPlate = (6 * oh.M) / (oh.width * tPlate * tPlate);
+    const pCarrier = Peq / carArea;
     const Mtr = V * p.kingpinLeadIn;
     const Tleg = Mtr / 2 / legC; // one U-bolt per side: its two legs form the couple M_side = M_tr / 2
     const sLeg = Tleg / Aleg;
     const beamPlate = plateY * L.beamF.thick;
     const pPlate = (2 * Tleg) / beamPlate;
     const ds: Detail[] = [
-      detail('pitch couple on the fore / aft bolster rails (pad pressure on the turntable plate, oak ⊥)', pRail, 'psi', al.oakPerp, '<='),
+      detail('lower plate overhanging the carrier: bending under the ball ring (vendor plate thickness, assumed)', sPlate, 'psi', plateAllow, '<='),
+      detail('carrier plate bearing on the beam top (oak ⊥)', pCarrier, 'psi', al.oakPerp, '<='),
       detail('front U-bolt leg tension from the trail moment', sLeg, 'psi', al.fastTens, '<='),
       detail('U-bolt plate bearing on the beam underside (oak ⊥)', pPlate, 'psi', al.oakPerp, '<='),
     ];
-    const how = `Two pitch moments act on the front steer body about a lateral axis. (1) A strike's horizontal force H = ${f(H)} lbf (two-wheel curb) acts at the axle height ${f(zAxle, 2)}" while the pin reaction acts at ${f(zLoad, 2)}" (${L.kpPlates ? "the crossbar plate's mid height: R_top and R_bot at the sleeve ends are equivalent to H there" : 'the beam mid depth'}): M_p = H × ${f(Math.abs(zAxle - zLoad), 3)}" = ${f(Mp)} lb·in. It is returned as a vertical couple between the FORE and AFT bolster rails (centers ${f(lever, 2)}" apart, the 'fore-aft bearers') through the turntable plate margins, so the lazy-susan bearing ring and the kingpin carry no moment: F = M_p/${f(lever, 2)}" = ${f(Fc)} lbf per rail on ${f(rw, 2)}" × ${f(ts, 1)}" = ${f(Arail, 1)} in² → ${f(pRail, 1)} psi (≤ ${f(al.oakPerp, 0)}). The kingpin only transfers the horizontal force H (rows kingpin-plates / kingpin-bolts). (2) The turntable load acts on the beam at the pin line, ${f(p.kingpinLeadIn, 2)}" ahead of the axle rod, so the design axle load V = ${f(V)} lbf (${frontLoadText(ctx, w)} × ${p.dynamicFactor}) twists the beam about the rod: M_tr = V × lead = ${f(Mtr)} lb·in. The front U-bolts, legs ${f(legC, 2)}" apart, hold the beam to the rod: per side M_tr/2 = T_leg × ${f(legC, 2)}" → T_leg = ${f(Tleg)} lbf, ${f(sLeg, 0)} psi on A_t = 0.75·A (≤ ${f(al.fastTens, 0)}); the legs' pull is reacted by the ${f(plateY, 2)}" × ${f(L.beamF.thick, 2)}" plate on the beam underside: ${f(pPlate, 1)} psi (≤ ${f(al.oakPerp, 0)}). Not modeled: the stiffness of the lazy-susan plate margins that overhang the 4" beam (ask the vendor for the plate thickness); the carrier plate (2" wide) is the only steel the bottom plate stands on.`;
+    const how = `Two pitch moments act on the front steer body about a lateral axis. (1) A strike's horizontal force H = ${f(H)} lbf (two-wheel curb) acts at the axle height ${f(zAxle, 2)}" while the pin reaction acts at ${f(zLoad, 2)}" (${L.kpPlates ? "the crossbar plate's mid height: R_top and R_bot at the sleeve ends are equivalent to H there" : 'the beam mid depth'}): M_p = H × ${f(Math.abs(zAxle - zLoad), 3)}" = ${f(Mp)} lb·in. The kingpin only transfers the horizontal force H (rows kingpin-plates / kingpin-bolts). The moment is carried by the parts that carry vertical load, in this order (D-47, r3 N-5): the bolster rails (clamped to the turntable's top plate by their ${Math.round(p.bolsterFastenerCount)} carriage bolts through the nose deck) → the top plate → the BALL RING (pitch diameter ${f(Dp, 1)}", assumed) in eccentric compression → the bearing's lower plate → the ${f(2 * carHx, 2)}" wide steel carrier plate → the beam top → the front U-bolts and the rod. (The round-2 text returned the moment as a couple between the fore and aft bolster rails 'through the turntable plate margins'; those margins touch nothing, so that path is gone. The ring itself is judged in the info row 'turntable-ring'.) The carrier is only ${f(2 * carHx, 2)}" wide under a ${f(Dp, 1)}" ring, so ${f(rg.unsupportedFrac * 100, 0)}% of the ring load sits on the lower plate OUTSIDE the carrier edge: that plate (${f(tPlate, 3)}" steel, the vendor's, assumed) is a cantilever of the ring's moment ${f(oh.M)} lb·in over ${f(oh.width, 1)}": σ = 6M/(b·t²) = ${f(sPlate, 0)} psi (≤ ${f(plateAllow, 0)}). The carrier bears on ${f(bearX, 2)}" × ${f(2 * Math.min(carHy, L.beamF.len / 2), 2)}" of beam top = ${f(carArea, 1)} in² with the equivalent thrust P_eq = ${f(Peq)} lbf: ${f(pCarrier, 1)} psi (≤ ${f(al.oakPerp, 0)}). (2) The turntable load acts on the beam at the pin line, ${f(p.kingpinLeadIn, 2)}" ahead of the axle rod, so the design axle load V = ${f(V)} lbf (${frontLoadText(ctx, w)} × ${p.dynamicFactor}) twists the beam about the rod: M_tr = V × lead = ${f(Mtr)} lb·in. The front U-bolts, legs ${f(legC, 2)}" apart, hold the beam to the rod: per side M_tr/2 = T_leg × ${f(legC, 2)}" → T_leg = ${f(Tleg)} lbf, ${f(sLeg, 0)} psi on A_t = 0.75·A (≤ ${f(al.fastTens, 0)}); the legs' pull is reacted by the ${f(plateY, 2)}" × ${f(L.beamF.thick, 2)}" plate on the beam underside: ${f(pPlate, 1)} psi (≤ ${f(al.oakPerp, 0)}). Not modeled: tilt of an unsupported lower plate (stiffness).`;
     return governing(ds, how);
   };
   return dualCheck({
-    id: 'pitch-path', label: 'Pitch-moment path: bolster rails and front U-bolts', group: 'Structure', refs: ['D-32', 'D-12', 'D-34'], primary: 'goal',
+    id: 'pitch-path', label: 'Pitch moment: lower plate on the carrier, carrier on the beam, front U-bolts', group: 'Structure', refs: ['D-32', 'D-12', 'D-34', 'D-47'], primary: 'goal',
+    ...evalBoth(ctx, ev),
+  });
+}
+
+/**
+ * The turntable's ball ring under the strike's pitch moment (r3 fittings, eng N-5, D-47). INFO row: the ring diameter and the maker's moment rating are not
+ * known (assumed / verify), and the project's 2x margin on a thrust rating applied to an equivalent thrust fails at the defaults, so the finding is reported
+ * here with its numbers without changing any pass/fail status. Replace with a real row when the vendor's tilting-moment rating is in hand (Phase 4).
+ */
+export function turntableRingCheck(ctx: Ctx): AnalysisCheck {
+  const { p } = ctx;
+  const rg = ringGeometry(ctx);
+  const { Dp, Rr } = rg;
+  const ev = (c: CaseData): CaseEval => {
+    const { H, V, arm, Mp } = pitchTerms(ctx, c);
+    const ecc = V > 0 ? Mp / V : Infinity;
+    const kern = Rr / 2; // a thin ring stays fully loaded while e <= R/2
+    const Peq = V + (4 * Mp) / Dp; // linear contact distribution: Q_max = V/N + 4M/(N·D_p), so P_eq = N·Q_max
+    const capRing = p.turntableRatingLb / p.kingpinMargin; // the margin of the 'turntable' row
+    const ds: Detail[] = [
+      detail('ring stays in compression: load eccentricity e = M_p/V against the kern R/2', ecc, 'in', kern, '<='),
+      detail('ball-ring equivalent thrust P_eq = V + 4·M_p/D_p against the rating / project margin', Peq, 'lbf', capRing, '<='),
+    ];
+    const how = `Not judged (info): ring diameter ${f(Dp, 1)}" (assumed) and the maker's tilting-moment rating (unknown) are Phase 4 vendor facts. The strike's H = ${f(H)} lbf at ${f(arm, 3)}" above the pin line gives M_p = ${f(Mp)} lb·in on the ball ring with the design front load V = ${f(V)} lbf (the same event: the strike force uses the same dynamic factor). Eccentricity e = M_p/V = ${f(ecc, 2)}" against the kern R/2 = ${f(kern, 2)}" (${f((ecc / kern) * 100, 0)}% of it; at 100% the far side of the ring unloads and the kingpin's crossbar plate holds it down). Equivalent thrust (classical linear contact distribution) P_eq = V + 4·M_p/D_p = ${f(V)} + ${f((4 * Mp) / Dp)} = ${f(Peq)} lbf = ${f((Peq / capRing) * 100, 0)}% of the ${f(p.turntableRatingLb)} lb rating / margin ${p.kingpinMargin} = ${f(capRing)} lbf${Peq > capRing ? ' (OVER the project margin: buy a bearing with a published moment rating, a larger ring, or a stiffer pair, or accept the lower margin on the strike event)' : ''}. A shorter lever (the crossbar plate is ${f(arm, 2)}" above the axle line) or a larger ring lowers it.`;
+    return { ...governing(ds, how), info: true };
+  };
+  return dualCheck({
+    id: 'turntable-ring', label: 'Turntable ball ring under the strike\'s pitch moment (info)', group: 'Structure', refs: ['D-32', 'D-47'], primary: 'goal',
     ...evalBoth(ctx, ev),
   });
 }
@@ -660,9 +744,7 @@ export function kingpinSplitCheck(ctx: Ctx): AnalysisCheck {
       } else {
         ds.push(detail('crossbar cleavage under the lateral load, no cross-bolts (NDS 3.4.3.3)', Fy, 'lbf', Vrb, '<='));
       }
-      const tauWeb = p.pullForceLbf / (2 * eWeb * p.axleDiameterIn);
-      ds.push(detail('beam web shear-out between the sleeve bore and the rod groove (rope pull, NDS F\'v)', tauWeb, 'psi', FvP, '<='));
-      txt = `Cleavage (NDS 3.4.3.3): V_r = ⅔·F'v·b·d_e with F'v = ${p.oakNdsShearPsi} × C_M ${p.ndsWetFactorShear} × C_D ${p.ndsLoadDurationFactor} = ${f(FvP, 0)} psi. Beam front slab: b = ${f(bm.lm, 2)}", d_e = ${f(bm.frontDist, 3)}" from the bolt line to the loaded front face → V_r = ${f(Vr)} lbf; the slab is pushed by the carrier-end bolts with ${f(gv.V)} lbf (${gv.name}: R_top plus the stop torque's force on one side of the line), ${f(gv.V / Vr, 2)}× the unreinforced capacity, so ${bm.nCross} × ${f(bm.crossD, 3)}" 316 stainless fore-aft cross-bolts (${f(bm.crossWasher, 2)}" fender washers) stitch it and are designed to carry ALL of it: ${f(Tcb)} lbf each = ${f(Tcb / Acb, 0)} psi (≤ ${f(cbAllow, 0)} = ${f(p.kingpinCrossBoltYieldPsi, 0)} / SF ${p.steelSafetyFactor}), washers ${f(Tcb / Aw, 0)} psi (≤ ${f(al.oakPerp, 0)}). Crossbar: lateral skid F_y = μ × V = ${f(p.tireGroundMu, 2)} × ${f(Vaxle)} = ${f(Fy)} lbf across the grain, d_e = ${f(br.edgeDist, 2)}", b = ${f(br.lm, 2)}" → V_r = ${f(Vrb)} lbf unreinforced; ${br.nCross} cross-bolts across the width carry ${f(Tcbb)} lbf each. Web between the sleeve bore and the rod groove: rope pull ${p.pullForceLbf} lbf, τ = P/(2·e·groove depth) = ${f(tauWeb, 0)} psi (≤ F'v ${f(FvP, 0)}), e = ${f(eWeb, 3)}". Replaces round 1's clear-wood 850 psi block shear (3–4× unconservative, critic MF-4). Strike H = ${f(H)} lbf.`;
+      txt = `Cleavage (NDS 3.4.3.3): V_r = ⅔·F'v·b·d_e with F'v = ${p.oakNdsShearPsi} × C_M ${p.ndsWetFactorShear} × C_D ${p.ndsLoadDurationFactor} = ${f(FvP, 0)} psi. Beam front slab: b = ${f(bm.lm, 2)}", d_e = ${f(bm.frontDist, 3)}" from the bolt line to the loaded front face → V_r = ${f(Vr)} lbf; the slab is pushed by the carrier-end bolts with ${f(gv.V)} lbf (${gv.name}: R_top plus the stop torque's force on one side of the line), ${f(gv.V / Vr, 2)}× the unreinforced capacity, so ${bm.nCross} × ${f(bm.crossD, 3)}" 316 stainless fore-aft cross-bolts (${f(bm.crossWasher, 2)}" fender washers) stitch it and are designed to carry ALL of it: ${f(Tcb)} lbf each = ${f(Tcb / Acb, 0)} psi (≤ ${f(cbAllow, 0)} = ${f(p.kingpinCrossBoltYieldPsi, 0)} / SF ${p.steelSafetyFactor}), washers ${f(Tcb / Aw, 0)} psi (≤ ${f(al.oakPerp, 0)}). Crossbar: lateral skid F_y = μ × V = ${f(p.tireGroundMu, 2)} × ${f(Vaxle)} = ${f(Fy)} lbf across the grain, d_e = ${f(br.edgeDist, 2)}", b = ${f(br.lm, 2)}" → V_r = ${f(Vrb)} lbf unreinforced; ${br.nCross} cross-bolts across the width carry ${f(Tcbb)} lbf each. The round-1 row for the web between the sleeve bore and the rod groove (rope pull over a ligament) is dropped with the plates (r3 N-6): the pin no longer bears on that oak, the plate bolt line does, and the rope pull is the 'bridle pull' case of kingpin-bolts (NDS bolt capacity and row tear-out along the grain), so the same load is checked where it actually acts. Replaces round 1's clear-wood 850 psi block shear (3–4× unconservative, critic MF-4). Strike H = ${f(H)} lbf.`;
     } else {
       const bore0 = bore;
       const D1 = L.beamF.depth;
@@ -715,7 +797,7 @@ export function bridleTieCheck(ctx: Ctx): AnalysisCheck {
   const dx = handsX - eyeX, dy = -eyeY, dz = handsZ - eyeZ;
   const len = Math.hypot(dx, dy, dz);
   const ux = dx / len, uy = Math.abs(dy) / len, uz = dz / len;
-  const T = p.pullForceLbf; // one leg takes the whole design pull (the other is slack when turning)
+  const T = p.pullForceLbf * p.bridleTieOverloadFactor; // one leg takes the whole design pull (the other is slack when turning), times the overload factor (r3 N-6, D-47)
   const Tax = T * ux;
   const Tperp = T * Math.hypot(uy, uz);
   const yieldPsi = p.eyeBoltYieldPsi;
@@ -733,7 +815,7 @@ export function bridleTieCheck(ctx: Ctx): AnalysisCheck {
       detail('washer bearing on the beam aft face (oak ⊥)', pW, 'psi', al.oakPerp, '<='),
       detail('shank bearing in the beam hole (oak, dowel bearing ⊥)', pHole, 'psi', al.oakDowel, '<='),
     ];
-    const how = `Tie load: the design pull ${f(T)} lbf (D-14) on ONE leg, along the taut rope from the eye (${f(eyeX, 2)}", ±${f(eyeY, 2)}", ${f(eyeZ, 2)}") to the pullers' hands ${f(p.bridleRopeRunIn)}" beyond the ring at ${f(handsZ)}" height (the 30–40" range, evaluated at ${f(handsZ)}"): direction (${f(ux, 3)} fwd, ${f(uy, 3)} inboard, ${f(uz, 3)} up) = ${f(Math.asin(uz) * 180 / Math.PI, 1)}° above horizontal. Axial along the eye bolt (fore-aft): ${f(Tax)} lbf; transverse (lateral + vertical): ${f(Tperp)} lbf bending the ${f(d, 3)}" shank over the ${f(arm, 2)}" eye offset: σ = T_ax/A_t + T_perp·arm/Z = ${f(Tax)}/${f(At, 4)} + ${f(Tperp)}·${f(arm, 2)}/${f(Z, 5)} = ${f(sT, 0)} + ${f(sB, 0)} = ${f(sComb, 0)} psi (≤ ${f(allow, 0)} = yield ${f(yieldPsi, 0)} / ${p.steelSafetyFactor}). Washer on the beam aft face (${f(Dw, 2)}" OD): ${f(Tax)}/${f(Aw, 2)} = ${f(pW, 0)} psi (≤ ${f(al.oakPerp, 0)}); shank bearing in the ${f(beamT, 2)}" beam hole ${f(Tperp)}/(${f(d, 3)} × ${f(beamT, 2)}) = ${f(pHole, 0)} psi (≤ ${f(al.oakDowel, 0)}). The tie sits ${f(p.bridleTieOffsetIn, 2)}" inboard of the U-bolt plate, so the rope load goes into the beam and not into the axle rod (critic Phase 2 r2 A4). The eye is ${f(tieHalfY(ctx) - L.bolster.halfY, 2)}" outboard of the bolster ring. Confirm the bought eye bolt's working-load limit is at least ${f(T)} lbf at its pull angle (the rope-to-tire mock-up is a Phase 3 build task).`;
+    const how = `Tie load: the design pull ${f(p.pullForceLbf)} lbf (D-14) × the overload factor ${p.bridleTieOverloadFactor} (D-47; a hard yank by more scouts than the 4-6 assumed) = ${f(T)} lbf on ONE leg, along the taut rope from the eye (${f(eyeX, 2)}", ±${f(eyeY, 2)}", ${f(eyeZ, 2)}") to the pullers' hands ${f(p.bridleRopeRunIn)}" beyond the ring at ${f(handsZ)}" height (the 30–40" range, evaluated at ${f(handsZ)}"): direction (${f(ux, 3)} fwd, ${f(uy, 3)} inboard, ${f(uz, 3)} up) = ${f(Math.asin(uz) * 180 / Math.PI, 1)}° above horizontal. Axial along the eye bolt (fore-aft): ${f(Tax)} lbf; transverse (lateral + vertical): ${f(Tperp)} lbf bending the ${f(d, 3)}" shank over the ${f(arm, 2)}" eye offset: σ = T_ax/A_t + T_perp·arm/Z = ${f(Tax)}/${f(At, 4)} + ${f(Tperp)}·${f(arm, 2)}/${f(Z, 5)} = ${f(sT, 0)} + ${f(sB, 0)} = ${f(sComb, 0)} psi (≤ ${f(allow, 0)} = yield ${f(yieldPsi, 0)} / ${p.steelSafetyFactor}). Washer on the beam aft face (${f(Dw, 2)}" OD): ${f(Tax)}/${f(Aw, 2)} = ${f(pW, 0)} psi (≤ ${f(al.oakPerp, 0)}); shank bearing in the ${f(beamT, 2)}" beam hole ${f(Tperp)}/(${f(d, 3)} × ${f(beamT, 2)}) = ${f(pHole, 0)} psi (≤ ${f(al.oakDowel, 0)}). The tie sits ${f(p.bridleTieOffsetIn, 2)}" inboard of the U-bolt plate, so the rope load goes into the beam and not into the axle rod (critic Phase 2 r2 A4). The eye is ${f(tieHalfY(ctx) - L.bolster.halfY, 2)}" outboard of the bolster ring. Confirm the bought eye bolt's working-load limit is at least ${f(T)} lbf at its pull angle (the rope-to-tire mock-up is a Phase 3 build task). Order of failure (D-47): the eye shank is at ${f((sComb / allow) * 100, 0)}% of its allowable, the washer on the oak at ${f((pW / al.oakPerp) * 100, 0)}%, the beam hole at ${f((pHole / al.oakDowel) * 100, 0)}%: the eye bolt is the intended weak link, and the BOM says so.`;
     return governing(ds, how);
   };
   return dualCheck({

@@ -364,8 +364,8 @@ const defs = {
   },
   edgeBandIn: {
     label: 'Oak edge-banding thickness (edged ply)', group: 'body', unit: 'in',
-    default: 0.1875, min: 0.125, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-35',
-    note: 'Glued-on oak strip, flush both faces, on every ply edge that is not captured (deck step, shoulder panels, signs).',
+    default: 0.25, min: 0.125, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-35, D-47',
+    note: 'Glued-on oak strip, flush both faces, on every straight ply edge that is not captured (deck step, signs). 1/4" thick x 5/16" wide (ply + 1/16" proud), epoxied, cauls and tape, then flush-trimmed; 3/16" strips snapped on the bench (r3 build S12). Curved corners (the kingpin-access opening) use 1/16" oak edge veneer instead.',
   },
   blockingThickIn: {
     label: 'Oak doubler (blocking) thickness', group: 'body', unit: 'in',
@@ -465,6 +465,11 @@ const defs = {
     default: 0.75, min: 0.25, max: 3, step: 0.25, status: 'assumed', ref: 'D-19',
     note: 'forwardRaised only: box bottom = the higher of (wheel diameter, rider knee top) + this.',
   },
+  storageSideClearIn: {
+    label: 'Storage box clearance to the chine (each side)', group: 'body', unit: 'in',
+    default: 0.125, min: 0.0625, max: 0.25, step: 0.0156, status: 'assumed', ref: 'D-47',
+    note: 'The box drops in from above and is bonded to the deck, so it needs a gap to the chine inner face (r3 build S3); the gap is filled with thickened epoxy. The box is narrower by twice this, and the height rises to hold the volume.',
+  },
   storageLidRimWidthIn: {
     label: 'Storage lid oak rim width', group: 'body', unit: 'in',
     default: 1, min: 0.5, max: 2, step: 0.25, status: 'assumed', ref: 'D-19',
@@ -501,6 +506,11 @@ const defs = {
     note: 'Stainless D-rings on the cabin gunwales for post-race gear hauling (BRIEF §4.9: at least 6 in all).',
   },
 
+  lashDoublerThickIn: {
+    label: 'Lash-plate doubler thickness (inboard of the gunwale)', group: 'body', unit: 'in',
+    default: 1, min: 0.75, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-47',
+    note: 'The lash plate (1.5 x 0.9") is centered on this oak doubler, glued to the inner face of the gunwale, and its four screws go straight down into it (r3 build S8): the 5/8" gunwale is too thin and has the web groove under it. 1" leaves 0.25" of oak beside each screw row.',
+  },
   lashLoadLbf: {
     label: 'Lash point design load (strap pull)', group: 'body', unit: 'lbf',
     default: 300, min: 100, max: 600, step: 25, status: 'assumed', ref: 'D-41',
@@ -683,6 +693,40 @@ const defs = {
   clampPlateThickIn: {
     label: 'U-bolt plate thickness', group: 'wheels', unit: 'in',
     default: 0.375, min: 0.1875, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-10',
+  },
+  wheelRatingLb: {
+    label: 'Wheel load rating, each (vendor listing)', group: 'wheels', unit: 'lb',
+    default: 300, min: 100, max: 800, step: 25, status: 'verify', ref: 'D-11',
+    note: 'Eng r2 N-7: READ THIS OFF THE VENDOR LISTING for the exact wheel you order (13" hand-truck wheels are typically listed 250-400 lb per wheel; flat-free are often listed higher than pneumatic). 300 is an assumed placeholder. It is a static / rolling rating: the wheel-rating check compares the static goal-rider load to it and the dynamic peak to `wheelRatingPeakMult` times it.',
+  },
+  wheelRatingPeakMult: {
+    label: 'Short-duration peak allowed over the wheel rating', group: 'wheels', unit: '×',
+    default: 2, min: 1, max: 4, step: 0.25, status: 'verify', ref: 'D-11',
+    note: 'A catalog rating is a continuous / static value with margin against failure; a curb-strike or drop peak may reach a multiple of it for an instant. 2× is an assumption (hub bearings and spokes / web, not the tire, are what fail); ask the vendor or test one wheel to a drop.',
+  },
+  wheelSideRatingFrac: {
+    label: 'Wheel lateral (skid) capacity as a fraction of the rating', group: 'wheels', unit: '×',
+    default: 0.5, min: 0.1, max: 1, step: 0.05, status: 'verify', ref: 'D-11',
+    note: 'Hub bearings in a hand-truck wheel are rated radially; a side load (cornering, side-slope skid) acts on the bearing as a moment and axial load. Half the radial rating is an assumption.',
+  },
+  beamNotchClearIn: {
+    label: 'Rail notch clearance each side of the rear axle beam', group: 'wheels', unit: 'in',
+    default: 0.0625, min: 0.03, max: 0.125, step: 0.0156, status: 'assumed', ref: 'D-15',
+    note: 'Build r2 MUST-4: the cabin rails are notched on their underside so they bear on the rear beam top (the beam is 1.35" higher than the rail bottom). Beam width + this each side, 1.35" deep, router or bandsaw + chisel, corners relieved.',
+  },
+  beamHoldDownLegIn: {
+    label: 'Rear beam hold-down angle leg length', group: 'wheels', unit: 'in',
+    default: 1.5, min: 1, max: 2.5, step: 0.25, status: 'assumed', ref: 'D-15',
+    note: '316 stainless angle, inside each rail: one leg against the rail inner face (two bolts through the rail), the other lying on the beam top (one bolt down through the beam). Ties the beam to the rail against rebound and side loads.',
+  },
+  beamHoldDownThickIn: {
+    label: 'Rear beam hold-down angle thickness', group: 'wheels', unit: 'in',
+    default: 0.1875, min: 0.125, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-15',
+  },
+  beamHoldDownBoltDiameterIn: {
+    label: 'Rear beam hold-down bolt diameter', group: 'wheels', unit: 'in',
+    default: 0.25, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-15',
+    note: '1/4" 316 stainless hex bolts, nylock nuts, fender washers (the bolts through the rail sit 4D above the notch ceiling).',
   },
   axleYieldPsi: {
     label: 'Axle steel yield strength', group: 'wheels', unit: 'psi',
@@ -868,6 +912,11 @@ const defs = {
     default: 0.5, min: 0.25, max: 1, step: 0.125, status: 'assumed', ref: 'D-31',
     note: 'The stop blocks are wedges in the corners of the bolster opening; the thin ends are trimmed off where the wood behind the face is thinner than this, which also sets the length of the stop face.',
   },
+  stopBlockRoughAllowIn: {
+    label: 'Stop block blank allowance (over the finished wedge)', group: 'steering', unit: 'in',
+    default: 0.125, min: 0.0625, max: 0.25, step: 0.0156, status: 'assumed', ref: 'D-47',
+    note: 'The wedges are small, so they are cut from the board 1/8" over the finished stock size (not the 1/2" a long board needs) and the stop face is cut 1/16" proud, then planed back at the shim fit (r3 build S12).',
+  },
   turntableCenterHoleIn: {
     label: 'Turntable center hole diameter', group: 'steering', unit: 'in',
     default: 6.25, min: 4, max: 8, step: 0.25, status: 'verify', ref: 'D-43',
@@ -885,8 +934,23 @@ const defs = {
   },
   kingpinPlateWidthIn: {
     label: 'Carrier / beam plate width (along the fore-aft axis)', group: 'steering', unit: 'in',
-    default: 2.5, min: 2, max: 3, step: 0.125, status: 'assumed', ref: 'D-43',
-    note: 'The strips on and under the beam are this wide. The sleeve hole takes 1¼" of it, so the net section beside the hole carries the pin reaction in the plane of the plate (kingpin-plates row). 2.5" just spans the beam strip between the rod groove and the front face.',
+    default: 4, min: 2, max: 4.5, step: 0.125, status: 'assumed', ref: 'D-47',
+    note: 'The CARRIER plate on top of the beam is this wide (r3 fittings N-5): it is the lazy susan\'s whole lower support, so it spans the beam (4") and lies over the axle rod and the groove, leaving the ball ring over steel for 4" of its 9" diameter instead of 2.5". The sleeve hole takes 1¼" of it, so the net section beside the hole carries the pin reaction in the plane of the plate (kingpin-plates row). The plate under the beam keeps its own width (kingpinUnderPlateWidthIn).',
+  },
+  kingpinUnderPlateWidthIn: {
+    label: 'Beam plate (under the beam) width', group: 'steering', unit: 'in',
+    default: 2.5, min: 2, max: 3, step: 0.125, status: 'assumed', ref: 'D-47',
+    note: 'The 3/16" plate under the beam. It only clamps the beam and takes the pin head, so it stays at the old 2.5" (r3 fittings: only the carrier was widened).',
+  },
+  turntableRaceDiaIn: {
+    label: 'Turntable ball-race (pitch) diameter', group: 'steering', unit: 'in',
+    default: 9, min: 6, max: 11, step: 0.5, status: 'verify', ref: 'D-47',
+    note: 'Assumed: a 12" square lazy susan has a ball ring of about 9" on its pitch circle and a 6.25" open center. Sets the ring support and pitch-moment rows (pitch-path). Ask the vendor for the real ring diameter and the plate thickness.',
+  },
+  turntablePlateThickIn: {
+    label: 'Turntable lower-plate thickness (vendor)', group: 'steering', unit: 'in',
+    default: 0.1875, min: 0.0625, max: 0.375, step: 0.0156, status: 'verify', ref: 'D-47',
+    note: 'Assumed 3/16" steel for a 1,500 lb 12" bearing. The part of the lower plate that overhangs the carrier bends under the ball ring (pitch-path row). Buy a bearing whose lower plate is at least the thickness the row reports, or add wings.',
   },
   steerStopBarThickIn: {
     label: 'Stop arm bar thickness', group: 'steering', unit: 'in',
@@ -930,8 +994,8 @@ const defs = {
   },
   eyeBoltDiameterIn: {
     label: 'Bridle eye bolt shank diameter', group: 'steering', unit: 'in',
-    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-33',
-    note: 'Forged shoulder eye bolt through the front face of the front axle beam (axis fore-aft, along the rope), nut and washer on the aft face.',
+    default: 0.5, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-33, D-47',
+    note: 'Forged shoulder eye bolt through the front face of the front axle beam (axis fore-aft, along the rope), nut and washer on the aft face. 1/2" since r3 (fittings N-6): the eye bolt is the intended weak link of the rope tie, and it now holds the design pull x the overload factor.',
   },
   eyeBoltYieldPsi: {
     label: 'Bridle eye bolt steel yield strength', group: 'steering', unit: 'psi',
@@ -940,7 +1004,13 @@ const defs = {
   },
   eyeBoltWasherDiameterIn: {
     label: 'Bridle eye bolt washer OD (aft face of the beam)', group: 'steering', unit: 'in',
-    default: 1, min: 0.75, max: 2, step: 0.125, status: 'assumed', ref: 'D-33',
+    default: 2, min: 0.75, max: 2, step: 0.125, status: 'assumed', ref: 'D-33, D-47',
+    note: '2" fender washer (r3 fittings N-6): at 1" the washer crushed the oak at 250 lbf of rope pull.',
+  },
+  bridleTieOverloadFactor: {
+    label: 'Bridle tie overload factor on the design pull', group: 'loads', unit: '×',
+    default: 2, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-47',
+    note: 'The rope tie (eye bolt, washer, beam hole) is checked at the design pull x this factor, so a hard yank by 8 scouts does not fail it first (r3 fittings N-6). 2 x 150 = 300 lbf. The pull itself is still O-2.',
   },
   eyeBoltEyeOffsetIn: {
     label: 'Bridle eye center ahead of the beam front face', group: 'steering', unit: 'in',
@@ -975,6 +1045,11 @@ const defs = {
     label: 'Kingpin-nut access panel length (fore-aft)', group: 'steering', unit: 'in',
     default: 4.5, min: 3.5, max: 6, step: 0.25, status: 'assumed', ref: 'D-34',
     note: 'A removable ply panel in the nose deck over the kingpin nut (threaded inserts + machine screws into the crossbar). Needs the kingpin crossbar.',
+  },
+  accessOpeningCornerRadiusIn: {
+    label: 'Kingpin-access opening corner radius', group: 'steering', unit: 'in',
+    default: 1, min: 0.5, max: 1.375, step: 0.125, status: 'assumed', ref: 'D-47',
+    note: 'The opening in the nose deck and its panel have this corner radius (a 1/2" router bit in a template; 1" is the tightest radius that takes 1/16" oak edge veneer without cracking; r3 build S12). It must stay under half the opening width.',
   },
   accessPanelWidthIn: {
     label: 'Kingpin-nut access panel width (across)', group: 'steering', unit: 'in',
@@ -1037,6 +1112,11 @@ const defs = {
     label: 'Kingpin steel sleeve outside diameter (0 = none)', group: 'steering', unit: 'in',
     default: 1.25, min: 0, max: 2, step: 0.0625, status: 'explore', ref: 'D-12',
     note: 'A steel tube sleeve (inside diameter = the kingpin) in the beam bore, e.g. 1.25" OD for a ¾" pin. With the kingpin steel plates (D-35, the default crossbar configuration) it is the pin guide between the beam plates: it bears in their spigot holes and the epoxy bed in the oak is a seal that is NOT counted. Without the crossbar (the Phase 1 pin) the oak bears on the sleeve OD instead. Must exceed the kingpin diameter; the rod-to-kingpin web and beam ligament rules use the sleeve OD.',
+  },
+  kingpinSleeveClearIn: {
+    label: 'Kingpin sleeve bore clearance over the pin (diametral)', group: 'steering', unit: 'in',
+    default: 0.006, min: 0.003, max: 0.015, step: 0.001, status: 'assumed', ref: 'D-47',
+    note: 'The DOM tube is bought at about 0.750" ID +/- 0.005, which can be smaller than a grade-8 pin body (0.744-0.750" per ASME B18.2.1). The bore is reamed or honed to pin + this (0.756"), which leaves 0.006-0.014" diametral clearance on a bolt body of 0.7439-0.7500". Steering play at the stop is a few thousandths of an inch.',
   },
   sleeveYieldPsi: {
     label: 'Kingpin sleeve steel yield strength', group: 'steering', unit: 'psi',
@@ -1137,7 +1217,7 @@ const defs = {
   },
   brakeShaftDiameterIn: {
     label: 'Brake cross shaft diameter', group: 'brake', unit: 'in',
-    default: 0.75, min: 0.375, max: 1, step: 0.125, status: 'assumed', ref: 'D-38',
+    default: 0.875, min: 0.375, max: 1, step: 0.125, status: 'assumed', ref: 'D-38',
     note: 'Ground shafting, pre-hardened 4140 (brakeShaftYieldPsi). ¾" carries the shoe-arm torque at 2× the hold load; ½" does not. Phase 3 r2: the shaft is cross-drilled for roll pins (no keyseat, build review M10) and the ¼" diametral hole costs 57% of the bending section, so the net-section stress is checked (brake-shaft); 1045 at 70 ksi would need a 7/8" shaft (+1.8 lb).',
   },
   brakeLeverWidthIn: {
@@ -1147,7 +1227,7 @@ const defs = {
   },
   brakeLeverThickIn: {
     label: 'Brake lever thickness (fore-aft, in the plane of the pull)', group: 'brake', unit: 'in',
-    default: 1.5, min: 0.75, max: 2, step: 0.25, status: 'assumed', ref: 'D-38',
+    default: 2, min: 0.75, max: 2, step: 0.25, status: 'assumed', ref: 'D-38',
   },
   brakeEfficiency: {
     label: 'Brake linkage efficiency', group: 'brake', unit: '×',
@@ -1185,7 +1265,7 @@ const defs = {
   },
   brakeRatioHeadroom: {
     label: 'Ratio headroom over the target (tail solve)', group: 'brake', unit: '×',
-    default: 1.1, min: 1, max: 1.3, step: 0.01, status: 'assumed', ref: 'D-38',
+    default: 1.2, min: 1, max: 1.3, step: 0.01, status: 'assumed', ref: 'D-38',
     note: 'The tail is solved to this multiple of the target so the check passes with margin, not at equality.',
   },
   tireGroundMu: {
@@ -1217,11 +1297,18 @@ const defs = {
   },
   handlePostThickIn: {
     label: 'Push-handle upright thickness (fore-aft)', group: 'brake', unit: 'in',
-    default: 1, min: 0.75, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-39',
+    default: 0.9375, min: 0.75, max: 1.5, step: 0.0625, status: 'assumed', ref: 'D-39',
+    note: 'Build r2 S7: planed 15/16" so it is a slip fit (with `handleSocketSlipIn` per side) in the 1-1/4" × 1-3/4" × 1/8" aluminum tube (inside 1.0" × 1.5"). Mill from 1" stock; leave room for the oak to swell.',
   },
   handlePostWidthIn: {
     label: 'Push-handle upright width (across)', group: 'brake', unit: 'in',
-    default: 1.5, min: 1, max: 2.5, step: 0.125, status: 'assumed', ref: 'D-39',
+    default: 1.4375, min: 1, max: 2.5, step: 0.0625, status: 'assumed', ref: 'D-39',
+    note: 'Planed 1-7/16" from 1-1/2" stock (see the thickness).',
+  },
+  handleSocketSlipIn: {
+    label: 'Push-handle post slip clearance per side in the socket', group: 'brake', unit: 'in',
+    default: 0.03125, min: 0.015, max: 0.0625, step: 0.0078, status: 'assumed', ref: 'D-39',
+    note: 'Socket outside = post + 2 × (wall + slip): 15/16" + 2 × (1/8" + 1/32") = 1-1/4" and 1-7/16" → 1-3/4", the standard tube.',
   },
   handleSocketDepthIn: {
     label: 'Push-handle socket depth (tube length)', group: 'brake', unit: 'in',
@@ -1246,7 +1333,7 @@ const defs = {
   // ── Brake mechanism geometry (D-38) ───────────────────────────────────────
   brakeShoeTravelIn: {
     label: 'Brake shoe engagement stroke (pad to tread)', group: 'brake', unit: 'in',
-    default: 0.375, min: 0.1, max: 0.75, step: 0.025, status: 'assumed', ref: 'D-38',
+    default: 0.3125, min: 0.1, max: 0.75, step: 0.025, status: 'assumed', ref: 'D-38',
     note: 'Released gap to the tread plus tire/pad compliance and a little wear allowance (the clevis lengthens the link to take up more). Sets the lever stroke: stroke ≈ ratio × this. 3/8" so a muddy shoe retracts clear of the tread (build review S10).',
   },
   brakeShoePinDiameterIn: {
@@ -1265,7 +1352,7 @@ const defs = {
   brakeLeverPivotBehindShaftIn: {
     label: 'Brake lever pivot behind the cross shaft', group: 'brake', unit: 'in',
     default: 1.25, min: 0.75, max: 3, step: 0.05, status: 'assumed', ref: 'D-38',
-    note: 'The lever pivots on a bolt through an oak block on the outside of the left rear rail, just behind the shaft (behind the tire, so it never depends on the hull-to-tire gap).',
+    note: 'The lever pivots on a post welded to the left bearing plate (outside the rail band), just behind the shaft (behind the tire, so it never depends on the hull-to-tire gap); the plate ear reaches behind the rail end (D-48).',
   },
   brakeLeverPivotZIn: {
     label: 'Brake lever pivot height', group: 'brake', unit: 'in',
@@ -1293,19 +1380,64 @@ const defs = {
     note: 'Leans the grip back toward the push handle.',
   },
   brakeBearingBoltDiameterIn: {
-    label: 'Cross shaft bearing mounting bolt diameter', group: 'brake', unit: 'in',
-    default: 0.4375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-38',
-    note: 'Four bolts through the bearing plate, block and rail per bearing, on a square pattern (brakeBearingBoltSpacingIn).',
+    label: 'Cross shaft bearing-plate bolt diameter', group: 'brake', unit: 'in',
+    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-38',
+    note: 'Phase 3 r3 (build MUST-3): 3/8" 316 hex bolts through the steel bearing plate and the 3/4" rail band, fender washer and nylock nut inside the rail. 3/8" (not 7/16") because the rail is only 0.75" thick and 4" tall: the edge distances are 1.5D (parallel to grain) and 7D from the rail end toward which the pivot load pulls.',
   },
   brakePivotBoltDiameterIn: {
-    label: 'Brake lever pivot bolt diameter', group: 'brake', unit: 'in',
-    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-38',
-    note: 'Bolt through the lever (bronze sleeve), the oak block and the rail; nut and washer inside.',
+    label: 'Brake lever pivot post diameter', group: 'brake', unit: 'in',
+    default: 0.75, min: 0.375, max: 1, step: 0.125, status: 'assumed', ref: 'D-48',
+    note: 'Phase 3 r3: a 3/4" A36 round post welded (outsourced, 3/16" fillet all round) to the left bearing plate ear, sticking out 1.4" to carry the lever on a bronze sleeve. A 3/8" bolt cantilevered that far bends (about 460 lbf·in at the 2× hold load against 80 for a 316 bolt; the round-2 check never looked at pin bending). The lever bore is the post + 2 × 1/8" sleeve.',
   },
   brakeBearingBoltSpacingIn: {
-    label: 'Cross shaft bearing bolt pattern (square side)', group: 'brake', unit: 'in',
-    default: 2, min: 1.25, max: 3, step: 0.25, status: 'assumed', ref: 'D-38',
-    note: 'Four bolts through the bearing plate, oak block and rail; the pattern resists the overturning moment of the shoe-arm and crank loads.',
+    label: 'Cross shaft bearing-plate bolt pitch (fore-aft, between columns)', group: 'brake', unit: 'in',
+    default: 1.75, min: 1.25, max: 3, step: 0.125, status: 'assumed', ref: 'D-38',
+    note: 'Phase 3 r3: the bolts are a grid of 2 rows × `brakeBearingBoltCols` columns on the outside of the rail band, FORWARD of the shaft notch (the rail is solid wood there), not a 2" square around the shaft (that put holes 0.25" from the rail end and below its bottom, build MUST-3). Pitch ≥ 4D along the grain.',
+  },
+  brakeBearingBoltCols: {
+    label: 'Cross shaft bearing-plate bolt columns (2 rows each)', group: 'brake', unit: '',
+    default: 2, min: 2, max: 4, step: 1, status: 'assumed', ref: 'D-38',
+    note: 'Bolts in the bearing-plate grid = 2 × this. The left plate also carries the lever pivot reaction (about 600 lbf at 2× the goal hold load), 2.7" behind the first column, so it needs the third column.',
+  },
+  brakeBearingBoltRowGapIn: {
+    label: 'Bearing-plate bolt rows: vertical gap', group: 'brake', unit: 'in',
+    default: 1.3, min: 1, max: 2.5, step: 0.125, status: 'assumed', ref: 'D-38',
+    note: 'Gap between the two bolt rows; the lower row sits `brakeBoltEdgeIn` above the rail bottom, the upper row must stay 1.5D below the deck ledge (validator).',
+  },
+  brakeBoltEdgeIn: {
+    label: 'Bearing-plate lower bolt row above the rail bottom', group: 'brake', unit: 'in',
+    default: 0.8, min: 0.5, max: 1.5, step: 0.05, status: 'assumed', ref: 'D-38',
+    note: 'Edge distance of the lower bolt row to the rail bottom (2.1D for 3/8"; NDS wants 1.5D parallel to the grain, 4D perpendicular, and a steel plate on the outside plus a fender washer inside spread the load).',
+  },
+  brakeBoltEndIn: {
+    label: 'Bearing-plate first bolt column: distance from the rail end', group: 'brake', unit: 'in',
+    default: 2.95, min: 1.5, max: 5, step: 0.05, status: 'assumed', ref: 'D-38',
+    note: '≥ 7D (NDS loaded end distance, 2.63" for 3/8"): the lever pivot reaction pulls the plate toward the rail end. Also must clear the shaft notch (validator).',
+  },
+  brakeDoublerThickIn: {
+    label: 'Brake bearing-plate oak doubler inside the rail (0 = none)', group: 'brake', unit: 'in',
+    default: 1.5, min: 0, max: 2, step: 0.25, status: 'assumed', ref: 'D-48',
+    note: 'A glued, bolted oak block on the INSIDE of the rail behind the bolt grid (the dedicated bearing block the build review asked for): the bolts then go through 1.75" of oak instead of 0.75", which lifts the NDS bolt capacity and the cleavage limit (⅔ F\'v b d_e, b = rail + doubler) that a 0.75" rail alone fails at the plate\'s edge distances. It stays forward of the shaft (clear of the shaft path) and aft of the rear axle beam hold-down.',
+  },
+  brakePlateThickIn: {
+    label: 'Brake bearing plate thickness (A36, outsourced)', group: 'brake', unit: 'in',
+    default: 0.1875, min: 0.1875, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-38',
+    note: 'One plate per side on the outside of the rail band: carries the bronze shaft bearing and (left) the lever pivot, and spans the shaft notch to solid rail. 3/16 inch (the bolt-hole bearing and tear-out are at 10% of allowable; the pivot post is welded to the left plate\'s ear).',
+  },
+  brakeGripTravelMaxIn: {
+    label: 'Brake lever grip travel limit', group: 'brake', unit: 'in',
+    default: 6.5, min: 4, max: 9, step: 0.25, status: 'verify', ref: 'D-38',
+    note: 'The most a scout can sweep the grip before the lever becomes awkward (F3 flagged 6.4" as long). Feel-test on the mock-up. Raising the ratio or the shoe stroke raises the travel one for one; the check reports both.',
+  },
+  brakeAbuseLbf: {
+    label: 'Brake lever abuse pull (a scout hanging on the grip)', group: 'brake', unit: 'lbf',
+    default: 100, min: 50, max: 200, step: 10, status: 'locked', ref: 'D-38',
+    note: 'Eng r2 N-8: lever, link, crank, shaft, pins and ratchet must survive this at the grip without yielding (SF 1). The brake may be bent after it only if the check says so; no failure of the rider-facing parts.',
+  },
+  brakeShieldThickIn: {
+    label: 'Brake shoe splash shield sheet thickness (0 = none)', group: 'brake', unit: 'in',
+    default: 0.0625, min: 0, max: 0.125, step: 0.0156, status: 'assumed', ref: 'D-38',
+    note: 'Build r1 S10: a bent 1/16" HDPE or aluminum cover over the back and sides of each oak shoe and its pivot bore, between the shoe arms. It does not touch the tread; it keeps the pivot, pin and spring clear of tire spray. The mud-fouled lining case (brakePadMuFouled) is still the pass/fail case.',
   },
   brakeBushingPsi: {
     label: 'Oil-impregnated bronze bushing allowable bearing pressure', group: 'brake', unit: 'psi',
@@ -1319,7 +1451,7 @@ const defs = {
   },
   brakeClevisPinDiameterIn: {
     label: 'Brake clevis pin diameter', group: 'brake', unit: 'in',
-    default: 0.3125, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-38',
+    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-38',
   },
   brakeStrokeReserve: {
     label: 'Ratchet stroke reserve (× the applied lever angle)', group: 'brake', unit: '×',
@@ -2205,6 +2337,22 @@ export function validateParams(input: Params): ParamIssue[] {
     err(['rearOverhangIn', 'brakeShaftBehindTireIn', 'wheelDiameterIn'],
       `The brake cross shaft reaches ${shaftBack.toFixed(2)}" behind the rear axle, into the rear transom; the rear overhang must be ≥ ${(shaftBack + p.transomThicknessIn).toFixed(2)}".`);
 
+  // Brake bearing-plate bolt grid in the rail (build r2 MUST-3, D-48): mirrors src/model/rear-mount.ts bearingMount.
+  if (p.brakeType === BRAKE_TYPE.tireTread) {
+    const railBot = p.deckHeightIn - p.deckPlyIn - p.railDepthIn;
+    const solidTop = p.deckHeightIn - p.deckPlyIn;
+    const zHi = railBot + p.brakeBoltEdgeIn + p.brakeBearingBoltRowGapIn;
+    const bd = p.brakeBearingBoltDiameterIn;
+    if (solidTop - zHi < 1.5 * bd - 1e-9)
+      err(['brakeBoltEdgeIn', 'brakeBearingBoltRowGapIn', 'railDepthIn', 'brakeBearingBoltDiameterIn'],
+        `The upper bearing-plate bolt row is ${(solidTop - zHi).toFixed(2)}" below the deck ledge (needs 1.5D = ${(1.5 * bd).toFixed(2)}"): lower the rows, deepen the rail or use a smaller bolt (D-48).`);
+    if (p.brakeBoltEdgeIn < 1.5 * bd - 1e-9)
+      err(['brakeBoltEdgeIn', 'brakeBearingBoltDiameterIn'], `The lower bearing-plate bolt row is ${p.brakeBoltEdgeIn}" above the rail bottom (needs 1.5D = ${(1.5 * bd).toFixed(2)}"; D-48).`);
+    const notchTop = r + 0 + p.brakeShaftDiameterIn / 2 + 0.125;
+    if (solidTop - notchTop < 1)
+      err(['railDepthIn', 'brakeShaftDiameterIn', 'deckHeightIn', 'wheelDiameterIn'],
+        `The brake shaft notch in the rail reaches ${notchTop.toFixed(2)}", leaving ${(solidTop - notchTop).toFixed(2)}" of rail below the deck ledge (needs 1"): a taller rail, a lower shaft (smaller wheel) or a higher deck (D-48).`);
+  }
   // Brake linkage (D-38). Numbers below mirror src/model/brake.ts (lever-to-hull gap 0.64", clevis cheek 0.15", clevis half height 0.25").
   if (p.brakeType === BRAKE_TYPE.tireTread) {
     const sX = -(r + p.brakeShaftBehindTireIn);

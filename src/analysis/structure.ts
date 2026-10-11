@@ -654,7 +654,7 @@ export function rollKingpinUpliftCheck(ctx: Ctx): AnalysisCheck {
     const sW = r.U / Aw;
     const sT = r.U / sec.A;
     const kpPlan = ctx.L.kpPlates ? kingpinPlatePlan(p) : null;
-    const plateA = kpPlan ? 4 * kpPlan.carrier.hx * kpPlan.carrier.hy : 0;
+    const plateA = kpPlan ? 4 * kpPlan.under.hx * kpPlan.under.hy : 0; // the plate UNDER the beam pushes up on the beam underside (it is narrower than the carrier since r3 N-5)
     const ds = [
       ...(kpPlan
         ? [

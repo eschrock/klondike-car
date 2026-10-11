@@ -16,7 +16,7 @@ import { toothThickness } from '../model/stops';
 import { BRIDLE_APEX_AHEAD_IN } from '../model/steering';
 import { makeContext } from './context';
 import { runChecks, type AnalysisCheck } from './index';
-import { bridleTieCheck, kingpinBoltsCheck, kingpinPlatesCheck, kingpinSplitCheck, pinLoads, pinReactions, pitchPathCheck, plateModel, stopEnv, stopShare, stopStiffness, steerStopsBoundCheck, steerStopsCheck } from './front';
+import { bridleTieCheck, kingpinBoltsCheck, kingpinPlatesCheck, kingpinSplitCheck, pinLoads, pinReactions, pitchPathCheck, plateModel, turntableRingCheck, stopEnv, stopShare, stopStiffness, steerStopsBoundCheck, steerStopsCheck } from './front';
 import { allowables, obstacleForce, strikeCases, wheelLoads, yawTorque } from './structure';
 
 const defaults = defaultParams();
@@ -241,9 +241,9 @@ describe('kingpin-plates: the pin as an overhanging beam on the sleeve, steel on
     expect(row('sleeve spigot bearing in the carrier').value).toBeCloseTo((H * 1.2809) / (1.25 * 0.375), -1);
     expect(c.statusGoal).not.toBe('fail');
   });
-  it('the carrier strip at the sleeve hole: net width 2.5 − 1.25 = 1.25", Z = ⅜ × 1.25²/6 = 0.0977 in³, σ = (R_top/2 × y₁)/Z with y₁ = 2.34375"', () => {
+  it('the carrier strip at the sleeve hole: net width 4 − 1.25 = 2.75" (carrier widened in r3, D-47), Z = ⅜ × 2.75²/6 = 0.4727 in³, σ = (R_top/2 × y₁)/Z with y₁ = 2.34375"', () => {
     const H = Math.max(...strikeCases(ctx, goal).map((s) => s.H));
-    const sigma = ((H * 1.2809) / 2 * 2.34375) / (0.375 * 1.25 ** 2 / 6);
+    const sigma = ((H * 1.2809) / 2 * 2.34375) / (0.375 * 2.75 ** 2 / 6);
     expect(det(c, 'carrier strip').value).toBeGreaterThanOrEqual(sigma - 1);
     expect(det(c, 'carrier strip').limit).toBeCloseTo(36000 / 2, 6);
   });
@@ -295,8 +295,8 @@ describe('kingpin-bolts: NDS lateral capacity of the plate bolts, spacing, edge 
     expect(names.some((n) => /^plate-stack couple: bolt tension/.test(n))).toBe(true);
     expect(names.some((n) => /^plate-stack couple: carrier edge contact/.test(n))).toBe(true);
     expect(names.some((n) => /^bolt preload clamp pressure/.test(n))).toBe(true);
-    // clamp pressure: 6 × 1500 lbf over the 2.5" × 11.94" carrier footprint = 301.6 psi
-    expect(det(c, 'bolt preload clamp pressure').value).toBeCloseTo((6 * 1500) / (2.5 * 11.9375), 0);
+    // clamp pressure: 6 × 1500 lbf over the part of the 4" carrier that lies on the beam (43.5..46.875 = 3.375") × 11.94" = 223.4 psi
+    expect(det(c, 'bolt preload clamp pressure').value).toBeCloseTo((6 * 1500) / (3.375 * 11.9375), 0);
     expect(c.how).toMatch(/Plate-stack couple/);
     expect(c.statusGoal).not.toBe('fail');
   });
@@ -403,67 +403,86 @@ describe('kingpin-split: NDS cleavage and the cross-bolts that stitch the loaded
     expect(d.limit).toBeCloseTo((2 / 3) * FvP * pm.bar.lm * 1.5, 1);
     expect(d.value).toBeCloseTo(Fy, 6);
   });
-  it('the web between the sleeve bore and the rod groove: rope pull 150 lbf, τ = P/(2·e·0.75) with e = 1.5 − 0.375 − 0.625 = 0.5" → 200 psi, held to the NDS F\'v 318 psi (not the clear-wood 850)', () => {
-    const d = det(c, 'beam web shear-out');
-    expect(d.value).toBeCloseTo(150 / (2 * 0.5 * 0.75), 6);
-    expect(d.limit).toBeCloseTo(FvP, 2);
+  it('r3 N-6: the legacy web shear-out row (rope pull over the bore-to-groove ligament) is gone with the plates; the text says where the pull is checked instead', () => {
+    expect(c.details!.some((d) => /web shear-out/.test(d.name))).toBe(false);
+    expect(c.how).toMatch(/dropped with the plates/);
     expect(c.how).toMatch(/3.4.3.3/);
   });
 });
 
-describe('pitch-path (M3, D-43): the pin reaction acts at the crossbar plate, 1.34" above the axle line', () => {
+describe('pitch-path (M3, D-43, r3 N-5, D-47): the moment goes through the ball ring, the lower plate, the 4" carrier and the beam', () => {
   const p = resolveParams(defaults);
   const ctx = ctxOf(p);
   const goal = ctx.loads.goal;
   const L = computeLayout(p);
   const c = pitchPathCheck(ctx);
-  it('M_p = H·|z_axle − z_load| with z_axle = 6.5" and z_load = (7.75 + 7.9375)/2 = 7.84375" (1.34375"), returned as a vertical couple between rail centers 10.5" apart on 1.5" × 12" pads', () => {
-    const H = Math.max(...strikeCases(ctx, goal).map((s) => s.H));
-    const Mp = H * 1.34375;
-    expect(Mp / 10.5 / (1.5 * 12)).toBeGreaterThan(0);
-    expect(det(c, 'bolster rails').value).toBeCloseTo(Mp / 10.5 / 18, 4);
+  it('the round-2 "couple between the bolster rails through the plate margins" row is gone; the text names the real path', () => {
+    expect(c.details!.some((d) => /bolster rails/.test(d.name))).toBe(false);
+    expect(c.how).toMatch(/BALL RING/);
+    expect(c.how).toMatch(/those margins touch nothing/);
+    expect(c.how).not.toMatch(/lazy-susan bearing ring and the kingpin carry no moment/);
+  });
+  it('U-bolt rows by hand, M_p = H·1.34375", and the carrier bears on the 3.375" of its width that lies on the beam', () => {
     const w = wheelLoads(ctx, goal);
     const V = w.frontAxle * p.dynamicFactor;
     const legC = L.beamF.thick + 2 * p.uboltBeamClearIn + p.uboltRodDiameterIn;
     const Tleg = (V * p.kingpinLeadIn) / 2 / legC;
     const Aleg = 0.75 * ((Math.PI * 0.375 ** 2) / 4);
     expect(det(c, 'U-bolt leg tension').value).toBeCloseTo(Tleg / Aleg, 0);
-    expect(det(c, 'plate bearing').value).toBeCloseTo((2 * Tleg) / (p.clampPlateWidthIn * L.beamF.thick), 1);
+    expect(det(c, 'U-bolt plate bearing').value).toBeCloseTo((2 * Tleg) / (p.clampPlateWidthIn * L.beamF.thick), 1);
+    const H = Math.max(...strikeCases(ctx, goal).map((s) => s.H));
+    const Peq = V + (4 * H * 1.34375) / p.turntableRaceDiaIn;
+    expect(det(c, 'carrier plate bearing').value).toBeCloseTo(Peq / (3.375 * 2 * 5.96875), 0);
     expect(c.statusGoal).toBe('pass');
-    expect(c.how).toMatch(/lazy-susan bearing ring and the kingpin carry no moment/);
+  });
+  it('the lower plate overhanging the carrier is a row (vendor plate thickness): a 4" carrier cuts its stress vs the old 2.5"', () => {
+    const wide = det(c, 'lower plate overhanging').value;
+    const narrow = det(pitchPathCheck(ctxOf({ ...defaults, kingpinPlateWidthIn: 2.5 })), 'lower plate overhanging').value;
+    expect(wide).toBeLessThan(narrow);
+    expect(det(c, 'lower plate overhanging').limit).toBeCloseTo(36000 / p.steelSafetyFactor, 6);
+  });
+  it('turntable-ring (info): e = M_p/V ≈ 2.1" vs the kern R/2 = 2.25", P_eq = V + 4M/D_p vs rating/margin', () => {
+    const r = turntableRingCheck(ctx);
+    expect(r.status).toBe('info');
+    expect(det(r, 'eccentricity').value).toBeCloseTo(2.1, 1);
+    expect(det(r, 'eccentricity').limit).toBeCloseTo(2.25, 9);
+    expect(det(r, 'equivalent thrust').limit).toBeCloseTo(p.turntableRatingLb / p.kingpinMargin, 6);
   });
 });
 
-describe('bridle-tie (M6): 150 lbf along the leg to the pullers\' hands', () => {
+describe('bridle-tie (M6, r3 N-6): the design pull x 2 along the leg to the pullers\' hands, on a 1/2" eye bolt and a 2" washer', () => {
   const p = resolveParams(defaults);
   const ctx = ctxOf(p);
   const c = bridleTieCheck(ctx);
   const eye = ctx.byId.get('eyebolt-L')!;
-  it('direction from the eye (x, 13.25", 5.625") to the hands 96" beyond the ring at 40": components, bending over the 1" eye offset, washer and hole bearing', () => {
+  it('direction from the eye to the hands 96" beyond the ring at 40": components, bending over the 1" eye offset, washer and hole bearing at 300 lbf', () => {
     const ex = eye.transform[12], ey = Math.abs(eye.transform[13]), ez = eye.transform[14];
     const hx = p.wheelbaseIn + BRIDLE_APEX_AHEAD_IN + p.bridleRopeRunIn, hz = 40;
     const d = [hx - ex, -ey, hz - ez];
     const len = Math.hypot(...d);
     const [ux, uy, uz] = [d[0] / len, Math.abs(d[1]) / len, d[2] / len];
-    const T = 150;
+    const T = 150 * 2;
     const Tax = T * ux, Tperp = T * Math.hypot(uy, uz);
-    const dia = 0.375;
+    const dia = 0.5;
     const At = 0.75 * ((Math.PI * dia * dia) / 4), Z = (Math.PI * dia ** 3) / 32;
     expect(det(c, 'eye bolt shank').value).toBeCloseTo(Tax / At + (Tperp * 1) / Z, 4);
     expect(det(c, 'eye bolt shank').limit).toBeCloseTo(36000 / p.steelSafetyFactor, 6);
-    const Aw = (Math.PI / 4) * (1 ** 2 - (dia + 1 / 16) ** 2);
+    const Aw = (Math.PI / 4) * (2 ** 2 - (dia + 1 / 16) ** 2);
     expect(det(c, 'washer').value).toBeCloseTo(Tax / Aw, 4);
     expect(det(c, 'shank bearing').value).toBeCloseTo(Tperp / (dia * 4), 4);
-    // the vertical component: hands at 40" give a slope of atan(34.4/…)
     expect(Math.asin(uz) * (180 / Math.PI)).toBeGreaterThan(10);
     expect(Math.asin(uz) * (180 / Math.PI)).toBeLessThan(20);
     expect(c.how).toMatch(/evaluated at 40\.0"/);
-    expect(c.statusGoal).not.toBe('fail');
+    expect(c.how).toMatch(/intended weak link/);
+    expect(c.statusGoal).toBe('pass');
   });
-  it('a bigger pull or a thinner eye bolt raises the stress; the oak tongue has no tie points (info row)', () => {
+  it('holds 250 lbf of design pull (2.0 x 250 = 500 lbf) with the eye bolt first, then the washer, then the hole; the oak tongue has no tie points (info row)', () => {
+    const big = bridleTieCheck(ctxOf({ ...defaults, pullForceLbf: 250 }));
+    expect(big.statusGoal).not.toBe('fail');
+    expect(det(big, 'eye bolt shank').util).toBeGreaterThan(det(big, 'washer').util);
+    expect(det(big, 'washer').util).toBeGreaterThan(det(big, 'shank bearing').util);
     const base = det(c, 'eye bolt shank').value;
     expect(det(bridleTieCheck(ctxOf({ ...defaults, pullForceLbf: 300 })), 'eye bolt shank').value).toBeCloseTo(2 * base, 4);
-    expect(det(bridleTieCheck(ctxOf({ ...defaults, eyeBoltDiameterIn: 0.25 })), 'eye bolt shank').value).toBeGreaterThan(base * 2);
     expect(bridleTieCheck(ctxOf({ ...defaults, drawbar: 1 })).status).toBe('info');
   });
 });

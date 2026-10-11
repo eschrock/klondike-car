@@ -34,13 +34,13 @@ describe('hull checks (D-43)', () => {
     expect(sigma / al.oakDesignMorPsi).toBeLessThan(0.6);
   });
 
-  it('the lift row uses the CG-weighted share, not mass / 2: the rear person carries 70-78 lb (review: about 74), more than the front', () => {
+  it('the lift row uses the CG-weighted share, not mass / 2: the rear person carries 70-86 lb (review: about 74), more than the front', () => {
     const c = liftCheck(ctx);
     const rear = c.details!.find((d) => d.name === 'rear slot bar bending')!;
     // σ = share × 3 × 4.5/4 / 0.0703125 → share = σ × 0.0703125 × 4 / (3 × 4.5)
     const share = (rear.value * 0.0703125 * 4) / (3 * 4.5);
     expect(share).toBeGreaterThan(70);
-    expect(share).toBeLessThan(78);
+    expect(share).toBeLessThan(86); // 78 -> 86 (r3 rear/brake): +5 lb of bearing plates, doublers and the 7/8" shaft sit behind the axle, so the rear person carries ~83 lb
     const front = c.details!.find((d) => d.name === 'front slot bar bending')!;
     expect(rear.value).toBeGreaterThan(front.value);
     expect(rear.limit).toBeCloseTo(al.oakDesignMorPsi, 6);

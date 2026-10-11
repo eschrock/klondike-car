@@ -299,10 +299,14 @@ export function buildPart(part: Part): BuiltPart | null {
       break;
     }
     case 'sweep': {
-      // Round 3 (review r2 MUST 4): a roundover of 30% of the thinner dimension and a domed tip, so the bent lamination
-      // reads as a stem; the section size is unchanged (a design question for the owner). Parts without a finish stay crisp.
-      const rounded = !!f?.roundoverIn;
-      const m = rounded ? buildRoundedSweepMesh(g.path, g.width, g.thickness, g.plies, 0.3 * Math.min(g.width, g.thickness)) : buildSweepMesh(g.path, g.width, g.thickness, g.plies);
+      // Round 4: the path may lie in plan (hull chine, gunwale, rail, web: local y is up, see the D-45 viewer notes), so nothing
+      // here may assume the path rises in z. The mesh is built in local space and the part transform places it. Oak sweeps roll
+      // over their long edges by the model's own `finish.roundoverIn` (D-44); both ends are flat end-grain caps (they butt a
+      // transom or scarf into the next member). Okoume sweeps (the curved web) show ply edge on the two thin faces.
+      const radius = f?.roundoverIn ?? 0;
+      const m = radius > 0.01
+        ? buildRoundedSweepMesh(g.path, g.width, g.thickness, g.plies, radius)
+        : buildSweepMesh(g.path, g.width, g.thickness, g.plies, look === 'okoume');
       if (!m.positions.length) return null;
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(m.positions, 3));
@@ -311,16 +315,32 @@ export function buildPart(part: Part): BuiltPart | null {
       else geo.computeVertexNormals(); // faces have their own vertices: smooth along the path, crisp across edges
       const rnd = mulberry32(hashString(part.id));
       const [o1, o2] = [rnd(), rnd()];
+      // Edge / end vertices (never shared with the long faces) get the end-grain or ply-edge tile; the rest the long-grain tile.
+      const isEdgeVert = new Uint8Array(m.positions.length / 3);
+      for (const [start, count] of m.edgeRanges) for (let k = start; k < start + count; k++) isEdgeVert[m.indices[k]] = 1;
+      const tile = look === 'okoume' ? WOOD_TILE_IN.ply : WOOD_TILE_IN.end;
       const uv: number[] = [];
-      for (let i = 0; i < m.uvs.length; i += 2) uv.push(m.uvs[i] / WOOD_TILE_IN.along + o1, m.uvs[i + 1] / WOOD_TILE_IN.across + o2);
+      for (let i = 0; i < m.uvs.length; i += 2) {
+        if (isEdgeVert[i / 2]) uv.push(m.uvs[i] / tile + o1, m.uvs[i + 1] / tile + o2);
+        else uv.push(m.uvs[i] / WOOD_TILE_IN.along + o1, m.uvs[i + 1] / WOOD_TILE_IN.across + o2);
+      }
       geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      if (isWood(look) && m.edgeRanges.length) {
+        // Group 0: long grain (everything not in an edge range); group 1: end grain / ply edge. Triangles are re-sorted.
+        const edge = new Set<number>();
+        for (const [start, count] of m.edgeRanges) for (let k = start; k < start + count; k += 3) edge.add(k);
+        const longIdx: number[] = [], edgeIdx: number[] = [];
+        for (let k = 0; k < m.indices.length; k += 3) (edge.has(k) ? edgeIdx : longIdx).push(m.indices[k], m.indices[k + 1], m.indices[k + 2]);
+        geo.setIndex([...longIdx, ...edgeIdx]);
+        geo.addGroup(0, longIdx.length, 0);
+        geo.addGroup(longIdx.length, edgeIdx.length, 1);
+      }
       if (m.plyLines.length) {
         const lines = new THREE.BufferGeometry();
         lines.setAttribute('position', new THREE.Float32BufferAttribute(m.plyLines, 3));
         geo.userData.plyLines = lines;
       }
       geometry = geo;
-      if (isWood(look)) material = (material as THREE.Material[])[0];
       break;
     }
     case 'mesh': {

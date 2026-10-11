@@ -8,6 +8,11 @@ export interface SweepMesh {
   plyLines: number[];
   /** Per-vertex UVs in inches: u = arc length along the path (the grain direction), v = across the face. */
   uvs: number[];
+  /**
+   * Index ranges [start, count] that are end grain / ply edge (flat end caps; for `edgeTopBottom` also the two faces normal to
+   * the local y axis). Vertices are never shared with the long-grain range, so the caller can scale their UVs separately.
+   */
+  edgeRanges: Array<[number, number]>;
 }
 
 /**
@@ -15,9 +20,9 @@ export interface SweepMesh {
  * `width` along local Y (matches `localBounds` in model/bounds.ts: path ± thickness/2, ± width/2). Each of the four faces has
  * its own vertices so normals are smooth along the path but crisp across the edges; the ends are flat caps.
  */
-export function buildSweepMesh(path: Vec2[], width: number, thickness: number, plies: number): SweepMesh {
+export function buildSweepMesh(path: Vec2[], width: number, thickness: number, plies: number, edgeTopBottom = false): SweepMesh {
   const pts = path.filter((p, i) => i === 0 || Math.hypot(p[0] - path[i - 1][0], p[1] - path[i - 1][1]) > 1e-9);
-  const out: SweepMesh = { positions: [], indices: [], plyLines: [], uvs: [] };
+  const out: SweepMesh = { positions: [], indices: [], plyLines: [], uvs: [], edgeRanges: [] };
   const n = pts.length;
   if (n < 2) return out;
 
@@ -58,18 +63,22 @@ export function buildSweepMesh(path: Vec2[], width: number, thickness: number, p
       if (f % 2 === 0) out.uvs.push(arc[i], o0, arc[i], o1);
       else out.uvs.push(arc[i], y0, arc[i], y1);
     }
+    const i0 = out.indices.length;
     for (let i = 0; i < n - 1; i++) {
       const a = base + i * 2;
       out.indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
     }
+    if (edgeTopBottom && f % 2 === 0) out.edgeRanges.push([i0, out.indices.length - i0]);
   });
   // End caps (duplicated vertices so they stay flat).
   for (const [i, flip] of [[0, true], [n - 1, false]] as const) {
     const b = out.positions.length / 3;
+    const i0 = out.indices.length;
     out.positions.push(...pos(i, -ht, -hw), ...pos(i, ht, -hw), ...pos(i, ht, hw), ...pos(i, -ht, hw));
     out.uvs.push(-hw, -ht, -hw, ht, hw, ht, hw, -ht);
     if (flip) out.indices.push(b, b + 2, b + 1, b, b + 3, b + 2);
     else out.indices.push(b, b + 1, b + 2, b, b + 2, b + 3);
+    out.edgeRanges.push([i0, 6]);
   }
   // Ply lines on both side faces, nudged outward so they do not z-fight.
   if (plies > 1) {
@@ -93,11 +102,11 @@ export interface RoundedSweepMesh extends SweepMesh {
  * The same bent lamination with every long edge rolled over by `radius` (round 3, review r2 MUST 4: a laminated stem, not a
  * stick) and a domed end cap at the tip. The section is a rounded rectangle (`thickness` along the path normal in XZ, `width`
  * along Y), so the outer bounds match `localBounds`. UVs follow the grain: u = arc length, v = distance around the section,
- * so the long-grain texture runs along the curve and wraps over the roundovers. The dome takes `dome` inches off the tip
- * (the last `dome` of the path is replaced by quarter-ellipse rings that close to a point at the original end).
+ * so the long-grain texture runs along the curve and wraps over the roundovers. Both ends are flat end-grain caps (round 4:
+ * hull members butt a transom). `dome` > 0 still makes the old stem tip (the last `dome` of the path closes to a point).
  */
-export function buildRoundedSweepMesh(path: Vec2[], width: number, thickness: number, plies: number, radius: number, dome = thickness * 0.5, corner = 4): RoundedSweepMesh {
-  const out: RoundedSweepMesh = { positions: [], indices: [], plyLines: [], uvs: [], normals: [] };
+export function buildRoundedSweepMesh(path: Vec2[], width: number, thickness: number, plies: number, radius: number, dome = 0, corner = 4): RoundedSweepMesh {
+  const out: RoundedSweepMesh = { positions: [], indices: [], plyLines: [], uvs: [], normals: [], edgeRanges: [] };
   const pts = path.filter((p, i) => i === 0 || Math.hypot(p[0] - path[i - 1][0], p[1] - path[i - 1][1]) > 1e-9);
   const n0 = pts.length;
   if (n0 < 2) return out;
@@ -136,13 +145,13 @@ export function buildRoundedSweepMesh(path: Vec2[], width: number, thickness: nu
   let acc = 0;
   for (let i = 0; i < n0; i++) {
     if (i > 0) acc += segLen(i - 1);
-    if (acc > L - d - 1e-9) break;
+    if (d > 0 && acc > L - d - 1e-9) break;
     const nn = i === 0 ? segN[0] : unit(segN[i - 1][0] + segN[Math.min(n0 - 2, i)][0], segN[i - 1][1] + segN[Math.min(n0 - 2, i)][1]);
     const tt = i === 0 ? segT[0] : unit(segT[i - 1][0] + segT[Math.min(n0 - 2, i)][0], segT[i - 1][1] + segT[Math.min(n0 - 2, i)][1]);
     rings.push({ px: pts[i][0], pz: pts[i][1], nx: nn[0], nz: nn[1], tx: tt[0], tz: tt[1], scale: 1, tilt: 0, arc: acc });
   }
   // Point on the path at arc length L - d, then the dome rings straight out along its tangent.
-  {
+  if (d > 0) {
     let a = 0;
     const target = L - d;
     let i = 0;
@@ -177,21 +186,27 @@ export function buildRoundedSweepMesh(path: Vec2[], width: number, thickness: nu
       out.indices.push(a, b, b + 1, a, b + 1, a + 1);
     }
   }
-  // Flat cap at the base end.
-  {
-    const g = rings[0];
+  // Flat end-grain caps (duplicated vertices so they stay flat); the far one only when the end is not domed.
+  const addCap = (g: Ring, sign: 1 | -1): void => {
     const b = out.positions.length / 3;
+    const i0 = out.indices.length;
     out.positions.push(g.px, 0, g.pz);
-    out.normals.push(-g.tx, 0, -g.tz);
+    out.normals.push(sign * g.tx, 0, sign * g.tz);
     out.uvs.push(0, 0);
     for (let j = 0; j < M; j++) {
       const s = sec[j];
       out.positions.push(g.px + g.nx * s.o, s.y, g.pz + g.nz * s.o);
-      out.normals.push(-g.tx, 0, -g.tz);
+      out.normals.push(sign * g.tx, 0, sign * g.tz);
       out.uvs.push(s.y, s.o);
     }
-    for (let j = 0; j < M - 1; j++) out.indices.push(b, b + 2 + j, b + 1 + j);
-  }
+    for (let j = 0; j < M - 1; j++) {
+      if (sign > 0) out.indices.push(b, b + 2 + j, b + 1 + j);
+      else out.indices.push(b, b + 1 + j, b + 2 + j);
+    }
+    out.edgeRanges.push([i0, out.indices.length - i0]);
+  };
+  addCap(rings[0], -1);
+  if (d === 0) addCap(rings[rings.length - 1], 1);
   // Ply lines on both side faces, riding the rounded surface.
   if (plies > 1) {
     const eps = 0.01;
