@@ -3,13 +3,16 @@
  * wood / steel mass with finish (D-20), and steer-body placement about the kingpin.
  */
 import { derived, PLY_SPECIES, resolveParams, type Params } from '../params';
+import { poseMatrices, solveSteer, type SteerBodyId, type SteerSolution } from './ackermann';
 import { computeLayout, type Layout } from './layout';
 import { compose, multiply, rotationX, rotationY, rotationZ, translation } from './mat4';
 import type { Dims, EdgeCondition, Fab, Joint, Mat4, Part, PartGroup, PartKind, RigidBody, Vec2, Vec3 } from './types';
 
 export interface ViewState {
-  /** Displayed steer angle, degrees (+ = turning left). Clamped to ± lock. */
+  /** Displayed steer angle, degrees (+ = turning left). Clamped to ± lock. Phase 3b: the INNER wheel angle (clamped to the tow lock). */
   steerDeg?: number;
+  /** Phase 3b control mode: 'both' (default, analysis/mass see everything), 'tow' omits the stick, 'ride' omits the tongue and its link. */
+  mode?: 'both' | 'tow' | 'ride';
   /** Which rider mass the mannequin carries. Default 'operating'. */
   rider?: 'none' | 'operating' | 'goal';
   /** Include the cargo block. Default true. */
@@ -27,6 +30,9 @@ export interface Ctx {
   steerRad: number;
   /** T(kingpin)·Rz(steer)·T(−kingpin), kingpin at x = WB + kingpinLeadIn (D-25): moves a neutral-frame steer-body part to its steered pose. */
   pivot: Mat4;
+  /** Phase 3b: Ackermann solution at the displayed steer angle and the rigid-body poses of the steer bodies (neutral frame to steered pose). */
+  steer: SteerSolution;
+  pose: Record<SteerBodyId, Mat4>;
   plyName: string;
 }
 
@@ -73,13 +79,16 @@ export function makeCtx(input: Params, v: ViewState = {}): Ctx {
   const deg = Math.min(lock, Math.max(-lock, v.steerDeg ?? 0));
   const steerRad = (deg * Math.PI) / 180;
   const pivot = multiply(translation(L.kx, 0, 0), multiply(rotationZ(steerRad), translation(-L.kx, 0, 0)));
+  const steer = solveSteer(L.front.ack, deg);
   return {
     p,
     d: derived(p),
     L,
-    view: { steerDeg: deg, rider: v.rider ?? 'operating', cargo: v.cargo ?? true, removed: v.removed ?? false },
+    view: { steerDeg: deg, mode: v.mode ?? 'both', rider: v.rider ?? 'operating', cargo: v.cargo ?? true, removed: v.removed ?? false },
     steerRad,
     pivot,
+    steer,
+    pose: poseMatrices(L.front.ack, steer),
     plyName: p.plySpecies === PLY_SPECIES.okoumeMarine ? 'okoume marine plywood' : 'baltic birch plywood',
   };
 }

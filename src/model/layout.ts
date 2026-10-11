@@ -13,6 +13,7 @@ import {
   type Params,
 } from '../params';
 import { buildPlanCurve, offsetY, sidePolyline, type PlanCurve } from './hull-curve';
+import { computeFrontLayout, type FrontLayout } from './front-layout';
 import { riderLegTopZ } from './rider-geom';
 import type { Vec2, Vec3 } from './types';
 
@@ -78,6 +79,8 @@ export interface Layout {
   /** Rear axle beam and front axle beam. */
   beamR: Beam;
   beamF: Beam;
+  /** Phase 3b Ackermann front end (additive in Stage 0; the old front-end fields above stay until the flip). */
+  front: FrontLayout;
   turntable: { z0: number; z1: number };
   /** Bolster ring: x0..x1 fore-aft, ±halfY across, z0..z1 depth, rail width rw. */
   bolster: { x0: number; x1: number; z0: number; z1: number; halfY: number; rw: number };
@@ -299,9 +302,12 @@ export function computeLayout(input: Params): Layout {
   const sheerX1 = xFront - transom;
   const sheer = { x0: Math.max(xn, sheerX1 - p.sheerLengthIn), x1: sheerX1, riseIn: Math.max(0, p.sheerRiseIn) };
 
+  const hullCurve = buildPlanCurve(xc0, xn, hwC + side / 2, hwN + side / 2);
+  const front = computeFrontLayout(p, { r, WB, kx, seat, hull: hullCurve, side, ply }, (x) => offsetY(hullCurve, -side / 2, x));
+
   return {
-    r, WB, xs, xc0, xn, hull: buildPlanCurve(xc0, xn, hwC + side / 2, hwN + side / 2), chineH, chineBot, railTop: chineBot, shoulderBeam: p.shoulderBeamIn, sideTop: deckTop + p.sideHeightIn, xRear, xFront, kx, railBand: p.railBandIn, joistT, flare, web, side, transom, rearLane, ply, deckTop, deckBot: deckTop - ply, noseTop, noseBot: noseTop - ply,
-    hwC, hwN, sideH: p.sideHeightIn, sheer, noseGunTop: deckTop + p.sideHeightIn + sheer.riseIn, beamR, beamF,
+    r, WB, xs, xc0, xn, hull: hullCurve, chineH, chineBot, railTop: chineBot, shoulderBeam: p.shoulderBeamIn, sideTop: deckTop + p.sideHeightIn, xRear, xFront, kx, railBand: p.railBandIn, joistT, flare, web, side, transom, rearLane, ply, deckTop, deckBot: deckTop - ply, noseTop, noseBot: noseTop - ply,
+    hwC, hwN, sideH: p.sideHeightIn, sheer, noseGunTop: deckTop + p.sideHeightIn + sheer.riseIn, beamR, beamF, front,
     turntable: { z0: tz0, z1: tz1 },
     bolster, sideBearer, kingpin: { z0: beamF.bot - plateT, z1: through ? bolsterTop : tz1 }, crossbar, accessPanel,
     kpPlates: plates ? { carrier: { z0: beamF.top, z1: tz0 }, under: { z0: beamF.bot - plateT, z1: beamF.bot }, bar: { z0: tz1, z1: tz1 + plateT } } : null,

@@ -2,6 +2,8 @@
  * Wheel contacts, support polygon and turning geometry (spec "Wheel contacts"; A-1, A-2, A-3).
  * Ground plane, model frame (+X forward, +Y left), inches and degrees. Pure math.
  */
+import { instantCenters, solveSteer, wheelCenters, type AckSpec } from '../model/ackermann';
+
 export type P2 = [number, number];
 
 export const RAD = Math.PI / 180;
@@ -12,6 +14,11 @@ export interface ContactInputs {
   rearTrackIn: number;
   frontTrackIn: number;
   kingpinLeadIn: number;
+  /**
+   * Phase 3b Ackermann spec (optional, additive). When present, `contactsAt(g, innerRad)` takes the INNER wheel angle (+ = left) and puts each front contact at
+   * its solved wheel center (4-bar, per-wheel kingpin and scrub), and `instantCenterY` uses the mean of the two axle-line centers. Absent: the old single-pivot rotation.
+   */
+  ack?: AckSpec;
 }
 
 export interface Contacts {
@@ -31,6 +38,10 @@ export function rot2(p: P2, a: number, about: P2 = [0, 0]): P2 {
 
 /** Tire center-plane contact points at steer angle `deltaRad` (+ = left). Front contacts rotate about the kingpin. */
 export function contactsAt(g: ContactInputs, deltaRad: number): Contacts {
+  if (g.ack) {
+    const w = wheelCenters(g.ack, solveSteer(g.ack, deltaRad * DEG));
+    return { RL: [0, g.rearTrackIn / 2], RR: [0, -g.rearTrackIn / 2], FL: w.L, FR: w.R, kx: g.ack.kx };
+  }
   const kx = g.wheelbaseIn + g.kingpinLeadIn;
   const K: P2 = [kx, 0];
   const f = (sy: number): P2 => {
@@ -126,6 +137,7 @@ export function outerEdgeDistance(c: Contacts, cgXY: P2, deltaRad: number): numb
  */
 export function instantCenterY(g: ContactInputs, deltaRad: number): number | null {
   if (Math.abs(deltaRad) < 1e-9) return null;
+  if (g.ack) return instantCenters(g.ack, solveSteer(g.ack, deltaRad * DEG)).mean;
   const lead = g.kingpinLeadIn;
   const ax = g.wheelbaseIn + lead - lead * Math.cos(deltaRad);
   return ax / Math.tan(deltaRad) - lead * Math.sin(deltaRad);

@@ -9,6 +9,7 @@
  * are continuous at both ends and at the inflection (no kinks, no curvature jumps), and for a given length the tightest radius is
  * much larger than a quintic "smootherstep" would give (a bent lamination cares about the tightest radius).
  */
+import { solveSteer, type AckSpec } from './ackermann';
 import type { Vec2 } from './types';
 
 /** Fraction of each half over which curvature ramps (the rest holds constant). 1 = triangle profile, small = nearly two arcs. */
@@ -202,12 +203,19 @@ export interface TireSweepSpec {
   tireWidth: number;
   wheelDiameter: number;
   lockDeg: number;
+  /**
+   * Phase 3b Ackermann spec (optional, additive). When present the sweep is per wheel: the left tire rectangle is rotated about the LEFT kingpin by the
+   * solved left-knuckle angle (wheel center at (-lead, +scrub) in the knuckle frame) for the inner-wheel input from -tow lock to +tow lock; `kx`, `frontTrack`
+   * and `lockDeg` are then ignored. Absent: the old rotation about one pivot.
+   */
+  ack?: AckSpec;
 }
 
 /** Plan rectangles of the LEFT front tire at every degree of steering from −lock to +lock (rotated about the kingpin). */
 const polyCache = new Map<string, Vec2[][]>();
 export function leftTirePolys(t: TireSweepSpec, stepDeg = 1): Vec2[][] {
-  const key = [t.wheelbase, t.kx, t.frontTrack, t.tireWidth, t.wheelDiameter, t.lockDeg, stepDeg].join('|');
+  const a = t.ack;
+  const key = [t.wheelbase, t.kx, t.frontTrack, t.tireWidth, t.wheelDiameter, t.lockDeg, stepDeg, a ? [a.kx, a.lead, a.scrub, a.kpHalf, a.armLen, a.armAngleDeg, a.tieLen, a.towLockInnerDeg].join(',') : ''].join('|');
   const hit = polyCache.get(key);
   if (hit) return hit;
   const out = leftTirePolysUncached(t, stepDeg);
@@ -219,6 +227,20 @@ export function leftTirePolys(t: TireSweepSpec, stepDeg = 1): Vec2[][] {
 function leftTirePolysUncached(t: TireSweepSpec, stepDeg: number): Vec2[][] {
   const r = t.wheelDiameter / 2, hw = t.tireWidth / 2;
   const out: Vec2[][] = [];
+  if (t.ack) {
+    const a = t.ack;
+    const lock = a.towLockInnerDeg;
+    // Input d runs -inner..+inner, so the left-knuckle angle covers leftWheelRange(a) = -outer..+inner at the tow lock.
+    for (let d = -lock; d <= lock + 1e-9; d += stepDeg) {
+      const sol = solveSteer(a, d);
+      const th = (sol.leftDeg * Math.PI) / 180, c = Math.cos(th), s = Math.sin(th);
+      out.push(([[-r, -hw], [r, -hw], [r, hw], [-r, hw]] as Vec2[]).map(([dx, dy]) => {
+        const x = -a.lead + dx, y = a.scrub + dy;
+        return [a.kx + c * x - s * y, a.kpHalf + s * x + c * y] as Vec2;
+      }));
+    }
+    return out;
+  }
   const lock = Math.abs(t.lockDeg);
   for (let d = -lock; d <= lock + 1e-9; d += stepDeg) {
     const a = (d * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);

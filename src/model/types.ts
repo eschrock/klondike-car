@@ -48,11 +48,18 @@ export type Fab =
 
 /**
  * Rigid body the part belongs to, for the physics sim and articulation.
- * 'steer' parts rotate with the front axle about the kingpin.
+ * 'steer' parts rotate with the front axle about the kingpin (the old turntable front end, removed at the Phase 3b flip).
+ * Phase 3b (additive in Stage 0): 'steer-L' / 'steer-R' rotate about their own kingpin; 'tie-rod', 'bellcrank' and 'tongue' are visual-only rigid bodies
+ * posed analytically by `ackermann.poseMatrices`.
  */
 export type RigidBody =
   | 'chassis'
   | 'steer'
+  | 'steer-L'
+  | 'steer-R'
+  | 'tie-rod'
+  | 'bellcrank'
+  | 'tongue'
   | 'wheel-FL'
   | 'wheel-FR'
   | 'wheel-RL'

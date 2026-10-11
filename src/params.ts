@@ -17,6 +17,7 @@
 
 import { kingpinPlateIssues, kingpinPlatePlan, stopArmHx } from './model/kingpin-plates';
 import { planStops } from './model/stops';
+import { neutralTieLen, type AckSpec } from './model/ackermann';
 import { buildPlanCurve, curveTireGap, latestCurveEnd, offsetY, type CurveClearanceSpec } from './model/hull-curve';
 
 export type ParamStatus = 'locked' | 'verify' | 'assumed' | 'explore';
@@ -32,6 +33,7 @@ export type ParamGroup =
   | 'stock'
   | 'materials'
   | 'factors'
+  | 'ride'
   | 'truck';
 
 export interface ParamOption {
@@ -68,6 +70,7 @@ export const GROUP_LABELS: Record<ParamGroup, string> = {
   stock: 'Stock thicknesses',
   materials: 'Material properties',
   factors: 'Design factors & check limits',
+  ride: 'Ride mode and bump loads',
   truck: 'Truck bed (2007 Tacoma short bed)',
 };
 
@@ -1854,6 +1857,350 @@ const defs = {
     label: 'Required clearance to bed/wells (incl. liner)', group: 'truck', unit: 'in',
     default: 0.5, min: 0, max: 2, step: 0.125, status: 'assumed', ref: 'D-6',
   },
+  // ── Phase 3b: Ackermann ride-mode front end, bump loads, ride rules (D-49..D-52, spec docs/phase3b-spec.md). Additive in Stage 0 ──
+  spindleStub: {
+    label: 'Spindle stub diameter', group: 'steering', unit: '',
+    default: 1, min: 0, max: 1, step: 1, status: 'verify', ref: 'D-53',
+    note: 'Purchased racing-kart spindle stub. 25 mm (0.984") is the default: section modulus 0.0936 in3 vs 0.0294 in3 for 17 mm (3.2x), and the front wheels keep their 13" hand-truck wheels with a 1" bore (no sleeve adapter, orchestrator decision). 17 mm needs a sleeve adapter and is the weak option.',
+    options: [{ value: 0, label: '17 mm (0.669")' }, { value: 1, label: '25 mm (0.984")' }],
+  },
+  spindleStubLengthIn: {
+    label: 'Spindle stub length (boss face to tip)', group: 'steering', unit: 'in',
+    default: 3.5, min: 2.5, max: 5, step: 0.25, status: 'verify', ref: 'D-53',
+    note: 'Catalog spindle; verify against the part bought.',
+  },
+  spindleYieldPsi: {
+    label: 'Spindle yield strength', group: 'steering', unit: 'psi',
+    default: 100000, min: 60000, max: 150000, step: 5000, status: 'verify', ref: 'D-53',
+    note: 'Hardened chromoly-class assumption; verify with the maker.',
+  },
+  spindleUltimatePsi: {
+    label: 'Spindle ultimate strength', group: 'steering', unit: 'psi',
+    default: 125000, min: 80000, max: 180000, step: 5000, status: 'verify', ref: 'D-53',
+    note: 'Hardened chromoly-class assumption; used for the hard-hit (fail-safe) rows and the Goodman fatigue row.',
+  },
+  spindleMassLb: {
+    label: 'Spindle mass (each)', group: 'steering', unit: 'lb',
+    default: 2.2, min: 1, max: 5, step: 0.1, status: 'verify', ref: 'D-53',
+    note: 'Catalog estimate.',
+  },
+  spindleBossAboveStubIn: {
+    label: 'Kingpin boss center above the stub axis', group: 'steering', unit: 'in',
+    default: 1.9, min: 1, max: 3, step: 0.1, status: 'verify', ref: 'D-53',
+    note: 'Sets the bracket leaf heights and the kingpin boss position.',
+  },
+  kingpinInclinationDeg: {
+    label: 'Kingpin inclination (KPI)', group: 'steering', unit: '°',
+    default: 6, min: 0, max: 12, step: 0.5, status: 'assumed', ref: 'D-53',
+    note: 'Built into the bracket as hole offsets. Neglected in the plan kinematics (camber and lift change from KPI are ignored); used for the geometry display and analysis rows.',
+  },
+  casterDeg: {
+    label: 'Caster', group: 'steering', unit: '°',
+    default: 6, min: 0, max: 12, step: 0.5, status: 'assumed', ref: 'D-53',
+    note: 'Built into the bracket as hole offsets. Ground trail = lead + r tan(caster). Neglected in the plan kinematics.',
+  },
+  scrubRadiusIn: {
+    label: 'Scrub radius (kingpin inboard of the wheel center)', group: 'steering', unit: 'in',
+    default: 3, min: 0.5, max: 5, step: 0.25, status: 'assumed', ref: 'D-53',
+    note: 'Orchestrator decision: 3.0" accepted. Driven by the wheel hub (hubLengthIn/2), the bracket leaf and 0.5" clearance. Validator: scrub >= hubLengthIn/2 + kingpinBracketLeafRadiusIn + 0.5. A dished wheel or thinner hub would give back about 1.5" of scrub and 1.6" of nose width.',
+  },
+  steerArmLengthIn: {
+    label: 'Steering arm length (kingpin to tie-rod pin)', group: 'steering', unit: 'in',
+    default: 3, min: 1.5, max: 5, step: 0.25, status: 'assumed', ref: 'D-53',
+    note: 'Arm vector at neutral = (-A cos g, -/+ A sin g), rearward and inboard.',
+  },
+  ackermannAngleDeg: {
+    label: 'Steering arm angle (Ackermann)', group: 'steering', unit: '°',
+    default: 24, min: 10, max: 40, step: 0.5, status: 'explore', ref: 'D-53',
+    note: 'Tuned so the 4-bar tracks ideal Ackermann at the tow lock (error 0.03 deg there, worst 0.59 deg mid-range). Ideal (arms meeting at the rear axle center) is atan(kpHalf / kx) = 18.1 deg, but that underperforms at large lock. The real spindle arm angle may differ (DECISIONS Q-list).',
+  },
+  steerRideLockDeg: {
+    label: 'Ride-mode steering lock (outer wheel)', group: 'steering', unit: '°',
+    default: 8, min: 4, max: 12, step: 0.5, status: 'assumed', ref: 'D-51',
+    note: 'Outer wheel angle at the ride stop; the inner wheel is solved from the 4-bar (about 8.6 deg).',
+  },
+  steerCenterSpringLbf: {
+    label: 'Centering spring force at the stick grip at ride lock', group: 'steering', unit: 'lbf',
+    default: 2.5, min: 0, max: 6, step: 0.5, status: 'assumed', ref: 'D-53',
+    note: 'Two extension springs from the bellcrank to the beam; neutral when the stick is released.',
+  },
+  frontBeamWidthIn: {
+    label: 'Front beam width (fore-aft)', group: 'steering', unit: 'in',
+    default: 2, min: 1.5, max: 3, step: 0.25, status: 'assumed', ref: 'D-53',
+    note: 'Steel rectangular tube (A500), orchestrator decision. Width is the fore-aft dimension, depth the vertical one.',
+  },
+  frontBeamDepthIn: {
+    label: 'Front beam depth (vertical)', group: 'steering', unit: 'in',
+    default: 2, min: 1.5, max: 3, step: 0.25, status: 'assumed', ref: 'D-53',
+    note: 'Steel rectangular tube.',
+  },
+  frontBeamWallIn: {
+    label: 'Front beam wall thickness', group: 'steering', unit: 'in',
+    default: 0.12, min: 0.083, max: 0.25, step: 0.01, status: 'assumed', ref: 'D-53',
+    note: 'A500 tube, 0.120" wall.',
+  },
+  frontBeamBehindKingpinIn: {
+    label: 'Front beam center behind the kingpin line', group: 'steering', unit: 'in',
+    default: 0.5, min: 0, max: 2, step: 0.25, status: 'assumed', ref: 'D-53',
+    note: 'Beam center x = kx - this (44.75" at the defaults).',
+  },
+  frontBeamYieldPsi: {
+    label: 'Front beam yield strength', group: 'steering', unit: 'psi',
+    default: 46000, min: 30000, max: 70000, step: 1000, status: 'assumed', ref: 'D-53',
+    note: 'A500 grade B.',
+  },
+  kingpinBracketThickIn: {
+    label: 'Kingpin bracket thickness', group: 'steering', unit: 'in',
+    default: 0.1875, min: 0.125, max: 0.3125, step: 0.0625, status: 'assumed', ref: 'D-53',
+    note: '3/16" A36 C-channel bent from one flat blank, laser cut and press-brake bent (outsourced, no welding).',
+  },
+  kingpinBracketGapIn: {
+    label: 'Kingpin bracket leaf gap', group: 'steering', unit: 'in',
+    default: 2, min: 1, max: 3, step: 0.125, status: 'verify', ref: 'D-53',
+    note: 'Leaf gap = spindle boss height plus shims.',
+  },
+  kingpinBracketLeafRadiusIn: {
+    label: 'Kingpin bracket leaf footprint radius', group: 'steering', unit: 'in',
+    default: 1, min: 0.75, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-53',
+    note: 'Leaf footprint radius around the pivot; enters the scrub validator.',
+  },
+  kingpinBracketBoltDiaIn: {
+    label: 'Kingpin bracket web bolt diameter', group: 'steering', unit: 'in',
+    default: 0.3125, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-53',
+    note: '5/16" grade 8 through the beam end with crush sleeves and nylock nuts (four per side).',
+  },
+  tieRodDiaIn: {
+    label: 'Tie rod diameter', group: 'steering', unit: 'in',
+    default: 0.5, min: 0.375, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-53',
+    note: '1/2" threaded rod with left- and right-hand rod ends (adjustable toe). Euler buckling of the 27" rod is a check.',
+  },
+  tieRodEndDiaIn: {
+    label: 'Tie rod end bolt diameter', group: 'steering', unit: 'in',
+    default: 0.3125, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-53',
+    note: '5/16" rod ends.',
+  },
+  bellcrankArmIn: {
+    label: 'Bellcrank arm length', group: 'steering', unit: 'in',
+    default: 3, min: 2, max: 5, step: 0.25, status: 'assumed', ref: 'D-53',
+    note: 'Both arms (and the cable cross-arm) are this long; 1:1 to the rod center travel at the defaults.',
+  },
+  bellcrankPivotAftOfKingpinIn: {
+    label: 'Bellcrank pivot behind the kingpin line', group: 'steering', unit: 'in',
+    default: 6.5, min: 4, max: 10, step: 0.25, status: 'assumed', ref: 'D-53',
+    note: 'Pivot x = kx - this (38.75" at the defaults), y = 0.',
+  },
+  tongueHingeAheadOfBeamIn: {
+    label: 'Tongue hinge ahead of the beam front face', group: 'steering', unit: 'in',
+    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-53',
+    note: 'Vertical hinge pin in a bolted clevis (47.25" at the defaults).',
+  },
+  tongueLinkArmIn: {
+    label: 'Tongue link ear distance from the hinge', group: 'steering', unit: 'in',
+    default: 3.25, min: 2.5, max: 5, step: 0.25, status: 'assumed', ref: 'D-53',
+    note: 'Gives about 24.4 deg of tongue yaw at the tow lock (lateral-transfer model).',
+  },
+  tongueMaxYawDeg: {
+    label: 'Tongue yaw stop', group: 'steering', unit: '°',
+    default: 25, min: 15, max: 35, step: 1, status: 'assumed', ref: 'D-53',
+    note: 'Yaw stops at +/- this; the tow lock must be reached before it.',
+  },
+  modePinDiaIn: {
+    label: 'Mode pin diameter', group: 'steering', unit: 'in',
+    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-53',
+    note: 'One captured pin in one of two mutually exclusive sockets (TOW, RIDE): the interlock.',
+  },
+  rideStickAheadOfHpointIn: {
+    label: 'Ride stick pivot ahead of the H-point', group: 'steering', unit: 'in',
+    default: 6, min: 2, max: 12, step: 0.5, status: 'assumed', ref: 'D-53',
+    note: 'Stick x = seatXIn + this.',
+  },
+  rideStickInsetIn: {
+    label: 'Ride stick inset from the right chine inner face', group: 'steering', unit: 'in',
+    default: 3.4, min: 2, max: 6, step: 0.25, status: 'assumed', ref: 'D-53',
+    note: 'y = -(inner half width at x - inset).',
+  },
+  rideStickLengthIn: {
+    label: 'Ride stick length (pivot to grip)', group: 'steering', unit: 'in',
+    default: 14, min: 8, max: 20, step: 0.5, status: 'assumed', ref: 'D-53',
+    note: '3/4" aluminum tube with a rubber grip.',
+  },
+  rideStickPivotAboveSeatIn: {
+    label: 'Ride stick pivot above the seat surface', group: 'steering', unit: 'in',
+    default: 1, min: 0, max: 4, step: 0.25, status: 'assumed', ref: 'D-53',
+  },
+  rideStickCableArmIn: {
+    label: 'Ride stick cable arm', group: 'steering', unit: 'in',
+    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-53',
+    note: 'Stick +/-15 deg for the 0.39" cable travel at the ride lock.',
+  },
+  stickCableDiaIn: {
+    label: 'Stick cable diameter', group: 'steering', unit: 'in',
+    default: 0.125, min: 0.0625, max: 0.1875, step: 0.0625, status: 'assumed', ref: 'D-53',
+    note: '1/8" 7x19 stainless pull-pull cables.',
+  },
+  stickCablePreloadLbf: {
+    label: 'Stick cable preload', group: 'steering', unit: 'lbf',
+    default: 10, min: 0, max: 30, step: 1, status: 'assumed', ref: 'D-53',
+    note: 'Set with the turnbuckles.',
+  },
+  frontBrakeType: {
+    label: 'Front brake type', group: 'brake', unit: '',
+    default: 0, min: 0, max: 2, step: 1, status: 'explore', ref: 'D-56',
+    note: 'Orchestrator decision: tread shoe on a swing arm on each knuckle is the default. Option 1 (purchased kart mechanical disc) needs a disc hub adapter that the hand-truck wheels lack; option 2 removes it for A/B.',
+    options: [{ value: 0, label: 'Tread shoe on a knuckle swing arm' }, { value: 1, label: 'Purchased kart mechanical disc (needs a hub adapter)' }, { value: 2, label: 'None (A/B)' }],
+  },
+  frontBrakeBias: {
+    label: 'Front brake bias (target front share of shoe force)', group: 'brake', unit: '',
+    default: 0.5, min: 0.3, max: 0.7, step: 0.05, status: 'explore', ref: 'D-56',
+    note: 'The cable takeoff arm on the main lever is solved from this.',
+  },
+  frontShoeTravelIn: {
+    label: 'Front shoe stroke', group: 'brake', unit: 'in',
+    default: 0.3125, min: 0.125, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-56',
+  },
+  brakeShoeBacking: {
+    label: 'Brake shoe backing', group: 'brake', unit: '',
+    default: 1, min: 0, max: 1, step: 1, status: 'assumed', ref: 'D-56',
+    note: 'Lined steel-backed purchased shoe (default) or the old oak pad with bonded lining.',
+    options: [{ value: 0, label: 'Oak pad with bonded lining (old)' }, { value: 1, label: 'Lined steel-backed purchased shoe' }],
+  },
+  brakeShoeBackThickIn: {
+    label: 'Steel shoe back thickness', group: 'brake', unit: 'in',
+    default: 0.125, min: 0.0625, max: 0.1875, step: 0.0625, status: 'assumed', ref: 'D-56',
+  },
+  hipLeverAheadOfHpointIn: {
+    label: 'Hip lever pivot ahead of the H-point', group: 'brake', unit: 'in',
+    default: 3, min: 0, max: 8, step: 0.5, status: 'assumed', ref: 'D-56',
+    note: 'Left hip lever pivot x = seatXIn + this.',
+  },
+  hipLeverInsetIn: {
+    label: 'Hip lever inset from the left chine inner face', group: 'brake', unit: 'in',
+    default: 1, min: 0.5, max: 3, step: 0.25, status: 'assumed', ref: 'D-56',
+    note: 'Inside the hull.',
+  },
+  hipLeverArmIn: {
+    label: 'Hip lever arm (pivot to grip)', group: 'brake', unit: 'in',
+    default: 9, min: 5, max: 14, step: 0.5, status: 'assumed', ref: 'D-56',
+  },
+  hipLeverCableArmIn: {
+    label: 'Hip lever cable arm', group: 'brake', unit: 'in',
+    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-56',
+  },
+  hipLeverThrowDeg: {
+    label: 'Hip lever throw', group: 'brake', unit: '°',
+    default: 40, min: 20, max: 60, step: 1, status: 'assumed', ref: 'D-56',
+  },
+  hipCableDiaIn: {
+    label: 'Hip lever Bowden inner cable diameter', group: 'brake', unit: 'in',
+    default: 0.125, min: 0.0625, max: 0.1875, step: 0.0625, status: 'assumed', ref: 'D-56',
+  },
+  brakeEmergencyLimitLbf: {
+    label: 'Emergency brake hand force limit', group: 'brake', unit: 'lbf',
+    default: 50, min: 30, max: 80, step: 5, status: 'assumed', ref: 'D-56',
+    note: '0.30 g at the envelope slope from 10 mph.',
+  },
+  brakeHeatLimitK: {
+    label: 'Brake shoe surface temperature rise limit', group: 'brake', unit: 'K',
+    default: 250, min: 100, max: 400, step: 10, status: 'assumed', ref: 'D-56',
+  },
+  brakeHeatContactFrac: {
+    label: 'Real contact patch fraction of shoe area', group: 'brake', unit: '',
+    default: 0.5, min: 0.1, max: 1, step: 0.05, status: 'assumed', ref: 'D-56',
+  },
+  rideRunFt: {
+    label: 'Longest ride run without a cooling stop', group: 'brake', unit: 'ft',
+    default: 300, min: 100, max: 600, step: 25, status: 'assumed', ref: 'D-55',
+    note: 'Assumed (open question Q-4).',
+  },
+  beltDesignG: {
+    label: 'Lap belt anchor design load', group: 'brake', unit: 'g',
+    default: 5, min: 2, max: 10, step: 0.5, status: 'verify', ref: 'D-55',
+    note: 'Anchor load = rider weight x this.',
+  },
+  rideSpeedMph: {
+    label: 'Ride design speed', group: 'ride', unit: 'mph',
+    default: 10, min: 3, max: 15, step: 1, status: 'locked', ref: 'D-49',
+  },
+  rideMaxSlopeDeg: {
+    label: 'Steepest slope to ride', group: 'ride', unit: '°',
+    default: 10, min: 5, max: 15, step: 1, status: 'locked', ref: 'D-51',
+    note: 'Walk it down above this.',
+  },
+  rideGoSlopeDeg: {
+    label: 'Slope up to which the lower friction value gives GO', group: 'ride', unit: '°',
+    default: 8, min: 4, max: 12, step: 1, status: 'assumed', ref: 'D-51',
+  },
+  rideMuGo8: {
+    label: 'Required usable friction for GO up to the go slope', group: 'ride', unit: '',
+    default: 0.4, min: 0.2, max: 0.8, step: 0.05, status: 'assumed', ref: 'D-51',
+    note: 'Worst-bias table value.',
+  },
+  rideMuGo10: {
+    label: 'Required usable friction for GO up to the max slope', group: 'ride', unit: '',
+    default: 0.5, min: 0.2, max: 0.8, step: 0.05, status: 'assumed', ref: 'D-51',
+    note: 'Worst-bias table value.',
+  },
+  rideMuDerate: {
+    label: 'Measured friction derate for speed', group: 'ride', unit: '',
+    default: 0.85, min: 0.5, max: 1, step: 0.05, status: 'assumed', ref: 'D-51',
+    note: 'Camp-measured friction times this.',
+  },
+  rideStopMaxFt: {
+    label: 'Longest stop at the envelope slope', group: 'ride', unit: 'ft',
+    default: 40, min: 20, max: 80, step: 1, status: 'assumed', ref: 'D-55',
+    note: 'From the ride speed at the go slope, including the reaction time.',
+  },
+  rideReactionS: {
+    label: 'Reaction time', group: 'ride', unit: 's',
+    default: 1, min: 0.5, max: 2, step: 0.1, status: 'assumed', ref: 'D-55',
+  },
+  bumpSpeedMph: {
+    label: 'Bump speed', group: 'ride', unit: 'mph',
+    default: 10, min: 3, max: 15, step: 1, status: 'assumed', ref: 'D-54',
+  },
+  bumpNormalHeightIn: {
+    label: 'Routine bump height', group: 'ride', unit: 'in',
+    default: 1, min: 0.5, max: 3, step: 0.25, status: 'assumed', ref: 'D-54',
+    note: 'Normal-use rows use full margins.',
+  },
+  bumpHardHeightIn: {
+    label: 'Hard-hit height', group: 'ride', unit: 'in',
+    default: 2, min: 1, max: 4, step: 0.25, status: 'assumed', ref: 'D-54',
+    note: 'Rare hard hit (D-50: the 2" pothole or root). Hard-hit rows use ultimate / failSafeFactor.',
+  },
+  bumpWheelRateLbIn: {
+    label: 'Effective wheel radial stiffness', group: 'ride', unit: 'lb/in',
+    default: 400, min: 150, max: 1500, step: 25, status: 'verify', ref: 'D-54',
+    note: 'Pneumatic wheel including bottoming. The dominant uncertainty of the bump model: verify by a deflection test.',
+  },
+  bumpMassShare: {
+    label: 'Effective bump mass (multiple of the struck wheel static load)', group: 'ride', unit: '×',
+    default: 1.5, min: 1, max: 3, step: 0.1, status: 'assumed', ref: 'D-54',
+    note: 'Wheel plus its share of the axle line.',
+  },
+  failSafeFactor: {
+    label: 'Fail-safe factor on ultimate (hard hit)', group: 'factors', unit: '×',
+    default: 1.25, min: 1, max: 2, step: 0.05, status: 'assumed', ref: 'D-54',
+    note: 'Orchestrator decision: hard-hit rows compare to ultimate / this (1.25).',
+  },
+  fatigueLoadFactor: {
+    label: 'Fatigue load factor (static wheel load multiple)', group: 'factors', unit: '×',
+    default: 2.5, min: 1, max: 5, step: 0.25, status: 'assumed', ref: 'D-54',
+    note: 'Pulsating (the stub is fixed, the wheel rotates).',
+  },
+  spindleEnduranceLimitPsi: {
+    label: 'Spindle endurance limit', group: 'factors', unit: 'psi',
+    default: 30000, min: 15000, max: 60000, step: 1000, status: 'verify', ref: 'D-54',
+    note: 'Marin-derated; verify.',
+  },
+  fatigueSafetyMin: {
+    label: 'Min fatigue safety factor (Goodman)', group: 'factors', unit: '×',
+    default: 1.5, min: 1, max: 3, step: 0.1, status: 'assumed', ref: 'D-54',
+  },
+  ackermannErrorMaxDeg: {
+    label: 'Max Ackermann error over the lock', group: 'factors', unit: '°',
+    default: 1, min: 0.2, max: 3, step: 0.1, status: 'assumed', ref: 'D-53',
+  },
 } satisfies Record<string, ParamDef>;
 
 export const PARAM_DEFS: Record<ParamKey, ParamDef> = defs;
@@ -1985,6 +2332,52 @@ export function hullCurveSpec(p: Params): CurveClearanceSpec {
     wheelDiameter: p.wheelDiameterIn, lockDeg: p.steerLockDeg,
     yA: p.bodyWidthIn / 2 - p.sideThicknessIn / 2, yB: p.noseWidthIn / 2 - p.sideThicknessIn / 2, side: p.sideThicknessIn,
   };
+}
+
+/**
+ * Phase 3b target defaults for EXISTING keys whose default changes at the Stage 2 flip (spec section 1.7). Stage 0 is additive (the old model and its
+ * 1,100+ tests still run on the old defaults), so these are NOT applied to `defaultParams()` yet; `phase3bDefaults()` returns them applied. Ackermann
+ * tests and new-model code use it until the flip.
+ */
+export const PHASE3B_DEFAULT_OVERRIDES = {
+  steerLockDeg: 35.5, // tow-mode inner wheel angle (meaning changes too); range becomes 28-42
+  kingpinLeadIn: 1.25,
+  kingpinDiameterIn: 0.375, // grade 8 bolt; range min becomes 0.25
+  turnRadiusMaxIn: 108, // D-51 relaxed to 9 ft
+  brakeLiningThickIn: 0.25,
+} as const satisfies Partial<Record<ParamKey, number>>;
+
+/** `defaultParams()` with the Phase 3b target defaults applied (see `PHASE3B_DEFAULT_OVERRIDES`). */
+export function phase3bDefaults(): Params {
+  return { ...defaultParams(), ...PHASE3B_DEFAULT_OVERRIDES };
+}
+
+/**
+ * Ackermann kinematics spec (spec section 1.8) from the params: kingpin points, steering arms, derived tie rod, bellcrank and tongue. Plain numbers,
+ * so `model/ackermann.ts` stays pure. Front beam width is the fore-aft dimension; the tongue hinge sits `tongueHingeAheadOfBeamIn` ahead of the beam front face.
+ */
+export function ackSpec(p: Params): AckSpec {
+  const kx = p.wheelbaseIn + p.kingpinLeadIn;
+  const kpHalf = p.frontTrackIn / 2 - p.scrubRadiusIn;
+  const spec: AckSpec = {
+    wheelbase: p.wheelbaseIn,
+    kx,
+    lead: p.kingpinLeadIn,
+    scrub: p.scrubRadiusIn,
+    kpHalf,
+    armLen: p.steerArmLengthIn,
+    armAngleDeg: p.ackermannAngleDeg,
+    tieLen: 0,
+    bellArm: p.bellcrankArmIn,
+    bellPivot: [kx - p.bellcrankPivotAftOfKingpinIn, 0],
+    tongueHinge: [kx - p.frontBeamBehindKingpinIn + p.frontBeamWidthIn / 2 + p.tongueHingeAheadOfBeamIn, 0],
+    tongueLinkArm: p.tongueLinkArmIn,
+    towLockInnerDeg: p.steerLockDeg,
+    rideLockOuterDeg: p.steerRideLockDeg,
+    stickCableArm: p.rideStickCableArmIn,
+  };
+  spec.tieLen = neutralTieLen(spec);
+  return spec;
 }
 
 const curveEndCache = new Map<string, number>();
@@ -2141,6 +2534,10 @@ export function validateParams(input: Params): ParamIssue[] {
   const rearInnerTire = p.rearTrackIn / 2 - p.tireWidthIn / 2;
   if (p.bodyWidthIn / 2 + 0.75 > rearInnerTire && p.deckHeightIn < p.wheelDiameterIn)
     err(['bodyWidthIn', 'rearTrackIn'], 'Cabin is too wide to clear the rear tires (needs ≥ ¾" each side).');
+  const scrubMin = p.hubLengthIn / 2 + p.kingpinBracketLeafRadiusIn + 0.5;
+  if (p.scrubRadiusIn < scrubMin - 1e-9)
+    err(['scrubRadiusIn', 'hubLengthIn', 'kingpinBracketLeafRadiusIn'],
+      `Scrub radius ${p.scrubRadiusIn}" is too small for the wheel hub and the kingpin bracket: needs ≥ hubLength/2 + bracket leaf radius + 0.5" = ${scrubMin.toFixed(2)}" (D-53).`);
   if (p.seatXIn < 0 && p.rearOverhangIn < -p.seatXIn + 6)
     err(['seatXIn', 'rearOverhangIn'], 'Seat hangs off the back of the body.');
   if (p.seatXIn + p.riderLegReachIn > p.wheelbaseIn + p.frontOverhangIn)
