@@ -6,6 +6,7 @@ import { partCentroid, worldAABB } from '../model/bounds';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { Mat4, Part, PartGroup, RigidBody, Vec3 } from '../model/types';
 import { buildPart } from './partMesh';
+import { isShopAid } from './materials';
 import { EDGE_MAT, EXPOSED_MAT, PLY_LINE_MAT, type SurfaceMats } from './materials';
 import { blobTexture, setMaxAnisotropy } from './textures';
 import { JOINERY_LEGEND, jointColor, joineryMarkers } from './joinery';
@@ -74,7 +75,7 @@ export interface SimSceneShape {
 export class Viewer {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
-  private readonly camera = new THREE.PerspectiveCamera(40, 1, 1, 5000);
+  private readonly camera = new THREE.PerspectiveCamera(32, 1, 1, 5000);
   private readonly controls: OrbitControls;
   /** Cart meshes. In truck view its matrix is the cart-to-truck transform. */
   private readonly partsGroup = new THREE.Group();
@@ -119,6 +120,9 @@ export class Viewer {
   private contactGroup = new THREE.Group();
   private edgeLines: THREE.LineSegments[] = [];
   private showEdges = true;
+  /** Shop aids (jigs and forms such as the prow form) are hidden until the Advanced "Shop aids" toggle asks for them. */
+  private showShopAids = false;
+  private sunDir = new THREE.Vector3(-10, -90, 150).normalize();
   private currentView: ViewName = 'iso';
   /** The user orbited / zoomed since the last view button or auto-frame; until then a resize re-frames the cart. */
   private userMoved = false;
@@ -369,6 +373,10 @@ export class Viewer {
       this.showEdges = v;
       for (const l of this.edgeLines) l.visible = v;
     }, true);
+    mk('Shop aids', 'Show shop jigs and forms (for example the prow lamination form) as faint gray wireframes', false, (v) => {
+      this.showShopAids = v;
+      this.refreshVisibility();
+    });
     mk('Joinery', 'Mark each Domino, tenon, insert, bolt, screw and knob location (each physical joint once)', false, (v) => {
       this.showJoinery = v;
       this.rebuildOverlay();
@@ -500,7 +508,7 @@ export class Viewer {
       if (this.sectionSel) this.sectionSel.value = 'off';
       this.setSection('off', 0);
       this.hidden.clear();
-      for (const m of this.partsGroup.children) m.visible = !m.userData.shopAid; // no shop jigs in Simple (UX r2)
+      this.refreshVisibility(); // no shop jigs in Simple (UX r2)
       this.lastGroups = []; // rebuild the (hidden) group checkboxes so they read "shown" again
       this.showCg = false;
       this.showDims = this.dimsCb?.checked ?? false; // Dimensions stays available in Simple
@@ -595,9 +603,9 @@ export class Viewer {
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     this.scene.environmentIntensity = 0.7;
     pmrem.dispose();
-    this.hemi = new THREE.HemisphereLight(0xfff4e6, 0x5a5e66, 0.45);
+    this.hemi = new THREE.HemisphereLight(0xcfe0ff, 0x6b5a46, 0.5);
     this.scene.add(this.hemi);
-    const sun = new THREE.DirectionalLight(0xfff1de, 2.4);
+    const sun = new THREE.DirectionalLight(0xfff1dc, 2.6);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.bias = -0.0004;
@@ -620,8 +628,7 @@ export class Viewer {
   private placeSun(center: THREE.Vector3, radius: number): void {
     this.sunCenter.copy(center);
     this.sunRadius = radius;
-    const dir = new THREE.Vector3(-10, -90, 150).normalize();
-    this.sun.position.copy(center).addScaledVector(dir, radius * 3);
+    this.sun.position.copy(center).addScaledVector(this.sunDir, radius * 3);
     this.sun.target.position.copy(center);
     this.sun.target.updateMatrixWorld();
     const sc = this.sun.shadow.camera;
@@ -640,8 +647,8 @@ export class Viewer {
       gm.opacity = dark ? 0.35 : 0.3;
     }
     if (this.shadowPlane) (this.shadowPlane.material as THREE.ShadowMaterial).opacity = dark ? 0.5 : 0.3;
-    this.hemi.intensity = dark ? 0.35 : 0.45;
-    this.scene.environmentIntensity = dark ? 0.55 : 0.7;
+    this.hemi.intensity = dark ? 0.4 : 0.5;
+    this.scene.environmentIntensity = dark ? 0.6 : 0.7;
     for (const m of this.contactGroup.children) ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = dark ? 0.8 : 0.5;
   }
 
@@ -719,11 +726,11 @@ export class Viewer {
       mesh.userData.partId = part.id;
       mesh.userData.group = part.group;
       // Shop aids (e.g. the bent-lam prow form): reference parts that are fabricated, unlike the rider/cargo figures.
-      mesh.userData.shopAid = part.group === 'reference' && part.fab !== 'none';
-      mesh.castShadow = part.group !== 'reference';
+      mesh.userData.shopAid = isShopAid(part);
+      mesh.castShadow = !mesh.userData.shopAid;
       mesh.receiveShadow = true;
       mesh.matrixAutoUpdate = false;
-      mesh.visible = !this.hidden.has(part.group) && !(this.simple && mesh.userData.shopAid);
+      mesh.visible = this.shouldShow(mesh);
       const plyGeo = geo.userData.plyLines as THREE.BufferGeometry | undefined;
       if (plyGeo) mesh.add(new THREE.LineSegments(plyGeo, PLY_LINE_MAT)); // identity local matrix, follows the mesh
       if (built.edges) {
@@ -914,11 +921,19 @@ export class Viewer {
       cb.checked = !this.hidden.has(g);
       cb.addEventListener('change', () => {
         if (cb.checked) this.hidden.delete(g); else this.hidden.add(g);
-        for (const m of this.partsGroup.children) m.visible = !this.hidden.has(m.userData.group as PartGroup) && !(this.simple && m.userData.shopAid);
+        this.refreshVisibility();
       });
       label.append(cb, document.createTextNode(' ' + g));
       this.toggleHost.append(label);
     }
+  }
+
+  private shouldShow(m: THREE.Object3D): boolean {
+    return !this.hidden.has(m.userData.group as PartGroup) && !(m.userData.shopAid && (this.simple || !this.showShopAids));
+  }
+
+  private refreshVisibility(): void {
+    for (const m of this.partsGroup.children) m.visible = this.shouldShow(m);
   }
 
   private modelBox(): THREE.Box3 {
@@ -936,20 +951,61 @@ export class Viewer {
     this.placeSun(sphere.center, Math.max(sphere.radius, 20));
   }
 
+  /** Fraction of the canvas (each axis, half-extent in NDC) the model may fill when a view is framed (~80% with a margin). */
+  private static readonly FILL = 0.86;
+
   setView(name: ViewName, box?: THREE.Box3, auto = false): void {
     if (!auto) this.userMoved = false;
     this.currentView = name;
     const b = box ?? (this.inTruck ? this.truckBox() : this.modelBox());
-    const sphere = b.getBoundingSphere(new THREE.Sphere());
+    // Light from near the camera in the Top view, so the shadow falls under the cart instead of a detached ghost up and left.
+    if (name === 'top') this.sunDir.set(-0.12, -0.2, 1).normalize(); else this.sunDir.set(-10, -90, 150).normalize();
+    this.placeSun(this.sunCenter, this.sunRadius);
     const dir = new THREE.Vector3(...VIEW_DIRS[name]).normalize();
-    const fov = THREE.MathUtils.degToRad(this.camera.fov);
-    const aspect = Math.max(0.25, this.camera.aspect); // a collapsed canvas must not throw the camera miles away
-    const hfov = 2 * Math.atan(Math.tan(fov / 2) * aspect);
-    const dist = (sphere.radius / Math.sin(Math.min(fov, hfov) / 2)) * 1.05;
-    this.controls.target.copy(sphere.center);
-    this.camera.position.copy(sphere.center).addScaledVector(dir, dist);
+    const sphere = b.getBoundingSphere(new THREE.Sphere());
+    const corners: THREE.Vector3[] = [];
+    const addCorners = (bb: THREE.Box3): void => {
+      for (const x of [bb.min.x, bb.max.x]) for (const y of [bb.min.y, bb.max.y]) for (const z of [bb.min.z, bb.max.z]) corners.push(new THREE.Vector3(x, y, z));
+    };
+    if (box || this.inTruck) addCorners(b);
+    else {
+      // Per-part boxes hug the silhouette far better than one big box (the rear handle and prow would otherwise shrink the cart).
+      this.scene.updateMatrixWorld(true);
+      const pb = new THREE.Box3();
+      for (const m of this.partsGroup.children) if (m.visible) addCorners(pb.setFromObject(m));
+      if (!corners.length) addCorners(b);
+    }
+    const target = sphere.center.clone();
+    let dist = sphere.radius / Math.sin(THREE.MathUtils.degToRad(this.camera.fov) / 2);
     this.camera.up.set(0, 0, 1);
-    this.camera.lookAt(sphere.center);
+    // Fit the box's projection (not its bounding sphere) to FILL of the canvas: re-center on the projected extents, then
+    // rescale the distance, a few times (perspective makes it not exactly linear).
+    const ndc = new THREE.Vector3();
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3();
+    const tanV = Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2);
+    for (let it = 0; it < 6; it++) {
+      this.camera.position.copy(target).addScaledVector(dir, dist);
+      this.camera.lookAt(target);
+      this.camera.updateMatrixWorld(true);
+      this.camera.updateProjectionMatrix();
+      let [x0, x1, y0, y1] = [Infinity, -Infinity, Infinity, -Infinity];
+      for (const c of corners) {
+        ndc.copy(c).project(this.camera);
+        x0 = Math.min(x0, ndc.x); x1 = Math.max(x1, ndc.x); y0 = Math.min(y0, ndc.y); y1 = Math.max(y1, ndc.y);
+      }
+      const ex = (x1 - x0) / 2, ey = (y1 - y0) / 2;
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+      right.setFromMatrixColumn(this.camera.matrixWorld, 0);
+      up.setFromMatrixColumn(this.camera.matrixWorld, 1);
+      // NDC offset -> world offset at the target's depth.
+      target.addScaledVector(right, cx * dist * tanV * this.camera.aspect).addScaledVector(up, cy * dist * tanV);
+      dist *= Math.max(ex, ey) / Viewer.FILL;
+      dist = Math.max(dist, 1);
+    }
+    this.camera.position.copy(target).addScaledVector(dir, dist);
+    this.controls.target.copy(target);
+    this.camera.lookAt(target);
     this.controls.update();
     this.renderNow();
   }

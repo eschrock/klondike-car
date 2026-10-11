@@ -1,10 +1,12 @@
 import * as THREE from 'three';
+import { mergeGeometries, toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { localBounds } from '../model/bounds';
 import type { Geometry, Mat4, Part, Vec3 } from '../model/types';
 import { projectGrainUVs, maxAxis, minAxis, type Axis } from './grainUv';
 import { hashString, mulberry32 } from './noise';
-import { lookOf, isWood, materialsFor, wheelMaterials, type Look, type SurfaceMats } from './materials';
-import { crownFace, roundedBoxMesh, type RawMesh } from './shapes';
+import { lookOf, isWood, materialsFor, signMaterials, wheelMaterials, type Look, type SurfaceMats } from './materials';
+import { crownDrop, crownFace, roundedBoxMesh, type RawMesh } from './shapes';
+import { densify, dashedLoop, insetLoop, mergeTubes, roundedLoop, tubeAlong, type TubeMesh, type Vec2 } from './upholstery';
 import { buildSweepMesh } from './sweep';
 import { WOOD_TILE_IN } from './textures';
 import { buildWheelGeometry } from './wheel';
@@ -78,6 +80,105 @@ function applyGrain(geo: THREE.BufferGeometry, part: Part, look: 'oak' | 'okoume
   return out;
 }
 
+
+/** Per-part tint jitter for wood: about +/-6% lightness and a hair of hue, from the id hash, carried in vertex colors. */
+function tintJitter(id: string): [number, number, number] {
+  const rnd = mulberry32(hashString(id) ^ 0x9e3779b9);
+  const j = 1 + (rnd() - 0.5) * 0.12;
+  return [j * (1 + (rnd() - 0.5) * 0.04), j, j * (1 + (rnd() - 0.5) * 0.08)];
+}
+
+/** Gives a geometry a `color` attribute (the wood / vinyl / sign materials read vertex colors): jittered for wood, white otherwise. */
+function ensureColors(geo: THREE.BufferGeometry, id: string, wood: boolean): void {
+  if (geo.getAttribute('color')) return;
+  const n = geo.getAttribute('position').count;
+  const c = new Float32Array(n * 3);
+  const [r, g, b] = wood ? tintJitter(id) : [1, 1, 1];
+  for (let i = 0; i < n; i++) { c[i * 3] = r; c[i * 3 + 1] = g; c[i * 3 + 2] = b; }
+  geo.setAttribute('color', new THREE.BufferAttribute(c, 3));
+}
+
+/** Welt and stitching as one merged tube mesh in local coordinates. */
+const WELT_R_IN = 0.15;
+const STITCH_R_IN = 0.04;
+const STITCH_COLOR = 0x1c1c1e;
+const THREAD_DARK = 0x2a2a2d;
+
+interface TrimSpec {
+  /** Plan outline of the part (counter-clockwise or clockwise), in the plane coordinates of `at`. */
+  outline: Vec2[];
+  /** Roundover radius of the pillow edge. */
+  round: number;
+  /** Height of the crowned top surface at a plan point, for a given offset down from the top (inches). */
+  surface: (x: number, y: number, down: number) => number;
+  /** Maps (x, y, height) to the part's local frame. */
+  at: (x: number, y: number, h: number) => Vec3;
+  /** Optional center channel from (x, y0) to (x, y1). */
+  channel?: { x: number; y0: number; y1: number };
+}
+
+function upholsteryTrims(t: TrimSpec): TubeMesh {
+  const list: TubeMesh[] = [];
+  const dW = 0.293 * t.round; // the 45-degree point of the roundover sits this far in from the outline and down from the top
+  const welt = insetLoop(t.outline, dW).map(([x, y]) => t.at(x, y, t.surface(x, y, dW) + WELT_R_IN * 0.35));
+  list.push(tubeAlong(welt, WELT_R_IN, 0xffffff, true, 8));
+  const stitchLoop = densify(insetLoop(t.outline, t.round + 0.45).map(([x, y]) => t.at(x, y, t.surface(x, y, 0) - 0.01)), 0.12);
+  for (const dash of dashedLoop(stitchLoop, 0.32)) if (dash.length >= 2) list.push(tubeAlong(dash, STITCH_R_IN, STITCH_COLOR, false, 4));
+  if (t.channel) {
+    const { x, y0, y1 } = t.channel;
+    const n = Math.max(2, Math.round((y1 - y0) / 0.5));
+    const pts: Vec3[] = [];
+    for (let i = 0; i <= n; i++) {
+      const y = y0 + ((y1 - y0) * i) / n;
+      pts.push(t.at(x, y, t.surface(x, y, 0) - 0.02));
+    }
+    list.push(tubeAlong(pts, 0.085, THREAD_DARK, false, 6));
+  }
+  return mergeTubes(list);
+}
+
+/** Pillow (non-indexed, with position / normal / uv) plus the trims, as one geometry with a `color` attribute. */
+function withTrims(pillow: THREE.BufferGeometry, trims: TubeMesh): THREE.BufferGeometry {
+  pillow.clearGroups();
+  ensureColors(pillow, '', false);
+  const tube = new THREE.BufferGeometry();
+  tube.setAttribute('position', new THREE.Float32BufferAttribute(trims.positions, 3));
+  tube.setAttribute('normal', new THREE.Float32BufferAttribute(trims.normals, 3));
+  tube.setAttribute('color', new THREE.Float32BufferAttribute(trims.colors, 3));
+  tube.setIndex(trims.indices);
+  const flat = tube.toNonIndexed();
+  tube.dispose();
+  flat.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array((flat.getAttribute('position').count) * 2), 2));
+  const out = mergeGeometries([pillow, flat], false)!;
+  pillow.dispose();
+  flat.dispose();
+  return out;
+}
+
+/** Soft (upholstered) extrusion, e.g. the seat-back pad: rolled edges, a crowned front face, welt, stitch line and center channel. */
+function softExtrusion(g: Extract<Geometry, { type: 'extrusion' }>, part: Part): THREE.BufferGeometry {
+  const r = Math.max(0.1, Math.min(0.9, g.depth * 0.45));
+  let geo = bevelledExtrusion(g, r);
+  const xs = g.outline.map((q) => q[0]), ys = g.outline.map((q) => q[1]);
+  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const c: Vec3 = [(x0 + x1) / 2, (y0 + y1) / 2, g.depth / 2];
+  const size: Vec3 = [x1 - x0, y1 - y0, g.depth];
+  const crown = Math.min(0.6, g.depth * 0.2);
+  geo.translate(-c[0], -c[1], -c[2]);
+  crownFace(geo.getAttribute('position').array as unknown as number[], size, 2, 1, crown);
+  geo.translate(c[0], c[1], c[2]);
+  geo.deleteAttribute('normal');
+  geo = toCreasedNormals(geo, (50 * Math.PI) / 180);
+  geo = applyGrain(geo, part, 'vinyl', size, 2, 0);
+  const trims = upholsteryTrims({
+    outline: g.outline as Vec2[], round: r,
+    surface: (x, y, down) => g.depth - down - crownDrop(size, 2, g.depth / 2 - down, x - c[0], y - c[1], crown),
+    at: (x, y, h) => [x, y, h],
+    channel: { x: c[0], y0: y0 + r + 1.2, y1: y1 - r - 1.2 },
+  });
+  return withTrims(geo, trims);
+}
+
 /** World-space direction of a local axis under a column-major transform. */
 function worldAxis(m: Mat4, a: number): Vec3 {
   return [m[a * 4], m[a * 4 + 1], m[a * 4 + 2]];
@@ -98,17 +199,43 @@ export function buildPart(part: Part): BuiltPart | null {
     case 'box': {
       const soft = look === 'vinyl';
       const thin = minAxis(size);
+      if (look === 'sign') {
+        // Painted sign (review r1 MUST 4): the two big faces carry the painted texture, mapped right-reading as seen from
+        // outside on both sides (the right sign is not a mirror image); the thin faces keep the ply-edge look.
+        const [ua, va] = ([0, 1, 2] as const).filter((x) => x !== thin);
+        const geo = applyGrain(rawToGeometry(roundedBoxMesh(size, Math.min(0.05, size[thin] * 0.3), 3)), part, 'okoume', size, thin, ua);
+        const pos = geo.getAttribute('position'), nrm = geo.getAttribute('normal'), uv = geo.getAttribute('uv');
+        const w = worldAxis(part.transform, thin)[1];
+        const longVerts = geo.groups[0]?.count ?? 0;
+        for (let i = 0; i < longVerts; i++) {
+          const outward = (nrm.getComponent(i, thin) >= 0 ? 1 : -1) * Math.sign(w || 1); // +1: this face looks toward +Y (left)
+          const x = pos.getComponent(i, ua) / size[ua];
+          uv.setXY(i, 0.5 + (outward > 0 ? -x : x), 0.5 + pos.getComponent(i, va) / size[va]);
+        }
+        geometry = geo;
+        material = signMaterials(size[ua] / size[va]);
+        edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(size[0], size[1], size[2]), 1);
+        break;
+      }
       if (soft) {
         const t = size[thin];
-        const r = Math.min(Math.max(t * 0.3, 0.2), 1.0, t * 0.49);
+        const r = Math.min(Math.max(t * 0.45, 0.3), 0.9, t * 0.49);
+        const crown = Math.min(0.6, t * 0.18);
         const interior = size.map((s, a) => (a === thin ? 1 : Math.max(3, Math.min(15, Math.round(s / 2) | 1)))) as Vec3;
         const raw = roundedBoxMesh(size, r, 6, interior);
         const w = worldAxis(part.transform, thin);
         const sign: 1 | -1 = Math.abs(w[2]) > 0.5 ? (w[2] >= 0 ? 1 : -1) : w[0] >= 0 ? 1 : -1;
-        crownFace(raw.positions, size, thin, sign, Math.min(0.55, t * 0.14));
+        crownFace(raw.positions, size, thin, sign, crown);
         geometry = rawToGeometry(raw);
         geometry.computeVertexNormals();
         geometry = applyGrain(geometry, part, 'vinyl', size, thin, grain);
+        const [u, v] = [(thin + 1) % 3, (thin + 2) % 3];
+        const trims = upholsteryTrims({
+          outline: roundedLoop(size[u] / 2 - 0.293 * r, size[v] / 2 - 0.293 * r, 0.707 * r), round: r,
+          surface: (x, y, down) => (size[thin] / 2 - down - crownDrop(size, thin as 0 | 1 | 2, size[thin] / 2 - down, x, y, crown)),
+          at: (x, y, h) => { const p: Vec3 = [0, 0, 0]; p[u] = x; p[v] = y; p[thin] = sign * h; return p; },
+        });
+        geometry = withTrims(geometry, trims);
         break;
       }
       const r = clampRound(f?.roundoverIn ?? 0, size);
@@ -146,11 +273,15 @@ export function buildPart(part: Part): BuiltPart | null {
       geometry = w;
       const wm = wheelMaterials();
       const rubber = materialsFor('rubber') as THREE.Material;
-      material = [rubber, rubber, wm.rim, wm.hub, wm.brass];
+      material = [rubber, wm.lug, wm.rim, wm.hub, wm.brass, wm.bead];
       break;
     }
     case 'extrusion': {
       const r = Math.min(f?.roundoverIn ?? 0, g.depth * 0.49);
+      if (look === 'vinyl' && f?.soft) {
+        geometry = softExtrusion(g, part);
+        break;
+      }
       geometry = r > 0.01 ? bevelledExtrusion(g, r) : plainExtrusion(g);
       const thick: Axis = 2;
       if (isWood(look)) geometry = applyGrain(geometry, part, look, size, thick, part.grain ? grain : maxAxis([size[0], size[1], 0]));
@@ -193,5 +324,7 @@ export function buildPart(part: Part): BuiltPart | null {
       break;
     }
   }
+  if (isWood(look) || look === 'sign') ensureColors(geometry, part.id, true);
+  else if (look === 'vinyl') ensureColors(geometry, part.id, false);
   return { geometry, material, look, edges };
 }

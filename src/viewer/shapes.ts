@@ -77,6 +77,17 @@ export function roundedBoxMesh(size: Vec3, radius: number, arcSegs = 4, interior
  * Crown one face of a (rounded) box in place: the face stays at the box bounds in its middle and sags toward the edges by
  * `crown` inches, so it reads as a stuffed pillow without leaving the bounds. `axis` / `sign` pick the face (+/- local axis).
  */
+/** How far a crowned face sags at a point: `pu`, `pv` are the in-face coordinates, `pa` the (signed-away) height along the face axis. */
+export function crownDrop(size: Vec3, axis: 0 | 1 | 2, pa: number, pu: number, pv: number, crown: number): number {
+  const u = (axis + 1) % 3;
+  const v = (axis + 2) % 3;
+  const fu = Math.min(1, Math.abs(pu) / (size[u] / 2));
+  const fv = Math.min(1, Math.abs(pv) / (size[v] / 2));
+  const bump = (1 - fu * fu) * (1 - fv * fv);
+  const w = Math.min(1, pa / (size[axis] / 2));
+  return crown * (1 - Math.pow(bump, 0.7)) * w * w;
+}
+
 export function crownFace(positions: number[], size: Vec3, axis: 0 | 1 | 2, sign: 1 | -1, crown: number): void {
   const u = (axis + 1) % 3;
   const v = (axis + 2) % 3;

@@ -134,8 +134,8 @@ select { width: 100%; }
   /* Flex column (not grid) so the viewer can stay pinned (sticky) at the top while the panels scroll under it. */
   #app { display: flex; flex-direction: column; height: auto; min-height: 100vh; --stick-top: 0px; }
   #app.has-back { --stick-top: 44px; }
-  .viewer { position: sticky; top: var(--stick-top); z-index: 20; flex: none; height: 45vh; min-height: 260px; border-bottom: 1px solid var(--border); }
-  .fit-card { scroll-margin-top: calc(45vh + 56px); }
+  .viewer { position: sticky; top: var(--stick-top); z-index: 20; flex: none; height: min(56vh, 440px); min-height: 340px; border-bottom: 1px solid var(--border); }
+  .fit-card { scroll-margin-top: calc(min(56vh, 440px) + 56px); }
   .sidebar { overflow: visible; }
   .sidebar.left, .sidebar.right { border: 0; border-top: 1px solid var(--border); }
 }

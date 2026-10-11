@@ -65,7 +65,7 @@ const viewer = new Viewer($('viewer'));
 
 // View-only articulation: not a design parameter, never persisted.
 // `rider`/`cargo`/`removed` are consumed by the Phase 1 model (missing fields = defaults).
-const view: CartView = { steerDeg: 0, rider: 'operating', cargo: true, removed: false };
+const view: CartView = { steerDeg: 0, rider: 'none', cargo: false, removed: false }; // rider default follows the mode (setMode)
 const build = (p: ReturnType<typeof store.get>, v: CartView): Part[] => buildModel(p, v as ViewState);
 // Snap to 0.5° so 0 is always reachable even when the lock is a half degree (e.g. 38.5°).
 const snapSteer = (v: number) => Math.round(v * 2) / 2;
@@ -89,13 +89,21 @@ const checkbox = (label: string | Node[], title: string, checked: boolean, onCha
   cb.addEventListener('change', () => onChange(cb.checked));
   return h('label', { class: `steer-ctl ${cls}`.trim(), title }, cb, ...(typeof label === 'string' ? [label] : label));
 };
-viewer.addToolbarControl(
-  checkbox([h('span', { class: 'adv-only' }, 'Show rider & cargo'), h('span', { class: 'simple-only' }, 'Show rider')], 'Show the operating rider and cargo (view only; ignored in the Truck view)', true, (v) => {
-    view.rider = v ? 'operating' : 'none';
-    view.cargo = v;
-    render();
-  }),
-);
+// Visual pass r2: the rider and cargo hide the finish work, so they default OFF in Simple and ON in Advanced until the user picks.
+let riderTouched = false;
+const riderLabel = checkbox([h('span', { class: 'adv-only' }, 'Show rider & cargo'), h('span', { class: 'simple-only' }, 'Show rider')], 'Show the operating rider and cargo (view only; ignored in the Truck view)', false, (v) => {
+  riderTouched = true;
+  view.rider = v ? 'operating' : 'none';
+  view.cargo = v;
+  render();
+});
+const riderCb = riderLabel.querySelector('input') as HTMLInputElement;
+const setRiderShown = (v: boolean) => {
+  riderCb.checked = v;
+  view.rider = v ? 'operating' : 'none';
+  view.cargo = v;
+};
+viewer.addToolbarControl(riderLabel);
 viewer.addToolbarControl(
   checkbox('Transport config', 'Remove the removable parts (rear handle, seat back, tongue, ornaments; D-9)', false, (v) => {
     view.removed = v;
@@ -226,6 +234,7 @@ function setMode(next: Mode, opts: { fromSimple?: boolean; persist?: boolean } =
   backBar.hidden = !(mode === 'advanced' && fromSimple);
   app.classList.toggle('has-back', !backBar.hidden);
   viewer.setSimpleMode(mode === 'simple');
+  if (!riderTouched) setRiderShown(mode !== 'simple');
   if (mode === 'simple') {
     // Leave anything that takes over the viewer (simulation, truck placement); the design itself is untouched.
     right.showTab('analysis');

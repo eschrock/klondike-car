@@ -39,7 +39,7 @@ describe('roundover keeps the model dimensions exact (D-44)', () => {
     expect(clampRound(0.1, [10, 10, 5])).toBe(0.1);
   });
 
-  it('wheel geometry matches localBounds and has five material groups', () => {
+  it('wheel geometry matches localBounds and has six material groups', () => {
     const w = parts.find((p) => p.geometry.type === 'wheel')!;
     const g = w.geometry as Extract<Geometry, { type: 'wheel' }>;
     for (const tread of ['lug', 'rib'] as const) {
@@ -51,7 +51,7 @@ describe('roundover keeps the model dimensions exact (D-44)', () => {
         expect(b.min[a]).toBeGreaterThanOrEqual(lb.min[a] - 1e-3);
       }
       expect(b.max[0]).toBeGreaterThan(lb.max[0] - 0.2); // tread / lug tips reach the diameter
-      expect(geo.groups.map((x) => x.materialIndex)).toEqual([0, 1, 2, 3, 4]);
+      expect(geo.groups.map((x) => x.materialIndex)).toEqual([0, 1, 2, 3, 4, 5]);
     }
   });
 });

@@ -71,8 +71,10 @@ export function woodTextures(kind: WoodKind): { map: THREE.CanvasTexture; bump: 
   const nPore = new TileNoise(15, 110, 300);
   const nRay = new TileNoise(16, 36, 46);
   const nBlot = new TileNoise(17, 4, 3);
-  const light: RGB = oak ? [0.7, 0.47, 0.25] : [0.88, 0.7, 0.55];
-  const dark: RGB = oak ? [0.4, 0.22, 0.09] : [0.77, 0.56, 0.41];
+  // Round 2 stain: dark amber-brown oak (early wood ~#a06c34 down to late wood ~#4a2c12), okoume stained mahogany-brown (not cream).
+  const light: RGB = oak ? [0.6, 0.38, 0.18] : [0.62, 0.41, 0.26];
+  const dark: RGB = oak ? [0.27, 0.15, 0.06] : [0.43, 0.26, 0.15];
+  const nLow = new TileNoise(18, 2, 2); // panel-scale tone drift so big faces are not flat (review SHOULD 10)
   const rings = oak ? 20 : 5;
   let gray!: ImageData;
   const map = make(key, W, H, true, (img) => {
@@ -97,9 +99,9 @@ export function woodTextures(kind: WoodKind): { map: THREE.CanvasTexture; bump: 
           pore = pv > 0.72 ? ((pv - 0.72) / 0.28) * early : 0;
           const rv = nRay.at(s, t);
           ray = rv > 0.86 ? (rv - 0.86) / 0.14 : 0;
-          tone = late * 0.58 + (fib - 0.5) * 0.34 + blot * 0.2 + pore * 0.3;
+          tone = late * 0.58 + (fib - 0.5) * 0.34 + blot * 0.2 + pore * 0.3 + (nLow.at(s, t) - 0.5) * 0.25;
         } else {
-          tone = late * 0.38 + (fib - 0.5) * 0.3 + blot * 0.18;
+          tone = late * 0.38 + (fib - 0.5) * 0.3 + blot * 0.18 + (nLow.at(s, t) - 0.5) * 0.5;
         }
         const col = mix(light, dark, clamp01(tone));
         if (ray) for (let a = 0; a < 3; a++) col[a] = Math.min(1, col[a] + 0.09 * ray);
@@ -128,7 +130,7 @@ export function oakEndTexture(): THREE.CanvasTexture {
         const late = Math.pow(smooth(0.3, 1, f), 1.5);
         const pv = nP.at(s, t);
         const pore = pv > 0.75 ? (pv - 0.75) * 4 * (1 - late) : 0;
-        const c = mix([0.58, 0.38, 0.19], [0.34, 0.19, 0.08], clamp01(late * 0.8 + pore * 0.5));
+        const c = mix([0.45, 0.28, 0.13], [0.24, 0.13, 0.055], clamp01(late * 0.8 + pore * 0.5));
         put(img, (y * 256 + x) * 4, c);
       }
     }
@@ -146,7 +148,7 @@ export function plyEdgeTexture(): THREE.CanvasTexture {
       for (let x = 0; x < 64; x++) {
         const glue = inLayer < 2 ? 0.55 : 1;
         const streak = 0.96 + (n.at(x / 64, y / 160) - 0.5) * 0.12;
-        const c: RGB = [0.86 * tone * glue * streak, 0.68 * tone * glue * streak, 0.47 * tone * glue * streak];
+        const c: RGB = [0.68 * tone * glue * streak, 0.45 * tone * glue * streak, 0.28 * tone * glue * streak];
         put(img, (y * 64 + x) * 4, c);
       }
     }
@@ -169,17 +171,147 @@ export function pebbleBump(kind: 'vinyl' | 'rubber'): THREE.CanvasTexture {
   });
 }
 
-/** Twisted rope: diagonal strands (periodic: the shift per row is one full tile width). */
+/** Twisted rope: diagonal strands (periodic: the shift per row is one full tile width). Valleys are dark so the twist reads. */
 export function ropeTexture(): THREE.CanvasTexture {
   return make('rope', 64, 64, true, (img) => {
     for (let y = 0; y < 64; y++) {
       for (let x = 0; x < 64; x++) {
         const ph = ((x - y + 64 * 4) % 16) / 16; // 4 strands, one full width of shear per tile height
-        const v = 0.55 + 0.45 * Math.sin(ph * Math.PI);
-        put(img, (y * 64 + x) * 4, [0.82 * v, 0.7 * v, 0.46 * v]);
+        const v = Math.pow(Math.sin(ph * Math.PI), 0.8);
+        put(img, (y * 64 + x) * 4, mix([0.43, 0.32, 0.19], [0.72, 0.56, 0.35], v));
       }
     }
   });
+}
+
+/** Bump for the rope strands (same layout as `ropeTexture`). */
+export function ropeBump(): THREE.CanvasTexture {
+  return make('rope:bump', 64, 64, false, (img) => {
+    for (let y = 0; y < 64; y++) {
+      for (let x = 0; x < 64; x++) {
+        const ph = ((x - y + 64 * 4) % 16) / 16;
+        const g = Math.pow(Math.sin(ph * Math.PI), 0.8) * 255;
+        const i = (y * 64 + x) * 4;
+        img.data[i] = img.data[i + 1] = img.data[i + 2] = g;
+        img.data[i + 3] = 255;
+      }
+    }
+  });
+}
+
+/** Single place for the sign wording (Q-5 in DECISIONS.md is still open with Eric, so this may change). */
+export const SIGN_LINES = { top: 'TROOP 455', bottom: 'WILDERNESS RANGERS' } as const;
+
+/** Fleur-de-lis glyph (cream), drawn with canvas paths so it needs no font. Centered at (cx, cy), `h` tall. */
+function fleurDeLis(ctx: CanvasRenderingContext2D, cx: number, cy: number, h: number): void {
+  ctx.save();
+  ctx.translate(cx, cy);
+  const u = h / 100;
+  ctx.scale(u, u);
+  ctx.fillStyle = '#d8c9a3';
+  const side = (mirror: number): void => {
+    ctx.save();
+    ctx.scale(mirror, 1);
+    ctx.beginPath();
+    // Upper side petal: sweeps out from the band, up around, and curls back in at the tip.
+    ctx.moveTo(-4, 6);
+    ctx.bezierCurveTo(-36, 14, -50, -12, -38, -34);
+    ctx.bezierCurveTo(-34, -28, -30, -26, -27, -20);
+    ctx.bezierCurveTo(-36, -6, -20, -2, -4, -16);
+    ctx.closePath();
+    ctx.fill();
+    // Lower leaf under the band.
+    ctx.beginPath();
+    ctx.moveTo(-6, 20);
+    ctx.bezierCurveTo(-24, 22, -32, 34, -26, 44);
+    ctx.bezierCurveTo(-18, 38, -10, 34, -4, 26);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  };
+  side(1);
+  side(-1);
+  // Center petal and tail.
+  ctx.beginPath();
+  ctx.moveTo(0, -54);
+  ctx.bezierCurveTo(-17, -34, -15, -10, 0, 8);
+  ctx.bezierCurveTo(15, -10, 17, -34, 0, -54);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(0, 20);
+  ctx.bezierCurveTo(-7, 28, -6, 38, 0, 48);
+  ctx.bezierCurveTo(6, 38, 7, 28, 0, 20);
+  ctx.fill();
+  // Band.
+  ctx.fillRect(-24, 8, 48, 9);
+  ctx.restore();
+}
+
+/**
+ * Painted side sign (review MUST 4): forest-green paint over a trace of wood grain, a cream border, "TROOP 455" over
+ * "WILDERNESS RANGERS", and a fleur-de-lis at each end. The canvas aspect matches the sign face so nothing stretches.
+ * System fonts only (no external files), so it works in the single-file build.
+ */
+export function signTexture(aspect: number): THREE.CanvasTexture {
+  const key = `sign:${aspect.toFixed(2)}`;
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const W = 1536;
+  const H = Math.max(128, Math.round(W / aspect));
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#2f4a34';
+  ctx.fillRect(0, 0, W, H);
+  // Let a little grain through the paint.
+  const grain = woodTextures('oak').map.image as CanvasImageSource;
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.globalAlpha = 0.28;
+  ctx.drawImage(grain, 0, 0, W, H);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+  // Paint wear: a faint lighter wash along the top.
+  const wash = ctx.createLinearGradient(0, 0, 0, H);
+  wash.addColorStop(0, 'rgba(255,255,255,0.07)');
+  wash.addColorStop(1, 'rgba(0,0,0,0.12)');
+  ctx.fillStyle = wash;
+  ctx.fillRect(0, 0, W, H);
+  // Cream border: an outer line and a thinner inner line.
+  const m = H * 0.055;
+  ctx.strokeStyle = '#d8c9a3';
+  ctx.lineWidth = H * 0.032;
+  ctx.strokeRect(m, m, W - 2 * m, H - 2 * m);
+  ctx.lineWidth = H * 0.012;
+  ctx.strokeRect(m * 1.9, m * 1.9, W - 3.8 * m, H - 3.8 * m);
+  // Lettering.
+  const font = (px: number): string => `900 ${px}px Impact, "Arial Black", "Helvetica Neue", Arial, sans-serif`;
+  ctx.fillStyle = '#d8c9a3';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const fit = (text: string, px: number, maxW: number): number => {
+    ctx.font = font(px);
+    const w = ctx.measureText(text).width;
+    return w > maxW ? px * (maxW / w) : px;
+  };
+  const cx = W / 2;
+  const textW = W * 0.64;
+  const px1 = fit(SIGN_LINES.top, H * 0.34, textW);
+  const px2 = fit(SIGN_LINES.bottom, H * 0.2, textW);
+  ctx.font = font(px1);
+  ctx.fillText(SIGN_LINES.top, cx, H * 0.36);
+  ctx.font = font(px2);
+  ctx.fillText(SIGN_LINES.bottom, cx, H * 0.7);
+  // A thin rule between the lines, and a fleur-de-lis at each end.
+  ctx.fillRect(cx - textW * 0.42, H * 0.545, textW * 0.84, H * 0.012);
+  fleurDeLis(ctx, W * 0.115, H * 0.5, H * 0.6);
+  fleurDeLis(ctx, W * 0.885, H * 0.5, H * 0.6);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = maxAniso;
+  t.generateMipmaps = true;
+  cache.set(key, t);
+  return t;
 }
 
 /** Soft radial blob (white to transparent) used as a cheap contact shadow under the cart and its wheels. */

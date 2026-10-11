@@ -9,15 +9,15 @@ type WheelGeo = Extract<Geometry, { type: 'wheel' }>;
  * brass hub caps, like the concept art. Axle along local Y. The outer bounds match `localBounds`: tread / lug tips reach
  * the diameter, the sidewall reaches half the tire width, the hub barrel reaches max(width, hubLength) / 2.
  *
- * Merged into one geometry with groups in this order, so the caller supplies five materials:
- * 0 tire, 1 lugs (both rubber), 2 rim, 3 hub barrel, 4 hub caps.
+ * Merged into one geometry with groups in this order, so the caller supplies six materials:
+ * 0 tire, 1 lugs (both rubber), 2 rim dish, 3 hub barrel, 4 hub caps, 5 bead ring and spokes (round 2: lighter than the dish).
  */
 export function buildWheelGeometry(g: WheelGeo, tread: 'lug' | 'rib' = 'lug', lugCount = 26): THREE.BufferGeometry {
   const R = g.diameter / 2;
   const hw = g.width / 2;
   const hubR = Math.min(g.hubDiameter / 2, R * 0.45);
   const hubHalf = Math.max(g.width, g.hubLength) / 2;
-  const rimR = Math.min(Math.max(hubR * 1.35, R * 0.56), R * 0.78);
+  const rimR = Math.min(Math.max(hubR * 1.35, R * 0.6), R * 0.78);
   const lugH = tread === 'lug' ? Math.min(0.38, R * 0.06) : 0;
   const Rt = R - lugH;
   const s = Math.min(hw, Rt - rimR) * 0.4; // shoulder radius
@@ -75,12 +75,34 @@ export function buildWheelGeometry(g: WheelGeo, tread: 'lug' | 'rib' = 'lug', lu
   lugs.forEach((l) => l.dispose());
   lugGeo.rotateX(Math.PI / 2); // axle Z -> Y
 
-  // Dished rim.
+  // Deeply dished rim: a lip at the tire bead, then a step down to a flat disc recessed well inside the sidewall.
+  const dish = hw * 0.34;
   const rimPts = [
-    v2(hubR * 0.8, -hw * 0.5), v2(rimR * 0.82, -hw * 0.5), v2(rimR - 0.1, -hw * 0.74), v2(rimR + 0.06, -hw * 0.8),
-    v2(rimR + 0.06, hw * 0.8), v2(rimR - 0.1, hw * 0.74), v2(rimR * 0.82, hw * 0.5), v2(hubR * 0.8, hw * 0.5),
+    v2(hubR * 0.8, -dish), v2(rimR * 0.8, -dish), v2(rimR * 0.9, -dish - hw * 0.1), v2(rimR - 0.12, -hw * 0.66), v2(rimR + 0.06, -hw * 0.8),
+    v2(rimR + 0.06, hw * 0.8), v2(rimR - 0.12, hw * 0.66), v2(rimR * 0.9, dish + hw * 0.1), v2(rimR * 0.8, dish), v2(hubR * 0.8, dish),
   ];
   const rim = new THREE.LatheGeometry(rimPts, 40);
+
+  // Bead ring (a small torus on each side where the tire meets the rim) and five spokes standing off the dish.
+  const bead: THREE.BufferGeometry[] = [];
+  const beadR = Math.min(0.2, (R - rimR) * 0.12);
+  for (const sg of [-1, 1]) {
+    const ring: THREE.Vector2[] = [];
+    for (let i = 0; i <= 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      ring.push(v2(rimR + 0.04 + beadR * Math.cos(a), sg * hw * 0.78 + beadR * Math.sin(a)));
+    }
+    bead.push(new THREE.LatheGeometry(ring, 40));
+    for (let k = 0; k < 5; k++) {
+      const len = rimR * 0.84 - hubR * 0.7;
+      const b = new THREE.BoxGeometry(len, Math.min(0.3, hw * 0.3), Math.max(0.5, hubR * 0.28));
+      b.translate((len / 2) + hubR * 0.7, sg * (dish + Math.min(0.3, hw * 0.3) / 2 - 0.02), 0);
+      b.rotateY((k / 5) * Math.PI * 2);
+      bead.push(b);
+    }
+  }
+  const beads = mergeGeometries(bead)!;
+  bead.forEach((x) => x.dispose());
 
   // Hub barrel (steel) and brass caps at both ends.
   const barrelR = hubR * 0.5;
@@ -98,8 +120,8 @@ export function buildWheelGeometry(g: WheelGeo, tread: 'lug' | 'rib' = 'lug', lu
   const capB = new THREE.LatheGeometry(capPts(1), 28);
   const caps = mergeGeometries([capA, capB])!;
 
-  const merged = mergeGeometries([tire, lugGeo, rim, barrel, caps], true)!;
-  [tire, lugGeo, rim, barrel, capA, capB, caps].forEach((x) => x.dispose());
+  const merged = mergeGeometries([tire, lugGeo, rim, barrel, caps, beads], true)!;
+  [tire, lugGeo, rim, barrel, capA, capB, caps, beads].forEach((x) => x.dispose());
   return merged;
 }
 
