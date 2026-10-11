@@ -5,7 +5,7 @@
 | 0 — Setup & parameter reconciliation | ✅ approved 2026-10-10 |
 | 1 — Block model | ✅ approved |
 | 2 — Analysis & simulation | ✅ approved 2026-10-10 |
-| 3 — Detail design | in progress: visual pass done (8/10); critic round 2 |
+| 3 — Detail design | **checkpoint**: waiting on Eric (docs/phase3-checkpoint.md) |
 | 4 — Build outputs | not started |
 
 ## Phase 0 log
@@ -40,3 +40,4 @@
 - Visual pass: critic 5 → 7 → **8/10** (docs/reviews/visual-round{1,2,3}.md). Empty mass 161.6 lb (+1.0, sheer and transoms). Ropes hidden in the viewer per Eric. Deferred to Eric: broader prow section, steel U-tube grab handles (D-40). Brake grip force at the goal rider now marginal (90.3%).
 - Critic round 2: engineering 7/10, buildability 6/10. D-45 (Eric): prow dropped, one-piece S-curve hull, deck step hidden in the side profile; also fixes build MUST 1–2 and eng N-4. D-46: front end N-1..N-3 (adjustable stops, welded shear ears, carrier bolts from below); safe range 220 lb on paper, quoted as about 200 (fragile, see docs/phase3-r3-front-notes.md). Empty mass 161.2 lb. Next: build MUST 3–4 (brake mount, rear axle beam) and SHOULDs, viewer follow-up for plan-path sweeps, then critic round 3.
 - Round-3 fixes: D-47 (front and fittings: turntable support, bridle tie, curved finger guard, real kingpin bolt, step order, storage clearance, lash plates, banding) and D-48 (brake mount on bearing plates + doublers, rear beam seat and hold-downs, brake headroom 1.2 with 5.7" travel, 7/8" shaft, wheel rating, brake abuse). Viewer follow-up for the curved hull. Empty mass **169.0 lb**; safe 50–210 lb, green to 170 (limiter steer-stops). Open: `turntable-ring` info row at 137% of the assumed rating. Next: critic round 3.
+- Critic round 3 (final): engineering 7/10, buildability 6/10. Stopped at the round limit; checkpoint written (docs/phase3-checkpoint.md). Two eng MUSTs mean the Simple view overstates safety (stop-stand arm, turntable-ring info-only): fix before pushing.
