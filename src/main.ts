@@ -64,13 +64,21 @@ const viewer = new Viewer($('viewer'));
 // `rider`/`cargo`/`removed` are consumed by the Phase 1 model (missing fields = defaults).
 const view: CartView = { steerDeg: 0, rider: 'operating', cargo: true, removed: false };
 const build = (p: ReturnType<typeof store.get>, v: CartView): Part[] => buildModel(p, v as ViewState);
-const steerOut = h('output', { class: 'steer-out' }, '0°');
-const steer = h('input', { type: 'range', min: '-50', max: '50', step: '1', value: '0', 'aria-label': 'Displayed steer angle' });
-steer.addEventListener('input', () => {
-  view.steerDeg = Number(steer.value);
+// Snap to 0.5° so 0 is always reachable even when the lock is a half degree (e.g. 38.5°).
+const snapSteer = (v: number) => Math.round(v * 2) / 2;
+const steer = h('input', { type: 'range', min: '-50', max: '50', step: '0.5', value: '0', 'aria-label': 'Displayed steer angle' });
+const steerNum = h('input', { type: 'number', step: '0.5', value: '0', class: 'steer-num', 'aria-label': 'Steer angle (degrees)' });
+const steerZero = h('button', { type: 'button', class: 'steer-zero', title: 'Centre the steering (0°)' }, '0°');
+const setSteer = (v: number) => {
+  view.steerDeg = Number.isFinite(v) ? snapSteer(v) : 0;
   render();
-});
-viewer.addToolbarControl(h('label', { class: 'steer-ctl', title: 'Displayed steer angle (view only; clamped to the steering lock)' }, 'Steer', steer, steerOut));
+};
+steer.addEventListener('input', () => setSteer(Number(steer.value)));
+steerNum.addEventListener('change', () => setSteer(Number(steerNum.value)));
+steerZero.addEventListener('click', () => setSteer(0));
+viewer.addToolbarControl(
+  h('label', { class: 'steer-ctl', title: 'Displayed steer angle (view only; clamped to the steering lock)' }, 'Steer', steer, steerNum, steerZero),
+);
 
 const checkbox = (label: string, title: string, checked: boolean, onChange: (v: boolean) => void) => {
   const cb = h('input', { type: 'checkbox' });
@@ -111,7 +119,9 @@ const render = () => {
   steer.max = String(lock);
   view.steerDeg = Math.max(-lock, Math.min(lock, view.steerDeg ?? 0));
   steer.value = String(view.steerDeg);
-  steerOut.textContent = `${view.steerDeg}°`;
+  steerNum.min = String(-lock);
+  steerNum.max = String(lock);
+  steerNum.value = String(view.steerDeg);
 
   const key = JSON.stringify(p);
   if (key !== cacheKey) {

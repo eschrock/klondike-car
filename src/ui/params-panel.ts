@@ -22,7 +22,16 @@ function buildRow(key: ParamKey, store: Store, syncs: Map<ParamKey, Sync>): HTML
 
   const badge = h('span', { class: `badge ${d.status}`, title: STATUS_HELP[d.status] }, d.status);
   const label = h('label', { for: id, class: 'plabel' }, d.label);
-  const head = h('div', { class: 'phead' }, label, badge);
+  const reset = h('button', { type: 'button', class: 'preset-reset', title: `Reset to default (${fmtValue(d.default)}${d.unit ? ' ' + d.unit : ''})`, 'aria-label': `Reset ${d.label} to default` }, '↺');
+  reset.hidden = true;
+  reset.addEventListener('click', () => store.set(key, d.default));
+  const head = h('div', { class: 'phead' }, label, reset, badge);
+  // Wrap this row's sync so the reset button shows only when the value differs from the default.
+  const withReset = (r: HTMLElement) => {
+    const inner = syncs.get(key)!;
+    syncs.set(key, (v) => { inner(v); reset.hidden = Math.abs(v - d.default) < 1e-9; });
+    return r;
+  };
   const row = h('div', { class: 'prow', title: tip }, head);
 
   if (d.options) {
@@ -31,7 +40,7 @@ function buildRow(key: ParamKey, store: Store, syncs: Map<ParamKey, Sync>): HTML
     sel.addEventListener('change', () => store.set(key, Number(sel.value)));
     row.append(sel);
     syncs.set(key, (v) => { sel.value = String(v); });
-    return row;
+    return withReset(row);
   }
 
   const num = h('input', { id, type: 'number', min: String(d.min), max: String(d.max), step: String(d.step), class: 'pnum' });
@@ -51,7 +60,7 @@ function buildRow(key: ParamKey, store: Store, syncs: Map<ParamKey, Sync>): HTML
   });
   ctl.append(num, unit);
   row.append(ctl);
-  return row;
+  return withReset(row);
 }
 
 export function mountParamsPanel(host: HTMLElement, store: Store): void {
