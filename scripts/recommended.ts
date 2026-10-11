@@ -12,4 +12,5 @@ export const RECOMMENDED: Partial<Params> = {
   deckPlyIn: 0.472, // 12 mm okoume
   crossmemberSpacingIn: 8,
   brakeLeverRatio: 12,
+  bridleRopeRunIn: 96, // 8 ft bridle tails, tied low at the axle ends
 };

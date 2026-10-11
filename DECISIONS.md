@@ -67,6 +67,18 @@ Units are inches, pounds and degrees throughout.
 - The **cabin shoulder** sits **18.0" behind the front axle**. A-4's rear extent is now measured from the axle, i.e. the kingpin value minus the lead.
 
 **Tension to resolve in Phase 2:** lock, nose width (feet), turning radius and track all trade against each other. A wider track (straddle stowage) also pushes the shoulder aft. | 🔶 |
+| D-27 | **Phase 2 recommended configuration** (`docs/phase2-recommendation.md`, **pending Eric's approval**). Once approved, it supersedes:
+- **D-8/D-9:** no tongue; the cart fits the truck fully assembled.
+- **D-14:** rope bridle to the axle ends, 8 ft tails tied low; the tongue stays an option.
+- **D-12/D-25/D-26:**
+  - ¾" grade-8 kingpin through the beam and a chassis crossbar, in 1¼" steel sleeves;
+  - lead 1.5"; front beam 4.0";
+  - lock 37°; wheelbase 44".
+- **D-4:** ¾" 1045 turned-ground-polished axle shafting (≈ 70 ksi).
+- **D-17:** 12 mm deck on 8" joists.
+- **D-13:** brake lever 12:1.
+
+The params defaults change to match on approval. | 🔶 |
 | D-21 | **Build the full-featured ("heavy") design first.** Empty weight is **reported, not pass/fail**. The realistic expectation is ~90–120 lb. Once a design we like is working, make a **lightweight variant** as a second param preset aimed at the original 60–70 lb (10" wheels, lean beams, no rigid box, and so on). The `targetMass*` params now describe that variant's target. | ✅ |
 | D-22 | **Captured okoume side panels are allowed** (6 mm in an oak chine/gunwale frame, no exposed edges). This is now the default side construction, and it makes hull-as-beam (D-17) a real option. Solid oak and open frame stay selectable. | ✅ |
 | D-23 | **Bed dimensions stay fully parametric.** The truck-fit view (Phase 1/4) tries **both** stowage modes, wheels beside the wells and straddling them. It reports which fits and how much track or stability each allows, so plugging in measured values shows the tradeoff directly. | ✅ |

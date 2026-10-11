@@ -115,10 +115,12 @@ function materials(p: Params, isOpen: boolean, onToggle: (o: boolean) => void): 
       ]),
       h('h4', {}, 'Steel (D-4)'),
       rows([
-        ['Axle yield / E', `${f0(p.axleYieldPsi)} / ${f0(p.steelMoePsi)} psi`, '1018 CD, yield taken as 50 ksi (book 54)'],
+        ['Axle yield / E', `${f0(p.axleYieldPsi)} / ${f0(p.steelMoePsi)} psi`, p.axleYieldPsi >= 65000 ? '1045 turned-ground-polished shafting (≈ 70+ ksi; confirm vendor cert)' : '1018 CD, yield taken as 50 ksi (book 54)'],
         ['Axle allowable', `${f0(d.axleAllowablePsi)} psi`, `yield / SF ${p.steelSafetyFactor}`],
         ['Kingpin yield', `${f0(p.kingpinYieldPsi)} psi`, `SAE grade 8; margin ${p.kingpinMargin}; shear 0.577·yield`],
-        ['Kingpin shear plane', `${p.kingpinDiameterIn}" bolt`, 'single shear at the turntable interface, cantilever over the whole stack, washer ' + `${p.kingpinWasherDiameterIn}" OD`],
+        ['Kingpin shear plane', `${p.kingpinDiameterIn}" bolt${p.kingpinSleeveOdIn > 0 ? ` in ${p.kingpinSleeveOdIn}" OD sleeves` : ''}`, p.kingpinThroughBolster
+          ? 'single shear at the turntable interface; pin held in the beam below and the chassis crossbar above (bending lever g/2 + min(D1,D2)/2; average bore bearing, peak and pitch-moment path unresolved: Phase 3)'
+          : 'single shear at the turntable interface, cantilever over the whole stack'],
         ['Bolster fasteners (assumed)', `${p.bolsterFastenerCount} × ${p.bolsterFastenerDiameterIn}"`, `yield ${f0(p.bolsterFastenerYieldPsi)} psi (A307-type); shear 0.577·yield / ${p.kingpinMargin}`],
       ]),
       h('h4', {}, 'Loads and factors (D-1, D-2, D-14)'),

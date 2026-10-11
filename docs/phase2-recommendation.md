@@ -2,83 +2,115 @@
 
 **Status:** proposed, waiting for Eric's approval (BRIEF §10 checkpoint).
 
-**Try it:** [open the recommended design](https://eschrock.github.io/klondike-car/#wheelbaseIn=44&crossmemberSpacingIn=8&axleYieldPsi=70000&steerLockDeg=37&kingpinLeadIn=1.5&kingpinDiameterIn=0.75&kingpinSleeveOdIn=1.25&drawbar=0&brakeLeverRatio=12&frontAxleBeamThicknessIn=4&deckPlyIn=0.472). The link reproduces the exact design; open the Analysis tab for every check with its formula.
+**Try it:** [open the recommended design](https://eschrock.github.io/klondike-car/#wheelbaseIn=44&crossmemberSpacingIn=8&axleYieldPsi=70000&steerLockDeg=37&kingpinLeadIn=1.5&kingpinDiameterIn=0.75&kingpinSleeveOdIn=1.25&drawbar=0&brakeLeverRatio=12&frontAxleBeamThicknessIn=4&deckPlyIn=0.472&bridleRopeRunIn=96). The link reproduces the exact design; the Analysis tab shows every check with its formula.
+
+**Up front:**
+- **Weight:** 127 lb empty, 81% over the brief's 60–70 lb target. Per D-21 we build the full-featured design first and treat weight as information; a lightweight variant follows Phase 4.
+- **Lifting:** 117 lb with the removable parts off, or **58 lb per person** for a two-adult lift.
 
 **How it was chosen:**
-- **Analysis:** `src/analysis` covers every BRIEF §7 check. The critic graded it 7/10. Its round-1 fixes added obstacle strikes, the roll path, the lightest-rider case, the tyre-edge turning radius and a fair deck method.
-- **Exploration** (`docs/phase2-exploration.md`): about 45k designs, of which 176 pass at every rider weight.
-- **Targeted fixes:** the kingpin load path below, then a final check of named variants (`scripts/candidate.ts`, `scripts/recommend-table.ts`).
+1. **Analysis:** `src/analysis` implements every BRIEF §7 check, plus the load cases the critic added: obstacle strike, roll path, an 80 lb lightest rider, the tyre-edge turning radius, and an effective-width deck check.
+2. **Sweep:** about 45k designs (`docs/phase2-exploration.md`) found which variables drive which checks.
+3. **Hand-built design:** the sweep's best design solved the curb strike with a 1" kingpin and a wider beam. I built this design by hand from it instead, fixing the kingpin load path. The sweep ran **before** that kingpin model existed, so its counts ("176 pass") and mass range don't describe this design exactly.
+4. **Verification:** `scripts/recommend-table.ts` regenerates the table below, and the vitest `src/analysis/recommended.test.ts` asserts zero failures.
 
-## What changes from the Phase 1 defaults
+## Changes from the Phase 1 defaults
 
-| Parameter | Phase 1 | Recommended | Why |
+| Parameter | Phase 1 | Recommended | Mass | Why |
+|---|---|---|---|---|
+| Wheelbase | 48" | **44"** | −3.4 lb | The turning radius to the outer tyre edge was 97.25" against 96" (a fail). It is 93.4" at 44". |
+| Steering lock | 38.5° | **37°** | +0.5 lb | The kingpin sleeve (next row) moves the kingpin 1.5" ahead of the axle, which narrows the nose the tyres allow. At 37° the nose is 14.0", enough for feet in boots (12.1" needed inside). |
+| Kingpin | ½" grade 8, stopping at the turntable top | **¾" grade 8, through the beam *and* a chassis crossbar, in 1¼"-OD steel sleeves**; lead 1.5", front beam 4.0" | +2.3 lb | A front-wheel curb strike pushes the axle back through the kingpin. The old cantilevered ½" pin was 2.4× over. Real wagons pin the axle to the chassis; the crossbar cuts the bending lever from 2.9" to 1.1", and the sleeves spread the load into the oak. |
+| Axle rod | ¾" 1018 (50 ksi) | **¾" 1045 turned-ground-polished shafting (≈ 70 ksi)** | 0 | The rear axle with the 200 lb rider, plus tyre side friction, was **0.7% over** on 1018. 1045 TGP is stock in ¾" and fits standard ¾"-bore hand-truck wheel bearings. **Alternative:** move the clamp plate ¼" toward the hub and keep 1018 (7% margin). |
+| Deck | 9 mm okoume on 12" joists | **12 mm okoume on 8" joists** | +5.1 lb | A 200 lb scout standing mid-panel deflected 0.069" in 9 mm against L/300 = 0.032". 12 mm on 8" deflects 0.01". Bending was never the problem. **Lighter alternative:** 9 mm on 6" joists (−1.7 lb, more joists to cut). |
+| Pull attachment | 24" oak tongue | **Rope bridle tied to the axle ends** | −1.5 lb | See the rope rig section below. |
+| Bridle rope | (72" run assumed) | **8 ft tails, tied low at the axle ends** | — | The rear-pitch result depends on the rope angle (below). |
+| Brake lever ratio | 10:1 | **12:1** | 0 | No mass or geometry cost. Handle force to hold the 200 lb case on 15° drops from 28.1 to 23.7 lbf. |
+
+**Unchanged:** track 35.5", 13" pneumatic wheels, 9" deck, seat 12" ahead of the rear axle, ladder frame with captured okoume sides, storage over the rear axle, auto nose geometry.
+
+## Rope rig and rearward pitch
+On a 15° climb, a hard pull (150 lbf design surge) angled up toward the pullers' hands lifts the front of the cart. The check reports **the pull needed to lift the front wheels ÷ 150 lbf** (limit 1.25×). The lightest rider (80 lb) governs.
+
+| Rig (recommended design otherwise) | 80 lb | 150 lb | 200 lb |
 |---|---|---|---|
-| Pull attachment | 24" oak tongue | **Rope bridle to the axle ends** | Under a 150 lbf surge on a 15° climb, the tongue tip lifts the front. An **80 lb** rider then tips back at 1.07× the needed margin, a fail. The rope bridle gives **2.41×**. It also shortens the cart from 83" to ~67", so it fits the truck fully assembled. No 24" tongue passed anywhere in the sweep. |
-| Wheelbase | 48" | **44"** | The turning radius to the outer tyre edge was 97.25" at 48", against 96". At 44" it is 93.4". A shorter cart is also lighter and handier. |
-| Steering lock | 38.5° | **37°** | The steel kingpin sleeve below pushes the kingpin 1.5" ahead of the axle, which narrows the nose the front tyres allow. At 37° the nose is 14.0", enough for feet and boots. The turning radius still passes because of the shorter wheelbase. |
-| Kingpin | ½" grade 8, cantilevered from the beam | **¾" grade 8, through the beam *and* a chassis crossbar, in 1¼"-OD steel sleeves** | A front wheel hitting a 3" curb puts ~700 lbf through the kingpin. That is 2.4× over in the old design, where the pin stopped at the turntable top. Real wagons pin the axle to the chassis. The crossbar cuts the pin's bending lever from 2.9" to 1.1", and the sleeves spread the bearing into the oak. |
-| Kingpin lead / front beam | 1.125" / 3.5" | **1.5" / 4.0"** | Leaves ½" of oak between the axle groove and the sleeve bore, and ¾" at each beam end (D-25 rules). |
-| Axle rod | ¾" 1018 (50 ksi) | **¾" 1045 turned-ground-polished shafting (≈70 ksi)** | The rear axle at the 200 lb rider, with tyre side friction, was 3% over. A stronger steel at the same size beats a heavier 1" rod, which would need non-standard wheel bores. |
-| Deck | 9 mm okoume on 12" joists | **12 mm okoume on 8" joists** | A 200 lb scout standing mid-panel deflected 0.069" in 9 mm against L/300 = 0.032". 12 mm on 8" gives about 0.01". Bending was never the problem. |
-| Brake lever ratio | 10:1 | **12:1** | Costs nothing. Handle force to hold the 200 lb case on 15° drops from 28 to 20 lbf. |
+| **Rope bridle, 8 ft tails, hands at 30"** | **3.07×** | 3.84× | 4.40× |
+| 24" oak tongue, same rope | 1.71× | 2.13× | 2.43× |
+| Rope bridle, the old 6 ft run assumption | 1.92× | 2.41× | 2.76× |
 
-Unchanged: track 35.5" (fits beside the wheel wells), 13" pneumatic wheels, 9" deck height, seat 12" ahead of the rear axle, ladder frame with captured okoume sides, storage over the rear axle, and auto nose geometry.
+Rope-bridle sensitivity to hand height and rope length, at 80 lb / 150 lb:
+
+| Hand height | 6 ft | 8 ft | 10 ft |
+|---|---|---|---|
+| 30" | 1.92× / 2.41× | 3.07× / 3.84× | 4.89× / 6.13× |
+| 36" | 1.43× / 1.79× | 2.13× / 2.66× | 3.08× / 3.87× |
+| 40" | **1.23× / 1.55×** (80 lb fails) | 1.78× / 2.23× | 2.49× / 3.12× |
+
+- **What decides this check is rope length, not the tongue.** With 8 ft tails both rigs pass.
+- **I still recommend the rope bridle.**
+  - It is 1.5 lb lighter.
+  - The cart is 71" long instead of 83", so it **fits the truck fully assembled**.
+  - It is the traditional Klondike rig.
+  - It steers and self-centres. A pull on the axle-end ropes yaws the front axle about the kingpin, and with the kingpin 1.5" ahead the axle trails like a caster (the critic confirmed this by hand).
+- **The tongue's advantage** is better steering leverage and keeping the ropes clear of the tyres; the ropes can graze the front tyre sidewalls. If you prefer the tongue, it passes with 8 ft rope, but the cart must lose the tongue to fit the truck.
+- **Phase 3:** a mock-up of the rope-to-tyre geometry.
 
 ## Result
 
-| Case | Mass | CG (x fwd of rear axle, height) |
-|---|---|---|
-| Empty | **126.9 lb** | 19.6", 9.2" |
-| Transport (seat back, handle, signs off) | **116.7 lb**, 58 lb per person for two | 20.3", 8.3" |
-| + 150 lb rider + 25 lb cargo | 301.9 lb | 16.0", 15.0" |
-| + 200 lb rider + 25 lb cargo | 351.9 lb | 16.0", 15.7" |
+| Case | Mass | CG (x fwd of rear axle, height) | Size (L × W, without rope) |
+|---|---|---|---|
+| Empty | **126.9 lb** | 19.6", 9.2" | 71.0" × 40.5" |
+| Transport (seat back, handle, signs off) | **116.7 lb** | 20.3", 8.3" | 62.8" × 40.5" |
+| + 150 lb rider + 25 lb cargo | 301.9 lb | 16.0", 15.0" | |
+| + 200 lb rider + 25 lb cargo | 351.9 lb | 16.0", 15.7" | |
 
-### All checks
-**0 failures** at 150 lb, 200 lb and the 80 lb rear-pitch case. Columns: "150", "200" and "80" are the rider weights in lb.
+### Checks
 
-| Check | Value | Limit | 150 | 200 | 80 |
+Every rider case is evaluated: 150 lb is pass/fail, 200 lb is the goal (flagged), and 80 lb is the rearward-pitch case. **Result: 0 failures in any case.** "Margin" is how far the value sits inside the limit; "marginal" means it passes by less than 10%.
+
+| Check | 150 lb | 200 lb | 80 lb | Limit | Status |
 |---|---|---|---|---|---|
-| Lateral tip, straight | 49.8° | ≥ 40° | pass | pass | |
-| Lateral tip, full lock | 46.0° | ≥ 35° | pass | pass | |
-| Slide before tip (SSF) | 1.13 | ≥ 0.75 | pass | pass | |
-| Turn rollover speed | 9.2 mph | info (1.5× jog = 9.0) | info | info | |
-| Turning radius, outer tyre edge | 93.4" | ≤ 96" | marginal (−2.7%) | | |
-| Steering clearance (full sweep) | 0.76" | ≥ 0.70" | marginal | | |
-| Forward pitch, braking downhill | 67° margin | > 0 | pass | pass | |
-| Rearward pitch: pull to lift the front | 2.41× | ≥ 1.25× | pass | pass | pass |
-| Brake handle force, 15° hold | 20.4 lbf | ≤ 30 | pass | pass | |
-| Rear axle (vertical + tyre side load) | 25.2 ksi | ≤ 35 ksi | pass | pass | |
-| Front / rear axle beams | 1035 / 115 psi | 6460 / 850 | pass | pass | |
-| Axle groove bearing (⊥) | 299 psi | ≤ 358 | pass | pass | |
-| Frame rails, static deflection | 0.10" | ≤ 0.15" | pass | pass | |
-| Deck, standing scout | 0.01" | ≤ 0.02" | pass | pass | |
-| Kingpin, bridle pull | 67 psi bearing | ≤ 358 | pass | pass | |
-| **Kingpin, 3" curb strike** | 331 psi crossbar bearing | ≤ 358 | pass | **marginal (8%)** | |
-| Roll: side-bearers / kingpin uplift / bolster bolts | 272 psi / 210 psi / 0.39 | 358 / 358 / 1.0 | pass | pass | |
-| **Turntable rating** | 469 lbf | ≤ 500 (½ of 1000 lb rating) | pass | **marginal (6%)** | |
-| Truck fit | fits **fully assembled**, beside the wells, both orientations | ≥ 1 case | pass | | |
+| Lateral tip, straight | 49.8° | 48.3° | | ≥ 40° | pass |
+| Lateral tip, full lock | 46.0° | 44.5° | | ≥ 35° | pass |
+| Slide before tip (SSF) | 1.13 | 1.07 | | ≥ 0.75 | pass |
+| Turn rollover speed | 9.2 mph | 9.0 mph | | info (1.5× jog = 9.0) | info |
+| Turning radius, outer tyre edge | 93.4" | | | ≤ 96" | marginal (2.7% margin) |
+| Steering clearance (full sweep) | 0.76" | | | ≥ 0.70" | marginal (9%) |
+| Forward pitch, braking downhill | 67° margin | | | > 0 | pass |
+| Rearward pitch: pull to lift the front | 3.84× | 4.40× | 3.07× | ≥ 1.25× | pass |
+| Brake handle force, 15° hold | 20.3 lbf | 23.7 lbf | | ≤ 30 lbf | pass |
+| Rear axle (vertical + tyre side load) | 21.6 ksi | 25.2 ksi | | ≤ 35 ksi | pass |
+| Front / rear axle beams | | 1035 / 115 psi | | 6460 / 850 psi | pass |
+| Axle groove bearing (⊥) | | 299 psi | | ≤ 358 psi | pass |
+| Frame rails, static deflection | | 0.10" | | ≤ 0.15" | pass |
+| Deck, standing scout | | 0.01" | | ≤ 0.02" | pass |
+| Kingpin, bridle pull | | 67 psi bearing | | ≤ 358 psi | pass |
+| **Kingpin, 3" curb strike** (average crossbar bearing) | 281 psi | **331 psi** | | ≤ 358 psi | pass at 150 lb; **marginal at 200 lb, see below** |
+| Roll: side-bearers / kingpin uplift / bolster bolts | | 272 psi / 210 psi / 0.39 | | 358 / 358 / 1.0 | pass |
+| **Turntable rating** | 399 lbf | **469 lbf** | | ≤ 500 lbf (½ of the 1000 lb rating) | marginal at 200 lb |
+| Truck fit | fits **fully assembled**, beside the wells, both orientations | | | ≥ 1 case | pass (see the bedliner caveat) |
 
-### Qualitative sim
-In the Simulation tab, the tilt-table cross-check lands within 0.6–1.0° of the static tip angles, straight and at full lock. Run the scenarios (downhill, curb strike, full-lock turn, braking) to get a feel for the cart. The Analysis tab is the real validation.
+**Qualitative sim:** the tilt-table cross-check lands within 0.6–1.0° of the static tip angles, straight and at full lock. The sim pulls from a single point, not the two-rope bridle; that refinement is for Phase 3.
 
-## Tradeoffs considered
+## What isn't resolved yet (honest list)
+1. **Steering stops are not yet checked, and they would fail.** A one-wheel curb strike yaws the front axle into its stop with about **2,150 lbf**, roughly 4× what the 1½" oak stop posts can bear. That's a **Phase 3 must-fix**: steel stop faces, or stops placed further from the kingpin to cut the force. A check will be added.
+2. **Kingpin curb strike: the margin isn't really known.**
+   - The 331 vs 358 psi is an *average* bearing. A rigid pin peaks higher, and the pin may also carry the turntable pitch moment, which could exceed the allowable by up to ~3×.
+   - The load case is a deliberate envelope: both wheels square into a 3" curb with the 3× dynamic factor on top. Without the factor, H = 245 lbf instead of 735 lbf.
+   - The crossbar actually bears parallel to grain, which is stronger than the check assumes, but its side ligaments could split. Cleavage is unchecked.
+   - **Phase 3:** a deeper crossbar, a steel bearing plate, and a defined pitch-moment path.
+3. **Turntable at 200 lb (6% margin).** Option: a heavy-duty steel ring rated ≥ 1500 lb (~+2 lb).
+4. **Turning radius (2.7% margin).** Option: 0.375" boot allowance at 38.5° lock gives 5.2%, but less room for feet.
+5. **Truck width.** 40.5" overall against the 41.5" well gap leaves only 0.5" each side at the **unverified** default bed dimensions, and a drop-in bedliner would break it. Please measure (Q-1).
+6. **Finger gap.** At full lock there is a 0.76" gap between the tyre and the hull. That's a pinch risk for fingers on the nose, so Phase 3 adds a guard or a wider gap. The kingpin nut sits under the nose deck, so the nose deck becomes removable for access.
 
-- **Straddling the wheel wells for a wider track** (D-6, D-23): rejected. Lateral stability never limits this cart: the tip angles carry 30% or more margin at a 35.5" track. Straddling needs a wheelbase of 47" or more, which brings back the turning-radius problem. It adds ~7 lb and depends on exact well positions. **It stays available:** once you measure the bed, the Truck fit tab shows what each mode allows.
-- **Bigger kingpin instead of the crossbar.** The sweep's answer was a 1" pin with a wider beam. It works, but costs steering clearance and weight, and leaves the pin as a cantilever. The crossbar is how wagons are actually built.
-- **Wooden tongue:** rejected for rear-pitch safety and length. The steering leverage it offered isn't needed. The rope bridle on the axle ends gives ~18" of lever and is the traditional Klondike rig.
-- **Smaller (10") wheels:** they would save ~6 lb and help the turning radius. They roll worse over roots and lose ground clearance under the axle beams. 13" kept for the trail.
-- **Weight:** 127 lb empty is the honest number for the full-featured design (D-21). Every passing design in the sweep was 121–135 lb. The lightweight variant comes after Phase 4.
-
-## Remaining marginal items (will be watched in Phase 3)
-1. **Turning radius, −2.7%.** A shorter wheelbase or 38° lock would add margin but trade against the nose (feet).
-2. **Kingpin curb strike at the 200 lb rider, 8%.** A deeper bolster crossbar (more bearing depth) fixes it in detailing. The load case is conservative: both wheels square into a 3" curb with the 3× dynamic factor on top.
-3. **Turntable at the 200 lb rider, 6%.** Option: a heavy-duty steel fifth-wheel ring rated ≥ 1500 lb (~+2 lb).
-4. **Steering clearance, 0.76 vs 0.70".** The auto nose sizes itself to this on purpose.
-
-## Carried into Phase 3 (detail design)
-- Steering stops mount to the lower turntable plate, which is chassis-side.
-- Front U-bolts run down around an underslung beam.
-- Crossbar bearing depth (item 2).
-- The pitch moment path through the turntable (side-bearers carry roll only).
-- Bridle tie points and rope spec.
-- Lift handles at both ends (the transport lift is 58 lb per person).
+## Carried into Phase 3
+- **Steering hardware:**
+  - stop design and its check (item 1);
+  - stops mounted on the chassis-side turntable plate;
+  - kingpin peak bearing, pitch path, crossbar cleavage, bearing plate (item 2);
+  - sleeve spec;
+  - front U-bolts run down around the underslung beam.
+- **Bridle:** tie points and tie load on the axle ends, rope spec, rope-to-tyre geometry mock-up.
+- **Fasteners and parts to specify:** designed bolster fasteners, which are assumed 4 × ¼" so far; hub-bore confirmation for the chosen wheels.
+- **Rider safety and handling:** finger-gap guard; removable nose deck for kingpin access; lift handles at both ends.
