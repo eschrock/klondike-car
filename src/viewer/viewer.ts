@@ -308,12 +308,12 @@ export class Viewer {
   }
 
   private buildOverlayControls(): void {
-    const mk = (text: string, title: string, checked: boolean, on: (v: boolean) => void) => {
+    const mk = (text: string, title: string, checked: boolean, on: (v: boolean) => void, simpleToo = false) => {
       const cb = el('input', '');
       cb.type = 'checkbox';
       cb.checked = checked;
       cb.addEventListener('change', () => on(cb.checked));
-      const label = el('label', 'steer-ctl adv-only');
+      const label = el('label', simpleToo ? 'steer-ctl' : 'steer-ctl adv-only');
       label.title = title;
       label.append(cb, text);
       this.toolbar.append(label);
@@ -326,7 +326,7 @@ export class Viewer {
     this.dimsCb = mk('Dimensions', 'Overall length, width and height, wheelbase, track and deck height', false, (v) => {
       this.showDims = v;
       this.rebuildOverlay();
-    });
+    }, true); // also offered in the Simple view
   }
 
   /** CG marker + drop line and the dimension lines, in the (possibly truck-placed) model frame. */
@@ -416,7 +416,7 @@ export class Viewer {
       for (const m of this.partsGroup.children) m.visible = true;
       this.lastGroups = []; // rebuild the (hidden) group checkboxes so they read "shown" again
       this.showCg = false;
-      this.showDims = false;
+      this.showDims = this.dimsCb?.checked ?? false; // Dimensions stays available in Simple
     } else {
       this.showCg = this.cgCb?.checked ?? true;
       this.showDims = this.dimsCb?.checked ?? false;

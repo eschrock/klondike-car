@@ -120,3 +120,13 @@
   #simple-left, #simple-right { border: 0; border-top: 1px solid var(--border); overflow: visible; }
   .sv-host { overflow: visible; }
 }
+
+/* At-a-glance strip under the headline */
+.sv-glance { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.sv-glance-item { display: flex; flex-direction: column; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; }
+.sv-glance-k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.sv-glance-v { font-weight: 600; font-variant-numeric: tabular-nums; }
+.sv-glance-item.pass .sv-glance-v { color: var(--sv-pass); }
+.sv-glance-item.fail .sv-glance-v { color: var(--sv-fail); }
+.sv-watch .sv-demos { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 420px) { .sv-watch .sv-demos { grid-template-columns: 1fr 1fr; } }

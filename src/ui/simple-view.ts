@@ -99,7 +99,7 @@ const CONTROLS: Control[] = [
 
 function mountControls(host: HTMLElement, store: Store): void {
   const syncs: Array<(p: Params) => void> = [];
-  const section = h('section', { class: 'sv-controls', 'aria-labeledby': 'sv-cart-h' }, h('h2', { id: 'sv-cart-h' }, 'Your cart'));
+  const section = h('section', { class: 'sv-controls', 'aria-labelledby': 'sv-cart-h' }, h('h2', { id: 'sv-cart-h' }, 'Your cart'));
   for (const c of CONTROLS) {
     const id = `sv-${c.id}`;
     const d = c.def;
@@ -141,6 +141,8 @@ function mountSafetyCard(host: HTMLElement, deps: Pick<SimpleViewDeps, 'onLight'
   const busy = h('span', { class: 'sv-busy muted', hidden: '' }, 'checking…');
   const headEl = h('h2', { class: 'sv-headline', id: 'sv-safe-h' }, headlineIcon, headlineText, busy);
   const live = h('div', { role: 'status', 'aria-live': 'polite', class: 'sv-live' }, headEl);
+  // At-a-glance strip: the few numbers people ask first (size, weight, turning, truck bed).
+  const glance = h('ul', { class: 'sv-glance', 'aria-label': 'At a glance' });
 
   const cells: HTMLElement[] = [];
   const bar = h('div', { class: 'sv-bar', role: 'img' });
@@ -184,13 +186,13 @@ function mountSafetyCard(host: HTMLElement, deps: Pick<SimpleViewDeps, 'onLight'
 
   host.append(
     live,
+    glance,
     h('section', { class: 'sv-section', 'aria-label': 'Rider weights' }, wrap, legend, limits),
-    h('section', { class: 'sv-section', 'aria-labeledby': 'sv-now-h' },
+    h('section', { class: 'sv-section sv-watch', 'aria-labelledby': 'sv-demo-h' }, h('h3', { id: 'sv-demo-h' }, 'Watch it'), h('div', { class: 'sv-demos' }, ...demoBtns)),
+    h('section', { class: 'sv-section', 'aria-labelledby': 'sv-now-h' },
       h('h3', { id: 'sv-now-h' }, 'At this rider weight'), lightsList,
       h('p', { class: 'muted small' }, 'Every check here uses this one rider weight. The Analysis tab also checks the goal and lightest riders. Click a light for the details.')),
-    h('section', { class: 'sv-section', 'aria-labeledby': 'sv-spec-h' }, h('h3', { id: 'sv-spec-h' }, 'The cart'), specList),
-    h('section', { class: 'sv-section', 'aria-labeledby': 'sv-demo-h' }, h('h3', { id: 'sv-demo-h' }, 'Watch it'), h('div', { class: 'sv-demos' }, ...demoBtns),
-      h('p', { class: 'muted small' }, 'Opens the full simulation at this rider weight. “Back to simple” returns here.')),
+    h('section', { class: 'sv-section', 'aria-labelledby': 'sv-spec-h' }, h('h3', { id: 'sv-spec-h' }, 'The cart'), specList),
   );
 
   let last: DesignView | null = null;
@@ -255,6 +257,20 @@ function mountSafetyCard(host: HTMLElement, deps: Pick<SimpleViewDeps, 'onLight'
       ['Fits the truck', texts.truck.status === 'pass' ? 'Yes' : texts.truck.status === 'fail' ? 'No' : '–'],
     ];
     specList.replaceChildren(...rows.flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v)]));
+    // At a glance
+    const bedL = fmtVal(p.truckBedLengthIn), bedW = fmtVal(p.truckWellGapIn);
+    const fits = texts.truck.status !== 'fail';
+    const assembled = fit.cases.some((c) => c.config === 'installed' && c.fits);
+    const item = (k: string, v: string, cls = '') => h('li', { class: `sv-glance-item ${cls}` }, h('span', { class: 'sv-glance-k' }, k), h('span', { class: 'sv-glance-v' }, v));
+    const i = fit.dims.installed;
+    glance.replaceChildren(
+      item("Size", `${Math.round(i.lengthIn)} × ${Math.round(i.widthIn)} × ${Math.round(i.heightIn)} in`),
+      item('Weight', `${Math.round(spec.emptyLb)} lb · ${Math.round(spec.transportLb / 2)} lb each to lift`),
+      item('Turns in', Number.isFinite(turnFt) ? `${f1(turnFt)} ft` : '–'),
+      item('Truck bed', fits
+        ? `✔ Fits a ${bedL} × ${bedW} in bed${assembled ? '' : ' (handle & seat back off)'}`
+        : `✖ Too big for a ${bedL} × ${bedW} in bed`, fits ? 'pass' : 'fail'),
+    );
     setBusy(false);
   }
 

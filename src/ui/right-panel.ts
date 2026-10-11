@@ -136,10 +136,10 @@ export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): Rig
     });
     const body =
       t.id === 'truck'
-        ? h('div', { role: 'tabpanel', id: `panel-${t.id}`, 'aria-labeledby': `tab-${t.id}` }, truckBody)
+        ? h('div', { role: 'tabpanel', id: `panel-${t.id}`, 'aria-labelledby': `tab-${t.id}` }, truckBody)
         : MOUNTED.has(t.id)
-        ? h('div', { role: 'tabpanel', id: `panel-${t.id}`, 'aria-labeledby': `tab-${t.id}` })
-        : h('div', { role: 'tabpanel', id: `panel-${t.id}`, 'aria-labeledby': `tab-${t.id}`, class: 'placeholder' },
+        ? h('div', { role: 'tabpanel', id: `panel-${t.id}`, 'aria-labelledby': `tab-${t.id}` })
+        : h('div', { role: 'tabpanel', id: `panel-${t.id}`, 'aria-labelledby': `tab-${t.id}`, class: 'placeholder' },
             h('h3', {}, t.label), h('p', {}, t.blurb), h('p', { class: 'muted' }, `Coming in Phase ${t.phase}.`));
     buttons.push(b);
     bodies.push(body);
