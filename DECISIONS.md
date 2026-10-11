@@ -129,6 +129,7 @@ The workstream notes have the full reasoning and check tables: `docs/phase3-ws{A
   - Aluminum handle sockets, and pinch-gap checks.
 - **F4 seat and storage:** correctly sized Dominos, a tape-and-fold box on the deck with an oak coaming, a lid stay, 4-screw lash plates with a load check, and stainless fittings.
 - **Empty mass ≈ 160.6 lb.** | 🔶 |
+| D-44 | **Visual finishing (2026-10-11).** Eric: the model still looked like the block version. The viewer now dresses parts through an optional `Part.finish` (edge roundover, soft upholstery, tire tread, surface look). Analysis, mass and overlap tests ignore `finish`, so it is cosmetic only: a ¼" roundover (`roundoverIn`) on exposed oak is drawn, while the analysis keeps the square section (under 2% section loss on the 1½" rails). Real shape changes (the sheer line, crowned transoms, the curved seat back) go in `geometry` and do change the mass; see `docs/visual-pass-geometry-notes.md` and `docs/visual-pass-rendering-notes.md`. | 🔶 |
 
 
 ## Analysis-criterion interpretations

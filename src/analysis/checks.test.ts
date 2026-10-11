@@ -536,7 +536,8 @@ describe('kingpin through the bolster: single shear, steel plates and sleeve, wa
     // crossbar plate mid (7.75 + 7.9375)/2 = 7.84375; carrier mid (6.875 + 7.25)/2 = 7.0625; beam plate mid (4.1875 + 4.375)/2 = 4.28125 → b = 0.78125, a = 2.78125
     const H = Number(s.how.match(/Governing: [^,]+, H = (\d+)/)![1]);
     expect(sl.value).toBeCloseTo((H * (1 + 0.78125 / 2.78125)) / 0.75 ** 2, -1);
-    expect(pl.value).toBeCloseTo(H / (0.75 * 0.1875), -1);
+    // H is parsed from the rounded text, so allow one unit of rounding: ±0.5 lbf / (0.75 × 0.1875) ≈ ±3.6 psi plus 1 psi of display rounding.
+    expect(Math.abs(pl.value - H / (0.75 * 0.1875))).toBeLessThan(0.5 / (0.75 * 0.1875) + 1);
     expect(s.cases!.goal!.util).toBeLessThan(1);
     expect(s.status).not.toBe('fail');
     expect(run({ ...p, sleeveYieldPsi: 20000 }).find((c) => c.id === 'kingpin-strike')!.details!.find((d) => d.name.includes('steel sleeve'))!.limit).toBeCloseTo(9000, 6);

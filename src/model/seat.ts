@@ -12,7 +12,7 @@ import { RIDER_PELVIS_Z_FRAC, SIDE_CONSTRUCTION, STORAGE_LOCATION, type Params }
 import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
 import type { Layout } from './layout';
 import { chooseDomino, DOMINOS, type DominoQuery } from './joinery';
-import { profilePart } from './profile';
+import { profilePart, signedArea } from './profile';
 import type { Joint, Part, Vec2, Vec3 } from './types';
 
 // ── Detail dimensions and purchased-part estimates (D-18, D-40) ──
@@ -64,6 +64,22 @@ export function frameJoint(p: Params, to: string, q: DominoQuery, opts: { count?
 }
 /** Longest Domino length (mm) in the catalog, for the tests that confirm a joint's Domino really fits its member. */
 export const DOMINO_LENGTH_MM: Readonly<Record<string, number>> = Object.fromEntries(DOMINOS.map((d) => [d.name, d.lMm]));
+
+/** Corner radius actually used for a rounded rectangle `w` × `h` (D-44): capped at a third of the smaller side. */
+const padRadius = (w: number, h: number, r: number) => Math.max(0, Math.min(r, w / 3, h / 3));
+const PAD_CORNER_SEGMENTS = 6;
+/** Rounded rectangle centered on x = 0, spanning y = 0..h, CCW (D-44). */
+function roundedRect(w: number, h: number, r: number): Vec2[] {
+  const rr = padRadius(w, h, r);
+  if (rr < 1e-6) return [[-w / 2, 0], [w / 2, 0], [w / 2, h], [-w / 2, h]];
+  const out: Vec2[] = [];
+  const corners: Array<[number, number, number]> = [[w / 2 - rr, rr, -Math.PI / 2], [w / 2 - rr, h - rr, 0], [-w / 2 + rr, h - rr, Math.PI / 2], [-w / 2 + rr, rr, Math.PI]];
+  for (const [cx, cy, a0] of corners) for (let i = 0; i <= PAD_CORNER_SEGMENTS; i++) {
+    const a = a0 + (Math.PI / 2) * (i / PAD_CORNER_SEGMENTS);
+    out.push([cx + rr * Math.cos(a), cy + rr * Math.sin(a)]);
+  }
+  return out;
+}
 
 const unit = (x: number, y: number, z: number): Vec3 => {
   const n = Math.hypot(x, y, z) || 1;
@@ -212,14 +228,21 @@ export function buildSeat(ctx: Ctx): Part[] {
   const knobTop = sup.c2B + KNOB_R_IN + 0.1;
   const h0 = Math.min(H - 0.5, Math.max(0.5, p.seatCushionIn / Math.cos(a) + 0.3, pelvisTopAlongBack + PAD_GAP_IN, knobTop));
   const padH = Math.max(0.5, H - h0);
-  parts.push(box(ctx, {
-    ...backCommon, id: 'seat-back-pad', name: 'Seat back pad', mat: 'fixed', massLb: foam(BACK_PAD_THICK_IN * W * padH) + vinyl(2 * W * padH + 2 * (W + padH) * BACK_PAD_THICK_IN),
-    kind: 'purchased', material: 'closed-cell foam, marine-vinyl cover',
-    fab: 'buy', size: [BACK_PAD_THICK_IN, W, padH], center: at(BACK_PAD_THICK_IN / 2, h0 + padH / 2),
+  // The pad is a padded backrest with rounded corners (D-44): a rounded-rectangle extrusion along the back's normal. Local x → across (Y), local y → up the back, local z → forward (the back's normal).
+  const padOutline = roundedRect(W, padH, Math.min(p.seatBackCornerRadiusIn, W / 3, padH / 3));
+  const padArea = signedArea(padOutline);
+  const padPerim = padOutline.reduce((m, q, i) => m + Math.hypot(padOutline[(i + 1) % padOutline.length][0] - q[0], padOutline[(i + 1) % padOutline.length][1] - q[1]), 0);
+  const padO = at(0, h0);
+  parts.push({
+    id: 'seat-back-pad', name: 'Seat back pad', group: 'seat', kind: 'purchased', material: 'closed-cell foam, marine-vinyl cover',
+    geometry: { type: 'extrusion', outline: padOutline, depth: BACK_PAD_THICK_IN },
+    transform: [0, 1, 0, 0, s.col2[0], 0, s.col2[2], 0, s.col0[0], 0, s.col0[2], 0, padO[0], padO[1], padO[2], 1],
+    body: 'chassis', massLb: foam(BACK_PAD_THICK_IN * padArea) + vinyl(2 * padArea + padPerim * BACK_PAD_THICK_IN),
+    fab: 'buy', step: STEP.seatStorage, removable: true, explode: unit(-0.7, 0, 1), finish: { soft: true, surface: 'vinyl' },
     sourcing: { vendor: 'Closed-cell polyethylene foam and marine vinyl (as the cushion); sewn in-house', costUsd: 25 },
     joints: [{ type: 'screw', to: 'seat-back-panel', count: 4, size: '#6 × 3/4 stainless pan head, cup washer', note: 'through the vinyl flange; the pad lifts off with the back' }],
-    notes: 'Mass is an estimate (foam + cover).',
-  }));
+    notes: `Mass is an estimate (foam + cover). Rounded-rectangle pad, ${padRadius(W, padH, p.seatBackCornerRadiusIn).toFixed(2)}" corner radius, crowned by the viewer's soft finish (D-44).`,
+  });
 
   // Star knobs: one per stile, just behind the cushion edge.
   for (const { s: sg, tag } of SIDES) {

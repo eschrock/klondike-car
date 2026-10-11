@@ -9,6 +9,7 @@
  */
 import { FRAME_STYLE, SIDE_CONSTRUCTION, type Params } from '../params';
 import { SIDES, type Ctx } from './build-utils';
+import { sheerRise } from './layout';
 import { prowShape, fingerAnalysis, guardInsertZ, liftSlot, scupperSites } from './body';
 import { worldAABB } from './bounds';
 import type { Joint, JointType, Mat4, Part, Vec3 } from './types';
@@ -158,13 +159,14 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
       const xm = (run.x0 + run.x1) / 2;
       const z0 = run.bot + L.railBand;
       const z1 = zTop - L.railBand;
+      const riseAt = (x: number) => (rear ? 0 : sheerRise(L, x)); // the nose gunwale and web top follow the sheer (D-44)
       const rabbetSize = `${frac(dd)}" × ${L.ply.toFixed(3)}" rabbet (inside bottom edge)`;
       if (captured) {
         add({ a: `${id}-chine`, b: `${id}-web`, typeA: 'dado', size: groove, pts: [[xm, yc, z0 - g / 2]], noteA: 'Groove in the top of the chine; follows the flare tilt.', noteB: 'Lower edge of the web, captured.' });
-        add({ a: `${id}-gunwale`, b: `${id}-web`, typeA: 'dado', size: groove, pts: [[xm, yc + s * run.fl, z1 + g / 2]], noteA: 'Groove in the underside of the gunwale.', noteB: 'Upper edge of the web, captured.' });
+        add({ a: `${id}-gunwale`, b: `${id}-web`, typeA: 'dado', size: groove, pts: [[xm, yc + s * run.fl, z1 + g / 2 + riseAt(xm)]], noteA: 'Groove in the underside of the gunwale.', noteB: 'Upper edge of the web, captured.' });
         add({ a: `${id}-chine`, b: run.deck, typeA: 'rabbet', size: rabbetSize, pts: [[xm, s * (run.hw + dd / 2), run.bot + L.ply / 2]], noteB: 'Edge of the deck, captured.' });
         // Web end into a stopped dado in the transom.
-        add({ a: run.tx, b: `${id}-web`, typeA: 'dado', size: `${(pl + p.grooveSlopIn).toFixed(3)}" × ${frac(dd)}" stopped dado, ${frac(p.ventHoleIn)}" vent hole through the transom at its closed end`, pts: [[rear ? run.txFace - dd / 2 : run.txFace + dd / 2, yc, (z0 + z1) / 2]], noteA: 'Vented: the transom slides on last, so air and epoxy must escape (hydraulic lock, M4).', noteB: `End of the web, captured (${rear ? 'rear' : 'front'}); it enters the dado with the transom's slide in X.` });
+        add({ a: run.tx, b: `${id}-web`, typeA: 'dado', size: `${(pl + p.grooveSlopIn).toFixed(3)}" × ${frac(dd)}" stopped dado, ${frac(p.ventHoleIn)}" vent hole through the transom at its closed end`, pts: [[rear ? run.txFace - dd / 2 : run.txFace + dd / 2, yc, (z0 + z1 + riseAt(run.txFace)) / 2]], noteA: 'Vented: the transom slides on last, so air and epoxy must escape (hydraulic lock, M4).', noteB: `End of the web, captured (${rear ? 'rear' : 'front'}); it enters the dado with the transom's slide in X.` });
         // Chine and gunwale ends into the transom face, clear of the deck dado and the web dado.
         const chineBand = z0 - g - (run.bot + L.ply) - 0.2;
         if (chineBand >= MIN_BAND_IN) {
@@ -174,7 +176,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
         const gunBand = zTop - 0.1 - (z1 + g + 0.1);
         if (gunBand >= MIN_BAND_IN) {
           const ej = endJoint(p, L.side, L.transom, gunBand);
-          add({ a: `${id}-gunwale`, b: run.tx, typeA: ej.type, size: ej.size, pts: [[run.txFace, yc + s * run.fl, z1 + g + 0.1 + gunBand / 2]], noteA: 'End of the gunwale into the transom face; epoxy fillet inside.' });
+          add({ a: `${id}-gunwale`, b: run.tx, typeA: ej.type, size: ej.size, pts: [[run.txFace, yc + s * run.fl, z1 + g + 0.1 + gunBand / 2 + riseAt(run.txFace)]], noteA: 'End of the gunwale into the transom face; epoxy fillet inside.' });
         } else add({ a: `${id}-gunwale`, b: run.tx, typeA: 'glue', size: 'epoxy + fillet', pts: [[run.txFace, yc + s * run.fl, zTop - L.railBand / 2]] });
       } else if (solid) {
         add({ a: `${id}-board`, b: run.deck, typeA: 'rabbet', size: rabbetSize, pts: [[xm, s * (run.hw + dd / 2), run.bot + L.ply / 2]], noteB: 'Edge of the deck, captured.' });

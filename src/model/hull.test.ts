@@ -88,7 +88,8 @@ describe('captured-ply sides, decks and transoms (D-22, D-35)', () => {
       expect(web.geometry.type).toBe('extrusion');
       const w = worldAABB(web), c = worldAABB(chine), q = worldAABB(gun);
       expect(c.max[2] - w.min[2]).toBeCloseTo(g, 6);
-      expect(w.max[2] - q.min[2]).toBeCloseTo(g, 6);
+      // The nose gunwale and web follow the sheer curve (D-44): their boxes differ by the rise, and visual-geometry.test.ts checks the capture along the curve.
+      expect(w.max[2] - q.min[2]).toBeCloseTo(g + (id.includes('nose') ? L.sheer.riseIn : 0), 6);
       expect(web.geometry.type === 'extrusion' && web.geometry.depth).toBeCloseTo(defaults.panelPlyIn, 9);
     }
   });
@@ -297,7 +298,7 @@ describe('lift hand-holds (M9, D-37)', () => {
     expect(r.zTop + defaults.liftBarMinIn).toBeLessThanOrEqual(r.transomTop + 1e-9);
     expect(r.transomTop).toBeGreaterThanOrEqual(ctx.L.deckTop + ctx.L.sideH);
     const f = liftSlot(ctx, 'front');
-    expect(f.transomTop).toBeCloseTo(ctx.L.noseTop + ctx.L.sideH, 9); // the lantern / flag clips straddle this top (D-41)
+    expect(f.transomTop).toBeCloseTo(ctx.L.noseTop + ctx.L.sideH + ctx.L.sheer.riseIn, 9); // the lantern / flag clips straddle this top (D-41); it rises with the sheer at the bow (D-44)
   });
 });
 
@@ -458,7 +459,8 @@ describe('mass bookkeeping (D-35…D-37)', () => {
   it('the hull and frame groups stay near the Phase 3 round-2 numbers (body 35.1 after the ¾" transoms, ⅝" chines, backers, prow socket and scuppers, D-43; frame 10.1 with 10" joists; removable 4.7 lb)', () => {
     const parts = buildModel(defaults);
     const sum = (g: string) => parts.filter((x) => x.group === g && !x.payload).reduce((m, x) => m + x.massLb, 0);
-    expect(Math.abs(sum('body') - 35.1)).toBeLessThan(1);
+    // D-44 visual pass: sheer (front transom +0.9 lb, nose webs +0.2), crowned rear transom +0.25 → body ≈ 36.5 (was 35.2).
+    expect(Math.abs(sum('body') - 36.5)).toBeLessThan(1);
     expect(Math.abs(sum('frame') - 10.1)).toBeLessThan(0.5);
     expect(Math.abs(sum('removable') - 4.7)).toBeLessThan(0.6);
   });

@@ -110,6 +110,18 @@ export interface Joint {
   diaIn?: number;
 }
 
+/** Display finishing for a part (see `Part.finish`, D-44). */
+export interface Finish {
+  /** Radius of the roundover on the part's exposed edges (in). Box and extrusion parts. */
+  roundoverIn?: number;
+  /** Upholstered part: the viewer draws a soft, crowned pillow inside the geometry's bounds. */
+  soft?: boolean;
+  /** Wheel: draw a lugged tread on the tire. */
+  tread?: 'lug' | 'rib';
+  /** Surface look, when the material name alone is ambiguous. */
+  surface?: 'oak' | 'okoume' | 'vinyl' | 'rubber' | 'steel' | 'aluminum' | 'asa' | 'rope';
+}
+
 /** How each plywood edge is protected (acceptance: no exposed ply edges). */
 export type EdgeCondition = 'captured' | 'edged' | 'exposed';
 
@@ -143,6 +155,11 @@ export interface Part {
   sourcing?: { vendor: string; url?: string; costUsd?: number; sku?: string };
   /** Not part of the empty cart (rider, cargo, truck). */
   payload?: boolean;
+  /**
+   * Display finishing (D-44): how the viewer dresses the part. Analysis, mass and overlap tests ignore it, so it must
+   * stay a small-scale cosmetic (edge roundover, cushion crown). Real shape changes go in `geometry`.
+   */
+  finish?: Finish;
   notes?: string;
 }
 

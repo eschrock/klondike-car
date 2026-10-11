@@ -47,6 +47,13 @@ export interface Layout {
   hwC: number;
   hwN: number;
   sideH: number;
+  /**
+   * Sheer line (D-44): the nose gunwale top climbs `riseIn` above the flat side height between x0 and x1 (the front transom's inner face),
+   * on a smooth curve (zero slope at x0). `sideH` stays the LOWEST side height: cabin, seat, handles and the structural checks read it.
+   */
+  sheer: { x0: number; x1: number; riseIn: number };
+  /** Top of the front transom's edges and the nose gunwale at the bow: noseTop + sideH + the full sheer rise. */
+  noseGunTop: number;
   /** Rear axle beam and front axle beam. */
   beamR: Beam;
   beamF: Beam;
@@ -260,9 +267,13 @@ export function computeLayout(input: Params): Layout {
   const webZ1 = deckTop + p.sideHeightIn - p.railBandIn;
   const web = { z0: webZ0, z1: webZ1, phi: Math.atan2(flare, Math.max(0.1, webZ1 - webZ0)) };
 
+  // Sheer (D-44): rises over the forward `sheerLengthIn` of the nose, never behind the shoulder; 0 = the old straight gunwale.
+  const sheerX1 = xFront - transom;
+  const sheer = { x0: Math.max(xs, sheerX1 - p.sheerLengthIn), x1: sheerX1, riseIn: Math.max(0, p.sheerRiseIn) };
+
   return {
     r, WB, xs, xRear, xFront, kx, railBand: p.railBandIn, joistT, flare, web, side, transom, rearLane, ply, deckTop, deckBot: deckTop - ply, noseTop, noseBot: noseTop - ply,
-    hwC, hwN, sideH: p.sideHeightIn, beamR, beamF,
+    hwC, hwN, sideH: p.sideHeightIn, sheer, noseGunTop: noseTop + p.sideHeightIn + sheer.riseIn, beamR, beamF,
     turntable: { z0: tz0, z1: tz1 },
     bolster, sideBearer, kingpin: { z0: beamF.bot - plateT, z1: through ? bolsterTop : tz1 }, crossbar, accessPanel,
     kpPlates: plates ? { carrier: { z0: beamF.top, z1: tz0 }, under: { z0: beamF.bot - plateT, z1: beamF.bot }, bar: { z0: tz1, z1: tz1 + plateT } } : null,
@@ -284,4 +295,15 @@ export function cabinSidePoint(L: Layout, z: number, off: number, halfH = 0): { 
   const lean = Math.max(0, L.web.z0 - (z - halfH)) * Math.tan(L.web.phi);
   const o = off + lean;
   return { y: yc + o * Math.cos(L.web.phi), z: z - o * Math.sin(L.web.phi), phi: L.web.phi };
+}
+
+/**
+ * Sheer rise (in) of the nose gunwale top above its flat height at model x (D-44): 0 behind `sheer.x0`, then a quadratic ease-in (flat
+ * start, steepest at the bow, like a boat's sheer) to `sheer.riseIn` at `sheer.x1`; clamped beyond. Monotone non-decreasing in x.
+ */
+export function sheerRise(L: Pick<Layout, 'sheer'>, x: number): number {
+  const { x0, x1, riseIn } = L.sheer;
+  if (riseIn <= 0 || x1 <= x0) return 0;
+  const u = Math.max(0, Math.min(1, (x - x0) / (x1 - x0)));
+  return riseIn * u * u;
 }

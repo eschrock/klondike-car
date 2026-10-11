@@ -6,6 +6,8 @@ export interface SweepMesh {
   indices: number[];
   /** Segment end points (x,y,z pairs) for the ply lines drawn on both side faces; empty when plies <= 1. */
   plyLines: number[];
+  /** Per-vertex UVs in inches: u = arc length along the path (the grain direction), v = across the face. */
+  uvs: number[];
 }
 
 /**
@@ -15,7 +17,7 @@ export interface SweepMesh {
  */
 export function buildSweepMesh(path: Vec2[], width: number, thickness: number, plies: number): SweepMesh {
   const pts = path.filter((p, i) => i === 0 || Math.hypot(p[0] - path[i - 1][0], p[1] - path[i - 1][1]) > 1e-9);
-  const out: SweepMesh = { positions: [], indices: [], plyLines: [] };
+  const out: SweepMesh = { positions: [], indices: [], plyLines: [], uvs: [] };
   const n = pts.length;
   if (n < 2) return out;
 
@@ -46,20 +48,26 @@ export function buildSweepMesh(path: Vec2[], width: number, thickness: number, p
     [ht, hw, -ht, hw], // +Y side
     [-ht, hw, -ht, -hw], // inner face
   ];
-  for (const [o0, y0, o1, y1] of faces) {
+  const arc: number[] = [0];
+  for (let i = 1; i < n; i++) arc.push(arc[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  faces.forEach(([o0, y0, o1, y1], f) => {
     const base = out.positions.length / 3;
     for (let i = 0; i < n; i++) {
       out.positions.push(...pos(i, o0, y0), ...pos(i, o1, y1));
+      // Side faces (0, 2) span the thickness, outer / inner faces (1, 3) span the width.
+      if (f % 2 === 0) out.uvs.push(arc[i], o0, arc[i], o1);
+      else out.uvs.push(arc[i], y0, arc[i], y1);
     }
     for (let i = 0; i < n - 1; i++) {
       const a = base + i * 2;
       out.indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
     }
-  }
+  });
   // End caps (duplicated vertices so they stay flat).
   for (const [i, flip] of [[0, true], [n - 1, false]] as const) {
     const b = out.positions.length / 3;
     out.positions.push(...pos(i, -ht, -hw), ...pos(i, ht, -hw), ...pos(i, ht, hw), ...pos(i, -ht, hw));
+    out.uvs.push(-hw, -ht, -hw, ht, hw, ht, hw, -ht);
     if (flip) out.indices.push(b, b + 2, b + 1, b, b + 3, b + 2);
     else out.indices.push(b, b + 1, b + 2, b, b + 2, b + 3);
   }

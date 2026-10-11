@@ -5,7 +5,7 @@
 | 0 — Setup & parameter reconciliation | ✅ approved 2026-10-10 |
 | 1 — Block model | ✅ approved |
 | 2 — Analysis & simulation | ✅ approved 2026-10-10 |
-| 3 — Detail design | in progress: round-2 fixes done; **paused 2026-10-11**, see docs/HANDOFF.md |
+| 3 — Detail design | in progress: visual fidelity pass (resumed 2026-10-11) |
 | 4 — Build outputs | not started |
 
 ## Phase 0 log
@@ -36,3 +36,4 @@
 - Next: integration loose ends (agent), then engineering + buildability critics, UX r2, then the checkpoint.
 - Round 1 critics: engineering 6/10, buildability 6/10. Round 2 fixes F1–F4 landed (D-43). Empty mass ≈ 160.6 lb; Simple view safe to 200 lb (limiter kingpin-bolts 0.98). 918 tests green.
 - Paused at Eric's request. Resume plan, starting with a visual fidelity pass, is in docs/HANDOFF.md.
+- 2026-10-11 resumed. Visual fidelity pass: `Part.finish` contract + `roundoverIn` param (D-44); geometry agent (sheer, transoms, seat back, finish tags) and rendering agent (grain, PBR, env light, tread, roundovers) in parallel.

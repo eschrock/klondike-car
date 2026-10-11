@@ -11,7 +11,7 @@
 import { SIDE_CONSTRUCTION } from '../params';
 import { HULL_STEP, STEP, box, cylinder, roughOf, span, SIDES, IN3_PER_FT3, woodMassLb, type Ctx } from './build-utils';
 import { handleGeometry } from './brake';
-import { cabinSidePoint, type Layout } from './layout';
+import { cabinSidePoint, sheerRise, type Layout } from './layout';
 import { REFLECTOR_FRACS, REFLECTOR_SIZE } from './lighting';
 import { compose } from './mat4';
 import type { Dims, EdgeCondition, Mat4, Part, PartGroup, Vec2, Vec3 } from './types';
@@ -40,6 +40,10 @@ const GUARD_INSERT_RADIUS_IN = 0.16;
 const GUARD_X_MARGIN_IN = 0.5;
 const GUARD_OUT_MARGIN_IN = 0.25;
 const LIFT_SLOT_SEGMENTS = 8;
+/** Cosmetic sampling of the curved outlines (D-44): sheer curve, transom crown, rounded corners. */
+const SHEER_SEGMENTS = 14;
+const CROWN_SEGMENTS = 16;
+const CORNER_SEGMENTS = 6;
 /** Assembly order and hydraulic-lock relief shared by the notes of the hull parts (build review M4, D-43; HULL_STEP in build-utils.ts has the whole sequence). */
 const DECK_ASSEMBLY_NOTE = 'Assembly (M4): epoxy-seal every face and edge first; the deck is glued to the frame (rails + joists) as one unit BEFORE the sides slide on, and the transom slides onto its edge last.';
 const SIDE_ASSEMBLY_NOTE = 'Assembly (M4): glue the web into its chine and gunwale on the bench (a side assembly, wipe squeeze-out from the grooves), then slide the assembly inboard (Y) onto the deck edge so the chine rabbet closes over it; the transom goes on after, sliding in X.';
@@ -92,6 +96,45 @@ export function scupperSites(ctx: Ctx): ScupperSite[] {
     { x: L.xs - L.ply - 1, zone: 'cabin', deckZ: L.deckTop, hw: L.hwC, tagPos: 'cabin-front' },
     { x: frontTx - 1, zone: 'nose', deckZ: L.noseTop, hw: L.hwN, tagPos: 'nose-front' },
   ];
+}
+
+// ── Sheer and crown outlines (D-44) ──
+/** x samples from `a` to `b` (inclusive) that include the start of the sheer curve and SHEER_SEGMENTS steps along it. */
+function sheerSamples(L: Pick<Layout, 'sheer'>, a: number, b: number): number[] {
+  const xs = new Set<number>([a, b]);
+  const { x0, x1 } = L.sheer;
+  if (x1 > x0) for (let i = 0; i <= SHEER_SEGMENTS; i++) {
+    const x = x0 + ((x1 - x0) * i) / SHEER_SEGMENTS;
+    if (x > a + 1e-9 && x < b - 1e-9) xs.add(x);
+  }
+  return [...xs].sort((u, v) => u - v);
+}
+const polyLen = (pts: Vec2[]) => pts.reduce((t, q, i) => (i ? t + Math.hypot(q[0] - pts[i - 1][0], q[1] - pts[i - 1][1]) : 0), 0);
+
+/**
+ * Top of a transom (D-44), from the right corner over the crown to the left corner: a parabolic arc that is `crown` higher at the
+ * center than at the corners (height `zt` at |y| = `wTop`), with each top corner rounded by `rc`. Starts at the foot of the right
+ * corner arc (so the caller continues the right side up to it) and ends at the foot of the left one.
+ */
+export function transomTopOutline(wTop: number, zt: number, crown: number, rc: number): Vec2[] {
+  const zc = (y: number) => zt + crown * (1 - (y / wTop) ** 2);
+  const r = Math.max(0, Math.min(rc, wTop / 4));
+  const right: Vec2[] = [];
+  if (r > 1e-6) {
+    const cy = wTop - r, cz = zc(cy) - r;
+    for (let i = 0; i <= CORNER_SEGMENTS; i++) {
+      const a = (Math.PI / 2) * (i / CORNER_SEGMENTS);
+      right.push([cy + r * Math.cos(a), cz + r * Math.sin(a)]);
+    }
+  } else right.push([wTop, zt]);
+  const yIn = right[right.length - 1][0];
+  const mid: Vec2[] = [];
+  for (let i = 1; i < CROWN_SEGMENTS; i++) {
+    const y = yIn - (2 * yIn * i) / CROWN_SEGMENTS;
+    mid.push([y, zc(y)]);
+  }
+  const left = [...right].reverse().map(([y, z]) => [-y, z] as Vec2);
+  return [...right, ...mid, ...left];
 }
 
 // ── Generic extrusion part (transoms, decks, webs, guard, prow form) ──
@@ -174,7 +217,8 @@ export interface LiftSlot {
 /**
  * Hand-hold slot of the rear or front transom: bottom ≥ `liftSlotClearIn` above the deck and clear of an abutting storage box.
  * The rear transom may rise into a low crest if that pushes the slot above the gunwale line (the box top forces it); the
- * front transom keeps its top at the gunwale line (the lantern and flag clips straddle it, D-41) and lowers the slot instead.
+ * front transom keeps its top at the gunwale line (the lantern and flag clips straddle it, D-41; at the bow that line has risen by the sheer, D-44)
+ * and lowers the slot instead. `transomTop` is the height of the transom's CORNERS; the crown (`transomCrownIn`) arcs above it at the center, so the oak above the slot only grows (D-37).
  */
 export function liftSlot(ctx: Pick<Ctx, 'p' | 'L'>, end: 'rear' | 'front'): LiftSlot {
   const { p, L } = ctx;
@@ -185,7 +229,7 @@ export function liftSlot(ctx: Pick<Ctx, 'p' | 'L'>, end: 'rear' | 'front'): Lift
   let zTop = zBot + p.liftSlotHeightIn;
   let transomTop = Math.max(deck + L.sideH, zTop + p.liftBarMinIn);
   if (end === 'front') {
-    transomTop = deck + L.sideH;
+    transomTop = deck + L.sideH + L.sheer.riseIn; // the front transom top follows the sheer line at the bow (D-44); the slot stays where it was
     zTop = Math.min(zTop, transomTop - p.liftBarMinIn);
     zBot = zTop - p.liftSlotHeightIn;
   }
@@ -258,7 +302,8 @@ export function prowShape(ctx: Pick<Ctx, 'p' | 'L'>): ProwShape {
   // transom top by whatever the leg needs, so the lift slot never has to move (D-43).
   const zFoot = slot.zTop + PROW_LEG_ABOVE_SLOT_IN;
   const gunTop = L.noseTop + L.sideH;
-  const legLen = Math.max(p.prowLegMinIn, slot.transomTop - zFoot);
+  // Measured to the FLAT side height (not the sheer-raised bow top, D-44): the leg length, tip height and bend are exactly the checked D-43 prow, so the sheer and crown are cosmetic to the grab analysis.
+  const legLen = Math.max(p.prowLegMinIn, L.noseTop + L.sideH - zFoot);
   const xEnd = Math.max(0.5, p.prowReachIn - t / 2);
   const zEnd = Math.max(legLen + 1, gunTop + p.prowHeightIn - zFoot);
   const p0: Vec2 = [0, legLen];
@@ -533,11 +578,30 @@ export function buildBody(ctx: Ctx): Part[] {
         chine.massLb -= grooveLb + rabbetLb;
         chine.notes = `Top groove ${(pl + slop).toFixed(3)}" × ${g}" holds the web (cut at the measured ply + ~1 mm, D-43), ${((L.side - pl - slop) / 2).toFixed(3)}" oak walls each side; inside bottom rabbet ${dd}" × ${L.ply.toFixed(3)}" holds the deck (D-35); the chine rests on the rail below it and is Domino-tied to it (side-to-frame tie, D-43). Mill from quartersawn stock and cut the groove from the best face with a hold-down. ${SIDE_ASSEMBLY_NOTE}`;
         parts.push(chine);
-        const gun = box(ctx, { id: `${id}-gunwale`, partNo: `side-${run.zone}-gunwale`, name: `${nm} gunwale`, group: 'body', mat: 'oak', step: HULL_STEP.sides,
-          ...span([run.x0, run.x1], yr(yc + s * runFlare - L.side / 2, yc + s * runFlare + L.side / 2), [zTop - L.railBand, zTop]) });
-        gun.massLb -= grooveLb;
-        gun.notes = `Underside groove ${(pl + slop).toFixed(3)}" × ${g}" holds the web (D-35, D-43). ${SIDE_ASSEMBLY_NOTE}`;
-        parts.push(gun);
+        // The nose gunwale follows the sheer (D-44): an extrusion in the side (XZ) plane whose top AND underside climb with the curve; the web's top edge below it
+        // climbs with it, so the web stays captured in the underside groove along its whole length. With no rise (or in the cabin) it is the straight box it always was.
+        const curved = run.zone === 'nose' && L.sheer.riseIn > 1e-9;
+        const sxs = curved ? sheerSamples(L, run.x0, run.x1) : [];
+        const gunNote = `Underside groove ${(pl + slop).toFixed(3)}" × ${g}" holds the web (D-35, D-43). ${SIDE_ASSEMBLY_NOTE}`;
+        if (curved) {
+          const lo: Vec2[] = sxs.map((x): Vec2 => [x, zTop - L.railBand + sheerRise(L, x)]);
+          const hi: Vec2[] = sxs.map((x): Vec2 => [x, zTop + sheerRise(L, x)]).reverse();
+          const curveGrooveLb = oakLb(ctx, polyLen(lo) * (pl + slop) * g);
+          parts.push(extPart(ctx, {
+            id: `${id}-gunwale`, partNo: `side-${run.zone}-gunwale`, name: `${nm} gunwale`, group: 'body', mat: 'oak', step: HULL_STEP.sides, grain: 'x', fab: 'bandsaw',
+            center: [(run.x0 + run.x1) / 2, yc, zTop + L.sheer.riseIn / 2],
+            outline: [...lo, ...hi], depth: L.side,
+            // local x → X, local y → Z, local z → −Y: the extrusion runs from the outboard face (origin) inboard.
+            transform: frameMat([1, 0, 0], [0, 0, 1], [0, -1, 0], [0, yc + L.side / 2, 0]), extraLb: -curveGrooveLb,
+            notes: `Sawn from a ${(L.railBand + L.sheer.riseIn).toFixed(2)}" wide board along the sheer curve (rises ${L.sheer.riseIn}" over the forward ${(L.sheer.x1 - L.sheer.x0).toFixed(1)}", flat before it; D-44); cut the groove with a template-guided router after sawing, or laminate two bent strips. ${gunNote}`,
+          }));
+        } else {
+          const gun = box(ctx, { id: `${id}-gunwale`, partNo: `side-${run.zone}-gunwale`, name: `${nm} gunwale`, group: 'body', mat: 'oak', step: HULL_STEP.sides,
+            ...span([run.x0, run.x1], yr(yc + s * runFlare - L.side / 2, yc + s * runFlare + L.side / 2), [zTop - L.railBand, zTop]) });
+          gun.massLb -= grooveLb;
+          gun.notes = gunNote;
+          parts.push(gun);
+        }
         // Side web: an extrusion whose lower and upper ends enter the chine and gunwale grooves; its ends enter the transom dados.
         const z0 = run.bot + L.railBand;
         const z1 = zTop - L.railBand;
@@ -555,12 +619,20 @@ export function buildBody(ctx: Ctx): Part[] {
         const org: Vec3 = [c0[0] - g * u[0] - (pl / 2) * ez[0], c0[1] - g * u[1] - (pl / 2) * ez[1], c0[2] - g * u[2] - (pl / 2) * ez[2]];
         const frontCond: EdgeCondition = rear ? 'edged' : 'captured';
         const rearCond: EdgeCondition = rear ? 'captured' : 'edged';
+        // Web outline: a rectangle, or (nose with sheer) one whose top edge climbs with the gunwale groove (D-44). Edges in outline order: bottom, front end, top edge(s), rear end.
+        let webOutline = rectCCW(0, wLen, 0, hTot);
+        let webEdges: EdgeCondition[] = ['captured', frontCond, 'captured', rearCond];
+        if (curved) {
+          const wx = sheerSamples(L, xw0, xw1);
+          const top: Vec2[] = wx.map((x) => [x - xw0, hTot + sheerRise(L, x)] as Vec2).reverse();
+          webOutline = [[0, 0], [wLen, 0], ...top];
+          webEdges = ['captured', frontCond, ...top.slice(1).map(() => 'captured' as EdgeCondition), rearCond];
+        }
         parts.push(extPart(ctx, {
           id: `${id}-web`, partNo: `side-${run.zone}-web`, name: `${nm} side panel`, group: 'body', mat: 'ply', step: HULL_STEP.sides, grain: 'x',
           center: [(xw0 + xw1) / 2, yc + (s * runFlare) / 2, (z0 + z1) / 2],
-          outline: rectCCW(0, wLen, 0, hTot), depth: pl, transform: frameMat([1, 0, 0], u, ez, org),
-          // Outline edges in order: bottom, front end, top, rear end.
-          edges: ['captured', frontCond, 'captured', rearCond],
+          outline: webOutline, depth: pl, transform: frameMat([1, 0, 0], u, ez, org),
+          edges: webEdges,
           extraLb: edgeBandLb(ctx, hTot, pl),
           notes: `Captured in the chine and gunwale grooves (${g}" deep) and in a stopped dado in the ${rear ? 'rear' : 'front'} transom; the ${rear ? 'front' : 'rear'} end at the shoulder is banded with ${p.edgeBandIn}" oak (D-22, D-35). ${SIDE_ASSEMBLY_NOTE} The closed dado is vented: a ${p.ventHoleIn}" relief hole through the transom at its end lets air and epoxy escape as the transom slides on (hydraulic lock).`,
         }));
@@ -603,8 +675,11 @@ export function buildBody(ctx: Ctx): Part[] {
     const w0 = L.hwC + L.side;
     const zb = L.deckTop - p.crossmemberDepthIn, zt = rs.transomTop;
     const t0 = L.web.z0, t1 = L.web.z1;
-    const right: Vec2[] = flare > 1e-6 ? [[w0, zb], [w0, t0], [w0 + flare, t1], [w0 + flare, zt]] : [[w0, zb], [w0, zt]];
-    const outline = ccw([...right, ...[...right].reverse().map(([y, z]) => [-y, z] as Vec2)]);
+    // Right side up to the foot of the top-corner arc, the crowned top (D-44), then the mirrored left side down.
+    const wTopR = w0 + flare;
+    const topR = transomTopOutline(wTopR, zt, p.transomCrownIn, Math.min(p.transomCornerRadiusIn, (zt - (flare > 1e-6 ? t1 : zb)) / 2));
+    const sideR: Vec2[] = flare > 1e-6 ? [[w0, zb], [w0, t0], [w0 + flare, t1]] : [[w0, zb]];
+    const outline = ccw([...sideR, ...topR, ...[...sideR].reverse().map(([y, z]) => [-y, z] as Vec2)]);
     const dadoLb = oakLb(ctx, 2 * (L.hwC + dd) * L.ply * dd) + 2 * oakLb(ctx, (pl + slop) * (L.web.z1 - L.web.z0 + 2 * g) * dd);
     // Vent holes: the web-end dados (mid height of the web, at the web's y) and the two ends of the deck dado.
     const webY = L.hwC + L.side / 2 + flare / 2, webZ = (L.web.z0 + L.web.z1) / 2, deckVentY = L.hwC + dd - 0.15;
@@ -613,7 +688,7 @@ export function buildBody(ctx: Ctx): Part[] {
       id: 'transom-rear', name: 'Rear transom', group: 'body', mat: 'oak', step: HULL_STEP.transom, grain: 'x', center: [L.xRear, 0, (zb + zt) / 2],
       outline, holes: [slotHole(0, (rs.zBot + rs.zTop) / 2, rs.lengthIn, p.liftSlotHeightIn), ...ventHoles], depth: tT,
       transform: frameMat([0, 1, 0], [0, 0, 1], [1, 0, 0], [L.xRear, 0, 0]), extraLb: -dadoLb,
-      notes: `${tT}" oak, glued up from two boards (no board is ${(w0 * 2).toFixed(0)}" wide; keep the glue line clear of the slot). Lift hand-hold ${rs.lengthIn}" × ${p.liftSlotHeightIn}" (gloved hand), ${rs.barIn}" of oak above it; routed 3/8" roundovers both faces. Deck dado ${dd}" deep on the front face; stopped dados for the side panels (D-35, D-37); the closed dado ends are vented with ${p.ventHoleIn}" holes through the transom (4 holes: bung or epoxy-fill them after the glue-up). `
+      notes: `${tT}" oak, glued up from two boards (no board is ${(w0 * 2).toFixed(0)}" wide; keep the glue line clear of the slot). Lift hand-hold ${rs.lengthIn}" × ${p.liftSlotHeightIn}" (gloved hand), ${rs.barIn}" of oak above it; routed 3/8" roundovers both faces. The top edge is a ${p.transomCrownIn}" crown (arc) with ${p.transomCornerRadiusIn}" rounded corners (D-44). Deck dado ${dd}" deep on the front face; stopped dados for the side panels (D-35, D-37); the closed dado ends are vented with ${p.ventHoleIn}" holes through the transom (4 holes: bung or epoxy-fill them after the glue-up). `
         + `THE TRANSOM GOES ON LAST (M4): it slides in X onto the deck edge, both web ends, the chine and gunwale tenons and the rail tenons in one glue-up (about 14 joints: use 120-minute slow epoxy, rehearse twice); the corner backers and the handle-socket holes are done on the bench first.`,
     }));
     // Backers behind the handle sockets and the ratchet bracket (build review S13, D-43): the bolts pull on them from the outside.
@@ -638,9 +713,9 @@ export function buildBody(ctx: Ctx): Part[] {
     const ventHoles = [vent(webY, webZ), vent(-webY, webZ), vent(deckVentY, L.noseBot + L.ply / 2), vent(-deckVentY, L.noseBot + L.ply / 2)];
     parts.push(extPart(ctx, {
       id: 'transom-front', name: 'Front transom', group: 'body', mat: 'oak', step: HULL_STEP.transom, grain: 'x', center: [L.xFront, 0, (zbF + ztF) / 2],
-      outline: ccw(rectCCW(-wN, wN, zbF, ztF)), holes: [slotHole(0, (fs.zBot + fs.zTop) / 2, fs.lengthIn, p.liftSlotHeightIn), ...ventHoles], depth: tT,
+      outline: ccw([[wN, zbF], ...transomTopOutline(wN, ztF, p.transomCrownIn, Math.min(p.transomCornerRadiusIn, (ztF - zbF) / 2)), [-wN, zbF]]), holes: [slotHole(0, (fs.zBot + fs.zTop) / 2, fs.lengthIn, p.liftSlotHeightIn), ...ventHoles], depth: tT,
       transform: frameMat([0, 1, 0], [0, 0, 1], [1, 0, 0], [L.xFront - tT, 0, 0]), extraLb: -dadoF,
-      notes: `${tT}" oak. Lift hand-hold ${fs.lengthIn}" × ${p.liftSlotHeightIn}" (gloved hand), ${fs.barIn}" of oak above it, routed 3/8" roundovers. The prow socket block is glued and screwed to its front face above the slot (D-9, D-36, D-43); the nose run mirrors the rear: the front transom goes on LAST, sliding in −X onto the deck edge, web ends and chine / gunwale / rail tenons (M4); its closed dado ends are vented with ${p.ventHoleIn}" holes.`,
+      notes: `${tT}" oak. Lift hand-hold ${fs.lengthIn}" × ${p.liftSlotHeightIn}" (gloved hand), ${fs.barIn}" of oak above it, routed 3/8" roundovers. The top follows the ${L.sheer.riseIn}" sheer rise at the bow, with a ${p.transomCrownIn}" crown and ${p.transomCornerRadiusIn}" rounded corners (D-44). The prow socket block is glued and screwed to its front face above the slot (D-9, D-36, D-43); the nose run mirrors the rear: the front transom goes on LAST, sliding in −X onto the deck edge, web ends and chine / gunwale / rail tenons (M4); its closed dado ends are vented with ${p.ventHoleIn}" holes.`,
     }));
   }
 
@@ -667,7 +742,7 @@ export function buildBody(ctx: Ctx): Part[] {
     parts.push(extPart(ctx, {
       id: 'prow-socket', name: 'Prow socket block', group: 'body', mat: 'oak', step: HULL_STEP.transom, grain: 'z', center: [sk.x0 + sk.depthIn / 2, 0, (sk.z0 + sk.z1) / 2],
       outline: sOutline, depth: sk.heightIn, transform: frameMat([1, 0, 0], [0, 1, 0], [0, 0, 1], [sk.x0, 0, sk.z0]),
-      notes: `Oak (vertical grain) U-block, ${(2 * sk.halfIn).toFixed(2)}" wide × ${sk.depthIn.toFixed(2)}" deep × ${sk.heightIn.toFixed(1)}" tall, ${p.prowSocketCheekIn}" cheeks. The prow leg (${pr.widthIn}" × ${pr.thicknessIn}") drops in from above and bears on the cheeks and the front wall over its whole ${pr.legLenIn.toFixed(1)}" length; its back bears on the front-transom face. Glued (epoxy, cheek ends) and screwed from inside the hull (4 × 1/4-20 stainless flat-head screws into stainless inserts in the cheeks, nothing protrudes). It rises ${(sk.z1 - (liftSlot(ctx, 'front').transomTop)).toFixed(1)}" above the transom top, beside the lantern and flag clips. Round every outside corner 3/8".`,
+      notes: `Oak (vertical grain) U-block, ${(2 * sk.halfIn).toFixed(2)}" wide × ${sk.depthIn.toFixed(2)}" deep × ${sk.heightIn.toFixed(1)}" tall, ${p.prowSocketCheekIn}" cheeks. The prow leg (${pr.widthIn}" × ${pr.thicknessIn}") drops in from above and bears on the cheeks and the front wall over its whole ${pr.legLenIn.toFixed(1)}" length; its back bears on the front-transom face. Glued (epoxy, cheek ends) and screwed from inside the hull (4 × 1/4-20 stainless flat-head screws into stainless inserts in the cheeks, nothing protrudes). ${sk.z1 >= liftSlot(ctx, 'front').transomTop ? `It rises ${(sk.z1 - liftSlot(ctx, 'front').transomTop).toFixed(1)}" above the transom top` : `Its top stands ${(liftSlot(ctx, 'front').transomTop - sk.z1).toFixed(1)}" below the transom top (the transom rises with the sheer, D-44)`}, beside the lantern and flag clips. Round every outside corner 3/8".`,
     }));
     const area = pr.widthIn * pr.thicknessIn;
     const vol = area * pr.lengthIn;

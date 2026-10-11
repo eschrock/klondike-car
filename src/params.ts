@@ -320,6 +320,36 @@ const defs = {
     default: 0.25, min: 0.125, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-35',
     note: 'The deck edge sits in a rabbet in each chine and in a dado in each transom; the side-panel ends enter a stopped dado in the transoms.',
   },
+  roundoverIn: {
+    label: 'Roundover on exposed oak edges', group: 'body', unit: 'in',
+    default: 0.25, min: 0, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-44',
+    note: 'Router roundover on every exposed oak edge (hands, shins, splinters). Drawn in the viewer; the analysis and mass use the square section, which is conservative for mass and slightly unconservative for section (1/4" on a 1-1/2" rail is under 2%).',
+  },
+  sheerRiseIn: {
+    label: 'Sheer: gunwale rise at the bow', group: 'body', unit: 'in',
+    default: 2.5, min: 0, max: 4, step: 0.25, status: 'assumed', ref: 'D-44',
+    note: 'The nose gunwale (and the side panel top, the front transom top) climbs this far above the flat side height toward the bow, on a smooth curve that starts flat. 0 reproduces the straight gunwale. The rear and cabin keep their heights (seat, grab handles, storage box, handle sockets); the structural checks read the lowest section (side height), which is conservative.',
+  },
+  sheerLengthIn: {
+    label: 'Sheer: length of the rise (from the bow back)', group: 'body', unit: 'in',
+    default: 18, min: 6, max: 30, step: 1, status: 'assumed', ref: 'D-44',
+    note: 'The rise starts this far behind the front transom (never behind the cabin shoulder). Keep it shorter than the nose minus the finger-guard zone, so the guard sits on the flat gunwale.',
+  },
+  transomCrownIn: {
+    label: 'Transom crown (arc rise at the center)', group: 'body', unit: 'in',
+    default: 0.625, min: 0, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-44',
+    note: 'The transom top edge arcs up this much at the center above the gunwale line at its corners (a parabolic arc). The lift slot keeps its position, so the oak above it only grows.',
+  },
+  transomCornerRadiusIn: {
+    label: 'Transom top corner radius', group: 'body', unit: 'in',
+    default: 0.75, min: 0, max: 2, step: 0.125, status: 'assumed', ref: 'D-44',
+    note: 'Rounded top corners of both transoms (profile cut on the CNC or bandsaw). Kept small so the gunwale ends stay captured beside the corner.',
+  },
+  seatBackCornerRadiusIn: {
+    label: 'Seat back corner radius', group: 'seat', unit: 'in',
+    default: 2.5, min: 0, max: 5, step: 0.25, status: 'assumed', ref: 'D-44',
+    note: 'The padded backrest is a rounded rectangle; the radius is capped at a third of the smaller side.',
+  },
   edgeBandIn: {
     label: 'Oak edge-banding thickness (edged ply)', group: 'body', unit: 'in',
     default: 0.1875, min: 0.125, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-35',

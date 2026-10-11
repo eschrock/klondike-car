@@ -6,7 +6,8 @@
   --muted: #5b626e;
   --border: #d5d9e0;
   --accent: #1d55c4; /* 6.7:1 with white text (UX r2 C3) */
-  --viewer-bg: #e9ecf1;
+  --viewer-bg: #dfe3ea;
+  --viewer-bg-top: #f5f7fa; /* the 3D canvas is a soft vertical gradient: sky at the top, ground tone at the bottom */
   --b-locked: #2f6fed;
   --b-verify: #c77a00;
   --b-assumed: #7a4fd1;
@@ -24,7 +25,8 @@
     --muted: #96a0ae;
     --border: #343946;
     --accent: #6ea0ff;
-    --viewer-bg: #101216;
+    --viewer-bg: #0f1115;
+    --viewer-bg-top: #222833;
     --b-locked: #6ea0ff;
     --b-verify: #f0a73a;
     --b-assumed: #b39bff;
@@ -113,7 +115,7 @@ select { width: 100%; }
   background: var(--panel); border-bottom: 1px solid var(--border);
 }
 .viewer-stage { position: relative; flex: 1 1 auto; min-height: 0; }
-.viewer-canvas { position: absolute; inset: 0; overflow: hidden; }
+.viewer-canvas { position: absolute; inset: 0; overflow: hidden; background: linear-gradient(to bottom, var(--viewer-bg-top), var(--viewer-bg) 70%); }
 .viewer-canvas canvas { display: block; }
 .viewer-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .dim-label {

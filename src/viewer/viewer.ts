@@ -3,8 +3,11 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { centerOfGravity } from '../model/mass';
 import { partCentroid, worldAABB } from '../model/bounds';
-import type { Geometry, Mat4, Part, PartGroup, RigidBody, Vec3 } from '../model/types';
-import { buildSweepMesh } from './sweep';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import type { Mat4, Part, PartGroup, RigidBody, Vec3 } from '../model/types';
+import { buildPart } from './partMesh';
+import { EDGE_MAT, EXPOSED_MAT, PLY_LINE_MAT, type SurfaceMats } from './materials';
+import { blobTexture, setMaxAnisotropy } from './textures';
 import { JOINERY_LEGEND, jointColor, joineryMarkers } from './joinery';
 
 type ViewName = 'iso' | 'top' | 'side' | 'front';
@@ -18,122 +21,20 @@ const VIEW_DIRS: Record<ViewName, [number, number, number]> = {
 
 const VIEW_LABELS: Record<ViewName, string> = { iso: 'Iso', top: 'Top', side: 'Side', front: 'Front' };
 
-function materialFor(part: Part): THREE.Material {
-  const key = materialKey(part);
-  let m = materialCache.get(key);
-  if (m) return m;
-  switch (key) {
-    case 'oak': m = new THREE.MeshStandardMaterial({ color: 0xb98a52, roughness: 0.7 }); break;
-    case 'ply': m = new THREE.MeshStandardMaterial({ color: 0xdcc08a, roughness: 0.75 }); break;
-    case 'metal': m = new THREE.MeshStandardMaterial({ color: 0x8c9199, roughness: 0.35, metalness: 0.8 }); break;
-    case 'tire': m = new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: 0.9 }); break;
-    case 'printed': m = new THREE.MeshStandardMaterial({ color: 0xf26a1b, roughness: 0.5 }); break;
-    case 'rope': m = new THREE.MeshStandardMaterial({ color: 0xc9b07a, roughness: 0.95 }); break;
-    case 'truck':
-      m = new THREE.MeshStandardMaterial({ color: 0x8f9bb0, transparent: true, opacity: 0.35, roughness: 0.7, depthWrite: false });
-      break;
-    case 'ground':
-      m = new THREE.MeshStandardMaterial({ color: 0x7f8a7a, roughness: 1 });
-      break;
-    case 'reference':
-      m = new THREE.MeshStandardMaterial({ color: 0x4d8dff, transparent: true, opacity: 0.25, roughness: 0.6, depthWrite: false });
-      break;
-    default: m = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.6 });
-  }
-  m.side = THREE.DoubleSide;
-  materialCache.set(key, m);
-  return m;
-}
-
-const materialCache = new Map<string, THREE.Material>();
-
-function materialKey(part: Part): string {
-  if (part.id === 'truck-ground') return 'ground';
-  if (part.body === 'truck') return 'truck';
-  if (part.group === 'reference' || part.kind === 'reference') return 'reference';
-  if (part.geometry.type === 'wheel') return 'tire';
-  if (part.kind === 'printed') return 'printed';
-  const mat = part.material.toLowerCase();
-  if (mat.includes('rope')) return 'rope';
-  if (mat.includes('oak')) return 'oak';
-  if (mat.includes('ply') || part.kind === 'sheet') return 'ply';
-  if (part.kind === 'metal' || part.group === 'hardware' || mat.includes('steel')) return 'metal';
-  return 'other';
-}
-
-/** Ply-edge line material shared by every sweep (bent lamination). */
-const PLY_LINE_MAT = new THREE.LineBasicMaterial({ color: 0x6b4a22, transparent: true, opacity: 0.55 });
-/** Red tint for sheet parts that have an exposed ply edge (Advanced only). */
-const EXPOSED_MAT = new THREE.MeshStandardMaterial({ color: 0xe0443a, roughness: 0.75, side: THREE.DoubleSide });
-let exposedWarned = false;
 const JOINT_BOX = new THREE.BoxGeometry(1, 1, 1);
 const JOINT_CYL = new THREE.CylinderGeometry(1, 1, 1, 16).rotateX(Math.PI / 2);
 const JOINT_MATS = new Map<string, THREE.Material>();
+let exposedWarned = false;
 
 function hasExposedEdge(part: Part): boolean {
   const e = part.edges;
   return part.kind === 'sheet' && (Array.isArray(e) ? e.includes('exposed') : e === 'exposed');
 }
 
-function buildGeometry(g: Geometry): THREE.BufferGeometry | null {
-  switch (g.type) {
-    case 'box':
-      return new THREE.BoxGeometry(g.size[0], g.size[1], g.size[2]);
-    case 'cylinder': {
-      const c = new THREE.CylinderGeometry(g.radius, g.radius, g.length, 32);
-      c.rotateX(Math.PI / 2); // Three cylinders run along Y; ours run along Z.
-      return c;
-    }
-    case 'wheel': {
-      // Lathe about local Y (the axle): profile points are (radius, axial position).
-      const R = g.diameter / 2;
-      const hw = g.width / 2;
-      const hub = Math.min(g.hubDiameter / 2, R * 0.9);
-      const s = Math.min(hw, R - hub) * 0.45; // shoulder radius
-      const pts: THREE.Vector2[] = [new THREE.Vector2(hub, -hw), new THREE.Vector2(R - s, -hw)];
-      for (let i = 1; i <= 6; i++) {
-        const a = (i / 6) * (Math.PI / 2);
-        pts.push(new THREE.Vector2(R - s + s * Math.sin(a), -hw + s - s * Math.cos(a)));
-      }
-      for (let i = 0; i <= 6; i++) {
-        const a = (i / 6) * (Math.PI / 2);
-        pts.push(new THREE.Vector2(R - s + s * Math.cos(a), hw - s + s * Math.sin(a)));
-      }
-      pts.push(new THREE.Vector2(R - s, hw), new THREE.Vector2(hub, hw), new THREE.Vector2(hub, -hw));
-      return new THREE.LatheGeometry(pts, 48);
-    }
-    case 'extrusion': {
-      const shape = new THREE.Shape(g.outline.map(([x, y]) => new THREE.Vector2(x, y)));
-      for (const h of g.holes ?? []) shape.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(x, y))));
-      return new THREE.ExtrudeGeometry(shape, { depth: g.depth, bevelEnabled: false });
-    }
-    case 'sweep': {
-      const m = buildSweepMesh(g.path, g.width, g.thickness, g.plies);
-      if (!m.positions.length) return null;
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(m.positions, 3));
-      geo.setIndex(m.indices);
-      geo.computeVertexNormals(); // faces have their own vertices: smooth along the path, crisp across edges
-      if (m.plyLines.length) {
-        const lines = new THREE.LineSegments(new THREE.BufferGeometry(), PLY_LINE_MAT);
-        lines.geometry.setAttribute('position', new THREE.Float32BufferAttribute(m.plyLines, 3));
-        geo.userData.plyLines = lines.geometry;
-      }
-      return geo;
-    }
-    case 'mesh': {
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(g.positions, 3));
-      if (g.indices) geo.setIndex(g.indices);
-      geo.computeVertexNormals();
-      return geo;
-    }
-  }
-}
-
 const HIGHLIGHT_CACHE = new Map<string, THREE.Material>();
 
-function highlightMaterial(base: THREE.Material, key: string, color: string): THREE.Material {
+function highlightMaterial(base: SurfaceMats, key: string, color: string): SurfaceMats {
+  if (Array.isArray(base)) return base.map((b, i) => highlightMaterial(b, `${key}#${i}`, color) as THREE.Material);
   const k = `${key}|${color}`;
   let m = HIGHLIGHT_CACHE.get(k);
   if (!m) {
@@ -152,9 +53,9 @@ interface MeshInfo {
   mesh: THREE.Mesh;
   part: Part;
   dir: Vec3;
-  baseMat: THREE.Material;
+  baseMat: SurfaceMats;
   key: string;
-  normalMat: THREE.Material;
+  normalMat: SurfaceMats;
   /** Sheet part with an exposed ply edge. */
   exposed: boolean;
 }
@@ -212,6 +113,17 @@ export class Viewer {
   private simActive = false;
   private lastFollow: Vec3 | null = null;
   private sun!: THREE.DirectionalLight;
+  private hemi!: THREE.HemisphereLight;
+  private gridMat?: THREE.Material;
+  private shadowPlane?: THREE.Mesh;
+  private contactGroup = new THREE.Group();
+  private edgeLines: THREE.LineSegments[] = [];
+  private showEdges = true;
+  private currentView: ViewName = 'iso';
+  /** The user orbited / zoomed since the last view button or auto-frame; until then a resize re-frames the cart. */
+  private userMoved = false;
+  private sunCenter = new THREE.Vector3(30, 0, 10);
+  private sunRadius = 60;
   private readonly tmpA = new THREE.Matrix4();
   private readonly tmpB = new THREE.Matrix4();
 
@@ -286,10 +198,16 @@ export class Viewer {
     this.buildSectionControl();
     this.buildOverlayControls();
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    // alpha: the soft gradient behind the cart is CSS (`.viewer-canvas`), so it follows the app theme with no re-render.
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    this.renderer.setClearColor(0x000000, 0);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap; // PCFSoft was removed from three; shadow.radius softens the edge
+    setMaxAnisotropy(this.renderer.capabilities.getMaxAnisotropy());
     this.canvasHost.append(this.renderer.domElement);
     const ld = this.labelRenderer.domElement;
     ld.className = 'viewer-labels';
@@ -303,6 +221,7 @@ export class Viewer {
     this.controls.enableDamping = !reduceMotion.matches;
     reduceMotion.addEventListener('change', () => (this.controls.enableDamping = !reduceMotion.matches));
     this.controls.dampingFactor = 0.12;
+    this.controls.addEventListener('start', () => (this.userMoved = true));
     this.setupScrollCapture();
 
     this.buildScene();
@@ -314,13 +233,26 @@ export class Viewer {
     this.resize();
     this.setView('iso', new THREE.Box3(new THREE.Vector3(-10, -24, 0), new THREE.Vector3(60, 24, 30)));
 
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) this.renderNow(); });
+    (window as unknown as { __klondikeViewer?: Viewer }).__klondikeViewer = this; // debug hook: benchmark(), perf checks
     const loop = () => {
-      this.controls.update();
-      this.renderer.render(this.scene, this.camera);
-      this.labelRenderer.render(this.scene, this.camera);
       requestAnimationFrame(loop);
+      this.controls.update();
+      this.renderNow();
     };
     loop();
+  }
+
+  /** Debug: average milliseconds per `renderer.render` over `frames` frames (GPU-synchronized with a 1-pixel readback). */
+  benchmark(frames = 60): number {
+    const gl = this.renderer.getContext();
+    const px = new Uint8Array(4);
+    const t0 = performance.now();
+    for (let i = 0; i < frames; i++) {
+      this.renderer.render(this.scene, this.camera);
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    }
+    return (performance.now() - t0) / frames;
   }
 
   /** Show a short hint over the canvas; it fades by itself. */
@@ -433,6 +365,10 @@ export class Viewer {
       this.showDims = v;
       this.rebuildOverlay();
     }, true); // also offered in the Simple view
+    mk('Edges', 'Thin dark outlines on the parts (off shows the finish only)', true, (v) => {
+      this.showEdges = v;
+      for (const l of this.edgeLines) l.visible = v;
+    }, true);
     mk('Joinery', 'Mark each Domino, tenon, insert, bolt, screw and knob location (each physical joint once)', false, (v) => {
       this.showJoinery = v;
       this.rebuildOverlay();
@@ -637,27 +573,38 @@ export class Viewer {
     grid.rotation.x = Math.PI / 2;
     const gm = grid.material as THREE.Material;
     gm.transparent = true;
-    gm.opacity = 0.35;
+    gm.opacity = 0.3;
+    this.gridMat = gm;
     this.scene.add(grid);
 
     const axes = new THREE.AxesHelper(24); // X red, Y green, Z blue
     this.scene.add(axes);
 
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), new THREE.ShadowMaterial({ opacity: 0.25 }));
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), new THREE.ShadowMaterial({ opacity: 0.3 }));
     ground.position.z = -0.05;
     ground.receiveShadow = true;
+    this.shadowPlane = ground;
     this.scene.add(ground);
-    this.envObjects.push(grid, axes, ground);
+    this.contactGroup.renderOrder = 1;
+    this.scene.add(this.contactGroup);
+    this.envObjects.push(grid, axes, ground, this.contactGroup);
 
-    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x666a73, 1.1));
-    const sun = new THREE.DirectionalLight(0xffffff, 2.2);
-    sun.position.set(90, -70, 160);
+    // Soft daylight: a room-style environment map for ambient light and reflections (metals, vinyl sheen), a weak
+    // hemisphere fill, and one key sun that casts the shadows.
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environmentIntensity = 0.7;
+    pmrem.dispose();
+    this.hemi = new THREE.HemisphereLight(0xfff4e6, 0x5a5e66, 0.45);
+    this.scene.add(this.hemi);
+    const sun = new THREE.DirectionalLight(0xfff1de, 2.4);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
-    const sc = sun.shadow.camera;
-    sc.left = -90; sc.right = 90; sc.top = 90; sc.bottom = -90; sc.near = 10; sc.far = 500;
-    sun.shadow.bias = -0.0005;
+    sun.shadow.bias = -0.0004;
+    sun.shadow.normalBias = 0.05;
+    sun.shadow.radius = 3;
     this.sun = sun;
+    this.placeSun(this.sunCenter, this.sunRadius);
     this.scene.add(sun, sun.target);
 
     this.partsGroup.matrixAutoUpdate = false;
@@ -669,9 +616,58 @@ export class Viewer {
     this.scene.add(this.partsGroup, this.truckGroup, this.overlay, this.simGroup);
   }
 
+  /** Key light from the front-left and above; the shadow box is a tight fit around a sphere (the model bounds). */
+  private placeSun(center: THREE.Vector3, radius: number): void {
+    this.sunCenter.copy(center);
+    this.sunRadius = radius;
+    const dir = new THREE.Vector3(-10, -90, 150).normalize();
+    this.sun.position.copy(center).addScaledVector(dir, radius * 3);
+    this.sun.target.position.copy(center);
+    this.sun.target.updateMatrixWorld();
+    const sc = this.sun.shadow.camera;
+    const r = radius * 1.15;
+    sc.left = -r; sc.right = r; sc.top = r; sc.bottom = -r; sc.near = radius * 0.5; sc.far = radius * 6;
+    sc.updateProjectionMatrix();
+  }
+
+  /** The 3D background is a CSS gradient on the canvas host (see `.viewer-canvas`); here only the grid / shadow follow the theme. */
   private applyTheme(): void {
-    const bg = getComputedStyle(document.documentElement).getPropertyValue('--viewer-bg').trim() || '#e9ecf1';
-    this.scene.background = new THREE.Color(bg);
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    this.scene.background = null;
+    const gm = this.gridMat as THREE.LineBasicMaterial | undefined;
+    if (gm) {
+      gm.color.set(dark ? 0x59606c : 0x8a8f98);
+      gm.opacity = dark ? 0.35 : 0.3;
+    }
+    if (this.shadowPlane) (this.shadowPlane.material as THREE.ShadowMaterial).opacity = dark ? 0.5 : 0.3;
+    this.hemi.intensity = dark ? 0.35 : 0.45;
+    this.scene.environmentIntensity = dark ? 0.55 : 0.7;
+    for (const m of this.contactGroup.children) ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = dark ? 0.8 : 0.5;
+  }
+
+  /** Soft blobs under the body and each wheel: a cheap contact shadow / ambient occlusion. */
+  private rebuildContactShadows(parts: Part[]): void {
+    for (const c of [...this.contactGroup.children]) {
+      this.contactGroup.remove(c);
+      (c as THREE.Mesh).geometry.dispose();
+    }
+    const cart = parts.filter((p) => !p.payload && p.group !== 'reference');
+    if (!cart.length) return;
+    const bb = worldAABB(cart);
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const mat = new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false, opacity: dark ? 0.8 : 0.5, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    const blob = (cx: number, cy: number, w: number, h: number) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+      m.position.set(cx, cy, 0.04);
+      this.contactGroup.add(m);
+    };
+    blob((bb.min[0] + bb.max[0]) / 2, (bb.min[1] + bb.max[1]) / 2, (bb.max[0] - bb.min[0]) * 1.2, (bb.max[1] - bb.min[1]) * 1.3);
+    for (const w of cart) {
+      if (w.geometry.type !== 'wheel') continue;
+      const c = partCentroid(w);
+      const g = w.geometry;
+      blob(c[0], c[1], g.diameter * 0.55, Math.max(g.width, g.hubLength) * 2.2);
+    }
   }
 
   private resize(): void {
@@ -683,13 +679,25 @@ export class Viewer {
     this.renderer.domElement.style.height = '100%';
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    // First-load bug fix: the initial frame was computed before the layout settled (a tiny or zero-size canvas gives a
+    // wild aspect ratio and camera distance), and nothing re-framed it until a view button was clicked. Until the user
+    // moves the camera, every resize re-frames the same view.
+    if (this.framed && !this.userMoved && !this.simActive) this.setView(this.currentView, undefined, true);
+    // setSize clears the canvas: draw right away so a resize never shows an empty frame (the old "black until a click").
+    this.renderNow();
+  }
+
+  private renderNow(): void {
+    this.renderer.render(this.scene, this.camera);
+    this.labelRenderer.render(this.scene, this.camera);
   }
 
   private clearGroup(g: THREE.Group): void {
     for (const child of [...g.children]) {
       const mesh = child as THREE.Mesh;
-      mesh.geometry?.dispose();
+      if (!mesh.geometry?.userData.shared) mesh.geometry?.dispose();
       (mesh.geometry?.userData.plyLines as THREE.BufferGeometry | undefined)?.dispose();
+      for (const c of mesh.children) (c as THREE.LineSegments).geometry?.dispose();
       g.remove(child);
     }
   }
@@ -699,11 +707,13 @@ export class Viewer {
     this.clearGroup(this.partsGroup);
     this.infos = [];
     const cg = centerOfGravity(parts);
+    this.edgeLines = [];
     for (const part of parts) {
-      const geo = buildGeometry(part.geometry);
-      if (!geo) continue;
-      const key = materialKey(part);
-      const baseMat = materialFor(part);
+      const built = buildPart(part);
+      if (!built) continue;
+      const geo = built.geometry;
+      const key = built.look;
+      const baseMat = built.material;
       const mesh = new THREE.Mesh(geo, baseMat);
       mesh.name = part.id;
       mesh.userData.partId = part.id;
@@ -716,6 +726,12 @@ export class Viewer {
       mesh.visible = !this.hidden.has(part.group) && !(this.simple && mesh.userData.shopAid);
       const plyGeo = geo.userData.plyLines as THREE.BufferGeometry | undefined;
       if (plyGeo) mesh.add(new THREE.LineSegments(plyGeo, PLY_LINE_MAT)); // identity local matrix, follows the mesh
+      if (built.edges) {
+        const lines = new THREE.LineSegments(built.edges, EDGE_MAT);
+        lines.visible = this.showEdges;
+        this.edgeLines.push(lines);
+        mesh.add(lines);
+      }
       this.partsGroup.add(mesh);
       const exposed = hasExposedEdge(part);
       if (exposed && !exposedWarned) {
@@ -730,10 +746,12 @@ export class Viewer {
     this.refreshToggles(parts);
     this.lastParts = parts;
     this.rebuildOverlay();
+    this.rebuildContactShadows(parts);
+    this.fitSun();
     if (!this.framed && parts.length) {
       this.framed = true;
-      // Wait a frame so the canvas has its laid-out size (aspect) before framing.
-      requestAnimationFrame(() => this.setView('iso'));
+      // Wait a frame so the canvas has its laid-out size (aspect) before framing (resize() re-frames if it still moves).
+      requestAnimationFrame(() => { this.resize(); this.setView('iso', undefined, true); });
     }
   }
 
@@ -757,9 +775,9 @@ export class Viewer {
       return;
     }
     for (const part of bed) {
-      const geo = buildGeometry(part.geometry);
-      if (!geo) continue;
-      const mesh = new THREE.Mesh(geo, materialFor(part));
+      const built = buildPart(part);
+      if (!built) continue;
+      const mesh = new THREE.Mesh(built.geometry, built.material);
       mesh.matrixAutoUpdate = false;
       mesh.matrix.fromArray(part.transform);
       mesh.receiveShadow = true;
@@ -805,11 +823,10 @@ export class Viewer {
     for (const o of this.envObjects) o.visible = !this.simActive;
     if (!shapes) {
       this.lastFollow = null;
-      this.sun.position.set(90, -70, 160);
-      this.sun.target.position.set(0, 0, 0);
-      this.sun.target.updateMatrixWorld();
+      this.fitSun();
       return;
     }
+    this.placeSun(new THREE.Vector3(0, 0, 0), 60); // the sim sun then follows the cart (followPoint)
     const mat = (color: number) => {
       const m = new THREE.MeshStandardMaterial({ color, roughness: 1 });
       m.side = THREE.DoubleSide;
@@ -882,9 +899,7 @@ export class Viewer {
       this.camera.position.add(d);
     }
     this.lastFollow = [...p];
-    this.sun.position.set(p[0] + 90, p[1] - 70, p[2] + 160);
-    this.sun.target.position.set(p[0], p[1], 0);
-    this.sun.target.updateMatrixWorld();
+    this.placeSun(new THREE.Vector3(p[0], p[1], 0), 60);
   }
 
   private refreshToggles(parts: Part[]): void {
@@ -914,12 +929,21 @@ export class Viewer {
     return box;
   }
 
-  setView(name: ViewName, box?: THREE.Box3): void {
+  /** Fit the key light's shadow box to the model. */
+  private fitSun(): void {
+    if (this.simActive) return;
+    const sphere = this.modelBox().getBoundingSphere(new THREE.Sphere());
+    this.placeSun(sphere.center, Math.max(sphere.radius, 20));
+  }
+
+  setView(name: ViewName, box?: THREE.Box3, auto = false): void {
+    if (!auto) this.userMoved = false;
+    this.currentView = name;
     const b = box ?? (this.inTruck ? this.truckBox() : this.modelBox());
     const sphere = b.getBoundingSphere(new THREE.Sphere());
     const dir = new THREE.Vector3(...VIEW_DIRS[name]).normalize();
     const fov = THREE.MathUtils.degToRad(this.camera.fov);
-    const aspect = this.camera.aspect;
+    const aspect = Math.max(0.25, this.camera.aspect); // a collapsed canvas must not throw the camera miles away
     const hfov = 2 * Math.atan(Math.tan(fov / 2) * aspect);
     const dist = (sphere.radius / Math.sin(Math.min(fov, hfov) / 2)) * 1.05;
     this.controls.target.copy(sphere.center);
@@ -927,6 +951,7 @@ export class Viewer {
     this.camera.up.set(0, 0, 1);
     this.camera.lookAt(sphere.center);
     this.controls.update();
+    this.renderNow();
   }
 
   /** Bed (without the big ground plane) plus the cart. */

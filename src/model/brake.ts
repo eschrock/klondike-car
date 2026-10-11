@@ -951,11 +951,14 @@ function buildHandle(ctx: Ctx): Part[] {
       sourcing: { vendor: 'McMaster-Carr (clevis pin with lynch pin)' }, explode: [-1, s, 0.3],
     }));
   }
-  parts.push(box(ctx, {
-    id: 'handle-bar', name: 'Push handle crossbar', group: 'removable', mat: 'oak', removable: true, step: STEP.brake, grain: 'y',
-    ...span([h.xBar - p.handleBarDiameterIn / 2, h.xBar + p.handleBarDiameterIn / 2], [-(L.hwC + L.side), L.hwC + L.side], [barZ - p.handleBarDiameterIn / 2, barZ + p.handleBarDiameterIn / 2]),
-    notes: 'Square block stands in for a 1.25" round.',
-  }));
+  // A real round bar (D-44): a 1-1/4" white-oak dowel, ends rounded over by the viewer's finish (it stood in as a square block before).
+  const bar = cylinder(ctx, {
+    id: 'handle-bar', name: 'Push handle crossbar', group: 'removable', mat: 'oak', removable: true, step: STEP.brake, axis: 'y',
+    radius: p.handleBarDiameterIn / 2, length: 2 * (L.hwC + L.side), center: [h.xBar, 0, barZ],
+    notes: `Round ${p.handleBarDiameterIn}" white-oak bar (a dowel or turned stock), ends eased over; bolted to the two uprights (D-44).`,
+  });
+  bar.grain = 'z'; // the cylinder's own axis (it lies along Y in the model)
+  parts.push(bar);
   return parts;
 }
 

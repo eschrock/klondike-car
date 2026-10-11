@@ -432,6 +432,8 @@ const VARIANTS: Record<string, Partial<Params>> = {
   seatXMin: { seatXIn: seatMin },
   seatXMax: { seatXIn: seatMax },
   gunwaleFlare2: { gunwaleFlareIn: 2 },
+  sheer0: { sheerRiseIn: 0, transomCrownIn: 0, transomCornerRadiusIn: 0 },
+  sheer4Long: { sheerRiseIn: 4, sheerLengthIn: 24, transomCrownIn: 1.5, transomCornerRadiusIn: 2 },
   wheel10: { wheelDiameterIn: 10 },
   wheel11_5: { wheelDiameterIn: 11.5 },
   drumBrake: { brakeType: 1 },

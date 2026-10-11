@@ -2,6 +2,7 @@ import type { Params } from '../params';
 import { makeCtx, type ViewState } from './build-utils';
 import { buildBody, prowTop } from './body';
 import { buildBrake } from './brake';
+import { applyFinish } from './finish';
 import { buildFrame } from './frame';
 import { applyJoinery } from './joinery';
 import { applyHardwareMass, buildHardware, buildLighting } from './lighting';
@@ -37,5 +38,6 @@ export function buildModel(input: Params, view: ViewState = {}): Part[] {
   applyJoinery(ctx, parts); // structured joints for the hull and frame (D-35)
   const out = ctx.view.removed ? parts.filter((x) => !x.removable) : parts;
   applyHardwareMass(out); // the fastener remainder, from the joints of the parts actually present
+  applyFinish(out, ctx.p); // display finishing for the viewer (D-44): cosmetic, never read by the analysis
   return out;
 }

@@ -80,9 +80,12 @@ export function buildLighting(ctx: Ctx, _prowTipX: number, _prowTipZ: number): P
   const common = { group: 'lighting', step: STEP.finish } as const;
 
   // ── Front: clips on the front transom, left of the prow base (lantern) and right of it (flag-pole socket) ──
-  const zT = L.noseTop + L.sideH;
   const x0c = L.xFront - L.transom;
   const yc = Math.max(2.3, Math.min(4.5, L.hwN - CLIP.width / 2 - 0.15));
+  // The front transom top follows the sheer (L.noseGunTop) and arcs up by the crown (D-44): the clip sits on the highest point under its width, the inboard edge.
+  const wTopF = L.hwN + L.side;
+  const yIn = Math.max(0, yc - CLIP.width / 2);
+  const zT = L.noseGunTop + ctx.p.transomCrownIn * (1 - (yIn / wTopF) ** 2);
   const clipJoint = (to: string) => [{ type: 'knob' as const, to, count: 2, size: 'M5 thumbscrew in the leg, clamping the transom', note: 'tool-free; friction clamp + the web over the top (not a load path)' }];
   const lantern = profilePart(ctx, {
     id: 'lantern-mount', name: 'Front lantern bracket', group: 'lighting', mat: 'print', material: 'ASA', outline: clipOutline(L.transom, true), depth: CLIP.width,
