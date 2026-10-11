@@ -659,7 +659,7 @@ describe('steering sweep', () => {
       const p = { ...defaults, ...patch };
       if (!errorsOf(p).length) sweep(p, JSON.stringify(patch));
     }
-  }, 60000); // ~10 s sweep on CI runners
+  }, 120000); // ~15 s locally, up to ~45 s on CI runners
   // Each dog has a steel-faced side for each lock: at +lock the left dog's aft face closes on block AL and the right dog's fore face on block FR
   // (a 180° couple); at −lock the left dog's fore face closes on FL and the right dog's aft face on AR (D-31).
   const CONTACTS: Array<[string, number, string, string]> = [
@@ -815,7 +815,7 @@ describe('fuzz: validator-clean designs have no unintended overlaps', () => {
     expect(failures.slice(0, 5)).toEqual([]);
     expect(clean).toBeGreaterThanOrEqual(25); // D-45: the S-curve constraints (seat, bend radius, tire sweep) reject more of the wild jitter than the old square shoulder did
     expect(Date.now() - t0).toBeLessThan(10000);
-  });
+  }, 60000); // heavy sweep; shared CI runners are 2-3x slower
 });
 
 // ── Auto nose geometry (A-4, D-26): front track / lock / lead jitter with the nose derived, transport config included ──

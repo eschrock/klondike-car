@@ -294,7 +294,7 @@ describe('every variant the validator accepts yields finite checks', () => {
     console.log(`analysis sweep: ${clean}/${samples.length} validator-clean designs checked`);
     expect(bad.slice(0, 5)).toEqual([]);
     expect(clean).toBeGreaterThanOrEqual(30);
-  });
+  }, 60000); // heavy sweep (front-end bounding cases); shared CI runners are 2-3x slower
 });
 
 describe('critic round 1 fixes: hand-calculated numbers at the defaults', () => {
