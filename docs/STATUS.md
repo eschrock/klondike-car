@@ -5,7 +5,7 @@
 | 0 — Setup & parameter reconciliation | ✅ approved 2026-10-10 |
 | 1 — Block model | ✅ approved |
 | 2 — Analysis & simulation | ✅ approved 2026-10-10 |
-| 3 — Detail design | **checkpoint**: waiting on Eric (docs/phase3-checkpoint.md) |
+| 3 — Detail design | **3b**: ride mode rework (Ackermann front, gentle taper hull), D-49…D-52 |
 | 4 — Build outputs | not started |
 
 ## Phase 0 log
@@ -42,3 +42,4 @@
 - Round-3 fixes: D-47 (front and fittings: turntable support, bridle tie, curved finger guard, real kingpin bolt, step order, storage clearance, lash plates, banding) and D-48 (brake mount on bearing plates + doublers, rear beam seat and hold-downs, brake headroom 1.2 with 5.7" travel, 7/8" shaft, wheel rating, brake abuse). Viewer follow-up for the curved hull. Empty mass **169.0 lb**; safe 50–210 lb, green to 170 (limiter steer-stops). Open: `turntable-ring` info row at 137% of the assumed rating. Next: critic round 3.
 - Critic round 3 (final): engineering 7/10, buildability 6/10. Stopped at the round limit; checkpoint written (docs/phase3-checkpoint.md). Two eng MUSTs mean the Simple view overstates safety (stop-stand arm, turntable-ring info-only): fix before pushing.
 - Honesty fixes (eng r3 MUST-1..3): stop-stand arm corrected, turntable-ring gated, front-end bounding cases. Simple view now says no rider weight passes yet (front end only). Ride mode added (BRIEF §4.3a, D-49: rider drives downhill, 10 mph, minimal steering); design study running; front-end redesign waits for it.
+- Ride-mode study: 6 → 7 → 8/10. Eric: no curbs at camp (D-50, bumps not curb strikes, bend-don't-break), go with Concept A (D-51: Ackermann on racing-kart spindles, 9 ft tow radius, ±8° ride lock, rider stick + hip brake lever, front + rear brakes), and a gentle hull taper instead of the S-curve (D-52). Phase 3b spec in progress.
