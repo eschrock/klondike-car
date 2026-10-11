@@ -157,7 +157,6 @@ export class Viewer {
   private readonly envObjects: THREE.Object3D[] = [];
   private readonly canvasHost: HTMLElement;
   private readonly toggleHost: HTMLElement;
-  private readonly toolbar: HTMLElement;
   private readonly hidden = new Set<PartGroup>();
   private infos: MeshInfo[] = [];
   private framed = false;
@@ -188,30 +187,58 @@ export class Viewer {
   private readonly tmpA = new THREE.Matrix4();
   private readonly tmpB = new THREE.Matrix4();
 
+  /** Where the secondary controls live: inline on wide screens, in a "More" panel on phones (M7). */
+  private moreHost!: HTMLElement;
+  private hintEl!: HTMLElement;
+  private hintTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The canvas was clicked, so the mouse wheel zooms it (otherwise the wheel scrolls the page; M2). */
+  private canvasActive = false;
+
   /** Append a control (e.g. the view-only steer slider) to the toolbar. */
   addToolbarControl(node: HTMLElement): void {
-    this.toolbar.append(node);
+    this.moreHost.append(node);
   }
 
   constructor(container: HTMLElement) {
     container.classList.add('viewer-host');
     this.canvasHost = el('div', 'viewer-canvas');
-    const toolbar = (this.toolbar = el('div', 'viewer-toolbar'));
+    const toolbar = el('div', 'viewer-toolbar');
     this.toggleHost = el('div', 'viewer-toggles');
     // The controls live in their own bar above the canvas (never overlaying the cart).
     const bar = el('div', 'viewer-bar');
     bar.append(toolbar, this.toggleHost);
     const stage = el('div', 'viewer-stage');
     stage.append(this.canvasHost);
+    this.hintEl = el('div', 'viewer-hint');
+    this.hintEl.setAttribute('aria-hidden', 'true');
+    stage.append(this.hintEl);
     container.append(bar, stage);
 
+    // Row 1: the four camera views. Everything else goes in `moreHost` (inline on wide screens, a "More" panel on phones).
+    const views = el('div', 'viewer-views');
+    views.setAttribute('role', 'group');
+    views.setAttribute('aria-label', 'Camera view');
     for (const name of Object.keys(VIEW_DIRS) as ViewName[]) {
       const b = el('button', '');
       b.type = 'button';
       b.textContent = VIEW_LABELS[name];
       b.addEventListener('click', () => this.setView(name));
-      toolbar.append(b);
+      views.append(b);
     }
+    this.moreHost = el('div', 'viewer-more');
+    this.moreHost.id = 'viewer-more';
+    const moreBtn = el('button', 'viewer-more-btn');
+    moreBtn.type = 'button';
+    moreBtn.setAttribute('aria-expanded', 'false');
+    moreBtn.setAttribute('aria-controls', 'viewer-more');
+    moreBtn.textContent = 'More ▾';
+    moreBtn.addEventListener('click', () => {
+      const open = !this.moreHost.classList.contains('open');
+      this.moreHost.classList.toggle('open', open);
+      moreBtn.setAttribute('aria-expanded', String(open));
+      moreBtn.textContent = open ? 'More ▴' : 'More ▾';
+    });
+    toolbar.append(views, moreBtn, this.moreHost);
     this.buildExplodeControl();
     this.buildSectionControl();
     this.buildOverlayControls();
@@ -228,8 +255,12 @@ export class Viewer {
     // Model frame is Z-up: +X forward, +Y left.
     this.camera.up.set(0, 0, 1);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.enableDamping = true;
+    // Reduced motion: no inertia (N6).
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    this.controls.enableDamping = !reduceMotion.matches;
+    reduceMotion.addEventListener('change', () => (this.controls.enableDamping = !reduceMotion.matches));
     this.controls.dampingFactor = 0.12;
+    this.setupScrollCapture();
 
     this.buildScene();
     this.applyTheme();
@@ -249,6 +280,41 @@ export class Viewer {
     loop();
   }
 
+  /** Show a short hint over the canvas; it fades by itself. */
+  private showHint(text: string): void {
+    this.hintEl.textContent = text;
+    this.hintEl.classList.add('show');
+    clearTimeout(this.hintTimer);
+    this.hintTimer = setTimeout(() => this.hintEl.classList.remove('show'), 1800);
+  }
+
+  /**
+   * The canvas must not trap page scrolling (M2). Touch: one finger scrolls the page, two fingers orbit and pinch-zoom.
+   * Mouse / trackpad: the wheel scrolls the page, and zooms only while Ctrl or Cmd is held (a trackpad pinch already sets
+   * ctrlKey) or after the canvas was clicked ("activated"; clicking elsewhere or leaving the canvas deactivates it).
+   */
+  private setupScrollCapture(): void {
+    const dom = this.renderer.domElement;
+    // OrbitControls sets touch-action:none; 'pan-y' hands single-finger vertical swipes back to the page.
+    dom.style.touchAction = 'pan-y';
+    this.controls.touches = { ONE: null as unknown as THREE.TOUCH, TWO: THREE.TOUCH.DOLLY_ROTATE };
+    // Once two fingers are down the gesture is ours: stop the browser from also scrolling.
+    dom.addEventListener('touchmove', (e) => { if (e.touches.length >= 2 && e.cancelable) e.preventDefault(); }, { passive: false });
+    dom.addEventListener('touchstart', (e) => { if (e.touches.length === 1) this.showHint('Two fingers to rotate and zoom'); }, { passive: true });
+
+    const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+    // Capture phase on the parent runs before OrbitControls' own wheel handler (which calls preventDefault when zoom is on).
+    this.canvasHost.addEventListener('wheel', (e) => {
+      const allow = e.ctrlKey || e.metaKey || this.canvasActive;
+      this.controls.enableZoom = allow;
+      setTimeout(() => (this.controls.enableZoom = true)); // only gate the wheel; pinch (touch) zoom stays available
+      if (!allow) this.showHint(isMac ? '⌘ + scroll to zoom (or click the cart first)' : 'Ctrl + scroll to zoom (or click the cart first)');
+    }, { capture: true, passive: true });
+    dom.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse') this.canvasActive = true; });
+    dom.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') this.canvasActive = false; });
+    window.addEventListener('pointerdown', (e) => { if (!this.canvasHost.contains(e.target as Node)) this.canvasActive = false; });
+  }
+
   private buildExplodeControl(): void {
     const out = el('output', 'steer-out');
     out.textContent = '0"';
@@ -266,7 +332,7 @@ export class Viewer {
     const label = el('label', 'steer-ctl'); // shown in Simple too (D-30)
     label.title = 'Exploded view: each part moves along its own explode vector (radially from the center of gravity if it has none), farther the farther it is from the CG. The CG marker and dimensions are hidden while exploded';
     label.append('Explode', r, out);
-    this.toolbar.append(label);
+    this.moreHost.append(label);
   }
 
   private buildSectionControl(): void {
@@ -301,7 +367,7 @@ export class Viewer {
     this.sectionSel = sel;
     label.title = 'Section plane: hides everything beyond the plane (keeps the low side)';
     label.append('Section', sel, r, out);
-    this.toolbar.append(label);
+    this.moreHost.append(label);
   }
 
   private buildOverlayControls(): void {
@@ -313,7 +379,7 @@ export class Viewer {
       const label = el('label', simpleToo ? 'steer-ctl' : 'steer-ctl adv-only');
       label.title = title;
       label.append(cb, text);
-      this.toolbar.append(label);
+      this.moreHost.append(label);
       return cb;
     };
     this.cgCb = mk('CG', 'Center-of-gravity marker and drop line for what is shown (empty, or with rider and cargo)', true, (v) => {

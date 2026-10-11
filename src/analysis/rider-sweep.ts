@@ -76,6 +76,8 @@ export interface SweepResult {
   operatingChecks: AnalysisCheck[];
   /** Widest run of weights with no fail that contains the operating weight; null when the operating weight fails. */
   safe: SafeRange | null;
+  /** Widest all-green run (no "close to the limit" weights) that contains the operating weight; null when that weight is yellow or red. */
+  green: SafeRange | null;
   /** What fails just below / just above the safe range (null when the range is open on that side). */
   lowLimit: Limiter | null;
   highLimit: Limiter | null;
@@ -113,21 +115,29 @@ export function evaluateRider(p: Params, w: number, truckStatus: Status = 'info'
   return { point: pointFrom(w, checks, truckStatus), checks };
 }
 
-/** The widest no-fail run of grid weights around `w`, and what stops it on each side. Pure; exported for tests. */
-export function safeRange(points: SweepPoint[], at: SweepPoint): Pick<SweepResult, 'safe' | 'lowLimit' | 'highLimit'> {
-  if (at.status === 'fail') return { safe: null, lowLimit: at.worst, highLimit: at.worst };
+/**
+ * The widest run of grid weights around `at` that all satisfy `ok`, and what stops it on each side. Pure; exported for tests.
+ * Returns `run: null` when `at` itself does not satisfy `ok`.
+ */
+export function runAround(points: SweepPoint[], at: SweepPoint, ok: (s: Status) => boolean): { run: SafeRange | null; lowStop: SweepPoint | null; highStop: SweepPoint | null } {
+  if (!ok(at.status)) return { run: null, lowStop: null, highStop: null };
   const w = at.w;
   const below = points.filter((x) => x.w <= w).sort((a, b) => b.w - a.w);
   const above = points.filter((x) => x.w >= w).sort((a, b) => a.w - b.w);
   let lo = w, hi = w;
-  let lowFail: SweepPoint | undefined, highFail: SweepPoint | undefined;
-  for (const x of below) { if (x.status === 'fail') { lowFail = x; break; } lo = Math.min(lo, x.w); }
-  for (const x of above) { if (x.status === 'fail') { highFail = x; break; } hi = Math.max(hi, x.w); }
-  return {
-    safe: { loLb: lo, hiLb: hi, openLow: !lowFail, openHigh: !highFail },
-    lowLimit: lowFail?.worst ?? null,
-    highLimit: highFail?.worst ?? null,
-  };
+  let lowStop: SweepPoint | null = null, highStop: SweepPoint | null = null;
+  for (const x of below) { if (!ok(x.status)) { lowStop = x; break; } lo = Math.min(lo, x.w); }
+  for (const x of above) { if (!ok(x.status)) { highStop = x; break; } hi = Math.max(hi, x.w); }
+  return { run: { loLb: lo, hiLb: hi, openLow: !lowStop, openHigh: !highStop }, lowStop, highStop };
+}
+
+/** The widest no-fail run of grid weights around `w`, and what stops it on each side. Pure; exported for tests. */
+export function safeRange(points: SweepPoint[], at: SweepPoint): Pick<SweepResult, 'safe' | 'lowLimit' | 'highLimit' | 'green'> {
+  if (at.status === 'fail') return { safe: null, green: null, lowLimit: at.worst, highLimit: at.worst };
+  const { run, lowStop, highStop } = runAround(points, at, (s) => s !== 'fail');
+  // The comfortable tier: only the all-green run around the weight (a 'marginal' weight has none).
+  const green = runAround(points, at, (s) => s !== 'fail' && s !== 'marginal').run;
+  return { safe: run, green, lowLimit: lowStop?.worst ?? null, highLimit: highStop?.worst ?? null };
 }
 
 interface Core { points: SweepPoint[]; truckStatus: Status; fromLb: number; toLb: number; stepLb: number }

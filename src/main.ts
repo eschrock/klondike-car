@@ -69,7 +69,7 @@ const view: CartView = { steerDeg: 0, rider: 'operating', cargo: true, removed: 
 const build = (p: ReturnType<typeof store.get>, v: CartView): Part[] => buildModel(p, v as ViewState);
 // Snap to 0.5° so 0 is always reachable even when the lock is a half degree (e.g. 38.5°).
 const snapSteer = (v: number) => Math.round(v * 2) / 2;
-const steer = h('input', { type: 'range', min: '-50', max: '50', step: '0.5', value: '0', 'aria-label': 'Displayed steer angle' });
+const steer = h('input', { type: 'range', min: '-50', max: '50', step: '0.5', value: '0', 'aria-label': 'Try steering (preview only)' });
 const steerNum = h('input', { type: 'number', step: '0.5', value: '0', class: 'steer-num', 'aria-label': 'Steer angle (degrees)' });
 const steerZero = h('button', { type: 'button', class: 'steer-zero', title: 'Center the steering (0°)', 'aria-label': 'Center the steering' }, '↺');
 const setSteer = (v: number) => {
@@ -80,7 +80,7 @@ steer.addEventListener('input', () => setSteer(Number(steer.value)));
 steerNum.addEventListener('change', () => setSteer(Number(steerNum.value)));
 steerZero.addEventListener('click', () => setSteer(0));
 viewer.addToolbarControl(
-  h('label', { class: 'steer-ctl', title: 'Displayed steer angle (view only; clamped to the steering lock)' }, 'Steer', steer, steerNum, h('span', { class: 'steer-unit' }, '°'), steerZero),
+  h('label', { class: 'steer-ctl', title: "Preview only. Doesn't change the cart (clamped to its steering limit)." }, 'Try steering', steer, steerNum, h('span', { class: 'steer-unit' }, '°'), steerZero),
 );
 
 const checkbox = (label: string | Node[], title: string, checked: boolean, onChange: (v: boolean) => void, cls = '') => {
@@ -90,7 +90,7 @@ const checkbox = (label: string | Node[], title: string, checked: boolean, onCha
   return h('label', { class: `steer-ctl ${cls}`.trim(), title }, cb, ...(typeof label === 'string' ? [label] : label));
 };
 viewer.addToolbarControl(
-  checkbox([h('span', { class: 'adv-only' }, 'Rider & cargo'), h('span', { class: 'simple-only' }, 'Rider')], 'Show the operating rider and cargo (view only; ignored in the Truck view)', true, (v) => {
+  checkbox([h('span', { class: 'adv-only' }, 'Show rider & cargo'), h('span', { class: 'simple-only' }, 'Show rider')], 'Show the operating rider and cargo (view only; ignored in the Truck view)', true, (v) => {
     view.rider = v ? 'operating' : 'none';
     view.cargo = v;
     render();
@@ -171,11 +171,14 @@ const readMode = (): Mode => {
 };
 let mode: Mode = readMode();
 const app = $('app');
-const backBar = h('div', { class: 'back-bar', hidden: '' });
-const backBtn = h('button', { type: 'button' }, '← Back to simple');
-backBar.append(backBtn);
-$('right').prepend(backBar);
-backBtn.addEventListener('click', () => setMode('simple'));
+const backBar = $('back-bar');
+/** Page scroll position to return to when "Back to the simple view" is used. */
+let simpleScrollY = 0;
+$('btn-back').addEventListener('click', () => {
+  setMode('simple'); // not persisted: the saved mode only changes with an explicit Simple | Advanced click
+  window.scrollTo({ top: simpleScrollY });
+});
+const stacked = window.matchMedia('(max-width: 1200px)');
 
 /** Briefly highlight the Analysis row for a check (and open it), after a traffic-light click. */
 function focusAnalysisRow(checkId: string) {
@@ -193,24 +196,35 @@ function focusAnalysisRow(checkId: string) {
 const simple = mountSimpleView($('simple-left'), $('simple-right'), {
   store,
   onLight(_light, checkId) {
-    setMode('advanced', true);
+    simpleScrollY = window.scrollY;
+    setMode('advanced', { fromSimple: true });
     right.showTab('analysis');
     requestAnimationFrame(() => focusAnalysisRow(checkId));
   },
   onDemo(id, riderLb) {
+    simpleScrollY = window.scrollY;
     sim?.runScenario(id, { riderLb });
-    setMode('advanced', true);
+    setMode('advanced', { fromSimple: true });
     right.showTab('simulation'); // activates the sim, which starts the loaded scenario
+    if (stacked.matches) window.scrollTo({ top: 0 }); // phone: show the pinned viewer and the simulation controls
   },
 });
 
-function setMode(next: Mode, fromSimple = false) {
+/**
+ * `persist` is true only for an explicit Simple | Advanced click (and the first mount, which keeps the saved value):
+ * a demo or traffic-light click that lands in Advanced must not make Advanced the mode the next visit opens in (M8).
+ */
+function setMode(next: Mode, opts: { fromSimple?: boolean; persist?: boolean } = {}) {
+  const fromSimple = !!opts.fromSimple;
   mode = next;
-  try { localStorage.setItem(MODE_KEY, mode); } catch { /* private window: the choice just won't persist */ }
+  if (opts.persist) {
+    try { localStorage.setItem(MODE_KEY, mode); } catch { /* private window: the choice just won't persist */ }
+  }
   app.dataset.mode = mode;
   $('mode-simple').setAttribute('aria-pressed', String(mode === 'simple'));
   $('mode-advanced').setAttribute('aria-pressed', String(mode === 'advanced'));
   backBar.hidden = !(mode === 'advanced' && fromSimple);
+  app.classList.toggle('has-back', !backBar.hidden);
   viewer.setSimpleMode(mode === 'simple');
   if (mode === 'simple') {
     // Leave anything that takes over the viewer (simulation, truck placement); the design itself is untouched.
@@ -221,8 +235,8 @@ function setMode(next: Mode, fromSimple = false) {
   simple.setVisible(mode === 'simple');
   render();
 }
-$('mode-simple').addEventListener('click', () => setMode('simple'));
-$('mode-advanced').addEventListener('click', () => setMode('advanced'));
+$('mode-simple').addEventListener('click', () => setMode('simple', { persist: true }));
+$('mode-advanced').addEventListener('click', () => setMode('advanced', { persist: true }));
 
 sim = mountSimPanel(right.panelHost('simulation'), {
   viewer,

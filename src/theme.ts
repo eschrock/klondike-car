@@ -7,7 +7,8 @@ type Pref = 'auto' | 'light' | 'dark';
 const KEY = 'klondike-theme';
 const ORDER: Pref[] = ['auto', 'light', 'dark'];
 const ICON: Record<Pref, string> = { auto: '◐', light: '☀', dark: '☾' };
-const LABEL: Record<Pref, string> = { auto: 'Theme: auto (follows your system)', light: 'Theme: light', dark: 'Theme: dark' };
+const NAME: Record<Pref, string> = { auto: 'Auto', light: 'Light', dark: 'Dark' };
+const WHAT: Record<Pref, string> = { auto: 'follows your device setting', light: 'light colors', dark: 'dark colors' };
 
 const media = window.matchMedia('(prefers-color-scheme: dark)');
 
@@ -28,9 +29,11 @@ function apply(pref: Pref): void {
 export function mountThemeToggle(btn: HTMLButtonElement): void {
   let pref = readPref();
   const show = () => {
-    btn.textContent = ICON[pref];
-    btn.title = `${LABEL[pref]}. Click to change.`;
-    btn.setAttribute('aria-label', LABEL[pref]);
+    const next = ORDER[(ORDER.indexOf(pref) + 1) % ORDER.length];
+    // The icon plus a word, so the state is readable; the label says what the next press does.
+    btn.textContent = `${ICON[pref]} ${NAME[pref]}`;
+    btn.title = `Theme: ${NAME[pref]} (${WHAT[pref]}). Press to switch to ${NAME[next]}.`;
+    btn.setAttribute('aria-label', `Theme: ${NAME[pref]}. Switch to ${NAME[next]}.`);
   };
   apply(pref);
   show();

@@ -18,6 +18,7 @@
   </head>
   <body>
     <div id="app" data-mode="simple">
+      <a class="skip-link" href="#simple-right">Skip to the safety result</a>
       <header class="topbar">
         <h1>Troop 455 Klondike Cart</h1>
         <span class="spacer"></span>
@@ -27,12 +28,17 @@
         </div>
         <button id="btn-theme" class="theme-toggle" type="button"></button>
         <button id="btn-copy-link" type="button" title="Copy a shareable link to this exact design">Copy link</button>
-        <button id="btn-reset" type="button" title="Reset every parameter to its default">Reset to defaults</button>
+        <button id="btn-reset" type="button" title="Reset every parameter to its default">Reset<span class="long"> to defaults</span></button>
       </header>
-      <aside id="simple-left" class="sidebar" aria-label="Your cart"></aside>
-      <aside id="params" class="sidebar left" aria-label="Parameters"></aside>
+      <div id="back-bar" class="back-bar" hidden>
+        <button id="btn-back" type="button">← Back to the simple view</button>
+      </div>
+      <!-- DOM order = reading and focus order = the stacked phone order: viewer, safety result, controls (M10).
+           On wide screens the grid areas place them left | viewer | right. -->
       <main id="viewer" class="viewer" aria-label="3D viewer"></main>
-      <aside id="simple-right" class="sidebar" aria-label="Is it safe?"></aside>
+      <aside id="simple-right" class="sidebar" aria-label="Is it safe?" tabindex="-1"></aside>
+      <aside id="simple-left" class="sidebar" aria-label="Change the cart"></aside>
+      <aside id="params" class="sidebar left" aria-label="Parameters"></aside>
       <aside id="right" class="sidebar right" aria-label="Analysis"></aside>
     </div>
     <script type="module" src="/src/main.ts"></script>

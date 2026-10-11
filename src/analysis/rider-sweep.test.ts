@@ -70,4 +70,10 @@ describe('safeRange', () => {
   it('is null when the operating weight itself fails', () => {
     expect(safeRange(pts, pts[0]).safe).toBeNull();
   });
+  it('keeps the all-green tier separate from the yellow weights (M3)', () => {
+    // 60 is marginal, 70-90 are green, 50 and 100 fail.
+    expect(safeRange(pts, pts[3]).green).toEqual({ loLb: 70, hiLb: 90, openLow: false, openHigh: false });
+    expect(safeRange(pts, pts[1]).green).toBeNull(); // a yellow weight has no green run of its own
+    expect(safeRange(pts, pts[1]).safe).toEqual({ loLb: 60, hiLb: 90, openLow: false, openHigh: false });
+  });
 });

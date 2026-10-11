@@ -3,7 +3,7 @@
   --panel: #ffffff;
   --panel-2: #eef0f4;
   --text: #1c1f26;
-  --muted: #6a717d;
+  --muted: #5b626e;
   --border: #d5d9e0;
   --accent: #2f6fed;
   --viewer-bg: #e9ecf1;
@@ -39,8 +39,8 @@ body { background: var(--bg); color: var(--text); }
   display: grid;
   height: 100vh;
   grid-template-columns: minmax(270px, 320px) minmax(0, 1fr) minmax(270px, 340px);
-  grid-template-rows: auto minmax(0, 1fr);
-  grid-template-areas: 'top top top' 'left main right';
+  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-areas: 'top top top' 'back back back' 'left main right';
 }
 .topbar {
   grid-area: top;
@@ -126,15 +126,14 @@ select { width: 100%; }
 .viewer-toggles:empty { display: none; }
 .viewer-toggles label { cursor: pointer; white-space: nowrap; }
 
-/* Below 1200px the three columns squeeze the viewer, so stack: viewer, parameters, analysis. */
+/* Below 1200px the three columns squeeze the viewer, so stack: viewer, then the panels. The DOM order already is the
+   stacked order, so no CSS `order` is needed (focus order = visual order, M10). */
 @media (max-width: 1200px) {
   /* Flex column (not grid) so the viewer can stay pinned (sticky) at the top while the panels scroll under it. */
-  #app { display: flex; flex-direction: column; height: auto; min-height: 100vh; }
-  .topbar { order: 0; }
-  .viewer { order: 1; position: sticky; top: 0; z-index: 20; flex: none; height: 45vh; min-height: 260px; border-bottom: 1px solid var(--border); }
-  .sidebar.left { order: 2; }
-  .sidebar.right { order: 3; }
-  .fit-card { scroll-margin-top: calc(45vh + 12px); }
+  #app { display: flex; flex-direction: column; height: auto; min-height: 100vh; --stick-top: 0px; }
+  #app.has-back { --stick-top: 44px; }
+  .viewer { position: sticky; top: var(--stick-top); z-index: 20; flex: none; height: 45vh; min-height: 260px; border-bottom: 1px solid var(--border); }
+  .fit-card { scroll-margin-top: calc(45vh + 56px); }
   .sidebar { overflow: visible; }
   .sidebar.left, .sidebar.right { border: 0; border-top: 1px solid var(--border); }
 }
@@ -161,8 +160,8 @@ select { width: 100%; }
 .summary-table td { text-align: right; font-weight: 600; padding: 1px 0 1px 6px; }
 .truck-head h3 { margin: 0 0 6px; }
 .truck-head p { margin: 0 0 6px; }
-.pass { color: #1f8f4e; font-weight: 600; }
-.fail { color: #d1352b; font-weight: 600; }
+.pass { color: #146c3a; font-weight: 600; }
+.fail { color: #c22d24; font-weight: 600; }
 :root[data-theme='dark'] .pass { color: #4cc784; }
 :root[data-theme='dark'] .fail { color: #f87171; }
 .small { font-size: 11px; }
@@ -202,3 +201,67 @@ select { width: 100%; }
 .preset-reset { margin-left: 4px; padding: 0 5px; font-size: 11px; line-height: 16px; border-radius: 4px; cursor: pointer; }
 
 .theme-toggle { min-width: 2.2em; padding: 3px 8px; font-size: 14px; line-height: 1; }
+
+/* Header, phones (M1): row 1 = title + theme, row 2 = Simple|Advanced + Copy link + Reset. */
+.topbar { align-items: center; }
+.theme-toggle { white-space: nowrap; }
+@media (max-width: 600px) {
+  .topbar { flex-wrap: wrap; gap: 0 8px; padding: 6px 12px; align-items: center; }
+  .topbar h1 { order: 0; flex: 1 1 0; min-width: 0; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .theme-toggle { order: 1; flex: none; }
+  .spacer { order: 2; flex: 0 0 100%; height: 0; }
+  .mode-toggle { order: 3; flex: none; margin-top: 6px; }
+  .topbar .mode-toggle button { min-height: 42px; }
+  #btn-copy-link { order: 4; flex: none; margin-top: 6px; }
+  #btn-reset { order: 5; flex: none; margin-top: 6px; }
+  #btn-reset .long { display: none; }
+  .topbar button { white-space: nowrap; }
+  .topbar .mode-toggle button { padding: 3px 12px; }
+  .topbar .theme-toggle { min-height: 36px; } /* keeps the two-row header under 100 px; the row-2 controls stay 44 px */
+}
+
+/* Back bar: full width, pinned under the header after "Watch it" / a light card opens Advanced (M8). */
+.back-bar { grid-area: back; position: sticky; top: 0; z-index: 30; display: flex; align-items: center; min-height: 44px; padding: 4px 12px; background: var(--panel-2); border-bottom: 1px solid var(--border); }
+.back-bar[hidden] { display: none; }
+.back-bar button { min-height: 36px; font-weight: 600; }
+
+.skip-link { position: absolute; left: 8px; top: -60px; z-index: 100; background: var(--accent); color: #fff; padding: 8px 12px; border-radius: 6px; }
+.skip-link:focus { top: 8px; }
+:root[data-theme='dark'] .skip-link { color: #0b1020; }
+#app[data-mode='advanced'] .skip-link { display: none; }
+
+/* Viewer toolbar (M7): row 1 = the four views; the rest sits inline on wide screens and in a "More" panel on phones. */
+.viewer-bar { position: relative; }
+.viewer-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.viewer-views { display: inline-flex; }
+.viewer-views button { border-radius: 0; margin-left: -1px; }
+.viewer-views button:first-child { border-radius: 5px 0 0 5px; margin-left: 0; }
+.viewer-views button:last-child { border-radius: 0 5px 5px 0; }
+.viewer-more { display: contents; }
+.viewer-more-btn { display: none; }
+.viewer-hint {
+  position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); max-width: calc(100% - 24px);
+  background: color-mix(in srgb, var(--text) 82%, transparent); color: var(--panel); font-size: 13px; padding: 6px 12px; border-radius: 16px;
+  pointer-events: none; opacity: 0; transition: opacity 0.4s; text-align: center; z-index: 3;
+}
+.viewer-hint.show { opacity: 1; transition-duration: 0.12s; }
+@media (prefers-reduced-motion: reduce) { .viewer-hint { transition: none; } }
+@media (max-width: 600px) {
+  .viewer-toolbar { flex-wrap: nowrap; }
+  .viewer-views { flex: 1 1 auto; }
+  .viewer-views button { flex: 1 1 0; }
+  .viewer-more-btn { display: inline-block; flex: none; }
+  .viewer-more { display: none; position: absolute; left: 0; right: 0; top: 100%; z-index: 6; flex-direction: column; align-items: stretch; gap: 2px;
+    padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--border); box-shadow: 0 6px 12px rgb(0 0 0 / 20%); }
+  .viewer-more.open { display: flex; }
+  .viewer-more .steer-ctl { width: 100%; }
+}
+@media (pointer: coarse), (max-width: 600px) {
+  button, .tabs button { min-height: 44px; }
+  .topbar button, .viewer-bar button { min-height: 44px; }
+  .steer-ctl { min-height: 44px; }
+  .steer-ctl input[type='checkbox'] { width: 22px; height: 22px; }
+  .steer-ctl input[type='range'] { height: 32px; }
+  .steer-ctl .steer-num { min-height: 36px; }
+  .viewer-more-btn, .viewer-views button { min-width: 44px; }
+}

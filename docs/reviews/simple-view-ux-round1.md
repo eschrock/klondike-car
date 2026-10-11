@@ -197,3 +197,20 @@ Simple view, UX and accessibility review, round 1. Reviewed: spec, D-30, `index.
 4. The light theme passes 4.5:1 for all text (run axe or a contrast check).
 5. Dragging the rider slider produces at most one screen-reader announcement.
 6. After "Watch it", Back to simple is visible on phone, and a reload opens Simple.
+
+---
+
+## Round-1 fixes (implemented)
+
+- **M1** Header is two rows at 375 px (99 px tall): title + theme, then Simple|Advanced + Copy link + Reset. Advanced is visible.
+- **M2** Touch: one finger scrolls the page (`touch-action: pan-y`, `touches.ONE` off), two fingers orbit and pinch. Desktop: the wheel scrolls the page unless Ctrl/Cmd is held or the canvas was clicked; a fading hint says so. Not tested on a physical phone.
+- **M3** Headline keys on the all-green run ("Comfortably safe for riders up to 180 lb"); yellow weights go in the subline; caveat under the bar; `failReason('')` falls back to "a safety check fails". `SweepResult.green` added.
+- **M4** Plain-English reasons and lights, no kingpin/turntable/bolster in the main copy, a next-step line, "Details ›" on cards, the Analysis-tab footnote removed.
+- **M5** Order: headline, bar, rider slider, legend and limits, lights, glance, Watch it. The spec card is gone (truck size lives in the Truck tile). Left column is "Change the cart" with five knobs. The pinned cart is 34vh in Simple on phones.
+- **M6** Text-safe color tokens (`--sv-*-text`), `--muted` darkened, 12 px bar glyphs.
+- **M7** Toolbar: views row plus a "More" panel on phones, 44 px targets on coarse pointers, "Try steering" / "Steering angle (each way)", "Show rider".
+- **M8** Demos and lights no longer save Advanced as the mode; sticky full-width "Back to the simple view" bar restores the scroll position; demos renamed and labeled "(opens the detailed view)".
+- **M9** One debounced `role=status` message (600 ms), no `aria-busy`, `aria-valuetext` on the sliders.
+- **M10** DOM order is viewer, safety, controls, so the CSS `order` rules are gone.
+- **N1** Tap a block to set the weight, note line under the bar, a check glyph in green cells. **N2** glance wording and status colors. **N3** jog and brake references, "Close to the limit" / "Problem" legend. **N4** theme button shows icon plus word and names the next state. **N5** hints, 44 px reset targets. **N6** reduced motion. **N7** visible "Is it safe?" heading, skip link, "Change the cart".
+- **Skipped:** N3 severity ordering of the cards (cards would jump while dragging the slider); N5 reset undo or confirm and live turning-circle readout; N8 "Design: Standard" label (all-fail next step is done).
