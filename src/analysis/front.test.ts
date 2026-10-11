@@ -91,13 +91,15 @@ describe('steer-stops (M1)', () => {
     const rEff = ((2 / 3) * (plan.rb ** 3 - plan.ra ** 3)) / (plan.rb ** 2 - plan.ra ** 2);
     const Hgov = Math.max(...strikeCases(ctxOp, goal).map((s) => s.H));
     const K60 = y.Hw + 0.2 * (y.T / rEff);
-    expect(det(c, 'net kingpin load').value).toBeCloseTo(K60, 6);
-    expect(det(c, 'net kingpin load').limit).toBeCloseTo(Hgov, 6);
-    expect(det(c, 'net kingpin load').util).toBeLessThan(1);
+    // With the 60/40 split the pair stays under the governing strike, so the row does not list it (governs-only detail).
+    expect(K60).toBeLessThan(Hgov);
+    expect(c.details?.some((d) => d.name.startsWith('net kingpin load'))).toBe(false);
     const half = steerStopsCheck(ctxOf({ ...defaults, steerStopLoadShare: 0.5 }));
-    expect(det(half, 'net kingpin load').value).toBeCloseTo(y.Hw, 6);
+    expect(half.details?.some((d) => d.name.startsWith('net kingpin load'))).toBe(false);
+    // One stop alone: H_w + T/r_eff exceeds the governing strike, so the detail appears and fails the row.
     const single = steerStopsCheck(ctxOf({ ...defaults, steerStopLoadShare: 1 }));
     expect(det(single, 'net kingpin load').value).toBeCloseTo(y.Hw + y.T / rEff, 6);
+    expect(det(single, 'net kingpin load').limit).toBeCloseTo(Hgov, 6);
     expect(single.status).toBe('fail'); // one stop alone would overload the kingpin: the stops must be fitted so that both close
   });
   it('the check reads the dog bolts from the part joints: one bolt instead of two doubles the shear and the tension per bolt', () => {
