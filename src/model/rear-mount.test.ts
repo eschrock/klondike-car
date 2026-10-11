@@ -143,7 +143,7 @@ describe('rear axle beam seat and hold-downs (MUST-4)', () => {
     expect(seat).not.toBeNull();
     expect(seat.depth).toBeCloseTo(L.beamR.top - (L.deckBot - defaults.railDepthIn), 9); // 1.35"
     expect(seat.x1 - seat.x0).toBeCloseTo(L.beamR.thick + 2 * defaults.beamNotchClearIn, 9);
-    expect(seat.remain).toBeGreaterThan(2);
+    expect(seat.remain).toBeGreaterThan(1.5); // the 3" rail (one deck level, D-52) keeps 1.65" over the notch
     // the overlap of the rail's box and the beam is exactly the notch: no more than its depth and width
     const beam = worldAABB(byId('beam-R'));
     const rail = worldAABB(byId('rail-cabin-L'));
@@ -251,21 +251,12 @@ describe('brake shaft stock and cross-drilling (S9), BOM parts (S13)', () => {
     expect(sh.notes).toMatch(/cutting fluid/);
     expect(sh.joints!.filter((j) => j.type === 'pin').length).toBeGreaterThanOrEqual(5);
   });
-  it('the bearing plates, spacer washers, pivot post, doublers, shield and hold-downs are in the BOM with a source', () => {
-    for (const id of ['brake-bearing-plate-L', 'brake-bearing-plate-R', 'brake-lever-spacer', 'brake-lever-pin', 'brake-shoe-shield-L', 'brake-shoe-shield-R', 'beam-hold-down-L', 'beam-hold-down-R', 'brake-bushing-L', 'brake-rail-doubler-L']) {
+  it('the bearing plates, spacer washers, pivot post, doublers and hold-downs are in the BOM with a source', () => {
+    for (const id of ['brake-bearing-plate-L', 'brake-bearing-plate-R', 'brake-lever-spacer', 'brake-lever-pin', 'beam-hold-down-L', 'beam-hold-down-R', 'brake-bushing-L', 'brake-rail-doubler-L']) {
       const p = byId(id);
       expect(p, id).toBeDefined();
       if (p.kind !== 'lumber') expect(p.sourcing?.vendor, id).toBeTruthy();
     }
-  });
-  it('the splash shield is 1/16" sheet on the shoe back, does not lower the lowest brake point, and weighs a few hundredths of a pound', () => {
-    const sh = byId('brake-shoe-shield-L');
-    expect(sh.massLb).toBeLessThan(0.1);
-    expect(sh.massLb).toBeGreaterThan(0.005);
-    const pad = worldAABB(byId('brake-shoe-L'));
-    expect(worldAABB(sh).min[2]).toBeGreaterThanOrEqual(pad.min[2] - 0.05);
-    const off = buildModel({ ...defaults, brakeShieldThickIn: 0 });
-    expect(off.some((x) => x.id.startsWith('brake-shoe-shield'))).toBe(false);
   });
   it('the girder (hull-beam) frame and a stub-axle design still build, mount and stay valid', () => {
     for (const q of [{ frameStyle: 1 }, { axleStyle: 1 }] as Partial<Params>[]) {

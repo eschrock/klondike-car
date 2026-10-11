@@ -17,9 +17,9 @@ export const ladderRailY = (hw: number, side: number, railT: number): [number, n
 import type { Mat4, Part, Vec2, Vec3 } from './types';
 
 /**
- * D-45 frame: the cabin rail (or girder) is one bent lamination from the rear transom to x = xn, following the plan S-curve with its outer face
- * flush under the chine; the straight nose rail is scarfed on at xn (both are at the cabin level: the side lines do not step). A full-width
- * shoulder beam under the deck step ties the two rail pairs together (build review MUST-1). Cabin joists in the curve are cut to the rail's inner face.
+ * D-45/D-52 frame: the cabin rail (or girder) is one bent lamination from the rear transom to x = xn, following the plan curve with its outer face
+ * flush under the chine; the straight nose rail is scarfed on at xn and runs to the front transom, notched for the front beam. One deck level: no step and
+ * no shoulder beam. Joists in the curve and in the bow are cut to the rail's inner face.
  */
 export function buildFrame(ctx: Ctx): Part[] {
   const { p, L } = ctx;
@@ -36,8 +36,6 @@ export function buildFrame(ctx: Ctx): Part[] {
   /** Rail height: the usual depth below the cabin deck, plus the rise to the chine bottom (captured-ply: the nose deck level, D-45). */
   const hRail = railD + (L.railTop - L.deckBot);
   const zRail = L.railTop - hRail / 2;
-  const ledge = L.railTop - L.deckBot; // the cabin deck sits on a ledge notched into the rail's inner face (open at the top)
-  const ledgeLb = (len: number) => ((len * p.deckCaptureDepthIn * ledge) / 1728) * p.oakDensityPcf;
   /** Offset from the web plane of the member's inner face. */
   const dInner = ladder ? L.side / 2 - railT : -L.side / 2;
 
@@ -92,12 +90,12 @@ export function buildFrame(ctx: Ctx): Part[] {
     if (ladder) {
       parts.push(finishRail(bandPart(ctx, {
         id: `rail-cabin-${tag}`, partNo: 'rail-cabin', name: `Cabin rail ${tag}`, group: 'frame', mat: 'oak', s, path, t: railT, h: hRail, zc: zRail,
-        extraLb: -ledgeLb(L.xn - rearTx) - cutLb,
+        extraLb: -cutLb,
         plies: Math.max(1, Math.round(railT / strip)), step: STEP.frame, grain: 'x',
-        notes: `Bent lamination (${Math.max(1, Math.round(railT / strip))} plies of ${strip}") from the rear transom face along the plan S-curve to x = ${L.xn.toFixed(1)}", outer face flush under the chine (the rail follows the chine, so the chine sits on it all the way, D-43/D-45); inside radius ${(L.hull.minRadius - L.side / 2 - railT / 2 + dRail * 0).toFixed(1)}" vs ${(p.hullLamMinRadiusFactor * strip).toFixed(1)}" limit. ${L.ackHull ? `The rail's top is flush with the chine bottom AND the deck underside (one deck level, D-52): no ledge, no relief; the deck bonds to the rail top and its edge enters the chine's rabbet. ` : `The rail's top is flush with the chine bottom, 1" above the cabin deck: the cabin deck edge sits on a ${p.deckCaptureDepthIn}" ledge notched into the rail's inner face (open at the top, so the deck drops in; the ply edge is against oak); above the deck the rail's inner face is relieved flush with the chine's inner face. `}The chine sits on the top of the rail's outer ${L.side}" and is Domino-tied (vertical Dominos) and epoxied to it every ${p.chineTieSpacingIn}"; the deck bonds to the rail top. Frame + deck are one glued unit, turned over and lowered into the inverted side assemblies. Scarfed (1:8, ${(8 * railT).toFixed(0)}") to the nose rail at x = ${L.xn.toFixed(1)}"${L.ackHull ? ', in the straight bow run' : '; the shoulder beam Dominos into its inner face just behind that'}.`,
+        notes: `Bent lamination (${Math.max(1, Math.round(railT / strip))} plies of ${strip}") from the rear transom face along the plan S-curve to x = ${L.xn.toFixed(1)}", outer face flush under the chine (the rail follows the chine, so the chine sits on it all the way, D-43/D-45); inside radius ${(L.hull.minRadius - L.side / 2 - railT / 2 + dRail * 0).toFixed(1)}" vs ${(p.hullLamMinRadiusFactor * strip).toFixed(1)}" limit. The rail's top is flush with the chine bottom AND the deck underside (one deck level, D-52): no ledge, no relief; the deck bonds to the rail top and its edge enters the chine's rabbet. The chine sits on the top of the rail's outer ${L.side}" and is Domino-tied (vertical Dominos) and epoxied to it every ${p.chineTieSpacingIn}"; the deck bonds to the rail top. Frame + deck are one glued unit, turned over and lowered into the inverted side assemblies. Scarfed (1:8, ${(8 * railT).toFixed(0)}") to the nose rail at x = ${L.xn.toFixed(1)}", in the straight bow run.`,
       }), s, tag));
-      if (L.ackHull && L.noseRailEnd - L.xn > 0.5) {
-        // Ackermann hull (D-52): the nose rail follows the straight bow run, outer face flush under the chine, from the scarf at xn to the front transom's inner face.
+      if (L.noseRailEnd - L.xn > 0.5) {
+        // The nose rail (D-52) follows the straight bow run, outer face flush under the chine, from the scarf at xn to the front transom's inner face.
         const a = s * L.bowHeading;
         const run = sidePath(L, dRail, L.xn, L.noseRailEnd);
         const P0 = run[0], P1 = run[run.length - 1];
@@ -127,19 +125,12 @@ export function buildFrame(ctx: Ctx): Part[] {
           rail.notes += ` FRONT BEAM SEAT (D-52): underside notched ${f2(seatF.x1 - seatF.x0)}" wide × ${f2(seatF.depth)}" deep so the rail bears on the top of the front beam; ${f2(seatF.remain)}" of rail remains over the notch${seatF.ok ? '' : ' (BELOW the 1" floor)'}. Held down by the 316 angle bracket inside the rail (front-beam-hold-down-${tag}).`;
         }
         parts.push(rail);
-      } else if (L.noseRailEnd - L.xn > 0.5) {
-        const [rn0, rn1] = ladderRailY(L.hwN, L.side, railT);
-        parts.push(box(ctx, {
-          id: `rail-nose-${tag}`, partNo: 'rail-nose', name: `Nose rail ${tag}`, group: 'frame', mat: 'oak', step: STEP.frame, grain: 'x',
-          ...span([L.xn, L.noseRailEnd], [s * rn0, s * rn1].sort((a, b) => a - b) as [number, number], [L.deckBot - railD, L.railTop]),
-          notes: `Straight continuation of the cabin rail at the SAME height (the side lines do not step, D-45), flush under the nose chine (D-43). Scarfed to the cabin rail at x = ${L.xn.toFixed(1)}". Ends clear of the swinging turntable corners (D-12); beyond it the continuous chine + gunwale + web side beam and the bolster carry the deck.`,
-        }));
       }
     } else {
       // Hull-as-beam: the cabin side girder is deepened by railDepth. The nose is not deepened, because the steered axle beam sweeps under it.
       parts.push(finishRail(bandPart(ctx, {
         id: `girder-cabin-${tag}`, partNo: 'girder-cabin', name: `Cabin side girder ${tag}`, group: 'frame', mat: 'oak', s, path, t: L.side, h: hRail, zc: zRail,
-        extraLb: -ledgeLb(L.xn - rearTx) - cutLb,
+        extraLb: -cutLb,
         plies: Math.max(1, Math.round(L.side / strip)), step: STEP.frame, grain: 'x',
         notes: 'Bent lamination under the chine from the rear transom face to x = xn, following the plan S-curve (D-45); epoxy-laminated under the chine and Domino-tied to it (D-43), joined to the crossmembers with loose tenons (the girder is only the chine thickness).',
       }), s, tag));
@@ -147,7 +138,6 @@ export function buildFrame(ctx: Ctx): Part[] {
   }
 
   // Crossmembers / joists, between the rails (ladder) or the side girders (hull). In the S-curve the joist is cut to the member's inner face at its narrowest point.
-  const noseSpan = ladder ? L.hwN + L.side - railT : L.hwN;
   const innerAt = (x0: number, x1: number) => Math.min(...sidePath(L, dInner, x0, x1).map((q) => q[1]));
   L.cabinJoistX.forEach((x, i) => {
     const half = innerAt(x - L.joistT / 2, x + L.joistT / 2);
@@ -157,14 +147,31 @@ export function buildFrame(ctx: Ctx): Part[] {
       ...(half < L.hwC + (ladder ? L.side - railT : 0) - 1e-6 ? { notes: `In the S-curve: ends cut square to the joist and the rail inner face is ${half.toFixed(2)}" off the centerline here (the length is cut to the narrowest point under the joist; fill the wedge gap with thickened epoxy).` } : {}),
     }));
   });
+  // Nose joists (D-52 integration): the center linkage corridor (Layout.front.keepOut.center: the bellcrank, links, tongue ear and hinge clevis stand up to 0.38" under
+  // the deck) leaves no room for a joist across the middle, so each nose joist is cut into a left and a right piece from the rail inner face to the nose stringer.
+  const ns = L.noseStringers;
   L.noseJoistX.forEach((x, i) => {
-    // Ackermann hull: the bow converges, so a nose joist is cut to the rail's inner face at its narrowest point, like the cabin joists in the curve.
-    const half = L.ackHull ? innerAt(x - L.joistT / 2, x + L.joistT / 2) : noseSpan;
-    parts.push(box(ctx, {
-      id: `joist-nose-${i + 1}`, partNo: 'joist-nose', name: `Nose crossmember ${i + 1}`, group: 'frame', mat: 'oak', step: STEP.frame, grain: 'y',
-      ...span([x - L.joistT / 2, x + L.joistT / 2], [-half, half], [L.noseBot - jD, L.noseBot]),
-      ...(L.ackHull ? { notes: `Straddles the front beam (beam-F stands in the joist depth: the joist on each side of it, like the rear beam, D-47). Ends cut square; the bow rail inner face is ${half.toFixed(2)}" off the centerline at the narrow end (fill the wedge gap with thickened epoxy).` } : {}),
-    }));
+    // The bow converges, so a nose joist is cut to the rail's inner face at its narrowest point, like the cabin joists in the curve.
+    const half = innerAt(x - L.joistT / 2, x + L.joistT / 2);
+    if (half < ns.y1 + 0.5) return;
+    for (const { s, tag } of SIDES) {
+      parts.push(box(ctx, {
+        id: `joist-nose-${i + 1}-${tag}`, partNo: 'joist-nose', name: `Nose crossmember ${i + 1} ${tag}`, group: 'frame', mat: 'oak', step: STEP.frame, grain: 'y',
+        ...span([x - L.joistT / 2, x + L.joistT / 2], [Math.min(s * ns.y1, s * half), Math.max(s * ns.y1, s * half)], [L.deckBot - jD, L.deckBot]),
+        notes: `Half of a nose crossmember, from the nose stringer to the rail (the center ${f2(2 * ns.y0)}" is the steering-linkage corridor under the deck, so no joist crosses it). It straddles the front beam (beam-F stands in the joist depth: the joist on each side of it, like the rear beam, D-47). Ends cut square; the bow rail inner face is ${half.toFixed(2)}" off the centerline at the narrow end (fill the wedge gap with thickened epoxy).`,
+      }));
+    }
+  });
+  // Nose stringers: fore-aft oak beside the corridor, carrying the deck across the middle where no joist can; in runs either side of the front beam.
+  ns.runs.forEach(([xa, xb], k) => {
+    if (xb - xa < 1) return;
+    for (const { s, tag } of SIDES) {
+      parts.push(box(ctx, {
+        id: `stringer-nose-${tag}${k + 1}`, partNo: 'stringer-nose', name: `Nose stringer ${tag}${k + 1}`, group: 'frame', mat: 'oak', step: STEP.frame, grain: 'x',
+        ...span([xa, xb], [Math.min(s * ns.y0, s * ns.y1), Math.max(s * ns.y0, s * ns.y1)], [L.deckBot - jD, L.deckBot]),
+        notes: `${f2(L.joistT)}" × ${f2(jD)}" oak glued to the deck underside ${f2(ns.y0)}" off the centerline, just outside the steering-linkage corridor (Layout.front.keepOut.center), so the nose deck is carried across the middle by two stringers ${f2(2 * ns.y0 - 0.1)}" apart instead of by joists. The ${k === 0 ? 'rear' : 'front'} run ${k === 0 ? 'ends at the front beam gap' : 'starts at the front beam gap'}; the beam passes between the straddling joists. The nose joist halves and the front-brake cable run butt against its outer face; the cables pass through 1/4" holes drilled in it (a cable hole per stringer, drilled at the equalizer height).`,
+      }));
+    }
   });
   // Hold-down angles for the front beam (D-52, the D-48 pattern): 316 angle inside each nose rail, upright leg bolted through the rail, flat leg down through the beam.
   const seatF = frontBeamSeat(p, L);
@@ -203,15 +210,6 @@ export function buildFrame(ctx: Ctx): Part[] {
       });
       parts.push(part);
     }
-  }
-  // Shoulder beam (build review MUST-1, D-45): full width, under the deck step, between the (almost nose-width) rail pairs; the cabin deck butts its
-  // rear face (the riser), the nose deck sits on its top. The joint records (joinery.ts) Domino it into both rail pairs.
-  if (L.xn - L.xs > 0.2) {
-    parts.push(box(ctx, {
-      id: 'shoulder-beam', partNo: 'shoulder-beam', name: 'Shoulder beam', group: 'frame', mat: 'oak', step: STEP.frame, grain: 'y',
-      ...span([L.xs, L.xn], [-noseSpan, noseSpan], [L.deckBot - jD, L.noseBot]),
-      notes: `${L.shoulderBeam}" × ${(2 * noseSpan).toFixed(1)}" × ${(L.noseBot - L.deckBot + jD).toFixed(2)}" oak under the 1" deck step, just behind the end of the S-curve (D-45). Dominoed (vertical, with the frame) into the inner faces of the cabin rails and the nose rails' scarf; its rear face is the visible riser (the cabin deck's banded front edge butts it), its top carries the nose deck and the nose joists. This is the cabin-to-nose load path (MUST-1): rail, beam, rail.`,
-    }));
   }
   return parts;
 }

@@ -82,10 +82,8 @@ export const GROUP_OF_ID: Record<string, CheckGroup> = {
   'tie-rod': 'Structure', 'drag-link': 'Structure', bellcrank: 'Structure', 'steer-stop-load': 'Structure', 'tongue-tie': 'Structure', 'stick-cable': 'Structure',
   'brake-force': 'Braking', 'brake-traction': 'Braking', 'brake-ratio': 'Braking', 'brake-clear': 'Braking',
   'brake-lever': 'Structure', 'brake-links': 'Structure', 'brake-shaft': 'Structure', 'brake-shoes': 'Structure', 'brake-ratchet': 'Structure', 'handle-sockets': 'Structure',
-  'kingpin-strike': 'Structure', 'roll-side-bearer': 'Structure', 'roll-kingpin-uplift': 'Structure', 'roll-bolster-attach': 'Structure',
-  'steer-stops': 'Structure', 'kingpin-peak': 'Structure', 'pitch-path': 'Structure', 'turntable-ring': 'Structure', 'kingpin-split': 'Structure', 'bridle-tie': 'Structure',
   'axle-stress': 'Structure', 'beam-front': 'Structure', 'beam-rear': 'Structure', 'bearing-groove': 'Structure', rails: 'Structure', deck: 'Structure',
-  kingpin: 'Structure', turntable: 'Structure', tongue: 'Structure',
+  tongue: 'Structure',
   // Workstream D (seat, storage, fittings)
   'seat-back': 'Structure', 'seat-grip': 'Structure', 'storage-pack': 'Structure', 'storage-lid-open': 'Structure', 'lash-points': 'Structure', lift: 'Structure', 'foot-stop': 'Structure', 'lash-load': 'Structure',
 };

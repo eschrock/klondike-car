@@ -1,10 +1,10 @@
 // WS-B (Phase 3b): candidate hull plan shapes against the Ackermann tire sweep; numbers for docs/phase3b-wsB-notes.md and the SVG.
 // node scripts/run-ts.mjs scripts/hull-shapes.ts [svg]
 import { writeFileSync } from 'node:fs';
-import { phase3bDefaults, ackSpec, bowSpecOf, footZoneX, requiredCurveRadius } from '../src/params';
+import { defaultParams, ackSpec, bowSpecOf, footZoneX, requiredCurveRadius } from '../src/params';
 import { buildPlanCurve, fitBowCurve, latestCurveEnd, leftTirePolys, minGapToTires, offsetY, sidePolyline, sweepPinch, type PlanCurve } from '../src/model/hull-curve';
 
-const p0 = phase3bDefaults();
+const p0 = defaultParams();
 const side = p0.sideThicknessIn;
 const yA = p0.bodyWidthIn / 2 - side / 2;
 const xT = p0.wheelbaseIn + p0.frontOverhangIn - p0.transomThicknessIn;

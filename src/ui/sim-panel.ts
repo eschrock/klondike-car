@@ -166,8 +166,8 @@ export function mountSimPanel(host: HTMLElement, deps: SimPanelDeps): SimPanel {
     slider('Puller circles', 'The pull direction turns at this rate: the puller walks a circle (deg/s, + = left).', -30, 30, 1, () => controls.pullTurnDegPerS, (v) => (controls.pullTurnDegPerS = v), '°/s').row,
     modeSel.row, lockSlider.row);
   const brakeGroup = group('Brake (live)', true,
-    toggle('Brake on', 'Friction torque on the wheels (the front share goes to the front wheels in the Ackermann cart; the old turntable cart brakes the rear only).', () => controls.brakeOn, (v) => (controls.brakeOn = v), false),
-    slider('Brake force', 'Total braking force at the tire contact patches (all four wheels in the Ackermann cart), lbf.', 0, 200, 5, () => controls.brakeLbf, (v) => (controls.brakeLbf = v), ' lbf').row);
+    toggle('Brake on', 'Friction torque on the wheels (the front share goes to the front wheels, the solved bias of the takeoff arm).', () => controls.brakeOn, (v) => (controls.brakeOn = v), false),
+    slider('Brake force', 'Total braking force at the tire contact patches (all four wheels), lbf.', 0, 200, 5, () => controls.brakeLbf, (v) => (controls.brakeLbf = v), ' lbf').row);
 
   const notes = h('details', { class: 'sp-group sp-notes' }, h('summary', {}, 'What this models, and what it does not'),
     h('ul', {},

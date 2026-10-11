@@ -21,19 +21,19 @@ const g = brakeGeometry(ctx.p, ctx.L);
 
 describe('wheel / hub rating (N-7)', () => {
   const c = byId(cs, 'wheel-rating');
-  it('is a Structure row with the assumed 300 lb rating, three details, and passes at the defaults', () => {
+  it('is a Structure row with the assumed 300 lb rating and three details; on the 1" bump basis the peak vertical force FAILS at the defaults (flip notes: a rated wheel or a lower bump rate)', () => {
     expect(c.group).toBe('Structure');
     expect(defaults.wheelRatingLb).toBe(300);
-    expect(c.status).not.toBe('fail');
+    expect(c.status).toBe('fail'); // honest: peak 1,240 lbf against 2 x 300 (docs/phase3b-flip-notes.md)
     expect(c.details!.length).toBe(3);
-    expect(c.how).toMatch(/READ IT OFF THE VENDOR LISTING/);
+    expect(c.how).toMatch(/vendor listing/);
   });
-  it('static load on the heavier wheel, peak = static x dynamic factor vs 2 x rating, skid = mu P vs half the rating', () => {
+  it('static load on the heavier wheel, bump peak (V + static) vs 2 x rating, skid = mu P vs half the rating', () => {
     const stat = det(cs, 'wheel-rating', 'static load');
-    const peak = det(cs, 'wheel-rating', 'dynamic peak');
+    const peak = det(cs, 'wheel-rating', 'peak vertical');
     const side = det(cs, 'wheel-rating', 'lateral skid');
     expect(stat.limit).toBe(300);
-    expect(peak.value).toBeCloseTo(stat.value * defaults.dynamicFactor, 6);
+    expect(peak.value).toBeGreaterThan(stat.value * defaults.dynamicFactor); // the bump pulse is a larger multiple than the old dynamic factor
     expect(peak.limit).toBe(300 * defaults.wheelRatingPeakMult);
     expect(side.value).toBeCloseTo(defaults.tireGroundMu * stat.value, 6);
     expect(side.limit).toBeCloseTo(300 * defaults.wheelSideRatingFrac, 9);
@@ -41,31 +41,32 @@ describe('wheel / hub rating (N-7)', () => {
     expect(stat.value).toBeGreaterThan(100);
     expect(stat.value).toBeLessThan(160);
   });
-  it('a 100 lb rating fails (static), a 400 lb rating passes with room', () => {
+  it('a 100 lb rating fails (static); a 650 lb rated wheel passes the 1" bump peak with room', () => {
     expect(byId(run({ wheelRatingLb: 100 }), 'wheel-rating').status).toBe('fail');
+    expect(byId(run({ wheelRatingLb: 650 }), 'wheel-rating').status).not.toBe('fail');
     expect(byId(run({ wheelRatingLb: 400 }), 'wheel-rating').util).toBeLessThan(byId(cs, 'wheel-rating').util!);
   });
 });
 
 describe('rear axle beam seat (MUST-4)', () => {
   const seat = beamSeat(ctx.p, ctx.L)!;
-  it('passes at the defaults with the notch ceiling bearing worked by hand', () => {
+  it('on the 1" bump basis the struck wheel\'s V + static goes into ONE rail: the notch ceiling and the rail net-section shear FAIL at the defaults (flip notes), worked by hand', () => {
     const c = byId(cs, 'rear-beam-seat');
-    expect(c.status).not.toBe('fail');
+    expect(c.status).toBe('fail');
     const w = ctx.L.beamR.thick;
     const bear = det(cs, 'rear-beam-seat', 'notch ceiling');
-    // V = rear axle load x dynamic factor / 2 per rail on beam.thick x rail thickness
-    expect(bear.value).toBeCloseTo((bear.value * w * seat.railT) / (w * seat.railT), 9);
-    expect(bear.value * w * seat.railT * 2).toBeGreaterThan(300); // axle load x 3 is several hundred lbf
+    // bearing = V_total / (beam thickness x rail thickness); several hundred psi against the 358 psi design
+    expect((bear.value * w * seat.railT)).toBeGreaterThan(1000); // the 1" bump: about 1,240 lbf
     expect(bear.limit).toBeGreaterThan(300);
     expect(c.how).toMatch(/NOTCHED/);
   });
-  it('the rail net-section shear above the notch is the tightest detail, below its limit', () => {
-    const v = det(cs, 'rear-beam-seat', 'rail shear');
-    expect(v.util).toBeLessThan(0.95);
+  it('the rail net-section shear above the notch is the tightest detail (it is the failing one: remaining rail 1.65 inch)', () => {
+    const v = det(cs, 'rear-beam-seat', 'NORMAL: rail shear');
+    expect(v.util).toBeGreaterThan(1);
+    expect(seat.remain).toBeCloseTo(1.65, 2);
   });
-  it('the hold-down bolts carry rebound and the side skid in 316 tension, with washers on oak', () => {
-    const t = det(cs, 'rear-beam-seat', 'rebound tension');
+  it('the hold-down bolts carry rebound and the side skid in 316 tension, with washers on oak: far from their limits', () => {
+    const t = det(cs, 'rear-beam-seat', 'hold-down tension on each vertical bolt');
     expect(t.util).toBeLessThan(0.2);
     expect(det(cs, 'rear-beam-seat', 'side skid pull').util).toBeLessThan(0.3);
     expect(det(cs, 'rear-beam-seat', 'washer').util).toBeLessThan(1);
@@ -128,10 +129,10 @@ describe('closed-linkage statics of the bearing plates (MUST-3)', () => {
 });
 
 describe('brake abuse and headroom (N-8)', () => {
-  it('brake-abuse is a Structure row at yield level, the governing detail is named, and it passes (no marginal) at 100 lbf', () => {
+  it('brake-abuse is a Structure row at yield level, the governing detail is named, and it does not fail (marginal, 0.94, with the front brake in the chain) at 100 lbf', () => {
     const c = byId(cs, 'brake-abuse');
     expect(c.group).toBe('Structure');
-    expect(c.status).toBe('pass');
+    expect(c.status).not.toBe('fail');
     expect(c.details!.some((d) => d.name.startsWith('lever:'))).toBe(true);
     expect(c.details!.some((d) => d.name.startsWith('shaft/mounts:'))).toBe(true);
     expect(c.details!.some((d) => d.name.startsWith('ratchet:'))).toBe(true);
@@ -148,27 +149,22 @@ describe('brake abuse and headroom (N-8)', () => {
     const d = det(run({ brakeShaftDiameterIn: 0.75 }), 'brake-abuse', 'shaft bending + torsion');
     expect(d.value).toBeGreaterThan(d.limit);
   });
-  it('the headroom 1.2 trades travel for force: the goal-rider handle force is at most 0.87 of the limit, grip travel inside the 6.5" limit', () => {
+  it('the headroom 1.2 trades travel for force: the goal-rider handle force is at most 0.92 of the limit (the hip lever adds friction), grip travel inside the 6.5" limit', () => {
     const f = byId(cs, 'brake-force');
-    expect(f.cases!.goal!.value / defaults.handleForceLimitLbf).toBeLessThan(0.87);
-    expect(f.status).toBe('pass');
+    expect(f.cases!.goal!.value / defaults.handleForceLimitLbf).toBeLessThan(0.92);
+    expect(f.status).not.toBe('fail');
     expect(g.gripTravelIn).toBeLessThan(defaults.brakeGripTravelMaxIn);
     const r = byId(cs, 'brake-ratio');
     expect(r.details!.some((d) => d.name.includes('grip travel'))).toBe(true);
     expect(r.how).toMatch(/Grip travel/);
     // the travel limit is enforced: a 5" limit turns the row from pass to fail/marginal
     expect(byId(run({ brakeGripTravelMaxIn: 5 }), 'brake-ratio').status).not.toBe('pass');
-    // and the old 1.1 headroom at the 3/8" stroke would have been 6.4" of travel with the goal case at 0.92 of the limit
-    const old = run({ brakeRatioHeadroom: 1.1, brakeShoeTravelIn: 0.375 });
-    expect(byId(old, 'brake-force').cases!.goal!.util).toBeGreaterThan(byId(cs, 'brake-force').cases!.goal!.util);
   });
-  it('the Simple view safe range is reported by riderSweep (the limit is the front-end rows, not the brake or rear mounts)', () => {
+  it('the Simple view safe range is reported by riderSweep: no weight is safe at the flip, and the failing rows include the rear end on the bump basis (flip notes)', () => {
     const r = riderSweep(defaults);
-    // Honesty fix (critic Phase 3 r3 MUST-1..3): no weight is safe until the front end is redesigned; the brake and rear rows must still never be the failing ones.
     expect(r.safe).toBeNull();
-    expect(r.operating.worst?.id).toBe('steer-stops');
-    for (const id of ['brake-abuse', 'wheel-rating', 'rear-beam-seat', 'brake-shaft', 'brake-lever']) {
-      expect(r.points.every((p) => !p.fails.includes(id)), id).toBe(true);
-    }
+    expect(r.operating.worst).toBeTruthy();
+    for (const id of ['wheel-rating', 'rear-beam-seat', 'axle-stress']) expect(r.operating.fails, id).toContain(id);
+    for (const id of ['brake-shaft', 'brake-lever']) expect(r.points.every((p) => !p.fails.includes(id)), id).toBe(true);
   });
 });

@@ -1,10 +1,10 @@
 /**
- * Phase 3b Stage 1, WS-A: the Ackermann front end PARTS (front-end.ts) built with `ViewState.frontEnd = 'ackermann'` on `phase3bDefaults()`.
+ * Phase 3b Stage 1, WS-A: the Ackermann front end PARTS (front-end.ts) built with `ViewState.frontEnd = 'ackermann'` on `defaultParams()`.
  * Kinematics are in ackermann.test.ts; this file covers the parts, their articulation, the control modes, clearances over the steering sweep and the
  * published geometry. The old turntable front end still builds with the default view (see the last describe).
  */
 import { describe, expect, it } from 'vitest';
-import { phase3bDefaults, defaultParams } from '../params';
+import { defaultParams } from '../params';
 import { lockLimits, poseMatrices, solveSteer } from './ackermann';
 import { transformPoint, obbOverlap, partOBB, partsOverlap } from './bounds';
 import { buildModel } from './index';
@@ -12,10 +12,10 @@ import { computeLayout } from './layout';
 import { TOW_STOP_BLOCK_IN, TOW_STOP_GAP_IN } from './front-layout';
 import type { Part, Vec2, Vec3 } from './types';
 
-const P0 = phase3bDefaults();
+const P0 = defaultParams();
 const L0 = computeLayout(P0);
 const F = L0.front;
-const build = (steerDeg = 0, mode: 'both' | 'tow' | 'ride' = 'both', extra: Record<string, unknown> = {}) => buildModel(P0, { frontEnd: 'ackermann', steerDeg, mode, ...extra });
+const build = (steerDeg = 0, mode: 'both' | 'tow' | 'ride' = 'both', extra: Record<string, unknown> = {}) => buildModel(P0, { steerDeg, mode, ...extra });
 const byId = (parts: Part[], id: string) => parts.find((x) => x.id === id);
 const need = (parts: Part[], id: string) => { const x = byId(parts, id); if (!x) throw new Error(`missing part ${id}`); return x; };
 
@@ -169,7 +169,7 @@ describe('steering parts: control modes and the interlock', () => {
     expect(d).toBeGreaterThan(4);
   });
   it('transport (removed) drops the tongue family and the stick with its cables, keeps the beam, brackets and linkage', () => {
-    const t = buildModel(P0, { frontEnd: 'ackermann', removed: true });
+    const t = buildModel(P0, { removed: true });
     for (const id of ['tongue', 'tongue-link', 'tongue-plate', 'eyebolt-T', 'bridle', 'ride-stick', 'stick-cable-A', 'stick-guard']) expect(byId(t, id), id).toBeUndefined();
     for (const id of ['beam-F', 'bellcrank', 'tie-rod', 'spindle-L']) expect(byId(t, id), id).toBeDefined();
   });
@@ -197,14 +197,11 @@ const ALLOW: Pair[] = [
   { a: /^(stick-cable-[AB]-up|cable-guide-R)$/, b: /^(deck|cable-guide-R|stick-cable-[AB]-up)$/, why: 'the cables pass through the deck slot under the guide (WS-B cuts the slot)' },
   { a: /^wheel-F[LR]$/, b: /^brake-/, why: 'WS-C front brake shoes press the tread' },
 ];
-/** Nose joists conflict with the center linkage corridor (Layout.front.keepOut.center): WS-B must move or notch them. Recorded here, not hidden. */
-const PENDING_WS_B = /^joist-nose-\d+$/;
 const matches = (r: Pair, a: Part, b: Part) => (r.a.test(a.id) && r.b.test(b.id)) || (r.a.test(b.id) && r.b.test(a.id));
 const FRONT_RE = /^(wheel-F|beam-F|kp-bracket|spindle|steer-arm|kingpin-bolt|tie-rod|drag-link|bellcrank|bell-|cable-crossbar|mode-|centering-spring|steer-stop-tow|tongue|eyebolt-T|bridle|ride-stick|stick-|cable-guide)/;
 
-function sweepOverlaps(mode: 'both' | 'ride', degs: number[]): { bad: string[]; pending: Set<string> } {
+function sweepOverlaps(mode: 'both' | 'ride', degs: number[]): { bad: string[] } {
   const bad: string[] = [];
-  const pending = new Set<string>();
   for (const d of degs) {
     const parts = build(d, mode);
     const solid = parts.filter((x) => !x.payload && x.group !== 'reference' && !/^brake-/.test(x.id));
@@ -215,24 +212,21 @@ function sweepOverlaps(mode: 'both' | 'ride', degs: number[]): { bad: string[]; 
         const o = partsOverlap(a, b);
         if (o <= 0.05) continue;
         if (ALLOW.some((r) => matches(r, a, b))) continue;
-        if (PENDING_WS_B.test(a.id) || PENDING_WS_B.test(b.id)) { pending.add(`${a.id} x ${b.id}`); continue; }
         bad.push(`${d} ${mode}: ${a.id} x ${b.id} ${o.toFixed(2)}"`);
       }
     }
   }
-  return { bad, pending };
+  return { bad };
 }
 
 describe('steering parts: overlaps over the steering sweep', () => {
   const lockOuter = lockLimits(F.ack, 'tow').outerDeg;
-  it('no unintended overlaps with the rest of the cart at the tow sweep in 5 deg steps (both view), apart from the nose joists WS-B has yet to move', () => {
+  it('no unintended overlaps with the rest of the cart at the tow sweep in 5 deg steps (both view); the nose joists are split around the linkage corridor', () => {
     const degs: number[] = [];
     for (let d = -35.5; d <= 35.5 + 1e-9; d += 5) degs.push(Math.round(d * 2) / 2);
     degs.push(0, 35.5, -35.5, lockOuter, -lockOuter);
-    const { bad, pending } = sweepOverlaps('both', degs);
+    const { bad } = sweepOverlaps('both', degs);
     expect(bad).toEqual([]);
-    // Documented: the center corridor vs the Stage 1 nose joists. If WS-B clears them this set empties and the assertion below can go.
-    for (const p of pending) expect(p).toMatch(/joist-nose/);
   });
   it('no unintended overlaps in ride mode over the ride range (stick, cables, cross-bar pinned)', () => {
     const lock = lockLimits(F.ack, 'ride').innerDeg;
@@ -358,10 +352,11 @@ describe('steering parts: published geometry (Layout.front)', () => {
     expect(b.bracketZ - t / 2).toBeGreaterThan(b.z + bt / 2);
     expect(b.modeZ).toBeLessThan(b.dragZ);
   });
-  it('over the beam: the tongue passes under the front transom bottom by 0.25", the ear plate and the tongue link clear the beam top, and the whole stack is under the deck', () => {
+  it('over the beam: the tongue passes under the front transom bottom by the linkage running clearance, the ear plate and the tongue link clear the beam top, and the whole stack is under the deck', () => {
     const T = F.tongue;
-    const transomBottom = L0.noseTop - P0.crossmemberDepthIn;
-    expect(T.top).toBeLessThanOrEqual(transomBottom - 0.25 + 1e-9);
+    const transomBottom = L0.deckTop - P0.crossmemberDepthIn;
+    expect(T.top).toBeLessThanOrEqual(transomBottom - P0.steeringLinkClearIn + 1e-9);
+    expect(T.top).toBeLessThan(L0.deckTop - P0.crossmemberDepthIn); // the tongue is under the front transom's bottom edge
     expect(T.plate.z0).toBeGreaterThan(F.beam.top);
     expect(T.link.z0).toBeGreaterThanOrEqual(T.plate.z1 - 1e-9);
     expect(T.link.z1).toBeLessThan(L0.deckBot);
@@ -400,16 +395,5 @@ describe('steering parts: published geometry (Layout.front)', () => {
       // The foot post stays clear of the tire inner face.
       expect(Math.abs(F.knuckle[tag].foot[1]) + 0.3).toBeLessThan(Math.abs(F.stub[tag][1]) - P0.tireWidthIn / 2);
     }
-  });
-});
-
-describe('the old turntable front end still builds by default', () => {
-  it('the default view and the default params build the old turntable parts; the Ackermann view needs frontEnd = ackermann', () => {
-    const old = buildModel(defaultParams());
-    expect(byId(old, 'turntable')).toBeDefined();
-    expect(byId(old, 'spindle-L')).toBeUndefined();
-    const oldOnNewDefaults = buildModel(P0);
-    expect(byId(oldOnNewDefaults, 'turntable')).toBeDefined();
-    expect(byId(buildModel(P0, { frontEnd: 'ackermann' }), 'spindle-L')).toBeDefined();
   });
 });

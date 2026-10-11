@@ -103,7 +103,6 @@ function materials(p: Params, isOpen: boolean, onToggle: (o: boolean) => void): 
         ['Design bending', `${f0(d.oakDesignMorPsi)} psi`, `MOR × C_M / SF ${p.woodSafetyFactor}`],
         ['Design shear / comp. ⊥', `${f0(oakShear)} / ${f0(oakPerp)} psi`, `shear × ${p.wetServiceFactorStrength}, ⊥ × ${p.wetServiceFactorCompPerp}, both / SF ${p.woodSafetyFactor}`],
         ['Bolt bearing in oak (dowel)', `${f0((p.oakDowelBearingPsi * p.wetServiceFactorStrength) / p.woodSafetyFactor)} psi design`, `${f0(p.oakDowelBearingPsi)} psi clear × ${p.wetServiceFactorStrength} / SF`],
-        ['UHMW wear strip', `${f0(p.uhmwBearingPsi)} psi`, 'creep-limited design bearing'],
         ['Design E (deflection)', `${f0(d.oakDesignMoePsi)} psi`, 'MOE × C_M, static load'],
       ]),
       h('h4', {}, `Plywood (D-5): ${okoume ? 'okoume marine' : 'Baltic birch exterior'}`),
@@ -117,11 +116,7 @@ function materials(p: Params, isOpen: boolean, onToggle: (o: boolean) => void): 
       rows([
         ['Axle yield / E', `${f0(p.axleYieldPsi)} / ${f0(p.steelMoePsi)} psi`, p.axleYieldPsi >= 65000 ? '1045 turned-ground-polished shafting (≈ 70+ ksi; confirm vendor cert)' : '1018 CD, yield taken as 50 ksi (book 54)'],
         ['Axle allowable', `${f0(d.axleAllowablePsi)} psi`, `yield / SF ${p.steelSafetyFactor}`],
-        ['Kingpin yield', `${f0(p.kingpinYieldPsi)} psi`, `SAE grade 8; margin ${p.kingpinMargin}; shear 0.577·yield`],
-        ['Kingpin shear plane', `${p.kingpinDiameterIn}" bolt${p.kingpinSleeveOdIn > 0 ? ` in ${p.kingpinSleeveOdIn}" OD sleeves` : ''}`, p.kingpinThroughBolster
-          ? 'single shear at the turntable interface; pin held in the beam below and the chassis crossbar above (bending lever g/2 + min(D1,D2)/2; average bore bearing, peak and pitch-moment path unresolved: Phase 3)'
-          : 'single shear at the turntable interface, cantilever over the whole stack'],
-        ['Bolster fasteners (assumed)', `${p.bolsterFastenerCount} × ${p.bolsterFastenerDiameterIn}"`, `yield ${f0(p.bolsterFastenerYieldPsi)} psi (A307-type); shear 0.577·yield / ${p.kingpinMargin}`],
+        ['Kingpin bolt yield / ultimate', `${f0(p.kingpinYieldPsi)} / ${f0(p.kingpinUltimatePsi)} psi`, `SAE grade 8 ${p.kingpinDiameterIn}" bolt; normal hits use yield / SF ${p.steelSafetyFactor}, the hard hit ultimate / ${p.failSafeFactor} (D-50); shear 0.577·yield`],
       ]),
       h('h4', {}, 'Loads and factors (D-1, D-2, D-14)'),
       rows([
@@ -129,7 +124,7 @@ function materials(p: Params, isOpen: boolean, onToggle: (o: boolean) => void): 
         ['Dynamic factor', `× ${p.dynamicFactor}`, 'payload and axle reactions'],
         ['Lightest rider (pitch-back)', `${p.riderMinMassLb} lb`, 'BRIEF §4.1; counts toward the operating status'],
         ['Design pull', `${p.pullForceLbf} lbf`, `at ${p.pullerHandHeightIn}" hand height, ${p.bridleRopeRunIn}" rope run; lift pull ≥ ${p.pitchPullMarginMin}× peak`],
-        ['Front strike obstacles', `${p.curbHeightIn}" curb, ${p.rootHeightIn}" root`, 'H = V·tanφ, cos φ = (r − h)/r; one or both wheels'],
+        ['Bump hits (D-50)', `${p.bumpNormalHeightIn}" normal, ${p.bumpHardHeightIn}" hard, at ${p.rideSpeedMph} mph`, `velocity-pulse model, wheel rate ${p.bumpWheelRateLbIn} lb/in; sin β = (r − h)/r`],
         ['Axle tire friction', `H = μ·P_static, arm = tire radius`, 'combined with vertical as a resultant'],
         ['μ tire-ground / pad', `${p.tireGroundMu} / ${p.brakePadMu}`, 'D-16'],
         ['Deflection limit', `L/${p.deflectionLimitRatio}`, 'static load'],

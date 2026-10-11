@@ -65,7 +65,7 @@ export function liftCheck(ctx: Ctx): AnalysisCheck {
 }
 
 /** Numbers behind the foot-stop check for one rider mass, exported for the tests. */
-export function footStopLoads(ctx: Ctx, riderLb: number, g: number = ctx.p.curbStrikeG) {
+export function footStopLoads(ctx: Ctx, riderLb: number, g: number) {
   const { p } = ctx;
   const board = ctx.byId.get('foot-stop');
   if (!board) return null;
@@ -80,7 +80,7 @@ export function footStopLoads(ctx: Ctx, riderLb: number, g: number = ctx.p.curbS
   const cleatArea = ahead.reduce((m, c) => { const b = worldAABB(c); return m + (b.max[1] - b.min[1]) * Math.min(b.max[2], bb.max[2]) - 0 * b.min[2]; }, 0);
   const contact = ahead.reduce((m, c) => { const b = worldAABB(c); return m + (b.max[1] - b.min[1]) * (Math.min(b.max[2], bb.max[2]) - Math.max(b.min[2], bb.min[2])); }, 0);
   void cleatArea;
-  const screws = [board, ...cleats].reduce((n, x) => n + (x.joints ?? []).filter((j) => j.type === 'screw' && /^deck-/.test(j.to)).reduce((a, j) => a + j.count, 0), 0);
+  const screws = [board, ...cleats].reduce((n, x) => n + (x.joints ?? []).filter((j) => j.type === 'screw' && j.to === 'deck').reduce((a, j) => a + j.count, 0), 0);
   return { F, span, t, h, M, S, sigma: M / S, aheadCount: ahead.length, contact, bearing: contact > 0 ? F / contact : Infinity, screws, screwLoad: screws > 0 ? F / screws : Infinity };
 }
 
@@ -89,29 +89,26 @@ export function footStopCheck(ctx: Ctx): AnalysisCheck | null {
   const al = allowables(ctx);
   if (!ctx.byId.get('foot-stop')) return null;
   const ev = (c: CaseData): CaseEval => {
-    const gN = ctx.newFront ? bumpSeatG(ctx, c) : p.curbStrikeG;
+    const gN = bumpSeatG(ctx, c);
     const k = footStopLoads(ctx, c.riderLb, gN)!;
     const ds: Detail[] = [
       detail('foot-stop board bending between the sides', k.sigma, 'psi', al.oakBend, '<='),
       detail('deck screws in lateral shear (each)', k.screwLoad, 'lbf', p.woodScrewLateralLbf, '<='),
     ];
     if (k.aheadCount > 0) ds.push(detail('cleat bearing on the board face', k.bearing, 'psi', al.oakPerp, '<='));
-    let hardTxt = '';
-    if (ctx.newFront) {
-      // Hard hit with the lap belt (D-50): the 2" rear hit's seat factor, wood to MOR x C_M with no safety factor.
-      const gH = bumpSeatGHard(ctx, c);
-      const kh = footStopLoads(ctx, c.riderLb, gH)!;
-      ds.push(detail(`HARD 2" rear hit (seat factor ${f(gH, 2)}): foot-stop board bending (MOR x C_M, no safety factor)`, kh.sigma, 'psi', al.oakBend * p.woodSafetyFactor, '<='));
-      hardTxt = ` Hard hit: seat factor ${f(gH, 2)} gives ${f(kh.F)} lbf and ${f(kh.sigma, 0)} psi against ${f(al.oakBend * p.woodSafetyFactor, 0)} (no safety factor); the lap belt takes the rest.`;
-    }
-    const how = `${ctx.newFront ? 'Bump' : 'Curb strike'}: rider ${f(c.riderLb, 0)} lb × ${f(gN, 2)} g × foot-stop share ${p.footStopShare} = ${f(k.F)} lbf forward on the board (the rest goes through the grab handles and seat friction). `
+    // Hard hit with the lap belt (D-50): the 2" rear hit's seat factor, wood to MOR x C_M with no safety factor.
+    const gH = bumpSeatGHard(ctx, c);
+    const kh = footStopLoads(ctx, c.riderLb, gH)!;
+    ds.push(detail(`HARD 2" rear hit (seat factor ${f(gH, 2)}): foot-stop board bending (MOR x C_M, no safety factor)`, kh.sigma, 'psi', al.oakBend * p.woodSafetyFactor, '<='));
+    const hardTxt = ` Hard hit: seat factor ${f(gH, 2)} gives ${f(kh.F)} lbf and ${f(kh.sigma, 0)} psi against ${f(al.oakBend * p.woodSafetyFactor, 0)} (no safety factor); the lap belt takes the rest.`;
+    const how = `Bump: rider ${f(c.riderLb, 0)} lb × ${f(gN, 2)} g × foot-stop share ${p.footStopShare} = ${f(k.F)} lbf forward on the board (the rest goes through the grab handles and seat friction). `
       + `Board ${f(k.span, 1)}" between the sides, ${f(k.t, 2)}" × ${f(k.h, 1)}": M = F·L/4 = ${f(k.M)} lb·in, σ = M/(h·t²/6) = ${f(k.sigma, 0)} psi (≤ ${f(al.oakBend, 0)}). `
       + (k.aheadCount > 0 ? `${k.aheadCount} cleats ahead of the board bear on its face over ${f(k.contact, 1)} in²: ${f(k.bearing, 0)} psi (≤ ${f(al.oakPerp, 0)}). ` : 'No cleat stands ahead of the board: the load goes through the tenons and screws. ')
       + `${k.screws} #10 stainless deck screws share it in lateral shear: ${f(k.screwLoad)} lbf each (≤ ${f(p.woodScrewLateralLbf, 0)}).${hardTxt}`;
     return governing(ds, how);
   };
   return dualCheck({
-    id: 'foot-stop', label: ctx.newFront ? 'Foot stop and rider restraint (bump)' : 'Foot stop and rider restraint (curb strike)', group: 'Structure', refs: ['D-40', 'D-43', 'eng S-foot'],
+    id: 'foot-stop', label: 'Foot stop and rider restraint (bump)', group: 'Structure', refs: ['D-40', 'D-43', 'eng S-foot'],
     primary: 'goal', operating: ev(ctx.loads.operating), goal: ev(ctx.loads.goal), operatingLabel: 'Operating rider', goalLabel: 'Goal rider',
   });
 }

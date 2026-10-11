@@ -5,8 +5,6 @@
  */
 import {
   AXLE_BEAM_POSITION,
-  bolsterPlan,
-  SIDE_CONSTRUCTION,
   STORAGE_LOCATION,
   derived,
   hullCurveSpec,
@@ -22,25 +20,21 @@ import type { Vec2, Vec3 } from './types';
 // Design numbers (chine height, seat depth, tongue section, ...) live in params.ts; only derived geometry here.
 /** The Ackermann hull's sheer rise starts this far beyond the finger-pinch zone: the guard's end margin (0.5") plus sampling slack. */
 const SHEER_AFTER_PINCH_IN = 0.75;
+/** Air between the nose stringers and the center linkage corridor (in): the tongue link's box swings to within 0.04" of the corridor edge at the lock, and the steering-link running clearance is 0.25". */
+const NOSE_STRINGER_GAP_IN = 0.3;
 
 export interface Layout {
   r: number;
   WB: number;
   /**
-   * Deck step x (D-45): the rear face of the shoulder beam; the cabin deck ends here and the nose deck begins (1" up). Just behind `xn`.
-   * Cabin-side furniture (grips, lash points, reflectors, signs) is behind `xc0`, the start of the plan S-curve.
+   * Start of the hull curve (the cabin side is straight and full width up to here; cabin-side furniture - grips, lash points, reflectors, signs - is behind it)
+   * and its end `xn` (the straight bow run starts there, D-52).
    */
-  xs: number;
-  /** Start of the plan S-curve (the cabin side is straight and full width up to here) and its end (the nose side is straight from here). */
   xc0: number;
   xn: number;
-  /** The plan S-curve of the hull side centerline (D-45). */
+  /** The plan curve of the hull side centerline: one convex taper from the cabin to the bow (D-52). */
   hull: PlanCurve;
-  /**
-   * Ackermann hull (frontEndType 1, D-52): one deck level and no step (`xs` = `xn`, `noseTop` = `deckTop`, `shoulderBeam` = 0 are kept as aliases until Stage 3), and the
-   * side keeps converging along a STRAIGHT bow run from `xn` to the front transom at heading `bowHeading` (rad, the left side's; <= 0 means converging, the right side mirrors it).
-   */
-  ackHull: boolean;
+  /** The side keeps converging along a STRAIGHT bow run from `xn` to the front transom at heading `bowHeading` (rad, the left side's; <= 0 means converging, the right side mirrors it). */
   bowHeading: number;
   /**
    * Chine bottom and rail top (D-45). Captured-ply sides: the chine, its rail and the side lines are at the NOSE deck level along the whole hull, so
@@ -50,13 +44,11 @@ export interface Layout {
   railTop: number;
   /** Chine height (= railBand). */
   chineH: number;
-  /** Shoulder beam thickness (x), under the deck step, between the rail pairs. */
-  shoulderBeam: number;
   /** Top of the side (gunwale top without the sheer): deckTop + sideH. The side lines are the same along the whole hull (D-45). */
   sideTop: number;
   xRear: number;
   xFront: number;
-  /** Kingpin (steer pivot, turntable center) x: ahead of the front axle by kingpinLeadIn (D-25). */
+  /** Kingpin axis x: ahead of the front axle by kingpinLeadIn (D-25). */
   kx: number;
   /** Chine / gunwale section height and joist thickness (params). */
   railBand: number;
@@ -73,8 +65,6 @@ export interface Layout {
   ply: number;
   deckTop: number;
   deckBot: number;
-  noseTop: number;
-  noseBot: number;
   /** Inner half widths (between the side panels). */
   hwC: number;
   hwN: number;
@@ -86,35 +76,20 @@ export interface Layout {
   sheer: { x0: number; x1: number; riseIn: number };
   /** Top of the front transom's edges and the nose gunwale at the bow: noseTop + sideH + the full sheer rise. */
   noseGunTop: number;
-  /** Rear axle beam and front axle beam. */
+  /** Rear axle beam. */
   beamR: Beam;
-  beamF: Beam;
-  /** Phase 3b Ackermann front end (additive in Stage 0; the old front-end fields above stay until the flip). */
+  /** The Ackermann front end (D-53): kingpins, spindles, beam, brackets, links, tongue, stick (front-layout.ts). */
   front: FrontLayout;
-  turntable: { z0: number; z1: number };
-  /** Bolster ring: x0..x1 fore-aft, ±halfY across, z0..z1 depth, rail width rw. */
-  bolster: { x0: number; x1: number; z0: number; z1: number; halfY: number; rw: number };
-  /**
-   * Side-bearer blocks (steer body, D-12): |y| range [y0, y1] each side; oak z range [z0, z1] (housed `embed` into the beam
-   * top), UHMW wear strip [z1, zw]; x range [x0, x1] ahead of the front rod groove. The chassis-side bearer face is the
-   * bolster rail underside at turntable.z1, `clr` above the wear strip.
-   */
-  sideBearer: { y0: number; y1: number; z0: number; z1: number; zw: number; x0: number; x1: number };
-  /** Kingpin ends: beam underside (washer) to the turntable top, or to the crossbar top when kingpinThroughBolster = 1. */
-  kingpin: { z0: number; z1: number };
-  /**
-   * Kingpin steel plates (D-35, the crossbar configuration): the carrier plate on the beam top (the turntable stands on it), the plate
-   * under the beam, and the plate under the crossbar (on the turntable top plate). Null without the crossbar. z ranges, inches.
-   */
-  kpPlates: { carrier: { z0: number; z1: number }; under: { z0: number; z1: number }; bar: { z0: number; z1: number } } | null;
-  /** Chassis-side oak crossbar over the turntable center (kingpinThroughBolster = 1), fore-aft across the bolster opening: x range, half width |y|, z range (flush with the bolster rails). Null when off. */
-  crossbar: { x0: number; x1: number; hw: number; z0: number; z1: number } | null;
-  /** Removable access panel in the nose deck over the kingpin nut (D-34): x range, half width |y|, z range (crossbar top to the deck top). Null without the crossbar. Workstream B cuts this opening in the nose deck. */
-  accessPanel: { x0: number; x1: number; hw: number; z0: number; z1: number } | null;
-  /** Nose rails/joists stop here so the swinging turntable corners clear them. */
+  /** Nose rails/joists run to here: the front transom's inner face. */
   noseRailEnd: number;
   cabinJoistX: number[];
   noseJoistX: number[];
+  /**
+   * Nose stringers (D-52 integration): the center linkage corridor (`front.keepOut.center`) leaves no room under the nose deck for a joist, so the nose joists are
+   * split at |y| = `y0` and two oak stringers (`joistT` thick, `y0`..`y1`, a joist deep) run fore-aft beside the corridor to carry the deck. Each stringer is cut
+   * into the `runs` (x ranges) around the front beam's gap (the beam passes between the straddling joists).
+   */
+  noseStringers: { y0: number; y1: number; runs: Array<[number, number]> };
   seat: SeatLayout;
   storage: StorageLayout;
 }
@@ -169,11 +144,9 @@ export function computeLayout(input: Params): Layout {
   const r = d.wheelRadiusIn;
   const WB = p.wheelbaseIn;
   const kx = WB + p.kingpinLeadIn;
-  const ackHull = p.frontEndType === 1;
-  const hullCurve = hullPlanCurve(p); // D-45 reverse curve, or the Ackermann bow curve (D-52)
-  const xn = ackHull ? hullCurve.x1 : WB - p.noseTaperStartIn;
-  const xc0 = ackHull ? hullCurve.x0 : Math.min(p.hullCurveStartIn, xn - 1);
-  const xs = xn - p.shoulderBeamIn;
+  const hullCurve = hullPlanCurve(p); // the bow curve (D-52)
+  const xn = hullCurve.x1;
+  const xc0 = hullCurve.x0;
   const xRear = -p.rearOverhangIn;
   const xFront = WB + p.frontOverhangIn;
   const side = p.sideThicknessIn;
@@ -181,12 +154,10 @@ export function computeLayout(input: Params): Layout {
   const rearLane = p.blockingThickIn;
   const ply = p.deckPlyIn;
   const deckTop = p.deckHeightIn;
-  const noseTop = deckTop + p.frontDeckRaiseIn;
   const hwC = p.bodyWidthIn / 2 - side;
   const hwN = p.noseWidthIn / 2 - side;
   const rodR = p.axleDiameterIn / 2;
   const joistT = p.crossmemberThickIn;
-  const clr = p.sideBearerClearanceIn;
 
   const mkBeam = (x: number, track: number, thick: number): Beam => {
     const depth = p.axleBeamDepthIn;
@@ -194,52 +165,8 @@ export function computeLayout(input: Params): Layout {
     return { x, len: Math.max(1, track - p.hubLengthIn - 0.25), thick, depth, top, bot: top - depth };
   };
   const beamR = mkBeam(0, p.rearTrackIn, p.axleBeamThicknessIn);
-  // The front beam is centerd on the rod + kingpin pair (D-25, critic r2 H2): from the rod's rear edge (WB − rodR) to the
-  // kingpin's front edge (WB + lead + kpR), so both holes keep ≥ beamLigamentMinIn of wood on their outer side.
-  const beamF = mkBeam(WB + d.frontBeamOffsetIn, p.frontTrackIn, p.frontAxleBeamThicknessIn);
-
-  // Turntable on the front beam, centerd on the kingpin; bolster fills up to the nose deck (min depth).
-  const ts = p.turntableSizeIn;
-  const plates = p.kingpinThroughBolster === 1; // the steel kingpin plates exist whenever the pin runs up through the crossbar (D-35)
-  const carrierT = plates ? p.carrierPlateThickIn : 0;
-  const plateT = plates ? p.kingpinPlateThickIn : 0;
-  const tz0 = beamF.top + carrierT;
-  const tz1 = tz0 + p.turntableThicknessIn;
-  const bolsterTop = Math.max(noseTop - ply, tz1 + p.bolsterMinDepthIn);
-  const bp = bolsterPlan(p);
-  const sbY0 = ts / 2 + clr;
-  const sbY1 = bp.halfY;
-  const bolster = { x0: kx - ts / 2, x1: kx + ts / 2, z0: tz1, z1: bolsterTop, halfY: sbY1, rw: bp.rw };
-  // Kingpin crossbar (kingpinThroughBolster): fore-aft bar across the opening over the pin, ends let into the bolster rails,
-  // top flush with the rails; the kingpin ends here (nut + washer on the crossbar top).
-  const through = p.kingpinThroughBolster === 1;
-  const crossbar = through
-    ? { x0: bolster.x0 + bolster.rw - p.kingpinCrossbarLetInIn, x1: bolster.x1 - bolster.rw + p.kingpinCrossbarLetInIn, hw: p.kingpinCrossbarWidthIn / 2, z0: tz1 + plateT, z1: bolsterTop }
-    : null;
-  const accessPanel = crossbar && noseTop - bolsterTop > 0.05
-    ? { x0: kx - p.accessPanelLengthIn / 2, x1: kx + p.accessPanelLengthIn / 2, hw: p.accessPanelWidthIn / 2, z0: bolsterTop, z1: noseTop }
-    : null;
-  // Oak block housed in the beam top; UHMW strip on it; running clearance `clr` to the bolster rail underside (tz1).
-  const sbZw = tz1 - clr;
-  const sbZ1 = sbZw - p.sideBearerWearIn;
-  const sbX0 = WB + rodR + p.sideBearerSetbackIn;
-  const sideBearer = { y0: sbY0, y1: sbY1, z0: beamF.top - p.sideBearerEmbedIn, z1: sbZ1, zw: sbZw, x0: sbX0, x1: sbX0 + p.sideBearerLengthIn };
-
-  // Rotated square turntable reaches ts/2·(cos+sin) fore-aft at lock (peaks at 45°). The swinging axle beam's aft face
-  // also sweeps under the rail y-band: at |y| = hwN it reaches |xa|/cos + hwN·tan behind the kingpin (xa = beam aft face, kingpin-relative).
-  const lk = (Math.min(Math.abs(p.steerLockDeg), 45) * Math.PI) / 180;
-  const plateSwingX = (ts / 2) * (Math.cos(lk) + Math.sin(lk));
-  const beamAft = Math.abs(beamF.x - beamF.thick / 2 - kx);
-  const beamSwingX = beamAft / Math.cos(lk) + (hwN + side) * Math.tan(lk); // ladder rails run flush under the chine (D-43): their end corner is at |y| = hwN + side
-  // The beam's aft face is TILTED by the lock angle, so the perpendicular distance from the rail's end corner to it is the
-  // fore-aft gap × cos(lock): the gap must be clearance / cos(lock), not the clearance itself (the exploration found beam-F
-  // 0.75·cos 38.5° = 0.59" from the nose rail at track ≥ 36.5" or wider beams, where the beam rather than the plate governs).
-  // The U-bolt clamps sit at |y| beyond the rails' y-band, so they cannot reach the rail end; the nose side panels are covered
-  // by the auto shoulder rule (resolveParams). Moving the rail end back (rather than narrowing the nose) is the physical fix:
-  // the beam corner at |y| = hwN is what sweeps aft, and the nose width is already the widest the tires allow (A-4).
-  // Ackermann hull: no turntable to swing, the nose rails run to the front transom's inner face (D-52).
-  const noseRailEnd = ackHull ? WB + p.frontOverhangIn - p.transomThicknessIn : kx - Math.max(plateSwingX + p.steeringClearanceIn, beamSwingX + p.steeringClearanceIn / Math.cos(lk));
-
+  // Nose rails and joists run to the front transom's inner face (D-52); the steel front beam sits in notches in the rails (front-mount.ts).
+  const noseRailEnd = WB + p.frontOverhangIn - p.transomThicknessIn;
   // Joists skip the rear axle beam when it stands taller than their underside (overslung beam).
   const jD = p.crossmemberDepthIn;
   // They also skip the brake cross shaft when it runs through their depth.
@@ -278,8 +205,7 @@ export function computeLayout(input: Params): Layout {
     const x1 = Math.max(x0 + 1, xFront - side - 1.5);
     const w = Math.max(1, 2 * (hwN - p.storageSideClearIn)); // clearance to the chine (r3 build S3, D-47)
     // Over the nose the box must clear the tires and also the rider's knees (the legs pass under it to the foot stop).
-    const footDeck = p.seatXIn + p.riderLegReachIn >= xs ? noseTop : deckTop;
-    const zBot = Math.max(2 * r + p.storageRaisedClearIn, riderLegTopZ(p, surface, footDeck) + p.storageRaisedClearIn);
+    const zBot = Math.max(2 * r + p.storageRaisedClearIn, riderLegTopZ(p, surface, deckTop) + p.storageRaisedClearIn);
     storage = { location: p.storageLocation, x0, x1, zBot, zTop: zBot + boxHeight(x1 - x0, w), hw: w / 2 };
   } else {
     // Behind the seat back: its rear face leans back as it rises, so the box end follows it.
@@ -296,7 +222,7 @@ export function computeLayout(input: Params): Layout {
   // and the gunwale are the same height along the whole hull (captured-ply: at the nose deck level; the cabin rails stand 1" taller to meet the chine).
   const flare = 0;
   const chineH = p.railBandIn;
-  const chineBot = p.sideConstruction === SIDE_CONSTRUCTION.capturedPly ? noseTop - ply : deckTop - ply;
+  const chineBot = deckTop - ply;
   const webZ0 = chineBot + chineH;
   const webZ1 = deckTop + p.sideHeightIn - p.railBandIn;
   const web = { z0: webZ0, z1: webZ1, phi: Math.atan2(flare, Math.max(0.1, webZ1 - webZ0)) };
@@ -304,17 +230,17 @@ export function computeLayout(input: Params): Layout {
   // Sheer (D-44): rises over the forward `sheerLengthIn` of the nose, never behind the shoulder; 0 = the old straight gunwale.
   const sheerX1 = xFront - transom;
   let sheerX0 = Math.max(xn, sheerX1 - p.sheerLengthIn);
-  if (ackHull && p.sheerRiseIn > 0) {
+  if (p.sheerRiseIn > 0) {
     // The finger guard's strap needs a FLAT gunwale: the sheer rise starts beyond the pinch zone (the tire sweep within fingerGapMinIn of the hull side) plus the guard's margin.
     const hz = hazardRangeX(sidePolyline(hullCurve, side / 2, xc0, sheerX1), leftTirePolys(hullCurveSpec(p)), p.fingerGapMinIn);
     if (hz) sheerX0 = Math.min(sheerX1 - 1, Math.max(sheerX0, hz[1] + SHEER_AFTER_PINCH_IN));
   }
   const sheer = { x0: sheerX0, x1: sheerX1, riseIn: Math.max(0, p.sheerRiseIn) };
 
-  const front = computeFrontLayout(p, { r, WB, kx, seat, hull: hullCurve, side, ply, deckTop, noseTop }, (x) => offsetY(hullCurve, -side / 2, x));
+  const front = computeFrontLayout(p, { r, WB, kx, seat, hull: hullCurve, side, ply, deckTop }, (x) => offsetY(hullCurve, -side / 2, x));
 
   // ── Joists: skip the rear axle beam and the brake shaft; with the Ackermann front end also the steel front beam (its top stands in their depth) ──
-  const fb = ackHull ? front.beam : null;
+  const fb = front.beam;
   const straddle = (x: number, b: Beam): number[] | null => {
     const half = (b.thick + joistT) / 2 + 0.05;
     return Math.abs(x - b.x) < half ? [b.x - half, b.x + half] : null;
@@ -325,7 +251,7 @@ export function computeLayout(input: Params): Layout {
       const sr = straddle(x, beamR);
       if (sr) return sr;
     }
-    if (fb && fb.top > deckTop - ply - jD + 0.01) {
+    if (fb.top > deckTop - ply - jD + 0.01) {
       const sf = straddle(x, fb);
       if (sf) return sf;
     }
@@ -333,16 +259,18 @@ export function computeLayout(input: Params): Layout {
     if (shaftThroughJoists && Math.abs(x - shaftX) < sh) return [x < shaftX ? shaftX - sh : shaftX + sh];
     return [x];
   });
-  const cabinJoistX = joistsBetween(xRear + transom, xs);
-  const noseJoistX = ackHull ? joistsBetween(xn, noseRailEnd) : evenInterior(xn, noseRailEnd, p.crossmemberSpacingIn, joistT);
+  const cabinJoistX = joistsBetween(xRear + transom, xn);
+  const noseJoistX = joistsBetween(xn, noseRailEnd);
+  // Nose stringers: just outboard of the center linkage corridor, from the last cabin joist (or the rear transom) to the front transom, split around the front beam.
+  const strY0 = front.keepOut.center.y1 + NOSE_STRINGER_GAP_IN;
+  const strX0 = cabinJoistX.length ? cabinJoistX[cabinJoistX.length - 1] + joistT / 2 : xRear + transom;
+  const gapLo = front.beam.x - front.beam.thick / 2 - 0.05, gapHi = front.beam.x + front.beam.thick / 2 + 0.05;
+  const noseStringers = { y0: strY0, y1: strY0 + joistT, runs: [[strX0, gapLo], [gapHi, noseRailEnd]] as Array<[number, number]> };
 
   return {
-    r, WB, xs, xc0, xn, hull: hullCurve, ackHull, bowHeading: curveHeading(hullCurve, xFront), chineH, chineBot, railTop: chineBot, shoulderBeam: p.shoulderBeamIn, sideTop: deckTop + p.sideHeightIn, xRear, xFront, kx, railBand: p.railBandIn, joistT, flare, web, side, transom, rearLane, ply, deckTop, deckBot: deckTop - ply, noseTop, noseBot: noseTop - ply,
-    hwC, hwN, sideH: p.sideHeightIn, sheer, noseGunTop: deckTop + p.sideHeightIn + sheer.riseIn, beamR, beamF, front,
-    turntable: { z0: tz0, z1: tz1 },
-    bolster, sideBearer, kingpin: { z0: beamF.bot - plateT, z1: through ? bolsterTop : tz1 }, crossbar, accessPanel,
-    kpPlates: plates ? { carrier: { z0: beamF.top, z1: tz0 }, under: { z0: beamF.bot - plateT, z1: beamF.bot }, bar: { z0: tz1, z1: tz1 + plateT } } : null,
-    noseRailEnd, cabinJoistX, noseJoistX, seat, storage,
+    r, WB, xc0, xn, hull: hullCurve, bowHeading: curveHeading(hullCurve, xFront), chineH, chineBot, railTop: chineBot, sideTop: deckTop + p.sideHeightIn, xRear, xFront, kx, railBand: p.railBandIn, joistT, flare, web, side, transom, rearLane, ply, deckTop, deckBot: deckTop - ply,
+    hwC, hwN, sideH: p.sideHeightIn, sheer, noseGunTop: deckTop + p.sideHeightIn + sheer.riseIn, beamR, front,
+    noseRailEnd, cabinJoistX, noseJoistX, noseStringers, seat, storage,
   };
 }
 

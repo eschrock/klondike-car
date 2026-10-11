@@ -27,8 +27,8 @@ export function lookOf(part: Part): Look {
   // Phase 3b front end (spec 1.1, 8.1): the ride cables are stainless wire rope that IS drawn (their material says "cable", not "rope"),
   // the kart spindles and kingpin hardware are blackened steel, the stick grip is rubber and the lap belt is dark webbing.
   const tag = `${part.id} ${part.name}`.toLowerCase();
-  if (/(^|[\s-])(belt|webbing)/.test(tag) || mat.includes('webbing')) return 'webbing';
-  if (!/guide|grommet|channel|cover|clamp/.test(tag) && (mat.includes('cable') || /(^|[\s-])cable/.test(tag))) return 'cable';
+  if (/lap-belt|webbing/.test(tag) || mat.includes('webbing')) return 'webbing';
+  if (!/guide|grommet|channel|cover|clamp|crossbar|stop|pin|anchor/.test(tag) && (mat.includes('cable') || /(^|[\s-])cable/.test(tag))) return 'cable';
   if (/grip/.test(tag)) return 'rubber';
   if (/spindle|kingpin-bolt|kingpin bolt/.test(tag)) return 'blackened';
   if (mat.includes('oak')) return 'oak';

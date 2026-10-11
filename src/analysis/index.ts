@@ -12,14 +12,12 @@ import { brakeRideRows } from './brake-ride';
 import { brakeAbuse, brakeClearance, brakeForce, brakeLever, brakeLinks, brakeRatchet, brakeRatio, brakeShaft, brakeShoes, brakeTraction, handleSockets } from './brake';
 import { makeContext, type Ctx } from './context';
 import { rearBeamSeat, wheelRating } from './rear';
-import { steerClearance, steerClearanceAck, steerKinCheck, steerLockCheck, steerSweep, steerSweepAck } from './steering';
+import { steerClearance, steerKinCheck, steerLockCheck, steerSweep } from './steering';
 import { pitchForward, pitchRear, slideBeforeTip, tipLock, tipStraight, turnRadius, vRollover } from './stability';
-import { axleStress, bearingGroove, beamFront, beamRear, deckCheck, kingpinCheck, kingpinStrikeCheck, railsCheck, rollBolsterAttachCheck, rollKingpinUpliftCheck, rollSideBearerCheck, tongueCheck, turntableCheck } from './structure';
-import { bridleTieCheck, kingpinBoltsCheck, kingpinPeakCheck, kingpinPlatesCheck, kingpinSplitCheck, pitchPathCheck, steerStopsBoundCheck, steerStopsCheck, turntableRingCheck } from './front';
+import { axleStress, bearingGroove, beamRear, deckCheck, railsCheck } from './structure';
 import { frontEndChecks } from './front-end';
 import { linkageChecks } from './linkage';
 import { rideChecks } from './ride';
-import { rearBeamSeatBump, wheelRatingBump } from './rear-bump';
 import { seatChecks } from './seat';
 import { hullChecks } from './hull';
 import { cgCheck, massEmpty, truckFit, truckSkipped } from './transport';
@@ -29,8 +27,6 @@ export * from './types';
 export type { CaseData } from './loads';
 
 export interface RunOptions {
-  /** Force the Phase 3b (Ackermann, bump basis) rows on or off. Default: on when the model carries the new front-end parts (`spindle-L`). */
-  newFront?: boolean;
   /** Run the truck-fit collision search (tens to hundreds of ms). Default true. */
   includeTruck?: boolean;
   /** Reuse an existing truck-fit result instead of computing one. */
@@ -49,8 +45,11 @@ function sanitize(c: AnalysisCheck): AnalysisCheck {
   return c;
 }
 
-/** The pre-Phase-3b rows (turntable front end, curb and root strikes). Deleted at the Stage 2 flip (docs/phase3b-wsD-notes.md has the list). */
-function oldRows(ctx: Ctx, truck: AnalysisCheck): AnalysisCheck[] {
+/**
+ * The check list (D-50, D-51, D-53): per-wheel Ackermann contacts and sweeps, the bump load basis (spindle, bracket, beam, tie rod, linkage, tongue, rear axle and
+ * wheel rows), the ride rows (rollover, envelope) and the ride-mode brake rows (`brake-ride.ts`).
+ */
+function allRows(ctx: Ctx, truck: AnalysisCheck): AnalysisCheck[] {
   return [
     massEmpty(ctx),
     cgCheck(ctx),
@@ -60,63 +59,6 @@ function oldRows(ctx: Ctx, truck: AnalysisCheck): AnalysisCheck[] {
     vRollover(ctx),
     turnRadius(ctx),
     steerClearance(ctx, steerSweep(ctx)),
-    pitchForward(ctx),
-    pitchRear(ctx),
-    brakeRatio(ctx),
-    brakeForce(ctx),
-    brakeTraction(ctx),
-    brakeClearance(ctx),
-    brakeLever(ctx),
-    brakeLinks(ctx),
-    brakeShaft(ctx),
-    brakeShoes(ctx),
-    brakeRatchet(ctx),
-    handleSockets(ctx),
-    brakeAbuse(ctx),
-    wheelRating(ctx),
-    rearBeamSeat(ctx),
-    axleStress(ctx),
-    beamFront(ctx),
-    beamRear(ctx),
-    bearingGroove(ctx),
-    railsCheck(ctx),
-    deckCheck(ctx),
-    kingpinCheck(ctx),
-    kingpinStrikeCheck(ctx),
-    rollSideBearerCheck(ctx),
-    rollKingpinUpliftCheck(ctx),
-    rollBolsterAttachCheck(ctx),
-    steerStopsCheck(ctx),
-    steerStopsBoundCheck(ctx),
-    kingpinPlatesCheck(ctx),
-    kingpinBoltsCheck(ctx),
-    kingpinPeakCheck(ctx),
-    pitchPathCheck(ctx),
-    turntableRingCheck(ctx),
-    kingpinSplitCheck(ctx),
-    bridleTieCheck(ctx),
-    turntableCheck(ctx),
-    tongueCheck(ctx),
-    ...seatChecks(ctx),
-    ...hullChecks(ctx),
-    truck,
-  ];
-}
-
-/**
- * The Ackermann ride-mode rows (D-50, D-51, D-53): per-wheel contacts and sweeps, the bump load basis, the new front-end structure and linkage rows and the
- * ride rows. WS-C's brake rows join here (`brake-ride.ts`: stop, emergency, bias, heat, park-hold, hip-cable, belt-anchor, brake-front) when they land.
- */
-function ackermannRows(ctx: Ctx, truck: AnalysisCheck): AnalysisCheck[] {
-  return [
-    massEmpty(ctx),
-    cgCheck(ctx),
-    tipStraight(ctx),
-    tipLock(ctx),
-    slideBeforeTip(ctx),
-    vRollover(ctx),
-    turnRadius(ctx),
-    steerClearanceAck(ctx, steerSweepAck(ctx)),
     steerKinCheck(ctx),
     steerLockCheck(ctx),
     pitchForward(ctx),
@@ -133,8 +75,8 @@ function ackermannRows(ctx: Ctx, truck: AnalysisCheck): AnalysisCheck[] {
     handleSockets(ctx),
     brakeAbuse(ctx),
     ...brakeRideRows(ctx),
-    wheelRatingBump(ctx),
-    rearBeamSeatBump(ctx),
+    wheelRating(ctx),
+    rearBeamSeat(ctx),
     axleStress(ctx),
     beamRear(ctx),
     bearingGroove(ctx),
@@ -150,11 +92,10 @@ function ackermannRows(ctx: Ctx, truck: AnalysisCheck): AnalysisCheck[] {
 }
 
 export function runChecks(input: Params, opts: RunOptions = {}): AnalysisCheck[] {
-  const p = resolveParams(input); // auto nose width / shoulder (A-4, D-26)
+  const p = resolveParams(input); // auto hull curve start (A-4, D-26, D-52)
   const parts = buildModel(p, { rider: 'goal', cargo: true, steerDeg: 0 });
-  const ctx = makeContext(p, parts, { newFront: opts.newFront });
+  const ctx = makeContext(p, parts);
   const includeTruck = opts.includeTruck ?? true;
   const truck = includeTruck ? truckFit(opts.fit ?? checkTruckFit(p, (v) => buildModel(p, v))) : truckSkipped();
-  const out: AnalysisCheck[] = ctx.newFront ? ackermannRows(ctx, truck) : oldRows(ctx, truck);
-  return out.map(sanitize);
+  return allRows(ctx, truck).map(sanitize);
 }

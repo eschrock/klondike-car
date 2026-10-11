@@ -38,7 +38,7 @@ describe('sheer line (D-44)', () => {
   it('the rise is 0 behind the start, monotone, and reaches the full rise at the front transom', () => {
     expect(L.sheer.riseIn).toBe(defaults.sheerRiseIn);
     expect(sheerRise(L, L.sheer.x0)).toBe(0);
-    expect(sheerRise(L, L.xs)).toBe(0);
+    expect(sheerRise(L, L.xn)).toBe(0);
     expect(sheerRise(L, L.sheer.x1)).toBeCloseTo(defaults.sheerRiseIn, 9);
     let prev = -1;
     for (let x = L.xRear; x <= L.xFront; x += 0.25) {
@@ -52,7 +52,7 @@ describe('sheer line (D-44)', () => {
 
   it('the finger-guard zone and the whole cabin stay on the flat gunwale (hazard end is behind the start of the rise)', () => {
     const ctx2 = makeCtx(defaults);
-    expect(ctx2.L.sheer.x0).toBeGreaterThan(ctx2.L.xs);
+    expect(ctx2.L.sheer.x0).toBeGreaterThan(ctx2.L.xn);
     expect(sheerRise(ctx2.L, ctx2.L.xn + 3)).toBe(0); // the guard hazard zone spans xn .. xn + ~2" at the defaults (D-45)
   });
 
@@ -93,17 +93,22 @@ describe('sheer line (D-44)', () => {
     for (const tag of ['L', 'R']) {
       const gun = get(parts, `side-nose-${tag}-gunwale`), web = get(parts, `side-nose-${tag}-web`);
       const gl = outlineOf(gun);
-      const under = gl.slice(0, gl.length / 2); // bottom edge, x ascending (model x = local x, model z = local y)
+      // The bow run is set at the bow heading: local x runs along the run, so model x = origin x + local x cos(heading) (ey is straight up, model z = origin z + local y).
+      const gunX = (lx: number) => gun.transform[12] + lx * gun.transform[0];
+      const under = gl.slice(0, gl.length / 2).map(([lx, ly]) => [gunX(lx), gun.transform[14] + ly] as Vec2); // bottom edge, model x ascending
       const wl = outlineOf(web);
-      const wz0 = web.transform[14], wx0 = web.transform[12];
-      // web local (x, y): model x = wx0 + x, model z = wz0 + y (flare 0: u = +Z)
+      const wz0 = web.transform[14];
       const top = wl.slice(2);
       for (const [lx, ly] of top) {
-        const x = wx0 + lx;
-        expect(wz0 + ly, `${tag} x=${x.toFixed(2)}`).toBeCloseTo(zAt(under, Math.min(x, under[under.length - 1][0])) + g, 6);
+        const x = web.transform[12] + lx * web.transform[0];
+        if (x > under[under.length - 1][0] + 1e-9) continue; // the web's tail inside the transom dado runs on to the full rise past the (bevel-trimmed) gunwale end
+        expect(wz0 + ly, `${tag} x=${x.toFixed(2)}`).toBeCloseTo(zAt(under, x) + g, 6);
       }
       // the web enters the front transom dado at the full rise
-      expect(worldAABB(web).max[0]).toBeCloseTo(L.xFront - L.transom + defaults.deckCaptureDepthIn, 6);
+      // set at the bow heading: the square end corner pokes about (thickness / 2) sin(heading) further into the dado (0.25" deep), never out of it
+      const dadoEnd = L.xFront - L.transom + defaults.deckCaptureDepthIn;
+      expect(worldAABB(web).max[0]).toBeGreaterThanOrEqual(dadoEnd - 0.05);
+      expect(worldAABB(web).max[0]).toBeLessThan(dadoEnd + 0.1);
       // one edge condition per outline edge, none exposed
       expect(web.edges).toHaveLength(wl.length);
       expect((web.edges as string[]).includes('exposed')).toBe(false);
@@ -169,7 +174,7 @@ describe('shaped transoms (D-44)', () => {
   it('crown 0 and corner radius 0 give back the flat-topped transom', () => {
     const flat = buildModel({ ...defaults, transomCrownIn: 0, transomCornerRadiusIn: 0 });
     const ol = outlineOf(get(flat, 'transom-front'));
-    expect(new Set(ol.filter((q) => q[1] > L.noseTop).map((q) => q[1].toFixed(6))).size).toBe(1);
+    expect(new Set(ol.filter((q) => q[1] > L.deckTop).map((q) => q[1].toFixed(6))).size).toBe(1);
   });
 
   it('transomTopOutline is symmetric and CCW-continuable', () => {
@@ -221,7 +226,12 @@ describe('seat back, handle and finish tags (D-44)', () => {
     for (const w of parts.filter((q) => q.geometry.type === 'wheel')) expect(w.finish).toMatchObject({ tread: 'lug', surface: 'rubber' });
     expect(parts.filter((q) => q.geometry.type === 'wheel')).toHaveLength(4);
     expect(get(parts, 'handle-socket-L').finish?.surface).toBe('aluminum');
-    expect(get(parts, 'kingpin').finish?.surface).toBe('steel');
+    expect(get(parts, 'kp-bracket-L').finish?.surface).toBe('steel');
+    expect(get(parts, 'spindle-L').finish?.surface).toBe('blackened');
+    expect(get(parts, 'stick-cable-A').finish?.surface).toBe('cable');
+    expect(get(parts, 'cable-crossbar').finish?.surface).toBe('steel'); // a bar named for the cables it carries is not wire
+    expect(get(parts, 'lap-belt-L').finish?.surface).toBe('webbing');
+    expect(get(parts, 'belt-anchor-L').finish?.surface).toBe('steel');
     expect(parts.find((x) => x.material.includes('rope'))!.finish?.surface).toBe('rope');
     expect(get(parts, 'guard-L').finish?.surface).toBe('asa');
   });

@@ -120,8 +120,8 @@ describe('storage box', () => {
     expect(rp.some((x) => x.id === 'storage-bottom')).toBe(true);
     // Standing walls are bonded to the deck with a fillet; the drains go through the deck into the sealed hole.
     for (const id of ['storage-side-L', 'storage-side-R', 'storage-end-aft', 'storage-end-fore'])
-      expect(byId.get(id)!.joints!.some((j) => j.to === 'deck-cabin' && j.type === 'glue'), id).toBe(true);
-    expect(byId.get('storage-drain-L')!.joints!.some((j) => j.to === 'deck-cabin')).toBe(true);
+      expect(byId.get(id)!.joints!.some((j) => j.to === 'deck' && j.type === 'glue'), id).toBe(true);
+    expect(byId.get('storage-drain-L')!.joints!.some((j) => j.to === 'deck')).toBe(true);
   });
   it('wall corners are tape-and-fold (no spline) and the wall tops are capped with oak coaming (no exposed ply edge)', () => {
     for (const id of ['storage-side-L', 'storage-end-aft']) {

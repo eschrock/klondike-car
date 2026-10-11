@@ -117,8 +117,8 @@ export const MODE_PLATE_T_IN = 0.125;
 /** Tow-stop block plan size (along the arm, across it) and clearance to the arm at the lock: a catalog-style stand-in block. */
 export const TOW_STOP_BLOCK_IN = 0.75;
 export const TOW_STOP_GAP_IN = 0.0625;
-/** Clearance under the front transom's bottom edge (spec 3.6 validator). */
-export const TONGUE_UNDER_TRANSOM_IN = 0.25;
+/** Margin over the linkage running clearance that the tongue keeps under the front transom's bottom edge (spec 3.6: the transom bottom is the tongue's ceiling). */
+export const TONGUE_UNDER_TRANSOM_MARGIN_IN = 0.05;
 /** Radius of the rounded pin ends of the bellcrank plate, capped so the swung output arm clears the beam rear face. */
 export const BELL_PIN_R_IN = 0.45;
 /** The deck slot sits this far ahead of the stick pivot (clear of the pivot bracket); the cables' last run is straight along x for this far behind the bellcrank pivot (clear of the springs). */
@@ -140,7 +140,7 @@ export function convexHull(pts: Vec2[]): Vec2[] {
 export const discPts = (c: Vec2, r: number, n = 12): Vec2[] => Array.from({ length: n }, (_, i): Vec2 => [c[0] + r * Math.cos((2 * Math.PI * i) / n), c[1] + r * Math.sin((2 * Math.PI * i) / n)]);
 
 /** Needs the already-computed parts of the layout (wheel radius, seat, hull curve). */
-export function computeFrontLayout(p: Params, L: Pick<Layout, 'r' | 'WB' | 'kx' | 'seat' | 'hull' | 'side' | 'ply' | 'deckTop' | 'noseTop'>, innerHalfWidthAt: (x: number) => number): FrontLayout {
+export function computeFrontLayout(p: Params, L: Pick<Layout, 'r' | 'WB' | 'kx' | 'seat' | 'hull' | 'side' | 'ply' | 'deckTop'>, innerHalfWidthAt: (x: number) => number): FrontLayout {
   const ack = ackSpec(p);
   const r = L.r;
   const RAD = Math.PI / 180;
@@ -165,9 +165,9 @@ export function computeFrontLayout(p: Params, L: Pick<Layout, 'r' | 'WB' | 'kx' 
   const bellZ = dragZ + linkT / 2 + ASSY_GAP_IN + bellT / 2;
   const bracketZ = bellZ + bellT / 2 + ASSY_GAP_IN + linkT / 2;
   const modeZ = dragZ - linkT / 2 - ASSY_GAP_IN - MODE_PLATE_T_IN / 2;
-  // The tongue passes under the front transom (bottom = noseTop - crossmemberDepth) with TONGUE_UNDER_TRANSOM_IN to spare (spec 3.6); the ear plate and the
+  // The tongue passes under the front transom (bottom = noseTop - crossmemberDepth) with the linkage running clearance (`steeringLinkClearIn`) plus TONGUE_UNDER_TRANSOM_MARGIN_IN to spare (spec 3.6); the ear plate and the
   // tongue link stand higher (spacer sleeves on the ear-plate bolts) so they pass over the beam top.
-  const tongueTop = L.noseTop - p.crossmemberDepthIn - TONGUE_UNDER_TRANSOM_IN;
+  const tongueTop = L.deckTop - p.crossmemberDepthIn - p.steeringLinkClearIn - TONGUE_UNDER_TRANSOM_MARGIN_IN;
   const tongueDepth = p.tongueDepthIn;
   const tongueBot = tongueTop - tongueDepth;
   const tc = p.tongueClevisThickIn;

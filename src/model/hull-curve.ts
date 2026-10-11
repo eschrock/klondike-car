@@ -1,23 +1,13 @@
 /**
- * Plan-view S-curve of the hull side (D-45): a smooth reverse curve from the cabin side to the nose side.
+ * Plan-view curve of the hull side (D-45, D-52): one convex bow taper from the cabin side to the front transom, fitted to the Ackermann tire sweep.
  *
- * Plain numbers only (no params, no three.js), so params.ts (auto nose / validation), layout.ts, body.ts and the tests all share it.
+ * Plain numbers only (no params, no three.js), so params.ts (auto curve start / validation), layout.ts, body.ts and the tests all share it.
  *
- * The curve is defined on the side's CENTERLINE (the plane of the okoume web, the middle of the 5/8" chine and gunwale). It is built
- * from a curvature profile: curvature ramps up linearly from 0 (tangent to the cabin side), holds, and ramps back to 0 at the middle
- * of the curve (the inflection), then the mirror image bends it back to parallel (tangent to the nose side). So heading AND curvature
- * are continuous at both ends and at the inflection (no kinks, no curvature jumps), and for a given length the tightest radius is
- * much larger than a quintic "smootherstep" would give (a bent lamination cares about the tightest radius).
+ * The curve is defined on the side's CENTERLINE (the plane of the okoume web, the middle of the 5/8" chine and gunwale). It is built from a curvature
+ * profile (trapezoid ramps, so heading AND curvature are continuous at both ends), followed by a straight bow run (see the bow section below).
  */
 import { solveSteer, type AckSpec } from './ackermann';
 import type { Vec2 } from './types';
-
-/** Fraction of each half over which curvature ramps (the rest holds constant). 1 = triangle profile, small = nearly two arcs. */
-const RAMP_FRAC = 0.25;
-const FINE = 480;
-const SAMPLES = 24;
-/** Largest heading the curve may reach (rad) before the shape falls back to a smootherstep. */
-const MAX_HEADING = (80 * Math.PI) / 180;
 
 export interface PlanCurve {
   /** x of the start (tangent to the cabin side) and end (tangent to the nose side), and the centerline half widths there. */
@@ -33,115 +23,15 @@ export interface PlanCurve {
   length: number;
   /** Peak heading change from the cabin side direction (rad). */
   peakHeading: number;
-  /**
-   * Phase 3b bow taper (D-52, optional): slope dy/dx of the straight bow run that continues past x1 (negative = converging toward the front). Absent or 0:
-   * the nose side is parallel to the axis (the D-45 reverse curve).
-   */
+  /** Slope dy/dx of the straight bow run that continues past x1 (negative = converging toward the front, D-52). Absent or 0: the nose side is parallel to the axis. */
   endSlope?: number;
   /** Bow curves only: peak curvature of the reverse (straightening) part as a fraction of the convergent part; 0 = fully convex. */
   reverseFrac?: number;
 }
 
-/** Heading integral G(v) of the curvature profile g on [0, 1] (g ramps up over RAMP_FRAC of the first half, mirrored negative in the second). */
-function gProfile(v: number): number {
-  const h = v <= 0.5 ? v : 1 - v;
-  const gv = Math.min(1, h / (0.5 * RAMP_FRAC));
-  return v <= 0.5 ? gv : -gv;
-}
-
-const GTAB: number[] = (() => {
-  const t = [0];
-  for (let i = 1; i <= FINE; i++) {
-    const v0 = (i - 1) / FINE, v1 = i / FINE;
-    t.push(t[i - 1] + ((gProfile(v0) + gProfile((v0 + v1) / 2) * 4 + gProfile(v1)) / 6) * (1 / FINE));
-  }
-  return t;
-})();
-const G_MAX = Math.max(...GTAB);
-
-function integrals(phi: number): { C: number; S: number } {
-  let C = 0, S = 0;
-  for (let i = 0; i < FINE; i++) {
-    const th = phi * (GTAB[i] + GTAB[i + 1]) / 2;
-    C += Math.cos(th);
-    S += Math.sin(th);
-  }
-  return { C: C / FINE, S: S / FINE };
-}
-
-const cache = new Map<string, PlanCurve>();
-
-const smootherstep = (u: number) => u * u * u * (10 - 15 * u + 6 * u * u);
-
-/** Build (and cache) the curve from (x0, yA) to (x1, yB), both ends parallel to the x axis. */
-export function buildPlanCurve(x0: number, x1: number, yA: number, yB: number): PlanCurve {
-  const key = `${x0}|${x1}|${yA}|${yB}`;
-  const hit = cache.get(key);
-  if (hit) return hit;
-  const c = computeCurve(x0, x1, yA, yB);
-  if (cache.size > 4000) cache.clear();
-  cache.set(key, c);
-  return c;
-}
-
-function computeCurve(x0: number, x1: number, yA: number, yB: number): PlanCurve {
-  const Lc = Math.max(1e-6, x1 - x0);
-  const dy = yB - yA;
-  const D = Math.abs(dy);
-  const sgn = dy < 0 ? -1 : 1;
-  if (D < 1e-9) {
-    return { x0, x1, yA, yB, pts: [[x0, yA], [x1, yB]], minRadius: Infinity, length: Lc, peakHeading: 0 };
-  }
-  const target = D / Lc;
-  // Solve S(phi)/C(phi) = D / Lc by bisection on the heading scale phi (monotone while the peak heading < 90 degrees).
-  const phiMax = MAX_HEADING / G_MAX;
-  const rMax = (() => { const q = integrals(phiMax); return q.S / q.C; })();
-  if (target <= rMax) {
-    let lo = 0, hi = phiMax;
-    for (let i = 0; i < 60; i++) {
-      const mid = (lo + hi) / 2;
-      const q = integrals(mid);
-      if (q.S / q.C < target) lo = mid; else hi = mid;
-    }
-    const phi = (lo + hi) / 2;
-    const q = integrals(phi);
-    const S = Lc / q.C;
-    const kappa = phi / S;
-    const pts: Vec2[] = [];
-    const step = FINE / SAMPLES;
-    let cx = 0, cy = 0;
-    pts.push([x0, yA]);
-    for (let i = 0; i < FINE; i++) {
-      const th = phi * (GTAB[i] + GTAB[i + 1]) / 2;
-      cx += Math.cos(th) / FINE;
-      cy += Math.sin(th) / FINE;
-      if ((i + 1) % step === 0) pts.push([x0 + S * cx, yA + sgn * S * cy]);
-    }
-    pts[pts.length - 1] = [x1, yB];
-    return { x0, x1, yA, yB, pts, minRadius: 1 / kappa, length: S, peakHeading: phi * G_MAX };
-  }
-  // Too steep for the profile: fall back to a smootherstep (exact end points, tangent, curvature-continuous).
-  const pts: Vec2[] = [];
-  for (let i = 0; i <= SAMPLES; i++) {
-    const u = i / SAMPLES;
-    pts.push([x0 + Lc * u, yA + dy * smootherstep(u)]);
-  }
-  let rMin = Infinity, len = 0;
-  for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
-  for (let i = 1; i < 1000; i++) {
-    const u = i / 1000, h = 1e-4;
-    const f = (v: number) => D * smootherstep(v);
-    const yp = (f(u + h) - f(u - h)) / (2 * h * Lc);
-    const ypp = (f(u + h) - 2 * f(u) + f(u - h)) / (h * h * Lc * Lc);
-    const k = Math.abs(ypp) / (1 + yp * yp) ** 1.5;
-    if (k > 1e-12) rMin = Math.min(rMin, 1 / k);
-  }
-  return { x0, x1, yA, yB, pts, minRadius: rMin, length: len, peakHeading: Math.atan((1.875 * D) / Lc) };
-}
-
-// ── Bow taper (Phase 3b, D-52): one long curve that keeps converging toward the front transom ──
+// ── Bow taper (D-52): one long curve that keeps converging toward the front transom ──
 //
-// The D-45 curve ends PARALLEL to the axis (a reverse curve: a waist with an inflection). The Ackermann front end leaves room ahead of the tire pinch
+// The old D-45 curve ended PARALLEL to the axis (a reverse curve: a waist with an inflection). The Ackermann front end leaves room ahead of the tire pinch
 // (the sweep envelope rises again past x = 40"), and the rider's feet only need ~12" inside, so the hull can keep converging toward a bow. The family:
 // a convergent curvature pulse (peak K, trapezoid ramps), optionally followed by an equal-peak REVERSE pulse of relative length `lam` (0 = no reverse curvature,
 // 1 = the D-45 S-curve), then a straight bow run of fixed x extent that ends at the front transom with heading -tau. For a fixed bow width the one free
@@ -150,6 +40,8 @@ function computeCurve(x0: number, x1: number, yA: number, yB: number): PlanCurve
 /** Ramp fraction of each curvature pulse: curvature ramps over the first and last quarter of the pulse (same trapezoid as the D-45 curve). */
 const BOW_RAMP = 0.25;
 const BOW_N = 240;
+/** Largest peak heading the bow family searches (rad). */
+const MAX_HEADING = (80 * Math.PI) / 180;
 /** Heading integral of a unit-peak trapezoid curvature pulse on [0, 1]. */
 function pulseHeading(u: number): number {
   const r = BOW_RAMP;
@@ -270,8 +162,8 @@ const BOW_FIT_MARGIN_IN = 0.005;
 export function fitBowCurve(spec: BowSpec, tires: TireSweepSpec, side: number, clearance: number): BowFit {
   const clearanceIn = clearance;
   const a = tires.ack;
-  const key = [spec.x0, spec.yA, spec.xT, spec.yT, spec.straightIn, side, clearanceIn, tires.tireWidth, tires.wheelDiameter, tires.wheelbase, tires.kx, tires.frontTrack, tires.lockDeg,
-    a ? [a.kx, a.lead, a.scrub, a.kpHalf, a.armLen, a.armAngleDeg, a.tieLen, a.towLockInnerDeg].join(',') : ''].join('|');
+  const key = [spec.x0, spec.yA, spec.xT, spec.yT, spec.straightIn, side, clearanceIn, tires.tireWidth, tires.wheelDiameter,
+    [a.kx, a.lead, a.scrub, a.kpHalf, a.armLen, a.armAngleDeg, a.tieLen, a.towLockInnerDeg].join(',')].join('|');
   const hit = bowFitCache.get(key);
   if (hit) return hit;
   const polys = leftTirePolys(tires);
@@ -383,26 +275,20 @@ export function curveHeading(c: PlanCurve, x: number): number {
 // ── Front-tire sweep and clearance ──
 
 export interface TireSweepSpec {
-  wheelbase: number;
-  /** Kingpin x. */
-  kx: number;
-  frontTrack: number;
   tireWidth: number;
   wheelDiameter: number;
-  lockDeg: number;
   /**
-   * Phase 3b Ackermann spec (optional, additive). When present the sweep is per wheel: the left tire rectangle is rotated about the LEFT kingpin by the
-   * solved left-knuckle angle (wheel center at (-lead, +scrub) in the knuckle frame) for the inner-wheel input from -tow lock to +tow lock; `kx`, `frontTrack`
-   * and `lockDeg` are then ignored. Absent: the old rotation about one pivot.
+   * Ackermann spec (D-53): the sweep is per wheel - the left tire rectangle is rotated about the LEFT kingpin by the solved left-knuckle angle (wheel center at
+   * (-lead, +scrub) in the knuckle frame) for the inner-wheel input from -tow lock to +tow lock.
    */
-  ack?: AckSpec;
+  ack: AckSpec;
 }
 
-/** Plan rectangles of the LEFT front tire at every degree of steering from −lock to +lock (rotated about the kingpin). */
+/** Plan rectangles of the LEFT front tire at every degree of steering from −lock to +lock (rotated about its own kingpin by the solved knuckle angle). */
 const polyCache = new Map<string, Vec2[][]>();
 export function leftTirePolys(t: TireSweepSpec, stepDeg = 1): Vec2[][] {
   const a = t.ack;
-  const key = [t.wheelbase, t.kx, t.frontTrack, t.tireWidth, t.wheelDiameter, t.lockDeg, stepDeg, a ? [a.kx, a.lead, a.scrub, a.kpHalf, a.armLen, a.armAngleDeg, a.tieLen, a.towLockInnerDeg].join(',') : ''].join('|');
+  const key = [t.tireWidth, t.wheelDiameter, stepDeg, a.kx, a.lead, a.scrub, a.kpHalf, a.armLen, a.armAngleDeg, a.tieLen, a.towLockInnerDeg].join('|');
   const hit = polyCache.get(key);
   if (hit) return hit;
   const out = leftTirePolysUncached(t, stepDeg);
@@ -414,26 +300,15 @@ export function leftTirePolys(t: TireSweepSpec, stepDeg = 1): Vec2[][] {
 function leftTirePolysUncached(t: TireSweepSpec, stepDeg: number): Vec2[][] {
   const r = t.wheelDiameter / 2, hw = t.tireWidth / 2;
   const out: Vec2[][] = [];
-  if (t.ack) {
-    const a = t.ack;
-    const lock = a.towLockInnerDeg;
-    // Input d runs -inner..+inner, so the left-knuckle angle covers leftWheelRange(a) = -outer..+inner at the tow lock.
-    for (let d = -lock; d <= lock + 1e-9; d += stepDeg) {
-      const sol = solveSteer(a, d);
-      const th = (sol.leftDeg * Math.PI) / 180, c = Math.cos(th), s = Math.sin(th);
-      out.push(([[-r, -hw], [r, -hw], [r, hw], [-r, hw]] as Vec2[]).map(([dx, dy]) => {
-        const x = -a.lead + dx, y = a.scrub + dy;
-        return [a.kx + c * x - s * y, a.kpHalf + s * x + c * y] as Vec2;
-      }));
-    }
-    return out;
-  }
-  const lock = Math.abs(t.lockDeg);
+  const a = t.ack;
+  const lock = a.towLockInnerDeg;
+  // Input d runs -inner..+inner, so the left-knuckle angle covers leftWheelRange(a) = -outer..+inner at the tow lock.
   for (let d = -lock; d <= lock + 1e-9; d += stepDeg) {
-    const a = (d * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
+    const sol = solveSteer(a, d);
+    const th = (sol.leftDeg * Math.PI) / 180, c = Math.cos(th), s = Math.sin(th);
     out.push(([[-r, -hw], [r, -hw], [r, hw], [-r, hw]] as Vec2[]).map(([dx, dy]) => {
-      const x = t.wheelbase + dx - t.kx, y = t.frontTrack / 2 + dy;
-      return [t.kx + c * x - s * y, s * x + c * y] as Vec2;
+      const x = -a.lead + dx, y = a.scrub + dy;
+      return [a.kx + c * x - s * y, a.kpHalf + s * x + c * y] as Vec2;
     }));
   }
   return out;
@@ -529,29 +404,4 @@ export interface CurveClearanceSpec extends TireSweepSpec {
   side: number;
   /** Length of straight nose side tested after the curve end. */
   tailIn?: number;
-}
-
-/** Smallest distance from the OUTER face of the hull side (cabin + curve + nose) to the left front tire over the whole steering sweep. */
-export function curveTireGap(x0: number, x1: number, spec: CurveClearanceSpec, polys?: Vec2[][]): number {
-  const c = buildPlanCurve(x0, x1, spec.yA, spec.yB);
-  const outline = sidePolyline(c, spec.side / 2, Math.min(x0, x1) - 0.5, x1 + (spec.tailIn ?? 10));
-  return minGapToTires(outline, polys ?? leftTirePolys(spec));
-}
-
-/**
- * Latest curve end x1 (≥ x0 + minLen) whose outer face still clears the tire sweep by `clearance`: the S-curve may finish as late as that.
- * Returns x0 + minLen when even the shortest curve does not clear (the validator then reports it).
- */
-export function latestCurveEnd(x0: number, spec: CurveClearanceSpec, clearance: number, minLen = 3, maxLen = 40): number {
-  const polys = leftTirePolys(spec);
-  const ok = (x1: number) => curveTireGap(x0, x1, spec, polys) >= clearance - 1e-9;
-  const lo0 = x0 + minLen;
-  if (!ok(lo0)) return lo0;
-  let lo = lo0, hi = x0 + maxLen;
-  if (ok(hi)) return hi;
-  for (let i = 0; i < 14; i++) {
-    const mid = (lo + hi) / 2;
-    if (ok(mid)) lo = mid; else hi = mid;
-  }
-  return lo;
 }

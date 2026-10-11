@@ -1,11 +1,10 @@
-/** Phase 3 round 3, front / fittings fixes (D-47): kingpin bolt, stop-block stock, access opening radius, lash plate pattern, storage clearance, build order, finger guard. */
+/** Phase 3 round 3, fittings fixes (D-47): lash plate pattern, storage clearance, build order, finger guard. (The turntable-era kingpin, stop-block and access-opening tests went with those parts at the Phase 3b flip.) */
 import { describe, expect, it } from 'vitest';
 import { defaultParams, resolveParams, validateParams } from '../params';
 import { buildModel } from './index';
 import { computeLayout } from './layout';
 import { worldAABB } from './bounds';
 import { STEP, HULL_STEP } from './build-utils';
-import { KINGPIN_FLOOR_OAK_IN, hexBoltThreadIn, kingpinBolt, roundUp32, roundedRectCCW } from './steering';
 import { storageGeometry, LASH_HOLE_DX_IN, LASH_HOLE_DY_IN } from './storage';
 import { packEssentials, storageInterior } from './storage';
 
@@ -13,59 +12,6 @@ const p = resolveParams(defaultParams());
 const L = computeLayout(p);
 const parts = buildModel(p);
 const get = (id: string) => parts.find((x) => x.id === id)!;
-
-describe('S5: the kingpin is a real grade-8 hex bolt with the shear planes on the shank', () => {
-  it('ASME B18.2.1 thread length: 2D + 1/4" up to 6", 2D + 1/2" over', () => {
-    expect(hexBoltThreadIn(0.75, 6)).toBeCloseTo(1.75, 9);
-    expect(hexBoltThreadIn(0.75, 6.5)).toBeCloseTo(2, 9);
-  });
-  it('3/4-10 x 6" (shank 4.25") reaches 1/4" past the top of the crossbar plate; cut to 5-1/8" at the nut', () => {
-    const kp = L.kpPlates!;
-    const b = kingpinBolt(0.75, kp.under.z0, kp.bar.z1, kp.bar.z1 + KINGPIN_FLOOR_OAK_IN);
-    expect(b.buyIn).toBe(6);
-    expect(b.shankIn).toBeCloseTo(4.25, 9);
-    expect(b.zHead + b.shankIn).toBeGreaterThanOrEqual(kp.bar.z1 + 0.25 - 1e-9); // thread starts above every bearing plane
-    expect(b.cutIn).toBeLessThan(b.buyIn);
-    expect(b.threadLeftIn).toBeGreaterThanOrEqual(b.nutIn + 2 * b.pitchIn - 1e-9);
-    expect(b.zTail).toBeLessThan(L.kingpin.z1); // the tail ends inside the counterbore, below the access panel
-    const pin = get('kingpin');
-    expect(pin.sourcing!.vendor).toMatch(/unthreaded shank 4\.25"/);
-    expect(pin.sourcing!.vendor).toMatch(/5-1\/8"/);
-    expect(worldAABB(pin).max[2]).toBeCloseTo(b.zTail, 6);
-  });
-  it('the sleeve is reamed to pin + 0.006" (0.756"), not a zero-clearance 0.750"', () => {
-    expect(get('kingpin-sleeve-beam').sourcing!.vendor).toMatch(/0\.756"/);
-  });
-});
-
-describe('S12: stop blocks are cut from rounded stock with a fit plan', () => {
-  it('stock is rounded up to 1/32", the blank is stock + 1/8", and the joint note carries the proud-and-plane procedure', () => {
-    for (const id of ['AL', 'AR', 'FL', 'FR']) {
-      const b = get(`stop-block-${id}`);
-      for (const k of ['t', 'w', 'l'] as const) {
-        expect(Math.abs(b.stock![k] * 32 - Math.round(b.stock![k] * 32)), `${id} ${k}`).toBeLessThan(1e-9);
-        expect(b.rough![k] - b.stock![k]).toBeCloseTo(p.stopBlockRoughAllowIn, 9);
-      }
-      expect(b.joints!.some((j) => /PROUD/.test(j.note ?? ''))).toBe(true);
-    }
-    expect(roundUp32(3.238)).toBeCloseTo(3.25, 9);
-  });
-});
-
-describe('S12: kingpin-access opening corner radius', () => {
-  it('the opening in the nose deck and the panel are rounded to accessOpeningCornerRadiusIn (1")', () => {
-    const o = roundedRectCCW(-2.25, 2.25, -1.375, 1.375, 1);
-    expect(o.length).toBe(28);
-    const deck = get('deck-nose');
-    expect(deck.geometry.type === 'extrusion' && deck.geometry.holes![0].length).toBe(28);
-    const panel = get('nose-access-panel');
-    expect(panel.geometry.type).toBe('extrusion');
-    expect(panel.notes).toMatch(/1" corner radii/);
-    const bb = worldAABB(panel);
-    expect(bb.max[0] - bb.min[0]).toBeCloseTo(p.accessPanelLengthIn, 6);
-    expect(p.edgeBandIn).toBeCloseTo(0.25, 9);
-  });
-});
 
 describe('S8: lash plate pattern fits and is drawn', () => {
   it('each plate sits on a 1" doubler with 4 screws at +-0.5625 x +-0.25 that stay 0.25" inside the doubler faces', () => {
@@ -94,14 +40,17 @@ describe('S3: storage box clearance to the chine', () => {
 });
 
 describe('S10: build order', () => {
-  it('hull first, then the front stack and axles on the inverted hull, then the kingpin from below after turning upright', () => {
+  it('hull first, then the front beam and axles on the inverted hull, then the spindles, linkage and tongue after turning upright', () => {
     expect(STEP.frame).toBeLessThan(STEP.body);
     expect(HULL_STEP.transom).toBeLessThan(STEP.steering);
     expect(STEP.steering).toBeLessThan(STEP.gear);
-    expect(STEP.gear).toBeLessThan(STEP.kingpin);
-    expect(STEP.kingpin).toBeLessThan(STEP.seatStorage);
-    for (const id of ['turntable', 'bolster-fore', 'beam-F', 'axle-F']) expect(get(id).step, id).toBeGreaterThan(get('transom-rear').step);
-    expect(get('kingpin').step).toBe(STEP.kingpin);
+    expect(STEP.gear).toBeLessThan(STEP.linkage);
+    expect(STEP.linkage).toBeLessThan(STEP.spindles);
+    expect(STEP.spindles).toBeLessThan(STEP.seatStorage);
+    for (const id of ['beam-F', 'kp-bracket-L', 'axle-R']) expect(get(id).step, id).toBeGreaterThan(get('transom-rear').step);
+    expect(get('spindle-L').step).toBe(STEP.spindles);
+    expect(get('tie-rod').step).toBe(STEP.linkage);
+    expect(get('beam-F').step).toBeLessThan(get('spindle-L').step);
   });
 });
 

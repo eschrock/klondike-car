@@ -4,6 +4,7 @@ import { buildModel } from '../model';
 import { makeContext } from './context';
 import { footStopCheck, footStopLoads, hullChecks, liftCheck, liftShares } from './hull';
 import { liftBarStressPsi } from '../model/body';
+import { innerHalfWidth } from '../model/layout';
 
 const ctxFor = (patch: Partial<Params> = {}) => {
   const p = { ...defaultParams(), ...patch } as Params;
@@ -47,21 +48,26 @@ describe('hull checks (D-43)', () => {
     expect(c.how).toMatch(/not mass \/ 2/);
   });
 
-  it('foot stop by hand: 200 lb × 2 g × 0.6 = 240 lbf; board 12.75" × 0.75" × 4": M = 240 × 12.75 / 4 = 765 lb·in, S = 4 × 0.75² / 6 = 0.375 → 2,040 psi; 8 deck screws → 30 lbf each', () => {
-    const k = footStopLoads(ctx, 200)!;
+  it('foot stop by hand: 200 lb x 2 g x 0.6 = 240 lbf; the board spans the hull inside width at its own x, narrowest over its thickness (the bow converges); M = F L / 4, S = 4 x 0.75^2 / 6 = 0.375; 8 deck screws', () => {
+    const k = footStopLoads(ctx, 200, 2)!;
+    const fx = defaultParams().seatXIn + defaultParams().riderLegReachIn;
+    const t = defaultParams().footStopThickIn;
+    const span = 2 * Math.min(innerHalfWidth(ctx.L, fx - t / 2), innerHalfWidth(ctx.L, fx + t / 2)); // the side slopes across the board: cut to the narrowest
     expect(k.F).toBeCloseTo(240, 9);
-    expect(k.span).toBeCloseTo(12.75, 6);
-    expect(k.M).toBeCloseTo(765, 6);
+    expect(k.span).toBeCloseTo(span, 6);
+    expect(span).toBeGreaterThan(2 * ctx.L.hwN); // wider than the bow's inside width at the front transom
+    expect(k.M).toBeCloseTo((240 * span) / 4, 6);
     expect(k.S).toBeCloseTo(0.375, 9);
-    expect(k.sigma).toBeCloseTo(2040, 6);
+    expect(k.sigma).toBeCloseTo((240 * span) / 4 / 0.375, 6);
     expect(k.screws).toBe(8); // 4 through the board + 2 through each of 2 cleats
     expect(k.screwLoad).toBeCloseTo(30, 9);
     expect(footStopCheck(ctx)!.statusGoal).not.toBe('fail');
+    expect(footStopCheck(ctx)!.id).toBe('foot-stop');
+    expect(footStopCheck(ctx)!.label).toMatch(/bump/);
   });
 
-  it('foot stop fails when the load is real: 4 g and the whole share (200 × 4 × 1.0 = 800 lbf, 100 lbf per screw > 90)', () => {
-    const c = footStopCheck(ctxFor({ curbStrikeG: 4, footStopShare: 1 }))!;
-    expect(c.statusGoal).toBe('fail');
-    expect(footStopLoads(ctxFor({ curbStrikeG: 4, footStopShare: 1 }), 200)!.screwLoad).toBeCloseTo(100, 9);
+  it('foot stop screws are overloaded when the load is real: 4 g and the whole share (200 × 4 × 1.0 = 800 lbf, 100 lbf per screw > 90)', () => {
+    expect(footStopLoads(ctxFor({ footStopShare: 1 }), 200, 4)!.screwLoad).toBeCloseTo(100, 9);
+    expect(footStopLoads(ctxFor({ footStopShare: 1 }), 200, 4)!.screwLoad).toBeGreaterThan(ctx.p.woodScrewLateralLbf);
   });
 });

@@ -2,8 +2,6 @@
  * Ride-mode brake rows (Phase 3b WS-C, D-56): emergency stop force, stopping distance, front/rear bias and lockup order, shoe heat, the front brake
  * structure and housing, the hip lever and cable, parking hold on the design slope, and the lap belt anchor. The chain numbers (front/rear split, hip ratio,
  * lockup limits, stop and heat formulas) are in `brake-chain.ts`; every row is hand-checkable from its `how` text and docs/phase3b-wsC-notes.md.
- *
- * Rows are added only when the design has a front tread brake or the ride controls (`frontBrakeType` 0, `rideBrakeControls` 1); the old rear-only cart is unchanged.
  */
 import { HORN_H_IN, HORN_T_IN } from '../model/brake-front';
 import type { Ctx } from './context';
@@ -47,8 +45,8 @@ export function brakeEmergency(ctx: Ctx): AnalysisCheck {
     const fHip = hipFromMain(ch, fMain);
     return {
       value: fHip, unit: 'lbf', limit: p.brakeEmergencyLimitLbf, sense: '<=', marginalAbs: 0.05 * p.brakeEmergencyLimitLbf,
-      details: [detail(`${ch.hipOn ? 'hip grip' : 'main grip'} force`, fHip, 'lbf', p.brakeEmergencyLimitLbf, '<='), info('main grip force', fMain, 'lbf')],
-      how: `A 0.30 g stop on ${f(p.rideGoSlopeDeg)}°: total brake force F = W(0.30 + sinθ − Crr cosθ) = ${f(c.massLb)} × (0.30 + ${f(Math.sin(th), 3)} − ${f(crrOf(ctx), 3)} × ${f(Math.cos(th), 3)}) = ${f(Ftot)} lbf; at the mud-fouled lining μ ${f(p.brakePadMuFouled, 2)} the shoes need N = ${f(N)} lbf. Chain ratio ${f(ch.Rcrit, 1)}:1 (the smaller rolling direction; the front branch adds braking capacity, not leverage, same grip stroke) × efficiency ${f(ch.eta, 2)} gives ${f(fMain)} lbf at the main grip${ch.hipOn ? `; the hip lever is ${f(ch.hg.hipPerMain, 3)} of that geometrically and the Bowden cable is ${f(ch.etaHip, 2)} efficient, so ${f(fHip)} lbf at the hip grip` : ''}. Limit ${f(p.brakeEmergencyLimitLbf)} lbf.`,
+      details: [detail('hip grip force', fHip, 'lbf', p.brakeEmergencyLimitLbf, '<='), info('main grip force', fMain, 'lbf')],
+      how: `A 0.30 g stop on ${f(p.rideGoSlopeDeg)}°: total brake force F = W(0.30 + sinθ − Crr cosθ) = ${f(c.massLb)} × (0.30 + ${f(Math.sin(th), 3)} − ${f(crrOf(ctx), 3)} × ${f(Math.cos(th), 3)}) = ${f(Ftot)} lbf; at the mud-fouled lining μ ${f(p.brakePadMuFouled, 2)} the shoes need N = ${f(N)} lbf. Chain ratio ${f(ch.Rcrit, 1)}:1 (the smaller rolling direction; the front branch adds braking capacity, not leverage, same grip stroke) × efficiency ${f(ch.eta, 2)} gives ${f(fMain)} lbf at the main grip; the hip lever is ${f(ch.hg.hipPerMain, 3)} of that geometrically and the Bowden cable is ${f(ch.etaHip, 2)} efficient, so ${f(fHip)} lbf at the hip grip. Limit ${f(p.brakeEmergencyLimitLbf)} lbf.`,
     };
   };
   return dualCheck({ id: 'brake-emergency', label: 'Emergency stop: hand force for 0.30 g on the envelope slope', group: 'Braking', refs: ['D-56', 'D-51'], primary: 'operating', ...evalBoth(ctx, ev) });
@@ -122,8 +120,7 @@ export function brakeHeat(ctx: Ctx): AnalysisCheck {
     const h8 = heatRun(p, ch, c.massLb, p.rideGoSlopeDeg * RAD);
     const h10 = heatRun(p, ch, c.massLb, p.rideMaxSlopeDeg * RAD);
     const h15 = heatRun(p, ch, c.massLb, 15 * RAD);
-    const oakP = { ...p, brakeShoeBacking: 0 as const };
-    const hOak = heatRun(oakP, ch, c.massLb, p.rideGoSlopeDeg * RAD);
+    const hOak = heatRun(p, ch, c.massLb, p.rideGoSlopeDeg * RAD, p.rideSpeedMph, 'oak');
     const ds: Detail[] = [
       detail(`continuous braking distance to ${f(p.brakeHeatLimitK, 0)} K at ${f(p.rideGoSlopeDeg, 0)}°`, h8.runFt, 'ft', p.rideRunFt, '>='),
       info(`same at ${f(p.rideMaxSlopeDeg, 0)}° (info)`, h10.runFt, 'ft'),
@@ -132,7 +129,7 @@ export function brakeHeat(ctx: Ctx): AnalysisCheck {
     ];
     return {
       value: h8.runFt, unit: 'ft', limit: p.rideRunFt, sense: '>=', details: ds, marginalAbs: 0.1 * p.rideRunFt,
-      how: `Surface rise ΔT = 2 q √t / (√π e). Power W·v·(sinθ − Crr cosθ) at ${f(p.rideSpeedMph, 0)} mph on ${f(p.rideGoSlopeDeg, 0)}° goes to the shoes; the hottest one takes ${f(h8.shoeW)} W. Partition ${f(h8.partition, 2)} into a ${p.brakeShoeBacking === 1 ? 'lined steel-backed' : 'oak'} shoe (e = ${f(h8.effusivity, 0)} W·s^½/m²K), contact patch ${f(p.brakeHeatContactFrac, 2)} of ${f(h8.areaIn2, 1)} in² gives q = ${f(h8.qWm2, 0)} W/m². ΔT reaches ${f(p.brakeHeatLimitK, 0)} K after ${f(h8.timeS, 1)} s = ${f(h8.runFt, 0)} ft at ride speed (time ∝ 1/q²: a patch twice as large gives four times the run). Required ${f(p.rideRunFt, 0)} ft. Oak shoes on the same slope: ${f(hOak.runFt, 0)} ft. ${f(p.rideMaxSlopeDeg, 0)}°: ${f(h10.runFt, 0)} ft; 15°: ${f(h15.runFt, 0)} ft.`,
+      how: `Surface rise ΔT = 2 q √t / (√π e). Power W·v·(sinθ − Crr cosθ) at ${f(p.rideSpeedMph, 0)} mph on ${f(p.rideGoSlopeDeg, 0)}° goes to the shoes; the hottest one takes ${f(h8.shoeW)} W. Partition ${f(h8.partition, 2)} into a lined steel-backed shoe (e = ${f(h8.effusivity, 0)} W·s^½/m²K), contact patch ${f(p.brakeHeatContactFrac, 2)} of ${f(h8.areaIn2, 1)} in² gives q = ${f(h8.qWm2, 0)} W/m². ΔT reaches ${f(p.brakeHeatLimitK, 0)} K after ${f(h8.timeS, 1)} s = ${f(h8.runFt, 0)} ft at ride speed (time ∝ 1/q²: a patch twice as large gives four times the run). Required ${f(p.rideRunFt, 0)} ft. Oak shoes on the same slope: ${f(hOak.runFt, 0)} ft. ${f(p.rideMaxSlopeDeg, 0)}°: ${f(h10.runFt, 0)} ft; 15°: ${f(h15.runFt, 0)} ft.`,
     };
   };
   return dualCheck({ id: 'brake-heat', label: 'Shoe heat: continuous braking distance on the envelope slope', group: 'Braking', refs: ['D-56', 'D-55'], primary: 'operating', ...evalBoth(ctx, ev) });
@@ -315,14 +312,8 @@ export function beltAnchorCheck(ctx: Ctx): AnalysisCheck {
   return dualCheck({ id: 'belt-anchor', label: 'Lap belt anchors (fail-safe, ultimate)', group: 'Structure', refs: ['D-55', 'D-56'], primary: 'goal', ...evalBoth(ctx, ev) });
 }
 
-/** The rows added to the Ackermann row list: none for the old rear-only cart. */
+/** The ride-mode brake rows: stop, emergency, bias, heat, park-hold, the front brake structure, the hip cable and the belt anchors. */
 export function brakeRideRows(ctx: Ctx): AnalysisCheck[] {
-  const { p } = ctx;
-  const front = p.frontBrakeType === 0, controls = p.rideBrakeControls === 1;
-  if (!front && !controls) return [];
-  const rows: AnalysisCheck[] = [brakeEmergency(ctx), brakeStop(ctx), brakeBias(ctx), brakeHeat(ctx), parkHold(ctx)];
-  if (front) rows.push(frontBrakeCheck(ctx));
-  if (controls) rows.push(hipCableCheck(ctx), beltAnchorCheck(ctx));
-  return rows;
+  return [brakeEmergency(ctx), brakeStop(ctx), brakeBias(ctx), brakeHeat(ctx), parkHold(ctx), frontBrakeCheck(ctx), hipCableCheck(ctx), beltAnchorCheck(ctx)];
 }
 

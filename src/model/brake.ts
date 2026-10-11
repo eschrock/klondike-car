@@ -60,8 +60,6 @@ const PAD_INSET_BARS = 0.6;
 const RETURN_SPRING_MASS_LB = 0.12;
 const PAWL_SPRING_MASS_LB = 0.03;
 const SLEEVE_MASS_LB = 0.05;
-/** 5052 aluminum sheet density (0.098 lb/in³) for the splash shield mass. */
-const ALUMINUM_LB_PER_IN3 = 0.098;
 /** Bronze / steel sleeve wall (both sides) around a pin or bolt in an oak bore. */
 export const SLEEVE_WALL_IN = 0.375;
 /** Wall of the bronze sleeve in the lever bore around the 3/4" pivot post (3/4" ID × 1" OD). */
@@ -81,13 +79,14 @@ export function rot2(p: V2, c: V2, th: number): V2 {
   return [c[0] + x * co - z * si, c[1] + x * si + z * co];
 }
 
-/** Shoe length along the tread (in): the purchased lined steel-backed shoe (`brakeShoeBacking` 1, D-56) or the old oak pad. */
-export const shoeLengthIn = (p: Params): number => (p.brakeShoeBacking === 1 ? p.brakeLinedShoeLengthIn : p.brakeShoeLengthIn);
+/** Rear shoe length along the tread (in): the purchased lined steel-backed shoe (D-56). */
+export const shoeLengthIn = (p: Params): number => p.brakeLinedShoeLengthIn;
+/** Front shoe length and angle below the axle line: the long lined shoe at the axle line, where length costs no ground clearance. */
+export const frontShoeLengthIn = (p: Params): number => p.frontBrakeShoeLengthIn;
+export const frontShoeAngleDeg = (p: Params): number => p.frontBrakeShoeAngleDeg;
+/** Lined shoe width across the tread (in). */
+export const shoeWidthIn = (p: Params): number => p.brakeLinedShoeWidthIn;
 /** Radial thickness of the lined shoe (steel back + lining) in inches; the pivot lug stands up to the pin at `brakeShoeThickIn / 2`. */
-/** Front shoe length and angle below the axle line: the long lined shoe at the axle line (lined option), else the oak pad mirrored from the rear. */
-export const frontShoeLengthIn = (p: Params): number => (p.brakeShoeBacking === 1 ? p.frontBrakeShoeLengthIn : p.brakeShoeLengthIn);
-export const frontShoeAngleDeg = (p: Params): number => (p.brakeShoeBacking === 1 ? p.frontBrakeShoeAngleDeg : p.brakeShoeAngleDeg);
-export const shoeWidthIn = (p: Params): number => (p.brakeShoeBacking === 1 ? p.brakeLinedShoeWidthIn : p.brakeShoeWidthIn);
 export const linedShoeThickIn = (p: Params): number => p.brakeShoeBackThickIn + p.brakeLiningThickIn;
 /** Density of A36 sheet (lb/in3) for the shoe back. */
 const STEEL_LB_PER_IN3 = 0.2836;
@@ -625,86 +624,26 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
     }));
     const delta = shoeLengthIn(p) / (2 * r);
     const N = 8;
-    if (p.brakeShoeBacking === 1) {
-      // Purchased lined steel-backed shoe (D-56): a 1/8" steel back with the lining riveted on, radius-matched to the tread, with a pivot tab to the shoe pin.
-      const lt = p.brakeLiningThickIn, bt = p.brakeShoeBackThickIn;
-      const arcOutline: Vec2[] = [];
-      for (let i = 0; i <= N; i++) { const a = g.beta - delta + (2 * delta * i) / N; arcOutline.push([-(r + lt + bt) * Math.cos(a), -(r + lt + bt) * Math.sin(a)]); }
-      for (let i = N; i >= 0; i--) { const a = g.beta - delta + (2 * delta * i) / N; arcOutline.push([-r * Math.cos(a), -r * Math.sin(a)]); }
-      const shiftL = sub(pose.E, g.E);
-      const [qy0, qy1] = yRange(sgn, Y.pad[0], Y.pad[1]);
-      const depthL = Y.pad[1] - Y.pad[0];
-      const areaL = shoeLengthIn(p) * depthL;
-      const atR = (rad: number): V2 => add([g.O[0] - rad * Math.cos(g.beta), g.O[1] - rad * Math.sin(g.beta)], shiftL);
-      const cgL = atR(r + (lt + bt) / 2);
-      add1(planarExtrusion(ctx, {
-        id: `brake-shoe-${tag}`, partNo: 'brake-shoe', name: `Brake shoe ${tag} (lined, steel-backed)`, mat: 'fixed', kind: 'purchased',
-        material: `${f2(bt)}" steel back + ${f2(lt)}" woven / molded lining, riveted`, outline: arcOutline, origin: [g.O[0] + shiftL[0], g.O[1] + shiftL[1]],
-        yHi: Math.max(qy0, qy1), depth: depthL, massLb: areaL * (bt * STEEL_LB_PER_IN3 + lt * LINING_LB_PER_IN3) + 0.08, fab: 'buy',
-        explode: [0.2, sgn, 0.2], cg: [cgL[0], (qy0 + qy1) / 2, cgL[1]],
-        sourcing: { vendor: `Purchased lined steel-backed brake shoe (go-kart band / industrial shoe, ${f2(shoeLengthIn(p))}" × ${f2(depthL)}" lining on a ${f2(bt)}" back, radius-matched to the ${f2(2 * r)}" tire) with a ${f2(bt)}" pivot tab drilled for the ${p.brakeShoePinDiameterIn}" shoe pin. Part number to confirm (docs/phase3b-wsC-notes.md).` },
-        joints: [{ type: 'pin', to: `brake-shoe-pin-${tag}`, count: 1, size: `${p.brakeShoePinDiameterIn}" pivot bore in the tab`, note: 'shoe swivels on the pin' }],
-        notes: `Lined steel-backed shoe, ${f2(shoeLengthIn(p))}" long × ${f2(depthL)}" wide. Design μ ${f2(p.brakePadMu)} wet; ${f2(p.brakePadMuFouled)} mud-fouled (pass/fail). The steel back sheds spray, so the oak pad's splash shield is dropped. Test a lining sample on a wet tire first.`,
-      }));
-      continue;
-    }
-    // Pad: oak arc, concentric with the tread, moved with the arm (released pose is offset outward by the stroke).
-    const outline: Vec2[] = [];
-    const lt = p.brakeLiningThickIn;
-    // The oak pad is recessed by the lining thickness: the lining (below) fills r … r + lt, so the pad's total radial thickness stays brakeShoeThickIn.
-    for (let i = 0; i <= N; i++) { const a = g.beta - delta + (2 * delta * i) / N; outline.push([-(r + p.brakeShoeThickIn) * Math.cos(a), -(r + p.brakeShoeThickIn) * Math.sin(a)]); }
-    for (let i = N; i >= 0; i--) { const a = g.beta - delta + (2 * delta * i) / N; outline.push([-(r + lt) * Math.cos(a), -(r + lt) * Math.sin(a)]); }
-    const liningOutline: Vec2[] = [];
-    for (let i = 0; i <= N; i++) { const a = g.beta - delta + (2 * delta * i) / N; liningOutline.push([-(r + lt) * Math.cos(a), -(r + lt) * Math.sin(a)]); }
-    for (let i = N; i >= 0; i--) { const a = g.beta - delta + (2 * delta * i) / N; liningOutline.push([-r * Math.cos(a), -r * Math.sin(a)]); }
-    const shift = sub(pose.E, g.E);
-    const [py0, py1] = yRange(sgn, Y.pad[0], Y.pad[1]);
-    const atRadius = (rad: number): V2 => add([g.O[0] - rad * Math.cos(g.beta), g.O[1] - rad * Math.sin(g.beta)], shift);
-    const padCg = atRadius(r + p.brakeShoeThickIn / 2);
-    const liningCg = atRadius(r + lt / 2);
-    const pad = planarExtrusion(ctx, {
-      id: `brake-shoe-${tag}`, partNo: 'brake-shoe', name: `Brake shoe ${tag}`, mat: 'oak', outline, origin: [g.O[0] + shift[0], g.O[1] + shift[1]], yHi: Math.max(py0, py1), depth: Y.pad[1] - Y.pad[0],
-      grain: 'z', explode: [0.2, sgn, 0.2], cg: [padCg[0], (py0 + py1) / 2, padCg[1]],
-      joints: [{ type: 'pin', to: `brake-shoe-pin-${tag}`, count: 1, size: `${p.brakeShoePinDiameterIn}" pivot bore (steel bushing)`, note: 'pad swivels on the pin' }],
-      notes: `Oak arc cut on the bandsaw to the tire radius (13" tire), recessed ${f2(lt)}" for the bonded lining. The pivot bore sits at mid-thickness so the contact resultant (normal + friction) falls inside the pad (checked).`,
-    });
-    add1(pad);
-    // Brake lining (eng S-3 / build S10): bonded to the oak so the wet μ is about 0.45, not the 0.25 of bare oak on wet rubber.
-    const liningArea = (() => { let a = 0; for (let i = 0; i < liningOutline.length; i++) { const [x1, y1] = liningOutline[i], [x2, y2] = liningOutline[(i + 1) % liningOutline.length]; a += x1 * y2 - x2 * y1; } return Math.abs(a) / 2; })();
+    // Purchased lined steel-backed shoe (D-56): a 1/8" steel back with the lining riveted on, radius-matched to the tread, with a pivot tab to the shoe pin.
+    const lt = p.brakeLiningThickIn, bt = p.brakeShoeBackThickIn;
+    const arcOutline: Vec2[] = [];
+    for (let i = 0; i <= N; i++) { const a = g.beta - delta + (2 * delta * i) / N; arcOutline.push([-(r + lt + bt) * Math.cos(a), -(r + lt + bt) * Math.sin(a)]); }
+    for (let i = N; i >= 0; i--) { const a = g.beta - delta + (2 * delta * i) / N; arcOutline.push([-r * Math.cos(a), -r * Math.sin(a)]); }
+    const shiftL = sub(pose.E, g.E);
+    const [qy0, qy1] = yRange(sgn, Y.pad[0], Y.pad[1]);
+    const depthL = Y.pad[1] - Y.pad[0];
+    const areaL = shoeLengthIn(p) * depthL;
+    const atR = (rad: number): V2 => add([g.O[0] - rad * Math.cos(g.beta), g.O[1] - rad * Math.sin(g.beta)], shiftL);
+    const cgL = atR(r + (lt + bt) / 2);
     add1(planarExtrusion(ctx, {
-      id: `brake-shoe-lining-${tag}`, partNo: 'brake-shoe-lining', name: `Brake lining ${tag}`, mat: 'fixed', kind: 'purchased', material: 'woven / molded brake lining sheet', outline: liningOutline,
-      origin: [g.O[0] + shift[0], g.O[1] + shift[1]], yHi: Math.max(py0, py1), depth: Y.pad[1] - Y.pad[0], massLb: liningArea * (Y.pad[1] - Y.pad[0]) * LINING_LB_PER_IN3, fab: 'bandsaw',
-      explode: [0.2, sgn, 0.2], cg: [liningCg[0], (py0 + py1) / 2, liningCg[1]],
-      sourcing: { vendor: `McMaster-Carr (woven / molded brake lining sheet, ${f2(lt)}" thick, wet-rated, asbestos-free)` },
-      joints: [{ type: 'glue', to: `brake-shoe-${tag}`, count: 1, size: 'contact / epoxy adhesive + 2 stainless pan-head screws, countersunk', note: 'cut on the bandsaw to the arc, bonded to the oak pad face' }],
-      notes: `${f2(lt)}" lining, ${f2(p.brakeShoeLengthIn)}" long × ${f2(Y.pad[1] - Y.pad[0])}" wide, bonded to the pad face with contact or epoxy adhesive and held by two countersunk stainless screws (so a peeled bond cannot drop it onto the tire). Design μ ${f2(p.brakePadMu)} wet; ${f2(p.brakePadMuFouled)} mud-fouled (pass/fail). Test a lining sample on a wet tire first.`,
+      id: `brake-shoe-${tag}`, partNo: 'brake-shoe', name: `Brake shoe ${tag} (lined, steel-backed)`, mat: 'fixed', kind: 'purchased',
+      material: `${f2(bt)}" steel back + ${f2(lt)}" woven / molded lining, riveted`, outline: arcOutline, origin: [g.O[0] + shiftL[0], g.O[1] + shiftL[1]],
+      yHi: Math.max(qy0, qy1), depth: depthL, massLb: areaL * (bt * STEEL_LB_PER_IN3 + lt * LINING_LB_PER_IN3) + 0.08, fab: 'buy',
+      explode: [0.2, sgn, 0.2], cg: [cgL[0], (qy0 + qy1) / 2, cgL[1]],
+      sourcing: { vendor: `Purchased lined steel-backed brake shoe (go-kart band / industrial shoe, ${f2(shoeLengthIn(p))}" × ${f2(depthL)}" lining on a ${f2(bt)}" back, radius-matched to the ${f2(2 * r)}" tire) with a ${f2(bt)}" pivot tab drilled for the ${p.brakeShoePinDiameterIn}" shoe pin. Part number to confirm (docs/phase3b-wsC-notes.md).` },
+      joints: [{ type: 'pin', to: `brake-shoe-pin-${tag}`, count: 1, size: `${p.brakeShoePinDiameterIn}" pivot bore in the tab`, note: 'shoe swivels on the pin' }],
+      notes: `Lined steel-backed shoe, ${f2(shoeLengthIn(p))}" long × ${f2(depthL)}" wide. Design μ ${f2(p.brakePadMu)} wet; ${f2(p.brakePadMuFouled)} mud-fouled (pass/fail). The steel back sheds spray, so the oak pad's splash shield is dropped. Test a lining sample on a wet tire first.`,
     }));
-    // Splash shield (build review r1 S10, r2): a bent 1/16" aluminum (or HDPE) hood on the BACK of the shoe, reaching up past the shoe's upper end, that keeps
-    // tire spray and thrown stones off the pad back, the pin and the pivot region. It sits on the pad (no extra bracket), does not touch the tread and stays above the pad's
-    // lowest corner so the ground clearance does not change. Limited help by design: the mud-fouled lining case remains the pass/fail one.
-    if (p.brakeShieldThickIn > 1e-6) {
-      const st = p.brakeShieldThickIn, ext = 0.2;
-      const rIn = r + p.brakeShoeThickIn, rMid = rIn + st / 2;
-      const depthY = Y.pad[1] - Y.pad[0];
-      const a0 = g.beta - delta - ext, a1 = g.beta + delta;
-      const nSeg = 8;
-      const path: Vec2[] = Array.from({ length: nSeg + 1 }, (_, i) => {
-        const a = a0 + ((a1 - a0) * i) / nSeg;
-        return [g.O[0] + shift[0] - rMid * Math.cos(a), g.O[1] + shift[1] - rMid * Math.sin(a)] as Vec2;
-      });
-      const arcLen = (a1 - a0) * rMid;
-      const shield = box(ctx, {
-        id: `brake-shoe-shield-${tag}`, partNo: 'brake-shoe-shield', name: `Brake shoe splash shield ${tag}`, group: 'brake', mat: 'fixed', kind: 'metal', material: '5052 aluminum sheet 1/16", bent over a form (or 1/16" HDPE)',
-        size: [arcLen, depthY, st], center: [path[nSeg >> 1][0], (py0 + py1) / 2, path[nSeg >> 1][1]], massLb: arcLen * depthY * st * ALUMINUM_LB_PER_IN3,
-        fab: 'bandsaw', step: STEP.brake, explode: [0.4, sgn, 0.3], stock: { t: st, w: depthY, l: arcLen },
-        sourcing: { vendor: `McMaster-Carr (5052 aluminum sheet ${f2(st)}" thick, or HDPE; cut ${f2(depthY)}" × ${f2(arcLen)}" blank, bent over a ${f2(rIn)}"-radius form or a wood block, 2 × #8 316 pan-head screws into the oak)` },
-        joints: [{ type: 'screw', to: `brake-shoe-${tag}`, count: 2, size: '#8 × 5/8 316 pan-head screws into the pad back', note: 'pre-drill the oak; the screws stop short of the lining' }],
-        notes: `Splash hood: bent ${f2(st)}" sheet on the pad back, ${f2(ext * rIn)}" longer than the pad toward the axle line (its low end stops at the pad's lowest corner, so ground clearance is unchanged). Keeps tire spray, mud and stones off the pad back and pin; it does not touch the tread. Moves with the shoe.`,
-      });
-      shield.geometry = { type: 'sweep', path, width: depthY, thickness: st, plies: 1 };
-      shield.transform = translation(0, (py0 + py1) / 2, 0);
-      add1(shield);
-    }
   }
 
   // ── Return spring (single torsion spring on the shaft, right side) ──

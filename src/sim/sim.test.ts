@@ -30,7 +30,7 @@ describe('mass properties', () => {
     expect(spec.totalMassKg / KG_PER_LB).toBeCloseTo(totalMass(parts, { includePayload: true }), 6);
     const cg = centerOfGravity(parts, { includePayload: true });
     for (let k = 0; k < 3; k++) expect(spec.cgM[k] / M_PER_IN).toBeCloseTo(cg[k], 6);
-    expect(spec.bodies[spec.kinematics === 'ackermann' ? 'steer-L' : 'steer']!.massKg).toBeGreaterThan(0.5);
+    expect(spec.bodies['steer-L']!.massKg).toBeGreaterThan(0.5);
     for (const b of Object.values(spec.bodies)) expect(b.inertiaPrincipal.every((x) => x > 0)).toBe(true);
   });
 
@@ -106,7 +106,7 @@ describe('simulation', () => {
   it('poses every model rigid body relative to its build pose', async () => {
     const sim = await createSim(spec);
     const poses = sim.poses();
-    for (const id of ['chassis', spec.kinematics === 'ackermann' ? 'steer-L' : 'steer', 'wheel-FL', 'wheel-RR', 'rider', 'cargo'] as const) expect(poses.get(id)).toHaveLength(16);
+    for (const id of ['chassis', 'steer-L', 'steer-R', 'tie-rod', 'bellcrank', 'drag-link', 'tongue-link', 'tongue', 'wheel-FL', 'wheel-RR', 'rider', 'cargo'] as const) expect(poses.get(id)).toHaveLength(16);
     // At rest on flat ground the poses are (near) the identity.
     const d = poses.get('wheel-FL')!;
     expect(Math.hypot(d[12], d[13], d[14])).toBeLessThan(0.2);
@@ -151,25 +151,27 @@ describe('tilt table vs static tip angle (operating rider)', () => {
     expect(r.firstLiftDeg!).toBeLessThanOrEqual(r.onsetDeg! + 1e-6);
   }, 60_000);
 
-  it('full lock tips earlier than straight, in both directions', () => {
+  it('full lock tips earlier than straight toward the inner (turning-side) wheel; toward the outer wheel it does not (the Ackermann outer wheel steps outboard)', () => {
     for (const tipTo of ['right', 'left'] as const) {
       const straight = results.get(`0|${tipTo}`)!;
       for (const s of [lock, -lock]) {
         const locked = results.get(`${s}|${tipTo}`)!;
-        expect(locked.sim).toBeLessThan(straight.sim);
-        expect(locked.stat).toBeLessThan(straight.stat);
+        const toInner = (s > 0 && tipTo === 'left') || (s < 0 && tipTo === 'right');
+        if (toInner) {
+          expect(locked.sim).toBeLessThan(straight.sim);
+          expect(locked.stat).toBeLessThan(straight.stat);
+        } else {
+          expect(locked.stat).toBeGreaterThan(straight.stat - 0.1); // the outer wheel moves out: the outer edge is not closer
+        }
       }
     }
   });
 });
 
 
-/**
- * Phase 3b Ackermann front end (spec 8.2). Until the model has steer-L / steer-R parts, `kinematics: 'ackermann'` forces the two-knuckle
- * sim on the current parts (the old front parts ride on the chassis, the knuckles get a floor mass), so the sim logic is tested now.
- */
+/** The Ackermann front end (spec 8.2): two knuckle bodies on their own kingpins. */
 describe('Ackermann sim', () => {
-  const aspec: SimSpec = buildSimSpec(parts, p, { kinematics: 'ackermann' });
+  const aspec: SimSpec = spec;
   const ack = aspec.ack!;
   const run = async (s: SimSpec, secs: number, opts: Parameters<typeof createSim>[1] = {}) => {
     const sim = await createSim(s, opts);
@@ -178,9 +180,8 @@ describe('Ackermann sim', () => {
   };
 
   it('spec: bodies are chassis, steer-L, steer-R and four wheels; kingpins are two points a kingpin spacing apart', () => {
-    expect(aspec.kinematics).toBe('ackermann');
     expect(aspec.bodyIds.slice().sort()).toEqual(['chassis', 'steer-L', 'steer-R', ...WHEEL_IDS].sort());
-    expect(aspec.bodies.steer).toBeUndefined();
+    expect(Object.keys(aspec.bodies).sort()).toEqual(['chassis', 'steer-L', 'steer-R', ...WHEEL_IDS].sort());
     const k = aspec.kingpinsM!;
     expect(Math.abs(k.L[1] - k.R[1]) / MPI).toBeCloseTo(2 * ack.kpHalf, 6);
     expect(k.L[0]).toBeCloseTo(k.R[0], 9);

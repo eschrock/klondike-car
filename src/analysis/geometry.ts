@@ -13,12 +13,11 @@ export interface ContactInputs {
   wheelbaseIn: number;
   rearTrackIn: number;
   frontTrackIn: number;
-  kingpinLeadIn: number;
   /**
-   * Phase 3b Ackermann spec (optional, additive). When present, `contactsAt(g, innerRad)` takes the INNER wheel angle (+ = left) and puts each front contact at
-   * its solved wheel center (4-bar, per-wheel kingpin and scrub), and `instantCenterY` uses the mean of the two axle-line centers. Absent: the old single-pivot rotation.
+   * Ackermann spec (D-53): `contactsAt(g, innerRad)` takes the INNER wheel angle (+ = left) and puts each front contact at its solved wheel center (4-bar,
+   * per-wheel kingpin and scrub), and `instantCenterY` uses the mean of the two axle-line centers.
    */
-  ack?: AckSpec;
+  ack: AckSpec;
 }
 
 export interface Contacts {
@@ -26,7 +25,7 @@ export interface Contacts {
   RR: P2;
   FL: P2;
   FR: P2;
-  /** Kingpin x (steer pivot). */
+  /** Kingpin axis x. */
   kx: number;
 }
 
@@ -36,19 +35,10 @@ export function rot2(p: P2, a: number, about: P2 = [0, 0]): P2 {
   return [about[0] + c * x - s * y, about[1] + s * x + c * y];
 }
 
-/** Tire center-plane contact points at steer angle `deltaRad` (+ = left). Front contacts rotate about the kingpin. */
+/** Tire center-plane contact points at the INNER steer angle `deltaRad` (+ = left): each front wheel at its solved wheel center. */
 export function contactsAt(g: ContactInputs, deltaRad: number): Contacts {
-  if (g.ack) {
-    const w = wheelCenters(g.ack, solveSteer(g.ack, deltaRad * DEG));
-    return { RL: [0, g.rearTrackIn / 2], RR: [0, -g.rearTrackIn / 2], FL: w.L, FR: w.R, kx: g.ack.kx };
-  }
-  const kx = g.wheelbaseIn + g.kingpinLeadIn;
-  const K: P2 = [kx, 0];
-  const f = (sy: number): P2 => {
-    const q = rot2([-g.kingpinLeadIn, (sy * g.frontTrackIn) / 2], deltaRad);
-    return [K[0] + q[0], K[1] + q[1]];
-  };
-  return { RL: [0, g.rearTrackIn / 2], RR: [0, -g.rearTrackIn / 2], FL: f(1), FR: f(-1), kx };
+  const w = wheelCenters(g.ack, solveSteer(g.ack, deltaRad * DEG));
+  return { RL: [0, g.rearTrackIn / 2], RR: [0, -g.rearTrackIn / 2], FL: w.L, FR: w.R, kx: g.ack.kx };
 }
 
 type Named = { id: keyof Omit<Contacts, 'kx'>; p: P2 };
@@ -131,16 +121,12 @@ export function outerEdgeDistance(c: Contacts, cgXY: P2, deltaRad: number): numb
 }
 
 /**
- * Instantaneous center of the cart in a steady turn at steer angle δ (rolling without slip): the front axle line
- * (through the axle center, which trails the kingpin by `lead`) meets the rear axle line (x = 0). Returns y of the center
- * (x = 0), or null when going straight.
+ * Instantaneous center of the cart in a steady turn at inner steer angle δ (rolling without slip): the mean of the two front axle lines meeting the rear axle
+ * line (x = 0). Returns y of the center (x = 0), or null when going straight.
  */
 export function instantCenterY(g: ContactInputs, deltaRad: number): number | null {
   if (Math.abs(deltaRad) < 1e-9) return null;
-  if (g.ack) return instantCenters(g.ack, solveSteer(g.ack, deltaRad * DEG)).mean;
-  const lead = g.kingpinLeadIn;
-  const ax = g.wheelbaseIn + lead - lead * Math.cos(deltaRad);
-  return ax / Math.tan(deltaRad) - lead * Math.sin(deltaRad);
+  return instantCenters(g.ack, solveSteer(g.ack, deltaRad * DEG)).mean;
 }
 
 export interface TurnGeometry {

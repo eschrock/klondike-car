@@ -3,7 +3,7 @@
  * the lost-motion slot, part placement (steer bodies, clear of the tire and the hull) and the old defaults left alone.
  */
 import { describe, expect, it } from 'vitest';
-import { defaultParams, phase3bDefaults, type Params } from '../params';
+import { defaultParams, type Params } from '../params';
 import { buildModel } from './index';
 import { makeCtx } from './build-utils';
 import { brakeGeometry } from './brake';
@@ -12,7 +12,7 @@ import { hipControlGeometry } from './brake-controls';
 import { partsOverlap } from './bounds';
 
 const RAD = Math.PI / 180;
-const p3 = phase3bDefaults();
+const p3 = defaultParams();
 const geom = (p: Params) => { const c = makeCtx(p); const g = brakeGeometry(c.p, c.L); return { c, g, fg: frontBrakeGeometry(c.p, c.L, g), hg: hipControlGeometry(c.p, c.L, g) }; };
 
 describe('front brake geometry (hand calculation)', () => {
@@ -66,11 +66,14 @@ describe('brake bias: the bias-bar arm gives the front share in both rolling dir
     const { fg, g } = geom(p3);
     expect(Math.abs(fg.Rtot.rev / g.ratioCrit - 1)).toBeLessThan(0.05);
   });
-  it('the sim share helper returns the mean share, and null without a front tread brake', () => {
+  it('the sim share helper returns the mean share of the two rolling directions (0.60 at the defaults)', () => {
     const c = makeCtx(p3);
     expect(frontBrakeShare(p3, c.L)).toBeCloseTo(p3.frontBrakeBias, 2);
-    const c2 = makeCtx(defaultParams());
-    expect(frontBrakeShare(defaultParams(), c2.L)).toBeNull();
+    expect(frontBrakeShare(p3, c.L)).toBeCloseTo(0.6, 2);
+  });
+  it('the sim spec takes the front share from the solved takeoff arm', async () => {
+    const { buildSimSpec } = await import('../sim/spec');
+    expect(buildSimSpec(buildModel(p3), p3).frontBrakeShare).toBeCloseTo(frontBrakeShare(p3, makeCtx(p3).L)!, 9);
   });
 });
 
@@ -126,19 +129,8 @@ describe('parts', () => {
     expect(bad).toEqual([]);
   });
   it('mass of the new brake parts (front brake, hip controls, belt) is reported and bounded', () => {
-    const base = buildModel(defaultParams()).reduce((s, x) => s + (x.group === 'brake' ? x.massLb : 0), 0);
-    const now = parts.reduce((s, x) => s + (x.group === 'brake' ? x.massLb : 0), 0);
-    expect(now - base).toBeGreaterThan(3);
-    expect(now - base).toBeLessThan(20);
-  });
-});
-
-describe('old defaults are left alone', () => {
-  it('defaultParams has no front brake, no hip controls and oak rear shoes', () => {
-    const p = defaultParams();
-    expect([p.frontBrakeType, p.brakeShoeBacking, p.rideBrakeControls]).toEqual([2, 0, 0]);
-    const ids = buildModel(p).map((x) => x.id);
-    expect(ids.some((i) => /^(brake-front|hip-|belt-|lap-belt|brake-bias)/.test(i))).toBe(false);
-    expect(ids).toContain('brake-shoe-lining-L');
+    const mass = parts.filter((x) => /^(brake-front|brake-shoe-[A-Za-z-]*F|brake-bias|hip-|brake-hip|belt-|lap-belt)/.test(x.id)).reduce((s, x) => s + x.massLb, 0);
+    expect(mass).toBeGreaterThan(8);
+    expect(mass).toBeLessThan(25);
   });
 });

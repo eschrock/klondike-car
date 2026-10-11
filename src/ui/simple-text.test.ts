@@ -4,7 +4,7 @@ import { buildModel } from '../model';
 import { checkTruckFit } from '../truck/fit';
 import { LIGHT_OF_ID, riderSweep, runAround } from '../analysis/rider-sweep';
 import type { Status } from '../analysis/types';
-import { headline, lightTexts, limitLine, failReason, weightNote, limiterName, limiterAdvice, PHASE3B_CHECK_IDS } from './simple-text';
+import { FRONT_END_IDS, headline, lightTexts, limitLine, failReason, weightNote, limiterName, limiterAdvice, PHASE3B_CHECK_IDS } from './simple-text';
 import type { AnalysisCheck } from '../analysis/types';
 
 const p = defaultParams();
@@ -19,12 +19,12 @@ describe('simple wording', () => {
     expect(t.steering.text).toMatch(/circle [\d.]+ ft across/);
     expect(t.truck.text).toMatch(/Tacoma/);
     expect(t.strength.text).toMatch(/safety margin|Close to the limit|load this design allows/);
-    expect(t.strength.text).not.toMatch(/design limit|kingpin|turntable/i);
+    expect(t.strength.text).not.toMatch(/design limit|turntable|bolster/i);
     for (const x of Object.values(t)) expect(x.text).not.toMatch(/NaN|\?|undefined/);
   });
   it('words the two-tier headline from the sweep (M3)', () => {
     const mk = (statuses: Status[], at: number, from = 50) => {
-      const points = statuses.map((status, i) => ({ w: from + i * 10, status, worst: { id: 'kingpin-strike', label: '', util: 1, status } }));
+      const points = statuses.map((status, i) => ({ w: from + i * 10, status, worst: { id: 'kingpin-bracket', label: '', util: 1, status } }));
       const idx = (at - from) / 10;
       const opStatus = points[idx].status;
       const g = (ok: (s: Status) => boolean) => runAround(points as never, points[idx] as never, ok).run;
@@ -57,43 +57,51 @@ describe('simple wording', () => {
     const bad = headline(240, mk(st, 240));
     expect(bad.ok).toBe(false);
     expect(bad.text).toContain('240');
-    expect(bad.text).toContain('steering pin');
-    expect(bad.sub).toBe('This cart is comfortably safe for riders 50–190 lb. The front end (steering stops, plates and pivot) is being redesigned.'); // kingpin-strike is a front-end row
+    expect(bad.text).toContain('bracket that holds a steering pivot');
+    expect(bad.sub).toBe('This cart is comfortably safe for riders 50–190 lb. The new steering front end (spindle, bracket, rod and cable sizes) is still being verified.'); // kingpin-bracket is a front-end row
     // everything fails: a next step, and no stray " could fail"
     const none = headline(150, mk(Array(21).fill('fail'), 150));
     expect(none.sub).toMatch(/No rider weight from 50 to 250 lb passes/);
     expect(none.text).not.toMatch(/NaN|undefined|\?/);
   });
-  it('honesty fix: when NO weight is safe (the defaults today) the Simple view says so plainly, names the limiter and the front-end redesign, and has no NaN or empty text', () => {
+  it('honesty fix: when NO weight is safe the Simple view says so plainly, names the limiter and the front-end note, and has no NaN or empty text', () => {
     const t = lightTexts({ p, checks: sweep.operatingChecks, fit });
     expect(sweep.safe).toBeNull();
     const hd = headline(p.riderMassLb, sweep);
     expect(hd.tone).toBe('fail');
     expect(hd.ok).toBe(false);
-    expect(hd.text).toBe('Not yet shown safe for a 150 lb rider: the steering stops could crush or loosen at full turn.');
-    expect(hd.sub).toMatch(/No rider weight from 50 to 250 lb passes the checks yet\. What stops it: the steering stops at full turn\./);
-    expect(hd.sub).toMatch(/Everything else passes at this weight\. The front end .* is being redesigned\./);
+    // The limiter at the defaults is a new front-end row, so the headline says "not yet shown safe" and keeps the one-line front-end note.
+    expect(FRONT_END_IDS.has(sweep.operating.worst!.id)).toBe(true);
+    expect(hd.text).toMatch(/^Not yet shown safe for a 150 lb rider: .+\.$/);
+    expect(hd.sub).toMatch(/No rider weight from 50 to 250 lb passes the checks yet\. What stops it: .+\./);
+    expect(hd.sub).toMatch(/is still being verified\./);
     for (const x of [hd.text, hd.sub ?? '', t.strength.text, weightNote(150, 'fail', sweep.operating.worst?.id)]) expect(x).not.toMatch(/NaN|undefined|\?|Infinity/);
     expect(t.strength.status).toBe('fail');
     expect(t.strength.text).toMatch(/shortfall in margin, not a forecast that it will break/);
     expect(limitLine('below', sweep.safe, sweep.lowLimit)).toBeNull();
   });
   it('a range that excludes the default rider but has safe light weights reads cleanly', () => {
-    const pts = Array.from({ length: 21 }, (_, i) => ({ w: 50 + 10 * i, status: (50 + 10 * i <= 100 ? 'pass' : 'fail') as Status, worst: { id: 'steer-stops', label: '', util: 1, status: 'fail' as Status }, fails: ['steer-stops'] }));
+    const pts = Array.from({ length: 21 }, (_, i) => ({ w: 50 + 10 * i, status: (50 + 10 * i <= 100 ? 'pass' : 'fail') as Status, worst: { id: 'kingpin-bracket', label: '', util: 1, status: 'fail' as Status }, fails: ['kingpin-bracket'] }));
     const at = pts[10];
     const hd = headline(150, { points: pts as never, fromLb: 50, toLb: 250, stepLb: 10, safe: null, green: null, operating: at as never });
     expect(hd.text).toMatch(/^Not yet shown safe for a 150 lb rider/);
-    expect(hd.sub).toBe('This cart is comfortably safe for riders 50–100 lb. Everything else passes at this weight. The front end (steering stops, plates and pivot) is being redesigned.');
+    expect(hd.sub).toBe('This cart is comfortably safe for riders 50–100 lb. Everything else passes at this weight. The new steering front end (spindle, bracket, rod and cable sizes) is still being verified.');
+    // A failing row that is not a front-end row gets the plain wording and no note.
+    const ptsB = pts.map((q) => ({ ...q, worst: { ...q.worst, id: 'rails' }, fails: ['rails'] }));
+    const hb = headline(150, { points: ptsB as never, fromLb: 50, toLb: 250, stepLb: 10, safe: null, green: null, operating: ptsB[10] as never });
+    expect(hb.text).toMatch(/^Not safe for a 150 lb rider/);
+    expect(hb.sub).not.toMatch(/verified/);
   });
   it('names the limiting reason at an end, without jargon', () => {
     expect(limitLine('below', { loLb: 70, hiLb: 230, openLow: false, openHigh: false }, { id: 'pitch-rear', label: '', util: 1, status: 'fail' })).toBe('Below 70 lb: a hard pull uphill can lift the front wheels.');
     expect(failReason('')).toBe('a safety check fails');
     expect(failReason('unknown-check')).toBe('a safety check fails');
     for (const id of Object.keys(LIGHT_OF_ID)) expect(failReason(id)).not.toMatch(/turntable could|bolster|side bearer|tongue could be|bearing groove/i);
-    expect(failReason('kingpin-strike')).toMatch(/steering pin/);
+    expect(failReason('kingpin-bracket')).toMatch(/steering pivot/);
+    for (const gone of ['kingpin-strike', 'steer-stops', 'turntable-ring', 'kingpin-plates', 'roll-side-bearer', 'pitch-path']) expect(failReason(gone)).toBe('a safety check fails'); // the old front-end rows are gone
   });
   it('describes one weight for the bar note', () => {
-    expect(weightNote(190, 'marginal', 'kingpin-strike')).toBe('190 lb: close to the limit (the steering pin in a curb strike).');
+    expect(weightNote(190, 'marginal', 'kingpin-bracket')).toBe('190 lb: close to the limit (a bracket that holds a steering pivot in a hard bump).');
     expect(weightNote(150, 'pass', undefined)).toBe('150 lb: OK.');
   });
 });
@@ -113,7 +121,7 @@ describe('Phase 3b rows in the Simple view (spec 6.3)', () => {
     ({ id, label: id, group: 'Hills', value, limit, unit: 'ft', sense: '<=', status, how: '', util: value / limit }) as unknown as AnalysisCheck;
 
   it('the Hills light adds the stopping-distance sentence when the brake-stop row exists, and degrades silently when it does not', () => {
-    const base = sweep.operatingChecks;
+    const base = sweep.operatingChecks.filter((c) => c.id !== 'brake-stop');
     const without = lightTexts({ p, checks: base, fit }).hills.text;
     expect(without).not.toMatch(/stops in about/);
     const withRow = lightTexts({ p, checks: [...base, row('brake-stop', 34.4, 40)], fit }).hills;
@@ -124,7 +132,7 @@ describe('Phase 3b rows in the Simple view (spec 6.3)', () => {
   });
 
   it('the Steering light names a failing kinematic row in plain words', () => {
-    const t = lightTexts({ p, checks: [...sweep.operatingChecks, row('steer-kin', 2, 1, 'fail')], fit }).steering;
+    const t = lightTexts({ p, checks: [...sweep.operatingChecks.filter((c) => c.id !== 'steer-kin'), row('steer-kin', 2, 1, 'fail')], fit }).steering;
     expect(t.status).toBe('fail');
     expect(t.text).toMatch(/do not turn together/);
     expect(t.text).not.toMatch(/NaN|undefined/);

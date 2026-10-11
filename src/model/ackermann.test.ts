@@ -1,11 +1,11 @@
 /**
  * Stage 0 of Phase 3b (docs/phase3b-spec.md sections 0.1, 9 and 10.A): the Ackermann kinematics and the additive interface (params block, Layout.front,
- * RigidBody ids, ViewState.mode, Ctx.pose, ContactInputs.ack, TireSweepSpec.ack). The Stage 0 defaults are `phase3bDefaults()`: the existing keys whose
+ * RigidBody ids, ViewState.mode, Ctx.pose, ContactInputs.ack, TireSweepSpec.ack). The Stage 0 defaults are `defaultParams()`: the existing keys whose
  * default changes at the flip (steerLockDeg 35.5, kingpinLeadIn 1.25, ...) are applied there, not yet in `defaultParams()`.
  */
 import { describe, expect, it } from 'vitest';
 import { contactsAt, turnGeometry, DEG, RAD } from '../analysis/geometry';
-import { ackSpec, defaultParams, PARAM_DEFS, PHASE3B_DEFAULT_OVERRIDES, phase3bDefaults, sanitizeParams, validateParams, type Params } from '../params';
+import { ackSpec, defaultParams, PARAM_DEFS, sanitizeParams, validateParams, type Params } from '../params';
 import {
   ackermannErrorDeg, centerLinkage, centerPins, idealOuterDeg, linkageConditioning, instantCenters, kpL, kpR, leftWheelRange, lockLimits, poseMatrices, solveCenterExact, solveFromTongue, solveSteer, wheelCenters,
   type AckSpec,
@@ -15,7 +15,7 @@ import { leftTirePolys, minGapToTires } from './hull-curve';
 import { computeLayout } from './layout';
 import type { Mat4 } from './types';
 
-const P0 = phase3bDefaults();
+const P0 = defaultParams();
 const S: AckSpec = ackSpec(P0);
 const apply = (m: Mat4, x: number, y: number): [number, number] => [m[0] * x + m[4] * y + m[12], m[1] * x + m[5] * y + m[13]];
 
@@ -230,13 +230,13 @@ describe('ackermann', () => {
       expect(edge).toBeGreaterThan(8.7 * 12);
       expect(edge).toBeLessThan(9 * 12); // turnRadiusMaxIn 108
     }
-    expect(PHASE3B_DEFAULT_OVERRIDES.turnRadiusMaxIn).toBe(108);
+    expect(PARAM_DEFS.turnRadiusMaxIn.default).toBe(108);
     // Right-hand turn mirrors the center to the right.
     expect(instantCenters(S, solveSteer(S, -35.5)).mean!).toBeCloseTo(-ic.mean!, 6);
   });
 
   it('tire sweep envelope: min inner |y| 11.08" near x = 38.4", rear-most 36.0", front-most 52.2"; nose 20.625" outside', () => {
-    const polys = leftTirePolys({ wheelbase: S.wheelbase, kx: S.kx, frontTrack: P0.frontTrackIn, tireWidth: P0.tireWidthIn, wheelDiameter: P0.wheelDiameterIn, lockDeg: 35.5, ack: S }, 1);
+    const polys = leftTirePolys({ tireWidth: P0.tireWidthIn, wheelDiameter: P0.wheelDiameterIn, ack: S }, 1);
     expect(polys.length).toBe(72); // -35.5 .. +35.5 in 1 deg steps
     let minY = Infinity, xAtMin = 0, minX = Infinity, maxX = -Infinity;
     for (const q of polys) for (const [x, y] of q) {
@@ -253,9 +253,6 @@ describe('ackermann', () => {
     // A straight line at the nose half width clears the sweep by exactly the steering clearance.
     const line: [number, number][] = [[30, nose / 2], [60, nose / 2]];
     expect(minGapToTires(line, polys)).toBeGreaterThan(P0.steeringClearanceIn - 0.02);
-    // Old behavior without the spec is unchanged (rotation about one pivot, 37 deg default lock).
-    const old = leftTirePolys({ wheelbase: 44, kx: 45.5, frontTrack: 35.5, tireWidth: 4, wheelDiameter: 13, lockDeg: 37 }, 1);
-    expect(old.length).toBe(75);
   });
 });
 
@@ -297,20 +294,17 @@ describe('stage 0 interface (additive)', () => {
     // Modes: the two pin sockets are farther apart than the pin plus an inch.
     expect(Math.hypot(...(f.mode.pinTow.map((v, i) => v - f.mode.pinRide[i]) as [number, number, number]))).toBeGreaterThan(P0.modePinDiaIn + 1);
     expect(f.stick.pivot[1]).toBeLessThan(0); expect(f.hipLever.pivot[1]).toBeGreaterThan(0);
-    // Old layout still there on the old defaults.
-    const Ld = computeLayout(defaultParams());
-    expect(Ld.beamF.top).toBeGreaterThan(0);
-    expect(Ld.turntable.z1).toBeGreaterThan(0);
-    expect(Ld.front.ack.kx).toBeCloseTo(45.5, 9);
+    expect(computeLayout(defaultParams()).front.ack.kx).toBeCloseTo(45.25, 9);
   });
 
-  it('Ctx carries the solved pose and the mode (default both); the old pivot stays', () => {
+  it('Ctx carries the solved pose and the mode (default both)', () => {
     const c0 = makeCtx(P0);
     expect(c0.view.mode).toBe('both');
     expect(c0.steer.ok).toBe(true);
-    expect(c0.pivot).toHaveLength(16);
-    const c20 = makeCtx(P0, { steerDeg: 20, mode: 'ride' });
-    expect(c20.view.mode).toBe('ride');
+    const c20 = makeCtx(P0, { steerDeg: 20, mode: 'tow' });
+    expect(c20.view.mode).toBe('tow');
+    // The ride mode clamps the displayed angle to the inner angle of the ride lock (outer 8 deg).
+    expect(makeCtx(P0, { steerDeg: 20, mode: 'ride' }).steer.innerDeg).toBeCloseTo(8.59, 1);
     expect(c20.steer.innerDeg).toBe(20);
     expect(Math.atan2(c20.pose['steer-L'][1], c20.pose['steer-L'][0]) * DEG).toBeCloseTo(20, 9);
     expect(Math.atan2(c20.pose['steer-R'][1], c20.pose['steer-R'][0]) * DEG).toBeCloseTo(c20.steer.outerDeg, 9);
@@ -318,8 +312,8 @@ describe('stage 0 interface (additive)', () => {
     expect(makeCtx(P0, { steerDeg: 90 }).view.steerDeg).toBe(35.5);
   });
 
-  it('contactsAt with an Ackermann spec gives the hand wheel centers; without it the old rotation', () => {
-    const g = { wheelbaseIn: P0.wheelbaseIn, rearTrackIn: P0.rearTrackIn, frontTrackIn: P0.frontTrackIn, kingpinLeadIn: P0.kingpinLeadIn };
+  it('contactsAt with the Ackermann spec gives the hand wheel centers', () => {
+    const g = { wheelbaseIn: P0.wheelbaseIn, rearTrackIn: P0.rearTrackIn, frontTrackIn: P0.frontTrackIn };
     const c = contactsAt({ ...g, ack: S }, 35.5 * RAD);
     expect(c.FL[0]).toBeCloseTo(42.49, 2); expect(c.FL[1]).toBeCloseTo(16.47, 2);
     expect(c.FR[0]).toBeCloseTo(45.44, 2); expect(c.FR[1]).toBeCloseTo(-17.99, 2);
@@ -328,9 +322,6 @@ describe('stage 0 interface (additive)', () => {
     // Mirror.
     const m = contactsAt({ ...g, ack: S }, -35.5 * RAD);
     expect(m.FR[1]).toBeCloseTo(-c.FL[1], 9);
-    // Old behavior: front contacts rotate rigidly about one pivot (track unchanged).
-    const o = contactsAt(g, 35.5 * RAD);
-    expect(Math.hypot(o.FL[0] - o.FR[0], o.FL[1] - o.FR[1])).toBeCloseTo(P0.frontTrackIn, 9);
     // Track at lock is about 34.5" with the Ackermann contacts.
     expect(Math.hypot(c.FL[0] - c.FR[0], c.FL[1] - c.FR[1])).toBeCloseTo(34.5, 0);
     // Turn geometry uses the Ackermann instant center when the spec is present.
@@ -343,7 +334,7 @@ describe('stage 0 interface (additive)', () => {
       'steerArmLengthIn', 'ackermannAngleDeg', 'steerRideLockDeg', 'steerCenterSpringLbf', 'frontBeamWidthIn', 'frontBeamDepthIn', 'frontBeamWallIn', 'frontBeamBehindKingpinIn', 'frontBeamYieldPsi',
       'kingpinBracketThickIn', 'kingpinBracketGapIn', 'kingpinBracketLeafRadiusIn', 'kingpinBracketBoltDiaIn', 'tieRodDiaIn', 'tieRodEndDiaIn', 'bellcrankArmIn', 'bellcrankPivotAftOfKingpinIn',
       'tongueHingeAheadOfBeamIn', 'tongueLinkArmIn', 'tongueMaxYawDeg', 'modePinDiaIn', 'rideStickAheadOfHpointIn', 'rideStickInsetIn', 'rideStickLengthIn', 'rideStickPivotAboveSeatIn',
-      'rideStickCableArmIn', 'stickCableDiaIn', 'stickCablePreloadLbf', 'frontBrakeType', 'frontBrakeBias', 'frontShoeTravelIn', 'brakeShoeBacking', 'brakeShoeBackThickIn', 'hipLeverAheadOfHpointIn',
+      'rideStickCableArmIn', 'stickCableDiaIn', 'stickCablePreloadLbf', 'frontBrakeBias', 'frontShoeTravelIn', 'brakeShoeBackThickIn', 'hipLeverAheadOfHpointIn',
       'hipLeverInsetIn', 'hipLeverArmIn', 'hipLeverCableArmIn', 'hipLeverThrowDeg', 'hipCableDiaIn', 'brakeEmergencyLimitLbf', 'brakeHeatLimitK', 'brakeHeatContactFrac', 'rideRunFt', 'beltDesignG',
       'rideSpeedMph', 'rideMaxSlopeDeg', 'rideGoSlopeDeg', 'rideMuGo8', 'rideMuGo10', 'rideMuDerate', 'rideStopMaxFt', 'rideReactionS', 'bumpSpeedMph', 'bumpNormalHeightIn', 'bumpHardHeightIn',
       'bumpWheelRateLbIn', 'bumpMassShare', 'failSafeFactor', 'fatigueLoadFactor', 'spindleEnduranceLimitPsi', 'fatigueSafetyMin', 'ackermannErrorMaxDeg'] as const;
@@ -355,17 +346,16 @@ describe('stage 0 interface (additive)', () => {
       expect(d.default, k).toBeGreaterThanOrEqual(d.min);
       expect(d.default, k).toBeLessThanOrEqual(d.max);
     }
-    for (const k of ['spindleStub', 'scrubRadiusIn', 'ackermannAngleDeg', 'frontBrakeType', 'bumpWheelRateLbIn', 'failSafeFactor']) expect(PARAM_DEFS[k as keyof typeof PARAM_DEFS].note, k).toBeTruthy();
+    for (const k of ['spindleStub', 'scrubRadiusIn', 'ackermannAngleDeg', 'frontBrakeBias', 'bumpWheelRateLbIn', 'failSafeFactor']) expect(PARAM_DEFS[k as keyof typeof PARAM_DEFS].note, k).toBeTruthy();
     // Orchestrator decisions.
     expect(PARAM_DEFS.spindleStub.default).toBe(1); // 25 mm
     expect(PARAM_DEFS.spindleStub.options).toHaveLength(2);
     expect(PARAM_DEFS.scrubRadiusIn.default).toBe(3);
     expect(PARAM_DEFS.failSafeFactor.default).toBe(1.25);
-    expect([0, 2]).toContain(PARAM_DEFS.frontBrakeType.default); // WS-C parks it at 2 (none) until the front brake lands; the target default is 0
     expect(PARAM_DEFS.bumpWheelRateLbIn.group).toBe('ride');
-    // Existing keys whose default changes at the flip keep their old default in Stage 0 (old model untouched) and are applied by phase3bDefaults().
-    const old = defaultParams();
-    expect([old.steerLockDeg, old.kingpinLeadIn, old.kingpinDiameterIn, old.turnRadiusMaxIn, old.brakeLiningThickIn]).toEqual([37, 1.5, 0.75, 96, 0.125]);
+    // Existing keys whose default changed at the Phase 3b flip (D-51, D-53, D-56): now in PARAM_DEFS.
+    expect([P0.steerLockDeg, P0.kingpinLeadIn, P0.kingpinDiameterIn, P0.turnRadiusMaxIn, P0.brakeLiningThickIn]).toEqual([35.5, 1.25, 0.375, 108, 0.25]);
+    expect([PARAM_DEFS.steerLockDeg.min, PARAM_DEFS.steerLockDeg.max, PARAM_DEFS.kingpinDiameterIn.min]).toEqual([28, 42, 0.25]);
     expect(P0.steerLockDeg).toBe(35.5);
     expect(P0.kingpinLeadIn).toBe(1.25);
   });
@@ -381,7 +371,6 @@ describe('stage 0 interface (additive)', () => {
 
   it('validateParams: scrub radius too small for the hub and bracket is an error; defaults are clean', () => {
     expect(validateParams(defaultParams()).filter((i) => i.severity === 'error')).toEqual([]);
-    // phase3bDefaults() still trips the OLD kingpin-sleeve web rule (lead 1.25 < 1.5 with the old 3/4" pin); that validator is deleted at the flip. The new rule is clean.
     expect(validateParams(P0).filter((i) => i.severity === 'error' && i.keys.includes('scrubRadiusIn'))).toEqual([]);
     const bad = validateParams({ ...P0, scrubRadiusIn: 2.5 });
     expect(bad.some((i) => i.severity === 'error' && i.keys.includes('scrubRadiusIn'))).toBe(true);

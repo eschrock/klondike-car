@@ -3,7 +3,7 @@
  * the check code.
  */
 import { describe, expect, it } from 'vitest';
-import { phase3bDefaults, defaultParams, type Params } from '../params';
+import { defaultParams, type Params } from '../params';
 import { buildModel } from '../model';
 import { makeContext } from './context';
 import { brakeForce, brakeRatio, brakeClearance } from './brake';
@@ -14,7 +14,7 @@ import type { AnalysisCheck } from './types';
 
 const RAD = Math.PI / 180;
 const mk = (p: Params) => makeContext(p, buildModel(p, { rider: 'goal', cargo: true }));
-const p3 = phase3bDefaults();
+const p3 = defaultParams();
 const ctx = mk(p3);
 const ch = chainOf(ctx);
 const caseOf = (c: AnalysisCheck, k: 'operating' | 'goal') => c.cases![k]!;
@@ -33,8 +33,7 @@ describe('brake force: hold on the design slope', () => {
     expect(ch.hg.hipPerMain).toBeLessThan(0.96);
   });
   it('the front brake adds capacity, not leverage: the total ratio is within 5% of the rear-only ratio and the hold force is about the same', () => {
-    const rear = chainOf(mk({ ...p3, frontBrakeType: 2 }));
-    expect(Math.abs(ch.Rcrit / rear.Rcrit - 1)).toBeLessThan(0.05);
+    expect(Math.abs(ch.Rcrit / ch.g.ratioCrit - 1)).toBeLessThan(0.05); // ch.g is the rear linkage alone
   });
   it('the ratio row reports the front and total ratios and a grip travel that includes the cable stretch', () => {
     const row = brakeRatio(ctx);
@@ -116,9 +115,11 @@ describe('shoe heat', () => {
   it('lined steel-backed shoes allow at least rideRunFt at the envelope slope at the operating rider; oak shoes fail', () => {
     const row = brakeHeat(ctx);
     expect(caseOf(row, 'operating').value).toBeGreaterThanOrEqual(p3.rideRunFt);
-    const oak = brakeHeat(mk({ ...p3, brakeShoeBacking: 0 }));
-    expect(caseOf(oak, 'operating').status).toBe('fail');
-    expect(caseOf(oak, 'operating').value).toBeLessThan(0.5 * caseOf(row, 'operating').value);
+    // The row also reports the old oak pad on the same slope (info): it allows less than half the lined run and fails the requirement.
+    const oakRun = heatRun(p3, ch, ctx.loads.operating.massLb, p3.rideGoSlopeDeg * RAD, p3.rideSpeedMph, 'oak').runFt;
+    expect(oakRun).toBeLessThan(0.5 * caseOf(row, 'operating').value);
+    expect(oakRun).toBeLessThan(p3.rideRunFt);
+    expect(row.how).toMatch(/Oak shoes on the same slope/);
   });
   it('hand check: dT = 2 q sqrt(t)/(sqrt(pi) e) gives t = (dT sqrt(pi) e / 2q)^2, and the 250 K time scales as 1/q^2', () => {
     const c = ctx.loads.operating, th = p3.rideGoSlopeDeg * RAD;
@@ -210,8 +211,7 @@ describe('front brake structure, clearance and housing', () => {
 });
 
 describe('row set', () => {
-  it('the old rear-only cart gets no ride rows; the Phase 3b cart gets all of them', () => {
-    expect(brakeRideRows(mk(defaultParams()))).toEqual([]);
+  it('the cart gets all the ride rows', () => {
     const ids = brakeRideRows(ctx).map((r) => r.id);
     expect(ids).toEqual(['brake-emergency', 'brake-stop', 'brake-bias', 'brake-heat', 'park-hold', 'brake-front', 'hip-cable', 'belt-anchor']);
   });

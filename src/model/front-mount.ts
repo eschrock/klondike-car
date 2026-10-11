@@ -38,9 +38,9 @@ export interface FrontBeamSeat {
 /** The rail must keep this much oak over the notch (acceptance, spec section 10 WS-B). */
 export const FRONT_RAIL_REMAIN_MIN_IN = 1;
 
-/** Null unless the Ackermann hull has a ladder frame with a nose rail that the beam crosses under. */
+/** Null unless the hull has a ladder frame with a nose rail that the beam crosses under. */
 export function frontBeamSeat(p: Params, L: Layout): FrontBeamSeat | null {
-  if (!L.ackHull || p.frameStyle !== FRAME_STYLE.ladder) return null;
+  if (p.frameStyle !== FRAME_STYLE.ladder) return null;
   const b = L.front.beam;
   const railT = p.railThicknessIn;
   const zBot = L.deckBot - p.railDepthIn;

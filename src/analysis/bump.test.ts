@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ackCtx } from './ack-test-utils';
 import { bumpCases, bumpPulse, bumpSeatG, bumpSeatGHard, bumpStrike, goodmanPulsating, peakVertical, seatFactor, sensitivityText } from './bump';
-import { makeContext } from './context';
-import { buildModel } from '../model';
-import { defaultParams } from '../params';
 
 const base = { rIn: 6.5, hIn: 1, vMph: 10, staticLb: 65, kLbIn: 400, massShare: 1.5 };
 
@@ -49,7 +46,7 @@ describe('bump: velocity-pulse (spec 5.1)', () => {
     expect(bumpStrike(ctx, ctx.loads.goal, 'rear', 1).Fn).toBeGreaterThan(bumpStrike(ctx, ctx.loads.goal, 'front', 1).Fn);
   });
 
-  it('the seat factor is 1 + V_rear / W (about 4 at the defaults) and only replaces dynamicFactor on the Ackermann basis', () => {
+  it('the seat factor is 1 + V_rear / W (about 4 at the defaults), never below dynamicFactor', () => {
     const ctx = ackCtx();
     const c = ctx.loads.operating;
     const rear = bumpStrike(ctx, c, 'rear', ctx.p.bumpNormalHeightIn);
@@ -58,10 +55,8 @@ describe('bump: velocity-pulse (spec 5.1)', () => {
     expect(bumpSeatG(ctx, c)).toBeLessThan(4.8);
     expect(bumpSeatGHard(ctx, c)).toBeGreaterThan(bumpSeatG(ctx, c) - 0.5);
     expect(seatFactor(ctx, c)).toBe(Math.max(ctx.p.dynamicFactor, bumpSeatG(ctx, c)));
-    const p0 = defaultParams();
-    const old = makeContext(p0, buildModel(p0, { rider: 'goal', cargo: true, steerDeg: 0 }));
-    expect(old.newFront).toBe(false);
-    expect(seatFactor(old, old.loads.operating)).toBe(p0.dynamicFactor);
+    // At least the dynamic factor of the load basis, and never less.
+    expect(seatFactor(ctx, ctx.loads.operating)).toBeGreaterThanOrEqual(ctx.p.dynamicFactor);
   });
 
   it('prints the wheel-rate sensitivity (k x 0.5 and x 2.5) and Goodman matches the hand value', () => {

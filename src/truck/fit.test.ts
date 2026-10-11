@@ -4,7 +4,6 @@ import { buildModel, type ViewState } from '../model';
 import { translation } from '../model/mat4';
 import type { Part } from '../model/types';
 import { buildTruckBed } from './bed';
-import { phase1Params } from '../test-baselines';
 import { checkTruckFit, computeFeasibleWindows, configParts, validatorError, type CartView } from './fit';
 
 const stub = (p = defaultParams()) => (v: CartView) => buildModel(p, v as ViewState);
@@ -116,19 +115,13 @@ describe('real cart (D-6, D-23)', () => {
   const find = (r: ReturnType<typeof checkTruckFit>, mode: string, config: string) =>
     r.cases.filter((c) => c.mode === mode && c.config === config);
   const r = checkTruckFit(p, build(p));
-  // The Phase 1 cart (48" wheelbase, oak tongue): the tongue sets the installed length and straddling the wells works.
-  const p1 = phase1Params();
+  // The same cart on a 48" wheelbase: straddling the wells works there (at the 44" default it does not, D-27).
+  const p1 = { ...p, wheelbaseIn: 48 };
   const r1 = checkTruckFit(p1, build(p1));
 
   it('has three configurations; the tongue-off cart is shorter than installed, removed shorter still', () => {
-    // Phase 1 (oak tongue): taking the tongue off shortens the cart.
-    expect(r1.dims['tongue-off'].lengthIn).toBeLessThan(r1.dims.installed.lengthIn);
-    expect(r1.dims.removed.lengthIn).toBeLessThanOrEqual(r1.dims['tongue-off'].lengthIn);
-    expect(configParts('tongue-off', build(p1)).map((x) => x.id + x.name).some((n) => /tongue|bridle/i.test(n))).toBe(false);
-    // Phase 2 defaults (rope bridle, no tongue): the rope is excluded from the fit (fit.ts), so installed and tongue-off have the
-    // same length; removed is no longer.
-    expect(p.drawbar).toBe(0);
-    expect(r.dims['tongue-off'].lengthIn).toBeCloseTo(r.dims.installed.lengthIn, 9);
+    // The oak tongue (24" ahead of the front axle, hinged ahead of the beam) sets the installed length: taking it off shortens the cart.
+    expect(r.dims['tongue-off'].lengthIn).toBeLessThan(r.dims.installed.lengthIn);
     expect(r.dims.removed.lengthIn).toBeLessThanOrEqual(r.dims['tongue-off'].lengthIn);
     expect(configParts('tongue-off', build(p)).map((x) => x.id + x.name).some((n) => /tongue|bridle/i.test(n))).toBe(false);
   });
@@ -154,8 +147,10 @@ describe('real cart (D-6, D-23)', () => {
     // Same default cart with only the wheelbase put back to 48 straddles again, so 44 is what costs the straddle mode.
     const q = { ...p, wheelbaseIn: 48 };
     expect(find(checkTruckFit(q, build(q)), 'straddle', 'removed').some((x) => x.fits)).toBe(true);
-    // docs/phase2-recommendation.md: "fits fully assembled, beside the wells, both orientations".
-    const beside = find(r, 'beside', 'installed').filter((x) => x.fits);
+    // The 24" oak tongue makes the assembled cart 81.7" long: it does NOT fit the bed assembled (0.18" over), so the Simple view says to take the tongue off (D-9).
+    // With the tongue off (69.5") it rides beside the wells in both orientations.
+    expect(find(r, 'beside', 'installed').some((x) => x.fits)).toBe(false);
+    const beside = find(r, 'beside', 'tongue-off').filter((x) => x.fits);
     expect(beside.length).toBeGreaterThanOrEqual(2);
   });
   it('beside fits only when the track fits the well gap', () => {

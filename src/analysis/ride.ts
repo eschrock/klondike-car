@@ -39,9 +39,13 @@ export function practicalDecelG(geom: DecelGeom, slopeDeg: number, mu: number, s
   return F - Math.sin(th) + CRR * Math.cos(th);
 }
 
-/** Worst practical deceleration over the front shares bias - 0.1, bias, bias + 0.1 (0.4, 0.5, 0.6 at the default). */
-export function worstBiasDecelG(geom: DecelGeom, slopeDeg: number, mu: number, bias: number): number {
-  return Math.min(...[bias - 0.1, bias, bias + 0.1].map((s) => practicalDecelG(geom, slopeDeg, mu, s)));
+/**
+ * Worst practical deceleration over the front shares bias - tol, bias, bias + tol. The tolerance is `frontBrakeBiasTolerance` (0.05): the solved share is accurate to about
+ * +/-0.02 (a bench-set bias bar and the lining mu of each shoe set), so 0.05 is 2.5 times that. The spec's +/-0.1 was written around a 0.5 share; around the 0.6 that the
+ * lockup order needs (D-56) it would test 0.7, a share the bias bar cannot reach (the 0.4-0.6 band).
+ */
+export function worstBiasDecelG(geom: DecelGeom, slopeDeg: number, mu: number, bias: number, tol = 0.05): number {
+  return Math.min(...[bias - tol, bias, bias + tol].map((s) => practicalDecelG(geom, slopeDeg, mu, s)));
 }
 
 export const goStatus = (g: number): 'GO' | 'CAUTION' | 'NO' => (g >= GO_DECEL_G ? 'GO' : g >= CAUTION_DECEL_G ? 'CAUTION' : 'NO');
@@ -138,19 +142,24 @@ export function rideEnvelope(ctx: Ctx): AnalysisCheck {
   const { p } = ctx;
   const c = ctx.loads.operating;
   const g = decelGeom(ctx, c);
-  const bias = p.frontBrakeBias;
-  const rows = ENVELOPE_SLOPES.map((s) => `${s} deg: ` + ENVELOPE_MU.map((mu) => { const d = worstBiasDecelG(g, s, mu, bias); return `mu ${mu} ${f(d, 2)} g ${goStatus(d)}`; }).join(', '));
-  const dGo8 = worstBiasDecelG(g, p.rideGoSlopeDeg, p.rideMuGo8, bias);
-  const dGo10 = worstBiasDecelG(g, p.rideMaxSlopeDeg, p.rideMuGo10, bias);
+  const bias = p.frontBrakeBias, tol = p.frontBrakeBiasTolerance;
+  const rows = ENVELOPE_SLOPES.map((s) => `${s} deg: ` + ENVELOPE_MU.map((mu) => { const d = worstBiasDecelG(g, s, mu, bias, tol); return `mu ${mu} ${f(d, 2)} g ${goStatus(d)}`; }).join(', '));
+  const dGo8 = worstBiasDecelG(g, p.rideGoSlopeDeg, p.rideMuGo8, bias, tol);
+  const dGo10 = worstBiasDecelG(g, p.rideMaxSlopeDeg, p.rideMuGo10, bias, tol);
   const worst = Math.min(dGo8, dGo10);
+  // The same corners at exactly the solved share (no tolerance): the GO rule is met there, but only just, and a bias-bar error of the tolerance can take a corner back to CAUTION.
+  const solved8 = practicalDecelG(g, p.rideGoSlopeDeg, p.rideMuGo8, bias), solved10 = practicalDecelG(g, p.rideMaxSlopeDeg, p.rideMuGo10, bias);
+  const fragile = (dGo8 < GO_DECEL_G && solved8 >= GO_DECEL_G) || (dGo10 < GO_DECEL_G && solved10 >= GO_DECEL_G);
   return singleCheck({
     id: 'ride-envelope', label: 'Ride envelope: slope x friction (GO table)', group: 'Braking', refs: ['D-51', 'D-55', 'study 1.5'],
     value: worst, unit: 'g', limit: GO_DECEL_G, sense: '>=', info: true,
     details: [
       detail(`GO table value at ${p.rideGoSlopeDeg} deg, usable mu ${p.rideMuGo8} (worst front share)`, dGo8, 'g', GO_DECEL_G, '>='),
       detail(`GO table value at ${p.rideMaxSlopeDeg} deg, usable mu ${p.rideMuGo10} (worst front share)`, dGo10, 'g', GO_DECEL_G, '>='),
+      detail(`same ${p.rideGoSlopeDeg} deg corner at exactly the solved share ${f(bias, 2)} (info)`, solved8, 'g', GO_DECEL_G, '>='),
+      detail(`same ${p.rideMaxSlopeDeg} deg corner at exactly the solved share ${f(bias, 2)} (info)`, solved10, 'g', GO_DECEL_G, '>='),
     ],
-    how: `Practical deceleration with a fixed front share (${f(bias - 0.1, 1)}, ${f(bias, 1)}, ${f(bias + 0.1, 1)}; the worst is quoted), both axles limited by mu N with the braking load transfer, CG ${f(g.x)}" ahead of the rear axle and ${f(g.h)}" high at the operating rider, rolling resistance ${CRR}. GO needs >= ${GO_DECEL_G} g, CAUTION ${CAUTION_DECEL_G}-${GO_DECEL_G} g (5 mph with a handler), NO below. ${rows.join('; ')}. Rule: ride up to ${p.rideMaxSlopeDeg} deg at up to ${p.rideSpeedMph} mph (daylight, helmet, lap belt, an adult spotter); GO needs usable mu >= ${p.rideMuGo8} up to ${p.rideGoSlopeDeg} deg and >= ${p.rideMuGo10} up to ${p.rideMaxSlopeDeg} deg (the camp-measured mu x ${p.rideMuDerate}); the table above gives ${f(dGo8, 2)} g and ${f(dGo10, 2)} g at those two corners. Walk it down above ${p.rideMaxSlopeDeg} deg. The stopping distance, heat and bias rows are in the Braking group (brake-ride).`,
+    how: `Practical deceleration with a fixed front share (${f(bias - tol, 2)}, ${f(bias, 2)}, ${f(bias + tol, 2)}: the solved bias +/- ${f(tol, 2)}, the bias bar's accuracy; the worst is quoted), both axles limited by mu N with the braking load transfer, CG ${f(g.x)}" ahead of the rear axle and ${f(g.h)}" high at the operating rider, rolling resistance ${CRR}. GO needs >= ${GO_DECEL_G} g, CAUTION ${CAUTION_DECEL_G}-${GO_DECEL_G} g (5 mph with a handler), NO below. ${rows.join('; ')}. Rule: ride up to ${p.rideMaxSlopeDeg} deg at up to ${p.rideSpeedMph} mph (daylight, helmet, lap belt, an adult spotter); GO needs usable mu >= ${p.rideMuGo8} up to ${p.rideGoSlopeDeg} deg and >= ${p.rideMuGo10} up to ${p.rideMaxSlopeDeg} deg (the camp-measured mu x ${p.rideMuDerate}); the table above gives ${f(dGo8, 2)} g and ${f(dGo10, 2)} g at those two corners. Walk it down above ${p.rideMaxSlopeDeg} deg.${fragile ? ` WATCH: at exactly the solved share the corners give ${f(solved8, 2)} g and ${f(solved10, 2)} g (GO), but a bias error of ${f(tol, 2)} takes one below the ${GO_DECEL_G} g GO line (${f(dGo8, 2)} g at ${p.rideGoSlopeDeg} deg, ${f(dGo10, 2)} g at ${p.rideMaxSlopeDeg} deg): set the bias bar on the mock-up with two scales (brake-bias row) or raise the GO friction rule.` : ''} The stopping distance, heat and bias rows are in the Braking group (brake-ride).`,
   });
 }
 

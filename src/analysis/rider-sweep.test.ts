@@ -13,13 +13,16 @@ describe('riderSweep', () => {
     clearRiderSweepCache();
     const t0 = performance.now();
     const r = riderSweep(p0, { fit });
-    expect(performance.now() - t0).toBeLessThan(1500); // ~110 ms measured
+    expect(performance.now() - t0).toBeLessThan(10000); // ~1-2 s measured with the bump-basis rows (it was ~110 ms before the flip); shared CI runners are 2-3x slower
     expect(r.points.map((x) => x.w)).toEqual(Array.from({ length: 21 }, (_, i) => 50 + 10 * i));
-    // Honesty fix (critic Phase 3 r3 MUST-1..3): at the defaults the operating weight FAILS (front end), so there is no safe range; it used to be 50-210 lb.
+    // Honesty (docs/phase3b-flip-notes.md): at the flip the operating weight FAILS - the new front end (kingpin bolt and bracket, tie rod, bellcrank, tongue tie, stick cable) and
+    // the rear end on the bump basis (axle, wheel rating, rail seat, groove) are undersized for the bump loads - so there is no safe range. Pin that it is reported, not which rows.
     expect(r.operating.status).toBe('fail');
     expect(r.safe).toBeNull();
     expect(r.green).toBeNull();
-    expect(r.operating.fails.every((id) => ['steer-stops', 'steer-stops-bound', 'kingpin-bolts', 'turntable-ring'].includes(id))).toBe(true);
+    expect(r.operating.fails.length).toBeGreaterThan(0);
+    for (const id of r.operating.fails) expect(LIGHT_OF_ID[id], id).toBeDefined();
+    expect(r.operating.fails).toContain('kingpin-bracket');
   });
 
   it('is cached by design (rider masses excluded)', () => {

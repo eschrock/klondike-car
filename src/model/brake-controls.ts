@@ -1,6 +1,6 @@
 /**
  * Rider brake controls (Phase 3b WS-C, D-56): the left hip lever, its Bowden cable into the main brake lever through a lost-motion slot, and the lap belt.
- * Plain TS geometry (`hipControlGeometry`, `beltGeometry`) shared by the part builder and the analysis; parts are built only when `rideBrakeControls` is 1.
+ * Plain TS geometry (`hipControlGeometry`, `beltGeometry`) shared by the part builder and the analysis;.
  *
  * Hip lever (left, inside the hull): a 1 in x 1/4 in aluminum bar pivoting on a bracket on the left chine inner face, grip `hipLeverArmIn` above the pivot,
  * cable lug `hipLeverCableArmIn` below it, so pulling the grip aft pulls the lug forward and the Bowden inner cable into its housing. The housing runs aft
@@ -13,7 +13,7 @@
  * Parking: the existing quadrant and pawl act on the main lever, so both axles stay set. The pawl can be released only by the main lever's thumb tab;
  * the hip lever cannot release it (docs/phase3b-wsC-notes.md, open question on ride-mode modulation).
  */
-import type { Params } from '../params';
+import { FRAME_STYLE, SIDE_CONSTRUCTION, type Params } from '../params';
 import { STEP, box, cylinder, SIDES, type Ctx } from './build-utils';
 import { brakeGeometry, f2, type BrakeGeom } from './brake';
 import type { Layout } from './layout';
@@ -26,7 +26,6 @@ const HOUSING_LB_PER_IN = 0.004;
 const WEBBING_LB_PER_IN = 0.008;
 
 export interface HipControlGeom {
-  on: boolean;
   /** Hip lever pivot (x, |y|, z) and the grip at rest. */
   pivot: Vec3;
   grip: Vec3;
@@ -61,7 +60,6 @@ export interface HipControlGeom {
 
 export function hipControlGeometry(p: Params, L: Layout, g: BrakeGeom = brakeGeometry(p, L)): HipControlGeom {
   const hl = L.front.hipLever;
-  const on = p.rideBrakeControls === 1;
   const throwRad = p.hipLeverThrowDeg * RAD;
   const linkAbove = p.hipLinkAboveLeverPivotIn;
   const linkTravelIn = linkAbove * g.thetaL;
@@ -77,21 +75,21 @@ export function hipControlGeometry(p: Params, L: Layout, g: BrakeGeom = brakeGeo
   const channelZ = L.deckTop + 0.5;
   const channelFront: Vec3 = [hl.pivot[0] - 1.0, chineIn - 0.25, channelZ];
   // The storage box leaves 1/8 in off the chine, so the hole is just ahead of the box's fore end.
-  const hole: Vec3 = [L.storage.x1 + 0.8, outer, runZ];
+  // The straight cabin chine ends at xn (the bow bends in from there), so the hole never goes farther forward than 1" short of it.
+  const hole: Vec3 = [Math.min(L.storage.x1 + 0.8, L.xn - 1), outer, runZ];
   const insideIn = Math.abs(channelFront[0] - hole[0]) + 1;
   const outsideIn = Math.abs(hole[0] - stop[0]) * 1.05 + 2;
   const exposedIn = Math.abs(pinRel[0] - stop[0]) + 0.5;
   const cableTravel = p.hipLeverCableArmIn * throwRad;
   const hipPerMain = (p.hipLeverCableArmIn / p.hipLeverArmIn) * (g.lGrip / Math.max(1e-6, linkAbove));
   return {
-    on, pivot: hl.pivot, grip: hl.grip, armIn: p.hipLeverArmIn, cableArmIn: p.hipLeverCableArmIn, throwRad,
+    pivot: hl.pivot, grip: hl.grip, armIn: p.hipLeverArmIn, cableArmIn: p.hipLeverCableArmIn, throwRad,
     gripTravelIn: p.hipLeverArmIn * throwRad, lugTravelIn: cableTravel, mainPivot, linkAbove, linkTravelIn, slotIn: p.hipLostMotionSlotIn,
     outerY: outer, cableY, runZ, channelZ, channelFront, hole, stop, pinRel, insideIn, outsideIn, exposedIn, hipPerMain,
   };
 }
 
 export interface BeltGeom {
-  on: boolean;
   /** Anchor centers (x, |y|, z) on the deck at the chine, the doubler under the rail, two bolts each. */
   x: number;
   y: number;
@@ -104,7 +102,6 @@ export interface BeltGeom {
 
 export function beltGeometry(p: Params, L: Layout): BeltGeom {
   return {
-    on: p.rideBrakeControls === 1,
     x: p.seatXIn,
     y: L.hwC - 0.5,
     zDeck: L.deckTop,
@@ -120,7 +117,6 @@ const cableMassLb = (dia: number, len: number) => CABLE_LB_PER_IN_PER_SQIN * dia
 /** Hip lever, cable, channel, lost-motion plate and the lap belt. */
 export function buildBrakeControls(ctx: Ctx): Part[] {
   const { p, L } = ctx;
-  if (p.rideBrakeControls !== 1) return [];
   const g = brakeGeometry(p, L);
   const hg = hipControlGeometry(p, L, g);
   const bg = beltGeometry(p, L);
@@ -145,7 +141,7 @@ export function buildBrakeControls(ctx: Ctx): Part[] {
       id: 'hip-lever-bracket', partNo: 'hip-lever-bracket', name: 'Hip lever bracket', group: 'brake', mat: 'steel', step: STEP.brake, fab: 'outsource',
       size: [2.0, 0.1875, 3.0], center: [hg.pivot[0], chine - 0.1875 / 2 - 0.03, hg.pivot[2] + 0.1], explode: [0, 0.4, 0.4],
       notes: '3/16" A36 plate flat on the chine inner face, 2 x 5/16" stainless bolts through the chine and the rail; carries the pivot bolt on a 3/8" standoff.',
-      joints: [{ type: 'bolt', to: 'side-cabin-L-chine', count: 2, diaIn: 0.3125, note: 'through the chine into the rail' }],
+      joints: [{ type: 'bolt', to: p.sideConstruction === SIDE_CONSTRUCTION.solidOak ? 'side-cabin-L-board' : p.sideConstruction === SIDE_CONSTRUCTION.openFrame ? 'side-cabin-L-gunwale' : 'side-cabin-L-chine', count: 2, diaIn: 0.3125, note: 'through the side member (chine) into the rail' }],
     }));
     parts.push(cylinder(ctx, {
       id: 'hip-lever-pivot', partNo: 'hip-lever-pivot', name: 'Hip lever pivot bolt', group: 'brake', mat: 'steel', step: STEP.brake, fab: 'buy', kind: 'purchased', material: '3/8" 316 shoulder bolt, nylon-insert nut',
@@ -195,6 +191,7 @@ export function buildBrakeControls(ctx: Ctx): Part[] {
     parts.push(cylinder(ctx, {
       id: 'brake-hip-cable-pin', partNo: 'brake-hip-cable-pin', name: 'Hip cable slot pin', group: 'brake', mat: 'fixed', kind: 'purchased', material: '3/16" 316 stainless pin with the swaged cable end', massLb: 0.03,
       center: [hg.pinRel[0], hg.pinRel[1] + 0.08, hg.pinRel[2]], axis: 'y', radius: 0.0938, length: 0.4, fab: 'buy', step: STEP.brake, explode: [0, 1, 0],
+      sourcing: { vendor: 'McMaster-Carr (3/16" 316 stainless clevis pin; the cable end is swaged to it by the cable shop)' },
       notes: `Rides in the slot; the bare inner cable (${f2(hg.exposedIn)}") runs aft to the housing stop.`,
     }));
   }
@@ -207,7 +204,7 @@ export function buildBrakeControls(ctx: Ctx): Part[] {
         id: `belt-anchor-${tag}`, partNo: 'belt-anchor', name: `Lap belt anchor plate ${tag}`, group: 'brake', mat: 'steel', step: STEP.brake, fab: 'outsource',
         size: [bg.plate.lenIn, bg.plate.widIn, bg.plate.thickIn], center: [bg.x, sgn * bg.y, bg.zDeck + bg.plate.thickIn / 2], explode: [0, sgn * 0.3, 0.8],
         notes: `${f2(bg.plate.thickIn)}" A36 plate on the deck at the chine, two ${f2(p.beltAnchorBoltDiaIn)}" 316 bolts ${f2(bg.boltSpacingIn)}" apart through the deck, the rail and a ${f2(bg.doubler.thickIn)}" steel doubler strap under the rail (nylock nuts), with a slot for the 2" webbing.`,
-        joints: [{ type: 'bolt', to: `rail-cabin-${tag}`, count: 2, diaIn: p.beltAnchorBoltDiaIn, note: 'vertical through the deck, rail and doubler' }],
+        joints: [{ type: 'bolt', to: `${p.frameStyle === FRAME_STYLE.ladder ? 'rail' : 'girder'}-cabin-${tag}`, count: 2, diaIn: p.beltAnchorBoltDiaIn, note: 'vertical through the deck, rail and doubler' }],
       }));
       parts.push(box(ctx, {
         id: `belt-doubler-${tag}`, partNo: 'belt-doubler', name: `Lap belt anchor doubler ${tag}`, group: 'brake', mat: 'steel', step: STEP.brake, fab: 'outsource',

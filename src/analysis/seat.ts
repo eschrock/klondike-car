@@ -69,7 +69,7 @@ export function seatBackCheck(ctx: Ctx): AnalysisCheck {
       detail('insert pull-out (each stud)', k.T, 'lbf', p.seatInsertAllowLbf, '<='),
       detail('ply panel bending', k.sigmaPly, 'psi', al.plyBend, '<='),
     ];
-    const how = `Rider ${f(c.riderLb, 0)} lb × dynamic ${f(gF, 2)}${ctx.newFront ? ' (max of the dynamic factor and 1 + V_rear/W, spec 5.4)' : ''} × torso share ${p.seatBackLoadFraction} = ${f(k.Q)} lbf aft over the ${f(k.sup.H)}" back, ${f(k.w, 2)} lbf/in on each of 2 stiles. `
+    const how = `Rider ${f(c.riderLb, 0)} lb × dynamic ${f(gF, 2)} (max of the dynamic factor and 1 + V_rear/W, spec 5.4) × torso share ${p.seatBackLoadFraction} = ${f(k.Q)} lbf aft over the ${f(k.sup.H)}" back, ${f(k.w, 2)} lbf/in on each of 2 stiles. `
       + `Stile ${f(k.sup.fw, 2)}" × ${f(k.sup.t, 2)}" bears on the oak ${k.sup.rear ? 'wedge against the box end' : 'post'} crest at ${f(k.A, 2)}" and is held by the 3/8-16 knob stud at ${f(k.B, 2)}": `
       + `R_A = ${f(k.RA)} lbf, stud pull ${f(k.T)} lbf; M at the crest = w(H − A)²/2 = ${f(k.M)} lb·in, σ = ${f(k.M / S, 0)} psi (≤ ${f(al.oakBend, 0)}); `
       + `bearing ${f(k.RA / (k.sup.fw * CRUSH_HEIGHT_IN), 0)} psi on ${f(k.sup.fw, 2)}" × ${CRUSH_HEIGHT_IN}" (≤ ${f(al.oakPerp, 0)}); insert ${f(k.T, 0)} lbf (≤ ${f(p.seatInsertAllowLbf, 0)}); `

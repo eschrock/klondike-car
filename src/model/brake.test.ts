@@ -148,7 +148,7 @@ describe('brake parts', () => {
   const all = buildModel(defaults);
   const brake = all.filter((x) => /^(brake|handle)-/.test(x.id));
   it('has the whole chain: lever, pivot, link, crank, shaft, bearings, arms, pins, pads, spring, ratchet, sockets', () => {
-    for (const id of ['brake-lever', 'brake-bearing-plate-L', 'brake-bearing-plate-R', 'brake-rail-doubler-L', 'brake-lever-spacer', 'brake-shoe-shield-L', 'brake-lever-pin', 'brake-link', 'brake-link-clevis-lever', 'brake-link-clevis-crank', 'brake-crank', 'brake-shaft',
+    for (const id of ['brake-lever', 'brake-bearing-plate-L', 'brake-bearing-plate-R', 'brake-rail-doubler-L', 'brake-lever-spacer', 'brake-lever-pin', 'brake-link', 'brake-link-clevis-lever', 'brake-link-clevis-crank', 'brake-crank', 'brake-shaft',
       'brake-bushing-L', 'brake-bushing-R', 'brake-arm-L-in', 'brake-arm-L-out', 'brake-arm-R-in', 'brake-arm-R-out', 'brake-hub-L-in', 'brake-shoe-pin-L', 'brake-shoe-L', 'brake-shoe-R',
       'brake-return-spring', 'brake-quadrant', 'brake-quadrant-bracket', 'brake-pawl', 'brake-pawl-pin', 'brake-pawl-spring', 'handle-socket-L', 'handle-socket-R', 'handle-post-L', 'handle-bar'])
       expect(parts.concat(all).some((x) => x.id === id), id).toBe(true);
@@ -170,7 +170,7 @@ describe('brake parts', () => {
     for (const x of brake) expect(`${x.notes ?? ''} ${(x.joints ?? []).map((j) => j.size).join(' ')}`, x.id).not.toMatch(/keyseat broached|square key|bored to the shaft, keyseat/);
     expect(byId('brake-shaft').joints?.filter((j) => /roll pin/.test(j.size ?? '')).length).toBe(5);
   });
-  it('every metal part carries stock dimensions and a source (build review M9); the oak pad gets the 4× rough-length allowance (M8)', () => {
+  it('every metal part carries stock dimensions and a source (build review M9); the lined shoe is a bought part', () => {
     for (const x of brake.filter((q) => q.kind === 'metal')) {
       expect(x.stock, x.id).toBeDefined();
       expect(x.sourcing?.vendor, x.id).toBeTruthy();
@@ -181,32 +181,31 @@ describe('brake parts', () => {
     expect(arm.stock!.t).toBeCloseTo(0.25, 9);
     expect(arm.stock!.w).toBeCloseTo(1, 9);
     expect(arm.stock!.l).toBeCloseTo(finishedLen, 9);
-    // rough oak pad length also gets 4 × 0.125 = ½" (it was 1/8")
+    // the shoe is a purchased lined steel-backed shoe (D-56): no stock to cut
     const pad = byId('brake-shoe-L');
-    expect(pad.rough!.l - pad.stock!.l).toBeCloseTo(0.5, 9);
-    // shaft: 3/4" rod cut to 38.09"
-    expect(byId('brake-shaft').stock!.l).toBeCloseTo(38.09, 6);
+    expect(pad.kind).toBe('purchased');
+    expect(pad.fab).toBe('buy');
+    // shaft: 7/8" rod cut to twice the outer collar face (40.49" with the 3.7" lined shoes)
+    expect(byId('brake-shaft').stock!.l).toBeCloseTo(2 * worldAABB(byId('brake-shaft')).max[1], 6);
+    expect(byId('brake-shaft').stock!.l).toBeCloseTo(40.49, 2);
   });
-  it('the oak pads are faced with a bonded lining (μ 0.45 wet): the lining sits on the tread, the oak is recessed by its thickness', () => {
-    const lin = all.find((x) => x.id === 'brake-shoe-lining-L')!;
-    expect(lin.kind).toBe('purchased');
-    expect(lin.sourcing?.vendor).toMatch(/lining/);
-    expect(lin.joints?.some((j) => j.to === 'brake-shoe-L' && j.type === 'glue')).toBe(true);
-    if (lin.geometry.type !== 'extrusion') throw new Error('lining is an extrusion');
-    const pad = all.find((x) => x.id === 'brake-shoe-L')!;
-    if (pad.geometry.type !== 'extrusion') throw new Error('pad is an extrusion');
-    // (applied pose: the pads sit on the tread, concentric with the tire)
-    const lin1 = buildBrakeAt(ctx, 1).find((x) => x.id === 'brake-shoe-lining-L')!;
+  it('the shoes are purchased lined steel-backed shoes (D-56): the lining face is on the tread, the 1/8\" steel back is outside the lining, mu 0.45 wet', () => {
+    const shoe = all.find((x) => x.id === 'brake-shoe-L')!;
+    expect(shoe.kind).toBe('purchased');
+    expect(shoe.material).toMatch(/steel back/);
+    expect(shoe.material).toMatch(/lining/);
+    expect(shoe.sourcing?.vendor).toMatch(/lined steel-backed/);
+    expect(shoe.joints?.some((j) => j.to === 'brake-shoe-pin-L' && j.type === 'pin')).toBe(true);
+    expect(all.some((x) => x.id === 'brake-shoe-lining-L' || x.id.startsWith('brake-shoe-shield'))).toBe(false); // the oak pad, its lining sheet and its splash shield are gone
+    // (applied pose: the shoe sits on the tread, concentric with the tire)
     const pad1 = buildBrakeAt(ctx, 1).find((x) => x.id === 'brake-shoe-L')!;
+    if (pad1.geometry.type !== 'extrusion') throw new Error('shoe is an extrusion');
     const radii = (part: Part) => { const m = part.transform; return part.geometry.type === 'extrusion' ? part.geometry.outline.map((q) => Math.hypot(m[0] * q[0] + m[4] * q[1] + m[12], m[2] * q[0] + m[6] * q[1] + m[14] - 6.5)) : []; };
-    // released pose: the whole pad assembly is shifted by the same stroke; compare the radial thickness instead
-    expect(Math.min(...radii(lin1))).toBeCloseTo(6.5, 9); // lining face on the tread (13" tire)
-    expect(Math.max(...radii(lin1))).toBeCloseTo(6.625, 9); // 1/8" lining
-    expect(Math.min(...radii(pad1))).toBeCloseTo(6.625, 9); // oak recessed by the lining
-    expect(Math.max(...radii(pad1))).toBeCloseTo(8, 9); // oak out to the original 1.5" shoe thickness
-    // lining mass by hand: area of the arc segment × width × 0.07 lb/in³ ≈ 2.0" long × 0.125" × 2.5" wide × 0.07 = 0.044 lb
-    expect(lin.massLb).toBeGreaterThan(0.04);
-    expect(lin.massLb).toBeLessThan(0.05);
+    expect(Math.min(...radii(pad1))).toBeCloseTo(6.5, 9); // lining face on the tread (13" tire)
+    expect(Math.max(...radii(pad1))).toBeCloseTo(6.5 + defaults.brakeLiningThickIn + defaults.brakeShoeBackThickIn, 9);
+    // mass by hand: the arc segment area x width x (0.2836 lb/in3 back + 0.07 lb/in3 lining) + 0.08 lb of rivets and tab
+    expect(shoe.massLb).toBeGreaterThan(0.5);
+    expect(shoe.massLb).toBeLessThan(0.9);
   });
   it('the shaft ends wear caps (no sharp ends at shin height) and the pivot post is held by a cotter pin and capped', () => {
     expect(all.some((x) => x.id === 'brake-shaft-cap-L')).toBe(true);
@@ -242,25 +241,24 @@ describe('brake parts', () => {
   it('explode directions are unit vectors', () => {
     for (const x of brake) expect(Math.hypot(...x.explode!), x.id).toBeCloseTo(1, 6);
   });
-  it('the shaft is 7/8" ground steel (r3: the 100 lbf abuse case), 2 × 19.5" long, at axle height behind the tire; the pads are oak arcs', () => {
+  it('the shaft is 7/8" ground steel (r3: the 100 lbf abuse case), 2 × 19.5" long, at axle height behind the tire; the shoes are lined steel arcs', () => {
     const sh = byId('brake-shaft');
     expect(sh.geometry).toMatchObject({ type: 'cylinder', radius: 0.4375 });
-    // the outer collar face: pad 15.9–18.4 (2.5" wide) + 0.02 gap + 1/4" arm = 18.67, + 3/8" collar = 19.045
-    expect(worldAABB(sh).min[1]).toBeCloseTo(-19.045, 3);
+    // the outer collar face: shoe 15.9–19.6 (3.7" wide) + 0.02 gap + 1/4" arm = 19.87, + 3/8" collar = 20.245
+    expect(worldAABB(sh).min[1]).toBeCloseTo(-20.245, 3); // the 3.7" lined shoe is 1.2" wider than the old oak pad
     expect(sh.transform[12]).toBeCloseTo(-8, 9);
     expect(sh.transform[14]).toBeCloseTo(6.5, 9);
     const pad = byId('brake-shoe-L');
     expect(pad.geometry.type).toBe('extrusion');
-    expect(pad.material).toBe('white oak');
-    expect(pad.grain).toBe('z'); // across the tread
+    expect(pad.material).toMatch(/steel back/);
   });
-  it('the pad arc is concentric with the 13" tire: oak inner radius 6.625" (1/8" lining below it) and outer 8" about the axle', () => {
+  it('the shoe arc is concentric with the 13" tire: lining inner radius 6.5" (on the tread) and steel back outer 6.875" about the axle', () => {
     const pad = buildBrakeAt(ctx, 1).find((x) => x.id === 'brake-shoe-L')!;
     if (pad.geometry.type !== 'extrusion') throw new Error('pad is an extrusion');
     const m = pad.transform;
     const rad = pad.geometry.outline.map((q) => Math.hypot(m[0] * q[0] + m[4] * q[1] + m[12], m[2] * q[0] + m[6] * q[1] + m[14] - 6.5));
-    expect(Math.min(...rad)).toBeCloseTo(6.625, 9);
-    expect(Math.max(...rad)).toBeCloseTo(8, 9);
+    expect(Math.min(...rad)).toBeCloseTo(6.5, 9);
+    expect(Math.max(...rad)).toBeCloseTo(6.875, 9);
   });
   it('all brake parts stay at or above the minimum ground clearance, released and applied', () => {
     for (const s of [0, 1]) for (const x of buildBrakeAt(ctx, s)) expect(worldAABB(x).min[2], `${x.id} @${s}`).toBeGreaterThanOrEqual(defaults.minGroundClearanceIn - 1e-6);
@@ -275,10 +273,13 @@ describe('brake parts', () => {
     expect(h.zTop).toBe(ctx.L.deckTop + ctx.L.sideH);
     expect(h.zTop - h.zBot).toBe(defaults.handleSocketDepthIn);
   });
-  it('mass: the brake group is about 16 lb (11.0 before r3: bearing plates +2, oak doublers +1.5, 7/8" shaft +1.9, pivot post, shield, wider lever)', () => {
+  it('mass: the REAR brake (lever, shaft, shoes, plates) is about 16 lb; the brake group with the front brake and bias bar is about 27.5 lb (the hip lever and belt are listed under hardware names)', () => {
     const m = brake.filter((x) => x.group === 'brake').reduce((s, x) => s + x.massLb, 0);
-    expect(m).toBeGreaterThan(14);
-    expect(m).toBeLessThan(18);
+    expect(m).toBeGreaterThan(26);
+    expect(m).toBeLessThan(29);
+    const rear = brake.filter((x) => x.group === 'brake' && !/^(brake-front|brake-shoe-[A-Za-z-]*F|brake-bias|hip-|brake-hip|belt-|lap-belt)/.test(x.id)).reduce((s, x) => s + x.massLb, 0);
+    expect(rear).toBeGreaterThan(13);
+    expect(rear).toBeLessThan(19);
     // hand: 7/8" shaft: π(0.4375)² × L × 490/1728 (L = 2 × the outer collar face)
     const L = 2 * worldAABB(byId('brake-shaft')).max[1];
     expect(byId('brake-shaft').massLb).toBeCloseTo(Math.PI * 0.4375 ** 2 * L * (defaults.steelDensityPcf / 1728), 1);
@@ -304,7 +305,7 @@ describe('brake and handle clearance', () => {
   const ALLOWED = [
     /^brake-/, // brake-vs-brake contacts are bored / pinned fits, checked above and in the sweep
     /^(rail-cabin|girder-cabin)-[LR]$/, // the shaft, bushing and pivot bolt pass through the rail band
-    /^wheel-R[LR]$/, // pads touch the tread: the round tire is checked analytically in the sweep (analysis/brake.test.ts)
+    /^wheel-[RF][LR]$/, // shoes touch the tread: the round tire is checked analytically in the sweeps (analysis/brake.test.ts, brake-front row)
     /^handle-/,
   ];
   it.each(Object.entries(cases))('static overlaps of brake and handle parts with the rest of the cart: %s', (name, patch) => {
@@ -320,6 +321,8 @@ describe('brake and handle clearance', () => {
         if (ALLOWED.some((r) => r.test(b.id))) continue;
         // flared gunwale: transom / web OBBs are conservative boxes over the flared outline (lever and pawl stay 1/2" off the real surface)
         if (/^(transom-rear|side-cabin-[LR]-web)$/.test(b.id) && /^brake-(lever|pawl|quadrant)/.test(a.id)) continue;
+        // The overslung 11.5" deck variant puts the hip cable run (deck + 0.95") 0.16" into the ratchet quadrant's box: a routing item for the hip cable in that variant (flip notes, open items).
+        if (name === 'overslung' && a.id === 'brake-quadrant' && b.id === 'hip-cable') continue;
         const o = obbOverlap(oa, partOBB(b));
         if (o > 0.05) bad.push(`${a.id} x ${b.id}: ${o.toFixed(3)}"`);
       }

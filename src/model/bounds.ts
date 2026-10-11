@@ -80,6 +80,8 @@ export function partOBB(part: Part): OBB {
 }
 
 const SLAB_IN = 1.25;
+/** Horizontal bands a tire is cut into for the tight box list (`partOBBs`). */
+const WHEEL_BANDS = 12;
 const MAX_SLABS = 40;
 
 /** Clip a polygon to the vertical strip xa <= x <= xb (Sutherland–Hodgman, two passes). */
@@ -128,12 +130,34 @@ function computeOBBs(part: Part): OBB[] {
     }
     return out.length ? out : [partOBB(part)];
   }
+  if (g.type === 'wheel') {
+    // A tire is a disc in its local x-z plane, not the box of its bounding square: its corners are not there. Horizontal bands (local z), each as wide as the disc is at
+    // the band's nearest edge to the axle (a superset of the disc), so a hull panel or bracket that is above the axle line is not charged for the square corner (D-45 style).
+    const r = g.diameter / 2, w = Math.max(g.width, g.hubLength) / 2;
+    const n = WHEEL_BANDS;
+    const out: OBB[] = [];
+    for (let k = 0; k < n; k++) {
+      const z0 = -r + (2 * r * k) / n, z1 = -r + (2 * r * (k + 1)) / n;
+      const near = z0 <= 0 && z1 >= 0 ? 0 : Math.min(Math.abs(z0), Math.abs(z1));
+      const xh = Math.sqrt(Math.max(0, r * r - near * near));
+      out.push({ center: transformPoint(m, [0, 0, (z0 + z1) / 2]), axes: [column(m, 0), column(m, 1), column(m, 2)], half: [xh, w, (z1 - z0) / 2] });
+    }
+    return out;
+  }
   if (g.type === 'extrusion') {
     const b = localBounds(g);
     const bw = b.max[0] - b.min[0], bh = b.max[1] - b.min[1];
     let area = 0;
     for (let i = 0; i < g.outline.length; i++) { const [x1, y1] = g.outline[i], [x2, y2] = g.outline[(i + 1) % g.outline.length]; area += x1 * y2 - x2 * y1; }
     area = Math.abs(area) / 2;
+    // A rectilinear outline (all edges along the axes: C and L sections, stepped plates) is covered EXACTLY by a few rectangles, however small: split it by scanlines so a
+    // bent bracket is its web and leaves, not the solid block of its bounding rectangle.
+    if (!g.holes && g.outline.length > 4 && area < 0.995 * bw * bh) {
+      const rects = rectilinearRects(g.outline);
+      if (rects) {
+        return rects.map((r) => ({ center: transformPoint(m, [(r[0] + r[1]) / 2, (r[2] + r[3]) / 2, g.depth / 2]), axes: [column(m, 0), column(m, 1), column(m, 2)] as [Vec3, Vec3, Vec3], half: [(r[1] - r[0]) / 2, (r[3] - r[2]) / 2, g.depth / 2] as Vec3 }));
+      }
+    }
     if (bw > 2 * SLAB_IN && (g.outline.length > 4 || g.holes) && area < 0.995 * bw * bh) {
       const n = Math.min(MAX_SLABS, Math.max(2, Math.ceil(bw / SLAB_IN)));
       const out: OBB[] = [];
@@ -149,6 +173,37 @@ function computeOBBs(part: Part): OBB[] {
     }
   }
   return [partOBB(part)];
+}
+
+
+/**
+ * Exact rectangle cover of a rectilinear polygon (every edge axis-parallel), as [x0, x1, y0, y1] rectangles: scanlines between consecutive distinct y values, even-odd
+ * x intervals, then vertically adjacent rectangles with the same x interval merged. Null for any other outline.
+ */
+export function rectilinearRects(poly: Vec2[]): Array<[number, number, number, number]> | null {
+  const n = poly.length;
+  const EPS = 1e-9;
+  for (let i = 0; i < n; i++) {
+    const a = poly[i], b = poly[(i + 1) % n];
+    if (Math.abs(a[0] - b[0]) > EPS && Math.abs(a[1] - b[1]) > EPS) return null;
+  }
+  const ys = [...new Set(poly.map((q) => Math.round(q[1] * 1e6) / 1e6))].sort((u, v) => u - v);
+  const out: Array<[number, number, number, number]> = [];
+  for (let k = 0; k + 1 < ys.length; k++) {
+    const ym = (ys[k] + ys[k + 1]) / 2;
+    const xs: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const a = poly[i], b = poly[(i + 1) % n];
+      if (Math.abs(a[0] - b[0]) < EPS && (a[1] - ym) * (b[1] - ym) < 0) xs.push(a[0]);
+    }
+    xs.sort((u, v) => u - v);
+    for (let j = 0; j + 1 < xs.length; j += 2) {
+      if (xs[j + 1] - xs[j] < EPS) continue;
+      const prev = out.find((r) => Math.abs(r[3] - ys[k]) < EPS && Math.abs(r[0] - xs[j]) < EPS && Math.abs(r[1] - xs[j + 1]) < EPS);
+      if (prev) prev[3] = ys[k + 1]; else out.push([xs[j], xs[j + 1], ys[k], ys[k + 1]]);
+    }
+  }
+  return out.length ? out : null;
 }
 
 /** Deepest interpenetration between two parts over their tight box lists (≤ 0 when separated). */

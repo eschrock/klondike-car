@@ -14,7 +14,7 @@ describe('practical deceleration (study 1.1, 1.5)', () => {
   it('reproduces the study table at the real CG (worst of front shares 0.4/0.5/0.6)', () => {
     const ctx = ackCtx();
     const g = decelGeom(ctx, ctx.loads.operating);
-    const at = (s: number, mu: number) => worstBiasDecelG(g, s, mu, 0.5);
+    const at = (s: number, mu: number) => worstBiasDecelG(g, s, mu, 0.5, 0.1); // the study's +/-0.1 around 0.5
     expect(at(5, 0.5)).toBeCloseTo(0.35, 1);
     expect(at(8, 0.4)).toBeCloseTo(0.21, 1);
     expect(at(10, 0.5)).toBeCloseTo(0.25, 1);
@@ -36,10 +36,16 @@ describe('ride rows', () => {
     expect(ssf).toBeLessThan(1.35);
     expect(r.status).toBe('pass');
   });
-  it('ride-envelope is an info row; its two GO corners are at least 0.2 g with the default thresholds', () => {
+  it('ride-envelope is an info row; its two GO corners are at least 0.2 g at the solved front share (0.60), but not at the share +/- 0.05 for the 8 deg corner: the row says so', () => {
     const r = rideEnvelope(ctx);
     expect(r.status).toBe('info');
-    expect(r.details!.every((d) => d.value >= GO_DECEL_G)).toBe(true);
+    const by = (re: RegExp) => r.details!.find((d) => re.test(d.name))!;
+    expect(by(/8 deg corner at exactly the solved share/).value).toBeGreaterThanOrEqual(GO_DECEL_G); // 0.218 g (WS-C)
+    expect(by(/10 deg corner at exactly the solved share/).value).toBeGreaterThanOrEqual(GO_DECEL_G); // 0.292 g
+    expect(by(/GO table value at 10 deg/).value).toBeGreaterThanOrEqual(GO_DECEL_G); // 0.232 g at 0.55..0.65
+    expect(by(/GO table value at 8 deg/).value).toBeLessThan(GO_DECEL_G); // 0.174 g at the 0.65 share: honest
+    expect(r.how).toMatch(/WATCH: at exactly the solved share/);
+    expect(r.how).toMatch(/0\.55, 0\.60, 0\.65/);
     expect(r.how).toMatch(/Walk it down above 10 deg/);
   });
   it('the envelope follows the params: a lower friction threshold fails the 8 deg corner', () => {

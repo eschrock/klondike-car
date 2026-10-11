@@ -3,7 +3,7 @@
  * one deck, 2-ply sides, the nose rails and joists around the front beam, and the finger guard. The old hull path is covered by hull.test.ts / hull-curve.test.ts.
  */
 import { describe, expect, it } from 'vitest';
-import { hullCurveSpec, hullPlanCurve, hullTireGap, lamPly, phase3bDefaults, requiredCurveRadius, resolveParams, validateParams, ackSpec, footZoneX, type Params } from '../params';
+import { hullCurveSpec, hullPlanCurve, hullTireGap, lamPly, defaultParams, requiredCurveRadius, resolveParams, validateParams, ackSpec, footZoneX, type Params } from '../params';
 import { buildModel } from './index';
 import { makeCtx } from './build-utils';
 import { computeLayout, innerHalfWidth } from './layout';
@@ -14,7 +14,7 @@ import { frontBeamSeat, FRONT_RAIL_REMAIN_MIN_IN } from './front-mount';
 import { partsOverlap, worldAABB } from './bounds';
 import type { Part } from './types';
 
-const ack = (over: Partial<Params> = {}): Params => ({ ...phase3bDefaults(), ...over });
+const ack = (over: Partial<Params> = {}): Params => ({ ...defaultParams(), ...over });
 const errorsOf = (p: Params) => validateParams(p).filter((i) => i.severity === 'error' && !/kingpin sleeve|axle-rod groove/.test(i.message));
 const HULL_ID = /^(deck|side-(cabin|nose)|rail-|joist-|transom-front|transom-rear|guard-|scupper-|front-beam-hold-down|shoulder)/;
 
@@ -183,9 +183,9 @@ describe('one deck, one level (parts)', () => {
     expect(byId.has('deck')).toBe(true);
     expect(parts.filter((x) => /^deck/.test(x.id)).map((x) => x.id)).toEqual(['deck']);
     expect(byId.has('shoulder-beam')).toBe(false);
-    expect(L.noseTop).toBe(L.deckTop);
-    expect(L.xs).toBe(L.xn);
-    expect(L.shoulderBeam).toBe(0);
+    expect(byId.has('deck-cabin') || byId.has('deck-nose') || byId.has('nose-access-panel')).toBe(false);
+    expect(L.chineBot).toBeCloseTo(L.deckBot, 9); // the side lines are at one height
+    expect(L.bowHeading).toBeLessThan(0);
   });
   it('the deck is one sheet (fits 4 x 8) and every edge is captured', () => {
     const d = byId.get('deck')!;
@@ -196,7 +196,11 @@ describe('one deck, one level (parts)', () => {
     expect(Math.max(...xs) - Math.min(...xs)).toBeLessThan(96);
     const ys = g.outline.map((q) => q[1]);
     expect(Math.max(...ys) - Math.min(...ys)).toBeLessThan(48);
-    expect(new Set(d.edges as string[])).toEqual(new Set(['captured']));
+    // Every ply edge is captured in the chine rabbet or a transom dado; the only other edges are the rim of the cable slot, which is lined (printed guide) and edged.
+    const edges = d.edges as string[];
+    expect(edges.filter((e) => e === 'exposed')).toEqual([]);
+    expect(edges.filter((e) => e === 'edged')).toHaveLength(4); // the 4 edges of the cable slot
+    expect(g.holes).toHaveLength(1);
   });
   it('the deck edge is captured in the chine rabbet along the whole hull (distance to the chine centerline = side/2 - capture depth)', () => {
     const d = byId.get('deck')!;
@@ -373,19 +377,5 @@ describe('hull and frame parts: no unintended overlaps (Ackermann hull)', () => 
     if (errorsOf(p).length) return;
     expect(() => buildModel(p)).not.toThrow();
     expect(check(p)).toEqual([]);
-  });
-});
-
-describe('the old hull path is unchanged while the old front end is selected', () => {
-  it('frontEndType 0 keeps two decks, the shoulder beam and the parallel nose', () => {
-    const p: Params = { ...phase3bDefaults(), frontEndType: 0, noseWidthIn: 13.5, hullCurveStartIn: 18, hullLamThicknessIn: 0.125, hullWebPlies: 2 };
-    const ids = buildModel(p).map((x) => x.id);
-    expect(ids).toContain('deck-cabin');
-    expect(ids).toContain('deck-nose');
-    expect(ids).toContain('shoulder-beam');
-    expect(ids).not.toContain('deck');
-    const L = computeLayout(p);
-    expect(L.ackHull).toBe(false);
-    expect(L.bowHeading).toBe(0);
   });
 });

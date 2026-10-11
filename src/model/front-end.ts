@@ -15,8 +15,9 @@
 import { centerPins, solveSteer } from './ackermann';
 import { FRAME_STYLE } from '../params';
 import { CABLE_END_BEHIND_PIVOT_IN as CABLE_END_BEHIND, MODE_PLATE_T_IN, convexHull, discPts } from './front-layout';
-import { IN3_PER_FT3, STEP, poseOf, woodMassLb, type Ctx } from './build-utils';
+import { IN3_PER_FT3, STEP, poseOf, roughOf, woodMassLb, type Ctx } from './build-utils';
 import { multiply, rotationY, translation } from './mat4';
+import { toLocal } from './joinery';
 import { circlePath, customPart, mergeMeshes, pathLength, tubeAlong, type CustomPartSpec } from './mesh-utils';
 import { boltLength, inchesText, washerThick } from './rear-mount';
 import type { Joint, Mat4, Part, Vec2, Vec3 } from './types';
@@ -150,7 +151,7 @@ export function buildFrontEnd(ctx: Ctx): Part[] {
       geometry: { type: 'extrusion', outline: sec, depth: w }, transform: m, massLb: steelLb(ctx, area * w), fab: 'outsource', step: STEP.gear,
       explode: [0, s, -0.1], stock: { t, w: Math.max(...sec.map((q) => q[1])) - zLo + (uEnd - u0), l: w },
       sourcing: { vendor: `Outsourced laser cut and press-brake bend (SendCutSend / Xometry / local fab shop class), ${frac(t)}" A36 plate, one flat blank bent twice; the DXF comes from the cut list. Zinc or powder coat after bending. No welding (D-51)` },
-      joints: [bolt(beam.top > 0 ? 'beam-F' : 'beam-F', 4, bd, `${frac(bd)}" grade 8 x ${inchesText(boltLength(beam.thick + t, bd))} through the beam end (web, both tube walls... bolts run fore-aft through the web and the tube, crush sleeves inside the tube), nylock nuts`, 'two rows of two bolts on the web, across the beam end face', br.bolts.map((b) => b.pos))],
+      joints: [bolt(beam.top > 0 ? 'beam-F' : 'beam-F', 4, bd, `${frac(bd)}" grade 8 x ${inchesText(boltLength(beam.thick + t, bd))} through the beam end (web, both tube walls... bolts run fore-aft through the web and the tube, crush sleeves inside the tube), nylock nuts`, 'two rows of two bolts on the web, across the beam end face', br.bolts.map((b) => toLocal(m, b.pos)))],
       notes: `Web ${f2(t)}" on the beam end face (|y| ${f2(u0)}" to ${f2(u0 + t)}"), leaves ${f2(lo.z0)}-${f2(lo.z1)}" and ${f2(up.z0)}-${f2(up.z1)}" (gap ${f2(p.kingpinBracketGapIn)}" for the boss and shims), reaching ${f2(p.kingpinBracketLeafRadiusIn)}" past the kingpin axis at |y| ${f2(uPiv)}". Caster ${p.casterDeg} deg and KPI ${p.kingpinInclinationDeg} deg are built in as hole offsets between the upper and lower leaf (offset = leaf gap x tan angle); the kingpin bolt hole in each leaf is drilled to the offset from the cut list. Plan kinematics neglect the tilt (spec 1.2).`,
     }));
   }
@@ -247,7 +248,7 @@ export function buildFrontEnd(ctx: Ctx): Part[] {
       id: 'bellcrank', name: 'Bellcrank', outline: bc.plate, z0: bellZ - bellT / 2, t: bellT, material: `${frac(bellT)}" A36 steel plate, laser cut`, body: 'bellcrank',
       fab: 'outsource', step: STEP.linkage, explode: unit3([-0.5, 0, -1]),
       sourcing: { vendor: `Outsourced laser cut ${frac(bellT)}" A36 plate (the DXF comes from the cut list); bore the pivot hole ${f2(0.3125 + 0.03)}" with a flanged bronze bushing; zinc plate` },
-      joints: [bolt('bell-bracket', 1, 0.3125, `${frac(0.3125)}" grade 8 pivot bolt through the bracket plate, bellcrank, cross-bar and mode plate, nylock nut`, undefined, [[0, 0, 0]])],
+      joints: [bolt('bell-bracket', 1, 0.3125, `${frac(0.3125)}" grade 8 pivot bolt through the bracket plate, bellcrank, cross-bar and mode plate, nylock nut`, undefined, [[pv[0], pv[1], bellT / 2]])],
       notes: `Pivot at (${f2(pv[0])}", 0), ${p.bellcrankPivotAftOfKingpinIn}" behind the kingpin line. Output arm ${f2(ack.bellArm)}" at ${f2(ack.bellOutDeg ?? 0)} deg (drag link pin), input arm ${f2(ack.bellInArm ?? 0)}" at ${f2(ack.bellInDeg ?? 0)} deg (tongue-link standoff), RIDE socket on the cross-bar line ${f2(ack.bellCableArm! / 2)}" to the right, spring pins aft. The plate is the hull of those pins. Plane z ${f2(bellZ)}".`,
     });
     parts.push(bell);
@@ -345,6 +346,7 @@ export function buildFrontEnd(ctx: Ctx): Part[] {
       transform: translation((T.rearX + T.tipX) / 2, 0, T.z), body: 'tongue', massLb: woodMassLb(p, tongueLen * p.tongueThickIn * p.tongueDepthIn, 2 * (tongueLen * (p.tongueThickIn + p.tongueDepthIn) + p.tongueThickIn * p.tongueDepthIn), p.oakDensityPcf),
       fab: 'table-saw', step: STEP.spindles, grain: 'x', removable: true, explode: unit3([1, 0, -0.1]),
       stock: { t: Math.min(p.tongueThickIn, p.tongueDepthIn), w: Math.max(p.tongueThickIn, p.tongueDepthIn), l: tongueLen },
+      rough: roughOf(p, { t: Math.min(p.tongueThickIn, p.tongueDepthIn), w: Math.max(p.tongueThickIn, p.tongueDepthIn), l: tongueLen }),
       joints: [bolt('tongue-hinge-top', 1, pinD, `${frac(pinD)}" grade 8 hinge pin through the tongue (reamed hole, oiled-bronze bushing), vertical`), bolt('tongue-plate', 2, 0.25, '1/4-20 carriage bolts down through the ear plate into the tongue top, through the arc slots in the hinge top plate')],
       notes: `Oak tongue, ${p.tongueThickIn}" x ${p.tongueDepthIn}", measured from the front axle: tip at x = ${f2(T.tipX)}". Top ${f2(T.top)}" (${f2(T.top - beam.top)}" over the beam top, under the front transom), rear end rounded about the hinge pin at x = ${f2(hinge[0])}" (${p.tongueHingeAheadOfBeamIn}" ahead of the beam front face). Yaws +/- ${p.tongueMaxYawDeg} deg (the exact linkage needs ${f2(yawLock)} deg at the tow lock). Removable for transport (D-9).`,
     }));

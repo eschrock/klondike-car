@@ -116,7 +116,7 @@ export function brakeRatio(ctx: Ctx): AnalysisCheck {
   const gated: Detail[] = [];
   const info = (name: string, value: number, unit: string): Detail => ({ name, value, unit, limit: 0, sense: '>=', util: 0 });
   let frontText = '';
-  if (ch.frontOn || ch.hipOn) {
+  {
     const goal = ctx.loads.goal;
     const hold = (goal.massLb * Math.sin(p.designSlopeDeg * RAD)) / holdMu(p) / (ch.Rcrit * ch.eta);
     const comp = cableCompliance(ctx, ch, hold);
@@ -129,7 +129,7 @@ export function brakeRatio(ctx: Ctx): AnalysisCheck {
       details.push(...gated, info('total ratio, rolling forward', ch.Rtot.fwd, ':1'), info('front share of the shoe force, mean of forward and backward', (ch.bias.fwd + ch.bias.rev) / 2, ''));
       frontText = ` Front brake: bias bar front arm a_f = ${f(ch.fg.aF, 2)}" of ${f(ch.fg.barIn, 1)}" gives the front branch ${f(ch.phi * 100, 1)}% of the lever force and ${f(ch.bias.fwd * 100, 1)}% / ${f(ch.bias.rev * 100, 1)}% (fwd / back) of the shoe force. Front branch ratio ${f(ch.fg.Rf.fwd, 1)} / ${f(ch.fg.Rf.rev, 1)}:1 (cable arm ${f(ch.fg.tailIn, 2)}" on the swing arm, ${f(ch.fg.kFwd, 2)}" / ${f(ch.fg.kRev, 2)}" shoe moment arm), so the total ratio is (1 − φ)R_rear + φR_front = ${f(ch.Rtot.fwd, 1)} / ${f(ch.Rtot.rev, 1)}:1: work is conserved (same stroke at all four shoes), so the front brake adds braking capacity and parking margin, not mechanical advantage. The front cable stretch (${f(comp.frontStretchIn, 3)}") adds ${f(comp.extraGripMainIn, 2)}" of grip travel at the goal hold force.`;
     }
-    if (ch.hipOn) {
+    {
       details.push(info('hip grip travel, full throw (feel-test; the gate is the cable travel reserve in hip-cable)', ch.hg.gripTravelIn, 'in'), info('hip force per main-grip force (geometric)', ch.hg.hipPerMain, ''));
       frontText += ` Hip lever: ${f(ch.hg.armIn, 1)}" arm, ${f(p.hipLeverThrowDeg, 0)}° throw = ${f(ch.hg.gripTravelIn, 2)}" at the grip; hip force = ${f(ch.hg.hipPerMain, 3)} × the main-grip force before cable friction.`;
     }
@@ -157,11 +157,11 @@ export function brakeForce(ctx: Ctx): AnalysisCheck {
     const F = Math.max(Fd, Ff);
     const chn = chainOf(ctx);
     const Ffwd = derived && b.g.ratioFwd > 0 ? down / muF / ((chn.frontOn ? chn.Rtot.fwd : b.g.ratioFwd) * p.brakeEfficiency) : Ff;
-    const Fhip = chn.hipOn ? hipFromMain(chn, F) : 0;
+    const Fhip = hipFromMain(chn, F);
     return {
       value: Math.max(F, Fhip), unit: 'lbf', limit: p.handleForceLimitLbf, sense: '<=', suffix: Fhip > F ? 'hip lever, mud-fouled lining' : Ff >= Fd ? 'mud-fouled lining' : 'wet lining',
       details: [
-        ...(chn.hipOn ? [detail(`hip lever grip force (main-grip force × ${f(chn.hg.hipPerMain, 3)} ÷ cable efficiency ${f(chn.etaHip, 2)})`, Fhip, 'lbf', p.handleForceLimitLbf, '<=')] : []),
+        detail(`hip lever grip force (main-grip force × ${f(chn.hg.hipPerMain, 3)} ÷ cable efficiency ${f(chn.etaHip, 2)})`, Fhip, 'lbf', p.handleForceLimitLbf, '<='),
         detail(`handle force, wet bonded lining μ ${f(muD, 2)}`, Fd, 'lbf', p.handleForceLimitLbf, '<='),
         detail(`handle force, mud / slush-fouled lining μ ${f(muF, 2)} (pass/fail)`, Ff, 'lbf', p.handleForceLimitLbf, '<='),
         detail(`info: bare wet oak μ ${BARE_OAK_MU} (why the lining is specified; not pass/fail)`, Fbare, 'lbf', p.handleForceLimitLbf, '<='),

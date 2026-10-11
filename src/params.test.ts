@@ -19,26 +19,27 @@ describe('PARAM_DEFS', () => {
 });
 
 describe('validateParams', () => {
-  it('defaults are free of errors and warnings', () => {
-    expect(validateParams(defaultParams())).toEqual([]);
+  it('defaults are free of errors and warnings (the one info message is the solid-spring radius note, D-57)', () => {
+    const issues = validateParams(defaultParams());
+    expect(issues.filter((i) => i.severity !== 'info')).toEqual([]);
+    expect(issues.filter((i) => i.severity === 'info').map((i) => i.keys[0])).toEqual(['hullLamThicknessIn']);
   });
   it('warns on crossed rider masses (the Simple view sweeps every weight) and rejects an over-wide nose', () => {
     const issues = validateParams({ ...defaultParams(), riderGoalMassLb: 150, riderMassLb: 200, autoNoseGeometry: 0, noseWidthIn: 30 });
     expect(issues.filter((i) => i.severity === 'error').map((i) => i.keys[0])).toContain('noseWidthIn');
     expect(issues.filter((i) => i.severity === 'warn').map((i) => i.keys[0])).toContain('riderGoalMassLb');
   });
-  it('flags front tires hitting the nose (width) or the S-curve hull (D-45) at full lock', () => {
-    const issues = validateParams({ ...defaultParams(), autoNoseGeometry: 0, noseWidthIn: 18, noseTaperStartIn: 12 });
-    expect(issues.filter((i) => i.message.startsWith('Front tires hit'))).toHaveLength(1);
-    expect(issues.filter((i) => i.message.startsWith('The S-curve hull comes within'))).toHaveLength(1);
+  it('flags the hull coming too close to a front tire at some steering angle when the bow is wide and the curve start is late', () => {
+    const issues = validateParams({ ...defaultParams(), autoNoseGeometry: 0, noseWidthIn: 22, hullCurveStartIn: 26 });
+    expect(issues.filter((i) => i.message.startsWith('The hull side comes within'))).toHaveLength(1);
   });
   it('warns when the cart is too wide for the wheel wells', () => {
     const issues = validateParams({ ...defaultParams(), rearTrackIn: 40 });
     expect(issues.some((i) => i.message.startsWith('Overall width'))).toBe(true);
   });
-  it('flags a deck too low for the front axle stack', () => {
-    const issues = validateParams({ ...defaultParams(), deckHeightIn: 6, frontDeckRaiseIn: 0 });
-    expect(issues.some((i) => i.message.startsWith('Front axle stack'))).toBe(true);
+  it('flags a deck too low for the rear axle beam', () => {
+    const issues = validateParams({ ...defaultParams(), deckHeightIn: 6 });
+    expect(issues.some((i) => i.severity === 'error' && i.message.startsWith('Rear axle beam + ply needs the deck'))).toBe(true);
   });
 });
 

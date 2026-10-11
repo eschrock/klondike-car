@@ -38,7 +38,7 @@ export function buildPayload(ctx: Ctx): Part[] {
 
   // Legs reach the foot stop.
   const stopRear = p.seatXIn + p.riderLegReachIn - p.footStopThickIn / 2;
-  const deckZ = p.seatXIn + p.riderLegReachIn >= L.xs ? L.noseTop : L.deckTop;
+  const deckZ = p.seatXIn + p.riderLegReachIn >= L.xn ? L.deckTop : L.deckTop;
   for (const sy of [1, -1]) {
     const y = sy * LEG_Y_FRAC * S;
     const hip: Vec3 = [H[0], y, H[2] + (THIGH.z * S) / 2];

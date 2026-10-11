@@ -25,33 +25,18 @@ export const LIGHT_CHECK_IDS: Record<Light, string[]> = {
 
 /** How a structure check reads in a sentence, and the event that stresses it (plain words, no part-names a parent has not met). */
 const PART: Record<string, { name: string; event?: string }> = {
-  'kingpin-strike': { name: 'the steering pin', event: 'in a curb strike' },
-  'roll-side-bearer': { name: 'the front steering plate', event: 'when the cart leans' },
-  'roll-kingpin-uplift': { name: 'the steering pin', event: 'when the cart leans' },
-  'roll-bolster-attach': { name: 'the front steering plate', event: 'when the cart leans' },
   'axle-stress': { name: 'an axle' },
   'beam-front': { name: 'the front axle' },
   'beam-rear': { name: 'the rear axle' },
   'bearing-groove': { name: 'an axle' },
   rails: { name: 'the side rails' },
   deck: { name: 'the floor' },
-  kingpin: { name: 'the steering pin' },
-  turntable: { name: 'the steering pivot' },
   tongue: { name: 'the pull handle' },
-  'steer-stops': { name: 'the steering stops', event: 'at full turn' },
-  'kingpin-peak': { name: 'the steering pin', event: 'in the wood around it' },
-  'pitch-path': { name: 'the front steering plate', event: 'under load' },
-  'kingpin-split': { name: 'the wood around the steering pin' },
-  'steer-stops-bound': { name: 'the steering stops', event: 'if only one of the two catches' },
-  'kingpin-plates': { name: 'the steel plates at the steering pin' },
-  'kingpin-bolts': { name: 'the bolts that hold the steering pin plates', event: 'in a curb strike' },
-  'bridle-tie': { name: 'the rope tie point' },
-  'turntable-ring': { name: 'the steering pivot bearing', event: 'in a curb strike' },
   'seat-back': { name: 'the seat back', event: 'when the rider leans back' },
   'seat-grip': { name: 'the side grab handles' },
   lift: { name: 'the lifting hand-holds', event: 'when two people lift the cart' },
-  'foot-stop': { name: 'the foot stop', event: 'in a curb strike' },
-  // Phase 3b front end (D-51 to D-56): plain names for the rows the Ackermann cart adds. No old-front-end words (turntable, bolster, kingpin plates).
+  'foot-stop': { name: 'the foot stop', event: 'in a hard bump' },
+  // Phase 3b front end (D-51 to D-56): plain names for the rows the Ackermann cart adds..
   'spindle-stub': { name: 'a front wheel stub', event: 'in a hard bump' },
   'kingpin-bolt': { name: 'a steering pivot bolt', event: 'in a hard bump' },
   'kingpin-bracket': { name: 'a bracket that holds a steering pivot', event: 'in a hard bump' },
@@ -65,15 +50,15 @@ const PART: Record<string, { name: string; event?: string }> = {
   'brake-front': { name: 'the front brake parts' },
 };
 /**
- * The checks that belong to the front end (steering stops, steering plates and pin, pivot bearing). Honesty fix (docs/phase3-honesty-notes.md): with the
- * corrected stop-stand statics, the gated pivot-bearing row and the bounding cases, these are what stop the Simple view from showing a safe weight, and the
- * owner has them in redesign (DECISIONS D-46, D-47). REMOVE `FRONT_END_NOTE` once the redesigned front end passes.
+ * The checks that belong to the new (Phase 3b) front end: the spindle, its bracket and bolt, the tie rod, bellcrank, tongue and links, the stick cable and the front brake.
+ * Their sizes are placeholders until the real purchased parts are chosen (spec 12), and at the defaults several do not yet pass at the operating rider. While any of these
+ * fails, the Simple view says the front end is still being verified (spec 12: keep a one-line note until the rows clear). REMOVE `FRONT_END_NOTE` once they pass.
  */
 export const FRONT_END_IDS = new Set([
-  'steer-stops', 'steer-stops-bound', 'kingpin-plates', 'kingpin-bolts', 'kingpin-peak', 'kingpin-split', 'kingpin-strike', 'kingpin', 'pitch-path', 'turntable-ring',
-  'turntable', 'roll-side-bearer', 'roll-kingpin-uplift', 'roll-bolster-attach', 'bridle-tie',
+  'spindle-stub', 'spindle-fatigue', 'kingpin-bolt', 'kingpin-bracket', 'wheel-retention', 'tie-rod', 'drag-link', 'bellcrank', 'steer-stop-load', 'beam-front', 'tongue',
+  'tongue-tie', 'stick-cable', 'brake-front', 'hip-cable',
 ]);
-export const FRONT_END_NOTE = 'The front end (steering stops, plates and pivot) is being redesigned.';
+export const FRONT_END_NOTE = 'The new steering front end (spindle, bracket, rod and cable sizes) is still being verified.';
 const partText = (id: string) => { const q = PART[id]; return q ? (q.event ? `${q.name} ${q.event}` : q.name) : id; };
 
 /** Why a check fails, as it would read after "Above 230 lb: " (no trailing period). */
@@ -86,12 +71,6 @@ const REASON: Record<string, string> = {
   'pitch-fwd': 'braking downhill could tip it nose-first',
   'pitch-rear': 'a hard pull uphill can lift the front wheels',
   'brake-force': 'it takes too hard a squeeze on the brake handle to hold it on a hill',
-  'kingpin-strike': 'a hard bump into a curb could bend or break the steering pin (kingpin)',
-  turntable: 'the steering pivot (turntable) could be overloaded and fail',
-  kingpin: 'the steering pin (kingpin) could be overloaded and fail',
-  'roll-kingpin-uplift': 'leaning hard could pull the steering pin out',
-  'roll-side-bearer': 'the front steering plate could come loose when the cart leans',
-  'roll-bolster-attach': 'the front steering plate could come loose when the cart leans',
   'axle-stress': 'an axle could bend',
   'beam-front': 'an axle could bend',
   'beam-rear': 'an axle could bend',
@@ -99,19 +78,10 @@ const REASON: Record<string, string> = {
   rails: 'the side rails could crack',
   deck: 'the floor could crack',
   tongue: 'the pull handle could crack',
-  'steer-stops': 'the steering stops could crush or loosen at full turn',
-  'kingpin-peak': 'the wood around the steering pin could crush',
-  'pitch-path': 'the front steering plate could dent the beam under it',
-  'kingpin-split': 'the wood around the steering pin could split',
-  'steer-stops-bound': 'if only one steering stop catches, it could crush or loosen',
-  'kingpin-plates': 'a steel plate at the steering pin could bend or tear',
-  'kingpin-bolts': 'the bolts that hold the steering pin plates to the wood could pull through or split it',
-  'bridle-tie': 'the rope tie point could pull out',
-  'turntable-ring': 'the steering pivot bearing could be overloaded when the front wheels hit a curb',
   'seat-back': 'the seat back could break or pull loose when the rider leans back',
   'seat-grip': 'a side grab handle could break when a rider hangs on',
   lift: 'a lifting hand-hold could crack when the cart is carried',
-  'foot-stop': 'the foot stop could break or pull loose in a curb strike',
+  'foot-stop': 'the foot stop could break or pull loose in a hard bump',
   'spindle-stub': 'a front wheel stub could bend or break in a hard bump',
   'kingpin-bolt': 'a steering pivot bolt could bend or shear in a hard bump',
   'kingpin-bracket': 'a bracket that holds a steering pivot could bend or tear in a hard bump',
@@ -142,7 +112,7 @@ export function failReason(id: string): string {
   return REASON[id] ?? 'a safety check fails';
 }
 
-/** What is closest to its limit, as a short noun phrase ("close to the limit (the steering pin in a curb strike)"). */
+/** What is closest to its limit, as a short noun phrase ("close to the limit (a front wheel stub in a hard bump)"). */
 export function limiterName(id: string): string {
   if (PART[id]) return partText(id);
   switch (id) {
@@ -330,8 +300,8 @@ export function headline(w: number, sweep: HeadlineSweep): Headline {
   const yellows = runsOf(points, 'marginal').sort((a, b) => a.lo - b.lo);
   const status = sweep.operating.status;
   if (!safe) {
-    // The rider's own weight fails the checks. Name the limiter; if only front-end rows fail, say the rest of the cart passes (and that the front end is being
-    // redesigned). Every branch below must read cleanly when NO weight in the swept range is safe (no empty headline, no NaN).
+    // The rider's own weight fails the checks. Name the limiter; if only front-end rows fail, say the rest of the cart passes (and that the front end is being verified).
+    // Every branch below must read cleanly when NO weight in the swept range is safe (no empty headline, no NaN).
     const worstId = sweep.operating.worst?.id ?? '';
     const fails = sweep.operating.fails ?? [];
     const frontOnly = fails.length > 0 && fails.every((id) => FRONT_END_IDS.has(id));

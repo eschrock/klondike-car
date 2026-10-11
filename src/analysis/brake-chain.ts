@@ -25,7 +25,6 @@ export interface Chain {
   hg: HipControlGeom;
   bg: BeltGeom;
   frontOn: boolean;
-  hipOn: boolean;
   /** N_total / F_hand (no efficiency) per rolling direction, and the smaller of the two (the one to size hand force by). */
   Rtot: { fwd: number; rev: number };
   Rcrit: number;
@@ -48,17 +47,17 @@ export function chainOf(ctx: Ctx): Chain {
   const frontOn = fg.on;
   const Rtot = frontOn ? fg.Rtot : { fwd: g.ratioFwd, rev: g.ratioRev };
   c = {
-    g, fg, hg, bg, frontOn, hipOn: hg.on, Rtot, Rcrit: Math.min(Rtot.fwd, Rtot.rev), bias: frontOn ? fg.bias : { fwd: 0, rev: 0 },
+    g, fg, hg, bg, frontOn, Rtot, Rcrit: Math.min(Rtot.fwd, Rtot.rev), bias: frontOn ? fg.bias : { fwd: 0, rev: 0 },
     phi: frontOn ? fg.phi : 0, eta: p.brakeEfficiency, etaHip: p.hipCableEfficiency,
   };
   cache.set(ctx, c);
   return c;
 }
 
-/** Hand force at the hip grip for a given force at the main grip (geometric ratio and cable efficiency); the main-grip value itself when there is no hip lever. */
-export const hipFromMain = (ch: Chain, fMain: number): number => (ch.hipOn ? (fMain * ch.hg.hipPerMain) / ch.etaHip : fMain);
+/** Hand force at the hip grip for a given force at the main grip (geometric ratio and cable efficiency). */
+export const hipFromMain = (ch: Chain, fMain: number): number => (fMain * ch.hg.hipPerMain) / ch.etaHip;
 /** Inverse: main-grip equivalent of a hip grip force. */
-export const mainFromHip = (ch: Chain, fHip: number): number => (ch.hipOn ? (fHip * ch.etaHip) / ch.hg.hipPerMain : fHip);
+export const mainFromHip = (ch: Chain, fHip: number): number => (fHip * ch.etaHip) / ch.hg.hipPerMain;
 
 /** Main-grip force that produces total shoe normal force N (forward or reverse rolling). */
 export const mainForceForN = (ch: Chain, N: number, dir: 'fwd' | 'rev' | 'crit' = 'crit'): number => N / ((dir === 'crit' ? ch.Rcrit : ch.Rtot[dir]) * ch.eta);
@@ -128,15 +127,15 @@ export interface HeatResult {
 }
 
 /** Surface temperature rise dT = 2 q sqrt(t) / (sqrt(pi) e) for a constant flux; the time and distance to `brakeHeatLimitK` at the ride speed. */
-export function heatRun(p: Params, ch: Chain, W: number, theta: number, speedMph = p.rideSpeedMph): HeatResult {
+export function heatRun(p: Params, ch: Chain, W: number, theta: number, speedMph = p.rideSpeedMph, shoe: 'lined' | 'oak' = 'lined'): HeatResult {
   const v = speedMph * MPH_M_S;
-  const lined = p.brakeShoeBacking === 1;
+  const lined = shoe === 'lined';
   const partition = lined ? p.brakeHeatPartitionLined : p.brakeHeatPartitionOak;
   const e = lined ? p.brakeEffusivityLined : p.brakeEffusivityOak;
-  const padW = Math.max(0.5, Math.min(shoeWidthIn(p), p.tireWidthIn - 2 * 0.6 * p.brakeBarThickIn));
+  const padW = Math.max(0.5, Math.min(lined ? shoeWidthIn(p) : p.brakeShoeWidthIn, p.tireWidthIn - 2 * 0.6 * p.brakeBarThickIn));
   const power = W * LBF_N * v * (Math.sin(theta) - p.brakeRollingCrr * Math.cos(theta));
-  const areaRear = shoeLengthIn(p) * padW;
-  const areaFront = ch.frontOn ? frontShoeLengthIn(p) * padW : 0;
+  const areaRear = (lined ? shoeLengthIn(p) : p.brakeShoeLengthIn) * padW;
+  const areaFront = ch.frontOn ? (lined ? frontShoeLengthIn(p) : p.brakeShoeLengthIn) * padW : 0;
   if (power <= 0) return { runFt: Infinity, timeS: Infinity, qWm2: 0, shoeW: 0, partition, effusivity: e, areaIn2: areaRear };
   // Flux into each axle's shoes (two per axle, equal split): the hotter of the front and the rear sets the run. Rear only: the two rear shoes.
   const bMin = ch.frontOn ? Math.min(ch.bias.fwd, ch.bias.rev) : 0, bMax = ch.frontOn ? Math.max(ch.bias.fwd, ch.bias.rev) : 0;
@@ -176,14 +175,14 @@ export function cableCompliance(ctx: Ctx, ch: Chain, fMain: number): Compliance 
   const runs = ch.frontOn ? frontRunLengths(ch.fg, g, L) : { main: 0, outer: 0 };
   const M = fMain * g.lGrip;
   const Tc = ch.frontOn ? (ch.phi * M) / Math.max(1e-6, g.dQ) : 0;
-  const Th = ch.hipOn ? M / Math.max(1e-6, ch.hg.linkAbove) : 0;
-  const hipLen = ch.hipOn ? ch.hg.insideIn + ch.hg.outsideIn + ch.hg.exposedIn : 0;
+  const Th = M / Math.max(1e-6, ch.hg.linkAbove);
+  const hipLen = ch.hg.insideIn + ch.hg.outsideIn + ch.hg.exposedIn;
   const frontStretch = ch.frontOn ? (Tc * runs.main + (Tc / 2) * runs.outer) / (E * aF) : 0;
-  const hipStretch = ch.hipOn ? (Th * hipLen) / (E * aH) : 0;
+  const hipStretch = (Th * hipLen) / (E * aH);
   return {
     Tc, Th, mainLenIn: runs.main, outerLenIn: runs.outer, hipLenIn: hipLen, frontStretchIn: frontStretch, hipStretchIn: hipStretch,
     extraGripMainIn: ch.frontOn ? ((ch.phi * frontStretch) / Math.max(1e-6, g.dQ)) * g.lGrip : 0,
-    extraGripHipIn: ch.hipOn ? (hipStretch / Math.max(1e-6, ch.hg.cableArmIn)) * ch.hg.armIn : 0,
-    hipReserveIn: ch.hipOn ? ch.hg.lugTravelIn - ch.hg.linkTravelIn - hipStretch : 0,
+    extraGripHipIn: (hipStretch / Math.max(1e-6, ch.hg.cableArmIn)) * ch.hg.armIn,
+    hipReserveIn: ch.hg.lugTravelIn - ch.hg.linkTravelIn - hipStretch,
   };
 }

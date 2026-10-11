@@ -102,12 +102,9 @@ export function bumpSeatGHard(ctx: Ctx, c: CaseData): number {
   return 1 + b.V / c.massLb;
 }
 
-/**
- * The payload / seat dynamic factor for a load case. Old front end: `dynamicFactor` (3). Ackermann front end: max(dynamicFactor, bumpSeatG)
- * (spec 5.4: rails, deck, seat-back, seat-grip).
- */
+/** The payload / seat dynamic factor for a load case: max(dynamicFactor, bumpSeatG) (spec 5.4: rails, deck, seat-back, seat-grip). */
 export function seatFactor(ctx: Ctx, c: CaseData): number {
-  return ctx.newFront ? Math.max(ctx.p.dynamicFactor, bumpSeatG(ctx, c)) : ctx.p.dynamicFactor;
+  return Math.max(ctx.p.dynamicFactor, bumpSeatG(ctx, c));
 }
 
 /** Peak vertical force on a struck wheel: the obstacle's V plus the static wheel load still on the tire (conservative; the spec rows quote V alone). */

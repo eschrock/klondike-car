@@ -2,18 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { ackCtx, ackParams, byId } from './ack-test-utils';
 import { contactsAt, lateralTip, RAD } from './geometry';
 import { tipLock, turnRadius } from './stability';
-import { steerClearanceAck, steerKinCheck, steerLockCheck, steerSweepAck } from './steering';
+import { steerClearance, steerKinCheck, steerLockCheck, steerSweep } from './steering';
 import { runChecks } from './index';
 import { LIGHT_OF_ID, lightOf, withRider } from './rider-sweep';
 import { makeContext } from './context';
 import { buildModel } from '../model';
 import type { Part, Mat4 } from '../model/types';
-import { defaultParams, phase3bDefaults } from '../params';
+import { defaultParams } from '../params';
 import { seatFactor } from './bump';
 import { payload, railsCheck, deckCheck, axleStress, bearingGroove } from './structure';
 import { seatBackCheck, seatGripCheck } from './seat';
 import { footStopCheck } from './hull';
-import { rearBeamSeatBump, wheelRatingBump } from './rear-bump';
+import { rearBeamSeat, wheelRating } from './rear';
 
 describe('contacts and stability with the Ackermann spec', () => {
   const ctx = ackCtx();
@@ -79,35 +79,39 @@ describe('steering sweep with per-body poses', () => {
     const wallY = 11.08 - 0.75;
     const wallL = boxPart('hull-wall-L', 'chassis', 'body', [38, wallY - 1, 6.5], [30, 2, 14]);
     const wallR = boxPart('hull-wall-R', 'chassis', 'body', [38, -(wallY - 1), 6.5], [30, 2, 14]);
-    const ctx = makeContext(base.p, [wheelL, wheelR, wallL, wallR], { newFront: true });
-    const sw = steerSweepAck(ctx);
+    const ctx = makeContext(base.p, [wheelL, wheelR, wallL, wallR], );
+    const sw = steerSweep(ctx);
     expect(sw.minClearanceIn).toBeGreaterThan(0.7);
     expect(sw.minClearanceIn).toBeLessThan(0.8);
     expect(['wheel-FL', 'wheel-FR']).toContain(sw.steerPart);
     expect(sw.chassisPart).toMatch(/hull-wall/);
-    const row = steerClearanceAck(ctx, sw);
+    const row = steerClearance(ctx, sw);
     expect(row.value).toBeCloseTo(sw.minClearanceIn, 9);
     expect(row.limit).toBeCloseTo(base.p.steeringClearanceIn - 0.05, 9);
     expect(row.how).toContain(sw.chassisPart);
   });
 
-  it('two steering-hardware parts are skipped, but a tire against a bracket is counted', () => {
+  it('two steering-hardware parts are skipped, and so is a tire against its own kingpin bracket (the scrub rule judges that pair); a tire against anything else is counted', () => {
     const base = ackCtx();
     const st = base.L.front.stub;
     const spindle = boxPart('spindle-L', 'steer-L', 'steering', [st.L[0], st.L[1], st.L[2]], [2, 3, 2]);
     const bracket = boxPart('kp-bracket-L', 'chassis', 'steering', [st.L[0], st.L[1], st.L[2]], [2, 3, 2]); // overlapping on purpose
-    const ctx = makeContext(base.p, [spindle, bracket], { newFront: true });
-    expect(steerSweepAck(ctx).minClearanceIn).toBeGreaterThanOrEqual(3); // nothing counted
+    const ctx = makeContext(base.p, [spindle, bracket]);
+    expect(steerSweep(ctx).minClearanceIn).toBeGreaterThanOrEqual(3); // nothing counted
     const wheel = boxPart('wheel-FL', 'wheel-FL', 'running-gear', [st.L[0], st.L[1], st.L[2]], [2, 3, 2]);
-    const ctx2 = makeContext(base.p, [wheel, bracket], { newFront: true });
-    expect(steerSweepAck(ctx2).minClearanceIn).toBeLessThan(0);
+    expect(steerSweep(makeContext(base.p, [wheel, bracket])).minClearanceIn).toBeGreaterThanOrEqual(3); // the bracket is judged by the scrub rule
+    const block = boxPart('some-block', 'chassis', 'body', [st.L[0], st.L[1], st.L[2]], [2, 3, 2]);
+    expect(steerSweep(makeContext(base.p, [wheel, block])).minClearanceIn).toBeLessThan(0);
+    // The linkage group (knuckles, shoes, rods, tongue) has its own, smaller limit.
+    const row = steerClearance(makeContext(base.p, [wheel, block]), steerSweep(makeContext(base.p, [wheel])));
+    expect(row.details!.map((d) => d.limit)).toEqual([base.p.steeringClearanceIn - 0.05, base.p.steeringLinkClearIn]);
   });
 
   it.runIf(buildModel(ackParams(), { rider: 'goal', cargo: true, steerDeg: 0 }).some((x) => x.id === 'spindle-L'))(
     'steering sweep: clearance on the real model at the defaults is >= 0.7 inch and names the pair',
     () => {
       const ctx = ackCtx();
-      const sw = steerSweepAck(ctx);
+      const sw = steerSweep(ctx);
       expect(sw.minClearanceIn).toBeGreaterThanOrEqual(0.7);
       expect(sw.steerPart).not.toBe('–');
     },
@@ -116,16 +120,11 @@ describe('steering sweep with per-body poses', () => {
 
 describe('row basis (spec 5.4): each re-based row pins its new formula', () => {
   const ctx = ackCtx();
-  const old = (() => {
-    const p = defaultParams();
-    return makeContext(p, buildModel(p, { rider: 'goal', cargo: true, steerDeg: 0 }));
-  })();
 
-  it('payload uses max(dynamicFactor, 1 + V_rear/W) on the Ackermann basis and dynamicFactor on the old one', () => {
+  it('payload uses max(dynamicFactor, 1 + V_rear/W)', () => {
     const c = ctx.loads.goal;
     expect(payload(ctx, c)).toBeCloseTo((c.riderLb + c.cargoLb) * seatFactor(ctx, c), 9);
     expect(seatFactor(ctx, c)).toBeGreaterThan(ctx.p.dynamicFactor);
-    expect(payload(old, old.loads.goal)).toBeCloseTo((old.loads.goal.riderLb + old.loads.goal.cargoLb) * 3, 9);
   });
 
   it('rails: hard-hit bending details exist and scale by the factor ratio; the span runs to the front beam', () => {
@@ -151,25 +150,22 @@ describe('row basis (spec 5.4): each re-based row pins its new formula', () => {
     expect(ax.details!.some((d) => d.name.startsWith('HARD 2" rear hit'))).toBe(true);
     expect(ax.details![0].limit).toBeCloseTo(ctx.p.axleYieldPsi / ctx.p.steelSafetyFactor, 6);
     expect(bearingGroove(ctx).details!.length).toBe(2);
-    expect(wheelRatingBump(ctx).details![1].name).toMatch(/NORMAL 1" bump/);
-    expect(rearBeamSeatBump(ctx).details!.some((d) => d.name.startsWith('HARD 2" rear hit'))).toBe(true);
+    expect(wheelRating(ctx).details![1].name).toMatch(/NORMAL 1" bump/);
+    expect(rearBeamSeat(ctx).details!.some((d) => d.name.startsWith('HARD 2" rear hit'))).toBe(true);
     void c;
-    // The old basis is unchanged: static x dynamicFactor.
-    expect(axleStress(old).how).toContain('× 3 =');
   });
 });
 
 describe('runChecks on the Ackermann basis', () => {
   it('every id has a light mapping, no old front-end row appears, and the sweep over 50-250 lb stays finite', () => {
-    const p = phase3bDefaults();
+    const p = defaultParams();
     for (const w of [50, 100, 150, 200, 250]) {
-      const cs = runChecks(withRider(p, w), { includeTruck: false, newFront: true });
+      const cs = runChecks(withRider(p, w), { includeTruck: false });
       for (const c of cs) {
         expect(lightOf(c), c.id).toBeTruthy();
         const nums = [c.value, c.limit, ...(c.details ?? []).flatMap((d) => [d.value, d.limit])];
-        // The foot-stop deck-screw count is a model artifact until the hull parts settle; allow only that sentinel.
         const bad = nums.filter((n) => !Number.isFinite(n) || Math.abs(n) >= 1e8);
-        if (c.id !== 'foot-stop') expect(bad, `${c.id} at ${w} lb`).toEqual([]);
+        expect(bad, `${c.id} at ${w} lb`).toEqual([]);
       }
       const ids = cs.map((c) => c.id);
       for (const gone of ['kingpin-strike', 'steer-stops', 'turntable-ring', 'kingpin-plates', 'roll-side-bearer', 'pitch-path', 'turntable']) expect(ids).not.toContain(gone);
@@ -179,8 +175,8 @@ describe('runChecks on the Ackermann basis', () => {
   });
 
   it('a heavier rider loads the bump rows more (monotone utilization on spindle-stub)', () => {
-    const p = phase3bDefaults();
-    const u = (w: number) => byId(runChecks(withRider(p, w), { includeTruck: false, newFront: true }), 'spindle-stub').util!;
+    const p = defaultParams();
+    const u = (w: number) => byId(runChecks(withRider(p, w), { includeTruck: false }), 'spindle-stub').util!;
     expect(u(200)).toBeGreaterThan(u(100));
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PARAM_DEFS, phase3bDefaults, type ParamKey, type Params } from '../params';
+import { PARAM_DEFS, defaultParams, type ParamKey, type Params } from '../params';
 import { solveSteer } from '../model/ackermann';
 import { ackSpec } from '../params';
 import { runChecks } from './index';
@@ -21,7 +21,7 @@ describe('Ackermann rows: finite for every variant the linkage can assemble', ()
     let ran = 0;
     const bad: string[] = [];
     for (let i = 0; i < 60; i++) {
-      const p: Params = { ...phase3bDefaults() };
+      const p: Params = { ...defaultParams() };
       for (const k of KEYS) {
         if (rnd() > 0.35) continue;
         const d = PARAM_DEFS[k];
@@ -31,7 +31,7 @@ describe('Ackermann rows: finite for every variant the linkage can assemble', ()
       if (p.riderGoalMassLb < p.riderMassLb) p.riderGoalMassLb = p.riderMassLb;
       if (!solveSteer(ackSpec(p), p.steerLockDeg).ok) continue;
       let cs;
-      try { cs = runChecks(p, { includeTruck: false, newFront: true }); } catch { continue; }
+      try { cs = runChecks(p, { includeTruck: false }); } catch { continue; }
       ran++;
       for (const c of cs) {
         if (c.id === 'foot-stop') continue;

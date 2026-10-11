@@ -187,7 +187,7 @@ export function buildHardware(ctx: Ctx): Part[] {
   if (L.beamR.top > zBot) blockers.push([L.beamR.x - L.beamR.thick / 2, L.beamR.x + L.beamR.thick / 2]);
   blockers.sort((a, b) => a[0] - b[0]);
   let lo = L.xRear + L.transom, bestLo = lo, bestHi = lo;
-  for (const [b0, b1] of [...blockers, [L.xs, L.xs] as [number, number]]) {
+  for (const [b0, b1] of [...blockers, [L.xn, L.xn] as [number, number]]) {
     if (b0 - lo > bestHi - bestLo) { bestLo = lo; bestHi = b0; }
     lo = Math.max(lo, b1);
   }

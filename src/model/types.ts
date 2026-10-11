@@ -103,7 +103,9 @@ export type JointType =
   | 'screw'
   | 'threaded-insert'
   | 'pin'
-  | 'knob';
+  | 'knob'
+  /** A drilled hole a cable, housing or wire passes through (the host part needs the hole; nothing is fastened). */
+  | 'hole';
 
 export interface Joint {
   type: JointType;

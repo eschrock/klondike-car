@@ -33,6 +33,10 @@ const CABLE_LB_PER_IN_PER_SQIN = 0.14;
 const HOUSING_LB_PER_IN = 0.004;
 /** Horn plate thickness and the pivot spacer between the horn and the arm clevis (the horn must stay inboard of the tire). */
 export const HORN_T_IN = 0.25;
+/** The equalizer's x from the aft end of the center linkage corridor (in). */
+export const EQ_BEHIND_CORRIDOR_IN = 2;
+/** Air the horn keeps from the bracket's bounding square at every steer angle: the front-brake sweep's 0.25" hull clearance plus a little (brake-front row). */
+export const HORN_BRACKET_AIR_IN = 0.1;
 const ARM_GAP_IN = 0.05;
 /** Horn plate depth (vertical) and the yoke: the crossbar ahead of the tire front ties the outboard plate to the horn so the pivot pin is supported at both ends. */
 export const HORN_H_IN = 1.5;
@@ -56,7 +60,7 @@ const rot2 = (p: V2, c: V2, th: number): V2 => {
 export interface DirPair { fwd: number; rev: number }
 
 export interface FrontBrakeGeom {
-  /** True when the front tread brakes exist (`frontBrakeType` 0). */
+  /** True when the front tread brakes can be built (the rear linkage closes, so the lever and bias bar are defined). */
   on: boolean;
   why: string;
   r: number;
@@ -144,7 +148,7 @@ export function noseOuterHalf(p: Params, L: Layout): number {
 export function frontBrakeGeometry(p: Params, L: Layout, g: BrakeGeom = brakeGeometry(p, L)): FrontBrakeGeom {
   const r = L.r;
   const fl = L.front;
-  const on = p.frontBrakeType === 0 && g.ok;
+  const on = g.ok;
   const yWheel = Math.abs(fl.stub.L[1]);
   const O: V2 = [L.WB, r];
   const beta = frontShoeAngleDeg(p) * RAD;
@@ -214,12 +218,22 @@ export function frontBrakeGeometry(p: Params, L: Layout, g: BrakeGeom = brakeGeo
   const horn: [number, number] = [hornOut - HORN_T_IN, hornOut];
   const pivotPin: [number, number] = [horn[0], armOut[1]];
 
-  const hornRoot: Vec3 = [fl.kp.L[0] + 1.3, (horn[0] + horn[1]) / 2, r + p.spindleBossAboveStubIn];
-  const exit: Vec3 = [fl.kp.L[0] - 2.5, noseOuterHalf(p, L) + 0.5, fl.beam.top + 0.8];
-  const equalizer: Vec3 = [L.xn + 5.5, 0, fl.beam.top + 0.8];
+  // The horn root stands off the kingpin axis by more than the corner of the bracket C-channel's bounding square (leaf radius x sqrt 2) plus half the horn thickness, so the
+  // horn clears the bracket box (the leaves are round discs inside it) at every steer angle with air to spare (D-53/D-56 integration).
+  // The horn is a slanted bar HORN_H_IN tall: its square root end pokes back (H/2) sin(slope) behind the root point, so the standoff grows with the slope (a short horn is steep).
+  const hornBase = p.kingpinBracketLeafRadiusIn * Math.SQRT2 + HORN_T_IN / 2 + HORN_BRACKET_AIR_IN;
+  const hornRootZ = r + p.spindleBossAboveStubIn;
+  const hornEnd: V2 = [S[0] + YOKE_X_IN + 0.25, S[1]];
+  let hornRootAhead = hornBase;
+  for (let k = 0; k < 6; k++) hornRootAhead = hornBase + (HORN_H_IN / 2) * Math.abs(Math.sin(Math.atan2(hornEnd[1] - hornRootZ, hornEnd[0] - (fl.kp.L[0] + hornRootAhead))));
+  const hornRoot: Vec3 = [fl.kp.L[0] + hornRootAhead, (horn[0] + horn[1]) / 2, hornRootZ];
+  const exit: Vec3 = [fl.kp.L[0] - 2.5, noseOuterHalf(p, L) + 0.5, L.deckBot - p.railDepthIn / 2]; // out through the nose rail at its mid height (a rail hole, joinery.ts)
+  // The equalizer rocker sits under the deck above the aft end of the linkage corridor (nothing in the corridor stands near the deck ahead of x0 + 5: the mode pin and tongue link
+  // begin at x0 + 5.5), clear of the steering links and the mode pin at every steer angle.
+  const equalizer: Vec3 = [fl.keepOut.center.x0 + EQ_BEHIND_CORRIDOR_IN, 0, fl.beam.top + 0.8];
 
   return {
-    on, why: on ? '' : p.frontBrakeType === 2 ? 'frontBrakeType 2: no front brake' : p.frontBrakeType === 1 ? 'frontBrakeType 1 (kart disc) is not modeled' : 'the rear linkage does not close',
+    on, why: on ? '' : 'the rear linkage does not close',
     r, O, yWheel, beta, n, tFwd, tan, pinR, E, C, Erel, S, arm, armLen: norm2(arm), Kn, Kt, kFwd, kRev, rho, offsetIn: gamma, stroke, thetaF,
     tailIn, tail, tailRel: rot2(tail, S, -thetaF), pull, linkStrokeIn, barIn, aF, phi, Rr, Rf, Rtot, bias,
     y: { pad, armIn, armOut, horn, pivotPin }, shoeLen, shoeW, hornRoot, exit, equalizer,
@@ -228,7 +242,7 @@ export function frontBrakeGeometry(p: Params, L: Layout, g: BrakeGeom = brakeGeo
 
 /**
  * Front share of the total shoe normal force (= of the ground brake force, equal pad friction), averaged over the two rolling directions; null when there is
- * no front tread brake (`frontBrakeType` not 0). The sim splits its brake torque with this (`SpecOptions.frontBrakeShare`).
+ * no front tread brake (the rear linkage does not close). The sim splits its brake torque with this (`SpecOptions.frontBrakeShare`).
  */
 export function frontBrakeShare(p: Params, L: Layout): number | null {
   const fg = frontBrakeGeometry(p, L);
@@ -264,7 +278,7 @@ export function frontRunLengths(fg: FrontBrakeGeom, g: BrakeGeom, L: Layout): { 
   return { main, outer };
 }
 
-/** Build the front brake parts (empty when `frontBrakeType` is not 0). */
+/** Build the front brake parts (empty when the rear linkage does not close). */
 export function buildFrontBrake(ctx: Ctx): Part[] {
   const { p, L } = ctx;
   const g = brakeGeometry(p, L);
@@ -350,22 +364,21 @@ export function buildFrontBrake(ctx: Ctx): Part[] {
       const delta = fg.shoeLen / (2 * fg.r);
       const N = 8;
       const outline: Vec2[] = [];
-      const rOut = fg.r + (p.brakeShoeBacking === 1 ? lt + bt : p.brakeShoeThickIn), rIn = fg.r;
+      const rOut = fg.r + lt + bt, rIn = fg.r;
       for (let i = 0; i <= N; i++) { const a = -fg.beta - delta + (2 * delta * i) / N; outline.push([rOut * Math.cos(a), rOut * Math.sin(a)]); }
       for (let i = N; i >= 0; i--) { const a = -fg.beta - delta + (2 * delta * i) / N; outline.push([rIn * Math.cos(a), rIn * Math.sin(a)]); }
       const shift = sub2(fg.Erel, fg.E);
       const [s0, s1] = yRange(sgn, fg.y.pad[0], fg.y.pad[1]);
       const depth = fg.y.pad[1] - fg.y.pad[0];
-      const lined = p.brakeShoeBacking === 1;
       const area = fg.shoeLen * depth;
-      const cgR = fg.r + (lined ? (lt + bt) / 2 : p.brakeShoeThickIn / 2);
+      const cgR = fg.r + (lt + bt) / 2;
       const cg: V2 = [fg.O[0] + cgR * Math.cos(-fg.beta) + shift[0], fg.O[1] + cgR * Math.sin(-fg.beta) + shift[1]];
       const sh = planarExtrusion(ctx, {
-        id: `brake-shoe-F${tag}`, partNo: 'brake-shoe', name: `Front brake shoe ${tag}${lined ? ' (lined, steel-backed)' : ''}`, mat: lined ? 'fixed' : 'oak',
-        kind: lined ? 'purchased' : undefined, outline, origin: add2(fg.O, shift), yHi: Math.max(s0, s1), depth,
-        massLb: lined ? area * (bt * STEEL_LB_PER_IN3 + lt * LINING_LB_PER_IN3) + 0.08 : undefined, fab: lined ? 'buy' : 'bandsaw', grain: lined ? undefined : 'z',
-        material: lined ? `${f2(bt)}" steel back + ${f2(lt)}" woven / molded lining, riveted` : undefined, explode: [0.3, sgn, 0.3], cg: [cg[0], (s0 + s1) / 2, cg[1]],
-        sourcing: lined ? { vendor: `Same purchased lined steel-backed shoe as the rear (${f2(fg.shoeLen)}" × ${f2(depth)}"), radius-matched to the tire, pivot tab drilled for the shoe pin. Part number to confirm.` } : undefined,
+        id: `brake-shoe-F${tag}`, partNo: 'brake-shoe', name: `Front brake shoe ${tag} (lined, steel-backed)`, mat: 'fixed',
+        kind: 'purchased', outline, origin: add2(fg.O, shift), yHi: Math.max(s0, s1), depth,
+        massLb: area * (bt * STEEL_LB_PER_IN3 + lt * LINING_LB_PER_IN3) + 0.08, fab: 'buy',
+        material: `${f2(bt)}" steel back + ${f2(lt)}" woven / molded lining, riveted`, explode: [0.3, sgn, 0.3], cg: [cg[0], (s0 + s1) / 2, cg[1]],
+        sourcing: { vendor: `Same purchased lined steel-backed shoe as the rear (${f2(fg.shoeLen)}" × ${f2(depth)}"), radius-matched to the tire, pivot tab drilled for the shoe pin. Part number to confirm.` },
         joints: [{ type: 'pin', to: `brake-shoe-pin-F${tag}`, count: 1, size: `${p.brakeShoePinDiameterIn}" pivot bore in the tab`, note: 'shoe swivels on the pin' }],
         notes: `Front shoe, ${f2(frontShoeAngleDeg(p))}° below the axle line on the FRONT of the tread (mirror of the rear placement). Rides on the knuckle, so it keeps its gap to the tire over the whole steering sweep.`,
       });

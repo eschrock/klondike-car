@@ -1,9 +1,10 @@
-/** Running gear: wheels, axles (through rod or stubs), axle beams and U-bolt clamps (D-10, D-11, D-15). */
-import { AXLE_BEAM_POSITION, AXLE_STYLE, kingpinPlatesOn } from '../params';
-import { kingpinPlatePlan } from './kingpin-plates';
+/**
+ * Running gear: the four wheels and the REAR axle (through rod or stubs), axle beam and rod clamps (D-10, D-11, D-15). The front axle is the Ackermann front end in
+ * front-end.ts (spindles on a steel beam, D-53); the front wheels ride on the knuckle poses.
+ */
+import { AXLE_BEAM_POSITION, AXLE_STYLE } from '../params';
 import { IN3_PER_FT3, STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
 import { multiply, translation } from './mat4';
-import { customPart, filletPath, pathLength, tubeAlong } from './mesh-utils';
 import { beamSeat, boltLength, inchesText, localPoint, railSection } from './rear-mount';
 import type { Mat4, Part, RigidBody, Vec2, Vec3 } from './types';
 
@@ -19,11 +20,9 @@ const unitVec = (v: Vec3): Vec3 => { const n = Math.hypot(...v) || 1; return [v[
 
 export function buildRunningGear(ctx: Ctx): Part[] {
   const { p, d, L } = ctx;
-  const ack = ctx.view.frontEnd === 'ackermann'; // Phase 3b: the front axle beam, rod and clamps are replaced by front-end.ts; the front wheels turn with their own knuckles
   const parts: Part[] = [];
   const r = L.r;
   const rodR = p.axleDiameterIn / 2;
-  const kpPlan = kingpinPlatePlan(p);
 
   // Wheels
   const wheel = (id: 'wheel-FL' | 'wheel-FR' | 'wheel-RL' | 'wheel-RR', name: string, transform: number[]): Part => ({
@@ -39,7 +38,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
       width: p.tireWidthIn,
       hubDiameter: Math.min(p.wheelDiameterIn * HUB_DIA_FRAC, HUB_DIA_MAX_IN),
       hubLength: p.hubLengthIn,
-      bore: ack && id.startsWith('wheel-F') ? (p.spindleStub === 0 ? 17 : 25) / 25.4 : p.axleDiameterIn,
+      bore: id.startsWith('wheel-F') ? (p.spindleStub === 0 ? 17 : 25) / 25.4 : p.axleDiameterIn,
     },
     transform,
     body: id as RigidBody,
@@ -57,21 +56,17 @@ export function buildRunningGear(ctx: Ctx): Part[] {
   parts.push(
     wheel('wheel-RL', 'Rear left wheel', translation(0, ry, r)),
     wheel('wheel-RR', 'Rear right wheel', translation(0, -ry, r)),
-    wheel('wheel-FL', 'Front left wheel', multiply(ack ? ctx.pose['steer-L'] : ctx.pivot, translation(L.WB, fy, r))),
-    wheel('wheel-FR', 'Front right wheel', multiply(ack ? ctx.pose['steer-R'] : ctx.pivot, translation(L.WB, -fy, r))),
+    wheel('wheel-FL', 'Front left wheel', multiply(ctx.pose['steer-L'], translation(L.WB, fy, r))),
+    wheel('wheel-FR', 'Front right wheel', multiply(ctx.pose['steer-R'], translation(L.WB, -fy, r))),
   );
 
-  // Axles + beams + clamps, rear then front
-  const axles: Array<{ tag: 'R' | 'F'; x: number; track: number; steer: boolean; beam: typeof L.beamR }> = [
-    { tag: 'R', x: 0, track: p.rearTrackIn, steer: false, beam: L.beamR },
-    { tag: 'F', x: L.WB, track: p.frontTrackIn, steer: true, beam: L.beamF },
-  ];
-  for (const ax of axles) {
-    if (ack && ax.tag === 'F') continue; // Phase 3b: beam-F is the steel tube in front-end.ts
-    const name = ax.tag === 'R' ? 'rear' : 'front';
+  // Rear axle, beam and clamps.
+  {
+    const ax = { tag: 'R' as const, x: 0, track: p.rearTrackIn, beam: L.beamR };
+    const name = 'rear';
     if (p.axleStyle === AXLE_STYLE.throughRod) {
       parts.push(cylinder(ctx, {
-        id: `axle-${ax.tag}`, name: `${name} axle (through rod)`, group: 'running-gear', steer: ax.steer,
+        id: `axle-${ax.tag}`, name: `${name} axle (through rod)`, group: 'running-gear',
         center: [ax.x, 0, r], axis: 'y', radius: rodR, length: ax.track + p.hubLengthIn + 2 * p.axleEndExtraIn,
         mat: 'steel', fab: 'drill-tap', step: STEP.gear, notes: 'Dead axle, clamped to the beam (D-10). Sits in a groove in the beam.',
       }));
@@ -81,7 +76,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
       for (const { s, tag } of SIDES) {
         parts.push(cylinder(ctx, {
           id: `axle-${ax.tag}${tag}`, partNo: `stub-axle`, name: `${name} ${tag === 'L' ? 'left' : 'right'} stub axle`,
-          group: 'running-gear', steer: ax.steer, center: [ax.x, s * (outer - stubLen / 2), r], axis: 'y',
+          group: 'running-gear', center: [ax.x, s * (outer - stubLen / 2), r], axis: 'y',
           radius: rodR, length: stubLen, mat: 'steel', fab: 'drill-tap', step: STEP.gear,
           notes: `Embedded ${STUB_EMBED_IN}" into the beam (D-10).`,
         }));
@@ -90,7 +85,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
     // Beam
     const b = ax.beam;
     // Rear beam (build review r2 MUST-4, D-48): the rails are notched to bear on its top (see frame.ts) and a 316 angle inside each rail holds it down.
-    const seatInfo = ax.tag === 'R' ? beamSeat(p, L) : null;
+    const seatInfo = beamSeat(p, L);
     const beamRailJoints: Part['joints'] = [];
     if (seatInfo) {
       const rs = railSection(p, L);
@@ -111,60 +106,18 @@ export function buildRunningGear(ctx: Ctx): Part[] {
       }
     }
     parts.push(box(ctx, {
-      id: `beam-${ax.tag}`, name: `${name} axle beam`, group: 'running-gear', steer: ax.steer, mat: 'oak',
+      id: `beam-${ax.tag}`, name: `${name} axle beam`, group: 'running-gear', mat: 'oak',
       size: [b.thick, b.len, b.depth], center: [b.x, 0, (b.top + b.bot) / 2], grain: 'y', fab: 'table-saw',
-      step: STEP.gear, notes: (p.axleBeamPosition === AXLE_BEAM_POSITION.underslung ? 'Underslung (D-15).' : 'Overslung (D-15).') + (ax.tag === 'F' ? ' Centerd on the rod + kingpin pair (D-25).' : ''),
-      ...(ax.tag === 'R' && seatInfo ? { joints: beamRailJoints } : {}),
-      ...(ax.tag === 'F' && kingpinPlatesOn(p) ? {
-        joints: [{
-          type: 'bolt' as const, to: 'kp-carrier', count: kpPlan.crossBeamY.length, diaIn: p.kingpinCrossBoltDiameterIn,
-          size: `${p.kingpinCrossBoltDiameterIn}" 316 stainless fore-aft cross-bolts through the beam at mid depth, ${p.kingpinCrossBoltWasherIn}" OD fender washers each end`,
-          at: kpPlan.crossBeamY.map((y): Vec3 => [0, y, 0]), note: 'Stitch the front slab ahead of the plate bolts against cleavage (NDS 3.4.3.3, kingpin-split row, D-35).',
-        }],
-      } : {}),
+      step: STEP.gear, notes: (p.axleBeamPosition === AXLE_BEAM_POSITION.underslung ? 'Underslung (D-15).' : 'Overslung (D-15).'),
+      ...(seatInfo ? { joints: beamRailJoints } : {}),
     }));
-    // Clamps. REAR (Phase 2, unchanged): 2 plates per wheel side (one per U-bolt leg), straddling the rod: legs at rod x ± (rod radius + leg gap).
-    // FRONT (M8, D-34): a square U-bolt whose bridge crosses over the axle rod on top of the underslung beam, legs running down
-    // around the beam faces to a steel plate under the beam, nuts below the plate. `clamp-F?1` = U-bolt, `clamp-F?2` = plate.
+    // Clamps: 2 plates per wheel side (one per bolt), straddling the rod: at rod x ± (rod radius + leg gap).
     const under = p.axleBeamPosition === AXLE_BEAM_POSITION.underslung;
     const plate = { x: p.clampPlateLengthIn, y: p.clampPlateWidthIn, z: p.clampPlateThickIn };
     const legOffset = rodR + p.clampLegGapIn;
     const yEdge = Math.min(b.len / 2 - 0.25, ax.track / 2 - p.tireWidthIn / 2);
     const yc = yEdge - plate.y / 2;
-    if (ax.tag === 'F' && under) {
-      const rr = p.uboltRodDiameterIn / 2;
-      const inner = b.thick + 2 * p.uboltBeamClearIn;
-      const legX = inner / 2 + rr;
-      const zBridge = b.top + rr;
-      const zEnd = b.bot - plate.z - p.uboltNutAllowanceIn; // under the plate: nut + thread
-      const bend = Math.max(2.5 * rr, 0.35);
-      for (const { s, tag } of SIDES) {
-        const path = filletPath([[-legX, 0, zEnd], [-legX, 0, zBridge], [legX, 0, zBridge], [legX, 0, zEnd]], bend, 6);
-        const mesh = tubeAlong(path, rr, 10);
-        const vol = Math.PI * rr * rr * pathLength(path);
-        const plateLen = 2 * legX + 1;
-        parts.push(customPart(ctx, {
-          id: `clamp-F${tag}1`, partNo: 'ubolt-F', name: `front ${tag === 'L' ? 'left' : 'right'} U-bolt`, group: 'running-gear', kind: 'purchased', material: 'zinc-plated steel square U-bolt + nuts and washers',
-          geometry: { type: 'mesh', positions: mesh.positions, indices: mesh.indices },
-          transform: translation(b.x, s * yc, 0), steer: true, massLb: (vol / IN3_PER_FT3) * p.steelDensityPcf + 0.11, fab: 'buy', step: STEP.gear, explode: unitVec([0, s * 0.6, 1]),
-          sourcing: { vendor: `McMaster-Carr or equivalent: square U-bolt ${p.uboltRodDiameterIn}" rod, ${inner.toFixed(2)}" inside width (stock widths vary: use the next size up and shim, or bend from rod), ${(zBridge - zEnd).toFixed(1)}" legs, 4 nuts + 4 washers` },
-          joints: [
-            { type: 'bolt', to: 'beam-F', count: 1, diaIn: p.uboltRodDiameterIn, size: `${p.uboltRodDiameterIn}" square U-bolt: bridge over the axle rod on the beam top, legs down the beam faces`, note: 'Legs run down AROUND the underslung beam (nothing drilled through it); the bridge holds the rod in its groove.' },
-            { type: 'bolt', to: `clamp-F${tag}2`, count: 2, diaIn: p.uboltRodDiameterIn, size: `${p.uboltRodDiameterIn}" nut + washer on each leg below the plate` },
-          ],
-          notes: `Legs ${(2 * legX).toFixed(2)}" apart (c-c), ${p.uboltBeamClearIn}" clear of each beam face; bridge crosses the ${p.axleDiameterIn}" axle rod on top of the beam; mass is an estimate (rod volume + nuts and washers).`,
-        }));
-        parts.push(box(ctx, {
-          id: `clamp-F${tag}2`, partNo: 'ubolt-plate-F', name: `front ${tag === 'L' ? 'left' : 'right'} U-bolt plate`, group: 'running-gear', steer: true, mat: 'steel', kind: 'metal', material: 'A36 steel plate', fab: 'drill-tap', step: STEP.gear,
-          ...span([b.x - plateLen / 2, b.x + plateLen / 2], [s * yc - plate.y / 2, s * yc + plate.y / 2], [b.bot - plate.z, b.bot]),
-          joints: [
-            { type: 'bolt', to: `clamp-F${tag}1`, count: 2, diaIn: p.uboltRodDiameterIn, size: `2 × ${p.uboltRodDiameterIn}" holes for the U-bolt legs` },
-            { type: 'bolt', to: 'beam-F', count: 1, diaIn: p.uboltRodDiameterIn, size: 'bears flat on the beam underside', note: 'Carries the U-bolt clamp load into the beam bottom (oak ⊥).' },
-          ],
-          notes: `Steel plate under the beam (M8): ${plateLen.toFixed(2)}" × ${plate.y}" × ${plate.z}", legs pass through it, nuts below.`,
-        }));
-      }
-    } else {
+    {
       // REAR clamp plates (build review r2 MUST-4 / S13, eng N-10): 316 stainless flat bar cut to size (0.8" × 1.5" × 3/8"), one 3/8" 316 bolt through each plate and the
       // beam beside the rod; the two plates per wheel side pin the rod in its groove. Real parts with a source and a stock size instead of the old "mass is an estimate" boxes.
       const zc = under ? b.top + plate.z / 2 : b.bot - plate.z / 2;
@@ -176,7 +129,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
           const grip = plate.z + b.depth;
           const part = box(ctx, {
             id: `clamp-${ax.tag}${tag}${i}`, partNo: 'axle-clamp', name: `${name} ${tag === 'L' ? 'left' : 'right'} rod clamp plate ${i}`,
-            group: 'running-gear', steer: ax.steer, mat: 'steel', kind: 'metal', material: '316 stainless flat bar',
+            group: 'running-gear', mat: 'steel', kind: 'metal', material: '316 stainless flat bar',
             ...sp, fab: 'drill-tap', step: STEP.gear,
             sourcing: { vendor: `McMaster-Carr (316 stainless flat bar ${plate.z}" × ${plate.y}": cut ${plate.x}" pieces on the bandsaw, drill ${f2(bd + 0.03)}"; 316 hex bolt ${f2(bd)}" × ${inchesText(boltLength(grip, bd))}, nylock nut, fender washer). 316, not zinc (wet tannin oak, S7)` },
             joints: [{

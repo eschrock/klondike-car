@@ -14,31 +14,18 @@ export interface Ctx {
   byId: Map<string, Part>;
   loads: LoadModel;
   contact: ContactInputs;
-  /**
-   * Phase 3b Ackermann front end (D-51). True when the model carries the new front-end parts (`spindle-L`), or when forced by the caller (tests that exercise
-   * the new rows on the old model). It selects the new front-end rows, the bump load basis (D-50) and the Ackermann contacts; false keeps the old rows
-   * working until the Stage 2 flip.
-   */
-  newFront: boolean;
 }
 
-export interface ContextOptions {
-  /** Force the Phase 3b basis on or off; default: detect the new front-end parts. */
-  newFront?: boolean;
-}
-
-export function makeContext(p: Params, parts: Part[], opts: ContextOptions = {}): Ctx {
+export function makeContext(p: Params, parts: Part[]): Ctx {
   const L = computeLayout(p);
-  const newFront = opts.newFront ?? parts.some((x) => x.id === 'spindle-L');
-  const ack = newFront ? L.front.ack : undefined;
+  const ack = L.front.ack;
   return {
-    newFront,
     p,
     d: derived(p),
     L,
     parts,
     byId: new Map(parts.map((x) => [x.id, x])),
-    loads: buildLoadModel(p, parts, L.kx, ack),
-    contact: { wheelbaseIn: p.wheelbaseIn, rearTrackIn: p.rearTrackIn, frontTrackIn: p.frontTrackIn, kingpinLeadIn: p.kingpinLeadIn, ...(ack ? { ack } : {}) },
+    loads: buildLoadModel(p, parts, ack),
+    contact: { wheelbaseIn: p.wheelbaseIn, rearTrackIn: p.rearTrackIn, frontTrackIn: p.frontTrackIn, ack },
   };
 }
