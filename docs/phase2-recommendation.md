@@ -20,12 +20,12 @@
 |---|---|---|---|---|
 | Wheelbase | 48" | **44"** | −3.4 lb | The turning radius to the outer tyre edge was 97.25" against 96" (a fail). It is 93.4" at 44". |
 | Steering lock | 38.5° | **37°** | +0.5 lb | The kingpin sleeve (next row) moves the kingpin 1.5" ahead of the axle, which narrows the nose the tyres allow. At 37° the nose is 14.0", enough for feet in boots (12.1" needed inside). |
-| Kingpin | ½" grade 8, stopping at the turntable top | **¾" grade 8, through the beam *and* a chassis crossbar, in 1¼"-OD steel sleeves**; lead 1.5", front beam 4.0" | +2.3 lb | A front-wheel curb strike pushes the axle back through the kingpin. The old cantilevered ½" pin was 2.4× over. Real wagons pin the axle to the chassis; the crossbar cuts the bending lever from 2.9" to 1.1", and the sleeves spread the load into the oak. |
+| Kingpin | ½" grade 8 | **¾" grade 8, through the beam *and* a chassis crossbar, in 1¼"-OD steel sleeves**; lead 1.5", front beam 4.0" | +2.3 lb | A front-wheel curb strike pushes the axle back through the kingpin. **Baselines at the 200 lb rider:** the Phase 1 checkpoint pin stopped at the turntable top, as a single-shear cantilever, and its bending was **~2.6× over** (166 vs 65 ksi). With the crossbar added in Phase 2 but still a ½" pin with no sleeve (the current params defaults), oak bore bearing is **2.0× over** (722 vs 358 psi). Real wagons pin the axle to the chassis. The crossbar cuts the bending lever from 2.9" to 1.1", and the sleeves spread the load into the oak. |
 | Axle rod | ¾" 1018 (50 ksi) | **¾" 1045 turned-ground-polished shafting (≈ 70 ksi)** | 0 | The rear axle with the 200 lb rider, plus tyre side friction, was **0.7% over** on 1018. 1045 TGP is stock in ¾" and fits standard ¾"-bore hand-truck wheel bearings. **Alternative:** move the clamp plate ¼" toward the hub and keep 1018 (7% margin). |
 | Deck | 9 mm okoume on 12" joists | **12 mm okoume on 8" joists** | +5.1 lb | A 200 lb scout standing mid-panel deflected 0.069" in 9 mm against L/300 = 0.032". 12 mm on 8" deflects 0.01". Bending was never the problem. **Lighter alternative:** 9 mm on 6" joists (−1.7 lb, more joists to cut). |
 | Pull attachment | 24" oak tongue | **Rope bridle tied to the axle ends** | −1.5 lb | See the rope rig section below. |
 | Bridle rope | (72" run assumed) | **8 ft tails, tied low at the axle ends** | — | The rear-pitch result depends on the rope angle (below). |
-| Brake lever ratio | 10:1 | **12:1** | 0 | No mass or geometry cost. Handle force to hold the 200 lb case on 15° drops from 28.1 to 23.7 lbf. |
+| Brake lever ratio | 10:1 | **12:1** | 0 | No mass or geometry cost. Handle force to hold the 200 lb case on 15° drops from 28.5 lbf (10:1) to 23.7 lbf. |
 
 **Unchanged:** track 35.5", 13" pneumatic wheels, 9" deck, seat 12" ahead of the rear axle, ladder frame with captured okoume sides, storage over the rear axle, auto nose geometry.
 

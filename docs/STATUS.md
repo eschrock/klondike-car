@@ -3,8 +3,8 @@
 | Phase | State |
 |---|---|
 | 0 — Setup & parameter reconciliation | ✅ approved 2026-10-10 |
-| 1 — Block model | ✅ checkpoint — awaiting Eric |
-| 2 — Analysis & simulation | not started |
+| 1 — Block model | ✅ approved |
+| 2 — Analysis & simulation | ✅ checkpoint — awaiting Eric |
 | 3 — Detail design | not started |
 | 4 — Build outputs | not started |
 
@@ -20,3 +20,9 @@
 - Critic round 1: 7/10. Fixes: kingpin lead (D-25), frame-style seat/bolster/storage (137 → 119 lb), 32-variant overlap tests, true fore-aft truck-fit logic, CG/dimension overlays, layout.
 - Critic round 2: 7/10. Fixes: steering stops land at exactly ±lock, front-beam ligaments, boot allowance (lock 38.5°, nose 13.5", D-26), fuzz test, validator-aware fit windows, mass table.
 - Critic round 3: 8/10. Must-fix items done: SSF preview at the bed-only max track, screenshots, doc numbers. Carried into Phase 2/3: stop posts on the lower turntable plate, pitch path, rod-to-kingpin web rule, U-bolt orientation, tongue joint, fuzz residue.
+
+## Phase 2 log
+- Spec (docs/phase2-spec.md). Analysis checks, Rapier sim and auto-nose geometry were built by parallel agents.
+- Analysis critic r1: 7/10. Added obstacle strike, roll path, 80 lb rider, tyre-edge turning radius, effective-width deck, C_M ⊥ 0.67, lateral axle load.
+- Exploration: about 45k designs (docs/phase2-exploration.md). Then kingpin through a crossbar with sleeves.
+- Recommendation (docs/phase2-recommendation.md, D-27). Checkpoint critic r2 7/10 → r3 8/10; wording fixes done.
