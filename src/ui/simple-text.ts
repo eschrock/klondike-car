@@ -58,8 +58,8 @@ const REASON: Record<string, string> = {
   'pitch-rear': 'a hard pull uphill can lift the front wheels',
   'brake-force': 'it takes too hard a squeeze on the brake handle to hold it on a hill',
   'kingpin-strike': 'a hard bump into a curb could bend or break the steering pin (kingpin)',
-  turntable: 'the steering pivot (turntable) would be overloaded',
-  kingpin: 'the steering pin (kingpin) would be overloaded',
+  turntable: 'the steering pivot (turntable) could be overloaded and fail',
+  kingpin: 'the steering pin (kingpin) could be overloaded and fail',
   'roll-kingpin-uplift': 'leaning hard could pull the steering pin out',
   'roll-side-bearer': 'the front steering plate could come loose when the cart leans',
   'roll-bolster-attach': 'the front steering plate could come loose when the cart leans',
@@ -101,7 +101,7 @@ export function limiterAdvice(id: string): string {
     case 'tip-straight': case 'tip-lock': case 'slide-before-tip': return 'widen the wheels or lower the floor';
     case 'pitch-rear': case 'pitch-fwd': return 'make the cart longer between the wheels or lower the floor';
     case 'brake-force': case 'brake-traction': return 'ask the builders about a stronger brake';
-    default: return PART[id] ? 'ask the builders to strengthen that part' : 'adjust the cart in the controls below';
+    default: return PART[id] ? `the builders need to strengthen ${PART[id].name}` : 'adjust the cart in the controls below';
   }
 }
 

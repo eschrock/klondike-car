@@ -162,7 +162,8 @@ function mountSafetyCard(host: HTMLElement, deps: Pick<SimpleViewDeps, 'onLight'
   const glance = h('ul', { class: 'sv-glance', 'aria-label': 'At a glance' });
 
   const cells: HTMLElement[] = [];
-  const bar = h('div', { class: 'sv-bar', role: 'img' });
+  // Visual only: the rider slider and the note line under the bar carry the same information for assistive tech (UX r2 C2).
+  const bar = h('div', { class: 'sv-bar', 'aria-hidden': 'true' });
   for (let w = FROM; w <= TO; w += STEP) {
     const c = h('span', { class: 'sv-cell info', 'data-w': String(w) });
     cells.push(c);
@@ -292,7 +293,7 @@ function mountSafetyCard(host: HTMLElement, deps: Pick<SimpleViewDeps, 'onLight'
       h('span', { class: 'sv-glance-k' }, k), h('span', { class: 'sv-glance-v' }, v), ...(subText ? [h('span', { class: 'sv-glance-s' }, subText)] : []));
     glance.replaceChildren(
       item('Size (L × W × H)', dims(fit.dims.installed), null),
-      item('Empty weight', `${Math.round(spec.emptyLb)} lb`, `Two people lift ${Math.round(spec.transportLb / 2)} lb each`),
+      item('Empty weight', `${Math.round(spec.emptyLb)} lb`, `Seat back and handle off: two people lift ${Math.round(spec.transportLb / 2)} lb each`),
       item('Turning circle', Number.isFinite(turnFt) ? `${f1(turnFt)} ft across` : '–', 'About the width of a two-car driveway', texts.steering.status),
       item('Truck',
         fits ? `✔ Fits a Tacoma bed (${bedL} × ${bedW} in)` : `✖ Too big for a Tacoma bed (${bedL} × ${bedW} in)`,

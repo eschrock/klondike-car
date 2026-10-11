@@ -564,7 +564,7 @@ export class Viewer {
       if (this.sectionSel) this.sectionSel.value = 'off';
       this.setSection('off', 0);
       this.hidden.clear();
-      for (const m of this.partsGroup.children) m.visible = true;
+      for (const m of this.partsGroup.children) m.visible = !m.userData.shopAid; // no shop jigs in Simple (UX r2)
       this.lastGroups = []; // rebuild the (hidden) group checkboxes so they read "shown" again
       this.showCg = false;
       this.showDims = this.dimsCb?.checked ?? false; // Dimensions stays available in Simple
@@ -708,10 +708,12 @@ export class Viewer {
       mesh.name = part.id;
       mesh.userData.partId = part.id;
       mesh.userData.group = part.group;
+      // Shop aids (e.g. the bent-lam prow form): reference parts that are fabricated, unlike the rider/cargo figures.
+      mesh.userData.shopAid = part.group === 'reference' && part.fab !== 'none';
       mesh.castShadow = part.group !== 'reference';
       mesh.receiveShadow = true;
       mesh.matrixAutoUpdate = false;
-      mesh.visible = !this.hidden.has(part.group);
+      mesh.visible = !this.hidden.has(part.group) && !(this.simple && mesh.userData.shopAid);
       const plyGeo = geo.userData.plyLines as THREE.BufferGeometry | undefined;
       if (plyGeo) mesh.add(new THREE.LineSegments(plyGeo, PLY_LINE_MAT)); // identity local matrix, follows the mesh
       this.partsGroup.add(mesh);
@@ -897,7 +899,7 @@ export class Viewer {
       cb.checked = !this.hidden.has(g);
       cb.addEventListener('change', () => {
         if (cb.checked) this.hidden.delete(g); else this.hidden.add(g);
-        for (const m of this.partsGroup.children) m.visible = !this.hidden.has(m.userData.group as PartGroup);
+        for (const m of this.partsGroup.children) m.visible = !this.hidden.has(m.userData.group as PartGroup) && !(this.simple && m.userData.shopAid);
       });
       label.append(cb, document.createTextNode(' ' + g));
       this.toggleHost.append(label);
