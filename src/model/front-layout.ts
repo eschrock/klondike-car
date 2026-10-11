@@ -1,14 +1,15 @@
 /**
  * Derived geometry of the Ackermann front end (Phase 3b, spec sections 1 and 9): kingpin points, neutral wheel centers and arm tips, tie rod,
- * bellcrank and its stack, tongue, beam, kingpin brackets, knuckle shoe inputs, the ride stick and cables, the hip lever, the mode plate and the tow stops.
+ * bellcrank and its stack, tongue, beam, kingpin brackets and the tow stops (Phase 3c-1: the stick, cables, hip lever, mode plate, front-brake inputs are gone, D-53).
  * Plain numbers; every design number comes from Params (src/params.ts). Neutral (steer = 0) model frame.
  *
  * Stage 1 (WS-A) refined the Stage 0 placements and re-laid the center linkage (docs/phase3b-wsA-notes.md): the z levels are a stack, low to high,
- *   tie rod and steering arms (below the beam)  <  drag link and cable cross-bar  <  bellcrank plate  <  bell bracket plate
+ *   tie rod and steering arms (below the beam)  <  drag link  <  bellcrank plate  <  bell bracket plate
  *   ... beam top ... tongue top  <  tongue hinge top plate  <  tongue ear plate  <  tongue link  <  deck underside.
  */
 import { ackSpec, type Params } from '../params';
 import { centerLinkage, type AckSpec } from './ackermann';
+import { TONGUE_UNDER_TRANSOM_MARGIN_IN } from './front-stack';
 import type { Beam, Layout } from './layout';
 import type { Vec2, Vec3 } from './types';
 
@@ -32,9 +33,6 @@ export interface FrontKnuckle {
   /** Kingpin boss center (on the tilted kingpin axis, `spindleBossAboveStubIn` above the stub axis) and the unit axis (up, tilted by caster and KPI). */
   bossPos: Vec3;
   bossAxis: Vec3;
-  /** Front-brake swing-arm pivot on the knuckle (neutral frame) and the shoe contact angle below the axle line on the FRONT of the tread. */
-  shoePivot: Vec3;
-  shoeAngleDeg: number;
   /** Plan point of the foot post (under the carrier, inside the tire's inner face) that carries the bolt-on steering arm, and the arm plate's plan outline (neutral, CCW). */
   foot: Vec2;
   armHull: Vec2[];
@@ -61,14 +59,12 @@ export interface FrontLayout {
   tieRod: { x: number; z: number; len: number };
   /**
    * Bellcrank: pivot, output arm length, the bellcrank plate center z, the tongue-link plane center z (over the beam), neutral pins and derived link lengths.
-   * `outPin` (drag link), `inPin` (tongue link, on a standoff up to `inZ`), `ridePin` (RIDE socket on the cross-bar), `cablePins` (cross-bar ends, left = A),
-   * `springPin`/`springAnchor` (centering springs), `dragZ` (drag link and cross-bar plane), `bracketZ` (bell bracket plate), `plate` (convex plan outline of
-   * the plate, absolute neutral frame), `bracket` (plan outline of the bracket plate bolted to the beam rear face).
+   * `outPin` (drag link), `inPin` (tongue link, on a standoff up to `inZ`), `linkPinAt` (the tongue-link clevis pin axis, top of the standoff), `dragZ` (drag link plane),
+   * `bracketZ` (bell bracket plate), `plate` (convex plan outline of the plate, absolute neutral frame), `bracket` (plan outline of the bracket plate bolted to the beam rear face).
    */
   bellcrank: {
-    pivot: Vec2; arm: number; z: number; inZ: number; outPin: Vec2; inPin: Vec2; ridePin: Vec2; cablePins: { A: Vec2; B: Vec2 };
-    springPin: { L: Vec2; R: Vec2 }; springAnchor: { L: Vec2; R: Vec2 };
-    dragZ: number; bracketZ: number; modeZ: number; plate: Vec2[]; bracket: Vec2[];
+    pivot: Vec2; arm: number; z: number; inZ: number; outPin: Vec2; inPin: Vec2; linkPinAt: Vec3;
+    dragZ: number; bracketZ: number; plate: Vec2[]; bracket: Vec2[];
     dragLinkLen: number; tongueLinkLen: number;
   };
   /**
@@ -85,24 +81,13 @@ export interface FrontLayout {
   knuckle: { L: FrontKnuckle; R: FrontKnuckle };
   /** Tow-lock stop blocks (one per side: the inner wheel's lock, 35.5 deg by default). */
   towStop: { L: TowStop; R: TowStop };
-  /** Right-hand ride stick (neutral, upright) and cable arm. */
-  stick: { pivot: Vec3; grip: Vec3; cableArm: number };
-  /**
-   * Stick cables (neutral): lever-arm attach points A (forward) and B (aft), the deck slot center and size (WS-B cuts it), the below-deck waypoints and the
-   * cross-bar pins they end on.
-   */
-  cable: { armA: Vec3; armB: Vec3; slot: Vec3; slotSize: Vec2; dropA: Vec3; dropB: Vec3; endA: Vec3; endB: Vec3; pinA: Vec3; pinB: Vec3 };
-  /** Left hip brake lever. */
-  hipLever: { pivot: Vec3; grip: Vec3 };
-  /** Mode plate center and the two mutually exclusive pin sockets. */
-  mode: { plate: Vec3; pinTow: Vec3; pinRide: Vec3 };
   /** Ground trail = lead + r tan(caster). */
   trailIn: number;
   /**
-   * Chassis keep-out volumes for WS-B (frame, deck): the center linkage corridor under the nose deck (no joist, rail or deck cut-out may sit in it; the deck
-   * underside stays above `top`) and the cable run. Neutral frame, with the full steering sweep of the tongue and links included.
+   * Chassis keep-out volume for WS-B (frame, deck): the center linkage corridor under the nose deck (no joist, rail or deck cut-out may sit in it; the deck
+   * underside stays above `top`). Neutral frame, with the full steering sweep of the tongue and links included.
    */
-  keepOut: { center: Box3; cable: Box3 };
+  keepOut: { center: Box3 };
 }
 
 const unit = (v: Vec3): Vec3 => {
@@ -112,19 +97,14 @@ const unit = (v: Vec3): Vec3 => {
 
 /** Assembly clearance left between stacked plates (in): a tolerance, not a design number. */
 export const ASSY_GAP_IN = 0.03;
-/** Spec-given plate sizes the params do not carry: the shuttle/mode plate (1/8", spec 1.1). */
-export const MODE_PLATE_T_IN = 0.125;
 /** Tow-stop block plan size (along the arm, across it) and clearance to the arm at the lock: a catalog-style stand-in block. */
 export const TOW_STOP_BLOCK_IN = 0.75;
 export const TOW_STOP_GAP_IN = 0.0625;
-/** Margin over the linkage running clearance that the tongue keeps under the front transom's bottom edge (spec 3.6: the transom bottom is the tongue's ceiling). */
-export const TONGUE_UNDER_TRANSOM_MARGIN_IN = 0.05;
+export { TONGUE_UNDER_TRANSOM_MARGIN_IN };
 /** Radius of the rounded pin ends of the bellcrank plate, capped so the swung output arm clears the beam rear face. */
 export const BELL_PIN_R_IN = 0.45;
-/** The deck slot sits this far ahead of the stick pivot (clear of the pivot bracket); the cables' last run is straight along x for this far behind the bellcrank pivot (clear of the springs). */
-export const SLOT_AHEAD_OF_STICK_IN = 2.6;
-export const CABLE_END_BEHIND_PIVOT_IN = 4.4;
-
+/** The bell bracket strip reaches this far behind the bellcrank pivot (it carries the pivot bolt). */
+export const BELL_BRACKET_PAST_PIVOT_IN = 1;
 /** Convex hull of points (Andrew's monotone chain), counter-clockwise. */
 export function convexHull(pts: Vec2[]): Vec2[] {
   const p = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
@@ -140,7 +120,7 @@ export function convexHull(pts: Vec2[]): Vec2[] {
 export const discPts = (c: Vec2, r: number, n = 12): Vec2[] => Array.from({ length: n }, (_, i): Vec2 => [c[0] + r * Math.cos((2 * Math.PI * i) / n), c[1] + r * Math.sin((2 * Math.PI * i) / n)]);
 
 /** Needs the already-computed parts of the layout (wheel radius, seat, hull curve). */
-export function computeFrontLayout(p: Params, L: Pick<Layout, 'r' | 'WB' | 'kx' | 'seat' | 'hull' | 'side' | 'ply' | 'deckTop'>, innerHalfWidthAt: (x: number) => number): FrontLayout {
+export function computeFrontLayout(p: Params, L: Pick<Layout, 'r' | 'WB' | 'kx' | 'hull' | 'side' | 'ply' | 'deckTop'>): FrontLayout {
   const ack = ackSpec(p);
   const r = L.r;
   const RAD = Math.PI / 180;
@@ -159,12 +139,11 @@ export function computeFrontLayout(p: Params, L: Pick<Layout, 'r' | 'WB' | 'kx' 
 
   // ── z stack of the linkage ──
   const tieZ = beam.bot - p.tieRodDiaIn; // the rod's top is a rod radius under the beam bottom
-  const linkT = p.kingpinBracketThickIn; // drag link, cross-bar, tongue link, ear plate and bell bracket plate: the same 3/16" plate
+  const linkT = p.kingpinBracketThickIn; // drag link, tongue link, ear plate and bell bracket plate: the same 3/16" plate
   const bellT = p.bellcrankPlateThickIn;
   const dragZ = tieZ + p.tieRodDiaIn / 2 + ASSY_GAP_IN + linkT / 2;
   const bellZ = dragZ + linkT / 2 + ASSY_GAP_IN + bellT / 2;
   const bracketZ = bellZ + bellT / 2 + ASSY_GAP_IN + linkT / 2;
-  const modeZ = dragZ - linkT / 2 - ASSY_GAP_IN - MODE_PLATE_T_IN / 2;
   // The tongue passes under the front transom (bottom = noseTop - crossmemberDepth) with the linkage running clearance (`steeringLinkClearIn`) plus TONGUE_UNDER_TRANSOM_MARGIN_IN to spare (spec 3.6); the ear plate and the
   // tongue link stand higher (spacer sleeves on the ear-plate bolts) so they pass over the beam top.
   const tongueTop = L.deckTop - p.crossmemberDepthIn - p.steeringLinkClearIn - TONGUE_UNDER_TRANSOM_MARGIN_IN;
@@ -215,20 +194,13 @@ export function computeFrontLayout(p: Params, L: Pick<Layout, 'r' | 'WB' | 'kx' 
     const k = sy > 0 ? kp.L : kp.R;
     const s = p.spindleBossAboveStubIn / axis[2];
     const bossPos: Vec3 = [k[0] + axis[0] * s, k[1] + axis[1] * s, k[2] + axis[2] * s];
-    // Tread shoe on the FRONT of the tire, `brakeShoeAngleDeg` below the axle line (mirror of the rear placement); the swing arm pivots on the knuckle
-    // brake boss a shoe length up the tread tangent and a shoe thickness off the tread.
-    const b = p.brakeShoeAngleDeg * RAD;
     const c = sy > 0 ? stub.L : stub.R;
-    const contact: Vec3 = [c[0] + r * Math.cos(b), c[1], c[2] - r * Math.sin(b)];
-    const nrm: Vec3 = [Math.cos(b), 0, -Math.sin(b)];
-    const tan: Vec3 = [Math.sin(b), 0, Math.cos(b)];
-    const shoePivot: Vec3 = [contact[0] + nrm[0] * p.brakeShoeThickIn + tan[0] * p.brakeShoeLengthIn, c[1], contact[2] + nrm[2] * p.brakeShoeThickIn + tan[2] * p.brakeShoeLengthIn];
     const root: Vec2 = [c[0], c[1] - sy * hubHalf];
     // The modeled boss is vertical through the kingpin point (the plan rotation neglects the tilt, spec 1.2); the foot is 40% of the way from it to the stub root.
     const foot: Vec2 = [k[0] + 0.4 * (root[0] - k[0]), k[1] + 0.4 * (root[1] - k[1])];
     const tipP = sy > 0 ? armTip.L : armTip.R;
     const armHull = convexHull([...discPts(foot, p.steerArmWidthIn / 2, 14), ...discPts([k[0], k[1]], p.steerArmWidthIn / 2, 14), ...discPts([tipP[0], tipP[1]], p.steerArmWidthIn / 2, 14)]);
-    return { bossPos, bossAxis: axis, shoePivot, shoeAngleDeg: p.brakeShoeAngleDeg, foot, armHull };
+    return { bossPos, bossAxis: axis, foot, armHull };
   };
 
   const knuckleL = mkKnuckle(1), knuckleR = mkKnuckle(-1);
@@ -267,41 +239,16 @@ export function computeFrontLayout(p: Params, L: Pick<Layout, 'r' | 'WB' | 'kx' 
     };
   };
 
-  // Rider controls.
-  const sx = p.seatXIn + p.rideStickAheadOfHpointIn;
-  const stickPivot: Vec3 = [sx, -(innerHalfWidthAt(sx) - p.rideStickInsetIn), L.seat.surface + p.rideStickPivotAboveSeatIn];
-  const hx = p.seatXIn + p.hipLeverAheadOfHpointIn;
-  const hipPivot: Vec3 = [hx, innerHalfWidthAt(hx) - p.hipLeverInsetIn, L.seat.surface];
   const pv = ack.bellPivot;
 
-  // Bellcrank plate: the hull of the pivot boss, the two arm pins, the RIDE socket and the two spring pins.
+  // Bellcrank plate: the hull of the pivot boss and the two arm pins.
   const w = p.bellcrankArmWidthIn;
-  const cable = cl.cableArm;
-  const ridePin: Vec2 = [pv[0], pv[1] - cable / 2];
-  const springPin = { L: [pv[0] - 0.9, pv[1] + cable / 2] as Vec2, R: [pv[0] - 0.9, pv[1] - cable / 2] as Vec2 };
-  const springAnchor = { L: [pv[0] - 3.2, pv[1] + cable / 2 + 0.4] as Vec2, R: [pv[0] - 3.2, pv[1] - cable / 2 - 0.4] as Vec2 };
-  const bellHull = convexHull([
-    ...discPts(pv, w * 0.8), ...discPts(cl.out0, BELL_PIN_R_IN), ...discPts(cl.in0, BELL_PIN_R_IN), ...discPts(ridePin, BELL_PIN_R_IN), ...discPts(springPin.L, BELL_PIN_R_IN * 0.75), ...discPts(springPin.R, BELL_PIN_R_IN * 0.75),
-  ]);
-  // Bracket plate on the beam rear face: a strip along the centerline back past the pivot with a cross head for the spring anchors.
+  const bellHull = convexHull([...discPts(pv, w * 0.8), ...discPts(cl.out0, BELL_PIN_R_IN), ...discPts(cl.in0, BELL_PIN_R_IN)]);
+  // Bracket plate on the beam rear face: a strip along the centerline back past the pivot.
   const bx1 = beamX - beam.thick / 2; // beam rear face
   const stripHalf = w / 2;
-  const headX0 = springAnchor.L[0] - 0.6, headX1 = springAnchor.L[0] + 0.6;
-  const headHalf = cable / 2 + 0.4 + 0.6;
-  const bracketOutline: Vec2[] = [
-    [headX0, -headHalf], [headX1, -headHalf], [headX1, -stripHalf], [bx1, -stripHalf], [bx1, stripHalf], [headX1, stripHalf], [headX1, headHalf], [headX0, headHalf],
-  ];
-
-  // Stick cables: attach points on the lever arm below the pivot, a deck slot, below-deck waypoints and the cross-bar pins.
-  const armZ = stickPivot[2] - p.rideStickCableArmIn;
-  const armA: Vec3 = [stickPivot[0] + 0.5, stickPivot[1], armZ], armB: Vec3 = [stickPivot[0] - 0.5, stickPivot[1], armZ];
-  const wZ = bellZ + 0.8; // below the joists (their bottom is a crossmember depth under the deck underside), above the cross-bar
-  // The cables go down through a deck slot ahead of the stick bracket, then drop under the joists and run forward to waypoints in line with the cross-bar pins.
-  const slotZ = L.deckTop - L.ply / 2;
-  const slot: Vec3 = [stickPivot[0] + SLOT_AHEAD_OF_STICK_IN, stickPivot[1], slotZ];
-  const extend = (arm: Vec3): Vec3 => { const t = (arm[2] - wZ) / (arm[2] - slotZ); return [arm[0] + (slot[0] - arm[0]) * t, arm[1], wZ]; };
-  const dropA = extend(armA), dropB = extend(armB);
-  const endA: Vec3 = [pv[0] - CABLE_END_BEHIND_PIVOT_IN, cl.cableA0[1], dragZ], endB: Vec3 = [pv[0] - CABLE_END_BEHIND_PIVOT_IN, cl.cableB0[1], dragZ];
+  const headX0 = pv[0] - BELL_BRACKET_PAST_PIVOT_IN;
+  const bracketOutline: Vec2[] = [[headX0, -stripHalf], [bx1, -stripHalf], [bx1, stripHalf], [headX0, stripHalf]];
 
   return {
     ack,
@@ -310,8 +257,8 @@ export function computeFrontLayout(p: Params, L: Pick<Layout, 'r' | 'WB' | 'kx' 
     armTip,
     tieRod: { x: cl.mid0[0], z: tieZ, len: ack.tieLen },
     bellcrank: {
-      pivot: pv, arm: ack.bellArm, z: bellZ, inZ: (link.z0 + link.z1) / 2, outPin: cl.out0, inPin: cl.in0, ridePin,
-      cablePins: { A: cl.cableA0, B: cl.cableB0 }, springPin, springAnchor, dragZ, bracketZ, modeZ, plate: bellHull, bracket: bracketOutline,
+      pivot: pv, arm: ack.bellArm, z: bellZ, inZ: (link.z0 + link.z1) / 2, outPin: cl.out0, inPin: cl.in0, linkPinAt: [cl.in0[0], cl.in0[1], link.z0],
+      dragZ, bracketZ, plate: bellHull, bracket: bracketOutline,
       dragLinkLen: cl.dragLen, tongueLinkLen: cl.tongueLinkLen,
     },
     tongue: {
@@ -322,17 +269,9 @@ export function computeFrontLayout(p: Params, L: Pick<Layout, 'r' | 'WB' | 'kx' 
     bracket: { L: mkBracket(1), R: mkBracket(-1) },
     knuckle: { L: knuckleL, R: knuckleR },
     towStop: { L: mkStop(1), R: mkStop(-1) },
-    stick: { pivot: stickPivot, grip: [stickPivot[0], stickPivot[1], stickPivot[2] + p.rideStickLengthIn], cableArm: p.rideStickCableArmIn },
-    cable: {
-      armA, armB, slot, slotSize: [1.6, 0.5], dropA, dropB, endA, endB,
-      pinA: [cl.cableA0[0], cl.cableA0[1], dragZ], pinB: [cl.cableB0[0], cl.cableB0[1], dragZ],
-    },
-    hipLever: { pivot: hipPivot, grip: [hipPivot[0], hipPivot[1], hipPivot[2] + p.hipLeverArmIn] },
-    mode: { plate: [pv[0], 0, modeZ], pinTow: [cl.in0[0], cl.in0[1], link.z0], pinRide: [ridePin[0], ridePin[1], dragZ] },
     trailIn: ack.lead + r * tanC,
     keepOut: {
-      center: { x0: headX0 - 0.5, x1: ack.tongueHinge[0] + 1.2, y0: -(headHalf + 0.5), y1: headHalf + 0.5, z0: tieZ - p.steerArmThickIn, z1: link.z1 + 0.15 },
-      cable: { x0: stickPivot[0], x1: pv[0], y0: Math.min(stickPivot[1], -cable) - 0.5, y1: cable + 0.5, z0: dragZ - linkT, z1: wZ + 0.3 },
+      center: { x0: headX0 - 0.5, x1: ack.tongueHinge[0] + 1.2, y0: -(w / 2 + 3), y1: w / 2 + 3, z0: tieZ - p.steerArmThickIn, z1: link.z1 + 0.15 },
     },
   };
 }

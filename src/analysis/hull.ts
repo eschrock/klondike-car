@@ -96,11 +96,11 @@ export function footStopCheck(ctx: Ctx): AnalysisCheck | null {
       detail('deck screws in lateral shear (each)', k.screwLoad, 'lbf', p.woodScrewLateralLbf, '<='),
     ];
     if (k.aheadCount > 0) ds.push(detail('cleat bearing on the board face', k.bearing, 'psi', al.oakPerp, '<='));
-    // Hard hit with the lap belt (D-50): the 2" rear hit's seat factor, wood to MOR x C_M with no safety factor.
+    // Hard hit (D-50; no lap belt at 3c-1, D-53): the 2" rear hit's seat factor, wood to MOR x C_M with no safety factor.
     const gH = bumpSeatGHard(ctx, c);
     const kh = footStopLoads(ctx, c.riderLb, gH)!;
     ds.push(detail(`HARD 2" rear hit (seat factor ${f(gH, 2)}): foot-stop board bending (MOR x C_M, no safety factor)`, kh.sigma, 'psi', al.oakBend * p.woodSafetyFactor, '<='));
-    const hardTxt = ` Hard hit: seat factor ${f(gH, 2)} gives ${f(kh.F)} lbf and ${f(kh.sigma, 0)} psi against ${f(al.oakBend * p.woodSafetyFactor, 0)} (no safety factor); the lap belt takes the rest.`;
+    const hardTxt = ` Hard hit: seat factor ${f(gH, 2)} gives ${f(kh.F)} lbf and ${f(kh.sigma, 0)} psi against ${f(al.oakBend * p.woodSafetyFactor, 0)} (no safety factor); the grab handles and seat friction take the rest.`;
     const how = `Bump: rider ${f(c.riderLb, 0)} lb × ${f(gN, 2)} g × foot-stop share ${p.footStopShare} = ${f(k.F)} lbf forward on the board (the rest goes through the grab handles and seat friction). `
       + `Board ${f(k.span, 1)}" between the sides, ${f(k.t, 2)}" × ${f(k.h, 1)}": M = F·L/4 = ${f(k.M)} lb·in, σ = M/(h·t²/6) = ${f(k.sigma, 0)} psi (≤ ${f(al.oakBend, 0)}). `
       + (k.aheadCount > 0 ? `${k.aheadCount} cleats ahead of the board bear on its face over ${f(k.contact, 1)} in²: ${f(k.bearing, 0)} psi (≤ ${f(al.oakPerp, 0)}). ` : 'No cleat stands ahead of the board: the load goes through the tenons and screws. ')

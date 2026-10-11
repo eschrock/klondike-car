@@ -11,11 +11,7 @@ const mesh = (id: string, name: string, material: string): Part => {
 };
 
 describe('Phase 3b front-end looks (spec 8.1)', () => {
-  it('cables are drawn (a cable is not rope) in a bright stainless look', () => {
-    const cable = mesh('stick-cable-A', 'Stick cable A', '1/8" 7x19 stainless cable');
-    expect(lookOf(cable)).toBe('cable');
-    expect(buildPart(cable)).not.toBeNull();
-    // A real rope is still not drawn.
+  it('a rope is still not drawn (the bridle); the ride cables and the lap belt are gone (D-53)', () => {
     expect(buildPart(mesh('bridle', 'Bridle', '3/8" polyester rope'))).toBeNull();
   });
 
@@ -28,11 +24,10 @@ describe('Phase 3b front-end looks (spec 8.1)', () => {
     expect(built!.geometry.getAttribute('position').count).toBeGreaterThan(10);
   });
 
-  it('the stick grip is rubber, the lap belt is webbing, the beam tube and tie rod stay steel', () => {
-    expect(lookOf(mesh('stick-grip', 'Stick grip', 'rubber grip'))).toBe('rubber');
-    expect(lookOf(mesh('lap-belt', 'Lap belt', 'nylon webbing'))).toBe('webbing');
+  it('the beam tube and tie rod stay steel; a webbing or cable material no longer has a look of its own', () => {
     expect(lookOf(mesh('beam-F', 'Front beam', 'A500 steel tube'))).toBe('steel');
     expect(lookOf(mesh('tie-rod', 'Tie rod', '1/2" threaded steel rod'))).toBe('steel');
-    expect(lookOf(mesh('cable-guide-R', 'Cable guide', 'printed ASA'))).not.toBe('cable');
+    expect(lookOf(mesh('brake-beam', 'Brake beam', '6061-T6 aluminum square tube'))).toBe('aluminum');
+    expect(lookOf(mesh('lap-belt', 'Lap belt', 'nylon webbing'))).not.toBe('webbing' as never);
   });
 });

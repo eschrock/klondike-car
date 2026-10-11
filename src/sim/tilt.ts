@@ -22,11 +22,17 @@ export interface TiltOptions {
   maxSeconds?: number;
 }
 
+/**
+ * Tire-ground friction of the tilt table: high enough that the cart tips rather than slides (the static tip angle is about 50 degrees, tan 50 = 1.2), but not
+ * so high that the locked steered inner wheel sticks and shifts load abruptly (at 2.0 the 35.5 degree left-lock case lifted its second wheel 8 degrees early).
+ */
+export const TILT_FRICTION_MU = 1.5;
+
 export async function runTiltOnset(spec: SimSpec, o: TiltOptions = {}): Promise<TiltResult> {
   const rate = (o.rateDegPerS ?? 2) * (o.tipTo === 'left' ? -1 : 1);
   const steer = o.steerDeg ?? 0;
   const sim = await createSim(spec, {
-    config: { tiltRateDegPerS: rate, frictionMu: o.frictionMu ?? 2, wheelsLocked: o.wheelsLocked ?? true, initialSteerDeg: steer },
+    config: { tiltRateDegPerS: rate, frictionMu: o.frictionMu ?? TILT_FRICTION_MU, wheelsLocked: o.wheelsLocked ?? true, initialSteerDeg: steer },
     controls: { steerMode: 'angle', steerAngleDeg: steer },
   });
   const steps = Math.round((o.maxSeconds ?? 60) * 240);

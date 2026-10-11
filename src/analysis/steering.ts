@@ -49,7 +49,7 @@ interface AckBody { id: string; key: PoseId; obb: OBB; r: number; steering: bool
 /**
  * Steering clearance sweep: for the input (inner wheel angle, + = left) from -lock to +lock in `stepDeg` steps, solve the linkage
  * and move each rigid body by its OWN pose (knuckles, spindles, wheels and front shoes with the left or right knuckle; tie rod, bellcrank, tongue, links
- * separately) against every chassis OBB. A pair is skipped only when both are steering hardware (the brackets, stops, beam, mode plate and the
+ * separately) against every chassis OBB. A pair is skipped only when both are steering hardware (the brackets, stops, beam and the
  * knuckle metal are designed to be adjacent and are checked by the model tests); tires, shoes, the tongue and the tie rod are always counted.
  */
 export function steerSweep(ctx: Ctx, stepDeg = 1): SweepResult {
@@ -114,7 +114,7 @@ export function steerClearance(ctx: Ctx, sweep: SweepResult): AnalysisCheck {
     id: 'steer-clear', label: 'Steering clearance', group: 'Steering', refs: ['A-4', 'D-26', 'D-53'],
     value: sweep.minClearanceIn, unit: 'in', limit, sense: '>=', details: ds,
     status: worstUtil > 1 + 1e-9 ? 'fail' : worstUtil > 0.9 ? 'marginal' : 'pass',
-    how: `OBB sweep of every moving rigid body at its own pose (knuckles, spindles, wheels and front shoes about their own kingpins; tie rod, bellcrank, tongue and links) against every chassis part, input -${f(p.steerLockDeg)} to +${f(p.steerLockDeg)} deg inner wheel in 1 deg steps (the Ackermann linkage solved at each). Front tires: ${capped ? `everything stays > ${CAP_IN}" apart` : `minimum ${f(sweep.minClearanceIn, 2)}" between ${sweep.steerPart} and ${sweep.chassisPart} at ${f(sweep.deltaDeg)} deg`}, limit >= steering clearance ${f(p.steeringClearanceIn, 2)}" - 0.05" tolerance = ${f(limit, 2)}" (tire bulge, mud, play). Everything else that moves: ${lk.minClearanceIn >= CAP_IN ? `everything stays > ${CAP_IN}" apart` : `minimum ${f(lk.minClearanceIn, 2)}" between ${lk.steerPart} and ${lk.chassisPart} at ${f(lk.deltaDeg)} deg`}, limit >= the running clearance ${f(linkLimit, 2)}". Pairs of two steering hardware parts (brackets, stops, beam, mode plate, knuckle metal) are skipped: they are designed adjacent; a front tire against its kingpin bracket is skipped too (the leaf clears the hub by the scrub rule, validateParams).`,
+    how: `OBB sweep of every moving rigid body at its own pose (knuckles, spindles and wheels about their own kingpins; tie rod, bellcrank, tongue and links) against every chassis part, input -${f(p.steerLockDeg)} to +${f(p.steerLockDeg)} deg inner wheel in 1 deg steps (the Ackermann linkage solved at each). Front tires: ${capped ? `everything stays > ${CAP_IN}" apart` : `minimum ${f(sweep.minClearanceIn, 2)}" between ${sweep.steerPart} and ${sweep.chassisPart} at ${f(sweep.deltaDeg)} deg`}, limit >= steering clearance ${f(p.steeringClearanceIn, 2)}" - 0.05" tolerance = ${f(limit, 2)}" (tire bulge, mud, play). Everything else that moves: ${lk.minClearanceIn >= CAP_IN ? `everything stays > ${CAP_IN}" apart` : `minimum ${f(lk.minClearanceIn, 2)}" between ${lk.steerPart} and ${lk.chassisPart} at ${f(lk.deltaDeg)} deg`}, limit >= the running clearance ${f(linkLimit, 2)}". Pairs of two steering hardware parts (brackets, stops, beam, mode plate, knuckle metal) are skipped: they are designed adjacent; a front tire against its kingpin bracket is skipped too (the leaf clears the hub by the scrub rule, validateParams).`,
   });
 }
 
@@ -130,31 +130,28 @@ export function steerKinCheck(ctx: Ctx): AnalysisCheck {
     if (e > worst) { worst = e; worstAt = d; }
   }
   const eLock = Math.abs(ackermannErrorDeg(ack, lock));
-  const rideIn = lockLimits(ack, 'ride').innerDeg;
-  const okAt = [0, lock, -lock, rideIn, -rideIn].map((d) => solveSteer(ack, d).ok);
+  const okAt = [0, lock, -lock].map((d) => solveSteer(ack, d).ok);
   const assembled = okAt.every(Boolean);
   const value = assembled ? worst : 99;
   return singleCheck({
     id: 'steer-kin', label: 'Ackermann error and linkage assembly', group: 'Steering', refs: ['D-53'],
     value, unit: 'deg', limit: p.ackermannErrorMaxDeg, sense: '<=',
     details: [detail('worst Ackermann error over 0..tow lock', worst, 'deg', p.ackermannErrorMaxDeg, '<='), detail('error at the tow lock', eLock, 'deg', p.ackermannErrorMaxDeg, '<=')],
-    how: `Error = actual outer wheel angle minus the ideal (both axle lines meeting on the rear axle line), swept 0 to ${f(lock)} deg inner in 0.5 deg steps: worst ${f(worst, 2)} deg at ${f(worstAt)} deg inner, ${f(eLock, 2)} deg at the tow lock. Arms ${f(ack.armLen, 2)}" at ${f(ack.armAngleDeg, 0)} deg; the 4-bar is tuned for the lock, so the middle of the range is worst. Linkage assembled (solver ok) at neutral, both tow locks and both ride locks: ${assembled ? 'yes' : 'NO (binds)'}. Limit <= ${p.ackermannErrorMaxDeg} deg.`,
+    how: `Error = actual outer wheel angle minus the ideal (both axle lines meeting on the rear axle line), swept 0 to ${f(lock)} deg inner in 0.5 deg steps: worst ${f(worst, 2)} deg at ${f(worstAt)} deg inner, ${f(eLock, 2)} deg at the tow lock. Arms ${f(ack.armLen, 2)}" at ${f(ack.armAngleDeg, 0)} deg; the 4-bar is tuned for the lock, so the middle of the range is worst. Linkage assembled (solver ok) at neutral and both tow locks: ${assembled ? 'yes' : 'NO (binds)'}. Limit <= ${p.ackermannErrorMaxDeg} deg.`,
   });
 }
 
 export function steerLockCheck(ctx: Ctx): AnalysisCheck {
   const { p } = ctx;
   const ack = ctx.L.front.ack;
-  const tow = lockLimits(ack, 'tow'), ride = lockLimits(ack, 'ride');
+  const tow = lockLimits(ack);
   const sol = solveSteer(ack, p.steerLockDeg);
   const yaw = Math.abs(sol.tongueDeg);
   const lr = leftWheelRange(ack);
   const innerErr = Math.abs(tow.innerDeg - p.steerLockDeg);
-  const rideErr = Math.abs(ride.outerDeg - p.steerRideLockDeg);
   const margin = p.tongueMaxYawDeg - yaw;
   const ds = [
     detail('tow lock reached (inner wheel, tolerance 0.1 deg)', innerErr, 'deg', 0.1, '<='),
-    detail('ride lock window (outer wheel, tolerance 0.1 deg)', rideErr, 'deg', 0.1, '<='),
     detail('tongue yaw at the tow lock vs the yaw stop', yaw, 'deg', p.tongueMaxYawDeg, '<='),
   ];
   const worstUtil = Math.max(...ds.map((x) => x.util));
@@ -162,6 +159,6 @@ export function steerLockCheck(ctx: Ctx): AnalysisCheck {
     id: 'steer-lock', label: 'Steering lock stops and tongue yaw', group: 'Steering', refs: ['D-53', 'D-51'],
     value: yaw, unit: 'deg', limit: p.tongueMaxYawDeg, sense: '<=', details: ds, marginalAbs: 0.5,
     status: worstUtil > 1 + 1e-9 ? 'fail' : margin < 0.5 ? 'marginal' : 'pass',
-    how: `Tow stops (bracket tabs on the steering arm) at ${f(p.steerLockDeg)} deg inner: the linkage gives inner ${f(tow.innerDeg, 2)} / outer ${f(tow.outerDeg, 2)} deg (left wheel range ${f(lr.minDeg, 1)} to ${f(lr.maxDeg, 1)}). Ride window (narrow bellcrank slot) at ${f(p.steerRideLockDeg)} deg outer: outer ${f(ride.outerDeg, 2)}, inner ${f(ride.innerDeg, 2)} deg. Tongue yaw at the tow lock ${f(yaw, 1)} deg against the ${f(p.tongueMaxYawDeg, 0)} deg stops (margin ${f(margin, 1)} deg); bellcrank turn ${f(sol.bellcrankDeg, 1)} deg at the tow lock. The tow tab is the first stop; the bellcrank window in TOW is wide enough never to be.`,
+    how: `Tow-lock stops (blocks under the beam, against the steering arm) at ${f(p.steerLockDeg)} deg inner: the linkage gives inner ${f(tow.innerDeg, 2)} / outer ${f(tow.outerDeg, 2)} deg (left wheel range ${f(lr.minDeg, 1)} to ${f(lr.maxDeg, 1)}). Tongue yaw at the tow lock ${f(yaw, 1)} deg against the ${f(p.tongueMaxYawDeg, 0)} deg stops (margin ${f(margin, 1)} deg); bellcrank turn ${f(sol.bellcrankDeg, 1)} deg at the tow lock. The tow-lock block is the first stop; the tongue yaw stop is the second.`,
   });
 }

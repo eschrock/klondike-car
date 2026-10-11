@@ -1,14 +1,12 @@
 /**
- * Rear mounts on the cabin rails (build review r2 MUST-3 and MUST-4, D-48): ONE source of geometry for the brake bearing plates (shaft bearing + lever
- * pivot) and for the rear axle beam's seat in the rails, read by the model (brake.ts, frame.ts, running-gear.ts), the analysis and the tests.
+ * Rear axle beam seat in the cabin rails (build review r2 MUST-4, D-48) and the shared fastener helpers. ONE source of geometry for the rear axle beam's seat in
+ * the rails and its hold-down angles, read by the model (frame.ts, running-gear.ts), the analysis and the tests. (The brake bearing plates of D-48 went with the
+ * cross-shaft brake at Phase 3c-1; the brake beam's notch is in brake-layout.ts.)
  *
  * Plain TS, no three.js. Model frame: +X forward, +Y left, +Z up, inches. Positions are for the LEFT rail; the right is the mirror.
  *
- * The rail at the rear end is a 0.75" × 4" oak bar (z from the rail bottom to the chine) whose inner face carries the deck ledge from `deckBot`
- * up; only the part below the ledge is full thickness. The brake shaft crosses it at wheel-center height (0.97" above the rail bottom), so the
- * rail is NOTCHED from below for the shaft (open at the bottom, 1/4" wider than the bushing) and the bearing plates are bolted to the OUTSIDE of
- * the rail in the solid wood FORWARD of the notch; the lever pivot is on the left plate's ear that reaches behind the rail end. The beam is seated
- * in a second notch where the rail meets the rear axle beam.
+ * The rail at the rear end is a 0.75" x 4" oak bar (z from the rail bottom to the chine) whose inner face carries the deck ledge from `deckBot`
+ * up; only the part below the ledge is full thickness. The beam is seated in a notch where the rail meets the rear axle beam.
  */
 import { AXLE_BEAM_POSITION, FRAME_STYLE, type Params } from '../params';
 import type { Layout } from './layout';
@@ -16,14 +14,6 @@ import type { Mat4, Vec3 } from './types';
 
 export type V2 = [number, number];
 
-/** Outside diameter of the bronze flanged bearing pressed into each bearing plate: shaft + this. */
-export const BEARING_WALL_IN = 0.25;
-/** Edge distance (plate edge to a hole edge) kept around every steel-plate hole, as a multiple of the hole diameter (AISC J3.4: 1.5d for cut edges). */
-export const PLATE_EDGE_D = 1.5;
-/** Bearing length of the flanged bronze bearing in the plate and notch: plate + this inboard (it stands into the shaft notch). */
-export const BEARING_STANDOFF_IN = 0.5;
-/** Notch width over the shaft: bearing OD + this; top: shaft top + this. */
-export const SHAFT_NOTCH_CLEAR_IN = 0.25;
 /** Hex-head height as a multiple of the bolt diameter (3/8" hex bolt: 0.25"). */
 export const HEAD_HEIGHT_D = 0.65;
 
@@ -54,92 +44,6 @@ export function railSection(p: Params, L: Layout): RailSection {
   const t = ladder ? p.railThicknessIn : L.side;
   const yOut = L.hwC + L.side;
   return { ladder, t, yIn: yOut - t, yOut, zBot: L.deckBot - p.railDepthIn, zSolidTop: L.deckBot, zTop: L.railTop, xEnd: L.xRear + L.transom };
-}
-
-export interface BearingMount {
-  rail: RailSection;
-  /** Shaft centre (x, z), lever pivot (x, z). */
-  S: V2;
-  Q: V2;
-  D: number;
-  plateT: number;
-  boltD: number;
-  /** Bearing-plate bolts (x, z), the same on both sides. Rows are `zRows`, columns `xCols`. */
-  bolts: V2[];
-  xCols: number[];
-  zRows: [number, number];
-  /** Shaft notch in the underside of the rail: x range and the z of its top. */
-  notch: { x0: number; x1: number; top: number };
-  /** Plate outlines (x, z), counter-clockwise: left carries the pivot ear, right the shaft bearing only. */
-  outlineL: V2[];
-  outlineR: V2[];
-  /** Bearing OD, pivot hole, bolt hole diameters in the plate. */
-  bearingOd: number;
-  pivotHole: number;
-  boltHole: number;
-  /** Oak doubler glued inside the rail behind the bolt grid (x, z range, thickness; t = 0: none). */
-  doubler: { x0: number; x1: number; z0: number; z1: number; t: number; /** All bolts lie in the doubler's length (joists crossing the grid can cut it short). */ covers: boolean };
-  /** Bolt-to-boundary distances in the rail (center to the rail end, bottom, deck-ledge top, shaft notch), the smallest over the pattern. */
-  dist: { end: number; bottom: number; top: number; notch: number };
-}
-
-const rectDist = (pt: V2, x0: number, x1: number, z0: number, z1: number): number => {
-  const dx = Math.max(x0 - pt[0], 0, pt[0] - x1), dz = Math.max(z0 - pt[1], 0, pt[1] - z1);
-  return Math.hypot(dx, dz);
-};
-
-/** Bearing-plate and notch layout. `S` is the shaft centre, `Q` the lever pivot (both from brakeGeometry's inputs). */
-export function bearingMount(p: Params, L: Layout, S: V2, Q: V2): BearingMount {
-  const rail = railSection(p, L);
-  const D = p.brakeShaftDiameterIn;
-  const boltD = p.brakeBearingBoltDiameterIn;
-  const bearingOd = D + BEARING_WALL_IN;
-  const nHalf = (bearingOd + SHAFT_NOTCH_CLEAR_IN) / 2;
-  const notch = { x0: S[0] - nHalf, x1: S[0] + nHalf, top: S[1] + D / 2 + SHAFT_NOTCH_CLEAR_IN / 2 };
-  // Lower row above the rail bottom, upper row one row-gap higher.
-  const zLo = rail.zBot + p.brakeBoltEdgeIn;
-  const zHi = zLo + p.brakeBearingBoltRowGapIn;
-  // First column: at least `brakeBoltEndIn` from the rail end and 2.5D past the notch's front wall.
-  const x1 = Math.max(rail.xEnd + p.brakeBoltEndIn, notch.x1 + 2.5 * boltD);
-  const nCol = Math.max(2, Math.round(p.brakeBearingBoltCols));
-  const xCols = Array.from({ length: nCol }, (_, i) => x1 + i * p.brakeBearingBoltSpacingIn);
-  const bolts: V2[] = [];
-  for (const z of [zLo, zHi]) for (const x of xCols) bolts.push([x, z]);
-  const boltHole = boltD + 1 / 32;
-  const pivotHole = p.brakePivotBoltDiameterIn; // the post is welded on, no hole: this is the weld footprint
-  const eB = PLATE_EDGE_D * boltHole + boltHole / 2; // plate edge to a bolt center
-  const ePv = pivotHole / 2 + 0.5; // plate edge to the post center: post radius + weld + edge
-  const eBr = bearingOd / 2 + PLATE_EDGE_D * 0.3; // plate edge to the bearing center
-  const xMaxCol = xCols[xCols.length - 1];
-  const xMax = xMaxCol + eB;
-  const zTop = zHi + eB;
-  const zBotMain = Math.min(zLo - eB, S[1] - eBr);
-  const outline = (xMin: number, ear: boolean): V2[] => {
-    if (!ear) return [[xMin, zBotMain], [xMax, zBotMain], [xMax, zTop], [xMin, zTop]];
-    const zBotEar = Math.min(zBotMain, Q[1] - ePv);
-    const xEarEnd = Q[0] + ePv;
-    return [[xMin, zBotEar], [xEarEnd, zBotEar], [xEarEnd, zBotMain], [xMax, zBotMain], [xMax, zTop], [xMin, zTop]];
-  };
-  const outlineL = outline(Math.min(Q[0] - ePv, S[0] - eBr), true);
-  const outlineR = outline(S[0] - eBr, false);
-  let dEnd = Infinity, dBot = Infinity, dTop = Infinity, dNotch = Infinity;
-  for (const b of bolts) {
-    dEnd = Math.min(dEnd, b[0] - rail.xEnd);
-    dBot = Math.min(dBot, b[1] - rail.zBot);
-    dTop = Math.min(dTop, rail.zSolidTop - b[1]);
-    dNotch = Math.min(dNotch, rectDist(b, notch.x0, notch.x1, rail.zBot, notch.top));
-  }
-  const dT = p.brakeDoublerThickIn;
-  // The doubler runs 0.9" past the outer bolt columns, clear of the shaft path, and stops short of any deck joist that crosses it (a joist butts the rail, so it
-  // cannot also cross the doubler): the widest free interval is kept.
-  let iv: Array<[number, number]> = [[Math.max(xCols[0] - 0.9, notch.x1 + 0.1), xMaxCol + 0.9]];
-  for (const jx of L.cabinJoistX) {
-    const j0 = jx - L.joistT / 2 - 0.05, j1 = jx + L.joistT / 2 + 0.05;
-    iv = iv.flatMap(([a, b]) => (j1 <= a || j0 >= b ? [[a, b] as [number, number]] : [[a, Math.min(b, j0)], [Math.max(a, j1), b]].filter(([u, v]) => v - u > 0.1) as Array<[number, number]>));
-  }
-  const best = iv.reduce((m, c) => (c[1] - c[0] > m[1] - m[0] ? c : m), iv[0] ?? [xCols[0], xCols[0]]);
-  const doubler = { x0: best[0], x1: best[1], z0: rail.zBot, z1: rail.zSolidTop, t: dT, covers: bolts.every((b) => b[0] >= best[0] - 1e-9 && b[0] <= best[1] + 1e-9) };
-  return { rail, doubler, S, Q, D, plateT: p.brakePlateThickIn, boltD, bolts, xCols, zRows: [zLo, zHi], notch, outlineL, outlineR, bearingOd, pivotHole, boltHole, dist: { end: dEnd, bottom: dBot, top: dTop, notch: dNotch } };
 }
 
 /** The rear axle beam's seat in the cabin rails and its hold-down brackets (MUST-4). Null when the beam does not reach into the rail (overslung beams are above the deck). */

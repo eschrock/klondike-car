@@ -12,9 +12,6 @@ import { SIDES, type Ctx } from './build-utils';
 import { innerHalfWidth, sheerRise, sidePath } from './layout';
 import { fingerAnalysis, guardInsertZ, scupperSites } from './body';
 import { worldAABB } from './bounds';
-import { brakeGeometry } from './brake';
-import { beltGeometry, hipControlGeometry } from './brake-controls';
-import { frontBrakeGeometry } from './brake-front';
 import type { Joint, JointType, Mat4, Part, Vec3 } from './types';
 
 // ── Festool Domino catalog (nominal mm, thickness × length) ──
@@ -318,55 +315,6 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
       }
     }
   });
-
-  // ── Cable runs, holes and fittings of the ride-mode brake controls (D-56, docs/phase3b-wsC-notes.md section 5): modeled as joints on the host parts ──
-  {
-    const bg = brakeGeometry(p, L);
-    const fg = frontBrakeGeometry(p, L, bg);
-    const hg = hipControlGeometry(p, L, bg);
-    const bl = beltGeometry(p, L);
-    const holeD = '1/4" hole';
-    const addHole = (q: Pair) => add({ ...q, hostOnly: true });
-    if (fg.on) {
-      // Front main cable (about 57"): lever bias bar -> equalizer. It enters the hull through the left rail just ahead of the exposed 4" at the bar, then runs under the deck, rising
-      // to the equalizer; wherever the line passes through a joist's depth or the rear beam it needs a hole.
-      const xe = bg.T0[0] + 5.3;
-      const ze = bg.T0[1] + 1.1;
-      const yEntry = L.hwC + L.side - p.railThicknessIn / 2;
-      const eq = fg.equalizer;
-      const at = (x: number): Vec3 => {
-        const t = (x - xe) / (eq[0] - xe);
-        return [x, yEntry + (eq[1] - yEntry) * t, ze + (eq[2] - ze) * t];
-      };
-      const main = 'brake-front-cable-main';
-      addHole({ a: ladder ? 'rail-cabin-L' : 'girder-cabin-L', b: main, typeA: 'hole', size: `${holeD} through the rail, entry of the front main cable (housing grommet), x = ${xe.toFixed(1)}"`, pts: [[xe, yEntry, ze]], noteA: 'The front brake main cable and its housing enter the hull here from the bias bar.' });
-      if (has('beam-R')) addHole({ a: 'beam-R', b: main, typeA: 'hole', size: `${holeD} through the rear axle beam fore-aft (the beam is ${L.beamR.thick}" thick), epoxy-lined`, pts: [at(L.beamR.x)], noteA: 'Front brake main cable passes through the rear axle beam; drill from the shop template before the beam is bolted on (frame owner).' });
-      L.cabinJoistX.forEach((x, i) => {
-        const q = at(x);
-        if (q[2] < L.deckBot - jD + 0.25 || q[2] > L.deckBot - 0.25) return;
-        addHole({ a: `joist-cabin-${i + 1}`, b: main, typeA: 'hole', size: `${holeD} through the crossmember depth, epoxy-lined`, pts: [q], noteA: 'Front brake main cable passes through this crossmember.' });
-      });
-      // The two outer housings leave the equalizer outboard and out through the nose rails to the knuckle clamps: a hole through each nose rail (rail middle height).
-      for (const { s, tag } of SIDES) {
-        const hz = L.deckBot - p.railDepthIn / 2;
-        if (ladder) addHole({ a: `rail-nose-${tag}`, b: `brake-front-cable-${tag}`, typeA: 'hole', size: `${holeD} with a grommet through the nose rail`, pts: [[fg.exit[0], s * (innerHalfWidth(L, fg.exit[0]) + L.side - p.railThicknessIn / 2), hz]], noteA: 'The front brake outer housing leaves the nose here (grommet).' });
-      }
-      // Stringer holes: the equalizer cables cross the nose stringers on the way out.
-      for (const { s, tag } of SIDES) {
-        const run = L.noseStringers.runs.findIndex(([xa, xb]) => fg.equalizer[0] >= xa && fg.equalizer[0] <= xb);
-        if (run >= 0) addHole({ a: `stringer-nose-${tag}${run + 1}`, b: `brake-front-cable-${tag}`, typeA: 'hole', size: `${holeD} across the stringer at the equalizer height`, pts: [[fg.equalizer[0], s * (L.noseStringers.y0 + L.noseStringers.y1) / 2, fg.equalizer[2]]], noteA: 'The equalizer outer housing passes through the stringer.' });
-      }
-    }
-    // Hip cable: a hole (grommet) through the left chine just ahead of the storage box, and the housing stop bracket on the rear transom end.
-    addHole({ a: hg.hole[0] > L.xn ? 'side-nose-L-chine' : 'side-cabin-L-chine', b: 'hip-cable-grommet', typeA: 'hole', size: `${holeD} through the chine for the hip cable grommet, x = ${hg.hole[0].toFixed(1)}"`, pts: [[hg.hole[0], hg.hole[1] + L.side / 2, hg.hole[2]]], noteA: 'The hip brake cable leaves the hull here, then runs outside the chine aft to its housing stop.' });
-    addHole({ a: 'transom-rear', b: 'brake-hip-cable-stop', typeA: 'screw', size: '2 × #10 316 screws into the transom end and its backer: bracket arm for the hip cable housing stop', pts: [[L.xRear + L.transom / 2, hg.stop[1] - 0.2, hg.stop[2]]], noteA: 'The housing stop sits on a small bracket on the rear transom end (the stop is at x = ' + hg.stop[0].toFixed(1) + '", behind the transom).' });
-    // Lap belt anchors: two 3/8" bolts each, vertically through the deck, the rail and the doubler (the joints are on the anchor and the rail; the deck gets the holes).
-    for (const { s, tag } of SIDES) {
-      const ax = bl.x, ay = s * bl.y;
-      addHole({ a: 'deck', b: `belt-anchor-${tag}`, typeA: 'hole', size: `2 × ${frac(p.beltAnchorBoltDiaIn)}" holes through the deck, ${frac(bl.boltSpacingIn)}" apart, for the belt anchor bolts`, pts: [-1, 1].map((k) => [ax + (k * bl.boltSpacingIn) / 2, ay, L.deckTop - L.ply / 2] as Vec3), noteA: 'Lap belt anchor bolts go through here, then the rail and the doubler strap under it.' });
-      addHole({ a: ladder ? `rail-cabin-${tag}` : `girder-cabin-${tag}`, b: `belt-doubler-${tag}`, typeA: 'hole', size: `2 × ${frac(p.beltAnchorBoltDiaIn)}" holes through the rail for the belt anchor bolts`, pts: [-1, 1].map((k) => [ax + (k * bl.boltSpacingIn) / 2, ay, L.deckBot - p.railDepthIn / 2] as Vec3), noteA: 'Lap belt anchor bolts pass through the rail into the doubler strap.' });
-    }
-  }
 
   // ── Rear transom backers (S13): epoxy to the transom, the socket and bracket bolts pass through both ──
   for (const { s, tag } of SIDES) {

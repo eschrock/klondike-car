@@ -124,7 +124,7 @@ function materials(p: Params, isOpen: boolean, onToggle: (o: boolean) => void): 
         ['Dynamic factor', `× ${p.dynamicFactor}`, 'payload and axle reactions'],
         ['Lightest rider (pitch-back)', `${p.riderMinMassLb} lb`, 'BRIEF §4.1; counts toward the operating status'],
         ['Design pull', `${p.pullForceLbf} lbf`, `at ${p.pullerHandHeightIn}" hand height, ${p.bridleRopeRunIn}" rope run; lift pull ≥ ${p.pitchPullMarginMin}× peak`],
-        ['Bump hits (D-50)', `${p.bumpNormalHeightIn}" normal, ${p.bumpHardHeightIn}" hard, at ${p.rideSpeedMph} mph`, `velocity-pulse model, wheel rate ${p.bumpWheelRateLbIn} lb/in; sin β = (r − h)/r`],
+        ['Bump hits (D-50)', `${p.bumpNormalHeightIn}" normal, ${p.bumpHardHeightIn}" hard, at ${p.bumpSpeedMph} mph (jogging pace)`, `velocity-pulse model, wheel rate ${p.bumpWheelRateLbIn} lb/in; sin β = (r − h)/r`],
         ['Axle tire friction', `H = μ·P_static, arm = tire radius`, 'combined with vertical as a resultant'],
         ['μ tire-ground / pad', `${p.tireGroundMu} / ${p.brakePadMu}`, 'D-16'],
         ['Deflection limit', `L/${p.deflectionLimitRatio}`, 'static load'],

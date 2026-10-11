@@ -34,13 +34,14 @@ describe('spindle rows (spec 5.5)', () => {
     expect(hh.R).toBeGreaterThan(h.R);
   });
 
-  it('a 17 mm stub is 3.2x as stressed (section modulus) and fails normal use honestly', () => {
+  it('a 17 mm stub is 3.2x as stressed (section modulus) and is no longer comfortable in normal use', () => {
     const c17 = ackCtx({ spindleStub: 0 });
     const r25 = spindleStubCheck(ctx), r17 = spindleStubCheck(c17);
     const ratio = (r17.details![0].value) / (r25.details![0].value);
     expect(ratio).toBeGreaterThan(3.0);
     expect(ratio).toBeLessThan(3.4);
-    expect(r17.cases!.goal!.status).toBe('fail');
+    expect(r17.cases!.goal!.status).not.toBe('pass'); // at jogging pace (D-53) it is marginal; at the 10 mph of the ride study it failed
+    expect(r17.cases!.goal!.util).toBeGreaterThan(3 * r25.cases!.goal!.util - 0.05);
   });
 
   it('spindle-fatigue: Goodman factor matches the hand value and the stub is far above the limit at the defaults', () => {

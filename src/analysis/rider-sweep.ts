@@ -25,16 +25,14 @@ export const LIGHT_OF_ID: Record<string, Light | 'info'> = {
   'slide-before-tip': 'turns', 'v-rollover': 'turns',
   'pitch-fwd': 'hills', 'pitch-rear': 'hills', 'brake-force': 'hills', 'brake-traction': 'hills', 'brake-ratio': 'hills', 'brake-clear': 'hills',
   'turn-radius': 'steering', 'steer-clear': 'steering',
-  // Phase 3b (D-51): Ackermann steering, ride mode and the bump-basis front end. Rows that WS-C adds for stopping, heat and bias color Hills & braking.
-  'steer-kin': 'steering', 'steer-lock': 'steering', 'steer-centering': 'info', 'ride-steer-effort': 'info',
-  'ride-rollover': 'hills', 'ride-envelope': 'info',
-  'brake-stop': 'hills', 'brake-emergency': 'hills', 'brake-heat': 'hills', 'brake-bias': 'hills', 'park-hold': 'hills', 'brake-front': 'strength',
-  'hip-cable': 'strength', 'belt-anchor': 'strength',
+  // Phase 3b (D-51), Phase 3c-1 (D-53): Ackermann steering and the bump-basis front end; the handler's basic rear brake (park-hold is a strength row of the parking pin).
+  'steer-kin': 'steering', 'steer-lock': 'steering', 'park-hold': 'strength',
   'spindle-stub': 'strength', 'spindle-fatigue': 'strength', 'kingpin-bolt': 'strength', 'kingpin-bracket': 'strength', 'wheel-retention': 'strength',
-  'tie-rod': 'strength', 'drag-link': 'strength', bellcrank: 'strength', 'steer-stop-load': 'strength', 'tongue-tie': 'strength', 'stick-cable': 'strength',
+  'tie-rod': 'strength', 'drag-link': 'strength', bellcrank: 'strength', 'steer-stop-load': 'strength', 'tongue-tie': 'strength',
   'truck-fit': 'truck',
   'mass-empty': 'info', cg: 'info',
   // Strength = every `group === 'Structure'` check (kept explicit so the mapping test can see them).
+  'brake-lever': 'strength', 'brake-links': 'strength', 'brake-beam': 'strength', 'brake-shoes': 'strength', 'handle-sockets': 'strength',
   'brake-abuse': 'strength', 'wheel-rating': 'strength', 'rear-beam-seat': 'strength', 'axle-stress': 'strength', 'beam-front': 'strength', 'beam-rear': 'strength', 'bearing-groove': 'strength', rails: 'strength', deck: 'strength',
   tongue: 'strength',
   // Seat and fittings (D-40, D-41): the seat back and grips carry a rider, so they color Strength; packing, lid swing and

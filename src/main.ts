@@ -2,7 +2,7 @@ import './style.css';
 import { mountThemeToggle } from './theme';
 import { store } from './state';
 import { derived } from './params';
-import { steerRange, type ControlMode } from './ui/steer-range';
+import { steerRange } from './ui/steer-range';
 import { buildModel, type ViewState } from './model';
 import { h } from './ui/dom';
 import { Viewer } from './viewer/viewer';
@@ -66,8 +66,8 @@ const viewer = new Viewer($('viewer'));
 
 // View-only articulation: not a design parameter, never persisted.
 // `rider`/`cargo`/`removed` are consumed by the Phase 1 model (missing fields = defaults).
-const view: CartView & { mode: ControlMode } = { steerDeg: 0, mode: 'both', rider: 'none', cargo: false, removed: false }; // rider default follows the mode (setMode)
-const build = (p: ReturnType<typeof store.get>, v: CartView & { mode?: ControlMode }): Part[] => buildModel(p, v as ViewState);
+const view: CartView = { steerDeg: 0, rider: 'none', cargo: false, removed: false }; // rider default follows the mode (setMode)
+const build = (p: ReturnType<typeof store.get>, v: CartView): Part[] => buildModel(p, v as ViewState);
 // Snap to 0.5° so 0 is always reachable even when the lock is a half degree (e.g. 38.5°).
 const snapSteer = (v: number) => Math.round(v * 2) / 2;
 const steer = h('input', { type: 'range', min: '-50', max: '50', step: '0.5', value: '0', 'aria-label': 'Try steering (preview only), inner wheel angle' });
@@ -81,19 +81,8 @@ steer.addEventListener('input', () => setSteer(Number(steer.value)));
 steerNum.addEventListener('change', () => setSteer(Number(steerNum.value)));
 steerZero.addEventListener('click', () => setSteer(0));
 viewer.addToolbarControl(
-  h('label', { class: 'steer-ctl', title: "Preview only. Doesn't change the cart. The angle is the inner wheel's; the slider stops at the steering limit of the control mode shown." }, 'Try steering (inner wheel)', steer, steerNum, h('span', { class: 'steer-unit' }, '°'), steerZero),
+  h('label', { class: 'steer-ctl', title: "Preview only. Doesn't change the cart. The angle is the inner wheel's; the slider stops at the tow lock." }, 'Try steering (inner wheel)', steer, steerNum, h('span', { class: 'steer-unit' }, '°'), steerZero),
 );
-// Phase 3b control mode (view only, not in the URL): Both shows the tongue and the ride stick, Tow only the tongue, Ride only the stick.
-const modeSel = h('select', { 'aria-label': 'Control mode shown' });
-for (const [v, t] of [['both', 'Both'], ['tow', 'Tow'], ['ride', 'Ride']]) modeSel.append(h('option', { value: v }, t));
-modeSel.addEventListener('change', () => {
-  view.mode = modeSel.value as ControlMode;
-  render();
-});
-viewer.addToolbarControl(
-  h('label', { class: 'steer-ctl', title: 'Control mode shown. Tow: the tongue steers (inner wheel to 35.5°). Ride: the right-hip stick and cables steer (outer wheel ±8°) and the tongue is off. Both: everything, for the mass and analysis views.' }, 'Mode', modeSel),
-);
-
 const checkbox = (label: string | Node[], title: string, checked: boolean, onChange: (v: boolean) => void, cls = '') => {
   const cb = h('input', { type: 'checkbox' });
   cb.checked = checked;
@@ -137,7 +126,7 @@ let fit: FitResult;
 let specFacts: SpecFacts = { emptyLb: 0, transportLb: 0 };
 const render = () => {
   const p = store.get();
-  const lock = steerRange(p, view.mode);
+  const lock = steerRange(p);
   steer.min = String(-lock);
   steer.max = String(lock);
   view.steerDeg = Math.max(-lock, Math.min(lock, view.steerDeg ?? 0));

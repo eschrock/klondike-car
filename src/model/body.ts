@@ -12,7 +12,7 @@
  */
 import { SIDE_CONSTRUCTION, hullCurveSpec, lamPly } from '../params';
 import { HULL_STEP, STEP, bandPart, box, cylinder, roughOf, span, SIDES, IN3_PER_FT3, woodMassLb, type Ctx } from './build-utils';
-import { handleGeometry } from './brake';
+import { handleGeometry } from './handle';
 import { transformPoint } from './bounds';
 import { leftTirePolys } from './hull-curve';
 import { cabinSidePoint, innerHalfWidth, sheerRise, sidePath, type Layout } from './layout';
@@ -44,7 +44,6 @@ const SIDE_ASSEMBLY_NOTE = 'Assembly (M4, D-45): laminate the chine and gunwale 
 const HOOD_FACTOR = 2;
 
 // ── Small geometry helpers ──
-const f2s = (v: number) => (Math.round(v * 100) / 100).toString();
 export const frameMat = (ex: Vec3, ey: Vec3, ez: Vec3, o: Vec3): Mat4 => [...ex, 0, ...ey, 0, ...ez, 0, ...o, 1];
 const rectCCW = (x0: number, x1: number, y0: number, y1: number): Vec2[] => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
 
@@ -493,14 +492,11 @@ export function buildBody(ctx: Ctx): Part[] {
   {
     const x0 = rearTx - dd, x1 = frontTx + dd;
     const { outline, edges } = deckOutline(x0, x1, dNose);
-    // The ride stick's two cables pass down through a slot in the deck (Layout.front.cable.slot, WS-A); the slot edge is lined with a printed grommet strip.
-    const cs = L.front.cable;
-    const slot = cw(rectCCW(cs.slot[0] - cs.slotSize[0] / 2, cs.slot[0] + cs.slotSize[0] / 2, cs.slot[1] - cs.slotSize[1] / 2, cs.slot[1] + cs.slotSize[1] / 2));
     parts.push(extPart(ctx, {
       id: 'deck', name: 'Deck', group: 'body', mat: 'ply', step: HULL_STEP.deck, grain: 'x', center: [(x0 + x1) / 2, 0, L.deckTop],
-      outline, holes: [slot], depth: L.ply, transform: compose([0, 0, L.deckBot]),
-      edges: [...edges.map((c) => (c === 'edged' ? 'captured' : c)), ...slot.map((): EdgeCondition => 'edged')],
-      notes: `One sheet, ${(x1 - x0).toFixed(1)}" long (fits a 4 x 8 sheet), with the outline of the plan shape (D-52): ${dd}" into a ${dd}" × ${rabbetH(L.deckTop, L.deckBot).toFixed(3)}" rabbet in the underside of each chine all the way round (deck + ${ds}" clearance, thickened epoxy fills it; the rail top is flush with the deck underside) and into a dado in each transom. No exposed ply edge, no step. The ${f2s(cs.slotSize[0])}" × ${f2s(cs.slotSize[1])}" cable slot for the ride stick (Layout.front.cable.slot, x ${f2s(cs.slot[0])}", y ${f2s(cs.slot[1])}") is routed through it with its edges sealed with epoxy and lined with the printed guide (cable-guide-R, edge condition 'edged'). ${DECK_ASSEMBLY_NOTE}`,
+      outline, depth: L.ply, transform: compose([0, 0, L.deckBot]),
+      edges: edges.map((c) => (c === 'edged' ? 'captured' : c)),
+      notes: `One sheet, ${(x1 - x0).toFixed(1)}" long (fits a 4 x 8 sheet), with the outline of the plan shape (D-52): ${dd}" into a ${dd}" × ${rabbetH(L.deckTop, L.deckBot).toFixed(3)}" rabbet in the underside of each chine all the way round (deck + ${ds}" clearance, thickened epoxy fills it; the rail top is flush with the deck underside) and into a dado in each transom. No exposed ply edge, no step. ${DECK_ASSEMBLY_NOTE}`,
     }));
   }
 

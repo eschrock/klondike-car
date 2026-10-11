@@ -5,6 +5,7 @@
  */
 import { STORAGE_LOCATION } from '../params';
 import { STEP, box, span, SIDES, type Ctx } from './build-utils';
+import { beamLayout } from './brake-layout';
 import { cabinSidePoint } from './layout';
 import { profilePart } from './profile';
 import { storageGeometry } from './storage';
@@ -38,7 +39,7 @@ const FASTENER_LB = {
   screw: 0.008, boltSmall: 0.04, boltLarge: 0.09, boltTapped: 0.02, insert: 0.005, knob: 0.02, domino: 0.005, glue: 0.01, nutWasher: 0.03,
 } as const;
 /** Bolts whose shank is already a separate part (kingpin, eye bolts, U-bolts, brake and handle pins): only their nuts and washers are left for the allowance. */
-const ITEMIZED_BOLT = /^(kingpin$|eyebolt|clamp-|brake-(lever-pin|shoe-pin|pawl-pin|shaft)|handle-pin|seat-knob)/;
+const ITEMIZED_BOLT = /^(kingpin$|eyebolt|clamp-|brake-(pivot-pin|link-pin-[TB]|park-pin|lever-pin)|handle-pin|seat-knob)/;
 const HARDWARE_FALLBACK_LB = 2.5;
 const HARDWARE_SIZE = [2, 2, 1.25] as const;
 /** Cabin reflectors at these fore-aft fractions of the cabin length (clear of the signs and the nose). */
@@ -180,9 +181,9 @@ export function buildHardware(ctx: Ctx): Part[] {
   const zBot = L.deckBot - HARDWARE_SIZE[2];
   const blockers: Array<[number, number]> = L.cabinJoistX.map((x) => [x - L.joistT / 2, x + L.joistT / 2]);
   const p = ctx.p;
-  if (L.r + p.brakeShaftDiameterIn / 2 > zBot && L.r - p.brakeShaftDiameterIn / 2 < L.deckBot) {
-    const sx = -(L.r + p.brakeShaftBehindTireIn);
-    blockers.push([sx - p.brakeShaftDiameterIn / 2, sx + p.brakeShaftDiameterIn / 2]);
+  {
+    const bl = beamLayout(p, L.r, L.deckBot - p.railDepthIn, L.xRear + L.transom);
+    if (bl.zB + p.brakeBeamSizeIn / 2 > zBot && bl.zB - p.brakeBeamSizeIn / 2 < L.deckBot) blockers.push([bl.notch.x0, bl.notch.x1]);
   }
   if (L.beamR.top > zBot) blockers.push([L.beamR.x - L.beamR.thick / 2, L.beamR.x + L.beamR.thick / 2]);
   blockers.sort((a, b) => a[0] - b[0]);

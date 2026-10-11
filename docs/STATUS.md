@@ -5,7 +5,7 @@
 | 0 — Setup & parameter reconciliation | ✅ approved 2026-10-10 |
 | 1 — Block model | ✅ approved |
 | 2 — Analysis & simulation | ✅ approved 2026-10-10 |
-| 3 — Detail design | 3b flipped (`6341ecf`, consistent, 174 lb, no safe range). **Paused:** Eric is re-scoping to a sled (docs/phase3c-plan.md) |
+| 3 — Detail design | **3c** (docs/phase3c-plan.md): 3c-1 done (ride mode out, basic brake); next 3c-2 cargo and bed |
 | 4 — Build outputs | not started |
 
 ## Phase 0 log
@@ -45,3 +45,4 @@
 - Ride-mode study: 6 → 7 → 8/10. Eric: no curbs at camp (D-50, bumps not curb strikes, bend-don't-break), go with Concept A (D-51: Ackermann on racing-kart spindles, 9 ft tow radius, ±8° ride lock, rider stick + hip brake lever, front + rear brakes), and a gentle hull taper instead of the S-curve (D-52). Phase 3b spec in progress.
 - Phase 3b Stage 0–2 landed: Ackermann front end, convex-taper hull, ride brakes, bump analysis (1,263 tests green, 174.1 lb, 10 rows fail at 150 lb). Eric (2026-10-11): it should be a Klondike *sled* on wheels: rider as passenger, team pulls, musher steers and brakes at the back. Keep it a crafted, reusable oak piece with storage. Research in docs/klondike-research.md; next-phase plan in docs/phase3c-plan.md. Finishing tweaks on hold (flush flag socket, lamp detail).
 - Eric: keep Ashley's concept, a solid, wide, reusable wooden cart (post-race hauler), wheels required, steerable front kept, ride mode out; the seat back and cushion stow in the storage box. Plan: docs/phase3c-plan.md (3c-1 strip ride mode, 3c-2 cargo and bed, 3c-3 size and slim, 3c-4 finish).
+- 3c-1 (D-53): ride mode, front brakes and lap belt removed; linkage simplified (tongue → bellcrank); basic bolted wagon brake (8.7 lb, 20 lbf hold on 15° at 150 lb); bumps at 5 mph. Empty mass 174.1 → 145.5 lb. Still no safe range: bellcrank 2.64, kingpin bracket 2.50, rear beam seat 2.29, bearing groove 1.50, kingpin bolt 1.33, tongue tie 1.32, wheel rating 1.01 at 150 lb (sizing is 3c-3). Tag cart-v3b = pre-3c.

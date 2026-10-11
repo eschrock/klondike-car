@@ -10,7 +10,7 @@ import type { CaseData } from './loads';
 import { evalBoth } from './stability';
 import { allowables, wheelLoads } from './structure';
 import { boltCapacity, cleavageVr } from './nds';
-import { uncTensileArea } from './brake-mount';
+import { uncTensileArea } from './nds';
 import { bumpCases, bumpText, peakVertical, sensitivityText } from './bump';
 import type { AnalysisCheck, Detail } from './types';
 

@@ -3,16 +3,14 @@
  * wood / steel mass with finish (D-20), and rigid-body placement of the steered parts (Ackermann poses).
  */
 import { derived, PLY_SPECIES, resolveParams, type Params } from '../params';
-import { lockLimits, poseMatrices, solveSteer, type PoseId, type SteerSolution } from './ackermann';
+import { poseMatrices, solveSteer, type PoseId, type SteerSolution } from './ackermann';
 import { computeLayout, type Layout } from './layout';
 import { compose, multiply, rotationX, rotationY } from './mat4';
 import type { Dims, EdgeCondition, Fab, Joint, Mat4, Part, PartGroup, PartKind, RigidBody, Vec2, Vec3 } from './types';
 
 export interface ViewState {
-  /** Displayed steer angle, degrees (+ = turning left): the INNER wheel angle, clamped to the lock of the mode in view. */
+  /** Displayed steer angle, degrees (+ = turning left): the INNER wheel angle, clamped to the tow lock. */
   steerDeg?: number;
-  /** Control mode: 'both' (default, analysis/mass see everything), 'tow' omits the stick, 'ride' omits the tongue and its link. */
-  mode?: 'both' | 'tow' | 'ride';
   /** Which rider mass the mannequin carries. Default 'operating'. */
   rider?: 'none' | 'operating' | 'goal';
   /** Include the cargo block. Default true. */
@@ -26,7 +24,7 @@ export interface Ctx {
   d: ReturnType<typeof derived>;
   L: Layout;
   view: Required<ViewState>;
-  /** Steer angle in radians (the inner wheel), clamped to the lock of the mode in view. */
+  /** Steer angle in radians (the inner wheel), clamped to the tow lock. */
   steerRad: number;
   /** Ackermann solution at the displayed steer angle and the rigid-body poses of the steer bodies (neutral frame to steered pose). */
   steer: SteerSolution;
@@ -73,8 +71,8 @@ export const STEEL_STOCK_SOURCING = { vendor: 'McMaster-Carr (A36 steel bar / pl
 export function makeCtx(input: Params, v: ViewState = {}): Ctx {
   const p = resolveParams(input); // every part sees the auto-resolved hull curve start (A-4, D-26, D-52)
   const L = computeLayout(p);
-  // The displayed angle is the INNER wheel angle, clamped to the lock of the mode in view (ride: the inner angle that goes with the outer ride lock).
-  const lock = v.mode === 'ride' ? lockLimits(L.front.ack, 'ride').innerDeg : Math.abs(p.steerLockDeg);
+  // The displayed angle is the INNER wheel angle, clamped to the tow lock.
+  const lock = Math.abs(p.steerLockDeg);
   const deg = Math.min(lock, Math.max(-lock, v.steerDeg ?? 0));
   const steerRad = (deg * Math.PI) / 180;
   const steer = solveSteer(L.front.ack, deg);
@@ -82,7 +80,7 @@ export function makeCtx(input: Params, v: ViewState = {}): Ctx {
     p,
     d: derived(p),
     L,
-    view: { steerDeg: deg, mode: v.mode ?? 'both', rider: v.rider ?? 'operating', cargo: v.cargo ?? true, removed: v.removed ?? false },
+    view: { steerDeg: deg, rider: v.rider ?? 'operating', cargo: v.cargo ?? true, removed: v.removed ?? false },
     steerRad,
     steer,
     pose: poseMatrices(L.front.ack, steer),
@@ -183,13 +181,11 @@ function defaultExplode(ctx: Ctx, s: PartSpec): Vec3 {
       if (id.startsWith('clamp')) return unit([0, sy * 0.6, -1]);
       return unit([fx * 0.3, 0, -1]);
     case 'steering':
-      // Phase 3b front end (WS-A): spindles outward and down, brackets outward, tie rod / drag link / bellcrank down and aft, tongue forward, stick up, cables down, mode plate / pin down.
+      // Phase 3b front end (WS-A): spindles outward and down, brackets outward, tie rod / drag link / bellcrank down and aft, tongue forward.
       if (/^(spindle|steer-arm|kingpin-bolt)-/.test(id)) return unit([0, sy * 1, -0.5]);
       if (/^(kp-bracket|steer-stop-tow)-/.test(id)) return unit([0, sy * 1, -0.1]);
-      if (/^(tie-rod|drag-link|bellcrank|cable-crossbar|centering-spring|bell-)/.test(id)) return unit([-0.5, 0, -1]);
-      if (/^(mode-plate|mode-pin)/.test(id)) return unit([-0.2, 0, -1]);
-      if (/^(ride-stick|stick-guard|stick-bracket)/.test(id)) return unit([0, 0, 1]);
-      if (/^(stick-cable|cable-guide)/.test(id)) return unit([0, 0, -1]);
+      if (/^(tie-rod|drag-link|bellcrank|bell-)/.test(id)) return unit([-0.5, 0, -1]);
+      if (/^tongue-link-pin/.test(id)) return unit([-0.2, 0, 1]);
       if (/^(tongue|eyebolt-T|bridle)/.test(id)) return unit([1, 0, -0.1]);
       return unit([0.6, 0, -0.5]);
     case 'frame':
@@ -208,7 +204,7 @@ function defaultExplode(ctx: Ctx, s: PartSpec): Vec3 {
       if (/^storage-lid/.test(id)) return unit([-0.3, 0, 1]);
       return unit([-0.5, 0, 0.7]);
     case 'brake':
-      if (/^brake-shoe|^brake-drum/.test(id)) return unit([0.2, sy * 1, 0.2]);
+      if (/^brake-shoe/.test(id)) return unit([0.2, sy * 1, 0.2]);
       return unit([-1, 0, -0.3]);
     case 'removable':
       if (/^handle/.test(id)) return unit([-1, 0, 0.3]);

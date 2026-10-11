@@ -1,27 +1,22 @@
 /**
- * Braking checks (D-13, D-24, D-38, D-39): the lever ratio DERIVED from the linkage geometry (`brakeGeometry`), the handle
- * force to hold on the design slope, rear-only traction (info), the mechanism members (lever, links, cross shaft, shoes,
- * ratchet), the push-handle sockets, and a sweep of the linkage over its stroke.
+ * Braking checks for the handler's basic rear brake (Phase 3c-1, D-53; the D-13/D-38/D-48 cross-shaft analysis is gone): the lever ratio DERIVED from the
+ * lever / link / beam geometry (`brakeGeometry`), the hand force to hold on the design slope, rear-only traction (info), the members (lever and pivot,
+ * link and pins, beam, shoes), the parking pin, the push-handle sockets, a lever abuse check and a sweep of the mechanism over its stroke.
  *
- * Load path (all forces in lbf, moments in lbf·in; every row hand-checkable from its `how` string):
- *   W sinθ / μ_pad = N_hold   total shoe normal force that holds the cart on the design slope (D-13); μ_pad is the LOWER of the
- *                             bonded-lining wet μ and the mud-fouled μ (`holdMu`), so the members are sized for the worst lining
+ * Load path (all forces in lbf, moments in lbf·in; every row is hand-checkable from its `how` string):
+ *   W sinθ / μ_pad = N_hold   total shoe normal force that holds the cart on the design slope; μ_pad is the LOWER of the bonded-lining wet μ and the
+ *                             mud-fouled μ (`holdMu`), so the members are sized for the worst lining
  *   N = λ · N_hold            what the members are checked at (hard pull / jerk, `brakeLoadFactor`)
- *   hand force F_eq = N / ratio, lever moment M_L = F_eq · l_grip, link force F_link = M_L / d_Q,
- *   shaft torque T = F_link · d_S = N · k  (k = moment arm of the shoe force about the shaft, friction included)
- * The critical rolling direction is the one with the larger k (smaller ratio); members are sized with it.
+ *   F_beam = N (cos β + μ sin β)   the beam's forward pull (shoes a few degrees below the axle line); F_link = F_beam / u_x (u = link direction)
+ *   hand-equivalent F = F_link d_Q / l_grip   (d_Q = pivot-to-link-line distance, l_grip = pivot-to-grip height, applied pose)
+ *   pivot reaction R = F (hand, rearward) + F_link (link, rearward) pushed FORWARD by the bracket into the transom
+ * Friction acts nearly vertically on the shoes (they sit within a few degrees of the axle line), so there is no servo: forward and reverse ratios differ by
+ * a few percent, and the smaller one is critical.
  */
-import { BRAKE_TYPE } from '../params';
 import { obbOverlap, partOBB, partOBBs, worldAABB, type OBB } from '../model/bounds';
-import {
-  CRANK_LIGAMENT_IN, HUB_LEN_BARS, PIVOT_SLEEVE_WALL_IN, SLEEVE_WALL_IN, brakeGeometry, buildBrakeAt, handleGeometry, ratchetGeometry, shoeLengthIn,
-  type BrakeGeom, type HandleGeom, type RatchetGeom,
-} from '../model/brake';
+import { brakeGeometry, buildBrakeAt, railGeometry, shoeLengthIn, type BrakeGeom } from '../model/brake';
 import { makeCtx } from '../model/build-utils';
-import { bearingMount } from '../model/rear-mount';
-import { cableCompliance, chainOf, hipFromMain } from './brake-chain';
-import { frontBrakeSweep } from './brake-sweep-front';
-import { mountDetails, mountStatics } from './brake-mount';
+import { handleGeometry, type HandleGeom } from '../model/handle';
 import type { Part, Vec3 } from '../model/types';
 import type { Ctx } from './context';
 import { dualCheck, singleCheck, detail, governing, type CaseEval } from './dual';
@@ -39,113 +34,92 @@ export function scaleLimits(ds: Detail[], k: number): Detail[] {
 
 // ── shared bundle ────────────────────────────────────────────────────────────────────────────────────────────
 
-interface Bundle { g: BrakeGeom; rg: RatchetGeom; h: HandleGeom; drum: boolean }
+interface Bundle { g: BrakeGeom; h: HandleGeom }
 const bundles = new WeakMap<Ctx, Bundle>();
 export function brakeBundle(ctx: Ctx): Bundle {
   let b = bundles.get(ctx);
   if (!b) {
-    const g = brakeGeometry(ctx.p, ctx.L);
-    b = { g, rg: ratchetGeometry(ctx.p, g, ctx.L), h: handleGeometry(ctx.p, ctx.L), drum: ctx.p.brakeType === BRAKE_TYPE.woodDrum };
+    b = { g: brakeGeometry(ctx.p, ctx.L), h: handleGeometry(ctx.p, ctx.L) };
     bundles.set(ctx, b);
   }
   return b;
 }
 
-/** Lever ratio the analysis uses: the derived (critical-direction) ratio, or the target for the drum variant / a failed linkage. */
-export function effectiveBrakeRatio(ctx: Ctx): { ratio: number; derived: boolean } {
-  const b = brakeBundle(ctx);
-  if (b.drum) return { ratio: ctx.p.brakeLeverRatio, derived: false };
-  const ch = chainOf(ctx);
-  return { ratio: ch.frontOn ? ch.Rcrit : b.g.ratioCrit, derived: true };
-}
-
 /** Friction used to size the hold load: the lower of the design (wet lining) μ and the mud-fouled μ. */
 export const holdMu = (p: { brakePadMu: number; brakePadMuFouled: number }): number => Math.min(p.brakePadMu, p.brakePadMuFouled);
 
-const tpiUnf = (d: number): number => (d <= 0.25 ? 28 : d <= 0.375 ? 24 : d <= 0.4375 ? 20 : d <= 0.5 ? 20 : 18);
-const tensileArea = (d: number): number => (Math.PI / 4) * (d - 0.9743 / tpiUnf(d)) ** 2;
 const circleA = (d: number) => (Math.PI / 4) * d * d;
 
-/** Allowable stresses for A36 flat bar, rod and pins (yield / steel safety factor; shear 0.577; bearing 0.9). */
-function steelAllow(ctx: Ctx) {
-  const fy = ctx.p.brakeSteelYieldPsi / ctx.p.steelSafetyFactor;
-  return { tens: fy, shear: 0.577 * fy, bear: 0.9 * fy, fy: ctx.p.brakeSteelYieldPsi };
+/** Allowable stresses: A36 flat bar, plates (yield / steel SF; shear 0.577; bearing 0.9), 316 bolts and pins, 6061-T6 aluminum. */
+function allow(ctx: Ctx) {
+  const { p } = ctx;
+  const fy = p.brakeSteelYieldPsi / p.steelSafetyFactor;
+  const fb = p.kingpinCrossBoltYieldPsi / p.steelSafetyFactor;
+  const fa = p.brakeAluminumYieldPsi / p.steelSafetyFactor;
+  return { steel: fy, steelShear: 0.577 * fy, steelBear: 0.9 * fy, bolt: fb, boltShear: 0.577 * fb, al: fa, alShear: 0.577 * fa, alBear: fa };
 }
 
 interface Loads {
-  W: number; down: number; nHold: number; lam: number; nTot: number; nShoe: number; feq: number; ml: number; flink: number; tin: number; tShoe: number; rPin: number; kMax: number;
-}
-function loadsAt(ctx: Ctx, c: CaseData, b: Bundle): Loads {
-  const { p } = ctx;
-  const th = p.designSlopeDeg * RAD;
-  const down = c.massLb * Math.sin(th);
-  const nHold = down / holdMu(p);
-  const lam = p.brakeLoadFactor;
-  const nTot = lam * nHold;
-  const ratio = b.g.ratioCrit > 1e-6 ? b.g.ratioCrit : p.brakeLeverRatio;
-  const feq = nTot / ratio;
-  const ml = feq * b.g.lGrip;
-  const flink = b.g.dQ > 1e-6 ? ml / b.g.dQ : 0;
-  const tin = flink * b.g.dS;
-  return {
-    W: c.massLb, down, nHold, lam, nTot, nShoe: nTot / 2, feq, ml, flink, tin, tShoe: tin / 2,
-    rPin: (nTot / 2) * Math.sqrt(1 + p.brakePadMu ** 2), kMax: Math.max(b.g.kFwd, b.g.kRev),
-  };
+  W: number; down: number; nHold: number; lam: number; nTot: number; nShoe: number;
+  /** Beam forward pull, link force, hand-equivalent force at the grip, lever moment about the pivot, pivot reaction (vector and magnitude), friction per shoe (vertical). */
+  Fc: number; Flink: number; feq: number; ml: number; R: [number, number]; Rmag: number; muN: number;
 }
 
-const na = (id: string, label: string, group: AnalysisCheck['group'], why: string): AnalysisCheck =>
-  singleCheck({ id, label, group, value: 0, unit: '', limit: 0, sense: '<=', info: true, how: `Not evaluated: ${why}`, refs: ['D-13', 'D-38'] });
+function fromNormal(ctx: Ctx, g: BrakeGeom, nTot: number, W: number, down: number, nHold: number, lam: number): Loads {
+  const { p } = ctx;
+  const beta = g.bl.beta;
+  const Fc = nTot * (Math.cos(beta) + p.brakePadMu * Math.sin(beta));
+  const Flink = g.ux > 1e-6 ? Fc / g.ux : 0;
+  const ml = Flink * g.dQ;
+  const feq = g.lGrip > 1e-6 ? ml / g.lGrip : 0;
+  const R: [number, number] = [feq + Flink * g.ux, Flink * ((g.B1[1] - g.T1[1]) / Math.max(1e-9, g.linkLen))];
+  return { W, down, nHold, lam, nTot, nShoe: nTot / 2, Fc, Flink, feq, ml, R, Rmag: Math.hypot(R[0], R[1]), muN: (p.brakePadMu * nTot) / 2 };
+}
+
+function loadsAt(ctx: Ctx, c: CaseData, g: BrakeGeom): Loads {
+  const { p } = ctx;
+  const down = c.massLb * Math.sin(p.designSlopeDeg * RAD);
+  const nHold = down / holdMu(p);
+  return fromNormal(ctx, g, p.brakeLoadFactor * nHold, c.massLb, down, nHold, p.brakeLoadFactor);
+}
+
+/** Loads for a hand force `F` at the grip with no reference to the rider (the abuse case): N follows from the beam pull in the direction that gives the larger N. */
+function loadsFromHand(ctx: Ctx, g: BrakeGeom, F: number): Loads {
+  const { p } = ctx;
+  const Flink = g.dQ > 1e-6 ? (F * g.lGrip) / g.dQ : 0;
+  const Fc = Flink * g.ux;
+  const kMin = Math.max(1e-6, Math.cos(g.bl.beta) - p.brakePadMu * Math.sin(g.bl.beta));
+  const nTot = Fc / kMin;
+  const R: [number, number] = [F + Flink * g.ux, Flink * ((g.B1[1] - g.T1[1]) / Math.max(1e-9, g.linkLen))];
+  return { W: 0, down: 0, nHold: 0, lam: 0, nTot, nShoe: nTot / 2, Fc, Flink, feq: F, ml: F * g.lGrip, R, Rmag: Math.hypot(R[0], R[1]), muN: (p.brakePadMu * nTot) / 2 };
+}
+
+const loadText = (L: Loads, g: BrakeGeom) =>
+  `Hold load W·sinθ/μ = ${f(L.W)} × sin θ / μ = ${f(L.nHold)} lbf total shoe normal force; × λ ${f(L.lam, 2)} = N ${f(L.nTot)} lbf (${f(L.nShoe)} per shoe); beam pull F_c = N (cos β + μ sin β) = ${f(L.Fc)} lbf; link force F_link = F_c / u_x = ${f(L.Fc)} / ${f(g.ux, 3)} = ${f(L.Flink)} lbf; hand-equivalent F = F_link·d_Q / l_grip = ${f(L.Flink)} × ${f(g.dQ, 2)} / ${f(g.lGrip, 2)} = ${f(L.feq)} lbf; lever moment M_L = ${f(L.ml)} lbf·in; pivot reaction R = ${f(L.Rmag)} lbf (forward, into the transom)`;
 
 // ── lever ratio, handle force, traction ─────────────────────────────────────────────────────────────────────
 
 export function brakeRatio(ctx: Ctx): AnalysisCheck {
   const { p } = ctx;
-  const b = brakeBundle(ctx);
-  const g = b.g;
-  if (b.drum) return na('brake-ratio', 'Brake mechanical advantage (derived)', 'Braking', `the wooden-drum variant has no linkage geometry; the analysis uses the ${f(p.brakeLeverRatio, 1)}:1 target (D-13).`);
-  const lockMu = Math.abs(g.Kt) > 1e-9 ? Math.abs(g.Kn) / Math.abs(g.Kt) : Infinity;
-  const servo = g.kFwd > 0 ? g.kRev / g.kFwd : 0;
-  const how = `Derived from the linkage geometry, not assumed (D-38). In the vertical x–z plane with the pull applied to the grip: ratio = N_total / F_hand = (l_grip / d_Q) · (d_S / k), where l_grip = ${f(g.lGrip, 2)}" (pivot to grip height ${f(g.gripZ, 1)}"), d_Q = ${f(g.dQ, 2)}" = perpendicular distance of the lever pivot from the link line, d_S = ${f(g.dS, 2)}" = distance of the shaft from the link line (both at the applied pose: lever tail ${f(g.tailIn, 2)}" ${p.brakeLeverTailAuto ? `(SOLVED so the critical ratio = target × ${f(p.brakeRatioHeadroom, 2)} headroom = ${f(p.brakeLeverRatio * p.brakeRatioHeadroom, 2)}:1; it adapts to the wheel size)` : '(manual)'}, crank ${f(g.crankIn, 2)}"${g.crankIn > p.brakeCrankIn + 1e-6 ? ` (lengthened from ${f(p.brakeCrankIn, 2)}": the shortest tail alone cannot reach the ratio on this wheel)` : ''} at ${f(p.brakeCrankAngleDeg, 0)}° released, link ${f(g.linkLen, 2)}" pin to pin, ${g.linkTension ? 'in tension' : 'in compression'}), and k = moment arm of the shoe force about the shaft: the pin is ${f(g.armLen, 2)}" from the shaft, the normal-force arm is |Kn| = ${f(Math.abs(g.Kn), 2)}" and the friction-force arm is |Kt| = ${f(Math.abs(g.Kt), 2)}" (shoe ${f(p.brakeShoeAngleDeg, 0)}° below the axle line behind the tire). Shoe friction μ = ${f(p.brakePadMu, 2)} adds ±μ·Kt: k = |Kn ∓ μKt| = ${f(g.kFwd, 2)}" with the cart rolling FORWARD (friction helps: servo) and ${f(g.kRev, 2)}" rolling BACKWARD (de-servo). Ratio forward ${f(g.ratioFwd, 1)}:1, backward ${f(g.ratioRev, 1)}:1; the smaller one, ${f(g.ratioCrit, 1)}:1 (${g.critical}), is the critical case (the cart parked nose-up wants to roll back) and is what the force check uses. Target ≥ ${f(p.brakeLeverRatio, 1)}:1. Self-lock margin: the shoe locks only if μ ≥ |Kn|/|Kt| = ${f(lockMu, 1)} (design μ ${f(p.brakePadMu, 2)}); the servo gain forward is ${f(servo, 2)}× the backward value. Stroke: ${f(p.brakeShoeTravelIn, 2)}" at the pad takes the lever ${f(g.thetaL / RAD, 1)}° (${f(g.gripTravelIn, 1)}" at the grip).${g.ok ? '' : ` NOT VALID: ${g.why || (g.selfLocking ? 'the shoe is self-locking' : 'no ratio')}.`}`;
+  const g = brakeBundle(ctx).g;
+  const how = `Derived from the lever / link / beam geometry, not assumed (D-53). In the vertical x–z plane with the pull applied to the grip: ratio = N_total / F_hand = (l_grip / d_Q) · u_x / (cos β ± μ sin β), where l_grip = ${f(g.lGrip, 2)}" (pivot to grip height ${f(g.gripZ, 1)}"), d_Q = ${f(g.dQ, 2)}" = perpendicular distance of the lever pivot from the link line at the applied pose (lever tail ${f(g.tailIn, 2)}", link ${f(g.linkLen, 2)}" pin to pin in ${g.linkTension ? 'tension' : 'compression'}, u_x = ${f(g.ux, 3)} its forward cosine), and the shoes sit β = ${f(g.bl.beta / RAD, 1)}° below the axle line, so the friction (μ = ${f(p.brakePadMu, 2)}) adds only ±μ sin β = ${f(p.brakePadMu * Math.sin(g.bl.beta), 3)} to cos β = ${f(Math.cos(g.bl.beta), 3)}. Ratio with the cart rolling forward ${f(g.ratioFwd, 1)}:1, backward ${f(g.ratioRev, 1)}:1; the smaller, ${f(g.ratioCrit, 1)}:1 (${g.critical}), is the critical case and is what the force check uses. Target ≥ ${f(p.brakeLeverRatio, 1)}:1. Stroke: ${f(p.brakeShoeTravelIn, 4)}" at the shoe takes the beam ${f(g.bl.stroke, 3)}", the lever ${f(g.thetaL / RAD, 1)}° (${f(g.gripTravelIn, 1)}" at the grip; limit ${f(p.brakeGripTravelMaxIn, 1)}", status verify: feel-test the mock-up).${g.ok ? '' : ` NOT VALID: ${g.why || 'no ratio'}.`}`;
   const details: Detail[] = [
-    detail('ratio, rolling forward (servo)', g.ratioFwd, ':1', p.brakeLeverRatio, '>='),
-    detail('ratio, rolling backward (de-servo, critical)', g.ratioRev, ':1', p.brakeLeverRatio, '>='),
-    detail('self-lock margin μ_lock / μ_pad', lockMu / Math.max(1e-9, p.brakePadMu), '×', 2, '>='),
+    detail('ratio, rolling forward', g.ratioFwd, ':1', p.brakeLeverRatio, '>='),
+    detail('ratio, rolling backward', g.ratioRev, ':1', p.brakeLeverRatio, '>='),
     detail('grip travel, released to applied (hand lever sweep)', g.gripTravelIn, 'in', p.brakeGripTravelMaxIn, '<='),
   ];
-  const ch = chainOf(ctx);
-  const gated: Detail[] = [];
-  const info = (name: string, value: number, unit: string): Detail => ({ name, value, unit, limit: 0, sense: '>=', util: 0 });
-  let frontText = '';
-  {
-    const goal = ctx.loads.goal;
-    const hold = (goal.massLb * Math.sin(p.designSlopeDeg * RAD)) / holdMu(p) / (ch.Rcrit * ch.eta);
-    const comp = cableCompliance(ctx, ch, hold);
-    if (ch.frontOn) {
-      gated.push(
-        detail('front branch ratio, rolling backward (if it took the whole lever moment)', ch.fg.Rf.rev, ':1', p.brakeLeverRatio, '>='),
-        detail('TOTAL ratio N_total / F_hand, rolling backward (critical)', ch.Rtot.rev, ':1', p.brakeLeverRatio, '>='),
-        detail('main grip travel including the front cable stretch at the goal-rider hold force', g.gripTravelIn + comp.extraGripMainIn, 'in', p.brakeGripTravelMaxIn, '<='),
-      );
-      details.push(...gated, info('total ratio, rolling forward', ch.Rtot.fwd, ':1'), info('front share of the shoe force, mean of forward and backward', (ch.bias.fwd + ch.bias.rev) / 2, ''));
-      frontText = ` Front brake: bias bar front arm a_f = ${f(ch.fg.aF, 2)}" of ${f(ch.fg.barIn, 1)}" gives the front branch ${f(ch.phi * 100, 1)}% of the lever force and ${f(ch.bias.fwd * 100, 1)}% / ${f(ch.bias.rev * 100, 1)}% (fwd / back) of the shoe force. Front branch ratio ${f(ch.fg.Rf.fwd, 1)} / ${f(ch.fg.Rf.rev, 1)}:1 (cable arm ${f(ch.fg.tailIn, 2)}" on the swing arm, ${f(ch.fg.kFwd, 2)}" / ${f(ch.fg.kRev, 2)}" shoe moment arm), so the total ratio is (1 − φ)R_rear + φR_front = ${f(ch.Rtot.fwd, 1)} / ${f(ch.Rtot.rev, 1)}:1: work is conserved (same stroke at all four shoes), so the front brake adds braking capacity and parking margin, not mechanical advantage. The front cable stretch (${f(comp.frontStretchIn, 3)}") adds ${f(comp.extraGripMainIn, 2)}" of grip travel at the goal hold force.`;
-    }
-    {
-      details.push(info('hip grip travel, full throw (feel-test; the gate is the cable travel reserve in hip-cable)', ch.hg.gripTravelIn, 'in'), info('hip force per main-grip force (geometric)', ch.hg.hipPerMain, ''));
-      frontText += ` Hip lever: ${f(ch.hg.armIn, 1)}" arm, ${f(p.hipLeverThrowDeg, 0)}° throw = ${f(ch.hg.gripTravelIn, 2)}" at the grip; hip force = ${f(ch.hg.hipPerMain, 3)} × the main-grip force before cable friction.`;
-    }
-  }
   return singleCheck({
-    id: 'brake-ratio', label: 'Brake mechanical advantage (derived from geometry)', group: 'Braking', refs: ['D-13', 'D-38'],
-    value: g.ok ? g.ratioCrit : 0, unit: ':1', limit: p.brakeLeverRatio, sense: '>=', marginalAbs: 0.5, how: `${how} Grip travel from released to applied: ${f(g.gripTravelIn, 2)}" for the ${f(p.brakeShoeTravelIn, 4)}" shoe stroke at ${f(g.ratioCrit, 1)}:1 (limit ${f(p.brakeGripTravelMaxIn, 2)}", status verify: feel-test the mock-up). Raising the ratio or the stroke raises the travel one for one; the ratio headroom ${f(p.brakeRatioHeadroom, 2)} and the stroke were chosen together (r3 N-8).${frontText}`, details,
-    status: [judge(g.gripTravelIn, p.brakeGripTravelMaxIn, '<='), ...gated.map((d) => judge(d.value, d.limit, d.sense, d.sense === '>=' ? 0.5 : 0.3))].reduce((x, y) => worst(x, y), judge(g.ok ? g.ratioCrit : 0, p.brakeLeverRatio, '>=', 0.5)),
+    id: 'brake-ratio', label: 'Brake mechanical advantage (derived from geometry)', group: 'Braking', refs: ['D-53', 'D-13'],
+    value: g.ok ? g.ratioCrit : 0, unit: ':1', limit: p.brakeLeverRatio, sense: '>=', marginalAbs: 0.5, how, details,
+    status: [judge(g.gripTravelIn, p.brakeGripTravelMaxIn, '<=')].reduce((x, y) => worst(x, y), judge(g.ok ? g.ratioCrit : 0, p.brakeLeverRatio, '>=', 0.5)),
   });
 }
 
 export function brakeForce(ctx: Ctx): AnalysisCheck {
   const { p } = ctx;
   const th = p.designSlopeDeg * RAD;
-  const { ratio, derived } = effectiveBrakeRatio(ctx);
-  const b = brakeBundle(ctx);
+  const g = brakeBundle(ctx).g;
+  const ratio = g.ratioCrit > 1e-6 ? g.ratioCrit : p.brakeLeverRatio;
   const BARE_OAK_MU = 0.25;
   const ev = (c: CaseData): CaseEval => {
     const down = c.massLb * Math.sin(th);
@@ -155,22 +129,18 @@ export function brakeForce(ctx: Ctx): AnalysisCheck {
     const Ff = down / muF / eta; // mud / slush fouled lining: the pass/fail case
     const Fbare = down / BARE_OAK_MU / eta;
     const F = Math.max(Fd, Ff);
-    const chn = chainOf(ctx);
-    const Ffwd = derived && b.g.ratioFwd > 0 ? down / muF / ((chn.frontOn ? chn.Rtot.fwd : b.g.ratioFwd) * p.brakeEfficiency) : Ff;
-    const Fhip = hipFromMain(chn, F);
     return {
-      value: Math.max(F, Fhip), unit: 'lbf', limit: p.handleForceLimitLbf, sense: '<=', suffix: Fhip > F ? 'hip lever, mud-fouled lining' : Ff >= Fd ? 'mud-fouled lining' : 'wet lining',
+      value: F, unit: 'lbf', limit: p.handleForceLimitLbf, sense: '<=', suffix: Ff >= Fd ? 'mud-fouled lining' : 'wet lining',
       details: [
-        detail(`hip lever grip force (main-grip force × ${f(chn.hg.hipPerMain, 3)} ÷ cable efficiency ${f(chn.etaHip, 2)})`, Fhip, 'lbf', p.handleForceLimitLbf, '<='),
         detail(`handle force, wet bonded lining μ ${f(muD, 2)}`, Fd, 'lbf', p.handleForceLimitLbf, '<='),
         detail(`handle force, mud / slush-fouled lining μ ${f(muF, 2)} (pass/fail)`, Ff, 'lbf', p.handleForceLimitLbf, '<='),
         detail(`info: bare wet oak μ ${BARE_OAK_MU} (why the lining is specified; not pass/fail)`, Fbare, 'lbf', p.handleForceLimitLbf, '<='),
       ],
-      how: `F = W·sinθ / μ / (ratio · η) = ${f(c.massLb)} × sin ${f(p.designSlopeDeg)}° / μ / (${f(ratio, 1)} × ${f(p.brakeEfficiency, 2)}); W·sinθ = ${f(down)} lbf downslope. Wet bonded lining μ ${f(muD, 2)}: ${f(down / muD)} lbf total shoe normal force → ${f(Fd)} lbf at the handle. MUD / SLUSH-FOULED lining μ ${f(muF, 2)} (the shoe sits on the rear-lower tread, the wettest part, D-13, build S10): ${f(down / muF)} lbf shoe normal force → ${f(Ff)} lbf at the handle. The row value is the larger of the two, ${f(F)} lbf, limit ≤ ${p.handleForceLimitLbf} lbf (pass/fail at BOTH μ, not a sensitivity). Bare wet oak (μ ${BARE_OAK_MU}, no lining) would need ${f(Fbare)} lbf: the lining is what makes the brake work in the wet. (Shoe friction acts at the tire radius, 1:1 with ground force, D-13. The ratio ${f(ratio, 1)}:1 is ${derived ? `DERIVED from the lever / crank / shoe geometry (brake-ratio, D-38), taken in the critical ${b.g.critical} rolling direction at the design μ (conservative at the lower fouled μ)` : 'the target (drum variant)'}; it is read as handle force to TOTAL shoe normal force: one lever on a cross shaft drives both shoes, each seeing half the shaft torque.${derived ? ` Rolling forward the shoe is servo-assisted (${f(b.g.ratioFwd, 1)}:1) and the cart needs only ${f(Ffwd)} lbf at the fouled μ.` : ''})`,
+      how: `F = W·sinθ / μ / (ratio · η) = ${f(c.massLb)} × sin ${f(p.designSlopeDeg)}° / μ / (${f(ratio, 1)} × ${f(p.brakeEfficiency, 2)}); W·sinθ = ${f(down)} lbf downslope. Wet bonded lining μ ${f(muD, 2)}: ${f(down / muD)} lbf total shoe normal force → ${f(Fd)} lbf at the grip. MUD / SLUSH-FOULED lining μ ${f(muF, 2)} (the shoes sit on the rear of the tread, the wettest part): ${f(down / muF)} lbf shoe normal force → ${f(Ff)} lbf at the grip. The row value is the larger of the two, ${f(F)} lbf, limit ≤ ${p.handleForceLimitLbf} lbf (pass/fail at BOTH μ). Bare wet oak (μ ${BARE_OAK_MU}, no lining) would need ${f(Fbare)} lbf: the lining is what makes the brake work in the wet. (Shoe friction acts at the tire radius, 1:1 with ground force. The ratio ${f(ratio, 1)}:1 is DERIVED from the geometry (brake-ratio): handle force to TOTAL shoe normal force; one lever pushes one beam that loads both shoes equally.) Only the rear wheels brake (D-53): the front wheels roll.`,
     };
   };
   return dualCheck({
-    id: 'brake-force', label: 'Brake lever force to hold on the slope', group: 'Braking', refs: ['D-13', 'D-38', 'BRIEF §7'], primary: 'operating',
+    id: 'brake-force', label: 'Brake lever force to hold on the slope', group: 'Braking', refs: ['D-53', 'D-13', 'BRIEF §7'], primary: 'operating',
     ...evalBoth(ctx, ev),
   });
 }
@@ -188,267 +158,224 @@ export function brakeTraction(ctx: Ctx): AnalysisCheck {
     const wet = (0.3 * Nr) / down;
     return {
       value: ratio, unit: '×', limit: 1, sense: '>=', info: true,
-      how: `Parked nose-down on ${f(p.designSlopeDeg)}°, rear wheels only: N_r = W(cosθ·(L−x)/L − sinθ·h/L) = ${f(Nr)} lb; μ_ground·N_r = ${f(p.tireGroundMu, 2)} × ${f(Nr)} = ${f(p.tireGroundMu * Nr)} lbf vs W·sinθ = ${f(down)} lbf → ${f(ratio, 2)}× (${f(wet, 2)}× at wet-leaf μ 0.3). Info only (D-24); parked nose-up N_r is much larger.`,
+      how: `Parked nose-down on ${f(p.designSlopeDeg)}°, rear wheels only locked: N_r = W(cosθ·(L−x)/L − sinθ·h/L) = ${f(Nr)} lb; μ_ground·N_r = ${f(p.tireGroundMu, 2)} × ${f(Nr)} = ${f(p.tireGroundMu * Nr)} lbf vs W·sinθ = ${f(down)} lbf → ${f(ratio, 2)}× (${f(wet, 2)}× at wet-leaf μ 0.3). Info only (D-24); parked nose-up N_r is much larger. There are no front brakes (D-53): the pullers hold the tongue.`,
     };
   };
   return dualCheck({
-    id: 'brake-traction', label: 'Rear-only traction, parked nose-down', group: 'Braking', refs: ['D-24'], primary: 'operating',
+    id: 'brake-traction', label: 'Rear-only traction, parked nose-down', group: 'Braking', refs: ['D-24', 'D-53'], primary: 'operating',
     ...evalBoth(ctx, ev),
   });
 }
 
 // ── members ──────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** Case evaluator that carries the loads text shared by every member check. */
-const loadText = (L: Loads, b: Bundle) =>
-  `Hold load W·sinθ/μ = ${f(L.W)} × sin θ / μ = ${f(L.nHold)} lbf total shoe normal force; × λ ${f(L.lam, 2)} = N ${f(L.nTot)} lbf (${f(L.nShoe)} per shoe); hand-equivalent F = N / ratio ${f(b.g.ratioCrit, 1)} = ${f(L.feq)} lbf; lever moment M_L = F·l_grip = ${f(L.feq)} × ${f(b.g.lGrip, 2)} = ${f(L.ml)} lbf·in; link force F_link = M_L / d_Q = ${f(L.ml)} / ${f(b.g.dQ, 2)} = ${f(L.flink)} lbf; shaft torque T = F_link·d_S = ${f(L.flink)} × ${f(b.g.dS, 2)} = ${f(L.tin)} lbf·in (= N·k = ${f(L.nTot)} × ${f(L.kMax, 2)}); per shoe ${f(L.tShoe)} lbf·in`;
-
-function members(id: string, label: string, ctx: Ctx, fn: (c: CaseData, L: Loads, b: Bundle) => CaseEval, refs: string[]): AnalysisCheck {
-  const b = brakeBundle(ctx);
-  if (b.drum) return na(id, label, 'Structure', 'the wooden-drum variant has no linkage geometry yet (band geometry deferred, D-13).');
-  const ev = (c: CaseData): CaseEval => fn(c, loadsAt(ctx, c, b), b);
+function members(id: string, label: string, ctx: Ctx, fn: (L: Loads, g: BrakeGeom) => CaseEval, refs: string[]): AnalysisCheck {
+  const g = brakeBundle(ctx).g;
+  const ev = (c: CaseData): CaseEval => fn(loadsAt(ctx, c, g), g);
   return dualCheck({ id, label, group: 'Structure', refs, primary: 'goal', ...evalBoth(ctx, ev) });
 }
 
-function leverEval(ctx: Ctx, L: Loads, b: Bundle): CaseEval {
+function leverEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
   const { p } = ctx;
-  const al = allowables(ctx);
-  const w = p.brakeLeverWidthIn, h = p.brakeLeverThickIn;
-  const pivD = p.brakePivotBoltDiameterIn;
-  const sleeveOd = pivD + 2 * PIVOT_SLEEVE_WALL_IN;
-  const pinOd = p.brakeClevisPinDiameterIn + SLEEVE_WALL_IN;
-  const S = (w * (h ** 3 - sleeveOd ** 3)) / (6 * h);
-  const sigma = L.ml / S;
-  const tauTail = (1.5 * L.flink) / (w * h);
-  const st = [1, -1].map((sg) => mountStatics(p, b.g, L.feq, sg as 1 | -1));
-  const R = Math.max(...st.map((x) => Math.hypot(x.Qp[0], x.Qp[1])));
-  const bearPivot = R / (sleeveOd * w);
-  const bearTail = L.flink / (pinOd * w);
-  const sa = steelAllow(ctx);
-  const Y = b.g.y;
-  const arm = Math.max(0, Y.lever[0] - Y.block[1]) + w / 2;
-  const Mpost = R * arm;
-  const sigPost = (32 * Mpost) / (Math.PI * pivD ** 3);
-  const tauPost = R / circleA(pivD);
-  const te = 0.707 * (3 / 16);
-  const weldM = Mpost / ((Math.PI * pivD ** 2 * te) / 4);
-  const weldV = R / (Math.PI * pivD * te);
-  const weld = Math.hypot(weldM, weldV);
-  const weldAllow = 0.3 * p.weldFexxPsi;
+  const a = allow(ctx), al = allowables(ctx);
+  const w = p.brakeLeverWidthIn, t = p.brakeBarThickIn, plateT = p.brakePlateThickIn;
+  const pivD = p.brakePivotBoltDiameterIn, pinD = p.brakeClevisPinDiameterIn;
+  const Snet = (t * (w ** 3 - pivD ** 3)) / (6 * w);
+  const sigma = L.ml / Snet;
+  const tailNet = L.Flink / ((w - pinD) * t);
+  const tailBear = L.Flink / (pinD * t);
+  const pivShear = L.Rmag / (2 * circleA(pivD));
+  const pivBearBar = L.Rmag / (pivD * t);
+  const pivBearEar = L.Rmag / (2 * pivD * plateT);
+  const earEdge = 0.8 - pivD / 2;
+  const earTear = L.Rmag / 2 / (2 * earEdge * plateT);
+  const baseArea = (2 * (g.y.ear[1] + 0.5)) * (g.base.z1 - g.base.z0);
+  const transomBear = Math.max(0, L.R[0]) / baseArea;
+  const bd = p.brakeBracketBoltDiameterIn;
+  const boltShear = Math.abs(L.R[1]) / (4 * circleA(bd));
   const ds: Detail[] = [
-    detail('lever bending at the pivot (net of the sleeve bore)', sigma, 'psi', al.oakBend, '<='),
-    detail('tail shear parallel to grain', tauTail, 'psi', al.oakShear, '<='),
-    detail('tail pin bearing on its sleeve (oak bore)', bearTail, 'psi', al.oakDowel, '<='),
-    detail('pivot sleeve bearing (oak bore)', bearPivot, 'psi', al.oakDowel, '<='),
-    detail('pivot post bending (cantilever from the plate)', sigPost, 'psi', sa.tens, '<='),
-    detail('pivot post shear', tauPost, 'psi', sa.shear, '<='),
-    detail('pivot post fillet weld to the plate (ring: moment + shear)', weld, 'psi', weldAllow, '<='),
+    detail('lever bar bending at the pivot (net of the bolt hole)', sigma, 'psi', a.al, '<='),
+    detail('lever tail net tension at the link pin hole', tailNet, 'psi', a.al, '<='),
+    detail('link pin bearing on the lever tail (aluminum)', tailBear, 'psi', a.alBear, '<='),
+    detail('pivot bolt double shear (316)', pivShear, 'psi', a.boltShear, '<='),
+    detail('pivot bolt bearing on the lever bar (aluminum)', pivBearBar, 'psi', a.alBear, '<='),
+    detail('pivot bolt bearing on the two ears (steel)', pivBearEar, 'psi', a.steelBear, '<='),
+    detail('ear hole tear-out (steel)', earTear, 'psi', a.steelShear, '<='),
+    detail('bracket plate bearing on the transom (oak ⊥ grain)', transomBear, 'psi', al.oakPerp, '<='),
+    detail('bracket bolts, vertical shear of the pivot reaction (4 bolts)', boltShear, 'psi', a.boltShear, '<='),
   ];
-  const how = `${loadText(L, b)}. Lever ${f(w, 2)}" (across) × ${f(h, 2)}" (in the plane of the pull), grain along its length, pivot bore sleeve OD ${f(sleeveOd, 2)}" (${f(pivD, 2)}" post + 2 × ${f(PIVOT_SLEEVE_WALL_IN, 3)}" bronze): S_net = w(h³ − d³)/(6h) = ${f(S, 3)} in³; σ = M_L/S = ${f(L.ml)}/${f(S, 3)} = ${f(sigma, 0)} psi (≤ ${f(al.oakBend, 0)}). Tail shear τ = 1.5·F_link/(w·h) = 1.5 × ${f(L.flink)} / ${f(w * h, 2)} = ${f(tauTail, 0)} psi (≤ ${f(al.oakShear, 0)}). Link-pin sleeve OD ${f(pinOd, 2)}": bearing F_link/(OD·w) = ${f(bearTail, 0)} psi. Pivot reaction on the post (vector statics of the closed linkage, the worse rolling direction): ${f(R)} lbf = hand − link force; on the sleeve ${f(bearPivot, 0)} psi (≤ ${f(al.oakDowel, 0)} oak bolt bearing). The post is a CANTILEVER from the bearing plate (round 2 never checked this: a 3/8" bolt there would have bent): M = R × (${f(Math.max(0, Y.lever[0] - Y.block[1]), 2)}" thrust washers + ${f(w / 2, 2)}" half the lever) = ${f(R)} × ${f(arm, 2)} = ${f(Mpost)} lbf·in on a ${f(pivD, 2)}" A36 post: σ = 32M/πd³ = ${f(sigPost, 0)} psi, shear ${f(tauPost, 0)} psi (≤ ${f(sa.tens, 0)} / ${f(sa.shear, 0)}, A36 ${f(p.brakeSteelYieldPsi, 0)}/SF ${p.steelSafetyFactor}); 3/16" fillet ring weld (throat ${f(te, 3)}"): τ = √((M/(πd²t/4))² + (R/(πdt))²) = ${f(weld, 0)} psi (≤ 0.3 F_EXX = ${f(weldAllow, 0)}). The reaction goes on into the plate's bolt group (brake-shaft row).`;
+  const how = `${loadText(L, g)}. Lever bar ${f(w, 2)}" (in the plane) × ${f(t, 2)}" (across), 6061-T6 (allowable ${f(a.al, 0)} psi = ${f(p.brakeAluminumYieldPsi, 0)} / SF ${p.steelSafetyFactor}), pivot bolt ${f(pivD, 3)}": S_net = t(w³ − d³)/(6w) = ${f(Snet, 3)} in³, σ = M_L/S = ${f(L.ml)} / ${f(Snet, 3)} = ${f(sigma, 0)} psi. Tail net tension F_link / ((w − d)·t) = ${f(tailNet, 0)} psi; link-pin bearing F_link/(d·t) = ${f(tailBear, 0)} psi. The pivot reaction R = ${f(L.Rmag)} lbf pushes the bracket FORWARD into the transom (the hand and the link both pull the lever back): double shear on the ${f(pivD, 3)}" bolt ${f(pivShear, 0)} psi, bearing on the bar ${f(pivBearBar, 0)} psi and on the two ${f(plateT, 3)}" ears ${f(pivBearEar, 0)} psi, ear tear-out ${f(earTear, 0)} psi; the ${f(2 * (g.y.ear[1] + 0.5), 2)}" × ${f(g.base.z1 - g.base.z0, 2)}" plate bears on the transom at ${f(transomBear, 0)} psi (oak ⊥ grain allowable ${f(al.oakPerp, 0)}). The transom itself is not checked as a plate here (open item for 3c-3: it is backed by the deck edge and the corner backers).`;
   return governing(ds, how);
 }
 
 export function brakeLever(ctx: Ctx): AnalysisCheck {
-  return members('brake-lever', 'Brake lever (oak) and pivot', ctx, (_c, L, b) => leverEval(ctx, L, b), ['D-38', 'D-2']);
+  return members('brake-lever', 'Brake hand lever, pivot bolt and bracket', ctx, (L, g) => leverEval(ctx, L, g), ['D-53', 'D-2']);
 }
 
-function linksEval(ctx: Ctx, L: Loads, b: Bundle): CaseEval {
+function linksEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
   const { p } = ctx;
-  const sa = steelAllow(ctx);
-  const al = allowables(ctx);
-    const dr = p.brakeLinkRodDiameterIn, dp = p.brakeClevisPinDiameterIn;
-    const At = tensileArea(dr);
-    const rod = L.flink / At;
-    const pinShear = L.flink / (2 * circleA(dp));
-    const pinBear = L.flink / (dp * Math.max(0.1, b.g.y.crank[1] - b.g.y.crank[0]));
-    const crankT = Math.max(0.1, b.g.y.crank[1] - b.g.y.crank[0]);
-    // The crank bar is widened to shaft + 2 ligaments at the boss; the shaft bore (drilled and reamed, no keyseat) is taken out of the section.
-    const Dsh = p.brakeShaftDiameterIn;
-    const crankW = Math.max(p.brakeBarWidthIn, Dsh + 2 * CRANK_LIGAMENT_IN);
-    const crankSS = (crankT * (crankW ** 3 - Dsh ** 3)) / (6 * crankW);
-    const crankBend = (L.flink * b.g.dS) / crankSS;
-    const net = L.flink / ((crankW - dp) * Math.max(0.1, b.g.y.crank[1] - b.g.y.crank[0]));
-    const freeLen = Math.max(0.1, b.g.linkLen - 0.9);
-    const r = dr / 4;
-    const KLr = freeLen / r;
-    const E = p.steelMoePsi;
-    const Cc = Math.sqrt((2 * Math.PI ** 2 * E) / p.brakeSteelYieldPsi);
-    const crit = KLr <= Cc ? p.brakeSteelYieldPsi * (1 - KLr ** 2 / (2 * Cc ** 2)) : (Math.PI ** 2 * E) / KLr ** 2;
-    const buckle = (L.flink / circleA(dr)) / (crit / p.steelSafetyFactor);
-    const ds: Detail[] = [
-      detail(`link rod ${b.g.linkTension ? 'tension' : 'compression'} at the thread (tensile area)`, rod, 'psi', sa.tens, '<='),
-      detail('clevis pin double shear', pinShear, 'psi', sa.shear, '<='),
-      detail('clevis pin bearing on the crank plate', pinBear, 'psi', sa.bear, '<='),
-      detail('crank boss bending at the shaft bore (net of the bore)', crankBend, 'psi', sa.tens, '<='),
-      detail('crank bar net section at the pin hole', net, 'psi', sa.tens, '<='),
-    ];
-    if (!b.g.linkTension) ds.push(detail('link rod buckling (Johnson, pin-ended) demand / allowable', buckle, '×', 1, '<='));
-    const how = `${loadText(L, b)}. Link ${f(b.g.linkLen, 2)}" pin to pin, ${f(dr, 3)}" rod (3/8-24 thread, tensile area ${f(At, 4)} in²) carrying ${f(L.flink)} lbf ${b.g.linkTension ? 'in tension' : 'in compression'}: σ = ${f(rod, 0)} psi (≤ ${f(sa.tens, 0)} = A36 ${f(p.brakeSteelYieldPsi, 0)}/SF ${p.steelSafetyFactor}). ${b.g.linkTension ? '' : `Compression: free length ${f(freeLen, 2)}", r = d/4 = ${f(r, 3)}", KL/r = ${f(KLr, 0)} (Johnson limit C_c = ${f(Cc, 0)}), critical stress ${f(crit, 0)} psi; demand ÷ allowable = ${f(buckle, 2)}. `}Clevis pin ${f(dp, 4)}" in double shear τ = F/2A = ${f(L.flink)}/(2 × ${f(circleA(dp), 4)}) = ${f(pinShear, 0)} psi (≤ ${f(sa.shear, 0)}); bearing on the ${f(crankT, 2)}" crank plate F/(d·t) = ${f(pinBear, 0)} psi (≤ ${f(sa.bear, 0)} = 0.9 Fy/SF). Crank plate ${f(crankT, 2)}" thick × ${f(crankW, 2)}" wide at the boss (shaft + 2 × ${f(CRANK_LIGAMENT_IN, 3)}" ligament), shaft hole ${f(Dsh, 2)}" drilled and reamed: S_net = t(w³ − d³)/(6w) = ${f(crankSS, 4)} in³, M = F_link·d_S = ${f(L.flink * b.g.dS)} lbf·in, σ = ${f(crankBend, 0)} psi; net tension at the pin hole F/((w−d)·t) = ${f(net, 0)} psi. Oak lever tail bearing is in brake-lever (oak allowable ${f(al.oakDowel, 0)} psi).`;
-    return governing(ds, how);
+  const a = allow(ctx);
+  const t = p.brakeBarThickIn, w = p.brakeBarWidthIn, pinD = p.brakeClevisPinDiameterIn;
+  const barA = (w - pinD) * t; // net section of one bar at the pin hole
+  const axial = L.Flink / (2 * barA);
+  const pinShear = L.Flink / (2 * circleA(pinD)); // each pin: the middle plate (lever tail or clevis tab) pushes the pair of bars, double shear
+  const pinBearBars = L.Flink / (2 * pinD * t);
+  const tabEdge = 0.5 + 1.5 * pinD - pinD / 2;
+  const tabTear = L.Flink / 2 / (tabEdge * t);
+  const tabBear = L.Flink / (pinD * t);
+  const free = Math.max(0.1, g.linkLen - pinD);
+  const r = t / Math.sqrt(12);
+  const KLr = free / r;
+  const E = p.steelMoePsi;
+  const Cc = Math.sqrt((2 * Math.PI ** 2 * E) / p.brakeSteelYieldPsi);
+  const crit = KLr <= Cc ? p.brakeSteelYieldPsi * (1 - KLr ** 2 / (2 * Cc ** 2)) : (Math.PI ** 2 * E) / KLr ** 2;
+  const buckle = L.Flink / 2 / (w * t) / (crit / p.steelSafetyFactor);
+  const footBolts = L.Flink / (2 * circleA(0.25)); // 1/4" bolts take the whole link force as tension/shear: a bound
+  const ds: Detail[] = [
+    detail('link bars, net section at the pin hole (two bars)', axial, 'psi', a.steel, '<='),
+    detail('link pins double shear (316)', pinShear, 'psi', a.boltShear, '<='),
+    detail('link pin bearing on the bars (steel)', pinBearBars, 'psi', a.steelBear, '<='),
+    detail('clevis tab hole tear-out (steel)', tabTear, 'psi', a.steelShear, '<='),
+    detail('clevis tab pin bearing (steel)', tabBear, 'psi', a.steelBear, '<='),
+    detail('link bars buckling (Johnson, pin-ended) demand / allowable', buckle, '×', 1, '<='),
+    detail('clevis foot bolts (2 × 1/4", the whole link force, a bound)', footBolts, 'psi', a.bolt, '<='),
+  ];
+  const how = `${loadText(L, g)}. Two ${f(t, 2)}" × ${f(w, 2)}" A36 bars straddle the lever tail and the clevis tab, ${f(g.linkLen, 2)}" pin to pin, carrying ${f(L.Flink)} lbf in compression: net σ = F/(2(w − d)t) = ${f(axial, 0)} psi (≤ ${f(a.steel, 0)}). Pins ${f(pinD, 3)}" in double shear ${f(pinShear, 0)} psi; bearing on the bars ${f(pinBearBars, 0)} psi; clevis tab tear-out ${f(tabTear, 0)} psi and bearing ${f(tabBear, 0)} psi. Buckling: free length ${f(free, 2)}", r = t/√12 = ${f(r, 3)}", KL/r = ${f(KLr, 0)} (Johnson limit C_c = ${f(Cc, 0)}), critical ${f(crit, 0)} psi; demand ÷ allowable = ${f(buckle, 2)}. The clevis foot's two 1/4" through-bolts are a bound: ${f(footBolts, 0)} psi on their shank area.`;
+  return governing(ds, how);
 }
 
 export function brakeLinks(ctx: Ctx): AnalysisCheck {
-  return members('brake-links', 'Brake link, clevis pins and crank', ctx, (_c, L, b) => linksEval(ctx, L, b), ['D-38', 'D-2']);
+  return members('brake-links', 'Brake link bars, pins and clevis tab', ctx, (L, g) => linksEval(ctx, L, g), ['D-53', 'D-2']);
 }
 
-function shaftEval(ctx: Ctx, L: Loads, b: Bundle): CaseEval {
+function beamEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
   const { p } = ctx;
-  const sa = steelAllow(ctx);
-    const D = p.brakeShaftDiameterIn;
-    const Y = b.g.y;
-    const Z = (Math.PI * D ** 3) / 16; // polar section modulus
-    // Overhang loads on the left bearing: crank at the link plane, arms at their planes (all in one plane: summed, conservative).
-    const supY = Y.block[1];
-    const aC = Math.abs(Y.plane - supY);
-    const aIn = Math.abs((Y.armIn[0] + Y.armIn[1]) / 2 - supY);
-    const aOut = Math.abs((Y.armOut[0] + Y.armOut[1]) / 2 - supY);
-    const Fa = L.rPin / 2;
-    const Mb = L.flink * aC + Fa * (aIn + aOut);
-    const sigma = (32 * Mb) / (Math.PI * D ** 3);
-    const Tside = L.tShoe;
-    // Cross-drilled for roll pins (no keyseat, build review M10): the diametral hole takes πd³/16 → πd³/16 − d_p·d²/6 in torsion and
-    // πd³/32 → πd³/32 − d_p·d²/6 in bending (conservative: the hole is taken at the left bearing, where M is largest).
-    const dpin = p.brakeRollPinDiameterIn;
-    const Znet = Z - (dpin * D ** 2) / 6;
-    const Snet = (Math.PI * D ** 3) / 32 - (dpin * D ** 2) / 6;
-    const tauSide = Tside / Znet;
-    // At the cross-pin holes the moment is the ALGEBRAIC one: the link pulls the crank one way and the shoes pull the arm collars the other
-    // (torque balance about the shaft), so at the crank's holes only the two arm-collar forces lie outboard: M_h = F_a (y_in − y_c + y_out − y_c).
-    const yHubIn = Math.abs((Y.hubIn[0] + Y.hubIn[1]) / 2), yHubOut = Math.abs((Y.hubOut[0] + Y.hubOut[1]) / 2), yCrank = Math.abs(Y.plane);
-    const Mh = Fa * (yHubIn - yCrank + yHubOut - yCrank);
-    const sigmaNet = Mh / Snet;
-    const vm = Math.sqrt(sigmaNet ** 2 + 3 * tauSide ** 2);
-    const axleAllow = p.brakeShaftYieldPsi / p.steelSafetyFactor;
-    // Roll pins: each arm collar carries T_shoe/2 through one diametral pin (two shear planes at radius ≈ d/2): τ = T/(d·A_p); the crank
-    // carries T_in through two pins at 90° (each T_in/2).
-    const hubLen = HUB_LEN_BARS * p.brakeBarThickIn;
-    const pinA = circleA(dpin);
-    const pinArm = (L.tShoe / 2) / (D * pinA);
-    const pinCrank = (L.tin / 2) / (D * pinA);
-    const pinBearShaft = ((L.tin / 2) / D) / (dpin * (D / 2));
-    const mount = bearingMount(p, ctx.L, b.g.S, b.g.Q);
-    const me = mountDetails(ctx, b.g, mount, L.feq);
-    const ds: Detail[] = [
-      detail('shaft torsion at a cross-pin hole (one side\'s shoe torque, net section)', tauSide, 'psi', 0.577 * axleAllow, '<='),
-      detail('shaft bending + torsion (von Mises) at the crank cross-pin holes, net section', vm, 'psi', axleAllow, '<='),
-      detail('arm-collar roll pin double shear', pinArm, 'psi', p.brakeRollPinShearPsi, '<='),
-      detail('crank roll pins double shear (two pins at 90°)', pinCrank, 'psi', p.brakeRollPinShearPsi, '<='),
-      detail('crank roll pin bearing on the shaft', pinBearShaft, 'psi', sa.bear, '<='),
-      ...me.details,
-    ];
-    const how = `${loadText(L, b)}. Shaft ${f(D, 3)}" (pre-hardened 4140 ground rod, yield ${f(p.brakeShaftYieldPsi, 0)} psi; allowable ${f(axleAllow, 0)} psi = yield / SF ${p.steelSafetyFactor}). The crank is next to the left bearing and the left shoe arms take T_shoe each way, so the shaft carries at most T_shoe = ${f(Tside)} lbf·in. The shaft is cross-drilled ${f(dpin, 3)}" for roll pins (no keyseat, build review M10): net Z = πd³/16 − d_p·d²/6 = ${f(Znet, 4)} in³, τ = T/Z = ${f(tauSide, 0)} psi (≤ 0.577 × ${f(axleAllow, 0)}). Overhang bending at the left bearing: crank force ${f(L.flink)} lbf at ${f(aC, 2)}" + two arm forces R_pin/2 = ${f(Fa)} lbf at ${f(aIn, 2)}" and ${f(aOut, 2)}" (pin resultant R_pin = N_shoe·√(1+μ²) = ${f(L.rPin)} lbf; all summed in one plane, conservative): M = ${f(Mb)} lbf·in (gross σ = 32M/πd³ = ${f(sigma, 0)} psi); gross at the bearing, with every force summed in one direction, that is the conservative case. At the crank cross-pin holes the link force and the shoe forces act in OPPOSITE directions (torque balance), so only the arm-collar forces lie outboard: M_h = F_a·((y_in − y_c) + (y_out − y_c)) = ${f(Fa)} × (${f(yHubIn - yCrank, 2)} + ${f(yHubOut - yCrank, 2)}) = ${f(Mh)} lbf·in; net of the diametral hole S = πd³/32 − d_p·d²/6 = ${f(Snet, 4)} in³, σ = ${f(sigmaNet, 0)} psi; √(σ²+3τ²) = ${f(vm, 0)} psi. Roll pins ${f(dpin, 3)}" (allowable double shear ${f(p.brakeRollPinShearPsi, 0)} psi, heavy-duty spring pin ≈ 41 ksi ultimate ÷ 2): each arm collar (${f(hubLen, 2)}" wide, T_shoe/2 = ${f(L.tShoe / 2)} lbf·in) has one pin, τ = T/(d·A_p) = ${f(L.tShoe / 2)} / (${f(D, 2)} × ${f(pinA, 4)}) = ${f(pinArm, 0)} psi; the crank (T = ${f(L.tin)} lbf·in) has two pins at 90°, τ = ${f(pinCrank, 0)} psi; pin bearing on the shaft ${f(pinBearShaft, 0)} psi (≤ ${f(sa.bear, 0)}). ${me.text} Shaft bending at the bearing is NOT carried by the plates as a moment (the two bearings form the span: the lever rule is in the statics); the plates see the bearing force.`;
-    return governing(ds, how);
+  const a = allow(ctx), al = allowables(ctx);
+  const size = p.brakeBeamSizeIn, wall = p.brakeBeamWallIn;
+  const ri = size - 2 * wall;
+  const S = (size ** 4 - ri ** 4) / (6 * size);
+  const Jt = 2 * (size - wall) ** 2 * wall; // thin-wall closed section: 2 A_m t
+  const { rail } = railGeometry(p, ctx.L);
+  const yR = rail.yOut - rail.t / 2;
+  const ry = g.y.shoeC;
+  const fcShoe = L.Fc / 2;
+  const Mh = fcShoe * ry; // plan bending at the center: the end loads against the center pull
+  const MhRail = fcShoe * (ry - yR);
+  const Mv = L.muN * (ry - yR); // vertical friction at the shoe, reacted by the rail notch
+  const sigCenter = Mh / S;
+  const sigRail = (MhRail + Mv) / S;
+  const tShoeOff = size / 2 + p.brakeLiningThickIn + p.brakeShoeBackThickIn;
+  const tau = (L.muN * tShoeOff) / Jt;
+  // Shoe bolt holes and the clevis bolts through the tube walls (crush sleeves): wall bearing.
+  const bearWall = L.Flink / (2 * 0.25 * wall) / 2;
+  // Keeper strap: the vertical friction pulls the beam DOWN (the rolling direction that drags the tread down): screws in withdrawal, W = 1380 G² D ℓ.
+  const G = p.oakSpecificGravity;
+  const Dscr = 0.19, pen = 1.2;
+  const withdraw = 1380 * G * G * Dscr * pen;
+  const screwLoad = L.muN / 4; // 4 screws per keeper, the one-sided reaction
+  const keeperT = p.brakeKeeperThickIn;
+  const keeperSpan = g.bl.notch.x1 - g.bl.notch.x0;
+  const keeperW = rail.t;
+  const sigKeeper = ((L.muN * keeperSpan) / 4) / ((keeperW * keeperT ** 2) / 6);
+  // Rail notch walls: the beam presses a wall only for lateral scatter; the notch roof carries the upward friction on the tube's top face.
+  const roofBear = L.muN / (keeperSpan * rail.t);
+  const ds: Detail[] = [
+    detail('beam bending at the center (plan, end shoe loads against the center pull)', sigCenter, 'psi', a.al, '<='),
+    detail('beam bending at the rail notch (plan + vertical friction, summed)', sigRail, 'psi', a.al, '<='),
+    detail('beam torsion from the shoe friction offset', tau, 'psi', a.alShear, '<='),
+    detail('tube wall bearing at the clevis bolts (aluminum)', bearWall, 'psi', a.alBear, '<='),
+    detail('keeper screws withdrawal from the rail bottom (4 × #10 × 1.2" in oak) demand / capacity', screwLoad / withdraw, '×', 1, '<='),
+    detail('keeper strap bending (steel)', sigKeeper, 'psi', a.steel, '<='),
+    detail('notch roof bearing from the upward friction (oak ⊥ grain)', roofBear, 'psi', al.oakPerp, '<='),
+  ];
+  const how = `${loadText(L, g)}. Beam ${f(size, 2)}" square × ${f(wall, 3)}" wall 6061-T6 tube (S = ${f(S, 3)} in³; allowable ${f(a.al, 0)} psi), ${f(2 * g.y.beamHalf, 1)}" long, shoes at ±${f(ry, 2)}", rails at ±${f(yR, 2)}". Each shoe pushes back F_c/2 = ${f(fcShoe)} lbf: M at the center = ${f(fcShoe)} × ${f(ry, 2)} = ${f(Mh)} lbf·in, σ = ${f(sigCenter, 0)} psi. At the rail notch the end loads give ${f(MhRail)} lbf·in plus the vertical friction μN = ${f(L.muN)} lbf over the ${f(ry - yR, 2)}" overhang = ${f(Mv)} lbf·in: σ = ${f(sigRail, 0)} psi (summed, conservative). Torsion from μN acting ${f(tShoeOff, 2)}" off the tube axis: τ = ${f(tau, 0)} psi. Keeper: ${f(screwLoad)} lbf per screw against a withdrawal capacity of ${f(withdraw, 0)} lbf (NDS 1380·G²·D·ℓ, G = ${f(G, 2)}).`;
+  return governing(ds, how);
 }
 
-export function brakeShaft(ctx: Ctx): AnalysisCheck {
-  return members('brake-shaft', 'Brake cross shaft, keys and bearing mounts', ctx, (_c, L, b) => shaftEval(ctx, L, b), ['D-38', 'D-2']);
+export function brakeBeam(ctx: Ctx): AnalysisCheck {
+  return members('brake-beam', 'Brake beam, keepers and rail notches', ctx, (L, g) => beamEval(ctx, L, g), ['D-53', 'D-2']);
 }
 
-function shoesEval(ctx: Ctx, L: Loads, b: Bundle): CaseEval {
+function shoesEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
   const { p } = ctx;
-  const sa = steelAllow(ctx);
-  const al = allowables(ctx);
-    const t = p.brakeBarThickIn, w = p.brakeBarWidthIn;
-    const Sbar = (t * w ** 2) / 6;
-    const Ma = L.tShoe / 2;
-    const sigmaArm = Ma / Sbar;
-    const Fa = L.rPin / 2;
-    const dpin = p.brakeShoePinDiameterIn;
-    const pinFy = p.brakeShoePinYieldPsi / p.steelSafetyFactor;
-    const padW = b.g.y.pad[1] - b.g.y.pad[0];
-    const Mpin = (L.rPin * padW) / 8; // pad load spread over the pad width, pin simply supported at the two arms
-    const sigmaPin = (32 * Mpin) / (Math.PI * dpin ** 3);
-    const tauPin = Fa / circleA(dpin);
-    const bearArm = Fa / (dpin * t);
-    const bearPad = L.rPin / (dpin * padW);
-    const h = p.brakeShoeThickIn / 2;
-    const rock = p.brakePadMu * h;
-    const half = shoeLengthIn(p) / 2;
-    const pressure = L.nShoe / (shoeLengthIn(p) * padW);
-    const ds: Detail[] = [
-      detail('arm bending at the hub (each of two arms)', sigmaArm, 'psi', sa.tens, '<='),
-      detail('pad pin bending (pad load over its width)', sigmaPin, 'psi', pinFy, '<='),
-      detail('pad pin shear (double)', tauPin, 'psi', 0.577 * pinFy, '<='),
-      detail('pin bearing on the arm bar', bearArm, 'psi', sa.bear, '<='),
-      detail('pin bearing in the oak pad (steel bushing bore)', bearPad, 'psi', al.oakDowel, '<='),
-      detail('pad rock-off: μ·h_pin vs half the pad length', rock, 'in', half, '<='),
-    ];
-    const how = `${loadText(L, b)}. Per shoe: normal force N = ${f(L.nShoe)} lbf, friction μN = ${f(p.brakePadMu * L.nShoe)} lbf, pin resultant R = N√(1+μ²) = ${f(L.rPin)} lbf split over two arms (${f(Fa)} lbf each). Each arm (${f(t, 2)}" × ${f(w, 2)}" flat bar, ${f(b.g.armLen, 2)}" from the shaft to the pin) carries T_shoe/2 = ${f(Ma)} lbf·in: σ = M/S = ${f(Ma)}/${f(Sbar, 4)} = ${f(sigmaArm, 0)} psi (≤ ${f(sa.tens, 0)}). Pin ${f(dpin, 3)}": pad load R over ${f(padW, 2)}" between the arms, M = R·w/8 = ${f(Mpin)} lbf·in, σ = ${f(sigmaPin, 0)} psi; double shear τ = ${f(tauPin, 0)} psi; bearing on the arm bar ${f(bearArm, 0)} psi and in the oak pad ${f(bearPad, 0)} psi (≤ ${f(al.oakDowel, 0)}). The pad swivels on the pin at mid-thickness (h = ${f(h, 2)}" above the tread), so the contact resultant (normal + friction) is offset μ·h = ${f(rock, 2)}" along the pad; it stays on the pad while μ·h ≤ L/2 = ${f(half, 2)}". Average pad pressure on the tire ${f(pressure, 0)} psi (info).`;
-    return governing(ds, how);
+  const a = allow(ctx);
+  const len = shoeLengthIn(p);
+  const wd = g.y.pad[1] - g.y.pad[0];
+  const area = len * wd;
+  const pressure = L.nShoe / area;
+  const bt = p.brakeShoeBackThickIn;
+  // The back plate spans the 1/4" mounting bolt between the beam wall (a point support) and the lining face: bending of a strip len long under a central line load of N.
+  const Sback = (wd * bt ** 2) / 6;
+  const sigBack = (L.nShoe * len) / 4 / Sback;
+  const ds: Detail[] = [
+    detail('lining contact pressure', pressure, 'psi', p.brakeLiningMaxPsi, '<='),
+    detail('steel back plate bending between the lining and the center bolt', sigBack, 'psi', a.steel * 2, '<='),
+  ];
+  const how = `${loadText(L, g)}. Per shoe N = ${f(L.nShoe)} lbf on ${f(len, 2)}" × ${f(wd, 2)}" of lining = ${f(area, 1)} in²: ${f(pressure, 1)} psi (limit ${f(p.brakeLiningMaxPsi, 0)}). The ${f(bt, 3)}" steel back is a purchased lined shoe; bent as a strip between the beam wall and the lining under the whole N it sees ${f(sigBack, 0)} psi (allowable doubled: the shoe is a hardened-back part).`;
+  return governing(ds, how);
 }
 
 export function brakeShoes(ctx: Ctx): AnalysisCheck {
-  return members('brake-shoes', 'Brake shoe arms, pin and pad', ctx, (_c, L, b) => shoesEval(ctx, L, b), ['D-38', 'D-2']);
+  return members('brake-shoes', 'Brake shoes (lining pressure and back plate)', ctx, (L, g) => shoesEval(ctx, L, g), ['D-53', 'D-56']);
 }
 
-function ratchetEval(ctx: Ctx, L: Loads, b: Bundle): CaseEval {
+// ── parking hold (the hitch pin through the lever and the quadrant ear) ───────────────────────────────────────
+
+export function parkHold(ctx: Ctx): AnalysisCheck {
   const { p } = ctx;
-  const sa = steelAllow(ctx);
-  const al = allowables(ctx);
-    const rg = b.rg;
-    const Ft = L.ml / rg.rTooth;
-    const d = p.brakeRatchetToothDepthIn, tp = p.brakeRatchetPlateThickIn, pit = p.brakeRatchetPitchIn;
-    const bear = Ft / (d * tp);
-    const shear = Ft / (pit * tp);
-    const bend = (6 * Ft * d) / (tp * pit ** 2);
-    const dpin = p.brakePawlPinDiameterIn;
-    const wPawl = Math.min(p.brakeBarWidthIn, 0.75);
-    const arm = Math.max(0.2, rg.pawlArm);
-    const Spawl = (tp * (wPawl - dpin) ** 2) / 6;
-    const pawlBend = (Ft * arm) / Spawl;
-    const pinShear = Ft / circleA(dpin);
-    const bracketBear = Ft / (2 * 0.25 * ctx.L.transom);
-    const spanDeg = p.brakeRatchetSpanDeg;
-    const appDeg = b.g.thetaL / RAD;
-    const need = p.brakeStrokeReserve * appDeg;
+  const th = p.designSlopeDeg * RAD;
+  const g = brakeBundle(ctx).g;
+  const a = allow(ctx);
+  const t = p.brakeBarThickIn, plateT = p.brakePlateThickIn, pinD = p.brakeClevisPinDiameterIn;
+  const Rp = g.park.radius;
+  const ev = (c: CaseData): CaseEval => {
+    // The pin holds the lever against the link reaction. Without the hand, moment about the pivot: F_pin·R_p = F_link·d_Q. Held at the λ = 1 hold load (the pin is
+    // set on a quiet cart) and checked at the λ hold as well (a jerk on a parked cart).
+    const L1 = { ...loadsAt(ctx, c, g) };
+    const nHold1 = L1.nHold;
+    const L = fromNormal(ctx, g, nHold1, c.massLb, L1.down, nHold1, 1);
+    const Lj = loadsAt(ctx, c, g);
+    const Fpin = (Lj.Flink * g.dQ) / Rp;
+    const shear = Fpin / circleA(pinD); // single shear plane, between the lever bar and the ear
+    const bearBar = Fpin / (pinD * t);
+    const bearEar = Fpin / (pinD * plateT);
+    const edge = PARK_EDGE_IN - pinD / 2;
+    const tear = Fpin / (2 * edge * plateT);
+    const ground = (p.tireGroundMu * c.massLb * Math.cos(th)) / Math.max(1e-9, c.massLb * Math.sin(th));
+    const lastDeg = (g.park.angles[g.park.angles.length - 1] - g.thetaL) / RAD;
     const ds: Detail[] = [
-      detail('tooth face bearing (pawl on tooth)', bear, 'psi', sa.bear, '<='),
-      detail('tooth root shear', shear, 'psi', sa.shear, '<='),
-      detail('tooth root bending', bend, 'psi', sa.tens, '<='),
-      detail('pawl bending (net of the pin hole)', pawlBend, 'psi', sa.tens, '<='),
-      detail('pawl pivot screw single shear', pinShear, 'psi', sa.shear, '<='),
-      detail('bracket bolts bearing in the transom (oak)', bracketBear, 'psi', al.oakDowel, '<='),
-      detail('toothed span covers applied stroke × reserve', spanDeg, '°', need, '>='),
+      detail('parking pin single shear (λ hold)', shear, 'psi', a.boltShear, '<='),
+      detail('pin bearing on the lever bar (aluminum)', bearBar, 'psi', a.alBear, '<='),
+      detail('pin bearing on the quadrant ear (steel)', bearEar, 'psi', a.steelBear, '<='),
+      detail('ear hole tear-out toward the arc edge (steel)', tear, 'psi', a.steelShear, '<='),
+      detail('wear take-up: holes past the design hole (≥ 6°)', lastDeg, '°', 6, '>='),
     ];
-    const how = `${loadText(L, b)}. The pawl holds the lever moment M_L = ${f(L.ml)} lbf·in at the tooth radius R = ${f(rg.rTooth, 2)}": F_t = M_L/R = ${f(Ft)} lbf (the same load that holds the cart on ${f(p.designSlopeDeg)}° at λ ${f(L.lam, 2)}). Teeth ${f(pit, 3)}" pitch (${rg.nTeeth} teeth over ${f(spanDeg)}°), ${f(d, 3)}" deep, ${f(tp, 3)}" plate: face bearing F/(d·t) = ${f(bear, 0)} psi (≤ ${f(sa.bear, 0)} = 0.9 Fy/SF); root shear F/(pitch·t) = ${f(shear, 0)} psi (≤ ${f(sa.shear, 0)}); root bending 6·F·d/(t·pitch²) = ${f(bend, 0)} psi (≤ ${f(sa.tens, 0)}). Pawl bar ${f(wPawl, 2)}" wide, arm ${f(arm, 2)}" from its ${f(dpin, 3)}" pivot screw: σ = F·a/S_net = ${f(pawlBend, 0)} psi; screw single shear ${f(pinShear, 0)} psi. Bracket bolts (2 × ¼") bearing on the ${f(ctx.L.transom, 2)}" oak transom ${f(bracketBear, 0)} psi (≤ ${f(al.oakDowel, 0)}). Stroke: the applied lever angle is ${f(appDeg, 1)}°; the teeth cover ${f(spanDeg)}° ≥ ${f(p.brakeStrokeReserve, 1)} × ${f(appDeg, 1)}° = ${f(need, 1)}° so wear and tire compression can be taken up before the clevis needs adjusting. Release by lifting the spring-loaded pawl with the thumb tab; one tooth is ${f((pit / rg.rTooth) * b.g.lGrip, 2)}" of grip travel.`;
-    return governing(ds, how);
+    return {
+      ...governing(ds, `${loadText(Lj, g)}. Parked on ${f(p.designSlopeDeg)}° the brake is held by the hitch pin ${f(Rp, 1)}" from the pivot (a hole in the ear every ${f(p.brakeParkPitchIn, 2)}" along the arc, ${g.park.angles.length} holes, the second is the design applied position at ${f(g.thetaL / RAD, 1)}° and the others take up wear): F_pin = F_link·d_Q / R_p = ${f(Lj.Flink)} × ${f(g.dQ, 2)} / ${f(Rp, 1)} = ${f(Fpin)} lbf at the λ ${f(Lj.lam, 1)} load (${f(L.Flink * g.dQ / Rp)} lbf at the plain hold). Ground friction with the rear wheels locked and the fronts rolling: ${f(ground, 2)}× the downslope pull at μ ${f(p.tireGroundMu, 2)} on a level contact (info; brake-traction has the load transfer).`),
+    };
+  };
+  return dualCheck({ id: 'park-hold', label: 'Parking hold: hitch pin and quadrant ear', group: 'Structure', refs: ['D-53', 'D-39'], primary: 'goal', ...evalBoth(ctx, ev) });
 }
 
-export function brakeRatchet(ctx: Ctx): AnalysisCheck {
-  return members('brake-ratchet', 'Parking ratchet (teeth, pawl, stroke)', ctx, (_c, L, b) => ratchetEval(ctx, L, b), ['D-39', 'D-38']);
-}
+/** Distance from a parking hole center to the ear's arc edge (in): the ear band is `PARK_BAND_IN` wide each side of the arc (model/brake.ts). */
+const PARK_EDGE_IN = 0.55;
 
-// ── lever abuse: a scout hanging on the grip (eng r2 N-8) ─────────────────────────────────────────────────
-
-/**
- * Loads for a hand force `F` at the grip with no reference to the rider: lever moment, link force and shaft torque follow from the statics; the shoes take
- * N = T / k_min (the servo direction, the larger normal force for the same pull).
- */
-function loadsFromHand(ctx: Ctx, b: Bundle, F: number): Loads {
-  const { p } = ctx;
-  const ml = F * b.g.lGrip;
-  const flink = b.g.dQ > 1e-6 ? ml / b.g.dQ : 0;
-  const tin = flink * b.g.dS;
-  const kMin = Math.max(1e-6, Math.min(b.g.kFwd, b.g.kRev));
-  const nTot = tin / kMin;
-  return { W: 0, down: 0, nHold: 0, lam: 0, nTot, nShoe: nTot / 2, feq: F, ml, flink, tin, tShoe: tin / 2, rPin: (nTot / 2) * Math.sqrt(1 + p.brakePadMu ** 2), kMax: Math.max(b.g.kFwd, b.g.kRev) };
-}
+// ── lever abuse: a scout hanging on the grip (eng r2 N-8, simplified at 3c-1) ─────────────────────────────
 
 export function brakeAbuse(ctx: Ctx): AnalysisCheck {
   const { p } = ctx;
-  const b = brakeBundle(ctx);
-  if (b.drum) return na('brake-abuse', 'Brake lever abuse (100 lbf at the grip)', 'Structure', 'the wooden-drum variant has no linkage geometry yet.');
-  const L = loadsFromHand(ctx, b, p.brakeAbuseLbf);
-  const k = p.steelSafetyFactor; // yield-level: the design allowables carry the safety factor, remove it (oak: its design value is already ≥ 2× below the ultimate)
+  const g = brakeBundle(ctx).g;
+  const L = loadsFromHand(ctx, g, p.brakeAbuseLbf);
+  const k = p.steelSafetyFactor; // yield-level: the design allowables carry the safety factor, remove it
   const parts: Array<[string, CaseEval]> = [
-    ['lever', leverEval(ctx, L, b)], ['link/crank', linksEval(ctx, L, b)], ['shaft/mounts', shaftEval(ctx, L, b)], ['shoes', shoesEval(ctx, L, b)], ['ratchet', ratchetEval(ctx, L, b)],
+    ['lever', leverEval(ctx, L, g)], ['link', linksEval(ctx, L, g)], ['beam', beamEval(ctx, L, g)], ['shoes', shoesEval(ctx, L, g)],
   ];
   const ds: Detail[] = [];
   for (const [name, e] of parts) for (const d of scaleLimits(e.details ?? [], k)) ds.push({ ...d, name: `${name}: ${d.name}` });
   const worstD = ds.reduce((a, c) => (c.util > a.util ? c : a), ds[0]);
-  const how = `A ${f(p.brakeAbuseLbf)} lbf pull at the grip (a scout hanging on the lever, ${f(p.brakeAbuseLbf / Math.max(1, p.handleForceLimitLbf), 1)}× the 30 lbf limit; ${f(p.brakeAbuseLbf / 43.3, 1)}× the λ = 2 design hand force at the goal rider): lever moment ${f(L.ml)} lbf·in, link force ${f(L.flink)} lbf, shaft torque ${f(L.tin)} lbf·in, shoe normal force ${f(L.nTot)} lbf (servo direction, k_min). Every lever, link, crank, shaft, pin, shoe and ratchet detail is re-evaluated at that load with its allowable multiplied back to yield level (steel SF ${f(k, 1)} removed; the oak design values are at least that far below the ultimate): the row is the governing detail, "${worstD.name}". The brake may be stiff after this; nothing may yield. The plate bolts, pivot post and weld are in the lever / shaft details.`;
+  const how = `A ${f(p.brakeAbuseLbf)} lbf pull at the grip (a scout hanging on the lever, ${f(p.brakeAbuseLbf / Math.max(1, p.handleForceLimitLbf), 1)}× the 30 lbf limit): lever moment ${f(L.ml)} lbf·in, link force ${f(L.Flink)} lbf, beam pull ${f(L.Fc)} lbf, shoe normal force N = ${f(L.nTot)} lbf total (${f(L.nShoe)} per shoe; the larger-N rolling direction). Every lever, link, beam and shoe criterion is held to yield (the design allowables with the safety factor ${p.steelSafetyFactor} removed): worst "${worstD.name}", ${f(worstD.value, 1)} ${worstD.unit} against ${f(worstD.limit, 1)}. The brake may be bent after this only if the row says so.`;
   return singleCheck({
-    id: 'brake-abuse', label: `Brake lever abuse, ${f(p.brakeAbuseLbf)} lbf at the grip (yield level)`, group: 'Structure', refs: ['D-38', 'D-48', 'eng r2 N-8'],
+    id: 'brake-abuse', label: `Brake lever abuse, ${f(p.brakeAbuseLbf)} lbf at the grip (yield level)`, group: 'Structure', refs: ['D-53', 'eng r2 N-8'],
     value: worstD.value, unit: worstD.unit, limit: worstD.limit, sense: worstD.sense, how, details: ds,
   });
 }
@@ -459,14 +386,13 @@ export function handleSockets(ctx: Ctx): AnalysisCheck {
   const { p } = ctx;
   const h = brakeBundle(ctx).h;
   const al = allowables(ctx);
-  const sa = steelAllow(ctx);
+  const sa = { shear: 0.577 * (p.brakeSteelYieldPsi / p.steelSafetyFactor) };
   const F = p.handleHoldbackLbf;
   const Fp = F / 2; // per post
   const gripZ = p.rearHandleHeightIn;
   const lEff = Math.max(0.5, h.zTop - h.zFoot); // insertion length: foot to mouth
   const arm = gripZ - h.zFoot;
   const Rtop = (Fp * arm) / lEff;
-  const Rbot = Rtop - Fp;
   const M = Fp * (gripZ - h.zTop);
   const w = p.handlePostWidthIn, t = p.handlePostThickIn;
   const S = (w * t ** 2) / 6;
@@ -498,7 +424,7 @@ export function handleSockets(ctx: Ctx): AnalysisCheck {
     detail('socket bolts bearing in the transom (2 × ¼")', boltBear, 'psi', al.oakDowel, '<='),
     detail('retaining pin double shear (whole pull)', pinShear, 'psi', sa.shear, '<='),
   ];
-  const how = `A ${f(F)} lbf hold-back pull at the grip (${f(gripZ, 1)}" above the ground, D-9) shared by two uprights: ${f(Fp)} lbf each. Each upright is a cantilever from the socket mouth (${f(h.zTop, 1)}") to the grip: M = ${f(Fp)} × ${f(gripZ - h.zTop, 1)} = ${f(M)} lbf·in; ${f(w, 2)}" across × ${f(t, 2)}" fore-aft: S = ${f(S, 3)} in³, σ = ${f(sigma, 0)} psi (≤ ${f(al.oakBend, 0)}). The socket (steel tube, ${f(p.handleSocketDepthIn, 1)}" deep, wall ${f(wall, 3)}") reacts the moment with a couple over the insertion length ${f(lEff, 1)}" (foot ${f(h.zFoot, 1)}" to mouth): R_top = F_p·(grip − foot)/l = ${f(Fp)} × ${f(arm, 1)} / ${f(lEff, 1)} = ${f(Rtop)} lbf, R_foot = ${f(Math.abs(Rbot))} lbf; taking a contact length of depth/4 = ${f(contact, 2)}" at the mouth the post bears ${f(bearTop, 0)} psi (≤ ${f(al.oakPerp, 0)} oak ⊥ grain). Tube bending σ = M/S = ${f(M)}/${f(tubeS, 3)} = ${f(tubeSigma, 0)} psi (≤ ${f(alAllow, 0)} = 6061-T6 yield ${f(p.handleSocketYieldPsi, 0)} / SF ${p.steelSafetyFactor}; the sockets are aluminum, plan item 5); the ${f(bolt, 2)}" bolts and the ${f(dp, 3)}" pin bear on ${f(wall, 3)}" aluminum walls at ${f(wallBoltBear, 0)} and ${f(wallPinBear, 0)} psi; the top reaction ${f(Rtop)} lbf pulls on a ${f(washerOd, 2)}" fender washer (${f(pullThrough, 0)} psi on the oak, ≤ ${f(al.oakPerp, 0)} ⊥ grain); the two ¼" bolts bear on the ${f(ctx.L.transom, 2)}" transom ${f(boltBear, 0)} psi (≤ ${f(al.oakDowel, 0)}). The ${f(dp, 4)}" clevis pin keeps the post from lifting out: even if one pin took the whole ${f(F)} lbf, τ = F/2A = ${f(pinShear, 0)} psi.`;
+  const how = `A ${f(F)} lbf hold-back pull at the grip (${f(gripZ, 1)}" above the ground, D-9) shared by two uprights: ${f(Fp)} lbf each. Each upright is a cantilever from the socket mouth (${f(h.zTop, 1)}") to the grip: M = ${f(Fp)} × ${f(gripZ - h.zTop, 1)} = ${f(M)} lbf·in on a ${f(w, 2)}" × ${f(t, 2)}" post (σ ${f(sigma, 0)} psi). Top reaction ${f(Rtop)} lbf over the ${f(lEff, 1)}" insertion. Socket tube bending ${f(tubeSigma, 0)} psi, bolt-hole wall bearing ${f(wallBoltBear, 0)} psi, washer pull-through ${f(pullThrough, 0)} psi on the oak transom, retaining pin ${f(pinShear, 0)} psi in double shear.`;
   const g = governing(ds, how);
   return singleCheck({
     id: 'handle-sockets', label: `Rear push-handle sockets${g.suffix ? ` (${g.suffix})` : ''}`, group: 'Structure', refs: ['D-9', 'D-39'],
@@ -506,30 +432,27 @@ export function handleSockets(ctx: Ctx): AnalysisCheck {
   });
 }
 
-// ── sweep: the moving linkage vs everything else, released → applied ─────────────────────────────────────────
+// ── sweep: the moving mechanism vs everything else, released → applied ───────────────────────────────────────
 
 export interface BrakeSweepResult {
-  /** Smallest gap (in) between a moving brake part and any other solid over the stroke (analytic round tire; pads excluded from the tire). */
+  /** Smallest gap (in) between a moving brake part and any other solid over the stroke (the rail notch and the tire are measured separately). */
   minClearanceIn: number;
   moving: string;
   other: string;
   pose: number;
-  /** Pad inner surface to the tread, released and applied (in). */
+  /** Shoe lining to the tread, released and applied (in). */
   padGapReleasedIn: number;
   padGapAppliedIn: number;
-  /** Lowest point of any moving part over the stroke. */
+  /** Lowest point of any brake part over the stroke. */
   groundMinZ: number;
   poses: number;
 }
 
 const sweepCache = new Map<string, BrakeSweepResult>();
 const RIDER_KEYS = ['riderMassLb', 'riderGoalMassLb', 'riderMinMassLb', 'cargoMassLb'];
-
 const BIG = 99;
-const L_GROUP = /^brake-(lever|link|crank$|pawl)/;
-const S_GROUP = /^brake-(arm|shoe)/;
 
-/** Distance from point to the solid tire cylinder (axis along y, centre (0, y0, r), radius r, half width). */
+/** Distance from point to the solid tire cylinder (axis along y, center (0, y0, r), radius r, half width). */
 function tireDistance(pt: Vec3, r: number, yIn: number, yOut: number): number {
   const dr = Math.hypot(pt[0], pt[2] - r) - r;
   const dy = Math.max(yIn - Math.abs(pt[1]), Math.abs(pt[1]) - yOut, 0);
@@ -549,7 +472,7 @@ function obbSamples(o: OBB, n = 4): Vec3[] {
   return out;
 }
 
-/** Radial gap (in) of a pad part's inner arc to the tread, from its extrusion outline in the world frame. */
+/** Radial gap (in) of a shoe part's inner arc to the tread, from its extrusion outline in the world frame. */
 function padGap(pad: Part, r: number): number {
   if (pad.geometry.type !== 'extrusion') return BIG;
   const m = pad.transform;
@@ -566,8 +489,8 @@ function padGap(pad: Part, r: number): number {
 
 export function brakeSweep(ctx: Ctx, steps = 8): BrakeSweepResult {
   const { p } = ctx;
-  const b = brakeBundle(ctx);
-  if (b.drum || !b.g.ok) return { minClearanceIn: BIG, moving: '–', other: '–', pose: 0, padGapReleasedIn: BIG, padGapAppliedIn: BIG, groundMinZ: BIG, poses: 0 };
+  const g = brakeBundle(ctx).g;
+  if (!g.ok) return { minClearanceIn: BIG, moving: '–', other: '–', pose: 0, padGapReleasedIn: BIG, padGapAppliedIn: BIG, groundMinZ: BIG, poses: 0 };
   const key = JSON.stringify(Object.fromEntries(Object.entries(p).filter(([k]) => !RIDER_KEYS.includes(k)))) + `|${steps}`;
   const hit = sweepCache.get(key);
   if (hit) return hit;
@@ -575,31 +498,28 @@ export function brakeSweep(ctx: Ctx, steps = 8): BrakeSweepResult {
   const ry = p.rearTrackIn / 2;
   const yIn = ry - p.tireWidthIn / 2, yOut = ry + p.tireWidthIn / 2;
   const bctx = makeCtx(p, {});
-  // With a flared gunwale the rear transom and side-web boxes are conservative bounds of the flared outline: the lever (which leans out
-  // parallel to the web) and the pawl plate are measured against the real outline instead (analytic, below).
-  const flared = ctx.L.flare > 0;
-  const FLARE_BOX = /^(transom-rear|side-cabin-[LR]-web)$/;
+  // Intended contacts: the beam rides in the rail notches (measured analytically in brake-clear), the spring hooks on the transom, the parking pin stows in the lever.
+  const SKIP = /^(rail-cabin|girder-cabin)-/;
   const obstacles = ctx.parts
     .filter((x) => !x.payload && x.group !== 'reference' && !/^brake-/.test(x.id) && !/^wheel-R[LR]$/.test(x.id))
-    .flatMap((x) => partOBBs(x).map((o) => ({ id: x.id, o, rad: Math.hypot(...o.half) }))); // tight boxes: the S-curve members are not one big box (D-45)
+    .flatMap((x) => partOBBs(x).map((o) => ({ id: x.id, o, rad: Math.hypot(...o.half) })));
   let best = { minClearanceIn: BIG, moving: '–', other: '–', pose: 0 };
   let padRel = BIG, padApp = BIG, groundMin = BIG;
   for (let i = 0; i <= steps; i++) {
     const s = i / steps;
-    const moving = buildBrakeAt(bctx, s, true);
+    const moving = buildBrakeAt(bctx, s, true).filter((x) => !x.id.startsWith('handle-'));
     const mob = moving.map((x) => { const o = partOBB(x); return { id: x.id, part: x, o, rad: Math.hypot(...o.half) }; });
     for (const m of mob) {
       groundMin = Math.min(groundMin, worldAABB(m.part).min[2]);
-      // vs the rest of the cart
       for (const ob of obstacles) {
-        if (flared && FLARE_BOX.test(ob.id) && L_GROUP.test(m.id)) continue;
+        if (SKIP.test(ob.id)) continue;
+        if (m.id === 'brake-return-spring' && ob.id === 'transom-rear') continue;
         const d = Math.hypot(m.o.center[0] - ob.o.center[0], m.o.center[1] - ob.o.center[1], m.o.center[2] - ob.o.center[2]) - m.rad - ob.rad;
         if (d > best.minClearanceIn) continue;
         const clr = -obbOverlap(m.o, ob.o);
         if (clr < best.minClearanceIn) best = { minClearanceIn: clr, moving: m.id, other: ob.id, pose: s };
       }
-      // vs the round tires (pads touch by design: their gap is reported separately)
-      if (!/^brake-shoe(-lining)?-[LR]$/.test(m.id)) {
+      if (!/^brake-shoe-[LR]$/.test(m.id)) {
         let dmin = Infinity;
         for (const pt of obbSamples(m.o)) dmin = Math.min(dmin, tireDistance(pt, r, yIn, yOut));
         if (dmin < best.minClearanceIn) best = { minClearanceIn: dmin, moving: m.id, other: 'tire', pose: s };
@@ -609,29 +529,6 @@ export function brakeSweep(ctx: Ctx, steps = 8): BrakeSweepResult {
         if (i === steps) padApp = Math.min(padApp, gap);
       }
     }
-    // lever group vs shoe group
-    for (const a of mob) {
-      if (!L_GROUP.test(a.id)) continue;
-      for (const c of mob) {
-        if (!S_GROUP.test(c.id)) continue;
-        const clr = -obbOverlap(a.o, c.o);
-        if (clr < best.minClearanceIn) best = { minClearanceIn: clr, moving: a.id, other: c.id, pose: s };
-      }
-    }
-  }
-  if (flared) {
-    // Lever inboard face vs the flared hull outline from the deck up to the gunwale top (the lean keeps it parallel to the web).
-    const L = ctx.L;
-    const zTop = L.deckTop + L.sideH;
-    let gap = Infinity;
-    for (let z = L.deckBot; z <= zTop + 1e-9; z += 0.25) {
-      const t = Math.max(0, Math.min(1, (z - L.web.z0) / Math.max(0.1, L.web.z1 - L.web.z0)));
-      const hull = L.hwC + L.side + L.flare * t;
-      const lever = b.g.y.lever[0] + Math.tan(b.g.lean) * Math.max(0, z - b.g.kneeZ);
-      gap = Math.min(gap, lever - hull);
-    }
-    // (The ratchet plate hangs behind the transom, inboard of the lever by the pinch gap: its distance to the lever is reported in brake-clear.)
-    if (gap < best.minClearanceIn) best = { minClearanceIn: gap, moving: 'brake-lever / pawl plate', other: 'flared hull outline', pose: 0 };
   }
   const res: BrakeSweepResult = { ...best, padGapReleasedIn: padRel, padGapAppliedIn: padApp, groundMinZ: groundMin, poses: steps + 1 };
   if (sweepCache.size > 12) sweepCache.clear();
@@ -639,62 +536,42 @@ export function brakeSweep(ctx: Ctx, steps = 8): BrakeSweepResult {
   return res;
 }
 
-/** Finger-entrapment criteria (eng review, pinch gaps): a moving-part gap must be under a fingertip (3/16") or wider than the 1/2" band. */
-const FINGER_GAP_MAX_IN = 0.1875;
-const FINGER_BAND_TOP_IN = 0.5;
-const NO_RUB_IN = 0.06;
-
-/** Gaps at the hand lever: to the hull / gunwale, and to the ratchet plate over the plate's height (lever leaning out with a flared gunwale). */
-export function leverGaps(ctx: Ctx): { hull: number; plate: number } {
-  const b = brakeBundle(ctx);
-  const { g, rg } = b;
-  const Y = g.y;
-  const hull = Y.lever[0] - (ctx.L.hwC + ctx.L.side);
-  let plate = Infinity;
-  for (let i = 0; i <= 8; i++) {
-    const a = rg.a0 + (rg.span * i) / 8;
-    for (const rad of [rg.rInner, rg.rTooth]) {
-      const z = g.Q[1] + rad * Math.sin(a);
-      const lever = Y.lever[0] + Math.tan(g.lean) * Math.max(0, z - g.kneeZ);
-      plate = Math.min(plate, lever - Y.quad[1]);
-    }
-  }
-  return { hull, plate };
-}
-
 export function brakeClearance(ctx: Ctx, sweep: BrakeSweepResult = brakeSweep(ctx)): AnalysisCheck {
   const { p } = ctx;
-  const b = brakeBundle(ctx);
-  if (b.drum) return na('brake-clear', 'Brake linkage clearance over the stroke', 'Braking', 'the wooden-drum variant has no linkage geometry yet.');
-  const capped = sweep.minClearanceIn >= BIG - 1;
-  const gaps = leverGaps(ctx);
-  const details: Detail[] = [
-    detail('pad gap to the tread, released (= stroke)', sweep.padGapReleasedIn, 'in', p.brakeShoeTravelIn - 0.03, '>='),
-    detail('pad gap to the tread, applied (touching)', Math.abs(sweep.padGapAppliedIn), 'in', 0.03, '<='),
-    detail('lowest moving part vs minimum ground clearance', sweep.groundMinZ, 'in', p.minGroundClearanceIn, '>='),
-    detail('lever to ratchet plate gap: no rub', gaps.plate, 'in', NO_RUB_IN, '>='),
-    detail('lever to ratchet plate gap: under a fingertip (3/16")', gaps.plate, 'in', FINGER_GAP_MAX_IN, '<='),
-    detail('lever to hull gap: outside the 3/16"–1/2" finger-entrapment band', gaps.hull, 'in', FINGER_BAND_TOP_IN, '>='),
-  ];
-  const fs = frontBrakeSweep(ctx);
-  let minClear = sweep.minClearanceIn;
-  let frontText = '';
-  if (fs.on) {
-    details.push(
-      detail('front shoe lining gap to the tread (rigid with the wheel, any steer angle)', fs.shoeGapIn, 'in', p.frontShoeTravelIn - 0.03, '>='),
-      detail('front arms, horn and pins to the tire', fs.armToTireIn, 'in', 0.1, '>='),
-      detail(`front brake parts to the hull over the steering sweep (worst ${fs.moving} vs ${fs.other} at ${f(fs.steerDeg, 0)}°)`, fs.minToHullIn, 'in', 0.25, '>='),
-    );
-    minClear = Math.min(minClear, fs.minToHullIn);
-    frontText = ` Front brakes: the horn, arms, pins and shoes ride on the knuckle and are posed with the Ackermann solution at ${fs.poses} steer angles from the outer to the inner tow lock against the hull, rails, beam and brackets (least gap ${f(fs.minToHullIn, 2)}" at ${f(fs.steerDeg, 0)}°, ${fs.moving} vs ${fs.other}); the shoe gap to the tread is ${f(fs.shoeGapIn, 2)}" at every angle because it is rigid with the wheel.`;
+  const g = brakeBundle(ctx).g;
+  const bl = g.bl;
+  const wallRear = bl.xRear - bl.notch.x0;
+  const wallFront = bl.notch.x1 - (bl.xFront + bl.stroke);
+  // Lever bar front edge to the pivot bracket plate over the plate's height at the applied pose (the bar leans back above the pivot, so the gap only grows there).
+  let edgeGap = Infinity;
+  {
+    const lw = p.brakeLeverWidthIn;
+    const nF: [number, number] = [Math.cos(g.tilt), Math.sin(g.tilt)];
+    const up = (g.gripZ - g.Q[1]) / Math.cos(g.tilt);
+    for (let s = -g.tailIn; s <= up; s += 0.1) {
+      const q: [number, number] = [g.Q[0] + g.e[0] * s + nF[0] * lw / 2, g.Q[1] + g.e[1] * s + nF[1] * lw / 2];
+      const c = Math.cos(g.thetaL), sn = Math.sin(g.thetaL);
+      const d: [number, number] = [q[0] - g.Q[0], q[1] - g.Q[1]];
+      const pt: [number, number] = [g.Q[0] + d[0] * c - d[1] * sn, g.Q[1] + d[0] * sn + d[1] * c];
+      if (pt[1] >= g.base.z0 && pt[1] <= g.base.z1) edgeGap = Math.min(edgeGap, g.base.x0 - pt[0]);
+    }
+    if (!Number.isFinite(edgeGap)) edgeGap = BIG;
   }
-  const frontFail = fs.on && (fs.minToHullIn < 0.25 || fs.armToTireIn < 0.1);
-  const pinchFail = details.slice(3, 6).some((d) => d.util > 1) || frontFail;
-  const clearStatus: Status = judge(minClear, p.brakeClearanceIn, '>=');
+  const capped = sweep.minClearanceIn >= BIG - 1;
+  const details: Detail[] = [
+    detail('shoe lining gap to the tread, released (= stroke)', sweep.padGapReleasedIn, 'in', p.brakeShoeTravelIn - 0.03, '>='),
+    detail('shoe lining gap to the tread, applied (touching)', Math.abs(sweep.padGapAppliedIn), 'in', 0.03, '<='),
+    detail('lowest brake part vs minimum ground clearance', sweep.groundMinZ, 'in', p.minGroundClearanceIn, '>='),
+    detail('beam to the notch rear wall, released', wallRear, 'in', 0.06, '>='),
+    detail('beam to the notch front wall, applied', wallFront, 'in', 0.06, '>='),
+    detail('lever bar edge to the bracket plate (outside the 3/16"–1/2" finger band)', edgeGap, 'in', 0.5, '>='),
+  ];
+  const clearStatus: Status = judge(sweep.minClearanceIn, p.brakeClearanceIn, '>=');
+  const pinchFail = details.slice(2).some((d) => d.util > 1);
   const status: Status = pinchFail ? worst(clearStatus, 'fail') : clearStatus;
   return singleCheck({
-    id: 'brake-clear', label: 'Brake linkage clearance over the stroke', group: 'Braking', refs: ['D-38', 'D-16'],
-    value: minClear, unit: 'in', limit: p.brakeClearanceIn, sense: '>=', details, status,
-    how: `The moving brake parts (lever, link and clevises, crank, pawl, shoe arms, pins, pads and linings) are posed at ${sweep.poses} points from released to applied (lever solved from the closed link at each point) and tested against every other solid (hull, rails, storage box, axle beam, hubs, handle) with oriented-box separation, against the round rear tires by distance to the tire cylinder, and the lever group against the shoe group. ${capped ? `Everything stays > ${BIG}" apart.` : `Minimum clearance ${f(sweep.minClearanceIn, 2)}" between ${sweep.moving} and ${sweep.other} at ${f(sweep.pose * 100, 0)}% of the stroke.`} Limit ≥ ${f(p.brakeClearanceIn, 2)}". The linings sit ${f(sweep.padGapReleasedIn, 2)}" off the tread released (stroke ${f(p.brakeShoeTravelIn, 2)}") and ${f(sweep.padGapAppliedIn, 2)}" applied; the lowest point is ${f(sweep.groundMinZ, 2)}" above the ground (limit ${f(p.minGroundClearanceIn, 2)}"). Pinch points (eng review): the lever slides past the ratchet plate with a ${f(gaps.plate, 3)}" gap (≥ ${NO_RUB_IN}" so it cannot rub, ≤ ${FINGER_GAP_MAX_IN}" so a fingertip cannot enter) and stands ${f(gaps.hull, 3)}" off the hull (≥ ${FINGER_BAND_TOP_IN}", outside the 3/16"–1/2" finger-entrapment band).${pinchFail ? ' PINCH GAP OUT OF RANGE.' : ''}${frontText}`,
+    id: 'brake-clear', label: 'Brake mechanism clearance over the stroke', group: 'Braking', refs: ['D-53', 'D-16'],
+    value: sweep.minClearanceIn, unit: 'in', limit: p.brakeClearanceIn, sense: '>=', details, status,
+    how: `The moving brake parts (beam, shoes, clevis, link bars and pins, lever, grip, spring) are posed at ${sweep.poses} points from released to applied (the lever angle solved from the closed link at each point) and tested against every other solid except the rail notch they ride in and the tire the shoes press (hull, transom, storage box, push handle, rear axle beam, wheels): least gap ${capped ? 'more than 99' : f(sweep.minClearanceIn, 2)}" (${sweep.moving} vs ${sweep.other}, at pose ${f(sweep.pose, 2)}); limit ≥ ${f(p.brakeClearanceIn, 2)}". The shoe lining is ${f(sweep.padGapReleasedIn, 2)}" off the tread released and ${f(Math.abs(sweep.padGapAppliedIn), 2)}" applied (stroke ${f(p.brakeShoeTravelIn, 3)}"). Lowest brake part ${f(sweep.groundMinZ, 2)}" (keeper strap bottom; limit ${f(p.minGroundClearanceIn, 1)}"). The beam has ${f(wallRear, 3)}" to the notch rear wall released and ${f(wallFront, 3)}" to the front wall applied. The lever bar stands ${f(p.brakeLeverStandoffIn, 2)}" off the bracket plate, outside the 3/16"–1/2" finger-entrapment band.`,
   });
 }

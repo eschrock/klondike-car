@@ -1,4 +1,4 @@
-/** Test helpers for the analysis rows: a context on the default design (the Ackermann ride-mode cart). */
+/** Test helpers for the analysis rows: a context on the default design (the Ackermann tow cart). */
 import { defaultParams, resolveParams, type Params } from '../params';
 import { buildModel } from '../model';
 import { makeContext, type Ctx } from './context';

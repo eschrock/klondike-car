@@ -3,7 +3,7 @@
  * rearward pitch. Geometry from `geometry.ts`, CG and mass from the load cases.
  */
 import { worldAABB, partOBB } from '../model/bounds';
-import { instantCenters, lockLimits, solveSteer, wheelCenters } from '../model/ackermann';
+import { instantCenters, solveSteer, wheelCenters } from '../model/ackermann';
 import type { Ctx } from './context';
 import { dualCheck, singleCheck, detail, type CaseEval } from './dual';
 import { DEG, RAD, contactsAt, instantCenterY, lateralTip, outerEdgeDistance, sideEdges, turnGeometry, axleLoads } from './geometry';
@@ -48,8 +48,8 @@ export function tipStraight(ctx: Ctx): AnalysisCheck {
 export function tipLock(ctx: Ctx): AnalysisCheck {
   const { p, contact } = ctx;
   const lock = Math.abs(p.steerLockDeg) * RAD;
-  // Ackermann front end (D-53): the tow lock AND the ride lock (inner wheel angle), contacts from the solved wheel centers.
-  const locks: { rad: number; name: string }[] = [{ rad: lock, name: 'tow lock' }, { rad: lockLimits(ctx.L.front.ack, 'ride').innerDeg * RAD, name: 'ride lock' }];
+  // Ackermann front end (D-53): the tow lock (inner wheel angle), contacts from the solved wheel centers.
+  const locks: { rad: number; name: string }[] = [{ rad: lock, name: 'tow lock' }];
   const ev = (c: CaseData): CaseEval => {
     let best = { deg: Infinity, d: 0, h: 0, edge: '', sign: 1, x: 0, y: 0, name: '' };
     for (const lk of locks) for (const s of [1, -1]) {
@@ -58,7 +58,7 @@ export function tipLock(ctx: Ctx): AnalysisCheck {
       const lat = lateralTip(ct, [cg[0], cg[1]], cg[2]);
       if (lat.deg < best.deg) best = { deg: lat.deg, d: lat.d, h: cg[2], edge: lat.edge, sign: s, x: cg[0], y: cg[1], name: lk.name };
     }
-    const lockTxt = `the 4 contacts with the front wheel centers solved by the Ackermann linkage at the ${f(p.steerLockDeg)} deg tow lock (inner wheel; outer ${f(solveSteer(ctx.L.front.ack, p.steerLockDeg).outerDeg)} deg) and at the ride lock (inner ${f(locks[1].rad / RAD, 2)} deg); the ${best.name} governs`;
+    const lockTxt = `the 4 contacts with the front wheel centers solved by the Ackermann linkage at the ${f(p.steerLockDeg)} deg tow lock (inner wheel; outer ${f(solveSteer(ctx.L.front.ack, p.steerLockDeg).outerDeg)} deg)`;
     return {
       value: best.deg, unit: '°', limit: p.tipLockMinDeg, sense: '>=',
       how: `θ = atan(d/h) = atan(${f(best.d, 2)} / ${f(best.h, 2)}) = ${f(best.deg)}°; ${lockTxt} (${best.sign > 0 ? 'left' : 'right'} lock governs, edge ${best.edge}); min over all side edges and both lock directions. CG at lock (${f(best.x)}, ${f(best.y, 2)}). Limit ≥ ${p.tipLockMinDeg}°.`,

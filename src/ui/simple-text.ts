@@ -7,7 +7,6 @@ import type { FitResult } from '../truck/fit';
 import type { AnalysisCheck, Status } from '../analysis/types';
 import { SEVERITY } from '../analysis/types';
 import { LIGHT_OF_ID, lightOf, type Light, type Limiter, type SafeRange, type SweepResult } from '../analysis/rider-sweep';
-import { hillStopSentence } from './ride-rules';
 
 export const LIGHT_TITLE: Record<Light, string> = {
   tipping: 'Tipping over', turns: 'Fast turns', hills: 'Hills & braking', steering: 'Steering', strength: 'Strength', truck: 'Fits the truck',
@@ -17,7 +16,7 @@ export const LIGHT_TITLE: Record<Light, string> = {
 export const LIGHT_CHECK_IDS: Record<Light, string[]> = {
   tipping: ['tip-straight', 'tip-lock'],
   turns: ['slide-before-tip', 'v-rollover'],
-  hills: ['pitch-fwd', 'pitch-rear', 'brake-force', 'brake-traction', 'brake-stop', 'brake-emergency', 'brake-heat', 'brake-bias'],
+  hills: ['pitch-fwd', 'pitch-rear', 'brake-force', 'brake-traction'],
   steering: ['turn-radius', 'steer-clear', 'steer-kin', 'steer-lock'],
   strength: Object.keys(LIGHT_OF_ID).filter((k) => LIGHT_OF_ID[k] === 'strength'),
   truck: ['truck-fit'],
@@ -41,24 +40,30 @@ const PART: Record<string, { name: string; event?: string }> = {
   'kingpin-bolt': { name: 'a steering pivot bolt', event: 'in a hard bump' },
   'kingpin-bracket': { name: 'a bracket that holds a steering pivot', event: 'in a hard bump' },
   'tie-rod': { name: 'the steering rod' },
-  'stick-cable': { name: 'a steering cable', event: 'if the stick is yanked' },
   'wheel-retention': { name: 'the front wheel nuts and pins', event: 'in a hard bump' },
   'spindle-fatigue': { name: 'a front wheel stub', event: 'after many bumps' },
   'tongue-tie': { name: 'the rope tie point' },
-  'hip-cable': { name: 'the hip brake cable' },
-  'belt-anchor': { name: 'the lap belt anchors', event: 'in a crash' },
-  'brake-front': { name: 'the front brake parts' },
+  bellcrank: { name: 'the steering lever under the nose', event: 'when a front wheel is pushed hard' },
+  'drag-link': { name: 'a steering link' },
+  'steer-stop-load': { name: 'the steering stops' },
+  'wheel-rating': { name: 'a wheel', event: 'in a hard bump' },
+  'rear-beam-seat': { name: 'the rear axle seat in the side rails', event: 'in a hard bump' },
+  'brake-lever': { name: 'the brake lever', event: 'if it is yanked' },
+  'brake-links': { name: 'the brake link', event: 'under a hard pull' },
+  'brake-beam': { name: 'the brake beam' },
+  'brake-shoes': { name: 'the brake shoes' },
+  'park-hold': { name: 'the parking pin' },
 };
 /**
- * The checks that belong to the new (Phase 3b) front end: the spindle, its bracket and bolt, the tie rod, bellcrank, tongue and links, the stick cable and the front brake.
+ * The checks that belong to the new (Phase 3b) front end: the spindle, its bracket and bolt, the tie rod, bellcrank, tongue and links, and the tow-lock stops.
  * Their sizes are placeholders until the real purchased parts are chosen (spec 12), and at the defaults several do not yet pass at the operating rider. While any of these
  * fails, the Simple view says the front end is still being verified (spec 12: keep a one-line note until the rows clear). REMOVE `FRONT_END_NOTE` once they pass.
  */
 export const FRONT_END_IDS = new Set([
   'spindle-stub', 'spindle-fatigue', 'kingpin-bolt', 'kingpin-bracket', 'wheel-retention', 'tie-rod', 'drag-link', 'bellcrank', 'steer-stop-load', 'beam-front', 'tongue',
-  'tongue-tie', 'stick-cable', 'brake-front', 'hip-cable',
+  'tongue-tie',
 ]);
-export const FRONT_END_NOTE = 'The new steering front end (spindle, bracket, rod and cable sizes) is still being verified.';
+export const FRONT_END_NOTE = 'The new steering front end (spindle, bracket, rod and link sizes) is still being verified.';
 const partText = (id: string) => { const q = PART[id]; return q ? (q.event ? `${q.name} ${q.event}` : q.name) : id; };
 
 /** Why a check fails, as it would read after "Above 230 lb: " (no trailing period). */
@@ -86,27 +91,27 @@ const REASON: Record<string, string> = {
   'kingpin-bolt': 'a steering pivot bolt could bend or shear in a hard bump',
   'kingpin-bracket': 'a bracket that holds a steering pivot could bend or tear in a hard bump',
   'tie-rod': 'the steering rod could bend when the front wheels are pushed hard',
-  'stick-cable': 'a steering cable could stretch or snap if the stick is yanked',
   'wheel-retention': 'a front wheel could come off in a hard bump',
   'spindle-fatigue': 'a front wheel stub could crack after many bumps',
   'tongue-tie': 'the rope tie point could pull out',
-  'hip-cable': 'the hip brake cable could break under a hard grip',
-  'belt-anchor': 'a lap belt anchor could pull out in a crash',
-  'brake-front': 'the front brake parts could bend or loosen',
-  'brake-emergency': 'it takes too hard a squeeze on the brake to stop quickly on a hill',
-  'brake-stop': 'it takes too long to stop from riding speed on a hill',
-  'brake-bias': 'the rear wheels could lock before the front ones, and the cart could swing around',
-  'brake-heat': 'the brakes could overheat on a long run',
-  'park-hold': 'it might roll away when parked on a steep hill',
+  bellcrank: 'the steering lever under the nose could bend when a front wheel is pushed hard',
+  'drag-link': 'a steering link could bend when the front wheels are pushed hard',
+  'steer-stop-load': 'a steering stop could shear or pull loose',
+  'wheel-rating': 'a wheel could be overloaded in a hard bump',
+  'rear-beam-seat': 'the notch that holds the rear axle in the side rails could crush or split in a hard bump',
+  'brake-lever': 'the brake lever could bend or pull loose if it is yanked',
+  'brake-links': 'the brake link or its pins could bend or shear under a hard pull',
+  'brake-beam': 'the brake beam could bend under a hard pull',
+  'brake-shoes': 'a brake shoe could wear or crush under a hard pull',
+  'park-hold': 'the parking pin could bend and the cart roll away when parked on a steep hill',
   'steer-kin': 'the two front wheels do not turn together properly, so the tires would scrub and the steering would feel off',
   'steer-lock': 'the steering stops are not where they should be',
-  'ride-rollover': 'a tight turn at riding speed could tip it',
 };
 
 /** Rows the Phase 3b design adds (spec 4.2, 5.5, 7): each has a plain name or a failure sentence here, pinned by the simple-text test. */
 export const PHASE3B_CHECK_IDS = [
-  'spindle-stub', 'kingpin-bolt', 'kingpin-bracket', 'tie-rod', 'stick-cable', 'wheel-retention', 'spindle-fatigue', 'tongue-tie', 'hip-cable', 'belt-anchor',
-  'brake-front', 'brake-emergency', 'brake-stop', 'brake-bias', 'brake-heat', 'park-hold', 'steer-kin', 'steer-lock', 'ride-rollover',
+  'spindle-stub', 'kingpin-bolt', 'kingpin-bracket', 'tie-rod', 'wheel-retention', 'spindle-fatigue', 'tongue-tie',
+  'brake-lever', 'brake-links', 'brake-beam', 'brake-shoes', 'park-hold', 'steer-kin', 'steer-lock', 'bellcrank', 'drag-link', 'steer-stop-load', 'wheel-rating', 'rear-beam-seat',
 ] as const;
 export function failReason(id: string): string {
   return REASON[id] ?? 'a safety check fails';
@@ -119,9 +124,8 @@ export function limiterName(id: string): string {
     case 'tip-straight': case 'tip-lock': return 'tipping on a side slope';
     case 'slide-before-tip': case 'v-rollover': return 'a fast, sharp turn';
     case 'pitch-fwd': case 'pitch-rear': return 'hills';
-    case 'brake-force': case 'brake-traction': case 'brake-emergency': case 'brake-stop': case 'brake-bias': case 'brake-heat': case 'park-hold': return 'braking on a hill';
+    case 'brake-force': case 'brake-traction': return 'braking on a hill';
     case 'turn-radius': case 'steer-clear': case 'steer-kin': case 'steer-lock': return 'steering';
-    case 'ride-rollover': return 'a tight turn at riding speed';
     default: return 'a safety check';
   }
 }
@@ -131,10 +135,8 @@ export function limiterAdvice(id: string): string {
   switch (id) {
     case 'tip-straight': case 'tip-lock': case 'slide-before-tip': return 'widen the wheels or lower the floor';
     case 'pitch-rear': case 'pitch-fwd': return 'make the cart longer between the wheels or lower the floor';
-    case 'brake-force': case 'brake-traction': case 'brake-emergency': case 'brake-stop': case 'brake-heat': case 'park-hold': return 'ask the builders about a stronger brake';
-    case 'brake-bias': return 'ask the builders to re-set the front and rear brake balance';
+    case 'brake-force': case 'brake-traction': return 'ask the builders about a stronger brake';
     case 'steer-kin': case 'steer-lock': return 'ask the builders to re-check the steering linkage';
-    case 'ride-rollover': return 'widen the wheels or lower the floor, or keep riding speed down in turns';
     default: return PART[id] ? `the builders need to strengthen ${PART[id].name}` : 'adjust the cart in the controls below';
   }
 }
@@ -196,7 +198,7 @@ export function lightTexts({ p, checks, fit }: DesignFacts): Record<Light, Light
   // Hills & braking: brake handle force, front lift under a pull, forward pitch.
   {
     const bf = by(checks, 'brake-force'), pr = by(checks, 'pitch-rear'), pf = by(checks, 'pitch-fwd');
-    const status = st(['brake-force', 'pitch-rear', 'pitch-fwd', 'brake-stop', 'brake-emergency', 'brake-heat', 'brake-bias']);
+    const status = st(['brake-force', 'pitch-rear', 'pitch-fwd']);
     const slope = num(p.designSlopeDeg);
     const parts: string[] = [];
     parts.push(bf?.status === 'fail'
@@ -209,14 +211,6 @@ export function lightTexts({ p, checks, fit }: DesignFacts): Record<Light, Light
       : "The front won't lift when pulled uphill.");
     if (pf && (pf.status === 'fail' || pf.status === 'marginal'))
       parts.push(pf.status === 'fail' ? 'Braking downhill could tip it nose-first.' : 'Braking downhill is close to tipping it nose-first.');
-    // Phase 3b rows (WS-C / WS-D); absent rows add nothing.
-    const stop = by(checks, 'brake-stop');
-    const stopSentence = hillStopSentence(p, stop ? val(stop) : undefined);
-    if (stopSentence) parts.push(stop?.status === 'fail' ? `${stopSentence} That is longer than the ${num(lim(stop))} ft the rules allow.` : stopSentence);
-    for (const id of ['brake-emergency', 'brake-bias', 'brake-heat'] as const) {
-      const c = by(checks, id);
-      if (c && c.status === 'fail') parts.push(`${failReason(id).charAt(0).toUpperCase()}${failReason(id).slice(1)}.`);
-    }
     out.hills = { light: 'hills', status, text: parts.join(' ') };
   }
 

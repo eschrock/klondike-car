@@ -2,8 +2,6 @@ import type { Params } from '../params';
 import { makeCtx, unitDir, type ViewState } from './build-utils';
 import { buildBody } from './body';
 import { buildBrake } from './brake';
-import { buildBrakeControls } from './brake-controls';
-import { buildFrontBrake } from './brake-front';
 import { applyFinish } from './finish';
 import { buildFrame } from './frame';
 import { applyJoinery } from './joinery';
@@ -32,8 +30,6 @@ export function buildModel(input: Params, view: ViewState = {}): Part[] {
     ...buildSeat(ctx),
     ...buildStorage(ctx),
     ...buildBrake(ctx),
-    ...buildFrontBrake(ctx),
-    ...buildBrakeControls(ctx),
     ...buildLighting(ctx),
     ...buildHardware(ctx),
     ...buildPayload(ctx),

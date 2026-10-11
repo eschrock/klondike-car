@@ -13,6 +13,7 @@ import {
   type Params,
 } from '../params';
 import { curveHeading, hazardRangeX, leftTirePolys, offsetY, sidePolyline, type PlanCurve } from './hull-curve';
+import { beamLayout } from './brake-layout';
 import { computeFrontLayout, type FrontLayout } from './front-layout';
 import { riderLegTopZ } from './rider-geom';
 import type { Vec2, Vec3 } from './types';
@@ -78,7 +79,7 @@ export interface Layout {
   noseGunTop: number;
   /** Rear axle beam. */
   beamR: Beam;
-  /** The Ackermann front end (D-53): kingpins, spindles, beam, brackets, links, tongue, stick (front-layout.ts). */
+  /** The Ackermann front end (D-53): kingpins, spindles, beam, brackets, links, tongue (front-layout.ts). */
   front: FrontLayout;
   /** Nose rails/joists run to here: the front transom's inner face. */
   noseRailEnd: number;
@@ -169,9 +170,9 @@ export function computeLayout(input: Params): Layout {
   const noseRailEnd = WB + p.frontOverhangIn - p.transomThicknessIn;
   // Joists skip the rear axle beam when it stands taller than their underside (overslung beam).
   const jD = p.crossmemberDepthIn;
-  // They also skip the brake cross shaft when it runs through their depth.
-  const shaftX = -(r + p.brakeShaftBehindTireIn);
-  const shaftThroughJoists = r + p.brakeShaftDiameterIn / 2 > deckTop - ply - jD + 0.01 && r - p.brakeShaftDiameterIn / 2 < deckTop - ply;
+  // They also skip the brake beam (D-53) when it runs through their depth.
+  const bBeam = beamLayout(p, r, deckTop - ply - p.railDepthIn, xRear + transom);
+  const beamThroughJoists = bBeam.zB + p.brakeBeamSizeIn / 2 > deckTop - ply - jD + 0.01 && bBeam.zB - p.brakeBeamSizeIn / 2 < deckTop - ply;
   // A joist that would hit the beam is replaced by one on each side of it (not pushed to one side only), so a thicker
   // deck ply never lengthens the panel span next to the beam (critic Phase 2 r1, D1 oddity).
   // ── Seat ──
@@ -237,9 +238,9 @@ export function computeLayout(input: Params): Layout {
   }
   const sheer = { x0: sheerX0, x1: sheerX1, riseIn: Math.max(0, p.sheerRiseIn) };
 
-  const front = computeFrontLayout(p, { r, WB, kx, seat, hull: hullCurve, side, ply, deckTop }, (x) => offsetY(hullCurve, -side / 2, x));
+  const front = computeFrontLayout(p, { r, WB, kx, hull: hullCurve, side, ply, deckTop });
 
-  // ── Joists: skip the rear axle beam and the brake shaft; with the Ackermann front end also the steel front beam (its top stands in their depth) ──
+  // ── Joists: skip the rear axle beam and the brake beam; with the Ackermann front end also the steel front beam (its top stands in their depth) ──
   const fb = front.beam;
   const straddle = (x: number, b: Beam): number[] | null => {
     const half = (b.thick + joistT) / 2 + 0.05;
@@ -255,8 +256,7 @@ export function computeLayout(input: Params): Layout {
       const sf = straddle(x, fb);
       if (sf) return sf;
     }
-    const sh = (p.brakeShaftDiameterIn + joistT) / 2 + 0.05;
-    if (shaftThroughJoists && Math.abs(x - shaftX) < sh) return [x < shaftX ? shaftX - sh : shaftX + sh];
+    if (beamThroughJoists && x > bBeam.notch.x0 - joistT / 2 - 0.05 && x < bBeam.notch.x1 + joistT / 2 + 0.05) return [x < bBeam.xB ? bBeam.notch.x0 - joistT / 2 - 0.05 : bBeam.notch.x1 + joistT / 2 + 0.05];
     return [x];
   });
   const cabinJoistX = joistsBetween(xRear + transom, xn);

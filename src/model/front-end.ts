@@ -1,32 +1,23 @@
 /**
- * The Ackermann front end (Phase 3b, D-51/D-53, spec 1.1 and 1.3; WS-A Stage 1): steel tube front beam, bolt-on kingpin brackets, purchased racing-kart
- * spindles, tie rod, drag link, bellcrank, tongue (hinged ahead of the beam) with its tongue link, the keyed mode pin and plate, the ride stick with its
- * pull-pull cables and guides, the centering springs and the tow-lock stops. Everything is bolted: no shop welding (the brackets and plates are outsourced).
+ * The Ackermann front end (Phase 3b, D-51/D-53, spec 1.1 and 1.3; WS-A Stage 1; simplified for Phase 3c-1, D-53): steel tube front beam, bolt-on kingpin
+ * brackets, purchased racing-kart spindles, tie rod, drag link, bellcrank, the tongue (hinged ahead of the beam) with its tongue link and the tow-lock stops.
+ * There is ONE steering input, the tongue the pullers steer by: its link drives the bellcrank through a single clevis pin, and the bellcrank's output arm drives the
+ * tie rod through the drag link. (The bellcrank stays: the tongue ear moves fore-aft while the tie-rod center moves sideways, so a straight link between them
+ * would be a toggle; the bellcrank turns that motion through the 90 degrees.) Everything is bolted: no shop welding (the brackets and plates are outsourced).
  *
- * Built only when `ViewState.frontEnd === 'ackermann'` (index.ts) so the old turntable front end keeps building until the Stage 2 flip. Geometry comes
- * from `Layout.front` (front-layout.ts) and the steered pose of each rigid body from `ctx.pose` (ackermann.poseMatrices): parts are placed in the NEUTRAL
- * frame with `body` set to the moving body, and `customPart` multiplies the pose in. The stick and cables are not sim bodies: their transforms carry the pose
- * directly (they are rebuilt per slider value, like everything else).
- *
- * View modes (`ctx.view.mode`): 'both' (default) has the tongue AND the stick, the mode pin in the TOW socket (so the stick is installed but not
- * connected: it stays at neutral); 'tow' omits the stick, its cables, guard and bracket guard parts; 'ride' omits the tongue, its link, its hinge clevis, the
- * tongue-tip eye bolt and the bridle, and the mode pin sits in the RIDE socket (the cross-bar is then pinned to the bellcrank and the stick moves).
+ * Geometry comes from `Layout.front` (front-layout.ts) and the steered pose of each rigid body from `ctx.pose` (ackermann.poseMatrices): parts are placed in
+ * the NEUTRAL frame with `body` set to the moving body, and `customPart` multiplies the pose in.
  */
-import { centerPins, solveSteer } from './ackermann';
-import { FRAME_STYLE } from '../params';
-import { CABLE_END_BEHIND_PIVOT_IN as CABLE_END_BEHIND, MODE_PLATE_T_IN, convexHull, discPts } from './front-layout';
-import { IN3_PER_FT3, STEP, poseOf, roughOf, woodMassLb, type Ctx } from './build-utils';
-import { multiply, rotationY, translation } from './mat4';
+import { solveSteer } from './ackermann';
+import { convexHull, discPts } from './front-layout';
+import { IN3_PER_FT3, STEP, roughOf, woodMassLb, type Ctx } from './build-utils';
+import { translation } from './mat4';
 import { toLocal } from './joinery';
 import { circlePath, customPart, mergeMeshes, pathLength, tubeAlong, type CustomPartSpec } from './mesh-utils';
 import { boltLength, inchesText, washerThick } from './rear-mount';
 import type { Joint, Mat4, Part, Vec2, Vec3 } from './types';
 
 const VENDOR = 'McMaster-Carr or equivalent';
-const ALU_PCF = 168.5;
-/** Printed ASA at 60% fill (lighting.ts, D-41). */
-const ASA_PCF = 66.8;
-const RAD = Math.PI / 180;
 const f2 = (v: number) => (Math.round(v * 100) / 100).toString();
 
 /** 3/8 -> "3/8", 0.75 -> "3/4" (nearest 1/16). */
@@ -91,9 +82,6 @@ export function buildFrontEnd(ctx: Ctx): Part[] {
   const { p, L } = ctx;
   const F = L.front;
   const ack = F.ack;
-  const mode = ctx.view.mode;
-  const tow = mode !== 'ride';
-  const ride = mode !== 'tow';
   const parts: Part[] = [];
   const r = L.r;
   const beam = F.beam;
@@ -103,8 +91,6 @@ export function buildFrontEnd(ctx: Ctx): Part[] {
   const dragZ = F.bellcrank.dragZ;
   const bellZ = F.bellcrank.z;
   const armW = p.steerArmWidthIn;
-  const sol = ctx.steer;
-  const pins = centerPins(ack, sol);
   const yawLock = Math.max(...[-1, 1].map((k) => Math.abs(solveSteer(ack, k * ack.towLockInnerDeg).tongueDeg)));
   const stubD = p.spindleStub === 0 ? 17 / 25.4 : 25 / 25.4;
   const sIdx = (s: 1 | -1) => (s > 0 ? 'L' : 'R') as 'L' | 'R';
@@ -220,7 +206,7 @@ export function buildFrontEnd(ctx: Ctx): Part[] {
     }));
   }
 
-  // ── Tie rod, drag link, bellcrank, bell bracket, standoff, cross-bar, mode plate and pin, centering springs ──
+  // ── Tie rod, drag link, bellcrank, bell bracket, input standoff and the tongue-link pin ──
   {
     const d = p.tieRodDiaIn, ed = p.tieRodEndDiaIn;
     const rodVol = Math.PI * (d / 2) ** 2 * ack.tieLen;
@@ -248,8 +234,8 @@ export function buildFrontEnd(ctx: Ctx): Part[] {
       id: 'bellcrank', name: 'Bellcrank', outline: bc.plate, z0: bellZ - bellT / 2, t: bellT, material: `${frac(bellT)}" A36 steel plate, laser cut`, body: 'bellcrank',
       fab: 'outsource', step: STEP.linkage, explode: unit3([-0.5, 0, -1]),
       sourcing: { vendor: `Outsourced laser cut ${frac(bellT)}" A36 plate (the DXF comes from the cut list); bore the pivot hole ${f2(0.3125 + 0.03)}" with a flanged bronze bushing; zinc plate` },
-      joints: [bolt('bell-bracket', 1, 0.3125, `${frac(0.3125)}" grade 8 pivot bolt through the bracket plate, bellcrank, cross-bar and mode plate, nylock nut`, undefined, [[pv[0], pv[1], bellT / 2]])],
-      notes: `Pivot at (${f2(pv[0])}", 0), ${p.bellcrankPivotAftOfKingpinIn}" behind the kingpin line. Output arm ${f2(ack.bellArm)}" at ${f2(ack.bellOutDeg ?? 0)} deg (drag link pin), input arm ${f2(ack.bellInArm ?? 0)}" at ${f2(ack.bellInDeg ?? 0)} deg (tongue-link standoff), RIDE socket on the cross-bar line ${f2(ack.bellCableArm! / 2)}" to the right, spring pins aft. The plate is the hull of those pins. Plane z ${f2(bellZ)}".`,
+      joints: [bolt('bell-bracket', 1, 0.3125, `${frac(0.3125)}" grade 8 pivot bolt through the bracket plate and the bellcrank, nylock nut`, undefined, [[pv[0], pv[1], bellT / 2]])],
+      notes: `Pivot at (${f2(pv[0])}", 0), ${p.bellcrankPivotAftOfKingpinIn}" behind the kingpin line. Output arm ${f2(ack.bellArm)}" at ${f2(ack.bellOutDeg ?? 0)} deg (drag link pin), input arm ${f2(ack.bellInArm ?? 0)}" at ${f2(ack.bellInDeg ?? 0)} deg (tongue-link standoff) The plate is the hull of those two pins and the pivot. Plane z ${f2(bellZ)}".`,
     });
     parts.push(bell);
     parts.push(plate(ctx, {
@@ -257,7 +243,7 @@ export function buildFrontEnd(ctx: Ctx): Part[] {
       fab: 'outsource', step: STEP.gear, explode: unit3([-0.2, 0, 0.6]),
       sourcing: { vendor: `Outsourced laser cut ${frac(linkT)}" A36 plate; two ${frac(0.3125)}" through-bolts into the beam rear face (crush sleeves in the tube), nylock nuts on the front face` },
       joints: [bolt('beam-F', 2, 0.3125, `${frac(0.3125)}" grade 8 x ${inchesText(boltLength(beam.thick + linkT, 0.3125))} through the plate and the tube (fore-aft), crush sleeve, nylock nut`), bolt('bellcrank', 1, 0.3125, 'pivot bolt (counted with the bellcrank)')],
-      notes: `Carries the bellcrank pivot and the two centering-spring anchors, cantilevered ${f2(beam.x - beam.thick / 2 - pv[0])}" aft of the beam rear face, over the tie rod and the drag link (plane z ${f2(bc.bracketZ)}"). WS-D: check the bracket bending and the two bolts under the bellcrank pivot load.`,
+      notes: `Carries the bellcrank pivot, cantilevered ${f2(beam.x - beam.thick / 2 - pv[0])}" aft of the beam rear face, over the tie rod and the drag link (plane z ${f2(bc.bracketZ)}"). WS-D: check the bracket bending and the two bolts under the bellcrank pivot load.`,
     }));
     // Tongue-link standoff: the bellcrank input pin stands up to the tongue-link plane (over the beam).
     const so = F.tongue.link.z0;
@@ -266,55 +252,22 @@ export function buildFrontEnd(ctx: Ctx): Part[] {
       id: 'bell-standoff', name: 'Bellcrank input standoff', kind: 'purchased', material: '3/4" hex steel standoff, tapped both ends',
       geometry: { type: 'cylinder', radius: 0.375, length: so - soBot }, transform: alongZ([bc.inPin[0], bc.inPin[1], soBot], [bc.inPin[0], bc.inPin[1], so]), body: 'bellcrank',
       massLb: steelLb(ctx, Math.PI * 0.375 ** 2 * (so - soBot)) * 0.8, fab: 'buy', step: STEP.linkage, explode: unit3([-0.2, 0, -1]),
-      sourcing: { vendor: `${VENDOR}: 3/4" hex steel standoff ${inchesText(so - soBot)}" long (or a turned spacer), 1/4-20 tapped; the top socket takes the TOW mode pin` },
+      sourcing: { vendor: `${VENDOR}: 3/4" hex steel standoff ${inchesText(so - soBot)}" long (or a turned spacer), 1/4-20 tapped; the top takes the tongue-link pin` },
       joints: [bolt('bellcrank', 1, 0.25, '1/4-20 screw up through the input arm into the standoff')],
       notes: `Lifts the tongue-link pin ${f2(so - soBot)}" so the link passes over the beam top (${f2(beam.top)}") under the deck.`,
     }));
-    // Cable cross-bar: pinned to the bellcrank only in RIDE mode.
-    const cb = F.bellcrank.cablePins;
-    parts.push(mk(ctx, {
-      id: 'cable-crossbar', name: 'Cable cross-bar', kind: 'metal', material: `${frac(linkT)}" A36 steel flat bar with bushed holes`,
-      geometry: { type: 'box', size: [armW, 2 * ack.bellCableArm! + armW, linkT] }, transform: translation(pv[0], pv[1], dragZ), body: mode === 'ride' ? 'bellcrank' : 'chassis',
-      massLb: steelLb(ctx, armW * (2 * ack.bellCableArm! + armW) * linkT), fab: 'drill-tap', step: STEP.linkage, explode: unit3([-0.5, 0, -1]),
-      stock: { t: linkT, w: armW, l: 2 * ack.bellCableArm! + armW },
-      sourcing: { vendor: `${VENDOR}: ${frac(linkT)}" x ${frac(armW)}" A36 flat bar cut ${f2(2 * ack.bellCableArm! + armW)}", pivot hole ${f2(0.3125 + 0.03)}", cable swage-stud holes ${f2(2 * ack.bellCableArm!)}" apart, RIDE-pin hole ${f2(ack.bellCableArm! / 2)}" off center` },
-      joints: [bolt('bellcrank', 1, p.modePinDiaIn, `${frac(p.modePinDiaIn)}" mode pin in the RIDE socket joins the cross-bar to the bellcrank (RIDE only; the cross-bar turns freely on the pivot bolt otherwise)`)],
-      notes: `Rides on the pivot bolt below the bellcrank (z ${f2(dragZ)}"); the two cables end ${f2(ack.bellCableArm!)}" either side of the pivot (A left, B right). In 'both'/'tow' views it stays at neutral (the pin is in the TOW socket).`,
-    }));
-    void cb;
-    parts.push(mk(ctx, {
-      id: 'mode-plate', name: 'Mode plate', kind: 'metal', material: `${frac(MODE_PLATE_T_IN)}" A36 steel shuttle plate with two detents`,
-      geometry: { type: 'box', size: [3, ack.bellCableArm! + 2, MODE_PLATE_T_IN] }, transform: translation(pv[0], 0, bc.modeZ),
-      massLb: steelLb(ctx, 3 * (ack.bellCableArm! + 2) * MODE_PLATE_T_IN), fab: 'outsource', step: STEP.linkage, explode: unit3([-0.2, 0, -1]),
-      sourcing: { vendor: `Outsourced laser cut ${frac(MODE_PLATE_T_IN)}" A36 plate; detent marks TOW and RIDE; zinc plate` },
-      joints: [bolt('bell-bracket', 2, 0.3125, `${frac(0.3125)}" screws on 1/2" spacers either side of the bellcrank stack (the plate does not turn)`)],
-      notes: `Keyed interlock (D-51): ONE captured ${frac(p.modePinDiaIn)}" pin, two mutually exclusive sockets: TOW (tongue link standoff, ${f2(Math.hypot(F.mode.pinTow[0] - F.mode.pinRide[0], F.mode.pinTow[1] - F.mode.pinRide[1]))}" from) and RIDE (cross-bar). The plate window sets the bellcrank stop: wide in TOW (the bracket tabs are the primary tow stops), narrow in RIDE (outer ${p.steerRideLockDeg} deg).`,
-    }));
-    const sock = tow ? F.mode.pinTow : F.mode.pinRide;
-    const pinTopZ = tow ? F.tongue.link.z1 + 0.2 : bellZ + bellT / 2 + 0.2; // head over the link end (TOW) or over the bellcrank (RIDE)
-    // TOW: through the link end into the standoff top. RIDE: down through the bellcrank and the cross-bar only (it stops above the mode plate).
-    const pinLen = tow ? 1.4 : pinTopZ - (dragZ - linkT / 2);
-    parts.push(mk(ctx, {
-      id: 'mode-pin', name: 'Mode pin', kind: 'purchased', material: `${frac(p.modePinDiaIn)}" grade 8 clevis pin with lanyard and hairpin`,
-      geometry: { type: 'cylinder', radius: p.modePinDiaIn / 2, length: pinLen }, transform: alongZ([sock[0], sock[1], pinTopZ - pinLen], [sock[0], sock[1], pinTopZ]), body: 'bellcrank',
-      massLb: 0.1, fab: 'buy', step: STEP.linkage, explode: unit3([-0.2, 0, 1]),
-      sourcing: { vendor: `${VENDOR}: ${frac(p.modePinDiaIn)}" clevis pin ${inchesText(pinLen)}" with a hairpin cotter and a stainless lanyard cable to the mode plate (captured)` },
-      joints: [bolt(tow ? 'bell-standoff' : 'cable-crossbar', 1, p.modePinDiaIn, tow ? 'TOW socket: through the tongue-link end into the standoff top' : 'RIDE socket: through the cross-bar and the bellcrank')],
-      notes: `In the ${tow ? 'TOW' : 'RIDE'} socket at (${f2(sock[0])}", ${f2(sock[1])}", z ${f2(sock[2])}"). One pin, two sockets ${f2(Math.hypot(F.mode.pinTow[0] - F.mode.pinRide[0], F.mode.pinTow[1] - F.mode.pinRide[1], F.mode.pinTow[2] - F.mode.pinRide[2]))}" apart: it cannot occupy both, so the tongue and the stick are never both connected.`,
-    }));
-    // Centering springs: bellcrank spring pin to the bracket-head anchor (endpoints at the current pose).
-    for (const s of [1, -1] as const) {
-      const tag = sIdx(s);
-      const pinN = bc.springPin[tag], anc = bc.springAnchor[tag];
-      const pose = poseOf(ctx, 'bellcrank')!;
-      const a2: Vec2 = [pose[0] * pinN[0] + pose[4] * pinN[1] + pose[12], pose[1] * pinN[0] + pose[5] * pinN[1] + pose[13]];
-      const zS = bellZ;
-      const a: Vec3 = [a2[0], a2[1], zS], b: Vec3 = [anc[0], anc[1], zS];
+    // Tongue-link pin: a clevis pin through the link end into the standoff top (pull it and the link, tongue and bridle come off for transport, D-9).
+    {
+      const sock = F.bellcrank.linkPinAt;
+      const pinTopZ = F.tongue.link.z1 + 0.2;
+      const pinLen = 1.4;
       parts.push(mk(ctx, {
-        id: `centering-spring-${tag}`, partNo: 'centering-spring', name: `Centering spring ${tag}`, kind: 'purchased', material: 'stainless extension spring, hook ends',
-        geometry: { type: 'cylinder', radius: 0.2, length: len3(sub3(b, a)) }, transform: alongZ(a, b), massLb: 0.05, fab: 'buy', step: STEP.linkage, explode: unit3([-0.5, 0, -1]),
-        sourcing: { vendor: `${VENDOR}: stainless extension spring, ~${(0.4).toFixed(1)}" OD, ${f2(len3(sub3(b, a)))}" body at rest, rate set for ${p.steerCenterSpringLbf} lbf at the stick grip at ride lock (two springs); hook to the bellcrank spring pin and the bracket head` },
-        notes: `Neutral when the stick is released; about ${p.steerCenterSpringLbf} lbf at the grip at the ride lock. Still attached in tow mode (negligible against the tongue pull). Drawn between the pins at the current pose.`,
+        id: 'tongue-link-pin', name: 'Tongue link pin', kind: 'purchased', material: `${frac(p.tongueLinkPinDiaIn)}" grade 8 clevis pin with lanyard and hairpin`,
+        geometry: { type: 'cylinder', radius: p.tongueLinkPinDiaIn / 2, length: pinLen }, transform: alongZ([sock[0], sock[1], pinTopZ - pinLen], [sock[0], sock[1], pinTopZ]), body: 'bellcrank',
+        massLb: 0.1, fab: 'buy', step: STEP.linkage, removable: true, explode: unit3([-0.2, 0, 1]),
+        sourcing: { vendor: `${VENDOR}: ${frac(p.tongueLinkPinDiaIn)}" clevis pin ${inchesText(pinLen)}" with a hairpin cotter and a stainless lanyard cable to the bell bracket (captured)` },
+        joints: [bolt('bell-standoff', 1, p.tongueLinkPinDiaIn, 'through the tongue-link end into the standoff top')],
+        notes: `At (${f2(sock[0])}", ${f2(sock[1])}", z ${f2(sock[2])}"). Pull it to lift the tongue link off the bellcrank (transport, D-9). The tongue drives the bellcrank directly through this pin (D-53: no mode plate, no stick).`,
       }));
     }
   }
@@ -331,12 +284,12 @@ export function buildFrontEnd(ctx: Ctx): Part[] {
       stock: { t: ts.size[0], w: ts.size[1], l: ts.size[2] },
       sourcing: { vendor: `${VENDOR}: 3/4" square A36 bar cut ${f2(ts.size[2])}", 1/4-20 set screw (adjusts the lock) in the bearing face with a 1/8" urethane pad; one ${frac(0.3125)}" bolt up through the beam bottom wall into a tapped plate` },
       joints: [bolt('beam-F', 1, 0.3125, `${frac(0.3125)}" bolt up through the block into the beam bottom (backed by a plate inside the tube), nylock nut inside`)],
-      notes: `Primary tow-lock stop (D-53): the steering arm of the INNER wheel meets this block's face at ${ack.towLockInnerDeg} deg (adjust with the set screw to ${ack.towLockInnerDeg} +/- 0.1). It sits under the beam at the arm's leading edge (${f2(ts.size[2])}" tall, ${f2(beam.bot - (c[2] - ts.size[2] / 2) - ts.size[2])}" under nothing else), 65% of the way out the arm; the outer wheel is held by the 4-bar. Pairs with the bellcrank window in RIDE (outer ${p.steerRideLockDeg} deg).`,
+      notes: `Primary tow-lock stop (D-53): the steering arm of the INNER wheel meets this block's face at ${ack.towLockInnerDeg} deg (adjust with the set screw to ${ack.towLockInnerDeg} +/- 0.1). It sits under the beam at the arm's leading edge (${f2(ts.size[2])}" tall, ${f2(beam.bot - (c[2] - ts.size[2] / 2) - ts.size[2])}" under nothing else), 65% of the way out the arm; the outer wheel is held by the 4-bar.`,
     }));
   }
 
   // ── Tongue (hinged ahead of the beam) and its clevis, link and tie ──
-  if (tow) {
+  {
     const T = F.tongue;
     const hinge = T.hinge;
     const tongueLen = T.tipX - T.rearX;
@@ -364,8 +317,8 @@ export function buildFrontEnd(ctx: Ctx): Part[] {
       geometry: { type: 'box', size: [tl.len + armW, armW, linkT] }, transform: tl.m, body: 'tongue-link', massLb: steelLb(ctx, (tl.len + armW) * armW * linkT),
       fab: 'drill-tap', step: STEP.spindles, removable: true, explode: unit3([0.5, 0, 0.5]), stock: { t: linkT, w: armW, l: tl.len + armW },
       sourcing: { vendor: `${VENDOR}: ${frac(linkT)}" x ${frac(armW)}" A36 flat bar cut ${f2(tl.len + armW)}", holes ${f2(tl.len)}" apart (derived), flanged bronze bushings` },
-      joints: [bolt('tongue-plate', 1, p.tieRodEndDiaIn, `${frac(p.tieRodEndDiaIn)}" bolt at the ear`), bolt('bell-standoff', 1, p.modePinDiaIn, 'TOW mode pin into the standoff top')],
-      notes: `${f2(tl.len)}" between pins; runs over the beam top at z ${f2(T.link.z0)}-${f2(T.link.z1)}" (${f2(T.link.z0 - beam.top)}" over it, ${f2(L.deckBot - T.link.z1)}" under the deck). Slides off its pin when the TOW pin is pulled: the tongue then swings free.`,
+      joints: [bolt('tongue-plate', 1, p.tieRodEndDiaIn, `${frac(p.tieRodEndDiaIn)}" bolt at the ear`), bolt('tongue-link-pin', 1, p.tongueLinkPinDiaIn, 'clevis pin into the standoff top')],
+      notes: `${f2(tl.len)}" between pins; runs over the beam top at z ${f2(T.link.z0)}-${f2(T.link.z1)}" (${f2(T.link.z0 - beam.top)}" over it, ${f2(L.deckBot - T.link.z1)}" under the deck). Slides off its pin when the link pin is pulled: the tongue then swings free.`,
     }));
     // Hinge clevis: top and bottom plates, two walls with flanges bolted to the beam front face.
     const bf = beam.x + beam.thick / 2;
@@ -419,97 +372,8 @@ export function buildFrontEnd(ctx: Ctx): Part[] {
     }));
   }
 
-  // ── Ride stick, bracket, guard, cables and the cable guide ──
-  {
-    const st = F.stick;
-    const cab = F.cable;
-    const pivot = st.pivot;
-    const stickDeg = mode === 'ride' ? sol.stickDeg : 0;
-    const rotM = multiply(translation(pivot[0], pivot[1], pivot[2]), multiply(rotationY(-stickDeg * RAD), translation(-pivot[0], -pivot[1], -pivot[2])));
-    const ap = (m: Mat4, q: Vec3): Vec3 => [m[0] * q[0] + m[4] * q[1] + m[8] * q[2] + m[12], m[1] * q[0] + m[5] * q[1] + m[9] * q[2] + m[13], m[2] * q[0] + m[6] * q[1] + m[10] * q[2] + m[14]];
-    const od = p.rideStickDiaIn, wall = p.rideStickWallIn;
-    const bot: Vec3 = [pivot[0], pivot[1], pivot[2] - p.rideStickCableArmIn - 0.15], top = st.grip;
-    const tubeLen = top[2] - bot[2];
-    const tubeVol = (Math.PI / 4) * (od * od - (od - 2 * wall) ** 2) * tubeLen;
-    const railId = `${p.frameStyle === FRAME_STYLE.ladder ? 'rail' : 'girder'}-cabin-R`;
-    const fixing = [bolt(railId, 2, 0.25, '1/4-20 stainless screws through the outer cheek into the chine/rail inner face, and down through the base into the deck rail, T-nuts or inserts')];
-    // Pivot bracket: a U channel (base + two cheeks) on the deck beside the seat.
-    const bx0 = pivot[0] - 1, bx1 = pivot[0] + 1;
-    const ch = od / 2 + 0.2;
-    const deckZ = L.deckTop;
-    const uSec: Vec2[] = [
-      [pivot[1] - ch - linkT, deckZ], [pivot[1] + ch + linkT, deckZ], [pivot[1] + ch + linkT, pivot[2] + 0.6], [pivot[1] + ch, pivot[2] + 0.6], [pivot[1] + ch, deckZ + linkT],
-      [pivot[1] - ch, deckZ + linkT], [pivot[1] - ch, pivot[2] + 0.6], [pivot[1] - ch - linkT, pivot[2] + 0.6],
-    ];
-    // Extrude along x: local x = y, local y = z, local z = x.
-    parts.push(mk(ctx, {
-      id: 'stick-bracket', name: 'Ride stick pivot bracket', kind: 'metal', material: `${frac(linkT)}" A36 steel plate, laser cut and bent`,
-      geometry: { type: 'extrusion', outline: uSec, depth: bx1 - bx0 }, transform: basis([bx0, 0, 0], [0, 1, 0], [0, 0, 1], [1, 0, 0]),
-      massLb: steelLb(ctx, polyArea(uSec) * (bx1 - bx0)), fab: 'outsource', step: STEP.seatStorage, explode: unit3([0, 0, 1]), stock: { t: linkT, w: 2 * (ch + linkT), l: bx1 - bx0 },
-      sourcing: { vendor: `Outsourced laser cut and bent ${frac(linkT)}" A36 plate (U channel, ${f2(2 * ch)}" between the cheeks for the ${frac(od)}" tube); pivot bolt ${frac(0.25)}" through both cheeks and the stick` },
-      joints: fixing,
-      notes: `Base on the deck beside the seat, ${f2(-pivot[1])}" off the centerline (${p.rideStickInsetIn}" in from the right chine inner face); pivot at z ${f2(pivot[2])}" (seat surface + ${p.rideStickPivotAboveSeatIn}"), axis across the car, so the stick swings fore-aft (no scissor against the thigh).`,
-    }));
-    if (ride) {
-      parts.push(mk(ctx, {
-        id: 'ride-stick', name: 'Ride stick', kind: 'purchased', material: `${frac(od)}" x ${wall.toFixed(3)}" 6061-T6 aluminum tube, rubber grip, 1/8" steel cable-arm plate`,
-        geometry: { type: 'cylinder', radius: od / 2, length: tubeLen }, transform: multiply(rotM, alongZ(bot, top)), body: 'chassis',
-        massLb: (tubeVol / IN3_PER_FT3) * ALU_PCF + 0.3, fab: 'drill-tap', step: STEP.seatStorage, removable: true, explode: unit3([0, 0, 1]),
-        stock: { t: wall, w: od, l: tubeLen },
-        sourcing: { vendor: `${VENDOR}: 6061-T6 round tube ${frac(od)}" OD x ${wall.toFixed(3)}" wall, cut ${f2(tubeLen)}", cross-drilled for the pivot bolt, 1/8" steel cable-arm plate riveted inside the lower end (arm ${f2(p.rideStickCableArmIn)}" below the pivot, two cable holes ${f2(1)}" apart), rubber bar-end grip` },
-        joints: [bolt('stick-bracket', 1, 0.25, `${frac(0.25)}" stainless pivot bolt through the cheeks and the tube, nylock nut`)],
-        notes: `Pivot-to-grip ${p.rideStickLengthIn}", swings fore-aft about a cross-car pivot; grip pulled aft = left turn (stickDeg ${f2(stickDeg)} deg now, about 15 deg at the ride lock). Parked in a socket on the hull for tow (removable); the stow socket is not modeled (open question).`,
-      }));
-      const gY = pivot[1] + ch + linkT;
-      const guardH = 4.5;
-      parts.push(mk(ctx, {
-        id: 'stick-guard', name: 'Stick guard', kind: 'printed', material: 'ASA (UV-stable) printed guard', geometry: { type: 'box', size: [3, 0.1875, guardH] },
-        transform: translation(pivot[0], gY + 0.1875 / 2 + 0.05, pivot[2] - 1 + guardH / 2), massLb: ((3 * 0.1875 * guardH) / IN3_PER_FT3) * ASA_PCF, fab: 'print', step: STEP.seatStorage, removable: true,
-        explode: unit3([0, 1, 0.3]), sourcing: { vendor: 'Printed ASA, 3 perimeters, 0.2 mm layers; two #10-32 inserts into the stick bracket cheek' },
-        joints: [{ type: 'threaded-insert', to: 'stick-bracket', count: 2, size: '#10-32 inserts in the cheek, button-head screws', diaIn: 0.19 }],
-        notes: 'Covers the lower stick toward the rider\'s thigh (the pinch zone) and its swing; clip-on with the stick.',
-      }));
-      for (const tagAB of ['A', 'B'] as const) {
-        const armN = tagAB === 'A' ? cab.armA : cab.armB;
-        const armP = ap(rotM, armN);
-        const drop = tagAB === 'A' ? cab.dropA : cab.dropB;
-        const endW = tagAB === 'A' ? cab.endA : cab.endB;
-        const pinN = tagAB === 'A' ? cab.pinA : cab.pinB;
-        const pinP: Vec3 = pins && mode === 'ride' ? [pins[tagAB === 'A' ? 'cableA' : 'cableB'][0], pins[tagAB === 'A' ? 'cableA' : 'cableB'][1], pinN[2]] : pinN;
-        const cd = p.stickCableDiaIn;
-        const total = len3(sub3(armN, drop)) + len3(sub3(drop, endW)) + len3(sub3(endW, pinN));
-        const mkSeg = (id: string, nm: string, a: Vec3, b: Vec3, note: string, joints: Joint[]) => mk(ctx, {
-          id, partNo: 'stick-cable', name: nm, kind: 'purchased', material: `${frac(cd)}" 7x19 stainless steel cable (aircraft cable) with swage sleeves and a turnbuckle`,
-          geometry: { type: 'cylinder', radius: cd / 2, length: len3(sub3(b, a)) }, transform: alongZ(a, b), body: 'chassis', massLb: (Math.PI * (cd / 2) ** 2 * len3(sub3(b, a)) / IN3_PER_FT3) * p.steelDensityPcf, fab: 'buy', step: STEP.seatStorage, removable: true,
-          explode: unit3([0, 0, -1]),
-          sourcing: { vendor: `${VENDOR}: ${frac(cd)}" 7x19 stainless aircraft cable, ${f2(total + 6)}" per cable (one piece in three straight segments here) with a swage stud + nut each end and a turnbuckle in the run; preload ${p.stickCablePreloadLbf} lbf` },
-          joints, notes: note,
-        });
-        parts.push(mkSeg(`stick-cable-${tagAB}-up`, `Stick cable ${tagAB} (stick to the deck slot)`, armP, drop, `Cable ${tagAB}: from the stick's cable arm down through the deck slot (cable-guide-R) to the waypoint under the joists. Redrawn as straight segments at the current pose.`, [bolt('ride-stick', 1, cd, 'swage stud on the stick cable arm')]));
-        parts.push(mkSeg(`stick-cable-${tagAB}`, `Stick cable ${tagAB} (under the deck)`, drop, endW, `Cable ${tagAB} under the deck, below the joists, to the waypoint in line with its cross-bar pin (${f2(CABLE_END_BEHIND)}" behind the pivot). ${tagAB === 'B' ? 'In the real part B reverses over a small printed pulley behind the stick (pull-pull); drawn straight.' : ''}`, []));
-        parts.push(mkSeg(`stick-cable-${tagAB}-end`, `Stick cable ${tagAB} (to the bellcrank)`, endW, pinP, `Last run of cable ${tagAB}, along x to its ${tagAB === 'A' ? 'left' : 'right'} cross-bar pin (moves with the bellcrank in RIDE).`, [bolt('cable-crossbar', 1, cd, `swage stud and nut on the ${tagAB === 'A' ? 'left' : 'right'} end of the cross-bar`)]));
-      }
-    }
-    const gs = cab.slotSize;
-    parts.push(mk(ctx, {
-      id: 'cable-guide-R', name: 'Cable guide', kind: 'printed', material: 'ASA (UV-stable) printed covered channel with grommet',
-      geometry: { type: 'box', size: [gs[0] + 1.2, 1.4, 0.5] }, transform: translation(cab.slot[0], cab.slot[1], deckZ + 0.25), massLb: (((gs[0] + 1.2) * 1.4 * 0.5) / IN3_PER_FT3) * ASA_PCF + 0.02,
-      fab: 'print', step: STEP.seatStorage, explode: unit3([0, 0, -1]), sourcing: { vendor: 'Printed ASA covered channel over the deck slot (a foot cannot catch the cable); rubber grommet in the slot' },
-      joints: [{ type: 'screw', to: railId, count: 2, size: '#8 stainless screws into the deck rail', diaIn: 0.164 }],
-      notes: `Over the ${f2(gs[0])}" x ${f2(gs[1])}" slot the cables pass through the deck at (${f2(cab.slot[0])}", ${f2(cab.slot[1])}"). WS-B: cut this slot in the deck (Layout.front.cable.slot).`,
-    }));
-  }
-
-  return filterMode(parts, mode);
+  return parts;
 }
-
-/** Parts omitted by the control mode in view (spec 1.4): 'tow' has no stick, 'ride' no tongue (the builders above already skip most; this is the safety net). */
-function filterMode(parts: Part[], mode: 'both' | 'tow' | 'ride'): Part[] {
-  const stickRe = /^(ride-stick|stick-guard|stick-cable)/;
-  const tongueRe = /^(tongue|eyebolt-T|bridle)/;
-  return parts.filter((x) => !(mode === 'tow' && stickRe.test(x.id)) && !(mode === 'ride' && tongueRe.test(x.id)));
-}
-
 
 /** Hull of two discs (radii ra, rb), CCW. */
 function hullDiscs(a: Vec2, ra: number, b: Vec2, rb: number): Vec2[] {

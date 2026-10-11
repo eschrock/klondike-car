@@ -18,7 +18,7 @@ import { f } from './format';
 import type { CaseData } from './loads';
 import { evalBoth } from './stability';
 import { bumpCases, bumpText, goodmanPulsating, peakVertical, sensitivityText, staticWheelLb, type BumpStrike } from './bump';
-import { uncTensileArea } from './brake-mount';
+import { uncTensileArea } from './nds';
 import { innerHalfWidth } from '../model/layout';
 import type { AnalysisCheck, Detail } from './types';
 

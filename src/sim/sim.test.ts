@@ -7,7 +7,7 @@ import { createSim } from './core';
 import { ackermannErrorDeg, idealOuterDeg, poseMatrices, solveSteer } from '../model/ackermann';
 import { eigenSym3 } from './math';
 import { KG_PER_LB, M_PER_IN } from './massprops';
-import { SCENARIOS } from './scenarios';
+import { DEFAULT_CONFIG, SCENARIOS } from './scenarios';
 import { M_PER_IN as MPI } from './massprops';
 import { buildSimSpec, WHEEL_IDS, type SimSpec } from './spec';
 import { runTiltOnset } from './tilt';
@@ -218,24 +218,16 @@ describe('Ackermann sim', () => {
     expect(sim.readout().steerDeg).toBeLessThan(-14);
   });
 
-  it('the tow lock is the inner angle at the stop; the ride lock clamps the input to 8 deg outer', async () => {
+  it('the tow lock is the inner angle at the stop: a commanded 80 deg clamps to it, either way (ride mode and its 8 deg lock are gone, D-53)', async () => {
     const tow = await run(aspec, 3, { controls: { steerMode: 'angle', steerAngleDeg: 80 } });
     const towDeg = tow.readout().knuckleDeg!;
     expect(towDeg.L).toBeGreaterThan(ack.towLockInnerDeg - 1.5);
     expect(towDeg.L).toBeLessThan(ack.towLockInnerDeg + 0.6);
-    const ride = await run(aspec, 3, { config: { mode: 'ride' }, controls: { steerMode: 'angle', steerAngleDeg: -80 } });
-    const rk = ride.readout().knuckleDeg!;
-    // Turning right: the left wheel is the outer one at 8 deg.
-    expect(Math.abs(rk.L)).toBeGreaterThan(ack.rideLockOuterDeg - 0.6);
-    expect(Math.abs(rk.L)).toBeLessThan(ack.rideLockOuterDeg + 0.6);
-    expect(Math.abs(rk.R)).toBeLessThan(ack.rideLockOuterDeg + 1.5);
-  });
-
-  it('ride mode with the stick released holds the knuckles at zero', async () => {
-    const sim = await run(aspec, 3, { config: { mode: 'ride', initialSpeedMph: 6 }, controls: { steerMode: 'bridle' } });
-    const r = sim.readout();
-    expect(Math.abs(r.knuckleDeg!.L)).toBeLessThan(0.7);
-    expect(Math.abs(r.steerDeg)).toBeLessThan(0.7);
+    const right = await run(aspec, 3, { controls: { steerMode: 'angle', steerAngleDeg: -80 } });
+    const rk = right.readout().knuckleDeg!;
+    expect(Math.abs(rk.R)).toBeGreaterThan(ack.towLockInnerDeg - 1.5);
+    expect(Math.abs(rk.R)).toBeLessThan(ack.towLockInnerDeg + 0.6);
+    expect(Math.abs(rk.L)).toBeLessThan(Math.abs(rk.R));
   });
 
   it('a towed cart follows the rope through the tongue without hunting', async () => {
@@ -249,10 +241,11 @@ describe('Ackermann sim', () => {
     expect(sim.readout().speedMph).toBeGreaterThan(3);
   });
 
-  it('braking at 10 mph on 8 deg slows the cart with the front share and it stays straight', async () => {
-    const sc = SCENARIOS.find((x) => x.id === 'ride-downhill')!;
-    expect(sc.config.mode).toBe('ride');
-    const sim = await createSim(aspec, { config: sc.config, controls: sc.controls, script: sc });
+  it('there is no ride scenario and no ride config any more; the braking scenario brakes the rear wheels only and the cart stays straight', async () => {
+    expect(SCENARIOS.some((x) => /ride/.test(x.id))).toBe(false);
+    expect(Object.keys(DEFAULT_CONFIG)).not.toContain('mode');
+    const sc = SCENARIOS.find((x) => x.id === 'brake')!;
+    const sim = await createSim(aspec, { config: sc.config, controls: { ...sc.controls, brakeLbf: 100 }, script: sc });
     let vBefore = 0;
     let maxSteer = 0;
     for (let i = 0; i < 240 * 8; i++) {
@@ -262,11 +255,10 @@ describe('Ackermann sim', () => {
       maxSteer = Math.max(maxSteer, Math.abs(r.steerDeg));
     }
     const r = sim.readout();
-    expect(aspec.frontBrakeShare).toBeGreaterThan(0);
-    expect(r.speedMph).toBeLessThan(vBefore * 0.4);
+    expect(aspec).not.toHaveProperty('frontBrakeShare');
+    expect(r.speedMph).toBeLessThan(vBefore);
     expect(maxSteer).toBeLessThan(1.5);
     expect(r.tipped).toBe(false);
-    expect(Math.abs(r.distanceIn)).toBeGreaterThan(100);
   });
 
   it('poses: tie-rod, bellcrank and tongue match poseMatrices; the knuckles pose themselves', async () => {

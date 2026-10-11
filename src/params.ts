@@ -16,6 +16,8 @@
  */
 
 import { neutralTieLen, type AckSpec } from './model/ackermann';
+import { beamLayout, linkTopZ } from './model/brake-layout';
+import { frontStackTop } from './model/front-stack';
 import { fitBowCurve, leftTirePolys, minGapToTires, offsetY, sidePolyline, type BowSpec, type CurveClearanceSpec, type PlanCurve } from './model/hull-curve';
 
 export type ParamStatus = 'locked' | 'verify' | 'assumed' | 'explore';
@@ -31,7 +33,7 @@ export type ParamGroup =
   | 'stock'
   | 'materials'
   | 'factors'
-  | 'ride'
+  | 'bump'
   | 'truck';
 
 export interface ParamOption {
@@ -68,7 +70,7 @@ export const GROUP_LABELS: Record<ParamGroup, string> = {
   stock: 'Stock thicknesses',
   materials: 'Material properties',
   factors: 'Design factors & check limits',
-  ride: 'Ride mode and bump loads',
+  bump: 'Bump loads (walking and jogging pace)',
   truck: 'Truck bed (2007 Tacoma short bed)',
 };
 
@@ -77,7 +79,6 @@ export const AXLE_STYLE = { throughRod: 0, stubAxles: 1 } as const;
 export const AXLE_BEAM_POSITION = { underslung: 0, overslung: 1 } as const;
 export const TIRE_TYPE = { pneumatic: 0, flatFree: 1 } as const;
 export const PLY_SPECIES = { okoumeMarine: 0, balticBirchExterior: 1 } as const;
-export const BRAKE_TYPE = { tireTread: 0, woodDrum: 1 } as const;
 export const FRAME_STYLE = { ladder: 0, hullBeam: 1 } as const;
 export const SIDE_CONSTRUCTION = { solidOak: 0, capturedPly: 1, openFrame: 2 } as const;
 export const STORAGE_LOCATION = { rearOverAxle: 0, forwardRaised: 1, underSeat: 2 } as const;
@@ -725,14 +726,9 @@ const defs = {
   steerLockDeg: {
     label: 'Steering lock (each side)', group: 'steering', unit: '°',
     default: 35.5, min: 28, max: 42, step: 0.5, status: 'explore', primary: true, ref: 'D-12, D-51',
-    note: 'TOW-mode lock: the INNER wheel angle (the outer wheel follows the Ackermann trapezoid, about 26 deg at 35.5). Limited above by the turning radius (D-51, 108") and by the tire sweep that sets the bow width (D-52); ride mode uses the separate, much smaller steerRideLockDeg.',
+    note: 'The tow lock: the INNER wheel angle (the outer wheel follows the Ackermann trapezoid, about 26 deg at 35.5). Limited above by the turning radius (D-51, 108") and by the tire sweep that sets the bow width (D-52).',
   },
   // ── Phase 3 workstream A: steering stops, kingpin, bridle ties, front mounting (D-31…D-35) ──
-  weldFexxPsi: {
-    label: 'Weld filler tensile strength F_EXX', group: 'steering', unit: 'psi',
-    default: 70000, min: 60000, max: 80000, step: 10000, status: 'assumed', ref: 'D-43',
-    note: 'E70 electrode; fillet weld allowable shear = 0.3 F_EXX (AISC ASD).',
-  },
   kingpinPlateBoltYieldPsi: {
     label: 'Kingpin plate bolt yield strength', group: 'steering', unit: 'psi',
     default: 130000, min: 30000, max: 150000, step: 5000, status: 'verify', ref: 'D-43',
@@ -817,64 +813,48 @@ const defs = {
   },
 
   // ── Brake & rear handle ──────────────────────────────────────────────────
-  brakeType: {
-    label: 'Brake type', group: 'brake', unit: '',
-    default: BRAKE_TYPE.tireTread, min: 0, max: 1, step: 1, status: 'explore', ref: 'D-13',
-    options: [
-      { value: BRAKE_TYPE.tireTread, label: 'Shoes on rear tire treads' },
-      { value: BRAKE_TYPE.woodDrum, label: 'Band/shoe on wooden drum (live axle)' },
-    ],
-  },
   brakeLeverRatio: {
     label: 'Brake mechanical advantage TARGET', group: 'brake', unit: ':1',
-    default: 12, min: 2, max: 14, step: 0.5, status: 'explore', ref: 'D-13',
-    note: 'Phase 3 (D-38): a target, not an input. The analysis uses the ratio derived from the lever / crank / shoe geometry; the brake-ratio check fails if the geometry delivers less than this. (The wooden-drum variant has no linkage geometry and still uses the target.)',
-  },
-  brakeShoeThickIn: {
-    label: 'Brake shoe radial thickness', group: 'brake', unit: 'in',
-    default: 1.5, min: 0.75, max: 3, step: 0.25, status: 'assumed', ref: 'D-13',
-  },
-  brakeShoeWidthIn: {
-    label: 'Brake shoe width (across the tread)', group: 'brake', unit: 'in',
-    default: 2.5, min: 1.5, max: 4, step: 0.25, status: 'assumed', ref: 'D-13',
-    note: 'Phase 3 r2: 2.5" (was 3") shortens the shoe-arm overhang beyond the bearing, which sets the bending in the cross-drilled shaft; pad pressure is about 55 psi at 2× the hold load.',
-  },
-  brakeShoeLengthIn: {
-    label: 'Brake shoe length (along the tread)', group: 'brake', unit: 'in',
-    default: 2, min: 1, max: 5, step: 0.25, status: 'assumed', ref: 'D-13',
-  },
-  brakeShoeAngleDeg: {
-    label: 'Brake shoe position below the axle line (rear of the tire)', group: 'brake', unit: '°',
-    default: 11, min: 0, max: 20, step: 1, status: 'assumed', ref: 'D-38',
-    note: 'Phase 3: the shoes sit on the REAR of each tread, this far below the axle line, so the pad swings straight in from the cross shaft behind the tire. The lowest pad corner must stay above the minimum ground clearance (validator warning).',
-  },
-  brakeDrumDiameterFrac: {
-    label: 'Wooden drum diameter ÷ wheel diameter', group: 'brake', unit: '×',
-    default: 0.5, min: 0.3, max: 0.7, step: 0.05, status: 'assumed', ref: 'D-13',
-    note: 'The drum must stay above the minimum ground clearance (validator warning).',
-  },
-  brakeDrumWidthIn: {
-    label: 'Wooden drum width (along the axle)', group: 'brake', unit: 'in',
-    default: 1, min: 0.5, max: 2, step: 0.25, status: 'assumed', ref: 'D-13',
-  },
-  brakeShaftBehindTireIn: {
-    label: 'Brake cross shaft behind the rear tire', group: 'brake', unit: 'in',
-    default: 1.5, min: 1, max: 4, step: 0.25, status: 'assumed', ref: 'D-13',
-    note: 'The shaft sits this far behind the tread; the rear transom must stay behind it (validator).',
-  },
-  brakeShaftDiameterIn: {
-    label: 'Brake cross shaft diameter', group: 'brake', unit: 'in',
-    default: 0.875, min: 0.375, max: 1, step: 0.125, status: 'assumed', ref: 'D-38',
-    note: 'Ground shafting, pre-hardened 4140 (brakeShaftYieldPsi). ¾" carries the shoe-arm torque at 2× the hold load; ½" does not. Phase 3 r2: the shaft is cross-drilled for roll pins (no keyseat, build review M10) and the ¼" diametral hole costs 57% of the bending section, so the net-section stress is checked (brake-shaft); 1045 at 70 ksi would need a 7/8" shaft (+1.8 lb).',
+    default: 10, min: 2, max: 16, step: 0.5, status: 'explore', ref: 'D-53',
+    note: 'Phase 3c-1 (D-53): a target, not an input. The analysis uses the ratio DERIVED from the lever / link / beam geometry (hand force at the grip to total shoe normal force); brake-ratio fails if the geometry delivers less than this. 10:1 at 80 percent efficiency holds the goal rider (200 lb) on 15 degrees at the mud-fouled lining with about 26 lbf at the grip.',
   },
   brakeLeverWidthIn: {
-    label: 'Brake lever width (across)', group: 'brake', unit: 'in',
-    default: 0.75, min: 0.5, max: 2.5, step: 0.25, status: 'assumed', ref: 'D-38',
-    note: 'Kept narrow so the lever, its clevis and the shoe arms fit side by side in the gap between the hull and the rear tire.',
+    label: 'Brake lever bar width (in the plane of the pull)', group: 'brake', unit: 'in',
+    default: 1.5, min: 1, max: 2.5, step: 0.25, status: 'assumed', ref: 'D-53',
+    note: 'The hand lever is a flat aluminum bar (6061-T6), brakeBarThickIn thick across the cart and this wide in the plane of the pull, standing behind the rear transom on its own pivot bracket.',
   },
-  brakeLeverThickIn: {
-    label: 'Brake lever thickness (fore-aft, in the plane of the pull)', group: 'brake', unit: 'in',
-    default: 2, min: 0.75, max: 2, step: 0.25, status: 'assumed', ref: 'D-38',
+  brakeLeverStandoffIn: {
+    label: 'Brake lever standoff behind the pivot bracket plate', group: 'brake', unit: 'in',
+    default: 0.75, min: 0.25, max: 2, step: 0.125, status: 'assumed', ref: 'D-53',
+    note: 'Air between the pivot bracket plate (on the transom) and the lever bar edge: keeps the finger-pinch gap open (over 3/8") and lets the link reach forward to the beam.',
+  },
+  brakeBeamSizeIn: {
+    label: 'Brake beam square tube size', group: 'brake', unit: 'in',
+    default: 1.75, min: 1, max: 2, step: 0.25, status: 'assumed', ref: 'D-53',
+    note: 'The brake beam is one 6061-T6 aluminum square tube across the tail, behind the rear tires, with a lined shoe at each end. It slides fore-aft in a notch in each cabin rail (the notches are the guides) and rests on a keeper strap under each notch. Bolted only.',
+  },
+  brakeBeamWallIn: {
+    label: 'Brake beam tube wall', group: 'brake', unit: 'in',
+    default: 0.125, min: 0.0625, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-53',
+  },
+  brakeKeeperThickIn: {
+    label: 'Brake beam keeper strap thickness', group: 'brake', unit: 'in',
+    default: 0.25, min: 0.0625, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-53',
+    note: 'A steel strap screwed across the bottom of each rail notch; the beam rests on it. The beam height follows from the rail bottom, the strap and the tube size.',
+  },
+  brakeAluminumYieldPsi: {
+    label: 'Brake beam and lever aluminum yield (6061-T6)', group: 'brake', unit: 'psi',
+    default: 35000, min: 15000, max: 45000, step: 1000, status: 'assumed', ref: 'D-53',
+    note: 'Allowable = yield / steelSafetyFactor (shear 0.577x). The same value for the beam tube and the lever bar.',
+  },
+  brakeParkPitchIn: {
+    label: 'Parking quadrant: hole pitch along the arc', group: 'brake', unit: 'in',
+    default: 0.5, min: 0.25, max: 1, step: 0.125, status: 'assumed', ref: 'D-53',
+    note: 'The parking hold is a hitch pin through the lever and one of a row of holes in the pivot ear (a quadrant concentric with the lever pivot). The pitch sets how finely the hold takes up shoe wear.',
+  },
+  brakeParkRadiusIn: {
+    label: 'Parking quadrant radius (pivot to the pin holes)', group: 'brake', unit: 'in',
+    default: 7, min: 4, max: 12, step: 0.5, status: 'assumed', ref: 'D-53',
   },
   brakeEfficiency: {
     label: 'Brake linkage efficiency', group: 'brake', unit: '×',
@@ -891,29 +871,10 @@ const defs = {
     default: 0.35, min: 0.15, max: 0.8, step: 0.05, status: 'assumed', ref: 'D-13',
     note: 'The shoe sits on the rear-lower tread, the part that just left the ground, so mud and slush reach it first (build review S10). The handle-force check and the member loads use the lower of this and the design μ; the force must still be ≤ the handle limit at this μ. Test the lining on a wet tire before the build.',
   },
-  brakeShaftYieldPsi: {
-    label: 'Brake cross shaft yield (pre-hardened 4140 ground rod)', group: 'brake', unit: 'psi',
-    default: 100000, min: 50000, max: 140000, step: 5000, status: 'assumed', ref: 'D-38',
-    note: 'Pre-hardened 4140 ground rod (28–32 HRC, yield ≥ 100 ksi; drills and reams on the drill press with a cobalt bit). Allowable = yield / steelSafetyFactor. The axle stays 1045 at axleYieldPsi.',
-  },
   brakeLiningThickIn: {
     label: 'Brake lining thickness (bonded to the oak pad face)', group: 'brake', unit: 'in',
     default: 0.25, min: 0.0625, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-13, D-56',
     note: 'Woven or molded lining sheet, cut on the bandsaw and bonded to the oak pad with contact or epoxy adhesive plus two stainless pan-head screws. Counted inside the shoe radial thickness.',
-  },
-  brakeLeverTailAuto: {
-    label: 'Solve the lever tail from the ratio target', group: 'brake', unit: '',
-    default: 1, min: 0, max: 1, step: 1, status: 'assumed', ref: 'D-38',
-    options: [
-      { value: 1, label: 'On: tail solved so the critical ratio meets the target' },
-      { value: 0, label: 'Off: use the lever tail length below' },
-    ],
-    note: 'Phase 3 r2 (eng S-3): the lever tail is solved by bisection so that the derived critical-direction ratio equals the target × headroom, for any wheel size. If no tail between 1" and 4" can reach it, the tail is clamped and brake-ratio fails honestly.',
-  },
-  brakeRatioHeadroom: {
-    label: 'Ratio headroom over the target (tail solve)', group: 'brake', unit: '×',
-    default: 1.2, min: 1, max: 1.3, step: 0.01, status: 'assumed', ref: 'D-38',
-    note: 'The tail is solved to this multiple of the target so the check passes with margin, not at equality.',
   },
   tireGroundMu: {
     label: 'Tire-to-ground friction μ (design)', group: 'brake', unit: '',
@@ -983,11 +944,6 @@ const defs = {
     default: 0.3125, min: 0.1, max: 0.75, step: 0.025, status: 'assumed', ref: 'D-38',
     note: 'Released gap to the tread plus tire/pad compliance and a little wear allowance (the clevis lengthens the link to take up more). Sets the lever stroke: stroke ≈ ratio × this. 3/8" so a muddy shoe retracts clear of the tread (build review S10).',
   },
-  brakeShoePinDiameterIn: {
-    label: 'Shoe pivot pin diameter', group: 'brake', unit: 'in',
-    default: 0.5, min: 0.25, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-38',
-    note: 'Steel pin through the two shoe arms and the pad: lets the pad wrap the tread.',
-  },
   brakeBarWidthIn: {
     label: 'Brake steel flat bar width (arms, crank, ratchet pawl)', group: 'brake', unit: 'in',
     default: 1, min: 0.75, max: 2, step: 0.25, status: 'assumed', ref: 'D-38',
@@ -996,80 +952,34 @@ const defs = {
     label: 'Brake steel flat bar thickness', group: 'brake', unit: 'in',
     default: 0.25, min: 0.125, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-38',
   },
-  brakeLeverPivotBehindShaftIn: {
-    label: 'Brake lever pivot behind the cross shaft', group: 'brake', unit: 'in',
-    default: 1.25, min: 0.75, max: 3, step: 0.05, status: 'assumed', ref: 'D-38',
-    note: 'The lever pivots on a post welded to the left bearing plate (outside the rail band), just behind the shaft (behind the tire, so it never depends on the hull-to-tire gap); the plate ear reaches behind the rail end (D-48).',
-  },
-  brakeLeverPivotZIn: {
-    label: 'Brake lever pivot height', group: 'brake', unit: 'in',
-    default: 6.1, min: 5.5, max: 8, step: 0.05, status: 'assumed', ref: 'D-38',
-    note: 'On the rear rail band.',
-  },
   brakeLeverTailIn: {
-    label: 'Brake lever tail length (pivot to link pin), manual', group: 'brake', unit: 'in',
-    default: 1.9, min: 1, max: 4, step: 0.05, status: 'explore', ref: 'D-38',
-    note: 'The input lever arm of the linkage (shorter = more mechanical advantage). Used only when "Solve the lever tail" is off; otherwise the tail is solved from the ratio target (brakeLeverTailAuto).',
-  },
-  brakeCrankIn: {
-    label: 'Brake crank length (shaft to link pin)', group: 'brake', unit: 'in',
-    default: 3, min: 1, max: 4, step: 0.05, status: 'explore', ref: 'D-38',
-    note: 'Phase 3 r2: 3.0" (was 2.4") so the solved lever tail stays near 1.8" at the 1.1× ratio headroom and the link, tail shear and tail-pin bearing keep margin (tail shear and pin bearing 85% of allowable).',
-  },
-  brakeCrankAngleDeg: {
-    label: 'Brake crank direction (0° = forward, 270° = down)', group: 'brake', unit: '°',
-    default: 322, min: 180, max: 360, step: 1, status: 'assumed', ref: 'D-38',
-    note: 'Released position of the crank, counter-clockwise from +x seen from the left. 322° points forward and down at 38° (was 315°; raised so the 3" crank and its clevis stay ≥ 3.5" above the ground).',
+    label: 'Brake lever tail length (pivot to link pin)', group: 'brake', unit: 'in',
+    default: 1.5, min: 1, max: 4, step: 0.05, status: 'explore', ref: 'D-53',
+    note: 'The input lever arm of the linkage: the grip arm over this is most of the mechanical advantage (shorter = more advantage and more pivot load). The pivot stands this far above the link line.',
   },
   brakeLeverTiltDeg: {
     label: 'Brake lever tilt toward the rear', group: 'brake', unit: '°',
     default: 4, min: 0, max: 25, step: 1, status: 'assumed', ref: 'D-38',
     note: 'Leans the grip back toward the push handle.',
   },
-  brakeBearingBoltDiameterIn: {
-    label: 'Cross shaft bearing-plate bolt diameter', group: 'brake', unit: 'in',
-    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-38',
-    note: 'Phase 3 r3 (build MUST-3): 3/8" 316 hex bolts through the steel bearing plate and the 3/4" rail band, fender washer and nylock nut inside the rail. 3/8" (not 7/16") because the rail is only 0.75" thick and 4" tall: the edge distances are 1.5D (parallel to grain) and 7D from the rail end toward which the pivot load pulls.',
-  },
   brakePivotBoltDiameterIn: {
-    label: 'Brake lever pivot post diameter', group: 'brake', unit: 'in',
-    default: 0.75, min: 0.375, max: 1, step: 0.125, status: 'assumed', ref: 'D-48',
-    note: 'Phase 3 r3: a 3/4" A36 round post welded (outsourced, 3/16" fillet all round) to the left bearing plate ear, sticking out 1.4" to carry the lever on a bronze sleeve. A 3/8" bolt cantilevered that far bends (about 460 lbf·in at the 2× hold load against 80 for a 316 bolt; the round-2 check never looked at pin bending). The lever bore is the post + 2 × 1/8" sleeve.',
+    label: 'Brake lever pivot bolt diameter', group: 'brake', unit: 'in',
+    default: 0.375, min: 0.25, max: 0.625, step: 0.0625, status: 'assumed', ref: 'D-53',
+    note: 'A 316 shoulder bolt through the two pivot ears and the lever bar (double shear). The old cantilevered welded post of D-48 is gone.',
   },
-  brakeBearingBoltSpacingIn: {
-    label: 'Cross shaft bearing-plate bolt pitch (fore-aft, between columns)', group: 'brake', unit: 'in',
-    default: 1.75, min: 1.25, max: 3, step: 0.125, status: 'assumed', ref: 'D-38',
-    note: 'Phase 3 r3: the bolts are a grid of 2 rows × `brakeBearingBoltCols` columns on the outside of the rail band, FORWARD of the shaft notch (the rail is solid wood there), not a 2" square around the shaft (that put holes 0.25" from the rail end and below its bottom, build MUST-3). Pitch ≥ 4D along the grain.',
-  },
-  brakeBearingBoltCols: {
-    label: 'Cross shaft bearing-plate bolt columns (2 rows each)', group: 'brake', unit: '',
-    default: 2, min: 2, max: 4, step: 1, status: 'assumed', ref: 'D-38',
-    note: 'Bolts in the bearing-plate grid = 2 × this. The left plate also carries the lever pivot reaction (about 600 lbf at 2× the goal hold load), 2.7" behind the first column, so it needs the third column.',
-  },
-  brakeBearingBoltRowGapIn: {
-    label: 'Bearing-plate bolt rows: vertical gap', group: 'brake', unit: 'in',
-    default: 1.3, min: 1, max: 2.5, step: 0.125, status: 'assumed', ref: 'D-38',
-    note: 'Gap between the two bolt rows; the lower row sits `brakeBoltEdgeIn` above the rail bottom, the upper row must stay 1.5D below the deck ledge (validator).',
-  },
-  brakeBoltEdgeIn: {
-    label: 'Bearing-plate lower bolt row above the rail bottom', group: 'brake', unit: 'in',
-    default: 0.8, min: 0.5, max: 1.5, step: 0.05, status: 'assumed', ref: 'D-38',
-    note: 'Edge distance of the lower bolt row to the rail bottom (2.1D for 3/8"; NDS wants 1.5D parallel to the grain, 4D perpendicular, and a steel plate on the outside plus a fender washer inside spread the load).',
-  },
-  brakeBoltEndIn: {
-    label: 'Bearing-plate first bolt column: distance from the rail end', group: 'brake', unit: 'in',
-    default: 2.95, min: 1.5, max: 5, step: 0.05, status: 'assumed', ref: 'D-38',
-    note: '≥ 7D (NDS loaded end distance, 2.63" for 3/8"): the lever pivot reaction pulls the plate toward the rail end. Also must clear the shaft notch (validator).',
-  },
-  brakeDoublerThickIn: {
-    label: 'Brake bearing-plate oak doubler inside the rail (0 = none)', group: 'brake', unit: 'in',
-    default: 1.5, min: 0, max: 2, step: 0.25, status: 'assumed', ref: 'D-48',
-    note: 'A glued, bolted oak block on the INSIDE of the rail behind the bolt grid (the dedicated bearing block the build review asked for): the bolts then go through 1.75" of oak instead of 0.75", which lifts the NDS bolt capacity and the cleavage limit (⅔ F\'v b d_e, b = rail + doubler) that a 0.75" rail alone fails at the plate\'s edge distances. It stays forward of the shaft (clear of the shaft path) and aft of the rear axle beam hold-down.',
+  brakeBracketBoltDiameterIn: {
+    label: 'Brake pivot bracket bolt diameter (to the rear transom)', group: 'brake', unit: 'in',
+    default: 0.25, min: 0.1875, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-53',
+    note: 'Four 316 button-head bolts through the bracket plate and the transom. The lever load pushes the plate INTO the transom, so these hold it in place rather than carry the pull.',
   },
   brakePlateThickIn: {
-    label: 'Brake bearing plate thickness (A36, outsourced)', group: 'brake', unit: 'in',
-    default: 0.1875, min: 0.1875, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-38',
-    note: 'One plate per side on the outside of the rail band: carries the bronze shaft bearing and (left) the lever pivot, and spans the shaft notch to solid rail. 3/16 inch (the bolt-hole bearing and tear-out are at 10% of allowable; the pivot post is welded to the left plate\'s ear).',
+    label: 'Brake pivot bracket plate and ear thickness (A36, outsourced)', group: 'brake', unit: 'in',
+    default: 0.1875, min: 0.125, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-53',
+  },
+  brakeLiningMaxPsi: {
+    label: 'Brake lining allowable contact pressure', group: 'brake', unit: 'psi',
+    default: 100, min: 30, max: 300, step: 10, status: 'assumed', ref: 'D-53',
+    note: 'Woven or molded lining against a rubber tread: a long-life limit for a brake used only now and then. Pressure = shoe normal force / lining area at the lambda hold load.',
   },
   brakeGripTravelMaxIn: {
     label: 'Brake lever grip travel limit', group: 'brake', unit: 'in',
@@ -1081,24 +991,9 @@ const defs = {
     default: 100, min: 50, max: 200, step: 10, status: 'locked', ref: 'D-38',
     note: 'Eng r2 N-8: lever, link, crank, shaft, pins and ratchet must survive this at the grip without yielding (SF 1). The brake may be bent after it only if the check says so; no failure of the rider-facing parts.',
   },
-  brakeBushingPsi: {
-    label: 'Oil-impregnated bronze bushing allowable bearing pressure', group: 'brake', unit: 'psi',
-    default: 3000, min: 1000, max: 5000, step: 100, status: 'assumed', ref: 'D-38',
-    note: 'SAE 841 static load limit is about 4,500 psi at low speed; 3,000 psi leaves margin for the oscillating motion.',
-  },
-  brakeLinkRodDiameterIn: {
-    label: 'Brake link rod diameter', group: 'brake', unit: 'in',
-    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-38',
-    note: 'Cold-rolled rod, threaded 3/8-24 at both ends for the clevises.',
-  },
   brakeClevisPinDiameterIn: {
     label: 'Brake clevis pin diameter', group: 'brake', unit: 'in',
     default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-38',
-  },
-  brakeStrokeReserve: {
-    label: 'Ratchet stroke reserve (× the applied lever angle)', group: 'brake', unit: '×',
-    default: 1.5, min: 1, max: 3, step: 0.1, status: 'assumed', ref: 'D-39',
-    note: 'The toothed quadrant must cover the applied lever angle times this, to take up shoe wear and tire compression before the clevis needs re-adjusting.',
   },
   brakeLeverGripBelowHandleIn: {
     label: 'Brake lever grip below the push-handle grip', group: 'brake', unit: 'in',
@@ -1121,44 +1016,8 @@ const defs = {
   },
 
   // ── Parking ratchet (D-39) ────────────────────────────────────────────────
-  brakeRatchetRadiusIn: {
-    label: 'Parking ratchet tooth radius (from the lever pivot)', group: 'brake', unit: 'in',
-    default: 8.5, min: 5, max: 16, step: 0.5, status: 'assumed', ref: 'D-39',
-    note: 'Toothed steel quadrant on the hull side of the lever, concentric with the lever pivot; a spring-loaded pawl on the lever engages it. Capped so the pawl stays below the gunwale top (lash points).',
-  },
-  brakeRatchetPitchIn: {
-    label: 'Ratchet tooth pitch (along the arc)', group: 'brake', unit: 'in',
-    default: 0.3125, min: 0.1875, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-39',
-  },
-  brakeRatchetToothDepthIn: {
-    label: 'Ratchet tooth depth', group: 'brake', unit: 'in',
-    default: 0.1, min: 0.0625, max: 0.25, step: 0.0125, status: 'assumed', ref: 'D-39',
-  },
-  brakeRatchetPlateThickIn: {
-    label: 'Ratchet quadrant and pawl thickness', group: 'brake', unit: 'in',
-    default: 0.25, min: 0.1875, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-39',
-  },
-  brakeRatchetSpanDeg: {
-    label: 'Ratchet quadrant arc (toothed span)', group: 'brake', unit: '°',
-    default: 28, min: 8, max: 40, step: 1, status: 'assumed', ref: 'D-39',
-    note: 'Must cover the applied lever angle plus wear take-up (checked). 28° covers the 3/8" shoe stroke (15.6° applied) at 1.5× reserve with margin.',
-  },
-  brakePawlPinDiameterIn: {
-    label: 'Ratchet pawl pivot pin diameter', group: 'brake', unit: 'in',
-    default: 0.25, min: 0.1875, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-39',
-  },
 
   // ── Metal hardware: lathe-free shaft joints, aluminum sockets (build review M10; plan item 5) ──
-  brakeRollPinDiameterIn: {
-    label: 'Brake shaft cross-pin (heavy-duty roll pin) diameter', group: 'brake', unit: 'in',
-    default: 0.25, min: 0.1875, max: 0.3125, step: 0.0625, status: 'assumed', ref: 'D-38',
-    note: 'Drill-press joint, no lathe, mill or broach: the shaft collar (or the crank bar, drilled and reamed to the shaft) and the shaft are cross-drilled together and a roll pin is driven through. Arm collars have one pin each, the crank two at 90°.',
-  },
-  brakeRollPinShearPsi: {
-    label: 'Heavy-duty roll pin allowable double shear', group: 'brake', unit: 'psi',
-    default: 20000, min: 8000, max: 40000, step: 1000, status: 'assumed', ref: 'D-38',
-    note: 'A heavy-duty 1/4" spring (roll) pin breaks at about 4,000 lbf in double shear, i.e. about 41 ksi on its 2 × 0.049 in² section; ÷ safety factor 2 is 20 ksi.',
-  },
   handleSocketYieldPsi: {
     label: 'Push-handle socket tube yield (6061-T6 aluminum)', group: 'brake', unit: 'psi',
     default: 35000, min: 20000, max: 60000, step: 1000, status: 'assumed', ref: 'D-39',
@@ -1463,7 +1322,7 @@ const defs = {
     label: 'Required clearance to bed/wells (incl. liner)', group: 'truck', unit: 'in',
     default: 0.5, min: 0, max: 2, step: 0.125, status: 'assumed', ref: 'D-6',
   },
-  // ── Phase 3b: Ackermann ride-mode front end, bump loads, ride rules (D-49..D-52, spec docs/phase3b-spec.md). Additive in Stage 0 ──
+  // ── Phase 3b: Ackermann front end and bump loads (D-50..D-52, spec docs/phase3b-spec.md); the ride-mode parts of this block went at Phase 3c-1 (D-53) ──
   spindleStub: {
     label: 'Spindle stub diameter', group: 'steering', unit: '',
     default: 1, min: 0, max: 1, step: 1, status: 'verify', ref: 'D-53',
@@ -1519,16 +1378,6 @@ const defs = {
     label: 'Steering arm angle (Ackermann)', group: 'steering', unit: '°',
     default: 24, min: 10, max: 40, step: 0.5, status: 'explore', ref: 'D-53',
     note: 'Tuned so the 4-bar tracks ideal Ackermann at the tow lock (error 0.03 deg there, worst 0.59 deg mid-range). Ideal (arms meeting at the rear axle center) is atan(kpHalf / kx) = 18.1 deg, but that underperforms at large lock. The real spindle arm angle may differ (DECISIONS Q-list).',
-  },
-  steerRideLockDeg: {
-    label: 'Ride-mode steering lock (outer wheel)', group: 'steering', unit: '°',
-    default: 8, min: 4, max: 12, step: 0.5, status: 'assumed', ref: 'D-51',
-    note: 'Outer wheel angle at the ride stop; the inner wheel is solved from the 4-bar (about 8.6 deg).',
-  },
-  steerCenterSpringLbf: {
-    label: 'Centering spring force at the stick grip at ride lock', group: 'steering', unit: 'lbf',
-    default: 2.5, min: 0, max: 6, step: 0.5, status: 'assumed', ref: 'D-53',
-    note: 'Two extension springs from the bellcrank to the beam; neutral when the stick is released.',
   },
   frontBeamWidthIn: {
     label: 'Front beam width (fore-aft)', group: 'steering', unit: 'in',
@@ -1604,11 +1453,6 @@ const defs = {
     default: 54, min: 0, max: 120, step: 0.5, status: 'assumed', ref: 'D-53',
     note: 'With the tongue ear on the right and aft of the hinge, left and right tow locks give tongue yaws within 0.5 deg of each other.',
   },
-  bellcrankCableArmIn: {
-    label: 'Bellcrank cable cross-arm (each side)', group: 'steering', unit: 'in',
-    default: 3.8, min: 2, max: 5, step: 0.25, status: 'assumed', ref: 'D-53',
-    note: 'Cross-bar pins at +/- this across the pivot (RIDE mode). Sets the stick travel: about 15 deg at the ride lock with the 1.5" stick cable arm.',
-  },
   bellcrankPivotAftOfKingpinIn: {
     label: 'Bellcrank pivot behind the kingpin line', group: 'steering', unit: 'in',
     default: 6.5, min: 4, max: 10, step: 0.25, status: 'assumed', ref: 'D-53',
@@ -1634,67 +1478,14 @@ const defs = {
     default: 25, min: 15, max: 35, step: 1, status: 'assumed', ref: 'D-53',
     note: 'Yaw stops at +/- this; the tow lock must be reached before it.',
   },
-  modePinDiaIn: {
-    label: 'Mode pin diameter', group: 'steering', unit: 'in',
+  tongueLinkPinDiaIn: {
+    label: 'Tongue-link pin diameter', group: 'steering', unit: 'in',
     default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-53',
-    note: 'One captured pin in one of two mutually exclusive sockets (TOW, RIDE): the interlock.',
-  },
-  rideStickAheadOfHpointIn: {
-    label: 'Ride stick pivot ahead of the H-point', group: 'steering', unit: 'in',
-    default: 6, min: 2, max: 12, step: 0.5, status: 'assumed', ref: 'D-53',
-    note: 'Stick x = seatXIn + this.',
-  },
-  rideStickInsetIn: {
-    label: 'Ride stick inset from the right chine inner face', group: 'steering', unit: 'in',
-    default: 3.4, min: 2, max: 6, step: 0.25, status: 'assumed', ref: 'D-53',
-    note: 'y = -(inner half width at x - inset).',
-  },
-  rideStickLengthIn: {
-    label: 'Ride stick length (pivot to grip)', group: 'steering', unit: 'in',
-    default: 14, min: 8, max: 20, step: 0.5, status: 'assumed', ref: 'D-53',
-    note: '3/4" aluminum tube with a rubber grip.',
-  },
-  rideStickPivotAboveSeatIn: {
-    label: 'Ride stick pivot above the seat surface', group: 'steering', unit: 'in',
-    default: 1, min: 0, max: 4, step: 0.25, status: 'assumed', ref: 'D-53',
-  },
-  rideStickCableArmIn: {
-    label: 'Ride stick cable arm', group: 'steering', unit: 'in',
-    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-53',
-    note: 'Stick +/-15 deg for the 0.39" cable travel at the ride lock.',
-  },
-  stickCableDiaIn: {
-    label: 'Stick cable diameter', group: 'steering', unit: 'in',
-    default: 0.125, min: 0.0625, max: 0.1875, step: 0.0625, status: 'assumed', ref: 'D-53',
-    note: '1/8" 7x19 stainless pull-pull cables.',
-  },
-  stickCablePreloadLbf: {
-    label: 'Stick cable preload', group: 'steering', unit: 'lbf',
-    default: 10, min: 0, max: 30, step: 1, status: 'assumed', ref: 'D-53',
-    note: 'Set with the turnbuckles.',
-  },
-  frontBrakeBias: {
-    label: 'Front brake bias (target front share of shoe force)', group: 'brake', unit: '',
-    default: 0.6, min: 0.3, max: 0.7, step: 0.01, status: 'explore', ref: 'D-56',
-    note: 'The bias-bar front arm on the main lever is solved from this. WS-C: 0.60 (spec 0.5), the top of the 0.4-0.6 band because with the CG 17 in ahead of the rear axle and 14 in high the rear axle slides first below a front share of 0.565 at tire-ground mu 0.5 (goal rider); front-first (plows straight) is the benign order. Heat goes the other way: a higher front share runs the front shoes hotter.',
-  },
-  frontBrakeBiasTolerance: {
-    label: 'Front brake bias tolerance (ride envelope)', group: 'brake', unit: '',
-    default: 0.05, min: 0.01, max: 0.15, step: 0.01, status: 'assumed', ref: 'D-56, D-51',
-    note: 'The ride envelope (GO/CAUTION table) is evaluated at the front share bias +/- this. The solved share is accurate to about +/-0.02 (a bench-set bias bar, the lining mu of each shoe set); 0.05 is 2.5 times that. The spec used +/-0.1 around 0.5; around the 0.60 the lockup order needs it would test 0.70, which the bias bar cannot reach.',
-  },
-  frontShoeTravelIn: {
-    label: 'Front shoe stroke', group: 'brake', unit: 'in',
-    default: 0.3125, min: 0.125, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-56',
+    note: 'The captured clevis pin that joins the tongue link to the bellcrank (pull it to take the tongue off).',
   },
   brakeShoeBackThickIn: {
     label: 'Steel shoe back thickness', group: 'brake', unit: 'in',
     default: 0.125, min: 0.0625, max: 0.1875, step: 0.0625, status: 'assumed', ref: 'D-56',
-  },
-  brakeShoePinYieldPsi: {
-    label: 'Shoe and swing-arm pivot pin yield strength', group: 'brake', unit: 'psi',
-    default: 100000, min: 20000, max: 150000, step: 5000, status: 'verify', ref: 'D-56',
-    note: '17-4 PH stainless rod, H1025 or better, conservative against the 145 ksi table value. The wide lined shoe loads the shoe pin at the 100 lbf abuse pull to 40 ksi.',
   },
   brakeLinedShoeWidthIn: {
     label: 'Lined steel-backed shoe width (across the tread)', group: 'brake', unit: 'in',
@@ -1706,219 +1497,28 @@ const defs = {
     default: 3, min: 2, max: 6, step: 0.25, status: 'verify', ref: 'D-56',
     note: 'REAR lined shoe, radius-matched to the 13" tire. The rear shoe sits 11 deg below the axle line; at 3.25 in its released corner is 3.41 in off the ground (limit 3.5), at 3.0 in the lowest part is the crank clevis (3.51 in); the front shoes (frontBrakeShoeLengthIn) are longer. Heat time scales with area squared. The oak pad keeps brakeShoeLengthIn.',
   },
-  frontBrakeShoeLengthIn: {
-    label: 'Front lined shoe length (along the tread)', group: 'brake', unit: 'in',
-    default: 5.5, min: 2, max: 7, step: 0.25, status: 'verify', ref: 'D-56',
-    note: 'The front shoe sits at the axle line (frontBrakeShoeAngleDeg), where length costs no ground clearance, and takes 58% of the braking, so it is the larger shoe.',
-  },
-  frontBrakeShoeAngleDeg: {
-    label: 'Front shoe position below the axle line (front of the tire)', group: 'brake', unit: '°',
-    default: 0, min: -10, max: 15, step: 1, status: 'assumed', ref: 'D-56',
-    note: 'Angle of the front lined shoe on the tread; the front shoe sits at the axle line, where length costs no ground clearance (D-56).',
-  },
-  frontBrakeArmLenIn: {
-    label: 'Front brake swing arm length (pivot to shoe pin)', group: 'brake', unit: 'in',
-    default: 5, min: 2.5, max: 6, step: 0.25, status: 'assumed', ref: 'D-56',
-    note: 'Longer arms keep the pivot off the tire (3.5 puts it 0.3 in from the tread). The arm runs along the tread tangent so the shoe moves radially. The cable tail is longer than the arm because the front stroke must match the rear (virtual work), see docs/phase3b-wsC-notes.md.',
-  },
-  frontBrakePivotPinDiaIn: {
-    label: 'Front brake swing-arm pivot pin diameter', group: 'brake', unit: 'in',
-    default: 0.375, min: 0.25, max: 0.625, step: 0.0625, status: 'assumed', ref: 'D-56',
-  },
-  frontBrakeCableDiaIn: {
-    label: 'Front brake cable diameter (7x19 stainless)', group: 'brake', unit: 'in',
-    default: 0.25, min: 0.125, max: 0.25, step: 0.03125, status: 'assumed', ref: 'D-56',
-    note: 'Sized for stretch as much as strength: the run from the rear lever to the knuckles is about 60 in, and cable plus housing compliance eats the stroke.',
-  },
-  frontBrakeHousingMinBendIn: {
-    label: 'Bowden housing minimum bend radius', group: 'brake', unit: 'in',
-    default: 2.5, min: 1.5, max: 5, step: 0.25, status: 'verify', ref: 'D-56',
-    note: 'Vendor value for a 1/4 in OD spiral-wound housing; the loop at each knuckle must stay above it over the whole steering sweep.',
-  },
-  brakeBiasBarIn: {
-    label: 'Brake bias bar length (lever tail pin to the two outputs)', group: 'brake', unit: 'in',
-    default: 3, min: 1.5, max: 6, step: 0.25, status: 'assumed', ref: 'D-56',
-    note: 'A balance bar on the main lever tail pin; the front cable arm a_f is solved so the front share equals frontBrakeBias. See docs/phase3b-wsC-notes.md.',
-  },
-  bowdenEffModulusPsi: {
-    label: 'Bowden cable + housing effective modulus (on the inner cable area)', group: 'brake', unit: 'psi',
-    default: 3500000, min: 1000000, max: 12000000, step: 500000, status: 'verify', ref: 'D-56',
-    note: 'Inner stretch and housing compression in series, on the nominal cable area. Bench-test one run.',
-  },
-  brakeCableBreakPsi: {
-    label: '7x19 stainless cable minimum break strength per square inch of nominal area', group: 'brake', unit: 'psi',
-    default: 112600, min: 60000, max: 160000, step: 1000, status: 'verify', ref: 'D-56',
-    note: 'MBS = this x d^2: 1/8 in about 1,760 lbf, 5/32 in about 2,750 lbf, 3/16 in about 3,960 lbf. Read it off the vendor listing.',
-  },
-  hipLostMotionSlotIn: {
-    label: 'Hip cable lost-motion slot on the main lever', group: 'brake', unit: 'in',
-    default: 1.4, min: 0.8, max: 2.5, step: 0.1, status: 'assumed', ref: 'D-56',
-  },
-  hipLinkAboveLeverPivotIn: {
-    label: 'Hip cable link point above the main lever pivot', group: 'brake', unit: 'in',
-    default: 4.1, min: 2, max: 8, step: 0.1, status: 'assumed', ref: 'D-56',
-  },
-  brakeRollingCrr: {
-    label: 'Rolling resistance coefficient (brake and stop checks)', group: 'brake', unit: '',
-    default: 0.03, min: 0.01, max: 0.08, step: 0.005, status: 'assumed', ref: 'D-49',
-    note: 'Study value for hard ground. Rolling resistance helps a stop and hurts a descent estimate, so the heat check uses it as stated.',
-  },
-  brakeHeatPartitionOak: {
-    label: 'Heat share into an oak shoe', group: 'brake', unit: '',
-    default: 0.7, min: 0.3, max: 0.9, step: 0.05, status: 'verify', ref: 'D-56',
-  },
-  brakeHeatPartitionLined: {
-    label: 'Heat share into a lined steel-backed shoe', group: 'brake', unit: '',
-    default: 0.5, min: 0.2, max: 0.9, step: 0.05, status: 'verify', ref: 'D-56',
-  },
-  brakeEffusivityOak: {
-    label: 'Oak thermal effusivity', group: 'brake', unit: 'W s^0.5/m2K',
-    default: 550, min: 300, max: 900, step: 10, status: 'verify', ref: 'D-56',
-  },
-  brakeEffusivityLined: {
-    label: 'Lining thermal effusivity', group: 'brake', unit: 'W s^0.5/m2K',
-    default: 450, min: 200, max: 900, step: 10, status: 'verify', ref: 'D-56',
-  },
-  frontBrakeImbalanceFrac: {
-    label: 'Left/right front brake force imbalance assumed for brake-steer', group: 'brake', unit: '',
-    default: 0.2, min: 0, max: 0.5, step: 0.05, status: 'assumed', ref: 'D-56',
-  },
-  beltWebbingBreakLbf: {
-    label: 'Lap belt webbing minimum break strength', group: 'brake', unit: 'lbf',
-    default: 6000, min: 3000, max: 9000, step: 500, status: 'verify', ref: 'D-55',
-    note: '2 in nylon or polyester lap belt; read it off the listing.',
-  },
-  beltAnchorBoltDiaIn: {
-    label: 'Lap belt anchor bolt diameter', group: 'brake', unit: 'in',
-    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-55',
-  },
-  beltAnchorDoublerThickIn: {
-    label: 'Lap belt anchor steel doubler thickness (inside the rail)', group: 'brake', unit: 'in',
-    default: 0.1875, min: 0.125, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-55',
-  },
-  hipLeverAheadOfHpointIn: {
-    label: 'Hip lever pivot ahead of the H-point', group: 'brake', unit: 'in',
-    default: 5, min: 0, max: 8, step: 0.5, status: 'assumed', ref: 'D-56',
-    note: 'Left hip lever pivot x = seatXIn + this. WS-C moved it from the spec 3 to 5 so the lever (and its fore-aft swing) clears the gunwale lash eye and doubler at x 13.5-15.5.',
-  },
-  hipLeverInsetIn: {
-    label: 'Hip lever inset from the left chine inner face', group: 'brake', unit: 'in',
-    default: 1.5, min: 0.5, max: 3, step: 0.25, status: 'assumed', ref: 'D-56',
-    note: 'Inside the hull. WS-C: 1.5 (spec 1.0) keeps the lever clear of the lash doubler, which stands in 1/2 in from the chine.',
-  },
-  hipLeverArmIn: {
-    label: 'Hip lever arm (pivot to grip)', group: 'brake', unit: 'in',
-    default: 9, min: 5, max: 14, step: 0.5, status: 'assumed', ref: 'D-56',
-  },
-  hipLeverCableArmIn: {
-    label: 'Hip lever cable arm', group: 'brake', unit: 'in',
-    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-56',
-  },
-  hipLeverThrowDeg: {
-    label: 'Hip lever throw', group: 'brake', unit: '°',
-    default: 45, min: 20, max: 60, step: 1, status: 'assumed', ref: 'D-56',
-    note: 'WS-C: 45 (spec 40). The main lever link point moves 1.0 in per stroke; the lug at 1.5 in x 40 deg gives 1.05 in, which the cable stretch uses up.',
-  },
-  hipCableDiaIn: {
-    label: 'Hip lever Bowden inner cable diameter', group: 'brake', unit: 'in',
-    default: 0.15625, min: 0.0625, max: 0.1875, step: 0.03125, status: 'assumed', ref: 'D-56',
-    note: 'WS-C: 5/32 (spec 1/8). At the 100 lbf abuse pull the cable carries 600 lbf; 1/8 in 7x19 (about 1,760 lbf) gives a factor of 2.9 against the required 3.5, 5/32 in (about 2,750 lbf) gives 4.6.',
-  },
-  hipCableEfficiency: {
-    label: 'Hip Bowden cable efficiency (friction in the housing)', group: 'brake', unit: '',
-    default: 0.85, min: 0.5, max: 1, step: 0.05, status: 'verify', ref: 'D-56',
-    note: 'Two gentle bends over a 30 in run; a bench test of the real run replaces this.',
-  },
-  beltAnchorBoltUltPsi: {
-    label: 'Lap belt anchor bolt ultimate tensile strength (316 A4-70)', group: 'brake', unit: 'psi',
-    default: 100000, min: 50000, max: 150000, step: 5000, status: 'verify', ref: 'D-55',
-  },
-  brakeEmergencyLimitLbf: {
-    label: 'Emergency brake hand force limit', group: 'brake', unit: 'lbf',
-    default: 50, min: 30, max: 80, step: 5, status: 'assumed', ref: 'D-56',
-    note: '0.30 g at the envelope slope from 10 mph.',
-  },
-  brakeHeatLimitK: {
-    label: 'Brake shoe surface temperature rise limit', group: 'brake', unit: 'K',
-    default: 250, min: 100, max: 400, step: 10, status: 'assumed', ref: 'D-56',
-  },
-  brakeHeatContactFrac: {
-    label: 'Real contact patch fraction of shoe area', group: 'brake', unit: '',
-    default: 0.5, min: 0.1, max: 1, step: 0.05, status: 'assumed', ref: 'D-56',
-  },
-  rideRunFt: {
-    label: 'Longest ride run without a cooling stop', group: 'brake', unit: 'ft',
-    default: 300, min: 100, max: 600, step: 25, status: 'assumed', ref: 'D-55',
-    note: 'Assumed (open question Q-4).',
-  },
-  beltDesignG: {
-    label: 'Lap belt anchor design load', group: 'brake', unit: 'g',
-    default: 5, min: 2, max: 10, step: 0.5, status: 'verify', ref: 'D-55',
-    note: 'Anchor load = rider weight x this.',
-  },
-  rideSpeedMph: {
-    label: 'Ride design speed', group: 'ride', unit: 'mph',
-    default: 10, min: 3, max: 15, step: 1, status: 'locked', ref: 'D-49',
-  },
-  rideCautionSpeedMph: {
-    label: 'Caution speed (handler walking alongside)', group: 'ride', unit: 'mph',
-    default: 5, min: 2, max: 8, step: 1, status: 'locked', ref: 'D-51',
-    note: 'The speed cap wherever the friction table shows CAUTION or steps of 1" or more are on the run (spec 6.1).',
-  },
-  rideMaxSlopeDeg: {
-    label: 'Steepest slope to ride', group: 'ride', unit: '°',
-    default: 10, min: 5, max: 15, step: 1, status: 'locked', ref: 'D-51',
-    note: 'Walk it down above this.',
-  },
-  rideGoSlopeDeg: {
-    label: 'Slope up to which the lower friction value gives GO', group: 'ride', unit: '°',
-    default: 8, min: 4, max: 12, step: 1, status: 'assumed', ref: 'D-51',
-  },
-  rideMuGo8: {
-    label: 'Required usable friction for GO up to the go slope', group: 'ride', unit: '',
-    default: 0.4, min: 0.2, max: 0.8, step: 0.05, status: 'assumed', ref: 'D-51',
-    note: 'Worst-bias table value.',
-  },
-  rideMuGo10: {
-    label: 'Required usable friction for GO up to the max slope', group: 'ride', unit: '',
-    default: 0.5, min: 0.2, max: 0.8, step: 0.05, status: 'assumed', ref: 'D-51',
-    note: 'Worst-bias table value.',
-  },
-  rideMuDerate: {
-    label: 'Measured friction derate for speed', group: 'ride', unit: '',
-    default: 0.85, min: 0.5, max: 1, step: 0.05, status: 'assumed', ref: 'D-51',
-    note: 'Camp-measured friction times this.',
-  },
-  rideStopMaxFt: {
-    label: 'Longest stop at the envelope slope', group: 'ride', unit: 'ft',
-    default: 40, min: 20, max: 80, step: 1, status: 'assumed', ref: 'D-55',
-    note: 'From the ride speed at the go slope, including the reaction time.',
-  },
-  rideReactionS: {
-    label: 'Reaction time', group: 'ride', unit: 's',
-    default: 1, min: 0.5, max: 2, step: 0.1, status: 'assumed', ref: 'D-55',
-  },
   bumpSpeedMph: {
-    label: 'Bump speed', group: 'ride', unit: 'mph',
-    default: 10, min: 3, max: 15, step: 1, status: 'assumed', ref: 'D-54',
+    label: 'Bump design speed (jogging pace)', group: 'bump', unit: 'mph',
+    default: 5, min: 2, max: 8, step: 0.5, status: 'assumed', ref: 'D-53, D-54',
+    note: 'Phase 3c-1 (D-53): loads are at walking or jogging pace on a camp road (ride mode and its 10 mph cases are gone). The 1" routine bump and the hard-hit basis are both taken at this speed. D-50 still holds: bumps, not curbs.',
   },
   bumpNormalHeightIn: {
-    label: 'Routine bump height', group: 'ride', unit: 'in',
+    label: 'Routine bump height', group: 'bump', unit: 'in',
     default: 1, min: 0.5, max: 3, step: 0.25, status: 'assumed', ref: 'D-54',
     note: 'Normal-use rows use full margins.',
   },
   bumpHardHeightIn: {
-    label: 'Hard-hit height', group: 'ride', unit: 'in',
+    label: 'Hard-hit height', group: 'bump', unit: 'in',
     default: 2, min: 1, max: 4, step: 0.25, status: 'assumed', ref: 'D-54',
     note: 'Rare hard hit (D-50: the 2" pothole or root). Hard-hit rows use ultimate / failSafeFactor.',
   },
   bumpWheelRateLbIn: {
-    label: 'Effective wheel radial stiffness', group: 'ride', unit: 'lb/in',
+    label: 'Effective wheel radial stiffness', group: 'bump', unit: 'lb/in',
     default: 400, min: 150, max: 1500, step: 25, status: 'verify', ref: 'D-54',
     note: 'Pneumatic wheel including bottoming. The dominant uncertainty of the bump model: verify by a deflection test.',
   },
   bumpMassShare: {
-    label: 'Effective bump mass (multiple of the struck wheel static load)', group: 'ride', unit: '×',
+    label: 'Effective bump mass (multiple of the struck wheel static load)', group: 'bump', unit: '×',
     default: 1.5, min: 1, max: 3, step: 0.1, status: 'assumed', ref: 'D-54',
     note: 'Wheel plus its share of the axle line.',
   },
@@ -1965,7 +1565,7 @@ const defs = {
   bracketSteelYieldPsi: {
     label: 'Bracket / plate steel yield strength', group: 'factors', unit: 'psi',
     default: 36000, min: 30000, max: 60000, step: 1000, status: 'assumed', ref: 'D-54',
-    note: 'A36 plate: kingpin bracket leaves, bellcrank, mode plate.',
+    note: 'A36 plate: kingpin bracket leaves, bellcrank, brake pivot bracket.',
   },
   bracketSteelUltimatePsi: {
     label: 'Bracket / plate steel ultimate strength', group: 'factors', unit: 'psi',
@@ -1984,29 +1584,6 @@ const defs = {
     label: 'Rod end static radial rating', group: 'steering', unit: 'lbf',
     default: 2500, min: 500, max: 8000, step: 100, status: 'verify', ref: 'D-54',
     note: 'A 5/16" bolt-size rod end (heim joint) is typically listed 2-5 kips static radial; read the catalog for the part bought. The study warned that kart 5/16" rod ends are marginal.',
-  },
-  stickCableBreakLbf: {
-    label: 'Stick cable minimum break strength', group: 'steering', unit: 'lbf',
-    default: 1700, min: 500, max: 4000, step: 100, status: 'verify', ref: 'D-54',
-    note: '1/8" 7x19 stainless is about 1,700-2,000 lbf. The swage sleeves are rated at about 90% of that.',
-  },
-  stickHandLoadLbf: {
-    label: 'Hand force on the ride stick (cable design load)', group: 'steering', unit: 'lbf',
-    default: 60, min: 20, max: 150, step: 5, status: 'assumed', ref: 'D-54',
-    note: 'A scout grip is 60-70 lbf (study 5.4).',
-  },
-  rideStickDiaIn: {
-    label: 'Ride stick tube OD', group: 'steering', unit: 'in',
-    default: 0.75, min: 0.5, max: 1.25, step: 0.125, status: 'assumed', ref: 'D-53',
-  },
-  rideStickWallIn: {
-    label: 'Ride stick tube wall', group: 'steering', unit: 'in',
-    default: 0.065, min: 0.035, max: 0.125, step: 0.005, status: 'assumed', ref: 'D-53',
-  },
-  rideStickYieldPsi: {
-    label: 'Ride stick tube yield strength', group: 'steering', unit: 'psi',
-    default: 35000, min: 15000, max: 70000, step: 1000, status: 'assumed', ref: 'D-53',
-    note: '6061-T6 aluminum tube.',
   },
   spindleBossRadiusIn: {
     label: 'Spindle kingpin boss radius (thrust face)', group: 'steering', unit: 'in',
@@ -2065,16 +1642,6 @@ const defs = {
     label: 'Rut-wall lateral hit as a fraction of the vertical bump force', group: 'factors', unit: '',
     default: 0.8, min: 0.2, max: 1.5, step: 0.05, status: 'assumed', ref: 'D-54',
     note: 'Wheel retention row: the wheel is hit sideways with F_lat = this x V while it is also being hit by the bump.',
-  },
-  tireCorneringPerDeg: {
-    label: 'Tire cornering coefficient (lateral force / load per degree)', group: 'factors', unit: '/°',
-    default: 0.12, min: 0.05, max: 0.25, step: 0.01, status: 'assumed', ref: 'D-53',
-    note: 'Study 3.4: 0.08-0.16 per degree for a 13" pneumatic. Used by the info rows only.',
-  },
-  tirePneumaticTrailIn: {
-    label: 'Pneumatic tire trail', group: 'factors', unit: 'in',
-    default: 0.5, min: 0, max: 1.5, step: 0.1, status: 'assumed', ref: 'D-53',
-    note: 'Added to the geometric trail for self-centering.',
   },
   holdDownBoltUltimatePsi: {
     label: 'Rear beam hold-down bolt ultimate strength (316)', group: 'factors', unit: 'psi',
@@ -2178,14 +1745,11 @@ export function ackSpec(p: Params): AckSpec {
     bellOutDeg: p.bellcrankOutAngleDeg,
     bellInArm: p.bellcrankInArmIn,
     bellInDeg: p.bellcrankInAngleDeg,
-    bellCableArm: p.bellcrankCableArmIn,
     tongueEar: [p.tongueEarAheadIn, -p.tongueLinkArmIn],
     bellPivot: [kx - p.bellcrankPivotAftOfKingpinIn, 0],
     tongueHinge: [kx - p.frontBeamBehindKingpinIn + p.frontBeamWidthIn / 2 + p.tongueHingeAheadOfBeamIn, 0],
     tongueLinkArm: p.tongueLinkArmIn,
     towLockInnerDeg: p.steerLockDeg,
-    rideLockOuterDeg: p.steerRideLockDeg,
-    stickCableArm: p.rideStickCableArmIn,
   };
   spec.tieLen = neutralTieLen(spec);
   return spec;
@@ -2419,8 +1983,6 @@ export function validateParams(input: Params): ParamIssue[] {
     err(['truckWellGapIn', 'truckBedWidthIn'], 'Wheel-well gap is wider than the bed.');
   if (p.axleStyle === AXLE_STYLE.stubAxles && p.axleBeamDepthIn < 2.5)
     warn(['axleStyle', 'axleBeamDepthIn'], 'Stub axles need a deeper beam (≥ 2½") to resist the cantilever moment.');
-  if (p.brakeType === BRAKE_TYPE.woodDrum && p.axleStyle === AXLE_STYLE.stubAxles)
-    err(['brakeType', 'axleStyle'], 'A wooden drum brake needs a live through-axle.');
 
   // Vertical stack at the axles (D-15).
   const beamBottom =
@@ -2435,12 +1997,18 @@ export function validateParams(input: Params): ParamIssue[] {
   if (rearStackTop > p.deckHeightIn + 0.01)
     err(['deckHeightIn', 'axleBeamDepthIn'],
       `Rear axle beam + ply needs the deck at ≥ ${rearStackTop.toFixed(2)}"; it is ${p.deckHeightIn}".`);
-  if (p.brakeType === BRAKE_TYPE.woodDrum) {
-    const drumBottom = r - (p.wheelDiameterIn * p.brakeDrumDiameterFrac) / 2;
-    if (drumBottom < p.minGroundClearanceIn)
-      warn(['brakeDrumDiameterFrac', 'minGroundClearanceIn'],
-        `Brake drum bottom at ${drumBottom.toFixed(2)}" is below the ${p.minGroundClearanceIn}" ground clearance.`);
+  // The front-end linkage stack (beam, tongue plates, link and the link pin head) and the rear beam's hold-down angles must stay under the deck (Phase 3c-1: the rear
+  // brake no longer fixes the lowest deck, so these two stacks do).
+  {
+    const deckBot = p.deckHeightIn - p.deckPlyIn;
+    const fs = frontStackTop(p, r, p.deckHeightIn);
+    if (fs.pinTop + 0.05 > deckBot + 1e-9)
+      err(['deckHeightIn', 'crossmemberDepthIn', 'frontBeamDepthIn', 'deckPlyIn'],
+        `The front steering stack (beam top ${fs.beamTop.toFixed(2)}", tongue link pin head ${fs.pinTop.toFixed(2)}") does not fit under the deck underside at ${deckBot.toFixed(2)}" (needs 1/16" to spare): raise the deck.`);
+    if (p.axleBeamPosition === AXLE_BEAM_POSITION.underslung && deckBot - (r + p.axleDiameterIn / 2) < 0.9 - 1e-9)
+      err(['deckHeightIn', 'axleBeamDepthIn', 'deckPlyIn'], `The rear beam hold-down angle (3/4" leg) does not fit between the beam top (${(r + p.axleDiameterIn / 2).toFixed(2)}") and the deck underside (${deckBot.toFixed(2)}"): raise the deck.`);
   }
+
   // Rear axle beam (critic r2 H2): wood left beside the rod groove must be real wood.
   const d = derived(p);
   if (d.rearBeamLigamentIn < p.beamLigamentMinIn - 1e-9)
@@ -2464,53 +2032,26 @@ export function validateParams(input: Params): ParamIssue[] {
     }
   }
 
-  // The brake cross shaft runs behind the rear tire and must stay in front of the rear transom (and the push handle behind it).
-  const shaftBack = r + p.brakeShaftBehindTireIn + p.brakeShaftDiameterIn / 2;
-  if (p.rearOverhangIn < shaftBack + p.transomThicknessIn)
-    err(['rearOverhangIn', 'brakeShaftBehindTireIn', 'wheelDiameterIn'],
-      `The brake cross shaft reaches ${shaftBack.toFixed(2)}" behind the rear axle, into the rear transom; the rear overhang must be ≥ ${(shaftBack + p.transomThicknessIn).toFixed(2)}".`);
-
-  // Brake bearing-plate bolt grid in the rail (build r2 MUST-3, D-48): mirrors src/model/rear-mount.ts bearingMount.
-  if (p.brakeType === BRAKE_TYPE.tireTread) {
-    const railBot = p.deckHeightIn - p.deckPlyIn - p.railDepthIn;
+  // The brake beam (D-53, src/model/brake-layout.ts) slides in a notch in each cabin rail behind the rear tire: the notch must stay clear of the rear transom,
+  // leave rail under the deck ledge, and the keeper under it must clear the ground.
+  {
+    const railZBot = p.deckHeightIn - p.deckPlyIn - p.railDepthIn;
+    const bl = beamLayout(p, r, railZBot, -p.rearOverhangIn + p.transomThicknessIn);
+    if (bl.railEndWall < 0.1 - 1e-9)
+      err(['rearOverhangIn', 'wheelDiameterIn', 'brakeBeamSizeIn', 'brakeShoeTravelIn'],
+        `The brake beam's rear face is only ${bl.railEndWall.toFixed(2)}" from the rear transom's inner face (needs ≥ 1/8"): the beam sits too far back behind the rear tire. Lengthen the rear overhang or use a smaller tube.`);
     const solidTop = p.deckHeightIn - p.deckPlyIn;
-    const zHi = railBot + p.brakeBoltEdgeIn + p.brakeBearingBoltRowGapIn;
-    const bd = p.brakeBearingBoltDiameterIn;
-    if (solidTop - zHi < 1.5 * bd - 1e-9)
-      err(['brakeBoltEdgeIn', 'brakeBearingBoltRowGapIn', 'railDepthIn', 'brakeBearingBoltDiameterIn'],
-        `The upper bearing-plate bolt row is ${(solidTop - zHi).toFixed(2)}" below the deck ledge (needs 1.5D = ${(1.5 * bd).toFixed(2)}"): lower the rows, deepen the rail or use a smaller bolt (D-48).`);
-    if (p.brakeBoltEdgeIn < 1.5 * bd - 1e-9)
-      err(['brakeBoltEdgeIn', 'brakeBearingBoltDiameterIn'], `The lower bearing-plate bolt row is ${p.brakeBoltEdgeIn}" above the rail bottom (needs 1.5D = ${(1.5 * bd).toFixed(2)}"; D-48).`);
-    const notchTop = r + 0 + p.brakeShaftDiameterIn / 2 + 0.125;
-    if (solidTop - notchTop < 1)
-      err(['railDepthIn', 'brakeShaftDiameterIn', 'deckHeightIn', 'wheelDiameterIn'],
-        `The brake shaft notch in the rail reaches ${notchTop.toFixed(2)}", leaving ${(solidTop - notchTop).toFixed(2)}" of rail below the deck ledge (needs 1"): a taller rail, a lower shaft (smaller wheel) or a higher deck (D-48).`);
-  }
-  // Brake linkage (D-38). Numbers below mirror src/model/brake.ts (lever-to-hull gap 0.64", clevis cheek 0.15", clevis half height 0.25").
-  if (p.brakeType === BRAKE_TYPE.tireTread) {
-    const sX = -(r + p.brakeShaftBehindTireIn);
-    const phiB = (p.brakeCrankAngleDeg * Math.PI) / 180;
-    const bX = sX + p.brakeCrankIn * Math.cos(phiB);
-    const bZ = r + p.brakeCrankIn * Math.sin(phiB);
-    const planeOuterY = p.bodyWidthIn / 2 + 0.64 + p.brakeLeverWidthIn + 0.15; // crank plate + clevis cheek, outboard face
-    const tireIn = p.rearTrackIn / 2 - p.tireWidthIn / 2;
-    if (bX + 0.5 > -r - 0.05 && planeOuterY > tireIn - 0.05)
-      err(['brakeCrankIn', 'brakeCrankAngleDeg', 'brakeShaftBehindTireIn', 'bodyWidthIn', 'rearTrackIn'],
-        `The brake crank and clevis (${planeOuterY.toFixed(2)}" out from the centerline, reaching ${(bX + 0.5).toFixed(2)}" behind the axle) would run into the rear tire, whose inner face is at ${tireIn.toFixed(2)}". Move the cross shaft further back, shorten or re-aim the crank, or narrow the body.`);
-    const tilt = (p.brakeLeverTiltDeg * Math.PI) / 180;
-    const delta = p.brakeLinedShoeLengthIn / (2 * r);
-    const beta = (p.brakeShoeAngleDeg * Math.PI) / 180;
-    // Released pad: the pin is turned back about the shaft by the stroke (see brakeGeometry), which moves the pad down along its arc.
-    const ex = -(r + p.brakeShoeThickIn / 2) * Math.cos(beta) - sX, ez = r - (r + p.brakeShoeThickIn / 2) * Math.sin(beta) - r;
-    const kn = ex * -Math.sin(beta) - ez * -Math.cos(beta);
-    const thS = Math.abs(kn) < 1e-6 ? 0 : (-Math.sign(kn) * p.brakeShoeTravelIn) / Math.abs(kn);
-    const padLow = r - (r + p.brakeShoeBackThickIn + p.brakeLiningThickIn) * Math.sin(beta + delta) + thS * -ex; // the lined shoe's outer radius: steel back + lining (D-56)
-    const leverLow = p.brakeLeverPivotZIn - p.brakeLeverTailIn * Math.cos(tilt) - p.brakeBarWidthIn / 2;
-    const lowest = Math.min(padLow, bZ - 0.25, leverLow);
-    // This is the validator's closed-form estimate of the released pad corner; the brake-clear row measures the real parts (lowest moving part 3.51" at the defaults), so it is allowed 0.02" of slack.
-    if (lowest < p.minGroundClearanceIn - 0.02)
-      warn(['brakeShoeAngleDeg', 'brakeCrankAngleDeg', 'brakeLeverPivotZIn', 'brakeLeverTailIn', 'minGroundClearanceIn', 'wheelDiameterIn'],
-        `The lowest brake part (pad corner ${padLow.toFixed(2)}", crank clevis ${(bZ - 0.25).toFixed(2)}", lever tail ${leverLow.toFixed(2)}") is below the ${p.minGroundClearanceIn}" ground clearance.`);
+    if (solidTop - bl.notch.top < 1 - 1e-9)
+      err(['railDepthIn', 'brakeBeamSizeIn', 'deckHeightIn', 'brakeKeeperThickIn'],
+        `The brake beam notch in the rail reaches ${bl.notch.top.toFixed(2)}", leaving ${(solidTop - bl.notch.top).toFixed(2)}" of rail below the deck ledge (needs 1"): a taller rail, a smaller tube or a higher deck.`);
+    const transomBottom = p.deckHeightIn - p.crossmemberDepthIn;
+    const linkTop = linkTopZ(p, bl.zB);
+    if (linkTop > transomBottom - 0.1 + 1e-9)
+      err(['railDepthIn', 'crossmemberDepthIn', 'deckHeightIn', 'brakeBeamSizeIn'],
+        `The brake link and clevis (top at ${linkTop.toFixed(2)}") pass under the rear transom, whose bottom edge is at ${transomBottom.toFixed(2)}" (needs 1/8" of air): use a deeper rail, shallower crossmembers or a smaller beam tube.`);
+    if (bl.keeperBottom < p.minGroundClearanceIn - 1e-9)
+      warn(['railDepthIn', 'deckHeightIn', 'minGroundClearanceIn', 'brakeKeeperThickIn'],
+        `The brake beam keeper strap is at ${bl.keeperBottom.toFixed(2)}", below the ${p.minGroundClearanceIn}" ground clearance.`);
   }
 
   // Truck.

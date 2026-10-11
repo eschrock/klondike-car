@@ -10,8 +10,8 @@
  * tongue link from its input pin to the tongue ear. Stage 1 (WS-A) re-laid it: the output pin stands off to the left so the drag link runs ACROSS the car
  * (it must carry the rod center's sideways travel; a link along the car is a near toggle), the tongue ear is on a clevis cross-plate to the right of and
  * behind the hinge so the tongue's yaw moves it fore-aft along the tongue link. `solveSteer` solves ALL of it exactly (circle intersections, real link
- * lengths); the Stage 0 lateral-transfer shortcut is gone. Left and right turns are therefore NOT exact mirrors for the bellcrank/tongue/stick (the 4-bar,
- * knuckles and wheel centers still are). Ride-mode cables act on a cross-bar of `bellCableArm` on each side of the pivot.
+ * lengths); the Stage 0 lateral-transfer shortcut is gone. Left and right turns are therefore NOT exact mirrors for the bellcrank/tongue (the 4-bar,
+ * knuckles and wheel centers still are). Phase 3c-1 (D-53): the tongue is the ONLY steering input (no stick, cables, cross-bar or ride lock).
  *
  * The input scalar is the INNER wheel angle (+ = turn left); the outer angle comes from the 4-bar by exact circle intersection.
  */
@@ -40,15 +40,10 @@ export interface AckSpec {
   /** Stage 0 meaning: ear distance ahead of the hinge. Stage 1: the ear is `tongueEar` when given (this is then just the lateral offset magnitude). */
   tongueLinkArm: number;
   towLockInnerDeg: number;
-  rideLockOuterDeg: number;
-  /** Stick cable arm (in), default 1.5. The stick angle = asin(bellCableArm |sin bellcrank| / stickCableArm); grip pulled aft = + (same sense as the steer input). */
-  stickCableArm?: number;
   /** Bellcrank output arm direction (deg from +x, CCW) and input arm length / direction. Defaults: output aft (180), input forward (0), same length (Stage 0 layout). */
   bellOutDeg?: number;
   bellInArm?: number;
   bellInDeg?: number;
-  /** Cable cross-bar half length on the bellcrank (default `bellArm`). */
-  bellCableArm?: number;
   /** Tongue link ear relative to the hinge in the tongue frame: [ahead, left]. Default [tongueLinkArm, 0]. */
   tongueEar?: [number, number];
 }
@@ -65,7 +60,6 @@ export interface SteerSolution {
   rod: { dx: number; dy: number; rotDeg: number };
   bellcrankDeg: number;
   tongueDeg: number;
-  stickDeg: number;
   /** False when the linkage binds (no circle intersection) or is not assembled straight at neutral. */
   ok: boolean;
 }
@@ -155,36 +149,22 @@ export function ackermannErrorDeg(s: AckSpec, innerDeg: number): number {
   return Math.abs(sol.outerDeg - Math.abs(idealOuterDeg(s, innerDeg)));
 }
 
-/** Inner angle (deg) that gives the outer angle `outerDeg`, by bisection on the (monotone) 4-bar. */
-function innerFromOuter(s: AckSpec, outerDeg: number): number {
-  let lo = 0, hi = 60;
-  for (let i = 0; i < 60; i++) {
-    const mid = (lo + hi) / 2;
-    const o = outerFromInner(s, mid);
-    if (o === null || o > outerDeg) hi = mid; else lo = mid;
-  }
-  return (lo + hi) / 2;
-}
-
-/** Stops: the inner limit of a mode and the outer angle that goes with it (deg, magnitudes). Ride is stated at the outer wheel. */
-export function lockLimits(s: AckSpec, mode: 'tow' | 'ride'): { innerDeg: number; outerDeg: number } {
-  if (mode === 'tow') {
-    const o = outerFromInner(s, s.towLockInnerDeg);
-    return { innerDeg: s.towLockInnerDeg, outerDeg: o ?? idealOuterDeg(s, s.towLockInnerDeg) };
-  }
-  return { innerDeg: innerFromOuter(s, s.rideLockOuterDeg), outerDeg: s.rideLockOuterDeg };
+/** The tow lock: the inner-wheel limit (deg) and the outer angle that goes with it (magnitudes). */
+export function lockLimits(s: AckSpec): { innerDeg: number; outerDeg: number } {
+  const o = outerFromInner(s, s.towLockInnerDeg);
+  return { innerDeg: s.towLockInnerDeg, outerDeg: o ?? idealOuterDeg(s, s.towLockInnerDeg) };
 }
 
 /** Left-wheel angle range over the tow lock: -outer (turning right, left wheel outer) to +inner (turning left). */
 export function leftWheelRange(s: AckSpec): { minDeg: number; maxDeg: number } {
-  const l = lockLimits(s, 'tow');
+  const l = lockLimits(s);
   return { minDeg: -l.outerDeg, maxDeg: l.innerDeg };
 }
 
 // ── Center linkage geometry (neutral) ──
 /**
- * Neutral center-linkage pins (plan): the bellcrank output pin `out0` (drag link), input pin `in0` (tongue link) and the RIDE cable cross-bar pins
- * `cableA0`/`cableB0` (left/right of the pivot), the tie-rod midpoint `mid0` (drag link far end), the tongue ear `ear0` and the two derived link lengths.
+ * Neutral center-linkage pins (plan): the bellcrank output pin `out0` (drag link), input pin `in0` (tongue link), the tie-rod midpoint `mid0` (drag link far end),
+ * the tongue ear `ear0` and the two derived link lengths.
  * Stage 1 (WS-A) re-lay: the arms/ear are placed by the spec's optional fields; without them the Stage 0 straight layout is used (out aft, in forward, ear straight ahead).
  */
 function bellNeutral(s: AckSpec) {
@@ -198,15 +178,13 @@ function bellNeutral(s: AckSpec) {
   const mid0: P2 = [(tips.L[0] + tips.R[0]) / 2, (tips.L[1] + tips.R[1]) / 2];
   const earOff: P2 = s.tongueEar ?? [s.tongueLinkArm, 0];
   const ear0: P2 = [s.tongueHinge[0] + earOff[0], s.tongueHinge[1] + earOff[1]];
-  const cable = s.bellCableArm ?? s.bellArm;
   return {
     out0, in0, mid0, ear0, outArm, inArm, earR: Math.hypot(earOff[0], earOff[1]),
-    cableArm: cable, cableA0: [pv[0], pv[1] + cable] as P2, cableB0: [pv[0], pv[1] - cable] as P2,
     dragLen: dist(out0, mid0), tongueLinkLen: dist(ear0, in0),
   };
 }
 
-/** Neutral dimensions of the center linkage (plan): bellcrank pins, tie-rod midpoint, tongue ear, cable cross-bar pins and the two derived link lengths. */
+/** Neutral dimensions of the center linkage (plan): bellcrank pins, tie-rod midpoint, tongue ear and the two derived link lengths. */
 export function centerLinkage(s: AckSpec) {
   return bellNeutral(s);
 }
@@ -268,18 +246,13 @@ export function solveCenterExact(s: AckSpec, steerDeg: number): { bellcrankDeg: 
 }
 
 /**
- * Current positions (plan) of every center-linkage pin for a solution: drag-link pin on the bellcrank, tie-rod midpoint, tongue-link pin on the bellcrank,
- * tongue ear, and the two cable cross-bar pins. Null when the linkage binds.
+ * Current positions (plan) of every center-linkage pin for a solution: drag-link pin on the bellcrank, tie-rod midpoint, tongue-link pin on the bellcrank and
+ * the tongue ear. Null when the linkage binds.
  */
 export function centerPins(s: AckSpec, sol: SteerSolution) {
   const c = solveCenter(s, midOf(s, sol.leftDeg, sol.rightDeg));
   if (!c) return null;
-  const b = bellNeutral(s);
-  const pv = s.bellPivot;
-  return {
-    out: c.out1, mid: c.mid1, in: c.in1, ear: c.ear1,
-    cableA: add(pv, rot(sub(b.cableA0, pv), c.bell)), cableB: add(pv, rot(sub(b.cableB0, pv), c.bell)),
-  };
+  return { out: c.out1, mid: c.mid1, in: c.in1, ear: c.ear1 };
 }
 
 /**
@@ -288,7 +261,7 @@ export function centerPins(s: AckSpec, sol: SteerSolution) {
  */
 export function linkageConditioning(s: AckSpec, stepDeg = 1): number {
   let worst = 1;
-  const lock = lockLimits(s, 'tow').innerDeg;
+  const lock = lockLimits(s).innerDeg;
   for (let d = -lock; d <= lock + 1e-9; d += stepDeg) {
     const k = knuckles(s, d);
     if (!k) return 0;
@@ -309,7 +282,7 @@ export function solveSteer(s: AckSpec, steerDeg: number): SteerSolution {
   // A binding linkage returns the ideal Ackermann pose (finite, so poses never carry NaN) with ok = false.
   const bad = (): SteerSolution => {
     const o = Math.abs(idealOuterDeg(s, inner));
-    return { steerDeg, innerDeg: inner, outerDeg: o, leftDeg: sign * (sign > 0 ? inner : o), rightDeg: sign * (sign > 0 ? o : inner), rod: { dx: 0, dy: 0, rotDeg: 0 }, bellcrankDeg: 0, tongueDeg: 0, stickDeg: 0, ok: false };
+    return { steerDeg, innerDeg: inner, outerDeg: o, leftDeg: sign * (sign > 0 ? inner : o), rightDeg: sign * (sign > 0 ? o : inner), rod: { dx: 0, dy: 0, rotDeg: 0 }, bellcrankDeg: 0, tongueDeg: 0, ok: false };
   };
   const k = knuckles(s, steerDeg);
   if (k === null) return bad();
@@ -323,10 +296,6 @@ export function solveSteer(s: AckSpec, steerDeg: number): SteerSolution {
   // Rod direction R -> L is +y at neutral.
   const rotDeg = (Math.atan2(pL[1] - pR[1], pL[0] - pR[0]) - Math.PI / 2) * DEG;
   const center = solveCenter(s, mid1);
-  const stickArm = s.stickCableArm ?? 1.5;
-  const cableArm = s.bellCableArm ?? s.bellArm;
-  // Stick angle (grip pulled aft = +, the same sense as the steer input): the cross-bar pin moves fore-aft by cableArm sin(bell); the stick's cable arm follows it.
-  const stickDeg = center ? Math.asin(Math.min(1, (cableArm * Math.abs(Math.sin(center.bell))) / stickArm)) * DEG * sign : 0;
   return {
     steerDeg,
     innerDeg: k.inner,
@@ -336,7 +305,6 @@ export function solveSteer(s: AckSpec, steerDeg: number): SteerSolution {
     rod: { dx: mid1[0] - mid0[0], dy: mid1[1] - mid0[1], rotDeg },
     bellcrankDeg: center ? center.bell * DEG : 0,
     tongueDeg: center ? center.tongue * DEG : 0,
-    stickDeg,
     ok: center !== null && assembled && center.minSin >= MIN_TRANSMISSION_SIN,
   };
 }

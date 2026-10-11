@@ -130,7 +130,7 @@ export interface Finish {
   /** Wheel: draw a lugged tread on the tire. */
   tread?: 'lug' | 'rib';
   /** Surface look, when the material name alone is ambiguous. */
-  surface?: 'oak' | 'okoume' | 'vinyl' | 'rubber' | 'steel' | 'aluminum' | 'asa' | 'rope' | 'cable' | 'blackened' | 'webbing';
+  surface?: 'oak' | 'okoume' | 'vinyl' | 'rubber' | 'steel' | 'aluminum' | 'asa' | 'rope' | 'blackened';
 }
 
 /** How each plywood edge is protected (acceptance: no exposed ply edges). */

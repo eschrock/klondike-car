@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { PARAM_DEFS, defaultParams, resolveParams, sanitizeParams, validateParams, type ParamKey, type Params } from '../params';
 import { buildModel } from './index';
+import { decodeHash } from '../state';
 import { computeLayout, innerHalfWidth } from './layout';
 import { partsOverlap, worldAABB } from './bounds';
-import { lockLimits, solveSteer } from './ackermann';
+import { solveSteer } from './ackermann';
 import { centerOfGravity, totalMass } from './mass';
 import type { Part, PartGroup } from './types';
 
@@ -21,14 +22,12 @@ interface Allow {
 const ALLOW: Allow[] = [
   { a: /^axle-/, b: /^(wheel-|beam-)/, why: 'axle passes through the hub bore and lies in a groove in the beam (D-10, D-15)' },
   { a: /^beam-/, b: /^wheel-/, why: 'tire OBB is a conservative box; the beam ends sit inside the rim, 1/8" short of the hub face' },
-  { a: /^brake-shoe-/, b: /^wheel-/, why: 'shoe presses on the tread; the tire OBB corner is not tire' },
-  { a: /^brake-/, b: /^brake-/, why: 'pins, bolts, hubs and the shaft pass through bored holes in the arms, bushings, blocks and pads; the pawl sits in a tooth valley (D-38, D-39). Moving-part clearances are swept in src/analysis/brake.test.ts' },
-  { a: /^wheel-F[LR]$/, b: /^brake-/, why: 'the front brake shoes press the tread (D-56)' },
-  { a: /^(transom-rear|side-cabin-[LR]-web)$/, b: /^brake-(lever|pawl|quadrant)/, why: 'flared gunwale: the transom / web OBBs are conservative boxes over the flared outline; the lever leans out parallel to the web and stays 1/2" clear of it' },
+  { a: /^brake-shoe-/, b: /^wheel-R[LR]$/, why: 'the lined shoe presses on the tread; the tire OBB corner is not tire' },
+  { a: /^brake-/, b: /^brake-/, why: 'pins and bolts pass through bored holes in the bars, tabs, ears and the beam wall; the clevis tab foot stands on the beam rear wall; the shoe sits on the beam face (D-53). Moving-part clearances are swept in src/analysis/brake.test.ts' },
   { a: /^handle-(socket|post|pin)-/, b: /^handle-(socket|post|pin)-/, why: 'the post is a slip fit in the socket tube and the clevis pin passes through both (D-9, D-39)' },
-  { a: /^(rail-cabin|girder-cabin)-/, b: /^brake-(bushing-[LR]|shaft)$/, why: 'the brake shaft passes through a notch cut up from the rail bottom and the bearing stands 1/2" into it (D-47); the sweep has no notch geometry' },
+  { a: /^(rail-cabin|girder-cabin)-/, b: /^brake-beam$/, why: 'the brake beam slides in a notch cut up from the rail bottom (D-53); the sweep has no notch geometry' },
+  { a: /^(rail-cabin|girder-cabin)-/, b: /^brake-keeper-[LR]$/, why: 'the keeper strap is screwed to the rail bottom and touches it (D-53)' },
   { a: /^(rail-cabin|girder-cabin)-/, b: /^(beam-R|axle-R[LR]?)$/, why: 'the rail is notched on its underside and bears on the beam top (D-47, build r2 MUST-4); the sweep has no notch geometry' },
-  { a: /^axle-R$/, b: /^brake-drum-/, why: 'wooden drum is bored onto the live rear axle (D-13)' },
   { a: /^(lantern-mount|flag-mount)$/, b: /^transom-front$/, why: 'printed inverted-U clip straddles the transom top; the OBB of the U profile is its full bounding box (D-41)' },
   { a: /^seat-wedge-[LR]$/, b: /^seat-(back-(stile|pad)|knob)-?[LR]?$/, why: 'oak wedge/post is a trapezoid extrusion whose sloped face is the stile\'s rear face; its OBB is the bounding box' },
   { a: /^deck$/, b: /^(side-(cabin|nose)-[LR]-(chine|board)|(rail|girder)-(cabin|nose)-[LR]|transom-(rear|front))$/, why: 'the deck edge sits in the chine rabbets, the rail ledges and the transom dados (D-35, D-45); boxes over-cover the angled bow edge (hull.test.ts pins the groove depth)' },
@@ -37,7 +36,7 @@ const ALLOW: Allow[] = [
   { a: /^(rail-(cabin|nose)-[LR])$/, b: /^(rail-(cabin|nose)-[LR]|front-beam-hold-down-[LR])$/, why: 'rail scarf at the bow start; the hold-down angle sits on the rail' },
   { a: /^front-beam-hold-down-[LR]$/, b: /^joist-/, why: 'the hold-down angle is screwed to the joist' },
   { a: /^joist-/, b: /^(rail-(cabin|nose)-[LR]|side-)/, why: 'joist ends are let into the rail / side; boxes over-cover the angled bow' },
-  { a: /^transom-rear$/, b: /^brake-(lever|quadrant)$/, why: 'with gunwale flare the transom outline widens toward the top; its OBB is the full bounding box' },
+  { a: /^transom-rear$/, b: /^brake-(pivot-base|pivot-ear-[LR]|return-spring)$/, why: 'the bracket plate stands on the transom rear face and the spring hooks to an eye bolt in it (D-53)' },
   { a: /^doubler-lash-/, b: /^side-cabin-[LR]-(gunwale|board)$/, why: 'a lash doubler has a flat back against the curved gunwale: its far corner overlaps by the sagitta of its 2" chord' },
   { a: /^deck$/, b: /^side-(cabin|nose)-[LR]-post-\d+$/, why: 'open-frame posts stand outside the angled deck edge; the boxes over-cover it (D-45)' },
   { a: /^(rail|girder)-cabin-[LR]$/, b: /^(transom-backer-|storage-(side|end)|foot-stop-cleat-|seat-wedge-)/, why: 'above the cabin deck the rail\'s inner face is relieved flush with the chine\'s inner face (a 1/8" router rabbet, D-45); the rail drawing is the full box' },
@@ -50,52 +49,32 @@ const ALLOW: Allow[] = [
   { a: /^spindle-[LR]$/, b: /^(wheel-F[LR]|kingpin-bolt-[LR]|beam-F)$/, why: 'the stub passes through the wheel bore and the bolt through the boss; the mesh bounding box over-covers when turned (vertices clear the beam by >= 0.2", front-end.test.ts)' },
   { a: /^steer-arm-[LR]$/, b: /^(tie-rod|steer-stop-tow-[LR])$/, why: 'rod end bolted on the arm tip; the arm plate bounding box over-covers its hull at the lock' },
   { a: /^kingpin-bolt-[LR]$/, b: /^(kp-bracket-[LR]|spindle-[LR])$/, why: 'the bolt passes through the leaves and the boss' },
-  { a: /^bellcrank$/, b: /^centering-spring-[LR]$/, why: 'the spring hook is in the spring pin hole' },
-  { a: /^(bell-standoff|mode-pin|tongue-link|tongue-plate)$/, b: /^(bell-standoff|mode-pin|tongue-link|tongue-plate|tongue-hinge-pin|cable-crossbar|bellcrank)$/, why: 'pins pass through the link ends, the standoff top and the plates (drawn solid)' },
-  { a: /^cable-crossbar$/, b: /^stick-cable-[AB](-end)?$/, why: 'the cable swage stud passes through the cross-bar end' },
+  { a: /^(bell-standoff|tongue-link-pin|tongue-link|tongue-plate)$/, b: /^(bell-standoff|tongue-link-pin|tongue-link|tongue-plate|tongue-hinge-pin|bellcrank)$/, why: 'pins pass through the link ends, the standoff top and the plates (drawn solid)' },
   { a: /^tongue$/, b: /^(tongue-hinge-pin|eyebolt-T)$/, why: 'the hinge pin and the eye bolt pass through holes in the tongue' },
   { a: /^tongue-hinge-(top|bottom)$/, b: /^tongue-hinge-pin$/, why: 'the hinge pin passes through the plates' },
   { a: /^tongue-hinge-pin$/, b: /^(tongue-plate|tongue-hinge-top|tongue-hinge-bottom)$/, why: 'the hinge pin passes through the ear plate and the plates' },
   { a: /^bridle$/, b: /^eyebolt-T$/, why: 'rope tied to the eye' },
-  { a: /^(stick-bracket|ride-stick)$/, b: /^(stick-bracket|ride-stick|stick-cable-[AB]-up|stick-guard|cable-guide-R)$/, why: 'the stick stands inside the U bracket and its cable arm passes between the cheeks (bounding box of the U)' },
-  { a: /^stick-cable-[AB]/, b: /^stick-cable-[AB]/, why: 'the three straight segments of one cable meet at the waypoints; the two cables pass each other at the stick' },
-  { a: /^(stick-cable-[AB]-up|cable-guide-R)$/, b: /^(deck|cable-guide-R|stick-cable-[AB]-up)$/, why: 'the cables pass through the deck slot under the guide (cut at Layout.front.cable.slot)' },
 ];
 const matches = (r: Allow, a: Part, b: Part) => (r.a.test(a.id) && r.b.test(b.id)) || (r.a.test(b.id) && r.b.test(a.id));
 
 const SOLID: PartGroup[] = ['frame', 'body', 'running-gear', 'steering', 'seat', 'storage', 'brake', 'removable', 'lighting', 'hardware'];
 
 /**
- * Clashes that exist only OFF the defaults, found when the Stage 2 flip swept the variants (docs/phase3b-flip-notes.md, open items). They are real
- * geometry problems of the new brake-control and ride-stick routing (the cables and the stick are laid out for the default seat, storage and body width), not
- * contact allowances, so they are listed apart from ALLOW: the defaults are tested strictly (no entries), the variant and fuzz sweeps tolerate ONLY these
+ * Clashes that exist only OFF the defaults, found when the Stage 2 flip swept the variants (docs/phase3b-flip-notes.md, open items; the brake-control and ride-stick
+ * entries went with ride mode at Phase 3c-1). They are real geometry problems at the extremes of the front end, not contact allowances, so they are listed apart from ALLOW: the defaults are tested strictly (no entries), the variant and fuzz sweeps tolerate ONLY these
  * pairs, and any other new clash still fails. Delete an entry when its geometry is fixed.
  */
 const KNOWN_OFF_DEFAULT: RegExp[] = [
-  /^brake-quadrant x hip-cable:/, // hip cable vs the ratchet quadrant in the overslung 11.5" deck variant
-  /^beam-R x belt-doubler-[LR]:/, // belt doubler strap under the rail meets the rear beam when the seat is moved to its rearmost position
-  /^stick-cable-[AB]-up x joist-cabin-\d+:/, // the cable corridor is only kept clear of the default joist layout
-  /^sign-[LR] x hip-cable(-grommet)?:/, // the hip cable runs through the removable side sign area when the seat or wheels move the cable up
-  /^side-cabin-[LR]-chine x hip-cable-channel:/, // the printed cable channel does not fit the chine in the raised / under-seat storage layouts
-  /^(stick-bracket|ride-stick|stick-cable-[AB]-up|cable-guide-R) x seat-cushion:/, // the stick station is laid out beside the default 15" seat only
-  /^(side-cabin-[LR]-chine|belt-anchor-[LR]) x lap-belt-[LR]:/, // lap belt webbing vs a 23" wide hull
-  /^wheel-RL x brake-front-cable-main:/, // main front cable passes the rear tire in the narrow-track variant
   /^guard-[LR] x doubler-lash-[LR]\d:/, // finger guard vs lash doubler with a 10" front overhang
-  /^(wheel-F[LR]|brake-front-horn-[LR]) x hip-cable(-channel|-grommet)?:/, // the forward-raised storage layout routes the hip cable where the steered front wheel swings
   /^beam-F x bellcrank:/, // at the 42 deg slider maximum the bellcrank skims the front beam
   /^wheel-F[LR] x steer-arm-[LR]:/, // 32" front track with a wide tire: the steer arm plate bounding box meets the tire
-  /^side-cabin-[LR]-chine x hip-lever-bracket:/, // hip lever bracket vs the chine in a wide-cushion variant
-  /^deck x brake-front-equalizer:/, // equalizer plate vs the deck at a 30" tongue / 8.75" deck (equalizer rides under the slot)
   /^tongue-plate x transom-front:/, // tongue ear plate vs a transom pushed back by a 4.5" front overhang
 ];
 /**
- * Further off-default clashes that only the random fuzz reaches (extremes of several params at once, e.g. a 32" front track with a 9" overhang): the brake
- * and ride-stick accessory routing, and two front-end pairs (tie rod vs the nose rails, tongue vs the nose stringers) that need a wider bow or a shorter tongue.
+ * Further off-default clashes that only the random fuzz reaches (extremes of several params at once, e.g. a 32" front track with a 9" overhang): two front-end pairs
+ * (tie rod vs the nose rails, tongue vs the nose stringers) that need a wider bow or a shorter tongue.
  */
 const KNOWN_FUZZ_ONLY: RegExp[] = [
-  /^(side-cabin-[LR]-(post-\d|board)|hip-cable|brake-shoe-(yoke|pivot)-F[LR]|brake-front-cable-[LR]|rail-cabin-[LR]) x (hip-cable|hip-cable-grommet|hip-cable-channel|brake-hip-cable-pin|lap-belt-[LR]|belt-doubler-[LR]):/,
-  /^brake-front-equalizer x hardware:/,
-  /^(stick-bracket|stick-cable-[AB]-up|cable-guide-R) x storage-/,
   /^tie-rod x rail-nose-[LR]:/,
   /^tongue x stringer-nose-[LR]\d:/,
 ];
@@ -192,10 +171,6 @@ describe('overlaps', () => {
   it('also clean in the removed (transport) configuration', () => {
     expect(overlaps(buildModel(defaults, { removed: true }))).toEqual([]);
   });
-  it('also clean in the ride view at both ride locks', () => {
-    const rideLock = lockLimits(computeLayout(defaults).front.ack, 'ride').innerDeg;
-    for (const deg of [0, rideLock, -rideLock]) expect(overlaps(buildModel(defaults, { steerDeg: deg, mode: 'ride' })), `ride ${deg}`).toEqual([]);
-  });
   it('front tires clear the bow and cabin body at full lock', () => {
     for (const deg of [lock, -lock]) {
       const parts = buildModel(defaults, { steerDeg: deg });
@@ -209,13 +184,16 @@ describe('overlaps', () => {
   });
 });
 
-/** Documented empty masses at defaults (Phase 3b flip, D-50..D-56), lb. Printed by the breakdown test below.
+/** Documented empty masses at defaults (Phase 3c-1, D-53), lb. Printed by the breakdown test below.
+ * Phase 3c-1: 174.1 -> about 145 lb. Brake 30.9 -> 8.0 (the cross-shaft brake, front brakes, hip lever, lap belt and ride stick cables are gone; one aluminum beam,
+ * two shoes, a lever and a pivot bracket remain), steering 26.9 -> 23.1 (ride stick, mode plate, cross-bar, springs), hardware 9.0 -> 6.5 (fewer joints).
+ * Phase 3b flip: 166 -> 174.1 lb.
  * Phase 3b flip: 166 -> 174.1 lb. Steering 22.7 -> 26.9 (Ackermann front end: two knuckles + brackets, tie rod, bellcrank, tongue and linkage replace the turntable
  * and bolster), brake 16.0 -> 30.9 (front tread brakes, bias bar, hip lever, lap belt and the ride stick cables count in this group), running gear 51.0 -> 34.0 (the
  * front beam is a bracket carrier, not a 4" oak beam on a rod), body 33.3 -> 35.4 (the bow run, nose stringers). The band is +/-10% overall, +/-15% per group. */
-const EXPECTED_EMPTY_LB = 174;
+const EXPECTED_EMPTY_LB = 145;
 const EXPECTED_GROUP_LB: Record<string, number> = {
-  'running-gear': 34.0, steering: 26.9, frame: 15.4, body: 35.4, seat: 9.0, storage: 8.8, brake: 30.9, removable: 3.4, hardware: 9.0, lighting: 1.4,
+  'running-gear': 34.0, steering: 23.1, frame: 15.3, body: 35.4, seat: 9.0, storage: 8.8, brake: 8.0, removable: 3.4, hardware: 6.5, lighting: 1.4,
 };
 describe('masses', () => {
   const parts = buildModel(defaults);
@@ -284,13 +262,13 @@ describe('masses', () => {
 });
 
 describe('removed', () => {
-  it('drops exactly the removable parts: the tongue family and the ride stick with its cables stay off the truck', () => {
+  it('drops exactly the removable parts: the tongue family and the brake lever stay off the truck', () => {
     const full = buildModel(defaults);
     const removed = buildModel(defaults, { removed: true });
     expect(removed.map((p) => p.id)).toEqual(full.filter((p) => !p.removable).map((p) => p.id));
     const gone = full.filter((p) => p.removable).map((p) => p.id);
     const common = ['seat-back-panel', 'seat-back-stile-L', 'sign-L', 'sign-R', 'handle-bar', 'handle-post-L', 'handle-post-R'];
-    expect(gone).toEqual(expect.arrayContaining([...common, 'tongue', 'tongue-link', 'bridle', 'ride-stick']));
+    expect(gone).toEqual(expect.arrayContaining([...common, 'tongue', 'tongue-link', 'bridle', 'brake-lever', 'brake-lever-grip', 'tongue-link-pin']));
     expect(removed.some((p) => p.id === 'beam-F')).toBe(true);
   });
 });
@@ -328,7 +306,7 @@ describe('param sweeps', () => {
   });
   it('alternate structure, brake, storage and axle options build', () => {
     for (const patch of [
-      { frameStyle: 1 }, { sideConstruction: 0 }, { sideConstruction: 2 }, { axleStyle: 1 }, { brakeType: 1 },
+      { frameStyle: 1 }, { sideConstruction: 0 }, { sideConstruction: 2 }, { axleStyle: 1 },
       { storageLocation: 1 }, { storageLocation: 2 }, { axleBeamPosition: 1 }, { plySpecies: 1 }, { tireType: 1 },
     ]) check({ ...defaults, ...patch }, JSON.stringify(patch));
   });
@@ -368,7 +346,6 @@ const VARIANTS: Record<string, Partial<Params>> = {
   sheer4Long: { sheerRiseIn: 4, sheerLengthIn: 24, transomCrownIn: 1.5, transomCornerRadiusIn: 2 },
   wheel10: { wheelDiameterIn: 10 },
   wheel11_5: { wheelDiameterIn: 11.5 },
-  drumBrake: { brakeType: 1 },
   stubAxles: { axleStyle: 1 },
   hullBeamFrame: { frameStyle: 1 },
   sidesSolidOak: { sideConstruction: 0 },
@@ -378,8 +355,7 @@ const VARIANTS: Record<string, Partial<Params>> = {
   storageForwardRaised: { storageLocation: 1 },
   storageUnderSeat: { storageLocation: 2 },
   track30: { rearTrackIn: 30, frontTrackIn: 30 },
-  // The 1" gap between a 24" hull and the 30"-track tires is too narrow for the brake crank and clevis (D-38): the shaft moves back behind the tire.
-  'track30+fix': { rearTrackIn: 30, frontTrackIn: 30, bodyWidthIn: 23, steerLockDeg: 25, brakeShaftBehindTireIn: 3, rearOverhangIn: 11 }, // 23": the rear U-bolt plates start at 11.5" (D-43)
+  'track30+fix': { rearTrackIn: 30, frontTrackIn: 30, bodyWidthIn: 23, steerLockDeg: 25, rearOverhangIn: 11 }, // 23": the rear U-bolt plates start at 11.5" (D-43)
   // At the Phase 2 44" wheelbase the auto shoulder sits 0.2" further back, so the seat needs to move back 0.5" at a 44" track.
   track44: { rearTrackIn: 44, frontTrackIn: 44, seatXIn: 11.5 },
   'track44+fix': { rearTrackIn: 44, frontTrackIn: 44, seatXIn: 11.5 },
@@ -414,7 +390,7 @@ describe('variants', () => {
     expect(valid.length).toBeGreaterThanOrEqual(variantCases.length - 7); // D-43: the 5/8" chines cost the nose 1/4" of inside width, so kingpinLead2_5 joins the impossible extremes
     for (const v of skipped) expect(errorsOf(v.p)[0].message.length, v.name).toBeGreaterThan(20);
     // The feasible companions must really be feasible.
-    for (const n of ['overslungBeam+deck', 'track30+fix', 'track44+fix', 'wheelbase40+fix', 'seatXMin', 'seatXMax', 'gunwaleFlare2', 'wheel10', 'drumBrake', 'stubAxles', 'hullBeamFrame', 'lock30'])
+    for (const n of ['overslungBeam+deck', 'track30+fix', 'track44+fix', 'wheelbase40+fix', 'seatXMin', 'seatXMax', 'gunwaleFlare2', 'wheel10', 'stubAxles', 'hullBeamFrame', 'lock30'])
       expect(valid.some((v) => v.name === n), n).toBe(true);
   });
   it.each(valid.map((v) => [v.name, v.p] as const))('no unintended overlaps: %s (neutral and both full locks, transport config)', (_n, p) => {
@@ -521,7 +497,8 @@ describe('explode directions (M7)', () => {
     expect(dir('kingpin-bolt-L')[2]).toBeGreaterThan(0.9); // the knuckle bolts lift out through the bracket
     expect(dir('spindle-L')[1]).toBeGreaterThan(0.5);
     expect(dir('tie-rod')[2]).toBeLessThan(-0.5);
-    expect(dir('ride-stick')[2]).toBeGreaterThan(0.9);
+    expect(dir('brake-lever')[2]).toBeGreaterThan(0.2);
+    expect(dir('brake-beam')[2]).toBeLessThan(-0.5);
     expect(dir('side-cabin-L-web')[1]).toBeGreaterThan(0.9);
     expect(dir('side-cabin-R-web')[1]).toBeLessThan(-0.9);
     expect(dir('seat-cushion')[2]).toBeGreaterThan(0.9);
@@ -536,7 +513,7 @@ describe('explode directions (M7)', () => {
   });
 });
 
-// ── Steering sweep: every steer-body part stays clear of the chassis over the whole sweep (tow and ride) ───────────
+// ── Steering sweep: every steer-body part stays clear of the chassis over the whole sweep (the tow lock) ───────────
 describe('steering sweep', () => {
   const steerish = (x: Part) => x.body.startsWith('steer') || x.body === 'tie-rod' || x.body === 'bellcrank' || x.body.endsWith('-link') || x.body === 'tongue' || x.id === 'wheel-FL' || x.id === 'wheel-FR';
   const sweepAngles = (lock: number) => {
@@ -544,29 +521,28 @@ describe('steering sweep', () => {
     for (let d = -lock; d <= lock + 1e-9; d += 2.5) out.push(Math.min(lock, Math.round(d * 2) / 2));
     return [...new Set([-lock, ...out, lock])].sort((a, b) => a - b);
   };
-  const sweep = (p: Params, label: string, mode: 'both' | 'ride', tolerateKnown = false) => {
-    const lock = mode === 'ride' ? lockLimits(computeLayout(p).front.ack, 'ride').innerDeg : p.steerLockDeg;
+  const sweep = (p: Params, label: string, tolerateKnown = false) => {
+    const lock = p.steerLockDeg;
     const bad: string[] = [];
     for (const deg of sweepAngles(lock)) {
-      const parts = buildModel(p, { steerDeg: deg, mode });
+      const parts = buildModel(p, { steerDeg: deg });
       const moving = parts.filter((x) => !x.payload && steerish(x));
       const fixed = parts.filter((x) => !x.payload && !steerish(x) && SOLID.includes(x.group) && !/^brake-/.test(x.id));
       for (const a of moving) for (const b of fixed) {
         const o = partsOverlap(a, b);
-        if (o > TOL && !ALLOW.some((r) => matches(r, a, b)) && !(tolerateKnown && (isKnown(`${a.id} x ${b.id}:`) || isKnown(`${b.id} x ${a.id}:`)))) bad.push(`${label} ${mode} ${a.id} x ${b.id} @${deg}: ${o.toFixed(2)}`);
+        if (o > TOL && !ALLOW.some((r) => matches(r, a, b)) && !(tolerateKnown && (isKnown(`${a.id} x ${b.id}:`) || isKnown(`${b.id} x ${a.id}:`)))) bad.push(`${label} ${a.id} x ${b.id} @${deg}: ${o.toFixed(2)}`);
       }
     }
     return bad;
   };
-  it('nothing on the steer bodies hits the chassis anywhere in the tow or the ride sweep at the defaults', () => {
-    expect(sweep(defaults, 'defaults', 'both')).toEqual([]);
-    expect(sweep(defaults, 'defaults', 'ride')).toEqual([]);
+  it('nothing on the steer bodies hits the chassis anywhere in the tow sweep at the defaults', () => {
+    expect(sweep(defaults, 'defaults')).toEqual([]);
   }, 120000); // ~15 s locally, up to ~45 s on CI runners
   it('and for narrower locks, a wider track and storage in the other places', () => {
     const bad: string[] = [];
     for (const patch of [{ steerLockDeg: 30 }, { steerLockDeg: 36 }, { storageLocation: 1 }, { frontTrackIn: 38, rearTrackIn: 38 }]) {
       const p = { ...defaults, ...patch };
-      if (!errorsOf(p).length) bad.push(...sweep(p, JSON.stringify(patch), 'both', true));
+      if (!errorsOf(p).length) bad.push(...sweep(p, JSON.stringify(patch), true));
     }
     expect(bad).toEqual([]);
   }, 180000);
@@ -761,5 +737,26 @@ describe('old shared links (Stage 2 flip)', () => {
     expect(d).toEqual(defaults);
     expect(buildModel(d).map((x) => x.id)).toEqual(buildModel(defaults).map((x) => x.id));
     expect(Object.keys(PARAM_DEFS)).not.toEqual(expect.arrayContaining(['turntableType', 'drawbar', 'frontEndType']));
+  });
+});
+
+describe('old shared links (Phase 3c-1)', () => {
+  it('ride-mode, front-brake, hip-lever, lap-belt and cross-shaft brake params are ignored by the URL decoder and the sanitizer; the cart builds like the defaults', () => {
+    const old = {
+      rideStickLengthIn: 20, rideStickInsetIn: 4, steerRideLockDeg: 8, steerCenterSpringLbf: 3, stickCableDiaIn: 0.125, bellcrankCableArmIn: 3.8, modePinDiaIn: 0.375,
+      frontBrakeBias: 0.6, frontShoeTravelIn: 0.3, brakeBiasBarIn: 6, hipLeverArmIn: 6, hipCableDiaIn: 0.0625, beltDesignG: 4, beltAnchorBoltDiaIn: 0.375,
+      brakeType: 1, brakeShaftDiameterIn: 0.875, brakeRatchetRadiusIn: 8.5, brakeBearingBoltCols: 3, rideSpeedMph: 10, rideRunFt: 300, notAKey: 7,
+    };
+    const hash = '#' + Object.entries({ ...old, wheelbaseIn: 46 }).map(([k, v]) => `${k}=${v}`).join('&');
+    const d = decodeHash(hash);
+    expect(d.wheelbaseIn).toBe(46);
+    for (const k of Object.keys(old)) expect((d as unknown as Record<string, number>)[k], k).toBeUndefined();
+    const s = sanitizeParams(old as unknown as Partial<Params>);
+    expect(s).toEqual(defaults);
+    expect(buildModel(s).map((x) => x.id)).toEqual(buildModel(defaults).map((x) => x.id));
+    const keys = Object.keys(PARAM_DEFS);
+    for (const k of Object.keys(old)) expect(keys, k).not.toContain(k);
+    // The bump model's design speed is jogging pace now (D-53), not the 10 mph of the ride study.
+    expect(defaults.bumpSpeedMph).toBe(5);
   });
 });

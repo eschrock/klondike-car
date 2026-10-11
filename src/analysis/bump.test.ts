@@ -46,13 +46,13 @@ describe('bump: velocity-pulse (spec 5.1)', () => {
     expect(bumpStrike(ctx, ctx.loads.goal, 'rear', 1).Fn).toBeGreaterThan(bumpStrike(ctx, ctx.loads.goal, 'front', 1).Fn);
   });
 
-  it('the seat factor is 1 + V_rear / W (about 4 at the defaults), never below dynamicFactor', () => {
+  it('the seat factor is 1 + V_rear / W (about 2.6 at the defaults at jogging pace, D-53), never below dynamicFactor', () => {
     const ctx = ackCtx();
     const c = ctx.loads.operating;
     const rear = bumpStrike(ctx, c, 'rear', ctx.p.bumpNormalHeightIn);
     expect(bumpSeatG(ctx, c)).toBeCloseTo(1 + rear.V / c.massLb, 9);
-    expect(bumpSeatG(ctx, c)).toBeGreaterThan(3.2);
-    expect(bumpSeatG(ctx, c)).toBeLessThan(4.8);
+    expect(bumpSeatG(ctx, c)).toBeGreaterThan(2.0); // 5 mph (jogging pace): the 10 mph study of D-54 gave about 4
+    expect(bumpSeatG(ctx, c)).toBeLessThan(3.2);
     expect(bumpSeatGHard(ctx, c)).toBeGreaterThan(bumpSeatG(ctx, c) - 0.5);
     expect(seatFactor(ctx, c)).toBe(Math.max(ctx.p.dynamicFactor, bumpSeatG(ctx, c)));
     // At least the dynamic factor of the load basis, and never less.

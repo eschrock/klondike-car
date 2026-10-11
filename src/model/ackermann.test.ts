@@ -37,7 +37,7 @@ describe('ackermann', () => {
   it('straight ahead at 0 gives zero angles and the neutral tie rod length', () => {
     const sol = solveSteer(S, 0);
     expect(sol.ok).toBe(true);
-    for (const v of [sol.innerDeg, sol.outerDeg, sol.leftDeg, sol.rightDeg, sol.bellcrankDeg, sol.tongueDeg, sol.stickDeg, sol.rod.dx, sol.rod.dy, sol.rod.rotDeg]) expect(Math.abs(v)).toBeLessThan(1e-9);
+    for (const v of [sol.innerDeg, sol.outerDeg, sol.leftDeg, sol.rightDeg, sol.bellcrankDeg, sol.tongueDeg, sol.rod.dx, sol.rod.dy, sol.rod.rotDeg]) expect(Math.abs(v)).toBeLessThan(1e-9);
     const L = computeLayout(P0).front;
     const len = Math.hypot(L.armTip.L[0] - L.armTip.R[0], L.armTip.L[1] - L.armTip.R[1]);
     expect(len).toBeCloseTo(S.tieLen, 9);
@@ -69,7 +69,7 @@ describe('ackermann', () => {
     expect(sol.outerDeg).toBeGreaterThan(25.9);
     expect(sol.outerDeg).toBeLessThan(26.1);
     expect(idealOuterDeg(S, 35.5)).toBeCloseTo(25.96, 1);
-    const lim = lockLimits(S, 'tow');
+    const lim = lockLimits(S);
     expect(lim.innerDeg).toBe(35.5);
     expect(lim.outerDeg).toBeCloseTo(sol.outerDeg, 9);
     expect(leftWheelRange(S).maxDeg).toBeCloseTo(35.5, 9);
@@ -89,19 +89,9 @@ describe('ackermann', () => {
     expect(PARAM_DEFS.ackermannErrorMaxDeg.default).toBe(1);
   });
 
-  it('ride lock outer 8 gives inner 8.55 +/- 0.05', () => {
-    const lim = lockLimits(S, 'ride');
-    expect(lim.outerDeg).toBe(8);
-    expect(Math.abs(lim.innerDeg - 8.55)).toBeLessThan(0.05);
-    const sol = solveSteer(S, lim.innerDeg);
-    expect(sol.outerDeg).toBeCloseTo(8, 6);
-    // Rod travel 0.39"; bellcrank about 5.8 deg (exact re-laid linkage); stick +/-15 deg (1.5" cable arm, 3.8" cross-bar).
-    expect(Math.abs(sol.rod.dy)).toBeCloseTo(0.39, 1);
-    expect(Math.abs(sol.bellcrankDeg)).toBeGreaterThan(5.4);
-    expect(Math.abs(sol.bellcrankDeg)).toBeLessThan(6.4);
-    expect(Math.abs(sol.stickDeg)).toBeGreaterThan(14.4);
-    expect(Math.abs(sol.stickDeg)).toBeLessThan(15.6);
-    expect(sol.stickDeg).toBeGreaterThan(0);
+  it('there is no ride lock any more (D-53): the tongue is the only steering input', () => {
+    expect(Object.keys(S)).not.toContain('rideLockOuterDeg');
+    expect(solveSteer(S, 35.5)).not.toHaveProperty('stickDeg');
   });
 
   it('tongue yaw at the tow lock (EXACT linkage) is 21-23 deg in both directions, at least 2 deg inside tongueMaxYawDeg', () => {
@@ -139,7 +129,7 @@ describe('ackermann', () => {
     expect(ex.tongueDeg).toBeCloseTo(solveSteer(S, 35.5).tongueDeg, 9);
     expect(ex.bellcrankDeg).toBeCloseTo(solveSteer(S, 35.5).bellcrankDeg, 9);
     // The Stage 0 straight lever (output aft, input forward, ear ahead, 3" arms): a near toggle, tongue yaw 31.8 deg > the stop.
-    const old: AckSpec = { ...S, bellArm: 3, bellOutDeg: undefined, bellInArm: undefined, bellInDeg: undefined, bellCableArm: undefined, tongueEar: undefined, tongueLinkArm: 3.25 };
+    const old: AckSpec = { ...S, bellArm: 3, bellOutDeg: undefined, bellInArm: undefined, bellInDeg: undefined, tongueEar: undefined, tongueLinkArm: 3.25 };
     const exOld = solveCenterExact(old, 35.5)!;
     expect(exOld.tongueDeg).toBeGreaterThan(P0.tongueMaxYawDeg);
     expect(centerLinkage(old).dragLen).toBeGreaterThan(6);
@@ -153,8 +143,6 @@ describe('ackermann', () => {
       const pins = centerPins(S, sol)!;
       expect(Math.hypot(pins.out[0] - pins.mid[0], pins.out[1] - pins.mid[1])).toBeCloseTo(cl.dragLen, 9);
       expect(Math.hypot(pins.ear[0] - pins.in[0], pins.ear[1] - pins.in[1])).toBeCloseTo(cl.tongueLinkLen, 9);
-      // The cross-bar pins stay 2 x cableArm apart and centered on the pivot.
-      expect(Math.hypot(pins.cableA[0] - pins.cableB[0], pins.cableA[1] - pins.cableB[1])).toBeCloseTo(2 * cl.cableArm, 9);
       // The link poses carry their neutral pins onto the solved ones.
       const pose = poseMatrices(S, sol);
       const o = apply(pose['drag-link'], cl.out0[0], cl.out0[1]), m = apply(pose['drag-link'], cl.mid0[0], cl.mid0[1]);
@@ -285,30 +273,25 @@ describe('stage 0 interface (additive)', () => {
       const k = f.knuckle[side];
       expect(Math.hypot(...k.bossAxis)).toBeCloseTo(1, 9);
       expect(k.bossPos[2]).toBeGreaterThan(L.r + P0.spindleBossAboveStubIn - 0.01);
-      expect(k.shoeAngleDeg).toBe(P0.brakeShoeAngleDeg);
     }
     // KPI leans the boss inboard, caster leans it back.
     expect(f.knuckle.L.bossPos[1]).toBeLessThan(f.kp.L[1]);
     expect(f.knuckle.L.bossPos[0]).toBeLessThan(f.kp.L[0]);
     expect(f.trailIn).toBeCloseTo(P0.kingpinLeadIn + L.r * Math.tan(P0.casterDeg * RAD), 9);
-    // Modes: the two pin sockets are farther apart than the pin plus an inch.
-    expect(Math.hypot(...(f.mode.pinTow.map((v, i) => v - f.mode.pinRide[i]) as [number, number, number]))).toBeGreaterThan(P0.modePinDiaIn + 1);
-    expect(f.stick.pivot[1]).toBeLessThan(0); expect(f.hipLever.pivot[1]).toBeGreaterThan(0);
+    // The tongue-link pin sits on top of the standoff at the input pin.
+    expect(f.bellcrank.linkPinAt[0]).toBeCloseTo(f.bellcrank.inPin[0], 9);
+    expect(f.bellcrank.linkPinAt[2]).toBeCloseTo(f.tongue.link.z0, 9);
     expect(computeLayout(defaultParams()).front.ack.kx).toBeCloseTo(45.25, 9);
   });
 
-  it('Ctx carries the solved pose and the mode (default both)', () => {
+  it('Ctx carries the solved pose and the clamped angle', () => {
     const c0 = makeCtx(P0);
-    expect(c0.view.mode).toBe('both');
     expect(c0.steer.ok).toBe(true);
-    const c20 = makeCtx(P0, { steerDeg: 20, mode: 'tow' });
-    expect(c20.view.mode).toBe('tow');
-    // The ride mode clamps the displayed angle to the inner angle of the ride lock (outer 8 deg).
-    expect(makeCtx(P0, { steerDeg: 20, mode: 'ride' }).steer.innerDeg).toBeCloseTo(8.59, 1);
+    const c20 = makeCtx(P0, { steerDeg: 20 });
     expect(c20.steer.innerDeg).toBe(20);
     expect(Math.atan2(c20.pose['steer-L'][1], c20.pose['steer-L'][0]) * DEG).toBeCloseTo(20, 9);
     expect(Math.atan2(c20.pose['steer-R'][1], c20.pose['steer-R'][0]) * DEG).toBeCloseTo(c20.steer.outerDeg, 9);
-    // The steer angle is clamped to the lock like before.
+    // The steer angle is clamped to the tow lock.
     expect(makeCtx(P0, { steerDeg: 90 }).view.steerDeg).toBe(35.5);
   });
 
@@ -331,12 +314,9 @@ describe('stage 0 interface (additive)', () => {
 
   it('the Phase 3b param block is present with status, ref and a note on every new param', () => {
     const keys = ['spindleStub', 'spindleStubLengthIn', 'spindleYieldPsi', 'spindleUltimatePsi', 'spindleMassLb', 'spindleBossAboveStubIn', 'kingpinInclinationDeg', 'casterDeg', 'scrubRadiusIn',
-      'steerArmLengthIn', 'ackermannAngleDeg', 'steerRideLockDeg', 'steerCenterSpringLbf', 'frontBeamWidthIn', 'frontBeamDepthIn', 'frontBeamWallIn', 'frontBeamBehindKingpinIn', 'frontBeamYieldPsi',
+      'steerArmLengthIn', 'ackermannAngleDeg', 'frontBeamWidthIn', 'frontBeamDepthIn', 'frontBeamWallIn', 'frontBeamBehindKingpinIn', 'frontBeamYieldPsi',
       'kingpinBracketThickIn', 'kingpinBracketGapIn', 'kingpinBracketLeafRadiusIn', 'kingpinBracketBoltDiaIn', 'tieRodDiaIn', 'tieRodEndDiaIn', 'bellcrankArmIn', 'bellcrankPivotAftOfKingpinIn',
-      'tongueHingeAheadOfBeamIn', 'tongueLinkArmIn', 'tongueMaxYawDeg', 'modePinDiaIn', 'rideStickAheadOfHpointIn', 'rideStickInsetIn', 'rideStickLengthIn', 'rideStickPivotAboveSeatIn',
-      'rideStickCableArmIn', 'stickCableDiaIn', 'stickCablePreloadLbf', 'frontBrakeBias', 'frontShoeTravelIn', 'brakeShoeBackThickIn', 'hipLeverAheadOfHpointIn',
-      'hipLeverInsetIn', 'hipLeverArmIn', 'hipLeverCableArmIn', 'hipLeverThrowDeg', 'hipCableDiaIn', 'brakeEmergencyLimitLbf', 'brakeHeatLimitK', 'brakeHeatContactFrac', 'rideRunFt', 'beltDesignG',
-      'rideSpeedMph', 'rideMaxSlopeDeg', 'rideGoSlopeDeg', 'rideMuGo8', 'rideMuGo10', 'rideMuDerate', 'rideStopMaxFt', 'rideReactionS', 'bumpSpeedMph', 'bumpNormalHeightIn', 'bumpHardHeightIn',
+      'tongueHingeAheadOfBeamIn', 'tongueLinkArmIn', 'tongueMaxYawDeg', 'tongueLinkPinDiaIn', 'brakeShoeBackThickIn', 'bumpSpeedMph', 'bumpNormalHeightIn', 'bumpHardHeightIn',
       'bumpWheelRateLbIn', 'bumpMassShare', 'failSafeFactor', 'fatigueLoadFactor', 'spindleEnduranceLimitPsi', 'fatigueSafetyMin', 'ackermannErrorMaxDeg'] as const;
     for (const k of keys) {
       const d = PARAM_DEFS[k];
@@ -346,13 +326,14 @@ describe('stage 0 interface (additive)', () => {
       expect(d.default, k).toBeGreaterThanOrEqual(d.min);
       expect(d.default, k).toBeLessThanOrEqual(d.max);
     }
-    for (const k of ['spindleStub', 'scrubRadiusIn', 'ackermannAngleDeg', 'frontBrakeBias', 'bumpWheelRateLbIn', 'failSafeFactor']) expect(PARAM_DEFS[k as keyof typeof PARAM_DEFS].note, k).toBeTruthy();
+    for (const k of ['spindleStub', 'scrubRadiusIn', 'ackermannAngleDeg', 'bumpSpeedMph', 'bumpWheelRateLbIn', 'failSafeFactor']) expect(PARAM_DEFS[k as keyof typeof PARAM_DEFS].note, k).toBeTruthy();
     // Orchestrator decisions.
     expect(PARAM_DEFS.spindleStub.default).toBe(1); // 25 mm
     expect(PARAM_DEFS.spindleStub.options).toHaveLength(2);
     expect(PARAM_DEFS.scrubRadiusIn.default).toBe(3);
     expect(PARAM_DEFS.failSafeFactor.default).toBe(1.25);
-    expect(PARAM_DEFS.bumpWheelRateLbIn.group).toBe('ride');
+    expect(PARAM_DEFS.bumpWheelRateLbIn.group).toBe('bump');
+    expect(PARAM_DEFS.bumpSpeedMph.default).toBe(5); // D-53: jogging pace, not the 10 mph of the ride study
     // Existing keys whose default changed at the Phase 3b flip (D-51, D-53, D-56): now in PARAM_DEFS.
     expect([P0.steerLockDeg, P0.kingpinLeadIn, P0.kingpinDiameterIn, P0.turnRadiusMaxIn, P0.brakeLiningThickIn]).toEqual([35.5, 1.25, 0.375, 108, 0.25]);
     expect([PARAM_DEFS.steerLockDeg.min, PARAM_DEFS.steerLockDeg.max, PARAM_DEFS.kingpinDiameterIn.min]).toEqual([28, 42, 0.25]);
@@ -360,8 +341,8 @@ describe('stage 0 interface (additive)', () => {
     expect(P0.kingpinLeadIn).toBe(1.25);
   });
 
-  it('old links load: unknown keys (turntableType, drawbar, frontDeckRaiseIn) are ignored, and new keys fall back to defaults', () => {
-    const s = sanitizeParams({ turntableType: 1, drawbar: 0, frontDeckRaiseIn: 0.5, notAKey: 7 } as unknown as Partial<Params>);
+  it('old links load: unknown keys (turntableType, drawbar, frontDeckRaiseIn, and the ride-mode and front-brake keys removed at 3c-1) are ignored, and new keys fall back to defaults', () => {
+    const s = sanitizeParams({ turntableType: 1, drawbar: 0, frontDeckRaiseIn: 0.5, rideStickLengthIn: 20, steerRideLockDeg: 8, frontBrakeBias: 0.6, hipLeverArmIn: 5, beltDesignG: 4, brakeType: 1, notAKey: 7 } as unknown as Partial<Params>);
     expect(s.scrubRadiusIn).toBe(3);
     expect((s as unknown as Record<string, number>).notAKey).toBeUndefined();
     const t = sanitizeParams({ scrubRadiusIn: 99, spindleStub: 0.4 });

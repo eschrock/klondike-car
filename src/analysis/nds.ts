@@ -131,3 +131,9 @@ export function boltCapacity(ctx: Ctx, D: number, lm: number, ls0: number, theta
   const r = lateralZ({ D, lm, ls, Fem, Fes: p.steelDowelBearingPsi, Fyb: p.kingpinPlateBoltYieldPsi, thetaDeg });
   return { Zref: r.Z, Z: r.Z * ndsAdjust(p), mode: r.mode, Fem, Re: Fem / p.steelDowelBearingPsi, ls };
 }
+
+/** UNC tensile stress area of a bolt of diameter d: π/4 (d − 0.9743/n)². */
+export function uncTensileArea(d: number): number {
+  const n = d <= 0.25 ? 20 : d <= 0.3125 ? 18 : d <= 0.375 ? 16 : d <= 0.4375 ? 14 : d <= 0.5 ? 13 : 11;
+  return (Math.PI / 4) * (d - 0.9743 / n) ** 2;
+}

@@ -24,10 +24,14 @@ describe('runChecks at the defaults', () => {
       'mass-empty', 'cg', 'tip-straight', 'tip-lock', 'slide-before-tip', 'v-rollover', 'turn-radius', 'steer-clear', 'pitch-fwd', 'pitch-rear',
       'brake-force', 'brake-traction', 'axle-stress', 'beam-rear', 'bearing-groove', 'rails', 'deck', 'tongue', 'truck-fit',
       // the Phase 3b front end (D-50..D-56): bump-basis rows
-      'spindle-stub', 'kingpin-bolt', 'kingpin-bracket', 'beam-front', 'tie-rod', 'bellcrank', 'tongue-tie', 'stick-cable', 'wheel-rating', 'rear-beam-seat',
+      'spindle-stub', 'kingpin-bolt', 'kingpin-bracket', 'beam-front', 'tie-rod', 'bellcrank', 'tongue-tie', 'wheel-rating', 'rear-beam-seat',
+      // the handler's basic rear brake (D-53)
+      'brake-ratio', 'brake-clear', 'brake-lever', 'brake-links', 'brake-beam', 'brake-shoes', 'park-hold', 'brake-abuse', 'handle-sockets',
     ]) expect(ids, id).toContain(id);
     // the old turntable / bolster / side-bearer / kingpin-strike rows are gone with the old design
-    for (const id of ['kingpin', 'turntable', 'kingpin-strike', 'roll-side-bearer', 'roll-kingpin-uplift', 'roll-bolster-attach']) expect(ids, id).not.toContain(id);
+    for (const id of ['kingpin', 'turntable', 'kingpin-strike', 'roll-side-bearer', 'roll-kingpin-uplift', 'roll-bolster-attach',
+      // Phase 3c-1 (D-53): ride mode, front brakes, hip lever and lap belt
+      'stick-cable', 'ride-rollover', 'ride-envelope', 'steer-centering', 'ride-steer-effort', 'brake-stop', 'brake-emergency', 'brake-bias', 'brake-heat', 'brake-front', 'hip-cable', 'belt-anchor', 'brake-shaft', 'brake-ratchet']) expect(ids, id).not.toContain(id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const c of cs) {
       expect(c.how.length, c.id).toBeGreaterThan(30);
@@ -67,12 +71,11 @@ describe('runChecks at the defaults', () => {
   });
   it('brake force follows F = W sin(theta) / mu / (ratio x eta) at the operating mass', () => {
     const W = buildModel(defaults, { rider: 'operating', cargo: true }).reduce((s, x) => s + x.massLb, 0);
-    const F = (W * Math.sin((defaults.designSlopeDeg * Math.PI) / 180)) / defaults.brakePadMuFouled / (byId(cs, 'brake-ratio').details!.find((d) => d.name.includes('TOTAL ratio'))!.value * defaults.brakeEfficiency);
+    const F = (W * Math.sin((defaults.designSlopeDeg * Math.PI) / 180)) / defaults.brakePadMuFouled / (byId(cs, 'brake-ratio').value * defaults.brakeEfficiency);
     const c = byId(cs, 'brake-force');
     expect(c.details!.find((d) => d.name.includes('mud / slush-fouled'))!.value).toBeCloseTo(F, 3);
-    // the row value is the larger of the main-grip force and the hip-lever force (D-56): the hip lever is the harder one to pull
-    const hip = c.details!.find((d) => d.name.includes('hip lever grip force'))!.value;
-    expect(c.cases!.operating!.value).toBeCloseTo(Math.max(F, hip), 3);
+    // the row value is the larger of the wet and mud-fouled cases: the fouled lining needs more
+    expect(c.cases!.operating!.value).toBeCloseTo(F, 3);
   });
   it('rear axle stress is on the bump basis (D-50): normal and hard cases plus the skid case, goal case governing', () => {
     const c = byId(cs, 'axle-stress');
@@ -303,8 +306,8 @@ describe('hand-calculated numbers at the defaults', () => {
     const bare = c.details!.find((d) => d.name.includes('bare wet oak'))!;
     expect(fouled.value / wet.value).toBeCloseTo(0.45 / 0.35, 3);
     expect(bare.value / wet.value).toBeCloseTo(0.45 / 0.25, 3);
-    const hip = c.details!.find((d) => d.name.includes('hip lever grip force'))!.value;
-    expect(c.cases!.operating!.value).toBeCloseTo(Math.max(fouled.value, hip), 6); // the larger of the main grip and the hip lever (D-56)
+    expect(c.details!.some((d) => d.name.includes('hip lever'))).toBe(false); // the hip lever is gone (D-53)
+    expect(c.cases!.operating!.value).toBeCloseTo(Math.max(fouled.value, wet.value), 6); // the larger of the wet and mud-fouled cases
     expect(c.how).toMatch(/TOTAL shoe normal force/);
   });
 });

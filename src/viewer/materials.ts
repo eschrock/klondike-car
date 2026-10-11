@@ -3,7 +3,7 @@ import type { Part } from '../model/types';
 import { oakEndTexture, pebbleBump, plyEdgeTexture, signTexture, woodTextures } from './textures';
 
 /** What a part looks like. The viewer reads `part.finish.surface` first, then falls back to the material name (D-44). */
-export type Surface = 'oak' | 'okoume' | 'vinyl' | 'rubber' | 'steel' | 'aluminum' | 'asa' | 'rope' | 'cable' | 'blackened' | 'webbing';
+export type Surface = 'oak' | 'okoume' | 'vinyl' | 'rubber' | 'steel' | 'aluminum' | 'asa' | 'rope' | 'blackened';
 /** 'sign' = painted side sign (review r1 MUST 4); 'mannequin' = rider and cargo; 'jig' = shop aids such as a lamination form. */
 export type Look = Surface | 'truck' | 'ground' | 'sign' | 'mannequin' | 'jig' | 'other';
 
@@ -24,12 +24,8 @@ export function lookOf(part: Part): Look {
   if (part.kind === 'printed') return 'asa';
   const mat = part.material.toLowerCase();
   if (mat.includes('rope')) return 'rope';
-  // Phase 3b front end (spec 1.1, 8.1): the ride cables are stainless wire rope that IS drawn (their material says "cable", not "rope"),
-  // the kart spindles and kingpin hardware are blackened steel, the stick grip is rubber and the lap belt is dark webbing.
+  // Phase 3b front end (spec 1.1, 8.1): the kart spindles and kingpin hardware are blackened steel; the brake lever's grip is oak.
   const tag = `${part.id} ${part.name}`.toLowerCase();
-  if (/lap-belt|webbing/.test(tag) || mat.includes('webbing')) return 'webbing';
-  if (!/guide|grommet|channel|cover|clamp|crossbar|stop|pin|anchor/.test(tag) && (mat.includes('cable') || /(^|[\s-])cable/.test(tag))) return 'cable';
-  if (/grip/.test(tag)) return 'rubber';
   if (/spindle|kingpin-bolt|kingpin bolt/.test(tag)) return 'blackened';
   if (mat.includes('oak')) return 'oak';
   if (mat.includes('vinyl') || mat.includes('foam') || part.finish?.soft) return 'vinyl';
@@ -80,14 +76,6 @@ export function materialsFor(look: Look): SurfaceMats {
     case 'blackened':
       // Black-oxide / powder-coated steel: kart spindles, kingpin bolts.
       m = new THREE.MeshStandardMaterial({ color: 0x2c2f33, roughness: 0.5, metalness: 0.75, ...SOLID });
-      break;
-    case 'cable':
-      // 7x19 stainless wire rope: bright, a little rough, thin: it has to read against the dark underside.
-      m = new THREE.MeshStandardMaterial({ color: 0xb4b9bf, roughness: 0.4, metalness: 0.95, ...SOLID });
-      break;
-    case 'webbing':
-      // Nylon lap belt: matte near-black with a hint of blue.
-      m = new THREE.MeshStandardMaterial({ color: 0x1d2330, roughness: 0.93, ...SOLID });
       break;
     case 'aluminum':
       m = new THREE.MeshStandardMaterial({ color: 0xc8ccd2, roughness: 0.42, metalness: 1, ...SOLID });

@@ -10,8 +10,6 @@
 import { ackSpec, type Params } from '../params';
 import { lockLimits, type AckSpec } from '../model/ackermann';
 import { partOBB, worldAABB } from '../model/bounds';
-import { frontBrakeShare } from '../model/brake-front';
-import { computeLayout } from '../model/layout';
 import type { Part, Vec3 } from '../model/types';
 import { translationOf } from '../model/mat4';
 import { bodyMass, KG_PER_LB, M_PER_IN, principalSI, G, type BodyMass } from './massprops';
@@ -42,9 +40,6 @@ export interface HullBox {
 export const VISUAL_BODIES = ['tie-rod', 'bellcrank', 'tongue', 'drag-link', 'tongue-link'] as const;
 const isVisualBody = (b: string) => (VISUAL_BODIES as readonly string[]).includes(b);
 
-/** Default share of the braking force taken by the front axle (spec 4: front 0.4-0.6, bias set by the takeoff arm). */
-export const DEFAULT_FRONT_BRAKE_SHARE = 0.5;
-
 export interface SimSpec {
   /** Bodies present in this spec (chassis, the two knuckles, four wheels). */
   bodyIds: SimBodyId[];
@@ -62,14 +57,10 @@ export interface SimSpec {
   ack: AckSpec;
   /** Tow lock, rad: the inner wheel angle. */
   lockRad: number;
-  /** Ride lock, rad, as an inner wheel angle (outer 8 deg gives about 8.55). */
-  rideLockRad: number;
   /** Tongue yaw stop, deg. */
   tongueMaxYawDeg: number;
   /** Tongue hinge, model frame, meters: where the pull force acts on the chassis. */
   tongueHingeM: Vec3;
-  /** Share of the brake force taken by the front wheels (the solved bias of the takeoff arm, `frontBrakeShare`). */
-  frontBrakeShare: number;
   /** Tongue tip (or bridle attachment): where the pull force acts, model frame at zero steer, meters. */
   pullPointM: Vec3;
   /** Whole-cart mass, CG (model frame, m) and weight in newtons. */
@@ -81,7 +72,6 @@ export interface SimSpec {
 }
 
 export interface SpecOptions {
-  frontBrakeShare?: number;
   /** Override the rider mass (lb): the rider parts' masses are scaled to sum to this. */
   riderMassLb?: number;
 }
@@ -167,7 +157,7 @@ export function buildSimSpec(parts: Part[], p: Params, opts: SpecOptions = {}): 
     knuckleHull[side] = hullBoxes(knuckleParts, bm.cgIn);
   }
 
-  // Pull point: the tongue tip, or (ride view: no tongue part) where it would be.
+  // Pull point: the tongue tip, or (no tongue part, e.g. a removed-tongue view) where it would be.
   const tongue = sim.find((x) => x.id === 'tongue');
   let pullIn: Vec3;
   if (tongue) {
@@ -182,8 +172,7 @@ export function buildSimSpec(parts: Part[], p: Params, opts: SpecOptions = {}): 
   const cg: Vec3 = [0, 0, 0];
   for (const b of all) for (let k = 0; k < 3; k++) cg[k] += b.massKg * b.cgM[k];
   const totalKg = all.reduce((s, b) => s + b.massKg, 0);
-  const towInner = lockLimits(ack, 'tow').innerDeg;
-  const rideInner = lockLimits(ack, 'ride').innerDeg;
+  const towInner = lockLimits(ack).innerDeg;
 
   return {
     bodyIds: ['chassis', 'steer-L', 'steer-R', ...WHEEL_IDS],
@@ -196,10 +185,8 @@ export function buildSimSpec(parts: Part[], p: Params, opts: SpecOptions = {}): 
     kingpinsM,
     ack,
     lockRad: (towInner * Math.PI) / 180,
-    rideLockRad: (rideInner * Math.PI) / 180,
     tongueMaxYawDeg: p.tongueMaxYawDeg,
     tongueHingeM: inM([ack.tongueHinge[0], 0, hubZ]),
-    frontBrakeShare: opts.frontBrakeShare ?? frontBrakeShare(p, computeLayout(p)) ?? DEFAULT_FRONT_BRAKE_SHARE,
     pullPointM: inM(pullIn),
     totalMassKg: totalKg,
     cgM: [cg[0] / totalKg, cg[1] / totalKg, cg[2] / totalKg],

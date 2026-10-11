@@ -76,12 +76,12 @@ export const worst = (a: Status, b: Status): Status => (SEVERITY[a] >= SEVERITY[
 export const GROUP_OF_ID: Record<string, CheckGroup> = {
   'mass-empty': 'Mass & transport', cg: 'Mass & transport', 'truck-fit': 'Mass & transport',
   'tip-straight': 'Stability', 'tip-lock': 'Stability', 'slide-before-tip': 'Stability', 'v-rollover': 'Stability', 'pitch-fwd': 'Stability', 'pitch-rear': 'Stability',
-  'turn-radius': 'Steering', 'steer-clear': 'Steering', 'steer-kin': 'Steering', 'steer-lock': 'Steering', 'steer-centering': 'Steering', 'ride-steer-effort': 'Steering',
-  'ride-rollover': 'Stability', 'ride-envelope': 'Braking', 'brake-stop': 'Braking', 'brake-emergency': 'Braking', 'brake-heat': 'Braking', 'brake-bias': 'Braking', 'park-hold': 'Braking', 'brake-front': 'Structure', 'hip-cable': 'Structure', 'belt-anchor': 'Structure',
+  'turn-radius': 'Steering', 'steer-clear': 'Steering', 'steer-kin': 'Steering', 'steer-lock': 'Steering',
+  'park-hold': 'Structure',
   'spindle-stub': 'Structure', 'spindle-fatigue': 'Structure', 'kingpin-bolt': 'Structure', 'kingpin-bracket': 'Structure', 'wheel-retention': 'Structure',
-  'tie-rod': 'Structure', 'drag-link': 'Structure', bellcrank: 'Structure', 'steer-stop-load': 'Structure', 'tongue-tie': 'Structure', 'stick-cable': 'Structure',
+  'tie-rod': 'Structure', 'drag-link': 'Structure', bellcrank: 'Structure', 'steer-stop-load': 'Structure', 'tongue-tie': 'Structure',
   'brake-force': 'Braking', 'brake-traction': 'Braking', 'brake-ratio': 'Braking', 'brake-clear': 'Braking',
-  'brake-lever': 'Structure', 'brake-links': 'Structure', 'brake-shaft': 'Structure', 'brake-shoes': 'Structure', 'brake-ratchet': 'Structure', 'handle-sockets': 'Structure',
+  'brake-lever': 'Structure', 'brake-links': 'Structure', 'brake-beam': 'Structure', 'brake-shoes': 'Structure', 'brake-abuse': 'Structure', 'handle-sockets': 'Structure',
   'axle-stress': 'Structure', 'beam-front': 'Structure', 'beam-rear': 'Structure', 'bearing-groove': 'Structure', rails: 'Structure', deck: 'Structure',
   tongue: 'Structure',
   // Workstream D (seat, storage, fittings)

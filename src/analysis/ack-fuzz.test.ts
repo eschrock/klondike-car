@@ -15,7 +15,7 @@ function mulberry32(a: number) {
 
 describe('Ackermann rows: finite for every variant the linkage can assemble', () => {
   const KEYS: ParamKey[] = ['wheelbaseIn', 'frontTrackIn', 'rearTrackIn', 'scrubRadiusIn', 'kingpinLeadIn', 'steerArmLengthIn', 'ackermannAngleDeg', 'steerLockDeg', 'spindleStub', 'kingpinDiameterIn',
-    'casterDeg', 'wheelDiameterIn', 'tireWidthIn', 'bumpWheelRateLbIn', 'bumpSpeedMph', 'bumpHardHeightIn', 'riderMassLb', 'riderGoalMassLb', 'tieRodDiaIn', 'kingpinBracketThickIn', 'rideStickLengthIn', 'frontBrakeBias'];
+    'casterDeg', 'wheelDiameterIn', 'tireWidthIn', 'bumpWheelRateLbIn', 'bumpSpeedMph', 'bumpHardHeightIn', 'riderMassLb', 'riderGoalMassLb', 'tieRodDiaIn', 'kingpinBracketThickIn', 'brakeLeverTailIn', 'brakeBeamSizeIn'];
   it('60 seeded designs: every check value, limit and detail is finite and the text has no NaN', () => {
     const rnd = mulberry32(3030);
     let ran = 0;

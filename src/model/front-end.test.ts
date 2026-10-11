@@ -1,35 +1,37 @@
 /**
- * Phase 3b Stage 1, WS-A: the Ackermann front end PARTS (front-end.ts) built with `ViewState.frontEnd = 'ackermann'` on `defaultParams()`.
- * Kinematics are in ackermann.test.ts; this file covers the parts, their articulation, the control modes, clearances over the steering sweep and the
- * published geometry. The old turntable front end still builds with the default view (see the last describe).
+ * Phase 3b Stage 1, WS-A: the Ackermann front end PARTS (front-end.ts) on `defaultParams()`; Phase 3c-1 (D-53): ride mode, the stick, cables, mode plate and pin,
+ * centering springs and the front brakes are gone, the tongue drives the bellcrank through one link pin.
+ * Kinematics are in ackermann.test.ts; this file covers the parts, their articulation, clearances over the steering sweep and the published geometry.
  */
 import { describe, expect, it } from 'vitest';
-import { defaultParams } from '../params';
+import { defaultParams, validateParams } from '../params';
 import { lockLimits, poseMatrices, solveSteer } from './ackermann';
-import { transformPoint, obbOverlap, partOBB, partsOverlap } from './bounds';
+import { transformPoint, partsOverlap } from './bounds';
 import { buildModel } from './index';
 import { computeLayout } from './layout';
 import { TOW_STOP_BLOCK_IN, TOW_STOP_GAP_IN } from './front-layout';
+import { LINK_PIN_HEAD_IN, frontStackTop } from './front-stack';
 import type { Part, Vec2, Vec3 } from './types';
 
 const P0 = defaultParams();
 const L0 = computeLayout(P0);
 const F = L0.front;
-const build = (steerDeg = 0, mode: 'both' | 'tow' | 'ride' = 'both', extra: Record<string, unknown> = {}) => buildModel(P0, { steerDeg, mode, ...extra });
+const build = (steerDeg = 0, extra: Record<string, unknown> = {}) => buildModel(P0, { steerDeg, ...extra });
 const byId = (parts: Part[], id: string) => parts.find((x) => x.id === id);
 const need = (parts: Part[], id: string) => { const x = byId(parts, id); if (!x) throw new Error(`missing part ${id}`); return x; };
 
 const FRONT_IDS = ['beam-F', 'kp-bracket-L', 'kp-bracket-R', 'spindle-L', 'spindle-R', 'steer-arm-L', 'steer-arm-R', 'kingpin-bolt-L', 'kingpin-bolt-R', 'tie-rod', 'drag-link', 'bellcrank', 'bell-bracket',
-  'bell-standoff', 'cable-crossbar', 'mode-plate', 'mode-pin', 'centering-spring-L', 'centering-spring-R', 'steer-stop-tow-L', 'steer-stop-tow-R', 'tongue', 'tongue-plate', 'tongue-link',
-  'tongue-hinge-top', 'tongue-hinge-bottom', 'tongue-hinge-wall-L', 'tongue-hinge-wall-R', 'tongue-hinge-pin', 'eyebolt-T', 'bridle', 'stick-bracket', 'ride-stick', 'stick-guard',
-  'stick-cable-A', 'stick-cable-B', 'cable-guide-R'];
+  'bell-standoff', 'tongue-link-pin', 'steer-stop-tow-L', 'steer-stop-tow-R', 'tongue', 'tongue-plate', 'tongue-link',
+  'tongue-hinge-top', 'tongue-hinge-bottom', 'tongue-hinge-wall-L', 'tongue-hinge-wall-R', 'tongue-hinge-pin', 'eyebolt-T', 'bridle'];
+/** Ride mode parts removed at Phase 3c-1 (D-53): none of them may come back. */
+const GONE_IDS = ['cable-crossbar', 'mode-pin', 'centering-spring-L', 'centering-spring-R', 'stick-bracket', 'ride-stick', 'stick-guard', 'stick-cable-A', 'stick-cable-B', 'stick-cable-A-up', 'stick-cable-B-end', 'cable-guide-R'];
 
 describe('steering parts: the part list', () => {
   const parts = build();
   it('every published front-end id is present, ids are unique, and each part has a fab, step, explode, finite transform and (for bought parts) sourcing', () => {
     for (const id of FRONT_IDS) expect(byId(parts, id), id).toBeDefined();
     expect(new Set(parts.map((x) => x.id)).size).toBe(parts.length);
-    const mine = parts.filter((x) => FRONT_IDS.includes(x.id) || /^(stick-cable|tongue-hinge|spindle|steer-arm|kingpin-bolt|kp-bracket)/.test(x.id));
+    const mine = parts.filter((x) => FRONT_IDS.includes(x.id) || /^(tongue-hinge|spindle|steer-arm|kingpin-bolt|kp-bracket)/.test(x.id));
     for (const x of mine) {
       expect(x.fab, x.id).toBeDefined();
       expect(x.step, x.id).toBeGreaterThan(0);
@@ -57,22 +59,23 @@ describe('steering parts: the part list', () => {
     expect(need(parts, 'beam-F').massLb).toBeGreaterThan(5);
     expect(need(parts, 'beam-F').massLb).toBeLessThan(9);
     expect(sum(/^spindle-/)).toBeCloseTo(2 * P0.spindleMassLb, 6);
-    const frontEnd = parts.filter((x) => FRONT_IDS.includes(x.id) || /^(stick-cable|tongue-hinge)/.test(x.id)).reduce((a, x) => a + x.massLb, 0);
-    expect(frontEnd).toBeGreaterThan(18);
-    expect(frontEnd).toBeLessThan(32);
+    const frontEnd = parts.filter((x) => FRONT_IDS.includes(x.id) || /^tongue-hinge/.test(x.id)).reduce((a, x) => a + x.massLb, 0);
+    expect(frontEnd).toBeGreaterThan(16);
+    expect(frontEnd).toBeLessThan(28);
   });
-  it('the cables are drawn (their material says cable, not rope); the bridle is the only rope', () => {
-    for (const id of ['stick-cable-A', 'stick-cable-B', 'stick-cable-A-up', 'stick-cable-B-end']) { expect(need(parts, id).material).toMatch(/cable/); expect(need(parts, id).material).not.toMatch(/rope/); }
+  it('the ride-mode parts are gone (no stick, cables, mode plate, mode pin, cross-bar, centering springs or cable slot guide); the bridle is the only rope', () => {
+    for (const id of GONE_IDS) expect(byId(parts, id), id).toBeUndefined();
+    expect(parts.some((x) => /^(stick-|ride-stick|cable-|centering-|mode-)/.test(x.id))).toBe(false);
     expect(need(parts, 'bridle').material).toBe('rope');
   });
 });
 
 describe('steering parts: articulation', () => {
-  const MOVING: Record<string, string> = { 'spindle-L': 'steer-L', 'steer-arm-L': 'steer-L', 'spindle-R': 'steer-R', 'steer-arm-R': 'steer-R', 'wheel-FL': 'steer-L', 'wheel-FR': 'steer-R', 'tie-rod': 'tie-rod', bellcrank: 'bellcrank', 'bell-standoff': 'bellcrank', 'mode-pin': 'bellcrank', tongue: 'tongue', 'tongue-plate': 'tongue', 'eyebolt-T': 'tongue', 'drag-link': 'drag-link', 'tongue-link': 'tongue-link' };
+  const MOVING: Record<string, string> = { 'spindle-L': 'steer-L', 'steer-arm-L': 'steer-L', 'spindle-R': 'steer-R', 'steer-arm-R': 'steer-R', 'wheel-FL': 'steer-L', 'wheel-FR': 'steer-R', 'tie-rod': 'tie-rod', bellcrank: 'bellcrank', 'bell-standoff': 'bellcrank', 'tongue-link-pin': 'bellcrank', tongue: 'tongue', 'tongue-plate': 'tongue', 'eyebolt-T': 'tongue', 'drag-link': 'drag-link', 'tongue-link': 'tongue-link' };
   it('buildModel at steerDeg 0 and 20 moves knuckles, wheels, tie rod, bellcrank and tongue, and leaves the beam, brackets and hull fixed', () => {
     const a = build(0), b = build(20);
     for (const id of Object.keys(MOVING)) expect(need(a, id).transform, id).not.toEqual(need(b, id).transform);
-    for (const id of ['beam-F', 'kp-bracket-L', 'kp-bracket-R', 'bell-bracket', 'mode-plate', 'tongue-hinge-top', 'tongue-hinge-bottom', 'tongue-hinge-wall-L', 'tongue-hinge-pin', 'steer-stop-tow-L', 'stick-bracket', 'deck', 'rail-nose-L', 'transom-front', 'wheel-RL', 'kingpin-bolt-L']) {
+    for (const id of ['beam-F', 'kp-bracket-L', 'kp-bracket-R', 'bell-bracket', 'tongue-hinge-top', 'tongue-hinge-bottom', 'tongue-hinge-wall-L', 'tongue-hinge-pin', 'steer-stop-tow-L', 'deck', 'rail-nose-L', 'transom-front', 'wheel-RL', 'kingpin-bolt-L']) {
       const x = byId(a, id);
       if (!x) continue;
       expect(need(b, id).transform, id).toEqual(x.transform);
@@ -112,66 +115,34 @@ describe('steering parts: articulation', () => {
       expect(Math.hypot(tEnd[0] - inn[0], tEnd[1] - inn[1]), `tongue link @${d}`).toBeLessThan(1e-6);
     }
   });
-  it('the steer angle is clamped to the lock of the mode in view (tow 35.5, ride the inner angle of the 8 deg outer lock)', () => {
+  it('the steer angle is clamped to the tow lock (inner wheel)', () => {
     const big = build(90);
     expect(Math.atan2(need(big, 'spindle-L').transform[1], need(big, 'spindle-L').transform[0]) * (180 / Math.PI)).toBeCloseTo(35.5, 6);
-    const rideLock = lockLimits(F.ack, 'ride').innerDeg;
-    const r = build(90, 'ride');
-    expect(Math.atan2(need(r, 'spindle-L').transform[1], need(r, 'spindle-L').transform[0]) * (180 / Math.PI)).toBeCloseTo(rideLock, 6);
-  });
-  it('the stick swings fore-aft only in ride mode, about 15 deg at the ride lock; in both/tow it stays parked and unconnected', () => {
-    const lock = lockLimits(F.ack, 'ride').innerDeg;
-    const grip = (parts: Part[]) => { const s = need(parts, 'ride-stick'); return transformPoint(s.transform, [0, 0, s.geometry.type === 'cylinder' ? s.geometry.length / 2 : 0]); };
-    const g0 = grip(build(0, 'ride')), g1 = grip(build(lock, 'ride')), g2 = grip(build(-lock, 'ride'));
-    expect(g1[0]).toBeLessThan(g0[0]); // left turn: grip pulled aft
-    expect(g2[0]).toBeGreaterThan(g0[0]);
-    const swing = Math.atan2(g0[0] - g1[0], g1[2] - F.stick.pivot[2]) * (180 / Math.PI);
-    expect(swing).toBeGreaterThan(14);
-    expect(swing).toBeLessThan(16.5);
-    const both = grip(build(lock, 'both'));
-    expect(both[0]).toBeCloseTo(g0[0], 9);
-    // The cross-bar is pinned to the bellcrank in ride mode and free (neutral) otherwise.
-    expect(need(build(lock, 'ride'), 'cable-crossbar').body).toBe('bellcrank');
-    expect(need(build(lock, 'both'), 'cable-crossbar').transform).toEqual(need(build(0, 'both'), 'cable-crossbar').transform);
-  });
-  it('the cable lengths barely change over the ride range (pull-pull stays taut: within 0.15 in of neutral for the run that moves)', () => {
-    const lock = lockLimits(F.ack, 'ride').innerDeg;
-    const total = (parts: Part[], t: 'A' | 'B') => ['-up', '', '-end'].reduce((a, s) => { const c = need(parts, `stick-cable-${t}${s}`); return a + (c.geometry.type === 'cylinder' ? c.geometry.length : 0); }, 0);
-    const n = build(0, 'ride');
-    for (const d of [lock, -lock]) {
-      const q = build(d, 'ride');
-      // Cable A is the forward-attached one: it follows the bellcrank pin and the stick tip directly.
-      expect(Math.abs(total(q, 'A') - total(n, 'A'))).toBeLessThan(0.3); // the up-run is steep (cos 0.77), so the stick's tip motion is not fully seen by the cable: about 1% of the length, taken up by the turnbuckle spring (notes)
-    }
   });
 });
 
-describe('steering parts: control modes and the interlock', () => {
-  it('mode ride omits the tongue, its link, its hinge clevis, the tongue-tip eye bolt and the bridle; mode tow omits the stick, its cables and guard; both has everything with the pin in the TOW socket', () => {
-    const both = build(0, 'both'), ride = build(0, 'ride'), tow = build(0, 'tow');
-    const tongueSet = /^(tongue|eyebolt-T|bridle)/;
-    const stickSet = /^(ride-stick|stick-guard|stick-cable)/;
-    expect(both.some((x) => tongueSet.test(x.id)) && both.some((x) => stickSet.test(x.id))).toBe(true);
-    expect(ride.some((x) => tongueSet.test(x.id))).toBe(false);
-    expect(ride.some((x) => stickSet.test(x.id))).toBe(true);
-    expect(tow.some((x) => stickSet.test(x.id))).toBe(false);
-    expect(tow.some((x) => tongueSet.test(x.id))).toBe(true);
-    // The pin: TOW socket (over the tongue-link standoff) in both and tow, RIDE socket (over the cross-bar) in ride.
-    const pinXY = (parts: Part[]) => { const t = need(parts, 'mode-pin').transform; return [t[12], t[13]]; };
-    expect(pinXY(both)[0]).toBeCloseTo(F.mode.pinTow[0], 6); expect(pinXY(both)[1]).toBeCloseTo(F.mode.pinTow[1], 6);
-    expect(pinXY(tow)).toEqual(pinXY(both));
-    expect(pinXY(ride)[0]).toBeCloseTo(F.mode.pinRide[0], 6); expect(pinXY(ride)[1]).toBeCloseTo(F.mode.pinRide[1], 6);
-    for (const m of [both, tow, ride]) expect(m.filter((x) => x.id === 'mode-pin')).toHaveLength(1);
+describe('steering parts: one input, the tongue', () => {
+  it('the tongue-link pin sits over the bellcrank input pin on the standoff, moves with the bellcrank, and there is exactly one of it', () => {
+    for (const d of [0, 20, -20]) {
+      const parts = build(d);
+      expect(parts.filter((x) => x.id === 'tongue-link-pin')).toHaveLength(1);
+      const t = need(parts, 'tongue-link-pin');
+      expect(t.body).toBe('bellcrank');
+      expect(t.removable).toBe(true);
+      const neutral = need(build(0), 'tongue-link-pin').transform;
+      expect(neutral[12]).toBeCloseTo(F.bellcrank.linkPinAt[0], 6);
+      expect(neutral[13]).toBeCloseTo(F.bellcrank.linkPinAt[1], 6);
+    }
   });
-  it('the mode pin cannot occupy both sockets (distance between sockets > pin diameter + 1 inch) and the sockets are on different levels\' parts', () => {
-    const d = Math.hypot(F.mode.pinTow[0] - F.mode.pinRide[0], F.mode.pinTow[1] - F.mode.pinRide[1]);
-    expect(d).toBeGreaterThan(P0.modePinDiaIn + 1);
-    expect(d).toBeGreaterThan(4);
+  it('no part of the ride-mode controls exists in any view (ViewState has no mode)', () => {
+    for (const parts of [build(0), build(20), buildModel(P0, { removed: true })]) {
+      expect(parts.some((x) => /^(ride-stick|stick-|cable-|centering-spring|mode-pin|mode-plate)/.test(x.id))).toBe(false);
+    }
   });
-  it('transport (removed) drops the tongue family and the stick with its cables, keeps the beam, brackets and linkage', () => {
+  it('transport (removed) drops the tongue family (and the link pin), keeps the beam, brackets and linkage', () => {
     const t = buildModel(P0, { removed: true });
-    for (const id of ['tongue', 'tongue-link', 'tongue-plate', 'eyebolt-T', 'bridle', 'ride-stick', 'stick-cable-A', 'stick-guard']) expect(byId(t, id), id).toBeUndefined();
-    for (const id of ['beam-F', 'bellcrank', 'tie-rod', 'spindle-L']) expect(byId(t, id), id).toBeDefined();
+    for (const id of ['tongue', 'tongue-link', 'tongue-plate', 'eyebolt-T', 'bridle', 'tongue-link-pin']) expect(byId(t, id), id).toBeUndefined();
+    for (const id of ['beam-F', 'bellcrank', 'tie-rod', 'spindle-L', 'drag-link']) expect(byId(t, id), id).toBeDefined();
   });
 });
 
@@ -185,25 +156,19 @@ const ALLOW: Pair[] = [
   { a: /^spindle-[LR]$/, b: /^beam-F$/, why: 'the spindle mesh bounding box is axis-aligned in its neutral frame and over-covers when turned; the mesh vertices clear the beam by >= 0.2" (tested below)' },
   { a: /^steer-arm-[LR]$/, b: /^(tie-rod|steer-stop-tow-[LR])$/, why: 'rod end bolted on the arm tip; the arm plate bounding box over-covers its hull at the lock (the plate-to-stop gap is tested analytically below)' },
   { a: /^kingpin-bolt-[LR]$/, b: /^(kp-bracket-[LR]|spindle-[LR])$/, why: 'the bolt passes through the leaves and the boss' },
-  { a: /^bellcrank$/, b: /^centering-spring-[LR]$/, why: 'the spring hook is in the spring pin hole' },
-  { a: /^(bell-standoff|mode-pin|tongue-link|tongue-plate)$/, b: /^(bell-standoff|mode-pin|tongue-link|tongue-plate|tongue-hinge-pin|cable-crossbar|bellcrank)$/, why: 'pins pass through the link ends, the standoff top and the plates (drawn solid)' },
-  { a: /^cable-crossbar$/, b: /^stick-cable-[AB](-end)?$/, why: 'the cable swage stud passes through the cross-bar end' },
+  { a: /^(bell-standoff|tongue-link-pin|tongue-link|tongue-plate)$/, b: /^(bell-standoff|tongue-link-pin|tongue-link|tongue-plate|tongue-hinge-pin|bellcrank)$/, why: 'pins pass through the link ends, the standoff top and the plates (drawn solid)' },
   { a: /^tongue$/, b: /^(tongue-hinge-pin|eyebolt-T)$/, why: 'the hinge pin and the eye bolt pass through holes in the tongue' },
   { a: /^tongue-hinge-(top|bottom)$/, b: /^tongue-hinge-pin$/, why: 'the hinge pin passes through the plates' },
   { a: /^tongue-hinge-pin$/, b: /^(tongue-plate|tongue-hinge-top|tongue-hinge-bottom)$/, why: 'the hinge pin passes through the ear plate and the plates' },
   { a: /^bridle$/, b: /^eyebolt-T$/, why: 'rope tied to the eye' },
-  { a: /^(stick-bracket|ride-stick)$/, b: /^(stick-bracket|ride-stick|stick-cable-[AB]-up|stick-guard|cable-guide-R)$/, why: 'the stick stands inside the U bracket and its cable arm passes between the cheeks (bounding box of the U)' },
-  { a: /^stick-cable-[AB]/, b: /^stick-cable-[AB]/, why: 'the three straight segments of one cable meet at the waypoints; the two cables pass each other at the stick' },
-  { a: /^(stick-cable-[AB]-up|cable-guide-R)$/, b: /^(deck|cable-guide-R|stick-cable-[AB]-up)$/, why: 'the cables pass through the deck slot under the guide (WS-B cuts the slot)' },
-  { a: /^wheel-F[LR]$/, b: /^brake-/, why: 'WS-C front brake shoes press the tread' },
 ];
 const matches = (r: Pair, a: Part, b: Part) => (r.a.test(a.id) && r.b.test(b.id)) || (r.a.test(b.id) && r.b.test(a.id));
-const FRONT_RE = /^(wheel-F|beam-F|kp-bracket|spindle|steer-arm|kingpin-bolt|tie-rod|drag-link|bellcrank|bell-|cable-crossbar|mode-|centering-spring|steer-stop-tow|tongue|eyebolt-T|bridle|ride-stick|stick-|cable-guide)/;
+const FRONT_RE = /^(wheel-F|beam-F|kp-bracket|spindle|steer-arm|kingpin-bolt|tie-rod|drag-link|bellcrank|bell-|steer-stop-tow|tongue|eyebolt-T|bridle)/;
 
-function sweepOverlaps(mode: 'both' | 'ride', degs: number[]): { bad: string[] } {
+function sweepOverlaps(degs: number[]): { bad: string[] } {
   const bad: string[] = [];
   for (const d of degs) {
-    const parts = build(d, mode);
+    const parts = build(d);
     const solid = parts.filter((x) => !x.payload && x.group !== 'reference' && !/^brake-/.test(x.id));
     const front = solid.filter((x) => FRONT_RE.test(x.id));
     for (const a of front) {
@@ -212,7 +177,7 @@ function sweepOverlaps(mode: 'both' | 'ride', degs: number[]): { bad: string[] }
         const o = partsOverlap(a, b);
         if (o <= 0.05) continue;
         if (ALLOW.some((r) => matches(r, a, b))) continue;
-        bad.push(`${d} ${mode}: ${a.id} x ${b.id} ${o.toFixed(2)}"`);
+        bad.push(`${d}: ${a.id} x ${b.id} ${o.toFixed(2)}"`);
       }
     }
   }
@@ -220,17 +185,12 @@ function sweepOverlaps(mode: 'both' | 'ride', degs: number[]): { bad: string[] }
 }
 
 describe('steering parts: overlaps over the steering sweep', () => {
-  const lockOuter = lockLimits(F.ack, 'tow').outerDeg;
-  it('no unintended overlaps with the rest of the cart at the tow sweep in 5 deg steps (both view); the nose joists are split around the linkage corridor', () => {
+  const lockOuter = lockLimits(F.ack).outerDeg;
+  it('no unintended overlaps with the rest of the cart at the tow sweep in 5 deg steps; the nose joists are split around the linkage corridor', () => {
     const degs: number[] = [];
     for (let d = -35.5; d <= 35.5 + 1e-9; d += 5) degs.push(Math.round(d * 2) / 2);
     degs.push(0, 35.5, -35.5, lockOuter, -lockOuter);
-    const { bad } = sweepOverlaps('both', degs);
-    expect(bad).toEqual([]);
-  });
-  it('no unintended overlaps in ride mode over the ride range (stick, cables, cross-bar pinned)', () => {
-    const lock = lockLimits(F.ack, 'ride').innerDeg;
-    const { bad } = sweepOverlaps('ride', [-lock, -lock / 2, 0, lock / 2, lock]);
+    const { bad } = sweepOverlaps(degs);
     expect(bad).toEqual([]);
   });
 });
@@ -304,7 +264,7 @@ describe('steering parts: analytic clearances over the sweep', () => {
       expect(gapAt(s * 35.5)).toBeLessThan(TOW_STOP_GAP_IN + 0.02);
       for (let a = 0; a < 35.5 - 1e-9; a += 0.5) expect(gapAt(s * a), `${tag} @${a}`).toBeGreaterThan(0);
       // The outer wheel (the other direction, to the outer lock) is nowhere near.
-      const outer = lockLimits(F.ack, 'tow').outerDeg;
+      const outer = lockLimits(F.ack).outerDeg;
       for (let a = 0; a <= outer; a += 1) expect(gapAt(-s * a), `${tag} outer @${a}`).toBeGreaterThan(0.5);
     }
   });
@@ -322,35 +282,16 @@ describe('steering parts: analytic clearances over the sweep', () => {
       expect(Math.abs(F.kp[tag][1]) - F.beam.len / 2 - P0.kingpinBracketThickIn).toBeGreaterThanOrEqual(P0.spindleBossRadiusIn + lean - 1e-9);
     }
   });
-  it('the stick, cables and guide stay >= 1.25" from the rider\'s thigh and the hull, and the stick has no pinch gap under 1.25" to the hull side', () => {
-    const lock = lockLimits(F.ack, 'ride').innerDeg;
-    const hw = (x: number) => L0.hull && (() => { const xs = [x]; void xs; return 0; })();
-    void hw;
-    for (const d of [-lock, 0, lock]) {
-      const parts = build(d, 'ride');
-      const near = parts.filter((x) => /^(ride-stick|stick-guard|stick-cable-[AB]-up|cable-guide-R)$/.test(x.id));
-      for (const a of near) for (const b of parts.filter((x) => /^rider-(thigh|pelvis|torso|head)/.test(x.id))) {
-        const gap = -obbOverlap(partOBB(a), partOBB(b));
-        expect(gap, `${a.id} vs ${b.id} @${d}`).toBeGreaterThanOrEqual(1.25);
-      }
-    }
-    // The hull side: the inner face of the right chine at the stick is `rideStickInsetIn` from the stick axis.
-    const stickTube = P0.rideStickDiaIn / 2;
-    expect(P0.rideStickInsetIn - stickTube).toBeGreaterThanOrEqual(1.25);
-    // Stick swing: the grip travels 14" x sin(15 deg) = 3.6" fore-aft, along the hull side (parallel to it), so the gap to the side does not change with the angle.
-    expect(F.stick.pivot[1]).toBeLessThan(0);
-  });
 });
 
 describe('steering parts: published geometry (Layout.front)', () => {
-  it('the z stack is ordered: tie rod and arms under the beam, drag link and cross-bar over the tie rod, bellcrank over them, bracket plate over the bellcrank', () => {
+  it('the z stack is ordered: tie rod and arms under the beam, the drag link over the tie rod, bellcrank over them, bracket plate over the bellcrank', () => {
     const b = F.bellcrank;
     const t = P0.kingpinBracketThickIn, bt = P0.bellcrankPlateThickIn;
     expect(F.tieRod.z + P0.tieRodDiaIn / 2).toBeLessThanOrEqual(F.beam.bot - 0.25 + 1e-9);
     expect(b.dragZ - t / 2).toBeGreaterThan(F.tieRod.z + P0.tieRodDiaIn / 2);
     expect(b.z - bt / 2).toBeGreaterThan(b.dragZ + t / 2);
     expect(b.bracketZ - t / 2).toBeGreaterThan(b.z + bt / 2);
-    expect(b.modeZ).toBeLessThan(b.dragZ);
   });
   it('over the beam: the tongue passes under the front transom bottom by the linkage running clearance, the ear plate and the tongue link clear the beam top, and the whole stack is under the deck', () => {
     const T = F.tongue;
@@ -367,21 +308,14 @@ describe('steering parts: published geometry (Layout.front)', () => {
     // The tongue-tip eye is at the tongue's own height range.
     expect(T.hinge[0]).toBeCloseTo(F.beam.x + F.beam.thick / 2 + P0.tongueHingeAheadOfBeamIn, 9);
   });
-  it('the stick cable path: arm tips above the deck, the slot ahead of the bracket in the deck plane, drops under the joists, and the end waypoints in line with the cross-bar pins', () => {
-    const c = F.cable;
-    expect(c.armA[2]).toBeGreaterThan(L0.deckTop);
-    expect(c.slot[2]).toBeGreaterThan(L0.deckBot);
-    expect(c.slot[2]).toBeLessThan(L0.deckTop);
-    expect(c.slot[0] - F.stick.pivot[0]).toBeGreaterThan(2.5);
-    expect(c.dropA[2]).toBeLessThan(L0.deckBot - P0.crossmemberDepthIn); // below the joist bottoms
-    for (const k of ['A', 'B'] as const) {
-      const end = k === 'A' ? c.endA : c.endB, pin = k === 'A' ? c.pinA : c.pinB;
-      expect(end[1]).toBeCloseTo(pin[1], 9);
-      expect(end[2]).toBeCloseTo(pin[2], 9);
-      expect(end[0]).toBeLessThan(pin[0]);
-    }
+  it('the center-linkage keep-out spans the bell bracket back to the tongue hinge (Layout.front.keepOut.center) and the bellcrank pins are in it', () => {
     expect(F.keepOut.center.x0).toBeLessThan(F.bellcrank.pivot[0]);
     expect(F.keepOut.center.x1).toBeGreaterThan(F.tongue.hinge[0]);
+    for (const q of [F.bellcrank.outPin, F.bellcrank.inPin]) {
+      expect(q[0]).toBeGreaterThan(F.keepOut.center.x0);
+      expect(q[1]).toBeLessThan(F.keepOut.center.y1);
+      expect(q[1]).toBeGreaterThan(F.keepOut.center.y0);
+    }
   });
   it('tow stop and arm geometry: the stops sit under the beam, the arm hull contains the kingpin axis, the foot and the tip', () => {
     for (const tag of ['L', 'R'] as const) {
@@ -394,6 +328,29 @@ describe('steering parts: published geometry (Layout.front)', () => {
       expect(Math.max(...xs)).toBeGreaterThan(F.kp[tag][0]);
       // The foot post stays clear of the tire inner face.
       expect(Math.abs(F.knuckle[tag].foot[1]) + 0.3).toBeLessThan(Math.abs(F.stub[tag][1]) - P0.tireWidthIn / 2);
+    }
+  });
+});
+
+describe('front stack under the deck (Phase 3c-1 validator rule)', () => {
+  it('frontStackTop reproduces the layout (beam top, tongue top, link top) for several decks and crossmember depths', () => {
+    for (const q of [{}, { deckHeightIn: 10 }, { crossmemberDepthIn: 2.25, deckHeightIn: 10 }, { frontBeamDepthIn: 2.5, deckHeightIn: 10 }] as Partial<typeof P0>[]) {
+      const p = { ...P0, ...q };
+      const L = computeLayout(p);
+      const fs = frontStackTop(p, L.r, L.deckTop);
+      expect(fs.beamTop, JSON.stringify(q)).toBeCloseTo(L.front.beam.top, 9);
+      expect(fs.tongueTop).toBeCloseTo(L.front.tongue.top, 9);
+      expect(fs.linkTop).toBeCloseTo(L.front.tongue.link.z1, 9);
+      expect(fs.pinTop - fs.linkTop).toBeCloseTo(LINK_PIN_HEAD_IN, 9);
+    }
+  });
+  it('the validator refuses a deck so low that the link pin head or the rear beam hold-down would poke through it; the defaults keep 0.3 in to spare', () => {
+    expect(validateParams(P0).filter((i) => i.severity === 'error')).toEqual([]);
+    const L = computeLayout(P0);
+    expect(L.deckBot - frontStackTop(P0, L.r, L.deckTop).pinTop).toBeGreaterThan(0.3);
+    for (const deckHeightIn of [8, 8.25]) {
+      const bad = validateParams({ ...P0, deckHeightIn });
+      expect(bad.some((i) => i.severity === 'error' && i.keys.includes('deckHeightIn')), `deck ${deckHeightIn}`).toBe(true);
     }
   });
 });

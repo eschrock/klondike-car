@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ackCtx, byId } from './ack-test-utils';
 import { frontHit, kingpinLoad } from './front-end';
-import { armLeverIn, chain, eulerLoad, kickback, leverage, linkageChecks, stickCableCheck, tieRodCheck, tongueLinkageCheck, tongueSidePull, tongueTieCheck } from './linkage';
+import { armLeverIn, chain, eulerLoad, kickback, leverage, linkageChecks, steerStopLoadCheck, tieRodCheck, tongueLinkageCheck, tongueSidePull, tongueTieCheck } from './linkage';
 
 const ctx = ackCtx();
 
@@ -20,7 +20,6 @@ describe('kickback chain', () => {
     const c = chain(ctx, frontHit(ctx, ctx.loads.goal, 'normal'));
     expect(c.Fdrag).toBeCloseTo(c.Frod / lv.dragCos, 6);
     expect(c.Mb).toBeCloseTo(c.Fdrag * lv.out, 6);
-    expect(c.Fcable).toBeCloseTo(c.Mb / lv.cable, 6);
     expect(c.Ftl).toBeCloseTo(c.Mb / lv.inn, 6);
     expect(lv.dragCos).toBeGreaterThan(0.3);
     expect(lv.out).toBeGreaterThan(0.25);
@@ -68,19 +67,18 @@ describe('linkage rows', () => {
     expect(row.details![0].util).toBeGreaterThan(row.details![2].util);
   });
 
-  it('stick-cable: the cable carries the lesser of the kickback and the hand-limited tension (60 lbf x 14" / 1.5" = 560 lbf)', () => {
-    const row = stickCableCheck(ctx);
-    const cab = row.details!.find((d) => d.name.startsWith('NORMAL: cable tension'))!;
-    const handLimited = (ctx.p.stickHandLoadLbf * ctx.p.rideStickLengthIn) / ctx.L.front.stick.cableArm;
-    expect(handLimited).toBeCloseTo(560, 6);
-    const kick = chain(ctx, frontHit(ctx, ctx.loads.goal, 'normal')).Fcable;
-    expect(cab.value).toBeCloseTo(Math.min(kick, handLimited), 6);
-    expect(cab.limit).toBeCloseTo(ctx.p.stickCableBreakLbf / 3.5, 6);
+  it('steer-stop-load: the tongue-link pin carries the tongue-link force (the bellcrank moment over the input lever) in double shear', () => {
+    const row = steerStopLoadCheck(ctx);
+    const pinN = row.details!.find((d) => d.name.startsWith('NORMAL: tongue-link pin'))!;
+    const n = chain(ctx, frontHit(ctx, ctx.loads.goal, 'normal'));
+    const dp = ctx.p.tongueLinkPinDiaIn;
+    expect(pinN.value).toBeCloseTo(n.Ftl / (2 * (Math.PI / 4) * dp * dp), 4);
+    expect(row.details!.some((d) => /ride window|mode pin/.test(d.name))).toBe(false);
   });
 
   it('the family returns dual-case rows with finite values', () => {
     const rows = linkageChecks(ctx);
-    expect(rows.map((r) => r.id)).toEqual(['tie-rod', 'drag-link', 'bellcrank', 'steer-stop-load', 'tongue', 'tongue-tie', 'stick-cable']);
+    expect(rows.map((r) => r.id)).toEqual(['tie-rod', 'drag-link', 'bellcrank', 'steer-stop-load', 'tongue', 'tongue-tie']);
     for (const r of rows) { expect(Number.isFinite(r.util!)).toBe(true); expect(r.cases!.goal).toBeTruthy(); }
     expect(byId(rows, 'bellcrank').how).toMatch(/lever arms/);
   });

@@ -8,8 +8,7 @@
 import { resolveParams, type Params } from '../params';
 import { buildModel } from '../model';
 import { checkTruckFit, type FitResult } from '../truck/fit';
-import { brakeRideRows } from './brake-ride';
-import { brakeAbuse, brakeClearance, brakeForce, brakeLever, brakeLinks, brakeRatchet, brakeRatio, brakeShaft, brakeShoes, brakeTraction, handleSockets } from './brake';
+import { brakeAbuse, brakeBeam, brakeClearance, brakeForce, brakeLever, brakeLinks, brakeRatio, brakeShoes, brakeTraction, handleSockets, parkHold } from './brake';
 import { makeContext, type Ctx } from './context';
 import { rearBeamSeat, wheelRating } from './rear';
 import { steerClearance, steerKinCheck, steerLockCheck, steerSweep } from './steering';
@@ -17,7 +16,6 @@ import { pitchForward, pitchRear, slideBeforeTip, tipLock, tipStraight, turnRadi
 import { axleStress, bearingGroove, beamRear, deckCheck, railsCheck } from './structure';
 import { frontEndChecks } from './front-end';
 import { linkageChecks } from './linkage';
-import { rideChecks } from './ride';
 import { seatChecks } from './seat';
 import { hullChecks } from './hull';
 import { cgCheck, massEmpty, truckFit, truckSkipped } from './transport';
@@ -46,8 +44,8 @@ function sanitize(c: AnalysisCheck): AnalysisCheck {
 }
 
 /**
- * The check list (D-50, D-51, D-53): per-wheel Ackermann contacts and sweeps, the bump load basis (spindle, bracket, beam, tie rod, linkage, tongue, rear axle and
- * wheel rows), the ride rows (rollover, envelope) and the ride-mode brake rows (`brake-ride.ts`).
+ * The check list (D-50, D-53): per-wheel Ackermann contacts and sweeps, the bump load basis (spindle, bracket, beam, tie rod, linkage, tongue, rear axle and
+ * wheel rows) at walking and jogging pace, and the handler's basic rear brake rows (`brake.ts`).
  */
 function allRows(ctx: Ctx, truck: AnalysisCheck): AnalysisCheck[] {
   return [
@@ -69,12 +67,11 @@ function allRows(ctx: Ctx, truck: AnalysisCheck): AnalysisCheck[] {
     brakeClearance(ctx),
     brakeLever(ctx),
     brakeLinks(ctx),
-    brakeShaft(ctx),
+    brakeBeam(ctx),
     brakeShoes(ctx),
-    brakeRatchet(ctx),
+    parkHold(ctx),
     handleSockets(ctx),
     brakeAbuse(ctx),
-    ...brakeRideRows(ctx),
     wheelRating(ctx),
     rearBeamSeat(ctx),
     axleStress(ctx),
@@ -84,7 +81,6 @@ function allRows(ctx: Ctx, truck: AnalysisCheck): AnalysisCheck[] {
     deckCheck(ctx),
     ...frontEndChecks(ctx),
     ...linkageChecks(ctx),
-    ...rideChecks(ctx),
     ...seatChecks(ctx),
     ...hullChecks(ctx),
     truck,

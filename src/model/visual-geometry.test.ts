@@ -228,10 +228,11 @@ describe('seat back, handle and finish tags (D-44)', () => {
     expect(get(parts, 'handle-socket-L').finish?.surface).toBe('aluminum');
     expect(get(parts, 'kp-bracket-L').finish?.surface).toBe('steel');
     expect(get(parts, 'spindle-L').finish?.surface).toBe('blackened');
-    expect(get(parts, 'stick-cable-A').finish?.surface).toBe('cable');
-    expect(get(parts, 'cable-crossbar').finish?.surface).toBe('steel'); // a bar named for the cables it carries is not wire
-    expect(get(parts, 'lap-belt-L').finish?.surface).toBe('webbing');
-    expect(get(parts, 'belt-anchor-L').finish?.surface).toBe('steel');
+    expect(get(parts, 'brake-beam').finish?.surface).toBe('aluminum');
+    expect(get(parts, 'brake-lever').finish?.surface).toBe('aluminum');
+    expect(get(parts, 'brake-keeper-L').finish?.surface).toBe('steel');
+    expect(get(parts, 'brake-lever-grip').finish?.surface).toBe('oak');
+    expect(parts.some((x) => /^(stick-cable|cable-crossbar|lap-belt|belt-anchor)/.test(x.id))).toBe(false);
     expect(parts.find((x) => x.material.includes('rope'))!.finish?.surface).toBe('rope');
     expect(get(parts, 'guard-L').finish?.surface).toBe('asa');
   });

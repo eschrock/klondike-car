@@ -2,12 +2,10 @@
  * Qualitative physics core (BRIEF §8): Rapier rigid bodies for the chassis (with rider and cargo as fixed mass), the
  * steered front end and four wheels on revolute joints. No three.js, no DOM: runs headless under vitest.
  *
- * Front end (spec 8.2): two knuckle bodies on their own vertical kingpin revolutes with the lock limits of the
- * control mode (tow: inner 35.5; ride: outer 8). The tie rod is NOT a physics linkage: two stiff position motors command the knuckles
+ * Front end (spec 8.2): two knuckle bodies on their own vertical kingpin revolutes with the tow lock limits (inner 35.5). The tie rod is NOT a physics linkage: two stiff position motors command the knuckles
  * to the angles `solveSteer` gives for the commanded inner-wheel angle. The tie rod, bellcrank, links and tongue are visual-only: their poses are
  * computed analytically (`poseMatrices`) and merged into `poses()` (tie rod, bellcrank, drag link, tongue link, tongue). In tow 'bridle' mode the tongue follows the rope direction (rate and
- * damping limited, clamped to the yaw stop) and the steer angle is `solveFromTongue`: qualitative, like the rest. In ride mode the input
- * is clamped to the ride lock and, with no input, a weak centering motor holds the knuckles at zero.
+ * damping limited, clamped to the yaw stop) and the steer angle is `solveFromTongue`: qualitative, like the rest (D-53: ride mode and its centering motor are gone).
  *
  * Units inside the engine are SI (m, kg, N); the public readouts and poses are in the model's units (inches, lbf,
  * mph) so they plug straight into the viewer. The step is a fixed 1/240 s.
@@ -18,7 +16,7 @@
  *  - Ground is a kinematic slab (so the tilt table can rotate it) carrying the root and the curb. Gravity is vertical.
  *  - The hull collides with the ground via compound cuboids from the part OBBs; that contact is the "hull touches
  *    the ground" half of the tip-over event.
- *  - Rolling resistance and the brakes are velocity motors (target 0) on the wheel joints with a limited torque.
+ *  - Rolling resistance and the brakes are velocity motors (target 0) on the wheel joints with a limited torque. Only the two REAR wheels brake (D-53).
  */
 import type RapierModule from '@dimforge/rapier3d-compat';
 import { poseMatrices, solveSteer, type SteerSolution } from '../model/ackermann';
@@ -53,9 +51,6 @@ const STEER_RATE_DEG_S = 120;
 /** Ackermann knuckle motors: stiff, because they stand in for a rigid tie rod and must hold the solved angle against the tire scrub torque. */
 const ACK_STEER_K = 12000;
 const ACK_STEER_C = 240;
-/** Ride-mode centering motor (N·m/rad per knuckle, N·m·s/rad): the spring at the bellcrank, felt at the grip as about 2.5 lbf at the lock. */
-const RIDE_CENTER_K = 120;
-const RIDE_CENTER_C = 25;
 /** Tongue follow dynamics in tow bridle mode: first-order time constant (s) and the slew limit (deg/s). */
 const TONGUE_TAU_S = 0.12;
 const TONGUE_RATE_DEG_S = 120;
@@ -260,7 +255,7 @@ export class Sim {
       const o = sub(p, spec.bodies[id]!.cgM);
       return { x: o[0], y: o[1], z: o[2] };
     };
-    // Left-wheel angle range of the mode: tow = -outer..+inner, ride = -8..+inner(8.55); the right wheel is the mirror.
+    // Left-wheel angle range: -outer..+inner; the right wheel is the mirror.
     const lim = this.leftLimitsRad();
     const mk = (side: 'L' | 'R') => {
       const kp = spec.kingpinsM[side];
@@ -308,12 +303,12 @@ export class Sim {
     return this.config.sideSlopeDeg + this.config.tiltRateDegPerS * this.t;
   }
 
-  /** The steering lock of the control mode, rad: the INNER wheel angle at the tow or ride stop. */
+  /** The steering lock, rad: the INNER wheel angle at the tow stop. */
   lockRad(): number {
-    return this.config.mode === 'ride' ? this.spec.rideLockRad : this.spec.lockRad;
+    return this.spec.lockRad;
   }
 
-  /** Left-knuckle angle range of the control mode (rad): turning right the left wheel is the outer one. */
+  /** Left-knuckle angle range (rad): turning right the left wheel is the outer one. */
   private leftLimitsRad(): { min: number; max: number } {
     const a = this.spec.ack;
     const inner = this.lockRad();
@@ -358,32 +353,25 @@ export class Sim {
     const r = this.spec.wheelRadiusM;
     const crr = this.config.rollingResistance;
     const brakeN = this.brakeActive ? this.controls.brakeLbf * N_PER_LBF : 0;
-    const frontShare = this.spec.frontBrakeShare;
     for (const id of WHEEL_IDS) {
       const rear = id === 'wheel-RL' || id === 'wheel-RR';
-      const brakeNm = (brakeN * r * (rear ? 1 - frontShare : frontShare)) / 2;
+      const brakeNm = rear ? (brakeN * r) / 2 : 0; // rear brake only (D-53)
       this.wheelJoints[id].setMotorMaxForce(this.config.wheelsLocked ? 1e6 : crr * this.loadN[id] * r + brakeNm);
     }
     this.applySteering();
   }
 
-  /** Two knuckle motors: tow bridle (tongue follows the rope), angle hold, or the ride centering spring. */
+  /** Two knuckle motors: tow bridle (tongue follows the rope) or angle hold. */
   private applySteering(): void {
     const lock = this.lockRad();
     let cmdRad: number;
-    let K = ACK_STEER_K;
-    let C = ACK_STEER_C;
+    const K = ACK_STEER_K;
+    const C = ACK_STEER_C;
     if (this.controls.steerMode === 'angle') {
       const target = Math.max(-lock, Math.min(lock, rad(this.controls.steerAngleDeg)));
       const maxStep = rad(STEER_RATE_DEG_S) * DT;
       this.steerCmdRad += Math.max(-maxStep, Math.min(maxStep, target - this.steerCmdRad));
       cmdRad = this.steerCmdRad;
-    } else if (this.config.mode === 'ride') {
-      // Hands off the stick: the centering spring holds the knuckles straight (weak, so a rider's pull overcomes it).
-      this.steerCmdRad = 0;
-      cmdRad = 0;
-      K = RIDE_CENTER_K;
-      C = RIDE_CENTER_C;
     } else {
       // Tow bridle: the tongue yaw follows the rope direction (first-order, slew limited), clamped to the yaw stop.
       let target = this.tongueDeg;
@@ -421,11 +409,11 @@ export class Sim {
     this.brakeActive = this.controls.brakeOn;
     this.applyMotors();
 
-    // Pull force: at the tongue hinge on the chassis (tow mode only: the tongue is off in ride mode). The rope is the pull direction in the world, not a body-fixed one.
+    // Pull force: at the tongue hinge on the chassis. The rope is the pull direction in the world, not a body-fixed one.
     const sb = this.bodies.chassis;
     sb.resetForces(true);
     sb.resetTorques(true); // addForceAtPoint also accumulates a persistent torque
-    if (this.controls.pullLbf > 0 && this.config.mode !== 'ride') {
+    if (this.controls.pullLbf > 0) {
       const a = rad(this.controls.pullAngleDeg + this.controls.pullTurnDegPerS * this.t);
       const F = this.controls.pullLbf * N_PER_LBF;
       const local = sub(this.spec.tongueHingeM, this.spec.bodies.chassis!.cgM);

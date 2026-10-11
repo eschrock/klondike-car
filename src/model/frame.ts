@@ -4,9 +4,9 @@
  * Side-to-frame tie (build review M6, D-43): the ladder rails run FLUSH UNDER THE CHINES (outer face at hw + side), not inboard of them, so the
  * chine bears on the rail top and is Domino-tied and epoxied to it every `chineTieSpacingIn`; the hull-girder frame already sits under the chine.
  */
-import { BRAKE_TYPE, FRAME_STYLE } from '../params';
-import { shaftCenter } from './brake';
-import { bearingMount, beamSeat, boltLength, inchesText, localPoint, railSection } from './rear-mount';
+import { FRAME_STYLE } from '../params';
+import { beamLayout } from './brake-layout';
+import { beamSeat, boltLength, inchesText, localPoint, railSection } from './rear-mount';
 import { IN3_PER_FT3, STEP, bandPart, box, span, SIDES, type Ctx } from './build-utils';
 import { sidePath } from './layout';
 import { FRONT_RAIL_REMAIN_MIN_IN, frontBeamSeat } from './front-mount';
@@ -39,13 +39,11 @@ export function buildFrame(ctx: Ctx): Part[] {
   /** Offset from the web plane of the member's inner face. */
   const dInner = ladder ? L.side / 2 - railT : -L.side / 2;
 
-  // ── Rear end (build review r2 MUST-3 and MUST-4, D-48): the rail is notched from below for the brake shaft and for the rear axle beam; the brake bearing
-  // plates bolt to its outside forward of the shaft notch; the beam is held down by an angle bracket inside each rail. All geometry from rear-mount.ts.
-  const tread = p.brakeType === BRAKE_TYPE.tireTread;
-  const S = shaftCenter(p, L.r);
-  const mount = tread ? bearingMount(p, L, S, [S[0] - p.brakeLeverPivotBehindShaftIn, p.brakeLeverPivotZIn]) : null;
+  // ── Rear end (D-48, D-53): the rail is notched from below for the brake beam (it slides in the notch; a keeper strap under the notch carries it) and for the rear
+  // axle beam; the beam is held down by an angle bracket inside each rail. Geometry from brake-layout.ts and rear-mount.ts.
+  const bl = beamLayout(p, L.r, railSection(p, L).zBot, railSection(p, L).xEnd);
   const seat = beamSeat(p, L);
-  const shaftNotchVol = mount ? (mount.notch.x1 - mount.notch.x0) * (mount.notch.top - mount.rail.zBot) * mount.rail.t : 0;
+  const shaftNotchVol = (bl.notch.x1 - bl.notch.x0) * (bl.notch.top - railSection(p, L).zBot) * railSection(p, L).t;
   const cutLb = ((shaftNotchVol + (seat?.volume ?? 0)) / IN3_PER_FT3) * p.oakDensityPcf;
   const f2 = (v: number) => (Math.round(v * 100) / 100).toString();
   const finishRail = (part: Part, s: 1 | -1, tag: 'L' | 'R'): Part => {
@@ -53,20 +51,18 @@ export function buildFrame(ctx: Ctx): Part[] {
     const rr = railSection(p, L);
     const yMid = s * (rr.yOut - rr.t / 2);
     const joints = (part.joints ??= []);
-    if (mount) {
-      const bolt = p.brakeBearingBoltDiameterIn;
+    {
+      const zb = rr.zBot;
+      const w = bl.notch.x1 - bl.notch.x0, h = bl.notch.top - zb;
       joints.push({
-        type: 'bolt', to: `brake-bearing-plate-${tag}`, count: mount.bolts.length, diaIn: bolt,
-        size: `${f2(bolt)}" × ${inchesText(boltLength(p.brakePlateThickIn + mount.rail.t + mount.doubler.t, bolt))} 316 hex bolts, nylock nuts and 1-1/2" fender washers on the inside face`,
-        at: mount.bolts.map(([x, z]) => localPoint(part.transform, [x, yMid, z])),
-        note: `${mount.xCols.length} columns × 2 rows at ${f2(p.brakeBearingBoltSpacingIn)}" × ${f2(p.brakeBearingBoltRowGapIn)}", first column ${f2(mount.dist.end)}" from the rail end, lower row ${f2(mount.dist.bottom)}" above the rail bottom, upper row ${f2(mount.dist.top)}" below the deck ledge`,
+        type: 'dado', to: 'brake-beam', count: 1, size: `${f2(w)}" wide x ${f2(h)}" high notch up from the rail bottom, x ${f2(bl.notch.x0)} to ${f2(bl.notch.x1)}`,
+        at: [localPoint(part.transform, [(bl.notch.x0 + bl.notch.x1) / 2, yMid, zb + h / 2])], note: 'the brake beam slides in the notch (it is the guide); a keeper strap screwed across the notch bottom carries it',
       });
-      const w = mount.notch.x1 - mount.notch.x0, h = mount.notch.top - mount.rail.zBot;
       joints.push({
-        type: 'dado', to: 'brake-shaft', count: 1, size: `${f2(w)}" wide × ${f2(h)}" high notch up from the rail bottom, x ${f2(mount.notch.x0)} to ${f2(mount.notch.x1)}`,
-        at: [localPoint(part.transform, [S[0], yMid, mount.rail.zBot + h / 2])], note: 'the cross shaft passes through the notch; the bearing is in the plate outside the rail, so there is no hole in the rail',
+        type: 'screw', to: `brake-keeper-${tag}`, count: 4, diaIn: 0.19, size: '4 x #10 x 1-1/2" stainless wood screws up into the rail bottom, two each side of the notch',
+        at: [bl.notch.x0 - 0.5, bl.notch.x1 + 0.5].flatMap((x) => [yMid - 0.15, yMid + 0.15].map((yy) => localPoint(part.transform, [x, yy, zb]))),
       });
-      notes.push(`REAR END (D-48): underside notched ${f2(w)}" wide × ${f2(h)}" high for the brake shaft (x ${f2(mount.notch.x0)} to ${f2(mount.notch.x1)}, open at the bottom: a bandsaw cut and a chisel); the ${mount.bolts.length} bearing-plate bolts go through the SOLID rail forward of it (${f2(mount.dist.end)}" from the end, ${f2(mount.dist.bottom)}" above the bottom).`);
+      notes.push(`REAR END (D-53): underside notched ${f2(w)}" wide x ${f2(h)}" high for the brake beam (x ${f2(bl.notch.x0)} to ${f2(bl.notch.x1)}, open at the bottom: a bandsaw cut and a chisel; ${f2(bl.railEndWall)}" of air is left between the beam and the transom, ${f2(rr.zSolidTop - bl.notch.top)}" under the deck ledge). The beam slides ${f2(bl.stroke)}" in it; epoxy-seal the notch walls.`);
     }
     if (seat) {
       const hd = seat.hd;
@@ -169,7 +165,7 @@ export function buildFrame(ctx: Ctx): Part[] {
       parts.push(box(ctx, {
         id: `stringer-nose-${tag}${k + 1}`, partNo: 'stringer-nose', name: `Nose stringer ${tag}${k + 1}`, group: 'frame', mat: 'oak', step: STEP.frame, grain: 'x',
         ...span([xa, xb], [Math.min(s * ns.y0, s * ns.y1), Math.max(s * ns.y0, s * ns.y1)], [L.deckBot - jD, L.deckBot]),
-        notes: `${f2(L.joistT)}" × ${f2(jD)}" oak glued to the deck underside ${f2(ns.y0)}" off the centerline, just outside the steering-linkage corridor (Layout.front.keepOut.center), so the nose deck is carried across the middle by two stringers ${f2(2 * ns.y0 - 0.1)}" apart instead of by joists. The ${k === 0 ? 'rear' : 'front'} run ${k === 0 ? 'ends at the front beam gap' : 'starts at the front beam gap'}; the beam passes between the straddling joists. The nose joist halves and the front-brake cable run butt against its outer face; the cables pass through 1/4" holes drilled in it (a cable hole per stringer, drilled at the equalizer height).`,
+        notes: `${f2(L.joistT)}" × ${f2(jD)}" oak glued to the deck underside ${f2(ns.y0)}" off the centerline, just outside the steering-linkage corridor (Layout.front.keepOut.center), so the nose deck is carried across the middle by two stringers ${f2(2 * ns.y0 - 0.1)}" apart instead of by joists. The ${k === 0 ? 'rear' : 'front'} run ${k === 0 ? 'ends at the front beam gap' : 'starts at the front beam gap'}; the beam passes between the straddling joists. The nose joist halves butt against its outer face.`,
       }));
     }
   });

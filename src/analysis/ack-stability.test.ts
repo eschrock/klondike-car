@@ -9,7 +9,7 @@ import { makeContext } from './context';
 import { buildModel } from '../model';
 import type { Part, Mat4 } from '../model/types';
 import { defaultParams } from '../params';
-import { seatFactor } from './bump';
+import { bumpStrike, seatFactor } from './bump';
 import { payload, railsCheck, deckCheck, axleStress, bearingGroove } from './structure';
 import { seatBackCheck, seatGripCheck } from './seat';
 import { footStopCheck } from './hull';
@@ -124,7 +124,9 @@ describe('row basis (spec 5.4): each re-based row pins its new formula', () => {
   it('payload uses max(dynamicFactor, 1 + V_rear/W)', () => {
     const c = ctx.loads.goal;
     expect(payload(ctx, c)).toBeCloseTo((c.riderLb + c.cargoLb) * seatFactor(ctx, c), 9);
-    expect(seatFactor(ctx, c)).toBeGreaterThan(ctx.p.dynamicFactor);
+    // D-53: at jogging pace (5 mph) 1 + V_rear/W is about 2.5, below the dynamic factor 3, so the dynamic factor governs the payload.
+    expect(seatFactor(ctx, c)).toBeGreaterThanOrEqual(ctx.p.dynamicFactor);
+    expect(seatFactor(ctx, c)).toBe(Math.max(ctx.p.dynamicFactor, 1 + bumpStrike(ctx, c, 'rear', ctx.p.bumpNormalHeightIn).V / c.massLb));
   });
 
   it('rails: hard-hit bending details exist and scale by the factor ratio; the span runs to the front beam', () => {
@@ -169,9 +171,11 @@ describe('runChecks on the Ackermann basis', () => {
       }
       const ids = cs.map((c) => c.id);
       for (const gone of ['kingpin-strike', 'steer-stops', 'turntable-ring', 'kingpin-plates', 'roll-side-bearer', 'pitch-path', 'turntable']) expect(ids).not.toContain(gone);
-      for (const id of ['spindle-stub', 'kingpin-bolt', 'kingpin-bracket', 'beam-front', 'wheel-retention', 'spindle-fatigue', 'tie-rod', 'drag-link', 'bellcrank', 'tongue-tie', 'stick-cable', 'steer-kin', 'steer-lock', 'ride-rollover', 'ride-envelope']) expect(ids).toContain(id);
+      for (const id of ['spindle-stub', 'kingpin-bolt', 'kingpin-bracket', 'beam-front', 'wheel-retention', 'spindle-fatigue', 'tie-rod', 'drag-link', 'bellcrank', 'tongue-tie', 'steer-kin', 'steer-lock', 'brake-lever', 'brake-beam', 'park-hold']) expect(ids).toContain(id);
+      for (const gone of ['stick-cable', 'ride-rollover', 'ride-envelope', 'steer-centering', 'ride-steer-effort', 'brake-front', 'hip-cable', 'belt-anchor']) expect(ids).not.toContain(gone);
     }
-    for (const id of ['brake-stop', 'brake-emergency', 'brake-heat', 'brake-bias', 'steer-kin', 'steer-lock', 'ride-rollover']) expect(LIGHT_OF_ID[id], id).toBeTruthy();
+    for (const id of ['steer-kin', 'steer-lock', 'park-hold', 'brake-lever', 'brake-links', 'brake-beam', 'brake-shoes']) expect(LIGHT_OF_ID[id], id).toBeTruthy();
+    for (const id of ['brake-stop', 'brake-emergency', 'brake-heat', 'brake-bias', 'ride-rollover']) expect(LIGHT_OF_ID[id], id).toBeUndefined();
   });
 
   it('a heavier rider loads the bump rows more (monotone utilization on spindle-stub)', () => {

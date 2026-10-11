@@ -1,12 +1,11 @@
 /**
  * Steering linkage and tongue rows for the Ackermann front end (Phase 3b, D-51, D-53, D-54; spec 2.3, 5.5): tie rod, drag link, bellcrank, steer stops,
- * tongue (hinge, link pin), tongue tie (the bridle eye bolt moved to the tongue tip) and the ride stick with its cables. Computed from `Layout.front` and
+ * tongue (hinge, link pin) and tongue tie (the bridle eye bolt moved to the tongue tip). Computed from `Layout.front` and
  * the params, on the bump model for the kickback and on the 150 lbf bridle pull for the tongue.
  *
  * Kickback path. A front hit puts the moment M_z = scrub H (+ lead F_lat for a sideways hit) on the struck knuckle about its kingpin. The steering arm turns
  * it into a tie-rod force F = M_z / (A cos g) (A cos g = the arm's fore-aft projection, 2.74" at the defaults), the other knuckle is free, so the whole force
- * goes through the rod center, the drag link and the bellcrank (1:1) to whatever holds the bellcrank: the tongue link (tow), the stick cables (ride, until the
- * narrow window plate stops the bellcrank) or the stops. Normal rows use the 1 inch bump, hard rows the 2 inch hit at ultimate / failSafeFactor.
+ * goes through the rod center, the drag link and the bellcrank (1:1) to whatever holds the bellcrank: the tongue link (the pullers) or the stops. Normal rows use the 1 inch bump, hard rows the 2 inch hit at ultimate / failSafeFactor.
  */
 import { rectSection, bendingStress } from './beams';
 import type { Ctx } from './context';
@@ -16,8 +15,7 @@ import type { CaseData } from './loads';
 import { evalBoth } from './stability';
 import { allowables } from './structure';
 import { frontHit, kingpinLoad, steelBases, type FrontHit } from './front-end';
-import { sensitivityText } from './bump';
-import { uncTensileArea } from './brake-mount';
+import { uncTensileArea } from './nds';
 import type { AnalysisCheck, Detail } from './types';
 
 const REFS = ['D-50', 'D-53', 'D-54'];
@@ -41,8 +39,6 @@ export interface Leverage {
   inn: number;
   /** Perpendicular distance from the tongue hinge to the tongue-link line (in). */
   ear: number;
-  /** Cable cross-bar half length on the bellcrank (the ride window and the cables act here). */
-  cable: number;
   /** |cos| of the angle between the drag link and the tie-rod axis (the rod center force is along y): F_drag = F_rod / dragCos. */
   dragCos: number;
 }
@@ -66,7 +62,6 @@ export function leverage(ctx: Ctx): Leverage {
     out: Math.max(0.25, Math.abs(cross2(rel(outPin, piv), ud))),
     inn: Math.max(0.25, Math.abs(cross2(rel(inPin, piv), ut))),
     ear: Math.max(0.25, Math.abs(cross2(rel(ear, hinge), ut))),
-    cable: fl.ack.bellCableArm ?? fl.ack.bellArm,
     dragCos: Math.max(0.3, Math.abs(ud[1])),
   };
 }
@@ -94,10 +89,9 @@ export function tongueSidePull(ctx: Ctx): { Fperp: number; Mh: number; Flink: nu
 export interface Chain {
   Mz: number;
   Frod: number;
-  /** Force in the drag link, moment on the bellcrank, force at the cable cross-bar / window, force in the tongue link. */
+  /** Force in the drag link, moment on the bellcrank, force in the tongue link. */
   Fdrag: number;
   Mb: number;
-  Fcable: number;
   Ftl: number;
   fromLateral: boolean;
 }
@@ -108,10 +102,10 @@ export function chain(ctx: Ctx, F: FrontHit): Chain {
   const k = kickback(ctx, F);
   const Fdrag = k.Frod / lv.dragCos;
   const Mb = Fdrag * lv.out;
-  return { Mz: k.Mz, Frod: k.Frod, Fdrag, Mb, Fcable: Mb / lv.cable, Ftl: Mb / lv.inn, fromLateral: k.fromLateral };
+  return { Mz: k.Mz, Frod: k.Frod, Fdrag, Mb, Ftl: Mb / lv.inn, fromLateral: k.fromLateral };
 }
 
-const levText = (lv: Leverage) => `lever arms from the re-laid linkage: drag link ${f(lv.out, 2)}" and tongue link ${f(lv.inn, 2)}" about the bellcrank pivot, cable cross-bar ${f(lv.cable, 2)}", tongue link ${f(lv.ear, 2)}" about the hinge, drag link at ${f((Math.acos(lv.dragCos) * 180) / Math.PI, 0)} deg to the rod axis`;
+const levText = (lv: Leverage) => `lever arms from the re-laid linkage: drag link ${f(lv.out, 2)}" and tongue link ${f(lv.inn, 2)}" about the bellcrank pivot, tongue link ${f(lv.ear, 2)}" about the hinge, drag link at ${f((Math.acos(lv.dragCos) * 180) / Math.PI, 0)} deg to the rod axis`;
 
 // ── tie rod ─────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -181,7 +175,7 @@ export function bellcrankCheck(ctx: Ctx): AnalysisCheck {
   const m = steelBases(ctx);
   const lv = leverage(ctx);
   const sec = rectSection(p.bellcrankPlateThickIn, p.bellcrankArmWidthIn);
-  const dp = p.modePinDiaIn; // pivot bolt
+  const dp = p.tongueLinkPinDiaIn; // pivot bolt
   const side = tongueSidePull(ctx);
   const ev = (c: CaseData): CaseEval => {
     const n = chain(ctx, frontHit(ctx, c, 'normal')), h = chain(ctx, frontHit(ctx, c, 'hard'));
@@ -201,13 +195,12 @@ export function bellcrankCheck(ctx: Ctx): AnalysisCheck {
   return dualCheck({ id: 'bellcrank', label: 'Bellcrank plate and pivot', group: 'Structure', refs: REFS, primary: 'goal', ...evalBoth(ctx, ev) });
 }
 
-// ── steer stops (tow tabs, ride window) ─────────────────────────────────────────────────────────────────────
+// ── steer stops (tow-lock blocks) and the tongue-link pin ───────────────────────────────────────────────────────
 
 export function steerStopLoadCheck(ctx: Ctx): AnalysisCheck {
   const { p } = ctx;
   const m = steelBases(ctx);
-  const dp = p.modePinDiaIn;
-  const tPlate = 0.125; // mode plate, 1/8" steel (spec 1.1)
+  const dp = p.tongueLinkPinDiaIn;
   const dt = p.kingpinBracketBoltDiaIn; // the tow-stop set screw
   const At = (Math.PI / 4) * dt * dt;
   const A = ctx.L.front.ack.armLen;
@@ -215,19 +208,17 @@ export function steerStopLoadCheck(ctx: Ctx): AnalysisCheck {
     const n = chain(ctx, frontHit(ctx, c, 'normal')), h = chain(ctx, frontHit(ctx, c, 'hard'));
     const side = tongueSidePull(ctx);
     const tabN = Math.max(n.Mz, (side.Frod / 2) * armLeverIn(ctx)) / A, tabH = h.Mz / A;
-    const winN = n.Fcable, winH = h.Fcable;
+    const pinN = n.Ftl, pinH = h.Ftl;
     const ds: Detail[] = [
-      detail('NORMAL: ride window plate bearing under the mode pin (0.9 Fy / SF)', winN / (dp * tPlate), 'psi', m.brgN(p.bracketSteelYieldPsi), '<='),
-      detail('NORMAL: mode pin double shear (0.577 Fy / SF)', winN / (2 * (Math.PI / 4) * dp * dp), 'psi', m.shearN(p.kingpinYieldPsi), '<='),
-      detail('NORMAL: tow stop tab set screw shear (0.577 Fy / SF)', tabN / At, 'psi', m.shearN(p.kingpinYieldPsi), '<='),
-      detail('HARD 2" hit: ride window plate bearing (1.5 Fu / ff)', winH / (dp * tPlate), 'psi', m.brgH(p.bracketSteelUltimatePsi), '<='),
-      detail('HARD 2" hit: mode pin double shear (0.6 Fu / ff)', winH / (2 * (Math.PI / 4) * dp * dp), 'psi', m.shearH(p.kingpinUltimatePsi), '<='),
-      detail('HARD 2" hit: tow stop tab set screw shear (0.6 Fu / ff)', tabH / At, 'psi', m.shearH(p.kingpinUltimatePsi), '<='),
+      detail('NORMAL: tow stop set screw shear (0.577 Fy / SF)', tabN / At, 'psi', m.shearN(p.kingpinYieldPsi), '<='),
+      detail('NORMAL: tongue-link pin double shear (0.577 Fy / SF)', pinN / (2 * (Math.PI / 4) * dp * dp), 'psi', m.shearN(p.kingpinYieldPsi), '<='),
+      detail('HARD 2" hit: tow stop set screw shear (0.6 Fu / ff)', tabH / At, 'psi', m.shearH(p.kingpinUltimatePsi), '<='),
+      detail('HARD 2" hit: tongue-link pin double shear (0.6 Fu / ff)', pinH / (2 * (Math.PI / 4) * dp * dp), 'psi', m.shearH(p.kingpinUltimatePsi), '<='),
     ];
-    const how = `Ride mode: the narrow window in the 1/8" mode plate stops the bellcrank before the cable or the hand can: the bellcrank moment (${f(n.Mb, 0)} lb.in normal, ${f(h.Mb, 0)} hard) acts on the window at the cross-bar radius ${f(leverage(ctx).cable, 2)}", ${f(winN)} lbf normal, ${f(winH)} lbf hard, bearing under the ${f(dp, 3)}" mode pin (double shear). Tow mode: the bracket tab set screws (${f(dt, 4)}" grade 8) stop the steering arm at its ${f(A, 2)}" tip: ${f(tabN)} lbf normal (including the sideways tongue pull share), ${f(tabH)} lbf hard. The cable and the hand never see the kickback beyond the window (spec 1.6).`;
+    const how = `Tow-lock stops: the set screws (${f(dt, 4)}" grade 8) in the blocks under the beam stop the steering arm at its ${f(A, 2)}" tip: ${f(tabN)} lbf normal (including the sideways tongue pull share), ${f(tabH)} lbf hard. A front hit's bellcrank moment (${f(n.Mb, 0)} lb.in normal, ${f(h.Mb, 0)} hard) reaches the tongue through the link pin: ${f(pinN)} lbf normal, ${f(pinH)} lbf hard in double shear on the ${f(dp, 3)}" pin. ${levText(leverage(ctx))}.`;
     return governing(ds, how);
   };
-  return dualCheck({ id: 'steer-stop-load', label: 'Steer stops: ride window plate, mode pin, tow tab screws', group: 'Structure', refs: REFS, primary: 'goal', ...evalBoth(ctx, ev) });
+  return dualCheck({ id: 'steer-stop-load', label: 'Steer stops: tow-lock set screws and the tongue-link pin', group: 'Structure', refs: REFS, primary: 'goal', ...evalBoth(ctx, ev) });
 }
 
 // ── tongue (hinge pin, link pin, bending) ───────────────────────────────────────────────────────────────────
@@ -239,7 +230,7 @@ export function tongueLinkageCheck(ctx: Ctx): AnalysisCheck {
   const len = p.tongueLengthIn, thick = p.tongueThickIn, depth = p.tongueDepthIn;
   const side = tongueSidePull(ctx);
   const lv = leverage(ctx);
-  const dh = p.tongueHingePinDiaIn, tc = p.tongueClevisThickIn, dl = p.modePinDiaIn;
+  const dh = p.tongueHingePinDiaIn, tc = p.tongueClevisThickIn, dl = p.tongueLinkPinDiaIn;
   const ev = (c: CaseData): CaseEval => {
     void c;
     const lat = rectSection(depth, thick), vert = rectSection(thick, depth);
@@ -301,37 +292,6 @@ export function tongueTieCheck(ctx: Ctx): AnalysisCheck {
   return dualCheck({ id: 'tongue-tie', label: 'Tongue tie: eye bolt through the tongue tip', group: 'Structure', refs: ['D-33', 'D-14', 'D-47'], primary: 'goal', ...evalBoth(ctx, ev) });
 }
 
-// ── ride stick and cables ───────────────────────────────────────────────────────────────────────────────────
-
-export function stickCableCheck(ctx: Ctx): AnalysisCheck {
-  const { p } = ctx;
-  const m = steelBases(ctx);
-  const st = ctx.L.front.stick;
-  const arm = p.rideStickLengthIn; // pivot to grip
-  const ca = st.cableArm;
-  const lv = leverage(ctx);
-  const od = p.rideStickDiaIn, id = od - 2 * p.rideStickWallIn;
-  const I = (Math.PI / 64) * (od ** 4 - id ** 4), S = I / (od / 2);
-  const ev = (c: CaseData): CaseEval => {
-    const n = chain(ctx, frontHit(ctx, c, 'normal')), h = chain(ctx, frontHit(ctx, c, 'hard'));
-    const handN = p.stickHandLoadLbf, handH = 2 * p.stickHandLoadLbf;
-    // The cable carries the lesser of the kickback (bellcrank moment over the cross-bar) and what a hand holding the grip can resist (hand x grip arm / stick cable arm).
-    const cableN = Math.min(n.Fcable, (handN * arm) / ca), cableH = Math.min(h.Fcable, (handH * arm) / ca);
-    const gripN = (cableN * ca) / arm, gripH = (cableH * ca) / arm;
-    const Mn = gripN * arm, Mh = gripH * arm;
-    const ds: Detail[] = [
-      detail('NORMAL: cable tension vs minimum break strength / 3.5', cableN, 'lbf', p.stickCableBreakLbf / 3.5, '<='),
-      detail('NORMAL: stick tube bending (yield / SF)', Mn / S, 'psi', m.bendN(p.rideStickYieldPsi), '<='),
-      detail('HARD 2" hit: cable tension vs break strength / ff', cableH, 'lbf', p.stickCableBreakLbf / m.ff, '<='),
-      detail('HARD 2" hit: stick tube bending (elastic vs 1.2 yield: bend, not break)', Mh / S, 'psi', p.rideStickYieldPsi * 1.2, '<='),
-    ];
-    const how = `Stick: ${f(od, 3)}" x ${f(p.rideStickWallIn, 3)}" aluminum tube (S = ${f(S, 4)} in3), pivot to grip ${arm}", stick cable arm ${ca}" (ratio ${f(arm / ca, 1)}:1); two 1/8" 7x19 stainless pull-pull cables, preload ${p.stickCablePreloadLbf} lbf, break ${f(p.stickCableBreakLbf, 0)} lbf (assumed). `
-      + `Kickback of a front hit: bellcrank moment ${f(n.Mb, 0)} lb.in (1" bump), ${f(h.Mb, 0)} (2" hit) over the ${f(lv.cable, 2)}" cross-bar = ${f(n.Fcable)} / ${f(h.Fcable)} lbf in the cable if the stick is held; a hand can resist ${handN} lbf (hard: ${handH}) at the grip = ${f((handN * arm) / ca)} (${f((handH * arm) / ca)}) lbf in the cable, so the cable carries ${f(cableN)} lbf normal and ${f(cableH)} lbf hard (grip force ${f(gripN)} / ${f(gripH)} lbf; the study quoted 44-160 lbf). Tube bending ${f(Mn, 0)} lb.in normal, ${f(Mh, 0)} hard. Once the bellcrank reaches the window plate, the plate (steer-stop-load) takes the rest, not the cable. ${sensitivityText(ctx, c, 'front', p.bumpNormalHeightIn)}`;
-    return governing(ds, how);
-  };
-  return dualCheck({ id: 'stick-cable', label: 'Ride stick tube and pull-pull cables', group: 'Structure', refs: REFS, primary: 'goal', ...evalBoth(ctx, ev) });
-}
-
 export function linkageChecks(ctx: Ctx): AnalysisCheck[] {
-  return [tieRodCheck(ctx), dragLinkCheck(ctx), bellcrankCheck(ctx), steerStopLoadCheck(ctx), tongueLinkageCheck(ctx), tongueTieCheck(ctx), stickCableCheck(ctx)];
+  return [tieRodCheck(ctx), dragLinkCheck(ctx), bellcrankCheck(ctx), steerStopLoadCheck(ctx), tongueLinkageCheck(ctx), tongueTieCheck(ctx)];
 }

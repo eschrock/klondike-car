@@ -135,20 +135,12 @@ describe('captured-ply sides, decks and transoms (D-22, D-35)', () => {
     const side = get(parts, 'side-cabin-L-chine').geometry;
     expect(side.type === 'sweep' && side.path[0][0]).toBeCloseTo(L.xRear + L.transom, 6);
   });
-  it('the deck carries the one cut-out: the 1.6 x 0.5 inch slot for the ride stick cables at Layout.front.cable.slot, with its rim edged', () => {
+  it('the deck is one uncut sheet: the ride stick cable slot is gone (D-53) and its edges are all captured', () => {
     const d = get(parts, 'deck');
-    const cs = L.front.cable;
     if (d.geometry.type !== 'extrusion') throw new Error('deck is not an extrusion');
-    expect(d.geometry.holes).toHaveLength(1);
-    const h = d.geometry.holes![0];
-    expect(Math.max(...h.map((q) => q[0])) - Math.min(...h.map((q) => q[0]))).toBeCloseTo(cs.slotSize[0], 9);
-    expect(Math.max(...h.map((q) => q[1])) - Math.min(...h.map((q) => q[1]))).toBeCloseTo(cs.slotSize[1], 9);
-    expect((Math.max(...h.map((q) => q[0])) + Math.min(...h.map((q) => q[0]))) / 2).toBeCloseTo(cs.slot[0], 9);
-    expect((Math.max(...h.map((q) => q[1])) + Math.min(...h.map((q) => q[1]))) / 2).toBeCloseTo(cs.slot[1], 9);
-    expect(d.edges).toHaveLength(d.geometry.outline.length + h.length);
+    expect(d.geometry.holes ?? []).toHaveLength(0);
+    expect(d.edges).toHaveLength(d.geometry.outline.length);
     expect(flat(d.edges).includes('exposed')).toBe(false);
-    // The cable guard on the deck top and the cables pass through it; the slot is inside the hull.
-    expect(Math.abs(cs.slot[1])).toBeLessThan(L.hwC - 1);
   });
 });
 

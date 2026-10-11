@@ -196,11 +196,11 @@ describe('one deck, one level (parts)', () => {
     expect(Math.max(...xs) - Math.min(...xs)).toBeLessThan(96);
     const ys = g.outline.map((q) => q[1]);
     expect(Math.max(...ys) - Math.min(...ys)).toBeLessThan(48);
-    // Every ply edge is captured in the chine rabbet or a transom dado; the only other edges are the rim of the cable slot, which is lined (printed guide) and edged.
+    // Every ply edge is captured in the chine rabbet or a transom dado; the cable slot of the ride stick is gone (D-53), so there is no other edge.
     const edges = d.edges as string[];
     expect(edges.filter((e) => e === 'exposed')).toEqual([]);
-    expect(edges.filter((e) => e === 'edged')).toHaveLength(4); // the 4 edges of the cable slot
-    expect(g.holes).toHaveLength(1);
+    expect(edges.filter((e) => e === 'edged')).toEqual([]);
+    expect(g.holes ?? []).toHaveLength(0);
   });
   it('the deck edge is captured in the chine rabbet along the whole hull (distance to the chine centerline = side/2 - capture depth)', () => {
     const d = byId.get('deck')!;
