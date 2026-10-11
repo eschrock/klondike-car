@@ -77,9 +77,10 @@ export function buildWheelGeometry(g: WheelGeo, tread: 'lug' | 'rib' = 'lug', lu
 
   // Deeply dished rim: a lip at the tire bead, then a step down to a flat disc recessed well inside the sidewall.
   const dish = hw * 0.34;
+  // Round 3: the profile starts and ends on the axis, so the dish is a closed solid disc (nothing shows through behind the hub).
   const rimPts = [
-    v2(hubR * 0.8, -dish), v2(rimR * 0.8, -dish), v2(rimR * 0.9, -dish - hw * 0.1), v2(rimR - 0.12, -hw * 0.66), v2(rimR + 0.06, -hw * 0.8),
-    v2(rimR + 0.06, hw * 0.8), v2(rimR - 0.12, hw * 0.66), v2(rimR * 0.9, dish + hw * 0.1), v2(rimR * 0.8, dish), v2(hubR * 0.8, dish),
+    v2(0.01, -dish), v2(hubR * 0.8, -dish), v2(rimR * 0.8, -dish), v2(rimR * 0.9, -dish - hw * 0.1), v2(rimR - 0.12, -hw * 0.66), v2(rimR + 0.06, -hw * 0.8),
+    v2(rimR + 0.06, hw * 0.8), v2(rimR - 0.12, hw * 0.66), v2(rimR * 0.9, dish + hw * 0.1), v2(rimR * 0.8, dish), v2(hubR * 0.8, dish), v2(0.01, dish),
   ];
   const rim = new THREE.LatheGeometry(rimPts, 40);
 
@@ -93,12 +94,19 @@ export function buildWheelGeometry(g: WheelGeo, tread: 'lug' | 'rib' = 'lug', lu
       ring.push(v2(rimR + 0.04 + beadR * Math.cos(a), sg * hw * 0.78 + beadR * Math.sin(a)));
     }
     bead.push(new THREE.LatheGeometry(ring, 40));
+    // Five tapered, rounded spokes that start inside the hub barrel, ride up the dish and end inside the bead ring.
+    const p0 = [Math.min(hubR * 0.5 * 0.8, hubR * 0.4), sg * (dish + 0.02)];
+    const p1 = [rimR * 0.95, sg * hw * 0.74];
+    const dx = p1[0] - p0[0], dy = p1[1] - p0[1];
+    const len = Math.hypot(dx, dy);
+    const rBig = Math.max(0.45, hubR * 0.26); // wide at the hub, narrower toward the bead
     for (let k = 0; k < 5; k++) {
-      const len = rimR * 0.84 - hubR * 0.7;
-      const b = new THREE.BoxGeometry(len, Math.min(0.3, hw * 0.3), Math.max(0.5, hubR * 0.28));
-      b.translate((len / 2) + hubR * 0.7, sg * (dish + Math.min(0.3, hw * 0.3) / 2 - 0.02), 0);
-      b.rotateY((k / 5) * Math.PI * 2);
-      bead.push(b);
+      const sp = new THREE.CylinderGeometry(rBig * 0.5, rBig, len, 10, 1); // top (+Y) is the outer end
+      sp.scale(0.55, 1, 1); // flatten along the dish normal; full width tangentially (Z)
+      sp.rotateZ(Math.atan2(dy, dx) - Math.PI / 2);
+      sp.translate((p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2, 0);
+      sp.rotateY((k / 5) * Math.PI * 2);
+      bead.push(sp);
     }
   }
   const beads = mergeGeometries(bead)!;

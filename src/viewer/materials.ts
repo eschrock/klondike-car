@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Part } from '../model/types';
-import { oakEndTexture, pebbleBump, plyEdgeTexture, ropeBump, ropeTexture, signTexture, woodTextures } from './textures';
+import { oakEndTexture, pebbleBump, plyEdgeTexture, signTexture, woodTextures } from './textures';
 
 /** What a part looks like. The viewer reads `part.finish.surface` first, then falls back to the material name (D-44). */
 export type Surface = 'oak' | 'okoume' | 'vinyl' | 'rubber' | 'steel' | 'aluminum' | 'asa' | 'rope';
@@ -67,16 +67,15 @@ export function materialsFor(look: Look): SurfaceMats {
       m = new THREE.MeshStandardMaterial({ color: 0x0f0f10, roughness: 0.9, bumpMap: pebbleBump('rubber'), bumpScale: 0.5, ...SOLID });
       break;
     case 'steel':
-      m = new THREE.MeshStandardMaterial({ color: 0xa4aab2, roughness: 0.38, metalness: 1, ...SOLID });
+      // Round 3 (review r2 MUST 2): a believable zinc / stainless steel, not a mirror (a mirror reads as flat gray under a room map).
+      m = new THREE.MeshStandardMaterial({ color: 0x7c8288, roughness: 0.35, metalness: 0.9, ...SOLID });
       break;
     case 'aluminum':
       m = new THREE.MeshStandardMaterial({ color: 0xc8ccd2, roughness: 0.42, metalness: 1, ...SOLID });
       break;
     case 'asa':
-      m = new THREE.MeshStandardMaterial({ color: 0xf26a1b, roughness: 0.5, ...SOLID });
-      break;
-    case 'rope':
-      m = new THREE.MeshStandardMaterial({ color: 0xffffff, map: ropeTexture(), bumpMap: ropeBump(), bumpScale: 1.4, roughness: 0.95, ...SOLID });
+      // Printed ASA, round 3: dark charcoal satin plastic (was safety orange, which read as unstained wood; review r2 MUST 1).
+      m = new THREE.MeshStandardMaterial({ color: 0x2b2f33, roughness: 0.55, bumpMap: pebbleBump('rubber'), bumpScale: 0.08, ...SOLID });
       break;
     case 'truck':
       m = new THREE.MeshStandardMaterial({ color: 0x8f9bb0, transparent: true, opacity: 0.35, roughness: 0.7, depthWrite: false, side: THREE.DoubleSide });
@@ -91,7 +90,7 @@ export function materialsFor(look: Look): SurfaceMats {
       m = new THREE.MeshBasicMaterial({ color: 0x9aa0a8, transparent: true, opacity: 0.35, wireframe: true, depthWrite: false });
       break;
     default:
-      m = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.6, ...SOLID });
+      m = new THREE.MeshStandardMaterial({ color: 0x70757b, roughness: 0.55, ...SOLID });
   }
   cache.set(look, m);
   return m;
@@ -101,7 +100,7 @@ export function materialsFor(look: Look): SurfaceMats {
 let wheelSet: { rim: THREE.Material; brass: THREE.Material; hub: THREE.Material; bead: THREE.Material; lug: THREE.Material } | undefined;
 export function wheelMaterials(): { rim: THREE.Material; brass: THREE.Material; hub: THREE.Material; bead: THREE.Material; lug: THREE.Material } {
   wheelSet ??= {
-    rim: new THREE.MeshStandardMaterial({ color: 0x5b6068, roughness: 0.5, metalness: 0.55, ...SOLID }),
+    rim: new THREE.MeshStandardMaterial({ color: 0x3a3f46, roughness: 0.5, metalness: 0.55, ...SOLID }),
     bead: new THREE.MeshStandardMaterial({ color: 0xa4aab2, roughness: 0.32, metalness: 0.95, ...SOLID }),
     brass: new THREE.MeshStandardMaterial({ color: 0xb98f4a, roughness: 0.32, metalness: 1, ...SOLID }),
     hub: new THREE.MeshStandardMaterial({ color: 0x9aa0a8, roughness: 0.4, metalness: 1, ...SOLID }),

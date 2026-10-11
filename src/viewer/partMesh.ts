@@ -7,7 +7,8 @@ import { hashString, mulberry32 } from './noise';
 import { lookOf, isWood, materialsFor, signMaterials, wheelMaterials, type Look, type SurfaceMats } from './materials';
 import { crownDrop, crownFace, roundedBoxMesh, type RawMesh } from './shapes';
 import { densify, dashedLoop, insetLoop, mergeTubes, roundedLoop, tubeAlong, type TubeMesh, type Vec2 } from './upholstery';
-import { buildSweepMesh } from './sweep';
+import { lashPointMesh } from './hardware';
+import { buildRoundedSweepMesh, buildSweepMesh } from './sweep';
 import { WOOD_TILE_IN } from './textures';
 import { buildWheelGeometry } from './wheel';
 
@@ -187,6 +188,8 @@ function worldAxis(m: Mat4, a: number): Vec3 {
 export function buildPart(part: Part): BuiltPart | null {
   const g = part.geometry;
   const look = lookOf(part);
+  // Owner decision (round 3): rope is not drawn. The part stays in the model (mass, BOM, analysis), only the picture omits it.
+  if (look === 'rope') return null;
   const f = part.finish;
   const b = localBounds(g);
   const size: Vec3 = [b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]];
@@ -238,7 +241,13 @@ export function buildPart(part: Part): BuiltPart | null {
         geometry = withTrims(geometry, trims);
         break;
       }
-      const r = clampRound(f?.roundoverIn ?? 0, size);
+      if (look === 'steel' && part.partNo === 'lash-point' && thin === 2 && maxAxis(size) === 0) {
+        // D-ring on a bolt plate drawn inside the box (round 3, review r2 MUST 2); no cube outline.
+        geometry = rawToGeometry(lashPointMesh(size));
+        break;
+      }
+      // Hardware gets a small break on every edge (round 3): about 0.05" so brackets and plates are not razor cubes.
+      const r = clampRound(f?.roundoverIn ?? (look === 'steel' || look === 'aluminum' ? 0.05 : 0), size);
       geometry = r > 0.01 ? rawToGeometry(roundedBoxMesh(size, r, 4)) : new THREE.BoxGeometry(size[0], size[1], size[2]);
       if (isWood(look)) geometry = applyGrain(geometry, part, look, size, thin, grain);
       edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(size[0], size[1], size[2]), 1);
@@ -253,9 +262,6 @@ export function buildPart(part: Part): BuiltPart | null {
         const [o1, o2] = [rnd(), rnd()];
         for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getY(i) * g.length) / WOOD_TILE_IN.along + o1, (uv.getX(i) * 2 * Math.PI * g.radius) / WOOD_TILE_IN.across + o2);
         material = [(material as THREE.Material[])[0], (material as THREE.Material[])[1], (material as THREE.Material[])[1]];
-      } else if (look === 'rope') {
-        const uv = c.getAttribute('uv');
-        for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 2, (uv.getY(i) * g.length) / (g.radius * 5));
       }
       geometry = c;
       if (!f?.surface || look === 'steel') edges = new THREE.EdgesGeometry(c, 40);
@@ -293,12 +299,16 @@ export function buildPart(part: Part): BuiltPart | null {
       break;
     }
     case 'sweep': {
-      const m = buildSweepMesh(g.path, g.width, g.thickness, g.plies);
+      // Round 3 (review r2 MUST 4): a roundover of 30% of the thinner dimension and a domed tip, so the bent lamination
+      // reads as a stem; the section size is unchanged (a design question for the owner). Parts without a finish stay crisp.
+      const rounded = !!f?.roundoverIn;
+      const m = rounded ? buildRoundedSweepMesh(g.path, g.width, g.thickness, g.plies, 0.3 * Math.min(g.width, g.thickness)) : buildSweepMesh(g.path, g.width, g.thickness, g.plies);
       if (!m.positions.length) return null;
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(m.positions, 3));
       geo.setIndex(m.indices);
-      geo.computeVertexNormals(); // faces have their own vertices: smooth along the path, crisp across edges
+      if ('normals' in m) geo.setAttribute('normal', new THREE.Float32BufferAttribute((m as { normals: number[] }).normals, 3));
+      else geo.computeVertexNormals(); // faces have their own vertices: smooth along the path, crisp across edges
       const rnd = mulberry32(hashString(part.id));
       const [o1, o2] = [rnd(), rnd()];
       const uv: number[] = [];
@@ -320,7 +330,7 @@ export function buildPart(part: Part): BuiltPart | null {
       geo.computeVertexNormals();
       geometry = geo;
       // Textured looks need UVs: box-map meshes that land on a wood / vinyl material (none do today).
-      if (isWood(look) || look === 'vinyl' || look === 'rope') material = materialsFor('other');
+      if (isWood(look) || look === 'vinyl') material = materialsFor('other');
       break;
     }
   }

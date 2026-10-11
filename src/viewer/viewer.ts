@@ -6,7 +6,7 @@ import { partCentroid, worldAABB } from '../model/bounds';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { Mat4, Part, PartGroup, RigidBody, Vec3 } from '../model/types';
 import { buildPart } from './partMesh';
-import { isShopAid } from './materials';
+import { isShopAid, lookOf } from './materials';
 import { EDGE_MAT, EXPOSED_MAT, PLY_LINE_MAT, type SurfaceMats } from './materials';
 import { blobTexture, setMaxAnisotropy } from './textures';
 import { JOINERY_LEGEND, jointColor, joineryMarkers } from './joinery';
@@ -94,7 +94,7 @@ export class Viewer {
   private sectionOut!: HTMLOutputElement;
   private readonly overlay = new THREE.Group();
   private readonly labelRenderer = new CSS2DRenderer();
-  private showCg = true;
+  private showCg = false; // off until the CG checkbox is ticked (review r2 SHOULD 9)
   private showDims = false;
   private showJoinery = false;
   private simple = false;
@@ -116,6 +116,7 @@ export class Viewer {
   private sun!: THREE.DirectionalLight;
   private hemi!: THREE.HemisphereLight;
   private gridMat?: THREE.Material;
+  private groundPool?: THREE.Mesh;
   private shadowPlane?: THREE.Mesh;
   private contactGroup = new THREE.Group();
   private edgeLines: THREE.LineSegments[] = [];
@@ -361,7 +362,7 @@ export class Viewer {
       this.moreHost.append(label);
       return cb;
     };
-    this.cgCb = mk('CG', 'Center-of-gravity marker and drop line for what is shown (empty, or with rider and cargo)', true, (v) => {
+    this.cgCb = mk('CG', 'Center-of-gravity marker and drop line for what is shown (empty, or with rider and cargo)', false, (v) => {
       this.showCg = v;
       this.rebuildOverlay();
     });
@@ -513,7 +514,7 @@ export class Viewer {
       this.showCg = false;
       this.showDims = this.dimsCb?.checked ?? false; // Dimensions stays available in Simple
     } else {
-      this.showCg = this.cgCb?.checked ?? true;
+      this.showCg = this.cgCb?.checked ?? false;
       this.showDims = this.dimsCb?.checked ?? false;
     }
     this.rebuildOverlay();
@@ -526,6 +527,7 @@ export class Viewer {
     this.explodeAmount = amount;
     this.applyMatrices();
     if (was !== amount > 0) this.rebuildOverlay(); // the CG / dimension overlay is hidden while exploded
+    if (this.framed && !this.userMoved && !this.simActive && !this.inTruck) this.setView(this.currentView, undefined, true); // re-fit to the exploded bounds
   }
 
   setSection(axis: SectionAxis, pos: number): void {
@@ -582,8 +584,32 @@ export class Viewer {
     const gm = grid.material as THREE.Material;
     gm.transparent = true;
     gm.opacity = 0.3;
+    // Fade the grid with distance from the cart (review r2 SHOULD 7): full strength near it, gone by about 115".
+    gm.onBeforeCompile = (sh) => {
+      sh.vertexShader = 'varying vec3 vGp;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvGp = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      sh.fragmentShader = 'varying vec3 vGp;\n' + sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.a *= 1.0 - smoothstep(50.0, 115.0, length(vGp.xy - vec2(25.0, 0.0)));');
+    };
     this.gridMat = gm;
     this.scene.add(grid);
+
+    // A soft ground pool under the cart so it never floats on the dark background (lit warm gray, fading to nothing).
+    const gc = document.createElement('canvas');
+    gc.width = gc.height = 256;
+    const gx = gc.getContext('2d')!;
+    const gr = gx.createRadialGradient(128, 128, 0, 128, 128, 128);
+    gr.addColorStop(0, 'rgba(255,255,255,1)');
+    gr.addColorStop(0.55, 'rgba(255,255,255,0.55)');
+    gr.addColorStop(1, 'rgba(255,255,255,0)');
+    gx.fillStyle = gr;
+    gx.fillRect(0, 0, 256, 256);
+    const gtex = new THREE.CanvasTexture(gc);
+    gtex.colorSpace = THREE.SRGBColorSpace;
+    this.groundPool = new THREE.Mesh(new THREE.CircleGeometry(100, 48), new THREE.MeshBasicMaterial({ map: gtex, color: 0x7a6e5e, transparent: true, opacity: 0.4, depthWrite: false }));
+    (this.groundPool.geometry as THREE.CircleGeometry).scale(1, 0.62, 1);
+    this.groundPool.position.set(25, 0, -0.1);
+    this.groundPool.renderOrder = -2;
+    this.scene.add(this.groundPool);
+    this.envObjects.push(this.groundPool);
 
     const axes = new THREE.AxesHelper(24); // X red, Y green, Z blue
     this.scene.add(axes);
@@ -605,7 +631,7 @@ export class Viewer {
     pmrem.dispose();
     this.hemi = new THREE.HemisphereLight(0xcfe0ff, 0x6b5a46, 0.5);
     this.scene.add(this.hemi);
-    const sun = new THREE.DirectionalLight(0xfff1dc, 2.6);
+    const sun = new THREE.DirectionalLight(0xfff1dc, 2.3);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.bias = -0.0004;
@@ -646,6 +672,11 @@ export class Viewer {
       gm.color.set(dark ? 0x59606c : 0x8a8f98);
       gm.opacity = dark ? 0.35 : 0.3;
     }
+    if (this.groundPool) {
+      const m = this.groundPool.material as THREE.MeshBasicMaterial;
+      m.color.set(dark ? 0x8c7d68 : 0xb9ad98);
+      m.opacity = dark ? 0.5 : 0.28;
+    }
     if (this.shadowPlane) (this.shadowPlane.material as THREE.ShadowMaterial).opacity = dark ? 0.5 : 0.3;
     this.hemi.intensity = dark ? 0.4 : 0.5;
     this.scene.environmentIntensity = dark ? 0.6 : 0.7;
@@ -658,7 +689,7 @@ export class Viewer {
       this.contactGroup.remove(c);
       (c as THREE.Mesh).geometry.dispose();
     }
-    const cart = parts.filter((p) => !p.payload && p.group !== 'reference');
+    const cart = parts.filter((p) => !p.payload && p.group !== 'reference' && lookOf(p) !== 'rope'); // the rope is not drawn (owner, round 3)
     if (!cart.length) return;
     const bb = worldAABB(cart);
     const dark = document.documentElement.getAttribute('data-theme') === 'dark';

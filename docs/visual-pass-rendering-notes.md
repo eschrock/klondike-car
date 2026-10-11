@@ -97,3 +97,18 @@ NICE (16 to 21): not done.
 - Lash points and grab handles: model as D-ring / U-tube parts and add `finish.surface: 'powdercoat'` (forest green `#2f5a3a`) to the type, so the viewer can paint them (review 7).
 - Prow: a broader, chamfered stem section (review 11).
 - `Part.finish` could carry `surface: 'paint'` for the signs; the viewer matches them by `partNo === 'sign'` for now.
+
+## Round 3 (response to `docs/reviews/visual-round2.md`, 7/10)
+
+Files: `src/viewer/{textures,materials,partMesh,sweep,wheel,viewer}.ts`, new `src/viewer/hardware.ts` and `src/viewer/round3.test.ts`. No model or params changes, no new assets.
+
+1. **Stain (MUST 1): done.** Oak early wood is about #78492a down to late wood about #331c0a (mean face near the #7a4a22 target after lighting), okoume about #7a4f30 to #54311c, oak end grain and ply edges lowered the same way. Key sun 2.6 to 2.3 so the dark stain is not blown out. Printed ASA parts (guards, lantern / flag / light mounts, knobs, caps) are now dark charcoal satin plastic (`#2b2f33`) instead of safety orange; there is no other orange left in the model. Unfinished "other" parts (LED, reflectors) went from near-white to a mid gray. Checked light and dark: warm walnut, grain still visible, not muddy.
+2. **Hardware (MUST 2, viewer side): done.** Steel is `#7c8288`, metalness 0.9, roughness 0.35; steel and aluminum boxes get a 0.05" edge break. The six `lash-*` parts draw a bolt plate with four screw heads, a bracket and a stainless squircle D-ring standing up, all inside the part's 1.5 x 0.9 x 0.75 box (`hardware.ts`). Grab handles are untouched: oak with roundover (D-40). Model-side request stays: green powdercoated U-handles would need `finish.surface`.
+3. **Wheel (MUST 3): done.** The dish is a closed solid disc (profile runs to the axis); the five spokes are tapered, rounded and run from inside the hub barrel up the dish into the bead ring. All inside `localBounds`.
+4. **Prow (MUST 4, viewer side): done.** Section size is unchanged. Sweeps with a `roundoverIn` finish use `buildRoundedSweepMesh`: roundover 30% of the thinner dimension, grain UVs follow the curve and wrap the roundovers, ply lines ride the rounded surface, and the tip is a domed cap (stays inside the bounds; tested). The broad carved crest in the concept is still a model decision for Eric.
+5. **Rope (MUST 5): dropped by owner decision.** Eric: "I don't think we need to show the ropes - they look kind of weird." The viewer no longer draws any rope-look part (`buildPart` returns null for it: the bridle). The parts stay in the model, so mass, BOM and analysis are unchanged. The twisted-rope code, the rope texture / bump and the rope material were removed. The ground contact shadow no longer counts the rope, and framing and the sun fit read only drawn meshes, so neither accounts for it. No toggle.
+6. **SHOULDs.** Ground: the grid fades out by about 115" from the cart, and a soft warm ground pool sits under it (lit gray in dark theme, faint in light) so it does not float. CG marker and its checkbox now default off (Advanced shows it only when ticked). Explode re-fits the camera while the user has not orbited. Not done: panel edge darkening, rider mannequin, sign shape, SSAO, tire tread.
+
+Performance: `benchmark(60)` about 3.7 ms (budget 30).
+Tests: see the final summary; `round3.test.ts` covers the rounded sweep (bounds, winding) and the lash mesh bounds.
+Left for the owner / model side: prow crest size, green powdercoat handles, rider figure shape.

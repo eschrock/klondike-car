@@ -71,9 +71,10 @@ export function woodTextures(kind: WoodKind): { map: THREE.CanvasTexture; bump: 
   const nPore = new TileNoise(15, 110, 300);
   const nRay = new TileNoise(16, 36, 46);
   const nBlot = new TileNoise(17, 4, 3);
-  // Round 2 stain: dark amber-brown oak (early wood ~#a06c34 down to late wood ~#4a2c12), okoume stained mahogany-brown (not cream).
-  const light: RGB = oak ? [0.6, 0.38, 0.18] : [0.62, 0.41, 0.26];
-  const dark: RGB = oak ? [0.27, 0.15, 0.06] : [0.43, 0.26, 0.15];
+  // Round 3 stain (review r2 MUST 1): about 20% deeper than round 2. Oak runs from an early-wood highlight (~#8a5628, with
+  // the odd ray fleck brighter) to late wood ~#3a200c; the mean face lands near #6a4020. Okoume runs ~#8a5a36 to #5e3820.
+  const light: RGB = oak ? [0.47, 0.29, 0.14] : [0.48, 0.31, 0.19];
+  const dark: RGB = oak ? [0.2, 0.11, 0.04] : [0.33, 0.19, 0.11];
   const nLow = new TileNoise(18, 2, 2); // panel-scale tone drift so big faces are not flat (review SHOULD 10)
   const rings = oak ? 20 : 5;
   let gray!: ImageData;
@@ -130,7 +131,7 @@ export function oakEndTexture(): THREE.CanvasTexture {
         const late = Math.pow(smooth(0.3, 1, f), 1.5);
         const pv = nP.at(s, t);
         const pore = pv > 0.75 ? (pv - 0.75) * 4 * (1 - late) : 0;
-        const c = mix([0.45, 0.28, 0.13], [0.24, 0.13, 0.055], clamp01(late * 0.8 + pore * 0.5));
+        const c = mix([0.37, 0.225, 0.1], [0.19, 0.1, 0.04], clamp01(late * 0.8 + pore * 0.5));
         put(img, (y * 256 + x) * 4, c);
       }
     }
@@ -148,7 +149,7 @@ export function plyEdgeTexture(): THREE.CanvasTexture {
       for (let x = 0; x < 64; x++) {
         const glue = inLayer < 2 ? 0.55 : 1;
         const streak = 0.96 + (n.at(x / 64, y / 160) - 0.5) * 0.12;
-        const c: RGB = [0.68 * tone * glue * streak, 0.45 * tone * glue * streak, 0.28 * tone * glue * streak];
+        const c: RGB = [0.56 * tone * glue * streak, 0.37 * tone * glue * streak, 0.23 * tone * glue * streak];
         put(img, (y * 64 + x) * 4, c);
       }
     }
@@ -165,34 +166,6 @@ export function pebbleBump(kind: 'vinyl' | 'rubber'): THREE.CanvasTexture {
         const v = clamp01(0.45 + (a.at(x / 256, y / 256) - 0.5) * 0.9 + (b.at(x / 256, y / 256) - 0.5) * 0.5);
         const i = (y * 256 + x) * 4;
         img.data[i] = img.data[i + 1] = img.data[i + 2] = v * 255;
-        img.data[i + 3] = 255;
-      }
-    }
-  });
-}
-
-/** Twisted rope: diagonal strands (periodic: the shift per row is one full tile width). Valleys are dark so the twist reads. */
-export function ropeTexture(): THREE.CanvasTexture {
-  return make('rope', 64, 64, true, (img) => {
-    for (let y = 0; y < 64; y++) {
-      for (let x = 0; x < 64; x++) {
-        const ph = ((x - y + 64 * 4) % 16) / 16; // 4 strands, one full width of shear per tile height
-        const v = Math.pow(Math.sin(ph * Math.PI), 0.8);
-        put(img, (y * 64 + x) * 4, mix([0.43, 0.32, 0.19], [0.72, 0.56, 0.35], v));
-      }
-    }
-  });
-}
-
-/** Bump for the rope strands (same layout as `ropeTexture`). */
-export function ropeBump(): THREE.CanvasTexture {
-  return make('rope:bump', 64, 64, false, (img) => {
-    for (let y = 0; y < 64; y++) {
-      for (let x = 0; x < 64; x++) {
-        const ph = ((x - y + 64 * 4) % 16) / 16;
-        const g = Math.pow(Math.sin(ph * Math.PI), 0.8) * 255;
-        const i = (y * 64 + x) * 4;
-        img.data[i] = img.data[i + 1] = img.data[i + 2] = g;
         img.data[i + 3] = 255;
       }
     }
