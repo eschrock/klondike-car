@@ -1,120 +1,100 @@
-# Plan: the sled rework (next phase, draft for Eric)
+# Plan: Phase 3c, simplify and finish the cart
 
-**Why.** We designed a cart, then a rider-steered downhill cart. A Klondike Derby sled is a **dog sled on wheels** (`docs/klondike-research.md`):
-- the rider is a passenger;
-- the team pulls from the front on hand loops;
-- a musher at the back steers and brakes on a handlebow.
+**Status:** draft for Eric, 2026-10-11. This replaces the earlier "sled rework" drafts of this file.
 
-The current model (`6341ecf`, 174 lb) is a consistent checkpoint and a step toward this, but far too heavy and cart-like. This plan slims it down and resets the shape.
+## What we're building (Eric, after the sled research)
+- **The concept is Ashley's.** It's a Klondike sled for the race, and afterwards a **solid, wide, reusable wooden cart**. Post-race uses (`reference/04-post-race-uses.png`): camp gear, firewood and water, a campsite hauler, first aid and hydration station, a pioneering-pole cart, a service-project tools cart, a parade and recruiting display.
+- **It keeps a solid look and feel:**
+  - oak and good joinery;
+  - the weatherproof storage box;
+  - signs and a lantern;
+  - built to last for years.
+- **Wheels are required** (we're in the South).
+- **It stays on the wider side, so it's useful as a hauler.**
+- **The front wheels stay steerable** through the tongue, which the pullers steer, as now.
+- **"Self-steering" is out.** The rider does not drive it, and it isn't designed to coast downhill.
+- **The race roles follow the Klondike norm** (`docs/klondike-research.md`):
+  - the rider is a passenger;
+  - the team pulls on hand loops (6–9", never over a neck or waist);
+  - a musher or handler at the back pushes and brakes.
 
-**Eric's guardrail (2026-10-11):** *not* the bare-bones ski-and-PVC sleds online. It stays **a really nice, reusable wooden piece with storage**: oak, good joinery, a finished look, built to last for years. "Sled" sets how it is used and its character: the rider is a passenger, the team pulls, the musher steers and brakes from the back, and it is narrower and lighter. It does not mean minimal.
+The sled research and Eric's packet (`reference/05-klondike-sled-packet.pdf`) supply **character cues only**:
+- a handlebow at the back;
+- the curled bow;
+- the low, long proportions.
 
+They do not change the structure.
 
-**Eric (2026-10-11, later): the scope is narrower than the draft below assumed.**
-- **Wheels are required.** Runners are styling and structure only.
-- **Keep the current layout with steerable front wheels.** The Ackermann front end, steered by the tongue, stays, minus the rider controls.
-- **Keep it wide enough to be useful.** Today's width stays.
+## 1. What changes from `6341ecf` (174 lb, no safe rider range)
 
-So the next phase is a **refinement of the current design**, not a restart:
-- **Drop ride mode:** the rider stick, cables, mode pin, centering, ride lock, hip lever, ride rules card, and the 10 mph bump and fail-safe cases (back to walking or jogging pace).
-- **Musher at the back:** the push handle becomes a sled-style handlebow, with the brake lever there.
-- **Front brakes:** reconsider them. They were added for downhill riding.
-- **Restyle toward a sled:** runner-like lower side members curling up at the bow, a slatted or paneled basket look, side rails and the handlebow, while keeping the oak, the storage box and the finish quality.
-- **Slim the weight back down.**
+**Remove (ride mode, D-49 and D-51 rider controls):**
+- the rider side stick, cables, guides and deck slot;
+- the mode pin, centering springs and ride lock;
+- the hip lever and Bowden cable, and the lost-motion link;
+- the "Riding it downhill" card, the ride envelope rows and the ride sim scenario;
+- the 10 mph bump and fail-safe load cases. Loads go back to **walking or jogging pace on a camp road** (D-50 "bumps, not curbs" still holds), with full margins on normal use.
 
-Decisions 2, 3 and 6 below are answered or adjusted by this, and the S1 concepts become styling and weight variants of the current layout.
+**Reconsider:**
+- **Front brakes (10 lb).** They were added for downhill riding. Without riding, the handler's brake on the rear wheels plus the team should hold a loaded cart on 15°. *Recommendation:* drop them; this check decides it.
+- **Lap belt.** Optional at walking pace. *Recommendation:* drop it, and keep the grab handles and foot stop.
+- **Ackermann front.** Keep the steerable front wheels. Car-style steering is already built and fixes the old turntable failures. With ride mode gone, the linkage can be simplified: the tongue drives the bellcrank directly, with no mode plate and no stick.
 
+**Keep:**
+- the convex-taper hull with no prow (D-45, D-52);
+- the oak, the finish, the storage box and the signs;
+- the rear brake with the handler's lever on the push handle (D-38, D-48);
+- the truck fit and the Simple view.
 
-**Design direction from the packet (2026-10-11).**
-- **Shape:** the classic sled silhouette on wheels:
-  - a long, low bed on hardwood lower rails ("runners") whose tips curl up into a bent-lam brush bow;
-  - side rails that sweep up (Wagner's S-curve) to a tall rear handlebow, which is the musher's push handle and holds the brake lever;
-  - an X brace at the back and a slatted or paneled deck.
-- **Width:** somewhat narrower than today (about 24–26" body, Eric: "somewhat narrower for sure"), still wide enough to be useful.
-- **Wheels:** steerable front wheels (today's Ackermann, steered by the tongue) and fixed rear wheels.
-- **Kept:** the oak and the integrated storage box.
-- **Gear curtain:** canvas or net, as in every plan.
+**Add or adjust:**
+- **A cargo mode.** Post-race hauling becomes a real load case: a payload in lb, spread or concentrated. A flat, usable bed.
+- **The seat stows in the storage box (Eric).** The seat back and cushion come out with no tools and **stow inside the storage box**, leaving a flat cargo floor. This sizes the box interior: it must take the seat-back frame and panel, the back pad and the cushion. When towing in race mode, the 10 Essentials go in the box. The box, the seat-back attachment (D-40 knobs) and the cushion's Dual Lock pad get a fit check and a test. If the back frame is too big to fit, the back folds or splits.
+- **A handlebow-style push handle.** It's the musher's station, holding the brake lever, and gives a sled cue at the back.
+- **Width.** Stays wide (today's 28" cabin), not the 18–24" sled norm.
 
-## 1. What changes, and what we keep
+**Then fix what still fails at the new loads.** The current failures are:
 
-| Area | Keep | Drop or replace |
-|---|---|---|
-| Framework | params → `buildModel` → analysis, viewer, Simple view, truck fit, critic workflow, finish/rendering pipeline | none |
-| Body | oak, the finish quality, rendering, roundovers, the "no exposed ply" rule, **the weatherproof storage box**, signs, lantern | the wide boat hull and its curved gunwales. Replaced by a **crafted sled body**: runners with bent-lam tips and a brush bow, a slatted or paneled basket on stanchions, side rails, an integrated storage box, and a shaped rear handlebow |
-| Running gear | wheel and axle analysis | 13" pneumatic wheels and steel axle beams. Replaced by a **removable wheel kit** bolted to the runners (≤ 12" wheels if AAC limits it) |
-| Steering | bridle and tow analysis, tip checks | Ackermann spindles, linkage, rider stick, ride/tow modes. Replaced by a steering choice for Eric (decision 4) |
-| Brake | brake holding and force checks | rider hip lever, front knuckle brakes, cross shaft and ratchet. Replaced by a **musher brake** at the handlebow (a claw or drag bar, or a simple lever to the rear wheels) |
-| Rider | seat analysis, grab handles, belt | ride-mode envelope, 10 mph bump and fail-safe cases, ride rules card. The rider sits or kneels in the basket and holds side rails |
-| Loads | 150 lb must pass, 200 lb goal (D-1); towing loads; tip; lifting | downhill riding at speed. Loads are walking or jogging pace on a camp road (D-50's "bumps, not curbs") |
-| Weight | none | a real target: well under today's 174 lb. Simple scout sleds weigh 30–60 lb; ours keeps oak, storage and a wheel kit, so roughly **70–100 lb** is a sensible aim (decision 6) |
+| Area | Checks |
+|---|---|
+| Front end | kingpin bracket and bolt (largely driven by the 3" scrub of the hand-truck wheel hubs), bellcrank, tongue tie, tie rod |
+| Rear end | rear beam seat, bearing groove, axle, wheel rating |
 
-The ride-mode work is not wasted: it showed what not to build. We tag the current state (`cart-v3b`) before deleting it, so nothing is lost.
+Most of these were driven by the 10 mph bump cases, so re-run them at walking-pace loads before resizing anything.
 
-## 2. Decisions for Eric before design starts
-1. **AAC / Bert Adams 2026 rules:**
-   - Are sled length and width limits enforced?
-   - Wheel limits: number, diameter, removable?
-   - Hardware: are screws and bolts OK, or lashings only?
-   - Must youth do the building?
+**Then slim the weight.** The target is roughly **100–120 lb** for a solid cart with storage, versus 174 lb today (decision 4).
 
-   *Default if unknown:* about 72" long, 20–22" wide, wheels ≤ 12" and removable, screws and bolts allowed.
-2. **Snow or wheels-only.** Do we design true runners plus a bolt-on wheel kit, so it works on snow too, or a wheels-first sled whose runners are styling and structure?
-
-   *Recommendation:* wheels-first, with real hardwood runners as the main frame members. It keeps the sled look, the runners carry the wheel kit, and in Atlanta it almost always runs on wheels.
-3. **Wheel layout:**
-   - **(a)** 4 small wheels: fixed rear, swivel casters front;
-   - **(b)** 4 fixed wheels, steered by skidding;
-   - **(c)** fixed rear plus a simple pivoting front axle on the tow bar, like today's tongue.
-
-   *Recommendation:* (c) or (a). The study (`docs/ride-mode-study.md`) gives the tradeoffs, which still hold at walking pace.
-4. **Musher position:** walks behind holding the handlebow (simplest), or can also stand on runner tails or a footboard (classic dog sled, which needs a stronger rear)?
-5. **Rider:** sit facing forward (a low seat pad and backrest), or kneel? Is a lap belt still wanted at walking pace?
-6. **Weight target:** how heavy is acceptable, given who lifts it and how it goes in the truck? I'd aim for 70–100 lb with oak and storage.
-7. **Night start:** keep a front lantern (yes, recommended) and the flush flag socket (your idea).
+## 2. Decisions for Eric
+1. **Front brakes:** drop them (recommended) if the rear brake holds on 15°?
+2. **Cargo capacity:** what should it haul after the race? Suggest **250 lb** of payload (firewood, water jugs, coolers), and the 150/200 lb rider in race mode.
+3. **The bed:** the seat back and cushion stow in the storage box for a flat floor (decided, Eric). Do we want stake pockets or tie-down points for poles and tall loads (pioneering, the parade flag)?
+4. **Weight target:** is about 100–120 lb right, given who lifts it into the truck?
+5. **Width:** keep the 28" cabin (and the 41" track)? Or slightly narrower for the truck and trails?
+6. **Lap belt:** drop it?
 
 ## 3. Phases
-- **S0, reset (short).**
-  - Tag `cart-v3b`.
-  - Rewrite BRIEF §3–§4 for the sled.
-  - Record the decisions above in DECISIONS.
-  - Mark superseded entries (the D-49 ride mode, the D-51 front end, the D-52 hull).
-- **S1, concepts.**
-  - 2–3 sled concepts as block models in the viewer, built from new params:
-    - runner length and profile;
-    - basket height, width and slat pitch;
-    - stanchion count;
-    - handlebow height;
-    - wheel kit.
-  - Quick mass, tip and pull numbers for each.
-  - **Checkpoint:** Eric picks one.
-- **S2, analysis re-scope.**
-  - Delete the ride-mode, Ackermann and hull-specific code and checks.
-  - Keep and adapt:
-    - structure of the runners, stanchions and basket under the rider;
-    - wheel kit and axle;
-    - harness, bridle and tow-bar pull;
-    - tip;
-    - musher brake hold on 15°;
-    - lift and truck fit.
-  - Make the Simple view honest for the sled.
-  - Critic round (engineering).
-- **S3, detail and look.** Joinery as plain Domino and screw (or lashing, if the rules require it), and a gear curtain. Visual pass toward the reference sled look, with a critic.
-  - Bent-lam runner tips and brush bow; our lamination work pays off here.
-  - The steam- or lam-bent handlebow.
-  - Critics on engineering, buildability and visual.
-  - **Checkpoint.**
-- **S4, build outputs (the old Phase 4):**
-  - cut list;
-  - nesting;
-  - BOM with costs;
-  - DXF and STL files;
-  - lamination forms for the runners and bow;
-  - assembly steps;
-  - finishing;
-  - single-file HTML.
+1. **3c-1, strip ride mode.**
+   - Remove the parts, params, rows, UI and sim pieces listed in §1, and simplify the linkage.
+   - Re-run the analysis at walking-pace loads.
+   - Report the new mass and the failing rows.
+2. **3c-2, cargo mode and bed.** Add the payload case and the flat bed. Make the seat stow in the box (size the box, and fold or split the back if needed). Add the handlebow push handle and tie-downs.
+3. **3c-3, size and slim.**
+   - Fix the remaining failures with the lightest sound change. For example, a dished or kart-style front hub to cut the scrub.
+   - Weight-reduction pass against the target.
+   - Engineering and buildability critics.
+4. **3c-4, finishing.**
+   - Visual pass: the deferred flush flag socket, lamp detail and sled cues.
+   - Visual critic.
+   - **Checkpoint for Eric.**
+5. **Phase 4, build outputs:**
+   - cut list;
+   - nesting;
+   - BOM with costs;
+   - DXF and STL files;
+   - lamination forms;
+   - assembly steps;
+   - finishing schedule;
+   - single-file HTML.
 
-## 4. How we'll keep it simple this time
-- **A short brief first.** Eric confirms the use case (who rides, who steers, at what speed) before any design work. This would have caught both earlier misunderstandings.
-- **Fewer mechanisms, same craft.** Prefer purchased wheels and hubs and plain, strong joinery. Every added *mechanism* must justify its weight; good wood, finish and storage are part of the brief, not extras.
-- **Loads at the real speed** (walking or jogging pace, bumps), with margins on normal use only.
-- **Show shapes early.** Eric sees a block-model screenshot at S1, before detail work.
+## 4. Lessons applied
+- Confirm the use case in one paragraph before designing: who rides, who steers, at what speed, and what it does after the race. Both rework rounds came from use-case misunderstandings, not engineering.
+- Loads at the real speed, with margins on normal use, and proven purchased parts judged by their record.
+- Every mechanism must earn its weight. Craft, wood and storage are part of the brief.
