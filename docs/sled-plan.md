@@ -24,6 +24,17 @@ So the next phase is a **refinement of the current design**, not a restart:
 
 Decisions 2, 3 and 6 below are answered or adjusted by this, and the S1 concepts become styling and weight variants of the current layout.
 
+
+**Design direction from the packet (2026-10-11).**
+- **Shape:** the classic sled silhouette on wheels:
+  - a long, low bed on hardwood lower rails ("runners") whose tips curl up into a bent-lam brush bow;
+  - side rails that sweep up (Wagner's S-curve) to a tall rear handlebow, which is the musher's push handle and holds the brake lever;
+  - an X brace at the back and a slatted or paneled deck.
+- **Width:** somewhat narrower than today (about 24–26" body, Eric: "somewhat narrower for sure"), still wide enough to be useful.
+- **Wheels:** steerable front wheels (today's Ackermann, steered by the tongue) and fixed rear wheels.
+- **Kept:** the oak and the integrated storage box.
+- **Gear curtain:** canvas or net, as in every plan.
+
 ## 1. What changes, and what we keep
 
 | Area | Keep | Drop or replace |

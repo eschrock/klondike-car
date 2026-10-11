@@ -55,6 +55,32 @@ There is no single national BSA spec. Each council or district publishes its own
 4. **Wheels are an add-on to a sled,** not the basis of a cart. Small wheels (≤ 12" in some rules) bolt to the runners. Steering comes from the team's pull, with the musher pushing and skidding the back.
 5. **Confirm the AAC 2026 sled rules** before freezing anything: size, wheel limits, hardware or lashing rules, and youth-built rules.
 
+
+## Eric's event packet (`reference/05-klondike-sled-packet.pdf`, 2026-10-11)
+There are no formal sled rules, only a packet of example plans:
+- a 1964 National Council sketch;
+- Glenn Wagner's Boys' Life "A Klondike Derby Sled";
+- three council "Klondike Sledge" plans;
+- Troop 22 (Niagara);
+- an Alaskan Klondike sled;
+- Ben Hunt's Arctic hand sled and Komatik.
+
+**What they share, which defines the look:**
+
+| Feature | Typical |
+|---|---|
+| Length | 6–7 ft ("20" wide × 6 or 7 ft long is a good size for scouting") |
+| Width | 18–25" across the runners, 20–28" outside |
+| Deck | low slatted floor about 3.5–7" above the runners, on short upright blocks |
+| Rear stanchions | 33–40" tall, with a handrail or handlebow and an X brace behind |
+| Side rails | rise from the bow to the handlebow: straight (the sledge plans) or a graceful S (Wagner, the Alaskan sled) |
+| Bow | curved front guard or brush bow; runner tips curl up (ski tips or bent ash) |
+| Front | tow bar with bridle holes; canvas snow curtain on the front and sides |
+| Rear | foot treads on the runner tails and a spring brake (Alaskan sled: "a brake is a must in hilly country") |
+| Materials | ash, oak or birch; screws plus lashings; steamed or laminated bends |
+
+**The silhouette is the point:** a long, low, open bed, side rails sweeping up to a tall handlebow at the back, and a curled bow at the front. Wagner's sled (7 ft × 20" × 34½") is the most elegant of them, with its double curved rails and lacing between the posts.
+
 ## Sources
 - NH Scouting, [2024 Klondike Leader Guide](https://nhscouting.org/wp-content/uploads/2023/12/2024-Klondike-Leader-Guide.pdf) and [2020 Klondike Derby Rules](https://nhscouting.org/wp-content/uploads/2020/01/2020-Klondike-Derby-Rules.pdf)
 - [2026 Cardinal Klondike Derby Rules](https://scoutingevent.com/Download/421170073/OR/2026_Cardinal_Klondike_Derby_Rules.pdf) and [Camporee Guide](https://scoutingevent.com/Download/421170072/OR/2026_Cardinal_Klondike_DerbyCamporee_Guide.pdf)
