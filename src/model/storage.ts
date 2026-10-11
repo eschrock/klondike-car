@@ -9,7 +9,7 @@
 import { STORAGE_LOCATION, type Params } from '../params';
 import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
 import type { Layout } from './layout';
-import { gunwaleId, gunwaleY, seatBackSupport } from './seat';
+import { gunwaleId, gunwaleY, inboardOf, seatBackSupport } from './seat';
 import type { Joint, Part } from './types';
 
 // ── Hardware and detail dimensions (estimates, D-41) ──
@@ -20,8 +20,6 @@ const DRAIN_MASS_LB = 0.03;
 const GASKET_LB_PER_IN = 0.002;
 const LASH_MASS_LB = 0.1;
 const LASH_SIZE = [1.5, 0.9, 0.75] as const;
-/** The body's grab-handle blocks (body.ts, D-22) sit 2" to 10" ahead of the H-point; lash points keep clear of them. */
-const BODY_GRAB_X: readonly [number, number] = [2, 10];
 const BACKER_IN = 1;
 const BACKER_W_IN = 1.5;
 const BATTEN_X_IN = 0.75;
@@ -181,7 +179,7 @@ export function packEssentials(interior: Interior, kit: readonly KitItem[] = ESS
   };
 }
 
-/** Lash-point x positions along one gunwale: farthest-point spread over the free stretches (clear of the grips and the body's grab blocks). */
+/** Lash-point x positions along one gunwale: farthest-point spread over the free stretches (clear of the grips). */
 export function lashPositions(p: Params, L: Layout, n: number): number[] {
   const margin = LASH_SIZE[0] / 2 + 0.25;
   const lo = L.xRear + L.side + margin;
@@ -190,11 +188,10 @@ export function lashPositions(p: Params, L: Layout, n: number): number[] {
   const gx0 = Math.min(p.seatXIn - 5, L.xs - L.side - gripLen - 0.25);
   const blocked: Array<[number, number]> = [
     [gx0 - margin, gx0 + gripLen + margin],
-    [p.seatXIn + BODY_GRAB_X[0] - margin, p.seatXIn + BODY_GRAB_X[1] + margin],
   ];
   // A rear box that stands above the gunwale occupies the gunwale line along its length.
   const st = storageGeometry(p, L);
-  if (p.storageLocation === STORAGE_LOCATION.rearOverAxle && st.zTop > L.deckTop + L.sideH - 0.01) blocked.push([st.x0 - margin, st.x1 + margin]);
+  if (p.storageLocation === STORAGE_LOCATION.rearOverAxle && st.zTop > L.deckTop + L.sideH - L.railBand - 0.01) blocked.push([st.x0 - margin, st.x1 + margin]);
   const cands: number[] = [];
   for (let x = lo; x <= hi + 1e-9; x += 0.5) if (!blocked.some(([a, b]) => x > a && x < b)) cands.push(x);
   const chosen: number[] = [];
@@ -298,7 +295,8 @@ export function buildStorage(ctx: Ctx): Part[] {
       notes: 'Gives the hinge screws something to bite; the ply end is only 6 mm.' }));
     // Latch: on the inside face of the rear transom above the lid (rear box), else on the aft end's outer face; hooks a catch on the lid frame.
     const rear = p.storageLocation === STORAGE_LOCATION.rearOverAxle;
-    const ly = sg * Math.min(hw - 3, 6);
+    // Latches sit at 8.5" off center, clear of the rear-light doubler (|y| 2.5 to 7.5) on the same transom face.
+    const ly = sg * Math.min(hw - 3, 8.5);
     const latchBox = rear
       ? span([x0, x0 + 0.35], [ly - 0.6, ly + 0.6], [zTop + 0.4, zTop + 1.7])
       : span([x0 - 0.35, x0], [ly - 0.6, ly + 0.6], [zTop - 2.5, zTop - 1.2]);
@@ -309,7 +307,9 @@ export function buildStorage(ctx: Ctx): Part[] {
       material: 'stainless over-center draw latch', fab: 'buy', step: STEP.finish, ...latchBox,
       sourcing: { vendor: 'McMaster-Carr (316 stainless draw latch)', costUsd: 9 },
       joints: [{ type: 'screw', to: rear ? 'transom-rear' : 'storage-end-aft', count: 2, size: '#8 × 3/8 stainless' }],
-      notes: rear ? 'On the inside face of the rear transom, hooking a catch on the lid frame.' : 'On the aft end, hooking a catch on the lid frame.' }));
+      notes: rear
+        ? 'On the inside face of the rear transom, hooking a catch on the lid frame. No doubler: the lid frame swings through the space a doubler would take. Engagement is 3/8" (a #8 " + 3/8 pilot in white oak face grain holds about 100 lbf per screw, ~200 lbf per latch) against a gasket and slam load of about 20 lbf per latch, so about 10x margin (D-41).'
+        : 'On the aft end, hooking a catch on the lid frame.' }));
     parts.push(box(ctx, { ...common, id: `storage-catch-${tag}`, partNo: 'storage-catch', name: `Latch catch ${tag}`, mat: 'fixed', massLb: CATCH_MASS_LB, kind: 'purchased',
       material: 'stainless catch plate', fab: 'buy', step: STEP.finish, ...catchBox,
       joints: [{ type: 'screw', to: 'storage-rim-end-aft', count: 2, size: '#8 × 1/2 stainless' }] }));
@@ -348,11 +348,17 @@ export function buildStorage(ctx: Ctx): Part[] {
   const yg = gunwaleY(L);
   for (const { s: sg, tag } of SIDES) {
     xs.forEach((x, i) => {
+      const dId = `doubler-lash-${tag}${i + 1}`;
+      // Doubler: oak blocking on the inboard face of the ½" gunwale under the plate; the plate screws straddle the glue line (>= 3/4" engagement, no split-out of the thin rail).
+      parts.push(box(ctx, { id: dId, partNo: 'doubler-lash', name: `Lash point doubler ${tag}${i + 1}`, group: 'storage', mat: 'oak', grain: 'x', step: STEP.finish,
+        ...span([x - LASH_SIZE[0] / 2 - 0.25, x + LASH_SIZE[0] / 2 + 0.25], inboardOf(sg, yg - L.side / 2, p.blockingThickIn), [gTop - L.railBand, gTop]),
+        joints: [{ type: 'glue', to: gunwaleId(p, tag), count: 1, note: 'epoxy, full face' }, { type: 'screw', to: `lash-${tag}${i + 1}`, count: 2, size: '#10 × 1-1/4 stainless, through the plate on the glue line' }],
+        notes: 'Blocking behind the thin gunwale under the lash plate (D-41).' }));
       parts.push(box(ctx, { id: `lash-${tag}${i + 1}`, partNo: 'lash-point', name: `Lash point ${tag}${i + 1}`, group: 'hardware', mat: 'fixed', massLb: LASH_MASS_LB, kind: 'purchased',
         material: 'stainless D-ring on a bolt plate', fab: 'buy', step: STEP.finish, ...span([x - LASH_SIZE[0] / 2, x + LASH_SIZE[0] / 2], [sg * yg - LASH_SIZE[1] / 2, sg * yg + LASH_SIZE[1] / 2], [gTop, gTop + LASH_SIZE[2]]),
         sourcing: { vendor: 'McMaster-Carr (316 stainless D-ring with bolt plate, 300 lbf working load)', costUsd: 7 },
-        joints: [{ type: 'screw', to: gunwaleId(p, tag), count: 2, size: '#10 × 1" stainless, down into the gunwale' }],
-        notes: 'Rated for tie-down straps on coolers, duffels and firewood (post-race hauling, BRIEF §4.9). B may add a local gunwale doubler.' }));
+        joints: [{ type: 'screw', to: dId, count: 2, size: '#10 × 1-1/4 stainless, down on the glue line of the doubler and gunwale' }],
+        notes: 'Rated for tie-down straps on coolers, duffels and firewood (post-race hauling, BRIEF §4.9). Screws land in the oak doubler under the plate (D-41).' }));
     });
   }
   return parts;

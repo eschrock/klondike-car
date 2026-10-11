@@ -4,7 +4,7 @@ import { buildBody, prowTop } from './body';
 import { buildBrake } from './brake';
 import { buildFrame } from './frame';
 import { applyJoinery } from './joinery';
-import { buildHardware, buildLighting } from './lighting';
+import { applyHardwareMass, buildHardware, buildLighting } from './lighting';
 import { buildPayload } from './rider';
 import { buildRunningGear } from './running-gear';
 import { buildSeat } from './seat';
@@ -35,5 +35,7 @@ export function buildModel(input: Params, view: ViewState = {}): Part[] {
     ...buildPayload(ctx),
   ];
   applyJoinery(ctx, parts); // structured joints for the hull and frame (D-35)
-  return ctx.view.removed ? parts.filter((x) => !x.removable) : parts;
+  const out = ctx.view.removed ? parts.filter((x) => !x.removable) : parts;
+  applyHardwareMass(out); // the fastener remainder, from the joints of the parts actually present
+  return out;
 }

@@ -147,7 +147,6 @@ function defaultExplode(ctx: Ctx, s: PartSpec): Vec3 {
       if (/^transom-rear/.test(id)) return unit([-1, 0, 0.3]);
       if (/^transom-front/.test(id)) return unit([1, 0, 0.3]);
       if (/^prow/.test(id)) return unit([0.5, 0, 1]);
-      if (/^grab/.test(id)) return unit([0, sy * 0.7, 1]);
       return unit([0, sy * 0.5, 0.8]);
     case 'seat':
       if (/^foot-stop/.test(id)) return unit([0.6, 0, 0.8]);

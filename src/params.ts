@@ -268,6 +268,11 @@ const defs = {
     default: 0.1875, min: 0.125, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-35',
     note: 'Glued-on oak strip, flush both faces, on every ply edge that is not captured (deck step, shoulder panels, signs).',
   },
+  blockingThickIn: {
+    label: 'Oak doubler (blocking) thickness', group: 'body', unit: 'in',
+    default: 0.75, min: 0.5, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-41',
+    note: 'Local oak blocking glued behind the ½" gunwale and the ½" rear transom where grip pads, lash plates and the rear-light plate screw in, so every wood screw has at least ¾" of engagement.',
+  },
   prowHeightIn: {
     label: 'Prow height above the gunwale line', group: 'body', unit: 'in',
     default: 18, min: 8, max: 30, step: 0.5, status: 'assumed', ref: 'D-36',
@@ -375,7 +380,8 @@ const defs = {
   },
   storageVolumeIn3: {
     label: 'Storage box interior volume', group: 'body', unit: 'in³',
-    default: 1800, min: 800, max: 4000, step: 50, status: 'assumed', ref: 'D-19',
+    default: 2000, min: 800, max: 4000, step: 50, status: 'assumed', ref: 'D-19',
+    note: 'Raised from 1,800 to 2,000 in³ (Phase 3 integration): the 10 Essentials packing check (D-41) filled 0.96 of the 1,762 in³ interior at 1,800, so this restores about 10% margin.',
   },
   storageOverSideIn: {
     label: 'Storage box max height above the side top', group: 'body', unit: 'in',

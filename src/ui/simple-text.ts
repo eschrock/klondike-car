@@ -37,6 +37,13 @@ const PART: Record<string, { name: string; event?: string }> = {
   kingpin: { name: 'the steering pin' },
   turntable: { name: 'the steering pivot' },
   tongue: { name: 'the pull handle' },
+  'steer-stops': { name: 'the steering stops', event: 'at full turn' },
+  'kingpin-peak': { name: 'the steering pin', event: 'in the wood around it' },
+  'pitch-path': { name: 'the front steering plate', event: 'under load' },
+  'kingpin-split': { name: 'the wood around the steering pin' },
+  'bridle-tie': { name: 'the rope tie point' },
+  'seat-back': { name: 'the seat back', event: 'when the rider leans back' },
+  'seat-grip': { name: 'the side grab handles' },
 };
 const partText = (id: string) => { const q = PART[id]; return q ? (q.event ? `${q.name} ${q.event}` : q.name) : id; };
 
@@ -63,6 +70,13 @@ const REASON: Record<string, string> = {
   rails: 'the side rails could crack',
   deck: 'the floor could crack',
   tongue: 'the pull handle could crack',
+  'steer-stops': 'the steering stops could crush or loosen at full turn',
+  'kingpin-peak': 'the wood around the steering pin could crush',
+  'pitch-path': 'the front steering plate could dent the beam under it',
+  'kingpin-split': 'the wood around the steering pin could split',
+  'bridle-tie': 'the rope tie point could pull out',
+  'seat-back': 'the seat back could break or pull loose when the rider leans back',
+  'seat-grip': 'a side grab handle could break when a rider hangs on',
 };
 export function failReason(id: string): string {
   return REASON[id] ?? 'a safety check fails';

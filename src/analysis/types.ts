@@ -83,4 +83,6 @@ export const GROUP_OF_ID: Record<string, CheckGroup> = {
   'steer-stops': 'Structure', 'kingpin-peak': 'Structure', 'pitch-path': 'Structure', 'kingpin-split': 'Structure', 'bridle-tie': 'Structure',
   'axle-stress': 'Structure', 'beam-front': 'Structure', 'beam-rear': 'Structure', 'bearing-groove': 'Structure', rails: 'Structure', deck: 'Structure',
   kingpin: 'Structure', turntable: 'Structure', tongue: 'Structure',
+  // Workstream D (seat, storage, fittings)
+  'seat-back': 'Structure', 'seat-grip': 'Structure', 'storage-pack': 'Structure', 'storage-lid-open': 'Structure', 'lash-points': 'Structure',
 };

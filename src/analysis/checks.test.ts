@@ -11,6 +11,7 @@ import { judge } from './types';
 import { phase1Params } from '../test-baselines';
 import { makeContext } from './context';
 import { resolveParams } from '../params';
+import { worldAABB } from '../model/bounds';
 
 const defaults = defaultParams();
 const phase1 = phase1Params(); // the Phase 1 configuration: for tests whose purpose is a hand calculation worked at it
@@ -26,6 +27,31 @@ const turnEdgeIn = (p: Params, lockDeg: number) => {
 };
 const byId = (cs: AnalysisCheck[], id: string) => cs.find((c) => c.id === id)!;
 const run = (p: Params) => runChecks(p, { includeTruck: false });
+
+/**
+ * Hand calculation of the through-rod axle stress (M5) from a load case, so no mass is hard-coded and the test survives parts-list changes.
+ * Static wheel load: rear axle share M (WB - x_cg)/WB of the total, split 1/2 + |y_cg|/track between the wheels; design load = static x dynamic factor;
+ * cantilever arm a = wheel centerline - clamp plate outer edge; the tire friction force H = mu P_static adds H cos(psi) r to the vertical moment and
+ * H sin(psi) a in the fore-aft plane; sigma = sqrt(Mv^2 + Mh^2) c/I + H cos(psi)/A, worst psi over 0..90 deg.
+ */
+const rearAxleStressHand = (p: Params, parts: ReturnType<typeof buildModel>, c: { massLb: number; cg: number[] }) => {
+  const WB = p.wheelbaseIn;
+  const rearAxle = (c.massLb * (WB - c.cg[0])) / WB;
+  const P = rearAxle * (0.5 + Math.abs(c.cg[1]) / p.rearTrackIn); // static, worst wheel
+  const wheel = parts.find((x) => x.id === 'wheel-RL')!;
+  const outer = Math.max(...['clamp-RL1', 'clamp-RL2'].map((id) => worldAABB(parts.find((x) => x.id === id)!).max[1]));
+  const a = Math.abs(wheel.transform[13]) - outer;
+  const d = p.axleDiameterIn, I = (Math.PI * d ** 4) / 64, A = (Math.PI * d * d) / 4;
+  const r = p.wheelDiameterIn / 2;
+  const H = p.tireGroundMu * P;
+  let sigma = 0;
+  for (let psi = 0; psi <= 90; psi += 1) {
+    const rad = (psi * Math.PI) / 180;
+    const Mv = P * p.dynamicFactor * a + H * Math.cos(rad) * r, Mh = H * Math.sin(rad) * a;
+    sigma = Math.max(sigma, (Math.hypot(Mv, Mh) * (d / 2)) / I + (H * Math.cos(rad)) / A);
+  }
+  return { P, a, sigma };
+};
 
 describe('runChecks at the defaults', () => {
   const cs = run(defaults);
@@ -90,11 +116,12 @@ describe('runChecks at the defaults', () => {
   it('through-rod axle stress matches the closed-form cantilever for the rear wheel', () => {
     const c = byId(cs, 'axle-stress');
     const rear = c.details!.find((d) => d.name.startsWith('rear axle bending'))!;
-    // hand (goal, rear): P = 119.9 lb × 3 = 359.6 lbf, a = 2.0", M = 719.2 lb·in → 17.4 ksi vertical; with the tire friction force
-    // (0.5 × 119.9 lb at r = 6.5") M = 1109 lb·in → σ = 1109 × 0.375 / 0.015531 + 60.0/0.4418 = 26.9 ksi
-    // (P was 114.7 lb before workstream C: the 8.7 lb heavier brake mechanism behind the rear axle adds ~5 lb to each rear wheel's goal load)
-    expect(rear.value).toBeGreaterThan(26000);
-    expect(rear.value).toBeLessThan(27500);
+    // Hand calculation from the goal load case (see rearAxleStressHand): the same formulas as the check, with no pinned masses.
+    // At the Phase 3 defaults, P = 124 lb static and sigma is about 27 ksi (it was 26.9 ksi before the Phase 3 integration).
+    const ctx = makeContext(resolveParams(defaults), buildModel(resolveParams(defaults), { rider: 'goal', cargo: true, steerDeg: 0 }));
+    const hand = rearAxleStressHand(resolveParams(defaults), ctx.parts, ctx.loads.goal);
+    expect(rear.value).toBeCloseTo(hand.sigma, -1); // within 5 psi
+    expect(Math.abs(rear.value / hand.sigma - 1)).toBeLessThan(2e-3);
     expect(c.details!.some((d) => d.name.includes('deflection'))).toBe(true);
   });
 });
@@ -344,8 +371,17 @@ describe('critic round 1 fixes: hand-calculated numbers at the defaults', () => 
   });
   it('M2: compression ⊥ allowable is 1070 × 0.67 / 2 = 358.45 psi', () => {
     expect(goal('bearing-groove').limit).toBeCloseTo(358.45, 2);
-    // 149 lb front axle (nose-down) → rear wheel 124 lb static: groove stress 327 psi → 91% utilized (Phase 3: the heavier brake sits behind the axle)
-    expect(goal('bearing-groove').util).toBeCloseTo(326.6 / 358.45, 1);
+    // Worst wheel (front: worse of level and nose-down, or rear) x 3 over the rod diameter x the clamp-plate length along the rod; the numbers come from the
+    // goal load case (about 149 lb front axle, 124 lb static rear wheel and 327 psi at the Phase 3 mass).
+    const g = lctx.loads.goal, WB = legacy.wheelbaseIn;
+    const frontWheel = hand(g).front * (0.5 + Math.abs(g.cg[1]) / legacy.frontTrackIn);
+    const rearWheel = ((g.massLb * (WB - g.cg[0])) / WB) * (0.5 + Math.abs(g.cg[1]) / legacy.rearTrackIn);
+    const tag = rearWheel >= frontWheel ? 'R' : 'F';
+    const cl = [`clamp-${tag}L1`, `clamp-${tag}L2`].map((id) => worldAABB(lctx.parts.find((x) => x.id === id)!));
+    const widthY = Math.max(...cl.map((b) => b.max[1])) - Math.min(...cl.map((b) => Math.max(0, b.min[1])));
+    const stress = (Math.max(frontWheel, rearWheel) * legacy.dynamicFactor) / (legacy.axleDiameterIn * widthY);
+    expect(goal('bearing-groove').value).toBeCloseTo(stress, 0);
+    expect(goal('bearing-groove').util).toBeCloseTo(stress / 358.45, 3);
     expect(byId(run({ ...defaults, wetServiceFactorCompPerp: 0.85 }), 'bearing-groove').cases!.goal!.limit).toBeCloseTo(454.75, 2);
   });
   it('M3 rails: M = P·L/4 + w·L²/8 = 337.5 × 49.125 / 4 + (3 × chassis self-weight / 2) × 49.125 / 8 ≈ 4145 + 634 lb·in → σ = M/S = M / 1.125 ≈ 4.2 ksi', () => {
@@ -363,10 +399,10 @@ describe('critic round 1 fixes: hand-calculated numbers at the defaults', () => 
     // hand: W (cos15 · x/L + sin15 · h/L) with W, x, h from the goal load case
     expect(byId(cs, 'turntable').how).toMatch(/nose-down/);
   });
-  it('M5 axle: rear wheel, operating: P = 104.0 lb × 3 = 311.9; vertical M = 624 lb·in; + μP·r = 0.5 × 104.0 × 6.5 = 338 → 962 lb·in; σ = 962 × 0.375 / 0.015531 + 52.0/0.4418 = 23.3 ksi', () => {
+  it('M5 axle: rear wheel, operating: P = rear-axle share x (1/2 + |y|/track) x 3; M = P a + mu P r (vertical plane) with H sin(psi) a fore-aft; sigma = resultant c/I + H/A (about 23 ksi at the Phase 1 mass)', () => {
     const rear = byId(cs, 'axle-stress').cases!.operating!;
-    expect(rear.value).toBeGreaterThan(22800);
-    expect(rear.value).toBeLessThan(23800);
+    const hand = rearAxleStressHand(resolveParams(legacy), lctx.parts, lctx.loads.operating);
+    expect(Math.abs(rear.value / hand.sigma - 1)).toBeLessThan(2e-3);
     expect(byId(cs, 'axle-stress').how).toMatch(/resultant/);
   });
   it('D1 deck: b_eff = 10 + 0.625 × 9.5 = 15.94"; 200 lb on 4" at midspan of 9.5": δ = 0.069" (fails L/300 = 0.032"); 12 mm gives 0.029" (passes); needed ≥ 11.7 mm', () => {
@@ -415,7 +451,13 @@ describe('critic round 1 fixes: hand-calculated numbers at the defaults', () => 
     expect(byId(run({ ...defaults, riderMinMassLb: 150 }), 'pitch-rear').status).not.toBe('fail');
   });
   it('L1 pitch-fwd: F_b/W = 0.5 × 164.8 / 297.2 = 0.277 vs tip threshold (31.6/15.08) cos15° = 2.02; equivalent angle acos(0.277/2.095) − 15° = 67.4°', () => {
-    expect(op('pitch-fwd').value).toBeCloseTo(67.4, 0);
+    // Hand calculation from the operating load case (about 67 deg at the Phase 3 mass): N_r = W (cos th (WB - x)/WB - sin th h/WB), a/g = mu N_r / W,
+    // tip threshold (WB - x)/h cos th, equivalent angle acos((a/g) / ((WB - x)/h)) - design slope.
+    const q = lctx.loads.operating, WB = legacy.wheelbaseIn, th = (legacy.designSlopeDeg * Math.PI) / 180;
+    const Nr = q.massLb * (Math.cos(th) * (WB - q.cg[0]) / WB - Math.sin(th) * q.cg[2] / WB);
+    const geo = (WB - q.cg[0]) / q.cg[2];
+    const handDeg = (Math.acos(Math.min(1, (legacy.tireGroundMu * Nr / q.massLb) / geo)) * 180) / Math.PI - legacy.designSlopeDeg;
+    expect(op('pitch-fwd').value).toBeCloseTo(handDeg, 1);
     expect(byId(cs, 'pitch-fwd').how).not.toMatch(/tanθ \+ a/);
   });
   it('L2 brake: wet shoes μ 0.25 give F_design × 0.4 / 0.25 = 1.6 × F_design (sensitivity only; status follows the design μ)', () => {

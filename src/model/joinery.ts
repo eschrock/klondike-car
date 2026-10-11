@@ -262,16 +262,6 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     }
   }
 
-  // ── Grab handles: two bolts through the gunwale ──
-  for (const { tag } of SIDES) {
-    const grab = byId.get(`grab-${tag}`);
-    if (!grab) continue;
-    const nose = grab.transform[12] >= L.xs;
-    const rail = captured || openFrame ? `side-${nose ? 'nose' : 'cabin'}-${tag}-gunwale` : `side-${nose ? 'nose' : 'cabin'}-${tag}-board`;
-    const zc = grab.transform[14];
-    add({ a: grab.id, b: rail, typeA: 'bolt', size: '1/4-20 × 2 SS carriage bolt, fender washer and nyloc nut', pts: [-2.5, 2.5].map((dx) => [grab.transform[12] + dx, grab.transform[13], zc - 0.5] as Vec3), noteA: 'Through the gunwale; the nuts sit under the rail inside the hull.' });
-  }
-
   // ── Finger guards: strap on two inserts in the nose gunwale ──
   {
     const fa = fingerAnalysis(ctx);
@@ -298,6 +288,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     push(q.a, { type: q.typeA, to: q.b, count: q.pts.length, size: q.size, at: q.pts.map((pt) => toLocal(A.transform, pt)), ...(q.noteA ? { note: q.noteA } : {}) });
     push(q.b, { type: q.typeB ?? q.typeA, to: q.a, count: q.pts.length, size: q.sizeB ?? q.size, at: q.pts.map((pt) => toLocal(B.transform, pt)), ...(q.noteB ?? q.noteA ? { note: q.noteB ?? q.noteA } : {}) });
   }
+  locateJoints(parts);
 }
 
 export interface JoinerySummary {
@@ -326,4 +317,59 @@ export function joinerySummary(parts: Part[], filter: (p: Part) => boolean = () 
     }
   }
   return { total, byType };
+}
+
+
+/**
+ * Fill in `at` (local-frame fastener positions) for every structured joint that does not have one (parts built outside
+ * the hull/frame joinery: clamps, turntable, steer stops, seat and storage hardware, brake and handle bolts, lights).
+ *
+ * The positions are derived, not hand-placed: the contact region of the two mated parts is the overlap of their world
+ * bounding boxes (or, for parts a hair apart, this part's own face toward the mate). `count` points are spread over that region:
+ * along its longest axis, or on a grid over its two longest axes for four or more fasteners in a region at least
+ * `GRID_MIN_IN` wide. A joint listed on both parts gets the same world points on each (the region is symmetric), each
+ * in its own part's local frame. Payload parts are skipped (BRIEF: not part of the cart).
+ */
+const GRID_MIN_IN = 1;
+export function locateJoints(parts: Part[]): void {
+  const byId = new Map(parts.map((x) => [x.id, x]));
+  const boxes = new Map<string, { min: Vec3; max: Vec3 }>();
+  const bb = (x: Part) => { let b = boxes.get(x.id); if (!b) { b = worldAABB(x); boxes.set(x.id, b); } return b; };
+  for (const part of parts) {
+    if (part.payload) continue;
+    for (const j of part.joints ?? []) {
+      if (j.at && j.at.length === j.count) continue;
+      const a = bb(part);
+      const mate = byId.get(j.to);
+      const m = mate ? bb(mate) : a;
+      const lo: Vec3 = [0, 0, 0], hi: Vec3 = [0, 0, 0];
+      for (let k = 0; k < 3; k++) {
+        const l = Math.max(a.min[k], m.min[k]), h = Math.min(a.max[k], m.max[k]);
+        // Overlap: the shared slab. Gap: this part's own face toward the mate (the fastener sits on this part, not in the air gap).
+        const touching = l <= h + 1e-6; // faces that meet to within rounding count as a contact
+        const face = a.min[k] + a.max[k] <= m.min[k] + m.max[k] ? a.max[k] : a.min[k];
+        lo[k] = touching ? Math.min(l, h) : face;
+        hi[k] = touching ? Math.max(l, h) : face;
+      }
+      const ext = [0, 1, 2].map((k) => hi[k] - lo[k]);
+      const order = [0, 1, 2].sort((p, q) => ext[q] - ext[p]);
+      const at = (f: [number, number, number]): Vec3 => [0, 1, 2].map((k) => lo[k] + ext[k] * f[k]) as Vec3;
+      const world: Vec3[] = [];
+      const n = Math.max(1, j.count);
+      if (n === 1) world.push(at([0.5, 0.5, 0.5]));
+      else if (n >= 4 && ext[order[1]] >= GRID_MIN_IN) {
+        const nx = Math.min(n, Math.max(1, Math.round(Math.sqrt((n * ext[order[0]]) / ext[order[1]]))));
+        const ny = Math.ceil(n / nx);
+        for (let i = 0; i < n; i++) {
+          const f: [number, number, number] = [0.5, 0.5, 0.5];
+          f[order[0]] = ((i % nx) + 0.5) / nx;
+          f[order[1]] = (Math.floor(i / nx) + 0.5) / ny;
+          world.push(at(f));
+        }
+      } else {
+        for (let i = 0; i < n; i++) { const f: [number, number, number] = [0.5, 0.5, 0.5]; f[order[0]] = (i + 0.5) / n; world.push(at(f)); }
+      }
+      j.at = world.map((w) => toLocal(part.transform, w));
+    }
+  }
 }

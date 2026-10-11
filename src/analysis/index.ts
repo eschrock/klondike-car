@@ -14,6 +14,7 @@ import { steerClearance, steerSweep } from './steering';
 import { pitchForward, pitchRear, slideBeforeTip, tipLock, tipStraight, turnRadius, vRollover } from './stability';
 import { axleStress, bearingGroove, beamFront, beamRear, deckCheck, kingpinCheck, kingpinStrikeCheck, railsCheck, rollBolsterAttachCheck, rollKingpinUpliftCheck, rollSideBearerCheck, tongueCheck, turntableCheck } from './structure';
 import { bridleTieCheck, kingpinPeakCheck, kingpinSplitCheck, pitchPathCheck, steerStopsCheck } from './front';
+import { seatChecks } from './seat';
 import { cgCheck, massEmpty, truckFit, truckSkipped } from './transport';
 import type { AnalysisCheck } from './types';
 
@@ -83,6 +84,7 @@ export function runChecks(input: Params, opts: RunOptions = {}): AnalysisCheck[]
     bridleTieCheck(ctx),
     turntableCheck(ctx),
     tongueCheck(ctx),
+    ...seatChecks(ctx),
     includeTruck ? truckFit(opts.fit ?? checkTruckFit(p, (v) => buildModel(p, v))) : truckSkipped(),
   ];
   return out.map(sanitize);

@@ -9,14 +9,16 @@
  * Hand-written prose lives between <!-- obs:start --> and <!-- obs:end --> in the output and is preserved on re-runs.
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { defaultParams, derived, DRAWBAR, resolveParams, validateParams, type Params } from '../src/params';
+import { defaultParams, derived, DRAWBAR, kingpinBoreIn, resolveParams, validateParams, type Params } from '../src/params';
 import { buildModel } from '../src/model';
 import { totalMass } from '../src/model/mass';
 import { runChecks, type AnalysisCheck } from '../src/analysis';
 import { checkTruckFit, type Config, type FitResult, type Stowage } from '../src/truck/fit';
 
 const T0 = Date.now();
-const OUT = new URL('../docs/phase2-exploration.md', import.meta.url).pathname;
+/** EXPLORE_OUT overrides the output path (a smoke run must not overwrite docs/phase2-exploration.md); EXPLORE_SMOKE=1 shrinks the stage-2 grid. */
+const OUT = process.env.EXPLORE_OUT ?? new URL('../docs/phase2-exploration.md', import.meta.url).pathname;
+const SMOKE = process.env.EXPLORE_SMOKE === '1';
 const log = (s: string) => console.log(`[${((Date.now() - T0) / 1000).toFixed(1)}s] ${s}`);
 
 // ── evaluation ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -30,8 +32,10 @@ const LIG = defaultParams().beamLigamentMinIn;
 const WEB = defaultParams().rodKingpinWebMinIn;
 /** Kingpin + axle-rod combination with the kingpin lead (rod-kingpin web rule, 1/16") and front beam width (ligament rule, 1/8", never below the default) at their minimum valid values. */
 function hw(kp: number, axle: number): Over {
-  const lead = ceilTo(axle / 2 + kp / 2 + WEB, 1 / 16);
-  const beam = Math.max(defaultParams().frontAxleBeamThicknessIn, ceilTo(lead + axle / 2 + kp / 2 + 2 * LIG, 1 / 8));
+  // Phase 3 (M11): the oak is bored for the kingpin SLEEVE (1-1/4" OD by default), not the pin, so both rules use the bore.
+  const bore = kingpinBoreIn({ ...defaultParams(), kingpinDiameterIn: kp });
+  const lead = ceilTo(axle / 2 + bore / 2 + WEB, 1 / 16);
+  const beam = Math.max(defaultParams().frontAxleBeamThicknessIn, ceilTo(lead + axle / 2 + bore / 2 + 2 * LIG, 1 / 8));
   // Washer under the beam sized for >= 1.3 in^2 of annulus so the bump-roll uplift (about 360 lbf, goal) stays under the oak bearing limit.
   const washer = Math.max(defaultParams().kingpinWasherDiameterIn, ceilTo(Math.sqrt(kp * kp + (4 * 1.3) / Math.PI), 1 / 8));
   return { kingpinDiameterIn: kp, axleDiameterIn: axle, kingpinLeadIn: lead, frontAxleBeamThicknessIn: beam, kingpinWasherDiameterIn: washer };
@@ -204,7 +208,8 @@ const VARS: Var[] = [
   { key: 'ply', label: 'Deck ply (6/9/12/18 mm)', unit: 'in', values: [0.236, 0.354, 0.472, 0.709], apply: (v) => ({ deckPlyIn: v }) },
   { key: 'xmem', label: 'Crossmember spacing', unit: 'in', values: [6, 8, 10, 12, 14], apply: (v) => ({ crossmemberSpacingIn: v }) },
   { key: 'tongue', label: 'Tongue length (drawbar = tongue)', unit: 'in', values: [12, 18, 24, 30, 36], apply: (v) => ({ drawbar: DRAWBAR.woodTongue, tongueLengthIn: v }) },
-  { key: 'brake', label: 'Brake lever ratio (extra)', unit: ':1', values: [6, 8, 10, 12, 14], apply: (v) => ({ brakeLeverRatio: v }) },
+  // The brake ratio is derived from the linkage geometry since Phase 3 (D-38); the free input is the lever tail length (shorter = more mechanical advantage).
+  { key: 'brake', label: 'Brake lever tail length (extra)', unit: 'in', values: [1.2, 1.5, 1.9, 2.4, 3], apply: (v) => ({ brakeLeverTailIn: v }) },
   { key: 'seat', label: 'Seat H-point ahead of rear axle (extra)', unit: 'in', values: [4, 6, 8, 10, 12, 14, 16], apply: (v) => ({ seatXIn: v }) },
   { key: 'body', label: 'Cabin width (extra)', unit: 'in', values: [24, 26, 28, 30, 32], apply: (v) => ({ bodyWidthIn: v }) },
 ];
@@ -320,12 +325,12 @@ const cheapTxt = cheap.length
 
 // Stage 2 -------------------------------------------------------------------------------------------------------
 log('Stage 2: focused grid (fast path, truck fit only for survivors)');
-const trackLevels = [33.5, 34.5, 35.5, 36.5, 38, 40];
-const wbLevels = [42, 44, 46, 48, 50];
-const deckLevels = [8, 9, 10]; // nose deck raised to keep >= 9 in (see stage 1)
-const lockLevels = [33, 36, 38.5];
-const wheelLevels = [10, 11.5, 13];
-const seatLevels = [12, 14, 16];
+const trackLevels = SMOKE ? [34.5, 36.5] : [33.5, 34.5, 35.5, 36.5, 38, 40];
+const wbLevels = SMOKE ? [44, 48] : [42, 44, 46, 48, 50];
+const deckLevels = SMOKE ? [9] : [8, 9, 10]; // nose deck raised to keep >= 9 in (see stage 1)
+const lockLevels = SMOKE ? [36] : [33, 36, 38.5];
+const wheelLevels = SMOKE ? [11.5] : [10, 11.5, 13];
+const seatLevels = SMOKE ? [14] : [12, 14, 16];
 // pull: rope bridle only, or tongue 12 / 18 / 24
 const pullLevels: Over[] = [{ drawbar: DRAWBAR.ropeBridleOnly }, ...[12, 18, 24].map((l) => ({ drawbar: DRAWBAR.woodTongue, tongueLengthIn: l }))];
 const gridDims = `track ${trackLevels.length} x wheelbase ${wbLevels.length} x wheel ${wheelLevels.length} x deck height ${deckLevels.length} x lock ${lockLevels.length} x seat ${seatLevels.length} x pull ${pullLevels.length} x hardware ${hwOvers.length}`;

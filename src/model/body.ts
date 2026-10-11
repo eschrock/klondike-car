@@ -1,6 +1,6 @@
 /**
  * Body: decks, captured-ply sides, shoulder panels, transoms with lift hand-holds, the bent-lam prow (and its
- * form), finger guards over the front-tire pinch zone, signs and grab handles (D-22, D-35…D-37).
+ * form), finger guards over the front-tire pinch zone, signs (D-22, D-35…D-37).
  *
  * Shapes follow the build: the okoume side web is an `extrusion` that enters a groove in the chine and the gunwale,
  * the decks are `extrusion` outlines that enter rabbets (chines) and dados (transoms), the transoms are full-width
@@ -15,14 +15,11 @@ import { REFLECTOR_FRACS, REFLECTOR_SIZE } from './lighting';
 import { compose } from './mat4';
 import type { Dims, EdgeCondition, Mat4, Part, PartGroup, Vec2, Vec3 } from './types';
 
-// ── Block-model placeholders (not design numbers: open-frame post pitch, grab handle block, sign fit gaps) ──
+// ── Block-model placeholders (not design numbers: open-frame post pitch, sign fit gaps) ──
 const POST_SPACING_IN = 12;
 const POST_X_IN = 1.5;
 const SIGN_MIN_LEN_IN = 4;
 const SIGN_TIRE_GAP_IN = 0.25;
-/** Grab handle (spec: 1 × 1.5 × 8): along x, y, z. */
-const GRAB_SIZE = [8, 1.5, 1] as const;
-const GRAB_AHEAD_OF_SEAT_IN = 6;
 /** Prow leg: how far the foot hugs the front transom, and the oak kept between the slot and the leg. */
 const PROW_LEG_MAX_IN = 3;
 const PROW_LEG_ABOVE_SLOT_IN = 0.25;
@@ -643,17 +640,6 @@ export function buildBody(ctx: Ctx): Part[] {
     parts.push(sg);
   }
 
-  // ── Grab handles on the gunwales ──
-  const gx = p.seatXIn + GRAB_AHEAD_OF_SEAT_IN;
-  const nose = gx >= L.xs;
-  const gw = nose ? L.hwN : L.hwC;
-  const gTop = (nose ? L.noseTop : L.deckTop) + H;
-  for (const { s, tag } of SIDES) {
-    parts.push(box(ctx, {
-      id: `grab-${tag}`, partNo: 'grab-handle', name: `Grab handle ${tag}`, group: 'body', mat: 'oak', step: STEP.finish,
-      size: [...GRAB_SIZE], center: [gx, s * (gw + L.side / 2 + (nose ? 0 : flare)), gTop + GRAB_SIZE[2] / 2],
-      notes: 'Bolted through the gunwale with two 1/4" bolts and fender washers (D-35).',
-    }));
-  }
+  // Grab handles: the real ones are workstream D's `seat-grip-*` (seat.ts, D-40); the Phase 1 `grab-L/R` blocks sat on the gunwale and could not be gripped, so they were removed (Phase 3 integration).
   return parts;
 }

@@ -228,7 +228,7 @@ describe('overlaps', () => {
     for (const deg of [lock, -lock]) {
       const parts = buildModel(defaults, { steerDeg: deg });
       const tires = parts.filter((p) => p.id === 'wheel-FL' || p.id === 'wheel-FR');
-      const body = parts.filter((p) => !p.payload && /^(side-|shoulder|deck-|transom|rail-|joist-|bolster|foot-stop|storage|seat-|sign|reflector|grab)/.test(p.id));
+      const body = parts.filter((p) => !p.payload && /^(side-|shoulder|deck-|transom|rail-|joist-|bolster|foot-stop|storage|seat-|sign|reflector)/.test(p.id));
       expect(body.length).toBeGreaterThan(10);
       for (const t of tires) for (const b of body) {
         expect(obbOverlap(partOBB(t), partOBB(b)), `${t.id} vs ${b.id} @${deg}`).toBeLessThanOrEqual(0);
@@ -259,9 +259,21 @@ describe('overlaps', () => {
 //   lever and two shoe blocks; now: ¾" ground cross shaft 39.5" long 4.9 (was 2.0), four shoe arms + four keyed hubs 1.1, two oak pads 0.6,
 //   two pad pins 0.4, oak lever + pivot block + bearing pad 1.2, thick keyed crank 0.6, link rod and two clevises 0.2, two bronze bushings and a
 //   sleeve 0.25, return spring 0.1, ratchet quadrant + bracket + pawl + spring 0.45, two steel-tube handle sockets 2.3 (new, stay on the cart).
-const EXPECTED_EMPTY_LB = 144.7; // 126.9 (Phase 2) + Phase 3 workstreams A (+3.6), B (+0.6), D (+3.1) and C (+8.5): re-checked at the Phase 3 integration
+// Phase 3 integration (all four workstreams landed): 144.7 → 147.8 lb (+3.1), group by group:
+//   body 30.2 → 29.7 (-0.5): the two 8" x 1.5" x 1" `grab-L/R` oak blocks (about 0.27 lb each) are gone (-0.75 with the storage-volume change below), because D's real `seat-grip-*` handles replace them
+//     (the blocks sat on the gunwale and could not be gripped);
+//   seat 8.2 → 8.7 (+0.5): oak doublers behind the 1/2" gunwale under the two grip pads (2 x 0.22 lb of 3/4" x 1.5" x 6.5" oak) so every pad screw has
+//     >= 3/4" engagement (D-41);
+//   storage 9.9 → 10.5 (+0.6): six lash-plate doublers (6 x 0.07 = 0.4 lb) plus 0.2 lb for the larger box (2,000 in³);
+//   body: +0.2 lb from the larger box (the deck and transom crest follow it);
+//   lighting 1.2 → 1.3 (+0.1): the rear-light doubler (0.16 lb of oak);
+//   hardware 3.1 → 5.4 (+2.3): the flat 2.5 lb fastener lump became a computed remainder (lighting.ts `fastenerBreakdown`): about 114 wood and machine
+//     screws x 0.008 lb, 38 bolt sets x 0.04-0.09 lb, 16 nuts-and-washer legs, 20 inserts, 16 knobs, 22 Dominos and 56 epoxy joints = 4.8 lb, plus the six
+//     lash plates 0.6 lb. The old lump had been sized before the joint list existed and was too small for the real fastener count.
+// Group totals are therefore within a few percent of the sums above; the test band is ±15% per group and ±10% overall.
+const EXPECTED_EMPTY_LB = 147.8;
 const EXPECTED_GROUP_LB: Record<string, number> = {
-  'running-gear': 51.0, steering: 13.8, frame: 10.5, body: 30.2, seat: 8.2, storage: 9.9, brake: 12.2, removable: 4.8,
+  'running-gear': 51.0, steering: 13.8, frame: 10.5, body: 29.7, seat: 8.7, storage: 10.5, brake: 12.3, removable: 4.7, hardware: 5.4, lighting: 1.3,
 };
 
 describe('masses', () => {
@@ -523,7 +535,7 @@ describe('rider and tire clearance consistency', () => {
     const tireBody = (p: Params, deg: number) => {
       const parts = buildModel(p, { steerDeg: deg });
       const tires = parts.filter((x) => x.id === 'wheel-FL' || x.id === 'wheel-FR');
-      const body = parts.filter((x) => !x.payload && /^(side-|shoulder|deck-|transom|rail-|joist-|bolster|foot-stop|storage|seat-|sign|reflector|grab)/.test(x.id));
+      const body = parts.filter((x) => !x.payload && /^(side-|shoulder|deck-|transom|rail-|joist-|bolster|foot-stop|storage|seat-|sign|reflector)/.test(x.id));
       let worst = -Infinity;
       for (const t of tires) for (const b of body) worst = Math.max(worst, obbOverlap(partOBB(t), partOBB(b)));
       return worst;
@@ -675,7 +687,7 @@ describe('round-2 validator rules', () => {
     const tireGap = (p: Params, deg: number) => {
       const m = buildModel(p, { steerDeg: deg });
       const tires = m.filter((x) => x.id === 'wheel-FL' || x.id === 'wheel-FR');
-      const body = m.filter((x) => !x.payload && /^(side-|shoulder|deck-|transom|rail-|joist-|bolster|foot-stop|storage|seat-|sign|reflector|grab)/.test(x.id));
+      const body = m.filter((x) => !x.payload && /^(side-|shoulder|deck-|transom|rail-|joist-|bolster|foot-stop|storage|seat-|sign|reflector)/.test(x.id));
       let worst = -Infinity;
       for (const t of tires) for (const b of body) worst = Math.max(worst, obbOverlap(partOBB(t), partOBB(b)));
       return worst;

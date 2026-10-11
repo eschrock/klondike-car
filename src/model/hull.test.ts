@@ -5,7 +5,7 @@ import { buildModel } from './index';
 import { makeCtx } from './build-utils';
 import { buildBody, fingerAnalysis, frontTirePlan, liftBarStressPsi, liftSlot, prowFormProfile, prowShape } from './body';
 import { chooseDomino, DOMINOS, endJoint, frac, joinerySummary } from './joinery';
-import { worldAABB } from './bounds';
+import { localBounds, worldAABB } from './bounds';
 import { totalMass } from './mass';
 import type { EdgeCondition, Part, Vec2 } from './types';
 
@@ -209,11 +209,34 @@ describe('joinery: structured joints', () => {
     expect(frac(0.1875)).toBe('3/16');
     expect(frac(1.5)).toBe('1-1/2');
   });
+  // Every structured joint says where it is (DXF holes, viewer cut previews). `locateJoints` derives positions for the parts
+  // built outside the hull/frame joinery from the contact region of the mated parts. No exceptions are allowed: a new joint
+  // without `at` fails here. Payload parts (rider, cargo, truck) have no joinery.
+  it('every structured joint on a non-payload part has `at` with `count` finite positions near the part', () => {
+    for (const v of VARIANTS) {
+      const ps = buildModel(v.p, { rider: 'goal', cargo: true, steerDeg: 0 });
+      const ids = new Set(ps.map((x) => x.id));
+      for (const part of ps.filter((x) => !x.payload)) {
+        const b = localBounds(part.geometry);
+        for (const j of part.joints ?? []) {
+          const tag = `${v.name}: ${part.id} -> ${j.to} (${j.type})`;
+          expect(ids.has(j.to), `${tag} mates a part that exists`).toBe(true);
+          expect(j.at?.length, `${tag} has ${j.count} locations`).toBe(j.count);
+          for (const a of j.at!) {
+            expect(a.every(Number.isFinite), tag).toBe(true);
+            // Within 1" of the part's own bounds (the stop wedges and tilted webs are boxed loosely by their axis-aligned contact region).
+            for (let k = 0; k < 3; k++) expect(a[k], `${tag} axis ${k}`).toBeGreaterThanOrEqual(b.min[k] - 1);
+            for (let k = 0; k < 3; k++) expect(a[k], `${tag} axis ${k}`).toBeLessThanOrEqual(b.max[k] + 1);
+          }
+        }
+      }
+    }
+  });
   it('summary counts each physical joint once, by type (default model)', () => {
     const mine = (x: Part) => x.group === 'body' || x.group === 'frame' || x.id.startsWith('sign-');
     const s = joinerySummary(parts.filter(mine));
     expect(s.total).toBeGreaterThan(40);
-    for (const k of ['domino', 'mortise-tenon', 'dado', 'rabbet', 'glue', 'threaded-insert', 'knob', 'bolt', 'screw']) expect(s.byType[k] ?? 0, k).toBeGreaterThan(0);
+    for (const k of ['domino', 'mortise-tenon', 'dado', 'rabbet', 'glue', 'threaded-insert', 'knob', 'screw']) expect(s.byType[k] ?? 0, k).toBeGreaterThan(0);
     // Doubled lists (both parts) would give at least twice the once-counted total.
     const both = parts.filter(mine)
       .reduce((m, x) => m + (x.joints ?? []).reduce((a, j) => a + j.count, 0), 0);

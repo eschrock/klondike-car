@@ -31,6 +31,10 @@ export const LIGHT_OF_ID: Record<string, Light | 'info'> = {
   'kingpin-strike': 'strength', 'roll-side-bearer': 'strength', 'roll-kingpin-uplift': 'strength', 'roll-bolster-attach': 'strength',
   'axle-stress': 'strength', 'beam-front': 'strength', 'beam-rear': 'strength', 'bearing-groove': 'strength', rails: 'strength', deck: 'strength',
   kingpin: 'strength', turntable: 'strength', tongue: 'strength',
+  'steer-stops': 'strength', 'kingpin-peak': 'strength', 'pitch-path': 'strength', 'kingpin-split': 'strength', 'bridle-tie': 'strength',
+  // Seat and fittings (D-40, D-41): the seat back and grips carry a rider, so they color Strength; packing, lid swing and
+  // lash-point count are build-fit facts that do not change with rider weight and are reported only.
+  'seat-back': 'strength', 'seat-grip': 'strength', 'storage-pack': 'info', 'storage-lid-open': 'info', 'lash-points': 'info',
 };
 
 export function lightOf(c: Pick<AnalysisCheck, 'id' | 'group'>): Light | 'info' {

@@ -167,7 +167,7 @@ export function buildSteering(ctx: Ctx): Part[] {
   // ── Chassis-side kingpin crossbar (D-12): fore-aft oak bar across the bolster opening, ends let into the bolster rails, top flush with them ──
   if (cb) {
     const ap = L.accessPanel;
-    const insertAt = ap ? ([[-1, -1], [-1, 1], [1, -1], [1, 1]] as const).map(([sx, sy]): Vec3 => [sx * (ap.x1 - ap.x0) * 0.39, sy * ap.hw * 0.7, cb.z1 - cb.z0]) : [];
+    const insertAt = ap ? ([[-1, -1], [-1, 1], [1, -1], [1, 1]] as const).map(([sx, sy]): Vec3 => [sx * (ap.x1 - ap.x0) * 0.39, sy * ap.hw * 0.7, (cb.z1 - cb.z0) / 2]) : []; // local frame: the top face is +half the bar height
     const crossbarJoints: Joint[] = [
       { type: 'dado', to: 'bolster-aft', count: 1, size: `${p.kingpinCrossbarLetInIn}" let-in, end grain bears on the notch face` },
       { type: 'dado', to: 'bolster-fore', count: 1, size: `${p.kingpinCrossbarLetInIn}" let-in, end grain bears on the notch face` },

@@ -40,10 +40,12 @@ export const MIN_REAR_BOX_H_IN = 3.4;
 /** Grab handle: pad (on the gunwale), posts, bar. */
 const GRIP_PAD_W_IN = 1.5;
 const GRIP_PAD_T_IN = 0.75;
+/** Pad screw length (#8 × 1-3/4): 1" of engagement past the 3/4" pad. */
+const GRIP_SCREW_LEN_IN = 1.75;
 export const GRIP_POST_IN = 1;
 const GRIP_BAR_W_IN = 1.25;
 export const GRIP_BAR_H_IN = 1;
-/** Grab handle starts this far behind the H-point (hands rest at the hips); the body's grab block begins 2" ahead of the H-point. */
+/** Grab handle starts this far behind the H-point (hands rest at the hips). */
 const GRIP_BEHIND_HPOINT_IN = 5;
 
 const unit = (x: number, y: number, z: number): Vec3 => {
@@ -58,6 +60,8 @@ export function gunwaleId(p: Params, tag: 'L' | 'R'): string {
 
 /** Y of the cabin gunwale centerline (|y|), including the gunwale flare. */
 export const gunwaleY = (L: Layout): number => L.hwC + L.side / 2 + L.flare;
+/** Sorted y range (for `span`) of a block of thickness `t` against the inboard face of a gunwale whose inner face is at |y| = `yInner` on side `sg`. */
+export const inboardOf = (sg: 1 | -1, yInner: number, t: number): [number, number] => (sg > 0 ? [yInner - t, yInner] : [-yInner, -yInner + t]);
 
 export interface SeatBackSupport {
   /** True when the storage box sits behind the back (rear over axle): the stud goes through the box end into a backer cleat. */
@@ -242,11 +246,19 @@ export function buildSeat(ctx: Ctx): Part[] {
   const barBot = padTop + p.seatGripGapIn;
   for (const { s: sg, tag } of SIDES) {
     const gid = gunwaleId(p, tag);
+    // Doubler: oak blocking glued to the inboard face of the ½" gunwale, flush with its top, so the pad screws bite into oak with >= 3/4" engagement.
+    const dId = `doubler-grip-${tag}`;
+    parts.push(box(ctx, {
+      id: dId, partNo: 'doubler-grip', name: `Grab handle doubler ${tag}`, group: 'seat', mat: 'oak', step: STEP.finish, grain: 'x',
+      ...span([gxA, gxA + gLen], inboardOf(sg, yg - L.side / 2, p.blockingThickIn), [gTop - L.railBand, gTop]),
+      joints: [{ type: 'glue', to: gid, count: 1, note: 'epoxy, full face' }, { type: 'screw', to: `seat-grip-pad-${tag}`, count: 4, size: '#8 × 1-3/4 stainless, down through the pad' }],
+      notes: `Blocking behind the ${L.side}" gunwale (D-41): the pad screws (${(GRIP_SCREW_LEN_IN - GRIP_PAD_T_IN).toFixed(2)}" past the pad) land in this block, not the thin gunwale edge.`,
+    }));
     parts.push(box(ctx, {
       id: `seat-grip-pad-${tag}`, partNo: 'seat-grip-pad', name: `Grab handle pad ${tag}`, group: 'seat', mat: 'oak', step: STEP.finish, grain: 'x',
       ...span([gxA, gxA + gLen], [sg * yg - GRIP_PAD_W_IN / 2, sg * yg + GRIP_PAD_W_IN / 2], [gTop, padTop]),
-      joints: [{ type: 'glue', to: gid, count: 1, note: 'epoxy' }, { type: 'screw', to: gid, count: 4, size: '#8 × 1¼ stainless, down into the gunwale' }],
-      notes: 'Spreads the grip load over the gunwale (it is only ½" wide); B may thicken the gunwale locally.',
+      joints: [{ type: 'glue', to: gid, count: 1, note: 'epoxy' }, { type: 'screw', to: dId, count: 4, size: '#8 × 1-3/4 stainless, down into the doubler' }],
+      notes: 'Spreads the grip load over the gunwale and its doubler (the gunwale alone is only ½" wide).',
     }));
     for (const [n, xa] of [[1, gxA], [2, gxA + gLen - GRIP_POST_IN]] as const) {
       parts.push(box(ctx, {
@@ -269,7 +281,7 @@ export function buildSeat(ctx: Ctx): Part[] {
   const deckZ = onNose ? L.noseTop : L.deckTop;
   const fhw = onNose ? L.hwN : L.hwC;
   const zone = onNose ? 'nose' : 'cabin';
-  const sideMember = (tag: 'L' | 'R') => (p.sideConstruction === SIDE_CONSTRUCTION.solidOak ? `side-${zone}-${tag}-board` : `side-${zone}-${tag}-chine`);
+  const sideMember = (tag: 'L' | 'R') => (p.sideConstruction === SIDE_CONSTRUCTION.solidOak ? `side-${zone}-${tag}-board` : p.sideConstruction === SIDE_CONSTRUCTION.openFrame ? `side-${zone}-${tag}-gunwale` : `side-${zone}-${tag}-chine`); // the open frame has no chine
   parts.push(box(ctx, {
     id: 'foot-stop', name: 'Foot stop', group: 'seat', mat: 'oak', step: STEP.seatStorage, grain: 'y',
     ...span([fx - p.footStopThickIn / 2, fx + p.footStopThickIn / 2], [-fhw, fhw], [deckZ, deckZ + p.footStopHeightIn]),
