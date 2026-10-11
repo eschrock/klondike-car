@@ -14,6 +14,8 @@ Parametric design app for Troop 455's Klondike Derby cart. **BRIEF.md** is the s
 - Phase status and scratch notes live in `docs/` (`docs/STATUS.md` is the current-phase tracker).
 - Rider loads: 150 lb must pass everything; 200 lb is the goal (DECISIONS D-1).
 - **Parallel agents must never run `git stash`, `checkout`, `reset` or `commit`.** Other agents share the working tree. Only the orchestrating session commits.
+- **US English** spelling everywhere (tire, center, color, -ize). Leave fixed API names such as `aria-labelledby` alone.
+- Parallel agents edit shared files (`src/params.ts`, `src/model/layout.ts`, `src/model/types.ts`) only with small exact-string edits, never whole-file rewrites.
 - Commit at milestones. Always commit `package-lock.json` changes.
 
 ## Commands
