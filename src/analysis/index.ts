@@ -8,13 +8,18 @@
 import { resolveParams, type Params } from '../params';
 import { buildModel } from '../model';
 import { checkTruckFit, type FitResult } from '../truck/fit';
+import { brakeRideRows } from './brake-ride';
 import { brakeAbuse, brakeClearance, brakeForce, brakeLever, brakeLinks, brakeRatchet, brakeRatio, brakeShaft, brakeShoes, brakeTraction, handleSockets } from './brake';
-import { makeContext } from './context';
+import { makeContext, type Ctx } from './context';
 import { rearBeamSeat, wheelRating } from './rear';
-import { steerClearance, steerSweep } from './steering';
+import { steerClearance, steerClearanceAck, steerKinCheck, steerLockCheck, steerSweep, steerSweepAck } from './steering';
 import { pitchForward, pitchRear, slideBeforeTip, tipLock, tipStraight, turnRadius, vRollover } from './stability';
 import { axleStress, bearingGroove, beamFront, beamRear, deckCheck, kingpinCheck, kingpinStrikeCheck, railsCheck, rollBolsterAttachCheck, rollKingpinUpliftCheck, rollSideBearerCheck, tongueCheck, turntableCheck } from './structure';
 import { bridleTieCheck, kingpinBoltsCheck, kingpinPeakCheck, kingpinPlatesCheck, kingpinSplitCheck, pitchPathCheck, steerStopsBoundCheck, steerStopsCheck, turntableRingCheck } from './front';
+import { frontEndChecks } from './front-end';
+import { linkageChecks } from './linkage';
+import { rideChecks } from './ride';
+import { rearBeamSeatBump, wheelRatingBump } from './rear-bump';
 import { seatChecks } from './seat';
 import { hullChecks } from './hull';
 import { cgCheck, massEmpty, truckFit, truckSkipped } from './transport';
@@ -24,6 +29,8 @@ export * from './types';
 export type { CaseData } from './loads';
 
 export interface RunOptions {
+  /** Force the Phase 3b (Ackermann, bump basis) rows on or off. Default: on when the model carries the new front-end parts (`spindle-L`). */
+  newFront?: boolean;
   /** Run the truck-fit collision search (tens to hundreds of ms). Default true. */
   includeTruck?: boolean;
   /** Reuse an existing truck-fit result instead of computing one. */
@@ -42,12 +49,9 @@ function sanitize(c: AnalysisCheck): AnalysisCheck {
   return c;
 }
 
-export function runChecks(input: Params, opts: RunOptions = {}): AnalysisCheck[] {
-  const p = resolveParams(input); // auto nose width / shoulder (A-4, D-26)
-  const parts = buildModel(p, { rider: 'goal', cargo: true, steerDeg: 0 });
-  const ctx = makeContext(p, parts);
-  const includeTruck = opts.includeTruck ?? true;
-  const out: AnalysisCheck[] = [
+/** The pre-Phase-3b rows (turntable front end, curb and root strikes). Deleted at the Stage 2 flip (docs/phase3b-wsD-notes.md has the list). */
+function oldRows(ctx: Ctx, truck: AnalysisCheck): AnalysisCheck[] {
+  return [
     massEmpty(ctx),
     cgCheck(ctx),
     tipStraight(ctx),
@@ -95,7 +99,62 @@ export function runChecks(input: Params, opts: RunOptions = {}): AnalysisCheck[]
     tongueCheck(ctx),
     ...seatChecks(ctx),
     ...hullChecks(ctx),
-    includeTruck ? truckFit(opts.fit ?? checkTruckFit(p, (v) => buildModel(p, v))) : truckSkipped(),
+    truck,
   ];
+}
+
+/**
+ * The Ackermann ride-mode rows (D-50, D-51, D-53): per-wheel contacts and sweeps, the bump load basis, the new front-end structure and linkage rows and the
+ * ride rows. WS-C's brake rows join here (`brake-ride.ts`: stop, emergency, bias, heat, park-hold, hip-cable, belt-anchor, brake-front) when they land.
+ */
+function ackermannRows(ctx: Ctx, truck: AnalysisCheck): AnalysisCheck[] {
+  return [
+    massEmpty(ctx),
+    cgCheck(ctx),
+    tipStraight(ctx),
+    tipLock(ctx),
+    slideBeforeTip(ctx),
+    vRollover(ctx),
+    turnRadius(ctx),
+    steerClearanceAck(ctx, steerSweepAck(ctx)),
+    steerKinCheck(ctx),
+    steerLockCheck(ctx),
+    pitchForward(ctx),
+    pitchRear(ctx),
+    brakeRatio(ctx),
+    brakeForce(ctx),
+    brakeTraction(ctx),
+    brakeClearance(ctx),
+    brakeLever(ctx),
+    brakeLinks(ctx),
+    brakeShaft(ctx),
+    brakeShoes(ctx),
+    brakeRatchet(ctx),
+    handleSockets(ctx),
+    brakeAbuse(ctx),
+    ...brakeRideRows(ctx),
+    wheelRatingBump(ctx),
+    rearBeamSeatBump(ctx),
+    axleStress(ctx),
+    beamRear(ctx),
+    bearingGroove(ctx),
+    railsCheck(ctx),
+    deckCheck(ctx),
+    ...frontEndChecks(ctx),
+    ...linkageChecks(ctx),
+    ...rideChecks(ctx),
+    ...seatChecks(ctx),
+    ...hullChecks(ctx),
+    truck,
+  ];
+}
+
+export function runChecks(input: Params, opts: RunOptions = {}): AnalysisCheck[] {
+  const p = resolveParams(input); // auto nose width / shoulder (A-4, D-26)
+  const parts = buildModel(p, { rider: 'goal', cargo: true, steerDeg: 0 });
+  const ctx = makeContext(p, parts, { newFront: opts.newFront });
+  const includeTruck = opts.includeTruck ?? true;
+  const truck = includeTruck ? truckFit(opts.fit ?? checkTruckFit(p, (v) => buildModel(p, v))) : truckSkipped();
+  const out: AnalysisCheck[] = ctx.newFront ? ackermannRows(ctx, truck) : oldRows(ctx, truck);
   return out.map(sanitize);
 }

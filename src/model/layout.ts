@@ -9,15 +9,19 @@ import {
   SIDE_CONSTRUCTION,
   STORAGE_LOCATION,
   derived,
+  hullCurveSpec,
+  hullPlanCurve,
   resolveParams,
   type Params,
 } from '../params';
-import { buildPlanCurve, offsetY, sidePolyline, type PlanCurve } from './hull-curve';
+import { curveHeading, hazardRangeX, leftTirePolys, offsetY, sidePolyline, type PlanCurve } from './hull-curve';
 import { computeFrontLayout, type FrontLayout } from './front-layout';
 import { riderLegTopZ } from './rider-geom';
 import type { Vec2, Vec3 } from './types';
 
 // Design numbers (chine height, seat depth, tongue section, ...) live in params.ts; only derived geometry here.
+/** The Ackermann hull's sheer rise starts this far beyond the finger-pinch zone: the guard's end margin (0.5") plus sampling slack. */
+const SHEER_AFTER_PINCH_IN = 0.75;
 
 export interface Layout {
   r: number;
@@ -32,6 +36,12 @@ export interface Layout {
   xn: number;
   /** The plan S-curve of the hull side centerline (D-45). */
   hull: PlanCurve;
+  /**
+   * Ackermann hull (frontEndType 1, D-52): one deck level and no step (`xs` = `xn`, `noseTop` = `deckTop`, `shoulderBeam` = 0 are kept as aliases until Stage 3), and the
+   * side keeps converging along a STRAIGHT bow run from `xn` to the front transom at heading `bowHeading` (rad, the left side's; <= 0 means converging, the right side mirrors it).
+   */
+  ackHull: boolean;
+  bowHeading: number;
   /**
    * Chine bottom and rail top (D-45). Captured-ply sides: the chine, its rail and the side lines are at the NOSE deck level along the whole hull, so
    * the side profile never steps; the cabin deck (1" lower) sits on a ledge in the rail's inner face. Other constructions keep the cabin level.
@@ -159,8 +169,10 @@ export function computeLayout(input: Params): Layout {
   const r = d.wheelRadiusIn;
   const WB = p.wheelbaseIn;
   const kx = WB + p.kingpinLeadIn;
-  const xn = WB - p.noseTaperStartIn;
-  const xc0 = Math.min(p.hullCurveStartIn, xn - 1);
+  const ackHull = p.frontEndType === 1;
+  const hullCurve = hullPlanCurve(p); // D-45 reverse curve, or the Ackermann bow curve (D-52)
+  const xn = ackHull ? hullCurve.x1 : WB - p.noseTaperStartIn;
+  const xc0 = ackHull ? hullCurve.x0 : Math.min(p.hullCurveStartIn, xn - 1);
   const xs = xn - p.shoulderBeamIn;
   const xRear = -p.rearOverhangIn;
   const xFront = WB + p.frontOverhangIn;
@@ -225,7 +237,8 @@ export function computeLayout(input: Params): Layout {
   // The U-bolt clamps sit at |y| beyond the rails' y-band, so they cannot reach the rail end; the nose side panels are covered
   // by the auto shoulder rule (resolveParams). Moving the rail end back (rather than narrowing the nose) is the physical fix:
   // the beam corner at |y| = hwN is what sweeps aft, and the nose width is already the widest the tires allow (A-4).
-  const noseRailEnd = kx - Math.max(plateSwingX + p.steeringClearanceIn, beamSwingX + p.steeringClearanceIn / Math.cos(lk));
+  // Ackermann hull: no turntable to swing, the nose rails run to the front transom's inner face (D-52).
+  const noseRailEnd = ackHull ? WB + p.frontOverhangIn - p.transomThicknessIn : kx - Math.max(plateSwingX + p.steeringClearanceIn, beamSwingX + p.steeringClearanceIn / Math.cos(lk));
 
   // Joists skip the rear axle beam when it stands taller than their underside (overslung beam).
   const jD = p.crossmemberDepthIn;
@@ -234,16 +247,6 @@ export function computeLayout(input: Params): Layout {
   const shaftThroughJoists = r + p.brakeShaftDiameterIn / 2 > deckTop - ply - jD + 0.01 && r - p.brakeShaftDiameterIn / 2 < deckTop - ply;
   // A joist that would hit the beam is replaced by one on each side of it (not pushed to one side only), so a thicker
   // deck ply never lengthens the panel span next to the beam (critic Phase 2 r1, D1 oddity).
-  const cabinJoistX = evenInterior(xRear + transom, xs, p.crossmemberSpacingIn, joistT).flatMap((x) => {
-    const half = (beamR.thick + joistT) / 2 + 0.05;
-    // (Always, for an underslung beam: its hold-down angles stand on the beam top between the straddling joists, D-47.)
-    if ((beamR.top > deckTop - ply - jD + 0.01 || p.axleBeamPosition === AXLE_BEAM_POSITION.underslung) && Math.abs(x - beamR.x) < half) return [beamR.x - half, beamR.x + half];
-    const sh = (p.brakeShaftDiameterIn + joistT) / 2 + 0.05;
-    if (shaftThroughJoists && Math.abs(x - shaftX) < sh) return [x < shaftX ? shaftX - sh : shaftX + sh];
-    return [x];
-  });
-  const noseJoistX = evenInterior(xn, noseRailEnd, p.crossmemberSpacingIn, joistT);
-
   // ── Seat ──
   const baseW = Math.max(1, Math.min(p.seatWidthIn, 2 * hwC - 1));
   const pl = p.panelPlyIn;
@@ -300,13 +303,41 @@ export function computeLayout(input: Params): Layout {
 
   // Sheer (D-44): rises over the forward `sheerLengthIn` of the nose, never behind the shoulder; 0 = the old straight gunwale.
   const sheerX1 = xFront - transom;
-  const sheer = { x0: Math.max(xn, sheerX1 - p.sheerLengthIn), x1: sheerX1, riseIn: Math.max(0, p.sheerRiseIn) };
+  let sheerX0 = Math.max(xn, sheerX1 - p.sheerLengthIn);
+  if (ackHull && p.sheerRiseIn > 0) {
+    // The finger guard's strap needs a FLAT gunwale: the sheer rise starts beyond the pinch zone (the tire sweep within fingerGapMinIn of the hull side) plus the guard's margin.
+    const hz = hazardRangeX(sidePolyline(hullCurve, side / 2, xc0, sheerX1), leftTirePolys(hullCurveSpec(p)), p.fingerGapMinIn);
+    if (hz) sheerX0 = Math.min(sheerX1 - 1, Math.max(sheerX0, hz[1] + SHEER_AFTER_PINCH_IN));
+  }
+  const sheer = { x0: sheerX0, x1: sheerX1, riseIn: Math.max(0, p.sheerRiseIn) };
 
-  const hullCurve = buildPlanCurve(xc0, xn, hwC + side / 2, hwN + side / 2);
-  const front = computeFrontLayout(p, { r, WB, kx, seat, hull: hullCurve, side, ply }, (x) => offsetY(hullCurve, -side / 2, x));
+  const front = computeFrontLayout(p, { r, WB, kx, seat, hull: hullCurve, side, ply, deckTop, noseTop }, (x) => offsetY(hullCurve, -side / 2, x));
+
+  // ── Joists: skip the rear axle beam and the brake shaft; with the Ackermann front end also the steel front beam (its top stands in their depth) ──
+  const fb = ackHull ? front.beam : null;
+  const straddle = (x: number, b: Beam): number[] | null => {
+    const half = (b.thick + joistT) / 2 + 0.05;
+    return Math.abs(x - b.x) < half ? [b.x - half, b.x + half] : null;
+  };
+  const joistsBetween = (a: number, b: number) => evenInterior(a, b, p.crossmemberSpacingIn, joistT).flatMap((x) => {
+    // (Always, for an underslung beam: its hold-down angles stand on the beam top between the straddling joists, D-47.)
+    if (beamR.top > deckTop - ply - jD + 0.01 || p.axleBeamPosition === AXLE_BEAM_POSITION.underslung) {
+      const sr = straddle(x, beamR);
+      if (sr) return sr;
+    }
+    if (fb && fb.top > deckTop - ply - jD + 0.01) {
+      const sf = straddle(x, fb);
+      if (sf) return sf;
+    }
+    const sh = (p.brakeShaftDiameterIn + joistT) / 2 + 0.05;
+    if (shaftThroughJoists && Math.abs(x - shaftX) < sh) return [x < shaftX ? shaftX - sh : shaftX + sh];
+    return [x];
+  });
+  const cabinJoistX = joistsBetween(xRear + transom, xs);
+  const noseJoistX = ackHull ? joistsBetween(xn, noseRailEnd) : evenInterior(xn, noseRailEnd, p.crossmemberSpacingIn, joistT);
 
   return {
-    r, WB, xs, xc0, xn, hull: hullCurve, chineH, chineBot, railTop: chineBot, shoulderBeam: p.shoulderBeamIn, sideTop: deckTop + p.sideHeightIn, xRear, xFront, kx, railBand: p.railBandIn, joistT, flare, web, side, transom, rearLane, ply, deckTop, deckBot: deckTop - ply, noseTop, noseBot: noseTop - ply,
+    r, WB, xs, xc0, xn, hull: hullCurve, ackHull, bowHeading: curveHeading(hullCurve, xFront), chineH, chineBot, railTop: chineBot, shoulderBeam: p.shoulderBeamIn, sideTop: deckTop + p.sideHeightIn, xRear, xFront, kx, railBand: p.railBandIn, joistT, flare, web, side, transom, rearLane, ply, deckTop, deckBot: deckTop - ply, noseTop, noseBot: noseTop - ply,
     hwC, hwN, sideH: p.sideHeightIn, sheer, noseGunTop: deckTop + p.sideHeightIn + sheer.riseIn, beamR, beamF, front,
     turntable: { z0: tz0, z1: tz1 },
     bolster, sideBearer, kingpin: { z0: beamF.bot - plateT, z1: through ? bolsterTop : tz1 }, crossbar, accessPanel,

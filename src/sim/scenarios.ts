@@ -14,7 +14,9 @@ export interface SimConfig {
   rollingResistance: number;
   /** All four wheels held against rolling (chocked): the tilt table is a static test. */
   wheelsLocked: boolean;
-  /** Initial steer angle, degrees (+ = left); hold it with steerMode 'angle'. */
+  /** Phase 3b control mode: 'tow' (tongue, lock 35.5 inner) or 'ride' (stick, lock 8 outer, centering spring). Only the Ackermann front end has a ride mode. */
+  mode: 'tow' | 'ride';
+  /** Initial steer angle, degrees (+ = left; the INNER wheel in the Ackermann sim); hold it with steerMode 'angle'. */
   initialSteerDeg: number;
   /** Initial speed along the ground, mph. */
   initialSpeedMph: number;
@@ -46,7 +48,7 @@ export interface SimControls {
 
 export const DEFAULT_CONFIG: SimConfig = {
   slopeDeg: 0, sideSlopeDeg: 0, tiltRateDegPerS: 0, frictionMu: 0.7, rollingResistance: 0.05,
-  wheelsLocked: false, initialSteerDeg: 0, initialSpeedMph: 0, root: false, rootAtIn: 120, curb: false, curbAtIn: 120,
+  wheelsLocked: false, mode: 'tow', initialSteerDeg: 0, initialSpeedMph: 0, root: false, rootAtIn: 120, curb: false, curbAtIn: 120,
 };
 
 export const DEFAULT_CONTROLS: SimControls = {
@@ -85,8 +87,8 @@ export const SCENARIOS: Scenario[] = [
     config: { sideSlopeDeg: 0, tiltRateDegPerS: 2, frictionMu: 2, wheelsLocked: true }, controls: { brakeOn: false }, endAtS: 30,
   },
   {
-    id: 'bump', label: 'Root / curb strike', blurb: 'Rolls at 6 mph into a 2" root, then a 3" curb. Look for wheel lift and the load spike.',
-    config: { initialSpeedMph: 6, root: true, rootAtIn: 100, curb: true, curbAtIn: 220 }, controls: { steerMode: 'angle', steerAngleDeg: 0 }, endAtS: 6,
+    id: 'bump', label: 'Bump at 10 mph', blurb: 'Rolls at 10 mph into a 2" root (the hard-hit case, D-50), no curb. Look for the load spike and any wheel lift. Curbs are not a design load (the engine still has one under "3 in curb").',
+    config: { initialSpeedMph: 10, root: true, rootAtIn: 100 }, controls: { steerMode: 'angle', steerAngleDeg: 0 }, endAtS: 5,
   },
   {
     id: 'turn', label: 'Full-lock turn at speed', blurb: 'Rolling at 8 mph, the steering goes to full lock. The tires alone supply the side force (no rope help). Raise the start speed or the friction to find where a wheel lifts or it tips (≈12 mph at μ 1.5; at μ 0.7 it slides first).',
@@ -95,5 +97,9 @@ export const SCENARIOS: Scenario[] = [
   {
     id: 'brake', label: 'Braking event', blurb: 'Rolling at 6 mph down a 5° slope, rear brakes applied at 1 s.',
     config: { slopeDeg: 5, initialSpeedMph: 6 }, controls: { steerMode: 'angle', steerAngleDeg: 0, brakeOn: false, brakeLbf: 60 }, brakeAtS: 1, endAtS: 10,
+  },
+  {
+    id: 'ride-downhill', label: 'Ride downhill 8°, 10 mph', blurb: 'Ride mode (stick, centering spring): rolling at 10 mph down an 8° slope at μ 0.5; the rider brakes at 1 s with the brake force the rules assume (front and rear). The stick is centered, so the cart should stay straight.',
+    config: { mode: 'ride', slopeDeg: 8, initialSpeedMph: 10, frictionMu: 0.5 }, controls: { steerMode: 'angle', steerAngleDeg: 0, brakeOn: false, brakeLbf: 130 }, brakeAtS: 1, endAtS: 8,
   },
 ];

@@ -25,6 +25,13 @@ export const LIGHT_OF_ID: Record<string, Light | 'info'> = {
   'slide-before-tip': 'turns', 'v-rollover': 'turns',
   'pitch-fwd': 'hills', 'pitch-rear': 'hills', 'brake-force': 'hills', 'brake-traction': 'hills', 'brake-ratio': 'hills', 'brake-clear': 'hills',
   'turn-radius': 'steering', 'steer-clear': 'steering',
+  // Phase 3b (D-51): Ackermann steering, ride mode and the bump-basis front end. Rows that WS-C adds for stopping, heat and bias color Hills & braking.
+  'steer-kin': 'steering', 'steer-lock': 'steering', 'steer-centering': 'info', 'ride-steer-effort': 'info',
+  'ride-rollover': 'hills', 'ride-envelope': 'info',
+  'brake-stop': 'hills', 'brake-emergency': 'hills', 'brake-heat': 'hills', 'brake-bias': 'hills', 'park-hold': 'hills', 'brake-front': 'hills',
+  'hip-cable': 'strength', 'belt-anchor': 'strength',
+  'spindle-stub': 'strength', 'spindle-fatigue': 'strength', 'kingpin-bolt': 'strength', 'kingpin-bracket': 'strength', 'wheel-retention': 'strength',
+  'tie-rod': 'strength', 'drag-link': 'strength', bellcrank: 'strength', 'steer-stop-load': 'strength', 'tongue-tie': 'strength', 'stick-cable': 'strength',
   'truck-fit': 'truck',
   'mass-empty': 'info', cg: 'info',
   // Strength = every `group === 'Structure'` check (kept explicit so the mapping test can see them).
@@ -93,7 +100,7 @@ export interface SweepResult {
 const RIDER_KEYS = ['riderMassLb', 'riderGoalMassLb', 'riderMinMassLb'] as const;
 
 /** Geometry-only checks: they don't change with rider weight, so they color their light but not the rider bar. */
-export const RIDER_INDEPENDENT = new Set(['turn-radius', 'steer-clear', 'truck-fit']);
+export const RIDER_INDEPENDENT = new Set(['turn-radius', 'steer-clear', 'steer-kin', 'steer-lock', 'truck-fit']);
 
 /** Every rider case set to the same weight. */
 export const withRider = (p: Params, w: number): Params => ({ ...p, riderMassLb: w, riderGoalMassLb: w, riderMinMassLb: w });

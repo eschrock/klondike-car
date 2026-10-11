@@ -116,3 +116,18 @@ export const countersinkDepth = (D: number): number => ((1.92 * D - D) / 2) / Ma
 
 /** Effective side-member thickness when a countersunk head is flush in it (0 depth = plain hole). */
 export const effectiveSideThickness = (t: number, csDepth: number): number => Math.max(0.05, t - 0.5 * csDepth);
+
+import type { Ctx } from './context';
+
+/** NDS adjustment on a lateral design value: C_M (wet) × C_D (impact, ≤ 1.6) × C_g (group). */
+export const ndsAdjust = (p: { ndsWetFactorFasteners: number; ndsLoadDurationFactor: number; ndsGroupFactor: number }): number =>
+  p.ndsWetFactorFasteners * p.ndsLoadDurationFactor * p.ndsGroupFactor;
+
+/** Adjusted lateral capacity (lbf) of one plate bolt in the oak at angle θ to the grain, steel side plate of thickness ls, oak length lm. */
+export function boltCapacity(ctx: Ctx, D: number, lm: number, ls0: number, thetaDeg: number, csDepth = 0): { Zref: number; Z: number; mode: string; Fem: number; Re: number; ls: number } {
+  const { p } = ctx;
+  const ls = effectiveSideThickness(ls0, csDepth); // a flush countersunk head bears only on the plate below it (r3 N-2)
+  const Fem = feAtAngle(feParallel(p.oakSpecificGravity), fePerp(p.oakSpecificGravity, D), thetaDeg);
+  const r = lateralZ({ D, lm, ls, Fem, Fes: p.steelDowelBearingPsi, Fyb: p.kingpinPlateBoltYieldPsi, thetaDeg });
+  return { Zref: r.Z, Z: r.Z * ndsAdjust(p), mode: r.mode, Fem, Re: Fem / p.steelDowelBearingPsi, ls };
+}

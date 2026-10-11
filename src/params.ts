@@ -18,7 +18,7 @@
 import { kingpinPlateIssues, kingpinPlatePlan, stopArmHx } from './model/kingpin-plates';
 import { planStops } from './model/stops';
 import { neutralTieLen, type AckSpec } from './model/ackermann';
-import { buildPlanCurve, curveTireGap, latestCurveEnd, offsetY, type CurveClearanceSpec } from './model/hull-curve';
+import { buildPlanCurve, curveTireGap, fitBowCurve, latestCurveEnd, leftTirePolys, minGapToTires, offsetY, sidePolyline, type BowSpec, type CurveClearanceSpec, type PlanCurve } from './model/hull-curve';
 
 export type ParamStatus = 'locked' | 'verify' | 'assumed' | 'explore';
 
@@ -86,6 +86,8 @@ export const SIDE_CONSTRUCTION = { solidOak: 0, capturedPly: 1, openFrame: 2 } a
 export const STORAGE_LOCATION = { rearOverAxle: 0, forwardRaised: 1, underSeat: 2 } as const;
 
 /** Mannequin proportions (fractions of stature, D-3) that the nose-width validator also needs: hip separation and foot width. */
+/** Solid-spring rule of thumb (D-57): a member bent from solid stock needs an inside radius of at least this many times its thickness. */
+const SOLID_SPRING_RADIUS_FACTOR = 100;
 /** A rear box shorter than this is not a box (critic H3). */
 const MIN_REAR_STORAGE_LENGTH_IN = 6;
 export const RIDER_LEG_Y_FRAC = 0.05;
@@ -226,23 +228,23 @@ const defs = {
   },
   noseWidthIn: {
     label: 'Hull width in the front-wheel swing zone', group: 'body', unit: 'in',
-    default: 13.5, min: 12, max: 18, step: 0.25, status: 'explore', ref: 'D-15',
-    note: 'Overridden while "Auto nose width & shoulder" is on (resolveParams). Must hold the rider\'s feet + boots (bootAllowanceIn) and be ≤ 2 × (inner tire corner y at full lock − steering clearance); see A-4.',
+    default: 13.5, min: 10, max: 24, step: 0.25, status: 'explore', ref: 'D-15, D-52',
+    note: 'Old front end: overridden while "Auto nose width & shoulder" is on (resolveParams); must hold the rider\'s feet + boots (bootAllowanceIn) and be ≤ 2 × (inner tire corner y at full lock − steering clearance); see A-4. Ackermann front end (frontEndType 1, D-52): the OUTSIDE width of the hull at the front transom (the bow). Your choice; the curve behind it is solved so the hull clears the tire sweep (the pinch ~8" behind the bow is narrower than this only when a bow wider than ~19" is asked for). Narrower = a pointier bow and a gentler curve; the feet need about 12" inside at the foot stop.',
   },
   noseTaperStartIn: {
     label: 'Hull reaches nose width this far behind front axle', group: 'body', unit: 'in',
-    default: 13.25, min: 12, max: 26, step: 0.5, status: 'explore', ref: 'A-4, D-45',
-    note: 'The END of the plan S-curve (D-45), measured from the front AXLE. Overridden while "Auto nose width & shoulder" is on: resolveParams() finishes the curve as late as the front-tire sweep (full lock) plus steering clearance allows. Old links that saved the square-shoulder distance still load; the validator reports a curve that would hit a tire.',
+    default: 13.25, min: -12, max: 26, step: 0.5, status: 'explore', ref: 'A-4, D-45',
+    note: 'Ackermann front end: derived (the end of the curved part is hullBowStraightIn behind the front transom\'s inner face; negative = ahead of the axle). The END of the plan S-curve (D-45), measured from the front AXLE. Overridden while "Auto nose width & shoulder" is on: resolveParams() finishes the curve as late as the front-tire sweep (full lock) plus steering clearance allows. Old links that saved the square-shoulder distance still load; the validator reports a curve that would hit a tire.',
   },
   hullCurveStartIn: {
     label: 'S-curve starts (cabin begins to narrow) at x', group: 'body', unit: 'in',
-    default: 18, min: 8, max: 34, step: 0.5, status: 'explore', ref: 'D-45',
-    note: 'Model x of the start of the plan S-curve that blends the cabin side into the nose side (D-45). The cabin stays full width (and straight) up to here: the seat, grab handles, lash points, reflectors and storage box all sit behind it. The curve end is derived from the tire sweep (noseTaperStartIn). An earlier start gives a gentler curve (larger bend radius). With "Auto nose width & shoulder" on, the rule moves the start EARLIER (never later) if the curve would otherwise be tighter than the lamination limit.',
+    default: 18, min: 8, max: 34, step: 0.5, status: 'explore', ref: 'D-45, D-52',
+    note: 'Ackermann hull: the earliest allowed is the front of the grab handles (14.5" at the defaults); the earlier the start the gentler the curve (7 to 9 percent more bend radius per inch earlier at the defaults: 43" at 18, 58" at 14.5, 66" at 12.5, docs/phase3b-wsB-notes.md). Model x of the start of the plan S-curve that blends the cabin side into the nose side (D-45). The cabin stays full width (and straight) up to here: the seat, grab handles, lash points, reflectors and storage box all sit behind it. The curve end is derived from the tire sweep (noseTaperStartIn). An earlier start gives a gentler curve (larger bend radius). With "Auto nose width & shoulder" on, the rule moves the start EARLIER (never later) if the curve would otherwise be tighter than the lamination limit.',
   },
   hullLamThicknessIn: {
     label: 'Hull lamination strip thickness (chine, gunwale, rails)', group: 'body', unit: 'in',
-    default: 0.125, min: 0.0625, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-45',
-    note: 'The chine, gunwale and ladder rails are bent laminations of white-oak strips this thick, glued on a plan-view form (epoxy, slow hardener). The number of plies is member thickness / strip.',
+    default: 0.125, min: 0.0625, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-45, D-57',
+    note: 'The chine, gunwale and ladder rails are bent laminations of white-oak strips this thick, glued on a plan-view form (epoxy, slow hardener). The number of plies is member thickness / strip, rounded (Ackermann hull: 5/16" gives 2 plies for the 5/8" chine and gunwale and 2 x 3/8" for the 3/4" rail).',
   },
   hullLamMinRadiusFactor: {
     label: 'Min. bend radius / strip thickness', group: 'body', unit: '×',
@@ -263,6 +265,20 @@ const defs = {
     label: 'Shoulder beam thickness (under the deck step)', group: 'body', unit: 'in',
     default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-45',
     note: 'A full-width oak beam under the 1" deck step, just behind where the S-curve ends. Both rail pairs Domino into it, the cabin deck butts its rear face and the nose deck sits on it: the cabin-to-nose structural tie (build review MUST-1).',
+  },
+  frontEndType: {
+    label: 'Front end', group: 'steering', unit: '',
+    default: 0, min: 0, max: 1, step: 1, status: 'explore', ref: 'D-51, D-52',
+    options: [
+      { value: 0, label: 'Turntable wagon steer (Phase 3, being replaced)' },
+      { value: 1, label: 'Ackermann spindles, ride mode (Phase 3b)' },
+    ],
+    note: 'Target default 1 (PHASE3B_DEFAULT_OVERRIDES until the Stage 2 flip). Selects the hull for the new front end (WS-B): one deck level (no step, no shoulder beam: resolveParams forces frontDeckRaiseIn and shoulderBeamIn to 0), the hull curve solved against the Ackermann tire sweep, and a bow that keeps converging to the front transom instead of a reverse (S) curve.',
+  },
+  hullBowStraightIn: {
+    label: 'Straight bow run before the front transom (x extent)', group: 'body', unit: 'in',
+    default: 16, min: 4, max: 24, step: 1, status: 'assumed', ref: 'D-52, D-57',
+    note: 'Ackermann hull only. The curved part of the side ends this far (in x) behind the front transom\'s inner face; from there to the transom the side is a straight line that keeps converging (the bow). The scarfs between the bent cabin run and the straight bow run sit in it, so they never bend, and the sheer rise (sheerLengthIn) lies on it. Longer = the curve ends earlier; 16" costs nothing in bend radius at the defaults.',
   },
 
   steeringClearanceIn: {
@@ -1980,9 +1996,28 @@ const defs = {
     note: '5/16" rod ends.',
   },
   bellcrankArmIn: {
-    label: 'Bellcrank arm length', group: 'steering', unit: 'in',
+    label: 'Bellcrank output arm length (drag link pin)', group: 'steering', unit: 'in',
+    default: 4.5, min: 2.5, max: 5.5, step: 0.25, status: 'assumed', ref: 'D-53',
+    note: 'Re-laid in Stage 1 (WS-A): the exact link solution, not the lateral-transfer model, sets the angles. The drag link stands nearly along y (across the car) so it carries the rod-center sideways travel; the arm is nearly fore-aft. See docs/phase3b-wsA-notes.md.',
+  },
+  bellcrankOutAngleDeg: {
+    label: 'Bellcrank output arm angle (from +x, CCW)', group: 'steering', unit: '°',
+    default: 27.5, min: 0, max: 90, step: 0.5, status: 'assumed', ref: 'D-53',
+    note: 'The drag link pin sits ahead and to the left of the pivot, almost directly aft of the tie-rod center line, so the drag link runs across the car (transmission angle >= 0.8).',
+  },
+  bellcrankInArmIn: {
+    label: 'Bellcrank input arm length (tongue link pin)', group: 'steering', unit: 'in',
     default: 3, min: 2, max: 5, step: 0.25, status: 'assumed', ref: 'D-53',
-    note: 'Both arms (and the cable cross-arm) are this long; 1:1 to the rod center travel at the defaults.',
+  },
+  bellcrankInAngleDeg: {
+    label: 'Bellcrank input arm angle (from +x, CCW)', group: 'steering', unit: '°',
+    default: 54, min: 0, max: 120, step: 0.5, status: 'assumed', ref: 'D-53',
+    note: 'With the tongue ear on the right and aft of the hinge, left and right tow locks give tongue yaws within 0.5 deg of each other.',
+  },
+  bellcrankCableArmIn: {
+    label: 'Bellcrank cable cross-arm (each side)', group: 'steering', unit: 'in',
+    default: 3.8, min: 2, max: 5, step: 0.25, status: 'assumed', ref: 'D-53',
+    note: 'Cross-bar pins at +/- this across the pivot (RIDE mode). Sets the stick travel: about 15 deg at the ride lock with the 1.5" stick cable arm.',
   },
   bellcrankPivotAftOfKingpinIn: {
     label: 'Bellcrank pivot behind the kingpin line', group: 'steering', unit: 'in',
@@ -1995,9 +2030,14 @@ const defs = {
     note: 'Vertical hinge pin in a bolted clevis (47.25" at the defaults).',
   },
   tongueLinkArmIn: {
-    label: 'Tongue link ear distance from the hinge', group: 'steering', unit: 'in',
-    default: 3.25, min: 2.5, max: 5, step: 0.25, status: 'assumed', ref: 'D-53',
-    note: 'Gives about 24.4 deg of tongue yaw at the tow lock (lateral-transfer model).',
+    label: 'Tongue link ear offset to the right of the hinge', group: 'steering', unit: 'in',
+    default: 1.75, min: 0.5, max: 4, step: 0.25, status: 'assumed', ref: 'D-53',
+    note: 'Re-laid in Stage 1: the ear sits on a clevis cross-plate, to the right of the hinge pin; it moves fore-aft as the tongue yaws, which a fore-aft link transmits. About 22 deg of tongue yaw at the tow lock (exact solution), 3 deg inside the stop.',
+  },
+  tongueEarAheadIn: {
+    label: 'Tongue link ear ahead of the hinge (negative = aft, over the beam)', group: 'steering', unit: 'in',
+    default: -1.75, min: -4, max: 4, step: 0.25, status: 'assumed', ref: 'D-53',
+    note: 'The clevis plate reaches back over the beam top.',
   },
   tongueMaxYawDeg: {
     label: 'Tongue yaw stop', group: 'steering', unit: '°',
@@ -2045,14 +2085,14 @@ const defs = {
   },
   frontBrakeType: {
     label: 'Front brake type', group: 'brake', unit: '',
-    default: 0, min: 0, max: 2, step: 1, status: 'explore', ref: 'D-56',
-    note: 'Orchestrator decision: tread shoe on a swing arm on each knuckle is the default. Option 1 (purchased kart mechanical disc) needs a disc hub adapter that the hand-truck wheels lack; option 2 removes it for A/B.',
+    default: 2, min: 0, max: 2, step: 1, status: 'explore', ref: 'D-56',
+    note: 'Target default 0 (PHASE3B_DEFAULT_OVERRIDES until the Stage 2 flip; 2 keeps the old rear-only model). Orchestrator decision: tread shoe on a swing arm on each knuckle is the default. Option 1 (purchased kart mechanical disc) needs a disc hub adapter that the hand-truck wheels lack; option 2 removes it for A/B.',
     options: [{ value: 0, label: 'Tread shoe on a knuckle swing arm' }, { value: 1, label: 'Purchased kart mechanical disc (needs a hub adapter)' }, { value: 2, label: 'None (A/B)' }],
   },
   frontBrakeBias: {
     label: 'Front brake bias (target front share of shoe force)', group: 'brake', unit: '',
-    default: 0.5, min: 0.3, max: 0.7, step: 0.05, status: 'explore', ref: 'D-56',
-    note: 'The cable takeoff arm on the main lever is solved from this.',
+    default: 0.6, min: 0.3, max: 0.7, step: 0.01, status: 'explore', ref: 'D-56',
+    note: 'The bias-bar front arm on the main lever is solved from this. WS-C: 0.60 (spec 0.5), the top of the 0.4-0.6 band because with the CG 17 in ahead of the rear axle and 14 in high the rear axle slides first below a front share of 0.565 at tire-ground mu 0.5 (goal rider); front-first (plows straight) is the benign order. Heat goes the other way: a higher front share runs the front shoes hotter.',
   },
   frontShoeTravelIn: {
     label: 'Front shoe stroke', group: 'brake', unit: 'in',
@@ -2060,23 +2100,134 @@ const defs = {
   },
   brakeShoeBacking: {
     label: 'Brake shoe backing', group: 'brake', unit: '',
-    default: 1, min: 0, max: 1, step: 1, status: 'assumed', ref: 'D-56',
-    note: 'Lined steel-backed purchased shoe (default) or the old oak pad with bonded lining.',
+    default: 0, min: 0, max: 1, step: 1, status: 'assumed', ref: 'D-56',
+    note: 'Target default 1 (PHASE3B_DEFAULT_OVERRIDES until the Stage 2 flip). Lined steel-backed purchased shoe, or the old oak pad with bonded lining.',
     options: [{ value: 0, label: 'Oak pad with bonded lining (old)' }, { value: 1, label: 'Lined steel-backed purchased shoe' }],
   },
   brakeShoeBackThickIn: {
     label: 'Steel shoe back thickness', group: 'brake', unit: 'in',
     default: 0.125, min: 0.0625, max: 0.1875, step: 0.0625, status: 'assumed', ref: 'D-56',
   },
+  rideBrakeControls: {
+    label: 'Ride-mode brake controls (hip lever, lost-motion link, lap belt)', group: 'brake', unit: '',
+    default: 0, min: 0, max: 1, step: 1, status: 'assumed', ref: 'D-56',
+    note: 'Target default 1 (PHASE3B_DEFAULT_OVERRIDES until the Stage 2 flip). Adds the left hip lever, Bowden cable, lost-motion link on the main lever and the lap belt.',
+    options: [{ value: 0, label: 'Off (tow only)' }, { value: 1, label: 'On' }],
+  },
+  brakeShoePinYieldPsi: {
+    label: 'Shoe and swing-arm pivot pin yield strength', group: 'brake', unit: 'psi',
+    default: 36000, min: 20000, max: 150000, step: 5000, status: 'verify', ref: 'D-56',
+    note: 'Old default 36,000 (mild steel / annealed stainless). Target 100,000 (PHASE3B_DEFAULT_OVERRIDES): 17-4 PH stainless rod, H1025 or better, conservative against the 145 ksi table value. The wide lined shoe loads the shoe pin at the 100 lbf abuse pull to 40 ksi.',
+  },
+  brakeLinedShoeWidthIn: {
+    label: 'Lined steel-backed shoe width (across the tread)', group: 'brake', unit: 'in',
+    default: 3.7, min: 1.5, max: 3.7, step: 0.1, status: 'verify', ref: 'D-56',
+    note: 'WS-C: 3.7 in on the 4 in tire (the oak pad stays brakeShoeWidthIn 2.5). Shoe area sets the heat run (time scales with area squared); the arms sit just outside the shoe, inside the tire edges.',
+  },
+  brakeLinedShoeLengthIn: {
+    label: 'Lined steel-backed shoe length (along the tread)', group: 'brake', unit: 'in',
+    default: 3, min: 2, max: 6, step: 0.25, status: 'verify', ref: 'D-56',
+    note: 'REAR lined shoe, radius-matched to the 13" tire. The rear shoe sits 11 deg below the axle line; at 3.25 in its released corner is 3.41 in off the ground (limit 3.5), at 3.0 in the lowest part is the crank clevis (3.51 in); the front shoes (frontBrakeShoeLengthIn) are longer. Heat time scales with area squared. The oak pad keeps brakeShoeLengthIn.',
+  },
+  frontBrakeShoeLengthIn: {
+    label: 'Front lined shoe length (along the tread)', group: 'brake', unit: 'in',
+    default: 5.5, min: 2, max: 7, step: 0.25, status: 'verify', ref: 'D-56',
+    note: 'The front shoe sits at the axle line (frontBrakeShoeAngleDeg), where length costs no ground clearance, and takes 58% of the braking, so it is the larger shoe.',
+  },
+  frontBrakeShoeAngleDeg: {
+    label: 'Front shoe position below the axle line (front of the tire)', group: 'brake', unit: '°',
+    default: 0, min: -10, max: 15, step: 1, status: 'assumed', ref: 'D-56',
+    note: 'Used when brakeShoeBacking = 1; the oak variant mirrors the rear (brakeShoeAngleDeg).',
+  },
+  frontBrakeArmLenIn: {
+    label: 'Front brake swing arm length (pivot to shoe pin)', group: 'brake', unit: 'in',
+    default: 5, min: 2.5, max: 6, step: 0.25, status: 'assumed', ref: 'D-56',
+    note: 'Longer arms keep the pivot off the tire (3.5 puts it 0.3 in from the tread). The arm runs along the tread tangent so the shoe moves radially. The cable tail is longer than the arm because the front stroke must match the rear (virtual work), see docs/phase3b-wsC-notes.md.',
+  },
+  frontBrakePivotPinDiaIn: {
+    label: 'Front brake swing-arm pivot pin diameter', group: 'brake', unit: 'in',
+    default: 0.375, min: 0.25, max: 0.625, step: 0.0625, status: 'assumed', ref: 'D-56',
+  },
+  frontBrakeCableDiaIn: {
+    label: 'Front brake cable diameter (7x19 stainless)', group: 'brake', unit: 'in',
+    default: 0.25, min: 0.125, max: 0.25, step: 0.03125, status: 'assumed', ref: 'D-56',
+    note: 'Sized for stretch as much as strength: the run from the rear lever to the knuckles is about 60 in, and cable plus housing compliance eats the stroke.',
+  },
+  frontBrakeHousingMinBendIn: {
+    label: 'Bowden housing minimum bend radius', group: 'brake', unit: 'in',
+    default: 2.5, min: 1.5, max: 5, step: 0.25, status: 'verify', ref: 'D-56',
+    note: 'Vendor value for a 1/4 in OD spiral-wound housing; the loop at each knuckle must stay above it over the whole steering sweep.',
+  },
+  brakeBiasBarIn: {
+    label: 'Brake bias bar length (lever tail pin to the two outputs)', group: 'brake', unit: 'in',
+    default: 3, min: 1.5, max: 6, step: 0.25, status: 'assumed', ref: 'D-56',
+    note: 'A balance bar on the main lever tail pin; the front cable arm a_f is solved so the front share equals frontBrakeBias. See docs/phase3b-wsC-notes.md.',
+  },
+  bowdenEffModulusPsi: {
+    label: 'Bowden cable + housing effective modulus (on the inner cable area)', group: 'brake', unit: 'psi',
+    default: 3500000, min: 1000000, max: 12000000, step: 500000, status: 'verify', ref: 'D-56',
+    note: 'Inner stretch and housing compression in series, on the nominal cable area. Bench-test one run.',
+  },
+  brakeCableBreakPsi: {
+    label: '7x19 stainless cable minimum break strength per square inch of nominal area', group: 'brake', unit: 'psi',
+    default: 112600, min: 60000, max: 160000, step: 1000, status: 'verify', ref: 'D-56',
+    note: 'MBS = this x d^2: 1/8 in about 1,760 lbf, 5/32 in about 2,750 lbf, 3/16 in about 3,960 lbf. Read it off the vendor listing.',
+  },
+  hipLostMotionSlotIn: {
+    label: 'Hip cable lost-motion slot on the main lever', group: 'brake', unit: 'in',
+    default: 1.4, min: 0.8, max: 2.5, step: 0.1, status: 'assumed', ref: 'D-56',
+  },
+  hipLinkAboveLeverPivotIn: {
+    label: 'Hip cable link point above the main lever pivot', group: 'brake', unit: 'in',
+    default: 4.1, min: 2, max: 8, step: 0.1, status: 'assumed', ref: 'D-56',
+  },
+  brakeRollingCrr: {
+    label: 'Rolling resistance coefficient (brake and stop checks)', group: 'brake', unit: '',
+    default: 0.03, min: 0.01, max: 0.08, step: 0.005, status: 'assumed', ref: 'D-49',
+    note: 'Study value for hard ground. Rolling resistance helps a stop and hurts a descent estimate, so the heat check uses it as stated.',
+  },
+  brakeHeatPartitionOak: {
+    label: 'Heat share into an oak shoe', group: 'brake', unit: '',
+    default: 0.7, min: 0.3, max: 0.9, step: 0.05, status: 'verify', ref: 'D-56',
+  },
+  brakeHeatPartitionLined: {
+    label: 'Heat share into a lined steel-backed shoe', group: 'brake', unit: '',
+    default: 0.5, min: 0.2, max: 0.9, step: 0.05, status: 'verify', ref: 'D-56',
+  },
+  brakeEffusivityOak: {
+    label: 'Oak thermal effusivity', group: 'brake', unit: 'W s^0.5/m2K',
+    default: 550, min: 300, max: 900, step: 10, status: 'verify', ref: 'D-56',
+  },
+  brakeEffusivityLined: {
+    label: 'Lining thermal effusivity', group: 'brake', unit: 'W s^0.5/m2K',
+    default: 450, min: 200, max: 900, step: 10, status: 'verify', ref: 'D-56',
+  },
+  frontBrakeImbalanceFrac: {
+    label: 'Left/right front brake force imbalance assumed for brake-steer', group: 'brake', unit: '',
+    default: 0.2, min: 0, max: 0.5, step: 0.05, status: 'assumed', ref: 'D-56',
+  },
+  beltWebbingBreakLbf: {
+    label: 'Lap belt webbing minimum break strength', group: 'brake', unit: 'lbf',
+    default: 6000, min: 3000, max: 9000, step: 500, status: 'verify', ref: 'D-55',
+    note: '2 in nylon or polyester lap belt; read it off the listing.',
+  },
+  beltAnchorBoltDiaIn: {
+    label: 'Lap belt anchor bolt diameter', group: 'brake', unit: 'in',
+    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-55',
+  },
+  beltAnchorDoublerThickIn: {
+    label: 'Lap belt anchor steel doubler thickness (inside the rail)', group: 'brake', unit: 'in',
+    default: 0.1875, min: 0.125, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-55',
+  },
   hipLeverAheadOfHpointIn: {
     label: 'Hip lever pivot ahead of the H-point', group: 'brake', unit: 'in',
-    default: 3, min: 0, max: 8, step: 0.5, status: 'assumed', ref: 'D-56',
-    note: 'Left hip lever pivot x = seatXIn + this.',
+    default: 5, min: 0, max: 8, step: 0.5, status: 'assumed', ref: 'D-56',
+    note: 'Left hip lever pivot x = seatXIn + this. WS-C moved it from the spec 3 to 5 so the lever (and its fore-aft swing) clears the gunwale lash eye and doubler at x 13.5-15.5.',
   },
   hipLeverInsetIn: {
     label: 'Hip lever inset from the left chine inner face', group: 'brake', unit: 'in',
-    default: 1, min: 0.5, max: 3, step: 0.25, status: 'assumed', ref: 'D-56',
-    note: 'Inside the hull.',
+    default: 1.5, min: 0.5, max: 3, step: 0.25, status: 'assumed', ref: 'D-56',
+    note: 'Inside the hull. WS-C: 1.5 (spec 1.0) keeps the lever clear of the lash doubler, which stands in 1/2 in from the chine.',
   },
   hipLeverArmIn: {
     label: 'Hip lever arm (pivot to grip)', group: 'brake', unit: 'in',
@@ -2088,11 +2239,22 @@ const defs = {
   },
   hipLeverThrowDeg: {
     label: 'Hip lever throw', group: 'brake', unit: '°',
-    default: 40, min: 20, max: 60, step: 1, status: 'assumed', ref: 'D-56',
+    default: 45, min: 20, max: 60, step: 1, status: 'assumed', ref: 'D-56',
+    note: 'WS-C: 45 (spec 40). The main lever link point moves 1.0 in per stroke; the lug at 1.5 in x 40 deg gives 1.05 in, which the cable stretch uses up.',
   },
   hipCableDiaIn: {
     label: 'Hip lever Bowden inner cable diameter', group: 'brake', unit: 'in',
-    default: 0.125, min: 0.0625, max: 0.1875, step: 0.0625, status: 'assumed', ref: 'D-56',
+    default: 0.15625, min: 0.0625, max: 0.1875, step: 0.03125, status: 'assumed', ref: 'D-56',
+    note: 'WS-C: 5/32 (spec 1/8). At the 100 lbf abuse pull the cable carries 600 lbf; 1/8 in 7x19 (about 1,760 lbf) gives a factor of 2.9 against the required 3.5, 5/32 in (about 2,750 lbf) gives 4.6.',
+  },
+  hipCableEfficiency: {
+    label: 'Hip Bowden cable efficiency (friction in the housing)', group: 'brake', unit: '',
+    default: 0.85, min: 0.5, max: 1, step: 0.05, status: 'verify', ref: 'D-56',
+    note: 'Two gentle bends over a 30 in run; a bench test of the real run replaces this.',
+  },
+  beltAnchorBoltUltPsi: {
+    label: 'Lap belt anchor bolt ultimate tensile strength (316 A4-70)', group: 'brake', unit: 'psi',
+    default: 100000, min: 50000, max: 150000, step: 5000, status: 'verify', ref: 'D-55',
   },
   brakeEmergencyLimitLbf: {
     label: 'Emergency brake hand force limit', group: 'brake', unit: 'lbf',
@@ -2120,6 +2282,11 @@ const defs = {
   rideSpeedMph: {
     label: 'Ride design speed', group: 'ride', unit: 'mph',
     default: 10, min: 3, max: 15, step: 1, status: 'locked', ref: 'D-49',
+  },
+  rideCautionSpeedMph: {
+    label: 'Caution speed (handler walking alongside)', group: 'ride', unit: 'mph',
+    default: 5, min: 2, max: 8, step: 1, status: 'locked', ref: 'D-51',
+    note: 'The speed cap wherever the friction table shows CAUTION or steps of 1" or more are on the run (spec 6.1).',
   },
   rideMaxSlopeDeg: {
     label: 'Steepest slope to ride', group: 'ride', unit: '°',
@@ -2200,6 +2367,142 @@ const defs = {
   ackermannErrorMaxDeg: {
     label: 'Max Ackermann error over the lock', group: 'factors', unit: '°',
     default: 1, min: 0.2, max: 3, step: 0.1, status: 'assumed', ref: 'D-53',
+  },
+
+  // ── Phase 3b WS-D: material strengths and detail sizes for the front-end rows (analysis/front-end.ts, linkage.ts). Hard-hit rows use the ultimate values. ──
+  axleUltimatePsi: {
+    label: 'Axle steel ultimate strength', group: 'factors', unit: 'psi',
+    default: 85000, min: 45000, max: 140000, step: 1000, status: 'assumed', ref: 'D-54',
+    note: 'Companion of axleYieldPsi (1045 cold-finished ~ 91 ksi nominal; 85 ksi assumed). Hard-hit rear axle row.',
+  },
+  frontBeamUltimatePsi: {
+    label: 'Front beam ultimate strength', group: 'factors', unit: 'psi',
+    default: 58000, min: 40000, max: 100000, step: 1000, status: 'assumed', ref: 'D-54',
+    note: 'A500 grade B tube.',
+  },
+  kingpinUltimatePsi: {
+    label: 'Grade 8 bolt ultimate strength', group: 'factors', unit: 'psi',
+    default: 150000, min: 60000, max: 170000, step: 5000, status: 'assumed', ref: 'D-54',
+    note: 'Kingpin and bracket bolts (SAE grade 8 = 150 ksi tensile, 130 ksi yield in kingpinYieldPsi).',
+  },
+  bracketSteelYieldPsi: {
+    label: 'Bracket / plate steel yield strength', group: 'factors', unit: 'psi',
+    default: 36000, min: 30000, max: 60000, step: 1000, status: 'assumed', ref: 'D-54',
+    note: 'A36 plate: kingpin bracket leaves, bellcrank, mode plate.',
+  },
+  bracketSteelUltimatePsi: {
+    label: 'Bracket / plate steel ultimate strength', group: 'factors', unit: 'psi',
+    default: 58000, min: 40000, max: 80000, step: 1000, status: 'assumed', ref: 'D-54',
+  },
+  linkRodYieldPsi: {
+    label: 'Tie rod / link rod yield strength', group: 'steering', unit: 'psi',
+    default: 36000, min: 30000, max: 100000, step: 1000, status: 'assumed', ref: 'D-54',
+    note: 'Mild-steel threaded rod (A307 class). Grade 5 rod would be 92 ksi.',
+  },
+  linkRodUltimatePsi: {
+    label: 'Tie rod / link rod ultimate strength', group: 'steering', unit: 'psi',
+    default: 60000, min: 40000, max: 120000, step: 1000, status: 'assumed', ref: 'D-54',
+  },
+  rodEndRatingLbf: {
+    label: 'Rod end static radial rating', group: 'steering', unit: 'lbf',
+    default: 2500, min: 500, max: 8000, step: 100, status: 'verify', ref: 'D-54',
+    note: 'A 5/16" bolt-size rod end (heim joint) is typically listed 2-5 kips static radial; read the catalog for the part bought. The study warned that kart 5/16" rod ends are marginal.',
+  },
+  stickCableBreakLbf: {
+    label: 'Stick cable minimum break strength', group: 'steering', unit: 'lbf',
+    default: 1700, min: 500, max: 4000, step: 100, status: 'verify', ref: 'D-54',
+    note: '1/8" 7x19 stainless is about 1,700-2,000 lbf. The swage sleeves are rated at about 90% of that.',
+  },
+  stickHandLoadLbf: {
+    label: 'Hand force on the ride stick (cable design load)', group: 'steering', unit: 'lbf',
+    default: 60, min: 20, max: 150, step: 5, status: 'assumed', ref: 'D-54',
+    note: 'A scout grip is 60-70 lbf (study 5.4).',
+  },
+  rideStickDiaIn: {
+    label: 'Ride stick tube OD', group: 'steering', unit: 'in',
+    default: 0.75, min: 0.5, max: 1.25, step: 0.125, status: 'assumed', ref: 'D-53',
+  },
+  rideStickWallIn: {
+    label: 'Ride stick tube wall', group: 'steering', unit: 'in',
+    default: 0.065, min: 0.035, max: 0.125, step: 0.005, status: 'assumed', ref: 'D-53',
+  },
+  rideStickYieldPsi: {
+    label: 'Ride stick tube yield strength', group: 'steering', unit: 'psi',
+    default: 35000, min: 15000, max: 70000, step: 1000, status: 'assumed', ref: 'D-53',
+    note: '6061-T6 aluminum tube.',
+  },
+  spindleBossRadiusIn: {
+    label: 'Spindle kingpin boss radius (thrust face)', group: 'steering', unit: 'in',
+    default: 0.75, min: 0.4, max: 1.2, step: 0.05, status: 'verify', ref: 'D-53',
+    note: 'The boss thrust faces can react a vertical wheel load up to this far off the kingpin axis; the remaining lever to the wheel plane (scrub minus this) loads the kingpin bolt.',
+  },
+  spindleBossLengthIn: {
+    label: 'Spindle kingpin boss length (bearing length)', group: 'steering', unit: 'in',
+    default: 1.75, min: 0.75, max: 2.5, step: 0.05, status: 'verify', ref: 'D-53',
+    note: 'Less than the bracket leaf gap by the shim stack.',
+  },
+  steerArmWidthIn: {
+    label: 'Steering arm section width (in the plane)', group: 'steering', unit: 'in',
+    default: 0.75, min: 0.4, max: 1.5, step: 0.05, status: 'verify', ref: 'D-53',
+  },
+  steerArmThickIn: {
+    label: 'Steering arm section thickness', group: 'steering', unit: 'in',
+    default: 0.375, min: 0.2, max: 0.75, step: 0.025, status: 'verify', ref: 'D-53',
+  },
+  bellcrankPlateThickIn: {
+    label: 'Bellcrank plate thickness', group: 'steering', unit: 'in',
+    default: 0.25, min: 0.125, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-53',
+  },
+  bellcrankArmWidthIn: {
+    label: 'Bellcrank arm width', group: 'steering', unit: 'in',
+    default: 1.25, min: 0.75, max: 2.5, step: 0.125, status: 'assumed', ref: 'D-53',
+  },
+  tongueHingePinDiaIn: {
+    label: 'Tongue hinge pin diameter', group: 'steering', unit: 'in',
+    default: 0.5, min: 0.25, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-53',
+    note: 'Grade 8, vertical, double shear in the clevis.',
+  },
+  tongueClevisThickIn: {
+    label: 'Tongue hinge clevis plate thickness', group: 'steering', unit: 'in',
+    default: 0.25, min: 0.125, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-53',
+  },
+  wheelCotterDiaIn: {
+    label: 'Wheel cotter pin diameter', group: 'wheels', unit: 'in',
+    default: 0.09375, min: 0.0625, max: 0.1875, step: 0.015625, status: 'assumed', ref: 'D-54',
+    note: '3/32" cotter through the castle nut and stub end.',
+  },
+  wheelCotterUltimatePsi: {
+    label: 'Wheel cotter pin ultimate strength', group: 'wheels', unit: 'psi',
+    default: 55000, min: 30000, max: 100000, step: 1000, status: 'assumed', ref: 'D-54',
+  },
+  wheelNutEngagementIn: {
+    label: 'Wheel castle-nut thread engagement', group: 'wheels', unit: 'in',
+    default: 0.375, min: 0.2, max: 0.75, step: 0.025, status: 'assumed', ref: 'D-54',
+  },
+  stubThreadFrac: {
+    label: 'Threaded stub end diameter / stub diameter', group: 'wheels', unit: '',
+    default: 0.75, min: 0.5, max: 0.95, step: 0.05, status: 'assumed', ref: 'D-54',
+    note: 'The thread at the stub tip is smaller than the stub (25 mm stub: about 3/4"-16; 17 mm: M12).',
+  },
+  rutWallLateralFrac: {
+    label: 'Rut-wall lateral hit as a fraction of the vertical bump force', group: 'factors', unit: '',
+    default: 0.8, min: 0.2, max: 1.5, step: 0.05, status: 'assumed', ref: 'D-54',
+    note: 'Wheel retention row: the wheel is hit sideways with F_lat = this x V while it is also being hit by the bump.',
+  },
+  tireCorneringPerDeg: {
+    label: 'Tire cornering coefficient (lateral force / load per degree)', group: 'factors', unit: '/°',
+    default: 0.12, min: 0.05, max: 0.25, step: 0.01, status: 'assumed', ref: 'D-53',
+    note: 'Study 3.4: 0.08-0.16 per degree for a 13" pneumatic. Used by the info rows only.',
+  },
+  tirePneumaticTrailIn: {
+    label: 'Pneumatic tire trail', group: 'factors', unit: 'in',
+    default: 0.5, min: 0, max: 1.5, step: 0.1, status: 'assumed', ref: 'D-53',
+    note: 'Added to the geometric trail for self-centering.',
+  },
+  holdDownBoltUltimatePsi: {
+    label: 'Rear beam hold-down bolt ultimate strength (316)', group: 'factors', unit: 'psi',
+    default: 90000, min: 50000, max: 150000, step: 1000, status: 'assumed', ref: 'D-54',
+    note: 'Companion of kingpinCrossBoltYieldPsi for the hard-hit rear-beam-seat row (316 stainless, cold-worked A4-70 about 100 ksi).',
   },
 } satisfies Record<string, ParamDef>;
 
@@ -2322,7 +2625,8 @@ export function resolveParams(p: Params): Params {
   const q = t && (p.turntableSizeIn !== t.size || p.turntableThicknessIn !== t.thick || p.turntableMassLb !== t.mass || p.turntableRatingLb !== t.rating)
     ? { ...p, turntableSizeIn: t.size, turntableThicknessIn: t.thick, turntableMassLb: t.mass, turntableRatingLb: t.rating }
     : p;
-  return resolveNose(q);
+  // Ackermann front end (D-52): one deck level, no shoulder beam: the stepped-deck params are forced to 0 for every consumer of the resolved params.
+  return resolveNose(q.frontEndType === 1 && (q.frontDeckRaiseIn !== 0 || q.shoulderBeamIn !== 0) ? { ...q, frontDeckRaiseIn: 0, shoulderBeamIn: 0 } : q);
 }
 
 /** The tire-sweep clearance spec the S-curve is tested against (centerline half widths, D-45). */
@@ -2331,7 +2635,37 @@ export function hullCurveSpec(p: Params): CurveClearanceSpec {
     wheelbase: p.wheelbaseIn, kx: p.wheelbaseIn + p.kingpinLeadIn, frontTrack: p.frontTrackIn, tireWidth: p.tireWidthIn,
     wheelDiameter: p.wheelDiameterIn, lockDeg: p.steerLockDeg,
     yA: p.bodyWidthIn / 2 - p.sideThicknessIn / 2, yB: p.noseWidthIn / 2 - p.sideThicknessIn / 2, side: p.sideThicknessIn,
+    ...(p.frontEndType === 1 ? { ack: ackSpec(p) } : {}),
   };
+}
+
+/** The bow curve spec (Ackermann hull, D-52) for a curve start `x0`: centerline half widths, the front transom's inner face and the straight bow run. */
+export function bowSpecOf(p: Params, x0: number): BowSpec {
+  const side = p.sideThicknessIn;
+  return { x0, yA: p.bodyWidthIn / 2 - side / 2, xT: p.wheelbaseIn + p.frontOverhangIn - p.transomThicknessIn, yT: p.noseWidthIn / 2 - side / 2, straightIn: p.hullBowStraightIn };
+}
+
+/**
+ * The plan curve of the hull side centerline for RESOLVED params: the D-45 reverse curve (parallel nose) with the old front end; with the Ackermann front end
+ * the gentlest bow curve that clears the tire sweep (fitBowCurve) from the curve start to the front transom.
+ */
+export function hullPlanCurve(p: Params): PlanCurve {
+  if (p.frontEndType === 1) return fitBowCurve(bowSpecOf(p, p.hullCurveStartIn), hullCurveSpec(p), p.sideThicknessIn, p.steeringClearanceIn).curve;
+  return buildPlanCurve(p.hullCurveStartIn, p.wheelbaseIn - p.noseTaperStartIn, p.bodyWidthIn / 2 - p.sideThicknessIn / 2, p.noseWidthIn / 2 - p.sideThicknessIn / 2);
+}
+
+/** Smallest distance from the hull's OUTER face to the left front tire over the whole steering sweep, for RESOLVED params (the curve from `hullPlanCurve`). */
+export function hullTireGap(p: Params, curve: PlanCurve = hullPlanCurve(p)): number {
+  const spec = hullCurveSpec(p);
+  if (p.frontEndType !== 1) return curveTireGap(curve.x0, curve.x1, spec);
+  const xT = p.wheelbaseIn + p.frontOverhangIn - p.transomThicknessIn;
+  return minGapToTires(sidePolyline(curve, p.sideThicknessIn / 2, curve.x0 - 0.5, xT), leftTirePolys(spec));
+}
+
+/** Rider foot box (D-3 mannequin: foot length 0.14 of stature, the foot stop's rear face at seatX + leg reach): the x range the hull must be wide enough for. */
+export function footZoneX(p: Params): [number, number] {
+  const stopRear = p.seatXIn + p.riderLegReachIn - p.footStopThickIn / 2;
+  return [stopRear - 0.14 * p.riderStatureIn, stopRear];
 }
 
 /**
@@ -2345,6 +2679,15 @@ export const PHASE3B_DEFAULT_OVERRIDES = {
   kingpinDiameterIn: 0.375, // grade 8 bolt; range min becomes 0.25
   turnRadiusMaxIn: 108, // D-51 relaxed to 9 ft
   brakeLiningThickIn: 0.25,
+  frontBrakeType: 0, // WS-C: tread shoe on each knuckle (the PARAM_DEFS default stays 2 = none until the flip)
+  brakeShoeBacking: 1, // WS-C: lined steel-backed shoes
+  rideBrakeControls: 1, // WS-C: hip lever, lost-motion link, lap belt
+  brakeShoePinYieldPsi: 100000, // WS-C: 17-4 PH stainless shoe and pivot pins
+  frontEndType: 1, // WS-B: Ackermann front end selects the one-level, bow-tapered hull (PARAM_DEFS default stays 0 until the flip)
+  noseWidthIn: 13, // WS-B: outside width of the bow at the front transom (D-52); the old default 13.5 was the nose width in the swing zone
+  hullCurveStartIn: 14.5, // WS-B: as early as the grab handles allow (they reach 14.4")
+  hullLamThicknessIn: 0.3125, // WS-B: 2 plies of 5/16 for the chine and gunwale, 2 x 3/8 for the rail (D-57)
+  hullWebPlies: 1, // WS-B: one 6 mm okoume web sheet (R >= 58" instead of 5.7")
 } as const satisfies Partial<Record<ParamKey, number>>;
 
 /** `defaultParams()` with the Phase 3b target defaults applied (see `PHASE3B_DEFAULT_OVERRIDES`). */
@@ -2369,6 +2712,11 @@ export function ackSpec(p: Params): AckSpec {
     armAngleDeg: p.ackermannAngleDeg,
     tieLen: 0,
     bellArm: p.bellcrankArmIn,
+    bellOutDeg: p.bellcrankOutAngleDeg,
+    bellInArm: p.bellcrankInArmIn,
+    bellInDeg: p.bellcrankInAngleDeg,
+    bellCableArm: p.bellcrankCableArmIn,
+    tongueEar: [p.tongueEarAheadIn, -p.tongueLinkArmIn],
     bellPivot: [kx - p.bellcrankPivotAftOfKingpinIn, 0],
     tongueHinge: [kx - p.frontBeamBehindKingpinIn + p.frontBeamWidthIn / 2 + p.tongueHingeAheadOfBeamIn, 0],
     tongueLinkArm: p.tongueLinkArmIn,
@@ -2385,6 +2733,7 @@ const curveEndCache = new Map<string, number>();
 const noseCache = new Map<string, { noseWidthIn: number; noseTaperStartIn: number; hullCurveStartIn: number }>();
 
 function resolveNose(p: Params): Params {
+  if (p.frontEndType === 1) return resolveNoseAck(p);
   if (p.autoNoseGeometry !== 1) return p;
   if (!(p.wheelDiameterIn > p.deckHeightIn + p.frontDeckRaiseIn - p.deckPlyIn - p.crossmemberDepthIn)) return p;
   const ck = [p.wheelbaseIn, p.kingpinLeadIn, p.frontTrackIn, p.tireWidthIn, p.wheelDiameterIn, p.steerLockDeg, p.sideThicknessIn, p.bodyWidthIn, p.steeringClearanceIn, p.hullCurveStartIn,
@@ -2395,6 +2744,49 @@ function resolveNose(p: Params): Params {
   if (noseCache.size > 5000) noseCache.clear();
   noseCache.set(ck, { noseWidthIn: out.noseWidthIn, noseTaperStartIn: out.noseTaperStartIn, hullCurveStartIn: out.hullCurveStartIn });
   return out;
+}
+
+const ackNoseCache = new Map<string, { noseTaperStartIn: number; hullCurveStartIn: number }>();
+
+/**
+ * Ackermann hull (D-52). The curved part ends `hullBowStraightIn` behind the front transom's inner face (a derived `noseTaperStartIn`); the bow width is
+ * the user's `noseWidthIn`. With auto on, the curve start moves EARLIER (never later, never ahead of the 8" slider minimum) until the gentlest bow curve
+ * clears the tire sweep and meets the lamination radius: an earlier start is a longer, gentler curve.
+ */
+function resolveNoseAck(p: Params): Params {
+  const taper = Math.round((p.hullBowStraightIn + p.transomThicknessIn - p.frontOverhangIn) * 1e6) / 1e6;
+  let x0 = p.hullCurveStartIn;
+  if (p.autoNoseGeometry === 1) {
+    const ck = [p.wheelbaseIn, p.kingpinLeadIn, p.scrubRadiusIn, p.frontTrackIn, p.steerArmLengthIn, p.ackermannAngleDeg, p.steerLockDeg, p.tireWidthIn, p.wheelDiameterIn, p.sideThicknessIn,
+      p.bodyWidthIn, p.noseWidthIn, p.steeringClearanceIn, p.hullCurveStartIn, p.hullBowStraightIn, p.frontOverhangIn, p.transomThicknessIn, p.railThicknessIn, p.hullLamThicknessIn,
+      p.hullLamMinRadiusFactor, p.hullWebPlies, p.panelPlyIn, p.sideConstruction].join('|');
+    const hit = ackNoseCache.get(ck);
+    if (hit) x0 = hit.hullCurveStartIn;
+    else {
+      const needR = requiredCurveRadius(p);
+      const spec = hullCurveSpec(p);
+      const ok = (x: number) => {
+        const f = fitBowCurve(bowSpecOf(p, x), spec, p.sideThicknessIn, p.steeringClearanceIn);
+        return f.feasible && f.curve.minRadius >= needR - 1e-9;
+      };
+      const xnEnd = p.wheelbaseIn + p.frontOverhangIn - p.transomThicknessIn - p.hullBowStraightIn;
+      if (!ok(x0) && xnEnd - HULL_CURVE_START_MIN_IN > 3) {
+        let lo = HULL_CURVE_START_MIN_IN, hi = x0;
+        if (!ok(lo)) x0 = lo;
+        else {
+          while (hi - lo > 0.5 + 1e-9) {
+            const mid = Math.floor(((lo + hi) / 2) * 2) / 2;
+            if (ok(mid)) lo = mid; else hi = mid;
+          }
+          x0 = lo;
+        }
+      }
+      if (ackNoseCache.size > 3000) ackNoseCache.clear();
+      ackNoseCache.set(ck, { noseTaperStartIn: taper, hullCurveStartIn: x0 });
+    }
+  }
+  if (taper === p.noseTaperStartIn && x0 === p.hullCurveStartIn) return p;
+  return { ...p, noseTaperStartIn: taper, hullCurveStartIn: x0 };
 }
 
 function resolveNoseUncached(p: Params): Params {
@@ -2453,12 +2845,17 @@ const HULL_CURVE_END_BEHIND_AXLE_MIN_IN = 12;
 /** Earliest the auto rule will move the S-curve start (the slider minimum). */
 const HULL_CURVE_START_MIN_IN = 8;
 
+/** Actual ply thickness of a laminated member `t` thick glued from strips of about `strip` (the ply count is rounded: 3/4" rail from 5/16" strips = 2 x 3/8"). */
+export function lamPly(t: number, strip: number): number {
+  return t / Math.max(1, Math.round(t / Math.max(0.01, strip)));
+}
+
 /** Smallest centerline radius (in) the hull curve may have: the inside face of every bent member must meet its cold-bend limit (D-45). */
 export function requiredCurveRadius(p: Params): number {
   const strip = Math.max(0.01, p.hullLamThicknessIn);
   const web = p.panelPlyIn / Math.max(1, p.hullWebPlies);
   const f = p.hullLamMinRadiusFactor;
-  const r = [f * strip + p.sideThicknessIn / 2, f * strip + p.railThicknessIn / 2];
+  const r = [f * lamPly(p.sideThicknessIn, strip) + p.sideThicknessIn / 2, f * lamPly(p.railThicknessIn, strip) + p.railThicknessIn / 2];
   if (p.sideConstruction === SIDE_CONSTRUCTION.capturedPly) r.push(f * web + p.panelPlyIn / 2);
   return Math.max(...r);
 }
@@ -2509,7 +2906,7 @@ export function derived(p: Params) {
 
 export interface ParamIssue {
   keys: ParamKey[];
-  severity: 'error' | 'warn';
+  severity: 'error' | 'warn' | 'info';
   message: string;
 }
 
@@ -2523,7 +2920,10 @@ export function validateParams(input: Params): ParamIssue[] {
   const issues: ParamIssue[] = [];
   const err = (keys: ParamKey[], message: string) => issues.push({ keys, severity: 'error', message });
   const warn = (keys: ParamKey[], message: string) => issues.push({ keys, severity: 'warn', message });
+  const info = (keys: ParamKey[], message: string) => issues.push({ keys, severity: 'info', message });
   const r = p.wheelDiameterIn / 2;
+  /** The Phase 3 turntable front end: its validators stand down for the Ackermann front end (they are deleted at the Stage 2 flip). */
+  const oldFront = p.frontEndType !== 1;
 
   if (p.riderGoalMassLb < p.riderMassLb)
     warn(['riderGoalMassLb', 'riderMassLb'], 'The operating rider is heavier than the goal rider; the 200 lb goal checks no longer cover the heaviest case (the Simple view sweeps every weight).');
@@ -2542,7 +2942,7 @@ export function validateParams(input: Params): ParamIssue[] {
     err(['seatXIn', 'rearOverhangIn'], 'Seat hangs off the back of the body.');
   if (p.seatXIn + p.riderLegReachIn > p.wheelbaseIn + p.frontOverhangIn)
     err(['seatXIn', 'riderLegReachIn', 'frontOverhangIn'], 'Rider\'s feet extend past the front of the body.');
-  if (p.kingpinLeadIn + p.turntableSizeIn / 2 + p.transomThicknessIn > p.frontOverhangIn)
+  if (oldFront && p.kingpinLeadIn + p.turntableSizeIn / 2 + p.transomThicknessIn > p.frontOverhangIn)
     err(['kingpinLeadIn', 'turntableSizeIn', 'frontOverhangIn'],
       `The turntable (kingpin at ${p.kingpinLeadIn}" ahead of the axle, ${p.turntableSizeIn}" plate) pokes out of the front of the body; the front overhang must be ≥ ${(p.kingpinLeadIn + p.turntableSizeIn / 2 + p.transomThicknessIn).toFixed(2)}".`);
   // Seat geometry (critic H3, D-45): the grab handles end before the S-curve starts, the cushion stays inside the narrowing hull,
@@ -2560,7 +2960,7 @@ export function validateParams(input: Params): ParamIssue[] {
     err(['hullCurveStartIn', 'noseTaperStartIn', 'wheelbaseIn'],
       `The S-curve would be shorter than 3" (it starts at x = ${p.hullCurveStartIn}" and ends at ${xnCurve.toFixed(1)}"): start it earlier.`);
   else {
-    const curve = buildPlanCurve(p.hullCurveStartIn, xnCurve, p.bodyWidthIn / 2 - p.sideThicknessIn / 2, p.noseWidthIn / 2 - p.sideThicknessIn / 2);
+    const curve = hullPlanCurve(p);
     const seatHalf = Math.max(1, Math.min(p.seatWidthIn, p.bodyWidthIn - 2 * p.sideThicknessIn - 1)) / 2;
     const innerAtCushion = offsetY(curve, -p.sideThicknessIn / 2, Math.min(cushionFront, xnCurve));
     if (cushionFront > p.hullCurveStartIn && innerAtCushion < seatHalf + 0.25 - 1e-9)
@@ -2568,17 +2968,19 @@ export function validateParams(input: Params): ParamIssue[] {
         `The seat cushion (front at x = ${cushionFront.toFixed(1)}", ${(2 * seatHalf).toFixed(0)}" wide) runs into the narrowing hull: inside width there is only ${(2 * innerAtCushion).toFixed(1)}". Start the S-curve later, shorten the seat or narrow it.`);
     const tiresReach = p.wheelDiameterIn > p.deckHeightIn + p.frontDeckRaiseIn - p.deckPlyIn - p.crossmemberDepthIn;
     if (tiresReach) {
-      const gap = curveTireGap(p.hullCurveStartIn, xnCurve, hullCurveSpec(p));
+      const gap = hullTireGap(p, curve);
       if (gap < p.steeringClearanceIn - 1e-6)
-        err(['hullCurveStartIn', 'noseTaperStartIn', 'steerLockDeg', 'frontTrackIn', 'kingpinLeadIn'],
-          `The S-curve hull comes within ${gap.toFixed(2)}" of the front tire at some steering angle (needs ≥ ${p.steeringClearanceIn}"). End the curve earlier or turn "Auto nose width & shoulder" on.`);
+        err(['hullCurveStartIn', 'noseTaperStartIn', 'noseWidthIn', 'steerLockDeg', 'frontTrackIn', 'kingpinLeadIn'],
+          p.frontEndType === 1
+            ? `The hull side comes within ${gap.toFixed(2)}" of the front tire at some steering angle (needs ≥ ${p.steeringClearanceIn}"). Narrow the bow, start the curve earlier (turn "Auto nose width & shoulder" on) or reduce the steering lock.`
+            : `The S-curve hull comes within ${gap.toFixed(2)}" of the front tire at some steering angle (needs ≥ ${p.steeringClearanceIn}"). End the curve earlier or turn "Auto nose width & shoulder" on.`);
     }
     // Bent laminations: tightest radius of the INSIDE face vs the cold-bend limit (D-45).
     const strip = Math.max(0.01, p.hullLamThicknessIn);
     const webSheet = p.panelPlyIn / Math.max(1, p.hullWebPlies);
     const checks: Array<[string, number, number]> = [
-      ['chine / gunwale', p.sideThicknessIn, strip],
-      ['ladder rail', p.railThicknessIn, strip],
+      ['chine / gunwale', p.sideThicknessIn, lamPly(p.sideThicknessIn, strip)],
+      ['ladder rail', p.railThicknessIn, lamPly(p.railThicknessIn, strip)],
       ...(p.sideConstruction === SIDE_CONSTRUCTION.capturedPly ? ([['side panel', p.panelPlyIn, webSheet]] as Array<[string, number, number]>) : []),
     ];
     for (const [name, thick, s1] of checks) {
@@ -2586,6 +2988,12 @@ export function validateParams(input: Params): ParamIssue[] {
       if (rIn < lim - 1e-9)
         err(['hullCurveStartIn', 'hullLamThicknessIn', 'hullLamMinRadiusFactor', 'hullWebPlies'],
           `The ${name} bend radius ${rIn.toFixed(1)}" (inside face) is tighter than the cold-bend limit ${lim.toFixed(1)}" (${p.hullLamMinRadiusFactor} x ${s1.toFixed(3)}" strip): start the S-curve earlier, use thinner strips, or steam it.`);
+    }
+    // A member sprung from one solid piece instead of laminated (D-57): it needs the inside radius >= 100 x its thickness (strain t/2R under 0.5 percent).
+    if (p.frontEndType === 1 && Number.isFinite(curve.minRadius)) {
+      const need = SOLID_SPRING_RADIUS_FACTOR * p.sideThicknessIn;
+      info(['hullLamThicknessIn', 'sideThicknessIn', 'hullCurveStartIn'],
+        `Sprung from one solid piece the ${p.sideThicknessIn}" chine/gunwale would need an inside radius of at least ${SOLID_SPRING_RADIUS_FACTOR} x its thickness = ${need.toFixed(1)}"; this curve has ${(curve.minRadius - p.sideThicknessIn / 2).toFixed(1)}" (${curve.minRadius - p.sideThicknessIn / 2 >= need ? 'a test strip may show a solid spring works' : 'too tight, so the sides stay laminated'}). The 3/4" rail would need ${(SOLID_SPRING_RADIUS_FACTOR * p.railThicknessIn).toFixed(1)}".`);
     }
   }
   const a = (p.seatBackAngleDeg * Math.PI) / 180;
@@ -2617,11 +3025,21 @@ export function validateParams(input: Params): ParamIssue[] {
   }
   // The rider's feet go through the nose to the foot stop.
   const footSpan = (2 * RIDER_LEG_Y_FRAC + RIDER_FOOT_Y_FRAC) * p.riderStatureIn;
-  const noseInner = p.noseWidthIn - 2 * p.sideThicknessIn;
+  let noseInner = p.noseWidthIn - 2 * p.sideThicknessIn;
   const footNeed = footSpan + 2 * p.bootAllowanceIn + 0.25;
+  if (p.frontEndType === 1) {
+    // The bow converges: the feet need the room over the whole foot box (heel to the foot stop), not at the transom.
+    const curve = hullPlanCurve(p);
+    const [fx0, fx1] = footZoneX(p);
+    noseInner = Infinity;
+    for (let x = fx0; x <= fx1 + 1e-9; x += 0.5) noseInner = Math.min(noseInner, 2 * offsetY(curve, -p.sideThicknessIn / 2, x));
+    noseInner = Math.min(noseInner, 2 * offsetY(curve, -p.sideThicknessIn / 2, fx1));
+  }
   if (noseInner < footNeed)
     err(['noseWidthIn', 'riderStatureIn', 'bootAllowanceIn'],
-      `The nose is ${noseInner.toFixed(1)}" wide inside; the rider's feet need ≥ ${footNeed.toFixed(1)}" at this stature (feet ${footSpan.toFixed(1)}" + ${p.bootAllowanceIn}" boot allowance per side + ¼" play).`);
+      p.frontEndType === 1
+        ? `The hull is only ${noseInner.toFixed(1)}" wide inside at the rider's feet (x ${footZoneX(p)[0].toFixed(0)}-${footZoneX(p)[1].toFixed(0)}"); they need ≥ ${footNeed.toFixed(1)}" at this stature (feet ${footSpan.toFixed(1)}" + ${p.bootAllowanceIn}" boot allowance per side + ¼" play). Widen the bow.`
+        : `The nose is ${noseInner.toFixed(1)}" wide inside; the rider's feet need ≥ ${footNeed.toFixed(1)}" at this stature (feet ${footSpan.toFixed(1)}" + ${p.bootAllowanceIn}" boot allowance per side + ¼" play).`);
   if (p.truckWellStartIn + p.truckWellLengthIn > p.truckBedLengthIn)
     err(['truckWellStartIn', 'truckWellLengthIn', 'truckBedLengthIn'], 'Wheel wells extend past the bed.');
   if (p.truckWellGapIn > p.truckBedWidthIn)
@@ -2648,12 +3066,12 @@ export function validateParams(input: Params): ParamIssue[] {
   const beamTop = beamBottom + p.axleBeamDepthIn;
   // The bolster must fit between the turntable top and the nose deck underside (the model would otherwise poke through the deck).
   const frontDeckBot = p.deckHeightIn + p.frontDeckRaiseIn - p.deckPlyIn;
-  if (beamTop + frontStackIn(p) + p.bolsterMinDepthIn > frontDeckBot + 0.01)
+  if (oldFront && beamTop + frontStackIn(p) + p.bolsterMinDepthIn > frontDeckBot + 0.01)
     err(['deckHeightIn', 'frontDeckRaiseIn', 'axleBeamPosition', 'axleBeamDepthIn', 'turntableThicknessIn', 'bolsterMinDepthIn'],
       `Front axle beam + turntable + ${p.bolsterMinDepthIn}" bolster needs the nose deck underside at ≥ ${(beamTop + frontStackIn(p) + p.bolsterMinDepthIn).toFixed(2)}"; it is ${frontDeckBot.toFixed(2)}". Raise the deck or the forward deck raise, or use an underslung beam.`);
   const frontStackTop = beamTop + frontStackIn(p) + p.crossmemberDepthIn + p.deckPlyIn;
   const frontDeck = p.deckHeightIn + p.frontDeckRaiseIn;
-  if (frontStackTop > frontDeck + 0.01)
+  if (oldFront && frontStackTop > frontDeck + 0.01)
     warn(['deckHeightIn', 'frontDeckRaiseIn', 'axleBeamDepthIn', 'turntableThicknessIn'],
       `Front axle stack (beam + turntable + crossmember + ply) needs the deck at ≥ ${frontStackTop.toFixed(2)}" over the front axle; it is ${frontDeck.toFixed(2)}".`);
   const rearStackTop = beamTop + p.deckPlyIn;
@@ -2668,7 +3086,7 @@ export function validateParams(input: Params): ParamIssue[] {
   }
   // Front-wheel swing at full lock (A-4). Only matters if the tire reaches up to the hull.
   const d = derived(p);
-  if (p.wheelDiameterIn > p.deckHeightIn + p.frontDeckRaiseIn - p.deckPlyIn - p.crossmemberDepthIn) {
+  if (oldFront && p.wheelDiameterIn > p.deckHeightIn + p.frontDeckRaiseIn - p.deckPlyIn - p.crossmemberDepthIn) {
     const allowedHalf = d.swingInnerYIn - p.steeringClearanceIn;
     if (p.noseWidthIn / 2 > allowedHalf)
       err(['noseWidthIn', 'steerLockDeg', 'frontTrackIn'],
@@ -2716,7 +3134,7 @@ export function validateParams(input: Params): ParamIssue[] {
   // Front transom hangs below the nose deck; the swinging turntable corners and the tongue pass under it (critic r2 M3).
   const transomBottom = p.deckHeightIn + p.frontDeckRaiseIn - p.crossmemberDepthIn;
   const turntableTop = beamTop + frontStackIn(p);
-  if (transomBottom < turntableTop - 0.01)
+  if (oldFront && transomBottom < turntableTop - 0.01)
     err(['deckHeightIn', 'frontDeckRaiseIn', 'crossmemberDepthIn', 'turntableThicknessIn'],
       `The front transom hangs to ${transomBottom.toFixed(2)}", below the top of the turntable (${turntableTop.toFixed(2)}") and the tongue; raise the nose deck to ≥ ${(turntableTop + p.crossmemberDepthIn).toFixed(2)}".`);
 
@@ -2772,7 +3190,7 @@ export function validateParams(input: Params): ParamIssue[] {
       err(['brakeCrankIn', 'brakeCrankAngleDeg', 'brakeShaftBehindTireIn', 'bodyWidthIn', 'rearTrackIn'],
         `The brake crank and clevis (${planeOuterY.toFixed(2)}" out from the centerline, reaching ${(bX + 0.5).toFixed(2)}" behind the axle) would run into the rear tire, whose inner face is at ${tireIn.toFixed(2)}". Move the cross shaft further back, shorten or re-aim the crank, or narrow the body.`);
     const tilt = (p.brakeLeverTiltDeg * Math.PI) / 180;
-    const delta = p.brakeShoeLengthIn / (2 * r);
+    const delta = (p.brakeShoeBacking === 1 ? p.brakeLinedShoeLengthIn : p.brakeShoeLengthIn) / (2 * r);
     const beta = (p.brakeShoeAngleDeg * Math.PI) / 180;
     // Released pad: the pin is turned back about the shaft by the stroke (see brakeGeometry), which moves the pad down along its arc.
     const ex = -(r + p.brakeShoeThickIn / 2) * Math.cos(beta) - sX, ez = r - (r + p.brakeShoeThickIn / 2) * Math.sin(beta) - r;

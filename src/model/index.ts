@@ -2,6 +2,8 @@ import type { Params } from '../params';
 import { makeCtx, type ViewState } from './build-utils';
 import { buildBody } from './body';
 import { buildBrake } from './brake';
+import { buildBrakeControls } from './brake-controls';
+import { buildFrontBrake } from './brake-front';
 import { applyFinish } from './finish';
 import { buildFrame } from './frame';
 import { applyJoinery } from './joinery';
@@ -9,6 +11,7 @@ import { applyHardwareMass, buildHardware, buildLighting } from './lighting';
 import { buildPayload } from './rider';
 import { buildRunningGear } from './running-gear';
 import { buildSeat } from './seat';
+import { buildFrontEnd } from './front-end';
 import { buildSteering } from './steering';
 import { buildStorage } from './storage';
 import type { Part } from './types';
@@ -24,12 +27,14 @@ export function buildModel(input: Params, view: ViewState = {}): Part[] {
   const ctx = makeCtx(input, view); // resolves auto nose geometry (resolveParams) so every part and ctx.p agree
   const parts = [
     ...buildRunningGear(ctx),
-    ...buildSteering(ctx),
+    ...(ctx.view.frontEnd === 'ackermann' ? buildFrontEnd(ctx) : buildSteering(ctx)),
     ...buildFrame(ctx),
     ...buildBody(ctx),
     ...buildSeat(ctx),
     ...buildStorage(ctx),
     ...buildBrake(ctx),
+    ...buildFrontBrake(ctx),
+    ...buildBrakeControls(ctx),
     ...buildLighting(ctx),
     ...buildHardware(ctx),
     ...buildPayload(ctx),

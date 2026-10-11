@@ -6,7 +6,8 @@
 import type { Params } from '../params';
 import { partCentroid } from '../model/bounds';
 import type { Part, Vec3 } from '../model/types';
-import { rot2, type P2 } from './geometry';
+import { solveSteer, type AckSpec } from '../model/ackermann';
+import { DEG, rot2, type P2 } from './geometry';
 import type { LoadKind } from './types';
 
 export interface CaseData {
@@ -18,7 +19,11 @@ export interface CaseData {
   massLb: number;
   /** CG in the neutral (straight) pose. */
   cg: Vec3;
-  /** CG when the steer body is rotated by `deltaRad` about the kingpin (the steer body carries its own mass). */
+  /**
+   * CG when the steer body is rotated by `deltaRad` about the kingpin (the steer body carries its own mass). With the Ackermann spec (Phase 3b)
+   * `deltaRad` is the INNER wheel angle (+ = left) and each side's steer group (steer-L / wheel-FL, steer-R / wheel-FR) moves about its own kingpin
+   * by its own solved angle (D-53). The tie rod, bellcrank and tongue are treated as chassis mass (a few lb near the centerline).
+   */
   cgAt(deltaRad: number): Vec3;
   label: string;
 }
@@ -35,17 +40,25 @@ export interface LoadModel {
   emptyMassLb: number;
 }
 
-const isSteerBody = (x: Part) => x.body === 'steer' || x.body === 'wheel-FL' || x.body === 'wheel-FR';
+const isSteerBody = (x: Part) => x.body === 'steer' || x.body === 'steer-L' || x.body === 'steer-R' || x.body === 'wheel-FL' || x.body === 'wheel-FR';
 
-export function buildLoadModel(p: Params, parts: Part[], kingpinX: number): LoadModel {
+interface SteerGroup { m: number; x: number; y: number; z: number }
+
+export function buildLoadModel(p: Params, parts: Part[], kingpinX: number, ack?: AckSpec): LoadModel {
   let m = 0, mx = 0, my = 0, mz = 0;
   let ms = 0, msx = 0, msy = 0, msz = 0;
+  const gL: SteerGroup = { m: 0, x: 0, y: 0, z: 0 }, gR: SteerGroup = { m: 0, x: 0, y: 0, z: 0 };
   let removable = 0;
   for (const x of parts) {
     if (x.payload || x.group === 'reference') continue;
     const c = x.cgIn ?? partCentroid(x);
     m += x.massLb; mx += x.massLb * c[0]; my += x.massLb * c[1]; mz += x.massLb * c[2];
-    if (isSteerBody(x)) { ms += x.massLb; msx += x.massLb * c[0]; msy += x.massLb * c[1]; msz += x.massLb * c[2]; }
+    if (isSteerBody(x)) {
+      ms += x.massLb; msx += x.massLb * c[0]; msy += x.massLb * c[1]; msz += x.massLb * c[2];
+      const left = x.body === 'steer-L' || x.body === 'wheel-FL' || (x.body === 'steer' && c[1] >= 0);
+      const g = left ? gL : gR;
+      g.m += x.massLb; g.x += x.massLb * c[0]; g.y += x.massLb * c[1]; g.z += x.massLb * c[2];
+    }
     if (x.removable) removable += x.massLb;
   }
   const torso = parts.find((x) => x.id === 'rider-torso');
@@ -64,6 +77,17 @@ export function buildLoadModel(p: Params, parts: Part[], kingpinX: number): Load
       kind, riderLb, cargoLb, massLb: M, cg, label,
       cgAt(d: number): Vec3 {
         if (d === 0 || ms === 0 || M === 0) return cg;
+        if (ack) {
+          const sol = solveSteer(ack, d * DEG);
+          let dx = 0, dy = 0;
+          for (const [g, ang, ky] of [[gL, sol.leftDeg, ack.kpHalf], [gR, sol.rightDeg, -ack.kpHalf]] as const) {
+            if (g.m <= 0) continue;
+            const q0: P2 = [g.x / g.m, g.y / g.m];
+            const q = rot2(q0, (ang * Math.PI) / 180, [ack.kx, ky]);
+            dx += g.m * (q[0] - q0[0]); dy += g.m * (q[1] - q0[1]);
+          }
+          return [cg[0] + dx / M, cg[1] + dy / M, cg[2]];
+        }
         const q = rot2([steerC[0], steerC[1]] as P2, d, [kingpinX, 0]);
         return [(X - msx + ms * q[0]) / M, (Y - msy + ms * q[1]) / M, cg[2]];
       },

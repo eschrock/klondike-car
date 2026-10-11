@@ -89,7 +89,7 @@ export function mountParamsPanel(host: HTMLElement, store: Store): void {
     issuesBox.replaceChildren(
       ...issues.map((i) =>
         h('div', { class: `issue ${i.severity}`, title: i.keys.map((k) => PARAM_DEFS[k].label).join(', ') },
-          i.severity === 'error' ? '✖ ' : '⚠ ', i.message),
+          i.severity === 'error' ? '✖ ' : i.severity === 'info' ? 'ℹ ' : '⚠ ', i.message),
       ),
     );
     issuesBox.hidden = issues.length === 0;

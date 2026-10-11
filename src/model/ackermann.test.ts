@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { contactsAt, turnGeometry, DEG, RAD } from '../analysis/geometry';
 import { ackSpec, defaultParams, PARAM_DEFS, PHASE3B_DEFAULT_OVERRIDES, phase3bDefaults, sanitizeParams, validateParams, type Params } from '../params';
 import {
-  ackermannErrorDeg, centerLinkage, idealOuterDeg, instantCenters, kpL, kpR, leftWheelRange, lockLimits, poseMatrices, solveCenterExact, solveFromTongue, solveSteer, wheelCenters,
+  ackermannErrorDeg, centerLinkage, centerPins, idealOuterDeg, linkageConditioning, instantCenters, kpL, kpR, leftWheelRange, lockLimits, poseMatrices, solveCenterExact, solveFromTongue, solveSteer, wheelCenters,
   type AckSpec,
 } from './ackermann';
 import { makeCtx } from './build-utils';
@@ -50,7 +50,9 @@ describe('ackermann', () => {
       expect(b.leftDeg).toBeCloseTo(-a.rightDeg, 9);
       expect(b.rightDeg).toBeCloseTo(-a.leftDeg, 9);
       expect(b.rod.dy).toBeCloseTo(-a.rod.dy, 9);
-      expect(b.tongueDeg).toBeCloseTo(-a.tongueDeg, 9);
+      // Stage 1: the drag link slants, so the bellcrank/tongue are only NEAR mirror images (opposite sense, within 1.5 deg of each other); see the conditioning tests.
+      expect(Math.sign(b.tongueDeg)).toBe(-Math.sign(a.tongueDeg));
+      expect(Math.abs(b.tongueDeg + a.tongueDeg)).toBeLessThan(1.5);
       // Independent check: the tie rod really keeps its length at the solved knuckle angles (solved from either side).
       for (const sol of [a, b]) {
         const g = S.armAngleDeg * RAD;
@@ -93,32 +95,80 @@ describe('ackermann', () => {
     expect(Math.abs(lim.innerDeg - 8.55)).toBeLessThan(0.05);
     const sol = solveSteer(S, lim.innerDeg);
     expect(sol.outerDeg).toBeCloseTo(8, 6);
-    // Rod travel 0.39", bellcrank 7.5 deg, stick +/-15 deg (1.5" cable arm).
+    // Rod travel 0.39"; bellcrank about 5.8 deg (exact re-laid linkage); stick +/-15 deg (1.5" cable arm, 3.8" cross-bar).
     expect(Math.abs(sol.rod.dy)).toBeCloseTo(0.39, 1);
-    expect(sol.bellcrankDeg).toBeCloseTo(7.5, 0);
-    expect(sol.stickDeg).toBeCloseTo(15, 0);
+    expect(Math.abs(sol.bellcrankDeg)).toBeGreaterThan(5.4);
+    expect(Math.abs(sol.bellcrankDeg)).toBeLessThan(6.4);
+    expect(Math.abs(sol.stickDeg)).toBeGreaterThan(14.4);
+    expect(Math.abs(sol.stickDeg)).toBeLessThan(15.6);
+    expect(sol.stickDeg).toBeGreaterThan(0);
   });
 
-  it('tongue yaw at the tow lock is 24.3 +/- 0.5 deg, under tongueMaxYawDeg', () => {
-    const sol = solveSteer(S, 35.5);
-    expect(Math.abs(sol.tongueDeg - 24.3)).toBeLessThan(0.5);
-    expect(sol.tongueDeg).toBeLessThan(P0.tongueMaxYawDeg);
-    expect(Math.abs(sol.rod.dy)).toBeCloseTo(1.34, 1);
-    expect(sol.bellcrankDeg).toBeCloseTo(26.6, 0);
+  it('tongue yaw at the tow lock (EXACT linkage) is 21-23 deg in both directions, at least 2 deg inside tongueMaxYawDeg', () => {
+    const left = solveSteer(S, 35.5), right = solveSteer(S, -35.5);
+    expect(left.ok && right.ok).toBe(true);
+    for (const sol of [left, right]) {
+      expect(Math.abs(sol.tongueDeg)).toBeGreaterThan(21);
+      expect(Math.abs(sol.tongueDeg)).toBeLessThan(23);
+      expect(Math.abs(sol.tongueDeg)).toBeLessThan(P0.tongueMaxYawDeg - 2);
+    }
+    expect(left.tongueDeg).toBeGreaterThan(0); // tongue pulled left (CCW) steers left
+    expect(Math.abs(left.tongueDeg + right.tongueDeg)).toBeLessThan(1);
+    expect(Math.abs(left.rod.dy)).toBeCloseTo(1.34, 1);
+    expect(Math.abs(left.bellcrankDeg)).toBeGreaterThan(16);
+    expect(Math.abs(left.bellcrankDeg)).toBeLessThan(20);
     // solveFromTongue inverts it.
-    const back = solveFromTongue(S, sol.tongueDeg);
+    const back = solveFromTongue(S, left.tongueDeg);
     expect(back.steerDeg).toBeCloseTo(35.5, 3);
     expect(solveFromTongue(S, -10).steerDeg).toBeLessThan(0);
     expect(solveFromTongue(S, 10).tongueDeg).toBeCloseTo(10, 6);
+    // Monotone and smooth over the whole range (no flip to the other circle root).
+    let prev = -Infinity;
+    for (let d = -35.5; d <= 35.5 + 1e-9; d += 0.5) {
+      const t = solveSteer(S, d).tongueDeg;
+      expect(t).toBeGreaterThan(prev);
+      prev = t;
+    }
   });
 
-  it('the exact (real link length) center linkage is reported separately and is larger than the lateral-transfer model', () => {
+  it('the re-laid center linkage is well conditioned, and the Stage 0 straight layout (the deviation) is not', () => {
+    // Transmission = sine of the angle between each arm and its link at the three joints, worst over -lock..+lock.
+    expect(linkageConditioning(S)).toBeGreaterThan(0.8);
+    // The exact solver agrees with itself through solveSteer.
     const ex = solveCenterExact(S, 35.5)!;
+    expect(ex.tongueDeg).toBeCloseTo(solveSteer(S, 35.5).tongueDeg, 9);
+    expect(ex.bellcrankDeg).toBeCloseTo(solveSteer(S, 35.5).bellcrankDeg, 9);
+    // The Stage 0 straight lever (output aft, input forward, ear ahead, 3" arms): a near toggle, tongue yaw 31.8 deg > the stop.
+    const old: AckSpec = { ...S, bellArm: 3, bellOutDeg: undefined, bellInArm: undefined, bellInDeg: undefined, bellCableArm: undefined, tongueEar: undefined, tongueLinkArm: 3.25 };
+    const exOld = solveCenterExact(old, 35.5)!;
+    expect(exOld.tongueDeg).toBeGreaterThan(P0.tongueMaxYawDeg);
+    expect(centerLinkage(old).dragLen).toBeGreaterThan(6);
+    expect(linkageConditioning(old)).toBeLessThan(0.3);
+  });
+
+  it('the pins of the center linkage keep the rigid link lengths over the whole range', () => {
     const cl = centerLinkage(S);
-    expect(cl.dragLen).toBeGreaterThan(6);
-    // Documented deviation (docs/phase3b-stage0-notes.md): with a straight lever and the 6.76" drag link, fore-aft arc effects add about 7 deg.
-    expect(ex.bellcrankDeg).toBeGreaterThan(solveSteer(S, 35.5).bellcrankDeg);
-    expect(ex.tongueDeg).toBeGreaterThan(P0.tongueMaxYawDeg);
+    for (const d of [-35.5, -20, -8, 0, 8, 20, 35.5]) {
+      const sol = solveSteer(S, d);
+      const pins = centerPins(S, sol)!;
+      expect(Math.hypot(pins.out[0] - pins.mid[0], pins.out[1] - pins.mid[1])).toBeCloseTo(cl.dragLen, 9);
+      expect(Math.hypot(pins.ear[0] - pins.in[0], pins.ear[1] - pins.in[1])).toBeCloseTo(cl.tongueLinkLen, 9);
+      // The cross-bar pins stay 2 x cableArm apart and centered on the pivot.
+      expect(Math.hypot(pins.cableA[0] - pins.cableB[0], pins.cableA[1] - pins.cableB[1])).toBeCloseTo(2 * cl.cableArm, 9);
+      // The link poses carry their neutral pins onto the solved ones.
+      const pose = poseMatrices(S, sol);
+      const o = apply(pose['drag-link'], cl.out0[0], cl.out0[1]), m = apply(pose['drag-link'], cl.mid0[0], cl.mid0[1]);
+      expect(o[0]).toBeCloseTo(pins.out[0], 9); expect(o[1]).toBeCloseTo(pins.out[1], 9);
+      expect(m[0]).toBeCloseTo(pins.mid[0], 9); expect(m[1]).toBeCloseTo(pins.mid[1], 9);
+      const e = apply(pose['tongue-link'], cl.ear0[0], cl.ear0[1]), i = apply(pose['tongue-link'], cl.in0[0], cl.in0[1]);
+      expect(e[0]).toBeCloseTo(pins.ear[0], 9); expect(e[1]).toBeCloseTo(pins.ear[1], 9);
+      expect(i[0]).toBeCloseTo(pins.in[0], 9); expect(i[1]).toBeCloseTo(pins.in[1], 9);
+      // Bellcrank and tongue poses move the pins the same way.
+      const bi = apply(pose.bellcrank, cl.in0[0], cl.in0[1]);
+      expect(bi[0]).toBeCloseTo(pins.in[0], 9); expect(bi[1]).toBeCloseTo(pins.in[1], 9);
+      const te = apply(pose.tongue, cl.ear0[0], cl.ear0[1]);
+      expect(te[0]).toBeCloseTo(pins.ear[0], 9); expect(te[1]).toBeCloseTo(pins.ear[1], 9);
+    }
   });
 
   it('the linkage reports ok = false when the tie rod length is changed by 1 inch', () => {
@@ -223,11 +273,12 @@ describe('stage 0 interface (additive)', () => {
     expect(f.bellcrank.pivot[0]).toBeCloseTo(38.75, 6);
     expect(f.bellcrank.dragLinkLen).toBeGreaterThan(0);
     expect(f.tongue.hinge[0]).toBeCloseTo(47.25, 6);
-    expect(f.tongue.linkPin[0]).toBeCloseTo(50.5, 6);
+    expect(f.tongue.linkPin[0]).toBeCloseTo(45.5, 6);
+    expect(f.tongue.linkPin[1]).toBeCloseTo(-1.75, 6);
     // Steel tube beam: 2 x 2, centered on the stub axis, top = axis + 1", x = kx - 0.5", length 27.7".
     expect(f.beam.x).toBeCloseTo(44.75, 6);
     expect(f.beam.top).toBeCloseTo(L.r + 1, 9);
-    expect(f.beam.len).toBeCloseTo(27.7, 6);
+    expect(f.beam.len).toBeCloseTo(26.94, 2); // Stage 1: the beam ends 1.4" from the kingpin axis (boss radius + KPI lean + web), not 0.9" (27.7")
     for (const side of ['L', 'R'] as const) {
       const br = f.bracket[side];
       expect(br.bolts).toHaveLength(4);
@@ -310,7 +361,7 @@ describe('stage 0 interface (additive)', () => {
     expect(PARAM_DEFS.spindleStub.options).toHaveLength(2);
     expect(PARAM_DEFS.scrubRadiusIn.default).toBe(3);
     expect(PARAM_DEFS.failSafeFactor.default).toBe(1.25);
-    expect(PARAM_DEFS.frontBrakeType.default).toBe(0);
+    expect([0, 2]).toContain(PARAM_DEFS.frontBrakeType.default); // WS-C parks it at 2 (none) until the front brake lands; the target default is 0
     expect(PARAM_DEFS.bumpWheelRateLbIn.group).toBe('ride');
     // Existing keys whose default changes at the flip keep their old default in Stage 0 (old model untouched) and are applied by phase3bDefaults().
     const old = defaultParams();

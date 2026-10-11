@@ -16,7 +16,7 @@ import type { Ctx } from './context';
 import { dualCheck, singleCheck, detail, governing, type CaseEval } from './dual';
 import { f } from './format';
 import type { CaseData } from './loads';
-import { boltSpacing, cleavageVr, countersinkDepth, effectiveSideThickness, feAtAngle, fePerp, feParallel, lateralZ, rowTearOut } from './nds';
+import { boltSpacing, cleavageVr, countersinkDepth, rowTearOut } from './nds';
 import { evalBoth } from './stability';
 import { allowables, frontLoadText, part, strikeCases, tieHalfY, wheelLoads, yawTorque } from './structure';
 import type { AnalysisCheck, Detail } from './types';
@@ -112,18 +112,9 @@ export function plateModel(ctx: Ctx): PlateModel | null {
   };
 }
 
-/** NDS adjustment on a lateral design value: C_M (wet) × C_D (impact, ≤ 1.6) × C_g (group). */
-export const ndsAdjust = (p: { ndsWetFactorFasteners: number; ndsLoadDurationFactor: number; ndsGroupFactor: number }): number =>
-  p.ndsWetFactorFasteners * p.ndsLoadDurationFactor * p.ndsGroupFactor;
-
-/** Adjusted lateral capacity (lbf) of one plate bolt in the oak at angle θ to the grain, steel side plate of thickness ls, oak length lm. */
-export function boltCapacity(ctx: Ctx, D: number, lm: number, ls0: number, thetaDeg: number, csDepth = 0): { Zref: number; Z: number; mode: string; Fem: number; Re: number; ls: number } {
-  const { p } = ctx;
-  const ls = effectiveSideThickness(ls0, csDepth); // a flush countersunk head bears only on the plate below it (r3 N-2)
-  const Fem = feAtAngle(feParallel(p.oakSpecificGravity), fePerp(p.oakSpecificGravity, D), thetaDeg);
-  const r = lateralZ({ D, lm, ls, Fem, Fes: p.steelDowelBearingPsi, Fyb: p.kingpinPlateBoltYieldPsi, thetaDeg });
-  return { Zref: r.Z, Z: r.Z * ndsAdjust(p), mode: r.mode, Fem, Re: Fem / p.steelDowelBearingPsi, ls };
-}
+// ndsAdjust and boltCapacity moved to nds.ts (Phase 3b: front.ts is deleted at the Stage 2 flip); re-exported for the old rows and rear.ts.
+export { ndsAdjust, boltCapacity } from './nds';
+import { boltCapacity, ndsAdjust } from './nds';
 
 export interface PinLoad {
   name: string; Hx: number; Hy: number; T: number;

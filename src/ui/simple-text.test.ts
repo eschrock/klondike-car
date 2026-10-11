@@ -4,7 +4,8 @@ import { buildModel } from '../model';
 import { checkTruckFit } from '../truck/fit';
 import { LIGHT_OF_ID, riderSweep, runAround } from '../analysis/rider-sweep';
 import type { Status } from '../analysis/types';
-import { headline, lightTexts, limitLine, failReason, weightNote } from './simple-text';
+import { headline, lightTexts, limitLine, failReason, weightNote, limiterName, limiterAdvice, PHASE3B_CHECK_IDS } from './simple-text';
+import type { AnalysisCheck } from '../analysis/types';
 
 const p = defaultParams();
 const fit = checkTruckFit(p, (v) => buildModel(p, v));
@@ -94,5 +95,38 @@ describe('simple wording', () => {
   it('describes one weight for the bar note', () => {
     expect(weightNote(190, 'marginal', 'kingpin-strike')).toBe('190 lb: close to the limit (the steering pin in a curb strike).');
     expect(weightNote(150, 'pass', undefined)).toBe('150 lb: OK.');
+  });
+});
+
+describe('Phase 3b rows in the Simple view (spec 6.3)', () => {
+  it('every new check id has a plain name and a failure sentence; none mention turntable, bolster or kingpin plates', () => {
+    for (const id of PHASE3B_CHECK_IDS) {
+      expect(failReason(id), id).not.toBe('a safety check fails');
+      expect(limiterName(id), id).not.toBe('a safety check');
+      expect(limiterAdvice(id), id).not.toBe('adjust the cart in the controls below');
+      for (const t of [failReason(id), limiterName(id), limiterAdvice(id), weightNote(150, 'fail', id), weightNote(150, 'marginal', id)])
+        expect(t, id).not.toMatch(/turntable|bolster|kingpin plates|side bearer|NaN|undefined|\?/i);
+    }
+  });
+
+  const row = (id: string, value: number, limit: number, status: AnalysisCheck['status'] = 'pass') =>
+    ({ id, label: id, group: 'Hills', value, limit, unit: 'ft', sense: '<=', status, how: '', util: value / limit }) as unknown as AnalysisCheck;
+
+  it('the Hills light adds the stopping-distance sentence when the brake-stop row exists, and degrades silently when it does not', () => {
+    const base = sweep.operatingChecks;
+    const without = lightTexts({ p, checks: base, fit }).hills.text;
+    expect(without).not.toMatch(/stops in about/);
+    const withRow = lightTexts({ p, checks: [...base, row('brake-stop', 34.4, 40)], fit }).hills;
+    expect(withRow.text).toContain(`On an ${p.rideGoSlopeDeg}° hill at ${p.rideSpeedMph} mph it stops in about 34 ft.`);
+    const bad = lightTexts({ p, checks: [...base, row('brake-stop', 52, 40, 'fail')], fit }).hills;
+    expect(bad.status).toBe('fail');
+    expect(bad.text).toMatch(/longer than the 40 ft/);
+  });
+
+  it('the Steering light names a failing kinematic row in plain words', () => {
+    const t = lightTexts({ p, checks: [...sweep.operatingChecks, row('steer-kin', 2, 1, 'fail')], fit }).steering;
+    expect(t.status).toBe('fail');
+    expect(t.text).toMatch(/do not turn together/);
+    expect(t.text).not.toMatch(/NaN|undefined/);
   });
 });

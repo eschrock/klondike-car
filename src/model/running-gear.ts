@@ -19,6 +19,7 @@ const unitVec = (v: Vec3): Vec3 => { const n = Math.hypot(...v) || 1; return [v[
 
 export function buildRunningGear(ctx: Ctx): Part[] {
   const { p, d, L } = ctx;
+  const ack = ctx.view.frontEnd === 'ackermann'; // Phase 3b: the front axle beam, rod and clamps are replaced by front-end.ts; the front wheels turn with their own knuckles
   const parts: Part[] = [];
   const r = L.r;
   const rodR = p.axleDiameterIn / 2;
@@ -38,7 +39,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
       width: p.tireWidthIn,
       hubDiameter: Math.min(p.wheelDiameterIn * HUB_DIA_FRAC, HUB_DIA_MAX_IN),
       hubLength: p.hubLengthIn,
-      bore: p.axleDiameterIn,
+      bore: ack && id.startsWith('wheel-F') ? (p.spindleStub === 0 ? 17 : 25) / 25.4 : p.axleDiameterIn,
     },
     transform,
     body: id as RigidBody,
@@ -56,8 +57,8 @@ export function buildRunningGear(ctx: Ctx): Part[] {
   parts.push(
     wheel('wheel-RL', 'Rear left wheel', translation(0, ry, r)),
     wheel('wheel-RR', 'Rear right wheel', translation(0, -ry, r)),
-    wheel('wheel-FL', 'Front left wheel', multiply(ctx.pivot, translation(L.WB, fy, r))),
-    wheel('wheel-FR', 'Front right wheel', multiply(ctx.pivot, translation(L.WB, -fy, r))),
+    wheel('wheel-FL', 'Front left wheel', multiply(ack ? ctx.pose['steer-L'] : ctx.pivot, translation(L.WB, fy, r))),
+    wheel('wheel-FR', 'Front right wheel', multiply(ack ? ctx.pose['steer-R'] : ctx.pivot, translation(L.WB, -fy, r))),
   );
 
   // Axles + beams + clamps, rear then front
@@ -66,6 +67,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
     { tag: 'F', x: L.WB, track: p.frontTrackIn, steer: true, beam: L.beamF },
   ];
   for (const ax of axles) {
+    if (ack && ax.tag === 'F') continue; // Phase 3b: beam-F is the steel tube in front-end.ts
     const name = ax.tag === 'R' ? 'rear' : 'front';
     if (p.axleStyle === AXLE_STYLE.throughRod) {
       parts.push(cylinder(ctx, {

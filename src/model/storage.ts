@@ -9,7 +9,7 @@
  * Also holds the 10 Essentials kit list (D-19) and a simple packing check against the interior.
  */
 import { STORAGE_LOCATION, type Params } from '../params';
-import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
+import { STEP, box, cylinder, deckPartId, span, SIDES, type Ctx } from './build-utils';
 import { curveHeading } from './hull-curve';
 import { sidePath, type Layout } from './layout';
 import { frameJoint, gunwaleId, seatBackSupport } from './seat';
@@ -269,7 +269,7 @@ export function buildStorage(ctx: Ctx): Part[] {
   const miter = (to: string): Joint => ({ type: 'glue', to, count: 1, size: '45° bevel, tape-and-fold', note: 'bevels cut on the table saw, outside seam taped, folded, then a 3/8" epoxy fillet and 2" glass tape inside the corner; no spline (6 mm ply is too thin for one)' });
   const fillet = (to: string): Joint => ({ type: 'glue', to, count: 1, size: '3/8" epoxy fillet', note: 'floor captured between the walls, which reach the deck' });
   const dom = (to: string): Joint => frameJoint(p, to, { stockIn: rimT, hostIn: rimW, widthIn: rimW }, { note: 'light frame (no load path through the Domino): lid frame corner' });
-  const deckId = 'deck-cabin';
+  const deckId = deckPartId(L);
 
   // ── Tray: the deck is the floor when the box stands on it; a raised box (forward) keeps its own ply floor ──
   if (!g.deckFloor) {

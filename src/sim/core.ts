@@ -1,7 +1,14 @@
 /**
  * Qualitative physics core (BRIEF §8): Rapier rigid bodies for the chassis (with rider and cargo as fixed mass), the
- * steer body on a revolute kingpin joint with ± lock limits, and four wheels on revolute joints. No three.js, no DOM:
- * runs headless under vitest.
+ * steered front end and four wheels on revolute joints. No three.js, no DOM: runs headless under vitest.
+ *
+ * Front end, 'ackermann' (Phase 3b, spec 8.2): two knuckle bodies on their own vertical kingpin revolutes with the lock limits of the
+ * control mode (tow: inner 35.5; ride: outer 8). The tie rod is NOT a physics linkage: two stiff position motors command the knuckles
+ * to the angles `solveSteer` gives for the commanded inner-wheel angle. The tie rod, bellcrank and tongue are visual-only: their poses are
+ * computed analytically (`poseMatrices`) and merged into `poses()`. In tow 'bridle' mode the tongue follows the rope direction (rate and
+ * damping limited, clamped to the yaw stop) and the steer angle is `solveFromTongue`: qualitative, like the rest. In ride mode the input
+ * is clamped to the ride lock and, with no input, a weak centering motor holds the knuckles at zero.
+ * Front end 'turntable' (the old model, until the Stage 2 flip): one steer body about one kingpin.
  *
  * Units inside the engine are SI (m, kg, N); the public readouts and poses are in the model's units (inches, lbf,
  * mph) so they plug straight into the viewer. The step is a fixed 1/240 s.
@@ -15,6 +22,8 @@
  *  - Rolling resistance and the brakes are velocity motors (target 0) on the wheel joints with a limited torque.
  */
 import type RapierModule from '@dimforge/rapier3d-compat';
+import { poseMatrices, solveSteer, type SteerSolution } from '../model/ackermann';
+import { multiply } from '../model/mat4';
 import type { Mat4, RigidBody, Vec3 } from '../model/types';
 import { G, M_PER_IN, MPH_PER_MS, N_PER_LBF } from './massprops';
 import { add, dot, mat4FromQuat, qAxisAngle, qConj, qMul, qRotate, scale, sub, type Quat } from './math';
@@ -44,8 +53,17 @@ export const LIFT_FRACTION = 0.03;
 const STEER_K = 3000;
 const STEER_C = 120;
 const STEER_RATE_DEG_S = 120;
+/** Ackermann knuckle motors: stiff, because they stand in for a rigid tie rod and must hold the solved angle against the tire scrub torque. */
+const ACK_STEER_K = 12000;
+const ACK_STEER_C = 240;
 /** Light turntable friction in bridle mode (N·m·s/rad): keeps the free steer body from ringing. */
 const KINGPIN_DAMP = 30;
+/** Ride-mode centering motor (N·m/rad per knuckle, N·m·s/rad): the spring at the bellcrank, felt at the grip as about 2.5 lbf at the lock. */
+const RIDE_CENTER_K = 120;
+const RIDE_CENTER_C = 25;
+/** Tongue follow dynamics in tow bridle mode: first-order time constant (s) and the slew limit (deg/s). */
+const TONGUE_TAU_S = 0.12;
+const TONGUE_RATE_DEG_S = 120;
 /** Beyond this distance from the start the cart has left the "course" and the run ends. */
 export const COURSE_LIMIT_IN = 2400;
 
@@ -61,8 +79,10 @@ export interface SimReadout {
   t: number;
   /** Signed speed along the cart's heading, mph. */
   speedMph: number;
-  /** Steer angle (+ = left), degrees. */
+  /** Steer angle (+ = left), degrees. Ackermann sim: the inner wheel angle. */
   steerDeg: number;
+  /** Ackermann sim: the left and right knuckle angles (deg, + = left); null for the turntable sim. */
+  knuckleDeg: { L: number; R: number } | null;
   /** Ground tilt from the side slope, degrees (rises in the tilt table). */
   groundSideSlopeDeg: number;
   /** Cart up-axis vs the ground normal, degrees. */
@@ -97,7 +117,6 @@ type RB = InstanceType<Rapier['RigidBody']>;
 type Col = InstanceType<Rapier['Collider']>;
 type Joint = InstanceType<Rapier['RevoluteImpulseJoint']>;
 
-const BODY_IDS: SimBodyId[] = ['chassis', 'steer', ...WHEEL_IDS];
 const rad = (d: number) => (d * Math.PI) / 180;
 const deg = (r: number) => (r * 180) / Math.PI;
 const IG = (membership: number, filter: number) => ((membership << 16) | filter) >>> 0;
@@ -120,7 +139,16 @@ export class Sim {
   private readonly hullChassis = new Set<number>();
   private readonly hullSteer = new Set<number>();
   private readonly wheelJoints = {} as Record<WheelId, Joint>;
-  private readonly kingpin: Joint;
+  /** Turntable: the one kingpin (both entries the same joint). Ackermann: left and right kingpins. */
+  private readonly kingpin!: Joint;
+  private readonly kpL!: Joint;
+  private readonly kpR!: Joint;
+  private readonly bodyIds: SimBodyId[];
+  private readonly ackermann: boolean;
+  /** Tongue yaw relative to the chassis (deg, + = left) in tow bridle mode; inner-wheel command from it. */
+  private tongueDeg = 0;
+  private tongueTable: Array<{ t: number; s: number }> = [];
+  private lastSol: { cmd: number; sol: SteerSolution } | null = null;
   private readonly qSlope: Quat;
   private readonly cgIn = {} as Record<SimBodyId, Vec3>;
   private readonly startPos: Vec3;
@@ -140,6 +168,8 @@ export class Sim {
     this.config = { ...DEFAULT_CONFIG, ...opts.config };
     this.controls = { ...DEFAULT_CONTROLS, ...opts.controls };
     this.script = opts.script ?? {};
+    this.bodyIds = spec.bodyIds;
+    this.ackermann = spec.kinematics === 'ackermann';
     const c = this.config;
     const world = (this.world = new R.World({ x: 0, y: 0, z: -G }));
     world.timestep = DT;
@@ -179,19 +209,26 @@ export class Sim {
 
     // ── bodies ──
     const k = spec.kingpinM;
-    const steer0 = Math.max(-spec.lockRad, Math.min(spec.lockRad, rad(c.initialSteerDeg)));
+    const steer0 = Math.max(-this.lockRad(), Math.min(this.lockRad(), rad(c.initialSteerDeg)));
     this.steerCmdRad = steer0;
+    const sol0 = this.ackermann ? solveSteer(spec.ack!, deg(steer0)) : null;
     const place = (id: SimBodyId): { pos: Vec3; rot: Quat } => {
-      const cg = spec.bodies[id].cgM;
-      const front = id === 'steer' || id === 'wheel-FL' || id === 'wheel-FR';
-      const qz = qAxisAngle('z', front ? steer0 : 0);
-      const local = front ? add(k, qRotate(qz, sub(cg, k))) : cg;
+      const cg = spec.bodies[id]!.cgM;
+      // Which kingpin and angle (rad) this body turns about.
+      let pivot: Vec3 | null = null;
+      let ang = 0;
+      if (this.ackermann) {
+        if (id === 'steer-L' || id === 'wheel-FL') { pivot = spec.kingpinsM!.L; ang = rad(sol0!.leftDeg); }
+        else if (id === 'steer-R' || id === 'wheel-FR') { pivot = spec.kingpinsM!.R; ang = rad(sol0!.rightDeg); }
+      } else if (id === 'steer' || id === 'wheel-FL' || id === 'wheel-FR') { pivot = k; ang = steer0; }
+      const qz = qAxisAngle('z', ang);
+      const local = pivot ? add(pivot, qRotate(qz, sub(cg, pivot))) : cg;
       return { pos: qRotate(Rg, local), rot: qMul(Rg, qz) };
     };
     const v0 = c.initialSpeedMph / MPH_PER_MS;
     const vel = qRotate(Rg, [v0, 0, 0]);
-    for (const id of BODY_IDS) {
-      const b = spec.bodies[id];
+    for (const id of this.bodyIds) {
+      const b = spec.bodies[id]!;
       const pl = place(id);
       const desc = R.RigidBodyDesc.dynamic()
         .setTranslation(...pl.pos).setRotation(pl.rot).setCanSleep(false)
@@ -215,7 +252,7 @@ export class Sim {
     this.startPos = [sp.x, sp.y, sp.z];
 
     // Hull colliders (mass 0: the mass comes from the part list).
-    const addHull = (id: 'chassis' | 'steer', set: Set<number>) => {
+    const addHull = (id: 'chassis' | 'steer' | 'steer-L' | 'steer-R', set: Set<number>) => {
       for (const h of spec.hull[id]) {
         const col = world.createCollider(
           R.ColliderDesc.cuboid(...h.half).setTranslation(...h.center).setRotation(h.rot).setDensity(0)
@@ -226,21 +263,41 @@ export class Sim {
       }
     };
     addHull('chassis', this.hullChassis);
-    addHull('steer', this.hullSteer);
+    if (this.ackermann) { addHull('steer-L', this.hullSteer); addHull('steer-R', this.hullSteer); } else addHull('steer', this.hullSteer);
 
     // ── joints ──
     const loc = (id: SimBodyId, p: Vec3) => {
-      const o = sub(p, spec.bodies[id].cgM);
+      const o = sub(p, spec.bodies[id]!.cgM);
       return { x: o[0], y: o[1], z: o[2] };
     };
-    const kj = R.JointData.revolute(loc('chassis', k), loc('steer', k), { x: 0, y: 0, z: 1 });
-    kj.limitsEnabled = true;
-    kj.limits = [-spec.lockRad, spec.lockRad];
-    this.kingpin = world.createImpulseJoint(kj, this.bodies.chassis, this.bodies.steer, true) as Joint;
-    this.kingpin.setLimits(-spec.lockRad, spec.lockRad);
-    this.kingpin.configureMotorModel(R.MotorModel.ForceBased);
+    if (this.ackermann) {
+      // Left-wheel angle range of the mode: tow = -outer..+inner, ride = -8..+inner(8.55); the right wheel is the mirror.
+      const lim = this.leftLimitsRad();
+      const mk = (side: 'L' | 'R') => {
+        const kp = spec.kingpinsM![side];
+        const kid: SimBodyId = side === 'L' ? 'steer-L' : 'steer-R';
+        const j = R.JointData.revolute(loc('chassis', kp), loc(kid, kp), { x: 0, y: 0, z: 1 });
+        j.limitsEnabled = true;
+        const [lo, hi] = side === 'L' ? [lim.min, lim.max] : [-lim.max, -lim.min];
+        j.limits = [lo, hi];
+        const joint = world.createImpulseJoint(j, this.bodies.chassis, this.bodies[kid], true) as Joint;
+        joint.setLimits(lo, hi);
+        joint.configureMotorModel(R.MotorModel.ForceBased);
+        return joint;
+      };
+      this.kpL = mk('L');
+      this.kpR = mk('R');
+      this.tongueTable = this.buildTongueTable();
+    } else {
+      const kj = R.JointData.revolute(loc('chassis', k), loc('steer', k), { x: 0, y: 0, z: 1 });
+      kj.limitsEnabled = true;
+      kj.limits = [-spec.lockRad, spec.lockRad];
+      this.kingpin = world.createImpulseJoint(kj, this.bodies.chassis, this.bodies.steer, true) as Joint;
+      this.kingpin.setLimits(-spec.lockRad, spec.lockRad);
+      this.kingpin.configureMotorModel(R.MotorModel.ForceBased);
+    }
     for (const id of WHEEL_IDS) {
-      const parent: SimBodyId = id === 'wheel-FL' || id === 'wheel-FR' ? 'steer' : 'chassis';
+      const parent: SimBodyId = id === 'wheel-FL' || id === 'wheel-FR' ? (this.ackermann ? (id === 'wheel-FL' ? 'steer-L' : 'steer-R') : 'steer') : 'chassis';
       const wc = spec.wheelCentersM[id];
       const j = R.JointData.revolute(loc(parent, wc), { x: 0, y: 0, z: 0 }, { x: 0, y: 1, z: 0 });
       const joint = world.createImpulseJoint(j, this.bodies[parent], this.bodies[id], true) as Joint;
@@ -270,14 +327,65 @@ export class Sim {
     return this.config.sideSlopeDeg + this.config.tiltRateDegPerS * this.t;
   }
 
-  /** Brake torque per rear wheel (N·m) plus rolling resistance, as the wheel-joint motor limit. */
+  /** The steering lock of the control mode, rad (turntable: the one lock; Ackermann: the INNER wheel angle at the tow or ride stop). */
+  lockRad(): number {
+    return this.ackermann && this.config.mode === 'ride' ? this.spec.rideLockRad : this.spec.lockRad;
+  }
+
+  /** Left-knuckle angle range of the control mode (rad): turning right the left wheel is the outer one. */
+  private leftLimitsRad(): { min: number; max: number } {
+    const a = this.spec.ack!;
+    const inner = this.lockRad();
+    const outer = rad(solveSteer(a, -deg(inner)).leftDeg);
+    return { min: outer, max: inner };
+  }
+
+  /** Inner-wheel angle (deg) -> tongue yaw table, for the inverse map `solveFromTongue` without a bisection per step. */
+  private buildTongueTable(): Array<{ t: number; s: number }> {
+    const a = this.spec.ack!;
+    const out: Array<{ t: number; s: number }> = [];
+    const top = Math.ceil(deg(this.spec.lockRad)) + 2;
+    for (let s = 0; s <= top; s += 0.5) {
+      const sol = solveSteer(a, s);
+      if (!sol.ok) break;
+      out.push({ s, t: sol.tongueDeg });
+    }
+    return out;
+  }
+
+  private innerFromTongue(tongueDeg: number): number {
+    const tb = this.tongueTable;
+    const a = Math.abs(tongueDeg);
+    let out = tb[tb.length - 1].s;
+    for (let i = 1; i < tb.length; i++) {
+      if (a <= tb[i].t) {
+        const f = (a - tb[i - 1].t) / Math.max(1e-9, tb[i].t - tb[i - 1].t);
+        out = tb[i - 1].s + f * (tb[i].s - tb[i - 1].s);
+        break;
+      }
+    }
+    return Math.sign(tongueDeg) * out;
+  }
+
+  private solveCached(cmdDeg: number): SteerSolution {
+    if (!this.lastSol || this.lastSol.cmd !== cmdDeg) this.lastSol = { cmd: cmdDeg, sol: solveSteer(this.spec.ack!, cmdDeg) };
+    return this.lastSol.sol;
+  }
+
+  /** Brake torque per wheel (N·m) plus rolling resistance, as the wheel-joint motor limit. */
   private applyMotors(): void {
     const r = this.spec.wheelRadiusM;
     const crr = this.config.rollingResistance;
-    const brakeNm = this.brakeActive ? (this.controls.brakeLbf * N_PER_LBF * r) / 2 : 0;
+    const brakeN = this.brakeActive ? this.controls.brakeLbf * N_PER_LBF : 0;
+    const frontShare = this.ackermann ? this.spec.frontBrakeShare : 0;
     for (const id of WHEEL_IDS) {
       const rear = id === 'wheel-RL' || id === 'wheel-RR';
-      this.wheelJoints[id].setMotorMaxForce(this.config.wheelsLocked ? 1e6 : crr * this.loadN[id] * r + (rear ? brakeNm : 0));
+      const brakeNm = (brakeN * r * (rear ? 1 - frontShare : frontShare)) / 2;
+      this.wheelJoints[id].setMotorMaxForce(this.config.wheelsLocked ? 1e6 : crr * this.loadN[id] * r + brakeNm);
+    }
+    if (this.ackermann) {
+      this.applyAckermannSteering();
+      return;
     }
     // Steering.
     const lock = this.spec.lockRad;
@@ -294,6 +402,47 @@ export class Sim {
     }
   }
 
+  /** Two knuckle motors: tow bridle (tongue follows the rope), angle hold, or the ride centering spring. */
+  private applyAckermannSteering(): void {
+    const lock = this.lockRad();
+    let cmdRad: number;
+    let K = ACK_STEER_K;
+    let C = ACK_STEER_C;
+    if (this.controls.steerMode === 'angle') {
+      const target = Math.max(-lock, Math.min(lock, rad(this.controls.steerAngleDeg)));
+      const maxStep = rad(STEER_RATE_DEG_S) * DT;
+      this.steerCmdRad += Math.max(-maxStep, Math.min(maxStep, target - this.steerCmdRad));
+      cmdRad = this.steerCmdRad;
+    } else if (this.config.mode === 'ride') {
+      // Hands off the stick: the centering spring holds the knuckles straight (weak, so a rider's pull overcomes it).
+      this.steerCmdRad = 0;
+      cmdRad = 0;
+      K = RIDE_CENTER_K;
+      C = RIDE_CENTER_C;
+    } else {
+      // Tow bridle: the tongue yaw follows the rope direction (first-order, slew limited), clamped to the yaw stop.
+      let target = this.tongueDeg;
+      if (this.controls.pullLbf > 0) {
+        const a = deg(rad(this.controls.pullAngleDeg + this.controls.pullTurnDegPerS * this.t));
+        const f = qRotate(this.bodies.chassis.rotation() as Quat, [1, 0, 0]);
+        const yaw = deg(Math.atan2(f[1], f[0]));
+        target = ((((a - yaw) % 360) + 540) % 360) - 180;
+      }
+      const maxT = this.spec.tongueMaxYawDeg;
+      target = Math.max(-maxT, Math.min(maxT, target));
+      const step = (target - this.tongueDeg) * (1 - Math.exp(-DT / TONGUE_TAU_S));
+      const lim = TONGUE_RATE_DEG_S * DT;
+      this.tongueDeg += Math.max(-lim, Math.min(lim, step));
+      cmdRad = Math.max(-lock, Math.min(lock, rad(this.innerFromTongue(this.tongueDeg))));
+      this.steerCmdRad = cmdRad;
+    }
+    const sol = this.solveCached(Math.round(deg(cmdRad) * 1e4) / 1e4);
+    this.kpL.configureMotorPosition(rad(sol.leftDeg), K, C);
+    this.kpR.configureMotorPosition(rad(sol.rightDeg), K, C);
+    this.kpL.setMotorMaxForce(1e6);
+    this.kpR.setMotorMaxForce(1e6);
+  }
+
   step(): void {
     if (this.finished) return;
     const c = this.config;
@@ -302,20 +451,21 @@ export class Sim {
     if (this.script.steerAtS !== undefined && !this.scriptSteerDone && this.t >= this.script.steerAtS) {
       this.scriptSteerDone = true;
       this.controls.steerMode = 'angle';
-      this.controls.steerAngleDeg = deg(this.spec.lockRad);
+      this.controls.steerAngleDeg = deg(this.lockRad());
     }
     this.brakeActive = this.controls.brakeOn;
     this.applyMotors();
 
-    // Pull force at the tongue tip.
-    const sb = this.bodies.steer;
+    // Pull force: at the tongue tip on the steer body (turntable), or at the tongue hinge on the chassis (Ackermann, tow mode only:
+    // the tongue is off in ride mode). The rope is the pull direction in the world, not a body-fixed one.
+    const sb = this.ackermann ? this.bodies.chassis : this.bodies.steer;
     sb.resetForces(true);
     sb.resetTorques(true); // addForceAtPoint also accumulates a persistent torque
-    if (this.controls.pullLbf > 0) {
-      // The puller walks in a world direction (a rope pulled from ahead), not a body-fixed one.
+    if (this.controls.pullLbf > 0 && !(this.ackermann && this.config.mode === 'ride')) {
       const a = rad(this.controls.pullAngleDeg + this.controls.pullTurnDegPerS * this.t);
       const F = this.controls.pullLbf * N_PER_LBF;
-      const local = sub(this.spec.pullPointM, this.spec.bodies.steer.cgM);
+      const at = this.ackermann ? this.spec.tongueHingeM! : this.spec.pullPointM;
+      const local = sub(at, this.spec.bodies[this.ackermann ? 'chassis' : 'steer']!.cgM);
       const t = sb.translation();
       const w = add([t.x, t.y, t.z], qRotate(sb.rotation() as Quat, local));
       sb.addForceAtPoint({ x: F * Math.cos(a), y: F * Math.sin(a), z: 0 }, { x: w[0], y: w[1], z: w[2] }, true);
@@ -398,9 +548,23 @@ export class Sim {
     return deg(Math.acos(Math.max(-1, Math.min(1, dot(up, n)))));
   }
 
+  /** Knuckle angle relative to the chassis, degrees (+ = CCW). */
+  private relDeg(id: SimBodyId): number {
+    const rel = qMul(qConj(this.bodies.chassis.rotation() as Quat), this.bodies[id].rotation() as Quat);
+    const x = qRotate(rel, [1, 0, 0]); // heading of the body's forward axis in the chassis frame: robust to a little pitch and roll
+    return deg(Math.atan2(x[1], x[0]));
+  }
+
+  /** Left and right knuckle angles (Ackermann sim), degrees, + = turn left. */
+  knuckleDeg(): { L: number; R: number } {
+    return { L: this.relDeg('steer-L'), R: this.relDeg('steer-R') };
+  }
+
+  /** Steer angle, degrees, + = left. Ackermann: the INNER wheel angle (the larger knuckle angle). */
   steerDeg(): number {
-    const rel = qMul(qConj(this.bodies.chassis.rotation() as Quat), this.bodies.steer.rotation() as Quat);
-    return deg(2 * Math.atan2(rel.z, rel.w));
+    if (!this.ackermann) return this.relDeg('steer');
+    const k = this.knuckleDeg();
+    return Math.abs(k.L) >= Math.abs(k.R) ? k.L : k.R;
   }
 
   readout(): SimReadout {
@@ -422,6 +586,7 @@ export class Sim {
       t: this.t,
       speedMph: dot([v.x, v.y, v.z], fwd) * MPH_PER_MS,
       steerDeg: this.steerDeg(),
+      knuckleDeg: this.ackermann ? this.knuckleDeg() : null,
       groundSideSlopeDeg: this.groundSideSlopeDeg,
       rollDeg: this.rollDeg(),
       loadLbf, loadFrac, lift, anyLift: any,
@@ -443,7 +608,7 @@ export class Sim {
    */
   poses(): Map<RigidBody, Mat4> {
     const out = new Map<RigidBody, Mat4>();
-    for (const id of BODY_IDS) {
+    for (const id of this.bodyIds) {
       const b = this.bodies[id];
       const q = b.rotation() as Quat;
       const t = b.translation();
@@ -453,6 +618,14 @@ export class Sim {
     }
     out.set('rider', out.get('chassis')!);
     out.set('cargo', out.get('chassis')!);
+    if (this.ackermann) {
+      // Visual-only bodies: the analytic pose at the measured steer angle, carried by the chassis.
+      const ch = out.get('chassis')!;
+      const pm = poseMatrices(this.spec.ack!, solveSteer(this.spec.ack!, this.steerDeg()));
+      out.set('tie-rod', multiply(ch, pm['tie-rod']));
+      out.set('bellcrank', multiply(ch, pm.bellcrank));
+      out.set('tongue', multiply(ch, pm.tongue));
+    }
     return out;
   }
 

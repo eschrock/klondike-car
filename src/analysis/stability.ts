@@ -3,6 +3,7 @@
  * rearward pitch. Geometry from `geometry.ts`, CG and mass from the load cases.
  */
 import { worldAABB, partOBB } from '../model/bounds';
+import { instantCenters, lockLimits, solveSteer, wheelCenters } from '../model/ackermann';
 import type { Ctx } from './context';
 import { dualCheck, singleCheck, detail, type CaseEval } from './dual';
 import { DEG, RAD, contactsAt, instantCenterY, lateralTip, outerEdgeDistance, sideEdges, turnGeometry, axleLoads } from './geometry';
@@ -47,17 +48,23 @@ export function tipStraight(ctx: Ctx): AnalysisCheck {
 export function tipLock(ctx: Ctx): AnalysisCheck {
   const { p, contact } = ctx;
   const lock = Math.abs(p.steerLockDeg) * RAD;
+  // Ackermann front end (D-53): the tow lock AND the ride lock (inner wheel angle), contacts from the solved wheel centers.
+  const locks: { rad: number; name: string }[] = [{ rad: lock, name: 'tow lock' }];
+  if (ctx.newFront) locks.push({ rad: lockLimits(ctx.L.front.ack, 'ride').innerDeg * RAD, name: 'ride lock' });
   const ev = (c: CaseData): CaseEval => {
-    let best = { deg: Infinity, d: 0, h: 0, edge: '', sign: 1, x: 0, y: 0 };
-    for (const s of [1, -1]) {
-      const cg = c.cgAt(s * lock);
-      const ct = contactsAt(contact, s * lock);
+    let best = { deg: Infinity, d: 0, h: 0, edge: '', sign: 1, x: 0, y: 0, name: '' };
+    for (const lk of locks) for (const s of [1, -1]) {
+      const cg = c.cgAt(s * lk.rad);
+      const ct = contactsAt(contact, s * lk.rad);
       const lat = lateralTip(ct, [cg[0], cg[1]], cg[2]);
-      if (lat.deg < best.deg) best = { deg: lat.deg, d: lat.d, h: cg[2], edge: lat.edge, sign: s, x: cg[0], y: cg[1] };
+      if (lat.deg < best.deg) best = { deg: lat.deg, d: lat.d, h: cg[2], edge: lat.edge, sign: s, x: cg[0], y: cg[1], name: lk.name };
     }
+    const lockTxt = ctx.newFront
+      ? `the 4 contacts with the front wheel centers solved by the Ackermann linkage at the ${f(p.steerLockDeg)} deg tow lock (inner wheel; outer ${f(solveSteer(ctx.L.front.ack, p.steerLockDeg).outerDeg)} deg) and at the ride lock (inner ${f(locks[1].rad / RAD, 2)} deg); the ${best.name} governs`
+      : `polygon from the 4 contacts with the front pair rotated about the kingpin by ±${f(p.steerLockDeg)}°`;
     return {
       value: best.deg, unit: '°', limit: p.tipLockMinDeg, sense: '>=',
-      how: `θ = atan(d/h) = atan(${f(best.d, 2)} / ${f(best.h, 2)}) = ${f(best.deg)}°; polygon from the 4 contacts with the front pair rotated about the kingpin by ±${f(p.steerLockDeg)}° (${best.sign > 0 ? 'left' : 'right'} lock governs, edge ${best.edge}); min over all side edges and both lock directions. CG at lock (${f(best.x)}, ${f(best.y, 2)}). Limit ≥ ${p.tipLockMinDeg}°.`,
+      how: `θ = atan(d/h) = atan(${f(best.d, 2)} / ${f(best.h, 2)}) = ${f(best.deg)}°; ${lockTxt} (${best.sign > 0 ? 'left' : 'right'} lock governs, edge ${best.edge}); min over all side edges and both lock directions. CG at lock (${f(best.x)}, ${f(best.y, 2)}). Limit ≥ ${p.tipLockMinDeg}°.`,
     };
   };
   return dualCheck({
@@ -128,6 +135,27 @@ export function turnRadius(ctx: Ctx): AnalysisCheck {
   const half = p.tireWidthIn / 2;
   const edge = t ? t.outerFront + half : Infinity;
   const lim = p.turnRadiusMaxIn;
+  if (ctx.newFront && t) {
+    // Ackermann (D-53): the two axle lines meet within about a foot of each other; pass/fail is the mean instant center, both are reported.
+    const ack = ctx.L.front.ack;
+    const sol = solveSteer(ack, Math.abs(p.steerLockDeg));
+    const ic = instantCenters(ack, sol);
+    const wc = wheelCenters(ack, sol);
+    // Turning left: the right wheel is outer. Radius of the outer wheel center from each instant center, plus half the tire width.
+    const edgeFrom = (y: number | null) => (y === null ? NaN : Math.hypot(wc.R[0], wc.R[1] - y) + half);
+    const eL = edgeFrom(ic.fromLeft), eR = edgeFrom(ic.fromRight);
+    return singleCheck({
+      id: 'turn-radius', label: 'Turning radius (outer tire edge, curb to curb)', group: 'Steering', refs: ['A-2', 'D-26', 'D-51', 'D-53'],
+      value: edge, unit: 'in', limit: lim, sense: '<=',
+      details: [
+        detail('outer front tire edge, mean instant center (pass/fail)', edge, 'in', lim, '<='),
+        detail('outer front tire edge, from the left wheel axle line', eL, 'in', lim, '<='),
+        detail('outer front tire edge, from the right wheel axle line', eR, 'in', lim, '<='),
+        detail('rear-axle center', t.rearCenter, 'in', lim, '<='),
+      ],
+      how: `Ackermann at the ${f(p.steerLockDeg)} deg tow lock (inner wheel; outer ${f(sol.outerDeg, 2)} deg). The two wheel axle lines meet the rear axle line at y = ${f(ic.fromLeft ?? NaN)}" (left) and ${f(ic.fromRight ?? NaN)}" (right), a spread of ${f(Math.abs((ic.fromLeft ?? 0) - (ic.fromRight ?? 0)))}"; pass/fail uses the mean ${f(t.icY)}". Outer tire edge = distance of the outer wheel center (${f(wc.R[0])}, ${f(wc.R[1])}) from the instant center + w/2 ${f(half, 2)}" = ${f(edge)}" (${f(edge / 12, 2)} ft) with the mean; ${f(eL)}" (${f(eL / 12, 2)} ft) from the left axle line, ${f(eR)}" (${f(eR / 12, 2)} ft) from the right. Inner front centerline ${f(t.innerFront)}", rear-axle center ${f(t.rearCenter)}". Limit <= ${lim}" (${f(lim / 12, 1)} ft, D-51). Body corners and the tongue sweep wider than the tires and are not counted.`,
+    });
+  }
   return singleCheck({
     id: 'turn-radius', label: 'Turning radius (outer tire edge, curb to curb)', group: 'Steering', refs: ['A-2', 'D-26'],
     value: edge, unit: 'in', limit: lim, sense: '<=',
@@ -165,7 +193,7 @@ export function pitchForward(ctx: Ctx): AnalysisCheck {
     const deg = thetaStar - p.designSlopeDeg;
     return {
       value: deg, unit: '°', limit: 0, sense: '>=', marginalAbs: 5,
-      how: `On ${f(p.designSlopeDeg)}° nose down, rear-only braking at its traction limit: N_r = W(cosθ·(L−x)/L − sinθ·h/L) = ${f(Nr)} lb, F_b/W = μ·N_r/W = ${f(p.tireGroundMu, 2)}·${f(Nr)}/${f(c.massLb)} = ${f(aOverG, 3)}. Tip threshold F_b/W = (x_fc−x_cg)/h · cosθ = ${f(xfc - x, 1)}/${f(h, 2)} · ${f(Math.cos(th), 3)} = ${f(tipLimit, 3)} (the grade is already inside F_b, so no tanθ term). Margin ${f(margin, 3)}. Equivalent angle = the slope at which that braking force would equal the threshold, acos((F_b/W)/geo) = ${f(thetaStar)}°, minus the design slope ${f(p.designSlopeDeg)}° = ${f(deg)}° (> 0 passes; F_b held at its design-slope value; static N_r ignores braking load transfer: conservative). Other forward-pitch loads: a front-wheel curb/root strike is checked in 'kingpin-strike'; a rear handler holding the cart back on the ${f(p.rearHandleHeightIn)}" handle (about W·sinθ = ${f(c.massLb * Math.sin(th))} lbf) is reacted by the handler and is not checked here.`,
+      how: `On ${f(p.designSlopeDeg)}° nose down, rear-only braking at its traction limit: N_r = W(cosθ·(L−x)/L − sinθ·h/L) = ${f(Nr)} lb, F_b/W = μ·N_r/W = ${f(p.tireGroundMu, 2)}·${f(Nr)}/${f(c.massLb)} = ${f(aOverG, 3)}. Tip threshold F_b/W = (x_fc−x_cg)/h · cosθ = ${f(xfc - x, 1)}/${f(h, 2)} · ${f(Math.cos(th), 3)} = ${f(tipLimit, 3)} (the grade is already inside F_b, so no tanθ term). Margin ${f(margin, 3)}. Equivalent angle = the slope at which that braking force would equal the threshold, acos((F_b/W)/geo) = ${f(thetaStar)}°, minus the design slope ${f(p.designSlopeDeg)}° = ${f(deg)}° (> 0 passes; F_b held at its design-slope value; static N_r ignores braking load transfer: conservative). Other forward-pitch loads: ${ctx.newFront ? 'front-wheel bump hits are checked in the spindle, kingpin, bracket and beam rows' : "a front-wheel curb/root strike is checked in 'kingpin-strike'"}; a rear handler holding the cart back on the ${f(p.rearHandleHeightIn)}" handle (about W·sinθ = ${f(c.massLb * Math.sin(th))} lbf) is reacted by the handler and is not checked here.`,
     };
   };
   return dualCheck({

@@ -14,7 +14,7 @@
 import type { Params } from '../params';
 import type { BrakeGeom } from '../model/brake';
 import { BEARING_STANDOFF_IN, nutHeight, washerThick, type BearingMount, type V2 } from '../model/rear-mount';
-import { boltCapacity } from './front';
+import { boltCapacity } from './nds';
 import { cleavageVr } from './nds';
 import type { Ctx } from './context';
 import { detail } from './dual';

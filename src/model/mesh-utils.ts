@@ -2,9 +2,9 @@
  * Small mesh builders for bought hardware (Phase 3 workstream A): a round rod swept along a polyline path (U-bolts, eye bolts).
  * Plain TypeScript, no three.js. Geometry is a `mesh` Geometry (positions + triangle indices) in the part's local frame.
  */
-import type { Ctx } from './build-utils';
+import { poseOf, type Ctx } from './build-utils';
 import { multiply } from './mat4';
-import type { Dims, Fab, Geometry, Joint, Mat4, Part, PartGroup, PartKind, Vec3 } from './types';
+import type { Dims, Fab, Geometry, Joint, Mat4, Part, PartGroup, PartKind, RigidBody, Vec3 } from './types';
 
 export interface MeshData { positions: number[]; indices: number[] }
 
@@ -125,6 +125,8 @@ export interface CustomPartSpec {
   /** Placement before the steer pivot (neutral frame). */
   transform: Mat4;
   steer?: boolean;
+  /** Phase 3b rigid body: when it has a steered pose (`ctx.pose`), the transform is pose x transform. */
+  body?: RigidBody;
   massLb: number;
   fab: Fab;
   step: number;
@@ -148,8 +150,8 @@ export function customPart(ctx: Ctx, s: CustomPartSpec): Part {
     kind: s.kind,
     material: s.material,
     geometry: s.geometry,
-    transform: s.steer ? multiply(ctx.pivot, s.transform) : s.transform,
-    body: s.steer ? 'steer' : 'chassis',
+    transform: poseOf(ctx, s.body) ? multiply(poseOf(ctx, s.body)!, s.transform) : s.steer ? multiply(ctx.pivot, s.transform) : s.transform,
+    body: s.body ?? (s.steer ? 'steer' : 'chassis'),
     massLb: s.massLb,
     fab: s.fab,
     step: s.step,

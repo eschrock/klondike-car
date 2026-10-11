@@ -20,6 +20,7 @@ import { dualCheck, governing, singleCheck, detail, type CaseEval } from './dual
 import { f } from './format';
 import type { CaseData } from './loads';
 import { allowables } from './structure';
+import { seatFactor } from './bump';
 import type { AnalysisCheck, Detail } from './types';
 
 /** Effective bearing height of the stile on the wedge crest (crest plus the lid frame above it), in. */
@@ -38,10 +39,10 @@ function plateAlpha(r: number): number {
 }
 
 /** Numbers behind the seat-back check for one rider mass, exported for the tests. */
-export function seatBackLoads(ctx: Ctx, riderLb: number) {
+export function seatBackLoads(ctx: Ctx, riderLb: number, g: number = ctx.p.dynamicFactor) {
   const { p } = ctx;
   const sup = seatBackSupport(p, ctx.L);
-  const Q = riderLb * p.dynamicFactor * p.seatBackLoadFraction;
+  const Q = riderLb * g * p.seatBackLoadFraction;
   const w = Q / 2 / sup.H;
   const A = sup.c2A, B = sup.c2B;
   const RA = (w * sup.H * (sup.H / 2 - B)) / (A - B);
@@ -59,7 +60,8 @@ export function seatBackCheck(ctx: Ctx): AnalysisCheck {
   const { p } = ctx;
   const al = allowables(ctx);
   const ev = (c: CaseData): CaseEval => {
-    const k = seatBackLoads(ctx, c.riderLb);
+    const gF = seatFactor(ctx, c);
+    const k = seatBackLoads(ctx, c.riderLb, gF);
     const S = (k.sup.fw * k.sup.t * k.sup.t) / 6;
     const ds: Detail[] = [
       detail('stile bending at the crest', k.M / S, 'psi', al.oakBend, '<='),
@@ -67,7 +69,7 @@ export function seatBackCheck(ctx: Ctx): AnalysisCheck {
       detail('insert pull-out (each stud)', k.T, 'lbf', p.seatInsertAllowLbf, '<='),
       detail('ply panel bending', k.sigmaPly, 'psi', al.plyBend, '<='),
     ];
-    const how = `Rider ${f(c.riderLb, 0)} lb × dynamic ${p.dynamicFactor} × torso share ${p.seatBackLoadFraction} = ${f(k.Q)} lbf aft over the ${f(k.sup.H)}" back, ${f(k.w, 2)} lbf/in on each of 2 stiles. `
+    const how = `Rider ${f(c.riderLb, 0)} lb × dynamic ${f(gF, 2)}${ctx.newFront ? ' (max of the dynamic factor and 1 + V_rear/W, spec 5.4)' : ''} × torso share ${p.seatBackLoadFraction} = ${f(k.Q)} lbf aft over the ${f(k.sup.H)}" back, ${f(k.w, 2)} lbf/in on each of 2 stiles. `
       + `Stile ${f(k.sup.fw, 2)}" × ${f(k.sup.t, 2)}" bears on the oak ${k.sup.rear ? 'wedge against the box end' : 'post'} crest at ${f(k.A, 2)}" and is held by the 3/8-16 knob stud at ${f(k.B, 2)}": `
       + `R_A = ${f(k.RA)} lbf, stud pull ${f(k.T)} lbf; M at the crest = w(H − A)²/2 = ${f(k.M)} lb·in, σ = ${f(k.M / S, 0)} psi (≤ ${f(al.oakBend, 0)}); `
       + `bearing ${f(k.RA / (k.sup.fw * CRUSH_HEIGHT_IN), 0)} psi on ${f(k.sup.fw, 2)}" × ${CRUSH_HEIGHT_IN}" (≤ ${f(al.oakPerp, 0)}); insert ${f(k.T, 0)} lbf (≤ ${f(p.seatInsertAllowLbf, 0)}); `
@@ -92,7 +94,8 @@ export function seatGripCheck(ctx: Ctx): AnalysisCheck {
   const al = allowables(ctx);
   const ev = (c: CaseData): CaseEval => {
     // A hard pull toward the cart centerline on the bar: half the rider weight × the dynamic factor, shared by 2 posts.
-    const F = 0.5 * c.riderLb * p.dynamicFactor;
+    const gF = seatFactor(ctx, c);
+    const F = 0.5 * c.riderLb * gF;
     const arm = p.seatGripGapIn + GRIP_BAR_H_IN / 2;
     const Mpost = (F / 2) * arm;
     const S = (GRIP_POST_IN * GRIP_POST_IN ** 2) / 6;
@@ -101,7 +104,7 @@ export function seatGripCheck(ctx: Ctx): AnalysisCheck {
       detail('finger gap (no pinch)', p.seatGripGapIn, 'in', 1.25, '>='),
       detail('clear length (hand)', p.seatGripClearLengthIn, 'in', 3.5, '>='),
     ];
-    const how = `Pull ${f(F)} lbf (0.5 × ${f(c.riderLb, 0)} lb × ${p.dynamicFactor}) on the bar, ${f(F / 2)} lbf per post at ${f(arm, 2)}" above the pad: M = ${f(Mpost)} lb·in, σ = M/S = ${f(Mpost / S, 0)} psi (≤ ${f(al.oakBend, 0)}). `
+    const how = `Pull ${f(F)} lbf (0.5 × ${f(c.riderLb, 0)} lb × ${f(gF, 2)}) on the bar, ${f(F / 2)} lbf per post at ${f(arm, 2)}" above the pad: M = ${f(Mpost)} lb·in, σ = M/S = ${f(Mpost / S, 0)} psi (≤ ${f(al.oakBend, 0)}). `
       + `Finger gap under the bar ${f(p.seatGripGapIn, 2)}" (≥ 1.25") and ${f(p.seatGripClearLengthIn, 2)}" clear between the posts (≥ 3.5"): no pinch point (BRIEF §4.7).`;
     return governing(ds, how);
   };

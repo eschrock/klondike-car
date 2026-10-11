@@ -3,7 +3,7 @@
  * wood / steel mass with finish (D-20), and steer-body placement about the kingpin.
  */
 import { derived, PLY_SPECIES, resolveParams, type Params } from '../params';
-import { poseMatrices, solveSteer, type SteerBodyId, type SteerSolution } from './ackermann';
+import { lockLimits, poseMatrices, solveSteer, type PoseId, type SteerSolution } from './ackermann';
 import { computeLayout, type Layout } from './layout';
 import { compose, multiply, rotationX, rotationY, rotationZ, translation } from './mat4';
 import type { Dims, EdgeCondition, Fab, Joint, Mat4, Part, PartGroup, PartKind, RigidBody, Vec2, Vec3 } from './types';
@@ -13,6 +13,11 @@ export interface ViewState {
   steerDeg?: number;
   /** Phase 3b control mode: 'both' (default, analysis/mass see everything), 'tow' omits the stick, 'ride' omits the tongue and its link. */
   mode?: 'both' | 'tow' | 'ride';
+  /**
+   * Which front end to build (Phase 3b Stage 1, WS-A): 'turntable' (default, the old turntable/kingpin front end, until the Stage 2 flip) or 'ackermann' (the
+   * Ackermann spindle front end in `front-end.ts`; use it with `phase3bDefaults()`, whose `frontEndType` selects the matching hull).
+   */
+  frontEnd?: 'turntable' | 'ackermann';
   /** Which rider mass the mannequin carries. Default 'operating'. */
   rider?: 'none' | 'operating' | 'goal';
   /** Include the cargo block. Default true. */
@@ -32,7 +37,7 @@ export interface Ctx {
   pivot: Mat4;
   /** Phase 3b: Ackermann solution at the displayed steer angle and the rigid-body poses of the steer bodies (neutral frame to steered pose). */
   steer: SteerSolution;
-  pose: Record<SteerBodyId, Mat4>;
+  pose: Record<PoseId, Mat4>;
   plyName: string;
 }
 
@@ -43,7 +48,7 @@ export interface Ctx {
  * Then the hull is turned upright, the kingpin goes in from below and its nut on from above through the access opening (4.9), and the seat and storage (5),
  * the brake (6) and the finish (7) follow.
  */
-export const STEP = { frame: 3, body: 4, steering: 4.5, gear: 4.6, kingpin: 4.9, seatStorage: 5, brake: 6, finish: 7, payload: 8 } as const;
+export const STEP = { frame: 3, body: 4, steering: 4.5, gear: 4.6, linkage: 4.7, kingpin: 4.9, spindles: 4.9, seatStorage: 5, brake: 6, finish: 7, payload: 8 } as const;
 
 /**
  * Hull assembly sequence (build review M4 / MUST-2, D-43, D-45). `Part.step` is where a part is INSTALLED; the hull sequence is fractional
@@ -59,6 +64,8 @@ export const STEP = { frame: 3, body: 4, steering: 4.5, gear: 4.6, kingpin: 4.9,
  *   4. (4.3) Shoulder beam: already part of the frame; its Dominos engage in step 3.
  *   5. (4.4) The transoms go on LAST, sliding in X onto the deck edge, web ends, chine and gunwale tenons and rail tenons in one
  *      glue-up (slow 120-minute epoxy, rehearse twice); the vent holes let the dados breathe. Backers are glued to the transom first.
+ *   Ackermann hull (D-52): no shoulder beam and one deck, so step 4 is a single deck on the rails and joists (the front beam sits in its rail notches and
+ *   is held down by the angles at 4.6); the chine rabbet runs the whole hull and the sides are two plies of 5/16 (rail 2 x 3/8) around ONE plan form.
  *   6. (STEP.steering 4.5, STEP.gear 4.6) With the hull still inverted and the deck underside facing up: bolt the bolster ring through the nose deck, fit the
  *      beam, turntable and kingpin plates, then the axles and wheels. THEN turn the hull upright and drop in the kingpin (head from below, castle nut through the access opening, STEP.kingpin 4.9).
  */
@@ -75,7 +82,9 @@ export const STEEL_STOCK_SOURCING = { vendor: 'McMaster-Carr (A36 steel bar / pl
 export function makeCtx(input: Params, v: ViewState = {}): Ctx {
   const p = resolveParams(input); // every part sees the auto-resolved nose width / shoulder (A-4, D-26)
   const L = computeLayout(p);
-  const lock = Math.abs(p.steerLockDeg);
+  const ack = v.frontEnd === 'ackermann';
+  // Ackermann front end: the displayed angle is the INNER wheel angle, clamped to the lock of the mode in view (ride: the inner angle that goes with the outer ride lock).
+  const lock = ack && v.mode === 'ride' ? lockLimits(L.front.ack, 'ride').innerDeg : Math.abs(p.steerLockDeg);
   const deg = Math.min(lock, Math.max(-lock, v.steerDeg ?? 0));
   const steerRad = (deg * Math.PI) / 180;
   const pivot = multiply(translation(L.kx, 0, 0), multiply(rotationZ(steerRad), translation(-L.kx, 0, 0)));
@@ -84,7 +93,7 @@ export function makeCtx(input: Params, v: ViewState = {}): Ctx {
     p,
     d: derived(p),
     L,
-    view: { steerDeg: deg, mode: v.mode ?? 'both', rider: v.rider ?? 'operating', cargo: v.cargo ?? true, removed: v.removed ?? false },
+    view: { steerDeg: deg, mode: v.mode ?? 'both', frontEnd: v.frontEnd ?? 'turntable', rider: v.rider ?? 'operating', cargo: v.cargo ?? true, removed: v.removed ?? false },
     steerRad,
     pivot,
     steer,
@@ -92,6 +101,9 @@ export function makeCtx(input: Params, v: ViewState = {}): Ctx {
     plyName: p.plySpecies === PLY_SPECIES.okoumeMarine ? 'okoume marine plywood' : 'baltic birch plywood',
   };
 }
+
+/** Id of the deck part under a point of the hull: the single `deck` of the Ackermann hull (one level, D-52), else the cabin or nose deck of the stepped hull. */
+export const deckPartId = (L: Pick<Layout, 'ackHull'>, zone: 'cabin' | 'nose' = 'cabin'): string => (L.ackHull ? 'deck' : zone === 'nose' ? 'deck-nose' : 'deck-cabin');
 
 export const IN3_PER_FT3 = 1728;
 export const IN2_PER_FT2 = 144;
@@ -146,8 +158,15 @@ export interface CylSpec extends PartSpec {
   axis: 'x' | 'y' | 'z';
 }
 
+/** The steered pose of a rigid body (Phase 3b): neutral frame to steered frame; null for a body that does not move with the steering (or the old 'steer' body). */
+export function poseOf(ctx: Ctx, body: string | undefined): Mat4 | null {
+  return body && Object.prototype.hasOwnProperty.call(ctx.pose, body) ? ctx.pose[body as PoseId] : null;
+}
+
 function placement(ctx: Ctx, s: PartSpec): Mat4 {
   const m = compose(s.center, s.rot);
+  const pose = poseOf(ctx, s.body);
+  if (pose) return multiply(pose, m);
   return s.steer ? multiply(ctx.pivot, m) : m;
 }
 
@@ -175,7 +194,14 @@ function defaultExplode(ctx: Ctx, s: PartSpec): Vec3 {
       if (id.startsWith('clamp')) return unit([0, sy * 0.6, -1]);
       return unit([fx * 0.3, 0, -1]);
     case 'steering':
-      if (/^(tongue|bridle)/.test(id)) return unit([1, 0, -0.1]);
+      // Phase 3b front end (WS-A): spindles outward and down, brackets outward, tie rod / drag link / bellcrank down and aft, tongue forward, stick up, cables down, mode plate / pin down.
+      if (/^(spindle|steer-arm|kingpin-bolt)-/.test(id)) return unit([0, sy * 1, -0.5]);
+      if (/^(kp-bracket|steer-stop-tow)-/.test(id)) return unit([0, sy * 1, -0.1]);
+      if (/^(tie-rod|drag-link|bellcrank|cable-crossbar|centering-spring|bell-)/.test(id)) return unit([-0.5, 0, -1]);
+      if (/^(mode-plate|mode-pin)/.test(id)) return unit([-0.2, 0, -1]);
+      if (/^(ride-stick|stick-guard|stick-bracket)/.test(id)) return unit([0, 0, 1]);
+      if (/^(stick-cable|cable-guide)/.test(id)) return unit([0, 0, -1]);
+      if (/^(tongue|eyebolt-T|bridle)/.test(id)) return unit([1, 0, -0.1]);
       if (id === 'kingpin' || /^kingpin-sleeve-beam/.test(id)) return unit([0.3, 0, -1]);
       if (id === 'kingpin-crossbar' || /^kingpin-sleeve-bar/.test(id)) return unit([0.3, 0, 1]);
       if (/^steer-stop/.test(id)) return unit([0.3, sy * 0.8, -0.6]);
@@ -283,7 +309,8 @@ export function cylinder(ctx: Ctx, s: CylSpec): Part {
   const base = compose(s.center, s.rot);
   const m = multiply(base, rotAxis);
   const part = finalize(ctx, s, { type: 'cylinder', radius: s.radius, length: s.length }, mass, [2 * s.radius, 2 * s.radius, s.length]);
-  part.transform = s.steer ? multiply(ctx.pivot, m) : m;
+  const pose = poseOf(ctx, s.body);
+  part.transform = pose ? multiply(pose, m) : s.steer ? multiply(ctx.pivot, m) : m;
   delete part.grain;
   return part;
 }

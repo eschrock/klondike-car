@@ -9,7 +9,7 @@
  * elsewhere); the knobs resist only the overturning couple. Parts are built from the layout so every location variant stays clear.
  */
 import { RIDER_PELVIS_Z_FRAC, SIDE_CONSTRUCTION, STORAGE_LOCATION, type Params } from '../params';
-import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
+import { STEP, box, cylinder, deckPartId, span, SIDES, type Ctx } from './build-utils';
 import type { Layout } from './layout';
 import { chooseDomino, DOMINOS, type DominoQuery } from './joinery';
 import { profilePart, signedArea } from './profile';
@@ -176,7 +176,7 @@ export function buildSeat(ctx: Ctx): Part[] {
       parts.push(box(ctx, {
         id: `seat-riser-${tag}`, partNo: 'seat-riser', name: `Seat riser runner ${tag}`, group: 'seat', mat: 'oak', step: STEP.seatStorage, grain: 'x',
         ...span([s.xRear, s.xFront], [y - RISER_RUNNER_IN / 2, y + RISER_RUNNER_IN / 2], [s.pan, s.cushionBottom]),
-        joints: [{ type: 'glue', to: s.pan > L.deckTop + 0.01 ? 'storage-lid' : 'deck-cabin', count: 1, note: 'epoxy + 3 × #8 stainless screws up through the deck' }],
+        joints: [{ type: 'glue', to: s.pan > L.deckTop + 0.01 ? 'storage-lid' : deckPartId(L), count: 1, note: 'epoxy + 3 × #8 stainless screws up through the deck' }],
       }));
     }
   }
@@ -263,8 +263,8 @@ export function buildSeat(ctx: Ctx): Part[] {
   const zA = Math.max(...sup.wedge.map((q) => q[1]));
   for (const { s: sg, tag } of SIDES) {
     const j: Joint[] = [
-      { type: 'glue', to: 'deck-cabin', count: 1, note: 'epoxy to the deck' },
-      { type: 'screw', to: 'deck-cabin', count: 2, size: '#10 × 1½ stainless, up through the deck' },
+      { type: 'glue', to: deckPartId(L), count: 1, note: 'epoxy to the deck' },
+      { type: 'screw', to: deckPartId(L), count: 2, size: '#10 × 1½ stainless, up through the deck' },
     ];
     if (sup.rear) j.push({ type: 'screw', to: 'storage-end-fore', count: 2, size: '#10 × 1¼ stainless, through the box end into the backer cleat' });
     else j.push({ type: 'threaded-insert', to: `seat-back-stile-${tag}`, count: 1, size: '3/8-16 stainless, 3/4 deep', note: 'the stud ends here (D-9)' });
@@ -336,7 +336,7 @@ export function buildSeat(ctx: Ctx): Part[] {
     id: 'foot-stop', name: 'Foot stop', group: 'seat', mat: 'oak', step: STEP.seatStorage, grain: 'y',
     ...span([stopX0, stopX1], [-fhw, fhw], [deckZ, deckZ + p.footStopHeightIn]),
     joints: [
-      { type: 'screw', to: onNose ? 'deck-nose' : 'deck-cabin', count: 4, size: '#10 × 1½ stainless, up through the deck' },
+      { type: 'screw', to: deckPartId(L, onNose ? 'nose' : 'cabin'), count: 4, size: '#10 × 1½ stainless, up through the deck' },
       cleatJoint('L'), cleatJoint('R'),
     ],
     notes: `Board between the ${zone} sides, held by two corner cleats and the deck screws. The board end butts the inside face of the side (epoxy, no dado). Top edge rounded ½"; no gap under the board for a foot to catch (D-40).`,
@@ -347,7 +347,7 @@ export function buildSeat(ctx: Ctx): Part[] {
       ...span(cleatX, inboardOf(sg, fhw, FOOT_CLEAT_T_IN), [deckZ, deckZ + p.footStopHeightIn]),
       joints: [
         { type: 'glue', to: sideMember(tag), count: 1, note: 'epoxy to the inboard face of the side, thickened epoxy fills the 1/8" step to the web' },
-        { type: 'screw', to: onNose ? 'deck-nose' : 'deck-cabin', count: 2, size: '#10 × 1½ stainless, up through the deck' },
+        { type: 'screw', to: deckPartId(L, onNose ? 'nose' : 'cabin'), count: 2, size: '#10 × 1½ stainless, up through the deck' },
         { ...cleatJoint(tag), to: 'foot-stop' },
       ],
       notes: `Oak corner cleat (${FOOT_CLEAT_X_IN}" × ${FOOT_CLEAT_T_IN}") ${cleatAhead ? 'ahead of' : 'behind'} the foot-stop board: the rider's feet push the board ${cleatAhead ? 'into' : 'away from'} it. Rounded over ¼" on the exposed edges (S6, D-40).`,

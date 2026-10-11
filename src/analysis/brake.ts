@@ -14,22 +14,28 @@
 import { BRAKE_TYPE } from '../params';
 import { obbOverlap, partOBB, partOBBs, worldAABB, type OBB } from '../model/bounds';
 import {
-  CRANK_LIGAMENT_IN, HUB_LEN_BARS, PIVOT_SLEEVE_WALL_IN, SLEEVE_WALL_IN, brakeGeometry, buildBrakeAt, handleGeometry, ratchetGeometry,
+  CRANK_LIGAMENT_IN, HUB_LEN_BARS, PIVOT_SLEEVE_WALL_IN, SLEEVE_WALL_IN, brakeGeometry, buildBrakeAt, handleGeometry, ratchetGeometry, shoeLengthIn,
   type BrakeGeom, type HandleGeom, type RatchetGeom,
 } from '../model/brake';
 import { makeCtx } from '../model/build-utils';
 import { bearingMount } from '../model/rear-mount';
+import { cableCompliance, chainOf, hipFromMain } from './brake-chain';
+import { frontBrakeSweep } from './brake-sweep-front';
 import { mountDetails, mountStatics } from './brake-mount';
 import type { Part, Vec3 } from '../model/types';
 import type { Ctx } from './context';
 import { dualCheck, singleCheck, detail, governing, type CaseEval } from './dual';
 import { RAD, contactsAt } from './geometry';
-import { scaleLimits } from './front';
 import { f } from './format';
 import type { CaseData } from './loads';
 import { evalBoth, rearNormalNoseDown } from './stability';
 import { allowables } from './structure';
 import { judge, worst, type AnalysisCheck, type Detail, type Status } from './types';
+
+/** Raise the limit of every '<=' detail by k (the abuse case is held to strength, not to the design allowable). */
+export function scaleLimits(ds: Detail[], k: number): Detail[] {
+  return ds.map((d) => (d.sense === '<=' ? detail(d.name, d.value, d.unit, d.limit * k, '<=') : d));
+}
 
 // ── shared bundle ────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -49,7 +55,8 @@ export function brakeBundle(ctx: Ctx): Bundle {
 export function effectiveBrakeRatio(ctx: Ctx): { ratio: number; derived: boolean } {
   const b = brakeBundle(ctx);
   if (b.drum) return { ratio: ctx.p.brakeLeverRatio, derived: false };
-  return { ratio: b.g.ratioCrit, derived: true };
+  const ch = chainOf(ctx);
+  return { ratio: ch.frontOn ? ch.Rcrit : b.g.ratioCrit, derived: true };
 }
 
 /** Friction used to size the hold load: the lower of the design (wet lining) μ and the mud-fouled μ. */
@@ -105,10 +112,32 @@ export function brakeRatio(ctx: Ctx): AnalysisCheck {
     detail('self-lock margin μ_lock / μ_pad', lockMu / Math.max(1e-9, p.brakePadMu), '×', 2, '>='),
     detail('grip travel, released to applied (hand lever sweep)', g.gripTravelIn, 'in', p.brakeGripTravelMaxIn, '<='),
   ];
+  const ch = chainOf(ctx);
+  const gated: Detail[] = [];
+  const info = (name: string, value: number, unit: string): Detail => ({ name, value, unit, limit: 0, sense: '>=', util: 0 });
+  let frontText = '';
+  if (ch.frontOn || ch.hipOn) {
+    const goal = ctx.loads.goal;
+    const hold = (goal.massLb * Math.sin(p.designSlopeDeg * RAD)) / holdMu(p) / (ch.Rcrit * ch.eta);
+    const comp = cableCompliance(ctx, ch, hold);
+    if (ch.frontOn) {
+      gated.push(
+        detail('front branch ratio, rolling backward (if it took the whole lever moment)', ch.fg.Rf.rev, ':1', p.brakeLeverRatio, '>='),
+        detail('TOTAL ratio N_total / F_hand, rolling backward (critical)', ch.Rtot.rev, ':1', p.brakeLeverRatio, '>='),
+        detail('main grip travel including the front cable stretch at the goal-rider hold force', g.gripTravelIn + comp.extraGripMainIn, 'in', p.brakeGripTravelMaxIn, '<='),
+      );
+      details.push(...gated, info('total ratio, rolling forward', ch.Rtot.fwd, ':1'), info('front share of the shoe force, mean of forward and backward', (ch.bias.fwd + ch.bias.rev) / 2, ''));
+      frontText = ` Front brake: bias bar front arm a_f = ${f(ch.fg.aF, 2)}" of ${f(ch.fg.barIn, 1)}" gives the front branch ${f(ch.phi * 100, 1)}% of the lever force and ${f(ch.bias.fwd * 100, 1)}% / ${f(ch.bias.rev * 100, 1)}% (fwd / back) of the shoe force. Front branch ratio ${f(ch.fg.Rf.fwd, 1)} / ${f(ch.fg.Rf.rev, 1)}:1 (cable arm ${f(ch.fg.tailIn, 2)}" on the swing arm, ${f(ch.fg.kFwd, 2)}" / ${f(ch.fg.kRev, 2)}" shoe moment arm), so the total ratio is (1 − φ)R_rear + φR_front = ${f(ch.Rtot.fwd, 1)} / ${f(ch.Rtot.rev, 1)}:1: work is conserved (same stroke at all four shoes), so the front brake adds braking capacity and parking margin, not mechanical advantage. The front cable stretch (${f(comp.frontStretchIn, 3)}") adds ${f(comp.extraGripMainIn, 2)}" of grip travel at the goal hold force.`;
+    }
+    if (ch.hipOn) {
+      details.push(info('hip grip travel, full throw (feel-test; the gate is the cable travel reserve in hip-cable)', ch.hg.gripTravelIn, 'in'), info('hip force per main-grip force (geometric)', ch.hg.hipPerMain, ''));
+      frontText += ` Hip lever: ${f(ch.hg.armIn, 1)}" arm, ${f(p.hipLeverThrowDeg, 0)}° throw = ${f(ch.hg.gripTravelIn, 2)}" at the grip; hip force = ${f(ch.hg.hipPerMain, 3)} × the main-grip force before cable friction.`;
+    }
+  }
   return singleCheck({
     id: 'brake-ratio', label: 'Brake mechanical advantage (derived from geometry)', group: 'Braking', refs: ['D-13', 'D-38'],
-    value: g.ok ? g.ratioCrit : 0, unit: ':1', limit: p.brakeLeverRatio, sense: '>=', marginalAbs: 0.5, how: `${how} Grip travel from released to applied: ${f(g.gripTravelIn, 2)}" for the ${f(p.brakeShoeTravelIn, 4)}" shoe stroke at ${f(g.ratioCrit, 1)}:1 (limit ${f(p.brakeGripTravelMaxIn, 2)}", status verify: feel-test the mock-up). Raising the ratio or the stroke raises the travel one for one; the ratio headroom ${f(p.brakeRatioHeadroom, 2)} and the stroke were chosen together (r3 N-8).`, details,
-    status: worst(judge(g.ok ? g.ratioCrit : 0, p.brakeLeverRatio, '>=', 0.5), judge(g.gripTravelIn, p.brakeGripTravelMaxIn, '<=')),
+    value: g.ok ? g.ratioCrit : 0, unit: ':1', limit: p.brakeLeverRatio, sense: '>=', marginalAbs: 0.5, how: `${how} Grip travel from released to applied: ${f(g.gripTravelIn, 2)}" for the ${f(p.brakeShoeTravelIn, 4)}" shoe stroke at ${f(g.ratioCrit, 1)}:1 (limit ${f(p.brakeGripTravelMaxIn, 2)}", status verify: feel-test the mock-up). Raising the ratio or the stroke raises the travel one for one; the ratio headroom ${f(p.brakeRatioHeadroom, 2)} and the stroke were chosen together (r3 N-8).${frontText}`, details,
+    status: [judge(g.gripTravelIn, p.brakeGripTravelMaxIn, '<='), ...gated.map((d) => judge(d.value, d.limit, d.sense, d.sense === '>=' ? 0.5 : 0.3))].reduce((x, y) => worst(x, y), judge(g.ok ? g.ratioCrit : 0, p.brakeLeverRatio, '>=', 0.5)),
   });
 }
 
@@ -126,10 +155,13 @@ export function brakeForce(ctx: Ctx): AnalysisCheck {
     const Ff = down / muF / eta; // mud / slush fouled lining: the pass/fail case
     const Fbare = down / BARE_OAK_MU / eta;
     const F = Math.max(Fd, Ff);
-    const Ffwd = derived && b.g.ratioFwd > 0 ? down / muF / (b.g.ratioFwd * p.brakeEfficiency) : Ff;
+    const chn = chainOf(ctx);
+    const Ffwd = derived && b.g.ratioFwd > 0 ? down / muF / ((chn.frontOn ? chn.Rtot.fwd : b.g.ratioFwd) * p.brakeEfficiency) : Ff;
+    const Fhip = chn.hipOn ? hipFromMain(chn, F) : 0;
     return {
-      value: F, unit: 'lbf', limit: p.handleForceLimitLbf, sense: '<=', suffix: Ff >= Fd ? 'mud-fouled lining' : 'wet lining',
+      value: Math.max(F, Fhip), unit: 'lbf', limit: p.handleForceLimitLbf, sense: '<=', suffix: Fhip > F ? 'hip lever, mud-fouled lining' : Ff >= Fd ? 'mud-fouled lining' : 'wet lining',
       details: [
+        ...(chn.hipOn ? [detail(`hip lever grip force (main-grip force × ${f(chn.hg.hipPerMain, 3)} ÷ cable efficiency ${f(chn.etaHip, 2)})`, Fhip, 'lbf', p.handleForceLimitLbf, '<=')] : []),
         detail(`handle force, wet bonded lining μ ${f(muD, 2)}`, Fd, 'lbf', p.handleForceLimitLbf, '<='),
         detail(`handle force, mud / slush-fouled lining μ ${f(muF, 2)} (pass/fail)`, Ff, 'lbf', p.handleForceLimitLbf, '<='),
         detail(`info: bare wet oak μ ${BARE_OAK_MU} (why the lining is specified; not pass/fail)`, Fbare, 'lbf', p.handleForceLimitLbf, '<='),
@@ -322,6 +354,7 @@ function shoesEval(ctx: Ctx, L: Loads, b: Bundle): CaseEval {
     const sigmaArm = Ma / Sbar;
     const Fa = L.rPin / 2;
     const dpin = p.brakeShoePinDiameterIn;
+    const pinFy = p.brakeShoePinYieldPsi / p.steelSafetyFactor;
     const padW = b.g.y.pad[1] - b.g.y.pad[0];
     const Mpin = (L.rPin * padW) / 8; // pad load spread over the pad width, pin simply supported at the two arms
     const sigmaPin = (32 * Mpin) / (Math.PI * dpin ** 3);
@@ -330,12 +363,12 @@ function shoesEval(ctx: Ctx, L: Loads, b: Bundle): CaseEval {
     const bearPad = L.rPin / (dpin * padW);
     const h = p.brakeShoeThickIn / 2;
     const rock = p.brakePadMu * h;
-    const half = p.brakeShoeLengthIn / 2;
-    const pressure = L.nShoe / (p.brakeShoeLengthIn * padW);
+    const half = shoeLengthIn(p) / 2;
+    const pressure = L.nShoe / (shoeLengthIn(p) * padW);
     const ds: Detail[] = [
       detail('arm bending at the hub (each of two arms)', sigmaArm, 'psi', sa.tens, '<='),
-      detail('pad pin bending (pad load over its width)', sigmaPin, 'psi', sa.tens, '<='),
-      detail('pad pin shear (double)', tauPin, 'psi', sa.shear, '<='),
+      detail('pad pin bending (pad load over its width)', sigmaPin, 'psi', pinFy, '<='),
+      detail('pad pin shear (double)', tauPin, 'psi', 0.577 * pinFy, '<='),
       detail('pin bearing on the arm bar', bearArm, 'psi', sa.bear, '<='),
       detail('pin bearing in the oak pad (steel bushing bore)', bearPad, 'psi', al.oakDowel, '<='),
       detail('pad rock-off: μ·h_pin vs half the pad length', rock, 'in', half, '<='),
@@ -643,12 +676,25 @@ export function brakeClearance(ctx: Ctx, sweep: BrakeSweepResult = brakeSweep(ct
     detail('lever to ratchet plate gap: under a fingertip (3/16")', gaps.plate, 'in', FINGER_GAP_MAX_IN, '<='),
     detail('lever to hull gap: outside the 3/16"–1/2" finger-entrapment band', gaps.hull, 'in', FINGER_BAND_TOP_IN, '>='),
   ];
-  const pinchFail = details.slice(3).some((d) => d.util > 1);
-  const clearStatus: Status = judge(sweep.minClearanceIn, p.brakeClearanceIn, '>=');
+  const fs = frontBrakeSweep(ctx);
+  let minClear = sweep.minClearanceIn;
+  let frontText = '';
+  if (fs.on) {
+    details.push(
+      detail('front shoe lining gap to the tread (rigid with the wheel, any steer angle)', fs.shoeGapIn, 'in', p.frontShoeTravelIn - 0.03, '>='),
+      detail('front arms, horn and pins to the tire', fs.armToTireIn, 'in', 0.1, '>='),
+      detail(`front brake parts to the hull over the steering sweep (worst ${fs.moving} vs ${fs.other} at ${f(fs.steerDeg, 0)}°)`, fs.minToHullIn, 'in', 0.25, '>='),
+    );
+    minClear = Math.min(minClear, fs.minToHullIn);
+    frontText = ` Front brakes: the horn, arms, pins and shoes ride on the knuckle and are posed with the Ackermann solution at ${fs.poses} steer angles from the outer to the inner tow lock against the hull, rails, beam and brackets (least gap ${f(fs.minToHullIn, 2)}" at ${f(fs.steerDeg, 0)}°, ${fs.moving} vs ${fs.other}); the shoe gap to the tread is ${f(fs.shoeGapIn, 2)}" at every angle because it is rigid with the wheel.`;
+  }
+  const frontFail = fs.on && (fs.minToHullIn < 0.25 || fs.armToTireIn < 0.1);
+  const pinchFail = details.slice(3, 6).some((d) => d.util > 1) || frontFail;
+  const clearStatus: Status = judge(minClear, p.brakeClearanceIn, '>=');
   const status: Status = pinchFail ? worst(clearStatus, 'fail') : clearStatus;
   return singleCheck({
     id: 'brake-clear', label: 'Brake linkage clearance over the stroke', group: 'Braking', refs: ['D-38', 'D-16'],
-    value: sweep.minClearanceIn, unit: 'in', limit: p.brakeClearanceIn, sense: '>=', details, status,
-    how: `The moving brake parts (lever, link and clevises, crank, pawl, shoe arms, pins, pads and linings) are posed at ${sweep.poses} points from released to applied (lever solved from the closed link at each point) and tested against every other solid (hull, rails, storage box, axle beam, hubs, handle) with oriented-box separation, against the round rear tires by distance to the tire cylinder, and the lever group against the shoe group. ${capped ? `Everything stays > ${BIG}" apart.` : `Minimum clearance ${f(sweep.minClearanceIn, 2)}" between ${sweep.moving} and ${sweep.other} at ${f(sweep.pose * 100, 0)}% of the stroke.`} Limit ≥ ${f(p.brakeClearanceIn, 2)}". The linings sit ${f(sweep.padGapReleasedIn, 2)}" off the tread released (stroke ${f(p.brakeShoeTravelIn, 2)}") and ${f(sweep.padGapAppliedIn, 2)}" applied; the lowest point is ${f(sweep.groundMinZ, 2)}" above the ground (limit ${f(p.minGroundClearanceIn, 2)}"). Pinch points (eng review): the lever slides past the ratchet plate with a ${f(gaps.plate, 3)}" gap (≥ ${NO_RUB_IN}" so it cannot rub, ≤ ${FINGER_GAP_MAX_IN}" so a fingertip cannot enter) and stands ${f(gaps.hull, 3)}" off the hull (≥ ${FINGER_BAND_TOP_IN}", outside the 3/16"–1/2" finger-entrapment band).${pinchFail ? ' PINCH GAP OUT OF RANGE.' : ''}`,
+    value: minClear, unit: 'in', limit: p.brakeClearanceIn, sense: '>=', details, status,
+    how: `The moving brake parts (lever, link and clevises, crank, pawl, shoe arms, pins, pads and linings) are posed at ${sweep.poses} points from released to applied (lever solved from the closed link at each point) and tested against every other solid (hull, rails, storage box, axle beam, hubs, handle) with oriented-box separation, against the round rear tires by distance to the tire cylinder, and the lever group against the shoe group. ${capped ? `Everything stays > ${BIG}" apart.` : `Minimum clearance ${f(sweep.minClearanceIn, 2)}" between ${sweep.moving} and ${sweep.other} at ${f(sweep.pose * 100, 0)}% of the stroke.`} Limit ≥ ${f(p.brakeClearanceIn, 2)}". The linings sit ${f(sweep.padGapReleasedIn, 2)}" off the tread released (stroke ${f(p.brakeShoeTravelIn, 2)}") and ${f(sweep.padGapAppliedIn, 2)}" applied; the lowest point is ${f(sweep.groundMinZ, 2)}" above the ground (limit ${f(p.minGroundClearanceIn, 2)}"). Pinch points (eng review): the lever slides past the ratchet plate with a ${f(gaps.plate, 3)}" gap (≥ ${NO_RUB_IN}" so it cannot rub, ≤ ${FINGER_GAP_MAX_IN}" so a fingertip cannot enter) and stands ${f(gaps.hull, 3)}" off the hull (≥ ${FINGER_BAND_TOP_IN}", outside the 3/16"–1/2" finger-entrapment band).${pinchFail ? ' PINCH GAP OUT OF RANGE.' : ''}${frontText}`,
   });
 }

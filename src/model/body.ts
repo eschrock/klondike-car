@@ -10,7 +10,7 @@
  * Every ply part lists an edge condition for each outline edge (captured in oak, or edged with oak banding; none exposed). Joint
  * records are added in joinery.ts after all parts exist.
  */
-import { FRAME_STYLE, SIDE_CONSTRUCTION } from '../params';
+import { FRAME_STYLE, SIDE_CONSTRUCTION, hullCurveSpec, lamPly } from '../params';
 import { HULL_STEP, STEP, bandPart, box, cylinder, roughOf, span, SIDES, IN3_PER_FT3, woodMassLb, type Ctx } from './build-utils';
 import { handleGeometry } from './brake';
 import { transformPoint } from './bounds';
@@ -85,11 +85,11 @@ export function scupperSites(ctx: Ctx): ScupperSite[] {
   const { L } = ctx;
   const rearTx = L.xRear + L.transom, frontTx = L.xFront - L.transom;
   const r = ctx.p.scupperDiaIn / 2;
-  return [
-    { x: rearTx + Math.max(SCUPPER_END_INSET_IN, r + 0.1) * 0.75, zone: 'cabin', deckZ: L.deckTop, hw: L.hwC, tagPos: 'cabin-rear' },
-    { x: L.xs - 0.5, zone: 'cabin', deckZ: L.deckTop, hw: innerHalfWidth(L, L.xs - 0.5), tagPos: 'cabin-front' },
-    { x: frontTx - 1, zone: 'nose', deckZ: L.noseTop, hw: L.hwN, tagPos: 'nose-front' },
-  ];
+  const rear: ScupperSite = { x: rearTx + Math.max(SCUPPER_END_INSET_IN, r + 0.1) * 0.75, zone: 'cabin', deckZ: L.deckTop, hw: L.hwC, tagPos: 'cabin-rear' };
+  const front: ScupperSite = { x: frontTx - 1, zone: 'nose', deckZ: L.noseTop, hw: innerHalfWidth(L, frontTx - 1), tagPos: 'nose-front' };
+  // One deck level (Ackermann hull, D-52): the drains are at the two ends; the old mid drain sat at the deck step.
+  if (L.ackHull) return [rear, front];
+  return [rear, { x: L.xs - 0.5, zone: 'cabin', deckZ: L.deckTop, hw: innerHalfWidth(L, L.xs - 0.5), tagPos: 'cabin-front' }, front];
 }
 
 // ── Sheer and crown outlines (D-44) ──
@@ -185,7 +185,7 @@ function extPart(ctx: Ctx, s: ExtSpec): Part {
     explode: box(ctx, { id: s.id, name: s.name, group: s.group, mat: 'oak', size: [1, 1, 1], center: s.center, step: s.step }).explode,
   };
   if (s.partNo) out.partNo = s.partNo;
-  if (s.outline.length > 8 && s.id.startsWith('deck-')) {
+  if (s.outline.length > 8 && (s.id === 'deck' || s.id.startsWith('deck-'))) {
     // A tapering deck: the area centroid of the outline (the bounding-box center is off by ~1" in x), D-45.
     let A = 0, cx = 0, cy = 0;
     for (let i = 0; i < s.outline.length; i++) {
@@ -329,7 +329,8 @@ const fingerCache = new Map<string, FingerAnalysis>();
 export function fingerAnalysis(ctx: Ctx): FingerAnalysis {
   const { p, L } = ctx;
   const key = [p.wheelDiameterIn, p.tireWidthIn, p.frontTrackIn, p.steerLockDeg, p.fingerGapMinIn, p.fingerGuardClearIn, p.steeringClearanceIn, p.fingerGuardThickIn,
-    L.WB, L.kx, L.xs, L.xc0, L.xn, L.xFront, L.xRear, L.hwN, L.hwC, L.side, L.railBand, L.sideTop, L.sheer.x0, L.sheer.riseIn, L.web.z0].join('|');
+    L.WB, L.kx, L.xs, L.xc0, L.xn, L.xFront, L.xRear, L.hwN, L.hwC, L.side, L.railBand, L.sideTop, L.sheer.x0, L.sheer.riseIn, L.web.z0,
+    L.ackHull ? [p.scrubRadiusIn, p.steerArmLengthIn, p.ackermannAngleDeg, L.hull.minRadius, L.hull.endSlope].join(',') : ''].join('|');
   const hit = fingerCache.get(key);
   if (hit) return hit;
   const out = computeFinger(ctx);
@@ -342,8 +343,13 @@ function computeFinger(ctx: Ctx, stepDeg = 1): FingerAnalysis {
   const { p, L } = ctx;
   const lock = Math.abs(p.steerLockDeg);
   const tires: Vec2[][] = [];
-  for (let d = -lock; d <= lock + 1e-9; d += stepDeg) tires.push(frontTirePlan(ctx, 1, d));
-  tires.push(frontTirePlan(ctx, 1, lock));
+  if (L.ackHull) {
+    // Ackermann front end: the left tire at every degree of the solved left-knuckle angle, tow lock both ways (D-52); the right mirrors it.
+    tires.push(...leftTirePolys(hullCurveSpec(p), stepDeg));
+  } else {
+    for (let d = -lock; d <= lock + 1e-9; d += stepDeg) tires.push(frontTirePlan(ctx, 1, d));
+    tires.push(frontTirePlan(ctx, 1, lock));
+  }
   const segs = hullSegments(L);
   let minGap = Infinity;
   for (const t of tires) for (const sg of segs) minGap = Math.min(minGap, polyDist(t, sg));
@@ -510,6 +516,18 @@ export function buildBody(ctx: Ctx): Part[] {
   };
 
   // ── Decks (extrusions in plan, following the S-curve; capture: rabbets in the chines, dados in the transoms, banding on the step) ──
+  if (L.ackHull) {
+    // ONE deck level (D-52): a single polygon from the rear transom to the front transom, captured in the chine rabbet all the way round (one joint type),
+    // a dado in each transom; no step, no riser, no banded edge.
+    const x0 = rearTx - dd, x1 = frontTx + dd;
+    const { outline, edges } = deckOutline(x0, x1, dNose);
+    parts.push(extPart(ctx, {
+      id: 'deck', name: 'Deck', group: 'body', mat: 'ply', step: HULL_STEP.deck, grain: 'x', center: [(x0 + x1) / 2, 0, L.deckTop],
+      outline, depth: L.ply, transform: compose([0, 0, L.deckBot]),
+      edges: edges.map((c) => (c === 'edged' ? 'captured' : c)),
+      notes: `One sheet, ${(x1 - x0).toFixed(1)}" long (fits a 4 x 8 sheet), with the outline of the plan shape (D-52): ${dd}" into a ${dd}" × ${rabbetH(L.deckTop, L.deckBot).toFixed(3)}" rabbet in the underside of each chine all the way round (deck + ${ds}" clearance, thickened epoxy fills it; the rail top is flush with the deck underside) and into a dado in each transom. No exposed ply edge, no step. ${DECK_ASSEMBLY_NOTE}`,
+    }));
+  } else {
   {
     const x0 = rearTx - dd, x1 = L.xs;
     const { outline, edges } = deckOutline(x0, x1, dCabin);
@@ -542,6 +560,7 @@ export function buildBody(ctx: Ctx): Part[] {
         + (holes.length ? ` The kingpin-access opening (Layout.accessPanel, M10) is cut through it with ${p.accessOpeningCornerRadiusIn}" corner radii (router template with a 1/2" bit, D-47); the opening rim is banded with 1/16" oak edge veneer (the straight rear edge with ${p.edgeBandIn}" oak strips, 5/16" wide, epoxied, flush-trimmed) and the removable panel lies flush in it. Edge conditions: outline edges first, then the rim edges.` : ' No kingpin-access opening without the kingpin crossbar (Layout.accessPanel is null).'),
     }));
   }
+  }
 
   // ── Sides (D-45): the curved run (rear transom → xn) is one bent-lam sweep per member; the nose run is straight, scarfed on at xn ──
   const zTop = L.sideTop;
@@ -551,6 +570,111 @@ export function buildBody(ctx: Ctx): Part[] {
   const plyLen = (path: Vec2[]) => polyLen(path);
   const noseLen = frontTx - L.xn;
   const nm = (zone: 'cabin' | 'nose', tag: 'L' | 'R') => `${zone === 'cabin' ? 'Cabin' : 'Nose'} ${tag === 'L' ? 'left' : 'right'}`;
+  /**
+   * The straight bow run of the Ackermann hull (D-52): from xn to the front transom, converging at heading `L.bowHeading`, scarfed to the bent cabin run at xn
+   * (in the straight, never in the bend). Members are cut straight and set at the heading (rotated about z); the ply panels and the sheer gunwale are extrusions in
+   * the vertical plane of the run.
+   */
+  const bowRun = (s: 1 | -1, tag: 'L' | 'R'): Part[] => {
+    const out: Part[] = [];
+    const id = `side-nose-${tag}`;
+    const name = nm('nose', tag);
+    const a = s * L.bowHeading; // heading of this side's centerline (rad)
+    const ca = Math.cos(a), sa = Math.sin(a);
+    const run = sidePath(L, 0, L.xn, frontTx); // |y| of the web plane; a straight line
+    const P0 = run[0], P1 = run[run.length - 1];
+    // The square-cut end of a member set at the heading pokes (t/2) sin a past the transom face with one corner: the model trims the run by that (the real end is
+    // cut at the bevel so it seats flat on the transom face).
+    const trim = (t: number) => (t / 2) * Math.abs(sa);
+    const runLen0 = Math.hypot(P1[0] - P0[0], P1[1] - P0[1]);
+    const runLen = runLen0 - trim(L.side);
+    const mid: Vec3 = [P0[0] + (P1[0] - P0[0]) * (runLen / runLen0 / 2), s * (P0[1] + (P1[1] - P0[1]) * (runLen / runLen0 / 2)), 0];
+    const rot = { z: a };
+    const deg = ((Math.abs(L.bowHeading) * 180) / Math.PI).toFixed(1);
+    const rabbetLb = oakLb(ctx, runLen * dd * rabbetH(L.noseTop, L.noseBot));
+    const grooveLb = oakLb(ctx, runLen * (pl + slop) * g);
+    const scarfNote = (t: number, what: string) => `Scarfed (1:8, ${(8 * t).toFixed(1)}" long) to the bent ${what} at x = ${L.xn.toFixed(1)}", where the curve has ended: the scarf lies in the straight bow run, never in the bend.`;
+    const cutNote = `Straight, ${runLen.toFixed(1)}" long, set at ${deg}° to the axis (the bow keeps converging, D-52); the end at the front transom is cut at ${deg}° so it seats square on the transom face.`;
+    // Local frame of an extrusion in the vertical plane of the run: x along the run from its start, y up, z across (from the outer face inward).
+    const ex: Vec3 = [ca, sa, 0], ez: Vec3 = [sa, -ca, 0];
+    const frameAt = (thick: number, z0: number): Mat4 => frameMat(ex, [0, 0, 1], ez, [s * 0 + P0[0] - (thick / 2) * ez[0], s * P0[1] - (thick / 2) * ez[1], z0]);
+    const zSolid = captured ? 0 : zTop - L.noseBot;
+    if (p.sideConstruction === SIDE_CONSTRUCTION.solidOak) {
+      const bd = box(ctx, { id: `${id}-board`, partNo: 'side-nose-board', name: `${name} side board`, group: 'body', mat: 'oak', step: HULL_STEP.sides,
+        size: [runLen, L.side, zSolid], center: [mid[0], mid[1], (zTop + L.noseBot) / 2], rot });
+      bd.massLb -= rabbetLb;
+      bd.notes = `${scarfNote(L.side, 'board')} ${cutNote} Deck edge in a ${dd}" rabbet. ${SIDE_ASSEMBLY_NOTE}`;
+      out.push(bd);
+    } else if (captured) {
+      const chine = box(ctx, { id: `${id}-chine`, partNo: 'side-nose-chine', name: `${name} chine`, group: 'body', mat: 'oak', step: HULL_STEP.sides,
+        size: [runLen, L.side, L.chineH], center: [mid[0], mid[1], (zChine0 + zChine1) / 2], rot });
+      chine.massLb -= grooveLb + rabbetLb;
+      chine.notes = `${cutNote} Same ${L.chineH}" section and height as the bent chine (the side line does not step). ${scarfNote(L.side, 'chine')} Top groove ${(pl + p.grooveSlopIn).toFixed(3)}" × ${g}" holds the web; underside rabbet ${dd}" × ${rabbetH(L.noseTop, L.noseBot).toFixed(3)}" holds the deck. The chine rests on the rail and is Domino-tied to it. ${SIDE_ASSEMBLY_NOTE}`;
+      out.push(chine);
+      const curved = L.sheer.riseIn > 1e-9;
+      const gunNote = `Underside groove ${(pl + p.grooveSlopIn).toFixed(3)}" × ${g}" holds the web (D-35, D-43). ${scarfNote(L.side, 'gunwale')} ${SIDE_ASSEMBLY_NOTE}`;
+      if (curved) {
+        const sxs = sheerSamples(L, L.xn, frontTx);
+        const uEnd = (frontTx - L.xn) / ca - trim(L.side);
+        const lo: Vec2[] = sxs.map((x): Vec2 => [Math.min(uEnd, (x - L.xn) / ca), zTop - L.railBand + sheerRise(L, x)]);
+        const hi: Vec2[] = sxs.map((x): Vec2 => [Math.min(uEnd, (x - L.xn) / ca), zTop + sheerRise(L, x)]).reverse();
+        const curveGrooveLb = oakLb(ctx, polyLen(lo) * (pl + slop) * g);
+        const nLam = 3;
+        const rMin = (() => { // smallest radius of curvature of the sheer line (three-point circles)
+          let r = Infinity;
+          for (let i = 1; i + 1 < lo.length; i++) {
+            const [ax, ay] = lo[i - 1], [bx, by] = lo[i], [cx, cy] = lo[i + 1];
+            const ab = Math.hypot(bx - ax, by - ay), bc = Math.hypot(cx - bx, cy - by), ca2 = Math.hypot(ax - cx, ay - cy);
+            const area2 = Math.abs((bx - ax) * (cy - ay) - (by - ay) * (cx - ax));
+            if (area2 > 1e-9) r = Math.min(r, (ab * bc * ca2) / (2 * area2));
+          }
+          return Number.isFinite(r) ? r : Infinity;
+        })();
+        out.push(extPart(ctx, {
+          id: `${id}-gunwale`, partNo: 'side-nose-gunwale', name: `${name} gunwale`, group: 'body', mat: 'oak', step: HULL_STEP.sides, grain: 'x', fab: 'bentlam',
+          center: [(L.xn + frontTx) / 2, mid[1], zTop + L.sheer.riseIn / 2],
+          outline: [...lo, ...hi], depth: L.side, transform: frameAt(L.side, 0), extraLb: -curveGrooveLb,
+          notes: `LAMINATED, not sawn from a board (build review S4, D-47): ${nLam} flat layers of ${(L.railBand / nLam).toFixed(2)}" × ${L.side}" oak, each cut from straight-grain stock, glued up around a simple plywood sheer form (the rise is ${L.sheer.riseIn}" over the forward ${(L.sheer.x1 - L.sheer.x0).toFixed(1)}", flat before it, D-44; it starts beyond the finger-guard zone so the guard strap sits on the flat gunwale). The member is straight in plan, set at ${deg}° to the axis (D-52). The tightest radius of the sheer is ${rMin.toFixed(0)}" (the layer is ${(L.railBand / nLam).toFixed(2)}" thick: R/t = ${(rMin / (L.railBand / nLam)).toFixed(0)}, cold bend, no steaming), so the grain follows the rise everywhere. GROOVE METHOD: plow the ${(pl + slop).toFixed(3)}" × ${g}" web groove in the face of the BOTTOM layer while it is still a straight strip (router table, fence, 1/4" straight bit, two passes), then laminate: the groove follows the curve with no template, and the layers above close it. ${gunNote}`,
+        }));
+      } else {
+        const gun = box(ctx, { id: `${id}-gunwale`, partNo: 'side-nose-gunwale', name: `${name} gunwale`, group: 'body', mat: 'oak', step: HULL_STEP.sides,
+          size: [runLen, L.side, L.railBand], center: [mid[0], mid[1], zTop - L.railBand / 2], rot });
+        gun.massLb -= grooveLb;
+        gun.notes = `${cutNote} ${gunNote}`;
+        out.push(gun);
+      }
+      const z0 = L.web.z0, z1 = L.web.z1;
+      const hTot = Math.max(0.1, z1 - z0) + 2 * g;
+      const xw0 = L.xn, xw1 = frontTx + dd;
+      const wLen = (xw1 - xw0) / ca;
+      let webOutline = rectCCW(0, wLen, 0, hTot);
+      let webEdges: EdgeCondition[] = ['captured', 'captured', 'captured', 'captured'];
+      if (curved) {
+        const wx = sheerSamples(L, xw0, xw1);
+        const top: Vec2[] = wx.map((x) => [(x - xw0) / ca, hTot + sheerRise(L, x)] as Vec2).reverse();
+        webOutline = [[0, 0], [wLen, 0], ...top];
+        webEdges = ['captured', 'captured', ...top.slice(1).map(() => 'captured' as EdgeCondition), 'captured'];
+      }
+      out.push(extPart(ctx, {
+        id: `${id}-web`, partNo: 'side-nose-web', name: `${name} side panel`, group: 'body', mat: 'ply', step: HULL_STEP.sides, grain: 'x',
+        center: [(xw0 + xw1) / 2, mid[1], (z0 + z1) / 2],
+        outline: webOutline, depth: pl, transform: frameAt(pl, z0 - g),
+        edges: webEdges,
+        notes: `Straight 6 mm okoume panel set at ${deg}° to the axis, captured in the chine and gunwale grooves (${g}" deep) and in a stopped dado in the front transom; scarfed (8:1, ${(8 * pl).toFixed(1)}") to the bent panel at x = ${L.xn.toFixed(1)}" in the straight run (glued, no banding needed). ${SIDE_ASSEMBLY_NOTE} The closed dado is vented: a ${p.ventHoleIn}" relief hole through the transom at its end lets air and epoxy escape as the transom slides on (hydraulic lock).`,
+      }));
+    } else {
+      out.push(box(ctx, { id: `${id}-gunwale`, partNo: 'side-nose-gunwale', name: `${name} gunwale`, group: 'body', mat: 'oak', step: HULL_STEP.sides,
+        size: [runLen, L.side, L.railBand], center: [mid[0], mid[1], zTop - L.railBand / 2], rot, notes: `${cutNote} ${scarfNote(L.side, 'gunwale')}` }));
+      const n = Math.max(2, Math.ceil(runLen / POST_SPACING_IN) + 1);
+      for (let i = 0; i < n; i++) {
+        const x = L.xn + POST_X_IN / 2 + ((noseLen - POST_X_IN) * i) / (n - 1);
+        const yIn = Math.max(...sidePath(L, -L.side / 2, x - POST_X_IN / 2, x + POST_X_IN / 2).map((q) => q[1]));
+        out.push(box(ctx, { id: `${id}-post-${i + 1}`, partNo: 'side-nose-post', name: `${name} post ${i + 1}`, group: 'body', mat: 'oak', step: HULL_STEP.sides,
+          ...span([x - POST_X_IN / 2, x + POST_X_IN / 2], [s * yIn, s * (yIn + L.side)].sort((u, v) => u - v) as [number, number], [L.noseBot, zTop - L.railBand]), grain: 'z' }));
+      }
+    }
+    return out;
+  };
   for (const { s, tag } of SIDES) {
     // ---- cabin run (curved) ----
     {
@@ -566,10 +690,12 @@ export function buildBody(ctx: Ctx): Part[] {
         parts.push(b);
       } else if (captured) {
         const grooveLb = oakLb(ctx, len * (pl + slop) * g);
-        const rabbetLb = oakLb(ctx, plyLen(sidePath(L, 0, L.xs, L.xn)) * dd * rabbetH(L.noseTop, L.noseBot)); // the nose-deck rabbet starts at the deck step
+        const rabbetLb = oakLb(ctx, (L.ackHull ? len : plyLen(sidePath(L, 0, L.xs, L.xn))) * dd * rabbetH(L.noseTop, L.noseBot)); // the nose-deck rabbet starts at the deck step (Ackermann hull: the rabbet runs the whole hull, one deck)
         parts.push(bandPart(ctx, { id: `${id}-chine`, partNo: 'side-cabin-chine', name: `${name} chine`, group: 'body', mat: 'oak', s, path: cPath, t: L.side, h: L.chineH, zc: (zChine0 + zChine1) / 2, plies: lamPlies(L.side), step: HULL_STEP.sides,
           extraLb: -(grooveLb + rabbetLb),
-          notes: `${kindNote} Its bottom is at the nose deck level (${L.chineBot.toFixed(2)}") along the whole hull, so the side line never steps (D-45). Top groove ${(pl + slop).toFixed(3)}" × ${g}" holds the web, route it with a template after the lamination; from the deck step (x = ${L.xs.toFixed(1)}") forward an underside rabbet ${dd}" × ${rabbetH(L.noseTop, L.noseBot).toFixed(3)}" (deck + ${ds}" clearance) holds the nose deck (D-35, MUST-2); the chine rests on the rail below it and is Domino-tied to it (vertical Dominos, D-43). ${SIDE_ASSEMBLY_NOTE}` }));
+          notes: L.ackHull
+            ? `${kindNote} Its bottom is at the deck underside level (${L.chineBot.toFixed(2)}") along the whole hull (one deck level, D-52). Top groove ${(pl + p.grooveSlopIn).toFixed(3)}" × ${g}" holds the web, route it with a template after the lamination; an underside rabbet ${dd}" × ${rabbetH(L.noseTop, L.noseBot).toFixed(3)}" (deck + ${ds}" clearance) the whole length holds the deck edge; the chine rests on the rail and is Domino-tied to it (vertical Dominos, D-43). Build it on the one plan-view form: ${lamPlies(L.side)} plies of ${lamPly(L.side, strip).toFixed(4)}" cut on the bandsaw from 5/4 stock, ripped to ${L.chineH}". ${SIDE_ASSEMBLY_NOTE}`
+            : `${kindNote} Its bottom is at the nose deck level (${L.chineBot.toFixed(2)}") along the whole hull, so the side line never steps (D-45). Top groove ${(pl + slop).toFixed(3)}" × ${g}" holds the web, route it with a template after the lamination; from the deck step (x = ${L.xs.toFixed(1)}") forward an underside rabbet ${dd}" × ${rabbetH(L.noseTop, L.noseBot).toFixed(3)}" (deck + ${ds}" clearance) holds the nose deck (D-35, MUST-2); the chine rests on the rail below it and is Domino-tied to it (vertical Dominos, D-43). ${SIDE_ASSEMBLY_NOTE}` }));
         const gunNote = `Underside groove ${(pl + slop).toFixed(3)}" × ${g}" holds the web (D-35, D-43), routed with a bearing-guided slot cutter riding the plan form template. ${SIDE_ASSEMBLY_NOTE}`;
         parts.push(bandPart(ctx, { id: `${id}-gunwale`, partNo: 'side-cabin-gunwale', name: `${name} gunwale`, group: 'body', mat: 'oak', s, path: cPath, t: L.side, h: L.railBand, zc: zTop - L.railBand / 2, plies: lamPlies(L.side), step: HULL_STEP.sides,
           extraLb: -oakLb(ctx, len * (pl + slop) * g),
@@ -595,7 +721,9 @@ export function buildBody(ctx: Ctx): Part[] {
       }
     }
     // ---- nose run (straight, scarfed on at xn) ----
-    {
+    if (L.ackHull) {
+      parts.push(...bowRun(s, tag));
+    } else {
       const id = `side-nose-${tag}`;
       const name = nm('nose', tag);
       const yc = s * (L.hwN + L.side / 2);

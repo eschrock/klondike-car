@@ -17,6 +17,7 @@ import { f } from './format';
 import type { CaseData } from './loads';
 import { bendingStress, cantileverTip, circleSection, rectSection, rectShear, ssPointMid, ssUdlCentered, ssUdlFull, transformedSection, type Layer } from './beams';
 import { evalBoth, rearNormalNoseDown } from './stability';
+import { bumpCases, bumpSeatGHard, bumpText, peakVertical, seatFactor, sensitivityText } from './bump';
 import type { AnalysisCheck, Detail } from './types';
 
 export function allowables(ctx: Ctx) {
@@ -71,7 +72,8 @@ export function wheelLoads(ctx: Ctx, c: CaseData) {
 export const frontLoadText = (ctx: Ctx, w: ReturnType<typeof wheelLoads>) =>
   `front axle ${f(w.frontAxle)} lb = worse of level ${f(w.frontLevel)} and nose-down on ${f(ctx.p.designSlopeDeg)}° ${f(w.frontSlope)} (M4)`;
 
-export const payload = (ctx: Ctx, c: CaseData) => (c.riderLb + c.cargoLb) * ctx.p.dynamicFactor;
+/** Payload with the dynamic factor of the load basis: dynamicFactor (old front end) or max(dynamicFactor, bumpSeatG) (Ackermann front end, spec 5.4). */
+export const payload = (ctx: Ctx, c: CaseData) => (c.riderLb + c.cargoLb) * seatFactor(ctx, c);
 
 interface Clamp { outerY: number; centerY: number; widthY: number }
 function clampGeometry(ctx: Ctx, tag: 'F' | 'R'): Clamp {
@@ -90,7 +92,51 @@ function clampGeometry(ctx: Ctx, tag: 'F' | 'R'): Clamp {
 
 // ── axles ────────────────────────────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Rear stub axle on the bump basis (Phase 3b, D-50, spec 5.4). The front wheels now ride on the spindle stubs (spindle-stub row). Normal: the 1" rear bump
+ * (resultant of H and V + static at the cantilever), yield / SF; plus the old cornering-skid case at the static load. Hard: the 2" hit at ultimate / failSafeFactor.
+ */
+function axleStressBump(ctx: Ctx): AnalysisCheck {
+  const { p } = ctx;
+  const sec = circleSection(p.axleDiameterIn);
+  const E = p.steelMoePsi;
+  const stub = p.axleStyle === AXLE_STYLE.stubAxles;
+  const wheelR = ctx.d.wheelRadiusIn;
+  const allowN = p.axleYieldPsi / p.steelSafetyFactor, allowH = p.axleUltimatePsi / p.failSafeFactor;
+  const ev = (c: CaseData): CaseEval => {
+    const wheel = part(ctx, 'wheel-RL');
+    const yw = wheel ? Math.abs(wheel.transform[13]) : p.rearTrackIn / 2;
+    const clamp = clampGeometry(ctx, 'R');
+    const beam = part(ctx, 'beam-R');
+    const beamHalf = beam ? worldAABB(beam).max[1] : yw;
+    const edge = stub ? beamHalf : clamp.outerY;
+    const a = Math.max(0.01, yw - edge);
+    const cs = bumpCases(ctx, c, 'rear');
+    const Pst = cs.normal.staticLb;
+    const Rn = Math.hypot(cs.normal.H, peakVertical(cs.normal)), Rh = Math.hypot(cs.hard.H, peakVertical(cs.hard));
+    const sN = bendingStress(Rn * a, sec), sH = bendingStress(Rh * a, sec);
+    const Hs = p.tireGroundMu * Pst;
+    let sSkid = 0, psiW = 0;
+    for (let psi = 0; psi <= 90; psi += 1) {
+      const Hy = Hs * Math.cos(psi * RAD), Hx = Hs * Math.sin(psi * RAD);
+      const sg = Math.hypot(Pst * a + Hy * wheelR, Hx * a) * sec.c / sec.I + Hy / sec.A;
+      if (sg > sSkid) { sSkid = sg; psiW = psi; }
+    }
+    const defl = cantileverTip(Pst, a, E * sec.I).defl;
+    const ds: Detail[] = [
+      detail('NORMAL 1" rear bump: stub bending (resultant of H and V + static, yield / SF)', sN, 'psi', allowN, '<='),
+      detail('NORMAL cornering skid (mu P at the contact patch, static load), resultant', sSkid, 'psi', allowN, '<='),
+      detail('HARD 2" rear hit: stub bending (ultimate / fail-safe factor)', sH, 'psi', allowH, '<='),
+      detail('rear axle tip deflection (static)', defl, 'in', 0.05, '<='),
+    ];
+    const how = `Rear: ${bumpText(cs.normal, 'normal hit', p)}; with the static wheel load still on the tire V_total = ${f(peakVertical(cs.normal))} lbf, resultant ${f(Rn)} lbf at the ${stub ? 'beam face (stub axle)' : 'clamp plate outer edge (through rod)'} cantilever a = ${f(a, 2)}": sigma = ${f(sN, 0)} psi vs ${f(allowN, 0)} (yield ${f(p.axleYieldPsi, 0)} / SF ${p.steelSafetyFactor}). ${bumpText(cs.hard, 'Hard hit', p)}; resultant ${f(Rh)} lbf: ${f(sH, 0)} psi vs ${f(allowH, 0)} (ultimate ${f(p.axleUltimatePsi, 0)} / ${p.failSafeFactor}). Cornering skid H = mu P_static = ${f(Hs)} lbf at r ${f(wheelR, 2)}" (worst angle ${f(psiW, 0)} deg): ${f(sSkid, 0)} psi. ${sensitivityText(ctx, c, 'rear', p.bumpNormalHeightIn)} If this row fails the likely fixes are a 1" rear axle, a stronger steel, or a lower bump speed (spec section 12).`;
+    return governing(ds, how);
+  };
+  return dualCheck({ id: 'axle-stress', label: stub ? 'Rear stub axle bending (bump basis)' : 'Rear axle bending (through rod, bump basis)', group: 'Structure', refs: ['D-2', 'D-4', 'D-10', 'D-50', 'D-54'], primary: 'goal', ...evalBoth(ctx, ev) });
+}
+
 export function axleStress(ctx: Ctx): AnalysisCheck {
+  if (ctx.newFront) return axleStressBump(ctx);
   const { p } = ctx;
   const al = allowables(ctx);
   const sec = circleSection(p.axleDiameterIn);
@@ -147,7 +193,9 @@ function beamEval(ctx: Ctx, kind: 'front' | 'rear', c: CaseData): CaseEval {
   const tag = kind === 'front' ? 'F' : 'R';
   const beam = kind === 'front' ? L.beamF : L.beamR;
   const w = wheelLoads(ctx, c);
-  const F = (kind === 'front' ? w.frontAxle : w.rearAxle) * p.dynamicFactor;
+  // Bump basis (Phase 3b): the rear beam carries the struck wheel's force (bump V + static) to its rail; the old basis is the axle load x dynamicFactor.
+  const bumpRear = ctx.newFront && kind === 'rear' ? bumpCases(ctx, c, 'rear') : null;
+  const F = bumpRear ? 2 * peakVertical(bumpRear.normal) : (kind === 'front' ? w.frontAxle : w.rearAxle) * p.dynamicFactor;
   const groove = p.axleDiameterIn;
   const hEff = Math.max(0.1, beam.depth - groove);
   const sec = rectSection(beam.thick, hEff);
@@ -162,7 +210,7 @@ function beamEval(ctx: Ctx, kind: 'front' | 'rear', c: CaseData): CaseEval {
     // The rail/girder at the rear axle (x = 0) is on the straight cabin side: its centerline, not the bounding box of the curved member (D-45).
     const yr = part(ctx, 'rail-cabin-L') ? ctx.L.hwC + ctx.L.side - p.railThicknessIn / 2 : part(ctx, 'girder-cabin-L') ? ctx.L.hwC + ctx.L.side / 2 : ctx.L.hwC;
     M = (F / 2) * Math.abs(ys - Math.abs(yr));
-    load = `Rail/girder loads F/2 = ${f(F / 2)} lbf at y = ±${f(Math.abs(yr), 2)}" (axle load ${f(F / p.dynamicFactor)} lb × ${p.dynamicFactor} = ${f(F)} lbf), reactions at the clamp plates (y = ±${f(ys, 2)}")`;
+    load = `Rail/girder loads F/2 = ${f(F / 2)} lbf at y = ±${f(Math.abs(yr), 2)}" (${bumpRear ? `the struck rear wheel's 1" bump force V + static = ${f(F / 2)} lbf into its rail` : `axle load ${f(F / p.dynamicFactor)} lb × ${p.dynamicFactor} = ${f(F)} lbf`}), reactions at the clamp plates (y = ±${f(ys, 2)}")`;
   }
   const sigma = bendingStress(M, sec);
   const V = F / 2;
@@ -171,6 +219,11 @@ function beamEval(ctx: Ctx, kind: 'front' | 'rear', c: CaseData): CaseEval {
     detail('bending', sigma, 'psi', al.oakBend, '<='),
     detail('shear at the clamps', tau, 'psi', al.oakShear, '<='),
   ];
+  if (bumpRear) {
+    const k = peakVertical(bumpRear.hard) / peakVertical(bumpRear.normal);
+    ds.push(detail('HARD 2" rear hit: bending (MOR x C_M, no wood safety factor)', sigma * k, 'psi', al.oakBend * p.woodSafetyFactor, '<='));
+    ds.push(detail('HARD 2" rear hit: shear at the clamps (no wood safety factor)', tau * k, 'psi', al.oakShear * p.woodSafetyFactor, '<='));
+  }
   const how = `${load}. M = ${f(M)} lb·in on the net section ${f(beam.thick, 2)}" × (${f(beam.depth, 2)}" − ${f(groove, 2)}" rod groove) = ${f(beam.thick, 2)}" × ${f(hEff, 2)}": σ = M/S = ${f(M)}/${f(sec.S, 3)} = ${f(sigma, 0)} psi (≤ ${f(al.oakBend, 0)} psi design); τ = 1.5V/A = 1.5 × ${f(V)} / ${f(sec.A, 2)} = ${f(tau, 0)} psi (≤ ${f(al.oakShear, 0)} psi).`;
   return governing(ds, how);
 }
@@ -192,6 +245,24 @@ export function beamRear(ctx: Ctx): AnalysisCheck {
 export function bearingGroove(ctx: Ctx): AnalysisCheck {
   const { p } = ctx;
   const al = allowables(ctx);
+  if (ctx.newFront) {
+    // Bump basis: only the rear axle bears in an oak groove now (the front beam is steel). Normal: the 1" rear bump (V + static) vs the design stress;
+    // hard: the 2" hit vs the compression-perpendicular strength with no wood safety factor.
+    const evB = (c: CaseData): CaseEval => {
+      const cs = bumpCases(ctx, c, 'rear');
+      const clamp = clampGeometry(ctx, 'R');
+      const len = Math.max(0.1, clamp.widthY);
+      const area = p.axleDiameterIn * len;
+      const sN = peakVertical(cs.normal) / area, sH = peakVertical(cs.hard) / area;
+      const ds: Detail[] = [
+        detail('NORMAL 1" rear bump: bearing on the groove (oak perp design)', sN, 'psi', al.oakPerp, '<='),
+        detail('HARD 2" rear hit: bearing on the groove (oak perp, no wood safety factor)', sH, 'psi', al.oakPerp * p.woodSafetyFactor, '<='),
+      ];
+      const how = `Rear wheel V_total = bump V + static: ${f(peakVertical(cs.normal))} lbf (1") and ${f(peakVertical(cs.hard))} lbf (2" hit) bear on the groove over rod dia x clamp-plate length = ${f(p.axleDiameterIn, 3)}" x ${f(len, 2)}" = ${f(area, 2)} in2: ${f(sN, 0)} psi vs ${f(al.oakPerp, 0)} (design), ${f(sH, 0)} psi vs ${f(al.oakPerp * p.woodSafetyFactor, 0)} (${p.oakCompPerpPsi} x C_M ${p.wetServiceFactorCompPerp}, no safety factor). ${sensitivityText(ctx, c, 'rear', p.bumpNormalHeightIn)}`;
+      return governing(ds, how);
+    };
+    return dualCheck({ id: 'bearing-groove', label: 'Compression perp at the rear axle groove', group: 'Structure', refs: ['D-4', 'D-10', 'D-50'], primary: 'goal', ...evalBoth(ctx, evB) });
+  }
   const ev = (c: CaseData): CaseEval => {
     const w = wheelLoads(ctx, c);
     const worstTag = w.rearWheel >= w.frontWheel ? 'R' : 'F';
@@ -240,16 +311,17 @@ export function railsCheck(ctx: Ctx): AnalysisCheck {
   const { p, L } = ctx;
   const al = allowables(ctx);
   const hull = p.frameStyle === FRAME_STYLE.hullBeam;
-  const span = L.kx - 0;
+  const span = ctx.newFront ? L.front.beam.x : L.kx - 0;
   // Sprung chassis weight the rails also carry (deck, sides, seat, storage, fittings; axles/beams/clamps are carried directly), M3.
   const selfLb = ctx.parts.reduce((m, x) => (x.body === 'chassis' && !x.payload && x.group !== 'reference' && x.group !== 'running-gear' ? m + x.massLb : m), 0);
   const ev = (c: CaseData): CaseEval => {
+    const gN = seatFactor(ctx, c);
     const Pdyn = payload(ctx, c);
     const Pstat = c.riderLb + c.cargoLb;
     const Pm = Pdyn / 2;
-    const Wm = (selfLb * p.dynamicFactor) / 2; // chassis self-weight × dynamic factor, per rail, uniform over the span
+    const Wm = (selfLb * gN) / 2; // chassis self-weight × dynamic factor, per rail, uniform over the span
     const Ws = selfLb / 2; // static, for deflection
-    const selfTxt = `Chassis self-weight ${f(selfLb)} lb (all chassis parts above the axles, M3) × ${p.dynamicFactor} = ${f(selfLb * p.dynamicFactor)} lbf as a UDL, ${f(Wm)} lbf per member (static ${f(Ws)} lb in deflection).`;
+    const selfTxt = `Chassis self-weight ${f(selfLb)} lb (all chassis parts above the axles, M3) × ${f(gN, 2)} = ${f(selfLb * p.dynamicFactor)} lbf as a UDL, ${f(Wm)} lbf per member (static ${f(Ws)} lb in deflection).`;
     const ds: Detail[] = [];
     let how: string;
     if (!hull) {
@@ -264,7 +336,7 @@ export function railsCheck(ctx: Ctx): AnalysisCheck {
       const tau = rectShear(r.V, b, h);
       const defl = ssPointMid(Pstat / 2, span, al.Eoak * sec.I).defl + ssUdlFull(Ws, span, al.Eoak * sec.I).defl;
       ds.push(detail('bending', sigma, 'psi', al.oakBend, '<='), detail('shear', tau, 'psi', al.oakShear, '<='), detail('static deflection', defl, 'in', span / p.deflectionLimitRatio, '<='));
-      how = `Ladder rails ${f(b, 2)}" × ${f(h, 2)}" (2 members). Payload (${c.riderLb} + ${c.cargoLb}) × ${p.dynamicFactor} = ${f(Pdyn)} lbf as a point load at midspan of the ${f(span)}" span (rear beam to kingpin), ${f(Pm)} lbf per rail: M = PL/4 + wL²/8 = ${f(r0.M)} + ${f(u0.M)} = ${f(r.M)} lb·in. ${selfTxt} σ = M/S = ${f(sigma, 0)} psi (≤ ${f(al.oakBend, 0)}); τ = 1.5V/A = ${f(tau, 0)} psi (≤ ${f(al.oakShear, 0)}); static δ = P·L³/48EI + 5WL³/384EI with P = ${f(Pstat / 2)} lb, W = ${f(Ws)} lb: ${defl.toFixed(3)}" (≤ L/${p.deflectionLimitRatio} = ${(span / p.deflectionLimitRatio).toFixed(3)}").`;
+      how = `Ladder rails ${f(b, 2)}" × ${f(h, 2)}" (2 members). Payload (${c.riderLb} + ${c.cargoLb}) × ${f(gN, 2)} = ${f(Pdyn)} lbf as a point load at midspan of the ${f(span)}" span (rear beam to kingpin), ${f(Pm)} lbf per rail: M = PL/4 + wL²/8 = ${f(r0.M)} + ${f(u0.M)} = ${f(r.M)} lb·in. ${selfTxt} σ = M/S = ${f(sigma, 0)} psi (≤ ${f(al.oakBend, 0)}); τ = 1.5V/A = ${f(tau, 0)} psi (≤ ${f(al.oakShear, 0)}); static δ = P·L³/48EI + 5WL³/384EI with P = ${f(Pstat / 2)} lb, W = ${f(Ws)} lb: ${defl.toFixed(3)}" (≤ L/${p.deflectionLimitRatio} = ${(span / p.deflectionLimitRatio).toFixed(3)}").`;
     } else {
       const lay = hullLayers(ctx, 'cabin');
       if (!lay) {
@@ -294,8 +366,16 @@ export function railsCheck(ctx: Ctx): AnalysisCheck {
           ds.push(detail('nose side bending at the shoulder (oak)', sn, 'psi', al.oakBend, '<='));
           noseTxt = ` Nose side section at the shoulder (load just aft of it plus the self-weight UDL, M = P·xs(L−xs)/L + w·xs(L−xs)/2 = ${f(Mn)} lb·in): σ = ${f(sn, 0)} psi.`;
         }
-        how = `Hull-beam girders (2 members), transformed I-section from the actual parts (oak girder + chine + gunwale flanges, ply web, n_ply = E_ply/E_oak = ${f(nPly, 2)}): NA at z = ${f(ts.zNa, 2)}", I_tr = ${f(ts.I, 1)} in⁴. Payload × ${p.dynamicFactor} = ${f(Pdyn)} lbf at midspan of ${f(span)}", ${f(Pm)} lbf per girder: M = ${f(r0.M)} + ${f(u0.M)} (self-weight) = ${f(r.M)} lb·in. ${selfTxt} σ_oak = ${f(sOak, 0)} psi (≤ ${f(al.oakBend, 0)}); static δ = ${defl.toFixed(3)}" (≤ L/${p.deflectionLimitRatio} = ${(span / p.deflectionLimitRatio).toFixed(3)}").${noseTxt}`;
+        how = `Hull-beam girders (2 members), transformed I-section from the actual parts (oak girder + chine + gunwale flanges, ply web, n_ply = E_ply/E_oak = ${f(nPly, 2)}): NA at z = ${f(ts.zNa, 2)}", I_tr = ${f(ts.I, 1)} in⁴. Payload × ${f(gN, 2)} = ${f(Pdyn)} lbf at midspan of ${f(span)}", ${f(Pm)} lbf per girder: M = ${f(r0.M)} + ${f(u0.M)} (self-weight) = ${f(r.M)} lb·in. ${selfTxt} σ_oak = ${f(sOak, 0)} psi (≤ ${f(al.oakBend, 0)}); static δ = ${defl.toFixed(3)}" (≤ L/${p.deflectionLimitRatio} = ${(span / p.deflectionLimitRatio).toFixed(3)}").${noseTxt}`;
       }
+    }
+    if (ctx.newFront) {
+      // Hard hit (D-50): the 2" rear hit's seat factor; wood to MOR x C_M with no safety factor (no splitting). Bending scales with the factor.
+      const gH = Math.max(gN, 1 + bumpCases(ctx, c, 'rear').hard.V / c.massLb);
+      for (const dd of [...ds]) {
+        if (/bending/.test(dd.name) && dd.unit === 'psi') ds.push(detail(`HARD 2" rear hit (factor ${f(gH, 2)}): ${dd.name}`, (dd.value * gH) / gN, 'psi', dd.limit * p.woodSafetyFactor, '<='));
+      }
+      how += ` Hard hit: payload and chassis weight x ${f(gH, 2)} (1 + rear 2" V / W) against MOR x C_M with no wood safety factor. Normal factor max(dynamic ${p.dynamicFactor}, bumpSeatG) = ${f(gN, 2)} (spec 5.4).`;
     }
     return governing(ds, how);
   };
@@ -348,7 +428,7 @@ export function deckCheck(ctx: Ctx): AnalysisCheck {
   const seatCase = (th: number, c: CaseData) => {
     const sec = rectSection(b, th);
     const seatArea = p.seatDepthIn * L.seat.width;
-    const wSeat = ((c.riderLb * p.dynamicFactor) / seatArea) * Math.min(b, L.seat.width);
+    const wSeat = ((c.riderLb * seatFactor(ctx, c)) / seatArea) * Math.min(b, L.seat.width);
     const a = ssUdlCentered(wSeat, p.seatDepthIn, span, al.Eply * sec.I);
     return { wSeat, M: a.M, sigma: a.M / sec.S };
   };
@@ -370,11 +450,15 @@ export function deckCheck(ctx: Ctx): AnalysisCheck {
       detail('standing scout bending', s.sigma, 'psi', al.plyBend, '<='),
       detail('standing scout deflection', s.defl, 'in', lim, '<='),
     ];
+    if (ctx.newFront) {
+      const gN = seatFactor(ctx, c), gH = Math.max(gN, bumpSeatGHard(ctx, c));
+      ds.push(detail(`HARD 2" rear hit (seat factor ${f(gH, 2)}): seat case bending (ply MOR x C_M, no safety factor)`, (sa.sigma * gH) / gN, 'psi', al.plyBend * p.woodSafetyFactor, '<='));
+    }
     const tReq = needed(c);
     const stock = STOCK_PLY_MM.find((mm) => mm / 25.4 >= tReq - 1e-9);
     const sens = STOCK_PLY_MM.map((mm) => `${mm} mm: ${standing(mm / 25.4, c.riderLb).defl.toFixed(3)}"`).join(', ');
     const alt = standing(t, c.riderLb, beffAlt).defl;
-    const how = `Ply ${f(t, 3)}" (${f(t * 25.4, 1)} mm) on the largest crossmember span ${f(span, 2)}" (panel simply supported: the captured/glued edges give some fixity that is not counted). (a) Seat: ${c.riderLb} lb × ${p.dynamicFactor} spread over ${f(p.seatDepthIn)}" × ${f(L.seat.width)}" → ${f(sa.wSeat, 1)} lb/in on a 12" strip, M = ${f(sa.M)} lb·in, σ = ${f(sa.sigma, 0)} psi. (b) Standing scout: ${c.riderLb} lb static on a ${FOOT_ALONG_IN}" (along the span) × ${FOOT_ACROSS_IN}" patch at midspan, treated as a one-way plate with effective strip width b_eff = b_patch + 2.5·x(1−x/L) = ${FOOT_ACROSS_IN} + 0.625 × ${f(span, 2)} = ${f(beff, 1)}" (EN 1992 / BS 8110 rule for a point load on a one-way slab at x = L/2): M = ${f(s.M)} lb·in, σ = ${f(s.sigma, 0)} psi, δ = ${s.defl.toFixed(3)}" vs span/${p.deflectionLimitRatio} = ${lim.toFixed(3)}". Ply design stress ${f(al.plyBend, 0)} psi, E = ${f(al.Eply, 0)} psi (E × C_M ${p.wetServiceFactorStiffness}). Thickness that passes all three: ≥ ${Number.isFinite(tReq) ? `${f(tReq * 25.4, 1)} mm (${f(tReq, 3)}")` : 'more than 3"'}${stock ? `, so the next stock ply is ${stock} mm` : ''}. Standing-scout deflection by stock ply (same b_eff, this load): ${sens}. For reference, the looser b_eff = patch + span = ${f(beffAlt, 1)}" would give ${alt.toFixed(3)}" at the current ply.`;
+    const how = `Ply ${f(t, 3)}" (${f(t * 25.4, 1)} mm) on the largest crossmember span ${f(span, 2)}" (panel simply supported: the captured/glued edges give some fixity that is not counted). (a) Seat: ${c.riderLb} lb × ${f(seatFactor(ctx, c), 2)} spread over ${f(p.seatDepthIn)}" × ${f(L.seat.width)}" → ${f(sa.wSeat, 1)} lb/in on a 12" strip, M = ${f(sa.M)} lb·in, σ = ${f(sa.sigma, 0)} psi. (b) Standing scout: ${c.riderLb} lb static on a ${FOOT_ALONG_IN}" (along the span) × ${FOOT_ACROSS_IN}" patch at midspan, treated as a one-way plate with effective strip width b_eff = b_patch + 2.5·x(1−x/L) = ${FOOT_ACROSS_IN} + 0.625 × ${f(span, 2)} = ${f(beff, 1)}" (EN 1992 / BS 8110 rule for a point load on a one-way slab at x = L/2): M = ${f(s.M)} lb·in, σ = ${f(s.sigma, 0)} psi, δ = ${s.defl.toFixed(3)}" vs span/${p.deflectionLimitRatio} = ${lim.toFixed(3)}". Ply design stress ${f(al.plyBend, 0)} psi, E = ${f(al.Eply, 0)} psi (E × C_M ${p.wetServiceFactorStiffness}). Thickness that passes all three: ≥ ${Number.isFinite(tReq) ? `${f(tReq * 25.4, 1)} mm (${f(tReq, 3)}")` : 'more than 3"'}${stock ? `, so the next stock ply is ${stock} mm` : ''}. Standing-scout deflection by stock ply (same b_eff, this load): ${sens}. For reference, the looser b_eff = patch + span = ${f(beffAlt, 1)}" would give ${alt.toFixed(3)}" at the current ply.`;
     return governing(ds, how);
   };
   return dualCheck({

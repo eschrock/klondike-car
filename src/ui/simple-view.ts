@@ -12,15 +12,17 @@ import { SEVERITY, type Status } from '../analysis/types';
 import { LIGHTS, isRiderSweepCached, lightOf, riderSweep, type Light, type SweepResult } from '../analysis/rider-sweep';
 import type { Store } from '../state';
 import { h } from './dom';
+import { mountRideCard } from './ride-card';
 import { LIGHT_CHECK_IDS, LIGHT_TITLE, headline, lightTexts, limitLine, limiterAdvice, weightNote } from './simple-text';
 import './simple-view.css';
 
-export type DemoId = 'tilt' | 'turn' | 'bump' | 'brake';
+export type DemoId = 'tilt' | 'turn' | 'bump' | 'brake' | 'ride-downhill';
 export const DEMOS: { id: DemoId; label: string; title: string }[] = [
   { id: 'tilt', label: 'Tip it sideways', title: 'Tip the ground sideways until a wheel lifts. Opens the detailed view.' },
   { id: 'turn', label: 'Sharp turn at speed', title: 'Full-lock turn at speed. Opens the detailed view.' },
-  { id: 'bump', label: 'Hit a curb', title: 'Roll into a root and a curb. Opens the detailed view.' },
+  { id: 'bump', label: 'Hit a root at 10 mph', title: 'Roll into a 2 inch root at 10 mph. Opens the detailed view.' },
   { id: 'brake', label: 'Brake on a hill', title: 'Roll down a slope, then brake. Opens the detailed view.' },
+  { id: 'ride-downhill', label: 'Ride it downhill', title: 'Ride mode: 10 mph down an 8 degree slope, then brake. Opens the detailed view.' },
 ];
 
 /** Numbers the at-a-glance strip shows that come from the part list rather than the checks. */
@@ -232,6 +234,8 @@ function mountSafetyCard(host: HTMLElement, deps: Pick<SimpleViewDeps, 'onLight'
   );
 
   let last: DesignView | null = null;
+  const rideCard = mountRideCard();
+  host.append(rideCard.el);
 
   const markerPos = (w: number) => ((w - (FROM - STEP / 2)) / (TO - FROM + STEP)) * 100;
 
@@ -272,6 +276,7 @@ function mountSafetyCard(host: HTMLElement, deps: Pick<SimpleViewDeps, 'onLight'
     const heavier = !!sweep.highLimit;
     advice.hidden = !stop || !sweep.safe;
     if (stop && sweep.safe) advice.textContent = heavier ? `To carry heavier riders: ${limiterAdvice(stop.id)}.` : `To carry lighter riders: ${limiterAdvice(stop.id)}.`;
+    rideCard.update(p, spec.emptyLb > 0 ? spec.emptyLb : 169);
     // Lights
     const texts = lightTexts({ p, checks: sweep.operatingChecks, fit });
     for (const l of LIGHTS) {
