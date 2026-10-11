@@ -9,6 +9,21 @@ The current model (`6341ecf`, 174 lb) is a consistent checkpoint and a step towa
 
 **Eric's guardrail (2026-10-11):** *not* the bare-bones ski-and-PVC sleds online. It stays **a really nice, reusable wooden piece with storage**: oak, good joinery, a finished look, built to last for years. "Sled" sets how it is used and its character: the rider is a passenger, the team pulls, the musher steers and brakes from the back, and it is narrower and lighter. It does not mean minimal.
 
+
+**Eric (2026-10-11, later): the scope is narrower than the draft below assumed.**
+- **Wheels are required.** Runners are styling and structure only.
+- **Keep the current layout with steerable front wheels.** The Ackermann front end, steered by the tongue, stays, minus the rider controls.
+- **Keep it wide enough to be useful.** Today's width stays.
+
+So the next phase is a **refinement of the current design**, not a restart:
+- **Drop ride mode:** the rider stick, cables, mode pin, centering, ride lock, hip lever, ride rules card, and the 10 mph bump and fail-safe cases (back to walking or jogging pace).
+- **Musher at the back:** the push handle becomes a sled-style handlebow, with the brake lever there.
+- **Front brakes:** reconsider them. They were added for downhill riding.
+- **Restyle toward a sled:** runner-like lower side members curling up at the bow, a slatted or paneled basket look, side rails and the handlebow, while keeping the oak, the storage box and the finish quality.
+- **Slim the weight back down.**
+
+Decisions 2, 3 and 6 below are answered or adjusted by this, and the S1 concepts become styling and weight variants of the current layout.
+
 ## 1. What changes, and what we keep
 
 | Area | Keep | Drop or replace |
