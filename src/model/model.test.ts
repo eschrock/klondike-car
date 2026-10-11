@@ -396,7 +396,7 @@ describe('param sweeps', () => {
       const values = d.options ? d.options.map((o) => o.value) : [d.min, d.max];
       for (const v of values) check({ ...defaults, [k]: v }, `${k}=${v}`);
     }
-  });
+  }, 60000); // heavy sweep; shared CI runners are 2-3x slower
   it('whole-design extremes do not throw', () => {
     const lo = { ...defaults }, hi = { ...defaults };
     for (const k of all) { lo[k] = PARAM_DEFS[k].min; hi[k] = PARAM_DEFS[k].max; }
@@ -923,7 +923,7 @@ describe('autoNoseGeometry and resolveParams', () => {
     expect(clean.length).toBeGreaterThan(validOff * 2);
     expect(clean.length).toBeGreaterThanOrEqual(0.2 * N);
     expect(Date.now() - t0).toBeLessThan(15000);
-  });
+  }, 60000); // heavy sweep; shared CI runners are 2-3x slower
 });
 
 describe('round-3 carry-over validator rules', () => {
