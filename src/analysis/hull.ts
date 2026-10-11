@@ -1,15 +1,13 @@
 /**
- * Hull checks (Phase 3 round 2, D-43): `hullChecks(ctx)` returns
+ * Hull checks (Phase 3 round 2, D-43; the prow-grab check went with the prow, D-45): `hullChecks(ctx)` returns
  *  - lift:       the rear lifter's real share of the transport mass (CG-weighted, not mass / 2) × the dynamic factor, on the grip bar over
  *                the lift slot (bending and shear), for the rear and the front slot;
- *  - prow-grab:  a scout grabs the prow at the tip (25 lbf forward / aft / sideways): socket bearing, retaining-insert pull-out, leg bending at the
- *                socket mouth, and the sideways case (lateral bending + torsion of the 1.75" × 3/4" leg);
  *  - foot-stop:  rider restraint in a curb strike (rider × curb-strike g × foot-stop share): board bending between the sides, cleat bearing and
  *                the deck screws in lateral shear (operating and goal rider).
  * Every formula is written out in the `how` string; hull.test.ts works each one by hand with literal numbers.
  */
 import { worldAABB } from '../model/bounds';
-import { liftBarStressPsi, liftSlot, prowShape } from '../model/body';
+import { liftBarStressPsi, liftSlot } from '../model/body';
 import type { Part } from '../model/types';
 import type { Ctx } from './context';
 import { dualCheck, governing, singleCheck, detail, type CaseEval } from './dual';
@@ -65,69 +63,6 @@ export function liftCheck(ctx: Ctx): AnalysisCheck {
   });
 }
 
-/** Rectangular-section torsion constant α in τ_max = T / (α·b·t²) (Roark, b ≥ t): linear table in b/t. */
-const TORSION_ALPHA: ReadonlyArray<[number, number]> = [[1, 0.208], [1.5, 0.231], [2, 0.246], [2.5, 0.258], [3, 0.267], [4, 0.282], [6, 0.299], [10, 0.312]];
-export function torsionAlpha(ratio: number): number {
-  const r = Math.max(1, ratio);
-  for (let i = 1; i < TORSION_ALPHA.length; i++) {
-    const [r1, a1] = TORSION_ALPHA[i], [r0, a0] = TORSION_ALPHA[i - 1];
-    if (r <= r1) return a0 + ((r - r0) / (r1 - r0)) * (a1 - a0);
-  }
-  return TORSION_ALPHA[TORSION_ALPHA.length - 1][1];
-}
-
-/** Bearing contact zone at each end of the leg's run in the socket: the reactions sit this far in from the ends. */
-const SOCKET_CONTACT_IN = 1;
-/** Share of the foot reaction the more loaded of the two retaining inserts takes (stiffness is never equal). */
-const INSERT_SHARE = 0.6;
-
-/** The numbers behind the prow-grab check, exported for the tests. */
-export function prowGrabLoads(ctx: Ctx) {
-  const { p } = ctx;
-  const pr = prowShape(ctx);
-  const F = p.prowGrabLbf;
-  const Lb = pr.legLenIn;
-  const d = Math.max(0.5, Lb - SOCKET_CONTACT_IN); // lever between the two bearing zones
-  const h = pr.tipHeightIn - SOCKET_CONTACT_IN / 2; // tip above the lower zone
-  const Rtop = (F * h) / d;
-  const Rfoot = Rtop - F;
-  const t = pr.thicknessIn, w = pr.widthIn;
-  const mouthArm = pr.tipHeightIn - Lb; // tip above the socket mouth
-  const M = F * mouthArm;
-  const Sfa = (w * t * t) / 6;
-  const Slat = (t * w * w) / 6;
-  const T = F * pr.tipReachIn;
-  const alpha = torsionAlpha(w / t);
-  const tau = T / (alpha * w * t * t);
-  return { pr, F, Lb, d, h, Rtop, Rfoot, t, w, mouthArm, M, Sfa, Slat, T, alpha, tau, sigmaFa: M / Sfa, sigmaLat: M / Slat };
-}
-
-export function prowGrabCheck(ctx: Ctx): AnalysisCheck {
-  const { p } = ctx;
-  const al = allowables(ctx);
-  const k = prowGrabLoads(ctx);
-  const bearing = k.Rtop / (k.w * SOCKET_CONTACT_IN);
-  const insertLoad = Math.max(0, k.Rfoot) * INSERT_SHARE;
-  const combined = Math.hypot(k.sigmaLat / al.oakBend, k.tau / al.oakShear);
-  const rows: Detail[] = [
-    detail('socket mouth bearing (leg on cheek / front wall)', bearing, 'psi', al.oakPerp, '<='),
-    detail('retaining insert pull-out (worse of two)', insertLoad, 'lbf', p.prowInsertAllowLbf, '<='),
-    detail('leg bending at the socket mouth (fore-aft pull)', k.sigmaFa, 'psi', al.oakBend, '<='),
-    detail('leg sideways pull: bending + torsion (interaction)', combined, '', 1, '<='),
-  ];
-  const how = `A scout grabs the prow tip with ${f(k.F, 0)} lbf (forward, aft or sideways). The ${f(k.Lb, 1)}" leg bears in the socket at two zones ${f(SOCKET_CONTACT_IN, 1)}" in from each end, ${f(k.d, 1)}" apart; the tip is ${f(k.pr.tipHeightIn, 1)}" above the foot (${f(k.h, 1)}" above the lower zone): `
-    + `R_top = F·h/d = ${f(k.Rtop)} lbf on the mouth, R_foot = R_top − F = ${f(k.Rfoot)} lbf (pulls the foot off the transom for a forward pull: the 2 inserts retain it, the worse takes ${INSERT_SHARE} of it = ${f(insertLoad)} lbf vs ${f(p.prowInsertAllowLbf, 0)}). `
-    + `Bearing ${f(k.Rtop)} lbf / (${f(k.w, 2)}" × ${SOCKET_CONTACT_IN}") = ${f(bearing, 0)} psi (≤ ${f(al.oakPerp, 0)}). `
-    + `Leg ${f(k.w, 2)}" × ${f(k.t, 2)}": at the mouth M = F × ${f(k.mouthArm, 1)}" = ${f(k.M)} lb·in; fore-aft σ = M/(w·t²/6) = ${f(k.sigmaFa, 0)} psi (≤ ${f(al.oakBend, 0)}). `
-    + `Sideways: σ = M/(t·w²/6) = ${f(k.sigmaLat, 0)} psi and the ${f(k.pr.tipReachIn, 1)}" forward reach twists the leg: T = ${f(k.T)} lb·in, τ = T/(α·w·t²) = ${f(k.tau, 0)} psi with α = ${f(k.alpha, 3)} (b/t = ${f(k.w / k.t, 2)}); √((σ/${f(al.oakBend, 0)})² + (τ/${f(al.oakShear, 0)})²) = ${f(combined, 2)} (≤ 1). `
-    + `A vertical pull shears the two knob bolts (${f(k.F / 2)} lbf each): not governing. The prow is labeled "not a handle".`;
-  const g = governing(rows, how);
-  return singleCheck({
-    id: 'prow-grab', label: 'Prow grab strength (scout at the tip)', group: 'Structure',
-    value: g.value, unit: g.unit, limit: g.limit, sense: g.sense, details: rows, how, refs: ['D-36', 'D-43', 'build M3'],
-  });
-}
-
 /** Numbers behind the foot-stop check for one rider mass, exported for the tests. */
 export function footStopLoads(ctx: Ctx, riderLb: number) {
   const { p } = ctx;
@@ -173,5 +108,5 @@ export function footStopCheck(ctx: Ctx): AnalysisCheck | null {
 
 export function hullChecks(ctx: Ctx): AnalysisCheck[] {
   const fs = footStopCheck(ctx);
-  return [liftCheck(ctx), prowGrabCheck(ctx), ...(fs ? [fs] : [])];
+  return [liftCheck(ctx), ...(fs ? [fs] : [])];
 }

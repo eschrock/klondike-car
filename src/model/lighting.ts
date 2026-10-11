@@ -1,6 +1,6 @@
 /**
  * Lighting (D-9, D-41) and the hardware allowance. The front lantern bracket and the flag-pole socket clip onto the front
- * transom (the prow offers no socket yet); the rear light mounts on a flat printed plate on the rear transom. Brackets are
+ * transom ; the rear light mounts on a flat printed plate on the rear transom. Brackets are
  * ASA (UV-stable) 2D profiles + depth, so they go straight to an STL in Phase 4; they are not on a primary load path.
  */
 import { STORAGE_LOCATION } from '../params';
@@ -74,12 +74,12 @@ export function clipOutline(side: number, shelf: boolean): Vec2[] {
   return [[-w - c, -d], [-c, -d], [-c, c], [side + c, c], [side + c, -d], [xf, -d], ...tail, [-w - c, c + w]];
 }
 
-export function buildLighting(ctx: Ctx, _prowTipX: number, _prowTipZ: number): Part[] {
+export function buildLighting(ctx: Ctx): Part[] {
   const { L } = ctx;
   const parts: Part[] = [];
   const common = { group: 'lighting', step: STEP.finish } as const;
 
-  // ── Front: clips on the front transom, left of the prow base (lantern) and right of it (flag-pole socket) ──
+  // ── Front: clips on the front transom, lantern left of center, flag-pole socket right of center ──
   const x0c = L.xFront - L.transom;
   const yc = Math.max(2.3, Math.min(4.5, L.hwN - CLIP.width / 2 - 0.15));
   // The front transom top follows the sheer (L.noseGunTop) and arcs up by the crown (D-44): the clip sits on the highest point under its width, the inboard edge.
@@ -102,13 +102,13 @@ export function buildLighting(ctx: Ctx, _prowTipX: number, _prowTipZ: number): P
     center: [shelfX0 + FRONT_LIGHT_SIZE[0] / 2, yc, wz + FRONT_LIGHT_SIZE[2] / 2],
     sourcing: { vendor: 'Generic 800 lm rechargeable LED bike headlight with a flat mount (e.g. Cygolite / NiteRider class)', costUsd: 40 },
     joints: [{ type: 'screw', to: 'lantern-mount', count: 2, size: 'M4 stainless, into heat-set inserts in the shelf' }],
-    notes: 'Mass is an estimate. Faces forward on the shelf, ahead of the prow base.',
+    notes: 'Mass is an estimate. Faces forward on the shelf.',
   }));
   parts.push(profilePart(ctx, {
     id: 'flag-mount', name: 'Flag-pole clip', group: 'lighting', mat: 'print', material: 'ASA', outline: clipOutline(L.transom, false), depth: CLIP.width,
     basis: 'xz', origin: [x0c, -yc + CLIP.width / 2, zT], removable: true, step: STEP.finish, explode: [0.6, 0, 0.8],
     joints: clipJoint('transom-front'),
-    notes: 'Printed ASA, 4+ perimeters, profile flat on the bed (P4); heat-set inserts for the M5 stainless thumbscrews (brass is fine inside the plastic). Clips over the front transom, right of the prow. The prow has no socket yet (workstream B); this takes a flag or lantern staff meanwhile.',
+    notes: 'Printed ASA, 4+ perimeters, profile flat on the bed (P4); heat-set inserts for the M5 stainless thumbscrews (brass is fine inside the plastic). Clips over the front transom, right of center (D-45: there is no prow; the staff socket carries the flag).',
   }));
   const sock: [Vec2[], Vec2[]] = [circleLoop(0, 0, FLAG_SOCKET.rOut), circleLoop(0, 0, FLAG_SOCKET.rBore, 16, false)];
   parts.push(profilePart(ctx, {
@@ -158,7 +158,7 @@ export function buildLighting(ctx: Ctx, _prowTipX: number, _prowTipZ: number): P
   }));
 
   // ── Side reflectors (DOT-C2 adhesive-backed), forward and aft on each side ──
-  const cabinLen = L.xs - L.xRear;
+  const cabinLen = L.xc0 - L.xRear;
   const rp = cabinSidePoint(L, L.deckTop + L.sideH / 2, L.side / 2 + REFLECTOR_SIZE[1] / 2, REFLECTOR_SIZE[2] / 2);
   for (const { s, tag } of SIDES) {
     REFLECTOR_FRACS.forEach((f, i) => {

@@ -48,7 +48,6 @@ const PART: Record<string, { name: string; event?: string }> = {
   'seat-back': { name: 'the seat back', event: 'when the rider leans back' },
   'seat-grip': { name: 'the side grab handles' },
   lift: { name: 'the lifting hand-holds', event: 'when two people lift the cart' },
-  'prow-grab': { name: 'the prow', event: 'when a scout grabs it' },
   'foot-stop': { name: 'the foot stop', event: 'in a curb strike' },
 };
 const partText = (id: string) => { const q = PART[id]; return q ? (q.event ? `${q.name} ${q.event}` : q.name) : id; };
@@ -87,7 +86,6 @@ const REASON: Record<string, string> = {
   'seat-back': 'the seat back could break or pull loose when the rider leans back',
   'seat-grip': 'a side grab handle could break when a rider hangs on',
   lift: 'a lifting hand-hold could crack when the cart is carried',
-  'prow-grab': 'the prow could break or pull out when a scout grabs it',
   'foot-stop': 'the foot stop could break or pull loose in a curb strike',
 };
 export function failReason(id: string): string {

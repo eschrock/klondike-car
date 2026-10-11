@@ -282,7 +282,7 @@ export function buildSeat(ctx: Ctx): Part[] {
   const gLen = clear + 2 * GRIP_POST_IN;
   const gTop = L.deckTop + L.sideH;
   const yg = gunwaleY(L);
-  const cabinX1 = L.xs - L.side;
+  const cabinX1 = L.xc0 - L.side;
   const gxA = Math.min(gx0, cabinX1 - gLen - 0.25);
   const padTop = gTop + GRIP_PAD_T_IN;
   const barBot = padTop + p.seatGripGapIn;

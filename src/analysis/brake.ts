@@ -12,7 +12,7 @@
  * The critical rolling direction is the one with the larger k (smaller ratio); members are sized with it.
  */
 import { BRAKE_TYPE, FRAME_STYLE } from '../params';
-import { obbOverlap, partOBB, worldAABB, type OBB } from '../model/bounds';
+import { obbOverlap, partOBB, partOBBs, worldAABB, type OBB } from '../model/bounds';
 import {
   CRANK_LIGAMENT_IN, HUB_LEN_BARS, SLEEVE_WALL_IN, brakeGeometry, buildBrakeAt, handleGeometry, ratchetGeometry,
   type BrakeGeom, type HandleGeom, type RatchetGeom,
@@ -508,7 +508,7 @@ export function brakeSweep(ctx: Ctx, steps = 8): BrakeSweepResult {
   const FLARE_BOX = /^(transom-rear|side-cabin-[LR]-web)$/;
   const obstacles = ctx.parts
     .filter((x) => !x.payload && x.group !== 'reference' && !/^brake-/.test(x.id) && !/^wheel-R[LR]$/.test(x.id))
-    .map((x) => { const o = partOBB(x); return { id: x.id, o, rad: Math.hypot(...o.half) }; });
+    .flatMap((x) => partOBBs(x).map((o) => ({ id: x.id, o, rad: Math.hypot(...o.half) }))); // tight boxes: the S-curve members are not one big box (D-45)
   let best = { minClearanceIn: BIG, moving: '–', other: '–', pose: 0 };
   let padRel = BIG, padApp = BIG, groundMin = BIG;
   for (let i = 0; i <= steps; i++) {

@@ -1,5 +1,5 @@
 /**
- * Phase 3 workstream A (D-31…D-35): steer-stops and its share-1.0 bounding row, kingpin-plates, kingpin-bolts (NDS), kingpin-split (cleavage),
+ * Phase 3 workstream A (D-31…D-33, D-43): steer-stops and its share-1.0 bounding row, kingpin-plates, kingpin-bolts (NDS), kingpin-split (cleavage),
  * pitch-path, bridle-tie, and the roll-bolster-attach row that reads the fasteners from the model's joints. Loads come from the existing, separately
  * tested helpers (strikeCases, yawTorque, wheelLoads); every expected check value is rebuilt here from literal geometry (the plate z levels, the bolt
  * pitch 1.5625", the pad stiffness) worked by hand in the comments, never from the formulas in front.ts.
@@ -45,7 +45,7 @@ describe('the front-end checks at the defaults', () => {
       expect(c.load, id).toBe('goal');
       expect(Number.isFinite(c.value) && Number.isFinite(c.limit), id).toBe(true);
     }
-    expect(byId(cs, 'kingpin-peak').status).toBe('info'); // round 1's oak peak-bearing row is replaced (D-35)
+    expect(byId(cs, 'kingpin-peak').status).toBe('info'); // round 1's oak peak-bearing row is replaced (D-43)
   });
   it('the default turntable is preset 2 (1,500 lb, ½" stack) and the 1,000-lb row of round 1 no longer limits: capacity 1,500/2 = 750 lbf against the 3×-factored axle load', () => {
     expect(defaults.turntableType).toBe(2);
@@ -58,7 +58,7 @@ describe('the front-end checks at the defaults', () => {
   });
 });
 
-describe('steer-stops (M1, D-35): urethane-faced dogs, stiffness-based share, nothing through the ring', () => {
+describe('steer-stops (M1, D-43): urethane-faced dogs, stiffness-based share, nothing through the ring', () => {
   const p = resolveParams(defaults);
   const plan = steerStopPlan(p);
   const ctx = ctxOf(p);
@@ -79,28 +79,28 @@ describe('steer-stops (M1, D-35): urethane-faced dogs, stiffness-based share, no
     expect(y.rope).toBeCloseTo(150 * 13.25, 6);
     expect(y.governing).toBe('one-wheel curb strike');
   });
-  it('pad stiffness k = E·A/t: E 1,500 psi, A = 2.738" × 0.9375" = 2.567 in², t = ¼" → 15,403 lbf/in (the round-1 wood faces were ≈ 480,000)', () => {
+  it('pad stiffness k = E·A/t: E 1,500 psi, A = 2.608" × 1.25" = 3.260 in², t = 5/16" → 15,650 lbf/in (the round-1 wood faces were ≈ 480,000)', () => {
     const env = stopEnv(ctx, goal)!;
-    // face length = rb − ra = 5.6527 − 2.9143 = 2.7384"
-    expect(plan.rb - plan.ra).toBeCloseTo(2.7384, 3);
+    // face length = rb − ra = 5.5698 − 2.9614 = 2.6083"; face height 1.625 − 0.375 = 1.25"
+    expect(plan.rb - plan.ra).toBeCloseTo(2.6083, 3);
     expect(env.hFace).toBeCloseTo(hFace, 9);
-    expect(env.area).toBeCloseTo(2.7384 * 0.9375, 3);
-    expect(env.k).toBeCloseTo((1500 * 2.7384 * 0.9375) / 0.25, 0);
+    expect(env.area).toBeCloseTo(2.6083 * 1.25, 3);
+    expect(env.k).toBeCloseTo((1500 * 2.6083 * 1.25) / 0.3125, 0);
     expect(stopStiffness(1500, 4, 0.25)).toBeCloseTo(24000, 9);
     expect(env.k).toBeLessThan(480000 / 20); // ≥ 20× softer than oak behind a steel face
   });
-  it('r_eff = ⅔(s₂³ − s₁³)/(s₂² − s₁²) = ⅔ × 155.87 / 23.46 = 4.429"; the pair force P = T/r_eff; share = ½ + k·δ/(2P) with δ = 0.005" (≈ 0.52 here, ≤ 0.55 target)', () => {
+  it('r_eff = ⅔(s₂³ − s₁³)/(s₂² − s₁²) = 4.40"; the pair force P = T/r_eff; share = ½ + k·δ/(2P) with the realistic δ = 0.018" (≈ 0.61 here, r3 N-1)', () => {
     const y = yawTorque(ctx, goal);
     const env = stopEnv(ctx, goal)!;
-    // s₁ = 2.9143, s₂ = 5.6527: cubes 24.753 and 180.62, squares 8.493 and 31.953
-    const rEff = ((2 / 3) * (5.6527 ** 3 - 2.9143 ** 3)) / (5.6527 ** 2 - 2.9143 ** 2);
+    // s₁ = 2.9614, s₂ = 5.5698: cubes 25.97 and 172.79, squares 8.770 and 31.023
+    const rEff = ((2 / 3) * (5.5698 ** 3 - 2.9614 ** 3)) / (5.5698 ** 2 - 2.9614 ** 2);
     expect(env.rEff).toBeCloseTo(rEff, 3);
-    expect(env.rEff).toBeCloseTo(4.4294, 3);
-    expect(env.P).toBeCloseTo(y.T / 4.4294, 1);
-    const share = 0.5 + (15403 * 0.005) / (2 * (y.T / 4.4294));
+    expect(env.rEff).toBeCloseTo(4.3985, 3);
+    expect(env.P).toBeCloseTo(y.T / 4.3985, 1);
+    const share = 0.5 + (15650 * 0.018) / (2 * (y.T / 4.3985));
     expect(env.share).toBeCloseTo(share, 3);
     expect(env.share).toBeGreaterThan(0.5);
-    expect(env.share).toBeLessThanOrEqual(0.55);
+    expect(env.share).toBeLessThanOrEqual(0.65);
     expect(env.F).toBeCloseTo(env.share * env.P, 9);
     // the net force the pair leaves on the pin is (2·share − 1)·P
     expect(env.net).toBeCloseTo((2 * env.share - 1) * env.P, 6);
@@ -112,14 +112,15 @@ describe('steer-stops (M1, D-35): urethane-faced dogs, stiffness-based share, no
     // the round-1 wood faces: k = 480 kip/in, δ = 0.005" → kδ = 2,400 lbf > P = 1,528: one stop takes everything (critic MF-1)
     expect(stopShare(480000, 0.005, 1528)).toBe(1);
   });
-  it('the stops row: pad peak pressure = 3·T₁·s₂/(h(s₂³ − s₁³)) with T₁ = share·T, h = 0.9375", against the 800 psi pad allowable; the pad strain F/(k·t) against 30%', () => {
+  it('the stops row: pad peak pressure = 3·T₁·s₂/(h(s₂³ − s₁³)) with T₁ = share·T, h = 1.25", against the 800 psi pad allowable; the pad strain F/(k·t) against 30%', () => {
     const y = yawTorque(ctx, goal);
     const env = stopEnv(ctx, goal)!;
     const T1 = env.share * y.T;
-    const pMax = (3 * T1 * 5.6527) / (0.9375 * (5.6527 ** 3 - 2.9143 ** 3));
-    expect(det(c, 'urethane pad pressure').value).toBeCloseTo(pMax, 0);
+    const pMax = (3 * T1 * 5.5698) / (1.25 * (5.5698 ** 3 - 2.9614 ** 3));
+    // the row is the worst of the soft / nominal / stiff pad: it is at least the nominal value, and the stiff pad (larger share) sets the pressure
+    expect(det(c, 'urethane pad pressure').value).toBeGreaterThanOrEqual(pMax - 1);
     expect(det(c, 'urethane pad pressure').limit).toBe(800);
-    expect(det(c, 'pad compression strain').value).toBeCloseTo(env.F / env.k / 0.25, 6);
+    expect(det(c, 'pad compression strain').value).toBeGreaterThanOrEqual(env.F / env.k / 0.3125 - 1e-6);
     expect(det(c, 'pad compression strain').limit).toBe(0.3);
     expect(c.how).toMatch(/INSIDE the 6\.25" turntable hole/);
     expect(c.how).toMatch(/nothing through the ball ring/);
@@ -128,23 +129,33 @@ describe('steer-stops (M1, D-35): urethane-faced dogs, stiffness-based share, no
     expect(al.oakPerp).toBeCloseTo(358.45, 2);
     expect(det(c, 'bolster rail face').limit).toBeCloseTo(358.45, 2);
     expect(c.details!.filter((d) => d.util > 1)).toEqual([]);
+    expect(c.how).toMatch(/Pad modulus range 1000 \/ 1500 \/ 3000 psi/);
   });
-  it('flange bending: σ = 6·(p·h²/2)/t² = 3·p_max·h²/t² with h = 0.9375", t = 5/16"; riser bending 6·F·h_r/(d·w²)', () => {
-    const env = stopEnv(ctx, goal)!;
-    expect(det(c, 'channel flange').value).toBeCloseTo((3 * env.tri.pMax * 0.9375 ** 2) / 0.3125 ** 2, 0);
-    // the riser is 1/8" tall here (arm top 7.6875 → web bottom 7.8125), 0.5" deep, 1.25" wide
-    const riserH = 7.8125 - (7.25 + 0.4375);
-    expect(riserH).toBeCloseTo(0.125, 9);
+  it('flange bending: σ = 6·(p·h²/2)/t² = 3·p_max·h²/t² with h = 1.25", t = 3/8"; riser bending 6·F·h_r/(d·w²); the web, riser and arm are one welded stand (r3 N-3)', () => {
+    const env = stopEnv(ctx, goal, undefined, 3000)!; // the stiff pad governs the flange
+    expect(det(c, 'channel flange').value).toBeCloseTo((3 * env.tri.pMax * 1.25 ** 2) / 0.375 ** 2, 0);
+    // the riser is 5/16" tall here (arm top 7.25 + 0.25 = 7.5 → web bottom 7.8125), 0.5" deep, 1.25" wide
+    const riserH = 7.8125 - (7.25 + 0.25);
+    expect(riserH).toBeCloseTo(0.3125, 9);
     expect(det(c, 'riser bending').value).toBeCloseTo((6 * env.F * riserH) / (0.5 * 1.25 ** 2), 0);
     expect(det(c, 'riser shear').value).toBeCloseTo(env.F / (0.5 * 1.25), 0);
+    // weld rows: 1/4" all-around fillets on the 1.25 × 0.5 seam, allowable 0.3 × 70 ksi = 21 ksi
+    expect(det(c, 'web-to-riser').limit).toBeCloseTo(21000, 6);
+    expect(det(c, 'web-to-riser').util).toBeLessThan(0.8);
+    expect(det(c, 'riser-to-arm').util).toBeLessThan(0.8);
+    expect(c.how).toMatch(/welded stand/);
   });
-  it('the kingpin row lists the stop pair only when it makes a worse case than the two-wheel strike: not at the design share, yes when one stop takes all (mismatch 0.2" ≥ P/k)', () => {
-    expect(c.details?.some((d) => d.name.startsWith('net kingpin load'))).toBe(false);
-    const stiff = steerStopsCheck(ctxOf({ ...defaults, steerStopFitMismatchIn: 0.2 }));
+  it('the stop pair enters the kingpin load: the stiff and soft pad cases are pin-load cases of their own, and with one stop closed (mismatch 0.2" ≥ P/k) the net force is P', () => {
+    const lds = pinLoads(ctx, goal);
+    expect(lds.map((x) => x.name)).toEqual(expect.arrayContaining(['one-wheel strike + stops', 'one-wheel strike + stops (soft pad)', 'one-wheel strike + stops (stiff pad)']));
+    const nom = lds.find((x) => x.name === 'one-wheel strike + stops')!, stiff = lds.find((x) => x.name.includes('stiff'))!, soft = lds.find((x) => x.name.includes('soft'))!;
+    expect(stiff.Hx).toBeGreaterThan(nom.Hx);
+    expect(soft.Hx).toBeLessThan(nom.Hx);
     const y = yawTorque(ctx, goal);
-    const env1 = stopEnv(ctxOf({ ...defaults, steerStopFitMismatchIn: 0.2 }), goal, undefined)!;
+    const one = ctxOf({ ...defaults, steerStopFitMismatchIn: 0.2 });
+    const env1 = stopEnv(one, goal, undefined)!;
     expect(env1.share).toBe(1);
-    expect(det(stiff, 'net kingpin load').value).toBeCloseTo(y.Hw + env1.P, 6);
+    expect(pinLoads(one, goal).find((x) => x.name === 'one-wheel strike + stops')!.Hx).toBeCloseTo(y.Hw + env1.P, 6);
   });
   it('a pad that is too stiff or too thin does not share: with E = 150,000 psi (≈ hard plastic) the share is 1 and the row fails', () => {
     const hard = steerStopsCheck(ctxOf({ ...defaults, steerStopPadModulusPsi: 150000 }));
@@ -172,9 +183,9 @@ describe('steer-stops-bound: one stop takes the whole torque (share 1.0), a boun
     const y = yawTorque(ctx, goal);
     const env = stopEnv(ctx, goal, 1)!;
     expect(env.share).toBe(1);
-    expect(env.F).toBeCloseTo(y.T / 4.4294, 1);
+    expect(env.F).toBeCloseTo(y.T / 4.3985, 1);
     expect(env.net).toBeCloseTo(env.P, 9);
-    const pMax = (3 * y.T * 5.6527) / (0.9375 * (5.6527 ** 3 - 2.9143 ** 3));
+    const pMax = (3 * y.T * 5.5698) / (1.25 * (5.5698 ** 3 - 2.9614 ** 3));
     expect(det(c, 'urethane pad pressure').value).toBeCloseTo(pMax, 0);
     expect(det(c, 'urethane pad pressure').limit).toBe(1500);
     expect(det(c, 'pad compression strain').limit).toBe(0.5);
@@ -192,7 +203,7 @@ describe('steer-stops-bound: one stop takes the whole torque (share 1.0), a boun
   });
 });
 
-describe('kingpin-plates: the pin as an overhanging beam on the sleeve, steel on steel (D-35)', () => {
+describe('kingpin-plates: the pin as an overhanging beam on the sleeve, steel on steel (D-43)', () => {
   const p = resolveParams(defaults);
   const ctx = ctxOf(p);
   const goal = ctx.loads.goal;
@@ -216,13 +227,12 @@ describe('kingpin-plates: the pin as an overhanging beam on the sleeve, steel on
     expect(r.Rtop + r.Rbot).toBeCloseTo(1000, 9); // the two reactions sum to the pin load
   });
   it('rows at the two-wheel strike H: pin bending M/Z with Z = π·0.75³/32 = 0.04142; peak on the sleeve R_top/d²; crossbar plate hole H/(0.75 × 0.1875)', () => {
-    const H = Math.max(...strikeCases(ctx, goal).map((s) => s.H));
+    const H = Math.max(...pinLoads(ctx, goal).map((x) => Math.hypot(x.Hx, x.Hy))); // the worst pin load: the stiff-pad one-wheel strike with the stops
     expect(H).toBeGreaterThan(700);
     const g = pinLoads(ctx, goal)[0];
-    expect(g.Hx).toBeCloseTo(H, 9);
+    expect(g.Hx).toBeCloseTo(Math.max(...strikeCases(ctx, goal).map((s) => s.H)), 9);
     const mine = c.details!;
     const row = (n: string) => mine.find((d) => d.name.startsWith(n))!;
-    // the check reports the worst case per criterion; the two-wheel strike is the worst for the pin and the sleeve
     expect(row('pin bending').value).toBeCloseTo((H * 0.78125) / (Math.PI * 0.75 ** 3 / 32), -1);
     expect(row('pin on the sleeve').value).toBeCloseTo((H * 1.28090) / 0.5625, -1);
     expect(row('pin on the crossbar plate hole').value).toBeCloseTo(H / (0.75 * 0.1875), -1);
@@ -244,7 +254,7 @@ describe('kingpin-plates: the pin as an overhanging beam on the sleeve, steel on
   });
 });
 
-describe('kingpin-bolts: NDS lateral capacity of the plate bolts, spacing, edge distances, row tear-out (D-35)', () => {
+describe('kingpin-bolts: NDS lateral capacity of the plate bolts, spacing, edge distances, row tear-out (D-43)', () => {
   const p = resolveParams(defaults);
   const ctx = ctxOf(p);
   const goal = ctx.loads.goal;
@@ -258,15 +268,48 @@ describe('kingpin-bolts: NDS lateral capacity of the plate bolts, spacing, edge 
     expect(cap(c, 'beam plate bolt, under end').limit).toBeCloseTo(418.17 * ADJ, 0);
     expect(ADJ).toBeCloseTo(0.952, 9);
   });
-  it('per-bolt load at the carrier end with the stop torque: F = R_top/6 + T·y_max/Σy², R_top = 1.2809 H_x, Σy² = 101.318, y_max = 5.46875 (one-wheel strike + stops)', () => {
-    const ld = pinLoads(ctx, goal).find((x) => x.name === 'one-wheel strike + stops')!;
-    const F = (ld.Hx * 1.2809) / 6 + (ld.T * 5.46875) / SUM_Y2;
+  it('per-bolt load at the carrier end with the stop torque: F = R_top/6 + 0.6·T·y_max/Σy² (the shear ears take the other 40%), R_top = 1.2809 H_x, Σy² = 101.318, y_max = 5.46875 (one-wheel strike + stiff-pad stops)', () => {
+    const ld = pinLoads(ctx, goal).find((x) => x.name === 'one-wheel strike + stops (stiff pad)')!;
+    const F = (ld.Hx * 1.2809) / 6 + (0.6 * ld.T * 5.46875) / SUM_Y2;
     const d = c.details!.find((x) => x.name.startsWith('beam plate bolt, carrier end'))!;
     expect(d.name).toMatch(/one-wheel strike \+ stops/);
     expect(d.value).toBeCloseTo(F, 0);
     expect(SUM_Y2).toBeCloseTo(101.31836, 4);
-    // the torque term dominates: 5.46875/101.318 = 0.05398 per lb·in
-    expect((ld.T * 5.46875) / SUM_Y2).toBeGreaterThan((ld.Hx * 1.2809) / 6);
+    // the torque term (60% of it) is still the larger part: 0.6 × 5.46875/101.318 = 0.0324 per lb·in
+    expect((0.6 * ld.T * 5.46875) / SUM_Y2).toBeGreaterThan((ld.Hx * 1.2809) / 6);
+  });
+  it('r3 N-2: the carrier bolts go in from below and are tapped into the carrier (no countersink in the load path), preload torque is in the joint data; the crossbar plate bolts keep their flat heads and lose half the countersink depth from the plate', () => {
+    const car = ctx.byId.get('kp-carrier')!;
+    const j = car.joints!.find((x) => x.type === 'bolt' && x.to === 'beam-F')!;
+    expect(j.size).toMatch(/from BELOW/);
+    expect(j.size).not.toMatch(/flat-head/);
+    expect(j.note).toMatch(/torque to 7\.8 lb·ft \(94 lb·in = K 0\.2 × D × 1500 lbf preload\)/);
+    expect(pm.barCsDepth).toBeCloseTo(((1.92 - 1) * 0.3125) / 2 / Math.tan((41 * Math.PI) / 180), 6); // 0.165"
+    const cap = det(c, 'crossbar plate bolt').limit;
+    // 3/16" plate − ½ × 0.165" = 0.105" effective: mode Is/IIIs capacity is well under the 542 lbf of the uncorrected plate
+    expect(cap).toBeLessThan(542);
+    expect(cap).toBeGreaterThan(250);
+  });
+  it('r3 N-2: the plate-stack couple rows exist: M = |R_top|·(2.5/2 + 3/16) + |R_bot|·(2.5/2 + 3/32) (≈ 2.2·H), bolt tension with no preload credit, edge contact with 50% retained preload', () => {
+    const names = c.details!.map((d) => d.name);
+    expect(names.some((n) => /^plate-stack couple: bolt tension/.test(n))).toBe(true);
+    expect(names.some((n) => /^plate-stack couple: carrier edge contact/.test(n))).toBe(true);
+    expect(names.some((n) => /^bolt preload clamp pressure/.test(n))).toBe(true);
+    // clamp pressure: 6 × 1500 lbf over the 2.5" × 11.94" carrier footprint = 301.6 psi
+    expect(det(c, 'bolt preload clamp pressure').value).toBeCloseTo((6 * 1500) / (2.5 * 11.9375), 0);
+    expect(c.how).toMatch(/Plate-stack couple/);
+    expect(c.statusGoal).not.toBe('fail');
+  });
+  it('r3 N-1: the shear ears tie the carrier to the beam plate; their web and welds are rows; with ears removed the carrier plane takes all the torque', () => {
+    expect(pm.ear.n).toBe(2);
+    expect(det(c, 'shear ear web').limit).toBeCloseTo((0.6 * 36000) / 2, 6);
+    expect(det(c, 'shear ear fillet welds').limit).toBeCloseTo(21000, 6);
+    expect(det(c, 'shear ear web').util).toBeLessThan(0.2);
+    const parts = buildModel(p, { rider: 'goal', cargo: true, steerDeg: 0 }).filter((x) => !x.id.startsWith('kp-ear'));
+    const bare = kingpinBoltsCheck(makeContext(p, parts));
+    const dBare = bare.details!.find((x) => x.name.startsWith('beam plate bolt, carrier end'))!;
+    const dEars = c.details!.find((x) => x.name.startsWith('beam plate bolt, carrier end'))!;
+    expect(dBare.value).toBeGreaterThan(dEars.value * 1.15);
   });
   it('the rider-independent distances are advisory rules sitting exactly on the NDS minimum: rows 1.5625" = 5D, front edge 1.25" = 4D, rod-groove edge 1.25" = 4D; ⅜" bolts need 1.5" and draw a warning', () => {
     expect(pm.beam.frontDist).toBeCloseTo(1.25, 9);
@@ -286,7 +329,7 @@ describe('kingpin-bolts: NDS lateral capacity of the plate bolts, spacing, edge 
     expect(pm.bar.endDist).toBeCloseTo(2.75, 6);
     const FvP = 205 * 0.97 * 1.6; // 318.16 psi
     const t = pm.bar.lm;
-    const H = Math.max(...strikeCases(ctx, goal).map((s) => s.H));
+    const H = Math.max(...pinLoads(ctx, goal).map((x) => Math.abs(x.Hx)));
     const Z = 4 * FvP * t * 0.75;
     expect(det(c, 'crossbar row tear-out').limit).toBeCloseTo(Z, 0);
     expect(det(c, 'crossbar row tear-out').value).toBeCloseTo(H, 0);
@@ -316,7 +359,7 @@ describe('kingpin-bolts: NDS lateral capacity of the plate bolts, spacing, edge 
   });
 });
 
-describe('kingpin-split: NDS cleavage and the cross-bolts that stitch the loaded slabs (D-35, replaces round 1\'s 850 psi block shear)', () => {
+describe('kingpin-split: NDS cleavage and the cross-bolts that stitch the loaded slabs (D-43, replaces round 1\'s 850 psi block shear)', () => {
   const p = resolveParams(defaults);
   const ctx = ctxOf(p);
   const goal = ctx.loads.goal;
@@ -336,7 +379,7 @@ describe('kingpin-split: NDS cleavage and the cross-bolts that stitch the loaded
     expect(car).toBeDefined();
   });
   it('with four ⅜" stainless cross-bolts the slab is stitched: each carries V/4 (V = R_top + the stop torque\'s force on one side of the bolt line), tension on A_t = 0.75 × 0.1104 against 65,000/2 psi', () => {
-    const ld = pinLoads(ctx, goal).find((x) => x.name === 'one-wheel strike + stops')!;
+    const ld = pinLoads(ctx, goal).find((x) => x.name === 'one-wheel strike + stops (stiff pad)')!;
     const sumY2 = 101.31836;
     const V = ld.Hx * 1.2809 + (ld.T * (2.34375 + 3.90625 + 5.46875)) / sumY2;
     const At = 0.75 * ((Math.PI * 0.375 ** 2) / 4);
@@ -368,7 +411,7 @@ describe('kingpin-split: NDS cleavage and the cross-bolts that stitch the loaded
   });
 });
 
-describe('pitch-path (M3, D-35): the pin reaction acts at the crossbar plate, 1.34" above the axle line', () => {
+describe('pitch-path (M3, D-43): the pin reaction acts at the crossbar plate, 1.34" above the axle line', () => {
   const p = resolveParams(defaults);
   const ctx = ctxOf(p);
   const goal = ctx.loads.goal;

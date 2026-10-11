@@ -12,16 +12,37 @@ import {
   resolveParams,
   type Params,
 } from '../params';
+import { buildPlanCurve, offsetY, sidePolyline, type PlanCurve } from './hull-curve';
 import { riderLegTopZ } from './rider-geom';
-import type { Vec3 } from './types';
+import type { Vec2, Vec3 } from './types';
 
 // Design numbers (chine height, seat depth, tongue section, ...) live in params.ts; only derived geometry here.
 
 export interface Layout {
   r: number;
   WB: number;
-  /** Cabin shoulder x (full width ends, nose begins). */
+  /**
+   * Deck step x (D-45): the rear face of the shoulder beam; the cabin deck ends here and the nose deck begins (1" up). Just behind `xn`.
+   * Cabin-side furniture (grips, lash points, reflectors, signs) is behind `xc0`, the start of the plan S-curve.
+   */
   xs: number;
+  /** Start of the plan S-curve (the cabin side is straight and full width up to here) and its end (the nose side is straight from here). */
+  xc0: number;
+  xn: number;
+  /** The plan S-curve of the hull side centerline (D-45). */
+  hull: PlanCurve;
+  /**
+   * Chine bottom and rail top (D-45). Captured-ply sides: the chine, its rail and the side lines are at the NOSE deck level along the whole hull, so
+   * the side profile never steps; the cabin deck (1" lower) sits on a ledge in the rail's inner face. Other constructions keep the cabin level.
+   */
+  chineBot: number;
+  railTop: number;
+  /** Chine height (= railBand). */
+  chineH: number;
+  /** Shoulder beam thickness (x), under the deck step, between the rail pairs. */
+  shoulderBeam: number;
+  /** Top of the side (gunwale top without the sheer): deckTop + sideH. The side lines are the same along the whole hull (D-45). */
+  sideTop: number;
   xRear: number;
   xFront: number;
   /** Kingpin (steer pivot, turntable center) x: ahead of the front axle by kingpinLeadIn (D-25). */
@@ -135,7 +156,9 @@ export function computeLayout(input: Params): Layout {
   const r = d.wheelRadiusIn;
   const WB = p.wheelbaseIn;
   const kx = WB + p.kingpinLeadIn;
-  const xs = WB - p.noseTaperStartIn;
+  const xn = WB - p.noseTaperStartIn;
+  const xc0 = Math.min(p.hullCurveStartIn, xn - 1);
+  const xs = xn - p.shoulderBeamIn;
   const xRear = -p.rearOverhangIn;
   const xFront = WB + p.frontOverhangIn;
   const side = p.sideThicknessIn;
@@ -215,7 +238,7 @@ export function computeLayout(input: Params): Layout {
     if (shaftThroughJoists && Math.abs(x - shaftX) < sh) return [x < shaftX ? shaftX - sh : shaftX + sh];
     return [x];
   });
-  const noseJoistX = evenInterior(xs, noseRailEnd, p.crossmemberSpacingIn, joistT);
+  const noseJoistX = evenInterior(xn, noseRailEnd, p.crossmemberSpacingIn, joistT);
 
   // ── Seat ──
   const baseW = Math.max(1, Math.min(p.seatWidthIn, 2 * hwC - 1));
@@ -244,7 +267,7 @@ export function computeLayout(input: Params): Layout {
   if (p.storageLocation === STORAGE_LOCATION.underSeat) {
     storage = { location: p.storageLocation, x0: seat.xRear, x1: seat.xFront, zBot: deckTop, zTop: deckTop + hUnder, hw: baseW / 2 };
   } else if (p.storageLocation === STORAGE_LOCATION.forwardRaised) {
-    const x0 = xs;
+    const x0 = xn;
     const x1 = Math.max(x0 + 1, xFront - side - 1.5);
     const w = Math.max(1, 2 * hwN);
     // Over the nose the box must clear the tires and also the rider's knees (the legs pass under it to the foot stop).
@@ -261,19 +284,22 @@ export function computeLayout(input: Params): Layout {
     storage = { location: p.storageLocation, x0, x1, zBot: deckTop, zTop: deckTop + boxHeight(x1 - x0, 2 * hwC), hw: hwC };
   }
 
-  // Flare only exists on captured-ply cabin sides: the nose has the front tires beside it and the other constructions are straight.
-  const flare = p.sideConstruction === SIDE_CONSTRUCTION.capturedPly ? p.gunwaleFlareIn : 0;
-  const webZ0 = deckTop - ply + p.railBandIn;
+  // D-45: the sides are vertical (the S-curve web is laminated around a plan-view form), so there is no flare; the chine bottom, the web
+  // and the gunwale are the same height along the whole hull (captured-ply: at the nose deck level; the cabin rails stand 1" taller to meet the chine).
+  const flare = 0;
+  const chineH = p.railBandIn;
+  const chineBot = p.sideConstruction === SIDE_CONSTRUCTION.capturedPly ? noseTop - ply : deckTop - ply;
+  const webZ0 = chineBot + chineH;
   const webZ1 = deckTop + p.sideHeightIn - p.railBandIn;
   const web = { z0: webZ0, z1: webZ1, phi: Math.atan2(flare, Math.max(0.1, webZ1 - webZ0)) };
 
   // Sheer (D-44): rises over the forward `sheerLengthIn` of the nose, never behind the shoulder; 0 = the old straight gunwale.
   const sheerX1 = xFront - transom;
-  const sheer = { x0: Math.max(xs, sheerX1 - p.sheerLengthIn), x1: sheerX1, riseIn: Math.max(0, p.sheerRiseIn) };
+  const sheer = { x0: Math.max(xn, sheerX1 - p.sheerLengthIn), x1: sheerX1, riseIn: Math.max(0, p.sheerRiseIn) };
 
   return {
-    r, WB, xs, xRear, xFront, kx, railBand: p.railBandIn, joistT, flare, web, side, transom, rearLane, ply, deckTop, deckBot: deckTop - ply, noseTop, noseBot: noseTop - ply,
-    hwC, hwN, sideH: p.sideHeightIn, sheer, noseGunTop: noseTop + p.sideHeightIn + sheer.riseIn, beamR, beamF,
+    r, WB, xs, xc0, xn, hull: buildPlanCurve(xc0, xn, hwC + side / 2, hwN + side / 2), chineH, chineBot, railTop: chineBot, shoulderBeam: p.shoulderBeamIn, sideTop: deckTop + p.sideHeightIn, xRear, xFront, kx, railBand: p.railBandIn, joistT, flare, web, side, transom, rearLane, ply, deckTop, deckBot: deckTop - ply, noseTop, noseBot: noseTop - ply,
+    hwC, hwN, sideH: p.sideHeightIn, sheer, noseGunTop: deckTop + p.sideHeightIn + sheer.riseIn, beamR, beamF,
     turntable: { z0: tz0, z1: tz1 },
     bolster, sideBearer, kingpin: { z0: beamF.bot - plateT, z1: through ? bolsterTop : tz1 }, crossbar, accessPanel,
     kpPlates: plates ? { carrier: { z0: beamF.top, z1: tz0 }, under: { z0: beamF.bot - plateT, z1: beamF.bot }, bar: { z0: tz1, z1: tz1 + plateT } } : null,
@@ -306,4 +332,14 @@ export function sheerRise(L: Pick<Layout, 'sheer'>, x: number): number {
   if (riseIn <= 0 || x1 <= x0) return 0;
   const u = Math.max(0, Math.min(1, (x - x0) / (x1 - x0)));
   return riseIn * u * u;
+}
+
+/** Centerline polyline of one hull side member offset `d` outward from the web plane (negative = inward), covering x in [xa, xb], as |y| (D-45). */
+export function sidePath(L: Pick<Layout, 'hull'>, d: number, xa: number, xb: number): Vec2[] {
+  return sidePolyline(L.hull, d, xa, xb);
+}
+
+/** Inside half width of the hull (the chine's inner face) at x: hwC in the cabin, hwN in the nose, the S-curve between (D-45). */
+export function innerHalfWidth(L: Pick<Layout, 'hull' | 'side'>, x: number): number {
+  return offsetY(L.hull, -L.side / 2, x);
 }

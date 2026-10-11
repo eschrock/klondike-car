@@ -53,7 +53,7 @@ describe('sheer line (D-44)', () => {
   it('the finger-guard zone and the whole cabin stay on the flat gunwale (hazard end is behind the start of the rise)', () => {
     const ctx2 = makeCtx(defaults);
     expect(ctx2.L.sheer.x0).toBeGreaterThan(ctx2.L.xs);
-    expect(sheerRise(ctx2.L, ctx2.L.xs + 6)).toBe(0); // the guard hazard zone spans xs .. xs + ~5.2" at the defaults
+    expect(sheerRise(ctx2.L, ctx2.L.xn + 3)).toBe(0); // the guard hazard zone spans xn .. xn + ~2" at the defaults (D-45)
   });
 
   it('sheer 0 reproduces the straight gunwale: a box, a 4-point rectangular web, top at the old height', () => {
@@ -63,10 +63,10 @@ describe('sheer line (D-44)', () => {
     for (const tag of ['L', 'R']) {
       const gun = get(parts, `side-nose-${tag}-gunwale`);
       expect(gun.geometry.type).toBe('box');
-      expect(worldAABB(gun).max[2]).toBeCloseTo(c.noseTop + c.sideH, 9);
+      expect(worldAABB(gun).max[2]).toBeCloseTo(c.sideTop, 9);
       expect(outlineOf(get(parts, `side-nose-${tag}-web`))).toHaveLength(4);
     }
-    expect(liftSlot(makeCtx(p), 'front').transomTop).toBeCloseTo(c.noseTop + c.sideH, 9);
+    expect(liftSlot(makeCtx(p), 'front').transomTop).toBeCloseTo(c.sideTop, 9);
   });
 
   it('with the default sheer the nose gunwale top rises monotonically forward and ends at the full rise', () => {
@@ -75,12 +75,12 @@ describe('sheer line (D-44)', () => {
       const gun = get(parts, `side-nose-${tag}-gunwale`);
       expect(gun.geometry.type).toBe('extrusion');
       const ol = outlineOf(gun);
-      const top = ol.filter((q) => q[1] > L.noseTop + L.sideH - L.railBand + 1e-9 && q[1] >= zAt(ol.slice(0, ol.length / 2), q[0]) + L.railBand - 1e-9).sort((a, b) => a[0] - b[0]);
+      const top = ol.filter((q) => q[1] > L.sideTop - L.railBand + 1e-9 && q[1] >= zAt(ol.slice(0, ol.length / 2), q[0]) + L.railBand - 1e-9).sort((a, b) => a[0] - b[0]);
       expect(top.length).toBeGreaterThan(8);
       for (let i = 1; i < top.length; i++) expect(top[i][1]).toBeGreaterThanOrEqual(top[i - 1][1] - 1e-9);
       const bb = worldAABB(gun);
-      expect(bb.max[2]).toBeCloseTo(L.noseTop + L.sideH + defaults.sheerRiseIn, 6);
-      expect(bb.min[2]).toBeCloseTo(L.noseTop + L.sideH - L.railBand, 6); // the underside is flat at the back, so the chine-to-gunwale gap is the old one there
+      expect(bb.max[2]).toBeCloseTo(L.sideTop + defaults.sheerRiseIn, 6);
+      expect(bb.min[2]).toBeCloseTo(L.sideTop - L.railBand, 6); // the underside is flat at the back, so the chine-to-gunwale gap is the old one there
       // the section stays one rail band tall everywhere
       const half = ol.length / 2;
       for (let i = 0; i < half; i++) expect(ol[2 * half - 1 - i][1] - ol[i][1]).toBeCloseTo(L.railBand, 9);
@@ -116,7 +116,7 @@ describe('sheer line (D-44)', () => {
     const parts = buildModel(defaults);
     const f = worldAABB(get(parts, 'transom-front'));
     const crown = defaults.transomCrownIn;
-    expect(f.max[2]).toBeCloseTo(L.noseTop + L.sideH + defaults.sheerRiseIn + crown, 6);
+    expect(f.max[2]).toBeCloseTo(L.sideTop + defaults.sheerRiseIn + crown, 6);
     const r = worldAABB(get(parts, 'transom-rear'));
     expect(r.max[2]).toBeCloseTo(liftSlot(ctx, 'rear').transomTop + crown, 6);
   });

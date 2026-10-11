@@ -1,5 +1,5 @@
 /**
- * NDS-style timber-connection helpers (Phase 3 round 2, D-35): dowel bearing strength, single-shear yield-mode capacity of a
+ * NDS-style timber-connection helpers (Phase 3 round 2, D-43): dowel bearing strength, single-shear yield-mode capacity of a
  * bolt through a steel side plate into oak, row / group tear-out (NDS Appendix E), the cleavage (splitting) shear of a
  * connection loaded perpendicular to grain (NDS 3.4.3.3), and the bolt spacing / edge / end distance rules (NDS 12.5.1).
  * Plain numbers in, plain numbers out; every strength comes from Params (src/params.ts), nothing is hard-coded here except the
@@ -106,3 +106,13 @@ export function boltSpacing(D: number, l: number, load: 'par' | 'perp'): Spacing
   const between = r <= 2 ? 2.5 * D : r >= 6 ? 5 * D : (5 * l + 10 * D) / 8;
   return { inRow: 3 * D, betweenRows: between, loadedEnd: 4 * D, unloadedEnd: 4 * D, loadedEdge: 4 * D, unloadedEdge: 1.5 * D };
 }
+
+/**
+ * Depth of the countersink of an 82° flat-head fastener of shank diameter D (ASME B18.3 head diameter ≈ 1.92·D), inches. A countersunk
+ * hole bears only on the plate below the head: the effective side-plate thickness is t − ½·depth (AISC 360 J3.10 style reduction; verify
+ * the clause for a bolt group in wood, r3 N-2).
+ */
+export const countersinkDepth = (D: number): number => ((1.92 * D - D) / 2) / Math.tan((41 * Math.PI) / 180);
+
+/** Effective side-member thickness when a countersunk head is flush in it (0 depth = plain hole). */
+export const effectiveSideThickness = (t: number, csDepth: number): number => Math.max(0.05, t - 0.5 * csDepth);

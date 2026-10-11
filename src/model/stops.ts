@@ -62,7 +62,7 @@ export interface StopPlan {
   b: number;
   cb: number;
   lock: number;
-  /** Dog width across the steel flange faces (channel, D-35), urethane pad thickness, half width over the pads W = t/2 + tf. */
+  /** Dog width across the steel flange faces (channel, D-43), urethane pad thickness, half width over the pads W = t/2 + tf. */
   t: number;
   tf: number;
   W: number;
@@ -149,7 +149,7 @@ export function planStops(p: Params, op: OpeningLite): StopPlan {
   const cb = hasBar ? p.kingpinCrossbarWidthIn / 2 : Math.max(Math.max(p.kingpinDiameterIn, p.kingpinSleeveOdIn) / 2 + 0.5, NO_BAR_HALF_WIDTH_IN);
   const L = (Math.min(Math.abs(p.steerLockDeg), 60) * Math.PI) / 180;
   const t = p.steerStopSizeIn;
-  const tf = p.steerStopPadIn; // the stop face is the bonded urethane pad on the steel flange (D-35)
+  const tf = p.steerStopPadIn; // the stop face is the bonded urethane pad on the steel flange (D-43)
   const W = t / 2 + tf;
   const minThick = p.stopBlockMinIn;
   const c = Math.cos(L), sn = Math.sin(L);
@@ -172,7 +172,7 @@ export function planStops(p: Params, op: OpeningLite): StopPlan {
   const sLo = (cb + sn * (W + minThick)) / c; // thickness to the crossbar ≥ minThick
   const sHi = (a - W * c - minThick * c) / sn; // thickness to the rail face ≥ minThick
   ra = Math.max(ra, sLo);
-  // The channel web and its riser reach `p.steerStopRiserDepthIn` in from the stop face (D-35): their steel corner (half width t/2) must clear the crossbar side at lock too.
+  // The channel web and its riser reach `p.steerStopRiserDepthIn` in from the stop face (D-43): their steel corner (half width t/2) must clear the crossbar side at lock too.
   ra = Math.max(ra, (cb + GAP + (t / 2) * sn) / c + p.steerStopRiserDepthIn);
   rb = Math.min(rb, sHi);
   if (rb - ra < MIN_FACE_LEN_IN) return fail(`the stop face would be only ${(rb - ra).toFixed(2)}" long (needs ≥ ${MIN_FACE_LEN_IN}"): the dog, the crossbar and the opening leave no room; enlarge the turntable, narrow the crossbar or thin the stop dog`);

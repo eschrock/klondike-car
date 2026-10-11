@@ -35,8 +35,8 @@ export const LIGHT_OF_ID: Record<string, Light | 'info'> = {
   // Seat and fittings (D-40, D-41): the seat back and grips carry a rider, so they color Strength; packing, lid swing and
   // lash-point count are build-fit facts that do not change with rider weight and are reported only.
   'seat-back': 'strength', 'seat-grip': 'strength', 'storage-pack': 'info', 'storage-lid-open': 'info', 'lash-points': 'info',
-  // Hull (D-43): the lift and the prow grab do not depend on the rider; the foot stop carries the rider's restraint load. All three color Strength.
-  lift: 'strength', 'prow-grab': 'strength', 'foot-stop': 'strength', 'lash-load': 'info',
+  // Hull (D-43): the lift does not depend on the rider; the foot stop carries the rider's restraint load. Both color Strength.
+  lift: 'strength', 'foot-stop': 'strength', 'lash-load': 'info',
 };
 
 export function lightOf(c: Pick<AnalysisCheck, 'id' | 'group'>): Light | 'info' {

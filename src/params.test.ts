@@ -27,9 +27,10 @@ describe('validateParams', () => {
     expect(issues.filter((i) => i.severity === 'error').map((i) => i.keys[0])).toContain('noseWidthIn');
     expect(issues.filter((i) => i.severity === 'warn').map((i) => i.keys[0])).toContain('riderGoalMassLb');
   });
-  it('flags front tires hitting the nose or cabin shoulder at full lock', () => {
+  it('flags front tires hitting the nose (width) or the S-curve hull (D-45) at full lock', () => {
     const issues = validateParams({ ...defaultParams(), autoNoseGeometry: 0, noseWidthIn: 18, noseTaperStartIn: 12 });
-    expect(issues.filter((i) => i.message.startsWith('Front tires hit'))).toHaveLength(2);
+    expect(issues.filter((i) => i.message.startsWith('Front tires hit'))).toHaveLength(1);
+    expect(issues.filter((i) => i.message.startsWith('The S-curve hull comes within'))).toHaveLength(1);
   });
   it('warns when the cart is too wide for the wheel wells', () => {
     const issues = validateParams({ ...defaultParams(), rearTrackIn: 40 });

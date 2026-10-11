@@ -159,8 +159,8 @@ function beamEval(ctx: Ctx, kind: 'front' | 'rear', c: CaseData): CaseEval {
     M = (F / 2) * Math.abs(ys - yl);
     load = `Turntable load F = ${frontLoadText(ctx, w)} × ${p.dynamicFactor} = ${f(F)} lbf as two loads F/2 = ${f(F / 2)} at y = ±${f(yl)}" (turntable edges), reactions at the clamp plates (y = ±${f(ys, 2)}")`;
   } else {
-    const rail = part(ctx, 'rail-cabin-L') ?? part(ctx, 'girder-cabin-L');
-    const yr = rail ? (worldAABB(rail).min[1] + worldAABB(rail).max[1]) / 2 : ctx.L.hwC;
+    // The rail/girder at the rear axle (x = 0) is on the straight cabin side: its centerline, not the bounding box of the curved member (D-45).
+    const yr = part(ctx, 'rail-cabin-L') ? ctx.L.hwC + ctx.L.side - p.railThicknessIn / 2 : part(ctx, 'girder-cabin-L') ? ctx.L.hwC + ctx.L.side / 2 : ctx.L.hwC;
     M = (F / 2) * Math.abs(ys - Math.abs(yr));
     load = `Rail/girder loads F/2 = ${f(F / 2)} lbf at y = ±${f(Math.abs(yr), 2)}" (axle load ${f(F / p.dynamicFactor)} lb × ${p.dynamicFactor} = ${f(F)} lbf), reactions at the clamp plates (y = ±${f(ys, 2)}")`;
   }
@@ -217,24 +217,19 @@ export function bearingGroove(ctx: Ctx): AnalysisCheck {
 export function hullLayers(ctx: Ctx, zone: 'cabin' | 'nose'): Layer[] | null {
   const { p, L } = ctx;
   const al = allowables(ctx);
-  const oak = (x: Part | undefined): Layer | null => {
-    if (!x) return null;
-    const b = worldAABB(x);
-    return { b: b.max[1] - b.min[1], z0: b.min[2], z1: b.max[2], E: al.Eoak, kind: 'oak' };
-  };
+  // Real member sections (D-45, eng N-4): never the bounding box of a curved part. A bent chine, gunwale or girder (plan curve), and the sheer
+  // gunwale (a 4" board sawn to a 1.5" band), have large bounding boxes; the section is the thickness x height the member actually has.
+  const oak = (x: Part | undefined, b: number, z0: number, z1: number): Layer | null => (x ? { b, z0, z1, E: al.Eoak, kind: 'oak' } : null);
   const list: (Layer | null)[] = [];
-  if (zone === 'cabin') list.push(oak(part(ctx, 'girder-cabin-L')));
+  if (zone === 'cabin') list.push(oak(part(ctx, 'girder-cabin-L'), L.side, L.deckBot - p.railDepthIn, L.railTop));
   const pre = `side-${zone}-L`;
-  if (p.sideConstruction === SIDE_CONSTRUCTION.solidOak) list.push(oak(part(ctx, `${pre}-board`)));
+  if (p.sideConstruction === SIDE_CONSTRUCTION.solidOak) list.push(oak(part(ctx, `${pre}-board`), L.side, L.deckBot, L.sideTop));
   else {
-    list.push(oak(part(ctx, `${pre}-chine`)), oak(part(ctx, `${pre}-gunwale`)));
-    if (p.sideConstruction === SIDE_CONSTRUCTION.capturedPly) {
+    const open = p.sideConstruction === SIDE_CONSTRUCTION.openFrame;
+    list.push(oak(part(ctx, `${pre}-chine`), L.side, L.chineBot, L.chineBot + L.chineH), oak(part(ctx, `${pre}-gunwale`), L.side, L.sideTop - L.railBand, L.sideTop));
+    if (p.sideConstruction === SIDE_CONSTRUCTION.capturedPly && !open) {
       const web = part(ctx, `${pre}-web`);
-      if (web) {
-        const z0 = zone === 'cabin' ? L.web.z0 : L.noseBot + L.railBand;
-        const z1 = zone === 'cabin' ? L.web.z1 : L.noseTop + L.sideH - L.railBand;
-        list.push({ b: p.panelPlyIn, z0, z1, E: al.Eply, kind: 'ply' });
-      }
+      if (web) list.push({ b: p.panelPlyIn, z0: L.web.z0, z1: L.web.z1, E: al.Eply, kind: 'ply' });
     }
   }
   const out = list.filter((x): x is Layer => !!x && x.z1 > x.z0);
@@ -258,10 +253,9 @@ export function railsCheck(ctx: Ctx): AnalysisCheck {
     const ds: Detail[] = [];
     let how: string;
     if (!hull) {
-      const rail = part(ctx, 'rail-cabin-L');
-      const bb = rail ? worldAABB(rail) : null;
-      const b = bb ? bb.max[1] - bb.min[1] : p.railThicknessIn;
-      const h = bb ? bb.max[2] - bb.min[2] : p.railDepthIn;
+      // Real section (D-45: the rail is a bent lamination, its bounding box is not its section).
+      const b = p.railThicknessIn;
+      const h = p.railDepthIn;
       const sec = rectSection(b, h);
       const r0 = ssPointMid(Pm, span, al.Eoak * sec.I);
       const u0 = ssUdlFull(Wm, span, al.Eoak * sec.I);

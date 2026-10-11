@@ -1,6 +1,6 @@
 import type { Params } from '../params';
 import { makeCtx, type ViewState } from './build-utils';
-import { buildBody, prowTop } from './body';
+import { buildBody } from './body';
 import { buildBrake } from './brake';
 import { applyFinish } from './finish';
 import { buildFrame } from './frame';
@@ -22,7 +22,6 @@ export type { ViewState } from './build-utils';
  */
 export function buildModel(input: Params, view: ViewState = {}): Part[] {
   const ctx = makeCtx(input, view); // resolves auto nose geometry (resolveParams) so every part and ctx.p agree
-  const tip = prowTop(ctx);
   const parts = [
     ...buildRunningGear(ctx),
     ...buildSteering(ctx),
@@ -31,7 +30,7 @@ export function buildModel(input: Params, view: ViewState = {}): Part[] {
     ...buildSeat(ctx),
     ...buildStorage(ctx),
     ...buildBrake(ctx),
-    ...buildLighting(ctx, tip.x - 1, tip.z),
+    ...buildLighting(ctx),
     ...buildHardware(ctx),
     ...buildPayload(ctx),
   ];

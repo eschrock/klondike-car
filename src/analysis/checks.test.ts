@@ -188,10 +188,11 @@ describe('parameter response', () => {
     expect(byId(run({ ...defaults, rearTrackIn: 33, frontTrackIn: 33 }), 'tip-straight').value).toBeLessThan(base);
     expect(byId(run({ ...defaults, deckHeightIn: 12 }), 'tip-straight').value).toBeLessThan(base);
   });
-  it('a 12 mm deck ply passes the standing-scout deflection that the 9 mm ply fails (D1)', () => {
+  it('a thicker deck ply passes the standing-scout deflection that the 9 mm ply fails (D1)', () => {
     // Phase 1 configuration (9 mm ply, 12" joist spacing): the Phase 2 defaults already use 12 mm at 8" spacing.
+    // D-45: the cabin deck runs 2.5" farther forward (to the deck step behind the S-curve end), so the first bay grew and 12 mm is now just short in this old configuration: 18 mm passes.
     const thin = byId(run(phase1), 'deck');
-    const thick = byId(run({ ...phase1, deckPlyIn: 0.472 }), 'deck');
+    const thick = byId(run({ ...phase1, deckPlyIn: 0.709 }), 'deck');
     expect(thin.details!.find((d) => d.name.includes('deflection'))!.util).toBeGreaterThan(1);
     expect(thick.status).not.toBe('fail');
   });
@@ -406,14 +407,14 @@ describe('critic round 1 fixes: hand-calculated numbers at the defaults', () => 
     expect(Math.abs(rear.value / hand.sigma - 1)).toBeLessThan(2e-3);
     expect(byId(cs, 'axle-stress').how).toMatch(/resultant/);
   });
-  it('D1 deck: b_eff = 10 + 0.625 × 9.44 = 15.9"; 200 lb on 4" at midspan of 9.44" (the ¾" transom, D-43, moves the joists and trims the first bay): δ = 0.068" (fails L/300 = 0.032"); 12 mm gives 0.029" (passes); needed ≥ 11.6 mm', () => {
-    expect(effectiveStripWidth(10, 9.44)).toBeCloseTo(15.9, 2);
+  it('D1 deck: b_eff = 10 + 0.625 × 10.16 = 16.35"; 200 lb on 4" at midspan of 10.16" (the S-curve deck step, D-45, lengthens the cabin deck by 2.5" and the last bay with it): δ = 0.083" (fails L/300 = 0.034"); 12 mm gives 0.035" (just fails); needed ≥ 12.1 mm', () => {
+    expect(effectiveStripWidth(10, 10.16)).toBeCloseTo(16.35, 2);
     const c = byId(cs, 'deck');
-    expect(c.details!.find((d) => d.name.includes('deflection'))!.value).toBeCloseTo(0.068, 3);
-    expect(c.how).toMatch(/≥ 11\.6 mm/);
-    expect(c.how).toMatch(/12 mm: 0\.02[89]/);
+    expect(c.details!.find((d) => d.name.includes('deflection'))!.value).toBeCloseTo(0.083, 3);
+    expect(c.how).toMatch(/≥ 12\.1 mm/);
+    expect(c.how).toMatch(/12 mm: 0\.03[45]/);
     const t12 = byId(run({ ...legacy, deckPlyIn: 0.472 }), 'deck').details!.find((d) => d.name.includes('deflection'))!.value;
-    expect(t12).toBeCloseTo(0.0285, 3);
+    expect(t12).toBeCloseTo(0.035, 3);
   });
   it('layout: a thicker deck ply no longer lengthens the span next to the rear beam (D1 oddity)', () => {
     const span = (t: number) => maxDeckSpan({ L: computeLayout({ ...defaults, deckPlyIn: t }) } as never);
@@ -534,10 +535,10 @@ describe('kingpin through the bolster: single shear, steel plates and sleeve, wa
     expect(sl.limit).toBeCloseTo((0.9 * 36000) / p.steelSafetyFactor, 6);
     expect(pl.limit).toBeCloseTo((0.9 * p.kingpinPlateYieldPsi) / p.steelSafetyFactor, 6);
     // crossbar plate mid (7.75 + 7.9375)/2 = 7.84375; carrier mid (6.875 + 7.25)/2 = 7.0625; beam plate mid (4.1875 + 4.375)/2 = 4.28125 → b = 0.78125, a = 2.78125
-    const H = Number(s.how.match(/Governing: [^,]+, H = (\d+)/)![1]);
+    const H = Number(s.how.match(/Governing: [^,]+, H = ([\d.]+)/)![1]);
     expect(sl.value).toBeCloseTo((H * (1 + 0.78125 / 2.78125)) / 0.75 ** 2, -1);
-    // H is parsed from the rounded text, so allow one unit of rounding: ±0.5 lbf / (0.75 × 0.1875) ≈ ±3.6 psi plus 1 psi of display rounding.
-    expect(Math.abs(pl.value - H / (0.75 * 0.1875))).toBeLessThan(0.5 / (0.75 * 0.1875) + 1);
+    // H is parsed from text rounded to 0.1 lbf: ±0.05 lbf / (0.75 × 0.1875) ≈ ±0.36 psi.
+    expect(Math.abs(pl.value - H / (0.75 * 0.1875))).toBeLessThan(0.05 / (0.75 * 0.1875) + 0.01);
     expect(s.cases!.goal!.util).toBeLessThan(1);
     expect(s.status).not.toBe('fail');
     expect(run({ ...p, sleeveYieldPsi: 20000 }).find((c) => c.id === 'kingpin-strike')!.details!.find((d) => d.name.includes('steel sleeve'))!.limit).toBeCloseTo(9000, 6);

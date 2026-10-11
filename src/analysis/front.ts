@@ -1,9 +1,9 @@
 /**
- * Front-end detail checks (Phase 3 workstream A, D-31…D-35): the steering stops (M1) and their share-1.0 bounding row, the kingpin steel
+ * Front-end detail checks (Phase 3 workstream A, D-31…D-33, D-43): the steering stops (M1) and their share-1.0 bounding row, the kingpin steel
  * plates and their NDS bolt groups, cleavage and tear-out (M2, M4), the pitch-moment path (M3) and the bridle tie points (M6). Each is
  * evaluated at the operating and the goal rider like the other structure rows (D-2); the `how` strings carry the hand arithmetic.
  *
- * Round 2 (D-35). The kingpin runs in a steel sleeve through the front beam; a carrier plate on the beam and a plate under it clamp the
+ * Round 2 (D-43). The kingpin runs in a steel sleeve through the front beam; a carrier plate on the beam and a plate under it clamp the
  * beam with six bolts in one line, a third plate under the crossbar takes the pin at the top. The oak therefore sees only the bolt
  * groups: per-bolt NDS lateral capacity (src/analysis/nds.ts), row tear-out, edge distances, cleavage with cross-bolts.
  */
@@ -15,7 +15,7 @@ import type { Ctx } from './context';
 import { dualCheck, singleCheck, detail, governing, type CaseEval } from './dual';
 import { f } from './format';
 import type { CaseData } from './loads';
-import { boltSpacing, cleavageVr, feAtAngle, fePerp, feParallel, lateralZ, rowTearOut } from './nds';
+import { boltSpacing, cleavageVr, countersinkDepth, effectiveSideThickness, feAtAngle, fePerp, feParallel, lateralZ, rowTearOut } from './nds';
 import { evalBoth } from './stability';
 import { allowables, frontLoadText, part, strikeCases, tieHalfY, wheelLoads, yawTorque } from './structure';
 import type { AnalysisCheck, Detail } from './types';
@@ -28,7 +28,7 @@ const boxSize = (ctx: Ctx, id: string): [number, number, number] | null => {
   return x && x.geometry.type === 'box' ? x.geometry.size : null;
 };
 
-// ── Pin statics and the plate model (D-35) ───────────────────────────────────────────────────────────────────────
+// ── Pin statics and the plate model (D-43) ───────────────────────────────────────────────────────────────────────
 
 /**
  * The pin as an overhanging beam: supported at the sleeve's two ends (a apart), loaded by the crossbar plate b above the top support.
@@ -48,6 +48,9 @@ export interface PlateModel {
   carrier: { t: number; hx: number; hy: number };
   barPlate: { t: number; hx: number; hy: number };
   holeD: number;
+  /** Shear ears tying the carrier to the beam plate (r3 N-1), the countersink depth of the crossbar plate bolts (r3 N-2). */
+  ear: { n: number; yE: number; proj: number; t: number; h: number };
+  barCsDepth: number;
 }
 
 /** Everything the plate rows need, read from the model's parts and their structured joints (the analysis reads real fasteners, D-33). */
@@ -96,6 +99,8 @@ export function plateModel(ctx: Ctx): PlateModel | null {
     carrier: { t: kpl.carrier.z1 - kpl.carrier.z0, hx: (carSize?.[0] ?? 2 * kp.carrier.hx) / 2, hy: (carSize?.[1] ?? 2 * kp.carrier.hy) / 2 },
     barPlate: { t: kpl.bar.z1 - kpl.bar.z0, hx: (barSize?.[0] ?? 2 * kp.bar.hx) / 2, hy: (barSize?.[1] ?? 2 * kp.bar.hy) / 2 },
     holeD: p.kingpinDiameterIn + 1 / 64,
+    ear: { n: ['kp-ear-L', 'kp-ear-R'].filter((id) => part(ctx, id)).length, yE: kp.carrier.hy - 0.5, proj: p.kingpinEarProjectIn, t: p.kingpinEarThickIn, h: kpl.carrier.z0 - kpl.under.z1 },
+    barCsDepth: countersinkDepth(barBoltD),
   };
 }
 
@@ -104,17 +109,22 @@ export const ndsAdjust = (p: { ndsWetFactorFasteners: number; ndsLoadDurationFac
   p.ndsWetFactorFasteners * p.ndsLoadDurationFactor * p.ndsGroupFactor;
 
 /** Adjusted lateral capacity (lbf) of one plate bolt in the oak at angle θ to the grain, steel side plate of thickness ls, oak length lm. */
-export function boltCapacity(ctx: Ctx, D: number, lm: number, ls: number, thetaDeg: number): { Zref: number; Z: number; mode: string; Fem: number; Re: number } {
+export function boltCapacity(ctx: Ctx, D: number, lm: number, ls0: number, thetaDeg: number, csDepth = 0): { Zref: number; Z: number; mode: string; Fem: number; Re: number; ls: number } {
   const { p } = ctx;
+  const ls = effectiveSideThickness(ls0, csDepth); // a flush countersunk head bears only on the plate below it (r3 N-2)
   const Fem = feAtAngle(feParallel(p.oakSpecificGravity), fePerp(p.oakSpecificGravity, D), thetaDeg);
   const r = lateralZ({ D, lm, ls, Fem, Fes: p.steelDowelBearingPsi, Fyb: p.kingpinPlateBoltYieldPsi, thetaDeg });
-  return { Zref: r.Z, Z: r.Z * ndsAdjust(p), mode: r.mode, Fem, Re: Fem / p.steelDowelBearingPsi };
+  return { Zref: r.Z, Z: r.Z * ndsAdjust(p), mode: r.mode, Fem, Re: Fem / p.steelDowelBearingPsi, ls };
 }
 
 export interface PinLoad { name: string; Hx: number; Hy: number; T: number }
 
 /** Governing pin load cases at one rider case (all horizontal, at the pin): the two-wheel strike, the one-wheel strike with the stop pair, the bridle pull, the lateral skid. */
 export function pinLoads(ctx: Ctx, c: CaseData, share?: number): PinLoad[] {
+  const extra = (E: number, label: string): PinLoad[] => {
+    const e = stopEnv(ctx, c, share, E);
+    return e ? [{ name: `one-wheel strike + stops (${label} pad)`, Hx: yawTorque(ctx, c).Hw + e.net, Hy: 0, T: yawTorque(ctx, c).T }] : [];
+  };
   const { p } = ctx;
   const yaw = yawTorque(ctx, c);
   const cases = strikeCases(ctx, c);
@@ -128,10 +138,12 @@ export function pinLoads(ctx: Ctx, c: CaseData, share?: number): PinLoad[] {
     { name: 'one-wheel strike + stops', Hx: yaw.Hw + net, Hy: 0, T: yaw.T },
     { name: 'bridle pull', Hx: p.pullForceLbf, Hy: 0, T: yaw.rope },
     { name: 'lateral skid', Hx: 0, Hy: Fy, T: 0 },
+    ...extra(p.steerStopPadModulusMinPsi, 'soft'),
+    ...extra(p.steerStopPadModulusMaxPsi, 'stiff'),
   ];
 }
 
-// ── Steering stop compliance (D-35) ─────────────────────────────────────────────────────────────────────────────
+// ── Steering stop compliance (D-43) ─────────────────────────────────────────────────────────────────────────────
 
 /** Stiffness of one stop: a bonded urethane pad of area A and thickness t at modulus E, k = E·A/t (lbf/in). */
 export const stopStiffness = (E: number, A: number, t: number): number => (E * A) / t;
@@ -162,7 +174,7 @@ export interface StopEnv {
 }
 
 /** The stop pair at one rider case. `share` overrides the stiffness-derived share (1 = the bounding case). */
-export function stopEnv(ctx: Ctx, c: CaseData, share?: number): StopEnv | null {
+export function stopEnv(ctx: Ctx, c: CaseData, share?: number, modulus?: number): StopEnv | null {
   const { p } = ctx;
   const plan = steerStopPlan(p);
   const pad = boxSize(ctx, 'steer-stop-face-L1');
@@ -172,7 +184,7 @@ export function stopEnv(ctx: Ctx, c: CaseData, share?: number): StopEnv | null {
   const tri1 = triangularFace(plan.ra, plan.rb, hFace, yaw.T);
   const P = yaw.T / tri1.rEff;
   const area = len * hFace;
-  const k = stopStiffness(p.steerStopPadModulusPsi, area, plan.tf);
+  const k = stopStiffness(modulus ?? p.steerStopPadModulusPsi, area, plan.tf);
   const sh = share ?? stopShare(k, p.steerStopFitMismatchIn, P);
   const tri = triangularFace(plan.ra, plan.rb, hFace, sh * yaw.T);
   return { T: yaw.T, rEff: tri1.rEff, P, share: sh, F: sh * P, net: (2 * sh - 1) * P, k, area, hFace, len, tri, plan };
@@ -214,10 +226,25 @@ function stopDetails(ctx: Ctx, env: StopEnv, bound: boolean): { ds: Detail[]; te
   // the vertical axis M_z = F·(r_eff − y_r), carried as a couple of y-forces on the two screws of each joint (lever = their spacing).
   const yR = plan.ra - dRiser / 2;
   const Mz = F * Math.max(0, env.rEff - yR);
-  const levRiser = 0.6, levArm = 2 * 0.55; // screw spacings across x: riser ±0.3", arm ±0.55"
-  const Tris = Mr / levRiser, Tarm = Mr / levArm;
-  const vRis = Math.hypot(F / 2, Mz / levRiser), vArm = Math.hypot(F / nScr, Mz / levArm);
-  const interRis = Math.sqrt((vRis / Ascr / (0.577 * steelAllow)) ** 2 + (Tris / At / steelAllow) ** 2);
+  const levArm = 2 * 0.55; // arm screw spacing across x: ±0.55"
+  // Riser (r3 N-3): the web, riser and arm are one welded stand. Two all-around fillets carry the face force F and the dog's vertical-axis moment M_z
+  // (weld group torsion), and the overturning moment F·h as a couple on the weld length. Round 2's two 3/8" screws are gone: they had no bearing or edge check.
+  const wl = p.steerStopWeldIn;
+  const weldSeam = (b: number, d: number) => {
+    const L = 2 * (b + d);
+    const Ju = (b + d) ** 3 / 6 - (b * b * d * d) / (b + d);
+    const c = Math.hypot(b / 2, d / 2);
+    const tauDirect = F / (0.707 * wl * L);
+    const tauTors = (Mz * c) / (0.707 * wl * Ju);
+    // overturning F·h: a couple on the two long sides (lever d): tension/compression line force per unit length
+    const tauOver = Mr / (d * 0.707 * wl * 2 * b) ;
+    return { tau: Math.hypot(tauDirect + tauTors, tauOver), tauDirect, tauTors, tauOver, L };
+  };
+  const wWeb = weldSeam(wDog, dRiser), wArm = weldSeam(wDog, dRiser);
+  const steelAllowW = 0.3 * p.weldFexxPsi * steelK;
+  const levArmFix = levArm;
+  const Tarm = Mr / levArmFix;
+  const vArm = Math.hypot(F / nScr, Mz / levArmFix);
   const interArm = Math.sqrt((vArm / Ascr / (0.577 * steelAllow)) ** 2 + (Tarm / At / steelAllow) ** 2);
   const armLen = armSize ? armSize[1] : 2;
   const toeA = armLen * (p.carrierPlateThickIn + 0.5); // the carrier spreads the toe load over about its own thickness + half the arm thickness
@@ -234,14 +261,15 @@ function stopDetails(ctx: Ctx, env: StopEnv, bound: boolean): { ds: Detail[]; te
     ...(riser ? [
       detail('riser bending at its base (force at web level)', sigR, 'psi', p.kingpinPlateYieldPsi / (p.steelSafetyFactor / steelK), '<='),
       detail('riser shear', tauR, 'psi', (0.577 * p.kingpinPlateYieldPsi) / (p.steelSafetyFactor / steelK), '<='),
-      detail('riser screws (to the arm): shear incl. the dog\'s vertical-axis moment + tension, ellipse', interRis, '', 1, '<='),
+      detail('web-to-riser all-around fillet weld (direct + torsion from M_z, plus overturning)', wWeb.tau, 'psi', steelAllowW, '<='),
+      detail('riser-to-arm all-around fillet weld (direct + torsion from M_z, plus overturning)', wArm.tau, 'psi', steelAllowW, '<='),
       detail('arm screws (to the carrier): shear incl. the dog\'s vertical-axis moment + tension, ellipse', interArm, '', 1, '<='),
       detail('arm screw thread stripping in the carrier (tapped hole)', Tarm, 'lbf', Tg, '<='),
       detail('arm screw bearing on the carrier hole (steel)', bearScr, 'psi', al.plateBrg * steelK, '<='),
       ...(ctx.L.kpPlates ? [detail('arm toe on the carrier, onto the beam top (oak ⊥)', pToe, 'psi', al.oakPerp * woodK, '<=')] : []),
     ] : []),
   ];
-  const text = `Pad: bonded ${f(plan.tf, 3)}" urethane, area ${f(env.area, 2)} in² (${f(env.len, 2)}" × ${f(hF, 2)}"), E ${f(p.steerStopPadModulusPsi, 0)} psi → k = E·A/t = ${f(env.k, 0)} lbf/in. Pair force P = T/r_eff = ${f(env.T)}/${f(env.rEff, 2)} = ${f(env.P)} lbf; the stiffer stop takes F = ${f(F)} lbf (share ${f(env.share, 3)}). Face pressure peak p_max = 3·T₁·s₂/(h(s₂³−s₁³)) = ${f(tri.pMax, 0)} psi (mean ${f(tri.pAvg, 0)}); the wedge splits F into ${f(Fx)} lbf on the rail face (${f(al0.railLen, 2)}" × ${f(ringDepth, 2)}" = ${f(pRail, 0)} psi) and ${f(Fy)} lbf on the crossbar side (${f(al0.barLen, 2)}" × ${f(ringDepth, 2)}" = ${f(pBar, 0)} psi) against oak ⊥ ${f(al.oakPerp * woodK, 0)} psi. Flange as a cantilever under the face pressure: σ = 3·p·h²/t² = ${f(sigFl, 0)} psi. ${riser ? `Riser (${f(wDog, 2)}" × ${f(dRiser, 2)}" × ${f(hRiser, 2)}"): the face force F acts at web level, M = F·${f(hRiser, 2)}" = ${f(Mr)} lb·in, σ = 6M/(d·w²) = ${f(sigR, 0)} psi, τ = F/(d·w) = ${f(tauR, 0)} psi; the dog's cantilever (F at r_eff ${f(env.rEff, 2)}" vs the riser at ${f(yR, 2)}") adds M_z = ${f(Mz)} lb·in; riser screws (${f(levRiser, 1)}" apart) ${f(vRis)} lbf shear + ${f(Tris)} lbf tension (interaction ${f(interRis, 2)}); arm screws (${f(levArm, 1)}" apart) ${f(vArm)} lbf shear + ${f(Tarm)} lbf tension (interaction ${f(interArm, 2)}, thread strip ${f(Tarm)} lbf vs ${f(Tg)}, bearing ${f(bearScr, 0)} psi); toe pressure on the beam top ${f(pToe, 0)} psi.` : ''}`;
+  const text = `Pad: bonded ${f(plan.tf, 3)}" urethane, area ${f(env.area, 2)} in² (${f(env.len, 2)}" × ${f(hF, 2)}"), E ${f(p.steerStopPadModulusPsi, 0)} psi → k = E·A/t = ${f(env.k, 0)} lbf/in. Pair force P = T/r_eff = ${f(env.T)}/${f(env.rEff, 2)} = ${f(env.P)} lbf; the stiffer stop takes F = ${f(F)} lbf (share ${f(env.share, 3)}). Face pressure peak p_max = 3·T₁·s₂/(h(s₂³−s₁³)) = ${f(tri.pMax, 0)} psi (mean ${f(tri.pAvg, 0)}); the wedge splits F into ${f(Fx)} lbf on the rail face (${f(al0.railLen, 2)}" × ${f(ringDepth, 2)}" = ${f(pRail, 0)} psi) and ${f(Fy)} lbf on the crossbar side (${f(al0.barLen, 2)}" × ${f(ringDepth, 2)}" = ${f(pBar, 0)} psi) against oak ⊥ ${f(al.oakPerp * woodK, 0)} psi. Flange as a cantilever under the face pressure: σ = 3·p·h²/t² = ${f(sigFl, 0)} psi. ${riser ? `Riser (${f(wDog, 2)}" × ${f(dRiser, 2)}" × ${f(hRiser, 2)}"): the face force F acts at web level, M = F·${f(hRiser, 2)}" = ${f(Mr)} lb·in, σ = 6M/(d·w²) = ${f(sigR, 0)} psi, τ = F/(d·w) = ${f(tauR, 0)} psi; the dog's cantilever (F at r_eff ${f(env.rEff, 2)}" vs the riser at ${f(yR, 2)}") adds M_z = ${f(Mz)} lb·in; web/riser/arm welded stand, ${f(wl, 4)}\" E70 fillets all around the ${f(wDog, 2)}\" × ${f(dRiser, 2)}\" seam: direct ${f(wWeb.tauDirect, 0)} + torsion ${f(wWeb.tauTors, 0)} psi with overturning ${f(wWeb.tauOver, 0)} psi → ${f(wWeb.tau, 0)} psi (≤ 0.3·F_EXX = ${f(steelAllowW, 0)}); arm screws (${f(levArm, 1)}" apart) ${f(vArm)} lbf shear + ${f(Tarm)} lbf tension (interaction ${f(interArm, 2)}, thread strip ${f(Tarm)} lbf vs ${f(Tg)}, bearing ${f(bearScr, 0)} psi); toe pressure on the beam top ${f(pToe, 0)} psi.` : ''}`;
   return { ds, text };
 }
 
@@ -253,24 +281,31 @@ export function steerStopsCheck(ctx: Ctx): AnalysisCheck {
   if (!plan.ok || !dogPart) {
     return singleCheck({
       id: 'steer-stops', label: 'Steering stops', group: 'Structure', value: 0, unit: 'psi', limit: al.oakPerp, sense: '<=', status: 'fail', load: 'goal',
-      how: `The steering stops do not fit this design (${plan.why || 'no stop dog in the model'}): see the validator.`, refs: ['D-31', 'D-35'],
+      how: `The steering stops do not fit this design (${plan.why || 'no stop dog in the model'}): see the validator.`, refs: ['D-31', 'D-43'],
     });
   }
   const ev = (c: CaseData): CaseEval => {
-    const env = stopEnv(ctx, c)!;
     const yaw = yawTorque(ctx, c);
     const Hgov = Math.max(...strikeCases(ctx, c).map((s) => s.H));
-    const Kvec = yaw.Hw + env.net;
-    const { ds, text } = stopDetails(ctx, env, false);
-    // The pin itself is checked in kingpin-strike / kingpin-plates / kingpin-bolts at the load pinLoads() gives (it includes this net force). The stop pair
-    // only matters to the pin if it makes a WORSE case than the two-wheel strike, so this is a governs / does-not-govern test, not a margin.
-    if (Kvec > Hgov) ds.push(detail('net kingpin load with the stop pair exceeds the governing kingpin strike load', Kvec, 'lbf', Hgov, '<='));
+    // The pad modulus is a range, not a number (r3 N-1): soft / nominal / stiff, the worst of each row governs.
+    const moduli: Array<[string, number]> = [['soft pad', p.steerStopPadModulusMinPsi], ['nominal pad', p.steerStopPadModulusPsi], ['stiff pad', p.steerStopPadModulusMaxPsi]];
+    const runs = moduli.map(([name, E]) => {
+      const env = stopEnv(ctx, c, undefined, E)!;
+      const r = stopDetails(ctx, env, false);
+      const Kvec = yaw.Hw + env.net;
+      void Hgov;
+      return { name, env, ...r, Kvec };
+    });
+    const merged = mergeCases(runs.map((r) => ({ name: r.name, details: r.ds })));
+    const nom = runs[1], env = nom.env, text = nom.text, Kvec = nom.Kvec;
+    const ds = merged;
+    const rangeTxt = `Pad modulus range ${f(p.steerStopPadModulusMinPsi, 0)} / ${f(p.steerStopPadModulusPsi, 0)} / ${f(p.steerStopPadModulusMaxPsi, 0)} psi (soft / nominal / stiff, r3 N-1): share ${runs.map((r) => `${r.name} ${f(r.env.share, 3)}`).join(', ')}, net kingpin force ${runs.map((r) => f(r.env.net)).join(' / ')} lbf; each row is the worst of the three. Fit-up mismatch ${p.steerStopFitMismatchIn}" after the feeler-gauge step (shim packs up to ${p.steerStopAdjustRangeIn}").`;
     const tThin = Math.min(toothThickness(plan.a, plan.cb, plan.W, plan.lock, plan.ra), toothThickness(plan.a, plan.cb, plan.W, plan.lock, plan.rb));
-    const how = `Yaw torque on the steer body about the kingpin: ${yaw.governing} T = ${f(yaw.T)} lb·in (one-wheel curb strike: H_w = ${f(yaw.Hw)} lbf [V_w ${f(yaw.Vw)} lbf, ${frontLoadText(ctx, wheelLoads(ctx, c))}] × y_w ${f(yaw.yw, 2)}" = ${f(yaw.strike)}; hard rope pull ${p.pullForceLbf} lbf × tie ${f(yaw.yTie, 2)}" = ${f(yaw.rope)}). Two stops close at lock (a 180° couple: dog L on the aft-left block, dog R on the fore-right block, and the mirror at −lock). Each dog is a ${f(plan.t, 2)}" steel channel standing on a riser and an arm INSIDE the ${p.turntableCenterHoleIn}" turntable hole (nothing through the ball ring), with a bonded urethane pad on each face; the dog spans s = ${f(plan.ra, 2)}…${f(plan.rb, 2)}" from the kingpin: r_eff = ⅔(s₂³−s₁³)/(s₂²−s₁²) = ${f(env.rEff, 2)}". ${text} Net on the kingpin: (2·share − 1)·P = ${f(env.net)} lbf, so with H_w = ${f(yaw.Hw)} lbf the pin sees ${f(Kvec)} lbf against the ${f(Hgov)} lbf two-wheel strike that already governs; the bounding row 'steer-stops-bound' puts the whole torque on one stop (share 1). Thinnest wood behind the face where the block is trimmed: ${f(tThin, 2)}" (rule ≥ ${p.stopBlockMinIn}"). Stop torque into the carrier and its bolt group: row 'kingpin-bolts'. Not modeled: the channel web touching the top plate under overturning (≈ ${f(env.F * env.hFace / 2 / 0.9)} lbf vertical, a UHMW pad on the web underside is specified); stiffness of the lazy-susan plates.`;
+    const how = `Yaw torque on the steer body about the kingpin: ${yaw.governing} T = ${f(yaw.T)} lb·in (one-wheel curb strike: H_w = ${f(yaw.Hw)} lbf [V_w ${f(yaw.Vw)} lbf, ${frontLoadText(ctx, wheelLoads(ctx, c))}] × y_w ${f(yaw.yw, 2)}" = ${f(yaw.strike)}; hard rope pull ${p.pullForceLbf} lbf × tie ${f(yaw.yTie, 2)}" = ${f(yaw.rope)}). Two stops close at lock (a 180° couple: dog L on the aft-left block, dog R on the fore-right block, and the mirror at −lock). Each dog is a ${f(plan.t, 2)}" steel channel standing on a riser and an arm INSIDE the ${p.turntableCenterHoleIn}" turntable hole (nothing through the ball ring), with a bonded urethane pad on each face; the dog spans s = ${f(plan.ra, 2)}…${f(plan.rb, 2)}" from the kingpin: r_eff = ⅔(s₂³−s₁³)/(s₂²−s₁²) = ${f(env.rEff, 2)}". ${text} ${rangeTxt} Net on the kingpin (nominal pad): (2·share − 1)·P = ${f(env.net)} lbf, so with H_w = ${f(yaw.Hw)} lbf the pin sees ${f(Kvec)} lbf against the ${f(Hgov)} lbf two-wheel strike that already governs; the bounding row 'steer-stops-bound' puts the whole torque on one stop (share 1). Thinnest wood behind the face where the block is trimmed: ${f(tThin, 2)}" (rule ≥ ${p.stopBlockMinIn}"). Stop torque into the carrier and its bolt group: row 'kingpin-bolts'. Not modeled: the channel web touching the top plate under overturning (≈ ${f(env.F * env.hFace / 2 / 0.9)} lbf vertical, a UHMW pad on the web underside is specified); stiffness of the lazy-susan plates.`;
     return governing(ds, how);
   };
   return dualCheck({
-    id: 'steer-stops', label: 'Steering stops: urethane-faced dogs, risers, stop blocks', group: 'Structure', refs: ['D-31', 'D-35', 'D-12', 'A3'], primary: 'goal',
+    id: 'steer-stops', label: 'Steering stops: urethane-faced dogs, risers, stop blocks', group: 'Structure', refs: ['D-31', 'D-43', 'D-12', 'A3'], primary: 'goal',
     ...evalBoth(ctx, ev),
   });
 }
@@ -286,7 +321,7 @@ export function steerStopsBoundCheck(ctx: Ctx): AnalysisCheck {
   const al = allowables(ctx);
   const plan = steerStopPlan(p);
   if (!plan.ok || !part(ctx, 'steer-stop-L')) {
-    return singleCheck({ id: 'steer-stops-bound', label: 'Steering stops, bounding case (share 1.0)', group: 'Structure', value: 0, unit: 'psi', limit: al.oakPerp, sense: '<=', status: 'fail', load: 'goal', how: `The steering stops do not fit this design (${plan.why || 'no stop dog in the model'}).`, refs: ['D-35'] });
+    return singleCheck({ id: 'steer-stops-bound', label: 'Steering stops, bounding case (share 1.0)', group: 'Structure', value: 0, unit: 'psi', limit: al.oakPerp, sense: '<=', status: 'fail', load: 'goal', how: `The steering stops do not fit this design (${plan.why || 'no stop dog in the model'}).`, refs: ['D-43'] });
   }
   const ev = (c: CaseData): CaseEval => {
     const env = stopEnv(ctx, c, 1)!;
@@ -307,12 +342,12 @@ export function steerStopsBoundCheck(ctx: Ctx): AnalysisCheck {
     return governing(ds, how);
   };
   return dualCheck({
-    id: 'steer-stops-bound', label: 'Steering stops, bounding case: one stop takes all (share 1.0)', group: 'Structure', refs: ['D-35', 'MF-1'], primary: 'goal',
+    id: 'steer-stops-bound', label: 'Steering stops, bounding case: one stop takes all (share 1.0)', group: 'Structure', refs: ['D-43', 'MF-1'], primary: 'goal',
     ...evalBoth(ctx, ev),
   });
 }
 
-// ── Kingpin plates (D-35): steel rows ───────────────────────────────────────────────────────────────────────────
+// ── Kingpin plates (D-43): steel rows ───────────────────────────────────────────────────────────────────────────
 
 /** The steel-side details at one pin load: pin on the sleeve and the crossbar plate, sleeve spigots, plate hole tear-out and net section, carrier strip bending. */
 export function plateSteelDetails(ctx: Ctx, pm: PlateModel, ld: PinLoad): { details: Detail[]; text: string } {
@@ -361,7 +396,7 @@ export function kingpinPlatesCheck(ctx: Ctx): AnalysisCheck {
   if (!pm) {
     return singleCheck({
       id: 'kingpin-plates', label: 'Kingpin steel plates', group: 'Structure', value: 0, unit: 'psi', limit: al.plateBrg, sense: '<=', info: true, load: 'goal',
-      how: 'No crossbar, so no kingpin plates: the pin is a cantilever over the stack and bears on oak (see kingpin-strike and kingpin-peak).', refs: ['D-35'],
+      how: 'No crossbar, so no kingpin plates: the pin is a cantilever over the stack and bears on oak (see kingpin-strike and kingpin-peak).', refs: ['D-43'],
     });
   }
   const ev = (c: CaseData): CaseEval => {
@@ -373,7 +408,7 @@ export function kingpinPlatesCheck(ctx: Ctx): AnalysisCheck {
     return governing(merged, how);
   };
   return dualCheck({
-    id: 'kingpin-plates', label: 'Kingpin steel plates: pin, sleeve spigots, plate holes', group: 'Structure', refs: ['D-35', 'D-32', 'M2'], primary: 'goal',
+    id: 'kingpin-plates', label: 'Kingpin steel plates: pin, sleeve spigots, plate holes', group: 'Structure', refs: ['D-43', 'D-32', 'M2'], primary: 'goal',
     ...evalBoth(ctx, ev),
   });
 }
@@ -390,11 +425,12 @@ export function mergeCases(cases: Array<{ name: string; details: Detail[] }>): D
   return [...best.values()].map((d) => ({ ...d, name: `${d.name} [${(d as Detail & { _case: string })._case}]` }));
 }
 
-// ── Kingpin plate bolt groups (D-35): NDS rows ──────────────────────────────────────────────────────────────────
+// ── Kingpin plate bolt groups (D-43): NDS rows ──────────────────────────────────────────────────────────────────
 
 /** Per-bolt NDS check of the beam bolt line at one pin load, plus spacing / edge rules and row tear-out. */
 export function beamBoltDetails(ctx: Ctx, pm: PlateModel, ld: PinLoad): { details: Detail[]; text: string } {
   const { p } = ctx;
+  const al = allowables(ctx);
   const bm = pm.beam;
   const H = Math.hypot(ld.Hx, ld.Hy);
   const rx = pinReactions(H, pm.a, pm.b);
@@ -402,6 +438,7 @@ export function beamBoltDetails(ctx: Ctx, pm: PlateModel, ld: PinLoad): { detail
   const sumY2 = bm.ys.reduce((m, y) => m + y * y, 0);
   const yMax = Math.max(...bm.ys.map(Math.abs));
   const Ft = sumY2 > 0 ? (ld.T * yMax) / sumY2 : 0; // tangential force on the outermost bolt from the stop torque (the arms deliver it to the carrier)
+  const topShare = pm.ear.n > 0 ? p.kingpinTorqueTopShare : 1; // the ears hand the rest of the stop torque to the beam plate (r3 N-1)
   const oneEnd = (R: number, t: number, torque: number) => {
     const Fx = Math.abs(R * ux) / bm.n + torque, Fy = Math.abs(R * uy) / bm.n;
     const F = Math.hypot(Fx, Fy);
@@ -409,8 +446,26 @@ export function beamBoltDetails(ctx: Ctx, pm: PlateModel, ld: PinLoad): { detail
     const cap = boltCapacity(ctx, bm.D, bm.lm, t, theta);
     return { Fx, Fy, F, theta, cap };
   };
-  const top = oneEnd(rx.Rtop, bm.tTop, Ft);
-  const bot = oneEnd(rx.Rbot, bm.tBot, 0);
+  const top = oneEnd(rx.Rtop, bm.tTop, Ft * topShare);
+  const bot = oneEnd(rx.Rbot, bm.tBot, Ft * (1 - topShare));
+  // Plate-stack couple (r3 N-2): the sleeve reactions R_top / R_bot sit at the plate mid-planes, ±(lm/2 + t/2) from the beam mid-depth; the wood cannot
+  // resist the resulting moment by bearing alone, so it goes into bolt tension and plate-edge contact. No preload credit: the bolts carry it alone.
+  const zT = bm.lm / 2 + bm.tTop / 2, zB = bm.lm / 2 + bm.tBot / 2;
+  const Mc = Math.abs(rx.Rtop) * zT + Math.abs(rx.Rbot) * zB;
+  const leverC = Math.max(0.1, pm.carrier.hx - Math.abs(bm.x));
+  const Tc = Mc / leverC;
+  const AtB = STEEL_TENSILE_AREA_FRAC * (Math.PI * bm.D * bm.D) / 4;
+  const boltTenAllow = p.kingpinPlateBoltYieldPsi / p.steelSafetyFactor;
+  // Plate-edge contact: the retained preload clamp plus the couple on the footprint (Z = 2hy·(2hx)²/6); separation when the couple exceeds the clamp.
+  const clampRet = (bm.n * p.kingpinPlateBoltPreloadLb * p.kingpinPlatePreloadRetainedFrac) / (4 * pm.carrier.hx * pm.carrier.hy);
+  const Zfoot = (2 * pm.carrier.hy * (2 * pm.carrier.hx) ** 2) / 6;
+  const edgeBrg = clampRet + Mc / Zfoot;
+  const edgeSep = Mc / Zfoot - clampRet; // > 0 means the edge lifts and the bolts alone carry the couple (the tension row has no preload credit)
+  const clampP = (bm.n * p.kingpinPlateBoltPreloadLb) / (4 * pm.carrier.hx * pm.carrier.hy);
+  // Shear ears: the beam-plane share of the torque as a force pair at the ears.
+  const Fe = pm.ear.n > 0 ? ((1 - topShare) * ld.T) / (2 * pm.ear.yE) : 0;
+  const earWebTau = pm.ear.n > 0 ? Fe / (pm.ear.proj * pm.ear.t) : 0;
+  const earWeldTau = pm.ear.n > 0 ? Fe / (0.707 * p.kingpinEarWeldIn * 2 * pm.ear.proj) : 0;
   const sp = boltSpacing(bm.D, bm.lm, 'perp');
   const spPar = boltSpacing(bm.D, bm.lm, 'par');
   const FvP = p.oakNdsShearPsi * p.ndsWetFactorShear * p.ndsLoadDurationFactor;
@@ -422,8 +477,15 @@ export function beamBoltDetails(ctx: Ctx, pm: PlateModel, ld: PinLoad): { detail
     detail('beam plate bolt, carrier end: per-bolt load vs NDS lateral capacity', top.F, 'lbf', top.cap.Z, '<='),
     detail('beam plate bolt, under end: per-bolt load vs NDS lateral capacity', bot.F, 'lbf', bot.cap.Z, '<='),
     detail('beam row tear-out under the lateral load along the grain', Fy, 'lbf', rt.Z, '<='),
+    detail('plate-stack couple: bolt tension from R_top / R_bot (no preload credit)', Tc / bm.n / AtB, 'psi', boltTenAllow, '<='),
+    detail('plate-stack couple: carrier edge contact on the beam top, retained preload + couple (oak ⊥)', edgeBrg, 'psi', al.oakPerp, '<='),
+    detail('bolt preload clamp pressure under the plates (oak ⊥)', clampP, 'psi', al.oakPerp, '<='),
+    ...(pm.ear.n > 0 ? [
+      detail('shear ear web: in-plane shear', earWebTau, 'psi', (0.6 * p.kingpinPlateYieldPsi) / p.steelSafetyFactor, '<='),
+      detail('shear ear fillet welds (carrier and beam plate)', earWeldTau, 'psi', 0.3 * p.weldFexxPsi, '<='),
+    ] : []),
   ];
-  const text = `Beam bolt line: ${bm.n} × ${f(bm.D, 4)}" at ${f(bm.pitch, 4)}" (≥ 5D = ${f(sp.betweenRows, 3)}" for l/D = ${f(bm.lm / bm.D, 1)}), edges ${f(bm.frontDist, 3)}" to the front face and ${f(bm.grooveDist, 3)}" to the rod groove (≥ 4D = ${f(sp.loadedEdge, 3)}"; these rider-independent distances are validator rules, see validateParams, since a row sitting exactly on its minimum would read marginal at every weight). Pin reaction at the carrier end R_top = ${f(rx.Rtop)} lbf (${f(Math.abs(rx.Rtop) / bm.n)} per bolt) + the stop torque on the outermost bolt T·y_max/Σy² = ${f(ld.T)} × ${f(yMax, 2)} / ${f(sumY2, 1)} = ${f(Ft)} lbf (arms → screws → carrier in its own plane) = ${f(top.F)} lbf at ${f(top.theta, 0)}° to the grain; capacity Z = ${f(top.cap.Zref)} lbf (yield mode ${top.cap.mode}; Fe = ${f(top.cap.Fem, 0)} psi at that angle for G = ${p.oakSpecificGravity}, D = ${f(bm.D, 4)}", plate ${f(bm.tTop, 4)}", Fes ${f(p.steelDowelBearingPsi, 0)}, Fyb ${f(p.kingpinPlateBoltYieldPsi, 0)}) × C_M ${p.ndsWetFactorFasteners} × C_D ${p.ndsLoadDurationFactor} × C_g ${p.ndsGroupFactor} = ${f(top.cap.Z)} lbf. Under end: R_bot ${f(rx.Rbot)} lbf → ${f(bot.F)} lbf per bolt vs ${f(bot.cap.Z)}. Row tear-out along the grain n·F'v·t·s_crit = ${bm.n} × ${f(FvP, 0)} × ${f(bm.lm, 2)} × ${f(rt.sCrit, 3)} = ${f(rt.Z)} lbf (F'v = ${p.oakNdsShearPsi} × ${p.ndsWetFactorShear} × ${p.ndsLoadDurationFactor}); the group is a single row, so group tear-out equals the row value.`;
+  const text = `Beam bolt line: ${bm.n} × ${f(bm.D, 4)}" at ${f(bm.pitch, 4)}" (≥ 5D = ${f(sp.betweenRows, 3)}" for l/D = ${f(bm.lm / bm.D, 1)}), edges ${f(bm.frontDist, 3)}" to the front face and ${f(bm.grooveDist, 3)}" to the rod groove (≥ 4D = ${f(sp.loadedEdge, 3)}"; these rider-independent distances are validator rules, see validateParams, since a row sitting exactly on its minimum would read marginal at every weight). Pin reaction at the carrier end R_top = ${f(rx.Rtop)} lbf (${f(Math.abs(rx.Rtop) / bm.n)} per bolt) + the stop torque on the outermost bolt T·y_max/Σy² = ${f(ld.T)} × ${f(yMax, 2)} / ${f(sumY2, 1)} = ${f(Ft)} lbf (arms → screws → carrier in its own plane), of which ${f(topShare * 100, 0)}% stays in the carrier plane (${f(Ft * topShare)} lbf) and ${f((1 - topShare) * 100, 0)}% goes through the two shear ears (${f(Fe)} lbf each, web ${f(earWebTau, 0)} psi, welds ${f(earWeldTau, 0)} psi) to the beam plate = ${f(top.F)} lbf at ${f(top.theta, 0)}° to the grain; capacity Z = ${f(top.cap.Zref)} lbf (yield mode ${top.cap.mode}; Fe = ${f(top.cap.Fem, 0)} psi at that angle for G = ${p.oakSpecificGravity}, D = ${f(bm.D, 4)}", plate ${f(bm.tTop, 4)}", Fes ${f(p.steelDowelBearingPsi, 0)}, Fyb ${f(p.kingpinPlateBoltYieldPsi, 0)}) × C_M ${p.ndsWetFactorFasteners} × C_D ${p.ndsLoadDurationFactor} × C_g ${p.ndsGroupFactor} = ${f(top.cap.Z)} lbf. Under end: R_bot ${f(rx.Rbot)} lbf + the ears' share of the torque → ${f(bot.F)} lbf per bolt vs ${f(bot.cap.Z)}. Plate-stack couple: R_top·${f(zT, 2)}\" + |R_bot|·${f(zB, 2)}\" = ${f(Mc)} lb·in (≈ ${f(Mc / (H || 1), 1)}·H) over the ${f(leverC, 2)}\" from the bolt line to the plate edge: ${f(Tc)} lbf total bolt tension (${f(Tc / bm.n / AtB, 0)} psi per bolt with no preload credit) and ${f(edgeBrg, 0)} psi contact at the carrier edge with ${f(p.kingpinPlatePreloadRetainedFrac * 100, 0)}% of the preload retained (${edgeSep > 0 ? 'the edge lifts by ' + f(edgeSep, 0) + ' psi of couple: bolts alone carry it' : 'stays clamped'}); the bolts are tightened to ${f(p.kingpinPlateBoltPreloadLb, 0)} lbf (${f(p.kingpinPlateBoltNutFactor * bm.D * p.kingpinPlateBoltPreloadLb / 12, 1)} lb·ft, Belleville washers, retorque after the first wet day), clamp pressure ${f(clampP, 0)} psi. Row tear-out along the grain n·F'v·t·s_crit = ${bm.n} × ${f(FvP, 0)} × ${f(bm.lm, 2)} × ${f(rt.sCrit, 3)} = ${f(rt.Z)} lbf (F'v = ${p.oakNdsShearPsi} × ${p.ndsWetFactorShear} × ${p.ndsLoadDurationFactor}); the group is a single row, so group tear-out equals the row value.`;
   void spPar;
   return { details, text };
 }
@@ -435,7 +497,7 @@ export function barBoltDetails(ctx: Ctx, pm: PlateModel, ld: PinLoad): { details
   const Fx = Math.abs(ld.Hx) / br.n, Fy = Math.abs(ld.Hy) / br.n;
   const F = Math.hypot(Fx, Fy);
   const theta = Math.atan2(Fy, Fx) * DEG; // angle to the grain (along x)
-  const cap = boltCapacity(ctx, br.D, br.lm, br.t, theta);
+  const cap = boltCapacity(ctx, br.D, br.lm, br.t, theta, pm.barCsDepth);
   const spPar = boltSpacing(br.D, br.lm, 'par');
   const spPerp = boltSpacing(br.D, br.lm, 'perp');
   const FvP = p.oakNdsShearPsi * p.ndsWetFactorShear * p.ndsLoadDurationFactor;
@@ -460,7 +522,7 @@ export function kingpinBoltsCheck(ctx: Ctx): AnalysisCheck {
   if (!pm) {
     return singleCheck({
       id: 'kingpin-bolts', label: 'Kingpin plate bolt groups', group: 'Structure', value: 0, unit: 'lbf', limit: 1, sense: '<=', info: true, load: 'goal',
-      how: 'No crossbar, so no kingpin plates: the pin bears on oak directly (see kingpin-strike).', refs: ['D-35'],
+      how: 'No crossbar, so no kingpin plates: the pin bears on oak directly (see kingpin-strike).', refs: ['D-43'],
     });
   }
   void al;
@@ -469,16 +531,16 @@ export function kingpinBoltsCheck(ctx: Ctx): AnalysisCheck {
     const all = cases.map((ld) => ({ ld, r: beamBoltDetailsAll(ctx, pm, ld) }));
     const merged = mergeCases(all.map((x) => ({ name: x.ld.name, details: x.r.details })));
     const gov = all.reduce((a, b) => (Math.max(...b.r.details.map((d) => d.util)) > Math.max(...a.r.details.map((d) => d.util)) ? b : a), all[0]);
-    const how = `Pin load cases at this rider (${cases.map((x) => `${x.name}: H_x ${f(x.Hx)} lbf, H_y ${f(x.Hy)} lbf, stop torque ${f(x.T)} lb·in`).join('; ')}); each row is the worst over the cases. Governing: ${gov.ld.name}. ${gov.r.text} NDS: Fe⊥ = 6,100·G^1.45/√D, Fe∥ = 11,200·G (Table 12.3.3), yield modes Im, Is, IIIs, IV (Table 12.3.1A, Rd = 3.2–4·Kθ); the oak sees ONLY these bolts (D-35).`;
+    const how = `Pin load cases at this rider (${cases.map((x) => `${x.name}: H_x ${f(x.Hx)} lbf, H_y ${f(x.Hy)} lbf, stop torque ${f(x.T)} lb·in`).join('; ')}); each row is the worst over the cases. Governing: ${gov.ld.name}. ${gov.r.text} NDS: Fe⊥ = 6,100·G^1.45/√D, Fe∥ = 11,200·G (Table 12.3.3), yield modes Im, Is, IIIs, IV (Table 12.3.1A, Rd = 3.2–4·Kθ); the oak sees ONLY these bolts (D-43).`;
     return governing(merged, how);
   };
   return dualCheck({
-    id: 'kingpin-bolts', label: 'Kingpin plate bolt groups: NDS lateral capacity, spacing, edges, row tear-out', group: 'Structure', refs: ['D-35', 'D-32', 'MF-3'], primary: 'goal',
+    id: 'kingpin-bolts', label: 'Kingpin plate bolt groups: NDS lateral capacity, spacing, edges, row tear-out', group: 'Structure', refs: ['D-43', 'D-32', 'MF-3'], primary: 'goal',
     ...evalBoth(ctx, ev),
   });
 }
 
-// ── M2: kingpin peak bearing (round 1) → replaced by the plate rows (D-35) ──────────────────────────────────────
+// ── M2: kingpin peak bearing (round 1) → replaced by the plate rows (D-43) ──────────────────────────────────────
 
 /**
  * Round 1 held the oak bore to a rigid-pin peak bearing (5.4× the average, critic MF-3: the 1,700 psi allowable was overstated 22–56%). Round 2 takes the
@@ -490,9 +552,9 @@ export function kingpinPeakCheck(ctx: Ctx): AnalysisCheck {
   return singleCheck({
     id: 'kingpin-peak', label: 'Kingpin peak bearing (round 1, replaced)', group: 'Structure', value: 0, unit: 'psi', limit: al.oakDowel, sense: '<=', info: true, load: 'goal',
     how: ctx.L.kpPlates
-      ? 'Replaced in round 2 (D-35): with the kingpin steel plates the pin runs in a steel sleeve and bears on steel, so no oak bears on the pin and the round-1 peak-bearing row (a rigid pin in two oak members, 5.4× the average) has no oak to apply to. The NDS bolt-group rows (kingpin-bolts), the steel rows (kingpin-plates) and the cleavage rows (kingpin-split) carry the pin load instead.'
+      ? 'Replaced in round 2 (D-43): with the kingpin steel plates the pin runs in a steel sleeve and bears on steel, so no oak bears on the pin and the round-1 peak-bearing row (a rigid pin in two oak members, 5.4× the average) has no oak to apply to. The NDS bolt-group rows (kingpin-bolts), the steel rows (kingpin-plates) and the cleavage rows (kingpin-split) carry the pin load instead.'
       : 'No crossbar: the pin is a cantilever over the stack and bears on oak (see kingpin-strike); the two-member rigid-pin model does not apply and the steel plates do not exist.',
-    refs: ['D-32', 'D-35'],
+    refs: ['D-32', 'D-43'],
   });
 }
 
@@ -514,7 +576,7 @@ export function pitchPathCheck(ctx: Ctx): AnalysisCheck {
   const rr = p.uboltRodDiameterIn;
   const Aleg = STEEL_TENSILE_AREA_FRAC * ((Math.PI * rr * rr) / 4);
   const zAxle = L.r;
-  // The pin force reaches the steer body at the beam plates (R_top above, R_bot below); equivalently H at the crossbar plate's mid height (D-35).
+  // The pin force reaches the steer body at the beam plates (R_top above, R_bot below); equivalently H at the crossbar plate's mid height (D-43).
   const zLoad = L.kpPlates ? (L.kpPlates.bar.z0 + L.kpPlates.bar.z1) / 2 : (L.beamF.top + L.beamF.bot) / 2;
   const ev = (c: CaseData): CaseEval => {
     const w = wheelLoads(ctx, c);
@@ -622,7 +684,7 @@ export function kingpinSplitCheck(ctx: Ctx): AnalysisCheck {
     return governing(ds, txt);
   };
   return dualCheck({
-    id: 'kingpin-split', label: pm ? 'Kingpin cleavage (NDS 3.4.3.3) and cross-bolts' : 'Kingpin ligaments: beam and crossbar split / shear-out', group: 'Structure', refs: ['D-32', 'D-35', 'MF-4'], primary: 'goal',
+    id: 'kingpin-split', label: pm ? 'Kingpin cleavage (NDS 3.4.3.3) and cross-bolts' : 'Kingpin ligaments: beam and crossbar split / shear-out', group: 'Structure', refs: ['D-32', 'D-43', 'MF-4'], primary: 'goal',
     ...evalBoth(ctx, ev),
   });
 }

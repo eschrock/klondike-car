@@ -88,3 +88,13 @@ describe('row / group tear-out (Appendix E), cleavage (3.4.3.3), spacing (12.5.1
     expect(boltSpacing(0.3125, 0.5, 'perp').betweenRows).toBeCloseTo(0.78125, 9); // l/D = 1.6 ≤ 2: 2.5D
   });
 });
+
+describe('countersink reduction (r3 N-2)', () => {
+  it('82° flat head, head diameter 1.92·D: depth = 0.46·D / tan 41° = 0.1654" for 5/16"; the effective plate loses half of it (3/8" → 0.2923")', async () => {
+    const { countersinkDepth, effectiveSideThickness } = await import('./nds');
+    expect(countersinkDepth(0.3125)).toBeCloseTo((0.46 * 0.3125) / Math.tan((41 * Math.PI) / 180), 9);
+    expect(countersinkDepth(0.3125)).toBeCloseTo(0.1654, 3);
+    expect(effectiveSideThickness(0.375, countersinkDepth(0.3125))).toBeCloseTo(0.375 - 0.0827, 3);
+    expect(effectiveSideThickness(0.375, 0)).toBe(0.375);
+  });
+});

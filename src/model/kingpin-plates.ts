@@ -1,5 +1,5 @@
 /**
- * Kingpin steel plates and their bolt groups (Phase 3 round 2, D-35). Plain numbers only; the model builder, the validator and
+ * Kingpin steel plates and their bolt groups (Phase 3 round 2, D-43). Plain numbers only; the model builder, the validator and
  * the analysis all read the same plan so they cannot disagree about where the bolts are.
  *
  * The pin runs in a steel sleeve through the front beam. A carrier plate (¼") lies on the beam top and a plate (3/16") under the
@@ -58,7 +58,7 @@ export function kingpinPlatePlan(p: Params): KingpinPlatePlan {
 }
 
 /**
- * Geometry rules of the plate bolt groups and the stop arms (D-35): these do not depend on the rider, so they are validator errors, not check rows (a row
+ * Geometry rules of the plate bolt groups and the stop arms (D-43): these do not depend on the rider, so they are validator errors, not check rows (a row
  * sitting exactly on its minimum would read "marginal" at every weight). Each message carries the numbers.
  */
 export function kingpinPlateIssues(p: Params): Array<{ keys: string[]; message: string }> {

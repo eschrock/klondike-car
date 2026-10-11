@@ -17,6 +17,7 @@
 
 import { kingpinPlateIssues, kingpinPlatePlan, stopArmHx } from './model/kingpin-plates';
 import { planStops } from './model/stops';
+import { buildPlanCurve, curveTireGap, latestCurveEnd, offsetY, type CurveClearanceSpec } from './model/hull-curve';
 
 export type ParamStatus = 'locked' | 'verify' | 'assumed' | 'explore';
 
@@ -169,7 +170,7 @@ const defs = {
     note: 'Brake pivot, rear-handle sockets, and (by default) the storage box over the rear axle.',
   },
   frontOverhangIn: {
-    label: 'Body/prow overhang ahead of front axle', group: 'layout', unit: 'in',
+    label: 'Body overhang ahead of front axle', group: 'layout', unit: 'in',
     default: 8.5, min: 0, max: 20, step: 0.5, status: 'explore', ref: 'D-43',
     note: '8.5" (was 8"): the turntable corner, kingpin lead and the ¾" front transom need ≥ 8.25" (D-43).',
   },
@@ -226,10 +227,41 @@ const defs = {
     note: 'Overridden while "Auto nose width & shoulder" is on (resolveParams). Must hold the rider\'s feet + boots (bootAllowanceIn) and be ≤ 2 × (inner tire corner y at full lock − steering clearance); see A-4.',
   },
   noseTaperStartIn: {
-    label: 'Nose taper starts this far behind front axle', group: 'body', unit: 'in',
-    default: 18, min: 14, max: 26, step: 0.5, status: 'explore', ref: 'A-4',
-    note: 'Overridden while "Auto nose width & shoulder" is on (resolveParams). Measured from the front AXLE. The full-width cabin must end behind the rear-most tire corner at full lock + steering clearance; that corner is (swing rear extent − kingpin lead) behind the axle (A-4).',
+    label: 'Hull reaches nose width this far behind front axle', group: 'body', unit: 'in',
+    default: 13.25, min: 12, max: 26, step: 0.5, status: 'explore', ref: 'A-4, D-45',
+    note: 'The END of the plan S-curve (D-45), measured from the front AXLE. Overridden while "Auto nose width & shoulder" is on: resolveParams() finishes the curve as late as the front-tire sweep (full lock) plus steering clearance allows. Old links that saved the square-shoulder distance still load; the validator reports a curve that would hit a tire.',
   },
+  hullCurveStartIn: {
+    label: 'S-curve starts (cabin begins to narrow) at x', group: 'body', unit: 'in',
+    default: 18, min: 8, max: 34, step: 0.5, status: 'explore', ref: 'D-45',
+    note: 'Model x of the start of the plan S-curve that blends the cabin side into the nose side (D-45). The cabin stays full width (and straight) up to here: the seat, grab handles, lash points, reflectors and storage box all sit behind it. The curve end is derived from the tire sweep (noseTaperStartIn). An earlier start gives a gentler curve (larger bend radius). With "Auto nose width & shoulder" on, the rule moves the start EARLIER (never later) if the curve would otherwise be tighter than the lamination limit.',
+  },
+  hullLamThicknessIn: {
+    label: 'Hull lamination strip thickness (chine, gunwale, rails)', group: 'body', unit: 'in',
+    default: 0.125, min: 0.0625, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-45',
+    note: 'The chine, gunwale and ladder rails are bent laminations of white-oak strips this thick, glued on a plan-view form (epoxy, slow hardener). The number of plies is member thickness / strip.',
+  },
+  hullLamMinRadiusFactor: {
+    label: 'Min. bend radius / strip thickness', group: 'body', unit: '×',
+    default: 40, min: 20, max: 100, step: 5, status: 'assumed', ref: 'D-45',
+    note: 'White oak (and okoume ply sheets) lay up cold without steaming above this ratio; the validator flags a tighter hull curve (the inside face of the lamination is the tightest).',
+  },
+  hullWebPlies: {
+    label: 'Side-panel sheets in the curve', group: 'body', unit: '',
+    default: 2, min: 1, max: 3, step: 1, status: 'assumed', ref: 'D-45',
+    note: 'The curved 6 mm okoume web is laminated from this many thin sheets (2 x 3 mm) around the same form, so it can take the curve (min radius = factor x one sheet). 1 = a single 6 mm sheet, which does not bend this tight cold.',
+  },
+  deckSlopIn: {
+    label: 'Deck rabbet / dado clearance over the ply', group: 'body', unit: 'in',
+    default: 0.04, min: 0, max: 0.08, step: 0.004, status: 'assumed', ref: 'D-45',
+    note: 'The deck rabbet in the chine and the dado in each transom are cut this much taller than the (epoxy-sealed) deck so the sealed panel enters its own rabbet; thickened epoxy fills the gap (build review MUST-2).',
+  },
+  shoulderBeamIn: {
+    label: 'Shoulder beam thickness (under the deck step)', group: 'body', unit: 'in',
+    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-45',
+    note: 'A full-width oak beam under the 1" deck step, just behind where the S-curve ends. Both rail pairs Domino into it, the cabin deck butts its rear face and the nose deck sits on it: the cabin-to-nose structural tie (build review MUST-1).',
+  },
+
   steeringClearanceIn: {
     label: 'Tire-to-hull clearance at full lock', group: 'body', unit: 'in',
     default: 0.75, min: 0.25, max: 2, step: 0.125, status: 'assumed', ref: 'A-4',
@@ -247,9 +279,9 @@ const defs = {
   gunwaleFlareIn: {
     label: 'Gunwale outward flare (each side)', group: 'body', unit: 'in',
     default: 0, min: 0, max: 4, step: 0.25, status: 'explore', ref: 'D-6',
-    note: 'Above the wheel-well height the body may be wider than the well gap.',
+    note: 'IGNORED since D-45: the S-curve hull has vertical sides (the web is laminated around a plan-view form, so it cannot also lean). Kept so old links load; the validator warns when it is set.',
   },
-  // ── Hull detail: captured ply, joinery, prow, lift handles, finger guard, signs (Phase 3 workstream B, D-35…D-37) ──
+  // ── Hull detail: captured ply, joinery, lift handles, finger guard, signs (Phase 3 workstream B, D-35…D-37) ──
   grooveDepthIn: {
     label: 'Side-panel groove depth (chine / gunwale)', group: 'body', unit: 'in',
     default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-35',
@@ -263,27 +295,7 @@ const defs = {
   transomThicknessIn: {
     label: 'Transom thickness (front and rear)', group: 'stock', unit: 'in',
     default: 0.75, min: 0.5, max: 1.25, step: 0.0625, status: 'assumed', ref: 'D-35, D-43',
-    note: '¾" gives the transom a real hand-hold bar, lets a DF 500 Domino keep a 0.15" wall, and takes the handle sockets, quadrant bracket and prow socket bolts. The chine and gunwale thickness is "Chine / gunwale stock thickness".',
-  },
-  prowLegMinIn: {
-    label: 'Prow leg bearing length in its socket', group: 'body', unit: 'in',
-    default: 4, min: 3, max: 6, step: 0.5, status: 'assumed', ref: 'D-36, D-43',
-    note: 'Straight leg that drops into an oak socket block on the front face of the front transom. The leg bears on the socket walls; the stainless inserts and knobs only retain it (build review M3).',
-  },
-  prowSocketCheekIn: {
-    label: 'Prow socket cheek (wall) thickness', group: 'body', unit: 'in',
-    default: 0.75, min: 0.5, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-43',
-    note: 'Oak walls each side of and in front of the prow leg.',
-  },
-  prowGrabLbf: {
-    label: 'Prow grab load at the tip (one scout)', group: 'factors', unit: 'lbf',
-    default: 25, min: 10, max: 100, step: 5, status: 'assumed', ref: 'D-43',
-    note: 'A scout grabbing or leaning on the prow, applied forward, aft or sideways at the tip. The prow is labeled "not a handle".',
-  },
-  prowInsertAllowLbf: {
-    label: 'Prow retaining insert allowable pull-out (each)', group: 'factors', unit: 'lbf',
-    default: 300, min: 100, max: 800, step: 25, status: 'verify', ref: 'D-43',
-    note: '5/16-18 stainless threaded insert epoxied into the laminated leg (glue lines across the insert): ultimate ≈ 900 lbf (vendor data to confirm) ÷ 3.',
+    note: '¾" gives the transom a real hand-hold bar, lets a DF 500 Domino keep a 0.15" wall, and takes the handle sockets, and quadrant bracket bolts. The chine and gunwale thickness is "Chine / gunwale stock thickness".',
   },
   scupperDiaIn: {
     label: 'Deck scupper (drain hole) diameter', group: 'body', unit: 'in',
@@ -359,39 +371,6 @@ const defs = {
     label: 'Oak doubler (blocking) thickness', group: 'body', unit: 'in',
     default: 0.75, min: 0.5, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-41',
     note: 'Local oak blocking glued behind the gunwale and the rear transom where grip pads, lash plates and the rear-light plate screw in, so every wood screw has at least ¾" of engagement.',
-  },
-  prowHeightIn: {
-    label: 'Prow height above the gunwale line', group: 'body', unit: 'in',
-    default: 18, min: 8, max: 30, step: 0.5, status: 'assumed', ref: 'D-36',
-  },
-  prowReachIn: {
-    label: 'Prow tip reach ahead of the front transom', group: 'body', unit: 'in',
-    default: 7.75, min: 3, max: 14, step: 0.25, status: 'assumed', ref: 'D-36',
-  },
-  prowWidthIn: {
-    label: 'Prow width (across the hull)', group: 'body', unit: 'in',
-    default: 1.75, min: 1, max: 3, step: 0.125, status: 'assumed', ref: 'D-36, D-43',
-    note: '1.75" (was 1.5"): a sideways grab at the tip twists the leg (25 lbf × 7.4" reach); 1.5" ran 105% of the oak shear allowable, 1.75" about 87% (prow-grab).',
-  },
-  prowLamThicknessIn: {
-    label: 'Prow lamination strip thickness', group: 'body', unit: 'in',
-    default: 0.125, min: 0.0625, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-36',
-    note: '1/8" white oak strips, resawn or planed; epoxy-laminated on a form.',
-  },
-  prowPlies: {
-    label: 'Prow lamination count', group: 'body', unit: '',
-    default: 6, min: 2, max: 12, step: 1, status: 'assumed', ref: 'D-36',
-    note: 'Prow thickness = count × strip thickness (6 × 1/8" = 3/4").',
-  },
-  prowSpringbackFrac: {
-    label: 'Prow form spring-back allowance', group: 'body', unit: '',
-    default: 0.06, min: 0, max: 0.2, step: 0.01, status: 'verify', ref: 'D-36',
-    note: 'The form is cut overbent by this fraction of each heading change. Typical thin-strip epoxy laminations spring back 3–8%: bend a test strip first.',
-  },
-  prowMinRadiusFactor: {
-    label: 'Min. bend radius / strip thickness', group: 'body', unit: '×',
-    default: 40, min: 20, max: 100, step: 5, status: 'assumed', ref: 'D-36',
-    note: 'White oak strips lay up cold without steaming above this ratio; the model flags a tighter prow centerline.',
   },
   liftSlotLengthIn: {
     label: 'Lift hand-hold slot length (across the transom)', group: 'body', unit: 'in',
@@ -780,49 +759,109 @@ const defs = {
   },
   steerStopSizeIn: {
     label: 'Steering stop dog width (steel channel, across the flanges)', group: 'steering', unit: 'in',
-    default: 1.25, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-35',
+    default: 1.25, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-43',
     note: 'Round 2: each stop dog is a formed steel channel (web + two upturned flanges, outsourced waterjet + brake) bolted to a riser that stands on the kingpin carrier plate INSIDE the turntable center hole, so nothing goes through the ball ring. The flange outer faces are the stops; a bonded urethane pad on each face makes the two stops share load. Each dog has a face on both sides and lands flat on a chassis stop block exactly at lock (src/model/stops.ts).',
   },
   steerStopHeightIn: {
     label: 'Steering stop dog flange height', group: 'steering', unit: 'in',
-    default: 1.25, min: 0.5, max: 2, step: 0.25, status: 'assumed', ref: 'D-35',
+    default: 1.625, min: 0.5, max: 2, step: 0.25, status: 'assumed', ref: 'D-43',
     note: 'Clamped to the bolster depth minus the web, the running clearances and the riser. The bearing face on the stop block is this tall.',
   },
   // ── Phase 3 workstream A: steering stops, kingpin, bridle ties, front mounting (D-31…D-35) ──
   steerStopFacePlateIn: {
     label: 'Stop channel steel thickness', group: 'steering', unit: 'in',
-    default: 0.3125, min: 0.1875, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-35',
+    default: 0.375, min: 0.1875, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-43',
     note: 'A36 plate, web and flanges; the flange bends over the stop pressure (steer-stops row). Also the riser and foot plate.',
   },
   steerStopPadIn: {
     label: 'Stop face urethane pad thickness', group: 'steering', unit: 'in',
-    default: 0.25, min: 0.125, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-35',
+    default: 0.3125, min: 0.125, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-43',
     note: '70-80A urethane bonded to each flange face. It is the compliance that makes two stops share the yaw torque (stiffness k = E·A/t, share from fit-up mismatch) and it soaks up the impact.',
   },
   steerStopPadModulusPsi: {
     label: 'Stop pad effective compressive modulus', group: 'steering', unit: 'psi',
-    default: 1500, min: 500, max: 5000, step: 100, status: 'verify', ref: 'D-35',
+    default: 1500, min: 500, max: 5000, step: 100, status: 'verify', ref: 'D-43',
     note: 'Apparent modulus of a thin bonded 75A urethane pad (shape factor ~2), ~1,500 psi; test a pad (Phase 4). Lower = softer = shares better but crushes more.',
   },
   steerStopPadAllowPsi: {
     label: 'Stop pad bearing allowable', group: 'steering', unit: 'psi',
-    default: 800, min: 300, max: 2000, step: 50, status: 'verify', ref: 'D-35',
+    default: 800, min: 300, max: 2000, step: 50, status: 'verify', ref: 'D-43',
     note: 'Compressive stress the urethane pad may see at the design strike (about half its 1,500 psi yield stress).',
   },
   steerStopPadYieldPsi: {
     label: 'Stop pad yield stress (bounding case)', group: 'steering', unit: 'psi',
-    default: 1500, min: 500, max: 4000, step: 100, status: 'verify', ref: 'D-35',
+    default: 1500, min: 500, max: 4000, step: 100, status: 'verify', ref: 'D-43',
     note: 'Compressive stress at which a thin bonded 75A urethane pad takes a set. The share-1.0 bounding row (one stop closes, the other does not) is held to this, not to the design allowable.',
   },
   steerStopRiserDepthIn: {
     label: 'Stop riser depth (radial, y)', group: 'steering', unit: 'in',
-    default: 0.5, min: 0.25, max: 1, step: 0.125, status: 'assumed', ref: 'D-35',
+    default: 0.5, min: 0.25, max: 1, step: 0.125, status: 'assumed', ref: 'D-43',
     note: 'The short block between the stop arm and the channel web, at the turntable hole edge. The web and the riser reach this far in from the stop face, and the planner keeps that inner end clear of the crossbar at lock.',
   },
   steerStopFitMismatchIn: {
     label: 'Stop fit-up mismatch (one stop closes late)', group: 'steering', unit: 'in',
-    default: 0.005, min: 0, max: 0.06, step: 0.001, status: 'assumed', ref: 'D-35',
-    note: 'Assembly tolerance between the two stops of the couple (shim at assembly). share = ½ + k·δ/(2·P): at 0.005" it is ≈ 0.55. A mismatch of P/k closes only one stop (share 1.0, the bounding row).',
+    default: 0.018, min: 0, max: 0.06, step: 0.001, status: 'assumed', ref: 'D-43',
+    note: 'Residual fit-up mismatch of the two stops AFTER the feeler-gauge step (r3 N-1): 0.005" cannot be held by a shop, so the design uses a realistic 0.015-0.020" (bonded pad thickness tolerance + block seat + thermal change + pad set). The stops are adjustable (shim packs under the stop blocks, steerStopAdjustRangeIn) and the assembly step is "both pads touch a 0.003" feeler within 0.010" at lock". share = ½ + k·δ/(2·P). A mismatch of P/k closes only one stop (share 1.0, the bounding row).',
+  },
+  steerStopPadModulusMinPsi: {
+    label: 'Stop pad modulus, soft end of the range', group: 'steering', unit: 'psi',
+    default: 1000, min: 300, max: 3000, step: 100, status: 'assumed', ref: 'D-43',
+    note: 'Soft bound of the pad apparent modulus (70A durometer tolerance, hot day, aging). steer-stops is evaluated at this, the nominal and the stiff value and the worst governs (r3 N-1), so no row depends on a lucky modulus.',
+  },
+  steerStopPadModulusMaxPsi: {
+    label: 'Stop pad modulus, stiff end of the range', group: 'steering', unit: 'psi',
+    default: 3000, min: 1000, max: 8000, step: 100, status: 'assumed', ref: 'D-43',
+    note: 'Stiff bound: 80A durometer tolerance and a winter night (urethane roughly doubles in modulus near freezing). A stiffer pad raises the share of the late-closing stop and the net force on the kingpin.',
+  },
+  steerStopAdjustRangeIn: {
+    label: 'Stop block shim-pack adjustment range', group: 'steering', unit: 'in',
+    default: 0.0625, min: 0.03125, max: 0.25, step: 0.03125, status: 'assumed', ref: 'D-43',
+    note: 'Total shim thickness available under each stop block (1/64" and 1/32" stainless shims). Must cover the fit-up mismatch (validator). Assembly step: shim until both pads of each dog touch a feeler gauge together at lock.',
+  },
+  kingpinTorqueTopShare: {
+    label: 'Stop torque taken at the carrier bolt plane', group: 'steering', unit: '',
+    default: 0.6, min: 0.5, max: 1, step: 0.05, status: 'assumed', ref: 'D-43',
+    note: 'The stop torque enters the carrier; two welded shear ears (kp-ear) tie the carrier to the beam plate so the under plane takes the rest (r3 N-1). 0.5 if both planes were equally stiff; 0.6 covers the ear/weld compliance. 1.0 = no ears.',
+  },
+  kingpinEarThickIn: {
+    label: 'Shear ear web thickness', group: 'steering', unit: 'in',
+    default: 0.25, min: 0.1875, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-43',
+    note: 'A36 web in the fore-aft/vertical plane, welded to a tab of the carrier above and a tab of the beam plate below, standing in front of the beam face. In-plane shear carries the torque share between the two plates.',
+  },
+  kingpinEarProjectIn: {
+    label: 'Shear ear projection ahead of the beam face', group: 'steering', unit: 'in',
+    default: 0.75, min: 0.5, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-43',
+    note: 'How far the ear web (and the plate tabs) reach forward of the beam front face; kept short of the bridle rope.',
+  },
+  kingpinEarWeldIn: {
+    label: 'Shear ear fillet weld leg', group: 'steering', unit: 'in',
+    default: 0.1875, min: 0.125, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-43',
+    note: 'Fillet weld leg, both sides of the web at both plates, E70 filler.',
+  },
+  kingpinPlateBoltPreloadLb: {
+    label: 'Plate bolt preload (target)', group: 'steering', unit: 'lbf',
+    default: 1500, min: 500, max: 4000, step: 100, status: 'assumed', ref: 'D-43',
+    note: 'About 25% of proof for a 5/16 grade 8 bolt, limited by oak crush under the plates (clamp pressure row). Torque = K·D·F with K = kingpinPlateBoltNutFactor, ~8 lb·ft lubricated. Two Belleville washers under each nut hold it as the oak shrinks; retorque after the first wet day.',
+  },
+  kingpinPlatePreloadRetainedFrac: {
+    label: 'Plate bolt preload retained after shrinkage', group: 'steering', unit: '',
+    default: 0.5, min: 0.2, max: 1, step: 0.05, status: 'assumed', ref: 'D-43',
+    note: 'Fraction of the bolt preload left after the oak shrinks and creeps (Belleville washers keep it from falling further). The plate-edge contact row uses this retained clamp plus the couple.',
+  },
+  kingpinPlateBoltNutFactor: {
+    label: 'Bolt nut factor K', group: 'steering', unit: '',
+    default: 0.2, min: 0.1, max: 0.3, step: 0.01, status: 'assumed', ref: 'D-43',
+    note: 'T = K·D·F; 0.2 for plain or zinc-flake steel, dry.',
+  },
+  steerStopWeldIn: {
+    label: 'Stop riser-to-arm fillet weld leg', group: 'steering', unit: 'in',
+    default: 0.25, min: 0.125, max: 0.3125, step: 0.0625, status: 'assumed', ref: 'D-43',
+    note: 'All-around fillet welds: web to riser and riser to arm (r3 N-3). The dog, riser and arm are one welded stand (deeper risers push the stop face outward and shrink the pad: tried 1.0-1.5", the crossbar-side stop block bearing doubled); the two arm screws bolt the stand to the carrier. E70 filler, allowable 0.3 F_EXX.',
+  },
+  weldFexxPsi: {
+    label: 'Weld filler tensile strength F_EXX', group: 'steering', unit: 'psi',
+    default: 70000, min: 60000, max: 80000, step: 10000, status: 'assumed', ref: 'D-43',
+    note: 'E70 electrode; fillet weld allowable shear = 0.3 F_EXX (AISC ASD).',
   },
   stopBlockMinIn: {
     label: 'Stop block minimum wood thickness behind the face', group: 'steering', unit: 'in',
@@ -831,62 +870,62 @@ const defs = {
   },
   turntableCenterHoleIn: {
     label: 'Turntable center hole diameter', group: 'steering', unit: 'in',
-    default: 6.25, min: 4, max: 8, step: 0.25, status: 'verify', ref: 'D-35',
+    default: 6.25, min: 4, max: 8, step: 0.25, status: 'verify', ref: 'D-43',
     note: 'The open center of a 12" lazy susan is about 6" (a 12" round bearing lists 6.3"). The kingpin plates, the stop risers and the plate bolts live inside it so nothing goes through the ball ring. Verify the bought bearing.',
   },
   kingpinPlateThickIn: {
     label: 'Kingpin steel plate thickness', group: 'steering', unit: 'in',
-    default: 0.1875, min: 0.125, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-35',
+    default: 0.1875, min: 0.125, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-43',
     note: 'A36 plate, outsourced waterjet / laser. A plate on top of the front beam (the turntable carrier), one under the beam and one under the crossbar; the pin bears on them steel-on-steel.',
   },
   carrierPlateThickIn: {
     label: 'Turntable carrier plate thickness (on the beam)', group: 'steering', unit: 'in',
-    default: 0.375, min: 0.1875, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-35',
+    default: 0.375, min: 0.1875, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-43',
     note: 'The A36 strip on top of the front beam under the lazy susan: the kingpin sleeve spigots into it, the stop arms screw to it, and it hands the stop torque in its own plane to the plate bolts. 5/16" so its bolt holes bear well enough to pass the stop torque (NDS yield mode IIIs scales with plate thickness) and the strip carries it in bending.',
   },
   kingpinPlateWidthIn: {
     label: 'Carrier / beam plate width (along the fore-aft axis)', group: 'steering', unit: 'in',
-    default: 2.5, min: 2, max: 3, step: 0.125, status: 'assumed', ref: 'D-35',
+    default: 2.5, min: 2, max: 3, step: 0.125, status: 'assumed', ref: 'D-43',
     note: 'The strips on and under the beam are this wide. The sleeve hole takes 1¼" of it, so the net section beside the hole carries the pin reaction in the plane of the plate (kingpin-plates row). 2.5" just spans the beam strip between the rod groove and the front face.',
   },
   steerStopBarThickIn: {
     label: 'Stop arm bar thickness', group: 'steering', unit: 'in',
-    default: 0.4375, min: 0.25, max: 0.75, step: 0.125, status: 'assumed', ref: 'D-35',
-    note: 'A36 flat bar lying on the carrier inside the turntable hole: the stop dogs stand on it through a short riser. ½" so the riser force does not bend it.',
+    default: 0.25, min: 0.25, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-43',
+    note: 'A36 flat bar lying on the carrier inside the turntable hole: the stop dogs stand on it through a riser. Thinned from ½" in r3 (N-3) so the riser block between arm and channel web is 0.31" tall and the riser screws have real bearing thickness.',
   },
   steerStopScrewDiameterIn: {
     label: 'Stop arm screw diameter', group: 'steering', unit: 'in',
-    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-35',
+    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-43',
     note: 'Grade 8 socket flat-head screws through each stop arm, tapped into the carrier (shear and a little tension from the riser overturning). Four in all.',
   },
   kingpinPlateYieldPsi: {
     label: 'Kingpin plate steel yield strength', group: 'steering', unit: 'psi',
-    default: 36000, min: 30000, max: 60000, step: 1000, status: 'assumed', ref: 'D-35',
+    default: 36000, min: 30000, max: 60000, step: 1000, status: 'assumed', ref: 'D-43',
     note: 'A36. Allowable = yield / steel safety factor.',
   },
   kingpinPlateBoltDiameterIn: {
     label: 'Kingpin plate bolt diameter', group: 'steering', unit: 'in',
-    default: 0.3125, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-35',
+    default: 0.3125, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-43',
     note: '5/16" through-bolts holding the plates to the beam (6, in one line, ≥ 5D apart) and the crossbar (4): flat heads flush in the carrier, nuts under the beam plate. 5/16" because the 4D loaded-edge distance of a ⅜" bolt (1.5") does not fit the front lip and the rod groove of the 4" beam (1.25" each). Per-bolt lateral capacity is the NDS yield-mode value (src/analysis/nds.ts).',
   },
   kingpinPlateBoltYieldPsi: {
     label: 'Kingpin plate bolt yield strength', group: 'steering', unit: 'psi',
-    default: 130000, min: 30000, max: 150000, step: 5000, status: 'verify', ref: 'D-35',
+    default: 130000, min: 30000, max: 150000, step: 5000, status: 'verify', ref: 'D-43',
     note: 'SAE grade 8, zinc-flake coated and sealed in epoxy where it runs through oak. 316 stainless (cold worked F593, 65 ksi) cuts the stop-torque margin below 1: see the kingpin-bolts row.',
   },
   kingpinCrossBoltDiameterIn: {
     label: 'Kingpin cross-bolt diameter (splitting reinforcement)', group: 'steering', unit: 'in',
-    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-35',
+    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-43',
     note: '316 stainless fore-aft bolts through the front beam, flanking the plate bolts, with fender washers: they stitch the front slab against cleavage (NDS 3.4.3.3). The crossbar gets two across its width.',
   },
   kingpinCrossBoltYieldPsi: {
     label: 'Kingpin cross-bolt yield strength', group: 'steering', unit: 'psi',
-    default: 65000, min: 30000, max: 100000, step: 1000, status: 'assumed', ref: 'D-35',
+    default: 65000, min: 30000, max: 100000, step: 1000, status: 'assumed', ref: 'D-43',
     note: '316 stainless, cold-worked ASTM F593 condition CW (65 ksi min yield for ⅜"). Allowable tension = yield / steel safety factor.',
   },
   kingpinCrossBoltWasherIn: {
     label: 'Kingpin cross-bolt washer OD', group: 'steering', unit: 'in',
-    default: 1.75, min: 1, max: 2.5, step: 0.125, status: 'assumed', ref: 'D-35',
+    default: 1.75, min: 1, max: 2.5, step: 0.125, status: 'assumed', ref: 'D-43',
     note: 'Fender washers under the cross-bolt heads and nuts; they spread the splitting tension into the oak (oak ⊥ bearing).',
   },
   eyeBoltDiameterIn: {
@@ -1752,7 +1791,6 @@ export function steerStopPlan(p: Params) {
 }
 
 /** Largest overlap a tilted (flared) side panel may have with its chine/gunwale grooves, in the block model (inches). */
-const FLARE_BITE_MAX_IN = 0.05;
 
 /** Front-wheel swing at full lock (A-4, D-25): inner tire corner |y| (kingpin frame) and rear-most extent behind the axle. */
 function swingGeometry(p: Params) {
@@ -1769,8 +1807,6 @@ function swingGeometry(p: Params) {
 
 /** Auto nose geometry rounds to this (inches). */
 const AUTO_NOSE_STEP_IN = 0.125;
-/** Auto shoulder keeps at least this much spare behind the swing rule (the Phase 1 default carried ~0.09"). */
-const AUTO_SHOULDER_MARGIN_IN = 0.0625;
 
 /**
  * Resolve derived-by-rule params (A-4, D-26). With `autoNoseGeometry` = 1, `noseWidthIn` becomes the widest hull that
@@ -1800,9 +1836,33 @@ export function resolveParams(p: Params): Params {
   return resolveNose(q);
 }
 
+/** The tire-sweep clearance spec the S-curve is tested against (centerline half widths, D-45). */
+export function hullCurveSpec(p: Params): CurveClearanceSpec {
+  return {
+    wheelbase: p.wheelbaseIn, kx: p.wheelbaseIn + p.kingpinLeadIn, frontTrack: p.frontTrackIn, tireWidth: p.tireWidthIn,
+    wheelDiameter: p.wheelDiameterIn, lockDeg: p.steerLockDeg,
+    yA: p.bodyWidthIn / 2 - p.sideThicknessIn / 2, yB: p.noseWidthIn / 2 - p.sideThicknessIn / 2, side: p.sideThicknessIn,
+  };
+}
+
+const curveEndCache = new Map<string, number>();
+
+const noseCache = new Map<string, { noseWidthIn: number; noseTaperStartIn: number; hullCurveStartIn: number }>();
+
 function resolveNose(p: Params): Params {
   if (p.autoNoseGeometry !== 1) return p;
   if (!(p.wheelDiameterIn > p.deckHeightIn + p.frontDeckRaiseIn - p.deckPlyIn - p.crossmemberDepthIn)) return p;
+  const ck = [p.wheelbaseIn, p.kingpinLeadIn, p.frontTrackIn, p.tireWidthIn, p.wheelDiameterIn, p.steerLockDeg, p.sideThicknessIn, p.bodyWidthIn, p.steeringClearanceIn, p.hullCurveStartIn,
+    p.railThicknessIn, p.hullLamThicknessIn, p.hullLamMinRadiusFactor, p.hullWebPlies, p.panelPlyIn, p.sideConstruction, p.rearOverhangIn, p.noseWidthIn, p.noseTaperStartIn].join('|');
+  const hit = noseCache.get(ck);
+  if (hit) return hit.noseWidthIn === p.noseWidthIn && hit.noseTaperStartIn === p.noseTaperStartIn && hit.hullCurveStartIn === p.hullCurveStartIn ? p : { ...p, ...hit };
+  const out = resolveNoseUncached(p);
+  if (noseCache.size > 5000) noseCache.clear();
+  noseCache.set(ck, { noseWidthIn: out.noseWidthIn, noseTaperStartIn: out.noseTaperStartIn, hullCurveStartIn: out.hullCurveStartIn });
+  return out;
+}
+
+function resolveNoseUncached(p: Params): Params {
   const sw = swingGeometry(p);
   const maxNose = 2 * (sw.swingInnerYIn - p.steeringClearanceIn);
   // Floor keeps the model non-degenerate (a nose thinner than its own side boards); the validator still flags it.
@@ -1810,13 +1870,62 @@ function resolveNose(p: Params): Params {
     2 * p.sideThicknessIn + 0.5,
     Math.min(p.bodyWidthIn, Math.floor((maxNose + 1e-9) / AUTO_NOSE_STEP_IN) * AUTO_NOSE_STEP_IN),
   );
-  const shoulderNeed = sw.swingRearBehindAxleIn + p.steeringClearanceIn + AUTO_SHOULDER_MARGIN_IN;
-  const shoulder = Math.min(
-    p.wheelbaseIn + p.rearOverhangIn - 2 * p.sideThicknessIn,
-    Math.ceil((shoulderNeed - 1e-9) / AUTO_NOSE_STEP_IN) * AUTO_NOSE_STEP_IN,
-  );
-  if (nose === p.noseWidthIn && shoulder === p.noseTaperStartIn) return p;
-  return { ...p, noseWidthIn: nose, noseTaperStartIn: shoulder };
+  // D-45: the S-curve ends as late as the tire sweep + clearance allows (replaces the square-shoulder rule of A-4), and starts early enough
+  // that the bent laminations stay within their cold-bend radius (the start is moved earlier, never later, than the slider says).
+  const q = { ...p, noseWidthIn: nose };
+  const spec = hullCurveSpec(q);
+  const needR = requiredCurveRadius(q);
+  const maxShoulder = p.wheelbaseIn + p.rearOverhangIn - 2 * p.sideThicknessIn;
+  /** End (as a 1/8" shoulder distance) and radius-ok flag for a curve start. */
+  const trial = (x0: number) => {
+    const key = [spec.wheelbase, spec.kx, spec.frontTrack, spec.tireWidth, spec.wheelDiameter, spec.lockDeg, spec.yA, spec.yB, spec.side, x0, p.steeringClearanceIn].join('|');
+    let xe = curveEndCache.get(key);
+    if (xe === undefined) {
+      xe = latestCurveEnd(x0, spec, p.steeringClearanceIn, 3, Math.max(3, p.wheelbaseIn - HULL_CURVE_END_BEHIND_AXLE_MIN_IN - x0));
+      if (curveEndCache.size > 2000) curveEndCache.clear();
+      curveEndCache.set(key, xe);
+    }
+    let shoulder = Math.min(maxShoulder, Math.max(0, Math.ceil((p.wheelbaseIn - xe - 1e-9) / AUTO_NOSE_STEP_IN) * AUTO_NOSE_STEP_IN));
+    // Rounding the end back to 1/8" and the gap itself are not monotone: verify, and step the end back until the rounded curve clears.
+    for (let k = 0; k < 40 && p.wheelbaseIn - shoulder > x0 + 3 && curveTireGap(x0, p.wheelbaseIn - shoulder, spec) < p.steeringClearanceIn - 1e-9; k++) shoulder += AUTO_NOSE_STEP_IN;
+    const xn = p.wheelbaseIn - shoulder;
+    const ok = xn <= x0 + 3 || buildPlanCurve(x0, xn, spec.yA, spec.yB).minRadius >= needR - 1e-9;
+    return { shoulder, ok };
+  };
+  let x0 = p.hullCurveStartIn;
+  let tr = trial(x0);
+  if (!tr.ok) {
+    // Earlier start = longer, gentler curve (monotone): find the latest start (0.5" steps) that meets the radius, by bisection.
+    let lo = HULL_CURVE_START_MIN_IN, hi = x0;
+    const trLo = trial(lo);
+    if (!trLo.ok) { x0 = lo; tr = trLo; } else {
+      let best = trLo;
+      while (hi - lo > 0.5 + 1e-9) {
+        const mid = Math.floor(((lo + hi) / 2) * 2) / 2;
+        const t = trial(mid);
+        if (t.ok) { lo = mid; best = t; } else hi = mid;
+      }
+      x0 = lo; tr = best;
+    }
+  }
+  const shoulder = tr.shoulder;
+  if (nose === p.noseWidthIn && shoulder === p.noseTaperStartIn && x0 === p.hullCurveStartIn) return p;
+  return { ...p, noseWidthIn: nose, noseTaperStartIn: shoulder, hullCurveStartIn: x0 };
+}
+
+/** The S-curve must end at least this far behind the front axle (room for the shoulder beam, nose joists and the bolster ring). */
+const HULL_CURVE_END_BEHIND_AXLE_MIN_IN = 12;
+/** Earliest the auto rule will move the S-curve start (the slider minimum). */
+const HULL_CURVE_START_MIN_IN = 8;
+
+/** Smallest centerline radius (in) the hull curve may have: the inside face of every bent member must meet its cold-bend limit (D-45). */
+export function requiredCurveRadius(p: Params): number {
+  const strip = Math.max(0.01, p.hullLamThicknessIn);
+  const web = p.panelPlyIn / Math.max(1, p.hullWebPlies);
+  const f = p.hullLamMinRadiusFactor;
+  const r = [f * strip + p.sideThicknessIn / 2, f * strip + p.railThicknessIn / 2];
+  if (p.sideConstruction === SIDE_CONSTRUCTION.capturedPly) r.push(f * web + p.panelPlyIn / 2);
+  return Math.max(...r);
 }
 
 /** Derived quantities that many modules need; no geometry here. */
@@ -1887,8 +1996,6 @@ export function validateParams(input: Params): ParamIssue[] {
     err(['targetMassMinLb', 'targetMassMaxLb'], 'Mass target low end exceeds high end.');
   if (p.noseWidthIn > p.bodyWidthIn)
     err(['noseWidthIn', 'bodyWidthIn'], 'Nose is wider than the cabin.');
-  if (p.noseTaperStartIn > p.wheelbaseIn - p.seatXIn)
-    warn(['noseTaperStartIn', 'seatXIn'], 'Nose taper starts behind the seat.');
   const rearInnerTire = p.rearTrackIn / 2 - p.tireWidthIn / 2;
   if (p.bodyWidthIn / 2 + 0.75 > rearInnerTire && p.deckHeightIn < p.wheelDiameterIn)
     err(['bodyWidthIn', 'rearTrackIn'], 'Cabin is too wide to clear the rear tires (needs ≥ ¾" each side).');
@@ -1899,13 +2006,49 @@ export function validateParams(input: Params): ParamIssue[] {
   if (p.kingpinLeadIn + p.turntableSizeIn / 2 + p.transomThicknessIn > p.frontOverhangIn)
     err(['kingpinLeadIn', 'turntableSizeIn', 'frontOverhangIn'],
       `The turntable (kingpin at ${p.kingpinLeadIn}" ahead of the axle, ${p.turntableSizeIn}" plate) pokes out of the front of the body; the front overhang must be ≥ ${(p.kingpinLeadIn + p.turntableSizeIn / 2 + p.transomThicknessIn).toFixed(2)}".`);
-  // Seat geometry (critic H3): the cushion must end before the shoulder panel, the leaning back must stay inside the rear
-  // transom, and a rear storage box needs room between the transom and the seat back.
-  const xsShoulder = p.wheelbaseIn - p.noseTaperStartIn;
+  // Seat geometry (critic H3, D-45): the grab handles end before the S-curve starts, the cushion stays inside the narrowing hull,
+  // the leaning back must stay inside the rear transom, and a rear storage box needs room between the transom and the seat back.
+  const xnCurve = p.wheelbaseIn - p.noseTaperStartIn;
   const cushionFront = p.seatXIn - p.seatBehindHpointIn + p.seatDepthIn;
-  if (cushionFront > xsShoulder - p.panelPlyIn - 0.01)
+  const gripFront = p.seatXIn - 5 + p.seatGripClearLengthIn + 2 + p.sideThicknessIn + 0.25;
+  if (p.hullCurveStartIn < gripFront - 1e-9)
+    err(['hullCurveStartIn', 'seatXIn', 'seatGripClearLengthIn'],
+      `The S-curve starts at x = ${p.hullCurveStartIn}" but the grab handles reach ${gripFront.toFixed(1)}": the cabin must stay full width and straight under them (D-45). Start the curve later or move the seat back.`);
+  if (cushionFront > xnCurve - p.shoulderBeamIn - 0.01)
     err(['seatXIn', 'seatDepthIn', 'noseTaperStartIn', 'wheelbaseIn'],
-      `The seat cushion runs into the cabin shoulder (cabin ends ${xsShoulder.toFixed(1)}" ahead of the rear axle; the cushion front is at ${cushionFront.toFixed(1)}"). Move the seat back or shorten it.`);
+      `The seat cushion (front at x = ${cushionFront.toFixed(1)}") runs into the deck step (the shoulder beam starts at ${(xnCurve - p.shoulderBeamIn).toFixed(1)}"). Move the seat back or shorten it.`);
+  if (xnCurve < p.hullCurveStartIn + 3)
+    err(['hullCurveStartIn', 'noseTaperStartIn', 'wheelbaseIn'],
+      `The S-curve would be shorter than 3" (it starts at x = ${p.hullCurveStartIn}" and ends at ${xnCurve.toFixed(1)}"): start it earlier.`);
+  else {
+    const curve = buildPlanCurve(p.hullCurveStartIn, xnCurve, p.bodyWidthIn / 2 - p.sideThicknessIn / 2, p.noseWidthIn / 2 - p.sideThicknessIn / 2);
+    const seatHalf = Math.max(1, Math.min(p.seatWidthIn, p.bodyWidthIn - 2 * p.sideThicknessIn - 1)) / 2;
+    const innerAtCushion = offsetY(curve, -p.sideThicknessIn / 2, Math.min(cushionFront, xnCurve));
+    if (cushionFront > p.hullCurveStartIn && innerAtCushion < seatHalf + 0.25 - 1e-9)
+      err(['hullCurveStartIn', 'seatXIn', 'seatDepthIn', 'seatWidthIn'],
+        `The seat cushion (front at x = ${cushionFront.toFixed(1)}", ${(2 * seatHalf).toFixed(0)}" wide) runs into the narrowing hull: inside width there is only ${(2 * innerAtCushion).toFixed(1)}". Start the S-curve later, shorten the seat or narrow it.`);
+    const tiresReach = p.wheelDiameterIn > p.deckHeightIn + p.frontDeckRaiseIn - p.deckPlyIn - p.crossmemberDepthIn;
+    if (tiresReach) {
+      const gap = curveTireGap(p.hullCurveStartIn, xnCurve, hullCurveSpec(p));
+      if (gap < p.steeringClearanceIn - 1e-6)
+        err(['hullCurveStartIn', 'noseTaperStartIn', 'steerLockDeg', 'frontTrackIn', 'kingpinLeadIn'],
+          `The S-curve hull comes within ${gap.toFixed(2)}" of the front tire at some steering angle (needs ≥ ${p.steeringClearanceIn}"). End the curve earlier or turn "Auto nose width & shoulder" on.`);
+    }
+    // Bent laminations: tightest radius of the INSIDE face vs the cold-bend limit (D-45).
+    const strip = Math.max(0.01, p.hullLamThicknessIn);
+    const webSheet = p.panelPlyIn / Math.max(1, p.hullWebPlies);
+    const checks: Array<[string, number, number]> = [
+      ['chine / gunwale', p.sideThicknessIn, strip],
+      ['ladder rail', p.railThicknessIn, strip],
+      ...(p.sideConstruction === SIDE_CONSTRUCTION.capturedPly ? ([['side panel', p.panelPlyIn, webSheet]] as Array<[string, number, number]>) : []),
+    ];
+    for (const [name, thick, s1] of checks) {
+      const rIn = curve.minRadius - thick / 2, lim = p.hullLamMinRadiusFactor * s1;
+      if (rIn < lim - 1e-9)
+        err(['hullCurveStartIn', 'hullLamThicknessIn', 'hullLamMinRadiusFactor', 'hullWebPlies'],
+          `The ${name} bend radius ${rIn.toFixed(1)}" (inside face) is tighter than the cold-bend limit ${lim.toFixed(1)}" (${p.hullLamMinRadiusFactor} x ${s1.toFixed(3)}" strip): start the S-curve earlier, use thinner strips, or steam it.`);
+    }
+  }
   const a = (p.seatBackAngleDeg * Math.PI) / 180;
   const backRear = p.seatXIn - p.seatBehindHpointIn - p.seatBackThickIn * Math.cos(a) - p.seatBackHeightIn * Math.sin(a);
   const transomFront = -p.rearOverhangIn + p.transomThicknessIn;
@@ -1923,14 +2066,10 @@ export function validateParams(input: Params): ParamIssue[] {
   if (footStopFront > p.wheelbaseIn + p.frontOverhangIn - p.transomThicknessIn + 1e-9)
     err(['seatXIn', 'riderLegReachIn', 'frontOverhangIn', 'wheelbaseIn'],
       `The foot stop reaches ${footStopFront.toFixed(2)}" ahead of the rear axle, into the front transom (its inner face is at ${(p.wheelbaseIn + p.frontOverhangIn - p.transomThicknessIn).toFixed(2)}"). Move the seat back or lengthen the front overhang.`);
-  // A flared captured-ply side (D-6): the tilted panel's end corners bite into the chine/gunwale; the overlap test tolerates 0.05" (groove depth is Phase 3).
-  if (p.sideConstruction === SIDE_CONSTRUCTION.capturedPly && p.gunwaleFlareIn > 0) {
-    const webH = Math.max(0.1, p.sideHeightIn + p.deckPlyIn - 2 * p.railBandIn);
-    const bite = (p.panelPlyIn / 2) * Math.sin(Math.atan2(p.gunwaleFlareIn, webH));
-    if (bite > FLARE_BITE_MAX_IN)
-      err(['gunwaleFlareIn', 'sideHeightIn', 'railBandIn', 'panelPlyIn'],
-        `The ${p.gunwaleFlareIn}" gunwale flare over a ${webH.toFixed(2)}" tall side panel tilts it so its corners overlap the chine and gunwale by ${bite.toFixed(3)}" (max ${FLARE_BITE_MAX_IN}"). Use a taller side, a thinner panel, or less flare.`);
-  }
+  if (p.gunwaleFlareIn > 0)
+    warn(['gunwaleFlareIn'], 'Gunwale flare is ignored: the S-curve hull (D-45) has vertical sides.');
+  if (p.sideConstruction === SIDE_CONSTRUCTION.capturedPly && p.sideHeightIn - 2 * p.railBandIn - p.frontDeckRaiseIn < 1)
+    err(['sideHeightIn', 'railBandIn', 'frontDeckRaiseIn'], 'The side panel would be shorter than 1" (the chine is deepened by the deck step, D-45). Raise the side or reduce the step.');
   // Captured-ply grooves (D-35): the oak walls left each side of the groove must stay sturdy.
   if (p.sideConstruction === SIDE_CONSTRUCTION.capturedPly) {
     const wall = (p.sideThicknessIn - p.panelPlyIn - p.grooveSlopIn) / 2;
@@ -1995,11 +2134,6 @@ export function validateParams(input: Params): ParamIssue[] {
     if (p.noseWidthIn / 2 > allowedHalf)
       err(['noseWidthIn', 'steerLockDeg', 'frontTrackIn'],
         `Front tires hit the nose at full lock: nose must be ≤ ${(2 * allowedHalf).toFixed(2)}" wide (is ${p.noseWidthIn}").`);
-    // swingRearXIn is kingpin-referenced; the shoulder (noseTaperStartIn) is axle-referenced, so subtract the lead (M2).
-    const neededTaper = d.swingRearBehindAxleIn + p.steeringClearanceIn;
-    if (p.noseTaperStartIn < neededTaper)
-      err(['noseTaperStartIn', 'steerLockDeg', 'kingpinLeadIn'],
-        `Front tires hit the cabin shoulder at full lock: full width must end ≥ ${neededTaper.toFixed(2)}" behind the front axle (is ${p.noseTaperStartIn}").`);
   }
 
   // Kingpin sleeve (steel tube, ID = pin) and the bore the wood is cut for.
@@ -2113,6 +2247,10 @@ export function validateParams(input: Params): ParamIssue[] {
       err(['turntableCenterHoleIn', 'steerStopSizeIn', 'steerStopRiserDepthIn', 'kingpinCrossbarWidthIn'],
         `The stop arm's corner (${armHx}" off the pin line, ${stop.ra.toFixed(2)}" along it) reaches ${corner.toFixed(2)}" from the kingpin, outside the ${holeR.toFixed(3)}" radius of the turntable's ${p.turntableCenterHoleIn}" center hole (needs ≥ ${(corner + 0.02).toFixed(2)}"). Verify the bearing's open center.`);
   }
+
+  // Stop adjustability and the riser screw pattern (r3 N-1, N-3).
+  if (p.steerStopAdjustRangeIn < 2 * p.steerStopFitMismatchIn - 1e-9)
+    err(['steerStopAdjustRangeIn', 'steerStopFitMismatchIn'], `The shim range ${p.steerStopAdjustRangeIn}" cannot cover twice the ${p.steerStopFitMismatchIn}" fit-up mismatch the stop rows assume.`);
 
   // Kingpin-nut access panel (D-34): it must sit on the crossbar top and cover the nut washer.
   if (p.kingpinThroughBolster === 1) {

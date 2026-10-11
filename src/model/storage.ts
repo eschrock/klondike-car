@@ -10,8 +10,9 @@
  */
 import { STORAGE_LOCATION, type Params } from '../params';
 import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
-import type { Layout } from './layout';
-import { frameJoint, gunwaleId, gunwaleY, inboardOf, seatBackSupport } from './seat';
+import { curveHeading } from './hull-curve';
+import { sidePath, type Layout } from './layout';
+import { frameJoint, gunwaleId, seatBackSupport } from './seat';
 import type { Joint, Part } from './types';
 
 // ── Hardware and detail dimensions (estimates, D-41) ──
@@ -22,6 +23,19 @@ const DRAIN_MASS_LB = 0.03;
 const GASKET_LB_PER_IN = 0.002;
 const LASH_MASS_LB = 0.1;
 const LASH_SIZE = [1.5, 0.9, 0.75] as const;
+/** A lash plate (turned to the gunwale) is not set where the gunwale runs more than this far off the axis. */
+const LASH_MAX_HEADING_DEG = 25;
+
+/** Furthest x a lash plate's center may reach: the straight cabin side plus the part of the S-curve flatter than LASH_MAX_HEADING_DEG. */
+export function lashReachX(L: Layout): number {
+  let x = L.xc0 - L.side;
+  for (let i = 1; i < L.hull.pts.length; i++) {
+    const [x0, y0] = L.hull.pts[i - 1], [x1, y1] = L.hull.pts[i];
+    if ((Math.abs(Math.atan2(y1 - y0, x1 - x0)) * 180) / Math.PI > LASH_MAX_HEADING_DEG) break;
+    x = Math.max(x, x1);
+  }
+  return x;
+}
 /** Bolt-plate screws per lash point (4-hole plate), the screw (#10 × 1-1/4 stainless), the plate thickness, and the tip/lead allowance (no thread bite). */
 export const LASH_SCREWS = 4;
 export const LASH_SCREW_DIA_IN = 0.19;
@@ -215,9 +229,10 @@ export function packEssentials(interior: Interior, kit: readonly KitItem[] = ESS
 export function lashPositions(p: Params, L: Layout, n: number): number[] {
   const margin = LASH_SIZE[0] / 2 + 0.25;
   const lo = L.xRear + L.transom + L.rearLane + margin; // clear of the transom and the corner backers (D-43)
-  const hi = L.xs - L.side - margin;
+  // D-45: plates may stand on the first part of the S-curve, turned to follow the gunwale, where it still runs within LASH_MAX_HEADING_DEG of the axis.
+  const hi = lashReachX(L) - margin;
   const gripLen = p.seatGripClearLengthIn + 2;
-  const gx0 = Math.min(p.seatXIn - 5, L.xs - L.side - gripLen - 0.25);
+  const gx0 = Math.min(p.seatXIn - 5, L.xc0 - L.side - gripLen - 0.25);
   const blocked: Array<[number, number]> = [
     [gx0 - margin, gx0 + gripLen + margin],
   ];
@@ -420,20 +435,24 @@ export function buildStorage(ctx: Ctx): Part[] {
   // ── Lash points on the cabin gunwales: stainless D-rings on bolt plates (BRIEF §4.9) ──
   const xs = lashPositions(p, L, p.lashPointsPerSide);
   const gTop = L.deckTop + L.sideH;
-  const yg = gunwaleY(L);
   for (const { s: sg, tag } of SIDES) {
     xs.forEach((x, i) => {
       const dId = `doubler-lash-${tag}${i + 1}`;
-      // Doubler: oak blocking on the inboard face of the ½" gunwale under the plate; the plate screws straddle the glue line (>= 3/4" engagement, no split-out of the thin rail).
+      // On the S-curve the plate and its doubler turn with the gunwale (heading h of the web plane at x); on the straight side h = 0.
+      const yg = sidePath(L, 0, x, x + 1e-6)[0][1];
+      const h = curveHeading(L.hull, x);
+      const rot = h === 0 ? undefined : { z: sg * h };
+      const inN = L.side / 2 + p.blockingThickIn / 2; // doubler center, inboard of the web plane
+      // Doubler: oak blocking on the inboard face of the gunwale under the plate; the plate screws straddle the glue line (>= 3/4" engagement, no split-out of the thin rail).
       parts.push(box(ctx, { id: dId, partNo: 'doubler-lash', name: `Lash point doubler ${tag}${i + 1}`, group: 'storage', mat: 'oak', grain: 'x', step: STEP.finish,
-        ...span([x - LASH_SIZE[0] / 2 - 0.25, x + LASH_SIZE[0] / 2 + 0.25], inboardOf(sg, yg - L.side / 2, p.blockingThickIn), [gTop - L.railBand, gTop]),
+        size: [LASH_SIZE[0] + 0.5, p.blockingThickIn, L.railBand], center: [x + inN * Math.sin(h), sg * (yg - inN * Math.cos(h)), gTop - L.railBand / 2], ...(rot ? { rot } : {}),
         joints: [{ type: 'glue', to: gunwaleId(p, tag), count: 1, note: 'epoxy, full face' }, { type: 'screw', to: `lash-${tag}${i + 1}`, count: LASH_SCREWS, size: '#10 × 1-1/4 stainless, through the plate on the glue line' }],
-        notes: 'Blocking behind the thin gunwale under the lash plate (D-41).' }));
+        notes: `Blocking behind the thin gunwale under the lash plate (D-41).${h !== 0 ? ' On the S-curve: plane its back to the gunwale curve (the 2" chord leaves up to 0.12" of gap or overlap).' : ''}` }));
       parts.push(box(ctx, { id: `lash-${tag}${i + 1}`, partNo: 'lash-point', name: `Lash point ${tag}${i + 1}`, group: 'hardware', mat: 'fixed', massLb: LASH_MASS_LB, kind: 'purchased',
-        material: 'stainless D-ring on a bolt plate', fab: 'buy', step: STEP.finish, ...span([x - LASH_SIZE[0] / 2, x + LASH_SIZE[0] / 2], [sg * yg - LASH_SIZE[1] / 2, sg * yg + LASH_SIZE[1] / 2], [gTop, gTop + LASH_SIZE[2]]),
+        material: 'stainless D-ring on a bolt plate', fab: 'buy', step: STEP.finish, size: [LASH_SIZE[0], LASH_SIZE[1], LASH_SIZE[2]], center: [x, sg * yg, gTop + LASH_SIZE[2] / 2], ...(rot ? { rot } : {}),
         sourcing: { vendor: 'McMaster-Carr (316 stainless 4-hole D-ring bolt plate, 300 lbf working load)', costUsd: 7 },
         joints: [{ type: 'screw', to: dId, count: LASH_SCREWS, size: '#10 × 1-1/4 stainless, down on the glue line of the doubler and gunwale' }],
-        notes: 'Rated for tie-down straps on coolers, duffels and firewood (post-race hauling, BRIEF §4.9). Four screws land in the oak doubler and gunwale under the plate; the lash-load check pulls it at 300 lbf and 45° (D-41, S-9).' }));
+        notes: `Rated for tie-down straps on coolers, duffels and firewood (post-race hauling, BRIEF §4.9). Four screws land in the oak doubler and gunwale under the plate; the lash-load check pulls it at 300 lbf and 45° (D-41, S-9).${h !== 0 ? ` This plate stands on the S-curve and is turned ${((Math.abs(h) * 180) / Math.PI).toFixed(0)}° to follow the gunwale.` : ''}` }));
     });
   }
   return parts;

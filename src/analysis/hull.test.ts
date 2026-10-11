@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultParams, derived, type Params } from '../params';
 import { buildModel } from '../model';
 import { makeContext } from './context';
-import { footStopCheck, footStopLoads, hullChecks, liftCheck, liftShares, prowGrabCheck, prowGrabLoads, torsionAlpha } from './hull';
+import { footStopCheck, footStopLoads, hullChecks, liftCheck, liftShares } from './hull';
 import { liftBarStressPsi } from '../model/body';
 
 const ctxFor = (patch: Partial<Params> = {}) => {
@@ -13,9 +13,9 @@ const ctx = ctxFor();
 const al = derived(defaultParams());
 
 describe('hull checks (D-43)', () => {
-  it('returns lift, prow-grab and foot-stop, all Structure, finite, and passing at the defaults', () => {
+  it('returns lift and foot-stop (the prow-grab check went with the prow, D-45), all Structure, finite, and passing at the defaults', () => {
     const cs = hullChecks(ctx);
-    expect(cs.map((c) => c.id)).toEqual(['lift', 'prow-grab', 'foot-stop']);
+    expect(cs.map((c) => c.id)).toEqual(['lift', 'foot-stop']);
     for (const c of cs) {
       expect(c.group).toBe('Structure');
       expect(Number.isFinite(c.value)).toBe(true);
@@ -45,37 +45,6 @@ describe('hull checks (D-43)', () => {
     expect(rear.value).toBeGreaterThan(front.value);
     expect(rear.limit).toBeCloseTo(al.oakDesignMorPsi, 6);
     expect(c.how).toMatch(/not mass \/ 2/);
-  });
-
-  it('prow grab by hand at the defaults (25 lbf, 1.75" × 0.75" leg, 4" leg, tip 20.5" above the foot, reach 7.375")', () => {
-    const k = prowGrabLoads(ctx);
-    expect(k.pr.legLenIn).toBeCloseTo(4, 9);
-    expect(k.pr.tipHeightIn).toBeCloseTo(20.5, 6); // gunwale line 16.75 + 18 − foot 14.25
-    expect(k.pr.tipReachIn).toBeCloseTo(7.375, 9); // 7.75 − 0.75 / 2
-    expect(k.d).toBeCloseTo(3, 9); // 4 − 1
-    expect(k.h).toBeCloseTo(20, 9); // 20.5 − 0.5
-    expect(k.Rtop).toBeCloseTo(166.67, 2); // 25 × 20 / 3
-    expect(k.Rfoot).toBeCloseTo(141.67, 2);
-    expect(k.M).toBeCloseTo(412.5, 6); // 25 × (20.5 − 4)
-    expect(k.sigmaFa).toBeCloseTo(2514, 0); // 412.5 / (1.75 × 0.5625 / 6 = 0.1640625)
-    expect(k.sigmaLat).toBeCloseTo(1077.6, 0); // 412.5 / (0.75 × 3.0625 / 6 = 0.3828125)
-    expect(k.T).toBeCloseTo(184.375, 6); // 25 × 7.375
-    expect(k.alpha).toBeCloseTo(0.254, 3); // Roark b/t = 2.333 between 0.246 (2) and 0.258 (2.5)
-    expect(k.tau).toBeCloseTo(737.4, 0); // 184.375 / (0.254 × 1.75 × 0.5625)
-    const c = prowGrabCheck(ctx);
-    // combined = hypot(1077.6 / 6460, 737.4 / 850) = hypot(0.1668, 0.8675) = 0.8834
-    expect(c.details!.find((d) => d.name.includes('bending + torsion'))!.value).toBeCloseTo(0.883, 2);
-    // insert: 141.67 × 0.6 = 85 lbf vs 300; bearing 166.67 / (1.75 × 1) = 95 psi vs 358
-    expect(c.details!.find((d) => d.name.includes('insert'))!.value).toBeCloseTo(85, 0);
-    expect(c.details!.find((d) => d.name.includes('bearing'))!.value).toBeCloseTo(95.2, 0);
-    expect(c.status).not.toBe('fail');
-  });
-
-  it('prow grab fails at the old 1.5" width: τ = 184.375 / (0.246 × 1.5 × 0.5625) = 888 psi > 850 (the reason the default is 1.75")', () => {
-    expect(torsionAlpha(2)).toBeCloseTo(0.246, 9);
-    const c = prowGrabCheck(ctxFor({ prowWidthIn: 1.5 }));
-    expect(c.status).toBe('fail');
-    expect(prowGrabLoads(ctxFor({ prowWidthIn: 1.5 })).tau).toBeCloseTo(888, 0);
   });
 
   it('foot stop by hand: 200 lb × 2 g × 0.6 = 240 lbf; board 12.75" × 0.75" × 4": M = 240 × 12.75 / 4 = 765 lb·in, S = 4 × 0.75² / 6 = 0.375 → 2,040 psi; 8 deck screws → 30 lbf each', () => {

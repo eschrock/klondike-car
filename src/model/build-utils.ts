@@ -5,7 +5,7 @@
 import { derived, PLY_SPECIES, resolveParams, type Params } from '../params';
 import { computeLayout, type Layout } from './layout';
 import { compose, multiply, rotationX, rotationY, rotationZ, translation } from './mat4';
-import type { Dims, EdgeCondition, Fab, Joint, Mat4, Part, PartGroup, PartKind, RigidBody, Vec3 } from './types';
+import type { Dims, EdgeCondition, Fab, Joint, Mat4, Part, PartGroup, PartKind, RigidBody, Vec2, Vec3 } from './types';
 
 export interface ViewState {
   /** Displayed steer angle, degrees (+ = turning left). Clamped to ± lock. */
@@ -34,18 +34,21 @@ export interface Ctx {
 export const STEP = { gear: 1, steering: 2, frame: 3, body: 4, seatStorage: 5, brake: 6, finish: 7, payload: 8 } as const;
 
 /**
- * Hull assembly sequence (build review M4, D-43). `Part.step` is where a part is INSTALLED; the hull sequence is fractional
- * between the frame (3) and the seat and storage (5), so Phase 4 can sort on it:
- *   0. Epoxy-seal every groove, rabbet, dado and all ply faces and edges (a process step, before the bench glue-ups).
- *   1. (4.0) Frame + deck glued as a unit.
- *   2. Bench: glue each web into its chine and gunwale (a side assembly), vent holes drilled; these slide on at 4.2.
- *   3. (4.2) Each side assembly slides INBOARD (Y) onto the deck edge so the chine rabbet closes over it, then is Domino-tied to the rail.
- *   4. (4.3) Shoulder panels, epoxy fillets.
+ * Hull assembly sequence (build review M4 / MUST-2, D-43, D-45). `Part.step` is where a part is INSTALLED; the hull sequence is fractional
+ * between the frame (3) and the seat and storage (5), so Phase 4 can sort on it. The hull is built UPSIDE DOWN so that every move is a
+ * straight vertical one, which works for the curved sides too (a curved side cannot slide inboard onto a curved deck edge):
+ *   0. Epoxy-seal every groove, rabbet, dado and all ply faces and edges (a process step, before the bench glue-ups). The deck rabbets and dados
+ *      are the (sealed) deck + a clearance (deckSlopIn) tall: thickened epoxy fills the gap.
+ *   1. (4.0) Frame (rails, joists, shoulder beam) + deck glued as a unit, right side up on the bench; the Domino mortises in the rail tops are cut.
+ *   2. Bench, gunwale down on a flat table: laminate the chine, gunwale and rails around the plan-view form (scarfed to their nose runs at x = xn),
+ *      glue each web into its chine and gunwale: a side assembly with the plan S-curve built in; vent holes drilled.
+ *   3. (4.2) The two side assemblies stand inverted on the table in their jig; the frame + deck unit is turned over and LOWERED into them. The Dominos
+ *      (all vertical) and the deck-edge rabbets engage together, with epoxy and the screws up through the rails.
+ *   4. (4.3) Shoulder beam: already part of the frame; its Dominos engage in step 3.
  *   5. (4.4) The transoms go on LAST, sliding in X onto the deck edge, web ends, chine and gunwale tenons and rail tenons in one
- *      glue-up (slow 120-minute epoxy, rehearse twice); the vent holes let the dados breathe. Backers and the prow socket are glued to the transom first.
- *   6. (4.5) Prow socket block bolts on; the prow itself is removable (D-9).
+ *      glue-up (slow 120-minute epoxy, rehearse twice); the vent holes let the dados breathe. Backers are glued to the transom first.
  */
-export const HULL_STEP = { deck: 4, sides: 4.2, shoulder: 4.3, transom: 4.4, prow: 4.5 } as const;
+export const HULL_STEP = { deck: 4, sides: 4.2, shoulder: 4.3, transom: 4.4 } as const;
 
 /** Rough (as-milled-from-the-board) size of a finished wood piece: thickness and width + the allowance, length + 4× (≈ ½", build review M8). */
 export function roughOf(p: Params, s: Dims): Dims {
@@ -168,7 +171,6 @@ function defaultExplode(ctx: Ctx, s: PartSpec): Vec3 {
       if (/^side-/.test(id) || /^shoulder/.test(id)) return unit([0, sy * 1, 0.25]);
       if (/^transom-rear/.test(id)) return unit([-1, 0, 0.3]);
       if (/^transom-front/.test(id)) return unit([1, 0, 0.3]);
-      if (/^prow/.test(id)) return unit([0.5, 0, 1]);
       return unit([0, sy * 0.5, 0.8]);
     case 'seat':
       if (/^foot-stop/.test(id)) return unit([0.6, 0, 0.8]);
@@ -294,3 +296,73 @@ export const SIDES: ReadonlyArray<{ s: 1 | -1; tag: 'L' | 'R' }> = [
   { s: 1, tag: 'L' },
   { s: -1, tag: 'R' },
 ];
+
+
+/** A member of constant section bent in PLAN along a hull-side curve (D-45): chine, gunwale, ladder rail, side panel. Sweep geometry, path in plan. */
+export interface BandSpec {
+  id: string;
+  partNo?: string;
+  name: string;
+  group: PartGroup;
+  mat: 'oak' | 'ply';
+  /** Side sign (+1 left) and the |y| centerline samples (x, |y|) of the member. */
+  s: 1 | -1;
+  path: Vec2[];
+  /** In-plan thickness, height (vertical) and the z of its center. */
+  t: number;
+  h: number;
+  zc: number;
+  plies: number;
+  step: number;
+  grain?: 'x' | 'y' | 'z';
+  edges?: EdgeCondition | EdgeCondition[];
+  extraLb?: number;
+  removable?: boolean;
+  notes?: string;
+}
+
+export function bandPart(ctx: Ctx, b: BandSpec): Part {
+  const { p } = ctx;
+  let len = 0;
+  for (let i = 1; i < b.path.length; i++) len += Math.hypot(b.path[i][0] - b.path[i - 1][0], b.path[i][1] - b.path[i - 1][1]);
+  const vol = b.t * b.h * len;
+  const surf = 2 * len * (b.t + b.h) + 2 * b.t * b.h;
+  const oak = b.mat === 'oak';
+  const mass = woodMassLb(p, vol, surf, oak ? p.oakDensityPcf : ctx.d.plyDensityPcf) + (b.extraLb ?? 0);
+  const stock: Dims = { t: Math.min(b.t, b.h), w: Math.max(b.t, b.h), l: len };
+  const cx = b.path.reduce((a, q) => a + q[0], 0) / b.path.length;
+  const cy = b.path.reduce((a, q) => a + q[1], 0) / b.path.length;
+  let lx = 0, ly = 0;
+  for (let i = 1; i < b.path.length; i++) {
+    const w = Math.hypot(b.path[i][0] - b.path[i - 1][0], b.path[i][1] - b.path[i - 1][1]);
+    lx += (w * (b.path[i][0] + b.path[i - 1][0])) / 2;
+    ly += (w * (b.path[i][1] + b.path[i - 1][1])) / 2;
+  }
+  lx /= Math.max(1e-9, len);
+  ly /= Math.max(1e-9, len);
+  const out: Part = {
+    id: b.id,
+    name: b.name,
+    group: b.group,
+    kind: oak ? 'bentlam' : 'sheet',
+    material: oak ? 'white oak' : ctx.plyName,
+    // local x → model X, local y (width) → model Z, local z → −Y: a plan path (x, |y|) becomes (x, −s·|y|).
+    geometry: { type: 'sweep', path: b.path.map(([x, y]) => [x, -b.s * y] as Vec2), width: b.h, thickness: b.t, plies: b.plies },
+    transform: [1, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, b.zc, 1],
+    body: 'chassis',
+    massLb: mass,
+    fab: 'bentlam',
+    step: b.step,
+    stock,
+    // Reuse the subsystem's default exploded-view direction through a throwaway box at the same place.
+    explode: box(ctx, { id: b.id, name: b.name, group: b.group, mat: 'oak', size: [1, 1, 1], center: [cx, b.s * cy, b.zc], step: b.step }).explode,
+    cgIn: [lx, b.s * ly, b.zc], // length-weighted centroid of the path (the bounding box center of a curved member is far from it)
+  };
+  if (b.partNo) out.partNo = b.partNo;
+  if (oak) out.rough = roughOf(p, stock);
+  if (b.grain ?? 'x') out.grain = b.grain ?? 'x';
+  if (b.edges) out.edges = b.edges;
+  if (b.removable) out.removable = true;
+  if (b.notes) out.notes = b.notes;
+  return out;
+}
