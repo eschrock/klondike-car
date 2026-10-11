@@ -38,7 +38,7 @@ export interface AnalysisCheck extends CheckResult {
   statusGoal: Status;
   /** Per-case values, for rows evaluated at both riders. */
   cases?: { operating?: CaseResult; goal?: CaseResult; /** Lightest-rider case (BRIEF §4.1), for rows that get worse with a lighter rider. */ light?: CaseResult };
-  /** The case whose result sets the row status (worst status, then highest utilisation). */
+  /** The case whose result sets the row status (worst status, then highest utilization). */
   governingLoad?: LoadKind;
   /** Highest demand / capacity over the evaluated cases (1 = at the limit). */
   util?: number;

@@ -3,7 +3,7 @@
  *
  * Tries both stowage modes x both orientations x three configurations (installed / tongue off / all
  * removables off, D-9), steer at 0. The cart sits with its wheel contacts on the bed floor / tailgate
- * (coplanar) and is slid fore-aft in 0.25" steps; it is centred on the bed centreline (no lateral search).
+ * (coplanar) and is slid fore-aft in 0.25" steps; it is centerd on the bed centerline (no lateral search).
  *
  * Modes (D-6, D-23):
  *  - 'beside'   : wheels pass beside the wells. Every wheel's lateral extent (+ clearance) lies inside the
@@ -35,7 +35,7 @@ export const CONFIGS: Config[] = ['installed', 'tongue-off', 'removed'];
 /** Parts removed in the 'tongue off' configuration (only the tongue/bridle, D-9). */
 const TONGUE_RE = /tongue|bridle/i;
 
-/** Cart parts for a configuration, built through `build` (which must honour `removed`). */
+/** Cart parts for a configuration, built through `build` (which must honor `removed`). */
 export function configParts(config: Config, build: (view: CartView) => Part[]): Part[] {
   const base = { steerDeg: 0, rider: 'none', cargo: false } as const;
   if (config === 'removed') return build({ ...base, removed: true });
@@ -268,8 +268,8 @@ function evaluate(p: Params, items: Item[], solids: SolidItem[], mode: Stowage, 
   const we = p.truckWellStartIn + p.truckWellLengthIn;
   const gapLo = p.truckBedLengthIn;
   const gapHi = p.truckBedLengthIn + p.truckTailgateGapIn;
-  const centres = wheelItems.map((i) => i.obb.center[0]);
-  const wmid = centres.length ? (Math.min(...centres) + Math.max(...centres)) / 2 : 0;
+  const centers = wheelItems.map((i) => i.obb.center[0]);
+  const wmid = centers.length ? (Math.min(...centers) + Math.max(...centers)) / 2 : 0;
   // The axle nearer the bulkhead ('low') must sit wholly ahead of the wells, the other wholly behind them.
   const lowEdge = Math.max(-Infinity, ...wheelItems.filter((i) => i.obb.center[0] <= wmid).map((i) => i.max[0]));
   const highEdge = Math.min(Infinity, ...wheelItems.filter((i) => i.obb.center[0] > wmid).map((i) => i.min[0]));
@@ -278,7 +278,7 @@ function evaluate(p: Params, items: Item[], solids: SolidItem[], mode: Stowage, 
   let modeIssue = '';
   const okMode = (tx: number) => {
     if (!wheelItems.length) return true;
-    if (p.truckTailgateGapIn > 0 && centres.some((c) => c + tx > gapLo - TIRE_PATCH_HALF_IN && c + tx < gapHi + TIRE_PATCH_HALF_IN)) return false;
+    if (p.truckTailgateGapIn > 0 && centers.some((c) => c + tx > gapLo - TIRE_PATCH_HALF_IN && c + tx < gapHi + TIRE_PATCH_HALF_IN)) return false;
     if (mode === 'beside') return besideOk;
     return lowEdge + tx + req <= ws + 1e-9 && highEdge + tx - req >= we - 1e-9;
   };
@@ -533,9 +533,9 @@ const tick = () => new Promise<void>((r) => setTimeout(r, 0));
 /**
  * Per mode and configuration: the max track at the current wheelbase and the wheelbase window at the current
  * track. Scans at 1" steps then refines the edges to 0.25", rebuilding the model per point. Yields to the event
- * loop between evaluations; `cancelled()` aborts (returns null).
+ * loop between evaluations; `canceled()` aborts (returns null).
  */
-export async function computeFeasibleWindows(p: Params, build: Build, cancelled: () => boolean = () => false): Promise<FitWindows | null> {
+export async function computeFeasibleWindows(p: Params, build: Build, canceled: () => boolean = () => false): Promise<FitWindows | null> {
   const t0 = performance.now();
   // Loaded CG height (operating rider + cargo) at a given track, from the model's own mass functions.
   const cgCache = new Map<number, number>();
@@ -555,7 +555,7 @@ export async function computeFeasibleWindows(p: Params, build: Build, cancelled:
   let evals = 0;
   const run = async (q: Params): Promise<Verdict | null> => {
     await tick();
-    if (cancelled()) return null;
+    if (canceled()) return null;
     evals++;
     return verdicts(q, build);
   };

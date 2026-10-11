@@ -2,7 +2,7 @@
  * Truck bed model (2007 Tacoma short bed, tailgate down), built from the `truck*` params (D-23).
  *
  * TRUCK frame: origin at bed floor level, x = 0 at the bulkhead, +x toward the tailgate, y = 0 on
- * the centreline, z up. The lowered tailgate continues the floor as a slab, separated by the hinge gap. All parts are
+ * the centerline, z up. The lowered tailgate continues the floor as a slab, separated by the hinge gap. All parts are
  * `payload` + 'reference' so they never count toward mass, the cut list or the BOM.
  */
 import type { Params } from '../params';

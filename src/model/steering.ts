@@ -1,11 +1,14 @@
 /** Steering: turntable, bolster, kingpin, stops, tongue, bridle (D-12, D-14). */
 import { DRAWBAR, steerStopPlan } from '../params';
 import { IN3_PER_FT3, STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
-import type { Part } from './types';
+import type { Part, Vec3 } from './types';
 
 // ── Block-model placeholders ──
 /** Bridle rope: reach ahead of the tongue tip, section, mass (spec). */
 const BRIDLE_LEN_IN = 18;
+/** Rope bridle: ring this far ahead of the front axle; legs tied this far in from the beam ends. */
+const BRIDLE_APEX_AHEAD_IN = 24;
+const BRIDLE_TIE_INSET_IN = 0.75;
 const BRIDLE_SECTION_IN = 0.5;
 const BRIDLE_MASS_LB = 1;
 
@@ -19,7 +22,7 @@ export function buildSteering(ctx: Ctx): Part[] {
     id: 'turntable', name: 'Turntable (lazy susan)', group: 'steering', steer: true, mat: 'fixed', massLb: p.turntableMassLb,
     kind: 'purchased', material: 'steel turntable bearing', fab: 'buy', step: STEP.steering,
     ...span([kx - ts / 2, kx + ts / 2], [-ts / 2, ts / 2], [L.turntable.z0, L.turntable.z1]),
-    notes: 'Centred on the kingpin (D-25). Estimate mass; 1000 lb rated (D-12). Its top plate carries the bolster rails.',
+    notes: 'Centerd on the kingpin (D-25). Estimate mass; 1000 lb rated (D-12). Its top plate carries the bolster rails.',
   }));
 
   // Bolster: two oak rails fore and aft of the kingpin plus two end rails, bearing on the turntable top plate.
@@ -60,7 +63,7 @@ export function buildSteering(ctx: Ctx): Part[] {
     }));
   }
 
-  // Kingpin: ahead of the axle (D-25), through the solid beam and the turntable centre and, with kingpinThroughBolster (D-12),
+  // Kingpin: ahead of the axle (D-25), through the solid beam and the turntable center and, with kingpinThroughBolster (D-12),
   // on up through the oak crossbar let into the bolster, where the nut and washer sit on the crossbar top.
   const cb = L.crossbar;
   parts.push(cylinder(ctx, {
@@ -123,11 +126,30 @@ export function buildSteering(ctx: Ctx): Part[] {
       notes: 'Pins off for transport (D-9). Length is measured from the front axle (overall length, D-23).',
     }));
   }
-  parts.push(box(ctx, {
-    id: 'bridle', name: 'Bridle rope', group: 'steering', steer: true, mat: 'fixed', massLb: BRIDLE_MASS_LB, kind: 'purchased',
-    material: 'rope', fab: 'buy', removable: true, step: STEP.steering,
-    ...span([tipX, tipX + BRIDLE_LEN_IN], [-BRIDLE_SECTION_IN / 2, BRIDLE_SECTION_IN / 2], [tongueCz - BRIDLE_SECTION_IN / 2, tongueCz + BRIDLE_SECTION_IN / 2]),
-    notes: 'Estimate mass; drawn as a straight bar.',
-  }));
+  if (p.drawbar === DRAWBAR.woodTongue) {
+    parts.push(box(ctx, {
+      id: 'bridle', name: 'Bridle rope', group: 'steering', steer: true, mat: 'fixed', massLb: BRIDLE_MASS_LB, kind: 'purchased',
+      material: 'rope', fab: 'buy', removable: true, step: STEP.steering,
+      ...span([tipX, tipX + BRIDLE_LEN_IN], [-BRIDLE_SECTION_IN / 2, BRIDLE_SECTION_IN / 2], [tongueCz - BRIDLE_SECTION_IN / 2, tongueCz + BRIDLE_SECTION_IN / 2]),
+      notes: 'Estimate mass; drawn as a short straight lead from the tongue tip.',
+    }));
+  } else {
+    // Rope bridle (D-14, D-27): a leg tied at each end of the front axle beam, meeting at a ring ahead of the cart.
+    // Only the legs and ring are drawn; the 8 ft pull tails (bridleRopeRunIn) continue to the pullers' hands.
+    const tieX = L.beamF.x + L.beamF.thick / 2;
+    const tieY = L.beamF.len / 2 - BRIDLE_TIE_INSET_IN;
+    const ring: Vec3 = [L.WB + BRIDLE_APEX_AHEAD_IN, 0, tongueCz];
+    for (const { s: side, tag } of SIDES) {
+      const a: Vec3 = [tieX, side * tieY, tongueCz];
+      const dx = ring[0] - a[0], dy = ring[1] - a[1];
+      parts.push(box(ctx, {
+        id: `bridle-${tag}`, partNo: 'bridle-leg', name: `Bridle rope leg ${tag}`, group: 'steering', steer: true, mat: 'fixed',
+        massLb: BRIDLE_MASS_LB / 2, kind: 'purchased', material: 'rope', fab: 'buy', removable: true, step: STEP.steering,
+        size: [Math.hypot(dx, dy), BRIDLE_SECTION_IN, BRIDLE_SECTION_IN], center: [(a[0] + ring[0]) / 2, (a[1] + ring[1]) / 2, tongueCz],
+        rot: { z: Math.atan2(dy, dx) },
+        notes: `½" rope tied low at the beam end; legs meet at a ring ${BRIDLE_APEX_AHEAD_IN}" ahead of the front axle. Pull tails ${p.bridleRopeRunIn}" (D-27).`,
+      }));
+    }
+  }
   return parts;
 }

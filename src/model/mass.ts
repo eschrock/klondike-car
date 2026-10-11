@@ -15,7 +15,7 @@ export function totalMass(parts: Part[], opts: MassOptions = {}): number {
   return counted(parts, opts).reduce((s, p) => s + p.massLb, 0);
 }
 
-/** Mass-weighted centre of gravity in the model frame (inches). Zero vector if there is no mass. */
+/** Mass-weighted center of gravity in the model frame (inches). Zero vector if there is no mass. */
 export function centerOfGravity(parts: Part[], opts: MassOptions = {}): Vec3 {
   let m = 0, x = 0, y = 0, z = 0;
   for (const p of counted(parts, opts)) {

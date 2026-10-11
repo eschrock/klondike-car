@@ -1,5 +1,5 @@
 /**
- * Steering clearance sweep: OBBs of the steer body (front tyres, axle beam, clamps, tongue, ...) against the chassis
+ * Steering clearance sweep: OBBs of the steer body (front tires, axle beam, clamps, tongue, ...) against the chassis
  * at δ = −lock … +lock in 1° steps. The steer parts are rotated analytically about the kingpin (no model rebuild).
  */
 import { obbOverlap, partOBB, type OBB } from '../model/bounds';
@@ -52,13 +52,13 @@ export function steerSweep(ctx: Ctx, stepDeg = 1): SweepResult {
     const c = Math.cos(deg * RAD), s = Math.sin(deg * RAD);
     for (const sb of steer) {
       const cx = sb.obb.center[0] - K, cy = sb.obb.center[1];
-      const centre: Vec3 = [K + c * cx - s * cy, s * cx + c * cy, sb.obb.center[2]];
+      const center: Vec3 = [K + c * cx - s * cy, s * cx + c * cy, sb.obb.center[2]];
       let moved: OBB | null = null;
       for (const fb of fixed) {
-        const dx = centre[0] - fb.obb.center[0], dy = centre[1] - fb.obb.center[1], dz = centre[2] - fb.obb.center[2];
+        const dx = center[0] - fb.obb.center[0], dy = center[1] - fb.obb.center[1], dz = center[2] - fb.obb.center[2];
         if (Math.hypot(dx, dy, dz) - sb.r - fb.r > best.minClearanceIn) continue;
         moved ??= {
-          center: centre,
+          center: center,
           axes: [rotZ(sb.obb.axes[0], c, s), rotZ(sb.obb.axes[1], c, s), rotZ(sb.obb.axes[2], c, s)],
           half: sb.obb.half,
         };
@@ -77,6 +77,6 @@ export function steerClearance(ctx: Ctx, sweep: SweepResult): AnalysisCheck {
   return singleCheck({
     id: 'steer-clear', label: 'Steering clearance', group: 'Steering', refs: ['A-4', 'D-26'],
     value: sweep.minClearanceIn, unit: 'in', limit, sense: '>=',
-    how: `OBB sweep of the steer body (front tyres as full-radius boxes, beam, clamps, tongue) against every chassis part for δ = −${f(p.steerLockDeg)}° … +${f(p.steerLockDeg)}° in 1° steps, parts rotated about the kingpin. ${capped ? `Everything stays > ${CAP_IN}" apart.` : `Minimum clearance ${f(sweep.minClearanceIn, 2)}" between ${sweep.steerPart} and ${sweep.chassisPart} at δ = ${f(sweep.deltaDeg)}°.`} Limit ≥ steering clearance ${f(p.steeringClearanceIn, 2)}" − 0.05" tolerance = ${f(limit, 2)}". Turntable, kingpin, steering stops and side-bearers are excluded: they sit 1/16" from the bolster by design (D-12).`,
+    how: `OBB sweep of the steer body (front tires as full-radius boxes, beam, clamps, tongue) against every chassis part for δ = −${f(p.steerLockDeg)}° … +${f(p.steerLockDeg)}° in 1° steps, parts rotated about the kingpin. ${capped ? `Everything stays > ${CAP_IN}" apart.` : `Minimum clearance ${f(sweep.minClearanceIn, 2)}" between ${sweep.steerPart} and ${sweep.chassisPart} at δ = ${f(sweep.deltaDeg)}°.`} Limit ≥ steering clearance ${f(p.steeringClearanceIn, 2)}" − 0.05" tolerance = ${f(limit, 2)}". Turntable, kingpin, steering stops and side-bearers are excluded: they sit 1/16" from the bolster by design (D-12).`,
   });
 }

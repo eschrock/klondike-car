@@ -117,7 +117,7 @@ describe('simulation', () => {
  * computed here independently from the model: the CG, the wheel contact points at the held steer angle, and the
  * support edge on the downhill side. The plumb line from the CG hits the ground at (x, y − h·tanφ), so the cart tips
  * when that point reaches the line through the two downhill wheels: tanφ = (lateral CG-to-edge distance at the CG's x) / h.
- * For straight steering that is the familiar atan((T/2)/h) with the CG on the centreline.
+ * For straight steering that is the familiar atan((T/2)/h) with the CG on the centerline.
  */
 function staticTipDeg(steerDeg: number, tipTo: 'right' | 'left'): { deg: number; h: number; edge: number } {
   const ps = buildModel(p, { steerDeg, rider: 'operating', cargo: true });

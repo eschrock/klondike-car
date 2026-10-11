@@ -4,6 +4,7 @@ import { buildModel, type ViewState } from '../model';
 import { translation } from '../model/mat4';
 import type { Part } from '../model/types';
 import { buildTruckBed } from './bed';
+import { phase1Params } from '../test-baselines';
 import { checkTruckFit, computeFeasibleWindows, configParts, validatorError, type CartView } from './fit';
 
 const stub = (p = defaultParams()) => (v: CartView) => buildModel(p, v as ViewState);
@@ -114,32 +115,47 @@ describe('real cart (D-6, D-23)', () => {
   const find = (r: ReturnType<typeof checkTruckFit>, mode: string, config: string) =>
     r.cases.filter((c) => c.mode === mode && c.config === config);
   const r = checkTruckFit(p, build(p));
+  // The Phase 1 cart (48" wheelbase, oak tongue): the tongue sets the installed length and straddling the wells works.
+  const p1 = phase1Params();
+  const r1 = checkTruckFit(p1, build(p1));
 
   it('has three configurations; the tongue-off cart is shorter than installed, removed shorter still', () => {
-    expect(r.dims['tongue-off'].lengthIn).toBeLessThan(r.dims.installed.lengthIn);
+    // Phase 1 (oak tongue): taking the tongue off shortens the cart.
+    expect(r1.dims['tongue-off'].lengthIn).toBeLessThan(r1.dims.installed.lengthIn);
+    expect(r1.dims.removed.lengthIn).toBeLessThanOrEqual(r1.dims['tongue-off'].lengthIn);
+    expect(configParts('tongue-off', build(p1)).map((x) => x.id + x.name).some((n) => /tongue|bridle/i.test(n))).toBe(false);
+    // Phase 2 defaults (rope bridle, no tongue): the rope is excluded from the fit (fit.ts), so installed and tongue-off have the
+    // same length; removed is no longer.
+    expect(p.drawbar).toBe(0);
+    expect(r.dims['tongue-off'].lengthIn).toBeCloseTo(r.dims.installed.lengthIn, 9);
     expect(r.dims.removed.lengthIn).toBeLessThanOrEqual(r.dims['tongue-off'].lengthIn);
-    const names = configParts('tongue-off', build(p)).map((x) => x.id + x.name);
-    expect(names.some((n) => /tongue|bridle/i.test(n))).toBe(false);
+    expect(configParts('tongue-off', build(p)).map((x) => x.id + x.name).some((n) => /tongue|bridle/i.test(n))).toBe(false);
   });
   it('straddle fits (transport config) with wheel footprints wholly outside the well zone', () => {
-    const c = find(r, 'straddle', 'removed').find((x) => x.fits)!;
+    // At the Phase 1 48" wheelbase; at the 44" default straddle no longer fits (next test), the cart goes beside the wells instead.
+    const c = find(r1, 'straddle', 'removed').find((x) => x.fits)!;
     expect(c).toBeTruthy();
-    const ws = p.truckWellStartIn, we = ws + p.truckWellLengthIn;
-    const parts = configParts('removed', build(p));
+    const ws = p1.truckWellStartIn, we = ws + p1.truckWellLengthIn;
+    const parts = configParts('removed', build(p1));
     const M = c.placement!.transform;
-    // wheel x-extent in truck frame = centre (via M) +- radius
+    // wheel x-extent in truck frame = center (via M) +- radius
     for (const w of parts.filter((x) => x.geometry.type === 'wheel')) {
       const cx = M[0] * w.transform[12] + M[4] * w.transform[13] + M[12];
       const rad = (w.geometry as { diameter: number }).diameter / 2;
-      const outside = cx + rad <= ws - p.truckClearanceIn + 1e-6 || cx - rad >= we + p.truckClearanceIn - 1e-6;
+      const outside = cx + rad <= ws - p1.truckClearanceIn + 1e-6 || cx - rad >= we + p1.truckClearanceIn - 1e-6;
       expect(outside).toBe(true);
     }
-    expect(c.minClearanceIn).toBeGreaterThanOrEqual(p.truckClearanceIn - 1e-9);
+    expect(c.minClearanceIn).toBeGreaterThanOrEqual(p1.truckClearanceIn - 1e-9);
   });
-  it('straddle fails for a short wheelbase (44)', () => {
-    const q = { ...p, wheelbaseIn: 44 };
-    const rr = checkTruckFit(q, build(q));
-    expect(find(rr, 'straddle', 'removed').some((x) => x.fits)).toBe(false);
+  it('straddle fails for a short wheelbase (44), which is now the default; the cart rides beside the wells in both orientations (D-27)', () => {
+    expect(p.wheelbaseIn).toBe(44);
+    expect(find(r, 'straddle', 'removed').some((x) => x.fits)).toBe(false);
+    // Same default cart with only the wheelbase put back to 48 straddles again, so 44 is what costs the straddle mode.
+    const q = { ...p, wheelbaseIn: 48 };
+    expect(find(checkTruckFit(q, build(q)), 'straddle', 'removed').some((x) => x.fits)).toBe(true);
+    // docs/phase2-recommendation.md: "fits fully assembled, beside the wells, both orientations".
+    const beside = find(r, 'beside', 'installed').filter((x) => x.fits);
+    expect(beside.length).toBeGreaterThanOrEqual(2);
   });
   it('beside fits only when the track fits the well gap', () => {
     const q = { ...p, rearTrackIn: 40, frontTrackIn: 40 };
@@ -158,10 +174,20 @@ describe('real cart (D-6, D-23)', () => {
     const wider = { ...p, rearTrackIn: beside.maxTrackIn! + 1, frontTrackIn: beside.maxTrackIn! + 1 };
     expect(find(checkTruckFit(wider, build(wider)), 'beside', 'removed').some((x) => x.fits)).toBe(false);
     const st = w!.windows.find((x) => x.mode === 'straddle' && x.config === 'removed')!;
-    expect(st.wheelbaseMinIn!).toBeLessThanOrEqual(p.wheelbaseIn);
-    // The validator may cap both at the same track (M1); the bed alone is what separates the modes.
-    expect(st.maxTrackIn!).toBeGreaterThanOrEqual(beside.maxTrackIn!);
-    expect(st.maxTrackBedOnlyIn!).toBeGreaterThan(beside.maxTrackBedOnlyIn!);
+    // At the 44" default the cart does NOT straddle (see above): the window starts above the current wheelbase.
+    expect(st.fitsNow).toBe(false);
+    expect(st.wheelbaseMinIn!).toBeGreaterThan(p.wheelbaseIn);
+    // ... and the Phase 1 48" cart is inside its own window.
+    const p1w = await computeFeasibleWindows(p1, (q, v) => buildModel(q, v as ViewState));
+    const st1 = p1w!.windows.find((x) => x.mode === 'straddle' && x.config === 'removed')!;
+    expect(st1.fitsNow).toBe(true);
+    expect(st1.wheelbaseMinIn!).toBeLessThanOrEqual(p1.wheelbaseIn);
+    // The validator may cap both at the same track (M1); the bed alone is what separates the modes. (Compared on the Phase 1 cart:
+    // at the 44" default straddle has no feasible track at all, so there is no straddle maximum to compare.)
+    expect(st.maxTrackIn).toBeNull();
+    const beside1 = p1w!.windows.find((x) => x.mode === 'beside' && x.config === 'removed')!;
+    expect(st1.maxTrackIn!).toBeGreaterThanOrEqual(beside1.maxTrackIn!);
+    expect(st1.maxTrackBedOnlyIn!).toBeGreaterThan(beside1.maxTrackBedOnlyIn!);
   }, 60000);
 });
 

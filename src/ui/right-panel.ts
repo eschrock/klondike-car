@@ -53,6 +53,8 @@ export interface RightPanel {
   setWindows(w: FitWindows | 'computing' | null): void;
   /** Empty tab body for a self-contained panel (analysis, simulation) to mount into. */
   panelHost(id: 'analysis' | 'simulation'): HTMLElement;
+  /** Programmatically open a tab (the Simple view jumps to Analysis / Simulation). */
+  showTab(id: string): void;
 }
 
 export interface RightPanelOptions {
@@ -134,10 +136,10 @@ export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): Rig
     });
     const body =
       t.id === 'truck'
-        ? h('div', { role: 'tabpanel', id: `panel-${t.id}`, 'aria-labelledby': `tab-${t.id}` }, truckBody)
+        ? h('div', { role: 'tabpanel', id: `panel-${t.id}`, 'aria-labeledby': `tab-${t.id}` }, truckBody)
         : MOUNTED.has(t.id)
-        ? h('div', { role: 'tabpanel', id: `panel-${t.id}`, 'aria-labelledby': `tab-${t.id}` })
-        : h('div', { role: 'tabpanel', id: `panel-${t.id}`, 'aria-labelledby': `tab-${t.id}`, class: 'placeholder' },
+        ? h('div', { role: 'tabpanel', id: `panel-${t.id}`, 'aria-labeledby': `tab-${t.id}` })
+        : h('div', { role: 'tabpanel', id: `panel-${t.id}`, 'aria-labeledby': `tab-${t.id}`, class: 'placeholder' },
             h('h3', {}, t.label), h('p', {}, t.blurb), h('p', { class: 'muted' }, `Coming in Phase ${t.phase}.`));
     buttons.push(b);
     bodies.push(body);
@@ -269,6 +271,10 @@ export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): Rig
   }
 
   return {
+    showTab(id) {
+      const i = TABS.findIndex((t) => t.id === id);
+      if (i >= 0) select(i);
+    },
     panelHost(id) {
       return bodies[TABS.findIndex((t) => t.id === id)];
     },

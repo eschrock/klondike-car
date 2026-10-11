@@ -69,7 +69,7 @@ const frontLoadText = (ctx: Ctx, w: ReturnType<typeof wheelLoads>) =>
 
 const payload = (ctx: Ctx, c: CaseData) => (c.riderLb + c.cargoLb) * ctx.p.dynamicFactor;
 
-interface Clamp { outerY: number; centreY: number; widthY: number }
+interface Clamp { outerY: number; centerY: number; widthY: number }
 function clampGeometry(ctx: Ctx, tag: 'F' | 'R'): Clamp {
   let outer = 0, lo = Infinity, hi = 0;
   for (const id of [`clamp-${tag}L1`, `clamp-${tag}L2`]) {
@@ -81,7 +81,7 @@ function clampGeometry(ctx: Ctx, tag: 'F' | 'R'): Clamp {
     hi = Math.max(hi, b.max[1]);
   }
   if (!Number.isFinite(lo)) { lo = 0; hi = 0; }
-  return { outerY: outer, centreY: (lo + hi) / 2, widthY: hi - lo };
+  return { outerY: outer, centerY: (lo + hi) / 2, widthY: hi - lo };
 }
 
 // ── axles ────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -107,7 +107,7 @@ export function axleStress(ctx: Ctx): AnalysisCheck {
       const Pdes = Pstatic * p.dynamicFactor;
       const des = cantileverTip(Pdes, a, E * sec.I);
       const stat = cantileverTip(Pstatic, a, E * sec.I);
-      // M5: a tyre friction force H = μ·P_des acts at the contact patch (arm r below the axle) at angle ψ from the axle axis.
+      // M5: a tire friction force H = μ·P_des acts at the contact patch (arm r below the axle) at angle ψ from the axle axis.
       // Its axial part H·cosψ bends the rod in the vertical plane through the arm r (adds to P·a, either sign) and loads it axially;
       // its fore-aft part H·sinψ bends the rod in the orthogonal plane with arm a. Worst ψ over 0…90°.
       const H = p.tireGroundMu * Pstatic;
@@ -120,10 +120,10 @@ export function axleStress(ctx: Ctx): AnalysisCheck {
       }
       return { tag, a, Pstatic, Pdes, H, M: des.M, Mv, Mh, psiW, sigma, sigmaV: bendingStress(des.M, sec), defl: stat.defl };
     });
-    const ds: Detail[] = rows.map((r) => detail(`${r.tag === 'F' ? 'front' : 'rear'} axle bending (vertical + tyre friction, resultant)`, r.sigma, 'psi', al.steel, '<='));
+    const ds: Detail[] = rows.map((r) => detail(`${r.tag === 'F' ? 'front' : 'rear'} axle bending (vertical + tire friction, resultant)`, r.sigma, 'psi', al.steel, '<='));
     const extra: Detail[] = rows.map((r) => detail(`${r.tag === 'F' ? 'front' : 'rear'} axle tip deflection (static)`, r.defl, 'in', 0.05, '<='));
     const how = rows
-      .map((r) => `${r.tag === 'F' ? 'Front' : 'Rear'}: P = ${f(r.Pstatic)} lb static wheel load${r.tag === 'F' ? ` (${frontLoadText(ctx, w)})` : ''} × ${p.dynamicFactor} = ${f(r.Pdes)} lbf at the hub; cantilever a = ${f(r.a, 2)}" from the ${stub ? 'beam face (stub axle)' : 'clamp plate outer edge (through rod)'} (the pressure peak is ~0.4" outboard of the clamp edge, so a is a conservative simplification, D3); vertical-only M = P·a = ${f(r.M)} lb·in, σ = ${f(r.sigmaV, 0)} psi. With the tyre friction force H = μ·P_static = ${f(p.tireGroundMu, 2)} × ${f(r.Pstatic)} = ${f(r.H)} lbf (cornering / side-slope limit on the static normal load; using the ×${p.dynamicFactor} design load instead would give ${f(p.tireGroundMu * r.Pdes)} lbf) at the contact radius r = ${f(wheelR, 2)}" (worst angle ${f(r.psiW, 0)}° from the axle axis): M_vertical-plane = ${f(r.Mv)}, M_fore-aft = ${f(r.Mh)} lb·in, resultant σ = √(Mv²+Mh²)·c/I + H_axial/A = ${f(r.sigma, 0)} psi; tip deflection P_static·a³/3EI = ${r.defl.toFixed(4)}" (guide ≤ 0.05", info).`)
+      .map((r) => `${r.tag === 'F' ? 'Front' : 'Rear'}: P = ${f(r.Pstatic)} lb static wheel load${r.tag === 'F' ? ` (${frontLoadText(ctx, w)})` : ''} × ${p.dynamicFactor} = ${f(r.Pdes)} lbf at the hub; cantilever a = ${f(r.a, 2)}" from the ${stub ? 'beam face (stub axle)' : 'clamp plate outer edge (through rod)'} (the pressure peak is ~0.4" outboard of the clamp edge, so a is a conservative simplification, D3); vertical-only M = P·a = ${f(r.M)} lb·in, σ = ${f(r.sigmaV, 0)} psi. With the tire friction force H = μ·P_static = ${f(p.tireGroundMu, 2)} × ${f(r.Pstatic)} = ${f(r.H)} lbf (cornering / side-slope limit on the static normal load; using the ×${p.dynamicFactor} design load instead would give ${f(p.tireGroundMu * r.Pdes)} lbf) at the contact radius r = ${f(wheelR, 2)}" (worst angle ${f(r.psiW, 0)}° from the axle axis): M_vertical-plane = ${f(r.Mv)}, M_fore-aft = ${f(r.Mh)} lb·in, resultant σ = √(Mv²+Mh²)·c/I + H_axial/A = ${f(r.sigma, 0)} psi; tip deflection P_static·a³/3EI = ${r.defl.toFixed(4)}" (guide ≤ 0.05", info).`)
       .join(' | ') + ` Allowable ${f(al.steel, 0)} psi (yield ${f(p.axleYieldPsi, 0)} / SF ${p.steelSafetyFactor}).`;
     const e = governing(ds, how);
     e.details = [...ds, ...extra];
@@ -148,7 +148,7 @@ function beamEval(ctx: Ctx, kind: 'front' | 'rear', c: CaseData): CaseEval {
   const hEff = Math.max(0.1, beam.depth - groove);
   const sec = rectSection(beam.thick, hEff);
   const clamp = clampGeometry(ctx, tag);
-  const ys = clamp.centreY;
+  const ys = clamp.centerY;
   let M: number, load: string;
   if (kind === 'front') {
     const yl = p.turntableSizeIn / 2;
@@ -538,10 +538,10 @@ export function kingpinStrikeCheck(ctx: Ctx): AnalysisCheck {
     const aAx = Math.max(0.01, yw - (stub ? L.beamF.len / 2 : clamp.outerY));
     const hEffBeam = Math.max(0.1, L.beamF.depth - p.axleDiameterIn);
     const netX = Math.max(0.1, L.beamF.thick - kingpinBoreIn(p));
-    // Evaluate every case against the kingpin criteria; the governing case is the one with the highest utilisation.
+    // Evaluate every case against the kingpin criteria; the governing case is the one with the highest utilization.
     const rows = cases.map((s) => {
       const k = kingpinStress(ctx, s.H);
-      const Mbeam = s.Hw * clamp.centreY;
+      const Mbeam = s.Hw * clamp.centerY;
       const sBeam = (6 * Mbeam) / (hEffBeam * netX * netX);
       const sAxle = (Math.hypot(s.Vw, s.Hw) * aAx * sec.c) / sec.I;
       return { s, k, sBeam, sAxle, util: Math.max(kingpinUtil(k, al), sBeam / al.oakBend, sAxle / al.steel) };
@@ -563,7 +563,7 @@ export function kingpinStrikeCheck(ctx: Ctx): AnalysisCheck {
     const dMin = Math.max(dBend, dShear, g.k.sleeve ? 0 : dBear);
     const dStd = STD_KINGPIN_IN.find((x) => x >= dMin - 1e-9);
     const table = rows.map((r) => `${r.s.name}: H = ${f(r.s.H)} lbf (V_w ${f(r.s.Vw)}, tanφ ${f(r.s.tan, 2)}, φ ${f(r.s.phi * DEG, 1)}°) → kingpin σ ${f(r.k.sigma / 1000, 1)} ksi, bearing ${f(r.k.bearing, 0)} psi`).join('; ');
-    const how = `Front wheel(s) strike a ${p.curbHeightIn}" curb or ${p.rootHeightIn}" root (loaded wheel radius r = ${f(ctx.d.wheelRadiusIn, 2)}"): cos φ = (r − h)/r, horizontal force H = V·tanφ on the design wheel load V = static × ${p.dynamicFactor} (${frontLoadText(ctx, w)}). ${table}. Governing: ${g.s.name}, H = ${f(g.s.H)} lbf. The kingpin and the beam are the only horizontal link between the axle and the chassis (stops and side-bearers resist only rotation), so H goes through the ${f(p.kingpinDiameterIn, 3)}" bolt: ${SHEAR_TXT(g.k)}${g.k.through ? '' : `, s = ${f(g.k.stack, 3)}"`}. Single shear: τ = ${f(g.k.tau, 0)} psi (≤ ${f(al.kpShear, 0)}), M = H·${f(g.k.arm, 3)}" = ${f(g.k.M)} lb·in, σ = ${f(g.k.sigma, 0)} psi (≤ ${f(al.kpBend, 0)} = yield ${f(p.kingpinYieldPsi, 0)} / ${p.kingpinMargin}); oak bearing on the ${BORE_TXT(p, g.k)}: beam H/(d·depth ${f(g.k.D1, 2)}") = ${f(g.k.bearing, 0)} psi${g.k.through ? `, crossbar (depth ${f(g.k.D2, 2)}") ${f(g.k.bearingBar, 0)} psi, crossbar end on the bolster rail H/(${f(g.k.cbWidth, 2)}" × ${f(g.k.D2, 2)}") ${f(g.k.endBrg, 0)} psi` : ''} (≤ ${f(al.oakPerp, 0)}, C_M ${p.wetServiceFactorCompPerp})${g.k.sleeve ? `; pin on the steel sleeve ${f(g.k.sleeveBrg, 0)} psi (≤ 0.9·${f(p.sleeveYieldPsi, 0)}/${p.steelSafetyFactor} = ${f(al.sleeve, 0)})` : ''}. Beam: the wheel force enters at the clamps (y = ±${f(clamp.centreY, 2)}") and is reacted at the kingpin, fore-aft bending ${f(g.sBeam, 0)} psi on the net section ${f(hEffBeam, 2)}" × (${f(L.beamF.thick, 2)}" − ${f(kingpinBoreIn(p), 2)}" bore). Axle: ${f(g.s.Vw)} lbf vertical with ${f(g.s.Hw)} lbf fore-aft on the ${f(aAx, 2)}" cantilever: ${f(g.sAxle, 0)} psi. The turntable carries no horizontal rating (D-12), so the kingpin takes it all; the yaw torque of a one-wheel strike swings the steer body into its stop. Minimum kingpin for this H: bending d ≥ ${f(dBend, 3)}", shear ≥ ${f(dShear, 3)}", oak bore (pin or sleeve OD) ≥ ${f(dBear, 3)}"${g.k.sleeve ? ' (met by the sleeve OD, not the pin)' : ''} → ${Number.isFinite(dMin) ? `${f(dMin, 3)}"` : '?'}, i.e. ${dStd ? `${dStd}" bolt (at the same grade and arm)` : 'more than 1¼"'}; a steel sleeve, a deeper member or a stronger bolt grade also works.`;
+    const how = `Front wheel(s) strike a ${p.curbHeightIn}" curb or ${p.rootHeightIn}" root (loaded wheel radius r = ${f(ctx.d.wheelRadiusIn, 2)}"): cos φ = (r − h)/r, horizontal force H = V·tanφ on the design wheel load V = static × ${p.dynamicFactor} (${frontLoadText(ctx, w)}). ${table}. Governing: ${g.s.name}, H = ${f(g.s.H)} lbf. The kingpin and the beam are the only horizontal link between the axle and the chassis (stops and side-bearers resist only rotation), so H goes through the ${f(p.kingpinDiameterIn, 3)}" bolt: ${SHEAR_TXT(g.k)}${g.k.through ? '' : `, s = ${f(g.k.stack, 3)}"`}. Single shear: τ = ${f(g.k.tau, 0)} psi (≤ ${f(al.kpShear, 0)}), M = H·${f(g.k.arm, 3)}" = ${f(g.k.M)} lb·in, σ = ${f(g.k.sigma, 0)} psi (≤ ${f(al.kpBend, 0)} = yield ${f(p.kingpinYieldPsi, 0)} / ${p.kingpinMargin}); oak bearing on the ${BORE_TXT(p, g.k)}: beam H/(d·depth ${f(g.k.D1, 2)}") = ${f(g.k.bearing, 0)} psi${g.k.through ? `, crossbar (depth ${f(g.k.D2, 2)}") ${f(g.k.bearingBar, 0)} psi, crossbar end on the bolster rail H/(${f(g.k.cbWidth, 2)}" × ${f(g.k.D2, 2)}") ${f(g.k.endBrg, 0)} psi` : ''} (≤ ${f(al.oakPerp, 0)}, C_M ${p.wetServiceFactorCompPerp})${g.k.sleeve ? `; pin on the steel sleeve ${f(g.k.sleeveBrg, 0)} psi (≤ 0.9·${f(p.sleeveYieldPsi, 0)}/${p.steelSafetyFactor} = ${f(al.sleeve, 0)})` : ''}. Beam: the wheel force enters at the clamps (y = ±${f(clamp.centerY, 2)}") and is reacted at the kingpin, fore-aft bending ${f(g.sBeam, 0)} psi on the net section ${f(hEffBeam, 2)}" × (${f(L.beamF.thick, 2)}" − ${f(kingpinBoreIn(p), 2)}" bore). Axle: ${f(g.s.Vw)} lbf vertical with ${f(g.s.Hw)} lbf fore-aft on the ${f(aAx, 2)}" cantilever: ${f(g.sAxle, 0)} psi. The turntable carries no horizontal rating (D-12), so the kingpin takes it all; the yaw torque of a one-wheel strike swings the steer body into its stop. Minimum kingpin for this H: bending d ≥ ${f(dBend, 3)}", shear ≥ ${f(dShear, 3)}", oak bore (pin or sleeve OD) ≥ ${f(dBear, 3)}"${g.k.sleeve ? ' (met by the sleeve OD, not the pin)' : ''} → ${Number.isFinite(dMin) ? `${f(dMin, 3)}"` : '?'}, i.e. ${dStd ? `${dStd}" bolt (at the same grade and arm)` : 'more than 1¼"'}; a steel sleeve, a deeper member or a stronger bolt grade also works.`;
     return governing(ds, how);
   };
   return dualCheck({
@@ -585,7 +585,7 @@ function rollLoads(ctx: Ctx, c: CaseData) {
 }
 
 const ROLL_TXT = (ctx: Ctx, r: ReturnType<typeof rollLoads>) =>
-  `One front wheel carries the design load P = ${f(r.w.frontWheel)} lb static (${frontLoadText(ctx, r.w)}, heavier wheel) × ${ctx.p.dynamicFactor} = ${f(r.P)} lbf at y = ${f(r.yw, 2)}"; the other is unloaded. Moment balance of the steer body about its centreline: F_sb = P·y_w/y_sb = ${f(r.P)} × ${f(r.yw, 2)} / ${f(r.ysb, 2)}" (centroid of the bearer block) = ${f(r.Fsb)} lbf down on the bearer; vertical balance leaves ${f(r.U)} lbf of UPLIFT that the kingpin must carry in tension (D-12: the turntable is not moment-rated).`;
+  `One front wheel carries the design load P = ${f(r.w.frontWheel)} lb static (${frontLoadText(ctx, r.w)}, heavier wheel) × ${ctx.p.dynamicFactor} = ${f(r.P)} lbf at y = ${f(r.yw, 2)}"; the other is unloaded. Moment balance of the steer body about its centerline: F_sb = P·y_w/y_sb = ${f(r.P)} × ${f(r.yw, 2)} / ${f(r.ysb, 2)}" (centroid of the bearer block) = ${f(r.Fsb)} lbf down on the bearer; vertical balance leaves ${f(r.U)} lbf of UPLIFT that the kingpin must carry in tension (D-12: the turntable is not moment-rated).`;
 
 export function rollSideBearerCheck(ctx: Ctx): AnalysisCheck {
   const { p, L } = ctx;
@@ -653,7 +653,7 @@ export function rollBolsterAttachCheck(ctx: Ctx): AnalysisCheck {
       detail('shear + tension interaction (ellipse)', Math.sqrt(inter), '', 1, '<='),
       detail('fastener bearing in the bolster oak (⊥, dowel)', brg, 'psi', al.oakDowel, '<='),
     ];
-    const how = `Assumed attachment: ${n} × ${f(dia, 3)}" bolts (yield ${f(p.bolsterFastenerYieldPsi, 0)} psi, A307-type) clamping the turntable top plate and bolster rails to the nose rails/deck; bolster depth ${f(tb, 2)}". Loads: the governing strike H = ${f(H)} lbf horizontally (kingpin-strike) and the roll uplift U = ${f(r.U)} lbf. Shear τ = H/(n·A) = ${f(H)}/(${n} × ${f(Ab, 4)}) = ${f(tau, 0)} psi (≤ 0.577·yield/${p.kingpinMargin} = ${f(al.fastShear, 0)}); tension σ = U/(n·A_t), A_t ≈ 0.75·A = ${f(sT, 0)} psi (≤ yield/${p.kingpinMargin} = ${f(al.fastTens, 0)}); interaction √((τ/τ_a)² + (σ/σ_a)²) = ${f(Math.sqrt(inter), 2)} (≤ 1); bearing on the bolster oak H/(n·d·t) = ${f(brg, 0)} psi (≤ ${f(al.oakDowel, 0)} = ${p.oakDowelBearingPsi} dowel bearing × C_M ${p.wetServiceFactorStrength} / ${p.woodSafetyFactor}). The fasteners' pull-through and the bolster's own bending are not modelled.`;
+    const how = `Assumed attachment: ${n} × ${f(dia, 3)}" bolts (yield ${f(p.bolsterFastenerYieldPsi, 0)} psi, A307-type) clamping the turntable top plate and bolster rails to the nose rails/deck; bolster depth ${f(tb, 2)}". Loads: the governing strike H = ${f(H)} lbf horizontally (kingpin-strike) and the roll uplift U = ${f(r.U)} lbf. Shear τ = H/(n·A) = ${f(H)}/(${n} × ${f(Ab, 4)}) = ${f(tau, 0)} psi (≤ 0.577·yield/${p.kingpinMargin} = ${f(al.fastShear, 0)}); tension σ = U/(n·A_t), A_t ≈ 0.75·A = ${f(sT, 0)} psi (≤ yield/${p.kingpinMargin} = ${f(al.fastTens, 0)}); interaction √((τ/τ_a)² + (σ/σ_a)²) = ${f(Math.sqrt(inter), 2)} (≤ 1); bearing on the bolster oak H/(n·d·t) = ${f(brg, 0)} psi (≤ ${f(al.oakDowel, 0)} = ${p.oakDowelBearingPsi} dowel bearing × C_M ${p.wetServiceFactorStrength} / ${p.woodSafetyFactor}). The fasteners' pull-through and the bolster's own bending are not modeled.`;
     return governing(ds, how);
   };
   return dualCheck({

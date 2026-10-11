@@ -36,6 +36,11 @@ export interface SimPanel {
   readonly active: boolean;
   /** Design parameters changed: rebuild the cart and restart the run. */
   paramsChanged(): void;
+  /**
+   * Load a scenario by id with a custom rider mass and start it (the Simple view's "Watch it" demos). Safe to call before
+   * the tab is active: the state is set now and the run starts when `setActive(true)` follows.
+   */
+  runScenario(id: string, opts?: { riderLb?: number }): void;
 }
 
 const WHEEL_LABEL: Record<WheelId, string> = {
@@ -98,7 +103,7 @@ export function mountSimPanel(host: HTMLElement, deps: SimPanelDeps): SimPanel {
   // ── header ──
   const banner = h('div', { class: 'sp-banner', role: 'note' },
     h('strong', {}, 'Qualitative — the Analysis tab is the real validation.'),
-    h('span', {}, ' Rigid bodies, ball wheels, no tyre or frame flex: it shows trends and tip onset, not safety margins.'));
+    h('span', {}, ' Rigid bodies, ball wheels, no tire or frame flex: it shows trends and tip onset, not safety margins.'));
 
   const scenarioSel = h('select', { 'aria-label': 'Scenario' });
   for (const s of SCENARIOS) scenarioSel.append(h('option', { value: s.id }, s.label));
@@ -141,7 +146,7 @@ export function mountSimPanel(host: HTMLElement, deps: SimPanelDeps): SimPanel {
     slider('Side slope', 'Starting camber, + raises the left side so the cart leans to the right.', -25, 25, 1, () => config.sideSlopeDeg, (v) => (config.sideSlopeDeg = v), '°', false).row,
     slider('Tilt rate', 'Tilt table: the side slope keeps rising at this rate (deg/s). 0 = fixed slope.', -4, 4, 0.5, () => config.tiltRateDegPerS, (v) => (config.tiltRateDegPerS = v), '°/s', false).row,
     slider('Start speed', 'Initial speed along the ground.', 0, 15, 0.5, () => config.initialSpeedMph, (v) => (config.initialSpeedMph = v), ' mph', false).row,
-    slider('Tyre friction μ', 'Tyre-ground friction coefficient (dry dirt ≈ 0.6-0.8).', 0.2, 2, 0.05, () => config.frictionMu, (v) => (config.frictionMu = v), '', false).row,
+    slider('Tire friction μ', 'Tire-ground friction coefficient (dry dirt ≈ 0.6-0.8).', 0.2, 2, 0.05, () => config.frictionMu, (v) => (config.frictionMu = v), '', false).row,
     toggle('2" root', 'A half-buried 2" round root across the path.', () => config.root, (v) => (config.root = v), true),
     toggle('3" curb', 'A 3" step up across the path.', () => config.curb, (v) => (config.curb = v), true),
     toggle('Wheels chocked', 'Hold the wheels against rolling (tilt table).', () => config.wheelsLocked, (v) => (config.wheelsLocked = v), true));
@@ -160,12 +165,12 @@ export function mountSimPanel(host: HTMLElement, deps: SimPanelDeps): SimPanel {
     modeSel.row, lockSlider.row);
   const brakeGroup = group('Brake (live)', true,
     toggle('Brake on', 'Friction torque on the two rear wheels.', () => controls.brakeOn, (v) => (controls.brakeOn = v), false),
-    slider('Brake force', 'Total braking force at the rear tyre contact patches, lbf.', 0, 200, 5, () => controls.brakeLbf, (v) => (controls.brakeLbf = v), ' lbf').row);
+    slider('Brake force', 'Total braking force at the rear tire contact patches, lbf.', 0, 200, 5, () => controls.brakeLbf, (v) => (controls.brakeLbf = v), ' lbf').row);
 
   const notes = h('details', { class: 'sp-group sp-notes' }, h('summary', {}, 'What this models, and what it does not'),
     h('ul', {},
       h('li', {}, 'Masses, CG and inertia come from the parts list (rider and cargo ride on the chassis); the front axle is a separate body on a vertical kingpin with the steering stops as joint limits (D-12, D-25, D-26).'),
-      h('li', {}, 'Each wheel is a ball at the tyre radius: contact is at the tyre centreline (what the static tip check uses). No tyre width, sidewall flex, hub or axle bending.'),
+      h('li', {}, 'Each wheel is a ball at the tire radius: contact is at the tire centerline (what the static tip check uses). No tire width, sidewall flex, hub or axle bending.'),
       h('li', {}, 'The pull is a horizontal force at the tongue tip in a fixed world direction; real ropes go slack and real pullers react. Rolling resistance is Coulomb-like (0.05 of the load).'),
       h('li', {}, '“Tip onset” is when a second wheel lifts: the support is then a line and the cart tips. The first lift is a load-transfer warning only.'),
       h('li', {}, 'The Analysis tab, not this sim, is the validation. Fixed step 1/240 s.')));
@@ -174,7 +179,7 @@ export function mountSimPanel(host: HTMLElement, deps: SimPanelDeps): SimPanel {
     h('div', { class: 'sp-scenario' }, h('label', {}, h('span', { class: 'sp-label' }, 'Scenario'), scenarioSel), blurb),
     transport, alert, stats, loads, onset, info, terrain, riderGroup, pullGroup, brakeGroup, notes);
 
-  // ── behaviour ──
+  // ── behavior ──
   const syncAll = () => setters.forEach((f) => f());
 
   const applyScenario = (s: Scenario) => {
@@ -329,6 +334,19 @@ export function mountSimPanel(host: HTMLElement, deps: SimPanelDeps): SimPanel {
       }
     },
     paramsChanged() {
+      if (active) void restart();
+    },
+    runScenario(id, opts = {}) {
+      const s = SCENARIOS.find((x) => x.id === id);
+      if (!s) return;
+      if (opts.riderLb !== undefined && Number.isFinite(opts.riderLb)) {
+        rider = 'custom';
+        customLb = Math.max(60, Math.min(250, opts.riderLb)); // the custom slider's range
+        customRow.row.hidden = false;
+      }
+      applyScenario(s); // also re-syncs every widget (rider select, custom slider, controls)
+      running = s.id !== 'free';
+      syncRun();
       if (active) void restart();
     },
   };

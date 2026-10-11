@@ -6,7 +6,7 @@ const STATUS_HELP: Record<string, string> = {
   locked: 'Locked: fixed by the brief or the event rules',
   verify: 'Verify: placeholder, measure/confirm',
   assumed: 'Assumed: engineering assumption',
-  explore: 'Explore: design variable to optimise',
+  explore: 'Explore: design variable to optimize',
 };
 
 type Sync = (value: number) => void;

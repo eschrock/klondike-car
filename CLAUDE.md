@@ -5,7 +5,7 @@ Parametric design app for Troop 455's Klondike Derby cart. **BRIEF.md** is the s
 ## Architecture rules
 - `src/params.ts` is the only home for design numbers. Model code may hold *derived* geometry, never literal design dimensions. If a number matters, it becomes a param (with `status` and a `note`).
 - `src/model/**` and `src/analysis/**` are plain TS with **no three.js imports**, so they run headless under vitest. Geometry is plain data (`src/model/types.ts`).
-- Model frame: +X forward, +Y left, +Z up; origin on the ground under the rear-axle centre. Inches, pounds, degrees.
+- Model frame: +X forward, +Y left, +Z up; origin on the ground under the rear-axle center. Inches, pounds, degrees.
 - Every downstream view (viewer, analysis, sim, cut list, BOM, exports, assembly) consumes `buildModel(params): Part[]`.
 
 ## Workflow

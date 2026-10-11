@@ -6,9 +6,9 @@
  * Units inside the engine are SI (m, kg, N); the public readouts and poses are in the model's units (inches, lbf,
  * mph) so they plug straight into the viewer. The step is a fixed 1/240 s.
  *
- * Modelling choices (limitations are listed in the panel):
- *  - Each wheel is a ball of the tyre radius: contact is at the tyre centreline, which is what the static tip check
- *    (T/2)/h uses, and ball-on-plane contact is robust. Tyre width, sidewall and hub are not simulated.
+ * Modeling choices (limitations are listed in the panel):
+ *  - Each wheel is a ball of the tire radius: contact is at the tire centerline, which is what the static tip check
+ *    (T/2)/h uses, and ball-on-plane contact is robust. Tire width, sidewall and hub are not simulated.
  *  - Ground is a kinematic slab (so the tilt table can rotate it) carrying the root and the curb. Gravity is vertical.
  *  - The hull collides with the ground via compound cuboids from the part OBBs; that contact is the "hull touches
  *    the ground" half of the tip-over event.
@@ -24,7 +24,7 @@ import { WHEEL_IDS, type SimBodyId, type SimSpec, type WheelId } from './spec';
 export type Rapier = typeof RapierModule;
 
 let rapierPromise: Promise<Rapier> | null = null;
-/** Loads and initialises the Rapier WASM once; every caller shares the promise. */
+/** Loads and initializes the Rapier WASM once; every caller shares the promise. */
 export function loadRapier(): Promise<Rapier> {
   rapierPromise ??= import('@dimforge/rapier3d-compat').then(async (m) => {
     const R = ((m as unknown as { default?: Rapier }).default ?? (m as unknown as Rapier)) as Rapier;

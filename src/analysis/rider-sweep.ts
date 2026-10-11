@@ -1,0 +1,186 @@
+/**
+ * Rider sweep (docs/simple-view-spec.md, D-30): "for what rider weights is this cart safe?" Pure TypeScript, no DOM.
+ *
+ * For each weight w the checks run with the operating, goal and lightest rider all set to w, so every load case is the
+ * same rider. Truck fit does not depend on the rider and is evaluated once (or taken from `opts.fit`). A design is a plain
+ * `Params` object throughout, so scenario A vs. B is just two sweeps (spec "Scenario A/B readiness").
+ */
+import type { Params } from '../params';
+import { checkTruckFit, type FitResult } from '../truck/fit';
+import { buildModel } from '../model';
+import { runChecks } from './index';
+import { truckFit } from './transport';
+import { SEVERITY, worst, type AnalysisCheck, type Status } from './types';
+
+/** The six plain-English groups the Simple view reports on. */
+export type Light = 'tipping' | 'turns' | 'hills' | 'steering' | 'strength' | 'truck';
+export const LIGHTS: Light[] = ['tipping', 'turns', 'hills', 'steering', 'strength', 'truck'];
+
+/**
+ * Which light each check id belongs to. 'info' rows never color a light (they are reported only): the empty mass and CG
+ * live on the spec card, and the turn rollover speed (v-rollover) and rear-only traction are quoted in sentences.
+ */
+export const LIGHT_OF_ID: Record<string, Light | 'info'> = {
+  'tip-straight': 'tipping', 'tip-lock': 'tipping',
+  'slide-before-tip': 'turns', 'v-rollover': 'turns',
+  'pitch-fwd': 'hills', 'pitch-rear': 'hills', 'brake-force': 'hills', 'brake-traction': 'hills',
+  'turn-radius': 'steering', 'steer-clear': 'steering',
+  'truck-fit': 'truck',
+  'mass-empty': 'info', cg: 'info',
+  // Strength = every `group === 'Structure'` check (kept explicit so the mapping test can see them).
+  'kingpin-strike': 'strength', 'roll-side-bearer': 'strength', 'roll-kingpin-uplift': 'strength', 'roll-bolster-attach': 'strength',
+  'axle-stress': 'strength', 'beam-front': 'strength', 'beam-rear': 'strength', 'bearing-groove': 'strength', rails: 'strength', deck: 'strength',
+  kingpin: 'strength', turntable: 'strength', tongue: 'strength',
+};
+
+export function lightOf(c: Pick<AnalysisCheck, 'id' | 'group'>): Light | 'info' {
+  return LIGHT_OF_ID[c.id] ?? (c.group === 'Structure' ? 'strength' : 'info');
+}
+
+export interface Limiter { id: string; label: string; util: number; status: Status }
+
+export interface SweepPoint {
+  w: number;
+  /** Worst status over the rider-dependent checks (truck fit excluded). */
+  status: Status;
+  /** The check closest to (or past) its limit at this weight. */
+  worst: Limiter | null;
+  byLight: Record<Light, Status>;
+  /** Ids of the failing checks at this weight. */
+  fails: string[];
+}
+
+export interface SweepOptions {
+  fromLb?: number;
+  toLb?: number;
+  stepLb?: number;
+  /** A precomputed truck-fit result (the app already has one); otherwise it is computed once. */
+  fit?: FitResult;
+}
+
+export interface SafeRange {
+  loLb: number;
+  hiLb: number;
+  /** The run reaches the end of the swept range, so there is no limit on that side. */
+  openLow: boolean;
+  openHigh: boolean;
+}
+
+export interface SweepResult {
+  points: SweepPoint[];
+  fromLb: number;
+  toLb: number;
+  stepLb: number;
+  /** The evaluation at the operating weight (`p.riderMassLb`) and its checks, all riders set to that weight. */
+  operating: SweepPoint;
+  operatingChecks: AnalysisCheck[];
+  /** Widest run of weights with no fail that contains the operating weight; null when the operating weight fails. */
+  safe: SafeRange | null;
+  /** What fails just below / just above the safe range (null when the range is open on that side). */
+  lowLimit: Limiter | null;
+  highLimit: Limiter | null;
+  truckStatus: Status;
+}
+
+const RIDER_KEYS = ['riderMassLb', 'riderGoalMassLb', 'riderMinMassLb'] as const;
+
+/** Geometry-only checks: they don't change with rider weight, so they color their light but not the rider bar. */
+export const RIDER_INDEPENDENT = new Set(['turn-radius', 'steer-clear', 'truck-fit']);
+
+/** Every rider case set to the same weight. */
+export const withRider = (p: Params, w: number): Params => ({ ...p, riderMassLb: w, riderGoalMassLb: w, riderMinMassLb: w });
+
+function pointFrom(w: number, checks: AnalysisCheck[], truckStatus: Status): SweepPoint {
+  const byLight: Record<Light, Status> = { tipping: 'info', turns: 'info', hills: 'info', steering: 'info', strength: 'info', truck: truckStatus };
+  let status: Status = 'info';
+  let wc: AnalysisCheck | null = null;
+  const fails: string[] = [];
+  for (const c of checks) {
+    const l = lightOf(c);
+    if (l === 'info' || l === 'truck') continue;
+    byLight[l] = worst(byLight[l], c.status);
+    if (c.status === 'info' || RIDER_INDEPENDENT.has(c.id)) continue;
+    status = worst(status, c.status);
+    if (c.status === 'fail') fails.push(c.id);
+    if (!wc || SEVERITY[c.status] > SEVERITY[wc.status] || (c.status === wc.status && (c.util ?? 0) > (wc.util ?? 0))) wc = c;
+  }
+  return { w, status, worst: wc ? { id: wc.id, label: wc.label, util: wc.util ?? 0, status: wc.status } : null, byLight, fails };
+}
+
+/** Run the checks at one rider weight (truck fit excluded). */
+export function evaluateRider(p: Params, w: number, truckStatus: Status = 'info'): { point: SweepPoint; checks: AnalysisCheck[] } {
+  const checks = runChecks(withRider(p, w), { includeTruck: false });
+  return { point: pointFrom(w, checks, truckStatus), checks };
+}
+
+/** The widest no-fail run of grid weights around `w`, and what stops it on each side. Pure; exported for tests. */
+export function safeRange(points: SweepPoint[], at: SweepPoint): Pick<SweepResult, 'safe' | 'lowLimit' | 'highLimit'> {
+  if (at.status === 'fail') return { safe: null, lowLimit: at.worst, highLimit: at.worst };
+  const w = at.w;
+  const below = points.filter((x) => x.w <= w).sort((a, b) => b.w - a.w);
+  const above = points.filter((x) => x.w >= w).sort((a, b) => a.w - b.w);
+  let lo = w, hi = w;
+  let lowFail: SweepPoint | undefined, highFail: SweepPoint | undefined;
+  for (const x of below) { if (x.status === 'fail') { lowFail = x; break; } lo = Math.min(lo, x.w); }
+  for (const x of above) { if (x.status === 'fail') { highFail = x; break; } hi = Math.max(hi, x.w); }
+  return {
+    safe: { loLb: lo, hiLb: hi, openLow: !lowFail, openHigh: !highFail },
+    lowLimit: lowFail?.worst ?? null,
+    highLimit: highFail?.worst ?? null,
+  };
+}
+
+interface Core { points: SweepPoint[]; truckStatus: Status; fromLb: number; toLb: number; stepLb: number }
+const coreCache = new Map<string, Core>();
+const atCache = new Map<string, { point: SweepPoint; checks: AnalysisCheck[] }>();
+const MAX_CACHE = 12;
+const remember = <V>(m: Map<string, V>, k: string, v: V) => {
+  m.set(k, v);
+  if (m.size > MAX_CACHE) m.delete(m.keys().next().value as string);
+};
+
+/** Params JSON with the rider masses removed: the sweep overrides them, so dragging the rider slider never invalidates it. */
+function designKey(p: Params): string {
+  const q: Partial<Params> = { ...p };
+  for (const k of RIDER_KEYS) delete q[k];
+  return JSON.stringify(q);
+}
+
+export function clearRiderSweepCache(): void {
+  coreCache.clear();
+  atCache.clear();
+}
+
+function core(p: Params, o: Required<Omit<SweepOptions, 'fit'>>, fit: FitResult | undefined, key: string): Core {
+  const ck = `${key}|${o.fromLb}|${o.toLb}|${o.stepLb}`;
+  const hit = coreCache.get(ck);
+  if (hit) return hit;
+  const truckStatus = truckFit(fit ?? checkTruckFit(p, (v) => buildModel(p, v))).status;
+  const points: SweepPoint[] = [];
+  for (let w = o.fromLb; w <= o.toLb + 1e-9; w += o.stepLb) points.push(evaluateRider(p, w, truckStatus).point);
+  const c = { points, truckStatus, ...o };
+  remember(coreCache, ck, c);
+  return c;
+}
+
+/** Cached by the design's params JSON (rider masses excluded). Target: well under 150 ms for the 21-point default sweep. */
+export function riderSweep(p: Params, opts: SweepOptions = {}): SweepResult {
+  const o = { fromLb: opts.fromLb ?? 50, toLb: opts.toLb ?? 250, stepLb: opts.stepLb ?? 10 };
+  const key = designKey(p);
+  const c = core(p, o, opts.fit, key);
+  const w = p.riderMassLb;
+  const grid = c.points.find((x) => Math.abs(x.w - w) < 1e-9);
+  const atKey = `${key}|${w}`;
+  let at = atCache.get(atKey);
+  if (!at) {
+    at = grid ? { point: grid, checks: runChecks(withRider(p, w), { includeTruck: false }) } : evaluateRider(p, w, c.truckStatus);
+    remember(atCache, atKey, at);
+  }
+  return { ...c, operating: at.point, operatingChecks: at.checks, ...safeRange(c.points, at.point) };
+}
+
+/** True when a sweep for this design (rider masses ignored) is already cached, so `riderSweep` returns at once. */
+export function isRiderSweepCached(p: Params, opts: SweepOptions = {}): boolean {
+  const ck = `${designKey(p)}|${opts.fromLb ?? 50}|${opts.toLb ?? 250}|${opts.stepLb ?? 10}`;
+  return coreCache.has(ck);
+}

@@ -22,11 +22,10 @@ describe('validateParams', () => {
   it('defaults are free of errors and warnings', () => {
     expect(validateParams(defaultParams())).toEqual([]);
   });
-  it('flags crossed rider masses and an over-wide nose', () => {
+  it('warns on crossed rider masses (the Simple view sweeps every weight) and rejects an over-wide nose', () => {
     const issues = validateParams({ ...defaultParams(), riderGoalMassLb: 150, riderMassLb: 200, autoNoseGeometry: 0, noseWidthIn: 30 });
-    expect(issues.filter((i) => i.severity === 'error').map((i) => i.keys[0])).toEqual(
-      expect.arrayContaining(['riderGoalMassLb', 'noseWidthIn']),
-    );
+    expect(issues.filter((i) => i.severity === 'error').map((i) => i.keys[0])).toContain('noseWidthIn');
+    expect(issues.filter((i) => i.severity === 'warn').map((i) => i.keys[0])).toContain('riderGoalMassLb');
   });
   it('flags front tires hitting the nose or cabin shoulder at full lock', () => {
     const issues = validateParams({ ...defaultParams(), autoNoseGeometry: 0, noseWidthIn: 18, noseTaperStartIn: 12 });

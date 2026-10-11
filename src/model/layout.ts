@@ -24,7 +24,7 @@ export interface Layout {
   xs: number;
   xRear: number;
   xFront: number;
-  /** Kingpin (steer pivot, turntable centre) x: ahead of the front axle by kingpinLeadIn (D-25). */
+  /** Kingpin (steer pivot, turntable center) x: ahead of the front axle by kingpinLeadIn (D-25). */
   kx: number;
   /** Chine / gunwale section height and joist thickness (params). */
   railBand: number;
@@ -56,7 +56,7 @@ export interface Layout {
   sideBearer: { y0: number; y1: number; z0: number; z1: number; zw: number; x0: number; x1: number };
   /** Kingpin ends: beam underside (washer) to the turntable top, or to the crossbar top when kingpinThroughBolster = 1. */
   kingpin: { z0: number; z1: number };
-  /** Chassis-side oak crossbar over the turntable centre (kingpinThroughBolster = 1), fore-aft across the bolster opening: x range, half width |y|, z range (flush with the bolster rails). Null when off. */
+  /** Chassis-side oak crossbar over the turntable center (kingpinThroughBolster = 1), fore-aft across the bolster opening: x range, half width |y|, z range (flush with the bolster rails). Null when off. */
   crossbar: { x0: number; x1: number; hw: number; z0: number; z1: number } | null;
   /** Nose rails/joists stop here so the swinging turntable corners clear them. */
   noseRailEnd: number;
@@ -135,11 +135,11 @@ export function computeLayout(input: Params): Layout {
     return { x, len: Math.max(1, track - p.hubLengthIn - 0.25), thick, depth, top, bot: top - depth };
   };
   const beamR = mkBeam(0, p.rearTrackIn, p.axleBeamThicknessIn);
-  // The front beam is centred on the rod + kingpin pair (D-25, critic r2 H2): from the rod's rear edge (WB − rodR) to the
+  // The front beam is centerd on the rod + kingpin pair (D-25, critic r2 H2): from the rod's rear edge (WB − rodR) to the
   // kingpin's front edge (WB + lead + kpR), so both holes keep ≥ beamLigamentMinIn of wood on their outer side.
   const beamF = mkBeam(WB + d.frontBeamOffsetIn, p.frontTrackIn, p.frontAxleBeamThicknessIn);
 
-  // Turntable on the front beam, centred on the kingpin; bolster fills up to the nose deck (min depth).
+  // Turntable on the front beam, centerd on the kingpin; bolster fills up to the nose deck (min depth).
   const ts = p.turntableSizeIn;
   const tz0 = beamF.top;
   const tz1 = tz0 + p.turntableThicknessIn;
@@ -171,7 +171,7 @@ export function computeLayout(input: Params): Layout {
   // 0.75·cos 38.5° = 0.59" from the nose rail at track ≥ 36.5" or wider beams, where the beam rather than the plate governs).
   // The U-bolt clamps sit at |y| beyond the rails' y-band, so they cannot reach the rail end; the nose side panels are covered
   // by the auto shoulder rule (resolveParams). Moving the rail end back (rather than narrowing the nose) is the physical fix:
-  // the beam corner at |y| = hwN is what sweeps aft, and the nose width is already the widest the tyres allow (A-4).
+  // the beam corner at |y| = hwN is what sweeps aft, and the nose width is already the widest the tires allow (A-4).
   const noseRailEnd = kx - Math.max(plateSwingX + p.steeringClearanceIn, beamSwingX + p.steeringClearanceIn / Math.cos(lk));
 
   // Joists skip the rear axle beam when it stands taller than their underside (overslung beam).
@@ -253,7 +253,7 @@ export { len as spanLen };
 
 /**
  * A point on the outside of a captured-ply cabin side panel: `off` inches out along the panel normal from its
- * centreline at height z (flare tilts the panel, so signs and reflectors lean with it). `halfH` is the half height of
+ * centerline at height z (flare tilts the panel, so signs and reflectors lean with it). `halfH` is the half height of
  * the piece being mounted: its lower edge leans inward below the chine top, so the offset grows to keep it off the
  * chine's vertical face. Returns |y|, z and the lean φ.
  */

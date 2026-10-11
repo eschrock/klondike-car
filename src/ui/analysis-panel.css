@@ -1,4 +1,4 @@
-/* Analysis panel (Phase 2). Uses the app's colour tokens; status colours are local with a dark-mode override. */
+/* Analysis panel (Phase 2). Uses the app's color tokens; status colors are local with a dark-mode override. */
 .ap {
   --ap-pass: #1f8f4e; --ap-marg: #b26a00; --ap-fail: #d1352b; --ap-info: var(--muted);
   font-size: 12px; line-height: 1.4; min-width: 0;

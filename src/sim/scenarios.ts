@@ -8,7 +8,7 @@ export interface SimConfig {
   sideSlopeDeg: number;
   /** Tilt-table: the side slope keeps rising from `sideSlopeDeg` at this rate (deg/s). 0 = fixed. */
   tiltRateDegPerS: number;
-  /** Tyre-ground friction coefficient. */
+  /** Tire-ground friction coefficient. */
   frictionMu: number;
   /** Rolling resistance coefficient (pneumatic on firm dirt ≈ 0.05). */
   rollingResistance: number;
@@ -40,7 +40,7 @@ export interface SimControls {
   steerMode: 'bridle' | 'angle';
   steerAngleDeg: number;
   brakeOn: boolean;
-  /** Total brake force at the tyre contact patches of the two rear wheels, lbf. */
+  /** Total brake force at the tire contact patches of the two rear wheels, lbf. */
   brakeLbf: number;
 }
 
@@ -89,7 +89,7 @@ export const SCENARIOS: Scenario[] = [
     config: { initialSpeedMph: 6, root: true, rootAtIn: 100, curb: true, curbAtIn: 220 }, controls: { steerMode: 'angle', steerAngleDeg: 0 }, endAtS: 6,
   },
   {
-    id: 'turn', label: 'Full-lock turn at speed', blurb: 'Rolling at 8 mph, the steering goes to full lock. The tyres alone supply the side force (no rope help). Raise the start speed or the friction to find where a wheel lifts or it tips (≈12 mph at μ 1.5; at μ 0.7 it slides first).',
+    id: 'turn', label: 'Full-lock turn at speed', blurb: 'Rolling at 8 mph, the steering goes to full lock. The tires alone supply the side force (no rope help). Raise the start speed or the friction to find where a wheel lifts or it tips (≈12 mph at μ 1.5; at μ 0.7 it slides first).',
     config: { initialSpeedMph: 8 }, controls: { steerMode: 'angle', steerAngleDeg: 0 }, steerAtS: 0.5, endAtS: 8,
   },
   {

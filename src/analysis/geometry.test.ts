@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildLoadModel } from './loads';
 import {
-  axleLoads, contactsAt, instantCentreY, lateralTip, outerEdgeDistance, RAD, sideEdges, tipAngleDeg, turnGeometry,
+  axleLoads, contactsAt, instantCenterY, lateralTip, outerEdgeDistance, RAD, sideEdges, tipAngleDeg, turnGeometry,
   type ContactInputs,
 } from './geometry';
 import { defaultParams } from '../params';
@@ -16,7 +16,7 @@ const TABLE: ContactInputs = { wheelbaseIn: 48, rearTrackIn: 35.5, frontTrackIn:
 
 describe('symmetric support polygon (hand calc)', () => {
   const box: ContactInputs = { wheelbaseIn: 48, rearTrackIn: 36, frontTrackIn: 36, kingpinLeadIn: 0 };
-  it('straight: CG on the centreline 12" up is 18" from each side edge → atan(18/12) = 56.3°', () => {
+  it('straight: CG on the centerline 12" up is 18" from each side edge → atan(18/12) = 56.3°', () => {
     const lat = lateralTip(contactsAt(box, 0), [24, 0], 12);
     expect(s3(lat.d)).toBe(18);
     expect(s3(lat.deg)).toBe(56.3);
@@ -38,10 +38,10 @@ describe('symmetric support polygon (hand calc)', () => {
     // Outer edge for a left turn is the right edge RR–FR: 17.0".
     expect(s3(outerEdgeDistance(c, [24, 0], 30 * RAD))).toBe(17);
   });
-  it('turning geometry: IC at WB/tanδ, outer front tyre at WB/sinδ + T/2', () => {
+  it('turning geometry: IC at WB/tanδ, outer front tire at WB/sinδ + T/2', () => {
     const t = turnGeometry(box, 30 * RAD)!;
     expect(s3(t.icY)).toBe(83.1); // 48 / tan 30°
-    expect(s3(t.rearCentre)).toBe(83.1);
+    expect(s3(t.rearCenter)).toBe(83.1);
     expect(s3(t.outerFront)).toBe(114); // 48 / sin 30° + 18
     expect(s3(t.innerFront)).toBe(78); // 96 − 18
   });
@@ -86,14 +86,14 @@ describe('DECISIONS hand-calc table (119 lb cart, 150 lb rider, 40° lock)', () 
     const ct = contactsAt(TABLE, 40 * RAD);
     const ssf = outerEdgeDistance(ct, [x, y], 40 * RAD) / h;
     expect(s3(ssf)).toBe(1.11);
-    const ic = instantCentreY(TABLE, 40 * RAD)!;
+    const ic = instantCenterY(TABLE, 40 * RAD)!;
     const v = Math.sqrt(386.1 * Math.hypot(x, y - ic) * ssf) / 17.6;
     expect(v).toBeGreaterThan(9.05);
     expect(v).toBeLessThan(9.15);
   });
-  it('turning radius: 4.8 ft at the rear centre, 7.7 ft at the outer front tyre', () => {
+  it('turning radius: 4.8 ft at the rear center, 7.7 ft at the outer front tire', () => {
     const t = turnGeometry(TABLE, 40 * RAD)!;
-    expect(t.rearCentre / 12).toBeCloseTo(4.77, 2);
+    expect(t.rearCenter / 12).toBeCloseTo(4.77, 2);
     expect(t.outerFront / 12).toBeCloseTo(7.7, 1);
     expect(Math.abs(t.outerFront - 92.4)).toBeLessThan(1);
   });

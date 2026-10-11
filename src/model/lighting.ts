@@ -44,7 +44,7 @@ export function buildLighting(ctx: Ctx, prowTipX: number, prowTipZ: number): Par
 
 export function buildHardware(ctx: Ctx): Part[] {
   const { L } = ctx;
-  // Under the deck, centred in the widest gap between cabin crossmembers (and clear of a tall rear axle beam).
+  // Under the deck, centerd in the widest gap between cabin crossmembers (and clear of a tall rear axle beam).
   const zBot = L.deckBot - HARDWARE_SIZE[2];
   const blockers: Array<[number, number]> = L.cabinJoistX.map((x) => [x - L.joistT / 2, x + L.joistT / 2]);
   const p = ctx.p;
@@ -64,6 +64,6 @@ export function buildHardware(ctx: Ctx): Part[] {
   return [box(ctx, {
     id: 'hardware', name: 'Fasteners, inserts & misc', group: 'hardware', mat: 'fixed', massLb: HARDWARE_MASS_LB, kind: 'purchased', fab: 'buy',
     step: STEP.finish, size: [sx, HARDWARE_SIZE[1], HARDWARE_SIZE[2]], center: [(bestLo + bestHi) / 2, 0, L.deckBot - HARDWARE_SIZE[2] / 2],
-    notes: 'Allowance (estimate): bolts, nuts, washers, threaded inserts, glue. Parked under the deck centre.',
+    notes: 'Allowance (estimate): bolts, nuts, washers, threaded inserts, glue. Parked under the deck center.',
   })];
 }

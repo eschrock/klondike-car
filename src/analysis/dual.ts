@@ -60,7 +60,7 @@ export function dualCheck(s: DualSpec): AnalysisCheck {
   if (goalFlag) lines.push(`GOAL RIDER FLAG: passes at the ${s.operatingLabel.toLowerCase()} but fails at the ${s.goalLabel.toLowerCase()} (D-1: flagged, not designed around).`);
   const cases: AnalysisCheck['cases'] = { operating: toCase('operating', s.operating, sOp), goal: toCase('goal', s.goal, sg) };
   if (s.light && sLight) cases.light = toCase('light', s.light, sLight);
-  // Governing case: worst status, then highest utilisation (info rows: the primary case).
+  // Governing case: worst status, then highest utilization (info rows: the primary case).
   let gov: CaseResult = cases[s.primary]!;
   if (!info) {
     for (const r of Object.values(cases)) {
@@ -91,7 +91,7 @@ export function dualCheck(s: DualSpec): AnalysisCheck {
   };
 }
 
-/** Pick the criterion with the highest utilisation and turn the list into a CaseEval. */
+/** Pick the criterion with the highest utilization and turn the list into a CaseEval. */
 export function governing(details: Detail[], how: string): CaseEval {
   const g = details.reduce((a, b) => (b.util > a.util ? b : a), details[0]);
   return { value: g.value, unit: g.unit, limit: g.limit, sense: g.sense, how, suffix: g.name, details };

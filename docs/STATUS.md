@@ -23,6 +23,6 @@
 
 ## Phase 2 log
 - Spec (docs/phase2-spec.md). Analysis checks, Rapier sim and auto-nose geometry were built by parallel agents.
-- Analysis critic r1: 7/10. Added obstacle strike, roll path, 80 lb rider, tyre-edge turning radius, effective-width deck, C_M ⊥ 0.67, lateral axle load.
+- Analysis critic r1: 7/10. Added obstacle strike, roll path, 80 lb rider, tire-edge turning radius, effective-width deck, C_M ⊥ 0.67, lateral axle load.
 - Exploration: about 45k designs (docs/phase2-exploration.md). Then kingpin through a crossbar with sleeves.
 - Recommendation (docs/phase2-recommendation.md, D-27). Checkpoint critic r2 7/10 → r3 8/10; wording fixes done.

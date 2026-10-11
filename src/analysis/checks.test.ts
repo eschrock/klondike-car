@@ -8,8 +8,20 @@ import { runChecks, type AnalysisCheck } from './index';
 import { liftPull } from './stability';
 import { effectiveStripWidth, maxDeckSpan, obstacleForce, rollBalance } from './structure';
 import { judge } from './types';
+import { phase1Params } from '../test-baselines';
 
 const defaults = defaultParams();
+const phase1 = phase1Params(); // the Phase 1 configuration: for tests whose purpose is a hand calculation worked at it
+
+/**
+ * Independent closed form for the turning radius (A-2): the instant center lies on the rear axle line; the front axle center
+ * trails the kingpin by `lead` and swings through the lock angle θ, so (rear-axle line at x = 0, kingpin at wheelbase + lead)
+ * the outer front tire centerline radius = (wheelbase + lead − lead·cosθ)/sinθ + frontTrack/2, and the outer EDGE adds tire width/2.
+ */
+const turnEdgeIn = (p: Params, lockDeg: number) => {
+  const th = (lockDeg * Math.PI) / 180;
+  return (p.wheelbaseIn + p.kingpinLeadIn - p.kingpinLeadIn * Math.cos(th)) / Math.sin(th) + p.frontTrackIn / 2 + p.tireWidthIn / 2;
+};
 const byId = (cs: AnalysisCheck[], id: string) => cs.find((c) => c.id === id)!;
 const run = (p: Params) => runChecks(p, { includeTruck: false });
 
@@ -41,15 +53,22 @@ describe('runChecks at the defaults', () => {
     expect(ssf).toBeGreaterThan(0.95);
     expect(ssf).toBeLessThan(1.2);
   });
-  it('turn radius (A-2, M1): tyre-centreline 95.2" at the Phase 1 lock (D-26), the pass/fail value is the outer EDGE = centreline + w/2 = 97.2"', () => {
-    const t = byId(cs, 'turn-radius');
-    const centre = t.details!.find((d) => d.name.includes('centreline'))!.value;
-    expect(centre).toBeCloseTo(95.25, 1);
-    expect(t.value).toBeCloseTo(centre + defaults.tireWidthIn / 2, 6);
+  it('turn radius (A-2, M1): tire-centerline 95.2" at the Phase 1 lock (D-26), the pass/fail value is the outer EDGE = centerline + w/2 = 97.2"', () => {
+    const t = byId(run(phase1), 'turn-radius'); // hand calculation at the Phase 1 configuration (48" wheelbase, 38.5° lock)
+    const center = t.details!.find((d) => d.name.includes('centerline'))!.value;
+    expect(center).toBeCloseTo(95.25, 1);
+    expect(t.value).toBeCloseTo(center + phase1.tireWidthIn / 2, 6);
     expect(t.value).toBeCloseTo(97.25, 1);
     expect(t.status).toBe('fail'); // 97.25" > 96"
-    const r40 = byId(run({ ...defaults, steerLockDeg: 40 }), 'turn-radius').details!.find((d) => d.name.includes('centreline'))!.value;
-    expect(Math.abs(r40 - 7.7 * 12)).toBeLessThan(1); // DECISIONS hand-calc table, tyre centre
+    const r40 = byId(run({ ...phase1, steerLockDeg: 40 }), 'turn-radius').details!.find((d) => d.name.includes('centerline'))!.value;
+    expect(Math.abs(r40 - 7.7 * 12)).toBeLessThan(1); // DECISIONS hand-calc table, tire center
+  });
+  it('turn radius at the current defaults (44" wheelbase, 37° lock, 1.5" lead) matches the closed form and passes (marginally) the 96" limit (D-27)', () => {
+    const t = byId(cs, 'turn-radius');
+    expect(t.value).toBeCloseTo(turnEdgeIn(defaults, defaults.steerLockDeg), 6); // 93.36"
+    expect(t.value).toBeCloseTo(93.36, 1);
+    expect(t.status).toBe('marginal'); // passes with a 2.7% margin (< 10% of the limit): docs/phase2-recommendation.md
+    expect(t.value).toBeLessThan(defaults.turnRadiusMaxIn);
   });
   it('goal rider is heavier and tips earlier than the operating rider', () => {
     const t = byId(cs, 'tip-straight').cases!;
@@ -68,7 +87,7 @@ describe('runChecks at the defaults', () => {
   it('through-rod axle stress matches the closed-form cantilever for the rear wheel', () => {
     const c = byId(cs, 'axle-stress');
     const rear = c.details!.find((d) => d.name.startsWith('rear axle bending'))!;
-    // hand (goal, rear): P = 114.7 lb × 3 = 344.1 lbf, a = 2.0", M = 688.3 lb·in → 16.6 ksi vertical; with the tyre friction force
+    // hand (goal, rear): P = 114.7 lb × 3 = 344.1 lbf, a = 2.0", M = 688.3 lb·in → 16.6 ksi vertical; with the tire friction force
     // (0.5 × 114.7 lb at r = 6.5") M = 1061 lb·in → σ = 1061 × 0.375 / 0.015531 + 57.4/0.4418 = 25.75 ksi
     expect(rear.value).toBeGreaterThan(25000);
     expect(rear.value).toBeLessThan(26500);
@@ -113,7 +132,11 @@ describe('operating / goal flagging', () => {
   });
   it('real run: a handle-force limit between the 150 lb and 200 lb loads flags the goal rider', () => {
     const base = byId(run(defaults), 'brake-force').cases!;
-    const limit = Math.round((base.operating!.value + base.goal!.value) / 2 + 2);
+    // Midpoint of the two loads (20.3 / 23.7 lbf at the Phase 2 defaults, ratio 12:1). The old "+ 2" nudge assumed a wider gap
+    // (the 10:1 ratio) and would now put the limit above the goal value, i.e. into 'marginal' instead of 'fail'.
+    const limit = Math.round((base.operating!.value + base.goal!.value) / 2);
+    expect(limit).toBeGreaterThan(base.operating!.value);
+    expect(limit).toBeLessThan(base.goal!.value);
     const c = byId(run({ ...defaults, handleForceLimitLbf: limit }), 'brake-force');
     expect(c.statusOperating).not.toBe('fail');
     expect(c.statusGoal).toBe('fail');
@@ -134,8 +157,9 @@ describe('parameter response', () => {
     expect(byId(run({ ...defaults, deckHeightIn: 12 }), 'tip-straight').value).toBeLessThan(base);
   });
   it('a 12 mm deck ply passes the standing-scout deflection that the 9 mm ply fails (D1)', () => {
-    const thin = byId(run(defaults), 'deck');
-    const thick = byId(run({ ...defaults, deckPlyIn: 0.472 }), 'deck');
+    // Phase 1 configuration (9 mm ply, 12" joist spacing): the Phase 2 defaults already use 12 mm at 8" spacing.
+    const thin = byId(run(phase1), 'deck');
+    const thick = byId(run({ ...phase1, deckPlyIn: 0.472 }), 'deck');
     expect(thin.details!.find((d) => d.name.includes('deflection'))!.util).toBeGreaterThan(1);
     expect(thick.status).not.toBe('fail');
   });
@@ -243,7 +267,8 @@ describe('every variant the validator accepts yields finite checks', () => {
 describe('critic round 1 fixes: hand-calculated numbers at the defaults', () => {
   // The hand calcs below were done for the original steering layout (kingpin ending at the turntable top, D-12); the crossbar
   // option adds ~1.5 lb and moves the CG, so they pin that configuration (kingpinThroughBolster = 0). The crossbar has its own tests below.
-  const legacy = { ...defaults, kingpinThroughBolster: 0 };
+  // They also pin the Phase 1 design values (phase1Params(): 48" wheelbase, ½" pin, 9 mm deck, 12" joists, 72" rope run, ...).
+  const legacy = { ...phase1, kingpinThroughBolster: 0 };
   const cs = run(legacy);
   const goal = (id: string) => byId(cs, id).cases!.goal!;
   const op = (id: string) => byId(cs, id).cases!.operating!;
@@ -290,7 +315,7 @@ describe('critic round 1 fixes: hand-calculated numbers at the defaults', () => 
   });
   it('M2: compression ⊥ allowable is 1070 × 0.67 / 2 = 358.45 psi', () => {
     expect(goal('bearing-groove').limit).toBeCloseTo(358.45, 2);
-    // 144 lb front axle × share → rear heavier: groove stress 306 psi → 85% utilised
+    // 144 lb front axle × share → rear heavier: groove stress 306 psi → 85% utilized
     expect(goal('bearing-groove').util).toBeCloseTo(306 / 358.45, 1);
     expect(byId(run({ ...defaults, wetServiceFactorCompPerp: 0.85 }), 'bearing-groove').cases!.goal!.limit).toBeCloseTo(454.75, 2);
   });
@@ -315,7 +340,7 @@ describe('critic round 1 fixes: hand-calculated numbers at the defaults', () => 
     expect(c.details!.find((d) => d.name.includes('deflection'))!.value).toBeCloseTo(0.069, 3);
     expect(c.how).toMatch(/≥ 11\.7 mm/);
     expect(c.how).toMatch(/12 mm: 0\.029/);
-    const t12 = byId(run({ ...defaults, deckPlyIn: 0.472 }), 'deck').details!.find((d) => d.name.includes('deflection'))!.value;
+    const t12 = byId(run({ ...legacy, deckPlyIn: 0.472 }), 'deck').details!.find((d) => d.name.includes('deflection'))!.value;
     expect(t12).toBeCloseTo(0.029, 3);
   });
   it('layout: a thicker deck ply no longer lengthens the span next to the rear beam (D1 oddity)', () => {
@@ -331,7 +356,7 @@ describe('critic round 1 fixes: hand-calculated numbers at the defaults', () => 
     expect(c.cases!.operating!.value).toBeCloseTo(1.334, 2);
     expect(c.cases!.goal!.value).toBeCloseTo(1.525, 2);
     expect(c.cases!.light!.value).toBeCloseTo(1.067, 2);
-    expect(c.cases!.light!.limit).toBe(defaults.pitchPullMarginMin);
+    expect(c.cases!.light!.limit).toBe(legacy.pitchPullMarginMin);
     expect(c.statusOperating).toBe('fail'); // the 80 lb rider is part of the operating envelope
     expect(c.status).toBe('fail');
     expect(c.governingLoad).toBe('light');
@@ -368,11 +393,15 @@ describe('status chips and per-case results (P1/P2)', () => {
         expect(c.util, c.id).toBeGreaterThanOrEqual(0);
       }
     }
-    expect(byId(cs, 'turn-radius').util).toBeCloseTo(97.25 / 96, 2);
+    expect(byId(cs, 'turn-radius').util).toBeCloseTo(turnEdgeIn(defaults, defaults.steerLockDeg) / defaults.turnRadiusMaxIn, 6);
   });
   it('the governing case of a failing row is the failing case (so the chip matches the value shown)', () => {
-    const c = byId(cs, 'pitch-rear');
+    // pitch-rear passes every rider at the Phase 2 defaults (rope tied low at the axle ends, 96" run), so the "failing row"
+    // case is exercised on the Phase 1 configuration, where the 80 lb rider fails it (H3).
+    const c = byId(run(phase1), 'pitch-rear');
+    expect(c.status).toBe('fail');
     expect(c.cases![c.governingLoad as 'light']!.status).toBe('fail');
+    expect(byId(cs, 'pitch-rear').status).toBe('pass'); // and the chip matches at the defaults too
     const a = byId(cs, 'axle-stress');
     expect(a.cases![a.governingLoad as 'goal']!.status).toBe(a.status);
   });
@@ -381,10 +410,11 @@ describe('status chips and per-case results (P1/P2)', () => {
 describe('kingpin through the bolster: single shear with two bearing members, sleeve, washer rule (D-12)', () => {
   const det = (cs: AnalysisCheck[], id: string, name: string) => byId(cs, id).details!.find((x) => x.name.includes(name))!;
   it('crossbar: τ = H/A (one shear plane at the turntable), M = H·(g/2 + D_min/2), bearing in beam and crossbar', () => {
-    const cs = run(defaults);
-    const L = computeLayout(defaults);
+    // Hand arithmetic below uses the ½" unsleeved pin (A = π·0.25², Z = π·0.5³/32), i.e. the Phase 1 pin; the sleeved ¾" default has its own test.
+    const cs = run(phase1);
+    const L = computeLayout(phase1);
     const kp = byId(cs, 'kingpin');
-    const H = defaults.pullForceLbf;
+    const H = phase1.pullForceLbf;
     const A = Math.PI * 0.25 * 0.25;
     const g = L.turntable.z1 - L.turntable.z0, D2 = L.crossbar!.z1 - L.crossbar!.z0;
     expect(det(cs, 'kingpin', 'shear').value).toBeCloseTo(H / A, 0);
@@ -400,7 +430,12 @@ describe('kingpin through the bolster: single shear with two bearing members, sl
     expect(det(cs, 'kingpin-strike', 'crossbar (oak').util!).toBeGreaterThan(det(cs, 'kingpin-strike', 'in the beam').util!);
   });
   it('a sleeve moves the oak bearing to its OD and adds a pin-on-sleeve steel bearing row (0.9·36 ksi / 2 = 16.2 ksi)', () => {
-    const p = { ...defaults, kingpinDiameterIn: 0.625, kingpinSleeveOdIn: 1.25, kingpinLeadIn: 1.5, frontAxleBeamThicknessIn: 4 };
+    // The Phase 2 default IS the sleeved pin (¾" pin in a 1.25" OD steel sleeve, 1.5" lead, 4" beam). The earlier hand-picked
+    // 0.625" variant sat at < 0.9 goal util; both it and the ¾" default now sit at ≈ 0.92 (goal average crossbar bearing 331 of
+    // 358 psi), which docs/phase2-recommendation.md lists as "marginal at 200 lb" (known, Phase 3 item 2). So the margin
+    // assertion is relaxed from < 0.9 to "passes the goal rider but is marginal", not dropped.
+    const p = { ...defaults };
+    expect(p.kingpinSleeveOdIn).toBe(1.25);
     const cs = run(p);
     const L = computeLayout(p);
     const s = byId(cs, 'kingpin-strike');
@@ -409,7 +444,10 @@ describe('kingpin through the bolster: single shear with two bearing members, sl
     const H = byId(cs, 'kingpin-strike').how.match(/Governing: [^,]+, H = (\d+)/)![1];
     const brgBeam = s.details!.find((d) => d.name.includes('in the beam'))!;
     expect(brgBeam.value).toBeCloseTo(Number(H) / (1.25 * L.beamF.depth), -1);
-    expect(s.cases!.goal!.util).toBeLessThan(0.9); // ≥ 10% margin at the goal rider
+    expect(s.cases!.goal!.util).toBeLessThan(1); // passes at the goal rider ...
+    expect(s.cases!.goal!.util).toBeGreaterThan(0.9); // ... but with < 10% margin (the documented 331/358 psi)
+    expect(s.cases!.goal!.status).toBe('marginal');
+    expect(s.status).not.toBe('fail');
     expect(run({ ...p, sleeveYieldPsi: 20000 }).find((c) => c.id === 'kingpin-strike')!.details!.find((d) => d.name.includes('steel sleeve'))!.limit).toBeCloseTo(9000, 6);
   });
   it('the washer is at least 2.25 × the pin: a 1" pin gets a 2.25" washer even with the 1.25" param', () => {

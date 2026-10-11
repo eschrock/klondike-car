@@ -5,9 +5,11 @@ import { computeLayout } from './layout';
 import { obbOverlap, partOBB, worldAABB } from './bounds';
 import { centerOfGravity, totalMass } from './mass';
 import type { Part, PartGroup } from './types';
+import { phase1Params } from '../test-baselines';
 
 const TOL = 0.05;
 const defaults = defaultParams();
+const phase1 = phase1Params(); // Phase 1 configuration, for tests that need a tongue / unsleeved ½" pin / the old hand numbers
 
 interface Allow {
   a: RegExp;
@@ -23,8 +25,11 @@ const ALLOW: Allow[] = [
   { a: /^kingpin$/, b: /^kingpin-crossbar$/, why: 'the kingpin passes up through the crossbar bore (D-12)' },
   { a: /^kingpin-crossbar$/, b: /^bolster-(fore|aft)$/, why: 'the crossbar ends are let into notches in the bolster rails (D-12)' },
   { a: /^kingpin-sleeve-/, b: /^(kingpin|beam-F|turntable|kingpin-crossbar)$/, why: 'the steel sleeve is a tube pressed into the beam / crossbar bore around the pin (drawn solid)' },
-  { a: /^kingpin$/, b: /^(beam-F|turntable)$/, why: 'kingpin passes through the solid beam and the turntable centre (D-25); it leads the axle rod, so axle-F is NOT allowed' },
+  { a: /^kingpin$/, b: /^(beam-F|turntable)$/, why: 'kingpin passes through the solid beam and the turntable center (D-25); it leads the axle rod, so axle-F is NOT allowed' },
   { a: /^side-bearer-[LR]$/, b: /^beam-F$/, why: 'the bearer block is housed in a mortise in the beam top (M5); only the mortise volume overlaps' },
+  { a: /^beam-F$/, b: /^bridle-[LR]$/, why: 'the rope-bridle legs are tied around the front beam ends (D-14, D-27); the drawn rope bar ends embed ≲ ¼" in the beam' },
+  { a: /^bridle-L$/, b: /^bridle-R$/, why: 'the two rope legs meet at the ring ahead of the cart (D-14, D-27); the drawn bar ends overlap at the knot' },
+  { a: /^wheel-F[LR]$/, b: /^bridle-[LR]$/, why: 'each rope leg is tied at the axle end, which is inside the wheel; the tire OBB is a conservative box, so wide tires / large wheels show a ≲ 0.08" corner clash (reported, see the Phase 2 test notes)' },
   { a: /^axle-R$/, b: /^brake-drum-/, why: 'wooden drum is bored onto the live rear axle (D-13)' },
 ];
 const matches = (r: Allow, a: Part, b: Part) => (r.a.test(a.id) && r.b.test(b.id)) || (r.a.test(b.id) && r.b.test(a.id));
@@ -70,8 +75,14 @@ describe('buildModel structure', () => {
     expect(fl.transform[0]).toBeCloseTo(Math.cos((20 * Math.PI) / 180), 6);
     expect(fl.transform[1]).toBeCloseTo(s20, 6);
     // The steering-stop posts are pre-rotated by ∓lock so they land axis-aligned (flat on the bolster face) at lock.
-    for (const part of big.filter((x) => x.body === 'steer' && !x.id.startsWith('steer-stop-'))) expect(part.transform[1], part.id).toBeCloseTo(s20, 6);
+    // The rope-bridle legs carry their own fixed yaw (they slope in to the ring), so they are checked by the CHANGE in yaw below.
+    for (const part of big.filter((x) => x.body === 'steer' && !x.id.startsWith('steer-stop-') && !x.id.startsWith('bridle-'))) expect(part.transform[1], part.id).toBeCloseTo(s20, 6);
     expect(big.filter((x) => x.body === 'steer').length).toBeGreaterThan(8);
+    const yaw = (x: Part) => Math.atan2(x.transform[1], x.transform[0]);
+    const neutral = buildModel(p, { steerDeg: 0 });
+    const legs = big.filter((x) => x.id.startsWith('bridle-'));
+    expect(legs.length).toBe(2); // rope bridle at the default drawbar
+    for (const leg of legs) expect(yaw(leg) - yaw(neutral.find((x) => x.id === leg.id)!), leg.id).toBeCloseTo((20 * Math.PI) / 180, 6);
     const neg = buildModel(p, { steerDeg: -50 }).find((x) => x.id === 'wheel-FL')!;
     expect(neg.transform[1]).toBeCloseTo(-s20, 6);
   });
@@ -85,7 +96,7 @@ describe('buildModel structure', () => {
       const turntable = m.find((x) => x.id === 'turntable')!;
       expect(turntable.transform[12]).toBeCloseTo(kx, 6);
       expect(turntable.transform[13]).toBeCloseTo(0, 6);
-      // The kingpin and the axle rod never intersect: centre distance > kingpin radius + rod radius.
+      // The kingpin and the axle rod never intersect: center distance > kingpin radius + rod radius.
       const axle = m.find((x) => x.id === 'axle-F')!;
       const dist = Math.hypot(axle.transform[12] - k.transform[12], axle.transform[13] - k.transform[13]);
       expect(dist).toBeGreaterThan(defaults.kingpinDiameterIn / 2 + defaults.axleDiameterIn / 2);
@@ -135,15 +146,18 @@ describe('buildModel structure', () => {
     const beam = worldAABB(m.find((x) => x.id === 'beam-F')!);
     const rod = worldAABB(m.find((x) => x.id === 'axle-F')!);
     const kp = worldAABB(m.find((x) => x.id === 'kingpin')!);
+    // The wood is measured from the BORE: the steel sleeve OD when there is one (D-12), else the pin.
+    const boreD = Math.max(defaults.kingpinDiameterIn, defaults.kingpinSleeveOdIn);
+    const boreFront = kp.max[0] + (boreD - defaults.kingpinDiameterIn) / 2;
     expect(rod.min[0] - beam.min[0]).toBeGreaterThanOrEqual(defaults.beamLigamentMinIn - 1e-9);
-    expect(beam.max[0] - kp.max[0]).toBeGreaterThanOrEqual(defaults.beamLigamentMinIn - 1e-9);
-    // The beam is centred on the rod + kingpin pair, so the two ligaments are equal.
-    expect(rod.min[0] - beam.min[0]).toBeCloseTo(beam.max[0] - kp.max[0], 6);
+    expect(beam.max[0] - boreFront).toBeGreaterThanOrEqual(defaults.beamLigamentMinIn - 1e-9);
+    // The beam is centerd on the rod + kingpin pair, so the two ligaments are equal.
+    expect(rod.min[0] - beam.min[0]).toBeCloseTo(beam.max[0] - boreFront, 6);
     const rear = worldAABB(m.find((x) => x.id === 'beam-R')!);
     const rodR = worldAABB(m.find((x) => x.id === 'axle-R')!);
     expect(rodR.min[0] - rear.min[0]).toBeGreaterThanOrEqual(defaults.beamLigamentMinIn - 1e-9);
     // Validator: a front beam narrower than lead + rod + kingpin radii + 2 ligaments is rejected, the minimum is accepted.
-    const need = defaults.kingpinLeadIn + defaults.axleDiameterIn / 2 + defaults.kingpinDiameterIn / 2 + 2 * defaults.beamLigamentMinIn;
+    const need = defaults.kingpinLeadIn + defaults.axleDiameterIn / 2 + boreD / 2 + 2 * defaults.beamLigamentMinIn;
     const ligErr = (t: number) => errorsOf({ ...defaults, frontAxleBeamThicknessIn: t }).some((i) => i.message.startsWith('Front axle beam is'));
     expect(ligErr(need - 0.125)).toBe(true);
     expect(ligErr(need)).toBe(false);
@@ -187,9 +201,15 @@ describe('overlaps', () => {
 });
 
 /** Documented empty masses at defaults (heavy design, D-21), lb. Printed by the breakdown test below. */
-const EXPECTED_EMPTY_LB = 123.9; // 122.1 + the kingpin crossbar (kingpinThroughBolster, D-12)
+// Phase 2 defaults (D-27): 126.9 lb = the Phase 1 123.9 lb (122.1 + the kingpin crossbar, D-12) + 3.0 lb net. Part-by-part from the
+// Phase 1 → Phase 2 change (each checked against a scaling hand calc, e.g. beam-F 7.93 × 4/3.5 = 9.06 lb ≈ 9.05 with the bore removed;
+// pin 0.27 lb × (0.75/0.5)² = 0.60 ≈ 0.58 with its shorter length):
+//   front beam 3.5" → 4" thick +1.1; ¾" pin +0.3; two steel sleeves (1.25" OD tube around the ¾" pin, ≈ 2.5" and 1.6" long) +0.95;
+//   12 mm deck ply (+33%) on a shorter cabin +2.2, one more cabin joist and a nose joist at 8" spacing +1.4;
+//   oak tongue + straight bridle −2.6, two rope legs +1.0; shorter 44" cabin: rails, chines, gunwales, signs −1.0 in all.
+const EXPECTED_EMPTY_LB = 126.9;
 const EXPECTED_GROUP_LB: Record<string, number> = {
-  'running-gear': 48.6, steering: 12.2, frame: 9.5, body: 28.0, seat: 5.9, storage: 8.1, brake: 3.5, removable: 5.0,
+  'running-gear': 49.7, steering: 11.6, frame: 10.5, body: 29.8, seat: 5.9, storage: 8.1, brake: 3.5, removable: 4.7,
 };
 
 describe('masses', () => {
@@ -261,11 +281,18 @@ describe('masses', () => {
 
 describe('removed', () => {
   it('drops exactly the removable parts', () => {
+    // Default drawbar is the rope bridle (no tongue): the removable set has the rope legs; the oak-tongue config has the tongue.
     const full = buildModel(defaults);
     const removed = buildModel(defaults, { removed: true });
     expect(removed.map((p) => p.id)).toEqual(full.filter((p) => !p.removable).map((p) => p.id));
     const gone = full.filter((p) => p.removable).map((p) => p.id);
-    expect(gone).toEqual(expect.arrayContaining(['tongue', 'prow', 'seat-back-panel', 'seat-back-stile-L', 'sign-L', 'sign-R', 'handle-bar', 'handle-post-L', 'handle-post-R']));
+    const common = ['prow', 'seat-back-panel', 'seat-back-stile-L', 'sign-L', 'sign-R', 'handle-bar', 'handle-post-L', 'handle-post-R'];
+    expect(gone).toEqual(expect.arrayContaining([...common, 'bridle-L', 'bridle-R']));
+    expect(gone).not.toContain('tongue');
+    const fullT = buildModel(phase1);
+    const goneT = fullT.filter((p) => p.removable).map((p) => p.id);
+    expect(buildModel(phase1, { removed: true }).map((p) => p.id)).toEqual(fullT.filter((p) => !p.removable).map((p) => p.id));
+    expect(goneT).toEqual(expect.arrayContaining([...common, 'tongue', 'bridle']));
   });
 });
 
@@ -342,8 +369,9 @@ const VARIANTS: Record<string, Partial<Params>> = {
   storageUnderSeat: { storageLocation: 2 },
   track30: { rearTrackIn: 30, frontTrackIn: 30 },
   'track30+fix': { rearTrackIn: 30, frontTrackIn: 30, bodyWidthIn: 24, steerLockDeg: 25 },
-  track44: { rearTrackIn: 44, frontTrackIn: 44 },
-  'track44+fix': { rearTrackIn: 44, frontTrackIn: 44, noseTaperStartIn: 23 },
+  // At the Phase 2 44" wheelbase the auto shoulder sits 0.2" further back, so the seat needs to move back 0.5" at a 44" track.
+  track44: { rearTrackIn: 44, frontTrackIn: 44, seatXIn: 11.5 },
+  'track44+fix': { rearTrackIn: 44, frontTrackIn: 44, seatXIn: 11.5, noseTaperStartIn: 23 },
   wheelbase40: { wheelbaseIn: 40 },
   'wheelbase40+fix': { wheelbaseIn: 40, seatXIn: 8 },
   wheelbase60: { wheelbaseIn: 60 },
@@ -483,7 +511,8 @@ describe('explode directions (M7)', () => {
     expect(dir('wheel-FL')[1]).toBeGreaterThan(0.8);
     expect(dir('wheel-FR')[1]).toBeLessThan(-0.8);
     expect(dir('beam-R')[2]).toBeLessThan(-0.9);
-    expect(dir('tongue')[0]).toBeGreaterThan(0.9);
+    expect(buildModel(phase1).find((x) => x.id === 'tongue')!.explode![0]).toBeGreaterThan(0.9);
+    expect(dir('bridle-L')[0]).toBeGreaterThan(0.5); // rope bridle legs (default drawbar) separate forward
     expect(dir('kingpin')[2]).toBeLessThan(-0.9);
     expect(dir('side-cabin-L-web')[1]).toBeGreaterThan(0.9);
     expect(dir('side-cabin-R-web')[1]).toBeLessThan(-0.9);
@@ -629,7 +658,8 @@ describe('round-2 validator rules', () => {
   });
   it('steering stops must fit the bolster opening', () => {
     expect(errorsOf({ ...defaults, steerStopSizeIn: 3 }).some((i) => i.message.startsWith('Steering stop posts'))).toBe(true);
-    expect(errorsOf({ ...defaults, turntableSizeIn: 6 }).some((i) => i.message.startsWith('Steering stop posts'))).toBe(true);
+    // The turntable preset (D-28) overrides the size param, so a custom 6" plate needs turntableType = 0 (Custom).
+    expect(errorsOf({ ...defaults, turntableType: 0, turntableSizeIn: 6 }).some((i) => i.message.startsWith('Steering stop posts'))).toBe(true);
   });
 });
 
@@ -700,12 +730,27 @@ describe('fuzz: validator-clean designs have no unintended overlaps', () => {
 
 // ── Auto nose geometry (A-4, D-26): front track / lock / lead jitter with the nose derived, transport config included ──
 describe('autoNoseGeometry and resolveParams', () => {
-  it('defaults: auto reproduces (or widens) the Phase 1 nose and shoulder and stays validator-clean', () => {
-    expect(defaults.autoNoseGeometry).toBe(1);
-    const r = resolveParams(defaults);
+  it('Phase 1 configuration: auto reproduces (or widens) the Phase 1 nose and shoulder and stays validator-clean', () => {
+    expect(phase1.autoNoseGeometry).toBe(1);
+    const r = resolveParams(phase1);
     expect(r.noseWidthIn).toBeGreaterThanOrEqual(13.5);
     expect(r.noseWidthIn * 8 % 1).toBe(0);
     expect(r.noseTaperStartIn).toBe(18);
+    expect(validateParams(phase1)).toEqual([]);
+    expect(validateParams({ ...phase1, autoNoseGeometry: 0 })).toEqual([]);
+  });
+  it('Phase 2 defaults (44" wheelbase, 37° lock, 1.5" lead): auto nose and shoulder match an independent trig derivation, and stay validator-clean', () => {
+    expect(defaults.autoNoseGeometry).toBe(1);
+    const r = resolveParams(defaults);
+    // Independent re-derivation of the A-4 swing rule: inner tire corner |y| and rear-most tire corner behind the axle at full lock.
+    const lk = (defaults.steerLockDeg * Math.PI) / 180;
+    const half = defaults.frontTrackIn / 2, w = defaults.tireWidthIn, rr = defaults.wheelDiameterIn / 2, lead = defaults.kingpinLeadIn;
+    const innerY = (half - w / 2) * Math.cos(lk) - (lead + rr) * Math.sin(lk); // 7.76"
+    const rearBehindAxle = (half + w / 2) * Math.sin(lk) + (lead + rr) * Math.cos(lk) - lead; // 16.77"
+    expect(r.noseWidthIn).toBe(Math.floor((2 * (innerY - defaults.steeringClearanceIn)) / 0.125) * 0.125); // 14.0"
+    expect(r.noseTaperStartIn).toBe(Math.ceil((rearBehindAxle + defaults.steeringClearanceIn + 0.0625) / 0.125) * 0.125); // 17.625"
+    expect(r.noseTaperStartIn).toBe(17.625);
+    expect(r.noseWidthIn).toBeGreaterThanOrEqual(13.5);
     expect(validateParams(defaults)).toEqual([]);
     expect(validateParams({ ...defaults, autoNoseGeometry: 0 })).toEqual([]);
   });
@@ -761,7 +806,9 @@ describe('autoNoseGeometry and resolveParams', () => {
     const rnd = mulberry32(2026);
     const out: Params[] = [];
     for (let i = 0; i < N; i++) {
-      const p = { ...defaults };
+      // Base = the Phase 2 defaults with the Phase 1 UNSLEEVED ½" pin: this sweep is about the auto nose vs the manual nose, and the
+      // default 1¼" sleeve only admits kingpinLeadIn = 1.5" (web rule), which would collapse the lead jitter to nothing.
+      const p = { ...defaults, kingpinSleeveOdIn: 0, kingpinDiameterIn: 0.5 };
       for (const k of J) { const d = PARAM_DEFS[k]; p[k] = Math.min(d.max, Math.max(d.min, Math.round((d.min + rnd() * (d.max - d.min)) / d.step) * d.step)); }
       for (const k of OTHERS) {
         if (rnd() > 0.15) continue;
@@ -796,8 +843,12 @@ describe('round-3 carry-over validator rules', () => {
   it('rod-to-kingpin web >= rodKingpinWebMinIn', () => {
     const webErr = (p: Params) => errorsOf(p).some((i) => i.keys.includes('rodKingpinWebMinIn'));
     expect(webErr(defaults)).toBe(false);
-    expect(webErr({ ...defaults, kingpinLeadIn: 1 })).toBe(true); // 1 - 0.375 - 0.25 = 0.375" < 0.5"
-    expect(webErr({ ...defaults, kingpinLeadIn: 1, rodKingpinWebMinIn: 0.375 })).toBe(false);
+    // Phase 1 hand numbers (½" bare pin): web = lead − rod radius − pin radius
+    expect(webErr({ ...phase1, kingpinLeadIn: 1 })).toBe(true); // 1 - 0.375 - 0.25 = 0.375" < 0.5"
+    expect(webErr({ ...phase1, kingpinLeadIn: 1, rodKingpinWebMinIn: 0.375 })).toBe(false);
+    // Phase 2 default (1¼" OD sleeve): the web runs to the sleeve OD, so lead 1.5 − 0.375 − 0.625 = 0.5" just meets the 0.5" rule
+    expect(webErr({ ...defaults, kingpinLeadIn: 1.375 })).toBe(true); // 0.375" < 0.5"
+    expect(webErr({ ...defaults, kingpinLeadIn: 1.375, rodKingpinWebMinIn: 0.375 })).toBe(false);
   });
   it('foot stop must end inside the front transom inner face', () => {
     const stopErr = (p: Params) => errorsOf(p).some((i) => i.message.startsWith('The foot stop reaches'));
@@ -825,14 +876,24 @@ describe('round-3 carry-over validator rules', () => {
 describe('slider ranges (L1)', () => {
   it.each(['seatXIn', 'steerLockDeg', 'kingpinLeadIn', 'noseTaperStartIn'] as const)('%s: most of its range is valid at the other defaults', (k) => {
     const d = PARAM_DEFS[k];
+    // kingpinLeadIn is judged at the Phase 1 configuration (bare ½" pin): at the Phase 2 defaults the 1¼" steel sleeve needs the full
+    // 1.5" lead, so only the slider's top step is valid there (documented by the next test) and the "most of its range" property can't hold.
+    const base = k === 'kingpinLeadIn' ? phase1 : defaults;
     let ok = 0, n = 0;
     for (let v = d.min; v <= d.max + 1e-9; v += d.step) {
       n++;
-      if (!errorsOf({ ...defaults, [k]: v }).length) ok++;
+      if (!errorsOf({ ...base, [k]: v }).length) ok++;
     }
     expect(ok / n, `${k} valid fraction`).toBeGreaterThanOrEqual(0.25);
     expect(['seatXIn', 'steerLockDeg'].includes(k) ? ok / n : 1, k).toBeGreaterThanOrEqual(0.7);
     expect(errorsOf({ ...defaults, [k]: defaults[k] })).toEqual([]);
+  });
+  it('kingpinLeadIn at the Phase 2 defaults (1¼" sleeve, 4" beam): only the slider maximum 1.5" is valid (the default sits on the end stop)', () => {
+    const d = PARAM_DEFS.kingpinLeadIn;
+    const valid: number[] = [];
+    for (let v = d.min; v <= d.max + 1e-9; v += d.step) if (!errorsOf({ ...defaults, kingpinLeadIn: v }).length) valid.push(v);
+    expect(valid).toEqual([1.5]);
+    expect(defaults.kingpinLeadIn).toBe(d.max);
   });
 });
 
@@ -849,7 +910,7 @@ describe('kingpin through the bolster (D-12)', () => {
     expect(L.kingpin.z1).toBeCloseTo(L.bolster.z1, 6);
     const kp = worldAABB(m.find((x) => x.id === 'kingpin')!);
     expect(kp.max[2]).toBeCloseTo(bb.max[2], 6);
-    // centred on the kingpin, ends let into the fore/aft rails by kingpinCrossbarLetInIn
+    // centerd on the kingpin, ends let into the fore/aft rails by kingpinCrossbarLetInIn
     expect((bb.min[0] + bb.max[0]) / 2).toBeCloseTo(L.kx, 6);
     expect(bb.max[0] - L.kx).toBeCloseTo(L.bolster.x1 - L.kx - L.bolster.rw + defaults.kingpinCrossbarLetInIn, 6);
     expect(bb.max[1] - bb.min[1]).toBeCloseTo(defaults.kingpinCrossbarWidthIn, 6);
@@ -880,7 +941,7 @@ describe('kingpin through the bolster (D-12)', () => {
     // sleeve OD must exceed the pin
     expect(errorsOf({ ...defaults, kingpinSleeveOdIn: 0.5 }).some((i) => i.keys.includes('kingpinSleeveOdIn'))).toBe(true);
     // web rule uses the sleeve OD: lead 1.25 is enough for a ¾" pin alone but not for its 1¼" sleeve
-    expect(errorsOf({ ...defaults, kingpinDiameterIn: 0.75, kingpinLeadIn: 1.25 })).toEqual([]);
+    expect(errorsOf({ ...defaults, kingpinSleeveOdIn: 0, kingpinDiameterIn: 0.75, kingpinLeadIn: 1.25 })).toEqual([]);
     expect(errorsOf({ ...defaults, kingpinDiameterIn: 0.75, kingpinSleeveOdIn: 1.25, kingpinLeadIn: 1.25 }).some((i) => i.keys.includes('kingpinLeadIn'))).toBe(true);
     // crossbar must leave the ligament around the bore
     expect(errorsOf({ ...p, kingpinCrossbarWidthIn: 2 }).some((i) => i.keys.includes('kingpinCrossbarWidthIn'))).toBe(true);

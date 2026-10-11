@@ -18,14 +18,14 @@
 5. **Floor height:** `deckHeightIn`.
 6. **How sharp it turns:** `steerLockDeg`.
 
-**Centre:** the existing 3D viewer.
+**Center:** the existing 3D viewer.
 - Kept: Iso / Top / Side / Front, the steer slider with its 0° button, and a "Show rider" toggle.
 - Hidden: explode, section, dimensions, the group toggles and the transport toggle.
 - The CG marker is hidden by default.
 
 **Right: "Is it safe?"**
 
-1. **Rider range bar.** A horizontal band from 50 to 250 lb, coloured green / yellow / red per 10 lb step. The current rider weight is a marker.
+1. **Rider range bar.** A horizontal band from 50 to 250 lb, colored green / yellow / red per 10 lb step. The current rider weight is a marker.
    - Headline: **"Safe for riders about 70–230 lb"**, from the widest contiguous run with no fail that contains the operating weight. If the current weight fails, say so plainly in red.
    - Under the bar, the limiting reason at each end, in plain English. For example: "Below 70 lb: a hard uphill pull can lift the front wheels". "Above 230 lb: a curb strike could overload the kingpin".
 2. **Traffic lights at the current rider weight.** Each light shows the worst status of its checks, plus one plain sentence that includes the key number. Clicking a light switches to Advanced → Analysis and scrolls to and highlights the first relevant row.
@@ -39,7 +39,7 @@
 | Strength | all `group === 'Structure'` checks | "Every part is at most 92% of its design limit (weakest: kingpin in a curb strike)." |
 | Fits the truck | truck-fit | "Fits the Tacoma bed with the tailgate down." Add "fully assembled" or "with the handle and seat back off". |
 
-   - Statuses: pass = green, marginal = yellow (passes by < 10%), fail = red, info = grey.
+   - Statuses: pass = green, marginal = yellow (passes by < 10%), fail = red, info = gray.
    - Wording is generated from the check values, never hard-coded numbers.
 3. **Spec card:**
    - length × width × height, assembled and for transport;

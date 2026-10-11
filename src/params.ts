@@ -3,13 +3,13 @@
  *
  * Units: inches, pounds (mass = lb, force = lbf), degrees, lb/ft³, psi.
  * Model frame: +X forward (toward the bridle), +Y left, +Z up. Origin is on the
- * ground directly below the rear-axle centre, midway between the rear wheels.
+ * ground directly below the rear-axle center, midway between the rear wheels.
  *
  * `status` records how confident we are in a default:
  *   locked  – fixed by the brief, the event rules, or Eric
  *   verify  – placeholder that Eric needs to measure/confirm
  *   assumed – engineering assumption (cited by `ref` in DECISIONS.md)
- *   explore – design variable that Phase 2 optimises
+ *   explore – design variable that Phase 2 optimizes
  *
  * View-only state (e.g. the displayed steer angle) does NOT live here; it is
  * passed to buildModel() separately so it never pollutes the design.
@@ -90,7 +90,7 @@ const defs = {
   // ── Rider & loads ────────────────────────────────────────────────────────
   riderMassLb: {
     label: 'Operating rider mass', group: 'loads', unit: 'lb',
-    default: 150, min: 60, max: 220, step: 5, status: 'locked', primary: true, ref: 'D-1',
+    default: 150, min: 50, max: 250, step: 5, status: 'locked', primary: true, ref: 'D-1',
     note: 'Largest realistic scout. All checks must pass here.',
   },
   riderGoalMassLb: {
@@ -149,10 +149,10 @@ const defs = {
   // ── Overall layout ───────────────────────────────────────────────────────
   wheelbaseIn: {
     label: 'Wheelbase (axle to axle)', group: 'layout', unit: 'in',
-    default: 48, min: 36, max: 64, step: 0.5, status: 'explore', primary: true,
+    default: 44, min: 36, max: 64, step: 0.5, status: 'explore', primary: true,
   },
   rearTrackIn: {
-    label: 'Rear track (wheel centre to centre)', group: 'layout', unit: 'in',
+    label: 'Rear track (wheel center to center)', group: 'layout', unit: 'in',
     default: 35.5, min: 26, max: 52, step: 0.25, status: 'explore', primary: true, ref: 'D-6',
     note: 'Wheels beside the wheel wells: track + outer width (tire or hub + axle end) + 2 × clearance ≤ well gap → 35.5". Wider only with "straddle" stowage.',
   },
@@ -247,7 +247,7 @@ const defs = {
   },
   crossmemberSpacingIn: {
     label: 'Max unsupported deck span (joist spacing)', group: 'body', unit: 'in',
-    default: 12, min: 6, max: 24, step: 0.5, status: 'explore', ref: 'D-17',
+    default: 8, min: 6, max: 24, step: 0.5, status: 'explore', ref: 'D-17',
   },
   storageLocation: {
     label: 'Storage box location', group: 'body', unit: '',
@@ -410,7 +410,7 @@ const defs = {
   clampLegGapIn: {
     label: 'U-bolt leg gap beside the axle rod', group: 'wheels', unit: 'in',
     default: 0.25, min: 0.125, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-10',
-    note: 'Clamp legs straddle the rod at rod centre ± (rod radius + gap) (critic r2, H2).',
+    note: 'Clamp legs straddle the rod at rod center ± (rod radius + gap) (critic r2, H2).',
   },
   clampPlateWidthIn: {
     label: 'U-bolt plate width (across the beam)', group: 'wheels', unit: 'in',
@@ -426,15 +426,26 @@ const defs = {
   },
   axleYieldPsi: {
     label: 'Axle steel yield strength', group: 'wheels', unit: 'psi',
-    default: 50000, min: 30000, max: 120000, step: 1000, status: 'assumed', ref: 'D-4',
-    note: '1018 cold-drawn ≈ 54 ksi; 50 ksi used for conservatism.',
+    default: 70000, min: 30000, max: 120000, step: 1000, status: 'assumed', ref: 'D-4',
+    note: '¾" 1045 turned-ground-polished shafting ≈ 70+ ksi (D-27; confirm vendor cert). 1018 cold-drawn would be ≈ 54 ksi.',
   },
 
   // ── Steering & pull ──────────────────────────────────────────────────────
   steerLockDeg: {
     label: 'Steering lock (each side)', group: 'steering', unit: '°',
-    default: 38.5, min: 30, max: 40, step: 0.5, status: 'explore', primary: true, ref: 'D-12',
+    default: 37, min: 30, max: 40, step: 0.5, status: 'explore', primary: true, ref: 'D-12',
     note: 'Limited above by the nose width the rider\'s boots need (A-4) and below by the 96" turning radius (A-2).',
+  },
+  turntableType: {
+    label: 'Turntable bearing', group: 'steering', unit: '',
+    default: 1, min: 0, max: 3, step: 1, status: 'explore', ref: 'D-28',
+    note: 'Presets set size, stack height, mass and rating (catalog estimates — verify against the part bought). "Custom" uses the four turntable params below.',
+    options: [
+      { value: 0, label: 'Custom (use the values below)' },
+      { value: 1, label: '12" lazy-susan, 1000 lb' },
+      { value: 2, label: '12" heavy-duty ball bearing, 1500 lb' },
+      { value: 3, label: 'Steel fifth-wheel ring, 2000 lb' },
+    ],
   },
   turntableSizeIn: {
     label: 'Turntable bearing size (square)', group: 'steering', unit: 'in',
@@ -507,12 +518,13 @@ const defs = {
   },
   turntableRatingLb: {
     label: 'Turntable load rating', group: 'steering', unit: 'lb',
-    default: 1000, min: 1000, max: 2000, step: 50, status: 'locked', ref: 'D-12',
+    default: 1000, min: 1000, max: 2500, step: 50, status: 'verify', ref: 'D-28',
+    note: 'Used when Turntable bearing = Custom; the brief requires ≥ 1000 lb.',
   },
   kingpinLeadIn: {
     label: 'Kingpin ahead of front axle (trail)', group: 'steering', unit: 'in',
-    default: 1.125, min: 0.875, max: 1.5, step: 0.125, status: 'explore', ref: 'D-25',
-    note: 'Needs ≥ rod radius + kingpin radius + rodKingpinWebMinIn (1.125" for ¾" rod, ½" bolt, ½" web). Kingpin must clear the axle rod; the trailing axle self-centres under pull like a caster.',
+    default: 1.5, min: 0.875, max: 1.5, step: 0.125, status: 'explore', ref: 'D-25',
+    note: 'Needs ≥ rod radius + kingpin radius + rodKingpinWebMinIn (1.125" for ¾" rod, ½" bolt, ½" web). Kingpin must clear the axle rod; the trailing axle self-centers under pull like a caster.',
   },
   rodKingpinWebMinIn: {
     label: 'Min web between axle-rod groove and kingpin hole', group: 'steering', unit: 'in',
@@ -521,7 +533,7 @@ const defs = {
   },
   kingpinDiameterIn: {
     label: 'Kingpin bolt diameter', group: 'steering', unit: 'in',
-    default: 0.5, min: 0.375, max: 1, step: 0.0625, status: 'explore', ref: 'D-12',
+    default: 0.75, min: 0.375, max: 1, step: 0.0625, status: 'explore', ref: 'D-12',
   },
   kingpinYieldPsi: {
     label: 'Kingpin bolt yield strength', group: 'steering', unit: 'psi',
@@ -535,12 +547,12 @@ const defs = {
       { value: 0, label: 'No: kingpin stops at the turntable top (single-shear cantilever)' },
       { value: 1, label: 'Yes: kingpin runs up through an oak crossbar let into the bolster (real wagon practice)' },
     ],
-    note: 'A kingpin must tie the steer beam to the chassis. With 1, an oak crossbar spans the bolster opening over the turntable centre, flush with the bolster rails and let into them, and the kingpin (and its nut) end at its top. The pin is then held in two members, one on each side of the turntable interface.',
+    note: 'A kingpin must tie the steer beam to the chassis. With 1, an oak crossbar spans the bolster opening over the turntable center, flush with the bolster rails and let into them, and the kingpin (and its nut) end at its top. The pin is then held in two members, one on each side of the turntable interface.',
   },
   kingpinCrossbarWidthIn: {
     label: 'Kingpin crossbar width (across the cart)', group: 'steering', unit: 'in',
     default: 3, min: 1.5, max: 4.5, step: 0.25, status: 'assumed', ref: 'D-12',
-    note: 'Oak bar running fore-aft across the bolster opening (depth = the bolster depth), kingpin at its centre. Needs ≥ bore diameter + 2 × beamLigamentMinIn and must stay clear of the swinging steer stops.',
+    note: 'Oak bar running fore-aft across the bolster opening (depth = the bolster depth), kingpin at its center. Needs ≥ bore diameter + 2 × beamLigamentMinIn and must stay clear of the swinging steer stops.',
   },
   kingpinCrossbarLetInIn: {
     label: 'Kingpin crossbar let-in depth into each bolster rail', group: 'steering', unit: 'in',
@@ -549,7 +561,7 @@ const defs = {
   },
   kingpinSleeveOdIn: {
     label: 'Kingpin steel sleeve outside diameter (0 = none)', group: 'steering', unit: 'in',
-    default: 0, min: 0, max: 2, step: 0.0625, status: 'explore', ref: 'D-12',
+    default: 1.25, min: 0, max: 2, step: 0.0625, status: 'explore', ref: 'D-12',
     note: 'A steel tube sleeve (inside diameter = the kingpin) in the beam bore and the crossbar bore, e.g. 1.25" OD for a ¾" pin. The oak bore bearing then acts on the sleeve OD; the pin bears on the steel sleeve. Must exceed the kingpin diameter. The rod-to-kingpin web and beam ligament rules use the sleeve OD.',
   },
   sleeveYieldPsi: {
@@ -559,7 +571,7 @@ const defs = {
   },
   drawbar: {
     label: 'Pull attachment', group: 'steering', unit: '',
-    default: DRAWBAR.woodTongue, min: 0, max: 1, step: 1, status: 'explore', ref: 'D-14',
+    default: 0, min: 0, max: 1, step: 1, status: 'explore', ref: 'D-14',
     options: [
       { value: DRAWBAR.ropeBridleOnly, label: 'Rope bridle to axle ends' },
       { value: DRAWBAR.woodTongue, label: 'Short oak tongue + bridle' },
@@ -575,7 +587,7 @@ const defs = {
   },
   bridleRopeRunIn: {
     label: 'Bridle rope run (tongue tip to puller hands)', group: 'steering', unit: 'in',
-    default: 72, min: 36, max: 144, step: 6, status: 'assumed', ref: 'D-14',
+    default: 96, min: 36, max: 144, step: 6, status: 'assumed', ref: 'D-14',
     note: 'A 6 ft rope sets the pull angle α = atan((hand height − tongue tip height) / run) used by the rearward-pitch check.',
   },
   kingpinWasherDiameterIn: {
@@ -614,7 +626,7 @@ const defs = {
   },
   brakeLeverRatio: {
     label: 'Brake linkage mechanical advantage', group: 'brake', unit: ':1',
-    default: 10, min: 2, max: 14, step: 0.5, status: 'explore', ref: 'D-13',
+    default: 12, min: 2, max: 14, step: 0.5, status: 'explore', ref: 'D-13',
   },
   brakeShoeThickIn: {
     label: 'Brake shoe radial thickness', group: 'brake', unit: 'in',
@@ -692,7 +704,7 @@ const defs = {
   handleBarDiameterIn: {
     label: 'Push-handle crossbar diameter', group: 'brake', unit: 'in',
     default: 1.25, min: 1, max: 2, step: 0.125, status: 'assumed', ref: 'D-9',
-    note: 'Modelled as a square block.',
+    note: 'Modeled as a square block.',
   },
 
   // ── Stock thicknesses (finished) ─────────────────────────────────────────
@@ -722,7 +734,7 @@ const defs = {
   },
   frontAxleBeamThicknessIn: {
     label: 'Front axle beam width (fore-aft)', group: 'stock', unit: 'in',
-    default: 3.5, min: 1.5, max: 5, step: 0.125, status: 'explore', ref: 'D-25',
+    default: 4, min: 1.5, max: 5, step: 0.125, status: 'explore', ref: 'D-25',
     note: 'Holds the rod groove AND the kingpin hole: needs ≥ lead + rod radius + kingpin radius + 2 × beamLigamentMinIn (H2).',
   },
   axleBeamDepthIn: {
@@ -731,7 +743,7 @@ const defs = {
   },
   deckPlyIn: {
     label: 'Deck plywood thickness', group: 'stock', unit: 'in',
-    default: 0.354, min: 0.236, max: 0.709, step: 0.001, status: 'explore',
+    default: 0.472, min: 0.236, max: 0.709, step: 0.001, status: 'explore',
     options: [
       { value: 0.236, label: '6 mm' },
       { value: 0.354, label: '9 mm' },
@@ -1027,7 +1039,7 @@ export function bolsterPlan(p: Params) {
 /**
  * Steering stops (D-12, critic r2 H1): square oak posts on the turntable plate inside the bolster opening. The left
  * post turns aft with +steer and lands flat on the aft bolster rail's inner face exactly at +lock; the right post is the
- * mirror image for −lock. At lock the post is axis-aligned, so its neutral pose is rotated by −lock and centred at
+ * mirror image for −lock. At lock the post is axis-aligned, so its neutral pose is rotated by −lock and centerd at
  * R(−lock)·(face + s/2, openHalfY/2). All numbers are kingpin-relative (+x forward). `ok` is false when the posts do
  * not stay inside the opening over the whole sweep or would touch the kingpin.
  */
@@ -1116,7 +1128,26 @@ const AUTO_SHOULDER_MARGIN_IN = 0.0625;
  * the hull (no swing rule applies) or when auto is off. Every consumer (buildModel, computeLayout, validateParams)
  * sees the resolved values; the manual nose params are ignored while auto is on.
  */
+/** Turntable presets (D-28): size, stack height, mass, rating. Catalog estimates, status 'verify'. */
+export const TURNTABLE_PRESETS: Record<number, { size: number; thick: number; mass: number; rating: number }> = {
+  1: { size: 12, thick: 0.375, mass: 3.5, rating: 1000 },
+  2: { size: 12, thick: 0.5, mass: 5.5, rating: 1500 },
+  3: { size: 12, thick: 0.75, mass: 9, rating: 2000 },
+};
+
+/**
+ * Apply derived-default params: the turntable preset (D-28), then the auto nose geometry (A-4/D-26).
+ * Pure and idempotent; every consumer (model, layout, validator, analysis) calls it first.
+ */
 export function resolveParams(p: Params): Params {
+  const t = TURNTABLE_PRESETS[p.turntableType];
+  const q = t && (p.turntableSizeIn !== t.size || p.turntableThicknessIn !== t.thick || p.turntableMassLb !== t.mass || p.turntableRatingLb !== t.rating)
+    ? { ...p, turntableSizeIn: t.size, turntableThicknessIn: t.thick, turntableMassLb: t.mass, turntableRatingLb: t.rating }
+    : p;
+  return resolveNose(q);
+}
+
+function resolveNose(p: Params): Params {
   if (p.autoNoseGeometry !== 1) return p;
   if (!(p.wheelDiameterIn > p.deckHeightIn + p.frontDeckRaiseIn - p.deckPlyIn - p.crossmemberDepthIn)) return p;
   const sw = swingGeometry(p);
@@ -1142,7 +1173,7 @@ export function derived(p: Params) {
   const wheelMassLb =
     p.wheelMass10Lb + t * (p.wheelMass13Lb - p.wheelMass10Lb) +
     (p.tireType === TIRE_TYPE.flatFree ? p.flatFreeExtraLb : 0);
-  // Half-width of a wheel assembly beyond its centre plane: tire, or hub + axle end.
+  // Half-width of a wheel assembly beyond its center plane: tire, or hub + axle end.
   const wheelOuterHalfIn = Math.max(p.tireWidthIn / 2, p.hubLengthIn / 2 + p.axleEndExtraIn);
   const { swingInnerYIn, swingRearXIn, swingRearBehindAxleIn } = swingGeometry(p);
   const rodR = p.axleDiameterIn / 2;
@@ -1166,7 +1197,7 @@ export function derived(p: Params) {
     swingInnerYIn,
     swingRearXIn,
     swingRearBehindAxleIn,
-    /** Front beam: centred on the rod + kingpin pair; centre offset from the axle and the wood left beyond each hole edge. */
+    /** Front beam: centerd on the rod + kingpin pair; center offset from the axle and the wood left beyond each hole edge. */
     frontBeamOffsetIn: (p.kingpinLeadIn + kpR - rodR) / 2,
     frontBeamLigamentIn: (p.frontAxleBeamThicknessIn - p.kingpinLeadIn - rodR - kpR) / 2,
     rearBeamLigamentIn: (p.axleBeamThicknessIn - 2 * rodR) / 2,
@@ -1198,7 +1229,7 @@ export function validateParams(input: Params): ParamIssue[] {
   const r = p.wheelDiameterIn / 2;
 
   if (p.riderGoalMassLb < p.riderMassLb)
-    err(['riderGoalMassLb', 'riderMassLb'], 'Goal rider is lighter than the operating rider.');
+    warn(['riderGoalMassLb', 'riderMassLb'], 'The operating rider is heavier than the goal rider; the 200 lb goal checks no longer cover the heaviest case (the Simple view sweeps every weight).');
   if (p.targetMassMinLb > p.targetMassMaxLb)
     err(['targetMassMinLb', 'targetMassMaxLb'], 'Mass target low end exceeds high end.');
   if (p.noseWidthIn > p.bodyWidthIn)
@@ -1366,7 +1397,7 @@ export function validateParams(input: Params): ParamIssue[] {
       const railOuter = p.bodyWidthIn / 2 - (p.frameStyle === FRAME_STYLE.ladder && !sideLow ? p.sideThicknessIn : 0);
       if (railOuter > clampInner + 1e-6)
         err(['bodyWidthIn', 'rearTrackIn', 'clampPlateWidthIn'],
-          `The cabin rails/sides reach ${railOuter.toFixed(2)}" off centre but the rear U-bolt plates start at ${clampInner.toFixed(2)}"; narrow the body or widen the track.`);
+          `The cabin rails/sides reach ${railOuter.toFixed(2)}" off center but the rear U-bolt plates start at ${clampInner.toFixed(2)}"; narrow the body or widen the track.`);
     }
   }
 

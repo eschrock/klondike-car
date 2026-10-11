@@ -4,7 +4,7 @@
  *
  * Geometry is expressed in the part's local frame, in inches; `transform`
  * places it in the model frame (+X forward, +Y left, +Z up, origin on the
- * ground under the rear-axle centre). Plain data — no three.js types — so the
+ * ground under the rear-axle center). Plain data — no three.js types — so the
  * model and analysis run headless in tests.
  *
  * One Part = one physical piece. Identical pieces are separate Parts (e.g.
@@ -61,15 +61,15 @@ export type RigidBody =
   | 'truck';
 
 export type Geometry =
-  /** Axis-aligned box centred on the local origin. */
+  /** Axis-aligned box centerd on the local origin. */
   | { type: 'box'; size: Vec3 }
-  /** Cylinder along local Z, centred on the local origin. */
+  /** Cylinder along local Z, centerd on the local origin. */
   | { type: 'cylinder'; radius: number; length: number }
-  /** Tire + hub; axle along local Y, centred on the local origin. */
+  /** Tire + hub; axle along local Y, centerd on the local origin. */
   | { type: 'wheel'; diameter: number; width: number; hubDiameter: number; hubLength: number; bore: number }
   /** 2D profile in local XY (outer loop CCW, holes CW), extruded along +Z from z=0. */
   | { type: 'extrusion'; outline: Vec2[]; holes?: Vec2[][]; depth: number }
-  /** Bent lamination: centreline path in local XZ, rectangular section (width along Y). */
+  /** Bent lamination: centerline path in local XZ, rectangular section (width along Y). */
   | { type: 'sweep'; path: Vec2[]; width: number; thickness: number; plies: number }
   /** Pre-built triangle mesh (purchased parts, mannequin, truck). */
   | { type: 'mesh'; positions: number[]; indices?: number[] };
@@ -128,7 +128,7 @@ export interface Part {
   transform: Mat4;
   body: RigidBody;
   massLb: number;
-  /** Mass-centre in the model frame; defaults to the transformed geometry centroid. */
+  /** Mass-center in the model frame; defaults to the transformed geometry centroid. */
   cgIn?: Vec3;
   removable?: boolean;
   /** Unit direction (model frame) the part moves in the exploded view. */

@@ -36,7 +36,7 @@ export function ssUdlFull(W: number, L: number, EI: number): { M: number; V: num
   return { M: (W * L) / 8, V: W / 2, defl: (5 * W * L ** 3) / (384 * EI) };
 }
 
-/** Simply supported span, uniformly distributed load of intensity w over length a, centred. */
+/** Simply supported span, uniformly distributed load of intensity w over length a, centerd. */
 export function ssUdlCentered(w: number, a: number, L: number, EI: number): { M: number; V: number; defl: number } {
   const aa = Math.min(a, L);
   return {

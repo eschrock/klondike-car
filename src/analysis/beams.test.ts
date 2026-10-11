@@ -25,7 +25,7 @@ describe('hand-calculated beam cases (3 significant figures)', () => {
     expect(r.M).toBeCloseTo(12500, 6);
     expect(r.defl).toBeCloseTo((5 * 10 * 100 ** 4) / (384 * 1e9), 9);
   });
-  it('centred partial UDL: 200 lb over 4" on a 12" span', () => {
+  it('centerd partial UDL: 200 lb over 4" on a 12" span', () => {
     // M = (w a / 8)(2L − a) with w = 50 lb/in: 50·4/8 · 20 = 500 lb·in
     expect(ssUdlCentered(50, 4, 12, 1e6).M).toBeCloseTo(500, 9);
   });

@@ -1,5 +1,8 @@
 import type { Params } from '../src/params';
-/** Phase 2 recommended configuration (docs/phase2-recommendation.md): changes from the Phase 1 defaults. */
+/**
+ * Phase 2 recommended configuration (docs/phase2-recommendation.md): changes from the Phase 1 defaults.
+ * Approved 2026-10-10 (D-27) and now the params.ts defaults, so applying it is a no-op; kept as the record.
+ */
 export const RECOMMENDED: Partial<Params> = {
   drawbar: 0, // rope bridle to the axle ends, no wooden tongue
   wheelbaseIn: 44,

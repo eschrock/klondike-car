@@ -1,7 +1,7 @@
 /**
  * Load cases (spec "Load cases"): empty, operating (150 lb rider + cargo, pass/fail) and goal (200 lb rider + cargo).
  * Mass and CG come from the model's part list (src/model/mass.ts conventions); the rider's mass is applied at the
- * mannequin's D-3 CG and the cargo at its block's centre.
+ * mannequin's D-3 CG and the cargo at its block's center.
  */
 import type { Params } from '../params';
 import { partCentroid } from '../model/bounds';

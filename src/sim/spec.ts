@@ -20,14 +20,14 @@ export type SimBodyId = 'chassis' | 'steer' | WheelId;
 export interface SimBody {
   id: SimBodyId;
   massKg: number;
-  /** CG in the model frame, metres (the body origin in the sim). */
+  /** CG in the model frame, meters (the body origin in the sim). */
   cgM: Vec3;
   inertiaPrincipal: Vec3;
   inertiaFrame: Quat;
 }
 
 export interface HullBox {
-  /** Centre relative to the body CG, metres, body axes. */
+  /** Center relative to the body CG, meters, body axes. */
   center: Vec3;
   half: Vec3;
   rot: Quat;
@@ -39,11 +39,11 @@ export interface SimSpec {
   hull: { chassis: HullBox[]; steer: HullBox[] };
   wheelRadiusM: number;
   wheelWidthM: number;
-  /** Wheel centres at zero steer, model frame, metres. */
+  /** Wheel centers at zero steer, model frame, meters. */
   wheelCentersM: Record<WheelId, Vec3>;
   kingpinM: Vec3;
   lockRad: number;
-  /** Tongue tip (or bridle attachment): where the pull force acts, model frame at zero steer, metres. */
+  /** Tongue tip (or bridle attachment): where the pull force acts, model frame at zero steer, meters. */
   pullPointM: Vec3;
   /** Whole-cart mass, CG (model frame, m) and weight in newtons. */
   totalMassKg: number;
@@ -68,7 +68,7 @@ function toBody(id: SimBodyId, b: BodyMass): SimBody {
 function hullBoxes(parts: Part[], cgIn: Vec3): HullBox[] {
   const out: HullBox[] = [];
   for (const p of parts) {
-    if (p.geometry.type === 'wheel' || p.payload || p.group === 'reference' || p.id === 'bridle') continue;
+    if (p.geometry.type === 'wheel' || p.payload || p.group === 'reference' || /^bridle/.test(p.id)) continue;
     const o = partOBB(p);
     if (Math.max(...o.half) * 2 < 2) continue; // hardware and other small bits do not matter for ground contact
     out.push({
@@ -126,7 +126,9 @@ export function buildSimSpec(parts: Part[], p: Params, opts: SpecOptions = {}): 
   const kingpinIn: Vec3 = kp ? translationOf(kp.transform) : [kx, 0, p.wheelDiameterIn / 2];
   // Pull point: tongue tip, else the bridle's near end, else the front of the steer body.
   const tongue = sim.find((x) => x.id === 'tongue');
-  const bridle = sim.find((x) => x.id === 'bridle');
+  // Straight lead ('bridle') with a tongue, or the two rope legs ('bridle-L'/'bridle-R') tied at the beam ends.
+  const bridleParts = sim.filter((x) => /^bridle/.test(x.id));
+  const bridle = bridleParts.length ? bridleParts : undefined;
   let pullIn: Vec3;
   if (tongue) {
     const bb = worldAABB(tongue);
@@ -135,7 +137,7 @@ export function buildSimSpec(parts: Part[], p: Params, opts: SpecOptions = {}): 
     const bb = worldAABB(bridle);
     pullIn = [bb.min[0], 0, (bb.min[2] + bb.max[2]) / 2];
   } else {
-    const bb = worldAABB(steerParts);
+    const bb = worldAABB(steerParts.filter((x) => !/^bridle/.test(x.id)));
     pullIn = [bb.max[0], 0, (bb.min[2] + bb.max[2]) / 2];
   }
 

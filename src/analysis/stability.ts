@@ -5,7 +5,7 @@
 import { worldAABB, partOBB } from '../model/bounds';
 import type { Ctx } from './context';
 import { dualCheck, singleCheck, detail, type CaseEval } from './dual';
-import { DEG, RAD, contactsAt, instantCentreY, lateralTip, outerEdgeDistance, sideEdges, turnGeometry, axleLoads } from './geometry';
+import { DEG, RAD, contactsAt, instantCenterY, lateralTip, outerEdgeDistance, sideEdges, turnGeometry, axleLoads } from './geometry';
 import { f } from './format';
 import type { CaseData } from './loads';
 import type { AnalysisCheck } from './types';
@@ -102,13 +102,13 @@ export function vRollover(ctx: Ctx): AnalysisCheck {
   const jog = p.jogSpeedMph;
   const ev = (c: CaseData): CaseEval => {
     const o = outerSsf(ctx, c);
-    const ic = instantCentreY(contact, o.sign * lock) ?? 0;
+    const ic = instantCenterY(contact, o.sign * lock) ?? 0;
     const rCg = Math.hypot(o.cg[0], o.cg[1] - ic);
     const v = (r: number) => Math.sqrt(G_IN_S2 * r * o.ssf) / IN_S_PER_MPH;
     const v1 = v(rCg);
     return {
       value: v1, unit: 'mph', limit: p.rolloverSpeedFactor * jog, sense: '>=', info: true,
-      how: `v = √(g·r·SSF) with g = 386.1 in/s², r_cg = ${f(rCg)}" (CG to the instant centre on the rear axle line, y = ${f(Math.abs(ic))}") and SSF_out = ${f(o.ssf, 2)}: v = ${f(v1, 1)} mph at r_min = ${f(v1 / jog, 2)}× a ${jog} mph jog (A-1 target 1.5× = ${f(p.rolloverSpeedFactor * jog, 1)} mph; reported, not pass/fail). At 2× r: ${f(v(2 * rCg), 1)} mph, 3× r: ${f(v(3 * rCg), 1)}, 4× r: ${f(v(4 * rCg), 1)} (SSF held at its full-lock value, conservative).`,
+      how: `v = √(g·r·SSF) with g = 386.1 in/s², r_cg = ${f(rCg)}" (CG to the instant center on the rear axle line, y = ${f(Math.abs(ic))}") and SSF_out = ${f(o.ssf, 2)}: v = ${f(v1, 1)} mph at r_min = ${f(v1 / jog, 2)}× a ${jog} mph jog (A-1 target 1.5× = ${f(p.rolloverSpeedFactor * jog, 1)} mph; reported, not pass/fail). At 2× r: ${f(v(2 * rCg), 1)} mph, 3× r: ${f(v(3 * rCg), 1)}, 4× r: ${f(v(4 * rCg), 1)} (SSF held at its full-lock value, conservative).`,
     };
   };
   return dualCheck({
@@ -118,9 +118,9 @@ export function vRollover(ctx: Ctx): AnalysisCheck {
 }
 
 /**
- * Turning radius at full lock (A-2): swept radius of the outer front tyre EDGE (curb to curb). The instant centre lies on
+ * Turning radius at full lock (A-2): swept radius of the outer front tire EDGE (curb to curb). The instant center lies on
  * the front axle line, so the radial direction at the front wheel is the axle direction and the outer edge is exactly
- * centreline + w/2. (A-2 originally called the tyre centre "conservative"; it is the less conservative reading.)
+ * centerline + w/2. (A-2 originally called the tire center "conservative"; it is the less conservative reading.)
  */
 export function turnRadius(ctx: Ctx): AnalysisCheck {
   const { p, contact } = ctx;
@@ -129,15 +129,15 @@ export function turnRadius(ctx: Ctx): AnalysisCheck {
   const edge = t ? t.outerFront + half : Infinity;
   const lim = p.turnRadiusMaxIn;
   return singleCheck({
-    id: 'turn-radius', label: 'Turning radius (outer tyre edge, curb to curb)', group: 'Steering', refs: ['A-2', 'D-26'],
+    id: 'turn-radius', label: 'Turning radius (outer tire edge, curb to curb)', group: 'Steering', refs: ['A-2', 'D-26'],
     value: edge, unit: 'in', limit: lim, sense: '<=',
     details: t ? [
-      detail('outer front tyre edge (pass/fail)', edge, 'in', lim, '<='),
-      detail('outer front tyre centreline', t.outerFront, 'in', lim, '<='),
-      detail('rear-axle centre', t.rearCentre, 'in', lim, '<='),
+      detail('outer front tire edge (pass/fail)', edge, 'in', lim, '<='),
+      detail('outer front tire centerline', t.outerFront, 'in', lim, '<='),
+      detail('rear-axle center', t.rearCenter, 'in', lim, '<='),
     ] : undefined,
     how: t
-      ? `Instant centre at y = ${f(t.icY)}" on the rear axle line (the front axle line, through the axle centre that trails the kingpin by ${f(p.kingpinLeadIn, 2)}", meets x = 0 at ${f(p.steerLockDeg)}° lock). Pass/fail is the outer front tyre EDGE swept radius (A-2, curb to curb) = centreline ${f(t.outerFront)}" + w/2 ${f(half, 2)}" = ${f(edge)}" (${f(edge / 12, 2)} ft); because the centre lies on the axle line, the edge is exactly w/2 beyond the tyre centreline (so the tyre-centre reading in A-2 is the LESS conservative one). Details: tyre centreline ${f(t.outerFront)}" (${f(t.outerFront / 12, 2)} ft), rear-axle centre ${f(t.rearCentre)}" (${f(t.rearCentre / 12, 2)} ft), inner front ${f(t.innerFront)}". Limit ≤ ${lim}" (${f(lim / 12, 1)} ft). Body corners and the tongue sweep wider than the tyres and are not counted.`
+      ? `Instant center at y = ${f(t.icY)}" on the rear axle line (the front axle line, through the axle center that trails the kingpin by ${f(p.kingpinLeadIn, 2)}", meets x = 0 at ${f(p.steerLockDeg)}° lock). Pass/fail is the outer front tire EDGE swept radius (A-2, curb to curb) = centerline ${f(t.outerFront)}" + w/2 ${f(half, 2)}" = ${f(edge)}" (${f(edge / 12, 2)} ft); because the center lies on the axle line, the edge is exactly w/2 beyond the tire centerline (so the tire-center reading in A-2 is the LESS conservative one). Details: tire centerline ${f(t.outerFront)}" (${f(t.outerFront / 12, 2)} ft), rear-axle center ${f(t.rearCenter)}" (${f(t.rearCenter / 12, 2)} ft), inner front ${f(t.innerFront)}". Limit ≤ ${lim}" (${f(lim / 12, 1)} ft). Body corners and the tongue sweep wider than the tires and are not counted.`
       : 'No steering lock.',
   });
 }
@@ -174,9 +174,10 @@ export function pitchForward(ctx: Ctx): AnalysisCheck {
   });
 }
 
-/** Tongue tip (pull point) from the bridle part, or the front beam when absent: x of the bridle's rear end, z at its centre line. */
+/** Tongue tip (pull point) from the bridle part, or the front beam when absent: x of the bridle's rear end, z at its center line. */
 export function pullPoint(ctx: Ctx): { x: number; z: number } {
-  const br = ctx.byId.get('bridle');
+  // Tongue rig: the straight lead 'bridle' starts at the tongue tip. Rope rig: the legs are tied at the beam ends.
+  const br = ctx.byId.get('bridle') ?? ctx.byId.get('bridle-L');
   if (br) {
     const b = worldAABB(br);
     return { x: b.min[0], z: partOBB(br).center[2] };

@@ -26,6 +26,7 @@ function materialFor(part: Part): THREE.Material {
     case 'metal': m = new THREE.MeshStandardMaterial({ color: 0x8c9199, roughness: 0.35, metalness: 0.8 }); break;
     case 'tire': m = new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: 0.9 }); break;
     case 'printed': m = new THREE.MeshStandardMaterial({ color: 0xf26a1b, roughness: 0.5 }); break;
+    case 'rope': m = new THREE.MeshStandardMaterial({ color: 0xc9b07a, roughness: 0.95 }); break;
     case 'truck':
       m = new THREE.MeshStandardMaterial({ color: 0x8f9bb0, transparent: true, opacity: 0.35, roughness: 0.7, depthWrite: false });
       break;
@@ -51,6 +52,7 @@ function materialKey(part: Part): string {
   if (part.geometry.type === 'wheel') return 'tire';
   if (part.kind === 'printed') return 'printed';
   const mat = part.material.toLowerCase();
+  if (mat.includes('rope')) return 'rope';
   if (mat.includes('oak')) return 'oak';
   if (mat.includes('ply') || part.kind === 'sheet') return 'ply';
   if (part.kind === 'metal' || part.group === 'hardware' || mat.includes('steel')) return 'metal';
@@ -92,7 +94,7 @@ function buildGeometry(g: Geometry): THREE.BufferGeometry | null {
       return new THREE.ExtrudeGeometry(shape, { depth: g.depth, bevelEnabled: false });
     }
     case 'sweep':
-      // TODO(Phase 1): sweep a rectangular section along the XZ centreline (bent laminations).
+      // TODO(Phase 1): sweep a rectangular section along the XZ centerline (bent laminations).
       if (!sweepWarned) {
         sweepWarned = true;
         console.warn('viewer: sweep geometry is not implemented yet; rendering nothing.');
@@ -170,6 +172,12 @@ export class Viewer {
   private showCg = true;
   private showDims = false;
   private lastParts: Part[] = [];
+  // Controls the Simple view hides (the `adv-only` class); kept so simple mode can reset them.
+  private explodeInput?: HTMLInputElement;
+  private explodeOut?: HTMLOutputElement;
+  private sectionSel?: HTMLSelectElement;
+  private cgCb?: HTMLInputElement;
+  private dimsCb?: HTMLInputElement;
   private truckFrameKey: string | null = null;
   private inTruck = false;
   /** Physics sim: per-rigid-body pose (relative to the build pose), the posed ground group and the camera follow point. */
@@ -256,8 +264,10 @@ export class Viewer {
       this.setExplode(Number(r.value));
       out.textContent = `${r.value}"`;
     });
-    const label = el('label', 'steer-ctl');
-    label.title = 'Exploded view: each part moves along its own explode vector (radially from the centre of gravity if it has none), farther the farther it is from the CG. The CG marker and dimensions are hidden while exploded';
+    const label = el('label', 'steer-ctl adv-only');
+    this.explodeInput = r;
+    this.explodeOut = out;
+    label.title = 'Exploded view: each part moves along its own explode vector (radially from the center of gravity if it has none), farther the farther it is from the CG. The CG marker and dimensions are hidden while exploded';
     label.append('Explode', r, out);
     this.toolbar.append(label);
   }
@@ -290,7 +300,8 @@ export class Viewer {
       this.setSection(axis, Number(r.value));
     });
     r.addEventListener('input', () => this.setSection(sel.value as SectionAxis, Number(r.value)));
-    const label = el('label', 'steer-ctl');
+    const label = el('label', 'steer-ctl adv-only');
+    this.sectionSel = sel;
     label.title = 'Section plane: hides everything beyond the plane (keeps the low side)';
     label.append('Section', sel, r, out);
     this.toolbar.append(label);
@@ -302,16 +313,17 @@ export class Viewer {
       cb.type = 'checkbox';
       cb.checked = checked;
       cb.addEventListener('change', () => on(cb.checked));
-      const label = el('label', 'steer-ctl');
+      const label = el('label', 'steer-ctl adv-only');
       label.title = title;
       label.append(cb, text);
       this.toolbar.append(label);
+      return cb;
     };
-    mk('CG', 'Centre-of-gravity marker and drop line for what is shown (empty, or with rider and cargo)', true, (v) => {
+    this.cgCb = mk('CG', 'Center-of-gravity marker and drop line for what is shown (empty, or with rider and cargo)', true, (v) => {
       this.showCg = v;
       this.rebuildOverlay();
     });
-    mk('Dimensions', 'Overall length, width and height, wheelbase, track and deck height', false, (v) => {
+    this.dimsCb = mk('Dimensions', 'Overall length, width and height, wheelbase, track and deck height', false, (v) => {
       this.showDims = v;
       this.rebuildOverlay();
     });
@@ -386,6 +398,31 @@ export class Viewer {
       }
       void z0;
     }
+  }
+
+  /**
+   * Simple view (D-30): the explode, section, CG, dimension and group controls are hidden by CSS (`adv-only`, the
+   * `viewer-toggles` bar), so reset what they drive: no explode, no section, no CG marker, no dimensions, every group
+   * visible. Leaving simple mode restores the CG / dimension overlays to their checkboxes.
+   */
+  setSimpleMode(simple: boolean): void {
+    if (simple) {
+      if (this.explodeInput) this.explodeInput.value = '0';
+      if (this.explodeOut) this.explodeOut.textContent = '0"';
+      this.setExplode(0);
+      if (this.sectionSel) this.sectionSel.value = 'off';
+      this.setSection('off', 0);
+      this.hidden.clear();
+      for (const m of this.partsGroup.children) m.visible = true;
+      this.lastGroups = []; // rebuild the (hidden) group checkboxes so they read "shown" again
+      this.showCg = false;
+      this.showDims = false;
+    } else {
+      this.showCg = this.cgCb?.checked ?? true;
+      this.showDims = this.dimsCb?.checked ?? false;
+    }
+    this.rebuildOverlay();
+    if (simple && this.lastParts.length) this.refreshToggles(this.lastParts);
   }
 
   /** Exploded distance in inches (part.explode × amount). */
@@ -644,7 +681,7 @@ export class Viewer {
 
   /**
    * Orientation of the sim ground (a column-major 4x4 about the origin, inches). `focus` is the cart's world position:
-   * the grid is re-centred under it (snapped to its 48" cells) and the sun's shadow box follows it.
+   * the grid is re-centerd under it (snapped to its 48" cells) and the sun's shadow box follows it.
    */
   setSimGroundPose(pose: Mat4, focus?: Vec3): void {
     this.simGroup.matrix.fromArray(pose);
@@ -742,7 +779,7 @@ export function explodeScale(distFromCgIn: number): number {
 
 /**
  * Explode vector (inches per unit of the slider). A part's own `explode` wins as the direction, including the zero
- * vector (= does not move); only when it is undefined does the part move radially away from the centre of gravity.
+ * vector (= does not move); only when it is undefined does the part move radially away from the center of gravity.
  * The length is scaled by the part's distance from the CG (`explodeScale`).
  */
 function explodeDir(part: Part, cg: Vec3): Vec3 {

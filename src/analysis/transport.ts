@@ -20,7 +20,7 @@ export function cgCheck(ctx: Ctx): AnalysisCheck {
   const { loads } = ctx;
   const fmt = (c: { cg: number[]; massLb: number }) => `(${f(c.cg[0])}, ${f(c.cg[1], 2)}, ${f(c.cg[2], 2)}) in at ${f(c.massLb)} lb`;
   return singleCheck({
-    id: 'cg', label: 'Centre of gravity height (operating)', group: 'Mass & transport', value: loads.operating.cg[2], unit: 'in', limit: 0, sense: '<=', info: true, load: 'operating',
+    id: 'cg', label: 'Center of gravity height (operating)', group: 'Mass & transport', value: loads.operating.cg[2], unit: 'in', limit: 0, sense: '<=', info: true, load: 'operating',
     how: `Mass-weighted centroid, x forward of the rear axle / y left / z above ground. Empty ${fmt(loads.empty)}; operating ${fmt(loads.operating)}; goal ${fmt(loads.goal)}. The rider is placed at the D-3 CG (9.5" above the seat, 4" ahead of the H-point). Static axle loads, operating: ${staticAxleText(ctx, loads.operating)}.`,
     refs: ['D-3', 'BRIEF §7'],
   });

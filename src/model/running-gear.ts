@@ -82,7 +82,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
     parts.push(box(ctx, {
       id: `beam-${ax.tag}`, name: `${name} axle beam`, group: 'running-gear', steer: ax.steer, mat: 'oak',
       size: [b.thick, b.len, b.depth], center: [b.x, 0, (b.top + b.bot) / 2], grain: 'y', fab: 'table-saw',
-      step: STEP.gear, notes: (p.axleBeamPosition === AXLE_BEAM_POSITION.underslung ? 'Underslung (D-15).' : 'Overslung (D-15).') + (ax.tag === 'F' ? ' Centred on the rod + kingpin pair (D-25).' : ''),
+      step: STEP.gear, notes: (p.axleBeamPosition === AXLE_BEAM_POSITION.underslung ? 'Underslung (D-15).' : 'Overslung (D-15).') + (ax.tag === 'F' ? ' Centerd on the rod + kingpin pair (D-25).' : ''),
     }));
     // Clamps: 2 plates per wheel side (one per U-bolt leg), straddling the rod: legs at rod x ± (rod radius + leg gap).
     const under = p.axleBeamPosition === AXLE_BEAM_POSITION.underslung;

@@ -33,7 +33,7 @@ Mass and CG come from `buildModel` and `src/model/mass.ts`.
 
 ## Wheel contacts and support polygon
 - **Rear contacts:** (0, ±T_r/2, 0).
-- **Front contacts at steer δ:** kingpin K = (WB + lead, 0); each contact is K + R(δ)·(−lead, ±T_f/2). Use the tire centre-plane contact point; ignore tire width (conservative).
+- **Front contacts at steer δ:** kingpin K = (WB + lead, 0); each contact is K + R(δ)·(−lead, ±T_f/2). Use the tire center-plane contact point; ignore tire width (conservative).
 - **Static axle loads:** from the CG x, with N_front = W·x_cg / x_frontContactMean. Use the proper 2D static distribution for a 4-point support at δ = 0. At lock, report per-wheel loads with the tripod-free approximation: rear pair and front pair, each split equally. Info only.
 
 ## Checks
@@ -46,14 +46,14 @@ Each check returns a `CheckResult`: id, label, value, unit, limit, sense, status
 | `tip-straight` | Lateral tip, straight | δ = 0. d = horizontal distance from the CG ground projection to the nearest side edge of the support polygon. θ = atan(d / h). Both sides. | ≥ `tipStraightMinDeg` (40°) |
 | `tip-lock` | Lateral tip at full lock | δ = ±lock. Polygon from the 4 contacts; take the **min over all edges and both lock directions**. | ≥ `tipLockMinDeg` (35°) |
 | `slide-before-tip` | SSF vs friction (A-1) | SSF_out = d_outer / h. Use the outer edge at full lock in the turn direction: turning left, the right side is outer. | SSF ≥ `slideMarginFactor` × `tireGroundMu` |
-| `v-rollover` | Turn rollover speed | v = √(g · r_cg · SSF_out). r_cg = distance from the instantaneous centre (rear axle line at y = WB / tan δ, ignoring lead) to the CG. Also report v at 2×, 3× and 4× r_min, and v_roll / jog speed. | info (A-1) |
-| `turn-radius` | Turning radius | Outer front tire centre radius about the instant centre at lock. Also report the rear-axle-centre radius. | ≤ `turnRadiusMaxIn` |
+| `v-rollover` | Turn rollover speed | v = √(g · r_cg · SSF_out). r_cg = distance from the instantaneous center (rear axle line at y = WB / tan δ, ignoring lead) to the CG. Also report v at 2×, 3× and 4× r_min, and v_roll / jog speed. | info (A-1) |
+| `turn-radius` | Turning radius | Outer front tire center radius about the instant center at lock. Also report the rear-axle-center radius. | ≤ `turnRadiusMaxIn` |
 | `steer-clear` | Steering clearance | OBB sweep: front tires, and the whole steer body vs chassis, at δ = 0 … ±lock in 1° steps. Report the minimum clearance. | ≥ `steeringClearanceIn` − 0.05 (tolerance) |
 | `pitch-fwd` | Forward pitch-over braking downhill | On `designSlopeDeg`, nose down. Rear brake at its traction limit a = μ·N_r / m (rear-only). Margin: (x_fc − x_cg)/h − (tan θ + a/g), with x_fc the front contact x. Express as an equivalent angle. | margin > 0, report deg |
 | `pitch-rear` | Rearward pitch, climbing | Nose up on `designSlopeDeg`, with the bridle pull up at the puller hand height (pull angle from tongue tip height to `pullerHandHeightIn` over 6 ft of rope). Tip-back angle atan(x_cg / h), reduced by the pull's lift moment. | ≥ 2 × designSlope |
 | `brake-force` | Lever force to hold on the slope | F = W·sin θ / μ_pad / (ratio · eff). | ≤ `handleForceLimitLbf` |
 | `brake-traction` | Rear-only traction, nose-down park | N_r·μ_ground vs W·sin θ (formula in DECISIONS). | info (D-24) |
-| `axle-stress` | Axle bending | Per axle and design load (wheel static load × dynamic factor). **Through rod:** a cantilever from the nearest clamp plate's outer edge to the wheel hub centre; M = P·a. **Stub axles:** cantilever from the beam face. σ = M·c / I. Also report tip deflection at the hub, δ = P·a³ / 3EI (static load). | σ ≤ axleAllowable; deflection ≤ 0.05" static (info) |
+| `axle-stress` | Axle bending | Per axle and design load (wheel static load × dynamic factor). **Through rod:** a cantilever from the nearest clamp plate's outer edge to the wheel hub center; M = P·a. **Stub axles:** cantilever from the beam face. σ = M·c / I. Also report tip deflection at the hub, δ = P·a³ / 3EI (static load). | σ ≤ axleAllowable; deflection ≤ 0.05" static (info) |
 | `beam-front` | Front axle beam bending + shear | The turntable delivers the front axle load at the kingpin, spread over the turntable footprint as two loads at ±size/2. The beam reacts at the clamp plates. Simple-span bending with the actual section (thickness × depth, minus the rod groove depth from depth). Shear check at the clamps. | σ ≤ oak design; τ ≤ design shear |
 | `beam-rear` | Rear axle beam | Rails/girders load the beam at their y. Reactions at the clamps. Overhang bending M = R·(y_clamp − y_rail). Same σ and τ. | same |
 | `bearing-groove` | Compression ⊥ at the axle groove | Wheel design load / (rod dia × clamp plate length × 2 plates). | ≤ oak C⊥ design |

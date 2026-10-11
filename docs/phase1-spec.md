@@ -16,7 +16,7 @@ Goal (BRIEF §10, Phase 1): simple boxes, cylinders and extrusions at **real dim
 
 The detailed joinery and real shapes are Phase 3. Blocks still need correct **sizes, positions, materials and masses**, because the Phase 2 analysis runs on them.
 
-Frame: +X forward, +Y left, +Z up, origin on the ground under the rear-axle centre (C-1). Inches and pounds.
+Frame: +X forward, +Y left, +Z up, origin on the ground under the rear-axle center (C-1). Inches and pounds.
 Below, `r` = wheel radius, `WB` = wheelbase, `L` = body length, and `xs = WB − noseTaperStartIn` is the cabin shoulder.
 
 ## Mass rules
@@ -31,7 +31,7 @@ Below, `r` = wheel radius, `WB` = wheelbase, `L` = body length, and `xs = WB −
 ### Running gear (`running-gear`)
 - **4 wheels**, `body: wheel-XX`. Rear at (0, ±T_r/2, r). Front ones sit on the steer body: kingpin at (WB, 0), rotated by `steerDeg`, offset (0, ±T_f/2, r). Mass is `derived().wheelMassLb`.
 - **Axles** (steel):
-  - **Through rod:** one cylinder per axle along Y. Length = track + hubLength + 2·axleEndExtra. Centre at z = r. The front axle belongs to `steer`.
+  - **Through rod:** one cylinder per axle along Y. Length = track + hubLength + 2·axleEndExtra. Center at z = r. The front axle belongs to `steer`.
   - **Stub axles:** four cylinders of length hubLength + axleEndExtra + 4 (embedded).
 - **Axle beams** (oak):
   - Size: axleBeamThickness (x) × axleBeamDepth (z). Length (y) = track − hubLength − 0.25 (between the hub faces).
@@ -89,7 +89,7 @@ Below, `r` = wheel radius, `WB` = wheelbase, `L` = body length, and `xs = WB −
 - 4 side reflectors (0.05 lb each).
 
 ### Hardware allowance (`hardware`)
-- One "fasteners, inserts & misc" part: a small box at the deck centre, 2.5 lb (estimate), `kind: purchased`.
+- One "fasteners, inserts & misc" part: a small box at the deck center, 2.5 lb (estimate), `kind: purchased`.
 
 ### Payload (`reference`, `payload: true`, excluded from empty mass)
 - **Rider mannequin** (body `rider`), seated on the cushion with its H-point at (seatX, 0, deck + seatBase + cushion).

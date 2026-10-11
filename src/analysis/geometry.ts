@@ -29,7 +29,7 @@ export function rot2(p: P2, a: number, about: P2 = [0, 0]): P2 {
   return [about[0] + c * x - s * y, about[1] + s * x + c * y];
 }
 
-/** Tyre centre-plane contact points at steer angle `deltaRad` (+ = left). Front contacts rotate about the kingpin. */
+/** Tire center-plane contact points at steer angle `deltaRad` (+ = left). Front contacts rotate about the kingpin. */
 export function contactsAt(g: ContactInputs, deltaRad: number): Contacts {
   const kx = g.wheelbaseIn + g.kingpinLeadIn;
   const K: P2 = [kx, 0];
@@ -120,11 +120,11 @@ export function outerEdgeDistance(c: Contacts, cgXY: P2, deltaRad: number): numb
 }
 
 /**
- * Instantaneous centre of the cart in a steady turn at steer angle δ (rolling without slip): the front axle line
- * (through the axle centre, which trails the kingpin by `lead`) meets the rear axle line (x = 0). Returns y of the centre
+ * Instantaneous center of the cart in a steady turn at steer angle δ (rolling without slip): the front axle line
+ * (through the axle center, which trails the kingpin by `lead`) meets the rear axle line (x = 0). Returns y of the center
  * (x = 0), or null when going straight.
  */
-export function instantCentreY(g: ContactInputs, deltaRad: number): number | null {
+export function instantCenterY(g: ContactInputs, deltaRad: number): number | null {
   if (Math.abs(deltaRad) < 1e-9) return null;
   const lead = g.kingpinLeadIn;
   const ax = g.wheelbaseIn + lead - lead * Math.cos(deltaRad);
@@ -132,22 +132,22 @@ export function instantCentreY(g: ContactInputs, deltaRad: number): number | nul
 }
 
 export interface TurnGeometry {
-  /** y of the instantaneous centre. */
+  /** y of the instantaneous center. */
   icY: number;
-  /** Radius of the rear-axle centre (A-2 reports it too). */
-  rearCentre: number;
-  /** Outer / inner front tyre centre radius. */
+  /** Radius of the rear-axle center (A-2 reports it too). */
+  rearCenter: number;
+  /** Outer / inner front tire center radius. */
   outerFront: number;
   innerFront: number;
 }
 
 export function turnGeometry(g: ContactInputs, deltaRad: number): TurnGeometry | null {
-  const ic = instantCentreY(g, deltaRad);
+  const ic = instantCenterY(g, deltaRad);
   if (ic === null) return null;
   const c = contactsAt(g, deltaRad);
   const rad = (q: P2) => Math.hypot(q[0], q[1] - ic);
   const [a, b] = [rad(c.FL), rad(c.FR)];
-  return { icY: ic, rearCentre: Math.abs(ic), outerFront: Math.max(a, b), innerFront: Math.min(a, b) };
+  return { icY: ic, rearCenter: Math.abs(ic), outerFront: Math.max(a, b), innerFront: Math.min(a, b) };
 }
 
 /**

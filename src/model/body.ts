@@ -26,7 +26,7 @@ const SIGN_TIRE_GAP_IN = 0.25;
 const GRAB_SIZE = [8, 1.5, 1] as const;
 const GRAB_AHEAD_OF_SEAT_IN = 6;
 
-/** Curved stem profile in local (x forward, y up), CCW, from a quadratic Bezier centreline. */
+/** Curved stem profile in local (x forward, y up), CCW, from a quadratic Bezier centerline. */
 function prowOutline(): Vec2[] {
   const P0: Vec2 = [PROW_BASE_HALF_IN, 0];
   const P1: Vec2 = [PROW_BASE_HALF_IN, PROW_HEIGHT_IN * 0.6];

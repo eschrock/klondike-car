@@ -62,7 +62,7 @@ function caseList(c: Row): [CaseKey, CaseResult][] {
   return out;
 }
 
-/** The case that sets the row status (worst status, then highest utilisation): the value shown beside the chip comes from it (P1). */
+/** The case that sets the row status (worst status, then highest utilization): the value shown beside the chip comes from it (P1). */
 function governingCase(c: Row): [CaseKey, CaseResult] | undefined {
   const list = caseList(c);
   if (!list.length) return undefined;
@@ -130,8 +130,8 @@ function materials(p: Params, isOpen: boolean, onToggle: (o: boolean) => void): 
         ['Lightest rider (pitch-back)', `${p.riderMinMassLb} lb`, 'BRIEF §4.1; counts toward the operating status'],
         ['Design pull', `${p.pullForceLbf} lbf`, `at ${p.pullerHandHeightIn}" hand height, ${p.bridleRopeRunIn}" rope run; lift pull ≥ ${p.pitchPullMarginMin}× peak`],
         ['Front strike obstacles', `${p.curbHeightIn}" curb, ${p.rootHeightIn}" root`, 'H = V·tanφ, cos φ = (r − h)/r; one or both wheels'],
-        ['Axle tyre friction', `H = μ·P_static, arm = tyre radius`, 'combined with vertical as a resultant'],
-        ['μ tyre-ground / pad', `${p.tireGroundMu} / ${p.brakePadMu}`, 'D-16'],
+        ['Axle tire friction', `H = μ·P_static, arm = tire radius`, 'combined with vertical as a resultant'],
+        ['μ tire-ground / pad', `${p.tireGroundMu} / ${p.brakePadMu}`, 'D-16'],
         ['Deflection limit', `L/${p.deflectionLimitRatio}`, 'static load'],
       ]),
     ));
@@ -184,7 +184,7 @@ export function mountAnalysisPanel(host: HTMLElement): AnalysisPanel {
       head.setAttribute('aria-expanded', String(now));
       if (now) open.add(c.id); else open.delete(c.id);
     });
-    return h('div', { class: 'ap-row' }, head, body);
+    return h('div', { class: 'ap-row', 'data-check-id': c.id }, head, body);
   }
 
   function update(p: Params, checks: CheckResult[]): void {
