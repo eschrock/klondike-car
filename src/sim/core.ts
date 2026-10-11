@@ -143,8 +143,12 @@ export class Sim {
     const c = this.config;
     const world = (this.world = new R.World({ x: 0, y: 0, z: -G }));
     world.timestep = DT;
+    // Solver effort: the steer body is a light rod (pitch inertia of a few hundredths of a kg·m², less than a locked
+    // wheel's spin inertia) closing a constraint loop chassis -> kingpin -> steer -> wheel hinge -> ground. With few
+    // internal PGS iterations that loop does not converge and the whole cart rocks on its wheels (rope-bridle default,
+    // where the tongue's inertia is absent). 16 internal iterations settle it for any plausible steer body.
     world.numSolverIterations = 8;
-    world.numInternalPgsIterations = 2;
+    world.numInternalPgsIterations = 16;
     world.integrationParameters.contact_natural_frequency = 60;
 
     // Ground orientation: pitch (downhill) about Y, side slope about the cart's own X axis first.
