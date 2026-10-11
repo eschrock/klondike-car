@@ -5,7 +5,7 @@
 | 0 — Setup & parameter reconciliation | ✅ approved 2026-10-10 |
 | 1 — Block model | ✅ approved |
 | 2 — Analysis & simulation | ✅ approved 2026-10-10 |
-| 3 — Detail design | **3b**: ride mode rework (Ackermann front, gentle taper hull), D-49…D-52 |
+| 3 — Detail design | 3b flipped (`6341ecf`, consistent, 174 lb, no safe range). **Paused:** Eric is re-scoping to a sled (docs/sled-plan.md) |
 | 4 — Build outputs | not started |
 
 ## Phase 0 log
@@ -43,3 +43,4 @@
 - Critic round 3 (final): engineering 7/10, buildability 6/10. Stopped at the round limit; checkpoint written (docs/phase3-checkpoint.md). Two eng MUSTs mean the Simple view overstates safety (stop-stand arm, turntable-ring info-only): fix before pushing.
 - Honesty fixes (eng r3 MUST-1..3): stop-stand arm corrected, turntable-ring gated, front-end bounding cases. Simple view now says no rider weight passes yet (front end only). Ride mode added (BRIEF §4.3a, D-49: rider drives downhill, 10 mph, minimal steering); design study running; front-end redesign waits for it.
 - Ride-mode study: 6 → 7 → 8/10. Eric: no curbs at camp (D-50, bumps not curb strikes, bend-don't-break), go with Concept A (D-51: Ackermann on racing-kart spindles, 9 ft tow radius, ±8° ride lock, rider stick + hip brake lever, front + rear brakes), and a gentle hull taper instead of the S-curve (D-52). Phase 3b spec in progress.
+- Phase 3b Stage 0–2 landed: Ackermann front end, convex-taper hull, ride brakes, bump analysis (1,263 tests green, 174.1 lb, 10 rows fail at 150 lb). Eric (2026-10-11): it should be a Klondike *sled* on wheels: rider as passenger, team pulls, musher steers and brakes at the back. Keep it a crafted, reusable oak piece with storage. Research in docs/klondike-research.md; next-phase plan in docs/sled-plan.md. Finishing tweaks on hold (flush flag socket, lamp detail).
