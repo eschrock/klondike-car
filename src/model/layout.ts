@@ -32,7 +32,12 @@ export interface Layout {
   /** Effective gunwale flare (cabin sides only, captured-ply construction only) and the cabin web plane (flare tilt φ). */
   flare: number;
   web: { z0: number; z1: number; phi: number };
+  /** Chine / gunwale / side-board thickness (hwC and hwN are measured to its inner face). */
   side: number;
+  /** Front and rear transom thickness (D-43): the sides run between the transom faces at xRear + transom and xFront − transom. Not the same as `side`. */
+  transom: number;
+  /** Oak backer lane between the rear transom and a rear storage box (D-43): corner backers behind the handle sockets and quadrant bracket fill it. */
+  rearLane: number;
   ply: number;
   deckTop: number;
   deckBot: number;
@@ -56,6 +61,11 @@ export interface Layout {
   sideBearer: { y0: number; y1: number; z0: number; z1: number; zw: number; x0: number; x1: number };
   /** Kingpin ends: beam underside (washer) to the turntable top, or to the crossbar top when kingpinThroughBolster = 1. */
   kingpin: { z0: number; z1: number };
+  /**
+   * Kingpin steel plates (D-35, the crossbar configuration): the carrier plate on the beam top (the turntable stands on it), the plate
+   * under the beam, and the plate under the crossbar (on the turntable top plate). Null without the crossbar. z ranges, inches.
+   */
+  kpPlates: { carrier: { z0: number; z1: number }; under: { z0: number; z1: number }; bar: { z0: number; z1: number } } | null;
   /** Chassis-side oak crossbar over the turntable center (kingpinThroughBolster = 1), fore-aft across the bolster opening: x range, half width |y|, z range (flush with the bolster rails). Null when off. */
   crossbar: { x0: number; x1: number; hw: number; z0: number; z1: number } | null;
   /** Removable access panel in the nose deck over the kingpin nut (D-34): x range, half width |y|, z range (crossbar top to the deck top). Null without the crossbar. Workstream B cuts this opening in the nose deck. */
@@ -122,6 +132,8 @@ export function computeLayout(input: Params): Layout {
   const xRear = -p.rearOverhangIn;
   const xFront = WB + p.frontOverhangIn;
   const side = p.sideThicknessIn;
+  const transom = p.transomThicknessIn;
+  const rearLane = p.blockingThickIn;
   const ply = p.deckPlyIn;
   const deckTop = p.deckHeightIn;
   const noseTop = deckTop + p.frontDeckRaiseIn;
@@ -143,7 +155,10 @@ export function computeLayout(input: Params): Layout {
 
   // Turntable on the front beam, centerd on the kingpin; bolster fills up to the nose deck (min depth).
   const ts = p.turntableSizeIn;
-  const tz0 = beamF.top;
+  const plates = p.kingpinThroughBolster === 1; // the steel kingpin plates exist whenever the pin runs up through the crossbar (D-35)
+  const carrierT = plates ? p.carrierPlateThickIn : 0;
+  const plateT = plates ? p.kingpinPlateThickIn : 0;
+  const tz0 = beamF.top + carrierT;
   const tz1 = tz0 + p.turntableThicknessIn;
   const bolsterTop = Math.max(noseTop - ply, tz1 + p.bolsterMinDepthIn);
   const bp = bolsterPlan(p);
@@ -154,7 +169,7 @@ export function computeLayout(input: Params): Layout {
   // top flush with the rails; the kingpin ends here (nut + washer on the crossbar top).
   const through = p.kingpinThroughBolster === 1;
   const crossbar = through
-    ? { x0: bolster.x0 + bolster.rw - p.kingpinCrossbarLetInIn, x1: bolster.x1 - bolster.rw + p.kingpinCrossbarLetInIn, hw: p.kingpinCrossbarWidthIn / 2, z0: tz1, z1: bolsterTop }
+    ? { x0: bolster.x0 + bolster.rw - p.kingpinCrossbarLetInIn, x1: bolster.x1 - bolster.rw + p.kingpinCrossbarLetInIn, hw: p.kingpinCrossbarWidthIn / 2, z0: tz1 + plateT, z1: bolsterTop }
     : null;
   const accessPanel = crossbar && noseTop - bolsterTop > 0.05
     ? { x0: kx - p.accessPanelLengthIn / 2, x1: kx + p.accessPanelLengthIn / 2, hw: p.accessPanelWidthIn / 2, z0: bolsterTop, z1: noseTop }
@@ -163,14 +178,14 @@ export function computeLayout(input: Params): Layout {
   const sbZw = tz1 - clr;
   const sbZ1 = sbZw - p.sideBearerWearIn;
   const sbX0 = WB + rodR + p.sideBearerSetbackIn;
-  const sideBearer = { y0: sbY0, y1: sbY1, z0: tz0 - p.sideBearerEmbedIn, z1: sbZ1, zw: sbZw, x0: sbX0, x1: sbX0 + p.sideBearerLengthIn };
+  const sideBearer = { y0: sbY0, y1: sbY1, z0: beamF.top - p.sideBearerEmbedIn, z1: sbZ1, zw: sbZw, x0: sbX0, x1: sbX0 + p.sideBearerLengthIn };
 
   // Rotated square turntable reaches ts/2·(cos+sin) fore-aft at lock (peaks at 45°). The swinging axle beam's aft face
   // also sweeps under the rail y-band: at |y| = hwN it reaches |xa|/cos + hwN·tan behind the kingpin (xa = beam aft face, kingpin-relative).
   const lk = (Math.min(Math.abs(p.steerLockDeg), 45) * Math.PI) / 180;
   const plateSwingX = (ts / 2) * (Math.cos(lk) + Math.sin(lk));
   const beamAft = Math.abs(beamF.x - beamF.thick / 2 - kx);
-  const beamSwingX = beamAft / Math.cos(lk) + hwN * Math.tan(lk);
+  const beamSwingX = beamAft / Math.cos(lk) + (hwN + side) * Math.tan(lk); // ladder rails run flush under the chine (D-43): their end corner is at |y| = hwN + side
   // The beam's aft face is TILTED by the lock angle, so the perpendicular distance from the rail's end corner to it is the
   // fore-aft gap × cos(lock): the gap must be clearance / cos(lock), not the clearance itself (the exploration found beam-F
   // 0.75·cos 38.5° = 0.59" from the nose rail at track ≥ 36.5" or wider beams, where the beam rather than the plate governs).
@@ -186,7 +201,7 @@ export function computeLayout(input: Params): Layout {
   const shaftThroughJoists = r + p.brakeShaftDiameterIn / 2 > deckTop - ply - jD + 0.01 && r - p.brakeShaftDiameterIn / 2 < deckTop - ply;
   // A joist that would hit the beam is replaced by one on each side of it (not pushed to one side only), so a thicker
   // deck ply never lengthens the panel span next to the beam (critic Phase 2 r1, D1 oddity).
-  const cabinJoistX = evenInterior(xRear + side, xs, p.crossmemberSpacingIn, joistT).flatMap((x) => {
+  const cabinJoistX = evenInterior(xRear + transom, xs, p.crossmemberSpacingIn, joistT).flatMap((x) => {
     const half = (beamR.thick + joistT) / 2 + 0.05;
     if (beamR.top > deckTop - ply - jD + 0.01 && Math.abs(x - beamR.x) < half) return [beamR.x - half, beamR.x + half];
     const sh = (p.brakeShaftDiameterIn + joistT) / 2 + 0.05;
@@ -231,7 +246,7 @@ export function computeLayout(input: Params): Layout {
     storage = { location: p.storageLocation, x0, x1, zBot, zTop: zBot + boxHeight(x1 - x0, w), hw: w / 2 };
   } else {
     // Behind the seat back: its rear face leans back as it rises, so the box end follows it.
-    const x0 = xRear + side;
+    const x0 = xRear + transom + rearLane;
     const backX = (zTop: number) => Pr[0] - Math.max(0, zTop - Pr[2]) * (-col2[0] / col2[2]);
     let h = Math.min(hCap, p.storageVolumeIn3 / (Math.max(0.5, seatRear - x0) * Math.max(0.5, 2 * hwC)));
     for (let i = 0; i < 6; i++) h = boxHeight(Math.max(1, backX(deckTop + h) - x0), 2 * hwC);
@@ -246,10 +261,11 @@ export function computeLayout(input: Params): Layout {
   const web = { z0: webZ0, z1: webZ1, phi: Math.atan2(flare, Math.max(0.1, webZ1 - webZ0)) };
 
   return {
-    r, WB, xs, xRear, xFront, kx, railBand: p.railBandIn, joistT, flare, web, side, ply, deckTop, deckBot: deckTop - ply, noseTop, noseBot: noseTop - ply,
+    r, WB, xs, xRear, xFront, kx, railBand: p.railBandIn, joistT, flare, web, side, transom, rearLane, ply, deckTop, deckBot: deckTop - ply, noseTop, noseBot: noseTop - ply,
     hwC, hwN, sideH: p.sideHeightIn, beamR, beamF,
     turntable: { z0: tz0, z1: tz1 },
-    bolster, sideBearer, kingpin: { z0: beamF.bot, z1: through ? bolsterTop : tz1 }, crossbar, accessPanel,
+    bolster, sideBearer, kingpin: { z0: beamF.bot - plateT, z1: through ? bolsterTop : tz1 }, crossbar, accessPanel,
+    kpPlates: plates ? { carrier: { z0: beamF.top, z1: tz0 }, under: { z0: beamF.bot - plateT, z1: beamF.bot }, bar: { z0: tz1, z1: tz1 + plateT } } : null,
     noseRailEnd, cabinJoistX, noseJoistX, seat, storage,
   };
 }

@@ -33,6 +33,28 @@ export interface Ctx {
 /** Assembly step numbers (build order). */
 export const STEP = { gear: 1, steering: 2, frame: 3, body: 4, seatStorage: 5, brake: 6, finish: 7, payload: 8 } as const;
 
+/**
+ * Hull assembly sequence (build review M4, D-43). `Part.step` is where a part is INSTALLED; the hull sequence is fractional
+ * between the frame (3) and the seat and storage (5), so Phase 4 can sort on it:
+ *   0. Epoxy-seal every groove, rabbet, dado and all ply faces and edges (a process step, before the bench glue-ups).
+ *   1. (4.0) Frame + deck glued as a unit.
+ *   2. Bench: glue each web into its chine and gunwale (a side assembly), vent holes drilled; these slide on at 4.2.
+ *   3. (4.2) Each side assembly slides INBOARD (Y) onto the deck edge so the chine rabbet closes over it, then is Domino-tied to the rail.
+ *   4. (4.3) Shoulder panels, epoxy fillets.
+ *   5. (4.4) The transoms go on LAST, sliding in X onto the deck edge, web ends, chine and gunwale tenons and rail tenons in one
+ *      glue-up (slow 120-minute epoxy, rehearse twice); the vent holes let the dados breathe. Backers and the prow socket are glued to the transom first.
+ *   6. (4.5) Prow socket block bolts on; the prow itself is removable (D-9).
+ */
+export const HULL_STEP = { deck: 4, sides: 4.2, shoulder: 4.3, transom: 4.4, prow: 4.5 } as const;
+
+/** Rough (as-milled-from-the-board) size of a finished wood piece: thickness and width + the allowance, length + 4× (≈ ½", build review M8). */
+export function roughOf(p: Params, s: Dims): Dims {
+  return { t: s.t + p.millingAllowanceIn, w: s.w + p.millingAllowanceIn, l: s.l + 4 * p.millingAllowanceIn };
+}
+
+/** Default sourcing of a steel bar, plate or rod part nobody gave a source (build review M9): McMaster-class stock cut to length. */
+export const STEEL_STOCK_SOURCING = { vendor: 'McMaster-Carr (A36 steel bar / plate / rod stock, cut to length)' } as const;
+
 export function makeCtx(input: Params, v: ViewState = {}): Ctx {
   const p = resolveParams(input); // every part sees the auto-resolved nose width / shoulder (A-4, D-26)
   const L = computeLayout(p);
@@ -179,10 +201,9 @@ function finalize(ctx: Ctx, s: PartSpec, geometry: Part['geometry'], massLb: num
     s.material ?? (s.mat === 'oak' ? 'white oak' : s.mat === 'ply' ? ctx.plyName : s.mat === 'steel' ? 'steel' : 'purchased');
   const wood = s.mat === 'oak' || s.mat === 'ply';
   const [t, w, l] = dimsSorted;
-  const stock: Dims | undefined = s.stock === false ? undefined : s.stock ?? (wood ? { t, w, l } : undefined);
-  const rough: Dims | undefined = wood && stock && s.mat === 'oak'
-    ? { t: stock.t + p.millingAllowanceIn, w: stock.w + p.millingAllowanceIn, l: stock.l + p.millingAllowanceIn }
-    : undefined;
+  // Steel bar / plate / rod: the stock is the section × the cut length (build review M9), unless the builder says otherwise.
+  const stock: Dims | undefined = s.stock === false ? undefined : s.stock ?? (wood || s.mat === 'steel' ? { t, w, l } : undefined);
+  const rough: Dims | undefined = wood && stock && s.mat === 'oak' ? roughOf(p, stock) : undefined;
   const fab: Fab = s.fab ?? (wood ? 'table-saw' : s.mat === 'steel' ? 'drill-tap' : 'buy');
   const out: Part = {
     id: s.id,
@@ -208,6 +229,7 @@ function finalize(ctx: Ctx, s: PartSpec, geometry: Part['geometry'], massLb: num
   if (s.payload) out.payload = true;
   if (s.notes) out.notes = s.notes;
   if (s.sourcing) out.sourcing = s.sourcing;
+  else if (s.mat === 'steel') out.sourcing = { ...STEEL_STOCK_SOURCING };
   if (s.cgIn) out.cgIn = s.cgIn;
   return out;
 }

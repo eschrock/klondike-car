@@ -5,8 +5,9 @@
  *  - bridle eye bolts at the front beam and rope legs that start at them (M6),
  *  - the removable kingpin-nut access panel in the nose deck (M10).
  */
-import { DRAWBAR, steerStopPlan } from '../params';
+import { DRAWBAR, steerStopPlan, kingpinPlatesOn } from '../params';
 import { IN3_PER_FT3, STEP, box, cylinder, span, SIDES, woodMassLb, type Ctx } from './build-utils';
+import { kingpinPlatePlan, stopArmHx, stopArmThick } from './kingpin-plates';
 import { compose } from './mat4';
 import { circlePath, customPart, mergeMeshes, pathLength, tubeAlong } from './mesh-utils';
 import type { Joint, Part, Vec3 } from './types';
@@ -70,6 +71,8 @@ export function buildSteering(ctx: Ctx): Part[] {
   const nBolt = Math.max(1, Math.round(p.bolsterFastenerCount));
   const boltDia = p.bolsterFastenerDiameterIn;
   const bolts = ringBoltLayout(nBolt, bo, cb ? cb.hw : 0);
+  const kp = kingpinPlatePlan(p); // kingpin steel plate bolt groups (D-35)
+  const plates = kingpinPlatesOn(p) && !!L.kpPlates;
 
   // ── Turntable ──
   parts.push(box(ctx, {
@@ -77,10 +80,10 @@ export function buildSteering(ctx: Ctx): Part[] {
     kind: 'purchased', material: 'steel turntable bearing', fab: 'buy', step: STEP.steering,
     ...span([kx - ts / 2, kx + ts / 2], [-ts / 2, ts / 2], [L.turntable.z0, L.turntable.z1]),
     sourcing: { vendor: `${VENDOR}: ${ts}" square lazy-susan turntable bearing, rated ${p.turntableRatingLb} lb (D-28; catalog estimate, verify the part bought)` },
-    joints: [
-      { type: 'screw', to: 'beam-F', count: 4, size: `${frac(5 / 16)}" × 2-1/2" lag screws through the bottom-plate holes into the beam top`, diaIn: 5 / 16, note: 'Bottom plate on the front beam; the top plate carries the bolster ring.' },
-    ],
-    notes: `Centerd on the kingpin (D-25). Estimate mass; ${p.turntableRatingLb} lb rated (D-12), thrust only: the roll moment goes through the side-bearers and the pitch moment through the sleeved kingpin couple and the bolster rails (D-32). Its top plate carries the bolster rails; the kingpin passes through its center hole with radial clearance and touches neither plate.`,
+    joints: kingpinPlatesOn(p)
+      ? [{ type: 'screw', to: 'kp-carrier', count: 2, size: '1/4-20 × 3/4" flat-head screws through the bottom plate\'s inner flange into the carrier', diaIn: 0.25, note: `Verify the bought bearing (M12): a 12" square lazy susan has its mounting holes in the corners (about 10" apart), which cannot land on the ${p.frontAxleBeamThicknessIn}"-wide beam. Drill two holes in the bottom plate's inner flange (r ≈ ${(p.turntableCenterHoleIn / 2 + 0.25).toFixed(2)}") clear of the ball race, and tap the carrier.` }]
+      : [{ type: 'screw', to: 'beam-F', count: 4, size: `${frac(5 / 16)}" × 2-1/2" lag screws through the bottom-plate holes into the beam top`, diaIn: 5 / 16, note: 'Bottom plate on the front beam; the top plate carries the bolster ring.' }],
+    notes: `Centerd on the kingpin (D-25). Estimate mass; ${p.turntableRatingLb} lb rated (D-12), thrust only: the roll moment goes through the side-bearers and the pitch moment through the sleeved kingpin couple and the bolster rails (D-32). Its top plate carries the bolster rails; the kingpin, the steel sleeve, the stop arms and the kingpin plates live inside its ${p.turntableCenterHoleIn}" center hole (D-35, assumed: a 12" lazy susan has a ~6" open center; verify) and touch neither plate.`,
   }));
 
   // ── Bolster ring: two oak rails fore and aft of the kingpin plus two end rails, bearing on the turntable top plate ──
@@ -153,14 +156,14 @@ export function buildSteering(ctx: Ctx): Part[] {
     id: 'kingpin', name: 'Kingpin (grade-8 bolt)', group: 'steering', mat: 'steel', kind: 'purchased', fab: 'buy', step: STEP.steering,
     center: [kx, 0, (L.kingpin.z0 + L.kingpin.z1) / 2], axis: 'z', radius: p.kingpinDiameterIn / 2,
     length: L.kingpin.z1 - L.kingpin.z0,
-    sourcing: { vendor: `${VENDOR}: SAE grade 8 hex bolt ${frac(p.kingpinDiameterIn)}" × ${kpLen}" (grip ≥ ${stack.toFixed(2)}"), hardened washers, lock nut` },
+    sourcing: { vendor: `${VENDOR}: SAE grade 8 hex bolt ${frac(p.kingpinDiameterIn)}" × ${kpLen}" with an UNTHREADED shank for the whole grip ≥ ${stack.toFixed(2)}" (sleeve, turntable hole and crossbar plate; critic S-8), hardened washers, lock nut` },
     joints: cb ? [
       { type: 'bolt', to: 'kingpin-crossbar', count: 1, diaIn: p.kingpinDiameterIn, size: `${frac(p.kingpinDiameterIn)}" grade 8; head + washer under the beam, lock nut + washer on the crossbar top (counterbored flush)`, note: 'Pin is a tight fit in the sleeves, not in the turntable center hole.' },
     ] : [
       { type: 'bolt', to: 'turntable', count: 1, diaIn: p.kingpinDiameterIn, size: `${frac(p.kingpinDiameterIn)}" grade 8; head let into the turntable plate` },
     ],
     notes: cb
-      ? 'Mass is the steel shank only; nut and washers are in the hardware allowance. Washer under the beam, nut + washer on the crossbar top (counterbored flush); reached through the access panel in the nose deck (M10).'
+      ? 'Mass is the steel shank only; nut and washers are in the hardware allowance. Head + hardened washer under the beam plate, nut + washer on the crossbar top (counterbored flush); reached through the access panel in the nose deck (M10). D-35: the pin runs in the steel sleeve through the beam (supported at the carrier and the beam plate) and bears on the crossbar plate; it touches no oak. Snug nut, no preload on the turntable (castle nut + cotter).'
       : 'Mass is the steel shank only; nut and washers are in the hardware allowance. Head is let into the turntable plate.',
   }));
 
@@ -171,7 +174,12 @@ export function buildSteering(ctx: Ctx): Part[] {
     const crossbarJoints: Joint[] = [
       { type: 'dado', to: 'bolster-aft', count: 1, size: `${p.kingpinCrossbarLetInIn}" let-in, end grain bears on the notch face` },
       { type: 'dado', to: 'bolster-fore', count: 1, size: `${p.kingpinCrossbarLetInIn}" let-in, end grain bears on the notch face` },
-      { type: 'screw', to: 'turntable', count: 2, size: '#10 × 2-1/2" pan-head, through the crossbar into the top plate', diaIn: 0.19 },
+      ...(kingpinPlatesOn(p)
+        ? [{ type: 'bolt' as const, to: 'kp-bar-plate', count: 4, diaIn: p.kingpinPlateBoltDiameterIn, size: `${frac(p.kingpinPlateBoltDiameterIn)}" grade 8 bolts through the plate and the crossbar, nuts in counterbores in the crossbar top`, at: kp.barX.map((x): Vec3 => [x, 0, 0]), note: 'The pin force enters the oak only here: roll-bolster / kingpin-bolts rows (NDS dowel bearing, row tear-out).' }]
+        : [{ type: 'screw' as const, to: 'turntable', count: 2, size: '#10 × 2-1/2" pan-head, through the crossbar into the top plate', diaIn: 0.19 }]),
+      ...(kingpinPlatesOn(p)
+        ? [{ type: 'bolt' as const, to: 'kp-bar-plate', count: kp.crossBarX.length, diaIn: p.kingpinCrossBoltDiameterIn, size: `${frac(p.kingpinCrossBoltDiameterIn)}" 316 stainless cross-bolts through the crossbar width, ${frac(p.kingpinCrossBoltWasherIn)}" OD fender washers`, at: kp.crossBarX.map((x): Vec3 => [x, 0, 0]), note: 'Stitch the crossbar against cleavage from the lateral pin load (NDS 3.4.3.3, kingpin-split row).' }]
+        : []),
     ];
     if (ap) crossbarJoints.push({ type: 'threaded-insert', to: 'nose-access-panel', count: 4, size: '#10-24 stainless knurled brass insert × 1/2", epoxied 3/4" into the crossbar top', diaIn: 0.19, at: insertAt });
     parts.push(box(ctx, {
@@ -182,52 +190,122 @@ export function buildSteering(ctx: Ctx): Part[] {
     }));
   }
 
-  // ── Steel sleeves (kingpinSleeveOdIn > 0): tube with ID = pin, pressed into the beam bore and the crossbar bore ──
+  // ── Steel sleeve (kingpinSleeveOdIn > 0): with the kingpin plates (D-35) one tube spans the beam from the plate under it to the carrier on top
+  // (spigoted into both, flush with their outer faces); without them (Phase 1 pin) a tube is pressed into each bore as before ──
   if (p.kingpinSleeveOdIn > 0) {
     const od = p.kingpinSleeveOdIn, id = p.kingpinDiameterIn;
     const wall = (od - id) / 2;
     const tube = (len: number) => (Math.PI / 4) * (od * od - id * id) * len;
-    const ends: Array<[string, string, number, number, boolean]> = [['beam', 'beam', L.beamF.bot, L.beamF.top, true]];
-    if (cb) ends.push(['bar', 'crossbar', cb.z0, cb.z1, false]);
+    const ends: Array<[string, string, number, number, boolean]> = plates
+      ? [['beam', 'beam and both plates', L.kpPlates!.under.z0, L.kpPlates!.carrier.z1, true]]
+      : [['beam', 'beam', L.beamF.bot, L.beamF.top, true]];
+    if (cb && !plates) ends.push(['bar', 'crossbar', cb.z0, cb.z1, false]);
     for (const [tag, where, z0, z1, steer] of ends) {
       parts.push(cylinder(ctx, {
         id: `kingpin-sleeve-${tag}`, partNo: 'kingpin-sleeve', name: `Kingpin sleeve (${where} bore)`, group: 'steering', steer, mat: 'fixed',
         massLb: (tube(z1 - z0) / IN3_PER_FT3) * p.steelDensityPcf, kind: 'purchased', material: `${frac(od)}" OD × ${frac(wall)}" wall DOM steel tube (A36 / 1020)`, fab: 'buy', step: STEP.steering,
         center: [kx, 0, (z0 + z1) / 2], axis: 'z', radius: od / 2, length: z1 - z0,
         sourcing: { vendor: `${VENDOR}: ${frac(od)}" OD × ${frac(wall)}" wall DOM (drawn-over-mandrel) steel tube, ID ${id.toFixed(3)}" (the ¾" pin slides through; hone to +0.003" if needed), cut ${(z1 - z0).toFixed(2)}" long` },
-        joints: [
-          { type: 'glue', to: where === 'beam' ? 'beam-F' : 'kingpin-crossbar', count: 1, size: `${od.toFixed(3)}" OD, press fit in a ${od.toFixed(3)}" reamed bore + epoxy`, note: 'The oak bears on the sleeve OD; the pin bears on its bore (M2 peak-bearing check).' },
-        ],
-        notes: `${od}" OD × ${wall}" wall DOM tube, ${(z1 - z0).toFixed(2)}" long, pressed and epoxied into the ${where} bore; the oak bears on the OD and the pin on the bore. Drawn solid.`,
+        joints: plates
+          ? [
+            { type: 'pin', to: 'kp-carrier', count: 1, size: `${od.toFixed(3)}" OD spigot in the carrier hole`, note: 'Reaction of the pin at the top of the beam (the carrier plate carries it to the beam through the plate bolts).' },
+            { type: 'pin', to: 'kp-under', count: 1, size: `${od.toFixed(3)}" OD spigot in the beam-plate hole`, note: 'Reaction of the pin at the bottom of the beam.' },
+            { type: 'glue', to: 'beam-F', count: 1, size: `${od.toFixed(3)}" OD, epoxy-bedded in a reamed bore`, note: 'The epoxy bed seals the bore; its strength is NOT counted (the plates carry the pin force).' },
+          ]
+          : [{ type: 'glue', to: where === 'beam' ? 'beam-F' : 'kingpin-crossbar', count: 1, size: `${od.toFixed(3)}" OD, press fit in a ${od.toFixed(3)}" reamed bore + epoxy`, note: 'The oak bears on the sleeve OD; the pin bears on its bore (M2 peak-bearing check).' }],
+        notes: plates
+          ? `${od}" OD × ${wall}" wall DOM tube, ${(z1 - z0).toFixed(2)}" long, running from the plate under the beam to the carrier on top (D-35): the pin runs in it, it spigots into both plates, and the plates' bolt groups carry the pin force into the beam. Drawn solid.`
+          : `${od}" OD × ${wall}" wall DOM tube, ${(z1 - z0).toFixed(2)}" long, pressed and epoxied into the ${where} bore; the oak bears on the OD and the pin on the bore. Drawn solid.`,
       }));
     }
   }
 
-  // ── Steering stops (M1, D-31): steel-faced oak dogs on the beam, four oak stop blocks in the corners of the bolster opening ──
+  // ── Kingpin steel plates (D-35): carrier on the beam, plate under the beam, plate under the crossbar ──
+  if (plates) {
+    const kpl = L.kpPlates!;
+    const fabNote = 'Outsourced: waterjet / laser cut by a service (SendCutSend / Oshcut class), deburred, zinc-rich primer + paint; build review M11.';
+    const steelPlate = (id: string, name: string, x: [number, number], y: [number, number], z: [number, number], joints: Joint[], notes: string, steer: boolean, sourcing: string) => {
+      parts.push(box(ctx, {
+        id, name, group: 'steering', steer, mat: 'steel', kind: 'metal', material: 'A36 steel plate', fab: 'outsource', step: STEP.steering,
+        ...span(x, y, z), joints, notes: `${notes} ${fabNote}`, sourcing: { vendor: sourcing },
+      }));
+    };
+    const pitchY = kp.beamY[4] - kp.beamY[3];
+    steelPlate('kp-carrier', 'Kingpin carrier plate (on the beam, under the turntable)', [kx - kp.carrier.hx, kx + kp.carrier.hx], [-kp.carrier.hy, kp.carrier.hy], [kpl.carrier.z0, kpl.carrier.z1], [
+      { type: 'bolt', to: 'beam-F', count: kp.beamY.length, diaIn: kp.D, size: `${frac(kp.D)}" grade 8 undercut flat-head bolts through the carrier, the beam and the beam plate; nylon-insert nuts under the beam plate`, at: kp.beamY.map((y): Vec3 => [kp.beamX, y, 0]), note: `One line along the beam through the pin, ${pitchY.toFixed(3)}" apart (NDS 5D rows for a load across the grain). This bolt group carries the pin force and the stop torque into the beam (kingpin-bolts row).` },
+      { type: 'screw', to: 'turntable', count: 2, size: '1/4-20 tapped holes for the bearing\'s bottom-plate screws', diaIn: 0.25, at: [[0, p.turntableCenterHoleIn / 2 + 0.25, 0], [0, -(p.turntableCenterHoleIn / 2 + 0.25), 0]] },
+    ], `${frac(p.carrierPlateThickIn)}" A36 strip ${(2 * kp.carrier.hx).toFixed(2)}" × ${(2 * kp.carrier.hy).toFixed(2)}" lying on the beam top (the rod is flush with the beam top and the strip clears its groove): the turntable's bottom plate stands on it (M12: the mounting plate), the sleeve spigots into it, the stop arms screw to it.`, true,
+    `${VENDOR} or a laser service: ${p.carrierPlateThickIn}" A36 plate, ${(2 * kp.carrier.hx).toFixed(2)}" × ${(2 * kp.carrier.hy).toFixed(2)}", ${kp.beamY.length} × ${frac(kp.D)}" countersunk holes, 1-1/4" sleeve hole, two 1/4-20 tapped holes, four stop-arm screw holes tapped ${frac(p.steerStopScrewDiameterIn)}-16`);
+    steelPlate('kp-under', 'Kingpin plate (under the beam)', [kx - kp.carrier.hx, kx + kp.carrier.hx], [-kp.carrier.hy, kp.carrier.hy], [kpl.under.z0, kpl.under.z1], [
+      { type: 'bolt', to: 'beam-F', count: kp.beamY.length, diaIn: kp.D, size: `${frac(kp.D)}" nylon-insert nuts + washers on the grade 8 plate bolts`, at: kp.beamY.map((y): Vec3 => [kp.beamX, y, 0]) },
+    ], `${frac(p.kingpinPlateThickIn)}" A36 strip under the beam, the same footprint as the carrier. The pin head and its hardened washer bear on its underside; the sleeve spigots into it.`, true,
+    `${VENDOR} or a laser service: ${p.kingpinPlateThickIn}" A36 plate, ${(2 * kp.carrier.hx).toFixed(2)}" × ${(2 * kp.carrier.hy).toFixed(2)}", ${kp.beamY.length} × ${frac(kp.D)}" holes, 1-1/4" sleeve hole`);
+    steelPlate('kp-bar-plate', 'Kingpin plate (under the crossbar)', [kx - kp.bar.hx, kx + kp.bar.hx], [-kp.bar.hy, kp.bar.hy], [kpl.bar.z0, kpl.bar.z1], [
+      { type: 'bolt', to: 'kingpin-crossbar', count: kp.barX.length, diaIn: kp.D, size: `${frac(kp.D)}" grade 8 undercut flat-head bolts through the plate and the crossbar; nuts in counterbores in the crossbar top`, at: kp.barX.map((x): Vec3 => [x, 0, 0]) },
+    ], `${frac(p.kingpinPlateThickIn)}" A36 plate under the crossbar, lying on the turntable top plate (chassis on chassis). The pin bears on its hole, steel on steel (grease or a flanged bronze bushing, D-35), and hands the pin force to the crossbar through its four bolts.`, false,
+    `${VENDOR} or a laser service: ${p.kingpinPlateThickIn}" A36 plate, ${(2 * kp.bar.hx).toFixed(2)}" × ${(2 * kp.bar.hy).toFixed(2)}", ${kp.barX.length} × ${frac(kp.D)}" countersunk holes, ${frac(p.kingpinDiameterIn + 1 / 64)}" pin hole (flanged bronze bushing optional)`);
+  }
+
+  // ── Steering stops (M1, D-31, D-35): urethane-faced steel channel dogs standing on risers inside the turntable center hole, four oak stop blocks in the corners of the bolster opening ──
   const plan = steerStopPlan(p);
-  const dogH = Math.max(0.25, Math.min(p.steerStopHeightIn, ringDepth - p.sideBearerClearanceIn));
+  const clr = p.sideBearerClearanceIn;
+  const tfS = p.steerStopFacePlateIn; // channel steel
+  const zw0 = bo.z0 + clr; // channel web bottom: clear of the turntable top plate
+  const dogH = Math.max(0.5, Math.min(p.steerStopHeightIn, ringDepth - 2 * clr));
   if (plan.ok) {
     const len = plan.rb - plan.ra, midY = (plan.ra + plan.rb) / 2;
-    const nb = Math.max(2, Math.round(p.steerStopBoltCount));
-    const boltAt = (): Vec3[] => Array.from({ length: nb }, (_, i): Vec3 => [0, -len / 2 + (len * (i + 0.5)) / nb, 0]);
+    const riserDepth = p.steerStopRiserDepthIn; // in y; the web overhangs it
+    const barT = stopArmThick(p);
+    const zBar0 = plates ? L.kpPlates!.carrier.z1 : L.turntable.z0; // Phase 1 layout (no crossbar): the arm lies on the beam top
+    const yIn = Math.max(p.kingpinSleeveOdIn, p.kingpinDiameterIn) / 2 + 0.25; // the arm starts clear of the sleeve
+    const steelLb = (vol: number) => (vol / IN3_PER_FT3) * p.steelDensityPcf;
     for (const { s, tag } of SIDES) {
+      const yr: [number, number] = [Math.min(s * (plan.ra - riserDepth), s * plan.ra), Math.max(s * (plan.ra - riserDepth), s * plan.ra)];
+      const armY: [number, number] = [Math.min(s * yIn, s * plan.ra), Math.max(s * yIn, s * plan.ra)];
+      const armHx = plates ? Math.min(kp.carrier.hx, stopArmHx(p, plan.ra)) : plan.t / 2; // 2" wide unless the hole is tight: its corner stays inside the turntable hole
+      // Stop arm: a ½" bar on the carrier, clamped by the plate bolts under it and screwed to the carrier; the riser stands on its outer end.
       parts.push(box(ctx, {
-        id: `steer-stop-${tag}`, partNo: 'steer-stop', name: `Steering stop dog ${tag}`, group: 'steering', steer: true, mat: 'oak', grain: 'y', step: STEP.steering,
-        size: [plan.t, len, dogH], center: [kx, s * midY, bo.z0 + dogH / 2],
+        id: `steer-stop-arm-${tag}`, partNo: 'steer-stop-arm', name: `Stop arm ${tag}`, group: 'steering', steer: true, mat: 'steel', kind: 'metal', material: 'A36 steel flat bar', fab: 'drill-tap', step: STEP.steering,
+        ...span([kx - armHx, kx + armHx], armY, [zBar0, zBar0 + barT]),
+        sourcing: { vendor: `${VENDOR}: A36 flat bar ${frac(barT)}" × ${(2 * armHx).toFixed(2)}", cut ${(plan.ra - yIn).toFixed(2)}" long (a saw cut; the holes are drilled and the screw holes tapped on the drill press)` },
         joints: [
-          { type: 'bolt', to: 'beam-F', count: nb, diaIn: p.steerStopBoltDiameterIn, size: `${frac(p.steerStopBoltDiameterIn)}" hex bolt, through the dog, the turntable plate and the beam; nut + ${frac(p.steerStopWasherDiameterIn)}" OD fender washer under the beam`, at: boltAt(), note: 'Hold-down bolts: the analysis reads their count and diameter (steer-stops).' },
-          { type: 'screw', to: `steer-stop-face-${tag}1`, count: 3, size: '#8 countersunk flat-head, counterbored into the steel plate', diaIn: 0.164 },
-          { type: 'screw', to: `steer-stop-face-${tag}2`, count: 3, size: '#8 countersunk flat-head, counterbored into the steel plate', diaIn: 0.164 },
+          { type: 'screw', to: 'kp-carrier', count: 2, diaIn: p.steerStopScrewDiameterIn, size: `${frac(p.steerStopScrewDiameterIn)}-16 grade 8 socket flat-head screws through the arm, tapped into the carrier`, at: [-0.55, 0.55].map((x): Vec3 => [x, s * (plan.ra - riserDepth / 2) - s * (yIn + plan.ra) / 2, 0]), note: 'Steel on steel: the stop torque goes arm → screws → carrier (in its own plane) → plate bolts (steer-stops, kingpin-bolts rows).' },
+          { type: 'bolt', to: 'beam-F', count: 1, diaIn: kp.D, size: 'one of the six plate bolts passes through the arm (flush head)', at: [[kp.beamX, (s > 0 ? kp.beamY[3] : kp.beamY[2]) - s * (yIn + plan.ra) / 2, 0]] },
         ],
-        notes: `Radial oak dog (${plan.t}" thick, ${len.toFixed(2)}" long, ${dogH.toFixed(2)}" tall, stop face s = ${plan.ra.toFixed(2)}…${plan.rb.toFixed(2)}" from the kingpin) standing on the ${s > 0 ? '+y' : '−y'} axis. Its steel-faced sides land flat on the stop blocks at exactly ±${p.steerLockDeg}° of lock. Bolted down through the lazy-susan bottom plate into the beam (D-31).`,
+        notes: `½" bar lying on the carrier inside the ${p.turntableCenterHoleIn}" center hole (${(2 * armHx).toFixed(2)}" wide, y ${yIn.toFixed(2)}…${plan.ra.toFixed(2)}"): nothing goes through the ball ring (M1 mounting). Clamped by one plate bolt and two stop-arm screws.`,
+      }));
+      parts.push(box(ctx, {
+        id: `steer-stop-riser-${tag}`, partNo: 'steer-stop-riser', name: `Stop riser ${tag}`, group: 'steering', steer: true, mat: 'steel', kind: 'metal', material: 'A36 steel bar', fab: 'drill-tap', step: STEP.steering,
+        ...span([kx - plan.t / 2, kx + plan.t / 2], yr, [zBar0 + barT, zw0]),
+        sourcing: { vendor: `${VENDOR}: A36 bar ${frac(riserDepth)}" × ${frac(plan.t)}", cut ${(zw0 - zBar0 - barT).toFixed(2)}" long` },
+        joints: [
+          { type: 'screw', to: `steer-stop-arm-${tag}`, count: 2, diaIn: p.steerStopScrewDiameterIn, size: `${frac(p.steerStopScrewDiameterIn)}-16 flat-head screws up through the arm into the riser`, at: [[-0.3, 0, -0.1], [0.3, 0, -0.1]] },
+        ],
+        notes: `Short block between the arm and the channel web, at the hole edge (y ${(plan.ra - riserDepth).toFixed(2)}…${plan.ra.toFixed(2)}"). Narrow enough (${plan.t}") that its corner stays out of the crossbar's shadow at lock.`,
+      }));
+      // Channel dog: ¼" web on the riser, two upturned flanges; the flange outer faces carry the urethane pads.
+      const webLen = len + riserDepth;
+      const chMass = steelLb(plan.t * webLen * tfS + 2 * (dogH - tfS) * len * tfS);
+      parts.push(box(ctx, {
+        id: `steer-stop-${tag}`, partNo: 'steer-stop', name: `Steering stop dog ${tag} (steel channel)`, group: 'steering', steer: true, mat: 'fixed', massLb: chMass, kind: 'metal', material: 'A36 steel plate, formed channel', fab: 'outsource', step: STEP.steering,
+        size: [plan.t, webLen, dogH], center: [kx, s * (plan.ra - riserDepth + (webLen) / 2), zw0 + dogH / 2],
+        sourcing: { vendor: `Waterjet / laser service with a press brake: ${frac(tfS)}" A36 plate, formed U channel ${plan.t}" wide × ${dogH.toFixed(2)}" tall × ${webLen.toFixed(2)}" long, 2 clearance holes in the web` },
+        joints: [
+          { type: 'screw', to: `steer-stop-riser-${tag}`, count: 2, diaIn: p.steerStopScrewDiameterIn, size: `${frac(p.steerStopScrewDiameterIn)}-16 flat-head screws down through the web into the riser`, at: [[-0.3, -webLen / 2 + riserDepth / 2, 0], [0.3, -webLen / 2 + riserDepth / 2, 0]].map(([a, c]): Vec3 => [a, s * c, 0]) },
+          { type: 'glue', to: `steer-stop-face-${tag}1`, count: 1, note: 'Urethane pad bonded to the flange outer face (epoxy / urethane adhesive, abraded steel).' },
+          { type: 'glue', to: `steer-stop-face-${tag}2`, count: 1, note: 'Urethane pad bonded to the flange outer face.' },
+        ],
+        notes: `Radial dog: ${frac(tfS)}" steel channel (web on the riser, two flanges up), stop face s = ${plan.ra.toFixed(2)}…${plan.rb.toFixed(2)}" from the kingpin, ${dogH.toFixed(2)}" tall, standing on the ${s > 0 ? '+y' : '−y'} axis. Its urethane-faced sides land flat on the stop blocks at exactly ±${p.steerLockDeg}° of lock; the dog is carried from INSIDE the turntable hole, over the ring (D-35). Drawn as the bounding box of the web and flanges.`,
       }));
       for (const [n, sx] of [[1, -1], [2, 1]] as const) {
+        const padLb = (plan.tf * len * (dogH - tfS) / IN3_PER_FT3) * p.urethaneDensityPcf;
         parts.push(box(ctx, {
-          id: `steer-stop-face-${tag}${n}`, partNo: 'steer-stop-face', name: `Steering stop steel face plate ${tag}${n}`, group: 'steering', steer: true, mat: 'steel', step: STEP.steering,
-          size: [plan.tf, len, dogH], center: [kx + sx * (plan.t / 2 + plan.tf / 2), s * midY, bo.z0 + dogH / 2],
-          material: 'A36 steel plate', kind: 'metal', fab: 'cnc',
-          joints: [{ type: 'screw', to: `steer-stop-${tag}`, count: 3, size: '#8 countersunk flat-head, counterbored into the steel plate', diaIn: 0.164 }],
-          notes: `${plan.tf}" A36 plate screwed to the ${sx < 0 ? 'aft' : 'fore'} side of the dog (${s > 0 ? 'left' : 'right'}): the steel face spreads the stop contact over the stop block and takes the wear.`,
+          id: `steer-stop-face-${tag}${n}`, partNo: 'steer-stop-face', name: `Steering stop urethane pad ${tag}${n}`, group: 'steering', steer: true, mat: 'fixed', massLb: padLb, step: STEP.steering,
+          size: [plan.tf, len, dogH - tfS], center: [kx + sx * (plan.t / 2 + plan.tf / 2), s * midY, zw0 + tfS + (dogH - tfS) / 2],
+          material: `${frac(plan.tf)}" 70-80A cast urethane pad, bonded`, kind: 'purchased', fab: 'buy',
+          sourcing: { vendor: `${VENDOR}: ${frac(plan.tf)}" 70-80A urethane sheet, cut ${len.toFixed(2)}" × ${(dogH - tfS).toFixed(2)}" and bonded to the flange` },
+          joints: [{ type: 'glue', to: `steer-stop-${tag}`, count: 1, note: 'Bonded to the steel flange; the pad is the compliance that makes the two stops share load (steer-stops row, D-35).' }],
+          notes: `${frac(plan.tf)}" urethane on the ${sx < 0 ? 'aft' : 'fore'} flange face of the ${s > 0 ? 'left' : 'right'} dog: the stop face. Stiffness k = E·A/t sets the share between the two stops (D-35).`,
         }));
       }
     }
@@ -250,7 +328,7 @@ export function buildSteering(ctx: Ctx): Part[] {
           { type: 'screw', to: rail, count: 2, size: '#10 × 2-1/2" countersunk, through the rail into the block', diaIn: 0.19 },
           ...(cb ? [{ type: 'glue' as const, to: 'kingpin-crossbar', count: 1, size: 'side face of the crossbar', note: `Contact length ${th.barLen.toFixed(2)}".` }] : []),
         ],
-        notes: `Wedge cut to the corner between the ${th.id.startsWith('A') ? 'aft' : 'fore'} bolster rail and the crossbar, trimmed where thinner than ${p.stopBlockMinIn}". Its face is the plane the dog's ${th.lockSign > 0 ? 'aft' : 'fore'}-side steel plate reaches at exactly ${th.lockSign > 0 ? '+' : '−'}${p.steerLockDeg}° of lock (flat contact). Grain runs along the stop force (end-grain face); the analysis conservatively uses the across-grain bearing allowable. The OBB drawn is the bounding rectangle behind the face.`,
+        notes: `Wedge cut to the corner between the ${th.id.startsWith('A') ? 'aft' : 'fore'} bolster rail and the crossbar, trimmed where thinner than ${p.stopBlockMinIn}". Its face is the plane the dog's ${th.lockSign > 0 ? 'aft' : 'fore'}-side urethane pad reaches at exactly ${th.lockSign > 0 ? '+' : '−'}${p.steerLockDeg}° of lock (flat contact). Grain runs along the stop force (end-grain face); the analysis conservatively uses the across-grain bearing allowable. The OBB drawn is the bounding rectangle behind the face.`,
       }));
     }
   }

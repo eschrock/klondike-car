@@ -9,7 +9,8 @@
  * joinery.ts after all parts exist.
  */
 import { SIDE_CONSTRUCTION } from '../params';
-import { STEP, box, span, SIDES, IN3_PER_FT3, woodMassLb, type Ctx } from './build-utils';
+import { HULL_STEP, STEP, box, cylinder, roughOf, span, SIDES, IN3_PER_FT3, woodMassLb, type Ctx } from './build-utils';
+import { handleGeometry } from './brake';
 import { cabinSidePoint, type Layout } from './layout';
 import { REFLECTOR_FRACS, REFLECTOR_SIZE } from './lighting';
 import { compose } from './mat4';
@@ -20,9 +21,10 @@ const POST_SPACING_IN = 12;
 const POST_X_IN = 1.5;
 const SIGN_MIN_LEN_IN = 4;
 const SIGN_TIRE_GAP_IN = 0.25;
-/** Prow leg: how far the foot hugs the front transom, and the oak kept between the slot and the leg. */
-const PROW_LEG_MAX_IN = 3;
+/** Prow leg: the oak kept between the lift slot and the leg foot (the leg itself is `prowLegMinIn` long and drops into a socket, D-43). */
 const PROW_LEG_ABOVE_SLOT_IN = 0.25;
+/** Running clearance of the prow leg in its socket slot (each side and in front). */
+const PROW_SOCKET_CLEAR_IN = 0.015;
 const PROW_BEZIER_CTRL = 0.6;
 const PROW_SAMPLES = 24;
 /** Prow form: base below the foot, and how far the form body extends past the inside face. */
@@ -31,10 +33,16 @@ const FORM_BODY_IN = 3;
 const FORM_CHEEK_IN = 1;
 const FORM_SIDE_OFFSET_IN = 4;
 /** Finger guard: strap height on the gunwale and the margin past the hazard zone. */
-const GUARD_STRAP_IN = 1;
+const GUARD_STRAP_IN = 1.25;
+/** Finger-guard inserts sit ABOVE the gunwale's web groove: oak left over the groove top, and the #10-32 insert's hole radius (build review M2, D-43). */
+const GUARD_INSERT_CLEAR_IN = 0.25;
+const GUARD_INSERT_RADIUS_IN = 0.16;
 const GUARD_X_MARGIN_IN = 0.5;
 const GUARD_OUT_MARGIN_IN = 0.25;
 const LIFT_SLOT_SEGMENTS = 8;
+/** Assembly order and hydraulic-lock relief shared by the notes of the hull parts (build review M4, D-43; HULL_STEP in build-utils.ts has the whole sequence). */
+const DECK_ASSEMBLY_NOTE = 'Assembly (M4): epoxy-seal every face and edge first; the deck is glued to the frame (rails + joists) as one unit BEFORE the sides slide on, and the transom slides onto its edge last.';
+const SIDE_ASSEMBLY_NOTE = 'Assembly (M4): glue the web into its chine and gunwale on the bench (a side assembly, wipe squeeze-out from the grooves), then slide the assembly inboard (Y) onto the deck edge so the chine rabbet closes over it; the transom goes on after, sliding in X.';
 /** The hood flange is this many wall thicknesses (it cantilevers ~5" off a 1" strap, so it is thicker than the leg). */
 const HOOD_FACTOR = 2;
 
@@ -60,6 +68,31 @@ const cw = (o: Vec2[]): Vec2[] => (signedArea(o) <= 0 ? o : [...o].reverse());
 const oakLb = (ctx: Ctx, vol: number) => (vol / IN3_PER_FT3) * ctx.p.oakDensityPcf;
 /** Oak edge banding along `lenIn` of ply `plyIn` thick (glued strip, flush both faces). */
 export const edgeBandLb = (ctx: Ctx, lenIn: number, plyIn: number) => oakLb(ctx, lenIn * ctx.p.edgeBandIn * plyIn);
+
+/** Regular polygon (n-gon) loop in (y, z), CCW. */
+function circleLoop(cy: number, cz: number, r: number, n: number): Vec2[] {
+  return Array.from({ length: n }, (_, i) => [cy + r * Math.cos((2 * Math.PI * i) / n), cz + r * Math.sin((2 * Math.PI * i) / n)] as Vec2);
+}
+
+// ── Scuppers (build review M7, D-43) ──
+const SCUPPER_MASS_LB = 0.03;
+/** Hole bottom sits this far above the deck surface (so standing water drains to it); the nipple sticks out this far past the chine. */
+const SCUPPER_BELOW_SURFACE_IN = 0.05;
+const SCUPPER_STICKOUT_IN = 0.25;
+const SCUPPER_END_INSET_IN = 0.5;
+
+export interface ScupperSite { x: number; zone: 'cabin' | 'nose'; deckZ: number; hw: number; tagPos: string }
+/** Where the drains go: rear corners (in the backer lane when there is a rear box), cabin shoulder corners, nose front corners. */
+export function scupperSites(ctx: Ctx): ScupperSite[] {
+  const { L } = ctx;
+  const rearTx = L.xRear + L.transom, frontTx = L.xFront - L.transom;
+  const r = ctx.p.scupperDiaIn / 2;
+  return [
+    { x: rearTx + Math.max(SCUPPER_END_INSET_IN, r + 0.1) * 0.75, zone: 'cabin', deckZ: L.deckTop, hw: L.hwC, tagPos: 'cabin-rear' },
+    { x: L.xs - L.ply - 1, zone: 'cabin', deckZ: L.deckTop, hw: L.hwC, tagPos: 'cabin-front' },
+    { x: frontTx - 1, zone: 'nose', deckZ: L.noseTop, hw: L.hwN, tagPos: 'nose-front' },
+  ];
+}
 
 // ── Generic extrusion part (transoms, decks, webs, guard, prow form) ──
 interface ExtSpec {
@@ -117,7 +150,7 @@ function extPart(ctx: Ctx, s: ExtSpec): Part {
   if (s.partNo) out.partNo = s.partNo;
   if (stock) {
     out.stock = stock;
-    if (s.mat === 'oak') out.rough = { t: stock.t + p.millingAllowanceIn, w: stock.w + p.millingAllowanceIn, l: stock.l + p.millingAllowanceIn };
+    if (s.mat === 'oak') out.rough = roughOf(p, stock);
   }
   if (s.grain) out.grain = s.grain;
   if (s.edges) out.edges = s.edges;
@@ -143,11 +176,11 @@ export interface LiftSlot {
  * The rear transom may rise into a low crest if that pushes the slot above the gunwale line (the box top forces it); the
  * front transom keeps its top at the gunwale line (the lantern and flag clips straddle it, D-41) and lowers the slot instead.
  */
-export function liftSlot(ctx: Ctx, end: 'rear' | 'front'): LiftSlot {
+export function liftSlot(ctx: Pick<Ctx, 'p' | 'L'>, end: 'rear' | 'front'): LiftSlot {
   const { p, L } = ctx;
   const deck = end === 'rear' ? L.deckTop : L.noseTop;
   let floor = deck + p.liftSlotClearIn;
-  if (end === 'rear' && L.storage.x0 < L.xRear + L.side + 0.5 && L.storage.zTop > L.deckTop) floor = Math.max(floor, L.storage.zTop + 0.25);
+  if (end === 'rear' && L.storage.x0 < L.xRear + L.transom + L.rearLane + 0.5 && L.storage.zTop > L.deckTop) floor = Math.max(floor, L.storage.zTop + 0.25);
   let zBot = floor;
   let zTop = zBot + p.liftSlotHeightIn;
   let transomTop = Math.max(deck + L.sideH, zTop + p.liftBarMinIn);
@@ -156,7 +189,7 @@ export function liftSlot(ctx: Ctx, end: 'rear' | 'front'): LiftSlot {
     zTop = Math.min(zTop, transomTop - p.liftBarMinIn);
     zBot = zTop - p.liftSlotHeightIn;
   }
-  return { zBot, zTop, transomTop, barIn: p.liftBarMinIn, thickIn: L.side, lengthIn: p.liftSlotLengthIn };
+  return { zBot, zTop, transomTop, barIn: p.liftBarMinIn, thickIn: L.transom, lengthIn: p.liftSlotLengthIn };
 }
 
 /** Stadium-shaped hand-hold outline (CW, for a hole) centered at (y0, zc), local x = model y, local y = model z. */
@@ -198,6 +231,11 @@ export interface ProwShape {
   legLenIn: number;
   /** Top of the tip's bounding box in the model frame, and the x of the tip. */
   tipTop: { x: number; z: number };
+  /** Oak socket block on the front face of the front transom that the leg drops into (build review M3, D-43). */
+  socket: { x0: number; depthIn: number; slotDepthIn: number; slotHalfIn: number; halfIn: number; z0: number; z1: number; heightIn: number };
+  /** Centerline height of the tip above the leg foot (the lever arm of a grab, checked in analysis/hull.ts) and forward reach of the tip from the leg axis. */
+  tipHeightIn: number;
+  tipReachIn: number;
 }
 
 function minRadius(path: Vec2[]): number {
@@ -212,13 +250,15 @@ function minRadius(path: Vec2[]): number {
   return rMin;
 }
 
-export function prowShape(ctx: Ctx): ProwShape {
+export function prowShape(ctx: Pick<Ctx, 'p' | 'L'>): ProwShape {
   const { p, L } = ctx;
   const slot = liftSlot(ctx, 'front');
   const t = p.prowPlies * p.prowLamThicknessIn;
-  const zFoot = Math.max(slot.zTop + PROW_LEG_ABOVE_SLOT_IN, slot.transomTop - PROW_LEG_MAX_IN);
+  // The leg stands just above the lift slot and is `prowLegMinIn` long (or longer, to the transom top): the socket block rises past the
+  // transom top by whatever the leg needs, so the lift slot never has to move (D-43).
+  const zFoot = slot.zTop + PROW_LEG_ABOVE_SLOT_IN;
   const gunTop = L.noseTop + L.sideH;
-  const legLen = Math.max(0.5, slot.transomTop - zFoot);
+  const legLen = Math.max(p.prowLegMinIn, slot.transomTop - zFoot);
   const xEnd = Math.max(0.5, p.prowReachIn - t / 2);
   const zEnd = Math.max(legLen + 1, gunTop + p.prowHeightIn - zFoot);
   const p0: Vec2 = [0, legLen];
@@ -232,10 +272,15 @@ export function prowShape(ctx: Ctx): ProwShape {
   let len = 0;
   for (let i = 1; i < path.length; i++) len += Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]);
   const origin: Vec3 = [L.xFront + t / 2, 0, zFoot];
+  const slotHalf = p.prowWidthIn / 2 + PROW_SOCKET_CLEAR_IN;
+  const slotDepth = t + PROW_SOCKET_CLEAR_IN;
   return {
     path, origin, widthIn: p.prowWidthIn, thicknessIn: t, plies: p.prowPlies, lengthIn: len,
     minRadiusIn: minRadius(path), limitRadiusIn: p.prowMinRadiusFactor * p.prowLamThicknessIn, legLenIn: legLen,
     tipTop: { x: origin[0] + xEnd, z: origin[2] + zEnd + t / 2 },
+    socket: { x0: L.xFront, depthIn: slotDepth + p.prowSocketCheekIn, slotDepthIn: slotDepth, slotHalfIn: slotHalf, halfIn: slotHalf + p.prowSocketCheekIn, z0: zFoot, z1: zFoot + legLen, heightIn: legLen },
+    tipHeightIn: zEnd,
+    tipReachIn: xEnd,
   };
 }
 
@@ -387,6 +432,12 @@ function computeFinger(ctx: Ctx, stepDeg = 1): FingerAnalysis {
   return out;
 }
 
+/** Height (model z) of the finger-guard insert axis: above the gunwale's web groove, oak left over it, hole radius clear (build review M2, D-43). */
+export function guardInsertZ(L: Layout, p: { grooveDepthIn: number }): number {
+  const zg = L.noseTop + L.sideH - L.railBand;
+  return zg + p.grooveDepthIn + GUARD_INSERT_CLEAR_IN + GUARD_INSERT_RADIUS_IN;
+}
+
 /**
  * Profile of the finger guard in (out from the hull face, z), CCW. Captured-ply sides: a joggled L whose leg lies in the
  * web recess (between the chine and gunwale faces) and whose strap lies on the gunwale face. Other constructions have a
@@ -421,20 +472,20 @@ export function buildBody(ctx: Ctx): Part[] {
   const openFrame = p.sideConstruction === SIDE_CONSTRUCTION.openFrame;
   const sideCond: EdgeCondition = openFrame ? 'edged' : 'captured';
   const na = L.accessPanel; // kingpin-nut access opening in the nose deck (workstream A, M10, D-34); null without the crossbar
-  const rearTx = L.xRear + L.side; // inner face of the rear transom
-  const frontTx = L.xFront - L.side; // inner face of the front transom
+  const rearTx = L.xRear + L.transom; // inner face of the rear transom
+  const frontTx = L.xFront - L.transom; // inner face of the front transom
 
   // ── Decks (extrusions in plan; capture: rabbets in the chines, dados in the transoms, banding on the step) ──
   {
     const x0 = rearTx - dd, x1 = L.xs, yH = L.hwC + (openFrame ? 0 : dd);
     const front = 2 * yH;
     parts.push(extPart(ctx, {
-      id: 'deck-cabin', name: 'Cabin deck', group: 'body', mat: 'ply', step: STEP.body, grain: 'x', center: [(x0 + x1) / 2, 0, L.deckTop],
+      id: 'deck-cabin', name: 'Cabin deck', group: 'body', mat: 'ply', step: HULL_STEP.deck, grain: 'x', center: [(x0 + x1) / 2, 0, L.deckTop],
       outline: rectCCW(x0, x1, -yH, yH), depth: L.ply, transform: compose([0, 0, L.deckBot]),
       // Outline edges in order: right side, front (the step), left side, rear.
       edges: [sideCond, 'edged', sideCond, 'captured'],
       extraLb: edgeBandLb(ctx, front, L.ply),
-      notes: `Sits in a ${dd}" rabbet in each chine (D-35) and a ${dd}" dado in the rear transom; the front (step) edge is banded with ${p.edgeBandIn}" oak.`,
+      notes: `Sits in a ${dd}" rabbet in each chine (D-35) and a ${dd}" dado in the rear transom; the front (step) edge is banded with ${p.edgeBandIn}" oak. ${DECK_ASSEMBLY_NOTE}`,
     }));
   }
   {
@@ -445,11 +496,11 @@ export function buildBody(ctx: Ctx): Part[] {
     // Edge conditions: the four outline edges, then (when there is a cutout) the four edges of its rim, all banded.
     const rim = holes.length ? 2 * (na!.x1 - na!.x0 + 2 * na!.hw) : 0;
     parts.push(extPart(ctx, {
-      id: 'deck-nose', name: 'Nose deck', group: 'body', mat: 'ply', step: STEP.body, grain: 'x', center: [(x0 + x1) / 2, 0, L.noseTop],
+      id: 'deck-nose', name: 'Nose deck', group: 'body', mat: 'ply', step: HULL_STEP.deck, grain: 'x', center: [(x0 + x1) / 2, 0, L.noseTop],
       outline, ...(holes.length ? { holes } : {}), depth: L.ply, transform: compose([0, 0, L.noseBot]),
       edges: [sideCond, 'captured', sideCond, 'edged', ...(holes.length ? (['edged', 'edged', 'edged', 'edged'] as EdgeCondition[]) : [])],
       extraLb: edgeBandLb(ctx, 2 * yH + rim, L.ply),
-      notes: `Sits in rabbets in the nose chines and a dado in the front transom; the rear (step) edge is banded with ${p.edgeBandIn}" oak.`
+      notes: `Sits in rabbets in the nose chines and a dado in the front transom; the rear (step) edge is banded with ${p.edgeBandIn}" oak. ${DECK_ASSEMBLY_NOTE}`
         + (holes.length ? ' The kingpin-access opening (Layout.accessPanel, M10) is cut through it; the opening rim is banded with oak and the removable panel lies flush in it. Edge conditions: outline edges first, then the four rim edges.' : ' No kingpin-access opening without the kingpin crossbar (Layout.accessPanel is null).'),
     }));
   }
@@ -470,22 +521,22 @@ export function buildBody(ctx: Ctx): Part[] {
       const len = run.x1 - run.x0;
       const rabbetLb = oakLb(ctx, len * dd * L.ply);
       if (p.sideConstruction === SIDE_CONSTRUCTION.solidOak) {
-        const b = box(ctx, { id: `${id}-board`, partNo: `side-${run.zone}-board`, name: `${nm} side board`, group: 'body', mat: 'oak', step: STEP.body,
+        const b = box(ctx, { id: `${id}-board`, partNo: `side-${run.zone}-board`, name: `${nm} side board`, group: 'body', mat: 'oak', step: HULL_STEP.sides,
           ...span([run.x0, run.x1], yr(yc - L.side / 2, yc + L.side / 2), [run.bot, zTop]) });
         b.massLb -= rabbetLb;
-        b.notes = `Deck edge sits in a ${dd}" rabbet on the inside bottom (D-35).`;
+        b.notes = `Deck edge sits in a ${dd}" rabbet on the inside bottom (D-35). ${SIDE_ASSEMBLY_NOTE}`;
         parts.push(b);
       } else if (captured) {
         const grooveLb = oakLb(ctx, len * (pl + slop) * g);
-        const chine = box(ctx, { id: `${id}-chine`, partNo: `side-${run.zone}-chine`, name: `${nm} chine`, group: 'body', mat: 'oak', step: STEP.body,
+        const chine = box(ctx, { id: `${id}-chine`, partNo: `side-${run.zone}-chine`, name: `${nm} chine`, group: 'body', mat: 'oak', step: HULL_STEP.sides,
           ...span([run.x0, run.x1], yr(yc - L.side / 2, yc + L.side / 2), [run.bot, run.bot + L.railBand]) });
         chine.massLb -= grooveLb + rabbetLb;
-        chine.notes = `Top groove ${(pl + slop).toFixed(3)}" × ${g}" holds the web; inside bottom rabbet ${dd}" × ${L.ply.toFixed(3)}" holds the deck (D-35).`;
+        chine.notes = `Top groove ${(pl + slop).toFixed(3)}" × ${g}" holds the web (cut at the measured ply + ~1 mm, D-43), ${((L.side - pl - slop) / 2).toFixed(3)}" oak walls each side; inside bottom rabbet ${dd}" × ${L.ply.toFixed(3)}" holds the deck (D-35); the chine rests on the rail below it and is Domino-tied to it (side-to-frame tie, D-43). Mill from quartersawn stock and cut the groove from the best face with a hold-down. ${SIDE_ASSEMBLY_NOTE}`;
         parts.push(chine);
-        const gun = box(ctx, { id: `${id}-gunwale`, partNo: `side-${run.zone}-gunwale`, name: `${nm} gunwale`, group: 'body', mat: 'oak', step: STEP.body,
+        const gun = box(ctx, { id: `${id}-gunwale`, partNo: `side-${run.zone}-gunwale`, name: `${nm} gunwale`, group: 'body', mat: 'oak', step: HULL_STEP.sides,
           ...span([run.x0, run.x1], yr(yc + s * runFlare - L.side / 2, yc + s * runFlare + L.side / 2), [zTop - L.railBand, zTop]) });
         gun.massLb -= grooveLb;
-        gun.notes = `Underside groove ${(pl + slop).toFixed(3)}" × ${g}" holds the web (D-35).`;
+        gun.notes = `Underside groove ${(pl + slop).toFixed(3)}" × ${g}" holds the web (D-35, D-43). ${SIDE_ASSEMBLY_NOTE}`;
         parts.push(gun);
         // Side web: an extrusion whose lower and upper ends enter the chine and gunwale grooves; its ends enter the transom dados.
         const z0 = run.bot + L.railBand;
@@ -505,22 +556,22 @@ export function buildBody(ctx: Ctx): Part[] {
         const frontCond: EdgeCondition = rear ? 'edged' : 'captured';
         const rearCond: EdgeCondition = rear ? 'captured' : 'edged';
         parts.push(extPart(ctx, {
-          id: `${id}-web`, partNo: `side-${run.zone}-web`, name: `${nm} side panel`, group: 'body', mat: 'ply', step: STEP.body, grain: 'x',
+          id: `${id}-web`, partNo: `side-${run.zone}-web`, name: `${nm} side panel`, group: 'body', mat: 'ply', step: HULL_STEP.sides, grain: 'x',
           center: [(xw0 + xw1) / 2, yc + (s * runFlare) / 2, (z0 + z1) / 2],
           outline: rectCCW(0, wLen, 0, hTot), depth: pl, transform: frameMat([1, 0, 0], u, ez, org),
           // Outline edges in order: bottom, front end, top, rear end.
           edges: ['captured', frontCond, 'captured', rearCond],
           extraLb: edgeBandLb(ctx, hTot, pl),
-          notes: `Captured in the chine and gunwale grooves (${g}" deep) and in a stopped dado in the ${rear ? 'rear' : 'front'} transom; the ${rear ? 'front' : 'rear'} end at the shoulder is banded with ${p.edgeBandIn}" oak (D-22, D-35).`,
+          notes: `Captured in the chine and gunwale grooves (${g}" deep) and in a stopped dado in the ${rear ? 'rear' : 'front'} transom; the ${rear ? 'front' : 'rear'} end at the shoulder is banded with ${p.edgeBandIn}" oak (D-22, D-35). ${SIDE_ASSEMBLY_NOTE} The closed dado is vented: a ${p.ventHoleIn}" relief hole through the transom at its end lets air and epoxy escape as the transom slides on (hydraulic lock).`,
         }));
       } else {
         // Open frame: gunwale on posts every 12".
-        parts.push(box(ctx, { id: `${id}-gunwale`, partNo: `side-${run.zone}-gunwale`, name: `${nm} gunwale`, group: 'body', mat: 'oak', step: STEP.body,
+        parts.push(box(ctx, { id: `${id}-gunwale`, partNo: `side-${run.zone}-gunwale`, name: `${nm} gunwale`, group: 'body', mat: 'oak', step: HULL_STEP.sides,
           ...span([run.x0, run.x1], yr(yc - L.side / 2, yc + L.side / 2), [zTop - L.railBand, zTop]) }));
         const n = Math.max(2, Math.ceil((run.x1 - run.x0) / POST_SPACING_IN) + 1);
         for (let i = 0; i < n; i++) {
           const x = run.x0 + POST_X_IN / 2 + ((run.x1 - run.x0 - POST_X_IN) * i) / (n - 1);
-          parts.push(box(ctx, { id: `${id}-post-${i + 1}`, partNo: `side-${run.zone}-post`, name: `${nm} post ${i + 1}`, group: 'body', mat: 'oak', step: STEP.body,
+          parts.push(box(ctx, { id: `${id}-post-${i + 1}`, partNo: `side-${run.zone}-post`, name: `${nm} post ${i + 1}`, group: 'body', mat: 'oak', step: HULL_STEP.sides,
             ...span([x - POST_X_IN / 2, x + POST_X_IN / 2], yr(yc - L.side / 2, yc + L.side / 2), [run.bot, zTop - L.railBand]), grain: 'z' }));
         }
       }
@@ -532,7 +583,7 @@ export function buildBody(ctx: Ctx): Part[] {
     for (const { s, tag } of SIDES) {
       const ya = s * (L.hwN + L.side), yb = s * L.hwC;
       const sh = box(ctx, {
-        id: `shoulder-${tag}`, partNo: 'shoulder', name: `Shoulder panel ${tag}`, group: 'body', mat: 'ply', edges: 'edged', step: STEP.body,
+        id: `shoulder-${tag}`, partNo: 'shoulder', name: `Shoulder panel ${tag}`, group: 'body', mat: 'ply', edges: 'edged', step: HULL_STEP.shoulder,
         ...span([L.xs - pl, L.xs], [Math.min(ya, yb), Math.max(ya, yb)], [L.deckTop, L.deckTop + H]), grain: 'y',
       });
       const wy = Math.abs(yb - ya);
@@ -543,6 +594,10 @@ export function buildBody(ctx: Ctx): Part[] {
   }
 
   // ── Transoms (full width, wrapping the side ends) with a lift hand-hold each (M9, D-37) ──
+  const tT = L.transom;
+  /** Vent hole (through the transom) at the closed end of a dado: air and epoxy escape as the transom slides on (build review M4, D-43). */
+  const ventR = p.ventHoleIn / 2;
+  const vent = (y: number, z: number): Vec2[] => cw(circleLoop(y, z, ventR, 8));
   {
     const rs = liftSlot(ctx, 'rear');
     const w0 = L.hwC + L.side;
@@ -551,27 +606,69 @@ export function buildBody(ctx: Ctx): Part[] {
     const right: Vec2[] = flare > 1e-6 ? [[w0, zb], [w0, t0], [w0 + flare, t1], [w0 + flare, zt]] : [[w0, zb], [w0, zt]];
     const outline = ccw([...right, ...[...right].reverse().map(([y, z]) => [-y, z] as Vec2)]);
     const dadoLb = oakLb(ctx, 2 * (L.hwC + dd) * L.ply * dd) + 2 * oakLb(ctx, (pl + slop) * (L.web.z1 - L.web.z0 + 2 * g) * dd);
+    // Vent holes: the web-end dados (mid height of the web, at the web's y) and the two ends of the deck dado.
+    const webY = L.hwC + L.side / 2 + flare / 2, webZ = (L.web.z0 + L.web.z1) / 2, deckVentY = L.hwC + dd - 0.15;
+    const ventHoles = [vent(webY, webZ), vent(-webY, webZ), vent(deckVentY, L.deckBot + L.ply / 2), vent(-deckVentY, L.deckBot + L.ply / 2)];
     parts.push(extPart(ctx, {
-      id: 'transom-rear', name: 'Rear transom', group: 'body', mat: 'oak', step: STEP.body, grain: 'x', center: [L.xRear, 0, (zb + zt) / 2],
-      outline, holes: [slotHole(0, (rs.zBot + rs.zTop) / 2, rs.lengthIn, p.liftSlotHeightIn)], depth: L.side,
+      id: 'transom-rear', name: 'Rear transom', group: 'body', mat: 'oak', step: HULL_STEP.transom, grain: 'x', center: [L.xRear, 0, (zb + zt) / 2],
+      outline, holes: [slotHole(0, (rs.zBot + rs.zTop) / 2, rs.lengthIn, p.liftSlotHeightIn), ...ventHoles], depth: tT,
       transform: frameMat([0, 1, 0], [0, 0, 1], [1, 0, 0], [L.xRear, 0, 0]), extraLb: -dadoLb,
-      notes: `Lift hand-hold ${rs.lengthIn}" × ${p.liftSlotHeightIn}" (gloved hand), ${rs.barIn}" of oak above it; routed 1/4" roundovers both faces. Deck dado ${dd}" deep on the front face; stopped dados for the side panels (D-35, D-37).`,
+      notes: `${tT}" oak, glued up from two boards (no board is ${(w0 * 2).toFixed(0)}" wide; keep the glue line clear of the slot). Lift hand-hold ${rs.lengthIn}" × ${p.liftSlotHeightIn}" (gloved hand), ${rs.barIn}" of oak above it; routed 3/8" roundovers both faces. Deck dado ${dd}" deep on the front face; stopped dados for the side panels (D-35, D-37); the closed dado ends are vented with ${p.ventHoleIn}" holes through the transom (4 holes: bung or epoxy-fill them after the glue-up). `
+        + `THE TRANSOM GOES ON LAST (M4): it slides in X onto the deck edge, both web ends, the chine and gunwale tenons and the rail tenons in one glue-up (about 14 joints: use 120-minute slow epoxy, rehearse twice); the corner backers and the handle-socket holes are done on the bench first.`,
     }));
+    // Backers behind the handle sockets and the ratchet bracket (build review S13, D-43): the bolts pull on them from the outside.
+    const hg = handleGeometry(p, L);
+    const bkT = p.blockingThickIn;
+    for (const { s, tag } of SIDES) {
+      const yHi = L.hwC, yLo = Math.max(0.5, hg.yPost - hg.socketY / 2 - 0.5);
+      const bz0 = Math.max(L.deckTop + 0.5, hg.zBot - 0.5), bz1 = hg.zTop;
+      parts.push(box(ctx, {
+        id: `transom-backer-${tag}`, partNo: 'transom-backer', name: `Rear transom backer ${tag}`, group: 'body', mat: 'oak', step: HULL_STEP.transom, grain: 'z',
+        ...span([rearTx, rearTx + bkT], [s * yLo, s * yHi].sort((x, y) => x - y) as [number, number], [bz0, bz1]),
+        notes: `${bkT}" oak backer glued (epoxy, full face) to the INSIDE of the rear transom behind the push-handle socket${tag === 'L' ? ' and the ratchet bracket' : ''}: the socket bolts (1/4" carriage bolts, nuts and fender washers recessed in it) pull on ${tT + bkT}" of oak instead of ${tT}". Glue it on the bench before the transom goes on; a rear storage box starts ${bkT}" farther forward (Layout.rearLane).`,
+      }));
+    }
+  }
+  {
     const fs = liftSlot(ctx, 'front');
     const wN = L.hwN + L.side;
     const zbF = L.noseTop - p.crossmemberDepthIn, ztF = fs.transomTop;
     const dadoF = oakLb(ctx, 2 * (L.hwN + dd) * L.ply * dd) + 2 * oakLb(ctx, (pl + slop) * (L.noseTop + H - L.railBand - (L.noseBot + L.railBand) + 2 * g) * dd);
+    const webY = L.hwN + L.side / 2, webZ = (L.noseBot + L.railBand + L.noseTop + H - L.railBand) / 2, deckVentY = L.hwN + dd - 0.15;
+    const ventHoles = [vent(webY, webZ), vent(-webY, webZ), vent(deckVentY, L.noseBot + L.ply / 2), vent(-deckVentY, L.noseBot + L.ply / 2)];
     parts.push(extPart(ctx, {
-      id: 'transom-front', name: 'Front transom', group: 'body', mat: 'oak', step: STEP.body, grain: 'x', center: [L.xFront, 0, (zbF + ztF) / 2],
-      outline: ccw(rectCCW(-wN, wN, zbF, ztF)), holes: [slotHole(0, (fs.zBot + fs.zTop) / 2, fs.lengthIn, p.liftSlotHeightIn)], depth: L.side,
-      transform: frameMat([0, 1, 0], [0, 0, 1], [1, 0, 0], [L.xFront - L.side, 0, 0]), extraLb: -dadoF,
-      notes: `Lift hand-hold ${fs.lengthIn}" × ${p.liftSlotHeightIn}" (gloved hand), ${fs.barIn}" of oak above it. The prow leg bolts to its front face above the slot (D-9, D-36).`,
+      id: 'transom-front', name: 'Front transom', group: 'body', mat: 'oak', step: HULL_STEP.transom, grain: 'x', center: [L.xFront, 0, (zbF + ztF) / 2],
+      outline: ccw(rectCCW(-wN, wN, zbF, ztF)), holes: [slotHole(0, (fs.zBot + fs.zTop) / 2, fs.lengthIn, p.liftSlotHeightIn), ...ventHoles], depth: tT,
+      transform: frameMat([0, 1, 0], [0, 0, 1], [1, 0, 0], [L.xFront - tT, 0, 0]), extraLb: -dadoF,
+      notes: `${tT}" oak. Lift hand-hold ${fs.lengthIn}" × ${p.liftSlotHeightIn}" (gloved hand), ${fs.barIn}" of oak above it, routed 3/8" roundovers. The prow socket block is glued and screwed to its front face above the slot (D-9, D-36, D-43); the nose run mirrors the rear: the front transom goes on LAST, sliding in −X onto the deck edge, web ends and chine / gunwale / rail tenons (M4); its closed dado ends are vented with ${p.ventHoleIn}" holes.`,
     }));
   }
 
-  // ── Prow: removable bent-lam sweep on the front transom, and its form as a reference part ──
+  // ── Scuppers: 3/8" epoxy-lined holes THROUGH THE CHINE at deck level, with stainless nipples (build review M7, D-43) ──
+  // The deck is a closed tub (two full-width transoms, 7" sides): slush and rain drain out at the rear corners, the cabin shoulder corners
+  // and the nose front corners. Through the chine (not the deck) because the bolster and joists fill the space under the nose deck.
+  for (const { x, zone, deckZ, hw, tagPos } of openFrame ? [] : scupperSites(ctx)) {
+    for (const { s, tag } of SIDES) {
+      parts.push(cylinder(ctx, {
+        id: `scupper-${tagPos}-${tag}`, partNo: 'scupper', name: `Deck scupper ${tagPos} ${tag}`, group: 'body', mat: 'fixed', kind: 'purchased', material: '316 stainless drain nipple', massLb: SCUPPER_MASS_LB,
+        fab: 'buy', step: HULL_STEP.sides, center: [x, s * (hw + (L.side + SCUPPER_STICKOUT_IN) / 2), deckZ + SCUPPER_BELOW_SURFACE_IN + p.scupperDiaIn / 2], axis: 'y', radius: p.scupperDiaIn / 2, length: L.side + SCUPPER_STICKOUT_IN,
+        explode: [0, s, 0], sourcing: { vendor: 'McMaster-Carr (316 stainless barbed / threaded drain nipple, 3/8" tube)' },
+        notes: `${p.scupperDiaIn}" hole through the ${zone} chine at deck level (its lower edge just above the deck surface, epoxy-lined so no cut oak end is bare), a 316 nipple bedded in epoxy.`,
+      }));
+    }
+  }
+
+  // ── Prow: removable bent-lam sweep that drops into an oak socket on the front transom, and its form as a reference part ──
   {
     const pr = prowShape(ctx);
+    const sk = pr.socket;
+    // Socket block: a U in plan (open to the transom) extruded up; the leg bears on its front wall and cheeks, its back is the transom face.
+    const sOutline: Vec2[] = [[0, -sk.halfIn], [sk.depthIn, -sk.halfIn], [sk.depthIn, sk.halfIn], [0, sk.halfIn], [0, sk.slotHalfIn], [sk.slotDepthIn, sk.slotHalfIn], [sk.slotDepthIn, -sk.slotHalfIn], [0, -sk.slotHalfIn]];
+    parts.push(extPart(ctx, {
+      id: 'prow-socket', name: 'Prow socket block', group: 'body', mat: 'oak', step: HULL_STEP.transom, grain: 'z', center: [sk.x0 + sk.depthIn / 2, 0, (sk.z0 + sk.z1) / 2],
+      outline: sOutline, depth: sk.heightIn, transform: frameMat([1, 0, 0], [0, 1, 0], [0, 0, 1], [sk.x0, 0, sk.z0]),
+      notes: `Oak (vertical grain) U-block, ${(2 * sk.halfIn).toFixed(2)}" wide × ${sk.depthIn.toFixed(2)}" deep × ${sk.heightIn.toFixed(1)}" tall, ${p.prowSocketCheekIn}" cheeks. The prow leg (${pr.widthIn}" × ${pr.thicknessIn}") drops in from above and bears on the cheeks and the front wall over its whole ${pr.legLenIn.toFixed(1)}" length; its back bears on the front-transom face. Glued (epoxy, cheek ends) and screwed from inside the hull (4 × 1/4-20 stainless flat-head screws into stainless inserts in the cheeks, nothing protrudes). It rises ${(sk.z1 - (liftSlot(ctx, 'front').transomTop)).toFixed(1)}" above the transom top, beside the lantern and flag clips. Round every outside corner 3/8".`,
+    }));
     const area = pr.widthIn * pr.thicknessIn;
     const vol = area * pr.lengthIn;
     const surf = 2 * pr.lengthIn * (pr.widthIn + pr.thicknessIn) + 2 * area;
@@ -580,11 +677,12 @@ export function buildBody(ctx: Ctx): Part[] {
       id: 'prow', name: 'Prow (bent-lam stem)', group: 'body', kind: 'bentlam', material: 'white oak',
       geometry: { type: 'sweep', path: pr.path, width: pr.widthIn, thickness: pr.thicknessIn, plies: pr.plies },
       transform: compose(pr.origin), body: 'chassis', massLb: woodMassLb(p, vol, surf, p.oakDensityPcf),
-      fab: 'bentlam', step: STEP.body, removable: true, explode: [0.3 / dir, 0, 1 / dir],
+      fab: 'bentlam', step: HULL_STEP.prow, removable: true, explode: [0.3 / dir, 0, 1 / dir],
       stock: { t: pr.thicknessIn, w: pr.widthIn, l: pr.lengthIn },
-      rough: { t: pr.thicknessIn + p.millingAllowanceIn, w: pr.widthIn + p.millingAllowanceIn, l: pr.lengthIn + p.millingAllowanceIn },
+      rough: roughOf(p, { t: pr.thicknessIn, w: pr.widthIn, l: pr.lengthIn }),
       grain: 'z',
-      notes: `${pr.plies} plies of ${p.prowLamThicknessIn}" white oak (${pr.thicknessIn}" total) × ${pr.widthIn}" wide, epoxy-laminated on the prow form; ${pr.legLenIn.toFixed(2)}" straight leg against the front transom face, then a Bezier sweep to ${p.prowHeightIn}" above the gunwale. Tightest radius ${pr.minRadiusIn.toFixed(1)}" (limit ${pr.limitRadiusIn.toFixed(1)}" = ${p.prowMinRadiusFactor}× strip). Removable for transport: two 1/4-20 threaded inserts in the leg take thumb-knob bolts through the transom (D-9, D-36). Strips: ${pr.plies} × ${p.prowLamThicknessIn}" × ${(pr.widthIn + 0.25).toFixed(2)}" × ${(pr.lengthIn + 2).toFixed(0)}" (trim after glue-up).`,
+      notes: `${pr.plies} plies of ${p.prowLamThicknessIn}" white oak (${pr.thicknessIn}" total) × ${pr.widthIn}" wide, epoxy-laminated (slow hardener) on the prow form; ${pr.legLenIn.toFixed(2)}" straight leg that drops into the prow socket block on the front transom, then a Bezier sweep to ${p.prowHeightIn}" above the gunwale. Tightest radius ${pr.minRadiusIn.toFixed(1)}" (limit ${pr.limitRadiusIn.toFixed(1)}" = ${p.prowMinRadiusFactor}× strip). The leg BEARS in the socket; two 5/16-18 stainless inserts in its back and 5/16-18 stainless thumb-knob bolts through the transom (short bolts: knobs stand about 3/4" into the nose) only RETAIN it (D-9, D-36, D-43). Label it "not a handle": a grab is checked at ${p.prowGrabLbf} lbf at the tip (prow-grab). `
+        + `Lay-up: resaw 5/32" strips from quartersawn or rift 4/4 stock and drum-sand to ${p.prowLamThicknessIn}" (yield about 40%): ${pr.plies} strips ${p.prowLamThicknessIn}" × ${(pr.widthIn + 0.25).toFixed(2)}" × ${(pr.lengthIn + 2).toFixed(0)}" plus 2 spares; trim after glue-up. Clamp with cauls and bar clamps every 2-3" or a vacuum bag, NOT ratchet straps (they do not clamp a convex form along its length); tape or wax the form (epoxy bonds to MDF); bend a 3-ply test strip first to measure spring-back.`,
     });
     const fp = prowFormProfile(ctx);
     const depth = pr.widthIn + 2 * FORM_CHEEK_IN;
@@ -595,7 +693,7 @@ export function buildBody(ctx: Ctx): Part[] {
       // local x → model x, local y → model z, local z → −Y; drawn beside the cart, foot at ground + base.
       transform: frameMat([1, 0, 0], [0, 0, 1], [0, -1, 0], [L.xFront - 6, yForm, FORM_BASE_IN]),
       body: 'chassis', massLb: 0, fab: 'cnc', step: STEP.payload, payload: true, explode: [0, 0, 0],
-      notes: `CNC the profile out of 3/4" MDF sheets (${Math.ceil(depth / 0.75)} layers glued for ${depth.toFixed(2)}" depth); the strips wrap the convex edge. Spring-back allowance ${(p.prowSpringbackFrac * 100).toFixed(0)}%: every heading change is overbent by that fraction (${fp.overbendDeg.toFixed(1)}° extra at the tip); tightest form radius ${fp.formMinRadiusIn.toFixed(1)}". Verify with a test strip before cutting the form (spring-back is a placeholder, D-36). Clamp with ratchet straps and 1" cauls; wax the form; 24 h cure. Shown beside the cart; not part of its mass.`,
+      notes: `CNC the profile out of 3/4" MDF sheets (${Math.ceil(depth / 0.75)} layers glued for ${depth.toFixed(2)}" depth); the strips wrap the convex edge. Spring-back allowance ${(p.prowSpringbackFrac * 100).toFixed(0)}%: every heading change is overbent by that fraction (${fp.overbendDeg.toFixed(1)}° extra at the tip); tightest form radius ${fp.formMinRadiusIn.toFixed(1)}". Verify with a test strip before cutting the form (spring-back is a placeholder, D-36). Clamp with cauls and bar clamps every 2-3" or a vacuum bag (not ratchet straps); wax or tape the form; 24 h cure. Shown beside the cart; not part of its mass.`,
     });
   }
 

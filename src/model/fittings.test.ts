@@ -4,8 +4,9 @@ import { defaultParams, validateParams, type Params } from '../params';
 import { buildModel } from './index';
 import { computeLayout } from './layout';
 import { obbOverlap, partOBB, worldAABB } from './bounds';
-import { ESSENTIALS, packEssentials, storageInterior, lashPositions } from './storage';
-import { seatBackSupport } from './seat';
+import { ESSENTIALS, packEssentials, storageInterior, lashPositions, interiorOf, storageGeometry, type StorageGeometry } from './storage';
+import { seatBackSupport, frameJoint } from './seat';
+import { DOMINOS } from './joinery';
 import { signedArea } from './profile';
 import type { Part } from './types';
 
@@ -92,18 +93,61 @@ describe('storage box', () => {
     expect(parts.filter((x) => /^storage-hinge-[LR]$/.test(x.id))).toHaveLength(2);
     expect(parts.filter((x) => /^storage-latch-[LR]$/.test(x.id))).toHaveLength(2);
     expect(parts.filter((x) => /^storage-drain-[LR]$/.test(x.id))).toHaveLength(2);
-    // Gasket sits exactly between the wall top and the lid frame underside.
+    // Gasket sits exactly between the oak coaming on the wall top and the lid frame underside (S4: never on a ply edge).
     const wall = worldAABB(byId.get('storage-side-L')!);
+    const coam = worldAABB(byId.get('storage-coaming-side-L')!);
     const gasket = worldAABB(byId.get('storage-gasket-side-L')!);
     const rim = worldAABB(byId.get('storage-rim-side-L')!);
-    expect(gasket.min[2]).toBeCloseTo(wall.max[2], 6);
+    expect(coam.min[2]).toBeCloseTo(wall.max[2], 6);
+    expect(gasket.min[2]).toBeCloseTo(coam.max[2], 6);
     expect(rim.min[2]).toBeCloseTo(gasket.max[2], 6);
+    expect(coam.max[2] - coam.min[2]).toBeCloseTo(defaults.storageCoamingThickIn, 6);
+    // The gasket's whole footprint is on the coaming.
+    expect(gasket.min[1]).toBeGreaterThanOrEqual(coam.min[1] - 1e-6);
+    expect(gasket.max[1]).toBeLessThanOrEqual(coam.max[1] + 1e-6);
   });
   it('the lid frame captures the ply panel and the walls reach the deck (no exposed ply edge)', () => {
     const lid = byId.get('storage-lid')!;
     expect(lid.edges).toBe('captured');
     expect(lid.joints!.filter((j) => j.type === 'rabbet')).toHaveLength(4);
     expect(worldAABB(byId.get('storage-side-L')!).min[2]).toBeCloseTo(L.storage.zBot, 6);
+  });
+  it('the deck is the box floor (no separate floor panel); a raised box keeps its own floor', () => {
+    expect(byId.has('storage-bottom')).toBe(false);
+    expect(storageGeometry(defaults, L).floorZ).toBeCloseTo(L.deckTop, 9);
+    const raised = { ...defaults, storageLocation: 1 } as Params;
+    const rp = buildModel(raised);
+    expect(rp.some((x) => x.id === 'storage-bottom')).toBe(true);
+    // Standing walls are bonded to the deck with a fillet; the drains go through the deck into the sealed hole.
+    for (const id of ['storage-side-L', 'storage-side-R', 'storage-end-aft', 'storage-end-fore'])
+      expect(byId.get(id)!.joints!.some((j) => j.to === 'deck-cabin' && j.type === 'glue'), id).toBe(true);
+    expect(byId.get('storage-drain-L')!.joints!.some((j) => j.to === 'deck-cabin')).toBe(true);
+  });
+  it('wall corners are tape-and-fold (no spline) and the wall tops are capped with oak coaming (no exposed ply edge)', () => {
+    for (const id of ['storage-side-L', 'storage-end-aft']) {
+      const miters = byId.get(id)!.joints!.filter((j) => /tape-and-fold/.test(j.size ?? ''));
+      expect(miters.length, id).toBe(2);
+      for (const j of byId.get(id)!.joints!) expect(j.size ?? '', id).not.toMatch(/spline/);
+    }
+    for (const id of ['storage-coaming-side-L', 'storage-coaming-side-R', 'storage-coaming-end-aft', 'storage-coaming-end-fore']) {
+      const c = byId.get(id)!;
+      expect(c.material).toBe('white oak');
+      expect(c.grain).toBeDefined();
+    }
+  });
+  it('interior by hand: a 15" × 27" box on its deck, 1/4" ply, 1/2" × 3/8" coaming, 1" × 1/2" lid frame, 1/8" gasket', () => {
+    // lx = 15 − 2·0.25 = 14.5, w = 27 − 0.5 = 26.5, h = 14 − 9 = 5 (floor = deck, no floor panel): base 14.5 × 26.5 × 5 = 1,921.25 in³.
+    // Coaming zone: ledge = 0.5 − 0.25 = 0.25 each side: 14 × 26 × 0.375 = 136.5. Lid zone: lip = 1 − 0.25 = 0.75: 13 × 25 × (0.5 + 0.125) = 203.125.
+    const g: StorageGeometry = { x0: 0, x1: 15, hw: 13.5, zBot: 9, zTop: 15.2, zWallTop: 14.375, zPlyTop: 14, coamT: 0.375, coamW: 0.5, deckFloor: true,
+      pl: 0.25, rimW: 1, rimT: 0.5, gasket: 0.125, floorZ: 9, lidUnderZ: 14.95 };
+    const i = interiorOf(g);
+    expect(i.lx).toBeCloseTo(14.5, 9);
+    expect(i.w).toBeCloseTo(26.5, 9);
+    expect(i.h).toBeCloseTo(5, 9);
+    expect(i.capIn3).toBeCloseTo(136.5 + 203.125, 9);
+    expect(i.totalIn3).toBeCloseTo(1921.25 + 136.5 + 203.125, 9); // 2,260.875
+    // The same box with its own 1/4" floor panel loses 0.25 × 14.5 × 26.5 = 96.0625 in³ of height.
+    expect(interiorOf({ ...g, deckFloor: false, floorZ: 9.25 }).totalIn3).toBeCloseTo(2260.875 - 96.0625, 9);
   });
   it('lash points: at least 6, above the gunwale, 2" or more apart, bolted to the gunwale', () => {
     const lash = parts.filter((x) => x.id.startsWith('lash-'));
@@ -115,8 +159,92 @@ describe('storage box', () => {
     for (const x of lash) {
       expect(worldAABB(x).min[2]).toBeCloseTo(defaults.deckHeightIn + defaults.sideHeightIn, 6);
       expect(x.joints!.some((j) => j.type === 'screw')).toBe(true);
+      expect(x.joints!.find((j) => j.type === 'screw')!.count, x.id).toBe(4); // 4-hole plate (lash-load check needs 4 screws)
     }
     expect(lashPositions(defaults, L, 5).length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('round 2 joinery (build M1): every Domino fits its member', () => {
+  // A Domino's FACE WIDTH (wMm: 17 mm for a 4×20, 22 mm for an 8×50; the L in T×L is the tenon length, i.e. the depth across the joint) must fit inside the
+  // member face with the light-frame edge margin (0.1" each side); the mortise depth L/2 must leave a wall in the host (chooseDomino, orchestrator correction).
+  const lenIn = (size: string) => DOMINOS.find((d) => size.startsWith(d.name))!.wMm / 25.4;
+  it('seat back: 4×20 offset past the 3/8" groove (hand: 20 mm = 0.787" ≤ 1.5 − 0.375 − 2 × 0.1 = 0.925"; 5×30 = 1.181" is not)', () => {
+    for (const id of ['seat-back-stile-L', 'seat-back-rail-top']) {
+      for (const j of byId.get(id)!.joints!.filter((q) => q.type === 'domino')) {
+        expect(j.size, id).toMatch(/^\d+×\d+ \(DF 500\)/);
+        expect(lenIn(j.size!)).toBeLessThanOrEqual(defaults.seatBackFrameWidthIn - defaults.seatBackGrooveDepthIn - 2 * defaults.dominoEdgeLightIn + 1e-9);
+      }
+    }
+    // Face widths: 5×30 = 19 mm = 0.748" and 8×50 = 22 mm = 0.866" both fit the 0.925" left beside the groove (0.1" margins); 12×100 XL (30 mm = 1.18") does not.
+    expect(lenIn('8×50')).toBeCloseTo(0.866, 3);
+    expect(lenIn('12×100')).toBeGreaterThan(1.5 - 0.375 - 0.2);
+  });
+  it('lid frame: 4×20 in the 1" rim (0.787" ≤ 1.0 − 0.2 = 0.8")', () => {
+    for (const id of ['storage-rim-side-L', 'storage-rim-end-aft']) {
+      for (const j of byId.get(id)!.joints!.filter((q) => q.type === 'domino')) {
+        expect(j.size, id).toMatch(/^\d+×\d+ \(DF 500\)/);
+        expect(lenIn(j.size!)).toBeLessThanOrEqual(defaults.storageLidRimWidthIn - 2 * defaults.dominoEdgeLightIn + 1e-9);
+      }
+    }
+  });
+  it('grab-handle posts: 4×20 into the pad across the 1" post; the post-to-bar tenon leaves shoulders on the 1" post', () => {
+    const post = byId.get('seat-grip-post-L1')!;
+    const d = post.joints!.find((j) => j.type === 'domino')!;
+    expect(d.size).toMatch(/^\d+×\d+ \(DF 500\)/);
+    expect(lenIn(d.size!)).toBeLessThanOrEqual(1 - 0.2 + 1e-9);
+    const tenon = post.joints!.find((j) => j.type === 'mortise-tenon')!;
+    expect(tenon.size).toBe('3/8 × 3/4 × 1/2 blind tenon'); // 3/4" wide on a 1" post: 1/8" shoulders (the old through tenon was 1" wide: none)
+  });
+  it('frameJoint falls back to a blind tenon when no Domino fits (a 0.6" member)', () => {
+    expect(frameJoint(defaults, 'x', { stockIn: 0.5, hostIn: 0.6, widthIn: 0.6 }).type).toBe('mortise-tenon');
+    expect(frameJoint(defaults, 'x', { stockIn: 0.75, hostIn: 1.5, widthIn: 1.125 }).type).toBe('domino');
+  });
+});
+
+describe('round 2 fittings: foot-stop cleats, latch blocks, stay, stainless', () => {
+  it('foot stop: no "stopped dado"; corner cleats bonded to each side, ahead of the board so the foot load bears on them', () => {
+    const stop = worldAABB(byId.get('foot-stop')!);
+    for (const tag of ['L', 'R']) {
+      const cleat = byId.get(`foot-stop-cleat-${tag}`)!;
+      const b = worldAABB(cleat);
+      expect(b.min[0]).toBeCloseTo(stop.max[0], 6);
+      expect(b.max[0] - b.min[0]).toBeCloseTo(1.25, 6);
+      expect(cleat.joints!.some((j) => j.type === 'glue')).toBe(true);
+      expect(cleat.joints!.some((j) => j.type === 'domino' && j.to === 'foot-stop' && j.count === 2)).toBe(true);
+    }
+    expect(JSON.stringify(byId.get('foot-stop')!.joints)).not.toMatch(/dado/);
+    // At the validator limit (board against the front transom) the cleats go behind the board instead of into the transom.
+    const lim = { ...defaults, frontOverhangIn: defaults.seatXIn + defaults.riderLegReachIn + defaults.footStopThickIn / 2 + defaults.sideThicknessIn - defaults.wheelbaseIn } as Params;
+    if (!validateParams(lim).some((i) => i.severity === 'error')) {
+      const m = buildModel(lim);
+      const s2 = worldAABB(m.find((x) => x.id === 'foot-stop')!);
+      expect(worldAABB(m.find((x) => x.id === 'foot-stop-cleat-L')!).max[0]).toBeCloseTo(s2.min[0], 6);
+    }
+  });
+  it('hinge screws are #8 × 1" into a 1" backer; each latch has an oak block; a friction stay holds the lid', () => {
+    for (const tag of ['L', 'R']) {
+      const h = byId.get(`storage-hinge-${tag}`)!;
+      expect(h.joints!.find((j) => j.to === `storage-hinge-backer-${tag}`)!.size).toMatch(/#8 × 1 stainless/);
+      const bk = worldAABB(byId.get(`storage-hinge-backer-${tag}`)!);
+      expect(bk.max[0] - bk.min[0]).toBeCloseTo(1, 6);
+      const blk = byId.get(`storage-latch-block-${tag}`)!;
+      expect(blk.material).toBe('white oak');
+      expect(byId.get(`storage-latch-${tag}`)!.joints![0].to).toBe(blk.id);
+    }
+    expect(byId.get('storage-lid-stay')!.sourcing?.vendor).toMatch(/316/);
+  });
+  it('every purchased part in these groups names a source; metal hardware is stainless (no zinc or brass in wet oak, S7)', () => {
+    for (const x of parts.filter((q) => (mine(q) || q.group === 'hardware') && q.kind === 'purchased')) {
+      expect(x.sourcing?.vendor, x.id).toBeTruthy();
+      if (/hinge|latch|catch|drain|D-ring|stay|hardware/i.test(`${x.id} ${x.material}`)) expect(`${x.material} ${x.sourcing!.vendor}`, x.id).toMatch(/316|stainless/);
+      expect(`${x.material} ${x.sourcing!.vendor}`, x.id).not.toMatch(/zinc-plated|brass insert/i);
+    }
+  });
+  it('oak parts carry the 4× rough length allowance (build M8)', () => {
+    for (const x of parts.filter((q) => mine(q) && q.kind === 'lumber')) {
+      expect(x.rough!.l - x.stock!.l, x.id).toBeGreaterThanOrEqual(4 * defaults.millingAllowanceIn - 1e-9);
+    }
   });
 });
 

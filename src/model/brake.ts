@@ -3,7 +3,11 @@
  *
  * Mechanism (tire-tread brake, left lever side drawn; everything else mirrors):
  *   hand lever (oak) ── link (threaded rod + 2 clevises) ── crank on the cross shaft ── shaft (ground steel rod in
- *   two flange bearings) ── keyed hubs ── two steel arms per side ── pin ── oak shoe pad that swivels to wrap the tread.
+ *   two flange bearings) ── pinned shaft collars ── two steel arms per side ── pin ── oak shoe pad faced with a bonded
+ *   brake lining, that swivels to wrap the tread.
+ * No lathe, mill, broach or welder (build review M10): the collars are bought, the shaft joints are drill-press cross-pins
+ * (a heavy-duty roll pin through collar and shaft, drilled together), and the steel plate (ratchet quadrant) is cut by a
+ * waterjet / laser service (`fab: 'outsource'`).
  * The lever pivots on a bolt + bronze sleeve in an oak block bolted to the outside of the left rear rail. The shoes sit on the
  * REAR of each tread just below the axle line (shaft is 1.5" behind the tire), so the arms are short and nearly tangent
  * to the tread: the friction force then passes almost through the shaft and the servo effect stays small (see `brakeGeometry`).
@@ -12,7 +16,7 @@
  * the part builder and the analysis (`analysis/brake.ts`) read it. Pose s = 0 is released, s = 1 is applied (pad on the tread).
  * Everything here is plain TS (no three.js).
  */
-import { BRAKE_TYPE, FRAME_STYLE, type Params } from '../params';
+import { BRAKE_TYPE, FRAME_STYLE, PARAM_DEFS, type Params } from '../params';
 import { STEP, box, cylinder, span, segment, SIDES, woodMassLb, IN3_PER_FT3, type Ctx } from './build-utils';
 import type { Layout } from './layout';
 import { compose, multiply, rotationX, translation } from './mat4';
@@ -30,13 +34,26 @@ const CLEVIS_CHEEK_IN = 0.15;
 const CLEVIS_Z_IN = 0.5;
 const CLEVIS_MASS_LB = 0.09;
 /** Clearance between the lever and the hull top; washer / running gaps between stacked parts. */
-const LEVER_HULL_GAP_IN = 0.5;
+const LEVER_HULL_GAP_IN = 0.64;
 const STACK_GAP_IN = 0.05;
-/** The ratchet plate stands off the gunwale this far (clears a side reflector, 1/4" thick); the lever starts 1/2" out. */
-const QUAD_HULL_GAP_IN = 0.27;
-/** Hub OD = shaft + this; hub length = this × bar thickness. */
+/**
+ * The ratchet plate's outer face stands this far inboard of the lever: too small for a fingertip (< 3/16") and clear of a rub. With the
+ * lever LEVER_HULL_GAP_IN (0.64") off the hull and a 1/4" plate that puts the plate 0.28" off the gunwale (clears a 1/4" side reflector). The
+ * lever-to-hull gap (0.64") is outside the 3/16"–1/2" finger-entrapment band (eng review, pinch gaps).
+ */
+const PLATE_LEVER_GAP_IN = 0.11;
+/** Shaft-collar OD = shaft + this; collar width = this × bar thickness (a bought 3/4"-bore collar, ≈ 1-1/4" OD × 3/8" wide). */
 const HUB_WALL_IN = 0.5;
 export const HUB_LEN_BARS = 1.5;
+/** Ligament left on each side of the shaft bore in the crank boss (the crank bar is widened to shaft + 2 ligaments). */
+export const CRANK_LIGAMENT_IN = 0.375;
+/** Brake lining density (woven / molded sheet, about 120 lb/ft³) and shaft end cap dimensions: placeholders for purchased items. */
+const LINING_LB_PER_IN3 = 0.07;
+const END_CAP_MASS_LB = 0.02;
+const END_CAP_LEN_IN = 0.5;
+const STEEL_FINISH = 'Finish: hot-dip galvanize or zinc-rich primer + two coats of paint (wet tannin-rich oak, BRIEF §5.2); stainless fasteners; epoxy barrier coat where it touches oak.';
+/** Rough oak length: finished + 4 × the milling allowance (crosscut and end-trim; build review M8). Metal stock is the section × the cut length (build-utils, M9). */
+const roughLen = (p: Params, l: number) => l + 4 * p.millingAllowanceIn;
 /** Pad and its arms sit this far (fraction of the bar thickness) inside the tread edge. */
 const PAD_INSET_BARS = 0.6;
 const RETURN_SPRING_MASS_LB = 0.12;
@@ -90,6 +107,10 @@ export interface BrakeGeom {
   /** Shaft rotation from released to applied (rad, counter-clockwise positive) and the stroke it produces at the pad. */
   thetaS: number;
   // Lever and link
+  /** Lever tail length used (pivot → link pin): the param, or solved from the ratio target (`brakeLeverTailAuto`). */
+  tailIn: number;
+  /** Crank length used (shaft → link pin): the param, or lengthened by the solve when even the shortest tail cannot reach the ratio (small wheels). */
+  crankIn: number;
   Q: V2;
   tilt: number;
   /** Unit vector along the lever, pivot → grip (released). */
@@ -175,7 +196,60 @@ const solveLever = (T0: V2, B1: V2, Q: V2, linkLen: number): number | null => {
 /** Shaft centre (x, z): behind the tread, at axle height (D-13). */
 export const shaftCenter = (p: Params, r: number): V2 => [-(r + p.brakeShaftBehindTireIn), r];
 
+const tailCache = new Map<string, { tail: number; crank: number }>();
+/**
+ * Lever tail (and, only if that is not enough, crank length) that makes the critical-direction ratio equal `target × headroom` (eng S-3:
+ * the ratio must not fall out of a few fixed numbers). Scans the tail from the longest down, takes the first (longest) tail that delivers the
+ * ratio and refines by bisection. If even the shortest tail falls short (small wheels), the tail stays at its minimum and the crank is
+ * lengthened the same way. If nothing reaches it the shortest tail and longest crank are returned so `brake-ratio` fails honestly.
+ */
+export function solveLeverTail(p: Params, L: Layout): { tail: number; crank: number } {
+  const tLo = PARAM_DEFS.brakeLeverTailIn.min, tHi = PARAM_DEFS.brakeLeverTailIn.max;
+  const cLo = p.brakeCrankIn, cHi = Math.max(p.brakeCrankIn, PARAM_DEFS.brakeCrankIn.max);
+  const key = JSON.stringify([L.r, p.rearHandleHeightIn, Object.entries(p).filter(([k]) => /^brake/.test(k) && k !== 'brakeLeverTailIn')]);
+  const hit = tailCache.get(key);
+  if (hit) return hit;
+  const goal = p.brakeLeverRatio * p.brakeRatioHeadroom;
+  const ratioAt = (t: number, c: number) => { const g = geometryWithTail(p, L, t, c); return g.ok ? g.ratioCrit : -1; };
+  const STEP_IN = 0.05;
+  /** Largest x in [lo, hi] with f(x) ≥ goal, scanning down from hi and refining by bisection; null if none. */
+  const largest = (lo: number, hi: number, f: (x: number) => number): number | null => {
+    for (let x = hi; x >= lo - 1e-9; x -= STEP_IN) {
+      if (f(x) >= goal) {
+        if (x >= hi - 1e-9) return hi;
+        let a = x, b = x + STEP_IN; // a delivers the goal, b does not
+        for (let k = 0; k < 30; k++) { const m = (a + b) / 2; if (f(m) >= goal) a = m; else b = m; }
+        return a;
+      }
+    }
+    return null;
+  };
+  let out = { tail: tLo, crank: cHi };
+  const t = largest(tLo, tHi, (x) => ratioAt(x, cLo));
+  if (t !== null) out = { tail: t, crank: cLo };
+  else {
+    // shortest tail, longer crank: ratio rises with the crank length, so take the SMALLEST crank that delivers it
+    for (let c = cLo; c <= cHi + 1e-9; c += STEP_IN) {
+      if (ratioAt(tLo, c) >= goal) {
+        let a = Math.max(cLo, c - STEP_IN), b = c; // b delivers it, a (or the previous step) does not
+        for (let k = 0; k < 30; k++) { const m = (a + b) / 2; if (ratioAt(tLo, m) >= goal) b = m; else a = m; }
+        out = { tail: tLo, crank: b };
+        break;
+      }
+    }
+  }
+  if (tailCache.size > 64) tailCache.clear();
+  tailCache.set(key, out);
+  return out;
+}
+
 export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
+  if (p.brakeType === BRAKE_TYPE.woodDrum || !p.brakeLeverTailAuto) return geometryWithTail(p, L, p.brakeLeverTailIn, p.brakeCrankIn);
+  const { tail, crank } = solveLeverTail(p, L);
+  return geometryWithTail(p, L, tail, crank);
+}
+
+function geometryWithTail(p: Params, L: Layout, tailIn: number, crankIn: number): BrakeGeom {
   const r = L.r;
   const O: V2 = [0, r];
   const S = shaftCenter(p, r);
@@ -203,9 +277,9 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
   const gripZ = p.rearHandleHeightIn - p.brakeLeverGripBelowHandleIn;
   const lever = Math.max(1, (gripZ - Q[1]) / Math.cos(tilt));
   const G = add(Q, mul(e, lever));
-  const T0 = sub(Q, mul(e, p.brakeLeverTailIn));
+  const T0 = sub(Q, mul(e, tailIn));
   const phi = p.brakeCrankAngleDeg * RAD;
-  const B0 = add(S, mul([Math.cos(phi), Math.sin(phi)], p.brakeCrankIn));
+  const B0 = add(S, mul([Math.cos(phi), Math.sin(phi)], crankIn));
   const linkLen = norm(sub(B0, T0));
   const B1 = rot2(B0, S, thetaS);
 
@@ -226,10 +300,16 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
   const critical: 'forward' | 'reverse' = ratioFwd < ratioRev ? 'forward' : 'reverse';
   const ratioCrit = Math.min(ratioFwd, ratioRev);
 
+  // Lean the lever outward so it stays clear of a flared gunwale (parallel to the side web).
+  const kneeZ = L.deckBot;
+  const lean = L.flare > 0 ? Math.atan2(L.flare, Math.max(0.1, L.web.z1 - kneeZ)) : 0;
+  // The ratchet plate sits PLATE_LEVER_GAP_IN inboard of the lever at the plate's lowest point (where a leaning lever is closest to the hull).
+  const rTooth = ratchetRadius(p, L, Q[1], tilt);
+  const plateZLow = Q[1] + (rTooth - p.brakeBarWidthIn - 0.25) * Math.min(Math.sin(Math.atan2(e[1], e[0])), Math.sin(Math.atan2(e[1], e[0]) + p.brakeRatchetSpanDeg * RAD));
+
   // ── y positions ──
-  const ladder = p.frameStyle === FRAME_STYLE.ladder;
   const hullTop = L.hwC + L.side + L.flare;
-  const rail = ladder ? L.hwC : L.hwC + L.side;
+  const rail = L.hwC + L.side; // ladder rails now run flush under the chine (D-43, F2), so both frames have their outer face here
   const barT = p.brakeBarThickIn;
   const leverY0 = Math.max(rail + 0.5, L.hwC + L.side + LEVER_HULL_GAP_IN);
   const leverW = p.brakeLeverWidthIn;
@@ -253,18 +333,15 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
     pad: [padY0, padY1],
     armIn, armOut, hubIn, hubOut,
     shaftHalf: hubOut[1],
-    quad: [hullTop + QUAD_HULL_GAP_IN, hullTop + QUAD_HULL_GAP_IN + p.brakeRatchetPlateThickIn],
+    quad: ((): [number, number] => { const face = leverY0 + Math.tan(lean) * Math.max(0, plateZLow - kneeZ) - PLATE_LEVER_GAP_IN; return [face - p.brakeRatchetPlateThickIn, face]; })(),
     hullTop,
   };
-  // Lean the lever outward so it stays clear of a flared gunwale (parallel to the side web).
-  const kneeZ = L.deckBot;
-  const lean = L.flare > 0 ? Math.atan2(L.flare, Math.max(0.1, L.web.z1 - kneeZ)) : 0;
 
   const why = th === null ? 'the link does not close: no lever angle reaches the applied crank position' : '';
   const ok = th !== null && !selfLocking && ratioCrit > 0;
   return {
     ok, why, r, O, S, beta, n, tFwd, E, C, Erel, arm, armLen: norm(arm), Kn, Kt, kFwd, kRev, selfLocking, thetaS,
-    Q, tilt, e, G, gripZ, T0, T1, B0, B1, linkLen, thetaL, dQ, dS, lGrip, linkTension,
+    tailIn, crankIn, Q, tilt, e, G, gripZ, T0, T1, B0, B1, linkLen, thetaL, dQ, dS, lGrip, linkTension,
     ratioFwd, ratioRev, ratioCrit, critical, gripTravelIn: G[0] - G1[0], lean, kneeZ, y,
   };
 }
@@ -293,11 +370,15 @@ export interface RatchetGeom {
   pawlArm: number;
 }
 
-export function ratchetGeometry(p: Params, g: BrakeGeom, L?: Layout): RatchetGeom {
-  // Keep the pawl pivot (tooth radius + 0.9 bar widths) and its bar below the gunwale top, where the lash points sit.
+/** Tooth radius: the param, capped so the pawl pivot (tooth radius + 0.9 bar widths) and its bar stay below the gunwale top, where the lash points sit. */
+export function ratchetRadius(p: Params, L: Layout | undefined, pivotZ: number, tilt: number): number {
   const gTop = L ? L.deckTop + L.sideH : Infinity;
-  const rMax = (gTop - 0.1 - p.brakeBarWidthIn * 0.4 - g.Q[1]) / Math.cos(g.tilt) - p.brakeBarWidthIn * 0.9;
-  const rTooth = Math.max(3, Math.min(p.brakeRatchetRadiusIn, rMax));
+  const rMax = (gTop - 0.1 - p.brakeBarWidthIn * 0.4 - pivotZ) / Math.cos(tilt) - p.brakeBarWidthIn * 0.9;
+  return Math.max(3, Math.min(p.brakeRatchetRadiusIn, rMax));
+}
+
+export function ratchetGeometry(p: Params, g: BrakeGeom, L?: Layout): RatchetGeom {
+  const rTooth = ratchetRadius(p, L, g.Q[1], g.tilt);
   const a0 = Math.atan2(g.e[1], g.e[0]);
   const span = p.brakeRatchetSpanDeg * RAD;
   const pitchAngle = p.brakeRatchetPitchIn / rTooth;
@@ -323,8 +404,9 @@ function basis(ex: Vec3, ey: Vec3, o: Vec3): Mat4 {
 
 /** Part from a profile in the model x–z plane, extruded across y from `yHi` down to `yHi − depth` (profile origin at (ox, oz)). */
 function planarExtrusion(ctx: Ctx, s: {
-  id: string; partNo?: string; name: string; mat: 'oak' | 'steel'; outline: Vec2[]; origin: V2; yHi: number; depth: number;
+  id: string; partNo?: string; name: string; mat: 'oak' | 'steel' | 'fixed'; outline: Vec2[]; origin: V2; yHi: number; depth: number;
   grain?: 'x' | 'y' | 'z'; fab?: Part['fab']; joints?: Joint[]; notes?: string; explode?: Vec3; cg?: Vec3;
+  kind?: Part['kind']; massLb?: number; material?: string; sourcing?: Part['sourcing'];
 }): Part {
   const { p } = ctx;
   let a = 0, per = 0;
@@ -335,14 +417,14 @@ function planarExtrusion(ctx: Ctx, s: {
   }
   const area = Math.abs(a) / 2;
   const vol = area * s.depth;
-  const massLb = s.mat === 'steel'
+  const massLb = s.massLb !== undefined ? s.massLb : s.mat === 'steel'
     ? (vol / IN3_PER_FT3) * p.steelDensityPcf
     : woodMassLb(p, vol, 2 * area + per * s.depth, p.oakDensityPcf);
   const xs = s.outline.map((q) => q[0]), zs = s.outline.map((q) => q[1]);
   const dims = [Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs), s.depth].sort((q, w) => q - w);
   const part: Part = {
-    id: s.id, name: s.name, group: 'brake', kind: s.mat === 'steel' ? 'metal' : 'lumber',
-    material: s.mat === 'steel' ? 'steel' : 'white oak',
+    id: s.id, name: s.name, group: 'brake', kind: s.kind ?? (s.mat === 'steel' ? 'metal' : 'lumber'),
+    material: s.material ?? (s.mat === 'steel' ? 'A36 steel plate' : 'white oak'),
     geometry: { type: 'extrusion', outline: s.outline, depth: s.depth },
     // local (x, y, z) → model (x, yHi − z, oz + y): Rx(+90°) then translate.
     transform: multiply(translation(s.origin[0], s.yHi, s.origin[1]), rotationX(Math.PI / 2)),
@@ -352,9 +434,14 @@ function planarExtrusion(ctx: Ctx, s: {
   if (s.partNo) part.partNo = s.partNo;
   if (s.mat === 'oak') {
     part.stock = { t: dims[0], w: dims[1], l: dims[2] };
-    part.rough = { t: dims[0] + p.millingAllowanceIn, w: dims[1] + p.millingAllowanceIn, l: dims[2] + p.millingAllowanceIn };
+    part.rough = { t: dims[0] + p.millingAllowanceIn, w: dims[1] + p.millingAllowanceIn, l: roughLen(p, dims[2]) };
     if (s.grain) part.grain = s.grain;
+  } else if (s.mat === 'steel') {
+    // Plate blank: the bounding rectangle of the outline (the cutting service nests it; the width/length are the blank).
+    const spans = [Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs)].sort((q, w) => q - w);
+    part.stock = { t: s.depth, w: spans[0], l: spans[1] };
   }
+  if (s.sourcing) part.sourcing = s.sourcing;
   if (s.joints) part.joints = s.joints;
   if (s.notes) part.notes = s.notes;
   if (s.cg) part.cgIn = s.cg;
@@ -377,11 +464,15 @@ function flatBar(ctx: Ctx, s: { id: string; partNo?: string; name: string; a: V2
 }
 
 const cylY = (ctx: Ctx, s: { id: string; partNo?: string; name: string; c: V2; y0: number; y1: number; radius: number; mat?: 'steel' | 'fixed'; massLb?: number; material?: string;
-  kind?: Part['kind']; fab?: Part['fab']; joints?: Joint[]; notes?: string; explode?: Vec3; sourcing?: Part['sourcing'] }): Part =>
+  kind?: Part['kind']; fab?: Part['fab']; joints?: Joint[]; notes?: string; explode?: Vec3; sourcing?: Part['sourcing']; stock?: Part['stock'] }): Part =>
   cylinder(ctx, {
     id: s.id, partNo: s.partNo, name: s.name, group: 'brake', mat: s.mat ?? 'steel', massLb: s.massLb, material: s.material, kind: s.kind, fab: s.fab, step: STEP.brake,
-    center: [s.c[0], (s.y0 + s.y1) / 2, s.c[1]], axis: 'y', radius: s.radius, length: Math.abs(s.y1 - s.y0), joints: s.joints, notes: s.notes, explode: s.explode, sourcing: s.sourcing,
+    center: [s.c[0], (s.y0 + s.y1) / 2, s.c[1]], axis: 'y', radius: s.radius, length: Math.abs(s.y1 - s.y0), joints: s.joints, notes: s.notes, explode: s.explode, sourcing: s.sourcing, stock: s.stock,
   });
+
+/** Bought bar / rod stock (A36 flat bar, ground rod): the section × the cut length (build review M9). */
+const bar = (_p: Params, t: number, w: number, l: number) => ({ t, w, l });
+const YARD = (what: string): Part['sourcing'] => ({ vendor: `Local steel yard or Metals Depot / McMaster-Carr (${what})` });
 
 /**
  * Brake parts at pose `s` (0 released, 1 applied; the model default is 0). `sweep` in analysis/brake.ts calls this with
@@ -407,14 +498,16 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
   // ── Cross shaft ──
   add1(fixed(cylinder(ctx, {
     id: 'brake-shaft', name: 'Brake cross shaft', group: 'brake', mat: 'steel', step: STEP.brake, center: [g.S[0], 0, g.S[1]], axis: 'y',
-    radius: D / 2, length: 2 * Y.shaftHalf, material: 'ground 1045 steel rod',
-    notes: 'Turns ±~11° in two flange bearings; the arms, cranks and hubs are keyed to it (3/16" square keys). Shaft ground like the axle (D-38).',
+    radius: D / 2, length: 2 * Y.shaftHalf, material: 'ground 4140 pre-hard steel rod (zinc-plated)',
+    stock: bar(p, D, D, 2 * Y.shaftHalf),
+    sourcing: { vendor: `McMaster-Carr (${D}" precision ground 4140 pre-hardened alloy rod, 36" lengths, cut on the bandsaw with a metal blade; zinc-plated or greased)` },
+    notes: `Turns ±~11° in two flange bearings. Each collar and the crank are cross-drilled with the shaft on the drill press (clamp the assembly in a V-block, drill ${p.brakeRollPinDiameterIn}" through both) and a heavy-duty roll pin is driven in: no keyseat, lathe or mill (build review M10). Shaft ground rod (D-38). ${STEEL_FINISH} Both ends carry a rubber / nylon dome cap (shin height).`,
     joints: [
-      { type: 'pin', to: 'brake-hub-L-in', count: 1, size: '3/16" square key', note: 'keyed hub, set screw on the key' },
-      { type: 'pin', to: 'brake-hub-L-out', count: 1, size: '3/16" square key' },
-      { type: 'pin', to: 'brake-hub-R-in', count: 1, size: '3/16" square key' },
-      { type: 'pin', to: 'brake-hub-R-out', count: 1, size: '3/16" square key' },
-      { type: 'pin', to: 'brake-crank', count: 2, size: '3/16" square keys at 180°' },
+      { type: 'pin', to: 'brake-hub-L-in', count: 1, size: `${p.brakeRollPinDiameterIn}" heavy-duty roll pin`, note: 'cross-drilled through the collar and shaft together' },
+      { type: 'pin', to: 'brake-hub-L-out', count: 1, size: `${p.brakeRollPinDiameterIn}" heavy-duty roll pin` },
+      { type: 'pin', to: 'brake-hub-R-in', count: 1, size: `${p.brakeRollPinDiameterIn}" heavy-duty roll pin` },
+      { type: 'pin', to: 'brake-hub-R-out', count: 1, size: `${p.brakeRollPinDiameterIn}" heavy-duty roll pin` },
+      { type: 'pin', to: 'brake-crank', count: 2, size: `${p.brakeRollPinDiameterIn}" heavy-duty roll pins at 90°`, note: 'through the crank boss and shaft' },
     ],
     explode: [0, 0, -1],
   })));
@@ -453,20 +546,26 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
       return flatBar(ctx, {
         id: `brake-arm-${tag}-${which}`, partNo: 'brake-arm', name: `Shoe arm ${tag} ${which === 'in' ? 'inboard' : 'outboard'}`, a: g.S, b: pose.E,
         y: (y0 + y1) / 2, thickY: barT, widthPlane: barW, mat: 'steel', fab: 'drill-tap', extendB: p.brakeShoePinDiameterIn / 2 + 0.1,
+        sourcing: YARD(`A36 flat bar ${barT}" × ${barW}", bandsaw and drill press`),
         joints: [
-          { type: 'bolt', to: `brake-hub-${tag}-${which}`, count: 2, size: '1/4-20 × 1 socket-head, tapped into the hub flange' },
+          { type: 'bolt', to: `brake-hub-${tag}-${which}`, count: 2, size: '1/4-20 × 1 stainless socket-head screws, into the face-tapped collar' },
           { type: 'pin', to: `brake-shoe-pin-${tag}`, count: 1, size: `${p.brakeShoePinDiameterIn}" dia pin, drilled to a close slip fit` },
         ],
-        notes: 'Cut from A36 flat bar; the pin hole is reamed. The arm is nearly tangent to the tread so the shoe friction stays close to neutral (D-38).',
+        notes: `Cut from A36 flat bar on the bandsaw; the pin hole is reamed. The arm is nearly tangent to the tread so the shoe friction stays close to neutral (D-38). ${STEEL_FINISH}`,
         explode: [0.2, sgn, 0.2],
       });
     };
     const hub = (which: 'in' | 'out') => {
       const [a0, a1] = which === 'in' ? Y.hubIn : Y.hubOut;
       const [y0, y1] = yRange(sgn, a0, a1);
+      const od = D + HUB_WALL_IN, len = Math.abs(y1 - y0);
       return cylY(ctx, {
-        id: `brake-hub-${tag}-${which}`, partNo: 'brake-hub', name: `Shoe arm hub ${tag} ${which === 'in' ? 'inboard' : 'outboard'}`, c: g.S, y0, y1, radius: (D + HUB_WALL_IN) / 2,
-        fab: 'drill-tap', explode: [0, sgn, -0.5], notes: 'Round steel bar bored to the shaft, keyseat broached; the arm bolts to the shaft-side face.',
+        id: `brake-hub-${tag}-${which}`, partNo: 'brake-hub', name: `Shoe arm shaft collar ${tag} ${which === 'in' ? 'inboard' : 'outboard'}`, c: g.S, y0, y1, radius: od / 2,
+        mat: 'fixed', kind: 'purchased', material: 'steel shaft collar, face-tapped (flange-mount)', massLb: (Math.PI / 4) * (od ** 2 - D ** 2) * len / IN3_PER_FT3 * p.steelDensityPcf,
+        fab: 'buy', explode: [0, sgn, -0.5],
+        sourcing: { vendor: `McMaster-Carr or Ruland (${D}" bore flange-mount / face-tapped clamp-on shaft collar, about ${f2(od)}" OD × ${f2(len)}" wide, stainless or zinc-plated)` },
+        joints: [{ type: 'pin', to: 'brake-shaft', count: 1, size: `${p.brakeRollPinDiameterIn}" heavy-duty roll pin`, note: 'cross-drilled with the shaft (drill press); the collar clamp or set screw only locates it' }],
+        notes: 'Bought collar, no lathe or broach: the arm bolts to the tapped face and a roll pin through collar and shaft carries the torque (build review M10).',
       });
     };
     add1(arm('in')); add1(arm('out')); add1(hub('in')); add1(hub('out'));
@@ -474,33 +573,64 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
     const [pi0, pi1] = yRange(sgn, Y.armIn[0], Y.armOut[1]);
     add1(cylY(ctx, {
       id: `brake-shoe-pin-${tag}`, partNo: 'brake-shoe-pin', name: `Shoe pivot pin ${tag}`, c: pose.E, y0: pi0, y1: pi1, radius: p.brakeShoePinDiameterIn / 2,
-      fab: 'drill-tap', explode: [0.2, sgn, 0.2], notes: 'Retained by two e-clips / cotters. Lets the pad swivel so it follows the tread.',
+      fab: 'drill-tap', explode: [0.2, sgn, 0.2], material: '1/2" 316 stainless rod', sourcing: { vendor: 'McMaster-Carr (1/2" 316 stainless rod, cut on the bandsaw; two stainless cotter pins or hairpin clips)' },
+      stock: bar(p, p.brakeShoePinDiameterIn, p.brakeShoePinDiameterIn, Math.abs(pi1 - pi0)),
+      notes: 'Retained by two stainless cotter / hairpin clips with their ends turned in and capped. Lets the pad swivel so it follows the tread. Stainless: it sits in the mud and spray of the rear tire (build review S10).',
     }));
     // Pad: oak arc, concentric with the tread, moved with the arm (released pose is offset outward by the stroke).
     const delta = p.brakeShoeLengthIn / (2 * r);
     const N = 8;
     const outline: Vec2[] = [];
+    const lt = p.brakeLiningThickIn;
+    // The oak pad is recessed by the lining thickness: the lining (below) fills r … r + lt, so the pad's total radial thickness stays brakeShoeThickIn.
     for (let i = 0; i <= N; i++) { const a = g.beta - delta + (2 * delta * i) / N; outline.push([-(r + p.brakeShoeThickIn) * Math.cos(a), -(r + p.brakeShoeThickIn) * Math.sin(a)]); }
-    for (let i = N; i >= 0; i--) { const a = g.beta - delta + (2 * delta * i) / N; outline.push([-r * Math.cos(a), -r * Math.sin(a)]); }
+    for (let i = N; i >= 0; i--) { const a = g.beta - delta + (2 * delta * i) / N; outline.push([-(r + lt) * Math.cos(a), -(r + lt) * Math.sin(a)]); }
+    const liningOutline: Vec2[] = [];
+    for (let i = 0; i <= N; i++) { const a = g.beta - delta + (2 * delta * i) / N; liningOutline.push([-(r + lt) * Math.cos(a), -(r + lt) * Math.sin(a)]); }
+    for (let i = N; i >= 0; i--) { const a = g.beta - delta + (2 * delta * i) / N; liningOutline.push([-r * Math.cos(a), -r * Math.sin(a)]); }
     const shift = sub(pose.E, g.E);
     const [py0, py1] = yRange(sgn, Y.pad[0], Y.pad[1]);
-    const padCg = add([g.O[0] - (r + p.brakeShoeThickIn / 2) * Math.cos(g.beta), g.O[1] - (r + p.brakeShoeThickIn / 2) * Math.sin(g.beta)], shift);
+    const atRadius = (rad: number): V2 => add([g.O[0] - rad * Math.cos(g.beta), g.O[1] - rad * Math.sin(g.beta)], shift);
+    const padCg = atRadius(r + p.brakeShoeThickIn / 2);
+    const liningCg = atRadius(r + lt / 2);
     const pad = planarExtrusion(ctx, {
       id: `brake-shoe-${tag}`, partNo: 'brake-shoe', name: `Brake shoe ${tag}`, mat: 'oak', outline, origin: [g.O[0] + shift[0], g.O[1] + shift[1]], yHi: Math.max(py0, py1), depth: Y.pad[1] - Y.pad[0],
       grain: 'z', explode: [0.2, sgn, 0.2], cg: [padCg[0], (py0 + py1) / 2, padCg[1]],
       joints: [{ type: 'pin', to: `brake-shoe-pin-${tag}`, count: 1, size: `${p.brakeShoePinDiameterIn}" pivot bore (steel bushing)`, note: 'pad swivels on the pin' }],
-      notes: 'Oak arc cut on the bandsaw to the tire radius (13" tire); the tread face can take a 1/8" leather or UHMW wear face. The pivot bore sits at mid-thickness so the contact resultant (normal + friction) falls inside the pad (checked).',
+      notes: `Oak arc cut on the bandsaw to the tire radius (13" tire), recessed ${f2(lt)}" for the bonded lining. The pivot bore sits at mid-thickness so the contact resultant (normal + friction) falls inside the pad (checked).`,
     });
     add1(pad);
+    // Brake lining (eng S-3 / build S10): bonded to the oak so the wet μ is about 0.45, not the 0.25 of bare oak on wet rubber.
+    const liningArea = (() => { let a = 0; for (let i = 0; i < liningOutline.length; i++) { const [x1, y1] = liningOutline[i], [x2, y2] = liningOutline[(i + 1) % liningOutline.length]; a += x1 * y2 - x2 * y1; } return Math.abs(a) / 2; })();
+    add1(planarExtrusion(ctx, {
+      id: `brake-shoe-lining-${tag}`, partNo: 'brake-shoe-lining', name: `Brake lining ${tag}`, mat: 'fixed', kind: 'purchased', material: 'woven / molded brake lining sheet', outline: liningOutline,
+      origin: [g.O[0] + shift[0], g.O[1] + shift[1]], yHi: Math.max(py0, py1), depth: Y.pad[1] - Y.pad[0], massLb: liningArea * (Y.pad[1] - Y.pad[0]) * LINING_LB_PER_IN3, fab: 'bandsaw',
+      explode: [0.2, sgn, 0.2], cg: [liningCg[0], (py0 + py1) / 2, liningCg[1]],
+      sourcing: { vendor: `McMaster-Carr (woven / molded brake lining sheet, ${f2(lt)}" thick, wet-rated, asbestos-free)` },
+      joints: [{ type: 'glue', to: `brake-shoe-${tag}`, count: 1, size: 'contact / epoxy adhesive + 2 stainless pan-head screws, countersunk', note: 'cut on the bandsaw to the arc, bonded to the oak pad face' }],
+      notes: `${f2(lt)}" lining, ${f2(p.brakeShoeLengthIn)}" long × ${f2(Y.pad[1] - Y.pad[0])}" wide, bonded to the pad face with contact or epoxy adhesive and held by two countersunk stainless screws (so a peeled bond cannot drop it onto the tire). Design μ ${f2(p.brakePadMu)} wet; ${f2(p.brakePadMuFouled)} mud-fouled (pass/fail). Test a lining sample on a wet tire first.`,
+    }));
   }
 
   // ── Return spring (single torsion spring on the shaft, right side) ──
   {
     const [y0, y1] = yRange(-1, Y.block[1] + 0.1, Y.block[1] + 0.1 + 0.6);
     add1(fixed(cylY(ctx, {
-      id: 'brake-return-spring', name: 'Brake return spring', c: g.S, y0, y1, radius: (D + 0.6) / 2, mat: 'fixed', kind: 'purchased', material: 'torsion spring',
-      massLb: RETURN_SPRING_MASS_LB, fab: 'buy', explode: [0, -1, -0.5], sourcing: { vendor: 'McMaster-Carr (music-wire torsion spring, ¾" ID)' },
+      id: 'brake-return-spring', name: 'Brake return spring', c: g.S, y0, y1, radius: (D + 0.6) / 2, mat: 'fixed', kind: 'purchased', material: 'stainless torsion spring',
+      massLb: RETURN_SPRING_MASS_LB, fab: 'buy', explode: [0, -1, -0.5], sourcing: { vendor: 'McMaster-Carr (302 stainless torsion spring, ¾" ID)' },
       notes: 'Coaxial with the shaft: one leg hooks the bearing flange, the other the shaft collar. Backs the shoes off the tread and returns the lever when the pawl is released.',
+    })));
+  }
+
+  // ── Shaft end caps: the shaft ends sit at shin height beside the rear tire (eng review: sharp ends) ──
+  for (const { s: sgn, tag } of SIDES) {
+    const yEnd = sgn * Y.shaftHalf;
+    const [c0, c1] = yRange(sgn, Y.shaftHalf - 0.1, Y.shaftHalf + END_CAP_LEN_IN - 0.1);
+    add1(fixed(cylY(ctx, {
+      id: `brake-shaft-cap-${tag}`, partNo: 'brake-shaft-cap', name: `Shaft end cap ${tag}`, c: g.S, y0: c0, y1: c1, radius: (D + 0.2) / 2, mat: 'fixed', kind: 'purchased',
+      material: 'rubber / nylon dome end cap', massLb: END_CAP_MASS_LB, fab: 'buy', explode: [0, sgn, 0],
+      sourcing: { vendor: `McMaster-Carr (${D}" ID rubber or nylon dome end cap, about 1/2" long)` },
+      notes: `Covers the cut end of the cross shaft (y = ${f2(Math.abs(yEnd))}") so there is no sharp end at shin height.`,
     })));
   }
 
@@ -534,7 +664,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
       { type: 'bolt', to: 'brake-link-clevis-lever', count: 1, size: `${p.brakeClevisPinDiameterIn}" clevis pin`, note: 'tail bore, fork straddles the lever' },
       { type: 'bolt', to: 'brake-pawl-pin', count: 1, size: `${p.brakePawlPinDiameterIn}" shoulder screw into a threaded insert` },
     ];
-    const notes = `Oak, grain along the lever. Pivots ${f2(p.brakeLeverTailIn)}" above its link pin; grip ${f2(g.gripZ)}" above the ground, ${f2(p.brakeLeverGripBelowHandleIn)}" below the push-handle grip (D-38).`;
+    const notes = `Oak, grain along the lever. Pivots ${f2(g.tailIn)}" above its link pin${p.brakeLeverTailAuto ? ' (solved from the ratio target)' : ''}; grip ${f2(g.gripZ)}" above the ground, ${f2(p.brakeLeverGripBelowHandleIn)}" below the push-handle grip (D-38).`;
     const kneeIn = g.lean > 0 && tailEnd[1] < g.kneeZ && g.kneeZ < leverTop[1];
     if (!kneeIn) {
       add1(lever3('brake-lever', 'Brake lever', tailEnd, leverTop, { joints, notes }));
@@ -561,8 +691,9 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
   })));
   const pinY1 = lv1 + 0.3;
   add1(fixed(cylY(ctx, {
-    id: 'brake-lever-pin', name: 'Lever pivot bolt', c: g.Q, y0: Y.rail - 0.3, y1: pinY1, radius: p.brakePivotBoltDiameterIn / 2, fab: 'drill-tap', explode: [-1, 0.5, -0.3],
-    notes: '3/8-16 grade 5 bolt, nut and washer inside the rail band; a bronze sleeve in the lever bore carries it.',
+    id: 'brake-lever-pin', name: 'Lever pivot bolt', c: g.Q, y0: Y.rail - 0.3, y1: pinY1, radius: p.brakePivotBoltDiameterIn / 2, mat: 'fixed', kind: 'purchased', material: '316 stainless bolt', massLb: 0.07, fab: 'buy', explode: [-1, 0.5, -0.3],
+    sourcing: { vendor: 'McMaster-Carr (3/8-16 316 stainless hex bolt, 3" long, nut, washers and a 316 acorn nut on the lever side)' },
+    notes: '3/8-16 stainless bolt, nut and washer inside the rail band; a bronze sleeve in the lever bore carries it. The outboard end is covered with a stainless acorn (dome) nut: no bare thread at hand height.',
   })));
   add1(fixed(cylY(ctx, {
     id: 'brake-lever-sleeve', name: 'Lever pivot sleeve', c: g.Q, y0: lv0, y1: lv1, radius: (p.brakePivotBoltDiameterIn + SLEEVE_WALL_IN) / 2, mat: 'fixed', kind: 'purchased', material: 'oil-impregnated bronze sleeve',
@@ -572,13 +703,15 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
   // Crank: a thick keyed plate (S → link pin), link rod and clevises.
   const planeY = Y.plane;
   const [cr0, cr1] = Y.crank;
+  const crankW = Math.max(barW, D + 2 * CRANK_LIGAMENT_IN);
   add1(flatBar(ctx, {
-    id: 'brake-crank', name: 'Brake crank (input)', a: g.S, b: pose.B, y: (cr0 + cr1) / 2, thickY: cr1 - cr0, widthPlane: barW, mat: 'steel', fab: 'drill-tap', extendB: barW / 2,
+    id: 'brake-crank', name: 'Brake crank (input)', a: g.S, b: pose.B, y: (cr0 + cr1) / 2, thickY: cr1 - cr0, widthPlane: crankW, mat: 'steel', fab: 'drill-tap', extendB: crankW / 2,
+    sourcing: YARD(`A36 flat bar ${f2(cr1 - cr0)}" × ${f2(crankW)}", bandsaw and drill press`),
     joints: [
-      { type: 'pin', to: 'brake-shaft', count: 2, size: '3/16" square keys at 180°', note: 'bored to the shaft, keyseats broached; one set screw on a key' },
+      { type: 'pin', to: 'brake-shaft', count: 2, size: `${p.brakeRollPinDiameterIn}" heavy-duty roll pins at 90°`, note: 'shaft bore drilled and reamed on the drill press, then cross-drilled with the shaft' },
       { type: 'pin', to: 'brake-link-clevis-crank', count: 1, size: `${p.brakeClevisPinDiameterIn}" clevis pin` },
     ],
-    notes: `Cut from ${f2(cr1 - cr0)}" A36 bar (a thick keyed plate, not a bolted-on strap: it carries the full shaft torque through two keys). The ${p.brakeClevisPinDiameterIn}" pin hole is the link crank end.`, explode: [-1, 0.2, -0.3],
+    notes: `Cut from ${f2(cr1 - cr0)}" × ${f2(crankW)}" A36 bar on the bandsaw: the ${f2(D)}" shaft hole is drilled (step drill, then reamer) on the drill press, leaving ${f2(CRANK_LIGAMENT_IN)}" of ligament each side; two ${p.brakeRollPinDiameterIn}" roll pins at 90° through the boss and shaft carry the torque (no keyseat, build review M10). The ${p.brakeClevisPinDiameterIn}" pin hole is the link crank end. ${STEEL_FINISH}`, explode: [-1, 0.2, -0.3],
   }));
   {
     const a = pose.T, b = pose.B;
@@ -587,12 +720,13 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
     const lrod = Math.max(0.2, len - CLEVIS_LEN_IN);
     add1(cylinder(ctx, {
       id: 'brake-link', name: 'Brake link rod', group: 'brake', mat: 'steel', step: STEP.brake, center: [(a[0] + b[0]) / 2, planeY, (a[1] + b[1]) / 2], axis: 'x', rot: { y: -ang },
-      radius: p.brakeLinkRodDiameterIn / 2, length: lrod, fab: 'drill-tap', material: 'cold-rolled rod, 3/8-24 threaded each end',
+      radius: p.brakeLinkRodDiameterIn / 2, length: lrod, fab: 'drill-tap', material: '316 stainless rod, 3/8-24 threaded each end', stock: bar(p, p.brakeLinkRodDiameterIn, p.brakeLinkRodDiameterIn, lrod),
+      sourcing: { vendor: 'McMaster-Carr (3/8-24 316 stainless threaded rod, or 3/8" rod threaded with a die; cut on the bandsaw)' },
       joints: [
         { type: 'screw', to: 'brake-link-clevis-lever', count: 1, size: '3/8-24 thread, jam nut', note: 'length adjustment' },
         { type: 'screw', to: 'brake-link-clevis-crank', count: 1, size: '3/8-24 thread, jam nut' },
       ],
-      notes: 'Both clevis ends thread on: turning them is the brake adjustment (wear take-up).', explode: [-1, 0.2, -0.3],
+      notes: 'Both clevis ends thread on: turning them is the brake adjustment (wear take-up). Cut the rod 1/2" long and file the ends: the threads are inside the clevis shanks, no bare end shows.', explode: [-1, 0.2, -0.3],
     }));
     const ends: Array<[string, V2, V2, number]> = [
       ['brake-link-clevis-lever', a, b, 0],
@@ -605,9 +739,9 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
       const ctr = add(c0, mul(u, CLEVIS_LEN_IN / 2 - 0.15));
       const yHalf = id.endsWith('lever') ? Math.max((lv1 - lv0) / 2, 0.4) + CLEVIS_CHEEK_IN : (cr1 - cr0) / 2 + CLEVIS_CHEEK_IN;
       add1(box(ctx, {
-        id, name: id.endsWith('lever') ? 'Clevis (lever end)' : 'Clevis (crank end)', group: 'brake', mat: 'fixed', kind: 'purchased', material: 'zinc clevis rod end', massLb: CLEVIS_MASS_LB, fab: 'buy',
+        id, name: id.endsWith('lever') ? 'Clevis (lever end)' : 'Clevis (crank end)', group: 'brake', mat: 'fixed', kind: 'purchased', material: '316 stainless clevis rod end', massLb: CLEVIS_MASS_LB, fab: 'buy',
         step: STEP.brake, size: [CLEVIS_LEN_IN, 2 * yHalf, CLEVIS_Z_IN], center: [ctr[0], planeY, ctr[1]], rot: { y: -Math.atan2(u[1], u[0]) },
-        sourcing: { vendor: 'McMaster-Carr (3/8-24 clevis rod end with 5/16 pin)' }, explode: [-1, 0.2, -0.3],
+        sourcing: { vendor: 'McMaster-Carr (3/8-24 316 stainless clevis rod end with 5/16 pin and cotter)' }, explode: [-1, 0.2, -0.3],
       }));
     }
   }
@@ -636,10 +770,11 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
     quadZ = [g.Q[1] + Math.min(...outline.map((q) => q[1])), g.Q[1] + Math.max(...outline.map((q) => q[1]))];
     // Hull side: the quadrant is flat against the gunwale at y = hullTop.
     add1(fixed(planarExtrusion(ctx, {
-      id: 'brake-quadrant', name: 'Parking ratchet quadrant', mat: 'steel', outline, origin: g.Q, yHi: Y.quad[1], depth: plateT, fab: 'laser',
+      id: 'brake-quadrant', name: 'Parking ratchet quadrant', mat: 'steel', outline, origin: g.Q, yHi: Y.quad[1], depth: plateT, fab: 'outsource',
+      sourcing: { vendor: `Waterjet / laser cutting service (SendCutSend, OSH Cut or a local shop): ${f2(plateT)}" A36 plate cut from the DXF; teeth finished with a file` },
       explode: [-1, 0.5, 0.5],
       joints: [{ type: 'bolt', to: 'brake-quadrant-bracket', count: 2, size: '1/4-20 × 3/4 machine screws, tapped into the bracket', note: 'the plate swings behind the hull end, so it hangs from a bent bracket on the transom' }],
-      notes: `Laser-cut ${f2(plateT)}" A36 plate, ${nt} teeth at ${f2(p.brakeRatchetPitchIn)}" pitch on a ${f2(R)}" radius (${f2(p.brakeRatchetSpanDeg)}° span), ${f2(d)}" deep; teeth are filed square on the holding face. (Alternate: CNC'd hardwood with steel tooth inserts.)`,
+      notes: `Waterjet / laser-service-cut ${f2(plateT)}" A36 plate (outsourced: the shop's laser does not cut steel), ${nt} teeth at ${f2(p.brakeRatchetPitchIn)}" pitch on a ${f2(R)}" radius (${f2(p.brakeRatchetSpanDeg)}° span), ${f2(d)}" deep; teeth are filed square on the holding face. ${STEEL_FINISH} (Alternate: CNC'd hardwood with steel tooth inserts.)`,
     })));
   }
   {
@@ -647,13 +782,14 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
     const bz0 = Math.max(quadZ[0], zTopT - 2.5), bz1 = Math.min(quadZ[1], zTopT);
     const bY: [number, number] = [L.hwC - 1, Y.quad[1]];
     add1(fixed(box(ctx, {
-      id: 'brake-quadrant-bracket', name: 'Ratchet bracket (bent angle)', group: 'brake', mat: 'steel', step: STEP.brake, fab: 'drill-tap',
+      id: 'brake-quadrant-bracket', name: 'Ratchet bracket (cut angle)', group: 'brake', mat: 'steel', step: STEP.brake, fab: 'drill-tap',
+      sourcing: YARD('A36 angle iron, 2" × 2" × 1/4", cut on the bandsaw with a metal blade and drilled'),
       ...span([L.xRear - p.brakeRatchetPlateThickIn, L.xRear], bY, [bz0, Math.max(bz0 + 0.5, bz1)]),
       joints: [
         { type: 'bolt', to: 'transom-rear', count: 2, size: '1/4-20 × 1-1/2 carriage bolts, fender washers inside', note: 'through the rear transom, near the left corner' },
         { type: 'bolt', to: 'brake-quadrant', count: 2, size: '1/4-20 machine screws' },
       ],
-      notes: 'Bent from 1/4" angle: one leg against the outer face of the rear transom, the other carrying the toothed quadrant. The ratchet load presses it onto the transom.',
+      notes: `Cut from 1/4" angle iron (a bought L, not bent: one leg against the outer face of the rear transom, the other carrying the toothed quadrant). The ratchet load presses it onto the transom. Sits where the rear transom backer goes (hull workstream): bolts pass through the backer. ${STEEL_FINISH}`,
       explode: [-1, 0.5, 0.5],
     })));
     const tip = rot2(rg.pawlTip, g.Q, pose.thetaL);
@@ -661,6 +797,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
     const yPawl = (Y.quad[0] + Y.quad[1]) / 2;
     add1(flatBar(ctx, {
       id: 'brake-pawl', name: 'Parking ratchet pawl', a: pv, b: tip, y: yPawl, thickY: p.brakeRatchetPlateThickIn, widthPlane: Math.min(barW, 0.75), mat: 'steel', fab: 'drill-tap',
+      sourcing: YARD(`A36 flat bar ${f2(p.brakeRatchetPlateThickIn)}" × 3/4", bandsaw and drill press`),
       joints: [{ type: 'pin', to: 'brake-pawl-pin', count: 1, size: `${p.brakePawlPinDiameterIn}" shoulder screw, single shear` }],
       notes: 'Flat bar pawl on a shoulder screw in the lever; the spring keeps the tip in the teeth. The thumb tab at the pivot end lifts it to release the brake.', explode: [-1, 0.5, 0.5],
     }));
@@ -668,16 +805,33 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
     const leverFace = lv0 + Math.tan(g.lean) * Math.max(0, pv[1] - g.kneeZ);
     const [pp0, pp1] = [Y.quad[0], leverFace + (lv1 - lv0) / 2];
     add1(cylY(ctx, {
-      id: 'brake-pawl-pin', name: 'Pawl pivot screw', c: pv, y0: pp0, y1: pp1, radius: p.brakePawlPinDiameterIn / 2, fab: 'drill-tap', explode: [-1, 0.5, 0.5],
+      id: 'brake-pawl-pin', name: 'Pawl pivot screw', c: pv, y0: pp0, y1: pp1, radius: p.brakePawlPinDiameterIn / 2, mat: 'fixed', kind: 'purchased', material: '316 stainless shoulder screw', massLb: 0.02, fab: 'buy', explode: [-1, 0.5, 0.5],
+      sourcing: { vendor: 'McMaster-Carr (1/4" shoulder screw, 316 stainless, into a stainless threaded insert; acorn nut on the lever side)' },
     }));
     add1(cylY(ctx, {
       id: 'brake-pawl-spring', name: 'Pawl spring', c: add(pv, [0.25, -0.7]), y0: Y.quad[1], y1: Math.min(leverFace, Y.quad[1] + 0.24), radius: 0.15, mat: 'fixed', kind: 'purchased', material: 'torsion spring',
-      massLb: PAWL_SPRING_MASS_LB, fab: 'buy', explode: [-1, 0.5, 0.5], sourcing: { vendor: 'McMaster-Carr (small torsion spring)' },
+      massLb: PAWL_SPRING_MASS_LB, fab: 'buy', explode: [-1, 0.5, 0.5], sourcing: { vendor: 'McMaster-Carr (small 302 stainless torsion spring)' },
     }));
   }
 
   if (!movingOnly) parts.push(...buildHandle(ctx));
-  return unitExplode(parts);
+  return unitExplode(stockPass(ctx, parts));
+}
+
+/** Every bought or cut metal part carries stock dimensions (section × cut length) and a source, for the Phase 4 bar / plate list (build review M9). */
+function stockPass(_ctx: Ctx, parts: Part[]): Part[] {
+  for (const x of parts) {
+    if (x.kind !== 'metal') continue;
+    if (!x.stock) {
+      const g = x.geometry;
+      if (g.type === 'box') {
+        const d = [...g.size].sort((a, b) => a - b);
+        x.stock = { t: d[0], w: d[1], l: d[2] };
+      } else if (g.type === 'cylinder') x.stock = { t: 2 * g.radius, w: 2 * g.radius, l: g.length };
+    }
+    if (!x.sourcing) x.sourcing = YARD(`${x.material}, cut on the bandsaw and drilled`);
+  }
+  return parts;
 }
 
 /** The exploded view needs unit directions. */
@@ -725,7 +879,7 @@ function buildDrumVariant(ctx: Ctx): Part[] {
     notes: `Drum variant: lever ratio ${p.brakeLeverRatio}:1 is the target, not drawn (D-13).`,
   }));
   parts.push(...buildHandle(ctx));
-  return unitExplode(parts);
+  return unitExplode(stockPass(ctx, parts));
 }
 
 // ── Rear push handle: steel-tube sockets on the transom, pinned oak uprights, crossbar (D-9, D-39) ──
@@ -766,20 +920,21 @@ function buildHandle(ctx: Ctx): Part[] {
   const parts: Part[] = [];
   const w = p.handleSocketWallIn;
   const barZ = p.rearHandleHeightIn;
-  // Hollow steel tube: wall area × length × density.
-  const tubeLb = ((h.socketX * h.socketY - p.handlePostThickIn * p.handlePostWidthIn) * p.handleSocketDepthIn / IN3_PER_FT3) * p.steelDensityPcf;
+  // Hollow 6061 aluminum tube (plan item 5, −1.5 lb vs steel): wall area × length × density.
+  const tubeLb = ((h.socketX * h.socketY - p.handlePostThickIn * p.handlePostWidthIn) * p.handleSocketDepthIn / IN3_PER_FT3) * p.aluminumDensityPcf;
   for (const { s, tag } of SIDES) {
     const y = s * h.yPost;
     parts.push(box(ctx, {
       id: `handle-socket-${tag}`, partNo: 'handle-socket', name: `Push handle socket ${tag}`, group: 'brake', mat: 'fixed', kind: 'metal', massLb: tubeLb, step: STEP.brake, fab: 'drill-tap',
+      stock: { t: h.socketX, w: h.socketY, l: p.handleSocketDepthIn },
       ...span([L.xRear - h.socketX, L.xRear], [y - h.socketY / 2, y + h.socketY / 2], [h.zBot, h.zTop]),
-      material: 'steel rectangular tube',
+      material: '6061-T6 aluminum rectangular tube, anodized',
       joints: [
-        { type: 'bolt', to: 'transom-rear', count: 2, size: '1/4-20 × 1-1/2 carriage bolt, fender washers inside', note: 'two bolts through the 1/2" oak transom' },
+        { type: 'bolt', to: 'transom-rear', count: 2, size: '1/4-20 × 1-1/2 stainless carriage bolt, fender washers inside, nylon washer under the head', note: 'two bolts through the oak transom (and its backer)' },
         { type: 'pin', to: `handle-post-${tag}`, count: 1, size: `${p.handlePinDiameterIn}" clevis pin through both walls and the post` },
       ],
-      notes: `Steel tube ${f2(h.socketX)} × ${f2(h.socketY)} × ${f2(p.handleSocketDepthIn)} (wall ${f2(w)}); the post is a close slip fit. Stays on the cart when the handle is removed (D-9).`,
-      sourcing: { vendor: 'McMaster-Carr (A500 rectangular tube)' }, explode: [-1, 0, 0.3],
+      notes: `Aluminum 6061-T6 rectangular tube ${f2(h.socketX)} × ${f2(h.socketY)} × ${f2(p.handleSocketDepthIn)} (wall ${f2(w)}), cut on the bandsaw and drilled on the drill press; the post is a close slip fit. Lighter than steel (about 0.4 lb vs 1.2 lb each, plan item 5). Anodized or epoxy-coated, and bedded in epoxy / sealant against the transom: bare aluminum corrodes against wet tannin oak. Stays on the cart when the handle is removed (D-9).`,
+      sourcing: { vendor: `McMaster-Carr (6061-T6 aluminum rectangular tube, ${f2(h.socketX)}" × ${f2(h.socketY)}" outside, ${f2(w)}" wall)` }, explode: [-1, 0, 0.3],
     }));
     parts.push(box(ctx, {
       id: `handle-post-${tag}`, partNo: 'handle-post', name: `Push handle upright ${tag}`, group: 'removable', mat: 'oak', removable: true, step: STEP.brake, grain: 'z',

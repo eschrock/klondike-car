@@ -110,7 +110,8 @@ describe('runChecks at the defaults', () => {
   it('brake force follows F = W sinθ / μ / (ratio · η) at the operating mass', () => {
     const W = buildModel(defaults, { rider: 'operating', cargo: true }).reduce((s, x) => s + x.massLb, 0);
     // Phase 3 (D-38): the ratio is DERIVED from the linkage geometry (brake-ratio), not the free `brakeLeverRatio` param (now a target).
-    const F = (W * Math.sin((defaults.designSlopeDeg * Math.PI) / 180)) / defaults.brakePadMu / (byId(cs, 'brake-ratio').value * defaults.brakeEfficiency);
+    // Phase 3 r2: pass/fail at the lower of the wet-lining μ (0.45) and the mud-fouled μ (0.35); the derived ratio is 13.2:1 (12 × 1.1 headroom).
+    const F = (W * Math.sin((defaults.designSlopeDeg * Math.PI) / 180)) / defaults.brakePadMuFouled / (byId(cs, 'brake-ratio').value * defaults.brakeEfficiency);
     expect(byId(cs, 'brake-force').cases!.operating!.value).toBeCloseTo(F, 3);
   });
   it('through-rod axle stress matches the closed-form cantilever for the rear wheel', () => {
@@ -405,14 +406,14 @@ describe('critic round 1 fixes: hand-calculated numbers at the defaults', () => 
     expect(Math.abs(rear.value / hand.sigma - 1)).toBeLessThan(2e-3);
     expect(byId(cs, 'axle-stress').how).toMatch(/resultant/);
   });
-  it('D1 deck: b_eff = 10 + 0.625 × 9.5 = 15.94"; 200 lb on 4" at midspan of 9.5": δ = 0.069" (fails L/300 = 0.032"); 12 mm gives 0.029" (passes); needed ≥ 11.7 mm', () => {
-    expect(effectiveStripWidth(10, 9.5)).toBeCloseTo(15.94, 2);
+  it('D1 deck: b_eff = 10 + 0.625 × 9.44 = 15.9"; 200 lb on 4" at midspan of 9.44" (the ¾" transom, D-43, moves the joists and trims the first bay): δ = 0.068" (fails L/300 = 0.032"); 12 mm gives 0.029" (passes); needed ≥ 11.6 mm', () => {
+    expect(effectiveStripWidth(10, 9.44)).toBeCloseTo(15.9, 2);
     const c = byId(cs, 'deck');
-    expect(c.details!.find((d) => d.name.includes('deflection'))!.value).toBeCloseTo(0.069, 3);
-    expect(c.how).toMatch(/≥ 11\.7 mm/);
-    expect(c.how).toMatch(/12 mm: 0\.029/);
+    expect(c.details!.find((d) => d.name.includes('deflection'))!.value).toBeCloseTo(0.068, 3);
+    expect(c.how).toMatch(/≥ 11\.6 mm/);
+    expect(c.how).toMatch(/12 mm: 0\.02[89]/);
     const t12 = byId(run({ ...legacy, deckPlyIn: 0.472 }), 'deck').details!.find((d) => d.name.includes('deflection'))!.value;
-    expect(t12).toBeCloseTo(0.029, 3);
+    expect(t12).toBeCloseTo(0.0285, 3);
   });
   it('layout: a thicker deck ply no longer lengthens the span next to the rear beam (D1 oddity)', () => {
     const span = (t: number) => maxDeckSpan({ L: computeLayout({ ...defaults, deckPlyIn: t }) } as never);
@@ -460,11 +461,15 @@ describe('critic round 1 fixes: hand-calculated numbers at the defaults', () => 
     expect(op('pitch-fwd').value).toBeCloseTo(handDeg, 1);
     expect(byId(cs, 'pitch-fwd').how).not.toMatch(/tanθ \+ a/);
   });
-  it('L2 brake: wet shoes μ 0.25 give F_design × 0.4 / 0.25 = 1.6 × F_design (sensitivity only; status follows the design μ)', () => {
+  it('L2 brake: the mud-fouled case (μ 0.35) is pass/fail and bare wet oak (μ 0.25) is info only: F_fouled = F_wet × 0.45 / 0.35, F_bare = F_wet × 0.45 / 0.25', () => {
     const c = byId(cs, 'brake-force');
-    const wet = c.details!.find((d) => d.name.includes('wet'))!;
-    // ratio-independent, so it survives the Phase 3 derived ratio (D-38)
-    expect(wet.value / c.cases!.operating!.value).toBeCloseTo(0.4 / 0.25, 3);
+    const wet = c.details!.find((d) => d.name.includes('wet bonded lining'))!;
+    const fouled = c.details!.find((d) => d.name.includes('fouled'))!;
+    const bare = c.details!.find((d) => d.name.includes('bare wet oak'))!;
+    // ratio-independent, so it survives the Phase 3 derived ratio (D-38): 0.45/0.35 = 1.2857, 0.45/0.25 = 1.8
+    expect(fouled.value / wet.value).toBeCloseTo(0.45 / 0.35, 3);
+    expect(bare.value / wet.value).toBeCloseTo(0.45 / 0.25, 3);
+    expect(c.cases!.operating!.value).toBeCloseTo(fouled.value, 6); // the row value is the larger of wet and fouled
     expect(c.how).toMatch(/TOTAL shoe normal force/);
     expect(c.statusOperating).not.toBe('fail');
   });
@@ -484,8 +489,9 @@ describe('status chips and per-case results (P1/P2)', () => {
   });
   it('the governing case of a failing row is the failing case (so the chip matches the value shown)', () => {
     // pitch-rear passes every rider at the Phase 2 defaults (rope tied low at the axle ends, 96" run), so the "failing row"
-    // case is exercised on the Phase 1 configuration, where the 80 lb rider fails it (H3).
-    const c = byId(run(phase1), 'pitch-rear');
+    // case is exercised on the Phase 1 configuration, where the 80 lb rider fails it (H3). The kingpin steel plates (D-35, +5 lb on the front axle) move the
+    // CG forward enough to lift that rider to marginal, so the failing configuration is the Phase 1 pin without the crossbar and its plates.
+    const c = byId(run({ ...phase1, kingpinThroughBolster: 0 }), 'pitch-rear');
     expect(c.status).toBe('fail');
     expect(c.cases![c.governingLoad as 'light']!.status).toBe('fail');
     expect(byId(cs, 'pitch-rear').status).toBe('pass'); // and the chip matches at the defaults too
@@ -494,46 +500,44 @@ describe('status chips and per-case results (P1/P2)', () => {
   });
 });
 
-describe('kingpin through the bolster: single shear with two bearing members, sleeve, washer rule (D-12)', () => {
+describe('kingpin through the bolster: single shear, steel plates and sleeve, washer rule (D-12, D-35)', () => {
   const det = (cs: AnalysisCheck[], id: string, name: string) => byId(cs, id).details!.find((x) => x.name.includes(name))!;
-  it('crossbar: τ = H/A (one shear plane at the turntable), M = H·(g/2 + D_min/2), bearing in beam and crossbar', () => {
-    // Hand arithmetic below uses the ½" unsleeved pin (A = π·0.25², Z = π·0.5³/32), i.e. the Phase 1 pin; the sleeved ¾" default has its own test.
+  it('crossbar + plates: τ = H/A, M = H·b with b = crossbar-plate mid − carrier mid, pin on the crossbar plate hole = H/(d·t) (hand arithmetic at the ½" Phase 1 pin)', () => {
+    // ½" pin: A = π·0.25² = 0.19635 in², Z = π·0.5³/32 = 0.012272 in³. Phase 1 front end: carrier 6.875…7.25, ½" turntable? no: 3/8" bearing 7.25…7.625,
+    // crossbar plate 7.625…7.8125 (3/16"), beam plate under the 2.5" beam 4.1875…4.375. Plate mid heights 7.71875 (crossbar), 7.0625 (carrier), 4.28125 (beam plate):
+    // b = 7.71875 − 7.0625 = 0.65625", a = 7.0625 − 4.28125 = 2.78125".
     const cs = run(phase1);
-    const L = computeLayout(phase1);
     const kp = byId(cs, 'kingpin');
-    const H = phase1.pullForceLbf;
-    const A = Math.PI * 0.25 * 0.25;
-    const g = L.turntable.z1 - L.turntable.z0, D2 = L.crossbar!.z1 - L.crossbar!.z0;
-    expect(det(cs, 'kingpin', 'shear').value).toBeCloseTo(H / A, 0);
-    const arm = g / 2 + Math.min(L.beamF.depth, D2) / 2;
-    expect(det(cs, 'kingpin', 'bending').value).toBeCloseTo((H * arm) / (Math.PI * 0.5 ** 3 / 32), -1);
-    expect(det(cs, 'kingpin', 'beam').value).toBeCloseTo(H / (0.5 * L.beamF.depth), 0);
-    expect(det(cs, 'kingpin', 'crossbar (oak').value).toBeCloseTo(H / (0.5 * D2), 0);
-    expect(kp.how).toMatch(/single shear/);
+    const H = phase1.pullForceLbf; // 150 lbf
+    expect(det(cs, 'kingpin', 'shear').value).toBeCloseTo(150 / 0.19635, 0); // 764 psi
+    expect(det(cs, 'kingpin', 'bending').value).toBeCloseTo((150 * 0.65625) / 0.012272, -1); // M = 98.4 lb·in → 8,022 psi
+    expect(det(cs, 'kingpin', 'crossbar plate hole').value).toBeCloseTo(150 / (0.5 * 0.1875), 0); // 1,600 psi
+    expect(det(cs, 'kingpin', 'steel sleeve').value).toBeCloseTo((150 * (1 + 0.65625 / 2.78125)) / 0.25, 0); // R_top = 185.4 lbf over one pin diameter: 742 psi
+    expect(kp.details!.some((d) => d.name.includes('(oak ⊥)') && /in the beam|in the crossbar/.test(d.name))).toBe(false); // the pin touches no oak
+    expect(kp.how).toMatch(/overhanging pin/);
+    expect(H).toBe(150);
   });
-  it('the crossbar bore (bolster depth) is shallower than the beam, so it governs the oak bearing without a sleeve', () => {
-    const p = { ...defaults, kingpinDiameterIn: 0.75, kingpinLeadIn: 1.25 };
-    const cs = run(p);
-    expect(det(cs, 'kingpin-strike', 'crossbar (oak').util!).toBeGreaterThan(det(cs, 'kingpin-strike', 'in the beam').util!);
+  it('with the plates the oak bore bearing rows are gone; without the crossbar (the Phase 1 single-shear pin) they are back', () => {
+    const cs = run(defaults);
+    const s = byId(cs, 'kingpin-strike');
+    expect(s.details!.some((d) => /bore bearing in the beam|bore bearing in the crossbar/.test(d.name))).toBe(false);
+    const legacy = run({ ...phase1, kingpinThroughBolster: 0 });
+    expect(byId(legacy, 'kingpin-strike').details!.some((d) => /bore bearing in the beam/.test(d.name))).toBe(true);
   });
-  it('a sleeve moves the oak bearing to its OD and adds a pin-on-sleeve steel bearing row (0.9·36 ksi / 2 = 16.2 ksi)', () => {
-    // The Phase 2 default IS the sleeved pin (¾" pin in a 1.25" OD steel sleeve, 1.5" lead, 4" beam). The earlier hand-picked
-    // 0.625" variant sat at < 0.9 goal util; both it and the ¾" default now sit at ≈ 0.92 (goal average crossbar bearing 331 of
-    // 358 psi), which docs/phase2-recommendation.md lists as "marginal at 200 lb" (known, Phase 3 item 2). So the margin
-    // assertion is relaxed from < 0.9 to "passes the goal rider but is marginal", not dropped.
+  it('steel limits: pin on the sleeve and on the plate hole are held to 0.9·36 ksi / 2 = 16.2 ksi; the sleeve peak is R_top/d² with R_top = H(1 + b/a), b = 0.78125", a = 2.78125" at the defaults', () => {
     const p = { ...defaults };
     expect(p.kingpinSleeveOdIn).toBe(1.25);
     const cs = run(p);
-    const L = computeLayout(p);
     const s = byId(cs, 'kingpin-strike');
     const sl = s.details!.find((d) => d.name.includes('steel sleeve'))!;
+    const pl = s.details!.find((d) => d.name.includes('crossbar plate hole'))!;
     expect(sl.limit).toBeCloseTo((0.9 * 36000) / p.steelSafetyFactor, 6);
-    const H = byId(cs, 'kingpin-strike').how.match(/Governing: [^,]+, H = (\d+)/)![1];
-    const brgBeam = s.details!.find((d) => d.name.includes('in the beam'))!;
-    expect(brgBeam.value).toBeCloseTo(Number(H) / (1.25 * L.beamF.depth), -1);
-    expect(s.cases!.goal!.util).toBeLessThan(1); // passes at the goal rider ...
-    expect(s.cases!.goal!.util).toBeGreaterThan(0.9); // ... but with < 10% margin (the documented 331/358 psi)
-    expect(s.cases!.goal!.status).toBe('marginal');
+    expect(pl.limit).toBeCloseTo((0.9 * p.kingpinPlateYieldPsi) / p.steelSafetyFactor, 6);
+    // crossbar plate mid (7.75 + 7.9375)/2 = 7.84375; carrier mid (6.875 + 7.25)/2 = 7.0625; beam plate mid (4.1875 + 4.375)/2 = 4.28125 → b = 0.78125, a = 2.78125
+    const H = Number(s.how.match(/Governing: [^,]+, H = (\d+)/)![1]);
+    expect(sl.value).toBeCloseTo((H * (1 + 0.78125 / 2.78125)) / 0.75 ** 2, -1);
+    expect(pl.value).toBeCloseTo(H / (0.75 * 0.1875), -1);
+    expect(s.cases!.goal!.util).toBeLessThan(1);
     expect(s.status).not.toBe('fail');
     expect(run({ ...p, sleeveYieldPsi: 20000 }).find((c) => c.id === 'kingpin-strike')!.details!.find((d) => d.name.includes('steel sleeve'))!.limit).toBeCloseTo(9000, 6);
   });

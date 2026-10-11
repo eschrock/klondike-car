@@ -115,6 +115,20 @@ The workstream notes have the full reasoning and check tables: `docs/phase3-ws{A
 - **Rear light:** moved off-center so it no longer covers the lift slot.
 - **Hardware:** the allowance is now *computed* from the structured joint list (screws, bolt sets, inserts, knobs, Dominos, epoxy): **4.8 lb** remainder at the defaults, replacing the flat 2.5 lb. The unit masses are estimates, so weigh a set.
 - **Joint locations:** every structured joint has an `at` location, derived from the mating contact region rather than hole-exact. | 🔶 |
+| D-43 | **Phase 3 round 2 (critic fixes, 2026-10-11): pending review.** Full proposed text is in `docs/phase3-r2-F{1,2,3,4}-notes.md`; consolidate it into individual entries at the checkpoint.
+- **F1 front end:**
+  - The kingpin bears steel-on-steel in 3/16"–⅜" plates. The curb-strike shear goes into the oak through NDS-checked 5/16" grade-8 bolt groups (6 in the beam, 4 in the crossbar), with cleavage taken by ⅜" cross-bolts.
+  - Urethane-faced steel stop dogs on the carrier inside the turntable hole. Load share is 0.52, and a bounding row checks one stop taking it all.
+  - Turntable is preset 2 (1500 lb) with a 1.0" forward deck raise.
+  - Cost: +8.9 lb. `kingpin-bolts` (0.98) now limits the rider range to 200 lb.
+- **F2 hull:** ¾" transoms, ⅝" chines and gunwales, and a real chine-to-rail tie. Scuppers, vented dados, and the assembly order as data. A socketed prow. Groove slop 0.04". Domino rule corrected (face width vs depth). Lift, prow-grab and foot-stop checks.
+- **F3 brake:**
+  - A bonded lining (μ 0.45 wet, 0.35 fouled, pass/fail).
+  - The lever tail is auto-solved to 13.2:1.
+  - Collars and roll pins replace the lathe work, and the shaft is pre-hardened 4140.
+  - Aluminum handle sockets, and pinch-gap checks.
+- **F4 seat and storage:** correctly sized Dominos, a tape-and-fold box on the deck with an oak coaming, a lid stay, 4-screw lash plates with a load check, and stainless fittings.
+- **Empty mass ≈ 160.6 lb.** | 🔶 |
 
 
 ## Analysis-criterion interpretations

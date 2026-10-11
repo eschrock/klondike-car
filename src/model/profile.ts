@@ -3,7 +3,7 @@
  * The outline is in the part's local XY (outer loop CCW, holes CW) and is extruded along local +Z, so the same data goes
  * straight to an STL (Phase 4) or a CNC / Shaper Origin DXF. `basis` picks which world plane the outline lies in.
  */
-import { woodMassLb, STEP, type Ctx } from './build-utils';
+import { roughOf, woodMassLb, STEP, type Ctx } from './build-utils';
 import type { Dims, Joint, Mat4, Part, PartGroup, Vec2, Vec3 } from './types';
 
 /** Printed-part density: ASA 1.07 g/cm³ ≈ 66.8 lb/ft³ at 100%, times an assumed 60% effective fill (walls + 40% gyroid), D-41. */
@@ -103,7 +103,7 @@ export function profilePart(ctx: Ctx, s: ProfileSpec): Part {
     if (s.grain) part.grain = s.grain;
     if (s.stock) {
       part.stock = s.stock;
-      part.rough = { t: s.stock.t + p.millingAllowanceIn, w: s.stock.w + p.millingAllowanceIn, l: s.stock.l + p.millingAllowanceIn };
+      part.rough = roughOf(p, s.stock);
     }
   }
   if (s.removable) part.removable = true;

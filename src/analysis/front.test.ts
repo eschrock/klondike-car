@@ -1,17 +1,22 @@
 /**
- * Phase 3 workstream A checks (D-31…D-34): steer-stops, kingpin-peak, pitch-path, kingpin-split, bridle-tie, and the
- * roll-bolster-attach row that now reads the fasteners from the model's joints. Every expected value is recomputed here
- * from the part geometry and the formulas in the `how` strings, not copied from the code.
+ * Phase 3 workstream A (D-31…D-35): steer-stops and its share-1.0 bounding row, kingpin-plates, kingpin-bolts (NDS), kingpin-split (cleavage),
+ * pitch-path, bridle-tie, and the roll-bolster-attach row that reads the fasteners from the model's joints. Loads come from the existing, separately
+ * tested helpers (strikeCases, yawTorque, wheelLoads); every expected check value is rebuilt here from literal geometry (the plate z levels, the bolt
+ * pitch 1.5625", the pad stiffness) worked by hand in the comments, never from the formulas in front.ts.
+ *
+ * Geometry used below (defaults): beam top 6.875, carrier 3/8" → 7.25, 1,500 lb turntable ½" → 7.75, crossbar plate 3/16" → 7.9375, beam plate under the
+ * 2.5" beam 4.1875…4.375. Plate mid heights: crossbar plate 7.84375, carrier 7.0625, beam plate 4.28125 → a = 2.78125", b = 0.78125".
  */
 import { describe, expect, it } from 'vitest';
 import { defaultParams, resolveParams, steerStopPlan, type Params } from '../params';
+import { kingpinPlateIssues } from '../model/kingpin-plates';
 import { buildModel } from '../model';
 import { computeLayout } from '../model/layout';
 import { toothThickness } from '../model/stops';
 import { BRIDLE_APEX_AHEAD_IN } from '../model/steering';
 import { makeContext } from './context';
 import { runChecks, type AnalysisCheck } from './index';
-import { bridleTieCheck, kingpinPeakCheck, kingpinSplitCheck, pitchPathCheck, rigidPinMoment, rigidPinPeaks, steerStopsCheck } from './front';
+import { bridleTieCheck, kingpinBoltsCheck, kingpinPlatesCheck, kingpinSplitCheck, pinLoads, pinReactions, pitchPathCheck, plateModel, stopEnv, stopShare, stopStiffness, steerStopsBoundCheck, steerStopsCheck } from './front';
 import { allowables, obstacleForce, strikeCases, wheelLoads, yawTorque } from './structure';
 
 const defaults = defaultParams();
@@ -20,10 +25,16 @@ const byId = (cs: AnalysisCheck[], id: string) => cs.find((c) => c.id === id)!;
 const det = (c: AnalysisCheck, name: string) => c.details!.find((d) => d.name.includes(name))!;
 const ctxOf = (p: Params, parts = buildModel(resolveParams(p), { rider: 'goal', cargo: true, steerDeg: 0 })) => makeContext(resolveParams(p), parts);
 
-describe('the new front-end checks at the defaults', () => {
+// Hand-worked geometry constants (see the header)
+const A_SPAN = 2.78125, B_LOAD = 0.78125;
+const PITCH = 1.5625;
+const SUM_Y2 = 2 * (2.34375 ** 2 + 3.90625 ** 2 + 5.46875 ** 2); // 2 × (5.49316 + 15.25879 + 29.90723) = 101.31836
+const ADJ = 0.7 * 1.6 * 0.85; // C_M × C_D × C_g = 0.952
+
+describe('the front-end checks at the defaults', () => {
   const cs = run(defaults);
   it('exist, are Structure rows with hand arithmetic in `how`, and none fails at any rider case', () => {
-    for (const id of ['steer-stops', 'kingpin-peak', 'pitch-path', 'kingpin-split', 'bridle-tie']) {
+    for (const id of ['steer-stops', 'steer-stops-bound', 'kingpin-plates', 'kingpin-bolts', 'kingpin-split', 'pitch-path', 'bridle-tie']) {
       const c = byId(cs, id);
       expect(c, id).toBeDefined();
       expect(c.group, id).toBe('Structure');
@@ -34,230 +45,349 @@ describe('the new front-end checks at the defaults', () => {
       expect(c.load, id).toBe('goal');
       expect(Number.isFinite(c.value) && Number.isFinite(c.limit), id).toBe(true);
     }
+    expect(byId(cs, 'kingpin-peak').status).toBe('info'); // round 1's oak peak-bearing row is replaced (D-35)
+  });
+  it('the default turntable is preset 2 (1,500 lb, ½" stack) and the 1,000-lb row of round 1 no longer limits: capacity 1,500/2 = 750 lbf against the 3×-factored axle load', () => {
+    expect(defaults.turntableType).toBe(2);
+    expect(defaults.turntableRatingLb).toBe(1500);
+    expect(defaults.turntableThicknessIn).toBeCloseTo(0.5, 9);
+    expect(defaults.frontDeckRaiseIn).toBe(1);
+    const t = byId(cs, 'turntable');
+    expect(t.limit).toBeCloseTo(750, 6);
+    expect(t.statusGoal).not.toBe('fail');
   });
 });
 
-describe('steer-stops (M1)', () => {
+describe('steer-stops (M1, D-35): urethane-faced dogs, stiffness-based share, nothing through the ring', () => {
   const p = resolveParams(defaults);
   const plan = steerStopPlan(p);
   const ctx = ctxOf(p);
   const goal = ctx.loads.goal;
   const c = steerStopsCheck(ctx);
-  const al = allowables(ctx);
   const L = computeLayout(p);
   const ringDepth = L.bolster.z1 - L.bolster.z0;
-  const h = Math.min(p.steerStopHeightIn, ringDepth - p.sideBearerClearanceIn);
-  it('yaw torque: a one-wheel 3" curb strike H_w = V_w·tanφ at the wheel lateral position y_w = 17.75", T = H_w·y_w (6.5k lb·in at the goal rider)', () => {
+  const hFace = Math.min(p.steerStopHeightIn, ringDepth - 2 * p.sideBearerClearanceIn) - p.steerStopFacePlateIn; // 1.25 − 0.3125 = 0.9375"
+  it('yaw torque: a one-wheel 3" curb strike H_w = V_w·tanφ at y_w = 17.75" gives T = H_w·y_w (7k lb·in at the goal rider); the rope pull at one tie is 150 × 13.25" = 1,988', () => {
     const w = wheelLoads(ctx, goal);
-    const Vw = w.frontWheel * p.dynamicFactor;
-    const hw = obstacleForce(ctx.d.wheelRadiusIn, p.curbHeightIn, Vw).H;
+    const hw = obstacleForce(ctx.d.wheelRadiusIn, p.curbHeightIn, w.frontWheel * p.dynamicFactor).H;
     const y = yawTorque(ctx, goal);
     expect(y.Hw).toBeCloseTo(hw, 6);
     expect(y.yw).toBeCloseTo(17.75, 9);
     expect(y.strike).toBeCloseTo(hw * 17.75, 6);
     expect(y.T).toBeGreaterThan(6000);
-    expect(y.T).toBeLessThan(7200);
+    expect(y.T).toBeLessThan(8000);
+    expect(y.rope).toBeCloseTo(150 * 13.25, 6);
     expect(y.governing).toBe('one-wheel curb strike');
-    // the rope pull at one tie: 150 lbf × the tie's lateral position (13.25") = 1,988 lb·in, well below the strike
-    expect(y.rope).toBeCloseTo(p.pullForceLbf * y.yTie, 9);
-    expect(y.yTie).toBeCloseTo(13.25, 6);
   });
-  it('bearing: F = T₁/r_eff, peak p = 3·T₁·s₂/(h(s₂³−s₁³)) with T₁ = 0.6·T, s = ra…rb, h = the dog height; allowable oak ⊥ 358.45', () => {
+  it('pad stiffness k = E·A/t: E 1,500 psi, A = 2.738" × 0.9375" = 2.567 in², t = ¼" → 15,403 lbf/in (the round-1 wood faces were ≈ 480,000)', () => {
+    const env = stopEnv(ctx, goal)!;
+    // face length = rb − ra = 5.6527 − 2.9143 = 2.7384"
+    expect(plan.rb - plan.ra).toBeCloseTo(2.7384, 3);
+    expect(env.hFace).toBeCloseTo(hFace, 9);
+    expect(env.area).toBeCloseTo(2.7384 * 0.9375, 3);
+    expect(env.k).toBeCloseTo((1500 * 2.7384 * 0.9375) / 0.25, 0);
+    expect(stopStiffness(1500, 4, 0.25)).toBeCloseTo(24000, 9);
+    expect(env.k).toBeLessThan(480000 / 20); // ≥ 20× softer than oak behind a steel face
+  });
+  it('r_eff = ⅔(s₂³ − s₁³)/(s₂² − s₁²) = ⅔ × 155.87 / 23.46 = 4.429"; the pair force P = T/r_eff; share = ½ + k·δ/(2P) with δ = 0.005" (≈ 0.52 here, ≤ 0.55 target)', () => {
     const y = yawTorque(ctx, goal);
-    const T1 = p.steerStopLoadShare * y.T;
-    const rEff = ((2 / 3) * (plan.rb ** 3 - plan.ra ** 3)) / (plan.rb ** 2 - plan.ra ** 2);
-    const F = T1 / rEff;
-    const pMax = (3 * T1 * plan.rb) / (h * (plan.rb ** 3 - plan.ra ** 3));
-    expect(det(c, 'stop face bearing').value).toBeCloseTo(pMax, 6);
-    expect(det(c, 'stop face bearing').limit).toBeCloseTo(358.45, 2);
-    expect(pMax).toBeLessThan(al.oakPerp);
-    // the wedge splits the force along its two support normals
-    const al0 = plan.teeth.find((t) => t.id === 'AL')!;
-    expect(det(c, 'rail face').value).toBeCloseTo((F * Math.abs(al0.n.x)) / (al0.railLen * ringDepth), 6);
-    expect(det(c, 'crossbar side').value).toBeCloseTo((F * Math.abs(al0.n.y)) / (al0.barLen * ringDepth), 6);
-    // bolts: 2 × 3/8" through the dog; shear F/(n·A), tipping about the loaded toe W from the bolt line
-    const Ab = (Math.PI * 0.375 ** 2) / 4;
-    expect(det(c, 'bolt shear').value).toBeCloseTo(F / (2 * Ab), 6);
-    const Tb = (F * (h / 2)) / (plan.W * 2);
-    expect(det(c, 'interaction').value).toBeCloseTo(Math.sqrt((F / (2 * Ab) / al.fastShear) ** 2 + (Tb / (0.75 * Ab) / al.fastTens) ** 2), 6);
-    const Aw = (Math.PI / 4) * (1.5 ** 2 - (0.375 + 1 / 16) ** 2);
-    expect(det(c, 'washer').value).toBeCloseTo(Tb / Aw, 6);
-    expect(det(c, 'shear-out').value).toBeCloseTo(F / 2 / (2 * (p.steerStopSizeIn / 2 - 0.375 / 2) * h), 6);
-    expect(c.how).toMatch(/r_eff = ⅔/);
+    const env = stopEnv(ctx, goal)!;
+    // s₁ = 2.9143, s₂ = 5.6527: cubes 24.753 and 180.62, squares 8.493 and 31.953
+    const rEff = ((2 / 3) * (5.6527 ** 3 - 2.9143 ** 3)) / (5.6527 ** 2 - 2.9143 ** 2);
+    expect(env.rEff).toBeCloseTo(rEff, 3);
+    expect(env.rEff).toBeCloseTo(4.4294, 3);
+    expect(env.P).toBeCloseTo(y.T / 4.4294, 1);
+    const share = 0.5 + (15403 * 0.005) / (2 * (y.T / 4.4294));
+    expect(env.share).toBeCloseTo(share, 3);
+    expect(env.share).toBeGreaterThan(0.5);
+    expect(env.share).toBeLessThanOrEqual(0.55);
+    expect(env.F).toBeCloseTo(env.share * env.P, 9);
+    // the net force the pair leaves on the pin is (2·share − 1)·P
+    expect(env.net).toBeCloseTo((2 * env.share - 1) * env.P, 6);
   });
-  it('the kingpin sees H_w + (2·share − 1)·T/r_eff: with the 60/40 split it stays under the two-wheel strike that governs the kingpin, with equal shares it is just H_w, and with one stop taking all it is not', () => {
-    const ctxOp = ctx;
-    const y = yawTorque(ctxOp, goal);
-    const rEff = ((2 / 3) * (plan.rb ** 3 - plan.ra ** 3)) / (plan.rb ** 2 - plan.ra ** 2);
-    const Hgov = Math.max(...strikeCases(ctxOp, goal).map((s) => s.H));
-    const K60 = y.Hw + 0.2 * (y.T / rEff);
-    // With the 60/40 split the pair stays under the governing strike, so the row does not list it (governs-only detail).
-    expect(K60).toBeLessThan(Hgov);
+  it('stopShare: ½ + kδ/(2P); capped at 1 when P ≤ kδ (the second stop never touches); equal stiffness and no mismatch → ½', () => {
+    expect(stopShare(24000, 0.005, 1512)).toBeCloseTo(0.5 + 120 / 3024, 9); // 0.5397
+    expect(stopShare(24000, 0.005, 100)).toBe(1);
+    expect(stopShare(24000, 0, 1512)).toBe(0.5);
+    // the round-1 wood faces: k = 480 kip/in, δ = 0.005" → kδ = 2,400 lbf > P = 1,528: one stop takes everything (critic MF-1)
+    expect(stopShare(480000, 0.005, 1528)).toBe(1);
+  });
+  it('the stops row: pad peak pressure = 3·T₁·s₂/(h(s₂³ − s₁³)) with T₁ = share·T, h = 0.9375", against the 800 psi pad allowable; the pad strain F/(k·t) against 30%', () => {
+    const y = yawTorque(ctx, goal);
+    const env = stopEnv(ctx, goal)!;
+    const T1 = env.share * y.T;
+    const pMax = (3 * T1 * 5.6527) / (0.9375 * (5.6527 ** 3 - 2.9143 ** 3));
+    expect(det(c, 'urethane pad pressure').value).toBeCloseTo(pMax, 0);
+    expect(det(c, 'urethane pad pressure').limit).toBe(800);
+    expect(det(c, 'pad compression strain').value).toBeCloseTo(env.F / env.k / 0.25, 6);
+    expect(det(c, 'pad compression strain').limit).toBe(0.3);
+    expect(c.how).toMatch(/INSIDE the 6\.25" turntable hole/);
+    expect(c.how).toMatch(/nothing through the ball ring/);
+    // wedge split on the supports and the oak ⊥ allowable 358.45 (1,070 × 0.67 / 2)
+    const al = allowables(ctx);
+    expect(al.oakPerp).toBeCloseTo(358.45, 2);
+    expect(det(c, 'bolster rail face').limit).toBeCloseTo(358.45, 2);
+    expect(c.details!.filter((d) => d.util > 1)).toEqual([]);
+  });
+  it('flange bending: σ = 6·(p·h²/2)/t² = 3·p_max·h²/t² with h = 0.9375", t = 5/16"; riser bending 6·F·h_r/(d·w²)', () => {
+    const env = stopEnv(ctx, goal)!;
+    expect(det(c, 'channel flange').value).toBeCloseTo((3 * env.tri.pMax * 0.9375 ** 2) / 0.3125 ** 2, 0);
+    // the riser is 1/8" tall here (arm top 7.6875 → web bottom 7.8125), 0.5" deep, 1.25" wide
+    const riserH = 7.8125 - (7.25 + 0.4375);
+    expect(riserH).toBeCloseTo(0.125, 9);
+    expect(det(c, 'riser bending').value).toBeCloseTo((6 * env.F * riserH) / (0.5 * 1.25 ** 2), 0);
+    expect(det(c, 'riser shear').value).toBeCloseTo(env.F / (0.5 * 1.25), 0);
+  });
+  it('the kingpin row lists the stop pair only when it makes a worse case than the two-wheel strike: not at the design share, yes when one stop takes all (mismatch 0.2" ≥ P/k)', () => {
     expect(c.details?.some((d) => d.name.startsWith('net kingpin load'))).toBe(false);
-    const half = steerStopsCheck(ctxOf({ ...defaults, steerStopLoadShare: 0.5 }));
-    expect(half.details?.some((d) => d.name.startsWith('net kingpin load'))).toBe(false);
-    // One stop alone: H_w + T/r_eff exceeds the governing strike, so the detail appears and fails the row.
-    const single = steerStopsCheck(ctxOf({ ...defaults, steerStopLoadShare: 1 }));
-    expect(det(single, 'net kingpin load').value).toBeCloseTo(y.Hw + y.T / rEff, 6);
-    expect(det(single, 'net kingpin load').limit).toBeCloseTo(Hgov, 6);
-    expect(single.status).toBe('fail'); // one stop alone would overload the kingpin: the stops must be fitted so that both close
+    const stiff = steerStopsCheck(ctxOf({ ...defaults, steerStopFitMismatchIn: 0.2 }));
+    const y = yawTorque(ctx, goal);
+    const env1 = stopEnv(ctxOf({ ...defaults, steerStopFitMismatchIn: 0.2 }), goal, undefined)!;
+    expect(env1.share).toBe(1);
+    expect(det(stiff, 'net kingpin load').value).toBeCloseTo(y.Hw + env1.P, 6);
   });
-  it('the check reads the dog bolts from the part joints: one bolt instead of two doubles the shear and the tension per bolt', () => {
-    const parts = buildModel(p, { rider: 'goal', cargo: true, steerDeg: 0 });
-    const dog = parts.find((x) => x.id === 'steer-stop-L')!;
-    const j = dog.joints!.find((q) => q.type === 'bolt')!;
-    const two = det(steerStopsCheck(makeContext(p, parts)), 'bolt shear').value;
-    j.count = 1;
-    const one = det(steerStopsCheck(makeContext(p, parts)), 'bolt shear').value;
-    expect(one).toBeCloseTo(2 * two, 6);
-    j.count = 2;
-    j.diaIn = 0.25;
-    const thin = det(steerStopsCheck(makeContext(p, parts)), 'bolt shear').value;
-    expect(thin).toBeCloseTo(two * (0.375 / 0.25) ** 2, 4);
+  it('a pad that is too stiff or too thin does not share: with E = 150,000 psi (≈ hard plastic) the share is 1 and the row fails', () => {
+    const hard = steerStopsCheck(ctxOf({ ...defaults, steerStopPadModulusPsi: 150000 }));
+    expect(stopEnv(ctxOf({ ...defaults, steerStopPadModulusPsi: 150000 }), goal)!.share).toBe(1);
+    expect(hard.status).toBe('fail'); // the net force on the pin (and the pad at one stop) go over
   });
-  it('the rope pull governs the torque when the curb is low and the pull is hard: curb 1", pull 250 lbf → T = 250 × 13.25" = 3,313 lb·in', () => {
-    const q = { ...defaults, curbHeightIn: 1, rootHeightIn: 1, pullForceLbf: 250 };
-    const x = ctxOf(q);
-    const y = yawTorque(x, x.loads.goal);
-    expect(y.strike).toBeLessThan(250 * 13.25);
-    expect(y.governing).toBe('rope pull at one tie');
-    expect(y.T).toBeCloseTo(250 * 13.25, 6);
-  });
-  it('a stop face that is steel on a thin oak wedge: the thinnest wood behind the face is the 1/2" trim limit', () => {
+  it('the thinnest wood behind the stop face is the 1/2" trim limit', () => {
     expect(toothThickness(plan.a, plan.cb, plan.W, plan.lock, plan.ra)).toBeCloseTo(0.5, 9);
     expect(c.how).toMatch(/Thinnest wood behind the face where the block is trimmed: 0\.50"/);
   });
-  it('passes at the operating and the goal rider at the defaults (marginal only through the 60/40 kingpin detail)', () => {
-    expect(c.statusOperating).not.toBe('fail');
-    expect(c.statusGoal).not.toBe('fail');
-    expect(c.details!.filter((d) => d.util > 1)).toEqual([]);
-  });
   it('a design whose stops do not fit reports a failing row with the reason instead of throwing', () => {
-    const bad = { ...defaults, steerStopSizeIn: 3, steerStopFacePlateIn: 0.25 };
+    const bad = { ...defaults, steerStopSizeIn: 3, steerStopPadIn: 0.5 };
     const row = steerStopsCheck(ctxOf(bad, buildModel(resolveParams(bad), { rider: 'goal', cargo: true, steerDeg: 0 })));
     expect(row.status).toBe('fail');
     expect(row.how).toMatch(/do not fit/);
   });
 });
 
-describe('kingpin-peak (M2): rigid pin in the beam and the crossbar', () => {
+describe('steer-stops-bound: one stop takes the whole torque (share 1.0), a bounding case that must not fail catastrophically', () => {
   const p = resolveParams(defaults);
   const ctx = ctxOf(p);
   const goal = ctx.loads.goal;
-  const L = computeLayout(p);
-  const D1 = L.beamF.depth, D2 = L.crossbar!.z1 - L.crossbar!.z0, g = L.turntable.z1 - L.turntable.z0;
-  it('closed form: a_c = g + (D1 + D2)/2, Σ = D1³ + D2³, peak line load q = (H/D)(1 + 6·a_c·D²/Σ); at D1 = 2.5, D2 = 1.778, g = 0.375: factors 5.43 and 3.25', () => {
-    const pk = rigidPinPeaks(100, D1, D2, g);
-    expect(pk.ac).toBeCloseTo(0.375 + (2.5 + 1.778) / 2, 3);
-    expect(pk.S).toBeCloseTo(2.5 ** 3 + 1.778 ** 3, 2);
-    expect(pk.fA).toBeCloseTo(1 + (6 * pk.ac * 2.5 ** 2) / pk.S, 9);
-    expect(pk.fA).toBeCloseTo(5.43, 1);
-    expect(pk.fB).toBeCloseTo(3.25, 1);
-    expect(pk.qA).toBeCloseTo((100 / 2.5) * pk.fA, 9);
-    // the peak is more than the average, and the thinner member peaks relatively less
-    expect(pk.fA).toBeGreaterThan(pk.fB);
-    expect(pk.fB).toBeGreaterThan(1);
+  const c = steerStopsBoundCheck(ctx);
+  it('F = P = T/r_eff on one stop: the pad peak is the design value ÷ share, held to the pad yield 1,500 psi; the net force on the pin is P (no cancellation)', () => {
+    const y = yawTorque(ctx, goal);
+    const env = stopEnv(ctx, goal, 1)!;
+    expect(env.share).toBe(1);
+    expect(env.F).toBeCloseTo(y.T / 4.4294, 1);
+    expect(env.net).toBeCloseTo(env.P, 9);
+    const pMax = (3 * y.T * 5.6527) / (0.9375 * (5.6527 ** 3 - 2.9143 ** 3));
+    expect(det(c, 'urethane pad pressure').value).toBeCloseTo(pMax, 0);
+    expect(det(c, 'urethane pad pressure').limit).toBe(1500);
+    expect(det(c, 'pad compression strain').limit).toBe(0.5);
   });
-  it('equilibrium of the model: each zone carries ±H, the pin moment closes to zero at the far end, and the zone resultants are colinear (no net moment on the pin)', () => {
-    const H = 735;
-    const zA = -(g / 2 + D1 / 2), zB = g / 2 + D2 / 2;
-    const { ac, S } = rigidPinPeaks(H, D1, D2, g);
-    // numerical integrals of the two linear distributions
-    const integ = (f: (z: number) => number, z0: number, z1: number, n = 2000) => { let s = 0; const dz = (z1 - z0) / n; for (let i = 0; i < n; i++) s += f(z0 + (i + 0.5) * dz) * dz; return s; };
-    const qA = (z: number) => H / D1 + (12 * H * ac * (z - zA)) / S;
-    const qB = (z: number) => -H / D2 + (12 * H * ac * (z - zB)) / S;
-    const FA = integ(qA, -g / 2 - D1, -g / 2), FB = integ(qB, g / 2, g / 2 + D2);
-    expect(FA).toBeCloseTo(H, 4);
-    expect(FB).toBeCloseTo(-H, 4);
-    const MA = integ((z) => qA(z) * z, -g / 2 - D1, -g / 2), MB = integ((z) => qB(z) * z, g / 2, g / 2 + D2);
-    expect(MA + MB).toBeCloseTo(0, 3);
-    const mom = rigidPinMoment(H, D1, D2, g);
-    expect(mom.closure).toBeLessThan(1e-3 * H);
-    expect(mom.Mmax).toBeGreaterThan(0);
-    // the maximum moment is well below the cantilever H·(stack) and of the order of H × the gap plus a fraction of a member depth
-    expect(mom.Mmax).toBeLessThan(H * (g + D1));
+  it('the abuse case holds wood and steel to strength: oak ⊥ 358.45 × 2 = 716.9, plate rows × 2; the plate bolts to the NDS value × the wood safety factor 2', () => {
+    expect(det(c, 'bolster rail face').limit).toBeCloseTo(716.9, 1);
+    expect(det(c, 'channel flange').limit).toBeCloseTo(36000, 6); // 36 ksi / (SF 2 / 2)
+    expect(det(c, 'carrier end').limit).toBeCloseTo(2 * 509.14, 0);
+    // at the pin: H_w + P, as the how text says
+    expect(c.how).toMatch(/the net force it leaves on the kingpin is P/);
   });
-  it('rows: peak = q/w on the 1.25" sleeve OD against the dowel-bearing allowable 1,700 psi, pin on the sleeve = q/d against 16.2 ksi, pin bending M/Z', () => {
-    const c = kingpinPeakCheck(ctx);
-    const cases = strikeCases(ctx, goal);
-    const H = Math.max(Math.max(...cases.map((s) => s.H)), p.pullForceLbf);
-    const pk = rigidPinPeaks(H, D1, D2, g);
-    expect(det(c, 'beam peak').value).toBeCloseTo(pk.qA / 1.25, 6);
-    expect(det(c, 'crossbar peak').value).toBeCloseTo(pk.qB / 1.25, 6);
-    expect(det(c, 'beam peak').limit).toBeCloseTo((4000 * 0.85) / 2, 6);
-    expect(det(c, 'pin on steel sleeve').value).toBeCloseTo(Math.max(pk.qA, pk.qB) / 0.75, 6);
-    expect(det(c, 'pin on steel sleeve').limit).toBeCloseTo((0.9 * 36000) / 2, 6);
-    const mom = rigidPinMoment(H, D1, D2, g);
-    expect(det(c, 'pin bending').value).toBeCloseTo(mom.Mmax / ((Math.PI * 0.75 ** 3) / 32), 4);
+  it('it passes at the design (marginal at worst) and fails with a stiff pad because then the share is 1 at the design mismatch too', () => {
     expect(c.statusGoal).not.toBe('fail');
-    // the peak is several times the average the 'kingpin-strike' rows report, and that is the honest margin
-    const ks = byId(run(defaults), 'kingpin-strike');
-    const avg = ks.details!.find((d) => d.name.includes('in the beam'))!.value;
-    expect(det(c, 'beam peak').value / avg).toBeCloseTo(pk.fA, 1);
-    expect(c.how).toMatch(/peak is 5\.\d+× and 3\.\d+× the average/);
-    expect(c.how).toMatch(/over, and the fix is a deeper crossbar/);
-  });
-  it('without a sleeve the pin bears on the oak directly (w = pin diameter) and there is no pin-on-sleeve row; without the crossbar the row is info only', () => {
-    const noSleeve = kingpinPeakCheck(ctxOf({ ...defaults, kingpinSleeveOdIn: 0 }));
-    expect(noSleeve.details!.some((d) => d.name.includes('steel sleeve'))).toBe(false);
-    const pk = rigidPinPeaks(Math.max(...strikeCases(ctxOf({ ...defaults, kingpinSleeveOdIn: 0 }), ctxOf({ ...defaults, kingpinSleeveOdIn: 0 }).loads.goal).map((s) => s.H)), D1, D2, g);
-    expect(det(noSleeve, 'beam peak').value).toBeCloseTo(pk.qA / 0.75, 3);
-    const none = kingpinPeakCheck(ctxOf({ ...defaults, kingpinThroughBolster: 0 }));
-    expect(none.status).toBe('info');
+    expect(c.statusOperating).not.toBe('fail');
   });
 });
 
-describe('pitch-path (M3)', () => {
+describe('kingpin-plates: the pin as an overhanging beam on the sleeve, steel on steel (D-35)', () => {
+  const p = resolveParams(defaults);
+  const ctx = ctxOf(p);
+  const goal = ctx.loads.goal;
+  const pm = plateModel(ctx)!;
+  const c = kingpinPlatesCheck(ctx);
+  it('the plate model reads the geometry from the parts: a = 2.78125", b = 0.78125", plates 3/8", 3/16", 3/16"; the plate bolts are 6 + 4', () => {
+    expect(pm.a).toBeCloseTo(A_SPAN, 9);
+    expect(pm.b).toBeCloseTo(B_LOAD, 9);
+    expect(pm.carrier.t).toBeCloseTo(0.375, 9);
+    expect(pm.beam.tBot).toBeCloseTo(0.1875, 9);
+    expect(pm.barPlate.t).toBeCloseTo(0.1875, 9);
+    expect(pm.beam.n).toBe(6);
+    expect(pm.beam.pitch).toBeCloseTo(PITCH, 9);
+    expect(pm.bar.n).toBe(4);
+  });
+  it('pinReactions: R_top = H(1 + b/a) = 1.2809 H, R_bot = −H·b/a = −0.2809 H, M = H·b (0.78125 H); H = 1,000 → 1,280.9 / −280.9 / 781.25', () => {
+    const r = pinReactions(1000, A_SPAN, B_LOAD);
+    expect(r.Rtop).toBeCloseTo(1280.9, 1);
+    expect(r.Rbot).toBeCloseTo(-280.9, 1);
+    expect(r.M).toBeCloseTo(781.25, 9);
+    expect(r.Rtop + r.Rbot).toBeCloseTo(1000, 9); // the two reactions sum to the pin load
+  });
+  it('rows at the two-wheel strike H: pin bending M/Z with Z = π·0.75³/32 = 0.04142; peak on the sleeve R_top/d²; crossbar plate hole H/(0.75 × 0.1875)', () => {
+    const H = Math.max(...strikeCases(ctx, goal).map((s) => s.H));
+    expect(H).toBeGreaterThan(700);
+    const g = pinLoads(ctx, goal)[0];
+    expect(g.Hx).toBeCloseTo(H, 9);
+    const mine = c.details!;
+    const row = (n: string) => mine.find((d) => d.name.startsWith(n))!;
+    // the check reports the worst case per criterion; the two-wheel strike is the worst for the pin and the sleeve
+    expect(row('pin bending').value).toBeCloseTo((H * 0.78125) / (Math.PI * 0.75 ** 3 / 32), -1);
+    expect(row('pin on the sleeve').value).toBeCloseTo((H * 1.28090) / 0.5625, -1);
+    expect(row('pin on the crossbar plate hole').value).toBeCloseTo(H / (0.75 * 0.1875), -1);
+    expect(row('pin on the crossbar plate hole').limit).toBeCloseTo((0.9 * 36000) / 2, 6);
+    // sleeve spigot bearing in the carrier hole: R_top / (OD 1.25 × 3/8")
+    expect(row('sleeve spigot bearing in the carrier').value).toBeCloseTo((H * 1.2809) / (1.25 * 0.375), -1);
+    expect(c.statusGoal).not.toBe('fail');
+  });
+  it('the carrier strip at the sleeve hole: net width 2.5 − 1.25 = 1.25", Z = ⅜ × 1.25²/6 = 0.0977 in³, σ = (R_top/2 × y₁)/Z with y₁ = 2.34375"', () => {
+    const H = Math.max(...strikeCases(ctx, goal).map((s) => s.H));
+    const sigma = ((H * 1.2809) / 2 * 2.34375) / (0.375 * 1.25 ** 2 / 6);
+    expect(det(c, 'carrier strip').value).toBeGreaterThanOrEqual(sigma - 1);
+    expect(det(c, 'carrier strip').limit).toBeCloseTo(36000 / 2, 6);
+  });
+  it('without the crossbar there are no plates: the row is info, and kingpin-strike keeps its oak bearing rows', () => {
+    const none = kingpinPlatesCheck(ctxOf({ ...defaults, kingpinThroughBolster: 0 }));
+    expect(none.status).toBe('info');
+    expect(kingpinBoltsCheck(ctxOf({ ...defaults, kingpinThroughBolster: 0 })).status).toBe('info');
+  });
+});
+
+describe('kingpin-bolts: NDS lateral capacity of the plate bolts, spacing, edge distances, row tear-out (D-35)', () => {
+  const p = resolveParams(defaults);
+  const ctx = ctxOf(p);
+  const goal = ctx.loads.goal;
+  const c = kingpinBoltsCheck(ctx);
+  const pm = plateModel(ctx)!;
+  it('capacity at the carrier end: Z = 534.8 (IIIs, ⅜" plate, θ = 90°) × C_M 0.7 × C_D 1.6 × C_g 0.85 = 509.1 lbf; at the beam-plate end (3/16") 418.2 × 0.952 = 398.1 lbf', () => {
+    const cap = (cs: AnalysisCheck, n: string) => cs.details!.find((d) => d.name.startsWith(n))!;
+    // the governing case is the one-wheel strike with the stop torque: it loads the bolt across the grain (θ near 90°) at the carrier end
+    expect(cap(c, 'beam plate bolt, carrier end').limit).toBeGreaterThan(480);
+    expect(cap(c, 'beam plate bolt, carrier end').limit).toBeLessThan(515); // Hankinson: slightly above Z(90°) when the load has a small along-grain part
+    expect(cap(c, 'beam plate bolt, under end').limit).toBeCloseTo(418.17 * ADJ, 0);
+    expect(ADJ).toBeCloseTo(0.952, 9);
+  });
+  it('per-bolt load at the carrier end with the stop torque: F = R_top/6 + T·y_max/Σy², R_top = 1.2809 H_x, Σy² = 101.318, y_max = 5.46875 (one-wheel strike + stops)', () => {
+    const ld = pinLoads(ctx, goal).find((x) => x.name === 'one-wheel strike + stops')!;
+    const F = (ld.Hx * 1.2809) / 6 + (ld.T * 5.46875) / SUM_Y2;
+    const d = c.details!.find((x) => x.name.startsWith('beam plate bolt, carrier end'))!;
+    expect(d.name).toMatch(/one-wheel strike \+ stops/);
+    expect(d.value).toBeCloseTo(F, 0);
+    expect(SUM_Y2).toBeCloseTo(101.31836, 4);
+    // the torque term dominates: 5.46875/101.318 = 0.05398 per lb·in
+    expect((ld.T * 5.46875) / SUM_Y2).toBeGreaterThan((ld.Hx * 1.2809) / 6);
+  });
+  it('the rider-independent distances are advisory rules sitting exactly on the NDS minimum: rows 1.5625" = 5D, front edge 1.25" = 4D, rod-groove edge 1.25" = 4D; ⅜" bolts need 1.5" and draw a warning', () => {
+    expect(pm.beam.frontDist).toBeCloseTo(1.25, 9);
+    expect(pm.beam.grooveDist).toBeCloseTo(1.25, 9);
+    expect(pm.beam.pitch).toBeCloseTo(1.5625, 9);
+    expect(kingpinPlateIssues(resolveParams(defaults))).toEqual([]);
+    const fat = kingpinPlateIssues(resolveParams({ ...defaults, kingpinPlateBoltDiameterIn: 0.375 }));
+    expect(fat.some((i) => /loaded edge distance of 4D = 1\.500/.test(i.message))).toBe(true);
+    // the rows themselves carry no distance details (they would read marginal at every weight)
+    expect(c.details!.some((d) => d.sense === '>=')).toBe(false);
+    expect(c.how).toMatch(/validator rules/);
+    // a 4.5" front beam gives both edges 1.375" ≥ 4D: still valid
+    expect(kingpinPlateIssues(resolveParams({ ...defaults, frontAxleBeamThicknessIn: 4.5 }))).toEqual([]);
+  });
+  it('crossbar line (distances in the how text): pitch 1.5" ≥ 4D = 1.25", end distance 5.0 − 2.25 = 2.75" ≥ 7D = 2.1875"; row tear-out = 4 × F\'v × t × min(2.75, 0.75)', () => {
+    expect(pm.bar.pitch).toBeCloseTo(1.5, 9);
+    expect(pm.bar.endDist).toBeCloseTo(2.75, 6);
+    const FvP = 205 * 0.97 * 1.6; // 318.16 psi
+    const t = pm.bar.lm;
+    const H = Math.max(...strikeCases(ctx, goal).map((s) => s.H));
+    const Z = 4 * FvP * t * 0.75;
+    expect(det(c, 'crossbar row tear-out').limit).toBeCloseTo(Z, 0);
+    expect(det(c, 'crossbar row tear-out').value).toBeCloseTo(H, 0);
+    expect(c.how).toMatch(/at 1\.500" \(≥ 4D = 1\.250"\), ends 2\.75" \(≥ 7D = 2\.188"\)/);
+  });
+  it('beam row tear-out under the lateral skid: n × F\'v × t × s_crit = 6 × 318.16 × 2.5 × 0.78125 = 3,728 lbf against F_y × 1.2809', () => {
+    const d = det(c, 'beam row tear-out');
+    expect(d.limit).toBeCloseTo(6 * 318.16 * 2.5 * 0.78125, 0);
+    const Fy = p.tireGroundMu * wheelLoads(ctx, goal).frontAxle * p.dynamicFactor;
+    expect(d.value).toBeCloseTo(Fy * 1.2809, 0);
+  });
+  it('304 / 316 stainless plate bolts (65 ksi) cut the stop-torque margin below 1: the carrier-end bolt fails (this is why the plate bolts are grade 8, zinc-flake coated and epoxy-sealed)', () => {
+    const ss = kingpinBoltsCheck(ctxOf({ ...defaults, kingpinPlateBoltYieldPsi: 65000 }));
+    const d = ss.details!.find((x) => x.name.startsWith('beam plate bolt, carrier end'))!;
+    // IV governs at 387.7 lbf dry → × 0.952 = 369.1 lbf
+    expect(d.limit).toBeCloseTo(387.7 * ADJ, 0);
+    expect(d.util).toBeGreaterThan(1);
+    expect(ss.status).toBe('fail');
+  });
+  it('a thinner carrier lowers the capacity (IIIs ∝ plate thickness): ¼" carrier → fails; the pin-load cases are reported by name', () => {
+    const thin = kingpinBoltsCheck(ctxOf({ ...defaults, carrierPlateThickIn: 0.25 }));
+    expect(thin.status).toBe('fail');
+    expect(c.how).toMatch(/two-wheel strike/);
+    expect(c.how).toMatch(/one-wheel strike \+ stops/);
+    expect(c.how).toMatch(/lateral skid/);
+    expect(c.how).toMatch(/bridle pull/);
+  });
+});
+
+describe('kingpin-split: NDS cleavage and the cross-bolts that stitch the loaded slabs (D-35, replaces round 1\'s 850 psi block shear)', () => {
+  const p = resolveParams(defaults);
+  const ctx = ctxOf(p);
+  const goal = ctx.loads.goal;
+  const c = kingpinSplitCheck(ctx);
+  const FvP = 205 * 0.97 * 1.6;
+  it('unreinforced front-slab capacity V_r = ⅔·F\'v·b·d_e = ⅔ × 318.16 × 2.5 × 1.25 = 662.8 lbf is exceeded by the carrier-end push (≈ 1.9×): with no cross-bolts the NDS row appears and fails', () => {
+    const car = ctx.byId.get('beam-F')!;
+    const parts = buildModel(p, { rider: 'goal', cargo: true, steerDeg: 0 });
+    const beam = parts.find((x) => x.id === 'beam-F')!;
+    beam.joints = beam.joints!.filter((j) => !(j.type === 'bolt' && j.to === 'kp-carrier')); // take the cross-bolts out
+    const bare = kingpinSplitCheck(makeContext(p, parts));
+    const d = bare.details!.find((x) => x.name.startsWith('beam front slab cleavage'))!;
+    expect(d.limit).toBeCloseTo((2 / 3) * FvP * 2.5 * 1.25, 1);
+    expect(d.limit).toBeCloseTo(662.8, 1);
+    expect(d.util).toBeGreaterThan(1.5);
+    expect(bare.status).toBe('fail');
+    expect(car).toBeDefined();
+  });
+  it('with four ⅜" stainless cross-bolts the slab is stitched: each carries V/4 (V = R_top + the stop torque\'s force on one side of the bolt line), tension on A_t = 0.75 × 0.1104 against 65,000/2 psi', () => {
+    const ld = pinLoads(ctx, goal).find((x) => x.name === 'one-wheel strike + stops')!;
+    const sumY2 = 101.31836;
+    const V = ld.Hx * 1.2809 + (ld.T * (2.34375 + 3.90625 + 5.46875)) / sumY2;
+    const At = 0.75 * ((Math.PI * 0.375 ** 2) / 4);
+    const d = c.details!.find((x) => x.name.startsWith('beam front slab: cross-bolt tension'))!;
+    expect(d.value).toBeCloseTo(V / 4 / At, -1);
+    expect(d.limit).toBeCloseTo(65000 / 2, 6);
+    const w = det(c, 'beam cross-bolt washer');
+    const Aw = (Math.PI / 4) * (1.75 ** 2 - (0.375 + 1 / 16) ** 2); // 2.405 − 0.150 = 2.255 in²
+    expect(w.value).toBeCloseTo(V / 4 / Aw, -1);
+    expect(c.statusGoal).not.toBe('fail');
+  });
+  it('crossbar: lateral skid F_y = μ·V across the grain, d_e = 1.5", b = crossbar depth: V_r = ⅔ × 318.16 × b × 1.5; the two cross-bolts carry F_y/2 each', () => {
+    const pm = plateModel(ctx)!;
+    const Fy = p.tireGroundMu * wheelLoads(ctx, goal).frontAxle * p.dynamicFactor; // 0.5 × V
+    const At = 0.75 * ((Math.PI * 0.375 ** 2) / 4);
+    expect(det(c, 'crossbar cleavage: cross-bolt tension').value).toBeCloseTo(Fy / 2 / At, -1);
+    const parts = buildModel(p, { rider: 'goal', cargo: true, steerDeg: 0 });
+    parts.find((x) => x.id === 'kingpin-crossbar')!.joints = parts.find((x) => x.id === 'kingpin-crossbar')!.joints!.filter((j) => !/cross-bolt/.test(j.size ?? ''));
+    const bare = kingpinSplitCheck(makeContext(p, parts));
+    const d = bare.details!.find((x) => x.name.startsWith('crossbar cleavage under the lateral load'))!;
+    expect(d.limit).toBeCloseTo((2 / 3) * FvP * pm.bar.lm * 1.5, 1);
+    expect(d.value).toBeCloseTo(Fy, 6);
+  });
+  it('the web between the sleeve bore and the rod groove: rope pull 150 lbf, τ = P/(2·e·0.75) with e = 1.5 − 0.375 − 0.625 = 0.5" → 200 psi, held to the NDS F\'v 318 psi (not the clear-wood 850)', () => {
+    const d = det(c, 'beam web shear-out');
+    expect(d.value).toBeCloseTo(150 / (2 * 0.5 * 0.75), 6);
+    expect(d.limit).toBeCloseTo(FvP, 2);
+    expect(c.how).toMatch(/3.4.3.3/);
+  });
+});
+
+describe('pitch-path (M3, D-35): the pin reaction acts at the crossbar plate, 1.34" above the axle line', () => {
   const p = resolveParams(defaults);
   const ctx = ctxOf(p);
   const goal = ctx.loads.goal;
   const L = computeLayout(p);
   const c = pitchPathCheck(ctx);
-  it('pitch couple M_p = H·|z_axle − z_beam mid| goes to the fore / aft bolster rails 10.5" apart; trail moment V·1.5" to the U-bolt legs', () => {
-    const w = wheelLoads(ctx, goal);
+  it('M_p = H·|z_axle − z_load| with z_axle = 6.5" and z_load = (7.75 + 7.9375)/2 = 7.84375" (1.34375"), returned as a vertical couple between rail centers 10.5" apart on 1.5" × 12" pads', () => {
     const H = Math.max(...strikeCases(ctx, goal).map((s) => s.H));
-    const Mp = H * Math.abs(L.r - (L.beamF.top + L.beamF.bot) / 2);
-    const lever = p.turntableSizeIn - L.bolster.rw;
-    expect(lever).toBeCloseTo(10.5, 9);
-    expect(det(c, 'bolster rails').value).toBeCloseTo(Mp / lever / (L.bolster.rw * p.turntableSizeIn), 6);
+    const Mp = H * 1.34375;
+    expect(Mp / 10.5 / (1.5 * 12)).toBeGreaterThan(0);
+    expect(det(c, 'bolster rails').value).toBeCloseTo(Mp / 10.5 / 18, 4);
+    const w = wheelLoads(ctx, goal);
     const V = w.frontAxle * p.dynamicFactor;
-    const Mtr = V * p.kingpinLeadIn;
-    const legC = L.beamF.thick + 2 * p.uboltBeamClearIn + p.uboltRodDiameterIn; // leg centers
-    const Tleg = Mtr / 2 / legC;
+    const legC = L.beamF.thick + 2 * p.uboltBeamClearIn + p.uboltRodDiameterIn;
+    const Tleg = (V * p.kingpinLeadIn) / 2 / legC;
     const Aleg = 0.75 * ((Math.PI * 0.375 ** 2) / 4);
     expect(det(c, 'U-bolt leg tension').value).toBeCloseTo(Tleg / Aleg, 0);
     expect(det(c, 'plate bearing').value).toBeCloseTo((2 * Tleg) / (p.clampPlateWidthIn * L.beamF.thick), 1);
     expect(c.statusGoal).toBe('pass');
     expect(c.how).toMatch(/lazy-susan bearing ring and the kingpin carry no moment/);
-  });
-});
-
-describe('kingpin-split (M4): ligament shear-out', () => {
-  const p = resolveParams(defaults);
-  const ctx = ctxOf(p);
-  const goal = ctx.loads.goal;
-  const L = computeLayout(p);
-  const c = kingpinSplitCheck(ctx);
-  it('beam front ligament 0.75" and web 0.5", crossbar side ligaments (3 − 1.25)/2 = 0.875": τ = F/(2·e·D)', () => {
-    const H = Math.max(...strikeCases(ctx, goal).map((s) => s.H));
-    const eFront = (p.frontAxleBeamThicknessIn - p.kingpinLeadIn - p.axleDiameterIn / 2 - 1.25 / 2) / 2;
-    expect(eFront).toBeCloseTo(0.75, 9);
-    expect(det(c, 'beam front').value).toBeCloseTo(H / (2 * eFront * L.beamF.depth), 6);
-    const eWeb = p.kingpinLeadIn - p.axleDiameterIn / 2 - 1.25 / 2;
-    expect(eWeb).toBeCloseTo(0.5, 9);
-    expect(det(c, 'web').value).toBeCloseTo(150 / (2 * eWeb * p.axleDiameterIn), 6);
-    const D2 = L.crossbar!.z1 - L.crossbar!.z0;
-    const Fy = p.tireGroundMu * wheelLoads(ctx, goal).frontAxle * p.dynamicFactor;
-    expect(det(c, 'side ligament').value).toBeCloseTo(Fy / (2 * 0.875 * D2), 6);
-    expect(det(c, 'end ligament').value).toBeCloseTo(H / (2 * (L.crossbar!.x1 - L.kx - 0.625) * D2), 6);
-    expect(det(c, 'beam front').limit).toBeCloseTo((2000 * 0.85) / 2, 6);
-    expect(c.statusGoal).not.toBe('fail');
-  });
-  it('a narrower crossbar raises the side-ligament shear-out; without the crossbar the row has only the beam ligaments', () => {
-    const narrow = kingpinSplitCheck(ctxOf({ ...defaults, kingpinCrossbarWidthIn: 2.25 }));
-    expect(det(narrow, 'side ligament').value).toBeGreaterThan(det(c, 'side ligament').value * 1.5);
-    const none = kingpinSplitCheck(ctxOf({ ...defaults, kingpinThroughBolster: 0 }));
-    expect(none.details!.some((d) => d.name.includes('crossbar'))).toBe(false);
   });
 });
 

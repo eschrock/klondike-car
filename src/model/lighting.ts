@@ -81,17 +81,17 @@ export function buildLighting(ctx: Ctx, _prowTipX: number, _prowTipZ: number): P
 
   // ── Front: clips on the front transom, left of the prow base (lantern) and right of it (flag-pole socket) ──
   const zT = L.noseTop + L.sideH;
-  const x0c = L.xFront - L.side;
+  const x0c = L.xFront - L.transom;
   const yc = Math.max(2.3, Math.min(4.5, L.hwN - CLIP.width / 2 - 0.15));
   const clipJoint = (to: string) => [{ type: 'knob' as const, to, count: 2, size: 'M5 thumbscrew in the leg, clamping the transom', note: 'tool-free; friction clamp + the web over the top (not a load path)' }];
   const lantern = profilePart(ctx, {
-    id: 'lantern-mount', name: 'Front lantern bracket', group: 'lighting', mat: 'print', material: 'ASA', outline: clipOutline(L.side, true), depth: CLIP.width,
+    id: 'lantern-mount', name: 'Front lantern bracket', group: 'lighting', mat: 'print', material: 'ASA', outline: clipOutline(L.transom, true), depth: CLIP.width,
     basis: 'xz', origin: [x0c, yc + CLIP.width / 2, zT], removable: true, step: STEP.finish, explode: [0.6, 0, 0.8],
     joints: clipJoint('transom-front'),
-    notes: 'Printed ASA, 4 perimeters; clips over the front transom and carries the headlight on its forward shelf. Comes off with the light for transport.',
+    notes: 'Printed ASA, 4+ perimeters, printed with the extrusion profile flat on the bed (layers parallel to the profile, strong in bending, P4); 0.25" shelf ribbed or printed in CF-nylon, 1/8" fillets at the inside corners. Heat-set inserts for the M5 stainless thumbscrews (brass is fine inside the plastic, away from the oak). Clips over the front transom and carries the headlight on its forward shelf. Comes off with the light for transport.',
   });
   parts.push(lantern);
-  const shelfX0 = x0c + L.side + CLIP.clearance + CLIP.wall;
+  const shelfX0 = x0c + L.transom + CLIP.clearance + CLIP.wall;
   const wz = zT + CLIP.clearance + CLIP.wall;
   parts.push(box(ctx, {
     ...common, id: 'front-light', name: 'Front LED headlight', mat: 'fixed', massLb: FRONT_LIGHT_MASS_LB, kind: 'purchased', material: 'LED headlight', fab: 'buy',
@@ -102,15 +102,15 @@ export function buildLighting(ctx: Ctx, _prowTipX: number, _prowTipZ: number): P
     notes: 'Mass is an estimate. Faces forward on the shelf, ahead of the prow base.',
   }));
   parts.push(profilePart(ctx, {
-    id: 'flag-mount', name: 'Flag-pole clip', group: 'lighting', mat: 'print', material: 'ASA', outline: clipOutline(L.side, false), depth: CLIP.width,
+    id: 'flag-mount', name: 'Flag-pole clip', group: 'lighting', mat: 'print', material: 'ASA', outline: clipOutline(L.transom, false), depth: CLIP.width,
     basis: 'xz', origin: [x0c, -yc + CLIP.width / 2, zT], removable: true, step: STEP.finish, explode: [0.6, 0, 0.8],
     joints: clipJoint('transom-front'),
-    notes: 'Printed ASA; clips over the front transom, right of the prow. The prow has no socket yet (workstream B); this takes a flag or lantern staff meanwhile.',
+    notes: 'Printed ASA, 4+ perimeters, profile flat on the bed (P4); heat-set inserts for the M5 stainless thumbscrews (brass is fine inside the plastic). Clips over the front transom, right of the prow. The prow has no socket yet (workstream B); this takes a flag or lantern staff meanwhile.',
   }));
   const sock: [Vec2[], Vec2[]] = [circleLoop(0, 0, FLAG_SOCKET.rOut), circleLoop(0, 0, FLAG_SOCKET.rBore, 16, false)];
   parts.push(profilePart(ctx, {
     id: 'flag-socket', name: 'Flag-pole socket', group: 'lighting', mat: 'print', material: 'ASA', outline: sock[0], holes: [sock[1]], depth: FLAG_SOCKET.height,
-    basis: 'xy', origin: [x0c + L.side / 2, -yc, wz], removable: true, step: STEP.finish, explode: [0, 0, 1],
+    basis: 'xy', origin: [x0c + L.transom / 2, -yc, wz], removable: true, step: STEP.finish, explode: [0, 0, 1],
     joints: [{ type: 'pin', to: 'flag-mount', count: 2, size: '#6-32 stainless, into heat-set inserts', note: 'the staff drops in and is held by a thumbscrew' }],
     notes: 'Printed ASA tube for a 1/2" staff, 3" deep.',
   }));
@@ -124,7 +124,7 @@ export function buildLighting(ctx: Ctx, _prowTipX: number, _prowTipZ: number): P
   const hw2 = REAR_PLATE.width / 2;
   const hz = plateZ0 + REAR_PLATE.height / 2;
   const yP = -(p.liftSlotLengthIn / 2 + hw2 + REAR_PLATE_SLOT_GAP_IN);
-  const rearTx = L.xRear + L.side;
+  const rearTx = L.xRear + L.transom;
   const st = storageGeometry(p, L);
   const zLo = p.storageLocation === STORAGE_LOCATION.rearOverAxle ? Math.max(plateZ0 + 0.3, st.zTop + 0.05) : plateZ0 + 0.3;
   // A tall rear box fills the transom's inner face up to the gunwale line: then the doubler goes on the outer face and the plate stands off it.
@@ -136,15 +136,15 @@ export function buildLighting(ctx: Ctx, _prowTipX: number, _prowTipZ: number): P
     id: 'rear-light-mount', name: 'Rear light plate', group: 'lighting', mat: 'print', material: 'ASA',
     outline: [[yP - hw2, plateZ0], [yP + hw2, plateZ0], [yP + hw2, zTop], [yP - hw2, zTop]], holes, depth: REAR_PLATE.thick, basis: 'yz', origin: [L.xRear - off - REAR_PLATE.thick, 0, 0],
     step: STEP.finish, explode: unit(-1, 0, 0.3),
-    joints: [{ type: 'screw', to: 'doubler-rear-light', count: 2, size: '#8 × 1-1/4 stainless pan head, through the plate into the doubler', note: inside ? 'pilot-drilled; 1" of oak engagement (1/2" transom + 1/2" into the doubler)' : 'pilot-drilled; 1" of oak engagement in the outer doubler' }],
-    notes: 'Printed ASA flat plate beside the lift slot, 2 screws into the doubler and 2 for the light (not a load path).',
+    joints: [{ type: 'screw', to: 'doubler-rear-light', count: 2, size: '#8 × 1-1/4 stainless pan head, through the plate into the doubler', note: inside ? `pilot-drilled; ${(1.25 - REAR_PLATE.thick).toFixed(2)}" of oak engagement (the ${L.transom}" transom + ${(1.25 - REAR_PLATE.thick - L.transom).toFixed(2)}" into the doubler)` : `pilot-drilled; ${(1.25 - REAR_PLATE.thick).toFixed(2)}" of oak engagement in the outer doubler` }],
+    notes: 'Printed ASA flat plate beside the lift slot, 2 screws into the doubler and 2 for the light (not a load path). Print flat on the bed, 4+ perimeters (P4).',
   }));
   parts.push(box(ctx, {
     ...common, id: 'doubler-rear-light', partNo: 'doubler-rear-light', name: 'Rear light doubler', group: 'lighting', mat: 'oak', grain: 'y',
     ...span(inside ? [rearTx, rearTx + T] : [L.xRear - T, L.xRear], [yP - hw2 - 0.5, yP + hw2 + 0.5], inside ? [zLo, zTop] : [plateZ0, zTop]),
     joints: [{ type: 'glue', to: 'transom-rear', count: 1, note: 'epoxy, full face' }, { type: 'screw', to: 'rear-light-mount', count: 2, size: '#8 × 1-1/4 stainless, through the plate' }],
-    notes: inside ? 'Blocking on the inner face of the 1/2" rear transom, above the lid frame, so the light-plate screws have 1" of engagement (D-41).'
-      : 'Blocking on the OUTER face of the rear transom (a tall storage box fills the inner face), so the light-plate screws have 1" of engagement (D-41).',
+    notes: inside ? `Blocking on the inner face of the ${L.transom}" rear transom, above the lid frame, so the light-plate screws have ${(1.25 - REAR_PLATE.thick).toFixed(2)}" of engagement (D-41).`
+      : `Blocking on the OUTER face of the rear transom (a tall storage box fills the inner face), so the light-plate screws have ${(1.25 - REAR_PLATE.thick).toFixed(2)}" of engagement (D-41).`,
   }));
   parts.push(box(ctx, {
     ...common, id: 'rear-light', name: 'Rear red light', mat: 'fixed', massLb: REAR_LIGHT_MASS_LB, kind: 'purchased', material: 'LED light', fab: 'buy',
@@ -183,7 +183,7 @@ export function buildHardware(ctx: Ctx): Part[] {
   }
   if (L.beamR.top > zBot) blockers.push([L.beamR.x - L.beamR.thick / 2, L.beamR.x + L.beamR.thick / 2]);
   blockers.sort((a, b) => a[0] - b[0]);
-  let lo = L.xRear + L.side, bestLo = lo, bestHi = lo;
+  let lo = L.xRear + L.transom, bestLo = lo, bestHi = lo;
   for (const [b0, b1] of [...blockers, [L.xs, L.xs] as [number, number]]) {
     if (b0 - lo > bestHi - bestLo) { bestLo = lo; bestHi = b0; }
     lo = Math.max(lo, b1);
@@ -192,6 +192,8 @@ export function buildHardware(ctx: Ctx): Part[] {
   const sx = Math.min(HARDWARE_SIZE[0], gap);
   return [box(ctx, {
     id: 'hardware', name: 'Fasteners, inserts & misc', group: 'hardware', mat: 'fixed', massLb: HARDWARE_FALLBACK_LB, kind: 'purchased', fab: 'buy',
+    material: '316 stainless screws, bolts, inserts and Dominos; epoxy',
+    sourcing: { vendor: 'McMaster-Carr / Fastenal (316 stainless wood screws, machine screws and threaded inserts; Festool Dominos; West System epoxy). Stainless throughout: no zinc or brass in wet oak (S7).', costUsd: 60 },
     step: STEP.finish, size: [sx, HARDWARE_SIZE[1], HARDWARE_SIZE[2]], center: [(bestLo + bestHi) / 2, 0, L.deckBot - HARDWARE_SIZE[2] / 2],
     notes: 'Fastener remainder, set from the joint list by applyHardwareMass. Parked under the deck center.',
   })];

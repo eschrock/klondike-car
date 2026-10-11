@@ -3,13 +3,13 @@
  *
  * Every physical joint is recorded on BOTH parts it joins (so a part's own list shows every cut it needs), each with
  * `at` in that part's own local frame. `joinerySummary` counts a physical joint once. The rules are choices made by
- * stock thickness: a Festool Domino where the host keeps a sound wall behind the mortise, a CNC blind tenon where
- * it does not (the 1/2" transoms and girders), grooves and rabbets that capture the ply, glue + epoxy fillets,
+ * stock thickness: a Festool Domino where the host keeps a sound wall behind the mortise, a loose tenon where
+ * it does not (thin members: a loose tenon), grooves and rabbets that capture the ply, glue + epoxy fillets,
  * and threaded inserts + knobs for everything that comes off (D-9).
  */
 import { FRAME_STYLE, SIDE_CONSTRUCTION, type Params } from '../params';
 import { SIDES, type Ctx } from './build-utils';
-import { prowShape, fingerAnalysis } from './body';
+import { prowShape, fingerAnalysis, guardInsertZ, liftSlot, scupperSites } from './body';
 import { worldAABB } from './bounds';
 import type { Joint, JointType, Mat4, Part, Vec3 } from './types';
 
@@ -18,19 +18,22 @@ export interface DominoSize {
   name: string;
   tool: 'DF 500' | 'DF 700 XL';
   tMm: number;
+  /** Tenon LENGTH = total depth across the joint (about L/2 into each piece), NOT the dimension along the joint face. */
   lMm: number;
+  /** Tenon face width (the dimension along the joint face), Festool nominal on the tight DF 500 setting / XL. */
+  wMm: number;
 }
 export const DOMINOS: readonly DominoSize[] = [
-  { name: '4×20', tool: 'DF 500', tMm: 4, lMm: 20 },
-  { name: '5×30', tool: 'DF 500', tMm: 5, lMm: 30 },
-  { name: '6×40', tool: 'DF 500', tMm: 6, lMm: 40 },
-  { name: '8×40', tool: 'DF 500', tMm: 8, lMm: 40 },
-  { name: '8×50', tool: 'DF 500', tMm: 8, lMm: 50 },
-  { name: '10×50', tool: 'DF 500', tMm: 10, lMm: 50 },
-  { name: '8×80', tool: 'DF 700 XL', tMm: 8, lMm: 80 },
-  { name: '10×80', tool: 'DF 700 XL', tMm: 10, lMm: 80 },
-  { name: '12×100', tool: 'DF 700 XL', tMm: 12, lMm: 100 },
-  { name: '14×100', tool: 'DF 700 XL', tMm: 14, lMm: 100 },
+  { name: '4×20', tool: 'DF 500', tMm: 4, lMm: 20, wMm: 17 },
+  { name: '5×30', tool: 'DF 500', tMm: 5, lMm: 30, wMm: 19 },
+  { name: '6×40', tool: 'DF 500', tMm: 6, lMm: 40, wMm: 20 },
+  { name: '8×40', tool: 'DF 500', tMm: 8, lMm: 40, wMm: 22 },
+  { name: '8×50', tool: 'DF 500', tMm: 8, lMm: 50, wMm: 22 },
+  { name: '10×50', tool: 'DF 500', tMm: 10, lMm: 50, wMm: 24 },
+  { name: '8×80', tool: 'DF 700 XL', tMm: 8, lMm: 80, wMm: 26 },
+  { name: '10×80', tool: 'DF 700 XL', tMm: 10, lMm: 80, wMm: 28 },
+  { name: '12×100', tool: 'DF 700 XL', tMm: 12, lMm: 100, wMm: 30 },
+  { name: '14×100', tool: 'DF 700 XL', tMm: 14, lMm: 100, wMm: 34 },
 ];
 const MM = 25.4;
 /** The tenon should be about a third of the stock; never more than this fraction. */
@@ -38,24 +41,33 @@ const DOMINO_MAX_T_FRAC = 0.42;
 /** CNC stub tenon: thickness is a third of the stock, width capped here. */
 const STUB_MAX_WIDTH_IN = 1;
 const MIN_BAND_IN = 0.4;
+/** Oak left each side of a Domino cut in a face (the same ≥ 0.1" rule as the groove walls). */
+const TIE_WALL_MIN_IN = 0.1;
 
 export interface DominoQuery {
   /** Thickness of the piece that carries the tenon (the Domino sits in its end or edge), in. */
   stockIn: number;
   /** Thickness of the host the other mortise is cut into, along the mortise depth (length / 2), in. */
   hostIn: number;
-  /** Room along the long dimension of the Domino (the joint face length), in. */
+  /** Room along the joint face (the tenon's face width must fit it with edge margins), in. */
   widthIn: number;
+  /** Dimension of the tenon-carrying piece along the tenon axis (the mortise depth L/2 must fit it with a wall); omit when it is not limiting. */
+  stockAlongIn?: number;
 }
 
-/** Largest Domino (by tenon area) that keeps a sound wall in the host, fits the face with an edge margin, and is not thicker than ~0.42× the stock; null if none. */
+/**
+ * Largest Domino (by tenon area) that (a) is no thicker than ~0.42× the stock, (b) has mortise depth L/2 that keeps a sound wall in the host
+ * (and in the tenon-carrying piece if `stockAlongIn` is given), and (c) whose FACE WIDTH (wMm, not L) fits the joint face with an edge margin; null if none.
+ * Example: 6×40 in ¾" × 1½" stiles: T 6 mm ≤ 0.75·0.42 in; depth 20 mm = 0.79" into a 1.5" member; face width 20 mm = 0.79" along a 1.5" rail end, 0.36" margins.
+ */
 export function chooseDomino(p: Params, q: DominoQuery): DominoSize | null {
   let best: DominoSize | null = null;
   for (const d of DOMINOS) {
     const wall = q.hostIn - d.lMm / 2 / MM;
     if (d.tMm / MM > q.stockIn * DOMINO_MAX_T_FRAC) continue;
     if (wall < p.dominoMinWallIn) continue;
-    if (d.lMm / MM > q.widthIn - 2 * p.dominoEdgeIn) continue;
+    if (q.stockAlongIn !== undefined && q.stockAlongIn - d.lMm / 2 / MM < p.dominoMinWallIn) continue;
+    if (d.wMm / MM > q.widthIn - 2 * p.dominoEdgeIn) continue;
     if (!best || d.tMm * d.lMm > best.tMm * best.lMm) best = d;
   }
   return best;
@@ -78,13 +90,13 @@ export interface EndJoint {
   widthIn: number;
 }
 
-/** Joint for the end of a `stockIn`-thick piece into a `hostIn`-thick host over `bandIn` of face: Domino if it fits, else a CNC blind tenon. */
+/** Joint for the end of a `stockIn`-thick piece into a `hostIn`-thick host over `bandIn` of face: Domino if it fits, else a loose tenon (both parts mortised: CNC or router; shop-made tenon stock). Not an integral CNC tenon (build review S2). */
 export function endJoint(p: Params, stockIn: number, hostIn: number, bandIn: number): EndJoint {
   const d = chooseDomino(p, { stockIn, hostIn, widthIn: bandIn });
-  if (d) return { type: 'domino', size: `${d.name} (${d.tool})`, widthIn: d.lMm / MM };
+  if (d) return { type: 'domino', size: `${d.name} (${d.tool})`, widthIn: d.wMm / MM };
   const w = Math.max(0.25, Math.min(STUB_MAX_WIDTH_IN, bandIn - 0.2));
   const t = Math.max(0.125, Math.round((stockIn / 3) * 16) / 16);
-  return { type: 'mortise-tenon', size: `${frac(t)} × ${frac(w)} × ${frac(p.tenonDepthIn)} deep (CNC blind tenon)`, widthIn: w };
+  return { type: 'mortise-tenon', size: `${frac(t)} × ${frac(w)} × ${frac(p.tenonDepthIn)} deep loose tenon (both parts mortised; rounded-edge tenon stock)`, widthIn: w };
 }
 
 // ── Frames ──
@@ -127,8 +139,8 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
   const solid = p.sideConstruction === SIDE_CONSTRUCTION.solidOak;
   const openFrame = p.sideConstruction === SIDE_CONSTRUCTION.openFrame;
   const ladder = p.frameStyle === FRAME_STYLE.ladder;
-  const rearTx = L.xRear + L.side;
-  const frontTx = L.xFront - L.side;
+  const rearTx = L.xRear + L.transom;
+  const frontTx = L.xFront - L.transom;
   const jD = p.crossmemberDepthIn;
 
   const runs = [
@@ -152,24 +164,24 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
         add({ a: `${id}-gunwale`, b: `${id}-web`, typeA: 'dado', size: groove, pts: [[xm, yc + s * run.fl, z1 + g / 2]], noteA: 'Groove in the underside of the gunwale.', noteB: 'Upper edge of the web, captured.' });
         add({ a: `${id}-chine`, b: run.deck, typeA: 'rabbet', size: rabbetSize, pts: [[xm, s * (run.hw + dd / 2), run.bot + L.ply / 2]], noteB: 'Edge of the deck, captured.' });
         // Web end into a stopped dado in the transom.
-        add({ a: run.tx, b: `${id}-web`, typeA: 'dado', size: `${(pl + p.grooveSlopIn).toFixed(3)}" × ${frac(dd)}" stopped dado`, pts: [[rear ? run.txFace - dd / 2 : run.txFace + dd / 2, yc, (z0 + z1) / 2]], noteB: `End of the web, captured (${rear ? 'rear' : 'front'}).` });
+        add({ a: run.tx, b: `${id}-web`, typeA: 'dado', size: `${(pl + p.grooveSlopIn).toFixed(3)}" × ${frac(dd)}" stopped dado, ${frac(p.ventHoleIn)}" vent hole through the transom at its closed end`, pts: [[rear ? run.txFace - dd / 2 : run.txFace + dd / 2, yc, (z0 + z1) / 2]], noteA: 'Vented: the transom slides on last, so air and epoxy must escape (hydraulic lock, M4).', noteB: `End of the web, captured (${rear ? 'rear' : 'front'}); it enters the dado with the transom's slide in X.` });
         // Chine and gunwale ends into the transom face, clear of the deck dado and the web dado.
         const chineBand = z0 - g - (run.bot + L.ply) - 0.2;
         if (chineBand >= MIN_BAND_IN) {
-          const ej = endJoint(p, L.side, L.side, chineBand);
+          const ej = endJoint(p, L.side, L.transom, chineBand);
           add({ a: `${id}-chine`, b: run.tx, typeA: ej.type, size: ej.size, pts: [[run.txFace, yc, run.bot + L.ply + 0.1 + chineBand / 2]], noteA: 'End of the chine into the transom face; epoxy fillet inside.' });
         } else add({ a: `${id}-chine`, b: run.tx, typeA: 'glue', size: 'epoxy + fillet', pts: [[run.txFace, yc, run.bot + L.railBand / 2]] });
         const gunBand = zTop - 0.1 - (z1 + g + 0.1);
         if (gunBand >= MIN_BAND_IN) {
-          const ej = endJoint(p, L.side, L.side, gunBand);
+          const ej = endJoint(p, L.side, L.transom, gunBand);
           add({ a: `${id}-gunwale`, b: run.tx, typeA: ej.type, size: ej.size, pts: [[run.txFace, yc + s * run.fl, z1 + g + 0.1 + gunBand / 2]], noteA: 'End of the gunwale into the transom face; epoxy fillet inside.' });
         } else add({ a: `${id}-gunwale`, b: run.tx, typeA: 'glue', size: 'epoxy + fillet', pts: [[run.txFace, yc + s * run.fl, zTop - L.railBand / 2]] });
       } else if (solid) {
         add({ a: `${id}-board`, b: run.deck, typeA: 'rabbet', size: rabbetSize, pts: [[xm, s * (run.hw + dd / 2), run.bot + L.ply / 2]], noteB: 'Edge of the deck, captured.' });
-        const ej = endJoint(p, L.side, L.side, Math.min(2, zTop - run.bot - 0.4));
+        const ej = endJoint(p, L.side, L.transom, Math.min(2, zTop - run.bot - 0.4));
         add({ a: `${id}-board`, b: run.tx, typeA: ej.type, size: ej.size, pts: [[run.txFace, yc, (run.bot + zTop) / 2 - 1], [run.txFace, yc, (run.bot + zTop) / 2 + 1]], noteA: 'Board end into the transom face.' });
       } else if (openFrame) {
-        const ej = endJoint(p, L.side, L.side, L.railBand);
+        const ej = endJoint(p, L.side, L.transom, L.railBand);
         add({ a: `${id}-gunwale`, b: run.tx, typeA: ej.type, size: ej.size, pts: [[run.txFace, yc, zTop - L.railBand / 2]], noteA: 'Gunwale end into the transom face.' });
         for (const part of parts) {
           if (!part.id.startsWith(`${id}-post-`)) continue;
@@ -182,14 +194,32 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
   }
 
   // ── Decks into the transom dados, glued to the frame ──
-  add({ a: 'transom-rear', b: 'deck-cabin', typeA: 'dado', size: `${L.ply.toFixed(3)}" × ${frac(dd)}" dado across the front face`, pts: [[rearTx - dd / 2, 0, L.deckBot + L.ply / 2]], noteB: 'Rear edge of the deck, captured.' });
-  add({ a: 'transom-front', b: 'deck-nose', typeA: 'dado', size: `${L.ply.toFixed(3)}" × ${frac(dd)}" dado across the rear face`, pts: [[frontTx + dd / 2, 0, L.noseBot + L.ply / 2]], noteB: 'Front edge of the deck, captured.' });
+  add({ a: 'transom-rear', b: 'deck-cabin', typeA: 'dado', size: `${L.ply.toFixed(3)}" × ${frac(dd)}" dado across the front face, ${frac(p.ventHoleIn)}" vent holes through the transom at both closed ends`, pts: [[rearTx - dd / 2, 0, L.deckBot + L.ply / 2]], noteB: 'Rear edge of the deck, captured.' });
+  add({ a: 'transom-front', b: 'deck-nose', typeA: 'dado', size: `${L.ply.toFixed(3)}" × ${frac(dd)}" dado across the rear face, ${frac(p.ventHoleIn)}" vent holes through the transom at both closed ends`, pts: [[frontTx + dd / 2, 0, L.noseBot + L.ply / 2]], noteB: 'Front edge of the deck, captured.' });
   for (const { s, tag } of SIDES) {
     if (ladder) {
-      add({ a: `rail-cabin-${tag}`, b: 'deck-cabin', typeA: 'glue', size: 'thickened epoxy, full face', pts: [[(rearTx + L.xs) / 2, s * (L.hwC - p.railThicknessIn / 2), L.deckBot]], noteA: 'Deck bonded to the rail top; weights or vacuum bag.' });
-      add({ a: `rail-nose-${tag}`, b: 'deck-nose', typeA: 'glue', size: 'thickened epoxy, full face', pts: [[(L.xs + L.noseRailEnd) / 2, s * (L.hwN - p.railThicknessIn / 2), L.noseBot]] });
-    } else {
-      add({ a: `girder-cabin-${tag}`, b: `side-cabin-${tag}-chine`, typeA: 'glue', size: 'epoxy, full face + 1/4" bronze screws at 8"', pts: [[(rearTx + L.xs) / 2, s * (L.hwC + L.side / 2), L.deckBot]], noteA: 'Girder laminated under the chine to deepen the side beam (D-17).' });
+      const yRc = s * (L.hwC + L.side - p.railThicknessIn / 2), yRn = s * (L.hwN + L.side - p.railThicknessIn / 2);
+      add({ a: `rail-cabin-${tag}`, b: 'deck-cabin', typeA: 'glue', size: 'thickened epoxy, full face', pts: [[(rearTx + L.xs) / 2, yRc, L.deckBot]], noteA: 'Deck bonded to the rail top; weights or vacuum bag.' });
+      add({ a: `rail-nose-${tag}`, b: 'deck-nose', typeA: 'glue', size: 'thickened epoxy, full face', pts: [[(L.xs + L.noseRailEnd) / 2, yRn, L.noseBot]] });
+    }
+    // Side-to-frame tie (build review M6, D-43): the chine bears on the rail (ladder, flush under it) or on the girder (hull-beam), epoxy bed + Dominos every chineTieSpacingIn.
+    if (captured) {
+      for (const zone of ['cabin', 'nose'] as const) {
+        const hw = zone === 'cabin' ? L.hwC : L.hwN, x0 = zone === 'cabin' ? rearTx : L.xs, x1 = zone === 'cabin' ? L.xs : (ladder ? L.noseRailEnd : L.xs);
+        const bot = zone === 'cabin' ? L.deckBot : L.noseBot;
+        const frameId = ladder ? `rail-${zone}-${tag}` : `girder-${zone}-${tag}`;
+        if (x1 - x0 < 2 * p.chineTieSpacingIn / 3) continue;
+        const n = Math.max(2, Math.floor((x1 - x0) / p.chineTieSpacingIn));
+        // Flat bearing face under the chine beside the deck rabbet, and the Domino that fits it with ≥ 0.1" of oak each side (the groove-wall rule).
+        const flat = L.side - dd;
+        const dom = DOMINOS.filter((d) => d.tool === 'DF 500' && d.tMm / MM + 2 * TIE_WALL_MIN_IN <= flat).sort((a, b) => b.tMm * b.wMm - a.tMm * a.wMm)[0];
+        const pts = Array.from({ length: n }, (_, i) => [x0 + ((i + 0.5) * (x1 - x0)) / n, s * (hw + dd + flat / 2), bot] as Vec3);
+        add({
+          a: `side-${zone}-${tag}-chine`, b: frameId, typeA: dom ? 'domino' : 'glue',
+          size: dom ? `${dom.name} (${dom.tool}) every ${p.chineTieSpacingIn}" + epoxy bed on the ${frac(flat)}" bearing face` : 'epoxy bed on the bearing face',
+          pts, noteA: 'SIDE-TO-FRAME TIE (D-43): the chine sits on the rail top, mortised before the rabbet is cut; the side assembly slides inboard onto the deck edge and drops onto these Dominos (M4).',
+        });
+      }
     }
   }
 
@@ -199,9 +229,9 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     const mem = ladder ? `rail-cabin-${tag}` : `girder-cabin-${tag}`;
     const bandZ = L.deckBot - (L.deckTop - jD);
     if (bandZ >= MIN_BAND_IN + 0.2) {
-      const ej = endJoint(p, railT, L.side, bandZ - 0.2);
-      add({ a: mem, b: 'transom-rear', typeA: ej.type, size: ej.size, pts: [[rearTx, s * (ladder ? L.hwC - railT / 2 : L.hwC + L.side / 2), (L.deckTop - jD + L.deckBot) / 2]], noteA: 'Member end into the transom face (the transom hangs jD below the deck).' });
-    } else add({ a: mem, b: 'transom-rear', typeA: 'glue', size: 'epoxy + fillet', pts: [[rearTx, s * L.hwC, L.deckBot - 0.5]] });
+      const ej = endJoint(p, railT, L.transom, bandZ - 0.2);
+      add({ a: mem, b: 'transom-rear', typeA: ej.type, size: ej.size, pts: [[rearTx, s * (ladder ? L.hwC + L.side - railT / 2 : L.hwC + L.side / 2), (L.deckTop - jD + L.deckBot) / 2]], noteA: 'Member end into the transom face (the transom hangs jD below the deck).' });
+    } else add({ a: mem, b: 'transom-rear', typeA: 'glue', size: 'epoxy + fillet', pts: [[rearTx, s * (L.hwC + L.side / 2), L.deckBot - 0.5]] });
   }
   const spanEnds = (zone: 'cabin' | 'nose', i: number) => {
     const j = byId.get(`joist-${zone}-${i + 1}`);
@@ -231,14 +261,37 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     add({ a: `shoulder-${tag}`, b: 'deck-cabin', typeA: 'glue', size: 'epoxy fillet along the bottom', pts: [[L.xs - pl / 2, s * ((L.hwN + L.side + L.hwC) / 2), L.deckTop]], noteA: 'Banded on all four edges; fillets to the deck and both sides.' });
   }
 
-  // ── Prow: removable on two inserts + knobs (D-9, D-36) ──
+  // ── Prow (D-9, D-36, D-43): the leg BEARS in the socket block; two 5/16-18 stainless inserts + knobs only retain it ──
   {
     const pr = prowShape(ctx);
-    const zs: number[] = [pr.origin[2] + pr.legLenIn * 0.3, pr.origin[2] + pr.legLenIn * 0.75];
+    // Retaining inserts low in the leg, through the transom: never above the transom top (a low side leaves less transom behind the leg).
+    const avail = Math.min(2.5, Math.max(0.5, liftSlot(ctx, 'front').transomTop - pr.origin[2]));
+    const zs: number[] = [pr.origin[2] + 0.3 * avail, pr.origin[2] + 0.75 * avail];
     add({
-      a: 'prow', b: 'transom-front', typeA: 'threaded-insert', typeB: 'knob', size: '1/4-20 × 3/8 flanged brass insert, epoxied in the leg', sizeB: '1/4-20 × 2 thumb-knob bolt through a 9/32 hole, knob inside the hull',
-      pts: zs.map((z) => [L.xFront, 0, z] as Vec3), noteA: 'Removable for transport; no tools.', noteB: 'Knob heads sit inside the front transom above the foot stop.',
+      a: 'prow', b: 'transom-front', typeA: 'threaded-insert', typeB: 'knob', size: '5/16-18 × 1/2 stainless (316) flanged insert, epoxied in the leg back', sizeB: '5/16-18 × 1-1/2 stainless thumb-knob bolt through a 11/32 hole, knob inside the hull (stands about 3/4" into the nose)',
+      pts: zs.map((z) => [L.xFront, 0, z] as Vec3), noteA: 'Removable for transport; no tools. Retains only: the leg bears in the socket.', noteB: 'Knob heads sit inside the front transom above the foot stop.',
     });
+    add({ a: 'prow', b: 'prow-socket', typeA: 'glue', size: `${pr.legLenIn.toFixed(1)}" slip fit in the socket (no glue: the prow comes off)`, pts: [[pr.socket.x0 + pr.socket.slotDepthIn / 2, 0, (pr.socket.z0 + pr.socket.z1) / 2]], noteA: 'Bearing joint: leg back on the transom face, sides and front on the socket walls.' });
+    add({ a: 'prow-socket', b: 'transom-front', typeA: 'screw', size: '1/4-20 × 1-1/2 stainless flat-head screw from inside, into stainless inserts in the cheeks + epoxy on the cheek ends', pts: [-1, 1].flatMap((sg) => [0.3, 0.7].map((f) => [L.xFront, sg * (pr.socket.slotHalfIn + p.prowSocketCheekIn / 2), pr.socket.z0 + f * Math.min(pr.socket.heightIn, liftSlot(ctx, 'front').transomTop - pr.socket.z0)] as Vec3)), noteA: 'Glued and screwed; nothing protrudes into the nose.' });
+  }
+
+  // ── Rear transom backers (S13): epoxy to the transom, the socket and bracket bolts pass through both ──
+  for (const { s, tag } of SIDES) {
+    const bk = byId.get(`transom-backer-${tag}`);
+    if (!bk) continue;
+    const bb = worldAABB(bk);
+    add({ a: bk.id, b: 'transom-rear', typeA: 'glue', size: 'epoxy, full face; the socket / bracket carriage bolts pass through both', pts: [[bb.min[0], (bb.min[1] + bb.max[1]) / 2, (bb.min[2] + bb.max[2]) / 2]], noteA: 'Glue on the bench before the transom goes on.' });
+    void s;
+  }
+
+  // ── Scuppers through the chines (M7) ──
+  for (const site of scupperSites(ctx)) {
+    for (const { s, tag } of SIDES) {
+      const sc = byId.get(`scupper-${site.tagPos}-${tag}`);
+      if (!sc) continue;
+      const host = captured || openFrame ? `side-${site.zone}-${tag}-chine` : `side-${site.zone}-${tag}-board`;
+      add({ a: sc.id, b: host, typeA: 'glue', size: `${frac(p.scupperDiaIn)}" 316 nipple bedded in epoxy; hole epoxy-lined`, pts: [[site.x, s * (site.hw + L.side / 2), sc.transform[14]]], noteA: 'Drains the deck at deck level; no cut oak edge is left bare.' });
+    }
   }
 
   // ── Signs: four thumb-knob screws into tee-nuts in the side panel (nothing protrudes inside the hull) ──
@@ -252,13 +305,13 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
       const pts = ([[-dx, -dz], [dx, -dz], [-dx, dz], [dx, dz]] as const).map(([x, z]) => toModel(sign.transform, [x, 0, z]));
       add({
         a: sign.id, b: captured ? `side-cabin-${tag}-web` : `side-cabin-${tag}-board`, typeA: 'knob', typeB: 'threaded-insert',
-        size: '#10-32 × 1 thumb-knob screw through a 3/16 clearance hole', sizeB: captured ? '#10-32 tee-nut, epoxied in the 6 mm web, prongs on the inside face' : '#10-32 × 3/8 brass insert',
+        size: '#10-32 × 1 thumb-knob screw through a 3/16 clearance hole', sizeB: captured ? '#10-32 short-barrel stainless tee-nut, epoxied in the 6 mm web, prongs on the inside face' : '#10-32 × 3/8 stainless insert',
         pts, noteA: 'Sign comes off for transport (D-9).',
       });
     } else {
       const dz = Math.max(0.3, sz / 2 - 0.45);
       const pts = [-dx, dx].map((x) => toModel(sign.transform, [x, 0, dz]));
-      add({ a: sign.id, b: `side-cabin-${tag}-gunwale`, typeA: 'knob', typeB: 'threaded-insert', size: '#10-32 thumb-knob screw', sizeB: '#10-32 × 3/8 brass insert in the gunwale face', pts });
+      add({ a: sign.id, b: `side-cabin-${tag}-gunwale`, typeA: 'knob', typeB: 'threaded-insert', size: '#10-32 thumb-knob screw', sizeB: '#10-32 × 3/8 stainless insert in the gunwale face', pts });
     }
   }
 
@@ -268,12 +321,11 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     for (const { s, tag } of SIDES) {
       const guard = byId.get(`guard-${tag}`);
       if (!guard || !fa.hazard) continue;
-      const zg = L.noseTop + L.sideH - L.railBand;
-      const zc = zg + Math.min(1, L.sideH - 0.25) / 2 - 0.1;
+      const zc = guardInsertZ(L, p); // above the gunwale's web groove (M2, D-43)
       const x0 = fa.hazard.x0, len = fa.hazard.x1 - fa.hazard.x0;
       add({
-        a: guard.id, b: captured || openFrame ? `side-nose-${tag}-gunwale` : `side-nose-${tag}-board`, typeA: 'screw', typeB: 'threaded-insert', size: '#10-32 × 5/8 SS button-head screw', sizeB: '#10-32 × 3/8 flanged brass insert',
-        pts: [0.25, 0.75].map((f) => [x0 + len * f, s * (L.hwN + L.side), zc] as Vec3), noteA: 'Strap on the gunwale outer face; the leg lies in the web recess.',
+        a: guard.id, b: captured || openFrame ? `side-nose-${tag}-gunwale` : `side-nose-${tag}-board`, typeA: 'screw', typeB: 'threaded-insert', size: '#10-32 × 5/8 SS button-head screw', sizeB: '#10-32 × 3/8 flanged 316 stainless insert (above the web groove, not into it)',
+        pts: [0.25, 0.75].map((f) => [x0 + len * f, s * (L.hwN + L.side), zc] as Vec3), noteA: 'Strap on the gunwale outer face; the leg lies in the web recess. The inserts sit in the solid oak above the groove (build review M2); print with the extrusion profile in the bed plane (layers parallel to the profile), ASA, 4+ perimeters, and add ribs under the hood flange.',
       });
     }
   }

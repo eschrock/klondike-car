@@ -42,6 +42,7 @@ export type Fab =
   | 'print'
   | 'bentlam'
   | 'drill-tap'
+  | 'outsource' // cut by a waterjet / laser service (steel plate): not a shop operation
   | 'buy'
   | 'none';
 

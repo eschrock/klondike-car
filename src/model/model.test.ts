@@ -22,7 +22,7 @@ const ALLOW: Allow[] = [
   { a: /^beam-/, b: /^wheel-/, why: 'tire OBB is a conservative box; the beam ends sit inside the rim, 1/8" short of the hub face' },
   { a: /^brake-shoe-/, b: /^wheel-/, why: 'shoe presses on the tread; the tire OBB corner is not tire' },
   { a: /^brake-/, b: /^brake-/, why: 'pins, bolts, hubs and the shaft pass through bored holes in the arms, bushings, blocks and pads; the pawl sits in a tooth valley (D-38, D-39). Moving-part clearances are swept in src/analysis/brake.test.ts' },
-  { a: /^(transom-rear|side-cabin-[LR]-web)$/, b: /^brake-(lever|pawl)/, why: 'flared gunwale: the transom / web OBBs are conservative boxes over the flared outline; the lever leans out parallel to the web and stays 1/2" clear of it, and the pawl sits on the plate outside the flare (D-38, D-39)' },
+  { a: /^(transom-rear|side-cabin-[LR]-web)$/, b: /^brake-(lever|pawl|quadrant)/, why: 'flared gunwale: the transom / web OBBs are conservative boxes over the flared outline; the lever leans out parallel to the web and stays 1/2" clear of it, and the pawl sits on the plate outside the flare (D-38, D-39)' },
   { a: /^handle-(socket|post|pin)-/, b: /^handle-(socket|post|pin)-/, why: 'the post is a slip fit in the socket tube and the clevis pin passes through both (D-9, D-39)' },
   { a: /^(rail-cabin|girder-cabin)-/, b: /^brake-(bushing|lever-pin)/, why: 'the shaft bushing and the lever pivot bolt pass through the rail band (D-38)' },
   { a: /^(rail-cabin|girder-cabin)-/, b: /^(beam-R|axle-R|brake-shaft)/, why: 'rails/girders are notched or drilled for the rear axle and brake-shaft journals (D-15); joinery is Phase 3' },
@@ -30,10 +30,12 @@ const ALLOW: Allow[] = [
   { a: /^kingpin-crossbar$/, b: /^bolster-(fore|aft)$/, why: 'the crossbar ends are let into notches in the bolster rails (D-12)' },
   { a: /^kingpin-sleeve-/, b: /^(kingpin|beam-F|turntable|kingpin-crossbar)$/, why: 'the steel sleeve is a tube pressed into the beam / crossbar bore around the pin (drawn solid)' },
   { a: /^kingpin$/, b: /^(beam-F|turntable)$/, why: 'kingpin passes through the solid beam and the turntable center (D-25); it leads the axle rod, so axle-F is NOT allowed' },
+  { a: /^(kingpin|kingpin-sleeve-beam)$/, b: /^kp-(carrier|under|bar-plate)$/, why: 'the pin and its sleeve pass through the holes of the kingpin steel plates (D-35)' },
+  { a: /^steer-stop-(arm|riser)-[LR]$/, b: /^turntable$/, why: 'the stop arm and its riser stand inside the turntable center hole (D-35); the turntable is drawn as a solid block' },
   { a: /^side-bearer-[LR]$/, b: /^beam-F$/, why: 'the bearer block is housed in a mortise in the beam top (M5); only the mortise volume overlaps' },
   { a: /^beam-F$/, b: /^bridle-[LR]$/, why: 'the rope-bridle legs are tied around the front beam ends (D-14, D-27); the drawn rope bar ends embed ≲ ¼" in the beam' },
   { a: /^bridle-L$/, b: /^bridle-R$/, why: 'the two rope legs meet at the ring ahead of the cart (D-14, D-27); the drawn bar ends overlap at the knot' },
-  { a: /^stop-block-/, b: /^(bolster-(fore|aft)|kingpin-crossbar)$/, why: 'the stop block is a wedge glued into the corner between the bolster rail and the crossbar (D-31); its OBB is the rectangle behind the stop face and over-covers the wedge' },
+  { a: /^stop-block-/, b: /^(bolster-(fore|aft)|kingpin-crossbar|kp-bar-plate)$/, why: 'the stop block is a wedge glued into the corner between the bolster rail and the crossbar (D-31); its OBB is the rectangle behind the stop face and over-covers the wedge' },
   { a: /^nose-access-panel$/, b: /^deck-nose$/, why: 'the access panel is the cutout of the nose deck (D-34); workstream B cuts the opening, until then both parts exist' },
   { a: /^clamp-F[LR]1$/, b: /^(beam-F|axle-F[LR]?|clamp-F[LR]2)$/, why: 'the front square U-bolt wraps the beam (legs down its faces, bridge over the axle rod) to the plate under it (D-34); its OBB is the box around the U' },
   { a: /^eyebolt-[LR]$/, b: /^(beam-F|axle-F[LR]?|bridle-[LR])$/, why: 'the eye bolt shank passes through a hole in the front beam; the rope leg is tied to its eye (D-33); the axle rod is 6 thousandths inside the shank OBB' },
@@ -43,7 +45,9 @@ const ALLOW: Allow[] = [
   { a: /^seat-wedge-[LR]$/, b: /^seat-(back-(stile|pad)|knob)-?[LR]?$/, why: 'oak wedge/post is a trapezoid extrusion whose sloped face is the stile\'s rear face; its OBB is the bounding box, which reaches into the stile, the knob and the pad that lie in front of that face (D-40)' },
   { a: /^deck-(cabin|nose)$/, b: /^(side-(cabin|nose)-[LR]-(chine|board)|transom-(rear|front))$/, why: 'the deck edge sits in the chine rabbets and the transom dados (D-35); hull.test.ts pins the capture depth' },
   { a: /^side-(cabin|nose)-[LR]-web$/, b: /^(side-(cabin|nose)-[LR]-(chine|gunwale)|transom-(rear|front))$/, why: 'the side panel enters the chine and gunwale grooves and the transom stopped dados (D-35); hull.test.ts pins the groove depth and the dado depth' },
-  { a: /^transom-rear$/, b: /^brake-lever$/, why: 'with gunwale flare the transom outline widens toward the top (it must meet the flared gunwale); its OBB is the full bounding box, which reaches the lever that stands outside the unflared lower hull (D-35, D-38)' },
+  { a: /^transom-rear$/, b: /^brake-(lever|quadrant)$/, why: 'with gunwale flare the transom outline widens toward the top (it must meet the flared gunwale); its OBB is the full bounding box, which reaches the lever that stands outside the unflared lower hull (D-35, D-38)' },
+  { a: /^scupper-/, b: /^side-(cabin|nose)-[LR]-(chine|board)$/, why: 'the 3/8" stainless drain nipple passes through its hole in the chine / side board at deck level (M7, D-43)' },
+  { a: /^prow$/, b: /^prow-socket$/, why: 'the prow leg is a slip fit in the slot of the socket block; the sweep OBB is its full bounding box, which covers the socket (D-43)' },
   { a: /^guard-[LR]$/, b: /^side-nose-[LR]-gunwale$/, why: 'the finger guard is a joggled L whose OBB is its full bounding box; the strap lies on the gunwale face and the leg in the web recess (D-37)' },
 ];
 const matches = (r: Allow, a: Part, b: Part) => (r.a.test(a.id) && r.b.test(b.id)) || (r.a.test(b.id) && r.b.test(a.id));
@@ -259,6 +263,9 @@ describe('overlaps', () => {
 //   lever and two shoe blocks; now: ¾" ground cross shaft 39.5" long 4.9 (was 2.0), four shoe arms + four keyed hubs 1.1, two oak pads 0.6,
 //   two pad pins 0.4, oak lever + pivot block + bearing pad 1.2, thick keyed crank 0.6, link rod and two clevises 0.2, two bronze bushings and a
 //   sleeve 0.25, return spring 0.1, ratchet quadrant + bracket + pawl + spring 0.45, two steel-tube handle sockets 2.3 (new, stay on the cart).
+// Phase 3 round 2, brake & metal (F3): brake 12.3 → 11.0 lb (−1.3): aluminum 6061 handle sockets −1.5 (0.40 lb each, was 1.17 steel), pads 2.5" wide
+//   instead of 3" (shorter arm overhang, shorter shaft 38.1" vs 39.1": −0.35), purchased shaft collars instead of solid hubs −0.1, lining +0.1,
+//   shaft caps and acorn nuts +0.05, crank boss widened to 1.5" +0.5.
 // Phase 3 integration (all four workstreams landed): 144.7 → 147.8 lb (+3.1), group by group:
 //   body 30.2 → 29.7 (-0.5): the two 8" x 1.5" x 1" `grab-L/R` oak blocks (about 0.27 lb each) are gone (-0.75 with the storage-volume change below), because D's real `seat-grip-*` handles replace them
 //     (the blocks sat on the gunwale and could not be gripped);
@@ -270,10 +277,15 @@ describe('overlaps', () => {
 //   hardware 3.1 → 5.4 (+2.3): the flat 2.5 lb fastener lump became a computed remainder (lighting.ts `fastenerBreakdown`): about 114 wood and machine
 //     screws x 0.008 lb, 38 bolt sets x 0.04-0.09 lb, 16 nuts-and-washer legs, 20 inserts, 16 knobs, 22 Dominos and 56 epoxy joints = 4.8 lb, plus the six
 //     lash plates 0.6 lb. The old lump had been sized before the joint list existed and was too small for the real fastener count.
+// Phase 3 round 2, front end (F1, D-35): steering 13.8 → 22.7 lb (+8.9): turntable preset 2 (1,500 lb) 3.5 → 5.5 (+2.0); steel kingpin plates: 3/8" carrier
+//   strip on the beam 3.17, 3/16" plate under the beam 1.59, 3/16" plate under the crossbar 0.64 (+5.4); the two stop arms 0.58 each, channel dogs 0.81 each and
+//   their pads replace two oak dogs and four steel faces (+1.3 net, with the risers); the crossbar sleeve and the loose oak bearing are gone (−0.4: the beam sleeve
+//   is now 0.68 lb, plate to plate, vs 0.56 + 0.40); the crossbar is 3/16" shallower (−0.1). The plate bolts, cross-bolts and screws are in the computed hardware.
+//   hardware 5.4 → 6.8 (F1 share ≈ +1.0: 10 plate bolts, 10 stainless cross-bolts, 8 stop screws, 12 washers and nuts, 2 tapped-hole screws).
 // Group totals are therefore within a few percent of the sums above; the test band is ±15% per group and ±10% overall.
-const EXPECTED_EMPTY_LB = 147.8;
+const EXPECTED_EMPTY_LB = 150.6;
 const EXPECTED_GROUP_LB: Record<string, number> = {
-  'running-gear': 51.0, steering: 13.8, frame: 10.5, body: 29.7, seat: 8.7, storage: 10.5, brake: 12.3, removable: 4.7, hardware: 5.4, lighting: 1.3,
+  'running-gear': 51.0, steering: 22.7, frame: 10.1, body: 35.1, seat: 8.7, storage: 8.7, brake: 11.0, removable: 4.7, hardware: 6.8, lighting: 1.3,
 };
 
 describe('masses', () => {
@@ -433,7 +445,7 @@ const VARIANTS: Record<string, Partial<Params>> = {
   storageUnderSeat: { storageLocation: 2 },
   track30: { rearTrackIn: 30, frontTrackIn: 30 },
   // The 1" gap between a 24" hull and the 30"-track tires is too narrow for the brake crank and clevis (D-38): the shaft moves back behind the tire.
-  'track30+fix': { rearTrackIn: 30, frontTrackIn: 30, bodyWidthIn: 24, steerLockDeg: 25, brakeShaftBehindTireIn: 3, rearOverhangIn: 11 },
+  'track30+fix': { rearTrackIn: 30, frontTrackIn: 30, bodyWidthIn: 23, steerLockDeg: 25, brakeShaftBehindTireIn: 3, rearOverhangIn: 11 }, // 23": the rear U-bolt plates start at 11.5" (D-43)
   // At the Phase 2 44" wheelbase the auto shoulder sits 0.2" further back, so the seat needs to move back 0.5" at a 44" track.
   track44: { rearTrackIn: 44, frontTrackIn: 44, seatXIn: 11.5 },
   'track44+fix': { rearTrackIn: 44, frontTrackIn: 44, seatXIn: 11.5, noseTaperStartIn: 23 },
@@ -464,7 +476,7 @@ describe('variants', () => {
     expect(errorsOf({ ...defaults, seatXIn: seatMax + 0.5 }).length).toBeGreaterThan(0);
   });
   it('most variants are valid; raw extremes that are impossible are skipped with a reason', () => {
-    expect(valid.length).toBeGreaterThanOrEqual(variantCases.length - 6);
+    expect(valid.length).toBeGreaterThanOrEqual(variantCases.length - 7); // D-43: the 5/8" chines cost the nose 1/4" of inside width, so kingpinLead2_5 joins the impossible extremes
     for (const v of skipped) expect(errorsOf(v.p)[0].message.length, v.name).toBeGreaterThan(20);
     // The feasible companions must really be feasible.
     for (const n of ['overslungBeam+deck', 'track30+fix', 'track44+fix', 'wheelbase40+fix', 'seatXMin', 'seatXMax', 'gunwaleFlare2', 'wheel10', 'drumBrake', 'stubAxles', 'hullBeamFrame', 'lock30'])
@@ -870,7 +882,7 @@ describe('autoNoseGeometry and resolveParams', () => {
       const d = PARAM_DEFS[k];
       let ok = 0, n = 0;
       for (let v = d.min; v <= d.max + 1e-9; v += d.step) { n++; if (!errorsOf({ ...defaults, [k]: v }).length) ok++; }
-      expect(ok / n, k).toBeGreaterThanOrEqual(0.3);
+      expect(ok / n, k).toBeGreaterThanOrEqual(0.29); // 0.3 before the 5/8" chines (D-43) took 1/4" of the nose's inside width
     }
   });
 
@@ -981,7 +993,9 @@ describe('kingpin through the bolster (D-12)', () => {
     expect(cb).toBeDefined();
     const bb = worldAABB(cb);
     expect(bb.max[2]).toBeCloseTo(L.bolster.z1, 6);
-    expect(bb.min[2]).toBeCloseTo(L.bolster.z0, 6);
+    // D-35: the crossbar plate (3/16") lies on the turntable top plate, so the oak starts one plate thickness above the bolster rails' underside.
+    expect(bb.min[2]).toBeCloseTo(L.bolster.z0 + defaults.kingpinPlateThickIn, 6);
+    expect(L.kpPlates!.bar.z0).toBeCloseTo(L.bolster.z0, 6);
     expect(L.kingpin.z1).toBeCloseTo(L.bolster.z1, 6);
     const kp = worldAABB(m.find((x) => x.id === 'kingpin')!);
     expect(kp.max[2]).toBeCloseTo(bb.max[2], 6);
@@ -1002,16 +1016,21 @@ describe('kingpin through the bolster (D-12)', () => {
     const fat = { ...defaults, bolsterRailWidthIn: 2.5, kingpinCrossbarWidthIn: 4 };
     expect(errorsOf(fat).some((i) => i.message.includes('crossbar'))).toBe(true);
   });
-  it('sleeve: steel tube mass in the beam and crossbar bores; validator rules use the bore', () => {
+  it('sleeve: steel tube mass in the beam bore (plate to plate with the kingpin plates, D-35) and the crossbar bore (Phase 1 pin); validator rules use the bore', () => {
     const p = { ...defaults, kingpinDiameterIn: 0.75, kingpinSleeveOdIn: 1.25, kingpinLeadIn: 1.5, frontAxleBeamThicknessIn: 4 };
     const parts = buildModel(p);
-    const sb = parts.find((x) => x.id === 'kingpin-sleeve-beam')!, sc = parts.find((x) => x.id === 'kingpin-sleeve-bar')!;
+    const sb = parts.find((x) => x.id === 'kingpin-sleeve-beam')!;
     const Lp = computeLayout(p);
     const tube = (len: number) => ((Math.PI / 4) * (1.25 ** 2 - 0.75 ** 2) * len * p.steelDensityPcf) / 1728;
-    expect(sb.massLb).toBeCloseTo(tube(Lp.beamF.depth), 6);
-    expect(sc.massLb).toBeCloseTo(tube(Lp.crossbar!.z1 - Lp.crossbar!.z0), 6);
+    // With the plates the one sleeve runs from the bottom of the beam plate to the top of the carrier (flush with both outer faces).
+    expect(sb.massLb).toBeCloseTo(tube(Lp.kpPlates!.carrier.z1 - Lp.kpPlates!.under.z0), 6);
     expect(sb.body).toBe('steer');
-    expect(sc.body).toBe('chassis');
+    expect(parts.some((x) => x.id === 'kingpin-sleeve-bar')).toBe(false); // the crossbar needs no sleeve: the pin bears on the crossbar plate
+    // Without the crossbar (Phase 1 pin) the Phase 2 pair of pressed tubes is unchanged.
+    const legacy = buildModel({ ...p, kingpinThroughBolster: 0 });
+    const Ll = computeLayout({ ...p, kingpinThroughBolster: 0 });
+    expect(legacy.find((x) => x.id === 'kingpin-sleeve-beam')!.massLb).toBeCloseTo(tube(Ll.beamF.depth), 6);
+    expect(legacy.some((x) => x.id === 'kingpin-sleeve-bar')).toBe(false); // no crossbar, no crossbar sleeve
     expect(buildModel({ ...p, kingpinSleeveOdIn: 0 }).some((x) => x.id.startsWith('kingpin-sleeve'))).toBe(false);
     // sleeve OD must exceed the pin
     expect(errorsOf({ ...defaults, kingpinSleeveOdIn: 0.5 }).some((i) => i.keys.includes('kingpinSleeveOdIn'))).toBe(true);

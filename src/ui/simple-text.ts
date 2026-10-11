@@ -41,9 +41,15 @@ const PART: Record<string, { name: string; event?: string }> = {
   'kingpin-peak': { name: 'the steering pin', event: 'in the wood around it' },
   'pitch-path': { name: 'the front steering plate', event: 'under load' },
   'kingpin-split': { name: 'the wood around the steering pin' },
+  'steer-stops-bound': { name: 'the steering stops', event: 'if only one of the two catches' },
+  'kingpin-plates': { name: 'the steel plates at the steering pin' },
+  'kingpin-bolts': { name: 'the bolts that hold the steering pin plates', event: 'in a curb strike' },
   'bridle-tie': { name: 'the rope tie point' },
   'seat-back': { name: 'the seat back', event: 'when the rider leans back' },
   'seat-grip': { name: 'the side grab handles' },
+  lift: { name: 'the lifting hand-holds', event: 'when two people lift the cart' },
+  'prow-grab': { name: 'the prow', event: 'when a scout grabs it' },
+  'foot-stop': { name: 'the foot stop', event: 'in a curb strike' },
 };
 const partText = (id: string) => { const q = PART[id]; return q ? (q.event ? `${q.name} ${q.event}` : q.name) : id; };
 
@@ -74,9 +80,15 @@ const REASON: Record<string, string> = {
   'kingpin-peak': 'the wood around the steering pin could crush',
   'pitch-path': 'the front steering plate could dent the beam under it',
   'kingpin-split': 'the wood around the steering pin could split',
+  'steer-stops-bound': 'if only one steering stop catches, it could crush or loosen',
+  'kingpin-plates': 'a steel plate at the steering pin could bend or tear',
+  'kingpin-bolts': 'the bolts that hold the steering pin plates to the wood could pull through or split it',
   'bridle-tie': 'the rope tie point could pull out',
   'seat-back': 'the seat back could break or pull loose when the rider leans back',
   'seat-grip': 'a side grab handle could break when a rider hangs on',
+  lift: 'a lifting hand-hold could crack when the cart is carried',
+  'prow-grab': 'the prow could break or pull out when a scout grabs it',
+  'foot-stop': 'the foot stop could break or pull loose in a curb strike',
 };
 export function failReason(id: string): string {
   return REASON[id] ?? 'a safety check fails';

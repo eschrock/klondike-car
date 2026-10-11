@@ -11,6 +11,7 @@
 import { RIDER_PELVIS_Z_FRAC, SIDE_CONSTRUCTION, STORAGE_LOCATION, type Params } from '../params';
 import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
 import type { Layout } from './layout';
+import { chooseDomino, DOMINOS, type DominoQuery } from './joinery';
 import { profilePart } from './profile';
 import type { Joint, Part, Vec2, Vec3 } from './types';
 
@@ -47,6 +48,22 @@ const GRIP_BAR_W_IN = 1.25;
 export const GRIP_BAR_H_IN = 1;
 /** Grab handle starts this far behind the H-point (hands rest at the hips). */
 const GRIP_BEHIND_HPOINT_IN = 5;
+/** Foot-stop corner cleats (S6): an oak block glued to each nose side, ahead of the board so the foot load bears on it (not on screws). */
+export const FOOT_CLEAT_X_IN = 1.25;
+export const FOOT_CLEAT_T_IN = 0.75;
+
+/**
+ * Joint for a light, non-structural-path frame member (seat-back frame, lid frame, grip posts): the largest Domino that chooseDomino
+ * accepts with the light-frame edge margin (`dominoEdgeLightIn`), else a blind stub tenon. Single source for those joints (build M1).
+ */
+export function frameJoint(p: Params, to: string, q: DominoQuery, opts: { count?: number; note?: string } = {}): Joint {
+  const d = chooseDomino({ ...p, dominoEdgeIn: p.dominoEdgeLightIn }, q);
+  const count = opts.count ?? 1;
+  if (d) return { type: 'domino', to, count, size: `${d.name} (${d.tool})`, note: opts.note };
+  return { type: 'mortise-tenon', to, count, size: '3/8 × 3/4 × 1/2 deep blind tenon (routed mortise, shaped tenon)', note: opts.note };
+}
+/** Longest Domino length (mm) in the catalog, for the tests that confirm a joint's Domino really fits its member. */
+export const DOMINO_LENGTH_MM: Readonly<Record<string, number>> = Object.fromEntries(DOMINOS.map((d) => [d.name, d.lMm]));
 
 const unit = (x: number, y: number, z: number): Vec3 => {
   const n = Math.hypot(x, y, z) || 1;
@@ -162,21 +179,23 @@ export function buildSeat(ctx: Ctx): Part[] {
   // Seat back: front face passes through P and leans back by seatBackAngleDeg. Oak frame (2 stiles + 2 rails) with a captured ply panel.
   const at = (c0: number, c2: number, y = 0): Vec3 => [s.P[0] + s.col0[0] * c0 + s.col2[0] * c2, y, s.P[2] + s.col0[2] * c0 + s.col2[2] * c2];
   const backCommon = { group: 'seat', removable: true, step: STEP.seatStorage, rot: { y: -a } } as const;
-  const domino = (to: string): Joint => ({ type: 'domino', to, count: 1, size: '6×40', note: 'one floating tenon per joint; frame member 1.5" wide, 20 mm per side' });
-  const panelDado = (z: number): Joint => ({ type: 'dado', to: 'seat-back-panel', count: 1, size: `${g} deep × ${plyT.toFixed(3)} groove`, note: `full-length groove on the inside edge, ${z.toFixed(2)}" long` });
+  // The Domino sits in the outer band of the member, clear of the panel groove (build M1/S9): band = member width − groove depth.
+  const domino = (to: string): Joint => frameJoint(p, to, { stockIn: t, hostIn: fw, widthIn: fw - g }, { note: `one floating tenon per joint, offset past the ${g}" panel groove (outer ${(fw - g).toFixed(3)}" of the ${fw}" member); the groove is stopped at the rail faces` });
+  const grooveW = plyT + p.grooveSlopIn;
+  const panelDado = (z: number, stopped: boolean): Joint => ({ type: 'dado', to: 'seat-back-panel', count: 1, size: `${g} deep × ${grooveW.toFixed(3)} groove`, note: stopped ? `stopped groove on the inside edge between the rails, ${z.toFixed(2)}" long` : `groove through the member on the inside edge, ${z.toFixed(2)}" long, ends in the stile's solid edge` });
   for (const { s: sg, tag } of SIDES) {
     parts.push(box(ctx, {
       ...backCommon, id: `seat-back-stile-${tag}`, partNo: 'seat-back-stile', name: `Seat back stile ${tag}`, mat: 'oak', grain: 'z',
-      size: [t, fw, H], center: at(-t / 2, H / 2, sg * sup.stileY), notes: 'Knob-mounted for transport, no tools (D-9). 3/8" stud hole 13/32" at the knob height.',
-      joints: [domino('seat-back-rail-top'), domino('seat-back-rail-bottom'), panelDado(H - 2 * fw + 2 * g),
-        { type: 'knob', to: `seat-knob-${tag}`, count: 1, size: '3/8-16 × 3" stud, star knob', note: 'perpendicular to the back face; the stud ends in the insert behind (D-9)' }],
+      size: [t, fw, H], center: at(-t / 2, H / 2, sg * sup.stileY), notes: 'Knob-mounted for transport, no tools (D-9). 3/8" stud hole 13/32" at the knob height; the 3-1/2" stud covers stile + wedge + box end + 3/4" of insert at the 15° back angle (S14).',
+      joints: [domino('seat-back-rail-top'), domino('seat-back-rail-bottom'), panelDado(H - 2 * fw, true),
+        { type: 'knob', to: `seat-knob-${tag}`, count: 1, size: '3/8-16 × 3-1/2" stud, star knob, nylon-insert jam nut', note: 'perpendicular to the back face; the stud ends in the insert behind (D-9); blue threadlocker on the insert end, jam nut on the stile so the knob cannot back off' }],
     }));
   }
   for (const [tag, c2] of [['top', H - fw / 2], ['bottom', fw / 2]] as const) {
     parts.push(box(ctx, {
       ...backCommon, id: `seat-back-rail-${tag}`, partNo: 'seat-back-rail', name: `Seat back ${tag} rail`, mat: 'oak', grain: 'y',
       size: [t, W - 2 * fw, fw], center: at(-t / 2, c2),
-      joints: [domino('seat-back-stile-L'), domino('seat-back-stile-R'), panelDado(W - 2 * fw + 2 * g)],
+      joints: [domino('seat-back-stile-L'), domino('seat-back-stile-R'), panelDado(W - 2 * fw, false)],
     }));
   }
   parts.push(box(ctx, {
@@ -184,7 +203,7 @@ export function buildSeat(ctx: Ctx): Part[] {
     size: [plyT, W - 2 * fw, H - 2 * fw], center: at(-t / 2, H / 2),
     stock: { t: plyT, w: W - 2 * fw + 2 * g, l: H - 2 * fw + 2 * g },
     joints: (['seat-back-stile-L', 'seat-back-stile-R', 'seat-back-rail-top', 'seat-back-rail-bottom'] as const).map((to): Joint => ({
-      type: 'dado', to, count: 1, size: `${g} deep tongue in a ${plyT.toFixed(3)} groove`, note: 'all four edges captured, epoxy-sealed (no exposed ply edge)',
+      type: 'dado', to, count: 1, size: `${g} deep tongue in a ${grooveW.toFixed(3)} groove`, note: 'all four edges captured, epoxy-sealed (no exposed ply edge); corners notched g × g where the tongues cross',
     })),
     notes: `Ply panel captured in grooves ${g}" deep in the stiles and rails; the cut size (stock) includes the tongues, the modeled box is the visible part.`,
   }));
@@ -264,14 +283,14 @@ export function buildSeat(ctx: Ctx): Part[] {
       parts.push(box(ctx, {
         id: `seat-grip-post-${tag}${n}`, partNo: 'seat-grip-post', name: `Grab handle post ${tag}${n}`, group: 'seat', mat: 'oak', step: STEP.finish, grain: 'z',
         ...span([xa, xa + GRIP_POST_IN], [sg * yg - GRIP_POST_IN / 2, sg * yg + GRIP_POST_IN / 2], [padTop, barBot]),
-        joints: [{ type: 'domino', to: `seat-grip-pad-${tag}`, count: 1, size: '6×40' }, { type: 'mortise-tenon', to: `seat-grip-bar-${tag}`, count: 1, size: '3/8 × 1 × 1/2 through tenon, wedged' }],
+        joints: [frameJoint(p, `seat-grip-pad-${tag}`, { stockIn: GRIP_POST_IN, hostIn: GRIP_PAD_T_IN, widthIn: GRIP_POST_IN }, { note: 'into the pad top, epoxy' }), { type: 'mortise-tenon', to: `seat-grip-bar-${tag}`, count: 1, size: '3/8 × 3/4 × 1/2 blind tenon', note: 'the 1" post leaves 1/8" shoulders each side of the tenon' }],
       }));
     }
     parts.push(box(ctx, {
       id: `seat-grip-bar-${tag}`, partNo: 'seat-grip-bar', name: `Grab handle bar ${tag}`, group: 'seat', mat: 'oak', step: STEP.finish, grain: 'x',
       ...span([gxA, gxA + gLen], [sg * yg - GRIP_BAR_W_IN / 2, sg * yg + GRIP_BAR_W_IN / 2], [barBot, barBot + GRIP_BAR_H_IN]),
       notes: `Rounded over ¼" on all edges. Finger gap ${p.seatGripGapIn}" under the bar, ${clear}" clear between the posts: no pinch point (BRIEF §4.7).`,
-      joints: [{ type: 'mortise-tenon', to: `seat-grip-post-${tag}1`, count: 1, size: '3/8 × 1 × 1/2 through tenon, wedged' }, { type: 'mortise-tenon', to: `seat-grip-post-${tag}2`, count: 1, size: '3/8 × 1 × 1/2 through tenon, wedged' }],
+      joints: [{ type: 'mortise-tenon', to: `seat-grip-post-${tag}1`, count: 1, size: '3/8 × 3/4 × 1/2 blind tenon' }, { type: 'mortise-tenon', to: `seat-grip-post-${tag}2`, count: 1, size: '3/8 × 3/4 × 1/2 blind tenon' }],
     }));
   }
 
@@ -282,15 +301,34 @@ export function buildSeat(ctx: Ctx): Part[] {
   const fhw = onNose ? L.hwN : L.hwC;
   const zone = onNose ? 'nose' : 'cabin';
   const sideMember = (tag: 'L' | 'R') => (p.sideConstruction === SIDE_CONSTRUCTION.solidOak ? `side-${zone}-${tag}-board` : p.sideConstruction === SIDE_CONSTRUCTION.openFrame ? `side-${zone}-${tag}-gunwale` : `side-${zone}-${tag}-chine`); // the open frame has no chine
+  // Corner cleats (build S6): the nose side is a chine + a 6 mm web, so there is nothing to dado. An oak block glued to the inboard face of each side
+  // stands ahead of the board (when there is room before the front transom), so the foot load bears on the cleats in compression; the board is
+  // Domino-pinned to them and screwed down through the deck.
+  const stopX0 = fx - p.footStopThickIn / 2, stopX1 = fx + p.footStopThickIn / 2;
+  const frontLimit = onNose ? L.xFront - L.transom : L.xs;
+  const cleatAhead = frontLimit - stopX1 >= FOOT_CLEAT_X_IN - 1e-9;
+  const cleatX: [number, number] = cleatAhead ? [stopX1, stopX1 + FOOT_CLEAT_X_IN] : [stopX0 - FOOT_CLEAT_X_IN, stopX0];
+  const cleatJoint = (tag: 'L' | 'R'): Joint => frameJoint(p, `foot-stop-cleat-${tag}`, { stockIn: p.footStopThickIn, hostIn: Math.min(p.footStopThickIn, FOOT_CLEAT_X_IN), widthIn: p.footStopHeightIn }, { count: 2, note: 'two floating tenons per cleat; the cleat face and the board end meet' });
   parts.push(box(ctx, {
     id: 'foot-stop', name: 'Foot stop', group: 'seat', mat: 'oak', step: STEP.seatStorage, grain: 'y',
-    ...span([fx - p.footStopThickIn / 2, fx + p.footStopThickIn / 2], [-fhw, fhw], [deckZ, deckZ + p.footStopHeightIn]),
+    ...span([stopX0, stopX1], [-fhw, fhw], [deckZ, deckZ + p.footStopHeightIn]),
     joints: [
       { type: 'screw', to: onNose ? 'deck-nose' : 'deck-cabin', count: 4, size: '#10 × 1½ stainless, up through the deck' },
-      { type: 'glue', to: sideMember('L'), count: 1, note: 'ends fit a stopped dado in each side' },
-      { type: 'glue', to: sideMember('R'), count: 1 },
+      cleatJoint('L'), cleatJoint('R'),
     ],
-    notes: 'Board between the nose sides; braced by them. Top edge rounded ½"; no gap under the board for a foot to catch (D-40).',
+    notes: `Board between the ${zone} sides, held by two corner cleats and the deck screws. The board end butts the inside face of the side (epoxy, no dado). Top edge rounded ½"; no gap under the board for a foot to catch (D-40).`,
   }));
+  for (const { s: sg, tag } of SIDES) {
+    parts.push(box(ctx, {
+      id: `foot-stop-cleat-${tag}`, partNo: 'foot-stop-cleat', name: `Foot stop cleat ${tag}`, group: 'seat', mat: 'oak', step: STEP.seatStorage, grain: 'z',
+      ...span(cleatX, inboardOf(sg, fhw, FOOT_CLEAT_T_IN), [deckZ, deckZ + p.footStopHeightIn]),
+      joints: [
+        { type: 'glue', to: sideMember(tag), count: 1, note: 'epoxy to the inboard face of the side, thickened epoxy fills the 1/8" step to the web' },
+        { type: 'screw', to: onNose ? 'deck-nose' : 'deck-cabin', count: 2, size: '#10 × 1½ stainless, up through the deck' },
+        { ...cleatJoint(tag), to: 'foot-stop' },
+      ],
+      notes: `Oak corner cleat (${FOOT_CLEAT_X_IN}" × ${FOOT_CLEAT_T_IN}") ${cleatAhead ? 'ahead of' : 'behind'} the foot-stop board: the rider's feet push the board ${cleatAhead ? 'into' : 'away from'} it. Rounded over ¼" on the exposed edges (S6, D-40).`,
+    }));
+  }
   return parts;
 }

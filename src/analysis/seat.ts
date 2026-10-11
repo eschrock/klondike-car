@@ -5,7 +5,8 @@
  *  - seat-grip:    side grab handle post bending under a hard pull, plus the no-pinch geometry (finger gap, clear length);
  *  - storage-pack: the 10 Essentials kit list (D-19) packed into the actual box interior;
  *  - storage-lid-open: how far the lid opens before the seat back stops it;
- *  - lash-points:  count of gunwale lash points (BRIEF §4.9: at least 6).
+ *  - lash-points:  count of gunwale lash points (BRIEF §4.9: at least 6);
+ *  - lash-load:    one lash plate pulled at its working load and angle: screw withdrawal (NDS) and lateral bearing (S-9).
  *
  * Seat-back model (per stile, 2 stiles): uniform line load w = Q / (2H) aft along the back, Q = rider mass × dynamic factor × torso share.
  * The stile bears on the oak wedge crest at height A (conservative: the face below is taken as relieved) and is held by the knob stud at
@@ -13,7 +14,7 @@
  * insert pull-out). Bending peaks at the crest: M = w·(H − A)²/2.
  */
 import { GRIP_BAR_H_IN, GRIP_POST_IN, seatBackSupport } from '../model/seat';
-import { storageGeometry, storageInterior, packEssentials, ESSENTIALS, lashPositions } from '../model/storage';
+import { storageGeometry, storageInterior, packEssentials, ESSENTIALS, lashPositions, LASH_SCREWS, LASH_SCREW_DIA_IN, LASH_SCREW_LEN_IN, LASH_PLATE_T_IN, LASH_TIP_IN } from '../model/storage';
 import type { Ctx } from './context';
 import { dualCheck, governing, singleCheck, detail, type CaseEval } from './dual';
 import { f } from './format';
@@ -188,7 +189,46 @@ export function lashPointsCheck(ctx: Ctx): AnalysisCheck {
   });
 }
 
+/** White oak specific gravity (NDS Table 12.3.3A, oven-dry) and the wet-service factor C_M for screw withdrawal (NDS Table 11.3.3). */
+const OAK_G = 0.68;
+const WITHDRAWAL_WET_CM = 0.7;
+
+/** Numbers behind the lash-load check, exported for the tests. */
+export function lashLoads(p: Ctx['p']) {
+  const th = (p.lashPullAngleDeg * Math.PI) / 180;
+  const V = p.lashLoadLbf * Math.sin(th);
+  const H = p.lashLoadLbf * Math.cos(th);
+  const pen = LASH_SCREW_LEN_IN - LASH_PLATE_T_IN - LASH_TIP_IN;
+  // NDS 12.2.1: W = 1380·G²·D lbf per inch of thread penetration (ASD, already includes the safety factor); wet service C_M = 0.7.
+  const wPerIn = 1380 * OAK_G * OAK_G * LASH_SCREW_DIA_IN;
+  const wScrew = wPerIn * pen * WITHDRAWAL_WET_CM;
+  const capW = LASH_SCREWS * wScrew;
+  const bearing = H / LASH_SCREWS / (LASH_SCREW_DIA_IN * pen);
+  return { V, H, pen, wPerIn, wScrew, capW, bearing };
+}
+
+export function lashLoadCheck(ctx: Ctx): AnalysisCheck {
+  const { p } = ctx;
+  const al = allowables(ctx);
+  const k = lashLoads(p);
+  const ds: Detail[] = [
+    detail('screw withdrawal (plate, all screws)', k.V, 'lbf', k.capW, '<='),
+    detail('screw bearing on the oak (lateral)', k.bearing, 'psi', al.oakDowel, '<='),
+  ];
+  const g = ds.reduce((a, b) => (b.util > a.util ? b : a), ds[0]);
+  return singleCheck({
+    id: 'lash-load',
+    label: 'Lash point pull (screw withdrawal)',
+    group: 'Structure',
+    value: g.value, unit: g.unit, limit: g.limit, sense: g.sense, details: ds,
+    refs: ['BRIEF 4.9', 'D-41'],
+    how: `One lash plate pulled at its ${p.lashLoadLbf} lbf working load, ${p.lashPullAngleDeg}° above the deck: withdrawal V = ${f(p.lashLoadLbf, 0)} × sin ${p.lashPullAngleDeg}° = ${f(k.V)} lbf, lateral H = ${f(k.H)} lbf. `
+      + `${LASH_SCREWS} stainless #10 × ${LASH_SCREW_LEN_IN}" screws (D = ${LASH_SCREW_DIA_IN}"), thread penetration ${LASH_SCREW_LEN_IN} − ${LASH_PLATE_T_IN} plate − ${LASH_TIP_IN} tip = ${f(k.pen, 3)}" into oak (G = ${OAK_G}): NDS W = 1380·G²·D = ${f(k.wPerIn)} lbf/in, × ${f(k.pen, 3)}" × C_M ${WITHDRAWAL_WET_CM} (wet) = ${f(k.wScrew)} lbf per screw, ${f(k.capW)} lbf for ${LASH_SCREWS}. `
+      + `Lateral: ${f(k.H / LASH_SCREWS)} lbf per screw bears on ${f(k.pen, 3)}" × ${LASH_SCREW_DIA_IN}" = ${f(k.bearing, 0)} psi (≤ ${f(al.oakDowel, 0)}). Two screws would give ${f((2 * k.wScrew), 0)} lbf and fail; the plate is a 4-hole plate for that reason.`,
+  });
+}
+
 /** All workstream D checks. The orchestrator adds these to `runChecks` (and the ids to GROUP_OF_ID, all 'Structure'). */
 export function seatChecks(ctx: Ctx): AnalysisCheck[] {
-  return [seatBackCheck(ctx), seatGripCheck(ctx), storagePackCheck(ctx), lidOpenCheck(ctx), lashPointsCheck(ctx)];
+  return [seatBackCheck(ctx), seatGripCheck(ctx), storagePackCheck(ctx), lidOpenCheck(ctx), lashPointsCheck(ctx), lashLoadCheck(ctx)];
 }

@@ -36,8 +36,11 @@ describe('brake kinematics (hand calculation)', () => {
     const Kt = arm[0] * t[1] - arm[1] * t[0];
     expect(Math.abs(Kn)).toBeCloseTo(1.5265, 3);
     expect(Math.abs(Kt)).toBeCloseTo(0.603, 3);
-    expect(g.kFwd).toBeCloseTo(Math.abs(Kn + 0.4 * Kt), 9); // 1.285: friction helps (servo) rolling forward
-    expect(g.kRev).toBeCloseTo(Math.abs(Kn - 0.4 * Kt), 9); // 1.768: de-servo rolling backward
+    // Phase 3 r2: design μ is 0.45 (bonded lining, wet): k_fwd = |−1.5265 + 0.45 × 0.6030| = 1.2551, k_rev = |−1.5265 − 0.45 × 0.6030| = 1.7978
+    expect(g.kFwd).toBeCloseTo(Math.abs(Kn + 0.45 * Kt), 9); // 1.255: friction helps (servo) rolling forward
+    expect(g.kRev).toBeCloseTo(Math.abs(Kn - 0.45 * Kt), 9); // 1.798: de-servo rolling backward
+    expect(g.kFwd).toBeCloseTo(1.2551, 3);
+    expect(g.kRev).toBeCloseTo(1.7978, 3);
     expect(g.kRev).toBeGreaterThan(g.kFwd);
     expect(g.critical).toBe('reverse');
     expect(g.selfLocking).toBe(false);
@@ -48,19 +51,19 @@ describe('brake kinematics (hand calculation)', () => {
       const q = brakePose(g, s);
       expect(Math.hypot(q.B[0] - q.T[0], q.B[1] - q.T[1])).toBeCloseTo(g.linkLen, 6);
       // the lever is rigid about Q and the crank rigid about S
-      expect(Math.hypot(q.T[0] - g.Q[0], q.T[1] - g.Q[1])).toBeCloseTo(defaults.brakeLeverTailIn, 9);
-      expect(Math.hypot(q.B[0] - g.S[0], q.B[1] - g.S[1])).toBeCloseTo(defaults.brakeCrankIn, 9);
+      expect(Math.hypot(q.T[0] - g.Q[0], q.T[1] - g.Q[1])).toBeCloseTo(g.tailIn, 9); // the solved tail (≈ 1.76")
+      expect(Math.hypot(q.B[0] - g.S[0], q.B[1] - g.S[1])).toBeCloseTo(defaults.brakeCrankIn, 9); // crank 3.0" (not lengthened on a 13" wheel)
     }
     expect(brakePose(g, 1).thetaL).toBeCloseTo(g.thetaL, 9);
   });
-  it('at the applied pose the pad is on the tread; released it stands the engagement stroke off (0.3") along the arc', () => {
+  it('at the applied pose the pad is on the tread; released it stands the engagement stroke off (3/8") along the arc', () => {
     const gap = (E: V2) => Math.hypot(E[0], E[1] - r) - (r + defaults.brakeShoeThickIn / 2); // pin radius error
     expect(gap(g.E)).toBeCloseTo(0, 9);
     const dE = Math.hypot(g.Erel[0] - g.E[0], g.Erel[1] - g.E[1]);
     expect(dE).toBeGreaterThan(defaults.brakeShoeTravelIn * 0.99); // the arc is a little longer than its inward component
     // inward component of the pin motion = the stroke
     const inward = (g.E[0] - g.Erel[0]) * -g.n[0] + (g.E[1] - g.Erel[1]) * -g.n[1];
-    expect(inward).toBeCloseTo(defaults.brakeShoeTravelIn, 1); // first order θ·|Kn| = 0.3; the arc adds ~3%
+    expect(inward).toBeCloseTo(defaults.brakeShoeTravelIn, 1); // first order θ·|Kn| = 0.375; the arc adds ~3%
   });
   it('virtual work: hand travel × F = pad travel × N_total, independent of the cross-product ratio', () => {
     // Frictionless: ratio0 = grip displacement / pad inward displacement, by finite differences about the applied pose.
@@ -72,25 +75,40 @@ describe('brake kinematics (hand calculation)', () => {
     const fromGeometry = (g.lGrip / g.dQ) * (g.dS / Math.abs(g.Kn));
     expect(ratio0).toBeCloseTo(fromGeometry, 2);
   });
-  it('the derived ratio is (l_grip / d_Q)(d_S / k): ≈ 12.99:1 backward, 17.86:1 forward, above the 12:1 target', () => {
+  it('the derived ratio is (l_grip / d_Q)(d_S / k): 13.2:1 backward (solved: 12 × 1.1), ≈ 18.9:1 forward, above the 12:1 target', () => {
     expect(g.ratioRev).toBeCloseTo((g.lGrip / g.dQ) * (g.dS / g.kRev), 9);
     expect(g.ratioFwd).toBeCloseTo((g.lGrip / g.dQ) * (g.dS / g.kFwd), 9);
     expect(g.ratioCrit).toBe(Math.min(g.ratioFwd, g.ratioRev));
     expect(g.ratioCrit).toBeGreaterThanOrEqual(defaults.brakeLeverRatio);
-    expect(g.ratioCrit).toBeLessThan(defaults.brakeLeverRatio * 1.15); // solved to the target, not far above it
+    expect(g.ratioCrit).toBeCloseTo(12 * 1.1, 6); // solved to the target × headroom (13.2), not far above it
+    expect(g.ratioFwd).toBeCloseTo(13.2 * (1.7978 / 1.2551), 1); // same l_grip/d_Q · d_S, smaller k: 13.2 × 1.4324 = 18.91
     expect(g.ok).toBe(true);
   });
-  it('lever stroke: 4.8" at the grip for a 0.3" shoe stroke, ratio × stroke / servo', () => {
-    expect(g.gripTravelIn).toBeGreaterThan(3.5);
-    expect(g.gripTravelIn).toBeLessThan(6);
+  it('lever stroke: ≈ 6.4" at the grip for a 3/8" shoe stroke (ratio 13.2 × 0.375 = 4.95" frictionless-ideal; the lever arc and the link angle add the rest)', () => {
+    expect(g.gripTravelIn).toBeGreaterThan(4.5);
+    expect(g.gripTravelIn).toBeLessThan(7);
     expect(g.gripZ).toBe(defaults.rearHandleHeightIn - defaults.brakeLeverGripBelowHandleIn);
   });
-  it('the target is a target: the derived ratio does not follow brakeLeverRatio', () => {
-    expect(geomOf({ ...defaults, brakeLeverRatio: 6 }).g.ratioCrit).toBeCloseTo(g.ratioCrit, 9);
+  it('auto tail on: the ratio follows target × headroom (10 → 11:1); auto off: the target does not move the geometry', () => {
+    expect(geomOf({ ...defaults, brakeLeverRatio: 10 }).g.ratioCrit).toBeCloseTo(11, 6);
+    const off = { ...defaults, brakeLeverTailAuto: 0 } as Params;
+    expect(geomOf({ ...off, brakeLeverRatio: 6 }).g.ratioCrit).toBeCloseTo(geomOf(off).g.ratioCrit, 9);
+    expect(geomOf(off).g.tailIn).toBe(1.9);
   });
-  it('shortening the lever tail or lengthening the crank raises the ratio; a longer shoe arm (shoe lower is neutral at 25°) lowers it', () => {
-    expect(geomOf({ ...defaults, brakeLeverTailIn: 1.7 }).g.ratioCrit).toBeGreaterThan(g.ratioCrit);
-    expect(geomOf({ ...defaults, brakeCrankIn: 2.8 }).g.ratioCrit).toBeGreaterThan(g.ratioCrit);
+  it('shortening the lever tail or lengthening the crank raises the ratio (auto off)', () => {
+    const off = { ...defaults, brakeLeverTailAuto: 0 } as Params;
+    expect(geomOf({ ...off, brakeLeverTailIn: 1.6 }).g.ratioCrit).toBeGreaterThan(geomOf(off).g.ratioCrit);
+    expect(geomOf({ ...off, brakeCrankIn: 3.4 }).g.ratioCrit).toBeGreaterThan(geomOf(off).g.ratioCrit);
+  });
+  it('wheel size: the solved tail shrinks on a 12" wheel (≈ 1.03") and the ratio still lands on 13.2:1; a 11" wheel runs out of tail and lengthens the crank (still short: fails honestly)', () => {
+    const w12 = geomOf({ ...defaults, wheelDiameterIn: 12 } as Params).g;
+    expect(w12.ratioCrit).toBeCloseTo(13.2, 6);
+    expect(w12.tailIn).toBeLessThan(g.tailIn);
+    expect(w12.tailIn).toBeGreaterThanOrEqual(1);
+    const w11 = geomOf({ ...defaults, wheelDiameterIn: 11 } as Params).g;
+    expect(w11.tailIn).toBe(1);
+    expect(w11.crankIn).toBeGreaterThan(defaults.brakeCrankIn);
+    expect(w11.ratioCrit).toBeLessThan(12);
   });
   it('rolling forward is servo-assisted and the servo gain goes away at the neutral angle (arm tangent to the tread)', () => {
     // Neutral when the shaft lies on the tangent through the pin: cos β = (r + t/2) / (r + gap behind the tire).
@@ -101,7 +119,7 @@ describe('brake kinematics (hand calculation)', () => {
   });
   it('self-locking is detected (a long friction arm at a small normal arm)', () => {
     // μ_lock = |Kn|/|Kt| = 2.65 here: a rubber pad on a dry tire (μ ≈ 0.8) is nowhere near it, an absurd μ of 3 is past it
-    expect(geomOf({ ...defaults, brakePadMu: 0.8 }).g.selfLocking).toBe(false);
+    expect(geomOf({ ...defaults, brakePadMu: 0.8, brakePadMuFouled: 0.8 }).g.selfLocking).toBe(false);
     const bad = geomOf({ ...defaults, brakePadMu: 3 }).g;
     expect(bad.selfLocking).toBe(true);
     expect(bad.ok).toBe(false);
@@ -136,7 +154,76 @@ describe('brake parts', () => {
       expect(parts.concat(all).some((x) => x.id === id), id).toBe(true);
   });
   it('every metal part is a cut / drilled / bought piece (no welding): steel parts carry drill-tap, laser or buy fabrication', () => {
-    for (const x of brake.filter((q) => q.kind === 'metal' || q.kind === 'purchased')) expect(['drill-tap', 'laser', 'buy', 'cnc'], x.id).toContain(x.fab);
+    for (const x of brake.filter((q) => q.kind === 'metal' || q.kind === 'purchased')) expect(['drill-tap', 'outsource', 'buy', 'bandsaw'], x.id).toContain(x.fab);
+    // the shop's laser does not cut steel and the router does not either: the A36 plate quadrant is outsourced
+    expect(byId('brake-quadrant').fab).toBe('outsource');
+    expect(byId('brake-quadrant').sourcing?.vendor).toMatch(/[Ww]aterjet/);
+    expect(byId('brake-quadrant').stock).toMatchObject({ t: 0.25 });
+  });
+  it('no lathe, mill or broach (build review M10): the shaft collars are bought, the shaft joints are roll pins, nothing is keyed or bored on a lathe', () => {
+    for (const id of ['brake-hub-L-in', 'brake-hub-L-out', 'brake-hub-R-in', 'brake-hub-R-out']) {
+      expect(byId(id).kind).toBe('purchased');
+      expect(byId(id).fab).toBe('buy');
+      expect(byId(id).sourcing?.vendor).toMatch(/shaft collar/);
+      expect(byId(id).joints?.some((j) => /roll pin/.test(j.size ?? ''))).toBe(true);
+    }
+    for (const x of brake) expect(`${x.notes ?? ''} ${(x.joints ?? []).map((j) => j.size).join(' ')}`, x.id).not.toMatch(/keyseat broached|square key|bored to the shaft, keyseat/);
+    expect(byId('brake-shaft').joints?.filter((j) => /roll pin/.test(j.size ?? '')).length).toBe(5);
+  });
+  it('every metal part carries stock dimensions and a source (build review M9); the oak pad gets the 4× rough-length allowance (M8)', () => {
+    for (const x of brake.filter((q) => q.kind === 'metal')) {
+      expect(x.stock, x.id).toBeDefined();
+      expect(x.sourcing?.vendor, x.id).toBeTruthy();
+    }
+    // arm: 1/4" × 1" flat bar, section × cut length (the shop crosscuts from stock; build-utils M9 convention)
+    const arm = byId('brake-arm-L-in');
+    const finishedLen = arm.geometry.type === 'box' ? Math.max(...arm.geometry.size) : 0;
+    expect(arm.stock!.t).toBeCloseTo(0.25, 9);
+    expect(arm.stock!.w).toBeCloseTo(1, 9);
+    expect(arm.stock!.l).toBeCloseTo(finishedLen, 9);
+    // rough oak pad length also gets 4 × 0.125 = ½" (it was 1/8")
+    const pad = byId('brake-shoe-L');
+    expect(pad.rough!.l - pad.stock!.l).toBeCloseTo(0.5, 9);
+    // shaft: 3/4" rod cut to 38.09"
+    expect(byId('brake-shaft').stock!.l).toBeCloseTo(38.09, 6);
+  });
+  it('the oak pads are faced with a bonded lining (μ 0.45 wet): the lining sits on the tread, the oak is recessed by its thickness', () => {
+    const lin = all.find((x) => x.id === 'brake-shoe-lining-L')!;
+    expect(lin.kind).toBe('purchased');
+    expect(lin.sourcing?.vendor).toMatch(/lining/);
+    expect(lin.joints?.some((j) => j.to === 'brake-shoe-L' && j.type === 'glue')).toBe(true);
+    if (lin.geometry.type !== 'extrusion') throw new Error('lining is an extrusion');
+    const pad = all.find((x) => x.id === 'brake-shoe-L')!;
+    if (pad.geometry.type !== 'extrusion') throw new Error('pad is an extrusion');
+    // (applied pose: the pads sit on the tread, concentric with the tire)
+    const lin1 = buildBrakeAt(ctx, 1).find((x) => x.id === 'brake-shoe-lining-L')!;
+    const pad1 = buildBrakeAt(ctx, 1).find((x) => x.id === 'brake-shoe-L')!;
+    const radii = (part: Part) => { const m = part.transform; return part.geometry.type === 'extrusion' ? part.geometry.outline.map((q) => Math.hypot(m[0] * q[0] + m[4] * q[1] + m[12], m[2] * q[0] + m[6] * q[1] + m[14] - 6.5)) : []; };
+    // released pose: the whole pad assembly is shifted by the same stroke; compare the radial thickness instead
+    expect(Math.min(...radii(lin1))).toBeCloseTo(6.5, 9); // lining face on the tread (13" tire)
+    expect(Math.max(...radii(lin1))).toBeCloseTo(6.625, 9); // 1/8" lining
+    expect(Math.min(...radii(pad1))).toBeCloseTo(6.625, 9); // oak recessed by the lining
+    expect(Math.max(...radii(pad1))).toBeCloseTo(8, 9); // oak out to the original 1.5" shoe thickness
+    // lining mass by hand: area of the arc segment × width × 0.07 lb/in³ ≈ 2.0" long × 0.125" × 2.5" wide × 0.07 = 0.044 lb
+    expect(lin.massLb).toBeGreaterThan(0.04);
+    expect(lin.massLb).toBeLessThan(0.05);
+  });
+  it('the shaft ends wear caps (no sharp ends at shin height) and the pivot bolt is capped by an acorn nut', () => {
+    expect(all.some((x) => x.id === 'brake-shaft-cap-L')).toBe(true);
+    expect(all.some((x) => x.id === 'brake-shaft-cap-R')).toBe(true);
+    expect(byId('brake-lever-pin').notes).toMatch(/acorn/);
+  });
+  it('the push-handle sockets are 6061-T6 aluminum tube: 0.6875 in² × 6" × 169 pcf = 0.40 lb each (steel was 1.17 lb), 1.5 lb saved for the pair', () => {
+    const sock = byId('handle-socket-L');
+    expect(sock.material).toMatch(/aluminum/);
+    // (1.25 × 1.75 − 1.0 × 1.5) = 0.6875 in²; × 6" = 4.125 in³; × 169/1728 = 0.4034 lb
+    expect(sock.massLb).toBeCloseTo(0.4034, 3);
+    expect(sock.stock).toMatchObject({ t: 1.25, w: 1.75 });
+    expect(sock.stock!.l).toBeCloseTo(6, 9); // cut length (metal stock = section × cut length)
+    const steel = ((1.25 * 1.75 - 1.5) * 6 / 1728) * defaults.steelDensityPcf;
+    expect(steel).toBeCloseTo(1.1696, 3);
+    expect(2 * (steel - sock.massLb)).toBeCloseTo(1.53, 1);
+    expect(sock.sourcing?.vendor).toMatch(/aluminum/);
   });
   it('bought hardware lists its source; every joint names a mating part that exists', () => {
     const ids = new Set(all.map((x) => x.id));
@@ -158,7 +245,8 @@ describe('brake parts', () => {
   it('the shaft is 0.75" ground steel, 2 × 19.5" long, at axle height behind the tire; the pads are oak arcs', () => {
     const sh = byId('brake-shaft');
     expect(sh.geometry).toMatchObject({ type: 'cylinder', radius: 0.375 });
-    expect(worldAABB(sh).min[1]).toBeCloseTo(-19.545, 3); // the outer hub face: pad 15.9–18.9 + arm + 3/8" hub
+    // the outer collar face: pad 15.9–18.4 (2.5" wide) + 0.02 gap + 1/4" arm = 18.67, + 3/8" collar = 19.045
+    expect(worldAABB(sh).min[1]).toBeCloseTo(-19.045, 3);
     expect(sh.transform[12]).toBeCloseTo(-8, 9);
     expect(sh.transform[14]).toBeCloseTo(6.5, 9);
     const pad = byId('brake-shoe-L');
@@ -166,12 +254,12 @@ describe('brake parts', () => {
     expect(pad.material).toBe('white oak');
     expect(pad.grain).toBe('z'); // across the tread
   });
-  it('the pad arc is concentric with the 13" tire: inner radius 6.5" and outer 8" about the axle', () => {
+  it('the pad arc is concentric with the 13" tire: oak inner radius 6.625" (1/8" lining below it) and outer 8" about the axle', () => {
     const pad = buildBrakeAt(ctx, 1).find((x) => x.id === 'brake-shoe-L')!;
     if (pad.geometry.type !== 'extrusion') throw new Error('pad is an extrusion');
     const m = pad.transform;
     const rad = pad.geometry.outline.map((q) => Math.hypot(m[0] * q[0] + m[4] * q[1] + m[12], m[2] * q[0] + m[6] * q[1] + m[14] - 6.5));
-    expect(Math.min(...rad)).toBeCloseTo(6.5, 9);
+    expect(Math.min(...rad)).toBeCloseTo(6.625, 9);
     expect(Math.max(...rad)).toBeCloseTo(8, 9);
   });
   it('all brake parts stay at or above the minimum ground clearance, released and applied', () => {
@@ -187,12 +275,12 @@ describe('brake parts', () => {
     expect(h.zTop).toBe(ctx.L.deckTop + ctx.L.sideH);
     expect(h.zTop - h.zBot).toBe(defaults.handleSocketDepthIn);
   });
-  it('mass: the brake group is 12 lb (3.5 lb before Phase 3): shaft 4.9 + steel hubs/arms/cranks ≈ 3 + sockets 2.3 + oak ≈ 2', () => {
+  it('mass: the brake group is about 11 lb (12.3 before round 2: aluminum sockets −1.5, narrower shaft run and pads −0.5, lining/caps/boss +0.3): shaft 4.8 + steel and collars ≈ 2.5 + sockets 0.8 + oak ≈ 2', () => {
     const m = brake.filter((x) => x.group === 'brake').reduce((s, x) => s + x.massLb, 0);
     expect(m).toBeGreaterThan(10);
-    expect(m).toBeLessThan(14);
-    // hand: 3/4" shaft 39.09" long: π(0.375)² × 39.09 × 490/1728 = 4.9 lb
-    expect(byId('brake-shaft').massLb).toBeCloseTo(Math.PI * 0.375 ** 2 * 39.09 * (defaults.steelDensityPcf / 1728), 1);
+    expect(m).toBeLessThan(12);
+    // hand: 3/4" shaft 38.09" long: π(0.375)² × 38.09 × 490/1728 = 4.77 lb
+    expect(byId('brake-shaft').massLb).toBeCloseTo(Math.PI * 0.375 ** 2 * 38.09 * (defaults.steelDensityPcf / 1728), 1);
   });
 });
 
@@ -209,7 +297,7 @@ describe('brake and handle clearance', () => {
   const cases: Record<string, Partial<Params>> = {
     defaults: {}, hullBeam: { frameStyle: 1 }, flare2: { gunwaleFlareIn: 2 }, sidesSolidOak: { sideConstruction: 0 }, sidesOpenFrame: { sideConstruction: 2 },
     wheel10: { wheelDiameterIn: 10 }, wheel11_5: { wheelDiameterIn: 11.5 }, 'track44+fix': { rearTrackIn: 44, frontTrackIn: 44, seatXIn: 11.5, noseTaperStartIn: 23 },
-    'track30+fix': { rearTrackIn: 30, frontTrackIn: 30, bodyWidthIn: 24, steerLockDeg: 25, brakeShaftBehindTireIn: 3, rearOverhangIn: 11 },
+    'track30+fix': { rearTrackIn: 30, frontTrackIn: 30, bodyWidthIn: 23, steerLockDeg: 25, brakeShaftBehindTireIn: 3, rearOverhangIn: 11 }, // 23" body: the rear U-bolt plates start at 11.5" (D-43)
     storageUnder: { storageLocation: 2 }, overslung: { axleBeamPosition: 1, deckHeightIn: 11.5 }, rearOverhang12: { rearOverhangIn: 12 },
   };
   const ALLOWED = [
@@ -230,7 +318,7 @@ describe('brake and handle clearance', () => {
       for (const b of others) {
         if (ALLOWED.some((r) => r.test(b.id))) continue;
         // flared gunwale: transom / web OBBs are conservative boxes over the flared outline (lever and pawl stay 1/2" off the real surface)
-        if (/^(transom-rear|side-cabin-[LR]-web)$/.test(b.id) && /^brake-(lever|pawl)/.test(a.id)) continue;
+        if (/^(transom-rear|side-cabin-[LR]-web)$/.test(b.id) && /^brake-(lever|pawl|quadrant)/.test(a.id)) continue;
         const o = obbOverlap(oa, partOBB(b));
         if (o > 0.05) bad.push(`${a.id} x ${b.id}: ${o.toFixed(3)}"`);
       }
@@ -240,7 +328,7 @@ describe('brake and handle clearance', () => {
   it('the validator rejects a hull so close to the tire that the crank and clevis cannot fit, and accepts the track-30 fix', () => {
     const tight = { ...defaults, rearTrackIn: 30, frontTrackIn: 30, bodyWidthIn: 24, steerLockDeg: 25 } as Params;
     expect(validateParams(tight).some((i) => i.severity === 'error' && i.keys.includes('brakeCrankIn'))).toBe(true);
-    expect(validateParams({ ...tight, brakeShaftBehindTireIn: 3, rearOverhangIn: 11 }).filter((i) => i.severity === 'error')).toEqual([]);
+    expect(validateParams({ ...tight, bodyWidthIn: 23, brakeShaftBehindTireIn: 3, rearOverhangIn: 11 }).filter((i) => i.severity === 'error')).toEqual([]);
   });
   it('the validator warns when a low brake part is under the ground clearance (10" wheels)', () => {
     const w = validateParams({ ...defaults, wheelDiameterIn: 10 }).filter((i) => i.keys.includes('minGroundClearanceIn'));

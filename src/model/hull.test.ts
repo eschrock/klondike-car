@@ -2,9 +2,9 @@
 import { describe, expect, it } from 'vitest';
 import { defaultParams, derived, validateParams, type Params } from '../params';
 import { buildModel } from './index';
-import { makeCtx } from './build-utils';
-import { buildBody, fingerAnalysis, frontTirePlan, liftBarStressPsi, liftSlot, prowFormProfile, prowShape } from './body';
+import { buildBody, fingerAnalysis, frontTirePlan, guardInsertZ, liftBarStressPsi, liftSlot, prowFormProfile, prowShape, scupperSites } from './body';
 import { chooseDomino, DOMINOS, endJoint, frac, joinerySummary } from './joinery';
+import { HULL_STEP, box, makeCtx } from './build-utils';
 import { localBounds, worldAABB } from './bounds';
 import { totalMass } from './mass';
 import type { EdgeCondition, Part, Vec2 } from './types';
@@ -100,17 +100,17 @@ describe('captured-ply sides, decks and transoms (D-22, D-35)', () => {
   });
   it('the web ends enter the transom dados (cabin) or the front transom dado (nose)', () => {
     const rear = worldAABB(get(parts, 'side-cabin-L-web'));
-    expect(rear.min[0]).toBeCloseTo(L.xRear + L.side - dd, 6);
-    expect(worldAABB(get(parts, 'side-nose-L-web')).max[0]).toBeCloseTo(L.xFront - L.side + dd, 6);
+    expect(rear.min[0]).toBeCloseTo(L.xRear + L.transom - dd, 6);
+    expect(worldAABB(get(parts, 'side-nose-L-web')).max[0]).toBeCloseTo(L.xFront - L.transom + dd, 6);
   });
   it('the decks are plan extrusions that enter the chine rabbets and transom dados', () => {
     const dc = get(parts, 'deck-cabin'), dn = get(parts, 'deck-nose');
     expect(dc.geometry.type).toBe('extrusion');
     const a = worldAABB(dc), b = worldAABB(dn);
     expect(a.max[1]).toBeCloseTo(L.hwC + dd, 6);
-    expect(a.min[0]).toBeCloseTo(L.xRear + L.side - dd, 6);
+    expect(a.min[0]).toBeCloseTo(L.xRear + L.transom - dd, 6);
     expect(b.max[1]).toBeCloseTo(L.hwN + dd, 6);
-    expect(b.max[0]).toBeCloseTo(L.xFront - L.side + dd, 6);
+    expect(b.max[0]).toBeCloseTo(L.xFront - L.transom + dd, 6);
     expect(a.max[2] - a.min[2]).toBeCloseTo(L.ply, 6);
   });
   it('the transoms span the full outside width and wrap the side ends', () => {
@@ -118,9 +118,11 @@ describe('captured-ply sides, decks and transoms (D-22, D-35)', () => {
     expect(r.max[1]).toBeCloseTo(L.hwC + L.side, 6);
     expect(r.min[1]).toBeCloseTo(-(L.hwC + L.side), 6);
     expect(f.max[1]).toBeCloseTo(L.hwN + L.side, 6);
-    expect(r.max[0] - r.min[0]).toBeCloseTo(L.side, 6);
+    expect(r.max[0] - r.min[0]).toBeCloseTo(L.transom, 6);
+    expect(L.transom).toBe(0.75); // D-43: the transoms are ¾", the chine and gunwale ⅝"
+    expect(L.side).toBe(0.625);
     const side = worldAABB(get(parts, 'side-cabin-L-chine'));
-    expect(side.min[0]).toBeCloseTo(L.xRear + L.side, 6);
+    expect(side.min[0]).toBeCloseTo(L.xRear + L.transom, 6);
   });
   it('the nose deck outline carries the kingpin-access opening from Layout.accessPanel, with its rim banded', () => {
     const plain = get(parts, 'deck-nose');
@@ -185,7 +187,7 @@ describe('joinery: structured joints', () => {
     const rail = get(parts, 'rail-cabin-L');
     const tenon = rail.joints!.find((j) => j.to === 'transom-rear')!;
     expect(tenon.type).toBe('mortise-tenon');
-    expect(tenon.at![0][0]).toBeCloseTo(-35.875 / 2, 3); // −x end of the 35.875" rail
+    expect(tenon.at![0][0]).toBeCloseTo(-35.625 / 2, 3); // −x end of the 35.625" rail (rear transom face at −10 + 0.75, shoulder at 26.375)
     const joist = get(parts, 'joist-cabin-1');
     const d = joist.joints!.filter((j) => j.type === 'domino');
     expect(d.map((j) => j.to).sort()).toEqual(['rail-cabin-L', 'rail-cabin-R']);
@@ -261,7 +263,7 @@ describe('lift hand-holds (M9, D-37)', () => {
       const t = get(parts, id);
       expect(t.geometry.type).toBe('extrusion');
       if (t.geometry.type !== 'extrusion') continue;
-      expect(t.geometry.holes).toHaveLength(1);
+      expect(t.geometry.holes).toHaveLength(5); // the lift slot + 4 dado vent holes (M4, D-43)
       const h = t.geometry.holes![0] as Vec2[];
       const w = Math.max(...h.map((q) => q[0])) - Math.min(...h.map((q) => q[0]));
       const ht = Math.max(...h.map((q) => q[1])) - Math.min(...h.map((q) => q[1]));
@@ -286,9 +288,9 @@ describe('lift hand-holds (M9, D-37)', () => {
     expect(perPerson).toBeGreaterThan(40);
   });
   it('the stress function is the beam formula', () => {
-    // M = P L / 4 = 174 × 4.5 / 4 = 195.75; S = t h² / 6 = 0.5 × 0.75² / 6 → σ = 4176 psi
-    const s = liftBarStressPsi({ zBot: 0, zTop: 1, transomTop: 2, barIn: 0.75, thickIn: 0.5, lengthIn: 4.5 }, 174);
-    expect(s).toBeCloseTo(4176, 0);
+    // M = P L / 4 = 174 × 4.5 / 4 = 195.75; S = t h² / 6 = 0.75 × 0.75² / 6 = 0.0703125 → σ = 2784 psi (the ¾" transom, D-43)
+    const s = liftBarStressPsi({ zBot: 0, zTop: 1, transomTop: 2, barIn: 0.75, thickIn: 0.75, lengthIn: 4.5 }, 174);
+    expect(s).toBeCloseTo(2784, 0);
   });
   it('a storage box against the rear transom raises the slot; the transom crests rather than thinning the bar', () => {
     const r = liftSlot(ctx, 'rear');
@@ -453,11 +455,150 @@ describe('signs (D-9, D-35)', () => {
 });
 
 describe('mass bookkeeping (D-35…D-37)', () => {
-  it('the hull and frame groups stay within a pound of the Phase 2 block model (body 29.7, frame 10.5, removable 4.7 lb)', () => {
+  it('the hull and frame groups stay near the Phase 3 round-2 numbers (body 35.1 after the ¾" transoms, ⅝" chines, backers, prow socket and scuppers, D-43; frame 10.1 with 10" joists; removable 4.7 lb)', () => {
     const parts = buildModel(defaults);
     const sum = (g: string) => parts.filter((x) => x.group === g && !x.payload).reduce((m, x) => m + x.massLb, 0);
-    expect(Math.abs(sum('body') - 29.7)).toBeLessThan(1.5);
-    expect(Math.abs(sum('frame') - 10.5)).toBeLessThan(0.5);
+    expect(Math.abs(sum('body') - 35.1)).toBeLessThan(1);
+    expect(Math.abs(sum('frame') - 10.1)).toBeLessThan(0.5);
     expect(Math.abs(sum('removable') - 4.7)).toBeLessThan(0.6);
+  });
+});
+
+
+describe('round 2 hull (build M2-M8, D-43)', () => {
+  const parts = buildModel(defaults);
+  const ctx = makeCtx(defaults);
+  const { L } = ctx;
+  const p = defaults;
+
+  it('transoms are 3/4", chines and gunwales 5/8", the groove is 0.276" (6 mm ply + 1 mm), leaving 0.17" walls', () => {
+    expect(L.transom).toBe(0.75);
+    expect(L.side).toBe(0.625);
+    // groove = 0.236 + 0.04 = 0.276"; wall each side = (0.625 − 0.276) / 2 = 0.1745"
+    expect(p.panelPlyIn + p.grooveSlopIn).toBeCloseTo(0.276, 9);
+    expect((p.sideThicknessIn - p.panelPlyIn - p.grooveSlopIn) / 2).toBeCloseTo(0.1745, 4);
+    expect(get(parts, 'side-cabin-L-chine').joints!.find((j) => j.to === 'side-cabin-L-web')!.size).toMatch(/0\.276/);
+  });
+
+  it('rough length gets 4× the milling allowance (M8): the 35.625" chine is 36.125" rough, 1/8" more each way in t and w', () => {
+    const c = get(parts, 'side-cabin-L-chine');
+    expect(c.stock!.l).toBeCloseTo(35.625, 6); // 26.375 − (−10 + 0.75)
+    expect(c.rough!.l).toBeCloseTo(36.125, 6);
+    expect(c.rough!.t).toBeCloseTo(0.75, 6);
+    for (const x of parts.filter((q) => q.rough && q.stock && (q.group === 'body' || q.group === 'frame'))) expect(x.rough!.l - x.stock!.l, x.id).toBeCloseTo(4 * p.millingAllowanceIn, 6);
+  });
+
+  it('a steel box with no stock gets the bar section x cut length and a McMaster-class source (M9 net)', () => {
+    const b = box(ctx, { id: 'x', name: 'x', group: 'hardware', center: [0, 0, 0], mat: 'steel', size: [0.25, 1, 6], step: 1 });
+    expect(b.stock).toEqual({ t: 0.25, w: 1, l: 6 });
+    expect(b.sourcing?.vendor).toMatch(/McMaster/);
+  });
+
+  it('the ladder rail runs flush under the chine and the chine is Domino-tied to it (M6): rail y = 13.375 + 0.625 − 0.75 .. 14', () => {
+    const r = worldAABB(get(parts, 'rail-cabin-L'));
+    expect(r.min[1]).toBeCloseTo(13.25, 6);
+    expect(r.max[1]).toBeCloseTo(14, 6);
+    expect(r.max[1]).toBeCloseTo(worldAABB(get(parts, 'side-cabin-L-chine')).max[1], 6);
+    expect(r.max[2]).toBeCloseTo(worldAABB(get(parts, 'side-cabin-L-chine')).min[2], 6); // the chine bears on the rail top
+    const tie = get(parts, 'side-cabin-L-chine').joints!.find((j) => j.to === 'rail-cabin-L')!;
+    expect(tie.type).toBe('domino');
+    expect(tie.count).toBe(5); // floor(35.625 / 6")
+    expect(tie.size).toMatch(/^4×20/); // the 0.375" flat beside the rabbet fits a 4 mm tenon with 0.1" walls (0.157 + 0.2 ≤ 0.375); 5 mm does not (0.197 + 0.2 > 0.375)
+    expect(get(parts, 'rail-cabin-L').joints!.some((j) => j.to === 'side-cabin-L-chine')).toBe(true);
+    const hb = buildModel({ ...defaults, frameStyle: 1 });
+    expect(hb.find((x) => x.id === 'side-cabin-L-chine')!.joints!.some((j) => j.to === 'girder-cabin-L' && j.type === 'domino')).toBe(true);
+  });
+
+  it('chooseDomino fits the FACE WIDTH, not the length (hand: 1.2" face − 2 × 0.25" = 0.7" = 17.8 mm takes a 17 mm-wide 4×20, not the 19 mm 5×30)', () => {
+    const d = chooseDomino(p, { stockIn: 1.5, hostIn: 1.5, widthIn: 1.2 });
+    expect(d?.name).toBe('4×20');
+    expect(chooseDomino(p, { stockIn: 1.5, hostIn: 1.5, widthIn: 1.0 })).toBeNull(); // 0.5" = 12.7 mm < 17 mm
+    // Depth: the receiving member must keep a wall behind the L/2 mortise: a 4×20 (0.394" deep) into a 0.5" host leaves 0.106" < 0.15".
+    expect(chooseDomino(p, { stockIn: 1.5, hostIn: 0.5, widthIn: 3 })).toBeNull();
+    expect(chooseDomino(p, { stockIn: 1.5, hostIn: 3, widthIn: 3, stockAlongIn: 0.5 })).toBeNull();
+    expect(DOMINOS.find((x) => x.name === '6×40')!.wMm).toBe(20);
+  });
+
+  it('finger-guard inserts sit above the web groove, not in it (M2): axis 0.785" over the gunwale bottom, hole spans 0.625..0.945 vs groove top 0.375 + 0.25 wall', () => {
+    const zg = L.noseTop + L.sideH - L.railBand;
+    const z = guardInsertZ(L, p);
+    expect(z - zg).toBeCloseTo(0.375 + 0.25 + 0.16, 6);
+    expect(z - 0.16).toBeGreaterThanOrEqual(zg + p.grooveDepthIn + 0.25 - 1e-9);
+    const j = get(parts, 'guard-L').joints!.find((q) => q.type === 'screw')!;
+    for (const a of get(parts, 'guard-L').joints![0].at!) void a;
+    expect(j.size).toMatch(/button-head/);
+    const ins = get(parts, 'side-nose-L-gunwale').joints!.find((q) => q.to === 'guard-L')!;
+    expect(ins.size).toMatch(/stainless/);
+    expect(ins.size).not.toMatch(/brass/);
+  });
+
+  it('prow: 4" leg bearing in a socket block bolted/glued on the front transom, 5/16-18 stainless retention only (M3)', () => {
+    const pr = prowShape(ctx);
+    expect(pr.legLenIn).toBeGreaterThanOrEqual(4);
+    const sock = get(parts, 'prow-socket');
+    const sb = worldAABB(sock);
+    expect(sb.min[0]).toBeCloseTo(L.xFront, 6);
+    expect(sb.max[2] - sb.min[2]).toBeCloseTo(pr.legLenIn, 6);
+    // Hand: slot half = 1.75/2 + 0.015 = 0.89; outer half = 0.89 + 0.75 = 1.64; depth = 0.75 + 0.015 + 0.75 = 1.515
+    expect(sb.max[1]).toBeCloseTo(1.64, 6);
+    expect(sb.max[0] - sb.min[0]).toBeCloseTo(1.515, 6);
+    // The socket stays clear of the lantern and flag clips (their inner edge is at |y| = 4.5 − 2.5/2 = 3.25) and the leg foot stays above the lift slot.
+    expect(sb.max[1]).toBeLessThan(3.25);
+    expect(pr.origin[2]).toBeGreaterThanOrEqual(liftSlot(ctx, 'front').zTop + 0.25 - 1e-9);
+    const ins = get(parts, 'prow').joints!.find((j) => j.type === 'threaded-insert')!;
+    expect(ins.size).toMatch(/5\/16-18.*stainless/);
+    expect(get(parts, 'prow-socket').joints!.some((j) => j.to === 'transom-front')).toBe(true);
+  });
+
+  it('scuppers: six 3/8" stainless nipples through the chines at deck level (M7), each with a joint and `at`', () => {
+    const sc = parts.filter((x) => x.id.startsWith('scupper-'));
+    expect(sc).toHaveLength(6);
+    expect(scupperSites(ctx)).toHaveLength(3);
+    for (const x of sc) {
+      expect(x.joints![0].at).toHaveLength(1);
+      expect(x.sourcing?.vendor).toMatch(/stainless/i);
+      const bb = worldAABB(x);
+      // lower edge of the hole 0.05" over the deck surface: z = deck + 0.05 + 3/16 − 3/16
+      const deckZ = /nose/.test(x.id) ? L.noseTop : L.deckTop;
+      expect(bb.min[2]).toBeCloseTo(deckZ + 0.05, 3);
+    }
+  });
+
+  it('rear transom backers sit inside the transom behind the sockets, and the rear box starts behind them (S13)', () => {
+    for (const tag of ['L', 'R']) {
+      const b = worldAABB(get(parts, `transom-backer-${tag}`));
+      expect(b.min[0]).toBeCloseTo(L.xRear + L.transom, 6);
+      expect(b.max[0] - b.min[0]).toBeCloseTo(p.blockingThickIn, 6);
+      expect(b.max[1] <= L.hwC + 1e-9 || b.min[1] >= -L.hwC - 1e-9).toBe(true);
+      expect(get(parts, `transom-backer-${tag}`).joints!.some((j) => j.to === 'transom-rear')).toBe(true);
+    }
+    expect(L.storage.x0).toBeCloseTo(L.xRear + L.transom + L.rearLane, 6);
+  });
+
+  it('assembly order is data (M4): deck 4 < sides 4.2 < shoulders 4.3 < transoms 4.4 < prow 4.5, and every closed dado is vented', () => {
+    const st = (id: string) => get(parts, id).step;
+    expect(st('deck-cabin')).toBe(HULL_STEP.deck);
+    expect(st('side-cabin-L-web')).toBe(HULL_STEP.sides);
+    expect(st('side-cabin-L-chine')).toBe(HULL_STEP.sides);
+    expect(st('shoulder-L')).toBe(HULL_STEP.shoulder);
+    expect(st('transom-rear')).toBe(HULL_STEP.transom);
+    expect(st('transom-front')).toBe(HULL_STEP.transom);
+    expect(st('prow')).toBe(HULL_STEP.prow);
+    expect(HULL_STEP.deck < HULL_STEP.sides && HULL_STEP.sides < HULL_STEP.shoulder && HULL_STEP.shoulder < HULL_STEP.transom && HULL_STEP.transom < HULL_STEP.prow).toBe(true);
+    expect(get(parts, 'transom-rear').notes).toMatch(/GOES ON LAST/);
+    expect(get(parts, 'side-cabin-L-web').notes).toMatch(/hydraulic lock/);
+    for (const j of get(parts, 'transom-rear').joints!.filter((q) => q.type === 'dado')) expect(j.size, j.to).toMatch(/vent/);
+  });
+
+  it('no joint says "CNC blind tenon": thin members get a loose tenon (S2)', () => {
+    for (const x of parts) for (const j of x.joints ?? []) if (x.group === 'body' || x.group === 'frame') expect(j.size ?? '', `${x.id}->${j.to}`).not.toMatch(/CNC blind/i);
+    const lt = parts.flatMap((x) => (x.group === 'body' || x.group === 'frame' ? x.joints ?? [] : [])).filter((j) => j.type === 'mortise-tenon');
+    expect(lt.length).toBeGreaterThan(0);
+    for (const j of lt) expect(j.size).toMatch(/loose tenon/);
+  });
+
+  it('10" joists: the cabin deck has 4 crossmembers (was 5 at 8"), largest bay 9.44"', () => {
+    expect(L.cabinJoistX).toHaveLength(4);
+    expect(p.crossmemberSpacingIn).toBe(10);
   });
 });

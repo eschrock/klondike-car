@@ -1,5 +1,6 @@
 /** Running gear: wheels, axles (through rod or stubs), axle beams and U-bolt clamps (D-10, D-11, D-15). */
-import { AXLE_BEAM_POSITION, AXLE_STYLE } from '../params';
+import { AXLE_BEAM_POSITION, AXLE_STYLE, kingpinPlatesOn } from '../params';
+import { kingpinPlatePlan } from './kingpin-plates';
 import { IN3_PER_FT3, STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
 import { multiply, translation } from './mat4';
 import { customPart, filletPath, pathLength, tubeAlong } from './mesh-utils';
@@ -21,6 +22,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
   const parts: Part[] = [];
   const r = L.r;
   const rodR = p.axleDiameterIn / 2;
+  const kpPlan = kingpinPlatePlan(p);
 
   // Wheels
   const wheel = (id: 'wheel-FL' | 'wheel-FR' | 'wheel-RL' | 'wheel-RR', name: string, transform: number[]): Part => ({
@@ -89,6 +91,13 @@ export function buildRunningGear(ctx: Ctx): Part[] {
       id: `beam-${ax.tag}`, name: `${name} axle beam`, group: 'running-gear', steer: ax.steer, mat: 'oak',
       size: [b.thick, b.len, b.depth], center: [b.x, 0, (b.top + b.bot) / 2], grain: 'y', fab: 'table-saw',
       step: STEP.gear, notes: (p.axleBeamPosition === AXLE_BEAM_POSITION.underslung ? 'Underslung (D-15).' : 'Overslung (D-15).') + (ax.tag === 'F' ? ' Centerd on the rod + kingpin pair (D-25).' : ''),
+      ...(ax.tag === 'F' && kingpinPlatesOn(p) ? {
+        joints: [{
+          type: 'bolt' as const, to: 'kp-carrier', count: kpPlan.crossBeamY.length, diaIn: p.kingpinCrossBoltDiameterIn,
+          size: `${p.kingpinCrossBoltDiameterIn}" 316 stainless fore-aft cross-bolts through the beam at mid depth, ${p.kingpinCrossBoltWasherIn}" OD fender washers each end`,
+          at: kpPlan.crossBeamY.map((y): Vec3 => [0, y, 0]), note: 'Stitch the front slab ahead of the plate bolts against cleavage (NDS 3.4.3.3, kingpin-split row, D-35).',
+        }],
+      } : {}),
     }));
     // Clamps. REAR (Phase 2, unchanged): 2 plates per wheel side (one per U-bolt leg), straddling the rod: legs at rod x ± (rod radius + leg gap).
     // FRONT (M8, D-34): a square U-bolt whose bridge crosses over the axle rod on top of the underslung beam, legs running down

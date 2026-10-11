@@ -15,6 +15,7 @@
  * passed to buildModel() separately so it never pollutes the design.
  */
 
+import { kingpinPlateIssues, kingpinPlatePlan, stopArmHx } from './model/kingpin-plates';
 import { planStops } from './model/stops';
 
 export type ParamStatus = 'locked' | 'verify' | 'assumed' | 'explore';
@@ -169,7 +170,8 @@ const defs = {
   },
   frontOverhangIn: {
     label: 'Body/prow overhang ahead of front axle', group: 'layout', unit: 'in',
-    default: 8, min: 0, max: 20, step: 0.5, status: 'explore',
+    default: 8.5, min: 0, max: 20, step: 0.5, status: 'explore', ref: 'D-43',
+    note: '8.5" (was 8"): the turntable corner, kingpin lead and the ¾" front transom need ≥ 8.25" (D-43).',
   },
   deckHeightIn: {
     label: 'Deck (floor top) height, between axles', group: 'layout', unit: 'in',
@@ -178,7 +180,7 @@ const defs = {
   },
   frontDeckRaiseIn: {
     label: 'Forward deck raise over front axle', group: 'layout', unit: 'in',
-    default: 0.5, min: 0, max: 8, step: 0.25, status: 'explore', ref: 'D-15',
+    default: 1, min: 0, max: 8, step: 0.25, status: 'explore', ref: 'D-15',
     note: 'Step the hull up ahead of the foot well so the front wheels can swing under it.',
   },
   minGroundClearanceIn: {
@@ -255,8 +257,63 @@ const defs = {
   },
   grooveSlopIn: {
     label: 'Groove width over the ply thickness', group: 'body', unit: 'in',
-    default: 0.016, min: 0, max: 0.06, step: 0.004, status: 'assumed', ref: 'D-35',
-    note: 'Room for the epoxy bed. The walls each side of the groove are (side stock − ply − slop) / 2 and need to stay ≥ 0.1".',
+    default: 0.04, min: 0, max: 0.06, step: 0.004, status: 'assumed', ref: 'D-35, D-43',
+    note: 'Cut the groove at the MEASURED ply thickness + about 1 mm (D-43): real 6 mm okoume runs 5.5–5.9 mm and two epoxy coats on faces and edges add 0.3–0.5 mm, plus ~0.3 mm of glue film. At 0.04" the groove is 0.276" (7 mm cutter) in 6 mm ply. The walls each side of the groove are (side stock − groove) / 2 and need to stay ≥ 0.1".',
+  },
+  transomThicknessIn: {
+    label: 'Transom thickness (front and rear)', group: 'stock', unit: 'in',
+    default: 0.75, min: 0.5, max: 1.25, step: 0.0625, status: 'assumed', ref: 'D-35, D-43',
+    note: '¾" gives the transom a real hand-hold bar, lets a DF 500 Domino keep a 0.15" wall, and takes the handle sockets, quadrant bracket and prow socket bolts. The chine and gunwale thickness is "Chine / gunwale stock thickness".',
+  },
+  prowLegMinIn: {
+    label: 'Prow leg bearing length in its socket', group: 'body', unit: 'in',
+    default: 4, min: 3, max: 6, step: 0.5, status: 'assumed', ref: 'D-36, D-43',
+    note: 'Straight leg that drops into an oak socket block on the front face of the front transom. The leg bears on the socket walls; the stainless inserts and knobs only retain it (build review M3).',
+  },
+  prowSocketCheekIn: {
+    label: 'Prow socket cheek (wall) thickness', group: 'body', unit: 'in',
+    default: 0.75, min: 0.5, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-43',
+    note: 'Oak walls each side of and in front of the prow leg.',
+  },
+  prowGrabLbf: {
+    label: 'Prow grab load at the tip (one scout)', group: 'factors', unit: 'lbf',
+    default: 25, min: 10, max: 100, step: 5, status: 'assumed', ref: 'D-43',
+    note: 'A scout grabbing or leaning on the prow, applied forward, aft or sideways at the tip. The prow is labeled "not a handle".',
+  },
+  prowInsertAllowLbf: {
+    label: 'Prow retaining insert allowable pull-out (each)', group: 'factors', unit: 'lbf',
+    default: 300, min: 100, max: 800, step: 25, status: 'verify', ref: 'D-43',
+    note: '5/16-18 stainless threaded insert epoxied into the laminated leg (glue lines across the insert): ultimate ≈ 900 lbf (vendor data to confirm) ÷ 3.',
+  },
+  scupperDiaIn: {
+    label: 'Deck scupper (drain hole) diameter', group: 'body', unit: 'in',
+    default: 0.375, min: 0.25, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-43',
+    note: 'Epoxy-lined holes through the deck at the rear corners and the nose low point, each with a stainless nipple so no cut ply edge is exposed.',
+  },
+  ventHoleIn: {
+    label: 'Dado vent hole diameter', group: 'body', unit: 'in',
+    default: 0.125, min: 0.0625, max: 0.25, step: 0.0156, status: 'assumed', ref: 'D-43',
+    note: 'Relief hole from the closed end of each stopped dado / deck dado through the transom, so epoxy and air can escape when the transom slides on (hydraulic lock).',
+  },
+  chineTieSpacingIn: {
+    label: 'Chine-to-frame Domino spacing', group: 'body', unit: 'in',
+    default: 6, min: 3, max: 12, step: 1, status: 'assumed', ref: 'D-43',
+    note: 'The rail runs flush under the chine; a Domino every this many inches plus an epoxy bed ties the side to the frame.',
+  },
+  curbStrikeG: {
+    label: 'Curb-strike deceleration (foot-stop load)', group: 'factors', unit: 'g',
+    default: 2, min: 1, max: 4, step: 0.25, status: 'assumed', ref: 'D-43',
+    note: 'Forward deceleration when a front wheel hits a curb; the rider is restrained by the foot stop, the grab handles and seat friction.',
+  },
+  footStopShare: {
+    label: 'Share of the rider restraint force taken by the foot stop', group: 'factors', unit: '',
+    default: 0.6, min: 0.3, max: 1, step: 0.05, status: 'assumed', ref: 'D-43',
+    note: 'The rest goes through the grab handles and seat friction (μ 0.4 × weight ≈ 0.4 g of the 2 g).',
+  },
+  woodScrewLateralLbf: {
+    label: '#10 stainless wood screw lateral allowable (oak, wet)', group: 'factors', unit: 'lbf',
+    default: 90, min: 40, max: 200, step: 5, status: 'verify', ref: 'D-43',
+    note: 'NDS-style single-shear lateral value for a #10 (0.19") screw in white oak with wet-service and a safety factor; confirm against the fastener catalog.',
   },
   deckCaptureDepthIn: {
     label: 'Deck / web-end capture depth (rabbet or dado)', group: 'body', unit: 'in',
@@ -271,7 +328,7 @@ const defs = {
   blockingThickIn: {
     label: 'Oak doubler (blocking) thickness', group: 'body', unit: 'in',
     default: 0.75, min: 0.5, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-41',
-    note: 'Local oak blocking glued behind the ½" gunwale and the ½" rear transom where grip pads, lash plates and the rear-light plate screw in, so every wood screw has at least ¾" of engagement.',
+    note: 'Local oak blocking glued behind the gunwale and the rear transom where grip pads, lash plates and the rear-light plate screw in, so every wood screw has at least ¾" of engagement.',
   },
   prowHeightIn: {
     label: 'Prow height above the gunwale line', group: 'body', unit: 'in',
@@ -283,7 +340,8 @@ const defs = {
   },
   prowWidthIn: {
     label: 'Prow width (across the hull)', group: 'body', unit: 'in',
-    default: 1.5, min: 1, max: 3, step: 0.125, status: 'assumed', ref: 'D-36',
+    default: 1.75, min: 1, max: 3, step: 0.125, status: 'assumed', ref: 'D-36, D-43',
+    note: '1.75" (was 1.5"): a sideways grab at the tip twists the leg (25 lbf × 7.4" reach); 1.5" ran 105% of the oak shear allowable, 1.75" about 87% (prow-grab).',
   },
   prowLamThicknessIn: {
     label: 'Prow lamination strip thickness', group: 'body', unit: 'in',
@@ -349,9 +407,9 @@ const defs = {
     default: 6, min: 3, max: 9, step: 0.5, status: 'assumed', ref: 'D-9',
   },
   tenonDepthIn: {
-    label: 'CNC blind-tenon depth (thin stock)', group: 'stock', unit: 'in',
+    label: 'Loose-tenon depth (thin stock)', group: 'stock', unit: 'in',
     default: 0.375, min: 0.25, max: 0.625, step: 0.0625, status: 'assumed', ref: 'D-35',
-    note: 'Used where the host is too thin for a Domino mortise (1/2" transoms and girders): a blind mortise leaves ≥ 1/8" of wall.',
+    note: 'Loose-tenon depth where no Domino size keeps the wall (thin hosts): both parts are mortised and a shop-made tenon is glued in. Not a CNC-cut integral tenon (build review S2).',
   },
   dominoMinWallIn: {
     label: 'Domino mortise: minimum wall left behind', group: 'stock', unit: 'in',
@@ -361,13 +419,18 @@ const defs = {
     label: 'Domino: minimum margin to the stock edge', group: 'stock', unit: 'in',
     default: 0.25, min: 0.1, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-35',
   },
+  dominoEdgeLightIn: {
+    label: 'Domino: margin to the stock edge, light frames', group: 'stock', unit: 'in',
+    default: 0.1, min: 0.05, max: 0.25, step: 0.025, status: 'assumed', ref: 'D-40',
+    note: 'Seat-back frame, storage lid frame and grab-handle posts carry no structural load path through the Domino (a 4x20 in a 1" member leaves 0.1" each side). Fed to chooseDomino for those joints only.',
+  },
   printedDensityPcf: {
     label: 'Printed ASA / PETG density (solid walls)', group: 'materials', unit: 'lb/ft³',
     default: 66, min: 50, max: 80, step: 1, status: 'assumed', ref: 'D-37',
   },
   crossmemberSpacingIn: {
     label: 'Max unsupported deck span (joist spacing)', group: 'body', unit: 'in',
-    default: 8, min: 6, max: 24, step: 0.5, status: 'explore', ref: 'D-17',
+    default: 10, min: 6, max: 24, step: 0.5, status: 'explore', ref: 'D-17, D-43',
   },
   storageLocation: {
     label: 'Storage box location', group: 'body', unit: '',
@@ -408,6 +471,16 @@ const defs = {
     default: 0.125, min: 0.0625, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-41',
     note: 'EPDM bulb or closed-cell strip between the wall tops and the lid frame.',
   },
+  storageCoamingThickIn: {
+    label: 'Storage wall-top oak coaming thickness', group: 'body', unit: 'in',
+    default: 0.375, min: 0.25, max: 0.75, step: 0.125, status: 'assumed', ref: 'D-41',
+    note: 'An oak strip capping the 6 mm ply walls so the gasket seals on oak and no ply edge is exposed at the wall tops. The ply wall stops this far below the gasket.',
+  },
+  storageCoamingWidthIn: {
+    label: 'Storage wall-top oak coaming width', group: 'body', unit: 'in',
+    default: 0.5, min: 0.375, max: 1, step: 0.125, status: 'assumed', ref: 'D-41',
+    note: 'Flush with the outside of the wall; the inboard overhang past the ply wall is a ledge that the gasket also sits on.',
+  },
   storageDrainDiaIn: {
     label: 'Storage box drain hole diameter', group: 'body', unit: 'in',
     default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-41',
@@ -417,6 +490,17 @@ const defs = {
     label: 'Lash points per gunwale', group: 'body', unit: '',
     default: 3, min: 2, max: 5, step: 1, status: 'assumed', ref: 'D-41',
     note: 'Stainless D-rings on the cabin gunwales for post-race gear hauling (BRIEF §4.9: at least 6 in all).',
+  },
+
+  lashLoadLbf: {
+    label: 'Lash point design load (strap pull)', group: 'body', unit: 'lbf',
+    default: 300, min: 100, max: 600, step: 25, status: 'assumed', ref: 'D-41',
+    note: 'BRIEF §4.9: the D-ring bolt plate is rated for 300 lbf working load. The lash-load check pulls each plate with this at the angle below.',
+  },
+  lashPullAngleDeg: {
+    label: 'Lash strap pull angle above the deck', group: 'body', unit: '°',
+    default: 45, min: 15, max: 75, step: 5, status: 'assumed', ref: 'D-41',
+    note: 'The strap runs up and inboard over the load: 45° splits the pull evenly into screw withdrawal (vertical) and lateral shear (horizontal).',
   },
 
   // ── Seat & rider position ────────────────────────────────────────────────
@@ -605,7 +689,7 @@ const defs = {
   },
   turntableType: {
     label: 'Turntable bearing', group: 'steering', unit: '',
-    default: 1, min: 0, max: 3, step: 1, status: 'explore', ref: 'D-28',
+    default: 2, min: 0, max: 3, step: 1, status: 'explore', ref: 'D-28',
     note: 'Presets set size, stack height, mass and rating (catalog estimates — verify against the part bought). "Custom" uses the four turntable params below.',
     options: [
       { value: 0, label: 'Custom (use the values below)' },
@@ -620,12 +704,12 @@ const defs = {
   },
   turntableThicknessIn: {
     label: 'Turntable bearing stack height', group: 'steering', unit: 'in',
-    default: 0.375, min: 0.25, max: 1, step: 0.0625, status: 'verify', ref: 'D-12',
+    default: 0.5, min: 0.25, max: 1, step: 0.0625, status: 'verify', ref: 'D-12',
   },
   turntableMassLb: {
     label: 'Turntable bearing mass', group: 'steering', unit: 'lb',
-    default: 3.5, min: 1, max: 8, step: 0.25, status: 'verify', ref: 'D-12',
-    note: 'Estimate for a 12" lazy-susan plate pair; replace with the catalog value.',
+    default: 5.5, min: 1, max: 8, step: 0.25, status: 'verify', ref: 'D-12',
+    note: 'Estimate for the 12" heavy-duty ball-bearing plate pair (preset 2, D-35); replace with the catalog value.',
   },
   bolsterRailWidthIn: {
     label: 'Bolster rail width (fore-aft)', group: 'steering', unit: 'in',
@@ -665,44 +749,115 @@ const defs = {
     default: 0.0625, min: 0.03125, max: 0.25, step: 0.03125, status: 'assumed', ref: 'D-12',
   },
   steerStopSizeIn: {
-    label: 'Steering stop dog thickness (oak block)', group: 'steering', unit: 'in',
-    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-31',
-    note: 'Phase 3: two oak dogs on the beam inside the bolster opening, one on each side of the crossbar, faced with steel plates. Each dog has a face on both sides and lands flat on a chassis stop block exactly at lock (src/model/stops.ts).',
+    label: 'Steering stop dog width (steel channel, across the flanges)', group: 'steering', unit: 'in',
+    default: 1.25, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-35',
+    note: 'Round 2: each stop dog is a formed steel channel (web + two upturned flanges, outsourced waterjet + brake) bolted to a riser that stands on the kingpin carrier plate INSIDE the turntable center hole, so nothing goes through the ball ring. The flange outer faces are the stops; a bonded urethane pad on each face makes the two stops share load. Each dog has a face on both sides and lands flat on a chassis stop block exactly at lock (src/model/stops.ts).',
   },
   steerStopHeightIn: {
-    label: 'Steering stop dog height', group: 'steering', unit: 'in',
-    default: 1.75, min: 0.5, max: 2, step: 0.25, status: 'assumed', ref: 'D-31',
-    note: 'Clamped to the bolster depth minus the running clearance. The bearing face on the stop block is this tall.',
+    label: 'Steering stop dog flange height', group: 'steering', unit: 'in',
+    default: 1.25, min: 0.5, max: 2, step: 0.25, status: 'assumed', ref: 'D-35',
+    note: 'Clamped to the bolster depth minus the web, the running clearances and the riser. The bearing face on the stop block is this tall.',
   },
-  // ── Phase 3 workstream A: steering stops, kingpin, bridle ties, front mounting (D-31…D-34) ──
+  // ── Phase 3 workstream A: steering stops, kingpin, bridle ties, front mounting (D-31…D-35) ──
   steerStopFacePlateIn: {
-    label: 'Stop dog steel face plate thickness', group: 'steering', unit: 'in',
-    default: 0.125, min: 0.0625, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-31',
-    note: 'A36 plate screwed to each side of the oak dog: the steel face spreads the contact over the stop block and takes the wear.',
+    label: 'Stop channel steel thickness', group: 'steering', unit: 'in',
+    default: 0.3125, min: 0.1875, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-35',
+    note: 'A36 plate, web and flanges; the flange bends over the stop pressure (steer-stops row). Also the riser and foot plate.',
+  },
+  steerStopPadIn: {
+    label: 'Stop face urethane pad thickness', group: 'steering', unit: 'in',
+    default: 0.25, min: 0.125, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-35',
+    note: '70-80A urethane bonded to each flange face. It is the compliance that makes two stops share the yaw torque (stiffness k = E·A/t, share from fit-up mismatch) and it soaks up the impact.',
+  },
+  steerStopPadModulusPsi: {
+    label: 'Stop pad effective compressive modulus', group: 'steering', unit: 'psi',
+    default: 1500, min: 500, max: 5000, step: 100, status: 'verify', ref: 'D-35',
+    note: 'Apparent modulus of a thin bonded 75A urethane pad (shape factor ~2), ~1,500 psi; test a pad (Phase 4). Lower = softer = shares better but crushes more.',
+  },
+  steerStopPadAllowPsi: {
+    label: 'Stop pad bearing allowable', group: 'steering', unit: 'psi',
+    default: 800, min: 300, max: 2000, step: 50, status: 'verify', ref: 'D-35',
+    note: 'Compressive stress the urethane pad may see at the design strike (about half its 1,500 psi yield stress).',
+  },
+  steerStopPadYieldPsi: {
+    label: 'Stop pad yield stress (bounding case)', group: 'steering', unit: 'psi',
+    default: 1500, min: 500, max: 4000, step: 100, status: 'verify', ref: 'D-35',
+    note: 'Compressive stress at which a thin bonded 75A urethane pad takes a set. The share-1.0 bounding row (one stop closes, the other does not) is held to this, not to the design allowable.',
+  },
+  steerStopRiserDepthIn: {
+    label: 'Stop riser depth (radial, y)', group: 'steering', unit: 'in',
+    default: 0.5, min: 0.25, max: 1, step: 0.125, status: 'assumed', ref: 'D-35',
+    note: 'The short block between the stop arm and the channel web, at the turntable hole edge. The web and the riser reach this far in from the stop face, and the planner keeps that inner end clear of the crossbar at lock.',
+  },
+  steerStopFitMismatchIn: {
+    label: 'Stop fit-up mismatch (one stop closes late)', group: 'steering', unit: 'in',
+    default: 0.005, min: 0, max: 0.06, step: 0.001, status: 'assumed', ref: 'D-35',
+    note: 'Assembly tolerance between the two stops of the couple (shim at assembly). share = ½ + k·δ/(2·P): at 0.005" it is ≈ 0.55. A mismatch of P/k closes only one stop (share 1.0, the bounding row).',
   },
   stopBlockMinIn: {
     label: 'Stop block minimum wood thickness behind the face', group: 'steering', unit: 'in',
     default: 0.5, min: 0.25, max: 1, step: 0.125, status: 'assumed', ref: 'D-31',
     note: 'The stop blocks are wedges in the corners of the bolster opening; the thin ends are trimmed off where the wood behind the face is thinner than this, which also sets the length of the stop face.',
   },
-  steerStopBoltDiameterIn: {
-    label: 'Stop dog hold-down bolt diameter', group: 'steering', unit: 'in',
-    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-31',
-    note: 'Through-bolts down through the dog, the turntable plate and the front beam; nut and fender washer under the beam.',
+  turntableCenterHoleIn: {
+    label: 'Turntable center hole diameter', group: 'steering', unit: 'in',
+    default: 6.25, min: 4, max: 8, step: 0.25, status: 'verify', ref: 'D-35',
+    note: 'The open center of a 12" lazy susan is about 6" (a 12" round bearing lists 6.3"). The kingpin plates, the stop risers and the plate bolts live inside it so nothing goes through the ball ring. Verify the bought bearing.',
   },
-  steerStopBoltCount: {
-    label: 'Stop dog hold-down bolts per dog', group: 'steering', unit: '',
-    default: 2, min: 2, max: 4, step: 1, status: 'assumed', ref: 'D-31',
+  kingpinPlateThickIn: {
+    label: 'Kingpin steel plate thickness', group: 'steering', unit: 'in',
+    default: 0.1875, min: 0.125, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-35',
+    note: 'A36 plate, outsourced waterjet / laser. A plate on top of the front beam (the turntable carrier), one under the beam and one under the crossbar; the pin bears on them steel-on-steel.',
   },
-  steerStopWasherDiameterIn: {
-    label: 'Stop dog bolt fender washer OD (under the beam)', group: 'steering', unit: 'in',
-    default: 1.5, min: 1, max: 2.5, step: 0.125, status: 'assumed', ref: 'D-31',
-    note: 'Carries the bolt tension from the dog tipping under the stop force onto the beam underside (oak ⊥).',
+  carrierPlateThickIn: {
+    label: 'Turntable carrier plate thickness (on the beam)', group: 'steering', unit: 'in',
+    default: 0.375, min: 0.1875, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-35',
+    note: 'The A36 strip on top of the front beam under the lazy susan: the kingpin sleeve spigots into it, the stop arms screw to it, and it hands the stop torque in its own plane to the plate bolts. 5/16" so its bolt holes bear well enough to pass the stop torque (NDS yield mode IIIs scales with plate thickness) and the strip carries it in bending.',
   },
-  steerStopLoadShare: {
-    label: 'Share of the yaw torque on the heavier-loaded stop', group: 'steering', unit: '×',
-    default: 0.6, min: 0.5, max: 1, step: 0.05, status: 'assumed', ref: 'D-31',
-    note: 'Both stops of the couple close at lock, but fit tolerance can make one lead: 0.6 = it takes 60% and the other 40%. 1 = one stop takes the whole torque, with the net force going to the kingpin.',
+  kingpinPlateWidthIn: {
+    label: 'Carrier / beam plate width (along the fore-aft axis)', group: 'steering', unit: 'in',
+    default: 2.5, min: 2, max: 3, step: 0.125, status: 'assumed', ref: 'D-35',
+    note: 'The strips on and under the beam are this wide. The sleeve hole takes 1¼" of it, so the net section beside the hole carries the pin reaction in the plane of the plate (kingpin-plates row). 2.5" just spans the beam strip between the rod groove and the front face.',
+  },
+  steerStopBarThickIn: {
+    label: 'Stop arm bar thickness', group: 'steering', unit: 'in',
+    default: 0.4375, min: 0.25, max: 0.75, step: 0.125, status: 'assumed', ref: 'D-35',
+    note: 'A36 flat bar lying on the carrier inside the turntable hole: the stop dogs stand on it through a short riser. ½" so the riser force does not bend it.',
+  },
+  steerStopScrewDiameterIn: {
+    label: 'Stop arm screw diameter', group: 'steering', unit: 'in',
+    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-35',
+    note: 'Grade 8 socket flat-head screws through each stop arm, tapped into the carrier (shear and a little tension from the riser overturning). Four in all.',
+  },
+  kingpinPlateYieldPsi: {
+    label: 'Kingpin plate steel yield strength', group: 'steering', unit: 'psi',
+    default: 36000, min: 30000, max: 60000, step: 1000, status: 'assumed', ref: 'D-35',
+    note: 'A36. Allowable = yield / steel safety factor.',
+  },
+  kingpinPlateBoltDiameterIn: {
+    label: 'Kingpin plate bolt diameter', group: 'steering', unit: 'in',
+    default: 0.3125, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-35',
+    note: '5/16" through-bolts holding the plates to the beam (6, in one line, ≥ 5D apart) and the crossbar (4): flat heads flush in the carrier, nuts under the beam plate. 5/16" because the 4D loaded-edge distance of a ⅜" bolt (1.5") does not fit the front lip and the rod groove of the 4" beam (1.25" each). Per-bolt lateral capacity is the NDS yield-mode value (src/analysis/nds.ts).',
+  },
+  kingpinPlateBoltYieldPsi: {
+    label: 'Kingpin plate bolt yield strength', group: 'steering', unit: 'psi',
+    default: 130000, min: 30000, max: 150000, step: 5000, status: 'verify', ref: 'D-35',
+    note: 'SAE grade 8, zinc-flake coated and sealed in epoxy where it runs through oak. 316 stainless (cold worked F593, 65 ksi) cuts the stop-torque margin below 1: see the kingpin-bolts row.',
+  },
+  kingpinCrossBoltDiameterIn: {
+    label: 'Kingpin cross-bolt diameter (splitting reinforcement)', group: 'steering', unit: 'in',
+    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-35',
+    note: '316 stainless fore-aft bolts through the front beam, flanking the plate bolts, with fender washers: they stitch the front slab against cleavage (NDS 3.4.3.3). The crossbar gets two across its width.',
+  },
+  kingpinCrossBoltYieldPsi: {
+    label: 'Kingpin cross-bolt yield strength', group: 'steering', unit: 'psi',
+    default: 65000, min: 30000, max: 100000, step: 1000, status: 'assumed', ref: 'D-35',
+    note: '316 stainless, cold-worked ASTM F593 condition CW (65 ksi min yield for ⅜"). Allowable tension = yield / steel safety factor.',
+  },
+  kingpinCrossBoltWasherIn: {
+    label: 'Kingpin cross-bolt washer OD', group: 'steering', unit: 'in',
+    default: 1.75, min: 1, max: 2.5, step: 0.125, status: 'assumed', ref: 'D-35',
+    note: 'Fender washers under the cross-bolt heads and nuts; they spread the splitting tension into the oak (oak ⊥ bearing).',
   },
   eyeBoltDiameterIn: {
     label: 'Bridle eye bolt shank diameter', group: 'steering', unit: 'in',
@@ -768,7 +923,7 @@ const defs = {
   },
   turntableRatingLb: {
     label: 'Turntable load rating', group: 'steering', unit: 'lb',
-    default: 1000, min: 1000, max: 2500, step: 50, status: 'verify', ref: 'D-28',
+    default: 1500, min: 1000, max: 2500, step: 50, status: 'verify', ref: 'D-28',
     note: 'Used when Turntable bearing = Custom; the brief requires ≥ 1000 lb.',
   },
   kingpinLeadIn: {
@@ -812,7 +967,7 @@ const defs = {
   kingpinSleeveOdIn: {
     label: 'Kingpin steel sleeve outside diameter (0 = none)', group: 'steering', unit: 'in',
     default: 1.25, min: 0, max: 2, step: 0.0625, status: 'explore', ref: 'D-12',
-    note: 'A steel tube sleeve (inside diameter = the kingpin) in the beam bore and the crossbar bore, e.g. 1.25" OD for a ¾" pin. The oak bore bearing then acts on the sleeve OD; the pin bears on the steel sleeve. Must exceed the kingpin diameter. The rod-to-kingpin web and beam ligament rules use the sleeve OD.',
+    note: 'A steel tube sleeve (inside diameter = the kingpin) in the beam bore, e.g. 1.25" OD for a ¾" pin. With the kingpin steel plates (D-35, the default crossbar configuration) it is the pin guide between the beam plates: it bears in their spigot holes and the epoxy bed in the oak is a seal that is NOT counted. Without the crossbar (the Phase 1 pin) the oak bears on the sleeve OD instead. Must exceed the kingpin diameter; the rod-to-kingpin web and beam ligament rules use the sleeve OD.',
   },
   sleeveYieldPsi: {
     label: 'Kingpin sleeve steel yield strength', group: 'steering', unit: 'psi',
@@ -885,7 +1040,8 @@ const defs = {
   },
   brakeShoeWidthIn: {
     label: 'Brake shoe width (across the tread)', group: 'brake', unit: 'in',
-    default: 3, min: 1.5, max: 4, step: 0.25, status: 'assumed', ref: 'D-13',
+    default: 2.5, min: 1.5, max: 4, step: 0.25, status: 'assumed', ref: 'D-13',
+    note: 'Phase 3 r2: 2.5" (was 3") shortens the shoe-arm overhang beyond the bearing, which sets the bending in the cross-drilled shaft; pad pressure is about 55 psi at 2× the hold load.',
   },
   brakeShoeLengthIn: {
     label: 'Brake shoe length (along the tread)', group: 'brake', unit: 'in',
@@ -913,7 +1069,7 @@ const defs = {
   brakeShaftDiameterIn: {
     label: 'Brake cross shaft diameter', group: 'brake', unit: 'in',
     default: 0.75, min: 0.375, max: 1, step: 0.125, status: 'assumed', ref: 'D-38',
-    note: 'Ground 1045 shafting like the axle (the brake-shaft check uses the axle allowable). ¾" carries the shoe-arm torque at 2× the hold load with margin; ½" does not.',
+    note: 'Ground shafting, pre-hardened 4140 (brakeShaftYieldPsi). ¾" carries the shoe-arm torque at 2× the hold load; ½" does not. Phase 3 r2: the shaft is cross-drilled for roll pins (no keyseat, build review M10) and the ¼" diametral hole costs 57% of the bending section, so the net-section stress is checked (brake-shaft); 1045 at 70 ksi would need a 7/8" shaft (+1.8 lb).',
   },
   brakeLeverWidthIn: {
     label: 'Brake lever width (across)', group: 'brake', unit: 'in',
@@ -930,8 +1086,38 @@ const defs = {
     note: 'Pivot friction and shoe/linkage compliance.',
   },
   brakePadMu: {
-    label: 'Shoe-to-tire friction μ (wet, design)', group: 'brake', unit: '',
-    default: 0.4, min: 0.2, max: 0.8, step: 0.05, status: 'assumed', ref: 'D-13',
+    label: 'Lining-to-tire friction μ (bonded woven / molded lining, wet design)', group: 'brake', unit: '',
+    default: 0.45, min: 0.2, max: 0.8, step: 0.05, status: 'assumed', ref: 'D-13',
+    note: 'Phase 3 r2: the oak pads are faced with a 1/8" woven or molded brake lining (bonded, brass-free), which is about 0.45 against a wet rubber tread. Bare oak on wet rubber is only about 0.25 and needs 32–37 lbf at the handle (eng review S-3).',
+  },
+  brakePadMuFouled: {
+    label: 'Lining-to-tire friction μ, mud / slush fouled (pass/fail case)', group: 'brake', unit: '',
+    default: 0.35, min: 0.15, max: 0.8, step: 0.05, status: 'assumed', ref: 'D-13',
+    note: 'The shoe sits on the rear-lower tread, the part that just left the ground, so mud and slush reach it first (build review S10). The handle-force check and the member loads use the lower of this and the design μ; the force must still be ≤ the handle limit at this μ. Test the lining on a wet tire before the build.',
+  },
+  brakeShaftYieldPsi: {
+    label: 'Brake cross shaft yield (pre-hardened 4140 ground rod)', group: 'brake', unit: 'psi',
+    default: 100000, min: 50000, max: 140000, step: 5000, status: 'assumed', ref: 'D-38',
+    note: 'Pre-hardened 4140 ground rod (28–32 HRC, yield ≥ 100 ksi; drills and reams on the drill press with a cobalt bit). Allowable = yield / steelSafetyFactor. The axle stays 1045 at axleYieldPsi.',
+  },
+  brakeLiningThickIn: {
+    label: 'Brake lining thickness (bonded to the oak pad face)', group: 'brake', unit: 'in',
+    default: 0.125, min: 0.0625, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-13',
+    note: 'Woven or molded lining sheet, cut on the bandsaw and bonded to the oak pad with contact or epoxy adhesive plus two stainless pan-head screws. Counted inside the shoe radial thickness.',
+  },
+  brakeLeverTailAuto: {
+    label: 'Solve the lever tail from the ratio target', group: 'brake', unit: '',
+    default: 1, min: 0, max: 1, step: 1, status: 'assumed', ref: 'D-38',
+    options: [
+      { value: 1, label: 'On: tail solved so the critical ratio meets the target' },
+      { value: 0, label: 'Off: use the lever tail length below' },
+    ],
+    note: 'Phase 3 r2 (eng S-3): the lever tail is solved by bisection so that the derived critical-direction ratio equals the target × headroom, for any wheel size. If no tail between 1" and 4" can reach it, the tail is clamped and brake-ratio fails honestly.',
+  },
+  brakeRatioHeadroom: {
+    label: 'Ratio headroom over the target (tail solve)', group: 'brake', unit: '×',
+    default: 1.1, min: 1, max: 1.3, step: 0.01, status: 'assumed', ref: 'D-38',
+    note: 'The tail is solved to this multiple of the target so the check passes with margin, not at equality.',
   },
   tireGroundMu: {
     label: 'Tire-to-ground friction μ (design)', group: 'brake', unit: '',
@@ -991,8 +1177,8 @@ const defs = {
   // ── Brake mechanism geometry (D-38) ───────────────────────────────────────
   brakeShoeTravelIn: {
     label: 'Brake shoe engagement stroke (pad to tread)', group: 'brake', unit: 'in',
-    default: 0.3, min: 0.1, max: 0.75, step: 0.05, status: 'assumed', ref: 'D-38',
-    note: 'Released gap to the tread plus tire/pad compliance and a little wear allowance (the clevis lengthens the link to take up more). Sets the lever stroke: stroke ≈ ratio × this.',
+    default: 0.375, min: 0.1, max: 0.75, step: 0.025, status: 'assumed', ref: 'D-38',
+    note: 'Released gap to the tread plus tire/pad compliance and a little wear allowance (the clevis lengthens the link to take up more). Sets the lever stroke: stroke ≈ ratio × this. 3/8" so a muddy shoe retracts clear of the tread (build review S10).',
   },
   brakeShoePinDiameterIn: {
     label: 'Shoe pivot pin diameter', group: 'brake', unit: 'in',
@@ -1018,18 +1204,19 @@ const defs = {
     note: 'On the rear rail band.',
   },
   brakeLeverTailIn: {
-    label: 'Brake lever tail length (pivot to link pin)', group: 'brake', unit: 'in',
+    label: 'Brake lever tail length (pivot to link pin), manual', group: 'brake', unit: 'in',
     default: 1.9, min: 1, max: 4, step: 0.05, status: 'explore', ref: 'D-38',
-    note: 'The input lever arm of the linkage (shorter = more mechanical advantage). With the crank and shoe geometry this is what the brake ratio is solved with.',
+    note: 'The input lever arm of the linkage (shorter = more mechanical advantage). Used only when "Solve the lever tail" is off; otherwise the tail is solved from the ratio target (brakeLeverTailAuto).',
   },
   brakeCrankIn: {
     label: 'Brake crank length (shaft to link pin)', group: 'brake', unit: 'in',
-    default: 2.4, min: 1, max: 4, step: 0.05, status: 'explore', ref: 'D-38',
+    default: 3, min: 1, max: 4, step: 0.05, status: 'explore', ref: 'D-38',
+    note: 'Phase 3 r2: 3.0" (was 2.4") so the solved lever tail stays near 1.8" at the 1.1× ratio headroom and the link, tail shear and tail-pin bearing keep margin (tail shear and pin bearing 85% of allowable).',
   },
   brakeCrankAngleDeg: {
     label: 'Brake crank direction (0° = forward, 270° = down)', group: 'brake', unit: '°',
-    default: 315, min: 180, max: 360, step: 1, status: 'assumed', ref: 'D-38',
-    note: 'Released position of the crank, counter-clockwise from +x seen from the left. 315° points forward and down at 45°.',
+    default: 322, min: 180, max: 360, step: 1, status: 'assumed', ref: 'D-38',
+    note: 'Released position of the crank, counter-clockwise from +x seen from the left. 322° points forward and down at 38° (was 315°; raised so the 3" crank and its clevis stay ≥ 3.5" above the ground).',
   },
   brakeLeverTiltDeg: {
     label: 'Brake lever tilt toward the rear', group: 'brake', unit: '°',
@@ -1110,12 +1297,33 @@ const defs = {
   },
   brakeRatchetSpanDeg: {
     label: 'Ratchet quadrant arc (toothed span)', group: 'brake', unit: '°',
-    default: 20, min: 8, max: 40, step: 1, status: 'assumed', ref: 'D-39',
-    note: 'Must cover the applied lever angle plus wear take-up (checked).',
+    default: 28, min: 8, max: 40, step: 1, status: 'assumed', ref: 'D-39',
+    note: 'Must cover the applied lever angle plus wear take-up (checked). 28° covers the 3/8" shoe stroke (15.6° applied) at 1.5× reserve with margin.',
   },
   brakePawlPinDiameterIn: {
     label: 'Ratchet pawl pivot pin diameter', group: 'brake', unit: 'in',
     default: 0.25, min: 0.1875, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-39',
+  },
+
+  // ── Metal hardware: lathe-free shaft joints, aluminum sockets (build review M10; plan item 5) ──
+  brakeRollPinDiameterIn: {
+    label: 'Brake shaft cross-pin (heavy-duty roll pin) diameter', group: 'brake', unit: 'in',
+    default: 0.25, min: 0.1875, max: 0.3125, step: 0.0625, status: 'assumed', ref: 'D-38',
+    note: 'Drill-press joint, no lathe, mill or broach: the shaft collar (or the crank bar, drilled and reamed to the shaft) and the shaft are cross-drilled together and a roll pin is driven through. Arm collars have one pin each, the crank two at 90°.',
+  },
+  brakeRollPinShearPsi: {
+    label: 'Heavy-duty roll pin allowable double shear', group: 'brake', unit: 'psi',
+    default: 20000, min: 8000, max: 40000, step: 1000, status: 'assumed', ref: 'D-38',
+    note: 'A heavy-duty 1/4" spring (roll) pin breaks at about 4,000 lbf in double shear, i.e. about 41 ksi on its 2 × 0.049 in² section; ÷ safety factor 2 is 20 ksi.',
+  },
+  handleSocketYieldPsi: {
+    label: 'Push-handle socket tube yield (6061-T6 aluminum)', group: 'brake', unit: 'psi',
+    default: 35000, min: 20000, max: 60000, step: 1000, status: 'assumed', ref: 'D-39',
+    note: 'Plan item 5: the push-handle sockets are 6061-T6 rectangular tube, not steel. Allowable = yield / steelSafetyFactor. Anodized or epoxy-coated, with a plastic isolator under the bolt washers (aluminum corrodes against wet tannin oak and steel bolts).',
+  },
+  aluminumDensityPcf: {
+    label: 'Aluminum 6061 density', group: 'brake', unit: 'lb/ft³',
+    default: 169, min: 160, max: 175, step: 1, status: 'assumed', ref: 'D-39',
   },
 
   // ── Stock thicknesses (finished) ─────────────────────────────────────────
@@ -1136,8 +1344,9 @@ const defs = {
     default: 0.75, min: 0.5, max: 1.5, step: 0.0625, status: 'explore',
   },
   sideThicknessIn: {
-    label: 'Side / gunwale stock thickness', group: 'stock', unit: 'in',
-    default: 0.5, min: 0.375, max: 1, step: 0.0625, status: 'explore',
+    label: 'Chine / gunwale stock thickness', group: 'stock', unit: 'in',
+    default: 0.625, min: 0.375, max: 1, step: 0.0625, status: 'explore', ref: 'D-35, D-43',
+    note: '⅝" leaves 0.17" walls beside the 0.276" groove (D-43) and a ⅜"-wide bearing face under the deck rabbet; the transoms have their own thickness.',
   },
   axleBeamThicknessIn: {
     label: 'Rear axle beam width (fore-aft)', group: 'stock', unit: 'in',
@@ -1221,6 +1430,51 @@ const defs = {
     label: 'White oak bolt (dowel) bearing ⊥ grain, clear', group: 'materials', unit: 'psi',
     default: 4000, min: 1500, max: 8000, step: 100, status: 'assumed', ref: 'D-4',
     note: 'Bolt bearing in a drilled hole is far above the area-bearing C⊥ (NDS Fe⊥ ≈ 6100·G^1.45/√D ≈ 5,700 psi for G = 0.68, ⅜" bolt); 4,000 psi is a conservative round figure. Used only for the bolster fastener bearing.',
+  },
+  oakSpecificGravity: {
+    label: 'White oak specific gravity (NDS G)', group: 'materials', unit: '',
+    default: 0.68, min: 0.5, max: 0.8, step: 0.01, status: 'assumed', ref: 'D-35',
+    note: 'NDS Table 12.3.3: dowel bearing Fe⊥ = 6,100·G^1.45/√D, Fe∥ = 11,200·G. G = 0.68 for white oak (oven-dry basis).',
+  },
+  oakNdsShearPsi: {
+    label: 'White oak NDS design shear Fv (reference)', group: 'materials', unit: 'psi',
+    default: 205, min: 100, max: 300, step: 5, status: 'verify', ref: 'D-35',
+    note: 'Lumber design value (it already carries the allowance for checks and splits), used for cleavage and row / group tear-out (NDS Appendix E and 3.4.3.3). The 850 psi clear-wood rows elsewhere are not used for these.',
+  },
+  oakNdsTensionPsi: {
+    label: 'White oak NDS design tension parallel to grain Ft (reference)', group: 'materials', unit: 'psi',
+    default: 500, min: 200, max: 1000, step: 25, status: 'verify', ref: 'D-35',
+    note: 'Net-section term of the group tear-out (NDS Appendix E).',
+  },
+  ndsWetFactorShear: {
+    label: 'NDS wet-service factor on Fv', group: 'materials', unit: '×',
+    default: 0.97, min: 0.5, max: 1, step: 0.01, status: 'assumed', ref: 'D-35',
+    note: 'NDS Table 4.3.1: C_M = 0.97 for shear parallel to grain in sawn lumber used wet.',
+  },
+  ndsWetFactorFasteners: {
+    label: 'NDS wet-service factor on bolt lateral capacity', group: 'materials', unit: '×',
+    default: 0.7, min: 0.5, max: 1, step: 0.05, status: 'assumed', ref: 'D-35',
+    note: 'NDS Table 11.3.3: C_M = 0.7 for bolts in wood at moisture content over 19% in service (snow, rain, mud).',
+  },
+  ndsLoadDurationFactor: {
+    label: 'NDS load-duration factor on the strike (connections)', group: 'materials', unit: '×',
+    default: 1.6, min: 1, max: 1.6, step: 0.05, status: 'assumed', ref: 'D-35',
+    note: 'A curb strike is a transient impact; the 3× dynamic factor is already in the load. NDS 10.3.2 caps C_D at 1.6 for connections, so 1.6 is used and no more.',
+  },
+  ndsGroupFactor: {
+    label: 'NDS group action factor Cg for the plate bolt rows', group: 'materials', unit: '×',
+    default: 0.85, min: 0.5, max: 1, step: 0.05, status: 'assumed', ref: 'D-35',
+    note: 'Conservative constant for 4 to 6 bolts in a row at ≥ 4D spacing through a steel side plate (NDS 11.3.6); the table value is 0.9 or better.',
+  },
+  urethaneDensityPcf: {
+    label: 'Urethane density (stop pads)', group: 'materials', unit: 'lb/ft³',
+    default: 70, min: 60, max: 80, step: 1, status: 'assumed', ref: 'D-35',
+    note: '70-80A cast urethane, about 1.1 g/cm³.',
+  },
+  steelDowelBearingPsi: {
+    label: 'Steel plate dowel bearing strength Fe (A36)', group: 'materials', unit: 'psi',
+    default: 87000, min: 40000, max: 120000, step: 1000, status: 'assumed', ref: 'D-35',
+    note: 'NDS Table 12.3.3: A36 steel, 87,000 psi.',
   },
   plySpecies: {
     label: 'Plywood', group: 'materials', unit: '',
@@ -1427,6 +1681,16 @@ export function kingpinBoreIn(p: Params): number {
   return p.kingpinSleeveOdIn > 0 ? Math.max(p.kingpinSleeveOdIn, p.kingpinDiameterIn) : p.kingpinDiameterIn;
 }
 
+/** The steel kingpin plates exist whenever the pin runs up through the chassis crossbar (the default); the Phase 1 single-shear pin keeps its oak bores (D-35). */
+export function kingpinPlatesOn(p: Params): boolean {
+  return p.kingpinThroughBolster === 1;
+}
+
+/** Height of the turntable stack above the front beam top: the bearing plus the steel carrier plate under it (D-35). */
+export function frontStackIn(p: Params): number {
+  return p.turntableThicknessIn + (kingpinPlatesOn(p) ? p.carrierPlateThickIn : 0);
+}
+
 /** Effective washer OD under the beam / over the crossbar: the param, but never less than 2.25 × the pin diameter (so a fatter pin is not starved of bearing area). */
 export function kingpinWasherEffectiveIn(p: Params): number {
   return Math.max(p.kingpinWasherDiameterIn, 2.25 * p.kingpinDiameterIn);
@@ -1602,9 +1866,9 @@ export function validateParams(input: Params): ParamIssue[] {
     err(['seatXIn', 'rearOverhangIn'], 'Seat hangs off the back of the body.');
   if (p.seatXIn + p.riderLegReachIn > p.wheelbaseIn + p.frontOverhangIn)
     err(['seatXIn', 'riderLegReachIn', 'frontOverhangIn'], 'Rider\'s feet extend past the front of the body.');
-  if (p.kingpinLeadIn + p.turntableSizeIn / 2 + p.sideThicknessIn > p.frontOverhangIn)
+  if (p.kingpinLeadIn + p.turntableSizeIn / 2 + p.transomThicknessIn > p.frontOverhangIn)
     err(['kingpinLeadIn', 'turntableSizeIn', 'frontOverhangIn'],
-      `The turntable (kingpin at ${p.kingpinLeadIn}" ahead of the axle, ${p.turntableSizeIn}" plate) pokes out of the front of the body; the front overhang must be ≥ ${(p.kingpinLeadIn + p.turntableSizeIn / 2 + p.sideThicknessIn).toFixed(2)}".`);
+      `The turntable (kingpin at ${p.kingpinLeadIn}" ahead of the axle, ${p.turntableSizeIn}" plate) pokes out of the front of the body; the front overhang must be ≥ ${(p.kingpinLeadIn + p.turntableSizeIn / 2 + p.transomThicknessIn).toFixed(2)}".`);
   // Seat geometry (critic H3): the cushion must end before the shoulder panel, the leaning back must stay inside the rear
   // transom, and a rear storage box needs room between the transom and the seat back.
   const xsShoulder = p.wheelbaseIn - p.noseTaperStartIn;
@@ -1614,21 +1878,21 @@ export function validateParams(input: Params): ParamIssue[] {
       `The seat cushion runs into the cabin shoulder (cabin ends ${xsShoulder.toFixed(1)}" ahead of the rear axle; the cushion front is at ${cushionFront.toFixed(1)}"). Move the seat back or shorten it.`);
   const a = (p.seatBackAngleDeg * Math.PI) / 180;
   const backRear = p.seatXIn - p.seatBehindHpointIn - p.seatBackThickIn * Math.cos(a) - p.seatBackHeightIn * Math.sin(a);
-  const transomFront = -p.rearOverhangIn + p.sideThicknessIn;
+  const transomFront = -p.rearOverhangIn + p.transomThicknessIn;
   if (backRear < transomFront + 0.01)
     err(['seatXIn', 'rearOverhangIn', 'seatBackHeightIn', 'seatBackAngleDeg'],
       `The leaning seat back would hit the rear transom (its top reaches ${backRear.toFixed(1)}" from the rear axle; the transom is at ${transomFront.toFixed(1)}").`);
   if (p.storageLocation === STORAGE_LOCATION.rearOverAxle) {
-    const room = p.seatXIn - p.seatBehindHpointIn - p.seatBackThickIn * Math.cos(a) - transomFront;
+    const room = p.seatXIn - p.seatBehindHpointIn - p.seatBackThickIn * Math.cos(a) - transomFront - p.blockingThickIn; // minus the corner-backer lane behind the box (D-43)
     if (room < MIN_REAR_STORAGE_LENGTH_IN)
       err(['seatXIn', 'rearOverhangIn', 'storageLocation'],
         `Only ${room.toFixed(1)}" between the rear transom and the seat back; a rear storage box needs ≥ ${MIN_REAR_STORAGE_LENGTH_IN}". Move the seat forward or choose another storage location.`);
   }
   // The foot stop (a board of footStopThickIn at seatX + leg reach) must end inside the front transom's inner face.
   const footStopFront = p.seatXIn + p.riderLegReachIn + p.footStopThickIn / 2;
-  if (footStopFront > p.wheelbaseIn + p.frontOverhangIn - p.sideThicknessIn + 1e-9)
+  if (footStopFront > p.wheelbaseIn + p.frontOverhangIn - p.transomThicknessIn + 1e-9)
     err(['seatXIn', 'riderLegReachIn', 'frontOverhangIn', 'wheelbaseIn'],
-      `The foot stop reaches ${footStopFront.toFixed(2)}" ahead of the rear axle, into the front transom (its inner face is at ${(p.wheelbaseIn + p.frontOverhangIn - p.sideThicknessIn).toFixed(2)}"). Move the seat back or lengthen the front overhang.`);
+      `The foot stop reaches ${footStopFront.toFixed(2)}" ahead of the rear axle, into the front transom (its inner face is at ${(p.wheelbaseIn + p.frontOverhangIn - p.transomThicknessIn).toFixed(2)}"). Move the seat back or lengthen the front overhang.`);
   // A flared captured-ply side (D-6): the tilted panel's end corners bite into the chine/gunwale; the overlap test tolerates 0.05" (groove depth is Phase 3).
   if (p.sideConstruction === SIDE_CONSTRUCTION.capturedPly && p.gunwaleFlareIn > 0) {
     const webH = Math.max(0.1, p.sideHeightIn + p.deckPlyIn - 2 * p.railBandIn);
@@ -1676,10 +1940,10 @@ export function validateParams(input: Params): ParamIssue[] {
   const beamTop = beamBottom + p.axleBeamDepthIn;
   // The bolster must fit between the turntable top and the nose deck underside (the model would otherwise poke through the deck).
   const frontDeckBot = p.deckHeightIn + p.frontDeckRaiseIn - p.deckPlyIn;
-  if (beamTop + p.turntableThicknessIn + p.bolsterMinDepthIn > frontDeckBot + 0.01)
+  if (beamTop + frontStackIn(p) + p.bolsterMinDepthIn > frontDeckBot + 0.01)
     err(['deckHeightIn', 'frontDeckRaiseIn', 'axleBeamPosition', 'axleBeamDepthIn', 'turntableThicknessIn', 'bolsterMinDepthIn'],
-      `Front axle beam + turntable + ${p.bolsterMinDepthIn}" bolster needs the nose deck underside at ≥ ${(beamTop + p.turntableThicknessIn + p.bolsterMinDepthIn).toFixed(2)}"; it is ${frontDeckBot.toFixed(2)}". Raise the deck or the forward deck raise, or use an underslung beam.`);
-  const frontStackTop = beamTop + p.turntableThicknessIn + p.crossmemberDepthIn + p.deckPlyIn;
+      `Front axle beam + turntable + ${p.bolsterMinDepthIn}" bolster needs the nose deck underside at ≥ ${(beamTop + frontStackIn(p) + p.bolsterMinDepthIn).toFixed(2)}"; it is ${frontDeckBot.toFixed(2)}". Raise the deck or the forward deck raise, or use an underslung beam.`);
+  const frontStackTop = beamTop + frontStackIn(p) + p.crossmemberDepthIn + p.deckPlyIn;
   const frontDeck = p.deckHeightIn + p.frontDeckRaiseIn;
   if (frontStackTop > frontDeck + 0.01)
     warn(['deckHeightIn', 'frontDeckRaiseIn', 'axleBeamDepthIn', 'turntableThicknessIn'],
@@ -1748,7 +2012,7 @@ export function validateParams(input: Params): ParamIssue[] {
 
   // Front transom hangs below the nose deck; the swinging turntable corners and the tongue pass under it (critic r2 M3).
   const transomBottom = p.deckHeightIn + p.frontDeckRaiseIn - p.crossmemberDepthIn;
-  const turntableTop = beamTop + p.turntableThicknessIn;
+  const turntableTop = beamTop + frontStackIn(p);
   if (transomBottom < turntableTop - 0.01)
     err(['deckHeightIn', 'frontDeckRaiseIn', 'crossmemberDepthIn', 'turntableThicknessIn'],
       `The front transom hangs to ${transomBottom.toFixed(2)}", below the top of the turntable (${turntableTop.toFixed(2)}") and the tongue; raise the nose deck to ≥ ${(turntableTop + p.crossmemberDepthIn).toFixed(2)}".`);
@@ -1763,9 +2027,8 @@ export function validateParams(input: Params): ParamIssue[] {
     if ((railBot < clampHi - 0.01 && railTop > clampLo + 0.01) || p.deckHeightIn - p.deckPlyIn < clampHi - 0.01) {
       const beamLen = Math.max(1, p.rearTrackIn - p.hubLengthIn - 0.25);
       const clampInner = Math.min(beamLen / 2 - 0.25, p.rearTrackIn / 2 - p.tireWidthIn / 2) - p.clampPlateWidthIn;
-      // The side panels / girders (outer face at bodyWidth/2) also reach the plates when the deck underside is that low.
-      const sideLow = p.deckHeightIn - p.deckPlyIn < clampHi - 0.01;
-      const railOuter = p.bodyWidthIn / 2 - (p.frameStyle === FRAME_STYLE.ladder && !sideLow ? p.sideThicknessIn : 0);
+      // The ladder rails now run flush under the chines (D-43), so rails, girders and side panels all have their outer face at bodyWidth/2.
+      const railOuter = p.bodyWidthIn / 2;
       if (railOuter > clampInner + 1e-6)
         err(['bodyWidthIn', 'rearTrackIn', 'clampPlateWidthIn'],
           `The cabin rails/sides reach ${railOuter.toFixed(2)}" off center but the rear U-bolt plates start at ${clampInner.toFixed(2)}"; narrow the body or widen the track.`);
@@ -1774,17 +2037,17 @@ export function validateParams(input: Params): ParamIssue[] {
 
   // The brake cross shaft runs behind the rear tire and must stay in front of the rear transom (and the push handle behind it).
   const shaftBack = r + p.brakeShaftBehindTireIn + p.brakeShaftDiameterIn / 2;
-  if (p.rearOverhangIn < shaftBack + p.sideThicknessIn)
+  if (p.rearOverhangIn < shaftBack + p.transomThicknessIn)
     err(['rearOverhangIn', 'brakeShaftBehindTireIn', 'wheelDiameterIn'],
-      `The brake cross shaft reaches ${shaftBack.toFixed(2)}" behind the rear axle, into the rear transom; the rear overhang must be ≥ ${(shaftBack + p.sideThicknessIn).toFixed(2)}".`);
+      `The brake cross shaft reaches ${shaftBack.toFixed(2)}" behind the rear axle, into the rear transom; the rear overhang must be ≥ ${(shaftBack + p.transomThicknessIn).toFixed(2)}".`);
 
-  // Brake linkage (D-38). Numbers below mirror src/model/brake.ts (lever-to-hull gap 0.5", clevis cheek 0.15", clevis half height 0.25").
+  // Brake linkage (D-38). Numbers below mirror src/model/brake.ts (lever-to-hull gap 0.64", clevis cheek 0.15", clevis half height 0.25").
   if (p.brakeType === BRAKE_TYPE.tireTread) {
     const sX = -(r + p.brakeShaftBehindTireIn);
     const phiB = (p.brakeCrankAngleDeg * Math.PI) / 180;
     const bX = sX + p.brakeCrankIn * Math.cos(phiB);
     const bZ = r + p.brakeCrankIn * Math.sin(phiB);
-    const planeOuterY = p.bodyWidthIn / 2 + 0.5 + p.brakeLeverWidthIn + 0.15; // crank plate + clevis cheek, outboard face
+    const planeOuterY = p.bodyWidthIn / 2 + 0.64 + p.brakeLeverWidthIn + 0.15; // crank plate + clevis cheek, outboard face
     const tireIn = p.rearTrackIn / 2 - p.tireWidthIn / 2;
     if (bX + 0.5 > -r - 0.05 && planeOuterY > tireIn - 0.05)
       err(['brakeCrankIn', 'brakeCrankAngleDeg', 'brakeShaftBehindTireIn', 'bodyWidthIn', 'rearTrackIn'],
@@ -1807,8 +2070,19 @@ export function validateParams(input: Params): ParamIssue[] {
   // Steering stops live inside the bolster opening (H1, D-31).
   const stop = steerStopPlan(p);
   if (!stop.ok)
-    err(['steerStopSizeIn', 'steerStopFacePlateIn', 'stopBlockMinIn', 'turntableSizeIn', 'bolsterRailWidthIn', 'steerLockDeg', 'kingpinCrossbarWidthIn'],
+    err(['steerStopSizeIn', 'steerStopPadIn', 'stopBlockMinIn', 'turntableSizeIn', 'bolsterRailWidthIn', 'steerLockDeg', 'kingpinCrossbarWidthIn'],
       `Steering stops do not fit the bolster opening over the ±${p.steerLockDeg}° sweep: ${stop.why}.`);
+  // Kingpin steel plates (D-35): bolt-line edge distances, carrier length, bolt clearances, riser height, and the stop arm inside the turntable center hole.
+  // The NDS edge-distance rule is advisory (kingpinPlateIssues, shown in the kingpin-bolts how text): only the hard geometry fits are validator errors.
+  for (const i of kingpinPlateIssues(p)) if (!/loaded edge distance/.test(i.message)) err(i.keys as ParamKey[], i.message);
+  if (kingpinPlatesOn(p) && stop.ok) {
+    const armHx = Math.min(kingpinPlatePlan(p).carrier.hx, stopArmHx(p, stop.ra));
+    const holeR = p.turntableCenterHoleIn / 2;
+    const corner = Math.hypot(armHx, stop.ra);
+    if (corner > holeR - 0.02)
+      err(['turntableCenterHoleIn', 'steerStopSizeIn', 'steerStopRiserDepthIn', 'kingpinCrossbarWidthIn'],
+        `The stop arm's corner (${armHx}" off the pin line, ${stop.ra.toFixed(2)}" along it) reaches ${corner.toFixed(2)}" from the kingpin, outside the ${holeR.toFixed(3)}" radius of the turntable's ${p.turntableCenterHoleIn}" center hole (needs ≥ ${(corner + 0.02).toFixed(2)}"). Verify the bearing's open center.`);
+  }
 
   // Kingpin-nut access panel (D-34): it must sit on the crossbar top and cover the nut washer.
   if (p.kingpinThroughBolster === 1) {

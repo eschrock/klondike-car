@@ -5,7 +5,7 @@
 | 0 — Setup & parameter reconciliation | ✅ approved 2026-10-10 |
 | 1 — Block model | ✅ approved |
 | 2 — Analysis & simulation | ✅ approved 2026-10-10 |
-| 3 — Detail design | in progress (integration + critics) |
+| 3 — Detail design | in progress: round-2 fixes done; **paused 2026-10-11**, see docs/HANDOFF.md |
 | 4 — Build outputs | not started |
 
 ## Phase 0 log
@@ -34,3 +34,5 @@
 - Spec (docs/phase3-spec.md) lists must-fixes M1–M11 and workstreams A–E, built by parallel agents. Notes are in docs/phase3-ws*-notes.md; decisions D-31…D-41 are merged into DECISIONS.md.
 - Merged model: 796 tests green. Empty mass 126.9 → 144.7 lb. The brake mechanism is +8.8 lb (the ¾" solid shaft alone is 4.9 lb).
 - Next: integration loose ends (agent), then engineering + buildability critics, UX r2, then the checkpoint.
+- Round 1 critics: engineering 6/10, buildability 6/10. Round 2 fixes F1–F4 landed (D-43). Empty mass ≈ 160.6 lb; Simple view safe to 200 lb (limiter kingpin-bolts 0.98). 918 tests green.
+- Paused at Eric's request. Resume plan, starting with a visual fidelity pass, is in docs/HANDOFF.md.

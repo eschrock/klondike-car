@@ -13,7 +13,7 @@ export const RECOMMENDED: Partial<Params> = {
   frontAxleBeamThicknessIn: 4.0,
   axleYieldPsi: 70000, // 3/4" 1045 turned-ground-polished shafting
   deckPlyIn: 0.472, // 12 mm okoume
-  crossmemberSpacingIn: 8,
+  crossmemberSpacingIn: 10, // D-43: 10" joists (deck check still passes)
   brakeLeverRatio: 12,
   bridleRopeRunIn: 96, // 8 ft bridle tails, tied low at the axle ends
 };

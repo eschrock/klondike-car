@@ -19,6 +19,12 @@ export const PHASE1_BASELINE: Partial<Params> = {
   brakeLeverRatio: 10,
   bridleRopeRunIn: 72,
   bolsterFastenerDiameterIn: 0.25, // Phase 2 assumed 4 × ¼" bolster bolts (D-33 makes them 3/8")
+  // Round 2 (D-35) moved the front-end defaults (1,500 lb turntable, deck raised 1", steel kingpin plates); the Phase 1 numbers keep the 1,000 lb bearing; the raise is 0.75" (not the Phase 1 0.5") so the steel carrier plate under the bearing (D-35) does not trip the front-stack validator.
+  turntableType: 1,
+  turntableThicknessIn: 0.375,
+  turntableMassLb: 3.5,
+  turntableRatingLb: 1000,
+  frontDeckRaiseIn: 0.75,
 };
 
 export function phase1Params(): Params {

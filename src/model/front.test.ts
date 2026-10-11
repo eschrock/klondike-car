@@ -19,7 +19,7 @@ describe('stops.ts: the stop dogs and blocks fit the bolster opening and land fl
   const p = resolveParams(defaults);
   const plan = steerStopPlan(p);
   const L = plan.lock;
-  it('opening and dog numbers: a = 6 − 1.5 = 4.5", b = 6.0625 − 0.0 → 6.0625", W = 1.5/2 + 0.125 = 0.875"', () => {
+  it('opening and dog numbers: a = 6 − 1.5 = 4.5", b = 6.0625 − 0.0 → 6.0625", W = 1.25/2 + 0.25 (urethane pad) = 0.875"', () => {
     expect(plan.ok).toBe(true);
     expect(plan.a).toBeCloseTo(4.5, 9);
     expect(plan.b).toBeCloseTo(6.0625, 9);
@@ -146,22 +146,31 @@ describe('the steering parts at the defaults', () => {
   const byId = (id: string) => m.find((x) => x.id === id)!;
   const L = computeLayout(defaults);
   const plan = steerStopPlan(resolveParams(defaults));
-  it('two steel-faced oak dogs (steer body) with a plate on each side, four oak stop blocks (chassis)', () => {
+  it('two steel channel dogs (steer body) with a bonded urethane pad on each flange, standing on a riser and an arm in the turntable hole; four oak stop blocks (chassis)', () => {
+    const ringDepth = L.bolster.z1 - L.bolster.z0; // 9.528 − 7.75 = 1.778"
+    const dogH = Math.min(defaults.steerStopHeightIn, ringDepth - 2 * defaults.sideBearerClearanceIn); // min(1.25, 1.778 − 0.125) = 1.25"
     for (const tag of ['L', 'R']) {
       const dog = byId(`steer-stop-${tag}`);
       expect(dog.body).toBe('steer');
-      expect(dog.material).toMatch(/oak/);
-      expect(dog.grain).toBe('y');
-      expect(dog.geometry.type === 'box' && dog.geometry.size[0]).toBeCloseTo(defaults.steerStopSizeIn, 9);
-      expect(dog.geometry.type === 'box' && dog.geometry.size[1]).toBeCloseTo(plan.rb - plan.ra, 9);
-      expect(dog.geometry.type === 'box' && dog.geometry.size[2]).toBeCloseTo(Math.min(defaults.steerStopHeightIn, L.bolster.z1 - L.bolster.z0 - defaults.sideBearerClearanceIn), 9);
+      expect(dog.material).toMatch(/steel/);
+      expect(dog.fab).toBe('outsource'); // build review M11: a press-brake channel from a waterjet service, not a shop operation
+      expect(dog.geometry.type === 'box' && dog.geometry.size[0]).toBeCloseTo(1.25, 9); // across the flange faces
+      expect(dog.geometry.type === 'box' && dog.geometry.size[1]).toBeCloseTo(plan.rb - plan.ra + defaults.steerStopRiserDepthIn, 9); // the web overhangs the riser
+      expect(dog.geometry.type === 'box' && dog.geometry.size[2]).toBeCloseTo(dogH, 9);
+      // Hand mass: web 1.25 × (2.739 + 0.5) × 5/16 = 1.265 in³ plus two flanges 2 × (1.25 − 0.3125) × 2.739 × 5/16 = 1.605 in³ → 2.870 in³ × 0.2836 lb/in³ = 0.814 lb.
+      expect(dog.massLb).toBeCloseTo(0.81, 2);
       for (const n of [1, 2]) {
         const face = byId(`steer-stop-face-${tag}${n}`);
-        expect(face.material).toMatch(/steel/);
+        expect(face.material).toMatch(/urethane/);
         expect(face.body).toBe('steer');
-        expect(face.massLb).toBeGreaterThan(0.1);
+        expect(face.massLb).toBeGreaterThan(0.02);
+        expect(face.massLb).toBeLessThan(0.06);
         expect(face.partNo).toBe('steer-stop-face');
+        // the pad is ¼" thick on the flange face
+        expect(face.geometry.type === 'box' && face.geometry.size[0]).toBeCloseTo(0.25, 9);
       }
+      expect(byId(`steer-stop-arm-${tag}`).material).toMatch(/steel/);
+      expect(byId(`steer-stop-riser-${tag}`).material).toMatch(/steel/);
     }
     for (const id of ['AL', 'AR', 'FL', 'FR']) {
       const b = byId(`stop-block-${id}`);
@@ -175,10 +184,8 @@ describe('the steering parts at the defaults', () => {
       expect(b.joints!.some((j) => j.type === 'glue' && /^bolster-(aft|fore)$/.test(j.to))).toBe(true);
       expect(b.joints!.some((j) => j.to === 'kingpin-crossbar')).toBe(true);
     }
-    // the old square posts are gone
-    expect(m.some((x) => x.id === 'steer-stop-L' && x.massLb < 0.1)).toBe(false);
   });
-  it('the stop blocks are as tall as the bolster ring and flush with its top; the dog stands on the turntable plate and stays 1/16" under the deck', () => {
+  it('the stop blocks are as tall as the bolster ring and flush with its top; the channel web stands 1/16" above the turntable top plate and its flanges stop 1/16" under the deck', () => {
     const ringTop = L.bolster.z1;
     for (const id of ['AL', 'FL', 'AR', 'FR']) {
       const bb = worldAABB(byId(`stop-block-${id}`));
@@ -186,20 +193,32 @@ describe('the steering parts at the defaults', () => {
       expect(bb.max[2]).toBeCloseTo(ringTop, 9);
     }
     const dog = worldAABB(byId('steer-stop-L'));
-    expect(dog.min[2]).toBeCloseTo(L.turntable.z1, 9);
+    expect(dog.min[2]).toBeCloseTo(L.turntable.z1 + defaults.sideBearerClearanceIn, 9);
     expect(dog.max[2]).toBeLessThanOrEqual(ringTop - defaults.sideBearerClearanceIn + 1e-9);
+    // the arm lies on the carrier plate (inside the turntable hole) and the riser stands on the arm under the web
+    const arm = worldAABB(byId('steer-stop-arm-L')), riser = worldAABB(byId('steer-stop-riser-L'));
+    expect(arm.min[2]).toBeCloseTo(L.kpPlates!.carrier.z1, 9);
+    expect(arm.max[2]).toBeCloseTo(L.kpPlates!.carrier.z1 + defaults.steerStopBarThickIn, 9);
+    expect(riser.min[2]).toBeCloseTo(arm.max[2], 9);
+    expect(riser.max[2]).toBeCloseTo(dog.min[2], 9);
+    // nothing of the steer-side stop reaches outside the turntable center hole in plan except the dog over the ring: the arm corner (1.0", 2.91") is inside the 3.125" hole radius
+    expect(Math.hypot(1.0, arm.max[1])).toBeLessThan(defaults.turntableCenterHoleIn / 2);
   });
-  it('the dog bolts down through the plate into the beam: count and diameter are structured joints, with washers under the beam', () => {
+  it('the arm is screwed to the carrier (2 × 3/8" tapped), one plate bolt passes through it, the riser screws to the arm and the channel to the riser: no bolt goes through the ball ring', () => {
     for (const tag of ['L', 'R']) {
-      const j = byId(`steer-stop-${tag}`).joints!.find((q) => q.type === 'bolt')!;
-      expect(j.to).toBe('beam-F');
-      expect(j.count).toBe(defaults.steerStopBoltCount);
-      expect(j.diaIn).toBeCloseTo(defaults.steerStopBoltDiameterIn, 9);
-      expect(j.at).toHaveLength(j.count);
-      expect(j.size).toMatch(/fender washer/);
-      // bolt positions lie along the dog and inside it
-      const half = (plan.rb - plan.ra) / 2;
-      for (const a of j.at!) expect(Math.abs(a[1])).toBeLessThanOrEqual(half);
+      const arm = byId(`steer-stop-arm-${tag}`);
+      const sj = arm.joints!.find((q) => q.type === 'screw')!;
+      expect(sj.to).toBe('kp-carrier');
+      expect(sj.count).toBe(2);
+      expect(sj.diaIn).toBeCloseTo(defaults.steerStopScrewDiameterIn, 9);
+      expect(sj.at).toHaveLength(2);
+      const bj = arm.joints!.find((q) => q.type === 'bolt')!;
+      expect(bj.to).toBe('beam-F');
+      expect(bj.count).toBe(1);
+      expect(byId(`steer-stop-riser-${tag}`).joints!.some((q) => q.to === `steer-stop-arm-${tag}`)).toBe(true);
+      expect(byId(`steer-stop-${tag}`).joints!.some((q) => q.type === 'screw' && q.to === `steer-stop-riser-${tag}`)).toBe(true);
+      // every joint of the stop parts goes to another stop part, the carrier or the beam: none to the turntable
+      for (const part of [arm, byId(`steer-stop-riser-${tag}`), byId(`steer-stop-${tag}`)]) expect(part.joints!.some((q) => q.to === 'turntable')).toBe(false);
     }
   });
   it('M7: the bolster fore and aft rails carry the structural through-bolts as joints (count and diameter from the params), none near the crossbar', () => {
@@ -301,7 +320,9 @@ describe('the steering parts at the defaults', () => {
     expect(sl.sourcing!.vendor).toMatch(/DOM/);
     expect(sl.sourcing!.vendor).toMatch(/ID 0\.750"/);
     expect(sl.joints!.some((j) => j.to === 'beam-F')).toBe(true);
-    expect(byId('kingpin-sleeve-bar').joints!.some((j) => j.to === 'kingpin-crossbar')).toBe(true);
+    expect(sl.joints!.some((j) => j.type === 'pin' && j.to === 'kp-carrier')).toBe(true); // D-35: the sleeve spigots into both beam plates
+    expect(sl.joints!.some((j) => j.type === 'pin' && j.to === 'kp-under')).toBe(true);
+    expect(m.some((x) => x.id === 'kingpin-sleeve-bar')).toBe(false); // no crossbar sleeve: the pin bears on the crossbar plate
     for (const id of ['wheel-FL', 'wheel-FR', 'wheel-RL', 'wheel-RR']) {
       const w = byId(id);
       expect(w.sourcing!.vendor).toMatch(/0\.75" bore/);
@@ -377,10 +398,156 @@ describe('overlap-free over the sweep for the Phase 3 front end', () => {
       for (const a of mine) for (const b of parts) {
         if (a === b) continue;
         const o = obbOverlap(partOBB(a), partOBB(b));
-        const intended = (a.id.startsWith('stop-block') && /^(bolster-(fore|aft)|kingpin-crossbar)$/.test(b.id)) || (b.id.startsWith('stop-block') && /^(bolster-(fore|aft)|kingpin-crossbar)$/.test(a.id));
+        const intended = (a.id.startsWith('stop-block') && /^(bolster-(fore|aft)|kingpin-crossbar|kp-bar-plate)$/.test(b.id)) || (b.id.startsWith('stop-block') && /^(bolster-(fore|aft)|kingpin-crossbar|kp-bar-plate)$/.test(a.id))
+          || (/^steer-stop-(arm|riser)/.test(a.id) && b.id === 'turntable') || (/^steer-stop-(arm|riser)/.test(b.id) && a.id === 'turntable'); // inside the turntable center hole
         if (intended) continue;
         expect(o, `${a.id} x ${b.id} @${deg}`).toBeLessThanOrEqual(1e-6);
       }
     }
+  });
+});
+
+// ── Phase 3 round 2 (D-35): the kingpin steel plates, the carrier, the stop arms and the rope legs ──────────────────────────────────
+
+import { kingpinPlatePlan } from './kingpin-plates';
+
+describe('kingpin steel plates and the plate bolt groups (D-35)', () => {
+  const p = resolveParams(defaults);
+  const kp = kingpinPlatePlan(p);
+  const m = buildModel(defaults);
+  const byId = (id: string) => m.find((x) => x.id === id)!;
+  const L = computeLayout(defaults);
+  it('plan numbers worked by hand: 5/16" bolts, l/D = 2.5/0.3125 = 8 ≥ 6 → rows 5D = 1.5625" apart; bolts at ±1.5, ±2.5, ±3.5 pitches = ±2.344, ±3.906, ±5.469"', () => {
+    expect(kp.D).toBeCloseTo(0.3125, 9);
+    expect(kp.beamY.map((y) => +y.toFixed(5))).toEqual([-5.46875, -3.90625, -2.34375, 2.34375, 3.90625, 5.46875]);
+    // edge distances: front face is 0.875 (beam offset) + 4/2 − 1.5 lead = 1.375" ahead of the pin, the rod-groove edge 1.5 − 0.375 = 1.125" behind it: the bolt line sits (1.375 − 1.125)/2 = 0.125" ahead of the pin so both are 1.25" = 4D
+    expect(kp.beamX).toBeCloseTo(0.125, 9);
+    const frontDist = L.beamF.x + L.beamF.thick / 2 - (L.kx + kp.beamX);
+    const grooveDist = L.kx + kp.beamX - (L.WB + p.axleDiameterIn / 2);
+    expect(frontDist).toBeCloseTo(1.25, 9);
+    expect(grooveDist).toBeCloseTo(1.25, 9);
+    expect(frontDist).toBeGreaterThanOrEqual(4 * kp.D - 1e-9);
+    // crossbar bolts: 4D = 1.25" in the row but the pin hole (0.766") plus bolt and 0.2" web need 2 × (0.383 + 0.156 + 0.2) = 1.48" across the pin → pitch 1.5"
+    expect(kp.barX).toEqual([-2.25, -0.75, 0.75, 2.25]);
+    // the carrier is 2.5" wide (param) and reaches 0.5" past the last bolt: 5.46875 + 0.5
+    expect(kp.carrier.hx).toBeCloseTo(1.25, 9);
+    expect(kp.carrier.hy).toBeCloseTo(5.96875, 9);
+    // M12: the whole carrier strip fits under the 12" plate (half length 5.97" ≤ 6")
+    expect(kp.carrier.hy).toBeLessThanOrEqual(defaults.turntableSizeIn / 2);
+    // cross-bolts: between the pin and the first bolt and between the first two: ±1.5625 and ±3.125"
+    expect(kp.crossBeamY).toEqual([-3.125, -1.5625, 1.5625, 3.125]);
+  });
+  it('three A36 plates sit on the beam, under the beam and under the crossbar; each is outsourced with stock and sourcing; masses by hand', () => {
+    const carrier = byId('kp-carrier'), under = byId('kp-under'), bar = byId('kp-bar-plate');
+    for (const x of [carrier, under, bar]) {
+      expect(x.fab).toBe('outsource');
+      expect(x.stock).toBeDefined();
+      expect(x.sourcing!.vendor).toMatch(/A36/);
+      expect(x.material).toMatch(/A36/);
+    }
+    expect(carrier.body).toBe('steer');
+    expect(under.body).toBe('steer');
+    expect(bar.body).toBe('chassis');
+    // z levels: beam top 6.875, carrier 3/8" → 7.25, turntable 1/2" → 7.75, crossbar plate 3/16" → 7.9375; beam bottom 4.375, plate under it down to 4.1875
+    expect(L.kpPlates!.carrier.z0).toBeCloseTo(6.875, 9);
+    expect(L.kpPlates!.carrier.z1).toBeCloseTo(7.25, 9);
+    expect(L.turntable.z0).toBeCloseTo(7.25, 9);
+    expect(L.turntable.z1).toBeCloseTo(7.75, 9);
+    expect(L.kpPlates!.bar.z0).toBeCloseTo(7.75, 9);
+    expect(L.kpPlates!.bar.z1).toBeCloseTo(7.9375, 9);
+    expect(L.crossbar!.z0).toBeCloseTo(7.9375, 9); // the crossbar oak starts above its plate
+    expect(L.kpPlates!.under.z0).toBeCloseTo(4.1875, 9);
+    expect(L.kingpin.z0).toBeCloseTo(4.1875, 9); // the pin head and its washer bear under the beam plate
+    // masses: carrier 2.5 × 11.9375 × 0.375 = 11.19 in³ × 0.2836 = 3.17 lb; beam plate 2.5 × 11.9375 × 3/16 = 5.60 in³ = 1.59 lb; crossbar plate 2 × (2.25 + 0.75) = 6.0" × 2.0" × 3/16 = 2.25 in³ = 0.638 lb
+    expect(carrier.massLb).toBeCloseTo(3.17, 2);
+    expect(under.massLb).toBeCloseTo(1.59, 2);
+    expect(bar.massLb).toBeCloseTo(0.638, 3);
+    // the one sleeve runs plate to plate: 7.25 − 4.1875 = 3.0625" × π/4 (1.25² − 0.75²) = 2.405 in³ × 0.2836 = 0.682 lb
+    expect(byId('kingpin-sleeve-beam').massLb).toBeCloseTo(0.682, 3);
+  });
+  it('the bolt groups are structured joints the analysis reads: 6 beam bolts (one line), 4 crossbar bolts, 4 + 2 stainless cross-bolts', () => {
+    const cj = byId('kp-carrier').joints!.find((j) => j.type === 'bolt' && j.to === 'beam-F')!;
+    expect(cj.count).toBe(6);
+    expect(cj.at).toHaveLength(6);
+    expect(cj.diaIn).toBeCloseTo(0.3125, 9);
+    for (const a of cj.at!) expect(a[0]).toBeCloseTo(0.125, 9); // one line, 1/8" ahead of the pin
+    const pj = byId('kp-bar-plate').joints!.find((j) => j.type === 'bolt' && j.to === 'kingpin-crossbar')!;
+    expect(pj.count).toBe(4);
+    expect(pj.at!.map((a) => a[0])).toEqual([-2.25, -0.75, 0.75, 2.25]);
+    const beamCross = byId('beam-F').joints!.find((j) => j.type === 'bolt' && j.to === 'kp-carrier')!;
+    expect(beamCross.count).toBe(4);
+    expect(beamCross.size).toMatch(/316 stainless/);
+    const barCross = byId('kingpin-crossbar').joints!.find((j) => j.type === 'bolt' && /cross-bolt/.test(j.size ?? ''))!;
+    expect(barCross.count).toBe(2);
+  });
+  it('without the crossbar (Phase 1 pin) there are no plates, no stop arms on a carrier and the stack is back to the bearing alone', () => {
+    const q = { ...defaults, kingpinThroughBolster: 0 };
+    const mm = buildModel(q);
+    expect(mm.some((x) => x.id.startsWith('kp-'))).toBe(false);
+    expect(computeLayout(q).kpPlates).toBeNull();
+    expect(computeLayout(q).turntable.z0).toBeCloseTo(6.875, 9);
+  });
+  it('the 12" lazy-susan plate\'s corner holes (10" apart) cannot land on the 4" beam: the carrier is the mounting plate and the bearing is screwed to it through two inner-flange holes (M12)', () => {
+    const t = byId('turntable');
+    expect(t.joints!.some((j) => j.type === 'screw' && j.to === 'kp-carrier' && j.count === 2)).toBe(true);
+    expect(t.joints![0].note).toMatch(/M12/);
+    expect(t.notes).toMatch(/6\.25" center hole/);
+    // the inner flange holes sit just outside the 6.25" center hole (r = 3.125 + 0.25)
+    const at = byId('kp-carrier').joints!.find((j) => j.to === 'turntable')!.at!;
+    expect(Math.abs(at[0][1])).toBeCloseTo(3.375, 9);
+  });
+});
+
+describe('the bridle rope legs stay clear of the front tires over the whole steering sweep (critic Phase 3 r1 §8 rope tails)', () => {
+  /** Distance from a world point to a wheel (a cylinder: radius r, half width w/2, axis = local y). */
+  function distToWheel(wheel: ReturnType<typeof buildModel>[number], pt: [number, number, number]): number {
+    const m = wheel.transform;
+    const g = wheel.geometry as { type: 'wheel'; diameter: number; width: number };
+    const d = [pt[0] - m[12], pt[1] - m[13], pt[2] - m[14]];
+    const xl = m[0] * d[0] + m[1] * d[1] + m[2] * d[2];
+    const yl = m[4] * d[0] + m[5] * d[1] + m[6] * d[2];
+    const zl = m[8] * d[0] + m[9] * d[1] + m[10] * d[2];
+    const radial = Math.max(0, Math.hypot(xl, zl) - g.diameter / 2);
+    const axial = Math.max(0, Math.abs(yl) - g.width / 2);
+    return Math.hypot(radial, axial);
+  }
+  const legPoints = (leg: ReturnType<typeof buildModel>[number]): Array<[number, number, number]> => {
+    const g = leg.geometry as { type: 'box'; size: [number, number, number] };
+    const mm = leg.transform;
+    const out: Array<[number, number, number]> = [];
+    for (let i = 0; i <= 40; i++) {
+      const s = -g.size[0] / 2 + (g.size[0] * i) / 40;
+      out.push([mm[12] + mm[0] * s, mm[13] + mm[1] * s, mm[14] + mm[2] * s]);
+    }
+    return out;
+  };
+  it('at neutral and at both locks every point of both ½" legs is ≥ 2.0" from both front tires (rope radius ¼" + a 1¾" margin); the eyes are 2.5" inboard of the tire inner face', () => {
+    const lock = defaults.steerLockDeg;
+    for (const deg of [-lock, -lock / 2, 0, lock / 2, lock]) {
+      const parts = buildModel(defaults, { steerDeg: deg });
+      const wheels = ['wheel-FL', 'wheel-FR'].map((id) => parts.find((x) => x.id === id)!);
+      for (const leg of ['bridle-L', 'bridle-R'].map((id) => parts.find((x) => x.id === id)!)) {
+        for (const w of wheels) {
+          const dmin = Math.min(...legPoints(leg).map((q) => distToWheel(w, q)));
+          expect(dmin, `${leg.id} vs ${w.id} @${deg}`).toBeGreaterThan(2.0);
+        }
+      }
+    }
+    // hand check at neutral: the eye is at |y| = 13.25"; the tire inner face is at 35.5/2 ... front track 35.5 → wheel center 17.75, width 4 → inner face 15.75"; gap 2.5"
+    const parts = buildModel(defaults, { steerDeg: 0 });
+    const eye = parts.find((x) => x.id === 'eyebolt-L')!;
+    const fl = parts.find((x) => x.id === 'wheel-FL')!;
+    expect(Math.abs(eye.transform[13])).toBeCloseTo(13.25, 6);
+    expect(fl.transform[13] - 2).toBeCloseTo(15.75, 6);
+  });
+  it('a slack leg can swing: the worst case of the other leg dangling toward its tire is still off the tread — the eye-to-tire gap 2.5" exceeds the 1½" a ½" rope sags sideways', () => {
+    const parts = buildModel(defaults, { steerDeg: 0 });
+    const eye = parts.find((x) => x.id === 'eyebolt-R')!;
+    const wr = parts.find((x) => x.id === 'wheel-FR')!;
+    const gap = Math.min(...[0, 1, 2, 3].map((k) => distToWheel(wr, [eye.transform[12], eye.transform[13], eye.transform[14] + k * 0])));
+    expect(gap).toBeGreaterThan(2.0);
+    // a leg rotated outward by the full lock (a slack leg hanging in line with the rope tail) reaches |y| = 13.25 + 24" × sin(37°) = 27.7" at the ring: that is the tail, not the tie, and it
+    // trails 24" ahead of the axle, past the tire front (axle + 6.5") where it is not alongside the tread
+    expect(defaults.wheelbaseIn + 24 - (defaults.wheelbaseIn + defaults.wheelDiameterIn / 2)).toBeGreaterThan(15);
   });
 });
