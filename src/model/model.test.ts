@@ -24,6 +24,7 @@ const ALLOW: Allow[] = [
   { a: /^beam-/, b: /^wheel-/, why: 'tire OBB is a conservative box; the beam ends sit inside the rim, 1/8" short of the hub face' },
   { a: /^brake-shoe-/, b: /^wheel-R[LR]$/, why: 'the lined shoe presses on the tread; the tire OBB corner is not tire' },
   { a: /^brake-/, b: /^brake-/, why: 'pins and bolts pass through bored holes in the bars, tabs, ears and the beam wall; the clevis tab foot stands on the beam rear wall; the shoe sits on the beam face (D-53). Moving-part clearances are swept in src/analysis/brake.test.ts' },
+  { a: /^handle-post-[LR]$/, b: /^handle-bar$/, why: 'the post top is sawn to the handlebow slope and the bow sits on it; the post OBB is its full rectangle, which pokes into the bow boxes above the sloped top (D-53)' },
   { a: /^handle-(socket|post|pin)-/, b: /^handle-(socket|post|pin)-/, why: 'the post is a slip fit in the socket tube and the clevis pin passes through both (D-9, D-39)' },
   { a: /^(rail-cabin|girder-cabin)-/, b: /^brake-beam$/, why: 'the brake beam slides in a notch cut up from the rail bottom (D-53); the sweep has no notch geometry' },
   { a: /^(rail-cabin|girder-cabin)-/, b: /^brake-keeper-[LR]$/, why: 'the keeper strap is screwed to the rail bottom and touches it (D-53)' },

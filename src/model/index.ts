@@ -9,6 +9,7 @@ import { applyHardwareMass, buildHardware, buildLighting } from './lighting';
 import { buildPayload } from './rider';
 import { buildRunningGear } from './running-gear';
 import { buildSeat } from './seat';
+import { applySeatStow } from './seat-stow';
 import { buildFrontEnd } from './front-end';
 import { buildStorage } from './storage';
 import type { Part } from './types';
@@ -35,6 +36,7 @@ export function buildModel(input: Params, view: ViewState = {}): Part[] {
     ...buildPayload(ctx),
   ];
   applyJoinery(ctx, parts); // structured joints for the hull and frame (D-35)
+  if (ctx.view.seat === 'stowed') applySeatStow(ctx.p, ctx.L, parts); // cargo mode (D-53): the seat kit lies flat in the storage box
   const out = ctx.view.removed ? parts.filter((x) => !x.removable) : parts;
   applyHardwareMass(out); // the fastener remainder, from the joints of the parts actually present
   applyFinish(out, ctx.p); // display finishing for the viewer (D-44): cosmetic, never read by the analysis

@@ -5,7 +5,7 @@
 | 0 — Setup & parameter reconciliation | ✅ approved 2026-10-10 |
 | 1 — Block model | ✅ approved |
 | 2 — Analysis & simulation | ✅ approved 2026-10-10 |
-| 3 — Detail design | **3c** (docs/phase3c-plan.md): 3c-1 done (ride mode out, basic brake); next 3c-2 cargo and bed |
+| 3 — Detail design | **3c** (docs/phase3c-plan.md): 3c-1, 3c-2 done; next 3c-3 sled form (narrower, sloped sides), 10" wheels, sign, sizing, weight |
 | 4 — Build outputs | not started |
 
 ## Phase 0 log
@@ -46,3 +46,4 @@
 - Phase 3b Stage 0–2 landed: Ackermann front end, convex-taper hull, ride brakes, bump analysis (1,263 tests green, 174.1 lb, 10 rows fail at 150 lb). Eric (2026-10-11): it should be a Klondike *sled* on wheels: rider as passenger, team pulls, musher steers and brakes at the back. Keep it a crafted, reusable oak piece with storage. Research in docs/klondike-research.md; next-phase plan in docs/phase3c-plan.md. Finishing tweaks on hold (flush flag socket, lamp detail).
 - Eric: keep Ashley's concept, a solid, wide, reusable wooden cart (post-race hauler), wheels required, steerable front kept, ride mode out; the seat back and cushion stow in the storage box. Plan: docs/phase3c-plan.md (3c-1 strip ride mode, 3c-2 cargo and bed, 3c-3 size and slim, 3c-4 finish).
 - 3c-1 (D-53): ride mode, front brakes and lap belt removed; linkage simplified (tongue → bellcrank); basic bolted wagon brake (8.7 lb, 20 lbf hold on 15° at 150 lb); bumps at 5 mph. Empty mass 174.1 → 145.5 lb. Still no safe range: bellcrank 2.64, kingpin bracket 2.50, rear beam seat 2.29, bearing groove 1.50, kingpin bolt 1.33, tongue tie 1.32, wheel rating 1.01 at 150 lb (sizing is 3c-3). Tag cart-v3b = pre-3c.
+- 3c-2: 250 lb cargo case on every row (cargo governs the front end, rear seat, axle, wheel rating, tip), seat stows in the box (seat-stow row passes; seat x 15.5", leg reach 32.5", box 2,200 in³), flat bed with seat stowed, crowned bent-lam handlebow, 6 D-rings as tie-downs. 146.3 lb. Cargo capacity 19 lb today (kingpin bolt); 3c-3 sizes to cargo. Eric: next make it narrower (~24") with sled sides (low at the bow, tall at the back) and fix the sign.

@@ -317,9 +317,9 @@ export function deckCheck(ctx: Ctx): AnalysisCheck {
   const beff = effectiveStripWidth(FOOT_ACROSS_IN, span);
   const beffAlt = FOOT_ACROSS_IN + span;
   // Standing-scout response for a ply thickness: bending stress and static deflection of the b_eff strip.
-  const standing = (th: number, footLb: number, width = beff) => {
+  const standing = (th: number, footLb: number, width = beff, along = FOOT_ALONG_IN) => {
     const sec = rectSection(width, th);
-    const r = ssUdlCentered(footLb / FOOT_ALONG_IN, FOOT_ALONG_IN, span, al.Eply * sec.I);
+    const r = ssUdlCentered(footLb / along, along, span, al.Eply * sec.I);
     return { M: r.M, sigma: r.M / sec.S, defl: r.defl };
   };
   const seatCase = (th: number, c: CaseData) => {
@@ -356,9 +356,34 @@ export function deckCheck(ctx: Ctx): AnalysisCheck {
     const how = `Ply ${f(t, 3)}" (${f(t * 25.4, 1)} mm) on the largest crossmember span ${f(span, 2)}" (panel simply supported: the captured/glued edges give some fixity that is not counted). (a) Seat: ${c.riderLb} lb × ${f(seatFactor(ctx, c), 2)} spread over ${f(p.seatDepthIn)}" × ${f(L.seat.width)}" → ${f(sa.wSeat, 1)} lb/in on a 12" strip, M = ${f(sa.M)} lb·in, σ = ${f(sa.sigma, 0)} psi. (b) Standing scout: ${c.riderLb} lb static on a ${FOOT_ALONG_IN}" (along the span) × ${FOOT_ACROSS_IN}" patch at midspan, treated as a one-way plate with effective strip width b_eff = b_patch + 2.5·x(1−x/L) = ${FOOT_ACROSS_IN} + 0.625 × ${f(span, 2)} = ${f(beff, 1)}" (EN 1992 / BS 8110 rule for a point load on a one-way slab at x = L/2): M = ${f(s.M)} lb·in, σ = ${f(s.sigma, 0)} psi, δ = ${s.defl.toFixed(3)}" vs span/${p.deflectionLimitRatio} = ${lim.toFixed(3)}". Ply design stress ${f(al.plyBend, 0)} psi, E = ${f(al.Eply, 0)} psi (E × C_M ${p.wetServiceFactorStiffness}). Thickness that passes all three: ≥ ${Number.isFinite(tReq) ? `${f(tReq * 25.4, 1)} mm (${f(tReq, 3)}")` : 'more than 3"'}${stock ? `, so the next stock ply is ${stock} mm` : ''}. Standing-scout deflection by stock ply (same b_eff, this load): ${sens}. For reference, the looser b_eff = patch + span = ${f(beffAlt, 1)}" would give ${alt.toFixed(3)}" at the current ply.`;
     return governing(ds, how);
   };
+  // Cargo mode (D-53): the payload spread over the bed (a 12" strip of the panel under the bed pressure) and the concentrated item (jug pair, cooler) on its footprint.
+  const cargoEval = (): CaseEval => {
+    const c = ctx.loads.cargoCases[0];
+    const gC = seatFactor(ctx, c);
+    const area = ctx.bed.areaIn2;
+    const qDyn = (p.cargoPayloadLb * gC) / area; // psi
+    const qStat = p.cargoPayloadLb / area;
+    const sec = rectSection(b, t);
+    const udl = ssUdlFull(qDyn * b * span, span, al.Eply * sec.I);
+    const udlStat = ssUdlFull(qStat * b * span, span, al.Eply * sec.I);
+    const Pc = Math.min(p.cargoConcentratedLb, p.cargoPayloadLb);
+    const along = Math.min(p.cargoPatchAlongIn, span);
+    const widthC = effectiveStripWidth(p.cargoPatchAcrossIn, span);
+    // The patch covers `along` of the span; a patch longer than the span loads the whole panel (the part of the item beyond the span rests on the joists).
+    const load = (lb: number, th: number) => standing(th, lb * (along / p.cargoPatchAlongIn), widthC, along);
+    const concDyn = load(Pc * gC, t), concStat = load(Pc, t);
+    const ds: Detail[] = [
+      detail('uniform cargo, bending', udl.M / sec.S, 'psi', al.plyBend, '<='),
+      detail('uniform cargo, deflection (static)', udlStat.defl, 'in', lim, '<='),
+      detail('concentrated item, bending', concDyn.sigma, 'psi', al.plyBend, '<='),
+      detail('concentrated item, deflection (static)', concStat.defl, 'in', lim, '<='),
+    ];
+    return governing(ds, `Ply ${f(t, 3)}" on the ${f(span, 2)}" span. Uniform: ${f(p.cargoPayloadLb, 0)} lb × ${f(gC, 2)} over the ${f(area / 144, 2)} ft² bed = ${f(qDyn, 2)} psi on a 12" strip: M = wL²/8 = ${f(udl.M)} lb·in, σ = ${f(udl.M / sec.S, 0)} psi (≤ ${f(al.plyBend, 0)}), static δ = ${udlStat.defl.toFixed(3)}" (≤ ${lim.toFixed(3)}"). Concentrated: ${f(Pc, 0)} lb (a jug pair or a cooler) × ${f(gC, 2)} on a ${p.cargoPatchAlongIn}" × ${p.cargoPatchAcrossIn}" footprint, effective strip ${f(widthC, 1)}": σ = ${f(concDyn.sigma, 0)} psi, static δ = ${concStat.defl.toFixed(3)}".`);
+  };
   return dualCheck({
-    id: 'deck', label: 'Deck ply panel', group: 'Structure', refs: ['D-2', 'D-5', 'D-17'], primary: 'goal',
-    ...evalBoth(ctx, ev),
+    id: 'deck', label: 'Deck ply panel', group: 'Structure', refs: ['D-2', 'D-5', 'D-17', 'D-53'], primary: 'goal',
+    ...evalBoth(ctx, ev, { cargo: false }),
+    ...(ctx.loads.cargoCases.length ? { cargo: cargoEval(), cargoLabel: `Cargo ${p.cargoPayloadLb} lb` } : {}),
   });
 }
 

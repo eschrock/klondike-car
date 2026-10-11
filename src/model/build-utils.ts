@@ -17,6 +17,11 @@ export interface ViewState {
   cargo?: boolean;
   /** Transport configuration: omit `removable` parts. */
   removed?: boolean;
+  /**
+   * Cargo mode (D-53): 'stowed' lays the seat back, cushion, wedges, knobs and plugs flat inside the storage box and leaves the bed clear (no rider; `cargo`
+   * then shows the payload on the bed instead of the Essentials block). Default 'installed'.
+   */
+  seat?: 'installed' | 'stowed';
 }
 
 export interface Ctx {
@@ -80,7 +85,7 @@ export function makeCtx(input: Params, v: ViewState = {}): Ctx {
     p,
     d: derived(p),
     L,
-    view: { steerDeg: deg, rider: v.rider ?? 'operating', cargo: v.cargo ?? true, removed: v.removed ?? false },
+    view: { steerDeg: deg, rider: v.seat === 'stowed' ? 'none' : v.rider ?? 'operating', cargo: v.cargo ?? true, removed: v.removed ?? false, seat: v.seat ?? 'installed' },
     steerRad,
     steer,
     pose: poseMatrices(L.front.ack, steer),

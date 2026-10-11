@@ -45,17 +45,19 @@ function limitText(c: { status: Status; limit: number; sense: '>=' | '<='; unit:
   return `${isInfo ? 'ref ' : ''}${sym} ${fmtNumber(c.limit, c.unit)}${unitText(c.unit)}`;
 }
 
-const LOAD_LABEL = { empty: 'empty cart', operating: 'operating rider', goal: 'goal rider', light: 'lightest rider' } as const;
+const LOAD_LABEL = { empty: "empty cart", operating: "operating rider", goal: "goal rider", light: "lightest rider", cargo: "cargo" } as const;
 
-type CaseKey = 'operating' | 'goal' | 'light';
+type CaseKey = 'operating' | 'goal' | 'light' | 'cargo';
 
 /** Rider mass shown for each case. */
-const riderOf = (p: Params, k: CaseKey) => (k === 'operating' ? p.riderMassLb : k === 'goal' ? p.riderGoalMassLb : p.riderMinMassLb);
+const riderOf = (p: Params, k: CaseKey) => (k === 'operating' ? p.riderMassLb : k === 'goal' ? p.riderGoalMassLb : k === 'cargo' ? p.cargoPayloadLb : p.riderMinMassLb);
+/** Short name of a case's load for the chip: "150 lb" for a rider, "cargo 250 lb" for the payload (D-53). */
+const caseWho = (p: Params, k: CaseKey) => (k === 'cargo' ? `cargo ${p.cargoPayloadLb} lb` : `${riderOf(p, k)} lb`);
 
 /** The evaluated cases of a row in display order. */
 function caseList(c: Row): [CaseKey, CaseResult][] {
   const out: [CaseKey, CaseResult][] = [];
-  for (const k of ['operating', 'goal', 'light'] as CaseKey[]) {
+  for (const k of ['operating', 'goal', 'light', 'cargo'] as CaseKey[]) {
     const r = c.cases?.[k];
     if (r) out.push([k, r]);
   }
@@ -64,7 +66,9 @@ function caseList(c: Row): [CaseKey, CaseResult][] {
 
 /** The case that sets the row status (worst status, then highest utilization): the value shown beside the chip comes from it (P1). */
 function governingCase(c: Row): [CaseKey, CaseResult] | undefined {
-  const list = caseList(c);
+  // The row status is the rider's (D-53): the cargo case only governs a row that has no rider case (the cargo-only rows).
+  const all = caseList(c);
+  const list = all.some(([k]) => k !== 'cargo') ? all.filter(([k]) => k !== 'cargo') : all;
   if (!list.length) return undefined;
   const sev: Record<Status, number> = { info: 0, pass: 1, marginal: 2, fail: 3 };
   return list.reduce((a, b) => (sev[b[1].status] > sev[a[1].status] || (sev[b[1].status] === sev[a[1].status] && b[1].util > a[1].util) ? b : a));
@@ -75,6 +79,12 @@ const pct = (u: number) => (Number.isFinite(u) ? `${Math.round(u * 100)}%` : '�
 function counts(rows: Row[], key: 'statusOperating' | 'statusGoal') {
   const n: Record<Status, number> = { pass: 0, marginal: 0, fail: 0, info: 0 };
   for (const r of rows) n[r[key] ?? r.status]++;
+  return n;
+}
+
+function countsCargo(rows: Row[]) {
+  const n: Record<Status, number> = { pass: 0, marginal: 0, fail: 0, info: 0 };
+  for (const r of rows) if (r.statusCargo) n[r.statusCargo]++;
   return n;
 }
 
@@ -121,6 +131,7 @@ function materials(p: Params, isOpen: boolean, onToggle: (o: boolean) => void): 
       h('h4', {}, 'Loads and factors (D-1, D-2, D-14)'),
       rows([
         ['Operating / goal rider', `${p.riderMassLb} / ${p.riderGoalMassLb} lb`, `+ ${p.cargoMassLb} lb cargo`],
+        ['Cargo mode (D-53)', `${p.cargoPayloadLb} lb on the bed, seat stowed, no rider`, `CG ${p.cargoCgHeightIn}" above the deck, ${p.cargoCgOffsetYIn}" off center; concentrated ${p.cargoConcentratedLb} lb on ${p.cargoPatchAlongIn}" × ${p.cargoPatchAcrossIn}"; worse of two placements`],
         ['Dynamic factor', `× ${p.dynamicFactor}`, 'payload and axle reactions'],
         ['Lightest rider (pitch-back)', `${p.riderMinMassLb} lb`, 'BRIEF §4.1; counts toward the operating status'],
         ['Design pull', `${p.pullForceLbf} lbf`, `at ${p.pullerHandHeightIn}" hand height, ${p.bridleRopeRunIn}" rope run; lift pull ≥ ${p.pitchPullMarginMin}× peak`],
@@ -151,6 +162,11 @@ export function mountAnalysisPanel(host: HTMLElement): AnalysisPanel {
         h('li', { class: d.util > 1 ? 'over' : '' }, h('span', {}, d.name),
           h('span', {}, `${fmtNumber(d.value, d.unit)}${unitText(d.unit)} ${d.sense === '>=' ? '≥' : '≤'} ${fmtNumber(d.limit, d.unit)} (${Number.isFinite(d.util) ? Math.round(d.util * 100) : '∞'}%)`)))));
     }
+    if (c.detailsCargo?.length && c.details !== c.detailsCargo) {
+      body.append(h('div', { class: 'ap-refs' }, `Cargo ${p.cargoPayloadLb} lb criteria:`), h('ul', { class: 'ap-details' }, ...c.detailsCargo.map((d) =>
+        h('li', { class: d.util > 1 ? 'over' : '' }, h('span', {}, d.name),
+          h('span', {}, `${fmtNumber(d.value, d.unit)}${unitText(d.unit)} ${d.sense === '>=' ? '≥' : '≤'} ${fmtNumber(d.limit, d.unit)} (${Number.isFinite(d.util) ? Math.round(d.util * 100) : '∞'}%)`)))));
+    }
     if (c.refs?.length) body.append(h('div', { class: 'ap-refs' }, `Refs: ${c.refs.join(', ')}`));
 
     const list = caseList(c);
@@ -158,20 +174,22 @@ export function mountAnalysisPanel(host: HTMLElement): AnalysisPanel {
     const caseLine = list.length
       ? h('span', { class: 'ap-load' },
           h('span', { class: 'ap-cases' }, ...list.map(([k, r]) =>
-            h('span', { class: `ap-cc ${r.status}${gov && gov[0] === k ? ' gov' : ''}`, title: `${LOAD_LABEL[k]} ${riderOf(p, k)} lb: ${STATUS_WORD[r.status]}` },
-              `${riderOf(p, k)} lb ${valueText(r.value, r.unit)} `, h('b', {}, CHIP[r.status])))),
+            h('span', { class: `ap-cc ${r.status}${gov && gov[0] === k ? ' gov' : ''}`, title: `${LOAD_LABEL[k]} ${caseWho(p, k)}: ${STATUS_WORD[r.status]}` },
+              `${caseWho(p, k)} ${valueText(r.value, r.unit)} `, h('b', {}, CHIP[r.status])))),
           c.goalFlag ? h('span', { class: 'ap-flag' }, 'fails at goal rider only') : '')
       : h('span', { class: 'ap-load' }, c.load ? LOAD_LABEL[c.load] : 'geometry');
     // The value beside the chip is the governing case's (the one that sets the chip); rows without cases show their single value.
-    const shown = gov ? { value: gov[1].value, unit: gov[1].unit, limit: gov[1].limit, sense: gov[1].sense, status: c.status === 'info' ? 'info' as Status : gov[1].status, util: gov[1].util } : { value: c.value, unit: c.unit, limit: c.limit, sense: c.sense, status: c.status, util: c.util };
+    const shown = gov ? { value: gov[1].value, unit: gov[1].unit, limit: gov[1].limit, sense: gov[1].sense, status: c.status === 'info' && gov[0] !== 'cargo' ? 'info' as Status : gov[1].status, util: gov[1].util } : { value: c.value, unit: c.unit, limit: c.limit, sense: c.sense, status: c.status, util: c.util };
+    // A cargo-only row has no rider status: its chip shows the cargo result.
+    const headStatus: Status = c.status === 'info' && c.statusCargo ? c.statusCargo : c.status;
     const util = shown.status === 'info' || shown.util === undefined ? '' : pct(shown.util);
     const head = h('button', { class: 'ap-head', type: 'button', 'aria-expanded': String(isOpen), 'aria-controls': body.id, 'data-id': c.id },
-      h('span', {}, h('span', { class: `ap-chip ${c.status}`, title: STATUS_WORD[c.status] }, CHIP[c.status])),
+      h('span', {}, h('span', { class: `ap-chip ${headStatus}`, title: STATUS_WORD[headStatus] }, CHIP[headStatus])),
       h('span', { class: 'ap-name' }, c.label, caseLine),
       h('span', { class: 'ap-val' },
         h('b', {}, valueText(shown.value, shown.unit)),
         h('span', { class: 'ap-limit' }, limitText(shown)),
-        gov && list.length > 1 ? h('span', { class: 'ap-limit' }, `governs: ${riderOf(p, gov[0])} lb`) : '',
+        gov && list.length > 1 ? h('span', { class: 'ap-limit' }, `governs: ${caseWho(p, gov[0])}`) : '',
         util ? h('span', { class: `ap-util${(shown.util ?? 0) > 1 ? ' over' : ''}` }, `util ${util}`) : ''));
     head.addEventListener('click', () => {
       const now = body.hidden;
@@ -192,10 +210,12 @@ export function mountAnalysisPanel(host: HTMLElement): AnalysisPanel {
     }
     const op = counts(rows, 'statusOperating');
     const go = counts(rows, 'statusGoal');
+    const cg = countsCargo(rows);
     root.append(h('div', { class: 'ap-summary', role: 'status' },
       h('div', { class: 'ap-sumrow' }, h('b', {}, `Operating ${p.riderMassLb} lb`), countSpan(op.pass, 'pass'), countSpan(op.marginal, 'marginal'), countSpan(op.fail, 'fail')),
       h('div', { class: 'ap-sumrow' }, h('b', {}, `Goal ${p.riderGoalMassLb} lb`), countSpan(go.pass, 'pass'), countSpan(go.marginal, 'marginal'), countSpan(go.fail, 'fail')),
-      h('div', { class: 'muted small' }, 'Operating rider must pass everything (D-1); the goal rider is reported and flagged. Info rows are not counted.')));
+      h('div', { class: 'ap-sumrow' }, h('b', {}, `Cargo ${p.cargoPayloadLb} lb`), countSpan(cg.pass, 'pass'), countSpan(cg.marginal, 'marginal'), countSpan(cg.fail, 'fail')),
+      h('div', { class: 'muted small' }, 'Operating rider must pass everything (D-1); the goal rider is reported and flagged. Cargo (D-53) is the post-race payload with the seat stowed and no rider, shown next to the rider cases; it never sets a row\'s rider status. Info rows are not counted.')));
     const flagged = rows.filter((r) => r.goalFlag);
     if (flagged.length)
       root.append(h('div', { class: 'ap-flags' }, h('strong', {}, `Goal rider (${p.riderGoalMassLb} lb) fails where the operating rider passes:`),

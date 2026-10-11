@@ -58,7 +58,14 @@ export function buildPayload(ctx: Ctx): Part[] {
   // 'none' = no rider at all (e.g. truck view): drop the mannequin, keep cargo.
   if (view.rider === 'none') parts.splice(0, parts.length);
 
-  if (view.cargo) {
+  if (view.cargo && view.seat === 'stowed') {
+    // Cargo mode (D-53): the payload as one block on the bed, piled against the box, at the cargo CG height (cargoCgHeightIn above the deck).
+    const st = L.storage;
+    const lx = Math.min(p.cargoLoadLengthIn, Math.max(1, L.xn - st.x1 - 0.5));
+    const w = Math.max(1, Math.min(p.cargoLoadWidthIn, 2 * L.hwC - 1));
+    parts.push(box(ctx, { ...common, id: 'cargo', name: `Cargo payload (${p.cargoPayloadLb} lb on the bed)`, body: 'cargo', massLb: p.cargoPayloadLb, material: 'cargo',
+      size: [lx, w, 2 * p.cargoCgHeightIn], center: [st.x1 + 0.5 + lx / 2, 0, L.deckTop + p.cargoCgHeightIn] }));
+  } else if (view.cargo) {
     const st = L.storage;
     const lx = Math.max(0.5, st.x1 - st.x0 - 2 * p.panelPlyIn);
     const w = Math.max(0.5, 2 * st.hw - 2 * p.panelPlyIn);

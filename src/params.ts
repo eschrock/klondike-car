@@ -24,6 +24,7 @@ export type ParamStatus = 'locked' | 'verify' | 'assumed' | 'explore';
 
 export type ParamGroup =
   | 'loads'
+  | 'cargo'
   | 'layout'
   | 'body'
   | 'seat'
@@ -61,6 +62,7 @@ export interface ParamDef {
 
 export const GROUP_LABELS: Record<ParamGroup, string> = {
   loads: 'Rider & loads',
+  cargo: 'Cargo mode (hauling after the race)',
   layout: 'Overall layout',
   body: 'Body / hull',
   seat: 'Seat & rider position',
@@ -120,8 +122,8 @@ const defs = {
   },
   riderLegReachIn: {
     label: 'H-point to foot stop (horizontal)', group: 'loads', unit: 'in',
-    default: 36, min: 24, max: 44, step: 0.5, status: 'assumed', ref: 'D-3',
-    note: 'Knees slightly bent on a low seat; ≈ 0.53 × stature.',
+    default: 32.5, min: 24, max: 44, step: 0.5, status: 'assumed', ref: 'D-3, D-53',
+    note: 'Knees bent a little more than a straight reach on a low seat; ≈ 0.48 × stature. 32.5 in (was 36): the seat moved 3.5 in forward (D-53, so the seat kit lies flat in the storage box) and the foot stop stays where it was, so the nose, the cleats and the steering do not change.',
   },
   bootAllowanceIn: {
     label: 'Boot allowance per side (nose width)', group: 'loads', unit: 'in',
@@ -131,6 +133,66 @@ const defs = {
   cargoMassLb: {
     label: 'Cargo (10 Essentials + team gear)', group: 'loads', unit: 'lb',
     default: 25, min: 0, max: 60, step: 1, status: 'locked',
+  },
+  // ── Cargo mode (Phase 3c-2, D-53): the seat stows in the box and the cart hauls gear, firewood and water ──
+  cargoPayloadLb: {
+    label: 'Cargo payload after the race', group: 'cargo', unit: 'lb',
+    default: 250, min: 0, max: 600, step: 25, status: 'assumed', primary: true, ref: 'D-53',
+    note: 'Confirm with Eric. Camp gear, firewood and water (reference/04): a uniform load over the bed, seat stowed, no rider. Carried at a high center of gravity (cargoCgHeightIn). The cargo case runs next to the rider cases and never changes the rider range.',
+  },
+  cargoConcentratedLb: {
+    label: 'Concentrated cargo item (jug pair or cooler)', group: 'cargo', unit: 'lb',
+    default: 90, min: 20, max: 200, step: 5, status: 'assumed', ref: 'D-53',
+    note: 'Two full 5-gal water jugs (about 42 lb each) or a loaded cooler on a small footprint (deck, joists). Never more than the payload.',
+  },
+  cargoPatchAlongIn: {
+    label: 'Concentrated item footprint, fore-aft', group: 'cargo', unit: 'in',
+    default: 12, min: 6, max: 24, step: 1, status: 'assumed', ref: 'D-53',
+    note: 'A 5-gal jug is about 11.5 in across.',
+  },
+  cargoPatchAcrossIn: {
+    label: 'Concentrated item footprint, across', group: 'cargo', unit: 'in',
+    default: 12, min: 6, max: 24, step: 1, status: 'assumed', ref: 'D-53',
+  },
+  cargoCgHeightIn: {
+    label: 'Cargo center of gravity above the deck', group: 'cargo', unit: 'in',
+    default: 12, min: 3, max: 24, step: 1, status: 'assumed', ref: 'D-53',
+    note: 'A tall strapped load (coolers on firewood, duffels above the 7 in gunwale): 5 in above the gunwale. Drives tipping, the rear-only brake hold and pitch.',
+  },
+  cargoCgOffsetYIn: {
+    label: 'Cargo center of gravity off the centerline', group: 'cargo', unit: 'in',
+    default: 3, min: 0, max: 8, step: 0.5, status: 'assumed', ref: 'D-53',
+    note: 'A lopsided load. Applied to the tipping and wheel-share rows (worst side).',
+  },
+  cargoLoadWidthIn: {
+    label: 'Width of the payload block', group: 'cargo', unit: 'in',
+    default: 20, min: 10, max: 26, step: 1, status: 'assumed', ref: 'D-53',
+    note: 'The hull narrows toward the nose (26.8 in clear in the cabin, 20.6 in at the end of the S-curve), so the payload can only be piled forward as far as the bed is this wide. A cooler or a duffel is 16 to 24 in.',
+  },
+  cargoLoadLengthIn: {
+    label: 'Length of bed the payload occupies', group: 'cargo', unit: 'in',
+    default: 16, min: 8, max: 28, step: 1, status: 'assumed', ref: 'D-53',
+    note: 'Sets how far fore or aft the cargo center can sit: the payload is checked piled against the box (aft) and against the nose end of the bed where it is still cargoLoadWidthIn wide (fore).',
+  },
+  cargoLidLoadLb: {
+    label: 'Load the storage lid is rated to carry', group: 'cargo', unit: 'lb',
+    default: 40, min: 0, max: 150, step: 5, status: 'assumed', ref: 'D-53',
+    note: 'A light cooler or a duffel on the box lid on the concentrated footprint. Heavy items go on the floor of the bed, not on the lid.',
+  },
+  cargoRestraintG: {
+    label: 'Cargo restraint deceleration', group: 'cargo', unit: 'g',
+    default: 0.8, min: 0.3, max: 1.5, step: 0.1, status: 'assumed', ref: 'D-53',
+    note: 'Forward restraint a strapped load must resist (US DOT cargo securement uses 0.8 g forward, 0.5 g rearward and sideways).',
+  },
+  cargoStrapMu: {
+    label: 'Cargo to deck friction', group: 'cargo', unit: '',
+    default: 0.3, min: 0.1, max: 0.6, step: 0.05, status: 'assumed', ref: 'D-53',
+    note: 'Wet cargo on a sealed deck. The straps supply the rest of the restraint.',
+  },
+  cargoStrapWllLbf: {
+    label: 'Cargo strap working load (each)', group: 'cargo', unit: 'lbf',
+    default: 500, min: 100, max: 1500, step: 50, status: 'assumed', ref: 'D-53, D-41',
+    note: '1 in cam-buckle tie-down strap, 500 lbf working load (1,500 lbf break). The D-ring plate end is rated by lashLoadLbf.',
   },
   riderMinMassLb: {
     label: 'Lightest rider mass (pitch-back case)', group: 'loads', unit: 'lb',
@@ -440,8 +502,8 @@ const defs = {
   },
   storageVolumeIn3: {
     label: 'Storage box interior volume', group: 'body', unit: 'in³',
-    default: 2000, min: 800, max: 4000, step: 50, status: 'assumed', ref: 'D-19',
-    note: 'Raised from 1,800 to 2,000 in³ (Phase 3 integration): the 10 Essentials packing check (D-41) filled 0.96 of the 1,762 in³ interior at 1,800, so this restores about 10% margin.',
+    default: 2200, min: 800, max: 4000, step: 50, status: 'assumed', ref: 'D-19, D-53',
+    note: 'Raised from 1,800 to 2,000 in³ (Phase 3 integration): the 10 Essentials packing check (D-41) filled 0.96 of the 1,762 in³ interior at 1,800. Raised again to 2,200 in³ (Phase 3c-2, D-53): the box also holds the seat back and cushion in cargo mode, so it needs about 4.8 in of height under the lid frame for them (seat-stow check).',
   },
   storageOverSideIn: {
     label: 'Storage box max height above the side top', group: 'body', unit: 'in',
@@ -513,8 +575,8 @@ const defs = {
   // ── Seat & rider position ────────────────────────────────────────────────
   seatXIn: {
     label: 'Seat H-point ahead of rear axle', group: 'seat', unit: 'in',
-    default: 12, min: 1.5, max: 17.5, step: 0.5, status: 'explore', primary: true,
-    note: 'Forward → more front load, better lock stability; aft → more rear-brake traction.',
+    default: 15.5, min: 1.5, max: 17.5, step: 0.5, status: 'explore', primary: true, ref: 'D-53',
+    note: 'Forward → more front load, better lock stability; aft → more rear-brake traction. 15.5 in (was 12): the box behind the seat must be at least 16.9 in long inside so the seat back (16 in) and the cushion (15.6 in) lie flat in it, the cushion stopping short of the 1 in insert backers (D-53, seat-stow check).',
   },
   seatDepthIn: {
     label: 'Seat cushion depth (fore-aft)', group: 'seat', unit: 'in',
@@ -560,6 +622,11 @@ const defs = {
   seatCushionIn: {
     label: 'Seat cushion thickness', group: 'seat', unit: 'in',
     default: 2, min: 1, max: 5, step: 0.25, status: 'assumed', ref: 'D-18',
+  },
+  seatStowClearIn: {
+    label: 'Clearance around the stowed seat in the box', group: 'seat', unit: 'in',
+    default: 0.25, min: 0, max: 1, step: 0.125, status: 'assumed', ref: 'D-53',
+    note: 'Total slack, fore-aft and across, when the seat back and cushion lie flat in the storage box (seat-stow check).',
   },
   seatBackHeightIn: {
     label: 'Seat-back height above seat', group: 'seat', unit: 'in',
@@ -899,9 +966,14 @@ const defs = {
     default: 2, min: 0.5, max: 5, step: 0.5, status: 'assumed', ref: 'D-9',
   },
   handleBarDiameterIn: {
-    label: 'Push-handle crossbar diameter', group: 'brake', unit: 'in',
-    default: 1.25, min: 1, max: 2, step: 0.125, status: 'assumed', ref: 'D-9',
-    note: 'Modeled as a square block.',
+    label: 'Push-handle bow section (square, rounded over)', group: 'brake', unit: 'in',
+    default: 1.25, min: 1, max: 2, step: 0.125, status: 'assumed', ref: 'D-9, D-53',
+    note: 'The handlebow is a laminated white-oak bow of this square section, rounded over to a grip by hand.',
+  },
+  handleBowCrownIn: {
+    label: 'Handlebow crown (rise at the middle over the post tops)', group: 'brake', unit: 'in',
+    default: 3, min: 0, max: 8, step: 0.5, status: 'assumed', ref: 'D-53',
+    note: 'A sled-style handlebow (reference/05): the bow arches up between and over the two posts. 0 = the old straight bar. The bow ends overhang the posts to the edge of the cart; the grip height (rearHandleHeightIn) is measured at the posts.',
   },
   handlePostThickIn: {
     label: 'Push-handle upright thickness (fore-aft)', group: 'brake', unit: 'in',
@@ -997,7 +1069,8 @@ const defs = {
   },
   brakeLeverGripBelowHandleIn: {
     label: 'Brake lever grip below the push-handle grip', group: 'brake', unit: 'in',
-    default: 4, min: 0, max: 10, step: 0.5, status: 'assumed', ref: 'D-38',
+    default: 4, min: 0, max: 10, step: 0.5, status: 'assumed', ref: 'D-38, D-53',
+    note: 'Measured from the grip height at the posts (rearHandleHeightIn). The handlebow crowns above that at the middle (handleBowCrownIn), so the lever hangs in the hollow under the crown with that much more finger room; raising the lever to follow the crown makes the 100 lbf abuse case fail (the grip arm grows).',
   },
   brakeClearanceIn: {
     label: 'Brake moving-part clearance (sweep limit)', group: 'brake', unit: 'in',
@@ -1891,10 +1964,13 @@ export function validateParams(input: Params): ParamIssue[] {
   // the leaning back must stay inside the rear transom, and a rear storage box needs room between the transom and the seat back.
   const xnCurve = p.wheelbaseIn - p.noseTaperStartIn;
   const cushionFront = p.seatXIn - p.seatBehindHpointIn + p.seatDepthIn;
-  const gripFront = p.seatXIn - 5 + p.seatGripClearLengthIn + 2 + p.sideThicknessIn + 0.25;
-  if (p.hullCurveStartIn < gripFront - 1e-9)
+  // The grab handles slide aft to stay under the straight cabin side (layout: `gxA = min(seatXIn - 5, curve start - side - length - 1/4)`), so the S-curve start never forces the seat back (D-53: the seat moved forward 3 in
+  // so the seat kit lies flat in the box). The rule now only asks that they still reach the rider and clear the rear transom.
+  const gripLen = p.seatGripClearLengthIn + 2;
+  const gripStart = Math.min(p.seatXIn - 5, p.hullCurveStartIn - p.sideThicknessIn - gripLen - 0.25);
+  if (p.seatXIn - gripStart > 9)
     err(['hullCurveStartIn', 'seatXIn', 'seatGripClearLengthIn'],
-      `The S-curve starts at x = ${p.hullCurveStartIn}" but the grab handles reach ${gripFront.toFixed(1)}": the cabin must stay full width and straight under them (D-45). Start the curve later or move the seat back.`);
+      `The S-curve starts at x = ${p.hullCurveStartIn}", so the grab handles (${gripLen}" long) must start at x = ${gripStart.toFixed(1)}", ${(p.seatXIn - gripStart).toFixed(1)}" behind the hips: out of reach (limit 9"). Start the curve later or move the seat back.`);
   if (cushionFront > xnCurve - 0.01)
     err(['seatXIn', 'seatDepthIn', 'noseTaperStartIn', 'wheelbaseIn'],
       `The seat cushion (front at x = ${cushionFront.toFixed(1)}") runs past the end of the hull curve (x = ${xnCurve.toFixed(1)}"). Move the seat back or shorten it.`);

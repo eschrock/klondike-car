@@ -12,7 +12,8 @@ import { SEVERITY, type Status } from '../analysis/types';
 import { LIGHTS, isRiderSweepCached, lightOf, riderSweep, type Light, type SweepResult } from '../analysis/rider-sweep';
 import type { Store } from '../state';
 import { h } from './dom';
-import { LIGHT_CHECK_IDS, LIGHT_TITLE, headline, lightTexts, limitLine, limiterAdvice, weightNote } from './simple-text';
+import { LIGHT_CHECK_IDS, LIGHT_TITLE, cargoText, headline, lightTexts, limitLine, limiterAdvice, weightNote } from './simple-text';
+import { cargoCapacity, isCargoCapacityCached, type CargoCapacity } from '../analysis/cargo-capacity';
 import './simple-view.css';
 
 export type DemoId = 'tilt' | 'turn' | 'bump' | 'brake';
@@ -209,6 +210,11 @@ function mountSafetyCard(host: HTMLElement, deps: Pick<SimpleViewDeps, 'onLight'
     });
   }
 
+  // Cargo mode (D-53): what the cart hauls after the race. Its own card; the rider headline above never reads it.
+  const cargoHead = h('h3', { class: 'sv-headline info', id: 'sv-cargo-h' }, h('span', { class: 'sv-h-icon', 'aria-hidden': 'true' }), h('span', {}, 'After the race: hauling'));
+  const cargoLines = h('ul', { class: 'sv-cargo-lines' });
+  const cargoSection = h('section', { class: 'sv-section sv-cargo', 'aria-labelledby': 'sv-cargo-h' }, cargoHead, cargoLines);
+
   const demoBtns = DEMOS.map((d) => {
     const b = h('button', { type: 'button', class: 'sv-demo', title: d.title, 'aria-label': `${d.label}. Opens the detailed view.` }, d.label);
     b.addEventListener('click', () => { if (last) deps.onDemo(d.id, last.p.riderMassLb); });
@@ -224,6 +230,7 @@ function mountSafetyCard(host: HTMLElement, deps: Pick<SimpleViewDeps, 'onLight'
     sub,
     h('section', { class: 'sv-section sv-answer', 'aria-label': 'Rider weights' }, wrap, note, riderHost, legend, limits, advice, caveat),
     h('section', { class: 'sv-section', 'aria-labelledby': 'sv-glance-h' }, h('h3', { id: 'sv-glance-h' }, 'The cart at a glance'), glance),
+    cargoSection,
     h('section', { class: 'sv-section sv-watch', 'aria-labelledby': 'sv-demo-h' },
       h('h3', { id: 'sv-demo-h' }, 'Watch it ', h('span', { class: 'sv-h3-note' }, '(opens the detailed view)')), h('div', { class: 'sv-demos' }, ...demoBtns)),
     h('section', { class: 'sv-section', 'aria-labelledby': 'sv-now-h' },
@@ -303,13 +310,30 @@ function mountSafetyCard(host: HTMLElement, deps: Pick<SimpleViewDeps, 'onLight'
     setBusy(false);
   }
 
+  /** The cargo card: shown from a payload sweep, or "checking…" while it runs. */
+  function updateCargo(c: CargoCapacity | null) {
+    const icon = cargoHead.firstElementChild as HTMLElement, label = cargoHead.lastElementChild as HTMLElement;
+    if (!c) {
+      cargoHead.className = 'sv-headline info';
+      icon.textContent = '–';
+      label.textContent = 'After the race: checking what it can haul…';
+      cargoLines.replaceChildren();
+      return;
+    }
+    const t = cargoText(c);
+    cargoHead.className = `sv-headline ${t.tone}`;
+    icon.textContent = t.tone === 'pass' ? '✔' : t.tone === 'warn' ? '!' : '✖';
+    label.textContent = t.headline;
+    cargoLines.replaceChildren(...t.lines.map((x) => h('li', {}, x)));
+  }
+
   /** Only the marker moves while a new sweep is pending. */
   function pending(p: Params) {
     marker.style.left = `${markerPos(p.riderMassLb)}%`;
     markerLabel.textContent = `${p.riderMassLb} lb`;
     setBusy(true);
   }
-  return { update, pending };
+  return { update, pending, updateCargo };
 }
 
 export function mountSimpleView(leftHost: HTMLElement, rightHost: HTMLElement, deps: SimpleViewDeps): SimpleView {
@@ -330,6 +354,15 @@ export function mountSimpleView(leftHost: HTMLElement, rightHost: HTMLElement, d
     const { p, fit, spec } = pendingDesign;
     const sweep = riderSweep(p, { fit, fromLb: FROM, toLb: TO, stepLb: STEP });
     card.update({ p, fit, spec, sweep });
+    // The payload sweep is about a dozen runs of the checks: let the rider answer paint first, then fill the cargo card (cached by the design).
+    cardCargo(p);
+  };
+  let cargoTimer: ReturnType<typeof setTimeout> | undefined;
+  const cardCargo = (p: Params) => {
+    clearTimeout(cargoTimer);
+    if (isCargoCapacityCached(p)) { card.updateCargo(cargoCapacity(p)); return; }
+    card.updateCargo(null);
+    cargoTimer = setTimeout(() => { if (visible) card.updateCargo(cargoCapacity(p)); }, 30);
   };
 
   return {

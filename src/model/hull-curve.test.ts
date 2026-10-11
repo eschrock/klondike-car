@@ -66,13 +66,13 @@ describe('plan bow curve (D-45, D-52)', () => {
       expect(b.max[0], id).toBeLessThanOrEqual(Math.max(L.xc0, L.seat.xFront) + 1e-9);
     }
     for (const id of ['seat-grip-bar-L', 'storage-lid', 'storage-side-L', 'reflector-L2']) expect(worldAABB(get(parts, id)).max[0], id).toBeLessThanOrEqual(L.xc0 + 1e-9);
-    // The lash points sit on the gunwale; the front one may stand a little ahead of the curve start (the gunwale there is still within 1 inch of full width).
-    expect(worldAABB(get(parts, 'lash-L1')).max[0]).toBeLessThanOrEqual(L.xc0 + 1);
+    // The lash points sit on the gunwale; the front one may stand a little ahead of the curve start (the gunwale there is still within 1 inch of full width). D-53: 1.25" (the seat moved forward 3", the grips slid to the end of the straight side).
+    expect(worldAABB(get(parts, 'lash-L1')).max[0]).toBeLessThanOrEqual(L.xc0 + 1.25);
     for (let x = L.xRear; x <= L.xc0; x += 0.5) expect(innerHalfWidth(L, x), `x ${x}`).toBeCloseTo(L.hwC, 4);
     // The cushion front corners stay inside the narrowing hull with ¼" to spare.
     expect(innerHalfWidth(L, L.seat.xFront)).toBeGreaterThanOrEqual(L.seat.width / 2 + 0.25 - 1e-9);
-    // And the validator enforces it: a seat too far forward runs into the narrowing hull or the grab handles.
-    expect(errorsOf({ ...defaults, seatXIn: 14 }).some((i) => i.message.includes('narrowing hull') || i.message.includes('grab handles'))).toBe(true);
+    // And the validator enforces it: a seat so far forward that the grab handles (slid aft under the straight side) are out of reach, or that runs into the narrowing hull.
+    expect(errorsOf({ ...defaults, seatXIn: 17.5 }).some((i) => i.message.includes('narrowing hull') || i.message.includes('grab handles'))).toBe(true);
   });
 
   it('the bow side is a straight line from the end of the curve to the front transom', () => {

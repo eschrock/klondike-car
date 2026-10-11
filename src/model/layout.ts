@@ -23,6 +23,8 @@ import type { Vec2, Vec3 } from './types';
 const SHEER_AFTER_PINCH_IN = 0.75;
 /** Air between the nose stringers and the center linkage corridor (in): the tongue link's box swings to within 0.04" of the corridor edge at the lock, and the steering-link running clearance is 0.25". */
 const NOSE_STRINGER_GAP_IN = 0.3;
+/** Air between the top of a rear storage box and the bottom of the grab-handle doublers it stands beside (D-53). */
+export const GRIP_BOX_CLEAR_IN = 0.25;
 
 export interface Layout {
   r: number;
@@ -180,8 +182,8 @@ export function computeLayout(input: Params): Layout {
   const pl = p.panelPlyIn;
   const underSeat = p.storageLocation === STORAGE_LOCATION.underSeat;
   const hCap = p.sideHeightIn + p.storageOverSideIn;
-  const boxHeight = (lx: number, w: number) =>
-    Math.min(hCap, p.storageVolumeIn3 / (Math.max(0.5, lx - 2 * pl) * Math.max(0.5, w - 2 * pl)) + 2 * pl);
+  const boxHeight = (lx: number, w: number, cap = hCap) =>
+    Math.min(cap, p.storageVolumeIn3 / (Math.max(0.5, lx - 2 * pl) * Math.max(0.5, w - 2 * pl)) + 2 * pl);
   const hUnder = underSeat ? boxHeight(p.seatDepthIn, baseW) : 0;
   const pan = deckTop + hUnder;
   const cushionBottom = pan + p.seatRiserIn;
@@ -213,10 +215,23 @@ export function computeLayout(input: Params): Layout {
     const x0 = xRear + transom + rearLane;
     const hwB = hwC - p.storageSideClearIn; // the box stands this far off the chine inner face (r3 build S3, D-47)
     const backX = (zTop: number) => Pr[0] - Math.max(0, zTop - Pr[2]) * (-col2[0] / col2[2]);
-    let h = Math.min(hCap, p.storageVolumeIn3 / (Math.max(0.5, seatRear - x0) * Math.max(0.5, 2 * hwB)));
-    for (let i = 0; i < 6; i++) h = boxHeight(Math.max(1, backX(deckTop + h) - x0), 2 * hwB);
+    const solveH = (cap: number) => {
+      let h = Math.min(cap, p.storageVolumeIn3 / (Math.max(0.5, seatRear - x0) * Math.max(0.5, 2 * hwB)));
+      for (let i = 0; i < 6; i++) h = boxHeight(Math.max(1, backX(deckTop + h) - x0), 2 * hwB, cap);
+      return h;
+    };
+    let capEff = hCap;
+    let h = solveH(capEff);
+    // D-53: the seat moved forward so the seat kit lies flat in the box, and the box now reaches the grab handles' doublers (inboard of the gunwale, band tall). Where it does,
+    // its lid stays under the bottom of the doubler band (GRIP_BOX_CLEAR_IN of air) instead of colliding with it.
+    const gripLen = p.seatGripClearLengthIn + 2;
+    const gripX0 = Math.min(p.seatXIn - 5, xc0 - side - gripLen - 0.25);
+    if (backX(deckTop + h) > gripX0 - 0.05) {
+      capEff = Math.min(hCap, p.sideHeightIn - p.railBandIn - GRIP_BOX_CLEAR_IN);
+      h = solveH(capEff);
+    }
     const x1 = Math.max(x0 + 1, backX(deckTop + h));
-    storage = { location: p.storageLocation, x0, x1, zBot: deckTop, zTop: deckTop + boxHeight(x1 - x0, 2 * hwB), hw: hwB };
+    storage = { location: p.storageLocation, x0, x1, zBot: deckTop, zTop: deckTop + boxHeight(x1 - x0, 2 * hwB, capEff), hw: hwB };
   }
 
   // D-45: the sides are vertical (the S-curve web is laminated around a plan-view form), so there is no flare; the chine bottom, the web

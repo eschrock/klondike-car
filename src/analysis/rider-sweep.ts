@@ -40,6 +40,8 @@ export const LIGHT_OF_ID: Record<string, Light | 'info'> = {
   'seat-back': 'strength', 'seat-grip': 'strength', 'storage-pack': 'info', 'storage-lid-open': 'info', 'lash-points': 'info',
   // Hull (D-43): the lift does not depend on the rider; the foot stop carries the rider's restraint load. Both color Strength.
   lift: 'strength', 'foot-stop': 'strength', 'lash-load': 'info',
+  // Cargo mode (D-53): the joists carry the seat and the cargo, the handlebow the handler; the stow fit, the lid and the tie-downs are cargo facts and color no light.
+  joists: 'strength', 'handle-bow': 'strength', 'seat-stow': 'info', 'lid-load': 'info', 'cargo-strap': 'info',
 };
 
 export function lightOf(c: Pick<AnalysisCheck, 'id' | 'group'>): Light | 'info' {
@@ -120,7 +122,7 @@ function pointFrom(w: number, checks: AnalysisCheck[], truckStatus: Status): Swe
 
 /** Run the checks at one rider weight (truck fit excluded). */
 export function evaluateRider(p: Params, w: number, truckStatus: Status = 'info'): { point: SweepPoint; checks: AnalysisCheck[] } {
-  const checks = runChecks(withRider(p, w), { includeTruck: false });
+  const checks = runChecks(withRider(p, w), { includeTruck: false, cargo: false });
   return { point: pointFrom(w, checks, truckStatus), checks };
 }
 
@@ -192,7 +194,7 @@ export function riderSweep(p: Params, opts: SweepOptions = {}): SweepResult {
   const atKey = `${key}|${w}`;
   let at = atCache.get(atKey);
   if (!at) {
-    at = grid ? { point: grid, checks: runChecks(withRider(p, w), { includeTruck: false }) } : evaluateRider(p, w, c.truckStatus);
+    at = grid ? { point: grid, checks: runChecks(withRider(p, w), { includeTruck: false, cargo: false }) } : evaluateRider(p, w, c.truckStatus);
     remember(atCache, atKey, at);
   }
   return { ...c, operating: at.point, operatingChecks: at.checks, ...safeRange(c.points, at.point) };

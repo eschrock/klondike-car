@@ -4,7 +4,7 @@ import { buildModel } from '../model';
 import { checkTruckFit } from '../truck/fit';
 import { LIGHT_OF_ID, riderSweep, runAround } from '../analysis/rider-sweep';
 import type { Status } from '../analysis/types';
-import { FRONT_END_IDS, headline, lightTexts, limitLine, failReason, weightNote, limiterName, limiterAdvice, PHASE3B_CHECK_IDS } from './simple-text';
+import { cargoText, FRONT_END_IDS, headline, lightTexts, limitLine, failReason, weightNote, limiterName, limiterAdvice, PHASE3B_CHECK_IDS } from './simple-text';
 import type { AnalysisCheck } from '../analysis/types';
 
 const p = defaultParams();
@@ -131,5 +131,38 @@ describe('Phase 3b rows in the Simple view (spec 6.3)', () => {
     expect(t.status).toBe('fail');
     expect(t.text).toMatch(/do not turn together/);
     expect(t.text).not.toMatch(/NaN|undefined/);
+  });
+});
+
+describe('cargo card wording (D-53)', () => {
+  const base = {
+    payloadLb: 250, statusAtPayload: 'pass' as Status, counts: { pass: 30, marginal: 0, fail: 0 }, capacityLb: null as number | null, comfortableLb: null as number | null, maxLb: 600,
+    limiter: null, openIds: [] as string[], capacityOtherLb: null, limiterOther: null, alwaysFailing: [], cargoFailsAtPayload: [], rows: [],
+    bed: { x0: 8, xFull: 36, xLoadEnd: 37, loadWidthIn: 20, loadLengthIn: 29, xStop: 48, widthIn: 26.75, stopWidthIn: 14, heightIn: 7, straightLengthIn: 6, fullLengthIn: 28, totalLengthIn: 40, areaIn2: 900, fullAreaIn2: 700, boxTopIn: 5 },
+    stow: { applicable: true, fits: true, status: 'pass' as Status, marginIn: { length: 0.5, width: 2, height: 0.4 } }, rearTraction: 1.2,
+  };
+  it('says "hauls N lb or more" when nothing fails up to the end of the ladder, and the bed and the stow in words', () => {
+    const t = cargoText(base);
+    expect(t.tone).toBe('pass');
+    expect(t.headline).toBe('Hauls 600 lb or more after the race');
+    expect(t.lines.join(' ')).toMatch(/27 in wide at the box and 20 in or wider for 29 in, 7 in to the top of the sides, 40 in long/);
+    expect(t.lines.join(' ')).toMatch(/lie flat in the box/);
+    expect(t.lines.join(' ')).not.toMatch(/rear brake alone/);
+  });
+  it('rounds the capacity to 5 lb, goes red below the target and names the limiter and the rows that fail empty', () => {
+    const row = (id: string) => ({ id, label: id, utilAtPayload: 1.5, statusAtPayload: 'fail' as Status, failAtLb: 20, marginalAtLb: 10, fixed: false });
+    const t = cargoText({ ...base, capacityLb: 154, limiter: row('wheel-rating'), alwaysFailing: [row('bellcrank')], counts: { pass: 20, marginal: 1, fail: 3 }, cargoFailsAtPayload: [row('wheel-rating')], statusAtPayload: 'fail',
+      limiterOther: row('axle-stress'), capacityOtherLb: 199, stow: { ...base.stow, status: 'marginal' }, rearTraction: 0.62 });
+    expect(t.tone).toBe('fail');
+    expect(t.headline).toBe('Hauls up to 155 lb after the race');
+    const all = t.lines.join(' ');
+    expect(all).toMatch(/What stops it first: a wheel in a hard bump\. 1 other check fails even with nothing on the bed/);
+    expect(all).toMatch(/next limit is an axle, at about 200 lb/);
+    expect(all).toMatch(/fit in the box, but only just/);
+    expect(all).toMatch(/rear brake alone holds about 62%/);
+    expect(all).not.toMatch(/NaN|undefined/);
+  });
+  it('is amber when the design payload is within 10% of a limit', () => {
+    expect(cargoText({ ...base, capacityLb: 300, comfortableLb: 200 }).tone).toBe('warn');
   });
 });

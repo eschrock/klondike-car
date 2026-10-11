@@ -49,6 +49,8 @@ export interface CartView {
   rider?: 'none' | 'operating' | 'goal';
   cargo?: boolean;
   removed?: boolean;
+  /** Cargo mode (D-53): the seat kit lies in the storage box. */
+  seat?: 'installed' | 'stowed';
 }
 
 export interface PairInfo {

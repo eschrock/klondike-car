@@ -243,7 +243,7 @@ describe('the defaults', () => {
   it('every brake row passes; the failing rows are the bump-basis front and rear end rows (3c-3 sizes them), none of them a brake row', () => {
     const all = runChecks(defaults, { includeTruck: false });
     const failing = all.filter((c) => [c.status, c.statusOperating, c.statusGoal].includes('fail')).map((c) => c.id).sort();
-    expect(failing).toEqual(['axle-stress', 'bearing-groove', 'bellcrank', 'kingpin-bolt', 'kingpin-bracket', 'rear-beam-seat', 'tongue-tie', 'wheel-rating']);
+    expect(failing).toEqual(['bearing-groove', 'bellcrank', 'kingpin-bolt', 'kingpin-bracket', 'rear-beam-seat', 'tongue-tie', 'wheel-rating']);
     for (const id of ['brake-ratio', 'brake-force', 'brake-clear', 'brake-lever', 'brake-links', 'brake-beam', 'brake-shoes', 'park-hold', 'handle-sockets']) expect(byId(all, id).status, id).toBe('pass');
     expect(byId(all, 'brake-abuse').status).not.toBe('fail');
   });

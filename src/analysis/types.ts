@@ -4,7 +4,7 @@
 import type { CheckResult } from '../model/types';
 
 export type Status = CheckResult['status'];
-export type LoadKind = 'empty' | 'operating' | 'goal' | 'light';
+export type LoadKind = 'empty' | 'operating' | 'goal' | 'light' | 'cargo';
 export type CheckGroup = 'Stability' | 'Steering' | 'Braking' | 'Structure' | 'Mass & transport';
 export const CHECK_GROUPS: CheckGroup[] = ['Stability', 'Steering', 'Braking', 'Structure', 'Mass & transport'];
 
@@ -37,11 +37,20 @@ export interface AnalysisCheck extends CheckResult {
   statusOperating: Status;
   statusGoal: Status;
   /** Per-case values, for rows evaluated at both riders. */
-  cases?: { operating?: CaseResult; goal?: CaseResult; /** Lightest-rider case (BRIEF §4.1), for rows that get worse with a lighter rider. */ light?: CaseResult };
+  cases?: {
+    operating?: CaseResult; goal?: CaseResult; /** Lightest-rider case (BRIEF §4.1), for rows that get worse with a lighter rider. */ light?: CaseResult;
+    /** Cargo mode (D-53): the post-race payload on the bed with the seat stowed and no rider. Reported next to the rider cases; it never sets `status` or `util`. */
+    cargo?: CaseResult;
+  };
   /** The case whose result sets the row status (worst status, then highest utilization). */
   governingLoad?: LoadKind;
   /** Highest demand / capacity over the evaluated cases (1 = at the limit). */
   util?: number;
+  /** Status and utilization of the cargo case alone (D-53). `status`, `statusOperating`, `statusGoal`, `util` and `governingLoad` are rider-only, so the rider range never moves with the cargo. */
+  statusCargo?: Status;
+  utilCargo?: number;
+  /** Criteria of the cargo case (the `details` are the governing rider case's). */
+  detailsCargo?: Detail[];
   /** True when the operating case passes but the goal rider fails (status is then 'fail', D-1). */
   goalFlag?: boolean;
   /** All criteria evaluated in the governing case (structure rows). */
@@ -86,4 +95,6 @@ export const GROUP_OF_ID: Record<string, CheckGroup> = {
   tongue: 'Structure',
   // Workstream D (seat, storage, fittings)
   'seat-back': 'Structure', 'seat-grip': 'Structure', 'storage-pack': 'Structure', 'storage-lid-open': 'Structure', 'lash-points': 'Structure', lift: 'Structure', 'foot-stop': 'Structure', 'lash-load': 'Structure',
+  // Cargo mode (Phase 3c-2, D-53)
+  'seat-stow': 'Structure', joists: 'Structure', 'lid-load': 'Structure', 'cargo-strap': 'Structure', 'handle-bow': 'Structure',
 };

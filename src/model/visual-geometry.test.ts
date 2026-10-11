@@ -203,10 +203,17 @@ describe('seat back, handle and finish tags (D-44)', () => {
     expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(seatBackSupport(defaults, computeLayout(defaults)).W, 6);
   });
 
-  it('the push handle crossbar is a round bar', () => {
+  it('the push handle is a crowned handlebow (D-53): a bent-lamination sweep that arches up over the post tops', () => {
     const bar = get(parts, 'handle-bar');
-    expect(bar.geometry.type).toBe('cylinder');
+    expect(bar.geometry.type).toBe('sweep');
+    expect(bar.kind).toBe('bentlam');
     expect(bar.grain).toBeDefined();
+    const g = bar.geometry as Extract<Part['geometry'], { type: 'sweep' }>;
+    const zs = g.path.map((q) => q[1]);
+    const mid = g.path[Math.floor(g.path.length / 2)];
+    expect(mid[0]).toBeCloseTo(0, 9);
+    expect(mid[1]).toBeCloseTo(Math.max(...zs), 9); // highest in the middle
+    expect(mid[1] - defaults.rearHandleHeightIn).toBeCloseTo(defaults.handleBowCrownIn, 6);
   });
 
   it('every oak lumber part has a roundover of at most a third of its smallest section; okoume ply, vinyl and wheels are tagged', () => {

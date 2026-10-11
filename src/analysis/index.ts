@@ -19,6 +19,7 @@ import { linkageChecks } from './linkage';
 import { seatChecks } from './seat';
 import { hullChecks } from './hull';
 import { cgCheck, massEmpty, truckFit, truckSkipped } from './transport';
+import { cargoChecks } from './cargo';
 import type { AnalysisCheck } from './types';
 
 export * from './types';
@@ -29,6 +30,8 @@ export interface RunOptions {
   includeTruck?: boolean;
   /** Reuse an existing truck-fit result instead of computing one. */
   fit?: FitResult;
+  /** Evaluate the cargo case (D-53) next to the rider cases. Default true; the rider sweeps pass false (they never read it). */
+  cargo?: boolean;
 }
 
 /** Replace any non-finite number by a large sentinel so the UI never shows NaN (and the row fails). */
@@ -83,6 +86,7 @@ function allRows(ctx: Ctx, truck: AnalysisCheck): AnalysisCheck[] {
     ...linkageChecks(ctx),
     ...seatChecks(ctx),
     ...hullChecks(ctx),
+    ...cargoChecks(ctx),
     truck,
   ];
 }
@@ -90,7 +94,8 @@ function allRows(ctx: Ctx, truck: AnalysisCheck): AnalysisCheck[] {
 export function runChecks(input: Params, opts: RunOptions = {}): AnalysisCheck[] {
   const p = resolveParams(input); // auto hull curve start (A-4, D-26, D-52)
   const parts = buildModel(p, { rider: 'goal', cargo: true, steerDeg: 0 });
-  const ctx = makeContext(p, parts);
+  const cargo = opts.cargo ?? true;
+  const ctx = makeContext(p, parts, cargo ? buildModel(p, { rider: 'none', cargo: false, steerDeg: 0, seat: 'stowed' }) : undefined);
   const includeTruck = opts.includeTruck ?? true;
   const truck = includeTruck ? truckFit(opts.fit ?? checkTruckFit(p, (v) => buildModel(p, v))) : truckSkipped();
   return allRows(ctx, truck).map(sanitize);

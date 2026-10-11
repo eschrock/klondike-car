@@ -16,11 +16,11 @@ const byId = new Map(parts.map((x) => [x.id, x]));
 const mine = (x: Part) => ['seat', 'storage', 'lighting'].includes(x.group) || x.id.startsWith('lash-');
 
 describe('seat', () => {
-  it('the back comes off without tools: stiles, rails, panel, pad and knobs are removable, the wedges stay', () => {
+  it('the back comes off without tools: stiles, rails, panel, pad, knobs, the loose wedges and the hole plugs are removable; the inserts stay in the box (D-53)', () => {
     const removed = new Set(buildModel(defaults, { removed: true }).map((x) => x.id));
-    for (const id of ['seat-back-stile-L', 'seat-back-stile-R', 'seat-back-rail-top', 'seat-back-rail-bottom', 'seat-back-panel', 'seat-back-pad', 'seat-knob-L', 'seat-knob-R'])
+    for (const id of ['seat-back-stile-L', 'seat-back-stile-R', 'seat-back-rail-top', 'seat-back-rail-bottom', 'seat-back-panel', 'seat-back-pad', 'seat-knob-L', 'seat-knob-R', 'seat-wedge-L', 'seat-wedge-R', 'seat-plug-L', 'seat-plug-R'])
       expect(removed.has(id), id).toBe(false);
-    for (const id of ['seat-wedge-L', 'seat-wedge-R', 'storage-backer-L', 'storage-backer-R']) expect(removed.has(id), id).toBe(true);
+    for (const id of ['storage-backer-L', 'storage-backer-R', 'seat-cushion']) expect(removed.has(id), id).toBe(true);
   });
   it('each stile is held by a knob joint and the matching insert joint sits in the fixed part behind it', () => {
     for (const tag of ['L', 'R']) {

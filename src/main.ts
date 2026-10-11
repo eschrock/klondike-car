@@ -66,7 +66,7 @@ const viewer = new Viewer($('viewer'));
 
 // View-only articulation: not a design parameter, never persisted.
 // `rider`/`cargo`/`removed` are consumed by the Phase 1 model (missing fields = defaults).
-const view: CartView = { steerDeg: 0, rider: 'none', cargo: false, removed: false }; // rider default follows the mode (setMode)
+const view: CartView = { steerDeg: 0, rider: 'none', cargo: false, removed: false, seat: 'installed' }; // rider default follows the mode (setMode)
 const build = (p: ReturnType<typeof store.get>, v: CartView): Part[] => buildModel(p, v as ViewState);
 // Snap to 0.5° so 0 is always reachable even when the lock is a half degree (e.g. 38.5°).
 const snapSteer = (v: number) => Math.round(v * 2) / 2;
@@ -104,6 +104,13 @@ const setRiderShown = (v: boolean) => {
   view.cargo = v;
 };
 viewer.addToolbarControl(riderLabel);
+// Cargo mode (D-53): the seat back, cushion and wedges lie flat in the storage box and the bed is clear. View only; with "Show rider & cargo" on, the payload block shows on the bed.
+viewer.addToolbarControl(
+  checkbox('Seat stowed (cargo mode)', 'Show the seat back, cushion, wedges and knobs lying flat inside the storage box, leaving a flat cargo bed (D-53). With "Show rider & cargo" on, the cargo payload sits on the bed. View only.', false, (v) => {
+    view.seat = v ? 'stowed' : 'installed';
+    render();
+  }),
+);
 viewer.addToolbarControl(
   checkbox('Transport config', 'Remove the removable parts (rear handle, seat back, tongue, ornaments; D-9)', false, (v) => {
     view.removed = v;

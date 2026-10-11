@@ -195,7 +195,7 @@ export interface CheckResult {
   /** 'marginal' = passes by < 10%; 'info' = reported, no limit. */
   status: 'pass' | 'marginal' | 'fail' | 'info';
   /** Which rider case this was evaluated at. */
-  load?: 'empty' | 'operating' | 'goal';
+  load?: 'empty' | 'operating' | 'goal' | 'cargo';
   how: string;
   refs?: string[];
 }

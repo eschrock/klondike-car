@@ -7,6 +7,7 @@ import type { FitResult } from '../truck/fit';
 import type { AnalysisCheck, Status } from '../analysis/types';
 import { SEVERITY } from '../analysis/types';
 import { LIGHT_OF_ID, lightOf, type Light, type Limiter, type SafeRange, type SweepResult } from '../analysis/rider-sweep';
+import type { CargoCapacity } from '../analysis/cargo-capacity';
 
 export const LIGHT_TITLE: Record<Light, string> = {
   tipping: 'Tipping over', turns: 'Fast turns', hills: 'Hills & braking', steering: 'Steering', strength: 'Strength', truck: 'Fits the truck',
@@ -53,6 +54,8 @@ const PART: Record<string, { name: string; event?: string }> = {
   'brake-beam': { name: 'the brake beam' },
   'brake-shoes': { name: 'the brake shoes' },
   'park-hold': { name: 'the parking pin' },
+  joists: { name: 'the floor crossmembers' },
+  'handle-bow': { name: 'the handlebow', event: 'when the handler pulls back' },
 };
 /**
  * The checks that belong to the new (Phase 3b) front end: the spindle, its bracket and bolt, the tie rod, bellcrank, tongue and links, and the tow-lock stops.
@@ -104,6 +107,8 @@ const REASON: Record<string, string> = {
   'brake-beam': 'the brake beam could bend under a hard pull',
   'brake-shoes': 'a brake shoe could wear or crush under a hard pull',
   'park-hold': 'the parking pin could bend and the cart roll away when parked on a steep hill',
+  joists: 'a floor crossmember could crack under the seat',
+  'handle-bow': 'the handlebow could crack when the handler pulls back',
   'steer-kin': 'the two front wheels do not turn together properly, so the tires would scrub and the steering would feel off',
   'steer-lock': 'the steering stops are not where they should be',
 };
@@ -339,4 +344,35 @@ export function weightNote(w: number, status: Status, worstId: string | undefine
   if (status === 'fail') return `${w} lb: a check fails, because ${failReason(worstId ?? '')}.`;
   if (status === 'marginal') return `${w} lb: close to the limit (${limiterName(worstId ?? '')}).`;
   return `${w} lb: OK.`;
+}
+
+// ── Cargo mode (D-53): "what can it haul after the race?" Separate from the rider headline, which it never changes. ──
+
+export interface CargoText {
+  tone: Tone;
+  headline: string;
+  /** Plain sentences under the headline, in reading order. */
+  lines: string[];
+}
+
+const n0 = (x: number) => String(Math.round(x));
+const rounded5 = (x: number) => Math.round(x / 5) * 5;
+
+/** Words for the cargo card of the Simple view, from a payload sweep. Pure. */
+export function cargoText(c: CargoCapacity): CargoText {
+  const cap = c.capacityLb;
+  const headline = cap === null ? `Hauls ${c.maxLb} lb or more after the race` : `Hauls up to ${rounded5(cap)} lb after the race`;
+  const short = cap !== null && cap < c.payloadLb;
+  const tone: Tone = short || c.cargoFailsAtPayload.length > 0 ? 'fail' : c.comfortableLb !== null && c.comfortableLb < c.payloadLb ? 'warn' : 'pass';
+  const lines: string[] = [];
+  lines.push(`The target is ${c.payloadLb} lb of camp gear, firewood and water with the seat stowed in the storage box (to confirm with Eric). ${tone === 'pass' ? 'Every check holds at that load.' : tone === 'warn' ? 'It holds, but close to a limit.' : `${c.counts.fail} check${c.counts.fail === 1 ? ' fails' : 's fail'} at that load.`}`);
+  if (c.limiter && short) lines.push(`What stops it first: ${limiterName(c.limiter.id)}.${c.alwaysFailing.length ? ` ${c.alwaysFailing.length} other check${c.alwaysFailing.length === 1 ? ' fails' : 's fail'} even with nothing on the bed.` : ''}`);
+  else if (c.limiter) lines.push(`Closest to its limit as the load grows: ${limiterName(c.limiter.id)}.`);
+  if (c.limiterOther && c.capacityOtherLb !== null && c.limiterOther.id !== c.limiter?.id)
+    lines.push(`Leaving out the checks that already fail for riders (the front end, still being verified), the next limit is ${limiterName(c.limiterOther.id)}, at about ${rounded5(c.capacityOtherLb)} lb.`);
+  const b = c.bed;
+  lines.push(`The bed is flat once the seat is in the box: ${n0(b.widthIn)} in wide at the box and ${n0(b.loadWidthIn)} in or wider for ${n0(b.loadLengthIn)} in, ${n0(b.heightIn)} in to the top of the sides, ${n0(b.totalLengthIn)} in long out to the foot stop (narrowing toward the nose). ${c.stow.applicable ? (c.stow.status === 'fail' ? 'The seat back and cushion do NOT fit in the box.' : c.stow.status === 'marginal' ? 'The seat back and cushion fit in the box, but only just.' : 'The seat back and cushion lie flat in the box.') : ''}`.trim());
+  if (c.rearTraction !== null && c.rearTraction < 1)
+    lines.push(`Parked nose-down on a steep hill with the full load, the rear brake alone holds about ${n0(c.rearTraction * 100)}% of it; the pullers (or a chock) hold the rest.`);
+  return { tone, headline, lines };
 }

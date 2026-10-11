@@ -189,7 +189,7 @@ export function buildSeat(ctx: Ctx): Part[] {
     id: 'seat-cushion', name: 'Seat cushion', group: 'seat', mat: 'fixed', massLb: foam(cushionVol) + vinyl(cushionCover), kind: 'purchased',
     material: 'closed-cell foam, marine-vinyl cover', fab: 'buy', step: STEP.seatStorage, ...span([cx0, s.xFront], [-hw, hw], [s.cushionBottom, s.surface]),
     sourcing: { vendor: 'Closed-cell polyethylene foam (McMaster-Carr / Foam Factory); marine vinyl (Sailrite / Hancock); sewn in-house', costUsd: 55 },
-    notes: 'Sits directly on the deck (or the storage lid / riser) on Dual Lock strips. Four drain grommets in the cover. Set back 3/8" from the back so the knob heads clear (D-40). Mass is an estimate (foam + cover, D-18).',
+    notes: 'Sits directly on the deck (or the storage lid / riser) on Dual Lock strips. Four drain grommets in the cover. Set back 3/8" from the back so the knob heads clear (D-40). Mass is an estimate (foam + cover, D-18). Cargo mode (D-53): peel it off the Dual Lock by hand and lay it flat in the storage box on top of the seat back (the strips stay on the deck, 0.1" proud: the bed is flat).',
   }));
 
   // Seat back: front face passes through P and leans back by seatBackAngleDeg. Oak frame (2 stiles + 2 rails) with a captured ply panel.
@@ -202,9 +202,9 @@ export function buildSeat(ctx: Ctx): Part[] {
   for (const { s: sg, tag } of SIDES) {
     parts.push(box(ctx, {
       ...backCommon, id: `seat-back-stile-${tag}`, partNo: 'seat-back-stile', name: `Seat back stile ${tag}`, mat: 'oak', grain: 'z',
-      size: [t, fw, H], center: at(-t / 2, H / 2, sg * sup.stileY), notes: 'Knob-mounted for transport, no tools (D-9). 3/8" stud hole 13/32" at the knob height; the 3-1/2" stud covers stile + wedge + box end + 3/4" of insert at the 15° back angle (S14).',
+      size: [t, fw, H], center: at(-t / 2, H / 2, sg * sup.stileY), notes: 'Knob-mounted for transport, no tools (D-9). 13/32" clearance hole for the 3/8" stud at the knob height; the 3-1/2" stud covers stile + wedge + box end + 3/4" of insert at the 15° back angle (S14). Cargo mode (D-53): unscrew both knobs (each stud comes out with its knob, so the back lifts clear), lift the back off, and stow it flat in the storage box with the cushion, wedges and knobs (seat-stow check).',
       joints: [domino('seat-back-rail-top'), domino('seat-back-rail-bottom'), panelDado(H - 2 * fw, true),
-        { type: 'knob', to: `seat-knob-${tag}`, count: 1, size: '3/8-16 × 3-1/2" stud, star knob, nylon-insert jam nut', note: 'perpendicular to the back face; the stud ends in the insert behind (D-9); blue threadlocker on the insert end, jam nut on the stile so the knob cannot back off' }],
+        { type: 'knob', to: `seat-knob-${tag}`, count: 1, size: '3/8-16 × 3-1/2" stud, star knob', note: 'perpendicular to the back face; the stud ends in the insert behind (D-9). The stud is part of the knob and slides out of the stile clearance hole when the knob is unscrewed, so nothing stays on the back but the knob heads; blue threadlocker on the INSERT thread only. Hand-tight; re-check at each stop.' }],
     }));
   }
   for (const [tag, c2] of [['top', H - fw / 2], ['bottom', fw / 2]] as const) {
@@ -252,7 +252,7 @@ export function buildSeat(ctx: Ctx): Part[] {
       axis: 'x', radius: KNOB_R_IN, length: KNOB_T_IN, rot: { y: -a }, center: at(KNOB_T_IN / 2, sup.c2B, sg * sup.knobY),
       explode: unit(0.5, sg * 0.3, 1),
       sourcing: { vendor: 'McMaster-Carr (3-lobe knob with stainless threaded stud, 3/8-16)', costUsd: 6 },
-      notes: 'Hand-tight; no tools to remove the back (D-9).',
+      notes: 'Hand-tight; no tools to remove the back (D-9). The 3-1/2" stud is part of the knob and stows with it in the box (D-53).',
     }));
   }
 
@@ -262,17 +262,17 @@ export function buildSeat(ctx: Ctx): Part[] {
   const depthX = Math.max(...sup.wedge.map((q) => q[0])) - Math.min(...sup.wedge.map((q) => q[0]));
   const zA = Math.max(...sup.wedge.map((q) => q[1]));
   for (const { s: sg, tag } of SIDES) {
-    const j: Joint[] = [
-      { type: 'glue', to: 'deck', count: 1, note: 'epoxy to the deck' },
-      { type: 'screw', to: 'deck', count: 2, size: '#10 × 1½ stainless, up through the deck' },
-    ];
-    if (sup.rear) j.push({ type: 'screw', to: 'storage-end-fore', count: 2, size: '#10 × 1¼ stainless, through the box end into the backer cleat' });
+    // D-53: the wedge is a LOOSE block, not glued or screwed to the deck, so the cargo bed is flat once the seat is off. The aft load presses the stile down and aft on it
+    // (the stile's rear face normal points aft and down), so it stays on the deck under rider load; the knob stud clamps it between the stile and the box end. With the wedge
+    // missing the 3-1/2" stud cannot reach the insert, so a forgotten wedge shows at once (the knob will not tighten).
+    const j: Joint[] = [];
+    if (sup.rear) j.push({ type: 'knob', to: `seat-knob-${tag}`, count: 1, size: '3/8" stud through a 13/32" hole', note: 'the stud passes through the wedge; loose block, clamped between the stile and the box end (D-53)' });
     else j.push({ type: 'threaded-insert', to: `seat-back-stile-${tag}`, count: 1, size: '3/8-16 stainless, 3/4 deep', note: 'the stud ends here (D-9)' });
     parts.push(profilePart(ctx, {
       id: `seat-wedge-${tag}`, partNo: 'seat-wedge', name: sup.rear ? `Seat back wedge ${tag}` : `Seat back post ${tag}`, group: 'seat', mat: 'oak',
-      outline: sup.wedge, depth: wedgeW, basis: 'xz', origin: [0, sg * sup.stileY + wedgeW / 2, 0], grain: 'z', step: STEP.seatStorage,
+      outline: sup.wedge, depth: wedgeW, basis: 'xz', origin: [0, sg * sup.stileY + wedgeW / 2, 0], grain: 'z', step: STEP.seatStorage, removable: true,
       stock: { t: wedgeW, w: depthX, l: zA - sup.zb }, explode: [0, 0, -1], joints: j,
-      notes: 'Shaped to the back angle (CNC or bandsaw + plane). Stays on the cart when the back comes off. The 3/8" stud passes through it.',
+      notes: 'Shaped to the back angle (CNC or bandsaw + plane). A LOOSE block (D-53): it comes off with the back and stows in the box, so the cargo bed has nothing proud of the deck. Seated between the stile and the box end by the knob stud; the 3/8" stud passes through it.',
     }));
   }
 

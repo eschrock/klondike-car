@@ -9,20 +9,40 @@ import { dualCheck, singleCheck, detail, type CaseEval } from './dual';
 import { DEG, RAD, contactsAt, instantCenterY, lateralTip, outerEdgeDistance, sideEdges, turnGeometry, axleLoads } from './geometry';
 import { f } from './format';
 import type { CaseData } from './loads';
-import type { AnalysisCheck } from './types';
+import { SEVERITY, judge, utilization, type AnalysisCheck } from './types';
 
 const G_IN_S2 = 386.1;
 const IN_S_PER_MPH = 17.6;
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** Evaluate `fn` at the operating and goal cases. */
-export function evalBoth(ctx: Ctx, fn: (c: CaseData) => CaseEval) {
-  return {
+/**
+ * Evaluate `fn` at the operating and goal cases, and (Phase 3c-2, D-53) at the cargo case: the worse of the cargo placements in `ctx.loads.cargoCases` (the payload
+ * piled against the box, and against the nose end of the full-width bed). Pass `{ cargo: false }` for a row with its own cargo evaluation or none (seat rows).
+ */
+export function evalBoth(ctx: Ctx, fn: (c: CaseData) => CaseEval, opts: { cargo?: boolean } = {}) {
+  const base = {
     operating: fn(ctx.loads.operating),
     goal: fn(ctx.loads.goal),
     operatingLabel: cap(ctx.loads.operating.label),
     goalLabel: cap(ctx.loads.goal.label),
+  };
+  const cases = ctx.loads.cargoCases;
+  if (opts.cargo === false || !cases.length) return base;
+  return { ...base, ...cargoWorst(cases, fn) };
+}
+
+/** Evaluate `fn` at each cargo placement and keep the one with the highest utilization (worst status first). */
+export function cargoWorst(cases: CaseData[], fn: (c: CaseData) => CaseEval): { cargo: CaseEval; cargoLabel: string } {
+  const evs = cases.map((c) => {
+    const e = fn(c);
+    return { c, e, status: e.info ? 'info' as const : judge(e.value, e.limit, e.sense, e.marginalAbs), util: utilization(e.value, e.limit, e.sense) };
+  });
+  const best = evs.reduce((a, b) => (SEVERITY[b.status] > SEVERITY[a.status] || (b.status === a.status && b.util > a.util) ? b : a));
+  const others = evs.filter((x) => x !== best).map((x) => `${x.c.placement ?? 'cargo'}: ${Number.isFinite(x.util) ? Math.round(x.util * 100) : '∞'}%`).join('; ');
+  return {
+    cargo: { ...best.e, how: `[${best.c.placement ?? 'cargo'}] ${best.e.how}${others ? ` Other placement (${others}).` : ''}` },
+    cargoLabel: cap(best.c.label),
   };
 }
 

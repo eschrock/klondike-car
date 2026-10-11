@@ -45,7 +45,12 @@ export const LASH_TIP_IN = 0.25;
 /** Half the screw spacing of the 4-hole plate along (x) and across (y) it: 1.125" × 0.5" holes in the 1.5" × 0.9" plate. */
 export const LASH_HOLE_DX_IN = 0.5625;
 export const LASH_HOLE_DY_IN = 0.25;
-const BACKER_IN = 1;
+/** The 3/8" epoxy fillet in every inside corner of the box (flat things stowed in it ride on it, not in the corner). */
+export const BOX_FILLET_IN = 0.375;
+const PLUG_MASS_LB = 0.05;
+export const PLUG_R_IN = 0.3;
+export const PLUG_LEN_IN = 0.45;
+export const BACKER_IN = 1;
 const BACKER_W_IN = 1.5;
 /** Oak block under each lid latch (#8 screws need more than the 6 mm end ply or a thin transom): thickness, and width across. */
 export const LATCH_BLOCK_IN = 0.375;
@@ -53,7 +58,7 @@ const LATCH_BLOCK_W_IN = 2;
 /** Lid hold-open stay (friction stay): size, mass. */
 const STAY_SIZE = [2, 0.3, 0.5] as const;
 const STAY_MASS_LB = 0.12;
-const BATTEN_X_IN = 0.75;
+const BATTEN_X_IN = 1;
 const HINGE_W_IN = 2.5;
 const HINGE_H_IN = 2.7;
 
@@ -325,13 +330,14 @@ export function buildStorage(ctx: Ctx): Part[] {
       joints: [dom('storage-rim-side-L'), dom('storage-rim-side-R')] }));
   }
   const inner = x1 - x0 - 2 * rimW;
-  const nBatten = inner >= 9 ? 2 : inner >= 4 ? 1 : 0;
+  // D-53: a third batten once the lid is long enough (bays of about 3.6 in), so the lid carries a light cooler (lid-load row).
+  const nBatten = inner >= 12 ? 3 : inner >= 9 ? 2 : inner >= 4 ? 1 : 0;
   for (let n = 1; n <= nBatten; n++) {
     const bx = x0 + rimW + (inner * n) / (nBatten + 1);
     parts.push(box(ctx, { ...common, id: `storage-lid-batten-${n}`, partNo: 'storage-lid-batten', name: `Storage lid batten ${n}`, mat: 'oak', grain: 'y',
       ...span([bx - BATTEN_X_IN / 2, bx + BATTEN_X_IN / 2], [-(hw - rimW), hw - rimW], [zTop - pl - rimT, zTop - pl]),
       joints: [{ type: 'glue', to: 'storage-lid', count: 1, note: 'epoxy + 4 stainless screws from the top (plugged)' }, { type: 'dado', to: 'storage-rim-side-L', count: 1, size: '1/4 deep', note: 'ends let into the frame sides' }, { type: 'dado', to: 'storage-rim-side-R', count: 1, size: '1/4 deep' }],
-      notes: 'Stiffen the lid panel so it can take a foot or a cooler (a 25" × 13" ply panel alone would sag).' }));
+      notes: 'Stiffen the lid panel so it can take a foot or a light cooler (a 25" × 13" ply panel alone would sag); the lid-load row sizes them for the rated lid load (D-53).' }));
   }
 
   // ── Gasket: closed-cell bulb strip on the wall tops, under the frame ──
@@ -424,7 +430,9 @@ export function buildStorage(ctx: Ctx): Part[] {
     const dist = Math.max(0, (xr - x1) / s.col0[0]);
     const zE = zS - s.col0[2] * dist;
     const z0 = Math.max(g.floorZ, Math.min(zE - BACKER_IN, zPlyTop - 2 * BACKER_IN));
-    const z1 = Math.max(z0 + 0.5, Math.min(z0 + 2 * BACKER_IN, zPlyTop)); // stops under the coaming
+    // D-53: the stowed seat back lies on the stowed cushion above the backers, so their tops stop 0.05" under it (the 3/8-16 insert still has >= 3/4" of oak).
+    const zStow = g.floorZ + BOX_FILLET_IN + p.seatCushionIn - 0.05;
+    const z1 = Math.max(z0 + 0.5, Math.min(z0 + 2 * BACKER_IN, zPlyTop, zStow)); // stops under the coaming
     for (const { s: sg, tag } of SIDES) {
       parts.push(box(ctx, { ...common, id: `storage-backer-${tag}`, partNo: 'storage-backer', name: `Seat-back insert backer ${tag}`, mat: 'oak', grain: 'z',
         ...span([x1 - pl - BACKER_IN, x1 - pl], [sg * sup.knobY - BACKER_W_IN / 2, sg * sup.knobY + BACKER_W_IN / 2], [z0, z1]),
@@ -432,6 +440,19 @@ export function buildStorage(ctx: Ctx): Part[] {
           { type: 'glue', to: 'storage-end-fore', count: 1, note: 'epoxy to the inside of the end panel' },
           { type: 'screw', to: 'storage-end-fore', count: 2, size: '#10 × 1¼ stainless, from the wedge side' }],
         notes: 'Takes the knob stud pull-out (about 180 lbf each at the goal rider, seat-back check).' }));
+    }
+  }
+
+  // ── Hole plugs (D-53): with the seat off, the two stud holes through the box's fore end are closed from the outside by hand-tight sealed thumb screws that thread into the
+  //    same inserts. Seat installed: they ride loose in the box (aft corners, on the floor) with the other small parts. ──
+  if (sup.rear) {
+    for (const { s: sg, tag } of SIDES) {
+      parts.push(cylinder(ctx, { ...common, id: `seat-plug-${tag}`, partNo: 'seat-plug', name: `Stud-hole plug ${tag}`, mat: 'fixed', massLb: PLUG_MASS_LB, kind: 'purchased',
+        material: '316 stainless 3/8-16 thumb screw, bonded sealing washer', fab: 'buy', removable: true, step: STEP.finish, axis: 'y', radius: PLUG_R_IN, length: PLUG_LEN_IN,
+        center: [Math.min(x0 + pl + 3.5, (x0 + x1) / 2), sg * (yIn - 2), g.floorZ + BOX_FILLET_IN + PLUG_R_IN],
+        sourcing: { vendor: 'McMaster-Carr (316 stainless thumb screw, 3/8-16, with a bonded sealing washer)', costUsd: 4 },
+        joints: [{ type: 'threaded-insert', to: `storage-backer-${tag}`, count: 1, size: '3/8-16 into the seat-back insert', note: 'cargo mode: screwed into the insert from the outside of the box end, hand-tight, so the stud hole is sealed' }],
+        notes: 'Closes the 13/32" stud hole through the box fore end whenever the seat back is off (the box is weatherproof, D-41). Seat installed: stowed loose in the box. Cargo mode: threaded into the insert from the bed side, 0.4" proud of the end wall.' }));
     }
   }
 

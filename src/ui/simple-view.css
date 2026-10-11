@@ -158,3 +158,7 @@
   .sv-light { min-height: 44px; }
 }
 
+/* Cargo mode (D-53): the after-the-race card */
+.sv-cargo .sv-headline { font-size: 16px; }
+.sv-cargo .sv-headline.info { color: var(--muted); }
+.sv-cargo-lines { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 4px; font-size: 13.5px; }

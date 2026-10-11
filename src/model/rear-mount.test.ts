@@ -196,7 +196,7 @@ describe('fastener stacks (S2) and the push-handle fit (S7)', () => {
     const j = byId('handle-post-L').joints!.find((q) => q.to === 'handle-bar' && q.type === 'pin')!;
     expect(j.size).toMatch(/epoxied/);
     expect(byId('handle-post-L').joints!.some((q) => q.to === 'handle-bar' && /wing nut/.test(q.size ?? ''))).toBe(false);
-    expect(byId('handle-bar').sourcing?.vendor).toMatch(/dowel/);
+    expect(byId('handle-bar').sourcing?.vendor).toMatch(/laminated/); // the handlebow is shop-laminated white oak (D-53), not a bought dowel
   });
 });
 
