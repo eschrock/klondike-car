@@ -8,6 +8,7 @@
  * groups: per-bolt NDS lateral capacity (src/analysis/nds.ts), row tear-out, edge distances, cleavage with cross-bolts.
  */
 import { kingpinBoreIn, steerStopPlan } from '../params';
+import { worldAABB } from '../model/bounds';
 import { BRIDLE_APEX_AHEAD_IN } from '../model/steering';
 import { kingpinPlatePlan } from '../model/kingpin-plates';
 import { toothThickness, triangularFace } from '../model/stops';
@@ -124,29 +125,47 @@ export function boltCapacity(ctx: Ctx, D: number, lm: number, ls0: number, theta
   return { Zref: r.Z, Z: r.Z * ndsAdjust(p), mode: r.mode, Fem, Re: Fem / p.steelDowelBearingPsi, ls };
 }
 
-export interface PinLoad { name: string; Hx: number; Hy: number; T: number }
+export interface PinLoad {
+  name: string; Hx: number; Hy: number; T: number;
+  /** Share of the stop torque that stays in the carrier bolt plane for this case (default: p.kingpinTorqueTopShare; the bounding value is the ears sharing nothing). */
+  earShare?: number;
+}
 
 /** Governing pin load cases at one rider case (all horizontal, at the pin): the two-wheel strike, the one-wheel strike with the stop pair, the bridle pull, the lateral skid. */
-export function pinLoads(ctx: Ctx, c: CaseData, share?: number): PinLoad[] {
-  const extra = (E: number, label: string): PinLoad[] => {
-    const e = stopEnv(ctx, c, share, E);
-    return e ? [{ name: `one-wheel strike + stops (${label} pad)`, Hx: yawTorque(ctx, c).Hw + e.net, Hy: 0, T: yawTorque(ctx, c).T }] : [];
-  };
+export function pinLoads(ctx: Ctx, c: CaseData, share?: number, withEars = true): PinLoad[] {
   const { p } = ctx;
+  const earB = p.kingpinTorqueTopShareBound;
   const yaw = yawTorque(ctx, c);
+  const extra = (E: number, label: string, fit?: number, earShare?: number): PinLoad[] => {
+    const e = stopEnv(ctx, c, share, E, fit);
+    return e ? [{ name: `one-wheel strike + stops (${label})`, Hx: yaw.Hw + e.net, Hy: 0, T: yaw.T, earShare }] : [];
+  };
   const cases = strikeCases(ctx, c);
   const Hgov = Math.max(...cases.map((s) => s.H));
   const env = stopEnv(ctx, c, share);
   const net = env ? env.net : 0;
   const w = wheelLoads(ctx, c);
   const Fy = p.tireGroundMu * w.frontAxle * p.dynamicFactor;
+  // Honesty fix (critic Phase 3 r3 MUST-2): the nominal cases are kept, and the bounding cases are added so the worst of each row governs: the fit-up at
+  // its bound for every pad, and (bolt rows only) the ears sharing nothing.
+  const fitB = p.steerStopFitMismatchMaxIn;
   return [
     { name: 'two-wheel strike', Hx: Hgov, Hy: 0, T: 0 },
     { name: 'one-wheel strike + stops', Hx: yaw.Hw + net, Hy: 0, T: yaw.T },
     { name: 'bridle pull', Hx: p.pullForceLbf, Hy: 0, T: yaw.rope },
     { name: 'lateral skid', Hx: 0, Hy: Fy, T: 0 },
-    ...extra(p.steerStopPadModulusMinPsi, 'soft'),
-    ...extra(p.steerStopPadModulusMaxPsi, 'stiff'),
+    ...extra(p.steerStopPadModulusMinPsi, 'soft pad'),
+    ...extra(p.steerStopPadModulusMaxPsi, 'stiff pad'),
+    ...extra(p.steerStopPadModulusMinPsi, `soft pad, fit-up ${fitB}"`, fitB),
+    ...extra(p.steerStopPadModulusPsi, `nominal pad, fit-up ${fitB}"`, fitB),
+    ...extra(p.steerStopPadModulusMaxPsi, `stiff pad, fit-up ${fitB}"`, fitB),
+    ...(withEars && earB > p.kingpinTorqueTopShare
+      ? [
+          { name: 'one-wheel strike + stops, ears share nothing', Hx: yaw.Hw + net, Hy: 0, T: yaw.T, earShare: earB },
+          ...extra(p.steerStopPadModulusMaxPsi, 'stiff pad, ears share nothing', undefined, earB),
+          ...extra(p.steerStopPadModulusMinPsi, 'soft pad, ears share nothing', undefined, earB),
+        ]
+      : []),
   ];
 }
 
@@ -181,7 +200,7 @@ export interface StopEnv {
 }
 
 /** The stop pair at one rider case. `share` overrides the stiffness-derived share (1 = the bounding case). */
-export function stopEnv(ctx: Ctx, c: CaseData, share?: number, modulus?: number): StopEnv | null {
+export function stopEnv(ctx: Ctx, c: CaseData, share?: number, modulus?: number, fitIn?: number): StopEnv | null {
   const { p } = ctx;
   const plan = steerStopPlan(p);
   const pad = boxSize(ctx, 'steer-stop-face-L1');
@@ -192,7 +211,7 @@ export function stopEnv(ctx: Ctx, c: CaseData, share?: number, modulus?: number)
   const P = yaw.T / tri1.rEff;
   const area = len * hFace;
   const k = stopStiffness(modulus ?? p.steerStopPadModulusPsi, area, plan.tf);
-  const sh = share ?? stopShare(k, p.steerStopFitMismatchIn, P);
+  const sh = share ?? stopShare(k, fitIn ?? p.steerStopFitMismatchIn, P);
   const tri = triangularFace(plan.ra, plan.rb, hFace, sh * yaw.T);
   return { T: yaw.T, rEff: tri1.rEff, P, share: sh, F: sh * P, net: (2 * sh - 1) * P, k, area, hFace, len, tri, plan };
 }
@@ -221,8 +240,25 @@ function stopDetails(ctx: Ctx, env: StopEnv, bound: boolean): { ds: Detail[]; te
   const wDog = plan.t; // channel / riser width across x
   const hRiser = riser ? riser[2] : 0;
   const dRiser = riser ? riser[1] : 0.5;
-  const Mr = F * hRiser; // the face force acts at web level (the web bears on the top plate under overturning); the riser is a short cantilever
-  const sigR = riser ? (6 * Mr) / (dRiser * wDog * wDog) : 0;
+  // Overturning arms (honesty fix, critic Phase 3 r3 MUST-3). The face force acts at the PAD CENTROID, which is well above the welds, and the web does NOT bear
+  // on the turntable top plate in the elastic range (a gap, derived below), so the stand overturns about the toe of the arm on the carrier. Every height is read
+  // from the built parts, never typed in.
+  const zOf = (id: string): { z0: number; z1: number } | null => {
+    const x = part(ctx, id);
+    if (!x) return null;
+    const b = worldAABB(x);
+    return { z0: b.min[2], z1: b.max[2] };
+  };
+  const zFace = zOf('steer-stop-face-L1'), zWeb = zOf('steer-stop-L'), zRis = zOf('steer-stop-riser-L'), zArm = zOf('steer-stop-arm-L'), zTop = zOf('turntable');
+  const zPad = zFace ? (zFace.z0 + zFace.z1) / 2 : (zWeb ? zWeb.z0 + env.hFace / 2 : 0);
+  const armArm = zPad - (zArm?.z0 ?? zRis?.z0 ?? 0); // pad centroid above the carrier top (the arm foot)
+  const armWeld = zPad - (zWeb?.z0 ?? 0); // above the web/riser weld plane
+  const armRiser = zPad - (zRis?.z0 ?? zArm?.z1 ?? 0); // above the riser/arm weld plane = the riser's base
+  const webGap = zWeb && zTop ? zWeb.z0 - zTop.z1 : 0; // the web floats this far above the turntable top plate
+  const Mr = F * armWeld; // overturning moment at the web-to-riser weld
+  const MrRis = F * armRiser; // at the riser base and the riser-to-arm weld
+  const MrBase = F * armArm; // about the carrier surface (arm screws and toe)
+  const sigR = riser ? (6 * MrRis) / (dRiser * wDog * wDog) : 0;
   const tauR = riser ? F / (dRiser * wDog) : 0;
   const dScr = p.steerStopScrewDiameterIn;
   const Ascr = (Math.PI * dScr * dScr) / 4;
@@ -237,24 +273,29 @@ function stopDetails(ctx: Ctx, env: StopEnv, bound: boolean): { ds: Detail[]; te
   // Riser (r3 N-3): the web, riser and arm are one welded stand. Two all-around fillets carry the face force F and the dog's vertical-axis moment M_z
   // (weld group torsion), and the overturning moment F·h as a couple on the weld length. Round 2's two 3/8" screws are gone: they had no bearing or edge check.
   const wl = p.steerStopWeldIn;
-  const weldSeam = (b: number, d: number) => {
+  const weldSeam = (b: number, d: number, Mover: number) => {
     const L = 2 * (b + d);
     const Ju = (b + d) ** 3 / 6 - (b * b * d * d) / (b + d);
     const c = Math.hypot(b / 2, d / 2);
     const tauDirect = F / (0.707 * wl * L);
     const tauTors = (Mz * c) / (0.707 * wl * Ju);
     // overturning F·h: a couple on the two long sides (lever d): tension/compression line force per unit length
-    const tauOver = Mr / (d * 0.707 * wl * 2 * b) ;
+    const tauOver = Mover / (d * 0.707 * wl * 2 * b);
     return { tau: Math.hypot(tauDirect + tauTors, tauOver), tauDirect, tauTors, tauOver, L };
   };
-  const wWeb = weldSeam(wDog, dRiser), wArm = weldSeam(wDog, dRiser);
+  const wWeb = weldSeam(wDog, dRiser, Mr), wArm = weldSeam(wDog, dRiser, MrRis);
   const steelAllowW = 0.3 * p.weldFexxPsi * steelK;
-  const levArmFix = levArm;
-  const Tarm = Mr / levArmFix;
-  const vArm = Math.hypot(F / nScr, Mz / levArmFix);
+  // Arm screws and toe: the stand tips about the TOE of the arm (the +x edge, the side the stop block pushes toward). The far screw is the tension member
+  // (the other is credited nothing, conservative); lever = arm half-length in x + the far screw's offset. Screw positions come from the model's joint.
+  const scrJ = arm?.joints?.find((j) => j.type === 'screw' && j.to === 'kp-carrier');
+  const scrX = scrJ?.at && scrJ.at.length ? Math.max(...scrJ.at.map((a) => Math.abs(a[0]))) : levArm / 2;
+  const armHx = armSize ? armSize[0] / 2 : scrX;
+  const levToe = armHx + scrX;
+  const Tarm = MrBase / levToe;
+  const vArm = Math.hypot(F / nScr, Mz / levArm);
   const interArm = Math.sqrt((vArm / Ascr / (0.577 * steelAllow)) ** 2 + (Tarm / At / steelAllow) ** 2);
   const armLen = armSize ? armSize[1] : 2;
-  const toeA = armLen * (p.carrierPlateThickIn + 0.5); // the carrier spreads the toe load over about its own thickness + half the arm thickness
+  const toeA = armLen * (p.carrierPlateThickIn + 0.5); // the carrier spreads the toe load over about its own thickness + 0.5" (the arm's toe strip)
   const pToe = Tarm / toeA;
   const tEng = p.carrierPlateThickIn;
   const bearScr = vArm / (dScr * tEng); // screw bearing on the tapped carrier hole
@@ -266,7 +307,7 @@ function stopDetails(ctx: Ctx, env: StopEnv, bound: boolean): { ds: Detail[]; te
     ...(al0.barLen > 0 ? [detail('stop block bearing on the crossbar side (oak ⊥)', pBar, 'psi', al.oakPerp * woodK, '<=')] : []),
     detail('channel flange bending under the pad pressure (steel)', sigFl, 'psi', p.kingpinPlateYieldPsi / (p.steelSafetyFactor / steelK) , '<='),
     ...(riser ? [
-      detail('riser bending at its base (force at web level)', sigR, 'psi', p.kingpinPlateYieldPsi / (p.steelSafetyFactor / steelK), '<='),
+      detail('riser bending at its base (force at the pad centroid)', sigR, 'psi', p.kingpinPlateYieldPsi / (p.steelSafetyFactor / steelK), '<='),
       detail('riser shear', tauR, 'psi', (0.577 * p.kingpinPlateYieldPsi) / (p.steelSafetyFactor / steelK), '<='),
       detail('web-to-riser all-around fillet weld (direct + torsion from M_z, plus overturning)', wWeb.tau, 'psi', steelAllowW, '<='),
       detail('riser-to-arm all-around fillet weld (direct + torsion from M_z, plus overturning)', wArm.tau, 'psi', steelAllowW, '<='),
@@ -276,7 +317,7 @@ function stopDetails(ctx: Ctx, env: StopEnv, bound: boolean): { ds: Detail[]; te
       ...(ctx.L.kpPlates ? [detail('arm toe on the carrier, onto the beam top (oak ⊥)', pToe, 'psi', al.oakPerp * woodK, '<=')] : []),
     ] : []),
   ];
-  const text = `Pad: bonded ${f(plan.tf, 3)}" urethane, area ${f(env.area, 2)} in² (${f(env.len, 2)}" × ${f(hF, 2)}"), E ${f(p.steerStopPadModulusPsi, 0)} psi → k = E·A/t = ${f(env.k, 0)} lbf/in. Pair force P = T/r_eff = ${f(env.T)}/${f(env.rEff, 2)} = ${f(env.P)} lbf; the stiffer stop takes F = ${f(F)} lbf (share ${f(env.share, 3)}). Face pressure peak p_max = 3·T₁·s₂/(h(s₂³−s₁³)) = ${f(tri.pMax, 0)} psi (mean ${f(tri.pAvg, 0)}); the wedge splits F into ${f(Fx)} lbf on the rail face (${f(al0.railLen, 2)}" × ${f(ringDepth, 2)}" = ${f(pRail, 0)} psi) and ${f(Fy)} lbf on the crossbar side (${f(al0.barLen, 2)}" × ${f(ringDepth, 2)}" = ${f(pBar, 0)} psi) against oak ⊥ ${f(al.oakPerp * woodK, 0)} psi. Flange as a cantilever under the face pressure: σ = 3·p·h²/t² = ${f(sigFl, 0)} psi. ${riser ? `Riser (${f(wDog, 2)}" × ${f(dRiser, 2)}" × ${f(hRiser, 2)}"): the face force F acts at web level, M = F·${f(hRiser, 2)}" = ${f(Mr)} lb·in, σ = 6M/(d·w²) = ${f(sigR, 0)} psi, τ = F/(d·w) = ${f(tauR, 0)} psi; the dog's cantilever (F at r_eff ${f(env.rEff, 2)}" vs the riser at ${f(yR, 2)}") adds M_z = ${f(Mz)} lb·in; web/riser/arm welded stand, ${f(wl, 4)}\" E70 fillets all around the ${f(wDog, 2)}\" × ${f(dRiser, 2)}\" seam: direct ${f(wWeb.tauDirect, 0)} + torsion ${f(wWeb.tauTors, 0)} psi with overturning ${f(wWeb.tauOver, 0)} psi → ${f(wWeb.tau, 0)} psi (≤ 0.3·F_EXX = ${f(steelAllowW, 0)}); arm screws (${f(levArm, 1)}" apart) ${f(vArm)} lbf shear + ${f(Tarm)} lbf tension (interaction ${f(interArm, 2)}, thread strip ${f(Tarm)} lbf vs ${f(Tg)}, bearing ${f(bearScr, 0)} psi); toe pressure on the beam top ${f(pToe, 0)} psi.` : ''}`;
+  const text = `Pad: bonded ${f(plan.tf, 3)}" urethane, area ${f(env.area, 2)} in² (${f(env.len, 2)}" × ${f(hF, 2)}"), E ${f(p.steerStopPadModulusPsi, 0)} psi → k = E·A/t = ${f(env.k, 0)} lbf/in. Pair force P = T/r_eff = ${f(env.T)}/${f(env.rEff, 2)} = ${f(env.P)} lbf; the stiffer stop takes F = ${f(F)} lbf (share ${f(env.share, 3)}). Face pressure peak p_max = 3·T₁·s₂/(h(s₂³−s₁³)) = ${f(tri.pMax, 0)} psi (mean ${f(tri.pAvg, 0)}); the wedge splits F into ${f(Fx)} lbf on the rail face (${f(al0.railLen, 2)}" × ${f(ringDepth, 2)}" = ${f(pRail, 0)} psi) and ${f(Fy)} lbf on the crossbar side (${f(al0.barLen, 2)}" × ${f(ringDepth, 2)}" = ${f(pBar, 0)} psi) against oak ⊥ ${f(al.oakPerp * woodK, 0)} psi. Flange as a cantilever under the face pressure: σ = 3·p·h²/t² = ${f(sigFl, 0)} psi. ${riser ? `Riser (${f(wDog, 2)}" × ${f(dRiser, 2)}" × ${f(hRiser, 2)}"): the face force F acts at the pad centroid ${f(zPad, 3)}" above the ground, ${f(armRiser, 2)}" above the riser base, ${f(armWeld, 2)}" above the web weld plane and ${f(armArm, 2)}" above the carrier top, so M = F·${f(armRiser, 2)}" = ${f(MrRis)} lb·in at the riser base, σ = 6M/(d·w²) = ${f(sigR, 0)} psi, τ = F/(d·w) = ${f(tauR, 0)} psi; the dog's cantilever (F at r_eff ${f(env.rEff, 2)}" vs the riser at ${f(yR, 2)}") adds M_z = ${f(Mz)} lb·in; web/riser/arm welded stand, ${f(wl, 4)}\" E70 fillets all around the ${f(wDog, 2)}\" × ${f(dRiser, 2)}\" seam (overturning ${f(Mr)} lb·in at the web weld, ${f(MrRis)} at the riser weld): direct ${f(wWeb.tauDirect, 0)} + torsion ${f(wWeb.tauTors, 0)} psi with overturning ${f(wWeb.tauOver, 0)} psi → ${f(wWeb.tau, 0)} psi (≤ 0.3·F_EXX = ${f(steelAllowW, 0)}); arm screws (${f(levArm, 1)}" apart) ${f(vArm)} lbf shear + ${f(Tarm)} lbf tension, the stand tipping about the arm toe: M = F·${f(armArm, 2)}" = ${f(MrBase)} lb·in over ${f(levToe, 2)}" (arm half-length ${f(armHx, 2)}" + far screw ${f(scrX, 2)}"), the web does not bear on the turntable top plate (it floats ${f(webGap, 3)}" above it and would need the welded stand to tip before it touched; no credit) (interaction ${f(interArm, 2)}, thread strip ${f(Tarm)} lbf vs ${f(Tg)}, bearing ${f(bearScr, 0)} psi); toe pressure on the beam top ${f(pToe, 0)} psi.` : ''}`;
   return { ds, text };
 }
 
@@ -295,20 +336,24 @@ export function steerStopsCheck(ctx: Ctx): AnalysisCheck {
     const yaw = yawTorque(ctx, c);
     const Hgov = Math.max(...strikeCases(ctx, c).map((s) => s.H));
     // The pad modulus is a range, not a number (r3 N-1): soft / nominal / stiff, the worst of each row governs.
+    // Honesty fix (critic Phase 3 r3 MUST-2): each modulus is evaluated at the nominal fit-up (kept as the detail) AND at the bounding fit-up; the worst governs.
     const moduli: Array<[string, number]> = [['soft pad', p.steerStopPadModulusMinPsi], ['nominal pad', p.steerStopPadModulusPsi], ['stiff pad', p.steerStopPadModulusMaxPsi]];
-    const runs = moduli.map(([name, E]) => {
-      const env = stopEnv(ctx, c, undefined, E)!;
+    const fitB = p.steerStopFitMismatchMaxIn;
+    const runsAt = (fit: number | undefined, suffix: string) => moduli.map(([name, E]) => {
+      const env = stopEnv(ctx, c, undefined, E, fit)!;
       const r = stopDetails(ctx, env, false);
       const Kvec = yaw.Hw + env.net;
       void Hgov;
-      return { name, env, ...r, Kvec };
+      return { name: name + suffix, env, ...r, Kvec };
     });
-    const merged = mergeCases(runs.map((r) => ({ name: r.name, details: r.ds })));
+    const runs = runsAt(undefined, '');
+    const bruns = runsAt(fitB, `, fit-up ${fitB}"`);
+    const merged = mergeCases([...runs, ...bruns].map((r) => ({ name: r.name, details: r.ds })));
     const nom = runs[1], env = nom.env, text = nom.text, Kvec = nom.Kvec;
     const ds = merged;
-    const rangeTxt = `Pad modulus range ${f(p.steerStopPadModulusMinPsi, 0)} / ${f(p.steerStopPadModulusPsi, 0)} / ${f(p.steerStopPadModulusMaxPsi, 0)} psi (soft / nominal / stiff, r3 N-1): share ${runs.map((r) => `${r.name} ${f(r.env.share, 3)}`).join(', ')}, net kingpin force ${runs.map((r) => f(r.env.net)).join(' / ')} lbf; each row is the worst of the three. Fit-up mismatch ${p.steerStopFitMismatchIn}" after the feeler-gauge step (shim packs up to ${p.steerStopAdjustRangeIn}").`;
+    const rangeTxt = `Pad modulus range ${f(p.steerStopPadModulusMinPsi, 0)} / ${f(p.steerStopPadModulusPsi, 0)} / ${f(p.steerStopPadModulusMaxPsi, 0)} psi (soft / nominal / stiff, r3 N-1): share ${runs.map((r) => `${r.name} ${f(r.env.share, 3)}`).join(', ')}, net kingpin force ${runs.map((r) => f(r.env.net)).join(' / ')} lbf; each row is the worst of these AND of the same three at the bounding fit-up ${fitB}" (share ${bruns.map((r) => `${r.name} ${f(r.env.share, 3)}`).join(', ')}; net kingpin force ${bruns.map((r) => f(r.env.net)).join(' / ')} lbf), so the nominal ${p.steerStopFitMismatchIn}" fit-up after the feeler-gauge step (shim packs up to ${p.steerStopAdjustRangeIn}") is the detail above and the bounds are what a row is judged on (honesty fix, critic Phase 3 r3 MUST-2).`;
     const tThin = Math.min(toothThickness(plan.a, plan.cb, plan.W, plan.lock, plan.ra), toothThickness(plan.a, plan.cb, plan.W, plan.lock, plan.rb));
-    const how = `Yaw torque on the steer body about the kingpin: ${yaw.governing} T = ${f(yaw.T)} lb·in (one-wheel curb strike: H_w = ${f(yaw.Hw)} lbf [V_w ${f(yaw.Vw)} lbf, ${frontLoadText(ctx, wheelLoads(ctx, c))}] × y_w ${f(yaw.yw, 2)}" = ${f(yaw.strike)}; hard rope pull ${p.pullForceLbf} lbf × tie ${f(yaw.yTie, 2)}" = ${f(yaw.rope)}). Two stops close at lock (a 180° couple: dog L on the aft-left block, dog R on the fore-right block, and the mirror at −lock). Each dog is a ${f(plan.t, 2)}" steel channel standing on a riser and an arm INSIDE the ${p.turntableCenterHoleIn}" turntable hole (nothing through the ball ring), with a bonded urethane pad on each face; the dog spans s = ${f(plan.ra, 2)}…${f(plan.rb, 2)}" from the kingpin: r_eff = ⅔(s₂³−s₁³)/(s₂²−s₁²) = ${f(env.rEff, 2)}". ${text} ${rangeTxt} Net on the kingpin (nominal pad): (2·share − 1)·P = ${f(env.net)} lbf, so with H_w = ${f(yaw.Hw)} lbf the pin sees ${f(Kvec)} lbf against the ${f(Hgov)} lbf two-wheel strike that already governs; the bounding row 'steer-stops-bound' puts the whole torque on one stop (share 1). Thinnest wood behind the face where the block is trimmed: ${f(tThin, 2)}" (rule ≥ ${p.stopBlockMinIn}"). Stop torque into the carrier and its bolt group: row 'kingpin-bolts'. Not modeled: the channel web touching the top plate under overturning (≈ ${f(env.F * env.hFace / 2 / 0.9)} lbf vertical, a UHMW pad on the web underside is specified); stiffness of the lazy-susan plates.`;
+    const how = `Yaw torque on the steer body about the kingpin: ${yaw.governing} T = ${f(yaw.T)} lb·in (one-wheel curb strike: H_w = ${f(yaw.Hw)} lbf [V_w ${f(yaw.Vw)} lbf, ${frontLoadText(ctx, wheelLoads(ctx, c))}] × y_w ${f(yaw.yw, 2)}" = ${f(yaw.strike)}; hard rope pull ${p.pullForceLbf} lbf × tie ${f(yaw.yTie, 2)}" = ${f(yaw.rope)}). Two stops close at lock (a 180° couple: dog L on the aft-left block, dog R on the fore-right block, and the mirror at −lock). Each dog is a ${f(plan.t, 2)}" steel channel standing on a riser and an arm INSIDE the ${p.turntableCenterHoleIn}" turntable hole (nothing through the ball ring), with a bonded urethane pad on each face; the dog spans s = ${f(plan.ra, 2)}…${f(plan.rb, 2)}" from the kingpin: r_eff = ⅔(s₂³−s₁³)/(s₂²−s₁²) = ${f(env.rEff, 2)}". ${text} ${rangeTxt} Net on the kingpin (nominal pad): (2·share − 1)·P = ${f(env.net)} lbf, so with H_w = ${f(yaw.Hw)} lbf the pin sees ${f(Kvec)} lbf against the ${f(Hgov)} lbf two-wheel strike that already governs; the bounding row 'steer-stops-bound' puts the whole torque on one stop (share 1). Thinnest wood behind the face where the block is trimmed: ${f(tThin, 2)}" (rule ≥ ${p.stopBlockMinIn}"). Stop torque into the carrier and its bolt group: row 'kingpin-bolts'. Not credited: the channel web bearing on the turntable top plate (it floats above it, r3 MUST-3); the overturning goes through the arm screws and the arm toe. Not modeled: stiffness of the lazy-susan plates.`;
     return governing(ds, how);
   };
   return dualCheck({
@@ -407,7 +452,7 @@ export function kingpinPlatesCheck(ctx: Ctx): AnalysisCheck {
     });
   }
   const ev = (c: CaseData): CaseEval => {
-    const cases = pinLoads(ctx, c);
+    const cases = pinLoads(ctx, c, undefined, false);
     const all = cases.map((ld) => ({ ld, r: plateSteelDetails(ctx, pm, ld) }));
     const merged = mergeCases(all.map((x) => ({ name: x.ld.name, details: x.r.details })));
     const g = all.reduce((a, b) => (b.r.details.reduce((m, d) => Math.max(m, d.util), 0) > a.r.details.reduce((m, d) => Math.max(m, d.util), 0) ? b : a), all[0]);
@@ -445,7 +490,7 @@ export function beamBoltDetails(ctx: Ctx, pm: PlateModel, ld: PinLoad): { detail
   const sumY2 = bm.ys.reduce((m, y) => m + y * y, 0);
   const yMax = Math.max(...bm.ys.map(Math.abs));
   const Ft = sumY2 > 0 ? (ld.T * yMax) / sumY2 : 0; // tangential force on the outermost bolt from the stop torque (the arms deliver it to the carrier)
-  const topShare = pm.ear.n > 0 ? p.kingpinTorqueTopShare : 1; // the ears hand the rest of the stop torque to the beam plate (r3 N-1)
+  const topShare = pm.ear.n > 0 ? (ld.earShare ?? p.kingpinTorqueTopShare) : 1; // the ears hand the rest of the stop torque to the beam plate (r3 N-1)
   const oneEnd = (R: number, t: number, torque: number) => {
     const Fx = Math.abs(R * ux) / bm.n + torque, Fy = Math.abs(R * uy) / bm.n;
     const F = Math.hypot(Fx, Fy);
@@ -664,9 +709,12 @@ export function pitchPathCheck(ctx: Ctx): AnalysisCheck {
 }
 
 /**
- * The turntable's ball ring under the strike's pitch moment (r3 fittings, eng N-5, D-47). INFO row: the ring diameter and the maker's moment rating are not
- * known (assumed / verify), and the project's 2x margin on a thrust rating applied to an equivalent thrust fails at the defaults, so the finding is reported
- * here with its numbers without changing any pass/fail status. Replace with a real row when the vendor's tilting-moment rating is in hand (Phase 4).
+ * The turntable's ball ring under the strike's pitch moment (r3 fittings, eng N-5, D-47; GATED by the honesty fix, critic Phase 3 r3 MUST-1). The row is a
+ * pass/fail strength row (it colors the Strength light and the safe range). RATING BASIS, stated in the row: the bearing has no published tilting-moment
+ * rating here, so the ring is judged like its sibling 'turntable' row, on the vertical load rating `turntableRatingLb` divided by the project margin
+ * `kingpinMargin` (2), applied to the equivalent thrust P_eq = V + 4·M_p/D_p (linear contact distribution on the ball ring), plus the ring-stays-loaded
+ * rule e = M_p/V <= kern R/2. The margin convention is NOT relaxed: the critic's 1.0x basis (the 3x dynamic factor is already in the load) is reported in the
+ * text for Eric's decision but does not set the status. The ring diameter and the lower-plate thickness stay 'verify' parameters (vendor facts, Phase 4).
  */
 export function turntableRingCheck(ctx: Ctx): AnalysisCheck {
   const { p } = ctx;
@@ -682,11 +730,11 @@ export function turntableRingCheck(ctx: Ctx): AnalysisCheck {
       detail('ring stays in compression: load eccentricity e = M_p/V against the kern R/2', ecc, 'in', kern, '<='),
       detail('ball-ring equivalent thrust P_eq = V + 4·M_p/D_p against the rating / project margin', Peq, 'lbf', capRing, '<='),
     ];
-    const how = `Not judged (info): ring diameter ${f(Dp, 1)}" (assumed) and the maker's tilting-moment rating (unknown) are Phase 4 vendor facts. The strike's H = ${f(H)} lbf at ${f(arm, 3)}" above the pin line gives M_p = ${f(Mp)} lb·in on the ball ring with the design front load V = ${f(V)} lbf (the same event: the strike force uses the same dynamic factor). Eccentricity e = M_p/V = ${f(ecc, 2)}" against the kern R/2 = ${f(kern, 2)}" (${f((ecc / kern) * 100, 0)}% of it; at 100% the far side of the ring unloads and the kingpin's crossbar plate holds it down). Equivalent thrust (classical linear contact distribution) P_eq = V + 4·M_p/D_p = ${f(V)} + ${f((4 * Mp) / Dp)} = ${f(Peq)} lbf = ${f((Peq / capRing) * 100, 0)}% of the ${f(p.turntableRatingLb)} lb rating / margin ${p.kingpinMargin} = ${f(capRing)} lbf${Peq > capRing ? ' (OVER the project margin: buy a bearing with a published moment rating, a larger ring, or a stiffer pair, or accept the lower margin on the strike event)' : ''}. A shorter lever (the crossbar plate is ${f(arm, 2)}" above the axle line) or a larger ring lowers it.`;
-    return { ...governing(ds, how), info: true };
+    const how = `RATING BASIS (judged, strength): P_eq against the vertical load rating ${f(p.turntableRatingLb)} lb divided by the project margin ${p.kingpinMargin} (the same convention as the 'turntable' row), and e against the kern R/2; the ring diameter ${f(Dp, 1)}" and the lower-plate thickness are assumed (verify), and the maker's tilting-moment rating is unknown (Phase 4 vendor facts: this row blocks the order until a named bearing passes). The strike's H = ${f(H)} lbf at ${f(arm, 3)}" above the pin line gives M_p = ${f(Mp)} lb·in on the ball ring with the design front load V = ${f(V)} lbf (the same event: the strike force uses the same dynamic factor). Eccentricity e = M_p/V = ${f(ecc, 2)}" against the kern R/2 = ${f(kern, 2)}" (${f((ecc / kern) * 100, 0)}% of it; at 100% the far side of the ring unloads and the kingpin's crossbar plate holds it down). Equivalent thrust (classical linear contact distribution) P_eq = V + 4·M_p/D_p = ${f(V)} + ${f((4 * Mp) / Dp)} = ${f(Peq)} lbf = ${f((Peq / capRing) * 100, 0)}% of the ${f(p.turntableRatingLb)} lb rating / margin ${p.kingpinMargin} = ${f(capRing)} lbf${Peq > capRing ? ' (OVER the project margin: buy a bearing with a published moment rating, a larger ring, or a stiffer pair, or accept the lower margin on the strike event)' : ''}. For Eric's decision, NOT applied: judged at 1.0 x the rating (the strike's 3x dynamic factor is already in V and H, so the 2x margin may double count) P_eq is ${f((Peq / p.turntableRatingLb) * 100, 0)}% of ${f(p.turntableRatingLb)} lbf. A shorter lever (the crossbar plate is ${f(arm, 2)}" above the axle line) or a larger ring lowers it.`;
+    return governing(ds, how);
   };
   return dualCheck({
-    id: 'turntable-ring', label: 'Turntable ball ring under the strike\'s pitch moment (info)', group: 'Structure', refs: ['D-32', 'D-47'], primary: 'goal',
+    id: 'turntable-ring', label: 'Turntable ball ring under the strike\'s pitch moment', group: 'Structure', refs: ['D-32', 'D-47'], primary: 'goal',
     ...evalBoth(ctx, ev),
   });
 }

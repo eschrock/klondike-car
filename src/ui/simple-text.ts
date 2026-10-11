@@ -45,11 +45,22 @@ const PART: Record<string, { name: string; event?: string }> = {
   'kingpin-plates': { name: 'the steel plates at the steering pin' },
   'kingpin-bolts': { name: 'the bolts that hold the steering pin plates', event: 'in a curb strike' },
   'bridle-tie': { name: 'the rope tie point' },
+  'turntable-ring': { name: 'the steering pivot bearing', event: 'in a curb strike' },
   'seat-back': { name: 'the seat back', event: 'when the rider leans back' },
   'seat-grip': { name: 'the side grab handles' },
   lift: { name: 'the lifting hand-holds', event: 'when two people lift the cart' },
   'foot-stop': { name: 'the foot stop', event: 'in a curb strike' },
 };
+/**
+ * The checks that belong to the front end (steering stops, steering plates and pin, pivot bearing). Honesty fix (docs/phase3-honesty-notes.md): with the
+ * corrected stop-stand statics, the gated pivot-bearing row and the bounding cases, these are what stop the Simple view from showing a safe weight, and the
+ * owner has them in redesign (DECISIONS D-46, D-47). REMOVE `FRONT_END_NOTE` once the redesigned front end passes.
+ */
+export const FRONT_END_IDS = new Set([
+  'steer-stops', 'steer-stops-bound', 'kingpin-plates', 'kingpin-bolts', 'kingpin-peak', 'kingpin-split', 'kingpin-strike', 'kingpin', 'pitch-path', 'turntable-ring',
+  'turntable', 'roll-side-bearer', 'roll-kingpin-uplift', 'roll-bolster-attach', 'bridle-tie',
+]);
+export const FRONT_END_NOTE = 'The front end (steering stops, plates and pivot) is being redesigned.';
 const partText = (id: string) => { const q = PART[id]; return q ? (q.event ? `${q.name} ${q.event}` : q.name) : id; };
 
 /** Why a check fails, as it would read after "Above 230 lb: " (no trailing period). */
@@ -83,6 +94,7 @@ const REASON: Record<string, string> = {
   'kingpin-plates': 'a steel plate at the steering pin could bend or tear',
   'kingpin-bolts': 'the bolts that hold the steering pin plates to the wood could pull through or split it',
   'bridle-tie': 'the rope tie point could pull out',
+  'turntable-ring': 'the steering pivot bearing could be overloaded when the front wheels hit a curb',
   'seat-back': 'the seat back could break or pull loose when the rider leans back',
   'seat-grip': 'a side grab handle could break when a rider hangs on',
   lift: 'a lifting hand-hold could crack when the cart is carried',
@@ -207,7 +219,7 @@ export function lightTexts({ p, checks, fit }: DesignFacts): Record<Light, Light
     const status = rows.length ? st(rows.map((r) => r.id)) : 'info';
     const pct = w ? Math.round((w.util ?? 0) * 100) : 0;
     const text = !w ? 'No strength checks to show.'
-      : status === 'fail' ? `${cap(partText(w.id))} would be past what it can take (${pct}% of its limit).`
+      : status === 'fail' ? `The weakest point is ${partText(w.id)}, at ${pct}% of the load this design allows. The design keeps a safety factor in reserve, so this is a shortfall in margin, not a forecast that it will break, but it must be fixed before the cart is built.${FRONT_END_IDS.has(w.id) ? ` ${FRONT_END_NOTE}` : ''}`
       : status === 'marginal' ? `Close to the limit: ${partText(w.id)} (${pct}% of what it can take).`
       : `Every part has a safety margin. Closest to its limit: ${partText(w.id)}.`;
     out.strength = { light: 'strength', status, text };
@@ -229,7 +241,6 @@ export function lightTexts({ p, checks, fit }: DesignFacts): Record<Light, Light
   return out;
 }
 
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export type Tone = 'pass' | 'warn' | 'fail';
 export interface Headline {
@@ -242,7 +253,7 @@ export interface Headline {
 }
 
 /** The slice of a rider sweep the headline needs (kept narrow so tests can build one by hand). */
-export type HeadlineSweep = Pick<SweepResult, 'points' | 'safe' | 'green' | 'fromLb' | 'toLb' | 'stepLb'> & { operating: Pick<SweepResult['operating'], 'status' | 'worst'> };
+export type HeadlineSweep = Pick<SweepResult, 'points' | 'safe' | 'green' | 'fromLb' | 'toLb' | 'stepLb'> & { operating: Pick<SweepResult['operating'], 'status' | 'worst'> & { fails?: string[] } };
 
 /** Maximal runs of grid weights whose status matches, widest first. */
 function runsOf(points: { w: number; status: Status }[], want: Status): { lo: number; hi: number }[] {
@@ -267,11 +278,19 @@ export function headline(w: number, sweep: HeadlineSweep): Headline {
   const yellows = runsOf(points, 'marginal').sort((a, b) => a.lo - b.lo);
   const status = sweep.operating.status;
   if (!safe) {
-    const reason = failReason(sweep.operating.worst?.id ?? '');
-    const text = `Not safe for a ${w} lb rider: ${reason}.`;
-    if (greens.length) return { tone: 'fail', ok: false, text, sub: `This cart is comfortably safe for riders ${range(greens[0].lo, greens[0].hi)}.` };
-    if (yellows.length) return { tone: 'fail', ok: false, text, sub: `Riders ${range(yellows[0].lo, yellows[0].hi)} would be close to the limit.` };
-    return { tone: 'fail', ok: false, text, sub: 'No rider weight is safe with this cart. Try a wider or lower design, or press Reset.' };
+    // The rider's own weight fails the checks. Name the limiter; if only front-end rows fail, say the rest of the cart passes (and that the front end is being
+    // redesigned). Every branch below must read cleanly when NO weight in the swept range is safe (no empty headline, no NaN).
+    const worstId = sweep.operating.worst?.id ?? '';
+    const fails = sweep.operating.fails ?? [];
+    const frontOnly = fails.length > 0 && fails.every((id) => FRONT_END_IDS.has(id));
+    const frontLimiter = FRONT_END_IDS.has(worstId);
+    const reason = failReason(worstId);
+    const text = frontOnly || frontLimiter ? `Not yet shown safe for a ${w} lb rider: ${reason}.` : `Not safe for a ${w} lb rider: ${reason}.`;
+    const front = frontOnly ? ` Everything else passes at this weight. ${FRONT_END_NOTE}` : frontLimiter ? ` ${FRONT_END_NOTE}` : '';
+    if (greens.length) return { tone: 'fail', ok: false, text, sub: `This cart is comfortably safe for riders ${range(greens[0].lo, greens[0].hi)}.${front}` };
+    if (yellows.length) return { tone: 'fail', ok: false, text, sub: `Riders ${range(yellows[0].lo, yellows[0].hi)} would be close to the limit.${front}` };
+    const none = `No rider weight from ${fromLb} to ${toLb} lb passes the checks yet. What stops it: ${limiterName(worstId)}.${front}`;
+    return { tone: 'fail', ok: false, text, sub: front ? none : `${none} To change that: ${limiterAdvice(worstId)}, or press Reset.` };
   }
   if (!green || status === 'marginal') {
     // This weight passes, but only just; say so first, then what is comfortable.

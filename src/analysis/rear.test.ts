@@ -162,10 +162,11 @@ describe('brake abuse and headroom (N-8)', () => {
     const old = run({ brakeRatioHeadroom: 1.1, brakeShoeTravelIn: 0.375 });
     expect(byId(old, 'brake-force').cases!.goal!.util).toBeGreaterThan(byId(cs, 'brake-force').cases!.goal!.util);
   });
-  it('the Simple view safe range is reported by riderSweep (the limit is the front steer-stops row, not the brake or rear mounts)', () => {
+  it('the Simple view safe range is reported by riderSweep (the limit is the front-end rows, not the brake or rear mounts)', () => {
     const r = riderSweep(defaults);
-    expect(r.safe).not.toBeNull();
-    expect(r.safe!.hiLb).toBeGreaterThanOrEqual(190);
+    // Honesty fix (critic Phase 3 r3 MUST-1..3): no weight is safe until the front end is redesigned; the brake and rear rows must still never be the failing ones.
+    expect(r.safe).toBeNull();
+    expect(r.operating.worst?.id).toBe('steer-stops');
     for (const id of ['brake-abuse', 'wheel-rating', 'rear-beam-seat', 'brake-shaft', 'brake-lever']) {
       expect(r.points.every((p) => !p.fails.includes(id)), id).toBe(true);
     }

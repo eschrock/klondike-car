@@ -847,10 +847,15 @@ const defs = {
     default: 0.018, min: 0, max: 0.06, step: 0.001, status: 'assumed', ref: 'D-43',
     note: 'Residual fit-up mismatch of the two stops AFTER the feeler-gauge step (r3 N-1): 0.005" cannot be held by a shop, so the design uses a realistic 0.015-0.020" (bonded pad thickness tolerance + block seat + thermal change + pad set). The stops are adjustable (shim packs under the stop blocks, steerStopAdjustRangeIn) and the assembly step is "both pads touch a 0.003" feeler within 0.010" at lock". share = ½ + k·δ/(2·P). A mismatch of P/k closes only one stop (share 1.0, the bounding row).',
   },
+  steerStopFitMismatchMaxIn: {
+    label: 'Stop fit-up mismatch, bounding value', group: 'steering', unit: 'in',
+    default: 0.03, min: 0, max: 0.06, step: 0.001, status: 'verify', ref: 'D-46',
+    note: 'Bounding fit-up mismatch (honesty fix, critic Phase 3 r3 MUST-2): the stop rows and every kingpin row are ALSO evaluated at this, and the worst governs; the nominal steerStopFitMismatchIn stays as the detail. The critic ran 0.030" as the realistic bad case; the Phase 4 bench test (stops shimmed to a 0.003" feeler) must show the build holds 0.018" or better.',
+  },
   steerStopPadModulusMinPsi: {
     label: 'Stop pad modulus, soft end of the range', group: 'steering', unit: 'psi',
-    default: 1000, min: 300, max: 3000, step: 100, status: 'assumed', ref: 'D-43',
-    note: 'Soft bound of the pad apparent modulus (70A durometer tolerance, hot day, aging). steer-stops is evaluated at this, the nominal and the stiff value and the worst governs (r3 N-1), so no row depends on a lucky modulus.',
+    default: 700, min: 300, max: 3000, step: 100, status: 'verify', ref: 'D-46',
+    note: 'Soft bound of the pad apparent modulus (70A durometer tolerance, hot day, aging). steer-stops is evaluated at this, the nominal and the stiff value and the worst governs (r3 N-1), so no row depends on a lucky modulus. Lowered from 1,000 to 700 psi (critic Phase 3 r3 MUST-2: a 1/4" to 3/8" pad of 70A urethane can be this soft hot); not tuned to pass: test a pad sample in Phase 4.',
   },
   steerStopPadModulusMaxPsi: {
     label: 'Stop pad modulus, stiff end of the range', group: 'steering', unit: 'psi',
@@ -866,6 +871,11 @@ const defs = {
     label: 'Stop torque taken at the carrier bolt plane', group: 'steering', unit: '',
     default: 0.6, min: 0.5, max: 1, step: 0.05, status: 'assumed', ref: 'D-43',
     note: 'The stop torque enters the carrier; two welded shear ears (kp-ear) tie the carrier to the beam plate so the under plane takes the rest (r3 N-1). 0.5 if both planes were equally stiff; 0.6 covers the ear/weld compliance. 1.0 = no ears.',
+  },
+  kingpinTorqueTopShareBound: {
+    label: 'Stop torque at the carrier bolt plane, bounding value', group: 'steering', unit: '',
+    default: 1, min: 0.5, max: 1, step: 0.05, status: 'verify', ref: 'D-46',
+    note: 'Honesty fix (critic Phase 3 r3 MUST-2): the bolt rows are ALSO evaluated with this share of the stop torque in the carrier plane, and the worst governs. 1.0 = the ears share nothing (any gap in the weld, or the plates shrink away). The 0.6 nominal is an assumption, not a measured value, and gets no credit in the safe range. Phase 4: measure the ear share with a dial indicator.',
   },
   kingpinEarThickIn: {
     label: 'Shear ear web thickness', group: 'steering', unit: 'in',

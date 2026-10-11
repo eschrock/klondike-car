@@ -63,6 +63,16 @@ The concept images are **loose inspiration only**. Priorities are **function fir
 - A **parking brake or lock**. Can be the same lever with a detent.
 - Must hold the loaded cart stationary on a **15° (27%) slope** with reasonable lever force (≤ 30 lbf at the handle).
 
+### 4.3a Ride mode: a rider drives it downhill (added 2026-10-11, Eric; D-49)
+The original brief only covered towing (pullers steer through the bridle, a rear handler brakes). That missed a core use: on downhills the crew can't pull or run alongside, so **the rider must be able to drive the cart alone**. Two modes, same cart:
+- **Tow mode:** as in 4.2 and 4.3 (bridle steering, rear-handler brake, push handle).
+- **Ride mode:** the rider steers and brakes from the seat. The rider controls are **removable or stowable** so they don't get in the way when towing.
+- **Design speed: 10 mph** ridden downhill, with the rider braking to hold it there. Impact, braking, rollover and steering checks cover this speed, not just walking pace.
+- **Steering input:** to be chosen by a design study: tiller through a slot in the nose deck, rope reins, or a short yoke or handlebar. Hard limits: no foot or hand pinch points (§4.7), and no input that can whip the steering to full lock at speed. Ride-mode lock, centering and damping, and wagon versus Ackermann steering, are reopened (the 4.2 "Ackermann only if clearly better" test now includes stability at speed).
+- **Brake:** usable by **both the rider and the rear handler**: one mechanism, two levers, either can apply it. The rider's lever sits at a comfortable angle by the seat (a lower lever, possibly routed through the deck). Checks add **stopping from 10 mph** (distance, pitch-over, shoe heat over a long descent) to holding on 15°.
+- **Steering need when riding is minimal** (Eric): no route to navigate, just small corrections to keep it running straight. Straight-line tracking and self-centering matter more than steering range; a small ride-mode lock is acceptable.
+- **Hill:** unknown (Q-4). Design for the 15° maximum slope with a run long enough to reach the design speed; verify at camp.
+
 ### 4.4 Wheels & axles
 - **Pneumatic wheels, 10–13" diameter** (make it a parameter). Mixed trail terrain favors the larger end. Sealed ball bearings. Consider flat-free tires as an option.
 - Axles: **steel rod (¾" or 5/8", parameter)** with shaft collars and cotter pins, or keyed rod in **bolt-on pillow blocks / flange bearings**. Bolted only.

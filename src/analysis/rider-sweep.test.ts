@@ -15,10 +15,11 @@ describe('riderSweep', () => {
     const r = riderSweep(p0, { fit });
     expect(performance.now() - t0).toBeLessThan(1500); // ~110 ms measured
     expect(r.points.map((x) => x.w)).toEqual(Array.from({ length: 21 }, (_, i) => 50 + 10 * i));
-    expect(r.operating.status).not.toBe('fail');
-    expect(r.safe).not.toBeNull();
-    expect(r.safe!.loLb).toBeLessThanOrEqual(p0.riderMassLb);
-    expect(r.safe!.hiLb).toBeGreaterThanOrEqual(p0.riderMassLb);
+    // Honesty fix (critic Phase 3 r3 MUST-1..3): at the defaults the operating weight FAILS (front end), so there is no safe range; it used to be 50-210 lb.
+    expect(r.operating.status).toBe('fail');
+    expect(r.safe).toBeNull();
+    expect(r.green).toBeNull();
+    expect(r.operating.fails.every((id) => ['steer-stops', 'steer-stops-bound', 'kingpin-bolts', 'turntable-ring'].includes(id))).toBe(true);
   });
 
   it('is cached by design (rider masses excluded)', () => {
@@ -52,7 +53,7 @@ describe('riderSweep', () => {
       expect(LIGHT_OF_ID[c.id] ?? (c.group === 'Structure' ? 'strength' : undefined), c.id).toBeDefined();
     }
     // Structure rows color Strength, except the rider-independent fit facts (D-41), which are reported only.
-    const INFO_STRUCTURE = new Set(['storage-pack', 'storage-lid-open', 'lash-points', 'lash-load', 'turntable-ring']);
+    const INFO_STRUCTURE = new Set(['storage-pack', 'storage-lid-open', 'lash-points', 'lash-load']);
     for (const c of checks.filter((x) => x.group === 'Structure')) expect(lightOf(c)).toBe(INFO_STRUCTURE.has(c.id) ? 'info' : 'strength');
     expect(new Set(checks.map((c) => c.id)).size).toBe(checks.length);
   });

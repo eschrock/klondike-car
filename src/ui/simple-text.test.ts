@@ -17,7 +17,7 @@ describe('simple wording', () => {
     expect(t.tipping.text).toMatch(/30°/);
     expect(t.steering.text).toMatch(/circle [\d.]+ ft across/);
     expect(t.truck.text).toMatch(/Tacoma/);
-    expect(t.strength.text).toMatch(/safety margin|Close to the limit|past what it can take/);
+    expect(t.strength.text).toMatch(/safety margin|Close to the limit|load this design allows/);
     expect(t.strength.text).not.toMatch(/design limit|kingpin|turntable/i);
     for (const x of Object.values(t)) expect(x.text).not.toMatch(/NaN|\?|undefined/);
   });
@@ -57,10 +57,32 @@ describe('simple wording', () => {
     expect(bad.ok).toBe(false);
     expect(bad.text).toContain('240');
     expect(bad.text).toContain('steering pin');
-    expect(bad.sub).toBe('This cart is comfortably safe for riders 50–190 lb.');
+    expect(bad.sub).toBe('This cart is comfortably safe for riders 50–190 lb. The front end (steering stops, plates and pivot) is being redesigned.'); // kingpin-strike is a front-end row
     // everything fails: a next step, and no stray " could fail"
     const none = headline(150, mk(Array(21).fill('fail'), 150));
-    expect(none.sub).toMatch(/No rider weight is safe/);
+    expect(none.sub).toMatch(/No rider weight from 50 to 250 lb passes/);
+    expect(none.text).not.toMatch(/NaN|undefined|\?/);
+  });
+  it('honesty fix: when NO weight is safe (the defaults today) the Simple view says so plainly, names the limiter and the front-end redesign, and has no NaN or empty text', () => {
+    const t = lightTexts({ p, checks: sweep.operatingChecks, fit });
+    expect(sweep.safe).toBeNull();
+    const hd = headline(p.riderMassLb, sweep);
+    expect(hd.tone).toBe('fail');
+    expect(hd.ok).toBe(false);
+    expect(hd.text).toBe('Not yet shown safe for a 150 lb rider: the steering stops could crush or loosen at full turn.');
+    expect(hd.sub).toMatch(/No rider weight from 50 to 250 lb passes the checks yet\. What stops it: the steering stops at full turn\./);
+    expect(hd.sub).toMatch(/Everything else passes at this weight\. The front end .* is being redesigned\./);
+    for (const x of [hd.text, hd.sub ?? '', t.strength.text, weightNote(150, 'fail', sweep.operating.worst?.id)]) expect(x).not.toMatch(/NaN|undefined|\?|Infinity/);
+    expect(t.strength.status).toBe('fail');
+    expect(t.strength.text).toMatch(/shortfall in margin, not a forecast that it will break/);
+    expect(limitLine('below', sweep.safe, sweep.lowLimit)).toBeNull();
+  });
+  it('a range that excludes the default rider but has safe light weights reads cleanly', () => {
+    const pts = Array.from({ length: 21 }, (_, i) => ({ w: 50 + 10 * i, status: (50 + 10 * i <= 100 ? 'pass' : 'fail') as Status, worst: { id: 'steer-stops', label: '', util: 1, status: 'fail' as Status }, fails: ['steer-stops'] }));
+    const at = pts[10];
+    const hd = headline(150, { points: pts as never, fromLb: 50, toLb: 250, stepLb: 10, safe: null, green: null, operating: at as never });
+    expect(hd.text).toMatch(/^Not yet shown safe for a 150 lb rider/);
+    expect(hd.sub).toBe('This cart is comfortably safe for riders 50–100 lb. Everything else passes at this weight. The front end (steering stops, plates and pivot) is being redesigned.');
   });
   it('names the limiting reason at an end, without jargon', () => {
     expect(limitLine('below', { loLb: 70, hiLb: 230, openLow: false, openHigh: false }, { id: 'pitch-rear', label: '', util: 1, status: 'fail' })).toBe('Below 70 lb: a hard pull uphill can lift the front wheels.');
