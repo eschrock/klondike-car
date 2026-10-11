@@ -11,11 +11,12 @@
   --b-verify: #c77a00;
   --b-assumed: #7a4fd1;
   --b-explore: #1f8f4e;
-  color-scheme: light dark;
+  color-scheme: light;
   font: 13px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
+/* Theme: html[data-theme] is always set to 'light' or 'dark' by src/theme.ts (auto follows the OS). */
+:root[data-theme='dark'] {
+  color-scheme: dark;
     --bg: #15171c;
     --panel: #1d2027;
     --panel-2: #262a33;
@@ -28,7 +29,6 @@
     --b-verify: #f0a73a;
     --b-assumed: #b39bff;
     --b-explore: #4cc784;
-  }
 }
 
 * { box-sizing: border-box; }
@@ -49,7 +49,6 @@ body { background: var(--bg); color: var(--text); }
   background: var(--panel); border-bottom: 1px solid var(--border);
 }
 .topbar h1 { font-size: 16px; margin: 0; }
-.topbar-sub { color: var(--muted); }
 .spacer { flex: 1; }
 button {
   font: inherit; color: var(--text); background: var(--panel-2);
@@ -149,10 +148,8 @@ select { width: 100%; }
 .issue { font-size: 12px; line-height: 1.35; padding: 6px 8px; border-radius: 6px; border: 1px solid; }
 .issue.error { color: #f87171; border-color: color-mix(in srgb, #f87171 50%, transparent); background: color-mix(in srgb, #f87171 10%, transparent); }
 .issue.warn { color: #fbbf24; border-color: color-mix(in srgb, #fbbf24 50%, transparent); background: color-mix(in srgb, #fbbf24 10%, transparent); }
-@media (prefers-color-scheme: light) {
-  .issue.error { color: #b91c1c; }
-  .issue.warn { color: #92400e; }
-}
+:root[data-theme='light'] .issue.error { color: #b91c1c; }
+:root[data-theme='light'] .issue.warn { color: #92400e; }
 
 /* Viewer toolbar + summary + truck fit */
 .steer-ctl { margin-left: 0; }
@@ -166,7 +163,8 @@ select { width: 100%; }
 .truck-head p { margin: 0 0 6px; }
 .pass { color: #1f8f4e; font-weight: 600; }
 .fail { color: #d1352b; font-weight: 600; }
-@media (prefers-color-scheme: dark) { .pass { color: #4cc784; } .fail { color: #f87171; } }
+:root[data-theme='dark'] .pass { color: #4cc784; }
+:root[data-theme='dark'] .fail { color: #f87171; }
 .small { font-size: 11px; }
 .summary-extra { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; margin: 8px 0 0; }
 .summary-extra dt { color: var(--muted); }
@@ -202,3 +200,5 @@ select { width: 100%; }
 .steer-unit { margin-left: -4px; }
 .steer-zero { padding: 1px 6px; }
 .preset-reset { margin-left: 4px; padding: 0 5px; font-size: 11px; line-height: 16px; border-radius: 4px; cursor: pointer; }
+
+.theme-toggle { min-width: 2.2em; padding: 3px 8px; font-size: 14px; line-height: 1; }

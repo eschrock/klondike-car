@@ -3,9 +3,7 @@
   --ap-pass: #1f8f4e; --ap-marg: #b26a00; --ap-fail: #d1352b; --ap-info: var(--muted);
   font-size: 12px; line-height: 1.4; min-width: 0;
 }
-@media (prefers-color-scheme: dark) {
-  .ap { --ap-pass: #4cc784; --ap-marg: #f0a73a; --ap-fail: #f87171; }
-}
+:root[data-theme='dark'] .ap { --ap-pass: #4cc784; --ap-marg: #f0a73a; --ap-fail: #f87171; }
 .ap-summary { display: grid; gap: 4px; padding: 8px 10px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
 .ap-sumrow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
 .ap-sumrow b { min-width: 7.5em; font-weight: 600; }

@@ -1,4 +1,5 @@
 import './style.css';
+import { mountThemeToggle } from './theme';
 import { store } from './state';
 import { derived } from './params';
 import { buildModel, type ViewState } from './model';
@@ -235,6 +236,7 @@ store.subscribe(() => {
 });
 setMode(mode);
 
+mountThemeToggle($('btn-theme') as HTMLButtonElement);
 $('btn-reset').addEventListener('click', () => store.reset());
 $('btn-copy-link').addEventListener('click', async (e) => {
   const btn = e.currentTarget as HTMLButtonElement;

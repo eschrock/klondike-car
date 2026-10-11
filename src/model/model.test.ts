@@ -567,7 +567,7 @@ describe('steering sweep', () => {
       const p = { ...defaults, ...patch };
       if (!errorsOf(p).length) sweep(p, JSON.stringify(patch));
     }
-  });
+  }, 60000); // ~10 s sweep on CI runners
   it.each([['L', 1], ['R', -1]] as const)('stop %s: zero overlap for |δ| < lock − 0.5°, flat contact with the aft bolster rail at lock', (tag, sign) => {
     const lock = defaults.steerLockDeg;
     const rail = (m: Part[]) => partOBB(m.find((x) => x.id === 'bolster-aft')!);

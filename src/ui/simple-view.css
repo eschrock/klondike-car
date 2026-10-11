@@ -5,13 +5,11 @@
   --sv-fail: #d1352b; --sv-fail-bg: #fbdcd9; --sv-fail-fg: #8a1a12;
   --sv-info: #6a717d; --sv-info-bg: #e6e9ee; --sv-info-fg: #3d434d;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
+:root[data-theme='dark'] {
     --sv-pass: #4cc784; --sv-pass-bg: #163a28; --sv-pass-fg: #a6ecc4;
     --sv-warn: #f0a73a; --sv-warn-bg: #43330f; --sv-warn-fg: #fbd98d;
     --sv-fail: #f87171; --sv-fail-bg: #4a1d1b; --sv-fail-fg: #fdb4ae;
     --sv-info: #96a0ae; --sv-info-bg: #2b303a; --sv-info-fg: #c3cad5;
-  }
 }
 
 /* Mode switching: #app[data-mode] picks which pair of sidebars shows. */
@@ -27,7 +25,7 @@
 .mode-toggle button { border: 0; border-radius: 0; background: transparent; padding: 3px 14px; font-weight: 600; }
 .mode-toggle button + button { border-left: 1px solid var(--border); }
 .mode-toggle button[aria-pressed='true'] { background: var(--accent); color: #fff; }
-@media (prefers-color-scheme: dark) { .mode-toggle button[aria-pressed='true'] { color: #0b1020; } }
+:root[data-theme='dark'] .mode-toggle button[aria-pressed='true'] { color: #0b1020; }
 
 .back-bar { padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--panel-2); }
 .back-bar[hidden] { display: none; }

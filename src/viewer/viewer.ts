@@ -233,7 +233,8 @@ export class Viewer {
 
     this.buildScene();
     this.applyTheme();
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => this.applyTheme());
+    // Follow the app theme (html[data-theme], set by src/theme.ts) for the 3D background.
+    new MutationObserver(() => this.applyTheme()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
     new ResizeObserver(() => this.resize()).observe(this.canvasHost);
     this.resize();

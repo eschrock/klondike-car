@@ -5,18 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
     <meta name="robots" content="noindex, nofollow" />
+    <script>
+      // Apply the saved theme before first paint (no flash). src/theme.ts owns the toggle.
+      (function () {
+        var pref = 'auto';
+        try { pref = localStorage.getItem('klondike-theme') || 'auto'; } catch (e) {}
+        var dark = pref === 'dark' || (pref === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      })();
+    </script>
     <title>Troop 455 Klondike Cart</title>
   </head>
   <body>
     <div id="app" data-mode="simple">
       <header class="topbar">
         <h1>Troop 455 Klondike Cart</h1>
-        <span class="topbar-sub">Parametric design tool</span>
         <span class="spacer"></span>
         <div class="mode-toggle" role="group" aria-label="View mode">
           <button id="mode-simple" type="button" aria-pressed="true">Simple</button>
           <button id="mode-advanced" type="button" aria-pressed="false">Advanced</button>
         </div>
+        <button id="btn-theme" class="theme-toggle" type="button"></button>
         <button id="btn-copy-link" type="button" title="Copy a shareable link to this exact design">Copy link</button>
         <button id="btn-reset" type="button" title="Reset every parameter to its default">Reset to defaults</button>
       </header>
