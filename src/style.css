@@ -198,6 +198,7 @@ select { width: 100%; }
 .group-table tr.total th, .group-table tr.total td { border-top: 1px solid var(--border); color: var(--text); font-weight: 600; }
 .win-row > div { margin-top: 2px; }
 
-.steer-num { width: 4.5em; }
+.steer-ctl .steer-num { width: 3.6em; min-width: 0; flex: none; padding: 2px 4px; text-align: right; }
+.steer-unit { margin-left: -4px; }
 .steer-zero { padding: 1px 6px; }
 .preset-reset { margin-left: 4px; padding: 0 5px; font-size: 11px; line-height: 16px; border-radius: 4px; cursor: pointer; }

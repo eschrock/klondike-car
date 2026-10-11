@@ -173,8 +173,6 @@ export class Viewer {
   private showDims = false;
   private lastParts: Part[] = [];
   // Controls the Simple view hides (the `adv-only` class); kept so simple mode can reset them.
-  private explodeInput?: HTMLInputElement;
-  private explodeOut?: HTMLOutputElement;
   private sectionSel?: HTMLSelectElement;
   private cgCb?: HTMLInputElement;
   private dimsCb?: HTMLInputElement;
@@ -264,9 +262,7 @@ export class Viewer {
       this.setExplode(Number(r.value));
       out.textContent = `${r.value}"`;
     });
-    const label = el('label', 'steer-ctl adv-only');
-    this.explodeInput = r;
-    this.explodeOut = out;
+    const label = el('label', 'steer-ctl'); // shown in Simple too (D-30)
     label.title = 'Exploded view: each part moves along its own explode vector (radially from the center of gravity if it has none), farther the farther it is from the CG. The CG marker and dimensions are hidden while exploded';
     label.append('Explode', r, out);
     this.toolbar.append(label);
@@ -407,9 +403,6 @@ export class Viewer {
    */
   setSimpleMode(simple: boolean): void {
     if (simple) {
-      if (this.explodeInput) this.explodeInput.value = '0';
-      if (this.explodeOut) this.explodeOut.textContent = '0"';
-      this.setExplode(0);
       if (this.sectionSel) this.sectionSel.value = 'off';
       this.setSection('off', 0);
       this.hidden.clear();

@@ -70,7 +70,7 @@ const build = (p: ReturnType<typeof store.get>, v: CartView): Part[] => buildMod
 const snapSteer = (v: number) => Math.round(v * 2) / 2;
 const steer = h('input', { type: 'range', min: '-50', max: '50', step: '0.5', value: '0', 'aria-label': 'Displayed steer angle' });
 const steerNum = h('input', { type: 'number', step: '0.5', value: '0', class: 'steer-num', 'aria-label': 'Steer angle (degrees)' });
-const steerZero = h('button', { type: 'button', class: 'steer-zero', title: 'Center the steering (0°)' }, '0°');
+const steerZero = h('button', { type: 'button', class: 'steer-zero', title: 'Center the steering (0°)', 'aria-label': 'Center the steering' }, '↺');
 const setSteer = (v: number) => {
   view.steerDeg = Number.isFinite(v) ? snapSteer(v) : 0;
   render();
@@ -79,7 +79,7 @@ steer.addEventListener('input', () => setSteer(Number(steer.value)));
 steerNum.addEventListener('change', () => setSteer(Number(steerNum.value)));
 steerZero.addEventListener('click', () => setSteer(0));
 viewer.addToolbarControl(
-  h('label', { class: 'steer-ctl', title: 'Displayed steer angle (view only; clamped to the steering lock)' }, 'Steer', steer, steerNum, steerZero),
+  h('label', { class: 'steer-ctl', title: 'Displayed steer angle (view only; clamped to the steering lock)' }, 'Steer', steer, steerNum, h('span', { class: 'steer-unit' }, '°'), steerZero),
 );
 
 const checkbox = (label: string | Node[], title: string, checked: boolean, onChange: (v: boolean) => void, cls = '') => {
@@ -89,7 +89,7 @@ const checkbox = (label: string | Node[], title: string, checked: boolean, onCha
   return h('label', { class: `steer-ctl ${cls}`.trim(), title }, cb, ...(typeof label === 'string' ? [label] : label));
 };
 viewer.addToolbarControl(
-  checkbox([h('span', { class: 'adv-only' }, 'Rider & cargo'), h('span', { class: 'simple-only' }, 'Show rider')], 'Show the operating rider and cargo (view only; ignored in the Truck view)', true, (v) => {
+  checkbox([h('span', { class: 'adv-only' }, 'Rider & cargo'), h('span', { class: 'simple-only' }, 'Rider')], 'Show the operating rider and cargo (view only; ignored in the Truck view)', true, (v) => {
     view.rider = v ? 'operating' : 'none';
     view.cargo = v;
     render();
