@@ -4,8 +4,8 @@
 |---|---|
 | 0 — Setup & parameter reconciliation | ✅ approved 2026-10-10 |
 | 1 — Block model | ✅ approved |
-| 2 — Analysis & simulation | ✅ checkpoint — awaiting Eric |
-| 3 — Detail design | not started |
+| 2 — Analysis & simulation | ✅ approved 2026-10-10 |
+| 3 — Detail design | in progress (integration + critics) |
 | 4 — Build outputs | not started |
 
 ## Phase 0 log
@@ -26,3 +26,11 @@
 - Analysis critic r1: 7/10. Added obstacle strike, roll path, 80 lb rider, tire-edge turning radius, effective-width deck, C_M ⊥ 0.67, lateral axle load.
 - Exploration: about 45k designs (docs/phase2-exploration.md). Then kingpin through a crossbar with sleeves.
 - Recommendation (docs/phase2-recommendation.md, D-27). Checkpoint critic r2 7/10 → r3 8/10; wording fixes done.
+
+## Simple view (D-30)
+- Built, then the UX critic gave r1 6/10. Fixes landed: phone layout, scroll capture, two-tier headline, plain-English copy, contrast. UX r2 is pending.
+
+## Phase 3 log
+- Spec (docs/phase3-spec.md) lists must-fixes M1–M11 and workstreams A–E, built by parallel agents. Notes are in docs/phase3-ws*-notes.md; decisions D-31…D-41 are merged into DECISIONS.md.
+- Merged model: 796 tests green. Empty mass 126.9 → 144.7 lb. The brake mechanism is +8.8 lb (the ¾" solid shaft alone is 4.9 lb).
+- Next: integration loose ends (agent), then engineering + buildability critics, UX r2, then the checkpoint.
