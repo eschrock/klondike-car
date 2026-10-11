@@ -58,6 +58,8 @@ export interface Layout {
   kingpin: { z0: number; z1: number };
   /** Chassis-side oak crossbar over the turntable center (kingpinThroughBolster = 1), fore-aft across the bolster opening: x range, half width |y|, z range (flush with the bolster rails). Null when off. */
   crossbar: { x0: number; x1: number; hw: number; z0: number; z1: number } | null;
+  /** Removable access panel in the nose deck over the kingpin nut (D-34): x range, half width |y|, z range (crossbar top to the deck top). Null without the crossbar. Workstream B cuts this opening in the nose deck. */
+  accessPanel: { x0: number; x1: number; hw: number; z0: number; z1: number } | null;
   /** Nose rails/joists stop here so the swinging turntable corners clear them. */
   noseRailEnd: number;
   cabinJoistX: number[];
@@ -154,6 +156,9 @@ export function computeLayout(input: Params): Layout {
   const crossbar = through
     ? { x0: bolster.x0 + bolster.rw - p.kingpinCrossbarLetInIn, x1: bolster.x1 - bolster.rw + p.kingpinCrossbarLetInIn, hw: p.kingpinCrossbarWidthIn / 2, z0: tz1, z1: bolsterTop }
     : null;
+  const accessPanel = crossbar && noseTop - bolsterTop > 0.05
+    ? { x0: kx - p.accessPanelLengthIn / 2, x1: kx + p.accessPanelLengthIn / 2, hw: p.accessPanelWidthIn / 2, z0: bolsterTop, z1: noseTop }
+    : null;
   // Oak block housed in the beam top; UHMW strip on it; running clearance `clr` to the bolster rail underside (tz1).
   const sbZw = tz1 - clr;
   const sbZ1 = sbZw - p.sideBearerWearIn;
@@ -244,7 +249,7 @@ export function computeLayout(input: Params): Layout {
     r, WB, xs, xRear, xFront, kx, railBand: p.railBandIn, joistT, flare, web, side, ply, deckTop, deckBot: deckTop - ply, noseTop, noseBot: noseTop - ply,
     hwC, hwN, sideH: p.sideHeightIn, beamR, beamF,
     turntable: { z0: tz0, z1: tz1 },
-    bolster, sideBearer, kingpin: { z0: beamF.bot, z1: through ? bolsterTop : tz1 }, crossbar,
+    bolster, sideBearer, kingpin: { z0: beamF.bot, z1: through ? bolsterTop : tz1 }, crossbar, accessPanel,
     noseRailEnd, cabinJoistX, noseJoistX, seat, storage,
   };
 }

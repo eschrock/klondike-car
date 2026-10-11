@@ -105,6 +105,8 @@ export interface Joint {
   /** Local-frame locations of each joint, when known (for DXF holes / viewer cut previews). */
   at?: Vec3[];
   note?: string;
+  /** Fastener shank diameter (in), for bolts / screws / inserts, so the analysis reads real fasteners (D-33). */
+  diaIn?: number;
 }
 
 /** How each plywood edge is protected (acceptance: no exposed ply edges). */

@@ -4,6 +4,8 @@ import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRe
 import { centerOfGravity } from '../model/mass';
 import { partCentroid, worldAABB } from '../model/bounds';
 import type { Geometry, Mat4, Part, PartGroup, RigidBody, Vec3 } from '../model/types';
+import { buildSweepMesh } from './sweep';
+import { JOINERY_LEGEND, jointColor, joineryMarkers } from './joinery';
 
 type ViewName = 'iso' | 'top' | 'side' | 'front';
 
@@ -59,7 +61,19 @@ function materialKey(part: Part): string {
   return 'other';
 }
 
-let sweepWarned = false;
+/** Ply-edge line material shared by every sweep (bent lamination). */
+const PLY_LINE_MAT = new THREE.LineBasicMaterial({ color: 0x6b4a22, transparent: true, opacity: 0.55 });
+/** Red tint for sheet parts that have an exposed ply edge (Advanced only). */
+const EXPOSED_MAT = new THREE.MeshStandardMaterial({ color: 0xe0443a, roughness: 0.75, side: THREE.DoubleSide });
+let exposedWarned = false;
+const JOINT_BOX = new THREE.BoxGeometry(1, 1, 1);
+const JOINT_CYL = new THREE.CylinderGeometry(1, 1, 1, 16).rotateX(Math.PI / 2);
+const JOINT_MATS = new Map<string, THREE.Material>();
+
+function hasExposedEdge(part: Part): boolean {
+  const e = part.edges;
+  return part.kind === 'sheet' && (Array.isArray(e) ? e.includes('exposed') : e === 'exposed');
+}
 
 function buildGeometry(g: Geometry): THREE.BufferGeometry | null {
   switch (g.type) {
@@ -93,13 +107,20 @@ function buildGeometry(g: Geometry): THREE.BufferGeometry | null {
       for (const h of g.holes ?? []) shape.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(x, y))));
       return new THREE.ExtrudeGeometry(shape, { depth: g.depth, bevelEnabled: false });
     }
-    case 'sweep':
-      // TODO(Phase 1): sweep a rectangular section along the XZ centerline (bent laminations).
-      if (!sweepWarned) {
-        sweepWarned = true;
-        console.warn('viewer: sweep geometry is not implemented yet; rendering nothing.');
+    case 'sweep': {
+      const m = buildSweepMesh(g.path, g.width, g.thickness, g.plies);
+      if (!m.positions.length) return null;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(m.positions, 3));
+      geo.setIndex(m.indices);
+      geo.computeVertexNormals(); // faces have their own vertices: smooth along the path, crisp across edges
+      if (m.plyLines.length) {
+        const lines = new THREE.LineSegments(new THREE.BufferGeometry(), PLY_LINE_MAT);
+        lines.geometry.setAttribute('position', new THREE.Float32BufferAttribute(m.plyLines, 3));
+        geo.userData.plyLines = lines.geometry;
       }
-      return null;
+      return geo;
+    }
     case 'mesh': {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(g.positions, 3));
@@ -133,6 +154,9 @@ interface MeshInfo {
   dir: Vec3;
   baseMat: THREE.Material;
   key: string;
+  normalMat: THREE.Material;
+  /** Sheet part with an exposed ply edge. */
+  exposed: boolean;
 }
 
 export type SectionAxis = 'off' | 'x' | 'y' | 'z';
@@ -170,6 +194,10 @@ export class Viewer {
   private readonly labelRenderer = new CSS2DRenderer();
   private showCg = true;
   private showDims = false;
+  private showJoinery = false;
+  private simple = false;
+  private readonly joineryGroup = new THREE.Group();
+  private legendEl!: HTMLElement;
   private lastParts: Part[] = [];
   // Controls the Simple view hides (the `adv-only` class); kept so simple mode can reset them.
   private sectionSel?: HTMLSelectElement;
@@ -212,6 +240,21 @@ export class Viewer {
     this.hintEl = el('div', 'viewer-hint');
     this.hintEl.setAttribute('aria-hidden', 'true');
     stage.append(this.hintEl);
+    this.legendEl = el('div', 'joinery-legend');
+    this.legendEl.hidden = true;
+    this.legendEl.setAttribute('aria-label', 'Joinery legend');
+    Object.assign(this.legendEl.style, {
+      position: 'absolute', left: '8px', bottom: '8px', padding: '4px 8px', font: '12px system-ui, sans-serif',
+      background: 'color-mix(in srgb, var(--panel, #fff) 85%, transparent)', color: 'var(--text, #222)', borderRadius: '4px', pointerEvents: 'none', zIndex: '2',
+    });
+    for (const l of JOINERY_LEGEND) {
+      const row = el('div', '');
+      const sw = el('span', '');
+      Object.assign(sw.style, { display: 'inline-block', width: '10px', height: '10px', marginRight: '6px', background: l.color, borderRadius: '2px' });
+      row.append(sw, l.label);
+      this.legendEl.append(row);
+    }
+    stage.append(this.legendEl);
     container.append(bar, stage);
 
     // Row 1: the four camera views. Everything else goes in `moreHost` (inline on wide screens, a "More" panel on phones).
@@ -390,11 +433,56 @@ export class Viewer {
       this.showDims = v;
       this.rebuildOverlay();
     }, true); // also offered in the Simple view
+    mk('Joinery', 'Mark each Domino, tenon, insert, bolt, screw and knob location (each physical joint once)', false, (v) => {
+      this.showJoinery = v;
+      this.rebuildOverlay();
+    });
+  }
+
+  /** Joint markers (Advanced, Joinery checkbox): drawn once per physical joint, hidden while exploded. */
+  private rebuildJoinery(): void {
+    for (const c of [...this.joineryGroup.children]) {
+      this.joineryGroup.remove(c); // geometries and materials are shared; nothing to dispose
+    }
+    const on = this.showJoinery && !this.simple && this.explodeAmount === 0 && this.lastParts.length > 0;
+    this.legendEl.hidden = !on;
+    if (!on) return;
+    const { markers, missingAt } = joineryMarkers(this.lastParts);
+    if (missingAt.length) console.warn(`viewer: ${missingAt.length} structured joint(s) have no \`at\`; not drawn`, missingAt);
+    const tmp = new THREE.Vector3();
+    for (const m of markers) {
+      const color = jointColor(m.type);
+      if (!color) continue;
+      const mat = JOINT_MATS.get(color) ?? JOINT_MATS.set(color, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, depthTest: false })).get(color)!;
+      const mesh = new THREE.Mesh(m.shape === 'box' ? JOINT_BOX : JOINT_CYL, mat);
+      mesh.renderOrder = 998;
+      mesh.name = `joint:${m.type}${m.size ? ' ' + m.size : ''}`;
+      // Box: l along the insertion axis, the long width perpendicular to it (world Z, or Y when inserting along Z).
+      // Cylinder (unit, along local Z): radius w, length l, axis along the insertion axis.
+      const ax = tmp.set(...m.axis);
+      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), ax);
+      mesh.quaternion.copy(q);
+      if (m.shape === 'box') {
+        // Local Z = insertion axis; make local Y (the width) vertical when possible.
+        const wAxis = Math.abs(m.axis[2]) > 0.5 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
+        const zl = ax.clone();
+        const xl = new THREE.Vector3().crossVectors(wAxis, zl).normalize();
+        const yl = new THREE.Vector3().crossVectors(zl, xl);
+        mesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xl, yl, zl));
+        mesh.scale.set(m.sizeIn.t, m.sizeIn.w, m.sizeIn.l);
+      } else {
+        mesh.scale.set(m.sizeIn.w, m.sizeIn.t, m.sizeIn.l);
+      }
+      mesh.position.set(...m.at);
+      this.joineryGroup.add(mesh);
+    }
   }
 
   /** CG marker + drop line and the dimension lines, in the (possibly truck-placed) model frame. */
   private rebuildOverlay(): void {
+    this.rebuildJoinery();
     for (const c of [...this.overlay.children]) {
+      if (c === this.joineryGroup) continue;
       this.overlay.remove(c);
       const o = c as THREE.Mesh;
       o.geometry?.dispose();
@@ -469,6 +557,9 @@ export class Viewer {
    * visible. Leaving simple mode restores the CG / dimension overlays to their checkboxes.
    */
   setSimpleMode(simple: boolean): void {
+    this.simple = simple;
+    this.applyBaseMaterials();
+    this.applyHighlight();
     if (simple) {
       if (this.sectionSel) this.sectionSel.value = 'off';
       this.setSection('off', 0);
@@ -510,6 +601,11 @@ export class Viewer {
     this.highlighted = new Set(ids);
     this.highlightColor = color;
     this.applyHighlight();
+  }
+
+  /** Exposed-edge parts are red in Advanced (the Simple view keeps the normal ply color). */
+  private applyBaseMaterials(): void {
+    for (const i of this.infos) i.baseMat = i.exposed && !this.simple ? EXPOSED_MAT : i.normalMat;
   }
 
   private applyHighlight(): void {
@@ -566,6 +662,7 @@ export class Viewer {
 
     this.partsGroup.matrixAutoUpdate = false;
     this.overlay.matrixAutoUpdate = false;
+    this.overlay.add(this.joineryGroup);
     this.truckGroup.visible = false;
     this.simGroup.matrixAutoUpdate = false;
     this.simGroup.visible = false;
@@ -590,7 +687,9 @@ export class Viewer {
 
   private clearGroup(g: THREE.Group): void {
     for (const child of [...g.children]) {
-      (child as THREE.Mesh).geometry?.dispose();
+      const mesh = child as THREE.Mesh;
+      mesh.geometry?.dispose();
+      (mesh.geometry?.userData.plyLines as THREE.BufferGeometry | undefined)?.dispose();
       g.remove(child);
     }
   }
@@ -613,9 +712,17 @@ export class Viewer {
       mesh.receiveShadow = true;
       mesh.matrixAutoUpdate = false;
       mesh.visible = !this.hidden.has(part.group);
+      const plyGeo = geo.userData.plyLines as THREE.BufferGeometry | undefined;
+      if (plyGeo) mesh.add(new THREE.LineSegments(plyGeo, PLY_LINE_MAT)); // identity local matrix, follows the mesh
       this.partsGroup.add(mesh);
-      this.infos.push({ mesh, part, dir: explodeDir(part, cg), baseMat, key });
+      const exposed = hasExposedEdge(part);
+      if (exposed && !exposedWarned) {
+        exposedWarned = true;
+        console.warn(`viewer: sheet part(s) with an exposed ply edge (e.g. ${part.id}); tinted red in Advanced.`);
+      }
+      this.infos.push({ mesh, part, dir: explodeDir(part, cg), baseMat, key, normalMat: baseMat, exposed });
     }
+    this.applyBaseMaterials();
     this.applyMatrices();
     this.applyHighlight();
     this.refreshToggles(parts);

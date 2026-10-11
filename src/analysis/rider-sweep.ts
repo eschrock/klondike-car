@@ -23,7 +23,7 @@ export const LIGHTS: Light[] = ['tipping', 'turns', 'hills', 'steering', 'streng
 export const LIGHT_OF_ID: Record<string, Light | 'info'> = {
   'tip-straight': 'tipping', 'tip-lock': 'tipping',
   'slide-before-tip': 'turns', 'v-rollover': 'turns',
-  'pitch-fwd': 'hills', 'pitch-rear': 'hills', 'brake-force': 'hills', 'brake-traction': 'hills',
+  'pitch-fwd': 'hills', 'pitch-rear': 'hills', 'brake-force': 'hills', 'brake-traction': 'hills', 'brake-ratio': 'hills', 'brake-clear': 'hills',
   'turn-radius': 'steering', 'steer-clear': 'steering',
   'truck-fit': 'truck',
   'mass-empty': 'info', cg: 'info',

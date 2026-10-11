@@ -1,4 +1,4 @@
-/** Frame: ladder rails or hull-beam girders, plus crossmembers/joists (D-17). */
+/** Frame: ladder rails or hull-beam girders, plus crossmembers/joists (D-17). Joinery records (Dominos, stub tenons, glue) are added in joinery.ts. */
 import { FRAME_STYLE } from '../params';
 import { STEP, box, span, SIDES, type Ctx } from './build-utils';
 import type { Part } from './types';
@@ -31,7 +31,8 @@ export function buildFrame(ctx: Ctx): Part[] {
       // because the steered axle beam sweeps under it.
       parts.push(box(ctx, {
         id: `girder-cabin-${tag}`, partNo: 'girder-cabin', name: `Cabin side girder ${tag}`, group: 'frame', mat: 'oak', step: STEP.frame, grain: 'x',
-        ...span([L.xRear, L.xs], [s * L.hwC, s * (L.hwC + L.side)].sort((a, b) => a - b) as [number, number], [L.deckBot - railD, L.deckBot]),
+        ...span([L.xRear + L.side, L.xs], [s * L.hwC, s * (L.hwC + L.side)].sort((a, b) => a - b) as [number, number], [L.deckBot - railD, L.deckBot]),
+        notes: 'Runs from the rear transom face (full-width transom, D-35) to the shoulder; epoxy-laminated under the chine, joined to the crossmembers with CNC stub tenons (1/2" stock is too thin for a Domino).',
       }));
     }
   }

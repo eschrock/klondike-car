@@ -40,13 +40,13 @@ export function allowables(ctx: Ctx) {
   };
 }
 
-const part = (ctx: Ctx, id: string): Part | undefined => ctx.byId.get(id);
+export const part = (ctx: Ctx, id: string): Part | undefined => ctx.byId.get(id);
 
 /**
  * Ground reaction per axle and the heavier wheel of each axle for a load case (static, δ = 0). The FRONT axle takes the
  * worse of the level distribution and the nose-down distribution on the design slope, N_f = W·cosθ − N_r (M4); rear is level.
  */
-function wheelLoads(ctx: Ctx, c: CaseData) {
+export function wheelLoads(ctx: Ctx, c: CaseData) {
   const ct = contactsAt(ctx.contact, 0);
   const xfc = (ct.FL[0] + ct.FR[0]) / 2;
   const a = axleLoads(c.massLb, c.cg[0], xfc);
@@ -64,10 +64,10 @@ function wheelLoads(ctx: Ctx, c: CaseData) {
   };
 }
 
-const frontLoadText = (ctx: Ctx, w: ReturnType<typeof wheelLoads>) =>
+export const frontLoadText = (ctx: Ctx, w: ReturnType<typeof wheelLoads>) =>
   `front axle ${f(w.frontAxle)} lb = worse of level ${f(w.frontLevel)} and nose-down on ${f(ctx.p.designSlopeDeg)}° ${f(w.frontSlope)} (M4)`;
 
-const payload = (ctx: Ctx, c: CaseData) => (c.riderLb + c.cargoLb) * ctx.p.dynamicFactor;
+export const payload = (ctx: Ctx, c: CaseData) => (c.riderLb + c.cargoLb) * ctx.p.dynamicFactor;
 
 interface Clamp { outerY: number; centerY: number; widthY: number }
 function clampGeometry(ctx: Ctx, tag: 'F' | 'R'): Clamp {
@@ -500,14 +500,14 @@ export function rollBalance(P: number, yw: number, ysb: number): { Fsb: number; 
   return { Fsb, U: Math.max(0, Fsb - P) };
 }
 
-interface Strike { name: string; both: boolean; h: number; hEff: number; phi: number; tan: number; Vw: number; Hw: number; H: number }
+export interface Strike { name: string; both: boolean; h: number; hEff: number; phi: number; tan: number; Vw: number; Hw: number; H: number }
 
 /**
  * Curb and root strikes by the front wheel(s). The wheel climbs the obstacle when the horizontal force reaches V·tanφ with
  * cos φ = (r − h)/r (h capped at 0.9 r: a taller step is a wall). V is the design (×dynamicFactor) front wheel load: the
  * heavier wheel alone, or both wheels at half the axle each. Both wheels: H = 2·H_w; one wheel: H = H_w.
  */
-function strikeCases(ctx: Ctx, c: CaseData): Strike[] {
+export function strikeCases(ctx: Ctx, c: CaseData): Strike[] {
   const { p, d } = ctx;
   const w = wheelLoads(ctx, c);
   const r = d.wheelRadiusIn;
@@ -520,6 +520,27 @@ function strikeCases(ctx: Ctx, c: CaseData): Strike[] {
     }
   }
   return out;
+}
+
+/** Lateral position |y| of the bridle tie points (the eye bolts), or the front beam end when the rig has none. */
+export function tieHalfY(ctx: Ctx): number {
+  const e = part(ctx, 'eyebolt-L');
+  return e ? Math.abs(e.transform[13]) : ctx.L.beamF.len / 2;
+}
+
+/**
+ * Yaw torque on the steer body about the kingpin that the steering stops must hold (M1, D-31): the larger of a one-wheel curb
+ * strike (the obstacle force H_w at the wheel's lateral position y_w) and a hard rope pull on one tie point (pull × the tie's
+ * lateral position, taken as the lever).
+ */
+export function yawTorque(ctx: Ctx, c: CaseData): { T: number; strike: number; rope: number; Hw: number; Vw: number; yw: number; yTie: number; governing: string } {
+  const { p } = ctx;
+  const one = strikeCases(ctx, c).find((s) => s.name === 'curb one wheel')!;
+  const yw = p.frontTrackIn / 2;
+  const yTie = tieHalfY(ctx);
+  const strike = one.Hw * yw;
+  const rope = p.pullForceLbf * yTie;
+  return { T: Math.max(strike, rope), strike, rope, Hw: one.Hw, Vw: one.Vw, yw, yTie, governing: strike >= rope ? 'one-wheel curb strike' : 'rope pull at one tie' };
 }
 
 const STD_KINGPIN_IN = [0.375, 0.5, 0.625, 0.75, 0.875, 1, 1.25];
@@ -635,8 +656,15 @@ export function rollKingpinUpliftCheck(ctx: Ctx): AnalysisCheck {
 export function rollBolsterAttachCheck(ctx: Ctx): AnalysisCheck {
   const { p, L } = ctx;
   const al = allowables(ctx);
-  const n = Math.max(1, Math.round(p.bolsterFastenerCount));
-  const dia = p.bolsterFastenerDiameterIn;
+  // M7: the fasteners are the structured 'bolt' joints on the bolster fore / aft rails (to the nose deck); the params are only the fallback.
+  const ringBolts = ctx.parts.filter((x) => /^bolster-(fore|aft)$/.test(x.id)).flatMap((x) => (x.joints ?? []).filter((j) => j.type === 'bolt' && j.to === 'deck-nose').map((j) => ({ x, j })));
+  const fromJoints = ringBolts.length > 0;
+  const n = fromJoints ? ringBolts.reduce((m, r) => m + r.j.count, 0) : Math.max(1, Math.round(p.bolsterFastenerCount));
+  const dia = fromJoints ? ringBolts[0].j.diaIn ?? p.bolsterFastenerDiameterIn : p.bolsterFastenerDiameterIn;
+  // Bolt radii from the kingpin (for the yaw-torque couple): joint locations are in each rail's local frame.
+  const radii = ringBolts.flatMap((r) => (r.j.at ?? []).map((a) => Math.hypot(r.x.transform[12] + a[0] - L.kx, r.x.transform[13] + a[1])));
+  const sumR2 = radii.reduce((m, r) => m + r * r, 0);
+  const rMax = radii.length ? Math.max(...radii) : 0;
   const Ab = (Math.PI * dia * dia) / 4;
   const At = 0.75 * Ab; // threaded tensile stress area ≈ 0.75 × gross area
   const tb = Math.max(0.1, L.bolster.z1 - L.bolster.z0);
@@ -647,13 +675,18 @@ export function rollBolsterAttachCheck(ctx: Ctx): AnalysisCheck {
     const sT = r.U / (n * At);
     const brg = H / (n * dia * tb);
     const inter = (tau / al.fastShear) ** 2 + (sT / al.fastTens) ** 2;
+    // The stops' yaw torque T goes through the ring into these bolts as a couple: F_i = T·r_i/Σr², added to the strike shear H/n (worst alignment).
+    const yaw = yawTorque(ctx, c);
+    const Fyaw = sumR2 > 0 ? (yaw.T * rMax) / sumR2 : 0;
+    const tauYaw = (H / n + Fyaw) / Ab;
     const ds = [
       detail('fastener shear (horizontal strike load)', tau, 'psi', al.fastShear, '<='),
       detail('fastener tension (roll uplift)', sT, 'psi', al.fastTens, '<='),
       detail('shear + tension interaction (ellipse)', Math.sqrt(inter), '', 1, '<='),
       detail('fastener bearing in the bolster oak (⊥, dowel)', brg, 'psi', al.oakDowel, '<='),
+      ...(sumR2 > 0 ? [detail('fastener shear with the stop yaw torque (couple at the outermost bolt)', tauYaw, 'psi', al.fastShear, '<=')] : []),
     ];
-    const how = `Assumed attachment: ${n} × ${f(dia, 3)}" bolts (yield ${f(p.bolsterFastenerYieldPsi, 0)} psi, A307-type) clamping the turntable top plate and bolster rails to the nose rails/deck; bolster depth ${f(tb, 2)}". Loads: the governing strike H = ${f(H)} lbf horizontally (kingpin-strike) and the roll uplift U = ${f(r.U)} lbf. Shear τ = H/(n·A) = ${f(H)}/(${n} × ${f(Ab, 4)}) = ${f(tau, 0)} psi (≤ 0.577·yield/${p.kingpinMargin} = ${f(al.fastShear, 0)}); tension σ = U/(n·A_t), A_t ≈ 0.75·A = ${f(sT, 0)} psi (≤ yield/${p.kingpinMargin} = ${f(al.fastTens, 0)}); interaction √((τ/τ_a)² + (σ/σ_a)²) = ${f(Math.sqrt(inter), 2)} (≤ 1); bearing on the bolster oak H/(n·d·t) = ${f(brg, 0)} psi (≤ ${f(al.oakDowel, 0)} = ${p.oakDowelBearingPsi} dowel bearing × C_M ${p.wetServiceFactorStrength} / ${p.woodSafetyFactor}). The fasteners' pull-through and the bolster's own bending are not modeled.`;
+    const how = `Fasteners read from the bolster rails' structured joints (M7): ${n} × ${f(dia, 3)}" bolts (yield ${f(p.bolsterFastenerYieldPsi, 0)} psi, A307-type) through the nose deck, the bolster rails and the turntable top plate; bolster depth ${f(tb, 2)}". Loads: the governing strike H = ${f(H)} lbf horizontally (kingpin-strike) and the roll uplift U = ${f(r.U)} lbf. Shear τ = H/(n·A) = ${f(H)}/(${n} × ${f(Ab, 4)}) = ${f(tau, 0)} psi (≤ 0.577·yield/${p.kingpinMargin} = ${f(al.fastShear, 0)}); tension σ = U/(n·A_t), A_t ≈ 0.75·A = ${f(sT, 0)} psi (≤ yield/${p.kingpinMargin} = ${f(al.fastTens, 0)}); interaction √((τ/τ_a)² + (σ/σ_a)²) = ${f(Math.sqrt(inter), 2)} (≤ 1); bearing on the bolster oak H/(n·d·t) = ${f(brg, 0)} psi (≤ ${f(al.oakDowel, 0)} = ${p.oakDowelBearingPsi} dowel bearing × C_M ${p.wetServiceFactorStrength} / ${p.woodSafetyFactor}). ${sumR2 > 0 ? ` Stop yaw torque (${yaw.governing}) T = ${f(yaw.T)} lb·in is carried by the bolts as a couple about the kingpin: bolt radii ${radii.map((r) => f(r, 2)).join('", ')}", F_max = T·r_max/Σr² = ${f(yaw.T)} × ${f(rMax, 2)} / ${f(sumR2, 1)} = ${f(Fyaw)} lbf, plus H/n = ${f(H / n)} lbf in the worst alignment: τ = ${f(tauYaw, 0)} psi (≤ ${f(al.fastShear, 0)}).` : ''} The fasteners' pull-through and the bolster's own bending are not modeled.`;
     return governing(ds, how);
   };
   return dualCheck({

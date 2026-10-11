@@ -1,8 +1,9 @@
 /** Running gear: wheels, axles (through rod or stubs), axle beams and U-bolt clamps (D-10, D-11, D-15). */
 import { AXLE_BEAM_POSITION, AXLE_STYLE } from '../params';
-import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
+import { IN3_PER_FT3, STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
 import { multiply, translation } from './mat4';
-import type { Part, RigidBody } from './types';
+import { customPart, filletPath, pathLength, tubeAlong } from './mesh-utils';
+import type { Part, RigidBody, Vec3 } from './types';
 
 // ── Block-model placeholders ──
 /** Hub outer diameter as a fraction of the wheel diameter, capped (viewer-only detail). */
@@ -12,6 +13,8 @@ const HUB_DIA_MAX_IN = 6;
 const STUB_EMBED_IN = 4;
 /** U-bolt + plate mass, estimate (spec). */
 const CLAMP_MASS_LB = 0.35;
+
+const unitVec = (v: Vec3): Vec3 => { const n = Math.hypot(...v) || 1; return [v[0] / n, v[1] / n, v[2] / n]; };
 
 export function buildRunningGear(ctx: Ctx): Part[] {
   const { p, d, L } = ctx;
@@ -41,7 +44,10 @@ export function buildRunningGear(ctx: Ctx): Part[] {
     fab: 'buy',
     step: STEP.gear,
     explode: [0, (id.endsWith('L') ? 1 : -1) / Math.hypot(1, 0.25), -0.25 / Math.hypot(1, 0.25)],
-    notes: 'Catalog wheel mass from params (D-11).',
+    sourcing: {
+      vendor: `McMaster-Carr or equivalent: ${p.wheelDiameterIn}" ${p.tireType === 0 ? 'pneumatic' : 'flat-free'} hand-truck wheel, ${p.axleDiameterIn}" bore, ${p.hubLengthIn}" hub length, sealed ball bearings or flanged bushings pressed into the hub (confirm the bore is ${p.axleDiameterIn}" and the hub length ${p.hubLengthIn}"; D-34)`,
+    },
+    notes: `Catalog wheel mass from params (D-11). Hub spec (M11): ${p.axleDiameterIn}" bore for the ${p.axleDiameterIn}" axle, ${p.hubLengthIn}" hub, sealed ball bearings (or flanged bronze bushings) in the hub; collar + cotter pin on the axle end (${p.axleEndExtraIn}" beyond the hub).`,
   });
   const ry = p.rearTrackIn / 2;
   const fy = p.frontTrackIn / 2;
@@ -84,22 +90,59 @@ export function buildRunningGear(ctx: Ctx): Part[] {
       size: [b.thick, b.len, b.depth], center: [b.x, 0, (b.top + b.bot) / 2], grain: 'y', fab: 'table-saw',
       step: STEP.gear, notes: (p.axleBeamPosition === AXLE_BEAM_POSITION.underslung ? 'Underslung (D-15).' : 'Overslung (D-15).') + (ax.tag === 'F' ? ' Centerd on the rod + kingpin pair (D-25).' : ''),
     }));
-    // Clamps: 2 plates per wheel side (one per U-bolt leg), straddling the rod: legs at rod x ± (rod radius + leg gap).
+    // Clamps. REAR (Phase 2, unchanged): 2 plates per wheel side (one per U-bolt leg), straddling the rod: legs at rod x ± (rod radius + leg gap).
+    // FRONT (M8, D-34): a square U-bolt whose bridge crosses over the axle rod on top of the underslung beam, legs running down
+    // around the beam faces to a steel plate under the beam, nuts below the plate. `clamp-F?1` = U-bolt, `clamp-F?2` = plate.
     const under = p.axleBeamPosition === AXLE_BEAM_POSITION.underslung;
     const plate = { x: p.clampPlateLengthIn, y: p.clampPlateWidthIn, z: p.clampPlateThickIn };
     const legOffset = rodR + p.clampLegGapIn;
     const yEdge = Math.min(b.len / 2 - 0.25, ax.track / 2 - p.tireWidthIn / 2);
     const yc = yEdge - plate.y / 2;
-    const zc = under ? b.top + plate.z / 2 : b.bot - plate.z / 2;
-    for (const { s, tag } of SIDES) {
-      for (const [i, sx] of [[1, 1], [2, -1]] as const) {
-        const sp = span([ax.x + sx * legOffset - plate.x / 2, ax.x + sx * legOffset + plate.x / 2],
-          [s * yc - plate.y / 2, s * yc + plate.y / 2], [zc - plate.z / 2, zc + plate.z / 2]);
-        parts.push(box(ctx, {
-          id: `clamp-${ax.tag}${tag}${i}`, partNo: 'axle-clamp', name: `${name} ${tag === 'L' ? 'left' : 'right'} U-bolt + plate ${i}`,
-          group: 'running-gear', steer: ax.steer, mat: 'fixed', massLb: CLAMP_MASS_LB, kind: 'purchased', material: 'zinc steel U-bolt + plate',
-          ...sp, fab: 'buy', step: STEP.gear, notes: 'Mass is an estimate.',
+    if (ax.tag === 'F' && under) {
+      const rr = p.uboltRodDiameterIn / 2;
+      const inner = b.thick + 2 * p.uboltBeamClearIn;
+      const legX = inner / 2 + rr;
+      const zBridge = b.top + rr;
+      const zEnd = b.bot - plate.z - p.uboltNutAllowanceIn; // under the plate: nut + thread
+      const bend = Math.max(2.5 * rr, 0.35);
+      for (const { s, tag } of SIDES) {
+        const path = filletPath([[-legX, 0, zEnd], [-legX, 0, zBridge], [legX, 0, zBridge], [legX, 0, zEnd]], bend, 6);
+        const mesh = tubeAlong(path, rr, 10);
+        const vol = Math.PI * rr * rr * pathLength(path);
+        const plateLen = 2 * legX + 1;
+        parts.push(customPart(ctx, {
+          id: `clamp-F${tag}1`, partNo: 'ubolt-F', name: `front ${tag === 'L' ? 'left' : 'right'} U-bolt`, group: 'running-gear', kind: 'purchased', material: 'zinc-plated steel square U-bolt + nuts and washers',
+          geometry: { type: 'mesh', positions: mesh.positions, indices: mesh.indices },
+          transform: translation(b.x, s * yc, 0), steer: true, massLb: (vol / IN3_PER_FT3) * p.steelDensityPcf + 0.11, fab: 'buy', step: STEP.gear, explode: unitVec([0, s * 0.6, 1]),
+          sourcing: { vendor: `McMaster-Carr or equivalent: square U-bolt ${p.uboltRodDiameterIn}" rod, ${inner.toFixed(2)}" inside width (stock widths vary: use the next size up and shim, or bend from rod), ${(zBridge - zEnd).toFixed(1)}" legs, 4 nuts + 4 washers` },
+          joints: [
+            { type: 'bolt', to: 'beam-F', count: 1, diaIn: p.uboltRodDiameterIn, size: `${p.uboltRodDiameterIn}" square U-bolt: bridge over the axle rod on the beam top, legs down the beam faces`, note: 'Legs run down AROUND the underslung beam (nothing drilled through it); the bridge holds the rod in its groove.' },
+            { type: 'bolt', to: `clamp-F${tag}2`, count: 2, diaIn: p.uboltRodDiameterIn, size: `${p.uboltRodDiameterIn}" nut + washer on each leg below the plate` },
+          ],
+          notes: `Legs ${(2 * legX).toFixed(2)}" apart (c-c), ${p.uboltBeamClearIn}" clear of each beam face; bridge crosses the ${p.axleDiameterIn}" axle rod on top of the beam; mass is an estimate (rod volume + nuts and washers).`,
         }));
+        parts.push(box(ctx, {
+          id: `clamp-F${tag}2`, partNo: 'ubolt-plate-F', name: `front ${tag === 'L' ? 'left' : 'right'} U-bolt plate`, group: 'running-gear', steer: true, mat: 'steel', kind: 'metal', material: 'A36 steel plate', fab: 'drill-tap', step: STEP.gear,
+          ...span([b.x - plateLen / 2, b.x + plateLen / 2], [s * yc - plate.y / 2, s * yc + plate.y / 2], [b.bot - plate.z, b.bot]),
+          joints: [
+            { type: 'bolt', to: `clamp-F${tag}1`, count: 2, diaIn: p.uboltRodDiameterIn, size: `2 × ${p.uboltRodDiameterIn}" holes for the U-bolt legs` },
+            { type: 'bolt', to: 'beam-F', count: 1, diaIn: p.uboltRodDiameterIn, size: 'bears flat on the beam underside', note: 'Carries the U-bolt clamp load into the beam bottom (oak ⊥).' },
+          ],
+          notes: `Steel plate under the beam (M8): ${plateLen.toFixed(2)}" × ${plate.y}" × ${plate.z}", legs pass through it, nuts below.`,
+        }));
+      }
+    } else {
+      const zc = under ? b.top + plate.z / 2 : b.bot - plate.z / 2;
+      for (const { s, tag } of SIDES) {
+        for (const [i, sx] of [[1, 1], [2, -1]] as const) {
+          const sp = span([ax.x + sx * legOffset - plate.x / 2, ax.x + sx * legOffset + plate.x / 2],
+            [s * yc - plate.y / 2, s * yc + plate.y / 2], [zc - plate.z / 2, zc + plate.z / 2]);
+          parts.push(box(ctx, {
+            id: `clamp-${ax.tag}${tag}${i}`, partNo: 'axle-clamp', name: `${name} ${tag === 'L' ? 'left' : 'right'} U-bolt + plate ${i}`,
+            group: 'running-gear', steer: ax.steer, mat: 'fixed', massLb: CLAMP_MASS_LB, kind: 'purchased', material: 'zinc steel U-bolt + plate',
+            ...sp, fab: 'buy', step: STEP.gear, notes: 'Mass is an estimate.',
+          }));
+        }
       }
     }
   }

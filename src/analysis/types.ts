@@ -77,8 +77,10 @@ export const GROUP_OF_ID: Record<string, CheckGroup> = {
   'mass-empty': 'Mass & transport', cg: 'Mass & transport', 'truck-fit': 'Mass & transport',
   'tip-straight': 'Stability', 'tip-lock': 'Stability', 'slide-before-tip': 'Stability', 'v-rollover': 'Stability', 'pitch-fwd': 'Stability', 'pitch-rear': 'Stability',
   'turn-radius': 'Steering', 'steer-clear': 'Steering',
-  'brake-force': 'Braking', 'brake-traction': 'Braking',
+  'brake-force': 'Braking', 'brake-traction': 'Braking', 'brake-ratio': 'Braking', 'brake-clear': 'Braking',
+  'brake-lever': 'Structure', 'brake-links': 'Structure', 'brake-shaft': 'Structure', 'brake-shoes': 'Structure', 'brake-ratchet': 'Structure', 'handle-sockets': 'Structure',
   'kingpin-strike': 'Structure', 'roll-side-bearer': 'Structure', 'roll-kingpin-uplift': 'Structure', 'roll-bolster-attach': 'Structure',
+  'steer-stops': 'Structure', 'kingpin-peak': 'Structure', 'pitch-path': 'Structure', 'kingpin-split': 'Structure', 'bridle-tie': 'Structure',
   'axle-stress': 'Structure', 'beam-front': 'Structure', 'beam-rear': 'Structure', 'bearing-groove': 'Structure', rails: 'Structure', deck: 'Structure',
   kingpin: 'Structure', turntable: 'Structure', tongue: 'Structure',
 };

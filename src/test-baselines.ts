@@ -18,6 +18,7 @@ export const PHASE1_BASELINE: Partial<Params> = {
   crossmemberSpacingIn: 12,
   brakeLeverRatio: 10,
   bridleRopeRunIn: 72,
+  bolsterFastenerDiameterIn: 0.25, // Phase 2 assumed 4 × ¼" bolster bolts (D-33 makes them 3/8")
 };
 
 export function phase1Params(): Params {

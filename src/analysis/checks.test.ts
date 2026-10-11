@@ -5,10 +5,12 @@ import { checkTruckFit } from '../truck/fit';
 import { dualCheck, type CaseEval } from './dual';
 import { computeLayout } from '../model/layout';
 import { runChecks, type AnalysisCheck } from './index';
-import { liftPull } from './stability';
+import { liftPull, pullPoint } from './stability';
 import { effectiveStripWidth, maxDeckSpan, obstacleForce, rollBalance } from './structure';
 import { judge } from './types';
 import { phase1Params } from '../test-baselines';
+import { makeContext } from './context';
+import { resolveParams } from '../params';
 
 const defaults = defaultParams();
 const phase1 = phase1Params(); // the Phase 1 configuration: for tests whose purpose is a hand calculation worked at it
@@ -81,16 +83,18 @@ describe('runChecks at the defaults', () => {
   });
   it('brake force follows F = W sinθ / μ / (ratio · η) at the operating mass', () => {
     const W = buildModel(defaults, { rider: 'operating', cargo: true }).reduce((s, x) => s + x.massLb, 0);
-    const F = (W * Math.sin((defaults.designSlopeDeg * Math.PI) / 180)) / defaults.brakePadMu / (defaults.brakeLeverRatio * defaults.brakeEfficiency);
+    // Phase 3 (D-38): the ratio is DERIVED from the linkage geometry (brake-ratio), not the free `brakeLeverRatio` param (now a target).
+    const F = (W * Math.sin((defaults.designSlopeDeg * Math.PI) / 180)) / defaults.brakePadMu / (byId(cs, 'brake-ratio').value * defaults.brakeEfficiency);
     expect(byId(cs, 'brake-force').cases!.operating!.value).toBeCloseTo(F, 3);
   });
   it('through-rod axle stress matches the closed-form cantilever for the rear wheel', () => {
     const c = byId(cs, 'axle-stress');
     const rear = c.details!.find((d) => d.name.startsWith('rear axle bending'))!;
-    // hand (goal, rear): P = 114.7 lb × 3 = 344.1 lbf, a = 2.0", M = 688.3 lb·in → 16.6 ksi vertical; with the tire friction force
-    // (0.5 × 114.7 lb at r = 6.5") M = 1061 lb·in → σ = 1061 × 0.375 / 0.015531 + 57.4/0.4418 = 25.75 ksi
-    expect(rear.value).toBeGreaterThan(25000);
-    expect(rear.value).toBeLessThan(26500);
+    // hand (goal, rear): P = 119.9 lb × 3 = 359.6 lbf, a = 2.0", M = 719.2 lb·in → 17.4 ksi vertical; with the tire friction force
+    // (0.5 × 119.9 lb at r = 6.5") M = 1109 lb·in → σ = 1109 × 0.375 / 0.015531 + 60.0/0.4418 = 26.9 ksi
+    // (P was 114.7 lb before workstream C: the 8.7 lb heavier brake mechanism behind the rear axle adds ~5 lb to each rear wheel's goal load)
+    expect(rear.value).toBeGreaterThan(26000);
+    expect(rear.value).toBeLessThan(27500);
     expect(c.details!.some((d) => d.name.includes('deflection'))).toBe(true);
   });
 });
@@ -268,8 +272,18 @@ describe('critic round 1 fixes: hand-calculated numbers at the defaults', () => 
   // The hand calcs below were done for the original steering layout (kingpin ending at the turntable top, D-12); the crossbar
   // option adds ~1.5 lb and moves the CG, so they pin that configuration (kingpinThroughBolster = 0). The crossbar has its own tests below.
   // They also pin the Phase 1 design values (phase1Params(): 48" wheelbase, ½" pin, 9 mm deck, 12" joists, 72" rope run, ...).
+  // The mass- and CG-dependent rows (H1, H2, M3, M4, H3) recompute their expected values from the model's own load case with the same
+  // hand formulas as the titles (axle loads from the CG, front load = worse of level and nose-down, ...), so they stay valid as the
+  // parts list changes (Phase 3 added front hardware, a heavier brake, seat and storage). Titles quote the numbers at the time of writing.
   const legacy = { ...phase1, kingpinThroughBolster: 0 };
   const cs = run(legacy);
+  const lctx = makeContext(resolveParams(legacy), buildModel(resolveParams(legacy), { rider: 'goal', cargo: true, steerDeg: 0 }));
+  const hand = (c: { massLb: number; cg: number[] }) => {
+    const th = (legacy.designSlopeDeg * Math.PI) / 180, WB = legacy.wheelbaseIn;
+    const level = (c.massLb * c.cg[0]) / WB; // rear contacts at x = 0, front at x = WB
+    const slope = c.massLb * (Math.cos(th) * (c.cg[0] / WB) + Math.sin(th) * (c.cg[2] / WB)); // nose-down on 15°: W (cosθ·x/L + sinθ·h/L)
+    return { level, slope, front: Math.max(level, slope) };
+  };
   const goal = (id: string) => byId(cs, id).cases!.goal!;
   const op = (id: string) => byId(cs, id).cases!.operating!;
   const det = (id: string, name: string, k: 'goal' | 'operating' = 'goal') => {
@@ -285,18 +299,20 @@ describe('critic round 1 fixes: hand-calculated numbers at the defaults', () => 
     expect(o.H).toBeCloseTo(156.47, 1);
     expect(obstacleForce(6.5, 2, 100).H).toBeCloseTo(103.9, 0); // root: cos φ = 4.5/6.5, tan = 1.039
   });
-  it('H1 kingpin-strike: goal front axle 144 lb (nose-down governs, M4) → both wheels over a 3" curb H = 144 × 3 × 1.565 = 676 lbf; σ = H·s/S = 676 × 2.875 / 0.012272 = 158 ksi → FAIL; ¾"–⅞" needed', () => {
+  it('H1 kingpin-strike: goal front axle ≈ 148 lb (nose-down governs, M4) → both wheels over a 3" curb H = front × 3 × 1.565 ≈ 697 lbf; σ = H·s/S = H × 2.875 / 0.012272 ≈ 163 ksi → FAIL; ¾"–⅞" needed', () => {
     const c = byId(cs, 'kingpin-strike');
     expect(c.status).toBe('fail');
     expect(c.statusOperating).toBe('fail'); // fails at the 150 lb rider too, so not a goal-only flag
+    const front = hand(lctx.loads.goal).front;
+    expect(hand(lctx.loads.goal).slope).toBeGreaterThan(hand(lctx.loads.goal).level); // nose-down governs
+    const H = front * legacy.dynamicFactor * obstacleForce(6.5, 3, 1).tan; // two wheels at half the axle each: H = 2 × (front/2 × 3) × tanφ
     const sigma = det('kingpin-strike', 'kingpin bending').value;
-    expect(sigma).toBeGreaterThan(155000);
-    expect(sigma).toBeLessThan(162000);
-    expect(det('kingpin-strike', 'kingpin shear').value).toBeCloseTo(676 / (Math.PI * 0.25 * 0.25), -2); // τ = H/A = 3443 psi
+    expect(sigma).toBeCloseTo((H * 2.875) / 0.012272, -3); // within ~1 ksi of 160 ksi
+    expect(det('kingpin-strike', 'kingpin shear').value).toBeCloseTo(H / (Math.PI * 0.25 * 0.25), -1); // τ = H/A ≈ 3.5 ksi
     expect(c.how).toMatch(/0\.875" bolt/); // minimum bolt text
     expect(c.how).toMatch(/curb both wheels/);
   });
-  it('H1: a ¾" kingpin passes the strike bending (σ = 676 × 2.875 / 0.04141 = 47 ksi < 65)', () => {
+  it('H1: a ¾" kingpin passes the strike bending (σ = 697 × 2.875 / 0.04141 = 48 ksi < 65)', () => {
     const c = byId(run({ ...legacy, kingpinDiameterIn: 0.75 }), 'kingpin-strike');
     expect(c.details!.find((d) => d.name.includes('kingpin bending'))!.util).toBeLessThan(1);
   });
@@ -306,32 +322,51 @@ describe('critic round 1 fixes: hand-calculated numbers at the defaults', () => 
     expect(r.U).toBeCloseTo(161.03, 1);
     expect(rollBalance(100, 5, 6.8).U).toBe(0);
   });
-  it('H2 roll path at the defaults (goal): P = 72.2 × 3 = 216.6 lbf, F_sb = 564 lbf on 2.25 in² = 251 psi, uplift 348 lbf on a 1.25" washer (1.03 in²) = 337 psi vs 358', () => {
-    expect(det('roll-side-bearer', 'bearer oak').value).toBeCloseTo(250.8, 0);
-    expect(det('roll-side-bearer', 'UHMW').value).toBeCloseTo(250.8, 0);
-    expect(det('roll-kingpin-uplift', 'washer').value).toBeCloseTo(337.3, 0);
+  it('H2 roll path at the defaults (goal): P = front wheel × 3 ≈ 223 lbf, F_sb = P·17.75/6.81 ≈ 582 lbf on 2.25 in² ≈ 258 psi, uplift F_sb − P ≈ 358 lbf on a 1.25" washer (1.03 in²) ≈ 348 psi vs 358', () => {
+    const g = lctx.loads.goal;
+    const front = hand(g).front;
+    const P = front * (0.5 + Math.abs(g.cg[1]) / legacy.frontTrackIn) * legacy.dynamicFactor;
+    const sb = computeLayout(legacy).sideBearer;
+    const ysb = (sb.y0 + sb.y1) / 2;
+    const Fsb = (P * legacy.frontTrackIn) / 2 / ysb;
+    const U = Fsb - P;
+    expect(ysb).toBeCloseTo(6.8125, 9);
+    const area = (sb.y1 - sb.y0) * (sb.x1 - sb.x0);
+    expect(area).toBeCloseTo(2.25, 9);
+    expect(det('roll-side-bearer', 'bearer oak').value).toBeCloseTo(Fsb / area, 0);
+    expect(det('roll-side-bearer', 'UHMW').value).toBeCloseTo(Fsb / area, 0);
+    const wOd = Math.max(legacy.kingpinWasherDiameterIn, 2.25 * legacy.kingpinDiameterIn);
+    expect((Math.PI / 4) * (wOd ** 2 - legacy.kingpinDiameterIn ** 2)).toBeCloseTo(1.03, 2);
+    expect(det('roll-kingpin-uplift', 'washer').value).toBeCloseTo(U / ((Math.PI / 4) * (wOd ** 2 - legacy.kingpinDiameterIn ** 2)), 0);
     expect(byId(cs, 'roll-bolster-attach').how).toMatch(/4 × 0\.250" bolts/);
-    expect(det('roll-bolster-attach', 'fastener shear').value).toBeCloseTo(676.1 / (4 * 0.0490874), -1); // 3443 psi
+    const H = front * legacy.dynamicFactor * obstacleForce(6.5, 3, 1).tan;
+    expect(det('roll-bolster-attach', 'fastener shear').value).toBeCloseTo(H / (4 * 0.0490874), -1); // ≈ 3.5 ksi
   });
   it('M2: compression ⊥ allowable is 1070 × 0.67 / 2 = 358.45 psi', () => {
     expect(goal('bearing-groove').limit).toBeCloseTo(358.45, 2);
-    // 144 lb front axle × share → rear heavier: groove stress 306 psi → 85% utilized
-    expect(goal('bearing-groove').util).toBeCloseTo(306 / 358.45, 1);
+    // 149 lb front axle (nose-down) → rear wheel 124 lb static: groove stress 327 psi → 91% utilized (Phase 3: the heavier brake sits behind the axle)
+    expect(goal('bearing-groove').util).toBeCloseTo(326.6 / 358.45, 1);
     expect(byId(run({ ...defaults, wetServiceFactorCompPerp: 0.85 }), 'bearing-groove').cases!.goal!.limit).toBeCloseTo(454.75, 2);
   });
-  it('M3 rails: M = P·L/4 + w·L²/8 = 337.5 × 49.125 / 4 + 100.9 × 49.125 / 8 = 4145 + 620 = 4765 lb·in → σ = M/S = 4765 / 1.125 = 4235 psi', () => {
-    expect(det('rails', 'bending').value).toBeCloseTo(4235, -1);
+  it('M3 rails: M = P·L/4 + w·L²/8 = 337.5 × 49.125 / 4 + (3 × chassis self-weight / 2) × 49.125 / 8 ≈ 4145 + 634 lb·in → σ = M/S = M / 1.125 ≈ 4.2 ksi', () => {
+    const selfLb = lctx.parts.reduce((m, x) => (x.body === 'chassis' && !x.payload && x.group !== 'reference' && x.group !== 'running-gear' ? m + x.massLb : m), 0);
+    const span = computeLayout(legacy).kx; // rear beam to kingpin
+    const M = (337.5 * span) / 4 + (((selfLb * legacy.dynamicFactor) / 2) * span) / 8;
+    expect(span).toBeCloseTo(49.125, 3);
+    expect(det('rails', 'bending').value).toBeCloseTo(M / 1.125, -1);
     expect(byId(cs, 'rails').how).toMatch(/self-weight/);
   });
-  it('M4: turntable load = worse of level (118.3 lb) and nose-down on 15° (144.0 lb) × 3 = 432 lbf (goal)', () => {
-    expect(goal('turntable').value).toBeCloseTo(432, 0);
-    // hand: W = 347.2, x = 16.4, h = 15.86, L = 48: W (cos15 · x/L + sin15 · h/L) = 144.3
+  it('M4: turntable load = worse of level (≈ 123 lb) and nose-down on 15° (≈ 148 lb) × 3 ≈ 445 lbf (goal)', () => {
+    const g = hand(lctx.loads.goal);
+    expect(g.slope).toBeGreaterThan(g.level);
+    expect(goal('turntable').value).toBeCloseTo(legacy.dynamicFactor * g.front, 0);
+    // hand: W (cos15 · x/L + sin15 · h/L) with W, x, h from the goal load case
     expect(byId(cs, 'turntable').how).toMatch(/nose-down/);
   });
-  it('M5 axle: rear wheel, operating: P = 98.0 lb × 3 = 294.1; vertical M = 588 lb·in; + μP·r = 0.5 × 98.0 × 6.5 = 318.5 → 906.8 lb·in; σ = 906.8 × 0.375 / 0.015531 + 49.0/0.4418 = 22.0 ksi', () => {
+  it('M5 axle: rear wheel, operating: P = 104.0 lb × 3 = 311.9; vertical M = 624 lb·in; + μP·r = 0.5 × 104.0 × 6.5 = 338 → 962 lb·in; σ = 962 × 0.375 / 0.015531 + 52.0/0.4418 = 23.3 ksi', () => {
     const rear = byId(cs, 'axle-stress').cases!.operating!;
-    expect(rear.value).toBeGreaterThan(21500);
-    expect(rear.value).toBeLessThan(22500);
+    expect(rear.value).toBeGreaterThan(22800);
+    expect(rear.value).toBeLessThan(23800);
     expect(byId(cs, 'axle-stress').how).toMatch(/resultant/);
   });
   it('D1 deck: b_eff = 10 + 0.625 × 9.5 = 15.94"; 200 lb on 4" at midspan of 9.5": δ = 0.069" (fails L/300 = 0.032"); 12 mm gives 0.029" (passes); needed ≥ 11.7 mm', () => {
@@ -351,11 +386,20 @@ describe('critic round 1 fixes: hand-calculated numbers at the defaults', () => 
     expect(liftPull(100, 20, 10, 0, 60, 0, Math.PI / 6)).toBeCloseTo(66.67, 1);
     expect(liftPull(100, 20, 10, 0, 0, 0, 0)).toBe(Infinity);
   });
-  it('H3 pitch-rear: T_lift/T_peak = 200 / 150 = 1.33 (operating), 1.52 (goal), 160 / 150 = 1.07 (80 lb rider) → FAIL at the lightest rider only', () => {
+  it('H3 pitch-rear: T_lift = W(x·cosθ − h·sinθ)/(x_p·sinα − z_p·cosα); T_lift/T_peak ≈ 1.4 (operating), 1.6 (goal), 1.1 (80 lb rider) → FAIL at the lightest rider only', () => {
     const c = byId(cs, 'pitch-rear');
-    expect(c.cases!.operating!.value).toBeCloseTo(1.334, 2);
-    expect(c.cases!.goal!.value).toBeCloseTo(1.525, 2);
-    expect(c.cases!.light!.value).toBeCloseTo(1.067, 2);
+    const pt = pullPoint(lctx);
+    const alpha = Math.atan2(legacy.pullerHandHeightIn - pt.z, legacy.bridleRopeRunIn);
+    const th = (legacy.designSlopeDeg * Math.PI) / 180;
+    const ratio = (k: 'operating' | 'goal' | 'light') => {
+      const q = lctx.loads[k];
+      return (q.massLb * (q.cg[0] * Math.cos(th) - q.cg[2] * Math.sin(th))) / (pt.x * Math.sin(alpha) - pt.z * Math.cos(alpha)) / legacy.pullForceLbf;
+    };
+    expect(c.cases!.operating!.value).toBeCloseTo(ratio('operating'), 2);
+    expect(c.cases!.goal!.value).toBeCloseTo(ratio('goal'), 2);
+    expect(c.cases!.light!.value).toBeCloseTo(ratio('light'), 2);
+    expect(ratio('operating')).toBeGreaterThan(1.25); // passes at the operating rider alone ...
+    expect(ratio('light')).toBeLessThan(1.25); // ... and fails only for the 80 lb rider
     expect(c.cases!.light!.limit).toBe(legacy.pitchPullMarginMin);
     expect(c.statusOperating).toBe('fail'); // the 80 lb rider is part of the operating envelope
     expect(c.status).toBe('fail');
@@ -374,10 +418,11 @@ describe('critic round 1 fixes: hand-calculated numbers at the defaults', () => 
     expect(op('pitch-fwd').value).toBeCloseTo(67.4, 0);
     expect(byId(cs, 'pitch-fwd').how).not.toMatch(/tanθ \+ a/);
   });
-  it('L2 brake: wet shoes μ 0.25 give 24.04 × 0.4 / 0.25 = 38.5 lbf (sensitivity only; status follows the design μ)', () => {
+  it('L2 brake: wet shoes μ 0.25 give F_design × 0.4 / 0.25 = 1.6 × F_design (sensitivity only; status follows the design μ)', () => {
     const c = byId(cs, 'brake-force');
     const wet = c.details!.find((d) => d.name.includes('wet'))!;
-    expect(wet.value).toBeCloseTo(38.46, 1);
+    // ratio-independent, so it survives the Phase 3 derived ratio (D-38)
+    expect(wet.value / c.cases!.operating!.value).toBeCloseTo(0.4 / 0.25, 3);
     expect(c.how).toMatch(/TOTAL shoe normal force/);
     expect(c.statusOperating).not.toBe('fail');
   });

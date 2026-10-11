@@ -3,6 +3,7 @@ import { makeCtx, type ViewState } from './build-utils';
 import { buildBody, prowTop } from './body';
 import { buildBrake } from './brake';
 import { buildFrame } from './frame';
+import { applyJoinery } from './joinery';
 import { buildHardware, buildLighting } from './lighting';
 import { buildPayload } from './rider';
 import { buildRunningGear } from './running-gear';
@@ -33,5 +34,6 @@ export function buildModel(input: Params, view: ViewState = {}): Part[] {
     ...buildHardware(ctx),
     ...buildPayload(ctx),
   ];
+  applyJoinery(ctx, parts); // structured joints for the hull and frame (D-35)
   return ctx.view.removed ? parts.filter((x) => !x.removable) : parts;
 }

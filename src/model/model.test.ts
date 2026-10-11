@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PARAM_DEFS, RIDER_FOOT_Y_FRAC, RIDER_LEG_Y_FRAC, defaultParams, derived, resolveParams, validateParams, type ParamKey, type Params } from '../params';
+import { PARAM_DEFS, RIDER_FOOT_Y_FRAC, RIDER_LEG_Y_FRAC, defaultParams, derived, resolveParams, steerStopPlan, validateParams, type ParamKey, type Params } from '../params';
 import { buildModel } from './index';
 import { computeLayout } from './layout';
 import { obbOverlap, partOBB, worldAABB } from './bounds';
@@ -21,6 +21,10 @@ const ALLOW: Allow[] = [
   { a: /^axle-/, b: /^(wheel-|beam-)/, why: 'axle passes through the hub bore and lies in a groove in the beam (D-10, D-15)' },
   { a: /^beam-/, b: /^wheel-/, why: 'tire OBB is a conservative box; the beam ends sit inside the rim, 1/8" short of the hub face' },
   { a: /^brake-shoe-/, b: /^wheel-/, why: 'shoe presses on the tread; the tire OBB corner is not tire' },
+  { a: /^brake-/, b: /^brake-/, why: 'pins, bolts, hubs and the shaft pass through bored holes in the arms, bushings, blocks and pads; the pawl sits in a tooth valley (D-38, D-39). Moving-part clearances are swept in src/analysis/brake.test.ts' },
+  { a: /^(transom-rear|side-cabin-[LR]-web)$/, b: /^brake-(lever|pawl)/, why: 'flared gunwale: the transom / web OBBs are conservative boxes over the flared outline; the lever leans out parallel to the web and stays 1/2" clear of it, and the pawl sits on the plate outside the flare (D-38, D-39)' },
+  { a: /^handle-(socket|post|pin)-/, b: /^handle-(socket|post|pin)-/, why: 'the post is a slip fit in the socket tube and the clevis pin passes through both (D-9, D-39)' },
+  { a: /^(rail-cabin|girder-cabin)-/, b: /^brake-(bushing|lever-pin)/, why: 'the shaft bushing and the lever pivot bolt pass through the rail band (D-38)' },
   { a: /^(rail-cabin|girder-cabin)-/, b: /^(beam-R|axle-R|brake-shaft)/, why: 'rails/girders are notched or drilled for the rear axle and brake-shaft journals (D-15); joinery is Phase 3' },
   { a: /^kingpin$/, b: /^kingpin-crossbar$/, why: 'the kingpin passes up through the crossbar bore (D-12)' },
   { a: /^kingpin-crossbar$/, b: /^bolster-(fore|aft)$/, why: 'the crossbar ends are let into notches in the bolster rails (D-12)' },
@@ -29,8 +33,18 @@ const ALLOW: Allow[] = [
   { a: /^side-bearer-[LR]$/, b: /^beam-F$/, why: 'the bearer block is housed in a mortise in the beam top (M5); only the mortise volume overlaps' },
   { a: /^beam-F$/, b: /^bridle-[LR]$/, why: 'the rope-bridle legs are tied around the front beam ends (D-14, D-27); the drawn rope bar ends embed ≲ ¼" in the beam' },
   { a: /^bridle-L$/, b: /^bridle-R$/, why: 'the two rope legs meet at the ring ahead of the cart (D-14, D-27); the drawn bar ends overlap at the knot' },
+  { a: /^stop-block-/, b: /^(bolster-(fore|aft)|kingpin-crossbar)$/, why: 'the stop block is a wedge glued into the corner between the bolster rail and the crossbar (D-31); its OBB is the rectangle behind the stop face and over-covers the wedge' },
+  { a: /^nose-access-panel$/, b: /^deck-nose$/, why: 'the access panel is the cutout of the nose deck (D-34); workstream B cuts the opening, until then both parts exist' },
+  { a: /^clamp-F[LR]1$/, b: /^(beam-F|axle-F[LR]?|clamp-F[LR]2)$/, why: 'the front square U-bolt wraps the beam (legs down its faces, bridge over the axle rod) to the plate under it (D-34); its OBB is the box around the U' },
+  { a: /^eyebolt-[LR]$/, b: /^(beam-F|axle-F[LR]?|bridle-[LR])$/, why: 'the eye bolt shank passes through a hole in the front beam; the rope leg is tied to its eye (D-33); the axle rod is 6 thousandths inside the shank OBB' },
   { a: /^wheel-F[LR]$/, b: /^bridle-[LR]$/, why: 'each rope leg is tied at the axle end, which is inside the wheel; the tire OBB is a conservative box, so wide tires / large wheels show a ≲ 0.08" corner clash (reported, see the Phase 2 test notes)' },
   { a: /^axle-R$/, b: /^brake-drum-/, why: 'wooden drum is bored onto the live rear axle (D-13)' },
+  { a: /^(lantern-mount|flag-mount)$/, b: /^transom-front$/, why: 'printed inverted-U clip straddles the transom top; the OBB of the U profile is its full bounding box (D-41)' },
+  { a: /^seat-wedge-[LR]$/, b: /^seat-(back-(stile|pad)|knob)-?[LR]?$/, why: 'oak wedge/post is a trapezoid extrusion whose sloped face is the stile\'s rear face; its OBB is the bounding box, which reaches into the stile, the knob and the pad that lie in front of that face (D-40)' },
+  { a: /^deck-(cabin|nose)$/, b: /^(side-(cabin|nose)-[LR]-(chine|board)|transom-(rear|front))$/, why: 'the deck edge sits in the chine rabbets and the transom dados (D-35); hull.test.ts pins the capture depth' },
+  { a: /^side-(cabin|nose)-[LR]-web$/, b: /^(side-(cabin|nose)-[LR]-(chine|gunwale)|transom-(rear|front))$/, why: 'the side panel enters the chine and gunwale grooves and the transom stopped dados (D-35); hull.test.ts pins the groove depth and the dado depth' },
+  { a: /^transom-rear$/, b: /^brake-lever$/, why: 'with gunwale flare the transom outline widens toward the top (it must meet the flared gunwale); its OBB is the full bounding box, which reaches the lever that stands outside the unflared lower hull (D-35, D-38)' },
+  { a: /^guard-[LR]$/, b: /^side-nose-[LR]-gunwale$/, why: 'the finger guard is a joggled L whose OBB is its full bounding box; the strap lies on the gunwale face and the leg in the web recess (D-37)' },
 ];
 const matches = (r: Allow, a: Part, b: Part) => (r.a.test(a.id) && r.b.test(b.id)) || (r.a.test(b.id) && r.b.test(a.id));
 
@@ -164,17 +178,40 @@ describe('buildModel structure', () => {
     // ...and the old 2.5" beam (the round-2 H2 defect) is rejected.
     expect(errorsOf({ ...defaults, frontAxleBeamThicknessIn: 2.5 }).length).toBeGreaterThan(0);
   });
-  it('U-bolt clamp plates straddle the rod: legs at rod x ± (rod radius + leg gap) (H2)', () => {
+  it('REAR U-bolt clamp plates straddle the rod: legs at rod x ± (rod radius + leg gap) (H2)', () => {
     const m = buildModel(defaults);
-    for (const [ax, rodX] of [['R', 0], ['F', defaults.wheelbaseIn]] as const) {
-      for (const tag of ['L', 'R']) {
-        const a = worldAABB(m.find((x) => x.id === `clamp-${ax}${tag}1`)!);
-        const b = worldAABB(m.find((x) => x.id === `clamp-${ax}${tag}2`)!);
-        const off = defaults.axleDiameterIn / 2 + defaults.clampLegGapIn;
-        expect((a.min[0] + a.max[0]) / 2).toBeCloseTo(rodX + off, 6);
-        expect((b.min[0] + b.max[0]) / 2).toBeCloseTo(rodX - off, 6);
-        expect(((a.min[0] + a.max[0]) / 2 + (b.min[0] + b.max[0]) / 2) / 2).toBeCloseTo(rodX, 6);
-      }
+    for (const tag of ['L', 'R']) {
+      const a = worldAABB(m.find((x) => x.id === `clamp-R${tag}1`)!);
+      const b = worldAABB(m.find((x) => x.id === `clamp-R${tag}2`)!);
+      const off = defaults.axleDiameterIn / 2 + defaults.clampLegGapIn;
+      expect((a.min[0] + a.max[0]) / 2).toBeCloseTo(off, 6);
+      expect((b.min[0] + b.max[0]) / 2).toBeCloseTo(-off, 6);
+    }
+  });
+  it('FRONT U-bolt (M8, D-34): the bridge crosses the rod on the beam top, the legs run down around the beam faces to a plate under it', () => {
+    const m = buildModel(defaults);
+    const beam = worldAABB(m.find((x) => x.id === 'beam-F')!);
+    const rod = worldAABB(m.find((x) => x.id === 'axle-F')!);
+    const rr = defaults.uboltRodDiameterIn / 2;
+    for (const tag of ['L', 'R']) {
+      const u = m.find((x) => x.id === `clamp-F${tag}1`)!;
+      const plate = m.find((x) => x.id === `clamp-F${tag}2`)!;
+      const ub = worldAABB(u), pb = worldAABB(plate);
+      expect(u.geometry.type).toBe('mesh');
+      expect(u.body).toBe('steer');
+      // legs outside the beam faces, bridge above the rod top, plate directly under the beam
+      expect(ub.min[0]).toBeCloseTo(beam.min[0] - defaults.uboltBeamClearIn - 2 * rr, 2);
+      expect(ub.max[0]).toBeCloseTo(beam.max[0] + defaults.uboltBeamClearIn + 2 * rr, 2);
+      expect(ub.max[2]).toBeCloseTo(rod.max[2] + 2 * rr, 2);
+      expect(ub.min[2]).toBeLessThan(pb.min[2]); // the nut ends hang below the plate
+      expect(pb.max[2]).toBeCloseTo(beam.min[2], 6);
+      expect(pb.max[2] - pb.min[2]).toBeCloseTo(defaults.clampPlateThickIn, 6);
+      expect(pb.max[0] - pb.min[0]).toBeGreaterThan(beam.max[0] - beam.min[0]); // spans the legs
+      expect(pb.max[1] - pb.min[1]).toBeCloseTo(defaults.clampPlateWidthIn, 6);
+      expect(u.sourcing?.vendor).toMatch(/U-bolt/);
+      expect(u.joints!.some((j) => j.type === 'bolt' && j.to === 'beam-F')).toBe(true);
+      expect(u.massLb).toBeGreaterThan(0.3);
+      expect(u.massLb).toBeLessThan(0.8);
     }
   });
 });
@@ -207,9 +244,24 @@ describe('overlaps', () => {
 //   front beam 3.5" → 4" thick +1.1; ¾" pin +0.3; two steel sleeves (1.25" OD tube around the ¾" pin, ≈ 2.5" and 1.6" long) +0.95;
 //   12 mm deck ply (+33%) on a shorter cabin +2.2, one more cabin joist and a nose joist at 8" spacing +1.4;
 //   oak tongue + straight bridle −2.6, two rope legs +1.0; shorter 44" cabin: rails, chines, gunwales, signs −1.0 in all.
-const EXPECTED_EMPTY_LB = 126.9;
+// Phase 3 workstream D (D-40, D-41): seat 5.9 → 8.2 lb (+2.3: vinyl covers on the cushion and back pad +0.8, two side grab handles +1.1,
+//   two oak wedges + two knobs +0.4); storage 8.1 → 9.9 lb (+1.8: lid frame wide enough to capture the ply panel, two lid battens,
+//   gaskets, hinges, latches, drains, backer cleats); six lash points (hardware) +0.6; lighting 0.7 → 1.2 lb (headlight, flag clip, plates).
+// Phase 3 workstream B (D-35…D-37): body 29.7 → 30.2 lb (+0.5) and frame unchanged, removable 4.7 → 4.8 lb (+0.1). Decks +0.5 (edges run 1/4"
+//   into the chine rabbets and transom dados, plus oak banding on the step edges), side webs +0.5 (taller by the groove depth each end, banded
+//   shoulder end), chines/gunwales −1.1 (grooves, rabbets, 1/2" shorter between the full-width transoms), shoulder panels +0.1 (banding),
+//   transoms +0.05, prow −0.25 (1/8" laminate sweep replaces the extruded block), two printed finger guards +0.7, signs +0.1 (banding).
+// Phase 3 workstream A (D-31…D-34): steering 11.6 → 13.8 lb (+2.3: two steel-faced oak stop dogs 0.41 + four steel face plates 0.67 + four oak
+//   stop blocks 0.70 replace two 0.07 lb oak posts (+1.8 net), two forged eye bolts +0.5, the access panel +0.13 (also still in the deck until B
+//   cuts the opening)); running gear 49.7 → 51.0 lb (+1.3: the front U-bolt wraps the beam to a steel plate under it: 2 × (0.47 + 0.90) lb replace
+//   4 × 0.35 lb). Total +3.6 lb.
+// Phase 3 workstream C (D-38, D-39): brake 3.5 → 12.2 lb (+8.7) and removable −0.2 (shorter uprights, +pins). The old brake was a ½" shaft, a
+//   lever and two shoe blocks; now: ¾" ground cross shaft 39.5" long 4.9 (was 2.0), four shoe arms + four keyed hubs 1.1, two oak pads 0.6,
+//   two pad pins 0.4, oak lever + pivot block + bearing pad 1.2, thick keyed crank 0.6, link rod and two clevises 0.2, two bronze bushings and a
+//   sleeve 0.25, return spring 0.1, ratchet quadrant + bracket + pawl + spring 0.45, two steel-tube handle sockets 2.3 (new, stay on the cart).
+const EXPECTED_EMPTY_LB = 144.7; // 126.9 (Phase 2) + Phase 3 workstreams A (+3.6), B (+0.6), D (+3.1) and C (+8.5): re-checked at the Phase 3 integration
 const EXPECTED_GROUP_LB: Record<string, number> = {
-  'running-gear': 49.7, steering: 11.6, frame: 10.5, body: 29.8, seat: 5.9, storage: 8.1, brake: 3.5, removable: 4.7,
+  'running-gear': 51.0, steering: 13.8, frame: 10.5, body: 30.2, seat: 8.2, storage: 9.9, brake: 12.2, removable: 4.8,
 };
 
 describe('masses', () => {
@@ -368,7 +420,8 @@ const VARIANTS: Record<string, Partial<Params>> = {
   storageForwardRaised: { storageLocation: 1 },
   storageUnderSeat: { storageLocation: 2 },
   track30: { rearTrackIn: 30, frontTrackIn: 30 },
-  'track30+fix': { rearTrackIn: 30, frontTrackIn: 30, bodyWidthIn: 24, steerLockDeg: 25 },
+  // The 1" gap between a 24" hull and the 30"-track tires is too narrow for the brake crank and clevis (D-38): the shaft moves back behind the tire.
+  'track30+fix': { rearTrackIn: 30, frontTrackIn: 30, bodyWidthIn: 24, steerLockDeg: 25, brakeShaftBehindTireIn: 3, rearOverhangIn: 11 },
   // At the Phase 2 44" wheelbase the auto shoulder sits 0.2" further back, so the seat needs to move back 0.5" at a 44" track.
   track44: { rearTrackIn: 44, frontTrackIn: 44, seatXIn: 11.5 },
   'track44+fix': { rearTrackIn: 44, frontTrackIn: 44, seatXIn: 11.5, noseTaperStartIn: 23 },
@@ -548,14 +601,12 @@ describe('steering sweep', () => {
           const o = obbOverlap(oa, partOBB(b));
           const isStop = a.id.startsWith('steer-stop-');
           // Every steer-body part (tongue, beam, bearers, clamps, wheels, ...) stays clear of the chassis all the way round.
-          // The stop posts must be strictly clear until the last half degree; the only contact allowed is at lock.
+          // The stop dogs and their steel faces must be strictly clear of everything, including the stop blocks, until the last half
+          // degree; the only contact allowed is face on face with a stop block at ±lock (D-31).
           if (isStop) {
-            const left = a.id.endsWith('L');
-            const atLock = left ? deg >= lock - 1e-9 : deg <= -lock + 1e-9;
-            const nearLock = left ? deg > lock - 0.5 - 1e-9 : deg < -lock + 0.5 + 1e-9;
-            if (!nearLock) expect(o, `${label} ${a.id} x ${b.id} @${deg}`).toBeLessThanOrEqual(0);
-            else expect(o, `${label} ${a.id} x ${b.id} @${deg}`).toBeLessThanOrEqual(1e-6);
-            void atLock;
+            const nearLock = Math.abs(deg) > lock - 0.5 - 1e-9;
+            if (b.id.startsWith('stop-block-') && nearLock) expect(o, `${label} ${a.id} x ${b.id} @${deg}`).toBeLessThanOrEqual(1e-6);
+            else expect(o, `${label} ${a.id} x ${b.id} @${deg}`).toBeLessThanOrEqual(0);
           } else if (!ALLOW.some((r) => matches(r, a, b))) expect(o, `${label} ${a.id} x ${b.id} @${deg}`).toBeLessThanOrEqual(TOL);
         }
       }
@@ -568,32 +619,44 @@ describe('steering sweep', () => {
       if (!errorsOf(p).length) sweep(p, JSON.stringify(patch));
     }
   }, 60000); // ~10 s sweep on CI runners
-  it.each([['L', 1], ['R', -1]] as const)('stop %s: zero overlap for |δ| < lock − 0.5°, flat contact with the aft bolster rail at lock', (tag, sign) => {
+  // Each dog has a steel-faced side for each lock: at +lock the left dog's aft face closes on block AL and the right dog's fore face on block FR
+  // (a 180° couple); at −lock the left dog's fore face closes on FL and the right dog's aft face on AR (D-31).
+  const CONTACTS: Array<[string, number, string, string]> = [
+    ['L', 1, 'steer-stop-face-L1', 'stop-block-AL'], ['L', -1, 'steer-stop-face-L2', 'stop-block-FL'],
+    ['R', 1, 'steer-stop-face-R2', 'stop-block-FR'], ['R', -1, 'steer-stop-face-R1', 'stop-block-AR'],
+  ];
+  it.each(CONTACTS)('dog %s at lock sign %i: %s closes flat on %s exactly at lock and is strictly clear before it', (tag, sign, faceId, blockId) => {
     const lock = defaults.steerLockDeg;
-    const rail = (m: Part[]) => partOBB(m.find((x) => x.id === 'bolster-aft')!);
-    for (let k = 0; k * 0.5 <= lock - 0.5 + 1e-9; k++) {
-      const deg = sign * k * 0.5;
+    const touch = (deg: number) => {
       const m = buildModel(defaults, { steerDeg: deg });
-      const o = obbOverlap(partOBB(m.find((x) => x.id === `steer-stop-${tag}`)!), rail(m));
-      expect(o, `δ=${deg}`).toBeLessThan(0);
-    }
+      return obbOverlap(partOBB(m.find((x) => x.id === faceId)!), partOBB(m.find((x) => x.id === blockId)!));
+    };
+    for (let k = 0; k * 0.5 <= lock - 0.5 + 1e-9; k++) expect(touch(sign * k * 0.5), `δ=${sign * k * 0.5}`).toBeLessThan(0);
+    expect(Math.abs(touch(sign * lock))).toBeLessThan(1e-6);
+    // Flat: the face is parallel to the block's face at lock (their normals line up).
     const m = buildModel(defaults, { steerDeg: sign * lock });
-    const stop = m.find((x) => x.id === `steer-stop-${tag}`)!;
-    const o = obbOverlap(partOBB(stop), rail(m));
-    expect(Math.abs(o)).toBeLessThan(1e-6);
-    // Flat: the post is axis-aligned at lock (face on face).
-    expect(Math.abs(stop.transform[1])).toBeLessThan(1e-9);
-    // It also touches nothing else (end rails, deck, ...) at lock.
-    for (const b of m.filter((x) => !x.payload && x.body === 'chassis' && x.id !== 'bolster-aft'))
-      expect(obbOverlap(partOBB(stop), partOBB(b)), b.id).toBeLessThanOrEqual(1e-6);
+    const face = partOBB(m.find((x) => x.id === faceId)!);
+    const block = partOBB(m.find((x) => x.id === blockId)!);
+    expect(Math.abs(face.axes[0][0] * block.axes[1][0] + face.axes[0][1] * block.axes[1][1])).toBeCloseTo(1, 9);
+    // The dog, both faces and the other three blocks touch nothing else at lock; the dog block itself never reaches a stop block.
+    const dog = partOBB(m.find((x) => x.id === `steer-stop-${tag}`)!);
+    for (const b of m.filter((x) => !x.payload && x.body === 'chassis' && SOLID.includes(x.group))) expect(obbOverlap(dog, partOBB(b)), b.id).toBeLessThan(0);
   });
-  it('without the stops the lock would be reached first: the other direction never touches either', () => {
+  it('two stops close at once at either lock (a couple): at +lock dogs L and R, at −lock dogs L and R, with no net force on the kingpin from equal shares', () => {
     const lock = defaults.steerLockDeg;
-    for (const tag of ['L', 'R']) {
-      const m = buildModel(defaults, { steerDeg: tag === 'L' ? -lock : lock });
-      const stop = m.find((x) => x.id === `steer-stop-${tag}`)!;
-      for (const b of m.filter((x) => !x.payload && x.body === 'chassis')) expect(obbOverlap(partOBB(stop), partOBB(b)), b.id).toBeLessThan(0);
+    for (const sign of [1, -1]) {
+      const m = buildModel(defaults, { steerDeg: sign * lock });
+      const engaged = CONTACTS.filter((c) => c[1] === sign).map(([, , faceId, blockId]) => obbOverlap(partOBB(m.find((x) => x.id === faceId)!), partOBB(m.find((x) => x.id === blockId)!)));
+      expect(engaged.length).toBe(2);
+      for (const o of engaged) expect(Math.abs(o)).toBeLessThan(1e-6);
     }
+    // The pair is the 180° rotation about the kingpin: the right block polygons are the left ones turned by 180°.
+    const plan = steerStopPlan(resolveParams(defaults));
+    const byId = (id: string) => plan.teeth.find((t) => t.id === id)!;
+    const sx = (t: { poly: Array<{ x: number; y: number }> }) => t.poly.reduce((m, q) => m + q.x, 0), sy = (t: { poly: Array<{ x: number; y: number }> }) => t.poly.reduce((m, q) => m + q.y, 0);
+    expect(sx(byId('FR'))).toBeCloseTo(-sx(byId('AL')), 9);
+    expect(sy(byId('FR'))).toBeCloseTo(-sy(byId('AL')), 9);
+    expect(sx(byId('AR'))).toBeCloseTo(-sx(byId('FL')), 9);
   });
 });
 
@@ -657,9 +720,9 @@ describe('round-2 validator rules', () => {
     }
   });
   it('steering stops must fit the bolster opening', () => {
-    expect(errorsOf({ ...defaults, steerStopSizeIn: 3 }).some((i) => i.message.startsWith('Steering stop posts'))).toBe(true);
+    expect(errorsOf({ ...defaults, steerStopSizeIn: 3, steerStopFacePlateIn: 0.25 }).some((i) => i.message.startsWith('Steering stops do not fit'))).toBe(true);
     // The turntable preset (D-28) overrides the size param, so a custom 6" plate needs turntableType = 0 (Custom).
-    expect(errorsOf({ ...defaults, turntableType: 0, turntableSizeIn: 6 }).some((i) => i.message.startsWith('Steering stop posts'))).toBe(true);
+    expect(errorsOf({ ...defaults, turntableType: 0, turntableSizeIn: 6 }).some((i) => i.message.startsWith('Steering stops do not fit'))).toBe(true);
   });
 });
 
@@ -784,7 +847,7 @@ describe('autoNoseGeometry and resolveParams', () => {
     expect(L.xs).toBeCloseTo(p.wheelbaseIn - r.noseTaperStartIn, 9);
     expect(validateParams(p)).toEqual(validateParams(r));
     const deckNose = buildModel(p).find((x) => x.id === 'deck-nose')!;
-    expect(worldAABB(deckNose).max[1] - worldAABB(deckNose).min[1]).toBeCloseTo(2 * L.hwN, 6);
+    expect(worldAABB(deckNose).max[1] - worldAABB(deckNose).min[1]).toBeCloseTo(2 * L.hwN + 2 * p.deckCaptureDepthIn, 6); // the deck edges sit in the chine rabbets (D-35)
   });
   it('an auto nose too narrow for the rider reports the boot error (honest outcome)', () => {
     const errs = errorsOf({ ...defaults, steerLockDeg: 45 });
