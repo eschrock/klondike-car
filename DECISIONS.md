@@ -145,7 +145,7 @@ The workstream notes have the full reasoning and check tables: `docs/phase3-ws{A
 | D-57 | **Character and ergonomics pass (Eric, 2026-10-11).** For pass 3c-4:
 1. **Sides with character:** the top edge sweeps up in a concave curve from a low bow to the back, as on Wagner's sled, with a gentle plan curve into the bow. Both are sliders.
 2. **Rear side height 14"** (bow stays about 4").
-3. **Bow as the foot brace:** a shaped oak bulkhead with a curved top replaces the curl lip and the separate foot-stop bar; a removable drop-in foot block in slots serves shorter riders.
+3. **Bow as the foot brace:** a shaped oak bulkhead with a curved top replaces the curl lip and the separate foot-stop bar. *(Updated 2026-10-12, Eric: the drop-in foot block and its four slot cleats are dropped. Bracing isn't needed at walking pace; a block can be added after test rides if small riders want one.)*
 4. **Flag:** a plain 1" tube inside a rear corner, flush with the side top (replaces the bow flag socket).
 5. **The seat stays full size.** The **seat back is hinged:** it flips flat and **latches**, with no tools, and never goes in the box. The **box only holds the cushions plus the 10 Essentials**, so it shrinks back from the 3c-2 enlargement, and the rider room is restored (leg reach back toward 36").
 6. **Rear handlebow:** a second pin position parks it low when not pushing.
