@@ -138,6 +138,9 @@ export class Viewer {
 
   /** Where the secondary controls live: inline on wide screens, in a "More" panel on phones (M7). */
   private moreHost!: HTMLElement;
+  private moreBtn!: HTMLButtonElement;
+  private explodeLabel?: HTMLElement;
+  private toolbarEl!: HTMLElement;
   private hintEl!: HTMLElement;
   private hintTimer: ReturnType<typeof setTimeout> | undefined;
   /** The canvas was clicked, so the mouse wheel zooms it (otherwise the wheel scrolls the page; M2). */
@@ -202,6 +205,8 @@ export class Viewer {
       moreBtn.setAttribute('aria-expanded', String(open));
       moreBtn.textContent = open ? 'More ▴' : 'More ▾';
     });
+    this.moreBtn = moreBtn;
+    this.toolbarEl = toolbar;
     toolbar.append(views, moreBtn, this.moreHost);
     // Phone: a tap on the 3D view folds the "More" sheet away so the sled is never hidden behind it.
     this.canvasHost.addEventListener('pointerdown', () => {
@@ -323,6 +328,7 @@ export class Viewer {
     const label = el('label', 'steer-ctl'); // shown in Simple too (D-30)
     label.title = 'Exploded view: each part moves along its own explode vector (radially from the center of gravity if it has none), farther the farther it is from the CG. The CG marker and dimensions are hidden while exploded';
     label.append('Explode', r, out);
+    this.explodeLabel = label;
     this.moreHost.append(label);
   }
 
@@ -506,6 +512,20 @@ export class Viewer {
       }
       void z0;
     }
+  }
+
+  /**
+   * Build mode (the Assembly step-through): the toolbar is the four view buttons and Explode, at every width; everything else (Dimensions,
+   * Outline edges, Shop aids, Joinery, CG, Section, the layer toggles) sits behind the "More" sheet, so the toolbar does not eat the viewer.
+   * The layout itself is CSS (`#app[data-mode='build']` in build-panel.css); this only moves Explode out of the sheet and back, and folds the sheet.
+   */
+  setBuildMode(on: boolean): void {
+    if (!this.explodeLabel) return;
+    this.moreHost.classList.remove('open');
+    this.moreBtn.setAttribute('aria-expanded', 'false');
+    this.moreBtn.textContent = 'More ▾';
+    if (on) this.toolbarEl.insertBefore(this.explodeLabel, this.moreBtn);
+    else this.moreHost.prepend(this.explodeLabel);
   }
 
   /**

@@ -246,6 +246,7 @@ const readMode = (): Mode => {
   try { return parseMode(localStorage.getItem(MODE_KEY)); } catch { return 'simple'; }
 };
 let mode: Mode = readMode();
+let viewerInBuild = false; // the viewer toolbar's Build layout (Explode out, the rest behind More)
 /** Where Back from Build lands when Build was the first mode shown (a saved Build opens straight into it). */
 let modeBeforeBuild: Mode = 'advanced';
 /** Set while a Build -> other mode click waits for `history.back()` to pop the entry Build pushed. */
@@ -333,7 +334,10 @@ function setMode(next: Mode, opts: { fromSimple?: boolean; persist?: boolean } =
   // Entering Build computes the section on screen; leaving it sends stepFocus null (which restores the full model) before the render below.
   buildPanel?.setActive(mode === 'build');
   if (was === 'build' && mode !== 'build') window.scrollTo({ top: 0 }); // the Build page may have been scrolled far down
+  if ((mode === 'build') !== viewerInBuild) { viewerInBuild = mode === 'build'; viewer.setBuildMode(viewerInBuild); }
   render();
+  // The step-through moved the camera (Top, Under, ...): Simple and Advanced always come back to Iso, reframed on the full sled.
+  if (was === 'build' && mode !== 'build') viewer.setView('iso');
 }
 /**
  * An explicit mode click. Build pushes one history entry, so Back leaves Build (restoring the mode it was entered from) instead of

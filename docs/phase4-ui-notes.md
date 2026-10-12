@@ -32,3 +32,12 @@ Supersedes the "Build tab" parts above: Build is now **Simple | Advanced | Build
 - **Print:** section print hides the rail and viewer, shows `#build-main` at full width; tiled Letter print is unchanged (`body.bp-print-tiles`).
 - Also fixed: nesting sheets were labeled one too high (`index` is already 1-based).
 - **Gaps:** BOM and cut-list tables scroll sideways on phones (the first column stays readable). The step number is not remembered across a reload. Print was checked as CSS only, not through the print dialog.
+
+## Visual round 2 (review: docs/reviews/build-mode-visual-round1.md, 7/10)
+- **Prev/Next/jump** scroll the new step's title under the pinned bars (`showStepTop`, `scroll-margin-top`); the counter shows `step.n` ("Step 11 of 29", the last step's number) and is also a step `<select>`; ←/→ step when focus is not in a field; the step is kept in sessionStorage; "Check before moving on" items are real checkboxes (localStorage `klondike-build-step-checks`; the print list keeps blank boxes).
+- **Camera:** leaving Build resets the viewer to Iso after the render (`main.ts` `setMode`). **Toolbar in Build:** `Viewer.setBuildMode` moves Explode out of the sheet; the views, Explode and "More" stay on one row at every width, everything else is in the sheet, the layer toggles are hidden (they fight the step-through).
+- **1024 (900 to 1279 px):** 168 px rail, 18 px padding, `.nw` columns, 11em first column. Sizes use `fracDim` (1/16 grid, else nearest 1/32 plus the decimal: `21-5/32 (21.142)`) with each dimension unbreakable (`dimsCell`). `.bp-scroll` gets `is-over` (edge shadow) or `is-fit` (clipped, so `thead th` sticks to the page scroller).
+- **Phones (< 600 px):** cut list and BOM rows are cards (`data-label` captions, `c-qty`/`c-key`/`c-end` roles from `TableOpts`); the BOM card ends with the extended price.
+- **Landmark:** `main.ts` already puts `role="main"` on `#build-main` and `role="region"` on the viewer `main` (exactly one main, verified).
+- Also: sticky table headers, 1150 px cap on cut list and Downloads, Shaper stock row, one-column Finishing (empty recoat/cure omitted), 5.8:1 warning color, oak buy table first in Nesting, BOM chips jump to their tables, totals/bulk/touches chips, group subtotals, vendor links (http/https only), pack and material notes, laminated groups with a Layers fold.
+- Not done: a click on a Shaper preview to open it full size; Verify numbering is not renumbered per group (the build book uses the same numbers).

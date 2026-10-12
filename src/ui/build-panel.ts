@@ -5,15 +5,18 @@
  * debounced on parameter changes and cached per parameter set.
  * Two hosts: a left rail (section nav + the zip, book and print buttons) and the content column. Layout lives in build-panel.css.
  */
-import type { Part } from '../model/types';
+import type { Dims, Part } from '../model/types';
 import type { Params } from '../params';
+import type { BomLine } from '../build/bom';
 import { BuildData, CSV_MIME, SHAPER_CONVENTIONS, SHAPER_NOTES, SVG_MIME, zipName, zipPackage } from '../build/package';
 import { fracIn } from '../build/cutlist';
 import { tilePlan } from '../build/forms';
 import type { BuildStep } from '../build/assembly';
+import type { OakRow } from '../build/cutlist';
 import { h } from './dom';
 import {
-  bytesLabel, clampStep, cureLine, dims3, featureSummary, groupByWhen, loadDone, maxDepth, pct, previewSvg, saveDone, sheetSvg, stepFocus, tilePagesHtml, todayISO, usd,
+  bytesLabel, clampStep, cureLine, dimsParts, featureSummary, fracDim, fracInch, groupByWhen, loadDone, loadStep, loadStepChecks, maxDepth, pct, previewSvg, saveDone, saveStep, saveStepChecks,
+  sheetSvg, stepFocus, tilePagesHtml, todayISO, usd,
   type StepFocus,
 } from './build-helpers';
 import './build-panel.css';
@@ -86,19 +89,62 @@ interface TableOpts {
   num?: number[];
   /** A closing row (subtotals). */
   foot?: (string | Node)[];
+  /** Columns that never wrap (a grain word, a step list). */
+  nowrap?: number[];
+  /** Phone cards (under 600 px): the quantity column, the one size line that is shown bold, and the closing price. The rest becomes a muted `label value` line. */
+  qty?: number;
+  key?: number;
+  end?: number;
 }
 
 /** A table in a keyboard-scrollable wrapper (a wide table scrolls sideways instead of wrapping into a column of fragments). */
 const table = (cls: string, head: (string | Node)[], rows: (string | Node)[][], aria: string, opts: TableOpts = {}): HTMLElement => {
-  const attrs = (i: number): Record<string, string> => (opts.num?.includes(i) ? { class: 'num' } : {});
+  const classes = (i: number): string => [opts.num?.includes(i) ? 'num' : '', opts.nowrap?.includes(i) ? 'nw' : '', opts.qty === i ? 'c-qty' : '', opts.key === i ? 'c-key' : '', opts.end === i ? 'c-end' : ''].filter(Boolean).join(' ');
+  const attrs = (i: number): Record<string, string> => (classes(i) ? { class: classes(i) } : {});
+  // `data-label` is the phone card's caption for the cell ("Rough", not "Rough T × W × L").
+  const label = (i: number): Record<string, string> => (typeof head[i] === 'string' && head[i] ? { 'data-label': (head[i] as string).replace(/\s*T × W × L$/, '') } : {});
   const t = h('table', { class: `bp-table ${cls}`.trim(), 'aria-label': aria },
     h('thead', {}, h('tr', {}, ...head.map((x, i) => h('th', { scope: 'col', ...attrs(i) }, x)))),
-    h('tbody', {}, ...rows.map((r) => h('tr', {}, ...r.map((c, i) => h('td', attrs(i), c))))),
+    h('tbody', {}, ...rows.map((r) => h('tr', {}, ...r.map((c, i) => h('td', { ...attrs(i), ...label(i) }, c))))),
     ...(opts.foot ? [h('tfoot', {}, h('tr', {}, ...opts.foot.map((c, i) => h(i === 0 ? 'th' : 'td', i === 0 ? { scope: 'row' } : attrs(i), c))))] : []));
-  return h('div', { class: 'bp-scroll', role: 'region', tabindex: '0', 'aria-label': aria }, t);
+  const wrap = h('div', { class: 'bp-scroll', role: 'region', tabindex: '0', 'aria-label': aria }, t);
+  watchOverflow(wrap);
+  return wrap;
 };
 
+/**
+ * Keep `.is-over` (a right-edge shadow cue: the table scrolls sideways) and `.is-fit` (nothing overflows, so the wrapper clips instead of
+ * scrolling and the table header can stick to the page scroller) in step with the width. One shared observer.
+ */
+let overflowRo: ResizeObserver | undefined;
+function measureOverflow(sc: HTMLElement): void {
+  sc.classList.remove('is-fit', 'is-over'); // measure in the scrolling state
+  sc.classList.add(sc.scrollWidth > sc.clientWidth + 1 ? 'is-over' : 'is-fit');
+}
+function watchOverflow(sc: HTMLElement): void {
+  if (typeof ResizeObserver === 'undefined') return;
+  overflowRo ??= new ResizeObserver((entries) => {
+    for (const e of entries) {
+      const el = e.target as HTMLElement;
+      const sc = el.classList.contains('bp-scroll') ? el : (el.parentElement as HTMLElement | null);
+      if (!sc || !sc.isConnected) { overflowRo?.unobserve(el); continue; }
+      measureOverflow(sc);
+    }
+  });
+  overflowRo.observe(sc);
+  overflowRo.observe(sc.firstElementChild as Element);
+}
+
 const sub = (text: string, extra = '') => h('div', { class: 'muted small' }, text + extra);
+/** A size in a table cell: `5/8 × 1-3/4 × 21-5/32 (21.142)`, each dimension unbreakable (`.bp-d`). */
+const dimsCell = (d: Dims): Node => {
+  const out: (string | Node)[] = [];
+  dimsParts(d).forEach((x, i) => { if (i) out.push(' × '); out.push(h('span', { class: 'bp-d' }, x)); });
+  return h('span', {}, ...out);
+};
+/** A BOM item name, linked to the vendor page when the price or part carries a real http(s) link. */
+const itemName = (text: string, url?: string): string | Node =>
+  url && /^https?:\/\//i.test(url) ? h('a', { href: url, target: '_blank', rel: 'noopener noreferrer', class: 'bp-link' }, text) : text;
 const stepList = (n: number[]): string => (n.length ? n.join(', ') : '–');
 
 const note = (text: string, cls = 'muted small') => h('p', { class: cls }, text);
@@ -114,9 +160,12 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
   let focusActive = false;
   let dataKey = '';
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let stepN = 0;
+  let stepN = loadStep(); // kept for the tab session (sessionStorage); clampStep fixes it if the step list changed
   let stepUpdate: ((reframe: boolean) => void) | null = null;
+  /** Move the Assembly step by one (the arrow keys); null outside the Assembly section. */
+  let stepMove: ((delta: number) => void) | null = null;
   let done = loadDone();
+  const stepChecks = loadStepChecks();
   /** Tell the viewer what to show; a `null` only goes out when a focus is active, so mounting never touches the viewer. */
   const emit = (f: StepFocus | null): void => {
     if (!f && !focusActive) return;
@@ -178,7 +227,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
       panels.get(s.id)!.hidden = !on;
     }
     navButtons.get(id)!.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    if (id !== 'assembly') { stepUpdate = null; emit(null); }
+    if (id !== 'assembly') { stepUpdate = null; stepMove = null; emit(null); }
     opts.onSection?.(id);
     if (changed) main.scrollTop = 0;
     if (active) renderSection();
@@ -231,6 +280,16 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
       renderSection(false); // a parameter change keeps the step; only a new step reframes the camera
     }, DEBOUNCE_MS);
   }
+
+  // ← / → step through the Assembly section unless the keys belong to a field (or another handler already took them: the section list).
+  document.addEventListener('keydown', (e) => {
+    if (!active || section !== 'assembly' || !stepMove || e.defaultPrevented) return;
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if ((e.target as Element | null)?.closest?.('input, select, textarea, [contenteditable=""], [contenteditable="true"], [role="slider"]')) return;
+    e.preventDefault();
+    stepMove(e.key === 'ArrowRight' ? 1 : -1);
+  });
 
   // ── Print ──
   let tilesHost: HTMLElement | null = null;
@@ -307,26 +366,34 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
   function renderCutlist(d: BuildData): Node[] {
     const c = d.cutList;
     const out: Node[] = [h('div', { class: 'bp-actions' }, csvButton('Download CSV', 'cutlist.csv', () => d.cutlistCsv))];
-    out.push(note('Final size is the finished T × W × L; rough adds the milling allowance. Dimensions in inches (sixteenths as fractions).'));
+    out.push(note('Final size is the finished T × W × L; rough adds the milling allowance. Dimensions in inches: fractions to the sixteenth; a size off that grid shows the nearest 1/32 with the exact decimal after it.'));
     if (c.warnings.length) {
       out.push(h('details', { class: 'bp-warn' }, h('summary', {}, `${c.warnings.length} data warning${c.warnings.length === 1 ? '' : 's'}`), h('ul', {}, ...c.warnings.map((w) => h('li', {}, w)))));
     }
     const partCell = (name: string, partNo: string, extra?: string): Node => h('div', {}, h('strong', {}, name), sub(partNo), ...(extra ? [h('div', { class: 'small' }, extra)] : []));
+    /** An oak row's name cell: the sizing note and, for a face-laminated part (D-70), the layer pieces behind a fold. */
+    const oakPart = (r: OakRow): Node => {
+      const layers = r.layerPieces ?? [];
+      return h('div', {}, h('strong', {}, r.name), sub(r.partNo), ...(r.note ? [h('div', { class: 'small' }, r.note)] : []),
+        ...(layers.length
+          ? [h('details', { class: 'small bp-layers' }, h('summary', {}, `Layers (${layers.length})`),
+              h('ul', { class: 'bp-plain' }, ...layers.map((q) => h('li', {}, `Layer ${q.layer} of ${q.layers}: ${q.qty} × ${q.board}, plane to ${fracInch(q.roughT)} × ${fracInch(q.widthIn)} × ${fracInch(q.lengthIn)}${q.edgeGlued > 1 ? ` (edge-glue ${q.edgeGlued} across)` : ''}, ${fracInch(q.finalT)} of the finished thickness`))))]
+          : []));
+    };
     out.push(h('h3', { class: 'bp-group' }, 'White oak by board thickness'));
     for (const g of c.oak) {
-      const resawn = g.board === 'resawn';
-      out.push(h('h4', { class: 'bp-sub' }, resawn ? `Resawn strips (${g.pieces} pieces)` : `${g.board} (usable ${fracIn(g.usableIn)}"), ${g.pieces} pieces`));
+      out.push(h('h4', { class: 'bp-sub' }, g.title));
       out.push(table('bp-cuts', ['Part', 'Qty', 'Final T × W × L', 'Rough T × W × L', 'Grain', 'Fabrication', 'Step'], g.rows.map((r) => [
-        partCell(r.name, r.partNo),
-        String(r.qty), dims3(r.stock), dims3(r.rough), r.grainWord ?? '–',
+        oakPart(r),
+        String(r.qty), dimsCell(r.stock), dimsCell(r.rough), r.grainWord ?? '–',
         `${r.fab}${r.plies ? ` · ${r.plies} plies` : ''}`, stepList(r.assemblySteps),
-      ]), `Oak ${g.board}`, { num: [1] }));
+      ]), `Oak ${g.title}`, { num: [1], nowrap: [4], qty: 1, key: 2 }));
     }
     out.push(h('h3', { class: 'bp-group' }, 'Resaw list'));
     out.push(table('bp-cuts', ['Strips for', 'Strips', 'Final T × W × L', 'Rough T × W × L', 'Resaw from'], c.strips.map((r) => [
       h('div', {}, h('strong', {}, r.name), sub(`${r.parts} part${r.parts === 1 ? '' : 's'} × ${r.plies} plies`)),
-      String(r.strips), dims3(r.stock), dims3(r.rough), r.resawFrom,
-    ]), 'Resawn strips', { num: [1] }));
+      String(r.strips), dimsCell(r.stock), dimsCell(r.rough), r.resawFrom,
+    ]), 'Resawn strips', { num: [1], qty: 1, key: 2 }));
     for (const pool of c.resaw) {
       out.push(note(`${pool.strips} strips of ${fracIn(pool.roughT)}" rough: buy ${pool.boards} × ${pool.board} × ${pool.boardWidthIn}" wide × ${pool.boardLengthIn / 12} ft (${pool.boardFeet.toFixed(1)} bf). RIP FIRST into ${pool.lanes} lane${pool.lanes === 1 ? '' : 's'}, then resaw each lane into ${pool.stripsPerBoard} slab${pool.stripsPerBoard === 1 ? '' : 's'}; a board yields ${pool.yieldPerBoard} strips, so the purchase holds ${pool.stripSlots}: ${pool.spares} spare${pool.spares === 1 ? '' : 's'}.`, 'muted bp-prose'));
     }
@@ -335,20 +402,36 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
       out.push(h('h4', { class: 'bp-sub' }, `${g.label} (${g.pieces} pieces)`));
       out.push(table('bp-cuts', ['Part', 'Qty', 'Size T × W × L', 'Grain', 'Fabrication', 'Step'], g.rows.map((r) => [
         partCell(r.name, r.partNo, r.note),
-        String(r.qty), dims3(r.stock), r.grainWord ?? '–', r.fab, stepList(r.assemblySteps),
-      ]), `Plywood ${g.label}`, { num: [1] }));
+        String(r.qty), dimsCell(r.stock), r.grainWord ?? '–', r.fab, stepList(r.assemblySteps),
+      ]), `Plywood ${g.label}`, { num: [1], nowrap: [3], qty: 1, key: 2 }));
     }
     out.push(h('h3', { class: 'bp-group' }, 'Metal stock (drill and tap)'));
     out.push(table('bp-cuts', ['Part', 'Qty', 'Section', 'Cut length', 'Step'], c.metal.map((r) => [
-      partCell(r.name, r.partNo), String(r.qty), r.section, `${fracIn(r.cutLengthIn)}"`, stepList(r.assemblySteps),
-    ]), 'Metal stock', { num: [1] }));
+      partCell(r.name, r.partNo), String(r.qty), r.section, fracInch(r.cutLengthIn), stepList(r.assemblySteps),
+    ]), 'Metal stock', { num: [1], qty: 1, key: 3 }));
     return out;
   }
 
   function renderNesting(d: BuildData): Node[] {
     const n = d.nest;
     const o = d.oak;
-    const out: Node[] = [note('Part outlines at true shape on full 4 × 8 sheets (grain arrows follow the sheet). The dashed blue box is the largest offcut. The side webs are drawn unrolled to their flat development.', 'muted small bp-prose')];
+    const oakBuy = (): Node[] => {
+      const out: Node[] = [];
+      out.push(h('h3', { class: 'bp-group' }, 'Oak board feet'));
+      out.push(table('bp-bf', ['Board', 'Pieces', 'Net bf', `+${Math.round(o.wasteAllowance * 100)}% waste`, 'Buy'], [
+        ...o.thicknesses.map((t) => [
+          h('strong', {}, t.board), String(t.pieces), t.netBf.toFixed(1), t.allowanceBf.toFixed(1),
+          h('div', { class: 'bp-buy' }, ...t.summary.map((x) => h('div', {}, x))),
+        ]),
+      ], 'Oak board feet by thickness', { num: [1, 2, 3], foot: ['Total', '', o.netBf.toFixed(1), o.allowanceBf.toFixed(1), ''] }));
+      out.push(note('Net = nominal thickness × rough width × rough length. The BOM prices the suggested whole boards (6" wide, 6, 8 or 10 ft), which runs higher than net plus the waste allowance; a yard that sells by the foot, or wider boards, costs less. Ask the yard for the thick boards first, then see what is left for the thinner parts.', 'muted small bp-prose'));
+      if (o.glueUps.length) out.push(note(`Wider than a board, edge-glue two pieces: ${o.glueUps.join(', ')}.`, 'small bp-prose'));
+      return out;
+    };
+    // The shopping list (oak board feet) comes first; the sheet drawings are the long part.
+    const out: Node[] = [...oakBuy()];
+    out.push(h('h3', { class: 'bp-group' }, 'Plywood sheets'));
+    out.push(note('Part outlines at true shape on full 4 × 8 sheets (grain arrows follow the sheet). The dashed blue box is the largest offcut. The side webs are drawn unrolled to their flat development.', 'muted small bp-prose'));
     for (const s of n.sheets) {
       out.push(h('article', { class: 'bp-card bp-sheet-card', 'aria-label': `${s.label}, sheet ${s.index}` },
         h('h3', { class: 'bp-group' }, `${s.label}, sheet ${s.index}`, h('span', { class: 'muted' }, ` · ${s.utilizationPct.toFixed(1)}% used`)),
@@ -359,34 +442,55 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
     }
     if (n.unplaced.length) out.push(h('p', { class: 'fail' }, `Did not fit: ${n.unplaced.join(', ')}`));
     if (n.grainTurned.length) out.push(h('p', { class: 'fail' }, `Grain turned across: ${n.grainTurned.map((g) => g.name).join(', ')}`));
-    out.push(h('h3', { class: 'bp-group' }, 'Oak board feet'));
-    out.push(table('bp-bf', ['Board', 'Pieces', 'Net bf', `+${Math.round(o.wasteAllowance * 100)}% waste`, 'Buy'], [
-      ...o.thicknesses.map((t) => [
-        h('strong', {}, t.board), String(t.pieces), t.netBf.toFixed(1), t.allowanceBf.toFixed(1),
-        h('div', { class: 'bp-buy' }, ...t.summary.map((x) => h('div', {}, x))),
-      ]),
-    ], 'Oak board feet by thickness', { num: [1, 2, 3], foot: ['Total', '', o.netBf.toFixed(1), o.allowanceBf.toFixed(1), ''] }));
-    out.push(note('Net = nominal thickness × rough width × rough length. The BOM prices the suggested whole boards (6" wide, 6, 8 or 10 ft), which runs higher than net plus the waste allowance; a yard that sells by the foot, or wider boards, costs less. Ask the yard for the thick boards first, then see what is left for the thinner parts.', 'muted small bp-prose'));
-    if (o.glueUps.length) out.push(note(`Wider than a board, edge-glue two pieces: ${o.glueUps.join(', ')}.`, 'small bp-prose'));
     return out;
   }
 
   function renderBom(d: BuildData): Node[] {
     const b = d.bom;
     const out: Node[] = [h('div', { class: 'bp-actions' }, csvButton('Download CSV', 'bom.csv', () => b.csv))];
+    const goTo = (id: string) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      el.focus({ preventScroll: true });
+    };
+    const part = (title: string, usdV: number, share: number) =>
+      h('li', { class: 'bp-part' }, h('span', { class: 'muted' }, title), h('strong', {}, usd(usdV)), h('span', { class: 'muted small' }, `${pct(share)} estimate`));
     out.push(h('div', { class: 'bp-total', role: 'status' },
       h('div', {}, h('span', {}, 'Total'), h('strong', {}, usd(b.totalUsd))),
+      h('div', { class: 'small' }, b.totalsText),
+      h('ul', { class: 'bp-subtotals bp-parts', 'aria-label': 'Totals by kind' },
+        part('Build', b.coreUsd, b.coreEstimateShare), part('Bulk parts', b.bulkUsd, b.bulkEstimateShare), part('Finishing touches', b.touchesUsd, b.touchesEstimateShare)),
       h('div', { class: 'muted small' }, `${pct(b.estimateShare)} of this is an estimate (${usd(b.estimateUsd)}); the rest is quoted. Prices are 2026 US retail guesses until you get quotes.`),
-      h('ul', { class: 'bp-subtotals', 'aria-label': 'Subtotals by section' },
-        ...b.sections.map((s) => h('li', {}, h('span', { class: 'muted' }, s.title), h('strong', {}, usd(s.subtotalUsd)))))));
-    for (const s of b.sections) {
-      out.push(h('h3', { class: 'bp-group' }, s.title, h('span', { class: 'muted' }, ` · ${usd(s.subtotalUsd)}`)));
-      out.push(table('bp-bom', ['Item', 'Qty', 'Unit price', 'Basis', 'Vendor', 'Extended'],
-        s.lines.map((l) => [
-          h('div', {}, l.description, ...(l.notes ? [sub(l.notes)] : [])),
+      h('h3', { class: 'bp-group' }, 'Jump to a section'),
+      h('ul', { class: 'bp-subtotals', 'aria-label': 'Subtotals by section (jump to a table)' },
+        ...b.sections.map((s) => {
+          const chip = h('button', { type: 'button', class: 'bp-chip', title: `Jump to ${s.title}` }, h('span', { class: 'muted' }, s.title), h('strong', {}, usd(s.subtotalUsd)));
+          chip.addEventListener('click', () => goTo(`bp-bom-${s.id}`));
+          return h('li', {}, chip);
+        }))));
+    const bomTable = (title: string, lines: BomLine[], subtotal: number): HTMLElement =>
+      table('bp-bom', ['Item', 'Qty', 'Unit price', 'Basis', 'Vendor', 'Extended'],
+        lines.map((l) => [
+          h('div', {}, itemName(l.description, l.url), ...(l.notes ? [sub(l.notes)] : []),
+            ...(l.packQty && l.packs ? [h('div', { class: 'small bp-pack' }, `need ${+(l.needed ?? 0).toFixed(2)} · ${l.packs} pack${l.packs === 1 ? '' : 's'} of ${l.packQty}${l.packUsd ? ` at ${usd(l.packUsd)}` : ''}`)] : []),
+            ...(l.materialNote ? [h('div', { class: 'small bp-material' }, h('strong', {}, 'Material: '), l.materialNote)] : [])),
           `${l.qty % 1 ? l.qty.toFixed(2) : l.qty} ${l.unit}`, usd(l.unitUsd), l.basis === 'estimate' ? 'estimate' : 'quoted', l.vendor ?? '–', h('strong', {}, usd(l.extUsd)),
         ]),
-        s.title, { num: [1, 2, 5], foot: [`${s.title} subtotal`, '', '', '', '', usd(s.subtotalUsd)] }));
+        title, { num: [1, 2, 5], qty: 1, end: 5, foot: [`${title} subtotal`, '', '', '', '', usd(subtotal)] });
+    for (const s of b.sections) {
+      out.push(h('h3', { class: 'bp-group bp-bom-head', id: `bp-bom-${s.id}`, tabindex: '-1' }, s.title, h('span', { class: 'muted' }, ` · ${usd(s.subtotalUsd)}`)));
+      for (const t of s.notes ?? []) out.push(note(t, 'muted small bp-prose'));
+      if (s.groups?.length) {
+        const loose = s.lines.filter((l) => !l.group || !s.groups!.some((g) => g.id === l.group));
+        if (loose.length) out.push(bomTable(s.title, loose, loose.reduce((a, l) => a + l.extUsd, 0)));
+        for (const g of s.groups) {
+          const lines = s.lines.filter((l) => l.group === g.id);
+          if (!lines.length) continue;
+          out.push(h('h4', { class: 'bp-sub' }, g.title, h('span', { class: 'muted' }, ` · ${usd(g.subtotalUsd)}`)));
+          out.push(bomTable(g.title, lines, g.subtotalUsd));
+        }
+      } else out.push(bomTable(s.title, s.lines, s.subtotalUsd));
     }
     out.push(h('div', { class: 'bp-total bp-grand' }, h('div', {}, h('span', {}, 'Grand total'), h('strong', {}, usd(b.totalUsd)))));
     if (b.unpriced.length) out.push(h('p', { class: 'fail' }, `No price: ${b.unpriced.join(', ')}`));
@@ -403,12 +507,22 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
       h('div', {}, h('h3', { class: 'bp-group' }, 'How to read the drawings'), legend, note(`${files.length} files, one per part (identical parts share a file). SVG only.`)),
       h('details', { class: 'bp-card' }, h('summary', {}, `Shaper notes (${SHAPER_NOTES.length})`), h('ul', { class: 'bp-plain muted small' }, ...SHAPER_NOTES.map((x) => h('li', {}, x))))));
     const cards: Node[] = [];
+    const partsById = new Map((design?.parts ?? []).map((x) => [x.id, x]));
+    /** "12 mm okoume marine plywood", "1-1/2" white oak": the thickness is the part's stock thickness, the material its own words. */
+    const stockOf = (id: string): string => {
+      const x = partsById.get(id);
+      if (!x) return '–';
+      if (!x.stock) return x.material;
+      // plywood is sold in millimeters (12 mm = 15/32", 4 mm = 5/32"); lumber in inches
+      return /plywood/i.test(x.material) ? `${+(x.stock.t * 25.4).toFixed(1)} mm ${x.material}` : `${fracDim(x.stock.t)}" ${x.material}`;
+    };
     for (const f of files) {
       const depth = maxDepth(f.features);
       cards.push(h('article', { class: 'bp-file', 'aria-label': f.fileName },
         svgBox(previewSvg(f.svg, `${f.partNo} Shaper file preview`)),
         h('div', { class: 'bp-file-head' }, h('strong', {}, f.partNo), h('span', { class: 'muted small' }, f.fileName)),
         h('dl', { class: 'bp-facts' },
+          h('dt', {}, 'Stock'), h('dd', {}, stockOf(f.partId)),
           h('dt', {}, 'Size'), h('dd', {}, `${f.widthIn.toFixed(2)} × ${f.heightIn.toFixed(2)} in`),
           h('dt', {}, 'Qty'), h('dd', {}, f.qty > 1 ? `${f.qty} (${f.partIds.join(', ')})` : '1'),
           h('dt', {}, 'Cut face'), h('dd', {}, f.cutFaceMatters ? `${f.cutFace} up` : 'Either face up'),
@@ -463,10 +577,29 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
       return b;
     });
     const detail = h('div', { class: 'bp-step-detail', 'aria-live': 'polite' });
-    const counter = h('span', { class: 'muted small' });
-    const prev = btn('← Prev', () => go(steps[Math.max(0, stepIdx() - 1)].n), 'Previous step');
-    const next = btn('Next →', () => go(steps[Math.min(steps.length - 1, stepIdx() + 1)].n), 'Next step', 'bp-primary');
+    const lastN = steps.length ? steps[steps.length - 1].n : 0;
+    const counterText = h('span', { 'aria-hidden': 'true' });
+    // The counter is also the step jump: an invisible native <select> over the text (a picker on phones, a list on desktop).
+    const jump = h('select', { class: 'bp-jump', 'aria-label': 'Jump to a step' }, ...steps.map((x) => h('option', { value: String(x.n) }, `${x.n}. ${x.title}`)));
+    jump.addEventListener('change', () => go(Number(jump.value)));
+    const counter = h('label', { class: 'bp-counter muted', title: 'Jump to a step' }, counterText, jump);
+    const prev = btn('← Prev', () => go(steps[Math.max(0, stepIdx() - 1)].n), 'Previous step (left arrow)');
+    const next = btn('Next →', () => go(steps[Math.min(steps.length - 1, stepIdx() + 1)].n), 'Next step (right arrow)', 'bp-primary');
     const viewNote = h('p', { class: 'muted small' });
+    const tidy = (t: string): string => t.replace(/\s*\(verify\.ts\)/, ''); // a source file name means nothing to the builder
+
+    /** "Check before moving on": real checkboxes on screen (ticks stay in this browser), blank printed boxes on paper. */
+    const checkItem = (s: BuildStep, c: string, forPrint: boolean): Node => {
+      if (forPrint) return h('li', {}, h('span', { class: 'bp-box', 'aria-hidden': 'true' }), c);
+      const key = `${s.n}|${c}`;
+      const cb = h('input', { type: 'checkbox' });
+      cb.checked = stepChecks.has(key);
+      cb.addEventListener('change', () => {
+        if (cb.checked) stepChecks.add(key); else stepChecks.delete(key);
+        saveStepChecks(stepChecks);
+      });
+      return h('li', {}, h('label', { class: 'bp-checkline' }, cb, h('span', {}, c)));
+    };
 
     const detailNodes = (s: BuildStep, forPrint: boolean): Node[] => {
       const ids = s.partIds;
@@ -478,22 +611,32 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
               ? h('details', { class: 'small' }, h('summary', {}, `Parts (${ids.length})`), h('div', { class: 'muted' }, listing.join(', ')))
               : h('p', { class: 'small' }, h('strong', {}, `Parts (${ids.length}): `), listing.join(', ')))
           : h('p', { class: 'muted small' }, 'No parts installed in this step.'),
-        h('ol', { class: 'bp-instr' }, ...s.instructions.map((t) => h('li', {}, t))),
+        h('ol', { class: 'bp-instr' }, ...s.instructions.map((t) => h('li', {}, tidy(t)))),
       ];
       if (s.clampCure) out.push(h('p', { class: 'bp-cure' }, h('strong', {}, 'Glue, clamp and cure: '), s.clampCure));
       else if (s.cure) out.push(h('p', { class: 'bp-cure' }, h('strong', {}, 'Cure: '), cureLine(s.cure)));
-      if (s.checks.length) out.push(h('div', {}, h('strong', { class: 'small' }, 'Check before moving on'), h('ul', { class: 'bp-checkboxes' }, ...s.checks.map((c) => h('li', {}, h('span', { class: 'bp-box', 'aria-hidden': 'true' }), c)))));
+      if (s.checks.length) out.push(h('div', {}, h('strong', { class: 'small' }, 'Check before moving on'), h('ul', { class: 'bp-checkboxes' }, ...s.checks.map((c) => checkItem(s, c, forPrint)))));
       if (s.tools.length) out.push(h('p', { class: 'muted small' }, h('strong', {}, 'Tools: '), s.tools.join(', ')));
       return out;
+    };
+
+    /** Prev / Next / a jump: if the new step's title is above the visible part of its scroller (#build-main wide, the window narrow), bring it to the top, under the pinned bars. */
+    const showStepTop = () => {
+      const bar = detail.parentElement?.querySelector('.bp-stepnav');
+      const clear = bar ? bar.getBoundingClientRect().bottom : 0;
+      if (detail.getBoundingClientRect().top < clear + 2) detail.scrollIntoView({ block: 'start' });
     };
 
     const update = (reframe: boolean) => {
       const i = stepIdx();
       const s = steps[i];
       if (!s) { emit(null); return; }
+      stepN = s.n;
+      saveStep(stepN);
       items.forEach((b, j) => { if (j === i) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current'); });
       if (items[i]) list.scrollTop = items[i].offsetTop - list.clientHeight / 2;
-      counter.textContent = `Step ${i + 1} of ${steps.length}`;
+      counterText.textContent = `Step ${s.n} of ${lastN} ▾`;
+      jump.value = String(s.n);
       (prev as HTMLButtonElement).disabled = i === 0;
       (next as HTMLButtonElement).disabled = i === steps.length - 1;
       detail.replaceChildren(...detailNodes(s, false));
@@ -506,8 +649,10 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
     const go = (n: number) => {
       stepN = n;
       update(true);
+      showStepTop();
     };
     stepUpdate = update;
+    stepMove = (delta) => go(steps[Math.max(0, Math.min(steps.length - 1, stepIdx() + delta))].n);
 
     return [
       note('Step through the build; the 3D viewer shows the sled as built up to the current step. Leaving this section restores the full model.', 'muted small bp-screen-only'),
@@ -522,19 +667,22 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
 
   function renderFinishing(d: BuildData): Node[] {
     const f = d.finishing;
-    const out: Node[] = [h('p', { class: 'small bp-prose' }, `Finish area (gross): ${f.areas.oakFt2.toFixed(0)} ft² oak, ${f.areas.okoumeFt2.toFixed(0)} ft² okoume, ${f.areas.oakEndGrainFt2.toFixed(1)} ft² oak end grain. Quantities include ${pct(0.15)} waste.`)];
+    const out: Node[] = [h('p', { class: 'small bp-prose' }, `Finish area (net, glued faces taken off): ${f.areas.oakFt2.toFixed(0)} ft² oak, ${f.areas.okoumeFt2.toFixed(0)} ft² okoume (${f.areas.show.totalFt2.toFixed(0)} ft² show, ${f.areas.hidden.totalFt2.toFixed(0)} ft² hidden; ${f.areas.gross.totalFt2.toFixed(0)} ft² gross), ${f.areas.oakEndGrainFt2.toFixed(1)} ft² oak end grain. Quantities include ${pct(0.15)} waste.`)];
     out.push(h('h3', { class: 'bp-group' }, 'Shopping list'));
-    out.push(table('bp-fin', ['Product', 'Notes', 'Buy'], f.buy.map((b) => [h('strong', {}, b.item), b.note, `${b.qty} ${b.unit}`]), 'Finish products to buy'));
+    out.push(table('bp-fin', ['Product', 'Notes', 'Buy'], f.buy.map((b) => [h('strong', {}, b.item), b.note, `${b.qty} ${b.unit}`]), 'Finish products to buy', { num: [2] }));
     out.push(h('h3', { class: 'bp-group' }, 'Schedule'));
-    out.push(h('div', { class: 'bp-grid bp-grid-fin' }, ...f.steps.map((s) =>
+    const real = (v: string | undefined): string => (v && !/^[-–—\s]*$/.test(v) ? v : '');
+    out.push(h('div', { class: 'bp-fin-steps' }, ...f.steps.map((s) =>
       h('article', { class: 'bp-card bp-finstep' },
         h('h4', { class: 'bp-sub' }, `${s.n}. ${s.title}`, s.coats ? h('span', { class: 'muted' }, ` · ${s.coats} coat${s.coats === 1 ? '' : 's'}`) : ''),
         h('ol', { class: 'bp-instr' }, ...s.instructions.map((t) => h('li', {}, t))),
         s.products.length
           ? table('bp-fin', ['Product', 'Area', 'Coats', 'Qt'], s.products.map((p) => [p.name, `${p.areaFt2.toFixed(0)} ft²`, String(p.coats), p.qtNeeded.toFixed(2)]), `${s.title} products`, { num: [1, 2, 3] })
           : h('span', {}),
-        h('p', { class: 'small' }, h('strong', {}, 'Recoat: '), s.recoat, ' ', h('strong', {}, 'Cure: '), s.cure),
-        h('p', { class: 'muted small' }, h('strong', {}, 'Winter shop: '), s.winter)))));
+        ...(real(s.recoat) || real(s.cure)
+          ? [h('p', { class: 'small' }, ...(real(s.recoat) ? [h('strong', {}, 'Recoat: '), real(s.recoat), ' '] : []), ...(real(s.cure) ? [h('strong', {}, 'Cure: '), real(s.cure)] : []))]
+          : []),
+        ...(real(s.winter) ? [h('p', { class: 'muted small' }, h('strong', {}, 'Winter shop: '), real(s.winter))] : [])))));
     if (f.assumptions.length) out.push(h('details', {}, h('summary', {}, 'Assumptions'), h('ul', { class: 'bp-plain small' }, ...f.assumptions.map((a) => h('li', {}, a)))));
     return out;
   }
@@ -577,6 +725,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
       if (a) renderSection();
       else {
         stepUpdate = null;
+        stepMove = null;
         clearTiles();
         emit(null);
         root.removeAttribute('aria-busy');

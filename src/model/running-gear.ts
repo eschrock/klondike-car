@@ -110,7 +110,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
     parts.push(box(ctx, {
       id: `beam-${ax.tag}`, name: `${name} axle beam`, group: 'running-gear', mat: 'oak',
       size: [b.thick, b.len, b.depth], center: [b.x, 0, (b.top + b.bot) / 2], grain: 'y', fab: 'table-saw',
-      step: STEP.gear, notes: (p.axleBeamPosition === AXLE_BEAM_POSITION.underslung ? 'Underslung (D-15).' : 'Overslung (D-15).'),
+      step: STEP.gear, notes: (p.axleBeamPosition === AXLE_BEAM_POSITION.underslung ? 'Underslung (D-15).' : 'Overslung (D-15).') + ' Face-laminated from stocked boards (D-70): no 12/4 is bought; the blank is glued up from 4/4 layers face to face with epoxy and milled to size BEFORE it is notched, bored and slotted (the cut list gives the layers). Strength is taken as solid oak.',
       ...(seatInfo ? { joints: beamRailJoints } : {}),
     }));
     // Clamps (D-62, build 3c M2): ONE bridge plate per wheel side, across the tube, with a 3/8 in bolt each side at tube center +/- (tube radius + clampLegGapIn) = 0.75 in. The groove is cut

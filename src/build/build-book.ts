@@ -60,6 +60,13 @@ const table = (head: Array<[string, string?]>, rows: string[][], cls = ''): stri
 const ul = (items: string[], cls = ''): string => `<ul${cls ? ` class="${cls}"` : ''}>${items.map((i) => `<li>${i}</li>`).join('')}</ul>`;
 const box = (): string => '<span class="box" aria-hidden="true"></span>';
 const num = (v: number, dp = 1): string => String(+v.toFixed(dp));
+/** A link to a real vendor page: new tab, no opener. Only http(s) URLs become links (a vendor URL is data, not markup). */
+const link = (url: string | undefined, text?: string): string => {
+  if (!url || !/^https?:\/\//i.test(url)) return '';
+  let host = url;
+  try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { /* keep the raw text */ }
+  return `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(text ?? host)}</a>`;
+};
 
 /** Ids and titles of the book's sections, in order (also the table of contents). */
 export const BOOK_SECTIONS: Array<[string, string]> = [
@@ -92,10 +99,25 @@ function cutlistSection(d: BuildData): string {
   if (c.warnings.length) out.push(`<p class="small"><strong>Data warnings:</strong></p>${ul(c.warnings.map(esc), 'small')}`);
   out.push('<h3>White oak, by board thickness</h3>');
   for (const g of c.oak) {
-    const resawn = g.board === 'resawn';
-    out.push(`<h4>${resawn ? `Resawn strips (${g.pieces} pieces: see the strip list)` : `${esc(g.board)} (usable ${fracIn(g.usableIn)}"), ${g.pieces} pieces`}</h4>`);
+    out.push(`<h4>${esc(g.title)}</h4>`);
+    if (g.board === 'laminated') {
+      out.push('<p class="muted small">No stocked board is thick enough (12/4 is not bought, D-70). Each part is glued up face to face from layers of stocked boards, and ONLY THEN milled to size, notched, bored and slotted. The rough size is the glued block; the layer pieces are in the next table.</p>');
+      out.push(table([['Part'], ['Qty', 'num'], ['Final T × W × L'], ['Rough block T × W × L'], ['Lamination'], ['Assembly step', 'num']], g.rows.map((r) => [
+        td(`${esc(r.name)}<div class="muted small">${esc(r.partNo)} · ${esc(r.ids.join(', '))}</div>${r.note ? `<div class="small">${esc(r.note)}</div>` : ''}`), td(r.qty, 'num'), td(dims3(r.stock)), td(dims3(r.rough)),
+        td(esc(r.lamination ? `face-laminated: ${r.lamination.text}` : '')), td(r.assemblySteps.join(', '), 'num'),
+      ])));
+      continue;
+    }
     out.push(table([['Part'], ['Qty', 'num'], ['Final T × W × L'], ['Rough T × W × L'], ['Grain'], ['Assembly step', 'num']], g.rows.map((r) => [
       td(`${esc(r.name)}<div class="muted small">${esc(r.partNo)} · ${esc(r.ids.join(', '))}${r.plies ? ` · ${r.plies} plies` : ''}</div>`), td(r.qty, 'num'), td(dims3(r.stock)), td(dims3(r.rough)), td(esc(r.grainWord ?? '')), td(r.assemblySteps.join(', '), 'num'),
+    ])));
+  }
+  if (c.layers.length) {
+    out.push('<h3>Face-laminated layers</h3>');
+    out.push('<p class="muted small">Plane every layer to its rough thickness, edge-glue a wide layer from the pieces shown, epoxy the layers face to face (206 slow hardener, thickened a little), clamp flat, and mill the block to the final size after the cure.</p>');
+    out.push(table([['Part'], ['Layer', 'num'], ['Board'], ['Pieces', 'num'], ['Rough layer T × W × L'], ['Share of final T', 'num']], c.layers.map((q) => [
+      td(`${esc(q.row.name)}<div class="muted small">${esc(q.row.partNo)} · ${esc(q.row.ids.join(', '))}</div>`), td(`${q.layer} of ${q.layers}`, 'num'), td(esc(q.board)), td(q.qty, 'num'),
+      td(`${num(q.roughT, 3)} × ${num(q.widthIn, 2)} × ${num(q.lengthIn, 2)}${q.edgeGlued > 1 ? ` (edge-glue ${q.edgeGlued} across)` : ''}`), td(`${fracIn(q.finalT)}"`, 'num'),
     ])));
   }
   out.push('<h3>Resawn strips</h3>');
@@ -128,6 +150,7 @@ function boardsSection(d: BuildData): string {
     [td('<strong>Total</strong>'), td(''), td(num(o.netBf), 'num'), td(num(o.allowanceBf), 'num'), td(num(o.purchaseBf), 'num')],
   ]));
   if (o.glueUps.length) out.push(`<p class="small">Wider than a board, edge-glue pieces: ${esc(o.glueUps.join(', '))}.</p>`);
+  if (o.laminated.length) out.push(`<p class="small">Face-laminated from the stocked boards above (D-70; no 12/4): ${esc([...new Set(o.laminated.map((q) => `${q.partNo} (${q.lamination.text})`))].join('; '))}.</p>`);
   const sheets = new Map<number, number>();
   for (const s of d.nest.sheets) sheets.set(s.thicknessMm, (sheets.get(s.thicknessMm) ?? 0) + 1);
   out.push('<h3>Plywood to buy</h3>');
@@ -138,7 +161,7 @@ function boardsSection(d: BuildData): string {
       out.push(`<h4>${esc(t.board)} board ${i + 1}: ${b.lengthIn / 12} ft × 6"</h4>`);
       out.push(table([['Lane width', 'num'], ['Cuts (width × length)'], ['Used', 'num']], b.lanes.map((l) => [
         td(`${num(l.widthIn, 2)}"`, 'num'),
-        td(l.cuts.map((c) => `${esc(c.id)}${c.fromBoard ? ` (milled down from ${esc(t.board)} for ${esc(c.fromBoard)})` : ''} ${num(c.widthIn, 2)}" × ${num(c.lengthIn)}"`).join('; ')),
+        td(l.cuts.map((c) => `${esc(c.id)}${c.layer ? ` layer ${c.layer}/${c.layers}` : ''}${c.fromBoard ? ` (milled down from ${esc(t.board)} for ${esc(c.fromBoard)})` : ''} ${num(c.widthIn, 2)}" × ${num(c.lengthIn)}"`).join('; ')),
         td(`${num(l.usedIn)}" of ${b.lengthIn}"`, 'num'),
       ])));
     });
@@ -165,17 +188,28 @@ function nestingSection(d: BuildData): string {
 
 function bomSection(d: BuildData): string {
   const b = d.bom;
-  const out: string[] = [`<p class="muted small">Total ${usd(b.totalUsd)}; ${pct(b.estimateShare)} of it is an estimate (${usd(b.estimateUsd)}), the rest quoted by the model. Prices are 2026 US retail guesses until you get quotes.</p>`];
+  const out: string[] = [`<p class="muted small">${esc(b.totalsText)}. ${pct(b.estimateShare)} of the total is an estimate (${usd(b.estimateUsd)}), the rest quoted by the model or by a vendor list. Prices are 2026 US retail guesses until you get quotes. Bulk parts (screws, nuts, washers, inserts, Dominos, tape, sandpaper) are priced by the pack in their own section: you buy a whole pack and may already have them in the shop. The finishing touches (lights, seat cushions, reflectors, tie-downs) are priced as their own section so you can build with or without them.</p>`];
+  const lineRow = (l: BuildData['bom']['sections'][number]['lines'][number]): string[] => [
+    td(`${esc(l.description)}${l.vendor ? `<div class="muted small">${esc(l.vendor)}</div>` : ''}${l.notes ? `<div class="muted small">${esc(l.notes)}</div>` : ''}${l.materialNote ? `<div class="small"><strong>Material:</strong> ${esc(l.materialNote)}</div>` : ''}${l.url ? `<div class="small">${link(l.url)}</div>` : ''}`),
+    td(`${l.qty % 1 ? l.qty.toFixed(2) : l.qty} ${esc(l.unit)}${l.packs !== undefined ? `<div class="muted small">need ${num(l.needed ?? 0, 2)}, ${l.packs} pack${l.packs === 1 ? '' : 's'} of ${l.packQty} at ${usd(l.packUsd ?? 0)}</div>` : ''}`, 'num'), td(usd(l.unitUsd), 'num'), td(`${usd(l.extUsd)}${l.basis === 'estimate' ? ' est.' : ''}`, 'num'),
+  ];
   for (const s of b.sections) {
     out.push(`<h3>${esc(s.title)} <span class="muted">· ${usd(s.subtotalUsd)}</span></h3>`);
-    out.push(table([['Item'], ['Qty', 'num'], ['Unit', 'num'], ['Ext.', 'num']], [
-      ...s.lines.map((l) => [
-        td(`${esc(l.description)}${l.vendor ? `<div class="muted small">${esc(l.vendor)}</div>` : ''}${l.notes ? `<div class="muted small">${esc(l.notes)}</div>` : ''}`),
-        td(`${l.qty % 1 ? l.qty.toFixed(2) : l.qty} ${esc(l.unit)}`, 'num'), td(usd(l.unitUsd), 'num'), td(`${usd(l.extUsd)}${l.basis === 'estimate' ? ' est.' : ''}`, 'num'),
-      ]),
-      [td(`<strong>${esc(s.title)} subtotal</strong>`), td(''), td(''), td(`<strong>${usd(s.subtotalUsd)}</strong>`, 'num')],
-    ]));
+    const rows: string[][] = [];
+    if (s.groups) {
+      for (const g of s.groups) {
+        const ls = s.lines.filter((l) => l.group === g.id);
+        if (!ls.length) continue;
+        rows.push([`<td colspan="4"><strong>${esc(g.title)}</strong></td>`]);
+        rows.push(...ls.map(lineRow));
+        rows.push([td(`<em>${esc(g.title)} subtotal</em>`), td(''), td(''), td(`<em>${usd(g.subtotalUsd)}</em>`, 'num')]);
+      }
+    } else rows.push(...s.lines.map(lineRow));
+    rows.push([td(`<strong>${esc(s.title)} subtotal</strong>`), td(''), td(''), td(`<strong>${usd(s.subtotalUsd)}</strong>`, 'num')]);
+    out.push(table([['Item'], ['Qty', 'num'], ['Unit', 'num'], ['Ext.', 'num']], rows));
+    for (const n of s.notes ?? []) out.push(`<p class="muted small">${esc(n)}</p>`);
   }
+  out.push(`<p class="total">${esc(b.totalsText)}</p>`);
   out.push(`<p class="total">Grand total ${usd(b.totalUsd)}</p>`);
   if (b.unpriced.length) out.push(`<p><strong>No price:</strong> ${esc(b.unpriced.join(', '))}</p>`);
   return out.join('');
@@ -200,7 +234,7 @@ function assemblySection(d: BuildData): string {
 
 function finishingSection(d: BuildData): string {
   const f = d.finishing;
-  const out: string[] = [`<p class="small">Finish area (gross): ${f.areas.oakFt2.toFixed(0)} ft² oak, ${f.areas.okoumeFt2.toFixed(0)} ft² okoume, ${f.areas.oakEndGrainFt2.toFixed(1)} ft² oak end grain.</p>`];
+  const out: string[] = [`<p class="small">Finish area (net, glued faces taken off): ${f.areas.oakFt2.toFixed(0)} ft² oak, ${f.areas.okoumeFt2.toFixed(0)} ft² okoume (${f.areas.show.totalFt2.toFixed(0)} ft² show, ${f.areas.hidden.totalFt2.toFixed(0)} ft² hidden; ${f.areas.gross.totalFt2.toFixed(0)} ft² gross), ${f.areas.oakEndGrainFt2.toFixed(1)} ft² oak end grain.</p>`];
   out.push('<h3>Shopping list</h3>');
   out.push(table([['Product'], ['Buy', 'num']], [
     ...f.buy.map((b) => [td(`${esc(b.item)}<div class="muted small">${esc(b.note)}</div>`), td(`${b.qty} ${esc(b.unit)}`, 'num')]),

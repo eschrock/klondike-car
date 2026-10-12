@@ -66,7 +66,7 @@ export function buildPivot(ctx: Ctx): Part[] {
   const beam = box(ctx, {
     id: 'beam-F', partNo: 'beam-F', name: 'Front axle beam (pivots)', group: 'front-end', mat: 'oak', size: [b.thick, b.len, b.depth], center: [b.x, 0, (b.top + b.bot) / 2], grain: 'y',
     body: 'front-axle', fab: 'table-saw', step: STEP.gear,
-    notes: `The pivoting front axle beam (D-56): ${f2(b.thick)}" × ${f2(b.depth)}" × ${f2(b.len)}" white oak with the same underslung stack as the rear (top ${f2(b.top)}", bottom ${f2(b.bot)}"). A ${frac(kd)}" hole at its center takes the kingpin; a stub axle is bolted down in a groove in each end. Its top carries the steel tongue plate (and so the thrust washer). It turns about the kingpin, ±${p.steerLockDeg}° between the two steering stops, and passes under the shallower front rails.`,
+    notes: `The pivoting front axle beam (D-56): ${f2(b.thick)}" × ${f2(b.depth)}" × ${f2(b.len)}" white oak with the same underslung stack as the rear (top ${f2(b.top)}", bottom ${f2(b.bot)}"). A ${frac(kd)}" hole at its center takes the kingpin; a stub axle is bolted down in a groove in each end. Its top carries the steel tongue plate (and so the thrust washer). It turns about the kingpin, ±${p.steerLockDeg}° between the two steering stops, and passes under the shallower front rails. Face-laminated from stocked boards (D-70): no 12/4 is bought; the blank is glued up from 4/4 layers face to face with epoxy and milled to size BEFORE it is bored, notched and slotted (the cut list gives the layers). Strength is taken as solid oak.`,
   });
   parts.push(beam);
 

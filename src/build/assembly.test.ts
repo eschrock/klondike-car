@@ -108,16 +108,16 @@ describe('assembly steps', () => {
     expect(steps.filter((s) => s.clampCure).length).toBeGreaterThan(12);
   });
 
-  it('uses 206 for the normal glue-ups and 209 (120 min) for closing the ends', () => {
+  it('uses 206 for every glue-up, the closing of the ends included (small batches, a second person mixing)', () => {
     const get = (id: string) => steps.find((s) => s.id === id)!;
     expect(get('frame').cure!.hardener).toBe('206');
     expect(get('frame').cure!.potMin).toEqual([20, 25]);
     expect(get('frame').cure!.clampHours).toEqual([8, 10]);
     expect(get('frame').cure!.fullHours).toBe(24);
     for (const id of ['transom', 'bulkhead']) {
-      expect(get(id).cure!.hardener, id).toBe('209');
-      expect(get(id).cure!.potMin[1], id).toBe(120);
-      expect(get(id).clampCure, id).toMatch(/209 extra slow/);
+      expect(get(id).cure!.hardener, id).toBe('206');
+      expect(get(id).clampCure, id).toMatch(/206 slow/);
+      expect(get(id).instructions.join(' '), id).toMatch(/small batch/i);
     }
     expect(get('frame').clampCure).toMatch(/60 °F/); // winter figures
   });
@@ -367,6 +367,18 @@ describe('build review round 1: forms and resaw numbers come from their sources 
     expect(mill).not.toMatch(/25 % spares/);
   });
 
+  it('schedules the face laminations in the milling step, before anything is notched, bored or slotted (D-70)', () => {
+    const mill = steps.find((s) => s.id === 'mill')!.instructions.join(' ');
+    expect(mill).toMatch(/Face-laminate the thick parts BEFORE anything is notched, bored or slotted/);
+    for (const id of ['beam-F', 'beam-R', 'brake-knee-L', 'brake-chock-L']) expect(mill, id).toContain(id);
+    expect(mill).toContain('3 \u00d7 3/4" from 4/4');
+    expect(mill).toMatch(/mill the glued block to its final size/);
+    expect(mill.indexOf('Face-laminate')).toBeLessThan(mill.indexOf('Edge-glue the wide panels FIRST'));
+    expect(steps.find((s) => s.id === 'mill')!.checks.join(' ')).toMatch(/Laminated blocks cured/);
+    const mi = steps.findIndex((s) => s.id === 'mill');
+    for (const later of ['brake-knees']) expect(steps.findIndex((s) => s.id === later), later).toBeGreaterThan(mi);
+  });
+
   it('schedules the edge-glued panels in the milling step', () => {
     const mill = steps.find((s) => s.id === 'mill')!.instructions.join(' ');
     expect(mill).toMatch(/Edge-glue the wide panels FIRST/);
@@ -444,7 +456,8 @@ describe('build review round 2: brake knees before the underside finish (MUST-A)
 describe('build review round 2: step 1 names the cut list boards, rip first (MUST-B, MUST-C)', () => {
   const cl = cutList(parts, p);
   const mill = steps.find((s) => s.id === 'mill')!.instructions.join(' ');
-  const board = (id: string): string => cl.oak.flatMap((g) => g.rows).find((r) => r.ids.includes(id))!.board;
+  // a face-laminated part (no 12/4, D-70) is named by its layers
+  const board = (id: string): string => { const r = cl.oak.flatMap((g) => g.rows).find((q) => q.ids.includes(id))!; return r.lamination ? `laminated: ${r.lamination.text}` : r.board; };
 
   it('reads every bandsaw-blank board from the cut list board column', () => {
     for (const [label, id] of [['brake knees', 'brake-knee-L'], ['brake shoes', 'brake-shoe-L'], ['chocks', 'brake-chock-L'], ['handlebow', 'handle-bar'], ['tongue', 'bridle-tongue']] as const) {

@@ -17,7 +17,31 @@ export const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g,
 /** `1-3/16 × 6 × 24` (sixteenths as fractions, other values as decimals). */
 /** " · assembly step 4" (or "steps 4, 6"), or '' when the part is in no step. */
 export const stepLabel = (steps: number[]): string => (steps.length ? ` · assembly step${steps.length > 1 ? 's' : ''} ${steps.join(', ')}` : '');
-export const dims3 = (d: Dims): string => `${fracIn(d.t)} × ${fracIn(d.w)} × ${fracIn(d.l)}`;
+export const dims3 = (d: Dims): string => `${fracDim(d.t)} × ${fracDim(d.w)} × ${fracDim(d.l)}`;
+/** The three parts of a size for a table cell: each dimension is one unbreakable piece (`21-5/32 (21.142)`), so a long size wraps between the ×. */
+export const dimsParts = (d: Dims): string[] => [fracDim(d.t), fracDim(d.w), fracDim(d.l)];
+
+/**
+ * A size a tape can read. On the 1/16 grid it is the plain fraction (`1-3/16`); off the grid it is the nearest 1/32 with the decimal after it,
+ * so the number to cut to and the number the drawings use are both visible: 21.142 -> `21-5/32 (21.142)`.
+ */
+export function fracDim(v: number): string {
+  const plain = fracIn(v);
+  if (!/^\d*\.\d+$/.test(plain)) return plain; // already a fraction or a whole number
+  const n32 = Math.round(v * 32);
+  if (n32 <= 0) return plain;
+  let n = n32, d = 32;
+  while (n % 2 === 0 && d > 1) { n /= 2; d /= 2; }
+  const whole = Math.floor(n / d), rem = n - whole * d;
+  const frac = rem === 0 ? String(whole) : whole ? `${whole}-${rem}/${d}` : `${rem}/${d}`;
+  return `${frac} (${plain})`;
+}
+
+/** `fracDim` with the inch mark: `21-5/32" (21.142")`. */
+export function fracInch(v: number): string {
+  const f = fracDim(v);
+  return f.includes(' (') ? f.replace(' (', '" (').replace(/\)$/, '")') : `${f}"`;
+}
 
 export function usd(v: number, cents = true): string {
   const s = Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: cents ? 2 : 0 });
@@ -161,6 +185,42 @@ export function saveDone(done: Set<string>, storage: Pick<Storage, 'setItem'> | 
   try {
     storage?.setItem(CHECK_KEY, JSON.stringify([...done]));
   } catch { /* not persisted: the ticks last until the page closes */ }
+}
+
+const STEP_CHECK_KEY = 'klondike-build-step-checks';
+const STEP_KEY = 'klondike-build-step';
+
+/** The "Check before moving on" ticks of the Assembly steps (per viewer, same rules as `loadDone`). Keys are `stepN|text`. */
+export function loadStepChecks(storage: Pick<Storage, 'getItem'> | undefined = safeStorage()): Set<string> {
+  try {
+    const raw = storage?.getItem(STEP_CHECK_KEY);
+    const v = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function saveStepChecks(done: Set<string>, storage: Pick<Storage, 'setItem'> | undefined = safeStorage()): void {
+  try { storage?.setItem(STEP_CHECK_KEY, JSON.stringify([...done])); } catch { /* not persisted */ }
+}
+
+/** The Assembly step on screen, kept for the tab session (a reload or a phone that slept lands on the same step). */
+export function loadStep(storage?: Pick<Storage, 'getItem'>): number {
+  try {
+    const st = storage ?? (typeof sessionStorage === 'undefined' ? undefined : sessionStorage);
+    const v = Number(st?.getItem(STEP_KEY));
+    return Number.isInteger(v) && v >= 0 ? v : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function saveStep(n: number, storage?: Pick<Storage, 'setItem'>): void {
+  try {
+    const st = storage ?? (typeof sessionStorage === 'undefined' ? undefined : sessionStorage);
+    st?.setItem(STEP_KEY, String(n));
+  } catch { /* not persisted */ }
 }
 
 function safeStorage(): Storage | undefined {

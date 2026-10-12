@@ -3,7 +3,7 @@ import { buildModel } from '../model';
 import { defaultParams } from '../params';
 import { BuildData } from '../build/package';
 import {
-  bytesLabel, clampStep, cureLine, dims3, featureSummary, groupByWhen, loadDone, previewSvg, saveDone, sheetSvg, stepFocus, tilePagesHtml, todayISO, usd, viewerView,
+  bytesLabel, clampStep, cureLine, dims3, featureSummary, fracDim, fracInch, groupByWhen, loadDone, loadStep, loadStepChecks, previewSvg, saveDone, saveStep, saveStepChecks, sheetSvg, stepFocus, tilePagesHtml, todayISO, usd, viewerView,
 } from './build-helpers';
 
 const p = defaultParams();
@@ -144,5 +144,43 @@ describe('assembly step-through focus', () => {
     expect(viewerView('under')).toBe('under');
     for (const v of ['iso', 'top', 'side', 'front'] as const) expect(viewerView(v)).toBe(v);
     expect(steps.every((s) => ['iso', 'top', 'side', 'front', 'under'].includes(s.view))).toBe(true);
+  });
+});
+
+describe('off-grid sizes (visual round 2)', () => {
+  it('shows the nearest 1/32 with the exact decimal after it, and leaves sixteenths and whole numbers alone', () => {
+    expect(fracDim(21.142)).toBe('21-5/32 (21.142)');
+    expect(fracDim(0.657)).toBe('21/32 (0.657)');
+    expect(fracDim(15.796)).toBe('15-25/32 (15.796)');
+    expect(fracDim(24.5)).toBe('24-1/2');
+    expect(fracDim(6)).toBe('6');
+    expect(fracDim(0.004)).toBe('0.004');
+    expect(fracInch(21.142)).toBe('21-5/32" (21.142")');
+    expect(fracInch(24.5)).toBe('24-1/2"');
+    expect(dims3({ t: 0.625, w: 1.75, l: 21.142 })).toBe('5/8 × 1-3/4 × 21-5/32 (21.142)');
+  });
+});
+
+describe('assembly step and checks persistence', () => {
+  const mem = () => {
+    const m = new Map<string, string>();
+    return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v) };
+  };
+  it('remembers the step and survives garbage or blocked storage', () => {
+    const st = mem();
+    expect(loadStep(st)).toBe(0);
+    saveStep(11, st);
+    expect(loadStep(st)).toBe(11);
+    st.setItem('klondike-build-step', 'nope');
+    expect(loadStep(st)).toBe(0);
+    const blocked = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); } };
+    expect(loadStep(blocked)).toBe(0);
+    expect(() => saveStep(3, blocked)).not.toThrow();
+  });
+  it('keeps the per-step checks per viewer', () => {
+    const st = mem();
+    saveStepChecks(new Set(['3|Dry fit']), st);
+    expect([...loadStepChecks(st)]).toEqual(['3|Dry fit']);
+    expect(loadStepChecks({ getItem: () => '{bad' }).size).toBe(0);
   });
 });

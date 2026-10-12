@@ -9,7 +9,7 @@
  *
  * Identical pieces (same `partNo`, same dimensions) are one row with a quantity; every row lists the part ids it covers.
  */
-import { isOakStocked } from './prices';
+import { OAK_PRICE_PER_BF, isOakStocked } from './prices';
 import type { Dims, Part } from '../model/types';
 import type { Params } from '../params';
 import { localBounds } from '../model/bounds';
@@ -48,6 +48,106 @@ export function boardForThickness(roughT: number): BoardThickness | null {
   return BOARD_THICKNESSES.find((b) => isOakStocked(b.nominal) && b.usableIn >= roughT - 1e-6) ?? null;
 }
 export const boardByNominal = (nominal: string): BoardThickness => BOARD_THICKNESSES.find((b) => b.nominal === nominal)!;
+
+// ── Face lamination (D-70) ────────────────────────────────────────────────────
+
+/** One layer of a face-laminated part: cut from a stocked board, planed to `roughT`, glued face to face. */
+export interface LaminationLayer {
+  /** Stocked board it comes from ('4/4' ...). */
+  board: string;
+  /** Thickness the layer is planed to BEFORE the glue-up (in): its share of the glued block's rough thickness. */
+  roughT: number;
+  /** The layer's share of the part's finished thickness (in): what is left of it after the glued block is milled to size. */
+  finalT: number;
+}
+
+/** How a part too thick for any stocked board is built up: layers glued face to face, then milled to size. */
+export interface Lamination {
+  layers: LaminationLayer[];
+  /** Finished thickness of the part (in) and rough thickness of the glued block (in): `roughT` = finished + the planing allowance, taken ONCE on the glued block. */
+  finalT: number;
+  roughT: number;
+  /** Cost of one square foot of face (USD): the sum over layers of nominal thickness x $/bf. The measure the layer mix is chosen by. */
+  costPerFt2: number;
+  /** "3 x 3/4\" from 4/4": the layers grouped by board. */
+  text: string;
+}
+
+/** The most layers a lamination may use (each is a glue line and a pass through the planer). */
+export const MAX_LAMINATION_LAYERS = 6;
+/** The thinnest layer worth planing and gluing (in). */
+export const MIN_LAYER_ROUGH_IN = 0.5;
+
+/**
+ * Face lamination for a part whose rough thickness no stocked board yields. Chooses the mix of STOCKED boards (any number from 2 to `MAX_LAMINATION_LAYERS`) that is cheapest
+ * per square foot of face, the sum over layers of nominal thickness x $/bf, and fits: every layer's rough thickness must be at most its board's `usableIn`, and the layers must add up to
+ * the glued block (`roughT` = finished thickness + the planing allowance, ONCE for the block: the layers are planed to their shares of it, and the block is milled to the finished size
+ * after the glue-up, which also takes off the glue squeeze-out and any slip between layers). Each layer's finished share is `finalT` x its share of `roughT`, so the shares sum to the
+ * part's finished thickness. The layers are scaled to the boards' usable thicknesses, so a mix of boards gives each layer a thickness in proportion to its board.
+ * For the axle beams (2.375" rough) three 4/4 layers ($30 per ft2) beat 6/4 + 4/4 ($30.25), 5/4 + 5/4 ($31.25) and 8/4 + 4/4 ($40). Ties go to fewer layers, then the thinner boards.
+ * Null when `roughT` is no more than the thickest stocked board yields (the part is not laminated) or nothing stocked can make it.
+ */
+/** A lamination mix of quoted boards is preferred when it costs at most this fraction more than the cheapest mix (which may rest on an estimated price). */
+export const LAMINATION_QUOTED_TOLERANCE = 0.05;
+
+export function planLamination(finalT: number, roughT: number): Lamination | null {
+  const boards = BOARD_THICKNESSES.filter((b) => isOakStocked(b.nominal));
+  if (!boards.length || boardForThickness(roughT)) return null;
+  const price = (b: BoardThickness): number => b.nominalIn * (OAK_PRICE_PER_BF[b.nominal]?.usd ?? Infinity);
+  let best: { mix: BoardThickness[]; cost: number } | null = null;
+  const walk = (start: number, mix: BoardThickness[]): void => {
+    if (mix.length >= 2) {
+      const usable = mix.reduce((a, b) => a + b.usableIn, 0);
+      if (usable >= roughT - 1e-6 && mix.every((b) => (roughT * b.usableIn) / usable >= MIN_LAYER_ROUGH_IN - 1e-9)) {
+        const cost = mix.reduce((a, b) => a + price(b), 0);
+        const nom = mix.reduce((a, b) => a + b.nominalIn, 0), bestNom = best ? best.mix.reduce((a, b) => a + b.nominalIn, 0) : Infinity;
+        if (!best || cost < best.cost - 1e-9 || (Math.abs(cost - best.cost) < 1e-9 && (mix.length < best.mix.length || (mix.length === best.mix.length && nom < bestNom - 1e-9)))) best = { mix: [...mix], cost };
+      }
+    }
+    if (mix.length >= MAX_LAMINATION_LAYERS) return;
+    for (let i = start; i < boards.length; i++) { mix.push(boards[i]); walk(i, mix); mix.pop(); }
+  };
+  walk(0, []);
+  if (!best) return null;
+  // Near-tie (within LAMINATION_QUOTED_TOLERANCE of the cheapest): prefer a mix whose every board has a QUOTED price, so an estimated price cannot flip the plan by a few
+  // cents (Eric 2026-10-12: the estimated 5/4 came out $0.25/ft2 under the quoted 4/4 for the axle beams).
+  const cheapest = (best as { cost: number }).cost;
+  const quotedMix = (mix: BoardThickness[]): boolean => mix.every((b) => OAK_PRICE_PER_BF[b.nominal]?.basis === 'quoted');
+  if (!quotedMix((best as { mix: BoardThickness[] }).mix)) {
+    let alt: { mix: BoardThickness[]; cost: number } | null = null;
+    const walkQ = (start: number, mix: BoardThickness[]): void => {
+      if (mix.length >= 2 && quotedMix(mix)) {
+        const usable = mix.reduce((a, b) => a + b.usableIn, 0);
+        if (usable >= roughT - 1e-6 && mix.every((b) => (roughT * b.usableIn) / usable >= MIN_LAYER_ROUGH_IN - 1e-9)) {
+          const cost = mix.reduce((a, b) => a + price(b), 0);
+          if (cost <= cheapest * (1 + LAMINATION_QUOTED_TOLERANCE) + 1e-9 && (!alt || cost < alt.cost - 1e-9 || (Math.abs(cost - alt.cost) < 1e-9 && mix.length < alt.mix.length))) alt = { mix: [...mix], cost };
+        }
+      }
+      if (mix.length >= MAX_LAMINATION_LAYERS) return;
+      for (let i = start; i < boards.length; i++) { mix.push(boards[i]); walkQ(i, mix); mix.pop(); }
+    };
+    walkQ(0, []);
+    if (alt) best = alt;
+  }
+  const { mix, cost } = best as { mix: BoardThickness[]; cost: number };
+  const usable = mix.reduce((a, b) => a + b.usableIn, 0);
+  // thickest layers first, so the face layers are the thick ones
+  const layers: LaminationLayer[] = [...mix].sort((a, b) => b.nominalIn - a.nominalIn).map((b) => {
+    const share = b.usableIn / usable;
+    return { board: b.nominal, roughT: roughT * share, finalT: finalT * share };
+  });
+  return { layers, finalT, roughT, costPerFt2: cost, text: laminationText(layers) };
+}
+
+/** "3 x 3/4\" from 4/4" (several groups: "1 x 1-1/4\" from 8/4 + 1 x 5/8\" from 4/4"). */
+export function laminationText(layers: LaminationLayer[]): string {
+  const groups: Array<{ board: string; n: number; finalT: number }> = [];
+  for (const l of layers) {
+    const g = groups.find((q) => q.board === l.board && Math.abs(q.finalT - l.finalT) < 1e-6);
+    if (g) g.n += 1; else groups.push({ board: l.board, n: 1, finalT: l.finalT });
+  }
+  return groups.map((g) => `${g.n} \u00d7 ${fracIn(g.finalT)}" from ${g.board}`).join(' + ');
+}
 
 /** Assumed width of the rough boards bought (in) and the lengths they come in (in): 6, 8 and 10 ft. */
 export const BOARD_WIDTH_IN = 6;
@@ -123,7 +223,7 @@ export interface OakRow {
   stock: Dims;
   /** Rough T x W x L (in). */
   rough: Dims;
-  /** Nominal board the piece is milled from ('4/4' ...), or 'resawn' for laminate members (see the strip list). */
+  /** Nominal board the piece is milled from ('4/4' ...), 'resawn' for laminate members (see the strip list), or 'laminated' for a part built up from face-glued layers (see `lamination`). */
   board: string;
   /** Grain as a LOCAL axis ('x' | 'y' | 'z'), as the model gives it. */
   grain?: string;
@@ -134,13 +234,37 @@ export interface OakRow {
   step: number;
   /** ASSEMBLY step numbers (0 to 29: the numbers in the build book) of the pieces, when the caller passed the step list. */
   assemblySteps: number[];
-  /** Sizing notes for the bench (a Shaper file cuts net, the blank is longer). */
+  /** Sizing notes for the bench (a Shaper file cuts net, the blank is longer). For a laminated part: "face-laminated: 3 x 3/4" from 4/4 ...". */
   note?: string;
   plies?: number;
+  /** Set when no stocked board yields the rough thickness (D-70): the part is glued up face to face from `lamination.layers`; `board` is then 'laminated' and `rough` is the glued block. */
+  lamination?: Lamination;
+  /** The layer pieces of a laminated part (one set per physical part, each `edgeGlued` times across when wider than a board). Empty for other rows. */
+  layerPieces: LayerPiece[];
   warnings: string[];
 }
 
+/** One layer of a laminated row: `qty` identical pieces (the row's quantity x the layer's edge-glue pieces), cut from `board`, planed to `roughT` before the glue-up. */
+export interface LayerPiece {
+  /** 1-based layer number, from the face layer. */
+  layer: number;
+  layers: number;
+  board: string;
+  /** Rough size of one piece (in): thickness the layer is planed to x width (the whole layer, or its share when `edgeGlued` > 1) x length. */
+  roughT: number;
+  widthIn: number;
+  lengthIn: number;
+  /** The layer's share of the finished thickness (in). */
+  finalT: number;
+  /** Pieces this layer is edge-glued from when it is wider than a board. 1 = one piece. */
+  edgeGlued: number;
+  /** Physical pieces in the whole row: row qty x `edgeGlued`. */
+  qty: number;
+}
+
 export interface OakGroup {
+  /** Heading for the group: '4/4 (usable 15/16"), 20 pieces', 'Face-laminated parts', 'Resawn strips'. */
+  title: string;
   board: string;
   nominalIn: number;
   usableIn: number;
@@ -242,13 +366,15 @@ export interface MetalRow {
 
 export interface CutList {
   oak: OakGroup[];
+  /** Layer pieces of every face-laminated part (D-70), flat: empty when no part is laminated. Each carries its parent row. */
+  layers: Array<LayerPiece & { row: OakRow }>;
   strips: StripRow[];
   resaw: ResawPool[];
   sheets: SheetGroup[];
   metal: MetalRow[];
   /** Data problems found in the model (transposed stock, missing stock). */
   warnings: string[];
-  csv: { oak: string; strips: string; sheets: string; metal: string };
+  csv: { oak: string; layers: string; strips: string; sheets: string; metal: string };
 }
 
 // ── Solid oak ─────────────────────────────────────────────────────────────────
@@ -267,13 +393,18 @@ function oakRows(parts: Part[], p: Params, warnings: string[], stepOf?: Readonly
     const rough = roughOf(x, p, warnings);
     const strip = isStripPart(x);
     let board: string;
+    let lamination: Lamination | undefined;
     const w: string[] = [];
     if (strip) board = 'resawn';
     else {
       const b = boardForThickness(rough.t);
       board = b ? b.nominal : '16/4';
-      if (!b) w.push(`${partKey(x)}: rough thickness ${r3(rough.t)}" is thicker than any stocked board; glue up two`);
-      else if (b.nominal === '16/4') w.push(`${partKey(x)}: needs 16/4 (3-3/4" usable); if the yard has none, glue up two 8/4`);
+      if (!b) {
+        // No stocked board is thick enough (12/4 is not bought, D-70): glue the part up face to face from layers of stocked boards.
+        lamination = planLamination(stock.t, rough.t) ?? undefined;
+        if (lamination) board = 'laminated';
+        else w.push(`${partKey(x)}: rough thickness ${r3(rough.t)}" is thicker than any stocked board and no stocked mix of layers makes it`);
+      } else if (b.nominal === '16/4') w.push(`${partKey(x)}: needs 16/4 (3-3/4" usable); if the yard has none, glue up two 8/4`);
     }
     const key = `${partKey(x)}|${dimKey(rough)}|${board}`;
     const row = map.get(key);
@@ -281,10 +412,24 @@ function oakRows(parts: Part[], p: Params, warnings: string[], stepOf?: Readonly
     const gw = grainInWords(x);
     map.set(key, {
       partNo: partKey(x), name: x.name, qty: 1, ids: [x.id], stock, rough, board, grain: x.grain, ...(gw ? { grainWord: gw } : {}), fab: x.fab, step: x.step, assemblySteps: stepsOf([x.id], stepOf),
-      ...(x.plies !== undefined ? { plies: x.plies } : {}), warnings: w,
+      ...(x.plies !== undefined ? { plies: x.plies } : {}), ...(lamination ? { lamination, note: laminationNote(lamination) } : {}), layerPieces: [], warnings: w,
     });
   }
-  return [...map.values()];
+  const out = [...map.values()];
+  for (const r of out) if (r.lamination) r.layerPieces = layerPiecesOf(r.lamination, r.rough, r.qty);
+  return out;
+}
+
+/** The note a laminated row carries into the cut list, the CSV and the build book. */
+export function laminationNote(l: Lamination): string {
+  const planed = [...new Set(l.layers.map((q) => fracIn(Math.round(q.roughT * 1000) / 1000)))].join(', ');
+  return `face-laminated: ${l.text} (D-70). Plane each layer to ${planed}" (the ${r3(l.roughT - l.finalT)}" planing allowance is taken once, on the glued block), epoxy the layers face to face, then mill the block to ${fracIn(l.finalT)}" thick.`;
+}
+
+/** Layer pieces of a laminated part: each layer is rough width x length, edge-glued from several pieces when wider than a board. `qty` is the number of parts. */
+export function layerPiecesOf(l: Lamination, rough: Dims, qty: number): LayerPiece[] {
+  const n = Math.max(1, Math.ceil(rough.w / BOARD_WIDTH_IN - 1e-9));
+  return l.layers.map((q, i) => ({ layer: i + 1, layers: l.layers.length, board: q.board, roughT: q.roughT, widthIn: rough.w / n, lengthIn: rough.l, finalT: q.finalT, edgeGlued: n, qty: qty * n }));
 }
 
 // ── Resaw ─────────────────────────────────────────────────────────────────────
@@ -525,15 +670,21 @@ export function cutList(parts: Part[], p: Params, stepOf?: ReadonlyMap<string, n
   const rows = oakRows(parts, p, warnings, stepOf);
   const groupMap = new Map<string, OakGroup>();
   for (const r of rows) {
-    const b = r.board === 'resawn' ? null : boardByNominal(r.board);
-    const g = groupMap.get(r.board) ?? { board: r.board, nominalIn: b?.nominalIn ?? 0, usableIn: b?.usableIn ?? 0, rows: [], pieces: 0 };
+    const b = r.board === 'resawn' || r.board === 'laminated' ? null : boardByNominal(r.board);
+    const g = groupMap.get(r.board) ?? { title: '', board: r.board, nominalIn: b?.nominalIn ?? 0, usableIn: b?.usableIn ?? 0, rows: [], pieces: 0 };
     groupMap.set(r.board, g);
     g.rows.push(r);
     g.pieces += r.qty;
   }
-  const order = (g: OakGroup): number => (g.board === 'resawn' ? 1000 : g.nominalIn);
+  const order = (g: OakGroup): number => (g.board === 'resawn' ? 1000 : g.board === 'laminated' ? 500 : g.nominalIn);
   const oak = [...groupMap.values()].sort((a, b) => order(a) - order(b));
-  for (const g of oak) g.rows.sort((a, b) => b.rough.l - a.rough.l);
+  for (const g of oak) {
+    g.rows.sort((a, b) => b.rough.l - a.rough.l);
+    g.title = g.board === 'resawn' ? `Resawn strips (${g.pieces} pieces: see the strip list)`
+      : g.board === 'laminated' ? `Face-laminated parts (${g.pieces} pieces: glued from stocked boards, D-70; see the layers)`
+        : `${g.board} (usable ${fracIn(g.usableIn)}"), ${g.pieces} pieces`;
+  }
+  const layers = oak.flatMap((g) => g.rows.flatMap((r) => r.layerPieces.map((q) => ({ row: r, ...q }))));
   const strips = stripRows(parts, p, pools, warnings);
   const sheets = sheetGroups(parts, warnings, stepOf);
   const metal = metalRows(parts, warnings, stepOf);
@@ -542,8 +693,12 @@ export function cutList(parts: Part[], p: Params, stepOf?: ReadonlyMap<string, n
   const d = (x: Dims): string => `${r3(x.t)} x ${r3(x.w)} x ${r3(x.l)}`;
   const csv = {
     oak: toCsv([
-      ['Board', 'Part no', 'Name', 'Qty', 'Final T x W x L (in)', 'Rough T x W x L (in)', 'Grain', 'Fab', 'Assembly step', 'Plies'],
-      ...oak.flatMap((g) => g.rows.map((r) => [g.board, r.partNo, r.name, r.qty, d(r.stock), d(r.rough), r.grainWord, r.fab, stepText(r.assemblySteps), r.plies])),
+      ['Board', 'Part no', 'Name', 'Qty', 'Final T x W x L (in)', 'Rough T x W x L (in)', 'Grain', 'Fab', 'Assembly step', 'Plies', 'Lamination'],
+      ...oak.flatMap((g) => g.rows.map((r) => [g.board, r.partNo, r.name, r.qty, d(r.stock), d(r.rough), r.grainWord, r.fab, stepText(r.assemblySteps), r.plies, r.lamination ? `face-laminated: ${r.lamination.text}` : undefined])),
+    ]),
+    layers: toCsv([
+      ['Part no', 'Name', 'Layer', 'Of', 'Board', 'Pieces', 'Rough layer T x W x L (in)', 'Layer share of final T (in)', 'Edge-glued from', 'Glued block rough T (in)', 'Final T (in)', 'Lamination'],
+      ...layers.map((q) => [q.row.partNo, q.row.name, q.layer, q.layers, q.board, q.qty, `${r3(q.roughT)} x ${r3(q.widthIn)} x ${r3(q.lengthIn)}`, q.finalT, q.edgeGlued, q.row.lamination!.roughT, q.row.lamination!.finalT, q.row.lamination!.text]),
     ]),
     strips: toCsv([
       ['Part no', 'Name', 'Parts', 'Plies', 'Strips', 'Final strip T x W x L (in)', 'Rough strip T x W x L (in)', 'Resaw from'],
@@ -558,5 +713,5 @@ export function cutList(parts: Part[], p: Params, stepOf?: ReadonlyMap<string, n
       ...metal.map((r) => [r.section, r.partNo, r.name, r.qty, r.cutLengthIn, r.fab, stepText(r.assemblySteps)]),
     ]),
   };
-  return { oak, strips, resaw: pools, sheets, metal, warnings: [...new Set(warnings)], csv };
+  return { oak, layers, strips, resaw: pools, sheets, metal, warnings: [...new Set(warnings)], csv };
 }

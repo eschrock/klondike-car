@@ -1,3 +1,4 @@
+import { OAK_ALT_PRICE_PER_BF } from './prices';
 import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
 import { defaultParams } from '../params';
@@ -73,6 +74,7 @@ describe('buildPackage', () => {
     const csv = pkg.files.find((f) => f.name === 'cutlist.csv')!.data as string;
     for (const h of ['# Oak, by board thickness', '# Resawn strips', '# Okoume plywood', '# Metal stock']) expect(csv).toContain(h);
     expect(csv).toContain(pkg.data.cutList.csv.oak.split('\n')[0]);
+    expect(csv).toContain('# Face-laminated layers (D-70)'); // the beams, knees and chocks (no 12/4)
   });
 
   it('zips every file with matching CRCs', () => {
@@ -127,10 +129,16 @@ describe('build book', () => {
     expect(html).toContain('@media print');
     expect(html).toContain('@page');
     expect(html).not.toMatch(/<script|<link|<img|<iframe|@import|url\(/i);
-    expect(html).not.toMatch(/(?:src|href)="(?:https?:)?\/\//i);
-    // the only URLs are the SVG namespace and the design link quoted in the header
+    expect(html).not.toMatch(/\ssrc="/i);
+    // the only URLs are the SVG namespace, the design link quoted in the header and the vendor links Eric gave (BOM lines with a `url`)
+    const vendor = new Set([...pkg.data.bom.sections.flatMap((s) => s.lines.map((l) => l.url).filter((u): u is string => !!u)), ...Object.values(OAK_ALT_PRICE_PER_BF).map((q) => q.url).filter((u): u is string => !!u)].map(esc));
+    expect(vendor.size).toBeGreaterThan(0);
     const urls = [...html.matchAll(/https?:\/\/[^\s"'<)]+/g)].map((m) => m[0]);
-    expect(urls.filter((u) => u !== 'http://www.w3.org/2000/svg' && u !== 'https://example.test/#x')).toEqual([]);
+    expect(urls.filter((u) => u !== 'http://www.w3.org/2000/svg' && u !== 'https://example.test/#x' && !vendor.has(u))).toEqual([]);
+    // every external link opens in a new tab without an opener
+    const anchors = [...html.matchAll(/<a href="(https?:[^"]+)"([^>]*)>/g)];
+    expect(anchors.length).toBeGreaterThan(0);
+    for (const a of anchors) { expect(vendor.has(a[1]), a[1]).toBe(true); expect(a[2]).toContain('target="_blank"'); expect(a[2]).toContain('rel="noopener"'); }
     expect((html.match(/<svg\b/g) ?? []).length).toBe(pkg.data.nest.sheets.length);
     expect(new TextEncoder().encode(html).length).toBeLessThan(4_000_000);
   });
@@ -174,5 +182,43 @@ describe('build book', () => {
     const f = other.files.find((q) => q.name === 'build-book.html')!.data as string;
     expect(f).not.toBe(html);
     expect(f).toContain(other.revision);
+  });
+});
+
+describe('build book: laminations, links, bulk parts and finishing touches', () => {
+  const html = (pkg.files.find((f) => f.name === 'build-book.html')!.data) as string;
+  const bom = pkg.data.bom;
+
+  it('shows each face-laminated part with its layers in the cut list and the board plan', () => {
+    expect(html).toContain('Face-laminated parts');
+    expect(html).toContain('Face-laminated layers');
+    for (const r of pkg.data.cutList.oak.flatMap((g) => g.rows).filter((q) => q.lamination)) expect(html, r.partNo).toContain(esc(`face-laminated: ${r.lamination!.text}`));
+    expect(html).toMatch(/beam-F layer 1\/3/);
+    expect(html).not.toMatch(/12\/4 \(usable/);
+  });
+
+  it('prints the BOM links as anchors that open in a new tab, and the material of each fastener line', () => {
+    expect(html).toContain('<a href="https://www.thewoodyard.com/current-pricing-list/" target="_blank" rel="noopener">thewoodyard.com</a>');
+    expect(html).toContain('href="https://www.aircraftspruce.com/catalog/wppages/okume.php"');
+    expect(html).toContain('<strong>Material:</strong>');
+    expect(html).toContain(esc(bom.sections.find((s) => s.id === 'fasteners')!.notes![0]));
+  });
+
+  it('shows the bulk and touches sections with their subtotals, and the totals as build + bulk + touches', () => {
+    expect(html).toContain('Bulk parts (shop stock)');
+    expect(html).toContain('Finishing touches subtotal');
+    expect(html).toContain('Bulk parts (shop stock) subtotal');
+    expect(html).toContain(`Lights subtotal`);
+    expect(html).toContain(esc(bom.totalsText));
+    expect(bom.totalsText).toBe(`Build ${usd(bom.coreUsd)} + bulk parts ${usd(bom.bulkUsd)} + finishing touches ${usd(bom.touchesUsd)} = ${usd(bom.totalUsd)}`);
+    expect(html).toMatch(/need [\d.]+, \d+ packs? of \d+ at \$/);
+  });
+
+  it('writes the totals, the URLs and the pack data to bom.csv', () => {
+    const csv = pkg.files.find((f) => f.name === 'bom.csv')!.data as string;
+    expect(csv).toContain(bom.totalsText);
+    expect(csv).toContain('Finishing touches');
+    expect(csv).toContain('Bulk parts (shop stock)');
+    expect(csv.split('\r\n')[0]).toContain('URL');
   });
 });

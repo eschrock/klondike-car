@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
 import { defaultParams } from '../params';
 import { assemblySteps } from './assembly';
-import { BOARD_THICKNESSES, RESAW_BOARD_WIDTHS_IN, RESAW_MIN_SPARES, boardByNominal, boardForThickness, cutList, isBuilt, makeLanes, stepMapOf, resawUsableIn, spareSlots, stripsPerBoard, toCsv } from './cutlist';
+import { BOARD_THICKNESSES, MAX_LAMINATION_LAYERS, RESAW_BOARD_WIDTHS_IN, RESAW_MIN_SPARES, boardByNominal, boardForThickness, cutList, isBuilt, laminationText, makeLanes, planLamination, stepMapOf, resawUsableIn, spareSlots, stripsPerBoard, toCsv } from './cutlist';
 
 const p = defaultParams();
 const parts = buildModel(p);
@@ -22,7 +22,8 @@ describe('board thickness map', () => {
     expect(boardForThickness(1.828)!.nominal).toBe('8/4'); // the king beam (1.703 finished): 8/4, not 12/4
     expect(boardForThickness(1.3)!.nominal).toBe('6/4');
     expect(boardForThickness(1.625)!.nominal).toBe('8/4');
-    expect(boardForThickness(2.375)!.nominal).toBe('12/4');
+    expect(boardForThickness(2.375)).toBeNull(); // 12/4 is not stocked (D-70): thicker than 8/4 means face-laminated
+    expect(boardForThickness(1.9)).toBeNull();
     expect(boardForThickness(9)).toBeNull();
   });
   it('lists the spec thicknesses', () => {
@@ -44,7 +45,7 @@ describe('cutList', () => {
     expect(listed).toEqual(oakIds);
     expect(oakIds.length).toBeGreaterThanOrEqual(60);
     for (const g of cl.oak) {
-      if (g.board === 'resawn') continue;
+      if (g.board === 'resawn' || g.board === 'laminated') continue;
       for (const r of g.rows) expect(r.rough.t, r.partNo).toBeLessThanOrEqual(g.usableIn + 1e-6);
     }
   });
@@ -184,11 +185,12 @@ describe('round 3: bench words, assembly steps, net web, no data warnings', () =
   it('has no data warnings (the transposed brake-shoe / brake-chock stock is fixed in the model; the backing strip has its stock)', () => {
     expect(cl.warnings).toEqual([]);
   });
-  it('cuts the brake shoe from 5/4 and the chock from 12/4 with T the board thickness', () => {
+  it('cuts the brake shoe from 5/4 and face-laminates the chock (no 12/4) with T the thickness', () => {
     const row = (no: string) => cl.oak.flatMap((g) => g.rows.map((r) => ({ r, board: g.board }))).find((x) => x.r.partNo === no)!;
     const shoe = row('brake-shoe'), chock = row('brake-chock');
     expect(shoe.board).toBe('5/4');
-    expect(chock.board).toBe('12/4');
+    expect(chock.board).toBe('laminated');
+    expect(chock.r.lamination!.text).toBe('3 \u00d7 0.833" from 4/4'); // 2.5 / 3: not a sixteenth, so the decimal
     for (const x of [shoe, chock]) { expect(x.r.stock.t).toBeLessThanOrEqual(x.r.stock.w); expect(x.r.stock.t).toBeLessThanOrEqual(x.r.stock.l); }
   });
   it('writes the grain in words, not as a local axis', () => {
@@ -217,5 +219,65 @@ describe('round 3: bench words, assembly steps, net web, no data warnings', () =
     expect(cl.csv.sheets).toContain('cut net 59.49');
     // a part whose file equals its blank has no note
     expect(cl.sheets.flatMap((g) => g.rows).find((r) => r.partNo === 'storage-lid')!.note).toBeUndefined();
+  });
+});
+
+describe('face lamination (D-70: no 12/4)', () => {
+  const rows = cl.oak.flatMap((g) => g.rows);
+  const lam = rows.filter((r) => r.lamination);
+
+  it('laminates exactly the four parts that needed 12/4: the two axle beams, the brake knees and the chocks', () => {
+    expect(lam.map((r) => r.partNo).sort()).toEqual(['beam-F', 'beam-R', 'brake-chock', 'brake-knee']);
+    expect(cl.oak.find((g) => g.board === 'laminated')!.title).toMatch(/^Face-laminated parts \(6 pieces/);
+    expect(cl.oak.some((g) => g.board === '12/4')).toBe(false);
+  });
+
+  it('picks three 4/4 layers for the axle beam: the cheapest mix per square foot that fits', () => {
+    const beam = lam.find((r) => r.partNo === 'beam-F')!;
+    expect(beam.lamination!.layers.map((l) => l.board)).toEqual(['4/4', '4/4', '4/4']);
+    expect(beam.lamination!.text).toBe('3 \u00d7 3/4" from 4/4');
+    expect(beam.note).toMatch(/^face-laminated: 3 \u00d7 3\/4" from 4\/4/);
+    expect(beam.lamination!.costPerFt2).toBeCloseTo(30, 6); // 3 x 1 x $10; 8/4 + 4/4 would be $40, 5/4 + 5/4 $31.25
+    // the layers add up to the glued block, each fits its board, and the finished shares add up to the part
+    const l = beam.lamination!;
+    expect(l.layers.reduce((a, q) => a + q.roughT, 0)).toBeCloseTo(beam.rough.t, 6);
+    expect(l.layers.reduce((a, q) => a + q.finalT, 0)).toBeCloseTo(beam.stock.t, 6);
+    for (const q of l.layers) expect(q.roughT).toBeLessThanOrEqual(boardByNominal(q.board).usableIn + 1e-9);
+    // the planing allowance is taken once, on the block
+    expect(l.roughT - l.finalT).toBeCloseTo(p.millingAllowanceIn, 6);
+  });
+
+  it('lists the layer pieces: N layers per part, a wide layer edge-glued from pieces, the right boards', () => {
+    expect(cl.layers.length).toBe(lam.reduce((a, r) => a + r.lamination!.layers.length, 0));
+    const knee = cl.layers.filter((q) => q.row.partNo === 'brake-knee');
+    expect(knee.length).toBe(3);
+    for (const q of knee) { expect(q.edgeGlued).toBe(2); expect(q.qty).toBe(4); expect(q.widthIn).toBeLessThanOrEqual(6); } // 2 knees x 2 pieces across
+    const beam = cl.layers.filter((q) => q.row.partNo === 'beam-R');
+    expect(beam.length).toBe(3);
+    for (const q of beam) { expect(q.edgeGlued).toBe(1); expect(q.board).toBe('4/4'); }
+    expect(cl.csv.layers.split('\r\n')[0]).toContain('Rough layer T x W x L (in)');
+    expect(cl.csv.layers.split('\r\n').length).toBe(cl.layers.length + 2); // header + rows + trailing
+    expect(cl.csv.oak).toContain('face-laminated: 3 \u00d7 3/4"" from 4/4'); // a quote in a CSV cell is doubled
+    expect(cl.csv.oak.split('\r\n')[0]).toContain('Lamination');
+  });
+
+  it('chooses by cost per square foot of face, and respects each board\'s usable thickness', () => {
+    const one = planLamination(2.25, 2.375)!;
+    expect(one.layers).toHaveLength(3);
+    // a part just over 8/4 (1.9" rough) can be 3 x 4/4 ($30) and no cheaper mix of stocked boards exists
+    const t19 = planLamination(1.775, 1.9)!;
+    expect(t19.costPerFt2).toBeLessThanOrEqual(30 + 1e-9);
+    for (const q of t19.layers) expect(q.roughT).toBeLessThanOrEqual(boardByNominal(q.board).usableIn + 1e-9);
+    expect(t19.layers.reduce((a, q) => a + q.roughT, 0)).toBeCloseTo(1.9, 6);
+    // a part a stocked board yields is not laminated
+    expect(planLamination(1.5, 1.625)).toBeNull();
+    expect(one.layers.length).toBeLessThanOrEqual(MAX_LAMINATION_LAYERS);
+    expect(laminationText([{ board: '4/4', roughT: 0.8, finalT: 0.75 }, { board: '4/4', roughT: 0.8, finalT: 0.75 }])).toBe('2 \u00d7 3/4" from 4/4');
+  });
+
+  it('has no data warnings and still puts every oak part in one row', () => {
+    expect(cl.warnings).toEqual([]);
+    const ids = rows.flatMap((r) => r.ids);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });

@@ -121,7 +121,7 @@ export class BuildData {
       ['Strip rough thickness (in)', 'Strips needed', 'Buy boards', 'Board', 'Width (in)', 'Length (in)', 'Strips per board', 'Strips bought', 'Spares', 'Board feet'],
       ...this.cutList.resaw.map((r) => [r.roughT, r.strips, r.boards, r.board, r.boardWidthIn, r.boardLengthIn, r.yieldPerBoard, r.stripSlots, r.spares, +r.boardFeet.toFixed(2)]),
     ]);
-    return [block('Oak, by board thickness', c.oak), block('Resawn strips', c.strips), block('Resaw boards to buy', boards), block('Okoume plywood', c.sheets), block('Metal stock', c.metal)].join('\n');
+    return [block('Oak, by board thickness', c.oak), ...(this.cutList.layers.length ? [block('Face-laminated layers (D-70)', c.layers)] : []), block('Resawn strips', c.strips), block('Resaw boards to buy', boards), block('Okoume plywood', c.sheets), block('Metal stock', c.metal)].join('\n');
   }
 
   get files(): PackageFile[] {

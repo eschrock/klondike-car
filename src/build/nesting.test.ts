@@ -90,6 +90,9 @@ describe('oakBoardFeet', () => {
     for (const x of parts.filter((q) => isBuilt(q) && /oak/i.test(q.material) && q.kind === 'lumber' && q.plies === undefined)) {
       const r = x.rough!;
       const d = [r.t, r.w, r.l].sort((a, b) => a - b);
+      // a part no stocked board yields (12/4 is not bought, D-70) is face-laminated: each layer counts at its own board's nominal thickness
+      const laminated = oak.laminated.find((q) => q.id === x.id);
+      if (laminated) { for (const l of laminated.lamination.layers) solid += (boardByNominal(l.board).nominalIn * d[1] * d[2]) / 144; continue; }
       const b0 = boardForThickness(d[0])!;
       // a thin bucket cut from the offcuts of a thicker board counts at the thicker board's nominal thickness
       const to = oak.consolidated.find((c) => c.from === b0.nominal && c.partNos.includes(partKey(x)))?.to ?? oak.folded.find((c) => c.from === b0.nominal && c.ids.includes(x.id))?.to;
@@ -126,8 +129,8 @@ describe('oakBoardFeet', () => {
   });
 
   it('cuts a solid bucket under 1 bf from the offcuts of a thicker board instead of buying a thin board for it (and says so)', () => {
-    // At the defaults every bucket is over 1 bf; thin the 8/4 bucket down to the king beam alone (about 0.6 bf) by dropping the bulkhead and the tongue.
-    const thin = parts.filter((x) => !/^(bow-bulkhead|bridle-tongue)$/.test(x.id));
+    // At the defaults every bucket is over 1 bf; thin the 6/4 bucket down to the chain joist and the seat wedges (about 0.6 bf) by dropping the handlebow; the 8/4 board is its host.
+    const thin = parts.filter((x) => x.id !== 'handle-bar');
     const oakThin = oakBoardFeet(thin, p);
     expect(oakThin.consolidated.length).toBeGreaterThan(0);
     for (const o of [oak, oakThin]) for (const c of o.consolidated) {
@@ -150,11 +153,11 @@ describe('oakBoardFeet', () => {
     const util = (b: { lengthIn: number; lanes: Array<{ widthIn: number; usedIn: number }> }): number => b.lanes.reduce((a, l) => a + l.widthIn * (l.usedIn - p.resawKerfIn), 0) / (BOARD_WIDTH_IN * b.lengthIn);
     for (const t of oak.thicknesses) for (const b of t.boards) expect(util(b), `${t.board} ${b.lengthIn / 12} ft`).toBeGreaterThan(0.4);
     const t44 = oak.thicknesses.find((t) => t.board === '4/4')!;
-    expect(t44.boards.length).toBeLessThanOrEqual(2);
+    expect(t44.boards.length).toBeLessThanOrEqual(3); // the face-laminated layers (D-70) take a third 4/4 board
     expect(oak.folded.length).toBeGreaterThan(0);
     // each folded piece is planned once, in a lane of a thicker board that is at least as wide, and marked with the thickness it would have been bought as
     const seen = new Map<string, number>();
-    for (const t of oak.thicknesses) for (const b of t.boards) for (const l of b.lanes) for (const c of l.cuts) if (!c.glueUp) seen.set(c.id, (seen.get(c.id) ?? 0) + 1);
+    for (const t of oak.thicknesses) for (const b of t.boards) for (const l of b.lanes) for (const c of l.cuts) if (!c.glueUp) seen.set(`${c.id}#${c.layer ?? 0}`, (seen.get(`${c.id}#${c.layer ?? 0}`) ?? 0) + 1);
     for (const n of seen.values()) expect(n).toBe(1);
     for (const f of oak.folded) {
       const host = oak.thicknesses.find((t) => t.board === f.to)!;
@@ -188,5 +191,38 @@ describe('oakBoardFeet', () => {
   it('scales the allowance with the waste param', () => {
     const more = oakBoardFeet(parts, { ...p, oakWasteAllowance: 0.5 });
     expect(more.allowanceBf).toBeGreaterThan(oak.allowanceBf);
+  });
+});
+
+describe('oakBoardFeet: face-laminated parts (D-70)', () => {
+  const oak = oakBoardFeet(parts, p);
+
+  it('buys no 12/4: the axle beams, brake knees and chocks take their layers from the 4/4 boards', () => {
+    expect(oak.thicknesses.map((t) => t.board)).not.toContain('12/4');
+    expect(oak.laminated.map((q) => q.id).sort()).toEqual(['beam-F', 'beam-R', 'brake-chock-L', 'brake-chock-R', 'brake-knee-L', 'brake-knee-R']);
+    const layerCuts = oak.thicknesses.flatMap((t) => t.boards.flatMap((b) => b.lanes.flatMap((l) => l.cuts.map((c) => ({ c, board: t.board })))))
+      .filter((q) => q.c.layer !== undefined);
+    // beams 3 layers each; knees 3 layers x 2 edge-glued pieces; chocks 3 x 2 (a 3.6" wide chock is one piece: 3 layers)
+    expect(layerCuts.filter((q) => q.c.id === 'beam-F')).toHaveLength(3);
+    expect(layerCuts.filter((q) => q.c.id === 'beam-R')).toHaveLength(3);
+    expect(layerCuts.filter((q) => q.c.id === 'brake-knee-L')).toHaveLength(6);
+    for (const q of layerCuts) { expect(q.c.layers, q.c.id).toBe(3); expect(q.board === '4/4' || q.c.fromBoard === '4/4', q.c.id).toBe(true); }
+    const t44 = oak.thicknesses.find((t) => t.board === '4/4')!;
+    expect(t44.layersIn!.partNos.sort()).toEqual(['beam-F', 'beam-R', 'brake-chock', 'brake-knee']);
+    expect(t44.summary.join(' ')).toMatch(/layer pieces for the face-laminated parts/);
+  });
+
+  it('counts the layers in the board feet at the nominal thickness of each layer\'s board', () => {
+    const beam = parts.find((x) => x.id === 'beam-R')!;
+    const d = beam.rough!;
+    const lam = oak.laminated.find((q) => q.id === 'beam-R')!.lamination;
+    expect(lam.layers.every((l) => l.board === '4/4')).toBe(true);
+    // 3 layers of 4/4 (1" nominal) over the rough face: 3 x w x l / 144 board feet
+    expect(lam.layers.length * d.w * d.l / 144).toBeCloseTo(3 * 2.375 * 27.97 / 144, 2);
+  });
+
+  it('keeps a laminated part wider than a board in the glue-up list', () => {
+    expect(oak.glueUps).toContain('brake-knee-L');
+    expect(oak.glueUps).not.toContain('beam-F');
   });
 });

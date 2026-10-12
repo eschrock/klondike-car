@@ -53,3 +53,12 @@ Build: 4 Bend-laminate the rails; 5 Frame and deck as one unit; 6 Side sandwiche
 - **Web** (59.49" net, 59.59" blank, from `flatPattern` and `stock.l`) is stated in step 2 and the dry fit. **Handle screws** are parsed from the joint size text (`socketScrewText`). **Hang** says how the hull is supported (side on a blanket, or padded horses).
 - **Stop-block pilots** (`stopBlockPilots`, from the wedges' screw `at` through `transform`): 17.55" and 18.54" forward of the transom outer face, 7.38" off the centerline, drilled at the wheel dry fit; the seat-blocks step drives the screws from the underside with the sled on its side (no "from below" on an upright hull).
 - **207** is bought with >= 25 % spare (`HARDENER_MARGIN`): 0.46 qt need becomes 1 qt, not a pint.
+
+## Right-sized finish (Eric, 2026-10-12)
+
+A snow sled kept in a garage, not a boat. Before to after, at the defaults (`finishing.ts`, `finishing.test.ts`; assembly 209 text and the BOM resin share follow):
+- **Areas:** gross 97.5 ft² (51.5 oak, 46.0 okoume) became net 83.0 ft² (42.8 oak, 40.2 okoume) after 14.5 ft² of glued lamination contacts came off both parts. Of the net: 41.2 ft² show (17.1 oak, 24.1 okoume), 41.8 ft² hidden (25.7 oak, 16.0 okoume), by the `SHOW_RULES` table.
+- **Epoxy coating:** two coats at 60 / 80 ft² per quart (about 59 fl oz mixed) became ONE saturation coat at 78 ft² per mixed quart (West System 105/206 table midpoint), 23 fl oz mixed. Second coat on the deck top and 207 are options, not in the quantities.
+- **Glue:** 51.2 fl oz became 50.8 (rate 1.0 down to 0.6 fl oz/ft², West's 0.5-0.75; the two-strip rail glue line is now counted), 60.9 with 20 % waste. Closes use 206 in small batches (no 209, no 303 pumps).
+- **Total mixed epoxy:** about 140 fl oz (coats + glue + the 209 closes) became 84 fl oz = 70 resin + 14 hardener (5:1, 206 only).
+- **Varnish:** 4 coats on all wood, one gallon (3.6 qt) became 3 coats show / 2 hidden at 140 ft²/qt, 1.7 qt, so 2 quarts. Stain and conditioner: show faces only, one coat.

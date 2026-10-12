@@ -43,8 +43,8 @@
     grid-template-areas: 'top top top' 'back back back' 'rail main viewer';
   }
   #app[data-mode='build'] #build-rail { grid-area: rail; overflow-y: auto; border-bottom: 0; border-right: 1px solid var(--border); padding: 14px 10px 16px; }
-  #app[data-mode='build'] #build-main { grid-area: main; overflow-y: auto; padding: 18px 28px 40px; }
-  #app[data-mode='build'][data-build-section='assembly'] #build-main { padding: 14px 18px 32px; }
+  #app[data-mode='build'] #build-main { grid-area: main; overflow-y: auto; padding: 18px 28px 40px; --bp-pad-top: 18px; }
+  #app[data-mode='build'][data-build-section='assembly'] #build-main { padding: 14px 18px 32px; --bp-pad-top: 14px; }
   #app[data-mode='build'][data-build-section='assembly'] #viewer { grid-area: viewer; position: static; height: auto; border-bottom: 0; border-left: 1px solid var(--border); }
   .bp-rail-title { display: block; margin: 0 0 8px; padding: 0 10px; }
   .bp-navlist { flex-direction: column; gap: 2px; padding: 0; overflow: visible; }
@@ -82,13 +82,26 @@
 .bp-cols { columns: 3 300px; column-gap: 28px; }
 .bp details { margin: 6px 0; }
 .bp summary { cursor: pointer; color: var(--muted); font-size: 13px; }
-.bp-warn summary { color: #b26a00; }
+.bp-warn summary { color: #8a5200; } /* 5.8:1 on --bg (was #b26a00, 3.9:1) */
 :root[data-theme='dark'] .bp-warn summary { color: #f0a73a; }
 .bp-card { border: 1px solid var(--border); border-radius: 10px; background: var(--panel); padding: 12px 16px; margin: 0 0 14px; min-width: 0; }
 .bp-card > :first-child { margin-top: 0; }
 
 /* Tables: a bordered, keyboard-scrollable panel; real columns, numbers right-aligned, no cramped wrapping of sizes and prices */
 .bp-scroll { overflow-x: auto; margin: 6px 0 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+/* A table that fits is clipped, not scrolled: no scroll container, so its header row can stick to the page scroller (#build-main wide, the window narrow). */
+.bp-scroll.is-fit { overflow-x: clip; }
+.bp-scroll.is-fit thead th { position: sticky; top: calc(var(--stick-top, 0px) - var(--bp-pad-top, 0px)); z-index: 2; } /* --bp-pad-top: #build-main's top padding, which a sticky offset respects */
+/* One that overflows sideways: a shadow on the edge that has more (the classic local/scroll background trick). */
+.bp-scroll.is-over {
+  background:
+    linear-gradient(to right, var(--panel) 30%, transparent) 0 0 / 40px 100% no-repeat local,
+    linear-gradient(to left, var(--panel) 30%, transparent) 100% 0 / 40px 100% no-repeat local,
+    linear-gradient(to right, rgb(0 0 0 / 0.25), transparent) 0 0 / 14px 100% no-repeat scroll,
+    linear-gradient(to left, rgb(0 0 0 / 0.25), transparent) 100% 0 / 14px 100% no-repeat scroll,
+    var(--panel);
+}
+.bp-scroll:has(> .bp-cuts), .bp-scroll:has(> .bp-files) { max-width: 1150px; } /* wider and the eye loses the row (Qty, Final and Rough drift 130 px apart) */
 .bp-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .bp-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .bp-table th, .bp-table td { padding: 8px 14px; text-align: left; vertical-align: top; border-top: 1px solid var(--border); font-weight: 400; }
@@ -96,8 +109,9 @@
 .bp-table th.num, .bp-table td.num { text-align: right; }
 .bp-table td.num { white-space: nowrap; }
 .bp-table tfoot th, .bp-table tfoot td { background: var(--panel-2); font-weight: 600; border-top: 2px solid var(--border); }
-.bp-cuts td:nth-child(3), .bp-cuts td:nth-child(4), .bp-cuts td:last-child, .bp-bom td:nth-child(2), .bp-bom td:nth-child(3), .bp-bom td:nth-child(4), .bp-bom td:last-child { white-space: nowrap; }
+.bp-cuts td:last-child, .bp-bom td:nth-child(2), .bp-bom td:nth-child(3), .bp-bom td:nth-child(4), .bp-bom td:last-child { white-space: nowrap; }
 .bp-cuts td:first-child, .bp-bom td:first-child { min-width: 14em; }
+.bp-table td.nw, .bp-d { white-space: nowrap; }
 .bp-fin td:last-child { white-space: nowrap; }
 .bp-buy div { margin-bottom: 2px; }
 .bp-files td:first-child { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; }
@@ -110,13 +124,27 @@
 .bp-total strong { font-variant-numeric: tabular-nums; }
 .bp-grand { margin-top: 4px; }
 .bp-subtotals { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
-.bp-subtotals li { display: flex; flex-direction: column; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+.bp-subtotals li { display: flex; }
+.bp-chip { flex: 1; display: flex; flex-direction: column; align-items: flex-start; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); text-align: left; min-height: 0; }
+.bp-chip:hover { border-color: var(--accent); }
+.bp-bom-head { scroll-margin-top: 8px; }
+.bp-bom-head:focus { outline: none; }
+.bp-parts { margin-top: 10px; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+.bp-part { display: flex; flex-direction: column; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+.bp-total > .bp-group { margin: 14px 0 6px; }
+.bp-pack { color: var(--text); }
+.bp-material { color: var(--muted); }
+.bp-material strong { font-weight: 600; }
+.bp-layers { margin: 4px 0 0; }
+.bp-link { color: var(--accent); text-underline-offset: 2px; }
 .bp-subtotals strong { font-size: 15px; }
+.bp-subtotals { margin-bottom: 0; }
 
 /* Verify checklist */
 #bp-sec-verify .bp-prose, #bp-sec-verify > p { max-width: 80ch; }
-.bp-verify-groups { columns: 2 440px; column-gap: 48px; }
+.bp-verify-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 0 48px; align-items: start; }
 .bp-verify-group { break-inside: avoid; }
+.bp-verify-group > .bp-group { margin-top: 18px; }
 .bp-progress { font-weight: 600; }
 .bp-checks { list-style: none; margin: 0 0 8px; padding: 0; }
 .bp-check { padding: 8px 0; border-top: 1px solid var(--border); }
@@ -129,7 +157,8 @@
 /* Cards of drawings (Shaper files, forms): large preview, name, facts, download. The drawing always sits on white so black-on-white Shaper files read in dark mode. */
 .bp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); gap: 16px; align-items: start; margin: 8px 0 16px; }
 .bp-grid-forms { grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); }
-.bp-grid-fin { grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); }
+.bp-fin-steps { display: grid; gap: 12px; max-width: 80ch; margin: 8px 0 16px; }
+.bp-fin-steps > .bp-card { margin: 0; }
 .bp-grid > .bp-card { margin: 0; }
 .bp-file { padding: 10px 12px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); min-width: 0; }
 .bp-file-head { display: flex; flex-direction: column; margin: 8px 0 4px; overflow-wrap: anywhere; }
@@ -158,9 +187,15 @@
 .bp-swatch.guide { background: transparent; border: 2px solid #0068ff; }
 
 /* Assembly */
-.bp-stepnav { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0 8px; background: var(--bg); }
+.bp-stepnav { position: sticky; top: calc(0px - var(--bp-pad-top, 0px)); z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0 8px; background: var(--bg); }
 .bp-stepnav button { padding: 6px 16px; font-weight: 600; min-height: 38px; }
 .bp-stepnav .muted { font-size: 13px; font-weight: 600; }
+/* The counter is also the step jump: a native <select> laid invisibly over the text. */
+.bp-counter { position: relative; display: inline-flex; align-items: center; flex: 0 1 auto; min-width: 0; padding: 6px 10px; border-radius: 6px; border-bottom: 1px dotted var(--muted); cursor: pointer; white-space: nowrap; }
+.bp-counter:hover { background: var(--panel-2); }
+.bp-counter:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.bp-jump { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; font-size: 16px; }
+.bp-step-detail { scroll-margin-top: 52px; } /* clears the sticky Prev/Next bar (narrow: also the pinned viewer, below) */
 .bp-step-detail { margin-top: 4px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
 .bp-step-title { margin: 0 0 6px; font-size: 16px; }
 .bp-kind { margin-left: 8px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); border: 1px solid var(--border); border-radius: 8px; padding: 0 6px; vertical-align: middle; }
@@ -169,6 +204,9 @@
 .bp-cure { padding: 6px 8px; background: color-mix(in srgb, var(--accent) 8%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 6px; }
 .bp-checkboxes { list-style: none; margin: 2px 0 6px; padding: 0; }
 .bp-checkboxes li { display: flex; gap: 8px; align-items: flex-start; margin: 2px 0; }
+.bp-checkline { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.bp-checkline input { flex: none; width: 16px; height: 16px; margin: 3px 0 0; }
+.bp-checkline input:checked + span { color: var(--muted); text-decoration: line-through; }
 .bp-box { flex: none; width: 12px; height: 12px; margin-top: 3px; border: 1.5px solid currentColor; border-radius: 2px; box-sizing: border-box; }
 .bp-allsteps { margin-top: 10px; }
 .bp-steps { position: relative; list-style: none; margin: 6px 0 0; padding: 0; max-height: 22em; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
@@ -184,6 +222,7 @@
 @media (max-width: 899px) {
   #app[data-mode='build'][data-build-section='assembly'] .bp-stepnav { top: calc(var(--stick-top, 0px) + min(42vh, 360px)); }
   #app[data-mode='build'][data-build-section='assembly'] #build-main { padding-top: 0; }
+  .bp-step-detail { scroll-margin-top: calc(var(--stick-top, 0px) + min(42vh, 360px) + 52px); }
   .bp-title { font-size: 19px; }
   .bp-cols { columns: 1; }
   .bp-table th, .bp-table td { padding: 6px 10px; }
@@ -192,6 +231,56 @@
   .bp-navlist::-webkit-scrollbar, .bp-rail-actions::-webkit-scrollbar { display: none; }
   .bp-navlist { padding-bottom: 6px; }
   .bp-rail-actions button { flex: none; white-space: nowrap; }
+}
+
+/* ── Viewer toolbar in Build ──
+   The Assembly viewer is small, so its toolbar is the four view buttons and Explode (moved out of the sheet by Viewer.setBuildMode) at every width.
+   Everything else (Dimensions, Outline edges, Shop aids, Joinery, CG, Section; the layer toggles are dropped) is behind the "More" sheet. */
+#app[data-mode='build'] .viewer-toggles { display: none; }
+#app[data-mode='build'] .viewer-toolbar { flex-wrap: nowrap; }
+#app[data-mode='build'] .viewer-views { flex: 0 1 auto; }
+#app[data-mode='build'] .viewer-more-btn { display: inline-block; flex: none; margin-left: auto; }
+#app[data-mode='build'] .viewer-toolbar > .steer-ctl { flex: 0 1 auto; min-width: 0; min-height: 0; padding-top: 2px; padding-bottom: 2px; }
+#app[data-mode='build'] .viewer-toolbar > .steer-ctl input[type='range'] { width: clamp(56px, 10vw, 110px); min-width: 0; }
+#app[data-mode='build'] .viewer-more { display: none; position: absolute; left: 0; right: 0; top: 100%; z-index: 6; flex-flow: row wrap; align-items: center; gap: 2px 6px;
+  padding: 4px 8px; max-height: min(36vh, 150px); overflow-y: auto; overscroll-behavior: contain; background: var(--panel); border-bottom: 1px solid var(--border); box-shadow: 0 6px 12px rgb(0 0 0 / 20%); }
+#app[data-mode='build'] .viewer-more.open { display: flex; }
+#app[data-mode='build'] .viewer-more .steer-ctl:has(input[type='range']) { flex: 1 1 100%; }
+
+/* ── 1024 fit (900 to 1279 px): the chrome gives the tables the room ── */
+@media (min-width: 900px) and (max-width: 1279px) {
+  #app[data-mode='build'] { grid-template-columns: 168px minmax(0, 1fr); }
+  #app[data-mode='build'][data-build-section='assembly'] { grid-template-columns: 168px clamp(340px, 32vw, 520px) minmax(0, 1fr); }
+  #app[data-mode='build'] #build-rail { padding: 12px 6px 16px; }
+  #app[data-mode='build'] #build-main { padding: 14px 18px 32px; --bp-pad-top: 14px; }
+  #app[data-mode='build'][data-build-section='assembly'] #build-main { padding: 12px 14px 28px; }
+  .bp-tab { gap: 8px; padding: 8px 8px; }
+  .bp-table th, .bp-table td { padding: 7px 10px; }
+  .bp-cuts td:first-child, .bp-bom td:first-child { min-width: 11em; }
+}
+
+/* ── Phones (under 600 px): the cut list and the BOM become cards ──
+   Line 1: the name and the quantity. Line 2: the size you cut to (the final T x W x L), bold. Line 3: the rest, muted, each with its caption. The BOM card ends with the extended price. */
+@media (max-width: 599px) {
+  #build-main .bp-cuts, #build-main .bp-cuts tbody, #build-main .bp-cuts tfoot, #build-main .bp-bom, #build-main .bp-bom tbody, #build-main .bp-bom tfoot { display: block; width: 100%; }
+  #build-main .bp-cuts thead, #build-main .bp-bom thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; } /* still read by screen readers */
+  #build-main .bp-cuts tbody tr, #build-main .bp-bom tbody tr { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; padding: 10px 12px; border-top: 1px solid var(--border); }
+  #build-main .bp-cuts tbody tr:first-child, #build-main .bp-bom tbody tr:first-child { border-top: 0; }
+  #build-main .bp-cuts tbody td, #build-main .bp-bom tbody td { display: block; min-width: 0; padding: 0; border: 0; order: 3; font-size: 12.5px; color: var(--muted); white-space: normal; text-align: left; }
+  #build-main .bp-cuts tbody td[data-label]::before, #build-main .bp-bom tbody td[data-label]::before { content: attr(data-label) ' '; }
+  #build-main .bp-cuts tbody td:first-child, #build-main .bp-bom tbody td:first-child { order: 0; flex: 1 1 0; font-size: 14px; color: var(--text); }
+  #build-main .bp-cuts tbody td:first-child::before, #build-main .bp-bom tbody td:first-child::before { content: none; }
+  #build-main .bp-cuts tbody td.c-qty { order: 1; margin-left: auto; font-size: 13px; font-weight: 600; color: var(--text); }
+  #build-main .bp-bom tbody td:first-child { flex: 0 0 100%; } /* the item text can be long: its own line, then Qty, Unit price, Basis, Vendor */
+  #build-main .bp-bom tbody td.c-qty { color: var(--text); font-weight: 600; }
+  #build-main .bp-cuts tbody td.c-key { order: 2; flex: 0 0 100%; font-size: 15px; font-weight: 700; color: var(--text); white-space: normal; }
+  #build-main .bp-cuts tbody td.c-key::before { content: none; }
+  #build-main .bp-bom tbody td.c-end { order: 4; flex: 0 0 100%; display: flex; justify-content: space-between; align-items: baseline; margin-top: 4px; font-size: 15px; font-weight: 700; color: var(--text); }
+  #build-main .bp-bom tbody td.c-end::before { font-size: 12.5px; font-weight: 400; color: var(--muted); }
+  #build-main .bp-cuts tfoot tr, #build-main .bp-bom tfoot tr { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; background: var(--panel-2); border-top: 2px solid var(--border); font-weight: 600; }
+  #build-main .bp-cuts tfoot th, #build-main .bp-cuts tfoot td, #build-main .bp-bom tfoot th, #build-main .bp-bom tfoot td { display: block; padding: 0; border: 0; background: transparent; }
+  #build-main .bp-bom tfoot td:empty, #build-main .bp-cuts tfoot td:empty { display: none; }
+  .bp-scroll.is-over { background: var(--panel); }
 }
 
 /* ── Print ──
@@ -213,7 +302,8 @@
   .bp .muted, .bp .muted * { color: #444 !important; }
   .bp { font-size: 10.5pt; max-width: none; }
   .bp-title { font-size: 16pt; }
-  .bp-scroll { overflow: visible; border-color: #999; }
+  .bp-scroll, .bp-scroll.is-fit, .bp-scroll.is-over { overflow: visible; border-color: #999; background: #fff; max-width: none; }
+  .bp-scroll.is-fit thead th { position: static; }
   .bp-table { width: 100%; }
   .bp-table th, .bp-table td { padding: 4px 8px; }
   .bp-table tr, .bp-file, .bp-check, .bp-step-print, .bp-finstep, .bp-total, .bp-card { break-inside: avoid; }

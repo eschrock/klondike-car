@@ -233,7 +233,27 @@ function glueUpList(c: StepCtx): string {
 }
 
 /** The board a part is milled from ("12/4"): the BOARD COLUMN of the cut list, never the model's raw rough thickness (a transposed `rough` once named a 16/4 board nobody sells). */
-const boardOf = (c: StepCtx, id: string): string => c.cut().oak.flatMap((g) => g.rows).find((r) => r.ids.includes(id))?.board ?? '?';
+const boardOf = (c: StepCtx, id: string): string => {
+  const row = c.cut().oak.flatMap((g) => g.rows).find((r) => r.ids.includes(id));
+  return row?.lamination ? `laminated: ${row.lamination.text}` : row?.board ?? '?';
+};
+
+/**
+ * The face-laminated parts (D-70: 12/4 is not bought), grouped by part number: "beam-F, beam-R (3 × 3/4" from 4/4); brake-knee-L, brake-knee-R (3 × 5/6" from 4/4, each layer edge-glued from 2 pieces)".
+ * Empty when no part is laminated. Read from the board plan, which is where the layers are cut from.
+ */
+function laminationList(c: StepCtx): string {
+  const plan = c.oak();
+  const wide = new Set(plan.glueUps);
+  const by = new Map<string, { ids: string[]; text: string; wide: boolean }>();
+  for (const q of plan.laminated) {
+    const key = `${q.partNo}|${q.lamination.text}`;
+    const g = by.get(key) ?? { ids: [], text: q.lamination.text, wide: wide.has(q.id) };
+    g.ids.push(q.id);
+    by.set(key, g);
+  }
+  return [...by.values()].map((g) => `${g.ids.join(', ')} (${g.text}${g.wide ? ', each layer edge-glued from pieces' : ''})`).join('; ');
+}
 
 /** Steepest angle (degrees) the bent rails make with the centerline in the bow taper: where the joist and king-beam ends meet them. */
 export function maxTaperAngleDeg(p: Params): number {
@@ -337,10 +357,15 @@ const TEMPLATES: Template[] = [
       const nRailStrips = rails.reduce((s, x) => s + (x.plies ?? 0), 0);
       const allow = c.p.millingAllowanceIn;
       const glued = glueUpList(c);
+      const laminated = laminationList(c);
       const b = (id: string): string => boardOf(c, id);
       return {
         instructions: [
           `Mill every oak part to rough size: finished + ${inch(allow)} thickness and width, + ${inch(4 * allow)} length (millingAllowanceIn); quantities by board thickness are in the cut list.`,
+          ...(laminated ? [
+            `Face-laminate the thick parts BEFORE anything is notched, bored or slotted (no 12/4 is bought, D-70): ${laminated}. Plane each layer to the rough thickness in the cut list's layer table (the ${inch(allow)} planing allowance is taken once, on the glued block), ` +
+            'edge-glue any wide layer first, then epoxy the layers face to face (206 slow hardener, thickened a little with silica), clamp flat between cauls with the ends and edges flush, and let the block cure overnight. Then mill the glued block to its final size. From there on it is treated as solid oak (epoxy-laminated oak is, in normal practice).',
+          ] : []),
           glued
             ? `Edge-glue the wide panels FIRST (they must cure before the planer and the Shaper): ${glued}. Rip each board ${inch(allow)} over its share, joint the mating edges, glue with 206 and cauls, then plane to thickness and trim to the cut-list size.`
             : 'No panel is wider than a board: no edge glue-ups.',
@@ -353,7 +378,7 @@ const TEMPLATES: Template[] = [
           `Bandsaw blanks from thick stock: brake knees (${b('brake-knee-L')}), brake shoes (${b('brake-shoe-L')}), chocks (${b('brake-chock-L')}), handlebow (${b('handle-bar')}), tongue (${b('bridle-tongue')}).`,
           'Mill strips and bandsaw blanks the day they are glued or bent; thin strips cup overnight. Sticker the rest and keep it at 6-9 % moisture.',
         ],
-        checks: ['Moisture 6-9 % on every board', 'Strip thickness uniform within 0.005" (feel for ridges)', 'Strips straight-grained with no knots in the bend', 'Panel glue-ups flat, no step at the glue lines'],
+        checks: ['Moisture 6-9 % on every board', 'Strip thickness uniform within 0.005" (feel for ridges)', 'Strips straight-grained with no knots in the bend', 'Panel glue-ups flat, no step at the glue lines', ...(laminated ? ['Laminated blocks cured, flat and square, with no gap at any glue line, before they are milled to size'] : [])],
       };
     },
   },
@@ -418,7 +443,7 @@ const TEMPLATES: Template[] = [
     build: (c) => ({
       instructions: [
         'First run the finishing offcut tests (finishing.ts, step 1). They decide how the okoume takes stain under epoxy; no show face is sealed until a panel passes.',
-        'Epoxy-seal (105/207, coat 1 of the finishing schedule) ONLY the dados (transom, bulkhead), the deck underside and deck edges, every ply edge (webs, signs, storage panels, seat back, lid), and faces nobody will see. The show faces stay bare: both web faces, the deck top, the box, the lid, the seat back. Glue faces stay bare or are scuffed.',
+        'Epoxy-seal (105/206, the one seal coat of the finishing schedule) ONLY the dados (transom, bulkhead), the deck underside and deck edges, every ply edge (webs, signs, storage panels, seat back, lid), and faces nobody will see. The show faces stay bare: both web faces, the deck top, the box, the lid, the seat back. Glue faces stay bare or are scuffed.',
         'The show faces are stained (conditioner, then dye or gel on the okoume), THEN epoxy-sealed, after assembly in the finishing schedule (steps 3-4). Water-based dye under epoxy is the safe route; oil-based stain or gel stays tacky unless it has fully cured.',
         `The deck dado and the deck gap under the inner chine band are deck + ${inch(c.p.deckSlopIn)} tall, so the sealed deck still enters; check with a feeler.`,
         'Wash or sand the amine blush off any sealed face that will be glued again (warm water + Scotch-Brite, dry; 120 grit), and the dado walls. Keep glue faces on the oak bands and rails bare.',
@@ -629,7 +654,7 @@ const TEMPLATES: Template[] = [
     match: /^transom-/,
     view: 'iso',
     tools: ['pipe clamps (2)', 'cauls', 'epoxy pumps', 'router', 'drill'],
-    hardener: '209',
+    hardener: '206',
     clamp: 'Two pipe clamps along the length; clamp backers with a caul the evening before.',
     build: (c) => {
       const transom = c.by('transom-rear');
@@ -639,7 +664,7 @@ const TEMPLATES: Template[] = [
           `Bench, the day before: drill the push-handle socket holes in the transom and the backers, and epoxy the ${plural(c.mine.filter((x) => /backer/.test(x.id)).length, 'backer')} (0.75" oak) to the inside of the transom (${sizeOf(transom)}), full face.`,
           'Set a captive 1/4-20 T-nut (or epoxied insert) per socket screw in each backer, from its inside face, before the backer is glued: the socket screws then drive in from outside and no wrench ever has to reach behind the storage box (it replaces the nylock nut in the BOM).',
           'Close ONE end first (S1). The transom slides in X onto the deck edge, both web ends (their dados, open at the top), the rail tenons and the four band ends per side (epoxy fillet butts, no Dominos): about a dozen joints in one glue-up.',
-          'Use the 120-minute slow epoxy (209) and rehearse twice. The 1/8" vent holes in the dados let air and epoxy escape; bung them after.',
+          'Use the 206 slow epoxy and rehearse twice: mix SMALL batches in a wide shallow container to extend the working time, with a second person mixing. The 1/8" vent holes in the dados let air and epoxy escape; bung them after.',
           `Joint count at the transom: ${plural(bands, 'epoxy joint')}, mortise-and-tenon ×${count(c, 'mortise-tenon')}.`,
         ],
         checks: ['Transom square to the deck and plumb', 'Vent holes show a bead of epoxy (dados filled)', 'Hull length unchanged from the dry-fit measure', 'T-nuts clear of epoxy (run a screw in dry)'],
@@ -654,14 +679,14 @@ const TEMPLATES: Template[] = [
     match: /^bow-bulkhead$/,
     view: 'iso',
     tools: ['pipe clamps (2)', 'cauls', 'epoxy pumps'],
-    hardener: '209',
+    hardener: '206',
     clamp: 'Second batch, after the transom epoxy has kicked (3-6 h); two pipe clamps along the length.',
     build: (c) => {
       const b = c.by('bow-bulkhead');
       return {
         instructions: [
           `Bulkhead ${sizeOf(b)} (rear face is the rider's foot brace): dados open at the top take the web ends, a deck dado run into them takes the deck edge, Dominos into the rails (D-69), four band ends per side butt with an epoxy fillet.`,
-          'Second, fresh batch of 209 so the close never runs against the first pot life. Fillet the inside corners with thickened epoxy.',
+          'Second, fresh small batch of 206 (wide shallow container, a second person mixing) so the close never runs against the first pot life. Fillet the inside corners with thickened epoxy.',
           'The lift hand-hold is already cut; keep epoxy out of it and out of the lamp-clip fit.',
         ],
         checks: ['Bulkhead square and at the right station (x of the dry-fit mark)', 'Web and deck seated in their dados, no gaps'],
@@ -777,7 +802,7 @@ const TEMPLATES: Template[] = [
       return {
         instructions: [
           `Run the finishing schedule (finishing.ts) on everything reachable from below: the deck underside, rails, joists, beams, hangers, king beam, the brake knees and their backers, the outside of the sides, the transom and bulkhead. Same products and coats as the rest (${f(a.oakFt2, 0)} ft² oak + ${f(a.okoumeFt2, 0)} ft² okoume in all).`,
-          'Offcut test first, then sand 120 / 150, stain the show faces, epoxy-seal them (two coats), and varnish (four coats, 320 between). Mask the bolt seats, the kingpin head and the hold-down angles; brush into the knee counterbores and leave the pivot-hole spot for later.',
+          'Offcut test first, then sand 120 / 150, stain the show faces, epoxy-seal them (one saturation coat), and varnish (3 coats on the show faces, 2 on the hidden ones, 320 between). Mask the bolt seats, the kingpin head and the hold-down angles; brush into the knee counterbores and leave the pivot-hole spot for later.',
           'Flip only when the last coat is dry enough to handle (3 days); the horses are padded, and the hull is carried by the rails and the bulkhead, never by the sides.',
           'The inside, the topside and everything built after the flip is finished after assembly, in the finish step.',
         ],
