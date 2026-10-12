@@ -123,8 +123,7 @@ export class Viewer {
   private showEdges = true;
   /** Shop aids (jigs and forms such as a lamination form) are hidden until the Advanced "Shop aids" toggle asks for them. */
   private showShopAids = false;
-  /** The wheel chocks hang under the rear knees on cords; they ride in the box when the sled is carried, so the drawing hides them until the "Wheel chocks" toggle asks (3c-5). */
-  private showChocks = false;
+  private edgesCb?: HTMLInputElement;
   private sunDir = new THREE.Vector3(-10, -90, 150).normalize();
   private currentView: ViewName = 'iso';
   /** The user orbited / zoomed since the last view button or auto-frame; until then a resize re-frames the sled. */
@@ -379,14 +378,11 @@ export class Viewer {
       this.showDims = v;
       this.rebuildOverlay();
     }, true); // also offered in the Simple view
-    mk('Edges', 'Thin dark outlines on the parts (off shows the finish only)', true, (v) => {
+    // Advanced only (Eric, D-65): in Simple the outlines are always on.
+    this.edgesCb = mk('Outline edges', 'Draws thin dark outlines along the sharp edges of every part, so you can see where one piece ends and the next begins. Turn it off to see the finish and the shading only.', true, (v) => {
       this.showEdges = v;
       for (const l of this.edgeLines) l.visible = v;
-    }, true);
-    mk('Wheel chocks', 'Show the wheel chocks parked at the rear tires (they are carried in the box when the sled is on the move)', false, (v) => {
-      this.showChocks = v;
-      this.refreshVisibility();
-    }, true);
+    });
     mk('Shop aids', 'Show shop jigs and forms (for example a lamination form) as faint gray wireframes', false, (v) => {
       this.showShopAids = v;
       this.refreshVisibility();
@@ -516,6 +512,8 @@ export class Viewer {
    */
   setSimpleMode(simple: boolean): void {
     this.simple = simple;
+    this.showEdges = simple ? true : this.edgesCb?.checked ?? true; // the outline toggle is Advanced only; Simple always draws them
+    for (const l of this.edgeLines) l.visible = this.showEdges;
     this.applyBaseMaterials();
     this.applyHighlight();
     if (simple) {
@@ -768,7 +766,6 @@ export class Viewer {
       mesh.userData.group = part.group;
       // Shop aids (e.g. a bent-lam form): reference parts that are fabricated, unlike the rider/cargo figures.
       mesh.userData.shopAid = isShopAid(part);
-      mesh.userData.chock = /^brake-chock/.test(part.id);
       mesh.castShadow = !mesh.userData.shopAid && built.look !== 'mannequin' || part.id === 'cargo'; // the rider is a translucent ghost: no shadow; the cargo crate is solid
       mesh.receiveShadow = true;
       mesh.matrixAutoUpdate = false;
@@ -971,7 +968,7 @@ export class Viewer {
   }
 
   private shouldShow(m: THREE.Object3D): boolean {
-    return !this.hidden.has(m.userData.group as PartGroup) && !(m.userData.shopAid && (this.simple || !this.showShopAids)) && !(m.userData.chock && !this.showChocks);
+    return !this.hidden.has(m.userData.group as PartGroup) && !(m.userData.shopAid && (this.simple || !this.showShopAids));
   }
 
   private refreshVisibility(): void {

@@ -268,7 +268,21 @@ describe('cargo card wording (D-53)', () => {
     expect(all).toMatch(/hold about 62%/); // wording of the brake itself belongs to the brake rows (D-57)
     expect(all).not.toMatch(/NaN|undefined/);
   });
-  it('is amber when the design payload is within 10% of a limit', () => {
-    expect(cargoText({ ...base, capacityLb: 300, comfortableLb: 200 }).tone).toBe('warn');
+  it('D-65: the headline stays GREEN when the capacity covers the target, even if a row is close to its limit at the target; the row becomes a plain caution line', () => {
+    const marg = { id: 'tip-straight', label: 'tip-straight', utilAtPayload: 0.95, statusAtPayload: 'marginal' as Status, failAtLb: 270, marginalAtLb: 200, fixed: false };
+    const t = cargoText({ ...base, payloadLb: 200, capacityLb: 270, comfortableLb: 190, rows: [marg], counts: { pass: 29, marginal: 1, fail: 0 }, statusAtPayload: 'marginal' });
+    expect(t.tone).toBe('pass');
+    expect(t.headline).toBe('Hauls up to 270 lb after the race');
+    expect(t.lines[0]).toMatch(/^At 200 lb a tall load is close to tipping: keep heavy items low, with the center of weight within about 12 in of the deck\./);
+    // any other row gets the generic sentence with its percentage
+    const other = cargoText({ ...base, payloadLb: 200, capacityLb: 270, comfortableLb: 190, rows: [{ ...marg, id: 'axle-stress', utilAtPayload: 0.93 }] });
+    expect(other.tone).toBe('pass');
+    expect(other.lines[0]).toMatch(/^At 200 lb an axle is close to its limit \(93% of what it can take\)\./);
+    // no marginal row, no caution
+    expect(cargoText({ ...base, payloadLb: 200, capacityLb: 270 }).lines[0]).toMatch(/^The target is 200 lb/);
+  });
+  it('D-65: amber only when the capacity is below the target and nothing fails at it; red when a row fails at the target', () => {
+    expect(cargoText({ ...base, payloadLb: 250, capacityLb: 240, comfortableLb: 200 }).tone).toBe('warn');
+    expect(cargoText({ ...base, payloadLb: 200, capacityLb: 270, counts: { pass: 28, marginal: 0, fail: 1 }, statusAtPayload: 'fail' }).tone).toBe('fail');
   });
 });

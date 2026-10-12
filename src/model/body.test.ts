@@ -347,21 +347,22 @@ describe('scuppers', () => {
 
 describe('signs (D-57): the Troop 455 sign is back on the tall rear part of each side', () => {
   const sp = signPlacement(makeCtx(defaults));
-  it('on by default: two removable ply blanks banded in oak, outside the side stack, hung on thumb-knob screws', () => {
+  it('on by default: two ply blanks banded in oak, outside the side stack, hung on thumb-knob screws; NOT removable (D-65: they stay on for transport)', () => {
     expect(defaults.showSideSigns).toBe(1);
     const signs = parts.filter((x) => /^sign/.test(x.id));
     expect(signs.filter((x) => !/backer/.test(x.id)).map((x) => x.id).sort()).toEqual(['sign-L', 'sign-R']);
     expect(signs.filter((x) => /backer/.test(x.id)).map((x) => x.id).sort()).toEqual(['sign-backer-L1', 'sign-backer-L2', 'sign-backer-R1', 'sign-backer-R2']); // D-62: oak backing strips inside the 4 mm web
     for (const x of signs.filter((q) => /backer/.test(q.id))) { expect(x.group).toBe('body'); expect(x.material).toBe('white oak'); expect(x.removable).toBeFalsy(); }
     for (const s of signs.filter((x) => !/backer/.test(x.id))) {
-      expect(s.removable).toBe(true);
-      expect(s.group).toBe('removable');
+      expect(s.removable).toBeFalsy(); // Eric, D-65: taking the signs off for the truck "seems excessive"
+      expect(s.group).toBe('body');
+      expect(s.notes).toMatch(/STAYS ON for transport/);
       expect(s.massLb).toBeGreaterThan(0);
       expect(s.edges).toBe('edged');
       expect(s.notes).not.toMatch(/PROVISIONAL/);
       expect(s.joints!.some((j) => j.type === 'knob')).toBe(true);
     }
-    expect(buildModel(defaults, { removed: true }).some((x) => /^sign-[LR]$/.test(x.id))).toBe(false);
+    expect(buildModel(defaults, { removed: true }).filter((x) => /^sign-[LR]$/.test(x.id))).toHaveLength(2); // D-65: the signs are on in Transport mode
     expect(buildModel(defaults, { removed: true }).filter((x) => /^sign-backer/.test(x.id))).toHaveLength(4); // the backing strips are glued in the side and stay
     expect(buildModel({ ...defaults, showSideSigns: 0 }).some((x) => /^sign/.test(x.id))).toBe(false);
   });

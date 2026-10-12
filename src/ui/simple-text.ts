@@ -7,7 +7,7 @@ import type { FitResult } from '../truck/fit';
 import type { AnalysisCheck, Status } from '../analysis/types';
 import { SEVERITY } from '../analysis/types';
 import { LIGHT_OF_ID, lightOf, type Light, type Limiter, type SafeRange, type SweepResult } from '../analysis/rider-sweep';
-import type { CargoCapacity } from '../analysis/cargo-capacity';
+import type { CargoCapacity, CargoRowTrend } from '../analysis/cargo-capacity';
 
 export const LIGHT_TITLE: Record<Light, string> = {
   tipping: 'Tipping over', turns: 'Fast turns', hills: 'Hills & braking', steering: 'Steering', strength: 'Strength', truck: 'Fits the truck',
@@ -46,7 +46,7 @@ const PART: Record<string, { name: string; event?: string }> = {
   'wheel-rating': { name: 'a rear wheel', event: 'in a hard bump' },
   'rear-beam-seat': { name: 'the rear axle seat in the side rails', event: 'in a hard bump' },
   'brake-flap': { name: 'a brake flap', event: 'if it is stomped' },
-  'brake-hinge': { name: 'a brake flap hinge', event: 'under a hard stomp' },
+  'brake-pivot': { name: 'a brake flap pivot pin', event: 'under a hard stomp' },
   'brake-mount': { name: 'the mount that holds a brake flap to the side rail', event: 'under a hard stomp' },
   'brake-return': { name: 'the cord that lifts a brake flap' },
   'park-hold': { name: 'the wheel chocks' },
@@ -86,7 +86,7 @@ const REASON: Record<string, string> = {
   'wheel-rating': 'a rear wheel could be overloaded in a hard bump',
   'rear-beam-seat': 'the notch that holds the rear axle in the side rails could crush or split in a hard bump',
   'brake-flap': 'a brake flap could bend or split if it is stomped',
-  'brake-hinge': 'a brake flap hinge could pull out of the wood under a hard stomp',
+  'brake-pivot': 'a brake flap pivot pin or its wood could give way under a hard stomp',
   'brake-mount': 'the mount that holds a brake flap to the side rail could crack or pull loose under a hard stomp',
   'brake-return': 'the cord that lifts a brake flap could slip or pull out, and the flap would drag on the tire',
   'park-hold': 'the wheel chocks could slip or be climbed and the sled roll away when parked on a steep hill',
@@ -98,7 +98,7 @@ const REASON: Record<string, string> = {
 /** Rows the D-56 pivoting front end and the D-57 step brake add: each has a plain name or a failure sentence here, pinned by the simple-text test. */
 export const PHASE3B_CHECK_IDS = [
   'bridle-eye', 'kingpin', 'king-bearing', 'front-beam', 'front-stub', 'steer-stops', 'king-beam', 'steer-clear',
-  'brake-flap', 'brake-hinge', 'brake-mount', 'brake-return', 'park-hold', 'wheel-rating', 'rear-beam-seat',
+  'brake-flap', 'brake-pivot', 'brake-mount', 'brake-return', 'park-hold', 'wheel-rating', 'rear-beam-seat',
 ] as const;
 export function failReason(id: string): string {
   return REASON[id] ?? 'a safety check fails';
@@ -234,12 +234,12 @@ export function lightTexts({ p, checks, fit }: DesignFacts): Record<Light, Light
   {
     const fits = (cfg: string) => !!fit?.cases.some((c) => c.config === cfg && c.fits);
     const tc = by(checks, 'truck-fit');
-    const status: Status = fit ? (fits('removed') || fits('bridle-off') || fits('installed') ? 'pass' : 'fail') : (tc?.status ?? 'info');
-    const how = fits('installed') ? ', fully assembled.' : fits('bridle-off') ? ' with the pull arm and rope off.' : fits('removed') ? ' with the handle and seat back off.' : '';
+    const status: Status = fit ? (fits('removed') || fits('installed') ? 'pass' : 'fail') : (tc?.status ?? 'info');
+    const how = fits('installed') ? ', fully assembled.' : fits('removed') ? ' in Transport mode (brake flaps and lights off, handle parked, seat back flat).' : '';
     out.truck = {
       light: 'truck', status,
       text: !fit ? 'Truck fit is still being worked out.'
-        : status === 'fail' ? 'Does not fit the Tacoma bed with the tailgate down, even with the removable parts off.'
+        : status === 'fail' ? 'Does not fit the Tacoma bed with the tailgate down, even in Transport mode.'
         : `Fits the Tacoma bed with the tailgate down${how}`,
     };
   }
@@ -363,14 +363,30 @@ export interface CargoText {
 const n0 = (x: number) => String(Math.round(x));
 const rounded5 = (x: number) => Math.round(x / 5) * 5;
 
+/** One plain caution for a cargo row that is within 10% of its limit at the target payload (the headline stays green, D-65). */
+function cautionText(r: CargoRowTrend, c: CargoCapacity): string {
+  switch (r.id) {
+    case 'tip-straight':
+      return `At ${c.payloadLb} lb a tall load is close to tipping: keep heavy items low, with the center of weight within about ${n0(c.heightRule?.designIn ?? 12)} in of the deck.`;
+    case 'slide-before-tip':
+      return `At ${c.payloadLb} lb a fast, sharp turn is close to rolling it: keep heavy items low and turn gently.`;
+    default:
+      return `At ${c.payloadLb} lb ${limiterName(r.id)} is close to its limit (${n0(r.utilAtPayload * 100)}% of what it can take).`;
+  }
+}
+
 /** Words for the cargo card of the Simple view, from a payload sweep. Pure. */
 export function cargoText(c: CargoCapacity): CargoText {
   const cap = c.capacityLb;
   const headline = cap === null ? `Hauls ${c.maxLb} lb or more after the race` : `Hauls up to ${rounded5(cap)} lb after the race`;
   const short = cap !== null && cap < c.payloadLb;
-  const tone: Tone = short || c.cargoFailsAtPayload.length > 0 ? 'fail' : c.comfortableLb !== null && c.comfortableLb < c.payloadLb ? 'warn' : 'pass';
+  // D-65 (Eric): green when the capacity covers the target and nothing fails at it. Rows that are merely close to their limit at the target become a plain caution line under the headline,
+  // not a yellow headline (it read as a capacity problem although 270 lb is more than the 200 lb target). Amber only when the capacity is below the target, red when a row fails at it.
+  const failsAtTarget = c.counts.fail > 0 || c.cargoFailsAtPayload.length > 0;
+  const tone: Tone = failsAtTarget ? 'fail' : short ? 'warn' : 'pass';
   const lines: string[] = [];
-  lines.push(`The target is ${c.payloadLb} lb of camp gear, firewood and water with the seat back flipped flat and the cushions in the storage box. ${tone === 'pass' ? 'Every check holds at that load.' : tone === 'warn' ? 'It holds, but close to a limit.' : `${c.counts.fail} check${c.counts.fail === 1 ? ' fails' : 's fail'} at that load.`}`);
+  if (!failsAtTarget) for (const r of c.rows.filter((q) => q.statusAtPayload === 'marginal' && !q.fixed)) lines.push(cautionText(r, c));
+  lines.push(`The target is ${c.payloadLb} lb of camp gear, firewood and water with the seat back flipped flat and the cushions in the storage box. ${tone === 'pass' ? 'Nothing fails at that load.' : tone === 'warn' ? `The capacity is below that load.` : `${c.counts.fail} check${c.counts.fail === 1 ? ' fails' : 's fail'} at that load.`}`);
   if (c.limiter && short) lines.push(`What stops it first: ${limiterName(c.limiter.id)}.${c.alwaysFailing.length ? ` ${c.alwaysFailing.length} other check${c.alwaysFailing.length === 1 ? ' fails' : 's fail'} even with nothing on the bed.` : ''}`);
   else if (c.limiter) lines.push(`Closest to its limit as the load grows: ${limiterName(c.limiter.id)}.`);
   if (c.limiterOther && c.capacityOtherLb !== null && c.limiterOther.id !== c.limiter?.id)

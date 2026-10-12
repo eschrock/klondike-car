@@ -1,6 +1,6 @@
 /**
  * The handler's STEP BRAKE (Phase 3c-4b, D-57 item 8) and the plain rear push handle (D-9/D-39): the layout is checked against independent derivations (hand-placed
- * points, the pad re-measured from the parts, the moments about the hinge pin from raw vectors), the parts against their declared mounts, and the whole thing over the
+ * points, the pad re-measured from the parts, the moments about the pivot pin from raw vectors), the parts against their declared mounts, and the whole thing over the
  * parameter extremes (the flaps follow the wheels, never a typed track).
  */
 import { describe, expect, it } from 'vitest';
@@ -30,14 +30,20 @@ describe('step brake layout (hand calculation)', () => {
   const { c, g } = geomOf(defaults);
   const r = c.L.r;
   const a = defaults.brakePadAngleDeg * RAD;
-  it('the pad contact and the hinge pin sit where a hand calculation puts them: the pin ahead of the tire front, the pad just behind the top of the tire', () => {
+  it('the pad contact and the pivot pin sit where a hand calculation puts them: the knee rear face ahead of the tire front (and of the sign zone), the pin brakePivotEndIn forward of it, the pad just behind the top of the tire', () => {
     expect(g.ok, g.why).toBe(true);
     expect(g.C[0]).toBeCloseTo(-r * Math.sin(a), 9);
     expect(g.C[1]).toBeCloseTo(r + r * Math.cos(a), 9);
-    expect(g.H[0]).toBeCloseTo(r + defaults.brakeHingeAheadIn, 9);
+    const kneeX0 = Math.max(r + defaults.brakePivotAheadIn, SIGN_X_MAX_IN);
+    expect(g.knee.x0).toBeCloseTo(kneeX0, 9);
+    expect(g.P[0]).toBeCloseTo(kneeX0 + defaults.brakePivotEndIn, 9); // the point on the flap top above the pin
+    expect(g.H[0]).toBeCloseTo(g.P[0] - g.plan.hPin * g.v[0], 9);
     expect(g.H[0]).toBeGreaterThan(r + 0.25);
     expect(g.xh).toBe(g.H[0]);
     expect(g.H[1]).toBeGreaterThan(2 * r); // the pin is above the top of the tire: the flap arches over it
+    // D-65: the pin is in the middle of the tongue stack (flap + pivot block): equal wood above and below it
+    expect(g.pivot.edgeTongueUp).toBeCloseTo(g.pivot.edgeTongueDown, 9);
+    expect(g.pivot.edgeTongueUp).toBeCloseTo((defaults.brakeFlapThickIn + defaults.brakePivotBlockIn) / 2, 9);
   });
   it('the flap clears the pad by the shoe block thickness along the underside plane, and the foot point is on its top surface', () => {
     // the highest point of the pad's top arc, measured on the up normal of the board, plus the block thickness, is the underside offset
@@ -45,16 +51,28 @@ describe('step brake layout (hand calculation)', () => {
     const topMax = Math.max(...g.pad.top.map((q) => q[0] * v[0] + q[1] * v[1]));
     expect(g.c - topMax).toBeCloseTo(defaults.brakeShoeBlockIn, 9);
     expect(g.F[0] * v[0] + g.F[1] * v[1]).toBeCloseTo(g.c + defaults.brakeFlapThickIn, 9);
-    expect(g.H[0] * v[0] + g.H[1] * v[1]).toBeCloseTo(g.c + defaults.brakeFlapThickIn, 9);
+    expect(g.P[0] * v[0] + g.P[1] * v[1]).toBeCloseTo(g.c + defaults.brakeFlapThickIn, 9);
+    expect(g.H[0] * v[0] + g.H[1] * v[1]).toBeCloseTo(g.c + defaults.brakeFlapThickIn - g.plan.hPin, 9); // the pin axis is hPin under the top surface
     expect(Math.atan2(-g.u[1], -g.u[0]) / RAD).toBeCloseTo(defaults.brakeFlapSlopeDeg, 9); // the board descends toward the rear
   });
-  it('the foot area is level with or behind the rear transom: the handler standing behind it reaches the flap end', () => {
-    expect(g.F[0]).toBeLessThanOrEqual(c.L.xRear);
-    expect(g.xEnd).toBeLessThan(c.L.xRear);
-    expect(c.L.xRear - g.xEnd).toBeLessThan(6); // not a long tail sticking out behind the sled
-    const flap = worldAABB(buildBrake(c).find((x) => x.id === 'brake-flap-L')!);
-    expect(Math.abs(flap.min[0] - g.xEnd)).toBeLessThan(0.15); // the sloping end face's lower corner
+  it('D-65: the flap and its foot tread END AT the rear transom face: nothing of the flap kit sticks out behind it, the foot point is the middle of the tread', () => {
+    expect(defaults.brakeFlapEndBehindTransomIn).toBe(0);
+    expect(g.xEnd).toBeCloseTo(c.L.xRear, 9);
+    expect(g.F[0]).toBeCloseTo(c.L.xRear + defaults.brakeFootPadLengthIn / 2, 9); // 2 in ahead of the transom face
+    const kit = buildBrake(c).filter((x) => /^brake-(flap|pivot-block|foot-tread|shoe|pad)-L$/.test(x.id));
+    expect(kit).toHaveLength(5);
+    for (const x of kit) expect(worldAABB(x).min[0], x.id).toBeGreaterThanOrEqual(c.L.xRear - 0.12); // the sloping end face's lower corner swings back about a tenth of an inch
+    const flap = worldAABB(kit.find((x) => x.id === 'brake-flap-L')!);
+    expect(Math.abs(flap.min[0] - g.xEnd)).toBeLessThan(0.15);
     expect(Math.min(...[flap.min[1], flap.max[1]].map(Math.abs))).toBeGreaterThan(c.L.hwC + c.L.side); // outboard of the body
+    // the only hardware behind the face is the ring of the cord's eye in the flap's end face and the snap hook at the transom (0.35 in)
+    expect(worldAABB(buildBrake(c).find((x) => x.id === 'brake-cord-L')!).min[0]).toBeGreaterThan(c.L.xRear - 0.6);
+  });
+  it('the foot lever is shorter than before the flap was shortened: the foot point is 15 in from the pin (was 17.5 in) and the ratio averages about 2.0:1 (was 2.3)', () => {
+    expect(g.aF).toBeGreaterThan(14.5);
+    expect(g.aF).toBeLessThan(15.5);
+    expect((g.ratioFwd + g.ratioRev) / 2).toBeGreaterThan(1.9);
+    expect((g.ratioFwd + g.ratioRev) / 2).toBeLessThan(2.1);
   });
   it('the lever ratio is geometry: re-derived from raw moments about the pin, ~2:1, and friction is the small second term', () => {
     const rC: [number, number] = [g.C[0] - g.H[0], g.C[1] - g.H[1]];
@@ -68,7 +86,7 @@ describe('step brake layout (hand calculation)', () => {
     expect(g.ratioFwd).toBeCloseTo(aF / (mN + mu * mT), 9);
     expect(g.ratioRev).toBeCloseTo(aF / (mN - mu * mT), 9);
     expect(g.ratioCrit).toBeCloseTo(Math.min(g.ratioFwd, g.ratioRev), 9);
-    expect(g.ratioCrit).toBeGreaterThan(1.9);
+    expect(g.ratioCrit).toBeGreaterThan(1.7);
     expect(g.ratioCrit).toBeLessThan(2.6);
     expect(Math.abs(mu * mT / mN)).toBeLessThan(0.15); // the friction line passes close to the pin: no servo effect
   });
@@ -88,7 +106,7 @@ describe('step brake layout (hand calculation)', () => {
     expect(g.theta / RAD).toBeGreaterThan(1.5);
     expect(g.theta / RAD).toBeLessThan(5);
   });
-  it('the flap group turns about the fixed pin: the foot area goes down, the pin and the hinge do not move, rigid distances are kept', () => {
+  it('the flap group turns about the fixed pin: the foot area goes down, the pin does not move, rigid distances are kept', () => {
     const a0 = buildBrakeAt(c, 0, true), a1 = buildBrakeAt(c, 1, true);
     const fl0 = worldAABB(a0.find((x) => x.id === 'brake-flap-L')!), fl1 = worldAABB(a1.find((x) => x.id === 'brake-flap-L')!);
     expect(fl0.min[2] - fl1.min[2]).toBeGreaterThan(0.5); // the rear end drops
@@ -102,7 +120,7 @@ describe('step brake layout (hand calculation)', () => {
     expect(q0[1]).toBeCloseTo(g.H[1], 9);
     const d = (p: [number, number], q: [number, number]) => Math.hypot(p[0] - q[0], p[1] - q[1]);
     for (const s of [0, 0.3, 0.7, 1]) expect(d(atPose(g, s, g.F), atPose(g, s, g.C))).toBeCloseTo(d(g.F, g.C), 9);
-    expect(buildBrakeAt(c, 0, true).every((x) => /^brake-(flap|foot-tread|shoe|pad|cord)-/.test(x.id))).toBe(true); // movingOnly: nothing fixed, no handle
+    expect(buildBrakeAt(c, 0, true).every((x) => /^brake-(flap|pivot-block|foot-tread|shoe|pad|cord)-/.test(x.id))).toBe(true); // movingOnly: nothing fixed (no pin, clip, snap hook, knee), no handle
   });
 });
 
@@ -111,10 +129,11 @@ describe('step brake parts', () => {
   const brake = parts.filter((x) => x.group === 'brake');
   const byId = (id: string) => parts.find((x) => x.id === id)!;
   const L = computeLayout(defaults);
-  it('builds the flap, shoe block, pad, hinge, knee, backer, return cord and chock with its cord on each side, and no trace of the D-55 steel parts', () => {
+  it('builds the flap, pivot block, pin and clip, shoe block, pad, foot tread, knee, backer, return cord with its snap hook and chock with its cord on each side, and no trace of the D-55 steel parts or the old hinge', () => {
     for (const tag of ['L', 'R']) {
-      for (const k of ['flap', 'shoe', 'pad', 'hinge', 'knee', 'backer', 'cord', 'chock', 'chock-cord']) expect(byId(`brake-${k}-${tag}`), `${k}-${tag}`).toBeDefined();
+      for (const k of ['flap', 'pivot-block', 'pivot-pin', 'pivot-clip', 'shoe', 'pad', 'foot-tread', 'knee', 'backer', 'cord', 'snap', 'chock', 'chock-cord']) expect(byId(`brake-${k}-${tag}`), `${k}-${tag}`).toBeDefined();
     }
+    expect(parts.some((x) => /^brake-hinge/.test(x.id)), 'the butt hinge is gone (D-65)').toBe(false);
     for (const gone of ['brake-pedal', 'brake-guard', 'brake-beam', 'brake-arm-L', 'brake-bracket-L', 'brake-latch-hook', 'brake-latch-stud', 'brake-return-spring-L', 'brake-pivot-bolt-L', 'brake-stop-pin-L']) {
       expect(parts.some((x) => x.id === gone), gone).toBe(false);
     }
@@ -138,10 +157,11 @@ describe('step brake parts', () => {
     expect(byId('brake-flap-L').grain).toBe('x');
     expect(byId('brake-flap-L').stock).toBeDefined();
   });
-  it('display finishes: the flap, shoe block, knee, backer and chocks are oak, the pad rubber, the hinge stainless steel, the cords rope', () => {
+  it('display finishes: the flap, shoe block, knee, backer and chocks are oak, the pad rubber, the pivot pin stainless steel, the cords rope', () => {
     for (const id of ['brake-flap-L', 'brake-shoe-L', 'brake-knee-R', 'brake-backer-L', 'brake-chock-L']) expect(byId(id).finish?.surface, id).toBe('oak');
     expect(byId('brake-pad-L').finish?.surface).toBe('rubber');
-    expect(byId('brake-hinge-R').finish?.surface).toBe('steel');
+    expect(byId('brake-pivot-pin-R').finish?.surface).toBe('steel');
+    expect(byId('brake-pivot-block-L').finish?.surface).toBe('oak');
     for (const id of ['brake-cord-L', 'brake-chock-cord-R']) expect(byId(id).finish?.surface, id).toBe('rope');
   });
   it('the knee is bolted through the rail into the backer: the knee sits on the hull outer face, the backer on the rail inner face, and neither overlaps the rail, the tire or the hull', () => {
@@ -152,10 +172,13 @@ describe('step brake parts', () => {
     for (const id of ['rail-L', 'wheel-RL', 'side-L-chine', 'side-L-gunwale', 'axle-hanger-L']) expect(partsOverlap(byId('brake-knee-L'), byId(id)), id).toBeLessThanOrEqual(0.05);
     for (const id of ['rail-L', 'deck', 'joist-2', 'beam-hold-down-L', 'axle-hanger-L']) expect(partsOverlap(byId('brake-backer-L'), byId(id)), id).toBeLessThanOrEqual(0.05);
     const tire = worldAABB(byId('wheel-RL'));
-    expect(knee.min[0]).toBeGreaterThan(tire.max[0] + 1.5); // ahead of the tire front
-    const hinge = worldAABB(byId('brake-hinge-L'));
-    expect(hinge.min[0]).toBeLessThan(knee.min[0]); // the pin is at the knee's rear face, the flap leaf reaches back over the flap
-    expect(hinge.max[1]).toBeLessThanOrEqual(knee.max[1] + 1e-6);
+    expect(knee.min[0]).toBeGreaterThan(tire.max[0] + 1.0); // ahead of the tire front (D-65: 1-1/4 in, the rear face of the knee)
+    const pin = worldAABB(byId('brake-pivot-pin-L'));
+    expect(pin.min[0]).toBeGreaterThan(knee.min[0]); // D-65: the pin is inside the knee, with oak behind it (the ears) and ahead of it
+    expect(pin.max[0]).toBeLessThan(knee.max[0]);
+    expect(pin.max[1]).toBeGreaterThan(knee.max[1]); // its outboard end (the cross hole and the clip) sticks out of the knee's outer face
+    expect(pin.max[1] - knee.max[1]).toBeCloseTo(0.55, 6);
+    expect(pin.min[2]).toBeGreaterThan(knee.min[2]); expect(pin.max[2]).toBeLessThan(knee.max[2]);
   });
   it('the knee stays out of the sign zone on the side (D-57 item 9: x up to 6 in) and the bungee eye is on the transom, not on the side', () => {
     const knee = worldAABB(byId('brake-knee-L'));
@@ -211,13 +234,33 @@ describe('step brake parts', () => {
     expect(Math.atan2(dz, dx) / RAD).toBeCloseTo(defaults.brakeChockAngleDeg, 6);
     expect(worldAABB(byId('brake-chock-L')).max[2]).toBeCloseTo(defaults.brakeChockHeightIn, 6);
   });
-  it('the parts add up: the brake group (flaps, mounts, chocks, handle sockets) is lighter than the 14 lb band and the chocks come off for transport', () => {
+  it('the parts add up: the brake group (flaps, mounts, chocks, handle sockets) is lighter than the 14 lb band', () => {
     const mass = brake.reduce((s, x) => s + x.massLb, 0);
     expect(mass).toBeGreaterThan(8);
     expect(mass).toBeLessThan(14);
+  });
+  it('D-65: the flap kit (flap, pivot block, pin, clip, shoe block, pad, foot tread, cord, snap hook) and the chocks are REMOVABLE with the shop note; the knees and backers are not', () => {
+    for (const tag of ['L', 'R']) {
+      for (const k of ['flap', 'pivot-block', 'pivot-pin', 'pivot-clip', 'shoe', 'pad', 'foot-tread', 'cord', 'snap', 'chock', 'chock-cord']) {
+        const x = byId(`brake-${k}-${tag}`);
+        expect(x.removable, x.id).toBe(true);
+        if (!/chock/.test(k)) expect(x.notes, x.id).toMatch(/pull the pivot pin .*unhook the cord.*about 15 s a side, no tools/);
+      }
+      for (const k of ['knee', 'backer']) expect(byId(`brake-${k}-${tag}`).removable, k).toBeFalsy();
+    }
+  });
+  it('D-65: Transport mode (removed) takes the whole flap kit and the chocks off, the knees and backers stay; brakes: false takes only the flap kit, chocks: false only the chocks', () => {
+    const kit = /^brake-(flap|pivot-block|pivot-pin|pivot-clip|shoe|pad|foot-tread|cord|snap)-/;
     const removed = buildModel(defaults, { removed: true });
-    expect(removed.some((x) => /^brake-chock/.test(x.id))).toBe(false);
-    expect(removed.some((x) => x.id === 'brake-flap-L')).toBe(true);
+    expect(removed.some((x) => kit.test(x.id) || /^brake-chock/.test(x.id))).toBe(false);
+    expect(removed.filter((x) => /^brake-(knee|backer)-/.test(x.id))).toHaveLength(4);
+    const noBrakes = buildModel(defaults, { brakes: false });
+    expect(noBrakes.some((x) => kit.test(x.id))).toBe(false);
+    expect(noBrakes.filter((x) => /^brake-(knee|backer|chock)/.test(x.id)).length).toBeGreaterThanOrEqual(8); // knees, backers and chocks stay
+    expect(noBrakes.some((x) => x.id === 'front-light')).toBe(true); // lights are a separate toggle
+    const noChocks = buildModel(defaults, { chocks: false });
+    expect(noChocks.some((x) => /^brake-chock/.test(x.id))).toBe(false);
+    expect(noChocks.some((x) => x.id === 'brake-flap-L')).toBe(true);
   });
   it('a one-chock build carries a single chock and cord', () => {
     const ps = buildModel({ ...defaults, brakeChockCount: 1 } as Params);
@@ -227,7 +270,7 @@ describe('step brake parts', () => {
 
 describe('step brake over the parameter extremes and old links', () => {
   it('builds without NaN over the extremes of the brake params, and the layout stays ok', () => {
-    const keys = Object.keys(PARAM_DEFS).filter((k) => /^brake(Hinge|Pad|Flap|Knee|Backer|Mount|Foot|Chock|Shoe|Bungee)/.test(k)) as Array<keyof Params>;
+    const keys = Object.keys(PARAM_DEFS).filter((k) => /^brake(Pivot|Pad|Flap|Knee|Backer|Mount|Foot|Chock|Shoe|Bungee)/.test(k)) as Array<keyof Params>;
     expect(keys.length).toBeGreaterThan(20);
     for (const k of keys) {
       for (const v of [PARAM_DEFS[k].min, PARAM_DEFS[k].max]) {

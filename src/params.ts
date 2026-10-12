@@ -1114,13 +1114,13 @@ const defs = {
   // ── Brake & rear handle ──────────────────────────────────────────────────
   brakeLeverRatio: {
     label: 'Brake foot-lever advantage TARGET', group: 'brake', unit: ':1',
-    default: 1.75, min: 1.25, max: 4, step: 0.25, status: 'explore', ref: 'D-57',
-    note: 'D-57: a target, not an input. The analysis uses the ratio DERIVED from the flap geometry (pad force on the tread over the foot force, from the moments about the hinge pin, with the pad friction in or against the swing); brake-ratio fails if the geometry delivers less than this. The owner asked for about 2:1; the geometry delivers a little over 2:1, so the target is 1.75.',
+    default: 1.5, min: 1.25, max: 4, step: 0.25, status: 'explore', ref: 'D-57, D-65',
+    note: 'D-57: a target, not an input. The analysis uses the ratio DERIVED from the flap geometry (pad force on the tread over the foot force, from the moments about the pivot pin, with the pad friction in or against the swing); brake-ratio fails if the geometry delivers less than this. The owner asked for about 2:1. D-65 (Eric): the flap now ends at the transom face, which shortens the foot lever from about 2.3:1 to about 2.0:1 (the average of the two rolling directions; 1.8 in the weaker one), so the target is 1.5 (was 1.75): the row that judges the brake is brake-slow (D-58), which still passes at every rider.',
   },
   brakeEfficiency: {
     label: 'Brake linkage efficiency', group: 'brake', unit: '×',
     default: 0.95, min: 0.5, max: 1, step: 0.05, status: 'assumed', ref: 'D-13, D-57',
-    note: 'Hinge friction only (D-57): a stainless butt hinge on a stainless pin is the only moving joint of the flap brake, so 0.95.',
+    note: 'Pin friction only (D-57, D-65): the stainless pivot pin in oak is the only moving joint of the flap brake, so 0.95.',
   },
   brakePadMu: {
     label: 'Pad-to-tire friction μ (rubber / leather pad on a wet tread, design)', group: 'brake', unit: '',
@@ -1209,7 +1209,7 @@ const defs = {
   brakeFootAbuseLbf: {
     label: 'Brake flap abuse stomp', group: 'brake', unit: 'lbf',
     default: 150, min: 100, max: 300, step: 10, status: 'assumed', ref: 'D-55, D-57',
-    note: 'A scout jumping on one flap: the flap, hinge, screws, knee, bolts and backer must survive it at yield (SF 1). The brake may be bent after it only if the check says so.',
+    note: 'A scout jumping on one flap: the flap, pivot pin and block, knee, bolts and backer must survive it at yield (SF 1). The brake may be bent after it only if the check says so.',
   },
   brakeLiningMaxPsi: {
     label: 'Brake pad allowable contact pressure', group: 'brake', unit: 'psi',
@@ -1219,12 +1219,12 @@ const defs = {
   brakeClearanceIn: {
     label: 'Brake moving-part clearance (sweep limit)', group: 'brake', unit: 'in',
     default: 0.1, min: 0.03, max: 0.5, step: 0.01, status: 'assumed', ref: 'D-38, D-57',
-    note: 'Minimum gap between the moving flap group (flap, shoe block, pad, hinge leaf, bungee) and the tire, hull, rails and ground over the full stroke.',
+    note: 'Minimum gap between the moving flap group (flap, pivot block, shoe block, pad, bungee) and the tire, hull, rails and ground over the full stroke.',
   },
   brakeLoadFactor: {
     label: 'Brake component load factor (on the hold load)', group: 'brake', unit: '×',
     default: 2, min: 1, max: 4, step: 0.25, status: 'assumed', ref: 'D-38',
-    note: 'The flap, hinge, knee and bolts are checked at this multiple of the load needed to hold the sled on the design slope: a hard stomp or a jerk on a parked sled.',
+    note: 'The flap, pivot, knee and bolts are checked at this multiple of the load needed to hold the sled on the design slope: a hard stomp or a jerk on a parked sled.',
   },
   brakeSteelYieldPsi: {
     label: 'Brake arm plate / pin steel yield', group: 'brake', unit: 'psi',
@@ -1232,10 +1232,10 @@ const defs = {
     note: 'A36 plate. Allowable = yield / steel safety factor (shear 0.577×).',
   },
 
-  brakeHingeAheadIn: {
-    label: 'Flap hinge pin ahead of the tire front', group: 'brake', unit: 'in',
-    default: 2, min: 0.25, max: 4, step: 0.25, status: 'assumed', ref: 'D-57',
-    note: 'D-57: the hinge sits ahead of the rear tire (pin at x = wheel radius + this) on top of the knee, so the flap reaches back over the tire to the foot. 2 in puts the pin and knee ahead of x = 6.5 in, clear of the sign zone on the side (D-57 item 9, x up to 6 in). The farther ahead, the longer the pad-side lever and the lower the foot lever ratio.',
+  brakePivotAheadIn: {
+    label: 'Brake knee rear face ahead of the tire front', group: 'brake', unit: 'in',
+    default: 1.25, min: 0.25, max: 4, step: 0.25, status: 'assumed', ref: 'D-57, D-65',
+    note: 'D-57, D-65: the knee stands ahead of the rear tire: its rear face is at x = wheel radius + this, but never behind x = 6 in, the end of the sign zone on the side (D-57 item 9). The pivot pin is brakePivotEndIn of oak further forward (x = 7 in at the defaults). The farther ahead, the longer the pad-side lever and the lower the foot lever ratio.',
   },
 
   brakePadAngleDeg: {
@@ -1289,50 +1289,25 @@ const defs = {
   brakeFlapSlopeDeg: {
     label: 'Brake flap slope (descending toward the rear)', group: 'brake', unit: '°',
     default: 6, min: 0, max: 15, step: 1, status: 'assumed', ref: 'D-57',
-    note: 'The foot end is lower than the hinge by this slope, so the foot has less height to climb. The flap\'s underside clears the pad by the shoe block thickness.',
+    note: 'The foot end is lower than the pivot by this slope, so the foot has less height to climb. The flap\'s underside clears the pad by the shoe block thickness.',
   },
 
-  brakeFootBehindTransomIn: {
-    label: 'Foot area centre behind the rear transom face', group: 'brake', unit: 'in',
-    default: 0.5, min: -4, max: 8, step: 0.5, status: 'assumed', ref: 'D-57',
-    note: 'D-57: the handler stands behind the transom and steps on the flap with one foot, so the foot area (brakeFootPadLengthIn long) is centred just behind the transom face and outboard of the body. The flap ends at the rear of the foot area.',
+  brakeFlapEndBehindTransomIn: {
+    label: 'Flap (and foot tread) rear end behind the rear transom face', group: 'brake', unit: 'in',
+    default: 0, min: 0, max: 6, step: 0.5, status: 'assumed', ref: 'D-65',
+    note: 'D-65 (Eric): the foot tread ends AT the rear transom face (0): nothing of the flap sticks out behind the sled. The foot point is the middle of the tread, so a shorter flap shortens the foot lever (about 2.3:1 to 2.0:1 on average).',
   },
 
   brakeFootPadLengthIn: {
     label: 'Foot area length on the flap', group: 'brake', unit: 'in',
-    default: 5, min: 3, max: 7, step: 0.5, status: 'assumed', ref: 'D-57',
-    note: 'The last stretch of the flap is the foot pad: grooved oak or a strip of rubber stair tread glued on.',
+    default: 4, min: 3, max: 7, step: 0.5, status: 'assumed', ref: 'D-57, D-65',
+    note: 'The last stretch of the flap is the foot tread, a ribbed rubber strip glued on. D-65: 4 in (was 5): the tread now ends at the transom face, so the foot point (the middle of the tread) is 2 in ahead of the transom face and the foot lever is as long as it can be there.',
   },
 
-  brakeHingeLengthIn: {
-    label: 'Hinge length (along the pin)', group: 'brake', unit: 'in',
-    default: 3, min: 2, max: 4, step: 0.5, status: 'assumed', ref: 'D-57',
-    note: 'McMaster 316 stainless steel butt hinge, a leaf height of this length.',
-  },
 
-  brakeHingeLeafIn: {
-    label: 'Hinge leaf width (each leaf)', group: 'brake', unit: 'in',
-    default: 1.5, min: 1, max: 2, step: 0.25, status: 'assumed', ref: 'D-57',
-    note: 'A 3 in x 3 in (open) hinge has two 1.5 in leaves: one screws to the flap top, one to the knee top.',
-  },
 
-  brakeHingePinDiaIn: {
-    label: 'Hinge pin diameter', group: 'brake', unit: 'in',
-    default: 0.25, min: 0.1875, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-57',
-    note: 'The stainless pin through the knuckles (double shear).',
-  },
 
-  brakeHingeScrewDiaIn: {
-    label: 'Hinge screw diameter (#10)', group: 'brake', unit: 'in',
-    default: 0.19, min: 0.164, max: 0.25, step: 0.001, status: 'assumed', ref: 'D-57',
-    note: '#10 316 stainless flat-head screws, 1 in long, into the oak flap and the oak knee.',
-  },
 
-  brakeHingeScrewsPerLeaf: {
-    label: 'Hinge screws per leaf', group: 'brake', unit: '',
-    default: 8, min: 2, max: 8, step: 1, status: 'assumed', ref: 'D-57, D-62',
-    note: 'Pilot holes drilled with the hinge as the template; a drop of epoxy in each hole in the end-grain side. D-62: 8 (was 6) with the shorter #10 x 3/4 in screws (build 3c M3: 0.55 in of thread instead of 0.8 in), which keeps the brake-hinge row at 0.65 (goal rider); with the old 6 screws the shorter screw alone would have taken the green rider range from 230 to 210 lb; drill extra holes in the leaf if the hinge has fewer.',
-  },
 
   brakeKneeDepthIn: {
     label: 'Knee (outrigger) fore-aft depth', group: 'brake', unit: 'in',
@@ -1347,9 +1322,45 @@ const defs = {
   },
 
   brakeKneeArmIn: {
-    label: 'Knee arm thickness (under the hinge)', group: 'brake', unit: 'in',
-    default: 1.25, min: 1, max: 2.5, step: 0.25, status: 'assumed', ref: 'D-57',
-    note: 'The horizontal arm that reaches out over the gap beside the tire to the hinge; braced by a sloping underside.',
+    label: 'Knee arm thickness (around the pivot pin)', group: 'brake', unit: 'in',
+    default: 1.5, min: 1, max: 2.5, step: 0.25, status: 'assumed', ref: 'D-57, D-65',
+    note: 'The horizontal arm that reaches out over the gap beside the tire to the pivot pin; braced by a sloping underside. D-65: 1-1/2 in (was 1-1/4): the pin passes through the ears with 3/4 in of oak above and below it.',
+  },
+
+  brakePivotPinDiaIn: {
+    label: 'Flap pivot pin diameter (316 stainless clevis pin)', group: 'brake', unit: 'in',
+    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-65',
+    note: 'D-65 (Eric): the screwed butt hinge is replaced by a pull pin. A 3/8 in stainless clevis pin goes through the knee ears and the flap\'s tongue (double shear) and is held by a hitch-pin clip: pull the pin, unhook the cord, and the flap lifts off.',
+  },
+
+  brakePivotTongueIn: {
+    label: 'Flap pivot tongue width (across, between the knee ears)', group: 'brake', unit: 'in',
+    default: 1.25, min: 0.75, max: 2, step: 0.125, status: 'assumed', ref: 'D-65',
+    note: 'The flap\'s front end narrows to this tongue (plan taper) and the oak pivot block lies on it; the pair enters a slot in the rear of the knee arm and the pin goes through the ears, the tongue and the block. The slot is 1/16 in wider each side.',
+  },
+
+  brakePivotBlockIn: {
+    label: 'Pivot block thickness (on the flap tongue)', group: 'brake', unit: 'in',
+    default: 0.625, min: 0.375, max: 1, step: 0.125, status: 'assumed', ref: 'D-65',
+    note: 'A small white-oak block glued and screwed on top of the flap tongue where it enters the knee. It deepens the tongue (flap 7/8 in + block 5/8 in) so the pin has 3/4 in of oak above and below it. The knee top stands this much above the flap top.',
+  },
+
+  brakePivotEndIn: {
+    label: 'Flap tongue past the pin (end distance)', group: 'brake', unit: 'in',
+    default: 0.75, min: 0.5, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-65',
+    note: 'The tongue and the pivot block reach this far past the pin axis: wood beyond the hole. Likewise the knee ears stand this far behind the pin.',
+  },
+
+  brakePivotSlotClearIn: {
+    label: 'Slot clearance each side of the tongue', group: 'brake', unit: 'in',
+    default: 0.0625, min: 0.03, max: 0.125, step: 0.0156, status: 'assumed', ref: 'D-65',
+    note: 'The slot sawn in the knee arm is the tongue width plus this each side, so the flap swings freely and a little grit does not bind it.',
+  },
+
+  brakePivotBlockScrews: {
+    label: 'Pivot block screws (#10, down through the block into the flap)', group: 'brake', unit: '',
+    default: 3, min: 2, max: 4, step: 1, status: 'assumed', ref: 'D-65',
+    note: 'Plus epoxy over the whole glued face. They keep the block on when the pin pushes it up (the cord pulls the flap up).',
   },
 
   brakeBackerThickIn: {
@@ -1362,6 +1373,12 @@ const defs = {
     label: 'Knee mounting bolt diameter', group: 'brake', unit: 'in',
     default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-57',
     note: '316 stainless hex bolts with fender washers and nylock nuts, through the knee leg, the rail and the backer.',
+  },
+
+  brakeMountWasherOdIn: {
+    label: 'Knee bolt nut washer outside diameter (316 fender washer)', group: 'brake', unit: 'in',
+    default: 1.25, min: 1, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-57, D-65',
+    note: 'D-65: 3/8 in x 1-1/4 in 316 fender washers (were 1 in) under the nuts in the backer: with the shorter flap the foot force and the pin load went up about 12% at the goal rider, and the overturning couple pulled the nuts into the backer (brake-mount, washer bearing 1.16). The washers sit in 1-3/8 in counterbores; the two columns are 1-1/4 in apart, so the washers just touch.',
   },
 
   brakeMountBoltColumns: {
@@ -1457,11 +1474,6 @@ const defs = {
     note: 'D-57: the flaps SLOW the loaded sled on the 15° design slope and STOP it on gentler grades. brake-slow reports the steepest grade held at the foot-force limit and the fouled pad μ for each load case, and checks it against this.',
   },
 
-  brakeHingeScrewLenIn: {
-    label: 'Hinge screw length', group: 'brake', unit: 'in',
-    default: 0.75, min: 0.75, max: 1.5, step: 0.25, status: 'assumed', ref: 'D-57, D-62',
-    note: 'Thread engagement in the oak is this length less the hinge leaf and a 0.1 in tip. D-62 (build 3c M3): #10 x 3/4 in (was 1 in): the flap is 7/8 in thick and a 1 in screw runs 0.9 in into it and can break out the underside; the engagement is 0.55 in.',
-  },
 
   brakeSlowShareMin: {
     label: 'Share of the design-slope pull the flaps must take (SLOWS)', group: 'brake', unit: '',
@@ -1484,7 +1496,7 @@ const defs = {
   brakeReturnLiftMargin: {
     label: 'Bungee lift over the weight of the flap group', group: 'brake', unit: '×',
     default: 1.5, min: 1, max: 4, step: 0.25, status: 'assumed', ref: 'D-57',
-    note: 'The released bungee torque about the hinge over the weight torque of the flap, shoe block and pad: so a bump does not drop the pad onto the tread.',
+    note: 'The released bungee torque about the pivot pin over the weight torque of the flap, shoe block and pad: so a bump does not drop the pad onto the tread.',
   },
 
   brakeCordSafetyFactor: {

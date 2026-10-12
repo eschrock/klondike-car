@@ -39,8 +39,8 @@ describe('truck bed', () => {
 describe('checkTruckFit with the stub model', () => {
   const p = defaultParams();
   const r = checkTruckFit(p, stub(p));
-  it('returns all 12 cases and overall dimensions', () => {
-    expect(r.cases.length).toBe(12);
+  it('returns all 8 cases and overall dimensions', () => {
+    expect(r.cases.length).toBe(8); // 2 modes x 2 orientations x 2 configurations (D-65: no bridle-off)
     expect(r.dims.installed.lengthIn).toBeGreaterThan(0);
     expect(r.evalMs).toBeLessThan(500);
   });
@@ -89,7 +89,7 @@ describe('checkTruckFit synthetic parts', () => {
     const parts = (v: CartView) => [box('a', [20, 20, 6], [0, 0, 3]), ...(v.removed ? [] : [box('tall', [10, 10, 80], [0, 0, 40], { removable: true })])];
     const r = checkTruckFit(p, parts);
     // tall box fits in bed (no roof), so make it too long instead
-    expect(r.cases.length).toBe(12);
+    expect(r.cases.length).toBe(8); // 2 modes x 2 orientations x 2 configurations (D-65: no bridle-off)
     const long = (v: CartView) => [box('a', [20, 20, 6], [0, 0, 3]), ...(v.removed ? [] : [box('handle', [100, 2, 2], [40, 0, 3], { removable: true })])];
     const r2 = checkTruckFit(p, long);
     expect(r2.cases.filter((c) => c.config === 'installed').some((c) => c.fits)).toBe(false);
@@ -104,7 +104,7 @@ describe('fit performance', () => {
     const many: Part[] = [...base];
     for (let i = 0; i < 150; i++) many.push(box(`s${i}`, [3, 2, 1], [(i % 30) * 2, ((i % 7) - 3) * 4, 8 + (i % 5)]));
     const r = checkTruckFit(p, () => many);
-    expect(r.cases.length).toBe(12);
+    expect(r.cases.length).toBe(8); // 2 modes x 2 orientations x 2 configurations (D-65: no bridle-off)
     // 50 ms is the interactive budget on a dev machine; shared CI runners are ~2-3x slower.
     expect(r.evalMs).toBeLessThan((globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.CI ? 200 : 50);
     console.log('fit ms (154 parts):', r.evalMs.toFixed(1));
@@ -118,32 +118,26 @@ describe('real sled (D-6, D-23, D-54)', () => {
     r.cases.filter((c) => c.mode === mode && c.config === config);
   const r = checkTruckFit(p, build(p));
 
-  it('has three configurations; the oak tongue (which reaches 5 in past the bow tip) makes the installed sled longer than bridle-off, and removed (handle, seat back, tongue off) is shorter and lower', () => {
-    // D-56: the tongue plate reaches tongueTieAheadIn past the bow tip and carries the shackle, so the installed box is longer than bridle-off (tongue, shackle and rope off).
-    // The rope is not rigid and never counts in the fit. The handlebow, seat back and the other removables are what 'removed' takes off.
-    expect(r.dims.installed.lengthIn).toBeGreaterThan(r.dims['bridle-off'].lengthIn + 0.3);
-    expect(r.dims.removed.lengthIn).toBeLessThanOrEqual(r.dims['bridle-off'].lengthIn);
-    // Pinned (defaults, D-57): the nose is 5 in shorter (bulkhead, 6.75 in front overhang) and the handlebow crown is 7/8 in instead of 3: installed 69.9 x 39.5 x 35.5 in (D-58: the oak tongue's shackle reaches 2.8 in past the bow, 34 1/2 in front track), bridle-off 67.1 long,
-    // removed 63.8 long and 23.6 high (the fixed grab boards and flag tube stand above the 22 in transom corners). Width = rear track 32 + tire 3.5 + hub/axle ends.
-    expect(r.dims.installed.lengthIn).toBeCloseTo(68.8, 0); // D-62: 1.07 in shorter than with the bow shackle, which reached 0.8 in past the tongue tip
-    expect(r.dims.installed.widthIn).toBeCloseTo(38.78, 1); // set by the front axle ends (34 1/2 in track + the 2.28 in hub and 1 in of axle beyond it each side, D-60; 39.5 with the 3 in hub); 32 in rear track + tire is narrower
+  it('has two configurations (D-65: installed and Transport mode); the oak tongue stays on in both, so Transport mode is no longer than installed; it is lower, but the parked handle stands above the 22 in transom corners', () => {
+    // D-65 (Eric): the tongue is bolted on and stays; the 'bridle-off' configuration is gone. Transport mode = TRANSPORT_VIEW: brakes, lights, chocks and the seat pad off, handle parked, seat flat.
+    expect(r.dims.removed.lengthIn).toBeLessThanOrEqual(r.dims.installed.lengthIn);
+    // Pinned (defaults): installed 67.0 x 38.8 x 35.5 in (the flap no longer sticks out 3 in behind the transom: 68.8 long before D-65); Transport mode 66.9 long (the tongue sets the length) and 25.7 high
+    // (the parked handlebow rests just above the rear side top). Width = the front axle ends (34 1/2 in track + the 2.28 in hub and 1 in of axle beyond it each side).
+    expect(r.dims.installed.lengthIn).toBeCloseTo(67.0, 0);
+    expect(r.dims.installed.widthIn).toBeCloseTo(38.78, 1);
     expect(r.dims.installed.heightIn).toBeCloseTo(35.5, 0);
-    expect(r.dims['bridle-off'].lengthIn).toBeCloseTo(67.1, 0);
-    expect(r.dims.removed.lengthIn).toBeCloseTo(63.8, 0);
-    expect(r.dims.removed.heightIn).toBeCloseTo(23.6, 0);
+    expect(r.dims.removed.lengthIn).toBeCloseTo(66.9, 0);
+    expect(r.dims.removed.heightIn).toBeCloseTo(25.7, 0);
     expect(r.dims.removed.heightIn).toBeLessThan(r.dims.installed.heightIn);
   });
-  it("the 'bridle-off' configuration removes the oak tongue, its sleeve and the rope (ids starting 'bridle'; the shackle is gone, D-62) and nothing else: the king beam, kingpin, axle beam and steering chains stay", () => {
+  it("Transport mode (the 'removed' configuration, TRANSPORT_VIEW, D-65) keeps the oak tongue, its sleeve, the rope, the signs and the parked handle, and takes off the flap kit, the lights, the chocks and the seat pad; the front axle stays", () => {
     const inst = configParts('installed', build(p)).map((x) => x.id);
-    const off = configParts('bridle-off', build(p)).map((x) => x.id);
-    const gone = inst.filter((id) => !off.includes(id));
-    expect(gone.sort()).toEqual(['bridle', 'bridle-sleeve', 'bridle-tongue']);
-    for (const id of ['beam-F', 'kingpin', 'king-beam', 'king-thrust', 'steer-chain-L', 'steer-chain-R', 'steer-anchor-L', 'steer-eye-R', 'axle-FL', 'axle-FR', 'wheel-FL', 'wheel-FR']) expect(off, id).toContain(id);
-    // The full transport config takes the tongue off too (they are removable), and keeps the axle.
     const removed = configParts('removed', build(p)).map((x) => x.id);
-    for (const id of ['bridle', 'bridle-sleeve', 'bridle-tongue']) expect(removed, id).not.toContain(id);
-    for (const id of ['beam-F', 'kingpin', 'king-beam']) expect(removed, id).toContain(id);
-    expect(CONFIGS).toEqual(['installed', 'bridle-off', 'removed']);
+    for (const id of ['bridle', 'bridle-sleeve', 'bridle-tongue', 'sign-L', 'sign-R', 'handle-bar', 'handle-post-L', 'brake-knee-L', 'brake-backer-R', 'beam-F', 'kingpin', 'king-beam', 'steer-chain-L', 'axle-FL', 'wheel-FL']) expect(removed, id).toContain(id);
+    const gone = inst.filter((id) => !removed.includes(id));
+    for (const id of ['brake-flap-L', 'brake-pivot-pin-R', 'brake-cord-L', 'brake-chock-L', 'front-light', 'rear-light', 'lamp-clip', 'rear-lamp-clip', 'seat-back-pad']) expect(gone, id).toContain(id);
+    expect(gone.some((id) => /^(bridle|sign|handle)/.test(id))).toBe(false);
+    expect(CONFIGS).toEqual(['installed', 'removed']);
   });
   it('the fit builds the front axle straight (steerDeg 0), the tongue plate counts as steel in the clearance check but the rope does not, and the tongue tip is tongueTieAheadIn past the bow', () => {
     const view: CartView[] = [];
@@ -155,15 +149,14 @@ describe('real sled (D-6, D-23, D-54)', () => {
     const tongue = parts.find((x) => x.id === 'bridle-tongue')!;
     const o = partOBB(tongue);
     expect(o.center[0] + o.half[0]).toBeCloseTo(computeLayout(p).tongue.tipX, 4);
-    // A tongue plate 100 in long blocks the installed fit (and fits once the tongue is off); a 100 in rope never counts.
+    // A tongue plate 100 in long blocks the fit in every configuration (D-65: it stays on); a 100 in rope never counts.
     const sled = (id: string, name: string) => (_v: CartView) => [box('a', [20, 20, 6], [0, 0, 3]), { ...box(id, [100, 2, 2], [40, 0, 3]), name }];
     const rt = checkTruckFit(p, sled('bridle-tongue', 'Bridle tongue plate'));
-    expect(rt.cases.filter((c) => c.config === 'installed').some((c) => c.fits)).toBe(false);
-    expect(rt.cases.filter((c) => c.config === 'bridle-off').some((c) => c.fits)).toBe(true);
+    expect(rt.cases.some((c) => c.fits)).toBe(false);
     expect(checkTruckFit(p, sled('bridle', 'Bridle rope')).cases.filter((c) => c.config === 'installed').some((c) => c.fits)).toBe(true);
   });
   it('beside fits in every configuration and both orientations at the defaults, with the tires wholly inside the well gap', () => {
-    for (const config of ['installed', 'bridle-off', 'removed']) {
+    for (const config of ['installed', 'removed']) {
       const fits = find(r, 'beside', config).filter((x) => x.fits);
       expect(fits.length).toBe(2); // nose to the tailgate and nose to the bulkhead
       for (const c of fits) expect(c.minClearanceIn).toBeGreaterThanOrEqual(p.truckClearanceIn - 1e-9);
@@ -181,25 +174,29 @@ describe('real sled (D-6, D-23, D-54)', () => {
   it('straddle does not fit at the default 44 in wheelbase, in any configuration; beside is the only mode there (the 5 in shorter D-57 nose lets a 48 in sled straddle without its tongue)', () => {
     // Straddling needs both axles wholly outside the 34 in well zone (so >= 45 in between axle centers) and no tire over the 1 in hinge gap at x = 60.5.
     expect(p.wheelbaseIn).toBe(44);
-    for (const config of ['installed', 'bridle-off', 'removed']) expect(find(r, 'straddle', config).some((x) => x.fits)).toBe(false);
+    for (const config of ['installed', 'removed']) expect(find(r, 'straddle', config).some((x) => x.fits)).toBe(false);
     expect(r.anyFits).toBe(true);
     expect(r.cases.filter((x) => x.fits).every((x) => x.mode === 'beside')).toBe(true);
-    // At 48 in the sled straddles once the tongue is off; D-58: the longer oak tongue (and, before D-62, its shackle) keeps even the 52 in assembled sled from straddling.
+    // D-65: the tongue stays on in Transport mode, so Transport mode and the assembled sled straddle alike: not at 48 in (a tire over the hinge gap), yes at 52 in.
     const q48 = { ...p, wheelbaseIn: 48 };
     const r48 = checkTruckFit(q48, build(q48));
-    expect(find(r48, 'straddle', 'installed').some((x) => x.fits)).toBe(false);
-    expect(find(r48, 'straddle', 'bridle-off').some((x) => x.fits)).toBe(true);
+    expect(find(r48, 'straddle', 'installed').some((x) => x.fits)).toBe(false); // 48 in puts a tire over the 1 in tailgate hinge gap in both configurations (46 and 50 in straddle)
+    expect(find(r48, 'straddle', 'removed').some((x) => x.fits)).toBe(false);
     const q52 = { ...p, wheelbaseIn: 52 };
     expect(find(checkTruckFit(q52, build(q52)), 'straddle', 'installed').some((x) => x.fits)).toBe(true); // D-62: no bow shackle, the assembled sled is 1.07 in shorter and a 52 in one can now straddle the wells
-    expect(find(checkTruckFit(q52, build(q52)), 'straddle', 'bridle-off').some((x) => x.fits)).toBe(true);
+    expect(find(checkTruckFit(q52, build(q52)), 'straddle', 'removed').some((x) => x.fits)).toBe(true);
   });
-  it('a longer wheelbase costs the assembled fit first: 52 in still fits beside as assembled, 56 in fits only with the handle and the tongue off', () => {
-    const q52 = { ...p, wheelbaseIn: 52 };
-    expect(find(checkTruckFit(q52, build(q52)), 'beside', 'installed').some((x) => x.fits)).toBe(true);
-    const q56 = { ...p, wheelbaseIn: 56 };
-    const r56 = checkTruckFit(q56, build(q56));
-    expect(find(r56, 'beside', 'installed').some((x) => x.fits)).toBe(false);
-    expect(find(r56, 'beside', 'removed').some((x) => x.fits)).toBe(true);
+  it('a longer wheelbase costs the fit: 52 and 56 in still fit beside, assembled and in Transport mode; 58 in fits neither (the tongue sets the length in both, D-65)', () => {
+    for (const wb of [52, 56]) {
+      const q = { ...p, wheelbaseIn: wb };
+      const rq = checkTruckFit(q, build(q));
+      expect(find(rq, 'beside', 'installed').some((x) => x.fits), `${wb} assembled`).toBe(true);
+      expect(find(rq, 'beside', 'removed').some((x) => x.fits), `${wb} transport`).toBe(true);
+    }
+    const q58 = { ...p, wheelbaseIn: 58 };
+    const r58 = checkTruckFit(q58, build(q58));
+    expect(find(r58, 'beside', 'installed').some((x) => x.fits)).toBe(false);
+    expect(find(r58, 'beside', 'removed').some((x) => x.fits)).toBe(false);
   });
   it('beside fits only when the track fits the well gap', () => {
     const q = { ...p, rearTrackIn: 40 };
@@ -223,19 +220,19 @@ describe('real sled (D-6, D-23, D-54)', () => {
     expect(beside.wheelbaseMinIn!).toBeCloseTo(44, 0);
     expect(beside.wheelbaseBoundedByValidator).toBe(true);
     expect(beside.wheelbaseMaxIn!).toBeGreaterThan(p.wheelbaseIn);
-    expect(beside.wheelbaseMaxIn!).toBeCloseTo(60.25, 0);
+    expect(beside.wheelbaseMaxIn!).toBeCloseTo(57.25, 0); // 62.25 with the handle and tongue off before D-65, 60.25 before the flap was shortened
     const besideInstalled = w!.windows.find((x) => x.mode === 'beside' && x.config === 'installed')!;
-    expect(besideInstalled.wheelbaseMaxIn!).toBeLessThan(beside.wheelbaseMaxIn!); // the handle makes the assembled sled longer
-    expect(besideInstalled.wheelbaseMaxIn!).toBeCloseTo(55.25, 0); // D-62: 1.25 in more than with the bow shackle (54)
+    expect(besideInstalled.wheelbaseMaxIn!).toBeLessThanOrEqual(beside.wheelbaseMaxIn!); // D-65: the tongue stays on in Transport mode, so it buys no length
+    expect(besideInstalled.wheelbaseMaxIn!).toBeCloseTo(57.25, 0); // D-62: 1.25 in more than with the bow shackle (54); D-65 +2 in with the flap ending at the transom face
     // Straddle: not at the default wheelbase (see the test above), and never as assembled (D-58 tongue); without the tongue it has a window from 45 in (both axles outside the 34 in well zone)
     // up to where the sled is too long for the bed.
-    for (const config of ['installed', 'bridle-off', 'removed']) {
+    for (const config of ['installed', 'removed']) {
       const st = w!.windows.find((x) => x.mode === 'straddle' && x.config === config)!;
       expect(st.fitsNow).toBe(false);
       // D-62: the assembled sled (no bow shackle) now has a straddle window too, a little narrower than without the tongue
       expect(st.wheelbaseMinIn!).toBeCloseTo(45, 0);
       expect(st.wheelbaseMaxIn!).toBeGreaterThan(50);
-      if (config === 'installed') expect(st.wheelbaseMaxIn!).toBeLessThanOrEqual(w!.windows.find((x) => x.mode === 'straddle' && x.config === 'bridle-off')!.wheelbaseMaxIn!);
+      if (config === 'installed') expect(st.wheelbaseMaxIn!).toBeLessThanOrEqual(w!.windows.find((x) => x.mode === 'straddle' && x.config === 'removed')!.wheelbaseMaxIn!);
     }
   }, 60000);
 });

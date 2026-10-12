@@ -146,4 +146,4 @@ export const PLY_LINE_MAT = new THREE.LineBasicMaterial({ color: 0x6b4a22, trans
 /** Red tint for sheet parts that have an exposed ply edge (Advanced only). */
 export const EXPOSED_MAT = new THREE.MeshStandardMaterial({ color: 0xe0443a, roughness: 0.75, side: THREE.DoubleSide });
 /** Outline pass: dark, low opacity so it keeps the drawing crisp without fighting the textures. */
-export const EDGE_MAT = new THREE.LineBasicMaterial({ color: 0x1b1208, transparent: true, opacity: 0.28 });
+export const EDGE_MAT = new THREE.LineBasicMaterial({ color: 0x1b1208, transparent: true, opacity: 0.5 }); // D-65: 0.28 was too faint to see the toggle work

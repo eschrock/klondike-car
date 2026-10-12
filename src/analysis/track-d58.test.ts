@@ -35,23 +35,23 @@ describe('the D-58 tracks', () => {
 describe('tip angles before (35.5 / 35.5 in) and after (34 1/2 / 32 in), 40 degree limit', () => {
   const tip = (cs: ReturnType<typeof run>, k: 'operating' | 'goal' | 'cargo') => row(cs, 'tip-straight').cases![k]!.value;
   it('150 lb rider 50.9 -> 48.7 deg; 200 lb rider 49.4 -> 47.3 deg; both far above the limit', () => {
-    expect(tip(old, 'operating')).toBeCloseTo(50.79, 1); // 50.84 before D-62 // 50.9 before D-60 dropped the four foot-block cleats (a little less mass forward)
-    expect(tip(nw, 'operating')).toBeCloseTo(48.62, 1); // 48.7 before D-62
-    expect(tip(old, 'goal')).toBeCloseTo(49.35, 1);
-    expect(tip(nw, 'goal')).toBeCloseTo(47.19, 1);
+    expect(tip(old, 'operating')).toBeCloseTo(50.73, 1); // 50.79 before D-65 (the lighter, shorter brake flaps), 50.84 before D-62 // 50.9 before D-60 dropped the four foot-block cleats (a little less mass forward)
+    expect(tip(nw, 'operating')).toBeCloseTo(48.57, 1); // 48.62 before D-65, 48.7 before D-62
+    expect(tip(old, 'goal')).toBeCloseTo(49.30, 1);
+    expect(tip(nw, 'goal')).toBeCloseTo(47.14, 1);
     for (const k of ['operating', 'goal'] as const) expect(tip(nw, k)).toBeGreaterThan(40 + 5);
     expect(row(nw, 'tip-straight').statusOperating).toBe('pass');
     expect(row(nw, 'tip-straight').statusGoal).toBe('pass');
   });
   it('200 lb cargo (the D-58 target, piled at the nose end of the bed): 44.7 -> 43.1 deg, passes the 40 degree limit by 3 degrees (marginal band, within 10% of the limit)', () => {
-    expect(tip(old, 'cargo')).toBeCloseTo(44.58, 1); // 44.67 before D-62 // D-60 (no foot-block cleats): 44.7 / 43.1 before
-    expect(tip(nw, 'cargo')).toBeCloseTo(42.91, 1); // 43.0 before D-62
+    expect(tip(old, 'cargo')).toBeCloseTo(44.50, 1); // 44.58 before D-65, 44.67 before D-62 // D-60 (no foot-block cleats): 44.7 / 43.1 before
+    expect(tip(nw, 'cargo')).toBeCloseTo(42.83, 1); // 42.91 before D-65, 43.0 before D-62
     expect(tip(nw, 'cargo')).toBeGreaterThan(40);
     expect(row(nw, 'tip-straight').statusCargo).toBe('marginal');
   });
   it('250 lb cargo, for the record: 43.2 -> 41.7 deg, still above the limit', () => {
-    expect(tip(run({ ...OLD, cargoPayloadLb: 250 }), 'cargo')).toBeCloseTo(43.12, 1);
-    expect(tip(run({ cargoPayloadLb: 250 }), 'cargo')).toBeCloseTo(41.52, 1); // 41.7 before D-60 dropped the cleats, 41.6 before D-62
+    expect(tip(run({ ...OLD, cargoPayloadLb: 250 }), 'cargo')).toBeCloseTo(43.05, 1);
+    expect(tip(run({ cargoPayloadLb: 250 }), 'cargo')).toBeCloseTo(41.45, 1); // 41.52 before D-65, 41.7 before D-60 dropped the cleats, 41.6 before D-62
   });
   it('slide-before-tip and tip-lock still pass for the riders; the slide margin falls 1.24 -> 1.14 (150 lb) against the 0.75 required', () => {
     expect(row(old, 'slide-before-tip').cases!.operating!.value).toBeCloseTo(1.24, 1);
@@ -80,7 +80,7 @@ describe('truck fit, brake and overall width at the new tracks', () => {
     expect(a.dims.installed.widthIn).toBeCloseTo(40.5, 1);
     expect(b.dims.installed.widthIn).toBeCloseTo(39.5, 1);
     expect(b.dims.installed.widthIn).toBeLessThan(a.dims.installed.widthIn);
-    for (const config of ['installed', 'bridle-off', 'removed']) expect(b.cases.some((c) => c.mode === 'beside' && c.config === config && c.fits), config).toBe(true);
+    for (const config of ['installed', 'removed']) expect(b.cases.some((c) => c.mode === 'beside' && c.config === config && c.fits), config).toBe(true);
     expect(b.anyFits).toBe(true);
   });
   it('the 32 in rear track keeps the brake flaps working: brake-slow (10 deg stop grade) and the brake geometry rows are unchanged or better; brake-clear stays at the rail (0.22 in)', () => {

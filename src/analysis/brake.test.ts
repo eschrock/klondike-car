@@ -42,12 +42,13 @@ const footByHand = (w: number, mu: number, sigma: 1 | -1) => {
 };
 
 describe('brake foot-lever ratio and foot force', () => {
-  it('brake-ratio is the derived critical-direction ratio, above the ~2:1 target and passes; the stroke, the foot height and the reach to the transom are checked', () => {
+  it('brake-ratio is the derived critical-direction ratio, above the target and passes (D-65: about 2.0:1 on average, 1.8 in the weaker direction); the stroke, the foot height and the end of the flap at the transom face are checked', () => {
     const c = byId(cs, 'brake-ratio');
     expect(c.value).toBeCloseTo(g.ratioCrit, 9);
     expect(c.value).toBeGreaterThan(defaults.brakeLeverRatio);
-    expect(c.value).toBeGreaterThan(1.9);
+    expect(c.value).toBeGreaterThan(1.75);
     expect(c.value).toBeLessThan(2.6);
+    expect((g.ratioFwd + g.ratioRev) / 2).toBeCloseTo(2.0, 1);
     expect(c.limit).toBe(defaults.brakeLeverRatio);
     expect(c.status).toBe('pass');
     expect(det(cs, 'brake-ratio', 'rolling forward').value).toBeCloseTo(g.ratioFwd, 9);
@@ -55,12 +56,12 @@ describe('brake foot-lever ratio and foot force', () => {
     expect(det(cs, 'brake-ratio', 'foot stroke').value).toBeCloseTo(g.footDrop, 9);
     expect(det(cs, 'brake-ratio', 'foot stroke').limit).toBe(defaults.brakeFootStrokeMaxIn);
     expect(det(cs, 'brake-ratio', 'foot area height').limit).toBe(defaults.brakeFootHeightMaxIn);
-    expect(det(cs, 'brake-ratio', 'transom face').value).toBeGreaterThan(0);
+    expect(det(cs, 'brake-ratio', 'transom face').value).toBeCloseTo(0, 9); // D-65: the flap ends AT the transom face, nothing sticks out
     expect(c.how).toMatch(/Derived from the flap geometry/);
   });
-  it('the ratio is geometry, not an input: moving the pad back or the hinge ahead lowers it until brake-ratio fails (target not met)', () => {
+  it('the ratio is geometry, not an input: moving the pad back or the knee and pin ahead lowers it until brake-ratio fails (target not met)', () => {
     expect(byId(run({ brakePadAngleDeg: 35 }), 'brake-ratio').value).toBeLessThan(byId(cs, 'brake-ratio').value);
-    expect(byId(run({ brakeHingeAheadIn: 4 }), 'brake-ratio').value).toBeLessThan(byId(cs, 'brake-ratio').value);
+    expect(byId(run({ brakePivotAheadIn: 4 }), 'brake-ratio').value).toBeLessThan(byId(cs, 'brake-ratio').value);
     expect(byId(run({ brakeLeverRatio: 3 }), 'brake-ratio').status).not.toBe('pass');
     expect(byId(run({ brakeFootStrokeMaxIn: 0.5 }), 'brake-ratio').status).toBe('fail');
   });
@@ -77,13 +78,13 @@ describe('brake foot-lever ratio and foot force', () => {
     expect(f.cases!.cargo!.value / hand).toBeGreaterThan(0.95);
     expect(f.cases!.cargo!.value / hand).toBeLessThan(1.05);
   });
-  it('INFO (Eric, D-58): the 15 degree HOLD force (85 / 98 / 104 lbf per foot against a 90 lbf yardstick) is reported but does not light anything: the step brake is a "just in case" slowing brake and brake-slow is the pass/fail row', () => {
+  it('INFO (Eric, D-58): the 15 degree HOLD force (92 / 106 / 99 lbf per foot against a 90 lbf yardstick, D-65) is reported but does not light anything: the step brake is a "just in case" slowing brake and brake-slow is the pass/fail row', () => {
     const f = byId(cs, 'brake-force');
     expect(f.cases!.operating!.limit).toBe(90);
     expect(f.group).toBe('Braking');
     expect(f.cases!.operating!.value).toBeGreaterThan(75);
-    expect(f.cases!.operating!.value).toBeLessThan(90);
-    expect(f.cases!.goal!.value).toBeGreaterThan(90); // the numbers are unchanged and still shown ...
+    expect(f.cases!.operating!.value).toBeLessThan(95); // D-65: the shorter foot lever raises the hold force (about 92 / 106 / 99 lbf per foot) ...
+    expect(f.cases!.goal!.value).toBeGreaterThan(95); // the numbers are still shown ...
     expect(f.cases!.cargo!.value).toBeGreaterThan(f.cases!.operating!.value);
     for (const k of ['operating', 'goal', 'cargo'] as const) expect(f.cases![k]!.status, k).toBe('info'); // ... but no case is pass / marginal / fail
     expect(f.status).toBe('info');
@@ -174,15 +175,40 @@ describe('brake members (hand calculations at the goal rider, load factor 2)', (
     expect(L.Rmag).toBeCloseTo(Math.hypot(...L.Rk), 9);
     expect(L.Rk[1]).toBeGreaterThan(0); // the flap pulls the knee UP (the hinge is in tension)
   });
-  it('hinge pin double shear and the knee-leaf screw withdrawal follow from that reaction (NDS 1380 G² D L C_M)', () => {
-    const pin = L.Rmag / (2 * (Math.PI / 4) * defaults.brakeHingePinDiaIn ** 2);
-    expect(det(cs, 'brake-hinge', 'pin double shear').value).toBeCloseTo(pin, 3);
-    const pen = defaults.brakeHingeScrewLenIn - 0.1 - 0.1;
-    const w1 = 1380 * defaults.oakSpecificGravity ** 2 * defaults.brakeHingeScrewDiaIn * pen * 0.7;
-    const dd = det(cs, 'brake-hinge', 'knee leaf screws, withdrawal each');
+  it('D-65 pull-pin pivot: pin double shear, pin bending between the ears, oak bearing, tear-out and edge distance, and the pivot block screws follow from that reaction (NDS 1380 G² D L C_M)', () => {
+    const d = defaults.brakePivotPinDiaIn, wt = defaults.brakePivotTongueIn, clr = defaults.brakePivotSlotClearIn;
+    const R = L.Rmag;
+    const A = (Math.PI / 4) * d ** 2;
+    expect(det(cs, 'brake-pivot', 'pin double shear').value).toBeCloseTo(R / (2 * A), 3);
+    // bending: reactions at the ear bearing centers (outboard ear thickness, inboard blind depth), load spread over the tongue
+    const armO = wt / 2 + clr + g.pivot.earOut / 2, armI = wt / 2 + clr + g.pivot.blind / 2;
+    const Ro = (R * armI) / (armO + armI), Ri = R - Ro;
+    const M = Math.max(Ro * armO, Ri * armI) - (R / 2) * (wt / 4);
+    expect(det(cs, 'brake-pivot', 'pin bending').value).toBeCloseTo(M / ((Math.PI * d ** 3) / 32), 3);
+    expect(det(cs, 'brake-pivot', 'oak bearing of the pin on the tongue').value).toBeCloseTo(R / (d * wt), 3);
+    expect(det(cs, 'brake-pivot', 'outboard ear').value).toBeCloseTo(Ro / (d * g.pivot.earOut), 3);
+    // edge distances in pin diameters: 3/4 in of oak above and below the pin in the tongue stack and the ear, 3/4 in past it
+    expect(det(cs, 'brake-pivot', 'edge distance, pin center to the nearer edge of the tongue').value).toBeCloseTo(0.75 / d, 2);
+    expect(det(cs, 'brake-pivot', 'edge distance, pin center to the nearer edge of the ear').value).toBeCloseTo(0.75 / d, 2);
+    expect(det(cs, 'brake-pivot', 'end distance').value).toBeCloseTo(defaults.brakePivotEndIn / d, 9);
+    const nBS = defaults.brakePivotBlockScrews;
+    const pen = 1.25 - defaults.brakePivotBlockIn - 0.1;
+    const w1 = 1380 * defaults.oakSpecificGravity ** 2 * 0.19 * pen * 0.7;
+    const dd = det(cs, 'brake-pivot', 'pivot block screws, withdrawal each');
     expect(dd.limit).toBeCloseTo(w1, 6);
-    expect(dd.value).toBeCloseTo(Math.max(0, L.Rk[1]) / defaults.brakeHingeScrewsPerLeaf, 6);
-    expect(byId(cs, 'brake-hinge').status).toBe('pass');
+    expect(dd.value).toBeCloseTo(((defaults.brakePivotBlockIn / (defaults.brakeFlapThickIn + defaults.brakePivotBlockIn)) * R) / nBS, 6);
+    expect(byId(cs, 'brake-pivot').status).toBe('pass');
+    expect(byId(cs, 'brake-pivot').how).toMatch(/DOUBLE shear/);
+    // a smaller pin is weaker in bending: 1/4 in is well over twice the stress
+    expect(det(run({ brakePivotPinDiaIn: 0.25 }), 'brake-pivot', 'pin bending').value).toBeGreaterThan(2 * det(cs, 'brake-pivot', 'pin bending').value);
+  });
+  it('the Shaper-cut fender: the flap section is checked at its weakest station along the taper and in shear in the tongue (D-65)', () => {
+    const bend = det(cs, 'brake-flap', 'flap bending, weakest station');
+    expect(bend.value).toBeGreaterThan(0);
+    expect(bend.util).toBeLessThan(1);
+    const tongue = det(cs, 'brake-flap', 'flap shear in the tongue');
+    expect(tongue.value).toBeCloseTo((1.5 * Math.abs(L.Rk[0] * -g.v[0] + L.Rk[1] * -g.v[1])) / (defaults.brakePivotTongueIn * defaults.brakeFlapThickIn), 3);
+    expect(byId(cs, 'brake-flap').how).toMatch(/Tapered fender/);
   });
   it('flap bending at the pad: M from the foot force and the bungee across the board, σ = M/S against the design oak MOR', () => {
     const v = g.v;
@@ -205,7 +231,7 @@ describe('brake members (hand calculations at the goal rider, load factor 2)', (
     expect(bt.count).toBe(4);
     const pts = bt.xs.flatMap((x) => bt.zs.map((z): [number, number] => [x, z]));
     const r2 = pts.map(([x, z]) => (x - bt.cx) ** 2 + (z - bt.cz) ** 2);
-    const rel: [number, number] = [g.xh - bt.cx, g.knee.zTop - bt.cz];
+    const rel: [number, number] = [g.xh - bt.cx, g.H[1] - bt.cz];
     const Mpl = Math.abs(rel[1] * L.Rk[0] - rel[0] * L.Rk[1]);
     const V = L.Rmag / 4 + (Mpl * Math.sqrt(Math.max(...r2))) / r2.reduce((a, b) => a + b, 0);
     const shear = det(cs, 'brake-mount', 'mounting bolt shear, worst bolt').value;
@@ -243,11 +269,11 @@ describe('brake abuse: a foot stomp on one flap (yield level)', () => {
     expect(c.group).toBe('Structure');
     expect(c.status).toBe('pass');
     expect(c.details!.length).toBeGreaterThan(15);
-    expect(c.details!.some((d) => /^hinge:/.test(d.name))).toBe(true);
+    expect(c.details!.some((d) => /^pivot:/.test(d.name))).toBe(true);
     expect(c.details!.some((d) => /^mount:/.test(d.name))).toBe(true);
     expect(c.how).toMatch(/ONE flap/);
-    // a 400 lbf stomp on a flap that is only a 5/4 oak board and four hinge screws no longer survives
-    expect(byId(run({ brakeFootAbuseLbf: 300, brakeHingeScrewsPerLeaf: 2 }), 'brake-abuse').status).not.toBe('pass');
+    // a 300 lbf stomp on a flap whose pivot pin is only 1/4 in no longer survives
+    expect(byId(run({ brakeFootAbuseLbf: 300, brakePivotPinDiaIn: 0.25 }), 'brake-abuse').status).not.toBe('pass');
   });
 });
 
@@ -303,7 +329,7 @@ describe('park-hold: the wheel chocks and the wheels hold the sled on the design
 
 describe('brake clearance over the stroke', () => {
   const ctx = ctxOf(defaults);
-  it('the moving flap group clears the hull, rails, transom and the rest over the stroke; the board and shoe clear the tire; the pad lands on the tread; the hinge gap stays open', () => {
+  it('the moving flap group clears the hull, rails, transom and the rest over the stroke; the board and shoe clear the tire; the pad lands on the tread; the flare shoulder stays clear of the knee', () => {
     const sw = brakeSweep(ctx);
     const row = byId(cs, 'brake-clear');
     expect(row.status).toBe('pass');
@@ -311,7 +337,7 @@ describe('brake clearance over the stroke', () => {
     expect(sw.boardTireGapIn).toBeGreaterThanOrEqual(defaults.brakeClearanceIn);
     expect(sw.padGapReleasedIn).toBeGreaterThan(0.5 * defaults.brakePadGapIn);
     expect(Math.abs(sw.padGapAppliedIn)).toBeLessThan(0.03);
-    expect(sw.hingeGapIn).toBeCloseTo(0.125, 3); // the designed gap at the applied pose; it opens as the flap lifts
+    expect(sw.shoulderGapIn).toBeGreaterThan(0.3); // D-65: the flare shoulder stays about half an inch behind the knee's rear face (the tongue runs in the slot)
     expect(sw.groundMinZ).toBeGreaterThanOrEqual(defaults.minGroundClearanceIn);
     expect(det(cs, 'brake-clear', 'knee bottom').value).toBeGreaterThanOrEqual(defaults.minGroundClearanceIn);
     expect(det(cs, 'brake-clear', 'sign zone').value).toBeGreaterThanOrEqual(0);
@@ -328,7 +354,7 @@ describe('rows and groups', () => {
     for (const gone of ['brake-lever', 'brake-links', 'brake-beam', 'brake-shoes']) expect(cs.some((c) => c.id === gone), gone).toBe(false);
     const groups: Record<string, string> = {
       'brake-ratio': 'Braking', 'brake-force': 'Braking', 'brake-slow': 'Braking', 'brake-traction': 'Braking', 'brake-clear': 'Braking', 'park-hold': 'Braking',
-      'brake-flap': 'Structure', 'brake-hinge': 'Structure', 'brake-mount': 'Structure', 'brake-return': 'Structure', 'brake-abuse': 'Structure', 'handle-sockets': 'Structure',
+      'brake-flap': 'Structure', 'brake-pivot': 'Structure', 'brake-mount': 'Structure', 'brake-return': 'Structure', 'brake-abuse': 'Structure', 'handle-sockets': 'Structure',
     };
     for (const [id, grp] of Object.entries(groups)) expect(byId(cs, id).group, id).toBe(grp);
     const h = handleGeometry(defaults, makeCtx(defaults).L);
@@ -337,10 +363,10 @@ describe('rows and groups', () => {
     expect(h.zTop).toBeGreaterThan(0);
   });
   it('the member rows carry the cargo case next to the rider cases', () => {
-    for (const id of ['brake-force', 'brake-slow', 'brake-flap', 'brake-hinge', 'brake-mount', 'park-hold']) expect(byId(cs, id).cases!.cargo, id).toBeDefined();
+    for (const id of ['brake-force', 'brake-slow', 'brake-flap', 'brake-pivot', 'brake-mount', 'park-hold']) expect(byId(cs, id).cases!.cargo, id).toBeDefined();
   });
   it('every row is finite and its `how` is non-empty', () => {
-    for (const id of ['brake-ratio', 'brake-force', 'brake-slow', 'brake-clear', 'brake-flap', 'brake-hinge', 'brake-mount', 'brake-return', 'park-hold', 'brake-abuse']) {
+    for (const id of ['brake-ratio', 'brake-force', 'brake-slow', 'brake-clear', 'brake-flap', 'brake-pivot', 'brake-mount', 'brake-return', 'park-hold', 'brake-abuse']) {
       const c = byId(cs, id);
       expect(Number.isFinite(c.value), id).toBe(true);
       expect(c.how.length, id).toBeGreaterThan(40);

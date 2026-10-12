@@ -34,7 +34,7 @@ export interface TruckParams {
 
 const GROUP_LABEL: Record<PartGroup, string> = {
   frame: 'Frame', body: 'Body (sides, deck, bow bulkhead, transom)', 'front-end': 'Front end (pivoting axle, kingpin, tongue)', 'running-gear': 'Running gear (wheels, axles)',
-  seat: 'Seat', brake: 'Brake', storage: 'Storage', lighting: 'Lighting', removable: 'Removable (handle, tongue, signs)',
+  seat: 'Seat', brake: 'Brake', storage: 'Storage', lighting: 'Lighting', removable: 'Push handle',
   hardware: 'Hardware', reference: 'Reference',
 };
 
@@ -68,11 +68,10 @@ const MOUNTED = new Set(['analysis', 'simulation']);
 
 const MODE_LABEL = { beside: 'Beside wells', straddle: 'Straddle wells' } as const;
 const ORIENT_LABEL = { 'nose-tailgate': 'Nose to tailgate', 'nose-bulkhead': 'Nose to bulkhead' } as const;
-const CONFIG_LABEL: Record<Config, string> = { installed: 'Installed', 'bridle-off': 'Tongue & rope off', removed: 'Removed (transport)' };
+const CONFIG_LABEL: Record<Config, string> = { installed: 'Installed', removed: 'Transport mode' };
 const CONFIG_HELP: Record<Config, string> = {
   installed: 'Everything fitted, including the tongue and bridle rope',
-  'bridle-off': 'Only the tongue, its sleeve and the bridle rope removed',
-  removed: 'All removable parts off (D-9)',
+  removed: 'Transport mode (D-65): brakes, lights and chocks off, handle parked, seat back flat; the tongue and the signs stay on',
 };
 
 export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): RightPanel {
@@ -85,7 +84,7 @@ export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): Rig
   const sizeInstalled = h('dd', {}, '–');
   const sizeTransport = h('dd', {}, '–');
   const extra = h('dl', { class: 'summary-extra' },
-    h('dt', { title: 'Empty mass with the removable parts off: what two people lift onto the truck (D-7, D-9)' }, 'Lift weight (transport config)'), lift,
+    h('dt', { title: 'Empty mass in Transport mode (brakes, lights and chocks off; handle parked, seat back flat; the tongue stays on; D-65): what two people lift onto the truck (D-7, D-9)' }, 'Lift weight (transport config)'), lift,
     h('dt', {}, 'Overall L × W × H, installed'), sizeInstalled,
     h('dt', {}, 'Overall L × W × H, transport'), sizeTransport,
   );

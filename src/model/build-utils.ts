@@ -16,6 +16,12 @@ export interface ViewState {
   cargo?: boolean;
   /** Transport configuration: omit `removable` parts. */
   removed?: boolean;
+  /** The brake flap kit (flaps, pivot blocks, pins, clips, shoe blocks, pads, foot treads, cords, snap hooks) is on the sled. Default true; false hides it (the knees and backers stay), D-65. */
+  brakes?: boolean;
+  /** The lights (front lamp and clip, rear light and clip) are on the sled. Default true, D-65. */
+  lights?: boolean;
+  /** The wheel chocks (and their cords) hang at the rear tires. Default true; the viewer builds with false until its Wheel chocks toggle asks (they ride in the box), D-65. */
+  chocks?: boolean;
   /**
    * Cargo mode (D-53, D-57): 'stowed' (shown as "seat flat") flips the seat back forward onto the deck and lays the two cushions flat inside the storage box (no rider; `cargo`
    * then shows the payload on the bed instead of the Essentials block). Default 'installed'.
@@ -92,7 +98,7 @@ export function makeCtx(input: Params, v: ViewState = {}): Ctx {
     d: derived(p),
     L,
     steerRad: (steerDeg * Math.PI) / 180,
-    view: { steerDeg, rider: v.seat === 'stowed' ? 'none' : v.rider ?? 'operating', cargo: v.cargo ?? true, removed: v.removed ?? false, seat: v.seat ?? 'installed', handle: v.handle ?? 'up' },
+    view: { steerDeg, rider: v.seat === 'stowed' ? 'none' : v.rider ?? 'operating', cargo: v.cargo ?? true, removed: v.removed ?? false, brakes: v.brakes ?? true, lights: v.lights ?? true, chocks: v.chocks ?? true, seat: v.seat ?? 'installed', handle: v.handle ?? 'up' },
     plyName: p.plySpecies === PLY_SPECIES.okoumeMarine ? 'okoume marine plywood' : 'baltic birch plywood',
   };
 }
@@ -207,7 +213,7 @@ function defaultExplode(ctx: Ctx, s: PartSpec): Vec3 {
       return unit([-0.5, 0, 0.7]);
     case 'brake':
       if (/^brake-(flap|shoe|pad|cord)/.test(id)) return unit([-0.4, sy * 0.5, 1]);
-      if (/^brake-(knee|hinge)/.test(id)) return unit([0.3, sy * 1, 0.4]);
+      if (/^brake-knee/.test(id)) return unit([0.3, sy * 1, 0.4]);
       if (/^brake-backer/.test(id)) return unit([0, -sy * 0.3, -1]);
       if (/^brake-chock/.test(id)) return unit([1, sy * 0.3, 0]);
       return unit([-1, 0, -0.3]);

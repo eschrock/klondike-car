@@ -219,7 +219,7 @@ describe('truck fit option and performance', () => {
     const reused = byId(runChecks(defaults, { fit }), 'truck-fit');
     expect(reused.status).toBe(fit.cases.some((c) => c.config === 'removed' && c.fits) ? 'pass' : 'fail');
     expect(byId(runChecks(defaults), 'truck-fit').value).toBe(reused.value);
-    expect(reused.how).toMatch(/off only/);
+    expect(reused.how).toMatch(/Fully assembled: fits/);
   });
   it('runChecks takes under 100 ms at the defaults without the truck call (the bump-basis rows cost about 60 ms)', () => {
     run(defaults); // warm up

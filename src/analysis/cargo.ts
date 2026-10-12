@@ -35,7 +35,7 @@ const STOW_MARGINAL_IN = 0.25;
 export function seatStowCheck(ctx: Ctx): AnalysisCheck {
   const { p, L } = ctx;
   const plan = seatStowPlan(p, L, ctx.parts);
-  const label = 'Cushions, front lamp and chocks stow in the box; the back flips flat';
+  const label = 'Cushions, lamps and chocks stow in the box; the back flips flat';
   if (!plan.applicable) {
     return singleCheck({
       id: 'seat-stow', label, group: 'Structure', value: 0, unit: 'in', limit: 0, sense: '>=', info: true, refs: ['D-57'],
@@ -49,7 +49,7 @@ export function seatStowCheck(ctx: Ctx): AnalysisCheck {
     detail('across: the cushion plus the clearance', need.widthIn, 'in', avail.w, '<='),
     detail('height: corner fillet + seat cushion + back pad, under the lid frame and battens', need.heightIn, 'in', avail.h, '<='),
   ];
-  // 3c-5: the front lamp, its clip and the wheel chocks lie in the layer above the cushions (the height left under the lid frame and battens), measured from the real parts.
+  // 3c-5, D-65: the front lamp and the rear tail light with their clips, and the wheel chocks, lie in the layer above the cushions (the height left under the lid frame and battens), measured from the real parts.
   const gear = boxGear(ctx.parts);
   const gearKit = [...gear.lamp, ...gear.chocks];
   const layerH = Math.max(0, margin.heightIn);
@@ -57,9 +57,16 @@ export function seatStowCheck(ctx: Ctx): AnalysisCheck {
   const gearTall = Math.max(0, ...gearKit.map((k) => Math.min(...(k.dims ?? [0]))));
   const gearIn3 = layer.rigidIn3;
   if (gearKit.length) {
-    ds.push(detail('height: the tallest of the lamp, its clip and the chocks (laid on their smallest side) in the height left above the cushions', gearTall, 'in', layerH, '<='));
-    ds.push(detail('floor area: the lamp, its clip and the chocks side by side in the layer above the cushions', layer.fill, '× of layer', 1, '<='));
+    ds.push(detail('height: the tallest of the lamps, their clips and the chocks (laid on their smallest side) in the height left above the cushions', gearTall, 'in', layerH, '<='));
+    ds.push(detail('floor area: the lamps, their clips and the chocks side by side in the layer above the cushions', layer.fill, '× of layer', 1, '<='));
   }
+  // D-65 OPTION (not in the default stow): the two removed brake flaps, laid in the same layer with the lamps and the chocks.
+  const flap = gear.flaps[0];
+  const withFlaps = flap ? packEssentials({ lx: avail.l, w: avail.w, h: layerH, capIn3: 0, totalIn3: avail.l * avail.w * layerH }, [...gearKit, ...gear.flaps]) : null;
+  const flapSorted = flap?.dims ? [...flap.dims].sort((x, y) => x - y) : [];
+  const flapOption = flap && withFlaps
+    ? `OPTION, not in the default stow (D-65): the ${flap.qty} removed brake flaps (each ${flapSorted.map((v) => f(v, 1)).join(' × ')}" with its shoe block, pad and pivot block on) ${withFlaps.fits ? `fit in the same layer too (fill ${f(withFlaps.fill, 2)})` : `do NOT fit with the lamps and chocks in the ${f(layerH, 2)}" layer above the cushions (the flaps are ${f(flapSorted[0], 2)}" thick and ${f(flapSorted[2], 1)}" long against ${f(avail.l, 1)}" × ${f(avail.w, 1)}" of floor${withFlaps.unplaced.length ? `; not placed: ${withFlaps.unplaced.join(', ')}` : ''}): carry them on the bed, strapped under the cargo, or on the seat`}. `
+    : '';
   const g = governing(ds, '');
   const gearMargin = gearKit.length ? layerH - gearTall : Infinity;
   const minMargin = Math.min(margin.lengthIn, margin.widthIn, margin.heightIn, gearMargin, layer.fits ? Infinity : -1);
@@ -73,8 +80,9 @@ export function seatStowCheck(ctx: Ctx): AnalysisCheck {
     + `Needs ${f(need.lengthIn, 2)}" fore-aft (incl. ${f(p.seatStowClearIn, 2)}" clearance), ${f(need.widthIn, 2)}" across, ${f(need.heightIn, 2)}" high: margins ${f(margin.lengthIn, 2)}", ${f(margin.widthIn, 2)}", ${f(margin.heightIn, 2)}" (marginal under ${STOW_MARGINAL_IN}"). `
     + `The cushions take ${f(plan.cushionsIn3, 0)} in³; the box interior under the lid frame has ${f(plan.freeIn3, 0)} in³ left, and the 10 Essentials need about ${f(essIn3, 0)} in³ (rigid items plus the soft goods at their packed volume, storage-pack row)${plan.freeIn3 >= essIn3 ? ': both fit together' : ': they do NOT both fit; carry the Essentials in a pack on the bed, or raise storageVolumeIn3'}. `
     + (gearKit.length
-      ? `Cargo mode also carries the front lamp and its clip and the ${gear.chocks[0]?.qty ?? 0} wheel chocks in a layer on top of the cushions (${f(avail.l, 1)}" × ${f(avail.w, 1)}" and ${f(layerH, 2)}" high under the lid frame): ${gearKit.map((k) => `${k.qty > 1 ? `${k.qty} × ` : ''}${k.name} ${(k.dims ?? []).map((v) => f(v, 1)).join('×')}"`).join(', ')} = ${f(gearIn3, 0)} in³ of bounding boxes in a ${f(layer.interior.totalIn3, 0)} in³ layer (fill ${f(layer.fill, 2)}); the tallest lies ${f(gearTall, 2)}" high, leaving ${f(layerH - gearTall, 2)}" under the lid${layer.fits ? '' : `; NOT placed: ${layer.unplaced.join(', ')}`}. `
+      ? `Cargo mode also carries the front lamp and its clip, the rear tail light and its clip and the ${gear.chocks[0]?.qty ?? 0} wheel chocks in a layer on top of the cushions (${f(avail.l, 1)}" × ${f(avail.w, 1)}" and ${f(layerH, 2)}" high under the lid frame): ${gearKit.map((k) => `${k.qty > 1 ? `${k.qty} × ` : ''}${k.name} ${(k.dims ?? []).map((v) => f(v, 1)).join('×')}"`).join(', ')} = ${f(gearIn3, 0)} in³ of bounding boxes in a ${f(layer.interior.totalIn3, 0)} in³ layer (fill ${f(layer.fill, 2)}); the tallest lies ${f(gearTall, 2)}" high, leaving ${f(layerH - gearTall, 2)}" under the lid${layer.fits ? '' : `; NOT placed: ${layer.unplaced.join(', ')}`}. `
       : '')
+    + flapOption
     + `Procedure, no tools: peel the back pad and the seat cushion off their Dual Lock, lay them in the box, pull the two pins, flip the back forward and push the pins down through the stiles into the deck.`;
   return singleCheck({
     id: 'seat-stow', label, group: 'Structure', value: g.value, unit: g.unit, limit: g.limit, sense: '<=',

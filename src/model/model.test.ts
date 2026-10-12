@@ -307,19 +307,18 @@ describe('masses', () => {
 });
 
 describe('removed', () => {
-  it('drops exactly the removable parts: the bridle (tongue plate, shackle, rope), the handle, the seat back and the signs come off for the truck; the front axle, king beam, stops and wheels stay', () => {
+  it('drops exactly the removable parts (D-65: the seat back pad and pins, the chocks, the lights and the brake flap kit; NOT the handle, parked in Transport mode, and NOT the signs); the front axle, king beam, stops and wheels stay', () => {
     const full = buildModel(defaults);
     const removed = buildModel(defaults, { removed: true });
     expect(removed.map((p) => p.id)).toEqual(full.filter((p) => !p.removable).map((p) => p.id));
     const gone = full.filter((p) => p.removable).map((p) => p.id);
-    expect(gone).toEqual(expect.arrayContaining(['seat-back-pad', 'seat-pin-L', 'sign-L', 'handle-bar', 'handle-post-L', 'handle-post-R', 'bridle', 'bridle-tongue']));
+    expect(gone).toEqual(expect.arrayContaining(['seat-back-pad', 'seat-pin-L', 'brake-flap-L', 'brake-pivot-pin-R', 'brake-chock-L', 'front-light', 'rear-light', 'lamp-clip', 'rear-lamp-clip']));
+    for (const id of ['bridle', 'bridle-tongue', 'bridle-sleeve', 'sign-L', 'sign-R', 'handle-bar', 'handle-post-L', 'handle-post-R', 'brake-knee-L', 'brake-backer-L']) expect(removed.some((p) => p.id === id), `${id} stays`).toBe(true);
     for (const id of ['beam-F', 'kingpin', 'king-beam', 'king-thrust', 'steer-eye-L', 'steer-anchor-L', 'axle-FL', 'wheel-FL', 'wheel-FR', 'bow-bulkhead', 'deck', 'transom-rear']) expect(removed.some((p) => p.id === id), id).toBe(true);
-    expect(gone.some((id) => /^sign/.test(id))).toBe(true); // the signs are on by default (D-57) and come off for the truck
-    // taking the tongue off shortens the sled to the bow tip (the tongue reaches tongueTieAheadIn past it)
+    expect(gone.some((id) => /^sign/.test(id))).toBe(false); // Eric, D-65: the signs are NOT removable ("that seems excessive")
+    // the tongue stays on (D-65): Transport mode still reaches tongueTieAheadIn past the bow tip
     const reach = (ps: Part[]) => Math.max(...ps.filter((x) => !x.payload).map((x) => worldAABB(x).max[0]));
-    expect(reach(removed)).toBeGreaterThanOrEqual(computeLayout(defaults).xFront - 1e-6);
-    expect(reach(removed)).toBeLessThan(computeLayout(defaults).xFront + 0.5); // the bow tip (the bulkhead's front face)
-    expect(reach(full.filter((x) => x.id !== 'bridle'))).toBeGreaterThan(computeLayout(defaults).xFront + defaults.tongueTieAheadIn - 0.01);
+    expect(reach(removed)).toBeGreaterThan(computeLayout(defaults).xFront + defaults.tongueTieAheadIn - 0.01);
   });
 });
 

@@ -1,20 +1,22 @@
 /**
- * Plan of the scooter-style STEP BRAKE (Phase 3c-4b, D-57 item 8): ONE pure source for where the oak flap, its hinge, the pad on the tread, the bungee, the outrigger
+ * Plan of the scooter-style STEP BRAKE (Phase 3c-4b, D-57 item 8; pull-pin pivot, D-65): ONE pure source for where the oak flap, its pivot, the pad on the tread, the bungee, the outrigger
  * (knee) and its backer, and the wheel chock sit, shared by `model/brake.ts` (the parts), `analysis/brake.ts` (the checks) and the tests. Plain TS, no three.js.
  * Model frame: +X forward, +Y left, +Z up, origin on the ground under the rear-axle center; inches. Planar numbers are (x, z) in the vertical plane of one wheel;
  * the right side mirrors the left. Every y position follows the wheels (`rearTrackIn`, `tireWidthIn`), the hull (`hwC + side`) and the rail, never a typed number.
  *
  * The mechanism (a kick-scooter fender brake, no welding, no custom steel):
- *   • An oak FLAP lies over each rear tire. A 316 stainless butt HINGE at its front end sits AHEAD of the tire (x = r + brakeHingeAheadIn), on the top of an oak
- *     OUTRIGGER ("knee") that is bolted through the hull rail into an oak BACKER glued to the inside of the rail. The flap reaches back over the tire to a foot area
- *     level with the rear transom (the handler stands behind the transom and steps on it with one foot while pushing with the handlebow).
+ *   • An oak FLAP lies over each rear tire, a Shaper-cut tapered fender: its front end narrows to a TONGUE that carries a small oak PIVOT BLOCK and enters a slot in the
+ *     rear of an oak OUTRIGGER ("knee") AHEAD of the tire (pin at x = r + brakePivotAheadIn); a 3/8" 316 stainless clevis pin through the knee ears, the tongue and the
+ *     block (double shear, held by a hitch-pin clip) is the pivot, and PULLING IT lets the flap come off (D-65). The knee is bolted through the hull rail into an oak BACKER
+ *     glued to the inside of the rail. The flap reaches back over the tire to a foot tread that ENDS at the rear transom face (D-65; the handler stands behind the transom
+ *     and steps on it with one foot while pushing with the handlebow).
  *   • Under the flap a wedge-shaped oak SHOE BLOCK carries a rubber / leather PAD on the tread, `brakePadAngleDeg` behind the top of the tire. Stepping down swings the
- *     flap about the hinge and presses the pad on the tread. Lever ratio = (hinge to foot) / (hinge to the pad, measured on the line of action of the pad force).
+ *     flap about the pivot pin and presses the pad on the tread. Lever ratio = (pin to foot) / (pin to the pad, measured on the line of action of the pad force).
  *   • A BUNGEE cord from the flap to an eye screw in the rear transom lifts the flap (a stop cord limits the lift); the model default is the released pose.
  *   • Two oak wedge CHOCKS hang on cords from the knees and park the sled (a ramp the tire has to climb, `brakeChockAngleDeg`).
  *
  * Pose s ∈ [0, 1]: 1 is APPLIED (the pad on the tread), 0 is RELEASED (the model default). The geometry below is built in the applied pose and the released pose
- * is the whole flap group turned clockwise (seen with +x right, +z up) by `theta` about the hinge pin, so the pad hangs `brakePadGapIn` above the tread.
+ * is the whole flap group turned clockwise (seen with +x right, +z up) by `theta` about the pivot pin, so the pad hangs `brakePadGapIn` above the tread.
  */
 import type { Params } from '../params';
 import type { Layout } from './layout';
@@ -22,13 +24,20 @@ import type { Layout } from './layout';
 export type V2 = [number, number];
 
 const RAD = Math.PI / 180;
-/** Running gap between the flap's front face and the knee's rear face, and between stacked flat parts (in): a tolerance. */
-export const HINGE_GAP_IN = 0.125;
-/** Thickness of a butt hinge leaf (316 stainless, about 12 gauge) and the lift of a screw eye's ring above its face (in): purchased-part sizes. */
-export const HINGE_LEAF_T_IN = 0.1;
+/** The side sign ends at this x (in) and the brake knee starts at or ahead of it (D-57 item 9). */
+export const SIGN_X_MAX_IN = 6;
+/** Where the flap's plan flare starts, measured behind the knee's rear face (in): the widening shoulder stays this far clear of the knee while the flap swings (a fabrication rule). */
+export const SHOULDER_CLEAR_IN = 0.5;
+/** Lift of a screw eye's ring above its face (in): a purchased-part size. */
 export const EYE_LIFT_IN = 0.35;
-/** The bungee eye sits this far in from the flap's inboard edge (in): a fabrication rule. */
-export const EYE_INSET_IN = 0.5;
+/** The bungee eye is a screw eye in the flap's rear END face, this far in from the flap's inboard edge (in): a fabrication rule. Its ring reaches EYE_LIFT_IN behind the end, which lets the cord clear the hull's rear corner. */
+export const EYE_INSET_IN = 0.8;
+/** Corner radii of the Shaper-cut flap outline (in): the foot end and the pivot tongue's nose. */
+export const FLAP_REAR_CORNER_IN = 0.5;
+export const FLAP_NOSE_CORNER_IN = 0.25;
+/** The pin enters the knee's inboard ear this deep (blind hole) and its cross hole for the clip sits this far beyond the knee's outboard face (in): a purchased-pin size. */
+export const PIN_BLIND_IN = 1;
+export const PIN_STICKOUT_IN = 0.55;
 /** NDS wet-service factor C_M on screw withdrawal (Table 11.3.3): a code constant, not a design number. */
 export const WITHDRAWAL_WET_CM = 0.7;
 /** Small tolerance when two faces are meant to touch (in). */
@@ -117,8 +126,8 @@ export function pointPolyGap(pt: V2, poly: V2[]): number {
 export interface BrakeY {
   /** Wheel center, tire inner and outer faces. */
   wheel: number; tireIn: number; tireOut: number;
-  /** Flap |y| range, hinge |y| range, pad |y| range. */
-  flap: [number, number]; hinge: [number, number]; pad: [number, number];
+  /** Flap |y| range, tongue |y| range, pad |y| range. */
+  flap: [number, number]; tongue: [number, number]; pad: [number, number];
   /** Hull outer face (the rail's and chine's outer face), rail inner face, backer inner face. */
   face: number; railIn: number; backerIn: number;
   /** Bungee eye on the flap, eye screw on the rear transom's aft face. */
@@ -139,21 +148,24 @@ export interface BrakeGeom {
   n: V2;
   t: V2;
   pad: { w: number; thick: number; length: number; top: V2[]; bot: V2[] };
-  /** Board (flap) direction from the hinge toward the foot end (descending), its up normal, the underside offset (plane p·v = c) and its slope (rad). */
+  /** Board (flap) direction from the pivot toward the foot end (descending), its up normal, the underside offset (plane p·v = c) and its slope (rad). */
   sigma: number;
   u: V2;
   v: V2;
   c: number;
-  /** Hinge pin axis (on the flap's top surface, applied pose = on the knee top), its x, the foot point on the top surface and the flap's rear end x. */
+  /** Pivot pin axis (applied pose; in the middle of the tongue + pivot block stack, D-65), its x, the point on the flap's TOP surface above it, the foot point on the top surface and the flap's rear end x. */
   H: V2;
   xh: number;
+  P: V2;
   F: V2;
   xEnd: number;
-  /** Board: start/end distance along u from the pin, length, thickness, width, and its center in the applied pose. */
+  /** Board: start/end distance along u from the pin, length, thickness, width (full), and its center in the applied pose. */
   board: { s0: number; s1: number; len: number; thick: number; w: number; c: V2 };
+  /** Plan of the Shaper-cut flap: tongue width, the stations (along u from the pin) where the flare starts and the full width is reached, and the pivot block. */
+  plan: { wTongue: number; sShoulder: number; sFull: number; blockT: number; blockLen: number; hPin: number };
   /** Shoe block outline (applied pose, x–z) and its width across. */
   shoe: { outline: V2[]; w: number; area: number };
-  /** Swing from released to applied (rad, CCW), the drop of the foot point over the stroke (in) and the horizontal foot arm (hinge to foot). */
+  /** Swing from released to applied (rad, CCW), the drop of the foot point over the stroke (in) and the horizontal foot arm (pin to foot). */
   theta: number;
   footDrop: number;
   aF: number;
@@ -165,8 +177,8 @@ export interface BrakeGeom {
   ratioRev: number;
   ratioCrit: number;
   critical: 'forward' | 'reverse';
-  /** Hinge hardware: x range and thickness (the box lies on the knee top, flat), length across. */
-  hinge: { x0: number; x1: number; z0: number; z1: number; len: number; leaf: number };
+  /** Pull-pin pivot: pin diameter and length, the slot (y range of the tongue and slot, outboard and inboard ear thicknesses), edge distances of the pin hole (to the tongue stack's top and bottom, ear top and bottom). */
+  pivot: { dia: number; len: number; yTongue: [number, number]; ySlot: [number, number]; earOut: number; earIn: number; zTongueTop: number; zTongueBot: number; edgeTongueUp: number; edgeTongueDown: number; edgeEarUp: number; edgeEarDown: number; slotEndX: number; blind: number };
   /** Bungee: eye on the flap (surface point, applied), transom anchor (x, y, z), cord lengths released / applied (3-D), cord tension released / applied, and the moment arm data. */
   bungee: { sEye: number; E: V2; Erel: V2; A: [number, number, number]; lenRel: number; lenApp: number; tRel: number; tApp: number; rate: number; fRel: V2; fApp: V2; mRel: number; mApp: number };
   /** Outrigger (knee), plan outline in (y, z) for the left side, x range, leg, arm; the rail, the backer and the bolt pattern. */
@@ -209,17 +221,28 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
   const tf = p.brakeFlapThickIn;
   const c = Math.max(...top.map((q) => dot2(q, v))) + p.brakeShoeBlockIn;
   const topZ = (x: number) => (c + tf - v[0] * x) / v[1];
-  const xh = r + p.brakeHingeAheadIn;
-  const H: V2 = [xh, topZ(xh)];
-  const xf = L.xRear - p.brakeFootBehindTransomIn;
+  // Pivot (D-65): the pin axis lies in the middle of the stack (flap tongue + pivot block on it), so it sits `hPin` below the flap's top surface.
+  const kneeRearX = Math.max(r + p.brakePivotAheadIn, SIGN_X_MAX_IN); // the knee's rear face: ahead of the tire and of the sign zone
+  const xp = kneeRearX + p.brakePivotEndIn; // the pin axis, `brakePivotEndIn` of oak ahead of the knee's rear face
+  const P: V2 = [xp, topZ(xp)];
+  const blockT = p.brakePivotBlockIn;
+  const hPin = (tf - blockT) / 2;
+  const H: V2 = [P[0] - hPin * v[0], P[1] - hPin * v[1]];
+  const xh = H[0];
+  const xEnd = L.xRear - p.brakeFlapEndBehindTransomIn; // the foot tread ends at the transom face (D-65)
+  const xf = xEnd + p.brakeFootPadLengthIn / 2; // the foot point: the middle of the tread
   const F: V2 = [xf, topZ(xf)];
-  const xEnd = xf - p.brakeFootPadLengthIn / 2;
-  const s0 = (HINGE_GAP_IN + tf * Math.sin(sigma)) / Math.cos(sigma); // the gap is measured at the underside corner, which the sloping board's square end brings forward
-  const s1 = (xh - xEnd) / Math.cos(sigma);
+  const s0 = -p.brakePivotEndIn / Math.cos(sigma); // the tongue reaches this far past the pin
+  const s1 = (P[0] - xEnd) / Math.cos(sigma);
   const bw = p.brakeFlapWidthIn;
   const sMid = (s0 + s1) / 2;
-  const bc: V2 = [H[0] + sMid * u[0] - (tf / 2) * v[0], H[1] + sMid * u[1] - (tf / 2) * v[1]];
+  const bc: V2 = [P[0] + sMid * u[0] - (tf / 2) * v[0], P[1] + sMid * u[1] - (tf / 2) * v[1]];
   const board = { s0, s1, len: s1 - s0, thick: tf, w: bw, c: bc };
+  const wTongue = Math.min(bw, p.brakePivotTongueIn);
+  const sShoulder = (xp - kneeRearX) / Math.cos(sigma) + SHOULDER_CLEAR_IN;
+  const sPadC = dot2(sub(C, P), u);
+  const sFull = Math.max(sShoulder + 2, sPadC - p.brakePadLengthIn / 2 - 0.5);
+  const plan = { wTongue, sShoulder, sFull, blockT, blockLen: p.brakePivotEndIn + sShoulder, hPin };
 
   // Shoe block: between the pad's top arc and the board's underside plane, with vertical ends.
   const underZ = (x: number) => (c - v[0] * x) / v[1];
@@ -252,23 +275,19 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
   const yFace = L.hwC + L.side;
   const railT = p.railThicknessIn;
   const yRailIn = yFace - railT;
-  const hl = p.brakeHingeLengthIn;
   const y: BrakeY = {
     wheel: yW, tireIn: yW - tw / 2, tireOut: yW + tw / 2,
-    flap: [yW - bw / 2, yW + bw / 2], hinge: [yW - hl / 2, yW + hl / 2], pad: [yW - padW / 2, yW + padW / 2],
+    flap: [yW - bw / 2, yW + bw / 2], tongue: [yW - wTongue / 2, yW + wTongue / 2], pad: [yW - padW / 2, yW + padW / 2],
     face: yFace, railIn: yRailIn, backerIn: yRailIn - p.brakeBackerThickIn,
     eye: yW - bw / 2 + EYE_INSET_IN, anchor: yFace - p.brakeBungeeAnchorInsetIn,
   };
 
-  // ── Hinge hardware (flat on the knee top; its flap leaf hovers a hair over the board) ──
-  const leaf = p.brakeHingeLeafIn;
-  const hinge = { x0: xh - leaf, x1: xh + leaf, z0: H[1], z1: H[1] + HINGE_LEAF_T_IN, len: hl, leaf };
 
   // ── Bungee: eye on the flap's rear end (inboard edge), cord up to an eye screw in the rear transom's aft face near its outer corner. (The gunwale's outer face is the
   //    sign zone, D-57 item 9, and the knee stays ahead of it, so nothing of the brake is on the side above the rail.) ──
-  const xe = xEnd + EYE_INSET_IN;
+  const xe = xEnd - EYE_LIFT_IN; // the ring of the eye in the flap's rear end face (D-65: the flap itself ends at the transom face)
   const sEye = (xh - xe) / Math.cos(sigma);
-  const E: V2 = [xe, topZ(xe) + EYE_LIFT_IN];
+  const E: V2 = [xe, topZ(xEnd) - tf / 2];
   const Erel = rot2(E, H, -theta);
   const A: [number, number, number] = [L.xRear - EYE_LIFT_IN, y.anchor, L.sideTop - p.brakeBungeeAnchorBelowTopIn];
   const len3 = (e: V2) => Math.hypot(A[0] - e[0], A[1] - y.eye, A[2] - e[1]);
@@ -285,14 +304,25 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
   // ── Mount: knee on the hull's outer face over the rail, bolted through the rail into the backer ──
   const zt = L.railTop;
   const zb = L.railTop - p.railDepthIn;
-  const kx0 = xh, kx1 = xh + p.brakeKneeDepthIn;
+  const kx0 = kneeRearX, kx1 = kneeRearX + p.brakeKneeDepthIn;
   const legT = p.brakeKneeLegIn, armT = p.brakeKneeArmIn;
   const yOut = y.flap[1];
-  const zTop = H[1];
+  const zTop = P[1] + blockT; // the knee top stands at the top of the pivot block (D-65)
   const zLeg = L.railTop + L.chineH;
   const zArmBot = zTop - armT;
   const poly: V2[] = [[yFace, zb], [yFace + legT, zb], [yFace + legT, zLeg], [yOut, zArmBot], [yOut, zTop], [yFace, zTop]];
   const knee = { x0: kx0, x1: kx1, poly, legT, armT, zLeg, zArmBot, zTop, zBot: zb, yOut, area: polyArea(poly) };
+  // ── Pull-pin pivot (D-65): the knee arm is slotted from its rear face; the flap's tongue (with the pivot block on it) enters the slot and the pin goes through ear, tongue, ear. ──
+  const slotHalf = wTongue / 2 + p.brakePivotSlotClearIn;
+  const ySlot: [number, number] = [yW - slotHalf, yW + slotHalf];
+  const earOut = yOut - ySlot[1];
+  const earIn = ySlot[0] - yFace;
+  const pinDia = p.brakePivotPinDiaIn;
+  const pivot = {
+    dia: pinDia, len: earOut + (ySlot[1] - ySlot[0]) + PIN_BLIND_IN + PIN_STICKOUT_IN, yTongue: y.tongue, ySlot, earOut, earIn,
+    zTongueTop: P[1] + blockT, zTongueBot: P[1] - tf, edgeTongueUp: blockT + hPin, edgeTongueDown: tf - hPin, edgeEarUp: zTop - H[1], edgeEarDown: H[1] - zArmBot,
+    slotEndX: xp + p.brakePivotEndIn + p.brakePivotSlotClearIn, blind: PIN_BLIND_IN,
+  };
   const rail = { zb, zt, t: railT };
   const bd = p.brakeMountBoltDiaIn;
   const cols = Math.max(1, Math.round(p.brakeMountBoltColumns)), rows = Math.max(1, Math.round(p.brakeMountBoltRows));
@@ -317,12 +347,50 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
   const chock = { psi, tangent, xToe, xBack, height: hC, width: p.brakeChockWidthIn, poly: cpoly, eyeX, kneeEye: [eyeX, zb] as V2, chockEye: [xBack, hC] as V2, heelAngle: Math.atan2(hC, xBack - xToe) };
 
   if (!why && !(ratioCrit > 0)) why = 'no lever ratio';
-  if (!why && !(H[0] > r + 0.2)) why = 'the hinge is not ahead of the tire';
+  if (!why && !(H[0] > r + 0.2)) why = 'the pivot pin is not ahead of the tire';
   if (!why && !(xEnd < H[0] - 4)) why = 'the flap is too short';
   const ok = !why;
   return {
     ok, why, r, O, y, alpha, delta, C, n, t, pad: { w: padW, thick: tp, length: p.brakePadLengthIn, top, bot },
-    sigma, u, v, c, H, xh, F, xEnd, board, shoe, theta, footDrop, aF, mN, mT, ratioFwd, ratioRev, ratioCrit, critical: ratioFwd <= ratioRev ? 'forward' : 'reverse',
-    hinge, bungee, knee, rail, backer, bolts, chock,
+    sigma, u, v, c, H, xh, P, F, xEnd, board, plan, shoe, theta, footDrop, aF, mN, mT, ratioFwd, ratioRev, ratioCrit, critical: ratioFwd <= ratioRev ? 'forward' : 'reverse',
+    pivot, bungee, knee, rail, backer, bolts, chock,
   };
+}
+
+/** Half-width (in) of the Shaper-cut flap at station `s` (along the board from the pin, toward the foot): the tongue, then a smooth S-curved flare to the full width over the tire. */
+export function flapHalfWidth(g: Pick<BrakeGeom, 'plan' | 'board'>, s: number): number {
+  const { wTongue, sShoulder, sFull } = g.plan;
+  const full = g.board.w / 2, tongue = wTongue / 2;
+  if (s <= sShoulder) return tongue;
+  if (s >= sFull) return full;
+  const t = (s - sShoulder) / (sFull - sShoulder);
+  return tongue + (full - tongue) * t * t * (3 - 2 * t);
+}
+
+/**
+ * The flap's plan outline in the board's own frame (x forward along the board, centered on the board's middle; y across, 0 on the tire's center line; CCW): the tongue nose with small
+ * corner radii, the S-curved flare, the full width over the tire and the foot end with larger corner radii. This is the Shaper Origin cut line (D-65); the thickness is the board thickness.
+ */
+export function flapOutline(g: Pick<BrakeGeom, 'plan' | 'board'>): V2[] {
+  const { s0, s1, len } = g.board;
+  const sMid = (s0 + s1) / 2;
+  const X = (s: number) => -(s - sMid); // station -> local x (forward = toward the pivot)
+  const rn = Math.min(FLAP_NOSE_CORNER_IN, g.plan.wTongue / 2 - 0.01), rr = Math.min(FLAP_REAR_CORNER_IN, g.board.w / 2 - 0.01);
+  const N = 24;
+  const sides: Array<{ s: number; w: number }> = [];
+  // stations along one side from the rear straight edge to the nose straight edge
+  const sEdgeR = s1 - rr, sEdgeN = s0 + rn;
+  for (let i = 0; i <= N; i++) { const s = sEdgeR + ((sEdgeN - sEdgeR) * i) / N; sides.push({ s, w: flapHalfWidth(g, s) }); }
+  const arc = (cx: number, cy: number, r: number, a0: number, a1: number, n = 6): V2[] => Array.from({ length: n + 1 }, (_, i) => { const a = a0 + ((a1 - a0) * i) / n; return [cx + r * Math.cos(a), cy + r * Math.sin(a)] as V2; });
+  const pts: V2[] = [];
+  const wR = flapHalfWidth(g, s1), wN = flapHalfWidth(g, s0);
+  // right side (y < 0) rear -> front, CCW starts at the rear-right corner
+  pts.push(...arc(X(s1 - rr) , -(wR - rr), rr, Math.PI, 1.5 * Math.PI)); // rear-right corner: from the rear edge (x = rear) to the right side
+  for (const q of sides) pts.push([X(q.s), -q.w]);
+  pts.push(...arc(X(s0 + rn), -(wN - rn), rn, 1.5 * Math.PI, 2 * Math.PI)); // nose-right corner
+  pts.push(...arc(X(s0 + rn), wN - rn, rn, 0, 0.5 * Math.PI)); // nose-left corner
+  for (const q of [...sides].reverse()) pts.push([X(q.s), q.w]);
+  pts.push(...arc(X(s1 - rr), wR - rr, rr, 0.5 * Math.PI, Math.PI)); // rear-left corner
+  void len;
+  return pts.filter((q, i) => { const o = pts[(i + pts.length - 1) % pts.length]; return Math.hypot(q[0] - o[0], q[1] - o[1]) > 1e-6; });
 }

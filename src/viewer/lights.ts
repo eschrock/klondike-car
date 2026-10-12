@@ -1,5 +1,5 @@
 /**
- * Phase 3c-5: the lamps, reflectors and the brake hinge, drawn as the real things instead of boxes. Each builder returns one merged geometry (one group per material, in the order of
+ * Phase 3c-5: the lamps and reflectors, drawn as the real things instead of boxes. Each builder returns one merged geometry (one group per material, in the order of
  * `materials`) that stays inside the part's bounding box (the model part is only a box; mass, BOM and overlap tests are unchanged).
  *
  *  - Front headlight (`front-light`): a rounded housing (a lathe about the forward axis, a little wider than tall), a chrome bezel ring and a domed warm-white lens that glows faintly
@@ -7,7 +7,6 @@
  *  - Rear light (`rear-light`): a small dark housing and a red lens with a slight glow, facing -x.
  *  - Side reflectors (`reflector`): a colored housing with a faceted prism face (cube-corner hexagons, drawn on a canvas) and a little clear-coat sheen. Amber at the front, red at
  *    the rear, picked from the part name; the face looks outward.
- *  - The brake hinge (`brake-hinge`): two leaves with screw heads and a five-knuckle barrel, instead of a bright flat plate.
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -20,7 +19,7 @@ export interface LightBuild {
 }
 
 /** Looks that get a custom mesh. */
-export type LightKind = 'lamp' | 'taillight' | 'reflector-amber' | 'reflector-red' | 'hinge' | 'socket';
+export type LightKind = 'lamp' | 'taillight' | 'reflector-amber' | 'reflector-red' | 'socket';
 
 /** Which custom mesh (if any) a part gets. */
 export function lightKindOf(part: Part): LightKind | null {
@@ -28,7 +27,6 @@ export function lightKindOf(part: Part): LightKind | null {
   if (part.id === 'front-light') return 'lamp';
   if (part.id === 'rear-light') return 'taillight';
   if (part.partNo === 'reflector') return /\bred\b/i.test(part.name) ? 'reflector-red' : 'reflector-amber';
-  if (part.partNo === 'brake-hinge') return 'hinge';
   if (part.partNo === 'handle-socket') return 'socket';
   return null;
 }
@@ -215,37 +213,6 @@ export function reflectorMesh(size: Vec3, kind: 'amber' | 'red', outward: 1 | -1
   face.translate(0, outward * (T / 2 + 0.004), 0);
   if (!face.getAttribute('normal')) face.computeVertexNormals();
   return { geometry: merge([body, face]), materials: [reflectorBody(kind), reflectorFace(kind)] };
-}
-
-// ── brake hinge ──
-const screwMat = () => mat('hinge:screw', () => new THREE.MeshStandardMaterial({ color: 0x3b4046, roughness: 0.5, metalness: 0.8, ...SOLID }));
-const stainless = () => mat('hinge:steel', () => new THREE.MeshStandardMaterial({ color: 0x6d737a, roughness: 0.48, metalness: 0.85, ...SOLID }));
-
-/** `size` is the open hinge: x across both leaves, y along the barrel, z the leaf thickness. */
-export function hingeMesh(size: Vec3): LightBuild {
-  const [W, Ln, T] = size;
-  const knuckleR = Math.max(0.1, T * 1.2);
-  const leaves: THREE.BufferGeometry[] = [];
-  const screws: THREE.BufferGeometry[] = [];
-  const leafW = W / 2 - knuckleR * 0.9;
-  for (const s of [-1, 1]) {
-    leaves.push(rawGeo(roundedBoxMesh([leafW, Ln, T], Math.min(0.03, T * 0.3), 3), [s * (knuckleR * 0.9 + leafW / 2), 0, 0]));
-    for (const y of [-Ln * 0.32, 0, Ln * 0.32]) {
-      const sc = new THREE.CylinderGeometry(0.1, 0.085, 0.035, 12);
-      sc.rotateX(Math.PI / 2);
-      sc.translate(s * (knuckleR + leafW * 0.55), y, T / 2 + 0.012);
-      screws.push(sc);
-    }
-  }
-  // Five knuckles with hair gaps.
-  const n = 5, gap = 0.04, kl = (Ln - gap * (n - 1)) / n;
-  const knuckles: THREE.BufferGeometry[] = [];
-  for (let i = 0; i < n; i++) {
-    const k = new THREE.CylinderGeometry(knuckleR, knuckleR, kl, 16); // axis along y
-    k.translate(0, -Ln / 2 + kl / 2 + i * (kl + gap), 0);
-    knuckles.push(k);
-  }
-  return { geometry: merge([merge([...leaves, ...knuckles], false), merge(screws, false)]), materials: [stainless(), screwMat()] };
 }
 
 // ── aluminum handle socket (3c visual round 2, review SHOULD 7) ──

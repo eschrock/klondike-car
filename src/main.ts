@@ -7,6 +7,7 @@ import { h } from './ui/dom';
 import { Viewer } from './viewer/viewer';
 import { buildTruckBed } from './truck/bed';
 import { checkTruckFit, computeFeasibleWindows, configParts, type CartView, type FitResult, type FitWindows } from './truck/fit';
+import { TRANSPORT_VIEW } from './model/removable';
 import type { Part } from './model/types';
 import { mountParamsPanel } from './ui/params-panel';
 import { mountRightPanel } from './ui/right-panel';
@@ -65,7 +66,7 @@ const viewer = new Viewer($('viewer'));
 
 // View-only articulation: not a design parameter, never persisted.
 // `rider`/`cargo`/`removed` are consumed by the Phase 1 model (missing fields = defaults).
-const view: CartView = { steerDeg: 0, rider: 'none', cargo: false, removed: false, seat: 'installed' }; // rider default follows the mode (setMode)
+const view: CartView = { steerDeg: 0, rider: 'none', cargo: false, removed: false, seat: 'installed', handle: 'up', brakes: true, lights: true, chocks: false }; // rider default follows the mode (setMode)
 const build = (p: ReturnType<typeof store.get>, v: CartView): Part[] => buildModel(p, v as ViewState);
 // Steering preview (D-56): turns the front axle, wheels, tongue and bridle about the kingpin. Range tied to p.steerLockDeg; never persisted, never changes the design.
 const steer = h('input', { type: 'range', min: '-20', max: '20', step: '0.5', value: '0', 'aria-label': 'Steering preview, front axle angle in degrees' });
@@ -102,26 +103,51 @@ const setRiderShown = (v: boolean) => {
   view.cargo = v;
 };
 viewer.addToolbarControl(riderLabel);
+// ── View toggles (D-57, D-65). Simple shows only Transport mode (and Show rider); the individual toggles are Advanced only (`adv-only`). ──
+// Transport mode is a meta-control: it shows the truck-fit "transport" configuration (TRANSPORT_VIEW: brakes, lights and chocks off, handle parked, seat back flat; the tongue and the signs
+// stay on). While it is on the individual toggles show those states and are locked; turning it off brings back what they were set to.
+let transport = false;
+const toggles = {} as Record<'seat' | 'handle' | 'brakes' | 'lights' | 'chocks', HTMLInputElement>;
+/** What the viewer builds: the individual toggles, or the transport configuration over them. */
+const effectiveView = (): CartView => (transport ? { ...view, ...TRANSPORT_VIEW, brakes: true, lights: true, chocks: false } : view);
+const syncToggles = () => {
+  const e = effectiveView();
+  const shown = { seat: e.seat === 'stowed', handle: e.handle === 'parked', brakes: e.brakes !== false && !e.removed, lights: e.lights !== false && !e.removed, chocks: !!e.chocks && !e.removed };
+  for (const k of Object.keys(toggles) as Array<keyof typeof toggles>) {
+    toggles[k].checked = shown[k];
+    toggles[k].disabled = transport;
+    toggles[k].closest('label')?.classList.toggle('is-locked', transport);
+  }
+};
+const addToggle = (key: keyof typeof toggles, label: string, title: string, on: (v: boolean) => void) => {
+  const l = checkbox(label, title, false, (v) => { on(v); render(); }, 'adv-only');
+  toggles[key] = l.querySelector('input') as HTMLInputElement;
+  viewer.addToolbarControl(l);
+};
+const transportCb = checkbox('Transport mode', 'Show the sled as it rides in the truck: the brake flaps, the lights and the wheel chocks off, the handlebow parked and the seat back flat. The tongue and the signs stay on. This is the same set the Truck fit tab uses (D-65). View only.', false, (v) => {
+  transport = v;
+  render();
+});
+viewer.addToolbarControl(transportCb);
 // Cargo mode (D-53, D-57): the seat back flips flat onto the deck and the two cushions lie in the storage box. View only; with "Show rider & cargo" on, the payload block shows on the bed.
-viewer.addToolbarControl(
-  checkbox('Seat flat (cargo mode)', 'Flip the seat back forward onto the deck and lay the seat cushion and the back pad flat inside the storage box, leaving a flat cargo bed (D-57). With "Show rider & cargo" on, the cargo payload sits on the bed. View only.', false, (v) => {
-    view.seat = v ? 'stowed' : 'installed';
-    render();
-  }),
-);
+addToggle('seat', 'Seat flat', 'Flip the seat back forward onto the deck and lay the seat cushion and the back pad flat inside the storage box, leaving a flat cargo bed (D-57). With "Show rider & cargo" on, the cargo payload sits on the bed. View only.', (v) => {
+  view.seat = v ? 'stowed' : 'installed';
+});
 // Handlebow parked (D-57): the posts drop to the second pin position and the bow rests just above the rear side top.
-viewer.addToolbarControl(
-  checkbox('Handle parked', 'Drop the rear handlebow to its second pin position, resting just above the rear side top, as when it is not being pushed (D-57). View only.', false, (v) => {
-    view.handle = v ? 'parked' : 'up';
-    render();
-  }),
-);
-viewer.addToolbarControl(
-  checkbox('Transport config', 'Remove the removable parts (rear handle, seat back, tongue, bridle rope, ornaments; D-9)', false, (v) => {
-    view.removed = v;
-    render();
-  }, 'adv-only'),
-);
+addToggle('handle', 'Handle parked', 'Drop the rear handlebow to its second pin position, resting just above the rear side top, as when it is not being pushed (D-57). View only.', (v) => {
+  view.handle = v ? 'parked' : 'up';
+});
+// Removable kits (D-65): the brake flaps (the knees and backers stay on the rails) and the lights.
+addToggle('brakes', 'Brakes', 'Show the removable brake parts: the flaps, pivot blocks and pins, shoe blocks and pads, foot treads and return cords. Off hides them (the knees and backers stay bolted on). View only.', (v) => {
+  view.brakes = v;
+});
+addToggle('lights', 'Lights', 'Show the front lamp and its clip and the rear light and its clip. Off hides them. View only.', (v) => {
+  view.lights = v;
+});
+// The wheel chocks hang under the rear knees on cords; they ride in the box when the sled is carried, so the drawing hides them until this toggle asks (3c-5, D-65).
+addToggle('chocks', 'Wheel chocks', 'Show the wheel chocks parked in front of the rear tires (they are carried in the box when the sled is on the move). View only.', (v) => {
+  view.chocks = v;
+});
 const exitTruck = h('button', { type: 'button', hidden: '' }, 'Exit truck view');
 exitTruck.addEventListener('click', () => {
   truckKey = null;
@@ -155,7 +181,7 @@ const render = () => {
       empty: build(p, { steerDeg: 0, rider: 'none', cargo: false }),
       operating: build(p, { steerDeg: 0, rider: 'operating', cargo: true }),
       goal: build(p, { steerDeg: 0, rider: 'goal', cargo: true }),
-      transport: build(p, { steerDeg: 0, rider: 'none', cargo: false, removed: true }),
+      transport: build(p, { steerDeg: 0, rider: 'none', cargo: false, ...TRANSPORT_VIEW }),
     };
     specFacts = { emptyLb: totalMass(summary.empty), transportLb: totalMass(summary.transport) };
     right.update(
@@ -179,7 +205,8 @@ const render = () => {
     viewer.highlight([...new Set(tc.colliding.map((q) => q.partId))], '#ff3b30');
   } else {
     viewer.setTruck(null);
-    if (!sim?.active) viewer.update(build(p, view.removed ? { ...view, steerDeg: 0 } : view)); // the transport config has the axle turned straight
+    syncToggles();
+    if (!sim?.active) viewer.update(build(p, transport ? { ...effectiveView(), steerDeg: 0 } : view)); // the transport config has the axle turned straight
     viewer.highlight([]);
   }
 };
@@ -247,6 +274,9 @@ function setMode(next: Mode, opts: { fromSimple?: boolean; persist?: boolean } =
   app.classList.toggle('has-back', !backBar.hidden);
   viewer.setSimpleMode(mode === 'simple');
   if (!riderTouched) setRiderShown(false);
+  if (mode === 'simple') { // D-65: Simple has only Transport mode; the Advanced toggles go back to their defaults so the picture matches the controls
+    view.seat = 'installed'; view.handle = 'up'; view.brakes = true; view.lights = true; view.chocks = false;
+  }
   if (mode === 'simple') {
     // Leave anything that takes over the viewer (simulation, truck placement); the design itself is untouched.
     right.showTab('analysis');

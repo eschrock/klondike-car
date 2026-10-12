@@ -1,18 +1,18 @@
 /**
  * Braking checks for the handler's STEP BRAKE (Phase 3c-4b, D-57 item 8; it replaced the D-55 steel drag bar): the foot-lever ratio DERIVED from the flap geometry
  * (`brakeGeometry`, model/brake-layout.ts), the FOOT force to hold the loaded sled on the design slope, how steep a grade the flaps stop it on at the limit foot force, the
- * rear-only traction (info), the members (flap, shoe block and pad; hinge and screws; knee, mounting bolts and backer; return bungee), the wheel-chock parking hold, a
+ * rear-only traction (info), the members (flap, shoe block and pad; pivot pin, ears and block; knee, mounting bolts and backer; return bungee), the wheel-chock parking hold, a
  * foot-stomp abuse check, the push-handle sockets and a sweep of the moving flap group over its stroke.
  *
- * Load path (all forces in lbf, moments in lbf·in, every row is hand-checkable from its `how` string). One flap, forces ON THE FLAP, moments about the hinge pin H, M = rz·fx − rx·fz:
+ * Load path (all forces in lbf, moments in lbf·in, every row is hand-checkable from its `how` string). One flap, forces ON THE FLAP, moments about the pivot pin H, M = rz·fx − rx·fz:
  *   pad: N along the tread normal n at the contact C and friction σ μ N along the forward tangent t (σ = +1 sled rolling forward);   bungee: B at its eye E;   foot: F straight down
- *   at the foot point.    F · a_F = N (m_N + σ μ m_T) + M_B     (a_F = horizontal hinge-to-foot distance; m_N, m_T = moments of a unit normal / friction force about H, brake-layout.ts)
- *   hinge reaction on the flap  R = −(N n + σ μ N t + B + F)  and the force on the knee is −R.
+ *   at the foot point.    F · a_F = N (m_N + σ μ m_T) + M_B     (a_F = horizontal pin-to-foot distance; m_N, m_T = moments of a unit normal / friction force about H, brake-layout.ts)
+ *   pivot reaction on the flap  R = −(N n + σ μ N t + B + F)  and the force on the knee is −R (D-65: the pull pin, in double shear).
  * Hold: W sinθ / μ = N_total is shared by two flaps (one foot each); members are checked at λ × that (a hard stomp / jerk on a parked sled, `brakeLoadFactor`).
  */
 import { obbOverlap, partOBB, partOBBs, worldAABB } from '../model/bounds';
 import { atPose, brakeGeometry, buildBrakeAt, type BrakeGeom, type V2 } from '../model/brake';
-import { HINGE_GAP_IN, HINGE_LEAF_T_IN, WITHDRAWAL_WET_CM, dot2, momentY, norm2, pointPolyGap, sub } from '../model/brake-layout';
+import { SHOULDER_CLEAR_IN, WITHDRAWAL_WET_CM, dot2, flapHalfWidth, momentY, norm2, pointPolyGap, sub } from '../model/brake-layout';
 import { SIGN_X_MAX_IN } from '../model/body';
 import { makeCtx } from '../model/build-utils';
 import { handleGeometry, POST_RELIEF, SOCKET_ACCESS_HOLE_IN, type HandleGeom } from '../model/handle';
@@ -53,7 +53,7 @@ const SIGMAS: Array<1 | -1> = [1, -1];
 /** Length of the squash chord of the tire against the chock face (in): a patch about an inch long under a few hundred pounds. */
 const SQUASH_CHORD_IN = 1;
 
-/** Allowable stresses for the 316 bolts, screws and hinge pin (yield / steel SF; shear 0.577). */
+/** Allowable stresses for the 316 bolts, screws and the pivot pin (yield / steel SF; shear 0.577). */
 function allow(ctx: Ctx) {
   const { p } = ctx;
   const fb = p.ss316BoltYieldPsi / p.steelSafetyFactor;
@@ -68,9 +68,9 @@ const screwWithdrawal = (p: Ctx['p'], D: number, pen: number) => 1380 * p.oakSpe
 /** Loads on ONE flap for a pad normal force `nFlap` and rolling direction σ. */
 export interface Loads {
   W: number; down: number; mu: number; sigma: 1 | -1; lam: number;
-  /** Pad normal force on this flap, and the foot force (at equilibrium, hinge friction ignored). */
+  /** Pad normal force on this flap, and the foot force (at equilibrium, pin friction ignored). */
   nFlap: number; foot: number;
-  /** Forces ON THE FLAP (x, z): pad, pad friction, bungee, foot; the force on the KNEE at the hinge (−R) and its size. */
+  /** Forces ON THE FLAP (x, z): pad, pad friction, bungee, foot; the force on the KNEE at the pivot pin (−R) and its size. */
   fN: V2; fF: V2; fB: V2; fFoot: V2; Rk: V2; Rmag: number;
 }
 
@@ -108,8 +108,8 @@ export function loadsFromFoot(ctx: Ctx, g: BrakeGeom, F: number): Loads {
 }
 
 const loadText = (L: Loads, g: BrakeGeom) => L.lam === 0
-  ? `Stomp F = ${f(L.foot)} lbf on ONE flap's foot area (hinge-to-foot ${f(g.aF, 2)}") with the tire dragging ${L.sigma > 0 ? 'forward' : 'backward'}: pad force N = (F a_F − M_B) η / (m_N ${L.sigma > 0 ? '+' : '−'} μ|m_T|) = ${f(L.nFlap)} lbf; force on the knee at the hinge ${f(L.Rmag)} lbf (x ${f(L.Rk[0])}, z ${f(L.Rk[1])})`
-  : `Hold load W·sinθ/μ = ${f(L.W)} × sin θ / ${f(L.mu, 2)} = ${f(L.down / L.mu)} lbf shared by two flaps = ${f(L.down / L.mu / 2)} each; × λ ${f(L.lam, 2)} = N ${f(L.nFlap)} lbf per flap; foot force at that load ${f(L.foot)} lbf (F a_F = N (m_N ${L.sigma > 0 ? '+' : '−'} μ|m_T|) + M_B with m_N ${f(g.mN, 2)}, m_T ${f(g.mT, 2)}, M_B ${f(g.bungee.mApp, 1)}); force on the knee at the hinge ${f(L.Rmag)} lbf (x ${f(L.Rk[0])}, z ${f(L.Rk[1])})`;
+  ? `Stomp F = ${f(L.foot)} lbf on ONE flap's foot area (pin-to-foot ${f(g.aF, 2)}") with the tire dragging ${L.sigma > 0 ? 'forward' : 'backward'}: pad force N = (F a_F − M_B) η / (m_N ${L.sigma > 0 ? '+' : '−'} μ|m_T|) = ${f(L.nFlap)} lbf; force on the knee at the pivot pin ${f(L.Rmag)} lbf (x ${f(L.Rk[0])}, z ${f(L.Rk[1])})`
+  : `Hold load W·sinθ/μ = ${f(L.W)} × sin θ / ${f(L.mu, 2)} = ${f(L.down / L.mu)} lbf shared by two flaps = ${f(L.down / L.mu / 2)} each; × λ ${f(L.lam, 2)} = N ${f(L.nFlap)} lbf per flap; foot force at that load ${f(L.foot)} lbf (F a_F = N (m_N ${L.sigma > 0 ? '+' : '−'} μ|m_T|) + M_B with m_N ${f(g.mN, 2)}, m_T ${f(g.mT, 2)}, M_B ${f(g.bungee.mApp, 1)}); force on the knee at the pivot pin ${f(L.Rmag)} lbf (x ${f(L.Rk[0])}, z ${f(L.Rk[1])})`;
 
 // ── foot-lever ratio, foot force, slowing, traction ─────────────────────────────────────────────────────────
 
@@ -117,13 +117,13 @@ export function brakeRatio(ctx: Ctx): AnalysisCheck {
   const { p, L } = ctx;
   const g = brakeBundle(ctx).g;
   const toDeg = 180 / Math.PI;
-  const how = `Derived from the flap geometry, not assumed (D-57). The hinge pin is ${f(g.xh, 2)}" ahead of the axle (${f(p.brakeHingeAheadIn, 2)}" ahead of the tire front) and ${f(g.H[1], 2)}" off the ground; the pad is centered ${f(g.alpha * toDeg, 0)}° behind the top of the tire (a ${f(g.pad.length, 1)}" pad at ${f(g.C[0], 2)}", ${f(g.C[1], 2)}"); the foot point is ${f(g.aF, 2)}" behind the pin, ${f(Math.abs(g.F[0] - L.xRear), 2)}" ${g.F[0] < L.xRear ? 'behind' : 'ahead of'} the rear transom face. Moments about the pin: a unit pad force n at C gives m_N = ${f(g.mN, 2)} in, a unit friction force along the tread gives m_T = ${f(g.mT, 2)} in, so ratio N_pad / F_foot = a_F / (m_N ± μ m_T) = ${f(g.aF, 2)} / (${f(g.mN, 2)} ± ${f(p.brakePadMu, 2)} × ${f(Math.abs(g.mT), 2)}) = ${f(g.ratioFwd, 2)}:1 rolling forward, ${f(g.ratioRev, 2)}:1 backward (friction is the small second term: the line of the pad force and the tread pass close to the pin, so there is no servo effect). Stepping on the foot area swings the flap ${f(g.theta * toDeg, 1)}° and drops it ${f(g.footDrop, 2)}".`;
+  const how = `Derived from the flap geometry, not assumed (D-57). The pivot pin is ${f(g.xh, 2)}" ahead of the axle (${f(p.brakePivotAheadIn, 2)}" ahead of the tire front) and ${f(g.H[1], 2)}" off the ground; the pad is centered ${f(g.alpha * toDeg, 0)}° behind the top of the tire (a ${f(g.pad.length, 1)}" pad at ${f(g.C[0], 2)}", ${f(g.C[1], 2)}"); the foot point is ${f(g.aF, 2)}" behind the pin, ${f(Math.abs(g.F[0] - L.xRear), 2)}" ${g.F[0] < L.xRear ? 'behind' : 'ahead of'} the rear transom face. Moments about the pin: a unit pad force n at C gives m_N = ${f(g.mN, 2)} in, a unit friction force along the tread gives m_T = ${f(g.mT, 2)} in, so ratio N_pad / F_foot = a_F / (m_N ± μ m_T) = ${f(g.aF, 2)} / (${f(g.mN, 2)} ± ${f(p.brakePadMu, 2)} × ${f(Math.abs(g.mT), 2)}) = ${f(g.ratioFwd, 2)}:1 rolling forward, ${f(g.ratioRev, 2)}:1 backward (friction is the small second term: the line of the pad force and the tread pass close to the pin, so there is no servo effect). Average of the two directions ${f((g.ratioFwd + g.ratioRev) / 2, 2)}:1 (about 2:1, D-65: the flap ends at the transom face, so the foot point is ${f(g.aF, 2)}" from the pin, was 17.5"). Stepping on the foot area swings the flap ${f(g.theta * toDeg, 1)}° and drops it ${f(g.footDrop, 2)}".`;
   const details: Detail[] = [
     detail('ratio, rolling forward', g.ratioFwd, ':1', p.brakeLeverRatio, '>='),
     detail('ratio, rolling backward', g.ratioRev, ':1', p.brakeLeverRatio, '>='),
     detail('foot stroke, released to applied (drop of the foot area)', g.footDrop, 'in', p.brakeFootStrokeMaxIn, '<='),
     detail('foot area height above the ground, released', g.F[1] - g.footDrop, 'in', p.brakeFootHeightMaxIn, '<='),
-    detail('flap rear end reaches the transom face (behind it is positive)', L.xRear - g.xEnd, 'in', 0, '>='),
+    detail('flap and foot tread stick out behind the rear transom face (D-65: none)', L.xRear - g.xEnd, 'in', 0, '<='),
   ];
   const ok: Status = g.ok ? [judge(g.ratioCrit, p.brakeLeverRatio, '>=', 0.25), ...details.slice(2).map((d) => judge(d.value, d.limit, d.sense, 0))].reduce((x, y) => worst(x, y)) : 'fail';
   return singleCheck({
@@ -132,7 +132,7 @@ export function brakeRatio(ctx: Ctx): AnalysisCheck {
   });
 }
 
-/** Foot force (lbf) per foot to hold a downslope pull `down` at pad friction `mu`, both flaps pressed, sled rolling in direction σ, with the hinge efficiency. */
+/** Foot force (lbf) per foot to hold a downslope pull `down` at pad friction `mu`, both flaps pressed, sled rolling in direction σ, with the pivot efficiency. */
 export function footForce(ctx: Ctx, g: BrakeGeom, down: number, mu: number, sigma: 1 | -1): number {
   const { p } = ctx;
   const nFlap = down / (2 * mu);
@@ -272,15 +272,26 @@ function flapEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
   const fric = L.mu * L.nFlap;
   const screwLat = p.woodScrewLateralLbf;
   const padScrewLat = screwLat * (0.164 / 0.19); // #8 against the #10 value
+  // D-65: the Shaper-cut fender narrows to a tongue at the pivot. The moment is the pin's transverse reaction times the station s (zero at the pin, the pad's M at s_C), the section the
+  // flap alone (the glued block is not counted) at the width of the outline there: find the weakest station between the pin and the pad.
+  const Tpin = Math.abs(dot2([-L.Rk[0], -L.Rk[1]], g.v));
+  let sigTaper = 0, sAt = 0;
+  for (let st = 0.1; st <= sC + 1e-9; st += 0.1) {
+    const sg = (Tpin * st) / ((2 * flapHalfWidth(g, st) * b.thick ** 2) / 6);
+    if (sg > sigTaper) { sigTaper = sg; sAt = st; }
+  }
+  const tauTongue = (1.5 * Tpin) / (g.plan.wTongue * b.thick);
   const ds: Detail[] = [
     detail('flap bending at the pad (oak, 5/4 board)', sig, 'psi', al.oakBend, '<='),
+    detail(`flap bending, weakest station of the tapered fender (${f(sAt, 1)}" from the pin)`, sigTaper, 'psi', al.oakBend, '<='),
+    detail('flap shear in the tongue at the pivot (oak, tongue width, flap alone)', tauTongue, 'psi', al.oakShear, '<='),
     detail('flap shear between the pad and the foot (oak)', tau, 'psi', al.oakShear, '<='),
     detail('flap deflection at the foot (the overhang past the pad) against the foot stroke', defl, 'in', g.footDrop, '<='),
     detail('pad contact pressure (rubber on the tread)', press, 'psi', p.brakeLiningMaxPsi, '<='),
     detail('shoe block screws, pad friction in lateral shear (2 x #10, each)', fric / 2, 'lbf', screwLat, '<='),
     detail('pad screws, pad friction in lateral shear (2 x #8, each)', fric / 2, 'lbf', padScrewLat, '<='),
   ];
-  const how = `${loadText(L, g)}. Oak flap ${f(b.w, 2)}" × ${f(b.thick, 2)}": the foot (${f(tF)} lbf across the board) acts ${f(sF - sC, 1)}" past the pad, the bungee lifts back ${f(Math.abs(tB), 1)} lbf, so M at the pad = ${f(Mpad)} lbf·in (+ friction ${f(axial)} lbf × ${f(ecc, 2)}" off the center line), S = ${f(S, 3)} in³, σ = ${f(sig, 0)} psi (design ${f(al.oakBend, 0)}); τ = 1.5 V / A = ${f(tau, 0)} psi; foot-end deflection ${f(defl, 3)}" as a ${f(lo, 1)}" overhang (EI ${f(EI, 0)} lbf·in²). Pad ${f(g.pad.length, 1)}" × ${f(g.pad.w, 1)}" = ${f(padArea, 1)} in²: ${f(press, 1)} psi (limit ${f(p.brakeLiningMaxPsi, 0)}). The pad friction μN = ${f(fric)} lbf is held by two #10 screws up through the shoe block into the flap (glued too) and two #8 screws through the pad.`;
+  const how = `${loadText(L, g)}. Oak flap ${f(b.w, 2)}" × ${f(b.thick, 2)}" (full width): the foot (${f(tF)} lbf across the board) acts ${f(sF - sC, 1)}" past the pad, the bungee lifts back ${f(Math.abs(tB), 1)} lbf, so M at the pad = ${f(Mpad)} lbf·in (+ friction ${f(axial)} lbf × ${f(ecc, 2)}" off the center line), S = ${f(S, 3)} in³, σ = ${f(sig, 0)} psi (design ${f(al.oakBend, 0)}); τ = 1.5 V / A = ${f(tau, 0)} psi; foot-end deflection ${f(defl, 3)}" as a ${f(lo, 1)}" overhang (EI ${f(EI, 0)} lbf·in²). Tapered fender (D-65): ${f(g.plan.wTongue, 2)}" tongue at the pivot, S-curved flare to the full width by ${f(g.plan.sFull, 1)}" from the pin; the weakest station (the flap alone, M = pin reaction ${f(Tpin)} lbf × s over S = w(s) t²/6) is ${f(sAt, 1)}" from the pin at ${f(sigTaper, 0)} psi; shear in the tongue ${f(tauTongue, 0)} psi. Pad ${f(g.pad.length, 1)}" × ${f(g.pad.w, 1)}" = ${f(padArea, 1)} in²: ${f(press, 1)} psi (limit ${f(p.brakeLiningMaxPsi, 0)}). The pad friction μN = ${f(fric)} lbf is held by two #10 screws up through the shoe block into the flap (glued too) and two #8 screws through the pad.`;
   return governing(ds, how);
 }
 
@@ -288,36 +299,54 @@ export function brakeFlap(ctx: Ctx): AnalysisCheck {
   return members('brake-flap', 'Brake flap, shoe block and pad', ctx, (L, g) => flapEval(ctx, L, g), ['D-57', 'D-2']);
 }
 
-function hingeEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
+/** NDS-style screw withdrawal strength is `screwWithdrawal`; the pivot checks below are hand-checkable from the layout (pivot block, ears, pin). */
+function pivotEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
   const { p } = ctx;
+  const al = allowables(ctx);
   const a = allow(ctx);
-  const sd = p.brakeHingeScrewDiaIn, n = Math.round(p.brakeHingeScrewsPerLeaf);
-  const pen = p.brakeHingeScrewLenIn - HINGE_LEAF_T_IN - 0.1;
-  const w1 = screwWithdrawal(p, sd, pen);
+  const pv = g.pivot, pl = g.plan, b = g.board;
   const R = L.Rmag;
-  const pin = R / (2 * circleA(p.brakeHingePinDiaIn)); // double shear through the knuckles
-  // The knee leaf: pulled up off the knee top (withdrawal) by the upward part of the force on the knee, sheared along x by the rest.
-  const Wk = Math.max(0, L.Rk[1]), Vk = Math.abs(L.Rk[0]);
-  // The flap leaf: the force on the flap is −Rk; its part along the board normal pulls the flap up to the leaf (withdrawal) when it points up, along the board it shears the screws.
-  const Ron: V2 = [-L.Rk[0], -L.Rk[1]];
-  const Wf = Math.max(0, dot2(Ron, g.v)), Vf = Math.abs(dot2(Ron, g.u));
-  const lat = p.woodScrewLateralLbf;
-  const combo = (W: number, V: number) => W / (n * w1) + V / (n * lat);
+  const d = pv.dia;
+  const wt = pl.wTongue, clr = p.brakePivotSlotClearIn;
+  // Double shear: the pin is loaded at the tongue and held by the two ears, so two planes carry R.
+  const shear = R / (2 * circleA(d));
+  // The ears' reactions (the pin is held over the outboard ear's thickness and over the blind depth in the inboard ear): moment arms from the tongue's center.
+  const armO = wt / 2 + clr + pv.earOut / 2, armI = wt / 2 + clr + pv.blind / 2;
+  const Ro = (R * armI) / (armO + armI), Ri = R - Ro;
+  const Mpin = Math.max(Ro * armO, Ri * armI) - (R / 2) * (wt / 4);
+  const Zpin = (Math.PI * d ** 3) / 32;
+  const bend = Mpin / Zpin;
+  // Oak bearing of the pin (dowel bearing), on the tongue (flap + block, grain along x, the load across it) and on each ear.
+  const bearT = R / (d * wt), bearO = Ro / (d * pv.earOut), bearI = Ri / (d * pv.blind);
+  // Tear-out toward the loaded edge: two shear planes either side of the pin, the nearer edge (the load can come either way).
+  const eT = Math.min(pv.edgeTongueUp, pv.edgeTongueDown), eE = Math.min(pv.edgeEarUp, pv.edgeEarDown);
+  const tearT = R / (2 * eT * wt), tearO = Ro / (2 * eE * pv.earOut);
+  // End distance past the pin: the tongue and the ears' rear stand p.brakePivotEndIn from the pin.
+  const endD = p.brakePivotEndIn;
+  // The pivot block takes its share of the pin's load (by thickness) and passes it into the flap through its screws (glue ignored): it pulls up when the pin pushes the flap down.
+  const nBS = Math.max(1, Math.round(p.brakePivotBlockScrews));
+  const penBS = 1.25 - pl.blockT - 0.1;
+  const wBS = screwWithdrawal(p, 0.19, penBS);
+  const shareBlock = (pl.blockT / (b.thick + pl.blockT)) * R;
   const ds: Detail[] = [
-    detail('hinge pin double shear (316)', pin, 'psi', a.boltShear, '<='),
-    detail('knee leaf screws, withdrawal each (NDS, wet)', Wk / n, 'lbf', w1, '<='),
-    detail('knee leaf screws, lateral each', Vk / n, 'lbf', lat, '<='),
-    detail('knee leaf screws, withdrawal + lateral combined (linear)', combo(Wk, Vk), '', 1, '<='),
-    detail('flap leaf screws, withdrawal each (NDS, wet)', Wf / n, 'lbf', w1, '<='),
-    detail('flap leaf screws, lateral each', Vf / n, 'lbf', lat, '<='),
-    detail('flap leaf screws, withdrawal + lateral combined (linear)', combo(Wf, Vf), '', 1, '<='),
+    detail('pivot pin double shear (316)', shear, 'psi', a.boltShear, '<='),
+    detail('pivot pin bending between the ears (316)', bend, 'psi', a.bolt, '<='),
+    detail('oak bearing of the pin on the tongue and block (dowel bearing)', bearT, 'psi', al.oakDowel, '<='),
+    detail('oak bearing on the outboard ear', bearO, 'psi', al.oakDowel, '<='),
+    detail('oak bearing on the inboard ear (blind hole depth)', bearI, 'psi', al.oakDowel, '<='),
+    detail('tear-out of the tongue toward the nearer edge (oak shear, two planes)', tearT, 'psi', al.oakShear, '<='),
+    detail('tear-out of the outboard ear toward the nearer edge (oak shear, two planes)', tearO, 'psi', al.oakShear, '<='),
+    detail('edge distance, pin center to the nearer edge of the tongue stack (pin diameters, 1.5 D minimum)', eT / d, '×D', 1.5, '>='),
+    detail('edge distance, pin center to the nearer edge of the ear (pin diameters)', eE / d, '×D', 1.5, '>='),
+    detail('end distance, pin center past the tongue end and the ear rear face (pin diameters)', endD / d, '×D', 1.5, '>='),
+    detail('pivot block screws, withdrawal each at the block share of the pin load (NDS, wet)', shareBlock / nBS, 'lbf', wBS, '<='),
   ];
-  const how = `${loadText(L, g)}. Hinge pin ${f(p.brakeHingePinDiaIn, 3)}" 316 in double shear: ${f(R)} / (2 × ${f(circleA(p.brakeHingePinDiaIn), 4)} in²) = ${f(pin, 0)} psi (allowable ${f(a.boltShear, 0)}). Each leaf has ${n} #10 × ${f(p.brakeHingeScrewLenIn, 2)}" screws with ${f(pen, 2)}" of thread in the oak: NDS withdrawal 1380 G² D L C_M = ${f(w1)} lbf each (wet). Knee leaf: the force on the knee pulls it up with ${f(Wk)} lbf and along x ${f(Vk)} lbf; flap leaf: ${f(Wf)} lbf out of the board, ${f(Vf)} lbf along it.`;
+  const how = `${loadText(L, g)}. D-65 pull-pin pivot: a ${f(d, 3)}" 316 clevis pin through the knee's two ears and the flap tongue (${f(wt, 2)}" wide, flap ${f(b.thick, 2)}" + pivot block ${f(pl.blockT, 2)}", the slot ${f(clr, 3)}" wider each side), held by a hitch-pin clip. The pin carries the whole ${f(R)} lbf in DOUBLE shear: ${f(R)} / (2 × ${f(circleA(d), 4)} in²) = ${f(shear, 0)} psi (allowable ${f(a.boltShear, 0)}). It is held by the outboard ear (${f(pv.earOut, 2)}" thick) and ${f(pv.blind, 2)}" of the inboard ear (blind hole): reactions ${f(Ro)} and ${f(Ri)} lbf at arms ${f(armO, 2)}" and ${f(armI, 2)}" from the tongue's center, so M = ${f(Mpin)} lbf·in on Z = π d³/32 = ${f(Zpin, 4)} in³ = ${f(bend, 0)} psi (allowable ${f(a.bolt, 0)}). Bearing: ${f(bearT, 0)} psi on the tongue (${f(wt, 2)}" × ${f(d, 3)}"), ${f(bearO, 0)} psi on the outboard ear, ${f(bearI, 0)} psi on the inboard ear (allowable ${f(al.oakDowel, 0)}). The pin sits ${f(pv.edgeTongueUp, 2)}" below the top of the tongue stack and ${f(pv.edgeTongueDown, 2)}" above its underside (${f(eT / d, 1)} pin diameters), ${f(pv.edgeEarUp, 2)}" below the knee top and ${f(pv.edgeEarDown, 2)}" above the arm bottom, and ${f(endD, 2)}" from the tongue end and the ears' rear faces; tear-out is checked as oak shear on two planes of the nearer edge. The pivot block's ${nBS} #10 × 1-1/4" screws (${f(penBS, 2)}" of thread in the flap, ${f(wBS)} lbf each) carry its ${f(shareBlock)} lbf share if the glue lets go.`;
   return governing(ds, how);
 }
 
-export function brakeHinge(ctx: Ctx): AnalysisCheck {
-  return members('brake-hinge', 'Brake hinge pin and leaf screws', ctx, (L, g) => hingeEval(ctx, L, g), ['D-57', 'D-2']);
+export function brakePivot(ctx: Ctx): AnalysisCheck {
+  return members('brake-pivot', 'Brake pivot pin, ears and pivot block (pull pin)', ctx, (L, g) => pivotEval(ctx, L, g), ['D-65', 'D-57', 'D-2']);
 }
 
 /** Lower z of the knee outline at |y| = y (the sloping underside beyond the leg) and its height there. */
@@ -329,7 +358,7 @@ function kneeSection(g: BrakeGeom, y: number) {
 }
 
 function mountEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
-  const { L: lay } = ctx;
+  const { L: lay, p } = ctx;
   const al = allowables(ctx), a = allow(ctx);
   const k = g.knee, bt = g.bolts, bd = bt.dia;
   const n = bt.count;
@@ -339,7 +368,7 @@ function mountEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
   const rmax = Math.sqrt(Math.max(...r2));
   const Rk = L.Rk;
   // In-plane: the force at the pin (x = pin, z = pin height) about the bolt group; direct share plus the twist (added arithmetically: conservative).
-  const Mpl = Math.abs(momentY([g.xh - bt.cx, k.zTop - bt.cz], Rk));
+  const Mpl = Math.abs(momentY([g.xh - bt.cx, g.H[1] - bt.cz], Rk));
   const direct = L.Rmag / n;
   const twist = sumR2 > 1e-9 ? (Mpl * rmax) / sumR2 : 0;
   const V = direct + twist;
@@ -361,7 +390,7 @@ function mountEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
   const bear = V / (bd * tComp);
   const edge = (g.rail.zt - g.rail.zb) / (2 * bt.zs.length); // from the first / last bolt row to the rail edge
   const tear = V / (2 * edge * tComp);
-  const dW = (8 / 3) * bd, dH = bd + 0.0625;
+  const dW = p.brakeMountWasherOdIn, dH = bd + 0.0625;
   const washerA = (Math.PI / 4) * (dW ** 2 - dH ** 2);
   const pull = T / washerA;
   const contactA = (k.x1 - k.x0) * lay.chineH;
@@ -383,7 +412,7 @@ function mountEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
     detail('nut washer bearing on the backer face (oak across the grain)', pull, 'psi', al.oakPerp, '<='),
     detail('knee leg bearing on the chine / rail face at the top of the couple (oak across the grain)', cBear, 'psi', al.oakPerp, '<='),
   ];
-  const how = `${loadText(L, g)}. ${n} × ${f(bd, 3)}" 316 bolts (${bt.xs.length} columns × ${bt.zs.length} rows, centroid x ${f(bt.cx, 2)}", z ${f(bt.cz, 2)}") through the ${f(k.legT, 2)}" knee leg, the ${f(g.rail.t, 2)}" rail and the ${f(g.backer.t, 2)}" backer glued to it. In plane: M = ${f(Mpl)} lbf·in about the bolt group (pin ${f(g.xh - bt.cx, 2)}" ahead of / ${f(k.zTop - bt.cz, 2)}" above it), twist ${f(twist)} + direct ${f(direct)} = ${f(V)} lbf on the worst bolt (shear ${f(shear, 0)} psi, bearing ${f(bear, 0)} psi on ${f(tComp, 2)}"). Out of plane: the force acts ${f(e, 2)}" outboard of the hull face: M_x = ${f(Mx)} lbf·in pivots on the chine top (z ${f(zc, 2)}") into the ${bt.zs.length} bolt rows (T ${f(Tz)} lbf) and M_z = ${f(Mz)} lbf·in over the columns (T ${f(Tx)} lbf): worst bolt tension ${f(T)} lbf = ${f(sigT, 0)} psi on ${f(At, 4)} in², washer bearing ${f(pull, 0)} psi on a ${f(dW, 2)}" fender washer. Knee arm section just beyond the leg ${f(sec.depth, 2)}" × ${f(sec.h, 2)}": σ ${f(sigK, 0)} psi. The knee bolts into the rail (backed by the glued ${f(g.backer.t, 2)}" doubler), not the 1/4" side panel.`;
+  const how = `${loadText(L, g)}. ${n} × ${f(bd, 3)}" 316 bolts (${bt.xs.length} columns × ${bt.zs.length} rows, centroid x ${f(bt.cx, 2)}", z ${f(bt.cz, 2)}") through the ${f(k.legT, 2)}" knee leg, the ${f(g.rail.t, 2)}" rail and the ${f(g.backer.t, 2)}" backer glued to it. In plane: M = ${f(Mpl)} lbf·in about the bolt group (pin ${f(g.xh - bt.cx, 2)}" ahead of / ${f(g.H[1] - bt.cz, 2)}" above it), twist ${f(twist)} + direct ${f(direct)} = ${f(V)} lbf on the worst bolt (shear ${f(shear, 0)} psi, bearing ${f(bear, 0)} psi on ${f(tComp, 2)}"). Out of plane: the force acts ${f(e, 2)}" outboard of the hull face: M_x = ${f(Mx)} lbf·in pivots on the chine top (z ${f(zc, 2)}") into the ${bt.zs.length} bolt rows (T ${f(Tz)} lbf) and M_z = ${f(Mz)} lbf·in over the columns (T ${f(Tx)} lbf): worst bolt tension ${f(T)} lbf = ${f(sigT, 0)} psi on ${f(At, 4)} in², washer bearing ${f(pull, 0)} psi on a ${f(dW, 3)}" fender washer. Knee arm section just beyond the leg ${f(sec.depth, 2)}" × ${f(sec.h, 2)}": σ ${f(sigK, 0)} psi. The knee bolts into the rail (backed by the glued ${f(g.backer.t, 2)}" doubler), not the 1/4" side panel.`;
   return governing(ds, how);
 }
 
@@ -391,10 +420,10 @@ export function brakeMount(ctx: Ctx): AnalysisCheck {
   return members('brake-mount', 'Brake knee, mounting bolts and backer', ctx, (L, g) => mountEval(ctx, L, g), ['D-57', 'D-2']);
 }
 
-/** Weight torque (lbf·in) about the hinge pin of the flap group (flap, shoe block, pad) in the released pose. */
+/** Weight torque (lbf·in) about the pivot pin of the flap group (flap, pivot block, shoe block, pad, foot tread) in the released pose. */
 export function weightTorque(ctx: Ctx, g: BrakeGeom): number {
   const bctx = makeCtx(ctx.p, {});
-  const mov = buildBrakeAt(bctx, 0, true).filter((x) => /^brake-(flap|shoe|pad)-L$/.test(x.id));
+  const mov = buildBrakeAt(bctx, 0, true).filter((x) => /^brake-(flap|shoe|pad|pivot-block|foot-tread)-L$/.test(x.id));
   return mov.reduce((s, x) => s + x.massLb * Math.max(0, g.H[0] - (x.cgIn ? x.cgIn[0] : partOBB(x).center[0])), 0);
 }
 
@@ -411,15 +440,17 @@ export function brakeReturn(ctx: Ctx): AnalysisCheck {
   const stopT = stopV / Math.max(0.2, bg.fRel[1] / bg.tRel);
   const pen = L.transom + p.blockingThickIn - 0.1;
   const wEye = screwWithdrawal(p, 0.19, pen);
-  const wFlapEye = screwWithdrawal(p, 0.19, p.brakeFlapThickIn - 0.1);
+  const wFlapEye = 0.5 * screwWithdrawal(p, 0.19, 1); // D-65: the flap eye is a #10 screw eye 1 in long in the flap's rear END face: end-grain withdrawal is taken as half the side-grain value
+  const latFlapEye = 0.5 * p.woodScrewLateralLbf;
   const ds: Detail[] = [
     detail('bungee torque over the weight torque of the flap group, released', lift, '×', p.brakeReturnLiftMargin, '>='),
     detail('bungee tension, applied (cord breaking strength / safety factor)', tMax, 'lbf', brk, '<='),
     detail('stop cord tension at rest (breaking strength / safety factor)', stopT, 'lbf', brk, '<='),
     detail('transom eye screw, withdrawal at the applied tension (NDS, wet)', tMax * (bg.fApp[1] / bg.tApp), 'lbf', wEye, '<='),
-    detail('flap eye screw, withdrawal at the applied tension (NDS, wet)', tMax * (bg.fApp[1] / bg.tApp), 'lbf', wFlapEye, '<='),
+    detail('flap eye screw (end grain), withdrawal: the x part of the cord pull at the applied tension (NDS, wet, half value)', tMax * (Math.abs(bg.fApp[0]) / bg.tApp), 'lbf', wFlapEye, '<='),
+    detail('flap eye screw (end grain), lateral: the cord pull across the screw (half value)', tMax, 'lbf', latFlapEye, '<='),
   ];
-  const how = `Return set per flap: a ${f(bg.lenRel)}" shock cord from an eye in the flap's rear end to an eye in the rear transom's aft face (${f(p.brakeBungeeAnchorBelowTopIn, 1)}" below the top, over the backer), with a stop cord of the same length. Released tension ${f(bg.tRel, 1)} lbf, ${f(bg.rate, 1)} lbf/in, ${f(bg.tApp, 2)} lbf at the applied pose (cord ${f(bg.lenApp)}"); torque about the pin ${f(bg.mRel, 1)} lbf·in released against the weight torque of the flap, shoe block and pad ${f(wt, 1)} lbf·in = ${f(lift, 2)}× (limit ≥ ${f(p.brakeReturnLiftMargin, 1)}): the stop cord takes the difference (${f(stopT, 2)} lbf) and holds the ${f(p.brakePadGapIn, 3)}" pad gap. Cords: ${p.brakeCordBreakLbf} lbf breaking strength / ${p.brakeCordSafetyFactor} = ${f(brk, 0)} lbf. Eye screws #10 into ${f(pen, 2)}" of the transom and its backer (${f(wEye)} lbf) and ${f(p.brakeFlapThickIn - 0.1, 2)}" of the flap (${f(wFlapEye)} lbf).`;
+  const how = `Return set per flap: a ${f(bg.lenRel)}" shock cord from an eye in the flap's rear end to an eye in the rear transom's aft face (${f(p.brakeBungeeAnchorBelowTopIn, 1)}" below the top, over the backer), with a stop cord of the same length. Released tension ${f(bg.tRel, 1)} lbf, ${f(bg.rate, 1)} lbf/in, ${f(bg.tApp, 2)} lbf at the applied pose (cord ${f(bg.lenApp)}"); torque about the pin ${f(bg.mRel, 1)} lbf·in released against the weight torque of the flap, shoe block and pad ${f(wt, 1)} lbf·in = ${f(lift, 2)}× (limit ≥ ${f(p.brakeReturnLiftMargin, 1)}): the stop cord takes the difference (${f(stopT, 2)} lbf) and holds the ${f(p.brakePadGapIn, 3)}" pad gap. Cords: ${p.brakeCordBreakLbf} lbf breaking strength / ${p.brakeCordSafetyFactor} = ${f(brk, 0)} lbf. Eye screws #10 into ${f(pen, 2)}" of the transom and its backer (${f(wEye)} lbf) and a 1" screw eye in the flap's rear end face (${f(wFlapEye)} lbf withdrawal, ${f(latFlapEye)} lbf lateral, end grain at half value).`;
   const gv = governing(ds, how);
   return singleCheck({
     id: 'brake-return', label: 'Flap return bungee, stop cord and eyes', group: 'Structure', refs: ['D-57'],
@@ -495,7 +526,7 @@ export function brakeAbuse(ctx: Ctx): AnalysisCheck {
   const L = loadsFromFoot(ctx, g, p.brakeFootAbuseLbf);
   const kS = p.steelSafetyFactor; // yield-level: the design allowables carry the safety factor, remove it
   const kW = p.woodSafetyFactor;
-  const parts: Array<[string, CaseEval]> = [['flap', flapEval(ctx, L, g)], ['hinge', hingeEval(ctx, L, g)], ['mount', mountEval(ctx, L, g)]];
+  const parts: Array<[string, CaseEval]> = [['flap', flapEval(ctx, L, g)], ['pivot', pivotEval(ctx, L, g)], ['mount', mountEval(ctx, L, g)]];
   const ds: Detail[] = [];
   for (const [name, e] of parts) {
     for (const d of e.details ?? []) {
@@ -504,7 +535,7 @@ export function brakeAbuse(ctx: Ctx): AnalysisCheck {
     }
   }
   const worstD = ds.reduce((a, c) => (c.util > a.util ? c : a), ds[0]);
-  const how = `A ${f(p.brakeFootAbuseLbf)} lbf stomp on the foot area of ONE flap (a scout jumping on it, ${f(p.brakeFootAbuseLbf / Math.max(1, p.brakeFootForceLimitLbf), 1)}× the ${f(p.brakeFootForceLimitLbf, 0)} lbf limit) with the tire turning: the pad sees N = (F a_F − M_B) η / (m_N ${L.sigma > 0 ? '+' : '−'} μ|m_T|) = ${f(L.nFlap)} lbf (the rolling direction and the dry pad μ ${f(p.brakePadMu, 2)} that give the larger force), the knee ${f(L.Rmag)} lbf at the hinge. The flap, hinge and mount are checked at yield level (limits raised by the safety factors, ${f(kW, 1)} on wood and ${f(kS, 1)} on steel): the brake may bend after it, but must not break.`;
+  const how = `A ${f(p.brakeFootAbuseLbf)} lbf stomp on the foot area of ONE flap (a scout jumping on it, ${f(p.brakeFootAbuseLbf / Math.max(1, p.brakeFootForceLimitLbf), 1)}× the ${f(p.brakeFootForceLimitLbf, 0)} lbf limit) with the tire turning: the pad sees N = (F a_F − M_B) η / (m_N ${L.sigma > 0 ? '+' : '−'} μ|m_T|) = ${f(L.nFlap)} lbf (the rolling direction and the dry pad μ ${f(p.brakePadMu, 2)} that give the larger force), the knee ${f(L.Rmag)} lbf at the pivot pin. The flap, pivot and mount are checked at yield level (limits raised by the safety factors, ${f(kW, 1)} on wood and ${f(kS, 1)} on steel): the brake may bend after it, but must not break.`;
   return singleCheck({
     id: 'brake-abuse', label: `Brake flap abuse, ${f(p.brakeFootAbuseLbf)} lbf stomp (yield level)`, group: 'Structure', refs: ['D-57', 'D-55', 'eng r2 N-8'],
     value: worstD.value, unit: worstD.unit, limit: worstD.limit, sense: worstD.sense, how, details: ds,
@@ -582,7 +613,7 @@ export function handleSockets(ctx: Ctx): AnalysisCheck {
 // ── sweep: the moving flap group vs everything else, released → applied ──────────────────────────────────────
 
 export interface BrakeSweepResult {
-  /** Smallest gap (in) between a moving brake part and any other solid over the stroke (the tire and the knee/hinge are measured separately). */
+  /** Smallest gap (in) between a moving brake part and any other solid over the stroke (the tire and the knee are measured separately). */
   minClearanceIn: number;
   moving: string;
   other: string;
@@ -594,7 +625,7 @@ export interface BrakeSweepResult {
   boardTireGapIn: number;
   groundMinZ: number;
   /** Least gap between the flap's front face and the knee's rear face over the swing (in). */
-  hingeGapIn: number;
+  shoulderGapIn: number;
   poses: number;
 }
 
@@ -605,24 +636,24 @@ const BIG = 99;
 export function brakeSweep(ctx: Ctx, steps = 8): BrakeSweepResult {
   const { p } = ctx;
   const g = brakeBundle(ctx).g;
-  if (!g.ok) return { minClearanceIn: BIG, moving: '–', other: '–', pose: 0, padGapReleasedIn: BIG, padGapAppliedIn: BIG, boardTireGapIn: BIG, groundMinZ: BIG, hingeGapIn: BIG, poses: 0 };
+  if (!g.ok) return { minClearanceIn: BIG, moving: '–', other: '–', pose: 0, padGapReleasedIn: BIG, padGapAppliedIn: BIG, boardTireGapIn: BIG, groundMinZ: BIG, shoulderGapIn: BIG, poses: 0 };
   const key = JSON.stringify(Object.fromEntries(Object.entries(p).filter(([k]) => !RIDER_KEYS.includes(k)))) + `|${steps}`;
   const hit = sweepCache.get(key);
   if (hit) return hit;
   const bctx = makeCtx(p, {});
-  const fixedBrake = buildBrakeAt(bctx, 0, false).filter((x) => /^brake-(hinge|knee|backer)-/.test(x.id));
+  const fixedBrake = buildBrakeAt(bctx, 0, false).filter((x) => /^brake-(knee|backer)-/.test(x.id));
   const obstacles = [...ctx.parts.filter((x) => !x.payload && x.group !== 'reference' && !/^brake-/.test(x.id) && !/^wheel-R[LR]$/.test(x.id)), ...fixedBrake]
     .flatMap((x) => partOBBs(x).map((o) => ({ id: x.id, o, rad: Math.hypot(...o.half) })));
-  const intended = (m: string, o: string) => /^brake-(hinge|knee|backer)-/.test(o) && /^brake-(flap|shoe|pad|cord)-/.test(m);
+  const intended = (m: string, o: string) => /^brake-(knee|backer)-/.test(o) && /^brake-(flap|shoe|pad|cord|pivot-block|foot-tread)-/.test(m);
   // 2-D shapes of the flap group in the applied pose
   const b = g.board;
   const tf = b.thick;
-  const corner = (s: number, h: number): V2 => [g.H[0] + s * g.u[0] - h * g.v[0], g.H[1] + s * g.u[1] - h * g.v[1]];
+  const corner = (s: number, h: number): V2 => [g.P[0] + s * g.u[0] - h * g.v[0], g.P[1] + s * g.u[1] - h * g.v[1]];
   const boardPoly: V2[] = [corner(b.s0, 0), corner(b.s1, 0), corner(b.s1, tf), corner(b.s0, tf)];
-  const frontLow = corner(b.s0, tf); // the flap's lower front corner (underside, at the hinge gap)
+  const shoulderLow = corner(g.plan.sShoulder, tf); // the underside corner where the flap's flare starts, just behind the knee's rear face
   const r = g.r;
   let best = { minClearanceIn: BIG, moving: '–', other: '–', pose: 0 };
-  let padRel = BIG, padApp = BIG, groundRel = BIG, boardTire = BIG, hingeGap = BIG;
+  let padRel = BIG, padApp = BIG, groundRel = BIG, boardTire = BIG, shoulderGap = BIG;
   for (let i = 0; i <= steps; i++) {
     const s = i / steps;
     const moving = buildBrakeAt(bctx, s, true);
@@ -632,7 +663,7 @@ export function brakeSweep(ctx: Ctx, steps = 8): BrakeSweepResult {
       const pp = poly.map(at);
       boardTire = Math.min(boardTire, pointPolyGap(g.O, pp) - r);
     }
-    hingeGap = Math.min(hingeGap, g.xh - at(frontLow)[0]);
+    shoulderGap = Math.min(shoulderGap, g.knee.x0 - at(shoulderLow)[0]);
     for (const m of mob) {
       const zmin = worldAABB(m.part).min[2];
       if (i === 0 && /^brake-(flap|shoe|pad)-/.test(m.id)) groundRel = Math.min(groundRel, zmin);
@@ -650,7 +681,7 @@ export function brakeSweep(ctx: Ctx, steps = 8): BrakeSweepResult {
       }
     }
   }
-  const res: BrakeSweepResult = { ...best, padGapReleasedIn: padRel, padGapAppliedIn: padApp, boardTireGapIn: boardTire, groundMinZ: groundRel, hingeGapIn: hingeGap, poses: steps + 1 };
+  const res: BrakeSweepResult = { ...best, padGapReleasedIn: padRel, padGapAppliedIn: padApp, boardTireGapIn: boardTire, groundMinZ: groundRel, shoulderGapIn: shoulderGap, poses: steps + 1 };
   if (sweepCache.size > 12) sweepCache.clear();
   sweepCache.set(key, res);
   return res;
@@ -679,8 +710,8 @@ export function brakeClearance(ctx: Ctx, sweep: BrakeSweepResult = brakeSweep(ct
     detail('flap and shoe block to the tire over the stroke (the nearest point)', sweep.boardTireGapIn, 'in', p.brakeClearanceIn, '>='),
     detail('lowest moving part (flap, shoe block, pad), released, vs minimum ground clearance', sweep.groundMinZ, 'in', p.minGroundClearanceIn, '>='),
     detail('knee bottom (the rail bottom) vs minimum ground clearance', kneeLow, 'in', p.minGroundClearanceIn, '>='),
-    detail('flap front face to the knee rear face over the swing', sweep.hingeGapIn, 'in', 0.03, '>='),
-    detail('hinge ahead of the tire front (a pin behind it would put the knee in the tire)', g.xh - g.r, 'in', 0.25, '>='),
+    detail('flap flare shoulder (where it widens past the tongue) to the knee rear face over the swing', sweep.shoulderGapIn, 'in', 0.03, '>='),
+    detail('pivot pin ahead of the tire front (a pin behind it would put the knee in the tire)', g.xh - g.r, 'in', 0.25, '>='),
     detail(`sign zone on the side (x up to ${SIGN_X_MAX_IN} in): the knee starts ahead of it`, g.knee.x0 - SIGN_X_MAX_IN, 'in', 0, '>='),
     detail('chock height under the knee (half an inch to spare)', g.knee.zBot - g.chock.height, 'in', 0.5, '>='),
     detail('wheel chock tangent to the tire ahead of the knee (chock back face clear of the knee face)', g.knee.x0 - g.chock.xBack, 'in', 0, '>='),
@@ -693,12 +724,12 @@ export function brakeClearance(ctx: Ctx, sweep: BrakeSweepResult = brakeSweep(ct
   return singleCheck({
     id: 'brake-clear', label: 'Brake mechanism clearance over the stroke', group: 'Braking', refs: ['D-57', 'D-55', 'D-16'],
     value: sweep.minClearanceIn, unit: 'in', limit: p.brakeClearanceIn, sense: '>=', details, status,
-    how: `The moving flap group (flap, shoe block, pad, return cord) is posed at ${sweep.poses} points from released to applied (the flap turns through ${f(g.theta / RAD, 1)}° about the pin) and tested against every other solid (hull, rails, transom, storage box, push handle, lights, the knee backers and the tire's neighborhood): ${capped ? 'nothing within reach' : `the closest is ${sweep.moving} to ${sweep.other}, ${f(sweep.minClearanceIn, 2)}" at pose ${f(sweep.pose, 2)}`}. The tire and the knee are measured in the vertical plane: the board and shoe block clear the tire by at least ${f(sweep.boardTireGapIn, 2)}" through the swing, the pad hangs ${f(sweep.padGapReleasedIn, 2)}" off the tread at its nearest point released and lands on it applied; the flap's front face stays ${f(sweep.hingeGapIn, 2)}" from the knee (${f(HINGE_GAP_IN, 3)}" built in). Ground: the flap group's lowest point is ${f(sweep.groundMinZ, 1)}" off the ground, the knee bottom ${f(kneeLow, 2)}" (limit ≥ ${f(p.minGroundClearanceIn, 1)}"). The knee starts at x = ${f(g.knee.x0, 1)}", clear of the sign zone on the side (to x = ${SIGN_X_MAX_IN}", D-57 item 9). The wheel chocks hang under the knee.`,
+    how: `The moving flap group (flap, pivot block, shoe block, pad, return cord) is posed at ${sweep.poses} points from released to applied (the flap turns through ${f(g.theta / RAD, 1)}° about the pin) and tested against every other solid (hull, rails, transom, storage box, push handle, lights, the knee backers and the tire's neighborhood): ${capped ? 'nothing within reach' : `the closest is ${sweep.moving} to ${sweep.other}, ${f(sweep.minClearanceIn, 2)}" at pose ${f(sweep.pose, 2)}`}. The tire and the knee are measured in the vertical plane: the board and shoe block clear the tire by at least ${f(sweep.boardTireGapIn, 2)}" through the swing, the pad hangs ${f(sweep.padGapReleasedIn, 2)}" off the tread at its nearest point released and lands on it applied; the flare shoulder of the flap stays ${f(sweep.shoulderGapIn, 2)}" from the knee's rear face (${f(SHOULDER_CLEAR_IN, 2)}" built in; the tongue itself runs in the knee slot). Ground: the flap group's lowest point is ${f(sweep.groundMinZ, 1)}" off the ground, the knee bottom ${f(kneeLow, 2)}" (limit ≥ ${f(p.minGroundClearanceIn, 1)}"). The knee starts at x = ${f(g.knee.x0, 1)}", clear of the sign zone on the side (to x = ${SIGN_X_MAX_IN}", D-57 item 9). The wheel chocks hang under the knee.`,
   });
 }
 
 
 /** All the braking and handle rows in one list (the call site in index.ts does not change when the brake design does). */
 export function brakeChecks(ctx: Ctx): AnalysisCheck[] {
-  return [brakeRatio(ctx), brakeForce(ctx), brakeSlow(ctx), brakeTraction(ctx), brakeClearance(ctx), brakeFlap(ctx), brakeHinge(ctx), brakeMount(ctx), brakeReturn(ctx), parkHold(ctx), handleSockets(ctx), brakeAbuse(ctx)];
+  return [brakeRatio(ctx), brakeForce(ctx), brakeSlow(ctx), brakeTraction(ctx), brakeClearance(ctx), brakeFlap(ctx), brakePivot(ctx), brakeMount(ctx), brakeReturn(ctx), parkHold(ctx), handleSockets(ctx), brakeAbuse(ctx)];
 }

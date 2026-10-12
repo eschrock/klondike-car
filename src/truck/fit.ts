@@ -22,6 +22,7 @@
  * the wheelbase range at the current track that still fit, by rebuilding the model with modified params.
  */
 import { PARAM_DEFS, derived, validateParams, type Params } from '../params';
+import { TRANSPORT_VIEW } from '../model/removable';
 import { centerOfGravity } from '../model/mass';
 import { obbOverlap, partOBB, type OBB } from '../model/bounds';
 import { multiply, rotationZ, translation } from '../model/mat4';
@@ -30,17 +31,15 @@ import { buildTruckBed, FLOOR_IDS, truckUsableLength } from './bed';
 
 export type Stowage = 'beside' | 'straddle';
 export type Orientation = 'nose-tailgate' | 'nose-bulkhead';
-export type Config = 'installed' | 'bridle-off' | 'removed';
-export const CONFIGS: Config[] = ['installed', 'bridle-off', 'removed'];
-/** Parts removed in the 'bridle-off' configuration (D-9, D-56): the tongue plate, its shackle and the rope, all with ids starting 'bridle'. The king beam, kingpin and axle stay. */
-const TONGUE_RE = /^bridle/i;
+/** The fit configurations (D-65): 'installed' (everything on) and 'removed' = Transport mode (TRANSPORT_VIEW). The oak tongue is bolted on and stays in both (Eric); the 'bridle-off' configuration is gone. */
+export type Config = 'installed' | 'removed';
+export const CONFIGS: Config[] = ['installed', 'removed'];
 
 /** Sled parts for a configuration, built through `build` (which must honor `removed`). */
 export function configParts(config: Config, build: (view: CartView) => Part[]): Part[] {
   const base = { rider: 'none', cargo: false } as const;
-  if (config === 'removed') return build({ ...base, removed: true });
-  const parts = build({ ...base, removed: false });
-  return config === 'bridle-off' ? parts.filter((x) => !TONGUE_RE.test(x.id)) : parts;
+  if (config === 'removed') return build({ ...base, ...TRANSPORT_VIEW });
+  return build({ ...base, removed: false });
 }
 
 /** View options the fit check passes to the model builder (a superset of the model's ViewState). */
@@ -48,6 +47,10 @@ export interface CartView {
   rider?: 'none' | 'operating' | 'goal';
   cargo?: boolean;
   removed?: boolean;
+  /** The brake flap kit and the lights (D-65); the viewer's own toggles. Default on. */
+  brakes?: boolean;
+  lights?: boolean;
+  chocks?: boolean;
   /** Front-axle steer angle (degrees about the kingpin, + = left). The fit always builds straight (the stowed axle is straightened); only the viewer passes this. */
   steerDeg?: number;
   /** Cargo mode (D-53, D-57): the back flips flat onto the deck and the two cushions lie in the storage box. */

@@ -11,7 +11,7 @@ import { handleGeometry } from './handle';
 import { transformPoint } from './bounds';
 import { innerHalfWidth, sideSlopeAt, sideTopAt, type Layout } from './layout';
 import { planWallGeometry } from './plan-wall';
-import { brakeGeometry } from './brake-layout';
+import { SIGN_X_MAX_IN, brakeGeometry } from './brake-layout';
 import { compose } from './mat4';
 import type { Dims, EdgeCondition, Mat4, Part, PartGroup, Vec2, Vec3 } from './types';
 
@@ -441,11 +441,11 @@ export function buildBody(ctx: Ctx): Part[] {
     const sg = signPlacement(ctx);
     for (const { s, tag } of SIDES) {
       const sign = box(ctx, {
-        id: `sign-${tag}`, partNo: 'sign', name: `Side sign ${tag}`, group: 'removable', mat: 'ply', removable: true, edges: 'edged', step: STEP.finish, fab: 'shaper-origin',
+        id: `sign-${tag}`, partNo: 'sign', name: `Side sign ${tag}`, group: 'body', mat: 'ply', edges: 'edged', step: STEP.finish, fab: 'shaper-origin',
         size: [sg.length, pl, sg.height], center: [sg.xc, s * (L.hwC + L.side + GRIP_BACKING_T_IN + pl / 2), sg.zc], // 1/16 in proud of the band faces: clear of the grab-board backing strip (D-63)
       });
       sign.massLb += edgeBandLb(ctx, 2 * (sg.length + sg.height), pl);
-      sign.notes = `D-57: the sign is back, on the outside of the tall rear part of the side (${sg.length.toFixed(1)}" × ${sg.height.toFixed(1)}", level, not tilted to follow the sheer (3c-5), its top edge ${sg.topMargin}" under the gunwale line at its forward end). ${mmOf(pl)} mm ply blank, all four edges banded with oak, drawn as a rounded-oval plank with the Troop 455 artwork (signTexture); hung on four thumb-knob screws (#10-32 x ${signKnobPlan(ctx).lenIn} in) that go through four ${signKnobPlan(ctx).standoffIn.toFixed(3)}" standoff discs epoxied to its back (oak, or 5/16 in nylon spacers) and the 4 mm web into threaded inserts in two oak backing strips glued inside it (nothing is screwed into the ply alone, D-62), so it comes off for transport. Cut the blank on the Shaper Origin (D-61). It stays clear of the rear wheel and of the brake hinge mounts.`;
+      sign.notes = `D-57: the sign is back, on the outside of the tall rear part of the side (${sg.length.toFixed(1)}" × ${sg.height.toFixed(1)}", level, not tilted to follow the sheer (3c-5), its top edge ${sg.topMargin}" under the gunwale line at its forward end). ${mmOf(pl)} mm ply blank, all four edges banded with oak, drawn as a rounded-oval plank with the Troop 455 artwork (signTexture); hung on four thumb-knob screws (#10-32 x ${signKnobPlan(ctx).lenIn} in) that go through four ${signKnobPlan(ctx).standoffIn.toFixed(3)}" standoff discs epoxied to its back (oak, or 5/16 in nylon spacers) and the 4 mm web into threaded inserts in two oak backing strips glued inside it (nothing is screwed into the ply alone, D-62), so it CAN come off for repairs, but it STAYS ON for transport (D-65, Eric: taking the signs off "seems excessive"; it is not a removable part). Cut the blank on the Shaper Origin (D-61). It stays clear of the rear wheel and of the brake knees.`;
       parts.push(sign);
       // Two oak backing strips glued inside the web, one per knob pair (build 3c M4): the sign screws through the 4 mm web into threaded inserts in them.
       const bk = signBackerPlan(ctx);
@@ -469,15 +469,15 @@ export function buildBody(ctx: Ctx): Part[] {
  * Where the side sign goes (D-57, 3c-5): LEVEL (not tilted to follow the sheer; Eric), on the outside of the tall rear part of the side, starting just ahead of the rear transom. Its
  * top edge is `topMargin` under the gunwale line at its FORWARD end (where the sheer is lowest, so the whole board stays inside the side), and its bottom edge clears the rear
  * wheel's brake flap, which stands out beside the side there and would hide the lower third of the board from a side view. The forward end is chosen (never ahead of `SIGN_X_MAX_IN`,
- * the brake hinge and knee) to give the biggest board that is at least `SIGN_MIN_ASPECT` long for its height, so the artwork keeps its two lines instead of stacking.
+ * the brake knee) to give the biggest board that is at least `SIGN_MIN_ASPECT` long for its height, so the artwork keeps its two lines instead of stacking.
  */
 export function signPlacement(ctx: Pick<Ctx, 'p' | 'L'>) {
   const { p, L } = ctx;
   const x0 = L.xSideStart + 1.3; // the turned corner of the board stays ahead of the rear end of the side
   const topMargin = 0.75;
   const bg = brakeGeometry(p, L);
-  const flapSlope = bg.u[0] !== 0 ? bg.u[1] / bg.u[0] : 0; // z per x along the flap's top surface (positive: it rises toward the hinge)
-  const flapTop = (x: number) => bg.H[1] + (Math.min(x, bg.H[0]) - bg.H[0]) * flapSlope + SIGN_FLAP_CLEAR_IN;
+  const flapSlope = bg.u[0] !== 0 ? bg.u[1] / bg.u[0] : 0; // z per x along the flap's top surface (positive: it rises toward the pivot)
+  const flapTop = (x: number) => bg.P[1] + (Math.min(x, bg.P[0]) - bg.P[0]) * flapSlope + SIGN_FLAP_CLEAR_IN;
   let best = { length: 4, height: 2, x1: x0 + 4, zTop: 0, zBot: 0, area: -1 };
   for (let x1 = Math.min(SIGN_X_MAX_IN, x0 + p.signLengthIn); x1 >= x0 + 4 - 1e-9; x1 -= 0.25) {
     const length = x1 - x0;
@@ -547,7 +547,7 @@ export function sideWebSplit(ctx: Pick<Ctx, 'p' | 'L'>): boolean {
 /** Least length / height of the sign (signTexture stacks the words below 2.2:1), and the clearance over the brake flap's top surface. */
 export const SIGN_MIN_ASPECT = 2.2;
 const SIGN_FLAP_CLEAR_IN = 0.3;
-/** The sign never reaches past this x (in): the rear wheel's hub, and the brake mount ahead of the tire, are beyond it (D-57). */
-export const SIGN_X_MAX_IN = 6;
+/** The sign never reaches past this x (in): the rear wheel's hub, and the brake mount ahead of the tire, are beyond it (D-57). Defined with the brake layout, which keeps the knee ahead of it. */
+export { SIGN_X_MAX_IN };
 
 export { slotHole as _slotHole };

@@ -106,14 +106,14 @@ describe('N-1: the 4 mm side web row', () => {
 });
 
 describe('S-5: the cargo load-height rule', () => {
-  it('the info row solves for the height: tip limit about 13.8 in, slide-before-tip lost at about 17 in, tip angle 42 / 36 / 31 degrees at 12 / 18 / 24 in', () => {
+  it('the info row solves for the height: tip limit about 13.8 in, slide-before-tip lost at about 17 in, tip angle 42 / 36 / 31 degrees at 12 / 18 / 24 in (D-65: 41.9 / 35.9 / 31.3 with the lighter brake kit)', () => {
     const c = row('cargo-height');
     expect(c.status).toBe('info');
     expect(c.how).toMatch(/LOAD-HEIGHT RULE/);
     expect(c.value).toBeGreaterThan(13);
     expect(c.value).toBeLessThan(14.5);
-    expect(c.how).toMatch(/at 18 in 36\.0°/);
-    expect(c.how).toMatch(/at 24 in 31\.4°/);
+    expect(c.how).toMatch(/at 18 in 35\.9°/);
+    expect(c.how).toMatch(/at 24 in 31\.3°/);
   });
   it('the Simple view cargo card says it in plain words', () => {
     const t = cargoText(cargoCapacity(defaults));
@@ -134,12 +134,13 @@ describe('S-4 / S-6 notes and the DOM tube', () => {
 });
 
 describe('M3 / S11 / materials', () => {
-  it('the brake hinge uses #10 x 3/4 screws (8 per leaf) and the knee note says to bevel and to hold a real hinge to it first', () => {
-    expect(defaults.brakeHingeScrewLenIn).toBe(0.75);
-    expect(get('brake-hinge-L').joints!.find((j) => j.to === 'brake-flap-L')!.size).toMatch(/#10 x 3\/4"/);
-    expect(get('brake-knee-L').notes).toMatch(/BEVELED/);
-    expect(get('brake-hinge-L').notes).toMatch(/HOLD A REAL HINGE TO IT BEFORE CUTTING THE FIRST KNEE/);
-    expect(row('brake-hinge').util!).toBeLessThan(0.9);
+  it('D-65: the butt hinge (D-62 #10 x 3/4 screws, the beveled knee top) is gone; the knee is slotted for the flap tongue and says so, the pivot block is screwed on with #10 x 1-1/4 screws and the row has margin', () => {
+    expect(parts.some((x) => /^brake-hinge/.test(x.id))).toBe(false);
+    expect('brakeHingeScrewLenIn' in defaults).toBe(false);
+    expect(get('brake-pivot-block-L').joints!.find((j) => j.type === 'screw')!.size).toMatch(/3 x #10 x 1-1\/4"/);
+    expect(get('brake-knee-L').notes).toMatch(/SLOTTED/);
+    expect(get('brake-knee-L').notes).not.toMatch(/BEVELED/);
+    expect(row('brake-pivot').util!).toBeLessThan(0.9);
   });
   it('the flat parts go to the Shaper Origin: deck, webs, grab boards, bulkhead, box panels, sign blanks, brake flaps, the seat-back panel', () => {
     for (const id of ['deck', 'side-L-web', 'seat-grip-L', 'bow-bulkhead', 'storage-end-fore', 'storage-lid', 'sign-L', 'brake-flap-L', 'seat-back-panel']) expect(get(id).fab, id).toBe('shaper-origin');

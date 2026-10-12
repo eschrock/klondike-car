@@ -27,7 +27,7 @@ export const DEMOS: { id: DemoId; label: string; title: string }[] = [
 /** Numbers the at-a-glance strip shows that come from the part list rather than the checks. */
 export interface SpecFacts {
   emptyLb: number;
-  /** Mass in transport configuration (removable parts off): what two people lift. */
+  /** Mass in Transport mode (removable parts off, handle parked, seat flat; D-65): what two people lift. */
   transportLb: number;
 }
 
@@ -299,13 +299,13 @@ function mountSafetyCard(host: HTMLElement, deps: Pick<SimpleViewDeps, 'onLight'
       h('span', { class: 'sv-glance-k' }, k), h('span', { class: 'sv-glance-v' }, v), ...(subText ? [h('span', { class: 'sv-glance-s' }, subText)] : []));
     glance.replaceChildren(
       item('Size (L × W × H)', dims(fit.dims.installed), null),
-      item('Empty weight', `${Math.round(spec.emptyLb)} lb`, `Seat back and handle off: two people lift ${Math.round(spec.transportLb / 2)} lb each`),
+      item('Empty weight', `${Math.round(spec.emptyLb)} lb`, `Brake flaps and lights off, handle parked: two people lift ${Math.round(spec.transportLb / 2)} lb each`),
       item('Front end', `Pivoting axle, ${fmtVal(Math.abs(p.steerLockDeg))} degrees each way`, 'It turns on one big bolt when the rope pulls it', texts.steering.status),
       ...(rest.maxLb !== null ? [item('Resting weight', rest.text, `${rest.status === 'fail' ? `The goal is ${p.restLoadLb} lb. ` : ''}${rest.note}`, rest.status)] : []),
       item('Turning circle', `about ${Math.round((2 * steerGeometry(p).centerRadiusIn) / 12)} ft across`, 'The circle the rear axle drives at full turn'),
       item('Truck',
         fits ? `✔ Fits a Tacoma bed (${bedL} × ${bedW} in)` : `✖ Too big for a Tacoma bed (${bedL} × ${bedW} in)`,
-        fits ? `${assembled ? 'Fully assembled.' : 'With the handle and seat back off.'} Packed size ${dims(fit.dims.removed)}.` : `Packed size ${dims(fit.dims.removed)}.`,
+        fits ? `${assembled ? 'Fully assembled.' : 'In Transport mode (brake flaps and lights off, handle parked, seat back flat).'} Packed size ${dims(fit.dims.removed)}.` : `Packed size ${dims(fit.dims.removed)}.`,
         fits ? 'pass' : 'fail'),
     );
     setBusy(false);

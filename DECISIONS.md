@@ -222,6 +222,20 @@ Details are in `docs/phase3c-3a-notes.md`. | 🔶 |
 - **Verify:** print a 1" test slice in an eased ½" slot.
 
 120.9 lb (−0.15 lb); no new clashes. | 🔶 |
+| D-65 | **Pull-pin step brake, removable kits and Transport mode (Eric, 2026-10-12).**
+1. **Shorter flap:** it ends at the rear transom face (4" foot tread). Lever ratio is about 2.0:1 on average, 1.8 in the weaker direction; the `brake-ratio` target is 1.5 (was 1.75). `brake-slow` passes: goal rider 12.5° against 10°, util 0.80. `brake-force` is info only (92/106/99 lbf).
+2. **Fender shape:** the flap is a Shaper-cut tapered fender with a 1¼" tongue.
+3. **Pull-pin pivot:** an oak pivot block on the tongue sits in a slotted knee arm, on a ⅜" 316 clevis pin in double shear with a hitch-pin clip (row `brake-pivot`). The cord has a snap hook; the knee nuts get 1¼" washers. The flap kit comes off in about 15 s a side with no tools; the knees stay.
+4. **Toggles:** Brakes, Lights, Wheel chocks, Seat flat and Handle parked are in Advanced only. **Transport mode** (Simple and Advanced) = handle parked, seat back flat, and the brake kit, lights, chocks and seat pad off. The tongue, signs and handle stay on. The truck fit uses the same set, and the 'bridle-off' configuration is dropped.
+5. **Amends D-9:** the signs and the tongue are not removable.
+6. **Simple view:** the hauling card is green when the capacity covers the target, with near-limit rows shown as caution lines.
+
+Empty 119.9 lb; 116.0 without the brake kit; 112.9 in Transport mode (56.5 lb each for two lifters). | 🔶 |
+| D-66 | **Matched tracks and a gradual bow taper (Eric, 2026-10-12).**
+- **Rear track about 30"** (was 32"; tire-to-body gap about 1¼"). The cargo load-height rule tightens to about 10" (was 12") to keep the cargo tip check passing.
+- **Front track equals the rear track when straight,** so the wheels line up.
+- **Bow taper:** to make room for the ±20° swing, the body narrows with a long, gradual taper starting around mid-cabin to a narrower bow (about 18–19" outside). It replaces the abrupt 1¼" turn-in over the last 14".
+- **Rechecked:** foot room, tip at lock, turn radius, the front axle beam and the brake knee reach. Overall width becomes about 36". | 🔶 |
 
 
 ## Analysis-criterion interpretations

@@ -265,21 +265,19 @@ describe('the oak tongue, shackle and bridle (D-56, D-58)', () => {
     expect(rope.massLb).toBeGreaterThan(0.1);
     expect(rope.massLb).toBeLessThan(0.6);
   });
-  it('the bridle comes off for transport: tongue, sleeve and rope are removable (and nothing else of the front end)', () => {
+  it('D-65 (Eric): the tongue is bolted on with two carriage bolts and stays on in Transport mode: tongue, sleeve and rope are NOT removable (the steer ropes, when switched on, are)', () => {
     const removed = buildModel(defaults, { removed: true });
     for (const id of ['bridle-tongue', 'bridle-sleeve', 'bridle']) {
-      expect(get(parts, id).removable, id).toBe(true);
-      expect(removed.some((x) => x.id === id), id).toBe(false);
+      expect(get(parts, id).removable, id).toBeFalsy();
+      expect(removed.some((x) => x.id === id), id).toBe(true);
     }
     for (const id of ['beam-F', 'kingpin', 'king-beam', 'king-thrust', 'roll-pad-L', 'steer-eye-L', 'steer-anchor-L', 'steer-chain-L', 'axle-FL', 'axle-FR', 'wheel-FL', 'wheel-FR', 'clamp-FL1']) {
       expect(get(parts, id).removable, id).toBeFalsy();
       expect(removed.some((x) => x.id === id), id).toBe(true);
     }
-    // the sled (without the tongue) is shorter than the bow tip by the banding at most, and lighter by the four parts
+    // nothing of the front end comes off: the sled still reaches the tongue tip
     const reach = Math.max(...removed.filter((x) => !x.payload).map((x) => worldAABB(x).max[0]));
-    expect(reach).toBeLessThan(L.xFront + 0.5);
-    const lost = ['bridle-tongue', 'bridle-sleeve', 'bridle'].reduce((m, id) => m + get(parts, id).massLb, 0);
-    expect(totalMass(parts) - totalMass(removed)).toBeGreaterThanOrEqual(lost - 1e-9);
+    expect(reach).toBeGreaterThan(L.xFront + defaults.tongueTieAheadIn - 0.01);
   });
 });
 
@@ -553,7 +551,7 @@ describe('front-end masses at the defaults (D-56): ranges, not pins', () => {
     expect(grp).toBeGreaterThan(10);
     expect(grp).toBeLessThan(25);
     const tot = totalMass(parts);
-    expect(tot).toBeGreaterThan(120);
+    expect(tot).toBeGreaterThan(115);
     expect(tot).toBeLessThan(160);
     expect(get(parts, 'beam-F').massLb).toBeGreaterThan(4);
     expect(get(parts, 'beam-F').massLb).toBeLessThan(6.5);

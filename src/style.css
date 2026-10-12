@@ -191,6 +191,7 @@ select { width: 100%; }
 .win-row:first-child { border-top: 0; }
 .win-mode { font-weight: 600; }
 .steer-ctl input[type='checkbox'] { width: auto; }
+.steer-ctl.is-locked { opacity: 0.55; } /* D-65: Transport mode sets these toggles, so they show its state and cannot be changed */
 
 .group-table { margin-top: 10px; }
 .group-table thead th:first-child { text-align: left; }

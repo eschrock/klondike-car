@@ -255,24 +255,38 @@ describe('the seat-stow row and the 10 Essentials row', () => {
     expect(c.status).toBe('pass');
     expect(c.value).toBeLessThan(0.9);
   });
-  it('3c-5, cargo mode: the box also holds the front lamp, its clip and the 2 wheel chocks, in the layer left above the cushions (reported with margins)', () => {
+  it('3c-5, D-65, cargo mode: the box also holds the front lamp and clip, the rear tail light and clip and the 2 wheel chocks, in the layer left above the cushions (reported with margins)', () => {
     const gear = boxGear(installed);
-    expect(gear.lamp.map((k) => k.name)).toEqual(['Front LED headlight', 'Lamp clip']);
+    expect(gear.lamp.map((k) => k.name)).toEqual(['Front LED headlight', 'Lamp clip', 'Rear LED tail light', 'Rear lamp clip']);
     expect(gear.chocks).toHaveLength(1);
     expect(gear.chocks[0].qty).toBe(2); // one per rear tire
     const plan = seatStowPlan(defaults, L, installed);
     const tall = Math.max(...[...gear.lamp, ...gear.chocks].map((k) => Math.min(...k.dims!)));
-    const g = det(cs, 'seat-stow', 'the tallest of the lamp, its clip and the chocks');
+    const g = det(cs, 'seat-stow', 'the tallest of the lamps');
     expect(g.value).toBeCloseTo(tall, 9);
     expect(g.limit).toBeCloseTo(plan.margin.heightIn, 9); // the height above the cushions
     expect(g.util).toBeLessThan(1);
     expect(det(cs, 'seat-stow', 'floor area').util).toBeLessThan(0.5);
     const how = byId(cs, 'seat-stow').how;
-    expect(how).toMatch(/front lamp and its clip and the 2 wheel chocks/);
+    expect(how).toMatch(/front lamp and its clip, the rear tail light and its clip and the 2 wheel chocks/);
     expect(how).toMatch(/leaving [\d.]+" under the lid/);
     // a box too shallow for the layer fails: the chocks are the tallest at 2.5 in
     const shallow = runChecks({ ...defaults, seatDepthIn: 17 }, { includeTruck: false });
     expect(byId(shallow, 'seat-stow').status).not.toBe('pass');
+  });
+  it('D-65: the two removed brake flaps are an OPTION, listed in the row but not in the default stow (the gear kit and the checked details do not include them)', () => {
+    const gear = boxGear(installed);
+    expect(gear.flaps).toHaveLength(1);
+    expect(gear.flaps[0].qty).toBe(2);
+    const [l, w, h] = gear.flaps[0].dims!;
+    expect(l).toBeGreaterThan(17); // the Shaper-cut board, about 17.8 in long
+    expect(w).toBeCloseTo(defaults.brakeFlapWidthIn, 6);
+    expect(h).toBeGreaterThan(defaults.brakeFlapThickIn + defaults.brakePivotBlockIn - 1e-9);
+    const how = byId(cs, 'seat-stow').how;
+    expect(how).toMatch(/OPTION, not in the default stow \(D-65\): the 2 removed brake flaps/);
+    // the default details are the lamps, clips and chocks only: the flaps are not in the height or floor checks
+    const tall = Math.max(...[...gear.lamp, ...gear.chocks].map((k) => Math.min(...k.dims!)));
+    expect(det(cs, 'seat-stow', 'the tallest of the lamps').value).toBeCloseTo(tall, 9);
   });
   it('3c-5, race mode: the 10 Essentials AND the 2 chocks fit (fill under 0.9, margin reported); the row says what it would do if they did not', () => {
     const c = byId(cs, 'storage-pack');

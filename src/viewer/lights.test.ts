@@ -1,5 +1,5 @@
 /**
- * Phase 3c-5: the lamps, reflectors and the brake hinge are drawn as real things inside their part boxes (lights.ts). Headless: the reflector's prism texture needs a canvas, so a
+ * Phase 3c-5: the lamps and reflectors are drawn as real things inside their part boxes (lights.ts). Headless: the reflector's prism texture needs a canvas, so a
  * tiny stand-in for `document.createElement('canvas')` is installed (the texture only has to exist; the pixels are not read here).
  */
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { buildModel } from '../model';
 import { defaultParams } from '../params';
 import { localBounds } from '../model/bounds';
-import { hingeMesh, lampMesh, lightKindOf, reflectorMesh, tailLightMesh, type LightBuild } from './lights';
+import { lampMesh, lightKindOf, reflectorMesh, tailLightMesh, type LightBuild } from './lights';
 import { buildPart } from './partMesh';
 
 beforeAll(() => {
@@ -31,13 +31,12 @@ function within(b: LightBuild, size: [number, number, number], slack = 0.02): vo
 }
 
 describe('which parts get a real mesh', () => {
-  it('the front lamp, the rear light, the four side reflectors (amber at the front, red at the rear) and the brake hinges', () => {
+  it('the front lamp, the rear light, the four side reflectors (amber at the front, red at the rear)', () => {
     expect(lightKindOf(get('front-light'))).toBe('lamp');
     expect(lightKindOf(get('rear-light'))).toBe('taillight');
     for (const tag of ['L', 'R']) {
       expect(lightKindOf(get(`reflector-${tag}1`)), `${tag} rear`).toBe('reflector-red');
       expect(lightKindOf(get(`reflector-${tag}2`)), `${tag} front`).toBe('reflector-amber');
-      expect(lightKindOf(get(`brake-hinge-${tag}`))).toBe('hinge');
     }
     expect(lightKindOf(get('deck'))).toBeNull();
   });
@@ -100,17 +99,8 @@ describe('the meshes stay inside the part boxes', () => {
     expect(amber.r).toBeGreaterThan(amber.b * 4);
     expect(amber.g).toBeGreaterThan(red.g * 3); // amber has green, red does not
   });
-  it('brake hinge: two leaves and a knuckled barrel, with dark screw heads', () => {
-    const size = sizeOf('brake-hinge-L');
-    const b = hingeMesh(size);
-    within(b, size, 0.1); // the barrel is a little thicker than the leaves
-    expect(b.materials.length).toBe(2);
-  });
-});
-
-describe('buildPart uses them', () => {
-  it('returns multi-material meshes with no outline for the lamp, the rear light, a reflector and a hinge', () => {
-    for (const id of ['front-light', 'rear-light', 'reflector-L1', 'reflector-R2', 'brake-hinge-L']) {
+  it('returns multi-material meshes with no outline for the lamp, the rear light, a reflector', () => {
+    for (const id of ['front-light', 'rear-light', 'reflector-L1', 'reflector-R2']) {
       const built = buildPart(get(id))!;
       expect(Array.isArray(built.material), id).toBe(true);
       expect(built.edges, id).toBeNull();

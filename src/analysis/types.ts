@@ -91,7 +91,7 @@ export const GROUP_OF_ID: Record<string, CheckGroup> = {
   'park-hold': 'Braking',
   'bridle-eye': 'Structure', 'side-web': 'Structure',
   'brake-force': 'Braking', 'brake-slow': 'Braking', 'brake-traction': 'Braking', 'brake-ratio': 'Braking', 'brake-clear': 'Braking',
-  'brake-flap': 'Structure', 'brake-hinge': 'Structure', 'brake-mount': 'Structure', 'brake-return': 'Structure', 'brake-abuse': 'Structure', 'handle-sockets': 'Structure',
+  'brake-flap': 'Structure', 'brake-pivot': 'Structure', 'brake-mount': 'Structure', 'brake-return': 'Structure', 'brake-abuse': 'Structure', 'handle-sockets': 'Structure',
   'axle-stress': 'Structure', 'beam-rear': 'Structure', 'bearing-groove': 'Structure', rails: 'Structure', deck: 'Structure',
   // Workstream D (seat, storage, fittings)
   'seat-back': 'Structure', 'seat-grip': 'Structure', 'storage-pack': 'Structure', 'storage-lid-open': 'Structure', 'lash-points': 'Structure', lift: 'Structure', 'foot-stop': 'Structure', 'lash-load': 'Structure', 'rest-load': 'Structure',

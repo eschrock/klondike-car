@@ -26,17 +26,17 @@ export function cgCheck(ctx: Ctx): AnalysisCheck {
   });
 }
 
-/** Any fitting case in the 'removed' config; also reports the bridle-off config. */
+/** Any fitting case in the 'removed' config (Transport mode, D-65); also reports the fully assembled sled. */
 export function truckFit(fit: FitResult): AnalysisCheck {
   const removed = fit.cases.filter((c) => c.config === 'removed');
   const fitting = removed.filter((c) => c.fits);
-  const bridleOff = fit.cases.filter((c) => c.config === 'bridle-off' && c.fits);
+  const assembled = fit.cases.filter((c) => c.config === 'installed' && c.fits);
   const best = [...fitting].sort((a, b) => b.minClearanceIn - a.minClearanceIn)[0];
   const modes = (cs: typeof removed) => (cs.length ? [...new Set(cs.map((c) => `${c.mode} (${c.orientation})`))].join(', ') : 'none');
   return singleCheck({
     id: 'truck-fit', label: 'Truck fit, transport configuration', group: 'Mass & transport', value: fitting.length, unit: 'cases', limit: 1, sense: '>=',
     status: fitting.length >= 1 ? 'pass' : 'fail', load: 'empty',
-    how: `Bounding/collision check against the bed with the tailgate down, removables off: ${fitting.length} of ${removed.length} placements fit (${modes(fitting)})${best ? `; best clearance ${f(best.minClearanceIn, 2)}"` : ''}. Bridle rope off only: ${bridleOff.length ? `fits (${modes(bridleOff)})` : 'does not fit'}. Required clearance ${f(fit.requiredClearanceIn, 2)}".`,
+    how: `Bounding/collision check against the bed with the tailgate down, Transport mode (brakes, lights and chocks off, handle parked, seat back flat; the tongue stays on): ${fitting.length} of ${removed.length} placements fit (${modes(fitting)})${best ? `; best clearance ${f(best.minClearanceIn, 2)}"` : ''}. Fully assembled: ${assembled.length ? `fits (${modes(assembled)})` : 'does not fit'}. Required clearance ${f(fit.requiredClearanceIn, 2)}".`,
     refs: ['D-8', 'D-9', 'D-23'],
   });
 }

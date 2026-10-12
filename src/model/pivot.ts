@@ -174,7 +174,7 @@ export function buildPivot(ctx: Ctx): Part[] {
     parts.push(mk({
       id: 'bridle-tongue', partNo: 'bridle-tongue', name: 'Bridle tongue (oak, on edge)', group: 'front-end', kind: 'lumber', material: 'white oak',
       geometry: { type: 'extrusion', outline, depth }, transform: translation(0, 0, L.tongue.z0), massLb: mass, body: 'front-axle',
-      fab: 'bandsaw', step: STEP.spindles, removable: true, explode: [1, 0, 0.1], grain: 'x',
+      fab: 'bandsaw', step: STEP.spindles, explode: [1, 0, 0.1], grain: 'x',
       stock: { t: depth, w: hw, l: len },
       rough: { t: depth + p.millingAllowanceIn, w: hw + p.millingAllowanceIn, l: len + 4 * p.millingAllowanceIn },
       joints: [
@@ -195,7 +195,7 @@ export function buildPivot(ctx: Ctx): Part[] {
     const svol = Math.PI * (holeR ** 2 - (sleeveId / 2) ** 2) * sl;
     parts.push(mk({
       id: 'bridle-sleeve', partNo: 'bridle-sleeve', name: 'Bridle sleeve (bronze)', group: 'front-end', kind: 'purchased', material: 'bronze sleeve bushing',
-      geometry: { type: 'cylinder', radius: holeR, length: sl }, transform: compose([L.tongue.holeX, 0, zMid], { x: Math.PI / 2 }), massLb: (svol / 1728) * BRONZE_PCF + 0.05, body: 'front-axle', fab: 'buy', step: STEP.spindles, removable: true, explode: [1, 0, 0.3],
+      geometry: { type: 'cylinder', radius: holeR, length: sl }, transform: compose([L.tongue.holeX, 0, zMid], { x: Math.PI / 2 }), massLb: (svol / 1728) * BRONZE_PCF + 0.05, body: 'front-axle', fab: 'buy', step: STEP.spindles, explode: [1, 0, 0.3],
       sourcing: { vendor: `McMaster-Carr (oil-embedded bronze sleeve bearing, ${f2(sleeveId)}" ID x ${f2(p.tongueHoleDiaIn)}" OD x ${f2(sl)}" long; 2 fender washers ${f2(1.5)}" OD, one each side, epoxied in the ${f2(p.tongueHoleDiaIn)}" hole)` },
       joints: [{ type: 'pin', to: 'bridle', count: 1, diaIn: p.bridleRopeDiaIn, size: `${f2(p.bridleRopeDiaIn)}" nylon bridle rope through the ${f2(sleeveId)}" bore`, at: [[0, 0, 0]] }, { type: 'pin', to: 'bridle-tongue', count: 1, diaIn: p.tongueHoleDiaIn, size: `${f2(p.tongueHoleDiaIn)}" hole across the stem`, at: [[0, 0, 0]] }],
       notes: `Sleeve (D-58): a ${f2(p.tongueHoleDiaIn)}" bronze sleeve bearing epoxied in the hole across the stem, ${f2(p.tongueTipEdgeIn)}" from the tip. The bridle rope (${f2(p.bridleRopeDiaIn)}" nylon, one strand) runs through its ${f2(sleeveId)}" bore, so the oak is not worn by the rope and the hole does not go oval: ease (flare or radius) both ends of the bore so the rope bears on a round edge. There is no shackle (D-62); the rope is the weak link.`,

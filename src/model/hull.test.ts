@@ -376,11 +376,11 @@ describe('joinery: structured joints', () => {
       .reduce((m, x) => m + (x.joints ?? []).reduce((a, j) => a + j.count, 0), 0);
     expect(both).toBeGreaterThan(s.total);
   });
-  it('the signs come off with knobs into threaded inserts in OAK BACKING STRIPS inside the 4 mm web, never into the ply alone (D-9, D-62); on by default (D-57)', () => {
+  it('the signs hang on knobs into threaded inserts in OAK BACKING STRIPS inside the 4 mm web, never into the ply alone (D-62); on by default (D-57); not a removable part (D-65)', () => {
     expect(parts.some((x) => x.id.startsWith('sign-'))).toBe(true);
     const ps = parts;
     const sign = get(ps, 'sign-L');
-    expect(sign.removable).toBe(true);
+    expect(sign.removable).toBeFalsy();
     expect(sign.joints!.filter((j) => j.type === 'knob').reduce((m, j) => m + j.count, 0)).toBe(4);
     expect(sign.joints!.every((j) => !/web/.test(j.to))).toBe(true); // no joint to the ply web: the knobs go into the strips
     for (const k of [1, 2]) {
@@ -479,14 +479,14 @@ describe('lift hand-hold (M9, D-37): the rear transom only', () => {
 
 describe('signs (D-9, D-35, D-57)', () => {
   const parts = buildModel(defaults);
-  it('two removable 6 mm blanks, banded on all edges, with four knob screws each, on the outside of the tall rear part of the side and turned to its slope', () => {
+  it('two 6 mm blanks (not removable, D-65), banded on all edges, with four knob screws each, on the outside of the tall rear part of the side and turned to its slope', () => {
     const { L } = makeCtx(defaults);
     for (const tag of ['L', 'R']) {
       const s = get(parts, `sign-${tag}`);
-      expect(s.removable).toBe(true);
+      expect(s.removable).toBeFalsy();
       expect(s.edges).toBe('edged');
       expect(s.geometry.type === 'box' && s.geometry.size[1]).toBeCloseTo(defaults.panelPlyIn, 9);
-      expect(s.group).toBe('removable');
+      expect(s.group).toBe('body');
       expect(s.notes).toMatch(/banded/);
       const c = transformPoint(s.transform, [0, 0, 0]);
       expect(Math.abs(c[1])).toBeCloseTo(L.hwC + L.side + GRIP_BACKING_T_IN + defaults.panelPlyIn / 2, 6); // D-63: 1/16 in proud of the band faces, clear of the grab-board backing strip
@@ -494,7 +494,7 @@ describe('signs (D-9, D-35, D-57)', () => {
       expect(c[2]).toBeLessThan(8 + 14 - defaults.railBandIn);
       expect(s.transform[2]).toBeCloseTo(0, 9); // 3c-5: LEVEL, its length axis is not tilted to follow the sheer
     }
-    expect(buildModel(defaults, { removed: true }).some((x) => /^sign-[LR]$/.test(x.id))).toBe(false);
+    expect(buildModel(defaults, { removed: true }).filter((x) => /^sign-[LR]$/.test(x.id))).toHaveLength(2); // D-65: they stay on in Transport mode
   });
   it('banding adds oak mass over the bare ply', () => {
     const s = get(parts, 'sign-L');

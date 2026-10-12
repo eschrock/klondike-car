@@ -10,7 +10,7 @@
  */
 import { STORAGE_LOCATION, type Params } from '../params';
 import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
-import { localBounds } from './bounds';
+import { localBounds, worldAABB } from './bounds';
 import { sideSlopeAt, sideTopAt, type Layout } from './layout';
 import { frameJoint, gunwaleId, seatBackSupport } from './seat';
 import type { Joint, Part, Vec3 } from './types';
@@ -118,10 +118,12 @@ export const ESSENTIALS: readonly KitItem[] = [
 ];
 
 /**
- * Loose gear that also rides in the box (3c-5), from the real part bounding boxes (the lamp and its clip are boxy; a wedge chock's bounding box over-covers it, which is conservative):
- * the front headlight and its printed clip (they come off to lift the nose, and ride in the box in cargo mode) and the wheel chocks (2 when the design has 2; both modes).
+ * Loose gear that also rides in the box (3c-5, D-65), from the real part bounding boxes (the lamps and their clips are boxy; a wedge chock's bounding box over-covers it, which is conservative):
+ * the front headlight and its printed clip and the rear tail light and its clip (they come off to lift the ends, and ride in the box in cargo mode), and the wheel chocks (2 when the design has 2;
+ * both modes). `flaps` is an OPTION, not part of the default stow (D-65): the two removed brake flaps, each with its shoe block, pad, pivot block and foot tread still on (what lifts off as
+ * one piece when the pin is pulled), as one bounding box each.
  */
-export function boxGear(parts: Part[]): { lamp: KitItem[]; chocks: KitItem[] } {
+export function boxGear(parts: Part[]): { lamp: KitItem[]; chocks: KitItem[]; flaps: KitItem[] } {
   const dimsOf = (x: Part): [number, number, number] => {
     const b = localBounds(x.geometry);
     return [b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]];
@@ -132,7 +134,23 @@ export function boxGear(parts: Part[]): { lamp: KitItem[]; chocks: KitItem[] } {
   };
   const chock = parts.filter((q) => /^brake-chock-[LR]$/.test(q.id));
   const chocks: KitItem[] = chock.length ? [{ name: 'Wheel chock', qty: chock.length, dims: dimsOf(chock[0]), essential: 'Parking' }] : [];
-  return { lamp: [...one('front-light', 'Front LED headlight', 'Lighting'), ...one('lamp-clip', 'Lamp clip', 'Lighting')], chocks };
+  // The flap assembly laid flat: its length and width from the Shaper-cut board, its height the board plus the taller of the shoe block with its pad (under the middle) and the pivot block (on the tongue).
+  const part = (id: string) => parts.find((q) => q.id === id);
+  const fl = part('brake-flap-L'), sh = part('brake-shoe-L'), pd = part('brake-pad-L'), pb = part('brake-pivot-block-L');
+  let flaps: KitItem[] = [];
+  if (fl && sh && pd && pb) {
+    const lb = localBounds(fl.geometry), bb = localBounds(pb.geometry);
+    const under = worldAABB([sh, pd]);
+    const h = (lb.max[2] - lb.min[2]) + Math.max(under.max[2] - under.min[2], bb.max[2] - bb.min[2]);
+    flaps = [{ name: 'Brake flap with shoe block and pad', qty: parts.filter((q) => /^brake-flap-[LR]$/.test(q.id)).length, dims: [lb.max[0] - lb.min[0], lb.max[1] - lb.min[1], h], essential: 'Parking' }];
+  }
+  return {
+    lamp: [
+      ...one('front-light', 'Front LED headlight', 'Lighting'), ...one('lamp-clip', 'Lamp clip', 'Lighting'),
+      ...one('rear-light', 'Rear LED tail light', 'Lighting'), ...one('rear-lamp-clip', 'Rear lamp clip', 'Lighting'),
+    ],
+    chocks, flaps,
+  };
 }
 
 export interface Interior {

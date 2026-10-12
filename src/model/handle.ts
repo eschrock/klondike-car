@@ -1,7 +1,7 @@
 /**
  * Rear push handle (D-9, D-39, D-53, D-57): aluminum tube sockets on the rear transom, pinned oak uprights, and a sled-style HANDLEBOW: a gently crowned white-oak bow
  * BANDSAWN from one board (D-57; it was a laminated, 3 in crown) that arches up between and over the two posts and overhangs them to the edge of the sled (reference/05). The
- * handle is the handler's station and comes off as one U for transport. The socket loads (D-39) are unchanged: the hold-back pull is taken at the posts, at the grip height
+ * handle is the handler's station; for transport it is PARKED (D-65), not removed (it can still come off as one U). The socket loads (D-39) are unchanged: the hold-back pull is taken at the posts, at the grip height
  * `rearHandleHeightIn`; the crown only adds height at the middle.
  *
  * Two pin positions (D-57): RIDING (the model default) and PARKED (`view.handle = 'parked'`): the sockets are `handleSocketDepthIn` deep, the posts have a second cross hole
@@ -166,7 +166,7 @@ export function buildHandle(ctx: Ctx): Part[] {
       : [[-yo, h.zFoot], [-yi, h.zFoot], [-yi, under(yi)], [-yo, under(yo)]];
     const zTopMax = Math.max(under(yi), under(yo));
     const postPart = profilePart(ctx, {
-      id: `handle-post-${tag}`, name: `Push handle upright ${tag}`, group: 'removable', mat: 'oak', removable: true, step: STEP.brake, grain: 'z',
+      id: `handle-post-${tag}`, name: `Push handle upright ${tag}`, group: 'removable', mat: 'oak', step: STEP.brake, grain: 'z',
       outline, depth: p.handlePostThickIn, basis: 'yz', origin: [h.postX[0], 0, 0], stock: { t: p.handlePostThickIn, w: p.handlePostWidthIn, l: zTopMax - h.zFoot }, explode: [-1, 0, 0.3],
       fab: 'table-saw',
       joints: [
@@ -181,7 +181,7 @@ export function buildHandle(ctx: Ctx): Part[] {
     parts.push(postPart);
     parts.push(cylinder(ctx, {
       id: `handle-pin-${tag}`, partNo: 'handle-pin', name: `Push handle retaining pin ${tag}`, group: 'removable', mat: 'fixed', kind: 'purchased', material: 'clevis pin + lynch pin', massLb: 0.05,
-      fab: 'buy', removable: true, step: STEP.brake, center: [h.xBar, y, h.zPin], axis: 'y', radius: p.handlePinDiameterIn / 2, length: h.socketY + 0.3,
+      fab: 'buy', step: STEP.brake, center: [h.xBar, y, h.zPin], axis: 'y', radius: p.handlePinDiameterIn / 2, length: h.socketY + 0.3,
       sourcing: { vendor: 'McMaster-Carr (clevis pin with lynch pin)' }, explode: [-1, s, 0.3],
     }));
   }
@@ -195,7 +195,7 @@ export function buildHandle(ctx: Ctx): Part[] {
   const barOutline: Vec2[] = [...ys.map((y): Vec2 => [y, under(y)]), ...[...ys].reverse().map((y): Vec2 => [y, over(y)])];
   const zLo = Math.min(...barOutline.map((q) => q[1])), zHi = Math.max(...barOutline.map((q) => q[1]));
   const bar = profilePart(ctx, {
-    id: 'handle-bar', name: 'Push handle handlebow', group: 'removable', mat: 'oak', removable: true, step: STEP.brake, grain: 'y', fab: 'bandsaw',
+    id: 'handle-bar', name: 'Push handle handlebow', group: 'removable', mat: 'oak', step: STEP.brake, grain: 'y', fab: 'bandsaw',
     outline: barOutline, depth: sec, basis: 'yz', origin: [h.xBar - sec / 2, 0, 0], stock: { t: sec, w: zHi - zLo + 0.25 + (bw.crownIn + (bw.zPost - bw.zEnd)), l: 2 * bw.yEnd }, explode: [-1, 0, 0.3],
     notes: bw.crownIn > 0
       ? `Sled-style handlebow (D-53, reference/05; D-57: gentler and bandsawn): ONE white-oak board ${sec}" thick, ${(zHi - zLo + 0.25 + bw.crownIn + (bw.zPost - bw.zEnd)).toFixed(2)}" wide (the bow's own height ${(zHi - zLo).toFixed(2)}" plus its ${(bw.crownIn + (bw.zPost - bw.zEnd)).toFixed(2)}" of sweep, so the arc can be laid on the board with the grain following it to within about 5 degrees instead of running out 11 to 14 at the ends: build 3c S7) and ${(2 * bw.yEnd).toFixed(1)}" long, the long edge bandsawn to a ${bw.radiusIn.toFixed(0)}" radius arc and the other edge to a parallel arc (no lamination, no bending form), then planed and rounded over to a ${sec}" grip. Pick straight-grained stock with the grain along the board: the cut grain runs out ${bw.postSlopeDeg.toFixed(0)}° at the posts and about ${((Math.asin(Math.min(1, bw.yEnd / bw.radiusIn)) * 180) / Math.PI).toFixed(0)}° at the ends (the hold-back pull is taken between the posts, where the grain is level). The arc passes through the two post tops at ${f2(bw.zPost)}" (the grip height) and crowns ${f2(bw.crownIn)}" above them at the middle (${f2(bw.zMid)}"); the ends overhang the posts to the sled edge (y = ±${f2(bw.yEnd)}") and hang ${f2(bw.zPost - bw.zEnd)}" below the post-top level. The post tops are sawn to the bow's ${bw.postSlopeDeg.toFixed(1)}° slope and each is pinned and epoxied.`

@@ -307,7 +307,7 @@ describe('the handlebow (D-53, D-57)', () => {
     expect(bb.max[0] - bb.min[0]).toBeCloseTo(defaults.handleBarDiameterIn, 6);
     expect(bar.massLb).toBeGreaterThan(0.8);
     expect(bar.massLb).toBeLessThan(2.5);
-    expect(bar.removable).toBe(true);
+    expect(bar.removable).toBeFalsy(); // D-65: the handle is PARKED for transport, not removed
     expect(bar.notes).toMatch(/bandsawn/);
   });
   it('the posts are cut to the bow slope and carry it on their tops: the post top is at the bow underside at both post edges', () => {

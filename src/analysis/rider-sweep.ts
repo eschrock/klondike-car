@@ -32,7 +32,7 @@ export const LIGHT_OF_ID: Record<string, Light | 'info'> = {
   'truck-fit': 'truck',
   'mass-empty': 'info', cg: 'info',
   // Strength = every `group === 'Structure'` check (kept explicit so the mapping test can see them).
-  'brake-flap': 'strength', 'brake-hinge': 'strength', 'brake-mount': 'strength', 'brake-return': 'strength', 'handle-sockets': 'strength',
+  'brake-flap': 'strength', 'brake-pivot': 'strength', 'brake-mount': 'strength', 'brake-return': 'strength', 'handle-sockets': 'strength',
   'brake-abuse': 'strength', 'wheel-rating': 'strength', 'rear-beam-seat': 'strength', 'axle-stress': 'strength', 'beam-rear': 'strength', 'bearing-groove': 'strength', rails: 'strength', deck: 'strength',
   // Seat and fittings (D-40, D-41): the seat back and grips carry a rider, so they color Strength; packing, lid swing and
   // lash-point count are build-fit facts that do not change with rider weight and are reported only.

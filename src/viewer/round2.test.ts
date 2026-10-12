@@ -8,7 +8,7 @@ import { displayGrainAxis } from './grainUv';
 import { figureGeometry, figureKindOf, figureMaterial, MANNEQUIN_OPACITY } from './mannequin';
 import { socketMesh } from './lights';
 import { treadMesh, rawBounds } from './hardware';
-import { buildPart, flapOutline } from './partMesh';
+import { buildPart } from './partMesh';
 
 beforeAll(() => {
   const ctx = new Proxy({}, { get: (_t, k) => (k === 'createLinearGradient' ? () => ({ addColorStop() {} }) : () => undefined), set: () => true });
@@ -85,15 +85,6 @@ describe('rider mannequin and cargo crate', () => {
 });
 
 describe('brake flap and foot tread', () => {
-  it('the flap outline narrows toward the foot end (-x) and stays inside the board', () => {
-    const o = flapOutline(19.9, 3.5);
-    const xs = o.map((q) => q[0]), ys = o.map((q) => q[1]);
-    expect(Math.min(...xs)).toBeGreaterThanOrEqual(-9.95 - 1e-9);
-    expect(Math.max(...xs)).toBeLessThanOrEqual(9.95 + 1e-9);
-    expect(Math.max(...ys.map(Math.abs))).toBeLessThanOrEqual(1.75 + 1e-9);
-    const tip = o.filter((q) => q[0] < -9.5).map((q) => Math.abs(q[1]));
-    expect(Math.max(...tip)).toBeLessThan(1.75 * 0.85);
-  });
   it('the foot tread is a few ounces of rubber and its ribbed mesh stays inside its box', () => {
     for (const tag of ['L', 'R']) {
       const t = get(`brake-foot-tread-${tag}`);
