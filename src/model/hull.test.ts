@@ -90,11 +90,12 @@ describe('no exposed plywood edges (acceptance, BRIEF §5.2)', () => {
   it('captured vs edged is what the joinery says: captured edges have a groove, rabbet or dado on the neighbor; the bulkhead takes the deck edge and the web end in dados', () => {
     const parts = buildModel(defaults);
     const web = get(parts, 'side-L-web');
-    expect(web.edges).toBe('captured'); // the flat panel: the rear end in the transom dado, top and bottom in the grooves, the front end in the bulkhead's dado
-    expect(web.joints!.filter((j) => j.type === 'dado').map((j) => j.to).sort()).toEqual(['bow-bulkhead', 'side-L-chine', 'side-L-gunwale', 'transom-rear']);
+    expect(web.edges).toBe('captured'); // the full-height panel: the rear end in the transom dado, the front end in the bulkhead's dado, top and bottom covered by the oak bands glued on both faces (D-62)
+    expect(web.joints!.filter((j) => j.type === 'dado').map((j) => j.to).sort()).toEqual(['bow-bulkhead', 'transom-rear']);
+    expect(web.joints!.filter((j) => j.type === 'glue' && /^side-/.test(j.to)).map((j) => j.to).sort()).toEqual(['side-L-chine', 'side-L-chine-in', 'side-L-gunwale', 'side-L-gunwale-in']);
     const deck = get(parts, 'deck');
     // D-52/D-57: one deck, in the chine rabbets all the way along, in a dado in the rear transom and in a dado in the bow bulkhead.
-    expect(deck.joints!.filter((j) => j.type === 'rabbet').map((j) => j.to).sort()).toEqual(['side-L-chine', 'side-R-chine']);
+    expect(deck.joints!.filter((j) => j.type === 'rabbet').map((j) => j.to).sort()).toEqual(['side-L-chine-in', 'side-R-chine-in']); // the gap under the inner chine band
     expect(deck.joints!.some((j) => j.type === 'dado' && j.to === 'transom-rear')).toBe(true);
     expect(deck.joints!.some((j) => j.type === 'dado' && j.to === 'bow-bulkhead')).toBe(true);
     expect(deck.joints!.some((j) => j.type === 'scarf')).toBe(false);
@@ -102,7 +103,7 @@ describe('no exposed plywood edges (acceptance, BRIEF §5.2)', () => {
     expect(deck.joints!.filter((j) => j.type === 'glue').map((j) => j.to).sort()).toEqual(['joist-1', 'joist-2', 'joist-3', 'joist-4', 'joist-5', 'joist-6', 'joist-8', 'king-beam', 'rail-L', 'rail-R']);
     // The bulkhead is oak: no ply edge to show; its rail, chine and gunwale ends are Domino or loose-tenon joints.
     expect(get(parts, 'bow-bulkhead').material).toBe('white oak');
-    expect(get(parts, 'bow-bulkhead').joints!.filter((j) => /^(rail|side)-/.test(j.to) && j.type !== 'dado').length).toBeGreaterThanOrEqual(6);
+    expect(get(parts, 'bow-bulkhead').joints!.filter((j) => /^(rail|side)-/.test(j.to) && j.type !== 'dado').length).toBeGreaterThanOrEqual(6); // D-62: the rail ends are tenons, the four band ends a side butt with an epoxy fillet (0.234 in strips take no Domino)
   });
 });
 
@@ -110,7 +111,7 @@ describe('captured-ply sides, deck and rear transom (D-22, D-35, D-54)', () => {
   const parts = buildModel(defaults);
   const ctx = makeCtx(defaults);
   const { L } = ctx;
-  const dd = defaults.deckCaptureDepthIn, g = defaults.grooveDepthIn;
+  const dd = defaults.deckCaptureDepthIn;
   const rearTx = -10 + 0.5; // the rear transom's inner face: x = -rearOverhang + 1/2 (D-60; was 3/4)
   it('the layout agrees with the hand numbers (24 in body, 22.75 in inside, deck 8, ply 0.472, rear face -9.5, side bar 1.5 in)', () => {
     expect(L.xSideStart).toBeCloseTo(rearTx, 9);
@@ -121,32 +122,37 @@ describe('captured-ply sides, deck and rear transom (D-22, D-35, D-54)', () => {
     expect(L.sideTop).toBeCloseTo(8 + 14, 9);
     expect(L.sideH).toBe(4);
   });
-  it('the web (a plan-bent sheet) enters the chine groove at the bottom and the gunwale groove at the top by the groove depth, all along the sheer', () => {
+  it('the web (a plan-bent sheet, FULL height, D-62) runs from the chine bottom to sideWebCapIn under the gunwale top, all along the sheer, with the oak bands on both faces', () => {
+    const cap = defaults.sideWebCapIn;
     for (const tag of ['L', 'R']) {
       const web = get(parts, `side-${tag}-web`), chine = get(parts, `side-${tag}-chine`), gun = get(parts, `side-${tag}-gunwale`);
       expect(web.geometry.type).toBe('mesh');
       const w = worldAABB(web), c = worldAABB(chine);
-      expect(c.max[2] - w.min[2]).toBeCloseTo(g, 6); // bottom: the chine top is g above the web bottom
-      const gpos = (gun.geometry as { positions: number[] }).positions, wpos = (web.geometry as { positions: number[] }).positions;
-      const topAtX = (pos: number[], x: number) => { let best = -Infinity, bd = Infinity; for (let i = 0; i < pos.length; i += 3) { const d = Math.abs(pos[i] - x); if (d < bd - 1e-9) { bd = d; best = pos[i + 2]; } else if (Math.abs(d - bd) < 1e-9) best = Math.max(best, pos[i + 2]); } return best; };
-      // Along the whole sheer: the web top is g above the gunwale underside (the sheer by hand), at every sampled x of the web.
+      expect(w.min[2]).toBeCloseTo(L.chineBot, 6); // bottom: flush with the outer chine band, on the rail
+      expect(c.min[2]).toBeCloseTo(w.min[2], 6);
+      const wpos = (web.geometry as { positions: number[] }).positions;
       for (let i = 0; i < wpos.length; i += 3) {
         const x = wpos[i];
         if (x < L.xSideStart || x > L.xSideEnd) continue;
         if (wpos[i + 2] < 10) continue; // bottom edge
-        const under = L.deckTop + sledLine(defaults, x, L.xSideStart, L.xSideEnd) - defaults.railBandIn;
-        if (wpos[i + 2] < under - 0.5) continue; // the rim vertices below the top edge of a face
-        expect(wpos[i + 2] - under, `${tag} x ${x.toFixed(1)}`).toBeCloseTo(g, 5);
+        const top = L.deckTop + sledLine(defaults, x, L.xSideStart, L.xSideEnd);
+        if (wpos[i + 2] < top - cap - 0.5) continue;
+        expect(top - wpos[i + 2], `${tag} x ${x.toFixed(1)}`).toBeCloseTo(cap, 5);
       }
-      expect(topAtX(gpos, L.xSideStart)).toBeCloseTo(L.deckTop + 14, 6);
-      expect(w.max[2]).toBeGreaterThan(L.deckTop + 12 - defaults.railBandIn);
+      // the bands: outer and inner thickness = (side - ply) / 2, either side of the web
+      for (const id of [`side-${tag}-chine`, `side-${tag}-chine-in`, `side-${tag}-gunwale`, `side-${tag}-gunwale-in`]) expect(get(parts, id).stock!.t).toBeCloseTo(L.sideBand, 9);
+      expect(2 * L.sideBand + defaults.panelPlyIn).toBeCloseTo(L.side, 9);
+      expect(worldAABB(gun).max[2]).toBeCloseTo(L.deckTop + 14, 6);
     }
   });
-  it('the groove leaves sturdy oak walls (≥ 0.1") and a ply that fits the groove', () => {
-    expect((defaults.sideThicknessIn - defaults.panelPlyIn - defaults.grooveSlopIn) / 2).toBeGreaterThanOrEqual(0.1);
+  it('the sandwich leaves 0.234 in bands (≥ 0.15 in) and the inner chine band is 0.512 in short of the bottom, which makes the deck rabbet without routing', () => {
+    expect(L.sideBand).toBeGreaterThanOrEqual(0.15);
     expect(validateParams(defaults).filter((i) => i.severity !== 'info')).toEqual([]);
+    const ci = worldAABB(get(parts, 'side-L-chine-in')), co = worldAABB(get(parts, 'side-L-chine'));
+    expect(ci.min[2] - co.min[2]).toBeCloseTo(defaults.deckPlyIn + defaults.deckSlopIn, 6);
+    expect(ci.max[2]).toBeCloseTo(co.max[2], 6);
     const thin = validateParams({ ...defaults, sideThicknessIn: 0.375 });
-    expect(thin.some((i) => i.severity === 'warn' && i.keys.includes('grooveSlopIn'))).toBe(true);
+    expect(thin.some((i) => i.severity === 'warn' && i.keys.includes('sideThicknessIn'))).toBe(true);
   });
   it('the web enters the rear transom dado at its rear end and ends against the bow bulkhead at its front end', () => {
     for (const tag of ['L', 'R']) {
@@ -159,8 +165,8 @@ describe('captured-ply sides, deck and rear transom (D-22, D-35, D-54)', () => {
     const d = get(parts, 'deck');
     expect(d.geometry.type).toBe('extrusion');
     const a = worldAABB(d);
-    expect(a.max[1]).toBeCloseTo(L.hwC + dd, 6); // full width behind the turn-in
-    expect(a.min[1]).toBeCloseTo(-(L.hwC + dd), 6);
+    expect(a.max[1]).toBeCloseTo(L.hwC + L.deckEdge, 6); // full width behind the turn-in; the edge rises into the gap under the inner chine band, against the web (D-62)
+    expect(a.min[1]).toBeCloseTo(-(L.hwC + L.deckEdge), 6);
     expect(a.min[0]).toBeCloseTo(rearTx - dd, 6);
     expect(a.max[0]).toBeCloseTo(L.xFlatEnd + dd, 6);
     expect(a.min[2]).toBeCloseTo(L.deckBot, 6);
@@ -171,7 +177,7 @@ describe('captured-ply sides, deck and rear transom (D-22, D-35, D-54)', () => {
     if (d.geometry.type !== 'extrusion') return;
     expect(d.geometry.holes ?? []).toHaveLength(0);
     const front = d.geometry.outline.filter((q) => q[0] > L.xFlatEnd - 1e-9);
-    expect(Math.max(...front.map((q) => Math.abs(q[1])))).toBeCloseTo(L.hwC + dd - defaults.bowTurnInIn, 6); // narrower at the bulkhead
+    expect(Math.max(...front.map((q) => Math.abs(q[1])))).toBeCloseTo(L.hwC + L.deckEdge - defaults.bowTurnInIn, 6); // narrower at the bulkhead
     expect(d.edges).toBe('captured');
   });
   it('the rear transom spans the full outside width, is as tall as the rear side plus a crown, and wraps the side ends', () => {
@@ -211,15 +217,20 @@ describe('the plan-curved sheer sides (D-54, D-57)', () => {
     expect(2 * L.hwC).toBeCloseTo(22.75, 9);
     expect(xe - xs).toBeCloseTo(58.75, 6); // from the 1/2 in transom's inner face (-9.5) to the bulkhead face (49.25), D-60
   });
-  it('the gunwale is bent-laminated and bandsawn: the notes say so and give the bend radius; the chine is laminated flat in 2 plies', () => {
+  it('the gunwale and chine bands are strips bent cold on the web (D-62): the notes say so and give the bend radius and the real sheer slope; the cut list shows strips', () => {
     const gun = get(parts, 'side-L-gunwale'), chine = get(parts, 'side-L-chine');
-    expect(gun.fab).toBe('bandsaw');
-    expect(gun.notes).toMatch(/BENT-LAMINATED AND BANDSAWN/);
+    expect(gun.fab).toBe('bentlam');
+    expect(gun.notes).toMatch(/OUTER gunwale band/);
+    expect(gun.notes).toMatch(/18\.[89]° at the rear transom/); // build review M1: the slope at the transom, not the mid-length figure
     expect(gun.notes).toMatch(/tightest radius/);
+    expect(gun.notes).toMatch(/grain FOLLOWS the sheer/);
+    expect(gun.stock!.t).toBeCloseTo(L.sideBand, 9); // a strip, not a 12 in wide blank
+    expect(gun.stock!.w).toBeCloseTo(defaults.railBandIn, 9);
+    expect(gun.stock!.l).toBeGreaterThan(58); // the 59 in side along its sheer
     expect(chine.fab).toBe('bentlam');
-    expect(chine.notes).toMatch(/2 plies/);
+    expect(chine.kind).toBe('bentlam');
     const rMin = (defaults.bowTurnLenIn ** 2) / (6 * defaults.bowTurnInIn);
-    expect(rMin).toBeGreaterThan(defaults.hullLamMinRadiusFactor * (defaults.sideThicknessIn / 2));
+    expect(rMin).toBeGreaterThan(defaults.hullLamMinRadiusFactor * L.sideBand);
   });
   it('the gunwale is a constant 1.5 in band under the sheer (every vertical pair of vertices on the mesh), top at 14 in at the rear and 4 in at the bulkhead', () => {
     const gun = get(parts, 'side-L-gunwale');
@@ -365,13 +376,21 @@ describe('joinery: structured joints', () => {
       .reduce((m, x) => m + (x.joints ?? []).reduce((a, j) => a + j.count, 0), 0);
     expect(both).toBeGreaterThan(s.total);
   });
-  it('the signs come off with tee-nuts and knobs (D-9); on by default (D-57)', () => {
+  it('the signs come off with knobs into threaded inserts in OAK BACKING STRIPS inside the 4 mm web, never into the ply alone (D-9, D-62); on by default (D-57)', () => {
     expect(parts.some((x) => x.id.startsWith('sign-'))).toBe(true);
     const ps = parts;
     const sign = get(ps, 'sign-L');
     expect(sign.removable).toBe(true);
-    expect(sign.joints!.find((j) => j.type === 'knob')!.count).toBe(4);
-    expect(get(ps, 'side-L-web').joints!.find((j) => j.type === 'threaded-insert' && j.to === 'sign-L')!.count).toBe(4);
+    expect(sign.joints!.filter((j) => j.type === 'knob').reduce((m, j) => m + j.count, 0)).toBe(4);
+    expect(sign.joints!.every((j) => !/web/.test(j.to))).toBe(true); // no joint to the ply web: the knobs go into the strips
+    for (const k of [1, 2]) {
+      const bk = get(ps, `sign-backer-L${k}`);
+      expect(bk.material).toBe('white oak');
+      expect(bk.joints!.filter((j) => j.type === 'threaded-insert' && j.to === 'sign-L').reduce((m, j) => m + j.count, 0)).toBe(2);
+      expect(bk.joints!.some((j) => j.type === 'glue' && /^side-L-web/.test(j.to))).toBe(true);
+    }
+    // nothing in the model screws into a side web
+    for (const x of ps) for (const j of x.joints ?? []) if (/^side-[LR]-web/.test(j.to)) expect(['screw', 'knob', 'threaded-insert', 'bolt'], `${x.id} -> ${j.to}`).not.toContain(j.type);
   });
 });
 
@@ -471,11 +490,11 @@ describe('signs (D-9, D-35, D-57)', () => {
       expect(s.notes).toMatch(/banded/);
       const c = transformPoint(s.transform, [0, 0, 0]);
       expect(Math.abs(c[1])).toBeCloseTo(L.hwC + L.side + defaults.panelPlyIn / 2, 6);
-      expect(c[2]).toBeGreaterThan(L.web.z0);
+      expect(c[2]).toBeGreaterThan(L.web.z0); // level with the free web
       expect(c[2]).toBeLessThan(8 + 14 - defaults.railBandIn);
       expect(s.transform[2]).toBeCloseTo(0, 9); // 3c-5: LEVEL, its length axis is not tilted to follow the sheer
     }
-    expect(buildModel(defaults, { removed: true }).some((x) => x.id.startsWith('sign-'))).toBe(false);
+    expect(buildModel(defaults, { removed: true }).some((x) => /^sign-[LR]$/.test(x.id))).toBe(false);
   });
   it('banding adds oak mass over the bare ply', () => {
     const s = get(parts, 'sign-L');
@@ -504,21 +523,20 @@ describe('round 2 hull (build M2-M8, D-43)', () => {
   const { L } = ctx;
   const p = defaults;
 
-  it('transoms are 1/2" (D-60; was 3/4"), chines and gunwales 5/8", the groove is 0.197" (4 mm ply + 1 mm; was 0.276" for 6 mm), leaving 0.21" walls', () => {
+  it('transoms are 1/2" (D-60; was 3/4"), chines and gunwales 5/8" thick as a sandwich of two 0.234" bands and the 4 mm web (D-62)', () => {
     expect(L.transom).toBe(0.5);
     expect(L.side).toBe(0.625);
-    // groove = 0.157 + 0.04 = 0.197"; wall each side = (0.625 − 0.197) / 2 = 0.214" (it follows panelPlyIn: the groove is the ply plus slop, D-60)
+    // D-61/D-62: no grooves; a band of (0.625 - 0.157) / 2 = 0.234" on each face of the 4 mm web
     expect(p.panelPlyIn).toBeCloseTo(0.157, 9);
-    expect(p.panelPlyIn + p.grooveSlopIn).toBeCloseTo(0.197, 9);
-    expect((p.sideThicknessIn - p.panelPlyIn - p.grooveSlopIn) / 2).toBeCloseTo(0.214, 3);
-    expect(get(parts, 'side-L-chine').joints!.find((j) => j.to === 'side-L-web')!.size).toMatch(/0\.197/);
+    expect(L.sideBand).toBeCloseTo(0.2338, 3);
+    expect(get(parts, 'side-L-chine').joints!.find((j) => j.to === 'side-L-web')!.size).toMatch(/0\.234" oak strip/);
   });
 
   it('rough length gets 4× the milling allowance (M8): the straight 64.53" chine is 65.03" rough, 1/8" more each way in t and w', () => {
     const c = get(parts, 'side-L-chine');
     expect(c.stock!.l).toBeCloseTo(L.xSideEnd - L.xSideStart, 6);
     expect(c.rough!.l).toBeCloseTo(c.stock!.l + 0.5, 6);
-    expect(c.rough!.t).toBeCloseTo(0.75, 6);
+    expect(c.rough!.t).toBeCloseTo(L.sideBand + p.millingAllowanceIn, 6); // a strip, not a 5/8 block (S2)
     for (const x of parts.filter((q) => q.rough && q.stock && (q.group === 'body' || q.group === 'frame'))) expect(x.rough!.l - x.stock!.l, x.id).toBeCloseTo(4 * p.millingAllowanceIn, 6);
   });
 

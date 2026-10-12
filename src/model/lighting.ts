@@ -135,11 +135,11 @@ export function buildLighting(ctx: Ctx): Part[] {
     const blk = (id: string, name: string, z0: number, to: string, note: string) => box(ctx, {
       ...common, id, partNo: 'flag-block', name, mat: 'oak', grain: 'z', step: STEP.finish,
       ...span([xc + od / 2, xc + od / 2 + FLAG_BLOCK.t], [yIn - FLAG_BLOCK.w, yIn], [z0, z0 + FLAG_BLOCK.h]), // 1.4 in across: it stays off the box wall
-      joints: [{ type: 'screw', to, count: 2, size: '#10 × 1-1/4 stainless, through the block into the side', note }, { type: 'screw', to: 'flag-tube', count: 2, size: '#8 × 1-1/4 stainless, into the tube wall' }, { type: 'glue', to, count: 1, note: 'epoxy to the side' }],
-      notes: `Oak holding block (D-57): ${FLAG_BLOCK.t}" × ${FLAG_BLOCK.w}" × ${FLAG_BLOCK.h}" with a half-round relief for the tube, epoxied and screwed to the inside of the side so it clamps the tube against the transom backer. Two blocks (top and bottom) hold a 14" tube; the tube stays put without them clipped to anything else.`,
+      joints: [{ type: 'glue', to, count: 1, size: 'thickened epoxy, full face', note }, { type: 'screw', to: 'flag-tube', count: 2, size: '#8 × 1-1/4 stainless, into the tube wall' }],
+      notes: `Oak holding block (D-57, D-62): ${FLAG_BLOCK.t}" × ${FLAG_BLOCK.w}" × ${FLAG_BLOCK.h}" with a half-round relief for the tube, EPOXIED to the inner oak band of the sandwich side (no screws into the side: the 4 mm web holds no screw, build 3c M4; the only screws go into the tube) so it clamps the tube against the transom backer. Two blocks (top and bottom) hold a 14" tube; the tube stays put without them clipped to anything else.`,
     });
-    parts.push(blk('flag-block-top', 'Flag tube block (top)', zTop - FLAG_BLOCK.h - 0.1, 'side-L-gunwale', 'into the gunwale band'));
-    parts.push(blk('flag-block-bottom', 'Flag tube block (bottom)', zBot + 0.4, 'side-L-web', 'into the side panel, with the epoxy bed'));
+    parts.push(blk('flag-block-top', 'Flag tube block (top)', zTop - FLAG_BLOCK.h - 0.1, 'side-L-gunwale-in', 'epoxied to the inner gunwale band (1-1/2 in tall, the block lies on it)'));
+    parts.push(blk('flag-block-bottom', 'Flag tube block (bottom)', zBot + 0.4, 'side-L-chine-in', 'epoxied to the inner chine band (the block lies on it)'));
   }
 
   // ── Rear: flat plate on the rear transom's outer face, the red light on it ──

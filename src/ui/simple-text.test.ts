@@ -128,7 +128,7 @@ describe('simple wording', () => {
     expect(failReason('')).toBe('a safety check fails');
     expect(failReason('unknown-check')).toBe('a safety check fails');
     for (const id of Object.keys(LIGHT_OF_ID)) expect(failReason(id)).not.toMatch(/turntable could|bolster|side bearer|tongue could be|bearing groove/i);
-    expect(failReason('bridle-eye')).toMatch(/rope shackle/);
+    expect(failReason('bridle-eye')).toMatch(/rope/);
     expect(failReason('kingpin')).toMatch(/bolt the front axle pivots on/);
     expect(failReason('steer-clear')).toMatch(/tire could rub the body/);
     expect(failReason('steer-stops')).toMatch(/steering stop/);
@@ -245,7 +245,7 @@ describe('cargo card wording (D-53)', () => {
     payloadLb: 250, statusAtPayload: 'pass' as Status, counts: { pass: 30, marginal: 0, fail: 0 }, capacityLb: null as number | null, comfortableLb: null as number | null, maxLb: 600,
     limiter: null, openIds: [] as string[], capacityOtherLb: null, limiterOther: null, alwaysFailing: [], cargoFailsAtPayload: [], rows: [],
     bed: { x0: 8, xFull: 36, xLoadEnd: 37, loadWidthIn: 20, loadLengthIn: 29, xStop: 48, widthIn: 26.75, stopWidthIn: 14, heightIn: 7, straightLengthIn: 6, fullLengthIn: 28, totalLengthIn: 40, areaIn2: 900, fullAreaIn2: 700, boxTopIn: 5 },
-    stow: { applicable: true, fits: true, status: 'pass' as Status, marginIn: { length: 0.5, width: 2, height: 0.4 } }, rearTraction: 1.2,
+    stow: { applicable: true, fits: true, status: 'pass' as Status, marginIn: { length: 0.5, width: 2, height: 0.4 } }, rearTraction: 1.2, heightRule: { designIn: 12, tipLimitIn: 13.8, slideLimitIn: 17 },
   };
   it('says "hauls N lb or more" when nothing fails up to the end of the ladder, and the bed and the stow in words', () => {
     const t = cargoText(base);

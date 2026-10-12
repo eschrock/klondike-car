@@ -185,6 +185,21 @@ The target is about **120 lb**, with no change to anything Eric chose. The deck 
 - **Sandwich sides** (build review M1): thin oak bands are laminated onto each face of the 4 mm okoume side panel at the top (gunwale) and bottom (chine), with no grooves. This replaces the grooved gunwale, which could not be built (its groove needed an edge that only exists after the sheer is sawn, and sawing it from a 12" blank wastes about 87%).
 - **Shop CNC is a Shaper Origin** (handheld, any size with ShaperTape). Flat parts go to it: deck, side panels, grab boards, the bulkhead and its hand-hold, box panels, sign blanks, brake flaps. Phase 4 exports SVG/DXF for them.
 - **14" handle sockets** (about 3.7" of post engaged when riding). | 🔶 |
+| D-62 | **Critic fix round (Phase 3c eng r1 8/10, build r1 7/10; 2026-10-12).**
+- **Sandwich sides:** oak bands are glued to each face of the 4 mm web, with no grooves. The cut list shows strips.
+- **Axle clamps:** one bridge plate per station, 6 instead of 12.
+- **Brake hinge:** a beveled knee and #10 × ¾ screws, 8 per leaf.
+- **Nothing screwed into the 4 mm web:** backing strips with inserts for the signs.
+- **Handle sockets:** an access hole and post relief grooves, plus a validator for the pin's end distance.
+- **Bridle:** no shackle. ⅜" nylon rope through the bronze-sleeved tongue hole on a bowline; the rope is the documented weak link, and the row has a snatch case.
+- **Front beam:** the chain eye hole is centered in its ligament.
+- **New rows:** `side-web`, and a cargo load-height rule (cargo CG ≤ about 13.8" above the deck).
+- **Hardware notes:** a flat-free tire warning, DOM A513 tube, and catalog UHMW thicknesses (½" disc, ¼" pads).
+- **Plywood sourcing (Eric):** 4 mm okoume as a full 4' × 8' from Aircraft Spruce (Peachtree City, GA, will-call); 12 mm from a local dealer. Each side web is one piece; an 8:1 scarf is an option for 2' × 4' sheets.
+- **Frameless ½" (12 mm) seat back** (Eric), cut from the deck offcut, with an oak crest strip. No 6 mm sheet is needed. Fallback deck: Baltic birch.
+- **Shaper:** every flat part is tagged `shaper-origin`.
+
+Result: 121.2 lb. Riders safe 50–250+ lb, green to 230 lb; cargo 269 lb; resting 348 lb. Nothing fails; `turn-radius` 0.98 is marginal. Details: `docs/phase3c-7-notes.md`. | 🔶 |
 - **Axle:** one oak axle beam under the bow, with a 10" wheel on a bolt-on ¾" stub at each end. The wheels sit outboard of the body on a 35.5" track, so the deck stays low (8").
 - **Pivot:** one ⅝" grade-8 kingpin through a UHMW thrust washer into an oak king beam. Bolted only.
 - **Steering:** oak stop blocks give **±20°** (turning circle about 20 ft). The pullers steer through a short tongue plate with the bridle shackled to it. Optional axle-end ropes for the musher are off by default.

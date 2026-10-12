@@ -4,7 +4,7 @@
  */
 import { bridleTiePoint } from '../model/bridle';
 import type { Ctx } from './context';
-import { dualCheck, singleCheck, detail, type CaseEval } from './dual';
+import { cargoOnlyCheck, dualCheck, singleCheck, detail, type CaseEval } from './dual';
 import { DEG, RAD, contactsAt, contactsWorstTip, lateralTip, sideEdges, axleLoads, worstOuterEdge } from './geometry';
 import { f } from './format';
 import type { CaseData } from './loads';
@@ -91,6 +91,45 @@ export function tipLock(ctx: Ctx): AnalysisCheck {
 function outerSsf(ctx: Ctx, c: CaseData) {
   const o = worstOuterEdge(ctx.contact, [c.cg[0], c.cg[1]], ctx.L.steer.lock);
   return { ssf: o.d / c.cg[2], d: o.d, h: c.cg[2], edge: o.edge, steer: o.steer, cg: c.cg };
+}
+
+/**
+ * The cargo LOAD-HEIGHT RULE (eng 3c S-5, D-62): the tip and slide-before-tip rows move a lot with the height of the cargo's center, which is an assumption (cargoCgHeightIn). This info row
+ * solves for the cargo CG height above the deck at which (a) the lateral tip angle reaches its limit and (b) the static stability factor falls to the slide-before-tip limit, worst over the
+ * cargo placements, and prints the tip angle at 12, 18 and 24 in, so the rule on the Simple view ("heavy things low, keep the load's center under X in") has numbers behind it.
+ */
+export function cargoHeightRule(ctx: Ctx): { tipLimitIn: number; slideLimitIn: number; atIn: Record<number, number> } | null {
+  const { p, contact, L } = ctx;
+  const cases = ctx.loads.cargoCases;
+  if (!cases.length) return null;
+  const lock = L.steer.lock;
+  const withHc = (c: CaseData, hc: number): CaseData => ({ ...c, cg: [c.cg[0], c.cg[1], c.cg[2] + (c.cargoLb * (hc - p.cargoCgHeightIn)) / c.massLb] });
+  const tipDeg = (c: CaseData, hc: number) => { const q = withHc(c, hc); return contactsWorstTip(contact, [q.cg[0], q.cg[1]], q.cg[2], lock).deg; };
+  const ssf = (c: CaseData, hc: number) => outerSsf(ctx, withHc(c, hc)).ssf;
+  const solve = (fn: (hc: number) => number, target: number): number => { // fn decreases with the height
+    let lo = 0, hi = 80;
+    if (fn(hi) >= target) return hi;
+    if (fn(lo) <= target) return 0;
+    for (let i = 0; i < 50; i++) { const mid = (lo + hi) / 2; if (fn(mid) >= target) lo = mid; else hi = mid; }
+    return lo;
+  };
+  const slideLimit = p.slideMarginFactor * p.tireGroundMu;
+  const tipLimitIn = Math.min(...cases.map((c) => solve((hc) => tipDeg(c, hc), p.tipStraightMinDeg)));
+  const slideLimitIn = Math.min(...cases.map((c) => solve((hc) => ssf(c, hc), slideLimit)));
+  const atIn: Record<number, number> = {};
+  for (const hc of [12, 18, 24]) atIn[hc] = Math.min(...cases.map((c) => tipDeg(c, hc)));
+  return { tipLimitIn, slideLimitIn, atIn };
+}
+
+export function cargoHeightCheck(ctx: Ctx): AnalysisCheck {
+  const { p } = ctx;
+  const r = cargoHeightRule(ctx);
+  if (!r) return cargoOnlyCheck({ id: 'cargo-height', label: 'Cargo load-height rule', group: 'Stability', value: 0, unit: 'in', limit: 0, sense: '>=', info: true, how: 'No cargo case in this design.', refs: ['eng 3c S-5'] });
+  return cargoOnlyCheck({
+    id: 'cargo-height', label: 'Cargo load-height rule (center of the load above the deck)', group: 'Stability', value: r.tipLimitIn, unit: 'in', limit: p.cargoCgHeightIn, sense: '>=', info: true, refs: ['eng 3c S-5', 'D-53', 'D-62'],
+    details: [detail('cargo CG height at which the lateral tip angle reaches its limit', r.tipLimitIn, 'in', p.cargoCgHeightIn, '>='), detail('cargo CG height at which slide-before-tip is lost', r.slideLimitIn, 'in', p.cargoCgHeightIn, '>=')],
+    how: `LOAD-HEIGHT RULE: heavy things low, on the deck, strapped down; keep the CENTER of the load under ${p.cargoCgHeightIn} in above the deck (the cargo case assumes exactly that, cargoCgHeightIn). Solving for the cargo center height (worst placement, the cargo 3 in off center): the lateral tip angle reaches its ${p.tipStraightMinDeg}° limit at ${f(r.tipLimitIn, 1)} in (so ${p.cargoCgHeightIn} in is the rule with a little margin); the static stability factor falls to the slide-before-tip limit (${f(p.slideMarginFactor * p.tireGroundMu, 2)}) at ${f(r.slideLimitIn, 1)} in, above which the sled can tip instead of skidding. Tip angle at 12 in ${f(r.atIn[12], 1)}°, at 18 in ${f(r.atIn[18], 1)}°, at 24 in ${f(r.atIn[24], 1)}°. A cooler stack on firewood puts the center near 18 in: safe at walking pace, but no longer "slide before tip". Engrave or placard it on the sled.`,
+  });
 }
 
 export function slideBeforeTip(ctx: Ctx): AnalysisCheck {

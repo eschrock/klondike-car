@@ -71,7 +71,7 @@ const ORIENT_LABEL = { 'nose-tailgate': 'Nose to tailgate', 'nose-bulkhead': 'No
 const CONFIG_LABEL: Record<Config, string> = { installed: 'Installed', 'bridle-off': 'Tongue & rope off', removed: 'Removed (transport)' };
 const CONFIG_HELP: Record<Config, string> = {
   installed: 'Everything fitted, including the tongue and bridle rope',
-  'bridle-off': 'Only the tongue plate, shackle and bridle rope removed',
+  'bridle-off': 'Only the tongue, its sleeve and the bridle rope removed',
   removed: 'All removable parts off (D-9)',
 };
 

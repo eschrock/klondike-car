@@ -38,7 +38,8 @@ describe('the changed params (every one cites D-60; the supplier-derived ones ar
     clampPlateThickIn: 0.25, axleBeamThicknessIn: 2.25, brakeFlapThickIn: 0.875, brakeFlapWidthIn: 3, brakeBackerThickIn: 0.75,
     storageLidRimWidthIn: 0.75, beamHoldDownThickIn: 0.125, brakeKneeLegIn: 1.75, seatBackFrameWidthIn: 1.25, grabBoardThickIn: 0.625, axleWallIn: 0.12,
     // the first four trade-offs
-    wheelMass10Lb: 2.8, wheelRatingLb: 300, hubLengthIn: 2.28, wheelBoreIn: 0.75, panelPlyIn: 0.157, seatBackPlyIn: 0.236, transomThicknessIn: 0.5,
+    wheelMass10Lb: 2.8, wheelRatingLb: 300, hubLengthIn: 2.28, wheelBoreIn: 0.75, panelPlyIn: 0.157, seatBackPlyIn: 0.472, // D-62 (Eric 2026-10-12): the seat back is a frameless 12 mm panel, was 6 mm in a frame
+    transomThicknessIn: 0.5,
     handlePostThickIn: 0.6875, handlePostWidthIn: 1.1875,
     // the follow-ons
     riderLegReachIn: 35.75, rollPadRadiusIn: 11.5,
@@ -97,22 +98,22 @@ describe('the foot block and its slot cleats are gone (D-60; Eric, D-57 item 3)'
 });
 
 describe('mass (target about 120 lb; 144.4 at 3c-5, 143.0 with the cleats gone)', () => {
-  it('the empty sled is 120.6 lb (the study predicted 120.7) and the package saves about 22.4 lb from the 143.0 lb it started at', () => {
-    expect(totalMass(partsPre)).toBeCloseTo(143, 1); // the study's B0: the 3c-5 sled less the foot-block cleats
-    expect(totalMass(parts)).toBeGreaterThan(119.5);
-    expect(totalMass(parts)).toBeLessThan(121.5);
-    expect(totalMass(partsPre) - totalMass(parts)).toBeGreaterThan(21.5);
-    expect(totalMass(partsPre) - totalMass(parts)).toBeLessThan(23.5);
+  it('the empty sled is 121.2 lb: the D-60 package gave 120.6 (the study predicted 120.7), 14 in sockets +0.46 = 121.1, the D-62 build fixes +0.1; the package still saves about 20 lb against the PRE_D60 numbers rebuilt with the D-62 sandwich sides, bridle and clamps', () => {
+    expect(totalMass(parts)).toBeGreaterThan(120.5);
+    expect(totalMass(parts)).toBeLessThan(121.9);
+    expect(totalMass(partsPre)).toBeCloseTo(141.2, 0); // the study's B0 was 143.0; the D-62 changes (sandwich sides, no shackle, frameless seat back, ...) are in this baseline too
+    expect(totalMass(partsPre) - totalMass(parts)).toBeGreaterThan(19.5);
+    expect(totalMass(partsPre) - totalMass(parts)).toBeLessThan(21);
   });
-  it('by group (lb): body 36.1, running gear 18.6, front end 16.3, frame 13.4, brake 10.9, seat 8.4, storage 7.0, hardware 5.5, removable 2.4, lighting 2.0', () => {
+  it('by group (lb): body 36.0, running gear 18.8, front end 16.0, frame 13.5, brake 11.1, seat 8.5, storage 7.0, hardware 5.9 (epoxy joints of the sandwich), removable 2.4, lighting 2.0', () => {
     const g = groupMass(parts);
-    const want: Record<string, number> = { body: 36.1, 'running-gear': 18.6, 'front-end': 16.3, frame: 13.4, brake: 10.9, seat: 8.4, storage: 7.0, hardware: 5.5, removable: 2.4, lighting: 2.0 };
+    const want: Record<string, number> = { body: 36.0, 'running-gear': 18.8, 'front-end': 16.0, frame: 13.5, brake: 11.1, seat: 8.5, storage: 7.0, hardware: 5.9, removable: 2.4, lighting: 2.0 };
     for (const [k, v] of Object.entries(want)) expect(Math.abs(g[k] - v), `${k} ${g[k]?.toFixed(2)}`).toBeLessThan(0.6);
     const gp = groupMass(partsPre);
-    // the same sled before the package (the 3c-5 groups less the cleats): running gear 26.4, front end 20.0, body 40.5
-    expect(gp['running-gear']).toBeCloseTo(26.4, 0);
-    expect(gp['front-end']).toBeCloseTo(20.0, 0);
-    expect(gp.body).toBeCloseTo(40.5, 0);
+    // the same sled before the package (PRE_D60, rebuilt with the D-62 sandwich sides, bridle and clamps): running gear 26.1, front end 18.7, body 40.1
+    expect(gp['running-gear']).toBeCloseTo(26.1, 0);
+    expect(gp['front-end']).toBeCloseTo(18.7, 0);
+    expect(gp.body).toBeCloseTo(40.1, 0);
   });
   it('the biggest single savings are where the study said: the hollow axles (3.5 lb), the wheels (4.8 lb), the 1/2 in transom (2.6 lb), the 4 mm side webs, box and lid', () => {
     const saved = (re: RegExp) => massOf(partsPre, re) - massOf(parts, re);
@@ -129,16 +130,16 @@ describe('mass (target about 120 lb; 144.4 at 3c-5, 143.0 with the cleats gone)'
     expect(saved(/^steer-(chain|eye|anchor)-/)).toBeGreaterThan(1.5);
     expect(saved(/^joist-/)).toBeGreaterThan(0.7);
   });
-  it('4 mm okoume for the sides, box and lid (and the sign blanks) but 6 mm for the seat back: the groove and the edge banding follow', () => {
+  it('4 mm okoume for the sides, box and lid (and the sign blanks) and a frameless 12 mm seat back (D-62): the sandwich bands and the edge banding follow', () => {
     expect(worldAABB(byId('sign-L')).max[1] - worldAABB(byId('sign-L')).min[1]).toBeCloseTo(0.157, 3);
     const lid = worldAABB(byId('storage-lid'));
     expect(lid.max[2] - lid.min[2]).toBeCloseTo(0.157, 3);
     const end = worldAABB(byId('storage-end-fore'));
     expect(end.max[0] - end.min[0]).toBeCloseTo(0.157, 3);
     const panel = byId('seat-back-panel');
-    expect(panel.geometry).toMatchObject({ type: 'box' });
-    expect(Math.min(...(panel.geometry as { size: number[] }).size)).toBeCloseTo(0.236, 3);
-    expect(byId('side-L-chine').joints!.find((j) => j.to === 'side-L-web')!.size).toMatch(/0\.197/); // 4 mm + the 0.04 in slop
+    expect(panel.geometry).toMatchObject({ type: 'extrusion' }); // D-62: the frameless 12 mm panel (was 6 mm in a frame)
+    expect(panel.stock!.t).toBeCloseTo(0.472, 3);
+    expect(byId('side-L-chine').joints!.find((j) => j.to === 'side-L-web')!.size).toMatch(/0\.234" oak strip/); // the sandwich bands, no groove
     expect(byId('side-L-web').notes).toMatch(/^4 mm okoume panel/);
     expect(byId('storage-hinge-backer-L').notes).toMatch(/4 mm ply/);
   });
@@ -179,10 +180,9 @@ describe('the analysis after the package (the study predicted: safe 50-250+, gre
   });
   it('rows above 0.9: the fit facts (park-hold, lash-points count, seat-stow 0.94), turn-radius 0.98, and the cargo case of front-beam (0.94) and tip-straight (0.95); nothing else', () => {
     const above = cs.filter((c) => Math.max(c.util ?? 0, c.utilCargo ?? 0) > 0.9 && c.status !== 'info').map((c) => c.id).sort();
-    expect(above).toEqual(['front-beam', 'lash-points', 'park-hold', 'seat-stow', 'tip-straight', 'turn-radius']);
+    expect(above).toEqual(['lash-points', 'park-hold', 'seat-stow', 'tip-straight', 'turn-radius']); // D-62: front-beam cargo fell from 0.94 to 0.88 with the wider outer front clamp plate
     const u = (id: string) => cs.find((c) => c.id === id)!;
-    expect(u('front-beam').util!).toBeLessThan(0.9); // only the cargo case is above 0.9
-    expect(u('front-beam').utilCargo!).toBeLessThan(0.97);
+    expect(u('front-beam').utilCargo!).toBeLessThan(0.9);
     expect(u('tip-straight').util!).toBeLessThan(0.9);
     expect(u('tip-straight').utilCargo!).toBeLessThan(0.97);
     expect(u('seat-stow').util!).toBeLessThan(0.97);
@@ -191,13 +191,13 @@ describe('the analysis after the package (the study predicted: safe 50-250+, gre
   it('the rows the package leans on stay where the study put them: lift 0.67 (1/2 in transom), handle-sockets 0.50 (14 in sockets), bridle-eye 0.63, joists 0.65, rest-load 0.72, wheel-rating 0.56, foot-stop low', () => {
     const u = (id: string) => cs.find((c) => c.id === id)!.util!;
     expect(u('lift')).toBeCloseTo(0.67, 1);
-    expect(u('handle-sockets')).toBeCloseTo(0.50, 1); // 14 in sockets: about 3.7 in of post engaged (was 0.78 at 12 in)
+    expect(u('handle-sockets')).toBeLessThan(0.75); // 14 in sockets: 3.7 in of post engaged (0.78 at 12 in); D-62 adds the pin end-distance and the notched post: 0.69
     expect(u('bridle-eye')).toBeCloseTo(0.63, 1);
     expect(u('joists')).toBeCloseTo(0.65, 1);
     expect(u('rest-load')).toBeCloseTo(0.72, 1);
     expect(u('wheel-rating')).toBeCloseTo(0.56, 1);
     expect(u('steer-stops')).toBeLessThan(0.8); // 3/8 in eye bolts and 3/16 in chain: the study 0.54
-    expect(u('seat-back')).toBeLessThan(0.7); // the 6 mm seat back panel (1.09 at 4 mm)
+    expect(u('seat-back')).toBeLessThan(0.8); // the frameless 12 mm panel on the crest strip: 0.78, the latch pin tear-out in ply governs (D-62; 0.59 for the framed 6 mm back)
     expect(u('lid-load')).toBeLessThan(0.8); // the 4 mm lid (the study 0.71)
     expect(u('brake-flap')).toBeLessThan(0.8);
     expect(u('brake-return')).toBeLessThan(0.7);
@@ -217,7 +217,7 @@ describe('the analysis after the package (the study predicted: safe 50-250+, gre
   });
   it('cargo capacity is at least 225 lb against the 200 lb target (207 before, the study 212 for A and 236 for B); resting capacity about 348 lb against 250 (the study 348-350)', () => {
     expect(cargoCapacity(defaults).capacityLb!).toBeGreaterThanOrEqual(225);
-    expect(cargoCapacity(defaults).capacityLb!).toBeLessThan(245);
+    expect(cargoCapacity(defaults).capacityLb!).toBeLessThan(280); // 269 with the wider outer front clamp plate (233 before D-62, front-beam limited it)
     expect(cargoCapacity(defaults).limiter?.id).toBe('front-beam');
     const p = { ...defaults } as Params;
     const ctx = makeContext(p, buildModel(p, { rider: 'goal', cargo: true }));

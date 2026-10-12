@@ -1,12 +1,13 @@
 /**
- * The bridle tie (D-56, D-58): a bow shackle through the bronze sleeve in the oak tongue near its tip (pivot.ts) and the bridle rope to the pullers. The pullers steer by pulling
- * the tongue, which turns the front axle about the kingpin.
+ * The bridle tie (D-56, D-58, D-62): the bridle rope runs through the bronze sleeve in the oak tongue near its tip (pivot.ts), once round the tip, and is tied with a bowline round
+ * its own standing part; the rope goes on to the pullers. There is NO shackle (D-62, eng 3c MUST-2): a catalog screw-pin shackle does not fit the 1-1/4 in tongue and is far stronger than
+ * the tie load, so it never was a weak link. The pullers steer by pulling the tongue, which turns the front axle about the kingpin.
  * Everything here turns with the axle (`body: 'front-axle'`).
  */
 import { STEP, type Ctx } from './build-utils';
 import { translation } from './mat4';
-import { circlePath, customPart, mergeMeshes, pathLength, tubeAlong } from './mesh-utils';
-import type { Part, Vec3 } from './types';
+import { customPart } from './mesh-utils';
+import type { Part } from './types';
 
 const f2 = (v: number) => (Math.round(v * 100) / 100).toString();
 const frac = (x: number) => {
@@ -17,39 +18,39 @@ const frac = (x: number) => {
   return `${w > 0 ? `${w}-` : ''}${n}/${d}`;
 };
 
-/** Where the bridle ties: the tie hole x and the shackle / rope height (z), on the centerline. */
+/** Where the bridle ties: the tie hole x and the rope height (z), on the centerline. */
 export function bridleTiePoint(ctx: Pick<Ctx, 'L'>): { x: number; z: number } {
   return { x: ctx.L.tongue.holeX, z: ctx.L.tongue.tieZ };
+}
+
+/** Linear density of 3/8 in three-strand nylon rope (lb/ft); it goes with the diameter squared. */
+const NYLON_LB_PER_FT_AT_3_8 = 0.0237;
+/** Rope beyond the pullers' run: the lead from the tongue to where the tails start, and the tails' extra length (in). */
+const BRIDLE_EXTRA_IN = 36;
+
+export function bridleRopeKnot(p: Ctx['p']) {
+  const d = p.bridleRopeDiaIn;
+  const rated = p.bridleRopeBreakLbf;
+  return { dia: d, rated, knotted: rated * p.bridleKnotEfficiency, wll: rated * p.bridleRopeWllFraction };
 }
 
 export function buildBridle(ctx: Ctx): Part[] {
   const { p, L } = ctx;
   const parts: Part[] = [];
   const mk = (s: Parameters<typeof customPart>[1]) => customPart(ctx, s);
-  const d = p.eyeBoltDiameterIn;
+  const d = p.bridleRopeDiaIn;
   const tie = bridleTiePoint(ctx);
-  // Bow shackle: a ring in the vertical plane along the rope, its pin through the sleeve in the tongue; the bow arches past the tongue tip (D-58).
-  const x0 = tie.x - 0.25 - d / 2, x1 = L.tongue.tipX + 0.8;
-  const ringR = (x1 - x0) / 2;
-  const ringC: Vec3 = [(x0 + x1) / 2, 0, tie.z];
-  const ring = circlePath(ringC, [0, 1, 0], ringR, 24);
-  const em = mergeMeshes(tubeAlong(ring, d / 2, 8, true));
-  const vol = Math.PI * (d / 2) ** 2 * pathLength(ring, true);
+  const rk = bridleRopeKnot(p);
+  const bl = 18; // drawn length of the lead (the pull tails continue to the pullers)
+  const lenFt = (p.bridleRopeRunIn + BRIDLE_EXTRA_IN) / 12;
+  const massLb = NYLON_LB_PER_FT_AT_3_8 * (d / 0.375) ** 2 * lenFt;
   parts.push(mk({
-    id: 'bridle-eye', partNo: 'bridle-shackle', name: 'Bridle shackle (tongue tie)', group: 'front-end', kind: 'purchased', material: 'galvanized steel bow shackle',
-    geometry: { type: 'mesh', positions: em.positions, indices: em.indices }, transform: translation(0, 0, 0), massLb: (vol / 1728) * p.steelDensityPcf + 0.1, body: 'front-axle',
-    fab: 'buy', step: STEP.spindles, removable: true, explode: [1, 0, 0.3],
-    sourcing: { vendor: `McMaster-Carr or equivalent: ${frac(d)}" screw-pin bow shackle (or a ${frac(d)}" eye bolt with its nut) through the sleeve in the tongue (${frac(p.tongueHoleDiaIn)}" OD bronze or steel bushing). THE SHACKLE PIN IS THE INTENDED WEAK LINK of the rope tie (D-47): confirm its working-load limit is at least ${p.pullForceLbf * p.bridleTieOverloadFactor} lbf (bridle-eye row)` },
-    joints: [{ type: 'pin', to: 'bridle-sleeve', count: 1, diaIn: d, size: `${frac(d)}" shackle pin through the sleeve`, at: [[tie.x, 0, tie.z]] }, { type: 'pin', to: 'bridle', count: 1, size: 'bowline round the shackle bow' }],
-    notes: `Bridle shackle (D-56, D-58): through the sleeve ${f2(L.tongue.tipX - L.tongue.holeX)}" from the oak tongue's tip, ${f2(tie.z)}" above the ground, on the centerline. The team ties the bridle rope to it.`,
+    id: 'bridle', name: 'Bridle rope (nylon)', group: 'front-end', kind: 'purchased', material: 'nylon rope', geometry: { type: 'box', size: [bl, d, d] }, body: 'front-axle',
+    transform: translation(L.tongue.tipX + 0.6 + bl / 2, 0, tie.z), massLb, fab: 'buy', step: STEP.spindles, removable: true, explode: [1, 0, 0],
+    sourcing: { vendor: `McMaster-Carr or equivalent: ${frac(d)}" three-strand NYLON rope (rated about ${Math.round(rk.rated)} lbf breaking, verify), ${lenFt.toFixed(0)} ft: ${Math.round(p.bridleRopeRunIn / 12)} ft to the pullers' hands plus the lead and the tails. NOT low-stretch polyester: nylon stretches 15 to 25 percent and absorbs the snatch when the slack comes taut (D-62). Optional: splice in 3 ft of ${frac(d)}" shock cord near the tongue.` },
+    joints: [{ type: 'pin', to: 'bridle-sleeve', count: 1, size: 'one strand through the sleeve, once round the tongue tip, bowline round its own standing part' }],
+    notes: `Bridle rope (D-62): ${frac(d)}" nylon three-strand. THE ROPE IS THE DOCUMENTED WEAK LINK of the tie: working load limit ${Math.round(rk.wll)} lbf (${Math.round(p.bridleRopeWllFraction * 100)}% of ${Math.round(rk.rated)} lbf), and at the bowline it breaks at about ${Math.round(rk.knotted)} lbf (a bowline keeps about ${Math.round(p.bridleKnotEfficiency * 100)}%); replace it when it is glazed, cut or stiff. Tie: pass the end through the bronze sleeve, once round the tongue tip, and bowline it round the standing part (one strand in the bore, the end whipped); the sleeve bore is eased so the rope bears on a round edge. Single lead from the tongue tie (hidden in the viewer); the pull tails continue to the pullers (D-27). Pulling it steers the front axle: the tongue turns about the kingpin. Nylon is the snatch absorber: bridle-eye checks the slack-then-taut case.`,
   }));
-  const bl = 18;
-  parts.push(mk({
-    id: 'bridle', name: 'Bridle rope', group: 'front-end', kind: 'purchased', material: 'rope', geometry: { type: 'box', size: [bl, 0.5, 0.5] }, body: 'front-axle',
-    transform: translation(x1 + bl / 2, 0, tie.z), massLb: 0.5, fab: 'buy', step: STEP.spindles, removable: true, explode: [1, 0, 0],
-    sourcing: { vendor: `McMaster-Carr or equivalent: 1/2" braided polyester rope (low stretch), ${Math.round(p.bridleRopeRunIn / 12)} ft pull tails + lead; tied to the shackle with a bowline` },
-    joints: [{ type: 'pin', to: 'bridle-eye', count: 1, size: 'bowline to the shackle' }],
-    notes: 'Single lead from the tongue tie (hidden in the viewer); the pull tails continue to the pullers (D-27). Pulling it steers the front axle: the tongue turns about the kingpin.',
-  }));
+  void f2;
   return parts;
 }

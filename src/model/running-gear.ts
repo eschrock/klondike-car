@@ -2,7 +2,7 @@
  * Running gear: the four wheels (10 in pneumatic, D-54) and the REAR axle (through rod or stubs), axle beam and rod clamps (D-10, D-11, D-15). The front axle, which
  * pivots about a kingpin, is in pivot.ts (D-56); the front wheels turn with it.
  */
-import { AXLE_BEAM_POSITION, AXLE_STYLE } from '../params';
+import { AXLE_BEAM_POSITION, AXLE_STYLE, axleGrooveDepthIn } from '../params';
 import { axleSourcing, axleStockNote } from './axle-stock';
 import { IN3_PER_FT3, STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
 import { translation } from './mat4';
@@ -113,35 +113,33 @@ export function buildRunningGear(ctx: Ctx): Part[] {
       step: STEP.gear, notes: (p.axleBeamPosition === AXLE_BEAM_POSITION.underslung ? 'Underslung (D-15).' : 'Overslung (D-15).'),
       ...(seatInfo ? { joints: beamRailJoints } : {}),
     }));
-    // Clamps: 2 plates per wheel side (one per bolt), straddling the rod: at rod x ± (rod radius + leg gap).
+    // Clamps (D-62, build 3c M2): ONE bridge plate per wheel side, across the tube, with a 3/8 in bolt each side at tube center +/- (tube radius + clampLegGapIn) = 0.75 in. The groove is cut
+    // axleGrooveDepthIn (0.70 in) deep so the tube stands axleProudIn proud and the plate bears on the TUBE; it used to be two 0.8 in plates that floated 0.075 in above the tube.
     const under = p.axleBeamPosition === AXLE_BEAM_POSITION.underslung;
     const plate = { x: p.clampPlateLengthIn, y: p.clampPlateWidthIn, z: p.clampPlateThickIn };
     const legOffset = rodR + p.clampLegGapIn;
     const yEdge = Math.min(b.len / 2 - 0.25, ax.track / 2 - p.tireWidthIn / 2);
     const yc = yEdge - plate.y / 2;
     {
-      // REAR clamp plates (build review r2 MUST-4 / S13, eng N-10): 316 stainless flat bar cut to size (0.8" × 1.5" × 3/8"), one 3/8" 316 bolt through each plate and the
-      // beam beside the rod; the two plates per wheel side pin the rod in its groove. Real parts with a source and a stock size instead of the old "mass is an estimate" boxes.
-      const zc = under ? b.top + plate.z / 2 : b.bot - plate.z / 2;
+      // REAR clamp plates (build review r2 MUST-4 / S13, eng N-10; D-62): 316 stainless flat bar cut to size (1/4 x 1.5 x 2-1/4 in), two 3/8 in 316 bolts through the plate and the beam either
+      // side of the tube. Real parts with a source and a stock size.
+      const zc = under ? r + rodR + plate.z / 2 : r - rodR - plate.z / 2;
       const bd = p.uboltRodDiameterIn;
       for (const { s, tag } of SIDES) {
-        for (const [i, sx] of [[1, 1], [2, -1]] as const) {
-          const sp = span([ax.x + sx * legOffset - plate.x / 2, ax.x + sx * legOffset + plate.x / 2],
-            [s * yc - plate.y / 2, s * yc + plate.y / 2], [zc - plate.z / 2, zc + plate.z / 2]);
-          const grip = plate.z + b.depth;
-          const part = box(ctx, {
-            id: `clamp-${ax.tag}${tag}${i}`, partNo: 'axle-clamp', name: `${name} ${tag === 'L' ? 'left' : 'right'} rod clamp plate ${i}`,
-            group: 'running-gear', mat: 'steel', kind: 'metal', material: '316 stainless flat bar',
-            ...sp, fab: 'drill-tap', step: STEP.gear,
-            sourcing: { vendor: `McMaster-Carr (316 stainless flat bar ${plate.z}" × ${plate.y}": cut ${plate.x}" pieces on the bandsaw, drill ${f2(bd + 0.03)}"; 316 hex bolt ${f2(bd)}" × ${inchesText(boltLength(grip, bd))}, nylock nut, fender washer). 316, not zinc (wet tannin oak, S7)` },
-            joints: [{
-              type: 'bolt', to: `beam-${ax.tag}`, count: 1, diaIn: bd, size: `${f2(bd)}" × ${inchesText(boltLength(grip, bd))} 316 hex bolt down through the plate and the beam, nylock nut + fender washer under the beam`,
-              at: [[0, 0, 0]], note: 'beside the axle rod; the plate edge presses the rod shoulder into its groove',
-            }],
-            notes: `Pins the axle rod in its groove (D-10): ${plate.x}" × ${plate.y}" × ${plate.z}" 316 stainless plate with one ${f2(bd)}" bolt through the beam (grip ${f2(grip)}"). Its mass is now the real plate; the bolt, nut and washer are in the fastener allowance.`,
-          });
-          parts.push(part);
-        }
+        const sp = span([ax.x - plate.x / 2, ax.x + plate.x / 2], [s * yc - plate.y / 2, s * yc + plate.y / 2], [zc - plate.z / 2, zc + plate.z / 2]);
+        const grip = plate.z + b.depth;
+        const part = box(ctx, {
+          id: `clamp-${ax.tag}${tag}1`, partNo: 'axle-clamp', name: `${name} ${tag === 'L' ? 'left' : 'right'} axle clamp plate`,
+          group: 'running-gear', mat: 'steel', kind: 'metal', material: '316 stainless flat bar',
+          ...sp, fab: 'drill-tap', step: STEP.gear,
+          sourcing: { vendor: `McMaster-Carr (316 stainless flat bar ${plate.z}" × ${plate.y}": cut ${plate.x}" pieces on the bandsaw, drill 2 × ${f2(bd + 0.03)}" at ${f2(2 * legOffset)}" centers; 2 × 316 hex bolt ${f2(bd)}" × ${inchesText(boltLength(grip, bd))}, nylock nuts, fender washers). 316, not zinc (wet tannin oak, S7). Or a stocked 316 two-hole tube strap for ${p.axleDiameterIn}" OD tube.` },
+          joints: [{
+            type: 'bolt', to: `beam-${ax.tag}`, count: 2, diaIn: bd, size: `2 × ${f2(bd)}" × ${inchesText(boltLength(grip, bd))} 316 hex bolts, ${f2(2 * legOffset)}" apart, down through the plate and the beam either side of the tube, nylock nuts + fender washers under the beam`,
+            at: [[legOffset, 0, 0], [-legOffset, 0, 0]], note: `the plate bears on the tube (it stands ${f2(p.axleProudIn)}" proud of the ${f2(axleGrooveDepthIn(p))}" groove); ${f2(legOffset - bd / 2 - 0.015 - rodR)}" of oak between each bolt hole and the groove wall`,
+          }],
+          notes: `Clamps the axle tube in its groove (D-10, D-62): ${plate.x}" × ${plate.y}" × ${plate.z}" 316 stainless plate across the tube, two ${f2(bd)}" bolts through the beam (grip ${f2(grip)}") at ${f2(legOffset)}" either side of the tube centerline. Cut the groove ${f2(axleGrooveDepthIn(p))}" deep so the tube stands ${f2(p.axleProudIn)}" proud and the plate bears on it; shim the plate ends with tape on the first tightening and check it does not rock. Snug plus a quarter turn, re-check the nuts before each event (oak creeps; the oak caps the preload at about 800 lbf). The bolts, nuts and washers are in the fastener allowance.`,
+        });
+        parts.push(part);
       }
     }
   }

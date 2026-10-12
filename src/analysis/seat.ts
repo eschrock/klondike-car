@@ -24,21 +24,16 @@ import { seatFactor } from './bump';
 import type { AnalysisCheck, Detail } from './types';
 
 /** Effective bearing height of the stile on the wedge crest (crest plus the lid frame above it), in. */
-const CRUSH_HEIGHT_IN = 1;
-/** Simply supported rectangular plate, uniform load: M_max = α q a² (a = short side) vs the side ratio. */
-const PLATE_ALPHA: ReadonlyArray<[number, number]> = [[1, 0.0479], [1.2, 0.0627], [1.4, 0.0755], [1.6, 0.0862], [1.8, 0.0948], [2, 0.1017], [3, 0.1189], [100, 0.125]];
+export const CRUSH_HEIGHT_IN = 1;
+/** Share of the ply bending design stress taken as rolling shear / tear-out strength (assumed, ply is weak in rolling shear). */
+const PLY_SHEAR_FRAC_OF_MOR = 0.15;
 
-function plateAlpha(r: number): number {
-  const ratio = Math.max(1, r);
-  for (let i = 1; i < PLATE_ALPHA.length; i++) {
-    const [r1, a1] = PLATE_ALPHA[i];
-    const [r0, a0] = PLATE_ALPHA[i - 1];
-    if (ratio <= r1) return a0 + ((ratio - r0) / (r1 - r0)) * (a1 - a0);
-  }
-  return PLATE_ALPHA[PLATE_ALPHA.length - 1][1];
-}
-
-/** Numbers behind the seat-back check for one rider mass, exported for the tests. */
+/**
+ * Numbers behind the seat-back check for one rider mass, exported for the tests. D-62: the back is a bare 12 mm okoume panel. Per station (2 stations): w = Q / (2H) aft along the back; the
+ * back leans on the full-width oak crest strip at height A and is held at its foot by the hinge (B = 0): R_A = w H (H/2 - B)/(A - B), R_B = w H - R_A (negative = the hinge is pulled toward
+ * the support). The moment M(x) = R_B x + R_A (x - A)+ - w x^2/2 (per station) is taken over the whole width W as a strip, m = 2 M / W per inch of width, sigma = 6 m / t^2. Deflection of
+ * the overhang above the crest at the static torso load.
+ */
 export function seatBackLoads(ctx: Ctx, riderLb: number, g: number = ctx.p.dynamicFactor) {
   const { p } = ctx;
   const sup = seatBackSupport(p, ctx.L);
@@ -47,13 +42,22 @@ export function seatBackLoads(ctx: Ctx, riderLb: number, g: number = ctx.p.dynam
   const A = sup.c2A, B = sup.c2B;
   const RA = (w * sup.H * (sup.H / 2 - B)) / (A - B);
   const RB = w * sup.H - RA;
-  const M = (w * (sup.H - A) ** 2) / 2;
-  const plyT = Math.min(p.seatBackPlyIn, sup.t);
-  const a = Math.min(sup.W - 2 * sup.fw, sup.H - 2 * sup.fw);
-  const b = Math.max(sup.W - 2 * sup.fw, sup.H - 2 * sup.fw);
-  const q = Q / (sup.W * sup.H);
-  const Mp = plateAlpha(b / a) * q * a * a;
-  return { sup, Q, w, A, B, RA, RB, T: Math.max(0, -RB), M, plyT, a, b, q, Mp, sigmaPly: (6 * Mp) / (plyT * plyT) };
+  let M = 0, xM = 0;
+  for (const x of [...Array.from({ length: 201 }, (_, i) => (sup.H * i) / 200), A]) {
+    const m = Math.abs(RB * x + (x > A ? RA * (x - A) : 0) - (w * x * x) / 2);
+    if (m > M) { M = m; xM = x; }
+  }
+  const t = Math.min(p.seatBackPlyIn, sup.t);
+  const m = (2 * M) / sup.W; // lb.in per inch of width
+  const sigmaPly = (6 * m) / (t * t);
+  const L = sup.H - A;
+  const Q1 = riderLb * p.seatBackLoadFraction; // static, for the deflection
+  const wPress = Q1 / (sup.H * sup.W); // lbf per in^2 of panel face
+  const Eply = allowables(ctx).Eply;
+  const defl = (wPress * L ** 4) / (8 * Eply * (t ** 3 / 12));
+  const stations = 2;
+  const halfEdge = sup.fw / 2 - 0.2; // from the pin hole edge to the panel side edge
+  return { sup, Q, w, A, B, RA, RB, T: Math.max(0, -RB), M, xM, t, m, sigmaPly, defl, stations, edge: halfEdge };
 }
 
 export function seatBackCheck(ctx: Ctx): AnalysisCheck {
@@ -62,25 +66,31 @@ export function seatBackCheck(ctx: Ctx): AnalysisCheck {
   const ev = (c: CaseData): CaseEval => {
     const gF = seatFactor(ctx, c);
     const k = seatBackLoads(ctx, c.riderLb, gF);
-    const S = (k.sup.fw * k.sup.t * k.sup.t) / 6;
+    const contactW = 2 * k.sup.stileY + k.sup.fw;
+    const pinBear = p.seatPinPullLbf / (0.375 * k.t); // 3/8 in pin: F / (d t)
+    const pinTear = p.seatPinPullLbf / (2 * Math.max(0.05, k.edge) * k.t);
     const ds: Detail[] = [
-      detail('stile bending at the crest', k.M / S, 'psi', al.oakBend, '<='),
-      detail('crest bearing on the stop block', k.RA / (k.sup.fw * CRUSH_HEIGHT_IN), 'psi', al.oakPerp, '<='),
-      detail('hinge load (each hinge, screws in oak)', k.T, 'lbf', p.seatHingeLoadLbf, '<='),
-      detail('ply panel bending', k.sigmaPly, 'psi', al.plyBend, '<='),
+      detail('panel bending (bare 12 mm ply as a strip above and below the crest line)', k.sigmaPly, 'psi', al.plyBend, '<='),
+      detail('crest bearing on the oak crest strip (full width)', (2 * k.RA) / (contactW * CRUSH_HEIGHT_IN), 'psi', al.oakPerp, '<='),
+      detail('hinge load (each hinge, screws in the oak backer)', k.T, 'lbf', p.seatHingeLoadLbf, '<='),
+      detail('hinge leaf inserts pull-out (each of 3 threaded inserts in the ply)', k.T / 3, 'lbf', p.seatInsertPulloutLbf, '<='),
+      detail('latch pin bearing on the 12 mm ply (pull per pin)', pinBear, 'psi', al.plyBend, '<='),
+      detail('latch pin tear-out toward the panel edge (ply rolling shear)', pinTear, 'psi', al.plyBend * PLY_SHEAR_FRAC_OF_MOR, '<='),
+      detail('panel overhang deflection at the static torso load', k.defl, 'in', 0.375, '<='),
     ];
-    const how = `Rider ${f(c.riderLb, 0)} lb × dynamic ${f(gF, 2)} (max of the dynamic factor and 1 + V_rear/W, spec 5.4) × torso share ${p.seatBackLoadFraction} = ${f(k.Q)} lbf aft over the ${f(k.sup.H)}" back, ${f(k.w, 2)} lbf/in on each of 2 stiles. `
-      + `Stile ${f(k.sup.fw, 2)}" × ${f(k.sup.t, 2)}" bears on the fixed oak ${k.sup.rear ? 'stop block against the box end' : 'post'} crest at ${f(k.A, 2)}" and is held at its foot by the hinge (${f(k.B, 2)}"): `
-      + `R_A = ${f(k.RA)} lbf, hinge load ${f(k.T)} lbf per stile; M at the crest = w(H − A)²/2 = ${f(k.M)} lb·in, σ = ${f(k.M / S, 0)} psi (≤ ${f(al.oakBend, 0)}); `
-      + `bearing ${f(k.RA / (k.sup.fw * CRUSH_HEIGHT_IN), 0)} psi on ${f(k.sup.fw, 2)}" × ${CRUSH_HEIGHT_IN}" (≤ ${f(al.oakPerp, 0)}); hinge ${f(k.T, 0)} lbf (≤ ${f(p.seatHingeLoadLbf, 0)}); `
-      + `ply panel ${f(k.a, 1)}" × ${f(k.b, 1)}" simply supported on 4 edges under ${f(k.q, 2)} psi: M = ${f(plateAlpha(k.b / k.a), 4)}·q·a² = ${f(k.Mp, 1)} lb·in/in, σ = ${f(k.sigmaPly, 0)} psi (≤ ${f(al.plyBend, 0)}).`;
+    const how = `Rider ${f(c.riderLb, 0)} lb × dynamic ${f(gF, 2)} (max of the dynamic factor and 1 + V_rear/W, spec 5.4) × torso share ${p.seatBackLoadFraction} = ${f(k.Q)} lbf aft over the ${f(k.sup.H)}" frameless back, ${f(k.w, 2)} lbf/in at each of 2 stations. `
+      + `The bare ${f(k.t * 25.4, 0)} mm panel leans on the full-width oak crest strip at ${f(k.A, 2)}" and is held at its foot by the hinges (${f(k.B, 2)}"): `
+      + `R_A = ${f(k.RA)} lbf per station, hinge load ${f(k.T)} lbf per hinge; worst moment ${f(k.M)} lb·in per station at ${f(k.xM, 1)}" up the back, over the ${f(k.sup.W)}" width m = 2M/W = ${f(k.m, 1)} lb·in/in, σ = 6m/t² = ${f(k.sigmaPly, 0)} psi (≤ ${f(al.plyBend, 0)}); `
+      + `bearing ${f((2 * k.RA) / (contactW * CRUSH_HEIGHT_IN), 0)} psi on ${f(contactW, 1)}" × ${CRUSH_HEIGHT_IN}" of crest (≤ ${f(al.oakPerp, 0)}); hinge ${f(k.T, 0)} lbf (≤ ${f(p.seatHingeLoadLbf, 0)}), ${f(k.T / 3, 0)} lbf on each of 3 inserts (≤ ${f(p.seatInsertPulloutLbf, 0)}, verify by a pull test); `
+      + `latch pin pull ${f(p.seatPinPullLbf, 0)} lbf: bearing ${f(pinBear, 0)} psi on 3/8" × ${f(k.t, 2)}", tear-out ${f(pinTear, 0)} psi on 2 × ${f(k.edge, 2)}" × ${f(k.t, 2)}" (rolling shear ${f(al.plyBend * PLY_SHEAR_FRAC_OF_MOR, 0)}); static deflection of the ${f(k.sup.H - k.A, 1)}" overhang ${f(k.defl, 3)}". `
+      + `The two-block version (without the crest strip) would span ${f(2 * k.sup.stileY, 1)}" between the blocks and overstress the panel; a frame was the fallback and is not needed.`;
     return governing(ds, how);
   };
   return dualCheck({
     id: 'seat-back',
-    label: 'Seat-back load (stile, stop block, hinge)',
+    label: 'Seat-back load (frameless 12 mm panel, crest strip, hinge inserts, latch pins)',
     group: 'Structure',
-    refs: ['D-9', 'D-40', 'BRIEF 4.7'],
+    refs: ['D-9', 'D-40', 'D-62', 'BRIEF 4.7'],
     primary: 'goal',
     operating: ev(ctx.loads.operating),
     goal: ev(ctx.loads.goal),

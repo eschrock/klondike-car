@@ -45,22 +45,24 @@ export const STEP = { frame: 3, body: 4, steering: 4.5, gear: 4.6, linkage: 4.7,
 /** D-54 build order note: `steering` (4.5) is the bow, `spindles` (4.9) the tongue plate, bridle and steering ropes, bolted on with the hull upright (D-56). */
 
 /**
- * Hull assembly sequence (build review M4 / MUST-2, D-43, D-45). `Part.step` is where a part is INSTALLED; the hull sequence is fractional
- * between the frame (3) and the seat and storage (5), so Phase 4 can sort on it. The hull is built UPSIDE DOWN so that every move is a
- * straight vertical one, which works for the curved sides too (a curved side cannot slide inboard onto a curved deck edge):
- *   0. Epoxy-seal every groove, rabbet, dado and all ply faces and edges (a process step, before the bench glue-ups). The deck rabbets and dados
- *      are the (sealed) deck + a clearance (deckSlopIn) tall: thickened epoxy fills the gap.
- *   1. (4.0) Frame (rails, joists) + deck glued as a unit, right side up on the bench; the Domino mortises in the rail tops are cut.
- *   2. Bench, gunwale down on a flat table: laminate the chine, gunwale and rails around the plan-view form (scarfed to their nose runs at x = xn),
- *      glue each web into its chine and gunwale: a side assembly with the plan S-curve built in; vent holes drilled.
- *   3. (4.2) The two side assemblies stand inverted on the table in their jig; the frame + deck unit is turned over and LOWERED into them. The Dominos
- *      (all vertical) and the deck-edge rabbets engage together, with epoxy and the screws up through the rails.
- *   4. (4.4) The transoms go on LAST, sliding in X onto the deck edge, web ends, chine and gunwale tenons and rail tenons in one
- *      glue-up (slow 120-minute epoxy, rehearse twice); the vent holes let the dados breathe. Backers are glued to the transom first.
- *   One deck (D-52): step 4 is a single deck on the rails and joists (the front beam sits in its rail notches and
- *   is held down by the angles at 4.6); the chine rabbet runs the whole hull and the sides are two plies of 5/16 (rail 2 x 3/8) around ONE plan form.
- *   5. (STEP.steering 4.5, STEP.gear 4.6) With the hull still inverted and the deck underside facing up: fit the front beam and its hold-down angles,
- *      then the axles and wheels. THEN turn the hull upright and fit the spindles, linkage and tongue (STEP.linkage 4.7, STEP.spindles 4.9).
+ * Hull assembly sequence (build review M4 / MUST-2, D-43, D-45; rewritten for the sandwich sides at D-61/D-62, build 3c S1/S10). `Part.step` is where a part is INSTALLED; the hull
+ * sequence is fractional between the frame (3) and the seat and storage (5), so Phase 4 can sort on it. The hull is built UPSIDE DOWN so that every move is a straight vertical one,
+ * which works for the curved sides too (a curved side cannot slide inboard onto a curved deck edge):
+ *   0. Epoxy-seal every dado, the deck faces and edges and all ply faces (a process step, before the bench glue-ups; wash or sand the amine blush off any face that will be glued again).
+ *      The deck gap under the inner chine band and the dados are the (sealed) deck + a clearance (deckSlopIn) tall: thickened epoxy fills the gap.
+ *   1. (4.0) Forms: one S-form (two 3/4" MDF cauls) for the plan turn-in. Scarf the two halves of each 4 mm web (8:1, thin okoume ships as 2 x 4 ft sheets), cut the webs to the flat
+ *      development of the sheer, glue the sign backing strips inside them.
+ *   2. (4.0) Frame (rails, joists, king beam) + deck glued as a unit, right side up on the bench; the Domino mortises in the rail tops are cut. The rails are two 3/8 strips bent on the form.
+ *   3. (4.2) Side assemblies on the bench: each web gets an oak band glued on EACH face at the chine and at the gunwale and is bent with them on the form (no grooves); vents drilled.
+ *      The two side assemblies stand inverted in the jig. DRY-FIT the frame + deck unit and both side assemblies, MEASURE from the rear transom dado to the bow bulkhead dado, and cut the
+ *      bands, webs and rails to that length less 1/32" (S1); rehearse the close.
+ *   4. (4.2) The frame + deck unit is turned over and LOWERED into the inverted side assemblies: the Dominos (all vertical) engage, the deck edge rises into the gap under the inner chine
+ *      band, epoxy bed, screws up through the rails.
+ *   5. (4.4) Close ONE end first: glue and clamp the rear transom (its stopped dados take the web ends, its deck dado the deck), let it kick, then bring in the bow bulkhead with a
+ *      second batch of slow (120-minute) epoxy. The vent holes let the dados breathe. Backers are glued to the transom first. Two pipe clamps along the length.
+ *   6. (STEP.steering 4.5, STEP.gear 4.6) With the hull still inverted and the deck underside facing up: fit the front beam, kingpin and the axle clamp plates, then the axles and wheels
+ *      (flipping the finished hull with axles and wheels is about 100 lb: four people and padded horses). THEN turn the hull upright and fit the tongue, bridle, linkage (STEP.linkage 4.7,
+ *      STEP.spindles 4.9), the seat and storage (5), the brake (6) and the finish (7).
  */
 export const HULL_STEP = { deck: 4, sides: 4.2, transom: 4.4 } as const;
 

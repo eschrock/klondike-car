@@ -138,6 +138,8 @@ export interface Part {
   material: string;
   stock?: Dims;
   rough?: Dims;
+  /** Laminated member (D-62, build 3c S2): `stock` and `rough` are ONE strip and the part is this many strips glued face to face (1 = a single strip, such as a sandwich band bent onto the web). */
+  plies?: number;
   /** Local axis the wood grain (or ply face grain) runs along. */
   grain?: 'x' | 'y' | 'z';
   /** Sheet parts: one entry per outline edge, or a single value for all edges. */

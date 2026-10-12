@@ -117,7 +117,7 @@ viewer.addToolbarControl(
   }),
 );
 viewer.addToolbarControl(
-  checkbox('Transport config', 'Remove the removable parts (rear handle, seat back, tongue plate, shackle and rope, ornaments; D-9)', false, (v) => {
+  checkbox('Transport config', 'Remove the removable parts (rear handle, seat back, tongue, bridle rope, ornaments; D-9)', false, (v) => {
     view.removed = v;
     render();
   }, 'adv-only'),

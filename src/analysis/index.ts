@@ -12,7 +12,7 @@ import { brakeChecks } from './brake';
 import { makeContext, type Ctx } from './context';
 import { rearBeamSeat, wheelRating } from './rear';
 import { frontChecks } from './front';
-import { pitchForward, pitchRear, slideBeforeTip, tipLock, tipStraight, turnRadius, vRollover } from './stability';
+import { cargoHeightCheck, pitchForward, pitchRear, slideBeforeTip, tipLock, tipStraight, turnRadius, vRollover } from './stability';
 import { axleStress, bearingGroove, beamRear, deckCheck, railsCheck } from './structure';
 import { bridleChecks } from './bridle';
 import { seatChecks } from './seat';
@@ -57,6 +57,7 @@ function allRows(ctx: Ctx, truck: AnalysisCheck): AnalysisCheck[] {
     tipStraight(ctx),
     tipLock(ctx),
     slideBeforeTip(ctx),
+    cargoHeightCheck(ctx),
     vRollover(ctx),
     turnRadius(ctx),
     ...frontChecks(ctx),

@@ -53,8 +53,11 @@ export interface Layout {
   /** Chine / gunwale / rail band height and joist thickness (params). */
   railBand: number;
   joistT: number;
-  /** Chine / gunwale / side-board thickness (hwC is measured to its inner face). */
+  /** Chine / gunwale / side-board thickness: the whole sandwich (outer band + web + inner band; hwC is measured to its inner face). */
   side: number;
+  /** Thickness of each oak band laminated onto a face of the 4 mm web, (side - panelPlyIn) / 2 (D-61, D-62), and the depth the deck edge enters the chine rabbet (the inner band's thickness at most). */
+  sideBand: number;
+  deckEdge: number;
   /** Rear transom thickness (D-43). */
   transom: number;
   /** Oak backer lane between the rear transom and a rear storage box. */
@@ -64,8 +67,10 @@ export interface Layout {
   deckBot: number;
   /** Inner half width (between the side panels): the whole hull, front to back. */
   hwC: number;
-  /** Web (side panel) bottom z; its top is the gunwale line minus the gunwale band. */
+  /** The FREE web between the chine band and the gunwale band: its bottom z (the chine top); its top is the gunwale line minus the gunwale band. The web itself runs the full height of the side, from the chine bottom to `webCap` under the gunwale top (D-62). */
   web: { z0: number };
+  /** The web stops this far under the top of the gunwale bands; the top edge is filled with thickened epoxy so no ply edge shows (D-62). */
+  webCap: number;
   /** Rear axle beam, and the pivoting front axle beam (center at the kingpin, x = wheelbase). */
   beamR: Beam;
   beamF: Beam;
@@ -143,6 +148,8 @@ export function computeLayout(input: Params): Layout {
   const ply = p.deckPlyIn;
   const deckTop = p.deckHeightIn;
   const hwC = p.bodyWidthIn / 2 - side;
+  const sideBand = Math.max(0.05, (side - p.panelPlyIn) / 2);
+  const deckEdge = Math.min(p.deckCaptureDepthIn, sideBand);
   const rodR = p.axleDiameterIn / 2;
   const joistT = p.crossmemberThickIn;
 
@@ -154,7 +161,7 @@ export function computeLayout(input: Params): Layout {
   // `position` 0 = underslung (rod on top of the beam), 1 = overslung. The pivoting front beam is ALWAYS underslung (the king stack in steerGeometry assumes it, D-56).
   const mkBeam = (x: number, track: number, thick: number, position = p.axleBeamPosition): Beam => {
     const depth = p.axleBeamDepthIn;
-    const top = position === 0 ? r + rodR : r - rodR + depth;
+    const top = position === 0 ? r + rodR - p.axleProudIn : r - rodR + p.axleProudIn + depth; // the tube stands axleProudIn proud of the groove (D-62)
     return { x, len: Math.max(1, track - p.hubLengthIn - 0.25), thick, depth, top, bot: top - depth };
   };
   const beamR = mkBeam(0, p.rearTrackIn, p.axleBeamThicknessIn);
@@ -242,7 +249,7 @@ export function computeLayout(input: Params): Layout {
   return {
     r, WB, xRear, xFront, xFlatEnd: bh.xFlatEnd, xSideEnd, turnIn, bulkhead, hold, chineBot, railTop: chineBot, chineH,
     sideTop: deckTop + p.sideHeightRearIn, sideH: sideBow, sideRear: p.sideHeightRearIn, sag: p.sheerCurveIn, xSideStart,
-    railBand: p.railBandIn, joistT, side, transom, rearLane, ply, deckTop, deckBot: deckTop - ply, hwC, web, beamR, beamF, steer, king, chain, tongue,
+    railBand: p.railBandIn, joistT, side, sideBand, deckEdge, webCap: p.sideWebCapIn, transom, rearLane, ply, deckTop, deckBot: deckTop - ply, hwC, web, beamR, beamF, steer, king, chain, tongue,
     railEnd: bh.xFlatEnd, railStepX: steer.railStepX, railDepthF: steer.railDepthFront, joistX, seat, storage,
   };
 }

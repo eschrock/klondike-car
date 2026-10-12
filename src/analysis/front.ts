@@ -10,6 +10,7 @@
  * One-wheel roll: the struck wheel carries F1 = V + static, the other wheel F2 = its static load; the axle beam then tips about the washer with the moment M = (F1 - F2) track/2.
  * The washer resists it by an edge pressure; when the resultant lies outside the washer's core the bolt (at the center) holds the opposite side down in tension (`washerContact`).
  */
+import { axleGrooveDepthIn } from '../params';
 import { worldAABB } from '../model/bounds';
 import { tongueOutline } from '../model/pivot';
 import { uncTensileArea } from './nds';
@@ -191,7 +192,7 @@ export function rollPadPatch(ctx: Ctx): PadPatch {
 /** Running gap (in) between the top of a roll pad and the rail bottom over the swing (the rail is railDepthFront deep where the beam passes under it). */
 export function rollPadGap(ctx: Ctx): number {
   const { p, L } = ctx;
-  return L.deckBot - L.railDepthF - (L.beamF.top + p.rollPadThickIn);
+  return L.deckBot - L.railDepthF - (L.beamF.top + p.axleProudIn + p.rollPadThickIn); // the pad lies on the tube, which stands axleProudIn proud of the beam (D-62)
 }
 
 /** The thrust disc: its annulus, and the part of it that touches the axle beam top (a strip as wide as the beam, whatever the steering angle: the disc is round). */
@@ -334,7 +335,7 @@ export function kingBearingCheck(ctx: Ctx): AnalysisCheck {
       detail('running gap between a pad top and the rail bottom (not too tight: the axle must swing free)', gap, 'in', p.rollPadGapMinIn, '>='),
       detail('running gap between a pad top and the rail bottom (not too loose: the pad must catch the roll)', gap, 'in', PAD_GAP_MAX_IN, '<='),
       detail('the pads stay under the shallow part of the rail over the whole steering range (worst overlap area; 0 = a pad leaves the rail)', pad.onRail ? pad.minArea : 0, 'in2', 0.5, '>='),
-      detail('steering effort: UHMW disc friction (mu 0.25) at the static load, as a sideways force at the shackle', fricLbf, 'lbf', STEER_FRICTION_FRAC_MAX * p.pullForceLbf, '<='),
+      detail('steering effort: UHMW disc friction (mu 0.25) at the static load, as a sideways force at the bridle tie', fricLbf, 'lbf', STEER_FRICTION_FRAC_MAX * p.pullForceLbf, '<='),
     ];
     const how = `D-58: the roll of the axle (the high wheel pushes up, the low wheel less) is carried by two UHMW slide pads on the axle beam top, ${f(p.rollPadRadiusIn, 2)}" either side of the kingpin, under the frame rails; the kingpin and the disc only locate and carry the vertical load. `
       + `Thrust disc: ${f(p.kingThrustOdIn, 2)}" OD x ${f(kd + 0.06, 3)}" bore x ${f(p.kingThrustThickIn, 3)}" UHMW, screwed to the king beam, turning on the beam top; it touches ${f(disc.Ac, 2)} in2 of it (the beam is ${f(L.beamF.thick, 2)}" wide); allowable ${f(allow, 0)} psi (steerBearingAllowPsi, verify with the supplier). `
@@ -342,8 +343,8 @@ export function kingBearingCheck(ctx: Ctx): AnalysisCheck {
       + `One-wheel roll: M = (F1 - F2) x track/2 = (${f(n.F1)} - ${f(n.F2)}) x ${f(p.frontTrackIn / 2, 2)} = ${f(n.roll)} lb.in; the pad on the high side meets the rail with M cos(a) / y = ${f(rn.P)} lbf (lever y >= ${f(pad.yMin, 1)}" over the steering range), spread over the part of the pad that is under the rail (at least ${f(pad.minArea, 2)} in2 of the ${f(padA, 2)} in2 pad, at ${f(pad.minAreaDeg, 0)} deg of steering: the rail is ${f(p.railThicknessIn, 2)}" wide and curves in toward the bow): ${f(rn.pressure, 0)} psi on the rail underside (design ${f(al.oakPerp, 0)}); ${rn.hold > 0 ? `the pad force exceeds the whole axle load, the nut holds the rest (${f(rn.hold)} lbf)` : 'the whole axle load is more than the pad force, so the kingpin holds nothing'}. `
       + `Hard hit: ${bumpText(h.strike, 'Front hard hit', p)}; N ${f(h.N)} lbf, M ${f(h.roll)} lb.in, pad ${f(rh.P)} lbf, ${f(rh.pressure, 0)} psi on the rail (allow ${f(al.oakPerp * p.woodSafetyFactor, 0)} with no wood safety factor)${rh.hold > 0 ? `, nut hold-down ${f(rh.hold)} lbf` : ''}. `
       + `Tow pull: the vertical ${f(ld.Tv)} lbf at ${f(pitchArm, 1)}" ahead of the pin tilts the axle nose-up by ${f(ld.Tv * pitchArm)} lb.in; that couple is resisted by the kingpin through the hole in the axle beam (kingpin row), the disc carries ${f(towP, 0)} psi. `
-      + `Running gap: the rail bottom is ${f(L.deckBot - L.railDepthF - L.beamF.top, 3)}" over the beam top and the pad is ${f(p.rollPadThickIn, 4)}" thick, so ${f(gap, 3)}" (between ${f(p.rollPadGapMinIn, 2)}" and ${f(PAD_GAP_MAX_IN, 3)}", set with tape under the pad): about ${f(Math.atan(gap / pad.yMin) * DEG, 2)} deg of roll before a pad bears. ${pad.onRail ? '' : `The pad swings from x = ${f(pad.xMin, 1)}" to ${f(pad.xMax, 1)}" and leaves the rail (steps at ${f(L.railStepX, 1)}", ends at ${f(L.railEnd, 1)}"). `}`
-      + `Steering friction: the disc bears the static load, so the UHMW friction torque (mu ${UHMW_MU}) is about ${f(UHMW_MU * w.frontAxle * 0.67 * disc.R)} lb.in = ${f(fricLbf)} lbf at the shackle (limit ${f(STEER_FRICTION_FRAC_MAX * p.pullForceLbf)} lbf = ${f(STEER_FRICTION_FRAC_MAX * 100, 0)}% of the design pull); while a pad bears it is higher but only for the moment of the bump.`;
+      + `Running gap: the rail bottom is ${f(L.deckBot - L.railDepthF - L.beamF.top - p.axleProudIn, 3)}" over the tube top and the pad is ${f(p.rollPadThickIn, 4)}" thick, so ${f(gap, 3)}" (between ${f(p.rollPadGapMinIn, 2)}" and ${f(PAD_GAP_MAX_IN, 3)}", set with tape under the pad): about ${f(Math.atan(gap / pad.yMin) * DEG, 2)} deg of roll before a pad bears. ${pad.onRail ? '' : `The pad swings from x = ${f(pad.xMin, 1)}" to ${f(pad.xMax, 1)}" and leaves the rail (steps at ${f(L.railStepX, 1)}", ends at ${f(L.railEnd, 1)}"). `}`
+      + `Steering friction: the disc bears the static load, so the UHMW friction torque (mu ${UHMW_MU}) is about ${f(UHMW_MU * w.frontAxle * 0.67 * disc.R)} lb.in = ${f(fricLbf)} lbf at the bridle tie (limit ${f(STEER_FRICTION_FRAC_MAX * p.pullForceLbf)} lbf = ${f(STEER_FRICTION_FRAC_MAX * 100, 0)}% of the design pull); while a pad bears it is higher but only for the moment of the bump.`;
     return governing(ds, how);
   };
   return dualCheck({ id: 'king-bearing', label: 'Roll pads, thrust disc and the oak under them', group: 'Structure', refs: ['D-56', 'D-55', 'D-58'], primary: 'goal', ...evalBoth(ctx, ev) });
@@ -357,15 +358,15 @@ export function frontBeamCheck(ctx: Ctx): AnalysisCheck {
   const b = L.beamF;
   const yw = p.frontTrackIn / 2;
   const hole = p.kingpinDiaIn;
-  const groove = p.axleDiameterIn;
+  const groove = axleGrooveDepthIn(p); // D-62: the groove is the tube diameter less the 0.05 in that stands proud
   // The beam at the kingpin: full depth, the bolt hole takes width. At the inner end of the stub grooves: the groove takes depth.
   const wNet = Math.max(0.1, b.thick - hole);
   const secK = { A: wNet * b.depth, I: (wNet * b.depth ** 3) / 12, c: b.depth / 2, S: (wNet * b.depth ** 2) / 6 };
   const hEff = Math.max(0.1, b.depth - groove);
   const secG = rectSection(b.thick, hEff);
   const yIn = b.len / 2 - p.frontStubLenIn; // inner end of the groove / stub
-  const plateY = p.clampPlateWidthIn;
-  const yOutSt = b.len / 2 - 0.25 - plateY / 2, yInSt = yIn + 0.25 + plateY / 2; // the two clamp stations (model/pivot.ts)
+  const plateY = p.clampPlateOuterWidthIn; // the outer station takes the fore-aft bump force on the groove wall (D-62)
+  const yOutSt = b.len / 2 - 0.25 - plateY / 2, yInSt = yIn + 0.25 + p.clampPlateWidthIn / 2; // the two clamp stations (model/pivot.ts)
   const bd = p.uboltRodDiameterIn;
   const boltAllowN = p.ss316BoltYieldPsi / p.steelSafetyFactor, boltAllowH = p.holdDownBoltUltimatePsi / p.failSafeFactor;
   const ligament = (b.thick - groove) / 2;
@@ -382,6 +383,12 @@ export function frontBeamCheck(ctx: Ctx): AnalysisCheck {
     // Fore-aft bump force on the rod: the same lever ratio, reacted by the groove walls over the plate length.
     const wallP = (H: number) => (H * (yw - yInSt)) / (yOutSt - yInSt) / (groove * plateY);
     const Fs = w.frontWheel;
+    // S-2 (3c-7): the chain eye bolt goes fore-aft through the beam at steerChainBeamYIn from the kingpin, centered in the ligament under the stub groove (steerGeometry.beamZ), so the hole sits at the
+    // neutral axis of the reduced section (the groove takes the top groove-depth of the beam there). Net section: the ligament less the hole's height across the whole width.
+    const hEye = p.steerEyeBoltDiaIn + 1 / 32;
+    const Inet = (b.thick * (hEff ** 3 - hEye ** 3)) / 12, cNet = hEff / 2;
+    const mEye = (F: number) => F * Math.max(0, yw - p.steerChainBeamYIn);
+    const eyeSigma = (F: number) => (mEye(F) * cNet) / Inet;
     const ds: Detail[] = [
       detail('static wheel force: bending at the kingpin hole (net section)', bendingNet(mK(Fs), secK), 'psi', al.oakBend, '<='),
       detail('NORMAL 1" bump: bending at the kingpin hole (net of the bolt hole)', bendingNet(mK(n.F1), secK), 'psi', al.oakBend, '<='),
@@ -395,11 +402,13 @@ export function frontBeamCheck(ctx: Ctx): AnalysisCheck {
       detail('NORMAL: fore-aft bump force bearing on the rod groove wall at the outer station (oak perpendicular)', wallP(n.H), 'psi', al.oakPerp, '<='),
       detail('HARD: fore-aft bump force on the groove wall (no wood safety factor)', wallP(h.H), 'psi', al.oakPerp * p.woodSafetyFactor, '<='),
       detail('wood ligament beside the rod groove (min ligament, D-4)', ligament, 'in', p.beamLigamentMinIn, '>='),
+      detail('NORMAL 1" bump: bending at the chain eye-bolt hole (net of the hole, centered under the stub groove)', eyeSigma(n.F1), 'psi', al.oakBend, '<='),
+      detail('HARD 2" hit: bending at the chain eye-bolt hole (no wood safety factor)', eyeSigma(h.F1), 'psi', al.oakBend * p.woodSafetyFactor, '<='),
     ];
     const how = `Front beam ${f(b.thick, 2)}" x ${f(b.depth, 2)}" x ${f(b.len, 2)}" oak, a stub axle clamped in a top groove at each end over ${f(p.frontStubLenIn, 1)}". The wheel force acts ${f(yw, 2)}" from the kingpin; the beam is held down at the kingpin by the thrust washer (center reaction). `
       + `Static heavier wheel ${f(Fs)} lb: M = ${f(mK(Fs))} lb.in. ${bumpText(n.strike, 'Front 1" bump', p)}: wheel force V + static = ${f(n.F1)} lbf: M = F x ${f(yw, 2)} = ${f(mK(n.F1))} lb.in on the net section at the kingpin hole (${f(wNet, 3)}" x ${f(b.depth, 2)}", S = ${f(secK.S, 3)} in3): sigma ${f(bendingNet(mK(n.F1), secK), 0)} psi (design ${f(al.oakBend, 0)}), tau ${f(tauK(n.F1), 0)} psi (design ${f(al.oakShear, 0)}). At the inner end of the stub groove (${f(yIn, 2)}" from the center; the section is ${f(b.thick, 2)}" x ${f(hEff, 2)}" after the ${f(groove, 2)}" rod groove) M = F x ${f(yw - yIn, 2)} = ${f(mG(n.F1))} lb.in: ${f((mG(n.F1) * secG.c) / secG.I, 0)} psi. `
       + `Hard hit: wheel force ${f(h.F1)} lbf: ${f(bendingNet(mK(h.F1), secK), 0)} psi against MOR x C_M ${f(al.oakBend * p.woodSafetyFactor, 0)}. `
-      + `The rod acts as a beam on its two clamp stations (${f(yInSt, 2)}" and ${f(yOutSt, 2)}" from the center): the outer station holds it down with ${f(Pout(n.F1))} lbf (${f(boltT(n.F1))} lbf on each of its two ${f(bd, 3)}" 316 bolts, ${f(At, 4)} in2 tensile area; hard ${f(boltT(h.F1))} lbf), and the fore-aft bump force H = ${f(n.H)} lbf (hard ${f(h.H)}) bears on the groove wall over ${f(groove, 2)}" x ${f(plateY, 2)}" at the outer station: ${f(wallP(n.H), 0)} / ${f(wallP(h.H), 0)} psi. Ligament beside the groove ${f(ligament, 3)}" (min ${p.beamLigamentMinIn}"). ${'Wheel-rate sensitivity as in the wheel rows (bumpWheelRateLbIn, verify by bench test).'}`;
+      + `The rod acts as a beam on its two clamp stations (${f(yInSt, 2)}" and ${f(yOutSt, 2)}" from the center): the outer station holds it down with ${f(Pout(n.F1))} lbf (${f(boltT(n.F1))} lbf on each of its two ${f(bd, 3)}" 316 bolts, ${f(At, 4)} in2 tensile area; hard ${f(boltT(h.F1))} lbf), and the fore-aft bump force H = ${f(n.H)} lbf (hard ${f(h.H)}) bears on the groove wall over ${f(groove, 2)}" x ${f(plateY, 2)}" at the outer station: ${f(wallP(n.H), 0)} / ${f(wallP(h.H), 0)} psi. Ligament beside the groove ${f(ligament, 3)}" (min ${p.beamLigamentMinIn}"). The chain eye-bolt hole (${f(hEye, 3)}", ${f(p.steerChainBeamYIn, 1)}" from the kingpin) is centered in the ${f(hEff, 2)}" ligament under the ${f(groove, 2)}" groove: net I = ${f(Inet, 3)} in4, M = F x ${f(Math.max(0, yw - p.steerChainBeamYIn), 2)} gives ${f(eyeSigma(n.F1), 0)} psi (1" bump) and ${f(eyeSigma(h.F1), 0)} psi (hard); mid depth of the whole beam would leave a 0.17 in wafer under the groove floor (eng S-2). ${'Wheel-rate sensitivity as in the wheel rows (bumpWheelRateLbIn, verify by bench test).'}`;
     return governing(ds, how);
   };
   return dualCheck({ id: 'front-beam', label: 'Front axle beam (oak): bending at the kingpin hole, clamp bolts and groove', group: 'Structure', refs: ['D-56', 'D-4', 'D-50', 'D-55'], primary: 'goal', ...evalBoth(ctx, ev) });
@@ -668,11 +677,11 @@ export function steerClear(ctx: Ctx): AnalysisCheck {
     const b = worldAABB(x);
     return { poly: [[b.min[0], b.min[1]], [b.max[0], b.min[1]], [b.max[0], b.max[1]], [b.min[0], b.max[1]]] as P2[], z0: b.min[2], z1: b.max[2] };
   });
-  const plateIds = ['L', 'R'].flatMap((s) => [1, 2, 3, 4].map((k) => `clamp-F${s}${k}`));
+  const plateIds = ['L', 'R'].flatMap((s) => [1, 2].map((k) => `clamp-F${s}${k}`)); // one bridge plate per station (D-62)
   const plates = rects(plateIds);
   const plateTop = Math.max(...plates.map((q) => q.z1));
   const hb = L.beamF.thick / 2;
-  const padZ = [L.beamF.top, L.beamF.top + p.rollPadThickIn];
+  const padZ = [L.beamF.top + p.axleProudIn, L.beamF.top + p.axleProudIn + p.rollPadThickIn];
   const pads = [1, -1].map((s) => ({ poly: [[-p.rollPadWidthIn / 2, p.rollPadRadiusIn - p.rollPadLenIn / 2], [p.rollPadWidthIn / 2, p.rollPadRadiusIn - p.rollPadLenIn / 2], [p.rollPadWidthIn / 2, p.rollPadRadiusIn + p.rollPadLenIn / 2], [-p.rollPadWidthIn / 2, p.rollPadRadiusIn + p.rollPadLenIn / 2]].map(([u, v]): P2 => [L.king.x + u, s * v]), z0: padZ[0], z1: padZ[1] }));
   const tongue = { poly: tongueOutline(ctx).map(([x, y]): P2 => [x, y]), z0: L.tongue.z0, z1: L.tongue.z1 };
   const beamBody = { poly: [[L.king.x - hb, -L.beamF.len / 2], [L.king.x + hb, -L.beamF.len / 2], [L.king.x + hb, L.beamF.len / 2], [L.king.x - hb, L.beamF.len / 2]] as P2[], z0: L.beamF.bot, z1: L.beamF.top };
@@ -703,7 +712,7 @@ export function steerClear(ctx: Ctx): AnalysisCheck {
   }
   void turning;
   const railBot = L.deckBot - L.railDepthF;
-  const gapBeamRail = railBot - L.beamF.top;
+  const gapBeamRail = railBot - (L.beamF.top + p.axleProudIn); // the tube stands axleProudIn proud of the beam top (D-62)
   const gapKing = L.king.bot - plateTop;
   const jointBot = L.deckBot - p.crossmemberDepthIn;
   const gapJoist = jointBot - L.tongue.z1;

@@ -35,7 +35,8 @@ const PART: Record<string, { name: string; event?: string }> = {
   lift: { name: 'the lifting hand-holds', event: 'when two people lift the sled' },
   'foot-stop': { name: 'the foot brace (the bow bulkhead)', event: 'in a hard bump' },
   // The pivoting front axle (D-56), in words a parent knows: the pivot is "the bolt the front axle turns on", the tongue plate is "the pull arm".
-  'bridle-eye': { name: 'the rope shackle on the pull arm', event: 'under a hard pull' },
+  'bridle-eye': { name: 'the rope tied to the pull arm', event: 'under a hard pull or a yank' },
+  'side-web': { name: 'the thin side panels', event: 'if someone leans on them or kicks them' },
   kingpin: { name: 'the bolt the front axle pivots on', event: 'when the sled is pulled hard' },
   'king-bearing': { name: 'the plastic washer the front axle turns on' },
   'front-beam': { name: 'the front axle', event: 'in a hard bump' },
@@ -52,7 +53,7 @@ const PART: Record<string, { name: string; event?: string }> = {
   joists: { name: 'the floor crossmembers' },
   'handle-bow': { name: 'the handlebow', event: 'when the handler pulls back' },
 };
-/** The rows of the pivoting front end (D-56): the pivot bolt, its washer and crossbar, the axle, the stubs, the stops and the rope shackle. */
+/** The rows of the pivoting front end (D-56): the pivot bolt, its washer and crossbar, the axle, the stubs, the stops and the rope tie. */
 export const FRONT_END_IDS = new Set(['bridle-eye', 'kingpin', 'king-bearing', 'front-beam', 'front-stub', 'steer-stops', 'king-beam']);
 const partText = (id: string) => { const q = PART[id]; return q ? (q.event ? `${q.name} ${q.event}` : q.name) : id; };
 
@@ -74,7 +75,7 @@ const REASON: Record<string, string> = {
   'seat-grip': 'a side grab board could break or pull off when a rider hangs on',
   lift: 'a lifting hand-hold could crack when the sled is carried',
   'foot-stop': 'the foot brace could break or pull off the bow in a hard bump',
-  'bridle-eye': 'the rope shackle on the pull arm could bend or pull out under a hard pull',
+  'bridle-eye': 'the rope or the pull arm it ties to could break or tear out under a hard pull',
   kingpin: 'the bolt the front axle pivots on could bend or shear when the sled is pulled hard or hits a bump',
   'king-bearing': 'the plastic washer the front axle turns on could be crushed by the weight',
   'front-beam': 'the front axle could bend or crack in a hard bump',
@@ -91,6 +92,7 @@ const REASON: Record<string, string> = {
   'park-hold': 'the wheel chocks could slip or be climbed and the sled roll away when parked on a steep hill',
   joists: 'a floor crossmember could crack under the seat',
   'handle-bow': 'the handlebow could crack when the handler pulls back',
+  'side-web': 'a thin side panel could crack if someone leans on it or kicks it, or if the cargo shoves against it',
 };
 
 /** Rows the D-56 pivoting front end and the D-57 step brake add: each has a plain name or a failure sentence here, pinned by the simple-text test. */
@@ -375,6 +377,8 @@ export function cargoText(c: CargoCapacity): CargoText {
     lines.push(`Leaving out the checks that already fail for riders (the front end), the next limit is ${limiterName(c.limiterOther.id)}, at about ${rounded5(c.capacityOtherLb)} lb.`);
   const b = c.bed;
   lines.push(`The bed is flat once the seat back is flipped down and the cushions are in the box: ${n0(b.widthIn)} in wide all the way, ${n0(b.totalLengthIn)} in long out to the foot brace, and ${n0(b.heightIn)} in to the top of the sides at the low (bow) end (the sides rise toward the back). ${c.stow.applicable ? (c.stow.status === 'fail' ? 'The two cushions do NOT fit in the box.' : c.stow.status === 'marginal' ? 'The two cushions fit in the box, but only just.' : 'The two cushions lie flat in the box.') : ''}`.trim());
+  if (c.heightRule)
+    lines.push(`Load-height rule: heavy things low, on the floor, strapped down. Keep the middle of the load under ${n0(c.heightRule.designIn)} in above the floor (it tips at about ${n0(c.heightRule.tipLimitIn)} in); above about ${n0(c.heightRule.slideLimitIn)} in a fast turn can tip it instead of skidding.`);
   if (c.rearTraction !== null && c.rearTraction < 1)
     lines.push(`Parked nose-down on a steep hill with the full load, the rear brake flaps alone hold about ${n0(c.rearTraction * 100)}% of it; the pullers (or a chock) hold the rest.`);
   return { tone, headline, lines };

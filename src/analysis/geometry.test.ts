@@ -12,7 +12,7 @@ import { rearNormalNoseDown, tipBackAngle } from './stability';
 const s3 = (x: number) => Number(x.toPrecision(3));
 
 /** The default sled with the pivoting front axle (D-56) straight ahead: 44" wheelbase, 35.5" rear and front tracks. */
-const P0 = { ...defaultParams(), frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5 }; // the 3c-3 hand-calc fixture (35.5 in tracks; D-58 narrowed them)
+const P0 = { ...defaultParams(), frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5, clampPlateOuterWidthIn: 1.5 }; // the 3c-3 hand-calc fixture (35.5 in tracks; D-58 narrowed them)
 const G: ContactInputs = { wheelbaseIn: P0.wheelbaseIn, rearTrackIn: P0.rearTrackIn, frontTrackIn: P0.frontTrackIn };
 
 describe('contact inputs at the defaults', () => {

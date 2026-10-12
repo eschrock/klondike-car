@@ -34,18 +34,16 @@ const ALLOW: Allow[] = [
   { a: /^kingpin$/, b: /^(beam-F|bridle-tongue|king-thrust|king-beam)$/, why: 'the kingpin bolt passes through bored holes in the axle beam, the tongue plate, the thrust washer bore and the king beam (the parts are boxes without the hole)' },
   { a: /^(beam-F|king-beam|joist-\d+)$/, b: /^steer-(eye|anchor)-[LR]$/, why: 'the forged eye bolt passes through a drilled hole in the member (D-58)' },
   { a: /^steer-(eye|anchor)-[LR]$/, b: /^steer-chain-[LR]$/, why: 'the chain hangs on the eye by a quick link; the chain is drawn straight between the eye rings (D-58)' },
-  { a: /^scupper-/, b: /^side-[LR]-chine$/, why: 'the drain nipple passes through the chine (D-57)' },
-  { a: /^bridle-sleeve$/, b: /^(bridle-tongue|bridle-eye)$/, why: 'the sleeve bushing lies in the hole across the tongue stem and the shackle pin runs through it (D-58)' },
-  { a: /^bridle-eye$/, b: /^(bridle-tongue|bridle)$/, why: 'the shackle pin passes through the tie hole in the tongue tip and the rope is tied round the shackle bow; the shackle mesh is a ring whose OBB over-covers the loop (D-56)' },
-  { a: /^bridle$/, b: /^bridle-eye$/, why: 'the rope is tied to the shackle (D-56)' },
+  { a: /^scupper-/, b: /^side-[LR]-(chine|chine-in|web)$/, why: 'the drain nipple passes through the chine sandwich: inner band, web and outer band (D-57, D-62)' },
+  { a: /^bridle-sleeve$/, b: /^bridle-tongue$/, why: 'the sleeve bearing lies in the hole across the tongue stem; the bridle rope runs through its bore (D-58, D-62)' },
   { a: /^bow-bulkhead$/, b: /^(deck|side-[LR]-web)$/, why: 'the deck edge and the web ends sit in dados in the bulkhead\'s rear face (D-57)' },
   { a: /^bow-bulkhead$/, b: /^lamp-clip$/, why: 'the lamp clip\'s plug fills the bulkhead\'s lift hand-hold slot (3c-5); the slot is a hole, so the bounding boxes meet' },
-  { a: /^seat-hinge-[LR]$/, b: /^seat-back-(stile|rail-bottom)-?[LR]?$/, why: 'the hinge knuckle sits at the stile\'s front foot, where its leaf is let into the frame (D-57)' },
-  { a: /^seat-pin-[LR]$/, b: /^(seat-back-stile|seat-wedge)-[LR]$/, why: 'the quick-release pin passes through the stile into the stop block (D-57)' },
+  { a: /^seat-hinge-[LR]$/, b: /^(seat-wedge-[LR]|seat-back-(panel|stile|rail-bottom)-?[LR]?)$/, why: 'the hinge knuckle sits at the stile\'s front foot, where its leaf is let into the frame (D-57)' },
+  { a: /^seat-pin-[LR]$/, b: /^(seat-back-stile|seat-back-panel|seat-wedge)-?[LR]?$/, why: 'the quick-release pin passes through the stile into the stop block (D-57)' },
   // ---- body: captured joints and sloped members
-  { a: /^deck$/, b: /^(side-[LR]-chine|transom-rear)$/, why: 'the deck edge sits in the chine rabbets and the transom dado (D-35, D-45)' },
-  { a: /^side-[LR]-web$/, b: /^(side-[LR]-(chine|gunwale)|transom-rear)$/, why: 'the side panel enters the chine and gunwale grooves and the transom stopped dados (D-35)' },
-  { a: /^seat-wedge-[LR]$/, b: /^seat-(back-(stile|pad)|knob)-?[LR]?$/, why: 'oak wedge/post is a trapezoid extrusion whose sloped face is the stile\'s rear face; its OBB is the bounding box' },
+  { a: /^deck$/, b: /^(side-[LR]-(chine|chine-in|web)|transom-rear)$/, why: 'the deck edge rises into the gap under the inner chine band, against the web, and sits in the transom dado (D-35, D-45, D-62)' },
+  { a: /^side-[LR]-web$/, b: /^(side-[LR]-(chine|chine-in|gunwale|gunwale-in)|transom-rear)$/, why: 'the oak bands are glued to the faces of the web (the sandwich, D-62; the plan-curved slab boxes meet along the S) and the web ends enter the transom stopped dados (D-35)' },
+  { a: /^seat-(wedge-[LR]|crest-strip)$/, b: /^seat-(back-(stile|pad|panel)|knob|wedge)-?[LR]?$/, why: 'oak wedge/post is a trapezoid extrusion whose sloped face is the stile\'s rear face; its OBB is the bounding box' },
 ];
 const matches = (r: Allow, a: Part, b: Part) => (r.a.test(a.id) && r.b.test(b.id)) || (r.a.test(b.id) && r.b.test(a.id));
 
@@ -69,7 +67,7 @@ const KNOWN_OFF_DEFAULT: RegExp[] = [
   // Pivoting front axle (D-56), found when the variants were swept; validateParams does not yet catch them:
   /^bridle-tongue x steer-stop-[LR]:/, // lock >= ~25 deg (or a wide body): the tongue plate (2.5 in bar) swings into the inboard stop blocks, which move inward as the lock grows
   /^steer-stop-L x steer-stop-R:/, // lock 35 deg: the stop contact point comes within the block width of the center line
-  /^clamp-F[LR][34] x king-beam:/, // tongue + thrust washer thinner than the 3/8 in clamp plates (tongueThickIn + kingThrustThickIn < clampPlateThickIn): the king beam bottom is below the plate tops
+  /^clamp-F[LR]2 x king-beam:/, // tongue + thrust washer thinner than the 3/8 in clamp plates (tongueThickIn + kingThrustThickIn < clampPlateThickIn): the king beam bottom is below the plate tops
   /^joist-[18] x (bridle-tongue|beam-F|axle-F[LR]|clamp-F[LR]\d|axle-R|beam-R):/, // a deep crossmember (crossmemberDepthIn >= ~2 at the 8 in deck) hangs below the tops of the beams / the tongue plate: no validator rule yet
   /^(axle-R|beam-R) x joist-1:/,
   /^beam-hold-down-[LR] x joist-1:/, // 3c-5: with the joists at 8.5 in the first joist no longer falls on the rear hanger at the defaults; in a variant where it does (kingBeam5, the fuzz) its end meets the hold-down angle's upright leg by 3/16 in (it was an ALLOW entry)
@@ -144,7 +142,7 @@ describe('buildModel structure', () => {
     expect(yaw(at, 'wheel-FL')).toBeCloseTo((15 * Math.PI) / 180, 9);
     expect(yaw(at, 'wheel-FR')).toBeCloseTo((15 * Math.PI) / 180, 9); // parallel wheels: no Ackermann
     const turning = (x: Part) => x.body === 'front-axle' || x.body === 'wheel-FL' || x.body === 'wheel-FR';
-    expect(neutral.filter(turning).map((x) => x.id)).toEqual(expect.arrayContaining(['beam-F', 'axle-FL', 'axle-FR', 'kingpin', 'bridle-tongue', 'bridle-eye', 'bridle', 'wheel-FL', 'wheel-FR', 'clamp-FL1', 'clamp-FR4']));
+    expect(neutral.filter(turning).map((x) => x.id)).toEqual(expect.arrayContaining(['beam-F', 'axle-FL', 'axle-FR', 'kingpin', 'bridle-tongue', 'bridle', 'wheel-FL', 'wheel-FR', 'clamp-FL1', 'clamp-FR2']));
     for (const a of at) {
       const b = neutral.find((x) => x.id === a.id)!;
       const moved = a.transform.some((v, k) => Math.abs(v - b.transform[k]) > 1e-6);
@@ -156,14 +154,20 @@ describe('buildModel structure', () => {
     }
     for (const id of ['king-beam', 'king-thrust', 'steer-anchor-L', 'deck', 'rail-L', 'wheel-RL', 'beam-R']) expect(at.find((x) => x.id === id)!.transform, id).toEqual(neutral.find((x) => x.id === id)!.transform);
   });
-  it('REAR U-bolt clamp plates straddle the rod: legs at rod x ± (rod radius + leg gap) (H2)', () => {
+  it('REAR clamp: ONE bridge plate per wheel side across the tube (D-62), bolts at rod x ± (rod radius + gap) = 0.75 in, sitting on the tube (0.05 in proud of the beam)', () => {
     const m = buildModel(defaults);
+    const off = defaults.axleDiameterIn / 2 + defaults.clampLegGapIn;
+    expect(off).toBeCloseTo(0.75, 9);
+    expect(m.filter((x) => /^clamp-R/.test(x.id)).map((x) => x.id).sort()).toEqual(['clamp-RL1', 'clamp-RR1']);
     for (const tag of ['L', 'R']) {
-      const a = worldAABB(m.find((x) => x.id === `clamp-R${tag}1`)!);
-      const b = worldAABB(m.find((x) => x.id === `clamp-R${tag}2`)!);
-      const off = defaults.axleDiameterIn / 2 + defaults.clampLegGapIn;
-      expect((a.min[0] + a.max[0]) / 2).toBeCloseTo(off, 6);
-      expect((b.min[0] + b.max[0]) / 2).toBeCloseTo(-off, 6);
+      const part = m.find((x) => x.id === `clamp-R${tag}1`)!;
+      const a = worldAABB(part);
+      expect((a.min[0] + a.max[0]) / 2).toBeCloseTo(0, 6);
+      expect(a.max[0] - a.min[0]).toBeCloseTo(defaults.clampPlateLengthIn, 9);
+      expect(a.min[2]).toBeCloseTo(computeLayout(defaults).r + defaults.axleDiameterIn / 2, 9); // on top of the tube
+      const bolts = part.joints!.find((j) => j.type === 'bolt')!;
+      expect(bolts.count).toBe(2);
+      expect(bolts.at!.map((q) => q[0]).sort((u, v) => u - v)).toEqual([-off, off]);
     }
   });
   it('the rear axle hangers straddle the rear beam: oak on the inside of each rail, bottom below the beam top by the seat notch, top at the deck underside', () => {
@@ -260,10 +264,10 @@ describe('masses', () => {
     expect(rows.steering).toBeUndefined();
     expect(rows.casters).toBeUndefined(); // the casters are gone (D-56); the front axle is the 'front-end' group
   });
-  it('the front-end group (D-56, D-58) is the axle beam, its two stubs and eight clamp plates, the kingpin, thrust disc, roll pads, king beam, oak tongue with its sleeve, shackle, rope and the two steering chains with their four eye bolts; 10-25 lb', () => {
+  it('the front-end group (D-56, D-58) is the axle beam, its two stubs and four bridge clamp plates (D-62), the kingpin, thrust disc, roll pads, king beam, oak tongue with its sleeve, rope and the two steering chains with their four eye bolts; 10-25 lb', () => {
     const c = parts.filter((x) => x.group === 'front-end');
     const m = c.reduce((a, x) => a + x.massLb, 0);
-    const ids = ['beam-F', 'axle-FL', 'axle-FR', ...['L', 'R'].flatMap((t) => [1, 2, 3, 4].map((k) => `clamp-F${t}${k}`)), 'kingpin', 'king-thrust', 'king-beam', 'bridle-tongue', 'bridle-sleeve', 'bridle-eye', 'bridle', 'roll-pad-L', 'roll-pad-R', 'steer-eye-L', 'steer-eye-R', 'steer-anchor-L', 'steer-anchor-R', 'steer-chain-L', 'steer-chain-R'];
+    const ids = ['beam-F', 'axle-FL', 'axle-FR', ...['L', 'R'].flatMap((t) => [1, 2].map((k) => `clamp-F${t}${k}`)), 'kingpin', 'king-thrust', 'king-beam', 'bridle-tongue', 'bridle-sleeve', 'bridle', 'roll-pad-L', 'roll-pad-R', 'steer-eye-L', 'steer-eye-R', 'steer-anchor-L', 'steer-anchor-R', 'steer-chain-L', 'steer-chain-R'];
     expect(c.map((x) => x.id).sort()).toEqual([...ids].sort());
     expect(m).toBeGreaterThan(10);
     expect(m).toBeLessThan(25);
@@ -274,7 +278,7 @@ describe('masses', () => {
     expect(parts.some((x) => x.id === 'seat-base')).toBe(false);
     expect(parts.some((x) => /^(bolster|turntable|kp-|spindle|side-bearer|tie-rod|tongue|ack|caster-|bow-block|tip-swivel|front-hanger-)/.test(x.id))).toBe(false);
     const seatBack = parts.filter((x) => x.id.startsWith('seat-back-') && x.id !== 'seat-back-pad');
-    expect(seatBack.map((x) => x.id).sort()).toEqual(['seat-back-panel', 'seat-back-rail-bottom', 'seat-back-rail-top', 'seat-back-stile-L', 'seat-back-stile-R']);
+    expect(seatBack.map((x) => x.id).sort()).toEqual(['seat-back-panel']); // D-62: frameless, the oak stiles and rails are gone
     expect(seatBack.reduce((m, x) => m + x.massLb, 0)).toBeLessThan(4);
     const lid = parts.find((x) => x.id === 'storage-lid')!;
     expect(lid.kind).toBe('sheet');
@@ -310,7 +314,7 @@ describe('removed', () => {
     const removed = buildModel(defaults, { removed: true });
     expect(removed.map((p) => p.id)).toEqual(full.filter((p) => !p.removable).map((p) => p.id));
     const gone = full.filter((p) => p.removable).map((p) => p.id);
-    expect(gone).toEqual(expect.arrayContaining(['seat-back-pad', 'seat-pin-L', 'sign-L', 'handle-bar', 'handle-post-L', 'handle-post-R', 'bridle', 'bridle-eye', 'bridle-tongue']));
+    expect(gone).toEqual(expect.arrayContaining(['seat-back-pad', 'seat-pin-L', 'sign-L', 'handle-bar', 'handle-post-L', 'handle-post-R', 'bridle', 'bridle-tongue']));
     for (const id of ['beam-F', 'kingpin', 'king-beam', 'king-thrust', 'steer-eye-L', 'steer-anchor-L', 'axle-FL', 'wheel-FL', 'wheel-FR', 'bow-bulkhead', 'deck', 'transom-rear']) expect(removed.some((p) => p.id === id), id).toBe(true);
     expect(gone.some((id) => /^sign/.test(id))).toBe(true); // the signs are on by default (D-57) and come off for the truck
     // taking the tongue off shortens the sled to the bow tip (the tongue reaches tongueTieAheadIn past it)
@@ -478,7 +482,7 @@ describe('variants', () => {
     const m = buildModel({ ...defaults, seatBackAngleDeg: 0, riderStatureIn: 76 });
     // Not asserting a clash here (validator-dependent); assert the function does detect a forced overlap.
     const torso = m.find((x) => x.id === 'rider-torso')!;
-    const stile = m.find((x) => x.id === 'seat-back-stile-L')!;
+    const stile = m.find((x) => x.id === 'seat-back-panel')!;
     const moved = { ...torso, transform: [...torso.transform.slice(0, 12), stile.transform[12], stile.transform[13], stile.transform[14], 1] };
     expect(riderClashes([...m.filter((x) => x !== torso), moved]).length).toBeGreaterThan(0);
   });
@@ -552,7 +556,6 @@ describe('explode directions (M7)', () => {
     expect(dir('bridle-tongue')[0]).toBeGreaterThan(0.8); // the tongue plate slides forward
     expect(dir('beam-R')[2]).toBeLessThan(-0.9);
     expect(dir('bridle')[0]).toBeGreaterThan(0.9); // the rope bridle separates forward
-    expect(dir('bridle-eye')[0]).toBeGreaterThan(0.8);
     expect(dir('bow-bulkhead')[0]).toBeGreaterThan(0.3);
     expect(dir('side-L-web')[1]).toBeGreaterThan(0.9);
     expect(dir('side-R-web')[1]).toBeLessThan(-0.9);

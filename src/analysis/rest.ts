@@ -7,6 +7,7 @@
  * The weight is a point (the seat footprint or the foot patch) moved over the deck; the sled's own weight splits between the axles by its CG. Everything is linear in the
  * weight, so the maximum resting weight is found by bisection on the worst utilization (the sled's own weight is a constant part of the load).
  */
+import { axleGrooveDepthIn } from '../params';
 import { totalMass, centerOfGravity } from '../model/mass';
 import type { Ctx } from './context';
 import { detail, governing, singleCheck } from './dual';
@@ -111,7 +112,7 @@ export function restEval(ctx: Ctx, W: number): RestResult {
     const bR = L.beamR;
     const hangerY = L.hwC + L.side - p.railThicknessIn - p.axleHangerThickIn / 2;
     const lever = Math.max(0.5, Tr / 2 - hangerY);
-    const secR = (bR.thick * Math.max(0.1, bR.depth - p.axleDiameterIn) ** 2) / 6;
+    const secR = (bR.thick * Math.max(0.1, bR.depth - axleGrooveDepthIn(p)) ** 2) / 6;
     add(`rear axle beam bending between the hanger and the wheel (heavier rear wheel ${f(wRear)} lb at ${atR})`, (wRear * lever) / secR, 'psi', al.oakBend);
     add('rear axle beam shear at the hanger', rectShear(wRear, bR.thick, bR.depth), 'psi', al.oakShear);
     const rod = axleSection(p);

@@ -286,20 +286,20 @@ export function buildStorage(ctx: Ctx): Part[] {
 
   // ── Tray: the deck is the floor when the box stands on it; a raised box (forward) keeps its own ply floor ──
   if (!g.deckFloor) {
-    parts.push(box(ctx, { ...common, id: 'storage-bottom', name: 'Storage box floor', mat: 'ply', edges: 'captured',
+    parts.push(box(ctx, { ...common, id: 'storage-bottom', name: 'Storage box floor', mat: 'ply', edges: 'captured', fab: 'shaper-origin',
       ...span([x0 + pl, x1 - pl], [-yIn, yIn], [zBot, zBot + pl]),
       joints: ['storage-side-L', 'storage-side-R', 'storage-end-aft', 'storage-end-fore'].map(fillet),
       notes: `Interior volume target ${p.storageVolumeIn3} in³ (D-19). The raised box has no deck under it, so it keeps its own floor; two ${p.storageDrainDiaIn}" drain holes at the aft corners go through it, lined with stainless nipples (D-41).` }));
   }
   const deckJoint = (): Joint[] => g.deckFloor ? [{ type: 'glue', to: deckId, count: 1, size: '3/8" epoxy fillet inside, 2" glass tape', note: 'wall bottom edge stands on the epoxy-sealed deck: fillet inside, bead outside, so no ply edge is exposed and the deck is the box floor' }] : [];
   for (const [tag, y] of [['L', hw - pl / 2], ['R', -(hw - pl / 2)]] as const) {
-    parts.push(box(ctx, { ...common, id: `storage-side-${tag}`, partNo: 'storage-side', name: `Storage box side ${tag}`, mat: 'ply', edges: 'captured',
+    parts.push(box(ctx, { ...common, id: `storage-side-${tag}`, partNo: 'storage-side', name: `Storage box side ${tag}`, mat: 'ply', edges: 'captured', fab: 'shaper-origin',
       ...span([x0, x1], [y - pl / 2, y + pl / 2], [zBot, zPlyTop]),
       joints: [miter('storage-end-aft'), miter('storage-end-fore'), ...deckJoint(), { type: 'glue', to: `storage-coaming-side-${tag}`, count: 1, note: 'oak coaming caps the wall top, epoxy' }],
       notes: 'Wall top is capped by the oak coaming so no ply edge is exposed under the gasket (S4).' }));
   }
   for (const [tag, xa, xb] of [['aft', x0, x0 + pl], ['fore', x1 - pl, x1]] as const) {
-    parts.push(box(ctx, { ...common, id: `storage-end-${tag}`, partNo: 'storage-end', name: `Storage box ${tag} end`, mat: 'ply', edges: 'captured',
+    parts.push(box(ctx, { ...common, id: `storage-end-${tag}`, partNo: 'storage-end', name: `Storage box ${tag} end`, mat: 'ply', edges: 'captured', fab: 'shaper-origin',
       ...span([xa, xb], [-yIn, yIn], [zBot, zPlyTop]),
       joints: [miter('storage-side-L'), miter('storage-side-R'), ...deckJoint(), { type: 'glue', to: `storage-coaming-end-${tag}`, count: 1, note: 'oak coaming caps the wall top, epoxy' }] }));
   }
@@ -319,7 +319,7 @@ export function buildStorage(ctx: Ctx): Part[] {
   }
 
   // ── Lid: oak frame (rim) capturing the ply panel, two battens under the panel ──
-  parts.push(box(ctx, { ...common, id: 'storage-lid', name: 'Storage lid panel', mat: 'ply', edges: 'captured',
+  parts.push(box(ctx, { ...common, id: 'storage-lid', name: 'Storage lid panel', mat: 'ply', edges: 'captured', fab: 'shaper-origin',
     ...span([x0 + rimW, x1 - rimW], [-(hw - rimW), hw - rimW], [zTop - pl, zTop]),
     stock: { t: pl, w: 2 * (hw - rimW) + 0.5, l: x1 - x0 - 2 * rimW + 0.5 },
     joints: ['storage-rim-side-L', 'storage-rim-side-R', 'storage-rim-end-aft', 'storage-rim-end-fore'].map((to): Joint => ({
@@ -346,7 +346,7 @@ export function buildStorage(ctx: Ctx): Part[] {
     parts.push(box(ctx, { ...common, id: `storage-lid-batten-${n}`, partNo: 'storage-lid-batten', name: `Storage lid batten ${n}`, mat: 'oak', grain: 'y',
       ...span([bx - BATTEN_X_IN / 2, bx + BATTEN_X_IN / 2], [-(hw - rimW), hw - rimW], [zTop - pl - rimT, zTop - pl]),
       joints: [{ type: 'glue', to: 'storage-lid', count: 1, note: 'epoxy + 4 stainless screws from the top (plugged)' }, { type: 'dado', to: 'storage-rim-side-L', count: 1, size: '1/4 deep', note: 'ends let into the frame sides' }, { type: 'dado', to: 'storage-rim-side-R', count: 1, size: '1/4 deep' }],
-      notes: 'Stiffen the lid panel so it can take a foot or a light cooler (a 25" × 13" ply panel alone would sag); the lid-load row sizes them for the rated lid load (D-53).' }));
+      notes: 'Stiffen the lid panel against sagging under a light cooler or a hand (a 25" × 13" ply panel alone would sag); the lid is engraved DO NOT STEP and is not a step (D-58); the lid-load row sizes the battens for the rated lid load (D-53).' }));
   }
 
   // ── Gasket: closed-cell bulb strip on the wall tops, under the frame ──

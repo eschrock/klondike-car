@@ -106,8 +106,8 @@ describe('washerContact (the roll couple on the UHMW thrust washer)', () => {
 describe('front wheel loads (the basis of every row)', () => {
   it('static front axle by hand: level W x/44 = 137 lb, nose down on 15 deg W cos(th) - N_r = 164 lb (M4: the worse governs); the heavier wheel takes 0.5 + |y|/35.5', () => {
     const w = wheelLoads(ctx, g);
-    expect(hw.level).toBeCloseTo(136.7, 0); // 138.1 before D-60 dropped the four foot-block cleats (the CG moves aft with them gone)
-    expect(hw.slope).toBeCloseTo(164.3, 0); // 165.7 with the foot-block cleats
+    expect(hw.level).toBeCloseTo(135.35, 0); // 138.1 before D-60 dropped the four foot-block cleats, 136.7 before D-62 (sandwich sides, frameless seat back, no shackle: the CG moves aft a little)
+    expect(hw.slope).toBeCloseTo(162.84, 0); // 164.3 before D-62 // 165.7 with the foot-block cleats
     expect(w.frontAxle).toBeCloseTo(hw.axle, 6);
     expect(w.frontWheel).toBeCloseTo(hw.wheel, 6);
   });

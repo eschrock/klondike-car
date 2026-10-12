@@ -61,12 +61,12 @@ function tireMinAbsY(w: Part, p: Params): number {
 
 describe('the front-end parts (D-56, D-58)', () => {
   it('exist with the right rigid bodies and groups; the axle turns, the king beam, thrust disc, chain anchors and chains are the chassis', () => {
-    for (const id of ['beam-F', 'axle-FL', 'axle-FR', 'kingpin', 'bridle-tongue', 'bridle-sleeve', 'bridle-eye', 'bridle', 'roll-pad-L', 'roll-pad-R', 'steer-eye-L', 'steer-eye-R', 'clamp-FL1', 'clamp-FL2', 'clamp-FL3', 'clamp-FL4', 'clamp-FR1', 'clamp-FR2', 'clamp-FR3', 'clamp-FR4'])
+    for (const id of ['beam-F', 'axle-FL', 'axle-FR', 'kingpin', 'bridle-tongue', 'bridle-sleeve', 'bridle', 'roll-pad-L', 'roll-pad-R', 'steer-eye-L', 'steer-eye-R', 'clamp-FL1', 'clamp-FL2', 'clamp-FR1', 'clamp-FR2'])
       expect(get(parts, id).body, id).toBe('front-axle');
     for (const id of ['king-beam', 'king-thrust', 'steer-anchor-L', 'steer-anchor-R', 'steer-chain-L', 'steer-chain-R']) expect(get(parts, id).body, id).toBe('chassis');
     expect(get(parts, 'wheel-FL').body).toBe('wheel-FL');
     expect(get(parts, 'wheel-FR').body).toBe('wheel-FR');
-    for (const id of ['beam-F', 'kingpin', 'bridle-tongue', 'bridle-eye', 'bridle', 'king-beam', 'king-thrust', 'roll-pad-L', 'steer-chain-L', 'steer-eye-R', 'steer-anchor-R', 'axle-FL', 'clamp-FR4']) expect(get(parts, id).group, id).toBe('front-end');
+    for (const id of ['beam-F', 'kingpin', 'bridle-tongue', 'bridle', 'king-beam', 'king-thrust', 'roll-pad-L', 'steer-chain-L', 'steer-eye-R', 'steer-anchor-R', 'axle-FL', 'clamp-FR2']) expect(get(parts, id).group, id).toBe('front-end');
     expect(get(parts, 'wheel-FL').group).toBe('running-gear');
     expect(get(parts, 'beam-F').material).toBe('white oak');
     expect(get(parts, 'king-beam').material).toBe('white oak');
@@ -74,7 +74,7 @@ describe('the front-end parts (D-56, D-58)', () => {
     expect(get(parts, 'roll-pad-L').material).toMatch(/UHMW/);
     expect(get(parts, 'king-thrust').material).toMatch(/UHMW/);
     expect(get(parts, 'kingpin').material).toMatch(/grade 8/);
-    expect(parts.filter((x) => x.body === 'front-axle').length).toBeGreaterThanOrEqual(20);
+    expect(parts.filter((x) => x.body === 'front-axle').length).toBeGreaterThanOrEqual(15); // D-62: no shackle, two bridge plates a side (were four, and a shackle)
     // the oak stop blocks of D-56 are gone (D-58: the lock is set by two chains)
     expect(parts.some((x) => /^steer-stop/.test(x.id))).toBe(false);
     // steering ropes are off by default and are added (turning with the axle) when asked for
@@ -87,11 +87,11 @@ describe('the front-end parts (D-56, D-58)', () => {
     expect(parts.some((x) => /^(caster-|tip-swivel|bow-block|front-hanger-|beam-F-placeholder)/.test(x.id))).toBe(false);
     for (const x of parts) expect(`${x.name} ${x.notes ?? ''}`, x.id).not.toMatch(/caster|placeholder|PROVISIONAL front|bow block/i);
   });
-  it('the front axle beam: oak, 2 3/4 x 2.25 x track - hub - 1/4 long, top at wheel radius + rod radius (5.375), underslung like the rear', () => {
+  it('the front axle beam: oak, 2 3/4 x 2.25 x track - hub - 1/4 long, top at wheel radius + rod radius less the 0.05 in the tube stands proud (5.325, D-62), underslung like the rear', () => {
     const b = worldAABB(get(parts, 'beam-F'));
-    expect(L.beamF.top).toBeCloseTo(5.375, 9);
-    expect(b.max[2]).toBeCloseTo(5.375, 9);
-    expect(b.min[2]).toBeCloseTo(3.125, 9);
+    expect(L.beamF.top).toBeCloseTo(5.325, 9);
+    expect(b.max[2]).toBeCloseTo(5.325, 9);
+    expect(b.min[2]).toBeCloseTo(3.075, 9);
     expect(b.max[0] - b.min[0]).toBeCloseTo(defaults.frontBeamThicknessIn, 9); // D-58: 2 3/4 in (the rear beam is axleBeamThicknessIn)
     expect((b.min[0] + b.max[0]) / 2).toBeCloseTo(kx, 9);
     expect(b.max[1] - b.min[1]).toBeCloseTo(defaults.frontTrackIn - defaults.hubLengthIn - 0.25, 9);
@@ -101,9 +101,9 @@ describe('the front-end parts (D-56, D-58)', () => {
     expect(r.max[2]).toBeCloseTo(b.max[2], 9);
     expect(r.min[2]).toBeCloseTo(b.min[2], 9);
     // an overslung REAR beam leaves the front beam underslung (the king stack assumes it)
-    expect(computeLayout({ ...defaults, axleBeamPosition: 1, deckHeightIn: 12 }).beamF.top).toBeCloseTo(5.375, 9);
+    expect(computeLayout({ ...defaults, axleBeamPosition: 1, deckHeightIn: 12 }).beamF.top).toBeCloseTo(5.325, 9);
   });
-  it('each stub axle is a 3/4 in rod from frontStubLenIn inside the beam end to past the hub, clamped by four plates; the wheel sits on the free end', () => {
+  it('each stub axle is a 3/4 in rod from frontStubLenIn inside the beam end to past the hub, clamped by two bridge plates (D-62); the wheel sits on the free end', () => {
     for (const [tag, s] of [['L', 1], ['R', -1]] as const) {
       const rod = worldAABB(get(parts, `axle-F${tag}`));
       const beam = worldAABB(get(parts, 'beam-F'));
@@ -114,9 +114,9 @@ describe('the front-end parts (D-56, D-58)', () => {
       const w = get(parts, `wheel-F${tag}`);
       expect(w.transform[13]).toBeCloseTo(s * defaults.frontTrackIn / 2, 9);
       expect(w.transform[14]).toBeCloseTo(L.r, 9);
-      for (let k = 1; k <= 4; k++) {
+      for (let k = 1; k <= 2; k++) {
         const c = worldAABB(get(parts, `clamp-F${tag}${k}`));
-        expect(c.min[2]).toBeCloseTo(L.beamF.top, 9); // on the beam top
+        expect(c.min[2]).toBeCloseTo(L.beamF.top + defaults.axleProudIn, 9); // on the TUBE, which stands proud of the beam top (D-62)
         expect(s * (s > 0 ? c.min[1] : c.max[1])).toBeGreaterThan(s * (s > 0 ? rod.min[1] : rod.max[1]) - 1e-9); // within the clamped length
       }
     }
@@ -144,13 +144,13 @@ describe('the kingpin stack (D-56, D-58)', () => {
       expect(b.max[1], id).toBeGreaterThan(0);
     }
   });
-  it('the vertical stack (D-58): beam-F top 5.375 < UHMW thrust disc (9/16) < king beam bottom 5.9375; the king beam top is the deck underside; the oak tongue stands 3/16 in under the beam top', () => {
+  it('the vertical stack (D-58, D-62): beam-F top 5.325 < UHMW thrust disc (1/2, a catalog size) < king beam bottom 5.825; the king beam top is the deck underside; the oak tongue stands 3/16 in under the beam top', () => {
     const beam = worldAABB(get(parts, 'beam-F')), tongue = worldAABB(get(parts, 'bridle-tongue'));
     const thr = worldAABB(get(parts, 'king-thrust')), king = worldAABB(get(parts, 'king-beam')), deck = worldAABB(get(parts, 'deck'));
-    expect(beam.max[2]).toBeCloseTo(5.375, 9);
+    expect(beam.max[2]).toBeCloseTo(5.325, 9);
     expect(thr.min[2]).toBeCloseTo(beam.max[2], 9); // the disc lies on the beam top
     expect(thr.max[2] - thr.min[2]).toBeCloseTo(defaults.kingThrustThickIn, 9);
-    expect(thr.max[2]).toBeCloseTo(5.9375, 9);
+    expect(thr.max[2]).toBeCloseTo(5.825, 9); // D-62: the catalog 1/2 in UHMW disc
     expect(king.min[2]).toBeCloseTo(thr.max[2], 9);
     expect(king.max[2]).toBeCloseTo(L.deckBot, 9);
     expect(deck.min[2]).toBeCloseTo(king.max[2], 9); // bonded to the deck underside
@@ -185,52 +185,47 @@ describe('the kingpin stack (D-56, D-58)', () => {
     expect(joistId(L, L.joistX.indexOf(kx))).toBe('king-beam');
     expect(parts.filter((x) => /^joist-\d+$/.test(x.id)).length).toBe(L.joistX.length - 1);
   });
-  it('the rails are 3 in deep at the rear and only railDepthF ahead of railStepX, so the swinging beam passes under them with 0.4 in', () => {
+  it('the rails are 3 in deep at the rear and only railDepthF ahead of railStepX, so the swinging beam passes under them with 0.35 in over the tube', () => {
     for (const tag of ['L', 'R']) {
       const r = get(parts, `rail-${tag}`);
       expect(r.stock).toBeDefined();
       expect(r.rough).toBeDefined();
-      expect(r.stock!.t).toBeCloseTo(defaults.railThicknessIn, 9);
+      expect(r.stock!.t).toBeCloseTo(defaults.railThicknessIn / 2, 9); // S2: the cut list shows ONE strip of the two glued face to face
+      expect(r.plies).toBe(2);
       expect(r.stock!.w).toBeCloseTo(defaults.railDepthIn, 9);
       const b = worldAABB(r);
       expect(b.max[2]).toBeCloseTo(L.deckBot, 9);
       expect(b.min[2]).toBeCloseTo(L.deckBot - defaults.railDepthIn, 9);
     }
-    expect(L.railDepthF).toBeCloseTo(1.753, 3);
+    expect(L.railDepthF).toBeCloseTo(1.803, 3); // D-62: the beam top is 0.05 in lower, the tube stands 0.05 proud and the clearance over the tube is beamRailClearIn 0.35 (was 0.4) for the catalog 1/4 in roll pad
     expect(L.railStepX).toBeLessThan(kx);
-    expect(L.deckBot - L.railDepthF - L.beamF.top).toBeCloseTo(0.4, 6); // the rail bottom over the beam top
+    expect(L.deckBot - L.railDepthF - L.beamF.top - defaults.axleProudIn).toBeCloseTo(defaults.beamRailClearIn, 6); // the rail bottom over the tube top
   });
 });
 
 describe('the oak tongue, shackle and bridle (D-56, D-58)', () => {
   const tongue = get(parts, 'bridle-tongue');
-  it('the tongue reaches tongueTieAheadIn past the bow tip; the sleeve is tongueTipEdgeIn behind the tip and the shackle pin goes through it', () => {
+  it('the tongue reaches tongueTieAheadIn past the bow tip; the sleeve is tongueTipEdgeIn behind the tip, bored for a single strand of the bridle rope (no shackle, D-62)', () => {
     const t = worldAABB(tongue);
     expect(t.max[0]).toBeCloseTo(L.xFront + defaults.tongueTieAheadIn, 9);
     expect(L.tongue.holeX).toBeCloseTo(L.tongue.tipX - defaults.tongueTipEdgeIn, 9);
-    const sh = get(parts, 'bridle-eye');
-    const s = worldAABB(sh);
-    // the shackle straddles the tongue at the sleeve: it spans the hole's x and the tongue's z, on the center line
-    expect(s.min[0]).toBeLessThan(L.tongue.holeX);
-    expect(s.max[0]).toBeGreaterThan(L.tongue.tipX); // the bow arches past the tip
-    expect(s.min[2]).toBeLessThan(L.tongue.z0 + 1);
-    expect(s.max[2]).toBeGreaterThan(L.tongue.z1 - 1);
-    expect((s.min[1] + s.max[1]) / 2).toBeCloseTo(0, 6);
-    const pin = sh.joints!.find((j) => j.to === 'bridle-sleeve')!;
-    expect(pin.type).toBe('pin');
-    expect(pin.diaIn).toBeCloseTo(defaults.eyeBoltDiameterIn, 9);
-    expect(pin.at![0][0]).toBeCloseTo(L.tongue.holeX, 9);
+    expect(parts.some((x) => x.id === 'bridle-eye')).toBe(false); // the shackle is gone
     expect(L.tongue.tieZ).toBeCloseTo((L.tongue.z0 + L.tongue.z1) / 2, 9);
-    expect(pin.at![0][2]).toBeCloseTo(L.tongue.tieZ, 9);
-    // the sleeve lies across the stem at the hole
-    const sl = worldAABB(get(parts, 'bridle-sleeve'));
+    // the sleeve lies across the stem at the hole, bored tongueSleeveBoreIn for the rope
+    const sleeve = get(parts, 'bridle-sleeve');
+    const sl = worldAABB(sleeve);
     expect((sl.min[0] + sl.max[0]) / 2).toBeCloseTo(L.tongue.holeX, 6);
     expect(sl.max[1] - sl.min[1]).toBeGreaterThanOrEqual(defaults.tongueWidthIn);
-    // the rope starts at the shackle and runs forward
+    const pin = sleeve.joints!.find((j) => j.to === 'bridle')!;
+    expect(pin.diaIn).toBeCloseTo(defaults.bridleRopeDiaIn, 9);
+    expect(defaults.tongueSleeveBoreIn).toBeGreaterThan(defaults.bridleRopeDiaIn);
+    expect(sleeve.sourcing!.vendor).toMatch(new RegExp(`${defaults.tongueSleeveBoreIn.toFixed(2).replace(/0$/, '')}`));
+    // the rope starts at the tongue tip and runs forward
     const rope = worldAABB(get(parts, 'bridle'));
     expect(rope.min[0]).toBeGreaterThan(L.tongue.holeX);
     expect((rope.min[2] + rope.max[2]) / 2).toBeCloseTo(L.tongue.tieZ, 6);
-    expect(get(parts, 'bridle').joints!.some((j) => j.to === 'bridle-eye')).toBe(true);
+    expect(get(parts, 'bridle').joints!.some((j) => j.to === 'bridle-sleeve')).toBe(true);
+    expect(get(parts, 'bridle-sleeve').joints!.some((j) => j.to === 'bridle')).toBe(true);
   });
   it('the tongue is white oak set ON EDGE, 1 1/2 in thick and 2 in deep: a 6 in head butting the front face of the beam, tapering to the stem; it has stock and rough stock and bolts to the beam with two 3/8 in carriage bolts', () => {
     expect(tongue.geometry.type).toBe('extrusion');
@@ -257,15 +252,22 @@ describe('the oak tongue, shackle and bridle (D-56, D-58)', () => {
     // it is NOT under the kingpin any more: no joint with the kingpin or the disc
     expect(tongue.joints!.some((j) => j.to === 'kingpin')).toBe(false);
   });
-  it('the shackle pin is the intended weak link: the shackle is lighter than the tongue and carries the pin diameter eyeBoltDiameterIn', () => {
-    expect(get(parts, 'bridle-eye').massLb).toBeGreaterThan(0.1);
-    expect(get(parts, 'bridle-eye').massLb).toBeLessThan(get(parts, 'bridle-tongue').massLb);
-    expect(get(parts, 'bridle-eye').sourcing!.vendor).toMatch(/WEAK LINK/);
-    expect(get(parts, 'bridle-eye').kind).toBe('purchased');
+  it('the ROPE is the documented weak link (D-62, no shackle): 3/8 in NYLON (not low-stretch polyester), with its working load and the knotted breaking strength in the notes', () => {
+    const rope = get(parts, 'bridle');
+    expect(rope.kind).toBe('purchased');
+    expect(rope.material).toMatch(/nylon/);
+    expect(rope.sourcing!.vendor).toMatch(/NYLON/);
+    expect(rope.sourcing!.vendor).toMatch(/NOT low-stretch polyester/);
+    expect(rope.notes).toMatch(/WEAK LINK/);
+    expect(rope.notes).toMatch(/370 lbf/); // working load limit
+    expect(rope.notes).toMatch(/2220 lbf/); // breaks at the bowline
+    expect(rope.sourcing!.vendor).toMatch(/shock cord/i);
+    expect(rope.massLb).toBeGreaterThan(0.1);
+    expect(rope.massLb).toBeLessThan(0.6);
   });
-  it('the bridle comes off for transport: tongue, sleeve, shackle and rope are removable (and nothing else of the front end)', () => {
+  it('the bridle comes off for transport: tongue, sleeve and rope are removable (and nothing else of the front end)', () => {
     const removed = buildModel(defaults, { removed: true });
-    for (const id of ['bridle-tongue', 'bridle-sleeve', 'bridle-eye', 'bridle']) {
+    for (const id of ['bridle-tongue', 'bridle-sleeve', 'bridle']) {
       expect(get(parts, id).removable, id).toBe(true);
       expect(removed.some((x) => x.id === id), id).toBe(false);
     }
@@ -276,27 +278,27 @@ describe('the oak tongue, shackle and bridle (D-56, D-58)', () => {
     // the sled (without the tongue) is shorter than the bow tip by the banding at most, and lighter by the four parts
     const reach = Math.max(...removed.filter((x) => !x.payload).map((x) => worldAABB(x).max[0]));
     expect(reach).toBeLessThan(L.xFront + 0.5);
-    const lost = ['bridle-tongue', 'bridle-sleeve', 'bridle-eye', 'bridle'].reduce((m, id) => m + get(parts, id).massLb, 0);
+    const lost = ['bridle-tongue', 'bridle-sleeve', 'bridle'].reduce((m, id) => m + get(parts, id).massLb, 0);
     expect(totalMass(parts) - totalMass(removed)).toBeGreaterThanOrEqual(lost - 1e-9);
   });
 });
 
 describe('the roll pads (D-58)', () => {
-  it('two UHMW pads lie on the beam top, rollPadRadiusIn either side of the kingpin, 5/16 in thick, turning with the axle, with a running gap under the rails', () => {
+  it('two UHMW pads lie on the tube over the beam top, rollPadRadiusIn either side of the kingpin, 1/4 in thick (a catalog size, D-62), turning with the axle, with a running gap under the rails', () => {
     for (const [tag, s] of [['L', 1], ['R', -1]] as const) {
       const b = worldAABB(get(parts, `roll-pad-${tag}`));
-      expect(b.min[2]).toBeCloseTo(L.beamF.top, 9);
+      expect(b.min[2]).toBeCloseTo(L.beamF.top + defaults.axleProudIn, 9); // on the tube (D-62)
       expect(b.max[2] - b.min[2]).toBeCloseTo(defaults.rollPadThickIn, 9);
       expect((b.min[1] + b.max[1]) / 2).toBeCloseTo(s * defaults.rollPadRadiusIn, 9);
       expect(b.max[1] - b.min[1]).toBeCloseTo(defaults.rollPadLenIn, 9);
       expect(b.max[0] - b.min[0]).toBeCloseTo(defaults.rollPadWidthIn, 9);
       expect(get(parts, `roll-pad-${tag}`).body).toBe('front-axle');
       // between the stub clamp plates on the beam top
-      const inner = worldAABB(get(parts, `clamp-F${tag}3`)), outer = worldAABB(get(parts, `clamp-F${tag}1`));
+      const inner = worldAABB(get(parts, `clamp-F${tag}2`)), outer = worldAABB(get(parts, `clamp-F${tag}1`));
       expect(s * (s > 0 ? b.min[1] : b.max[1])).toBeGreaterThan(s * (s > 0 ? inner.max[1] : inner.min[1]));
       expect(s * (s > 0 ? b.max[1] : b.min[1])).toBeLessThan(s * (s > 0 ? outer.min[1] : outer.max[1]));
     }
-    const gap = L.deckBot - L.railDepthF - (L.beamF.top + defaults.rollPadThickIn);
+    const gap = L.deckBot - L.railDepthF - (L.beamF.top + defaults.axleProudIn + defaults.rollPadThickIn);
     expect(gap).toBeGreaterThanOrEqual(defaults.rollPadGapMinIn);
     expect(gap).toBeLessThanOrEqual(0.125);
     expect(get(parts, 'roll-pad-L').partNo).toBe(get(parts, 'roll-pad-R').partNo);
@@ -500,9 +502,9 @@ describe('joinery of the front end (D-56)', () => {
   it('the new joints: kingpin through beam and king beam; tongue bolted to the beam, sleeve in the tongue; pads screwed to the beam; eye bolts through the beam and the chain joist, hooked to the chains; king beam tied to both rails and bonded to the deck; clamp plates bolted to the beam', () => {
     const has = (a: string, b: string, type?: string) => get(parts, a).joints?.some((j) => j.to === b && (!type || j.type === type)) ?? false;
     const cj = joistId(L, L.joistX.indexOf(kx) - 1);
-    for (const [a, b] of [['kingpin', 'beam-F'], ['kingpin', 'king-beam'], ['bridle-tongue', 'beam-F'], ['bridle-tongue', 'bridle-sleeve'], ['bridle-eye', 'bridle-sleeve'], ['bridle', 'bridle-eye'], ['king-beam', 'king-thrust'],
+    for (const [a, b] of [['kingpin', 'beam-F'], ['kingpin', 'king-beam'], ['bridle-tongue', 'beam-F'], ['bridle-tongue', 'bridle-sleeve'], ['bridle', 'bridle-sleeve'], ['king-beam', 'king-thrust'],
       ['king-beam', 'rail-L'], ['king-beam', 'rail-R'], ['king-beam', 'deck'], ['roll-pad-L', 'beam-F'], ['roll-pad-R', 'beam-F'], ['steer-eye-L', 'beam-F'], ['steer-eye-R', 'steer-chain-R'],
-      ['steer-anchor-L', cj], ['steer-anchor-R', 'steer-chain-R'], ['clamp-FL1', 'beam-F'], ['clamp-FR4', 'beam-F']] as const) {
+      ['steer-anchor-L', cj], ['steer-anchor-R', 'steer-chain-R'], ['clamp-FL1', 'beam-F'], ['clamp-FR2', 'beam-F']] as const) {
       expect(has(a, b), `${a} -> ${b}`).toBe(true);
       expect(has(b, a), `${b} -> ${a}`).toBe(true);
     }

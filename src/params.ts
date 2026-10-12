@@ -282,9 +282,9 @@ const defs = {
     note: 'D-57: the Troop 455 sign is back, on the outside of the tall rear part of each side (signTexture, oval plank). Nothing structural is sized to it.',
   },
   hullLamMinRadiusFactor: {
-    label: 'Min. bend radius / ply thickness', group: 'body', unit: '×',
+    label: 'Min. bend radius / band thickness', group: 'body', unit: '×',
     default: 40, min: 20, max: 100, step: 5, status: 'assumed', ref: 'D-45, D-57',
-    note: 'Cold-bent plies lay up without steaming above this ratio of bend radius to ply thickness; the validator flags a bow turn-in whose plan radius is tighter than this times one ply of the chine and gunwale (two plies each).',
+    note: 'Cold-bent strips lay up without steaming above this ratio of bend radius to strip thickness; the validator flags a bow turn-in whose plan radius is tighter than this times one oak band of the sandwich side (D-62).',
   },
   deckSlopIn: {
     label: 'Deck rabbet / dado clearance over the ply', group: 'body', unit: 'in',
@@ -295,16 +295,67 @@ const defs = {
   railBandIn: {
     label: 'Chine / gunwale height', group: 'body', unit: 'in',
     default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-22',
-    note: 'Oak chine and gunwale section height; the side panel is captured between them.',
+    note: 'Oak chine and gunwale band height (D-62: the bands are glued on both faces of the full-height 4 mm web, no grooves; the inner chine band is shorter by the deck gap, which makes the deck rabbet). The free web between the bands is the side height less twice this.',
   },
   // ── Hull detail: captured ply, joinery, lift handles, finger guard, signs (Phase 3 workstream B, D-35…D-37) ──
-  grooveDepthIn: {
-    label: 'Side-panel groove depth (chine / gunwale)', group: 'body', unit: 'in',
-    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-35',
-    note: 'The okoume web enters a groove this deep in the chine (top) and the gunwale (underside); the groove follows the flare tilt.',
+  signBackerThickIn: {
+    label: 'Sign backing strip thickness (oak, inside the side web)', group: 'body', unit: 'in',
+    default: 0.5, min: 0.375, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-62, build 3c M4',
+    note: 'D-62: nothing is screwed into the 4 mm web (a tee-nut in 0.157 in ply has 0.1 in of bite, and a 1 in screw poked into the cabin). Each side sign hangs on two vertical oak backing strips glued on the INSIDE of the web between the chine and gunwale bands, each with two #10-32 threaded inserts (3/8 long) for the knobs. The strips stand this far inboard of the web (0.27 in proud of the inner band faces), at the sign knob stations behind the box.',
+  },
+  thinSheetWidthIn: {
+    label: 'Thin okoume sheet: usable width', group: 'materials', unit: 'in',
+    default: 48, min: 12, max: 48, step: 0.25, status: 'locked', ref: 'D-62',
+    note: 'Eric 2026-10-12: 4 mm and 6 mm okoume from Aircraft Spruce (Peachtree City, GA), will-call pickup, in FULL 4 x 8 ft sheets; the 12 mm (1/2 in) deck sheet from a local dealer. So every thin-ply part must be cut from a blank that fits 48 x 96 in. Set this to 23.5 and the length to 47.5 for the other source (thin okoume shipped only as 2 x 4 ft sheets): the side webs then split into two halves joined by the hidden scarf (sideWebScarf), and the sheet test still checks that every blank fits.',
+  },
+  thinSheetLengthIn: {
+    label: 'Thin okoume sheet: usable length', group: 'materials', unit: 'in',
+    default: 96, min: 24, max: 96, step: 0.25, status: 'locked', ref: 'D-62',
+    note: 'Eric 2026-10-12: see the usable width. Full 4 x 8 ft sheets of 4 mm and 6 mm okoume from Aircraft Spruce, Peachtree City GA, will-call; the 12 mm deck from a local dealer. (2 x 4 ft alternative: 23.5 x 47.5.)',
+  },
+  sideWebScarf: {
+    label: 'Side webs in two scarfed halves', group: 'materials', unit: '',
+    default: 0, min: 0, max: 1, step: 1, status: 'assumed', ref: 'D-62',
+    options: [{ value: 0, label: 'One piece each (4 x 8 sheet)' }, { value: 1, label: 'Two halves, hidden 8:1 scarf (2 x 4 sheet)' }],
+    note: 'D-62: default off, each 4 mm side web is ONE piece cut from a 4 x 8 sheet. On (or automatically, whenever the whole web does not fit the thin-sheet size, e.g. 2 x 4 ft sheets), each web is two halves joined with an epoxied scarf at sideWebScarfXIn, hidden under the sign and its backing strip; the oak bands glued over both faces bridge it.',
+  },
+  plyScarfRatio: {
+    label: 'Ply scarf joint ratio (length : thickness)', group: 'materials', unit: ':1',
+    default: 8, min: 6, max: 12, step: 1, status: 'assumed', ref: 'D-62',
+    note: 'D-62: when the side webs are scarfed, the halves are joined with an epoxied scarf of this ratio (8:1 is 1.26 in long in 4 mm ply). Cut it with a block plane against a sanding jig (a 1.26 in bevel on a straight edge, the two halves taped together with the bevels facing and planed or sanded as a pair so they mate), or on the Shaper Origin with a tapered pass; glue with thickened epoxy on a flat board under tape and weights. The oak bands glued on both faces bridge it top and bottom, which also reinforces it.',
+  },
+  sideWebScarfXIn: {
+    label: 'Side web scarf: x of its center (when scarfed)', group: 'body', unit: 'in',
+    default: 2.7, min: -8, max: 10, step: 0.1, status: 'assumed', ref: 'D-62',
+    note: 'D-62: where the two web halves meet (model x, in from the rear axle), used only when the webs are scarfed. It is under the side sign on the outside and the sign backing strip on the inside, so it is hidden, and far enough back that the front half (this x to the bow bulkhead, plus half the scarf) fits a 47.5 in sheet length. If the sign is switched off or moved, the scarf can go under the grab board instead.',
+  },
+  sideKickLbf: {
+    label: 'Side web lean / kick load', group: 'loads', unit: 'lbf',
+    default: 50, min: 20, max: 150, step: 5, status: 'assumed', ref: 'D-62, eng 3c N-1',
+    note: 'D-62: a scout leaning on the side or kicking it: this lateral load on a square patch (sideKickPatchIn) of the 4 mm web, at mid height of the free panel between the oak bands, where the panel is tallest. D-60 took the web from 6 to 4 mm, which cut its out-of-plane stiffness 3.4 times; the side-web row now checks it. A person SITTING on the gunwale is not covered: the gunwale is not a seat.',
+  },
+  sideKickPatchIn: {
+    label: 'Side web kick: patch size', group: 'loads', unit: 'in',
+    default: 6, min: 2, max: 12, step: 1, status: 'assumed', ref: 'D-62',
+    note: 'A boot or a knee: a 6 in square patch. The panel carries it as a strip fixed at the two oak bands, over the patch width plus half the strip height each side.',
+  },
+  cargoSideG: {
+    label: 'Cargo leaning on the side: lateral g', group: 'loads', unit: 'g',
+    default: 0.5, min: 0.2, max: 1, step: 0.05, status: 'assumed', ref: 'D-62',
+    note: 'The cargo pushes the side with this multiple of its weight (a hard side bump or the sled dragged sideways; the tire friction coefficient is 0.5), spread over cargoSideContactIn of the side and the free web height.',
+  },
+  cargoSideContactIn: {
+    label: 'Cargo leaning on the side: contact length', group: 'loads', unit: 'in',
+    default: 36, min: 12, max: 60, step: 2, status: 'assumed', ref: 'D-62',
+    note: 'Length of the side the cargo lies against (the bed is about 40 in between the seat back and the bulkhead).',
+  },
+  sideWebCapIn: {
+    label: 'Side web stops short of the gunwale top', group: 'body', unit: 'in',
+    default: 0.125, min: 0, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-61, D-62',
+    note: 'D-61 sandwich sides: the 4 mm web runs the full height of the side between an oak band on each face at the chine and at the gunwale (no grooves). It stops this far under the top of the gunwale bands, and the gap is filled flush with thickened epoxy (or a 1/8 in oak cap strip), so no ply edge shows on the rail.',
   },
   grooveSlopIn: {
-    label: 'Groove width over the ply thickness', group: 'body', unit: 'in',
+    label: 'Dado / groove width over the ply thickness', group: 'body', unit: 'in',
     default: 0.04, min: 0, max: 0.06, step: 0.004, status: 'assumed', ref: 'D-35, D-43',
     note: 'Cut the groove at the MEASURED ply thickness + about 1 mm (D-43): real 6 mm okoume runs 5.5–5.9 mm and two epoxy coats on faces and edges add 0.3–0.5 mm, plus ~0.3 mm of glue film. At 0.04" the groove is 0.276" (7 mm cutter) in 6 mm ply. The walls each side of the groove are (side stock − groove) / 2 and need to stay ≥ 0.1".',
   },
@@ -549,14 +600,14 @@ const defs = {
     note: 'About stature × 0.19 + margin for a 13" torso.',
   },
   seatBackThickIn: {
-    label: 'Seat-back frame thickness', group: 'seat', unit: 'in',
-    default: 0.75, min: 0.5, max: 1.25, step: 0.0625, status: 'assumed', ref: 'D-18',
-    note: 'Oak frame (2 stiles + 2 rails) with a ply or fabric panel captured in it.',
+    label: 'Seat-back thickness (the frameless 12 mm panel)', group: 'seat', unit: 'in',
+    default: 0.472, min: 0.236, max: 1.25, step: 0.001, status: 'assumed', ref: 'D-18, D-62',
+    note: 'D-62 (Eric 2026-10-12): the seat back is a frameless 1/2 in (12 mm) okoume panel, so this is the panel thickness (it was a 3/4 in oak frame): keep it equal to seatBackPlyIn. The rear-bottom corner and the stop-block geometry follow it.',
   },
   seatBackFrameWidthIn: {
-    label: 'Seat-back frame member width', group: 'seat', unit: 'in',
-    default: 1.25, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-18, D-60',
-    note: 'D-60: 1-1/4 in (was 1-1/2 in).',
+    label: 'Seat-back hinge / pin / stop-block station width', group: 'seat', unit: 'in',
+    default: 1.25, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-18, D-60, D-62',
+    note: 'D-62: there is no frame any more; this is the width of each oak stop block behind the panel and of the hinge / latch-pin station (the stations sit this half-width in from each side of the panel). D-60: 1-1/4 in (was 1-1/2 in).',
   },
   footStopHeightIn: {
     label: 'Foot-brace band height above the deck', group: 'seat', unit: 'in',
@@ -600,6 +651,16 @@ const defs = {
     label: 'Seat-back hinge allowable per hinge (screws in oak)', group: 'seat', unit: 'lbf',
     default: 250, min: 100, max: 600, step: 25, status: 'verify', ref: 'D-57',
     note: 'A 2 in 316 butt hinge on #8 screws in white oak: the back-load check keeps the pull on each hinge under this (vendor and NDS data to confirm).',
+  },
+  seatInsertPulloutLbf: {
+    label: 'Seat-back hinge insert pull-out allowable (each)', group: 'seat', unit: 'lbf',
+    default: 150, min: 50, max: 400, step: 10, status: 'verify', ref: 'D-62',
+    note: 'D-62: a #10-32 x 3/8 stainless hex-drive threaded insert, epoxied into a blind hole in the 12 mm okoume seat-back panel. Published axial pull-out for a #10 insert in plywood is a few hundred pounds; 150 lbf is a cautious working value (confirm with a pull test on a scrap: hang a bucket from a screwed-in insert).',
+  },
+  seatPinPullLbf: {
+    label: 'Seat-back latch pin pull (each pin)', group: 'seat', unit: 'lbf',
+    default: 100, min: 25, max: 300, step: 5, status: 'assumed', ref: 'D-62',
+    note: 'D-62: the pull on one quick-release pin that holds the upright back against flipping forward (a scout hauling himself up by it, a bump): 100 lbf. It bears on the pin hole in the 12 mm panel and tears out toward the panel edge (a 13/32 in hole centered a half station width from the edge).',
   },
   grabBoardLengthIn: {
     label: 'Grab board length (along the side)', group: 'seat', unit: 'in',
@@ -645,6 +706,7 @@ const defs = {
       { value: TIRE_TYPE.pneumatic, label: 'Pneumatic' },
       { value: TIRE_TYPE.flatFree, label: 'Flat-free PU foam' },
     ],
+    note: 'Flat-free (foam-filled) tires change the BUMP RATE, not just the mass: a PU foam hand-truck tire is several times stiffer than a 30 psi pneumatic one, and at 2,000 lb/in half the structure rows fail (eng 3c review, section 1b). Selecting it only adds flatFreeExtraLb; the bump rate (bumpWheelRateLbIn) stays at 500 until you set it from a measurement, and validateParams warns. The tire squash test (bumpWheelRateLbIn: squash of 0.55 in or more at 300 lb, i.e. at most about 560 lb/in) is a PRE-ORDER GATE for whichever tire you buy.',
   },
   tireWidthIn: {
     label: 'Tire section width', group: 'wheels', unit: 'in',
@@ -726,18 +788,30 @@ const defs = {
     default: 0.375, min: 0.3125, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-34',
     note: '316 hex bolt through each rear clamp plate and the beam beside the axle rod (the plates pin the rod in its groove).',
   },
+  axleProudIn: {
+    label: 'Axle tube proud of the beam top (groove depth = tube diameter less this)', group: 'wheels', unit: 'in',
+    default: 0.05, min: 0.02, max: 0.1, step: 0.01, status: 'assumed', ref: 'D-62, build 3c M2',
+    note: 'D-62: the axle tube sits in a groove (tube diameter less this) deep, so the tube stands this far above the oak and the bridge plate BEARS ON THE TUBE and not on the beam top (flush, the D-60 plates floated 0.075 in above the tube and clamped nothing). Cut the groove 0.70 in deep for the 3/4 in tube. The beam top is therefore this much below the top of the tube, which lowers the whole front stack by 0.05 in and the beam bottom to 3.075 in off the ground. Shim the plate ends with tape on the first tightening and check it does not rock.',
+  },
   clampLegGapIn: {
-    label: 'U-bolt leg gap beside the axle rod', group: 'wheels', unit: 'in',
-    default: 0.25, min: 0.125, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-10',
-    note: 'Clamp legs straddle the rod at rod center ± (rod radius + gap) (critic r2, H2).',
+    label: 'Clamp bolt gap beside the axle tube', group: 'wheels', unit: 'in',
+    default: 0.375, min: 0.125, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-10, D-62',
+    note: 'The two bolts of a bridge plate sit at the tube center +/- (tube radius + this): 0.375 + 0.375 = 0.75 in (D-62; it was 0.25, which left a 0.045 in sliver of oak between the 0.41 in bolt hole and the groove wall; now 0.17 in).',
   },
   clampPlateWidthIn: {
-    label: 'U-bolt plate width (across the beam)', group: 'wheels', unit: 'in',
-    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-10',
+    label: 'Clamp bridge plate width (along the axle)', group: 'wheels', unit: 'in',
+    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-10, D-62',
+    note: 'The plate lies across the tube on a line this long (the ring-bending row of the tube wall uses it).',
+  },
+  clampPlateOuterWidthIn: {
+    label: 'Front OUTER clamp plate width (along the axle)', group: 'wheels', unit: 'in',
+    default: 1.75, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-62, eng 3c S-3',
+    note: 'D-62: the outer front clamp plate takes the fore-aft bump force on the groove wall (front-beam, HARD 2 in hit, 200 lb cargo forward). The 0.70 in groove (the tube stands proud) cut the wall area 7 percent and put that detail at 1.00; 1/4 in more plate (the eng review S-3 asked for 1/2 in more) brings it to 0.88 for 0.04 lb a plate. The inner front plates and the rear plate stay clampPlateWidthIn.',
   },
   clampPlateLengthIn: {
-    label: 'U-bolt plate length (fore-aft)', group: 'wheels', unit: 'in',
-    default: 0.8, min: 0.5, max: 1.5, step: 0.1, status: 'assumed', ref: 'D-10',
+    label: 'Clamp bridge plate length (across the tube, fore-aft)', group: 'wheels', unit: 'in',
+    default: 2.25, min: 1.5, max: 4, step: 0.25, status: 'assumed', ref: 'D-10, D-62',
+    note: 'D-62: ONE plate per clamp station with two 3/8 in bolts at +/- 0.75 in (6 plates instead of 12, same bolt count): 316 flat bar 1/4 x 1.5 x 2-1/4 in, 3/8 in from each hole centre to the end. The plate in bending between the bolts (a 800 lbf tube load, the oak-limited preload) is about 19 ksi.',
   },
   clampPlateThickIn: {
     label: 'U-bolt plate thickness', group: 'wheels', unit: 'in',
@@ -802,7 +876,7 @@ const defs = {
   axleTubeYieldPsi: {
     label: 'Axle tube yield strength (DOM)', group: 'wheels', unit: 'psi',
     default: 70000, min: 30000, max: 120000, step: 1000, status: 'verify', ref: 'D-60',
-    note: 'D-60: 1026 DOM tube is listed at about 70 ksi yield / 80+ ksi tensile (1020 DOM about 60 to 70 ksi yield): CONFIRM on the vendor listing or the mill cert, and lower it if the stock you can buy is 1020 DOM at 60 ksi. Used for the bending, cross-hole and ring-bearing rows when the axle is a tube (axleWallIn > 0); the solid rod uses the 1045 value above.',
+    note: 'Order DOM (drawn over mandrel) or CDS tube to ASTM A513 Type 5, NOT ordinary ERW "mechanical" tube (about 45 ksi yield / 55 ksi ultimate, which takes axle-stress from 0.59 to 0.94, no margin); keep the mill cert. D-60: 1026 DOM tube is listed at about 70 ksi yield / 80+ ksi tensile (1020 DOM about 60 to 70 ksi yield): CONFIRM on the vendor listing or the mill cert, and lower it if the stock you can buy is 1020 DOM at 60 ksi. Used for the bending, cross-hole and ring-bearing rows when the axle is a tube (axleWallIn > 0); the solid rod uses the 1045 value above.',
   },
 
   // ── Steering & pull ──────────────────────────────────────────────────────
@@ -834,8 +908,8 @@ const defs = {
   },
   kingThrustThickIn: {
     label: 'Kingpin thrust washer thickness', group: 'steering', unit: 'in',
-    default: 0.5625, min: 0.125, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-56, D-58',
-    note: 'D-58: 9/16 in (was 1/4 in; a 1/2 in disc plus a 1/16 in shim, or 5/8 in sheet planed). With the steel tongue plate gone the disc lies directly on the axle beam, and its thickness sets the running gap between the axle clamp plates (tops 3/8 in above the beam) and the king beam: 3/16 in (the steer-clear row wants 1/8 in).',
+    default: 0.5, min: 0.125, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-56, D-58, D-62',
+    note: 'D-62 (build 3c S5): 1/2 in, a catalog UHMW sheet thickness (McMaster steps are 1/2 and 5/8; the D-58 value of 9/16 in is not stocked, and a 5/8 in disc would take the pad gap to the edge of its window). The king beam is 1/16 in deeper to match. D-58: With the steel tongue plate gone the disc lies directly on the axle beam, and its thickness sets the running gap between the axle clamp plates (tops 3/8 in above the beam) and the king beam: 3/16 in (the steer-clear row wants 1/8 in).',
   },
   rollPadRadiusIn: {
     label: 'Roll pads: distance from the kingpin along the axle beam', group: 'steering', unit: 'in',
@@ -854,8 +928,13 @@ const defs = {
   },
   rollPadThickIn: {
     label: 'Roll pad thickness (UHMW)', group: 'steering', unit: 'in',
-    default: 0.3125, min: 0.1875, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-58',
-    note: 'The rail bottom is 0.4 in above the axle beam top where the beam swings under it (railDepthFront); 5/16 in leaves the running gap, set with a layer of tape under the pad.',
+    default: 0.25, min: 0.1875, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-58, D-62',
+    note: 'D-62 (build 3c S5): 1/4 in, a catalog UHMW sheet thickness (5/16 in is not stocked). The rail bottom is beamRailClearIn above the top of the axle tube where the beam swings under it (railDepthFront); a 1/4 in pad leaves the 0.10 in running gap, set with a layer of tape under the pad.',
+  },
+  beamRailClearIn: {
+    label: 'Clearance from the axle tube top to the shallow front rails', group: 'steering', unit: 'in',
+    default: 0.35, min: 0.2, max: 0.6, step: 0.05, status: 'assumed', ref: 'D-62',
+    note: 'D-62: was a fixed 0.4 in with a 5/16 in roll pad (gap 0.0875 in). With catalog 1/4 in UHMW pads, 0.35 in leaves a 0.10 in running gap (window 0.03 to 0.125 in) and the rails stay 0.05 in deeper at the front.',
   },
   rollPadGapMinIn: {
     label: 'Roll pad running gap (minimum / maximum)', group: 'steering', unit: 'in',
@@ -875,7 +954,7 @@ const defs = {
   tongueWidthIn: {
     label: 'Bridle tongue thickness (white oak, set on edge)', group: 'steering', unit: 'in',
     default: 1.25, min: 1, max: 2.5, step: 0.25, status: 'assumed', ref: 'D-58, D-60',
-    note: 'D-58: the steel tongue plate (it bent about its thin axis at 3.7x) is replaced by a white-oak tongue set on edge: 1.5 in across (y), tongueDepthIn deep (z), grain along its length. A bandsawn T: the wide head butts the front face of the axle beam and is bolted through it, the stem runs forward under the end joist and the bow to the shackle hole. D-60: 1-1/4 in (was 1-1/2 in).',
+    note: 'D-58: the steel tongue plate (it bent about its thin axis at 3.7x) is replaced by a white-oak tongue set on edge: 1.5 in across (y), tongueDepthIn deep (z), grain along its length. A bandsawn T: the wide head butts the front face of the axle beam and is bolted through it, the stem runs forward under the end joist and the bow to the bridle hole. D-60: 1-1/4 in (was 1-1/2 in).',
   },
   tongueTopDropIn: {
     label: 'Tongue top below the top of the axle beam', group: 'steering', unit: 'in',
@@ -907,19 +986,19 @@ const defs = {
     default: 2, min: 1, max: 4, step: 0.25, status: 'assumed', ref: 'D-58',
   },
   tongueTipEdgeIn: {
-    label: 'Shackle hole: distance to the tongue tip', group: 'steering', unit: 'in',
+    label: 'Bridle hole: distance to the tongue tip', group: 'steering', unit: 'in',
     default: 1.5, min: 1.25, max: 4, step: 0.25, status: 'assumed', ref: 'D-58',
-    note: 'Oak tears out along the grain, so the hole needs real end distance (the old steel tongue had 1 in); 1 1/2 in with the 1 in sleeve leaves 1 in of oak ahead of it, 3x what the 300 lbf tie load needs (bridle-eye). A 1/2 in bow shackle is about 1 1/2 in inside, so its bow clears the tip.',
+    note: 'Oak tears out along the grain, so the hole needs real end distance (the old steel tongue had 1 in); 1 1/2 in with the 1 in sleeve leaves 1 in of oak ahead of it, 3x what the 300 lbf tie load needs (bridle-eye). The rope makes one turn round this 1 in of oak at the tip.',
   },
   tongueHoleDiaIn: {
-    label: 'Shackle hole in the tongue (bronze or steel sleeve OD)', group: 'steering', unit: 'in',
+    label: 'Bridle hole in the tongue (bronze sleeve OD)', group: 'steering', unit: 'in',
     default: 1, min: 0.75, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-58',
-    note: 'A 1 in hole drilled across the tongue takes a bronze (or steel) sleeve bushing (1 in OD, 5/8 in bore for the 1/2 in shackle pin) and a fender washer each side. The shackle pin stays the intended weak link.',
+    note: 'A 1 in hole drilled across the tongue takes a bronze sleeve bearing (1 in OD, tongueSleeveBoreIn bore) and a fender washer each side. The bridle rope runs through the bore (D-62: no shackle).',
   },
   tongueTieAheadIn: {
     label: 'Tongue tip ahead of the bow tip', group: 'steering', unit: 'in',
     default: 5, min: 2, max: 12, step: 0.5, status: 'assumed', ref: 'D-56, D-58',
-    note: 'The tongue tip reaches this far beyond the bow so the shackle hole (tongueTipEdgeIn behind the tip), the ring and the rope clear the bow and the axle can swing.',
+    note: 'The tongue tip reaches this far beyond the bow so the bridle hole (tongueTipEdgeIn behind the tip) and the rope clear the bow and the axle can swing.',
   },
   steerChainDiaIn: {
     label: 'Steering stop chain: link stock diameter', group: 'steering', unit: 'in',
@@ -972,16 +1051,40 @@ const defs = {
     default: 96, min: 48, max: 144, step: 6, status: 'assumed', ref: 'D-56',
   },
 
-  eyeBoltDiameterIn: {
-    label: 'Bridle shackle pin diameter (tongue tie)', group: 'steering', unit: 'in',
-    default: 0.5, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-33, D-47, D-56',
-    note: 'D-56: the bridle is tied to a bow shackle through a hole in the tip of the tongue (the old bow eye bolt and backing block are gone). The shackle pin is the intended weak link of the rope tie, and it holds the design pull x the overload factor.',
+  bridleRopeDiaIn: {
+    label: 'Bridle rope diameter (nylon)', group: 'steering', unit: 'in',
+    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-62, eng 3c S-1',
+    note: 'D-62: no shackle (a catalog 1/2 in screw-pin shackle will not fit the 1-1/4 in tongue, and a real shackle is hundreds of times stronger than the tie load, so it was never a weak link). The bridle is 3/8 in NYLON three-strand rope (nylon stretches 15 to 25 percent under load, which absorbs the snatch when the rope goes from slack to taut at the start of a pull; low-stretch polyester was the worst choice). It runs through the bronze-sleeved hole in the tongue, once around the tongue tip, and is tied with a bowline round its own standing part, so a single strand passes through the bore. Optional: a 3 ft length of 3/8 in shock cord spliced in near the tongue cuts the snatch again (set bridleSnatchStiffLbIn to about 10).',
   },
-
-  eyeBoltYieldPsi: {
-    label: 'Bridle eye bolt steel yield strength', group: 'steering', unit: 'psi',
-    default: 36000, min: 30000, max: 90000, step: 1000, status: 'assumed', ref: 'D-33',
-    note: 'Forged carbon steel, conservative. Allowable = yield / steel safety factor. Confirm the vendor working-load limit is at least the pull in the rope-tie row.',
+  bridleRopeBreakLbf: {
+    label: 'Bridle rope breaking strength (new, spliced ends)', group: 'factors', unit: 'lbf',
+    default: 3700, min: 1000, max: 12000, step: 100, status: 'verify', ref: 'D-62',
+    note: 'Cordage Institute minimum tensile strength of 3/8 in three-strand nylon is about 3,700 lbf (double-braid nylon is a little higher); confirm on the vendor listing. A bowline keeps about 60 percent of it (bridleKnotEfficiency).',
+  },
+  bridleKnotEfficiency: {
+    label: 'Bridle knot efficiency (bowline)', group: 'factors', unit: '×',
+    default: 0.6, min: 0.4, max: 1, step: 0.05, status: 'assumed', ref: 'D-62',
+    note: 'A bowline keeps roughly 60 percent of the rope strength; an eye splice with a thimble keeps about 90.',
+  },
+  bridleRopeWllFraction: {
+    label: 'Bridle rope working load limit (share of the breaking strength)', group: 'factors', unit: '×',
+    default: 0.1, min: 0.05, max: 0.2, step: 0.01, status: 'assumed', ref: 'D-62',
+    note: 'The working load limit of a rope in shock-prone service is 10 percent of its new breaking strength (a safety factor of 10; the Cordage Institute gives 15 percent for 3-strand nylon in steady service). 3/8 in nylon: 370 lbf, against the 150 lbf design pull.',
+  },
+  bridleSnatchSpeedMph: {
+    label: 'Bridle snatch: closing speed when the slack comes taut', group: 'loads', unit: 'mph',
+    default: 4, min: 1, max: 8, step: 0.5, status: 'assumed', ref: 'D-62, eng 3c S-1',
+    note: 'The pullers take up the slack and the sled is not yet moving, so the rope goes from slack to taut with the pullers 2 to 4 mph ahead of the sled. The snatch force is v sqrt(k m): see bridleSnatchStiffLbIn.',
+  },
+  bridleSnatchStiffLbIn: {
+    label: 'Bridle snatch: stiffness of the rope and the pullers', group: 'loads', unit: 'lb/in',
+    default: 25, min: 3, max: 200, step: 1, status: 'verify', ref: 'D-62, eng 3c S-1',
+    note: 'About 25 lb/in for 8 ft of 3/8 in nylon plus the pullers (nylon gives roughly 15 percent stretch at 10 percent of its breaking strength: 370 lbf over 14 in of an 8 ft run). Low-stretch polyester is about 100 lb/in (the 320 to 640 lbf the engineering review estimated for a 320 lb sled), nylon with a 3 ft shock-cord section about 10. A cheap field test: pull the rope with a luggage scale and measure the stretch.',
+  },
+  tongueSleeveBoreIn: {
+    label: 'Bridle sleeve bore (bronze sleeve bearing ID)', group: 'steering', unit: 'in',
+    default: 0.625, min: 0.5, max: 0.875, step: 0.0625, status: 'verify', ref: 'D-62',
+    note: 'The bridle rope runs through this bore (a single strand, so it needs only a little over the rope diameter). 5/8 in ID x 1 in OD oil-embedded bronze sleeve bearings are a stocked McMaster size (confirm). Round (flare or ease) both ends of the bore so the rope does not bear on a sharp edge.',
   },
   bridleTieOverloadFactor: {
     label: 'Bridle tie overload factor on the design pull', group: 'loads', unit: '×',
@@ -1075,7 +1178,7 @@ const defs = {
   handleSocketDepthIn: {
     label: 'Push-handle socket depth (tube length)', group: 'brake', unit: 'in',
     default: 14, min: 3, max: 18, step: 0.5, status: 'assumed', ref: 'D-39, D-57, D-60',
-    note: 'D-57: deeper (was 6 in) so the posts can drop to the parked pin position with the bow just above the rear side top (handleParkClearIn); at 16 in about 5.7 in of post stayed in the socket when riding. Rectangular-tube socket bolted to the outside of the rear transom, its top flush with the transom top. D-60: 12 in (was 16 in). The parked position still sinks the post 9.8 in, so only about 1.7 in of post stays in the socket when riding (it was 5.7 in): the handle-sockets row passes the 50 lbf hold-back at 0.78 on that insertion, but the handle will have more play. Eric (2026-10-12): 14 in (+0.2 lb), so about 3.7 in of post stays in the socket when riding.',
+    note: 'D-57: deeper (was 6 in) so the posts can drop to the parked pin position with the bow just above the rear side top (handleParkClearIn); at 16 in about 5.7 in of post stayed in the socket when riding. Rectangular-tube socket bolted to the outside of the rear transom, its top flush with the transom top. D-60 took it from 16 in to 12 in; the parked position still sinks the post 9.8 in, which left only 1.7 in of post in the socket when riding (it was 5.7 in). Eric (2026-10-12): 14 in, so about 3.7 in of post stays in the socket when riding, the riding pin hole is 2.2 in (7 pin diameters) above the post foot, and the mass goes up 0.46 lb (the tubes are longer and so are the posts; the +0.2 lb quoted earlier was the tubes alone). At 12 in the riding pin hole would sit 0.19 in above the foot of the post (eng 3c review MUST-1): validateParams now errors when it is under 4 pin diameters and warns under 3 in of insertion.',
   },
   handleSocketWallIn: {
     label: 'Push-handle socket wall thickness', group: 'brake', unit: 'in',
@@ -1222,8 +1325,8 @@ const defs = {
 
   brakeHingeScrewsPerLeaf: {
     label: 'Hinge screws per leaf', group: 'brake', unit: '',
-    default: 6, min: 2, max: 8, step: 1, status: 'assumed', ref: 'D-57',
-    note: 'Pilot holes drilled with the hinge as the template; a drop of epoxy in each hole in the end-grain side.',
+    default: 8, min: 2, max: 8, step: 1, status: 'assumed', ref: 'D-57, D-62',
+    note: 'Pilot holes drilled with the hinge as the template; a drop of epoxy in each hole in the end-grain side. D-62: 8 (was 6) with the shorter #10 x 3/4 in screws (build 3c M3: 0.55 in of thread instead of 0.8 in), which keeps the brake-hinge row at 0.65 (goal rider); with the old 6 screws the shorter screw alone would have taken the green rider range from 230 to 210 lb; drill extra holes in the leaf if the hinge has fewer.',
   },
 
   brakeKneeDepthIn: {
@@ -1351,8 +1454,8 @@ const defs = {
 
   brakeHingeScrewLenIn: {
     label: 'Hinge screw length', group: 'brake', unit: 'in',
-    default: 1, min: 0.75, max: 1.5, step: 0.25, status: 'assumed', ref: 'D-57',
-    note: 'Thread engagement in the oak is this length less the hinge leaf and a 0.1 in tip.',
+    default: 0.75, min: 0.75, max: 1.5, step: 0.25, status: 'assumed', ref: 'D-57, D-62',
+    note: 'Thread engagement in the oak is this length less the hinge leaf and a 0.1 in tip. D-62 (build 3c M3): #10 x 3/4 in (was 1 in): the flap is 7/8 in thick and a 1 in screw runs 0.9 in into it and can break out the underside; the engagement is 0.55 in.',
   },
 
   brakeSlowShareMin: {
@@ -1416,9 +1519,9 @@ const defs = {
     note: 'D-60: 5/8 in (was 3/4 in); the joists row goes from 0.54 to about 0.65 and the resting capacity from 359 to about 350 lb.',
   },
   sideThicknessIn: {
-    label: 'Chine / gunwale stock thickness', group: 'stock', unit: 'in',
-    default: 0.625, min: 0.375, max: 1, step: 0.0625, status: 'explore', ref: 'D-35, D-43',
-    note: '⅝" leaves 0.17" walls beside the 0.276" groove (D-43) and a ⅜"-wide bearing face under the deck rabbet; the transoms have their own thickness.',
+    label: 'Side thickness (the sandwich: two oak bands + the 4 mm web)', group: 'stock', unit: 'in',
+    default: 0.625, min: 0.375, max: 1, step: 0.0625, status: 'explore', ref: 'D-35, D-43, D-62',
+    note: 'D-62: the side is a sandwich, an oak band on each face of the web, so 5/8 in = 2 x 0.234 in bands + 0.157 in web, the same as the grooved side it replaced. The deck edge rises into the gap under the inner chine band (depth = the band thickness); the transoms have their own thickness.',
   },
   axleBeamThicknessIn: {
     label: 'Rear axle beam width (fore-aft)', group: 'stock', unit: 'in',
@@ -1437,7 +1540,8 @@ const defs = {
   },
   deckPlyIn: {
     label: 'Deck plywood thickness', group: 'stock', unit: 'in',
-    default: 0.472, min: 0.236, max: 0.709, step: 0.001, status: 'explore',
+    default: 0.472, min: 0.236, max: 0.709, step: 0.001, status: 'explore', ref: 'D-62',
+    note: 'Okoume marine ply, 12 mm (1/2 in), a full 4 x 8 sheet from a local dealer (Eric, 2026-10-12). Fallback: 12 mm Baltic birch (about 3 to 4 lb heavier, epoxy-seal every face and edge).',
     options: [
       { value: 0.236, label: '6 mm' },
       { value: 0.354, label: '9 mm' },
@@ -1454,12 +1558,12 @@ const defs = {
       { value: 0.354, label: '9 mm' },
       { value: 0.472, label: '12 mm' },
     ],
-    note: 'D-60: 4 mm okoume (was 6 mm) for the side webs, the storage box and its lid and the sign blanks; the groove, dado and edge-banding widths follow it. The seat-back panel has its own size (seatBackPlyIn, still 6 mm). 4 mm skin and lid dent more easily (the cargo case of the lid-load row goes from 0.42 to 0.75); keep the lid engraved DO NOT STEP (D-58).',
+    note: 'D-60: 4 mm okoume (was 6 mm) for the side webs, the storage box and its lid and the sign blanks (marine okoume, a full 4 x 8 sheet from Aircraft Spruce, Peachtree City GA, will-call; Baltic birch 4 mm is the fallback); the dado and edge-banding widths follow it, and the sandwich bands of the sides are (side thickness - this) / 2 thick each (D-62). The seat-back panel has its own size (seatBackPlyIn, still 6 mm). 4 mm skin and lid dent more easily (the cargo case of the lid-load row goes from 0.42 to 0.75); keep the lid engraved DO NOT STEP (D-58).',
   },
   seatBackPlyIn: {
     label: 'Seat-back panel plywood', group: 'stock', unit: 'in',
-    default: 0.236, min: 0.157, max: 0.472, step: 0.001, status: 'explore', ref: 'D-60',
-    note: 'D-60: the seat-back panel stays 6 mm when the sides, box and lid go to 4 mm (the seat-back row was 0.53 at 6 mm and 1.09 at 4 mm).',
+    default: 0.472, min: 0.157, max: 0.472, step: 0.001, status: 'explore', ref: 'D-60, D-62',
+    note: 'Eric 2026-10-12: frameless 1/2 in (12 mm) okoume, cut from the offcut of the deck sheet (the 12 mm sheet from a local dealer), so no 6 mm sheet is bought at all. The panel IS the seat back (the oak stiles and rails are gone); the seat-back row checks the bare panel: bending as a strip above the crest line, deflection, the hinge inserts and the pin holes in ply. D-60 had it at 6 mm in an oak frame (the row was 0.53 at 6 mm and 1.09 at 4 mm).',
     options: [
       { value: 0.157, label: '4 mm' },
       { value: 0.236, label: '6 mm' },
@@ -1559,6 +1663,7 @@ const defs = {
       { value: PLY_SPECIES.okoumeMarine, label: 'Okoume marine (BS 1088)' },
       { value: PLY_SPECIES.balticBirchExterior, label: 'Baltic birch, exterior glue' },
     ],
+    note: 'MATERIALS AND SOURCES (Eric, 2026-10-12): the sheet goods are okoume marine plywood (BS 1088): 4 mm (sides, box, lid, signs) and 6 mm (seat back) in FULL 4 x 8 ft sheets from Aircraft Spruce, Peachtree City GA, will-call pickup; the 12 mm (1/2 in) deck sheet, a full 4 x 8, from a local dealer. FALLBACK if no okoume: Baltic birch 12 mm for the deck (about 3 to 4 lb heavier at the deck alone; every cut edge and face must be epoxy-sealed, it is exterior-glue only, not marine), 4 mm and 6 mm Baltic or okoume elsewhere. Solid parts are white oak: the lumber yard stocks 4/4 to 12/4 rough, so resaw and plane to the finished thickness (the stock/rough columns of the cut list already assume this). FINISHING STACK (Phase 4): stain (pre-stain conditioner or a gel stain on okoume, which blotches) -> epoxy seal -> spar varnish with UV filters.',
   },
   okoumeDensityPcf: {
     label: 'Okoume marine ply density', group: 'materials', unit: 'lb/ft³',
@@ -1741,7 +1846,7 @@ const defs = {
   bumpWheelRateLbIn: {
     label: 'Effective wheel radial stiffness (10" pneumatic)', group: 'bump', unit: 'lb/in',
     default: 500, min: 150, max: 1500, step: 25, status: 'verify', ref: 'D-54',
-    note: 'Phase 3c-3b: a 10" x 3.5" pneumatic hand-truck tire (4.10/3.50-4, rated about 300 lb at 30 psi) squashes about 0.6" (18% of the 3.25" section) at its rating, so k is about 300 / 0.6 = 500 lb/in; it scales with inflation pressure and runs 300 (20 psi) to 900 (rim-bound). TO MEASURE: stand a known weight on the sled at one wheel (a 150 lb person on the frame over the wheel) and measure the tire squash with a ruler against the hub; k = load / squash. docs/phase3c-3b-notes.md.',
+    note: 'PRE-ORDER GATE (eng 3c review, D-62): the design passes only if the real rate is below about 560 lb/in with the load forward (about 800 for the rider cases); the first row to flip is the front beam groove wall under a hard hit, then the rear beam seat, the groove bearing and the king bearing. TEST BEFORE ORDERING the lot: tire at 30 psi, a known weight over one wheel, a ruler: a squash of 0.55 in or more at 300 lb is a pass (everything holds as built); 0.4 to 0.55 in means lengthen the outer front clamp plate; under 0.4 in, stop and re-run the analysis with the measured k. Flat-free or foam-filled wheels change this rate by a factor of several and are NOT modeled by the tire-type switch. Phase 3c-3b: a 10" x 3.5" pneumatic hand-truck tire (4.10/3.50-4, rated about 300 lb at 30 psi) squashes about 0.6" (18% of the 3.25" section) at its rating, so k is about 300 / 0.6 = 500 lb/in; it scales with inflation pressure and runs 300 (20 psi) to 900 (rim-bound). TO MEASURE: stand a known weight on the sled at one wheel (a 150 lb person on the frame over the wheel) and measure the tire squash with a ruler against the hub; k = load / squash. docs/phase3c-3b-notes.md.',
   },
   bumpMassShare: {
     label: 'Rigid-body bump mass multiplier', group: 'bump', unit: '×',
@@ -1916,7 +2021,7 @@ export function steerGeometry(p: Params) {
   const outerEdgeRadiusIn = p.wheelbaseIn / sinL + trk / 2 + tw / 2;
   const innerEdgeRadiusIn = Math.max(0, p.wheelbaseIn / sinL - trk / 2 - tw / 2);
   // Vertical stack at the kingpin (underslung beam, axle rod in a top groove, as at the rear).
-  const beamTop = r + p.axleDiameterIn / 2;
+  const beamTop = r + p.axleDiameterIn / 2 - p.axleProudIn; // the tube stands axleProudIn above the beam (D-62)
   const beamBot = beamTop - p.axleBeamDepthIn;
   const tongueTop = beamTop; // D-58: the oak tongue butts the front of the beam, its top flush with the beam top (the disc lies directly on the beam)
   const thrustTop = beamTop + p.kingThrustThickIn;
@@ -1925,7 +2030,7 @@ export function steerGeometry(p: Params) {
   // The axle beam sweeps under the rails at the lock angle: the rails are shallower where it passes.
   const railYIn = bodyHalf - p.railThicknessIn;
   const swathHalf = (p.frontBeamThicknessIn / 2) * Math.cos(lock) + bodyHalf * Math.sin(lock); // at the rail's OUTER face (|y| = bodyHalf), where the beam's trailing corner reaches furthest back
-  const railDepthFront = Math.max(0, Math.min(p.railDepthIn, deckBot - (beamTop + 0.4)));
+  const railDepthFront = Math.max(0, Math.min(p.railDepthIn, deckBot - (beamTop + p.axleProudIn + p.beamRailClearIn))); // beamRailClearIn over the TUBE, which stands axleProudIn above the beam top (D-62)
   const railStepX = kingX - swathHalf - 1;
   // The steering lock is set by two CHECK CHAINS (D-58): an eye bolt fore-aft through each end of the axle beam (`steerChainBeamYIn` from the kingpin, mid depth, the eye standing 0.7 in out
   // of the beam's TRAILING face) and an eye bolt fore-aft through the crossmember just behind the king beam (layout.ts: `chain`, `steerChainAnchorYIn` from the center line, the eye standing out of its
@@ -1933,7 +2038,8 @@ export function steerGeometry(p: Params) {
   const endJoistX = bowCurl(p).xFlatEnd - p.crossmemberThickIn / 2 - 0.05; // the last joist, under the scarf of the deck to the bow bulkhead
   const stand = 0.7;
   const beamU = -(p.frontBeamThicknessIn / 2 + stand);
-  const beamZ = (beamTop + beamBot) / 2;
+  // S-2 (eng 3c): the chain eye bolt goes through the ligament UNDER the stub groove, not through mid depth of the whole beam (that left a 0.17 in wafer of oak under the groove floor).
+  const beamZ = (beamTop - (p.axleDiameterIn - p.axleProudIn) + beamBot) / 2;
   /** The beam eye of the RIGHT chain at steering angle a (rad, + = turning left, the beam turned counter-clockwise from above). */
   const beamEyeAt = (a: number): [number, number, number] => [kingX + beamU * Math.cos(a) + p.steerChainBeamYIn * Math.sin(a), beamU * Math.sin(a) - p.steerChainBeamYIn * Math.cos(a), beamZ];
   return { lock, kingX, clearAtLock, minTrack, centerRadiusIn, outerEdgeRadiusIn, innerEdgeRadiusIn, beamTop, beamBot, tongueTop, thrustTop, kingBot, kingDepth, railYIn, swathHalf, railDepthFront, railStepX, endJoistX, beamU, beamZ, beamEyeAt, stand, deckBot };
@@ -1984,6 +2090,30 @@ export interface ParamIssue {
  * degenerate; warnings mean a check is likely to fail. The full pass/fail
  * engineering checks live in src/analysis (Phase 2).
  */
+/** Depth of the axle-tube groove in the oak beam: the tube diameter less the amount that stands proud (D-62, build 3c M2). */
+export const axleGrooveDepthIn = (p: Pick<Params, 'axleDiameterIn' | 'axleProudIn'>): number => p.axleDiameterIn - p.axleProudIn;
+
+/**
+ * The push-handle post in its socket (E1, 3c-7), from params alone so `validateParams` can check it (handle.ts `handleGeometry` has the same numbers from the Layout; a test holds
+ * them equal): the post foot, the riding pin hole and the mouth, and so how much post stays in the socket when riding and how much wood is left below the pin hole.
+ */
+export function handleInsertion(p: Params): { insertionIn: number; pinEndIn: number; parkDropIn: number } {
+  const hwC = p.bodyWidthIn / 2 - p.sideThicknessIn;
+  const yPost = hwC - p.handleUprightInsetIn;
+  const yEnd = hwC + p.sideThicknessIn;
+  const c = Math.max(0, p.handleBowCrownIn);
+  const R = c > 1e-6 ? (yPost * yPost + c * c) / (2 * c) : Infinity;
+  const zEnd = Number.isFinite(R) ? p.rearHandleHeightIn + c - (R - Math.sqrt(Math.max(0, R * R - yEnd * yEnd))) : p.rearHandleHeightIn;
+  const sec = p.handleBarDiameterIn;
+  const zCornerTop = p.deckHeightIn + p.sideHeightRearIn;
+  const needEnd = zCornerTop + p.handleParkClearIn + sec / 2 + (p.rearHandleHeightIn - zEnd);
+  const needMid = zCornerTop + p.transomCrownIn + p.handleParkClearIn + sec / 2 - c;
+  const parkDropIn = Math.max(0, p.rearHandleHeightIn - Math.max(needEnd, needMid));
+  const insertionIn = p.handleSocketDepthIn - 0.5 - parkDropIn; // the foot sits 0.5 in above the socket bottom, plus the parked drop
+  const pinEndIn = insertionIn - Math.min(1.5, p.handleSocketDepthIn / 4); // the riding pin hole is min(1.5, depth/4) below the mouth
+  return { insertionIn, pinEndIn, parkDropIn };
+}
+
 export function validateParams(input: Params): ParamIssue[] {
   const p = resolveParams(input);
   const issues: ParamIssue[] = [];
@@ -2030,8 +2160,19 @@ export function validateParams(input: Params): ParamIssue[] {
     err(['axleWallIn', 'axleDiameterIn'], `The axle tube wall (${p.axleWallIn}") leaves no bore in a ${p.axleDiameterIn}" axle. Use a thinner wall, or 0 for a solid rod.`);
   if (Math.abs(p.wheelBoreIn - p.axleDiameterIn) > 0.01)
     warn(['wheelBoreIn', 'axleDiameterIn'], `The wheel bore (${p.wheelBoreIn}") is not the axle diameter (${p.axleDiameterIn}"): the bearings ride on the axle OD, so they must match. Choose another wheel or change the axle.`);
+  // S-4 (eng 3c): a foam-filled tire is several times stiffer than the 500 lb/in pneumatic one the bump model assumes.
+  if (p.tireType === TIRE_TYPE.flatFree && p.bumpWheelRateLbIn < 1000)
+    warn(['tireType', 'bumpWheelRateLbIn'], `Flat-free tires change the bump rate, not just the mass: the bump model still assumes ${p.bumpWheelRateLbIn} lb/in, a pneumatic tire. Measure the squash of the actual tire (load / squash) and set Effective wheel radial stiffness before trusting the structure rows (a foam tire can be 2,000 lb/in or more).`);
   if (p.axleCrossHoleFromEndIn - p.axleCrossHoleDiaIn / 2 < 1.5 * p.axleCrossHoleDiaIn - 1e-6 || p.axleEndExtraIn - p.axleCrossHoleFromEndIn < 0.5)
     warn(['axleCrossHoleFromEndIn', 'axleCrossHoleDiaIn', 'axleEndExtraIn'], 'The cotter-pin cross hole is too close to the axle end (want an end distance of 1.5 hole diameters or more) or leaves less than 1/2" for the collar and washer.');
+  // E1 (3c-7): the riding pin hole must have wood below it. At a 12 in socket the hole sat 0.19 in above the post foot (the pin retained nothing).
+  {
+    const hi = handleInsertion(p);
+    if (hi.pinEndIn < 4 * p.handlePinDiameterIn - 1e-9)
+      err(['handleSocketDepthIn', 'handlePinDiameterIn', 'handleParkClearIn'], `The riding retaining-pin hole is only ${Math.max(0, hi.pinEndIn).toFixed(2)}" above the foot of the post; it needs 4 pin diameters (${(4 * p.handlePinDiameterIn).toFixed(2)}"). Deepen the socket or reduce the parked drop (${hi.parkDropIn.toFixed(1)}").`);
+    else if (hi.insertionIn < 3 - 1e-9)
+      warn(['handleSocketDepthIn', 'handleParkClearIn'], `Only ${hi.insertionIn.toFixed(1)}" of post stays in the socket when riding (want 3" or more): the handle will wobble at the grip.`);
+  }
   // The rider's feet go through the body to the foot stop.
   const footSpan = (2 * RIDER_LEG_Y_FRAC + RIDER_FOOT_Y_FRAC) * p.riderStatureIn;
   const footNeed = footSpan + 2 * p.bootAllowanceIn + 0.25;
@@ -2049,20 +2190,23 @@ export function validateParams(input: Params): ParamIssue[] {
     warn(['bowBulkheadHeightIn', 'handleBowCrownIn', 'sideHeightBowIn'], 'The bow bulkhead corners (its peak less the handlebow crown it echoes, 3c-5) are meant to be at least as high as the side tops at the bow, so the sides end against it (D-57).');
   if (p.bowBulkheadHeightIn < p.liftSlotClearIn + p.liftSlotHeightIn + p.liftBarMinIn - 1e-9)
     err(['bowBulkheadHeightIn', 'liftSlotClearIn', 'liftSlotHeightIn'], `The bow bulkhead is too low for the lift hand-hold: it needs ${(p.liftSlotClearIn + p.liftSlotHeightIn + p.liftBarMinIn).toFixed(2)}" at the center (hand clearance + slot + oak above).`);
-  // Plan turn-in (D-57): the chine and gunwale are cold-bent flat in two plies; the smoothstep's tightest bend (6 x turn-in / length^2 curvature) must stay above the cold-bend limit.
+  // Plan turn-in (D-57, D-62): each oak band of the sandwich side is cold-bent on the web; the smoothstep's tightest bend (6 x turn-in / length^2 curvature) must stay above the cold-bend limit of ONE band.
+  const bandT = Math.max(0, (p.sideThicknessIn - p.panelPlyIn) / 2);
   if (p.bowTurnInIn > 1e-9) {
     const rMin = (p.bowTurnLenIn * p.bowTurnLenIn) / (6 * p.bowTurnInIn);
-    const lim = p.hullLamMinRadiusFactor * (p.sideThicknessIn / 2);
+    const lim = p.hullLamMinRadiusFactor * bandT;
     if (rMin < lim - 1e-9)
-      err(['bowTurnInIn', 'bowTurnLenIn', 'hullLamMinRadiusFactor'], `The bow turn-in bends the chine and gunwale to a ${rMin.toFixed(1)}" radius; two ${(p.sideThicknessIn / 2).toFixed(3)}" plies cold-bend to ${lim.toFixed(1)}" at best: lengthen the turn-in or reduce it.`);
+      err(['bowTurnInIn', 'bowTurnLenIn', 'hullLamMinRadiusFactor'], `The bow turn-in bends the chine and gunwale bands to a ${rMin.toFixed(1)}" radius; a ${bandT.toFixed(3)}" band cold-bends to ${lim.toFixed(1)}" at best: lengthen the turn-in or reduce it.`);
     if (p.bowTurnInIn * 2 > p.bodyWidthIn - 12)
       err(['bowTurnInIn', 'bodyWidthIn'], 'The bow turn-in would pinch the nose below 12" wide.');
   }
-  // Captured-ply grooves (D-35): the oak walls left each side of the groove must stay sturdy.
+  // Sandwich sides (D-61, D-62): the oak band on each face of the web must be a real strip, and the inner chine band must keep some height above the deck gap.
   {
-    const wall = (p.sideThicknessIn - p.panelPlyIn - p.grooveSlopIn) / 2;
-    if (wall < 0.1)
-      warn(['sideThicknessIn', 'panelPlyIn', 'grooveSlopIn'], `A ${p.panelPlyIn}" panel in a ${p.sideThicknessIn}" chine/gunwale leaves ${Math.max(0, wall).toFixed(3)}" walls beside the groove (want ≥ 0.1"). Thicken the side stock or thin the panel.`);
+    if (bandT < 0.15)
+      warn(['sideThicknessIn', 'panelPlyIn'], `A ${p.panelPlyIn}" web in a ${p.sideThicknessIn}" side leaves ${bandT.toFixed(3)}" oak bands on each face (want 0.15" or more). Thicken the side stock or thin the panel.`);
+    const innerChine = p.railBandIn - (p.deckPlyIn + p.deckSlopIn);
+    if (innerChine < 0.5)
+      warn(['railBandIn', 'deckPlyIn'], `The inner chine band is only ${Math.max(0, innerChine).toFixed(2)}" tall above the ${(p.deckPlyIn + p.deckSlopIn).toFixed(2)}" gap the deck edge rises into (want 1/2" or more): make the chine band taller.`);
   }
   // ── Front end: the pivoting soapbox axle (D-56). The wheels run beside the body; the lock angle sets a minimum track, the stack under the deck sets the king beam depth. ──
   const sg = steerGeometry(p);
@@ -2091,7 +2235,7 @@ export function validateParams(input: Params): ParamIssue[] {
     {
       const yIn = (p.frontTrackIn - p.hubLengthIn - 0.25) / 2 - p.frontStubLenIn; // inner end of the stub / groove
       const plateIn = yIn + 0.25 + p.clampPlateWidthIn; // inner station's outer edge
-      const plateOut = (p.frontTrackIn - p.hubLengthIn - 0.25) / 2 - 0.25 - p.clampPlateWidthIn; // outer station's inner edge
+      const plateOut = (p.frontTrackIn - p.hubLengthIn - 0.25) / 2 - 0.25 - p.clampPlateOuterWidthIn; // outer station's inner edge
       if (p.rollPadRadiusIn - p.rollPadLenIn / 2 < plateIn + 0.1 || p.rollPadRadiusIn + p.rollPadLenIn / 2 > plateOut - 0.1)
         warn(['rollPadRadiusIn', 'rollPadLenIn', 'frontStubLenIn'], `The roll pads (${(p.rollPadRadiusIn - p.rollPadLenIn / 2).toFixed(1)}" to ${(p.rollPadRadiusIn + p.rollPadLenIn / 2).toFixed(1)}" from the center) must lie between the stub clamp plates on the axle beam (free from ${plateIn.toFixed(1)}" to ${plateOut.toFixed(1)}").`);
     }
@@ -2101,8 +2245,8 @@ export function validateParams(input: Params): ParamIssue[] {
   // ── Rear axle stack (D-15, D-54) ──
   const beamBottom =
     p.axleBeamPosition === AXLE_BEAM_POSITION.underslung
-      ? r + p.axleDiameterIn / 2 - p.axleBeamDepthIn
-      : r - p.axleDiameterIn / 2;
+      ? r + p.axleDiameterIn / 2 - p.axleProudIn - p.axleBeamDepthIn
+      : r - p.axleDiameterIn / 2 + p.axleProudIn;
   if (beamBottom < p.minGroundClearanceIn)
     warn(['axleBeamDepthIn', 'axleBeamPosition', 'minGroundClearanceIn'],
       `Axle beam bottom at ${beamBottom.toFixed(2)}" is below the ${p.minGroundClearanceIn}" ground clearance.`);

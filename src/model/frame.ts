@@ -53,13 +53,16 @@ export function buildFrame(ctx: Ctx): Part[] {
     for (let i = 0; i < outline.length; i++) { const [px, pz] = outline[i], [qx, qz] = outline[(i + 1) % outline.length]; a2 += px * qz - qx * pz; per += Math.hypot(qx - px, qz - pz); }
     const area = Math.abs(a2) / 2;
     const mass = woodMassLb(p, area * railT, 2 * area + per * railT, p.oakDensityPcf);
-    const stock = { t: railT, w: railD, l: x1 - x0 };
+    // Build 3c S2: the rail is TWO strips of railT/2 glued face to face and bent on the plan form, so the cut list shows the strip (the part carries plies: 2).
+    const stock = { t: railT / 2, w: railD, l: x1 - x0 };
     const rail = customPart(ctx, {
       id: `rail-${tag}`, partNo: 'rail', name: `Rail ${tag}`, group: 'frame', kind: 'lumber', material: 'white oak',
       geometry: planWallGeometry(outline, railT, (x) => s * ((rY0 + rY1) / 2 - L.turnIn(x))), transform: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
-      massLb: mass, fab: 'table-saw', step: STEP.frame, grain: 'x', stock, rough: { t: railT + p.millingAllowanceIn, w: railD + p.millingAllowanceIn, l: stock.l + 4 * p.millingAllowanceIn }, explode: [fxOf(0.6), s * 0.3, -0.6],
+      massLb: mass, fab: 'bentlam', step: STEP.frame, grain: 'x', stock, rough: { t: railT / 2 + p.millingAllowanceIn, w: railD + p.millingAllowanceIn, l: stock.l + 4 * p.millingAllowanceIn }, explode: [fxOf(0.6), s * 0.3, -0.6],
     });
     rail.notes = `${f2(railT)}" × ${f2(railD)}" oak bar, straight behind the bow turn-in and ${p.bowTurnInIn > 0 ? `eased in with the hull over the last ${p.bowTurnLenIn}" (${p.bowTurnInIn}" each side at the bulkhead, D-57; cold-bent flat in 2 plies on the same plan form as the chine, the step and notches cut after bending)` : 'straight'}, ${f2(L.railEnd - rearTx)}" long from the rear transom's inner face to the end of the flat deck, outer face flush under the chine so the chine sits on it all the way (D-43). ${L.railDepthF < railD - 1e-6 ? `Ahead of x = ${f2(L.railStepX)}" it steps (45 degree ramp) down to ${f2(L.railDepthF)}" deep so the front axle beam, swinging ±${p.steerLockDeg}° about the kingpin, passes under it with 0.4" to spare (D-56). ` : ''}Its top is flush with the chine bottom AND the deck underside (one deck level, D-52): the deck bonds to the rail top and its edge enters the chine's rabbet. The chine sits on the top of the rail's outer ${L.side}" and is Domino-tied (vertical Dominos) and epoxied to it every ${p.chineTieSpacingIn}". Frame + deck are one glued unit, turned over and lowered into the inverted side assemblies. The rear axle hangers are bolted and glued to its inner face (${seat ? 'axle-hanger-' + tag : 'no hanger'}).`;
+    rail.plies = 2;
+    rail.notes += ` CUT LIST (build 3c S2): ${f2(railT / 2)}" × ${f2(railD + p.millingAllowanceIn)}" × ${f2(x1 - x0 + 4 * p.millingAllowanceIn)}" strips, TWO per rail (resaw from 4/4 and plane; strips this thin and ${f2(railD)}" wide need a planer sled or a drum sander), plus 25% spares; only the last ${p.bowTurnLenIn}" is curved.`;
     parts.push(rail);
   }
 
@@ -101,7 +104,7 @@ export function buildFrame(ctx: Ctx): Part[] {
         id: 'king-beam', partNo: 'king-beam', name: 'King beam (kingpin crossmember)', group: 'front-end', mat: 'oak', step: STEP.frame, grain: 'y',
         ...span([k.x - k.len / 2, k.x + k.len / 2], [-half, half], [k.bot, k.top]),
       });
-      kb.notes = `The front load path (D-56): an oak crossmember ${f2(k.len)}" fore-aft × ${f2(k.depth)}" deep between the rails at the kingpin, bonded to the deck underside and Domino-tied and epoxied to the rails. The ${f2(p.kingpinDiaIn)}" kingpin bolt is bored through its center; a slot cut from the front face (about ${f2(p.kingpinDiaIn * 1.6)}" wide × ${f2(p.kingpinDiaIn * 1.2)}" tall, just above the thrust disc) captures the nylock nut and its washer so they can swing with the axle. The UHMW thrust disc is screwed to its underside and the top of the axle beam turns under it (D-58); the clamp plates on the beam top pass under the king beam with 1/8 in to spare.`;
+      kb.notes = `The front load path (D-56): an oak crossmember ${f2(k.len)}" fore-aft × ${f2(k.depth)}" deep between the rails at the kingpin, bonded to the deck underside and Domino-tied and epoxied to the rails. The ${f2(p.kingpinDiaIn)}" kingpin bolt is bored through its center; a slot cut from the front face (about ${f2(p.kingpinDiaIn * 1.6)}" wide × ${f2(p.kingpinDiaIn * 1.2)}" tall, at the TOP of the king beam: the nut stands 0.45" under the deck; build 3c S5 made the two descriptions agree) captures the nylock nut and its washer so they can swing with the axle. The UHMW thrust disc is screwed to its underside and the top of the axle beam turns under it (D-58); the clamp plates on the beam top pass under the king beam with 1/8 in to spare.`;
       parts.push(kb);
       return;
     }

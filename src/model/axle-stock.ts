@@ -12,7 +12,7 @@ export function axleSourcing(p: Params, lengthIn: number): string {
   const d = frac(p.axleDiameterIn);
   const hole = `${p.axleCrossHoleDiaIn.toFixed(3)}"`;
   if (p.axleWallIn > 0)
-    return `McMaster-Carr (DOM mild-steel round tube, 1020 or 1026, ${d}" OD x ${p.axleWallIn.toFixed(3)}" wall, cut ${f2(lengthIn)}" long; drill a ${hole} cross hole ${f2(p.axleCrossHoleFromEndIn)}" from each end for the cotter pin; collar and cotter pin). The OD of DOM tube is held to about +-0.005", close enough for the wheel bearings: check the fit with the wheel before ordering the lot. Yield about ${p.axleTubeYieldPsi / 1000} ksi (confirm the cert)`;
+    return `McMaster-Carr (DOM (drawn-over-mandrel) mild-steel round tube, ASTM A513 Type 5, 1020 or 1026 - NOT ordinary ERW 'mechanical' tube, which is about 45 ksi yield and takes the axle-stress row from 0.59 to 0.94; keep the mill cert or the supplier's A513 T5 statement - ${d}" OD x ${p.axleWallIn.toFixed(3)}" wall, cut ${f2(lengthIn)}" long; drill a ${hole} cross hole ${f2(p.axleCrossHoleFromEndIn)}" from each end for the cotter pin; collar and cotter pin). The OD of DOM tube is held to about +-0.005", close enough for the wheel bearings: check the fit with the wheel before ordering the lot. Yield about ${p.axleTubeYieldPsi / 1000} ksi (confirm the cert). Clamp bolts: snug plus a quarter turn, re-check them before each event (the oak creeps); do not over-torque`;
   return `McMaster-Carr (${d}" 1045 turned-ground-polished shafting, cut ${f2(lengthIn)}" long; drill a ${hole} cross hole ${f2(p.axleCrossHoleFromEndIn)}" from each end; collar and cotter pin)`;
 }
 

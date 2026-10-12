@@ -133,8 +133,8 @@ describe('seat back, handle and finish tags (D-44)', () => {
       expect(x.finish!.roundoverIn!, x.id).toBeLessThanOrEqual(defaults.roundoverIn + 1e-12);
       expect(x.finish!.roundoverIn!, x.id).toBeLessThanOrEqual(minSection(x.geometry) * ROUNDOVER_MAX_FRACTION + 1e-9);
     }
-    // the 5/8" gunwale is capped at a third of its thickness (0.208"); a 3/4" rail takes the full 1/4"
-    expect(get(parts, 'side-L-gunwale').finish?.roundoverIn).toBeCloseTo(0.625 / 3, 9);
+    // the 0.234" sandwich gunwale band is capped at a third of its thickness (0.078"); a 3/4" rail takes a third of 1/4"
+    expect(get(parts, 'side-L-gunwale').finish?.roundoverIn).toBeCloseTo(computeLayout(defaults).sideBand / 3, 9);
     expect(get(parts, 'rail-L').finish?.roundoverIn).toBeCloseTo(defaults.railThicknessIn / 3, 9);
     expect(parts.some((x) => x.finish?.roundoverIn === defaults.roundoverIn)).toBe(true);
     for (const x of parts.filter((q) => q.material.includes('plywood'))) expect(x.finish?.surface, x.id).toBe('okoume');
@@ -145,7 +145,7 @@ describe('seat back, handle and finish tags (D-44)', () => {
     // the pivoting front axle (D-56): the tongue plate and kingpin are blackened steel; the beam, king beam and stops are oak; the thrust washer is UHMW; the shackle is steel
     expect(get(parts, 'kingpin').finish?.surface).toBe('blackened');
     expect(get(parts, 'bridle-tongue').finish?.surface).not.toBe('blackened'); // the oak tongue (D-58) is finished like the rest of the oak
-    expect(get(parts, 'bridle-eye').finish?.surface).toBe('steel');
+    expect(get(parts, 'bridle-sleeve').finish?.surface).toBe('steel'); // bronze sleeve (D-62: no shackle)
     expect(get(parts, 'king-thrust').finish?.surface).toBe('asa');
     for (const id of ['axle-hanger-L', 'beam-F', 'king-beam', 'bridle-tongue']) expect(get(parts, id).finish?.surface, id).toBe('oak');
     expect(get(parts, 'bow-bulkhead').finish?.surface).toBe('oak');

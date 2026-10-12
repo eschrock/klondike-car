@@ -83,13 +83,15 @@ describe('mass and parts', () => {
   });
   it('the shop notes and the sourcing name the stock: DOM tube, wall, the cross hole and the fit check; the solid rod still says 1045', () => {
     const t = tube.find((x) => x.id === 'axle-R')!;
-    expect(t.sourcing?.vendor).toMatch(/DOM mild-steel round tube/);
+    expect(t.sourcing?.vendor).toMatch(/DOM \(drawn-over-mandrel\) mild-steel round tube, ASTM A513 Type 5/);
+    expect(t.sourcing?.vendor).toMatch(/NOT ordinary ERW/); // eng 3c: ERW is about 45 ksi and takes axle-stress from 0.59 to 0.94
+    expect(t.sourcing?.vendor).toMatch(/quarter turn/);
     expect(t.sourcing?.vendor).toMatch(/0\.120" wall/);
     expect(t.sourcing?.vendor).toMatch(/cross hole/);
     expect(t.sourcing?.vendor).toMatch(/70 ksi/);
     expect(t.notes).toMatch(/hollow 3\/4" OD x 0\.120" wall DOM tube/);
     expect(t.notes).toMatch(/rusts inside/);
-    expect(tube.find((x) => x.id === 'axle-FL')!.sourcing?.vendor).toMatch(/DOM mild-steel round tube/);
+    expect(tube.find((x) => x.id === 'axle-FL')!.sourcing?.vendor).toMatch(/DOM \(drawn-over-mandrel\) mild-steel round tube/);
     expect(rod.find((x) => x.id === 'axle-R')!.sourcing?.vendor).toMatch(/1045/);
     // the stub-axle rear style gets the same stock
     expect(buildModel({ ...defaults, axleStyle: 1 } as Params).find((x) => x.id === 'axle-RL')!.geometry).toMatchObject({ wall: 0.12 });

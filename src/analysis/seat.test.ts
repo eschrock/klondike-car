@@ -25,7 +25,12 @@ describe('seatChecks', () => {
     const c = byId['seat-back'];
     expect(c.statusOperating).not.toBe('fail');
     expect(c.statusGoal).not.toBe('fail');
-    expect(c.details!.map((d) => d.name)).toEqual(['stile bending at the crest', 'crest bearing on the stop block', 'hinge load (each hinge, screws in oak)', 'ply panel bending']);
+    expect(c.details!.map((d) => d.name)).toEqual([
+      'panel bending (bare 12 mm ply as a strip above and below the crest line)', 'crest bearing on the oak crest strip (full width)', 'hinge load (each hinge, screws in the oak backer)',
+      'hinge leaf inserts pull-out (each of 3 threaded inserts in the ply)', 'latch pin bearing on the 12 mm ply (pull per pin)', 'latch pin tear-out toward the panel edge (ply rolling shear)', 'panel overhang deflection at the static torso load',
+    ]);
+    // D-62 (Eric 2026-10-12): the bare 12 mm panel on the full-width crest strip passes with margin: no fallback to the oak frame was needed
+    expect(c.util!).toBeLessThan(0.9);
     for (const d of c.details!) expect(d.util, d.name).toBeLessThan(1);
   });
   it('seat-back statics balance: R_A + R_B = w·H and moments about the hinge (the stile foot, B = 0) vanish', () => {
@@ -41,6 +46,12 @@ describe('seatChecks', () => {
     expect(k.T / k.Q).toBeLessThan(0.3); // a small share: the hinge screws in oak are not the weak link
     // Hand check at the defaults: w = 300/2/16 = 9.375 lbf/in per stile.
     expect(k.w).toBeCloseTo(9.375, 9);
+    // Hand check of the bare panel: the worst moment per station M (at the crest, w (H - A)^2 / 2), over the 16 in width: m = 2M/W, sigma = 6 m / t^2 with t = 0.472
+    const Mcrest = (k.w * (k.sup.H - k.A) ** 2) / 2;
+    expect(k.M).toBeGreaterThanOrEqual(Mcrest - 1e-6);
+    expect(k.m).toBeCloseTo((2 * k.M) / k.sup.W, 9);
+    expect(k.sigmaPly).toBeCloseTo((6 * k.m) / (0.472 * 0.472), 6);
+    expect(k.sigmaPly).toBeLessThan(2125);
   });
   it('a heavier torso share and a weak insert fail the row (the check has teeth)', () => {
     const bad = seatChecks(ctxFor({ seatBackLoadFraction: 1, seatHingeLoadLbf: 10 })).find((c) => c.id === 'seat-back')!;

@@ -15,7 +15,7 @@ import { atPose, brakeGeometry, buildBrakeAt, type BrakeGeom, type V2 } from '..
 import { HINGE_GAP_IN, HINGE_LEAF_T_IN, WITHDRAWAL_WET_CM, dot2, momentY, norm2, pointPolyGap, sub } from '../model/brake-layout';
 import { SIGN_X_MAX_IN } from '../model/body';
 import { makeCtx } from '../model/build-utils';
-import { handleGeometry, type HandleGeom } from '../model/handle';
+import { handleGeometry, POST_RELIEF, type HandleGeom } from '../model/handle';
 import type { Part } from '../model/types';
 import type { Ctx } from './context';
 import { dualCheck, singleCheck, detail, governing, type CaseEval } from './dual';
@@ -526,10 +526,17 @@ export function handleSockets(ctx: Ctx): AnalysisCheck {
   const Rtop = (Fp * arm) / lEff;
   const M = Fp * (gripZ - h.zTop);
   const w = p.handlePostWidthIn, t = p.handlePostThickIn;
-  const S = (w * t ** 2) / 6;
+  // Build 3c M5: the post has a relief groove down its transom-side (tension) face to clear the socket screw heads; the section modulus is that of the notched rectangle (tension face = the notch).
+  const gw = POST_RELIEF.widthIn, gd = POST_RELIEF.depthIn;
+  const aRect = w * t, aNotch = gw * gd, aNet = aRect - aNotch;
+  const yc = (aRect * (t / 2) - aNotch * (t - gd / 2)) / aNet; // centroid from the compression face
+  const Inet = (w * t ** 3) / 12 + aRect * (yc - t / 2) ** 2 - ((gw * gd ** 3) / 12 + aNotch * (t - gd / 2 - yc) ** 2);
+  const S = Inet / (t - yc); // to the tension face (the notch floor)
   const sigma = M / S;
-  const contact = Math.max(0.25, p.handleSocketDepthIn / 4);
+  // E1 (3c-7): the bearing strip at the mouth and at the foot cannot be longer than the post's real insertion (at a 12 in socket it was assumed 3 in against a 1.7 in insertion).
+  const contact = Math.max(0.25, Math.min(lEff, p.handleSocketDepthIn / 4));
   const bearTop = Rtop / (w * contact);
+  const pinEnd = Math.max(0, h.zPin - h.zFoot); // post foot to the riding pin hole (wood below the hole)
   const dp = p.handlePinDiameterIn;
   const pinShear = F / (2 * circleA(dp));
   const wall = p.handleSocketWallIn;
@@ -546,8 +553,9 @@ export function handleSockets(ctx: Ctx): AnalysisCheck {
   const washerA = (Math.PI / 4) * (washerOd ** 2 - (bolt + 0.03) ** 2);
   const pullThrough = Rtop / washerA;
   const ds: Detail[] = [
-    detail('post bending at the socket mouth', sigma, 'psi', al.oakBend, '<='),
+    detail('post bending at the socket mouth (net of the relief groove)', sigma, 'psi', al.oakBend, '<='),
     detail('post bearing at the socket mouth and foot', bearTop, 'psi', al.oakPerp, '<='),
+    detail('wood below the riding pin hole (end distance, 4 pin diameters)', pinEnd, 'in', 4 * p.handlePinDiameterIn, '>='),
     detail('socket tube bending (6061-T6 aluminum)', tubeSigma, 'psi', alAllow, '<='),
     detail('socket wall bearing at the bolt holes (aluminum)', wallBoltBear, 'psi', alAllow, '<='),
     detail('retaining pin bearing on the aluminum walls', wallPinBear, 'psi', alAllow, '<='),
@@ -555,7 +563,7 @@ export function handleSockets(ctx: Ctx): AnalysisCheck {
     detail('socket bolts bearing in the transom (2 × ¼")', boltBear, 'psi', al.oakDowel, '<='),
     detail('retaining pin double shear (whole pull)', pinShear, 'psi', sa.shear, '<='),
   ];
-  const how = `A ${f(F)} lbf hold-back pull at the grip (${f(gripZ, 1)}" above the ground, D-9) shared by two uprights: ${f(Fp)} lbf each. Each upright is a cantilever from the socket mouth (${f(h.zTop, 1)}") to the grip: M = ${f(Fp)} × ${f(gripZ - h.zTop, 1)} = ${f(M)} lbf·in on a ${f(w, 2)}" × ${f(t, 2)}" post (σ ${f(sigma, 0)} psi). Top reaction ${f(Rtop)} lbf over the ${f(lEff, 1)}" insertion. Socket tube bending ${f(tubeSigma, 0)} psi, bolt-hole wall bearing ${f(wallBoltBear, 0)} psi, washer pull-through ${f(pullThrough, 0)} psi on the oak transom, retaining pin ${f(pinShear, 0)} psi in double shear.`;
+  const how = `A ${f(F)} lbf hold-back pull at the grip (${f(gripZ, 1)}" above the ground, D-9) shared by two uprights: ${f(Fp)} lbf each. Each upright is a cantilever from the socket mouth (${f(h.zTop, 1)}") to the grip: M = ${f(Fp)} × ${f(gripZ - h.zTop, 1)} = ${f(M)} lbf·in on a ${f(w, 2)}" × ${f(t, 2)}" post (σ ${f(sigma, 0)} psi). Top reaction ${f(Rtop)} lbf over the ${f(lEff, 1)}" insertion (bearing strip ${f(contact, 2)}", never longer than the insertion; the riding pin hole is ${f(pinEnd, 2)}" above the post foot, ${f(pinEnd / p.handlePinDiameterIn, 1)} pin diameters). Socket tube bending ${f(tubeSigma, 0)} psi, bolt-hole wall bearing ${f(wallBoltBear, 0)} psi, washer pull-through ${f(pullThrough, 0)} psi on the oak transom, retaining pin ${f(pinShear, 0)} psi in double shear.`;
   const g = governing(ds, how);
   return singleCheck({
     id: 'handle-sockets', label: `Rear push-handle sockets${g.suffix ? ` (${g.suffix})` : ''}`, group: 'Structure', refs: ['D-9', 'D-39'],

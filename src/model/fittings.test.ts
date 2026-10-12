@@ -30,34 +30,41 @@ const centerOf = (x: Part) => transformPoint(x.transform, [0, 0, 0]);
 const sizeOf = (x: Part) => { if (x.geometry.type !== 'box') throw new Error(`${x.id} is not a box`); return x.geometry.size; };
 
 describe('seat', () => {
-  it('the pad and the cushion come off without tools (Dual Lock); the back frame stays on the sled on its hinges and flips flat (D-57); the stop blocks are fixed', () => {
+  it('the pad and the cushion come off without tools (Dual Lock); the frameless back panel stays on the sled on its hinges and flips flat (D-57); the stop blocks are fixed', () => {
     const removed = new Set(buildModel(defaults, { removed: true }).map((x) => x.id));
-    for (const id of ['seat-back-stile-L', 'seat-back-stile-R', 'seat-back-rail-top', 'seat-back-rail-bottom', 'seat-back-panel', 'seat-wedge-L', 'seat-wedge-R', 'seat-hinge-L', 'seat-hinge-R', 'seat-cushion'])
+    for (const id of ['seat-back-panel', 'seat-crest-strip', 'seat-wedge-L', 'seat-wedge-R', 'seat-hinge-L', 'seat-hinge-R', 'seat-cushion'])
       expect(removed.has(id), id).toBe(true);
     expect(removed.has('seat-back-pad')).toBe(false);
     expect(removed.has('seat-pin-L')).toBe(false); // the pins ride on their lanyards
   });
-  it('each stile is hinged at its foot, has a latch pin through it, and the matching blind hole is in the stop block behind it', () => {
+  it('the frameless 12 mm panel (D-62) is hinged at its foot by inserts in its front face, has a latch pin hole at each station, and the matching blind hole is in the stop block behind it', () => {
+    const panel = byId.get('seat-back-panel')!;
+    expect(panel.material).toMatch(/okoume/);
+    expect(panel.stock!.t).toBeCloseTo(0.472, 9);
+    expect(panel.notes).toMatch(/FRAMELESS/);
     for (const tag of ['L', 'R']) {
-      const stile = byId.get(`seat-back-stile-${tag}`)!;
-      expect(stile.joints!.some((j) => j.type === 'pin' && j.to === `seat-pin-${tag}`)).toBe(true);
+      expect(panel.joints!.some((j) => j.type === 'pin' && j.to === `seat-pin-${tag}`)).toBe(true);
       const hinge = byId.get(`seat-hinge-${tag}`)!;
-      expect(hinge.joints!.some((j) => j.type === 'screw' && j.to === stile.id)).toBe(true);
+      const h = hinge.joints!.find((j) => j.type === 'screw' && j.to === 'seat-back-panel')!;
+      expect(h.size).toMatch(/threaded insert/);
+      expect(panel.joints!.some((j) => j.type === 'screw' && j.to === hinge.id && /insert/.test(j.size ?? ''))).toBe(true);
       const wedge = byId.get(`seat-wedge-${tag}`)!;
       expect(wedge.joints!.some((j) => j.type === 'pin' && j.to === `seat-pin-${tag}`)).toBe(true);
+      expect(wedge.joints!.find((j) => j.type === 'pin')!.size).toMatch(/blind hole 1-1\/2" deep/);
     }
   });
-  it('frame joinery: Dominos at every rail-stile joint and the ply panel captured in grooves', () => {
-    for (const id of ['seat-back-stile-L', 'seat-back-stile-R']) {
-      const j = byId.get(id)!.joints!;
-      expect(j.filter((q) => q.type === 'domino').map((q) => q.to).sort()).toEqual(['seat-back-rail-bottom', 'seat-back-rail-top']);
-      expect(j.some((q) => q.type === 'dado' && q.to === 'seat-back-panel')).toBe(true);
-    }
+  it('no frame: no stiles, rails or Dominos in the back; the panel is banded (not captured) and a thin full-width oak crest strip, glued to the box end and the two stop blocks, carries it', () => {
+    expect(byId.has('seat-back-stile-L')).toBe(false);
+    expect(byId.has('seat-back-rail-top')).toBe(false);
     const panel = byId.get('seat-back-panel')!;
-    expect(panel.edges).toBe('captured');
-    expect(panel.joints!.filter((q) => q.type === 'dado')).toHaveLength(4);
-    // The cut size includes the tongues.
-    expect(panel.stock!.w).toBeGreaterThan((panel.geometry as { size: number[] }).size[1]);
+    expect(panel.edges).toBe('edged');
+    expect(panel.joints!.some((j) => j.type === 'domino' || j.type === 'dado')).toBe(false);
+    const strip = byId.get('seat-crest-strip')!;
+    expect(strip.material).toBe('white oak');
+    for (const to of ['seat-wedge-L', 'seat-wedge-R']) expect(strip.joints!.some((j) => j.type === 'glue' && j.to === to)).toBe(true);
+    expect(strip.joints!.some((j) => j.type === 'glue' && j.to === 'storage-end-fore')).toBe(true);
+    expect(panel.massLb).toBeGreaterThan(1.5);
+    expect(panel.massLb).toBeLessThan(3);
   });
   it('grab boards have a hand-sized hole and no pinch gap (BRIEF 4.7)', () => {
     for (const tag of ['L', 'R']) {
@@ -245,14 +252,9 @@ describe('round 2 joinery (build M1): every Domino fits its member', () => {
   // A Domino's FACE WIDTH (wMm: 17 mm for a 4×20, 22 mm for an 8×50; the L in T×L is the tenon length, i.e. the depth across the joint) must fit inside the
   // member face with the light-frame edge margin (0.1" each side); the mortise depth L/2 must leave a wall in the host (chooseDomino, orchestrator correction).
   const lenIn = (size: string) => DOMINOS.find((d) => size.startsWith(d.name))!.wMm / 25.4;
-  it('seat back: 4×20 offset past the 3/8" groove (hand: 20 mm = 0.787" ≤ 1.5 − 0.375 − 2 × 0.1 = 0.925"; 5×30 = 1.181" is not)', () => {
-    for (const id of ['seat-back-stile-L', 'seat-back-rail-top']) {
-      for (const j of byId.get(id)!.joints!.filter((q) => q.type === 'domino')) {
-        expect(j.size, id).toMatch(/^\d+×\d+ \(DF 500\)/);
-        expect(lenIn(j.size!)).toBeLessThanOrEqual(defaults.seatBackFrameWidthIn - defaults.seatBackGrooveDepthIn - 2 * defaults.dominoEdgeLightIn + 1e-9);
-      }
-    }
-    // Face widths: 5×30 = 19 mm = 0.748" and 8×50 = 22 mm = 0.866" both fit the 0.925" left beside the groove (0.1" margins); 12×100 XL (30 mm = 1.18") does not.
+  it('there is no seat-back frame to Domino any more (D-62): the back is a bare 12 mm panel', () => {
+    expect([...byId.keys()].filter((id) => /^seat-back-(stile|rail)/.test(id))).toEqual([]);
+    // Face widths of the Dominos still used elsewhere: 5×30 = 19 mm = 0.748" and 8×50 = 22 mm = 0.866" fit a 1-1/2 in member with 0.1" margins; 12×100 XL (30 mm = 1.18") does not.
     expect(lenIn('8×50')).toBeCloseTo(0.866, 3);
     expect(lenIn('12×100')).toBeGreaterThan(1.5 - 0.375 - 0.2);
   });
@@ -380,9 +382,9 @@ describe('detail quality', () => {
 
 describe('no unintended overlaps for the seat, storage and fittings', () => {
   const ALLOW: Array<[RegExp, RegExp]> = [
-    [/^seat-wedge-[LR]$/, /^seat-(back-(stile|pad)|knob)-?[LR]?$/],
-    [/^seat-hinge-[LR]$/, /^seat-back-(stile|rail)/], // the knuckle at the stile foot is part of the joint
-    [/^seat-pin-[LR]$/, /^(seat-back-stile|seat-wedge)-[LR]$/], // the pin passes through the stile into the stop block
+    [/^seat-(wedge-[LR]|crest-strip)$/, /^seat-(back-(stile|pad|panel)|knob|wedge)-?[LR]?$/],
+    [/^seat-hinge-[LR]$/, /^(seat-wedge-[LR]|seat-back-(stile|rail|panel))/], // the knuckle at the foot of the back is part of the joint
+    [/^seat-pin-[LR]$/, /^(seat-back-stile|seat-back-panel|seat-wedge)-?[LR]?$/], // the pin passes through the panel into the stop block
     [/^flag-block-/, /^(flag-tube|side-)/], // the blocks hold the tube against the side
     [/^seat-grip-[LR]$/, /^doubler-lash-[LR]\d$/], // the grab board and the lash doubler share the gunwale bolts (3c-4b, reported)
   ];

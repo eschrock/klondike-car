@@ -64,13 +64,13 @@ describe('rear axle hangers, beam seat and hold-downs (MUST-4, D-54)', () => {
   const seat = beamSeat(defaults, L)!;
   const rs = railSection(defaults, L);
   it('an oak hanger is glued and bolted to the inside face of each rail (the deck is 8 in up, D-56: the 3 in deep rail reaches only 0.85 in below the beam top): 5 x 0.75 in, from the rail top down to 1.35 in under the beam top', () => {
-    // Hand: the beam top = wheel radius 5 + rod radius 0.375 = 5.375 (underslung); the hanger bottom = 5.375 - 1.35 = 4.025; the top = the deck underside 7.528.
-    expect(L.beamR.top).toBeCloseTo(5.375, 9);
+    // Hand: the beam top = wheel radius 5 + rod radius 0.375 - the 0.05 the tube stands proud (D-62) = 5.325 (underslung); the hanger bottom = 5.325 - 1.35 = 3.975; the top = the deck underside 7.528.
+    expect(L.beamR.top).toBeCloseTo(5.325, 9);
     for (const tag of ['L', 'R']) {
       const s = tag === 'L' ? 1 : -1;
       const hg = byId(`axle-hanger-${tag}`);
       const b = worldAABB(hg), rail = worldAABB(byId(`rail-${tag}`));
-      expect(b.min[2]).toBeCloseTo(5.375 - defaults.axleSeatNotchIn, 9);
+      expect(b.min[2]).toBeCloseTo(5.325 - defaults.axleSeatNotchIn, 9);
       expect(b.max[2]).toBeCloseTo(L.deckBot, 9); // the rail top
       expect(b.min[0]).toBeCloseTo(L.beamR.x - defaults.axleHangerWidthIn / 2, 9);
       expect(b.max[0]).toBeCloseTo(L.beamR.x + defaults.axleHangerWidthIn / 2, 9);
@@ -85,7 +85,7 @@ describe('rear axle hangers, beam seat and hold-downs (MUST-4, D-54)', () => {
       expect(hg.joints!.some((j) => j.type === 'glue' && j.to === `rail-${tag}`)).toBe(true);
       expect(hg.joints!.find((j) => j.type === 'bolt' && j.to === `rail-${tag}`)!.count).toBe(2);
     }
-    expect(rs.zBot).toBeCloseTo(5.375 - 1.35, 9);
+    expect(rs.zBot).toBeCloseTo(5.325 - 1.35, 9);
     expect(rs.zSolidTop).toBeCloseTo(L.deckBot, 9);
     expect(rs.yOut).toBeCloseTo(11.25, 9);
     expect(rs.yIn).toBeCloseTo(11.25 - defaults.axleHangerThickIn, 9); // 7/8 in hanger (D-58)
@@ -162,17 +162,17 @@ describe('rear axle hangers, beam seat and hold-downs (MUST-4, D-54)', () => {
       expect(s > 0 ? b.max[1] : -b.min[1]).toBeCloseTo(railSection(defaults, L).yIn, 9);
       expect(b.min[0]).toBeGreaterThanOrEqual(hg.min[0]);
       expect(b.max[0]).toBeLessThanOrEqual(hg.max[0]);
-      expect(b.min[2]).toBeCloseTo(L.beamR.top, 9);
+      expect(b.min[2]).toBeCloseTo(L.beamR.top + defaults.axleProudIn, 9); // the flat leg bears on the tube, which stands 0.05 in proud (D-62)
     }
   });
-  it('the rear clamp plates are 316 flat bar parts with stock and sourcing, one bolt through the beam each (no zinc, no "mass is an estimate")', () => {
-    for (const id of ['clamp-RL1', 'clamp-RL2', 'clamp-RR1', 'clamp-RR2']) {
+  it('the rear clamp plates (ONE bridge plate per side, D-62) are 316 flat bar parts with stock and sourcing and two bolts through the beam (no zinc, no "mass is an estimate")', () => {
+    for (const id of ['clamp-RL1', 'clamp-RR1']) {
       const c = byId(id);
       expect(c.material).toMatch(/316/);
       expect(c.material).not.toMatch(/zinc/);
       expect(c.sourcing?.vendor).toMatch(/316/);
       expect(c.stock).toBeDefined();
-      expect(c.joints?.some((j) => j.to === 'beam-R' && j.type === 'bolt')).toBe(true);
+      expect(c.joints?.some((j) => j.to === 'beam-R' && j.type === 'bolt' && j.count === 2)).toBe(true);
       expect(c.notes).not.toMatch(/estimate/);
     }
   });

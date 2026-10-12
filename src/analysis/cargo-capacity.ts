@@ -61,6 +61,8 @@ export interface CargoCapacity {
   stow: { applicable: boolean; fits: boolean; status: Status; marginIn: { length: number; width: number; height: number } };
   /** Rear-only brake traction at the design payload, parked nose-down on the design slope (1 = just holds; the pullers or a chock hold the rest below that). Null when not evaluated. */
   rearTraction: number | null;
+  /** The load-height rule (eng 3c S-5): the cargo center height the design assumes, where the tip limit is reached and where slide-before-tip is lost (in above the deck). Null when not evaluated. */
+  heightRule: { designIn: number; tipLimitIn: number; slideLimitIn: number } | null;
 }
 
 function interpolate(w0: number, u0: number, w1: number, u1: number, level: number): number {
@@ -120,10 +122,12 @@ export function cargoCapacity(p: Params): CargoCapacity {
   const plan = seatStowPlan(p, L, buildModel(p, { rider: 'none', cargo: false }));
   const stowRow = at.rows.find((c) => c.id === 'seat-stow');
   const trac = at.rows.find((c) => c.id === 'brake-traction')?.cases?.cargo;
+  const hr = at.rows.find((c) => c.id === 'cargo-height');
   const out: CargoCapacity = {
     bed: cargoBed(p, L),
     stow: { applicable: plan.applicable, fits: plan.fits, status: stowRow?.status ?? 'info', marginIn: { length: plan.margin.lengthIn, width: plan.margin.widthIn, height: plan.margin.heightIn } },
     rearTraction: trac ? trac.value : null,
+    heightRule: hr && hr.detailsCargo && hr.detailsCargo.length > 1 ? { designIn: p.cargoCgHeightIn, tipLimitIn: hr.detailsCargo[0].value, slideLimitIn: hr.detailsCargo[1].value } : null,
     payloadLb: p.cargoPayloadLb, statusAtPayload: worstStatus,
     counts: { pass: rows.filter((r) => r.statusAtPayload === 'pass').length, marginal: rows.filter((r) => r.statusAtPayload === 'marginal').length, fail: rows.filter((r) => r.statusAtPayload === 'fail').length },
     capacityLb: fl ? Math.max(0, Math.floor(fl.failAtLb as number)) : null,

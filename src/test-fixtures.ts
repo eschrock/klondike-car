@@ -21,4 +21,6 @@ export const PRE_D60: Partial<Params> = {
   wheelMass10Lb: 4, wheelRatingLb: 300, hubLengthIn: 3,
   panelPlyIn: 0.236,
   handlePostThickIn: 0.9375, handlePostWidthIn: 1.4375,
+  // D-62 (3c-7): the axle groove is the full tube diameter again (no 0.05 in proud) and the clamp bolts sit 0.625 in from the tube centerline, so the older hand calcs keep their geometry.
+  axleProudIn: 0, clampLegGapIn: 0.25, clampPlateLengthIn: 0.8, clampPlateOuterWidthIn: 1.5, kingThrustThickIn: 0.5625, rollPadThickIn: 0.3125, beamRailClearIn: 0.4,
 };

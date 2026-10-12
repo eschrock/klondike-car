@@ -22,7 +22,7 @@ import { PRE_D60 } from '../test-fixtures';
 
 const DEG = 180 / Math.PI;
 const RAD = Math.PI / 180;
-const defaults = { ...defaultParams(), ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5 } // the 3c-3 hand-calc fixture: the 35.5 in tracks, 3/4 in hangers and 1 1/2 in clamp plates (D-58 narrowed the tracks and thickened them; the new defaults are tested in track-d58.test.ts)
+const defaults = { ...defaultParams(), ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5, clampPlateOuterWidthIn: 1.5 } // the 3c-3 hand-calc fixture: the 35.5 in tracks, 3/4 in hangers and 1 1/2 in clamp plates (D-58 narrowed the tracks and thickened them; the new defaults are tested in track-d58.test.ts)
 const mkCtx = (q: Partial<Params> = {}): Ctx => {
   const p = resolveParams({ ...defaults, ...q } as Params);
   return makeContext(p, buildModel(p, { rider: 'goal', cargo: true }), buildModel(p, { rider: 'none', cargo: false, seat: 'stowed' }));
@@ -235,7 +235,7 @@ describe('pitch rows (L1, H3)', () => {
       expect(byId('pitch-rear').cases![k]!.value, k).toBeCloseTo(ratio, 2);
       expect(byId('pitch-rear').cases![k]!.limit).toBe(1.25);
     }
-    expect(byId('pitch-rear').cases!.operating!.value).toBeCloseTo(3.0, 0);
+    expect(byId('pitch-rear').cases!.operating!.value).toBeCloseTo(2.5, 0); // about 3.0 before D-62 (the eng review quoted 2.4 to 2.8): sandwich sides, frameless seat back and the 0.05 in lower pull point
     expect(byId('pitch-rear').status).toBe('pass');
   });
 });

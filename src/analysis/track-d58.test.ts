@@ -9,7 +9,7 @@ import { checkTruckFit } from '../truck/fit';
 import { runChecks } from './index';
 import { PRE_D60 } from '../test-fixtures';
 
-const OLD = { frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5 };
+const OLD = { frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5, clampPlateOuterWidthIn: 1.5 };
 const run = (q: Partial<Params>) => runChecks({ ...defaultParams(), ...PRE_D60, ...q } as Params, { includeTruck: false });
 const row = (cs: ReturnType<typeof run>, id: string) => cs.find((c) => c.id === id)!;
 const nw = run({});
@@ -35,23 +35,23 @@ describe('the D-58 tracks', () => {
 describe('tip angles before (35.5 / 35.5 in) and after (34 1/2 / 32 in), 40 degree limit', () => {
   const tip = (cs: ReturnType<typeof run>, k: 'operating' | 'goal' | 'cargo') => row(cs, 'tip-straight').cases![k]!.value;
   it('150 lb rider 50.9 -> 48.7 deg; 200 lb rider 49.4 -> 47.3 deg; both far above the limit', () => {
-    expect(tip(old, 'operating')).toBeCloseTo(50.84, 1); // 50.9 before D-60 dropped the four foot-block cleats (a little less mass forward)
-    expect(tip(nw, 'operating')).toBeCloseTo(48.7, 1);
-    expect(tip(old, 'goal')).toBeCloseTo(49.4, 1);
-    expect(tip(nw, 'goal')).toBeCloseTo(47.25, 1);
+    expect(tip(old, 'operating')).toBeCloseTo(50.79, 1); // 50.84 before D-62 // 50.9 before D-60 dropped the four foot-block cleats (a little less mass forward)
+    expect(tip(nw, 'operating')).toBeCloseTo(48.62, 1); // 48.7 before D-62
+    expect(tip(old, 'goal')).toBeCloseTo(49.35, 1);
+    expect(tip(nw, 'goal')).toBeCloseTo(47.19, 1);
     for (const k of ['operating', 'goal'] as const) expect(tip(nw, k)).toBeGreaterThan(40 + 5);
     expect(row(nw, 'tip-straight').statusOperating).toBe('pass');
     expect(row(nw, 'tip-straight').statusGoal).toBe('pass');
   });
   it('200 lb cargo (the D-58 target, piled at the nose end of the bed): 44.7 -> 43.1 deg, passes the 40 degree limit by 3 degrees (marginal band, within 10% of the limit)', () => {
-    expect(tip(old, 'cargo')).toBeCloseTo(44.67, 1); // D-60 (no foot-block cleats): 44.7 / 43.1 before
-    expect(tip(nw, 'cargo')).toBeCloseTo(43.0, 1);
+    expect(tip(old, 'cargo')).toBeCloseTo(44.58, 1); // 44.67 before D-62 // D-60 (no foot-block cleats): 44.7 / 43.1 before
+    expect(tip(nw, 'cargo')).toBeCloseTo(42.91, 1); // 43.0 before D-62
     expect(tip(nw, 'cargo')).toBeGreaterThan(40);
     expect(row(nw, 'tip-straight').statusCargo).toBe('marginal');
   });
   it('250 lb cargo, for the record: 43.2 -> 41.7 deg, still above the limit', () => {
-    expect(tip(run({ ...OLD, cargoPayloadLb: 250 }), 'cargo')).toBeCloseTo(43.2, 1);
-    expect(tip(run({ cargoPayloadLb: 250 }), 'cargo')).toBeCloseTo(41.6, 1); // 41.7 before D-60 dropped the cleats
+    expect(tip(run({ ...OLD, cargoPayloadLb: 250 }), 'cargo')).toBeCloseTo(43.12, 1);
+    expect(tip(run({ cargoPayloadLb: 250 }), 'cargo')).toBeCloseTo(41.52, 1); // 41.7 before D-60 dropped the cleats, 41.6 before D-62
   });
   it('slide-before-tip and tip-lock still pass for the riders; the slide margin falls 1.24 -> 1.14 (150 lb) against the 0.75 required', () => {
     expect(row(old, 'slide-before-tip').cases!.operating!.value).toBeCloseTo(1.24, 1);

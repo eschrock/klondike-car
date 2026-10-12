@@ -16,7 +16,7 @@ const al = derived(defaultParams());
 describe('hull checks (D-43)', () => {
   it('returns lift and foot-stop (the prow-grab check went with the prow, D-45), all Structure and finite; both pass at the defaults (D-58: the nose is lifted by the hand-hold in the bow bulkhead, not by the tongue whose 3/16 in plate bent at 4.8x)', () => {
     const cs = hullChecks(ctx);
-    expect(cs.map((c) => c.id)).toEqual(['lift', 'foot-stop']);
+    expect(cs.map((c) => c.id)).toEqual(['lift', 'foot-stop', 'side-web']);
     for (const c of cs) {
       expect(c.group).toBe('Structure');
       expect(Number.isFinite(c.value)).toBe(true);
@@ -110,7 +110,8 @@ describe('hull checks (D-43)', () => {
     const dd = ctx.p.deckCaptureDepthIn;
     expect(k.dadoArea).toBeCloseTo(2 * dd * 20.25, 9);
     expect(k.dadoShear).toBeCloseTo(240 / (2 * dd * 20.25), 9);
-    expect(k.dominoPts).toBeGreaterThanOrEqual(4);
+    expect(k.dominoPts).toBeGreaterThanOrEqual(2); // D-62: the two rail ends; the sandwich band ends are butt joints, the web dados carry the rest
+    expect(k.webDadoArea).toBeCloseTo(4 * dd * (ctx.L.deckTop + 4 - ctx.L.webCap - ctx.L.chineBot), 6); // 2 sides x 2 faces x the dado depth x the web height at the bulkhead (4.35 in)
     const fs = footStopCheck(ctx)!;
     expect(fs.statusGoal).not.toBe('fail');
     expect(fs.id).toBe('foot-stop');
@@ -136,6 +137,6 @@ describe('hull checks (D-43)', () => {
     const k = footStopLoads(ctxFor({ footStopShare: 1 }), 200, 4)!;
     expect(k.F).toBeCloseTo(800, 9);
     expect(k.dadoShear).toBeCloseTo(800 / k.dadoArea, 9);
-    expect(k.dominoShear).toBeCloseTo(800 / (k.dominoPts * k.tenonArea), 9);
+    expect(k.dominoShear).toBeCloseTo(800 / (k.dominoPts * k.tenonArea + k.webDadoArea), 9); // the rail-end tenons plus the web dados (D-62)
   });
 });

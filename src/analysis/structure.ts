@@ -6,7 +6,7 @@
  * turntable) use the axle's static ground reaction × dynamicFactor, which already contains the sled mass (D-2).
  * Wood allowables are MOR/MOE × wet-service factors, with the wood safety factor; steel is yield / steel SF.
  */
-import { AXLE_STYLE } from '../params';
+import { AXLE_STYLE, axleGrooveDepthIn } from '../params';
 import { worldAABB } from '../model/bounds';
 import type { Part } from '../model/types';
 import type { Ctx } from './context';
@@ -133,7 +133,7 @@ function beamEval(ctx: Ctx, c: CaseData): CaseEval {
   // Bump basis (D-50): the rear beam carries the struck wheel's force (bump V + static) to its rail.
   const bumpRear = bumpCases(ctx, c, 'rear');
   const F = 2 * peakVertical(bumpRear.normal);
-  const groove = p.axleDiameterIn;
+  const groove = axleGrooveDepthIn(p); // D-62: 0.70 in deep, the tube stands 0.05 in proud
   const hEff = Math.max(0.1, beam.depth - groove);
   const sec = rectSection(beam.thick, hEff);
   const clamp = clampGeometry(ctx, 'R');

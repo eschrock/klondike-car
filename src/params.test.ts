@@ -49,9 +49,9 @@ describe('PARAM_DEFS', () => {
       bodyWidthIn: 24, wheelbaseIn: 44, wheelDiameterIn: 10, deckHeightIn: 8, sideHeightBowIn: 4, sideHeightRearIn: 14, sheerCurveIn: 2.5, bowTurnInIn: 1.25, bowTurnLenIn: 14,
       bowBulkheadThickIn: 1.5, bowBulkheadHeightIn: 5.75, crossmemberSpacingIn: 8.5, standDeflectionRatio: 240, showSideSigns: 1, rearOverhangIn: 10, frontOverhangIn: 6.75, handleBowCrownIn: 0.875, seatXIn: 13.5, riderLegReachIn: 35.75, // D-60: 1/4 in more, the thinner bulkhead's face is 1/4 in further forward
        seatDepthIn: 14.5, storageVolumeIn3: 2000,
-      frontTrackIn: 34.5, rearTrackIn: 32, steerLockDeg: 20, steerClearIn: 0.75, kingpinDiaIn: 0.625, kingThrustOdIn: 3, kingThrustThickIn: 0.5625, kingBeamLengthIn: 3,
+      frontTrackIn: 34.5, rearTrackIn: 32, steerLockDeg: 20, steerClearIn: 0.75, kingpinDiaIn: 0.625, kingThrustOdIn: 3, kingThrustThickIn: 0.5, kingBeamLengthIn: 3,
       tongueWidthIn: 1.25, tongueDepthIn: 1.75, tongueTieAheadIn: 5, steerRopesOn: 0, frontBeamThicknessIn: 2.5, rollPadRadiusIn: 11.5, // D-60: tongue 1-1/4 x 1-3/4, pads out 1/2 in with the short hub
-      transomThicknessIn: 0.5, panelPlyIn: 0.157, seatBackPlyIn: 0.236, wheelMass10Lb: 2.8, wheelRatingLb: 300, hubLengthIn: 2.28, wheelBoreIn: 0.75, axleWallIn: 0.12, crossmemberThickIn: 0.625, handleSocketDepthIn: 14,
+      transomThicknessIn: 0.5, panelPlyIn: 0.157, seatBackPlyIn: 0.472, wheelMass10Lb: 2.8, wheelRatingLb: 300, hubLengthIn: 2.28, wheelBoreIn: 0.75, axleWallIn: 0.12, crossmemberThickIn: 0.625, handleSocketDepthIn: 14,
     });
     expect(PARAM_DEFS.steerLockDeg.ref).toContain('D-56');
   });
@@ -83,10 +83,10 @@ describe('validateParams', () => {
     expect(validateParams(p).some((i) => i.severity === 'error' && i.message.startsWith('Rear axle beam + ply needs the deck'))).toBe(true);
     expect(validateParams(p).some((i) => i.severity === 'error' && /king beam/.test(i.message))).toBe(true);
   });
-  it('front pivot stack (D-56): a king beam under 1 in deep (a very low deck) is an error; the 8 in default leaves about 1.6 in (the 9/16 in disc, D-58)', () => {
+  it('front pivot stack (D-56): a king beam under 1 in deep (a very low deck) is an error; the 8 in default leaves about 1.7 in (the 1/2 in disc, D-62)', () => {
     const sg = steerGeometry(defaults);
     expect(sg.kingDepth).toBeGreaterThan(1.55);
-    expect(sg.kingDepth).toBeLessThan(1.65);
+    expect(sg.kingDepth).toBeLessThan(1.75); // 1.70 with the catalog 1/2 in disc and the 0.05 in lower beam top (D-62); 1.59 with the 9/16 in disc
     expect(errorsOf(defaults)).toEqual([]);
     const low = errorsOf({ ...defaults, deckHeightIn: 6 });
     expect(low.some((i) => i.keys.includes('deckHeightIn') && /king beam/.test(i.message))).toBe(true);

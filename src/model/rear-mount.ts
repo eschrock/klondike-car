@@ -79,12 +79,13 @@ export function beamSeat(p: Params, L: Layout, beam: Beam = L.beamR): BeamSeat |
   const bd = p.beamHoldDownBoltDiameterIn;
   const hdw = Math.min(b.thick - 0.25, 2.6);
   const hx0 = b.x - hdw / 2, hx1 = b.x + hdw / 2;
-  const zRail = b.top + Math.min(leg - 0.4, 1.1);
+  const zB = b.top + p.axleProudIn; // the hold-down's flat leg bears on the tube, which stands axleProudIn proud of the beam (D-62)
+  const zRail = zB + Math.min(leg - 0.4, 1.1);
   const px = hdw / 4;
   return {
     x0, x1, zBot: rail.zBot, zTop: b.top, depth, remain: rail.zTop - b.top, railT: rail.t, volume: w * depth * rail.t,
     hd: {
-      x0: hx0, x1: hx1, yRail: rail.yIn, yFree: rail.yIn - leg, zBeam: b.top, zTop: b.top + leg, t, leg, boltD: bd,
+      x0: hx0, x1: hx1, yRail: rail.yIn, yFree: rail.yIn - leg, zBeam: zB, zTop: zB + leg, t, leg, boltD: bd,
       railBolts: [[b.x - px, zRail], [b.x + px, zRail]],
       beamBolts: [-1, 1].map((k): V2 => [b.x + k * (p.axleDiameterIn / 2 + 0.1 + bd / 2 + 0.1), rail.yIn - leg / 2 - t / 2]),
     },

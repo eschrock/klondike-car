@@ -55,6 +55,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
   const bd = p.brakeMountBoltDiaIn;
   const sd = p.brakeHingeScrewDiaIn;
   const nS = Math.round(p.brakeHingeScrewsPerLeaf);
+  const hs = inchesText(p.brakeHingeScrewLenIn); // hinge screw length: #10 x 3/4 (build 3c M3; the flap is 7/8 thick, a 1 in screw broke out of the underside)
   const screw = (to: string, count: number, size: string, note?: string): Joint => ({ type: 'screw', to, count, diaIn: sd, size, ...(note ? { note } : {}) });
   const rotPts = (pts: V2[]): V2[] => pts.map(at);
 
@@ -66,10 +67,10 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
       const b = g.board;
       const c = at(b.c);
       const flap = box(ctx, {
-        id: `brake-flap-${tag}`, partNo: 'brake-flap', name: `Brake flap ${tag} (white oak)`, group: 'brake', mat: 'oak', step: STEP.brake, grain: 'x', fab: 'table-saw',
+        id: `brake-flap-${tag}`, partNo: 'brake-flap', name: `Brake flap ${tag} (white oak)`, group: 'brake', mat: 'oak', step: STEP.brake, grain: 'x', fab: 'shaper-origin',
         size: [b.len, b.w, b.thick], center: [c[0], yc, c[1]], rot: { y: -(g.sigma - phi) }, explode: [-0.4, sgn * 0.5, 1],
         joints: [
-          screw(`brake-hinge-${tag}`, nS, `${nS} x #10 x 1" 316 flat-head screws through the hinge's flap leaf into the flap top, ${f2(g.hinge.leaf)}" leaf, pilot-drilled, epoxy in the holes`),
+          screw(`brake-hinge-${tag}`, nS, `${nS} x #10 x ${hs}" 316 flat-head screws through the hinge's flap leaf into the flap top, ${f2(g.hinge.leaf)}" leaf, pilot-drilled, epoxy in the holes`),
           screw(`brake-shoe-${tag}`, 2, '2 x #10 x 2" 316 screws up through the shoe block into the flap, glued with epoxy', 'the screws and the glue take the pad friction'),
           screw(`brake-cord-${tag}`, 1, '1 x #10 316 stainless screw eye (3/16" ring) in the flap top at the front edge of the foot area'),
         ],
@@ -113,7 +114,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
           { type: 'glue', to: `brake-flap-${tag}`, count: 1, note: 'epoxy, full face' },
           screw(`brake-pad-${tag}`, 2, '2 x #8 x 1" 316 flat-head screws (heads buried 1/8" in the rubber) through the pad into the block', 'plus contact cement over the full face'),
         ],
-        notes: `Bandsawn from 2" white oak: the top face follows the flap underside (${f2(g.sigma / (Math.PI / 180))} degrees), the bottom face is cut to the tire radius (${f2(g.r + p.brakePadThickIn)}" from the axle, a template on a router sled or sandpaper on the tire), ${f2(p.brakeShoeBlockIn)}" thick at its thinnest. The rubber pad is glued and screwed on the curved face. Ends cut vertical.`,
+        notes: `Bandsawn from ${f2(g.shoe.w)}" thick white oak (the thickness is the pad width, across the wheel; the 3 in side is the tire-radius cut): the top face follows the flap underside (${f2(g.sigma / (Math.PI / 180))} degrees), the bottom face is cut to the tire radius (${f2(g.r + p.brakePadThickIn)}" from the axle, a template on a router sled or sandpaper on the tire), ${f2(p.brakeShoeBlockIn)}" thick at its thinnest. The rubber pad is glued and screwed on the curved face. Ends cut vertical.`,
         sourcing: { vendor: `Shop-cut white oak, ${f2(g.shoe.w)}" wide x ${f2(bb.z1 - bb.z0)}" x ${f2(bb.x1 - bb.x0)}" blank; the tire radius is the template` },
       });
       add1(shoe);
@@ -163,10 +164,10 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
         center: [(h.x0 + h.x1) / 2, yc, (h.z0 + h.z1) / 2], explode: [0, sgn * 0.3, 1],
         sourcing: { vendor: `McMaster-Carr (316 stainless steel butt hinge, ${f2(h.len)}" leaf height, ${f2(2 * h.leaf)}" open width, about 12 gauge, with a ${f2(p.brakeHingePinDiaIn)}" pin; countersunk for #10 screws)` },
         joints: [
-          screw(`brake-flap-${tag}`, nS, `${nS} x #10 x 1" 316 flat-head screws into the flap top`),
-          screw(`brake-knee-${tag}`, nS, `${nS} x #10 x 1" 316 flat-head screws into the knee top`),
+          screw(`brake-flap-${tag}`, nS, `${nS} x #10 x ${hs}" 316 flat-head screws into the flap top`),
+          screw(`brake-knee-${tag}`, nS, `${nS} x #10 x ${hs}" 316 flat-head screws into the knee top`),
         ],
-        notes: `Surface-mounted on the TOPS: one leaf (${f2(h.leaf)}") on the knee arm, the other on the flap's front end. The pin axis lies on the line where the two top faces meet, ${f2(g.xh)}" ahead of the axle (${f2(p.brakeHingeAheadIn)}" ahead of the tire's front) and ${f2(g.H[1])}" off the ground. A 1/8" gap between the flap's front face and the knee lets the flap swing (${f2(g.theta / (Math.PI / 180))} degrees released to applied). Drawn flat on the knee; the flap leaf follows the flap.`,
+        notes: `Surface-mounted on the TOPS: one leaf (${f2(h.leaf)}") on the knee arm, the other on the flap's front end. The pin axis lies on the line where the two top faces meet, ${f2(g.xh)}" ahead of the axle (${f2(p.brakeHingeAheadIn)}" ahead of the tire's front) and ${f2(g.H[1])}" off the ground. A 1/8" gap between the flap's front face and the knee lets the flap swing (${f2(g.theta / (Math.PI / 180))} degrees released to applied). The flap slopes down ${f2(g.sigma / (Math.PI / 180))} degrees applied (${f2((g.sigma - g.theta) / (Math.PI / 180))} released) while the knee top was flat, which put a top-mounted butt hinge ${f2(g.sigma / (Math.PI / 180))} degrees PAST its stop at rest (build 3c M3): the knee top is therefore BEVELED to the flap's applied slope (below), so the hinge is flat when the brake is applied and folds up only ${f2(g.theta / (Math.PI / 180))} degrees when released, never past flat. Screws #10 x ${hs}" (the flap is ${f2(g.board.thick)}" thick: a 1" screw ran out of the underside). HOLD A REAL HINGE TO IT BEFORE CUTTING THE FIRST KNEE: stand the hinge on a scrap at the bevel angle and check that the leaf lies flat on both faces. The model draws the knee top flat at the pin height and the hinge as a flat box; the bevel wedge (up to ${f2(((g.knee.x1 - g.knee.x0) * Math.tan(g.sigma)))}" at the knee's front end) is not drawn.`,
       }));
     }
 
@@ -182,10 +183,10 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
         joints: [
           { type: 'bolt', to: `rail-${tag}`, count: g.bolts.count, diaIn: bd, size: `${g.bolts.count} x ${f2(bd)}" x ${stackBolt}" 316 hex bolts (${g.bolts.xs.length} columns x ${g.bolts.zs.length} rows), fender washers and nylock nuts, through this leg and the rail into the backer`, note: `the nuts and washers sit in 1/2" counterbores in the backer's inner face; the heads are in counterbores in the knee's outboard face. Epoxy the holes.` },
           { type: 'glue', to: `rail-${tag}`, count: 1, note: 'epoxy, leg against the rail and chine outer face (the bolts clamp it)' },
-          screw(`brake-hinge-${tag}`, nS, `${nS} x #10 x 1" 316 screws into the knee top`),
+          screw(`brake-hinge-${tag}`, nS, `${nS} x #10 x ${hs}" 316 screws into the knee top`),
           screw(`brake-chock-cord-${tag}`, 1, '1 x #10 316 stainless screw eye in the underside, for the chock cord'),
         ],
-        notes: `Oak outrigger bandsawn from ${f2(kn.x1 - kn.x0)}" stock: a ${f2(kn.legT)}" leg on the hull's outer face (rail and chine, z ${f2(kn.zBot)}" to ${f2(kn.zLeg)}"), an arm ${f2(kn.armT)}" thick that reaches out ${f2(kn.yOut - Y.face)}" over the gap beside the tire, braced by the sloping underside, with its top flat at z = ${f2(kn.zTop)}" for the hinge. It stands ahead of the tire (x ${f2(kn.x0)}" to ${f2(kn.x1)}", the tire front is ${f2(g.r)}"), its bottom on the rail bottom (${f2(kn.zBot)}" off the ground). Bolted through the rail into the backer, not the thin side panel, so the loads go into the rail and the deck.`,
+        notes: `Oak outrigger bandsawn from ${f2(kn.x1 - kn.x0)}" stock: a ${f2(kn.legT)}" leg on the hull's outer face (rail and chine, z ${f2(kn.zBot)}" to ${f2(kn.zLeg)}"), an arm ${f2(kn.armT)}" thick that reaches out ${f2(kn.yOut - Y.face)}" over the gap beside the tire, braced by the sloping underside. Its TOP is BEVELED (bandsaw) to the flap's applied slope, ${f2(g.sigma / (Math.PI / 180))} degrees rising toward the front from the hinge pin line (z = ${f2(kn.zTop)}" at the pin, ${f2((kn.x1 - kn.x0) * Math.tan(g.sigma))}" higher at the front end), so the hinge leaf lies in the flap's plane when the brake is applied (build 3c M3); cut the blank that much taller, and hold a real hinge to the first knee before cutting the rest. It stands ahead of the tire (x ${f2(kn.x0)}" to ${f2(kn.x1)}", the tire front is ${f2(g.r)}"), its bottom on the rail bottom (${f2(kn.zBot)}" off the ground). Bolted through the rail into the backer, not the thin side panel, so the loads go into the rail and the deck.`,
         sourcing: { vendor: `Shop-cut white oak, ${f2(kn.x1 - kn.x0)}" x ${f2(bb.z1 - bb.z0)}" x ${f2(Math.abs(kn.yOut - Y.face))}" blank (laminate two 5/4 boards if no thick stock)` },
       }));
     }

@@ -84,12 +84,12 @@ export const worst = (a: Status, b: Status): Status => (SEVERITY[a] >= SEVERITY[
 /** Group of each check id, for callers holding plain `CheckResult`s. */
 export const GROUP_OF_ID: Record<string, CheckGroup> = {
   'mass-empty': 'Mass & transport', cg: 'Mass & transport', 'truck-fit': 'Mass & transport',
-  'tip-straight': 'Stability', 'tip-lock': 'Stability', 'slide-before-tip': 'Stability', 'v-rollover': 'Stability', 'pitch-fwd': 'Stability', 'pitch-rear': 'Stability',
+  'tip-straight': 'Stability', 'cargo-height': 'Stability', 'tip-lock': 'Stability', 'slide-before-tip': 'Stability', 'v-rollover': 'Stability', 'pitch-fwd': 'Stability', 'pitch-rear': 'Stability',
   'turn-radius': 'Steering', 'steer-clear': 'Steering',
   // The pivoting front axle (D-56)
   kingpin: 'Structure', 'king-bearing': 'Structure', 'front-beam': 'Structure', 'front-stub': 'Structure', 'steer-stops': 'Structure', 'king-beam': 'Structure',
   'park-hold': 'Braking',
-  'bridle-eye': 'Structure',
+  'bridle-eye': 'Structure', 'side-web': 'Structure',
   'brake-force': 'Braking', 'brake-slow': 'Braking', 'brake-traction': 'Braking', 'brake-ratio': 'Braking', 'brake-clear': 'Braking',
   'brake-flap': 'Structure', 'brake-hinge': 'Structure', 'brake-mount': 'Structure', 'brake-return': 'Structure', 'brake-abuse': 'Structure', 'handle-sockets': 'Structure',
   'axle-stress': 'Structure', 'beam-rear': 'Structure', 'bearing-groove': 'Structure', rails: 'Structure', deck: 'Structure',

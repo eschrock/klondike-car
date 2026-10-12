@@ -32,14 +32,14 @@ const g = storageGeometry(defaults, L);
 const kit = installed.filter((x) => isStowedKitPart(x.id));
 
 describe('the seat kit (D-57)', () => {
-  it('is the back frame (stiles, rails, panel), the pad, the cushion and the two latch pins; the wedges are fixed stop blocks now, no knobs, no plugs, no insert backers', () => {
+  it('is the frameless 12 mm back panel (D-62), the pad, the cushion and the two latch pins; the wedges are fixed stop blocks now, no knobs, no plugs, no insert backers', () => {
     expect(kit.map((x) => x.id).sort()).toEqual([
-      'seat-back-pad', 'seat-back-panel', 'seat-back-rail-bottom', 'seat-back-rail-top', 'seat-back-stile-L', 'seat-back-stile-R', 'seat-cushion', 'seat-pin-L', 'seat-pin-R',
+      'seat-back-pad', 'seat-back-panel', 'seat-cushion', 'seat-pin-L', 'seat-pin-R',
     ]);
     expect(installed.some((x) => /^(seat-knob|seat-plug|storage-backer)/.test(x.id))).toBe(false);
     expect(get(installed, 'seat-wedge-L').removable).toBeFalsy();
     expect(get(installed, 'seat-back-pad').removable).toBe(true); // Dual Lock: lifts off
-    expect(get(installed, 'seat-back-stile-L').removable).toBeFalsy(); // the back stays on the sled
+    expect(get(installed, 'seat-back-panel').removable).toBeFalsy(); // the back stays on the sled
   });
   it('the cushions measure 14.125 x 18 x 2 (seat) and the pad as wide as the back, 1 in thick', () => {
     expect(plan.applicable).toBe(true);
@@ -142,7 +142,7 @@ describe('the flat (stowed) view state', () => {
     expect(cu.min[2]).toBeCloseTo(hi.zRest, 6);
     expect(pad.max[2] - pad.min[2]).toBeCloseTo(BACK_PAD_THICK_IN, 6);
   });
-  it('the back flips forward 90 deg + the recline about the stile foot and lies FLAT on the deck, rear face up: 16 in head to foot, 0.75 in proud, from the hinge forward', () => {
+  it('the back flips forward 90 deg + the recline about the stile foot and lies FLAT on the deck, rear face up: 16 in head to foot, 0.472 in proud (the 12 mm panel; the 3/4 in frame was 0.75), from the hinge forward', () => {
     const M = backFlipMove(defaults, L);
     // the back's up-the-back axis (col2) becomes level, pointing forward; its front normal (col0) points down
     const up = [L.seat.col2[0], L.seat.col2[1], L.seat.col2[2]];
@@ -150,7 +150,7 @@ describe('the flat (stowed) view state', () => {
     expect(rot(up)[0]).toBeCloseTo(1, 9);
     expect(rot(up)[2]).toBeCloseTo(0, 9);
     expect(rot([L.seat.col0[0], 0, L.seat.col0[2]])[2]).toBeCloseTo(-1, 9);
-    const st = worldAABB(get(stowed, 'seat-back-stile-L'));
+    const st = worldAABB(get(stowed, 'seat-back-panel'));
     expect(st.max[0] - st.min[0]).toBeCloseTo(defaults.seatBackHeightIn, 1);
     expect(st.max[2] - st.min[2]).toBeCloseTo(defaults.seatBackThickIn, 1);
     expect(st.min[2]).toBeCloseTo(L.deckTop, 6); // on the deck
@@ -287,7 +287,7 @@ describe('the handlebow (D-53, D-57)', () => {
     expect(bar.geometry.type === 'extrusion' && bar.geometry.depth).toBe(defaults.handleBarDiameterIn);
     expect(bar.stock!.t).toBe(defaults.handleBarDiameterIn);
     expect(bar.stock!.l).toBeCloseTo(2 * bw.yEnd, 6);
-    expect(bar.stock!.w).toBeLessThan(3.5); // a 4 in board is plenty for a 7/8 in crown
+    expect(bar.stock!.w).toBeGreaterThanOrEqual(4.4); // build 3c S7: a 5/4 x 6 board (5-1/4 in actual), so the arc can follow the grain; the bow itself is 2.7 in from its lowest end to its highest edge
     const bb = worldAABB(bar);
     expect(bb.max[1]).toBeCloseTo(bw.yEnd, 6);
     expect(bb.min[1]).toBeCloseTo(-bw.yEnd, 6);

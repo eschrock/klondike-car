@@ -21,7 +21,7 @@ export const LIGHTS: Light[] = ['tipping', 'turns', 'hills', 'steering', 'streng
  * live on the spec card, and the turn rollover speed (v-rollover) and rear-only traction are quoted in sentences.
  */
 export const LIGHT_OF_ID: Record<string, Light | 'info'> = {
-  'tip-straight': 'tipping', 'tip-lock': 'tipping',
+  'tip-straight': 'tipping', 'tip-lock': 'tipping', 'cargo-height': 'info',
   'slide-before-tip': 'turns', 'v-rollover': 'turns',
   'pitch-fwd': 'hills', 'pitch-rear': 'hills', 'brake-force': 'info', 'brake-slow': 'hills', 'brake-traction': 'hills', 'brake-ratio': 'hills', 'brake-clear': 'hills', 'park-hold': 'hills',
   'turn-radius': 'steering', 'steer-clear': 'steering',
@@ -38,7 +38,7 @@ export const LIGHT_OF_ID: Record<string, Light | 'info'> = {
   // lash-point count are build-fit facts that do not change with rider weight and are reported only.
   'seat-back': 'strength', 'seat-grip': 'strength', 'storage-pack': 'info', 'storage-lid-open': 'info', 'lash-points': 'info',
   // Hull (D-43): the lift does not depend on the rider; the foot stop carries the rider's restraint load. Both color Strength.
-  lift: 'strength', 'foot-stop': 'strength', 'lash-load': 'info',
+  lift: 'strength', 'foot-stop': 'strength', 'side-web': 'strength', 'lash-load': 'info',
   // Cargo mode (D-53): the joists carry the seat and the cargo, the handlebow the handler; the stow fit, the lid and the tie-downs are cargo facts and color no light.
   'rest-load': 'strength', joists: 'strength', 'handle-bow': 'strength', 'seat-stow': 'info', 'lid-load': 'info', 'cargo-strap': 'info',
 };

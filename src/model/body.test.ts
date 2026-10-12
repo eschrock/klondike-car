@@ -112,7 +112,7 @@ describe('the plan turn-in (D-57)', () => {
     const d = get(parts, 'deck');
     const o = outlineOf(d);
     const dd = defaults.deckCaptureDepthIn;
-    for (const q of o) expect(Math.abs(q[1]), `x=${q[0].toFixed(2)}`).toBeCloseTo(hw + dd - bowTurnInAt(defaults, Math.min(q[0], xFlatEnd)), 9);
+    for (const q of o) expect(Math.abs(q[1]), `x=${q[0].toFixed(2)}`).toBeCloseTo(hw + L.deckEdge - bowTurnInAt(defaults, Math.min(q[0], xFlatEnd)), 9);
     const b = worldAABB(d);
     expect(b.min[0]).toBeCloseTo(xSideStart - dd, 9);
     expect(b.max[0]).toBeCloseTo(xFlatEnd + dd, 9);
@@ -167,8 +167,7 @@ describe('the sheer (D-57)', () => {
     // second difference positive = concave up
     for (const x of [0, 15, 30]) expect(sideHeightAtX(L, x - 1) - 2 * sideHeightAtX(L, x) + sideHeightAtX(L, x + 1)).toBeGreaterThan(0);
   });
-  it('is the same curve in the layout helpers and in params.sideHeightAt; the web top is the gunwale underside plus the groove depth (captured)', () => {
-    const g = defaults.grooveDepthIn;
+  it('is the same curve in the layout helpers and in params.sideHeightAt; the web (full height, D-62) stops sideWebCapIn under the gunwale top', () => {
     for (const x of [-9.25, -3, 0, 10, 25, 40, 49]) {
       expect(sideHeightAtX(L, x), `${x}`).toBeCloseTo(hAt(x), 9);
       expect(sideTopAt(L, x)).toBeCloseTo(L.deckTop + hAt(x), 9);
@@ -182,7 +181,7 @@ describe('the sheer (D-57)', () => {
       for (const [x, z] of web) {
         if (x < xSideStart || x > xSideEnd + 1e-9) continue;
         n++;
-        expect(z, `${tag} web top x=${x.toFixed(2)}`).toBeCloseTo(L.deckTop + hAt(x) - defaults.railBandIn + g, 9);
+        expect(z, `${tag} web top x=${x.toFixed(2)}`).toBeCloseTo(L.deckTop + hAt(x) - defaults.sideWebCapIn, 9);
       }
       expect(n).toBeGreaterThan(20);
       expect(gun.length).toBeGreaterThan(20);
@@ -204,7 +203,7 @@ describe('the sheer (D-57)', () => {
     expect(topEdge(get(parts, 'side-L-gunwale'))[0][1]).toBeCloseTo(L.deckTop + 14, 9);
   });
   it('lowering or raising the two heights moves the profile (sideHeightBowIn 5, sideHeightRearIn 12)', () => {
-    const p = { ...defaults, sideHeightBowIn: 5, sideHeightRearIn: 12 };
+    const p = { ...defaults, sideHeightBowIn: 5, sideHeightRearIn: 12, handleSocketDepthIn: 18 }; // a 12 in rear side sinks the parked handle 11.8 in: the 14 in socket would leave 1.7 in (E1, handleInsertion)
     expect(ownErrors(p)).toEqual([]);
     const top = topEdge(get(buildModel(p), 'side-L-gunwale'));
     expect(top[0][1] - defaults.deckHeightIn).toBeCloseTo(12, 9);
@@ -351,8 +350,10 @@ describe('signs (D-57): the Troop 455 sign is back on the tall rear part of each
   it('on by default: two removable ply blanks banded in oak, outside the side stack, hung on thumb-knob screws', () => {
     expect(defaults.showSideSigns).toBe(1);
     const signs = parts.filter((x) => /^sign/.test(x.id));
-    expect(signs.map((x) => x.id).sort()).toEqual(['sign-L', 'sign-R']);
-    for (const s of signs) {
+    expect(signs.filter((x) => !/backer/.test(x.id)).map((x) => x.id).sort()).toEqual(['sign-L', 'sign-R']);
+    expect(signs.filter((x) => /backer/.test(x.id)).map((x) => x.id).sort()).toEqual(['sign-backer-L1', 'sign-backer-L2', 'sign-backer-R1', 'sign-backer-R2']); // D-62: oak backing strips inside the 4 mm web
+    for (const x of signs.filter((q) => /backer/.test(q.id))) { expect(x.group).toBe('body'); expect(x.material).toBe('white oak'); expect(x.removable).toBeFalsy(); }
+    for (const s of signs.filter((x) => !/backer/.test(x.id))) {
       expect(s.removable).toBe(true);
       expect(s.group).toBe('removable');
       expect(s.massLb).toBeGreaterThan(0);
@@ -360,7 +361,8 @@ describe('signs (D-57): the Troop 455 sign is back on the tall rear part of each
       expect(s.notes).not.toMatch(/PROVISIONAL/);
       expect(s.joints!.some((j) => j.type === 'knob')).toBe(true);
     }
-    expect(buildModel(defaults, { removed: true }).some((x) => /^sign/.test(x.id))).toBe(false);
+    expect(buildModel(defaults, { removed: true }).some((x) => /^sign-[LR]$/.test(x.id))).toBe(false);
+    expect(buildModel(defaults, { removed: true }).filter((x) => /^sign-backer/.test(x.id))).toHaveLength(4); // the backing strips are glued in the side and stay
     expect(buildModel({ ...defaults, showSideSigns: 0 }).some((x) => /^sign/.test(x.id))).toBe(false);
   });
   it('is 15 x 6 in at most, starts just ahead of the transom, stops at x = 6 (clear of the wheel brake mount), is LEVEL (3c-5, not tilted to the sheer) and stays under the gunwale line at its forward end and over the chine', () => {
@@ -386,7 +388,7 @@ describe('signs (D-57): the Troop 455 sign is back on the tall rear part of each
     expect(l.min[0]).toBeCloseTo(r.min[0], 9);
     const m = buildModel({ ...defaults, showSideSigns: 0 });
     for (const x of m.filter((q) => q.id !== 'hardware')) expect(get(parts, x.id).massLb, x.id).toBeCloseTo(x.massLb, 9);
-    expect(parts.length).toBe(m.length + 2);
+    expect(parts.length).toBe(m.length + 2 + 4); // the two signs and their four oak backing strips
   });
 });
 
@@ -397,11 +399,11 @@ describe('what is gone with the old hull, the Ackermann front end and the swivel
     for (const v of [{ steerDeg: 15 }, { removed: true }, { rider: 'goal' as const }]) expect(buildModel(defaults, v).filter((x) => gone.test(x.id)).map((x) => x.id)).toEqual([]);
   });
   it('the front end is the pivoting soapbox axle (D-56): beam-F, its stubs and clamps, the kingpin, king beam, thrust washer, tongue, stops and bridle are present', () => {
-    for (const id of ['beam-F', 'axle-FL', 'axle-FR', 'clamp-FL1', 'clamp-FR4', 'kingpin', 'king-beam', 'king-thrust', 'bridle-tongue', 'bridle-sleeve', 'roll-pad-L', 'steer-eye-L', 'steer-anchor-L', 'steer-chain-L', 'steer-chain-R', 'bridle-eye', 'bridle']) expect(parts.some((x) => x.id === id), id).toBe(true);
+    for (const id of ['beam-F', 'axle-FL', 'axle-FR', 'clamp-FL1', 'clamp-FR2', 'kingpin', 'king-beam', 'king-thrust', 'bridle-tongue', 'bridle-sleeve', 'roll-pad-L', 'steer-eye-L', 'steer-anchor-L', 'steer-chain-L', 'steer-chain-R', 'bridle']) expect(parts.some((x) => x.id === id), id).toBe(true);
   });
-  it('the sides are one chine, one gunwale and one web per side, ids side-L-* and side-R-*', () => {
+  it('each side is a sandwich (D-61, D-62): one web with an oak band on each face at the chine and at the gunwale, ids side-L-* and side-R-* (the outer bands keep the plain ids)', () => {
     expect(parts.filter((x) => x.id.startsWith('side-')).map((x) => x.id).sort()).toEqual(
-      ['side-L-chine', 'side-L-gunwale', 'side-L-web', 'side-R-chine', 'side-R-gunwale', 'side-R-web'],
+      ['side-L-chine', 'side-L-chine-in', 'side-L-gunwale', 'side-L-gunwale-in', 'side-L-web', 'side-R-chine', 'side-R-chine-in', 'side-R-gunwale', 'side-R-gunwale-in', 'side-R-web'],
     );
     expect(parts.filter((x) => x.id.startsWith('rail-')).map((x) => x.id).sort()).toEqual(['rail-L', 'rail-R']);
     expect(parts.filter((x) => x.id.startsWith('transom-')).map((x) => x.id).sort()).toEqual(['transom-backer-L', 'transom-backer-R', 'transom-rear']);

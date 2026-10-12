@@ -1,12 +1,14 @@
 /**
- * Bridle-tie row (D-56, D-58): the bow shackle through the bronze sleeve near the tip of the white-oak tongue (pivot.ts), the tongue itself (a bandsawn T set ON EDGE, bolted to the
- * front face of the front axle beam with two carriage bolts) and those bolts. The row id `bridle-eye` is kept. The pull passes shackle pin > sleeve > oak around the hole > stem >
- * head > the two carriage bolts and the head's bearing on the beam face > kingpin (shear, see `kingpin` in front.ts). The rope and the shackle pin are the intended weak link of the
- * whole chain (D-47): this row is the strength of everything between them and the kingpin at the design pull x the overload factor.
+ * Bridle-tie row (D-56, D-58, D-62): the bridle rope through the bronze sleeve near the tip of the white-oak tongue (pivot.ts; no shackle since D-62), the tongue itself (a bandsawn T set
+ * ON EDGE, bolted to the front face of the front axle beam with two carriage bolts) and those bolts. The row id `bridle-eye` is kept. The pull passes rope > sleeve > oak around the
+ * hole > stem > head > the two carriage bolts and the head's bearing on the beam face > kingpin (shear, see `kingpin` in front.ts). The ROPE is the documented weak link (its working
+ * load limit and its knotted breaking strength are rows here, D-62): this row is the strength of everything between it and the kingpin at the design pull x the overload factor, plus the
+ * slack-then-taut SNATCH at the start of a pull (v sqrt(k m): oak may dent, nothing may break).
  *
  * D-58: the first D-56 tongue was a 3/16 in steel plate lying FLAT on the beam; the vertical part of the pull bent it about its thin axis (3.7x over). The oak tongue stands on
  * edge, so that pull bends it about its strong axis.
  */
+import { bridleRopeKnot } from '../model/bridle';
 import { tongueOutline } from '../model/pivot';
 import type { Ctx } from './context';
 import { dualCheck, detail, governing, type CaseEval } from './dual';
@@ -22,6 +24,9 @@ import type { AnalysisCheck, Detail } from './types';
 export const OAK_TENSION_PAR_OF_BEND = 0.5;
 /** Outside diameter (in) of the fender washer under each tongue-bolt nut, on the rear face of the axle beam. */
 export const TONGUE_NUT_WASHER_OD_IN = 2;
+/** Gravity in in/s2 (lbf to lb s2/in) and the speed conversion. */
+const G_IN_S2 = 386.09;
+const IN_PER_S_PER_MPH = 17.6;
 
 /** Width of the tongue at x (from its plan outline, model/pivot.ts). */
 export function tongueWidthAt(ctx: Ctx, x: number): number {
@@ -48,7 +53,7 @@ export function tieLoad(ctx: Ctx) {
 }
 
 /**
- * Tongue stress along x (between the beam's front face and the shackle hole) for a vertical tip force, a horizontal axial force and a lateral force: the worst section.
+ * Tongue stress along x (between the beam's front face and the bridle hole) for a vertical tip force, a horizontal axial force and a lateral force: the worst section.
  * The tongue stands on edge: the vertical force bends it about its STRONG axis (S = w d^2 / 6, d the depth), the lateral force about the weak one (S = d w^2 / 6).
  */
 export function tongueBarStress(ctx: Ctx, Tv: number, Tax: number, Tlat: number) {
@@ -79,11 +84,8 @@ export function bridleEye(ctx: Ctx): AnalysisCheck {
   const ld = tieLoad(ctx);
   const w = p.tongueWidthIn;
   const d = L.tongue.z1 - L.tongue.z0;
-  const dPin = p.eyeBoltDiameterIn;
-  const Apin = (Math.PI * dPin * dPin) / 4;
-  const Zpin = (Math.PI * dPin ** 3) / 32;
   const SF = p.steelSafetyFactor;
-  const pinAllow = p.eyeBoltYieldPsi / SF;
+  const rope = bridleRopeKnot(p);
   const hole = p.tongueHoleDiaIn; // the sleeve's OD = the drilled hole
   const endDist = L.tongue.tipX - L.tongue.holeX; // tip to the hole center
   const Lc = Math.max(0.05, endDist - hole / 2);
@@ -97,11 +99,8 @@ export function bridleEye(ctx: Ctx): AnalysisCheck {
   const ev = (c: CaseData): CaseEval => {
     void c;
     const T = ld.T;
-    // 1. Shackle pin: double shear through the clevis and bending over the jaw gap (the tongue sits between the jaws; assume the gap is the tongue plus the washers and 1/4 in).
-    const gap = w + 0.25;
-    const tauPin = T / (2 * Apin);
-    const sigPin = (T * gap) / 4 / Zpin;
-    // 2. Shackle hole in the oak: the sleeve bears on the oak (projected area, load along the grain), shear-out of the strip ahead of the hole (two planes, parallel to the grain), net-section tension.
+    // 1. The rope (D-62): its working load limit against the design pull, and the knotted breaking strength against the tie load (the order-of-failure line below).
+    // 2. Bridle hole in the oak: the sleeve bears on the oak (projected area, load along the grain), shear-out of the strip ahead of the hole (two planes, parallel to the grain), net-section tension.
     const bear = T / (hole * w);
     const tear = T / (2 * Lc * w);
     const net = T / ((d - hole) * w);
@@ -119,27 +118,55 @@ export function bridleEye(ctx: Ctx): AnalysisCheck {
     const boltTen = Tbolt / uncTensileArea(tb);
     const boltTenAllow = p.ss316BoltYieldPsi / SF;
     const washBear = Tbolt / washerA;
+    // 5. SNATCH (D-62, eng 3c S-1): the pullers take up the slack and the rope comes taut with a closing speed v: F = v sqrt(k m), k the stiffness of rope and pullers, m the moving mass. Wood to its
+    //    MOR x C_M, steel to yield, no safety factors (nothing may BREAK); the oak may dent (sleeve bearing, nut washers), so those two are reported in the text, not as rows.
+    const mSlug = c.massLb / G_IN_S2;
+    const vSnatch = p.bridleSnatchSpeedMph * IN_PER_S_PER_MPH;
+    const Fs = vSnatch * Math.sqrt(p.bridleSnatchStiffLbIn * mSlug);
+    const Fsh = Fs * Math.cos(ld.alpha), Fsv = Fs * Math.sin(ld.alpha);
+    const bs = tongueBarStress(ctx, Fsv, Fsh, 0);
+    const tearS = Fs / (2 * Lc * w), netS = Fs / ((d - hole) * w);
+    const TtotS = Fsh + (Fsv * arm) / hb;
+    const boltTenS = TtotS / 2 / uncTensileArea(tb);
+    const bearS = Fs / (hole * w), washS = TtotS / 2 / washerA;
+    const woodSF = p.woodSafetyFactor;
     const ds: Detail[] = [
-      detail('shackle pin: double shear', tauPin, 'psi', 0.577 * pinAllow, '<='),
-      detail('shackle pin: bending over the jaw gap', sigPin, 'psi', pinAllow, '<='),
-      detail('shackle hole: the sleeve bearing on the oak along the grain (dowel bearing)', bear, 'psi', al.oakDowel, '<='),
-      detail('shackle hole: edge shear-out (2 planes along the grain)', tear, 'psi', al.oakShear, '<='),
-      detail('shackle hole: net-section tension along the grain', net, 'psi', oakTen, '<='),
+      detail('rope: design pull against its working load limit (new nylon, 10% of breaking)', p.pullForceLbf, 'lbf', rope.wll, '<='),
+      detail('bridle hole: the sleeve bearing on the oak along the grain (dowel bearing)', bear, 'psi', al.oakDowel, '<='),
+      detail('bridle hole: edge shear-out (2 planes along the grain)', tear, 'psi', al.oakShear, '<='),
+      detail('bridle hole: net-section tension along the grain', net, 'psi', oakTen, '<='),
       detail('tongue stem: vertical-pull bending about the strong axis + axial, straight ahead', b0.sigma, 'psi', al.oakBend, '<='),
       detail('tongue stem: strong-axis + lateral (weak axis) + axial at full lock', b1.sigma, 'psi', al.oakBend, '<='),
       detail('carriage bolts: shear (yaw couple of the lateral pull at full lock)', boltShear, 'psi', boltShearAllow, '<='),
       detail('carriage bolts: tension (the axial pull + the nose-up pry on the head)', boltTen, 'psi', boltTenAllow, '<='),
       detail('carriage bolts: nut washer on the rear face of the axle beam (oak perpendicular)', washBear, 'psi', al.oakPerp, '<='),
+      detail('SNATCH: tongue stem bending (MOR x C_M, no safety factor)', bs.sigma, 'psi', al.oakBend * woodSF, '<='),
+      detail('SNATCH: bridle hole edge shear-out (no safety factor)', tearS, 'psi', al.oakShear * woodSF, '<='),
+      detail('SNATCH: bridle hole net-section tension (no safety factor)', netS, 'psi', oakTen * woodSF, '<='),
+      detail('SNATCH: carriage bolts tension (steel yield, no safety factor)', boltTenS, 'psi', p.ss316BoltYieldPsi, '<='),
+      detail('SNATCH: the rope at the bowline (knotted breaking strength)', Fs, 'lbf', rope.knotted, '<='),
     ];
+    // Order of failure at the tie load: the load at which each oak or steel detail would reach its ULTIMATE (allowable x its safety factor / its stress), against the rope's knotted breaking load.
+    const mults = [
+      { n: 'tongue stem bending', k: (al.oakBend * woodSF) / b0.sigma },
+      { n: 'bridle hole shear-out', k: (al.oakShear * woodSF) / tear },
+      { n: 'bridle hole net section', k: (oakTen * woodSF) / net },
+      { n: 'carriage bolt tension', k: p.ss316BoltYieldPsi / boltTen },
+    ].sort((a, b2) => a.k - b2.k);
+    const weakest = mults[0];
     const how = `Tie load: design pull ${f(p.pullForceLbf)} lbf (D-14) x overload factor ${p.bridleTieOverloadFactor} (D-47) = ${f(ld.T)} lbf along the rope from the tie (z = ${f(L.tongue.tieZ, 2)}", x = ${f(L.tongue.holeX, 1)}") to the pullers' hands ${f(p.bridleRopeRunIn)}" ahead at ${f(ld.handsZ)}" (${f(ld.alpha * DEG, 1)} deg above horizontal): ${f(ld.Th)} lbf horizontal, ${f(ld.Tv)} lbf vertical. `
-      + `Shackle pin ${f(dPin, 3)}" in double shear: ${f(tauPin, 0)} psi (allow ${f(0.577 * pinAllow, 0)} = 0.577 x yield ${f(p.eyeBoltYieldPsi, 0)} / ${SF}); bending over the ${f(gap, 2)}" jaw gap ${f(sigPin, 0)} psi (allow ${f(pinAllow, 0)}). `
+      + `Rope: ${f(p.bridleRopeDiaIn, 3)}" nylon through the sleeve, once round the tongue tip, bowline (D-62, no shackle): rated ${f(rope.rated, 0)} lbf new, ${f(rope.knotted, 0)} lbf at the knot (${f(p.bridleKnotEfficiency * 100, 0)}%), working load limit ${f(rope.wll, 0)} lbf (${f(p.bridleRopeWllFraction * 100, 0)}%) against the ${f(p.pullForceLbf, 0)} lbf design pull. `
       + `Oak around the ${f(hole, 2)}" sleeve (${f(endDist, 2)}" from the tip, ${f(Lc, 2)}" of oak ahead of the hole, the stem ${f(w, 2)}" thick x ${f(d, 2)}" deep): bearing ${f(bear, 0)} psi (dowel ${f(al.oakDowel, 0)}), shear-out ${f(tear, 0)} psi on 2 planes (shear ${f(al.oakShear, 0)}), net-section tension ${f(net, 0)} psi on ${f(d - hole, 2)}" (${f(oakTen, 0)} = ${OAK_TENSION_PAR_OF_BEND} x the bending design stress, assumed). `
       + `Stem as a cantilever from the beam's front face (x = ${f(xb, 2)}"): the vertical ${f(ld.Tv, 0)} lbf acts ${f(L.tongue.holeX - b0.x, 1)}" out from the critical section (x = ${f(b0.x, 1)}", ${f(b0.w, 2)}" wide, strong-axis S = ${f((b0.w * d * d) / 6, 3)} in3): ${f(b0.sv, 0)} psi bending + ${f(b0.sa, 0)} axial = ${f(b0.sigma, 0)} psi straight ahead; at full lock (${f(ld.lock * DEG, 0)} deg, lateral ${f(ld.latLock)} lbf about the weak axis, axial ${f(ld.axialLock)} lbf) ${f(b1.sigma, 0)} psi; allow ${f(al.oakBend, 0)}. The steel plate it replaces lay flat and bent about its thin axis at 3.7x. `
       + `Carriage bolts (2 x ${f(tb, 3)}" 316, ${f(bd, 2)}" either side of the kingpin line, mid depth): the pull tries to pull the head off the beam face: ${f(ld.Th)} lbf axial + the pry of the vertical pull ${f(ld.Tv)} lbf x ${f(arm, 1)}" / ${f(hb, 2)}" = ${f((ld.Tv * arm) / hb)} lbf = ${f(Ttot)} lbf over two bolts, ${f(Tbolt)} lbf each = ${f(boltTen, 0)} psi (allow ${f(boltTenAllow, 0)}); the ${f(TONGUE_NUT_WASHER_OD_IN, 0)}" fender washers on the beam's rear face bear at ${f(washBear, 0)} psi (oak perpendicular ${f(al.oakPerp, 0)}). The lateral pull ${f(ld.latLock)} lbf x ${f(arm, 1)}" = ${f(Mz)} lb.in twists the head: ${f(Fcouple)} lbf per bolt = ${f(boltShear, 0)} psi shear (allow ${f(boltShearAllow, 0)}). `
-      + `Order of failure (D-47): the rope and the shackle pin (the shackle's working-load limit must be at least ${f(ld.T)} lbf) are meant to go first, then the tongue bends (oak bends and splits slowly), and the kingpin (kingpin row) is far stronger. The pull through the kingpin and its nut is in the kingpin row.`;
+      + `SNATCH (slack then taut, D-62): F = v sqrt(k m) = ${f(vSnatch, 1)} in/s (${f(p.bridleSnatchSpeedMph, 1)} mph) x sqrt(${f(p.bridleSnatchStiffLbIn, 0)} lb/in x ${f(mSlug, 3)} lb s2/in) = ${f(Fs)} lbf (${f(Fsh)} horizontal, ${f(Fsv)} vertical; a stiff low-stretch rope at about 100 lb/in would be ${f(vSnatch * Math.sqrt(100 * mSlug))} lbf). Against the ULTIMATE strengths with no safety factors: stem ${f(bs.sigma, 0)} psi (MOR ${f(al.oakBend * woodSF, 0)}), shear-out ${f(tearS, 0)}, net section ${f(netS, 0)}, carriage bolts ${f(boltTenS, 0)} psi (yield ${f(p.ss316BoltYieldPsi, 0)}): nothing breaks. The oak may DENT: the sleeve bearing is ${f(bearS, 0)} psi (dowel allowable ${f(al.oakDowel, 0)}, ${f(bearS / al.oakDowel, 2)} x) and the nut washers ${f(washS, 0)} psi (perpendicular allowable ${f(al.oakPerp, 0)}, ${f(washS / al.oakPerp, 2)} x); a dent is acceptable and does not weaken the joint. `
+      + `Order of failure (D-62, replaces the D-47 shackle-pin claim): the ROPE is the documented weak link and the part to replace: it is rated ${f(rope.wll, 0)} lbf working load and breaks at the bowline at about ${f(rope.knotted, 0)} lbf. `
+      + `At the ${f(ld.T, 0)} lbf tie load the first oak or steel detail to reach its ultimate would be the ${weakest.n}, at about ${f(weakest.k * ld.T, 0)} lbf (${f(weakest.k, 1)} x the tie load; that estimate takes allowable x safety factor, so it is conservative for the wood)`
+      + (weakest.k * ld.T >= rope.knotted ? `: the rope lets go first, but only just (the carriage bolts would yield at about the same load); the oak under the nut washers dents long before either. ` : `: that is BELOW the rope's knotted ${f(rope.knotted, 0)} lbf, so a well-tied new rope does NOT go first; choose a weaker rope or strengthen that detail. `)
+      + `The pull through the kingpin and its nut is in the kingpin row.`;
     return governing(ds, how);
   };
-  return dualCheck({ id: 'bridle-eye', label: 'Bridle tie: shackle, oak tongue and carriage bolts', group: 'Structure', refs: ['D-33', 'D-14', 'D-47', 'D-56', 'D-58'], primary: 'goal', ...evalBoth(ctx, ev, { cargo: false }) });
+  return dualCheck({ id: 'bridle-eye', label: 'Bridle tie: rope, oak tongue and carriage bolts (with the start-up snatch)', group: 'Structure', refs: ['D-33', 'D-14', 'D-47', 'D-56', 'D-58', 'D-62'], primary: 'goal', ...evalBoth(ctx, ev, { cargo: false }) });
 }
 
 export function bridleChecks(ctx: Ctx): AnalysisCheck[] {

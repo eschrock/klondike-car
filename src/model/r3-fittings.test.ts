@@ -55,7 +55,7 @@ describe('S10: build order', () => {
     expect(get('axle-hanger-L').step).toBe(STEP.gear);
     expect(get('axle-R').step).toBe(STEP.gear);
     for (const id of ['beam-F', 'axle-FL', 'kingpin', 'king-thrust', 'wheel-FL', 'wheel-FR']) expect(get(id).step, id).toBe(STEP.gear);
-    for (const id of ['bridle-tongue', 'bridle-eye', 'bridle']) expect(get(id).step, id).toBe(STEP.spindles);
+    for (const id of ['bridle-tongue', 'bridle']) expect(get(id).step, id).toBe(STEP.spindles);
     expect(get('king-beam').step).toBeLessThan(get('bridle-tongue').step);
     expect(get('axle-R').step).toBeLessThanOrEqual(get('wheel-FL').step);
     // the deck is glued to the frame and the sides before the transom slides on last (HULL_STEP)

@@ -174,7 +174,7 @@ export function mountSimPanel(host: HTMLElement, deps: SimPanelDeps): SimPanel {
 
   const notes = h('details', { class: 'sp-group sp-notes' }, h('summary', {}, 'What this models, and what it does not'),
     h('ul', {},
-      h('li', {}, 'Masses, CG and inertia come from the parts list (rider and cargo ride on the chassis). The front axle (beam, stubs, kingpin, tongue plate, shackle) is its own body on a vertical hinge at the kingpin, held to the steering lock by hard stops (D-56) and free otherwise, with a little bearing friction; the front wheels spin on it.'),
+      h('li', {}, 'Masses, CG and inertia come from the parts list (rider and cargo ride on the chassis). The front axle (beam, stubs, kingpin, tongue, rope) is its own body on a vertical hinge at the kingpin, held to the steering lock by hard stops (D-56) and free otherwise, with a little bearing friction; the front wheels spin on it.'),
       h('li', {}, 'The pull acts at the tongue tie on the front axle, so a pull off the tongue line steers it. The “Turning circle” scenario holds the axle at the lock and reports the radius the rear axle center drives; pure-rolling ball wheels follow the geometry, WB / tan(lock), with no tire slip angle.'),
       h('li', {}, 'Only the two rear wheels brake.'),
       h('li', {}, 'Each wheel is a ball at the tire radius: contact is at the tire centerline (what the static tip check uses). No tire width, sidewall flex, hub or axle bending.'),
