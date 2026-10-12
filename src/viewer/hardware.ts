@@ -47,6 +47,24 @@ export function lashPointMesh(size: Vec3): RawMesh {
   return out;
 }
 
+/**
+ * Rubber foot tread on a brake flap (3c visual round 2): a thin base sheet with raised grip ribs across it (ribs run along y, spaced along x), all inside `size`
+ * (x along the flap, y across, z up), centered on the origin.
+ */
+export function treadMesh(size: Vec3): RawMesh {
+  const [L, W, T] = size;
+  const out: RawMesh = { positions: [], normals: [], indices: [] };
+  const tb = T * 0.55, rh = T - tb;
+  append(out, roundedBoxMesh([L, W, tb], Math.min(0.04, tb * 0.4), 3), [0, 0, -T / 2 + tb / 2]);
+  const pitch = 0.5, rw = 0.16;
+  const n = Math.max(1, Math.floor((L - 0.3) / pitch));
+  for (let i = 0; i < n; i++) {
+    const x = -((n - 1) * pitch) / 2 + i * pitch;
+    append(out, roundedBoxMesh([rw, W - 0.2, rh + 0.02], Math.min(0.04, rh * 0.45), 2), [x, 0, -T / 2 + tb + rh / 2 - 0.01]);
+  }
+  return out;
+}
+
 /** Bounding box of a raw mesh as [min, max] (for tests). */
 export function rawBounds(m: RawMesh): [Vec3, Vec3] {
   const lo: Vec3 = [Infinity, Infinity, Infinity], hi: Vec3 = [-Infinity, -Infinity, -Infinity];

@@ -20,7 +20,7 @@ export interface LightBuild {
 }
 
 /** Looks that get a custom mesh. */
-export type LightKind = 'lamp' | 'taillight' | 'reflector-amber' | 'reflector-red' | 'hinge';
+export type LightKind = 'lamp' | 'taillight' | 'reflector-amber' | 'reflector-red' | 'hinge' | 'socket';
 
 /** Which custom mesh (if any) a part gets. */
 export function lightKindOf(part: Part): LightKind | null {
@@ -29,6 +29,7 @@ export function lightKindOf(part: Part): LightKind | null {
   if (part.id === 'rear-light') return 'taillight';
   if (part.partNo === 'reflector') return /\bred\b/i.test(part.name) ? 'reflector-red' : 'reflector-amber';
   if (part.partNo === 'brake-hinge') return 'hinge';
+  if (part.partNo === 'handle-socket') return 'socket';
   return null;
 }
 
@@ -144,7 +145,7 @@ export function tailLightMesh(size: Vec3): LightBuild {
 }
 
 // ── side reflectors ──
-const REFLECTOR_COLORS = { amber: [0.95, 0.55, 0.05], red: [0.85, 0.08, 0.1] } as const;
+const REFLECTOR_COLORS = { amber: [0.95, 0.55, 0.05], red: [0.95, 0.1, 0.12] } as const;
 
 /** Cube-corner prism pattern: hexagons split into three rhombi of different brightness, dark seams, and a diagonal sheen. */
 export function reflectorTexture(kind: 'amber' | 'red'): THREE.CanvasTexture {
@@ -193,13 +194,14 @@ export function reflectorTexture(kind: 'amber' | 'red'): THREE.CanvasTexture {
   return t;
 }
 
-const reflectorBody = (kind: 'amber' | 'red') => mat(`reflector:body:${kind}`, () => new THREE.MeshPhysicalMaterial({
-  color: kind === 'amber' ? 0xd98200 : 0xaa1018, roughness: 0.3, clearcoat: 0.7, clearcoatRoughness: 0.2, ...SOLID,
+// Round 2 (review SHOULD 5): the housing is a light cream-gray satin bezel, so the colored prism face reads as a reflector (a lit rim around a red or amber window) from Iso.
+const reflectorBody = (_kind: 'amber' | 'red') => mat('reflector:body', () => new THREE.MeshPhysicalMaterial({
+  color: 0xe2dccd, roughness: 0.34, metalness: 0.35, clearcoat: 0.6, clearcoatRoughness: 0.2, ...SOLID,
 }));
 const reflectorFace = (kind: 'amber' | 'red') => mat(`reflector:face:${kind}`, () => {
   const tex = reflectorTexture(kind);
   return new THREE.MeshPhysicalMaterial({
-    color: 0xffffff, map: tex, emissive: kind === 'amber' ? 0xff9a10 : 0xff1a22, emissiveMap: tex, emissiveIntensity: 0.16, roughness: 0.22, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.12, ...SOLID,
+    color: 0xffffff, map: tex, emissive: kind === 'amber' ? 0xff9a10 : 0xff2a30, emissiveMap: tex, emissiveIntensity: 0.45, roughness: 0.22, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.12, ...SOLID,
   });
 });
 
@@ -207,7 +209,7 @@ const reflectorFace = (kind: 'amber' | 'red') => mat(`reflector:face:${kind}`, (
 export function reflectorMesh(size: Vec3, kind: 'amber' | 'red', outward: 1 | -1): LightBuild {
   const [L, T, H] = size;
   const body = rawGeo(roundedBoxMesh([L, T, H], Math.min(0.07, T * 0.3), 4));
-  const margin = Math.min(0.12, H * 0.12);
+  const margin = Math.min(0.08, H * 0.09); // thin cream bezel; the face fills the rest of the part box
   const face = new THREE.PlaneGeometry(L - 2 * margin, H - 2 * margin);
   face.rotateX(-outward * Math.PI / 2); // +z normal -> +y (outward = 1) or -y
   face.translate(0, outward * (T / 2 + 0.004), 0);
@@ -244,4 +246,54 @@ export function hingeMesh(size: Vec3): LightBuild {
     knuckles.push(k);
   }
   return { geometry: merge([merge([...leaves, ...knuckles], false), merge(screws, false)]), materials: [stainless(), screwMat()] };
+}
+
+// ── aluminum handle socket (3c visual round 2, review SHOULD 7) ──
+let brushed: THREE.CanvasTexture | undefined;
+/** Fine streaks along the tube (v runs along the length): a brushed-aluminum bump. Drawn with plain fills, so a stub canvas context is enough. */
+function brushedBump(): THREE.CanvasTexture {
+  if (brushed) return brushed;
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 32;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#808080';
+  g.fillRect(0, 0, 128, 32);
+  let a = 12345;
+  const rnd = (): number => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; };
+  for (let x = 0; x < 128; x++) {
+    const v = Math.round(110 + rnd() * 70);
+    g.fillStyle = `rgb(${v},${v},${v})`;
+    g.fillRect(x, 0, 1, 32);
+  }
+  brushed = new THREE.CanvasTexture(c);
+  brushed.wrapS = brushed.wrapT = THREE.RepeatWrapping;
+  return brushed;
+}
+const brushedAlu = () => mat('socket:alu', () => new THREE.MeshStandardMaterial({ color: 0xa4a9b0, roughness: 0.38, metalness: 0.85, bumpMap: brushedBump(), bumpScale: 0.35, ...SOLID }));
+const clampSteel = () => mat('socket:steel', () => new THREE.MeshStandardMaterial({ color: 0x25282c, roughness: 0.45, metalness: 0.8, ...SOLID }));
+
+/**
+ * `size` is the socket's box: x fore-aft (the transom face is +x), y across, z the tube's length. A brushed tube body, two dark clamp rings near its ends and two dark button-head bolts on
+ * the rear face. The rings and heads stand proud of the tube body but stay inside the box (the body is inset by the ring thickness).
+ */
+export function socketMesh(size: Vec3): LightBuild {
+  const [X, Y, Z] = size;
+  const inset = Math.min(0.1, X * 0.08);
+  const body = rawGeo(roundedBoxMesh([X - inset, Y - 2 * inset * 0.3, Z], Math.min(0.06, X * 0.05), 4), [inset / 2, 0, 0]);
+  // brush UVs: u across the section, v along the tube
+  const pos = body.getAttribute('position');
+  const uv = body.getAttribute('uv') as THREE.BufferAttribute;
+  for (let i = 0; i < pos.count; i++) uv.setXY(i, (pos.getX(i) + pos.getY(i)) * 1.5, pos.getZ(i) * 0.5);
+  const dark: THREE.BufferGeometry[] = [];
+  const ringH = Math.min(0.22, Z * 0.05);
+  for (const z of [-Z / 2 + 0.45, Z / 2 - 0.45]) dark.push(rawGeo(roundedBoxMesh([X, Y, ringH], Math.min(0.05, ringH * 0.4), 3), [0, 0, z]));
+  const headR = Math.min(0.2, X * 0.2, Y * 0.14);
+  for (const z of [-Z / 2 + 1.2, Z / 2 - 1.2]) {
+    const h = new THREE.CylinderGeometry(headR, headR * 1.05, inset * 0.9, 16);
+    h.rotateZ(Math.PI / 2); // axis y -> x
+    h.translate(-X / 2 + inset * 0.45, 0, z);
+    dark.push(h);
+  }
+  const darkAll = merge(dark.map((g) => { if (!g.getAttribute('uv')) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.getAttribute('position').count * 2), 2)); return g; }), false);
+  return { geometry: merge([body, darkAll]), materials: [brushedAlu(), clampSteel()] };
 }

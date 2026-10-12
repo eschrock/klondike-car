@@ -23,6 +23,8 @@ export type { BrakeGeom, V2 };
 const RUBBER_LB_PER_IN3 = 0.045;
 /** 316 stainless density (lb/in³) for the hinge. */
 const SS_LB_PER_IN3 = 0.29;
+/** Foot tread sheet thickness on the flap (in). */
+const FOOT_TREAD_THICK_IN = 0.125;
 const CORD_LB_PER_IN = 0.004;
 const f2 = (v: number) => (Math.round(v * 100) / 100).toString();
 const bbox = (pts: V2[]) => ({ x0: Math.min(...pts.map((q) => q[0])), x1: Math.max(...pts.map((q) => q[0])), z0: Math.min(...pts.map((q) => q[1])), z1: Math.max(...pts.map((q) => q[1])) });
@@ -75,6 +77,26 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
         sourcing: { vendor: `Shop-cut white oak, ${f2(b.thick)}" x ${f2(b.w)}" x ${f2(b.len)}" (a 5/4 board planed to ${f2(b.thick)}"); the hinge, shoe and eye holes are drilled from the parts as templates` },
       });
       add1(flap);
+    }
+
+    // ── The rubber foot tread: a thin ribbed sheet glued on the flap's foot area (3c visual round 2: the bare oak read as a plank, not a pedal) ──
+    {
+      const b = g.board;
+      const ang = -(g.sigma - phi);
+      const c = at(b.c);
+      const tl = Math.min(p.brakeFootPadLengthIn, b.len - 1), tw = Math.max(1, b.w - 0.5), tt = FOOT_TREAD_THICK_IN;
+      const dx = -b.len / 2 + tl / 2, dz = b.thick / 2 + tt / 2; // flap-local: the rear end is -x, the top face +z
+      const co = Math.cos(ang), si = Math.sin(ang);
+      const tread = box(ctx, {
+        id: `brake-foot-tread-${tag}`, partNo: 'brake-foot-tread', name: `Brake foot tread ${tag} (rubber sheet)`, group: 'brake', mat: 'fixed', kind: 'purchased', step: STEP.brake, fab: 'buy',
+        massLb: tl * tw * tt * RUBBER_LB_PER_IN3, material: `${f2(tt)}" ribbed rubber sheet (stair tread or neoprene)`, size: [tl, tw, tt],
+        center: [c[0] + co * dx + si * dz, yc, c[1] - si * dx + co * dz], rot: { y: ang }, explode: [-0.4, sgn * 0.5, 1.2],
+        joints: [{ type: 'glue', to: `brake-flap-${tag}`, count: 1, note: 'contact cement over the full face, edges sealed' }],
+        sourcing: { vendor: `McMaster-Carr (${f2(tt)}" ribbed rubber stair-tread or smooth neoprene sheet, cut ${f2(tl)}" x ${f2(tw)}")`, costUsd: 3 },
+        notes: `A ${f2(tl)}" x ${f2(tw)}" x ${f2(tt)}" strip of rubber on the flap's foot area (the last ${f2(p.brakeFootPadLengthIn)}"), glued with contact cement. It gives a boot grip on a wet or snowy flap and finishes the end so it reads as a pedal. A few ounces (replaces the grooving on the foot area).`,
+      });
+      tread.finish = { surface: 'rubber', roundoverIn: 0.03 };
+      add1(tread);
     }
 
     // ── The oak shoe block: a wedge between the flap underside and the pad ──

@@ -89,8 +89,13 @@ describe('the meshes stay inside the part boxes', () => {
       // the face sits on the outward side
       expect(outward > 0 ? b.geometry.boundingBox!.max.y : -b.geometry.boundingBox!.min.y).toBeGreaterThan(size[1] / 2 - 1e-6);
     }
-    const red = (reflectorMesh([2, 0.25, 1], 'red', 1).materials[0] as THREE.MeshPhysicalMaterial).color;
-    const amber = (reflectorMesh([2, 0.25, 1], 'amber', 1).materials[0] as THREE.MeshPhysicalMaterial).color;
+    // Round 2: the housing is a light cream bezel; the color lives in the face's emissive (and its prism map).
+    const redM = reflectorMesh([2, 0.25, 1], 'red', 1).materials;
+    const red = (redM[1] as THREE.MeshPhysicalMaterial).emissive;
+    const amber = (reflectorMesh([2, 0.25, 1], 'amber', 1).materials[1] as THREE.MeshPhysicalMaterial).emissive;
+    expect((redM[1] as THREE.MeshPhysicalMaterial).emissiveIntensity).toBeGreaterThanOrEqual(0.4);
+    const rim = (redM[0] as THREE.MeshPhysicalMaterial).color;
+    expect(rim.r + rim.g + rim.b).toBeGreaterThan(1.8); // a light rim
     expect(red.r).toBeGreaterThan(red.g * 3);
     expect(amber.r).toBeGreaterThan(amber.b * 4);
     expect(amber.g).toBeGreaterThan(red.g * 3); // amber has green, red does not

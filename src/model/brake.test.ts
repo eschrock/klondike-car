@@ -102,7 +102,7 @@ describe('step brake layout (hand calculation)', () => {
     expect(q0[1]).toBeCloseTo(g.H[1], 9);
     const d = (p: [number, number], q: [number, number]) => Math.hypot(p[0] - q[0], p[1] - q[1]);
     for (const s of [0, 0.3, 0.7, 1]) expect(d(atPose(g, s, g.F), atPose(g, s, g.C))).toBeCloseTo(d(g.F, g.C), 9);
-    expect(buildBrakeAt(c, 0, true).every((x) => /^brake-(flap|shoe|pad|cord)-/.test(x.id))).toBe(true); // movingOnly: nothing fixed, no handle
+    expect(buildBrakeAt(c, 0, true).every((x) => /^brake-(flap|foot-tread|shoe|pad|cord)-/.test(x.id))).toBe(true); // movingOnly: nothing fixed, no handle
   });
 });
 

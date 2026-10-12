@@ -87,7 +87,7 @@ const checkbox = (label: string | Node[], title: string, checked: boolean, onCha
   cb.addEventListener('change', () => onChange(cb.checked));
   return h('label', { class: `steer-ctl ${cls}`.trim(), title }, cb, ...(typeof label === 'string' ? [label] : label));
 };
-// Visual pass r2: the rider and cargo hide the finish work, so they default OFF in Simple and ON in Advanced until the user picks.
+// Visual pass r2 / 3c round 2: the rider and cargo hide the finish work, so they default OFF in both Simple and Advanced (opt in with the checkbox).
 let riderTouched = false;
 const riderLabel = checkbox([h('span', { class: 'adv-only' }, 'Show rider & cargo'), h('span', { class: 'simple-only' }, 'Show rider')], 'Show the operating rider and cargo (view only; ignored in the Truck view)', false, (v) => {
   riderTouched = true;
@@ -246,7 +246,7 @@ function setMode(next: Mode, opts: { fromSimple?: boolean; persist?: boolean } =
   backBar.hidden = !(mode === 'advanced' && fromSimple);
   app.classList.toggle('has-back', !backBar.hidden);
   viewer.setSimpleMode(mode === 'simple');
-  if (!riderTouched) setRiderShown(mode !== 'simple');
+  if (!riderTouched) setRiderShown(false);
   if (mode === 'simple') {
     // Leave anything that takes over the viewer (simulation, truck placement); the design itself is untouched.
     right.showTab('analysis');

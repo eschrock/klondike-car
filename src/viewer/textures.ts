@@ -76,7 +76,9 @@ export function woodTextures(kind: WoodKind): { map: THREE.CanvasTexture; bump: 
   const light: RGB = oak ? [0.47, 0.29, 0.14] : [0.48, 0.31, 0.19];
   const dark: RGB = oak ? [0.2, 0.11, 0.04] : [0.33, 0.19, 0.11];
   const nLow = new TileNoise(18, 2, 2); // panel-scale tone drift so big faces are not flat (review SHOULD 10)
-  const rings = oak ? 20 : 5;
+  // 3c visual round 2 (review SHOULD 3): the stripe period is doubled (oak 10 rings per 9 in, about 0.9 in; okoume 3, about 3 in) and the contrast cut about 30%, so close-ups read as oak, not corduroy.
+  const rings = oak ? 10 : 3;
+  const CONTRAST = 0.7, PIVOT = 0.35;
   let gray!: ImageData;
   const map = make(key, W, H, true, (img) => {
     // The bump canvas is made in the same pass (it shares every noise lookup).
@@ -100,10 +102,11 @@ export function woodTextures(kind: WoodKind): { map: THREE.CanvasTexture; bump: 
           pore = pv > 0.72 ? ((pv - 0.72) / 0.28) * early : 0;
           const rv = nRay.at(s, t);
           ray = rv > 0.86 ? (rv - 0.86) / 0.14 : 0;
-          tone = late * 0.58 + (fib - 0.5) * 0.34 + blot * 0.2 + pore * 0.3 + (nLow.at(s, t) - 0.5) * 0.25;
+          tone = late * 0.58 + (fib - 0.5) * 0.34 + blot * 0.2 + pore * 0.3 + (nLow.at(s, t) - 0.5) * 0.3;
         } else {
           tone = late * 0.38 + (fib - 0.5) * 0.3 + blot * 0.18 + (nLow.at(s, t) - 0.5) * 0.5;
         }
+        tone = PIVOT + (tone - PIVOT) * CONTRAST;
         const col = mix(light, dark, clamp01(tone));
         if (ray) for (let a = 0; a < 3; a++) col[a] = Math.min(1, col[a] + 0.09 * ray);
         const i = (y * W + x) * 4;

@@ -2,13 +2,14 @@ import * as THREE from 'three';
 import { mergeGeometries, toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { localBounds } from '../model/bounds';
 import type { Geometry, Mat4, Part, Vec3 } from '../model/types';
-import { projectGrainUVs, maxAxis, minAxis, type Axis } from './grainUv';
+import { displayGrainAxis, projectGrainUVs, maxAxis, minAxis, type Axis } from './grainUv';
 import { hashString, mulberry32 } from './noise';
 import { lookOf, isWood, materialsFor, signMaterials, wheelMaterials, type Look, type SurfaceMats } from './materials';
 import { crownDrop, crownFace, roundedBoxMesh, type RawMesh } from './shapes';
 import { densify, dashedLoop, insetLoop, mergeTubes, roundedLoop, tubeAlong, type TubeMesh, type Vec2 } from './upholstery';
-import { lashPointMesh } from './hardware';
-import { hingeMesh, lampMesh, lightKindOf, reflectorMesh, tailLightMesh } from './lights';
+import { lashPointMesh, treadMesh } from './hardware';
+import { figureGeometry, figureKindOf, figureMaterial } from './mannequin';
+import { hingeMesh, lampMesh, lightKindOf, reflectorMesh, socketMesh, tailLightMesh } from './lights';
 import { buildRoundedSweepMesh, buildSweepMesh } from './sweep';
 import { WOOD_TILE_IN, signOutline, type SignShape } from './textures';
 import { buildWheelGeometry } from './wheel';
@@ -257,6 +258,35 @@ export function signOvalGeometry(size: Vec3, thin: Axis, ua: Axis, va: Axis, cen
   return { geometry: geo, edges };
 }
 
+/**
+ * Plan outline of a brake flap `len` (x, hinge end at +x) by `w` (y), centered on the origin: full width at the hinge end (small corner radius), narrowing over the last third to 80% at the
+ * foot end with generous corner radii, so the tip reads as a finished pedal rather than a sawn plank end.
+ */
+export function flapOutline(len: number, w: number): [number, number][] {
+  const hl = len / 2, hw = w / 2;
+  const taperX = -hl + Math.min(len * 0.33, 7);
+  const tipW = hw * 0.8;
+  const corners: { p: Vec2; r: number }[] = [
+    { p: [hl, -hw], r: Math.min(0.3, hw) }, { p: [hl, hw], r: Math.min(0.3, hw) }, { p: [taperX, hw], r: 0 },
+    { p: [-hl, tipW], r: Math.min(1.1, tipW) }, { p: [-hl, -tipW], r: Math.min(1.1, tipW) }, { p: [taperX, -hw], r: 0 },
+  ];
+  const pts: [number, number][] = [];
+  const n = corners.length;
+  for (let i = 0; i < n; i++) {
+    const c = corners[i], a = corners[(i + n - 1) % n].p, b = corners[(i + 1) % n].p;
+    if (c.r <= 0) { pts.push([c.p[0], c.p[1]]); continue; }
+    const la = Math.hypot(a[0] - c.p[0], a[1] - c.p[1]), lb = Math.hypot(b[0] - c.p[0], b[1] - c.p[1]);
+    const d = Math.min(c.r, la * 0.45, lb * 0.45);
+    const p0: Vec2 = [c.p[0] + ((a[0] - c.p[0]) / la) * d, c.p[1] + ((a[1] - c.p[1]) / la) * d];
+    const p1: Vec2 = [c.p[0] + ((b[0] - c.p[0]) / lb) * d, c.p[1] + ((b[1] - c.p[1]) / lb) * d];
+    for (let k = 0; k <= 6; k++) {
+      const t = k / 6, u = 1 - t;
+      pts.push([u * u * p0[0] + 2 * u * t * c.p[0] + t * t * p1[0], u * u * p0[1] + 2 * u * t * c.p[1] + t * t * p1[1]]);
+    }
+  }
+  return pts;
+}
+
 export function buildPart(part: Part): BuiltPart | null {
   const g = part.geometry;
   const look = lookOf(part);
@@ -268,10 +298,18 @@ export function buildPart(part: Part): BuiltPart | null {
   const f = part.finish;
   const b = localBounds(g);
   const size: Vec3 = [b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]];
-  const grain: Axis = part.grain ? ('xyz'.indexOf(part.grain) as Axis) : maxAxis(g.type === 'extrusion' ? [size[0], size[1], 0] : size);
+  const modelGrain: Axis | undefined = part.grain ? ('xyz'.indexOf(part.grain) as Axis) : undefined;
+  // Boxes and extrusions: stripes along the board's long axis whatever the cut-list note says (round 2); meshes and sweeps follow their own path or the model.
+  const grain: Axis = g.type === 'box' || g.type === 'extrusion' ? displayGrainAxis(modelGrain, size, g.type === 'extrusion') : modelGrain ?? maxAxis(size);
   let edges: THREE.BufferGeometry | null = null;
   let geometry: THREE.BufferGeometry;
   let material: SurfaceMats = materialsFor(look);
+  if (look === 'mannequin' && g.type === 'box') {
+    // Round 2 (review MUST 1): the rider is a translucent navy mannequin (capsule limbs, ellipsoid head), the cargo a tan crate; both drawn inside the model's boxes.
+    const kind = figureKindOf(part.id);
+    const c: Vec3 = [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, (b.min[2] + b.max[2]) / 2];
+    return { geometry: figureGeometry(kind, size, c), material: figureMaterial(kind), look, edges: null };
+  }
 
   switch (g.type) {
     case 'box': {
@@ -281,8 +319,30 @@ export function buildPart(part: Part): BuiltPart | null {
         const built = lk === 'lamp' ? lampMesh(size)
           : lk === 'taillight' ? tailLightMesh(size)
           : lk === 'hinge' ? hingeMesh(size)
+          : lk === 'socket' ? socketMesh(size)
           : reflectorMesh(size, lk === 'reflector-red' ? 'red' : 'amber', part.transform[13] >= 0 ? 1 : -1);
         return { geometry: built.geometry, material: built.materials, look, edges: null };
+      }
+      if (part.partNo === 'brake-foot-tread' && size[0] >= size[1]) {
+        // Rubber foot tread (round 2, review SHOULD 4): a base sheet with grip ribs, inside the part's box.
+        geometry = rawToGeometry(treadMesh(size));
+        const p = geometry.getAttribute('position');
+        geometry.setAttribute('uv', new THREE.Float32BufferAttribute(Array.from({ length: p.count * 2 }, (_, i) => (i % 2 ? p.getY(i >> 1) : p.getX(i >> 1)) / 4), 2));
+        break;
+      }
+      if (part.partNo === 'brake-flap' && look === 'oak' && size[0] > size[1] && size[1] > size[2]) {
+        // Finished flap (round 2, review SHOULD 4): the plan outline narrows toward the foot end with rounded corners, and every edge is rolled over (the part's notes say "round the corners
+        // and roundover the edges"). The drawing stays inside the part's box, so mass, cut list and clearances do not change.
+        const outline = flapOutline(size[0], size[1]);
+        const ex = { type: 'extrusion' as const, outline, depth: size[2] };
+        geometry = bevelledExtrusion(ex, Math.min(0.14, size[2] * 0.3));
+        geometry.translate(0, 0, -size[2] / 2);
+        geometry = applyGrain(geometry, part, 'oak', size, 2, 0);
+        const sharp = plainExtrusion(ex);
+        sharp.translate(0, 0, -size[2] / 2);
+        edges = new THREE.EdgesGeometry(sharp, EDGE_ANGLE_DEG);
+        sharp.dispose();
+        break;
       }
       const soft = look === 'vinyl';
       const thin = minAxis(size);
@@ -377,7 +437,7 @@ export function buildPart(part: Part): BuiltPart | null {
       }
       geometry = r > 0.01 ? bevelledExtrusion(g, r) : plainExtrusion(g);
       const thick: Axis = 2;
-      if (isWood(look)) geometry = applyGrain(geometry, part, look, size, thick, part.grain ? grain : maxAxis([size[0], size[1], 0]));
+      if (isWood(look)) geometry = applyGrain(geometry, part, look, size, thick, grain);
       if (r > 0.01 || look !== 'other') {
         const sharp = plainExtrusion(g);
         edges = new THREE.EdgesGeometry(sharp, EDGE_ANGLE_DEG);

@@ -254,10 +254,12 @@ select { width: 100%; }
   .viewer-views { flex: 1 1 auto; }
   .viewer-views button { flex: 1 1 0; }
   .viewer-more-btn { display: inline-block; flex: none; }
-  .viewer-more { display: none; position: absolute; left: 0; right: 0; top: 100%; z-index: 6; flex-direction: column; align-items: stretch; gap: 2px;
-    padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--border); box-shadow: 0 6px 12px rgb(0 0 0 / 20%); }
+  /* Round 2 (review NICE 10): a compact sheet, not a full-canvas cover: the controls wrap two or three to a row, it scrolls past about 150 px, and a tap on the 3D view closes it. */
+  .viewer-more { display: none; position: absolute; left: 0; right: 0; top: 100%; z-index: 6; flex-flow: row wrap; align-items: center; gap: 2px 6px;
+    padding: 4px 8px; max-height: min(36vh, 150px); overflow-y: auto; overscroll-behavior: contain; background: var(--panel); border-bottom: 1px solid var(--border); box-shadow: 0 6px 12px rgb(0 0 0 / 20%); }
   .viewer-more.open { display: flex; }
-  .viewer-more .steer-ctl { width: 100%; }
+  .viewer-more .steer-ctl { flex: 0 1 auto; min-height: 38px; padding-top: 2px; padding-bottom: 2px; }
+  .viewer-more .steer-ctl:has(input[type='range']) { flex: 1 1 100%; }
 }
 @media (pointer: coarse), (max-width: 600px) {
   button, .tabs button { min-height: 44px; }

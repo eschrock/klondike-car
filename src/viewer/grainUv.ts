@@ -100,3 +100,15 @@ export function minAxis(size: ArrayLike<number>): Axis {
 export function maxAxis(size: ArrayLike<number>): Axis {
   return (size[0] >= size[1] && size[0] >= size[2] ? 0 : size[1] >= size[2] ? 1 : 2) as Axis;
 }
+
+/**
+ * Grain axis used for DISPLAY (3c visual round 2). The model's `grain` is a cut-list note and is sometimes ambiguous for the picture (the bow bulkhead says y on a board that is 21 in
+ * wide and 7 in tall; the handle posts say z, the thickness axis of their extrusion). The stripes must run along the board's long axis, so: keep the model's axis only when it is
+ * (nearly, within 15%) the longest; otherwise use the longest. `planar` (extrusions: outline in x and y, thickness along z) never picks z.
+ */
+export function displayGrainAxis(modelGrain: Axis | undefined, size: ArrayLike<number>, planar: boolean): Axis {
+  const dims = planar ? [size[0], size[1], -1] : [size[0], size[1], size[2]];
+  const longest = maxAxis(dims);
+  if (modelGrain !== undefined && dims[modelGrain] >= dims[longest] * 0.85) return modelGrain;
+  return longest;
+}

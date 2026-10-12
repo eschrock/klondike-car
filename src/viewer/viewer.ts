@@ -201,6 +201,13 @@ export class Viewer {
       moreBtn.textContent = open ? 'More ▴' : 'More ▾';
     });
     toolbar.append(views, moreBtn, this.moreHost);
+    // Phone: a tap on the 3D view folds the "More" sheet away so the sled is never hidden behind it.
+    this.canvasHost.addEventListener('pointerdown', () => {
+      if (!this.moreHost.classList.contains('open')) return;
+      this.moreHost.classList.remove('open');
+      moreBtn.setAttribute('aria-expanded', 'false');
+      moreBtn.textContent = 'More ▾';
+    });
     this.buildExplodeControl();
     this.buildSectionControl();
     this.buildOverlayControls();
@@ -617,9 +624,6 @@ export class Viewer {
     this.scene.add(this.groundPool);
     this.envObjects.push(this.groundPool);
 
-    const axes = new THREE.AxesHelper(24); // X red, Y green, Z blue
-    this.scene.add(axes);
-
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), new THREE.ShadowMaterial({ opacity: 0.3 }));
     ground.position.z = -0.05;
     ground.receiveShadow = true;
@@ -627,7 +631,7 @@ export class Viewer {
     this.scene.add(ground);
     this.contactGroup.renderOrder = 1;
     this.scene.add(this.contactGroup);
-    this.envObjects.push(grid, axes, ground, this.contactGroup);
+    this.envObjects.push(grid, ground, this.contactGroup);
 
     // Soft daylight: a room-style environment map for ambient light and reflections (metals, vinyl sheen), a weak
     // hemisphere fill, and one key sun that casts the shadows.
@@ -765,7 +769,7 @@ export class Viewer {
       // Shop aids (e.g. a bent-lam form): reference parts that are fabricated, unlike the rider/cargo figures.
       mesh.userData.shopAid = isShopAid(part);
       mesh.userData.chock = /^brake-chock/.test(part.id);
-      mesh.castShadow = !mesh.userData.shopAid;
+      mesh.castShadow = !mesh.userData.shopAid && built.look !== 'mannequin' || part.id === 'cargo'; // the rider is a translucent ghost: no shadow; the cargo crate is solid
       mesh.receiveShadow = true;
       mesh.matrixAutoUpdate = false;
       mesh.visible = this.shouldShow(mesh);

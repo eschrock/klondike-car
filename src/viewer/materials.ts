@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Part } from '../model/types';
+import { mannequinMaterial } from './mannequin';
 import { oakEndTexture, pebbleBump, plyEdgeTexture, signTexture, woodTextures, type SignShape } from './textures';
 
 /** What a part looks like. The viewer reads `part.finish.surface` first, then falls back to the material name (D-44). */
@@ -51,7 +52,7 @@ export function materialsFor(look: Look): SurfaceMats {
       const oak = look === 'oak';
       // Oiled, satin stain (roughness ~0.6). Vertex colors carry the per-part tint jitter (see `tintJitter` in partMesh).
       const long = new THREE.MeshStandardMaterial({
-        color: 0xffffff, map: t.map, bumpMap: t.bump, bumpScale: oak ? 0.8 : 0.4, roughnessMap: t.bump, roughness: oak ? 0.68 : 0.64, vertexColors: true, ...SOLID,
+        color: 0xffffff, map: t.map, bumpMap: t.bump, bumpScale: oak ? 0.6 : 0.3, roughnessMap: t.bump, roughness: oak ? 0.68 : 0.64, vertexColors: true, ...SOLID,
       });
       const end = new THREE.MeshStandardMaterial({
         color: 0xffffff, map: oak ? oakEndTexture() : plyEdgeTexture(), roughness: 0.8, vertexColors: true, ...SOLID,
@@ -82,7 +83,7 @@ export function materialsFor(look: Look): SurfaceMats {
       break;
     case 'asa':
       // Printed ASA, round 3: dark charcoal satin plastic (was safety orange, which read as unstained wood; review r2 MUST 1).
-      m = new THREE.MeshStandardMaterial({ color: 0x2b2f33, roughness: 0.55, bumpMap: pebbleBump('rubber'), bumpScale: 0.08, ...SOLID });
+      m = new THREE.MeshStandardMaterial({ color: 0x1e1a17, roughness: 0.5, bumpMap: pebbleBump('rubber'), bumpScale: 0.08, ...SOLID }); // 3c round 2: a warm black satin (the clip read as a gray block against the oak)
       break;
     case 'truck':
       m = new THREE.MeshStandardMaterial({ color: 0x8f9bb0, transparent: true, opacity: 0.35, roughness: 0.7, depthWrite: false, side: THREE.DoubleSide });
@@ -90,8 +91,8 @@ export function materialsFor(look: Look): SurfaceMats {
     case 'ground':
       m = new THREE.MeshStandardMaterial({ color: 0x7f8a7a, roughness: 1, side: THREE.DoubleSide });
       break;
-    case 'mannequin': // rider and cargo: solid, matte, neutral (round 2; was five blue glass slabs)
-      m = new THREE.MeshStandardMaterial({ color: 0x8f8b84, roughness: 0.88, ...SOLID });
+    case 'mannequin': // rider: a dark translucent navy ghost (3c visual round 2; was solid gray boxes). The cargo crate has its own tan material (mannequin.ts).
+      m = mannequinMaterial();
       break;
     case 'jig': // shop aids: neutral gray, clearly a jig (faint fill plus wireframe), never saturated blue
       m = new THREE.MeshBasicMaterial({ color: 0x9aa0a8, transparent: true, opacity: 0.35, wireframe: true, depthWrite: false });
