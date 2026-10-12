@@ -18,10 +18,10 @@ import { tieLoad } from './bridle';
 import { bumpStrike } from './bump';
 import { wheelLoads } from './structure';
 import { uncTensileArea } from './nds';
-import { PRE_D60 } from '../test-fixtures';
+import { PRE_D60, PRE_D66 } from '../test-fixtures';
 
 const RAD = Math.PI / 180;
-const defaults = { ...defaultParams(), ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, cargoPayloadLb: 250 }; // the 3c-3 hand-calc fixture (35.5 in tracks, 250 lb cargo); D-58 narrowed the tracks, cargo is 200 lb; the new defaults are in the rows below and track-d58.test.ts
+const defaults = { ...defaultParams(), ...PRE_D66, ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, cargoPayloadLb: 250 }; // the 3c-3 hand-calc fixture (35.5 in tracks, 250 lb cargo); D-58 narrowed the tracks, cargo is 200 lb; the new defaults are in the rows below and track-d58.test.ts
 const mkCtx = (q: Partial<Params> = {}): Ctx => {
   const p = resolveParams({ ...defaults, ...q } as Params);
   return makeContext(p, buildModel(p, { rider: 'goal', cargo: true }), buildModel(p, { rider: 'none', cargo: false, seat: 'stowed' }));
@@ -492,12 +492,16 @@ describe('steer-clear (clearances at full lock)', () => {
     expect(d.value).toBeCloseTo(hand1, 9);
     expect(d.limit).toBe(0.75);
   });
-  it('D-58 front track 34 1/2 in is the least that clears the body with a margin, rounded to 1/8 in: the gap is 0.855 in (0.75 needed) and a track 1/8 in narrower would give less than 0.75 in', () => {
+  it('D-66: the bow taper is derived from the sweep, so the front track no longer sets the clearance: the gap is steerClearIn + 1/8 in (to the 1/4 in rounding of the taper end) at the default 30 in and at a 29-1/2 in or 31 in track; D-58 had 34 1/2 in as the least track for the straight body (0.855 in)', () => {
     const q = (trk: number) => runChecks({ ...defaultParams(), frontTrackIn: trk }, { includeTruck: false }).find((x) => x.id === 'steer-clear')!.details!.find((x) => x.name.includes('tire to the side'))!.value;
+    for (const trk of [29.5, 30, 31]) {
+      expect(q(trk), `track ${trk}`).toBeGreaterThanOrEqual(0.75 + 0.125 - 0.01);
+      expect(q(trk), `track ${trk}`).toBeLessThan(0.75 + 0.125 + 0.1);
+    }
+    // the D-58 straight-body fixture still gives the hand number at 34 1/2 in
+    const p58 = { ...defaultParams(), ...PRE_D66 } as Params;
     const hand1 = ((34.5 - 3.5) / 2) * Math.cos(20 * RAD) - 5 * Math.sin(20 * RAD) - 12;
-    expect(hand1).toBeCloseTo(q(34.5), 1);
-    expect(q(34.5)).toBeGreaterThanOrEqual(0.75);
-    expect(q(34.375)).toBeLessThan(q(34.5));
+    expect(runChecks(p58, { includeTruck: false }).find((x) => x.id === 'steer-clear')!.details!.find((x) => x.name.includes('tire to the side'))!.value).toBeCloseTo(hand1, 1);
   });
   it('vertical gaps: axle beam top 5.375 under the shallow rails (7.528 - 1.753 = 5.775): 0.4 in; clamp plate tops 5.75 under the king beam bottom 5.9375: 3/16 in; tongue top 5.1875 under the chain joist-level underside 7.528 - 1.75 = 5.778 ...', () => {
     expect(c.details!.find((x) => x.name.includes('shallow rails'))!.value).toBeCloseTo(0.4, 6);

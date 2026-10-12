@@ -290,3 +290,56 @@ describe('step brake over the parameter extremes and old links', () => {
     expect(validateParams(defaults).filter((i) => i.severity !== 'info' && i.keys.some((k) => /^brake|^park/.test(k)))).toEqual([]);
   });
 });
+
+describe('the slotted knee is real geometry (D-65, D-66 viewer fix)', () => {
+  const { c, g } = geomOf(defaults);
+  const fixed = buildBrakeAt(c, 0, false);
+  const kneeOf = (tag: string) => fixed.find((x) => x.id === `brake-knee-${tag}`)!;
+  it('the knee is a mesh with the slot sawn through the arm: two ears and a bridge ahead of the slot, the pin hole line passes through both ears', () => {
+    for (const [tag, sgn] of [['L', 1], ['R', -1]] as const) {
+      const k = kneeOf(tag);
+      expect(k.geometry.type).toBe('mesh');
+      const boxes = (k.geometry as { boxes?: unknown[] }).boxes!;
+      expect(boxes.length).toBeGreaterThan(5);
+      // no box covers the slot: a probe line through the middle of the slot, behind the slot end, hits no box
+      const yMid = sgn * (g.pivot.ySlot[0] + g.pivot.ySlot[1]) / 2;
+      const hits = (boxes as Array<[[number, number, number], [number, number, number]]>).filter(([lo, hi]) => Math.min(lo[1], hi[1]) < yMid && Math.max(lo[1], hi[1]) > yMid && lo[0] < g.pivot.slotEndX - 0.01 && hi[0] > g.knee.x0 + 0.01);
+      expect(hits, `slot of knee ${tag}`).toHaveLength(0);
+      // the ears: solid at the pin x on both sides of the slot
+      const near = (y: number) => (boxes as Array<[[number, number, number], [number, number, number]]>).some(([lo, hi]) => Math.min(lo[1], hi[1]) < y && Math.max(lo[1], hi[1]) > y && lo[0] < g.H[0] && hi[0] > g.H[0] && lo[2] < g.H[1] && hi[2] > g.H[1]);
+      expect(near(sgn * (g.pivot.ySlot[1] + 0.3)), 'outboard ear holds the pin').toBe(true);
+      expect(near(sgn * (g.pivot.ySlot[0] - 0.5)), 'inboard ear holds the pin').toBe(true);
+      // its wood: lighter than the unslotted block by the slot's volume
+      const slotVol = (g.pivot.ySlot[1] - g.pivot.ySlot[0]) * (g.pivot.slotEndX - g.knee.x0) * g.knee.armT;
+      expect(slotVol).toBeGreaterThan(1);
+    }
+  });
+  it('the moving flap group (flap tongue, pivot block, shoe, pad, foot tread) never touches the knee over the whole swing: the tongue and block sit IN the slot with their clearance, at every pose', () => {
+    const clr = defaults.brakePivotSlotClearIn;
+    let worst = -Infinity;
+    for (let i = 0; i <= 10; i++) {
+      const moving = buildBrakeAt(c, i / 10, true);
+      for (const tag of ['L', 'R']) {
+        for (const m of moving.filter((x) => x.id.endsWith(`-${tag}`) && /^brake-(flap|pivot-block|shoe|pad|foot-tread)-/.test(x.id))) {
+          const o = partsOverlap(m, kneeOf(tag));
+          worst = Math.max(worst, o);
+          // the pivot block is an exact box: it clears the slot walls by the slot clearance (1/16 in); the flap is covered by slabs that are a little wider than its S-curved flare (conservative), so it only has to be separate
+          expect(o, `${m.id} vs knee at pose ${i / 10}`).toBeLessThanOrEqual(/pivot-block/.test(m.id) ? -(clr - 0.01) : -1e-6);
+        }
+        // the block and the tongue stay inside the slot walls with the clearance each side
+        const blk = worldAABB(moving.find((x) => x.id === `brake-pivot-block-${tag}`)!);
+        const sg = tag === 'L' ? 1 : -1;
+        const ys = [sg * g.pivot.ySlot[0], sg * g.pivot.ySlot[1]].sort((a, b) => a - b);
+        expect(blk.min[1] - ys[0]).toBeGreaterThanOrEqual(clr - 1e-6);
+        expect(ys[1] - blk.max[1]).toBeGreaterThanOrEqual(clr - 1e-6);
+      }
+    }
+    expect(worst).toBeLessThan(0); // separated at every pose
+  });
+  it('the flap tongue and block end short of the slot end at every pose (the nose swings but the slot is deep enough)', () => {
+    for (let i = 0; i <= 10; i++) {
+      const blk = worldAABB(buildBrakeAt(c, i / 10, true).find((x) => x.id === 'brake-pivot-block-L')!);
+      expect(g.pivot.slotEndX - blk.max[0], `pose ${i / 10}`).toBeGreaterThan(0.02);
+    }
+  });
+});

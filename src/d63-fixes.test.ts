@@ -155,22 +155,22 @@ describe('R2-M3: the deck side clearance', () => {
 });
 
 describe('the glue-up posture and the strip lengths', () => {
-  it('the band and web notes carry the posture: flat on a ramp form, cleats along the sheer line, one face per cure (two cures per side), the S-bend in the ~5 in web', () => {
+  it('the band and web notes carry the posture: flat on a ramp form, cleats along the sheer line, one face per cure (two cures per side), the long S-bend of the taper in the 5 to 7 in web', () => {
     for (const id of ['side-L-web', 'side-L-gunwale', 'side-L-chine-in']) {
       const n = get(id).notes!;
       expect(n, id).toMatch(/GLUE-UP POSTURE/);
       expect(n, id).toMatch(/FLAT on the bench with the S-ramp form/);
       expect(n, id).toMatch(/CLEAT THE SHEER LINE/);
       expect(n, id).toMatch(/TWO CURES PER SIDE/);
-      expect(n, id).toMatch(/about 5" tall/);
+      expect(n, id).toMatch(/5 to 7" tall/);
     }
     expect(HULL_STEP.sides).toBe(4.2);
   });
-  it('the S-bend really is in a web about 5 in tall (the note is true): the free web, chine bottom to the cap, over the last bowTurnLenIn', () => {
-    for (const x of [L.xSideEnd - defaults.bowTurnLenIn, L.xSideEnd]) {
+  it('the S-bend really is in a web about 5 in tall (the note is true): the free web, chine bottom to the cap, over the bow taper (D-66)', () => {
+    for (const x of [L.taper.x0, (L.taper.x0 + L.taper.x1) / 2, L.taper.x1, L.xSideEnd]) {
       const h = sideTopAt(L, x) - L.webCap - L.chineBot;
       expect(h, `x ${x.toFixed(1)}`).toBeGreaterThan(4);
-      expect(h, `x ${x.toFixed(1)}`).toBeLessThan(6);
+      expect(h, `x ${x.toFixed(1)}`).toBeLessThan(7); // D-66: the taper starts where the free web is 6.8 in tall and ends where it is 5 in
     }
   });
   it('the gunwale strip note gives the 60.4 in rough length and says a 5 ft board does not make it; the chine note does too', () => {

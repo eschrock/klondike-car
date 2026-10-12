@@ -154,8 +154,8 @@ const defs = {
   },
   cargoCgHeightIn: {
     label: 'Cargo center of gravity above the deck', group: 'cargo', unit: 'in',
-    default: 12, min: 3, max: 24, step: 1, status: 'assumed', ref: 'D-53',
-    note: 'A tall strapped load (coolers on firewood, duffels above the 7 in gunwale): 5 in above the gunwale. Drives tipping, the rear-only brake hold and pitch.',
+    default: 10, min: 3, max: 24, step: 1, status: 'assumed', ref: 'D-53, D-66',
+    note: 'D-66: the load-height RULE is now 10 in (was 12): keep the CENTER of the load under 10 in above the deck (a load about 20 in high, e.g. a cooler on a duffel, or gear below the 14 in rear sides). It tightens with the 30 in tracks (D-66) so the cargo tip row keeps its margin. Drives tipping, the rear-only brake hold and pitch.',
   },
   cargoCgOffsetYIn: {
     label: 'Cargo center of gravity off the centerline', group: 'cargo', unit: 'in',
@@ -210,8 +210,8 @@ const defs = {
   },
   rearTrackIn: {
     label: 'Rear track (wheel center to center)', group: 'layout', unit: 'in',
-    default: 32, min: 26, max: 52, step: 0.25, status: 'explore', primary: true, ref: 'D-6, D-58',
-    note: 'D-58 (Eric): tightened from 35.5" to 32". The rear wheels do not steer, so the track is set only by the tire width plus clearance to the 24" body (tire inner face 14.25" from center vs the body side at 12", the rod clamp plates start at 12.6") and by tipping (the 250 lb cargo case: tip-straight 41.0° vs the 40° limit at 32"). Still fits between the wheel wells of the truck bed with the front track.',
+    default: 30, min: 26, max: 52, step: 0.25, status: 'explore', primary: true, ref: 'D-6, D-58, D-66',
+    note: 'D-66 (Eric): 30" (was 32"; D-58 had tightened it from 35.5"). The rear wheels do not steer, so the track is set only by the tire width plus clearance to the 24" body (tire inner face 13.25" from center vs the body side at 12": a 1-1/4" gap, 3/4" is the least, and the rod clamp plates start at 12.6") and by tipping (the cargo tip row, which the tighter cargoCgHeightIn load-height rule protects). The front track is the same (frontTrackIn) so the wheels line up.',
   },
   rearOverhangIn: {
     label: 'Body overhang behind rear axle', group: 'layout', unit: 'in',
@@ -255,15 +255,20 @@ const defs = {
     default: 2.5, min: 0, max: 4, step: 0.25, status: 'explore', primary: true, ref: 'D-57',
     note: 'The top edge of the side sweeps up from the low bow to the tall rear in a smooth concave curve, as on Wagner\'s sled (reference/05). The gunwale dips this far below the straight line from the rear to the bow at mid-length (a parabola); 2.5 in with the 10 in of rise leaves the top edge level at the bow. 0 = the straight D-54 line. The gunwale is bandsawn from a wide oak board to the curve; the web top follows it.',
   },
-  bowTurnInIn: {
-    label: 'Bow turn-in (each side, in plan)', group: 'body', unit: 'in',
-    default: 1.25, min: 0, max: 3, step: 0.25, status: 'explore', primary: true, ref: 'D-57',
-    note: 'In plan the sides ease in toward the bow over bowTurnLenIn (a smooth S that is straight at both ends), so the nose is this much narrower on each side than the 24 in body. The chine, web, gunwale, deck and the front rails follow the curve; the bow bulkhead is as wide as the narrowed hull. It also gives the front tires more room at full lock. Chine and gunwale are cold-bent flat (2 plies) on a form; the web is a single bent sheet.',
+  bowWidthIn: {
+    label: 'Bow outside width (at the bulkhead)', group: 'body', unit: 'in',
+    default: 18.5, min: 15, max: 24, step: 0.25, status: 'explore', primary: true, ref: 'D-66',
+    note: 'D-66 (Eric): the sides draw in, in plan, from the full bodyWidthIn at bowTaperStartIn to this width at the bow bulkhead, in one long gradual S (a smootherstep: straight AND curvature-continuous at both ends). The taper is DERIVED from the swing of the front wheels (bowTaper in params.ts): it ends as far forward as the wheel sweep at full lock allows while keeping steerClearIn + bowTaperSlackIn from the tire to the body, and runs parallel to the bulkhead after that. This also sets the turn-in per side, (bodyWidthIn - bowWidthIn) / 2. The chine, web, gunwale, deck and the front rails follow the curve; chine and gunwale are cold-bent flat (2 plies) on a form, the web is a single bent sheet. The rider needs 12 to 14 in INSIDE at the feet (validateParams).',
   },
-  bowTurnLenIn: {
-    label: 'Bow turn-in length (ahead of the foot brace)', group: 'body', unit: 'in',
-    default: 14, min: 6, max: 30, step: 1, status: 'explore', ref: 'D-57',
-    note: 'The plan curve starts this far behind the bow bulkhead and runs to it. Keep it long enough that the bend in the chine and gunwale stays gentle (hullLamMinRadiusFactor).',
+  bowTaperStartIn: {
+    label: 'Bow taper start (x, from the rear axle)', group: 'body', unit: 'in',
+    default: 20, min: 10, max: 40, step: 1, status: 'explore', ref: 'D-66',
+    note: 'D-66: the sides are straight (full width) behind this x and start to draw in here, about mid-cabin. Earlier = a longer, gentler taper (but it must stay ahead of the seat cushion and the lash plates); later = a tighter bend, which the cold-bend rule limits (hullLamMinRadiusFactor).',
+  },
+  bowTaperSlackIn: {
+    label: 'Taper slack over the steering clearance', group: 'body', unit: 'in',
+    default: 0.125, min: 0, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-66',
+    note: 'The taper is derived so the tire clears the body by steerClearIn PLUS this much through the whole +-lock sweep (the steer-clear row then reads 1/8 in better than its limit, not exactly at it).',
   },
   bowBulkheadThickIn: {
     label: 'Bow bulkhead thickness', group: 'body', unit: 'in',
@@ -805,8 +810,8 @@ const defs = {
   },
   clampPlateWidthIn: {
     label: 'Clamp bridge plate width (along the axle)', group: 'wheels', unit: 'in',
-    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-10, D-62',
-    note: 'The plate lies across the tube on a line this long (the ring-bending row of the tube wall uses it).',
+    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-10, D-62, D-66',
+    note: 'The plate lies across the tube on a line this long (the ring-bending row of the tube wall uses it). D-66: at the 30 in rear track the tire inner face is 13.25 in from center, so the rear plate runs from 11.75 to 13.25 in: its inner 1/4 in is UNDER the 12 in rail, whose relief notch is cut high enough to clear it (frame.ts; the hanger, which carries the beam seat, is inboard of that).',
   },
   clampPlateOuterWidthIn: {
     label: 'Front OUTER clamp plate width (along the axle)', group: 'wheels', unit: 'in',
@@ -888,8 +893,8 @@ const defs = {
   // ── Front end (PROVISIONAL) and the bridle eye. The swivel casters of the first D-54 pass were rejected by Eric (deck too high, too close together, 360 degrees of swivel); the front end is being redecided (a center-pivot soapbox axle with limited steering). Until then the front is a fixed placeholder axle. ──
   frontTrackIn: {
     label: 'Front track (wheel center to center)', group: 'steering', unit: 'in',
-    default: 34.5, min: 26, max: 52, step: 0.125, status: 'explore', ref: 'D-56, D-58',
-    note: 'D-56: the two front wheels sit outboard of the 24 in body on the ends of the pivoting axle beam. At full lock a wheel\'s inner rear corner swings toward the body, so the track has a minimum for the lock angle (steer-clear check in validateParams: 34.28 in at 20 degrees and a 24 in body, 0.75 in clearance). D-58 (Eric): 34 1/2 in, the true minimum (34.28) plus about 0.1 in per side (the 3/4 in clearance is already an assumed running gap). The rear tire corner at lock sits about 10 in behind the axle where the body is still full width, so a narrower bow does not lower the minimum.',
+    default: 30, min: 26, max: 52, step: 0.125, status: 'explore', ref: 'D-56, D-58, D-66',
+    note: 'D-66 (Eric): equal to the rear track, so the straight-ahead wheels line up. The front wheels sit outboard of the body on the ends of the pivoting axle beam; at full lock a wheel\'s inner rear corner swings toward the body, and the bow taper (bowWidthIn, bowTaperStartIn, bowTaper in params.ts) is DERIVED from that sweep so the tire clears by steerClearIn + bowTaperSlackIn through the whole +-lock range. A narrower front track needs a longer or narrower taper (steer-clear check in validateParams). D-58 had 34.5 in front and 32 in rear with a 24 in straight body.',
   },
   steerLockDeg: {
     label: 'Steering lock (each way)', group: 'steering', unit: '°',
@@ -918,7 +923,7 @@ const defs = {
   },
   rollPadRadiusIn: {
     label: 'Roll pads: distance from the kingpin along the axle beam', group: 'steering', unit: 'in',
-    default: 11.5, min: 6, max: 14, step: 0.25, status: 'assumed', ref: 'D-58, D-60',
+    default: 9.5, min: 6, max: 14, step: 0.25, status: 'assumed', ref: 'D-58, D-60, D-66',
     note: 'D-58: two UHMW slide pads on top of the axle beam, one each side of the kingpin, that slide under the frame rails with a small running gap and catch the roll of a one-wheel bump, so the kingpin only locates. The rails are the nearest continuous frame members at this distance (they pass over the whole swing); the pad covers the rail underside at every steering angle (checked in king-bearing). D-60: 11-1/2 in (was 11 in): the shorter 2.28 in wheel hub moves the stub clamp stations outboard, so the pad moves with the inner station\'s edge (validateParams checks it); the king-bearing row is unchanged.',
   },
   rollPadLenIn: {
@@ -1027,13 +1032,13 @@ const defs = {
   },
   steerChainBeamYIn: {
     label: 'Steering stop chain: eye in the axle beam, distance from the kingpin', group: 'steering', unit: 'in',
-    default: 10.4, min: 4, max: 14, step: 0.2, status: 'assumed', ref: 'D-58',
-    note: 'The eye bolt goes fore-aft through the beam at mid depth (below the stub axle rod in its top groove), its eye standing out of the trailing face, between the kingpin and the stub clamp plates. A long lever keeps the chain pull low.',
+    default: 8, min: 4, max: 14, step: 0.2, status: 'assumed', ref: 'D-58, D-66',
+    note: 'The eye bolt goes fore-aft through the beam at mid depth (below the stub axle rod in its top groove), its eye standing out of the trailing face, between the kingpin and the stub clamp plates. A long lever keeps the chain pull low. D-66: 8 in (was 10.4): the bow rails now stand at about 8.5 to 9.25 in off center and the chain must stay inside them through the whole swing (at lock the eye swings to about 0.94 x this + 0.65 in).',
   },
   steerChainAnchorYIn: {
     label: 'Steering stop chain: eye in the chain joist, distance from the center line', group: 'steering', unit: 'in',
-    default: 8.4, min: 4, max: 11, step: 0.2, status: 'assumed', ref: 'D-58',
-    note: 'The eye bolt goes fore-aft through the chain joist (the crossmember just behind the king beam), the eye standing out of its front face, a little below mid depth; the 2 in washer and nut on its rear face must clear the rail. Behind the king beam the chain can run low, under it, to the beam end.',
+    default: 7.8, min: 4, max: 11, step: 0.2, status: 'assumed', ref: 'D-58, D-66',
+    note: 'D-66: 7.8 in (was 8.4): the chain joist stands where the bow taper has drawn the rail inner face in to about 9.1 in, and the 2 in washer needs 1.15 in of that. The eye bolt goes fore-aft through the chain joist (the crossmember just behind the king beam), the eye standing out of its front face, a little below mid depth; the 2 in washer and nut on its rear face must clear the rail. Behind the king beam the chain can run low, under it, to the beam end.',
   },
   chainJoistThickIn: {
     label: 'Chain joist thickness (the crossmember behind the king beam)', group: 'steering', unit: 'in',
@@ -1744,7 +1749,8 @@ const defs = {
   },
   tipStraightMinDeg: {
     label: 'Min lateral tip angle, straight (loaded)', group: 'factors', unit: '°',
-    default: 40, min: 25, max: 60, step: 1, status: 'locked',
+    default: 35, min: 25, max: 60, step: 1, status: 'locked', ref: 'D-67',
+    note: 'Tilt-table angle: the static sideways tilt at which the uphill wheels lift (tan θ ≈ the sideways g the loaded sled resists). Eric 2026-10-12: 35° straight ahead, the same as the full-lock limit, for a low passenger sled at walking pace (was 40°, set when the design expected higher speeds); riding-equipment practice is roughly 30°.',
   },
   tipLockMinDeg: {
     label: 'Min lateral tip angle, full lock (loaded)', group: 'factors', unit: '°',
@@ -1984,15 +1990,105 @@ export function sideHeightAt(p: Params, x: number, xRearFace: number, xEnd: numb
   return p.sideHeightRearIn + (p.sideHeightBowIn - p.sideHeightRearIn) * u - 4 * p.sheerCurveIn * u * (1 - u);
 }
 
+/** The smootherstep 6u^5 - 15u^4 + 10u^3: 0 at u = 0, 1 at u = 1, and its first AND second derivatives vanish at both ends (so the side is curvature-continuous where it leaves the straight and where it meets the bow run). */
+export const smootherstep = (u: number): number => { const t = Math.max(0, Math.min(1, u)); return t * t * t * (t * (6 * t - 15) + 10); };
+/** The largest |d2/du2| of `smootherstep` (at u = 0.2113): 10 / sqrt(3). The tightest plan bend of the taper is this times turn-in / length^2. */
+export const SMOOTHERSTEP_MAX_CURVATURE = 10 / Math.sqrt(3);
+
+export interface BowTaper {
+  /** Start x (full width behind it), the x where the taper reaches the bow width (parallel sides to the bulkhead after it), and the turn-in per side at the bow. */
+  x0: number;
+  x1: number;
+  turnIn: number;
+  /** Tightest plan radius of the S (in); Infinity when there is no taper. */
+  minRadiusIn: number;
+  /** True when the turn-in is enough to clear the swinging front tires everywhere (the taper was shortened as far as needed). */
+  clears: boolean;
+}
+
 /**
- * How far the hull's outer face has turned in at x, per side (D-57): 0 behind the turn-in start, `bowTurnInIn` at the bow bulkhead, a smoothstep between (so the sides are straight at both ends).
- * One function shared by the layout, the body, the frame and the front axle (the front tires sweep beside this part of the hull).
+ * The inner face of the front tire, as a plan line swept through the whole lock range (D-66): for each steering angle the face is a segment of length 2r at distance `inner` from the
+ * wheel plane's center, rotated about the kingpin at (kingX, 0). Returns y(x) = the smallest |y| the tire inner face reaches at x over every angle in [-lock, lock] (Infinity where no
+ * angle puts tire at x). The tire is treated as a plan rectangle at full radius (A-4, conservative).
  */
+export function tireSweepInnerEdge(p: Pick<Params, 'wheelDiameterIn' | 'wheelbaseIn' | 'frontTrackIn' | 'tireWidthIn' | 'steerLockDeg'>): (x: number) => number {
+  const DEG = Math.PI / 180;
+  const lock = p.steerLockDeg * DEG;
+  const r = p.wheelDiameterIn / 2;
+  const kingX = p.wheelbaseIn;
+  const inner = p.frontTrackIn / 2 - p.tireWidthIn / 2;
+  const N = 80;
+  return (x: number): number => {
+    let m = Infinity;
+    for (let i = 0; i <= N; i++) {
+      const a = -lock + (2 * lock * i) / N;
+      const c = Math.cos(a), sn = Math.sin(a);
+      const u = (x - kingX + inner * sn) / c;
+      if (u < -r - 1e-9 || u > r + 1e-9) continue;
+      m = Math.min(m, Math.abs(u * sn + inner * c));
+    }
+    return m;
+  };
+}
+
+/** The x values to test the tire sweep at: a fine grid over the whole swing plus the exact rear-most corner of the tire at every angle (the inner face starts abruptly there, so a plain grid can step over the worst point). */
+export function tireSweepXs(p: Pick<Params, 'wheelDiameterIn' | 'wheelbaseIn' | 'frontTrackIn' | 'tireWidthIn' | 'steerLockDeg'>, step = 0.1): number[] {
+  const DEG = Math.PI / 180;
+  const lock = p.steerLockDeg * DEG, r = p.wheelDiameterIn / 2, kingX = p.wheelbaseIn, inner = p.frontTrackIn / 2 - p.tireWidthIn / 2;
+  const lo = kingX - r - inner, hi = kingX + r + inner;
+  const xs: number[] = [];
+  for (let x = lo; x <= hi + 1e-9; x += step) xs.push(x);
+  for (const a of [-lock, lock]) for (const u of [-r, r]) { const x = kingX + u * Math.cos(a) - inner * Math.sin(a); xs.push(x, x + 1e-6, x - 1e-6); }
+  return xs;
+}
+
+const taperCache = new Map<string, BowTaper>();
+
+/**
+ * The bow taper (D-66), DERIVED from the swing of the front wheels. The hull's outer half width goes from `bodyWidthIn / 2` at `bowTaperStartIn` to `bowWidthIn / 2` at the bow bulkhead in one
+ * smootherstep S (curvature-continuous, no kink), and is parallel after it reaches the bow width. Where the S ends is the free choice: ending it LATER makes it gentler but the body is wider
+ * where the front tire's inner rear corner sweeps in at full lock. So `x1` is the LATEST end (capped at the bulkhead) that still leaves the tire `steerClearIn + bowTaperSlackIn` off the
+ * body over the whole +-lock sweep (bisection on the real tire sweep). If even the shortest S cannot clear, `clears` is false and `validateParams` says to narrow the bow.
+ */
+export function bowTaper(p: Params): BowTaper {
+  const key = [p.bodyWidthIn, p.bowWidthIn, p.bowTaperStartIn, p.bowTaperSlackIn, p.frontTrackIn, p.tireWidthIn, p.wheelDiameterIn, p.wheelbaseIn, p.steerLockDeg, p.steerClearIn, p.frontOverhangIn, p.bowBulkheadThickIn].join('|');
+  const hit = taperCache.get(key);
+  if (hit) return hit;
+  const xBulk = bowBulkhead(p).xFlatEnd;
+  const bodyHalf = p.bodyWidthIn / 2;
+  const turn = Math.max(0, (p.bodyWidthIn - p.bowWidthIn) / 2);
+  const x0 = Math.min(p.bowTaperStartIn, xBulk - 1);
+  let out: BowTaper;
+  if (turn < 1e-9) {
+    out = { x0, x1: xBulk, turnIn: 0, minRadiusIn: Infinity, clears: true };
+  } else {
+    const edge = tireSweepInnerEdge(p);
+    const need = p.steerClearIn + p.bowTaperSlackIn;
+    // Required turn-in at x: how far the body must have drawn in so the tire face (the nearest approach over the sweep) is `need` away.
+    const req: [number, number][] = [];
+    for (const x of tireSweepXs(p)) { if (x > bowBulkhead(p).xTip + 1e-9) continue; const e = edge(x); if (Number.isFinite(e)) req.push([x, bodyHalf - (e - need)]); }
+    const okAt = (x1: number): boolean => req.every(([x, t]) => t <= turn * smootherstep((x - x0) / Math.max(1e-6, x1 - x0)) + 1e-9);
+    const shortest = x0 + 2;
+    let x1: number;
+    let clears = true;
+    if (okAt(xBulk)) x1 = xBulk;
+    else if (!okAt(shortest)) { x1 = shortest; clears = false; }
+    else { let lo = shortest, hi = xBulk; for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (okAt(mid)) lo = mid; else hi = mid; } x1 = lo; }
+    // Round DOWN to 1/4 in so the pattern has a clean number (the slack covers it).
+    x1 = Math.max(shortest, Math.floor(x1 * 4) / 4);
+    out = { x0, x1, turnIn: turn, minRadiusIn: ((x1 - x0) * (x1 - x0)) / (SMOOTHERSTEP_MAX_CURVATURE * turn), clears };
+  }
+  if (taperCache.size > 40) taperCache.clear();
+  taperCache.set(key, out);
+  return out;
+}
+
+/** Turn-in per side of the hull's outer face at x for a taper (D-66): 0 behind `x0`, `turnIn` from `x1` on, a smootherstep between. */
+export const taperTurnIn = (t: BowTaper, x: number): number => t.turnIn * smootherstep((x - t.x0) / Math.max(1e-6, t.x1 - t.x0));
+
+/** How far the hull's outer face has turned in at x, per side (D-66; the plan curve read by the layout, body, frame and front axle). */
 export function bowTurnInAt(p: Params, x: number): number {
-  const x1 = bowBulkhead(p).xFlatEnd;
-  const x0 = x1 - p.bowTurnLenIn;
-  const u = Math.max(0, Math.min(1, (x - x0) / Math.max(1e-6, x1 - x0)));
-  return p.bowTurnInIn * u * u * (3 - 2 * u);
+  return taperTurnIn(bowTaper(p), x);
 }
 
 /** Actual ply thickness of a bent lamination `t` thick glued from plies of about `ply`. */
@@ -2015,17 +2111,13 @@ export function steerGeometry(p: Params) {
   const deckBot = p.deckHeightIn - p.deckPlyIn;
   // Tire vs body at full lock: the inner face of the tire (a plan rectangle 2r long, `tw` wide) swings toward the side of the body, whose outer half width is `bodyHalf` less the bow
   // turn-in at that x (D-57). Sampled along the inner face, both directions of lock; the rear corner governs, 10 in behind the axle where the turn-in has not started (D-58).
-  const bodyHalfAt = (x: number) => bodyHalf - bowTurnInAt(p, x);
+  const taper = bowTaper(p);
+  const bodyHalfAt = (x: number) => bodyHalf - taperTurnIn(taper, x);
+  // The body is the derived taper (D-66); the question "what track would this body need" holds the body fixed and moves the tire. The face is swept through the whole lock range.
   const clearAtTrack = (track: number) => {
-    const inner = track / 2 - tw / 2;
+    const edge = tireSweepInnerEdge({ ...p, frontTrackIn: track });
     let m = Infinity;
-    for (const a of [lock, -lock]) {
-      for (let i = 0; i <= 40; i++) {
-        const u = -r + (2 * r * i) / 40;
-        const x = kingX + u * Math.cos(a) - inner * Math.sin(a), y = u * Math.sin(a) + inner * Math.cos(a);
-        m = Math.min(m, Math.abs(y) - bodyHalfAt(x));
-      }
-    }
+    for (const x of tireSweepXs({ ...p, frontTrackIn: track }, 0.1)) { if (x > bowBulkhead(p).xTip + 1e-9) continue; const e = edge(x); if (Number.isFinite(e)) m = Math.min(m, e - bodyHalfAt(x)); }
     return m;
   };
   const clearAtLock = clearAtTrack(trk);
@@ -2207,15 +2299,18 @@ export function validateParams(input: Params): ParamIssue[] {
     warn(['bowBulkheadHeightIn', 'handleBowCrownIn', 'sideHeightBowIn'], 'The bow bulkhead corners (its peak less the handlebow crown it echoes, 3c-5) are meant to be at least as high as the side tops at the bow, so the sides end against it (D-57).');
   if (p.bowBulkheadHeightIn < p.liftSlotClearIn + p.liftSlotHeightIn + p.liftBarMinIn - 1e-9)
     err(['bowBulkheadHeightIn', 'liftSlotClearIn', 'liftSlotHeightIn'], `The bow bulkhead is too low for the lift hand-hold: it needs ${(p.liftSlotClearIn + p.liftSlotHeightIn + p.liftBarMinIn).toFixed(2)}" at the center (hand clearance + slot + oak above).`);
-  // Plan turn-in (D-57, D-62): each oak band of the sandwich side is cold-bent on the web; the smoothstep's tightest bend (6 x turn-in / length^2 curvature) must stay above the cold-bend limit of ONE band.
+  // Plan taper (D-66, D-62): each oak band of the sandwich side is cold-bent on the web; the S-curve's tightest bend must stay above the cold-bend limit of ONE band.
   const bandT = Math.max(0, (p.sideThicknessIn - p.panelPlyIn) / 2);
-  if (p.bowTurnInIn > 1e-9) {
-    const rMin = (p.bowTurnLenIn * p.bowTurnLenIn) / (6 * p.bowTurnInIn);
+  const taper = bowTaper(p);
+  if (taper.turnIn > 1e-9) {
     const lim = p.hullLamMinRadiusFactor * bandT;
-    if (rMin < lim - 1e-9)
-      err(['bowTurnInIn', 'bowTurnLenIn', 'hullLamMinRadiusFactor'], `The bow turn-in bends the chine and gunwale bands to a ${rMin.toFixed(1)}" radius; a ${bandT.toFixed(3)}" band cold-bends to ${lim.toFixed(1)}" at best: lengthen the turn-in or reduce it.`);
-    if (p.bowTurnInIn * 2 > p.bodyWidthIn - 12)
-      err(['bowTurnInIn', 'bodyWidthIn'], 'The bow turn-in would pinch the nose below 12" wide.');
+    if (taper.minRadiusIn < lim - 1e-9)
+      err(['bowWidthIn', 'bowTaperStartIn', 'hullLamMinRadiusFactor'], `The bow taper bends the chine and gunwale bands to a ${taper.minRadiusIn.toFixed(1)}" radius; a ${bandT.toFixed(3)}" band cold-bends to ${lim.toFixed(1)}" at best: start the taper earlier or narrow the bow less.`);
+    if (!taper.clears)
+      err(['bowWidthIn', 'bowTaperStartIn', 'frontTrackIn', 'steerLockDeg', 'steerClearIn'], `Even the shortest S-curve from x = ${taper.x0}" to the bow cannot keep the front tires ${p.steerClearIn}" clear of the body at ${p.steerLockDeg}° lock: start the taper earlier, narrow the bow, widen the front track or reduce the lock.`);
+    const inside = p.bowWidthIn - 2 * p.sideThicknessIn;
+    if (inside < footNeed)
+      err(['bowWidthIn', 'riderStatureIn', 'bootAllowanceIn'], `The bow is only ${inside.toFixed(1)}" wide inside; the rider's feet need ≥ ${footNeed.toFixed(1)}" there. Widen the bow.`);
   }
   // Sandwich sides (D-61, D-62): the oak band on each face of the web must be a real strip, and the inner chine band must keep some height above the deck gap.
   {
@@ -2244,8 +2339,8 @@ export function validateParams(input: Params): ParamIssue[] {
     err(['wheelbaseIn', 'frontOverhangIn'], 'The front axle runs onto the bow bulkhead: lengthen the front overhang.');
   {
     // The steering chains (D-58): the beam eye must lie between the kingpin zone and the clamp plates (the anchor eye pulls in by itself on a narrow body, layout.ts).
-    if (p.bodyWidthIn - 2 * p.bowTurnInIn < 13)
-      err(['bodyWidthIn', 'bowTurnInIn'], `The bow turn-in pinches the nose to ${(p.bodyWidthIn - 2 * p.bowTurnInIn).toFixed(1)}" at the bulkhead; it needs 13" for the hand-hold, the foot brace and the tongue.`);
+    if (Math.min(p.bodyWidthIn, p.bowWidthIn) < 13)
+      err(['bodyWidthIn', 'bowWidthIn'], `The bow is only ${Math.min(p.bodyWidthIn, p.bowWidthIn).toFixed(1)}" wide at the bulkhead; it needs 13" for the hand-hold, the foot brace and the tongue.`);
     if (p.steerChainBeamYIn < p.kingThrustOdIn / 2 + 1 || p.steerChainBeamYIn + 1.1 > (p.frontTrackIn - p.hubLengthIn - 0.25) / 2)
       err(['steerChainBeamYIn', 'frontTrackIn'], 'The steering chain eye in the axle beam must lie between the kingpin disc and the end of the beam (room for its 2" washer).');
     if (p.tongueHeadWidthIn / 2 < p.tongueBoltOffsetIn + p.tongueBoltDiaIn / 2 + 0.75)
@@ -2287,9 +2382,11 @@ export function validateParams(input: Params): ParamIssue[] {
   {
     const beamLen = Math.max(1, p.rearTrackIn - p.hubLengthIn - 0.25);
     const clampInner = Math.min(beamLen / 2 - 0.25, p.rearTrackIn / 2 - p.tireWidthIn / 2) - p.clampPlateWidthIn;
-    if (p.bodyWidthIn / 2 > clampInner + 1e-6)
-      err(['bodyWidthIn', 'rearTrackIn', 'clampPlateWidthIn'],
-        `The rails/sides reach ${(p.bodyWidthIn / 2).toFixed(2)}" off center but the rear U-bolt plates start at ${clampInner.toFixed(2)}"; narrow the body or widen the track.`);
+    // D-66: the plate may run under the outer part of the rail (the rail's relief notch is cut over the plate), but not past the rail's inner face where the axle hanger stands.
+    const railInner = p.bodyWidthIn / 2 - p.railThicknessIn;
+    if (railInner > clampInner + 1e-6)
+      err(['bodyWidthIn', 'rearTrackIn', 'clampPlateWidthIn', 'railThicknessIn'],
+        `The rear U-bolt plates start at ${clampInner.toFixed(2)}" off center but the rails' inner faces (where the axle hangers stand) are at ${railInner.toFixed(2)}"; widen the track or narrow the plates.`);
   }
 
   // Truck.

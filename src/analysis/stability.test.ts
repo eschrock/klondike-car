@@ -18,11 +18,11 @@ import { runChecks, type AnalysisCheck } from './index';
 import { contactsAt, contactsWorstTip } from './geometry';
 import { liftPull, pitchForward, pullPoint, rearNormalNoseDown, slideBeforeTip, tipBackAngle, tipLock, tipStraight, turnRadius } from './stability';
 import { cornerWeightLb } from './bump';
-import { PRE_D60 } from '../test-fixtures';
+import { PRE_D60, PRE_D66 } from '../test-fixtures';
 
 const DEG = 180 / Math.PI;
 const RAD = Math.PI / 180;
-const defaults = { ...defaultParams(), ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5, clampPlateOuterWidthIn: 1.5 } // the 3c-3 hand-calc fixture: the 35.5 in tracks, 3/4 in hangers and 1 1/2 in clamp plates (D-58 narrowed the tracks and thickened them; the new defaults are tested in track-d58.test.ts)
+const defaults = { ...defaultParams(), ...PRE_D66, ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5, clampPlateOuterWidthIn: 1.5 } // the 3c-3 hand-calc fixture: the 35.5 in tracks, 3/4 in hangers and 1 1/2 in clamp plates (D-58 narrowed the tracks and thickened them; the new defaults are tested in track-d58.test.ts)
 const mkCtx = (q: Partial<Params> = {}): Ctx => {
   const p = resolveParams({ ...defaults, ...q } as Params);
   return makeContext(p, buildModel(p, { rider: 'goal', cargo: true }), buildModel(p, { rider: 'none', cargo: false, seat: 'stowed' }));
@@ -73,11 +73,11 @@ describe('tip-straight (worst steer) and tip-lock (D-56)', () => {
       expect(byId('tip-straight').cases![name]!.value).toBeCloseTo(worstTip(c.cg), 6);
       expect(byId('tip-lock').cases![name]!.value).toBeCloseTo(Math.min(tipDeg(c.cg, 20), tipDeg(c.cg, -20)), 6);
       expect(byId('tip-straight').cases![name]!.value).toBeLessThan(tipDeg(c.cg, 0) + 1e-9); // turning the axle always shortens the nearer side edge
-      expect(byId('tip-straight').cases![name]!.limit).toBe(40);
+      expect(byId('tip-straight').cases![name]!.limit).toBe(35); // D-67 (was 40): the same as the full-lock limit
       expect(byId('tip-lock').cases![name]!.limit).toBe(35);
     });
   }
-  it('the CG height is 14.3 in (operating) and 15.0 in (goal): the deck is only 8 in up, so the goal rider tips earlier but both pass the 40 degree limit by a wide margin', () => {
+  it('the CG height is 14.3 in (operating) and 15.0 in (goal): the deck is only 8 in up, so the goal rider tips earlier but both pass the 35 degree limit (D-67; 40 before) by a wide margin', () => {
     expect(Math.abs(ctx.loads.operating.cg[2] - 14.3)).toBeLessThan(0.5);
     expect(Math.abs(ctx.loads.goal.cg[2] - 15.0)).toBeLessThan(0.5);
     expect(byId('tip-straight').cases!.goal!.value).toBeLessThan(byId('tip-straight').cases!.operating!.value);
@@ -87,7 +87,7 @@ describe('tip-straight (worst steer) and tip-lock (D-56)', () => {
     expect(byId('tip-straight').cases!.operating!.value).toBeCloseTo(50.85, 0);
     expect(byId('tip-straight').cases!.goal!.value).toBeCloseTo(49.4, 0);
   });
-  it('the cargo case is the worse of its two placements: the payload piled at the nose end of the full-width bed (x about 31 in, 16.2 in up, 1.95 in left) tips at 44.7 degrees with the 200 lb payload (D-58) at the 35.5 in fixture tracks: it passes the 40 degree limit, and it never moves the rider status', () => {
+  it('the cargo case is the worse of its two placements: the payload piled at the nose end of the full-width bed (x about 31 in, 16.2 in up, 1.95 in left) tips at 44.7 degrees with the 200 lb payload (D-58) at the 35.5 in fixture tracks: it passes the 35 degree limit (D-67; it was 40), and it never moves the rider status', () => {
     const [aft, fore] = ctx.loads.cargoCases;
     expect(worstTip(fore.cg)).toBeLessThan(worstTip(aft.cg));
     expect(byId('tip-straight').cases!.cargo!.value).toBeCloseTo(Math.min(worstTip(aft.cg), worstTip(fore.cg)), 6);
@@ -100,14 +100,14 @@ describe('tip-straight (worst steer) and tip-lock (D-56)', () => {
     expect(edgeD(20, 0, 17.75, 44, 17.75)).toBeCloseTo(17.75, 12);
     expect(edgeD(20, 3, 17.75, 44, 17.75)).toBeCloseTo(14.75, 12);
   });
-  it('the rows read the params: a wider front track, a wider rear track and a lower deck all raise the tip angle; the tip limits are the locked 40 / 35 deg params', () => {
+  it('the rows read the params: a wider front track, a wider rear track and a lower deck all raise the tip angle; the tip limits are the locked 35 / 35 deg params (D-67: the straight limit was 40)', () => {
     const v = (q: Partial<Params>, id = 'tip-straight') => runChecks({ ...defaults, ...q }, { includeTruck: false }).find((c) => c.id === id)!.cases!.operating!.value;
     const base = v({});
     expect(v({ frontTrackIn: 40 })).toBeGreaterThan(base);
     expect(v({ rearTrackIn: 40 })).toBeGreaterThan(base);
     expect(v({ deckHeightIn: 7.5 })).toBeGreaterThan(base);
     expect(v({ steerLockDeg: 30 })).toBeLessThan(base); // more lock, a shorter side edge
-    expect(defaults.tipStraightMinDeg).toBe(40);
+    expect(defaults.tipStraightMinDeg).toBe(35); // D-67
     expect(defaults.tipLockMinDeg).toBe(35);
   });
   it('the dual-check wrappers carry the steering text', () => {

@@ -122,9 +122,9 @@ describe('real sled (D-6, D-23, D-54)', () => {
     // D-65 (Eric): the tongue is bolted on and stays; the 'bridle-off' configuration is gone. Transport mode = TRANSPORT_VIEW: brakes, lights, chocks and the seat pad off, handle parked, seat flat.
     expect(r.dims.removed.lengthIn).toBeLessThanOrEqual(r.dims.installed.lengthIn);
     // Pinned (defaults): installed 67.0 x 38.8 x 35.5 in (the flap no longer sticks out 3 in behind the transom: 68.8 long before D-65); Transport mode 66.9 long (the tongue sets the length) and 25.7 high
-    // (the parked handlebow rests just above the rear side top). Width = the front axle ends (34 1/2 in track + the 2.28 in hub and 1 in of axle beyond it each side).
+    // (the parked handlebow rests just above the rear side top). Width = the axle ends (30 in tracks, D-66 (34 1/2 in front track before) + the 2.28 in hub and 1 in of axle beyond it each side).
     expect(r.dims.installed.lengthIn).toBeCloseTo(67.0, 0);
-    expect(r.dims.installed.widthIn).toBeCloseTo(38.78, 1);
+    expect(r.dims.installed.widthIn).toBeCloseTo(34.28, 1); // D-66: 30 in front and rear tracks + the hubs and axle ends (38.78 at the 34 1/2 in front track)
     expect(r.dims.installed.heightIn).toBeCloseTo(35.5, 0);
     expect(r.dims.removed.lengthIn).toBeCloseTo(66.9, 0);
     expect(r.dims.removed.heightIn).toBeCloseTo(25.7, 0);

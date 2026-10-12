@@ -11,8 +11,10 @@ import { makeContext, type Ctx } from './context';
 import { axleHoleDetails, axleIsTube, axleSection, axleUltimate, axleWall, axleYield, type AxleLoads } from './axle';
 import { circleSection, tubeSection } from './beams';
 import { runChecks } from './index';
+import { PRE_D66 } from '../test-fixtures';
 
-const defaults = defaultParams();
+// D-66 changed the tracks, the load-height rule and the bow: this file's hand calculations are the D-58 design (PRE_D66); the D-66 numbers are in d66.test.ts
+const defaults = { ...defaultParams(), ...PRE_D66 } as Params;
 const solid = { ...defaults, axleWallIn: 0 } as Params;
 const mkCtx = (q: Partial<Params> = {}): Ctx => {
   const p = resolveParams({ ...defaults, ...q } as Params);

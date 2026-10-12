@@ -317,11 +317,17 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
   const ySlot: [number, number] = [yW - slotHalf, yW + slotHalf];
   const earOut = yOut - ySlot[1];
   const earIn = ySlot[0] - yFace;
+  // The slot is sawn deep enough for the tongue's nose to clear its end through the WHOLE swing (D-66): the nose end face is square to the board (tilted by the flap slope), so its top corner (on the
+  // pivot block) is the farthest forward; turn the four corners of the tongue + block stack about the pin from the applied pose to the released one and add the slot clearance to the farthest.
+  const stackCorners: V2[] = [[s0, -blockT], [s0, tf]].map(([sc, h]): V2 => [P[0] + sc * u[0] - h * v[0], P[1] + sc * u[1] - h * v[1]]);
+  let noseMaxX = -Infinity;
+  for (let k = 0; k <= 20; k++) for (const q of stackCorners) noseMaxX = Math.max(noseMaxX, rot2(q, H, -(k / 20) * theta)[0]);
+  const slotEndX = noseMaxX + p.brakePivotSlotClearIn;
   const pinDia = p.brakePivotPinDiaIn;
   const pivot = {
     dia: pinDia, len: earOut + (ySlot[1] - ySlot[0]) + PIN_BLIND_IN + PIN_STICKOUT_IN, yTongue: y.tongue, ySlot, earOut, earIn,
     zTongueTop: P[1] + blockT, zTongueBot: P[1] - tf, edgeTongueUp: blockT + hPin, edgeTongueDown: tf - hPin, edgeEarUp: zTop - H[1], edgeEarDown: H[1] - zArmBot,
-    slotEndX: xp + p.brakePivotEndIn + p.brakePivotSlotClearIn, blind: PIN_BLIND_IN,
+    slotEndX, blind: PIN_BLIND_IN,
   };
   const rail = { zb, zt, t: railT };
   const bd = p.brakeMountBoltDiaIn;
@@ -380,7 +386,9 @@ export function flapOutline(g: Pick<BrakeGeom, 'plan' | 'board'>): V2[] {
   const sides: Array<{ s: number; w: number }> = [];
   // stations along one side from the rear straight edge to the nose straight edge
   const sEdgeR = s1 - rr, sEdgeN = s0 + rn;
-  for (let i = 0; i <= N; i++) { const s = sEdgeR + ((sEdgeN - sEdgeR) * i) / N; sides.push({ s, w: flapHalfWidth(g, s) }); }
+  // The stations are even along the side PLUS the two where the flare starts and ends, so the outline has a vertex exactly where the tongue ends (the overlap boxes of D-66 then cut the tongue from the flare).
+  const stations = [...Array.from({ length: N + 1 }, (_, i) => sEdgeR + ((sEdgeN - sEdgeR) * i) / N), g.plan.sShoulder, g.plan.sFull].filter((s) => s <= sEdgeR + 1e-9 && s >= sEdgeN - 1e-9).sort((a, b) => b - a).filter((s, i, a) => i === 0 || Math.abs(s - a[i - 1]) > 1e-6);
+  for (const s of stations) sides.push({ s, w: flapHalfWidth(g, s) });
   const arc = (cx: number, cy: number, r: number, a0: number, a1: number, n = 6): V2[] => Array.from({ length: n + 1 }, (_, i) => { const a = a0 + ((a1 - a0) * i) / n; return [cx + r * Math.cos(a), cy + r * Math.sin(a)] as V2; });
   const pts: V2[] = [];
   const wR = flapHalfWidth(g, s1), wN = flapHalfWidth(g, s0);

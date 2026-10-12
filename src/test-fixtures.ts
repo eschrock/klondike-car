@@ -24,3 +24,12 @@ export const PRE_D60: Partial<Params> = {
   // D-62 (3c-7): the axle groove is the full tube diameter again (no 0.05 in proud) and the clamp bolts sit 0.625 in from the tube centerline, so the older hand calcs keep their geometry.
   axleProudIn: 0, clampLegGapIn: 0.25, clampPlateLengthIn: 0.8, clampPlateOuterWidthIn: 1.5, kingThrustThickIn: 0.5625, rollPadThickIn: 0.3125, beamRailClearIn: 0.4,
 };
+
+/**
+ * D-66 (matched 30 in tracks, the derived bow taper, the 10 in load-height rule, pads and chain eyes moved in) changed the numbers the 3c-3 hand-calc fixtures were built on. `PRE_D66` puts the
+ * D-58 design back for those tests: 32 in rear and 34 1/2 in front track, a 12 in load-height rule, the pads 11-1/2 in out (spread PRE_D66 BEFORE PRE_D60, which has the older 11 in), the chain eyes at 10.4 / 8.4 in, and the D-57 bow turn-in (1.25 in a side over the last 14 in:
+ * `bowWidthIn` 21.5 from x = 35; with these wide tracks the derived taper is not limited by the wheels, so it ends at the bulkhead, as the old smoothstep did). The D-66 defaults are tested in d66.test.ts and the rows' own files.
+ */
+export const PRE_D66: Partial<Params> = {
+  rearTrackIn: 32, frontTrackIn: 34.5, cargoCgHeightIn: 12, rollPadRadiusIn: 11.5, steerChainBeamYIn: 10.4, steerChainAnchorYIn: 8.4, bowWidthIn: 21.5, bowTaperStartIn: 35, bowTaperSlackIn: 0,
+};

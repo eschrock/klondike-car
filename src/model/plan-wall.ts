@@ -84,5 +84,5 @@ export function planWallGeometry(outline: Vec2[], t: number, yc: (x: number) => 
     const j = (i + 1) % n;
     indices.push(rim0 + i, rim0 + n + j, rim0 + n + i, rim0 + i, rim0 + j, rim0 + n + j);
   }
-  return { type: 'mesh', positions, indices, slabs: 1.25, thickness: t, profile: o, ...(grainFollowsTop ? { grainFollowsTop } : {}) };
+  return { type: 'mesh', positions, indices, slabs: 0.4, thickness: t, profile: o, ...(grainFollowsTop ? { grainFollowsTop } : {}) };
 }

@@ -367,7 +367,7 @@ const rounded5 = (x: number) => Math.round(x / 5) * 5;
 function cautionText(r: CargoRowTrend, c: CargoCapacity): string {
   switch (r.id) {
     case 'tip-straight':
-      return `At ${c.payloadLb} lb a tall load is close to tipping: keep heavy items low, with the center of weight within about ${n0(c.heightRule?.designIn ?? 12)} in of the deck.`;
+      return `At ${c.payloadLb} lb a tall load is close to tipping: keep heavy items low, with the center of weight within about ${n0(c.heightRule?.designIn ?? 10)} in of the deck.`;
     case 'slide-before-tip':
       return `At ${c.payloadLb} lb a fast, sharp turn is close to rolling it: keep heavy items low and turn gently.`;
     default:
@@ -394,7 +394,14 @@ export function cargoText(c: CargoCapacity): CargoText {
   const b = c.bed;
   lines.push(`The bed is flat once the seat back is flipped down and the cushions are in the box: ${n0(b.widthIn)} in wide all the way, ${n0(b.totalLengthIn)} in long out to the foot brace, and ${n0(b.heightIn)} in to the top of the sides at the low (bow) end (the sides rise toward the back). ${c.stow.applicable ? (c.stow.status === 'fail' ? 'The two cushions do NOT fit in the box.' : c.stow.status === 'marginal' ? 'The two cushions fit in the box, but only just.' : 'The two cushions lie flat in the box.') : ''}`.trim());
   if (c.heightRule)
-    lines.push(`Load-height rule: heavy things low, on the floor, strapped down. Keep the middle of the load under ${n0(c.heightRule.designIn)} in above the floor (it tips at about ${n0(c.heightRule.tipLimitIn)} in); above about ${n0(c.heightRule.slideLimitIn)} in a fast turn can tip it instead of skidding.`);
+    {
+      const { designIn, tipLimitIn, slideLimitIn } = c.heightRule;
+      // Name whichever limit comes first as the load gets taller (D-67: the slide-before-tip height is now the lower one).
+      const why = slideLimitIn <= tipLimitIn
+        ? `above about ${n0(slideLimitIn)} in a sharp turn can tip it instead of skidding, and about ${n0(tipLimitIn)} in is the tipping limit itself.`
+        : `it reaches the tipping limit at about ${n0(tipLimitIn)} in, and above about ${n0(slideLimitIn)} in a sharp turn can tip it instead of skidding.`;
+      lines.push(`Load-height rule: heavy things low, on the floor, strapped down. Keep the middle of the load under ${n0(designIn)} in above the floor; ${why}`);
+    }
   if (c.rearTraction !== null && c.rearTraction < 1)
     lines.push(`Parked nose-down on a steep hill with the full load, the rear brake flaps alone hold about ${n0(c.rearTraction * 100)}% of it; the pullers (or a chock) hold the rest.`);
   return { tone, headline, lines };

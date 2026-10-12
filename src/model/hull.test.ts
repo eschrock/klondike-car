@@ -35,8 +35,8 @@ const PATCHES: Record<string, Partial<Params>> = {
   wide26: { bodyWidthIn: 26 },
   narrow23: { bodyWidthIn: 23 },
   bulkhead3: { bowBulkheadThickIn: 3, frontOverhangIn: 8 },
-  turn0: { bowTurnInIn: 0 },
-  turn25: { bowTurnInIn: 2.5, bowTurnLenIn: 24 },
+  turn0: { bowWidthIn: 24 },
+  turn25: { bowWidthIn: 19, bowTaperStartIn: 14 },
   bigLiftSlot: { liftSlotLengthIn: 5, liftSlotHeightIn: 1.5 },
   signsOff: { showSideSigns: 0 },
   wideTire: { tireWidthIn: 4.5 },
@@ -177,7 +177,7 @@ describe('captured-ply sides, deck and rear transom (D-22, D-35, D-54)', () => {
     if (d.geometry.type !== 'extrusion') return;
     expect(d.geometry.holes ?? []).toHaveLength(0);
     const front = d.geometry.outline.filter((q) => q[0] > L.xFlatEnd - 1e-9);
-    expect(Math.max(...front.map((q) => Math.abs(q[1])))).toBeCloseTo(L.hwC + L.deckEdge - defaults.bowTurnInIn, 6); // narrower at the bulkhead
+    expect(Math.max(...front.map((q) => Math.abs(q[1])))).toBeCloseTo(L.hwC + L.deckEdge - L.taper.turnIn, 6); // narrower at the bulkhead (D-66: 18.5 in outside)
     expect(d.edges).toBe('captured');
   });
   it('the rear transom spans the full outside width, is as tall as the rear side plus a crown, and wraps the side ends', () => {
@@ -229,7 +229,7 @@ describe('the plan-curved sheer sides (D-54, D-57)', () => {
     expect(gun.stock!.l).toBeGreaterThan(58); // the 59 in side along its sheer
     expect(chine.fab).toBe('bentlam');
     expect(chine.kind).toBe('bentlam');
-    const rMin = (defaults.bowTurnLenIn ** 2) / (6 * defaults.bowTurnInIn);
+    const rMin = L.taper.minRadiusIn; // D-66: the derived taper's tightest bend (31 in)
     expect(rMin).toBeGreaterThan(defaults.hullLamMinRadiusFactor * L.sideBand);
   });
   it('the gunwale is a constant 1.5 in band under the sheer (every vertical pair of vertices on the mesh), top at 14 in at the rear and 4 in at the bulkhead', () => {

@@ -261,8 +261,8 @@ export function lashPositions(p: Params, L: Layout, n: number): number[] {
   const margin = LASH_SIZE[0] / 2 + 0.25;
   const lo = L.xRear + L.transom + L.rearLane + margin + 0.6; // clear of the transom and the corner backers (D-43); the doubler is turned to the sheer's slope (up to ~20 degrees at the rear, D-57), so its corner reaches farther
   // D-54: the whole straight side is available, turned to the sled slope; the plates stop short of the end of the sides.
-  // D-57: the plates stay on the straight part of the side (the hull turns in toward the bow after `bulkhead.x0 - bowTurnLenIn`).
-  const hi = Math.min(L.xSideEnd - 2 * margin, L.bulkhead.x0 - p.bowTurnLenIn - margin);
+  // D-57, D-66: the plates stay on the straight part of the side (the hull starts to draw in at `L.taper.x0`).
+  const hi = Math.min(L.xSideEnd - 2 * margin, L.taper.x0 - margin);
   const gripLen = p.grabBoardLengthIn; // the grab board (D-57)
   const gx0 = p.seatXIn - GRIP_BEHIND_IN;
   const flagClear = L.xRear + L.transom + L.rearLane + p.flagTubeOdIn + 0.75 + margin + 0.6; // the flag tube and its holding block stand in the left rear corner (D-57)
@@ -272,7 +272,7 @@ export function lashPositions(p: Params, L: Layout, n: number): number[] {
   ];
   // A rear box that stands above the gunwale occupies the gunwale line along its length.
   const st = storageGeometry(p, L);
-  if (p.storageLocation === STORAGE_LOCATION.rearOverAxle && st.zTop > sideTopAt(L, st.x1) - L.railBand - 0.01) blocked.push([st.x0 - margin, st.x1 + margin]);
+  if (st.zTop > sideTopAt(L, st.x1) - L.railBand - 0.01) blocked.push([st.x0 - margin, st.x1 + margin]);
   const cands: number[] = [];
   for (let x = lo; x <= hi + 1e-9; x += 0.5) if (!blocked.some(([a, b]) => x > a && x < b)) cands.push(x);
   const chosen: number[] = [];

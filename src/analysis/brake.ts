@@ -328,6 +328,12 @@ function pivotEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
   const penBS = 1.25 - pl.blockT - 0.1;
   const wBS = screwWithdrawal(p, 0.19, penBS);
   const shareBlock = (pl.blockT / (b.thick + pl.blockT)) * R;
+  // D-66: the slot is sawn through the arm, so the outboard ear is a free-standing oak plate (earOut thick, armT deep at its outer face) that hangs from the bridge ahead of the slot end:
+  // the whole pin reaction Ro (taken in any direction, so the larger of its two components is not assumed) acts `slotEndX - pin x` from the root.
+  const earLever = Math.max(0, pv.slotEndX - g.H[0]);
+  const earS = (pv.earOut * g.knee.armT ** 2) / 6;
+  const earBend = (Ro * earLever) / earS;
+  const earShear = (1.5 * Ro) / (pv.earOut * g.knee.armT);
   const ds: Detail[] = [
     detail('pivot pin double shear (316)', shear, 'psi', a.boltShear, '<='),
     detail('pivot pin bending between the ears (316)', bend, 'psi', a.bolt, '<='),
@@ -340,6 +346,8 @@ function pivotEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
     detail('edge distance, pin center to the nearer edge of the ear (pin diameters)', eE / d, '×D', 1.5, '>='),
     detail('end distance, pin center past the tongue end and the ear rear face (pin diameters)', endD / d, '×D', 1.5, '>='),
     detail('pivot block screws, withdrawal each at the block share of the pin load (NDS, wet)', shareBlock / nBS, 'lbf', wBS, '<='),
+    detail('outboard ear bending at the bridge (D-66: the ear is a cantilever from the solid wood ahead of the slot, the pin load at the pin, oak)', earBend, 'psi', al.oakBend, '<='),
+    detail('outboard ear shear at the bridge (oak)', earShear, 'psi', al.oakShear, '<='),
   ];
   const how = `${loadText(L, g)}. D-65 pull-pin pivot: a ${f(d, 3)}" 316 clevis pin through the knee's two ears and the flap tongue (${f(wt, 2)}" wide, flap ${f(b.thick, 2)}" + pivot block ${f(pl.blockT, 2)}", the slot ${f(clr, 3)}" wider each side), held by a hitch-pin clip. The pin carries the whole ${f(R)} lbf in DOUBLE shear: ${f(R)} / (2 × ${f(circleA(d), 4)} in²) = ${f(shear, 0)} psi (allowable ${f(a.boltShear, 0)}). It is held by the outboard ear (${f(pv.earOut, 2)}" thick) and ${f(pv.blind, 2)}" of the inboard ear (blind hole): reactions ${f(Ro)} and ${f(Ri)} lbf at arms ${f(armO, 2)}" and ${f(armI, 2)}" from the tongue's center, so M = ${f(Mpin)} lbf·in on Z = π d³/32 = ${f(Zpin, 4)} in³ = ${f(bend, 0)} psi (allowable ${f(a.bolt, 0)}). Bearing: ${f(bearT, 0)} psi on the tongue (${f(wt, 2)}" × ${f(d, 3)}"), ${f(bearO, 0)} psi on the outboard ear, ${f(bearI, 0)} psi on the inboard ear (allowable ${f(al.oakDowel, 0)}). The pin sits ${f(pv.edgeTongueUp, 2)}" below the top of the tongue stack and ${f(pv.edgeTongueDown, 2)}" above its underside (${f(eT / d, 1)} pin diameters), ${f(pv.edgeEarUp, 2)}" below the knee top and ${f(pv.edgeEarDown, 2)}" above the arm bottom, and ${f(endD, 2)}" from the tongue end and the ears' rear faces; tear-out is checked as oak shear on two planes of the nearer edge. The pivot block's ${nBS} #10 × 1-1/4" screws (${f(penBS, 2)}" of thread in the flap, ${f(wBS)} lbf each) carry its ${f(shareBlock)} lbf share if the glue lets go.`;
   return governing(ds, how);
@@ -626,6 +634,8 @@ export interface BrakeSweepResult {
   groundMinZ: number;
   /** Least gap between the flap's front face and the knee's rear face over the swing (in). */
   shoulderGapIn: number;
+  /** Least gap (in) between the moving flap group and the slotted knee over the stroke: the tongue and block in the slot (it is the slot clearance, D-66). */
+  kneeGapIn: number;
   poses: number;
 }
 
@@ -636,7 +646,7 @@ const BIG = 99;
 export function brakeSweep(ctx: Ctx, steps = 8): BrakeSweepResult {
   const { p } = ctx;
   const g = brakeBundle(ctx).g;
-  if (!g.ok) return { minClearanceIn: BIG, moving: '–', other: '–', pose: 0, padGapReleasedIn: BIG, padGapAppliedIn: BIG, boardTireGapIn: BIG, groundMinZ: BIG, shoulderGapIn: BIG, poses: 0 };
+  if (!g.ok) return { minClearanceIn: BIG, moving: '–', other: '–', pose: 0, padGapReleasedIn: BIG, padGapAppliedIn: BIG, boardTireGapIn: BIG, groundMinZ: BIG, shoulderGapIn: BIG, kneeGapIn: BIG, poses: 0 };
   const key = JSON.stringify(Object.fromEntries(Object.entries(p).filter(([k]) => !RIDER_KEYS.includes(k)))) + `|${steps}`;
   const hit = sweepCache.get(key);
   if (hit) return hit;
@@ -644,7 +654,8 @@ export function brakeSweep(ctx: Ctx, steps = 8): BrakeSweepResult {
   const fixedBrake = buildBrakeAt(bctx, 0, false).filter((x) => /^brake-(knee|backer)-/.test(x.id));
   const obstacles = [...ctx.parts.filter((x) => !x.payload && x.group !== 'reference' && !/^brake-/.test(x.id) && !/^wheel-R[LR]$/.test(x.id)), ...fixedBrake]
     .flatMap((x) => partOBBs(x).map((o) => ({ id: x.id, o, rad: Math.hypot(...o.half) })));
-  const intended = (m: string, o: string) => /^brake-(knee|backer)-/.test(o) && /^brake-(flap|shoe|pad|cord|pivot-block|foot-tread)-/.test(m);
+  // D-66: the slotted knee is real geometry now (its slot is open, the tongue and pivot block sit in it), so only the backer (a glued face on the far side of the rail) is exempt; the knee is MEASURED.
+  const intended = (m: string, o: string) => /^brake-backer-/.test(o) && /^brake-(flap|shoe|pad|cord|pivot-block|foot-tread)-/.test(m);
   // 2-D shapes of the flap group in the applied pose
   const b = g.board;
   const tf = b.thick;
@@ -653,11 +664,11 @@ export function brakeSweep(ctx: Ctx, steps = 8): BrakeSweepResult {
   const shoulderLow = corner(g.plan.sShoulder, tf); // the underside corner where the flap's flare starts, just behind the knee's rear face
   const r = g.r;
   let best = { minClearanceIn: BIG, moving: '–', other: '–', pose: 0 };
-  let padRel = BIG, padApp = BIG, groundRel = BIG, boardTire = BIG, shoulderGap = BIG;
+  let padRel = BIG, padApp = BIG, groundRel = BIG, boardTire = BIG, shoulderGap = BIG, kneeGap = BIG;
   for (let i = 0; i <= steps; i++) {
     const s = i / steps;
     const moving = buildBrakeAt(bctx, s, true);
-    const mob = moving.map((x) => { const o = partOBB(x); return { id: x.id, part: x, o, rad: Math.hypot(...o.half) }; });
+    const mob = moving.map((x) => ({ id: x.id, part: x, boxes: partOBBs(x).map((o) => ({ o, rad: Math.hypot(...o.half) })) })); // tight box lists (the flap's plan outline, D-66: the slotted knee is measured, not skipped)
     const at = (q: V2) => atPose(g, s, q);
     for (const poly of [boardPoly, g.shoe.outline]) {
       const pp = poly.map(at);
@@ -674,14 +685,18 @@ export function brakeSweep(ctx: Ctx, steps = 8): BrakeSweepResult {
       }
       for (const ob of obstacles) {
         if (intended(m.id, ob.id)) continue;
-        const d = Math.hypot(m.o.center[0] - ob.o.center[0], m.o.center[1] - ob.o.center[1], m.o.center[2] - ob.o.center[2]) - m.rad - ob.rad;
-        if (d > best.minClearanceIn) continue;
-        const clr = -obbOverlap(m.o, ob.o);
-        if (clr < best.minClearanceIn) best = { minClearanceIn: clr, moving: m.id, other: ob.id, pose: s };
+        for (const mb of m.boxes) {
+          const d = Math.hypot(mb.o.center[0] - ob.o.center[0], mb.o.center[1] - ob.o.center[1], mb.o.center[2] - ob.o.center[2]) - mb.rad - ob.rad;
+          const isKnee = /^brake-knee-/.test(ob.id);
+          if (d > (isKnee ? kneeGap : best.minClearanceIn)) continue;
+          const clr = -obbOverlap(mb.o, ob.o);
+          if (isKnee) { kneeGap = Math.min(kneeGap, clr); continue; } // the tongue and block run in the knee's slot: judged against the slot clearance, not the 0.1 in rule
+          if (clr < best.minClearanceIn) best = { minClearanceIn: clr, moving: m.id, other: ob.id, pose: s };
+        }
       }
     }
   }
-  const res: BrakeSweepResult = { ...best, padGapReleasedIn: padRel, padGapAppliedIn: padApp, boardTireGapIn: boardTire, groundMinZ: groundRel, shoulderGapIn: shoulderGap, poses: steps + 1 };
+  const res: BrakeSweepResult = { ...best, padGapReleasedIn: padRel, padGapAppliedIn: padApp, boardTireGapIn: boardTire, groundMinZ: groundRel, shoulderGapIn: shoulderGap, kneeGapIn: kneeGap, poses: steps + 1 };
   if (sweepCache.size > 12) sweepCache.clear();
   sweepCache.set(key, res);
   return res;
@@ -711,6 +726,7 @@ export function brakeClearance(ctx: Ctx, sweep: BrakeSweepResult = brakeSweep(ct
     detail('lowest moving part (flap, shoe block, pad), released, vs minimum ground clearance', sweep.groundMinZ, 'in', p.minGroundClearanceIn, '>='),
     detail('knee bottom (the rail bottom) vs minimum ground clearance', kneeLow, 'in', p.minGroundClearanceIn, '>='),
     detail('flap flare shoulder (where it widens past the tongue) to the knee rear face over the swing', sweep.shoulderGapIn, 'in', 0.03, '>='),
+    detail('tongue and pivot block in the knee slot: least gap to the slot walls and its end over the whole swing (D-66: the slot is real; it is the slot clearance, 1/16 in)', sweep.kneeGapIn, 'in', Math.max(0.02, 0.5 * p.brakePivotSlotClearIn), '>='), // half the slot clearance: it must never close up (a grain of sand is OK, a touch is not)
     detail('pivot pin ahead of the tire front (a pin behind it would put the knee in the tire)', g.xh - g.r, 'in', 0.25, '>='),
     detail(`sign zone on the side (x up to ${SIGN_X_MAX_IN} in): the knee starts ahead of it`, g.knee.x0 - SIGN_X_MAX_IN, 'in', 0, '>='),
     detail('chock height under the knee (half an inch to spare)', g.knee.zBot - g.chock.height, 'in', 0.5, '>='),

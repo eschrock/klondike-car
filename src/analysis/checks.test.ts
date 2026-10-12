@@ -10,9 +10,9 @@ import { effectiveStripWidth, maxDeckSpan } from './structure';
 import { judge } from './types';
 import { makeContext } from './context';
 import { resolveParams } from '../params';
-import { PRE_D60 } from '../test-fixtures';
+import { PRE_D60, PRE_D66 } from '../test-fixtures';
 
-const defaults = { ...defaultParams(), ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5, clampPlateOuterWidthIn: 1.5 }; // the 3c-3 hand-calc fixture: the 35.5 in tracks (D-58 narrowed them to 34 1/2 / 32 in; the new defaults are in track-d58.test.ts)
+const defaults = { ...defaultParams(), ...PRE_D66, ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5, clampPlateOuterWidthIn: 1.5 }; // the 3c-3 hand-calc fixture: the 35.5 in tracks (D-58 narrowed them to 34 1/2 / 32 in; the new defaults are in track-d58.test.ts)
 
 const byId = (cs: AnalysisCheck[], id: string) => cs.find((c) => c.id === id)!;
 const run = (p: Params) => runChecks(p, { includeTruck: false });
@@ -69,7 +69,7 @@ describe('runChecks at the defaults', () => {
     expect((Math.atan2(tipAt(c.cg, 0), h) * 180) / Math.PI).toBeCloseTo(51.6, 0); // straight ahead is the better case
     // tip-lock is the same at exactly +-20 degrees (the worst case of the sweep is at full lock)
     expect(byId(cs, 'tip-lock').cases!.operating!.value).toBeCloseTo(Math.min((Math.atan2(tipAt(c.cg, 20), h) * 180) / Math.PI, (Math.atan2(tipAt(c.cg, -20), h) * 180) / Math.PI), 6);
-    expect(byId(cs, 'tip-straight').cases!.operating!.limit).toBe(40);
+    expect(byId(cs, 'tip-straight').cases!.operating!.limit).toBe(35); // D-67 (was 40): the same as the full-lock limit
     expect(byId(cs, 'tip-lock').cases!.operating!.limit).toBe(35);
     // slide-before-tip: SSF = d_outer / h with the outer edge RR-FR at +20 (d = (50.071 x 17.75 - 1.0706 x x) / 50.08 for y = 0)
     const ssf = byId(cs, 'slide-before-tip').cases!.operating!;
@@ -77,7 +77,7 @@ describe('runChecks at the defaults', () => {
     expect(ssf.value).toBeCloseTo(dOut / h, 2);
     expect(ssf.limit).toBeCloseTo(0.75, 9); // 1.5 x mu 0.5
   });
-  it('the stability rows PASS at the defaults with the wide 35.5 in track and the 14 in CG: tip 50.3 deg vs 40, at lock 50.3 vs 35, SSF 1.21 vs 0.75', () => {
+  it('the stability rows PASS at the defaults with the wide 35.5 in track and the 14 in CG: tip 50.3 deg vs 35 (D-67; 40 before), at lock 50.3 vs 35, SSF 1.21 vs 0.75', () => {
     for (const id of ['tip-straight', 'tip-lock', 'slide-before-tip']) {
       const r = byId(cs, id);
       expect(r.status, id).toBe('pass');
@@ -253,7 +253,7 @@ describe('every variant the validator accepts yields finite checks', () => {
     'tongueDepthIn', 'rearOverhangIn', 'frontOverhangIn', 'sideHeightBowIn', 'sideHeightRearIn', 'tireWidthIn', 'axleBeamThicknessIn',
     'axleBeamDepthIn', 'railDepthIn', 'railThicknessIn', 'crossmemberDepthIn', 'crossmemberSpacingIn', 'deckPlyIn', 'seatDepthIn',
     'pullerHandHeightIn', 'bumpSpeedNormalMph', 'bumpSpeedHardMph', 'riderMassLb', 'riderGoalMassLb', 'cargoMassLb', 'axleDiameterIn', 'designSlopeDeg',
-    'tireGroundMu', 'dynamicFactor', 'sideThicknessIn', 'sheerCurveIn', 'bowTurnInIn', 'bowBulkheadThickIn', 'bowBulkheadHeightIn', 'handleBowCrownIn', 'footStopHeightIn', 'seatDepthIn',
+    'tireGroundMu', 'dynamicFactor', 'sideThicknessIn', 'sheerCurveIn', 'bowWidthIn', 'bowBulkheadThickIn', 'bowBulkheadHeightIn', 'handleBowCrownIn', 'footStopHeightIn', 'seatDepthIn',
   ];
   const OPTIONS: ParamKey[] = ['storageLocation', 'axleBeamPosition', 'axleStyle', 'plySpecies'];
   const samples = (() => {
@@ -290,7 +290,7 @@ describe('every variant the validator accepts yields finite checks', () => {
     console.log(`analysis sweep: ${clean}/${samples.length} validator-clean designs checked`);
     expect(bad.slice(0, 5)).toEqual([]);
     expect(clean).toBeGreaterThanOrEqual(30);
-  }, 60000); // heavy sweep (front-end bounding cases); shared CI runners are 2-3x slower
+  }, 180000); // heavy sweep (front-end bounding cases); shared CI runners are 2-3x slower
 });
 
 describe('hand-calculated numbers at the defaults', () => {

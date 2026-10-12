@@ -7,17 +7,18 @@ import { defaultParams, resolveParams, steerGeometry, validateParams, type Param
 import { buildModel } from '../model';
 import { checkTruckFit } from '../truck/fit';
 import { runChecks } from './index';
-import { PRE_D60 } from '../test-fixtures';
+import { PRE_D60, PRE_D66 } from '../test-fixtures';
 
 const OLD = { frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5, clampPlateOuterWidthIn: 1.5 };
-const run = (q: Partial<Params>) => runChecks({ ...defaultParams(), ...PRE_D60, ...q } as Params, { includeTruck: false });
+// D-66 moved the defaults on (30 in tracks, the derived taper); this file records D-58, so its "new" design is the D-58 default restored with PRE_D66. The D-66 numbers are in d66.test.ts.
+const run = (q: Partial<Params>) => runChecks({ ...defaultParams(), ...PRE_D66, ...PRE_D60, ...q } as Params, { includeTruck: false });
 const row = (cs: ReturnType<typeof run>, id: string) => cs.find((c) => c.id === id)!;
 const nw = run({});
 const old = run(OLD);
 
 describe('the D-58 tracks', () => {
   it('front 34 1/2 in, rear 32 in; the front is the least track (rounded to 1/8 in) that keeps the tire 3/4 in off the body at the 20 degree lock', () => {
-    const p = { ...defaultParams(), ...PRE_D60 } as Params;
+    const p = { ...defaultParams(), ...PRE_D66, ...PRE_D60 } as Params;
     expect(p.frontTrackIn).toBe(34.5);
     expect(p.rearTrackIn).toBe(32);
     const sg = steerGeometry(p);
@@ -32,7 +33,7 @@ describe('the D-58 tracks', () => {
   });
 });
 
-describe('tip angles before (35.5 / 35.5 in) and after (34 1/2 / 32 in), 40 degree limit', () => {
+describe('tip angles before (35.5 / 35.5 in) and after (34 1/2 / 32 in), the straight tip limit (40 degrees in D-58, 35 since D-67)', () => {
   const tip = (cs: ReturnType<typeof run>, k: 'operating' | 'goal' | 'cargo') => row(cs, 'tip-straight').cases![k]!.value;
   it('150 lb rider 50.9 -> 48.7 deg; 200 lb rider 49.4 -> 47.3 deg; both far above the limit', () => {
     expect(tip(old, 'operating')).toBeCloseTo(50.73, 1); // 50.79 before D-65 (the lighter, shorter brake flaps), 50.84 before D-62 // 50.9 before D-60 dropped the four foot-block cleats (a little less mass forward)
@@ -43,11 +44,13 @@ describe('tip angles before (35.5 / 35.5 in) and after (34 1/2 / 32 in), 40 degr
     expect(row(nw, 'tip-straight').statusOperating).toBe('pass');
     expect(row(nw, 'tip-straight').statusGoal).toBe('pass');
   });
-  it('200 lb cargo (the D-58 target, piled at the nose end of the bed): 44.7 -> 43.1 deg, passes the 40 degree limit by 3 degrees (marginal band, within 10% of the limit)', () => {
+  it('200 lb cargo (the D-58 target, piled at the nose end of the bed): 44.7 -> 42.8 deg (the angles do not depend on the limit); it passed the old 40 degree limit by 3 degrees (marginal band) and clears the D-67 35 degree limit by 7.8 degrees, outside the 10% band (38.5), a plain pass', () => {
     expect(tip(old, 'cargo')).toBeCloseTo(44.50, 1); // 44.58 before D-65, 44.67 before D-62 // D-60 (no foot-block cleats): 44.7 / 43.1 before
     expect(tip(nw, 'cargo')).toBeCloseTo(42.83, 1); // 42.91 before D-65, 43.0 before D-62
     expect(tip(nw, 'cargo')).toBeGreaterThan(40);
-    expect(row(nw, 'tip-straight').statusCargo).toBe('marginal');
+    expect(row(nw, 'tip-straight').cases!.cargo!.limit).toBe(35); // D-67 (was 40)
+    expect(tip(nw, 'cargo')).toBeGreaterThan(35 * 1.1); // 42.8 > 38.5: outside the marginal band
+    expect(row(nw, 'tip-straight').statusCargo).toBe('pass'); // was 'marginal' at the 40 degree limit
   });
   it('250 lb cargo, for the record: 43.2 -> 41.7 deg, still above the limit', () => {
     expect(tip(run({ ...OLD, cargoPayloadLb: 250 }), 'cargo')).toBeCloseTo(43.05, 1);
@@ -72,7 +75,7 @@ describe('tip angles before (35.5 / 35.5 in) and after (34 1/2 / 32 in), 40 degr
 
 describe('truck fit, brake and overall width at the new tracks', () => {
   const fitAt = (q: Partial<Params>) => {
-    const p = { ...defaultParams(), ...PRE_D60, ...q } as Params;
+    const p = { ...defaultParams(), ...PRE_D66, ...PRE_D60, ...q } as Params;
     return checkTruckFit(p, (v) => buildModel(p, v));
   };
   it('the overall width falls 40.5 -> 39.5 in (set by the front axle ends: front track + tire + stub ends); the sled still fits beside in the bed in all three configurations', () => {
@@ -92,8 +95,8 @@ describe('truck fit, brake and overall width at the new tracks', () => {
     expect(row(nw, 'brake-force').status).toBe('info'); // Eric: the hold force is information only
   });
   it('the 32 in rear track clears the 24 in body: the validator accepts it, and a 28 in body that would meet the tires is refused', () => {
-    expect(validateParams({ ...defaultParams(), bodyWidthIn: 24 }).filter((i) => i.severity === 'error')).toEqual([]);
-    expect(validateParams({ ...defaultParams(), bodyWidthIn: 28 }).some((i) => i.severity === 'error' && i.keys.includes('rearTrackIn'))).toBe(true);
-    expect(resolveParams(defaultParams()).rearTrackIn).toBe(32);
+    expect(validateParams({ ...defaultParams(), ...PRE_D66, bodyWidthIn: 24 }).filter((i) => i.severity === 'error')).toEqual([]);
+    expect(validateParams({ ...defaultParams(), ...PRE_D66, bodyWidthIn: 28 }).some((i) => i.severity === 'error' && i.keys.includes('rearTrackIn'))).toBe(true);
+    expect(resolveParams({ ...defaultParams(), ...PRE_D66 }).rearTrackIn).toBe(32);
   });
 });

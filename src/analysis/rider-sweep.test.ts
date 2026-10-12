@@ -1,3 +1,4 @@
+import { PRE_D66 } from '../test-fixtures';
 import { describe, expect, it } from 'vitest';
 import { defaultParams } from '../params';
 import { runChecks } from './index';
@@ -22,11 +23,14 @@ describe('riderSweep', () => {
     expect(r.operating.fails).toEqual([]);
     expect(r.safe).toEqual({ loLb: 50, hiLb: 250, openLow: true, openHigh: true });
     // D-63 (3c-8): the lighter hinge/pin pads (-0.4 lb) tip the bearing-groove row at 240 lb from 0.9003 to 0.8995, just under the 0.9 yellow line: green is 50-230 or 50-240 depending on that knife edge.
-    expect(r.green).toMatchObject({ loLb: 50, openLow: true, openHigh: false });
-    expect(r.green!.hiLb).toBeGreaterThanOrEqual(230);
-    expect(r.green!.hiLb).toBeLessThanOrEqual(240);
+    // D-66 (matched 30 in tracks): nothing is red up to 250 lb, but the straight tip (43.6 deg at 200 lb, limit 40) was inside its 10% band from 190 lb, so green was 50-180 lb.
+    // D-67 (the straight tip limit 35 deg): 43.6 deg at 200 lb is 8.6 deg over it (util 35 / 43.6 = 0.80, far outside the 10% band), so the tip row leaves the sweep's marginal list and green is
+    // 50-240 lb; the 250 lb point is yellow only on the seat-back panel (0.909), and at 200 lb the tightest row is park-hold (0.883, a fit fact), not the tip.
+    expect(r.green).toMatchObject({ loLb: 50, hiLb: 240, openLow: true, openHigh: false });
+    expect(r.points.find((x) => x.w === 200)!.worst!.id).toBe('park-hold');
+    expect(r.points.find((x) => x.w === 250)!.worst!.id).toBe('seat-back');
     for (const id of ['king-bearing', 'steer-stops', 'bridle-eye', 'lift', 'brake-force']) expect(r.points.every((x) => !x.fails.includes(id)), id).toBe(true);
-    expect(r.points.filter((x) => x.w <= 230).every((x) => x.status === 'pass')).toBe(true);
+    expect(r.points.filter((x) => x.w <= 180).every((x) => x.status === 'pass')).toBe(true);
     // the deck ply no longer fails for the heaviest riders (it did from 230 lb at 10 in joist spacing and span/300)
     for (const w of [220, 230, 250]) expect(r.points.find((x) => x.w === w)!.fails).not.toContain('deck');
   });
@@ -42,7 +46,7 @@ describe('riderSweep', () => {
   it('shows red at the right weights for a design with a known failing check', () => {
     // The tip limit is raised to 52 deg (the straight tip is 55.6 deg at 50 lb and 47.9 at 250 lb) and the slide factor to 2.4 (SSF 1.47 at 50 lb down to 1.11 at 250 vs 1.2): the tip row
     // then fails from 70 lb (D-60; 80 lb before) and up and the slide-before-tip row from 100 lb (D-58 tracks; 120 lb before D-60: the sled is 24 lb lighter, so the stability margins shift), while the lighter riders have no stability failure. (Front-end and brake rows are ignored here.)
-    const bad = { ...p0, tipStraightMinDeg: 52, slideMarginFactor: 2.4 };
+    const bad = { ...p0, ...PRE_D66, tipStraightMinDeg: 52, slideMarginFactor: 2.4 }; // D-66 (30 in tracks) lowers the tip angles by about 3 degrees, so this known-failing design keeps the D-58 numbers it was written for
     const r = riderSweep(bad, { fit });
     const stab = (fails: string[]) => fails.filter((id) => ['tip-straight', 'slide-before-tip'].includes(id));
     const reds = r.points.filter((x) => stab(x.fails).length > 0);

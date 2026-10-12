@@ -106,18 +106,27 @@ describe('N-1: the 4 mm side web row', () => {
 });
 
 describe('S-5: the cargo load-height rule', () => {
-  it('the info row solves for the height: tip limit about 13.8 in, slide-before-tip lost at about 17 in, tip angle 42 / 36 / 31 degrees at 12 / 18 / 24 in (D-65: 41.9 / 35.9 / 31.3 with the lighter brake kit)', () => {
+  it('the info row solves for the height: D-67 (35 deg straight tip limit; it was 40 deg and 10.5 in at the D-66 30 in tracks) tip limit about 15.2 in, slide-before-tip lost at about 13.6 in (unchanged: it does not read the tip limit), tip angle 40.6 / 38.3 / 32.5 / 28.1 degrees at 10 / 12 / 18 / 24 in (D-65 at 32 / 34.5 in tracks: 13.8 in, 17 in, 41.9 / 35.9 / 31.3 at 12 / 18 / 24 in)', () => {
     const c = row('cargo-height');
     expect(c.status).toBe('info');
     expect(c.how).toMatch(/LOAD-HEIGHT RULE/);
-    expect(c.value).toBeGreaterThan(13);
-    expect(c.value).toBeLessThan(14.5);
-    expect(c.how).toMatch(/at 18 in 35\.9°/);
-    expect(c.how).toMatch(/at 24 in 31\.3°/);
+    expect(c.value).toBeGreaterThan(10); // the rule is 10 in (cargoCgHeightIn); D-67: the 35 deg tip limit is reached at about 15.2 in (10.5 in at the old 40 deg), so the rule keeps a 5 in margin on the tip
+    expect(c.value).toBeGreaterThan(15);
+    expect(c.value).toBeLessThan(15.5);
+    expect(c.value).toBeGreaterThan(c.details![1].value); // the slide-before-tip height (13.6 in) is now the lower of the two
+    expect(c.details![1].value).toBeGreaterThan(13);
+    expect(c.details![1].value).toBeLessThan(14.5);
+    expect(c.how).toMatch(/keep the CENTER of the load under 10 in/);
+    expect(c.how).toMatch(/reaches its 35° limit at 15\.2 in/);
+    expect(c.how).toMatch(/at 10 in 40\.[5-7]°/);
+    expect(c.how).toMatch(/at 18 in 32\.5°/);
+    expect(c.how).toMatch(/at 24 in 28\.1°/);
   });
-  it('the Simple view cargo card says it in plain words', () => {
+  it('the Simple view cargo card says it in plain words (D-66: 10 in above the floor; D-67: it tips at about 15 in)', () => {
     const t = cargoText(cargoCapacity(defaults));
-    expect(t.lines.some((l) => /Load-height rule: heavy things low/.test(l) && /12 in above the floor/.test(l))).toBe(true);
+    expect(t.lines.some((l) => /Load-height rule: heavy things low/.test(l) && /under 10 in above the floor/.test(l))).toBe(true);
+    expect(t.lines.some((l) => /about 15 in is the tipping limit itself/.test(l))).toBe(true);
+    expect(t.lines.some((l) => /above about 14 in a sharp turn can tip it instead of skidding/.test(l))).toBe(true);
   });
 });
 

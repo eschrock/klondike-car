@@ -96,7 +96,7 @@ function outerSsf(ctx: Ctx, c: CaseData) {
 /**
  * The cargo LOAD-HEIGHT RULE (eng 3c S-5, D-62): the tip and slide-before-tip rows move a lot with the height of the cargo's center, which is an assumption (cargoCgHeightIn). This info row
  * solves for the cargo CG height above the deck at which (a) the lateral tip angle reaches its limit and (b) the static stability factor falls to the slide-before-tip limit, worst over the
- * cargo placements, and prints the tip angle at 12, 18 and 24 in, so the rule on the Simple view ("heavy things low, keep the load's center under X in") has numbers behind it.
+ * cargo placements, and prints the tip angle at 10, 12, 18 and 24 in (the rule is 10 in since D-66), so the rule on the Simple view ("heavy things low, keep the load's center under X in") has numbers behind it.
  */
 export function cargoHeightRule(ctx: Ctx): { tipLimitIn: number; slideLimitIn: number; atIn: Record<number, number> } | null {
   const { p, contact, L } = ctx;
@@ -117,7 +117,7 @@ export function cargoHeightRule(ctx: Ctx): { tipLimitIn: number; slideLimitIn: n
   const tipLimitIn = Math.min(...cases.map((c) => solve((hc) => tipDeg(c, hc), p.tipStraightMinDeg)));
   const slideLimitIn = Math.min(...cases.map((c) => solve((hc) => ssf(c, hc), slideLimit)));
   const atIn: Record<number, number> = {};
-  for (const hc of [12, 18, 24]) atIn[hc] = Math.min(...cases.map((c) => tipDeg(c, hc)));
+  for (const hc of [10, 12, 18, 24]) atIn[hc] = Math.min(...cases.map((c) => tipDeg(c, hc)));
   return { tipLimitIn, slideLimitIn, atIn };
 }
 
@@ -128,7 +128,7 @@ export function cargoHeightCheck(ctx: Ctx): AnalysisCheck {
   return cargoOnlyCheck({
     id: 'cargo-height', label: 'Cargo load-height rule (center of the load above the deck)', group: 'Stability', value: r.tipLimitIn, unit: 'in', limit: p.cargoCgHeightIn, sense: '>=', info: true, refs: ['eng 3c S-5', 'D-53', 'D-62'],
     details: [detail('cargo CG height at which the lateral tip angle reaches its limit', r.tipLimitIn, 'in', p.cargoCgHeightIn, '>='), detail('cargo CG height at which slide-before-tip is lost', r.slideLimitIn, 'in', p.cargoCgHeightIn, '>=')],
-    how: `LOAD-HEIGHT RULE: heavy things low, on the deck, strapped down; keep the CENTER of the load under ${p.cargoCgHeightIn} in above the deck (the cargo case assumes exactly that, cargoCgHeightIn). Solving for the cargo center height (worst placement, the cargo 3 in off center): the lateral tip angle reaches its ${p.tipStraightMinDeg}° limit at ${f(r.tipLimitIn, 1)} in (so ${p.cargoCgHeightIn} in is the rule with a little margin); the static stability factor falls to the slide-before-tip limit (${f(p.slideMarginFactor * p.tireGroundMu, 2)}) at ${f(r.slideLimitIn, 1)} in, above which the sled can tip instead of skidding. Tip angle at 12 in ${f(r.atIn[12], 1)}°, at 18 in ${f(r.atIn[18], 1)}°, at 24 in ${f(r.atIn[24], 1)}°. A cooler stack on firewood puts the center near 18 in: safe at walking pace, but no longer "slide before tip". Engrave or placard it on the sled.`,
+    how: `LOAD-HEIGHT RULE: heavy things low, on the deck, strapped down; keep the CENTER of the load under ${p.cargoCgHeightIn} in above the deck (the cargo case assumes exactly that, cargoCgHeightIn). Solving for the cargo center height (worst placement, the cargo 3 in off center): the lateral tip angle reaches its ${p.tipStraightMinDeg}° limit at ${f(r.tipLimitIn, 1)} in (so the ${p.cargoCgHeightIn} in rule keeps ${f(r.tipLimitIn - p.cargoCgHeightIn, 1)} in of margin on tipping); the static stability factor falls to the slide-before-tip limit (${f(p.slideMarginFactor * p.tireGroundMu, 2)}) at ${f(r.slideLimitIn, 1)} in, above which the sled can tip instead of skidding. Tip angle at 10 in ${f(r.atIn[10], 1)}°, at 12 in ${f(r.atIn[12], 1)}°, at 18 in ${f(r.atIn[18], 1)}°, at 24 in ${f(r.atIn[24], 1)}°. A cooler stack on firewood puts the center near 18 in: safe at walking pace, but no longer "slide before tip". Engrave or placard it on the sled.`,
   });
 }
 

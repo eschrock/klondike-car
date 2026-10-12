@@ -74,7 +74,7 @@ export type Geometry =
   /** Bent lamination: centerline path in local XZ, rectangular section (width along Y). */
   | { type: 'sweep'; path: Vec2[]; width: number; thickness: number; plies: number }
   /** Pre-built triangle mesh (purchased parts, mannequin, truck). */
-  | { type: 'mesh'; positions: number[]; indices?: number[]; /** A long thin wall (D-57 plan-curved hull members): the overlap tests cover it with boxes about this long (in) along x instead of one bounding box. */ slabs?: number; /** Wall thickness (in) of such a plan-curved member, for the finish's roundover cap. */ thickness?: number; /** The wall's (x, z) outline, so the overlap tests can clip a notch or a step exactly. */ profile?: Vec2[]; /** The wood grain follows the top edge of the outline (a bandsawn sheer gunwale) instead of running straight along x. Cosmetic. */ grainFollowsTop?: boolean };
+  | { type: 'mesh'; positions: number[]; indices?: number[]; /** A long thin wall (D-57 plan-curved hull members): the overlap tests cover it with boxes about this long (in) along x instead of one bounding box. */ slabs?: number; /** Wall thickness (in) of such a plan-curved member, for the finish's roundover cap. */ thickness?: number; /** The wall's (x, z) outline, so the overlap tests can clip a notch or a step exactly. */ profile?: Vec2[]; /** The wood grain follows the top edge of the outline (a bandsawn sheer gunwale) instead of running straight along x. Cosmetic. */ grainFollowsTop?: boolean; /** Explicit tight boxes (local min / max corners) for the overlap tests, when the mesh has a slot or a notch that its bounding box would fill (the slotted brake knee, D-65). Each box must lie inside the solid. */ boxes?: Array<[Vec3, Vec3]> };
 
 export interface Dims {
   t: number;

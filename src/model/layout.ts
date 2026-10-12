@@ -4,13 +4,15 @@
  * all design inputs come from Params (src/params.ts).
  *
  * D-54 body, D-57 character: a sled side profile (the sheer sweeps up in a concave curve from `sideHeightBowIn` at the bow to `sideHeightRearIn` at the rear transom,
- * `sheerCurveIn`), sides that ease in toward the bow in plan (`bowTurnInIn`, shared with the frame and the front axle through `Layout.turnIn`), one flat deck level that ends
+ * `sheerCurveIn`), sides that draw in toward the bow in a long derived taper (D-66, `bowTaper`, shared with the frame and the front axle through `Layout.turnIn`), one flat deck level that ends
  * at the rear face of the shaped oak BOW BULKHEAD (the rider's foot brace and the lift hand-hold, D-57), and the pivoting soapbox front axle at the wheelbase (D-56).
  */
 import {
   STORAGE_LOCATION,
   bowBulkhead,
-  bowTurnInAt,
+  bowTaper,
+  taperTurnIn,
+  type BowTaper,
   derived,
   resolveParams,
   sideHeightAt,
@@ -32,8 +34,10 @@ export interface Layout {
   xFlatEnd: number;
   /** The sides end against the bulkhead here (= xFlatEnd). */
   xSideEnd: number;
-  /** How far the hull's outer face has turned in at x, per side (D-57): 0 behind the turn-in, `bowTurnInIn` at the bulkhead. The inner faces, the deck edge and the front rails follow it. */
+  /** How far the hull's outer face has turned in at x, per side (D-57): 0 behind the taper start (`bowTaperStartIn`), the full (bodyWidthIn - bowWidthIn) / 2 from the taper end on (D-66). The inner faces, the deck edge and the front rails follow it. */
   turnIn: (x: number) => number;
+  /** The derived bow taper (D-66): where the S starts and ends, the turn-in per side at the bow and its tightest radius. */
+  taper: BowTaper;
   /** The shaped oak bow bulkhead (D-57): rear face `x0` (= the foot brace), front face `x1` (the bow tip), bottom z, the top z at the corners (the sheer height at the bow) and at the center, and its half width. */
   bulkhead: { x0: number; x1: number; thick: number; bot: number; zCorner: number; zCenter: number; halfW: number };
   /** The lift hand-hold through the bulkhead (D-57; the nose is lifted by the body, not the tongue): slot x range (the bulkhead thickness), half length across, z range and its center. */
@@ -157,7 +161,8 @@ export function computeLayout(input: Params): Layout {
   // ── Bow end (D-57): the sides end against the bulkhead's rear face ──
   const sideBow = p.sideHeightBowIn;
   const xSideEnd = bh.xFlatEnd;
-  const turnIn = (x: number) => bowTurnInAt(p, x);
+  const taper = bowTaper(p);
+  const turnIn = (x: number) => taperTurnIn(taper, x);
 
   // `position` 0 = underslung (rod on top of the beam), 1 = overslung. The pivoting front beam is ALWAYS underslung (the king stack in steerGeometry assumes it, D-56).
   const mkBeam = (x: number, track: number, thick: number, position = p.axleBeamPosition): Beam => {
@@ -248,7 +253,7 @@ export function computeLayout(input: Params): Layout {
 
   void len;
   return {
-    r, WB, xRear, xFront, xFlatEnd: bh.xFlatEnd, xSideEnd, turnIn, bulkhead, hold, chineBot, railTop: chineBot, chineH,
+    r, WB, xRear, xFront, xFlatEnd: bh.xFlatEnd, xSideEnd, turnIn, taper, bulkhead, hold, chineBot, railTop: chineBot, chineH,
     sideTop: deckTop + p.sideHeightRearIn, sideH: sideBow, sideRear: p.sideHeightRearIn, sag: p.sheerCurveIn, xSideStart,
     railBand: p.railBandIn, joistT, side, sideBand, deckEdge, webCap: p.sideWebCapIn, transom, rearLane, ply, deckTop, deckBot: deckTop - ply, hwC, web, beamR, beamF, steer, king, chain, tongue,
     railEnd: bh.xFlatEnd, railStepX: steer.railStepX, railDepthF: steer.railDepthFront, joistX, seat, storage,

@@ -473,8 +473,15 @@ export function buildPart(part: Part): BuiltPart | null {
         if (g.grainFollowsTop && g.profile) followTopGrain(geometry, g.profile, part.id);
         break;
       }
-      // Textured looks need UVs: box-map other meshes that land on a wood / vinyl material (none do today).
-      if (isWood(look) || look === 'vinyl') material = materialsFor('other');
+      if (isWood(look)) {
+        // Any other wood mesh (e.g. the slotted brake knee, D-66): the same box-mapped grain and creased normals as the hull walls, without the sheer-following grain.
+        edges = new THREE.EdgesGeometry(geo, EDGE_ANGLE_DEG);
+        const flat = toCreasedNormals(geo.toNonIndexed(), (40 * Math.PI) / 180);
+        geometry = applyGrain(flat, part, look, size, 1, part.grain ? grain : 0);
+        break;
+      }
+      // Vinyl meshes need UVs too; none exist today, so they fall back to the plain material.
+      if (look === 'vinyl') material = materialsFor('other');
       break;
     }
   }

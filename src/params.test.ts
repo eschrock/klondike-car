@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PARAM_DEFS, bowBulkhead, bowTurnInAt, defaultParams, resolveParams, sanitizeParam, sanitizeParams, steerGeometry, validateParams, type ParamKey, type Params } from './params';
+import { PARAM_DEFS, bowBulkhead, bowTaper, bowTurnInAt, smootherstep, defaultParams, resolveParams, sanitizeParam, sanitizeParams, steerGeometry, validateParams, type ParamKey, type Params } from './params';
 import { createStore, decodeHash, encodeHash } from './state';
 import { buildModel } from './model';
 import { computeLayout } from './model/layout';
@@ -29,10 +29,12 @@ describe('PARAM_DEFS', () => {
       // D-57: the bow curl, the straight-line sag, the foot-stop board, the star-knob seat back and the pad-and-posts grab handle
       'sideProfileSagIn', 'bowCurlRadiusIn', 'bowCurlAngleDeg', 'bowCurlPlyIn', 'bowCurlPlies', 'footStopThickIn', 'seatBackKnobHeightIn', 'seatInsertAllowLbf', 'seatGripGapIn', 'seatGripClearLengthIn',
       // D-60: the drop-in foot block and its four slot cleats (old links that carry these keys still load: decodeHash ignores unknown keys)
-      'footBlockThickIn', 'footBlockStepIn', 'footBlockPositions', 'footBlockSlot'];
+      'footBlockThickIn', 'footBlockStepIn', 'footBlockPositions', 'footBlockSlot',
+      // D-66: the fixed 1-1/4 in turn-in over 14 in is replaced by the derived taper (start x and bow width)
+      'bowTurnInIn', 'bowTurnLenIn'];
     for (const k of gone) expect(keys, k).not.toContain(k);
     expect(keys.filter((k) => /^caster|^bowBlock|^swivel/.test(k))).toEqual([]);
-    const added = ['sideHeightBowIn', 'sideHeightRearIn', 'sheerCurveIn', 'bowTurnInIn', 'bowTurnLenIn', 'bowBulkheadThickIn', 'bowBulkheadHeightIn', 
+    const added = ['sideHeightBowIn', 'sideHeightRearIn', 'sheerCurveIn', 'bowWidthIn', 'bowTaperStartIn', 'bowTaperSlackIn', 'bowBulkheadThickIn', 'bowBulkheadHeightIn', 
       'grabBoardLengthIn', 'grabHoleLengthIn', 'grabHoleHeightIn', 'grabBoardThickIn', 'grabBoardBarIn', 'grabBoardFootIn', 'handleParkClearIn', 'flagTubeIdIn', 'flagTubeOdIn', 'seatHingeLoadLbf', 'seatBackLatchHeightIn', 'showSideSigns',
       'axleHangerThickIn', 'axleHangerWidthIn', 'bumpSpeedNormalMph', 'bumpSpeedHardMph',
       // D-60: the hollow axle, the wheel bore, the seat-back ply
@@ -44,13 +46,14 @@ describe('PARAM_DEFS', () => {
     for (const k of ['tongueThickIn', 'steerStopBoltDiaIn', 'endJoistThickIn', 'steerStopPadThickIn']) expect(keys, k).not.toContain(k);
     for (const k of added) expect(keys, k).toContain(k);
   });
-  it('the design defaults (D-54, D-56, D-57): 24 in body, 44 in wheelbase, 10 in wheels, 8 in deck, a sheer from 4 in at the bow to 14 in at the rear, the 1-1/2 in bow bulkhead (D-60), pivoting front axle at 34 1/2 in front and 32 in rear track (D-58) and 20 deg lock', () => {
+  it('the design defaults (D-54, D-56, D-57): 24 in body, 44 in wheelbase, 10 in wheels, 8 in deck, a sheer from 4 in at the bow to 14 in at the rear, the 1-1/2 in bow bulkhead (D-60), pivoting front axle at matched 30 in front and rear tracks (D-66) and 20 deg lock', () => {
     expect(defaults).toMatchObject({
-      bodyWidthIn: 24, wheelbaseIn: 44, wheelDiameterIn: 10, deckHeightIn: 8, sideHeightBowIn: 4, sideHeightRearIn: 14, sheerCurveIn: 2.5, bowTurnInIn: 1.25, bowTurnLenIn: 14,
+      bodyWidthIn: 24, wheelbaseIn: 44, wheelDiameterIn: 10, deckHeightIn: 8, sideHeightBowIn: 4, sideHeightRearIn: 14, sheerCurveIn: 2.5, bowWidthIn: 18.5, bowTaperStartIn: 20, bowTaperSlackIn: 0.125,
       bowBulkheadThickIn: 1.5, bowBulkheadHeightIn: 5.75, crossmemberSpacingIn: 8.5, standDeflectionRatio: 240, showSideSigns: 1, rearOverhangIn: 10, frontOverhangIn: 6.75, handleBowCrownIn: 0.875, seatXIn: 13.5, riderLegReachIn: 35.75, // D-60: 1/4 in more, the thinner bulkhead's face is 1/4 in further forward
        seatDepthIn: 14.5, storageVolumeIn3: 2000,
-      frontTrackIn: 34.5, rearTrackIn: 32, steerLockDeg: 20, steerClearIn: 0.75, kingpinDiaIn: 0.625, kingThrustOdIn: 3, kingThrustThickIn: 0.5, kingBeamLengthIn: 3,
-      tongueWidthIn: 1.25, tongueDepthIn: 1.75, tongueTieAheadIn: 5, steerRopesOn: 0, frontBeamThicknessIn: 2.5, rollPadRadiusIn: 11.5, // D-60: tongue 1-1/4 x 1-3/4, pads out 1/2 in with the short hub
+      frontTrackIn: 30, rearTrackIn: 30, steerLockDeg: 20, // D-66: matched 30 in tracks
+      steerClearIn: 0.75, kingpinDiaIn: 0.625, kingThrustOdIn: 3, kingThrustThickIn: 0.5, kingBeamLengthIn: 3,
+      tongueWidthIn: 1.25, tongueDepthIn: 1.75, tongueTieAheadIn: 5, steerRopesOn: 0, frontBeamThicknessIn: 2.5, rollPadRadiusIn: 9.5, // D-66 (was 11.5, D-60): tongue 1-1/4 x 1-3/4, pads out 1/2 in with the short hub
       transomThicknessIn: 0.5, panelPlyIn: 0.157, seatBackPlyIn: 0.472, wheelMass10Lb: 2.8, wheelRatingLb: 300, hubLengthIn: 2.28, wheelBoreIn: 0.75, axleWallIn: 0.12, crossmemberThickIn: 0.625, handleSocketDepthIn: 14,
     });
     expect(PARAM_DEFS.steerLockDeg.ref).toContain('D-56');
@@ -97,22 +100,23 @@ describe('validateParams', () => {
     expect(ok).toBeLessThanOrEqual(defaults.deckHeightIn);
     expect(steerGeometry({ ...defaults, deckHeightIn: ok }).kingDepth).toBeGreaterThanOrEqual(1 - 1e-9);
   });
-  it('steer clearance at full lock (D-56): a narrow front track is an error that names the minimum track; the minimum itself passes and a hair less fails', () => {
+  it('steer clearance at full lock (D-56, D-66): the bow taper is DERIVED from the wheel sweep, so the default clears by steerClearIn + bowTaperSlackIn; a bigger lock shortens the taper; one it cannot fit is an error that names the bow width and the track', () => {
     const sg = steerGeometry(defaults);
-    expect(sg.clearAtLock).toBeGreaterThan(defaults.steerClearIn);
-    const narrow = errorsOf({ ...defaults, frontTrackIn: 30 });
-    const e = narrow.find((i) => i.keys.includes('frontTrackIn') && i.keys.includes('steerLockDeg'));
+    expect(sg.clearAtLock).toBeGreaterThanOrEqual(defaults.steerClearIn + defaults.bowTaperSlackIn - 1e-6);
+    expect(sg.clearAtLock).toBeLessThan(defaults.steerClearIn + defaults.bowTaperSlackIn + 0.1); // the taper ends as far forward as the sweep allows (rounded down to 1/4 in)
+    const t = bowTaper(defaults);
+    expect(t.clears).toBe(true);
+    const t30 = bowTaper({ ...defaults, steerLockDeg: 30 });
+    expect(t30.x1).toBeLessThan(t.x1); // more lock: the body must be narrow sooner
+    const e = errorsOf({ ...defaults, steerLockDeg: 35, bowWidthIn: 21 }).find((i) => i.keys.includes('bowWidthIn') && i.keys.includes('steerLockDeg'));
     expect(e, 'a steer-clearance error').toBeDefined();
-    expect(e!.message).toContain(`${sg.minTrack.toFixed(1)}"`);
-    expect(e!.message).toMatch(/Widen the front track to at least/);
-    // the formula is consistent: at exactly the minimum track the clearance equals steerClearIn
-    const atMin = steerGeometry({ ...defaults, frontTrackIn: sg.minTrack });
-    expect(atMin.clearAtLock).toBeCloseTo(defaults.steerClearIn, 9);
-    const clearErr = (t: number) => errorsOf({ ...defaults, frontTrackIn: t }).some((i) => i.keys.includes('steerLockDeg') && i.keys.includes('frontTrackIn'));
-    expect(clearErr(sg.minTrack + 0.01)).toBe(false);
-    expect(clearErr(sg.minTrack - 0.01)).toBe(true);
-    // a bigger lock needs a wider track
-    expect(steerGeometry({ ...defaults, steerLockDeg: 30 }).minTrack).toBeGreaterThan(sg.minTrack);
+    expect(e!.message).toMatch(/cannot keep the front tires/);
+    // a wider front track (more room beside the body) lets the taper end later; a narrower one earlier
+    expect(bowTaper({ ...defaults, frontTrackIn: 31 }).x1).toBeGreaterThan(t.x1);
+    expect(bowTaper({ ...defaults, frontTrackIn: 29.5 }).x1).toBeLessThan(t.x1);
+    // the minimum track for THIS body shape is a little under the default (the taper has 1/8 in of slack), and a track under it is a clearance error when the shape is held
+    expect(sg.minTrack).toBeLessThan(defaults.frontTrackIn);
+    expect(sg.minTrack).toBeGreaterThan(defaults.frontTrackIn - 1);
     // a track so narrow the tires touch the body at rest is its own error
     expect(errorsOf({ ...defaults, frontTrackIn: 26 }).some((i) => i.keys.includes('frontTrackIn'))).toBe(true);
   });
@@ -122,8 +126,8 @@ describe('validateParams', () => {
     expect(Math.abs(L1.chain.anchor[1])).toBeLessThan(defaults.steerChainAnchorYIn);
     expect(Math.abs(L1.chain.anchor[1]) + 1.15).toBeLessThanOrEqual(L1.steer.railYIn - L1.turnIn(L1.chain.joistX) + 1e-9);
     expect(errorsOf({ ...defaults, steerChainBeamYIn: 1 }).some((i) => i.keys.includes('steerChainBeamYIn'))).toBe(true);
-    expect(errorsOf({ ...defaults, steerChainBeamYIn: 15.2 }).some((i) => i.keys.includes('steerChainBeamYIn'))).toBe(true);
-    expect(errorsOf({ ...defaults, steerChainBeamYIn: 10.4 })).toEqual([]);
+    expect(errorsOf({ ...defaults, steerChainBeamYIn: 13.2 }).some((i) => i.keys.includes('steerChainBeamYIn'))).toBe(true);
+    expect(errorsOf({ ...defaults, steerChainBeamYIn: 8 })).toEqual([]);
   });
   it('side profile (D-57): a bow side taller than the rear side warns; a bow side the panel cannot fit (under 1 in above the two bands) errors; a bulkhead too low for the hand-hold errors', () => {
     expect(withKey({ ...defaults, sideHeightBowIn: 7, sideHeightRearIn: 6 }, 'sideHeightBowIn').some((i) => i.severity === 'warn')).toBe(true);
@@ -131,28 +135,43 @@ describe('validateParams', () => {
     expect(errorsOf({ ...defaults, bowBulkheadHeightIn: 4 }).some((i) => i.keys.includes('liftSlotClearIn'))).toBe(true); // 3 in of hand clearance + 1.25 slot + 0.75 oak = 5
     expect(errorsOf({ ...defaults, sideHeightBowIn: 5 }).filter((i) => i.keys.some((k) => /^(side|bow|lift)/.test(k)))).toEqual([]);
   });
-  it('bow bulkhead and turn-in (D-57): the bulkhead sits one thickness behind the tip; the turn-in is 0 behind its start and bowTurnInIn at the face, a smoothstep between; the bend radius must meet the cold-bend limit; the feet must reach the face', () => {
+  it('bow bulkhead and taper (D-57, D-66): the bulkhead sits one thickness behind the tip; the taper is 0 behind bowTaperStartIn, a smootherstep (curvature-continuous) to (bodyWidthIn - bowWidthIn) / 2 at its derived end, then parallel; the bend radius must meet the cold-bend limit; the feet must reach the face', () => {
     const b = bowBulkhead(defaults);
     expect(b.xTip).toBeCloseTo(50.75, 9);
     expect(b.xFlatEnd).toBeCloseTo(49.25, 9); // D-60: the bulkhead is 1-1/2 in, so its face is 1/4 in further forward
     expect(b.thick).toBe(1.5);
-    expect(bowTurnInAt(defaults, 30)).toBe(0);
-    expect(bowTurnInAt(defaults, b.xFlatEnd)).toBeCloseTo(defaults.bowTurnInIn, 9);
-    expect(bowTurnInAt(defaults, b.xFlatEnd - defaults.bowTurnLenIn / 2)).toBeCloseTo(defaults.bowTurnInIn / 2, 9);
-    // a tight bend: 3 in over 6 in is a 2 in radius, far under 40 x 5/16
-    expect(errorsOf({ ...defaults, bowTurnInIn: 3, bowTurnLenIn: 6 }).some((i) => /cold-bend|bend/.test(i.message))).toBe(true);
-    expect(errorsOf({ ...defaults, bowTurnInIn: 0 }).filter((i) => i.keys.some((k) => /^(bow|side)/.test(k)))).toEqual([]);
+    const t = bowTaper(defaults);
+    expect(t.x0).toBe(defaults.bowTaperStartIn);
+    expect(t.turnIn).toBeCloseTo((defaults.bodyWidthIn - defaults.bowWidthIn) / 2, 9); // 2.75 in a side: 18.5 in outside at the bow
+    expect(t.x1).toBeGreaterThan(t.x0 + 15); // a long taper, not the old 14 in
+    expect(t.x1).toBeLessThanOrEqual(b.xFlatEnd);
+    expect(bowTurnInAt(defaults, t.x0 - 5)).toBe(0);
+    expect(bowTurnInAt(defaults, t.x0)).toBe(0);
+    expect(bowTurnInAt(defaults, t.x1)).toBeCloseTo(t.turnIn, 12);
+    expect(bowTurnInAt(defaults, b.xFlatEnd)).toBeCloseTo(t.turnIn, 12); // parallel to the bulkhead
+    expect(bowTurnInAt(defaults, (t.x0 + t.x1) / 2)).toBeCloseTo(t.turnIn / 2, 12);
+    // smootherstep: first AND second derivatives vanish at both ends (no kink, no curvature jump)
+    const h = 1e-3, f = (x: number) => bowTurnInAt(defaults, x);
+    for (const x of [t.x0 + h, t.x1 - h]) {
+      expect(Math.abs((f(x + h) - f(x - h)) / (2 * h))).toBeLessThan(1e-4);
+      expect(Math.abs((f(x + h) - 2 * f(x) + f(x - h)) / (h * h))).toBeLessThan(2e-3);
+    }
+    expect(smootherstep(0.5)).toBeCloseTo(0.5, 12);
+    // the tightest bend is far over the cold-bend limit of one 0.234 in band (40 x 0.234 = 9.4 in)
+    expect(t.minRadiusIn).toBeGreaterThan(25);
+    expect(errorsOf({ ...defaults, bowTaperStartIn: 36 }).some((i) => /cold-bend|bends the chine/.test(i.message) || /cannot keep/.test(i.message))).toBe(true);
+    expect(errorsOf({ ...defaults, bowWidthIn: 24 }).filter((i) => i.keys.some((k) => /^(bow|side)/.test(k)))).toEqual([]); // no taper
     // the rider's feet reach past the bulkhead face
     expect(errorsOf({ ...defaults, riderLegReachIn: 40 }).some((i) => i.keys.includes('riderLegReachIn'))).toBe(true);
-    // the turn-in can pinch the nose
-    expect(errorsOf({ ...defaults, bodyWidthIn: 18, bowTurnInIn: 3, bowTurnLenIn: 30 }).length).toBeGreaterThan(0);
+    // the bow can pinch the nose
+    expect(errorsOf({ ...defaults, bowWidthIn: 12.5 }).length).toBeGreaterThan(0);
   });
   it('axle hanger: wide enough for the beam notch and 3/4 in of oak each side; body clear of the rear tires and the U-bolt plates', () => {
     expect(errorsOf({ ...defaults, axleHangerWidthIn: 3.5 }).some((i) => i.keys.includes('axleHangerWidthIn'))).toBe(true);
     expect(errorsOf({ ...defaults, axleHangerWidthIn: 5 })).toEqual([]);
     expect(errorsOf({ ...defaults, bodyWidthIn: 34 }).some((i) => i.keys.includes('rearTrackIn'))).toBe(true);
-    expect(errorsOf({ ...defaults, bodyWidthIn: 30, rearTrackIn: 36 }).some((i) => i.message.startsWith('The rails/sides reach'))).toBe(true);
-    expect(errorsOf({ ...defaults, bodyWidthIn: 20, bowTurnInIn: 3.75 }).some((i) => /pinches the nose/.test(i.message))).toBe(true); // a 13 in nose is the least (hand-hold, foot brace, tongue): 20 - 2 x 3.5 = 13 passes, 12.5 in does not
+    expect(errorsOf({ ...defaults, bodyWidthIn: 30, rearTrackIn: 33 }).some((i) => /^The rear U-bolt plates start/.test(i.message))).toBe(true);
+    expect(errorsOf({ ...defaults, bodyWidthIn: 20, bowWidthIn: 12.5 }).some((i) => /only 12.5" wide at the bulkhead/.test(i.message))).toBe(true); // a 13 in nose is the least (hand-hold, foot brace, tongue)
   });
   it('the rider\'s feet and the truck: a body longer than the bed is an error', () => {
     expect(errorsOf({ ...defaults, wheelbaseIn: 64, rearOverhangIn: 18, frontOverhangIn: 20, bodyWidthIn: 24 }).some((i) => /longer than bed/.test(i.message))).toBe(true);

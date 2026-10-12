@@ -74,25 +74,44 @@ describe('layout numbers (D-54, D-57)', () => {
   });
 });
 
-describe('the plan turn-in (D-57)', () => {
-  it('is 0 behind the turn-in start (x = 35), 1.25 in at the bulkhead face, half of it half way, and smooth (zero slope at both ends)', () => {
+const RAD = Math.PI / 180;
+describe('the plan taper (D-57, D-66)', () => {
+  const T = L.taper;
+  const turn = (defaults.bodyWidthIn - defaults.bowWidthIn) / 2; // 2.75 in a side: 18.5 in outside at the bow
+  it('is 0 behind the taper start (x = 20), the full 2.75 in from its derived end (x1) to the bulkhead face, half of it half way, and smooth (zero slope AND zero curvature at both ends)', () => {
+    expect(T.x0).toBe(defaults.bowTaperStartIn);
     expect(bowTurnInAt(defaults, 0)).toBe(0);
-    expect(bowTurnInAt(defaults, 35)).toBe(0);
-    expect(bowTurnInAt(defaults, 49.25)).toBeCloseTo(1.25, 12);
-    expect(bowTurnInAt(defaults, 42.25)).toBeCloseTo(0.625, 12);
-    expect(bowTurnInAt(defaults, 60)).toBeCloseTo(1.25, 12); // clamped beyond the face
-    expect(bowTurnInAt(defaults, 35.01) - bowTurnInAt(defaults, 35)).toBeLessThan(1e-5);
+    expect(bowTurnInAt(defaults, T.x0)).toBe(0);
+    expect(bowTurnInAt(defaults, T.x1)).toBeCloseTo(turn, 12);
+    expect(bowTurnInAt(defaults, 49.25)).toBeCloseTo(turn, 12);
+    expect(bowTurnInAt(defaults, (T.x0 + T.x1) / 2)).toBeCloseTo(turn / 2, 12);
+    expect(bowTurnInAt(defaults, 60)).toBeCloseTo(turn, 12); // clamped beyond the face
+    expect(bowTurnInAt(defaults, T.x0 + 0.01) - bowTurnInAt(defaults, T.x0)).toBeLessThan(1e-8);
     expect(L.turnIn(40)).toBe(bowTurnInAt(defaults, 40));
-    expect(innerHalfWidth(L, 20)).toBeCloseTo(hw, 12);
-    expect(innerHalfWidth(L, 49.25)).toBeCloseTo(hw - 1.25, 12);
-    expect(outerHalfWidth(L, 49.25)).toBeCloseTo(12 - 1.25, 12);
+    expect(innerHalfWidth(L, 15)).toBeCloseTo(hw, 12);
+    expect(innerHalfWidth(L, 49.25)).toBeCloseTo(hw - turn, 12);
+    expect(outerHalfWidth(L, 49.25)).toBeCloseTo(12 - turn, 12);
+    expect(outerHalfWidth(L, 49.25) * 2).toBeCloseTo(defaults.bowWidthIn, 12);
   });
-  it('the chine, gunwale, web and rail of both sides follow it: outer face at 12 in behind x = 35 and 10.75 in at the bulkhead, mirrored exactly', () => {
+  it('the taper is gradual: it starts around mid-cabin and takes about 22 in; the steepest the side ever turns is about 13 degrees; the tightest bend radius is 31 in against the 9.4 in cold-bend limit of a 0.234 in band', () => {
+    expect(T.x0).toBeGreaterThanOrEqual(20);
+    expect(T.x1 - T.x0).toBeGreaterThan(20);
+    let maxSlope = 0;
+    for (let x = T.x0; x <= T.x1; x += 0.05) maxSlope = Math.max(maxSlope, Math.abs(bowTurnInAt(defaults, x + 0.05) - bowTurnInAt(defaults, x)) / 0.05);
+    expect(Math.atan(maxSlope) / RAD).toBeLessThan(14);
+    expect(T.minRadiusIn).toBeGreaterThan(30);
+    expect(T.minRadiusIn).toBeGreaterThan(defaults.hullLamMinRadiusFactor * L.sideBand);
+    // the numeric curvature agrees with the closed form turn x 10/sqrt(3) / length^2
+    let kMax = 0;
+    for (let x = T.x0 + 0.5; x < T.x1 - 0.5; x += 0.1) kMax = Math.max(kMax, Math.abs(bowTurnInAt(defaults, x + 0.1) - 2 * bowTurnInAt(defaults, x) + bowTurnInAt(defaults, x - 0.1)) / 0.01);
+    expect(1 / kMax).toBeCloseTo(T.minRadiusIn, 0);
+  });
+  it('the chine, gunwale, web and rail of both sides follow it: outer face at 12 in behind x = 20 and 9.25 in (18.5 in outside) at the bulkhead, mirrored exactly', () => {
     for (const [tag, sg] of [['L', 1], ['R', -1]] as const) {
       for (const [part, thick] of [['side-chine', L.side], ['side-gunwale', L.side], ['rail', defaults.railThicknessIn]] as const) {
         const id = part === 'rail' ? `rail-${tag}` : `side-${tag}-${part.slice(5)}`;
         const x = get(parts, id);
-        for (const at of [0, 20, 42, 48.9]) expect(Math.abs(outerYAt(x, at) - (12 - bowTurnInAt(defaults, at))), `${id} @ ${at}`).toBeLessThan(0.11); // nearest vertex, up to 0.75 in away on the curve
+        for (const at of [0, 20, 30, 38, 48.9]) expect(Math.abs(outerYAt(x, at) - (12 - bowTurnInAt(defaults, at))), `${id} @ ${at}`).toBeLessThan(0.11); // nearest vertex, up to 0.75 in away on the curve
         const b = worldAABB(x);
         expect(sg > 0 ? b.max[1] : -b.min[1], id).toBeCloseTo(12, 6);
         void thick;
@@ -102,7 +121,7 @@ describe('the plan turn-in (D-57)', () => {
       expect(wb.length).toBeGreaterThan(2);
       const ys = wb.map(([, vy]) => Math.abs(vy));
       expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(defaults.panelPlyIn, 6);
-      expect((Math.max(...ys) + Math.min(...ys)) / 2).toBeCloseTo(hw + L.side / 2 - 1.25, 6);
+      expect((Math.max(...ys) + Math.min(...ys)) / 2).toBeCloseTo(hw + L.side / 2 - turn, 6);
     }
     const a = worldAABB(get(parts, 'side-L-gunwale')), b = worldAABB(get(parts, 'side-R-gunwale'));
     expect(a.min[1]).toBeCloseTo(-b.max[1], 9);
@@ -120,8 +139,8 @@ describe('the plan turn-in (D-57)', () => {
     expect(b.max[1] - b.min[1]).toBeLessThanOrEqual(48);
     expect(d.edges).toBe('captured');
   });
-  it('with no turn-in the sides are parallel again and every width is the full 24 in', () => {
-    const p = { ...defaults, bowTurnInIn: 0 };
+  it('with no taper (a 24 in bow) the sides are parallel again and every width is the full 24 in', () => {
+    const p = { ...defaults, bowWidthIn: 24 };
     const m = buildModel(p);
     for (const at of [0, 30, 48.9]) expect(outerYAt(get(m, 'side-L-gunwale'), at)).toBeCloseTo(12, 6);
     expect(computeLayout(p).bulkhead.halfW).toBe(12);
@@ -223,8 +242,8 @@ describe('the bow bulkhead and its hand-hold (D-57)', () => {
     const bb = worldAABB(b);
     expect(bb.min[0]).toBeCloseTo(49.25, 9);
     expect(bb.max[0]).toBeCloseTo(50.75, 9);
-    expect(bb.max[1]).toBeCloseTo(10.75, 9);
-    expect(bb.min[1]).toBeCloseTo(-10.75, 9);
+    expect(bb.max[1]).toBeCloseTo(9.25, 9);
+    expect(bb.min[1]).toBeCloseTo(-9.25, 9);
     expect(bb.max[2]).toBeCloseTo(L.deckTop + 5.75, 9);
     expect(bb.min[2]).toBeCloseTo(L.bulkhead.bot, 9);
     expect(L.bulkhead.zCorner).toBeCloseTo(L.deckTop + 5.75 - 0.875, 12);
@@ -233,7 +252,7 @@ describe('the bow bulkhead and its hand-hold (D-57)', () => {
     const c2 = makeCtx({ ...defaults, handleBowCrownIn: 1.5 });
     expect(c2.L.bulkhead.zCenter - c2.L.bulkhead.zCorner).toBeCloseTo(1.5, 12);
     expect(L.bulkhead.zCorner).toBeGreaterThan(L.deckTop + defaults.sideHeightBowIn); // it stands a hair above the side tops, which end against its rear face
-    expect(o.halfW).toBeCloseTo(10.75, 12);
+    expect(o.halfW).toBeCloseTo(9.25, 12);
     // the sides end exactly at its rear face (the gunwale's top at the face is the corner height)
     expect(topEdge(get(parts, 'side-L-gunwale')).slice(-1)[0][1] - L.deckTop).toBeCloseTo(4, 9);
     for (const tag of ['L', 'R']) expect(worldAABB(get(parts, `side-${tag}-gunwale`)).max[0]).toBeCloseTo(49.25, 9);

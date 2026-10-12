@@ -17,7 +17,80 @@ import { buildHandle } from './handle';
 import { multiply, rotationY, translation } from './mat4';
 import { basisMatrix, profilePart } from './profile';
 import { boltLength, inchesText } from './rear-mount';
+import { trapezoidTriangles } from './plan-wall';
 import type { Joint, Part, Vec2, Vec3 } from './types';
+
+
+/** Clip a polygon in (y, z) to the strip y0 <= y <= y1 (Sutherland-Hodgman). */
+function clipY(poly: V2[], y0: number, y1: number): V2[] {
+  const pass = (pts: V2[], keep: (q: V2) => boolean, y: number): V2[] => {
+    const out: V2[] = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], c = pts[(i + 1) % pts.length];
+      const cut = (): V2 => [y, a[1] + ((c[1] - a[1]) * (y - a[0])) / (c[0] - a[0])];
+      if (keep(a)) { out.push(a); if (!keep(c)) out.push(cut()); } else if (keep(c)) out.push(cut());
+    }
+    return out;
+  };
+  return pass(pass(poly, (q) => q[0] >= y0 - 1e-12, y0), (q) => q[0] <= y1 + 1e-12, y1);
+}
+
+/**
+ * The SLOTTED brake knee as a triangle mesh in the MODEL frame (D-65, D-66 viewer fix): the knee's (y, z) profile extruded along x, with the slot for the flap tongue and pivot block
+ * sawn from the rear face to `slotEndX` through the whole arm. That leaves the inboard ear (with the leg), the outboard ear and, ahead of the slot, the solid bridge between them. `sgn`
+ * mirrors it to the right side. Also returns tight boxes for the overlap tests (the slot is NOT filled) and the wood volume (in^3).
+ */
+export function kneeSlottedMesh(g: BrakeGeom, sgn: 1 | -1): { positions: number[]; indices: number[]; boxes: Array<[Vec3, Vec3]>; volume: number; fullVolume: number } {
+  const kn = g.knee, pv = g.pivot;
+  const yFace = kn.poly[0][0];
+  const prisms: Array<{ y0: number; y1: number; xa: number; xb: number }> = [
+    { y0: yFace, y1: pv.ySlot[0], xa: kn.x0, xb: kn.x1 },
+    { y0: pv.ySlot[0], y1: pv.ySlot[1], xa: Math.min(kn.x1, pv.slotEndX), xb: kn.x1 },
+    { y0: pv.ySlot[1], y1: kn.yOut, xa: kn.x0, xb: kn.x1 },
+  ];
+  const lowerAt = (y: number): number => (y <= yFace + kn.legT + 1e-9 ? kn.zBot : kn.zLeg + ((kn.zArmBot - kn.zLeg) * (y - (yFace + kn.legT))) / Math.max(1e-9, kn.yOut - (yFace + kn.legT)));
+  const positions: number[] = [];
+  const indices: number[] = [];
+  const boxes: Array<[Vec3, Vec3]> = [];
+  let volume = 0;
+  const my = (y: number) => sgn * y;
+  for (const pr of prisms) {
+    const poly = clipY(kn.poly, pr.y0, pr.y1);
+    if (poly.length < 3 || pr.xb - pr.xa < 1e-6) continue;
+    volume += Math.abs(polyArea(poly)) * (pr.xb - pr.xa);
+    const base = positions.length / 3;
+    const vert = (q: V2, x: number) => { positions.push(x, my(q[0]), q[1]); return positions.length / 3 - 1; };
+    const flip = sgn < 0; // mirroring reverses the winding
+    const tri = (a: number, b: number, c: number) => (flip ? indices.push(a, c, b) : indices.push(a, b, c));
+    // caps: CCW in (y, z) looks along -x, so the +x cap keeps the order and the -x cap reverses it
+    for (const t of trapezoidTriangles(poly)) {
+      tri(vert(t[0], pr.xb), vert(t[1], pr.xb), vert(t[2], pr.xb));
+      tri(vert(t[0], pr.xa), vert(t[2], pr.xa), vert(t[1], pr.xa));
+    }
+    // walls: one quad per profile edge, outward normal (0, dz, -dy)
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i], b = poly[(i + 1) % poly.length];
+      if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 1e-9) continue;
+      const a0 = vert(a, pr.xa), b0 = vert(b, pr.xa), b1 = vert(b, pr.xb), a1 = vert(a, pr.xb);
+      tri(a0, b0, b1); tri(a0, b1, a1);
+    }
+    void base;
+    // tight boxes: slices of the y range, each as tall as the arm is at its inboard-most edge (a subset of the solid; the leg step is a slice edge)
+    const cuts = [...new Set([pr.y0, pr.y1, yFace + kn.legT].filter((y) => y >= pr.y0 - 1e-9 && y <= pr.y1 + 1e-9))].sort((u, v) => u - v);
+    for (let k = 0; k + 1 < cuts.length; k++) {
+      const n = Math.max(1, Math.ceil((cuts[k + 1] - cuts[k]) / 0.25));
+      for (let j = 0; j < n; j++) {
+        const ya = cuts[k] + ((cuts[k + 1] - cuts[k]) * j) / n, yb = cuts[k] + ((cuts[k + 1] - cuts[k]) * (j + 1)) / n;
+        const zLo = Math.max(lowerAt(ya + 1e-7), lowerAt(yb - 1e-7));
+        if (kn.zTop - zLo < 1e-6) continue;
+        const ys: [number, number] = sgn > 0 ? [ya, yb] : [-yb, -ya];
+        boxes.push([[pr.xa, ys[0], zLo], [pr.xb, ys[1], kn.zTop]]);
+      }
+    }
+  }
+  const fullVolume = Math.abs(polyArea(kn.poly)) * (kn.x1 - kn.x0);
+  return { positions, indices, boxes, volume, fullVolume };
+}
 
 export { atPose, brakeGeometry, rot2, hull2 };
 export type { BrakeGeom, V2 };
@@ -253,7 +326,12 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
         notes: `Oak outrigger bandsawn from ${f2(kn.x1 - kn.x0)}" stock: a ${f2(kn.legT)}" leg on the hull's outer face (rail and chine, z ${f2(kn.zBot)}" to ${f2(kn.zLeg)}"), an arm ${f2(kn.armT)}" thick that reaches out ${f2(kn.yOut - Y.face)}" over the gap beside the tire, braced by the sloping underside. Its top is FLAT at z = ${f2(kn.zTop)}", flush with the top of the pivot block (D-65). The rear of the arm is SLOTTED (bandsaw, then clean up with a chisel): a ${f2(slotW)}" wide slot (the ${f2(g.plan.wTongue)}" flap tongue plus ${f2(p.brakePivotSlotClearIn)}" a side) centered on the tire (|y| ${f2(pv.ySlot[0])}" to ${f2(pv.ySlot[1])}"), from the rear face (x = ${f2(kn.x0)}") forward to x = ${f2(pv.slotEndX)}", straight through the arm. That leaves two EARS: ${f2(pv.earOut)}" outboard and ${f2(pv.earIn)}" inboard. The ${f2(pv.dia)}" pin hole runs across the ears at x = ${f2(g.H[0])}", z = ${f2(g.H[1])}" (${f2(pv.edgeEarUp)}" below the top, ${f2(pv.edgeEarDown)}" above the arm bottom), through the outboard ear and ${f2(pv.blind)}" blind into the inboard ear; the knee's rear face is ${f2(g.H[0] - kn.x0)}" behind the pin. Drill it together with the flap tongue and block clamped in the slot. It stands ahead of the tire (x ${f2(kn.x0)}" to ${f2(kn.x1)}", the tire front is ${f2(g.r)}"), its bottom on the rail bottom (${f2(kn.zBot)}" off the ground). Bolted through the rail into the backer, not the thin side panel, so the loads go into the rail and the deck.`,
         sourcing: { vendor: `Shop-cut white oak, ${f2(kn.x1 - kn.x0)}" x ${f2(bb.z1 - bb.z0)}" x ${f2(Math.abs(kn.yOut - Y.face))}" blank (laminate two 5/4 boards if no thick stock)` },
       });
-      knee.massLb = Math.max(0, knee.massLb - (slotVol / 1728) * p.oakDensityPcf); // the slot is not drawn: take its wood out of the mass
+      // D-66 (viewer fix): the slot is REAL geometry now: the knee is a mesh with the slot sawn through the arm, so the tongue and pivot block sit in it with their clearance.
+      const km = kneeSlottedMesh(g, sgn);
+      knee.geometry = { type: 'mesh', positions: km.positions, indices: km.indices, boxes: km.boxes };
+      knee.transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+      knee.massLb = knee.massLb * (km.volume / Math.max(1e-9, km.fullVolume)); // the slot's wood is out of the mass (exact volume)
+      void slotVol;
       add1(knee);
     }
 

@@ -4,7 +4,7 @@
  * not read back from the builder where that is practical.
  */
 import { describe, expect, it } from 'vitest';
-import { defaultParams, steerGeometry, validateParams, type Params } from '../params';
+import { bowTurnInAt, defaultParams, steerGeometry, validateParams, type Params } from '../params';
 import { buildModel } from './index';
 import { computeLayout } from './layout';
 import { joistId } from './frame';
@@ -43,8 +43,11 @@ const clashes = (ps: Part[], tol = TOL) => {
   return bad;
 };
 
-/** Smallest |y| of the tire (a thick disc: the rim circle at both faces) of a posed front wheel, by its transform: local x/z span the disc, local y is the axle. */
-function tireMinAbsY(w: Part, p: Params): number {
+/**
+ * Smallest clearance of the tire (a thick disc: the rim circle at both faces) of a posed front wheel to the body side at the same x (D-66: the body half width follows the bow taper,
+ * `bowTurnInAt`): min over the rim of |y| - (bodyWidth / 2 - turnIn(x)). Local x/z span the disc, local y is the axle.
+ */
+function tireMinClear(w: Part, p: Params): number {
   const m = w.transform;
   const c: Vec3 = [m[12], m[13], m[14]];
   const u: Vec3 = [m[0], m[1], m[2]], a: Vec3 = [m[4], m[5], m[6]], v: Vec3 = [m[8], m[9], m[10]];
@@ -53,7 +56,8 @@ function tireMinAbsY(w: Part, p: Params): number {
     const th = (k * Math.PI) / 360;
     for (const side of [-1, 1]) {
       const y = c[1] + side * (p.tireWidthIn / 2) * a[1] + (p.wheelDiameterIn / 2) * (Math.cos(th) * u[1] + Math.sin(th) * v[1]);
-      best = Math.min(best, Math.abs(y));
+      const x = c[0] + side * (p.tireWidthIn / 2) * a[0] + (p.wheelDiameterIn / 2) * (Math.cos(th) * u[0] + Math.sin(th) * v[0]);
+      best = Math.min(best, Math.abs(y) - (p.bodyWidthIn / 2 - bowTurnInAt(p, x)));
     }
   }
   return best;
@@ -396,38 +400,45 @@ describe('the steering check chains and the swept pose (D-58)', () => {
     const over = m.map((x) => (turning(x) ? rot(x) : x));
     expect(clashes(over).length).toBeGreaterThan(0);
   });
-  it('the tires clear the body sides by at least steerClearIn at full lock, using the posed wheel geometry, and the number equals steerGeometry', () => {
+  it('the tires clear the body sides by at least steerClearIn at full lock (D-66: through the whole sweep, against the tapered side at the same x), using the posed wheel geometry, and the number equals steerGeometry', () => {
     const sg = steerGeometry(defaults);
-    for (const deg of [lock, -lock]) {
+    for (const deg of [-lock, -10, 0, 10, lock]) {
       const m = buildModel(defaults, { steerDeg: deg });
       for (const id of ['wheel-FL', 'wheel-FR']) {
-        const clear = tireMinAbsY(get(m, id), defaults) - bodyHalf;
-        expect(clear, `${id} ${deg}`).toBeGreaterThanOrEqual(defaults.steerClearIn - 1e-6);
+        const clear = tireMinClear(get(m, id), defaults);
+        expect(clear, `${id} ${deg}`).toBeGreaterThanOrEqual(defaults.steerClearIn + defaults.bowTaperSlackIn - 0.01);
       }
     }
-    // the tighter wheel at +lock is the left one (its inner rear corner swings toward the body)
     const m = buildModel(defaults, { steerDeg: lock });
-    const cl = Math.min(...['wheel-FL', 'wheel-FR'].map((id) => tireMinAbsY(get(m, id), defaults) - bodyHalf));
-    expect(cl).toBeCloseTo(sg.clearAtLock, 2); // the 720-point rim sampling is good to ~0.002 in
-    expect(sg.clearAtLock).toBeGreaterThanOrEqual(defaults.steerClearIn); // D-58: the front track is the minimum for the lock plus 0.05 in
-    expect(sg.clearAtLock).toBeLessThan(defaults.steerClearIn + 0.15);
-    // at rest the clearance is the plain gap
-    const rest = tireMinAbsY(get(parts, 'wheel-FL'), defaults) - bodyHalf;
-    expect(rest).toBeCloseTo(defaults.frontTrackIn / 2 - defaults.tireWidthIn / 2 - bodyHalf, 6);
+    const cl = Math.min(...['wheel-FL', 'wheel-FR'].map((id) => tireMinClear(get(m, id), defaults)));
+    expect(cl).toBeCloseTo(sg.clearAtLock, 1); // the 720-point rim sampling against the 0.1 in sweep grid
+    expect(sg.clearAtLock).toBeGreaterThanOrEqual(defaults.steerClearIn + defaults.bowTaperSlackIn - 1e-6); // D-66: the taper is derived to this
+    expect(sg.clearAtLock).toBeLessThan(defaults.steerClearIn + defaults.bowTaperSlackIn + 0.1);
+    // at rest the clearance is the plain gap behind the taper: the rear track's 1-1/4 in
+    const rest = tireMinClear(get(parts, 'wheel-FL'), defaults);
+    expect(rest).toBeGreaterThan(1.25 - 1e-6);
+    expect(defaults.frontTrackIn / 2 - defaults.tireWidthIn / 2 - bodyHalf).toBeCloseTo(1.25, 9);
   });
-  it('minimum track: at frontTrackIn = minTrack the posed clearance at full lock equals steerClearIn; a track under it is a validation error and a track over it is not', () => {
+  it('the taper is DERIVED: at any front track that clears the body at rest (and any lock) the posed clearance at full lock is steerClearIn plus the slack, to within the 1/4 in rounding of the taper end, and the sweep stays clean', () => {
+    for (const patch of [{ frontTrackIn: 29.5 }, { frontTrackIn: 31 }, { steerLockDeg: 22 }, { steerLockDeg: 15 }]) {
+      const p = { ...defaults, ...patch } as Params;
+      expect(validateParams(p).filter((i) => i.severity === 'error'), JSON.stringify(patch)).toEqual([]);
+      const sgp = steerGeometry(p);
+      const m = buildModel(p, { steerDeg: p.steerLockDeg });
+      const cl = Math.min(...['wheel-FL', 'wheel-FR'].map((id) => tireMinClear(get(m, id), p)));
+      expect(cl, JSON.stringify(patch)).toBeCloseTo(sgp.clearAtLock, 1);
+      expect(cl, JSON.stringify(patch)).toBeGreaterThanOrEqual(p.steerClearIn + p.bowTaperSlackIn - 0.01);
+      expect(cl, JSON.stringify(patch)).toBeLessThan(p.steerClearIn + p.bowTaperSlackIn + 0.25);
+    }
+  });
+  it('minimum track for THIS body shape: the default has the 1/8 in slack, so the least track is a hair under it; the track is not what limits the taper (the shape is derived from it)', () => {
     const sg = steerGeometry(defaults);
-    expect(sg.minTrack).toBeCloseTo(34.28, 1);
-    const p = { ...defaults, frontTrackIn: sg.minTrack };
-    const m = buildModel(p, { steerDeg: lock });
-    const cl = Math.min(...['wheel-FL', 'wheel-FR'].map((id) => tireMinAbsY(get(m, id), p) - p.bodyWidthIn / 2));
-    expect(cl).toBeCloseTo(defaults.steerClearIn, 2);
-    expect(steerGeometry(p).clearAtLock).toBeCloseTo(defaults.steerClearIn, 9);
-    expect(validateParams({ ...defaults, frontTrackIn: sg.minTrack + 0.05 }).filter((i) => i.severity === 'error')).toEqual([]);
-    expect(validateParams({ ...defaults, frontTrackIn: sg.minTrack - 0.05 }).some((i) => i.severity === 'error' && i.keys.includes('steerLockDeg'))).toBe(true);
-    // the track at minTrack still sweeps clean through the whole range
+    expect(sg.minTrack).toBeCloseTo(29.65, 1);
+    expect(sg.minTrack).toBeLessThan(defaults.frontTrackIn);
+    // a lock the body cannot clear is a validation error (the shortest S-curve is not enough), and the default sweeps clean through the whole range
+    expect(validateParams({ ...defaults, steerLockDeg: 35, bowWidthIn: 21 }).some((i) => i.severity === 'error' && i.keys.includes('steerLockDeg'))).toBe(true);
     const bad: string[] = [];
-    for (let deg = -lock; deg <= lock; deg += 2) bad.push(...clashes(buildModel(p, { steerDeg: deg })));
+    for (let deg = -lock; deg <= lock; deg += 2) bad.push(...clashes(buildModel(defaults, { steerDeg: deg })));
     expect(bad).toEqual([]);
   });
 });
@@ -461,15 +472,15 @@ describe('turning geometry (D-56: no Ackermann, both wheels parallel)', () => {
     expect(fr[12]).toBeCloseTo(kx + (defaults.frontTrackIn / 2) * Math.sin(d), 9);
     expect(fr[13]).toBeCloseTo(-(defaults.frontTrackIn / 2) * Math.cos(d), 9);
   });
-  it('the outer tire edge swings a circle of WB / sin(lock) + track / 2 + tire / 2 = 147.6 in about the turning center; the inner edge 109.7 in', () => {
+  it('the outer tire edge swings a circle of WB / sin(lock) + track / 2 + tire / 2 = 145.4 in about the turning center (D-66: 30 in front track); the inner edge 109.7 in', () => {
     const m = buildModel(defaults, { steerDeg: lock });
     const C: [number, number] = [0, sg.centerRadiusIn];
     const wheelDist = (id: string) => Math.hypot(get(m, id).transform[12] - C[0], get(m, id).transform[13] - C[1]);
     // the outer wheel at a left turn is the right one
     expect(wheelDist('wheel-FR') + defaults.tireWidthIn / 2).toBeCloseTo(sg.outerEdgeRadiusIn, 6);
     expect(wheelDist('wheel-FL') - defaults.tireWidthIn / 2).toBeCloseTo(sg.innerEdgeRadiusIn, 6);
-    expect(sg.outerEdgeRadiusIn).toBeCloseTo(147.6, 1);
-    expect(sg.innerEdgeRadiusIn).toBeCloseTo(109.65, 1); // 34.5 in front track (D-58)
+    expect(sg.outerEdgeRadiusIn).toBeCloseTo(145.4, 1);
+    expect(sg.innerEdgeRadiusIn).toBeCloseTo(111.9, 1); // 30 in front track (D-66; 34.5 in gave 147.6 / 109.65 at D-58)
     // closed form
     expect(sg.outerEdgeRadiusIn).toBeCloseTo(defaults.wheelbaseIn / Math.sin(lock * RAD) + defaults.frontTrackIn / 2 + defaults.tireWidthIn / 2, 9);
     // the turning circle (outer edge diameter) is about 24.7 ft, the center-line circle about 20 ft
@@ -555,7 +566,7 @@ describe('front-end masses at the defaults (D-56): ranges, not pins', () => {
     expect(tot).toBeLessThan(160);
     expect(get(parts, 'beam-F').massLb).toBeGreaterThan(4);
     expect(get(parts, 'beam-F').massLb).toBeLessThan(6.5);
-    expect(get(parts, 'king-beam').massLb).toBeGreaterThan(2.5);
+    expect(get(parts, 'king-beam').massLb).toBeGreaterThan(2.3); // D-66: the beam spans the narrowed bow (17 in between the rails, was 21)
     expect(get(parts, 'king-beam').massLb).toBeLessThan(4.5);
     expect(get(parts, 'kingpin').massLb).toBeGreaterThan(0.2);
     expect(get(parts, 'kingpin').massLb).toBeLessThan(1);

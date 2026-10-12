@@ -5,9 +5,10 @@ import { makeContext } from './context';
 import { footStopCheck, footStopLoads, hullChecks, liftCheck, liftShares, transportMassCg } from './hull';
 import { bowHold, liftBarStressPsi, liftSlot } from '../model/body';
 import { innerHalfWidth } from '../model/layout';
+import { PRE_D66 } from '../test-fixtures';
 
 const ctxFor = (patch: Partial<Params> = {}) => {
-  const p = { ...defaultParams(), ...patch } as Params;
+  const p = { ...defaultParams(), ...PRE_D66, ...patch } as Params; // D-66: the foot brace hand calculations are the D-58 bow (21.5 in at the bulkhead); the D-66 bow is checked in d66.test.ts
   return makeContext(p, buildModel(p, { rider: 'goal', cargo: true }));
 };
 const ctx = ctxFor();

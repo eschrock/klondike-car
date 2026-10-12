@@ -7,6 +7,7 @@
  * Side-to-frame tie (build review M6, D-43): the ladder rails run FLUSH UNDER THE CHINES (outer face at hw + side), not inboard of them, so the
  * chine bears on the rail top and is Domino-tied and epoxied to it every `chineTieSpacingIn`.
  */
+import { AXLE_BEAM_POSITION } from '../params';
 import { beamSeat, localPoint, railSection } from './rear-mount';
 import { IN3_PER_FT3, STEP, box, span, SIDES, woodMassLb, type Ctx } from './build-utils';
 import { customPart } from './mesh-utils';
@@ -41,7 +42,8 @@ export function buildFrame(ctx: Ctx): Part[] {
     // Relief notch (D-56: the deck is only 8 in up, so the 3 in rail reaches below the rear axle beam top): cut up from the rail bottom where the beam passes under the rail,
     // 1/16 in clear of the beam. (The D-57 step brake needs no notch: its knee bolts to the rail bottom band.)
     const notches: { x0: number; x1: number; z: number }[] = [];
-    if (L.beamR.top + 0.0625 > zb) notches.push({ x0: L.beamR.x - L.beamR.thick / 2 - 0.0625, x1: L.beamR.x + L.beamR.thick / 2 + 0.0625, z: L.beamR.top + 0.0625 });
+    const notchZ = L.beamR.top + 0.0625 + (p.axleBeamPosition === AXLE_BEAM_POSITION.underslung ? p.axleProudIn + p.clampPlateThickIn : 0);
+    if (notchZ > zb) notches.push({ x0: L.beamR.x - L.beamR.thick / 2 - 0.0625, x1: L.beamR.x + L.beamR.thick / 2 + 0.0625, z: notchZ }); // D-66: high enough to clear the rear clamp plate (it stands on the tube, which is proud of the beam), whose inner part runs under the rail
     notches.sort((a, b) => a.x0 - b.x0);
     for (const n of notches) n.x0 = Math.max(n.x0, x0); // a notch cannot start behind the rail's rear end
     for (let i = notches.length - 1; i >= 0; i--) if (notches[i].x1 <= notches[i].x0 + 1e-6) notches.splice(i, 1);
@@ -60,9 +62,9 @@ export function buildFrame(ctx: Ctx): Part[] {
       geometry: planWallGeometry(outline, railT, (x) => s * ((rY0 + rY1) / 2 - L.turnIn(x))), transform: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
       massLb: mass, fab: 'bentlam', step: STEP.frame, grain: 'x', stock, rough: { t: railT / 2 + p.millingAllowanceIn, w: railD + p.millingAllowanceIn, l: stock.l + 4 * p.millingAllowanceIn }, explode: [fxOf(0.6), s * 0.3, -0.6],
     });
-    rail.notes = `${f2(railT)}" × ${f2(railD)}" oak bar, straight behind the bow turn-in and ${p.bowTurnInIn > 0 ? `eased in with the hull over the last ${p.bowTurnLenIn}" (${p.bowTurnInIn}" each side at the bulkhead, D-57; cold-bent flat in 2 plies on the same plan form as the chine, the step and notches cut after bending)` : 'straight'}, ${f2(L.railEnd - rearTx)}" long from the rear transom's inner face to the end of the flat deck, outer face flush under the chine so the chine sits on it all the way (D-43). ${L.railDepthF < railD - 1e-6 ? `Ahead of x = ${f2(L.railStepX)}" it steps (45 degree ramp) down to ${f2(L.railDepthF)}" deep so the front axle beam, swinging ±${p.steerLockDeg}° about the kingpin, passes under it with 0.4" to spare (D-56). ` : ''}Its top is flush with the chine bottom AND the deck underside (one deck level, D-52): the deck bonds to the rail top and its edge rises into the gap under the inner chine band (D-62; no rabbet is routed). The chine sits on the top of the rail's outer ${L.side}" and is Domino-tied (vertical Dominos) and epoxied to it every ${p.chineTieSpacingIn}". Frame + deck are one glued unit, turned over and lowered into the inverted side assemblies. Glue the frame with the rails 1/2" LONG at both ends: they are trimmed with the bands and webs to the measured transom-to-bulkhead length less 1/32" at the dry fit (S1). The rear axle hangers are bolted and glued to its inner face (${seat ? 'axle-hanger-' + tag : 'no hanger'}).`;
+    rail.notes = `${f2(railT)}" × ${f2(railD)}" oak bar, straight behind the bow turn-in and ${L.taper.turnIn > 0 ? `eased in with the hull from x = ${f2(L.taper.x0)}" to x = ${f2(L.taper.x1)}" (${f2(L.taper.turnIn)}" each side at the bow, D-66; cold-bent flat in 2 plies on the same plan form as the chine, the step and notches cut after bending)` : 'straight'}, ${f2(L.railEnd - rearTx)}" long from the rear transom's inner face to the end of the flat deck, outer face flush under the chine so the chine sits on it all the way (D-43). ${L.railDepthF < railD - 1e-6 ? `Ahead of x = ${f2(L.railStepX)}" it steps (45 degree ramp) down to ${f2(L.railDepthF)}" deep so the front axle beam, swinging ±${p.steerLockDeg}° about the kingpin, passes under it with 0.4" to spare (D-56). ` : ''}Its top is flush with the chine bottom AND the deck underside (one deck level, D-52): the deck bonds to the rail top and its edge rises into the gap under the inner chine band (D-62; no rabbet is routed). The chine sits on the top of the rail's outer ${L.side}" and is Domino-tied (vertical Dominos) and epoxied to it every ${p.chineTieSpacingIn}". Frame + deck are one glued unit, turned over and lowered into the inverted side assemblies. Glue the frame with the rails 1/2" LONG at both ends: they are trimmed with the bands and webs to the measured transom-to-bulkhead length less 1/32" at the dry fit (S1). The rear axle hangers are bolted and glued to its inner face (${seat ? 'axle-hanger-' + tag : 'no hanger'}).`;
     rail.plies = 2;
-    rail.notes += ` CUT LIST (build 3c S2): ${f2(railT / 2)}" × ${f2(railD + p.millingAllowanceIn)}" × ${f2(x1 - x0 + 4 * p.millingAllowanceIn)}" strips, TWO per rail (resaw from 4/4 and plane; strips this thin and ${f2(railD)}" wide need a planer sled or a drum sander), plus 25% spares; only the last ${p.bowTurnLenIn}" is curved.`;
+    rail.notes += ` CUT LIST (build 3c S2): ${f2(railT / 2)}" × ${f2(railD + p.millingAllowanceIn)}" × ${f2(x1 - x0 + 4 * p.millingAllowanceIn)}" strips, TWO per rail (resaw from 4/4 and plane; strips this thin and ${f2(railD)}" wide need a planer sled or a drum sander), plus 25% spares; only the last ${f2(L.railEnd - L.taper.x0)}" is curved.`;
     parts.push(rail);
   }
 
@@ -97,7 +99,8 @@ export function buildFrame(ctx: Ctx): Part[] {
     const meetsHanger = hangerAt(x);
     const bkr = brakeGeometry(p, L).backer; // the step brake's oak backers on the rail inner faces (D-57): a joist that meets one is cut back to its inner face
     const meetsBacker = x + L.joistT / 2 > bkr.x0 && x - L.joistT / 2 < bkr.x1;
-    const half = rY0 - L.turnIn(x + (x === L.king.x ? L.king.len : L.joistT) / 2) - (meetsHanger ? p.axleHangerThickIn : 0) - (meetsBacker && !meetsHanger ? bkr.t : 0);
+    const halfT = x === L.king.x ? L.king.len : x === L.chain.joistX ? L.chain.joistT : L.joistT; // the chain joist is thicker than the others (D-58)
+    const half = rY0 - L.turnIn(x + halfT / 2) - (meetsHanger ? p.axleHangerThickIn : 0) - (meetsBacker && !meetsHanger ? bkr.t : 0);
     if (isKing) {
       const k = L.king;
       const kb = box(ctx, {

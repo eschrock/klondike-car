@@ -130,6 +130,10 @@ function computeOBBs(part: Part): OBB[] {
     }
     return out.length ? out : [partOBB(part)];
   }
+  if (g.type === 'mesh' && g.boxes && g.boxes.length) {
+    // Explicit boxes inside the solid (a slotted member): exact where the bounding box would fill the slot.
+    return g.boxes.map(([lo, hi]) => ({ center: transformPoint(m, [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2]), axes: [column(m, 0), column(m, 1), column(m, 2)] as [Vec3, Vec3, Vec3], half: [(hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2, (hi[2] - lo[2]) / 2] as Vec3 }));
+  }
   if (g.type === 'mesh' && g.slabs) {
     // A long, thin, plan-curved wall (a hull side member): one box per `slabs` inches of x over the vertices in that stretch.
     const b = localBounds(g);

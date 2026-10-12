@@ -1,0 +1,140 @@
+/**
+ * D-66 (Eric 2026-10-12): matched tracks and a gradual bow taper. Rear AND front track 30 in (tire to body gap 1-1/4 in), the cargo load-height rule 10 in, and the abrupt 1-1/4 in turn-in over
+ * 14 in replaced by a long S-curve taper that starts mid-cabin (x = 20) and is DERIVED from the swing of the front wheels (`bowTaper`). The results are pinned here; the pieces are in
+ * params.test.ts (the taper function), body.test.ts (the model), pivot.test.ts (the posed wheels), brake.test.ts (the slotted knee) and track-d58.test.ts (the D-58 history).
+ * Details: docs/phase3c-10-notes.md.
+ */
+import { describe, expect, it } from 'vitest';
+import { bowTaper, defaultParams, steerGeometry, validateParams } from './params';
+import { buildModel } from './model';
+import { computeLayout } from './model/layout';
+import { totalMass } from './model/mass';
+import { worldAABB } from './model/bounds';
+import { runChecks } from './analysis';
+import { riderSweep } from './analysis/rider-sweep';
+import { cargoCapacity } from './analysis/cargo-capacity';
+import { checkTruckFit } from './truck/fit';
+
+const defaults = defaultParams();
+const L = computeLayout(defaults);
+const cs = runChecks(defaults, { includeTruck: false });
+const row = (id: string) => cs.find((c) => c.id === id)!;
+
+describe('D-66 matched tracks', () => {
+  it('rear and front track are both 30 in: the straight-ahead wheels line up; the tire inner face is 13-1/4 in off center, 1-1/4 in from the 12 in body side (3/4 in is the least)', () => {
+    expect(defaults.rearTrackIn).toBe(30);
+    expect(defaults.frontTrackIn).toBe(defaults.rearTrackIn);
+    const gap = defaults.rearTrackIn / 2 - defaults.tireWidthIn / 2 - defaults.bodyWidthIn / 2;
+    expect(gap).toBeCloseTo(1.25, 9);
+    expect(gap).toBeGreaterThanOrEqual(0.75);
+    const parts = buildModel(defaults);
+    for (const [f, r] of [['wheel-FL', 'wheel-RL'], ['wheel-FR', 'wheel-RR']]) expect(parts.find((x) => x.id === f)!.transform[13]).toBeCloseTo(parts.find((x) => x.id === r)!.transform[13], 9);
+    expect(validateParams(defaults).filter((i) => i.severity !== 'info')).toEqual([]);
+  });
+  it('overall width is the 30 in track plus the hub and axle end (34.3 in; it was 38.8 in), and the sled still fits beside in the bed, assembled and in Transport mode', () => {
+    const fit = checkTruckFit(defaults, (v) => buildModel(defaults, v));
+    expect(fit.dims.installed.widthIn).toBeCloseTo(34.28, 1);
+    expect(fit.anyFits).toBe(true);
+    for (const config of ['installed', 'removed']) expect(fit.cases.some((c) => c.mode === 'beside' && c.config === config && c.fits), config).toBe(true);
+    expect(row('turn-radius').value).toBeCloseTo(145.4, 0); // outer tire edge radius in (150 limit): a hair better than 147.6 at the 34.5 in front track
+  });
+  it('mass 115.5 lb (119.9 before): the narrower bow, a shorter front beam and king beam, the shorter stubs and the lighter rear plates', () => {
+    const m = totalMass(buildModel(defaults, { rider: 'none', cargo: false }));
+    expect(m).toBeGreaterThan(115);
+    expect(m).toBeLessThan(116.2);
+  });
+});
+
+describe('D-66 bow taper', () => {
+  const t = bowTaper(defaults);
+  it('starts at x = 20 (mid-cabin), takes 22 in, goes from 24 in to 18.5 in outside; 17-1/4 in is left inside for the rider\'s feet (12 to 14 in needed)', () => {
+    expect(t.x0).toBe(20);
+    expect(t.x1 - t.x0).toBeGreaterThan(20);
+    expect(t.x1 - t.x0).toBeLessThan(25);
+    expect(t.turnIn).toBeCloseTo(2.75, 12);
+    const inside = defaults.bowWidthIn - 2 * defaults.sideThicknessIn;
+    expect(inside).toBeCloseTo(17.25, 9);
+    expect(inside).toBeGreaterThan(14);
+    expect(2 * (L.hwC - L.turnIn(L.xFlatEnd))).toBeCloseTo(17.25, 9);
+    expect(validateParams(defaults).some((i) => /feet need/.test(i.message))).toBe(false);
+  });
+  it('is gradual: never steeper than 14 degrees, curvature-continuous (smootherstep), tightest bend 31 in against the 9.4 in cold-bend limit of a 0.234 in band', () => {
+    let maxSlope = 0;
+    for (let x = t.x0; x < t.x1; x += 0.05) maxSlope = Math.max(maxSlope, (L.turnIn(x + 0.05) - L.turnIn(x)) / 0.05);
+    expect((Math.atan(maxSlope) * 180) / Math.PI).toBeLessThan(14);
+    expect(t.minRadiusIn).toBeGreaterThan(30);
+    expect(t.minRadiusIn).toBeGreaterThan(defaults.hullLamMinRadiusFactor * L.sideBand * 3);
+  });
+  it('keeps the front tires steerClearIn + 1/8 in clear of the body through the whole +-20 degree sweep (derived from the real wheel sweep): the steer-clear row passes with room', () => {
+    const sg = steerGeometry(defaults);
+    expect(sg.clearAtLock).toBeGreaterThanOrEqual(0.75 + 0.125 - 1e-6);
+    expect(row('steer-clear').status).toBe('pass');
+    expect(row('steer-clear').util!).toBeLessThan(0.9); // 0.83: 0.90 in against the 0.75 in limit
+  });
+  it('the sandwich bands stay bendable, the bow bulkhead follows the taper, and the deck, rails and chain joist follow it too', () => {
+    expect(validateParams(defaults).filter((i) => i.severity === 'error')).toEqual([]);
+    expect(L.bulkhead.halfW).toBeCloseTo(9.25, 9);
+    const m = buildModel(defaults);
+    const bb = worldAABB(m.find((x) => x.id === 'bow-bulkhead')!);
+    expect(bb.max[1]).toBeCloseTo(9.25, 6);
+    const king = worldAABB(m.find((x) => x.id === 'king-beam')!);
+    expect(king.max[1]).toBeCloseTo(11.25 - L.turnIn(L.king.x + defaults.kingBeamLengthIn / 2), 6); // between the rails: 17 in
+    expect(2 * king.max[1]).toBeLessThan(18);
+  });
+});
+
+describe('D-66 the numbers that moved', () => {
+  it('cargo: the load-height rule is 10 in; the 200 lb cargo tips at 40.6 deg (D-67 limit 35: a plain pass, it was marginal at the D-66 limit of 40), the capacity is 274 lb and the bearing-groove row limits it (D-66 had it at 226 lb on the tip row; the front beam at 269 lb before)', () => {
+    expect(defaults.cargoCgHeightIn).toBe(10);
+    const tip = row('tip-straight');
+    expect(tip.cases!.cargo!.value).toBeCloseTo(40.65, 1); // unchanged by D-67: the limit moved, not the sled
+    expect(tip.cases!.cargo!.limit).toBe(35);
+    expect(tip.cases!.cargo!.value).toBeGreaterThan(35 * 1.1); // outside the 10% marginal band (38.5)
+    expect(tip.statusCargo).toBe('pass'); // marginal at the 40 deg limit
+    const cap = cargoCapacity(defaults);
+    expect(cap.capacityLb!).toBeGreaterThanOrEqual(200);
+    expect(cap.capacityLb!).toBeLessThan(300); // 274 lb
+    expect(cap.limiter!.id).toBe('bearing-groove'); // the tip row no longer limits (it did at 226 lb with the 40 deg limit)
+    expect(cap.statusAtPayload).not.toBe('fail');
+    expect(cap.cargoFailsAtPayload).toEqual([]);
+  });
+  it('riders: safe 50 to over 250 lb (nothing red), green 50 to 240 lb (D-67: the straight tip, 43.6 deg at 200 lb, clears its 35 deg limit with room; it was inside the 10% band of the old 40 deg limit from 190 lb, green 50-180 lb; 250 lb is yellow on the seat-back panel only)', () => {
+    const sw = riderSweep(defaults);
+    expect(sw.safe).toEqual({ loLb: 50, hiLb: 250, openLow: true, openHigh: true });
+    expect(sw.green).toMatchObject({ loLb: 50, hiLb: 240, openLow: true, openHigh: false });
+    expect(row('tip-straight').cases!.goal!.value).toBeCloseTo(43.6, 0);
+    expect(row('tip-straight').statusGoal).toBe('pass'); // marginal at the 40 deg limit (util 0.80 now, 35 / 43.6)
+    expect(row('tip-lock').status).toBe('pass');
+    expect(row('slide-before-tip').status).toBe('pass');
+  });
+  it('no row fails at 150 lb, 200 lb or the 200 lb cargo; only the turn radius and the fit facts are above 0.9 (D-67: the tip row, 0.95 at the 40 deg limit, is down to 0.86 on the cargo case)', () => {
+    for (const c of cs) {
+      expect(c.statusOperating ?? c.status, c.id).not.toBe('fail');
+      expect(c.statusGoal ?? c.status, c.id).not.toBe('fail');
+      expect(c.statusCargo ?? 'pass', c.id).not.toBe('fail');
+    }
+    const high = cs.filter((c) => c.status !== 'info' && ((c.util ?? 0) > 0.9 || (c.utilCargo ?? 0) > 0.9)).map((c) => c.id).sort();
+    expect(high).toEqual(['lash-points', 'park-hold', 'seat-stow', 'turn-radius']);
+    expect(row('rest-load').status).toBe('pass'); // the resting 250 lb adult still passes: holds up to 348 lb, the heavier wheel is the tightest member (73%)
+    expect(row('rest-load').how).toMatch(/holds up to 34\d lb/);
+  });
+  it('front end at the narrow bow: the roll pads (9-1/2 in out) are under the rails at every angle, the chain eyes stay inside the rails, the king beam is 17 in between the rails; every front row passes', () => {
+    for (const id of ['king-bearing', 'kingpin', 'front-beam', 'front-stub', 'steer-stops', 'king-beam', 'steer-clear', 'bridle-eye']) {
+      expect(row(id).status, id).toBe('pass');
+      expect(row(id).statusCargo ?? 'pass', id).not.toBe('fail');
+    }
+    expect(row('king-bearing').util!).toBeLessThan(0.9);
+    expect(row('steer-stops').util!).toBeLessThan(0.6);
+    expect(defaults.rollPadRadiusIn).toBe(9.5);
+    expect(defaults.steerChainBeamYIn).toBe(8);
+  });
+  it('rear and brake: the rear clamp plate (11-3/4 to 13-1/4 in) runs under the outer part of the rail, whose relief notch is cut over it; the brake rows pass, brake-clear still 0.22 in', () => {
+    const rail = buildModel(defaults).find((x) => x.id === 'rail-L')!;
+    const plate = worldAABB(buildModel(defaults).find((x) => x.id === 'clamp-RL1')!);
+    expect(plate.min[1]).toBeCloseTo(11.75, 6);
+    expect(plate.max[1]).toBeCloseTo(13.25, 6);
+    expect(rail).toBeDefined();
+    for (const id of ['brake-slow', 'brake-ratio', 'brake-clear', 'brake-flap', 'brake-pivot', 'brake-mount', 'brake-return', 'brake-abuse', 'bearing-groove', 'rear-beam-seat', 'axle-stress']) expect(row(id).status, id).toBe('pass');
+    expect(row('brake-clear').value).toBeCloseTo(0.22, 1);
+  });
+});

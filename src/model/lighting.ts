@@ -183,10 +183,13 @@ export function buildLighting(ctx: Ctx): Part[] {
       const stripX0 = p.seatXIn - GRIP_BEHIND_HPOINT_IN + GRIP_BACKING_END_IN - 0.3, stripX1 = p.seatXIn - GRIP_BEHIND_HPOINT_IN + p.grabBoardLengthIn - GRIP_BACKING_END_IN + 0.3;
       if (x + REFLECTOR_SIZE[0] / 2 + 0.1 > stripX0 && x - REFLECTOR_SIZE[0] / 2 - 0.1 < stripX1) x = stripX1 + REFLECTOR_SIZE[0] / 2 + 0.3;
       const color = i === 0 ? 'red' : 'amber'; // 3c-5: red at the rear, amber at the front (DOT-C2 side marker colors)
+      // D-66: the side draws in toward the bow (L.turnIn), so the reflector sits on the tapered outer face and turns with it in plan.
+      const outerHalf = L.hwC + L.side - L.turnIn(x);
+      const dTurn = (L.turnIn(x + 0.25) - L.turnIn(x - 0.25)) / 0.5;
       parts.push(box(ctx, {
         id: `reflector-${tag}${i + 1}`, partNo: 'reflector', name: `Side reflector ${tag}${i + 1} (${color}, ${i === 0 ? 'rear' : 'front'})`, group: 'lighting', mat: 'fixed', massLb: REFLECTOR_MASS_LB,
         kind: 'purchased', material: 'reflector', fab: 'buy', step: STEP.finish, size: [...REFLECTOR_SIZE],
-        center: [x, s * (L.hwC + L.side + REFLECTOR_SIZE[1] / 2), sideTopAt(L, x) - L.railBand / 2], rot: { y: sideSlopeAt(L, x) },
+        center: [x, s * (outerHalf + REFLECTOR_SIZE[1] / 2), sideTopAt(L, x) - L.railBand / 2], rot: { y: sideSlopeAt(L, x), z: -s * Math.atan(dTurn) },
         sourcing: { vendor: `Generic 2" × 1" adhesive-backed prismatic side reflector, ${color} (DOT-C2 class: amber at the front, red at the rear)`, costUsd: 2 },
         notes: `Stick-on ${color} prismatic reflector on the gunwale's outer face; wipe the varnish clean and press for 60 s (D-41, 3c-5).`,
       }));

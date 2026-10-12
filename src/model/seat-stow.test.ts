@@ -234,11 +234,11 @@ describe('the flat cargo bed (D-53, D-54, D-57)', () => {
       a += ((2 * innerHalfWidth(L, x0) + 2 * innerHalfWidth(L, x1)) / 2) * (x1 - x0);
     }
     expect(bed.areaIn2).toBeCloseTo(a, 0);
-    expect(bed.stopWidthIn).toBeCloseTo(2 * (L.hwC - defaults.bowTurnInIn), 6);
+    expect(bed.stopWidthIn).toBeCloseTo(2 * (L.hwC - L.taper.turnIn), 6);
     expect(bed.areaIn2).toBeLessThan(len * bed.widthIn);
   });
-  it('a load narrower than the narrowest cabin gets the whole bed; one wider than the 22.75 in cabin does not fit', () => {
-    const l24 = bedLengthAtWidth(L, bed, 24), l20 = bedLengthAtWidth(L, bed, 20);
+  it('a load narrower than the narrowest cabin (17.25 in at the bow, D-66) gets the whole bed; one wider than the 22.75 in cabin does not fit', () => {
+    const l24 = bedLengthAtWidth(L, bed, 24), l20 = bedLengthAtWidth(L, bed, 17);
     expect(l24).toBe(0);
     expect(l20).toBeCloseTo(bed.xStop - bed.x0, 0);
     expect(2 * innerHalfWidth(L, bed.xLoadEnd)).toBeGreaterThanOrEqual(defaults.cargoLoadWidthIn - 1e-6);

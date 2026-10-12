@@ -45,7 +45,7 @@ describe('planWallGeometry', () => {
     for (const i of g.indices!) expect(i).toBeLessThan(n);
     expect(g.indices!.length % 3).toBe(0);
   });
-  it('every triangle of the two faces lies on the curved face: its normal follows the face (a few degrees of tilt in x at most), and none spans more than one subdivision in x', () => {
+  it('every triangle of the two faces lies on the curved face: its normal follows the face (up to about 13 degrees of tilt in x where the bow taper is steepest), and none spans more than one subdivision in x', () => {
     if (g.type !== 'mesh') return;
     const P = g.positions, I = g.indices!;
     let faces = 0;
@@ -56,7 +56,7 @@ describe('planWallGeometry', () => {
       const len = Math.hypot(n[0], n[1], n[2]);
       if (Math.abs(n[1]) / len < 0.5) continue; // the rim
       faces++;
-      expect(Math.abs(n[0]) / len, 'normal tilt toward x').toBeLessThan(Math.sin((9 * Math.PI) / 180));
+      expect(Math.abs(n[0]) / len, 'normal tilt toward x').toBeLessThan(Math.sin((14 * Math.PI) / 180)); // D-66: the curved face turns up to about 13 degrees (the steepest part of the long bow taper)
       expect(Math.abs(n[2]) / len, 'normal tilt toward z').toBeLessThan(0.02);
       expect(Math.max(P[a], P[b], P[c]) - Math.min(P[a], P[b], P[c])).toBeLessThanOrEqual(1.5 + 1e-6);
     }
@@ -97,7 +97,7 @@ describe('the real side members (chine, gunwale, web) and rails', () => {
         if (Math.abs(n[1]) / len < 0.5) continue;
         faces++;
         expect(Math.max(P[a], P[b], P[c]) - Math.min(P[a], P[b], P[c]), `${id} triangle ${k / 3}`).toBeLessThanOrEqual(1.6);
-        expect(Math.abs(n[0]) / len).toBeLessThan(Math.sin((10 * Math.PI) / 180));
+        expect(Math.abs(n[0]) / len).toBeLessThan(Math.sin((14 * Math.PI) / 180));
       }
       expect(faces).toBeGreaterThan(40);
     });

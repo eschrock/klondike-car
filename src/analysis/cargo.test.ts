@@ -3,7 +3,7 @@
  * The cargo case sits next to the rider cases: it adds `cases.cargo` / `statusCargo` and never moves a rider status, a rider util or the rider sweep.
  */
 import { describe, expect, it } from 'vitest';
-import { defaultParams } from '../params';
+import { defaultParams, type Params } from '../params';
 import { buildModel } from '../model';
 import { cargoBed } from '../model/bed';
 import { worldAABB } from '../model/bounds';
@@ -19,8 +19,10 @@ import { cargoCapacity } from './cargo-capacity';
 import { grainSlopeFactor, lidLoads, strapLoads } from './cargo';
 import { riderSweep } from './rider-sweep';
 import { contactsAt, RAD } from './geometry';
+import { PRE_D66 } from '../test-fixtures';
 
-const defaults = defaultParams();
+// D-66 changed the tracks, the load-height rule and the bow: this file's hand calculations are the D-58 design (PRE_D66); the D-66 numbers are in d66.test.ts
+const defaults = { ...defaultParams(), ...PRE_D66 } as Params;
 const L = computeLayout(defaults);
 const cs = runChecks(defaults, { includeTruck: false });
 const byId = (c: AnalysisCheck[], id: string) => c.find((x) => x.id === id)!;
@@ -124,7 +126,7 @@ describe('rear-only traction with the cargo forward (info number quoted by the c
 });
 
 describe('tipping with the high cargo CG', () => {
-  it('lateral tip = atan(d / h) of the 200 lb payload (CG 16.2 in up, 1.95 in left of center) worst over the steering range, hand-derived: aft and fore both pass the 40 degree limit; the fore pile (x = 31.3) is the worse', () => {
+  it('lateral tip = atan(d / h) of the 200 lb payload (CG 16.2 in up, 1.95 in left of center) worst over the steering range, hand-derived: aft and fore both pass the 35 degree limit (D-67; it was 40 and marginal); the fore pile (x = 31.3) is the worse', () => {
     const k = byId(cs, 'tip-straight').cases!.cargo!;
     const ct = contactsAt(ctx.contact, 0);
     expect(ct.FL[0]).toBeCloseTo(44, 9);
@@ -143,11 +145,13 @@ describe('tipping with the high cargo CG', () => {
     };
     const [aft, fore] = ctx.loads.cargoCases;
     expect(Math.abs(degAt(aft) - degAt(fore))).toBeLessThan(0.5); // D-58: the narrower REAR track makes the aft pile as bad as the fore one (41.7 vs 41.9)
-    expect(Math.abs(degAt(fore) - 42.1)).toBeLessThan(0.5); // 44.7 at the old 35.5 in tracks (200 lb; 43.2 at 250 lb); 43.0 at 34 1/2 / 32 in (D-58); 42.1 with the D-60 weight package (the sled is 24 lb lighter, so the payload's high, off-center CG counts for more in the total): 2 degrees over the 40 degree limit, still marginal
+    expect(Math.abs(degAt(fore) - 42.1)).toBeLessThan(0.5); // 44.7 at the old 35.5 in tracks (200 lb; 43.2 at 250 lb); 43.0 at 34 1/2 / 32 in (D-58); 42.1 with the D-60 weight package (the sled is 24 lb lighter, so the payload's high, off-center CG counts for more in the total): 41.9 degrees (hand-derived here) at the D-58 tracks and 12 in rule: D-67 lowered the limit to 35 degrees, so 7 degrees over it, outside the 10% marginal band (below 38.5), a plain pass (it was marginal at the 40 degree limit)
     expect(k.value).toBeCloseTo(Math.min(degAt(aft), degAt(fore)), 6);
     expect(k.value).toBeLessThan(byId(cs, 'tip-straight').cases!.operating!.value); // worse than the rider cases
     expect(k.value).toBeGreaterThan(defaults.tipStraightMinDeg);
-    expect(k.status).toBe('marginal');
+    expect(k.limit).toBe(35); // D-67
+    expect(k.value).toBeGreaterThan(defaults.tipStraightMinDeg * 1.1); // outside the 10% marginal band
+    expect(k.status).toBe('pass');
   });
 });
 
