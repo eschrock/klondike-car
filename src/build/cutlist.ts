@@ -9,6 +9,7 @@
  *
  * Identical pieces (same `partNo`, same dimensions) are one row with a quantity; every row lists the part ids it covers.
  */
+import { isOakStocked } from './prices';
 import type { Dims, Part } from '../model/types';
 import type { Params } from '../params';
 import { localBounds } from '../model/bounds';
@@ -44,7 +45,7 @@ export const BOARD_THICKNESSES: readonly BoardThickness[] = [
 
 /** Smallest nominal board that yields a rough thickness, or null when none does. */
 export function boardForThickness(roughT: number): BoardThickness | null {
-  return BOARD_THICKNESSES.find((b) => b.usableIn >= roughT - 1e-6) ?? null;
+  return BOARD_THICKNESSES.find((b) => isOakStocked(b.nominal) && b.usableIn >= roughT - 1e-6) ?? null;
 }
 export const boardByNominal = (nominal: string): BoardThickness => BOARD_THICKNESSES.find((b) => b.nominal === nominal)!;
 
@@ -370,6 +371,7 @@ export function planResaw(parts: Part[], p: Params): ResawPool[] {
     type Pick = { b: BoardThickness; k: number; boards: number; bf: number; widthIn: number; lanes: StripItem[][]; slots: number };
     let best: Pick | null = null;
     for (const b of BOARD_THICKNESSES) {
+      if (!isOakStocked(b.nominal)) continue; // resaw only from a thickness the yard stocks (prices.ts OAK_STOCKED)
       const k = stripsPerBoard(roughT, resawUsableIn(b, p), p.resawKerfIn);
       yieldByBoard[b.nominal] = k;
       if (k < 1) continue;

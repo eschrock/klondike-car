@@ -1,9 +1,9 @@
 /**
  * Unit prices for the BOM (Phase 4). One table, next to the part sourcing; nothing else in `src/build` holds a dollar figure.
  *
- * Every entry says where the number comes from. `basis: 'quoted'` is reserved for a number the MODEL carries (`part.sourcing.costUsd`, which
- * the BOM reads directly and marks quoted); every entry in this file is an `estimate`: a realistic 2026 US retail price, rounded, to be
- * replaced by a real quote before ordering. No SKUs are invented: `source` names a kind of vendor, not a catalog number.
+ * Every entry says where the number comes from. `basis: 'quoted'` is a real price: one the MODEL carries (`part.sourcing.costUsd`), or one Eric
+ * gathered from a named vendor's published list (the `quoted(...)` entries below, with the date and URL). Every other entry is an `estimate`: a realistic
+ * 2026 US retail price, rounded, to be replaced by a real quote before ordering. No SKUs are invented: `source` names a vendor or a kind of vendor.
  */
 
 export type PriceBasis = 'quoted' | 'estimate';
@@ -18,25 +18,34 @@ export interface Price {
 }
 
 const est = (usd: number, unit: string, source: string, note?: string): Price => ({ usd, unit, source, basis: 'estimate', ...(note ? { note } : {}) });
+const quoted = (usd: number, unit: string, source: string, note?: string): Price => ({ usd, unit, source, basis: 'quoted', ...(note ? { note } : {}) });
 
 // ── Lumber and sheet ──────────────────────────────────────────────────────────
 
 const HARDWOOD = 'Local hardwood dealer (rough, kiln-dried white oak)';
-/** White oak, $/board foot on nominal thickness. Thick stock costs more per board foot (scarcer, slower to dry). */
+const WOODYARD = 'The Wood Yard (local), thewoodyard.com/current-pricing-list (Eric, 2026-10-12), plus tax';
+/** White oak, $/board foot on nominal thickness. Thick stock costs more per board foot (scarcer, slower to dry). 4/4, 8/4 and 12/4: The Wood Yard's list (Eric, 2026-10-12). */
 export const OAK_PRICE_PER_BF: Record<string, Price> = {
-  '4/4': est(9.5, 'bf', HARDWOOD, 'Select and better, 4/4 rough'),
-  '5/4': est(10.5, 'bf', HARDWOOD),
-  '6/4': est(11.5, 'bf', HARDWOOD),
-  '8/4': est(13, 'bf', HARDWOOD),
-  '12/4': est(18, 'bf', HARDWOOD, '12/4 is special-order at many yards'),
-  '16/4': est(24, 'bf', HARDWOOD, 'special-order'),
+  '4/4': quoted(10, 'bf', WOODYARD, 'white oak 4/4 (their knotty 4/4 "CG" is $7.50: not for the bent strips or the structural members)'),
+  '5/4': est(12.5, 'bf', HARDWOOD, 'not on The Wood Yard list: another yard (estimate between their 4/4 and 8/4)'),
+  '6/4': est(13.5, 'bf', HARDWOOD, 'not on The Wood Yard list: another yard (estimate between their 4/4 and 8/4)'),
+  '8/4': quoted(15, 'bf', WOODYARD, 'white oak 8/4'),
+  '12/4': quoted(25, 'bf', WOODYARD, 'white oak 12/4'),
+  '16/4': est(32, 'bf', HARDWOOD, 'special-order'),
 };
 
-const PLY_SUPPLIER = 'Local plywood supplier (marine okoume, full 4 x 8 sheet)';
-/** Marine okoume (BS 1088), full 4 x 8 sheet from a local supplier (D-68). */
+/**
+ * The oak thicknesses the board plan may buy. A thickness set false is skipped: its parts move up to the next stocked thickness (milled down) and the
+ * resaw strips are re-planned from what is stocked. The Wood Yard lists 4/4, 8/4 and 12/4 only (2026-10-12); 5/4 and 6/4 are left on for the other
+ * yards Eric may use (set them false to plan from The Wood Yard alone). 16/4 is off: nothing needs it.
+ */
+export const OAK_STOCKED: Record<string, boolean> = { '4/4': true, '5/4': true, '6/4': true, '8/4': true, '12/4': true, '16/4': false };
+export const isOakStocked = (nominal: string): boolean => OAK_STOCKED[nominal] !== false;
+
+/** Marine plywood, full 4 x 8 sheets (D-68): prices Eric gathered 2026-10-12, plus tax. */
 export const PLYWOOD_PRICE: Record<string, Price> = {
-  '4 mm': est(95, 'sheet', PLY_SUPPLIER, '4 x 8 ft x 4 mm; the sides, box, lid and signs'),
-  '12 mm': est(170, 'sheet', PLY_SUPPLIER, '4 x 8 ft x 12 mm; the deck and, from its offcut, the seat back'),
+  '4 mm': quoted(122, 'sheet', 'Aircraft Spruce, Peachtree City GA (will-call), aircraftspruce.com/catalog/wppages/okume.php', '4 x 8 ft x 4 mm okoume; the sides, box, lid and signs'),
+  '12 mm': quoted(90, 'sheet', 'The Wood Yard (local), thewoodyard.com/current-pricing-list/#plywood', '4 x 8 ft x 1/2" marine plywood; the deck and, from its offcut, the seat back. VERIFY the species is okoume: meranti marine ply is about 30% heavier (+3 lb on the deck)'),
 };
 
 // ── Metal stock ($/ft, cut to length) ─────────────────────────────────────────

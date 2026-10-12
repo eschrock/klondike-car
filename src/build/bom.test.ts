@@ -72,7 +72,10 @@ describe('bom', () => {
     expect(cushion.unitUsd).toBe(parts.find((x) => x.id === 'seat-cushion')!.sourcing!.costUsd);
     expect(purchased.find((l) => l.key === 'wheel')!.basis).toBe('estimate');
     expect(purchased.find((l) => l.key === 'wheel')!.qty).toBe(4);
-    for (const s of ['lumber', 'plywood', 'metal'] as const) expect(b.sections.find((x) => x.id === s)!.lines.every((l) => l.basis === 'estimate')).toBe(true);
+    // Table prices carry their own basis: Eric's vendor quotes (the plywood, 4/4, 8/4, 12/4 oak) are quoted, the rest estimates
+    expect(b.sections.find((x) => x.id === 'plywood')!.lines.every((l) => l.basis === 'quoted')).toBe(true);
+    expect(b.sections.find((x) => x.id === 'metal')!.lines.every((l) => l.basis === 'estimate')).toBe(true);
+    for (const l of b.sections.find((x) => x.id === 'lumber')!.lines) expect(l.basis, l.key).toBe(OAK_PRICE_PER_BF[l.key].basis);
   });
 
   it('prices two sheets from a local supplier and 4/4 to 12/4 oak', () => {
