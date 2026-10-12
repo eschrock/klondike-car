@@ -382,7 +382,7 @@ export function buildStorage(ctx: Ctx): Part[] {
       notes: `Gives the hinge screws something to bite (#8 × 1" engages ${(1 - pl).toFixed(2)}" of oak past the ${Math.round(pl * 25.4)} mm ply); stops under the coaming.` }));
     // Latch block (S5): oak under each latch so the #8 screws are not in a thin ply end or a face-grain skin.
     // Latch: on the inside face of the rear transom above the lid (rear box), else on the aft end's outer face; hooks a catch on the lid frame.
-    // Latches sit at 8.5" off center, clear of the rear-light doubler (|y| 2.5 to 7.5) on the same transom face.
+    // Latches sit at 8.5" off center, clear of the rear lamp clip in the hand-hold (|y| < 2.25, D-64) on the same transom.
     const ly = sg * Math.min(hw - 3, 8.5);
     const blockZ: [number, number] = rear ? [zTop + 0.3, Math.max(zTop + 0.8, Math.min(zTop + 1.7, zGunTop))] : [zPlyTop - 1.4, zPlyTop];
     const blockX: [number, number] = rear ? [x0, x0 + LATCH_BLOCK_IN] : [x0 + pl, x0 + pl + 0.75];

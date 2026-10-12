@@ -427,7 +427,7 @@ const defs = {
   blockingThickIn: {
     label: 'Oak doubler (blocking) thickness', group: 'body', unit: 'in',
     default: 0.75, min: 0.5, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-41',
-    note: 'Local oak blocking glued behind the gunwale and the rear transom where grip pads, lash plates and the rear-light plate screw in, so every wood screw has at least ¾" of engagement.',
+    note: 'Local oak blocking glued behind the gunwale and the rear transom where grip pads and lash plates screw in, so every wood screw has at least ¾" of engagement.',
   },
   liftSlotLengthIn: {
     label: 'Lift hand-hold slot length (across the transom)', group: 'body', unit: 'in',

@@ -1,14 +1,13 @@
 /**
  * Lighting (D-9, D-41) and the hardware allowance. The front LED headlight rides on a printed ASA clip that snaps into the bow bulkhead's lift hand-hold (3c-5; the flag stands in a plain tube in a rear corner);
- * the rear light mounts on a flat printed plate on the rear transom. Brackets are
+ * the rear red tail light rides on a second printed clip that snaps into the REAR transom's hand-hold, facing aft (D-64). Brackets are
  * ASA (UV-stable) 2D profiles + depth, so they go straight to an STL in Phase 4; they are not on a primary load path.
  */
 import { STORAGE_LOCATION } from '../params';
 import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
-import { SIGN_X_MAX_IN } from './body';
+import { SIGN_X_MAX_IN, liftSlot } from './body';
 import { sideSlopeAt, sideTopAt } from './layout';
 import { profilePart } from './profile';
-import { storageGeometry } from './storage';
 import { GRIP_BACKING_END_IN, GRIP_BEHIND_HPOINT_IN } from './seat';
 import type { Part, Vec2, Vec3 } from './types';
 
@@ -25,6 +24,12 @@ const REAR_LIGHT_MASS_LB = 0.3;
 /** The lamp clip (3c-5): print clearance per side in the slot, and how far the plug stands proud of the bulkhead's front face (the lamp's seat). */
 export const LAMP_CLIP = { clearIn: 0.02, lipIn: 0.5 } as const;
 const REAR_LIGHT_SIZE = [0.75, 2, 1.5] as const;
+/**
+ * The rear lamp clip (D-64; status assumed): the same stadium plug as the front, through the 1/2 in rear transom's lift hand-hold. `outerLipIn` stands proud of the transom's outer face
+ * and carries the tail light (the light faces -x); `innerLipIn` is the most the plug may stand past the transom's inner face (a catch lip for the snap fit), cut back so the plug's inside end
+ * keeps `boxClearIn` clear of the storage box end (the box end sits `rearLane` = 0.75 in inside the transom at the defaults).
+ */
+export const REAR_LAMP_CLIP = { outerLipIn: 0.5, innerLipIn: 0.25, boxClearIn: 0.125 } as const;
 const REFLECTOR_MASS_LB = 0.05;
 export const REFLECTOR_SIZE = [2, 0.25, 1] as const;
 /**
@@ -48,12 +53,6 @@ const HARDWARE_FALLBACK_LB = 2.5;
 const HARDWARE_SIZE = [2, 2, 1.25] as const;
 /** Cabin reflectors at these fore-aft fractions of the cabin length (clear of the signs and the nose). */
 export const REFLECTOR_FRACS = [0.1, 0.95] as const;
-/** Rear plate: width across, height, thickness; hole radius. */
-export const REAR_PLATE = { width: 4, height: 2.4, thick: 0.25, hole: 0.1 } as const;
-/** Oak left between the lift slot's end and the rear-light plate. */
-const REAR_PLATE_SLOT_GAP_IN = 0.75;
-/** Least height of free inner transom face (above the lid frame) that takes an inside doubler. */
-const MIN_INSIDE_DOUBLER_IN = 1.25;
 /** Flag tube (D-57): mass per inch of 1" schedule 40 PVC, the drain hole, the oak holding blocks (thickness fore-aft, width across, height). */
 const FLAG_TUBE_LB_PER_IN = 0.036;
 export const FLAG_DRAIN_HOLE_IN = 0.1875;
@@ -98,7 +97,7 @@ export function buildLighting(ctx: Ctx): Part[] {
         { type: 'pin', to: 'bow-bulkhead', count: 2, size: 'two snap detent ribs, 0.04 in proud, on the long faces of the plug', note: 'tool-free: it pushes in from the front until the lamp stops against the bulkhead and pulls out the same way' },
         { type: 'threaded-insert', to: 'front-light', count: 2, size: 'M4 heat-set inserts in the clip\'s front lip' },
       ],
-      notes: `Printed ASA plug, ${len.toFixed(2)}" × ${h.toFixed(2)}" (the ${p.liftSlotLengthIn}" × ${p.liftSlotHeightIn}" hand-hold less ${LAMP_CLIP.clearIn}" a side), ${depth.toFixed(2)}" long: through the ${bh.thick}" bulkhead, its rear face flush with the foot brace and ${LAMP_CLIP.lipIn}" proud of the front. A stadium extrusion (outline in y-z, depth along x): print it lying on one long face so the layers run along the plug and the lip is not a stack of thin layers (P4); 4+ perimeters. Two 0.04" detent ribs make the push fit firm; the lamp's flat mount screws to two M4 heat-set inserts in the lip. To lift the nose: pull the lamp and clip out the front (it rides in the box, with the cushions), then grip the oak bar above the slot (D-37, D-57). It is not on a load path; it is removable. VERIFY ON THE REAL PARTS (build 3c-8): the plug has only ${LAMP_CLIP.clearIn}" of clearance a side in a Shaper-cut, epoxy-sealed slot, which is inside the printer's tolerance and the router's wander; print a 1" test slice at 0.04 to 0.05" a side with 0.05" ribs and try it in the real hand-hold (and the real lamp mount) before printing the whole clip.`,
+      notes: `Printed ASA plug, ${len.toFixed(2)}" × ${h.toFixed(2)}" (the ${p.liftSlotLengthIn}" × ${p.liftSlotHeightIn}" hand-hold less ${LAMP_CLIP.clearIn}" a side), ${depth.toFixed(2)}" long: through the ${bh.thick}" bulkhead, its rear face flush with the foot brace and ${LAMP_CLIP.lipIn}" proud of the front. A stadium extrusion (outline in y-z, depth along x): print it lying on one long face so the layers run along the plug and the lip is not a stack of thin layers (P4); 4+ perimeters. Two 0.04" detent ribs make the push fit firm; the lamp's flat mount screws to two M4 heat-set inserts in the lip. To lift the nose: pull the lamp and clip out the front (it rides in the box, with the cushions; the rear lamp pops out of the rear hand-hold the same way, D-64), then grip the oak bar above the slot (D-37, D-57). It is not on a load path; it is removable. VERIFY ON THE REAL PARTS (build 3c-8): the plug has only ${LAMP_CLIP.clearIn}" of clearance a side in a Shaper-cut, epoxy-sealed slot, which is inside the printer's tolerance and the router's wander; print a 1" test slice at 0.04 to 0.05" a side with 0.05" ribs and try it in the real hand-hold (and the real lamp mount) before printing the whole clip.`,
     }));
     const lampW = FRONT_LIGHT_SIZE[0];
     parts.push(box(ctx, {
@@ -143,46 +142,39 @@ export function buildLighting(ctx: Ctx): Part[] {
     parts.push(blk('flag-block-bottom', 'Flag tube block (bottom)', zBot + 0.4, 'side-L-chine-in', 'epoxied to the inner chine band (the block lies on it)'));
   }
 
-  // ── Rear: flat plate on the rear transom's outer face, the red light on it ──
-  // The plate sits beside the lift slot (B's 4.5" hand-hold is centered on the transom; a centered plate would cover it and its screws
-  // would land in the void), on the right (-y) side, with an oak doubler on the inner face so the screws have > 3/4" of engagement in the 1/2" transom.
-  const { p } = ctx;
-  const zTop = L.deckTop + L.sideRear; // the rear transom's top corners
-  const plateZ0 = zTop - REAR_PLATE.height;
-  const hw2 = REAR_PLATE.width / 2;
-  const hz = plateZ0 + REAR_PLATE.height / 2;
-  const yP = -(p.liftSlotLengthIn / 2 + hw2 + REAR_PLATE_SLOT_GAP_IN);
-  const rearTx = L.xRear + L.transom;
-  const st = storageGeometry(p, L);
-  const zLo = p.storageLocation === STORAGE_LOCATION.rearOverAxle ? Math.max(plateZ0 + 0.3, st.zTop + 0.05) : plateZ0 + 0.3;
-  // A tall rear box fills the transom's inner face up to the gunwale line: then the doubler goes on the outer face and the plate stands off it.
-  const inside = zTop - zLo >= MIN_INSIDE_DOUBLER_IN;
-  const T = p.blockingThickIn;
-  const off = inside ? 0 : T;
-  const holes: Vec2[][] = [[-1.5, hz - 0.3], [1.5, hz - 0.3], [-0.5, hz + 0.6], [0.5, hz + 0.6]].map(([hy, hzz]) => circleLoop(yP + hy, hzz, REAR_PLATE.hole, 8, false));
-  parts.push(profilePart(ctx, {
-    id: 'rear-light-mount', name: 'Rear light plate', group: 'lighting', mat: 'print', material: 'ASA',
-    outline: [[yP - hw2, plateZ0], [yP + hw2, plateZ0], [yP + hw2, zTop], [yP - hw2, zTop]], holes, depth: REAR_PLATE.thick, basis: 'yz', origin: [L.xRear - off - REAR_PLATE.thick, 0, 0],
-    step: STEP.finish, explode: unit(-1, 0, 0.3),
-    joints: [{ type: 'screw', to: 'doubler-rear-light', count: 2, size: '#8 × 1-1/4 stainless pan head, through the plate into the doubler', note: inside ? `pilot-drilled; ${(1.25 - REAR_PLATE.thick).toFixed(2)}" of oak engagement (the ${L.transom}" transom + ${(1.25 - REAR_PLATE.thick - L.transom).toFixed(2)}" into the doubler)` : `pilot-drilled; ${(1.25 - REAR_PLATE.thick).toFixed(2)}" of oak engagement in the outer doubler` }],
-    notes: 'Printed ASA flat plate beside the lift slot, 2 screws into the doubler and 2 for the light (not a load path). Print flat on the bed, 4+ perimeters (P4).',
-  }));
-  parts.push(box(ctx, {
-    ...common, id: 'doubler-rear-light', partNo: 'doubler-rear-light', name: 'Rear light doubler', group: 'lighting', mat: 'oak', grain: 'y',
-    ...span(inside ? [rearTx, rearTx + T] : [L.xRear - T, L.xRear], [yP - hw2 - 0.5, yP + hw2 + 0.5], inside ? [zLo, zTop] : [plateZ0, zTop]),
-    joints: [{ type: 'glue', to: 'transom-rear', count: 1, note: 'epoxy, full face' }, { type: 'screw', to: 'rear-light-mount', count: 2, size: '#8 × 1-1/4 stainless, through the plate' }],
-    notes: inside ? `Blocking on the inner face of the ${L.transom}" rear transom, above the lid frame, so the light-plate screws have ${(1.25 - REAR_PLATE.thick).toFixed(2)}" of engagement (D-41).`
-      : `Blocking on the OUTER face of the rear transom (a tall storage box fills the inner face), so the light-plate screws have ${(1.25 - REAR_PLATE.thick).toFixed(2)}" of engagement (D-41).`,
-  }));
-  parts.push(box(ctx, {
-    ...common, id: 'rear-light', name: 'Rear red light', mat: 'fixed', massLb: REAR_LIGHT_MASS_LB, kind: 'purchased', material: 'LED light', fab: 'buy',
-    size: [...REAR_LIGHT_SIZE], center: [L.xRear - off - REAR_PLATE.thick - REAR_LIGHT_SIZE[0] / 2, yP, hz],
-    sourcing: { vendor: 'Generic red LED bike tail light (USB rechargeable, rear-facing, with a screw-on bracket)', costUsd: 20 },
-    joints: [{ type: 'screw', to: 'rear-light-mount', count: 2, size: 'M3 × 8 stainless' }],
-    explode: unit(-1, 0, 0.5), notes: 'On the printed plate on the rear transom, off center so the lift slot stays open; mass includes the light (estimate).',
-  }));
+  // ── Rear (D-64): the red tail light rides on a printed ASA clip that snaps into the REAR transom's lift hand-hold and fills it, facing aft: the mirror of the front lamp. Pop it
+  //    out to use the hand-hold. It replaces the printed plate and the 3/4 in oak doubler that sat beside the slot. ──
+  {
+    const { p } = ctx;
+    const rs = liftSlot(ctx);
+    const zMid = (rs.zBot + rs.zTop) / 2;
+    const len = p.liftSlotLengthIn - 2 * LAMP_CLIP.clearIn, h = p.liftSlotHeightIn - 2 * LAMP_CLIP.clearIn;
+    const rearTxIn = L.xRear + L.transom; // the transom's inner face
+    const gap = L.storage.x0 - rearTxIn; // from the inner face to the storage box end
+    const inner = Math.max(0, Math.min(REAR_LAMP_CLIP.innerLipIn, gap - REAR_LAMP_CLIP.boxClearIn));
+    const outer = REAR_LAMP_CLIP.outerLipIn;
+    const depth = outer + L.transom + inner;
+    const clipX0 = L.xRear - outer;
+    parts.push(profilePart(ctx, {
+      id: 'rear-lamp-clip', name: 'Rear lamp clip (fills the hand-hold)', group: 'lighting', mat: 'print', material: 'ASA', outline: stadiumOutline(len, h), depth,
+      basis: 'yz', origin: [clipX0, 0, zMid], removable: true, step: STEP.finish, explode: unit(-0.8, 0, 0.3), fab: 'print',
+      joints: [
+        { type: 'pin', to: 'transom-rear', count: 2, size: 'two snap detent ribs, 0.04 in proud, on the long faces of the plug', note: 'tool-free: it pushes in from behind until the outer lip stops against the transom and pulls out the same way' },
+        { type: 'threaded-insert', to: 'rear-light', count: 2, size: 'M3 heat-set inserts in the clip\'s outer lip' },
+      ],
+      notes: `D-64: printed ASA plug, ${len.toFixed(2)}" × ${h.toFixed(2)}" (the ${p.liftSlotLengthIn}" × ${p.liftSlotHeightIn}" rear hand-hold less ${LAMP_CLIP.clearIn}" a side), ${depth.toFixed(2)}" long: through the ${L.transom}" transom, ${outer}" proud of the outer face (the lip that carries the tail light) and ${inner.toFixed(2)}" past the inner face, which leaves ${(gap - inner).toFixed(2)}" to the storage box end (at least ${REAR_LAMP_CLIP.boxClearIn}"). The same stadium extrusion as the front clip (outline in y-z, depth along x): print it lying on one long face, 4+ perimeters (P4). Two 0.04" detent ribs make the push fit firm; the light's flat mount screws to two M3 heat-set inserts in the outer lip. Pop it out before lifting: the rear lifter's hands need the slot, so both lamps come out (D-37, D-64). It is not on a load path; it is removable. VERIFY ON THE REAL PARTS: only ${LAMP_CLIP.clearIn}" of clearance a side in a Shaper-cut, epoxy-sealed slot in a ${L.transom}" transom whose slot edges are eased; print a 1" test slice at 0.04 to 0.05" a side with 0.05" ribs and try it in the real hand-hold before printing the whole clip.`,
+    }));
+    parts.push(box(ctx, {
+      ...common, id: 'rear-light', name: 'Rear red light', mat: 'fixed', massLb: REAR_LIGHT_MASS_LB, kind: 'purchased', material: 'LED light', fab: 'buy',
+      removable: true, size: [...REAR_LIGHT_SIZE], center: [clipX0 - REAR_LIGHT_SIZE[0] / 2, 0, zMid],
+      sourcing: { vendor: 'Generic red LED bike tail light (USB rechargeable, rear-facing, with a screw-on bracket)', costUsd: 20 },
+      joints: [{ type: 'screw', to: 'rear-lamp-clip', count: 2, size: 'M3 × 8 stainless, into heat-set inserts in the outer lip' }],
+      explode: unit(-1, 0, 0.5), notes: 'D-64: faces aft from the outer lip of the rear lamp clip, centered on the transom\'s hand-hold; mass includes the light (estimate). Red lens. Pops out with the clip before lifting.',
+    }));
+  }
 
   // ── Side reflectors (DOT-C2 adhesive-backed), forward and aft on each side: on the outside face of the gunwale, turned to the sled slope ──
+  const { p } = ctx;
   const reach = L.xSideEnd - L.xRear;
   for (const { s, tag } of SIDES) {
     REFLECTOR_FRACS.forEach((f, i) => {

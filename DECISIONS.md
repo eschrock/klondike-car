@@ -216,6 +216,12 @@ Details are in `docs/phase3c-3a-notes.md`. | 🔶 |
 - **Crest strip (S7):** 13.5" long, bedded 1/8" off the box end over the lid-hinge leaves. **Inserts (S8):** 5/16" in 11/32" blind holes (0.128" of veneer left), #10-32 x 3/8 hinge screws. **Grab boards (S9):** a 316 backing strip under the screw heads; button-head screws replace the carriage bolts.
 - **Notes:** stale tenon, groove and gap text refreshed; the lamp-clip clearance and the wheel bore are marked "verify on the real parts".
 - **Result:** 121.0 lb (-0.2 against 3c-7). Safe 50-250+, green 50-230 or 240 (bearing-groove at 240 lb is 0.8995 against the 0.9 line), cargo 269, resting 348. Nothing fails; nothing new above 0.9. | 🔶 |
+| D-64 | **Rear tail light on a snap-in clip (Eric, 2026-10-12).** The red LED bike tail light rides on a printed ASA clip that snaps into the rear transom's lift hand-hold and faces aft, mirroring the front lamp in the bow hand-hold. It replaces the light plate and its ¾" oak doubler.
+- **The clip:** a stadium plug 1.25" long, the slot less 0.02" a side. A ½" outer lip carries the light on M3 heat-set inserts. A ¼" inner catch lip stays at least ⅛" off the storage box end (0.5" at the defaults). Two detent ribs hold it.
+- **Use:** both lamps pop out before lifting.
+- **Verify:** print a 1" test slice in an eased ½" slot.
+
+120.9 lb (−0.15 lb); no new clashes. | 🔶 |
 
 
 ## Analysis-criterion interpretations

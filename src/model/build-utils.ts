@@ -217,6 +217,7 @@ function defaultExplode(ctx: Ctx, s: PartSpec): Vec3 {
     case 'lighting':
       if (id === 'rear-light') return unit([-1, 0, 0.5]);
       if (id === 'lamp-clip') return unit([0.8, 0, 0.3]);
+      if (id === 'rear-lamp-clip') return unit([-0.8, 0, 0.3]);
       return unit([0, sy * 1, 0.2]);
     case 'hardware':
       return [0, 0, -1];

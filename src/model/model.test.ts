@@ -38,6 +38,7 @@ const ALLOW: Allow[] = [
   { a: /^bridle-sleeve$/, b: /^bridle-tongue$/, why: 'the sleeve bearing lies in the hole across the tongue stem; the bridle rope runs through its bore (D-58, D-62)' },
   { a: /^bow-bulkhead$/, b: /^(deck|side-[LR]-web)$/, why: 'the deck edge and the web ends sit in dados in the bulkhead\'s rear face (D-57)' },
   { a: /^bow-bulkhead$/, b: /^lamp-clip$/, why: 'the lamp clip\'s plug fills the bulkhead\'s lift hand-hold slot (3c-5); the slot is a hole, so the bounding boxes meet' },
+  { a: /^transom-rear$/, b: /^rear-lamp-clip$/, why: 'the rear lamp clip\'s plug fills the rear transom\'s lift hand-hold slot (D-64); the slot is a hole, so the bounding boxes meet' },
   { a: /^seat-hinge-[LR]$/, b: /^(seat-wedge-[LR]|seat-back-(panel|stile|rail-bottom)-?[LR]?)$/, why: 'the hinge knuckle sits at the stile\'s front foot, where its leaf is let into the frame (D-57)' },
   { a: /^seat-pin-[LR]$/, b: /^(seat-back-stile|seat-back-panel|seat-wedge)-?[LR]?$/, why: 'the quick-release pin passes through the stile into the stop block (D-57)' },
   // ---- body: captured joints and sloped members
@@ -60,9 +61,6 @@ const KNOWN_OFF_DEFAULT: RegExp[] = [
   /^storage-lid x storage-rim-end-(aft|fore):/,
   /^storage-rim-end-aft x storage-rim-end-fore:/,
   /^handle-(socket|pin)-[LR] x handle-bar:/, // deck 17+ in / rear side 22 in: the handlebow sits at a fixed height above the rear transom's fittings
-  /^handle-bar x rear-light(-mount)?:/,
-  /^(handle-socket|handle-post)-R x rear-light-mount:/, // a 20 in body: the rear light mount meets the right handle socket
-  /^transom-backer-[LR] x doubler-rear-light:/, // bodies 22 in and narrower: the right handle backer meets the rear-light doubler
   /^transom-backer-[LR] x doubler-lash-[LR]1:/, // sag 3: a lash doubler runs into the transom backer by 0.1 in
   // Pivoting front axle (D-56), found when the variants were swept; validateParams does not yet catch them:
   /^bridle-tongue x steer-stop-[LR]:/, // lock >= ~25 deg (or a wide body): the tongue plate (2.5 in bar) swings into the inboard stop blocks, which move inward as the lock grows

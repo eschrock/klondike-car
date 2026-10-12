@@ -7,7 +7,10 @@ import { describe, expect, it } from 'vitest';
 import { defaultParams, validateParams, type Params } from '../params';
 import { buildModel } from './index';
 import { computeLayout, sideSlopeAt } from './layout';
-import { obbOverlap, partOBB, transformPoint, worldAABB } from './bounds';
+import { obbOverlap, partOBB, partsOverlap, transformPoint, worldAABB } from './bounds';
+import { liftSlot } from './body';
+import { makeCtx } from './build-utils';
+import { REAR_LAMP_CLIP } from './lighting';
 import { ESSENTIALS, packEssentials, storageInterior, lashPositions, interiorOf, storageGeometry, type StorageGeometry } from './storage';
 import { seatBackSupport, frameJoint } from './seat';
 import { DOMINOS } from './joinery';
@@ -309,7 +312,7 @@ describe('round 2 fittings: latch blocks, stay, stainless', () => {
 describe('lights and reflectors', () => {
   const printed = parts.filter((x) => x.kind === 'printed' && x.group === 'lighting');
   it('printed mounts are ASA or PETG extrusions with CCW outlines and CW holes, ready for STL', () => {
-    expect(printed.map((x) => x.id).sort()).toEqual(['lamp-clip', 'rear-light-mount']); // the flag clip and socket went with the bow curl (D-57), the lantern bracket with the 3c-5 lamp clip
+    expect(printed.map((x) => x.id).sort()).toEqual(['lamp-clip', 'rear-lamp-clip']); // the flag clip and socket went with the bow curl (D-57), the lantern bracket with the 3c-5 lamp clip, the rear plate with D-64
     for (const x of printed) {
       expect(x.material, x.id).toMatch(/ASA|PETG/);
       expect(x.fab).toBe('print');
@@ -321,7 +324,6 @@ describe('lights and reflectors', () => {
       for (const h of g.holes ?? []) expect(signedArea(h), x.id).toBeLessThan(0);
       expect(g.depth).toBeGreaterThan(0);
     }
-    expect((byId.get('rear-light-mount')!.geometry as { holes: unknown[] }).holes).toHaveLength(4);
   });
   it('the front lamp rides on a printed clip that fills the bow bulkhead\'s lift hand-hold (3c-5), flush at the rear, the lamp ahead of it facing forward', () => {
     const bh = worldAABB(byId.get('bow-bulkhead')!);
@@ -351,6 +353,46 @@ describe('lights and reflectors', () => {
     const g = part.geometry as { type: string; outline: [number, number][]; depth: number };
     expect(g.type).toBe('extrusion');
     expect(g.depth).toBeCloseTo(defaults.bowBulkheadThickIn + 0.5, 9);
+  });
+  it('D-64: the rear tail light rides on a printed clip that fills the REAR transom\'s lift hand-hold, facing aft; the plate and its oak doubler are gone', () => {
+    expect(byId.has('rear-light-mount')).toBe(false);
+    expect(byId.has('doubler-rear-light')).toBe(false);
+    const tr = worldAABB(byId.get('transom-rear')!);
+    const part = byId.get('rear-lamp-clip')!;
+    const b = worldAABB(part);
+    const L = computeLayout(defaults);
+    const rs = liftSlot(makeCtx(defaults));
+    const zMid = (rs.zBot + rs.zTop) / 2;
+    expect((b.min[1] + b.max[1]) / 2).toBeCloseTo(0, 6);
+    expect(b.max[1] - b.min[1], 'fills the slot length less the print clearance').toBeCloseTo(defaults.liftSlotLengthIn - 0.04, 6);
+    expect(b.max[2] - b.min[2]).toBeCloseTo(defaults.liftSlotHeightIn - 0.04, 6);
+    expect((b.min[2] + b.max[2]) / 2).toBeCloseTo(zMid, 6);
+    expect(b.min[0], 'a lip proud of the outer face').toBeCloseTo(tr.min[0] - REAR_LAMP_CLIP.outerLipIn, 6);
+    expect(b.max[0] - (L.xRear + L.transom), 'the inside end past the transom').toBeCloseTo(REAR_LAMP_CLIP.innerLipIn, 6);
+    expect(L.storage.x0 - b.max[0], 'inside end clears the storage box end by at least 1/8 in').toBeGreaterThanOrEqual(0.125 - 1e-9);
+    expect(part.removable).toBe(true);
+    expect(part.kind).toBe('printed');
+    expect(part.material).toBe('ASA');
+    expect(part.joints!.some((j) => j.to === 'transom-rear')).toBe(true);
+    expect(part.notes).toMatch(/VERIFY ON THE REAL PARTS/);
+    const g = part.geometry as { type: string; depth: number };
+    expect(g.type).toBe('extrusion');
+    expect(g.depth).toBeCloseTo(REAR_LAMP_CLIP.outerLipIn + L.transom + REAR_LAMP_CLIP.innerLipIn, 9);
+    const lamp = byId.get('rear-light')!;
+    const light = worldAABB(lamp);
+    expect(light.max[0]).toBeCloseTo(b.min[0], 6); // its front face rests on the outer lip, facing -x
+    expect((light.min[1] + light.max[1]) / 2).toBeCloseTo(0, 6);
+    expect((light.min[2] + light.max[2]) / 2).toBeCloseTo(zMid, 6);
+    expect(lamp.removable).toBe(true);
+    expect(lamp.joints!.some((j) => j.to === 'rear-lamp-clip')).toBe(true);
+    expect(lamp.sourcing!.vendor).toMatch(/USB rechargeable/);
+    // the thinnest rear lane the validator allows still keeps the inside end 1/8 in off the box end
+    const thin = { ...defaults, blockingThickIn: 0.5 };
+    const tl = computeLayout(thin);
+    const tb = worldAABB(buildModel(thin).find((x) => x.id === 'rear-lamp-clip')!);
+    expect(tl.storage.x0 - tb.max[0]).toBeGreaterThanOrEqual(0.125 - 1e-9);
+    // the clip stays out of the handle sockets, the brake and the box
+    for (const o of parts) if (/^(handle-|brake-|storage-)/.test(o.id)) expect(partsOverlap(part, o), o.id).toBeLessThanOrEqual(0.001);
   });
   it('side reflectors: four, with sourcing', () => {
     const r = parts.filter((x) => x.id.startsWith('reflector-'));
