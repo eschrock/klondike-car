@@ -89,7 +89,7 @@ export const store: Store = createStore({
   persist: hasWindow
     ? (hash) => {
         const url = window.location.pathname + window.location.search + (hash ? `#${hash}` : '');
-        history.replaceState(null, '', url);
+        history.replaceState(history.state, '', url); // keep the entry's state (Build mode marks its history entry)
       }
     : undefined,
 });

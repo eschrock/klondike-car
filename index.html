@@ -25,6 +25,7 @@
         <div class="mode-toggle" role="group" aria-label="View mode">
           <button id="mode-simple" type="button" aria-pressed="true">Simple</button>
           <button id="mode-advanced" type="button" aria-pressed="false">Advanced</button>
+          <button id="mode-build" type="button" aria-pressed="false">Build</button>
         </div>
         <button id="btn-theme" class="theme-toggle" type="button"></button>
         <button id="btn-copy-link" type="button" title="Copy a shareable link to this exact design">Copy link</button>
@@ -35,11 +36,15 @@
       </div>
       <!-- DOM order = reading and focus order = the stacked phone order: viewer, safety result, controls (M10).
            On wide screens the grid areas place them left | viewer | right. -->
+      <!-- Build mode only (display:none otherwise): the section rail sits before the viewer and the content after it, so the stacked phone order
+           (rail, viewer, content) is also the reading and focus order. -->
+      <nav id="build-rail" class="build-rail" aria-label="Build sections"></nav>
       <main id="viewer" class="viewer" aria-label="3D viewer"></main>
       <aside id="simple-right" class="sidebar" aria-label="Is it safe?" tabindex="-1"></aside>
       <aside id="simple-left" class="sidebar" aria-label="Change the sled"></aside>
       <aside id="params" class="sidebar left" aria-label="Parameters"></aside>
       <aside id="right" class="sidebar right" aria-label="Analysis"></aside>
+      <div id="build-main" class="build-main" aria-label="Build outputs"></div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

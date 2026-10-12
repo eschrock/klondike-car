@@ -18,6 +18,7 @@ import { totalMass } from './model/mass';
 import { mountSimpleView, type SpecFacts } from './ui/simple-view';
 import { mountBuildPanel } from './ui/build-panel';
 import { viewerView, type StepFocus } from './ui/build-helpers';
+import { BUILD_HISTORY_STATE, MODE_KEY, isBuildEntry, parseMode, type Mode } from './ui/mode';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -61,8 +62,6 @@ const right = mountRightPanel($('right'), {
   },
   onTab(id) {
     sim?.setActive(id === 'simulation');
-    buildPanel?.setActive(id === 'build');
-    $('app').classList.toggle('build-wide', id === 'build'); // Phase 4: the Build tab's tables and drawings get a wider right column
     truckTabOpen = id === 'truck';
     if (truckTabOpen) scheduleWindows(0);
   },
@@ -85,13 +84,13 @@ steer.addEventListener('input', () => setSteer(Number(steer.value)));
 steerNum.addEventListener('change', () => setSteer(Number(steerNum.value)));
 steerZero.addEventListener('click', () => setSteer(0));
 viewer.addToolbarControl(
-  h('label', { class: 'steer-ctl', title: "Preview only: it doesn't change the sled. Turns the front axle about the kingpin, from full left to full right lock (+ = left)." }, 'Steering', steer, steerNum, h('span', { class: 'steer-unit' }, '°'), steerZero),
+  h('label', { class: 'steer-ctl no-build', title: "Preview only: it doesn't change the sled. Turns the front axle about the kingpin, from full left to full right lock (+ = left)." }, 'Steering', steer, steerNum, h('span', { class: 'steer-unit' }, '°'), steerZero),
 );
 const checkbox = (label: string | Node[], title: string, checked: boolean, onChange: (v: boolean) => void, cls = '') => {
   const cb = h('input', { type: 'checkbox' });
   cb.checked = checked;
   cb.addEventListener('change', () => onChange(cb.checked));
-  return h('label', { class: `steer-ctl ${cls}`.trim(), title }, cb, ...(typeof label === 'string' ? [label] : label));
+  return h('label', { class: `steer-ctl no-build ${cls}`.trim(), title }, cb, ...(typeof label === 'string' ? [label] : label));
 };
 // Visual pass r2 / 3c round 2: the rider and cargo hide the finish work, so they default OFF in both Simple and Advanced (opt in with the checkbox).
 let riderTouched = false;
@@ -163,10 +162,13 @@ viewer.addToolbarControl(exitTruck);
 
 const analysis = mountAnalysisPanel(right.panelHost('analysis'));
 
-// Build tab (Phase 4). Its Assembly section steps through the build: the viewer shows only the parts installed so far,
-// tints the current step's parts and moves the camera to the step's preset. `null` (any other section or tab) restores the full model.
+// Build mode (Phase 4, top level). Its Assembly section steps through the build: the viewer shows only the parts installed so far,
+// tints the current step's parts and moves the camera to the step's preset. `null` (any other section, or leaving Build) restores the full model.
 let stepFocus: StepFocus | null = null;
-buildPanel = mountBuildPanel(right.panelHost('build'), {
+buildPanel = mountBuildPanel({ rail: $('build-rail'), main: $('build-main') }, {
+  onSection(id) {
+    $('app').dataset.buildSection = id; // the layout shows the viewer, large, only for Assembly (buildShowsViewer)
+  },
   onStep(f) {
     stepFocus = f;
     if (f) {
@@ -239,13 +241,20 @@ const render = () => {
     viewer.highlight(stepFocus?.highlightIds ?? [], '#ff9f0a');
   }
 };
-// ── Simple | Advanced (D-30) ──
-const MODE_KEY = 'klondike-view-mode';
-type Mode = 'simple' | 'advanced';
+// ── Simple | Advanced | Build (D-30) ──
 const readMode = (): Mode => {
-  try { return localStorage.getItem(MODE_KEY) === 'advanced' ? 'advanced' : 'simple'; } catch { return 'simple'; }
+  try { return parseMode(localStorage.getItem(MODE_KEY)); } catch { return 'simple'; }
 };
 let mode: Mode = readMode();
+/** Where Back from Build lands when Build was the first mode shown (a saved Build opens straight into it). */
+let modeBeforeBuild: Mode = 'advanced';
+/** Set while a Build -> other mode click waits for `history.back()` to pop the entry Build pushed. */
+let pendingMode: Mode | null = null;
+/** The saved mode from before the Build click, restored when Back (not a click) leaves Build, so a Back does not make Build the mode the next visit opens in. */
+let savedBeforeBuild: Mode | null = null;
+const saveMode = (m: Mode) => {
+  try { localStorage.setItem(MODE_KEY, m); } catch { /* private window: the choice just won't persist */ }
+};
 const app = $('app');
 const backBar = $('back-bar');
 /** Page scroll position to return to when "Back to the simple view" is used. */
@@ -292,31 +301,71 @@ const simple = mountSimpleView($('simple-left'), $('simple-right'), {
  */
 function setMode(next: Mode, opts: { fromSimple?: boolean; persist?: boolean } = {}) {
   const fromSimple = !!opts.fromSimple;
+  const was = mode;
+  if (next === 'build' && was !== 'build') modeBeforeBuild = was === 'simple' || was === 'advanced' ? was : 'advanced';
   mode = next;
-  if (opts.persist) {
-    try { localStorage.setItem(MODE_KEY, mode); } catch { /* private window: the choice just won't persist */ }
-  }
+  if (opts.persist) saveMode(mode);
   app.dataset.mode = mode;
   $('mode-simple').setAttribute('aria-pressed', String(mode === 'simple'));
   $('mode-advanced').setAttribute('aria-pressed', String(mode === 'advanced'));
+  $('mode-build').setAttribute('aria-pressed', String(mode === 'build'));
+  // Build's content column is the page's main landmark; the viewer is then a plain region (it shows only for Assembly).
+  if (mode === 'build') { $('build-main').setAttribute('role', 'main'); $('viewer').setAttribute('role', 'region'); }
+  else { $('build-main').removeAttribute('role'); $('viewer').removeAttribute('role'); }
   backBar.hidden = !(mode === 'advanced' && fromSimple);
   app.classList.toggle('has-back', !backBar.hidden);
   viewer.setSimpleMode(mode === 'simple');
   if (!riderTouched) setRiderShown(false);
-  if (mode === 'simple') { // D-65: Simple has only Transport mode; the Advanced toggles go back to their defaults so the picture matches the controls
+  if (mode !== 'advanced') { // D-65: Simple has only Transport mode; the Advanced toggles go back to their defaults so the picture matches the controls
     view.seat = 'installed'; view.handle = 'up'; view.brakes = true; view.lights = true; view.chocks = false;
   }
-  if (mode === 'simple') {
+  if (mode === 'build' && transport) { // the step-through draws the whole sled as built, so Transport mode (parts removed, handle parked) is off in Build
+    transport = false;
+    (transportCb.querySelector('input') as HTMLInputElement).checked = false;
+  }
+  if (mode !== 'advanced') {
     // Leave anything that takes over the viewer (simulation, truck placement); the design itself is untouched.
     right.showTab('analysis');
     truckKey = null;
     right.setActiveTruckKey(null);
   }
   simple.setVisible(mode === 'simple');
+  // Entering Build computes the section on screen; leaving it sends stepFocus null (which restores the full model) before the render below.
+  buildPanel?.setActive(mode === 'build');
+  if (was === 'build' && mode !== 'build') window.scrollTo({ top: 0 }); // the Build page may have been scrolled far down
   render();
 }
-$('mode-simple').addEventListener('click', () => setMode('simple', { persist: true }));
-$('mode-advanced').addEventListener('click', () => setMode('advanced', { persist: true }));
+/**
+ * An explicit mode click. Build pushes one history entry, so Back leaves Build (restoring the mode it was entered from) instead of
+ * the app; leaving Build by a click pops that entry first, so Back does not step through a dead entry.
+ */
+function chooseMode(next: Mode) {
+  if (mode === 'build' && next !== 'build' && isBuildEntry(history.state)) {
+    saveMode(next);
+    pendingMode = next;
+    history.back(); // the popstate handler below finishes the switch
+    return;
+  }
+  if (next === 'build' && mode !== 'build') {
+    savedBeforeBuild = readMode();
+    history.pushState(BUILD_HISTORY_STATE, '', window.location.href);
+  }
+  setMode(next, { persist: true });
+}
+window.addEventListener('popstate', (e) => {
+  if (pendingMode) {
+    const next = pendingMode;
+    pendingMode = null;
+    setMode(next);
+  } else if (isBuildEntry(e.state) && mode !== 'build') setMode('build'); // Forward
+  else if (!isBuildEntry(e.state) && mode === 'build') { // Back: leaves Build without changing the saved mode
+    if (savedBeforeBuild) saveMode(savedBeforeBuild);
+    setMode(modeBeforeBuild);
+  }
+});
+$('mode-simple').addEventListener('click', () => chooseMode('simple'));
+$('mode-advanced').addEventListener('click', () => chooseMode('advanced'));
+$('mode-build').addEventListener('click', () => chooseMode('build'));
 
 sim = mountSimPanel(right.panelHost('simulation'), {
   viewer,

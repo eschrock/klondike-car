@@ -98,7 +98,7 @@ const pathOf = (pts: [number, number][]): string => 'M' + pts.map((q) => `${q[0]
 export function sheetSvg(sheet: NestedSheet): string {
   const W = sheet.lengthIn, H = sheet.widthIn;
   const out: string[] = [];
-  out.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1 -1 ${W + 2} ${H + 2}" width="100%" class="bp-svg bp-sheet" role="img" aria-label="${esc(`${sheet.label} sheet ${sheet.index + 1}: ${sheet.placements.length} parts, ${sheet.utilizationPct.toFixed(0)}% used`)}">`);
+  out.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1 -1 ${W + 2} ${H + 2}" width="100%" class="bp-svg bp-sheet" role="img" aria-label="${esc(`${sheet.label} sheet ${sheet.index}: ${sheet.placements.length} parts, ${sheet.utilizationPct.toFixed(0)}% used`)}">`);
   out.push(`<rect x="0" y="0" width="${W}" height="${H}" fill="#fff" stroke="#000" stroke-width="0.4"/>`);
   const o = sheet.offcut.largest;
   if (o.widthIn > 0 && o.heightIn > 0) {
