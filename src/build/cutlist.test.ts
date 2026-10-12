@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
 import { defaultParams } from '../params';
-import { BOARD_THICKNESSES, RESAW_BOARD_WIDTHS_IN, RESAW_MIN_SPARES, boardByNominal, boardForThickness, cutList, isBuilt, resawUsableIn, stripsPerBoard, toCsv } from './cutlist';
+import { assemblySteps } from './assembly';
+import { BOARD_THICKNESSES, RESAW_BOARD_WIDTHS_IN, RESAW_MIN_SPARES, boardByNominal, boardForThickness, cutList, isBuilt, makeLanes, stepMapOf, resawUsableIn, spareSlots, stripsPerBoard, toCsv } from './cutlist';
 
 const p = defaultParams();
 const parts = buildModel(p);
@@ -65,9 +66,12 @@ describe('cutList', () => {
     expect(cl.resaw.length).toBe(2);
     for (const pool of cl.resaw) {
       expect(pool.stripsPerBoard).toBeGreaterThanOrEqual(1);
-      expect(pool.boards * pool.stripsPerBoard).toBeGreaterThanOrEqual(pool.layers);
-      expect(pool.layerStrips.flat().length).toBe(pool.strips);
-      for (const layer of pool.layerStrips) expect(layer.reduce((a, s) => a + s.widthIn + p.resawKerfIn, 0)).toBeLessThanOrEqual(pool.boardWidthIn + p.resawKerfIn + 1e-9);
+      expect(pool.lanes * pool.stripsPerBoard).toBeGreaterThanOrEqual(pool.strips);
+      expect(pool.laneStrips.flat().length).toBe(pool.strips);
+      for (const lane of pool.laneStrips) expect(lane.length).toBeLessThanOrEqual(pool.stripsPerBoard);
+      // rip first: the lanes (each as wide as its widest strip, plus a kerf) fit across the bought boards
+      const laneW = pool.laneStrips.map((l) => Math.max(...l.map((s) => s.widthIn)) + p.resawKerfIn);
+      expect(laneW.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(pool.boards * (pool.boardWidthIn + p.resawKerfIn) + 1e-9);
     }
   });
 
@@ -96,8 +100,6 @@ describe('cutList', () => {
       expect(pool.stripSlots).toBe(pool.strips + pool.spares);
       expect(pool.yieldPerBoard).toBe(Math.floor(pool.stripSlots / pool.boards));
       expect(RESAW_BOARD_WIDTHS_IN).toContain(pool.boardWidthIn);
-      // the bought slabs hold the layers of the plan
-      expect(pool.boards * pool.stripsPerBoard).toBeGreaterThanOrEqual(pool.layers);
       expect(pool.boardFeet).toBeCloseTo((pool.boards * boardByNominal(pool.board).nominalIn * pool.boardWidthIn * pool.boardLengthIn) / 144, 9);
     }
     // 8 band strips and 4 rail strips: more than that is bought, and the spares are real room (a strip of the widest width fits in each)
@@ -105,24 +107,52 @@ describe('cutList', () => {
     expect(cl.resaw.find((r) => Math.abs(r.roughT - 0.5) < 1e-3)!.stripSlots).toBeGreaterThanOrEqual(5);
   });
 
-  it('chooses the cheapest board in board feet that leaves the spare, over every thickness and the three widths', () => {
+  it('chooses the cheapest board in board feet that leaves the spare, over every thickness and width', () => {
     for (const pool of cl.resaw) {
+      const stripW = Math.max(...pool.laneStrips.flat().map((s) => s.widthIn));
       for (const b of BOARD_THICKNESSES) {
         const k = stripsPerBoard(pool.roughT, resawUsableIn(b, p), p.resawKerfIn);
         if (k < 1) continue;
         for (const w of RESAW_BOARD_WIDTHS_IN) {
-          // fewest boards that hold the strips with a spare, at this width: an upper bound on the need (every strip alone in a slab)
-          const alone = pool.strips + RESAW_MIN_SPARES;
-          const perLayer = Math.floor((w + p.resawKerfIn) / (Math.max(...pool.layerStrips.flat().map((s) => s.widthIn)) + p.resawKerfIn));
-          if (perLayer < 1) continue;
-          const slots = Math.ceil(alone / perLayer);
-          const boards = Math.ceil(slots / k);
+          // a plan that cuts every lane at the widest strip width is feasible (an upper bound on the room needed): no cheaper candidate may satisfy it
+          const perBoard = Math.floor((w + p.resawKerfIn) / (stripW + p.resawKerfIn)) * k;
+          if (perBoard < 1) continue;
+          const boards = Math.ceil((pool.strips + RESAW_MIN_SPARES) / perBoard);
           const bf = (boards * b.nominalIn * w * pool.boardLengthIn) / 144;
-          // no candidate that needs no more room than the pick is cheaper than it
-          if (boards * k * perLayer >= alone && bf < pool.boardFeet - 1e-9) throw new Error(`${pool.roughT}: ${b.nominal} x ${w}" needs ${bf} bf < ${pool.boardFeet}`);
+          if (bf < pool.boardFeet - 1e-9) throw new Error(`${pool.roughT}: ${b.nominal} x ${w}" needs ${bf} bf < ${pool.boardFeet}`);
         }
       }
     }
+  });
+
+  it("rips first, then resaws (round 3 MUST-C): the critic's numbers, 4/4 x 8\" gives 8 band strips and no spare; a wider board or a second board adds the spare", () => {
+    const kerf = p.resawKerfIn;
+    const t = 0.359, wide = 1.625, narrow = 1.113;
+    const k = stripsPerBoard(t, resawUsableIn(boardByNominal('4/4'), p), kerf);
+    expect(k).toBe(2); // 2 x 0.359 + 0.125 = 0.843 <= 0.875
+    const item = (widthIn: number, i: number) => ({ partNo: 'b', id: `b${i}`, widthIn, lengthIn: 72 });
+    const strips = [...Array(6)].map((_, i) => item(wide, i)).concat([item(narrow, 6), item(narrow, 7)]);
+    const lanes = makeLanes(strips, k);
+    expect(lanes.length).toBe(4); // 3 wide lanes + 1 narrow lane
+    const laneWidths = lanes.map((l) => Math.max(...l.map((s) => s.widthIn)));
+    expect(laneWidths).toEqual([wide, wide, wide, narrow]);
+    const used = laneWidths.reduce((a, w) => a + w + kerf, 0); // 6.488
+    // the critic's own arithmetic: four 1.625 lanes take 4 x 1.625 + 3 x 0.125 = 6.875, leaving 1.125 in on an 8 in board, which holds no 1.113 lane (it needs a kerf too)
+    expect(4 * wide + 3 * kerf).toBeCloseTo(6.875, 9);
+    expect(8 - (4 * wide + 3 * kerf)).toBeLessThan(narrow + kerf);
+    // 8 in: no room for another lane (1.637 < 1.75), so 0 spares; 9 in and 10 in leave one and two more lanes
+    expect(spareSlots([lanes.map((l) => l)], k, wide, kerf, 8)).toBe(0);
+    expect(8 + kerf - used).toBeLessThan(wide + kerf);
+    expect(spareSlots([lanes], k, wide, kerf, 9)).toBe(2);
+    expect(spareSlots([lanes], k, wide, kerf, 10)).toBe(4);
+    // so the planner does not pick 4/4 x 8 in with 0 spares; it meets the spare with the fewest board feet
+    const pool = cl.resaw.find((r) => Math.abs(r.roughT - 0.359) < 1e-3)!;
+    expect(pool.spares).toBeGreaterThanOrEqual(RESAW_MIN_SPARES);
+    expect(pool.strips).toBe(8);
+    expect(pool.board === '4/4' && pool.boardWidthIn <= 8 && pool.boards === 1).toBe(false);
+    // the cost of the one-board 4/4 x 10 in and the two-board 4/4 x 6 in options are both at least the pick
+    const bf = (boards: number, w: number): number => (boards * 1 * w * pool.boardLengthIn) / 144;
+    expect(pool.boardFeet).toBeLessThanOrEqual(Math.min(bf(1, 10), bf(2, 6)) + 1e-9);
   });
 
   it('splits plywood into the 4 mm and 12 mm sheets', () => {
@@ -147,5 +177,45 @@ describe('cutList', () => {
     expect(cl.csv.strips.startsWith('Part no,')).toBe(true);
     expect(cl.csv.sheets).toContain('seat-back-panel');
     expect(cl.csv.metal).toContain('DOM tube');
+  });
+});
+
+describe('round 3: bench words, assembly steps, net web, no data warnings', () => {
+  it('has no data warnings (the transposed brake-shoe / brake-chock stock is fixed in the model; the backing strip has its stock)', () => {
+    expect(cl.warnings).toEqual([]);
+  });
+  it('cuts the brake shoe from 5/4 and the chock from 12/4 with T the board thickness', () => {
+    const row = (no: string) => cl.oak.flatMap((g) => g.rows.map((r) => ({ r, board: g.board }))).find((x) => x.r.partNo === no)!;
+    const shoe = row('brake-shoe'), chock = row('brake-chock');
+    expect(shoe.board).toBe('5/4');
+    expect(chock.board).toBe('12/4');
+    for (const x of [shoe, chock]) { expect(x.r.stock.t).toBeLessThanOrEqual(x.r.stock.w); expect(x.r.stock.t).toBeLessThanOrEqual(x.r.stock.l); }
+  });
+  it('writes the grain in words, not as a local axis', () => {
+    const rows = [...cl.oak.flatMap((g) => g.rows), ...cl.sheets.flatMap((g) => g.rows)];
+    for (const r of rows) if (r.grain) expect(r.grainWord, r.partNo).toMatch(/^(along L|along W|vertical \(T\))$/);
+    const bulk = rows.find((r) => r.partNo === 'bow-bulkhead')!;
+    expect(bulk.grainWord).toBe('along L'); // the 18.5 in length
+    expect(cl.csv.oak).not.toMatch(/,[xyz],/);
+    expect(cl.csv.oak.split('\r\n')[0]).toContain('Assembly step');
+  });
+  it('joins the ASSEMBLY step number (0 to 29) through the map the caller passes', () => {
+    const steps = assemblySteps(parts, p);
+    const withSteps = cutList(parts, p, stepMapOf(steps));
+    const rows = [...withSteps.oak.flatMap((g) => g.rows), ...withSteps.sheets.flatMap((g) => g.rows)];
+    const nMax = Math.max(...steps.map((s) => s.n));
+    for (const r of rows) for (const n of r.assemblySteps) { expect(n).toBeGreaterThanOrEqual(0); expect(n).toBeLessThanOrEqual(nMax); }
+    for (const r of rows) for (const id of r.ids) { const n = stepMapOf(steps).get(id); if (n !== undefined) expect(r.assemblySteps).toContain(n); }
+    expect(rows.filter((r) => r.assemblySteps.length).length).toBeGreaterThan(rows.length * 0.8);
+    // without the map the column is empty rather than the model step
+    expect(cutList(parts, p).oak[0].rows[0].assemblySteps).toEqual([]);
+  });
+  it('labels the Shaper file as net and the blank as longer for the side web (59.49 / 59.59)', () => {
+    const web = cl.sheets.flatMap((g) => g.rows).find((r) => r.partNo === 'side-web')!;
+    expect(web.note).toMatch(/cut net 59\.49" from the Shaper file; blank 59\.59/);
+    expect(web.stock.l).toBeCloseTo(59.59, 2);
+    expect(cl.csv.sheets).toContain('cut net 59.49');
+    // a part whose file equals its blank has no note
+    expect(cl.sheets.flatMap((g) => g.rows).find((r) => r.partNo === 'storage-lid')!.note).toBeUndefined();
   });
 });

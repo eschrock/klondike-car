@@ -7,10 +7,10 @@
  */
 import type { Part } from '../model/types';
 import type { Params } from '../params';
-import { cutList, toCsv, type CutList } from './cutlist';
+import { cutList, stepMapOf, toCsv, type CutList } from './cutlist';
 import { nestPlywood, oakBoardFeet, type NestResult, type OakPlan } from './nesting';
 import { bom, type Bom } from './bom';
-import { shaperFiles, type ShaperFile } from './shaper-svg';
+import { SHAPER_MAX_DEPTH_IN, shaperFiles, type ShaperFile } from './shaper-svg';
 import { formDrawings, tileForLetter, type FormDrawing } from './forms';
 import { lampClipStls } from './stl';
 import { assemblySteps, type BuildStep } from './assembly';
@@ -67,7 +67,11 @@ export const SHAPER_NOTES: string[] = [
   'Every path carries shaper:cutDepth in inches (part thickness + 0.02 in breakthrough for outside and inside cuts).',
   'Drill marks are blue circles and crosses, not cuts: drill them by hand or on the drill press. A dashed mark is on the face you are NOT cutting.',
   'Edge joints (rabbets, edge dados, bevels, glue faces) are notes under each drawing and in the file description; they are not cut by the Shaper.',
-  'Each file is drawn as seen from the face being cut; the bow bulkhead is cut from its REAR face, so it is mirrored.',
+  'Each file is drawn as seen from the face you cut, and says which face goes UP (the bow bulkhead: REAR face up, so its drawing is the mirror image of the part seen from the front; the shared left/right files: either face, do not mirror).',
+  'Every pocket, hole and engraving names its bit in the file and the book: 1/8 in straight bit for the narrow web dados, mortises and 0.266 in holes and for the on-line lettering, 1/4 in for the wide deck dados and the 0.406 in holes. Use a bit no wider than the feature.',
+  `DEEP CUT parts (the bow bulkhead, the thickest solid): the stock is deeper than a Shaper bit reaches, so the file cuts the outline and hand hole ${SHAPER_MAX_DEPTH_IN} in deep from one face (verify YOUR bit's flute length), then you bandsaw the rest and finish with a flush-trim (pattern) bit riding the wall the Shaper cut.`,
+  'All text in these files (titles, tags, notes, dimension labels) is annotation only: stroke-only blue text inside a group marked as a guide, outside the cut area, never a cut path. Origin should ignore it; if it shows glyph outlines they are guides, not cuts. Before the first real cut, import transom-rear.svg once and confirm that only the outline, dados, mortises and holes show as cuts.',
+  'VERIFY the insert drill: the six blind insert holes in the seat-back panel are drawn at 5/16 in (assumed) by 0.344 in deep. Check the insert maker\'s drill chart for the exact bit and depth, and test in a scrap of 12 mm okoume, before drilling the panel.',
   'Check the 1:1 scale before cutting: a file is exactly as large as its part (width and height in inches).',
 ];
 
@@ -92,7 +96,8 @@ export class BuildData {
   }
 
   get verify(): VerifyCheck[] { return this.memo('verify', () => verifyChecklist(this.parts, this.p)); }
-  get cutList(): CutList { return this.memo('cutList', () => cutList(this.parts, this.p)); }
+  /** The cut list with the ASSEMBLY step numbers joined in (`assemblySteps` imports `cutlist.ts`, so the join is here). */
+  get cutList(): CutList { return this.memo('cutList', () => cutList(this.parts, this.p, stepMapOf(this.steps))); }
   get nest(): NestResult { return this.memo('nest', () => nestPlywood(this.parts, this.p)); }
   get oak(): OakPlan { return this.memo('oak', () => oakBoardFeet(this.parts, this.p)); }
   get bom(): Bom { return this.memo('bom', () => bom(this.parts, this.p)); }
@@ -167,6 +172,7 @@ function readme(d: BuildData, others: string[]): string {
   lines.push('----------------------------');
   lines.push('  forms/*.svg are full size (1:1). forms/tiled/*.svg are Letter pages (A1, A2, ... row letter then column number) with');
   lines.push('  0.5 in overlap and corner crosses: print at 100% (no "fit to page") and measure the 1 in check square on every page.');
+  lines.push('  A page with only guide lines or labels (no cut outline and no drill mark) is left out, so the labels can skip a number; the neighbors named on each page are the ones that were printed.');
   lines.push('');
   lines.push('Build book');
   lines.push('----------');

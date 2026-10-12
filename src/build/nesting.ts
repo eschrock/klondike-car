@@ -394,8 +394,8 @@ export function oakBoardFeet(parts: Part[], p: Params): OakPlan {
   const stripCount = new Map<string, number>();
   resaw.forEach((pool, i) => {
     const b = boardByNominal(pool.board);
-    for (const layer of pool.layerStrips) {
-      for (const s of layer) stripNet.set(pool.board, (stripNet.get(pool.board) ?? 0) + (b.nominalIn / pool.stripsPerBoard * s.widthIn * s.lengthIn) / 144);
+    for (const lane of pool.laneStrips) {
+      for (const s of lane) stripNet.set(pool.board, (stripNet.get(pool.board) ?? 0) + (b.nominalIn / pool.stripsPerBoard * s.widthIn * s.lengthIn) / 144);
     }
     stripCount.set(pool.board, (stripCount.get(pool.board) ?? 0) + pool.strips);
     (resawBoards.get(pool.board) ?? resawBoards.set(pool.board, []).get(pool.board)!).push({

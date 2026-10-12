@@ -532,6 +532,7 @@ export function buildSeat(ctx: Ctx): Part[] {
         notes: `Backing strip for the ${GRIP_BOLTS} grab-board screw heads (D-63, build 3c-8 S9): 316 flat bar ${GRIP_BACKING_T_IN}" × ${GRIP_BACKING_H_IN}" × ${f1(gripBackingLen(bLen))}" on the outside of the outer gunwale band. A 1/4" button head on the 0.234" oak band over the 4 mm web would pull through before the inside washer on the board fails, and a washer big enough to spread it (1-1/4") does not fit the 0.6" row spacing on a ${L.railBand}" band; the strip bears the heads on about ${f1(gripBackingLen(bLen) * GRIP_BACKING_H_IN)} in² (the seat-grip row checks it). Drill it with the board clamped on, one bit through all layers. It stands 1/16" proud of the hull face; round the ends.`,
       });
       strip.kind = 'metal';
+      strip.stock = { t: GRIP_BACKING_T_IN, w: GRIP_BACKING_H_IN, l: gripBackingLen(bLen) }; // the cut list reads the flat-bar stock from here, not from the sourcing text
       strip.material = '316 stainless flat bar';
       strip.massLb = (GRIP_BACKING_T_IN * GRIP_BACKING_H_IN * gripBackingLen(bLen) * p.steelDensityPcf) / 1728;
       parts.push(strip);

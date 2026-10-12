@@ -23,6 +23,8 @@ export const FINISH_WASTE = 0.15;
 export const END_GRAIN_FACTOR = 2;
 /** 105 resin : 207 (or 209) hardener = 3 : 1 by volume. (105 with 205 / 206 is 5 : 1, the glue-up kit; the two coats and the end closes use the 3 : 1 hardeners.) */
 export const EPOXY_RESIN_PARTS = 3;
+/** Spare 207 hardener to buy over the computed need (the container is rounded up to a pint or a quart until it holds this much extra). */
+export const HARDENER_MARGIN = 0.25;
 /** ft² per quart of MIXED 105/207: 1st coat soaks into bare okoume / end grain, 2nd coat goes on a sealed surface (D-20: about 300 ft² per mixed gallon per coat on sanded hardwood). */
 export const EPOXY_COVERAGE_COAT1 = 60;
 export const EPOXY_COVERAGE_COAT2 = 80;
@@ -512,7 +514,8 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
   const hardener209Qt = closeEpoxyFlOz / (EPOXY_RESIN_PARTS + 1) / FLOZ_PER_QT;
   const buy: BuyLine[] = [
     ...buyLines('West System 105 epoxy resin', resinQt, `${f(resinQt, 1)} qt resin for ${f(mixedQt, 1)} qt mixed (two coats of ${f(epoxyArea, 0)} ft² at ${EPOXY_COVERAGE_COAT1} / ${EPOXY_COVERAGE_COAT2} ft²/qt mixed); the glue-ups use the kit's 206`),
-    ...buyLines('West System 207 special clear hardener', hardenerQt, `${f(hardenerQt, 2)} qt hardener (3:1 with the 105 by volume) for the two coats`, false),
+    // The 207 is the tight one: a pint that leaves under HARDENER_MARGIN spare (two finishing campaigns, pump priming) becomes a quart.
+    ...buyLines('West System 207 special clear hardener', hardenerQt * (1 + HARDENER_MARGIN), `${f(hardenerQt, 2)} qt hardener (3:1 with the 105 by volume) for the two coats; bought with at least ${f(HARDENER_MARGIN * 100, 0)} % to spare for the two campaigns and pump priming`, false),
     ...buyLines('West System 209 extra slow hardener', Math.max(hardener209Qt, 0.01), `closes the transom and bulkhead (120 min pot): ${f(closeEpoxyFlOz, 0)} fl oz mixed with the kit's 105 at 3:1 = ${f(closeEpoxyFlOz / (EPOXY_RESIN_PARTS + 1), 1)} fl oz of 209; the smallest can is plenty`, false),
     ...buyLines('Water-based pre-stain conditioner (okoume)', cond.qtNeeded, `${f(areas.okoumeFt2, 0)} ft² at ${CONDITIONER_COVERAGE} ft²/qt`, false),
     ...buyLines('Gel stain (okoume)', gel.qtNeeded, `${f(areas.okoumeFt2, 0)} ft² at ${GEL_STAIN_COVERAGE} ft²/qt`, false),

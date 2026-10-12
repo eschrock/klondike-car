@@ -188,11 +188,20 @@ describe('fastener stacks (S2) and the push-handle fit (S7)', () => {
     expect(inchesText(3)).toBe('3');
     expect(inchesText(1.75)).toBe('1-3/4');
   });
-  it('the socket bolts are 1-3/4 in (grip 1.375 + a nylon washer + 0.1 in of thread past a T-nut flange; with a nylock nut they were 2 in) as computed from the stack', () => {
+  it('the socket screws are 1-1/4 in (round 3): the longest 1/4 in step that ends short of the T-nut flange with 1.5 diameters engaged, so no tip stands into the box aft wall (1-3/4 stood 0.31 in past it)', () => {
+    const sock = byId('handle-socket-L').joints!.find((j) => j.to === 'transom-rear')!;
+    const stack = defaults.handleSocketWallIn + L.transom + defaults.blockingThickIn + washerThick(0.25); // 1.4375 to the flange
+    const len = 1.25;
+    expect(sock.size).toMatch(/1\/4-20 × 1-1\/4 316/);
+    expect(len).toBeLessThanOrEqual(stack + 1e-9); // ends flush or short of the backer face
+    expect(1.25 - (stack - defaults.blockingThickIn)).toBeGreaterThanOrEqual(1.5 * 0.25); // T-nut engagement
+    expect(sock.note).toMatch(/SHORT of the flange/);
+  });
+  it('the socket bolts on a nylock nut were 2 in, with a T-nut the stack is computed from the grip', () => {
     const sock = byId('handle-socket-L').joints!.find((j) => j.to === 'transom-rear')!;
     const stack = defaults.handleSocketWallIn + L.transom + defaults.blockingThickIn; // 1.375
     expect(boltLength(stack, 0.25, 2)).toBe(2); // the nylock-nut length, kept to show the T-nut saves a size
-    expect(sock.size).toMatch(/1\/4-20 × 1-3\/4 316/);
+    expect(sock.size).toMatch(/1\/4-20 × 1-1\/4 316/);
     expect(sock.size).toMatch(/T-NUT/);
     expect(sock.size).toMatch(/button-head/);
     expect(sock.at).toHaveLength(2);

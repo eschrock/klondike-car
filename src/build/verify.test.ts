@@ -92,4 +92,15 @@ describe('verify checklist', () => {
     for (const id of ['tire-squash', 'wheel', 'axle-tube', 'steering-parts', 'bridle', 'sign-knobs']) expect(list.find((c) => c.id === id)!.when, id).toBe('before ordering');
     for (const id of ['seat-back', 'brake-knee', 'lamp-clip']) expect(list.find((c) => c.id === id)!.when, id).toBe('before cutting');
   });
+
+  it('round 2: the one-knee test says "the other knee" and comes before the knees are glued; the strip bend test uses the planned spares', () => {
+    const knee = list.find((c) => c.id === 'brake-knee')!;
+    expect(knee.whatToDo).toMatch(/before cutting the other knee/);
+    expect(knee.whatToDo).not.toMatch(/three knees/);
+    expect(knee.whatToDo).toMatch(/BEFORE the knees are glued/);
+    const bend = list.find((c) => c.id === 'strip-bend')!;
+    expect(bend.whatToDo).toMatch(/FIRST board of each strip pool/);
+    expect(bend.whatToDo).toMatch(/planned SPARE strips/);
+    expect(bend.whatToDo).toMatch(/\d+ spare strips?\)/);
+  });
 });

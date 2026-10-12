@@ -309,6 +309,20 @@ describe('Shaper SVG files', () => {
     expect(y[0]).toBeGreaterThan(f.heightIn);
   });
 
+  it('keeps the GRAIN label off its arrow (round 3): clear above a horizontal arrow, beside a vertical one', () => {
+    let n = 0;
+    for (const f of files) {
+      const label = /<text x="([-\d.]+)" y="([-\d.]+)"[^>]*>GRAIN along/.exec(f.svg);
+      if (!label) continue;
+      n++;
+      const arrow = /<path d="M([-\d.]+),([-\d.]+)L([-\d.]+),([-\d.]+)"[^>]*><title>grain<\/title>/.exec(f.svg)!;
+      const [x0, y0, x1, y1] = arrow.slice(1).map(Number), [lx, ly] = [Number(label[1]), Number(label[2])];
+      if (Math.abs(y1 - y0) < 1e-6) expect(y0 - ly, f.fileName).toBeGreaterThanOrEqual(0.1); // the baseline is above the arrow line (SVG y grows down)
+      else expect(Math.min(lx - x0, lx - x1), f.fileName).toBeGreaterThanOrEqual(0.1);
+    }
+    expect(n).toBeGreaterThan(3);
+  });
+
   it('puts the flat-position seat-pin clearance holes in the deck', () => {
     const deck = fileOf('deck');
     const pin = deck.features.filter((x) => x.kind === 'hole' && x.joint === 'pin');

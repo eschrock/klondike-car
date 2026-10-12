@@ -88,14 +88,14 @@ function verifySection(d: BuildData): string {
 
 function cutlistSection(d: BuildData): string {
   const c = d.cutList;
-  const out: string[] = ['<p class="muted small">Final size is the finished thickness × width × length; rough adds the milling allowance. Inches, sixteenths as fractions.</p>'];
+  const out: string[] = ['<p class="muted small">Final size is the finished thickness × width × length; rough adds the milling allowance. Inches, sixteenths as fractions. Step is the number of the assembly step (section 6) that installs the part.</p>'];
   if (c.warnings.length) out.push(`<p class="small"><strong>Data warnings:</strong></p>${ul(c.warnings.map(esc), 'small')}`);
   out.push('<h3>White oak, by board thickness</h3>');
   for (const g of c.oak) {
     const resawn = g.board === 'resawn';
     out.push(`<h4>${resawn ? `Resawn strips (${g.pieces} pieces: see the strip list)` : `${esc(g.board)} (usable ${fracIn(g.usableIn)}"), ${g.pieces} pieces`}</h4>`);
-    out.push(table([['Part'], ['Qty', 'num'], ['Final T × W × L'], ['Rough T × W × L'], ['Grain'], ['Step', 'num']], g.rows.map((r) => [
-      td(`${esc(r.name)}<div class="muted small">${esc(r.partNo)} · ${esc(r.ids.join(', '))}${r.plies ? ` · ${r.plies} plies` : ''}</div>`), td(r.qty, 'num'), td(dims3(r.stock)), td(dims3(r.rough)), td(esc(r.grain ?? '')), td(r.step, 'num'),
+    out.push(table([['Part'], ['Qty', 'num'], ['Final T × W × L'], ['Rough T × W × L'], ['Grain'], ['Assembly step', 'num']], g.rows.map((r) => [
+      td(`${esc(r.name)}<div class="muted small">${esc(r.partNo)} · ${esc(r.ids.join(', '))}${r.plies ? ` · ${r.plies} plies` : ''}</div>`), td(r.qty, 'num'), td(dims3(r.stock)), td(dims3(r.rough)), td(esc(r.grainWord ?? '')), td(r.assemblySteps.join(', '), 'num'),
     ])));
   }
   out.push('<h3>Resawn strips</h3>');
@@ -103,13 +103,13 @@ function cutlistSection(d: BuildData): string {
     td(`${esc(r.name)} (${r.parts} part${r.parts === 1 ? '' : 's'} × ${r.plies} plies)<div class="muted small">${esc(r.ids.join(', '))}</div>`), td(r.strips, 'num'), td(dims3(r.stock)), td(dims3(r.rough)), td(esc(r.resawFrom)),
   ])));
   for (const pool of c.resaw) {
-    out.push(`<p class="small">${pool.strips} strips of ${fracIn(pool.roughT)}" rough: buy ${pool.boards} × ${esc(pool.board)} × ${pool.boardWidthIn}" wide × ${pool.boardLengthIn / 12} ft (${pool.boardFeet.toFixed(1)} bf). Each board gives ${pool.stripsPerBoard} slab${pool.stripsPerBoard === 1 ? '' : 's'} and ${pool.yieldPerBoard} strips; the purchase holds ${pool.stripSlots} strips, so ${pool.spares} spare${pool.spares === 1 ? '' : 's'}.</p>`);
+    out.push(`<p class="small">${pool.strips} strips of ${fracIn(pool.roughT)}" rough: buy ${pool.boards} × ${esc(pool.board)} × ${pool.boardWidthIn}" wide × ${pool.boardLengthIn / 12} ft (${pool.boardFeet.toFixed(1)} bf). RIP FIRST into ${pool.lanes} lane${pool.lanes === 1 ? '' : 's'}, then resaw each lane into ${pool.stripsPerBoard} slab${pool.stripsPerBoard === 1 ? '' : 's'}; a board yields ${pool.yieldPerBoard} strips; the purchase holds ${pool.stripSlots} strips, so ${pool.spares} spare${pool.spares === 1 ? '' : 's'}.</p>`);
   }
   out.push('<h3>Okoume plywood</h3>');
   for (const g of c.sheets) {
     out.push(`<h4>${esc(g.label)} (${g.pieces} pieces)</h4>`);
-    out.push(table([['Part'], ['Qty', 'num'], ['Final T × W × L'], ['Grain'], ['Step', 'num']], g.rows.map((r) => [
-      td(`${esc(r.name)}<div class="muted small">${esc(r.partNo)} · ${esc(r.ids.join(', '))}</div>`), td(r.qty, 'num'), td(dims3(r.stock)), td(esc(r.grain ?? '')), td(r.step, 'num'),
+    out.push(table([['Part'], ['Qty', 'num'], ['Final T × W × L'], ['Grain'], ['Assembly step', 'num']], g.rows.map((r) => [
+      td(`${esc(r.name)}<div class="muted small">${esc(r.partNo)} · ${esc(r.ids.join(', '))}</div>${r.note ? `<div class="small"><strong>${esc(r.note)}</strong></div>` : ''}`), td(r.qty, 'num'), td(dims3(r.stock)), td(esc(r.grainWord ?? '')), td(r.assemblySteps.join(', '), 'num'),
     ])));
   }
   out.push('<h3>Metal stock</h3>');
@@ -145,7 +145,7 @@ function boardsSection(d: BuildData): string {
     for (const r of t.resawBoards) {
       const pool = o.resaw[r.pool];
       out.push(`<h4>${esc(t.board)} resaw: ${r.count} × ${r.widthIn}" wide × ${r.lengthIn / 12} ft</h4>`);
-      out.push(`<p class="small">${pool.strips} strips of ${fracIn(pool.roughT)}" rough (${esc([...new Set(pool.layerStrips.flat().map((s) => s.partNo))].join(', '))}); each board yields ${r.yieldPerBoard} strips, so ${r.spares} spare${r.spares === 1 ? '' : 's'}.</p>`);
+      out.push(`<p class="small">${pool.strips} strips of ${fracIn(pool.roughT)}" rough (${esc([...new Set(pool.laneStrips.flat().map((s) => s.partNo))].join(', '))}); each board yields ${r.yieldPerBoard} strips, so ${r.spares} spare${r.spares === 1 ? '' : 's'}.</p>`);
     }
   }
   return out.join('');

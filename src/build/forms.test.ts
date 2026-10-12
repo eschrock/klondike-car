@@ -119,15 +119,16 @@ describe('tileForLetter', () => {
     expect(tilePlan(pw, ph).windows.length).toBe(1);
   });
 
-  it('makes one Letter page per window, labeled A1, A2, ..., with alignment marks and a check square', () => {
+  it('makes one Letter page per printed window, labeled A1, A2, ..., with alignment marks and a check square', () => {
     const d = byId('side-form');
     const pages = tileForLetter(d.svg, d.widthIn, d.heightIn);
     const plan = tilePlan(d.widthIn, d.heightIn);
-    expect(pages.length).toBe(plan.windows.length);
+    expect(pages.length).toBeLessThanOrEqual(plan.windows.length);
     expect(pages.length).toBeGreaterThan(4);
     pages.forEach((pg, i) => {
       expect(wellFormed(pg), `page ${i}`).toBeNull();
-      const w = plan.windows[i];
+      const w = plan.windows.find((q) => pg.includes(`<title>${'Sandwich side: cleat-line template and S-ramp (1:1)'} page ${q.page}</title>`))!;
+      expect(w, `page ${i} has a window`).toBeDefined();
       for (const needle of [`width="${LETTER_W_IN}in" height="${LETTER_H_IN}in"`, `>${w.page}</text>`, '>1 in</text>', 'stroke-dasharray', '<circle', `viewBox="${w.x} ${w.y} ${w.w} ${w.h}"`]) expect(pg.includes(needle), `page ${w.page}: ${needle}`).toBe(true);
     });
     expect(plan.windows.slice(0, 3).map((x) => x.page)).toEqual(['A1', 'A2', 'A3']);
@@ -176,9 +177,10 @@ describe('printing (Phase 4 round 2)', () => {
     expect(b.x0).toBeCloseTo(9, 9); expect(b.x1).toBeCloseTo(11, 9); expect(b.y0).toBeCloseTo(4, 9); expect(b.y1).toBeCloseTo(6, 9);
   });
 
-  it('skips pages with no ink on them', () => {
-    // A 20 x 22 in sheet with two small marks, far apart: 3 x 3 windows, only two of them hold a path.
-    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="20in" height="22in" viewBox="0 0 20 22"><title>t</title><path d="M1,1L2,1L2,2L1,2Z" fill="none" stroke="#0068FF" shaper:cutType="guide"></path><path d="M18,20L19,20L19,21L18,21Z" fill="none" stroke="#0068FF" shaper:cutType="guide"></path><text x="10" y="10">label only</text></svg>';
+  it('skips pages with no CUT path or drill mark on them: guide lines and labels alone do not count', () => {
+    // A 20 x 22 in sheet: an outline and a drill mark far apart, plus a long guide line and a label crossing the middle windows (3 x 3 windows, only the two corners print).
+    const cut = (d: string) => `<path d="${d}" fill="none" stroke="#000000" shaper:cutType="outside"></path>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="20in" height="22in" viewBox="0 0 20 22"><title>t</title>${cut('M1,1L2,1L2,2L1,2Z')}<path d="M18,20.5a0.1,0.1 0 1,0 0.2,0a0.1,0.1 0 1,0 -0.2,0Z" fill="none" stroke="#0068FF" shaper:cutType="guide"></path><path d="M0,11L20,11" fill="none" stroke="#0068FF" shaper:cutType="guide"></path><text x="10" y="10">label only</text></svg>`;
     const plan = tilePlan(20, 22);
     expect(plan.windows.length).toBeGreaterThanOrEqual(6);
     const pages = tileForLetter(svg, 20, 22);
@@ -188,11 +190,32 @@ describe('printing (Phase 4 round 2)', () => {
     expect(pages[1]).toContain(`page 2 of 2`);
   });
 
+  it('prints the outline of a big template only where the outline or a mark is: the side form drops its guide-only pages', () => {
+    const d = byId('side-form');
+    const plan = tilePlan(d.widthIn, d.heightIn);
+    const pages = tileForLetter(d.svg, d.widthIn, d.heightIn);
+    expect(pages.length).toBeLessThan(plan.windows.length);
+    expect(pages.length).toBeGreaterThan(5);
+    for (const f of drawings) expect(tileForLetter(f.svg, f.widthIn, f.heightIn).length, f.id).toBeLessThanOrEqual(tilePlan(f.widthIn, f.heightIn).windows.length);
+  });
+
+  it('keeps every footer line inside the page width (about 0.55 em a character) and 0.25 in from every edge', () => {
+    for (const d of drawings) for (const pg of tileForLetter(d.svg, d.widthIn, d.heightIn)) {
+      for (const m of pg.slice(pg.indexOf('<g id="marks">')).matchAll(/<text x="([-\d.]+)" y="([-\d.]+)"[^>]*font-size="([\d.]+)"[^>]*>([^<]*)<\/text>/g)) {
+        const [x, y, size, txt] = [Number(m[1]), Number(m[2]), Number(m[3]), m[4]];
+        if (/text-anchor="end"/.test(m[0]) || /text-anchor="middle"/.test(m[0])) continue;
+        expect(x + txt.length * size * 0.55, `${d.id}: ${txt.slice(0, 40)}`).toBeLessThanOrEqual(LETTER_W_IN - 0.25);
+        expect(y).toBeGreaterThanOrEqual(0.25);
+        expect(y).toBeLessThanOrEqual(LETTER_H_IN - 0.25);
+      }
+    }
+  });
+
   it('puts registration crosses at the same drawing coordinates on neighboring pages, so they overlay', () => {
     const d = byId('side-form');
     const plan = tilePlan(d.widthIn, d.heightIn);
     const pages = tileForLetter(d.svg, d.widthIn, d.heightIn);
-    expect(pages.length).toBe(plan.windows.length); // the side form has ink on every page
+    expect(pages.length).toBeGreaterThan(plan.cols); // at least two rows print
     const crosses = (i: number): Array<[number, number]> => [...pages[i].matchAll(/<circle cx="([\d.]+)" cy="([\d.]+)" r="0.06"/g)].map((m) => [Number(m[1]) - TILE_MARGIN_IN + plan.windows[i].x, Number(m[2]) - TILE_MARGIN_IN + plan.windows[i].y] as [number, number]);
     const same = (a: Array<[number, number]>, b: Array<[number, number]>) => a.filter((q) => b.some((r) => Math.abs(q[0] - r[0]) < 1e-6 && Math.abs(q[1] - r[1]) < 1e-6));
     const idx = (r: number, c: number) => r * plan.cols + c;
@@ -224,3 +247,21 @@ describe('S-ramp rib', () => {
   });
 });
 
+
+describe('form text is annotation only (round 3)', () => {
+  it('every <text> sits in a stroke-only guide group and carries no fill of its own', () => {
+    for (const d of drawings) {
+      expect(d.svg.match(/<text\b/g)?.length ?? 0, d.id).toBeGreaterThan(5);
+      const stripped = d.svg.replace(/<g id="[a-z]+" shaper:cutType="guide" fill="none" stroke="#0068FF" stroke-width="0.008">[\s\S]*?<\/g>/g, '');
+      expect(stripped, d.id).not.toMatch(/<text\b/);
+      for (const m of d.svg.matchAll(/<text\b[^>]*>/g)) expect(m[0], d.id).not.toMatch(/\sfill=/);
+    }
+  });
+  it('the side form quotes the web end from the flat pattern, not the band end', () => {
+    const f = flatPattern(parts.find((x) => x.id === 'side-L-web')!)!;
+    const web = f.widthIn.toFixed(2);
+    expect(byId('side-form').notes.join(' ')).toContain(`the web itself ends at ${web}`);
+    expect(byId('side-form').svg).toContain(`web ends ${web}`);
+    expect(byId('side-form').notes.join(' ')).not.toMatch(/bow end at 59\.24/);
+  });
+});

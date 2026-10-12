@@ -274,3 +274,60 @@ describe('seat back, signs and deck holes', () => {
     for (const j of pins) { expect(j.size).toMatch(/13\/32 clearance/); expect(inside(deck, j.at![0]), JSON.stringify(j.at)).toBe(true); }
   });
 });
+
+describe('oak stock is T x W x L with T the board thickness (round 3)', () => {
+  it('no oak part has a stock thickness above its width or length (no documented exceptions)', () => {
+    const bad = parts.filter((x) => /oak/i.test(x.material) && x.stock && (x.stock.t > x.stock.w + 1e-9 || x.stock.t > x.stock.l + 1e-9)).map((x) => x.id);
+    expect(bad).toEqual([]);
+  });
+  it('the brake shoe is cut from 0.92 in stock (5/4) and the chock from 2.5 in (12/4); the other two sizes follow', () => {
+    for (const tag of ['L', 'R']) {
+      const sh = parts.find((x) => x.id === `brake-shoe-${tag}`);
+      if (sh) { expect(sh.stock!.t).toBeLessThan(sh.stock!.w); expect(sh.rough!.t).toBeCloseTo(sh.stock!.t + p.millingAllowanceIn, 9); }
+    }
+    const ck = get('brake-chock-L');
+    expect(ck.stock!.t).toBeLessThanOrEqual(ck.stock!.w);
+    expect(ck.stock!.t).toBeLessThanOrEqual(ck.stock!.l);
+  });
+});
+
+describe('rail-to-chine screws (round 3, build critic S4)', () => {
+  const L3 = computeLayout(p);
+  const screws = (tag: string) => get(`rail-${tag}`).joints!.filter((j) => j.type === 'screw' && j.to === `side-${tag}-chine`);
+  it('are #6, piloted, with one length per rail-depth zone (3 in aft, 1.8 in forward of the step)', () => {
+    for (const tag of ['L', 'R']) {
+      const js = screws(tag);
+      expect(js.length).toBe(2);
+      for (const j of js) { expect(j.size).toMatch(/^#6 × /); expect(j.size).toMatch(/PILOT/); expect(j.size).not.toMatch(/#8/); }
+      const deep = js.find((j) => /^#6 × 3-1\/2 /.test(j.size!))!, shallow = js.find((j) => /^#6 × 2-1\/2 /.test(j.size!))!;
+      expect(deep).toBeDefined(); expect(shallow).toBeDefined();
+      expect(deep.count).toBeGreaterThanOrEqual(3);
+      expect(shallow.count).toBeGreaterThanOrEqual(1);
+      // each length = the rail depth where it sits + 0.5 in into the chine, up to the next stocked step
+      const rail = get(`rail-${tag}`);
+      for (const [j, depth] of [[deep, p.railDepthIn], [shallow, L3.railDepthF]] as const) {
+        const len = Number(j === deep ? 3.5 : 2.5);
+        expect(len).toBeGreaterThanOrEqual(depth + 0.5 - 1e-9);
+        expect(len).toBeLessThan(depth + 0.5 + 0.25 + 1e-9);
+        for (const a of j.at!) { const x = toModel(rail.transform, a)[0]; if (j === shallow) expect(x).toBeGreaterThan(L3.railStepX - 1e-9); else expect(x).toBeLessThanOrEqual(L3.railStepX - 1.5 + 1e-9); }
+      }
+    }
+  });
+  it('sit between the Dominos, not on them', () => {
+    const dom = get('rail-L').joints!.find((j) => j.type === 'domino' && j.to === 'side-L-chine')!;
+    const dx = dom.at!.map((a) => toModel(get('rail-L').transform, a)[0]);
+    for (const j of screws('L')) for (const a of j.at!) {
+      const x = toModel(get('rail-L').transform, a)[0];
+      expect(Math.min(...dx.map((q) => Math.abs(q - x)))).toBeGreaterThan(1.5);
+    }
+  });
+});
+
+describe('handle-socket screws (round 3, build critic S3)', () => {
+  it('end flush or short of the backer face: the box aft wall sits there', () => {
+    const j = get('handle-socket-L').joints!.find((q) => q.to === 'transom-rear')!;
+    expect(j.size).toMatch(/1\/4-20 × 1-1\/4 /);
+    expect(j.note).toMatch(/SHORT of the flange/);
+    expect(j.note).not.toMatch(/PAST the flange/);
+  });
+});

@@ -59,6 +59,13 @@ describe('buildPackage', () => {
     expect(readme).toContain('https://example.test/#x');
     expect(readme).toMatch(/Black fill/);
     expect(readme).toMatch(/Blue stroke/);
+    // round 3: bit per feature, the DEEP CUT method, text is annotation only (one test import), the insert drill verify, and no stale mirrored-bulkhead line
+    expect(readme).toMatch(/names its bit/);
+    expect(readme).toMatch(/DEEP CUT parts/);
+    expect(readme).toMatch(/annotation only/);
+    expect(readme).toMatch(/import transom-rear\.svg/);
+    expect(readme).toMatch(/VERIFY the insert drill/);
+    expect(readme).not.toMatch(/so it is mirrored/);
     for (const n of names) expect(readme).toContain(n);
   });
 

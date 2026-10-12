@@ -8,6 +8,7 @@
 import { bowTaper, PARAM_DEFS, type Params } from '../params';
 import { localBounds } from '../model/bounds';
 import type { Part } from '../model/types';
+import { cutList } from './cutlist';
 
 export type VerifyWhen = 'before ordering' | 'before cutting' | 'at assembly';
 
@@ -63,6 +64,17 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
   const tubeWall = p.axleWallIn;
   const railStrip = (parts.find((x) => x.id === 'rail-L')?.stock?.t ?? 0.375);
   const bandStrip = (parts.find((x) => x.id === 'side-L-chine')?.stock?.t ?? 0.234);
+
+  // The resaw pools (rip first, then resaw; the cut list's plan): the rail and band strip boards and the spare strips each purchase leaves for the bend test.
+  const cut = cutList(parts, p);
+  const poolOf = (id: string) => {
+    const row = cut.strips.find((r) => r.ids.includes(id));
+    return row ? cut.resaw.find((q) => Math.abs(q.roughT - row.rough.t) < 0.002) : undefined;
+  };
+  const railPool = poolOf('rail-L');
+  const bandPool = poolOf('side-L-chine');
+  const spareOk = !!railPool && !!bandPool && railPool.spares > 0 && bandPool.spares > 0;
+  const poolText = (label: string, q: typeof railPool): string => (q ? `${label} ${q.board} × ${q.boardWidthIn}" (${q.spares} spare ${q.spares === 1 ? 'strip' : 'strips'})` : label);
 
   // Lamp clip: the hand-hold is the clip outline plus 0.02" a side (clip notes, D-64).
   const clip = parts.find((x) => x.id === 'lamp-clip');
@@ -179,7 +191,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       id: 'brake-knee',
       title: 'Brake: pivot pin, flap tongue and tire clearance on the first knee',
       whatToDo:
-        `Cut ONE knee blank (bandsaw the slot, 0.38" pin hole) with the real ${f(p.brakePivotPinDiaIn, 3)}" clevis pin, hitch-pin clip and a flap tongue + pivot block clamped in the slot, before cutting the other three knees and the flaps. ` +
+        `Cut ONE knee blank (bandsaw the slot, 0.38" pin hole) with the real ${f(p.brakePivotPinDiaIn, 3)}" clevis pin, hitch-pin clip and a flap tongue + pivot block clamped in the slot, before cutting the other knee and the flaps; this test comes BEFORE the knees are glued, since the knees go on first while the hull is inverted (assembly step "Brake knees"). ` +
         `Check the slot clearance (0.06" a side), the pin bore across the ears, the flap swing and the pad gap to the tire. Drag-test the chock: pull a weighted chock across packed dirt or gravel with a scale (and wet). Test a pad sample on a wet tire.`,
       pass:
         `Pin slides in with a drop of grease and no slop, flap swings freely through its stroke and the pad hangs ${f(p.brakePadGapIn, 2)}" off the tread released; chock μ ≥ ${p.brakeChockMuFouled} (design ${p.brakeChockMu}); pad μ ≥ 0.4 wet (0.25 fouled).`,
@@ -206,7 +218,8 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       id: 'strip-bend',
       title: `Strip bend test: the rails and bands bend to the ${f(Math.round(bowTaper(p).minRadiusIn), 0)}" radius, in 2 plies`,
       whatToDo:
-        `Before ordering the lumber list, buy ONE board of the stock the strips are resawn from (the cut list's resaw pool) and resaw, plane and bend two dry test strips: a rail strip (${f(railStrip, 3)}" thick) and a band strip (${f(bandStrip, 3)}" thick), ` +
+        `Before ordering the rest of the lumber list, buy the FIRST board of each strip pool (${poolText('rail strips:', railPool)}; ${poolText('band strips:', bandPool)}), rip a lane off it, then resaw and plane two dry test strips: a rail strip (${f(railStrip, 3)}" thick) and a band strip (${f(bandStrip, 3)}" thick). ` +
+        (spareOk ? `Cut them from the planned SPARE strips, so the test costs no extra board (a strip that bends without cracking is not used up: it goes into the laminate). ` : `A pool has no planned spare strip: this test needs one more board. `) + `Bend them ` +
         `around a block cut to the tightest plan radius of the rail form (${f(bowTaper(p).minRadiusIn, 0)}"). Note any cracking, the spring-back, and whether damp heat is needed. The result decides 2 vs 3 plies, which changes the strip count and the boards to buy.`,
       pass: 'Both strips take the radius without a crack or raised grain; spring-back stays under about 10 % of the turn-in (the rail-form drawing notes the allowance).',
       ifFails: 'Plane the strips thinner (3 plies: the strip count, the cut list and the board plan all change), add damp heat, or relax the bow taper (bowTaperStartIn) and re-run the checks, all before the order goes in.',

@@ -15,7 +15,7 @@ import type { Part, Vec2 } from '../model/types';
 import { flatPattern } from './flat';
 import { analyzeShaperPart } from './shaper-svg';
 import {
-  checkSquareEls, circleD, dimensionEls, esc, fmt, guideEl, hash6, pathEl, polyD, rectLoop, svgDocument, textEl, type Xf,
+  ANNOTATION_ATTRS, checkSquareEls, circleD, dimensionEls, esc, fmt, guideEl, hash6, pathEl, polyD, rectLoop, svgDocument, textEl, type Xf,
 } from './svg-util';
 
 /** Process constants (shop practice, not design numbers). */
@@ -76,18 +76,18 @@ function finishDrawing(plan: Plan, p: Params, date?: string): FormDrawing {
   const rev = `rev ${hash6(JSON.stringify(p))}${date ? `, ${date}` : ''}`;
   const tb: string[] = [];
   tb.push(guideEl(polyD(rectLoop(0.2, 0.2, W - 0.2, TITLE_H_IN - 0.2), sheet), { label: 'title block' }));
-  tb.push(textEl(sheet([0.4, TITLE_H_IN - 0.55]), plan.title, 0.32, { fill: '#0068FF', bold: true }));
+  tb.push(textEl(sheet([0.4, TITLE_H_IN - 0.55]), plan.title, 0.32, { bold: true, guide: true }));
   const lines = [...plan.subtitle, `Scale 1:1 (full size), units: inches. Check the 1 in square before use.`, `Klondike sled, Troop 455. Params ${rev}.`];
-  lines.forEach((l, i) => tb.push(textEl(sheet([0.4, TITLE_H_IN - 0.95 - i * 0.24]), l, 0.17)));
+  lines.forEach((l, i) => tb.push(textEl(sheet([0.4, TITLE_H_IN - 0.95 - i * 0.24]), l, 0.17, { guide: true })));
   tb.push(checkSquareEls([W - 1.6, 0.35], sheet));
-  const body = plan.draw(place) + `<g id="titleblock">${tb.join('')}</g>`;
+  const body = plan.draw(place) + `<g id="titleblock" ${ANNOTATION_ATTRS}>${tb.join('')}</g>`;
   const svg = svgDocument({ widthIn: W, heightIn: H, title: `${plan.title} (1:1)`, desc: [plan.title, ...plan.subtitle, ...plan.notes].join('\n'), body });
   return { id: plan.id, title: plan.title, fileName: `${plan.id}.svg`, svg, widthIn: W, heightIn: H, dims: plan.dims, notes: plan.notes };
 }
 
 // ── Shared pieces ──
 const outsideCut = (loop: Vec2[], place: Xf, depth: number, label: string): string => pathEl({ cutType: 'outside', d: polyD(loop, place), depthIn: depth + BREAKTHROUGH_IN, label });
-const label = (place: Xf, at: Vec2, text: string, size = 0.18, anchor: 'start' | 'middle' | 'end' = 'start'): string => textEl(place(at), text, size, { anchor });
+const label = (place: Xf, at: Vec2, text: string, size = 0.18, anchor: 'start' | 'middle' | 'end' = 'start'): string => textEl(place(at), text, size, { anchor, guide: true });
 const dimTo = (place: Xf, a: Vec2, b: Vec2, text: string, off = 0.6): string => dimensionEls(a, b, text, place, off);
 const inch = (v: number): string => `${fmt(Math.round(v * 1000) / 1000)} in`;
 
@@ -155,7 +155,7 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
     `Lay the web FLAT on the bench with this template under or over it (the template is the web's flat development: length ${inch(f.widthIn)} along the plan curve, ${inch(f.heightIn)} tall at the rear).`,
     `CLEAT THE SHEER LINE: ${nCleat} cleats or screws into the sacrificial table, ${inch(cleatStep)} apart along the sheer, on the high side of the line (a straight 1.5 in strip edge-bent to the sheer pushes sideways about 65 lbf at mid-span per band until the epoxy cures).`,
     hasRamp
-      ? `S-RAMP: the bow end of the web rides up this ramp: rise ${inch(rampH)} (the turn-in per side), S from station ${inch(uOf(xR0))} to ${inch(uOf(xR1))} along the web, level to the bow end at ${inch(uOf(xRe))}. Cut ${ribs} ribs from ${RIB_STOCK_IN} in MDF about ${CLEAT_SPACING_IN} in apart under the ${inch(webTallAtBow)} the web stands at the bow, and cap them with 1/4 in hardboard. The rib profile sits on a ${inch(RIB_BASE_IN)} base, so it is never thinner than ${inch(RIB_BASE_IN)} (the same height as the 1/4 in template under the flat part of the web). Do the other face on the mirror ramp (flip the web).`
+      ? `S-RAMP: the bow end of the web rides up this ramp: rise ${inch(rampH)} (the turn-in per side), S from station ${inch(uOf(xR0))} to ${inch(uOf(xR1))} along the web, level to the bow end of the bands at ${inch(uOf(xRe))}; the web itself ends at ${inch(f.widthIn)}, its last ${inch(f.widthIn - uOf(xRe))} runs into the bulkhead dado on the same level. Cut ${ribs} ribs from ${RIB_STOCK_IN} in MDF about ${CLEAT_SPACING_IN} in apart under the ${inch(webTallAtBow)} the web stands at the bow, and cap them with 1/4 in hardboard. The rib profile sits on a ${inch(RIB_BASE_IN)} base, so it is never thinner than ${inch(RIB_BASE_IN)} (the same height as the 1/4 in template under the flat part of the web). Do the other face on the mirror ramp (flip the web).`
       : 'No bow turn-in at these params: no ramp is needed.',
     'Lines: sheer (gunwale top, the cleat line), gunwale band lower edge, web top (the cut edge, the cap below the sheer), chine band top, inner chine band bottom (the deck-edge gap), web bottom. Both outlines are outside cuts so the template and the ramp rib can be cut on the Shaper.',
   ];
@@ -178,18 +178,18 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
         g.push(guideEl(polyD([q, tip], T, false)), guideEl(circleD(tip, 0.19, T)), label(T, [tip[0], tip[1] + 0.25], String(i + 1), 0.13, 'middle'));
       }
       if (hasRamp) {
-        for (const [x, t] of [[xR0, 'S starts'], [xR1, 'S ends'], [xRe, 'bow end']] as const) {
+        for (const [x, t] of [[xR0, 'S starts'], [xR1, 'S ends'], [xRe, `bands end; web ends ${inch(f.widthIn)}`]] as const) {
           g.push(guideEl(polyD([[uOf(x), -rampBlock + GAP * 0.4], [uOf(x), templateH]], T, false), { dashed: true }), label(T, [uOf(x) + 0.1, templateH + 0.3], `${t} (${inch(uOf(x))})`, 0.15));
         }
       }
       g.push(dimTo(T, [0, 0], [w, 0], `web length ${inch(f.widthIn)}`, -0.7));
       g.push(dimTo(T, [0, 0], [0, f.heightIn], `${inch(f.heightIn)}`, 0.7));
-      out.push(`<g id="guides">${g.join('')}</g>`);
+      out.push(`<g id="guides" ${ANNOTATION_ATTRS}>${g.join('')}</g>`);
       if (hasRamp) {
         const R: Xf = ([u, v]) => place([u, v]);
         const poly: Vec2[] = [[uOf(xR0), 0], ...rampProfile, [uOf(xRe), 0]]; // flat bottom; the least thickness is RIB_BASE_IN (the profile starts on it)
         out.push(`<g id="ramp">${outsideCut(poly, R, RIB_STOCK_IN, 'S-ramp rib profile')}</g>`);
-        out.push(`<g id="rampdims">${dimTo(R, [uOf(xRe), RIB_BASE_IN], [uOf(xRe), RIB_BASE_IN + rampH], `rise ${inch(rampH)} above the ${inch(RIB_BASE_IN)} base`, -0.7)}${dimTo(R, [uOf(xR0), 0], [uOf(xRe), 0], `ramp length ${inch(uOf(xRe) - uOf(xR0))}`, -0.6)}${dimTo(R, [uOf(xR0), 0], [uOf(xR1), 0], `S ${inch(uOf(xR1) - uOf(xR0))}`, -1.2)}${label(R, [uOf(xR0), RIB_BASE_IN + rampH + 0.4], `S-RAMP rib profile (cut ${ribs} from ${RIB_STOCK_IN} in MDF); rise = turn-in per side on a ${inch(RIB_BASE_IN)} base`, 0.2)}</g>`);
+        out.push(`<g id="rampdims" ${ANNOTATION_ATTRS}>${dimTo(R, [uOf(xRe), RIB_BASE_IN], [uOf(xRe), RIB_BASE_IN + rampH], `rise ${inch(rampH)} above the ${inch(RIB_BASE_IN)} base`, -0.7)}${dimTo(R, [uOf(xR0), 0], [uOf(xRe), 0], `ramp length ${inch(uOf(xRe) - uOf(xR0))}`, -0.6)}${dimTo(R, [uOf(xR0), 0], [uOf(xR1), 0], `S ${inch(uOf(xR1) - uOf(xR0))}`, -1.2)}${label(R, [uOf(xR0), RIB_BASE_IN + rampH + 0.4], `S-RAMP rib profile (cut ${ribs} from ${RIB_STOCK_IN} in MDF); rise = turn-in per side on a ${inch(RIB_BASE_IN)} base`, 0.2)}</g>`);
       }
       return out.join('');
     },
@@ -251,7 +251,7 @@ function railFormPlan(parts: Part[], L: Layout): Plan | null {
       g.push(dimTo(place, [lengthIn, face[face.length - 1][1]], [lengthIn, FORM_DEPTH_IN], `turn-in ${inch(turn)}`, 0.7));
       g.push(dimTo(place, [lengthIn, 0], [lengthIn, FORM_DEPTH_IN], `${inch(FORM_DEPTH_IN)}`, -1.4));
       g.push(label(place, [0, h - 0.3], 'FORM FACE (bend the strips against this curve; face = rail outer face)', 0.2));
-      out.push(`<g id="guides">${g.join('')}</g>`);
+      out.push(`<g id="guides" ${ANNOTATION_ATTRS}>${g.join('')}</g>`);
       return out.join('');
     },
   };
@@ -314,7 +314,7 @@ function crownPlan(parts: Part[], p: Params, L: Layout): Plan | null {
       g.push(guideEl(polyD([[0, bulkH - crown], [2 * b.halfW, bulkH - crown]], B, false), { dashed: true, label: 'corner height' }));
       g.push(dimTo(B, [0, 0], [2 * b.halfW, 0], `width ${inch(2 * b.halfW)}`, -0.6), dimTo(B, [2 * b.halfW + 0.2, bulkH - crown], [2 * b.halfW + 0.2, bulkH], `crown ${inch(crown)}`, -0.6));
       g.push(label(B, [0, bulkH + 0.35], 'BOW BULKHEAD crown template (top edge)', 0.2));
-      out.push(`<g id="guides">${g.join('')}</g>`);
+      out.push(`<g id="guides" ${ANNOTATION_ATTRS}>${g.join('')}</g>`);
       return out.join('');
     },
   };
@@ -353,7 +353,7 @@ function flapPlan(parts: Part[], p: Params): Plan | null {
       for (const m of marks) if (m.k === 'drill') g.push(guideEl(circleD(m.c, Math.max(m.dia, 0.19), T)), guideEl(polyD([[m.c[0] - 0.2, m.c[1]], [m.c[0] + 0.2, m.c[1]]], T, false)), guideEl(polyD([[m.c[0], m.c[1] - 0.2], [m.c[0], m.c[1] + 0.2]], T, false)));
       for (const l of crossLines) g.push(guideEl(polyD(l.pts, T, false), { dashed: true }), label(T, [l.pts[0][0] - 0.1, f.heightIn + 0.15], 'pivot pin cross hole', 0.14, 'end'));
       g.push(dimTo(T, [0, 0], [f.widthIn, 0], `length ${inch(f.widthIn)}`, -0.5), dimTo(T, [f.widthIn * 0.55, 0], [f.widthIn * 0.55, f.heightIn], `width ${inch(f.heightIn)}`, 0.0 + 0.5));
-      out.push(`<g id="guides">${g.join('')}</g>`);
+      out.push(`<g id="guides" ${ANNOTATION_ATTRS}>${g.join('')}</g>`);
       return out.join('');
     },
   };
@@ -395,6 +395,8 @@ export const PRINT_CUT_STROKE_IN = 0.02;
  * guides (still blue, #0068FF) and uses almost no ink. On-line paths and guides are left as they are.
  */
 export function printStyle(inner: string): string {
+  // Text: the Shaper files carry it as hairline blue strokes (a guide); on paper it is plain filled blue type.
+  inner = inner.split(ANNOTATION_ATTRS).join('shaper:cutType="guide" fill="#0068FF" stroke="none"');
   return inner.replace(/<path\b[^>]*>/g, (tag) => {
     const kind = /shaper:cutType="(outside|inside|pocket)"/.exec(tag)?.[1];
     if (!kind) return tag;
@@ -426,11 +428,73 @@ export function pathBounds(d: string): { x0: number; y0: number; x1: number; y1:
   return Number.isFinite(x0) ? { x0, y0, x1, y1 } : null;
 }
 
-/** True if any path of the drawing comes within the window (drawing inches, from the viewBox origin), so the page has ink on it. Text alone does not count. */
-function windowHasInk(boxes: Array<ReturnType<typeof pathBounds>>, win: TileWindow, minX: number, minY: number): boolean {
-  const wx0 = minX + win.x, wy0 = minY + win.y, wx1 = wx0 + win.w, wy1 = wy0 + win.h;
-  return boxes.some((b) => !b || (b.x1 >= wx0 - 1e-6 && b.x0 <= wx1 + 1e-6 && b.y1 >= wy0 - 1e-6 && b.y0 <= wy1 + 1e-6));
+/** The polylines and circles of the path data our drawings use (absolute M / L / H / V / Z and the half-circle arcs of `circleD`); null when it cannot tell. */
+function pathShapes(d: string): { lines: Array<[Vec2, Vec2]>; circles: Array<{ c: Vec2; r: number }> } | null {
+  const tok = d.match(/[MLHVZmlhvzAa]|-?\d*\.?\d+(?:e-?\d+)?/g);
+  if (!tok) return null;
+  const lines: Array<[Vec2, Vec2]> = [], circles: Array<{ c: Vec2; r: number }> = [];
+  let i = 0, cx = 0, cy = 0, sx = 0, sy = 0, cmd = '';
+  const num = () => Number(tok[i++]);
+  const seg = (x: number, y: number) => { lines.push([[cx, cy], [x, y]]); cx = x; cy = y; };
+  while (i < tok.length) {
+    if (/^[A-Za-z]$/.test(tok[i])) cmd = tok[i++];
+    switch (cmd) {
+      case 'M': cx = num(); cy = num(); sx = cx; sy = cy; cmd = 'L'; break;
+      case 'L': seg(num(), num()); break;
+      case 'H': seg(num(), cy); break;
+      case 'V': seg(cx, num()); break;
+      case 'a': { const rx = num(); num(); i += 3; const dx = num(), dy = num(); circles.push({ c: [cx + dx / 2, cy + dy / 2], r: rx }); cx += dx; cy += dy; break; }
+      case 'Z': case 'z': if (cx !== sx || cy !== sy) seg(sx, sy); cmd = ''; break;
+      default: return null;
+    }
+  }
+  return { lines, circles };
 }
+
+/** Does the segment a-b touch the rectangle (Liang-Barsky)? */
+function segmentHitsRect(a: Vec2, b: Vec2, x0: number, y0: number, x1: number, y1: number): boolean {
+  let t0 = 0, t1 = 1;
+  const dx = b[0] - a[0], dy = b[1] - a[1];
+  for (const [p, q] of [[-dx, a[0] - x0], [dx, x1 - a[0]], [-dy, a[1] - y0], [dy, y1 - a[1]]] as const) {
+    if (Math.abs(p) < 1e-12) { if (q < 0) return false; continue; }
+    const t = q / p;
+    if (p < 0) { if (t > t1) return false; t0 = Math.max(t0, t); } else { if (t < t0) return false; t1 = Math.min(t1, t); }
+  }
+  return t0 <= t1;
+}
+
+interface InkShape { lines: Array<[Vec2, Vec2]>; circles: Array<{ c: Vec2; r: number }> }
+
+/**
+ * The shapes that make a page worth printing: CUT paths (outside / inside / pocket / on-line) and DRILL MARKS (closed circles). Straight guide lines, dimension lines and labels do not: a page with only those is
+ * empty paper with a ruler on it. Null when nothing could be parsed.
+ */
+function inkShapes(inner: string): InkShape[] | null {
+  const out: InkShape[] = [];
+  for (const m of inner.matchAll(/<path\b[^>]*>/g)) {
+    const tag = m[0];
+    const d = /\sd="([^"]*)"/.exec(tag)?.[1];
+    if (!d) continue;
+    const sh = pathShapes(d);
+    if (!sh) return null;
+    const kind = /shaper:cutType="([a-z]+)"/.exec(tag)?.[1];
+    if (kind === 'outside' || kind === 'inside' || kind === 'pocket' || kind === 'online') out.push(sh);
+    else if (sh.circles.length) out.push({ lines: [], circles: sh.circles }); // a guide circle is a drill mark
+  }
+  return out;
+}
+
+/** True if a cut path or a drill mark comes within the window (drawing inches, from the viewBox origin). */
+function windowHasInk(shapes: InkShape[], win: TileWindow, minX: number, minY: number): boolean {
+  const wx0 = minX + win.x, wy0 = minY + win.y, wx1 = wx0 + win.w, wy1 = wy0 + win.h;
+  return shapes.some((sh) =>
+    sh.lines.some(([a, b]) => segmentHitsRect(a, b, wx0, wy0, wx1, wy1)) ||
+    sh.circles.some((c) => c.c[0] + c.r >= wx0 && c.c[0] - c.r <= wx1 && c.c[1] + c.r >= wy0 && c.c[1] - c.r <= wy1));
+}
+
+/** Font size (in) of the tile footer lines; a line is at most `LETTER_W_IN - 2 * TILE_MARGIN_IN` wide at about 0.55 em per character. */
+const FOOT_SIZE_IN = 0.13;
+const fitText = (t: string, max: number): string => (t.length > max ? `${t.slice(0, max - 1)}…` : t);
 
 /** Split a full-scale drawing onto US Letter pages (8.5 x 11, 0.5 in margins): one SVG per page with its label, overlap alignment marks and a 1 in check square. */
 export function tileForLetter(svg: string, widthIn: number, heightIn: number): string[] {
@@ -441,10 +505,10 @@ export function tileForLetter(svg: string, widthIn: number, heightIn: number): s
   const titleM = /<title>([^<]*)<\/title>/.exec(svg);
   const name = titleM ? titleM[1] : 'drawing';
   const { cols, rows, windows } = tilePlan(widthIn, heightIn);
-  // A page is printed only if some path crosses its window (a page of empty paper, or of text alone, is skipped).
-  const boxes = [...inner.matchAll(/<path\b[^>]*\sd="([^"]*)"/g)].map((m) => pathBounds(m[1]));
-  const printed = new Set(windows.filter((w) => windowHasInk(boxes, w, minX, minY)).map((w) => w.page));
-  if (!printed.size) windows.forEach((w) => printed.add(w.page)); // nothing parsed: keep every page rather than none
+  // A page is printed only if a CUT path or a drill mark crosses its window: a page of empty paper, or of guide lines and labels alone, is skipped (the cut outline and the marks are what you trace).
+  const shapes = inkShapes(inner);
+  const printed = new Set(shapes && shapes.length ? windows.filter((w) => windowHasInk(shapes, w, minX, minY)).map((w) => w.page) : []);
+  if (!printed.size) windows.forEach((w) => printed.add(w.page)); // nothing parsed or nothing cut: keep every page rather than none
   const at = (r: number, c: number): TileWindow | undefined => (r >= 0 && r < rows && c >= 0 && c < cols && printed.has(windows[r * cols + c].page) ? windows[r * cols + c] : undefined);
   const total = printed.size;
   const pages: string[] = [];
@@ -469,8 +533,9 @@ export function tileForLetter(svg: string, widthIn: number, heightIn: number): s
     for (const y of ys) if (y !== y0 && y !== y1) for (const x of [x0, x1]) marks.push(cross(x, y));
     // 1 in check square at the lower left of the printable area, on top of the drawing.
     const sq = `<rect x="${fmt(x0 + 0.1)}" y="${fmt(y1 - 1.1)}" width="1" height="1" fill="#fff" fill-opacity="0.85" stroke="#000" stroke-width="0.015"/><text x="${fmt(x0 + 0.6)}" y="${fmt(y1 - 0.55)}" font-family="Helvetica, Arial, sans-serif" font-size="0.16" text-anchor="middle">1 in</text>`;
-    // The label sits 0.2 in under the printable area (0.3 in from the page edge: some printers clip the last 0.25 in).
-    const label = `<text x="${fmt(x0)}" y="${fmt(y1 + 0.2)}" font-family="Helvetica, Arial, sans-serif" font-size="0.18" font-weight="bold">${win.page}</text><text x="${fmt(x0 + 0.6)}" y="${fmt(y1 + 0.2)}" font-family="Helvetica, Arial, sans-serif" font-size="0.14">page ${idx} of ${total}   ${esc(name)}   (${fmt(win.x)}, ${fmt(win.y)}) in   neighbors: ${esc(navs.join(' ') || 'none')}   print at 100%, no scaling; overlay neighbors so the crosses coincide, then trim</text>`;
+    // Two short lines, each inside the printable width: the page label and its neighbors under the printable area (0.34 in from the page bottom: some printers clip the last 0.25 in), the print instructions in the top margin.
+    const label = `<text x="${fmt(x0)}" y="${fmt(y1 + 0.16)}" font-family="Helvetica, Arial, sans-serif" font-size="0.18" font-weight="bold">${win.page}</text><text x="${fmt(x0 + 0.5)}" y="${fmt(y1 + 0.16)}" font-family="Helvetica, Arial, sans-serif" font-size="${FOOT_SIZE_IN}">page ${idx} of ${total}   ${esc(fitText(name, 40))}   neighbors: ${esc(navs.join(' ') || 'none')}</text>`
+      + `<text x="${fmt(x0)}" y="0.3" font-family="Helvetica, Arial, sans-serif" font-size="${FOOT_SIZE_IN}">${esc(`print at 100%, no scaling; overlay neighbors so the crosses coincide, then trim   (${fmt(win.x)}, ${fmt(win.y)}) in`)}</text>`;
     const big = `<text x="${fmt(x1 - 0.1)}" y="${fmt(y0 + 0.5)}" font-family="Helvetica, Arial, sans-serif" font-size="0.5" text-anchor="end" fill="#999" fill-opacity="0.6">${win.page}</text>`;
     pages.push(
       `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:shaper="http://www.shapertools.com/namespaces/shaper" width="${LETTER_W_IN}in" height="${LETTER_H_IN}in" viewBox="0 0 ${LETTER_W_IN} ${LETTER_H_IN}">\n` +

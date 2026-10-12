@@ -15,6 +15,8 @@ export const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g,
 // ── Formatting ────────────────────────────────────────────────────────────────
 
 /** `1-3/16 × 6 × 24` (sixteenths as fractions, other values as decimals). */
+/** " · assembly step 4" (or "steps 4, 6"), or '' when the part is in no step. */
+export const stepLabel = (steps: number[]): string => (steps.length ? ` · assembly step${steps.length > 1 ? 's' : ''} ${steps.join(', ')}` : '');
 export const dims3 = (d: Dims): string => `${fracIn(d.t)} × ${fracIn(d.w)} × ${fracIn(d.l)}`;
 
 export function usd(v: number, cents = true): string {

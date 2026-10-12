@@ -12,6 +12,7 @@ import { tilePlan } from '../build/forms';
 import type { BuildStep } from '../build/assembly';
 import { h } from './dom';
 import {
+  stepLabel,
   bytesLabel, clampStep, cureLine, dims3, featureSummary, groupByWhen, loadDone, maxDepth, pct, previewSvg, saveDone, sheetSvg, stepFocus, tilePagesHtml, todayISO, usd,
   type StepFocus,
 } from './build-helpers';
@@ -263,7 +264,7 @@ export function mountBuildPanel(host: HTMLElement, opts: BuildPanelOptions): Bui
       const resawn = g.board === 'resawn';
       out.push(h('h6', { class: 'bp-sub' }, resawn ? `Resawn strips (${g.pieces} pieces)` : `${g.board} (usable ${fracIn(g.usableIn)}"), ${g.pieces} pieces`));
       out.push(table('bp-cuts', ['Part', 'Qty'], g.rows.map((r) => [
-        h('div', {}, r.name, h('div', { class: 'muted small' }, `${r.partNo} · final ${dims3(r.stock)} · rough ${dims3(r.rough)}${r.grain ? ` · grain ${r.grain}` : ''} · ${r.fab}${r.plies ? ` · ${r.plies} plies` : ''}`)),
+        h('div', {}, r.name, h('div', { class: 'muted small' }, `${r.partNo} · final ${dims3(r.stock)} · rough ${dims3(r.rough)}${r.grainWord ? ` · grain ${r.grainWord}` : ''} · ${r.fab}${r.plies ? ` · ${r.plies} plies` : ''}${stepLabel(r.assemblySteps)}`)),
         String(r.qty),
       ]), `Oak ${g.board}`));
     }
@@ -273,19 +274,19 @@ export function mountBuildPanel(host: HTMLElement, opts: BuildPanelOptions): Bui
       String(r.strips),
     ]), 'Resawn strips'));
     for (const pool of c.resaw) {
-      out.push(note(`${pool.strips} strips of ${fracIn(pool.roughT)}" rough: buy ${pool.boards} × ${pool.board} × ${pool.boardWidthIn}" wide × ${pool.boardLengthIn / 12} ft (${pool.boardFeet.toFixed(1)} bf). Each board gives ${pool.stripsPerBoard} slab${pool.stripsPerBoard === 1 ? '' : 's'} and ${pool.yieldPerBoard} strips, so the purchase holds ${pool.stripSlots}: ${pool.spares} spare${pool.spares === 1 ? '' : 's'}.`));
+      out.push(note(`${pool.strips} strips of ${fracIn(pool.roughT)}" rough: buy ${pool.boards} × ${pool.board} × ${pool.boardWidthIn}" wide × ${pool.boardLengthIn / 12} ft (${pool.boardFeet.toFixed(1)} bf). RIP FIRST into ${pool.lanes} lane${pool.lanes === 1 ? '' : 's'}, then resaw each lane into ${pool.stripsPerBoard} slab${pool.stripsPerBoard === 1 ? '' : 's'}; a board yields ${pool.yieldPerBoard} strips, so the purchase holds ${pool.stripSlots}: ${pool.spares} spare${pool.spares === 1 ? '' : 's'}.`));
     }
     out.push(h('h5', { class: 'bp-group' }, 'Okoume plywood'));
     for (const g of c.sheets) {
       out.push(h('h6', { class: 'bp-sub' }, `${g.label} (${g.pieces} pieces)`));
       out.push(table('bp-cuts', ['Part', 'Qty'], g.rows.map((r) => [
-        h('div', {}, r.name, h('div', { class: 'muted small' }, `${r.partNo} · ${dims3(r.stock)}${r.grain ? ` · grain ${r.grain}` : ''} · ${r.fab}`)),
+        h('div', {}, r.name, h('div', { class: 'muted small' }, `${r.partNo} · ${dims3(r.stock)}${r.grainWord ? ` · grain ${r.grainWord}` : ''} · ${r.fab}${stepLabel(r.assemblySteps)}`), ...(r.note ? [h('div', { class: 'small' }, r.note)] : [])),
         String(r.qty),
       ]), `Plywood ${g.label}`));
     }
     out.push(h('h5', { class: 'bp-group' }, 'Metal stock (drill and tap)'));
     out.push(table('bp-cuts', ['Part', 'Qty'], c.metal.map((r) => [
-      h('div', {}, r.name, h('div', { class: 'muted small' }, `${r.section} · cut ${fracIn(r.cutLengthIn)}" · ${r.partNo}`)),
+      h('div', {}, r.name, h('div', { class: 'muted small' }, `${r.section} · cut ${fracIn(r.cutLengthIn)}" · ${r.partNo}${stepLabel(r.assemblySteps)}`)),
       String(r.qty),
     ]), 'Metal stock'));
     return out;

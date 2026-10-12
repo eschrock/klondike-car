@@ -31,7 +31,7 @@ import type { Part, Vec2, Vec3 } from '../model/types';
 import { worldAABB } from '../model/bounds';
 import { flatPattern, type FlatPattern } from './flat';
 import {
-  bbox, circleD, distToPoly, fmt, guideEl, parseInches, pathEl, pointInPoly, polyD, rectAlong, rectLoop, strokeText, svgDocument, textEl, type Xf,
+  ANNOTATION_ATTRS, bbox, circleD, distToPoly, fmt, guideEl, parseInches, pathEl, pointInPoly, polyD, rectAlong, rectLoop, strokeText, svgDocument, textEl, type Xf,
 } from './svg-util';
 
 /** Cut this much deeper than the stock so the bit breaks through cleanly (in). */
@@ -550,7 +550,7 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
     const b: Vec2 = f.grain === 'u' ? [a[0] + len, a[1]] : [a[0], a[1] + len];
     const d = f.grain === 'u' ? [1, 0] : [0, 1];
     const h1: Vec2 = [b[0] - 0.12 * d[0] - 0.06 * d[1], b[1] - 0.12 * d[1] - 0.06 * d[0]], h2: Vec2 = [b[0] - 0.12 * d[0] + 0.06 * d[1], b[1] - 0.12 * d[1] + 0.06 * d[0]];
-    items.push({ k: 'line', pts: [a, b], label: 'grain' }, { k: 'line', pts: [h1, b, h2], label: 'grain arrow' }, { k: 'tag', at: [a[0], a[1] - 0.08], text: `GRAIN along the ${fmt(f.grain === 'u' ? W : H)}"`, size: 0.12 });
+    items.push({ k: 'line', pts: [a, b], label: 'grain' }, { k: 'line', pts: [h1, b, h2], label: 'grain arrow' }, { k: 'tag', at: f.grain === 'u' ? [a[0], a[1] + 0.12] : [a[0] + 0.12, (a[1] + b[1]) / 2], text: `GRAIN along the ${fmt(f.grain === 'u' ? W : H)}"`, size: 0.12 });
   }
 
   // The face to put UP, in plain words (the part-local "+z face" means nothing at the bench). It matters when a pocket or the legend is on one face.
@@ -645,8 +645,6 @@ function pocketFor(fr: Frame, j: { type: string; size?: string }, mate: Part | u
 
 // ── Rendering ──
 
-/** Attributes of the group that holds every piece of human text: stroke-only blue (a guide's colors), never a filled glyph, never a cut path (R12). */
-const ANNOTATION_ATTRS = 'shaper:cutType="guide" fill="none" stroke="#0068FF" stroke-width="0.005"';
 
 /** The SVG body (shapes, no title) for a drawing, in the part's own coordinates. */
 export function renderBody(d: PartDrawing): string {

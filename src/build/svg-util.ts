@@ -83,6 +83,12 @@ export function pathEl(o: PathOpts): string {
 /** A guide `<path>` (blue, no fill). */
 export const guideEl = (d: string, o: { dashed?: boolean; label?: string; id?: string } = {}): string => pathEl({ cutType: 'guide', d, ...o });
 
+/**
+ * Attributes of a group that holds human text: stroke-only blue (a guide's colors), never a filled glyph, never a cut path. Shaper ignores `<text>`; if an importer turned glyphs into paths they would be
+ * blue guide strokes. 0.008 in so a screen preview stays readable.
+ */
+export const ANNOTATION_ATTRS = 'shaper:cutType="guide" fill="none" stroke="#0068FF" stroke-width="0.008"';
+
 /** A text element (ignored by Shaper). `xf` places the anchor; `size` is the font height in inches. */
 export function textEl(p: Vec2, text: string, size = 0.16, o: { anchor?: 'start' | 'middle' | 'end'; fill?: string; rotate?: number; bold?: boolean; guide?: boolean } = {}): string {
   const rot = o.rotate ? ` transform="rotate(${fmt(o.rotate)} ${fmt(p[0])} ${fmt(p[1])})"` : '';
@@ -175,7 +181,7 @@ export function dimensionEls(a: Vec2, b: Vec2, label: string, xf: Xf, off = 0.5,
   return (
     guideEl(polyD([a2, b2], xf, false), { label: `dimension ${label}` }) +
     guideEl(polyD(tick(a), xf, false)) + guideEl(polyD(tick(b), xf, false)) +
-    textEl(m, label, size, { anchor: 'middle', rotate: Math.abs(rot) < 0.5 ? 0 : rot })
+    textEl(m, label, size, { anchor: 'middle', rotate: Math.abs(rot) < 0.5 ? 0 : rot, guide: true })
   );
 }
 
@@ -183,7 +189,7 @@ export function dimensionEls(a: Vec2, b: Vec2, label: string, xf: Xf, off = 0.5,
 export function checkSquareEls(at: Vec2, xf: Xf): string {
   const sq: Vec2[] = [[at[0], at[1]], [at[0] + 1, at[1]], [at[0] + 1, at[1] + 1], [at[0], at[1] + 1]];
   const c = xf([at[0] + 0.5, at[1] + 0.5]);
-  return guideEl(polyD(sq, xf), { label: '1 in check square' }) + textEl([c[0], c[1] - 0.02], '1 in', 0.16, { anchor: 'middle' }) + textEl([c[0], c[1] + 0.18], 'CHECK', 0.12, { anchor: 'middle' });
+  return guideEl(polyD(sq, xf), { label: '1 in check square' }) + textEl([c[0], c[1] - 0.02], '1 in', 0.16, { anchor: 'middle', guide: true }) + textEl([c[0], c[1] + 0.18], 'CHECK', 0.12, { anchor: 'middle', guide: true });
 }
 
 // ── Single-stroke capital letters (Hershey-style) ──

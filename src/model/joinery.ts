@@ -14,6 +14,9 @@ import { sideTopAt } from './layout';
 import { scupperSites, signBackerPlan, signKnobPlan } from './body';
 import { worldAABB } from './bounds';
 import { boltLength, inchesText, screwLength } from './rear-mount';
+
+/** Bite of a rail-to-chine screw into the chine sandwich edge (outer band + web) after it has crossed the rail (in). */
+export const RAIL_CHINE_BITE_IN = 0.5;
 import type { Joint, JointType, Mat4, Part, Vec3 } from './types';
 
 // ── Festool Domino catalog (nominal mm, thickness × length) ──
@@ -214,8 +217,31 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
       add({
         a: `side-${tag}-chine`, b: `rail-${tag}`, typeA: dom ? 'domino' : 'glue',
         size: dom ? `${dom.name} (${dom.tool}) every ${p.chineTieSpacingIn}" + epoxy bed on the ${frac(flat)}" bearing face (outer band + web edge; the mortise runs across both)` : 'epoxy bed on the bearing face',
-        pts, noteA: 'SIDE-TO-FRAME TIE (D-43, D-62): the sandwich (outer chine band + web) sits on the rail top; the Dominos are VERTICAL and engage as the frame + deck unit is lowered into the inverted side assembly (a protruding Domino cannot be fitted any other way); epoxy bed, then screws up through the rail every other Domino.',
+        pts, noteA: 'SIDE-TO-FRAME TIE (D-43, D-62): the sandwich (outer chine band + web) sits on the rail top; the Dominos are VERTICAL and engage as the frame + deck unit is lowered into the inverted side assembly (a protruding Domino cannot be fitted any other way); epoxy bed, then piloted screws up through the rail BETWEEN the Dominos (every other gap, so they miss the mortises).',
       });
+      // Rail-to-chine screws (round 3, build critic S4): #6, not #8: the bearing edge is only the outer band + the web (0.39 in), and a #8 leaves 0.11 in a side. They go BETWEEN the Dominos (a screw at a Domino would
+      // hit its mortise), at the middle of every other gap, up through the rail and RAIL_CHINE_BITE_IN into the chine sandwich. The rail is 3 in deep aft of the step and railDepthF forward of it, so the length
+      // is per rail-depth zone (the 45 degree ramp is the shallower of its two ends).
+      const railD = p.railDepthIn, xs = L.railStepX;
+      const depthAt = (x: number): number => (x <= xs - 1.5 ? railD : x >= xs ? L.railDepthF : railD + ((L.railDepthF - railD) * (x - (xs - 1.5))) / 1.5);
+      const screwPts = Array.from({ length: Math.max(0, n - 1) }, (_, i) => i).filter((i, _k, all) => i % 2 === 0 || i === all.length - 1).map((i) => { // every other gap, and the last one so the forward end is tied too
+        const a = pts[i], b = pts[i + 1];
+        return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, cBot] as Vec3;
+      });
+      const byLen = new Map<number, Vec3[]>();
+      for (const q of screwPts) {
+        const len = screwLength(depthAt(q[0]), RAIL_CHINE_BITE_IN);
+        (byLen.get(len) ?? byLen.set(len, []).get(len)!).push(q);
+      }
+      for (const [len, qs] of [...byLen.entries()].sort((a, b) => b[0] - a[0])) {
+        const ds = qs.map((q) => depthAt(q[0])), dLo = Math.min(...ds), dHi = Math.max(...ds);
+        const zone = Math.abs(dHi - dLo) < 0.005 ? `${frac(dHi)}" deep` : `${frac(dLo)}" to ${frac(dHi)}" deep`;
+        add({
+          a: `rail-${tag}`, b: `side-${tag}-chine`, typeA: 'screw',
+          size: `#6 × ${inchesText(len)} 316 flat-head wood screws up through the rail (${zone} here: ${dHi >= railD - 0.005 ? `aft of x = ${(xs - 1.5).toFixed(1)}"` : `forward of x = ${xs.toFixed(1)}"`}), ${RAIL_CHINE_BITE_IN}" into the chine sandwich edge; PILOT 1/8 in through the rail and 3/32 in into the chine edge, countersink, and keep them on the centerline of the ${frac(flat)}" edge (a #6 leaves ${((flat - 0.138) / 2).toFixed(2)}" a side)`,
+          pts: qs, noteA: `Between the Dominos, every other gap (x = ${qs.map((q) => q[0].toFixed(1)).join(', ')}"); rail ${zone}.`,
+        });
+      }
     }
   }
 

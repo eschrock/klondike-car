@@ -173,7 +173,8 @@ describe('bom', () => {
     expect(qtyOf(f, /end plug for 3\/4" OD/)).toBe(6); // three axle tubes, two ends each
     expect(qtyOf(f, /machine screw #10-32 x 3\/8"/)).toBe(6); // seat hinge leaves into the six inserts
     expect(qtyOf(f, /stainless rod 3\/8" x 2-1\/4"/)).toBe(2); // handlebow pins
-    expect(qtyOf(f, /wood screw #8 x 3-1\/2"/)).toBe(10); // rail to chine, every other Domino: 5 a side
+    expect(qtyOf(f, /wood screw #6 x 3-1\/2"/)).toBe(8); // rail to chine, aft zone (3 in rail): 4 a side, #6 piloted (round 3: a #8 left 0.11 in a side of the 3/8 in edge)
+    expect(qtyOf(f, /wood screw #6 x 2-1\/2"/)).toBe(2); // rail to chine, forward zone (1.8 in rail): 1 a side
     expect(qtyOf(f, /Button plug 5\/8"/)).toBe(4);
     expect(qtyOf(f, /Nylon washer for 1\/4"/)).toBe(4);
     expect(qtyOf(f, /wood screw #6 x 1\/2"/)).toBe(12); // lid battens, 4 each

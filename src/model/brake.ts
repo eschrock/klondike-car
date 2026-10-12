@@ -240,7 +240,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
       const shoeAt = (fx: number): Vec3 => { const m = flapMat!; return [m[0] * fx + m[12], m[2] * fx + m[14], (qy1 - qy0) / 2]; };
       const shoe = profilePart(ctx, {
         id: `brake-shoe-${tag}`, partNo: 'brake-shoe', name: `Brake shoe block ${tag} (white oak wedge)`, group: 'brake', mat: 'oak', outline: outline as Vec2[], depth: qy1 - qy0, basis: 'xz', origin,
-        grain: 'x', stock: { t: qy1 - qy0, w: bb.z1 - bb.z0, l: bb.x1 - bb.x0 }, step: STEP.brake, fab: 'bandsaw', removable: true, explode: [0.2, sgn, 0.6],
+        grain: 'x', stock: { t: bb.z1 - bb.z0, w: qy1 - qy0, l: bb.x1 - bb.x0 }, step: STEP.brake, fab: 'bandsaw', removable: true, explode: [0.2, sgn, 0.6],
         joints: [
           { ...screw(`brake-flap-${tag}`, 2, '2 x #10 x 2" 316 screws up through the block into the flap, glued with epoxy'), at: shoeScrewX.map((x) => shoeAt(x)) },
           { type: 'glue', to: `brake-flap-${tag}`, count: 1, note: 'epoxy, full face', at: [shoeAt(shoeGlueX)] },
@@ -378,7 +378,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
       const outline = ck.poly;
       const chockPart = profilePart(ctx, {
         id: `brake-chock-${tag}`, partNo: 'brake-chock', name: `Wheel chock ${tag} (white oak wedge, shown parked)`, group: 'brake', mat: 'oak', outline: outline as Vec2[], depth: w, basis: 'xz', origin,
-        grain: 'x', stock: { t: w, w: ck.height, l: ck.xBack - ck.xToe }, step: STEP.brake, fab: 'bandsaw', removable: true, explode: [1, sgn * 0.3, 0],
+        grain: 'x', stock: { t: ck.height, w, l: ck.xBack - ck.xToe }, step: STEP.brake, fab: 'bandsaw', removable: true, explode: [1, sgn * 0.3, 0],
         joints: [screw(`brake-chock-cord-${tag}`, 1, '1 x #10 316 stainless screw eye in the back face, for the cord')],
         notes: `Oak wedge ${f2(w)}" wide, ${f2(ck.height)}" tall, ${f2(ck.xBack - ck.xToe)}" long: the ramp face rises away from the tire at ${f2(ck.psi / (Math.PI / 180))} degrees and is tangent to the tire ${f2(ck.tangent[1])}" off the ground, so the rolling wheel has to climb it. Two stainless screw heads (or a sawtooth cut) left proud in the base bite the ground (μ ${f2(p.brakeChockMu)}, ${f2(p.brakeChockMuFouled)} when wet or fouled). Shown parked in front of the tire for a sled facing downhill; for a sled facing uphill it goes behind the tire, ${f2(p.brakeChockCordLenIn)}" of cord reaches. Comes off for transport.`,
         sourcing: { vendor: `Shop-cut white oak wedge, ${f2(w)}" x ${f2(ck.height)}" x ${f2(ck.xBack - ck.xToe)}" (a single bandsaw cut of a 2x4-class blank)` },

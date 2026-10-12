@@ -142,8 +142,6 @@ export const THROUGH_BOLT_ALLOWANCE_IN = 0.4;
 export const SCREW_BITE_IN = 0.75;
 /** A hinge leaf is 1/16 in thick (the model's 316 butt hinges), so a machine screw into a hinge insert is one leaf longer than the insert. */
 export const HINGE_LEAF_IN = 1 / 16;
-/** Bite of a rail-to-chine screw into the 3/8 in chine sandwich edge (outer band + web) after it has crossed the rail (in). */
-export const RAIL_CHINE_BITE_IN = 0.5;
 
 /** Parts by id, for the thickness lookups of the length fallback. */
 type PartMap = Map<string, Part>;
@@ -199,10 +197,6 @@ export function jointItems(part: Part, j: Joint, byId: PartMap = new Map()): Fas
       const m = /(\d+)\s*[×x]\s*(\d+)/.exec(size);
       const dim = m ? `${m[1]}x${m[2]}` : '(size per joint note)';
       const out: FastenerItem[] = [{ label: /DF\s*500/.test(size) ? `Domino DF 500 ${dim}` : `Domino ${dim}`, qty: n }];
-      // "screws up through the rail every other Domino" (rail-to-chine tie, D-43, D-62): half the Dominos, one screw through the rail depth and RAIL_CHINE_BITE_IN into the chine sandwich.
-      if (/screws? up through the rail every other Domino/i.test(`${size} ${j.note ?? ''}`) && part.stock) {
-        out.push({ label: `316 flat-head wood screw #8 x ${fracIn(roundUpStock(part.stock.w + RAIL_CHINE_BITE_IN))}"`, qty: Math.ceil(n / 2) });
-      }
       return out;
     }
     case 'threaded-insert': {

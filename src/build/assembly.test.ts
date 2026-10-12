@@ -5,7 +5,9 @@ import { defaultParams } from '../params';
 import type { Part } from '../model/types';
 import { cutList } from './cutlist';
 import { formDrawings } from './forms';
-import { assemblySteps, cumulativeParts, hasGlueJoint, isHangPart, jointTally, stepParts } from './assembly';
+import { assemblySteps, cumulativeParts, EARLY_STEP_IDS, hasGlueJoint, isEarlyBrakePart, isHangPart, jointTally, socketScrewText, stepParts, stopBlockPilots } from './assembly';
+import { flatPattern } from './flat';
+import { verifyChecklist } from './verify';
 
 const p = defaultParams();
 const parts = buildModel(p);
@@ -48,7 +50,8 @@ describe('assembly steps', () => {
     for (let i = 1; i < steps.length; i++) expect(steps[i].modelStep, steps[i].id).toBeGreaterThanOrEqual(steps[i - 1].modelStep);
     const by = new Map(parts.map((x) => [x.id, x]));
     // The hang step installs hardware whose model steps are earlier (fitted at its own step, hung after the varnish): its modelStep is clamped up to the finish step.
-    const build = steps.filter((s) => s.partIds.length && s.id !== 'hang');
+    // The brake knees are glued while the hull is inverted: their step sits at 4.6 although the parts are model step 6 (EARLY_STEP_IDS, clamped down).
+    const build = steps.filter((s) => s.partIds.length && s.id !== 'hang' && !EARLY_STEP_IDS.has(s.id));
     for (let i = 0; i < build.length; i++) {
       const s = build[i];
       const ms = s.partIds.map((id) => by.get(id)!.step);
@@ -66,8 +69,9 @@ describe('assembly steps', () => {
     expect(at(HULL_STEP.transom)).toBeLessThan(at(STEP.gear));
     expect(at(STEP.gear)).toBeLessThan(at(STEP.spindles));
     expect(at(STEP.spindles)).toBeLessThan(at(STEP.seatStorage));
-    expect(at(STEP.seatStorage)).toBeLessThan(at(STEP.brake));
-    expect(at(STEP.brake)).toBeLessThan(at(STEP.finish));
+    const flaps = steps.findIndex((s) => s.id === 'brake-flaps');
+    expect(at(STEP.seatStorage)).toBeLessThan(flaps);
+    expect(flaps).toBeLessThan(at(STEP.finish));
   });
 
   it('close the hull in the order of the HULL_STEP comment', () => {
@@ -133,7 +137,7 @@ describe('assembly steps', () => {
     const first = steps.findIndex((s) => s.id === 'rear-beam');
     const last = steps.findIndex((s) => s.id === 'finish-under');
     const gear = steps.slice(first, last + 1);
-    expect(gear.map((s) => s.id)).toEqual(['rear-beam', 'front-beam', 'gear-fit', 'finish-under']);
+    expect(gear.map((s) => s.id)).toEqual(['rear-beam', 'front-beam', 'brake-knees', 'gear-fit', 'finish-under']);
     for (const s of gear) expect(s.view, s.id).toBe('under');
   });
 
@@ -380,5 +384,155 @@ describe('build review round 1: shop details', () => {
   it('tells the builder to scribe the angled joist ends in the bow taper', () => {
     expect(get('frame').instructions.join(' ')).toMatch(/meet the bent rails at up to \d+°/);
     expect(get('frame').instructions.join(' ')).toMatch(/scribe each end/);
+  });
+});
+
+describe('build review round 2: brake knees before the underside finish (MUST-A)', () => {
+  const idx = (id: string): number => steps.findIndex((s) => s.id === id);
+  const get = (id: string) => steps.find((s) => s.id === id)!;
+  const knees = get('brake-knees');
+
+  it('glues and bolts the knees while the hull is inverted, before the underside is finished and before the flip', () => {
+    expect(idx('brake-knees')).toBeGreaterThan(idx('front-beam'));
+    expect(idx('brake-knees')).toBeLessThan(idx('finish-under'));
+    expect(idx('brake-knees')).toBeLessThan(idx('flip'));
+    expect(knees.view).toBe('under');
+    const t = knees.instructions.join(' ');
+    expect(t).toMatch(/epoxy will not bond to varnish/);
+    expect(t).toMatch(/nylock nuts/);
+    expect(t).toMatch(/hull is inverted/);
+    expect(t).toMatch(/one-knee test/);
+    expect(t).not.toMatch(/stay bolted on for finishing/);
+    expect(t).not.toMatch(/the other three knees/);
+    expect(get('finish-under').instructions.join(' ')).toMatch(/brake knees/);
+    // The one-knee verify item is a "before cutting" gate: it is done in step 0, ahead of the knee step.
+    expect(verifyChecklist(parts, p).find((v) => v.id === 'brake-knee')!.when).toBe('before cutting');
+    expect(idx('verify')).toBeLessThan(idx('brake-knees'));
+  });
+
+  it('keeps each part in exactly one step: the knees alone, the flaps, pins, pads and cords stay in brake-flaps and hang', () => {
+    for (const id of ['brake-knee-L', 'brake-knee-R']) expect(knees.partIds, id).toContain(id);
+    for (const id of knees.partIds) expect(isEarlyBrakePart(parts.find((x) => x.id === id)!), id).toBe(true);
+    for (const id of ['brake-flap-L', 'brake-shoe-L', 'brake-chock-L', 'brake-pivot-block-L']) expect(get('brake-flaps').partIds, id).toContain(id);
+    for (const id of ['brake-pivot-pin-L', 'brake-pad-L', 'brake-cord-L']) expect(get('hang').partIds.some((q) => q.startsWith(id.slice(0, 9))), id).toBe(true);
+    const seen = new Map<string, number>();
+    for (const s of steps) for (const id of s.partIds) seen.set(id, (seen.get(id) ?? 0) + 1);
+    for (const id of knees.partIds) expect(seen.get(id), id).toBe(1);
+  });
+
+  it('clamps the knee step to the position it occupies, so modelStep stays nondecreasing and honest', () => {
+    const kneePart = parts.find((x) => x.id === 'brake-knee-L')!;
+    expect(kneePart.step).toBe(STEP.brake);
+    expect(knees.modelStep).toBeLessThan(kneePart.step);
+    expect(knees.modelStep).toBeGreaterThanOrEqual(steps[idx('front-beam')].modelStep);
+    expect(knees.modelStep).toBeLessThanOrEqual(steps[idx('gear-fit')].modelStep);
+    // The viewer shows the knees when they are glued: absent before the step, on the hull from it to the end, no wheels yet.
+    expect(cumulativeParts(steps, idx('front-beam'))).not.toContain('brake-knee-L');
+    expect(cumulativeParts(steps, idx('brake-knees'))).toContain('brake-knee-L');
+    expect(cumulativeParts(steps, idx('flip'))).toContain('brake-knee-R');
+    expect(cumulativeParts(steps, idx('flip'))).not.toContain('wheel-FL');
+  });
+
+  it('counts the knees in the weight of the hull at the flip', () => {
+    const mass = (ids: string[]): number => ids.reduce((a, id) => a + parts.find((x) => x.id === id)!.massLb, 0);
+    const m = /weighs about (\d+) lb/.exec(get('flip').instructions.join(' '));
+    expect(m).toBeTruthy();
+    expect(mass(knees.partIds)).toBeGreaterThan(0);
+  });
+});
+
+describe('build review round 2: step 1 names the cut list boards, rip first (MUST-B, MUST-C)', () => {
+  const cl = cutList(parts, p);
+  const mill = steps.find((s) => s.id === 'mill')!.instructions.join(' ');
+  const board = (id: string): string => cl.oak.flatMap((g) => g.rows).find((r) => r.ids.includes(id))!.board;
+
+  it('reads every bandsaw-blank board from the cut list board column', () => {
+    for (const [label, id] of [['brake knees', 'brake-knee-L'], ['brake shoes', 'brake-shoe-L'], ['chocks', 'brake-chock-L'], ['handlebow', 'handle-bar'], ['tongue', 'bridle-tongue']] as const) {
+      expect(mill, label).toContain(`${label} (${board(id)})`);
+    }
+    // Nothing is bought in 16/4, whatever the model's raw rough says.
+    expect(mill).not.toMatch(/16\/4/);
+    // ... and a part with a transposed model rough still gets its cut-list board.
+    const bad = parts.map((x) => (x.id === 'brake-shoe-L' || x.id === 'brake-shoe-R' ? { ...x, rough: { t: 3.125, w: 1.048, l: 3.7 } } : x));
+    const t2 = assemblySteps(bad, p).find((s) => s.id === 'mill')!.instructions.join(' ');
+    expect(t2).toContain(`brake shoes (${cutList(bad, p).oak.flatMap((g) => g.rows).find((r) => r.ids.includes('brake-shoe-L'))!.board})`);
+    expect(t2).not.toMatch(/16\/4/);
+  });
+
+  it('prescribes rip first and quotes the yield, the spares and the lane plan from cutList().resaw', () => {
+    expect(cl.resaw.length).toBeGreaterThanOrEqual(2);
+    for (const pool of cl.resaw) {
+      expect(mill).toContain(`resawn from ${pool.board}, RIP FIRST: rip ${pool.lanes} lane`);
+      expect(mill).toContain(`it yields ${pool.stripSlots} strips for the ${pool.strips} needed`);
+      expect(mill).toContain(pool.spares > 0 ? `${pool.spares} spare strip` : 'no spare strip');
+    }
+    expect(mill).toMatch(/do not resaw the full board width first/);
+  });
+
+  it('bends a real spare strip: the shaper step quotes the spares of both pools and the verify test uses them', () => {
+    const shaper = steps.find((s) => s.id === 'shaper')!.instructions.join(' ');
+    const rail = cl.resaw.find((q) => cl.strips.some((r) => r.ids.includes('rail-L') && Math.abs(r.rough.t - q.roughT) < 0.002))!;
+    const band = cl.resaw.find((q) => cl.strips.some((r) => r.ids.includes('side-L-chine') && Math.abs(r.rough.t - q.roughT) < 0.002))!;
+    expect(rail.spares).toBeGreaterThanOrEqual(1);
+    expect(band.spares).toBeGreaterThanOrEqual(1);
+    expect(shaper).toContain(`${rail.spares} spare rail strip`);
+    expect(shaper).toContain(`${band.spares} spare band strip`);
+    const bend = verifyChecklist(parts, p).find((v) => v.id === 'strip-bend')!;
+    expect(bend.whatToDo).toContain(`${band.board} × ${band.boardWidthIn}" (${band.spares} spare`);
+    expect(bend.whatToDo).toContain(`${rail.board} × ${rail.boardWidthIn}" (${rail.spares} spare`);
+    expect(bend.whatToDo).toMatch(/SPARE strips/);
+    expect(bend.whatToDo).not.toMatch(/needs one more board/);
+  });
+});
+
+describe('build review round 2: web length, socket screws, hang support, stop-block pilots', () => {
+  const get = (id: string) => steps.find((s) => s.id === id)!;
+  const web = parts.find((x) => x.id === 'side-L-web')!;
+  const net = +flatPattern(web)!.widthIn.toFixed(2);
+  const blank = +web.stock!.l.toFixed(2);
+
+  it('says the Shaper file cuts net and the blank is the stock, in step 2 and at the dry fit (numbers from the model)', () => {
+    expect(blank).toBeGreaterThan(net);
+    const shaper = get('shaper').instructions.join(' ');
+    expect(shaper).toContain(`cuts the NET flat development, ${net}" long`);
+    expect(shaper).toContain(`the blank is ${blank}"`);
+    expect(shaper).toMatch(/cut net from the file/);
+    const dry = get('dry-fit').instructions.join(' ');
+    expect(dry).toContain(`net, ${net}" from the file; the blank was ${blank}"`);
+  });
+
+  it('quotes the handle-socket screw from the joint size text, no hardcoded length', () => {
+    const j = parts.find((x) => x.id === 'handle-socket-L')!.joints!.find((q) => q.type === 'bolt')!;
+    const m = /^(\S+ × \S+) (\d+ [^,(]*?screws?)/.exec(j.size!)!;
+    const text = `${j.count} × ${m[1]} ${m[2]}`;
+    expect(socketScrewText(parts)).toBe(text);
+    expect(get('hang').instructions.join(' ')).toContain(text);
+    expect(get('handle').instructions.join(' ')).toContain(text);
+    expect(get('hang').instructions.join(' ')).not.toMatch(/1\/4-20 × 2 button/);
+    // A model with a different screw length changes the text.
+    const alt = parts.map((x) => (x.id === 'handle-socket-L' ? { ...x, joints: x.joints!.map((q) => (q.type === 'bolt' ? { ...q, size: q.size!.replace(/^(\S+ × )\S+/, '$19-9/16') } : q)) } : x));
+    expect(assemblySteps(alt, p).find((s) => s.id === 'hang')!.instructions.join(' ')).toContain('1/4-20 × 9-9/16');
+  });
+
+  it('says how the hull is supported while the nuts go on under the beams and joists', () => {
+    const t = get('hang').instructions.join(' ');
+    expect(t).toMatch(/roll it onto its side on a padded blanket/);
+    expect(t).toMatch(/flip it onto padded horses \(four people/);
+  });
+
+  it('gives the stop-block pilot locations in the wheel dry-fit step and screws from the underside, never from above', () => {
+    const pilots = stopBlockPilots(parts, p)!;
+    expect(pilots.total).toBe(4);
+    expect(pilots.xs.length).toBe(2);
+    const gf = get('gear-fit').instructions.join(' ');
+    expect(gf).toContain(`${pilots.xs.map((n) => `${+n.toFixed(2)}"`).join(' and ')} forward`);
+    expect(gf).toContain(`${pilots.offCenter.map((n) => `${+n.toFixed(2)}"`).join(' and ')} off the centerline`);
+    expect(gf).toMatch(/transom's outer face/);
+    // The pilots are the screws' own positions, in the model frame (the wedge `at` is local): the distance to the centerline equals the wedge's lateral center.
+    const sb = get('seat-blocks').instructions.join(' ');
+    expect(sb).toMatch(/UNDERSIDE/);
+    expect(sb).toMatch(/tip the sled onto its side/);
+    expect(sb).not.toMatch(/screw from below\./);
+    expect(get('flip').instructions.join(' ')).toMatch(/at least 4"/);
   });
 });

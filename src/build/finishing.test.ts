@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
 import { defaultParams } from '../params';
 import type { Part } from '../model/types';
-import { containers, DOMINO_FLOZ, endGrainAreaIn2, EPOXY_RESIN_PARTS, epoxyTimeFactor, finishAreas, finishMaterial, finishingSchedule, glueEpoxyFlOz, glueJointEstimates, surfaceAreaIn2 } from './finishing';
+import { containers, DOMINO_FLOZ, endGrainAreaIn2, EPOXY_RESIN_PARTS, epoxyTimeFactor, finishAreas, finishMaterial, finishingSchedule, glueEpoxyFlOz, glueJointEstimates, HARDENER_MARGIN, surfaceAreaIn2 } from './finishing';
 
 const p = defaultParams();
 const parts = buildModel(p);
@@ -196,10 +196,19 @@ describe('build review round 1: hardener, 209 and the pumps (MUST-10)', () => {
     const text = sched.steps.map((s) => s.instructions.join(' ')).join(' ') + sched.assumptions.join(' ');
     expect(text).toMatch(/3:1/);
     expect(text).not.toMatch(/5:1 by volume, pumps/);
-    // About a quarter of the mixed volume is hardener: 0.46 qt at the defaults, one pint.
+    // About a quarter of the mixed volume is hardener: 0.46 qt at the defaults.
     const mixed = sched.steps.find((s) => s.id === 'epoxy')!.products.reduce((a, q) => a + q.qtNeeded, 0);
     expect(buy(/207/).reduce((a, b) => a + b.qt, 0)).toBeGreaterThanOrEqual(mixed / 4 - 1e-9);
-    expect(buy(/207/).reduce((a, b) => a + b.qt, 0)).toBeLessThan(mixed / 4 + 0.5);
+  });
+
+  it('buys 207 with at least 25 % to spare: a pint that leaves less becomes a quart (round 2, SHOULD 5)', () => {
+    const mixed = sched.steps.find((s) => s.id === 'epoxy')!.products.reduce((a, q) => a + q.qtNeeded, 0);
+    const need = mixed / (EPOXY_RESIN_PARTS + 1);
+    const bought = buy(/207/).reduce((a, b) => a + b.qt, 0);
+    expect(bought).toBeGreaterThanOrEqual(need * (1 + HARDENER_MARGIN) - 1e-9);
+    // The defaults need 0.46 qt: a pint is only 9 % over, so the line is one quart.
+    expect(need).toBeGreaterThan(0.4);
+    expect(buy(/207/).map((b) => `${b.qty} ${b.unit}`)).toEqual(['1 qt']);
   });
 
   it('buys 209 extra-slow hardener for the transom and bulkhead closes, sized from their joints at 3:1', () => {
