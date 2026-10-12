@@ -504,7 +504,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
         jumpChip('Build', b.coreUsd, b.coreEstimateShare, b.sections[0]?.id ?? 'lumber'),
         jumpChip('Bulk parts', b.bulkUsd, b.bulkEstimateShare, 'bulk'),
         jumpChip('Finishing touches', b.touchesUsd, b.touchesEstimateShare, 'touches')),
-      h('div', { class: 'muted small' }, `${pct(b.estimateShare)} of this is an estimate (${usd(b.estimateUsd)}); the rest is quoted. Prices are 2026 US retail guesses until you get quotes.`),
+      h('div', { class: 'muted small' }, `${pct(b.estimateShare)} of this is an estimate (${usd(b.estimateUsd)}); the rest is quoted from a vendor page (each with its link and date) or by the model. Confirm prices before ordering.`),
       h('h3', { class: 'bp-group' }, 'Jump to a section'),
       h('ul', { class: 'bp-subtotals', 'aria-label': 'Subtotals by section (jump to a table)' },
         ...b.sections.filter((x) => !kinds.has(x.id)).map((x) => {

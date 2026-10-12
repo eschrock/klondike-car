@@ -90,10 +90,10 @@ describe('bom', () => {
     for (const l of b.sections.find((x) => x.id === 'lumber')!.lines) expect(l.basis, l.key).toBe(OAK_PRICE_PER_BF[l.key].basis);
   });
 
-  it('prices two sheets from a local supplier and 4/4 to 8/4 oak, no 12/4 (D-70)', () => {
+  it('prices the two sheets where Eric found them (4 mm Aircraft Spruce, 12 mm The Wood Yard) and 4/4 to 8/4 oak, no 12/4 (D-70)', () => {
     const ply = b.sections.find((s) => s.id === 'plywood')!.lines;
     expect(ply.map((l) => l.qty)).toEqual([1, 1]);
-    expect(JSON.stringify(b)).not.toMatch(/Aircraft Spruce/);
+    expect(ply.map((l) => l.vendor)).toEqual(['Aircraft Spruce', 'The Wood Yard']);
     const lumber = b.sections.find((s) => s.id === 'lumber')!.lines.map((l) => l.key);
     expect(lumber).toEqual(['4/4', '5/4', '6/4', '8/4']); // 12/4 is not stocked: the beams, knees and chocks are face-laminated from 4/4 (D-70)
   });

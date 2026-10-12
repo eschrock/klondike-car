@@ -637,7 +637,7 @@ export function bom(parts: Part[], p: Params): Bom {
     const price = PLYWOOD_PRICE[label];
     if (!price) { unpriced.push(`plywood ${label}`); continue; }
     plywood.push(line('Plywood', label, `Marine okoume plywood (BS 1088), ${label}, 4 x 8 ft`, sheets.length, price, {
-      vendor: 'Local plywood supplier',
+      vendor: price.source.split(/[,(]/)[0].trim(), // the shop itself (Aircraft Spruce, The Wood Yard): the full source and link are on the price
       notes: `${sheets.map((s) => `sheet ${s.index}: ${s.placements.length} parts, ${s.utilizationPct.toFixed(0)}% used`).join('; ')}`,
     }));
   }
