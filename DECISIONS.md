@@ -181,6 +181,10 @@ The target is about **120 lb**, with no change to anything Eric chose. The deck 
 - Handle posts are 11/16" × 1-3/16" so the socket is the standard 1" × 1½" × ⅛" tube. Only ~1.7" of post stays in a 12" socket when riding (the parked position sinks it 9.8").
 - The lash doubler stays 1" (the ⅞" plate overhangs a ¾" one). The signs follow the 4 mm ply. The rider's leg reach is 35.75" and the roll pads sit at 11½" so the thinner bulkhead face and the shorter hub still fit.
 - The thinner tongue means the nut-washer crush (0.63) now sits above the shackle pin (0.51): D-47's "pin first" holds for anything that breaks, not for the dent in the oak. | 🔶 |
+| D-61 | **Build decisions (Eric, 2026-10-12).**
+- **Sandwich sides** (build review M1): thin oak bands are laminated onto each face of the 4 mm okoume side panel at the top (gunwale) and bottom (chine), with no grooves. This replaces the grooved gunwale, which could not be built (its groove needed an edge that only exists after the sheer is sawn, and sawing it from a 12" blank wastes about 87%).
+- **Shop CNC is a Shaper Origin** (handheld, any size with ShaperTape). Flat parts go to it: deck, side panels, grab boards, the bulkhead and its hand-hold, box panels, sign blanks, brake flaps. Phase 4 exports SVG/DXF for them.
+- **14" handle sockets** (about 3.7" of post engaged when riding). | 🔶 |
 - **Axle:** one oak axle beam under the bow, with a 10" wheel on a bolt-on ¾" stub at each end. The wheels sit outboard of the body on a 35.5" track, so the deck stays low (8").
 - **Pivot:** one ⅝" grade-8 kingpin through a UHMW thrust washer into an oak king beam. Bolted only.
 - **Steering:** oak stop blocks give **±20°** (turning circle about 20 ft). The pullers steer through a short tongue plate with the bridle shackled to it. Optional axle-end ropes for the musher are off by default.
