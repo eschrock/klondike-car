@@ -11,7 +11,7 @@ import { bedLengthAtWidth, cargoBed } from './bed';
 import { partsOverlap, worldAABB } from './bounds';
 import { bowGeometry, bowUnderZ, handleGeometry, parkDrop } from './handle';
 import { computeLayout, innerHalfWidth, sideTopAt } from './layout';
-import { BACK_PAD_THICK_IN, CUSHION_CLEAR_IN, GRIP_BOLTS, hingeBacker, seatBackSupport } from './seat';
+import { BACK_PAD_THICK_IN, CUSHION_CLEAR_IN, GRIP_BOLTS, HINGE_BACKER_THICK_IN, PIN_R_IN, hingeBacker, seatBackSupport } from './seat';
 import { applySeatStow, backFlipMove, isBoxedCushion, isSeatBackPart, isStowedKitPart, seatStowPlan } from './seat-stow';
 import { BOX_FILLET_IN, storageGeometry } from './storage';
 import { centerOfGravity, totalMass } from './mass';
@@ -58,13 +58,26 @@ describe('the seat kit (D-57)', () => {
       const b = worldAABB(h);
       expect((b.min[0] + b.max[0]) / 2).toBeCloseTo(L.seat.P[0], 9);
       expect((b.min[2] + b.max[2]) / 2).toBeCloseTo(L.seat.P[2], 9);
-      expect(h.joints!.some((j) => j.to === 'seat-hinge-backer')).toBe(true);
+      expect(h.joints!.some((j) => j.to === `seat-hinge-backer-${tag}`)).toBe(true);
     }
-    const bk = worldAABB(get(installed, 'seat-hinge-backer'));
-    expect(bk.max[2]).toBeCloseTo(L.deckBot, 9);
+    // D-63 (3c-8): one 1 in thick oak pad per side under the deck, from a half inch behind the hinge axis to the face of the next joist (butted), 3 in across, centered on the hinge/pin station.
     const hb = hingeBacker(defaults, L);
-    expect(bk.min[0]).toBeCloseTo(hb.x0, 9);
-    for (const jx of L.joistX) expect(jx + L.joistT / 2 <= hb.x0 || jx - L.joistT / 2 >= hb.x1, `joist ${jx}`).toBe(true);
+    const sup = seatBackSupport(defaults, L);
+    for (const [tag, sg] of [['L', 1], ['R', -1]] as const) {
+      const bk = worldAABB(get(installed, `seat-hinge-backer-${tag}`));
+      expect(bk.max[2]).toBeCloseTo(L.deckBot, 9);
+      expect(bk.max[2] - bk.min[2]).toBeCloseTo(HINGE_BACKER_THICK_IN, 9);
+      expect(bk.min[0]).toBeCloseTo(hb.x0, 9);
+      expect(bk.max[0]).toBeCloseTo(hb.x1, 9);
+      expect((bk.min[1] + bk.max[1]) / 2).toBeCloseTo(sg * sup.stileY, 9);
+      expect(bk.max[1] - bk.min[1]).toBeCloseTo(3, 9);
+      expect(get(installed, `seat-hinge-backer-${tag}`).joints!.some((j) => j.type === 'glue' && /^joist-\d+$/.test(j.to))).toBe(true); // butted to a joist
+    }
+    for (const jx of L.joistX) expect(jx + L.joistT / 2 <= hb.x0 || jx - L.joistT / 2 >= hb.x1 - 1e-9, `joist ${jx}`).toBe(true);
+    // the flat pin lands in solid oak: in the pad (at least 4 pin diameters from its back end and its sides) and its far end is the joist face
+    const flatX = L.seat.P[0] + sup.c2L;
+    expect(flatX - hb.x0).toBeGreaterThanOrEqual(8 * PIN_R_IN);
+    expect(hb.x1 - flatX).toBeGreaterThan(0.5); // butted to the joist: wood continues across the glue line
   });
   it('the stop blocks are glued to the box end and carry a latch-pin hole; the back leans on their crest', () => {
     const sup = seatBackSupport(defaults, L);
@@ -350,13 +363,13 @@ describe('the handlebow (D-53, D-57)', () => {
 describe('the grab boards (D-57)', () => {
   const gr = get(installed, 'seat-grip-L');
   it('one oak board per side, ids seat-grip-L/R, with a routed hole and bolts through the gunwale; the old pad, posts, bar and doubler are gone', () => {
-    expect(installed.filter((x) => /^seat-grip/.test(x.id)).map((x) => x.id).sort()).toEqual(['seat-grip-L', 'seat-grip-R']);
+    expect(installed.filter((x) => /^seat-grip/.test(x.id)).map((x) => x.id).sort()).toEqual(['seat-grip-L', 'seat-grip-R', 'seat-grip-backing-L', 'seat-grip-backing-R']); // D-63: a 316 backing strip under the bolt heads on each outer gunwale band
     expect(installed.some((x) => /^(doubler-grip|seat-grip-(pad|post|bar))/.test(x.id))).toBe(false);
     expect(gr.material).toBe('white oak');
     expect(gr.geometry.type).toBe('extrusion');
     expect((gr.geometry as { holes?: unknown[] }).holes).toHaveLength(1);
     const bolts = gr.joints!.find((j) => j.type === 'bolt')!;
-    expect(bolts.to).toBe('side-L-gunwale');
+    expect(bolts.to).toBe('side-L-gunwale-in'); // the board laps the inner band (D-63: the bolt heads bear on the backing strip on the outer band)
     expect(bolts.count).toBe(GRIP_BOLTS);
   });
   it('lies against the inboard face of the gunwale, stands above its top by foot + hole + bar, and is 8 in long from 5 in behind the H-point', () => {

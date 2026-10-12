@@ -11,7 +11,7 @@ import { joistId } from './frame';
 import type { Params } from '../params';
 import { SIDES, type Ctx } from './build-utils';
 import { sideTopAt } from './layout';
-import { scupperSites, sideWebSplit, signBackerPlan } from './body';
+import { scupperSites, sideWebSplit, signBackerPlan, signKnobPlan } from './body';
 import { worldAABB } from './bounds';
 import type { Joint, JointType, Mat4, Part, Vec3 } from './types';
 
@@ -137,7 +137,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
   const add = (q: Pair) => { if (has(q.a) && has(q.b) && q.pts.length) pairs.push(q); };
 
   const dd = p.deckCaptureDepthIn;
-  const ddS = L.deckEdge; // the deck edge's depth into the side (the inner chine band's thickness at most, D-62)
+  const ddS = L.deckEdge; // the deck edge's depth under the inner chine band: the band's thickness at most, less deckSideClearIn (D-62, D-63)
   const bandT = L.sideBand;
   const pl = p.panelPlyIn;
   const rearTx = L.xRear + L.transom;
@@ -176,7 +176,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     // The scarf joint between the two web halves (thin okoume ships only as 2 x 4 ft sheets).
     if (split) add({ a: web1, b: web2, typeA: 'scarf', size: `${p.plyScarfRatio}:1 epoxied scarf, ${(p.plyScarfRatio * pl).toFixed(2)}" long in the ${Math.round(pl * 25.4)} mm ply, at x = ${p.sideWebScarfXIn}"`, pts: [[p.sideWebScarfXIn, s * (hw + L.side / 2), (cBot + topAt(p.sideWebScarfXIn) - L.webCap) / 2]], noteA: 'Plane the two bevels as a pair against a sanding jig (or taper them on the Shaper), thickened epoxy, flat board, tape and weights; hidden under the sign and its backing strip; the oak bands glued over both faces bridge it.' });
     // The deck edge rises into the gap under the inner chine band, against the web.
-    add({ a: `${id}-chine-in`, b: deck, typeA: 'rabbet', size: `${frac(ddS)}" × ${rabbetZ.toFixed(3)}" gap under the inner chine band (deck + ${frac(ds)}" clearance, thickened epoxy fills it; no routing)`, pts: [[xj, s * (hw + ddS / 2), L.deckBot + L.ply / 2]], noteB: 'Edge of the deck, in the gap against the web.' });
+    add({ a: `${id}-chine-in`, b: deck, typeA: 'rabbet', size: `${frac(ddS)}" × ${rabbetZ.toFixed(3)}" gap under the inner chine band (deck + ${frac(ds)}" clearance, thickened epoxy fills it; no routing); the deck edge is cut ${frac(p.deckSideClearIn)}" short of the web on each side (D-63), the slot is filled with thickened epoxy`, pts: [[xj, s * (hw + ddS / 2), L.deckBot + L.ply / 2]], noteB: 'Edge of the deck, in the gap against the web.' });
     // Web end into a stopped dado in the transom (full web height now).
     add({ a: 'transom-rear', b: web1, typeA: 'dado', size: `${(pl + p.grooveSlopIn).toFixed(3)}" × ${frac(dd)}" stopped dado, ${frac(p.ventHoleIn)}" vent hole through the transom at its closed end`, pts: [[rearTx - dd / 2, s * (hw + L.side / 2), webZMid(rearTx)]], noteA: 'Vented: the transom slides on last, so air and epoxy must escape (hydraulic lock, M4).', noteB: 'End of the web, captured (rear); it enters the dado with the transom\'s slide in X.' });
     // Band ends butt the transom face (a band is 0.234 in thick: too thin for a Domino); the web in its dado and the epoxy fillet inside carry the corner.
@@ -207,9 +207,10 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     const x0 = rearTx, x1 = L.railEnd;
     if (x1 - x0 >= (2 * p.chineTieSpacingIn) / 3) {
       const n = Math.max(2, Math.floor((x1 - x0) / p.chineTieSpacingIn));
-      const flat = L.side - ddS; // the bearing face under the sandwich: outer band + web edge
+      const webFace = Math.min(dd, L.sideBand); // the web's inner face, measured from hwC (the deck edge stops deckSideClearIn short of it, D-63)
+      const flat = L.side - webFace; // the bearing face under the sandwich: outer band + web edge
       const dom = DOMINOS.filter((d) => d.tool === 'DF 500' && d.tMm / MM + 2 * TIE_WALL_MIN_IN <= flat).sort((a, b) => b.tMm * b.wMm - a.tMm * a.wMm)[0];
-      const pts = Array.from({ length: n }, (_, i) => { const x = x0 + ((i + 0.5) * (x1 - x0)) / n; return [x, s * (hwAt(x) + ddS + flat / 2), cBot] as Vec3; });
+      const pts = Array.from({ length: n }, (_, i) => { const x = x0 + ((i + 0.5) * (x1 - x0)) / n; return [x, s * (hwAt(x) + webFace + flat / 2), cBot] as Vec3; });
       add({
         a: `side-${tag}-chine`, b: `rail-${tag}`, typeA: dom ? 'domino' : 'glue',
         size: dom ? `${dom.name} (${dom.tool}) every ${p.chineTieSpacingIn}" + epoxy bed on the ${frac(flat)}" bearing face (outer band + web edge; the mortise runs across both)` : 'epoxy bed on the bearing face',
@@ -301,13 +302,14 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     const sign = byId.get(`sign-${tag}`);
     if (!sign || sign.geometry.type !== 'box') continue;
     const { dx, dz } = signBackerPlan(ctx);
+    const kn = signKnobPlan(ctx);
     const pts = ([[-dx, -dz], [dx, -dz], [-dx, dz], [dx, dz]] as const).map(([x, z]) => toModel(sign.transform, [x, 0, z]));
     const backers = [`sign-backer-${tag}1`, `sign-backer-${tag}2`].filter(has);
     pts.forEach((pt, i) => {
       const bk = backers[i % 2 === 0 ? 0 : 1] ?? backers[0]; // the points go left-lower, right-lower, left-upper, right-upper: even = the left strip
       if (bk) add({
         a: sign.id, b: bk, typeA: 'knob', typeB: 'threaded-insert',
-        size: '#10-32 × 1 thumb-knob screw through a 3/16 clearance hole in the sign and the 4 mm web', sizeB: '#10-32 × 3/8 stainless threaded insert (epoxied) in the oak backing strip inside the web',
+        size: `#10-32 × ${kn.lenIn} in thumb-knob screw through a 3/16 clearance hole in the sign, a ${kn.standoffIn.toFixed(3)}" oak standoff disc (epoxied to the sign back) and the 4 mm web: ${kn.engagedIn.toFixed(2)}" into the insert, tip ${kn.tipShortIn.toFixed(2)}" short of the back of the strip`, sizeB: '#10-32 × 3/8 stainless threaded insert (epoxied) in the oak backing strip inside the web',
         pts: [pt], noteA: 'Sign comes off for transport (D-9). The screw goes through the web into the oak backing strip; nothing grips the 4 mm ply alone (build 3c M4).',
       });
     });

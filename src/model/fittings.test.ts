@@ -50,7 +50,8 @@ describe('seat', () => {
       expect(panel.joints!.some((j) => j.type === 'screw' && j.to === hinge.id && /insert/.test(j.size ?? ''))).toBe(true);
       const wedge = byId.get(`seat-wedge-${tag}`)!;
       expect(wedge.joints!.some((j) => j.type === 'pin' && j.to === `seat-pin-${tag}`)).toBe(true);
-      expect(wedge.joints!.find((j) => j.type === 'pin')!.size).toMatch(/blind hole 1-1\/2" deep/);
+      // D-63: the hole depth comes from the block outline at the pin height (1-1/16 in for the 1-1/2 in pin through the 0.47 in panel), with 1/4 in or more of oak left behind it
+      expect(wedge.joints!.find((j) => j.type === 'pin')!.size).toMatch(/blind hole 1\.0625" deep/);
     }
   });
   it('no frame: no stiles, rails or Dominos in the back; the panel is banded (not captured) and a thin full-width oak crest strip, glued to the box end and the two stop blocks, carries it', () => {
@@ -203,7 +204,7 @@ describe('storage box', () => {
       expect(doubler, x.id).toBeDefined();
       expect(x.joints!.some((j) => j.type === 'screw' && j.to === doubler.id)).toBe(true);
       expect(x.joints!.find((j) => j.type === 'screw')!.count, x.id).toBe(4); // 4-hole plate (lash-load check needs 4 screws)
-      expect(doubler.joints!.some((j) => j.type === 'glue' && j.to === (x.id.startsWith('lash-L') ? 'side-L-gunwale' : 'side-R-gunwale')), doubler.id).toBe(true);
+      expect(doubler.joints!.some((j) => j.type === 'glue' && j.to === (x.id.startsWith('lash-L') ? 'side-L-gunwale-in' : 'side-R-gunwale-in')), doubler.id).toBe(true);
     }
     expect(lashPositions(defaults, L, 5).length).toBeGreaterThanOrEqual(3);
   });

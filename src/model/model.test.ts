@@ -84,7 +84,7 @@ const KNOWN_OFF_DEFAULT: RegExp[] = [
   /^(clamp-F[LR]\d|king-beam) x roll-pad-[LR]:/, // a short stub (clamp plates inboard of the pad) or a thick disc: the roll pad meets a plate or the king beam; validateParams warns about the pad position
   /^clamp-F[LR]\d x king-thrust:/, // a long stub: the inner clamp plate reaches under the disc
   /^steer-chain-[LR] x rail-[LR]:/, // a narrow body (20 in): the rails are inboard of the beam eye, so the chain climbs through the rail band to its anchor; the anchor eye pulls in with the body but the beam eye does not
-  /^seat-hinge-backer x brake-backer-[LR]:/, // a narrow body (3c-4b, reported)
+  /^seat-hinge-backer-[LR] x brake-backer-[LR]:/, // a narrow body (3c-4b, reported)
   /^rail-[LR] x joist-\d+:/, // a long bow turn-in (turn25): the rail curves in by 0.06 in over the joist end (3c-4b, reported)
   /^(roll-pad-[LR]|steer-eye-[LR]|axle-F[LR]) x (joist-\d+|steer-eye-[LR]|axle-F[LR]|roll-pad-[LR]):/, // the roll pad / eye bolt vs a joist or the stub rod off the defaults (a short wheelbase puts a joist over the beam end; deep crossmembers hang to the beam top)
   /^steer-rope-[LR] x /, // steerRopesOn: the optional rope is a straight schematic line from the axle end back 96 in, through the rear wheel, brake and rail; hidden in the viewer

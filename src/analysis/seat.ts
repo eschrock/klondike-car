@@ -13,7 +13,7 @@
  * R_A = w·H·(H/2 − B)/(A − B) (bearing), R_B = w·H − R_A (negative = the hinge is loaded toward the support: its screws take it in shear). Bending peaks at the crest:
  * M = w·(H − A)²/2.
  */
-import { GRIP_BOLT_COLS, GRIP_BOLT_DIA_IN, GRIP_WASHER_OD_IN, GRIP_BOLT_ROWS_IN, GRIP_BOLTS, seatBackSupport } from '../model/seat';
+import { GRIP_BACKING_H_IN, GRIP_BACKING_T_IN, gripBackingLen, GRIP_BOLT_COLS, GRIP_BOLT_DIA_IN, GRIP_WASHER_OD_IN, GRIP_BOLT_ROWS_IN, GRIP_BOLTS, LATCH_HOLE_WALL_MIN_IN, latchGeometry, seatBackSupport } from '../model/seat';
 import { storageGeometry, storageInterior, boxGear, packEssentials, ESSENTIALS, lashPositions, LASH_SCREWS, LASH_SCREW_DIA_IN, LASH_SCREW_LEN_IN, LASH_PLATE_T_IN, LASH_TIP_IN } from '../model/storage';
 import type { Ctx } from './context';
 import { dualCheck, governing, singleCheck, detail, type CaseEval } from './dual';
@@ -63,6 +63,7 @@ export function seatBackLoads(ctx: Ctx, riderLb: number, g: number = ctx.p.dynam
 export function seatBackCheck(ctx: Ctx): AnalysisCheck {
   const { p } = ctx;
   const al = allowables(ctx);
+  const lg = latchGeometry(p, ctx.L); // D-63: geometry only, the same for every rider
   const ev = (c: CaseData): CaseEval => {
     const gF = seatFactor(ctx, c);
     const k = seatBackLoads(ctx, c.riderLb, gF);
@@ -77,12 +78,14 @@ export function seatBackCheck(ctx: Ctx): AnalysisCheck {
       detail('latch pin bearing on the 12 mm ply (pull per pin)', pinBear, 'psi', al.plyBend, '<='),
       detail('latch pin tear-out toward the panel edge (ply rolling shear)', pinTear, 'psi', al.plyBend * PLY_SHEAR_FRAC_OF_MOR, '<='),
       detail('panel overhang deflection at the static torso load', k.defl, 'in', 0.375, '<='),
+      detail('oak left behind the upright latch hole (stop block; the 4 mm box end is behind it)', lg.upLeftIn, 'in', LATCH_HOLE_WALL_MIN_IN, '>='),
+      detail('oak left under the flat latch hole (hinge backer pad)', lg.flatLeftIn, 'in', LATCH_HOLE_WALL_MIN_IN, '>='),
     ];
     const how = `Rider ${f(c.riderLb, 0)} lb × dynamic ${f(gF, 2)} (max of the dynamic factor and 1 + V_rear/W, spec 5.4) × torso share ${p.seatBackLoadFraction} = ${f(k.Q)} lbf aft over the ${f(k.sup.H)}" frameless back, ${f(k.w, 2)} lbf/in at each of 2 stations. `
       + `The bare ${f(k.t * 25.4, 0)} mm panel leans on the full-width oak crest strip at ${f(k.A, 2)}" and is held at its foot by the hinges (${f(k.B, 2)}"): `
       + `R_A = ${f(k.RA)} lbf per station, hinge load ${f(k.T)} lbf per hinge; worst moment ${f(k.M)} lb·in per station at ${f(k.xM, 1)}" up the back, over the ${f(k.sup.W)}" width m = 2M/W = ${f(k.m, 1)} lb·in/in, σ = 6m/t² = ${f(k.sigmaPly, 0)} psi (≤ ${f(al.plyBend, 0)}); `
       + `bearing ${f((2 * k.RA) / (contactW * CRUSH_HEIGHT_IN), 0)} psi on ${f(contactW, 1)}" × ${CRUSH_HEIGHT_IN}" of crest (≤ ${f(al.oakPerp, 0)}); hinge ${f(k.T, 0)} lbf (≤ ${f(p.seatHingeLoadLbf, 0)}), ${f(k.T / 3, 0)} lbf on each of 3 inserts (≤ ${f(p.seatInsertPulloutLbf, 0)}, verify by a pull test); `
-      + `latch pin pull ${f(p.seatPinPullLbf, 0)} lbf: bearing ${f(pinBear, 0)} psi on 3/8" × ${f(k.t, 2)}", tear-out ${f(pinTear, 0)} psi on 2 × ${f(k.edge, 2)}" × ${f(k.t, 2)}" (rolling shear ${f(al.plyBend * PLY_SHEAR_FRAC_OF_MOR, 0)}); static deflection of the ${f(k.sup.H - k.A, 1)}" overhang ${f(k.defl, 3)}". `
+      + `latch pins ${f(k.sup.c2L, 2)}" up the panel (D-63): blind holes ${f(lg.upHoleIn, 4)}" in the stop block (${f(lg.blockIn, 2)}" thick along the pin, ${f(lg.upLeftIn, 2)}" of oak left behind the hole, ≥ ${LATCH_HOLE_WALL_MIN_IN}") and ${f(lg.flatHoleIn, 3)}" in the 1" backer pad when flat (${f(lg.flatLeftIn, 2)}" left); latch pin pull ${f(p.seatPinPullLbf, 0)} lbf: bearing ${f(pinBear, 0)} psi on 3/8" × ${f(k.t, 2)}", tear-out ${f(pinTear, 0)} psi on 2 × ${f(k.edge, 2)}" × ${f(k.t, 2)}" (rolling shear ${f(al.plyBend * PLY_SHEAR_FRAC_OF_MOR, 0)}); static deflection of the ${f(k.sup.H - k.A, 1)}" overhang ${f(k.defl, 3)}". `
       + `The two-block version (without the crest strip) would span ${f(2 * k.sup.stileY, 1)}" between the blocks and overstress the panel; a frame was the fallback and is not needed.`;
     return governing(ds, how);
   };
@@ -116,15 +119,23 @@ export function seatGripCheck(ctx: Ctx): AnalysisCheck {
     const Tbolt = k * Math.max(...GRIP_BOLT_ROWS_IN);
     const boltArea = (Math.PI / 4) * (GRIP_BOLT_DIA_IN - 0.0825) ** 2; // 1/4-20 tensile stress area ≈ 0.0318 in²
     const washerA = (Math.PI / 4) * (GRIP_WASHER_OD_IN ** 2 - (GRIP_BOLT_DIA_IN + 0.03) ** 2);
+    // D-63 (3c-8 S9): the screw heads bear on a continuous 316 backing strip (1/16 x 1 in x board length) on the outer face of the outer gunwale band; all six tensions load the strip against the band,
+    // and each head's 3/8 in washer punches the strip.
+    const Ttotal = GRIP_BOLT_COLS * k * GRIP_BOLT_ROWS_IN.reduce((m, d) => m + d, 0);
+    const stripA = gripBackingLen(p.grabBoardLengthIn) * GRIP_BACKING_H_IN - (GRIP_BOLTS * Math.PI * 0.28 ** 2) / 4; // net of the 9/32 in holes
+    const punchD = 0.375;
+    const punch = Tbolt / (Math.PI * punchD * GRIP_BACKING_T_IN);
     const ds: Detail[] = [
       detail('grab bar bending over the hole', Mbar / Sbar, 'psi', al.oakBend, '<='),
       detail('bolt tension (each, the couple of the two rows)', Tbolt / boltArea, 'psi', p.ss316BoltYieldPsi / p.steelSafetyFactor, '<='),
       detail('washer bearing on the oak (⊥ grain)', Tbolt / washerA, 'psi', al.oakPerp, '<='),
+      detail('heads: 316 backing strip bearing on the outer gunwale band (⊥ grain, all six bolts)', Ttotal / stripA, 'psi', al.oakPerp, '<='),
+      detail('heads: 3/8" washer punching the 1/16" backing strip (shear)', punch, 'psi', (0.577 * p.ss316BoltYieldPsi) / p.steelSafetyFactor, '<='),
       detail('finger gap (no pinch)', p.grabHoleHeightIn, 'in', 1.25, '>='),
       detail('clear length (hand)', hl, 'in', 3.5, '>='),
     ];
     const how = `Pull ${f(F)} lbf (0.5 × ${f(c.riderLb, 0)} lb × ${f(gF, 2)}) on one board: the ${f(bt, 2)}" × ${f(bar, 2)}" bar over the ${f(hl, 2)}" hole, M = F·L/4 = ${f(Mbar)} lb·in, σ = M/S = ${f(Mbar / Sbar, 0)} psi (≤ ${f(al.oakBend, 0)}). `
-      + `The pull acts ${f(arm, 2)}" above the gunwale top; the ${GRIP_BOLTS} bolts (${GRIP_BOLT_COLS} columns × 2 rows ${GRIP_BOLT_ROWS_IN.join('" and ')}" below the top) resist it as a couple: T = F·arm·d_max/(cols·Σd²) = ${f(Tbolt)} lbf on the worst bolt, ${f(Tbolt / boltArea, 0)} psi on the ${f(boltArea, 4)} in² tensile area (≤ ${f(p.ss316BoltYieldPsi / p.steelSafetyFactor, 0)}), ${f(Tbolt / washerA, 0)} psi under the ${f(GRIP_WASHER_OD_IN, 2)}" fender washer (≤ ${f(al.oakPerp, 0)}). `
+      + `The pull acts ${f(arm, 2)}" above the gunwale top; the ${GRIP_BOLTS} bolts (${GRIP_BOLT_COLS} columns × 2 rows ${GRIP_BOLT_ROWS_IN.join('" and ')}" below the top) resist it as a couple: T = F·arm·d_max/(cols·Σd²) = ${f(Tbolt)} lbf on the worst bolt, ${f(Tbolt / boltArea, 0)} psi on the ${f(boltArea, 4)} in² tensile area (≤ ${f(p.ss316BoltYieldPsi / p.steelSafetyFactor, 0)}), ${f(Tbolt / washerA, 0)} psi under the ${f(GRIP_WASHER_OD_IN, 2)}" fender washer (≤ ${f(al.oakPerp, 0)}). The heads bear on the ${GRIP_BACKING_T_IN}" × ${GRIP_BACKING_H_IN}" × ${f(gripBackingLen(p.grabBoardLengthIn), 1)}" stainless strip (D-63): ${f(Ttotal)} lbf over ${f(stripA, 1)} in², ${f(Ttotal / stripA, 0)} psi on the outer band, ${f(punch, 0)} psi punching through the strip under a ${punchD}" washer. `
       + `Finger gap ${f(p.grabHoleHeightIn, 2)}" (≥ 1.25") and ${f(hl, 2)}" clear length (≥ 3.5"): no pinch point (BRIEF §4.7).`;
     return governing(ds, how);
   };

@@ -28,6 +28,8 @@ describe('seatChecks', () => {
     expect(c.details!.map((d) => d.name)).toEqual([
       'panel bending (bare 12 mm ply as a strip above and below the crest line)', 'crest bearing on the oak crest strip (full width)', 'hinge load (each hinge, screws in the oak backer)',
       'hinge leaf inserts pull-out (each of 3 threaded inserts in the ply)', 'latch pin bearing on the 12 mm ply (pull per pin)', 'latch pin tear-out toward the panel edge (ply rolling shear)', 'panel overhang deflection at the static torso load',
+      // D-63 (3c-8): the blind latch holes keep oak behind them (never the 4 mm box end)
+      'oak left behind the upright latch hole (stop block; the 4 mm box end is behind it)', 'oak left under the flat latch hole (hinge backer pad)',
     ]);
     // D-62 (Eric 2026-10-12): the bare 12 mm panel on the full-width crest strip passes with margin: no fallback to the oak frame was needed
     expect(c.util!).toBeLessThan(0.9);
@@ -67,7 +69,8 @@ describe('seatChecks', () => {
   it('grab-board row: the bar, the bolt couple and the washers hold a hard pull; no pinch point; a short, thin bar fails (teeth)', () => {
     const c = byId['seat-grip'];
     expect(c.status).not.toBe('fail');
-    expect(c.details!.map((d) => d.name)).toEqual(['grab bar bending over the hole', 'bolt tension (each, the couple of the two rows)', 'washer bearing on the oak (⊥ grain)', 'finger gap (no pinch)', 'clear length (hand)']);
+    expect(c.details!.map((d) => d.name)).toEqual(['grab bar bending over the hole', 'bolt tension (each, the couple of the two rows)', 'washer bearing on the oak (⊥ grain)',
+      'heads: 316 backing strip bearing on the outer gunwale band (⊥ grain, all six bolts)', 'heads: 3/8" washer punching the 1/16" backing strip (shear)', 'finger gap (no pinch)', 'clear length (hand)']);
     const bad = seatChecks(ctxFor({ grabBoardBarIn: 0.75, grabHoleLengthIn: 6, grabBoardThickIn: 0.5, riderMassLb: 250, riderGoalMassLb: 250 })).find((q) => q.id === 'seat-grip')!;
     expect(bad.util ?? 0).toBeGreaterThan(c.util ?? 0);
     const pinch = seatChecks(ctxFor({ grabHoleHeightIn: 1.25 })).find((q) => q.id === 'seat-grip')!;

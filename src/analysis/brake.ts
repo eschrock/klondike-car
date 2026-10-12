@@ -15,7 +15,7 @@ import { atPose, brakeGeometry, buildBrakeAt, type BrakeGeom, type V2 } from '..
 import { HINGE_GAP_IN, HINGE_LEAF_T_IN, WITHDRAWAL_WET_CM, dot2, momentY, norm2, pointPolyGap, sub } from '../model/brake-layout';
 import { SIGN_X_MAX_IN } from '../model/body';
 import { makeCtx } from '../model/build-utils';
-import { handleGeometry, POST_RELIEF, type HandleGeom } from '../model/handle';
+import { handleGeometry, POST_RELIEF, SOCKET_ACCESS_HOLE_IN, type HandleGeom } from '../model/handle';
 import type { Part } from '../model/types';
 import type { Ctx } from './context';
 import { dualCheck, singleCheck, detail, governing, type CaseEval } from './dual';
@@ -542,6 +542,12 @@ export function handleSockets(ctx: Ctx): AnalysisCheck {
   const wall = p.handleSocketWallIn;
   const tubeS = ((h.socketY * h.socketX ** 3 - (h.socketY - 2 * wall) * (h.socketX - 2 * wall) ** 3) / 12) / (h.socketX / 2);
   const tubeSigma = M / tubeS;
+  // D-63: the 5/8 in access hole in the rear (flange) wall, opposite each screw, takes that much out of the compression/tension flange; the full mouth moment is taken at it (conservative: the screws are
+  // 1.2 in down, where the moment has fallen).
+  const holeW = Math.min(SOCKET_ACCESS_HOLE_IN, h.socketY - 2 * wall);
+  const tubeI = (h.socketY * h.socketX ** 3 - (h.socketY - 2 * wall) * (h.socketX - 2 * wall) ** 3) / 12;
+  const tubeINet = tubeI - holeW * wall * (h.socketX / 2 - wall / 2) ** 2 - (holeW * wall ** 3) / 12;
+  const tubeSigmaNet = M / (tubeINet / (h.socketX / 2));
   const bolt = 0.25;
   const boltBear = Rtop / (2 * bolt * ctx.L.transom);
   // Aluminum 6061-T6 tube (plan item 5): allowable = yield / safety factor, for the tube in bending and for bearing on its walls.
@@ -557,13 +563,14 @@ export function handleSockets(ctx: Ctx): AnalysisCheck {
     detail('post bearing at the socket mouth and foot', bearTop, 'psi', al.oakPerp, '<='),
     detail('wood below the riding pin hole (end distance, 4 pin diameters)', pinEnd, 'in', 4 * p.handlePinDiameterIn, '>='),
     detail('socket tube bending (6061-T6 aluminum)', tubeSigma, 'psi', alAllow, '<='),
+    detail(`socket tube bending net of the ${f(SOCKET_ACCESS_HOLE_IN, 3)}" access hole (full mouth moment)`, tubeSigmaNet, 'psi', alAllow, '<='),
     detail('socket wall bearing at the bolt holes (aluminum)', wallBoltBear, 'psi', alAllow, '<='),
     detail('retaining pin bearing on the aluminum walls', wallPinBear, 'psi', alAllow, '<='),
     detail('bolt washer pull-through on the transom (oak ⊥ grain)', pullThrough, 'psi', al.oakPerp, '<='),
     detail('socket bolts bearing in the transom (2 × ¼")', boltBear, 'psi', al.oakDowel, '<='),
     detail('retaining pin double shear (whole pull)', pinShear, 'psi', sa.shear, '<='),
   ];
-  const how = `A ${f(F)} lbf hold-back pull at the grip (${f(gripZ, 1)}" above the ground, D-9) shared by two uprights: ${f(Fp)} lbf each. Each upright is a cantilever from the socket mouth (${f(h.zTop, 1)}") to the grip: M = ${f(Fp)} × ${f(gripZ - h.zTop, 1)} = ${f(M)} lbf·in on a ${f(w, 2)}" × ${f(t, 2)}" post (σ ${f(sigma, 0)} psi). Top reaction ${f(Rtop)} lbf over the ${f(lEff, 1)}" insertion (bearing strip ${f(contact, 2)}", never longer than the insertion; the riding pin hole is ${f(pinEnd, 2)}" above the post foot, ${f(pinEnd / p.handlePinDiameterIn, 1)} pin diameters). Socket tube bending ${f(tubeSigma, 0)} psi, bolt-hole wall bearing ${f(wallBoltBear, 0)} psi, washer pull-through ${f(pullThrough, 0)} psi on the oak transom, retaining pin ${f(pinShear, 0)} psi in double shear.`;
+  const how = `A ${f(F)} lbf hold-back pull at the grip (${f(gripZ, 1)}" above the ground, D-9) shared by two uprights: ${f(Fp)} lbf each. Each upright is a cantilever from the socket mouth (${f(h.zTop, 1)}") to the grip: M = ${f(Fp)} × ${f(gripZ - h.zTop, 1)} = ${f(M)} lbf·in on a ${f(w, 2)}" × ${f(t, 2)}" post (σ ${f(sigma, 0)} psi). Top reaction ${f(Rtop)} lbf over the ${f(lEff, 1)}" insertion (bearing strip ${f(contact, 2)}", never longer than the insertion; the riding pin hole is ${f(pinEnd, 2)}" above the post foot, ${f(pinEnd / p.handlePinDiameterIn, 1)} pin diameters). Socket tube bending ${f(tubeSigma, 0)} psi (${f(tubeSigmaNet, 0)} psi net of the ${f(SOCKET_ACCESS_HOLE_IN, 3)}" access hole), bolt-hole wall bearing ${f(wallBoltBear, 0)} psi, washer pull-through ${f(pullThrough, 0)} psi on the oak transom, retaining pin ${f(pinShear, 0)} psi in double shear.`;
   const g = governing(ds, how);
   return singleCheck({
     id: 'handle-sockets', label: `Rear push-handle sockets${g.suffix ? ` (${g.suffix})` : ''}`, group: 'Structure', refs: ['D-9', 'D-39'],

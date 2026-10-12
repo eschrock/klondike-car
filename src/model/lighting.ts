@@ -9,6 +9,7 @@ import { SIGN_X_MAX_IN } from './body';
 import { sideSlopeAt, sideTopAt } from './layout';
 import { profilePart } from './profile';
 import { storageGeometry } from './storage';
+import { GRIP_BACKING_END_IN, GRIP_BEHIND_HPOINT_IN } from './seat';
 import type { Part, Vec2, Vec3 } from './types';
 
 const unit = (x: number, y: number, z: number): Vec3 => {
@@ -97,7 +98,7 @@ export function buildLighting(ctx: Ctx): Part[] {
         { type: 'pin', to: 'bow-bulkhead', count: 2, size: 'two snap detent ribs, 0.04 in proud, on the long faces of the plug', note: 'tool-free: it pushes in from the front until the lamp stops against the bulkhead and pulls out the same way' },
         { type: 'threaded-insert', to: 'front-light', count: 2, size: 'M4 heat-set inserts in the clip\'s front lip' },
       ],
-      notes: `Printed ASA plug, ${len.toFixed(2)}" × ${h.toFixed(2)}" (the ${p.liftSlotLengthIn}" × ${p.liftSlotHeightIn}" hand-hold less ${LAMP_CLIP.clearIn}" a side), ${depth.toFixed(2)}" long: through the ${bh.thick}" bulkhead, its rear face flush with the foot brace and ${LAMP_CLIP.lipIn}" proud of the front. A stadium extrusion (outline in y-z, depth along x): print it lying on one long face so the layers run along the plug and the lip is not a stack of thin layers (P4); 4+ perimeters. Two 0.04" detent ribs make the push fit firm; the lamp's flat mount screws to two M4 heat-set inserts in the lip. To lift the nose: pull the lamp and clip out the front (it rides in the box, with the cushions), then grip the oak bar above the slot (D-37, D-57). It is not on a load path; it is removable.`,
+      notes: `Printed ASA plug, ${len.toFixed(2)}" × ${h.toFixed(2)}" (the ${p.liftSlotLengthIn}" × ${p.liftSlotHeightIn}" hand-hold less ${LAMP_CLIP.clearIn}" a side), ${depth.toFixed(2)}" long: through the ${bh.thick}" bulkhead, its rear face flush with the foot brace and ${LAMP_CLIP.lipIn}" proud of the front. A stadium extrusion (outline in y-z, depth along x): print it lying on one long face so the layers run along the plug and the lip is not a stack of thin layers (P4); 4+ perimeters. Two 0.04" detent ribs make the push fit firm; the lamp's flat mount screws to two M4 heat-set inserts in the lip. To lift the nose: pull the lamp and clip out the front (it rides in the box, with the cushions), then grip the oak bar above the slot (D-37, D-57). It is not on a load path; it is removable. VERIFY ON THE REAL PARTS (build 3c-8): the plug has only ${LAMP_CLIP.clearIn}" of clearance a side in a Shaper-cut, epoxy-sealed slot, which is inside the printer's tolerance and the router's wander; print a 1" test slice at 0.04 to 0.05" a side with 0.05" ribs and try it in the real hand-hold (and the real lamp mount) before printing the whole clip.`,
     }));
     const lampW = FRONT_LIGHT_SIZE[0];
     parts.push(box(ctx, {
@@ -185,7 +186,10 @@ export function buildLighting(ctx: Ctx): Part[] {
   const reach = L.xSideEnd - L.xRear;
   for (const { s, tag } of SIDES) {
     REFLECTOR_FRACS.forEach((f, i) => {
-      const x = Math.max(L.xRear + reach * f, SIGN_X_MAX_IN + 2); // the rear one stands ahead of the side sign (D-57)
+      let x = Math.max(L.xRear + reach * f, SIGN_X_MAX_IN + 2); // the rear one stands ahead of the side sign (D-57)
+      // D-63: the grab board's 316 backing strip is on the same outer gunwale face; a reflector that would sit on it moves just ahead of it
+      const stripX0 = p.seatXIn - GRIP_BEHIND_HPOINT_IN + GRIP_BACKING_END_IN - 0.3, stripX1 = p.seatXIn - GRIP_BEHIND_HPOINT_IN + p.grabBoardLengthIn - GRIP_BACKING_END_IN + 0.3;
+      if (x + REFLECTOR_SIZE[0] / 2 + 0.1 > stripX0 && x - REFLECTOR_SIZE[0] / 2 - 0.1 < stripX1) x = stripX1 + REFLECTOR_SIZE[0] / 2 + 0.3;
       const color = i === 0 ? 'red' : 'amber'; // 3c-5: red at the rear, amber at the front (DOT-C2 side marker colors)
       parts.push(box(ctx, {
         id: `reflector-${tag}${i + 1}`, partNo: 'reflector', name: `Side reflector ${tag}${i + 1} (${color}, ${i === 0 ? 'rear' : 'front'})`, group: 'lighting', mat: 'fixed', massLb: REFLECTOR_MASS_LB,

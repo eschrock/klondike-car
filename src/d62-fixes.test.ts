@@ -46,8 +46,8 @@ describe('E1: the handle socket guard', () => {
     expect(note).toMatch(/0\.46 lb/);
     expect(note).not.toMatch(/\(\+0\.2 lb\)/);
   });
-  it('M5: the socket screws go in through a 3/8 in access hole and the post has a relief groove on its transom face; the post mass drops by the groove', () => {
-    expect(get('handle-socket-L').joints!.find((j) => j.to === 'transom-rear')!.size).toMatch(/0\.375" ACCESS HOLE/);
+  it('M5 (revised at D-63, 3c-8): the socket screws go in through a 5/8 in access hole (the 3/8 in hole of 3c-7 was too small for the 0.44 in head and 0.5 in washer) and the post has a relief groove on its transom face; the post mass drops by the groove', () => {
+    expect(get('handle-socket-L').joints!.find((j) => j.to === 'transom-rear')!.size).toMatch(/0\.625" \(5\/8 in\) ACCESS HOLE/);
     expect(get('handle-socket-L').notes).toMatch(/ACCESS HOLE/);
     expect(get('handle-post-L').notes).toMatch(/RELIEF GROOVE/);
     expect(get('handle-socket-L').notes).not.toMatch(/15\/16" × 1-7\/16"/);
@@ -168,9 +168,10 @@ describe('M3 / S11 / materials', () => {
     expect(get('side-L-gunwale').stock!.t).toBeCloseTo(computeLayout(defaults).sideBand, 9);
     expect(get('side-L-gunwale').kind).toBe('bentlam');
   });
-  it('S4: the seat-back latch pin is 2-1/4 in usable and the stop-block hole is blind with a detent groove; the backer is a through hole', () => {
-    expect(get('seat-pin-L').material).toMatch(/2-1\/4"/);
+  it('S4 (revised at D-63, 3c-8): the seat-back latch pin is a 1-1/2 in spring-detent pin and BOTH holes are blind with a detent groove (stop block upright, backer pad flat)', () => {
+    expect(get('seat-pin-L').material).toMatch(/1-1\/2"/);
     expect(get('seat-wedge-L').joints!.find((j) => j.type === 'pin')!.size).toMatch(/detent groove/);
-    expect(get('seat-hinge-backer').notes).toMatch(/THROUGH holes/);
+    expect(get('seat-hinge-backer-L').joints!.find((j) => j.type === 'pin')!.size).toMatch(/blind hole 0\.625" deep/);
+    expect(get('seat-hinge-backer-L').notes).toMatch(/BUTTS/);
   });
 });

@@ -8,7 +8,7 @@ import { defaultParams, derived, validateParams, type Params } from '../params';
 import { buildModel } from './index';
 import { liftBarStressPsi, liftSlot, scupperSites } from './body';
 import { chooseDomino, DOMINOS, endJoint, frac, joinerySummary } from './joinery';
-import { HULL_STEP, box, makeCtx } from './build-utils';
+import { GRIP_BACKING_T_IN, HULL_STEP, box, makeCtx } from './build-utils';
 import { localBounds, transformPoint, worldAABB } from './bounds';
 import { totalMass } from './mass';
 import { joistId } from './frame';
@@ -489,7 +489,7 @@ describe('signs (D-9, D-35, D-57)', () => {
       expect(s.group).toBe('removable');
       expect(s.notes).toMatch(/banded/);
       const c = transformPoint(s.transform, [0, 0, 0]);
-      expect(Math.abs(c[1])).toBeCloseTo(L.hwC + L.side + defaults.panelPlyIn / 2, 6);
+      expect(Math.abs(c[1])).toBeCloseTo(L.hwC + L.side + GRIP_BACKING_T_IN + defaults.panelPlyIn / 2, 6); // D-63: 1/16 in proud of the band faces, clear of the grab-board backing strip
       expect(c[2]).toBeGreaterThan(L.web.z0); // level with the free web
       expect(c[2]).toBeLessThan(8 + 14 - defaults.railBandIn);
       expect(s.transform[2]).toBeCloseTo(0, 9); // 3c-5: LEVEL, its length axis is not tilted to follow the sheer
@@ -595,7 +595,7 @@ describe('round 2 hull (build M2-M8, D-43)', () => {
     expect(st('bow-bulkhead')).toBe(HULL_STEP.transom);
     expect(st('transom-rear')).toBe(HULL_STEP.transom);
     expect(HULL_STEP.deck < HULL_STEP.sides && HULL_STEP.sides < HULL_STEP.transom).toBe(true);
-    expect(get(parts, 'transom-rear').notes).toMatch(/GOES ON LAST/);
+    expect(get(parts, 'transom-rear').notes).toMatch(/CLOSED FIRST/);
     expect(get(parts, 'side-L-web').notes).toMatch(/hydraulic lock/);
     for (const j of get(parts, 'transom-rear').joints!.filter((q) => q.type === 'dado')) expect(j.size, j.to).toMatch(/vent/);
   });

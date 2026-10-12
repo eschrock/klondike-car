@@ -50,7 +50,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
     sourcing: {
       vendor: `McMaster-Carr or equivalent: ${p.wheelDiameterIn}" ${p.tireType === 0 ? 'pneumatic' : 'flat-free'} hand-truck wheel, ${p.wheelBoreIn}" bore, ${p.hubLengthIn}" hub length, sealed ball bearings or flanged bushings pressed into the hub (confirm the bore is ${p.wheelBoreIn}", the same as the ${p.axleDiameterIn}" axle, and the hub length ${p.hubLengthIn}"; D-34, D-60: the listings of the light wheels do not state either). READ THE LOAD RATING OFF THE LISTING: the model assumes ${p.wheelRatingLb} lb per wheel (wheelRatingLb, status verify; the wheel-rating check uses it) and ${d.wheelMassLb.toFixed(1)} lb (wheelMass10Lb, verify)`,
     },
-    notes: `Catalog wheel mass from params (D-11). Hub spec (M11, D-60): ${p.wheelBoreIn}" bore for the ${p.axleDiameterIn}" axle, ${p.hubLengthIn}" hub, sealed ball bearings (or flanged bronze bushings) in the hub; collar + cotter pin on the axle end (${p.axleEndExtraIn}" beyond the hub).`,
+    notes: `Catalog wheel mass from params (D-11). Hub spec (M11, D-60): ${p.wheelBoreIn}" bore for the ${p.axleDiameterIn}" axle, ${p.hubLengthIn}" hub, sealed ball bearings (or flanged bronze bushings) in the hub; collar + cotter pin on the axle end (${p.axleEndExtraIn}" beyond the hub). VERIFY ON THE REAL PART (build 3c-8): the bore and the hub length are the pre-order gate. Measure one real wheel (bore with a ${p.axleDiameterIn}" gauge pin or calipers, hub length, and the squash test) before ordering four; the listings of the light wheels give neither.`,
   });
   const ry = p.rearTrackIn / 2;
   const fy = p.frontTrackIn / 2;

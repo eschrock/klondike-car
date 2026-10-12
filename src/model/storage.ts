@@ -439,7 +439,7 @@ export function buildStorage(ctx: Ctx): Part[] {
       const cs = Math.cos(slope), sn = Math.sin(slope);
       const zTopAt = sideTopAt(L, x);
       const rot = Math.abs(slope) < 1e-9 ? undefined : { y: slope };
-      // r3 build S8: the plate is centered on a 1" oak DOUBLER glued to the inboard face of the gunwale (not on the 5/8" gunwale, which has the web groove under it);
+      // r3 build S8: the plate is centered on a 1" oak DOUBLER glued to the inboard face of the inner gunwale band (not on the 0.234" band alone: the plate screws need a solid block);
       // its four screws go straight down into the doubler, 1/4" either side of the plate centerline, so every screw is in solid oak 1/4" from a doubler face.
       const T = p.lashDoublerThickIn;
       const inN = L.side / 2 + T / 2; // doubler (and plate) center, inboard of the web plane
@@ -448,7 +448,7 @@ export function buildStorage(ctx: Ctx): Part[] {
       const screwAt = (z: number): Vec3[] => pat.map(([a, b]): Vec3 => [a * LASH_HOLE_DX_IN, b * LASH_HOLE_DY_IN, z]);
       parts.push(box(ctx, { id: dId, partNo: 'doubler-lash', name: `Lash point doubler ${tag}${i + 1}`, group: 'storage', mat: 'oak', grain: 'x', step: STEP.finish,
         size: [LASH_SIZE[0] + 0.5, T, L.railBand], center: [x - sn * (L.railBand / 2), cy, zTopAt - cs * (L.railBand / 2)], ...(rot ? { rot } : {}),
-        joints: [{ type: 'glue', to: gunwaleId(p, tag), count: 1, size: `${(LASH_SIZE[0] + 0.5).toFixed(1)}" × ${L.railBand}" face, epoxy`, note: `Epoxy, full face, against the gunwale's inner face (the web groove is behind it, the screws never reach it). The vertical shear of a ${p.lashLoadLbf} lbf pull at ${p.lashPullAngleDeg}° on ${((LASH_SIZE[0] + 0.5) * L.railBand).toFixed(1)} in² of glue is a few tens of psi.` },
+        joints: [{ type: 'glue', to: gunwaleId(p, tag), count: 1, size: `${(LASH_SIZE[0] + 0.5).toFixed(1)}" × ${L.railBand}" face, epoxy`, note: `Epoxy, full face, against the inboard face of the inner gunwale band (the 4 mm web and the outer band are behind it; there is no groove, and the screws never reach them). The vertical shear of a ${p.lashLoadLbf} lbf pull at ${p.lashPullAngleDeg}° on ${((LASH_SIZE[0] + 0.5) * L.railBand).toFixed(1)} in² of glue is a few tens of psi.` },
           { type: 'screw', to: `lash-${tag}${i + 1}`, count: LASH_SCREWS, size: '#10 × 1-1/4 stainless, straight down from the plate into the doubler', diaIn: LASH_SCREW_DIA_IN, at: screwAt(L.railBand / 2) }],
         notes: `${T}" oak doubler on the inboard face of the gunwale under the lash plate (D-41, D-47): ${(LASH_SIZE[0] + 0.5).toFixed(1)}" long, the full ${L.railBand}" band tall, cut square to the gunwale's ${((slope * 180) / Math.PI).toFixed(1)}° slope here (D-54). The four #10 screws sit ${LASH_HOLE_DY_IN}" either side of its centerline (${(T / 2 - LASH_HOLE_DY_IN).toFixed(2)}" from each face) and end ${(L.railBand - (LASH_SCREW_LEN_IN - LASH_PLATE_T_IN)).toFixed(2)}" above its bottom.` }));
       parts.push(box(ctx, { id: `lash-${tag}${i + 1}`, partNo: 'lash-point', name: `Lash point ${tag}${i + 1}`, group: 'hardware', mat: 'fixed', massLb: LASH_MASS_LB, kind: 'purchased',

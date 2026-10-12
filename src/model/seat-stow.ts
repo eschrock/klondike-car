@@ -14,7 +14,7 @@ import type { Params } from '../params';
 import { localBounds, transformPoint, worldAABB } from './bounds';
 import type { Layout } from './layout';
 import { multiply, rotationY, translation } from './mat4';
-import { PIN_LEN_IN, seatBackSupport } from './seat';
+import { PIN_HEAD_IN, PIN_LEN_IN, seatBackSupport } from './seat';
 import { BOX_FILLET_IN, storageGeometry } from './storage';
 import type { Mat4, Part, Vec3 } from './types';
 
@@ -183,11 +183,13 @@ export function applySeatStow(p: Params, L: Layout, parts: Part[]): StowPlan {
     pad.transform = m;
     delete pad.cgIn;
   }
-  // Latch pins: vertically down through the flat stiles into the deck (head up).
+  // Latch pins: vertically down through the flat panel and the deck into the backer pad (head up, seated on the panel's rear face, D-63). h.center is mid-thickness of the panel, so the rear
+  // (top) face is half a panel thickness above it; the usable length hangs below that face and the head stands PIN_HEAD_IN above it.
   for (const h of plan.flat.pins) {
     const pin = byId.get(`seat-pin-${h.tag}`);
     if (!pin) continue;
-    pin.transform = translation(h.center[0], h.center[1], h.center[2] - PIN_LEN_IN / 2 + 0.75);
+    const zFace = h.center[2] + p.seatBackThickIn / 2;
+    pin.transform = translation(h.center[0], h.center[1], zFace - PIN_LEN_IN + (PIN_LEN_IN + PIN_HEAD_IN) / 2);
     if (pin.cgIn) delete pin.cgIn;
   }
   return plan;

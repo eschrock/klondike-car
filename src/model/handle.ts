@@ -17,8 +17,18 @@ import { profilePart } from './profile';
 import type { Part, Vec2, Vec3 } from './types';
 
 const f2 = (v: number) => (Math.round(v * 100) / 100).toString();
-/** Access hole in the rear wall of the socket for the screws and the hex key, and the relief groove down the transom side of the post that clears the screw heads (build 3c M5). */
-const ACCESS_HOLE_IN = 0.375;
+/**
+ * Access hole in the rear wall of the socket for the screws and the hex key, and the relief groove down the transom side of the post that clears the screw heads (build 3c M5).
+ * D-63 (build 3c-8, R2-M2): 5/8 in. The 1/4-20 button head is 0.44 in across and its nylon washer 0.5 in, so a 3/8 in hole (3c-7) would not pass them; a 5/8 in hole does, with 0.0625 in to spare on
+ * the washer, and leaves (1.5 - 0.625) / 2 = 0.44 in of wall each side on the 1.5 in face. It is one plain 5/8 in Forstner or step-bit hole through a 1/8 in wall; plug it with a 5/8 in black
+ * button plug after assembly (water, grit). The alternative (feeding the screws down the open end of the 14 in bore) was rejected as the harder one: the screw would have to be placed 1.2 in from the mouth or the bottom blind, with a long
+ * magnetic driver, and the key still needs a hole to reach the head. The row checks the tube net of this hole (handle-sockets).
+ */
+const ACCESS_HOLE_IN = 0.625;
+/** Button head and nylon washer of the 1/4-20 socket screw (McMaster button-head cap screw: 0.44 in head; 1/4 in nylon washer: 0.5 in OD). */
+export const SOCKET_SCREW_HEAD_IN = 0.44;
+export const SOCKET_SCREW_WASHER_IN = 0.5;
+export const SOCKET_ACCESS_HOLE_IN = ACCESS_HOLE_IN;
 export const POST_RELIEF = { widthIn: 0.5, depthIn: 0.1875 } as const;
 
 // ── Rear push handle: steel-tube sockets on the transom, pinned oak uprights, crossbar (D-9, D-39) ──
@@ -141,12 +151,12 @@ export function buildHandle(ctx: Ctx): Part[] {
       ...span([L.xRear - h.socketX, L.xRear], [y - h.socketY / 2, y + h.socketY / 2], [h.zBot, h.zTop]),
       material: '6061-T6 aluminum rectangular tube, anodized',
       joints: [
-        { type: 'bolt', to: 'transom-rear', count: 2, diaIn: 0.25, size: `1/4-20 × ${inchesText(sockLen)} 316 button-head cap screws (round holes: a carriage-bolt square neck will not seat in a 1/8" aluminum wall), nylon washer under the head, fender washer + nylock nut inside the backer; the heads sit INSIDE the bore on the wall against the transom, so push them in through a ${ACCESS_HOLE_IN}" ACCESS HOLE in the opposite (rear) wall, directly opposite each screw (the head seats on the inside of the near wall and the hex key goes through the same hole)`,
+        { type: 'bolt', to: 'transom-rear', count: 2, diaIn: 0.25, size: `1/4-20 × ${inchesText(sockLen)} 316 button-head cap screws (round holes: a carriage-bolt square neck will not seat in a 1/8" aluminum wall), nylon washer under the head, fender washer + nylock nut inside the backer; the heads sit INSIDE the bore on the wall against the transom, so push them in through a ${ACCESS_HOLE_IN}" (5/8 in) ACCESS HOLE in the opposite (rear) wall, directly opposite each screw (the ${SOCKET_SCREW_HEAD_IN}" button head and its ${SOCKET_SCREW_WASHER_IN}" nylon washer pass it with ${f2((ACCESS_HOLE_IN - SOCKET_SCREW_WASHER_IN) / 2)}" a side; the head seats on the inside of the near wall and the hex key goes through the same hole); plug the holes with 5/8 in button plugs after assembly (D-63)`,
           at: [h.zBot + 1.2, h.zTop - 1.2].map((z): Vec3 => [h.socketX / 2 - w / 2, 0, z - (h.zBot + h.zTop) / 2]), note: `grip = socket wall ${f2(w)}" + transom ${f2(L.transom)}" + backer ${f2(p.blockingThickIn)}" = ${f2(sockGrip)}"; ${f2(sockLen)}" bolt: grip + 2 washers + nut + two threads` },
         { type: 'pin', to: `handle-post-${tag}`, count: 1, size: `${p.handlePinDiameterIn}" clevis pin through both walls and the post` },
       ],
-      notes: `Aluminum 6061-T6 rectangular tube ${f2(h.socketX)} × ${f2(h.socketY)} × ${f2(p.handleSocketDepthIn)} (wall ${f2(w)}), cut on the bandsaw and drilled on the drill press; the ${f2(p.handlePostThickIn)}" × ${f2(p.handlePostWidthIn)}" post is a slip fit (${f2(p.handleSocketSlipIn)}" a side) in the ${f2(h.socketX - 2 * w)}" × ${f2(h.socketY - 2 * w)}" inside. The two screw heads are inside the bore (${f2(0.14 + 0.06)}" proud of the wall with the nylon washer), so drill a ${ACCESS_HOLE_IN}" ACCESS HOLE in the rear wall opposite each screw (build 3c M5) and give the post the relief groove on its transom face. Lighter than steel (about 0.4 lb vs 1.2 lb each, plan item 5). Anodized or epoxy-coated, and bedded in epoxy / sealant against the transom: bare aluminum corrodes against wet tannin oak. Stays on the sled when the handle is removed (D-9).`,
-      sourcing: { vendor: `McMaster-Carr (6061-T6 aluminum rectangular tube, ${f2(h.socketX)}" × ${f2(h.socketY)}" outside, ${f2(w)}" wall)` }, explode: [-1, 0, 0.3],
+      notes: `Aluminum 6061-T6 rectangular tube ${f2(h.socketX)} × ${f2(h.socketY)} × ${f2(p.handleSocketDepthIn)} (wall ${f2(w)}), cut on the bandsaw and drilled on the drill press; the ${f2(p.handlePostThickIn)}" × ${f2(p.handlePostWidthIn)}" post is a slip fit (${f2(p.handleSocketSlipIn)}" a side) in the ${f2(h.socketX - 2 * w)}" × ${f2(h.socketY - 2 * w)}" inside. The two screw heads are inside the bore (${f2(0.14 + 0.06)}" proud of the wall with the nylon washer), so drill a ${ACCESS_HOLE_IN}" (5/8 in) ACCESS HOLE in the rear wall opposite each screw (build 3c M5, enlarged from 3/8 in at D-63: the head is ${SOCKET_SCREW_HEAD_IN}" and the washer ${SOCKET_SCREW_WASHER_IN}", neither passes a 3/8 in hole) and give the post the relief groove on its transom face. Leaves ${f2((h.socketY - ACCESS_HOLE_IN) / 2)}" of wall each side of the hole on the ${f2(h.socketY)}" face; seal the bare aluminum edge of each hole with epoxy or anodize touch-up, and press a 5/8 in black button plug in each after assembly (water, grit). Lighter than steel (about 0.4 lb vs 1.2 lb each, plan item 5). Anodized or epoxy-coated, and bedded in epoxy / sealant against the transom: bare aluminum corrodes against wet tannin oak. Stays on the sled when the handle is removed (D-9).`,
+      sourcing: { vendor: `McMaster-Carr (6061-T6 aluminum rectangular tube, ${f2(h.socketX)}" × ${f2(h.socketY)}" outside, ${f2(w)}" wall; plus two 5/8 in black nylon button plugs for the access holes)` }, explode: [-1, 0, 0.3],
     }));
     // The post top is sawn to the bow's slope (a flat-bottom bow section sits on it): the lowest points of the bow's underside over the post, inner and outer edge (D-53).
     const yi = h.yPost - p.handlePostWidthIn / 2, yo = h.yPost + p.handlePostWidthIn / 2;

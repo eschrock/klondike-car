@@ -291,6 +291,11 @@ const defs = {
     default: 0.04, min: 0, max: 0.08, step: 0.004, status: 'assumed', ref: 'D-45',
     note: 'The deck rabbet in the chine and the dado in each transom are cut this much taller than the (epoxy-sealed) deck so the sealed panel enters its own rabbet; thickened epoxy fills the gap (build review MUST-2).',
   },
+  deckSideClearIn: {
+    label: 'Deck side clearance to each web', group: 'body', unit: 'in',
+    default: 0.0625, min: 0, max: 0.125, step: 0.0156, status: 'assumed', ref: 'D-63',
+    note: 'D-63 (build r2 R2-M3): the deck is cut this much narrower on EACH side than the gap between the two webs, so a rigid sheet can drop between two bent webs that are never within 0.03 in of nominal over 59 in. It still tucks (the inner band thickness minus this) under each inner chine band; thickened epoxy fills the slot between the deck edge and the web. 1/16 in (23.09 in deck) at the default.',
+  },
 
   railBandIn: {
     label: 'Chine / gunwale height', group: 'body', unit: 'in',
@@ -301,7 +306,7 @@ const defs = {
   signBackerThickIn: {
     label: 'Sign backing strip thickness (oak, inside the side web)', group: 'body', unit: 'in',
     default: 0.5, min: 0.375, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-62, build 3c M4',
-    note: 'D-62: nothing is screwed into the 4 mm web (a tee-nut in 0.157 in ply has 0.1 in of bite, and a 1 in screw poked into the cabin). Each side sign hangs on two vertical oak backing strips glued on the INSIDE of the web between the chine and gunwale bands, each with two #10-32 threaded inserts (3/8 long) for the knobs. The strips stand this far inboard of the web (0.27 in proud of the inner band faces), at the sign knob stations behind the box.',
+    note: 'D-62: nothing is screwed into the 4 mm web (a tee-nut in 0.157 in ply has 0.1 in of bite, and a 1 in screw poked into the cabin). Each side sign hangs on two vertical oak backing strips glued on the INSIDE of the web between the chine and gunwale bands, each with two #10-32 threaded inserts (3/8 long) for the knobs. The strips stand this far inboard of the web (0.27 in proud of the inner band faces), at the sign knob stations behind the box. D-63: the knob screw length is derived from this thickness and the 0.234 in sign standoff (7/8 in at the default: sign + standoff disc + web = 0.55 in, 0.33 in into the insert, 1/8 in of wood left behind its tip).',
   },
   thinSheetWidthIn: {
     label: 'Thin okoume sheet: usable width', group: 'materials', unit: 'in',
@@ -556,7 +561,7 @@ const defs = {
   lashDoublerThickIn: {
     label: 'Lash-plate doubler thickness (inboard of the gunwale)', group: 'body', unit: 'in',
     default: 1, min: 0.75, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-47',
-    note: 'The lash plate (1.5 x 0.9") is centered on this oak doubler, glued to the inner face of the gunwale, and its four screws go straight down into it (r3 build S8): the 5/8" gunwale is too thin and has the web groove under it. 1" leaves 0.25" of oak beside each screw row. D-60 looked at 3/4 in (0.13 lb) and kept 1 in: the 0.9 in lash plate is wider than a 3/4 in doubler and would overhang it into the gunwale, and only 1/8 in of oak would be left beside each screw row.',
+    note: 'The lash plate (1.5 x 0.9") is centered on this oak doubler, glued to the inner face of the inner gunwale band, and its four screws go straight down into it (r3 build S8): a 0.234" band is too thin for a screw, and the 4 mm web is behind it. 1" leaves 0.25" of oak beside each screw row. D-60 looked at 3/4 in (0.13 lb) and kept 1 in: the 0.9 in lash plate is wider than a 3/4 in doubler and would overhang it into the gunwale, and only 1/8 in of oak would be left beside each screw row.',
   },
   lashLoadLbf: {
     label: 'Lash point design load (strap pull)', group: 'body', unit: 'lbf',
@@ -639,8 +644,8 @@ const defs = {
   },
   seatBackLatchHeightIn: {
     label: 'Seat-back latch pin height above the stile foot', group: 'seat', unit: 'in',
-    default: 3, min: 1.5, max: 6, step: 0.25, status: 'assumed', ref: 'D-57',
-    note: 'D-57: one 3/8 in quick-release (ball-lock) pin per stile, pushed in by hand with no tools. UPRIGHT: through the stile into the fixed oak stop block behind it. FLAT (flipped forward onto the deck): through the same stile hole into the deck and its backer. The farther below the stop-block crest, the lower the pin load.',
+    default: 2, min: 1.5, max: 6, step: 0.25, status: 'assumed', ref: 'D-57, D-63',
+    note: 'D-57, D-63 (Eric 2026-10-12: 2 in up the panel): one 3/8 in spring-detent quick-release pin per side, pushed in by hand with no tools. UPRIGHT: through the panel into a BLIND hole in the fixed oak stop block behind it, whose depth is set from the block outline at this height (the block is thinner the higher the pin goes: at 3 in it is 1.27 in along the pin, at 2 in 1.53 in, and the box end is only 4 mm ply behind it). FLAT (flipped forward onto the deck): through the same panel hole and the deck into a blind hole in the oak hinge backer. The farther below the stop-block crest, the lower the pin load. The seat-back row checks that at least 1/4 in of oak is left behind each hole.',
   },
   seatBackLoadFraction: {
     label: 'Share of rider weight that loads the seat back', group: 'seat', unit: '×',
@@ -2207,6 +2212,10 @@ export function validateParams(input: Params): ParamIssue[] {
     const innerChine = p.railBandIn - (p.deckPlyIn + p.deckSlopIn);
     if (innerChine < 0.5)
       warn(['railBandIn', 'deckPlyIn'], `The inner chine band is only ${Math.max(0, innerChine).toFixed(2)}" tall above the ${(p.deckPlyIn + p.deckSlopIn).toFixed(2)}" gap the deck edge rises into (want 1/2" or more): make the chine band taller.`);
+    // D-63: the deck is cut narrower than the web gap by deckSideClearIn each side; what is left under the inner chine band must still be a real tuck.
+    const tuck = Math.min(p.deckCaptureDepthIn, bandT) - p.deckSideClearIn;
+    if (tuck < 0.1)
+      warn(['deckSideClearIn', 'deckCaptureDepthIn'], `The deck edge tucks only ${Math.max(0, tuck).toFixed(3)}" under each inner chine band after the ${p.deckSideClearIn}" side clearance (want 0.1" or more): reduce the clearance or thicken the band.`);
   }
   // ── Front end: the pivoting soapbox axle (D-56). The wheels run beside the body; the lock angle sets a minimum track, the stack under the deck sets the king beam depth. ──
   const sg = steerGeometry(p);

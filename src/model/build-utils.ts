@@ -49,13 +49,19 @@ export const STEP = { frame: 3, body: 4, steering: 4.5, gear: 4.6, linkage: 4.7,
  * sequence is fractional between the frame (3) and the seat and storage (5), so Phase 4 can sort on it. The hull is built UPSIDE DOWN so that every move is a straight vertical one,
  * which works for the curved sides too (a curved side cannot slide inboard onto a curved deck edge):
  *   0. Epoxy-seal every dado, the deck faces and edges and all ply faces (a process step, before the bench glue-ups; wash or sand the amine blush off any face that will be glued again).
- *      The deck gap under the inner chine band and the dados are the (sealed) deck + a clearance (deckSlopIn) tall: thickened epoxy fills the gap.
+ *      The deck gap under the inner chine band and the dados are the (sealed) deck + a clearance (deckSlopIn) tall: thickened epoxy fills the gap. The deck is also cut deckSideClearIn
+ *      (1/16 in) narrower than the gap between the two webs on each side (D-63), so a rigid sheet drops between two bent webs; thickened epoxy fills that slot too.
  *   1. (4.0) Forms: one S-form (two 3/4" MDF cauls) for the plan turn-in. Scarf the two halves of each 4 mm web (8:1, thin okoume ships as 2 x 4 ft sheets), cut the webs to the flat
  *      development of the sheer, glue the sign backing strips inside them.
- *   2. (4.0) Frame (rails, joists, king beam) + deck glued as a unit, right side up on the bench; the Domino mortises in the rail tops are cut. The rails are two 3/8 strips bent on the form.
+ *   2. (4.0) Frame (rails, joists, king beam) + deck glued as a unit, right side up on the bench; the Domino mortises in the rail tops are cut. The rails are two 3/8 strips bent on the form, glued into the frame 1/2" LONG at both ends (they are trimmed in step 3, once the true length is known).
  *   3. (4.2) Side assemblies on the bench: each web gets an oak band glued on EACH face at the chine and at the gunwale and is bent with them on the form (no grooves); vents drilled.
+ *      GLUE-UP POSTURE (3c-8; a web with four bands is a two-direction bend: the sheer in the plane of the web, the S across it): lay the web FLAT on the bench with the S-ramp form
+ *      (about 1.25 in high, 14 in long) under the bow end, where the S-bend is in the last ~14 in and the web is only about 5 in tall; CLEAT THE SHEER LINE (screws or cleats into a sacrificial
+ *      table every 4 to 5 in, the whole length), because a straight 1.5 in strip edge-bent to the sheer pushes sideways about 65 lbf at mid-span per band until the epoxy cures; glue and
+ *      clamp ONE FACE per cure (its chine and gunwale bands; C-clamps or spring clamps across the band every 4 to 5 in, about 14 per band pair; brads or a vacuum bag if short), let it
+ *      cure, flip the web onto the mirror ramp and do the other face: TWO CURES PER SIDE. Bend-test a dry strip on the form first.
  *      The two side assemblies stand inverted in the jig. DRY-FIT the frame + deck unit and both side assemblies, MEASURE from the rear transom dado to the bow bulkhead dado, and cut the
- *      bands, webs and rails to that length less 1/32" (S1); rehearse the close.
+ *      bands and webs to that length less 1/32" and trim the frame unit's rails (left 1/2 in long in step 2) to match (S1); rehearse the close.
  *   4. (4.2) The frame + deck unit is turned over and LOWERED into the inverted side assemblies: the Dominos (all vertical) engage, the deck edge rises into the gap under the inner chine
  *      band, epoxy bed, screws up through the rails.
  *   5. (4.4) Close ONE end first: glue and clamp the rear transom (its stopped dados take the web ends, its deck dado the deck), let it kick, then bring in the bow bulkhead with a
@@ -64,6 +70,8 @@ export const STEP = { frame: 3, body: 4, steering: 4.5, gear: 4.6, linkage: 4.7,
  *      (flipping the finished hull with axles and wheels is about 100 lb: four people and padded horses). THEN turn the hull upright and fit the tongue, bridle, linkage (STEP.linkage 4.7,
  *      STEP.spindles 4.9), the seat and storage (5), the brake (6) and the finish (7).
  */
+/** Thickness of the 316 backing strip under the grab-board screw heads, on the outer gunwale band (D-63). The side signs hang this much farther out, so they clear it. */
+export const GRIP_BACKING_T_IN = 0.0625;
 export const HULL_STEP = { deck: 4, sides: 4.2, transom: 4.4 } as const;
 
 /** Rough (as-milled-from-the-board) size of a finished wood piece: thickness and width + the allowance, length + 4× (≈ ½", build review M8). */

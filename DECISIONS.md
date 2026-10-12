@@ -207,6 +207,15 @@ Result: 121.2 lb. Riders safe 50–250+ lb, green to 230 lb; cargo 269 lb; resti
 - **A-2 relaxed:** the turning radius limit becomes **12.5 ft to the outer tire edge** (Eric), from 8–9 ft, to suit the small steering angle.
 
 Details are in `docs/phase3c-3a-notes.md`. | 🔶 |
+| D-63 | **Last buildability fixes (Phase 3c-8; build review r2 8/10; 2026-10-12).** Details: `docs/phase3c-7-notes.md`, section "3c-8".
+- **Seat-back latch pins (R2-M1):** both pin stations drop to 2" up the panel (Eric: owner-approved). The pin is a 1-1/2" spring-detent pin in BOTH positions, because both holes are blind. The upright hole is 1-1/16" deep, computed from the stop-block outline at that height (the block is 1.53" thick along the pin; 0.41" of oak is left behind the hole, never the 4 mm box end). `seatBackSupport` steps the station down if a leaning-back change would thin the block, and the `seat-back` row checks the oak left behind both holes. The flat pin goes through the panel and the deck into a 5/8" blind hole in a 1" oak pad that is butted to `joist-3`. The one-piece 3/4" backer is replaced by two 3" wide pads (-0.5 lb).
+- **Handle-socket access holes (R2-M2):** 5/8" (the 1/4-20 button head is 0.44" and its nylon washer 0.5"; the 3/8" hole of 3c-7 was too small), plugged with button plugs. The tube row now checks the net section at the hole.
+- **Deck side clearance (R2-M3):** `deckSideClearIn` 1/16" a side; the deck is 23.09" wide and still tucks 0.17" under each inner chine band. Thickened epoxy fills the slot.
+- **Glue-up posture (S1):** web flat on a ramp form, the sheer line cleated, one face per cure (two cures a side). Gunwale strip rough length 60.4" (a 6 ft board, not 5 ft). Rails are glued long and trimmed at the dry fit.
+- **Sign (S4):** the sign hangs 1/16" proud (clear of the grab-board backing strip) on four standoff discs; knob screws are 7/8".
+- **Crest strip (S7):** 13.5" long, bedded 1/8" off the box end over the lid-hinge leaves. **Inserts (S8):** 5/16" in 11/32" blind holes (0.128" of veneer left), #10-32 x 3/8 hinge screws. **Grab boards (S9):** a 316 backing strip under the screw heads; button-head screws replace the carriage bolts.
+- **Notes:** stale tenon, groove and gap text refreshed; the lamp-clip clearance and the wheel bore are marked "verify on the real parts".
+- **Result:** 121.0 lb (-0.2 against 3c-7). Safe 50-250+, green 50-230 or 240 (bearing-groove at 240 lb is 0.8995 against the 0.9 line), cargo 269, resting 348. Nothing fails; nothing new above 0.9. | 🔶 |
 
 
 ## Analysis-criterion interpretations

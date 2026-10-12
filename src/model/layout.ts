@@ -57,6 +57,7 @@ export interface Layout {
   side: number;
   /** Thickness of each oak band laminated onto a face of the 4 mm web, (side - panelPlyIn) / 2 (D-61, D-62), and the depth the deck edge enters the chine rabbet (the inner band's thickness at most). */
   sideBand: number;
+  /** How far the deck edge reaches past hwC under the inner chine band: the band thickness (or the dado depth) less `deckSideClearIn` (D-63), so the deck is that much narrower than the web gap (the web's inner face is at hwC + sideBand). */
   deckEdge: number;
   /** Rear transom thickness (D-43). */
   transom: number;
@@ -149,7 +150,7 @@ export function computeLayout(input: Params): Layout {
   const deckTop = p.deckHeightIn;
   const hwC = p.bodyWidthIn / 2 - side;
   const sideBand = Math.max(0.05, (side - p.panelPlyIn) / 2);
-  const deckEdge = Math.min(p.deckCaptureDepthIn, sideBand);
+  const deckEdge = Math.max(0, Math.min(p.deckCaptureDepthIn, sideBand) - p.deckSideClearIn); // D-63: the deck is cut deckSideClearIn narrower than the web gap on each side (R2-M3)
   const rodR = p.axleDiameterIn / 2;
   const joistT = p.crossmemberThickIn;
 
