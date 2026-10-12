@@ -2,8 +2,7 @@
  * Small mesh builders for bought hardware (Phase 3 workstream A): a round rod swept along a polyline path (U-bolts, eye bolts).
  * Plain TypeScript, no three.js. Geometry is a `mesh` Geometry (positions + triangle indices) in the part's local frame.
  */
-import { poseOf, unitDir, type Ctx } from './build-utils';
-import { multiply } from './mat4';
+import { unitDir, type Ctx } from './build-utils';
 import type { Dims, Fab, Geometry, Joint, Mat4, Part, PartGroup, PartKind, RigidBody, Vec3 } from './types';
 
 export interface MeshData { positions: number[]; indices: number[] }
@@ -124,7 +123,6 @@ export interface CustomPartSpec {
   geometry: Geometry;
   /** Placement in the neutral frame (the rigid-body pose of `body` is multiplied in). */
   transform: Mat4;
-  /** Phase 3b rigid body: when it has a steered pose (`ctx.pose`), the transform is pose x transform. */
   body?: RigidBody;
   massLb: number;
   fab: Fab;
@@ -141,7 +139,7 @@ export interface CustomPartSpec {
 }
 
 /** Build a Part for geometry the box / cylinder factories cannot express; the rigid-body pose is applied here. */
-export function customPart(ctx: Ctx, s: CustomPartSpec): Part {
+export function customPart(_ctx: Ctx, s: CustomPartSpec): Part {
   const out: Part = {
     id: s.id,
     name: s.name,
@@ -149,7 +147,7 @@ export function customPart(ctx: Ctx, s: CustomPartSpec): Part {
     kind: s.kind,
     material: s.material,
     geometry: s.geometry,
-    transform: poseOf(ctx, s.body) ? multiply(poseOf(ctx, s.body)!, s.transform) : s.transform,
+    transform: s.transform,
     body: s.body ?? 'chassis',
     massLb: s.massLb,
     fab: s.fab,

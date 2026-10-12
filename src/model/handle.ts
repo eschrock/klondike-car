@@ -1,7 +1,7 @@
 /**
- * Rear push handle (D-9, D-39, D-53): aluminum tube sockets on the rear transom, pinned oak uprights, and a sled-style HANDLEBOW: a crowned, laminated white-oak
- * bow that arches up between and over the two posts and overhangs them to the edge of the cart (reference/05). The handle is the handler's station (the basic
- * brake lever hangs under the crown, D-53) and comes off as one U for transport. The socket loads (D-39) are unchanged: the hold-back pull is taken at the
+ * Rear push handle (D-9, D-39, D-53, D-55): aluminum tube sockets on the rear transom, pinned oak uprights, and a sled-style HANDLEBOW: a crowned, laminated white-oak
+ * bow that arches up between and over the two posts and overhangs them to the edge of the cart (reference/05). The handle is the handler's station, a plain handle
+ * (the brake is a foot bar, D-55) and comes off as one U for transport. The socket loads (D-39) are unchanged: the hold-back pull is taken at the
  * posts, at the grip height `rearHandleHeightIn`; the crown only adds height at the middle.
  */
 import type { Params } from '../params';
@@ -86,7 +86,7 @@ export function bowGeometry(p: Params, L: Layout): BowGeom {
 
 export function handleGeometry(p: Params, L: Layout): HandleGeom {
   const w = p.handleSocketWallIn;
-  const zTop = L.deckTop + L.sideH;
+  const zTop = L.deckTop + L.sideRear; // the rear transom's top corners (D-54: the tall rear section)
   const zBot = zTop - p.handleSocketDepthIn;
   const xo = L.xRear;
   const slip = p.handleSocketSlipIn;
@@ -163,7 +163,7 @@ export function buildHandle(ctx: Ctx): Part[] {
     explode: [-1, 0, 0.3],
     cgIn: [h.xBar, 0, (bw.zMid + bw.zEnd) / 2],
     notes: bw.crownIn > 0
-      ? `Sled-style handlebow (D-53, reference/05): ${plies} plies of ${(sec / plies).toFixed(3)}" white oak bent on a form to a ${bw.radiusIn.toFixed(1)}" radius arc, ${sec}" square before the hand rounding. The arc passes through the two post tops at ${f2(bw.zPost)}" (the grip height) and crowns ${f2(bw.crownIn)}" above them at the middle (${f2(bw.zMid)}"); the ends overhang the posts to the cart edge (y = ±${f2(bw.yEnd)}") and hang ${f2(bw.zPost - bw.zEnd)}" below the post-top level. The post tops are sawn to the bow's ${bw.postSlopeDeg.toFixed(1)}° slope and each is pinned and epoxied. The basic brake lever hangs under the crown, centered, ${f2(bw.zMid - sec / 2 - (p.rearHandleHeightIn - p.brakeLeverGripBelowHandleIn + 0.5))}" of room between the top of its grip and the underside of the bow (the lever was not raised to follow the crown: its 100 lbf abuse case is at the limit already, brake-abuse). Bent lamination, white-oak springback is allowed for on the form; epoxy between plies, clamped overnight, then scraped and rounded over.`
+      ? `Sled-style handlebow (D-53, reference/05): ${plies} plies of ${(sec / plies).toFixed(3)}" white oak bent on a form to a ${bw.radiusIn.toFixed(1)}" radius arc, ${sec}" square before the hand rounding. The arc passes through the two post tops at ${f2(bw.zPost)}" (the grip height) and crowns ${f2(bw.crownIn)}" above them at the middle (${f2(bw.zMid)}"); the ends overhang the posts to the cart edge (y = ±${f2(bw.yEnd)}") and hang ${f2(bw.zPost - bw.zEnd)}" below the post-top level. The post tops are sawn to the bow's ${bw.postSlopeDeg.toFixed(1)}° slope and each is pinned and epoxied. Bent lamination, white-oak springback is allowed for on the form; epoxy between plies, clamped overnight, then scraped and rounded over.`
       : `Straight handlebow (crown 0): a ${sec}" square white-oak bar, ends eased over, pinned and epoxied to the tops of the two uprights.`,
     sourcing: { vendor: `Shop-laminated: ${plies} strips of ${(sec / plies).toFixed(3)}" white oak (resawn), epoxied on a bending form`, costUsd: 15 },
   };

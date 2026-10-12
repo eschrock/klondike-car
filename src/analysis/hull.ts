@@ -15,6 +15,8 @@ import { f } from './format';
 import type { CaseData } from './loads';
 import { allowables } from './structure';
 import { bumpSeatG, bumpSeatGHard } from './bump';
+import { tongueBarStress } from './bridle';
+import { uncTensileArea } from './nds';
 import type { AnalysisCheck, Detail } from './types';
 
 /** Rear lifter's share of a carried mass: reaction at the rear hand-hold (xRear) for a CG at xCg between the two hand-holds (moments about the front one). */
@@ -40,27 +42,40 @@ export function liftCheck(ctx: Ctx): AnalysisCheck {
   const { p, L } = ctx;
   const al = allowables(ctx);
   const { massLb, xCg } = transportMassCg(ctx.parts);
-  // Hands on the bars: mid-thickness of each transom.
-  const xr = L.xRear + L.transom / 2, xf = L.xFront - L.transom / 2;
+  // The rear lifter's hands on the rear transom bar (mid-thickness); the front lifter carries through a rope loop in the bridle shackle at the tongue tip (D-56: there is no front hand-hold).
+  const xr = L.xRear + L.transom / 2;
+  const xf = L.tongue.holeX;
   const sh = liftShares(massLb, xCg, xr, xf);
   const rows: Detail[] = [];
-  const text: string[] = [];
-  for (const end of ['rear', 'front'] as const) {
-    const s = liftSlot(ctx, end);
-    const person = end === 'rear' ? sh.rear : sh.front;
-    const P = person * p.dynamicFactor; // one hand carries the whole share (conservative)
-    const sigma = liftBarStressPsi(s, P);
-    const V = P / 2;
-    const tau = (1.5 * V) / (s.thickIn * s.barIn);
-    rows.push(detail(`${end} slot bar bending`, sigma, 'psi', al.oakBend, '<='));
-    rows.push(detail(`${end} slot bar shear`, tau, 'psi', al.oakShear, '<='));
-    text.push(`${end}: ${f(person)} lb share × ${p.dynamicFactor} = ${f(P)} lbf on one hand; bar ${f(s.thickIn, 2)}" × ${f(s.barIn, 2)}" over a ${f(s.lengthIn, 1)}" slot: M = P·L/4 = ${f(P * s.lengthIn / 4)} lb·in, σ = ${f(sigma, 0)} psi (≤ ${f(al.oakBend, 0)}), τ = 1.5·(P/2)/(t·h) = ${f(tau, 0)} psi (≤ ${f(al.oakShear, 0)})`);
-  }
-  const how = `Transport mass ${f(massLb)} lb (removable parts off), CG ${f(xCg)}" ahead of the rear axle; hand-holds at x = ${f(xr, 2)}" and ${f(xf, 2)}". The rear lifter takes M·(x_f − x_cg)/(x_f − x_r) = ${f(sh.rear)} lb (${f((100 * sh.rear) / massLb, 0)}%), the front lifter ${f(sh.front)} lb: not mass / 2 (D-37 used 62 lb). ${text.join('. ')}.`;
+  const s = liftSlot(ctx);
+  const P = sh.rear * p.dynamicFactor; // one hand carries the whole share (conservative)
+  const sigma = liftBarStressPsi(s, P);
+  const V = P / 2;
+  const tau = (1.5 * V) / (s.thickIn * s.barIn);
+  rows.push(detail('rear slot bar bending', sigma, 'psi', al.oakBend, '<='));
+  rows.push(detail('rear slot bar shear', tau, 'psi', al.oakShear, '<='));
+  const Pf = sh.front * p.dynamicFactor;
+  // Front: the load goes shackle pin > tie hole > tongue bar (a cantilever, weak axis) and the cart hangs from the nose by the thrust washer / kingpin.
+  const d = p.eyeBoltDiameterIn;
+  const Apin = (Math.PI * d * d) / 4;
+  const tauPin = Pf / (2 * Apin);
+  const pinAllow = (0.577 * p.eyeBoltYieldPsi) / p.steelSafetyFactor;
+  rows.push(detail('front carry through the shackle pin (double shear)', tauPin, 'psi', pinAllow, '<='));
+  const bar = tongueBarStress(ctx, Pf, 0, 0);
+  rows.push(detail('front carry: tongue plate bending about its weak axis (A36)', bar.sigma, 'psi', p.bracketSteelYieldPsi / p.steelSafetyFactor, '<='));
+  const kd = p.kingpinDiaIn;
+  const At = uncTensileArea(kd);
+  const sKing = Pf / At;
+  rows.push(detail('front carry: kingpin in tension if the axle hangs from the nut (grade 8)', sKing, 'psi', p.grade8BoltYieldPsi / p.steelSafetyFactor, '<='));
+  const nutA = (Math.PI / 4) * ((2.2 * kd) ** 2 - (kd + 1 / 16) ** 2);
+  rows.push(detail('front carry: nut washer bearing on the oak slot ceiling (oak perpendicular)', Pf / nutA, 'psi', al.oakPerp, '<='));
+  const how = `Transport mass ${f(massLb)} lb (removable parts off), CG ${f(xCg)}" ahead of the rear axle. Rear lifter's hands on the rear bar at x = ${f(xr, 2)}", front lifter through a rope loop in the bridle shackle at the tongue tip, x = ${f(xf, 2)}" (D-56: no front hand-hold). The rear lifter takes M·(x_f − x_cg)/(x_f − x_r) = ${f(sh.rear)} lb (${f((100 * sh.rear) / massLb, 0)}%), the front lifter ${f(sh.front)} lb. `
+    + `Rear: ${f(P)} lbf on one hand (share × ${p.dynamicFactor}); bar ${f(s.thickIn, 2)}" × ${f(s.barIn, 2)}" over a ${f(s.lengthIn, 1)}" slot: M = P·L/4 = ${f(P * s.lengthIn / 4)} lb·in, σ = ${f(sigma, 0)} psi (≤ ${f(al.oakBend, 0)}), τ = 1.5·(P/2)/(t·h) = ${f(tau, 0)} psi (≤ ${f(al.oakShear, 0)}). `
+    + `Front: ${f(Pf)} lbf at the tie: shackle pin ${f(d, 3)}" in double shear ${f(tauPin, 0)} psi (≤ ${f(pinAllow, 0)}); the tongue plate is a cantilever from the beam, bending about its thin axis ${f(bar.sigma, 0)} psi (≤ ${f(p.bracketSteelYieldPsi / p.steelSafetyFactor, 0)}) — lifting the nose by the tongue bends it; lift the front by the body instead. If the axle hangs from the kingpin nut the ${f(kd, 3)}" grade 8 bolt takes ${f(Pf)} lbf in tension (${f(sKing, 0)} psi, ≤ ${f(p.grade8BoltYieldPsi / p.steelSafetyFactor, 0)}) and the nut washer bears on the slot ceiling at ${f(Pf / nutA, 0)} psi (≤ ${f(al.oakPerp, 0)}).`;
   const g = governing(rows, how);
   return singleCheck({
-    id: 'lift', label: 'Lifting the cart by the transom hand-holds', group: 'Structure',
-    value: g.value, unit: g.unit, limit: g.limit, sense: g.sense, details: rows, how, refs: ['D-37', 'D-43', 'BRIEF 4.4'],
+    id: 'lift', label: 'Lifting the cart (rear hand-hold, front through the tongue shackle)', group: 'Structure',
+    value: g.value, unit: g.unit, limit: g.limit, sense: g.sense, details: rows, how, refs: ['D-37', 'D-43', 'D-56', 'BRIEF 4.4'],
   });
 }
 

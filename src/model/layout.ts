@@ -1,98 +1,82 @@
 /**
  * Shared derived geometry for the block model: every builder reads positions from here so the
  * subsystems agree on where the deck, axle stack, seat and storage box are. Plain numbers only;
- * all design inputs come from Params (src/params.ts). Neutral (steer = 0) model frame.
+ * all design inputs come from Params (src/params.ts).
+ *
+ * D-54 body: straight parallel sides (a constant width, no taper), a sled side profile (a straight line from `sideHeightRearIn` at the rear transom to
+ * `sideHeightBowIn` where the sides end against the curled bow), one flat deck level, and the pivoting soapbox front axle at the wheelbase (D-56; the swivel casters were rejected).
  */
 import {
-  AXLE_BEAM_POSITION,
   STORAGE_LOCATION,
+  bowCurl,
   derived,
-  hullCurveSpec,
-  hullPlanCurve,
   resolveParams,
+  sideHeightAt,
+  steerGeometry,
   type Params,
 } from '../params';
-import { curveHeading, hazardRangeX, leftTirePolys, offsetY, sidePolyline, type PlanCurve } from './hull-curve';
-import { beamLayout } from './brake-layout';
-import { computeFrontLayout, type FrontLayout } from './front-layout';
-import { riderLegTopZ } from './rider-geom';
-import type { Vec2, Vec3 } from './types';
+import type { Vec3 } from './types';
 
-// Design numbers (chine height, seat depth, tongue section, ...) live in params.ts; only derived geometry here.
-/** The Ackermann hull's sheer rise starts this far beyond the finger-pinch zone: the guard's end margin (0.5") plus sampling slack. */
-const SHEER_AFTER_PINCH_IN = 0.75;
-/** Air between the nose stringers and the center linkage corridor (in): the tongue link's box swings to within 0.04" of the corridor edge at the lock, and the steering-link running clearance is 0.25". */
-const NOSE_STRINGER_GAP_IN = 0.3;
-/** Air between the top of a rear storage box and the bottom of the grab-handle doublers it stands beside (D-53). */
-export const GRIP_BOX_CLEAR_IN = 0.25;
+// Design numbers (chine height, seat depth, kingpin size, ...) live in params.ts; only derived geometry here.
+const DEG = Math.PI / 180;
 
 export interface Layout {
   r: number;
   WB: number;
-  /**
-   * Start of the hull curve (the cabin side is straight and full width up to here; cabin-side furniture - grips, lash points, reflectors, signs - is behind it)
-   * and its end `xn` (the straight bow run starts there, D-52).
-   */
-  xc0: number;
-  xn: number;
-  /** The plan curve of the hull side centerline: one convex taper from the cabin to the bow (D-52). */
-  hull: PlanCurve;
-  /** The side keeps converging along a STRAIGHT bow run from `xn` to the front transom at heading `bowHeading` (rad, the left side's; <= 0 means converging, the right side mirrors it). */
-  bowHeading: number;
-  /**
-   * Chine bottom and rail top (D-45). Captured-ply sides: the chine, its rail and the side lines are at the NOSE deck level along the whole hull, so
-   * the side profile never steps; the cabin deck (1" lower) sits on a ledge in the rail's inner face. Other constructions keep the cabin level.
-   */
-  chineBot: number;
-  railTop: number;
-  /** Chine height (= railBand). */
-  chineH: number;
-  /** Top of the side (gunwale top without the sheer): deckTop + sideH. The side lines are the same along the whole hull (D-45). */
-  sideTop: number;
+  /** Rear transom outer face (the body's rear end) and the bow tip (front-most point of the curl). */
   xRear: number;
   xFront: number;
-  /** Kingpin axis x: ahead of the front axle by kingpinLeadIn (D-25). */
-  kx: number;
-  /** Chine / gunwale section height and joist thickness (params). */
+  /** The flat deck ends here; the bow curl carries on and curls up (D-54). */
+  xFlatEnd: number;
+  /** The sides end against the curl here, where its inside face has risen to the bow side height. */
+  xSideEnd: number;
+  curl: ReturnType<typeof bowCurl> & {
+    /** Inside-face height above the deck top at x (0 at xFlatEnd), and the tangent angle (rad) there. */
+    heightAt: (x: number) => number;
+    angleAt: (x: number) => number;
+  };
+  /** Chine bottom, chine height (= railBand), and the rail top (the deck underside level). */
+  chineBot: number;
+  railTop: number;
+  chineH: number;
+  /** Top of the side at the REAR transom's inner face (deckTop + sideHeightRearIn): the gunwale line is lower further forward. */
+  sideTop: number;
+  /** The lowest side height above the deck (at the bow end) and the highest (rear). `sideH` is what the structural checks read (the lowest section). */
+  sideH: number;
+  sideRear: number;
+  /** Side-profile sag (in) and the x where the straight gunwale line starts (rear transom inner face). */
+  sag: number;
+  xSideStart: number;
+  /** Chine / gunwale / rail band height and joist thickness (params). */
   railBand: number;
   joistT: number;
-  /** Effective gunwale flare (cabin sides only, captured-ply construction only) and the cabin web plane (flare tilt φ). */
-  flare: number;
-  web: { z0: number; z1: number; phi: number };
-  /** Chine / gunwale / side-board thickness (hwC and hwN are measured to its inner face). */
+  /** Chine / gunwale / side-board thickness (hwC is measured to its inner face). */
   side: number;
-  /** Front and rear transom thickness (D-43): the sides run between the transom faces at xRear + transom and xFront − transom. Not the same as `side`. */
+  /** Rear transom thickness (D-43). */
   transom: number;
-  /** Oak backer lane between the rear transom and a rear storage box (D-43): corner backers behind the handle sockets and quadrant bracket fill it. */
+  /** Oak backer lane between the rear transom and a rear storage box. */
   rearLane: number;
   ply: number;
   deckTop: number;
   deckBot: number;
-  /** Inner half widths (between the side panels). */
+  /** Inner half width (between the side panels): the whole hull, front to back. */
   hwC: number;
-  hwN: number;
-  sideH: number;
-  /**
-   * Sheer line (D-44): the nose gunwale top climbs `riseIn` above the flat side height between x0 and x1 (the front transom's inner face),
-   * on a smooth curve (zero slope at x0). `sideH` stays the LOWEST side height: cabin, seat, handles and the structural checks read it.
-   */
-  sheer: { x0: number; x1: number; riseIn: number };
-  /** Top of the front transom's edges and the nose gunwale at the bow: noseTop + sideH + the full sheer rise. */
-  noseGunTop: number;
-  /** Rear axle beam. */
+  /** Web (side panel) bottom z; its top is the gunwale line minus the gunwale band. */
+  web: { z0: number };
+  /** Rear axle beam, and the pivoting front axle beam (center at the kingpin, x = wheelbase). */
   beamR: Beam;
-  /** The Ackermann front end (D-53): kingpins, spindles, beam, brackets, links, tongue (front-layout.ts). */
-  front: FrontLayout;
-  /** Nose rails/joists run to here: the front transom's inner face. */
-  noseRailEnd: number;
-  cabinJoistX: number[];
-  noseJoistX: number[];
-  /**
-   * Nose stringers (D-52 integration): the center linkage corridor (`front.keepOut.center`) leaves no room under the nose deck for a joist, so the nose joists are
-   * split at |y| = `y0` and two oak stringers (`joistT` thick, `y0`..`y1`, a joist deep) run fore-aft beside the corridor to carry the deck. Each stringer is cut
-   * into the `runs` (x ranges) around the front beam's gap (the beam passes between the straddling joists).
-   */
-  noseStringers: { y0: number; y1: number; runs: Array<[number, number]> };
+  beamF: Beam;
+  /** Front pivot (D-56): the steer geometry (lock, stack heights, swath, stops) and the pieces placed from it. */
+  steer: ReturnType<typeof steerGeometry>;
+  king: { x: number; len: number; bot: number; top: number; depth: number };
+  stops: { faceX: number; y1: number; y2: number; bot: number; top: number; thick: number };
+  /** Tongue plate: tip x, bottom and top z; the bridle tie hole is `holeX` from the tip and the shackle/rope height is `tieZ`. */
+  tongue: { tipX: number; z0: number; z1: number; holeX: number; tieZ: number };
+  /** Rails run to the end of the flat deck; ahead of `railStepX` they are only `railDepthF` deep so the swinging axle beam passes under them. Joists (the king beam included) carry the deck. */
+  railEnd: number;
+  railStepX: number;
+  railDepthF: number;
+  joistX: number[];
   seat: SeatLayout;
   storage: StorageLayout;
 }
@@ -142,46 +126,48 @@ function evenInterior(a: number, b: number, spacing: number, joistT: number): nu
 }
 
 export function computeLayout(input: Params): Layout {
-  const p = resolveParams(input); // auto nose width / shoulder (A-4, D-26)
+  const p = resolveParams(input);
   const d = derived(p);
   const r = d.wheelRadiusIn;
   const WB = p.wheelbaseIn;
-  const kx = WB + p.kingpinLeadIn;
-  const hullCurve = hullPlanCurve(p); // the bow curve (D-52)
-  const xn = hullCurve.x1;
-  const xc0 = hullCurve.x0;
+  const curl0 = bowCurl(p);
   const xRear = -p.rearOverhangIn;
-  const xFront = WB + p.frontOverhangIn;
+  const xFront = curl0.xTip;
   const side = p.sideThicknessIn;
   const transom = p.transomThicknessIn;
   const rearLane = p.blockingThickIn;
   const ply = p.deckPlyIn;
   const deckTop = p.deckHeightIn;
   const hwC = p.bodyWidthIn / 2 - side;
-  const hwN = p.noseWidthIn / 2 - side;
   const rodR = p.axleDiameterIn / 2;
   const joistT = p.crossmemberThickIn;
 
-  const mkBeam = (x: number, track: number, thick: number): Beam => {
+  // ── Bow curl: inside-face height above the deck top at x (0 at the tangent point) ──
+  const Ri = curl0.rIn;
+  const heightAt = (x: number) => {
+    const dd = Math.max(0, Math.min(curl0.run, x - curl0.xFlatEnd));
+    return Ri - Math.sqrt(Math.max(0, Ri * Ri - dd * dd));
+  };
+  const angleAt = (x: number) => Math.asin(Math.max(0, Math.min(1, (x - curl0.xFlatEnd) / Ri)));
+  const sideBow = Math.min(p.sideHeightBowIn, curl0.riseInner - 0.2);
+  const dEnd = Math.sqrt(Math.max(0, Ri * Ri - (Ri - sideBow) ** 2));
+  const xSideEnd = curl0.xFlatEnd + dEnd;
+  const curl = { ...curl0, heightAt, angleAt };
+
+  // `position` 0 = underslung (rod on top of the beam), 1 = overslung. The pivoting front beam is ALWAYS underslung (the king stack in steerGeometry assumes it, D-56).
+  const mkBeam = (x: number, track: number, thick: number, position = p.axleBeamPosition): Beam => {
     const depth = p.axleBeamDepthIn;
-    const top = p.axleBeamPosition === AXLE_BEAM_POSITION.underslung ? r + rodR : r - rodR + depth;
+    const top = position === 0 ? r + rodR : r - rodR + depth;
     return { x, len: Math.max(1, track - p.hubLengthIn - 0.25), thick, depth, top, bot: top - depth };
   };
   const beamR = mkBeam(0, p.rearTrackIn, p.axleBeamThicknessIn);
-  // Nose rails and joists run to the front transom's inner face (D-52); the steel front beam sits in notches in the rails (front-mount.ts).
-  const noseRailEnd = WB + p.frontOverhangIn - p.transomThicknessIn;
-  // Joists skip the rear axle beam when it stands taller than their underside (overslung beam).
-  const jD = p.crossmemberDepthIn;
-  // They also skip the brake beam (D-53) when it runs through their depth.
-  const bBeam = beamLayout(p, r, deckTop - ply - p.railDepthIn, xRear + transom);
-  const beamThroughJoists = bBeam.zB + p.brakeBeamSizeIn / 2 > deckTop - ply - jD + 0.01 && bBeam.zB - p.brakeBeamSizeIn / 2 < deckTop - ply;
-  // A joist that would hit the beam is replaced by one on each side of it (not pushed to one side only), so a thicker
-  // deck ply never lengthens the panel span next to the beam (critic Phase 2 r1, D1 oddity).
+  const beamF = mkBeam(WB, p.frontTrackIn, p.axleBeamThicknessIn, 0);
+
   // ── Seat ──
   const baseW = Math.max(1, Math.min(p.seatWidthIn, 2 * hwC - 1));
   const pl = p.panelPlyIn;
   const underSeat = p.storageLocation === STORAGE_LOCATION.underSeat;
-  const hCap = p.sideHeightIn + p.storageOverSideIn;
+  const hCap = p.sideHeightRearIn + p.storageOverSideIn;
   const boxHeight = (lx: number, w: number, cap = hCap) =>
     Math.min(cap, p.storageVolumeIn3 / (Math.max(0.5, lx - 2 * pl) * Math.max(0.5, w - 2 * pl)) + 2 * pl);
   const hUnder = underSeat ? boxHeight(p.seatDepthIn, baseW) : 0;
@@ -201,17 +187,10 @@ export function computeLayout(input: Params): Layout {
 
   // ── Storage ──
   let storage: StorageLayout;
-  if (p.storageLocation === STORAGE_LOCATION.underSeat) {
+  if (underSeat) {
     storage = { location: p.storageLocation, x0: seat.xRear, x1: seat.xFront, zBot: deckTop, zTop: deckTop + hUnder, hw: baseW / 2 };
-  } else if (p.storageLocation === STORAGE_LOCATION.forwardRaised) {
-    const x0 = xn;
-    const x1 = Math.max(x0 + 1, xFront - side - 1.5);
-    const w = Math.max(1, 2 * (hwN - p.storageSideClearIn)); // clearance to the chine (r3 build S3, D-47)
-    // Over the nose the box must clear the tires and also the rider's knees (the legs pass under it to the foot stop).
-    const zBot = Math.max(2 * r + p.storageRaisedClearIn, riderLegTopZ(p, surface, deckTop) + p.storageRaisedClearIn);
-    storage = { location: p.storageLocation, x0, x1, zBot, zTop: zBot + boxHeight(x1 - x0, w), hw: w / 2 };
   } else {
-    // Behind the seat back: its rear face leans back as it rises, so the box end follows it.
+    // Behind the seat back: its rear face leans back as it rises, so the box end follows it. The box sits in the tall rear section of the sled sides (D-54).
     const x0 = xRear + transom + rearLane;
     const hwB = hwC - p.storageSideClearIn; // the box stands this far off the chine inner face (r3 build S3, D-47)
     const backX = (zTop: number) => Pr[0] - Math.max(0, zTop - Pr[2]) * (-col2[0] / col2[2]);
@@ -220,108 +199,74 @@ export function computeLayout(input: Params): Layout {
       for (let i = 0; i < 6; i++) h = boxHeight(Math.max(1, backX(deckTop + h) - x0), 2 * hwB, cap);
       return h;
     };
-    let capEff = hCap;
-    let h = solveH(capEff);
-    // D-53: the seat moved forward so the seat kit lies flat in the box, and the box now reaches the grab handles' doublers (inboard of the gunwale, band tall). Where it does,
-    // its lid stays under the bottom of the doubler band (GRIP_BOX_CLEAR_IN of air) instead of colliding with it.
-    const gripLen = p.seatGripClearLengthIn + 2;
-    const gripX0 = Math.min(p.seatXIn - 5, xc0 - side - gripLen - 0.25);
-    if (backX(deckTop + h) > gripX0 - 0.05) {
-      capEff = Math.min(hCap, p.sideHeightIn - p.railBandIn - GRIP_BOX_CLEAR_IN);
-      h = solveH(capEff);
-    }
+    const h = solveH(hCap);
     const x1 = Math.max(x0 + 1, backX(deckTop + h));
-    storage = { location: p.storageLocation, x0, x1, zBot: deckTop, zTop: deckTop + boxHeight(x1 - x0, 2 * hwB, capEff), hw: hwB };
+    storage = { location: p.storageLocation, x0, x1, zBot: deckTop, zTop: deckTop + boxHeight(x1 - x0, 2 * hwB, hCap), hw: hwB };
   }
 
-  // D-45: the sides are vertical (the S-curve web is laminated around a plan-view form), so there is no flare; the chine bottom, the web
-  // and the gunwale are the same height along the whole hull (captured-ply: at the nose deck level; the cabin rails stand 1" taller to meet the chine).
-  const flare = 0;
+  // The chine bottom, the web and the gunwale: the chine and the rail top are at the deck underside level (one deck level, D-52).
   const chineH = p.railBandIn;
   const chineBot = deckTop - ply;
-  const webZ0 = chineBot + chineH;
-  const webZ1 = deckTop + p.sideHeightIn - p.railBandIn;
-  const web = { z0: webZ0, z1: webZ1, phi: Math.atan2(flare, Math.max(0.1, webZ1 - webZ0)) };
+  const web = { z0: chineBot + chineH };
 
-  // Sheer (D-44): rises over the forward `sheerLengthIn` of the nose, never behind the shoulder; 0 = the old straight gunwale.
-  const sheerX1 = xFront - transom;
-  let sheerX0 = Math.max(xn, sheerX1 - p.sheerLengthIn);
-  if (p.sheerRiseIn > 0) {
-    // The finger guard's strap needs a FLAT gunwale: the sheer rise starts beyond the pinch zone (the tire sweep within fingerGapMinIn of the hull side) plus the guard's margin.
-    const hz = hazardRangeX(sidePolyline(hullCurve, side / 2, xc0, sheerX1), leftTirePolys(hullCurveSpec(p)), p.fingerGapMinIn);
-    if (hz) sheerX0 = Math.min(sheerX1 - 1, Math.max(sheerX0, hz[1] + SHEER_AFTER_PINCH_IN));
-  }
-  const sheer = { x0: sheerX0, x1: sheerX1, riseIn: Math.max(0, p.sheerRiseIn) };
+  // ── Front pivot (D-56) ──
+  const steer = steerGeometry(p);
+  const kingX = steer.kingX;
+  const king = { x: kingX, len: p.kingBeamLengthIn, bot: steer.kingBot, top: deckTop - ply, depth: steer.kingDepth };
+  const stopThick = joistT;
+  // The beam's leading face (a plane `axleBeamThickness / 2` ahead of its axis) crosses the stop's rear face at beam distance `steer.stopY1` from the kingpin, i.e. at world |y| =
+  // stopY1 cos(lock) - (thickness / 2) sin(lock). Beyond that point the swinging face is AHEAD of the stop face, so a block there would be run through by the beam: the block
+  // ENDS at the contact point (it spans the old stop width inboard of it), and the beam touches its outer end at full lock.
+  const stopContactY = steer.stopY1 * Math.cos(steer.lock) - (p.axleBeamThicknessIn / 2) * Math.sin(steer.lock);
+  const stops = { faceX: steer.stopFaceX, y1: stopContactY - Math.min(steer.railYIn - steer.stopY1, 3 * stopThick), y2: stopContactY, bot: beamF.top - 1.0, top: deckTop - ply - p.crossmemberDepthIn, thick: stopThick };
+  const tipX = xFront + p.tongueTieAheadIn;
+  const tongue = { tipX, z0: beamF.top, z1: beamF.top + p.tongueThickIn, holeX: tipX - 1, tieZ: beamF.top + p.tongueThickIn + 0.35 };
 
-  const front = computeFrontLayout(p, { r, WB, kx, hull: hullCurve, side, ply, deckTop });
+  // ── Joists: even spacing from the rear transom to the king beam, the king beam itself, and a last joist under the scarf of the deck to the bow curl ──
+  const xSideStart = xRear + transom;
+  const xEndJoist = steer.endJoistX;
+  const joistX = [...evenInterior(xSideStart, kingX - king.len / 2, p.crossmemberSpacingIn, joistT), kingX, xEndJoist];
 
-  // ── Joists: skip the rear axle beam and the brake beam; with the Ackermann front end also the steel front beam (its top stands in their depth) ──
-  const fb = front.beam;
-  const straddle = (x: number, b: Beam): number[] | null => {
-    const half = (b.thick + joistT) / 2 + 0.05;
-    return Math.abs(x - b.x) < half ? [b.x - half, b.x + half] : null;
-  };
-  const joistsBetween = (a: number, b: number) => evenInterior(a, b, p.crossmemberSpacingIn, joistT).flatMap((x) => {
-    // (Always, for an underslung beam: its hold-down angles stand on the beam top between the straddling joists, D-47.)
-    if (beamR.top > deckTop - ply - jD + 0.01 || p.axleBeamPosition === AXLE_BEAM_POSITION.underslung) {
-      const sr = straddle(x, beamR);
-      if (sr) return sr;
-    }
-    if (fb.top > deckTop - ply - jD + 0.01) {
-      const sf = straddle(x, fb);
-      if (sf) return sf;
-    }
-    if (beamThroughJoists && x > bBeam.notch.x0 - joistT / 2 - 0.05 && x < bBeam.notch.x1 + joistT / 2 + 0.05) return [x < bBeam.xB ? bBeam.notch.x0 - joistT / 2 - 0.05 : bBeam.notch.x1 + joistT / 2 + 0.05];
-    return [x];
-  });
-  const cabinJoistX = joistsBetween(xRear + transom, xn);
-  const noseJoistX = joistsBetween(xn, noseRailEnd);
-  // Nose stringers: just outboard of the center linkage corridor, from the last cabin joist (or the rear transom) to the front transom, split around the front beam.
-  const strY0 = front.keepOut.center.y1 + NOSE_STRINGER_GAP_IN;
-  const strX0 = cabinJoistX.length ? cabinJoistX[cabinJoistX.length - 1] + joistT / 2 : xRear + transom;
-  const gapLo = front.beam.x - front.beam.thick / 2 - 0.05, gapHi = front.beam.x + front.beam.thick / 2 + 0.05;
-  const noseStringers = { y0: strY0, y1: strY0 + joistT, runs: [[strX0, gapLo], [gapHi, noseRailEnd]] as Array<[number, number]> };
-
+  void len;
   return {
-    r, WB, xc0, xn, hull: hullCurve, bowHeading: curveHeading(hullCurve, xFront), chineH, chineBot, railTop: chineBot, sideTop: deckTop + p.sideHeightIn, xRear, xFront, kx, railBand: p.railBandIn, joistT, flare, web, side, transom, rearLane, ply, deckTop, deckBot: deckTop - ply,
-    hwC, hwN, sideH: p.sideHeightIn, sheer, noseGunTop: deckTop + p.sideHeightIn + sheer.riseIn, beamR, front,
-    noseRailEnd, cabinJoistX, noseJoistX, noseStringers, seat, storage,
+    r, WB, xRear, xFront, xFlatEnd: curl.xFlatEnd, xSideEnd, curl, chineBot, railTop: chineBot, chineH,
+    sideTop: deckTop + p.sideHeightRearIn, sideH: sideBow, sideRear: p.sideHeightRearIn, sag: p.sideProfileSagIn, xSideStart,
+    railBand: p.railBandIn, joistT, side, transom, rearLane, ply, deckTop, deckBot: deckTop - ply, hwC, web, beamR, beamF, steer, king, stops, tongue,
+    railEnd: curl.xFlatEnd, railStepX: steer.railStepX, railDepthF: steer.railDepthFront, joistX, seat, storage,
   };
 }
 
 export { len as spanLen };
 
-/**
- * A point on the outside of a captured-ply cabin side panel: `off` inches out along the panel normal from its
- * centerline at height z (flare tilts the panel, so signs and reflectors lean with it). `halfH` is the half height of
- * the piece being mounted: its lower edge leans inward below the chine top, so the offset grows to keep it off the
- * chine's vertical face. Returns |y|, z and the lean φ.
- */
-export function cabinSidePoint(L: Layout, z: number, off: number, halfH = 0): { y: number; z: number; phi: number } {
-  const t = Math.max(0, Math.min(1, (z - L.web.z0) / Math.max(0.1, L.web.z1 - L.web.z0)));
-  const yc = L.hwC + L.side / 2 + L.flare * t;
-  const lean = Math.max(0, L.web.z0 - (z - halfH)) * Math.tan(L.web.phi);
-  const o = off + lean;
-  return { y: yc + o * Math.cos(L.web.phi), z: z - o * Math.sin(L.web.phi), phi: L.web.phi };
+/** Height of the gunwale top above the deck top at x (the straight sled profile from the rear transom's inner face to the end of the sides, plus the optional sag, D-54). */
+export function sideHeightAtX(L: Layout, x: number): number {
+  const u = Math.max(0, Math.min(1, (x - L.xSideStart) / Math.max(1e-6, L.xSideEnd - L.xSideStart)));
+  const bow = L.sideH;
+  return L.sideRear + (bow - L.sideRear) * u - 4 * L.sag * u * (1 - u);
 }
 
-/**
- * Sheer rise (in) of the nose gunwale top above its flat height at model x (D-44): 0 behind `sheer.x0`, then a quadratic ease-in (flat
- * start, steepest at the bow, like a boat's sheer) to `sheer.riseIn` at `sheer.x1`; clamped beyond. Monotone non-decreasing in x.
- */
-export function sheerRise(L: Pick<Layout, 'sheer'>, x: number): number {
-  const { x0, x1, riseIn } = L.sheer;
-  if (riseIn <= 0 || x1 <= x0) return 0;
-  const u = Math.max(0, Math.min(1, (x - x0) / (x1 - x0)));
-  return riseIn * u * u;
+/** Gunwale top z at x. */
+export const sideTopAt = (L: Layout, x: number): number => L.deckTop + sideHeightAtX(L, x);
+
+/** Slope of the gunwale line at x (rad, positive = descending toward the bow). */
+export function sideSlopeAt(L: Layout, x: number): number {
+  const h = 0.05;
+  const a = sideTopAt(L, x - h), b = sideTopAt(L, x + h);
+  return Math.atan2(a - b, 2 * h);
 }
 
-/** Centerline polyline of one hull side member offset `d` outward from the web plane (negative = inward), covering x in [xa, xb], as |y| (D-45). */
-export function sidePath(L: Pick<Layout, 'hull'>, d: number, xa: number, xb: number): Vec2[] {
-  return sidePolyline(L.hull, d, xa, xb);
+/** Top z of the side web at x: the gunwale top minus the gunwale band. */
+export const webTopAt = (L: Layout, x: number): number => sideTopAt(L, x) - L.railBand;
+
+/** Inside half width: constant (straight sides). Kept as a function so call sites read the same as before. */
+export function innerHalfWidth(L: Pick<Layout, 'hwC'>, _x?: number): number {
+  void _x;
+  return L.hwC;
 }
 
-/** Inside half width of the hull (the chine's inner face) at x: hwC in the cabin, hwN in the nose, the S-curve between (D-45). */
-export function innerHalfWidth(L: Pick<Layout, 'hull' | 'side'>, x: number): number {
-  return offsetY(L.hull, -L.side / 2, x);
+/** x samples from `a` to `b` inclusive, `n` segments. */
+export function samples(a: number, b: number, n: number): number[] {
+  return Array.from({ length: n + 1 }, (_, i) => a + ((b - a) * i) / n);
 }
+
+export { DEG as DEG_PER_RAD_INV, sideHeightAt as sideHeightLine };

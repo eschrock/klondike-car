@@ -1,14 +1,16 @@
 /**
- * Cargo mode, model side (Phase 3c-2, D-53): the seat kit lies flat in the storage box, the bed is flat and derived from the layout, the handlebow is a crowned
+ * Cargo mode, model side (Phase 3c-2, D-53; D-54): the seat kit lies flat in the storage box, the bed is flat and derived from the layout, the handlebow is a crowned
  * bent lamination on the same posts, and the cargo block sits on the bed. Numbers are re-derived by hand from the params and the layout.
+ * D-54: the 24 in body leaves a 22.03 in box interior, which has no room for the two floor strips beside the cushion, so the wedges and knobs lie ON TOP of the
+ * seat back (`stack` = 'top'); a wider body (27 in here) still takes the strips on the floor (`stack` = 'floor').
  */
 import { describe, expect, it } from 'vitest';
-import { defaultParams, type Params } from '../params';
+import { defaultParams, validateParams, type Params } from '../params';
 import { buildModel } from './index';
 import { bedLengthAtWidth, cargoBed } from './bed';
 import { partsOverlap, worldAABB } from './bounds';
 import { bowGeometry, bowUnderZ, handleGeometry } from './handle';
-import { computeLayout, innerHalfWidth } from './layout';
+import { computeLayout, innerHalfWidth, sideTopAt } from './layout';
 import { BACK_PAD_THICK_IN, CUSHION_CLEAR_IN } from './seat';
 import { applySeatStow, isStowedKitPart, seatStowPlan, studHoles, KNOB_STUD_IN } from './seat-stow';
 import { BOX_FILLET_IN, storageGeometry } from './storage';
@@ -57,13 +59,35 @@ describe('the fit (seat-stow, D-53)', () => {
     expect(plan.margin.widthIn).toBeGreaterThanOrEqual(0.25);
     expect(plan.margin.heightIn).toBeGreaterThanOrEqual(0.25);
   });
-  it('the needs add up by hand: length = the cushion + the 1 in backers + clearance, or the back + the coaming ledge each end + clearance; width = cushion + two strips + clearance; height = fillet + cushion + back', () => {
+  it('the default 24 in body stacks the wedges and knobs on top of the back: the 22.03 in interior is short of the 23.75 in the floor strips would need', () => {
+    expect(plan.stack).toBe('top');
+    // Hand: interior across = 2 (11.25 - 0.236) = 22.03 in; the strips need cushion 18 + 2 x (wedge 1.5 + 0.125 + knob 1 + 0.125 = 2.75) + clearance 0.25 = 23.75 in.
+    const strip = plan.sizes.wedge[1] + 0.125 + 1 + 0.125;
+    expect(plan.interior.y1 - plan.interior.y0).toBeCloseTo(22.028, 3);
+    expect(18 + 2 * strip + defaults.seatStowClearIn).toBeGreaterThan(plan.interior.y1 - plan.interior.y0);
+  });
+  it('the needs add up by hand (top stack): length = the cushion + the 1 in backers + clearance, or the back + the coaming ledge each end + clearance; width = cushion + clearance; height = fillet + cushion + back + the wedge on top', () => {
     const clear = defaults.seatStowClearIn;
     const ledge = defaults.storageCoamingWidthIn - defaults.panelPlyIn;
-    expect(plan.need.lengthIn).toBeCloseTo(Math.max(15.625 + 1 + clear, 16 + 2 * ledge + clear), 6);
-    const strip = plan.sizes.wedge[1] + 0.125 + 1 + 0.125; // wedge + gap + knob (1 in) + gap
-    expect(plan.need.widthIn).toBeCloseTo(18 + 2 * strip + clear, 6);
-    expect(plan.need.heightIn).toBeCloseTo(BOX_FILLET_IN + 1.75 + 2, 6);
+    expect(plan.need.lengthIn).toBeCloseTo(Math.max(15.625 + 1 + clear, 16 + 2 * ledge + clear), 6); // 16.875 (the cushion governs)
+    expect(plan.need.lengthIn).toBeCloseTo(16.875, 6);
+    expect(plan.need.widthIn).toBeCloseTo(18 + clear, 6); // the back (16) is narrower than the cushion (18); nothing else is beside them
+    // The wedge lies on its long edge: 1.87 in up (taller than the 1 in knob). 0.375 + 2 + 1.75 + 1.871 = 5.996.
+    expect(plan.need.heightIn).toBeCloseTo(BOX_FILLET_IN + 2 + 1.75 + plan.sizes.wedge[2], 6);
+    expect(plan.need.heightIn).toBeCloseTo(5.9959, 3);
+    expect(plan.margin.widthIn).toBeCloseTo(plan.interior.y1 - plan.interior.y0 - plan.need.widthIn, 9);
+  });
+  it('the needs add up by hand (floor strips, a 27 in body): width = cushion + two strips + clearance; height = fillet + cushion + back', () => {
+    const p27 = { ...defaults, bodyWidthIn: 27, frontTrackIn: 40 } as Params; // the wide body needs the wide front track for the steering lock (D-56)
+    expect(validateParams(p27).filter((i) => i.severity === 'error')).toEqual([]);
+    const q = seatStowPlan(p27, computeLayout(p27), buildModel(p27, { rider: 'none', cargo: false }));
+    expect(q.stack).toBe('floor');
+    expect(q.fits).toBe(true);
+    const clear = defaults.seatStowClearIn;
+    const strip = q.sizes.wedge[1] + 0.125 + 1 + 0.125; // wedge + gap + knob (1 in) + gap
+    expect(q.need.widthIn).toBeCloseTo(18 + 2 * strip + clear, 6); // 23.75
+    expect(q.need.heightIn).toBeCloseTo(BOX_FILLET_IN + 2 + 1.75, 6); // 4.125: the wedges beside the cushion add no height
+    expect(q.need.lengthIn).toBeCloseTo(16.875, 6);
   });
   it('the interior is inside the 6 mm walls, and the ceiling is the underside of the lid frame and battens, not the lid panel', () => {
     expect(plan.interior.x0).toBeCloseTo(g.x0 + g.pl, 9);
@@ -126,11 +150,11 @@ describe('the stowed view state', () => {
     expect(cu.max[0]).toBeLessThanOrEqual(backer.min[0] + 1e-6);
     expect(backer.max[2]).toBeLessThanOrEqual(st.min[2] + 1e-6);
   });
-  it('the stowed pieces do not interpenetrate each other, nor the box walls, lid, battens, backers and drains (tolerance 0.05 in)', () => {
-    const ps = stowed.filter((x) => isStowedKitPart(x.id) || /^storage-(side|end|coaming|lid|rim|gasket|backer|drain|latch|hinge)/.test(x.id));
+  const overlaps = (ps: Part[]): string[] => {
+    const set = ps.filter((x) => isStowedKitPart(x.id) || /^storage-(side|end|coaming|lid|rim|gasket|backer|drain|latch|hinge)/.test(x.id));
     const bad: string[] = [];
-    for (let i = 0; i < ps.length; i++) for (let j = i + 1; j < ps.length; j++) {
-      const a = ps[i], b = ps[j];
+    for (let i = 0; i < set.length; i++) for (let j = i + 1; j < set.length; j++) {
+      const a = set[i], b = set[j];
       const aKit = isStowedKitPart(a.id), bKit = isStowedKitPart(b.id);
       if (!aKit && !bKit) continue; // box vs box is the hull test's business
       if (a.id.startsWith('seat-plug') || b.id.startsWith('seat-plug')) continue; // threaded into the end wall's insert
@@ -139,7 +163,49 @@ describe('the stowed view state', () => {
       const d = partsOverlap(a, b);
       if (d > 0.05) bad.push(`${a.id} x ${b.id}: ${d.toFixed(3)}`);
     }
-    expect(bad).toEqual([]);
+    return bad;
+  };
+  it('the stowed pieces do not interpenetrate each other, nor the box walls, lid, battens, backers and drains (tolerance 0.05 in)', () => {
+    expect(overlaps(stowed)).toEqual([]);
+  });
+  it('top stack: the wedges and knobs lie on the back\'s pad in two lanes 2 in off center, the knob head behind the stud, the stud pointing fore, all inside the back\'s footprint', () => {
+    const pad = worldAABB(get(stowed, 'seat-back-pad'));
+    const frame = worldAABB(get(stowed, 'seat-back-stile-L'));
+    for (const tag of ['L', 'R']) {
+      const sg = tag === 'L' ? 1 : -1;
+      const w = worldAABB(get(stowed, `seat-wedge-${tag}`)), k = worldAABB(get(stowed, `seat-knob-${tag}`));
+      expect(w.min[2], `wedge ${tag} rests on the back`).toBeCloseTo(pad.max[2], 6);
+      expect(k.min[2], `knob ${tag} rests on the back`).toBeCloseTo(pad.max[2], 6);
+      expect(sg > 0 ? w.min[1] : -w.max[1], `wedge ${tag} lane`).toBeCloseTo(2, 6); // lane inner edge 2 in off center
+      expect(w.max[1] - w.min[1]).toBeCloseTo(defaults.seatBackFrameWidthIn, 6);
+      expect(sg * (k.min[1] + k.max[1]) / 2, `knob ${tag} in the wedge's lane`).toBeCloseTo(2 + defaults.seatBackFrameWidthIn / 2, 6);
+      expect(k.min[0], `knob ${tag} follows the wedge by the gap`).toBeCloseTo(w.max[0] + 0.125, 6); // wedge first (aft), then the knob head; the stud runs fore
+      // The part is the 0.4 in head; the plan box of the knob is head + the 3.5 in stud, which must stay inside the back's length.
+      const item = plan.items.find((i) => i.ids[0] === `seat-knob-${tag}`)!;
+      expect(item.box.max[0] - item.box.min[0]).toBeCloseTo(KNOB_STUD_IN, 6);
+      expect(k.min[0]).toBeCloseTo(item.box.min[0], 6);
+      expect(w.min[0]).toBeGreaterThanOrEqual(frame.min[0] - 1e-6);
+      expect(item.box.max[0]).toBeLessThanOrEqual(frame.max[0] + 1e-6);
+      expect(Math.max(w.max[2], k.max[2])).toBeLessThanOrEqual(plan.interior.zCeil + 1e-6);
+    }
+  });
+  it('floor stack (a 27 in body): the strips lie on the floor beside the cushion; the stowed kit still fits and does not interpenetrate', () => {
+    const p27 = { ...defaults, bodyWidthIn: 27, frontTrackIn: 40 } as Params; // the wide body needs the wide front track for the steering lock (D-56)
+    const L27 = computeLayout(p27);
+    const st27 = buildModel(p27, { rider: 'none', cargo: false, seat: 'stowed' });
+    const q = seatStowPlan(p27, L27, buildModel(p27, { rider: 'none', cargo: false }));
+    expect(q.stack).toBe('floor');
+    const cu = worldAABB(get(st27, 'seat-cushion'));
+    for (const tag of ['L', 'R']) {
+      const sg = tag === 'L' ? 1 : -1;
+      const w = worldAABB(get(st27, `seat-wedge-${tag}`)), k = worldAABB(get(st27, `seat-knob-${tag}`));
+      expect(w.min[2], `wedge ${tag} on the floor fillet`).toBeCloseTo(q.interior.zRest, 6);
+      expect(sg > 0 ? w.min[1] : -w.max[1], `wedge ${tag} beside the cushion`).toBeCloseTo(9 + 0.125, 6);
+      expect(sg > 0 ? k.min[1] : -k.max[1]).toBeGreaterThanOrEqual((sg > 0 ? w.max[1] : -w.min[1]) + 0.125 - 1e-6);
+      expect(cu.max[2]).toBeLessThanOrEqual(worldAABB(get(st27, 'seat-back-stile-L')).min[2] + 1e-6);
+      expect(sg > 0 ? k.max[1] : -k.min[1]).toBeLessThanOrEqual(q.interior.y1 + 1e-6);
+    }
+    expect(overlaps(st27)).toEqual([]);
   });
   it('the plugs thread into the inserts: on the stud axes at the fore end of the box', () => {
     const holes = studHoles(defaults, L);
@@ -168,48 +234,73 @@ describe('the stowed view state', () => {
   });
 });
 
-describe('the flat cargo bed (D-53)', () => {
+describe('the flat cargo bed (D-53, D-54)', () => {
   const bed = cargoBed(defaults, L);
-  it('starts at the fore end of the box, ends at the foot stop, and is as wide and tall as the cabin', () => {
+  it('starts at the fore end of the box, ends at the foot stop, and is as wide as the cabin and as tall as the lowest gunwale (the bow end of the sled line)', () => {
     expect(bed.x0).toBeCloseTo(L.storage.x1, 9);
     const stop = worldAABB(get(installed, 'foot-stop'));
     expect(bed.xStop).toBeCloseTo(stop.min[0], 9);
     expect(bed.widthIn).toBeCloseTo(2 * L.hwC, 9);
-    expect(bed.heightIn).toBe(defaults.sideHeightIn);
+    expect(bed.widthIn).toBeCloseTo(22.75, 9);
+    expect(bed.heightIn).toBe(defaults.sideHeightBowIn); // the lowest side along the bed is the bow end (4 in); the rear is 16 in
     expect(bed.boxTopIn).toBeCloseTo(L.storage.zTop - L.deckTop, 9);
+    expect(bed.xFull).toBeCloseTo(L.xFlatEnd, 9);
   });
-  it('the area is the floor between the sides over that run: bounded by the rectangles at the widest and the narrowest width', () => {
+  it('the area is the floor between the straight sides over that run: length x 22.75 in (the width is constant now)', () => {
     const len = bed.xStop - bed.x0;
-    expect(bed.areaIn2).toBeLessThan(len * bed.widthIn);
-    expect(bed.areaIn2).toBeGreaterThan(len * bed.stopWidthIn);
-    // Hand check with a trapezoid rule on the same side curve.
+    expect(len).toBeCloseTo(47.625 - 9.4047, 3); // foot stop rear face 47.625, box fore end 9.405
+    expect(bed.stopWidthIn).toBeCloseTo(bed.widthIn, 9); // no taper: the foot stop spans the same width
+    expect(bed.areaIn2).toBeCloseTo(len * bed.widthIn, 6); // 38.22 x 22.75 = 869.5
+    expect(bed.areaIn2).toBeCloseTo(869.51, 1);
+    expect(bed.fullAreaIn2).toBeCloseTo(bed.areaIn2, 9);
+    expect(bed.straightLengthIn).toBeCloseTo(len, 9);
+    expect(bed.totalLengthIn).toBeCloseTo(len, 9);
+    // Hand check with a trapezoid rule on the same side line.
     let a = 0;
     const n = 400;
     for (let i = 0; i < n; i++) {
       const x0 = bed.x0 + (len * i) / n, x1 = bed.x0 + (len * (i + 1)) / n;
       a += ((2 * innerHalfWidth(L, x0) + 2 * innerHalfWidth(L, x1)) / 2) * (x1 - x0);
     }
-    expect(bed.areaIn2).toBeCloseTo(a, -1); // within 5 in² of 887
+    expect(bed.areaIn2).toBeCloseTo(a, 6);
   });
-  it('the usable length falls with the load width, and the payload width sets how far forward the load can be piled', () => {
+  it('a load narrower than the cabin runs the whole bed; a load wider than the 22.75 in cabin does not fit at all; the payload width sets how far forward the load can be piled', () => {
+    const len = bed.xStop - bed.x0;
     const l24 = bedLengthAtWidth(L, bed, 24), l20 = bedLengthAtWidth(L, bed, 20), l16 = bedLengthAtWidth(L, bed, 16);
-    expect(l24).toBeLessThan(l20);
-    expect(l20).toBeLessThan(l16);
+    expect(l24).toBe(0);
+    expect(l20).toBeCloseTo(len, 0);
+    expect(l20).toBeLessThanOrEqual(len + 1e-9);
+    expect(l16).toBeCloseTo(l20, 9); // straight sides: any load under 22.75 in wide gets the same length
     expect(bed.loadLengthIn).toBeCloseTo(l20, 0);
     expect(2 * innerHalfWidth(L, bed.xLoadEnd)).toBeGreaterThanOrEqual(defaults.cargoLoadWidthIn - 1e-6);
+    // A narrower body narrows the cabin below the 20 in payload: then the bed takes no load of that width.
+    const narrow = { ...defaults, bodyWidthIn: 21 } as Params;
+    if (!validateParams(narrow).some((i) => i.severity === 'error')) {
+      const Ln = computeLayout(narrow);
+      expect(cargoBed(narrow, Ln).loadLengthIn).toBe(0);
+    }
   });
-  it('nothing of the seat kit stands on the bed: with the seat stowed only the foot stop, its cleats and the grab handles (on the gunwales) are above the deck ahead of the box', () => {
+  it('nothing of the seat kit stands on the bed: with the seat stowed only the foot stop, its two cleats and the grab handles (on the sloped gunwales) are above the deck ahead of the box', () => {
     const intruders = stowed.filter((x) => {
       if (x.payload || x.group === 'reference') return false;
       if (!/^(seat-|foot-stop|storage-backer)/.test(x.id)) return false;
       const b = worldAABB(x);
       return b.max[0] > bed.x0 + 0.6 && b.min[2] < L.deckTop + L.sideH - 1e-9 && b.max[0] < bed.xStop + 2;
     }).map((x) => x.id);
-    // The grab handles' doublers stand on the inside of the gunwale at the top of the side (1 in proud, 1.5 in tall); they are not on the floor.
+    // The grab handles' doublers stand on the inside of the gunwale (they are on the slope, not on the floor).
     expect(intruders.filter((id) => !/^(doubler|seat-grip|foot-stop)/.test(id)).sort()).toEqual([]);
-    for (const id of intruders.filter((q) => /^foot-stop/.test(q))) expect(worldAABB(get(stowed, id)).min[0], id).toBeGreaterThanOrEqual(bed.xStop - 1e-9); // the foot stop ends the bed
-    const grips = stowed.filter((x) => /^(doubler-grip|seat-grip-pad)/.test(x.id));
-    for (const x of grips) expect(worldAABB(x).min[2]).toBeGreaterThanOrEqual(L.deckTop + L.sideH - L.railBand - 1e-9);
+    // The foot stop board ends the bed. The cleats stand behind it (D-54: the flat deck ends too soon for them ahead of it) on the side edges of the bed, so the clear width
+    // between them still takes the 20 in payload.
+    expect(worldAABB(get(stowed, 'foot-stop')).min[0]).toBeGreaterThanOrEqual(bed.xStop - 1e-9);
+    const cl = worldAABB(get(stowed, 'foot-stop-cleat-L')), cr = worldAABB(get(stowed, 'foot-stop-cleat-R'));
+    expect(cl.max[0]).toBeLessThanOrEqual(bed.xStop + 1e-9);
+    expect(cl.min[1] - cr.max[1]).toBeGreaterThanOrEqual(defaults.cargoLoadWidthIn - 1e-9); // 21.25 in clear
+    // Each grab handle's doubler hangs in the gunwale band: its lowest corner is no lower than the gunwale underside line (a 1.5 in band, vertical offset 1.5 / cos(10.5 deg)).
+    for (const tag of ['L', 'R']) {
+      const d = worldAABB(get(stowed, `doubler-grip-${tag}`));
+      expect(d.min[2]).toBeGreaterThanOrEqual(sideTopAt(L, d.max[0]) - defaults.railBandIn / Math.cos(Math.atan2(12, L.xSideEnd - L.xSideStart)) - 1e-6);
+      expect(d.min[2]).toBeGreaterThan(L.deckTop + L.sideH); // above the bow-end side top: nowhere near the floor
+    }
     // In the installed view the wedges and the back DO stand on the bed.
     expect(worldAABB(get(installed, 'seat-wedge-L')).max[0]).toBeGreaterThan(bed.x0);
   });
@@ -294,16 +385,17 @@ describe('the handlebow (D-53)', () => {
     expect(h.socketX).toBeCloseTo(1.25, 9);
     expect(h.socketY).toBeCloseTo(1.75, 9);
     const sock = worldAABB(get(installed, 'handle-socket-L'));
-    expect(sock.min[2]).toBeCloseTo(L.deckTop + L.sideH - defaults.handleSocketDepthIn, 9);
+    expect(sock.min[2]).toBeCloseTo(L.deckTop + L.sideRear - defaults.handleSocketDepthIn, 9); // the rear transom corners: deck + 16 in (D-54), not the low bow side
     const post = worldAABB(get(installed, 'handle-post-L'));
     expect(post.min[2]).toBeCloseTo(h.zFoot, 9);
   });
-  it('the brake lever hangs under the crown: it stays under the bow at the middle with room for a hand (more than 4 in)', () => {
-    const lever = worldAABB(get(installed, 'brake-lever'));
-    expect(bw.zMid - defaults.handleBarDiameterIn / 2 - lever.max[2]).toBeGreaterThan(4);
-    // Same x as before: the lever is behind the transom, the bow above the sockets.
+  it('the bow stands behind the rear transom and clears its top corners (D-54: the transom is 16 in tall now), so the handler grips above the cart', () => {
     const bb = worldAABB(bar);
-    expect(bb.min[0]).toBeLessThan(L.xRear);
+    expect(bb.max[0]).toBeLessThan(L.xRear + 1e-9); // behind the transom's outer face (the posts are in the sockets there)
+    expect(bb.min[2]).toBeGreaterThan(L.deckTop + L.sideRear); // lowest point (the bow ends over the cart edge) above the transom corners at 30.75 in
+    expect(bw.zPost - defaults.handleBarDiameterIn / 2).toBeGreaterThan(h.zTop);
+    expect(h.gripArm).toBeCloseTo(defaults.rearHandleHeightIn - (L.deckTop + L.sideRear), 9); // grip height above the socket mouth
+    expect(h.zBot).toBeCloseTo(L.deckTop + L.sideRear - defaults.handleSocketDepthIn, 9);
   });
   it('crown 0 gives the old straight bar at the grip height', () => {
     const p0 = { ...defaults, handleBowCrownIn: 0 } as Params;

@@ -10,6 +10,8 @@
  *   bottom the cushion (peeled off its Dual Lock strips), flush to the aft wall so its fore end stops short of the backers
  *   beside both, on the floor in a strip along each side wall: a wedge lying on its long edge, then a knob with its stud pointing fore, and (seat off) the two
  *   hole plugs go into the inserts from the bed side.
+ * D-54: the body is 24 in wide, so the box interior (22 in) has no room for the two side strips; then the wedges and knobs lie ON TOP of the seat back instead
+ * (two short lanes over the pad, `stack` = 'top'), and the box is taller to take them.
  * The lid, its battens and its gasket stay clear: the free height is measured up to the underside of the lid frame and battens, not to the lid panel.
  */
 import type { Params } from '../params';
@@ -61,6 +63,8 @@ export interface StowPlan {
   margin: { lengthIn: number; widthIn: number; heightIn: number };
   fits: boolean;
   items: StowItem[];
+  /** Where the wedges and knobs lie: 'floor' (strips beside the cushion) or 'top' (over the seat back, D-54). */
+  stack: 'floor' | 'top';
   /** Rigid world transform that carries the back's frame to its stowed pose, and the stud-hole centers on the box end (seat off, plugs in). */
   backMove: Mat4;
   holes: Array<{ tag: 'L' | 'R'; center: Vec3 }>;
@@ -110,7 +114,7 @@ export function seatStowPlan(p: Params, L: Layout, parts: Part[]): StowPlan {
   };
   const empty: StowPlan = {
     applicable: false, interior, sizes: { back: [0, 0, 0], cushion: [0, 0, 0], wedge: [0, 0, 0], knob: [0, 0, 0] }, need: { lengthIn: 0, widthIn: 0, heightIn: 0 },
-    margin: { lengthIn: 0, widthIn: 0, heightIn: 0 }, fits: false, items: [], backMove: translation(0, 0, 0), holes: [],
+    margin: { lengthIn: 0, widthIn: 0, heightIn: 0 }, fits: false, items: [], stack: 'floor', backMove: translation(0, 0, 0), holes: [],
   };
   if (!sup.rear || !back.length || !cushion || !wedgeL || !wedgeR) return empty;
 
@@ -136,10 +140,13 @@ export function seatStowPlan(p: Params, L: Layout, parts: Part[]): StowPlan {
   // Fore-aft: the cushion (floor level) must stop short of the 1 in insert backers at the fore end; the back (above the backers) must clear the coaming ledge at both ends
   // (the ledge stands 'coamW - ply' inboard of the wall from the top of the ply wall up).
   const ledge = Math.max(0, g.coamW - g.pl);
+  const baseW = Math.max(backSize[1], cushionSize[1]);
+  const stack: 'floor' | 'top' = baseW + 2 * stripW + clear <= avail.widthIn + 1e-9 ? 'floor' : 'top';
+  const topH = stack === 'top' ? Math.max(wedgeSize[2], knobSize[2]) : 0;
   const need = {
     lengthIn: Math.max(cushionSize[0] + BACKER_IN + clear, backSize[0] + 2 * ledge + clear),
-    widthIn: Math.max(backSize[1], cushionSize[1]) + 2 * stripW + clear,
-    heightIn: BOX_FILLET_IN + cushionSize[2] + backSize[2],
+    widthIn: stack === 'floor' ? baseW + 2 * stripW + clear : baseW + clear,
+    heightIn: BOX_FILLET_IN + cushionSize[2] + backSize[2] + topH,
   };
   const margin = { lengthIn: avail.lengthIn - need.lengthIn, widthIn: avail.widthIn - need.widthIn, heightIn: avail.heightIn - need.heightIn };
   const fits = margin.lengthIn >= -1e-9 && margin.widthIn >= -1e-9 && margin.heightIn >= -1e-9;
@@ -153,8 +160,11 @@ export function seatStowPlan(p: Params, L: Layout, parts: Part[]): StowPlan {
   const Mb = col(u, [0, 1, 0], w, s.P);
   const backMove = multiply(Ms, rigidInverse(Mb));
   const half = cushionSize[1] / 2;
-  const yWedge = half + GAP_IN; // the strip's inner edge
+  const yWedge = stack === 'floor' ? half + GAP_IN : 2; // the strip's inner edge (on top of the back: two lanes 2 in off the center)
   const yKnob = yWedge + wedgeSize[1] + GAP_IN + KNOB_R_IN;
+  const zTopStack = zBack + backSize[2];
+  const zItem = stack === 'floor' ? interior.zRest : zTopStack;
+  const xItem = stack === 'floor' ? xa : xb + (backSize[0] - (wedgeSize[0] + GAP_IN + knobSize[0])) / 2;
   const items: StowItem[] = [
     { label: 'seat back (frame, panel and pad)', ids: back.map((x) => x.id), box: { min: [xb, -backSize[1] / 2, zBack], max: [xb + backSize[0], backSize[1] / 2, zBack + backSize[2]] } },
     { label: 'seat cushion', ids: ['seat-cushion'], box: { min: [xa, -half, zCushion], max: [xa + cushionSize[0], half, zCushion + cushionSize[2]] } },
@@ -162,10 +172,13 @@ export function seatStowPlan(p: Params, L: Layout, parts: Part[]): StowPlan {
   for (const sg of [1, -1] as const) {
     const tag = sg > 0 ? 'L' : 'R';
     const y0 = sg > 0 ? yWedge : -(yWedge + wedgeSize[1]);
-    items.push({ label: `wedge ${tag}`, ids: [`seat-wedge-${tag}`], box: { min: [xa, y0, interior.zRest], max: [xa + wedgeSize[0], y0 + wedgeSize[1], interior.zRest + wedgeSize[2]] } });
-    items.push({ label: `knob and stud ${tag}`, ids: [`seat-knob-${tag}`], box: { min: [xa, sg * yKnob - KNOB_R_IN, interior.zRest], max: [xa + knobSize[0], sg * yKnob + KNOB_R_IN, interior.zRest + 2 * KNOB_R_IN] } });
+    // On top the knob lies behind the wedge in the same lane (stud pointing fore, head aft), so both fit the back's length.
+    const kx = stack === 'floor' ? xItem : xItem + wedgeSize[0] + GAP_IN;
+    const ky = stack === 'floor' ? sg * yKnob : sg * (yWedge + wedgeSize[1] / 2);
+    items.push({ label: `wedge ${tag}`, ids: [`seat-wedge-${tag}`], box: { min: [xItem, y0, zItem], max: [xItem + wedgeSize[0], y0 + wedgeSize[1], zItem + wedgeSize[2]] } });
+    items.push({ label: `knob and stud ${tag}`, ids: [`seat-knob-${tag}`], box: { min: [kx, ky - KNOB_R_IN, zItem], max: [kx + knobSize[0], ky + KNOB_R_IN, zItem + 2 * KNOB_R_IN] } });
   }
-  return { applicable: true, interior, sizes: { back: backSize, cushion: cushionSize, wedge: wedgeSize, knob: knobSize }, need, margin, fits, items, backMove, holes: studHoles(p, L) };
+  return { applicable: true, interior, sizes: { back: backSize, cushion: cushionSize, wedge: wedgeSize, knob: knobSize }, need, margin, fits, items, stack, backMove, holes: studHoles(p, L) };
 }
 
 function moveBy(part: Part, m: Mat4): void {

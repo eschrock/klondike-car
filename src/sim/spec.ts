@@ -1,23 +1,22 @@
 /**
- * Turns the parts list into a physics spec (SI units, model frame): rigid-body mass properties, wheel and kingpin
- * geometry, the tongue-tip pull point and hull collider boxes. Pure data; no physics engine and no DOM (phase-2 spec
- * "Simulation"; D-12, D-25, D-26).
+ * Turns the parts list into a physics spec (SI units, model frame): rigid-body mass properties, wheel geometry, the bridle-eye pull point and hull collider boxes.
+ * Pure data; no physics engine and no DOM (phase-2 spec "Simulation"; D-12, D-56).
  *
- * Bodies (spec 8.2): chassis (all chassis parts + rider + cargo as fixed mass, plus the visual-only tie rod, bellcrank, links and tongue), two knuckle
- * bodies 'steer-L' / 'steer-R' on their own vertical kingpins, and four wheels. The tie rod is replaced by position motors that command each knuckle to its
- * solved angle (`solveSteer`). Parts tagged 'truck' are ignored.
+ * Bodies: chassis (all chassis parts + rider + cargo as fixed mass), the pivoting front axle ('front-axle': beam, stubs, clamps, kingpin, tongue, shackle, rope) on a vertical
+ * hinge at the kingpin with the steering lock as its limits (D-56), and four wheels on revolute joints (the front pair on the front axle). Parts tagged 'truck' are ignored.
+ * The parts must be built with steerDeg 0 (the neutral pose): poses are relative to the build pose.
  */
-import { ackSpec, type Params } from '../params';
-import { lockLimits, type AckSpec } from '../model/ackermann';
-import { partOBB, worldAABB } from '../model/bounds';
+import type { Params } from '../params';
+import { partOBB } from '../model/bounds';
 import type { Part, Vec3 } from '../model/types';
 import { translationOf } from '../model/mat4';
+import { computeLayout } from '../model/layout';
 import { bodyMass, KG_PER_LB, M_PER_IN, principalSI, G, type BodyMass } from './massprops';
 import { qFromColumns, scale, sub, type Quat } from './math';
 
 export const WHEEL_IDS = ['wheel-FL', 'wheel-FR', 'wheel-RL', 'wheel-RR'] as const;
 export type WheelId = (typeof WHEEL_IDS)[number];
-export type SimBodyId = 'chassis' | 'steer-L' | 'steer-R' | WheelId;
+export type SimBodyId = 'chassis' | 'front-axle' | WheelId;
 
 export interface SimBody {
   id: SimBodyId;
@@ -36,33 +35,21 @@ export interface HullBox {
   partId: string;
 }
 
-/** Rigid bodies the sim does not integrate: their mass rides on the chassis and the viewer poses them analytically (`poseMatrices`). */
-export const VISUAL_BODIES = ['tie-rod', 'bellcrank', 'tongue', 'drag-link', 'tongue-link'] as const;
-const isVisualBody = (b: string) => (VISUAL_BODIES as readonly string[]).includes(b);
-
 export interface SimSpec {
-  /** Bodies present in this spec (chassis, the two knuckles, four wheels). */
+  /** Bodies present in this spec (chassis, front axle, four wheels). */
   bodyIds: SimBodyId[];
   bodies: Partial<Record<SimBodyId, SimBody>>;
-  hull: { chassis: HullBox[]; 'steer-L': HullBox[]; 'steer-R': HullBox[] };
+  hull: { chassis: HullBox[] };
   wheelRadiusM: number;
   wheelWidthM: number;
-  /** Wheel centers at zero steer, model frame, meters. */
+  /** Wheel centers, model frame, meters. */
   wheelCentersM: Record<WheelId, Vec3>;
-  /** The midpoint of the two kingpins. */
-  kingpinM: Vec3;
-  /** The two kingpins, meters. */
-  kingpinsM: { L: Vec3; R: Vec3 };
-  /** Ackermann kinematics (inches/degrees, the model's own source of truth). */
-  ack: AckSpec;
-  /** Tow lock, rad: the inner wheel angle. */
-  lockRad: number;
-  /** Tongue yaw stop, deg. */
-  tongueMaxYawDeg: number;
-  /** Tongue hinge, model frame, meters: where the pull force acts on the chassis. */
-  tongueHingeM: Vec3;
-  /** Tongue tip (or bridle attachment): where the pull force acts, model frame at zero steer, meters. */
+  /** Tongue tie (the bridle shackle), model frame, meters: where the pull force acts, on the FRONT-AXLE body. */
   pullPointM: Vec3;
+  /** Kingpin hinge point (vertical axis), model frame, meters. */
+  kingpinM: Vec3;
+  /** Steering lock, degrees each way (the stop blocks, D-56). */
+  steerLockDeg: number;
   /** Whole-cart mass, CG (model frame, m) and weight in newtons. */
   totalMassKg: number;
   cgM: Vec3;
@@ -86,7 +73,7 @@ function toBody(id: SimBodyId, b: BodyMass): SimBody {
 function hullBoxes(parts: Part[], cgIn: Vec3): HullBox[] {
   const out: HullBox[] = [];
   for (const p of parts) {
-    if (p.geometry.type === 'wheel' || p.payload || p.group === 'reference' || /^bridle/.test(p.id) || isVisualBody(p.body)) continue;
+    if (p.geometry.type === 'wheel' || p.payload || p.group === 'reference' || /^bridle/.test(p.id)) continue;
     const o = partOBB(p);
     if (Math.max(...o.half) * 2 < 2) continue; // hardware and other small bits do not matter for ground contact
     out.push({
@@ -101,7 +88,7 @@ function hullBoxes(parts: Part[], cgIn: Vec3): HullBox[] {
 
 export function buildSimSpec(parts: Part[], p: Params, opts: SpecOptions = {}): SimSpec {
   const sim = parts.filter((x) => x.body !== 'truck');
-  const chassisParts = sim.filter((x) => x.body === 'chassis' || x.body === 'rider' || x.body === 'cargo' || isVisualBody(x.body));
+  const chassisParts = sim.filter((x) => x.body === 'chassis' || x.body === 'rider' || x.body === 'cargo');
 
   const riderParts = sim.filter((x) => x.body === 'rider');
   const riderNow = riderParts.reduce((s, x) => s + x.massLb, 0);
@@ -110,10 +97,12 @@ export function buildSimSpec(parts: Part[], p: Params, opts: SpecOptions = {}): 
     if (x.body === 'rider' && opts.riderMassLb !== undefined) return riderNow > 0 ? (x.massLb * opts.riderMassLb) / riderNow : 0;
     return x.massLb;
   };
-  // A custom rider mass with no rider parts present has nothing to attach to: put it on the (first) chassis seat CG.
   const chassis = bodyMass(chassisParts, massOf);
 
-  const bodies: Partial<Record<SimBodyId, SimBody>> = { chassis: toBody('chassis', chassis) };
+  const axleParts = sim.filter((x) => x.body === 'front-axle');
+  if (axleParts.length === 0) throw new Error('sim: no front-axle parts in the model');
+  const bodies: Partial<Record<SimBodyId, SimBody>> = { chassis: toBody('chassis', chassis), 'front-axle': toBody('front-axle', bodyMass(axleParts)) };
+  const L = computeLayout(p);
   const wheelCentersM = {} as Record<WheelId, Vec3>;
   const wheelCentersIn = {} as Record<WheelId, Vec3>;
   let wheelRadiusM = (p.wheelDiameterIn / 2) * M_PER_IN;
@@ -122,16 +111,18 @@ export function buildSimSpec(parts: Part[], p: Params, opts: SpecOptions = {}): 
     const part = sim.find((x) => x.id === id);
     if (!part) throw new Error(`sim: wheel part ${id} missing from the model`);
     const g = part.geometry;
+    let rr = wheelRadiusM;
+    let w = wheelWidthM;
     if (g.type === 'wheel') {
-      wheelRadiusM = (g.diameter / 2) * M_PER_IN;
-      wheelWidthM = g.width * M_PER_IN;
+      rr = (g.diameter / 2) * M_PER_IN;
+      w = g.width * M_PER_IN;
+      wheelRadiusM = rr;
+      wheelWidthM = w;
     }
     const c = translationOf(part.transform);
     wheelCentersIn[id] = c;
     wheelCentersM[id] = inM(c);
     const m = part.massLb * KG_PER_LB;
-    const rr = wheelRadiusM;
-    const w = wheelWidthM;
     // Solid disc: axle (local Y) = ½ m r², transverse = ¼ m r² + m w²/12.
     const it = 0.25 * m * rr * rr + (m * w * w) / 12;
     bodies[id] = {
@@ -139,55 +130,27 @@ export function buildSimSpec(parts: Part[], p: Params, opts: SpecOptions = {}): 
     };
   }
 
-  const ack = ackSpec(p);
-  const hubZ = wheelCentersIn['wheel-FL'][2];
-  // Kingpins at hub height (the kinematics are planar about vertical axes through these points).
-  const kL: Vec3 = [ack.kx, ack.kpHalf, hubZ];
-  const kR: Vec3 = [ack.kx, -ack.kpHalf, hubZ];
-  const kingpinsM = { L: inM(kL), R: inM(kR) };
-  const kingpinIn: Vec3 = [ack.kx, 0, hubZ];
-  let steerMassLb = 0;
-  const knuckleHull = { L: [] as HullBox[], R: [] as HullBox[] };
-  for (const side of ['L', 'R'] as const) {
-    const knuckleParts = sim.filter((x) => x.body === (side === 'L' ? 'steer-L' : 'steer-R'));
-    const bm = bodyMass(knuckleParts);
-    const id: SimBodyId = side === 'L' ? 'steer-L' : 'steer-R';
-    bodies[id] = toBody(id, bm);
-    steerMassLb += bm.massLb;
-    knuckleHull[side] = hullBoxes(knuckleParts, bm.cgIn);
-  }
+  // Pull point: the tie hole of the tongue plate (where the shackle and bridle attach), at the tie height, on the centerline.
+  const pullIn: Vec3 = [L.tongue.holeX, 0, L.tongue.tieZ];
+  // Kingpin hinge: the vertical bolt through the beam, tongue plate, thrust washer and king beam; its axis is at (king.x, 0).
+  const kingIn: Vec3 = [L.king.x, 0, (L.steer.beamBot + L.king.top) / 2];
 
-  // Pull point: the tongue tip, or (no tongue part, e.g. a removed-tongue view) where it would be.
-  const tongue = sim.find((x) => x.id === 'tongue');
-  let pullIn: Vec3;
-  if (tongue) {
-    const bb = worldAABB(tongue);
-    pullIn = [bb.max[0], (bb.min[1] + bb.max[1]) / 2, (bb.min[2] + bb.max[2]) / 2];
-  } else {
-    pullIn = [ack.tongueHinge[0] + p.tongueLengthIn, 0, hubZ];
-  }
-
-  const total = chassis.massLb + steerMassLb + WHEEL_IDS.reduce((s, id) => s + bodies[id]!.massKg / KG_PER_LB, 0);
+  const total = chassis.massLb + bodies['front-axle']!.massKg / KG_PER_LB + WHEEL_IDS.reduce((s, id) => s + bodies[id]!.massKg / KG_PER_LB, 0);
   const all = Object.values(bodies) as SimBody[];
   const cg: Vec3 = [0, 0, 0];
   for (const b of all) for (let k = 0; k < 3; k++) cg[k] += b.massKg * b.cgM[k];
   const totalKg = all.reduce((s, b) => s + b.massKg, 0);
-  const towInner = lockLimits(ack).innerDeg;
 
   return {
-    bodyIds: ['chassis', 'steer-L', 'steer-R', ...WHEEL_IDS],
+    bodyIds: ['chassis', 'front-axle', ...WHEEL_IDS],
     bodies,
-    hull: { chassis: hullBoxes(chassisParts, chassis.cgIn), 'steer-L': knuckleHull.L, 'steer-R': knuckleHull.R },
+    hull: { chassis: hullBoxes(chassisParts, chassis.cgIn) },
     wheelRadiusM,
     wheelWidthM,
     wheelCentersM,
-    kingpinM: inM(kingpinIn),
-    kingpinsM,
-    ack,
-    lockRad: (towInner * Math.PI) / 180,
-    tongueMaxYawDeg: p.tongueMaxYawDeg,
-    tongueHingeM: inM([ack.tongueHinge[0], 0, hubZ]),
     pullPointM: inM(pullIn),
+    kingpinM: inM(kingIn),
+    steerLockDeg: Math.abs(p.steerLockDeg),
     totalMassKg: totalKg,
     cgM: [cg[0] / totalKg, cg[1] / totalKg, cg[2] / totalKg],
     weightN: totalKg * G,

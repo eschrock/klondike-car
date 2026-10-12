@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { defaultParams, validateParams } from '../params';
 import { buildModel, type ViewState } from '../model';
+import { partOBB } from '../model/bounds';
+import { computeLayout } from '../model/layout';
 import { translation } from '../model/mat4';
 import type { Part } from '../model/types';
 import { buildTruckBed } from './bed';
-import { checkTruckFit, computeFeasibleWindows, configParts, validatorError, type CartView } from './fit';
+import { CONFIGS, checkTruckFit, computeFeasibleWindows, configParts, validatorError, type CartView } from './fit';
 
 const stub = (p = defaultParams()) => (v: CartView) => buildModel(p, v as ViewState);
 
@@ -48,7 +50,7 @@ describe('checkTruckFit with the stub model', () => {
       expect(c.fits).toBe(c.colliding.length === 0 && c.modeFeasible);
     }
   });
-  it('beside fits at default track in transport config (D-8: tongue/handle must come off)', () => {
+  it('beside fits at default track in transport config (D-8: the handle comes off)', () => {
     const c = r.cases.find((x) => x.mode === 'beside' && x.config === 'removed')!;
     expect(c.fits).toBe(true);
     expect(c.minClearanceIn).toBeGreaterThanOrEqual(p.truckClearanceIn - 1e-9);
@@ -88,7 +90,7 @@ describe('checkTruckFit synthetic parts', () => {
     const r = checkTruckFit(p, parts);
     // tall box fits in bed (no roof), so make it too long instead
     expect(r.cases.length).toBe(12);
-    const long = (v: CartView) => [box('a', [20, 20, 6], [0, 0, 3]), ...(v.removed ? [] : [box('tongue', [100, 2, 2], [40, 0, 3], { removable: true })])];
+    const long = (v: CartView) => [box('a', [20, 20, 6], [0, 0, 3]), ...(v.removed ? [] : [box('handle', [100, 2, 2], [40, 0, 3], { removable: true })])];
     const r2 = checkTruckFit(p, long);
     expect(r2.cases.filter((c) => c.config === 'installed').some((c) => c.fits)).toBe(false);
     expect(r2.cases.filter((c) => c.config === 'removed').some((c) => c.fits)).toBe(true);
@@ -109,81 +111,126 @@ describe('fit performance', () => {
   });
 });
 
-describe('real cart (D-6, D-23)', () => {
+describe('real cart (D-6, D-23, D-54)', () => {
   const p = defaultParams();
   const build = (q: ReturnType<typeof defaultParams>) => (v: CartView) => buildModel(q, v as ViewState);
   const find = (r: ReturnType<typeof checkTruckFit>, mode: string, config: string) =>
     r.cases.filter((c) => c.mode === mode && c.config === config);
   const r = checkTruckFit(p, build(p));
-  // The same cart on a 48" wheelbase: straddling the wells works there (at the 44" default it does not, D-27).
-  const p1 = { ...p, wheelbaseIn: 48 };
-  const r1 = checkTruckFit(p1, build(p1));
 
-  it('has three configurations; the tongue-off cart is shorter than installed, removed shorter still', () => {
-    // The oak tongue (24" ahead of the front axle, hinged ahead of the beam) sets the installed length: taking it off shortens the cart.
-    expect(r.dims['tongue-off'].lengthIn).toBeLessThan(r.dims.installed.lengthIn);
-    expect(r.dims.removed.lengthIn).toBeLessThanOrEqual(r.dims['tongue-off'].lengthIn);
-    expect(configParts('tongue-off', build(p)).map((x) => x.id + x.name).some((n) => /tongue|bridle/i.test(n))).toBe(false);
+  it('has three configurations; the tongue plate and shackle (which reach 4 in past the bow) make the installed cart longer than bridle-off, and removed (handle, seat back, tongue off) is shorter and lower', () => {
+    // D-56: the tongue plate reaches tongueTieAheadIn past the bow tip and carries the shackle, so the installed box is longer than bridle-off (tongue, shackle and rope off).
+    // The rope is not rigid and never counts in the fit. The handlebow, seat back and the other removables are what 'removed' takes off.
+    expect(r.dims.installed.lengthIn).toBeGreaterThan(r.dims['bridle-off'].lengthIn + 0.3);
+    expect(r.dims.removed.lengthIn).toBeLessThanOrEqual(r.dims['bridle-off'].lengthIn);
+    // Pinned (defaults, 2026-10-11): installed 75.1 x 40.5 x 37.6 in, bridle-off 74.4 long, removed 71.1 long and 24.6 high. Width = rear track 35.5 + tire 3.5 + hub/axle ends.
+    expect(r.dims.installed.lengthIn).toBeCloseTo(75.1, 0);
+    expect(r.dims.installed.widthIn).toBeCloseTo(40.5, 1);
+    expect(r.dims.installed.heightIn).toBeCloseTo(37.6, 0);
+    expect(r.dims['bridle-off'].lengthIn).toBeCloseTo(74.4, 0);
+    expect(r.dims.removed.lengthIn).toBeCloseTo(71.1, 0);
+    expect(r.dims.removed.heightIn).toBeCloseTo(24.6, 0);
+    expect(r.dims.removed.heightIn).toBeLessThan(r.dims.installed.heightIn);
   });
-  it('straddle fits (transport config) with wheel footprints wholly outside the well zone', () => {
-    // At the Phase 1 48" wheelbase; at the 44" default straddle no longer fits (next test), the cart goes beside the wells instead.
-    const c = find(r1, 'straddle', 'removed').find((x) => x.fits)!;
-    expect(c).toBeTruthy();
-    const ws = p1.truckWellStartIn, we = ws + p1.truckWellLengthIn;
-    const parts = configParts('removed', build(p1));
-    const M = c.placement!.transform;
-    // wheel x-extent in truck frame = center (via M) +- radius
-    for (const w of parts.filter((x) => x.geometry.type === 'wheel')) {
-      const cx = M[0] * w.transform[12] + M[4] * w.transform[13] + M[12];
-      const rad = (w.geometry as { diameter: number }).diameter / 2;
-      const outside = cx + rad <= ws - p1.truckClearanceIn + 1e-6 || cx - rad >= we + p1.truckClearanceIn - 1e-6;
-      expect(outside).toBe(true);
+  it("the 'bridle-off' configuration removes the tongue plate, its shackle and the rope (ids starting 'bridle') and nothing else: the king beam, kingpin, axle beam and steering stops stay", () => {
+    const inst = configParts('installed', build(p)).map((x) => x.id);
+    const off = configParts('bridle-off', build(p)).map((x) => x.id);
+    const gone = inst.filter((id) => !off.includes(id));
+    expect(gone.sort()).toEqual(['bridle', 'bridle-eye', 'bridle-tongue']);
+    for (const id of ['beam-F', 'kingpin', 'king-beam', 'king-thrust', 'steer-stop-L', 'steer-stop-R', 'axle-FL', 'axle-FR', 'wheel-FL', 'wheel-FR']) expect(off, id).toContain(id);
+    // The full transport config takes the tongue off too (they are removable), and keeps the axle.
+    const removed = configParts('removed', build(p)).map((x) => x.id);
+    for (const id of ['bridle', 'bridle-eye', 'bridle-tongue']) expect(removed, id).not.toContain(id);
+    for (const id of ['beam-F', 'kingpin', 'king-beam']) expect(removed, id).toContain(id);
+    expect(CONFIGS).toEqual(['installed', 'bridle-off', 'removed']);
+  });
+  it('the fit builds the front axle straight (steerDeg 0), the tongue plate counts as steel in the clearance check but the rope does not, and the tongue tip is tongueTieAheadIn past the bow', () => {
+    const view: CartView[] = [];
+    configParts('installed', (v) => { view.push(v); return build(p)(v); });
+    expect(view[0].steerDeg ?? 0).toBe(0);
+    const parts = configParts('installed', build(p));
+    const beam = parts.find((x) => x.id === 'beam-F')!;
+    expect(Math.abs(beam.transform[1])).toBeLessThan(1e-9); // no yaw: the beam lies along Y
+    const tongue = parts.find((x) => x.id === 'bridle-tongue')!;
+    const o = partOBB(tongue);
+    expect(o.center[0] + o.half[0]).toBeCloseTo(computeLayout(p).tongue.tipX, 4);
+    // A tongue plate 100 in long blocks the installed fit (and fits once the tongue is off); a 100 in rope never counts.
+    const cart = (id: string, name: string) => (_v: CartView) => [box('a', [20, 20, 6], [0, 0, 3]), { ...box(id, [100, 2, 2], [40, 0, 3]), name }];
+    const rt = checkTruckFit(p, cart('bridle-tongue', 'Bridle tongue plate'));
+    expect(rt.cases.filter((c) => c.config === 'installed').some((c) => c.fits)).toBe(false);
+    expect(rt.cases.filter((c) => c.config === 'bridle-off').some((c) => c.fits)).toBe(true);
+    expect(checkTruckFit(p, cart('bridle', 'Bridle rope')).cases.filter((c) => c.config === 'installed').some((c) => c.fits)).toBe(true);
+  });
+  it('beside fits in every configuration and both orientations at the defaults, with the tires wholly inside the well gap', () => {
+    for (const config of ['installed', 'bridle-off', 'removed']) {
+      const fits = find(r, 'beside', config).filter((x) => x.fits);
+      expect(fits.length).toBe(2); // nose to the tailgate and nose to the bulkhead
+      for (const c of fits) expect(c.minClearanceIn).toBeGreaterThanOrEqual(p.truckClearanceIn - 1e-9);
     }
-    expect(c.minClearanceIn).toBeGreaterThanOrEqual(p1.truckClearanceIn - 1e-9);
+    // Tire edges (in the truck frame, via the placement) are inside the well gap by the required clearance.
+    const c = find(r, 'beside', 'removed').find((x) => x.fits)!;
+    const M = c.placement!.transform;
+    const parts = configParts('removed', build(p));
+    for (const w of parts.filter((x) => x.geometry.type === 'wheel')) {
+      const cy = M[1] * w.transform[12] + M[5] * w.transform[13] + M[13];
+      const half = (w.geometry as { width: number }).width / 2;
+      expect(Math.abs(cy) + half + p.truckClearanceIn).toBeLessThanOrEqual(p.truckWellGapIn / 2 + 1e-6);
+    }
   });
-  it('straddle fails for a short wheelbase (44), which is now the default; the cart rides beside the wells in both orientations (D-27)', () => {
+  it('straddle never fits the 10 in wheels with the 12 in front overhang (D-54), at any reasonable wheelbase; beside is the only mode', () => {
+    // Straddling needs both axles wholly outside the 34 in well zone (so >= 45 in between axle centers) and no tire over the 1 in hinge gap at x = 60.5;
+    // the 71.5 in cart then no longer fits in the 80.5 in of bed + tailgate. The previous 48 in cart straddled; this one does not (the old 'straddle at 48' fact is gone).
     expect(p.wheelbaseIn).toBe(44);
-    expect(find(r, 'straddle', 'removed').some((x) => x.fits)).toBe(false);
-    // Same default cart with only the wheelbase put back to 48 straddles again, so 44 is what costs the straddle mode.
-    const q = { ...p, wheelbaseIn: 48 };
-    expect(find(checkTruckFit(q, build(q)), 'straddle', 'removed').some((x) => x.fits)).toBe(true);
-    // The 24" oak tongue makes the assembled cart 81.7" long: it does NOT fit the bed assembled (0.18" over), so the Simple view says to take the tongue off (D-9).
-    // With the tongue off (69.5") it rides beside the wells in both orientations.
-    expect(find(r, 'beside', 'installed').some((x) => x.fits)).toBe(false);
-    const beside = find(r, 'beside', 'tongue-off').filter((x) => x.fits);
-    expect(beside.length).toBeGreaterThanOrEqual(2);
+    for (const wb of [44, 48, 52, 56]) {
+      const q = { ...p, wheelbaseIn: wb };
+      const rq = checkTruckFit(q, build(q));
+      for (const config of ['installed', 'bridle-off', 'removed']) expect(find(rq, 'straddle', config).some((x) => x.fits)).toBe(false);
+    }
+    expect(r.anyFits).toBe(true);
+    expect(r.cases.filter((x) => x.fits).every((x) => x.mode === 'beside')).toBe(true);
+  });
+  it('a longer wheelbase costs the assembled fit first: 48 in still fits as assembled, 52 in fits only with the handle off', () => {
+    const q48 = { ...p, wheelbaseIn: 48 };
+    expect(find(checkTruckFit(q48, build(q48)), 'beside', 'installed').some((x) => x.fits)).toBe(true);
+    const q52 = { ...p, wheelbaseIn: 52 };
+    const r52 = checkTruckFit(q52, build(q52));
+    expect(find(r52, 'beside', 'installed').some((x) => x.fits)).toBe(false);
+    expect(find(r52, 'beside', 'removed').some((x) => x.fits)).toBe(true);
   });
   it('beside fits only when the track fits the well gap', () => {
-    const q = { ...p, rearTrackIn: 40, frontTrackIn: 40 };
+    const q = { ...p, rearTrackIn: 40 };
     const rr = checkTruckFit(q, build(q));
     expect(find(rr, 'beside', 'removed').some((x) => x.fits)).toBe(false);
     expect(find(r, 'beside', 'removed').some((x) => x.fits)).toBe(true);
   });
-  it('feasible windows: max track is monotone-consistent and contains the current fit', async () => {
+  it('feasible windows: max track is monotone-consistent and contains the current fit; straddle has no window', async () => {
     const w = await computeFeasibleWindows(p, (q, v) => buildModel(q, v as ViewState));
     expect(w).not.toBeNull();
     const beside = w!.windows.find((x) => x.mode === 'beside' && x.config === 'removed')!;
     expect(beside.fitsNow).toBe(true);
     expect(beside.maxTrackIn!).toBeGreaterThanOrEqual(p.rearTrackIn);
-    const q = { ...p, rearTrackIn: beside.maxTrackIn!, frontTrackIn: beside.maxTrackIn! };
+    // Pinned: the widest rear track is 37 in (tire 3.5 in: 40.5 in outside, the 41.5 in well gap less 2 x 0.5 in clearance).
+    expect(beside.maxTrackIn!).toBeCloseTo(p.truckWellGapIn - 2 * p.truckClearanceIn - p.tireWidthIn, 0);
+    const q = { ...p, rearTrackIn: beside.maxTrackIn! };
     expect(find(checkTruckFit(q, build(q)), 'beside', 'removed').some((x) => x.fits)).toBe(true);
-    const wider = { ...p, rearTrackIn: beside.maxTrackIn! + 1, frontTrackIn: beside.maxTrackIn! + 1 };
+    const wider = { ...p, rearTrackIn: beside.maxTrackIn! + 1 };
     expect(find(checkTruckFit(wider, build(wider)), 'beside', 'removed').some((x) => x.fits)).toBe(false);
-    const st = w!.windows.find((x) => x.mode === 'straddle' && x.config === 'removed')!;
-    // At the 44" default the cart does NOT straddle (see above): the window starts above the current wheelbase.
-    expect(st.fitsNow).toBe(false);
-    expect(st.wheelbaseMinIn!).toBeGreaterThan(p.wheelbaseIn);
-    // ... and the Phase 1 48" cart is inside its own window.
-    const p1w = await computeFeasibleWindows(p1, (q, v) => buildModel(q, v as ViewState));
-    const st1 = p1w!.windows.find((x) => x.mode === 'straddle' && x.config === 'removed')!;
-    expect(st1.fitsNow).toBe(true);
-    expect(st1.wheelbaseMinIn!).toBeLessThanOrEqual(p1.wheelbaseIn);
-    // The validator may cap both at the same track (M1); the bed alone is what separates the modes. (Compared on the Phase 1 cart:
-    // at the 44" default straddle has no feasible track at all, so there is no straddle maximum to compare.)
-    expect(st.maxTrackIn).toBeNull();
-    const beside1 = p1w!.windows.find((x) => x.mode === 'beside' && x.config === 'removed')!;
-    expect(st1.maxTrackIn!).toBeGreaterThanOrEqual(beside1.maxTrackIn!);
-    expect(st1.maxTrackBedOnlyIn!).toBeGreaterThan(beside1.maxTrackBedOnlyIn!);
+    // Wheelbase window: the validator sets the minimum (44 in, where the foot stop meets the end of the flat deck); the bed sets the maximum (the cart gets too long).
+    expect(beside.wheelbaseMinIn!).toBeCloseTo(44, 0);
+    expect(beside.wheelbaseBoundedByValidator).toBe(true);
+    expect(beside.wheelbaseMaxIn!).toBeGreaterThan(p.wheelbaseIn);
+    expect(beside.wheelbaseMaxIn!).toBeCloseTo(53.25, 0);
+    const besideInstalled = w!.windows.find((x) => x.mode === 'beside' && x.config === 'installed')!;
+    expect(besideInstalled.wheelbaseMaxIn!).toBeLessThan(beside.wheelbaseMaxIn!); // the handle makes the assembled cart longer
+    expect(besideInstalled.wheelbaseMaxIn!).toBeCloseTo(49.25, 0);
+    // Straddle: nothing is feasible (see the test above), so the windows are empty.
+    for (const config of ['installed', 'bridle-off', 'removed']) {
+      const st = w!.windows.find((x) => x.mode === 'straddle' && x.config === config)!;
+      expect(st.fitsNow).toBe(false);
+      expect(st.maxTrackIn).toBeNull();
+      expect(st.wheelbaseMinIn).toBeNull();
+      expect(st.wheelbaseMaxIn).toBeNull();
+    }
   }, 60000);
 });
 
@@ -240,7 +287,8 @@ describe('window validity (round-2 M1)', () => {
     }
   }, 60000);
   it('reports nothing feasible (and why) when the current design itself fails validation', async () => {
-    const p = { ...defaultParams(), autoNoseGeometry: 0, noseWidthIn: defaultParams().bodyWidthIn + 2 };
+    // A body too wide to clear the rear tires: the validator rejects it (the nose-width example of the Ackermann hull is gone, D-54).
+    const p = { ...defaultParams(), bodyWidthIn: 40 };
     expect(validatorError(p)).not.toBeNull();
     const w = await computeFeasibleWindows(p, buildQ);
     for (const x of w!.windows) {

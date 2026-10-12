@@ -1,12 +1,11 @@
 /**
- * Lighting (D-9, D-41) and the hardware allowance. The front lantern bracket and the flag-pole socket clip onto the front
- * transom ; the rear light mounts on a flat printed plate on the rear transom. Brackets are
+ * Lighting (D-9, D-41) and the hardware allowance. The front lantern bracket and the flag-pole socket clip onto the tip of the bow curl (D-54);
+ * the rear light mounts on a flat printed plate on the rear transom. Brackets are
  * ASA (UV-stable) 2D profiles + depth, so they go straight to an STL in Phase 4; they are not on a primary load path.
  */
 import { STORAGE_LOCATION } from '../params';
 import { STEP, box, span, SIDES, type Ctx } from './build-utils';
-import { beamLayout } from './brake-layout';
-import { cabinSidePoint } from './layout';
+import { sideSlopeAt, sideTopAt } from './layout';
 import { profilePart } from './profile';
 import { storageGeometry } from './storage';
 import type { Part, Vec2, Vec3 } from './types';
@@ -39,7 +38,7 @@ const FASTENER_LB = {
   screw: 0.008, boltSmall: 0.04, boltLarge: 0.09, boltTapped: 0.02, insert: 0.005, knob: 0.02, domino: 0.005, glue: 0.01, nutWasher: 0.03,
 } as const;
 /** Bolts whose shank is already a separate part (kingpin, eye bolts, U-bolts, brake and handle pins): only their nuts and washers are left for the allowance. */
-const ITEMIZED_BOLT = /^(kingpin$|eyebolt|clamp-|brake-(pivot-pin|link-pin-[TB]|park-pin|lever-pin)|handle-pin|seat-knob)/;
+const ITEMIZED_BOLT = /^(bridle-eye|eyebolt|clamp-|brake-(pivot-pin|link-pin-[TB]|park-pin|lever-pin)|handle-pin|seat-knob)/;
 const HARDWARE_FALLBACK_LB = 2.5;
 const HARDWARE_SIZE = [2, 2, 1.25] as const;
 /** Cabin reflectors at these fore-aft fractions of the cabin length (clear of the signs and the nose). */
@@ -80,22 +79,22 @@ export function buildLighting(ctx: Ctx): Part[] {
   const parts: Part[] = [];
   const common = { group: 'lighting', step: STEP.finish } as const;
 
-  // ── Front: clips on the front transom, lantern left of center, flag-pole socket right of center ──
-  const x0c = L.xFront - L.transom;
-  const yc = Math.max(2.3, Math.min(4.5, L.hwN - CLIP.width / 2 - 0.15));
-  // The front transom top follows the sheer (L.noseGunTop) and arcs up by the crown (D-44): the clip sits on the highest point under its width, the inboard edge.
-  const wTopF = L.hwN + L.side;
-  const yIn = Math.max(0, yc - CLIP.width / 2);
-  const zT = L.noseGunTop + ctx.p.transomCrownIn * (1 - (yIn / wTopF) ** 2);
-  const clipJoint = (to: string) => [{ type: 'knob' as const, to, count: 2, size: 'M5 thumbscrew in the leg, clamping the transom', note: 'tool-free; friction clamp + the web over the top (not a load path)' }];
+  // ── Front: clips over the tip of the bow curl (D-54), lantern left of center, flag-pole socket right of center ──
+  // The curl's tip edge is nearly vertical (bowCurlAngleDeg off the deck); the clip is drawn upright over it, centered on the panel at the tip.
+  const curl = L.curl;
+  const tipTopZ = L.deckTop - curl.thick / 2 + curl.rise + (curl.thick / 2) * Math.sin(curl.angleRad);
+  const x0c = L.xFront - curl.thick / 2 - (curl.thick / 2) * Math.cos(curl.angleRad) * 0;
+  const yc = Math.max(2.3, Math.min(4.5, L.hwC - CLIP.width / 2 - 0.15));
+  const zT = tipTopZ;
+  const clipJoint = (to: string) => [{ type: 'knob' as const, to, count: 2, size: 'M5 thumbscrew in the leg, clamping the curl', note: 'tool-free; friction clamp over the curl\'s top edge (not a load path)' }];
   const lantern = profilePart(ctx, {
-    id: 'lantern-mount', name: 'Front lantern bracket', group: 'lighting', mat: 'print', material: 'ASA', outline: clipOutline(L.transom, true), depth: CLIP.width,
+    id: 'lantern-mount', name: 'Front lantern bracket', group: 'lighting', mat: 'print', material: 'ASA', outline: clipOutline(curl.thick, true), depth: CLIP.width,
     basis: 'xz', origin: [x0c, yc + CLIP.width / 2, zT], removable: true, step: STEP.finish, explode: [0.6, 0, 0.8],
-    joints: clipJoint('transom-front'),
-    notes: 'Printed ASA, 4+ perimeters, printed with the extrusion profile flat on the bed (layers parallel to the profile, strong in bending, P4); 0.25" shelf ribbed or printed in CF-nylon, 1/8" fillets at the inside corners. Heat-set inserts for the M5 stainless thumbscrews (brass is fine inside the plastic, away from the oak). Clips over the front transom and carries the headlight on its forward shelf. Comes off with the light for transport.',
+    joints: clipJoint('bow-curl'),
+    notes: 'Printed ASA, 4+ perimeters, printed with the extrusion profile flat on the bed (layers parallel to the profile, strong in bending, P4); 0.25" shelf ribbed or printed in CF-nylon, 1/8" fillets at the inside corners. Heat-set inserts for the M5 stainless thumbscrews (brass is fine inside the plastic, away from the oak). Clips over the top of the bow curl and carries the headlight on its forward shelf. Comes off with the light for transport.',
   });
   parts.push(lantern);
-  const shelfX0 = x0c + L.transom + CLIP.clearance + CLIP.wall;
+  const shelfX0 = x0c + curl.thick + CLIP.clearance + CLIP.wall;
   const wz = zT + CLIP.clearance + CLIP.wall;
   parts.push(box(ctx, {
     ...common, id: 'front-light', name: 'Front LED headlight', mat: 'fixed', massLb: FRONT_LIGHT_MASS_LB, kind: 'purchased', material: 'LED headlight', fab: 'buy',
@@ -106,15 +105,15 @@ export function buildLighting(ctx: Ctx): Part[] {
     notes: 'Mass is an estimate. Faces forward on the shelf.',
   }));
   parts.push(profilePart(ctx, {
-    id: 'flag-mount', name: 'Flag-pole clip', group: 'lighting', mat: 'print', material: 'ASA', outline: clipOutline(L.transom, false), depth: CLIP.width,
+    id: 'flag-mount', name: 'Flag-pole clip', group: 'lighting', mat: 'print', material: 'ASA', outline: clipOutline(curl.thick, false), depth: CLIP.width,
     basis: 'xz', origin: [x0c, -yc + CLIP.width / 2, zT], removable: true, step: STEP.finish, explode: [0.6, 0, 0.8],
-    joints: clipJoint('transom-front'),
-    notes: 'Printed ASA, 4+ perimeters, profile flat on the bed (P4); heat-set inserts for the M5 stainless thumbscrews (brass is fine inside the plastic). Clips over the front transom, right of center (D-45: there is no prow; the staff socket carries the flag).',
+    joints: clipJoint('bow-curl'),
+    notes: 'Printed ASA, 4+ perimeters, profile flat on the bed (P4); heat-set inserts for the M5 stainless thumbscrews (brass is fine inside the plastic). Clips over the top of the bow curl, right of center (D-45: there is no prow; the staff socket carries the flag).',
   }));
   const sock: [Vec2[], Vec2[]] = [circleLoop(0, 0, FLAG_SOCKET.rOut), circleLoop(0, 0, FLAG_SOCKET.rBore, 16, false)];
   parts.push(profilePart(ctx, {
     id: 'flag-socket', name: 'Flag-pole socket', group: 'lighting', mat: 'print', material: 'ASA', outline: sock[0], holes: [sock[1]], depth: FLAG_SOCKET.height,
-    basis: 'xy', origin: [x0c + L.transom / 2, -yc, wz], removable: true, step: STEP.finish, explode: [0, 0, 1],
+    basis: 'xy', origin: [x0c + curl.thick / 2, -yc, wz], removable: true, step: STEP.finish, explode: [0, 0, 1],
     joints: [{ type: 'pin', to: 'flag-mount', count: 2, size: '#6-32 stainless, into heat-set inserts', note: 'the staff drops in and is held by a thumbscrew' }],
     notes: 'Printed ASA tube for a 1/2" staff, 3" deep.',
   }));
@@ -123,7 +122,7 @@ export function buildLighting(ctx: Ctx): Part[] {
   // The plate sits beside the lift slot (B's 4.5" hand-hold is centered on the transom; a centered plate would cover it and its screws
   // would land in the void), on the right (-y) side, with an oak doubler on the inner face so the screws have > 3/4" of engagement in the 1/2" transom.
   const { p } = ctx;
-  const zTop = L.deckTop + L.sideH;
+  const zTop = L.deckTop + L.sideRear; // the rear transom's top corners
   const plateZ0 = zTop - REAR_PLATE.height;
   const hw2 = REAR_PLATE.width / 2;
   const hz = plateZ0 + REAR_PLATE.height / 2;
@@ -158,17 +157,17 @@ export function buildLighting(ctx: Ctx): Part[] {
     explode: unit(-1, 0, 0.5), notes: 'On the printed plate on the rear transom, off center so the lift slot stays open; mass includes the light (estimate).',
   }));
 
-  // ── Side reflectors (DOT-C2 adhesive-backed), forward and aft on each side ──
-  const cabinLen = L.xc0 - L.xRear;
-  const rp = cabinSidePoint(L, L.deckTop + L.sideH / 2, L.side / 2 + REFLECTOR_SIZE[1] / 2, REFLECTOR_SIZE[2] / 2);
+  // ── Side reflectors (DOT-C2 adhesive-backed), forward and aft on each side: on the outside face of the gunwale, turned to the sled slope ──
+  const reach = L.xSideEnd - L.xRear;
   for (const { s, tag } of SIDES) {
     REFLECTOR_FRACS.forEach((f, i) => {
+      const x = L.xRear + reach * f;
       parts.push(box(ctx, {
         id: `reflector-${tag}${i + 1}`, partNo: 'reflector', name: `Side reflector ${tag}${i + 1}`, group: 'lighting', mat: 'fixed', massLb: REFLECTOR_MASS_LB,
         kind: 'purchased', material: 'reflector', fab: 'buy', step: STEP.finish, size: [...REFLECTOR_SIZE],
-        center: [L.xRear + cabinLen * f, s * rp.y, rp.z], rot: { x: -s * rp.phi },
+        center: [x, s * (L.hwC + L.side + REFLECTOR_SIZE[1] / 2), sideTopAt(L, x) - L.railBand / 2], rot: { y: sideSlopeAt(L, x) },
         sourcing: { vendor: 'Generic 2" × 1" adhesive-backed amber/white side reflector (DOT-C2 class)', costUsd: 2 },
-        notes: 'Stick-on reflector; wipe the varnish clean and press for 60 s (D-41).',
+        notes: 'Stick-on reflector on the gunwale\'s outer face; wipe the varnish clean and press for 60 s (D-41).',
       }));
     });
   }
@@ -179,16 +178,11 @@ export function buildHardware(ctx: Ctx): Part[] {
   const { L } = ctx;
   // Under the deck, centerd in the widest gap between cabin crossmembers (and clear of a tall rear axle beam).
   const zBot = L.deckBot - HARDWARE_SIZE[2];
-  const blockers: Array<[number, number]> = L.cabinJoistX.map((x) => [x - L.joistT / 2, x + L.joistT / 2]);
-  const p = ctx.p;
-  {
-    const bl = beamLayout(p, L.r, L.deckBot - p.railDepthIn, L.xRear + L.transom);
-    if (bl.zB + p.brakeBeamSizeIn / 2 > zBot && bl.zB - p.brakeBeamSizeIn / 2 < L.deckBot) blockers.push([bl.notch.x0, bl.notch.x1]);
-  }
+  const blockers: Array<[number, number]> = L.joistX.map((x) => [x - L.joistT / 2, x + L.joistT / 2]);
   if (L.beamR.top > zBot) blockers.push([L.beamR.x - L.beamR.thick / 2, L.beamR.x + L.beamR.thick / 2]);
   blockers.sort((a, b) => a[0] - b[0]);
   let lo = L.xRear + L.transom, bestLo = lo, bestHi = lo;
-  for (const [b0, b1] of [...blockers, [L.xn, L.xn] as [number, number]]) {
+  for (const [b0, b1] of [...blockers, [L.xFlatEnd, L.xFlatEnd] as [number, number]]) {
     if (b0 - lo > bestHi - bestLo) { bestLo = lo; bestHi = b0; }
     lo = Math.max(lo, b1);
   }

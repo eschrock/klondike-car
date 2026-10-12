@@ -161,9 +161,11 @@ function computeOBBs(part: Part): OBB[] {
     if (bw > 2 * SLAB_IN && (g.outline.length > 4 || g.holes) && area < 0.995 * bw * bh) {
       const n = Math.min(MAX_SLABS, Math.max(2, Math.ceil(bw / SLAB_IN)));
       const out: OBB[] = [];
-      for (let k = 0; k < n; k++) {
-        const xa = b.min[0] + (bw * k) / n, xb = b.min[0] + (bw * (k + 1)) / n;
-        const c = clipStrip(g.outline, xa, xb);
+      // Slab edges: the even split plus every x where the outline has a vertex, so a notch or a step with vertical sides is resolved exactly (a rail with relief notches).
+      const cuts = [...Array.from({ length: n + 1 }, (_, k) => b.min[0] + (bw * k) / n), ...g.outline.map((q) => q[0])].sort((u, v) => u - v).filter((v, i, a) => i === 0 || v - a[i - 1] > 1e-7);
+      for (let k = 0; k + 1 < cuts.length; k++) {
+        const xa = cuts[k], xb = cuts[k + 1];
+        const c = clipStrip(g.outline, xa + 1e-6, xb - 1e-6); // a hair inside, so a vertical outline edge ON a slab edge belongs to neither slab's vertex set
         if (c.length < 3) continue;
         const x0 = Math.min(...c.map((q) => q[0])), x1 = Math.max(...c.map((q) => q[0]));
         const y0 = Math.min(...c.map((q) => q[1])), y1 = Math.max(...c.map((q) => q[1]));

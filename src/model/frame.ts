@@ -1,211 +1,135 @@
 /**
- * Frame: ladder rails or hull-beam girders, plus crossmembers/joists (D-17). Joinery records (Dominos, loose tenons, glue) are added in joinery.ts.
+ * Frame (D-54): two straight ladder rails flush under the chines, the crossmembers (joists) that carry the deck, and the oak axle hangers that drop from each rail to the
+ * rear axle beam. The front pivot (D-56): the rails are only `railDepthF` deep ahead of `railStepX` so the swinging front axle beam passes under them; the KING BEAM is
+ * a crossmember between the rails at the kingpin, and two oak STOP blocks hang under the ends of the end joist. (No front hangers: the front beam is not seated in the
+ * rails.) Joinery records (Dominos, loose tenons, glue) are added in joinery.ts.
  *
  * Side-to-frame tie (build review M6, D-43): the ladder rails run FLUSH UNDER THE CHINES (outer face at hw + side), not inboard of them, so the
- * chine bears on the rail top and is Domino-tied and epoxied to it every `chineTieSpacingIn`; the hull-girder frame already sits under the chine.
+ * chine bears on the rail top and is Domino-tied and epoxied to it every `chineTieSpacingIn`.
  */
-import { FRAME_STYLE } from '../params';
-import { beamLayout } from './brake-layout';
-import { beamSeat, boltLength, inchesText, localPoint, railSection } from './rear-mount';
-import { IN3_PER_FT3, STEP, bandPart, box, span, SIDES, type Ctx } from './build-utils';
-import { sidePath } from './layout';
-import { FRONT_RAIL_REMAIN_MIN_IN, frontBeamSeat } from './front-mount';
-import { frameMat } from './body';
+import { beamSeat, localPoint, railSection } from './rear-mount';
+import { IN3_PER_FT3, STEP, box, span, SIDES, woodMassLb, type Ctx } from './build-utils';
+import { customPart } from './mesh-utils';
+import { atPose, brakeGeometry, rectPts } from './brake-layout';
+import type { Part, Vec2 } from './types';
+
+/** Part id of the joist at index i of `L.joistX` (the king beam is the one at the kingpin). */
+export const joistId = (L: { joistX: number[]; king: { x: number } }, i: number): string => (L.joistX[i] === L.king.x ? 'king-beam' : `joist-${i + 1}`);
 
 /** |y| range of a ladder rail: flush under the chine, outer face at the hull's outer face (D-43). */
 export const ladderRailY = (hw: number, side: number, railT: number): [number, number] => [hw + side - railT, hw + side];
-import type { Mat4, Part, Vec2, Vec3 } from './types';
 
-/**
- * D-45/D-52 frame: the cabin rail (or girder) is one bent lamination from the rear transom to x = xn, following the plan curve with its outer face
- * flush under the chine; the straight nose rail is scarfed on at xn and runs to the front transom, notched for the front beam. One deck level: no step and
- * no shoulder beam. Joists in the curve and in the bow are cut to the rail's inner face.
- */
+const f2 = (v: number) => (Math.round(v * 100) / 100).toString();
+
 export function buildFrame(ctx: Ctx): Part[] {
   const { p, L } = ctx;
   const parts: Part[] = [];
-  const ladder = p.frameStyle === FRAME_STYLE.ladder;
   const jD = p.crossmemberDepthIn;
   const railT = p.railThicknessIn;
   const railD = p.railDepthIn;
-  const strip = p.hullLamThicknessIn;
   const rearTx = L.xRear + L.transom;
-  /** Offset of the member's centerline from the web plane (outward +): the rail's outer face is flush with the chine's. */
-  const dRail = ladder ? (L.side - railT) / 2 : 0;
-
-  /** Rail height: the usual depth below the cabin deck, plus the rise to the chine bottom (captured-ply: the nose deck level, D-45). */
-  const hRail = railD + (L.railTop - L.deckBot);
-  const zRail = L.railTop - hRail / 2;
-  /** Offset from the web plane of the member's inner face. */
-  const dInner = ladder ? L.side / 2 - railT : -L.side / 2;
-
-  // ── Rear end (D-48, D-53): the rail is notched from below for the brake beam (it slides in the notch; a keeper strap under the notch carries it) and for the rear
-  // axle beam; the beam is held down by an angle bracket inside each rail. Geometry from brake-layout.ts and rear-mount.ts.
-  const bl = beamLayout(p, L.r, railSection(p, L).zBot, railSection(p, L).xEnd);
+  const fxOf = (v: number) => v;
+  void IN3_PER_FT3;
+  const [rY0, rY1] = ladderRailY(L.hwC, L.side, railT);
   const seat = beamSeat(p, L);
-  const shaftNotchVol = (bl.notch.x1 - bl.notch.x0) * (bl.notch.top - railSection(p, L).zBot) * railSection(p, L).t;
-  const cutLb = ((shaftNotchVol + (seat?.volume ?? 0)) / IN3_PER_FT3) * p.oakDensityPcf;
-  const f2 = (v: number) => (Math.round(v * 100) / 100).toString();
-  const finishRail = (part: Part, s: 1 | -1, tag: 'L' | 'R'): Part => {
-    const notes: string[] = [];
-    const rr = railSection(p, L);
-    const yMid = s * (rr.yOut - rr.t / 2);
-    const joints = (part.joints ??= []);
-    {
-      const zb = rr.zBot;
-      const w = bl.notch.x1 - bl.notch.x0, h = bl.notch.top - zb;
-      joints.push({
-        type: 'dado', to: 'brake-beam', count: 1, size: `${f2(w)}" wide x ${f2(h)}" high notch up from the rail bottom, x ${f2(bl.notch.x0)} to ${f2(bl.notch.x1)}`,
-        at: [localPoint(part.transform, [(bl.notch.x0 + bl.notch.x1) / 2, yMid, zb + h / 2])], note: 'the brake beam slides in the notch (it is the guide); a keeper strap screwed across the notch bottom carries it',
-      });
-      joints.push({
-        type: 'screw', to: `brake-keeper-${tag}`, count: 4, diaIn: 0.19, size: '4 x #10 x 1-1/2" stainless wood screws up into the rail bottom, two each side of the notch',
-        at: [bl.notch.x0 - 0.5, bl.notch.x1 + 0.5].flatMap((x) => [yMid - 0.15, yMid + 0.15].map((yy) => localPoint(part.transform, [x, yy, zb]))),
-      });
-      notes.push(`REAR END (D-53): underside notched ${f2(w)}" wide x ${f2(h)}" high for the brake beam (x ${f2(bl.notch.x0)} to ${f2(bl.notch.x1)}, open at the bottom: a bandsaw cut and a chisel; ${f2(bl.railEndWall)}" of air is left between the beam and the transom, ${f2(rr.zSolidTop - bl.notch.top)}" under the deck ledge). The beam slides ${f2(bl.stroke)}" in it; epoxy-seal the notch walls.`);
-    }
-    if (seat) {
-      const hd = seat.hd;
-      joints.push({
-        type: 'dado', to: 'beam-R', count: 1, size: `${f2(seat.x1 - seat.x0)}" wide × ${f2(seat.depth)}" deep notch in the rail underside (beam ${f2(L.beamR.thick)}" + ${f2(p.beamNotchClearIn)}" each side), ceiling bears on the beam top`,
-        at: [localPoint(part.transform, [L.beamR.x, yMid, seat.zBot + seat.depth / 2])], note: `${f2(seat.remain)}" of the ${f2(seat.remain + seat.depth)}" rail is left above the notch; router or bandsaw + chisel, corners relieved with a 1/4" radius`,
-      });
-      const bd = hd.boltD;
-      joints.push({
-        type: 'bolt', to: `beam-hold-down-${tag}`, count: 2, diaIn: bd, size: `${f2(bd)}" × ${inchesText(boltLength(hd.t + rr.t, bd))} 316 hex bolts through the angle's upright leg and the rail, nylock nuts and fender washers on the OUTSIDE face`,
-        at: hd.railBolts.map(([x, z]) => localPoint(part.transform, [x, yMid, z])),
-      });
-      notes.push(`REAR AXLE SEAT (D-48): underside notched ${f2(seat.x1 - seat.x0)}" wide × ${f2(seat.depth)}" deep so the rail bears on the top of the rear axle beam (the rail bottom is ${f2(seat.depth)}" below the beam top); ${f2(seat.remain)}" of rail remains over the notch. Held down by the 316 angle bracket inside the rail (beam-hold-down-${tag}).`);
-    }
-    if (notes.length) part.notes = `${part.notes ?? ''} ${notes.join(' ')}`.trim();
-    return part;
-  };
 
+  // ── Rails: straight oak bars from the rear transom to the end of the flat deck, shallower ahead of the front-axle swath (D-56) ──
   for (const { s, tag } of SIDES) {
-    const path = sidePath(L, dRail, rearTx, L.xn);
-    if (ladder) {
-      parts.push(finishRail(bandPart(ctx, {
-        id: `rail-cabin-${tag}`, partNo: 'rail-cabin', name: `Cabin rail ${tag}`, group: 'frame', mat: 'oak', s, path, t: railT, h: hRail, zc: zRail,
-        extraLb: -cutLb,
-        plies: Math.max(1, Math.round(railT / strip)), step: STEP.frame, grain: 'x',
-        notes: `Bent lamination (${Math.max(1, Math.round(railT / strip))} plies of ${strip}") from the rear transom face along the plan S-curve to x = ${L.xn.toFixed(1)}", outer face flush under the chine (the rail follows the chine, so the chine sits on it all the way, D-43/D-45); inside radius ${(L.hull.minRadius - L.side / 2 - railT / 2 + dRail * 0).toFixed(1)}" vs ${(p.hullLamMinRadiusFactor * strip).toFixed(1)}" limit. The rail's top is flush with the chine bottom AND the deck underside (one deck level, D-52): no ledge, no relief; the deck bonds to the rail top and its edge enters the chine's rabbet. The chine sits on the top of the rail's outer ${L.side}" and is Domino-tied (vertical Dominos) and epoxied to it every ${p.chineTieSpacingIn}"; the deck bonds to the rail top. Frame + deck are one glued unit, turned over and lowered into the inverted side assemblies. Scarfed (1:8, ${(8 * railT).toFixed(0)}") to the nose rail at x = ${L.xn.toFixed(1)}", in the straight bow run.`,
-      }), s, tag));
-      if (L.noseRailEnd - L.xn > 0.5) {
-        // The nose rail (D-52) follows the straight bow run, outer face flush under the chine, from the scarf at xn to the front transom's inner face.
-        const a = s * L.bowHeading;
-        const run = sidePath(L, dRail, L.xn, L.noseRailEnd);
-        const P0 = run[0], P1 = run[run.length - 1];
-        const runLen0 = Math.hypot(P1[0] - P0[0], P1[1] - P0[1]);
-        const runLen = runLen0 - (railT / 2) * Math.abs(Math.sin(a)); // the square end pokes past the transom face at the heading: trimmed (cut at the bevel in the shop)
-        const kf = runLen / runLen0 / 2;
-        const seatF = frontBeamSeat(p, L);
-        const cutF = seatF ? (seatF.volume / IN3_PER_FT3) * p.oakDensityPcf : 0;
-        const deg = ((Math.abs(L.bowHeading) * 180) / Math.PI).toFixed(1);
-        const rail = box(ctx, {
-          id: `rail-nose-${tag}`, partNo: 'rail-nose', name: `Nose rail ${tag}`, group: 'frame', mat: 'oak', step: STEP.frame, grain: 'x',
-          size: [runLen, railT, hRail], center: [P0[0] + (P1[0] - P0[0]) * kf, s * (P0[1] + (P1[1] - P0[1]) * kf), zRail], rot: { z: a },
-        });
-        rail.massLb -= cutF;
-        rail.notes = `Straight bow rail at the SAME height as the cabin rail (the side lines do not step), ${runLen.toFixed(1)}" long, set at ${deg}° to the axis to follow the chine (D-52); outer face flush under the nose chine (D-43). Scarfed (1:8, ${(8 * railT).toFixed(0)}") to the bent cabin rail at x = ${L.xn.toFixed(1)}" in the straight run. Runs to the front transom's inner face, notched from below for the front beam (below).`;
-        if (seatF) {
-          const f2 = (v: number) => (Math.round(v * 100) / 100).toString();
-          const joints = (rail.joints ??= []);
-          const bd = seatF.hd.boltD;
-          joints.push({
-            type: 'dado', to: 'beam-F', count: 1, size: `${f2(seatF.x1 - seatF.x0)}" wide × ${f2(seatF.depth)}" deep notch up from the rail bottom (beam ${f2(L.front.beam.thick)}" + ${f2(p.beamNotchClearIn)}" each side), ceiling bears on the beam top`,
-            note: `${f2(seatF.remain)}" of the ${f2(seatF.railH)}" rail is left above the notch (floor ${f2(FRONT_RAIL_REMAIN_MIN_IN)}"); bandsaw + chisel, corners relieved with a 1/4" radius. The beam passes under the rail; no cut in the beam.`,
-          });
-          joints.push({
-            type: 'bolt', to: `front-beam-hold-down-${tag}`, count: 2, diaIn: bd, size: `${f2(bd)}" × ${inchesText(boltLength(seatF.hd.t + seatF.railT, bd))} 316 hex bolts through the angle's upright leg and the rail, nylock nuts and fender washers on the OUTSIDE face`,
-          });
-          rail.notes += ` FRONT BEAM SEAT (D-52): underside notched ${f2(seatF.x1 - seatF.x0)}" wide × ${f2(seatF.depth)}" deep so the rail bears on the top of the front beam; ${f2(seatF.remain)}" of rail remains over the notch${seatF.ok ? '' : ' (BELOW the 1" floor)'}. Held down by the 316 angle bracket inside the rail (front-beam-hold-down-${tag}).`;
-        }
-        parts.push(rail);
-      }
-    } else {
-      // Hull-as-beam: the cabin side girder is deepened by railDepth. The nose is not deepened, because the steered axle beam sweeps under it.
-      parts.push(finishRail(bandPart(ctx, {
-        id: `girder-cabin-${tag}`, partNo: 'girder-cabin', name: `Cabin side girder ${tag}`, group: 'frame', mat: 'oak', s, path, t: L.side, h: hRail, zc: zRail,
-        extraLb: -cutLb,
-        plies: Math.max(1, Math.round(L.side / strip)), step: STEP.frame, grain: 'x',
-        notes: 'Bent lamination under the chine from the rear transom face to x = xn, following the plan S-curve (D-45); epoxy-laminated under the chine and Domino-tied to it (D-43), joined to the crossmembers with loose tenons (the girder is only the chine thickness).',
-      }), s, tag));
+    const zb = L.railTop - railD, zbF = L.railTop - L.railDepthF;
+    const x0 = rearTx, x1 = L.railEnd, xs = L.railStepX;
+    // Relief notches (D-56: the deck is only 8 in up, so the 3 in rail reaches below the rear axle beam top and the foot brake's swinging shoe beam): cut up from the rail bottom where
+    // each beam passes under the rail, 1/16 in clear of the beam (the brake beam over its whole swing).
+    const notches: { x0: number; x1: number; z: number }[] = [];
+    if (L.beamR.top + 0.0625 > zb) notches.push({ x0: L.beamR.x - L.beamR.thick / 2 - 0.0625, x1: L.beamR.x + L.beamR.thick / 2 + 0.0625, z: L.beamR.top + 0.0625 });
+    {
+      const bg = brakeGeometry(p, L);
+      const pts = [0, 0.25, 0.5, 0.75, 1].flatMap((u) => rectPts(bg.beam.c, bg.beam.w, bg.beam.h).map((q) => atPose(bg, u, q)));
+      const z = Math.max(...pts.map((q) => q[1])) + 0.0625;
+      if (z > zb) notches.push({ x0: Math.min(...pts.map((q) => q[0])) - 0.0625, x1: Math.max(...pts.map((q) => q[0])) + 0.0625, z });
+    }
+    notches.sort((a, b) => a.x0 - b.x0);
+    for (const n of notches) n.x0 = Math.max(n.x0, x0); // a notch cannot start behind the rail's rear end (a short rear overhang puts the brake beam partly behind it)
+    for (let i = notches.length - 1; i >= 0; i--) if (notches[i].x1 <= notches[i].x0 + 1e-6) notches.splice(i, 1);
+    const bottomEdge: Vec2[] = [[x0, zb], ...notches.flatMap((n): Vec2[] => [[n.x0, zb], [n.x0, n.z], [n.x1, n.z], [n.x1, zb]])];
+    const outline: Vec2[] = L.railDepthF < railD - 1e-6
+      ? [...bottomEdge, [xs - 1.5, zb], [xs, zbF], [x1, zbF], [x1, L.railTop], [x0, L.railTop]]
+      : [...bottomEdge, [x1, zb], [x1, L.railTop], [x0, L.railTop]];
+    let a2 = 0, per = 0;
+    for (let i = 0; i < outline.length; i++) { const [px, pz] = outline[i], [qx, qz] = outline[(i + 1) % outline.length]; a2 += px * qz - qx * pz; per += Math.hypot(qx - px, qz - pz); }
+    const area = Math.abs(a2) / 2;
+    const mass = woodMassLb(p, area * railT, 2 * area + per * railT, p.oakDensityPcf);
+    const yFar = s > 0 ? rY1 : -rY0; // the extrusion runs from here toward -y by railT
+    const stock = { t: railT, w: railD, l: x1 - x0 };
+    const rail = customPart(ctx, {
+      id: `rail-${tag}`, partNo: 'rail', name: `Rail ${tag}`, group: 'frame', kind: 'lumber', material: 'white oak',
+      geometry: { type: 'extrusion', outline, depth: railT }, transform: [1, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, yFar, 0, 1],
+      massLb: mass, fab: 'table-saw', step: STEP.frame, grain: 'x', stock, rough: { t: railT + p.millingAllowanceIn, w: railD + p.millingAllowanceIn, l: stock.l + 4 * p.millingAllowanceIn }, explode: [fxOf(0.6), s * 0.3, -0.6],
+    });
+    rail.notes = `Straight ${f2(railT)}" × ${f2(railD)}" oak bar (D-54: no bent lamination any more), ${f2(L.railEnd - rearTx)}" long from the rear transom's inner face to the end of the flat deck, outer face flush under the chine so the chine sits on it all the way (D-43). ${L.railDepthF < railD - 1e-6 ? `Ahead of x = ${f2(L.railStepX)}" it steps (45 degree ramp) down to ${f2(L.railDepthF)}" deep so the front axle beam, swinging ±${p.steerLockDeg}° about the kingpin, passes under it with 0.4" to spare (D-56). ` : ''}Its top is flush with the chine bottom AND the deck underside (one deck level, D-52): the deck bonds to the rail top and its edge enters the chine's rabbet. The chine sits on the top of the rail's outer ${L.side}" and is Domino-tied (vertical Dominos) and epoxied to it every ${p.chineTieSpacingIn}". Frame + deck are one glued unit, turned over and lowered into the inverted side assemblies. The rear axle hangers are bolted and glued to its inner face (${seat ? 'axle-hanger-' + tag : 'no hanger'}).`;
+    parts.push(rail);
+  }
+
+  // ── Rear axle hangers (D-54): the rails stand above the axle beam, so an oak hanger on the inside of each rail carries the beam's seat (the D-48 notch and hold-down angle).
+  //    (The front axle is NOT seated in the rails: it pivots under the king beam, D-56.) ──
+  const axles = [{ beam: L.beamR, pre: 'axle-hanger', label: 'Rear', beamId: 'beam-R' }] as const;
+  const hangerAt = (x: number) => axles.some((a) => Math.abs(x - a.beam.x) < p.axleHangerWidthIn / 2 + L.joistT / 2);
+  for (const a of axles) {
+    const sa = beamSeat(p, L, a.beam);
+    if (!sa) continue;
+    const rsa = railSection(p, L, a.beam);
+    const hx0 = a.beam.x - p.axleHangerWidthIn / 2, hx1 = a.beam.x + p.axleHangerWidthIn / 2;
+    const notchLb = ((sa.x1 - sa.x0) * sa.depth * rsa.t / 1728) * p.oakDensityPcf;
+    for (const { s, tag } of SIDES) {
+      const yOut = rsa.yOut, yIn = rsa.yIn; // |y| of the hanger's outer face (= the rail's inner face) and its inner face
+      const hg = box(ctx, {
+        id: `${a.pre}-${tag}`, partNo: a.pre, name: `${a.label} axle hanger ${tag}`, group: 'frame', mat: 'oak', step: STEP.gear, grain: 'z',
+        ...span([hx0, hx1], s > 0 ? [yIn, yOut] : [-yOut, -yIn], [rsa.zBot, rsa.zSolidTop]),
+      });
+      hg.massLb -= notchLb;
+      hg.joints = [
+        { type: 'dado', to: a.beamId, count: 1, size: `${f2(sa.x1 - sa.x0)}" wide × ${f2(sa.depth)}" deep notch up from the hanger bottom (beam ${f2(a.beam.thick)}" + ${f2(p.beamNotchClearIn)}" each side), ceiling bears on the beam top`, at: [localPoint(hg.transform, [a.beam.x, (yOut + yIn) / 2 * s, sa.zBot + sa.depth / 2])], note: 'the beam passes under the rail and the hanger sits on it; bandsaw + chisel, corners relieved with a 1/4" radius' },
+      ];
+      hg.notes = `${a.label} axle hanger (D-54): ${f2(p.axleHangerWidthIn)}" × ${f2(rsa.t)}" oak, vertical grain, from the rail top (${f2(rsa.zSolidTop)}") down to ${f2(rsa.zBot)}", glued and bolted to the INSIDE face of the rail. The bottom is notched ${f2(sa.x1 - sa.x0)}" × ${f2(sa.depth)}" so it straddles the axle beam and bears on its top (D-48 seat); ${f2(sa.remain)}" of oak is left above the notch. The 316 hold-down angle lies against its inner face.`;
+      parts.push(hg);
     }
   }
 
-  // Crossmembers / joists, between the rails (ladder) or the side girders (hull). In the S-curve the joist is cut to the member's inner face at its narrowest point.
-  const innerAt = (x0: number, x1: number) => Math.min(...sidePath(L, dInner, x0, x1).map((q) => q[1]));
-  L.cabinJoistX.forEach((x, i) => {
-    const half = innerAt(x - L.joistT / 2, x + L.joistT / 2);
+  // ── Joists: between the rails, under the deck. A joist that meets a hanger is cut back to the hanger's inner face. The one at the kingpin is the KING BEAM (D-56). ──
+  L.joistX.forEach((x, i) => {
+    const isKing = x === L.king.x;
+    const meetsHanger = hangerAt(x);
+    const half = rY0 - (meetsHanger ? p.axleHangerThickIn : 0);
+    if (isKing) {
+      const k = L.king;
+      const kb = box(ctx, {
+        id: 'king-beam', partNo: 'king-beam', name: 'King beam (kingpin crossmember)', group: 'front-end', mat: 'oak', step: STEP.frame, grain: 'y',
+        ...span([k.x - k.len / 2, k.x + k.len / 2], [-half, half], [k.bot, k.top]),
+      });
+      kb.notes = `The front load path (D-56): an oak crossmember ${f2(k.len)}" fore-aft × ${f2(k.depth)}" deep between the rails at the kingpin, bonded to the deck underside and Domino-tied and epoxied to the rails. The ${f2(p.kingpinDiaIn)}" kingpin bolt is bored through its center; a slot cut from the front face (about ${f2(p.kingpinDiaIn * 1.6)}" wide × ${f2(p.kingpinDiaIn * 1.2)}" tall, just above the thrust washer) captures the nylock nut and its washer so they can swing with the axle. The UHMW thrust washer rests on the tongue plate under it.`;
+      parts.push(kb);
+      return;
+    }
+    const last = x === L.joistX[L.joistX.length - 1];
     parts.push(box(ctx, {
-      id: `joist-cabin-${i + 1}`, partNo: 'joist-cabin', name: `Cabin crossmember ${i + 1}`, group: 'frame', mat: 'oak', step: STEP.frame, grain: 'y',
+      id: joistId(L, i), partNo: 'joist', name: `Crossmember ${i + 1}`, group: 'frame', mat: 'oak', step: STEP.frame, grain: 'y',
       ...span([x - L.joistT / 2, x + L.joistT / 2], [-half, half], [L.deckBot - jD, L.deckBot]),
-      ...(half < L.hwC + (ladder ? L.side - railT : 0) - 1e-6 ? { notes: `In the S-curve: ends cut square to the joist and the rail inner face is ${half.toFixed(2)}" off the centerline here (the length is cut to the narrowest point under the joist; fill the wedge gap with thickened epoxy).` } : {}),
+      ...(meetsHanger || last ? { notes: `${meetsHanger ? `Cut back ${f2(p.axleHangerThickIn)}" at each end to clear an axle hanger. ` : ''}${last ? 'The last joist under the scarf of the deck to the bow curl (D-54); the two steering stop blocks hang under its ends (D-56). ' : ''}` } : {}),
     }));
   });
-  // Nose joists (D-52 integration): the center linkage corridor (Layout.front.keepOut.center: the bellcrank, links, tongue ear and hinge clevis stand up to 0.38" under
-  // the deck) leaves no room for a joist across the middle, so each nose joist is cut into a left and a right piece from the rail inner face to the nose stringer.
-  const ns = L.noseStringers;
-  L.noseJoistX.forEach((x, i) => {
-    // The bow converges, so a nose joist is cut to the rail's inner face at its narrowest point, like the cabin joists in the curve.
-    const half = innerAt(x - L.joistT / 2, x + L.joistT / 2);
-    if (half < ns.y1 + 0.5) return;
+
+  // ── Steering stop blocks (D-56): one hangs under each end of the end joist; the leading face of the axle beam meets it at full lock ──
+  {
+    const st = L.stops;
+    const endX = L.joistX[L.joistX.length - 1];
     for (const { s, tag } of SIDES) {
-      parts.push(box(ctx, {
-        id: `joist-nose-${i + 1}-${tag}`, partNo: 'joist-nose', name: `Nose crossmember ${i + 1} ${tag}`, group: 'frame', mat: 'oak', step: STEP.frame, grain: 'y',
-        ...span([x - L.joistT / 2, x + L.joistT / 2], [Math.min(s * ns.y1, s * half), Math.max(s * ns.y1, s * half)], [L.deckBot - jD, L.deckBot]),
-        notes: `Half of a nose crossmember, from the nose stringer to the rail (the center ${f2(2 * ns.y0)}" is the steering-linkage corridor under the deck, so no joist crosses it). It straddles the front beam (beam-F stands in the joist depth: the joist on each side of it, like the rear beam, D-47). Ends cut square; the bow rail inner face is ${half.toFixed(2)}" off the centerline at the narrow end (fill the wedge gap with thickened epoxy).`,
-      }));
-    }
-  });
-  // Nose stringers: fore-aft oak beside the corridor, carrying the deck across the middle where no joist can; in runs either side of the front beam.
-  ns.runs.forEach(([xa, xb], k) => {
-    if (xb - xa < 1) return;
-    for (const { s, tag } of SIDES) {
-      parts.push(box(ctx, {
-        id: `stringer-nose-${tag}${k + 1}`, partNo: 'stringer-nose', name: `Nose stringer ${tag}${k + 1}`, group: 'frame', mat: 'oak', step: STEP.frame, grain: 'x',
-        ...span([xa, xb], [Math.min(s * ns.y0, s * ns.y1), Math.max(s * ns.y0, s * ns.y1)], [L.deckBot - jD, L.deckBot]),
-        notes: `${f2(L.joistT)}" × ${f2(jD)}" oak glued to the deck underside ${f2(ns.y0)}" off the centerline, just outside the steering-linkage corridor (Layout.front.keepOut.center), so the nose deck is carried across the middle by two stringers ${f2(2 * ns.y0 - 0.1)}" apart instead of by joists. The ${k === 0 ? 'rear' : 'front'} run ${k === 0 ? 'ends at the front beam gap' : 'starts at the front beam gap'}; the beam passes between the straddling joists. The nose joist halves butt against its outer face.`,
-      }));
-    }
-  });
-  // Hold-down angles for the front beam (D-52, the D-48 pattern): 316 angle inside each nose rail, upright leg bolted through the rail, flat leg down through the beam.
-  const seatF = frontBeamSeat(p, L);
-  if (seatF) {
-    const hd = seatF.hd;
-    const f2 = (v: number) => (Math.round(v * 100) / 100).toString();
-    for (const { s, tag } of SIDES) {
-      const a = s * L.bowHeading; // heading of this rail
-      const tdir: Vec3 = [Math.cos(a), Math.sin(a), 0];
-      const nOut: Vec3 = [s * -Math.sin(a), s * Math.cos(a), 0]; // outward normal of the rail
-      const ezl: Vec3 = [s * tdir[0], s * tdir[1], 0]; // extrusion direction (right-handed with nOut x up)
-      const pin: Vec3 = [L.front.beam.x, s * seatF.yIn, 0]; // on the rail's inner face, under the beam centerline
-      const origin: Vec3 = [pin[0] - (hd.w / 2) * ezl[0], pin[1] - (hd.w / 2) * ezl[1], 0];
-      const m: Mat4 = frameMat(nOut, [0, 0, 1], ezl, origin);
-      // Section (u outward from the rail's inner face, z): flat leg on the beam top reaching inboard `leg`, upright leg against the rail face.
-      const profile: Vec2[] = [[-hd.leg, hd.zBeam], [0, hd.zBeam], [0, hd.zTop], [-hd.t, hd.zTop], [-hd.t, hd.zBeam + hd.t], [-hd.leg, hd.zBeam + hd.t]];
-      const area = hd.t * (2 * hd.leg - hd.t);
-      const mass = ((area * hd.w) / IN3_PER_FT3) * p.steelDensityPcf;
-      const bd = hd.boltD;
-      const modelOf = (u: number, v: number, z: number): Vec3 => [pin[0] + ezl[0] * u + nOut[0] * v, pin[1] + ezl[1] * u + nOut[1] * v, z];
-      const part: Part = {
-        id: `front-beam-hold-down-${tag}`, partNo: 'front-beam-hold-down', name: `Front beam hold-down angle ${tag}`, group: 'frame', kind: 'metal', material: '316 stainless angle',
-        geometry: { type: 'extrusion', outline: profile, depth: hd.w }, transform: m, body: 'chassis', massLb: mass, fab: 'drill-tap', step: STEP.gear,
-        explode: [0, -s * 0.8, 0.5], stock: { t: hd.t, w: hd.leg, l: hd.w },
-        sourcing: { vendor: `McMaster-Carr (316 stainless angle ${f2(hd.leg)}" × ${f2(hd.leg)}" × ${f2(hd.t)}": cut ${f2(hd.w)}" long on the bandsaw, drill 2 × ${f2(bd + 0.03)}" in the upright leg and 2 × ${f2(bd + 0.03)}" in the flat leg; 4 × 316 hex bolts ${f2(bd)}", nylock nuts, fender washers)` },
-        notes: `Holds the front beam to the nose rail (D-52): the upright leg lies on the rail's inner face (z ${f2(hd.zBeam)}" to ${f2(hd.zTop)}", under the deck), two ${f2(bd)}" bolts through the rail; the flat leg lies on the beam top, two ${f2(bd)}" bolts down through both walls of the tube. Stays clear of the straddling deck joists. Rebound and side load are carried here; the vertical load bears on the notch ceiling.`,
-        joints: [],
-      };
-      part.joints!.push({
-        type: 'bolt', to: `rail-nose-${tag}`, count: 2, diaIn: bd, size: `${f2(bd)}" × ${inchesText(boltLength(hd.t + seatF.railT, bd))} 316 hex bolts through the upright leg and the rail`,
-        at: hd.railBolts.map(([u, z]) => localPoint(m, modelOf(u, -hd.t / 2, z))),
+      const sb = box(ctx, {
+        id: `steer-stop-${tag}`, partNo: 'steer-stop', name: `Steering stop block ${tag}`, group: 'front-end', mat: 'oak', step: STEP.frame, grain: 'z',
+        ...span([endX - L.joistT / 2, endX + L.joistT / 2], s > 0 ? [st.y1, st.y2] : [-st.y2, -st.y1], [st.bot, st.top]),
+        notes: `Steering stop (D-56): ${f2(L.joistT)}" × ${f2(st.y2 - st.y1)}" × ${f2(st.top - st.bot)}" oak, vertical grain, glued to the underside of the end joist (inboard of the rail, ending where the swinging beam's leading face meets it), with two ${f2(p.steerStopBoltDiaIn)}" 316 bolts down through the joist. Its rear face (x = ${f2(st.faceX)}") is where the axle beam's leading face meets it, ${f2(st.y2)}" out from the center line (the outer end of the block), at ±${p.steerLockDeg}°; the beam top is at z ${f2(L.beamF.top)}", so the block reaches down 1" past it.`,
       });
-      part.joints!.push({
-        type: 'bolt', to: 'beam-F', count: 2, diaIn: bd, size: `${f2(bd)}" × ${inchesText(boltLength(hd.t + L.front.beam.depth, bd))} 316 hex bolts down through the flat leg and both walls of the tube`,
-        at: hd.beamBolts.map(([u, v]) => localPoint(m, modelOf(u, -v, hd.zBeam + hd.t / 2))),
-      });
-      parts.push(part);
+      parts.push(sb);
     }
   }
   return parts;
 }
+

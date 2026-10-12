@@ -21,7 +21,7 @@ export type Mat4 = number[];
 export type PartGroup =
   | 'frame'
   | 'body'
-  | 'steering'
+  | 'front-end'
   | 'running-gear'
   | 'seat'
   | 'brake'
@@ -48,20 +48,12 @@ export type Fab =
 
 /**
  * Rigid body the part belongs to, for the physics sim and articulation.
- * 'steer' parts rotate with the front axle about the kingpin (the old turntable front end, removed at the Phase 3b flip).
- * Phase 3b (additive in Stage 0): 'steer-L' / 'steer-R' rotate about their own kingpin; 'tie-rod', 'bellcrank' and 'tongue' are visual-only rigid bodies
- * posed analytically by `ackermann.poseMatrices`.
+ * 'front-axle' is the pivoting front axle (D-56): the axle beam, stub axles, clamp plates, kingpin bolt, tongue and bridle, which turn together about the
+ * kingpin with the front wheels ('wheel-FL' / 'wheel-FR'). The king beam, thrust washer and stop blocks are on the chassis.
  */
 export type RigidBody =
   | 'chassis'
-  | 'steer'
-  | 'steer-L'
-  | 'steer-R'
-  | 'tie-rod'
-  | 'bellcrank'
-  | 'tongue'
-  | 'drag-link'
-  | 'tongue-link'
+  | 'front-axle'
   | 'wheel-FL'
   | 'wheel-FR'
   | 'wheel-RL'

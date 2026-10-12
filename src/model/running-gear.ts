@@ -1,10 +1,10 @@
 /**
- * Running gear: the four wheels and the REAR axle (through rod or stubs), axle beam and rod clamps (D-10, D-11, D-15). The front axle is the Ackermann front end in
- * front-end.ts (spindles on a steel beam, D-53); the front wheels ride on the knuckle poses.
+ * Running gear: the four wheels (10 in pneumatic, D-54) and the REAR axle (through rod or stubs), axle beam and rod clamps (D-10, D-11, D-15). The front axle, which
+ * pivots about a kingpin, is in pivot.ts (D-56); the front wheels turn with it.
  */
 import { AXLE_BEAM_POSITION, AXLE_STYLE } from '../params';
 import { IN3_PER_FT3, STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
-import { multiply, translation } from './mat4';
+import { translation } from './mat4';
 import { beamSeat, boltLength, inchesText, localPoint, railSection } from './rear-mount';
 import type { Mat4, Part, RigidBody, Vec2, Vec3 } from './types';
 
@@ -25,7 +25,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
   const rodR = p.axleDiameterIn / 2;
 
   // Wheels
-  const wheel = (id: 'wheel-FL' | 'wheel-FR' | 'wheel-RL' | 'wheel-RR', name: string, transform: number[]): Part => ({
+  const wheel = (id: 'wheel-RL' | 'wheel-RR' | 'wheel-FL' | 'wheel-FR', name: string, transform: number[]): Part => ({
     id,
     partNo: 'wheel',
     name,
@@ -38,7 +38,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
       width: p.tireWidthIn,
       hubDiameter: Math.min(p.wheelDiameterIn * HUB_DIA_FRAC, HUB_DIA_MAX_IN),
       hubLength: p.hubLengthIn,
-      bore: id.startsWith('wheel-F') ? (p.spindleStub === 0 ? 17 : 25) / 25.4 : p.axleDiameterIn,
+      bore: p.axleDiameterIn,
     },
     transform,
     body: id as RigidBody,
@@ -56,10 +56,9 @@ export function buildRunningGear(ctx: Ctx): Part[] {
   parts.push(
     wheel('wheel-RL', 'Rear left wheel', translation(0, ry, r)),
     wheel('wheel-RR', 'Rear right wheel', translation(0, -ry, r)),
-    wheel('wheel-FL', 'Front left wheel', multiply(ctx.pose['steer-L'], translation(L.WB, fy, r))),
-    wheel('wheel-FR', 'Front right wheel', multiply(ctx.pose['steer-R'], translation(L.WB, -fy, r))),
+    wheel('wheel-FL', 'Front left wheel', translation(L.WB, fy, r)),
+    wheel('wheel-FR', 'Front right wheel', translation(L.WB, -fy, r)),
   );
-
   // Rear axle, beam and clamps.
   {
     const ax = { tag: 'R' as const, x: 0, track: p.rearTrackIn, beam: L.beamR };
@@ -89,10 +88,10 @@ export function buildRunningGear(ctx: Ctx): Part[] {
     const beamRailJoints: Part['joints'] = [];
     if (seatInfo) {
       const rs = railSection(p, L);
-      const yRailMid = rs.yOut - rs.t / 2;
+      const yRailMid = rs.yOut - rs.t / 2; // the hanger's mid-plane
       for (const { s, tag } of SIDES) {
         beamRailJoints.push({
-          type: 'dado', to: rs.ladder ? `rail-cabin-${tag}` : `girder-cabin-${tag}`, count: 1,
+          type: 'dado', to: `axle-hanger-${tag}`, count: 1,
           size: `rail notch ${f2(seatInfo.x1 - seatInfo.x0)}" × ${f2(seatInfo.depth)}": the beam top (z ${f2(b.top)}") bears on the notch ceiling; no cut in the beam`,
           at: [[0, s * yRailMid, b.top - (b.top + b.bot) / 2]],
           note: 'the beam passes under the rail; the rail sits on it',
@@ -162,11 +161,11 @@ export function buildRunningGear(ctx: Ctx): Part[] {
         geometry: { type: 'extrusion', outline: profile, depth: w }, transform: m, body: 'chassis', massLb: mass, fab: 'drill-tap', step: STEP.gear,
         explode: unitVec([0, -s, 0.5]), stock: { t: hd.t, w: hd.leg, l: w },
         sourcing: { vendor: `McMaster-Carr (316 stainless angle ${f2(hd.leg)}" × ${f2(hd.leg)}" × ${f2(hd.t)}": cut ${f2(w)}" long on the bandsaw, drill 2 × ${f2(bd + 0.03)}" in the upright leg and 2 × ${f2(bd + 0.03)}" in the flat leg; 4 × 316 hex bolts ${f2(bd)}", nylock nuts, fender washers)` },
-        notes: `Holds the rear axle beam to the ${rs.ladder ? 'rail' : 'girder'} (build review r2 MUST-4): the upright leg lies on the rail's inner face (z ${f2(hd.zBeam)}" to ${f2(hd.zTop)}"), two ${f2(bd)}" bolts through the rail; the flat leg lies on the beam top (it also keeps the rod in its groove), two ${f2(bd)}" bolts down through the beam either side of the rod. Stays clear of the straddling deck joists (${f2(w)}" wide, centered on the beam). Rebound, side load and the rail's tendency to walk off the beam are carried here; the vertical load bears on the notch ceiling instead.`,
+        notes: `Holds the rear axle beam to the axle hanger (D-54, build review r2 MUST-4): the upright leg lies on the hanger's inner face (z ${f2(hd.zBeam)}" to ${f2(hd.zTop)}"), two ${f2(bd)}" bolts through the hanger; the flat leg lies on the beam top (it also keeps the rod in its groove), two ${f2(bd)}" bolts down through the beam either side of the rod. Stays clear of the straddling deck joists (${f2(w)}" wide, centered on the beam). Rebound, side load and the rail's tendency to walk off the beam are carried here; the vertical load bears on the notch ceiling instead.`,
         joints: [],
       };
       part.joints!.push({
-        type: 'bolt', to: rs.ladder ? `rail-cabin-${tag}` : `girder-cabin-${tag}`, count: 2, diaIn: bd, size: `${f2(bd)}" × ${inchesText(boltLength(hd.t + rs.t, bd))} 316 hex bolts through the upright leg and the rail`,
+        type: 'bolt', to: `axle-hanger-${tag}`, count: 2, diaIn: bd, size: `${f2(bd)}" × ${inchesText(boltLength(hd.t + rs.t, bd))} 316 hex bolts through the upright leg and the hanger`,
         at: hd.railBolts.map(([x, z]) => localPoint(part.transform, [x, s * (rs.yIn - hd.t / 2), z])),
       });
       part.joints!.push({

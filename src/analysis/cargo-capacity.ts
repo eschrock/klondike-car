@@ -3,7 +3,7 @@
  * so this is a separate sweep over the PAYLOAD (the rider sweep is over the rider weight): the checks run at a ladder of payloads with the seat stowed and no rider, and
  * each row's cargo utilization is followed up the ladder.
  *
- * A row that already fails with nothing on the bed (the front-end rows driven by the tongue pull and the hub scrub, D-53 / 3c-3) is not limited by the cargo, so it is
+ * A row that already fails with nothing on the bed (for example the front caster rows, D-54) is not limited by the cargo, so it is
  * reported separately (`alwaysFailing`) and does not set the capacity. The capacity is where the first cargo-limited row reaches its limit (linear interpolation of its
  * utilization between ladder points); the "comfortable" payload is where the first one comes within 10% of its limit.
  */

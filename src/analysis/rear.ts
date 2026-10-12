@@ -70,7 +70,7 @@ export function rearBeamSeat(ctx: Ctx): AnalysisCheck {
     const reboundH = reboundN * (cs.hard.V / Math.max(1, cs.normal.V));
     const bd = hd.boltD;
     const At = uncTensileArea(bd);
-    const tenAllowN = p.kingpinCrossBoltYieldPsi / sf, tenAllowH = p.holdDownBoltUltimatePsi / ff;
+    const tenAllowN = p.ss316BoltYieldPsi / sf, tenAllowH = p.holdDownBoltUltimatePsi / ff;
     const Tbeam = reboundN / hd.beamBolts.length, TbeamH = reboundH / hd.beamBolts.length;
     const washerA = (Math.PI / 4) * (1 - (bd + 1 / 16) ** 2);
     const capRail = boltCapacity(ctx, bd, seat.railT, hd.t, 90);
@@ -85,6 +85,7 @@ export function rearBeamSeat(ctx: Ctx): AnalysisCheck {
       detail('NORMAL rebound: hold-down tension on each vertical bolt through the beam (316, yield / SF)', Tbeam, 'lbf', At * tenAllowN, '<='),
       detail('NORMAL rebound: washer under the beam (1" fender, oak perp)', Tbeam / washerA, 'psi', al.oakPerp, '<='),
       detail('NORMAL rebound: rail bolt shear vs NDS lateral capacity (perp to grain)', railBoltV, 'lbf', capRail.Z, '<='),
+      detail('NORMAL 1" rear bump: hanger glued to the rail (epoxy on the lap, cross-grain: half the design shear)', VrailN / (p.axleHangerWidthIn * p.railDepthIn), 'psi', al.oakShear / 2, '<='),
       detail('side skid pull on the rail bolts (316 tension)', Tside, 'lbf', At * tenAllowN, '<='),
       detail('side skid washer on the rail outer face (oak perp)', Tside / washerA, 'psi', al.oakPerp, '<='),
       detail('rail cleavage at the hold-down bolts (NDS 3.4.3.3, rebound)', reboundN, 'lbf', cleavageVr(FvP, seat.railT, distCeil), '<='),
@@ -92,9 +93,10 @@ export function rearBeamSeat(ctx: Ctx): AnalysisCheck {
       detail('HARD 2" rear hit: rail shear on the net section (no wood safety factor)', VrailH, 'lbf', Vr * p.woodSafetyFactor, '<='),
       detail('HARD rebound: hold-down tension on each vertical bolt (316 ultimate / fail-safe factor)', TbeamH, 'lbf', At * tenAllowH, '<='),
     ];
+    const glueTxt = `The hanger (D-54) hangs from the rail on a ${f(p.axleHangerWidthIn, 1)}" x ${f(p.railDepthIn, 1)}" glued lap: ${f(VrailN / (p.axleHangerWidthIn * p.railDepthIn), 0)} psi shear against half the design shear ${f(al.oakShear / 2, 0)}. `;
     const how = `Struck rear wheel ${bumpText(cs.normal, '1" bump', p)}: its V + static = ${f(VrailN)} lbf goes into its rail (hard 2" hit: ${f(VrailH)} lbf). The rail is NOTCHED ${f(seat.x1 - seat.x0, 2)}" wide x ${f(seat.depth, 2)}" deep on its underside and sits on the beam: the ceiling bears on ${f(L.beamR.thick, 2)}" x ${f(seat.railT, 2)}" = ${f(A, 2)} in2, ${f(bearCeilN, 0)} psi normal, ${f(bearCeilH, 0)} psi hard. `
       + `Fore-aft braking load lambda W sin(theta) = ${f(p.brakeLoadFactor, 1)} x ${f(c.massLb)} x sin ${f(p.designSlopeDeg)} deg = ${f(Fx)} lbf, ${f(Fx / 2)} lbf per notch wall = ${f(bearWall, 0)} psi. Rail left above the notch ${f(dn, 2)}" of ${f(d, 2)}": V_r = 2/3 F'v b d_n = ${f(Vr)} lbf. `
-      + `Hold-down angles (316, ${f(hd.t, 3)}" x ${f(hd.leg, 2)}" legs): axle assembly ${f(unsprung)} lb x ${p.dynamicFactor} / 2 = ${f(reboundN)} lbf rebound per side (hard hit ${f(reboundH)}) on 2 x ${f(bd, 3)}" x ${inchesText(boltLength(hd.t + L.beamR.depth, bd))} bolts through the beam (${f(Tbeam)} lbf each normal, ${f(TbeamH)} hard; A_t ${f(At, 4)} in2) and 2 x ${f(bd, 3)}" bolts through the rail (${f(railBoltV)} lbf each vs NDS Z = ${f(capRail.Z)} lbf). A side skid mu P = ${f(Fy)} lbf pulls the beam outward against the rail bolts. ${sensitivityText(ctx, c, 'rear', p.bumpNormalHeightIn)}`;
+      + `Hold-down angles (316, ${f(hd.t, 3)}" x ${f(hd.leg, 2)}" legs): axle assembly ${f(unsprung)} lb x ${p.dynamicFactor} / 2 = ${f(reboundN)} lbf rebound per side (hard hit ${f(reboundH)}) on 2 x ${f(bd, 3)}" x ${inchesText(boltLength(hd.t + L.beamR.depth, bd))} bolts through the beam (${f(Tbeam)} lbf each normal, ${f(TbeamH)} hard; A_t ${f(At, 4)} in2) and 2 x ${f(bd, 3)}" bolts through the rail (${f(railBoltV)} lbf each vs NDS Z = ${f(capRail.Z)} lbf). A side skid mu P = ${f(Fy)} lbf pulls the beam outward against the rail bolts. ${glueTxt}${sensitivityText(ctx, c, 'rear', p.bumpNormalHeightIn)}`;
     return governing(ds, how);
   };
   return dualCheck({ id: 'rear-beam-seat', label: 'Rear axle beam seat in the rails and hold-down angles (bump basis)', group: 'Structure', refs: ['D-15', 'D-48', 'D-50', 'D-54'], primary: 'goal', ...evalBoth(ctx, ev) });

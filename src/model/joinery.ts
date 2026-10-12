@@ -7,10 +7,11 @@
  * it does not (thin members: a loose tenon), grooves and rabbets that capture the ply, glue + epoxy fillets,
  * and threaded inserts + knobs for everything that comes off (D-9).
  */
-import { FRAME_STYLE, SIDE_CONSTRUCTION, type Params } from '../params';
+import { joistId } from './frame';
+import type { Params } from '../params';
 import { SIDES, type Ctx } from './build-utils';
-import { innerHalfWidth, sheerRise, sidePath } from './layout';
-import { fingerAnalysis, guardInsertZ, scupperSites } from './body';
+import { sideTopAt, webTopAt } from './layout';
+import { scupperSites } from './body';
 import { worldAABB } from './bounds';
 import type { Joint, JointType, Mat4, Part, Vec3 } from './types';
 
@@ -139,129 +140,85 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
   const g = p.grooveDepthIn;
   const pl = p.panelPlyIn;
   const groove = `${(pl + p.grooveSlopIn).toFixed(3)}" × ${frac(g)}" groove, full length`;
-  const captured = p.sideConstruction === SIDE_CONSTRUCTION.capturedPly;
-  const solid = p.sideConstruction === SIDE_CONSTRUCTION.solidOak;
-  const openFrame = p.sideConstruction === SIDE_CONSTRUCTION.openFrame;
-  const ladder = p.frameStyle === FRAME_STYLE.ladder;
   const rearTx = L.xRear + L.transom;
-  const frontTx = L.xFront - L.transom;
   const jD = p.crossmemberDepthIn;
+  const railT = p.railThicknessIn;
 
   const ds = p.deckSlopIn;
   const rabbetH = (top: number, bot: number) => top - bot + ds;
   const deck = 'deck'; // one deck level (D-52): a single deck part
-  const runs = [
-    { zone: 'cabin', x0: rearTx, x1: L.xn, hw: L.hwC, deckTop: L.deckTop, tx: 'transom-rear', txFace: rearTx, deck },
-    { zone: 'nose', x0: L.xn, x1: frontTx, hw: L.hwN, deckTop: L.deckTop, tx: 'transom-front', txFace: frontTx, deck },
-  ] as const;
-  const bot = L.deckBot; // cabin deck underside
-  const cBot = L.chineBot; // chine bottom (captured ply: the nose deck level along the whole hull)
-  const zTop = L.sideTop;
+  const bot = L.deckBot;
+  const cBot = L.chineBot;
   const z0 = L.web.z0;
-  const z1 = L.web.z1;
+  const xm = (rearTx + L.xSideEnd) / 2;
+  const xj = rearTx + 1;
+  const topAt = (x: number) => sideTopAt(L, x);
+  const webTop = (x: number) => webTopAt(L, x);
+  const hw = L.hwC;
 
-  // ── Sides: panel grooves, deck rabbets, end joints to the transoms; the scarfs between the curved cabin run and the straight nose run at xn ──
-  for (const run of runs) {
-    const rear = run.zone === 'cabin';
-    for (const { s, tag } of SIDES) {
-      const id = `side-${run.zone}-${tag}`;
-      const yc = s * (run.hw + L.side / 2);
-      const xm = rear ? (L.xc0 + L.xn) / 2 : (run.x0 + run.x1) / 2; // mid curve for the cabin run's mid-length joints (the web grooves run the whole length)
-      const yAt = (x: number) => s * (innerHalfWidth(L, x) + L.side / 2);
-      const riseAt = (x: number) => (rear ? 0 : sheerRise(L, x)); // the nose gunwale and web top follow the sheer (D-44)
-      const rabbetSize = `${frac(dd)}" × ${rabbetH(run.deckTop, bot).toFixed(3)}" rabbet (inside bottom edge; deck + ${frac(ds)}" clearance, thickened epoxy fills it)`;
-      const xj = rear ? L.xc0 + 1 : run.x0 + 1;
-      if (captured) {
-        add({ a: `${id}-chine`, b: `${id}-web`, typeA: 'dado', size: groove, pts: [[xm, yAt(xm), z0 - g / 2]], noteA: 'Groove in the top of the chine, routed with a template after the lamination.', noteB: 'Lower edge of the web, captured.' });
-        add({ a: `${id}-gunwale`, b: `${id}-web`, typeA: 'dado', size: groove, pts: [[xm, yAt(xm), z1 + g / 2 + riseAt(xm)]], noteA: 'Groove in the underside of the gunwale.', noteB: 'Upper edge of the web, captured.' });
-        add({ a: `${id}-chine`, b: run.deck, typeA: 'rabbet', size: rabbetSize, pts: [[xj, s * (innerHalfWidth(L, xj) + dd / 2), L.deckBot + L.ply / 2]], noteB: 'Edge of the deck, captured.' });
-        // Web end into a stopped dado in the transom.
-        add({ a: run.tx, b: `${id}-web`, typeA: 'dado', size: `${(pl + p.grooveSlopIn).toFixed(3)}" × ${frac(dd)}" stopped dado, ${frac(p.ventHoleIn)}" vent hole through the transom at its closed end`, pts: [[rear ? run.txFace - dd / 2 : run.txFace + dd / 2, yc, (z0 + z1 + riseAt(run.txFace)) / 2]], noteA: 'Vented: the transom slides on last, so air and epoxy must escape (hydraulic lock, M4).', noteB: `End of the web, captured (${rear ? 'rear' : 'front'}); it enters the dado with the transom's slide in X.` });
-        // Chine and gunwale ends into the transom face, clear of the deck dado and the web dado.
-        const deckTopZ = Math.max(cBot, run.deckTop + ds);
-        const chineBand = z0 - g - deckTopZ - 0.2;
-        if (chineBand >= MIN_BAND_IN) {
-          const ej = endJoint(p, L.side, L.transom, chineBand);
-          add({ a: `${id}-chine`, b: run.tx, typeA: ej.type, size: ej.size, pts: [[run.txFace, yc, deckTopZ + 0.1 + chineBand / 2]], noteA: 'End of the chine into the transom face; epoxy fillet inside.' });
-        } else add({ a: `${id}-chine`, b: run.tx, typeA: 'glue', size: 'epoxy + fillet', pts: [[run.txFace, yc, cBot + L.chineH / 2]] });
-        const gunBand = zTop - 0.1 - (z1 + g + 0.1);
-        if (gunBand >= MIN_BAND_IN) {
-          const ej = endJoint(p, L.side, L.transom, gunBand);
-          add({ a: `${id}-gunwale`, b: run.tx, typeA: ej.type, size: ej.size, pts: [[run.txFace, yc, z1 + g + 0.1 + gunBand / 2 + riseAt(run.txFace)]], noteA: 'End of the gunwale into the transom face; epoxy fillet inside.' });
-        } else add({ a: `${id}-gunwale`, b: run.tx, typeA: 'glue', size: 'epoxy + fillet', pts: [[run.txFace, yc, zTop - L.railBand / 2]] });
-      } else if (solid) {
-        add({ a: `${id}-board`, b: run.deck, typeA: 'rabbet', size: rabbetSize, pts: [[xj, s * (innerHalfWidth(L, xj) + dd / 2), bot + L.ply / 2]], noteB: 'Edge of the deck, captured.' });
-        const ej = endJoint(p, L.side, L.transom, Math.min(2, zTop - bot - 0.4));
-        add({ a: `${id}-board`, b: run.tx, typeA: ej.type, size: ej.size, pts: [[run.txFace, yc, (bot + zTop) / 2 - 1], [run.txFace, yc, (bot + zTop) / 2 + 1]], noteA: 'Board end into the transom face.' });
-      } else if (openFrame) {
-        const ej = endJoint(p, L.side, L.transom, L.railBand);
-        add({ a: `${id}-gunwale`, b: run.tx, typeA: ej.type, size: ej.size, pts: [[run.txFace, yc, zTop - L.railBand / 2]], noteA: 'Gunwale end into the transom face.' });
-        for (const part of parts) {
-          if (!part.id.startsWith(`${id}-post-`)) continue;
-          const c: Vec3 = [part.transform[12], part.transform[13], zTop - L.railBand];
-          const pj = endJoint(p, L.side, L.side, 1.5);
-          add({ a: part.id, b: `${id}-gunwale`, typeA: pj.type, size: pj.size, pts: [c], noteA: 'Post top into the gunwale underside.' });
-        }
-      }
+  // ── Sides: panel grooves, deck rabbets, end joints to the rear transom and the bow curl ──
+  for (const { s, tag } of SIDES) {
+    const id = `side-${tag}`;
+    const yc = s * (hw + L.side / 2);
+    const rabbetSize = `${frac(dd)}" × ${rabbetH(L.deckTop, bot).toFixed(3)}" rabbet (inside bottom edge; deck + ${frac(ds)}" clearance, thickened epoxy fills it)`;
+    add({ a: `${id}-chine`, b: `${id}-web`, typeA: 'dado', size: groove, pts: [[xm, yc, z0 - g / 2]], noteA: 'Groove in the top of the chine (a straight cut: router table, fence).', noteB: 'Lower edge of the web, captured.' });
+    add({ a: `${id}-gunwale`, b: `${id}-web`, typeA: 'dado', size: groove, pts: [[xm, yc, webTop(xm) + g / 2]], noteA: 'Groove in the underside of the gunwale, plowed along the sloped edge before the board is sawn to the sled line.', noteB: 'Upper edge of the web, captured.' });
+    add({ a: `${id}-chine`, b: deck, typeA: 'rabbet', size: rabbetSize, pts: [[xj, s * (hw + dd / 2), L.deckBot + L.ply / 2]], noteB: 'Edge of the deck, captured.' });
+    // Web end into a stopped dado in the transom.
+    add({ a: 'transom-rear', b: `${id}-web`, typeA: 'dado', size: `${(pl + p.grooveSlopIn).toFixed(3)}" × ${frac(dd)}" stopped dado, ${frac(p.ventHoleIn)}" vent hole through the transom at its closed end`, pts: [[rearTx - dd / 2, yc, (z0 + webTop(rearTx)) / 2]], noteA: 'Vented: the transom slides on last, so air and epoxy must escape (hydraulic lock, M4).', noteB: 'End of the web, captured (rear); it enters the dado with the transom\'s slide in X.' });
+    // Chine and gunwale ends into the transom face, clear of the deck dado and the web dado.
+    const deckTopZ = Math.max(cBot, L.deckTop + ds);
+    const chineBand = z0 - g - deckTopZ - 0.2;
+    if (chineBand >= MIN_BAND_IN) {
+      const ej = endJoint(p, L.side, L.transom, chineBand);
+      add({ a: `${id}-chine`, b: 'transom-rear', typeA: ej.type, size: ej.size, pts: [[rearTx, yc, deckTopZ + 0.1 + chineBand / 2]], noteA: 'End of the chine into the transom face; epoxy fillet inside.' });
+    } else add({ a: `${id}-chine`, b: 'transom-rear', typeA: 'glue', size: 'epoxy + fillet', pts: [[rearTx, yc, cBot + L.chineH / 2]] });
+    const gunBand = topAt(rearTx) - 0.1 - (webTop(rearTx) + g + 0.1);
+    if (gunBand >= MIN_BAND_IN) {
+      const ej = endJoint(p, L.side, L.transom, gunBand);
+      add({ a: `${id}-gunwale`, b: 'transom-rear', typeA: ej.type, size: ej.size, pts: [[rearTx, yc, webTop(rearTx) + g + 0.1 + gunBand / 2]], noteA: 'End of the gunwale into the transom face; epoxy fillet inside.' });
+    } else add({ a: `${id}-gunwale`, b: 'transom-rear', typeA: 'glue', size: 'epoxy + fillet', pts: [[rearTx, yc, topAt(rearTx) - L.railBand / 2]] });
+    // The forward ends butt the bow curl, whose edge is bonded to the inside faces of the chine, web and gunwale.
+    for (const m of ['chine', 'web', 'gunwale'] as const) {
+      const zc = m === 'chine' ? cBot + L.chineH / 2 : m === 'web' ? (z0 + webTop(L.xSideEnd)) / 2 : topAt(L.xSideEnd) - L.railBand / 2;
+      add({ a: `${id}-${m}`, b: 'bow-curl', typeA: 'glue', size: 'thickened epoxy, the curl\'s edge against the inside face', pts: [[L.xSideEnd, s * hw, zc]], noteA: 'The bow curl\'s side edge is bonded along the member\'s inside face where the two meet (the curl rises across the end of the side).' });
     }
   }
-  // Scarfs between the curved cabin run and the straight nose run, at the tangent point x = xn (the scarf lies in the straight nose run, never in the bend).
-  for (const { s, tag } of SIDES) {
-    const yN = s * (innerHalfWidth(L, L.xn) + L.side / 2);
-    const scarf = (a: string, bId: string, t: number, zc: number, what: string) =>
-      add({ a, b: bId, typeA: 'scarf', size: `1:8 scarf, ${(8 * t).toFixed(1)}" long, epoxy`, pts: [[L.xn, yN, zc]], noteA: `${what}: scarf at the end of the curve, in the straight run (never in the bend; the bow run, D-52).` });
-    if (captured) {
-      scarf(`side-cabin-${tag}-chine`, `side-nose-${tag}-chine`, L.side, cBot + L.chineH / 2, 'Chine');
-      scarf(`side-cabin-${tag}-gunwale`, `side-nose-${tag}-gunwale`, L.side, zTop - L.railBand / 2, 'Gunwale');
-      scarf(`side-cabin-${tag}-web`, `side-nose-${tag}-web`, pl, (z0 + z1) / 2, 'Side panel');
-    } else if (solid) scarf(`side-cabin-${tag}-board`, `side-nose-${tag}-board`, L.side, (bot + zTop) / 2, 'Board');
-    else if (openFrame) scarf(`side-cabin-${tag}-gunwale`, `side-nose-${tag}-gunwale`, L.side, zTop - L.railBand / 2, 'Gunwale');
-    if (ladder) scarf(`rail-cabin-${tag}`, `rail-nose-${tag}`, p.railThicknessIn, (L.railTop + bot - p.railDepthIn) / 2, 'Rail');
-  }
 
-  // ── Decks into the transom dados, glued to the frame ──
+  // ── Deck: rear transom dado, scarfed to the bow curl, glued to the frame ──
   add({ a: 'transom-rear', b: deck, typeA: 'dado', size: `${rabbetH(L.deckTop, bot).toFixed(3)}" × ${frac(dd)}" dado across the front face (deck + ${frac(ds)}" clearance), ${frac(p.ventHoleIn)}" vent holes through the transom at both closed ends`, pts: [[rearTx - dd / 2, 0, L.deckBot + L.ply / 2]], noteB: 'Rear edge of the deck, captured.' });
-  add({ a: 'transom-front', b: deck, typeA: 'dado', size: `${rabbetH(L.deckTop, L.deckBot).toFixed(3)}" × ${frac(dd)}" dado across the rear face (deck + ${frac(ds)}" clearance), ${frac(p.ventHoleIn)}" vent holes through the transom at both closed ends`, pts: [[frontTx + dd / 2, 0, L.deckBot + L.ply / 2]], noteB: 'Front edge of the deck, captured.' });
+  add({ a: deck, b: 'bow-curl', typeA: 'scarf', size: `8:1 scarf, ${(8 * L.ply).toFixed(1)}" long, epoxy`, pts: [[L.xFlatEnd, 0, L.deckBot + L.ply / 2]], noteA: 'Deck to the bow curl: the scarf lies in the flat part, over the last joist.' });
   for (const { s, tag } of SIDES) {
-    if (ladder) {
-      const xRn = (L.xn + L.noseRailEnd) / 2;
-      const yRc = s * (innerHalfWidth(L, (L.xRear + L.xc0) / 2) + p.railThicknessIn / 2 + 0 * L.side), yRn = s * (innerHalfWidth(L, xRn) + L.side - p.railThicknessIn / 2);
-      void yRc;
-      add({ a: `rail-cabin-${tag}`, b: deck, typeA: 'glue', size: 'thickened epoxy, full face', pts: [[(rearTx + L.xn) / 2, s * (L.hwC + L.side - p.railThicknessIn / 2), L.deckBot]], noteA: 'Deck bonded to the rail ledge (and the joist tops); weights or vacuum bag.' });
-      add({ a: `rail-nose-${tag}`, b: deck, typeA: 'glue', size: 'thickened epoxy, full face (the rail top is flush with the deck underside)', pts: [[xRn, yRn, L.railTop]] });
-    }
-    // Side-to-frame tie (build review M6, D-43): the chine bears on the rail (ladder, flush under it) or on the girder (hull-beam), epoxy bed + VERTICAL Dominos every chineTieSpacingIn (the hull is built inverted, MUST-2).
-    if (captured) {
-      for (const zone of ['cabin', 'nose'] as const) {
-        const x0 = zone === 'cabin' ? rearTx : L.xn, x1 = zone === 'cabin' ? L.xn : (ladder ? L.noseRailEnd : L.xn);
-        const frameId = ladder ? `rail-${zone}-${tag}` : `girder-${zone}-${tag}`;
-        if (x1 - x0 < 2 * p.chineTieSpacingIn / 3) continue;
-        const n = Math.max(2, Math.floor((x1 - x0) / p.chineTieSpacingIn));
-        // Flat bearing face under the chine (beside the nose-deck rabbet in the nose), and the Domino that fits it with ≥ 0.1" of oak each side (the groove-wall rule).
-        const flat = L.side - dd; // one deck level: the rabbet runs the whole chine
-        const dom = DOMINOS.filter((d) => d.tool === 'DF 500' && d.tMm / MM + 2 * TIE_WALL_MIN_IN <= flat).sort((a, b) => b.tMm * b.wMm - a.tMm * a.wMm)[0];
-        const pts = Array.from({ length: n }, (_, i) => {
-          const x = x0 + ((i + 0.5) * (x1 - x0)) / n;
-          return [x, s * (innerHalfWidth(L, x) + dd + flat / 2), cBot] as Vec3;
-        });
-        add({
-          a: `side-${zone}-${tag}-chine`, b: frameId, typeA: dom ? 'domino' : 'glue',
-          size: dom ? `${dom.name} (${dom.tool}) every ${p.chineTieSpacingIn}" + epoxy bed on the ${frac(flat)}" bearing face` : 'epoxy bed on the bearing face',
-          pts, noteA: 'SIDE-TO-FRAME TIE (D-43, D-45): the chine sits on the rail top; the Dominos are VERTICAL and engage as the frame + deck unit is lowered into the inverted side assembly (a protruding Domino cannot be fitted any other way); epoxy bed, then screws up through the rail every other Domino.',
-        });
-      }
+    add({ a: `rail-${tag}`, b: deck, typeA: 'glue', size: 'thickened epoxy, full face (the rail top is flush with the deck underside)', pts: [[(rearTx + L.railEnd) / 2, s * (hw + L.side - railT / 2), L.railTop]], noteA: 'Deck bonded to the rail top (and the joist tops); weights or vacuum bag.' });
+    // Side-to-frame tie (build review M6, D-43): the chine bears on the rail, epoxy bed + VERTICAL Dominos every chineTieSpacingIn (the hull is built inverted, MUST-2).
+    const x0 = rearTx, x1 = L.railEnd;
+    if (x1 - x0 >= (2 * p.chineTieSpacingIn) / 3) {
+      const n = Math.max(2, Math.floor((x1 - x0) / p.chineTieSpacingIn));
+      const flat = L.side - dd;
+      const dom = DOMINOS.filter((d) => d.tool === 'DF 500' && d.tMm / MM + 2 * TIE_WALL_MIN_IN <= flat).sort((a, b) => b.tMm * b.wMm - a.tMm * a.wMm)[0];
+      const pts = Array.from({ length: n }, (_, i) => [x0 + ((i + 0.5) * (x1 - x0)) / n, s * (hw + dd + flat / 2), cBot] as Vec3);
+      add({
+        a: `side-${tag}-chine`, b: `rail-${tag}`, typeA: dom ? 'domino' : 'glue',
+        size: dom ? `${dom.name} (${dom.tool}) every ${p.chineTieSpacingIn}" + epoxy bed on the ${frac(flat)}" bearing face` : 'epoxy bed on the bearing face',
+        pts, noteA: 'SIDE-TO-FRAME TIE (D-43): the chine sits on the rail top; the Dominos are VERTICAL and engage as the frame + deck unit is lowered into the inverted side assembly (a protruding Domino cannot be fitted any other way); epoxy bed, then screws up through the rail every other Domino.',
+      });
     }
   }
 
-  // ── Frame: rails and girders to the rear transom, crossmembers to the rails or girders, joists to the deck ──
-  const railT = ladder ? p.railThicknessIn : L.side;
+  // ── Axle hangers (D-54): glued and bolted to the inside of each rail, both ends of the joint recorded ──
+  for (const { s, tag } of SIDES) for (const [pre, bx] of [['axle-hanger', L.beamR.x]] as const) {
+    const hy = s * (hw + L.side - railT / 2 - p.axleHangerThickIn / 2);
+    add({ a: `${pre}-${tag}`, b: `rail-${tag}`, typeA: 'glue', size: `${(p.axleHangerWidthIn).toFixed(2)}" × ${p.railDepthIn.toFixed(2)}" side-grain face, epoxy`, pts: [[bx, hy, L.railTop - p.railDepthIn / 2]], noteA: 'Long-grain hanger to the rail inner face: the bolts carry the vertical load, the glue keeps the faces together.' });
+    add({ a: `${pre}-${tag}`, b: `rail-${tag}`, typeA: 'bolt', size: `${p.beamHoldDownBoltDiameterIn}" 316 bolts through the hanger and the rail, nylock nuts and fender washers on the outside face`, pts: [[bx - 0.6, hy, L.railTop - 0.8], [bx + 0.6, hy, L.railTop - 0.8]], noteA: 'Above the beam notch, one each side of the hold-down angle.' });
+  }
+
+  // ── Frame: rails to the rear transom, crossmembers to the rails, joists to the deck ──
   for (const { s, tag } of SIDES) {
-    const mem = ladder ? `rail-cabin-${tag}` : `girder-cabin-${tag}`;
     const bandZ = L.deckBot - (L.deckTop - jD);
     if (bandZ >= MIN_BAND_IN + 0.2) {
       const ej = endJoint(p, railT, L.transom, bandZ - 0.2);
-      add({ a: mem, b: 'transom-rear', typeA: ej.type, size: ej.size, pts: [[rearTx, s * (ladder ? L.hwC + L.side - railT / 2 : L.hwC + L.side / 2), (L.deckTop - jD + L.deckBot) / 2]], noteA: 'Member end into the transom face (the transom hangs jD below the deck).' });
-    } else add({ a: mem, b: 'transom-rear', typeA: 'glue', size: 'epoxy + fillet', pts: [[rearTx, s * (L.hwC + L.side / 2), L.deckBot - 0.5]] });
+      add({ a: `rail-${tag}`, b: 'transom-rear', typeA: ej.type, size: ej.size, pts: [[rearTx, s * (hw + L.side - railT / 2), (L.deckTop - jD + L.deckBot) / 2]], noteA: 'Rail end into the transom face (the transom hangs jD below the deck).' });
+    } else add({ a: `rail-${tag}`, b: 'transom-rear', typeA: 'glue', size: 'epoxy + fillet', pts: [[rearTx, s * (hw + L.side / 2), L.deckBot - 0.5]] });
   }
   const spanEnds = (id: string) => {
     const j = byId.get(id);
@@ -269,52 +226,36 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     const bb = worldAABB(j);
     return { j, x: (bb.min[0] + bb.max[0]) / 2, yMin: bb.min[1], yMax: bb.max[1], zc: (bb.min[2] + bb.max[2]) / 2, thick: bb.max[0] - bb.min[0] };
   };
-  // Cabin crossmembers: both ends into the rail (or girder) faces, the top glued to the deck.
-  L.cabinJoistX.forEach((_x, i) => {
-    const e = spanEnds(`joist-cabin-${i + 1}`);
+  L.joistX.forEach((_x, i) => {
+    const e = spanEnds(joistId(L, i));
     if (!e) return;
     for (const { s, tag } of SIDES) {
-      const hostId = ladder ? `rail-cabin-${tag}` : `girder-cabin-${tag}`;
-      const ej = endJoint(p, e.thick, railT, jD);
+      // A joist cut back for the axle hanger butts the hanger's inner face; the others the rail's.
+      const hangerPre = Math.abs(e.x - L.beamR.x) < p.axleHangerWidthIn / 2 + L.joistT / 2 ? 'axle-hanger' : null;
+      const hangerHere = !!hangerPre && has(`${hangerPre}-${tag}`);
+      const hostId = hangerHere ? `${hangerPre}-${tag}` : `rail-${tag}`;
+      const ej = endJoint(p, e.thick, hangerHere ? p.axleHangerThickIn : railT, jD);
       add({ a: e.j.id, b: hostId, typeA: ej.type, size: ej.size, pts: [[e.x, s * (s > 0 ? e.yMax : -e.yMin), e.zc]], noteA: 'End of the crossmember into the member face; epoxy.' });
     }
     add({ a: e.j.id, b: 'deck', typeA: 'glue', size: 'thickened epoxy, full length', pts: [[e.x, 0, e.zc + jD / 2]], noteA: 'Deck bonded to the crossmember top.' });
   });
-  // Nose crossmember halves: outer end into the nose rail, inner end onto the nose stringer; the top glued to the deck.
-  L.noseJoistX.forEach((_x, i) => {
-    for (const { s, tag } of SIDES) {
-      const e = spanEnds(`joist-nose-${i + 1}-${tag}`);
-      if (!e) continue;
-      const yOut = s > 0 ? e.yMax : e.yMin, yIn = s > 0 ? e.yMin : e.yMax;
-      if (ladder) {
-        const ej = endJoint(p, e.thick, p.railThicknessIn, jD);
-        add({ a: e.j.id, b: `rail-nose-${tag}`, typeA: ej.type, size: ej.size, pts: [[e.x, yOut, e.zc]], noteA: 'Outer end of the half-crossmember into the rail face; epoxy.' });
-      }
-      const stringers = [...byId.keys()].filter((k) => k.startsWith(`stringer-nose-${tag}`));
-      const host = stringers.find((k) => { const bb = worldAABB(byId.get(k)!); return bb.min[0] <= e.x + 1e-6 && bb.max[0] >= e.x - 1e-6; }) ?? stringers[0];
-      if (host) {
-        const ej = endJoint(p, e.thick, L.joistT, jD);
-        add({ a: e.j.id, b: host, typeA: ej.type, size: ej.size, pts: [[e.x, yIn, e.zc]], noteA: 'Inner end of the half-crossmember onto the stringer face; epoxy.' });
-      }
-      add({ a: e.j.id, b: 'deck', typeA: 'glue', size: 'thickened epoxy, full length', pts: [[e.x, (yOut + yIn) / 2, e.zc + jD / 2]], noteA: 'Deck bonded to the crossmember top.' });
+  // ── Front pivot (D-56): the king beam holds the kingpin and the thrust washer; the stop blocks hang under the end joist (they end at the contact point of the swinging beam, inboard of the rails) ──
+  {
+    const kb = byId.get('king-beam');
+    if (kb) {
+      add({ a: 'king-beam', b: 'king-thrust', typeA: 'screw', size: 'two #6 screws (or contact cement) holding the UHMW washer to the king beam', pts: [[L.king.x, 0, L.king.bot]], noteA: 'Keeps the washer with the king beam; the tongue plate slides under it.' });
+      add({ a: 'king-beam', b: 'kingpin', typeA: 'hole', typeB: 'pin', size: `${frac(p.kingpinDiaIn)}" bore (snug bushing fit) through the king beam, nylock nut and washer captured in a slot cut from the front face`, sizeB: `${frac(p.kingpinDiaIn)}" bolt turns in the bore; the nut only stops the axle dropping away (rebound)`, pts: [[L.king.x, 0, (L.king.bot + L.king.top) / 2]], noteA: 'Bored square to the face on the drill press; the nut slot is cut from the front before the deck goes on.' });
     }
-  });
-  // Nose stringers: glued to the deck all along; the rear end of the first run butts the last cabin joist (or the rear transom), the front end of the last run the front transom.
-  L.noseStringers.runs.forEach(([xa, xb], k) => {
+    const endJ = joistId(L, L.joistX.length - 1);
     for (const { s, tag } of SIDES) {
-      const id = `stringer-nose-${tag}${k + 1}`;
-      add({ a: id, b: 'deck', typeA: 'glue', size: 'thickened epoxy, full length', pts: [[(xa + xb) / 2, s * (L.noseStringers.y0 + L.noseStringers.y1) / 2, L.deckBot]], noteA: 'Deck bonded to the stringer top.' });
-      if (k === 0) {
-        const lastJoist = L.cabinJoistX.length ? `joist-cabin-${L.cabinJoistX.length}` : 'transom-rear';
-        const ej = endJoint(p, L.joistT, L.joistT, jD);
-        add({ a: id, b: lastJoist, typeA: ej.type, size: ej.size, pts: [[xa, s * (L.noseStringers.y0 + L.noseStringers.y1) / 2, L.deckBot - jD / 2]], noteA: 'Rear end of the stringer onto the last cabin crossmember; epoxy.' });
-      }
-      if (k === L.noseStringers.runs.length - 1) {
-        const ej = endJoint(p, L.joistT, L.transom, jD);
-        add({ a: id, b: 'transom-front', typeA: ej.type, size: ej.size, pts: [[xb, s * (L.noseStringers.y0 + L.noseStringers.y1) / 2, L.deckBot - jD / 2]], noteA: 'Front end of the stringer into the front transom face; epoxy.' });
-      }
+      const sb = `steer-stop-${tag}`;
+      const st = L.stops;
+      const yc = s * (st.y1 + st.y2) / 2;
+      add({ a: sb, b: endJ, typeA: 'glue', size: 'epoxy on the joist underside, full face', pts: [[L.joistX[L.joistX.length - 1], yc, st.top]], noteA: 'Stop block bonded to the end joist.' });
+      add({ a: sb, b: endJ, typeA: 'bolt', size: `${frac(p.steerStopBoltDiaIn)}" 316 bolts down through the joist and the block, nylock nuts and fender washers at the bottom of the block (counterbored)`, pts: [-1, 1].map((k): Vec3 => [L.joistX[L.joistX.length - 1], yc + k * Math.max(0.3, (st.y2 - st.y1) / 4), (st.top + st.bot) / 2]), noteA: 'Carry the stop load in shear across the glue line.' });
     }
-  });
+  }
+  void deck;
 
   // ── Rear transom backers (S13): epoxy to the transom, the socket and bracket bolts pass through both ──
   for (const { s, tag } of SIDES) {
@@ -330,51 +271,23 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     for (const { s, tag } of SIDES) {
       const sc = byId.get(`scupper-${site.tagPos}-${tag}`);
       if (!sc) continue;
-      const host = captured && site.zone === 'cabin' ? (ladder ? `rail-cabin-${tag}` : `girder-cabin-${tag}`) : captured || openFrame ? `side-${site.zone}-${tag}-chine` : `side-${site.zone}-${tag}-board`;
-      add({ a: sc.id, b: host, typeA: 'glue', size: `${frac(p.scupperDiaIn)}" 316 nipple bedded in epoxy; hole epoxy-lined`, pts: [[site.x, s * (site.hw + L.side / 2), sc.transform[14]]], noteA: 'Drains the deck at deck level; no cut oak edge is left bare.' });
+      add({ a: sc.id, b: `side-${tag}-chine`, typeA: 'glue', size: `${frac(p.scupperDiaIn)}" 316 nipple bedded in epoxy; hole epoxy-lined`, pts: [[site.x, s * (site.hw + L.side / 2), sc.transform[14]]], noteA: 'Drains the deck at deck level; no cut oak edge is left bare.' });
     }
   }
 
-  // ── Signs: four thumb-knob screws into tee-nuts in the side panel (nothing protrudes inside the hull) ──
+  // ── Signs (provisional): four thumb-knob screws into tee-nuts in the side panel (nothing protrudes inside the hull) ──
   for (const { tag } of SIDES) {
     const sign = byId.get(`sign-${tag}`);
     if (!sign || sign.geometry.type !== 'box') continue;
     const [sx, , sz] = sign.geometry.size;
     const dx = Math.max(0.5, sx / 2 - 2);
-    if (captured || solid) {
-      const dz = Math.max(0.3, Math.min(1.5, (L.web.z1 - L.web.z0) / 2 - 0.6, sz / 2 - 0.6));
-      const pts = ([[-dx, -dz], [dx, -dz], [-dx, dz], [dx, dz]] as const).map(([x, z]) => toModel(sign.transform, [x, 0, z]));
-      add({
-        a: sign.id, b: captured ? `side-cabin-${tag}-web` : `side-cabin-${tag}-board`, typeA: 'knob', typeB: 'threaded-insert',
-        size: '#10-32 × 1 thumb-knob screw through a 3/16 clearance hole', sizeB: captured ? '#10-32 short-barrel stainless tee-nut, epoxied in the 6 mm web, prongs on the inside face' : '#10-32 × 3/8 stainless insert',
-        pts, noteA: 'Sign comes off for transport (D-9).',
-      });
-    } else {
-      const dz = Math.max(0.3, sz / 2 - 0.45);
-      const pts = [-dx, dx].map((x) => toModel(sign.transform, [x, 0, dz]));
-      add({ a: sign.id, b: `side-cabin-${tag}-gunwale`, typeA: 'knob', typeB: 'threaded-insert', size: '#10-32 thumb-knob screw', sizeB: '#10-32 × 3/8 stainless insert in the gunwale face', pts });
-    }
-  }
-
-  // ── Finger guards: the strap on stainless inserts in the gunwale, one on the curved cabin gunwale and the rest on the straight nose gunwale (r3 N-9) ──
-  {
-    const fa = fingerAnalysis(ctx);
-    for (const { s, tag } of SIDES) {
-      const guard = byId.get(`guard-${tag}`);
-      if (!guard || !fa.hazard) continue;
-      const zc = guardInsertZ(L, p); // above the gunwale's web groove (M2, D-43)
-      const x0 = fa.hazard.x0, len = fa.hazard.x1 - fa.hazard.x0;
-      const fracs = [0.15, 0.4, 0.65, 0.9];
-      const yAt = (x: number) => s * sidePath(L, L.side / 2, x, x + 1e-6)[0][1];
-      const hostOf = (x: number) => (x >= L.xn ? (captured || openFrame ? `side-nose-${tag}-gunwale` : `side-nose-${tag}-board`) : (captured || openFrame ? `side-cabin-${tag}-gunwale` : `side-cabin-${tag}-board`));
-      for (const host of new Set(fracs.map((f) => hostOf(x0 + len * f)))) {
-        const xs = fracs.map((f) => x0 + len * f).filter((x) => hostOf(x) === host);
-        add({
-          a: guard.id, b: host, typeA: 'screw', typeB: 'threaded-insert', size: '#10-32 × 5/8 SS button-head screw', sizeB: '#10-32 × 3/8 flanged 316 stainless insert (above the web groove, not into it)',
-          pts: xs.map((x) => [x, yAt(x), zc] as Vec3), noteA: 'Strap on the gunwale outer face; the leg lies in the web recess. The inserts sit in the solid oak above the groove (build review M2); print the guard hood face down, ASA, 4+ perimeters, and add ribs under the hood flange.',
-        });
-      }
-    }
+    const dz = Math.max(0.3, Math.min(1.5, sz / 2 - 0.6));
+    const pts = ([[-dx, -dz], [dx, -dz], [-dx, dz], [dx, dz]] as const).map(([x, z]) => toModel(sign.transform, [x, 0, z]));
+    add({
+      a: sign.id, b: `side-${tag}-web`, typeA: 'knob', typeB: 'threaded-insert',
+      size: '#10-32 × 1 thumb-knob screw through a 3/16 clearance hole', sizeB: '#10-32 short-barrel stainless tee-nut, epoxied in the 6 mm web, prongs on the inside face',
+      pts, noteA: 'Sign comes off for transport (D-9). Provisional placement (D-54).',
+    });
   }
 
   // ── Write both sides of every pair ──
@@ -422,7 +335,7 @@ export function joinerySummary(parts: Part[], filter: (p: Part) => boolean = () 
 
 /**
  * Fill in `at` (local-frame fastener positions) for every structured joint that does not have one (parts built outside
- * the hull/frame joinery: clamps, turntable, steer stops, seat and storage hardware, brake and handle bolts, lights).
+ * the hull/frame joinery: clamps, front axle, seat and storage hardware, brake and handle bolts, lights).
  *
  * The positions are derived, not hand-placed: the contact region of the two mated parts is the overlap of their world
  * bounding boxes (or, for parts a hair apart, this part's own face toward the mate). `count` points are spread over that region:

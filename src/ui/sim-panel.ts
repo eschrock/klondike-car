@@ -118,14 +118,15 @@ export function mountSimPanel(host: HTMLElement, deps: SimPanelDeps): SimPanel {
   // ── readouts ──
   const speedOut = h('output', { class: 'sp-big' }, '0.0');
   const stat = (k: string, v: HTMLElement) => h('div', { class: 'sp-stat' }, h('span', { class: 'muted' }, k), v);
-  const steerOut = h('output', {}, '0°');
   const timeOut = h('output', {}, '0.0 s');
+  const steerOut = h('output', {}, '0°');
+  const radiusOut = h('output', { title: 'Radius of the circle the rear axle center is driving (speed / yaw rate), against WB / tan(lock) from the geometry.' }, '–');
   const slopeOut = h('output', {}, '0.0°');
   const rollOut = h('output', {}, '0.0°');
   const peakOut = h('output', {}, '1.0×');
   const stats = h('div', { class: 'sp-stats' },
     h('div', { class: 'sp-stat sp-speed' }, speedOut, h('span', { class: 'muted' }, 'mph')),
-    stat('Time', timeOut), stat('Steer', steerOut), stat('Side slope', slopeOut), stat('Tilt', rollOut), stat('Peak load', peakOut));
+    stat('Time', timeOut), stat('Steer', steerOut), stat('Turn radius', radiusOut), stat('Side slope', slopeOut), stat('Tilt', rollOut), stat('Peak load', peakOut));
   const wheelRows = WHEEL_IDS.map((id) => {
     const bar = h('span', { class: 'sp-bar-fill' });
     const val = h('td', { class: 'sp-num' }, '–');
@@ -156,23 +157,28 @@ export function mountSimPanel(host: HTMLElement, deps: SimPanelDeps): SimPanel {
   customRow.row.hidden = true;
   const riderGroup = group('Rider mass case', true, riderSel.row, customRow.row);
 
-  const lockSlider = slider('Steer angle (inner wheel)', 'Lock-hold: the steering is held at this inner-wheel angle (+ = left). Clamped to the tow lock (35.5° inner).', -45, 45, 0.5, () => controls.steerAngleDeg, (v) => (controls.steerAngleDeg = v), '°');
-  const modeSel = select<SimControls['steerMode']>('Steering', [['bridle', 'Bridle: the rope steers the tongue'], ['angle', 'Lock-hold at an angle']], () => controls.steerMode, (v) => { controls.steerMode = v; });
+  // The steering slider's range is the lock of the current design (D-56); it is re-tied to it on every sync.
+  const lockNow = () => Math.abs(deps.getParams().steerLockDeg);
+  const steerSlider = slider('Steer angle', 'Hold the front axle at this angle about the kingpin (+ = left), clamped to the lock. Only while "Hold steering" is on.', -20, 20, 0.5, () => controls.steerDeg, (v) => (controls.steerDeg = v), '°');
+  setters.push(() => { const l = lockNow(); steerSlider.input.min = String(-l); steerSlider.input.max = String(l); steerSlider.input.value = String(controls.steerDeg); });
   const pullGroup = group('Pull & steering (live)', true,
-    slider('Pull force', 'Horizontal pull at the tongue tip, lbf.', 0, 150, 1, () => controls.pullLbf, (v) => (controls.pullLbf = v), ' lbf').row,
-    slider('Pull direction', 'The way the puller walks, from the starting heading (+ = left). The tongue follows it (bridle mode).', -60, 60, 1, () => controls.pullAngleDeg, (v) => (controls.pullAngleDeg = v), '°').row,
+    slider('Pull force', 'Horizontal pull at the tongue tie on the front axle, lbf.', 0, 150, 1, () => controls.pullLbf, (v) => (controls.pullLbf = v), ' lbf').row,
+    slider('Pull direction', 'The way the puller walks, from the starting heading (+ = left). A pull off the tongue line turns the front axle toward it, up to the stops.', -60, 60, 1, () => controls.pullAngleDeg, (v) => (controls.pullAngleDeg = v), '°').row,
+    toggle('Pull along the axle', 'The pull direction is measured from the front axle\'s own heading, not the world: the puller keeps the rope along the tongue, so the cart drives a circle.', () => controls.pullFollowsAxle, (v) => (controls.pullFollowsAxle = v), false),
     slider('Puller circles', 'The pull direction turns at this rate: the puller walks a circle (deg/s, + = left).', -30, 30, 1, () => controls.pullTurnDegPerS, (v) => (controls.pullTurnDegPerS = v), '°/s').row,
-    modeSel.row, lockSlider.row);
+    toggle('Hold steering', 'A servo holds the front axle at the steer angle; off, the axle swings free between the stops and the pull steers it.', () => controls.steerHold, (v) => (controls.steerHold = v), false),
+    steerSlider.row);
   const brakeGroup = group('Brake (live)', true,
-    toggle('Brake on', 'Friction torque on the two rear wheels (the only brake, D-53).', () => controls.brakeOn, (v) => (controls.brakeOn = v), false),
+    toggle('Brake on', 'Friction torque on the two rear wheels (the only brake, D-53, D-55).', () => controls.brakeOn, (v) => (controls.brakeOn = v), false),
     slider('Brake force', 'Total braking force at the tire contact patches of the two rear wheels, lbf.', 0, 200, 5, () => controls.brakeLbf, (v) => (controls.brakeLbf = v), ' lbf').row);
 
   const notes = h('details', { class: 'sp-group sp-notes' }, h('summary', {}, 'What this models, and what it does not'),
     h('ul', {},
-      h('li', {}, 'Masses, CG and inertia come from the parts list (rider and cargo ride on the chassis). The front end is two knuckle bodies, each on its own vertical kingpin with the tow lock as joint limits; the tie rod is replaced by two position motors that hold each knuckle at the Ackermann-solved angle. The tie rod, bellcrank and tongue are drawn from the same solver but have no physics (D-53, D-58). The old turntable cart is one steer body on one kingpin.'),
-      h('li', {}, 'The tongue yaw follows the rope direction (lagged, limited to the yaw stop) and sets the steering; only the two rear wheels brake.'),
+      h('li', {}, 'Masses, CG and inertia come from the parts list (rider and cargo ride on the chassis). The front axle (beam, stubs, kingpin, tongue plate, shackle) is its own body on a vertical hinge at the kingpin, held to the steering lock by hard stops (D-56) and free otherwise, with a little bearing friction; the front wheels spin on it.'),
+      h('li', {}, 'The pull acts at the tongue tie on the front axle, so a pull off the tongue line steers it. The “Turning circle” scenario holds the axle at the lock and reports the radius the rear axle center drives; pure-rolling ball wheels follow the geometry, WB / tan(lock), with no tire slip angle.'),
+      h('li', {}, 'Only the two rear wheels brake.'),
       h('li', {}, 'Each wheel is a ball at the tire radius: contact is at the tire centerline (what the static tip check uses). No tire width, sidewall flex, hub or axle bending.'),
-      h('li', {}, 'The pull is a horizontal force at the tongue in a fixed world direction; real ropes go slack and real pullers react. Rolling resistance is Coulomb-like (0.05 of the load).'),
+      h('li', {}, 'The pull is a horizontal force at the tongue tie in a fixed world direction (or along the axle); real ropes go slack and real pullers react. Rolling resistance is Coulomb-like (0.05 of the load).'),
       h('li', {}, '“Tip onset” is when a second wheel lifts: the support is then a line and the cart tips. The first lift is a load-transfer warning only.'),
       h('li', {}, 'The Analysis tab, not this sim, is the validation. Fixed step 1/240 s.')));
 
@@ -192,7 +198,7 @@ export function mountSimPanel(host: HTMLElement, deps: SimPanelDeps): SimPanel {
     syncAll();
   };
 
-  const riderViewState = (): ViewState => ({ steerDeg: 0, rider: rider === 'none' ? 'none' : rider === 'goal' ? 'goal' : 'operating', cargo: true });
+  const riderViewState = (): ViewState => ({ rider: rider === 'none' ? 'none' : rider === 'goal' ? 'goal' : 'operating', cargo: true });
 
   /** Rebuild the cart and a fresh sim from the current parameters and settings. */
   const restart = async () => {
@@ -244,6 +250,7 @@ export function mountSimPanel(host: HTMLElement, deps: SimPanelDeps): SimPanel {
     speedOut.textContent = fmt(Math.abs(r.speedMph));
     timeOut.textContent = `${fmt(r.t)} s`;
     steerOut.textContent = `${fmt(r.steerDeg)}°`;
+    radiusOut.textContent = r.turnRadiusIn === null ? '–' : `${fmt(r.turnRadiusIn / 12)} ft`;
     slopeOut.textContent = `${fmt(r.groundSideSlopeDeg)}°`;
     rollOut.textContent = `${fmt(r.rollDeg)}°`;
     peakOut.textContent = `${fmt(r.peakLoadFactor, 1)}×`;
@@ -288,8 +295,8 @@ export function mountSimPanel(host: HTMLElement, deps: SimPanelDeps): SimPanel {
       if (sim.readout().finished) { running = false; syncRun(); }
     }
     const r = sim.readout();
-    // Scripted events (brake, steer-to-lock) flip live controls: keep their widgets in step.
-    const snap = `${controls.brakeOn}|${controls.steerMode}|${controls.steerAngleDeg}`;
+    // Scripted events (brake) flip live controls: keep their widgets in step.
+    const snap = `${controls.brakeOn}|${lockNow()}`;
     if (snap !== lastSnap) { lastSnap = snap; syncAll(); }
     deps.viewer.setBodyPoses(sim.poses());
     deps.viewer.setSimGroundPose(sim.groundPose(), sim.chassisPositionIn());

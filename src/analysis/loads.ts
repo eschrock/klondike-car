@@ -6,8 +6,6 @@
 import type { Params } from '../params';
 import { partCentroid } from '../model/bounds';
 import type { Part, Vec3 } from '../model/types';
-import { solveSteer, type AckSpec } from '../model/ackermann';
-import { DEG, rot2, type P2 } from './geometry';
 import type { LoadKind } from './types';
 
 export interface CaseData {
@@ -19,11 +17,6 @@ export interface CaseData {
   massLb: number;
   /** CG in the neutral (straight) pose. */
   cg: Vec3;
-  /**
-   * CG when the steered parts are turned: `deltaRad` is the INNER wheel angle (+ = left) and each side's steer group (steer-L / wheel-FL, steer-R / wheel-FR)
-   * moves about its own kingpin by its own solved angle (D-53). The tie rod, bellcrank and tongue are treated as chassis mass (a few lb near the centerline).
-   */
-  cgAt(deltaRad: number): Vec3;
   label: string;
   /** Cargo cases only: which end of the bed the payload is piled against ('aft' = against the box, 'fore' = against the nose end of the full-width run). */
   placement?: string;
@@ -46,29 +39,17 @@ export interface LoadModel {
   emptyMassLb: number;
 }
 
-const isSteerBody = (x: Part) => x.body === 'steer-L' || x.body === 'steer-R' || x.body === 'wheel-FL' || x.body === 'wheel-FR';
-
-interface SteerGroup { m: number; x: number; y: number; z: number }
-
-/** Mass, moments and steer-group moments of an empty-cart part list. */
+/** Mass, moments and removable mass of an empty-cart part list. (The pivoting front axle assembly turns about the kingpin: its CG shift with the steer angle, about 0.02 in on the cart CG, is neglected.) */
 function sumParts(parts: Part[]) {
   let m = 0, mx = 0, my = 0, mz = 0;
-  let ms = 0;
-  const gL: SteerGroup = { m: 0, x: 0, y: 0, z: 0 }, gR: SteerGroup = { m: 0, x: 0, y: 0, z: 0 };
   let removable = 0;
   for (const x of parts) {
     if (x.payload || x.group === 'reference') continue;
     const c = x.cgIn ?? partCentroid(x);
     m += x.massLb; mx += x.massLb * c[0]; my += x.massLb * c[1]; mz += x.massLb * c[2];
-    if (isSteerBody(x)) {
-      ms += x.massLb;
-      const left = x.body === 'steer-L' || x.body === 'wheel-FL';
-      const g = left ? gL : gR;
-      g.m += x.massLb; g.x += x.massLb * c[0]; g.y += x.massLb * c[1]; g.z += x.massLb * c[2];
-    }
     if (x.removable) removable += x.massLb;
   }
-  return { m, mx, my, mz, ms, gL, gR, removable };
+  return { m, mx, my, mz, removable };
 }
 
 /** Where the cargo payload sits for the cargo cases (from the layout; see `cargoCg`). */
@@ -84,35 +65,20 @@ export interface CargoInput {
   placements: CargoPlacement[];
 }
 
-export function buildLoadModel(p: Params, parts: Part[], ack: AckSpec, cargoIn?: CargoInput): LoadModel {
-  const { m, mx, my, mz, ms, gL, gR, removable } = sumParts(parts);
+export function buildLoadModel(p: Params, parts: Part[], cargoIn?: CargoInput): LoadModel {
+  const { m, mx, my, mz, removable } = sumParts(parts);
   const torso = parts.find((x) => x.id === 'rider-torso');
   const cargo = parts.find((x) => x.id === 'cargo');
   const riderCg: Vec3 = torso ? (torso.cgIn ?? partCentroid(torso)) : [p.seatXIn + p.riderCgAheadOfHpointIn, 0, p.deckHeightIn + p.riderSeatedCgAboveSeatIn];
   const cargoCg: Vec3 = cargo ? (cargo.cgIn ?? partCentroid(cargo)) : [0, 0, p.deckHeightIn + 2];
 
-  const make = (kind: LoadKind, riderLb: number, cargoLb: number, label: string, base = { m, mx, my, mz, ms, gL, gR }, at: Vec3 = cargoCg, riderAt: Vec3 = riderCg): CaseData => {
+  const make = (kind: LoadKind, riderLb: number, cargoLb: number, label: string, base = { m, mx, my, mz }, at: Vec3 = cargoCg, riderAt: Vec3 = riderCg): CaseData => {
     const M = base.m + riderLb + cargoLb;
     const X = base.mx + riderLb * riderAt[0] + cargoLb * at[0];
     const Y = base.my + riderLb * riderAt[1] + cargoLb * at[1];
     const Z = base.mz + riderLb * riderAt[2] + cargoLb * at[2];
     const cg: Vec3 = M > 0 ? [X / M, Y / M, Z / M] : [0, 0, 0];
-    const { ms, gL, gR } = base;
-    return {
-      kind, riderLb, cargoLb, massLb: M, cg, label,
-      cgAt(d: number): Vec3 {
-        if (d === 0 || ms === 0 || M === 0) return cg;
-        const sol = solveSteer(ack, d * DEG);
-        let dx = 0, dy = 0;
-        for (const [g, ang, ky] of [[gL, sol.leftDeg, ack.kpHalf], [gR, sol.rightDeg, -ack.kpHalf]] as const) {
-          if (g.m <= 0) continue;
-          const q0: P2 = [g.x / g.m, g.y / g.m];
-          const q = rot2(q0, (ang * Math.PI) / 180, [ack.kx, ky]);
-          dx += g.m * (q[0] - q0[0]); dy += g.m * (q[1] - q0[1]);
-        }
-        return [cg[0] + dx / M, cg[1] + dy / M, cg[2]];
-      },
-    };
+    return { kind, riderLb, cargoLb, massLb: M, cg, label };
   };
   return {
     empty: make('empty', 0, 0, 'empty'),

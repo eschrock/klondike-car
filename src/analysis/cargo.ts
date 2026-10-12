@@ -43,15 +43,15 @@ export function seatStowCheck(ctx: Ctx): AnalysisCheck {
   const avail = { l: i.x1 - i.x0, w: i.y1 - i.y0, h: i.zCeil - i.zFloor };
   const ds: Detail[] = [
     detail('fore-aft: the cushion + backers, or the back + coaming ledges, plus the clearance', need.lengthIn, 'in', avail.l, '<='),
-    detail('across: the cushion plus a wedge-and-knob strip each side, plus the clearance', need.widthIn, 'in', avail.w, '<='),
-    detail('height: corner fillet + cushion + back (frame and pad), under the lid frame and battens', need.heightIn, 'in', avail.h, '<='),
+    detail(plan.stack === 'floor' ? 'across: the cushion plus a wedge-and-knob strip each side, plus the clearance' : 'across: the cushion plus the clearance (the wedges and knobs lie on top of the back)', need.widthIn, 'in', avail.w, '<='),
+    detail('height: corner fillet + cushion + back (frame and pad)' + (plan.stack === 'top' ? ' + the wedges and knobs on top' : '') + ', under the lid frame and battens', need.heightIn, 'in', avail.h, '<='),
   ];
   const g = governing(ds, '');
   const minMargin = Math.min(margin.lengthIn, margin.widthIn, margin.heightIn);
   const status: Status = minMargin < -1e-9 ? 'fail' : minMargin < STOW_MARGINAL_IN ? 'marginal' : 'pass';
   const how = `The seat kit lies flat in the box, measured from the real parts (not nominal sizes): the cushion ${f(s.cushion[0], 2)}" × ${f(s.cushion[1], 2)}" × ${f(s.cushion[2], 2)}" lies on the floor flush to the aft wall (its fore end stops short of the 1" insert backers); `
     + `the back (frame, panel, pad) ${f(s.back[0], 2)}" head to foot × ${f(s.back[1], 2)}" across × ${f(s.back[2], 2)}" thick lies on it, frame down and pad up, head toward the aft wall, centered so it clears the coaming ledge at both ends and rides above the backers; `
-    + `each wedge (${f(s.wedge[0], 2)}" × ${f(s.wedge[1], 2)}" × ${f(s.wedge[2], 2)}", on its long edge) and knob with its ${f(s.knob[0], 1)}" stud lie on the floor in a strip along each side wall, and the two stud-hole plugs go into the inserts from the bed side. `
+    + `each wedge (${f(s.wedge[0], 2)}" × ${f(s.wedge[1], 2)}" × ${f(s.wedge[2], 2)}", on its long edge) and knob with its ${f(s.knob[0], 1)}" stud ${plan.stack === 'floor' ? 'lie on the floor in a strip along each side wall' : 'lie on top of the seat back, in two short lanes (D-54: the 24 in body leaves no room for floor strips)'}, and the two stud-hole plugs go into the inserts from the bed side. `
     + `Interior ${f(avail.l, 2)}" long × ${f(avail.w, 2)}" wide (inside the 6 mm walls); the lowest piece rides on the 3/8" corner fillets, so the stack starts ${f(i.zRest - i.zFloor, 3)}" off the floor and has ${f(avail.h, 2)}" up to the underside of the lid frame and battens (the lid panel, its gasket and the coaming are above that, so the closed lid never touches the stack). `
     + `Needs ${f(need.lengthIn, 2)}" fore-aft (incl. ${f(p.seatStowClearIn, 2)}" clearance), ${f(need.widthIn, 2)}" across, ${f(need.heightIn, 2)}" high: margins ${f(margin.lengthIn, 2)}", ${f(margin.widthIn, 2)}", ${f(margin.heightIn, 2)}" (marginal under ${STOW_MARGINAL_IN}"). `
     + `Procedure, no tools: unscrew both star knobs (each 3-1/2" stud comes out with its knob), lift the back off the wedges, lift the wedges off, peel the cushion off its Dual Lock, lay the cushion then the back in the box, the wedges and knobs beside them, and thread the two plugs into the inserts (hand-tight) to seal the stud holes. In race mode the 10 Essentials ride in the box (storage-pack row) and the seat is installed; in cargo mode they come out, so they are not part of this fit.`;
@@ -65,11 +65,12 @@ export function seatStowCheck(ctx: Ctx): AnalysisCheck {
 
 /** The cabin joists (crossmembers under the deck) as measured from the parts. */
 function cabinJoists(ctx: Ctx): { parts: Part[]; spanIn: number; thickIn: number; depthIn: number; xs: number[]; tribIn: number } | null {
-  const js = ctx.parts.filter((x) => x.id.startsWith('joist-cabin-'));
+  const js = ctx.parts.filter((x) => /^joist-\d+$/.test(x.id));
   if (!js.length) return null;
   const bb = js.map((x) => worldAABB(x));
   const xs = bb.map((b) => (b.min[0] + b.max[0]) / 2).sort((a, b) => a - b);
-  const edges = [ctx.L.xRear + ctx.L.transom, ...xs, ctx.L.xn];
+  // The king beam (the crossmember at the kingpin, D-56) is a support too, though its part id is not joist-N.
+  const edges = [ctx.L.xRear + ctx.L.transom, ...[...xs, ctx.L.king.x].sort((a, b) => a - b), ctx.L.xFlatEnd];
   let trib = 0;
   for (let i = 1; i < edges.length - 1; i++) trib = Math.max(trib, (edges[i + 1] - edges[i - 1]) / 2);
   return {

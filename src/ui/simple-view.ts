@@ -6,7 +6,7 @@
  * Everything below `mountSimpleView` works on a plain `Params` design object (`DesignView`), never on a global, so a
  * later A-vs-B comparison is two `DesignView`s rendered by two safety cards.
  */
-import { PARAM_DEFS, type ParamDef, type Params } from '../params';
+import { PARAM_DEFS, steerGeometry, type ParamDef, type Params } from '../params';
 import type { FitResult } from '../truck/fit';
 import { SEVERITY, type Status } from '../analysis/types';
 import { LIGHTS, isRiderSweepCached, lightOf, riderSweep, type Light, type SweepResult } from '../analysis/rider-sweep';
@@ -19,7 +19,7 @@ import './simple-view.css';
 export type DemoId = 'tilt' | 'turn' | 'bump' | 'brake';
 export const DEMOS: { id: DemoId; label: string; title: string }[] = [
   { id: 'tilt', label: 'Tip it sideways', title: 'Tip the ground sideways until a wheel lifts. Opens the detailed view.' },
-  { id: 'turn', label: 'Sharp turn at speed', title: 'Full-lock turn at speed. Opens the detailed view.' },
+  { id: 'turn', label: 'Turn the front axle', title: 'Pull the cart with the front axle turned as far as it goes, and read off the turning circle it drives. Opens the detailed view.' },
   { id: 'bump', label: 'Hit a root at jogging pace', title: 'Roll into a 2 inch root at 5 mph. Opens the detailed view.' },
   { id: 'brake', label: 'Brake on a hill', title: 'Roll down a slope, then brake. Opens the detailed view.' },
 ];
@@ -60,7 +60,6 @@ const GLYPH: Record<Status, string> = { pass: '✔', marginal: '!', fail: '✖',
 const UNIT_WORD: Record<string, string> = { lb: 'pounds', in: 'inches', '°': 'degrees' };
 const ANNOUNCE_MS = 600;
 
-const f1 = (v: number) => v.toFixed(1);
 const dims = (d: { lengthIn: number; widthIn: number; heightIn: number }) => `${Math.round(d.lengthIn)} × ${Math.round(d.widthIn)} × ${Math.round(d.heightIn)} in`;
 const fmtVal = (v: number) => String(Number(v.toFixed(4)));
 
@@ -78,8 +77,8 @@ interface Control {
   reset(store: Store): void;
 }
 
-const setOne = (key: 'riderMassLb' | 'wheelbaseIn' | 'wheelDiameterIn' | 'deckHeightIn' | 'steerLockDeg') => (store: Store, v: number) => store.set(key, v);
-const resetOne = (key: 'riderMassLb' | 'wheelbaseIn' | 'wheelDiameterIn' | 'deckHeightIn' | 'steerLockDeg') => (store: Store) => store.set(key, PARAM_DEFS[key].default);
+const setOne = (key: 'riderMassLb' | 'wheelbaseIn' | 'wheelDiameterIn' | 'deckHeightIn' | 'bodyWidthIn') => (store: Store, v: number) => store.set(key, v);
+const resetOne = (key: 'riderMassLb' | 'wheelbaseIn' | 'wheelDiameterIn' | 'deckHeightIn' | 'bodyWidthIn') => (store: Store) => store.set(key, PARAM_DEFS[key].default);
 
 const CONTROLS: Control[] = [
   {
@@ -95,16 +94,16 @@ const CONTROLS: Control[] = [
     set: (store, v) => store.replace({ ...store.get(), frontTrackIn: v, rearTrackIn: v }),
     reset: (store) => store.replace({ ...store.get(), frontTrackIn: PARAM_DEFS.frontTrackIn.default, rearTrackIn: PARAM_DEFS.rearTrackIn.default }),
   },
-  { id: 'wheel', label: 'Wheel size', unit: 'in', def: PARAM_DEFS.wheelDiameterIn, hint: 'Bigger wheels roll easier and tip less, but add weight.', get: (p) => p.wheelDiameterIn, set: setOne('wheelDiameterIn'), reset: resetOne('wheelDiameterIn') },
+  { id: 'wheel', label: 'Wheel size', unit: 'in', def: PARAM_DEFS.wheelDiameterIn, hint: 'All four wheels. Bigger wheels roll easier, but add weight.', get: (p) => p.wheelDiameterIn, set: setOne('wheelDiameterIn'), reset: resetOne('wheelDiameterIn') },
   { id: 'floor', label: 'Floor height', unit: 'in', def: PARAM_DEFS.deckHeightIn, hint: 'Lower floor = steadier. Higher floor = more clearance.', get: (p) => p.deckHeightIn, set: setOne('deckHeightIn'), reset: resetOne('deckHeightIn') },
-  { id: 'steer', label: 'Steering angle (each way)', unit: '°', def: PARAM_DEFS.steerLockDeg, hint: 'Bigger angle = tighter turns.', get: (p) => p.steerLockDeg, set: setOne('steerLockDeg'), reset: resetOne('steerLockDeg') },
+  { id: 'body', label: 'Body width', unit: 'in', def: PARAM_DEFS.bodyWidthIn, hint: 'Wider carries more, but the feet need room inside.', get: (p) => p.bodyWidthIn, set: setOne('bodyWidthIn'), reset: resetOne('bodyWidthIn') },
 ];
 
 /** One labeled slider + number + reset. Returns the row and a function that shows the current design in it. */
 function controlRow(c: Control, store: Store): { row: HTMLElement; sync: (p: Params) => void } {
   const id = `sv-${c.id}`;
   const d = c.def;
-  const defaultText = `${fmtVal(c.id === 'width' ? PARAM_DEFS.rearTrackIn.default : d.default)} ${c.unit}`;
+  const defaultText = `${fmtVal(d.default)} ${c.unit}`;
   const range = h('input', { id, type: 'range', min: String(d.min), max: String(d.max), step: String(d.step), class: 'sv-range', 'aria-describedby': `${id}-hint` });
   const num = h('input', { type: 'number', min: String(d.min), max: String(d.max), step: String(d.step), class: 'sv-num', 'aria-label': `${c.label} (${c.unit})` });
   const reset = h('button', { type: 'button', class: 'sv-reset', title: `Reset to ${defaultText}`, 'aria-label': `Reset ${c.label} to ${defaultText}` }, '↺');
@@ -121,7 +120,7 @@ function controlRow(c: Control, store: Store): { row: HTMLElement; sync: (p: Par
     range.value = String(v);
     range.setAttribute('aria-valuetext', `${fmtVal(v)} ${UNIT_WORD[c.unit] ?? c.unit}`); // M9: the unit is read, not just the number
     if (document.activeElement !== num) num.value = fmtVal(v);
-    reset.hidden = Math.abs(v - (c.id === 'width' ? PARAM_DEFS.rearTrackIn.default : d.default)) < 1e-9 && (c.id !== 'width' || p.frontTrackIn === p.rearTrackIn);
+    reset.hidden = Math.abs(v - d.default) < 1e-9 && (c.id !== 'width' || p.frontTrackIn === p.rearTrackIn);
   };
   const row = h('div', { class: 'sv-row' },
     h('div', { class: 'sv-head' }, h('label', { for: id }, c.label), reset),
@@ -291,8 +290,6 @@ function mountSafetyCard(host: HTMLElement, deps: Pick<SimpleViewDeps, 'onLight'
       e.btn.setAttribute('aria-label', `${LIGHT_TITLE[l]}: ${STATUS_WORD[t.status]}. ${t.text} Opens the detailed view.`);
     }
     // At a glance: size, weight, turning circle and the truck, colored like the lights so the two never disagree.
-    const turn = sweep.operatingChecks.find((c) => c.id === 'turn-radius');
-    const turnFt = turn ? (2 * (turn.cases?.operating?.value ?? turn.value)) / 12 : NaN;
     const bedL = fmtVal(p.truckBedLengthIn), bedW = fmtVal(p.truckWellGapIn);
     const fits = texts.truck.status !== 'fail';
     const assembled = fit.cases.some((c) => c.config === 'installed' && c.fits);
@@ -301,7 +298,8 @@ function mountSafetyCard(host: HTMLElement, deps: Pick<SimpleViewDeps, 'onLight'
     glance.replaceChildren(
       item('Size (L × W × H)', dims(fit.dims.installed), null),
       item('Empty weight', `${Math.round(spec.emptyLb)} lb`, `Seat back and handle off: two people lift ${Math.round(spec.transportLb / 2)} lb each`),
-      item('Turning circle', Number.isFinite(turnFt) ? `${f1(turnFt)} ft across` : '–', 'About the width of a two-car driveway', texts.steering.status),
+      item('Front end', `Pivoting axle, ${fmtVal(Math.abs(p.steerLockDeg))} degrees each way`, 'It turns on one big bolt when the rope pulls it', texts.steering.status),
+      item('Turning circle', `about ${Math.round((2 * steerGeometry(p).centerRadiusIn) / 12)} ft across`, 'The circle the rear axle drives at full turn'),
       item('Truck',
         fits ? `✔ Fits a Tacoma bed (${bedL} × ${bedW} in)` : `✖ Too big for a Tacoma bed (${bedL} × ${bedW} in)`,
         fits ? `${assembled ? 'Fully assembled.' : 'With the handle and seat back off.'} Packed size ${dims(fit.dims.removed)}.` : `Packed size ${dims(fit.dims.removed)}.`,
@@ -341,7 +339,7 @@ export function mountSimpleView(leftHost: HTMLElement, rightHost: HTMLElement, d
   rightHost.classList.add('sv-host');
   const section = h('section', { class: 'sv-controls', 'aria-labelledby': 'sv-cart-h' }, h('h2', { id: 'sv-cart-h' }, 'Change the cart'));
   leftHost.append(section);
-  mountControls(section, deps.store, ['length', 'width', 'wheel', 'floor', 'steer']);
+  mountControls(section, deps.store, ['length', 'width', 'wheel', 'floor', 'body']);
   const card = mountSafetyCard(rightHost, deps);
 
   let pendingDesign: { p: Params; fit: FitResult; spec: SpecFacts } | null = null;

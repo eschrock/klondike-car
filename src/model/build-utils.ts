@@ -3,13 +3,12 @@
  * wood / steel mass with finish (D-20), and rigid-body placement of the steered parts (Ackermann poses).
  */
 import { derived, PLY_SPECIES, resolveParams, type Params } from '../params';
-import { poseMatrices, solveSteer, type PoseId, type SteerSolution } from './ackermann';
 import { computeLayout, type Layout } from './layout';
 import { compose, multiply, rotationX, rotationY } from './mat4';
 import type { Dims, EdgeCondition, Fab, Joint, Mat4, Part, PartGroup, PartKind, RigidBody, Vec2, Vec3 } from './types';
 
 export interface ViewState {
-  /** Displayed steer angle, degrees (+ = turning left): the INNER wheel angle, clamped to the tow lock. */
+  /** Displayed steering angle of the front axle, degrees (+ = turning left), clamped to the lock (D-56). Default 0. */
   steerDeg?: number;
   /** Which rider mass the mannequin carries. Default 'operating'. */
   rider?: 'none' | 'operating' | 'goal';
@@ -29,11 +28,8 @@ export interface Ctx {
   d: ReturnType<typeof derived>;
   L: Layout;
   view: Required<ViewState>;
-  /** Steer angle in radians (the inner wheel), clamped to the tow lock. */
+  /** Steering angle in radians (clamped to the lock). */
   steerRad: number;
-  /** Ackermann solution at the displayed steer angle and the rigid-body poses of the steer bodies (neutral frame to steered pose). */
-  steer: SteerSolution;
-  pose: Record<PoseId, Mat4>;
   plyName: string;
 }
 
@@ -44,6 +40,7 @@ export interface Ctx {
  * (4.7, 4.9), and the seat and storage (5), the brake (6) and the finish (7) follow.
  */
 export const STEP = { frame: 3, body: 4, steering: 4.5, gear: 4.6, linkage: 4.7, spindles: 4.9, seatStorage: 5, brake: 6, finish: 7, payload: 8 } as const;
+/** D-54 build order note: `steering` (4.5) is the bow, `spindles` (4.9) the tongue plate, bridle and steering ropes, bolted on with the hull upright (D-56). */
 
 /**
  * Hull assembly sequence (build review M4 / MUST-2, D-43, D-45). `Part.step` is where a part is INSTALLED; the hull sequence is fractional
@@ -74,21 +71,16 @@ export function roughOf(p: Params, s: Dims): Dims {
 export const STEEL_STOCK_SOURCING = { vendor: 'McMaster-Carr (A36 steel bar / plate / rod stock, cut to length)' } as const;
 
 export function makeCtx(input: Params, v: ViewState = {}): Ctx {
-  const p = resolveParams(input); // every part sees the auto-resolved hull curve start (A-4, D-26, D-52)
+  const p = resolveParams(input);
   const L = computeLayout(p);
-  // The displayed angle is the INNER wheel angle, clamped to the tow lock.
   const lock = Math.abs(p.steerLockDeg);
-  const deg = Math.min(lock, Math.max(-lock, v.steerDeg ?? 0));
-  const steerRad = (deg * Math.PI) / 180;
-  const steer = solveSteer(L.front.ack, deg);
+  const steerDeg = Math.min(lock, Math.max(-lock, v.steerDeg ?? 0));
   return {
     p,
     d: derived(p),
     L,
-    view: { steerDeg: deg, rider: v.seat === 'stowed' ? 'none' : v.rider ?? 'operating', cargo: v.cargo ?? true, removed: v.removed ?? false, seat: v.seat ?? 'installed' },
-    steerRad,
-    steer,
-    pose: poseMatrices(L.front.ack, steer),
+    steerRad: (steerDeg * Math.PI) / 180,
+    view: { steerDeg, rider: v.seat === 'stowed' ? 'none' : v.rider ?? 'operating', cargo: v.cargo ?? true, removed: v.removed ?? false, seat: v.seat ?? 'installed' },
     plyName: p.plySpecies === PLY_SPECIES.okoumeMarine ? 'okoume marine plywood' : 'baltic birch plywood',
   };
 }
@@ -144,11 +136,6 @@ export interface CylSpec extends PartSpec {
   axis: 'x' | 'y' | 'z';
 }
 
-/** The steered pose of a rigid body (Phase 3b): neutral frame to steered frame; null for a body that does not move with the steering . */
-export function poseOf(ctx: Ctx, body: string | undefined): Mat4 | null {
-  return body && Object.prototype.hasOwnProperty.call(ctx.pose, body) ? ctx.pose[body as PoseId] : null;
-}
-
 /** A direction as a unit vector (the exploded view moves parts by a distance along it); undefined stays undefined, a zero vector stays zero. */
 export function unitDir(v: Vec3 | undefined): Vec3 | undefined {
   if (!v) return undefined;
@@ -156,10 +143,8 @@ export function unitDir(v: Vec3 | undefined): Vec3 | undefined {
   return n < 1e-9 ? [0, 0, 0] : [v[0] / n, v[1] / n, v[2] / n];
 }
 
-function placement(ctx: Ctx, s: PartSpec): Mat4 {
-  const m = compose(s.center, s.rot);
-  const pose = poseOf(ctx, s.body);
-  return pose ? multiply(pose, m) : m;
+function placement(_ctx: Ctx, s: PartSpec): Mat4 {
+  return compose(s.center, s.rot);
 }
 
 /**
@@ -185,21 +170,16 @@ function defaultExplode(ctx: Ctx, s: PartSpec): Vec3 {
       if (id.startsWith('wheel')) return unit([0, sy * 1, -0.25]);
       if (id.startsWith('clamp')) return unit([0, sy * 0.6, -1]);
       return unit([fx * 0.3, 0, -1]);
-    case 'steering':
-      // Phase 3b front end (WS-A): spindles outward and down, brackets outward, tie rod / drag link / bellcrank down and aft, tongue forward.
-      if (/^(spindle|steer-arm|kingpin-bolt)-/.test(id)) return unit([0, sy * 1, -0.5]);
-      if (/^(kp-bracket|steer-stop-tow)-/.test(id)) return unit([0, sy * 1, -0.1]);
-      if (/^(tie-rod|drag-link|bellcrank|bell-)/.test(id)) return unit([-0.5, 0, -1]);
-      if (/^tongue-link-pin/.test(id)) return unit([-0.2, 0, 1]);
-      if (/^(tongue|eyebolt-T|bridle)/.test(id)) return unit([1, 0, -0.1]);
-      return unit([0.6, 0, -0.5]);
+    case 'front-end':
+      if (/^(bridle|eyebolt)/.test(id)) return unit([1, 0, 0.1]);
+      if (/^bow-/.test(id)) return unit([1, 0, 0.5]);
+      return unit([0.3, 0, -0.8]);
     case 'frame':
       return unit([fx * 0.6, Math.abs(c[1]) > 4 ? sy * 0.3 : 0, -0.6]);
     case 'body':
       if (/^deck/.test(id)) return unit([fx * 0.3, 0, 1]);
       if (/^side-/.test(id)) return unit([0, sy * 1, 0.25]);
       if (/^transom-rear/.test(id)) return unit([-1, 0, 0.3]);
-      if (/^transom-front/.test(id)) return unit([1, 0, 0.3]);
       return unit([0, sy * 0.5, 0.8]);
     case 'seat':
       if (/^foot-stop/.test(id)) return unit([0.6, 0, 0.8]);
@@ -295,8 +275,7 @@ export function cylinder(ctx: Ctx, s: CylSpec): Part {
   const base = compose(s.center, s.rot);
   const m = multiply(base, rotAxis);
   const part = finalize(ctx, s, { type: 'cylinder', radius: s.radius, length: s.length }, mass, [2 * s.radius, 2 * s.radius, s.length]);
-  const pose = poseOf(ctx, s.body);
-  part.transform = pose ? multiply(pose, m) : m;
+  part.transform = m;
   delete part.grain;
   return part;
 }

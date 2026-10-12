@@ -6,7 +6,7 @@ import { lashLoads, lidOpenAngleDeg, seatBackLoads, seatChecks } from './seat';
 
 const ctxFor = (patch: Partial<Params> = {}) => {
   const p = { ...defaultParams(), ...patch } as Params;
-  return makeContext(p, buildModel(p, { rider: 'goal', cargo: true, steerDeg: 0 }));
+  return makeContext(p, buildModel(p, { rider: 'goal', cargo: true }));
 };
 const ctx = ctxFor();
 

@@ -2,8 +2,6 @@
  * Wheel contacts, support polygon and turning geometry (spec "Wheel contacts"; A-1, A-2, A-3).
  * Ground plane, model frame (+X forward, +Y left), inches and degrees. Pure math.
  */
-import { instantCenters, solveSteer, wheelCenters, type AckSpec } from '../model/ackermann';
-
 export type P2 = [number, number];
 
 export const RAD = Math.PI / 180;
@@ -12,12 +10,8 @@ export const DEG = 180 / Math.PI;
 export interface ContactInputs {
   wheelbaseIn: number;
   rearTrackIn: number;
+  /** Front track (wheel center to center). The front axle pivots about the kingpin at x = wheelbase (D-56), so both front wheels keep this track at any steer angle. */
   frontTrackIn: number;
-  /**
-   * Ackermann spec (D-53): `contactsAt(g, innerRad)` takes the INNER wheel angle (+ = left) and puts each front contact at its solved wheel center (4-bar,
-   * per-wheel kingpin and scrub), and `instantCenterY` uses the mean of the two axle-line centers.
-   */
-  ack: AckSpec;
 }
 
 export interface Contacts {
@@ -25,8 +19,6 @@ export interface Contacts {
   RR: P2;
   FL: P2;
   FR: P2;
-  /** Kingpin axis x. */
-  kx: number;
 }
 
 export function rot2(p: P2, a: number, about: P2 = [0, 0]): P2 {
@@ -35,13 +27,27 @@ export function rot2(p: P2, a: number, about: P2 = [0, 0]): P2 {
   return [about[0] + c * x - s * y, about[1] + s * x + c * y];
 }
 
-/** Tire center-plane contact points at the INNER steer angle `deltaRad` (+ = left): each front wheel at its solved wheel center. */
-export function contactsAt(g: ContactInputs, deltaRad: number): Contacts {
-  const w = wheelCenters(g.ack, solveSteer(g.ack, deltaRad * DEG));
-  return { RL: [0, g.rearTrackIn / 2], RR: [0, -g.rearTrackIn / 2], FL: w.L, FR: w.R, kx: g.ack.kx };
+/**
+ * Tire center-plane contact points of the four wheels at steer angle `steerRad` (D-56; + = left turn). The whole front axle turns about the kingpin at (wheelbase, 0), so
+ * both front wheels stay parallel (no Ackermann): left (WB - (T/2) sin d, +(T/2) cos d), right (WB + (T/2) sin d, -(T/2) cos d). The rear contacts do not move.
+ */
+export function contactsAt(g: ContactInputs, steerRad = 0): Contacts {
+  const h = g.frontTrackIn / 2, s = Math.sin(steerRad), c = Math.cos(steerRad);
+  return {
+    RL: [0, g.rearTrackIn / 2], RR: [0, -g.rearTrackIn / 2],
+    FL: [g.wheelbaseIn - h * s, h * c], FR: [g.wheelbaseIn + h * s, -h * c],
+  };
 }
 
-type Named = { id: keyof Omit<Contacts, 'kx'>; p: P2 };
+/** Steer angles (rad) swept from -lock to +lock: every `stepDeg` plus both endpoints and zero. */
+export function steerSweep(lockRad: number, stepDeg = 2): number[] {
+  const lock = Math.abs(lockRad);
+  const out = new Set<number>([0, -lock, lock]);
+  for (let a = stepDeg * RAD; a < lock - 1e-9; a += stepDeg * RAD) { out.add(a); out.add(-a); }
+  return [...out].sort((a, b) => a - b);
+}
+
+type Named = { id: keyof Contacts; p: P2 };
 
 const cross = (o: P2, a: P2, b: P2) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
 
@@ -112,40 +118,44 @@ export function lateralTip(c: Contacts, cgXY: P2, h: number): { d: number; deg: 
   return { d: best.dist, deg: tipAngleDeg(best.dist, h), edge: `${best.a}-${best.b}` };
 }
 
+export interface WorstTip { steer: number; contacts: Contacts; d: number; deg: number; edge: string }
+
+/**
+ * Worst lateral tip over the whole steering range (D-56): the front axle turns, so the side edges of the support polygon change with the steer angle. Sweeps the steer
+ * angle from -lock to +lock (every 2 degrees plus the endpoints) and returns the angle, the contacts and the edge with the smallest tip angle atan(d / h).
+ */
+export function contactsWorstTip(g: ContactInputs, cgXY: P2, h: number, lockRad: number): WorstTip {
+  let best: WorstTip | null = null;
+  for (const st of steerSweep(lockRad)) {
+    const ct = contactsAt(g, st);
+    const lat = lateralTip(ct, cgXY, h);
+    if (!best || lat.deg < best.deg - 1e-12) best = { steer: st, contacts: ct, d: lat.d, deg: lat.deg, edge: lat.edge };
+  }
+  return best!;
+}
+
+/**
+ * Smallest static stability factor at the OUTER support edge in a turn, over the whole steering range: turning left (steer > 0) the outer edge is RR-FR, turning right FL-RL;
+ * straight, the nearer of the two. Returns the distance, the angle and the edge of the worst case.
+ */
+export function worstOuterEdge(g: ContactInputs, cgXY: P2, lockRad: number): { d: number; steer: number; edge: string } {
+  let best = { d: Infinity, steer: 0, edge: '' };
+  for (const st of steerSweep(lockRad)) {
+    const ct = contactsAt(g, st);
+    const dR = distToLine(cgXY, ct.RR, ct.FR), dL = distToLine(cgXY, ct.FL, ct.RL);
+    const d = st > 1e-12 ? dR : st < -1e-12 ? dL : Math.min(dR, dL);
+    const edge = st > 1e-12 ? 'RR-FR' : st < -1e-12 ? 'FL-RL' : dR <= dL ? 'RR-FR' : 'FL-RL';
+    if (d < best.d) best = { d, steer: st, edge };
+  }
+  return best;
+}
+
 /**
  * Outer support edge in a turn: turning left (δ > 0) the right side is outer, i.e. the line through RR and FR.
  * Returns the CG distance to it (positive when the CG is inside).
  */
 export function outerEdgeDistance(c: Contacts, cgXY: P2, deltaRad: number): number {
   return deltaRad >= 0 ? distToLine(cgXY, c.RR, c.FR) : distToLine(cgXY, c.FL, c.RL);
-}
-
-/**
- * Instantaneous center of the cart in a steady turn at inner steer angle δ (rolling without slip): the mean of the two front axle lines meeting the rear axle
- * line (x = 0). Returns y of the center (x = 0), or null when going straight.
- */
-export function instantCenterY(g: ContactInputs, deltaRad: number): number | null {
-  if (Math.abs(deltaRad) < 1e-9) return null;
-  return instantCenters(g.ack, solveSteer(g.ack, deltaRad * DEG)).mean;
-}
-
-export interface TurnGeometry {
-  /** y of the instantaneous center. */
-  icY: number;
-  /** Radius of the rear-axle center (A-2 reports it too). */
-  rearCenter: number;
-  /** Outer / inner front tire center radius. */
-  outerFront: number;
-  innerFront: number;
-}
-
-export function turnGeometry(g: ContactInputs, deltaRad: number): TurnGeometry | null {
-  const ic = instantCenterY(g, deltaRad);
-  if (ic === null) return null;
-  const c = contactsAt(g, deltaRad);
-  const rad = (q: P2) => Math.hypot(q[0], q[1] - ic);
-  const [a, b] = [rad(c.FL), rad(c.FR)];
-  return { icY: ic, rearCenter: Math.abs(ic), outerFront: Math.max(a, b), innerFront: Math.min(a, b) };
 }
 
 /**

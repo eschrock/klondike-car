@@ -8,8 +8,8 @@
  * The rail at the rear end is a 0.75" x 4" oak bar (z from the rail bottom to the chine) whose inner face carries the deck ledge from `deckBot`
  * up; only the part below the ledge is full thickness. The beam is seated in a notch where the rail meets the rear axle beam.
  */
-import { AXLE_BEAM_POSITION, FRAME_STYLE, type Params } from '../params';
-import type { Layout } from './layout';
+import type { Params } from '../params';
+import type { Beam, Layout } from './layout';
 import type { Mat4, Vec3 } from './types';
 
 export type V2 = [number, number];
@@ -25,25 +25,30 @@ export function localPoint(m: Mat4, pt: Vec3): Vec3 {
   return [0, 1, 2].map((c) => dot(d, col(c)) / dot(col(c), col(c))) as Vec3;
 }
 
-/** The rail (ladder) or side girder (hull-beam frame) at the rear end. */
+/**
+ * The rear axle hanger (D-54): an oak plate glued and bolted to the INSIDE face of each rail at the axle. The deck is 14.7 in up, so the rail no longer reaches the
+ * beam; the hanger drops from the rail top to `axleSeatNotchIn` below the beam top and carries the old D-48 notch. Dimensions here are for the hanger; `railT` is the rail.
+ */
 export interface RailSection {
-  ladder: boolean;
-  /** Thickness across (y), the |y| of its inner and outer faces. */
+  /** Thickness across (y) of the hanger, and the |y| of its inner and outer faces (its outer face is the rail's inner face). */
   t: number;
   yIn: number;
   yOut: number;
-  /** Bottom, top of the full-thickness part (below the deck ledge), x of the rear end (the rear transom's inner face). */
+  /** Hanger bottom, top of the full-thickness part (= the rail top, the deck underside), the rail top, and x of the rear end (the rear transom's inner face). */
   zBot: number;
   zSolidTop: number;
   zTop: number;
   xEnd: number;
+  /** The rail itself: its thickness and inner-face |y|. */
+  railT: number;
+  railYIn: number;
 }
 
-export function railSection(p: Params, L: Layout): RailSection {
-  const ladder = p.frameStyle === FRAME_STYLE.ladder;
-  const t = ladder ? p.railThicknessIn : L.side;
-  const yOut = L.hwC + L.side;
-  return { ladder, t, yIn: yOut - t, yOut, zBot: L.deckBot - p.railDepthIn, zSolidTop: L.deckBot, zTop: L.railTop, xEnd: L.xRear + L.transom };
+export function railSection(p: Params, L: Layout, beam: Beam = L.beamR): RailSection {
+  const railT = p.railThicknessIn;
+  const railYIn = L.hwC + L.side - railT;
+  const t = p.axleHangerThickIn;
+  return { t, yIn: railYIn - t, yOut: railYIn, zBot: beam.top - p.axleSeatNotchIn, zSolidTop: L.deckBot, zTop: L.railTop, xEnd: L.xRear + L.transom, railT, railYIn };
 }
 
 /** The rear axle beam's seat in the cabin rails and its hold-down brackets (MUST-4). Null when the beam does not reach into the rail (overslung beams are above the deck). */
@@ -63,10 +68,9 @@ export interface BeamSeat {
   hd: { x0: number; x1: number; yRail: number; yFree: number; zBeam: number; zTop: number; t: number; leg: number; boltD: number; /** (x, z) of the bolts through the upright leg and the rail. */ railBolts: V2[]; /** (x, |y|) of the bolts down through the horizontal leg and the beam, either side of the axle rod. */ beamBolts: V2[] };
 }
 
-export function beamSeat(p: Params, L: Layout): BeamSeat | null {
-  if (p.axleBeamPosition !== AXLE_BEAM_POSITION.underslung) return null;
-  const rail = railSection(p, L);
-  const b = L.beamR;
+export function beamSeat(p: Params, L: Layout, beam: Beam = L.beamR): BeamSeat | null {
+  const rail = railSection(p, L, beam);
+  const b = beam;
   const depth = b.top - rail.zBot;
   if (depth <= 0.05) return null;
   const w = b.thick + 2 * p.beamNotchClearIn;

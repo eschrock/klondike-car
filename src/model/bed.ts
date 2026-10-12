@@ -8,7 +8,7 @@ import { innerHalfWidth, type Layout } from './layout';
 export interface CargoBed {
   /** The bed starts at the box's fore end (the seat wedge is a loose block that stows, so nothing stands proud of the deck). */
   x0: number;
-  /** End of the S-curve (xn): the hull converges from here to the bow. */
+  /** End of the flat deck (the bow curl starts here); the hull is the same width all the way (D-54). */
   xFull: number;
   /** Where the clear width has narrowed to `cargoLoadWidthIn`: the payload block is piled no farther forward than this. */
   xLoadEnd: number;
@@ -22,7 +22,7 @@ export interface CargoBed {
   stopWidthIn: number;
   /** Deck to the lowest gunwale top. */
   heightIn: number;
-  /** Lengths: the straight cabin side at full width (x0 to xc0), through the S-curve taper to xn, and to the foot stop. */
+  /** Lengths: the straight side at full width (D-54: the whole bed), and to the foot stop. */
   straightLengthIn: number;
   fullLengthIn: number;
   totalLengthIn: number;
@@ -39,7 +39,7 @@ export function cargoBed(p: Params, L: Layout): CargoBed {
   // The wedge-free bed starts at the box's fore end when the box stands behind the seat; with another box location (not the stow design) the whole cabin floor is bed.
   const x0 = p.storageLocation === STORAGE_LOCATION.rearOverAxle ? L.storage.x1 : L.xRear + L.transom;
   const fx = p.seatXIn + p.riderLegReachIn;
-  const xStop = Math.min(fx - p.footStopThickIn / 2, L.noseRailEnd);
+  const xStop = Math.min(fx - p.footStopThickIn / 2, L.railEnd);
   const widthAt = (x: number) => 2 * innerHalfWidth(L, x);
   // First x (from the box) where the clear width has dropped below the payload block width.
   let xLoadEnd = x0;
@@ -50,9 +50,9 @@ export function cargoBed(p: Params, L: Layout): CargoBed {
     return area;
   };
   return {
-    x0, xFull: L.xn, xLoadEnd, loadWidthIn: p.cargoLoadWidthIn, loadLengthIn: Math.max(0, xLoadEnd - x0), xStop, widthIn: 2 * L.hwC, stopWidthIn: 2 * innerHalfWidth(L, xStop), heightIn: L.sideH,
-    straightLengthIn: Math.max(0, L.xc0 - x0), fullLengthIn: Math.max(0, L.xn - x0), totalLengthIn: Math.max(0, xStop - x0),
-    areaIn2: Math.max(1, integral(x0, xStop)), fullAreaIn2: Math.max(1, integral(x0, Math.max(x0, L.xn))), boxTopIn: L.storage.zTop - L.deckTop,
+    x0, xFull: L.xFlatEnd, xLoadEnd, loadWidthIn: p.cargoLoadWidthIn, loadLengthIn: Math.max(0, xLoadEnd - x0), xStop, widthIn: 2 * L.hwC, stopWidthIn: 2 * innerHalfWidth(L, xStop), heightIn: L.sideH,
+    straightLengthIn: Math.max(0, xStop - x0), fullLengthIn: Math.max(0, xStop - x0), totalLengthIn: Math.max(0, xStop - x0),
+    areaIn2: Math.max(1, integral(x0, xStop)), fullAreaIn2: Math.max(1, integral(x0, xStop)), boxTopIn: L.storage.zTop - L.deckTop,
   };
 }
 

@@ -461,7 +461,7 @@ export class Viewer {
     }
 
     if (this.showDims) {
-      const cart = parts.filter((x) => !x.payload && x.group !== 'reference' && !/bridle|rope/i.test(x.id + x.name));
+      const cart = parts.filter((x) => !x.payload && x.group !== 'reference' && x.id !== 'bridle' && !/rope/i.test(x.name)); // ropes are not drawn; the tongue plate and shackle are, and count in the overall length
       if (!cart.length) return;
       const bb = worldAABB(cart);
       const [x0, y0, z0] = bb.min;

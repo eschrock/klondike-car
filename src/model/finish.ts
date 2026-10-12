@@ -44,12 +44,12 @@ export function surfaceOf(part: Pick<Part, 'material' | 'kind'>): Finish['surfac
 }
 
 /**
- * Surface look of the Phase 3b front-end family by part id / name (D-53): purchased kart spindles and kingpin bolts are blackened steel. (The ride and brake
- * cables and the lap belt are gone at Phase 3c-1.) Mirrors the viewer's fallback (viewer/materials.ts) so the tag is on the part and not only in the renderer.
+ * Surface look of the front-end family by part id / name (D-56): the tongue plate and the kingpin bolt are blackened (painted) steel.
+ * Mirrors the viewer's fallback (viewer/materials.ts) so the tag is on the part and not only in the renderer.
  */
 export function frontSurfaceOf(part: Pick<Part, 'id' | 'name' | 'material'>): Finish['surface'] | undefined {
-  const tag = `${part.id} ${part.name}`.toLowerCase();
-  if (/spindle|kingpin-bolt|kingpin bolt/.test(tag)) return 'blackened';
+  // By id only: the king beam's name ("... (kingpin crossmember)") and the thrust washer's ("Kingpin thrust washer") mention the kingpin but are oak and UHMW.
+  if (/^(bridle-tongue|kingpin)$/.test(part.id)) return 'blackened';
   return undefined;
 }
 

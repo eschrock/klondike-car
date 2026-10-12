@@ -1,55 +1,114 @@
 import { describe, expect, it } from 'vitest';
 import { buildLoadModel } from './loads';
 import {
-  axleLoads, contactsAt, instantCenterY, lateralTip, outerEdgeDistance, RAD, sideEdges, tipAngleDeg, turnGeometry,
+  axleLoads, contactsAt, contactsWorstTip, distToLine, hull, lateralTip, outerEdgeDistance, RAD, sideEdges, steerSweep, tipAngleDeg, worstOuterEdge,
   type ContactInputs,
 } from './geometry';
-import { ackSpec, defaultParams } from '../params';
+import { defaultParams } from '../params';
 import { translation } from '../model/mat4';
 import type { Part } from '../model/types';
 import { rearNormalNoseDown, tipBackAngle } from './stability';
 
 const s3 = (x: number) => Number(x.toPrecision(3));
 
-/** The default Ackermann cart: 44" wheelbase, 35.5" tracks, kingpin 1.25" ahead of the axle, scrub 3", tow lock 35.5 deg inner. */
+/** The default cart with the pivoting front axle (D-56) straight ahead: 44" wheelbase, 35.5" rear and front tracks. */
 const P0 = defaultParams();
-const ACK = ackSpec(P0);
-const G: ContactInputs = { wheelbaseIn: P0.wheelbaseIn, rearTrackIn: P0.rearTrackIn, frontTrackIn: P0.frontTrackIn, ack: ACK };
+const G: ContactInputs = { wheelbaseIn: P0.wheelbaseIn, rearTrackIn: P0.rearTrackIn, frontTrackIn: P0.frontTrackIn };
 
-describe('support polygon with the Ackermann contacts (hand calc)', () => {
-  it('straight: contacts under the axles, a CG on the centerline 12" up is 17.75" from each side edge -> atan(17.75/12) = 55.9 deg', () => {
-    const c = contactsAt(G, 0);
+describe('contact inputs at the defaults', () => {
+  it('44 in wheelbase, 35.5 in rear track, 35.5 in front track', () => {
+    expect(G).toEqual({ wheelbaseIn: 44, rearTrackIn: 35.5, frontTrackIn: 35.5 });
+  });
+});
+
+describe('support polygon with the fixed contacts (hand calc)', () => {
+  it('contacts are under the axles at x = 0 and x = 44, y = +-17.75; the hull is the 44 x 35.5 rectangle', () => {
+    const c = contactsAt(G);
+    expect(c.RL).toEqual([0, 17.75]);
+    expect(c.RR).toEqual([0, -17.75]);
     expect(c.FL).toEqual([44, 17.75]);
     expect(c.FR).toEqual([44, -17.75]);
-    expect(c.kx).toBeCloseTo(45.25, 9);
+    expect(hull(c)).toHaveLength(4);
+  });
+  it('steer angle (D-56, + = left turn): the front axle turns about the kingpin (44, 0): FL = (44 - 17.75 sin d, 17.75 cos d), FR = (44 + 17.75 sin d, -17.75 cos d); the rear does not move', () => {
+    const d = 20 * RAD;
+    const c = contactsAt(G, d);
+    expect(c.FL[0]).toBeCloseTo(44 - 17.75 * Math.sin(d), 12);
+    expect(c.FL[1]).toBeCloseTo(17.75 * Math.cos(d), 12);
+    expect(c.FR[0]).toBeCloseTo(44 + 17.75 * Math.sin(d), 12);
+    expect(c.FR[1]).toBeCloseTo(-17.75 * Math.cos(d), 12);
+    expect(c.FL[0]).toBeCloseTo(37.9289, 3);
+    expect(c.FR[1]).toBeCloseTo(-16.6794, 3);
+    expect(c.RL).toEqual([0, 17.75]);
+    expect(c.RR).toEqual([0, -17.75]);
+    // the track between the two front contacts stays 35.5 in at any angle (both wheels stay parallel)
+    expect(Math.hypot(c.FL[0] - c.FR[0], c.FL[1] - c.FR[1])).toBeCloseTo(35.5, 12);
+    expect(contactsAt(G)).toEqual(contactsAt(G, 0));
+    // turning right mirrors the left turn
+    const m = contactsAt(G, -d);
+    expect(m.FL[0]).toBeCloseTo(c.FR[0], 12);
+    expect(m.FL[1]).toBeCloseTo(-c.FR[1], 12);
+  });
+  it('steerSweep covers -lock..+lock every 2 degrees with both endpoints and zero', () => {
+    const sw = steerSweep(20 * RAD);
+    expect(sw[0]).toBeCloseTo(-20 * RAD, 12);
+    expect(sw[sw.length - 1]).toBeCloseTo(20 * RAD, 12);
+    expect(sw.some((a) => Math.abs(a) < 1e-12)).toBe(true);
+    expect(sw).toHaveLength(21);
+    expect(steerSweep(19 * RAD)).toHaveLength(21); // 0, +-2 .. +-18 and +-19
+  });
+  it('contactsWorstTip: the smallest tip angle over the steering range; for a CG at (17.5, 0, 14.3) the worst case is full lock and the shorter side edge is the one from the rear tire to the TRAILING front wheel (17.249 in), by hand', () => {
+    const lock = 20 * RAD;
+    const w = contactsWorstTip(G, [17.5, 0], 14.3, lock);
+    expect(Math.abs(w.steer)).toBeCloseTo(lock, 12);
+    // steer +20: FL = (37.9289, 16.6794), FR = (50.0711, -16.6794). Left edge (0, 17.75) -> FL: d = |37.9289 (0 - 17.75) - (16.6794 - 17.75)(17.5 - 0)| / hypot(37.9289, 1.0706)
+    const dLeft = Math.abs(37.9289 * (0 - 17.75) - (16.6794 - 17.75) * 17.5) / Math.hypot(37.9289, 16.6794 - 17.75);
+    // Right edge (0, -17.75) -> FR: d = |50.0711 (0 + 17.75) - (-16.6794 + 17.75)(17.5)| / hypot(50.0711, 1.0706)
+    const dRight = Math.abs(50.0711 * 17.75 - (-16.6794 + 17.75) * 17.5) / Math.hypot(50.0711, 17.75 - 16.6794);
+    expect(dLeft).toBeCloseTo(17.2492, 3);
+    expect(dRight).toBeCloseTo(17.3719, 3);
+    expect(w.d).toBeCloseTo(Math.min(dLeft, dRight), 3);
+    expect(w.deg).toBeCloseTo((Math.atan2(17.2492, 14.3) * 180) / Math.PI, 2);
+    expect(w.deg).toBeLessThan(lateralTip(contactsAt(G), [17.5, 0], 14.3).deg); // straight ahead: atan(17.75 / 14.3) = 51.1 deg
+  });
+  it('worstOuterEdge: turning left (steer > 0) the outer edge is RR-FR, turning right FL-RL; the worst of the sweep is at full lock', () => {
+    const lock = 20 * RAD;
+    const o = worstOuterEdge(G, [17.5, 0], lock);
+    expect(Math.abs(o.steer)).toBeCloseTo(lock, 12);
+    expect(o.d).toBeLessThan(17.75);
+    expect(o.d).toBeGreaterThan(17.3);
+    expect(['RR-FR', 'FL-RL']).toContain(o.edge);
+  });
+  it('a CG on the centerline 12 in up is 17.75 in from each side edge -> atan(17.75 / 12) = 55.9 deg', () => {
+    const c = contactsAt(G);
     const lat = lateralTip(c, [22, 0], 12);
     expect(s3(lat.d)).toBe(17.8);
+    expect(lat.deg).toBeCloseTo((Math.atan2(17.75, 12) * 180) / Math.PI, 9);
     expect(s3(lat.deg)).toBe(55.9);
     expect(sideEdges(c, [22, 0])).toHaveLength(2);
   });
-  it('tow lock (35.5 deg inner, left turn): the wheel centers come from the 4-bar, (42.49, 16.47) and (45.44, -17.99)', () => {
-    const c = contactsAt(G, 35.5 * RAD);
-    expect(c.FL[0]).toBeCloseTo(42.49, 2);
-    expect(c.FL[1]).toBeCloseTo(16.47, 2);
-    expect(c.FR[0]).toBeCloseTo(45.44, 2);
-    expect(c.FR[1]).toBeCloseTo(-17.99, 2);
-    // Outer edge for a left turn is the right edge RR-FR. By hand: the line through (0, -17.75) and (45.44, -17.99); the distance from (22, 0) is
-    // |22 (-0.24) - 17.75 (45.44)| / 45.4406 = 17.87".
-    expect(s3(outerEdgeDistance(c, [22, 0], 35.5 * RAD))).toBe(17.9);
-    // A right lock is the mirror: the left edge is outer and the distance is the same.
-    const m = contactsAt(G, -35.5 * RAD);
-    expect(outerEdgeDistance(m, [22, 0], -35.5 * RAD)).toBeCloseTo(outerEdgeDistance(c, [22, 0], 35.5 * RAD), 6);
+  it('the side edges are parallel to x, so the distance is 17.75 - |y| anywhere along the wheelbase; the CG 3 in left of center shortens the left distance to 14.75', () => {
+    const c = contactsAt(G);
+    const e = sideEdges(c, [10, 3]).map((x) => Math.round(x.dist * 1e9) / 1e9).sort((a, b) => a - b);
+    expect(e).toEqual([14.75, 20.75]);
+    expect(lateralTip(c, [30, 3], 12).d).toBeCloseTo(14.75, 9);
+    expect(lateralTip(c, [10, 3], 12).d).toBeCloseTo(14.75, 9);
   });
-  it('turning geometry: the mean instant center is 75.6" off the rear axle at the tow lock; the outer front tire center is farther', () => {
-    const t = turnGeometry(G, 35.5 * RAD)!;
-    expect(t.icY).toBeCloseTo(75.6, 0);
-    expect(t.rearCenter).toBeCloseTo(75.6, 0);
-    expect(t.outerFront).toBeGreaterThan(t.rearCenter);
-    expect(t.innerFront).toBeLessThan(t.rearCenter);
-    expect(instantCenterY(G, 0)).toBeNull();
+  it('a different front track gives a trapezoid: front track 25 in -> the edge from (0, 17.75) to (44, 12.5) is 17.75 - 5.25 x/44 away at x = 22: d = (44 x 15.25 - ... ) hand value 14.6 in for a CG at (22, 0)', () => {
+    const c = contactsAt({ ...G, frontTrackIn: 25 });
+    // line through (0, 17.75) and (44, 12.5): direction (44, -5.25), length 44.31; d = |44 (0 - 17.75) + 5.25 x 22| / 44.31 = |-781 + 115.5| / 44.31 = 15.02
+    const len = Math.hypot(44, 5.25);
+    expect(lateralTip(c, [22, 0], 12).d).toBeCloseTo(Math.abs(44 * -17.75 + 5.25 * 22) / len, 9);
+    expect(lateralTip(c, [22, 0], 12).d).toBeCloseTo(15.02, 2);
+  });
+  it('outer edge in a turn: turning left the right edge RR-FR is outer; for the rectangle it is 17.75 from the centerline either way', () => {
+    const c = contactsAt(G);
+    expect(outerEdgeDistance(c, [22, 0], 0.3)).toBeCloseTo(17.75, 9);
+    expect(outerEdgeDistance(c, [22, 0], -0.3)).toBeCloseTo(17.75, 9);
+    expect(distToLine([22, 0], c.RR, c.FR)).toBeCloseTo(17.75, 9);
   });
   it('a CG outside the polygon gives a negative distance and angle', () => {
-    expect(lateralTip(contactsAt(G, 0), [22, 30], 12).deg).toBeLessThan(0);
+    expect(lateralTip(contactsAt(G), [22, 30], 12).deg).toBeLessThan(0);
   });
   it('static axle loads: W x/x_front to the front', () => {
     const a = axleLoads(300, 16, 48);
@@ -70,7 +129,7 @@ describe('load model hand calc (119 lb cart, 150 lb rider, 25 lb cargo)', () => 
     mk('rider-torso', 150, [16, 0, 20.5], { payload: true, body: 'rider' }),
     mk('cargo', 25, [-2, 0, 13], { payload: true, body: 'cargo' }),
   ];
-  const lm = buildLoadModel(p, parts, ACK);
+  const lm = buildLoadModel(p, parts);
   const c = lm.operating;
   it('reproduces the table CG: W = 294, x = 17.7, h = 14.8', () => {
     expect(c.massLb).toBeCloseTo(294, 9);
@@ -78,10 +137,28 @@ describe('load model hand calc (119 lb cart, 150 lb rider, 25 lb cargo)', () => 
     expect(s3(c.cg[2])).toBe(14.8);
     expect(lm.empty.massLb).toBeCloseTo(119, 9);
     expect(lm.goal.massLb).toBeCloseTo(119 + 200 + 25, 9);
+    expect(lm.cargoCases).toEqual([]); // no cargo input -> no cargo case
   });
-  it('straight tip: atan(17.75 / 14.8) = 50.2 deg', () => {
+  it('lateral tip: the CG is 17.75 in from each side edge -> atan(17.75 / 14.8) = 50.2 deg', () => {
     const [x, y, h] = c.cg;
-    expect(s3(lateralTip(contactsAt(G, 0), [x, y], h).deg)).toBe(50.2);
+    expect(lateralTip(contactsAt(G), [x, y], h).d).toBeCloseTo(17.75, 9);
+    expect(s3(lateralTip(contactsAt(G), [x, y], h).deg)).toBe(50.2);
+  });
+  it('cargo mode: a 250 lb payload at (30, 2, 22) on the 119 lb stowed cart gives W = 369, CG (28.07, 1.36, 17.49)', () => {
+    const stowed = [mk('cart', 119, [24, 0, 8])];
+    const cm = buildLoadModel(p, parts, { stowedParts: stowed, placements: [{ name: 'test', cg: [30, 2, 22] }] });
+    expect(cm.cargoCases).toHaveLength(1);
+    const k = cm.cargoCases[0];
+    expect(k.kind).toBe('cargo');
+    expect(k.riderLb).toBe(0);
+    expect(k.cargoLb).toBe(p.cargoPayloadLb);
+    expect(k.cargoLb).toBe(250);
+    expect(k.massLb).toBeCloseTo(369, 9);
+    expect(k.cg[0]).toBeCloseTo((119 * 24 + 250 * 30) / 369, 9);
+    expect(s3(k.cg[0])).toBe(28.1);
+    expect(s3(k.cg[1])).toBe(1.36);
+    expect(s3(k.cg[2])).toBe(17.5);
+    expect(k.placement).toBe('test');
   });
   it('rear-only hold on 15 deg nose-down: mu N_r = 78 lbf against 76 lbf downslope (44" wheelbase hand calc re-done at 48")', () => {
     const [x, , h] = c.cg;
@@ -89,9 +166,6 @@ describe('load model hand calc (119 lb cart, 150 lb rider, 25 lb cargo)', () => 
     const Nr = rearNormalNoseDown(c.massLb, x, h, th, 48);
     expect(Math.round(0.5 * Nr)).toBe(78);
     expect(Math.round(c.massLb * Math.sin(th))).toBe(76);
-  });
-  it('the CG moves with the steered parts but not when the cart has none', () => {
-    expect(c.cgAt(0.3)[0]).toBeCloseTo(c.cg[0], 12); // no steer parts in this synthetic cart
   });
 });
 

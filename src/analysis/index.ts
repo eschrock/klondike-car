@@ -8,14 +8,13 @@
 import { resolveParams, type Params } from '../params';
 import { buildModel } from '../model';
 import { checkTruckFit, type FitResult } from '../truck/fit';
-import { brakeAbuse, brakeBeam, brakeClearance, brakeForce, brakeLever, brakeLinks, brakeRatio, brakeShoes, brakeTraction, handleSockets, parkHold } from './brake';
+import { brakeChecks } from './brake';
 import { makeContext, type Ctx } from './context';
 import { rearBeamSeat, wheelRating } from './rear';
-import { steerClearance, steerKinCheck, steerLockCheck, steerSweep } from './steering';
+import { frontChecks } from './front';
 import { pitchForward, pitchRear, slideBeforeTip, tipLock, tipStraight, turnRadius, vRollover } from './stability';
 import { axleStress, bearingGroove, beamRear, deckCheck, railsCheck } from './structure';
-import { frontEndChecks } from './front-end';
-import { linkageChecks } from './linkage';
+import { bridleChecks } from './bridle';
 import { seatChecks } from './seat';
 import { hullChecks } from './hull';
 import { cgCheck, massEmpty, truckFit, truckSkipped } from './transport';
@@ -47,8 +46,8 @@ function sanitize(c: AnalysisCheck): AnalysisCheck {
 }
 
 /**
- * The check list (D-50, D-53): per-wheel Ackermann contacts and sweeps, the bump load basis (spindle, bracket, beam, tie rod, linkage, tongue, rear axle and
- * wheel rows) at walking and jogging pace, and the handler's basic rear brake rows (`brake.ts`).
+ * The check list (D-50, D-53, D-54, D-56): the wheel contacts, the pivoting front axle rows (front.ts), the bump load basis (bridle tie, rear axle and
+ * wheel rows) at walking and jogging pace, and the foot-operated rear brake rows (`brake.ts`).
  */
 function allRows(ctx: Ctx, truck: AnalysisCheck): AnalysisCheck[] {
   return [
@@ -59,22 +58,10 @@ function allRows(ctx: Ctx, truck: AnalysisCheck): AnalysisCheck[] {
     slideBeforeTip(ctx),
     vRollover(ctx),
     turnRadius(ctx),
-    steerClearance(ctx, steerSweep(ctx)),
-    steerKinCheck(ctx),
-    steerLockCheck(ctx),
+    ...frontChecks(ctx),
     pitchForward(ctx),
     pitchRear(ctx),
-    brakeRatio(ctx),
-    brakeForce(ctx),
-    brakeTraction(ctx),
-    brakeClearance(ctx),
-    brakeLever(ctx),
-    brakeLinks(ctx),
-    brakeBeam(ctx),
-    brakeShoes(ctx),
-    parkHold(ctx),
-    handleSockets(ctx),
-    brakeAbuse(ctx),
+    ...brakeChecks(ctx),
     wheelRating(ctx),
     rearBeamSeat(ctx),
     axleStress(ctx),
@@ -82,8 +69,7 @@ function allRows(ctx: Ctx, truck: AnalysisCheck): AnalysisCheck[] {
     bearingGroove(ctx),
     railsCheck(ctx),
     deckCheck(ctx),
-    ...frontEndChecks(ctx),
-    ...linkageChecks(ctx),
+    ...bridleChecks(ctx),
     ...seatChecks(ctx),
     ...hullChecks(ctx),
     ...cargoChecks(ctx),
@@ -92,10 +78,10 @@ function allRows(ctx: Ctx, truck: AnalysisCheck): AnalysisCheck[] {
 }
 
 export function runChecks(input: Params, opts: RunOptions = {}): AnalysisCheck[] {
-  const p = resolveParams(input); // auto hull curve start (A-4, D-26, D-52)
-  const parts = buildModel(p, { rider: 'goal', cargo: true, steerDeg: 0 });
+  const p = resolveParams(input);
+  const parts = buildModel(p, { rider: 'goal', cargo: true });
   const cargo = opts.cargo ?? true;
-  const ctx = makeContext(p, parts, cargo ? buildModel(p, { rider: 'none', cargo: false, steerDeg: 0, seat: 'stowed' }) : undefined);
+  const ctx = makeContext(p, parts, cargo ? buildModel(p, { rider: 'none', cargo: false, seat: 'stowed' }) : undefined);
   const includeTruck = opts.includeTruck ?? true;
   const truck = includeTruck ? truckFit(opts.fit ?? checkTruckFit(p, (v) => buildModel(p, v))) : truckSkipped();
   return allRows(ctx, truck).map(sanitize);

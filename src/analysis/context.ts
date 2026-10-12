@@ -26,7 +26,6 @@ export interface Ctx {
  */
 export function makeContext(p: Params, parts: Part[], stowedParts?: Part[]): Ctx {
   const L = computeLayout(p);
-  const ack = L.front.ack;
   const bed = cargoBed(p, L);
   const lenC = Math.min(p.cargoLoadLengthIn, Math.max(1, bed.xLoadEnd - bed.x0));
   const cy = p.cargoCgOffsetYIn, cz = L.deckTop + p.cargoCgHeightIn;
@@ -40,9 +39,9 @@ export function makeContext(p: Params, parts: Part[], stowedParts?: Part[]): Ctx
     L,
     parts,
     byId: new Map(parts.map((x) => [x.id, x])),
-    loads: buildLoadModel(p, parts, ack, stowedParts ? { stowedParts, placements } : undefined),
+    loads: buildLoadModel(p, parts, stowedParts ? { stowedParts, placements } : undefined),
     bed,
     stowedParts: stowedParts ?? null,
-    contact: { wheelbaseIn: p.wheelbaseIn, rearTrackIn: p.rearTrackIn, frontTrackIn: p.frontTrackIn, ack },
+    contact: { wheelbaseIn: p.wheelbaseIn, rearTrackIn: p.rearTrackIn, frontTrackIn: p.frontTrackIn },
   };
 }

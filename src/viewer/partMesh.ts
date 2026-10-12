@@ -9,7 +9,7 @@ import { crownDrop, crownFace, roundedBoxMesh, type RawMesh } from './shapes';
 import { densify, dashedLoop, insetLoop, mergeTubes, roundedLoop, tubeAlong, type TubeMesh, type Vec2 } from './upholstery';
 import { lashPointMesh } from './hardware';
 import { buildRoundedSweepMesh, buildSweepMesh } from './sweep';
-import { WOOD_TILE_IN } from './textures';
+import { WOOD_TILE_IN, signOutline, type SignShape } from './textures';
 import { buildWheelGeometry } from './wheel';
 
 export interface BuiltPart {
@@ -185,11 +185,53 @@ function worldAxis(m: Mat4, a: number): Vec3 {
   return [m[a * 4], m[a * 4 + 1], m[a * 4 + 2]];
 }
 
+/**
+ * The sign drawn as a rounded-oval plank (Sign v2): a superellipse outline (`signOutline`, shared with the texture) extruded
+ * to the blank's thickness with the rims rolled over, inside the blank's bounds. Returns the board and its two outline loops
+ * (the crisp edge lines, instead of the blank's rectangle). Axes: the outline lies in (ua, va), thickness along `thin`.
+ */
+export function signOvalGeometry(size: Vec3, thin: Axis, ua: Axis, va: Axis, center: Vec3, kind: SignShape = 'oval'): { geometry: THREE.BufferGeometry; edges: THREE.BufferGeometry } {
+  const t = size[thin];
+  const r = Math.min(0.05, t * 0.3);
+  const outline = signOutline(size[ua], size[va], 120, kind);
+  const shape = new THREE.Shape(outline.map(([x, y]) => new THREE.Vector2(x, y)));
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: t - 2 * r, bevelEnabled: true, bevelThickness: r, bevelSize: r, bevelOffset: -r, bevelSegments: 2, steps: 1 });
+  geo.translate(0, 0, r - t / 2);
+  // (x, y, z) -> (ua, va, thin); an odd axis permutation is a mirror, so flip the thickness axis to keep it a rotation.
+  const flip = va === (ua + 1) % 3 ? 1 : -1;
+  const remap = (arr: ArrayLike<number> & { [i: number]: number }, off: Vec3 | null): void => {
+    for (let i = 0; i < arr.length; i += 3) {
+      const x = arr[i], y = arr[i + 1], z = arr[i + 2];
+      const o: Vec3 = [0, 0, 0];
+      o[ua] = x; o[va] = y; o[thin] = flip * z;
+      for (let a = 0; a < 3; a++) arr[i + a] = o[a] + (off ? off[a] : 0);
+    }
+  };
+  remap(geo.getAttribute('position').array as Float32Array, center);
+  remap(geo.getAttribute('normal').array as Float32Array, null);
+  const seg: number[] = [];
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < outline.length; i++) {
+      for (const [x, y] of [outline[i], outline[(i + 1) % outline.length]]) {
+        const o: Vec3 = [0, 0, 0];
+        o[ua] = x; o[va] = y; o[thin] = side * t / 2;
+        seg.push(o[0] + center[0], o[1] + center[1], o[2] + center[2]);
+      }
+    }
+  }
+  const edges = new THREE.BufferGeometry();
+  edges.setAttribute('position', new THREE.Float32BufferAttribute(seg, 3));
+  return { geometry: geo, edges };
+}
+
 export function buildPart(part: Part): BuiltPart | null {
   const g = part.geometry;
   const look = lookOf(part);
   // Owner decision (round 3): rope is not drawn. The part stays in the model (mass, BOM, analysis), only the picture omits it.
   if (look === 'rope') return null;
+  // The `hardware` part is a mass placeholder for loose fasteners (screws, bolts, inserts, Dominos): it carries their weight
+  // and CG for the analysis and BOM but has no real shape, so it is not drawn.
+  if (part.id === 'hardware') return null;
   const f = part.finish;
   const b = localBounds(g);
   const size: Vec3 = [b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]];
@@ -203,21 +245,24 @@ export function buildPart(part: Part): BuiltPart | null {
       const soft = look === 'vinyl';
       const thin = minAxis(size);
       if (look === 'sign') {
-        // Painted sign (review r1 MUST 4): the two big faces carry the painted texture, mapped right-reading as seen from
-        // outside on both sides (the right sign is not a mirror image); the thin faces keep the ply-edge look.
+        // Painted sign (review r1 MUST 4; Sign v2): the model part is a plain blank, but it is drawn as a rounded-oval plank
+        // (same outline the texture's border follows). The two big faces carry the painted texture, mapped right-reading as
+        // seen from outside on both sides (the right sign is not a mirror image); the rim keeps the ply-edge look.
         const [ua, va] = ([0, 1, 2] as const).filter((x) => x !== thin);
-        const geo = applyGrain(rawToGeometry(roundedBoxMesh(size, Math.min(0.05, size[thin] * 0.3), 3)), part, 'okoume', size, thin, ua);
+        const oval = signOvalGeometry(size, thin, ua, va, [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, (b.min[2] + b.max[2]) / 2]);
+        const geo = applyGrain(oval.geometry, part, 'okoume', size, thin, ua);
         const pos = geo.getAttribute('position'), nrm = geo.getAttribute('normal'), uv = geo.getAttribute('uv');
         const w = worldAxis(part.transform, thin)[1];
         const longVerts = geo.groups[0]?.count ?? 0;
+        const mid = [(b.min[ua] + b.max[ua]) / 2, (b.min[va] + b.max[va]) / 2];
         for (let i = 0; i < longVerts; i++) {
           const outward = (nrm.getComponent(i, thin) >= 0 ? 1 : -1) * Math.sign(w || 1); // +1: this face looks toward +Y (left)
-          const x = pos.getComponent(i, ua) / size[ua];
-          uv.setXY(i, 0.5 + (outward > 0 ? -x : x), 0.5 + pos.getComponent(i, va) / size[va]);
+          const x = (pos.getComponent(i, ua) - mid[0]) / size[ua];
+          uv.setXY(i, 0.5 + (outward > 0 ? -x : x), 0.5 + (pos.getComponent(i, va) - mid[1]) / size[va]);
         }
         geometry = geo;
         material = signMaterials(size[ua] / size[va]);
-        edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(size[0], size[1], size[2]), 1);
+        edges = oval.edges;
         break;
       }
       if (soft) {

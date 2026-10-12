@@ -172,117 +172,328 @@ export function pebbleBump(kind: 'vinyl' | 'rubber'): THREE.CanvasTexture {
   });
 }
 
-/** Single place for the sign wording (Q-5 in DECISIONS.md is still open with Eric, so this may change). */
+/** Single place for the sign wording (Q-5 in DECISIONS.md: "TROOP 455 / WILDERNESS RANGERS", as in the concept renders). */
 export const SIGN_LINES = { top: 'TROOP 455', bottom: 'WILDERNESS RANGERS' } as const;
 
-/** Fleur-de-lis glyph (cream), drawn with canvas paths so it needs no font. Centered at (cx, cy), `h` tall. */
+/** Superellipse exponent of the sign outline (2 = ellipse; 2.6 = a fuller "plank oval" like the concept renders). */
+export const SIGN_SHAPE_EXP = 2.6;
+
+/** Board shape of the sign: a rounded-oval plank (superellipse) or a rounded rectangle. */
+export type SignShape = 'oval' | 'rounded';
+
+/** Corner radius of the 'rounded' shape for a blank of height `h` (and width `w`). */
+export const signCornerRadius = (w: number, h: number): number => Math.min(h * 0.3, w / 2);
+
+/**
+ * Counter-clockwise outline of a `w` x `h` sign, centered on the origin: a superellipse for 'oval', a rounded rectangle for
+ * 'rounded' (corner radius `radius`, default `signCornerRadius`). Shared by the texture and the board geometry.
+ */
+export function signOutline(w: number, h: number, segs = 120, shape: SignShape = 'oval', radius?: number): [number, number][] {
+  const pts: [number, number][] = [];
+  if (shape === 'rounded') {
+    const r = Math.max(0, Math.min(radius ?? signCornerRadius(w, h), w / 2, h / 2));
+    const per = Math.max(4, Math.round(segs / 8)); // segments per corner
+    // Corner centers, counter-clockwise starting at the bottom-right corner (angle -90..0 degrees).
+    const corners: [number, number, number][] = [[w / 2 - r, -h / 2 + r, -90], [w / 2 - r, h / 2 - r, 0], [-w / 2 + r, h / 2 - r, 90], [-w / 2 + r, -h / 2 + r, 180]];
+    for (const [cx, cy, a0] of corners) {
+      for (let i = 0; i <= per; i++) {
+        const a = ((a0 + (90 * i) / per) * Math.PI) / 180;
+        pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+      }
+    }
+    return pts;
+  }
+  const n = SIGN_SHAPE_EXP;
+  for (let i = 0; i < segs; i++) {
+    const a = (i / segs) * Math.PI * 2;
+    const c = Math.cos(a), s = Math.sin(a);
+    pts.push([(w / 2) * Math.sign(c) * Math.abs(c) ** (2 / n), (h / 2) * Math.sign(s) * Math.abs(s) ** (2 / n)]);
+  }
+  return pts;
+}
+
+/** Fleur-de-lis (cream), drawn from bezier paths so it needs no font. Mirror-symmetric, 3 petals and a band; centered at (cx, cy), `h` tall. */
 function fleurDeLis(ctx: CanvasRenderingContext2D, cx: number, cy: number, h: number): void {
   ctx.save();
   ctx.translate(cx, cy);
   const u = h / 100;
   ctx.scale(u, u);
-  ctx.fillStyle = '#d8c9a3';
-  const side = (mirror: number): void => {
-    ctx.save();
-    ctx.scale(mirror, 1);
-    ctx.beginPath();
-    // Upper side petal: sweeps out from the band, up around, and curls back in at the tip.
-    ctx.moveTo(-4, 6);
-    ctx.bezierCurveTo(-36, 14, -50, -12, -38, -34);
-    ctx.bezierCurveTo(-34, -28, -30, -26, -27, -20);
-    ctx.bezierCurveTo(-36, -6, -20, -2, -4, -16);
+  // Unit design box: x -40..40, y -50 (petal tip) .. +50 (tail tip), band at y 8..17.
+  const centerPetal = (): void => {
+    // Center petal: a pointed lance, widest about a third of the way up.
+    ctx.moveTo(0, -50);
+    ctx.bezierCurveTo(-5, -38, -17, -26, -15, -10);
+    ctx.bezierCurveTo(-14, -2, -8, 6, -6, 9);
+    ctx.lineTo(6, 9);
+    ctx.bezierCurveTo(8, 6, 14, -2, 15, -10);
+    ctx.bezierCurveTo(17, -26, 5, -38, 0, -50);
     ctx.closePath();
-    ctx.fill();
-    // Lower leaf under the band.
-    ctx.beginPath();
-    ctx.moveTo(-6, 20);
-    ctx.bezierCurveTo(-24, 22, -32, 34, -26, 44);
-    ctx.bezierCurveTo(-18, 38, -10, 34, -4, 26);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
   };
-  side(1);
-  side(-1);
-  // Center petal and tail.
+  const side = (m: number): void => {
+    // Side petal: leaves the band, swings out and up, then rolls over to a point that curls down and inward.
+    ctx.moveTo(m * 7, 9);
+    ctx.bezierCurveTo(m * 6, -4, m * 14, -12, m * 22, -24);
+    ctx.bezierCurveTo(m * 28, -35, m * 45, -35, m * 46, -20);
+    ctx.bezierCurveTo(m * 47, -9, m * 41, -2, m * 33, -3);
+    ctx.bezierCurveTo(m * 38, -9, m * 37, -18, m * 31, -15);
+    ctx.bezierCurveTo(m * 24, -11, m * 27, 1, m * 19, 6);
+    ctx.bezierCurveTo(m * 15, 8, m * 11, 9, m * 7, 9);
+    ctx.closePath();
+  };
+  const tail = (): void => {
+    // Short tail below the band, with a small leaf either side flicking outward.
+    ctx.moveTo(0, 17);
+    ctx.bezierCurveTo(-6, 24, -6, 36, 0, 50);
+    ctx.bezierCurveTo(6, 36, 6, 24, 0, 17);
+    ctx.closePath();
+  };
+  const leaf = (m: number): void => {
+    ctx.moveTo(m * 6, 17);
+    ctx.bezierCurveTo(m * 18, 16, m * 30, 24, m * 31, 39);
+    ctx.bezierCurveTo(m * 21, 35, m * 12, 31, m * 6, 25);
+    ctx.closePath();
+  };
+  const band = (): void => ctx.roundRect(-21, 7, 42, 11, 3);
+  const halo = ctx.strokeStyle; // a thin dark halo around the center petal and band keeps the three petals distinct
   ctx.beginPath();
-  ctx.moveTo(0, -54);
-  ctx.bezierCurveTo(-17, -34, -15, -10, 0, 8);
-  ctx.bezierCurveTo(15, -10, 17, -34, 0, -54);
+  side(1); side(-1); tail(); leaf(1); leaf(-1);
+  ctx.fill();
+  ctx.strokeStyle = SIGN_PAINT_DARK;
+  ctx.lineWidth = 3.2;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  centerPetal();
+  ctx.stroke();
   ctx.fill();
   ctx.beginPath();
-  ctx.moveTo(0, 20);
-  ctx.bezierCurveTo(-7, 28, -6, 38, 0, 48);
-  ctx.bezierCurveTo(6, 38, 7, 28, 0, 20);
+  band();
+  ctx.stroke();
   ctx.fill();
-  // Band.
-  ctx.fillRect(-24, 8, 48, 9);
+  ctx.strokeStyle = halo;
   ctx.restore();
 }
 
+/** Path of the board outline inset to semi-axes `a`, `b` around (cx, cy) (corner radius `r` for the rounded shape). */
+function outlinePath(ctx: CanvasRenderingContext2D, shape: SignShape, cx: number, cy: number, a: number, b: number, r?: number): void {
+  const pts = signOutline(2 * a, 2 * b, 240, shape, r);
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => (i ? ctx.lineTo(cx + x, cy + y) : ctx.moveTo(cx + x, cy + y)));
+  ctx.closePath();
+}
+
+const SIGN_PAINT: RGB = [47 / 255, 74 / 255, 52 / 255]; // #2f4a34
+const SIGN_CREAM = '#e4d6aa';
+const SIGN_PAINT_DARK = 'rgba(30, 50, 36, 0.95)';
+const SIGN_INK_DARK = 'rgba(12, 24, 16, 0.8)';
+const SIGN_FONT = (px: number): string => `800 ${px}px "Rockwell", "Rockwell Extra Bold", "Roboto Slab", "Rockwell Nova", "Bookman Old Style", Georgia, "Times New Roman", serif`;
+
 /**
- * Painted side sign (review MUST 4): forest-green paint over a trace of wood grain, a cream border, "TROOP 455" over
- * "WILDERNESS RANGERS", and a fleur-de-lis at each end. The canvas aspect matches the sign face so nothing stretches.
- * System fonts only (no external files), so it works in the single-file build.
+ * Painted side sign (`shape`: rounded-oval plank by default, or a rounded rectangle): forest-green paint, weathered, with the oak grain showing through and the paint
+ * worn thin toward the rim; an inset cream border; "TROOP 455" large (a slight arch), a fleur-de-lis between rules, and
+ * "WILDERNESS RANGERS" smaller on a gentle arc. The board itself is cut to the same `signOutline` by `partMesh.ts`,
+ * so the canvas only has to cover the face. The layout comes from `aspect` (face length / height) and every size is a
+ * fraction of the face height, so it adapts if the sign part changes shape. 2048 px wide, power-of-two canvas (the height
+ * is the nearest power of two; the drawing is scaled to keep letters undistorted), mipmapped and anisotropic. System
+ * fonts only (no external files), so it works in the single-file build.
  */
-export function signTexture(aspect: number): THREE.CanvasTexture {
-  const key = `sign:${aspect.toFixed(2)}`;
+export function signTexture(aspect: number, shape: SignShape = 'oval'): THREE.CanvasTexture {
+  const A = Math.max(0.4, Math.min(8, Math.round(aspect * 10) / 10));
+  const key = `sign:${shape}:${A.toFixed(1)}`;
   const hit = cache.get(key);
   if (hit) return hit;
-  const W = 1536;
-  const H = Math.max(128, Math.round(W / aspect));
-  const c = document.createElement('canvas');
-  c.width = W;
-  c.height = H;
-  const ctx = c.getContext('2d')!;
-  ctx.fillStyle = '#2f4a34';
-  ctx.fillRect(0, 0, W, H);
-  // Let a little grain through the paint.
-  const grain = woodTextures('oak').map.image as CanvasImageSource;
-  ctx.globalCompositeOperation = 'multiply';
-  ctx.globalAlpha = 0.28;
-  ctx.drawImage(grain, 0, 0, W, H);
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.globalAlpha = 1;
-  // Paint wear: a faint lighter wash along the top.
-  const wash = ctx.createLinearGradient(0, 0, 0, H);
-  wash.addColorStop(0, 'rgba(255,255,255,0.07)');
-  wash.addColorStop(1, 'rgba(0,0,0,0.12)');
-  ctx.fillStyle = wash;
-  ctx.fillRect(0, 0, W, H);
-  // Cream border: an outer line and a thinner inner line.
-  const m = H * 0.055;
-  ctx.strokeStyle = '#d8c9a3';
-  ctx.lineWidth = H * 0.032;
-  ctx.strokeRect(m, m, W - 2 * m, H - 2 * m);
-  ctx.lineWidth = H * 0.012;
-  ctx.strokeRect(m * 1.9, m * 1.9, W - 3.8 * m, H - 3.8 * m);
-  // Lettering.
-  const font = (px: number): string => `900 ${px}px Impact, "Arial Black", "Helvetica Neue", Arial, sans-serif`;
-  ctx.fillStyle = '#d8c9a3';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  const fit = (text: string, px: number, maxW: number): number => {
-    ctx.font = font(px);
-    const w = ctx.measureText(text).width;
-    return w > maxW ? px * (maxW / w) : px;
+  const Wc = A < 1.2 ? 1024 : 2048; // a near-square sign is small on the cart: half the width is plenty
+  const Hl = Wc / A; // logical height (drawing units are canvas pixels along X)
+  const Hc = Math.max(256, Math.min(2048, 2 ** Math.round(Math.log2(Hl)))); // canvas height: nearest power of two
+  const sy = Hc / Hl;
+  const mk = (): [HTMLCanvasElement, CanvasRenderingContext2D] => {
+    const c = document.createElement('canvas');
+    c.width = Wc;
+    c.height = Hc;
+    const x = c.getContext('2d', { willReadFrequently: true })!;
+    return [c, x];
   };
-  const cx = W / 2;
-  const textW = W * 0.64;
-  const px1 = fit(SIGN_LINES.top, H * 0.34, textW);
-  const px2 = fit(SIGN_LINES.bottom, H * 0.2, textW);
-  ctx.font = font(px1);
-  ctx.fillText(SIGN_LINES.top, cx, H * 0.36);
-  ctx.font = font(px2);
-  ctx.fillText(SIGN_LINES.bottom, cx, H * 0.7);
-  // A thin rule between the lines, and a fleur-de-lis at each end.
-  ctx.fillRect(cx - textW * 0.42, H * 0.545, textW * 0.84, H * 0.012);
-  fleurDeLis(ctx, W * 0.115, H * 0.5, H * 0.6);
-  fleurDeLis(ctx, W * 0.885, H * 0.5, H * 0.6);
-  const t = new THREE.CanvasTexture(c);
+  const [canvas, ctx] = mk();
+  const N = SIGN_SHAPE_EXP;
+  const rounded = shape === 'rounded';
+  const smoothf = smooth;
+
+  // 1. Bare oak underneath, then the paint pass.
+  ctx.drawImage(woodTextures('oak').map.image as CanvasImageSource, 0, 0, 640, 320, 0, 0, Wc, Hc);
+  const img = ctx.getImageData(0, 0, Wc, Hc);
+  const d = img.data;
+  const nLow = new TileNoise(61, 5, 3), nMid = new TileNoise(62, 28, 9), nStreak = new TileNoise(63, 3, 140);
+  const nSpeck = new TileNoise(64, 260, 90), nWear = new TileNoise(65, 14, 5), nWear2 = new TileNoise(66, 60, 20);
+  const rr = signCornerRadius(Wc, Hl);
+  const kx = new Float32Array(Wc), ky = new Float32Array(Hc);
+  for (let x = 0; x < Wc; x++) kx[x] = Math.abs(((x + 0.5) / Wc) * 2 - 1) ** N;
+  for (let y = 0; y < Hc; y++) ky[y] = Math.abs(((y + 0.5) / Hc) * 2 - 1) ** N;
+  for (let y = 0; y < Hc; y++) {
+    const t = y / Hc;
+    for (let x = 0; x < Wc; x++) {
+      const s = x / Wc;
+      const i = (y * Wc + x) * 4;
+      const wr = d[i] / 255, wg = d[i + 1] / 255, wb = d[i + 2] / 255;
+      // 0 well inside the board, 1 at its rim (superellipse level for the oval, distance to the rim for the rounded rectangle).
+      let edge: number;
+      if (rounded) {
+        const px = x + 0.5, py = (y + 0.5) / sy;
+        const qx = Math.abs(px - Wc / 2) - (Wc / 2 - rr), qy = Math.abs(py - Hl / 2) - (Hl / 2 - rr);
+        const dist = -(Math.min(Math.max(qx, qy), 0) + Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - rr); // inside distance to the rim
+        edge = 1 - smoothf(0, Hl * 0.22, dist);
+      } else edge = smoothf(0.5, 1, kx[x] + ky[y]);
+      const lum = 0.299 * wr + 0.587 * wg + 0.114 * wb;
+      const streak = nStreak.at(s, t);
+      const mott = (nLow.at(s, t) - 0.5) * 0.18 + (nMid.at(s, t) - 0.5) * 0.1 + (streak - 0.5) * 0.12 + (nSpeck.at(s, t) - 0.5) * 0.06;
+      const shade = (1 + mott) * (1 + (lum - 0.27) * 0.8) * (1 - 0.2 * edge) * (1.05 - 0.14 * t);
+      const wear = smoothf(0.6, 0.82, nWear.at(s, t) * 0.5 + nWear2.at(s, t) * 0.22 + (streak - 0.5) * 0.28 + edge * 0.3);
+      const a = 1 - 0.74 * wear;
+      const bare = 0.9;
+      d[i] = Math.min(255, (SIGN_PAINT[0] * shade * a + wr * bare * (1 - a)) * 255);
+      d[i + 1] = Math.min(255, (SIGN_PAINT[1] * shade * a + wg * bare * (1 - a)) * 255);
+      d[i + 2] = Math.min(255, (SIGN_PAINT[2] * shade * a + wb * bare * (1 - a)) * 255);
+      d[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  // 2. The lettering and border go on an "ink" layer, drawn in undistorted logical units, then distressed.
+  const [ink, ictx] = mk();
+  ictx.scale(1, sy);
+  const cx = Wc / 2, cy = Hl / 2;
+  const compact = A < 2.2; // stubby sign: stack the words (TROOP 455 / fleur / WILDERNESS / RANGERS)
+  const m1 = Hl * 0.075;
+  ictx.strokeStyle = SIGN_CREAM;
+  ictx.lineJoin = 'round';
+  ictx.lineWidth = Hl * 0.02;
+  outlinePath(ictx, shape, cx, cy, cx - m1, cy - m1, rounded ? Math.max(0, rr - m1) : undefined);
+  ictx.stroke();
+  ictx.lineWidth = Hl * 0.006;
+  outlinePath(ictx, shape, cx, cy, cx - m1 - Hl * 0.036, cy - m1 - Hl * 0.036, rounded ? Math.max(0, rr - m1 - Hl * 0.036) : undefined);
+  ictx.stroke();
+
+  // Width a line may use at a given height (fraction of the face), inside the border.
+  const room = (t: number): number => {
+    const margin = 2 * (m1 + Hl * (compact ? 0.05 : 0.1));
+    if (rounded) {
+      const dy = Math.min(t, 1 - t) * Hl; // distance from the nearest long edge
+      const inset = dy < rr ? rr - Math.sqrt(Math.max(0, rr * rr - (rr - dy) ** 2)) : 0;
+      return Wc - 2 * inset - margin * (compact ? 1 : 0.85);
+    }
+    return Wc * (1 - Math.min(1, Math.abs(2 * t - 1) ** N)) ** (1 / N) - margin;
+  };
+  /** Draws `text` centered at x = cx, baseline-center y `yc`, spaced, along an arc of `sag` (px; + smile, - frown). Fits to `maxW`. */
+  const line = (text: string, pxWanted: number, yc: number, spacingEm: number, sag: number, maxW: number): number => {
+    const chars = [...text];
+    const measure = (px: number): { w: number[]; total: number } => {
+      ictx.font = SIGN_FONT(px);
+      const w = chars.map((c) => ictx.measureText(c).width);
+      return { w, total: w.reduce((p, q) => p + q, 0) + spacingEm * px * (chars.length - 1) };
+    };
+    let px = pxWanted;
+    let m = measure(px);
+    if (m.total > maxW) {
+      px *= maxW / m.total;
+      m = measure(px);
+    }
+    const R = sag === 0 ? Infinity : ((m.total / 2) ** 2 + sag * sag) / (2 * sag);
+    ictx.textAlign = 'center';
+    ictx.textBaseline = 'alphabetic';
+    ictx.lineJoin = 'round';
+    let pos = -m.total / 2;
+    const items = chars.map((ch, i) => {
+      const mid = pos + m.w[i] / 2;
+      pos += m.w[i] + spacingEm * px;
+      const ang = Number.isFinite(R) ? mid / R : 0;
+      return { ch, x: Number.isFinite(R) ? cx + R * Math.sin(ang) : cx + mid, y: Number.isFinite(R) ? yc + R * (Math.cos(ang) - 1) : yc, ang };
+    });
+    for (const pass of [0, 1]) {
+      for (const it of items) {
+        ictx.save();
+        ictx.translate(it.x, it.y + 0.35 * px);
+        ictx.rotate(-it.ang);
+        ictx.font = SIGN_FONT(px);
+        if (pass === 0) {
+          ictx.strokeStyle = SIGN_INK_DARK;
+          ictx.lineWidth = Math.max(2, px * 0.085);
+          ictx.strokeText(it.ch, 0, 0);
+        } else {
+          ictx.fillStyle = SIGN_CREAM;
+          ictx.fillText(it.ch, 0, 0);
+        }
+        ictx.restore();
+      }
+    }
+    return px;
+  };
+
+  let fleurY = Hl * 0.55;
+  let fleurH = Hl * 0.2;
+  if (compact) {
+    const words = SIGN_LINES.bottom.split(' ');
+    const rows: [string, number, number][] = [[SIGN_LINES.top, 0.255, 0.17], ...words.map((w, i): [string, number, number] => [w, 0.64 + i * (0.4 / words.length) * 0.82, 0.105])];
+    for (const [text, yf, pf] of rows) {
+      const yc = Hl * yf, px = Hl * pf;
+      line(text, px, yc, 0.06, 0, Math.min(room((yc - px * 0.4) / Hl), room((yc + px * 0.4) / Hl)));
+    }
+    fleurY = Hl * 0.455;
+    fleurH = Hl * 0.17;
+  } else {
+    const yTop = Hl * 0.3;
+    const yBot = Hl * 0.775;
+    const sagTop = -Hl * 0.025, sagBot = Hl * 0.075;
+    const px1 = Hl * 0.29;
+    line(SIGN_LINES.top, px1, yTop, 0.07, sagTop, Math.min(room((yTop - px1 * 0.4) / Hl), room((yTop + px1 * 0.4) / Hl)));
+    const px2 = Hl * 0.108;
+    line(SIGN_LINES.bottom, px2, yBot, 0.1, sagBot, Math.min(room((yBot - sagBot + px2 * 0.4) / Hl), room((yBot + px2 * 0.4) / Hl)) * 0.97);
+  }
+
+  // Fleur-de-lis between two tapering rules.
+  const fh = fleurH;
+  const fy = fleurY;
+  ictx.fillStyle = SIGN_CREAM;
+  ictx.strokeStyle = SIGN_INK_DARK;
+  ictx.lineWidth = Math.max(1.5, Hl * 0.004);
+  fleurDeLis(ictx, cx, fy, fh);
+  const ruleLen = Math.min(Wc * 0.17, room(0.5) * 0.3);
+  for (const m of compact ? [] : [1, -1]) {
+    ictx.beginPath();
+    ictx.moveTo(cx + m * fh * 0.55, fy);
+    ictx.lineTo(cx + m * (fh * 0.55 + ruleLen), fy - Hl * 0.004);
+    ictx.lineTo(cx + m * (fh * 0.55 + ruleLen), fy + Hl * 0.004);
+    ictx.closePath();
+    ictx.fillStyle = SIGN_CREAM;
+    ictx.fill();
+    ictx.beginPath();
+    ictx.arc(cx + m * (fh * 0.55 + ruleLen + Hl * 0.012), fy, Hl * 0.011, 0, Math.PI * 2);
+    ictx.fill();
+  }
+
+  // Distress the ink: speckled and streaked losses of paint, aligned with the grain.
+  const id = ictx.getImageData(0, 0, Wc, Hc);
+  const q = id.data;
+  const nHole = new TileNoise(71, 300, 100), nHoleS = new TileNoise(72, 4, 150), nTone = new TileNoise(73, 9, 4);
+  for (let y = 0; y < Hc; y++) {
+    const t = y / Hc;
+    for (let x = 0; x < Wc; x++) {
+      const i = (y * Wc + x) * 4;
+      if (q[i + 3] === 0) continue;
+      const s = x / Wc;
+      const hole = smoothf(0.7, 0.86, nHole.at(s, t) * 0.6 + nHoleS.at(s, t) * 0.4);
+      const tone = 0.9 + (nTone.at(s, t) - 0.5) * 0.2;
+      q[i] = q[i] * tone;
+      q[i + 1] = q[i + 1] * tone;
+      q[i + 2] = q[i + 2] * tone * 0.97;
+      q[i + 3] *= 1 - 0.8 * hole;
+    }
+  }
+  ictx.putImageData(id, 0, 0);
+  ctx.drawImage(ink, 0, 0);
+
+  const t = new THREE.CanvasTexture(canvas);
   t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = maxAniso;
+  t.anisotropy = Math.max(maxAniso, 8);
   t.generateMipmaps = true;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
   cache.set(key, t);
   return t;
 }

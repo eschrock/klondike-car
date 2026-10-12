@@ -2,11 +2,11 @@
  * Structural checks (D-2, D-4, D-5, D-10, D-12, D-14, D-17). Each is evaluated at the operating and the goal rider; the
  * row shows the goal case (D-2: structure is sized to the goal rider) and `statusOperating` the other.
  *
- * Load factors: payload × dynamicFactor; members that also carry the cart's weight (axles, axle beams, kingpin side,
+ * Load factors: payload × dynamicFactor; members that also carry the cart's weight (axles, axle beams, rear-axle side,
  * turntable) use the axle's static ground reaction × dynamicFactor, which already contains the cart mass (D-2).
  * Wood allowables are MOR/MOE × wet-service factors, with the wood safety factor; steel is yield / steel SF.
  */
-import { FRAME_STYLE, AXLE_STYLE, SIDE_CONSTRUCTION } from '../params';
+import { AXLE_STYLE } from '../params';
 import { worldAABB } from '../model/bounds';
 import type { Part } from '../model/types';
 import type { Ctx } from './context';
@@ -14,7 +14,7 @@ import { dualCheck, detail, governing, type CaseEval } from './dual';
 import { RAD, axleLoads, contactsAt } from './geometry';
 import { f } from './format';
 import type { CaseData } from './loads';
-import { bendingStress, cantileverTip, circleSection, rectSection, rectShear, ssPointMid, ssUdlCentered, ssUdlFull, transformedSection, type Layer } from './beams';
+import { bendingStress, cantileverTip, circleSection, rectSection, rectShear, ssPointMid, ssUdlCentered, ssUdlFull } from './beams';
 import { evalBoth, rearNormalNoseDown } from './stability';
 import { bumpCases, bumpSeatGHard, bumpText, peakVertical, seatFactor, sensitivityText } from './bump';
 import type { AnalysisCheck, Detail } from './types';
@@ -181,36 +181,12 @@ export function bearingGroove(ctx: Ctx): AnalysisCheck {
   return dualCheck({ id: 'bearing-groove', label: 'Compression perp at the rear axle groove', group: 'Structure', refs: ['D-4', 'D-10', 'D-50'], primary: 'goal', ...evalBoth(ctx, ev) });
 }
 
-// ── rails / girders ──────────────────────────────────────────────────────────────────────────────────────────
-
-/** Vertical stack of oak/ply layers for a hull-beam side at `tag` in the cabin or nose zone (read from the parts). */
-export function hullLayers(ctx: Ctx, zone: 'cabin' | 'nose'): Layer[] | null {
-  const { p, L } = ctx;
-  const al = allowables(ctx);
-  // Real member sections (D-45, eng N-4): never the bounding box of a curved part. A bent chine, gunwale or girder (plan curve), and the sheer
-  // gunwale (a 4" board sawn to a 1.5" band), have large bounding boxes; the section is the thickness x height the member actually has.
-  const oak = (x: Part | undefined, b: number, z0: number, z1: number): Layer | null => (x ? { b, z0, z1, E: al.Eoak, kind: 'oak' } : null);
-  const list: (Layer | null)[] = [];
-  if (zone === 'cabin') list.push(oak(part(ctx, 'girder-cabin-L'), L.side, L.deckBot - p.railDepthIn, L.railTop));
-  const pre = `side-${zone}-L`;
-  if (p.sideConstruction === SIDE_CONSTRUCTION.solidOak) list.push(oak(part(ctx, `${pre}-board`), L.side, L.deckBot, L.sideTop));
-  else {
-    const open = p.sideConstruction === SIDE_CONSTRUCTION.openFrame;
-    list.push(oak(part(ctx, `${pre}-chine`), L.side, L.chineBot, L.chineBot + L.chineH), oak(part(ctx, `${pre}-gunwale`), L.side, L.sideTop - L.railBand, L.sideTop));
-    if (p.sideConstruction === SIDE_CONSTRUCTION.capturedPly && !open) {
-      const web = part(ctx, `${pre}-web`);
-      if (web) list.push({ b: p.panelPlyIn, z0: L.web.z0, z1: L.web.z1, E: al.Eply, kind: 'ply' });
-    }
-  }
-  const out = list.filter((x): x is Layer => !!x && x.z1 > x.z0);
-  return out.length ? out : null;
-}
+// ── rails ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export function railsCheck(ctx: Ctx): AnalysisCheck {
   const { p, L } = ctx;
   const al = allowables(ctx);
-  const hull = p.frameStyle === FRAME_STYLE.hullBeam;
-  const span = L.front.beam.x; // rear beam to front beam
+  const span = L.beamF.x; // rear beam to the king beam (the front support, at the kingpin, D-56)
   // Sprung chassis weight the rails also carry (deck, sides, seat, storage, fittings; axles/beams/clamps are carried directly), M3.
   const selfLb = ctx.parts.reduce((m, x) => (x.body === 'chassis' && !x.payload && x.group !== 'reference' && x.group !== 'running-gear' ? m + x.massLb : m), 0);
   const ev = (c: CaseData): CaseEval => {
@@ -222,52 +198,30 @@ export function railsCheck(ctx: Ctx): AnalysisCheck {
     const Ws = selfLb / 2; // static, for deflection
     const selfTxt = `Chassis self-weight ${f(selfLb)} lb (all chassis parts above the axles, M3) × ${f(gN, 2)} = ${f(selfLb * p.dynamicFactor)} lbf as a UDL, ${f(Wm)} lbf per member (static ${f(Ws)} lb in deflection).`;
     const ds: Detail[] = [];
-    let how: string;
-    if (!hull) {
-      // Real section (D-45: the rail is a bent lamination, its bounding box is not its section).
-      const b = p.railThicknessIn;
-      const h = p.railDepthIn;
-      const sec = rectSection(b, h);
-      const r0 = ssPointMid(Pm, span, al.Eoak * sec.I);
-      const u0 = ssUdlFull(Wm, span, al.Eoak * sec.I);
-      const r = { M: r0.M + u0.M, V: r0.V + u0.V };
-      const sigma = bendingStress(r.M, sec);
-      const tau = rectShear(r.V, b, h);
-      const defl = ssPointMid(Pstat / 2, span, al.Eoak * sec.I).defl + ssUdlFull(Ws, span, al.Eoak * sec.I).defl;
-      ds.push(detail('bending', sigma, 'psi', al.oakBend, '<='), detail('shear', tau, 'psi', al.oakShear, '<='), detail('static deflection', defl, 'in', span / p.deflectionLimitRatio, '<='));
-      how = `Ladder rails ${f(b, 2)}" × ${f(h, 2)}" (2 members). Payload (${c.riderLb} + ${c.cargoLb}) × ${f(gN, 2)} = ${f(Pdyn)} lbf as a point load at midspan of the ${f(span)}" span (rear beam to kingpin), ${f(Pm)} lbf per rail: M = PL/4 + wL²/8 = ${f(r0.M)} + ${f(u0.M)} = ${f(r.M)} lb·in. ${selfTxt} σ = M/S = ${f(sigma, 0)} psi (≤ ${f(al.oakBend, 0)}); τ = 1.5V/A = ${f(tau, 0)} psi (≤ ${f(al.oakShear, 0)}); static δ = P·L³/48EI + 5WL³/384EI with P = ${f(Pstat / 2)} lb, W = ${f(Ws)} lb: ${defl.toFixed(3)}" (≤ L/${p.deflectionLimitRatio} = ${(span / p.deflectionLimitRatio).toFixed(3)}").`;
-    } else {
-      const lay = hullLayers(ctx, 'cabin');
-      if (!lay) {
-        ds.push(detail('bending', 0, 'psi', al.oakBend, '<='));
-        how = 'Hull-beam girder section not found in the parts list.';
-      } else {
-        const ts = transformedSection(lay, al.Eoak);
-        const r0 = ssPointMid(Pm, span, ts.EI);
-        const u0 = ssUdlFull(Wm, span, ts.EI);
-        const r = { M: r0.M + u0.M };
-        const cOak = Math.max(...ts.layers.filter((q) => q.kind === 'oak').map((q) => q.cMax), 0);
-        const cPly = Math.max(...ts.layers.filter((q) => q.kind === 'ply').map((q) => q.cMax), 0);
-        const nPly = ts.layers.find((q) => q.kind === 'ply')?.n ?? 0;
-        const sOak = (r.M * cOak) / ts.I;
-        ds.push(detail('girder bending (oak)', sOak, 'psi', al.oakBend, '<='));
-        if (cPly > 0) ds.push(detail('girder bending (ply web)', (nPly * r.M * cPly) / ts.I, 'psi', al.plyBend, '<='));
-        const defl = ssPointMid(Pstat / 2, span, ts.EI).defl + ssUdlFull(Ws, span, ts.EI).defl;
-        ds.push(detail('static deflection', defl, 'in', span / p.deflectionLimitRatio, '<='));
-        // Nose section (no deepened girder) at the shoulder, with the load just aft of it.
-        let noseTxt = '';
-        const nose = L.xn < L.kx ? hullLayers(ctx, 'nose') : null;
-        if (nose) {
-          const tn = transformedSection(nose, al.Eoak);
-          const Mn = (Pm * L.xn * (L.kx - L.xn)) / L.kx + ((Wm / L.kx) * L.xn * (L.kx - L.xn)) / 2;
-          const cn = Math.max(...tn.layers.filter((q) => q.kind === 'oak').map((q) => q.cMax), 0);
-          const sn = (Mn * cn) / tn.I;
-          ds.push(detail('nose side bending at the shoulder (oak)', sn, 'psi', al.oakBend, '<='));
-          noseTxt = ` Nose side section at the shoulder (load just aft of it plus the self-weight UDL, M = P·xs(L−xs)/L + w·xs(L−xs)/2 = ${f(Mn)} lb·in): σ = ${f(sn, 0)} psi.`;
-        }
-        how = `Hull-beam girders (2 members), transformed I-section from the actual parts (oak girder + chine + gunwale flanges, ply web, n_ply = E_ply/E_oak = ${f(nPly, 2)}): NA at z = ${f(ts.zNa, 2)}", I_tr = ${f(ts.I, 1)} in⁴. Payload × ${f(gN, 2)} = ${f(Pdyn)} lbf at midspan of ${f(span)}", ${f(Pm)} lbf per girder: M = ${f(r0.M)} + ${f(u0.M)} (self-weight) = ${f(r.M)} lb·in. ${selfTxt} σ_oak = ${f(sOak, 0)} psi (≤ ${f(al.oakBend, 0)}); static δ = ${defl.toFixed(3)}" (≤ L/${p.deflectionLimitRatio} = ${(span / p.deflectionLimitRatio).toFixed(3)}").${noseTxt}`;
-      }
+    // Real section: a straight oak bar (D-54; no bent lamination any more).
+    const b = p.railThicknessIn;
+    const h = p.railDepthIn;
+    const sec = rectSection(b, h);
+    const r0 = ssPointMid(Pm, span, al.Eoak * sec.I);
+    const u0 = ssUdlFull(Wm, span, al.Eoak * sec.I);
+    const r = { M: r0.M + u0.M, V: r0.V + u0.V };
+    const sigma = bendingStress(r.M, sec);
+    const tau = rectShear(r.V, b, h);
+    const defl = ssPointMid(Pstat / 2, span, al.Eoak * sec.I).defl + ssUdlFull(Ws, span, al.Eoak * sec.I).defl;
+    ds.push(detail('bending', sigma, 'psi', al.oakBend, '<='), detail('shear', tau, 'psi', al.oakShear, '<='), detail('static deflection', defl, 'in', span / p.deflectionLimitRatio, '<='));
+    // The rails are only railDepthF deep ahead of railStepX (D-56, so the swinging front axle beam passes under them): bending at the step and the shear at the king beam end.
+    const hF = L.railDepthF;
+    let shallowTxt = '';
+    if (hF < h - 1e-6) {
+      const secF = rectSection(b, hF);
+      const Rr = r.V; // reaction at the king beam end
+      const lx = Math.max(0, span - L.railStepX);
+      const Mstep = Rr * lx - ((Wm / span) * lx * lx) / 2;
+      const sigF = bendingStress(Mstep, secF), tauF = rectShear(Rr, b, hF);
+      ds.push(detail('bending at the step to the shallow section', sigF, 'psi', al.oakBend, '<='), detail('shear in the shallow section at the king beam', tauF, 'psi', al.oakShear, '<='));
+      shallowTxt = ` Ahead of x = ${f(L.railStepX, 1)}" the rails are only ${f(hF, 2)}" deep (D-56): at the step M = ${f(Rr)} x ${f(lx, 1)} - w L²/2 = ${f(Mstep)} lb·in, σ = ${f(sigF, 0)} psi; shear at the king beam end ${f(tauF, 0)} psi.`;
     }
+    let how = `Ladder rails ${f(b, 2)}" × ${f(h, 2)}" (2 members). Payload (${c.riderLb} + ${c.cargoLb}) × ${f(gN, 2)} = ${f(Pdyn)} lbf as a point load at midspan of the ${f(span)}" span (rear beam to the king beam), ${f(Pm)} lbf per rail: M = PL/4 + wL²/8 = ${f(r0.M)} + ${f(u0.M)} = ${f(r.M)} lb·in. ${selfTxt} σ = M/S = ${f(sigma, 0)} psi (≤ ${f(al.oakBend, 0)}); τ = 1.5V/A = ${f(tau, 0)} psi (≤ ${f(al.oakShear, 0)}); static δ = P·L³/48EI + 5WL³/384EI with P = ${f(Pstat / 2)} lb, W = ${f(Ws)} lb: ${defl.toFixed(3)}" (≤ L/${p.deflectionLimitRatio} = ${(span / p.deflectionLimitRatio).toFixed(3)}").${shallowTxt}`;
     // Hard hit (D-50): the 2" rear hit's seat factor; wood to MOR x C_M with no safety factor (no splitting). Bending scales with the factor.
     const gH = Math.max(gN, 1 + bumpCases(ctx, c, 'rear').hard.V / c.massLb);
     for (const dd of [...ds]) {
@@ -277,7 +231,7 @@ export function railsCheck(ctx: Ctx): AnalysisCheck {
     return governing(ds, how);
   };
   return dualCheck({
-    id: 'rails', label: hull ? 'Hull-beam side girders' : 'Frame rails', group: 'Structure', refs: ['D-2', 'D-4', 'D-17'], primary: 'goal',
+    id: 'rails', label: 'Frame rails', group: 'Structure', refs: ['D-2', 'D-4', 'D-17'], primary: 'goal',
     ...evalBoth(ctx, ev),
   });
 }
@@ -289,8 +243,8 @@ export function maxDeckSpan(ctx: Ctx): number {
   const { L } = ctx;
   const half = L.joistT / 2;
   const edges: number[] = [L.xRear + L.transom]; // D-43: the transom, not the chine thickness
-  for (const x of L.cabinJoistX) edges.push(x - half, x + half);
-  edges.push(L.xn);
+  for (const x of L.joistX) edges.push(x - half, x + half);
+  edges.push(L.xFlatEnd);
   let m = 0;
   for (let i = 0; i + 1 < edges.length; i += 2) m = Math.max(m, edges[i + 1] - edges[i]);
   return Math.max(1, m);

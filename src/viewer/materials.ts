@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Part } from '../model/types';
-import { oakEndTexture, pebbleBump, plyEdgeTexture, signTexture, woodTextures } from './textures';
+import { oakEndTexture, pebbleBump, plyEdgeTexture, signTexture, woodTextures, type SignShape } from './textures';
 
 /** What a part looks like. The viewer reads `part.finish.surface` first, then falls back to the material name (D-44). */
 export type Surface = 'oak' | 'okoume' | 'vinyl' | 'rubber' | 'steel' | 'aluminum' | 'asa' | 'rope' | 'blackened';
@@ -24,9 +24,9 @@ export function lookOf(part: Part): Look {
   if (part.kind === 'printed') return 'asa';
   const mat = part.material.toLowerCase();
   if (mat.includes('rope')) return 'rope';
-  // Phase 3b front end (spec 1.1, 8.1): the kart spindles and kingpin hardware are blackened steel; the brake lever's grip is oak.
+  // D-56 front end: the tongue plate and the kingpin bolt are blackened (powder-coated) steel; the brake lever's grip is oak.
   const tag = `${part.id} ${part.name}`.toLowerCase();
-  if (/spindle|kingpin-bolt|kingpin bolt/.test(tag)) return 'blackened';
+  if (/bridle-tongue|kingpin/.test(tag)) return 'blackened';
   if (mat.includes('oak')) return 'oak';
   if (mat.includes('vinyl') || mat.includes('foam') || part.finish?.soft) return 'vinyl';
   if (mat.includes('ply') || part.kind === 'sheet') return 'okoume';
@@ -74,7 +74,7 @@ export function materialsFor(look: Look): SurfaceMats {
       m = new THREE.MeshStandardMaterial({ color: 0x7c8288, roughness: 0.35, metalness: 0.9, ...SOLID });
       break;
     case 'blackened':
-      // Black-oxide / powder-coated steel: kart spindles, kingpin bolts.
+      // Black-oxide / powder-coated steel: the tongue plate and the kingpin.
       m = new THREE.MeshStandardMaterial({ color: 0x2c2f33, roughness: 0.5, metalness: 0.75, ...SOLID });
       break;
     case 'aluminum':
@@ -117,15 +117,25 @@ export function wheelMaterials(): { rim: THREE.Material; brass: THREE.Material; 
   return wheelSet;
 }
 
-/** Painted sign face (forest green, cream lettering) at the sign's aspect ratio. Index 1 is the plywood edge for the other faces. */
+/**
+ * Painted sign face (forest green, cream lettering) at the sign's aspect ratio. Index 1 is the plywood edge for the rim.
+ * The texture is keyed by aspect, so dragging the sign length makes new ones: only the four most recent are kept.
+ */
 const signCache = new Map<string, THREE.Material[]>();
-export function signMaterials(aspect: number): THREE.Material[] {
-  const key = aspect.toFixed(2);
+export function signMaterials(aspect: number, shape: SignShape = 'oval'): THREE.Material[] {
+  const key = `${shape}:${(Math.round(aspect * 10) / 10).toFixed(1)}`;
   let m = signCache.get(key);
   if (!m) {
     const edge = (materialsFor('okoume') as THREE.Material[])[1];
-    m = [new THREE.MeshStandardMaterial({ color: 0xffffff, map: signTexture(aspect), roughness: 0.7, ...SOLID }), edge];
+    m = [new THREE.MeshStandardMaterial({ color: 0xffffff, map: signTexture(aspect, shape), roughness: 0.62, ...SOLID }), edge];
     signCache.set(key, m);
+    for (const [k, old] of signCache) {
+      if (signCache.size <= 4) break;
+      if (k === key) continue;
+      (old[0] as THREE.MeshStandardMaterial).map?.dispose();
+      old[0].dispose();
+      signCache.delete(k);
+    }
   }
   return m;
 }

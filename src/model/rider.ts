@@ -38,7 +38,7 @@ export function buildPayload(ctx: Ctx): Part[] {
 
   // Legs reach the foot stop.
   const stopRear = p.seatXIn + p.riderLegReachIn - p.footStopThickIn / 2;
-  const deckZ = p.seatXIn + p.riderLegReachIn >= L.xn ? L.deckTop : L.deckTop;
+  const deckZ = L.deckTop;
   for (const sy of [1, -1]) {
     const y = sy * LEG_Y_FRAC * S;
     const hip: Vec3 = [H[0], y, H[2] + (THIGH.z * S) / 2];
@@ -61,7 +61,7 @@ export function buildPayload(ctx: Ctx): Part[] {
   if (view.cargo && view.seat === 'stowed') {
     // Cargo mode (D-53): the payload as one block on the bed, piled against the box, at the cargo CG height (cargoCgHeightIn above the deck).
     const st = L.storage;
-    const lx = Math.min(p.cargoLoadLengthIn, Math.max(1, L.xn - st.x1 - 0.5));
+    const lx = Math.min(p.cargoLoadLengthIn, Math.max(1, L.xFlatEnd - st.x1 - 0.5));
     const w = Math.max(1, Math.min(p.cargoLoadWidthIn, 2 * L.hwC - 1));
     parts.push(box(ctx, { ...common, id: 'cargo', name: `Cargo payload (${p.cargoPayloadLb} lb on the bed)`, body: 'cargo', massLb: p.cargoPayloadLb, material: 'cargo',
       size: [lx, w, 2 * p.cargoCgHeightIn], center: [st.x1 + 0.5 + lx / 2, 0, L.deckTop + p.cargoCgHeightIn] }));

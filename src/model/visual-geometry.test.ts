@@ -1,11 +1,11 @@
-/** Visual finishing geometry (D-44): sheer line, crowned transoms, rounded seat back, finish tags. */
+/** Visual finishing geometry (D-44, D-54): the crowned rear transom, rounded seat back, handlebow and finish tags. (The sheer line went with the curved hull and the front transom at D-54; the sled side profile is tested in body.test.ts.) */
 import { describe, expect, it } from 'vitest';
-import { defaultParams, type Params } from '../params';
+import { PARAM_DEFS, defaultParams } from '../params';
 import { buildModel } from './index';
 import { liftSlot, transomTopOutline } from './body';
 import { makeCtx } from './build-utils';
 import { worldAABB } from './bounds';
-import { computeLayout, sheerRise } from './layout';
+import { computeLayout } from './layout';
 import { seatBackSupport } from './seat';
 import { ROUNDOVER_MAX_FRACTION, minSection } from './finish';
 import type { Part, Vec2 } from './types';
@@ -31,150 +31,51 @@ const zAt = (pts: Vec2[], x: number) => {
   return pts[pts.length - 1][1];
 };
 
-describe('sheer line (D-44)', () => {
-  const ctx = makeCtx(defaults);
-  const { L } = ctx;
-
-  it('the rise is 0 behind the start, monotone, and reaches the full rise at the front transom', () => {
-    expect(L.sheer.riseIn).toBe(defaults.sheerRiseIn);
-    expect(sheerRise(L, L.sheer.x0)).toBe(0);
-    expect(sheerRise(L, L.xn)).toBe(0);
-    expect(sheerRise(L, L.sheer.x1)).toBeCloseTo(defaults.sheerRiseIn, 9);
-    let prev = -1;
-    for (let x = L.xRear; x <= L.xFront; x += 0.25) {
-      const r = sheerRise(L, x);
-      expect(r).toBeGreaterThanOrEqual(prev - 1e-12);
-      prev = r;
-    }
-    // the curve starts flat (zero slope) and is steepest at the bow
-    expect(sheerRise(L, L.sheer.x0 + 0.5) - sheerRise(L, L.sheer.x0)).toBeLessThan(sheerRise(L, L.sheer.x1) - sheerRise(L, L.sheer.x1 - 0.5));
-  });
-
-  it('the finger-guard zone and the whole cabin stay on the flat gunwale (hazard end is behind the start of the rise)', () => {
-    const ctx2 = makeCtx(defaults);
-    expect(ctx2.L.sheer.x0).toBeGreaterThan(ctx2.L.xn);
-    expect(sheerRise(ctx2.L, ctx2.L.xn + 3)).toBe(0); // the guard hazard zone spans xn .. xn + ~2" at the defaults (D-45)
-  });
-
-  it('sheer 0 reproduces the straight gunwale: a box, a 4-point rectangular web, top at the old height', () => {
-    const p: Params = { ...defaults, sheerRiseIn: 0 };
-    const parts = buildModel(p);
-    const c = makeCtx(p).L;
-    for (const tag of ['L', 'R']) {
-      const gun = get(parts, `side-nose-${tag}-gunwale`);
-      expect(gun.geometry.type).toBe('box');
-      expect(worldAABB(gun).max[2]).toBeCloseTo(c.sideTop, 9);
-      expect(outlineOf(get(parts, `side-nose-${tag}-web`))).toHaveLength(4);
-    }
-    expect(liftSlot(makeCtx(p), 'front').transomTop).toBeCloseTo(c.sideTop, 9);
-  });
-
-  it('with the default sheer the nose gunwale top rises monotonically forward and ends at the full rise', () => {
-    const parts = buildModel(defaults);
-    for (const tag of ['L', 'R']) {
-      const gun = get(parts, `side-nose-${tag}-gunwale`);
-      expect(gun.geometry.type).toBe('extrusion');
-      const ol = outlineOf(gun);
-      const top = ol.filter((q) => q[1] > L.sideTop - L.railBand + 1e-9 && q[1] >= zAt(ol.slice(0, ol.length / 2), q[0]) + L.railBand - 1e-9).sort((a, b) => a[0] - b[0]);
-      expect(top.length).toBeGreaterThan(8);
-      for (let i = 1; i < top.length; i++) expect(top[i][1]).toBeGreaterThanOrEqual(top[i - 1][1] - 1e-9);
-      const bb = worldAABB(gun);
-      expect(bb.max[2]).toBeCloseTo(L.sideTop + defaults.sheerRiseIn, 6);
-      expect(bb.min[2]).toBeCloseTo(L.sideTop - L.railBand, 6); // the underside is flat at the back, so the chine-to-gunwale gap is the old one there
-      // the section stays one rail band tall everywhere
-      const half = ol.length / 2;
-      for (let i = 0; i < half; i++) expect(ol[2 * half - 1 - i][1] - ol[i][1]).toBeCloseTo(L.railBand, 9);
-    }
-  });
-
-  it('the web stays captured: its top edge is the gunwale underside plus the groove depth at every sample', () => {
-    const parts = buildModel(defaults);
-    const g = defaults.grooveDepthIn;
-    for (const tag of ['L', 'R']) {
-      const gun = get(parts, `side-nose-${tag}-gunwale`), web = get(parts, `side-nose-${tag}-web`);
-      const gl = outlineOf(gun);
-      // The bow run is set at the bow heading: local x runs along the run, so model x = origin x + local x cos(heading) (ey is straight up, model z = origin z + local y).
-      const gunX = (lx: number) => gun.transform[12] + lx * gun.transform[0];
-      const under = gl.slice(0, gl.length / 2).map(([lx, ly]) => [gunX(lx), gun.transform[14] + ly] as Vec2); // bottom edge, model x ascending
-      const wl = outlineOf(web);
-      const wz0 = web.transform[14];
-      const top = wl.slice(2);
-      for (const [lx, ly] of top) {
-        const x = web.transform[12] + lx * web.transform[0];
-        if (x > under[under.length - 1][0] + 1e-9) continue; // the web's tail inside the transom dado runs on to the full rise past the (bevel-trimmed) gunwale end
-        expect(wz0 + ly, `${tag} x=${x.toFixed(2)}`).toBeCloseTo(zAt(under, x) + g, 6);
-      }
-      // the web enters the front transom dado at the full rise
-      // set at the bow heading: the square end corner pokes about (thickness / 2) sin(heading) further into the dado (0.25" deep), never out of it
-      const dadoEnd = L.xFront - L.transom + defaults.deckCaptureDepthIn;
-      expect(worldAABB(web).max[0]).toBeGreaterThanOrEqual(dadoEnd - 0.05);
-      expect(worldAABB(web).max[0]).toBeLessThan(dadoEnd + 0.1);
-      // one edge condition per outline edge, none exposed
-      expect(web.edges).toHaveLength(wl.length);
-      expect((web.edges as string[]).includes('exposed')).toBe(false);
-      // the chine still caps the web from below by the groove depth
-      expect(worldAABB(get(parts, `side-nose-${tag}-chine`)).max[2] - worldAABB(web).min[2]).toBeCloseTo(g, 6);
-    }
-  });
-
-  it('the front transom top follows the sheer at its x; the rear stays at the old height', () => {
-    const parts = buildModel(defaults);
-    const f = worldAABB(get(parts, 'transom-front'));
-    const crown = defaults.transomCrownIn;
-    expect(f.max[2]).toBeCloseTo(L.sideTop + defaults.sheerRiseIn + crown, 6);
-    const r = worldAABB(get(parts, 'transom-rear'));
-    expect(r.max[2]).toBeCloseTo(liftSlot(ctx, 'rear').transomTop + crown, 6);
-  });
-
-  it('the structural side section is the lowest one: Layout.sideH is unchanged by the sheer', () => {
-    expect(L.sideH).toBe(defaults.sideHeightIn);
-    expect(makeCtx({ ...defaults, sheerRiseIn: 0 }).L.sideH).toBe(L.sideH);
-  });
-
-  it('mass is computed from the real outline: the sheer adds oak to the nose webs and the front transom', () => {
-    const flat = buildModel({ ...defaults, sheerRiseIn: 0 });
-    const curved = buildModel(defaults);
-    for (const id of ['side-nose-L-web', 'transom-front']) expect(get(curved, id).massLb).toBeGreaterThan(get(flat, id).massLb);
-    expect(get(curved, 'side-nose-L-gunwale').massLb).toBeCloseTo(get(flat, 'side-nose-L-gunwale').massLb, 2);
-  });
-});
-
-describe('shaped transoms (D-44)', () => {
+describe('shaped rear transom (D-44, D-54)', () => {
   const parts = buildModel(defaults);
   const { L } = makeCtx(defaults);
 
   it('the top edge is an arc: the center is the crown above the corners, and the corners are rounded', () => {
-    for (const [id, end] of [['transom-rear', 'rear'], ['transom-front', 'front']] as const) {
-      const ol = outlineOf(get(parts, id));
-      const zt = liftSlot(makeCtx(defaults), end).transomTop;
-      const maxZ = Math.max(...ol.map((q) => q[1]));
-      expect(maxZ).toBeCloseTo(zt + defaults.transomCrownIn, 6);
-      // the point at the side wall's top is below the corner height (it is rounded off)
-      const wTop = Math.max(...ol.map((q) => q[0]));
-      const atWall = ol.filter((q) => Math.abs(q[0] - wTop) < 1e-9).map((q) => q[1]);
-      expect(Math.max(...atWall)).toBeLessThan(zt - 0.05);
-    }
+    const ol = outlineOf(get(parts, 'transom-rear'));
+    const zt = liftSlot(makeCtx(defaults), 'rear').transomTop;
+    expect(zt).toBeCloseTo(L.deckTop + defaults.sideHeightRearIn, 9); // as tall as the rear side of the sled profile
+    const maxZ = Math.max(...ol.map((q) => q[1]));
+    expect(maxZ).toBeCloseTo(zt + defaults.transomCrownIn, 6);
+    // the point at the side wall's top is below the corner height (it is rounded off)
+    const wTop = Math.max(...ol.map((q) => q[0]));
+    const atWall = ol.filter((q) => Math.abs(q[0] - wTop) < 1e-9).map((q) => q[1]);
+    expect(Math.max(...atWall)).toBeLessThan(zt - 0.05);
+    // the crown is symmetric: the highest point is at the middle
+    const top = ol.find((q) => Math.abs(q[1] - maxZ) < 1e-9)!;
+    expect(Math.abs(top[0])).toBeLessThan(1);
+    // the top is the only crowned edge: the bottom is flat at the joist bottom
+    const bottom = ol.filter((q) => q[1] < L.deckTop).map((q) => q[1]);
+    expect(new Set(bottom.map((z) => z.toFixed(6))).size).toBe(1);
   });
 
   it('the lift-slot oak rule still holds along the crowned top (D-37): every top point over the slot is at least liftBarMinIn above it', () => {
-    for (const [id, end] of [['transom-rear', 'rear'], ['transom-front', 'front']] as const) {
-      const t = get(parts, id);
-      const ol = outlineOf(t);
-      const s = liftSlot(makeCtx(defaults), end);
-      const top = ol.filter((q) => q[1] > s.transomTop - 0.7).sort((a, b) => a[0] - b[0]);
-      for (const y of [-s.lengthIn / 2, 0, s.lengthIn / 2]) expect(zAt(top, y) - s.zTop).toBeGreaterThanOrEqual(defaults.liftBarMinIn - 1e-9);
-      // the slot itself did not move
-      if (t.geometry.type === 'extrusion') {
-        const h = t.geometry.holes![0];
-        expect(Math.max(...h.map((q) => q[1]))).toBeCloseTo(s.zTop, 6);
-      }
+    const t = get(parts, 'transom-rear');
+    const ol = outlineOf(t);
+    const s = liftSlot(makeCtx(defaults), 'rear');
+    const top = ol.filter((q) => q[1] > s.transomTop - 0.7).sort((a, b) => a[0] - b[0]);
+    for (const y of [-s.lengthIn / 2, 0, s.lengthIn / 2]) expect(zAt(top, y) - s.zTop).toBeGreaterThanOrEqual(defaults.liftBarMinIn - 1e-9);
+    // the slot itself did not move
+    if (t.geometry.type === 'extrusion') {
+      const h = t.geometry.holes![0];
+      expect(Math.max(...h.map((q) => q[1]))).toBeCloseTo(s.zTop, 6);
     }
   });
 
   it('crown 0 and corner radius 0 give back the flat-topped transom', () => {
     const flat = buildModel({ ...defaults, transomCrownIn: 0, transomCornerRadiusIn: 0 });
-    const ol = outlineOf(get(flat, 'transom-front'));
+    const ol = outlineOf(get(flat, 'transom-rear'));
     expect(new Set(ol.filter((q) => q[1] > L.deckTop).map((q) => q[1].toFixed(6))).size).toBe(1);
+  });
+
+  it('a lower rear side gives a lower transom, but never lower than the slot plus its oak (the rule wins over the profile)', () => {
+    const p = { ...defaults, sideHeightRearIn: 10 };
+    const t = worldAABB(get(buildModel(p), 'transom-rear'));
+    expect(t.max[2]).toBeCloseTo(Math.max(L.deckTop + 10, liftSlot(makeCtx(p), 'rear').zTop + defaults.liftBarMinIn) + defaults.transomCrownIn, 6);
   });
 
   it('transomTopOutline is symmetric and CCW-continuable', () => {
@@ -182,6 +83,12 @@ describe('shaped transoms (D-44)', () => {
     for (const [y, z] of o) expect(o.some(([y2, z2]) => Math.abs(y2 + y) < 1e-9 && Math.abs(z2 - z) < 1e-9)).toBe(true);
     expect(o[0][0]).toBeCloseTo(8, 9);
     expect(o[o.length - 1][0]).toBeCloseTo(-8, 9);
+  });
+
+  it('there is no front transom and no sheer: the bow is the curl, whose top edge is a plain band', () => {
+    expect(parts.some((x) => x.id === 'transom-front')).toBe(false);
+    expect(Object.keys(PARAM_DEFS)).not.toContain('sheerRiseIn');
+    expect(get(parts, 'bow-curl').geometry.type).toBe('sweep');
   });
 });
 
@@ -225,28 +132,29 @@ describe('seat back, handle and finish tags (D-44)', () => {
       expect(x.finish!.roundoverIn!, x.id).toBeLessThanOrEqual(defaults.roundoverIn + 1e-12);
       expect(x.finish!.roundoverIn!, x.id).toBeLessThanOrEqual(minSection(x.geometry) * ROUNDOVER_MAX_FRACTION + 1e-9);
     }
-    // the 5/8" gunwale is capped at a third of its thickness (0.208"); a 1-1/2" rail takes the full 1/4"
-    expect(get(parts, 'side-nose-L-gunwale').finish?.roundoverIn).toBeCloseTo(0.625 / 3, 9);
+    // the 5/8" gunwale is capped at a third of its thickness (0.208"); a 3/4" rail takes the full 1/4"
+    expect(get(parts, 'side-L-gunwale').finish?.roundoverIn).toBeCloseTo(0.625 / 3, 9);
+    expect(get(parts, 'rail-L').finish?.roundoverIn).toBeCloseTo(defaults.railThicknessIn / 3, 9);
     expect(parts.some((x) => x.finish?.roundoverIn === defaults.roundoverIn)).toBe(true);
     for (const x of parts.filter((q) => q.material.includes('plywood'))) expect(x.finish?.surface, x.id).toBe('okoume');
     for (const id of ['seat-cushion', 'seat-back-pad']) expect(get(parts, id).finish).toMatchObject({ soft: true, surface: 'vinyl' });
     for (const w of parts.filter((q) => q.geometry.type === 'wheel')) expect(w.finish).toMatchObject({ tread: 'lug', surface: 'rubber' });
     expect(parts.filter((q) => q.geometry.type === 'wheel')).toHaveLength(4);
     expect(get(parts, 'handle-socket-L').finish?.surface).toBe('aluminum');
-    expect(get(parts, 'kp-bracket-L').finish?.surface).toBe('steel');
-    expect(get(parts, 'spindle-L').finish?.surface).toBe('blackened');
-    expect(get(parts, 'brake-beam').finish?.surface).toBe('aluminum');
-    expect(get(parts, 'brake-lever').finish?.surface).toBe('aluminum');
-    expect(get(parts, 'brake-keeper-L').finish?.surface).toBe('steel');
-    expect(get(parts, 'brake-lever-grip').finish?.surface).toBe('oak');
-    expect(parts.some((x) => /^(stick-cable|cable-crossbar|lap-belt|belt-anchor)/.test(x.id))).toBe(false);
+    // the pivoting front axle (D-56): the tongue plate and kingpin are blackened steel; the beam, king beam and stops are oak; the thrust washer is UHMW; the shackle is steel
+    for (const id of ['bridle-tongue', 'kingpin']) expect(get(parts, id).finish?.surface, id).toBe('blackened');
+    expect(get(parts, 'bridle-eye').finish?.surface).toBe('steel');
+    expect(get(parts, 'king-thrust').finish?.surface).toBe('asa');
+    for (const id of ['axle-hanger-L', 'beam-F', 'king-beam', 'steer-stop-L', 'steer-stop-R']) expect(get(parts, id).finish?.surface, id).toBe('oak');
+    expect(get(parts, 'bow-curl').finish?.surface).toBe('okoume');
+    expect(get(parts, 'bow-curl').finish?.roundoverIn).toBeUndefined(); // ply: no roundover
+    expect(parts.some((x) => /^(stick-cable|cable-crossbar|lap-belt|belt-anchor|guard-)/.test(x.id))).toBe(false);
     expect(parts.find((x) => x.material.includes('rope'))!.finish?.surface).toBe('rope');
-    expect(get(parts, 'guard-L').finish?.surface).toBe('asa');
   });
 
   it('roundover 0 leaves oak untagged for edges but still tags the surface', () => {
     const flat = buildModel({ ...defaults, roundoverIn: 0 });
-    const x = get(flat, 'side-nose-L-gunwale');
+    const x = get(flat, 'side-L-gunwale');
     expect(x.finish?.roundoverIn).toBeUndefined();
     expect(x.finish?.surface).toBe('oak');
   });

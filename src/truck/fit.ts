@@ -1,8 +1,8 @@
 /**
  * Truck-fit check (BRIEF §4.5, D-6, D-9, D-23). Pure TS, no three.js.
  *
- * Tries both stowage modes x both orientations x three configurations (installed / tongue off / all
- * removables off, D-9), steer at 0. The cart sits with its wheel contacts on the bed floor / tailgate
+ * Tries both stowage modes x both orientations x three configurations (installed / tongue and rope off / all
+ * removables off, D-9), the front axle turned straight (steerDeg 0, D-56). The cart sits with its wheel contacts on the bed floor / tailgate
  * (coplanar) and is slid fore-aft in 0.25" steps; it is centerd on the bed centerline (no lateral search).
  *
  * Modes (D-6, D-23):
@@ -15,7 +15,7 @@
  *
  * Clearance is the true minimum separation of any non-payload cart part from any bed solid (walls, wells,
  * bulkhead, cab back wall, tailgate end): exact Euclidean for axis-aligned boxes, SAT (a lower bound) for
- * rotated ones. Floor/tailgate are contact surfaces. The bridle rope is excluded. Wheels are boxes
+ * rotated ones. Floor/tailgate are contact surfaces. The ropes (bridle, steering) are excluded; the tongue plate and its shackle count. Wheels are boxes
  * (conservative laterally, exact fore-aft).
  *
  * `computeFeasibleWindows` finds, per mode and configuration, the largest track at the current wheelbase and
@@ -30,25 +30,26 @@ import { buildTruckBed, FLOOR_IDS, truckUsableLength } from './bed';
 
 export type Stowage = 'beside' | 'straddle';
 export type Orientation = 'nose-tailgate' | 'nose-bulkhead';
-export type Config = 'installed' | 'tongue-off' | 'removed';
-export const CONFIGS: Config[] = ['installed', 'tongue-off', 'removed'];
-/** Parts removed in the 'tongue off' configuration (only the tongue/bridle, D-9). */
-const TONGUE_RE = /tongue|bridle/i;
+export type Config = 'installed' | 'bridle-off' | 'removed';
+export const CONFIGS: Config[] = ['installed', 'bridle-off', 'removed'];
+/** Parts removed in the 'bridle-off' configuration (D-9, D-56): the tongue plate, its shackle and the rope, all with ids starting 'bridle'. The king beam, kingpin and axle stay. */
+const TONGUE_RE = /^bridle/i;
 
 /** Cart parts for a configuration, built through `build` (which must honor `removed`). */
 export function configParts(config: Config, build: (view: CartView) => Part[]): Part[] {
-  const base = { steerDeg: 0, rider: 'none', cargo: false } as const;
+  const base = { rider: 'none', cargo: false } as const;
   if (config === 'removed') return build({ ...base, removed: true });
   const parts = build({ ...base, removed: false });
-  return config === 'tongue-off' ? parts.filter((x) => !TONGUE_RE.test(x.id) && !TONGUE_RE.test(x.name)) : parts;
+  return config === 'bridle-off' ? parts.filter((x) => !TONGUE_RE.test(x.id)) : parts;
 }
 
 /** View options the fit check passes to the model builder (a superset of the model's ViewState). */
 export interface CartView {
-  steerDeg?: number;
   rider?: 'none' | 'operating' | 'goal';
   cargo?: boolean;
   removed?: boolean;
+  /** Front-axle steer angle (degrees about the kingpin, + = left). The fit always builds straight (the stowed axle is straightened); only the viewer passes this. */
+  steerDeg?: number;
   /** Cargo mode (D-53): the seat kit lies in the storage box. */
   seat?: 'installed' | 'stowed';
 }
@@ -168,7 +169,8 @@ function aabbOf(o: OBB): { min: Vec3; max: Vec3 } {
   return { min, max };
 }
 
-const isBridle = (p: Part) => /bridle|rope/i.test(p.id) || /bridle|rope/i.test(p.name);
+/** Ropes (the bridle and the optional steering ropes) are not rigid and are left out of the clearance check; the tongue plate and shackle are steel and count. */
+const isBridle = (p: Part) => p.id === 'bridle' || /^steer-rope/.test(p.id) || /rope/i.test(p.name);
 
 function isAligned(o: OBB): boolean {
   return o.axes.every((a) => a.some((c) => Math.abs(c) > 1 - 1e-6));
@@ -545,8 +547,8 @@ export async function computeFeasibleWindows(p: Params, build: Build, canceled: 
     const k = Math.round(track * 1000);
     let h = cgCache.get(k);
     if (h === undefined) {
-      const q = { ...p, rearTrackIn: track, frontTrackIn: track };
-      h = centerOfGravity(build(q, { steerDeg: 0, rider: 'operating', cargo: true, removed: false }), { includePayload: true })[2];
+      const q = { ...p, rearTrackIn: track };
+      h = centerOfGravity(build(q, { rider: 'operating', cargo: true, removed: false }), { includePayload: true })[2];
       cgCache.set(k, h);
     }
     return h;
@@ -596,7 +598,7 @@ export async function computeFeasibleWindows(p: Params, build: Build, canceled: 
 
   const trackDef = PARAM_DEFS.rearTrackIn;
   const wbDef = PARAM_DEFS.wheelbaseIn;
-  const trackScan = await scan(['rearTrackIn', 'frontTrackIn'], p.rearTrackIn, trackDef, 1, 0.25);
+  const trackScan = await scan(['rearTrackIn'], p.rearTrackIn, trackDef, 1, 0.25);
   if (!trackScan) return null;
   const wbScan = await scan(['wheelbaseIn'], p.wheelbaseIn, wbDef, 1, 0.25);
   if (!wbScan) return null;

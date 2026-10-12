@@ -8,7 +8,7 @@
  * References checked while writing: the Appendix E row tear-out and group tear-out forms (Z'RT = n_i·F'v·t·s_critical;
  * Z'GT = ½Z'RT1 + ½Z'RT2 + F't·A_group-net). The 3.4.3.3 cleavage form is used as V_r = (2/3)·F'v·b·d_e with d_e the
  * distance from the nearest fastener to the loaded edge; the caller designs mechanical reinforcement for the whole V regardless,
- * so the exact factor on d_e/d does not govern any pass / fail result (see front.ts, kingpin-split).
+ * so the exact factor on d_e/d does not govern any pass / fail result (see the caster-mount row).
  */
 
 /** Dowel bearing strength parallel to grain, Fe∥ = 11,200·G (NDS Table 12.3.3), psi. */
@@ -128,7 +128,7 @@ export function boltCapacity(ctx: Ctx, D: number, lm: number, ls0: number, theta
   const { p } = ctx;
   const ls = effectiveSideThickness(ls0, csDepth); // a flush countersunk head bears only on the plate below it (r3 N-2)
   const Fem = feAtAngle(feParallel(p.oakSpecificGravity), fePerp(p.oakSpecificGravity, D), thetaDeg);
-  const r = lateralZ({ D, lm, ls, Fem, Fes: p.steelDowelBearingPsi, Fyb: p.kingpinPlateBoltYieldPsi, thetaDeg });
+  const r = lateralZ({ D, lm, ls, Fem, Fes: p.steelDowelBearingPsi, Fyb: p.grade8BoltYieldPsi, thetaDeg });
   return { Zref: r.Z, Z: r.Z * ndsAdjust(p), mode: r.mode, Fem, Re: Fem / p.steelDowelBearingPsi, ls };
 }
 

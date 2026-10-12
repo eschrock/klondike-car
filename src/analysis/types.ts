@@ -85,14 +85,14 @@ export const worst = (a: Status, b: Status): Status => (SEVERITY[a] >= SEVERITY[
 export const GROUP_OF_ID: Record<string, CheckGroup> = {
   'mass-empty': 'Mass & transport', cg: 'Mass & transport', 'truck-fit': 'Mass & transport',
   'tip-straight': 'Stability', 'tip-lock': 'Stability', 'slide-before-tip': 'Stability', 'v-rollover': 'Stability', 'pitch-fwd': 'Stability', 'pitch-rear': 'Stability',
-  'turn-radius': 'Steering', 'steer-clear': 'Steering', 'steer-kin': 'Steering', 'steer-lock': 'Steering',
+  'turn-radius': 'Steering', 'steer-clear': 'Steering',
+  // The pivoting front axle (D-56)
+  kingpin: 'Structure', 'king-bearing': 'Structure', 'front-beam': 'Structure', 'front-stub': 'Structure', 'steer-stops': 'Structure', 'king-beam': 'Structure',
   'park-hold': 'Structure',
-  'spindle-stub': 'Structure', 'spindle-fatigue': 'Structure', 'kingpin-bolt': 'Structure', 'kingpin-bracket': 'Structure', 'wheel-retention': 'Structure',
-  'tie-rod': 'Structure', 'drag-link': 'Structure', bellcrank: 'Structure', 'steer-stop-load': 'Structure', 'tongue-tie': 'Structure',
+  'bridle-eye': 'Structure',
   'brake-force': 'Braking', 'brake-traction': 'Braking', 'brake-ratio': 'Braking', 'brake-clear': 'Braking',
   'brake-lever': 'Structure', 'brake-links': 'Structure', 'brake-beam': 'Structure', 'brake-shoes': 'Structure', 'brake-abuse': 'Structure', 'handle-sockets': 'Structure',
-  'axle-stress': 'Structure', 'beam-front': 'Structure', 'beam-rear': 'Structure', 'bearing-groove': 'Structure', rails: 'Structure', deck: 'Structure',
-  tongue: 'Structure',
+  'axle-stress': 'Structure', 'beam-rear': 'Structure', 'bearing-groove': 'Structure', rails: 'Structure', deck: 'Structure',
   // Workstream D (seat, storage, fittings)
   'seat-back': 'Structure', 'seat-grip': 'Structure', 'storage-pack': 'Structure', 'storage-lid-open': 'Structure', 'lash-points': 'Structure', lift: 'Structure', 'foot-stop': 'Structure', 'lash-load': 'Structure',
   // Cargo mode (Phase 3c-2, D-53)

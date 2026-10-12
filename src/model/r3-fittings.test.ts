@@ -1,4 +1,4 @@
-/** Phase 3 round 3, fittings fixes (D-47): lash plate pattern, storage clearance, build order, finger guard. (The turntable-era kingpin, stop-block and access-opening tests went with those parts at the Phase 3b flip.) */
+/** Phase 3 round 3, fittings fixes (D-47): lash plate pattern, storage clearance, build order. (The turntable-era kingpin, stop-block and access-opening tests went with those parts at the Phase 3b flip; the Ackermann build order and the finger guard went at D-54.) */
 import { describe, expect, it } from 'vitest';
 import { defaultParams, resolveParams, validateParams } from '../params';
 import { buildModel } from './index';
@@ -40,23 +40,36 @@ describe('S3: storage box clearance to the chine', () => {
 });
 
 describe('S10: build order', () => {
-  it('hull first, then the front beam and axles on the inverted hull, then the spindles, linkage and tongue after turning upright', () => {
+  it('hull first (with the king beam and stop blocks in the frame), then the axles and wheels on the inverted hull, then (hull upright) the tongue plate, the bridle and the seat (D-56)', () => {
     expect(STEP.frame).toBeLessThan(STEP.body);
     expect(HULL_STEP.transom).toBeLessThan(STEP.steering);
     expect(STEP.steering).toBeLessThan(STEP.gear);
     expect(STEP.gear).toBeLessThan(STEP.linkage);
     expect(STEP.linkage).toBeLessThan(STEP.spindles);
     expect(STEP.spindles).toBeLessThan(STEP.seatStorage);
-    for (const id of ['beam-F', 'kp-bracket-L', 'axle-R']) expect(get(id).step, id).toBeGreaterThan(get('transom-rear').step);
-    expect(get('spindle-L').step).toBe(STEP.spindles);
-    expect(get('tie-rod').step).toBe(STEP.linkage);
-    expect(get('beam-F').step).toBeLessThan(get('spindle-L').step);
+    const transom = get('transom-rear').step;
+    // the king beam and the stops are part of the frame glue-up with the deck (before the sides and the transom)
+    for (const id of ['king-beam', 'steer-stop-L', 'steer-stop-R', 'joist-7']) expect(get(id).step, id).toBe(STEP.frame);
+    for (const id of ['axle-R', 'axle-hanger-L', 'beam-F', 'axle-FL', 'axle-FR', 'kingpin']) expect(get(id).step, id).toBeGreaterThan(transom);
+    // the hangers, both axles and the kingpin go on before the tongue and the bridle are bolted on with the hull upright
+    expect(get('axle-hanger-L').step).toBe(STEP.gear);
+    expect(get('axle-R').step).toBe(STEP.gear);
+    for (const id of ['beam-F', 'axle-FL', 'kingpin', 'king-thrust', 'wheel-FL', 'wheel-FR']) expect(get(id).step, id).toBe(STEP.gear);
+    for (const id of ['bridle-tongue', 'bridle-eye', 'bridle']) expect(get(id).step, id).toBe(STEP.spindles);
+    expect(get('king-beam').step).toBeLessThan(get('bridle-tongue').step);
+    expect(get('axle-R').step).toBeLessThanOrEqual(get('wheel-FL').step);
+    // the deck is glued to the frame and the sides before the transom slides on last (HULL_STEP)
+    expect(get('deck').step).toBe(HULL_STEP.deck);
+    expect(get('side-L-chine').step).toBe(HULL_STEP.sides);
+    expect(HULL_STEP.deck).toBeLessThan(HULL_STEP.sides);
+    expect(HULL_STEP.sides).toBeLessThan(HULL_STEP.transom);
+    expect(get('bow-curl').step).toBe(HULL_STEP.sides);
   });
 });
 
-describe('N-9: finger guard follows the hull outline', () => {
-  it('is one mesh per side with positive mass, and the defaults still validate', () => {
-    for (const t of ['L', 'R']) { const g = get(`guard-${t}`); expect(g.geometry.type).toBe('mesh'); expect(g.massLb).toBeGreaterThan(0.02); }
+describe('N-9 (D-54): the finger guards went with the curved bow', () => {
+  it('there are none, and the defaults still validate', () => {
+    expect(parts.some((x) => /^guard-/.test(x.id))).toBe(false);
     expect(validateParams(defaultParams()).filter((i) => i.severity === 'error')).toEqual([]);
   });
 });

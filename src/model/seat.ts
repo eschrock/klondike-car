@@ -8,9 +8,9 @@
  * Aft load from the rider bears on an oak wedge that fills the space between the back and the box end (a post when the box is
  * elsewhere); the knobs resist only the overturning couple. Parts are built from the layout so every location variant stays clear.
  */
-import { RIDER_PELVIS_Z_FRAC, SIDE_CONSTRUCTION, STORAGE_LOCATION, type Params } from '../params';
+import { RIDER_PELVIS_Z_FRAC, STORAGE_LOCATION, type Params } from '../params';
 import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
-import { innerHalfWidth, type Layout } from './layout';
+import { sideSlopeAt, sideTopAt, type Layout } from './layout';
 import { chooseDomino, DOMINOS, type DominoQuery } from './joinery';
 import { profilePart, signedArea } from './profile';
 import type { Joint, Part, Vec2, Vec3 } from './types';
@@ -87,12 +87,12 @@ const unit = (x: number, y: number, z: number): Vec3 => {
 };
 
 /** Gunwale member name the grips / lash points bolt to (cabin side), by construction (body.ts ids). */
-export function gunwaleId(p: Params, tag: 'L' | 'R'): string {
-  return p.sideConstruction === SIDE_CONSTRUCTION.solidOak ? `side-cabin-${tag}-board` : `side-cabin-${tag}-gunwale`;
+export function gunwaleId(_p: Params, tag: 'L' | 'R'): string {
+  return `side-${tag}-gunwale`;
 }
 
-/** Y of the cabin gunwale centerline (|y|), including the gunwale flare. */
-export const gunwaleY = (L: Layout): number => L.hwC + L.side / 2 + L.flare;
+/** Y of the gunwale centerline (|y|). */
+export const gunwaleY = (L: Layout): number => L.hwC + L.side / 2;
 /** Sorted y range (for `span`) of a block of thickness `t` against the inboard face of a gunwale whose inner face is at |y| = `yInner` on side `sg`. */
 export const inboardOf = (sg: 1 | -1, yInner: number, t: number): [number, number] => (sg > 0 ? [yInner - t, yInner] : [-yInner, -yInner + t]);
 
@@ -277,65 +277,72 @@ export function buildSeat(ctx: Ctx): Part[] {
   }
 
   // Side grab handles (BRIEF §4.7): oak pad on the gunwale, two posts, a bar. Clear opening under the bar so a gloved hand wraps it.
+  // D-54: the gunwale slopes (sled profile), so each handle is built along the slope: its parts are placed by (along the gunwale, up from its top) and turned to the slope.
   const clear = p.seatGripClearLengthIn;
-  const gx0 = p.seatXIn - GRIP_BEHIND_HPOINT_IN;
+  const gxA = p.seatXIn - GRIP_BEHIND_HPOINT_IN;
   const gLen = clear + 2 * GRIP_POST_IN;
-  const gTop = L.deckTop + L.sideH;
   const yg = gunwaleY(L);
-  const cabinX1 = L.xc0 - L.side;
-  const gxA = Math.min(gx0, cabinX1 - gLen - 0.25);
-  const padTop = gTop + GRIP_PAD_T_IN;
-  const barBot = padTop + p.seatGripGapIn;
+  const gxMid = gxA + gLen / 2;
+  const slope = sideSlopeAt(L, gxMid);
+  const cs = Math.cos(slope), sn = Math.sin(slope);
+  const z0g = sideTopAt(L, gxA);
+  /** Box spec for a block spanning `u` along the gunwale from the handle's rear end, `n` up from the gunwale top, and `y` across. */
+  const onSlope = (u: [number, number], n: [number, number], y: [number, number]) => {
+    const um = (u[0] + u[1]) / 2, nm = (n[0] + n[1]) / 2;
+    return {
+      size: [Math.max(0.01, u[1] - u[0]), Math.max(0.01, y[1] - y[0]), Math.max(0.01, n[1] - n[0])] as Vec3,
+      center: [gxA + um * cs + nm * sn, (y[0] + y[1]) / 2, z0g - um * sn + nm * cs] as Vec3,
+      rot: { y: slope },
+    };
+  };
+  const padTopN = GRIP_PAD_T_IN;
+  const barBotN = padTopN + p.seatGripGapIn;
   for (const { s: sg, tag } of SIDES) {
     const gid = gunwaleId(p, tag);
-    // Doubler: oak blocking glued to the inboard face of the ½" gunwale, flush with its top, so the pad screws bite into oak with >= 3/4" engagement.
+    // Doubler: oak blocking glued to the inboard face of the gunwale, flush with its top, so the pad screws bite into oak with >= 3/4" engagement.
     const dId = `doubler-grip-${tag}`;
+    const dy = inboardOf(sg, yg - L.side / 2, p.blockingThickIn);
     parts.push(box(ctx, {
       id: dId, partNo: 'doubler-grip', name: `Grab handle doubler ${tag}`, group: 'seat', mat: 'oak', step: STEP.finish, grain: 'x',
-      ...span([gxA, gxA + gLen], inboardOf(sg, yg - L.side / 2, p.blockingThickIn), [gTop - L.railBand, gTop]),
+      ...onSlope([0, gLen], [-L.railBand, 0], dy),
       joints: [{ type: 'glue', to: gid, count: 1, note: 'epoxy, full face' }, { type: 'screw', to: `seat-grip-pad-${tag}`, count: 4, size: '#8 × 1-3/4 stainless, down through the pad' }],
-      notes: `Blocking behind the ${L.side}" gunwale (D-41): the pad screws (${(GRIP_SCREW_LEN_IN - GRIP_PAD_T_IN).toFixed(2)}" past the pad) land in this block, not the thin gunwale edge.`,
+      notes: `Blocking behind the ${L.side}" gunwale (D-41), turned to the ${((slope * 180) / Math.PI).toFixed(1)}° slope of the sled profile (D-54): the pad screws (${(GRIP_SCREW_LEN_IN - GRIP_PAD_T_IN).toFixed(2)}" past the pad) land in this block, not the thin gunwale edge.`,
     }));
     parts.push(box(ctx, {
       id: `seat-grip-pad-${tag}`, partNo: 'seat-grip-pad', name: `Grab handle pad ${tag}`, group: 'seat', mat: 'oak', step: STEP.finish, grain: 'x',
-      ...span([gxA, gxA + gLen], [sg * yg - GRIP_PAD_W_IN / 2, sg * yg + GRIP_PAD_W_IN / 2], [gTop, padTop]),
+      ...onSlope([0, gLen], [0, padTopN], [sg * yg - GRIP_PAD_W_IN / 2, sg * yg + GRIP_PAD_W_IN / 2]),
       joints: [{ type: 'glue', to: gid, count: 1, note: 'epoxy' }, { type: 'screw', to: dId, count: 4, size: '#8 × 1-3/4 stainless, down into the doubler' }],
-      notes: 'Spreads the grip load over the gunwale and its doubler (the gunwale alone is only ½" wide).',
+      notes: 'Spreads the grip load over the gunwale and its doubler (the gunwale alone is only ½" wide). The pad lies along the sloped gunwale top.',
     }));
-    for (const [n, xa] of [[1, gxA], [2, gxA + gLen - GRIP_POST_IN]] as const) {
+    for (const [n, ua] of [[1, 0], [2, gLen - GRIP_POST_IN]] as const) {
       parts.push(box(ctx, {
         id: `seat-grip-post-${tag}${n}`, partNo: 'seat-grip-post', name: `Grab handle post ${tag}${n}`, group: 'seat', mat: 'oak', step: STEP.finish, grain: 'z',
-        ...span([xa, xa + GRIP_POST_IN], [sg * yg - GRIP_POST_IN / 2, sg * yg + GRIP_POST_IN / 2], [padTop, barBot]),
+        ...onSlope([ua, ua + GRIP_POST_IN], [padTopN, barBotN], [sg * yg - GRIP_POST_IN / 2, sg * yg + GRIP_POST_IN / 2]),
         joints: [frameJoint(p, `seat-grip-pad-${tag}`, { stockIn: GRIP_POST_IN, hostIn: GRIP_PAD_T_IN, widthIn: GRIP_POST_IN }, { note: 'into the pad top, epoxy' }), { type: 'mortise-tenon', to: `seat-grip-bar-${tag}`, count: 1, size: '3/8 × 3/4 × 1/2 blind tenon', note: 'the 1" post leaves 1/8" shoulders each side of the tenon' }],
       }));
     }
     parts.push(box(ctx, {
       id: `seat-grip-bar-${tag}`, partNo: 'seat-grip-bar', name: `Grab handle bar ${tag}`, group: 'seat', mat: 'oak', step: STEP.finish, grain: 'x',
-      ...span([gxA, gxA + gLen], [sg * yg - GRIP_BAR_W_IN / 2, sg * yg + GRIP_BAR_W_IN / 2], [barBot, barBot + GRIP_BAR_H_IN]),
+      ...onSlope([0, gLen], [barBotN, barBotN + GRIP_BAR_H_IN], [sg * yg - GRIP_BAR_W_IN / 2, sg * yg + GRIP_BAR_W_IN / 2]),
       notes: `Rounded over ¼" on all edges. Finger gap ${p.seatGripGapIn}" under the bar, ${clear}" clear between the posts: no pinch point (BRIEF §4.7).`,
       joints: [{ type: 'mortise-tenon', to: `seat-grip-post-${tag}1`, count: 1, size: '3/8 × 3/4 × 1/2 blind tenon' }, { type: 'mortise-tenon', to: `seat-grip-post-${tag}2`, count: 1, size: '3/8 × 3/4 × 1/2 blind tenon' }],
     }));
   }
 
-  // Foot stop: an oak board across the nose at x = seatX + leg reach, standing on its deck.
+  // Foot stop: an oak board across the body at x = seatX + leg reach, standing on the flat deck.
   const fx = p.seatXIn + p.riderLegReachIn;
-  const onNose = fx >= L.xn;
   const deckZ = L.deckTop;
-  // The board spans the hull's inside width at its own x: the bow converges (D-52), so this is wider than the bow's inside width at the front transom (hwN).
-  // The side slopes across the board's thickness (and across the cleat), so each is cut to the narrowest inside width over its x range (a small wedge gap
-  // at the wider end is filled with thickened epoxy).
-  const narrowest = (a: number, b: number) => Math.min(...[0, 0.25, 0.5, 0.75, 1].map((t) => innerHalfWidth(L, a + (b - a) * t)));
-  const zone = onNose ? 'nose' : 'cabin';
-  const sideMember = (tag: 'L' | 'R') => (p.sideConstruction === SIDE_CONSTRUCTION.solidOak ? `side-${zone}-${tag}-board` : p.sideConstruction === SIDE_CONSTRUCTION.openFrame ? `side-${zone}-${tag}-gunwale` : `side-${zone}-${tag}-chine`); // the open frame has no chine
-  // Corner cleats (build S6): the nose side is a chine + a 6 mm web, so there is nothing to dado. An oak block glued to the inboard face of each side
-  // stands ahead of the board (when there is room before the front transom), so the foot load bears on the cleats in compression; the board is
-  // Domino-pinned to them and screwed down through the deck.
+  // The sides are straight (D-54), so the board and its cleats span the same inside width everywhere.
+  const sideMember = (tag: 'L' | 'R') => `side-${tag}-chine`;
+  // Corner cleats (build S6): an oak block glued to the inboard face of each side stands ahead of the board (when there is room before the end of the flat deck), so the foot
+  // load bears on the cleats in compression; the board is Domino-pinned to them and screwed down through the deck.
   const stopX0 = fx - p.footStopThickIn / 2, stopX1 = fx + p.footStopThickIn / 2;
-  const fhw = narrowest(stopX0, stopX1);
-  const frontLimit = onNose ? L.xFront - L.transom : L.xn;
+  const fhw = L.hwC;
+  const frontLimit = L.xFlatEnd - 0.1;
   const cleatAhead = frontLimit - stopX1 >= FOOT_CLEAT_X_IN - 1e-9;
   const cleatX: [number, number] = cleatAhead ? [stopX1, stopX1 + FOOT_CLEAT_X_IN] : [stopX0 - FOOT_CLEAT_X_IN, stopX0];
-  const chw = narrowest(cleatX[0], cleatX[1]);
+  const chw = L.hwC;
+  const zone = 'body';
   const cleatJoint = (tag: 'L' | 'R'): Joint => frameJoint(p, `foot-stop-cleat-${tag}`, { stockIn: p.footStopThickIn, hostIn: Math.min(p.footStopThickIn, FOOT_CLEAT_X_IN), widthIn: p.footStopHeightIn }, { count: 2, note: 'two floating tenons per cleat; the cleat face and the board end meet' });
   parts.push(box(ctx, {
     id: 'foot-stop', name: 'Foot stop', group: 'seat', mat: 'oak', step: STEP.seatStorage, grain: 'y',

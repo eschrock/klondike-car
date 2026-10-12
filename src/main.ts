@@ -2,7 +2,6 @@ import './style.css';
 import { mountThemeToggle } from './theme';
 import { store } from './state';
 import { derived } from './params';
-import { steerRange } from './ui/steer-range';
 import { buildModel, type ViewState } from './model';
 import { h } from './ui/dom';
 import { Viewer } from './viewer/viewer';
@@ -68,20 +67,19 @@ const viewer = new Viewer($('viewer'));
 // `rider`/`cargo`/`removed` are consumed by the Phase 1 model (missing fields = defaults).
 const view: CartView = { steerDeg: 0, rider: 'none', cargo: false, removed: false, seat: 'installed' }; // rider default follows the mode (setMode)
 const build = (p: ReturnType<typeof store.get>, v: CartView): Part[] => buildModel(p, v as ViewState);
-// Snap to 0.5° so 0 is always reachable even when the lock is a half degree (e.g. 38.5°).
-const snapSteer = (v: number) => Math.round(v * 2) / 2;
-const steer = h('input', { type: 'range', min: '-50', max: '50', step: '0.5', value: '0', 'aria-label': 'Try steering (preview only), inner wheel angle' });
-const steerNum = h('input', { type: 'number', step: '0.5', value: '0', class: 'steer-num', 'aria-label': 'Steer angle of the inner wheel (degrees)' });
-const steerZero = h('button', { type: 'button', class: 'steer-zero', title: 'Center the steering (0°)', 'aria-label': 'Center the steering' }, '↺');
+// Steering preview (D-56): turns the front axle, wheels, tongue and bridle about the kingpin. Range tied to p.steerLockDeg; never persisted, never changes the design.
+const steer = h('input', { type: 'range', min: '-20', max: '20', step: '0.5', value: '0', 'aria-label': 'Steering preview, front axle angle in degrees' });
+const steerNum = h('input', { type: 'number', step: '0.5', value: '0', class: 'steer-num', 'aria-label': 'Steering angle (degrees)' });
+const steerZero = h('button', { type: 'button', class: 'steer-zero', title: 'Straighten the front axle (0°)', 'aria-label': 'Straighten the front axle' }, '↺');
 const setSteer = (v: number) => {
-  view.steerDeg = Number.isFinite(v) ? snapSteer(v) : 0;
+  view.steerDeg = Number.isFinite(v) ? Math.round(v * 2) / 2 : 0; // snap to 0.5° so 0 is always reachable
   render();
 };
 steer.addEventListener('input', () => setSteer(Number(steer.value)));
 steerNum.addEventListener('change', () => setSteer(Number(steerNum.value)));
 steerZero.addEventListener('click', () => setSteer(0));
 viewer.addToolbarControl(
-  h('label', { class: 'steer-ctl', title: "Preview only. Doesn't change the cart. The angle is the inner wheel's; the slider stops at the tow lock." }, 'Try steering (inner wheel)', steer, steerNum, h('span', { class: 'steer-unit' }, '°'), steerZero),
+  h('label', { class: 'steer-ctl', title: "Preview only: it doesn't change the cart. Turns the front axle about the kingpin, from full left to full right lock (+ = left)." }, 'Steering', steer, steerNum, h('span', { class: 'steer-unit' }, '°'), steerZero),
 );
 const checkbox = (label: string | Node[], title: string, checked: boolean, onChange: (v: boolean) => void, cls = '') => {
   const cb = h('input', { type: 'checkbox' });
@@ -112,7 +110,7 @@ viewer.addToolbarControl(
   }),
 );
 viewer.addToolbarControl(
-  checkbox('Transport config', 'Remove the removable parts (rear handle, seat back, tongue, ornaments; D-9)', false, (v) => {
+  checkbox('Transport config', 'Remove the removable parts (rear handle, seat back, tongue plate, shackle and rope, ornaments; D-9)', false, (v) => {
     view.removed = v;
     render();
   }, 'adv-only'),
@@ -133,7 +131,7 @@ let fit: FitResult;
 let specFacts: SpecFacts = { emptyLb: 0, transportLb: 0 };
 const render = () => {
   const p = store.get();
-  const lock = steerRange(p);
+  const lock = Math.abs(p.steerLockDeg);
   steer.min = String(-lock);
   steer.max = String(lock);
   view.steerDeg = Math.max(-lock, Math.min(lock, view.steerDeg ?? 0));
@@ -174,7 +172,7 @@ const render = () => {
     viewer.highlight([...new Set(tc.colliding.map((q) => q.partId))], '#ff3b30');
   } else {
     viewer.setTruck(null);
-    if (!sim?.active) viewer.update(build(p, view));
+    if (!sim?.active) viewer.update(build(p, view.removed ? { ...view, steerDeg: 0 } : view)); // the transport config has the axle turned straight
     viewer.highlight([]);
   }
 };

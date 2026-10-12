@@ -126,7 +126,9 @@ function materials(p: Params, isOpen: boolean, onToggle: (o: boolean) => void): 
       rows([
         ['Axle yield / E', `${f0(p.axleYieldPsi)} / ${f0(p.steelMoePsi)} psi`, p.axleYieldPsi >= 65000 ? '1045 turned-ground-polished shafting (≈ 70+ ksi; confirm vendor cert)' : '1018 CD, yield taken as 50 ksi (book 54)'],
         ['Axle allowable', `${f0(d.axleAllowablePsi)} psi`, `yield / SF ${p.steelSafetyFactor}`],
-        ['Kingpin bolt yield / ultimate', `${f0(p.kingpinYieldPsi)} / ${f0(p.kingpinUltimatePsi)} psi`, `SAE grade 8 ${p.kingpinDiameterIn}" bolt; normal hits use yield / SF ${p.steelSafetyFactor}, the hard hit ultimate / ${p.failSafeFactor} (D-50); shear 0.577·yield`],
+        ['Grade 8 bolt yield / ultimate', `${f0(p.grade8BoltYieldPsi)} / ${f0(p.grade8BoltUltimatePsi)} psi`, `SAE grade 8; normal hits use yield / SF ${p.steelSafetyFactor}, the hard hit ultimate / ${p.failSafeFactor} (D-50); shear 0.577·yield`],
+        ['A36 plate yield / ultimate', `${f0(p.bracketSteelYieldPsi)} / ${f0(p.bracketSteelUltimatePsi)} psi`, 'the tongue plate (D-56); bolted, never welded'],
+        ['UHMW thrust washer allowable', `${f0(p.steerBearingAllowPsi)} psi`, 'bearing pressure under the king beam, static; confirm with the supplier (D-56)'],
       ]),
       h('h4', {}, 'Loads and factors (D-1, D-2, D-14)'),
       rows([
@@ -135,7 +137,7 @@ function materials(p: Params, isOpen: boolean, onToggle: (o: boolean) => void): 
         ['Dynamic factor', `× ${p.dynamicFactor}`, 'payload and axle reactions'],
         ['Lightest rider (pitch-back)', `${p.riderMinMassLb} lb`, 'BRIEF §4.1; counts toward the operating status'],
         ['Design pull', `${p.pullForceLbf} lbf`, `at ${p.pullerHandHeightIn}" hand height, ${p.bridleRopeRunIn}" rope run; lift pull ≥ ${p.pitchPullMarginMin}× peak`],
-        ['Bump hits (D-50)', `${p.bumpNormalHeightIn}" normal, ${p.bumpHardHeightIn}" hard, at ${p.bumpSpeedMph} mph (jogging pace)`, `velocity-pulse model, wheel rate ${p.bumpWheelRateLbIn} lb/in; sin β = (r − h)/r`],
+        ['Bump hits (D-50)', `${p.bumpNormalHeightIn}" normal at ${p.bumpSpeedNormalMph} mph (walking), ${p.bumpHardHeightIn}" hard at ${p.bumpSpeedHardMph} mph (jogging)`, `velocity-pulse model, wheel rate ${p.bumpWheelRateLbIn} lb/in; sin β = (r − h)/r`],
         ['Axle tire friction', `H = μ·P_static, arm = tire radius`, 'combined with vertical as a resultant'],
         ['μ tire-ground / pad', `${p.tireGroundMu} / ${p.brakePadMu}`, 'D-16'],
         ['Deflection limit', `L/${p.deflectionLimitRatio}`, 'static load'],
