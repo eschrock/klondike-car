@@ -313,32 +313,6 @@ const defs = {
     default: 0.5, min: 0.375, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-62, build 3c M4',
     note: 'D-62: nothing is screwed into the 4 mm web (a tee-nut in 0.157 in ply has 0.1 in of bite, and a 1 in screw poked into the cabin). Each side sign hangs on two vertical oak backing strips glued on the INSIDE of the web between the chine and gunwale bands, each with two #10-32 threaded inserts (3/8 long) for the knobs. The strips stand this far inboard of the web (0.27 in proud of the inner band faces), at the sign knob stations behind the box. D-63: the knob screw length is derived from this thickness and the 0.234 in sign standoff (7/8 in at the default: sign + standoff disc + web = 0.55 in, 0.33 in into the insert, 1/8 in of wood left behind its tip).',
   },
-  thinSheetWidthIn: {
-    label: 'Thin okoume sheet: usable width', group: 'materials', unit: 'in',
-    default: 48, min: 12, max: 48, step: 0.25, status: 'locked', ref: 'D-62',
-    note: 'Eric 2026-10-12: 4 mm and 6 mm okoume from Aircraft Spruce (Peachtree City, GA), will-call pickup, in FULL 4 x 8 ft sheets; the 12 mm (1/2 in) deck sheet from a local dealer. So every thin-ply part must be cut from a blank that fits 48 x 96 in. Set this to 23.5 and the length to 47.5 for the other source (thin okoume shipped only as 2 x 4 ft sheets): the side webs then split into two halves joined by the hidden scarf (sideWebScarf), and the sheet test still checks that every blank fits.',
-  },
-  thinSheetLengthIn: {
-    label: 'Thin okoume sheet: usable length', group: 'materials', unit: 'in',
-    default: 96, min: 24, max: 96, step: 0.25, status: 'locked', ref: 'D-62',
-    note: 'Eric 2026-10-12: see the usable width. Full 4 x 8 ft sheets of 4 mm and 6 mm okoume from Aircraft Spruce, Peachtree City GA, will-call; the 12 mm deck from a local dealer. (2 x 4 ft alternative: 23.5 x 47.5.)',
-  },
-  sideWebScarf: {
-    label: 'Side webs in two scarfed halves', group: 'materials', unit: '',
-    default: 0, min: 0, max: 1, step: 1, status: 'assumed', ref: 'D-62',
-    options: [{ value: 0, label: 'One piece each (4 x 8 sheet)' }, { value: 1, label: 'Two halves, hidden 8:1 scarf (2 x 4 sheet)' }],
-    note: 'D-62: default off, each 4 mm side web is ONE piece cut from a 4 x 8 sheet. On (or automatically, whenever the whole web does not fit the thin-sheet size, e.g. 2 x 4 ft sheets), each web is two halves joined with an epoxied scarf at sideWebScarfXIn, hidden under the sign and its backing strip; the oak bands glued over both faces bridge it.',
-  },
-  plyScarfRatio: {
-    label: 'Ply scarf joint ratio (length : thickness)', group: 'materials', unit: ':1',
-    default: 8, min: 6, max: 12, step: 1, status: 'assumed', ref: 'D-62',
-    note: 'D-62: when the side webs are scarfed, the halves are joined with an epoxied scarf of this ratio (8:1 is 1.26 in long in 4 mm ply). Cut it with a block plane against a sanding jig (a 1.26 in bevel on a straight edge, the two halves taped together with the bevels facing and planed or sanded as a pair so they mate), or on the Shaper Origin with a tapered pass; glue with thickened epoxy on a flat board under tape and weights. The oak bands glued on both faces bridge it top and bottom, which also reinforces it.',
-  },
-  sideWebScarfXIn: {
-    label: 'Side web scarf: x of its center (when scarfed)', group: 'body', unit: 'in',
-    default: 2.7, min: -8, max: 10, step: 0.1, status: 'assumed', ref: 'D-62',
-    note: 'D-62: where the two web halves meet (model x, in from the rear axle), used only when the webs are scarfed. It is under the side sign on the outside and the sign backing strip on the inside, so it is hidden, and far enough back that the front half (this x to the bow bulkhead, plus half the scarf) fits a 47.5 in sheet length. If the sign is switched off or moved, the scarf can go under the grab board instead.',
-  },
   sideKickLbf: {
     label: 'Side web lean / kick load', group: 'loads', unit: 'lbf',
     default: 50, min: 20, max: 150, step: 5, status: 'assumed', ref: 'D-62, eng 3c N-1',
@@ -1563,7 +1537,7 @@ const defs = {
   deckPlyIn: {
     label: 'Deck plywood thickness', group: 'stock', unit: 'in',
     default: 0.472, min: 0.236, max: 0.709, step: 0.001, status: 'explore', ref: 'D-62',
-    note: 'Okoume marine ply, 12 mm (1/2 in), a full 4 x 8 sheet from a local dealer (Eric, 2026-10-12). Fallback: 12 mm Baltic birch (about 3 to 4 lb heavier, epoxy-seal every face and edge).',
+    note: 'Okoume marine ply, 12 mm (1/2 in), a full 4 x 8 sheet from a local supplier (Eric, 2026-10-12, D-68). Fallback: 12 mm Baltic birch (about 3 to 4 lb heavier, epoxy-seal every face and edge).',
     options: [
       { value: 0.236, label: '6 mm' },
       { value: 0.354, label: '9 mm' },
@@ -1580,12 +1554,12 @@ const defs = {
       { value: 0.354, label: '9 mm' },
       { value: 0.472, label: '12 mm' },
     ],
-    note: 'D-60: 4 mm okoume (was 6 mm) for the side webs, the storage box and its lid and the sign blanks (marine okoume, a full 4 x 8 sheet from Aircraft Spruce, Peachtree City GA, will-call; Baltic birch 4 mm is the fallback); the dado and edge-banding widths follow it, and the sandwich bands of the sides are (side thickness - this) / 2 thick each (D-62). The seat-back panel has its own size (seatBackPlyIn, still 6 mm). 4 mm skin and lid dent more easily (the cargo case of the lid-load row goes from 0.42 to 0.75); keep the lid engraved DO NOT STEP (D-58).',
+    note: 'D-60: 4 mm okoume (was 6 mm) for the side webs, the storage box and its lid and the sign blanks (marine okoume, a full 4 x 8 sheet from a local supplier, D-68; Baltic birch 4 mm is the fallback); the dado and edge-banding widths follow it, and the sandwich bands of the sides are (side thickness - this) / 2 thick each (D-62). The seat-back panel has its own size (seatBackPlyIn, 12 mm from the deck offcut, D-62). 4 mm skin and lid dent more easily (the cargo case of the lid-load row goes from 0.42 to 0.75); keep the lid engraved DO NOT STEP (D-58).',
   },
   seatBackPlyIn: {
     label: 'Seat-back panel plywood', group: 'stock', unit: 'in',
     default: 0.472, min: 0.157, max: 0.472, step: 0.001, status: 'explore', ref: 'D-60, D-62',
-    note: 'Eric 2026-10-12: frameless 1/2 in (12 mm) okoume, cut from the offcut of the deck sheet (the 12 mm sheet from a local dealer), so no 6 mm sheet is bought at all. The panel IS the seat back (the oak stiles and rails are gone); the seat-back row checks the bare panel: bending as a strip above the crest line, deflection, the hinge inserts and the pin holes in ply. D-60 had it at 6 mm in an oak frame (the row was 0.53 at 6 mm and 1.09 at 4 mm).',
+    note: 'Eric 2026-10-12: frameless 1/2 in (12 mm) okoume, cut from the offcut of the deck sheet (the 12 mm sheet from a local supplier, D-68), so no 6 mm sheet is bought at all. The panel IS the seat back (the oak stiles and rails are gone); the seat-back row checks the bare panel: bending as a strip above the crest line, deflection, the hinge inserts and the pin holes in ply. D-60 had it at 6 mm in an oak frame (the row was 0.53 at 6 mm and 1.09 at 4 mm).',
     options: [
       { value: 0.157, label: '4 mm' },
       { value: 0.236, label: '6 mm' },
@@ -1597,6 +1571,21 @@ const defs = {
     label: 'Rough-stock allowance (t / w)', group: 'stock', unit: 'in',
     default: 0.125, min: 0, max: 0.5, step: 0.0625, status: 'assumed',
     note: 'Added to thickness and width; length gets 4× this (≈ ½").',
+  },
+  oakWasteAllowance: {
+    label: 'Oak waste allowance (board feet)', group: 'stock', unit: '×',
+    default: 0.3, min: 0, max: 1, step: 0.05, status: 'assumed',
+    note: 'Phase 4 (cut list, BOM): the rough-volume board feet are multiplied by (1 + this) to cover knots, checks, sapwood, snipe and the offcuts a cut plan cannot use. 30 % is typical for hand-selected rough white oak.',
+  },
+  resawKerfIn: {
+    label: 'Saw kerf (resaw, rip and crosscut)', group: 'stock', unit: 'in',
+    default: 0.125, min: 0.0625, max: 0.25, step: 0.03125, status: 'assumed',
+    note: 'Phase 4: the material lost to each bandsaw resaw cut (and, in the board cut plan, to each rip and crosscut). 1/8 in is a 3/8 in resaw blade with some wander; a thin-kerf 1/16 in blade yields more laminate strips per board.',
+  },
+  nestKerfIn: {
+    label: 'Plywood nesting gap between parts and from the sheet edge', group: 'stock', unit: 'in',
+    default: 0.25, min: 0, max: 1, step: 0.0625, status: 'assumed',
+    note: 'Phase 4: clear space left between nested plywood parts, and between a part and the sheet edge, for the Shaper Origin bit (1/8 in cutter), the tape and a little drift.',
   },
 
   // ── Material properties ──────────────────────────────────────────────────
@@ -1685,7 +1674,7 @@ const defs = {
       { value: PLY_SPECIES.okoumeMarine, label: 'Okoume marine (BS 1088)' },
       { value: PLY_SPECIES.balticBirchExterior, label: 'Baltic birch, exterior glue' },
     ],
-    note: 'MATERIALS AND SOURCES (Eric, 2026-10-12): the sheet goods are okoume marine plywood (BS 1088): 4 mm (sides, box, lid, signs) and 6 mm (seat back) in FULL 4 x 8 ft sheets from Aircraft Spruce, Peachtree City GA, will-call pickup; the 12 mm (1/2 in) deck sheet, a full 4 x 8, from a local dealer. FALLBACK if no okoume: Baltic birch 12 mm for the deck (about 3 to 4 lb heavier at the deck alone; every cut edge and face must be epoxy-sealed, it is exterior-glue only, not marine), 4 mm and 6 mm Baltic or okoume elsewhere. Solid parts are white oak: the lumber yard stocks 4/4 to 12/4 rough, so resaw and plane to the finished thickness (the stock/rough columns of the cut list already assume this). FINISHING STACK (Phase 4): stain (pre-stain conditioner or a gel stain on okoume, which blotches) -> epoxy seal -> spar varnish with UV filters.',
+    note: 'MATERIALS AND SOURCES (Eric, 2026-10-12): the sheet goods are okoume marine plywood (BS 1088): 4 mm (sides, box, lid, signs) and 12 mm (1/2 in: the deck, and the seat back from its offcut), one FULL 4 x 8 ft sheet of each from a local supplier (D-68). Each 4 mm side web is one piece; there is no 2 x 4 ft sheet option. FALLBACK if no okoume: Baltic birch 12 mm for the deck (about 3 to 4 lb heavier at the deck alone; every cut edge and face must be epoxy-sealed, it is exterior-glue only, not marine), 4 mm Baltic birch elsewhere. Solid parts are white oak: the lumber yard stocks 4/4 to 12/4 rough, so resaw and plane to the finished thickness (the stock/rough columns of the cut list already assume this). FINISHING STACK (Phase 4): stain (pre-stain conditioner or a gel stain on okoume, which blotches) -> epoxy seal -> spar varnish with UV filters.',
   },
   okoumeDensityPcf: {
     label: 'Okoume marine ply density', group: 'materials', unit: 'lb/ft³',

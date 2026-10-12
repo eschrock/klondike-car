@@ -11,7 +11,7 @@ import { joistId } from './frame';
 import type { Params } from '../params';
 import { SIDES, type Ctx } from './build-utils';
 import { sideTopAt } from './layout';
-import { scupperSites, sideWebSplit, signBackerPlan, signKnobPlan } from './body';
+import { scupperSites, signBackerPlan, signKnobPlan } from './body';
 import { worldAABB } from './bounds';
 import type { Joint, JointType, Mat4, Part, Vec3 } from './types';
 
@@ -160,8 +160,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
   // ── Sides (D-61, D-62): the sandwich glue faces, the deck gap under the inner chine band, end joints to the rear transom and the bow bulkhead ──
   for (const { s, tag } of SIDES) {
     const id = `side-${tag}`;
-    const split = sideWebSplit(ctx);
-    const web1 = split ? `${id}-web-1` : `${id}-web`, web2 = split ? `${id}-web-2` : `${id}-web`;
+    const web1 = `${id}-web`;
     const yOutFace = s * (hw + L.side - bandT), yInFace = s * (hw + bandT); // the web's two faces
     const yOutBand = s * (hw + L.side - bandT / 2), yInBand = s * (hw + bandT / 2);
     const glueSize = `thickened epoxy, full face (${bandT.toFixed(3)}" oak strip on the ${Math.round(pl * 25.4)} mm web; no groove)`;
@@ -171,10 +170,8 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
       [`${id}-gunwale`, 'outer gunwale band', yOutFace, topAt(xm) - L.railBand / 2],
       [`${id}-gunwale-in`, 'inner gunwale band', yInFace, topAt(xm) - L.railBand / 2],
     ];
-    for (const [bandId, what, yf, zf] of bandPairs) for (const [w, xw] of (split ? [[web1, (rearTx + p.sideWebScarfXIn) / 2], [web2, (p.sideWebScarfXIn + L.xSideEnd) / 2]] : [[web1, xm]]) as [string, number][])
-      add({ a: bandId, b: w, typeA: 'glue', size: glueSize, pts: [[xw, yf, zf]], noteA: `Glued full-face to the web and bent with it on the plan form (the ${what} of the sandwich); it bridges the web scarf.`, noteB: `Oak band glued on this face (${what}).` });
-    // The scarf joint between the two web halves (thin okoume ships only as 2 x 4 ft sheets).
-    if (split) add({ a: web1, b: web2, typeA: 'scarf', size: `${p.plyScarfRatio}:1 epoxied scarf, ${(p.plyScarfRatio * pl).toFixed(2)}" long in the ${Math.round(pl * 25.4)} mm ply, at x = ${p.sideWebScarfXIn}"`, pts: [[p.sideWebScarfXIn, s * (hw + L.side / 2), (cBot + topAt(p.sideWebScarfXIn) - L.webCap) / 2]], noteA: 'Plane the two bevels as a pair against a sanding jig (or taper them on the Shaper), thickened epoxy, flat board, tape and weights; hidden under the sign and its backing strip; the oak bands glued over both faces bridge it.' });
+    for (const [bandId, what, yf, zf] of bandPairs) for (const [w, xw] of [[web1, xm]] as [string, number][])
+      add({ a: bandId, b: w, typeA: 'glue', size: glueSize, pts: [[xw, yf, zf]], noteA: `Glued full-face to the web and bent with it on the plan form (the ${what} of the sandwich).`, noteB: `Oak band glued on this face (${what}).` });
     // The deck edge rises into the gap under the inner chine band, against the web.
     add({ a: `${id}-chine-in`, b: deck, typeA: 'rabbet', size: `${frac(ddS)}" × ${rabbetZ.toFixed(3)}" gap under the inner chine band (deck + ${frac(ds)}" clearance, thickened epoxy fills it; no routing); the deck edge is cut ${frac(p.deckSideClearIn)}" short of the web on each side (D-63), the slot is filled with thickened epoxy`, pts: [[xj, s * (hw + ddS / 2), L.deckBot + L.ply / 2]], noteB: 'Edge of the deck, in the gap against the web.' });
     // Web end into a stopped dado in the transom (full web height now).
@@ -188,7 +185,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     // The forward ends meet the rear face of the bow bulkhead (D-57): the web in a stopped dado, the bands butt-glued with a fillet.
     {
       const xe = L.xSideEnd, ye = s * (hwAt(xe) + L.side / 2);
-      add({ a: web2, b: 'bow-bulkhead', typeA: 'dado', size: `${(pl + p.grooveSlopIn).toFixed(3)}" × ${frac(dd)}" stopped dado in the bulkhead's rear face`, pts: [[xe + dd / 2, ye, webZMid(xe)]], noteA: 'End of the web, captured (front); the bulkhead goes on after the rear transom (close one end first, S1).', noteB: 'Stopped dado for the web end.' });
+      add({ a: web1, b: 'bow-bulkhead', typeA: 'dado', size: `${(pl + p.grooveSlopIn).toFixed(3)}" × ${frac(dd)}" stopped dado in the bulkhead's rear face`, pts: [[xe + dd / 2, ye, webZMid(xe)]], noteA: 'End of the web, captured (front); the bulkhead goes on after the rear transom (close one end first, S1).', noteB: 'Stopped dado for the web end.' });
       const yb = (face: 'out' | 'in') => s * (hwAt(xe) + (face === 'out' ? L.side - bandT / 2 : bandT / 2));
       const fwdEnds: [string, number, number][] = [
         [`${id}-chine`, cBot + L.chineH / 2, yb('out')], [`${id}-chine-in`, cBot + rabbetZ + (L.chineH - rabbetZ) / 2, yb('in')],
@@ -292,7 +289,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     for (const { s, tag } of SIDES) {
       const sc = byId.get(`scupper-${site.tagPos}-${tag}`);
       if (!sc) continue;
-      for (const host of [`side-${tag}-chine`, `side-${tag}-chine-in`, sideWebSplit(ctx) ? `side-${tag}-web-${site.x < p.sideWebScarfXIn ? 1 : 2}` : `side-${tag}-web`])
+      for (const host of [`side-${tag}-chine`, `side-${tag}-chine-in`, `side-${tag}-web`])
         add({ a: sc.id, b: host, typeA: 'glue', size: `${frac(p.scupperDiaIn)}" 316 nipple bedded in epoxy; hole epoxy-lined through the inner band, the web and the outer band`, pts: [[site.x, s * (site.hw + L.side / 2), sc.transform[14]]], noteA: 'Drains the deck at deck level; no cut oak or ply edge is left bare.' });
     }
   }
@@ -318,7 +315,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     const b = byId.get(bk);
     if (!b) continue;
     const bb = worldAABB(b);
-    add({ a: bk, b: sideWebSplit(ctx) ? `side-${tag}-web-${((bb.min[0] + bb.max[0]) / 2) < p.sideWebScarfXIn ? 1 : 2}` : `side-${tag}-web`, typeA: 'glue', size: 'thickened epoxy, full face, on the inside of the 4 mm web', pts: [[(bb.min[0] + bb.max[0]) / 2, s * (hw + bandT), (bb.min[2] + bb.max[2]) / 2]], noteA: 'Glued on the bench with the side assembly, before the sides go into the jig.' });
+    add({ a: bk, b: `side-${tag}-web`, typeA: 'glue', size: 'thickened epoxy, full face, on the inside of the 4 mm web', pts: [[(bb.min[0] + bb.max[0]) / 2, s * (hw + bandT), (bb.min[2] + bb.max[2]) / 2]], noteA: 'Glued on the bench with the side assembly, before the sides go into the jig.' });
   }
 
   // ── Write both sides of every pair ──

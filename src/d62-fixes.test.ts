@@ -157,8 +157,7 @@ describe('M3 / S11 / materials', () => {
   });
   it('the sheet goods name their sources and the Baltic birch fallback, the solid-oak stocks and the finishing stack', () => {
     const n = PARAM_DEFS.plySpecies.note!;
-    expect(n).toMatch(/Aircraft Spruce, Peachtree City GA/);
-    expect(n).toMatch(/local dealer/);
+    expect(n).toMatch(/local supplier \(D-68\)/);
     expect(n).toMatch(/Baltic birch 12 mm for the deck/);
     expect(n).toMatch(/4\/4 to 12\/4/);
     expect(n).toMatch(/pre-stain conditioner or a gel stain.*epoxy seal.*spar varnish/);

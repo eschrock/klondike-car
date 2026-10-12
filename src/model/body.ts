@@ -9,7 +9,7 @@
 import { GRIP_BACKING_T_IN, HULL_STEP, STEP, box, cylinder, roughOf, span, SIDES, IN3_PER_FT3, woodMassLb, type Ctx } from './build-utils';
 import { handleGeometry } from './handle';
 import { transformPoint } from './bounds';
-import { innerHalfWidth, sideSlopeAt, sideTopAt, type Layout } from './layout';
+import { innerHalfWidth, samples, sideSlopeAt, sideTopAt, type Layout } from './layout';
 import { planWallGeometry } from './plan-wall';
 import { SIGN_X_MAX_IN, brakeGeometry } from './brake-layout';
 import { compose } from './mat4';
@@ -363,28 +363,22 @@ export function buildBody(ctx: Ctx): Part[] {
     };
     parts.push(extPart(ctx, gunSpec(true)));
     parts.push(extPart(ctx, gunSpec(false)));
-    // Web: the full-height 4 mm okoume panel in the middle of the sandwich. ONE piece from a 4 x 8 sheet (the default: Aircraft Spruce sells full sheets), or, when the thin sheets are 2 x 4 ft (or
-    // sideWebScarf is on), TWO halves joined with an epoxied scarf (D-62, Eric 2026-10-12). Its top follows the sheer less the cap; bent in plan with the turn-in; the rear piece's end enters a stopped
-    // dado in the transom, the front piece's in the bulkhead.
+    // Web: the full-height 4 mm okoume panel in the middle of the sandwich, ONE piece from a full 4 x 8 sheet (D-62, D-68). Its top follows the sheer less the cap; bent in plan with the
+    // turn-in; its rear end enters a stopped dado in the transom, its front end one in the bulkhead.
     {
       const z0 = L.chineBot;
       const xw0 = rearTx - dd;
-      const xsc = p.sideWebScarfXIn;
-      const scarfLen = p.plyScarfRatio * pl;
-      const split = sideWebSplit(ctx);
       const bandAreas = rectArea(chineRect(zChine0, zChine0 + L.chineH)) + rectArea(chineRect(zChine0 + rabbetZ, zChine0 + L.chineH)) + 2 * rectArea(gunOutline);
-      const pieces = split ? [{ k: 1, xa: xw0, xb: xsc }, { k: 2, xa: xsc, xb: x1s }] : [{ k: 0, xa: xw0, xb: x1s }];
-      const totalArea = pieces.reduce((acc, q) => acc + rectArea(slopedOutline(L, q.xa, q.xb, () => z0, webTopAtX)), 0);
-      for (const q of pieces) {
-        const outline = slopedOutline(L, q.xa, q.xb, () => z0, webTopAtX);
+      {
+        const xa = xw0, xb = x1s;
+        const outline = slopedOutline(L, xa, xb, () => z0, webTopAtX);
         const zs = outline.map((o) => o[1]);
-        const blank: Dims = { t: pl, w: Math.max(...zs) - Math.min(...zs), l: q.xb - q.xa + (split ? scarfLen / 2 : 0) + 0.1 }; // + half the scarf, + the plan-curve arc (0.1)
-        const share = rectArea(outline) / totalArea;
-        const which = q.k === 0 ? 'whole' : q.k === 1 ? 'rear half' : 'front half';
+        const arcLen = samples(xa, xb, 200).reduce((acc, x, i, xs) => i ? acc + Math.hypot(x - xs[i - 1], ycOf(x) - ycOf(xs[i - 1])) : 0, 0); // the flat development along the plan curve (Phase 4: the Shaper pattern is this long)
+        const blank: Dims = { t: pl, w: Math.max(...zs) - Math.min(...zs), l: arcLen + 0.1 }; // + 0.1 trim
         parts.push(extPart(ctx, {
-          id: q.k === 0 ? `${id}-web` : `${id}-web-${q.k}`, partNo: q.k === 0 ? 'side-web' : `side-web-${q.k}`, name: `${nm} side panel (web)${q.k === 0 ? '' : `, ${which}`}`, group: 'body', mat: 'ply', step: HULL_STEP.sides, grain: 'x', center: [(q.xa + q.xb) / 2, ycOf((q.xa + q.xb) / 2), (L.chineBot + topEdge((q.xa + q.xb) / 2)) / 2],
-          outline, depth: pl, transform: compose([0, 0, 0]), planYc: ycOf, edges: 'captured', extraLb: finishCredit(bandAreas * share), stock: blank,
-          notes: `${mmOf(pl)} mm okoume panel, FULL HEIGHT (D-61, D-62)${q.k === 0 ? ', ONE piece (4 x 8 sheet)' : `, the ${which.toUpperCase()} of the side web`}: ${(q.xb - q.xa).toFixed(1)}" long (${blank.l.toFixed(1)}" blank${split ? ' with half the scarf' : ''}), ${blank.w.toFixed(1)}" tall, from the chine bottom to ${L.webCap}" under the gunwale top. ${split ? `The thin sheets are ${p.thinSheetWidthIn} x ${p.thinSheetLengthIn} in, so each web is two halves joined at x = ${xsc}" with an epoxied ${p.plyScarfRatio}:1 SCARF ${scarfLen.toFixed(2)}" long (plane the two bevels as a pair, tape the glue-up flat under weights); the scarf is hidden under the sign outside and the sign backing strip inside, and the oak bands glued over both faces bridge it top and bottom. ` : `Cut from a full 4 x 8 sheet (Aircraft Spruce, Peachtree City GA, will-call; Eric 2026-10-12): no scarf (sideWebScarf is the option for 2 x 4 sheets). `}It is the middle layer of the sandwich: oak bands on both faces at the bottom (${L.chineH}") and at the top (${L.railBand}"); the free web between them is ${(L.sideH - L.chineH - L.railBand).toFixed(1)}" tall at the bow and ${(L.sideRear - L.chineH - L.railBand).toFixed(1)}" at the rear. It bends easily across its thickness (${turned ? `${L.taper.turnIn.toFixed(2)}" of plan turn-in per side over ${(L.taper.x1 - L.taper.x0).toFixed(0)}" is a flat bend of the sheet, no lamination` : 'it stays flat'}). Cut to the sheer on the Shaper Origin (the flat development is the pattern, D-61) before bending; ${q.k <= 1 ? `its rear end enters a stopped dado in the rear transom` : ''}${q.k === 0 ? ' and ' : ''}${q.k === 0 || q.k === 2 ? `its front end enters a stopped dado in the bow bulkhead at x = ${x1s.toFixed(1)}"` : ''}. Do NOT drive screws into it: signs and the flag blocks have oak backing (the sign backing strips) or are epoxied to the inner bands (build 3c M4). ${SIDE_ASSEMBLY_NOTE}${q.k <= 1 ? ` The closed dado is vented: a ${p.ventHoleIn}" relief hole through the transom at its end lets air and epoxy escape as the transom slides on (hydraulic lock).` : ''}`,
+          id: `${id}-web`, partNo: 'side-web', name: `${nm} side panel (web)`, group: 'body', mat: 'ply', step: HULL_STEP.sides, grain: 'x', center: [(xa + xb) / 2, ycOf((xa + xb) / 2), (L.chineBot + topEdge((xa + xb) / 2)) / 2],
+          outline, depth: pl, transform: compose([0, 0, 0]), planYc: ycOf, edges: 'captured', extraLb: finishCredit(bandAreas), stock: blank,
+          notes: `${mmOf(pl)} mm okoume panel, FULL HEIGHT, ONE piece from a full 4 x 8 sheet (D-61, D-62, D-68): ${(xb - xa).toFixed(1)}" long in plan (${blank.l.toFixed(1)}" blank, the flat development along the plan curve), ${blank.w.toFixed(1)}" tall, from the chine bottom to ${L.webCap}" under the gunwale top. It is the middle layer of the sandwich: oak bands on both faces at the bottom (${L.chineH}") and at the top (${L.railBand}"); the free web between them is ${(L.sideH - L.chineH - L.railBand).toFixed(1)}" tall at the bow and ${(L.sideRear - L.chineH - L.railBand).toFixed(1)}" at the rear. It bends easily across its thickness (${turned ? `${L.taper.turnIn.toFixed(2)}" of plan turn-in per side over ${(L.taper.x1 - L.taper.x0).toFixed(0)}" is a flat bend of the sheet, no lamination` : 'it stays flat'}). Cut to the sheer on the Shaper Origin (the flat development is the pattern, D-61) before bending; its rear end enters a stopped dado in the rear transom and its front end a stopped dado in the bow bulkhead at x = ${x1s.toFixed(1)}". Do NOT drive screws into it: signs and the flag blocks have oak backing (the sign backing strips) or are epoxied to the inner bands (build 3c M4). ${SIDE_ASSEMBLY_NOTE} The closed dado is vented: a ${p.ventHoleIn}" relief hole through the transom at its end lets air and epoxy escape as the transom slides on (hydraulic lock).`,
         }));
       }
     }
@@ -532,16 +526,6 @@ export function signKnobPlan(ctx: Pick<Ctx, 'p' | 'L'>) {
   const lenIn = Math.max(0.5, Math.floor((stackIn + stripT - SIGN_SCREW_BEHIND_IN) * 8 + 1e-9) / 8);
   const engagedIn = lenIn - stackIn;
   return { standoffIn, stackIn, lenIn, engagedIn, tipShortIn: stripT - engagedIn, stripT, insertLenIn: SIGN_INSERT_LEN_IN };
-}
-
-/**
- * Are the side webs two scarfed halves? Only when asked (`sideWebScarf`) or when the whole web (the dado at the transom to the dado at the bulkhead, plus the plan-curve arc) does not
- * fit the thin-sheet length (the 2 x 4 ft sheets of the other source): D-62, Eric 2026-10-12.
- */
-export function sideWebSplit(ctx: Pick<Ctx, 'p' | 'L'>): boolean {
-  const { p, L } = ctx;
-  const whole = L.xSideEnd - (L.xRear + L.transom - p.deckCaptureDepthIn) + 0.1;
-  return p.sideWebScarf === 1 || whole > Math.max(p.thinSheetLengthIn, p.thinSheetWidthIn) + 1e-9;
 }
 
 /** Least length / height of the sign (signTexture stacks the words below 2.2:1), and the clearance over the brake flap's top surface. */
