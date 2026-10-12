@@ -163,6 +163,17 @@ The workstream notes have the full reasoning and check tables: `docs/phase3-ws{A
 - **Wording:** "sled" in all visible text.
 - **Box:** holds the cushions, lamp, clip and two chocks in cargo mode, and the 10 Essentials plus chocks in race mode.
 - **Resting load:** one more joist (8.5" spacing, +0.84 lb), and the standing-adult deck deflection limit goes to **span/240**, a tad looser than the general span/300, per Eric. The agent first used span/160, a bigger loosening than asked, and it was corrected. Resting capacity is about 335 lb. Riders are safe from 50 to over 250 lb, green to 210 lb. Cargo capacity 207 lb. 144.2 lb. Details: `docs/phase3c-5-notes.md`. | 🔶 |
+| D-60 | **Weight package (Eric, 2026-10-12).** From `docs/weight-study-3c.md`:
+- **Package A ("free", −16.9 lb):**
+  - hollow ¾" × 0.12" axle tubes, front and rear;
+  - lighter 10" wheels rated 350 lb;
+  - smaller steering eye bolts, chain and chain joist;
+  - a ⅝" rear transom, 7/8 × 3" brake flaps, 12" handle sockets, a 1½" bow bulkhead and ⅝" joists;
+  - smaller rear clamp plates, rear beam and tongue, plus minor trims.
+- **Plus the first four trade-offs:** a 2.8 lb wheel rated 300 lb with a short hub, 4 mm okoume sides, box and lid (the seat back stays 6 mm), a ½" transom, and smaller handle posts.
+- **Foot block and slot cleats removed** (−1.4 lb).
+
+The target is about **120 lb**, with no change to anything Eric chose. The deck ply, axle diameter and rails stay. Ash is not used: white oak stays for durability. Wheel data and eye-bolt/chain ratings come from retailer and supplier listings and must be confirmed before ordering. | 🔶 |
 - **Axle:** one oak axle beam under the bow, with a 10" wheel on a bolt-on ¾" stub at each end. The wheels sit outboard of the body on a 35.5" track, so the deck stays low (8").
 - **Pivot:** one ⅝" grade-8 kingpin through a UHMW thrust washer into an oak king beam. Bolted only.
 - **Steering:** oak stop blocks give **±20°** (turning circle about 20 ft). The pullers steer through a short tongue plate with the bridle shackled to it. Optional axle-end ropes for the musher are off by default.
