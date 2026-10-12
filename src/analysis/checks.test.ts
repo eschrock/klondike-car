@@ -253,7 +253,7 @@ describe('every variant the validator accepts yields finite checks', () => {
     'tongueDepthIn', 'rearOverhangIn', 'frontOverhangIn', 'sideHeightBowIn', 'sideHeightRearIn', 'tireWidthIn', 'axleBeamThicknessIn',
     'axleBeamDepthIn', 'railDepthIn', 'railThicknessIn', 'crossmemberDepthIn', 'crossmemberSpacingIn', 'deckPlyIn', 'seatDepthIn',
     'pullerHandHeightIn', 'bumpSpeedNormalMph', 'bumpSpeedHardMph', 'riderMassLb', 'riderGoalMassLb', 'cargoMassLb', 'axleDiameterIn', 'designSlopeDeg',
-    'tireGroundMu', 'dynamicFactor', 'sideThicknessIn', 'sheerCurveIn', 'bowWidthIn', 'bowBulkheadThickIn', 'bowBulkheadHeightIn', 'handleBowCrownIn', 'footStopHeightIn', 'seatDepthIn',
+    'tireGroundMu', 'dynamicFactor', 'sideThicknessIn', 'sheerCurveIn', 'bowWidthIn', 'bowBulkheadThickIn', 'bowHoldMinClearIn', 'handleBowCrownIn', 'footStopHeightIn', 'seatDepthIn',
   ];
   const OPTIONS: ParamKey[] = ['storageLocation', 'axleBeamPosition', 'axleStyle', 'plySpecies'];
   const samples = (() => {

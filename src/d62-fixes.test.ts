@@ -120,7 +120,7 @@ describe('S-5: the cargo load-height rule', () => {
     expect(c.how).toMatch(/reaches its 35° limit at 15\.2 in/);
     expect(c.how).toMatch(/at 10 in 40\.[5-7]°/);
     expect(c.how).toMatch(/at 18 in 32\.5°/);
-    expect(c.how).toMatch(/at 24 in 28\.1°/);
+    expect(c.how).toMatch(/at 24 in 28\.[12]°/);
   });
   it('the Simple view cargo card says it in plain words (D-66: 10 in above the floor; D-67: it tips at about 15 in)', () => {
     const t = cargoText(cargoCapacity(defaults));

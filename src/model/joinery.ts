@@ -230,13 +230,14 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
       const ej = endJoint(p, railT, L.transom, bandZ - 0.2);
       add({ a: `rail-${tag}`, b: 'transom-rear', typeA: ej.type, size: ej.size, pts: [[rearTx, s * (hw + L.side - railT / 2), (L.deckTop - jD + L.deckBot) / 2]], noteA: 'Rail end into the transom face (the transom hangs jD below the deck).' });
     } else add({ a: `rail-${tag}`, b: 'transom-rear', typeA: 'glue', size: 'epoxy + fillet', pts: [[rearTx, s * (hw + L.side / 2), L.deckBot - 0.5]] });
-    // The rail's front end into the bow bulkhead's rear face (D-57): the foot load pulls the bulkhead forward off these ends, so each rail takes a Domino (or a loose tenon) and a glue fillet.
+    // The rail's front end into the bow bulkhead's rear face (D-57, D-69): the bulkhead's bottom is the bottom of the stepped front rail (the visible bottom of the side), so the whole
+    // front rail depth is the band. The foot load pulls the bulkhead forward off these ends, so each rail takes a Domino (or a loose tenon) and a glue fillet.
     {
       const bandB = L.deckBot - (L.bulkhead.bot) - 0.2;
       const xe = L.railEnd, ye = s * (hwAt(xe) + L.side - railT / 2);
       if (bandB >= MIN_BAND_IN) {
         const ej = endJoint(p, railT, L.bulkhead.thick, bandB);
-        add({ a: `rail-${tag}`, b: 'bow-bulkhead', typeA: ej.type, size: ej.size, pts: [[xe, ye, L.railTop - 0.1 - bandB / 2]], noteA: 'Rail end into the bulkhead\'s rear face (the bulkhead hangs below the deck level to the rail bottom).' });
+        add({ a: `rail-${tag}`, b: 'bow-bulkhead', typeA: ej.type, size: ej.size, pts: [[xe, ye, L.railTop - 0.1 - bandB / 2]], noteA: 'Rail end into the bulkhead\'s rear face (D-69: the bulkhead bottom is level with the bottom of the stepped front rail, so the whole rail depth is the band).' });
       } else add({ a: `rail-${tag}`, b: 'bow-bulkhead', typeA: 'glue', size: 'epoxy + fillet', pts: [[xe, ye, L.railTop - 0.5]] });
     }
   }

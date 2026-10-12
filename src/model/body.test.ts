@@ -238,40 +238,54 @@ describe('the bow bulkhead and its hand-hold (D-57)', () => {
     expect(b.material).toBe('white oak');
     expect(b.group).toBe('body');
   });
-  it('is 1.5 in thick (D-60; was 1.75) from the end of the flat deck to the bow tip, as wide as the narrowed hull, 4 7/8 in high at the corners rising 7/8 in (the handlebow crown) to 5 3/4 in above the deck at the center', () => {
+  it('is 1.5 in thick (D-60; was 1.75) from the end of the flat deck to the bow tip, as wide as the narrowed hull, aligned with the sides (D-69): bottom at the bottom of the stepped front rail, corners 4 in over the deck (the side top at the bow), crown 7/8 in higher (the handlebow crown)', () => {
     const bb = worldAABB(b);
     expect(bb.min[0]).toBeCloseTo(49.25, 9);
     expect(bb.max[0]).toBeCloseTo(50.75, 9);
     expect(bb.max[1]).toBeCloseTo(9.25, 9);
     expect(bb.min[1]).toBeCloseTo(-9.25, 9);
-    expect(bb.max[2]).toBeCloseTo(L.deckTop + 5.75, 9);
+    expect(bb.max[2]).toBeCloseTo(L.deckTop + 4.875, 9);
     expect(bb.min[2]).toBeCloseTo(L.bulkhead.bot, 9);
-    expect(L.bulkhead.zCorner).toBeCloseTo(L.deckTop + 5.75 - 0.875, 12);
+    // D-69: bottom = the bottom of the sides (the deck underside, deckTop - ply), corners = the side top at the bow, crown peaks handleBowCrownIn above the corners
+    expect(L.bulkhead.bot).toBeCloseTo(L.deckBot - L.railDepthF, 12);
+    for (const tag of ['L', 'R']) {
+      const side = worldAABB(get(parts, `side-${tag}-chine`));
+      const gun = get(parts, `side-${tag}-gunwale`);
+      expect(side.min[2], 'side bottom (chine)').toBeCloseTo(L.deckBot, 9);
+      expect(side.min[2] - L.bulkhead.bot, 'the bulkhead reaches the rail bottom below the chine').toBeCloseTo(L.railDepthF, 9);
+      expect(topEdge(gun).slice(-1)[0][1], 'side top at the bow').toBeCloseTo(L.bulkhead.zCorner, 9);
+    }
+    expect(L.bulkhead.zCorner).toBeCloseTo(L.deckTop + defaults.sideHeightBowIn, 12);
+    // the lowered bulkhead clears everything that swings or runs under the bow (the tongue is fixed in z, so its gap holds through the whole steering sweep): a 1/4 in running gap at least
+    const tongue = worldAABB(get(parts, 'bridle-tongue'));
+    expect(L.bulkhead.bot - tongue.max[2]).toBeGreaterThanOrEqual(0.25);
     // 3c-5: the bulkhead's crown is the handlebow's crown (the same param), so the two echo each other
     expect(L.bulkhead.zCenter - L.bulkhead.zCorner).toBeCloseTo(defaults.handleBowCrownIn, 12);
     const c2 = makeCtx({ ...defaults, handleBowCrownIn: 1.5 });
     expect(c2.L.bulkhead.zCenter - c2.L.bulkhead.zCorner).toBeCloseTo(1.5, 12);
-    expect(L.bulkhead.zCorner).toBeGreaterThan(L.deckTop + defaults.sideHeightBowIn); // it stands a hair above the side tops, which end against its rear face
+    expect(c2.L.bulkhead.zCorner).toBeCloseTo(L.bulkhead.zCorner, 12); // the crown moves only the peak
     expect(o.halfW).toBeCloseTo(9.25, 12);
     // the sides end exactly at its rear face (the gunwale's top at the face is the corner height)
     expect(topEdge(get(parts, 'side-L-gunwale')).slice(-1)[0][1] - L.deckTop).toBeCloseTo(4, 9);
     for (const tag of ['L', 'R']) expect(worldAABB(get(parts, `side-${tag}-gunwale`)).max[0]).toBeCloseTo(49.25, 9);
   });
-  it('has the lift hand-hold: a 4.5 x 1.25 in stadium on the centerline, 3 in above the deck, with the crown of oak above it; the layout publishes it for the lift row', () => {
+  it('has the lift hand-hold (D-69): a 4.5 x 1.25 in stadium on the centerline under the crown with 3/4 in of oak above it, so 2.875 in of hand room over the deck; the layout publishes it for the lift row', () => {
     const hole = (b.geometry as { holes?: Vec2[][] }).holes![0];
     const ys = hole.map((q) => q[0]), zs = hole.map((q) => q[1]);
     expect(Math.min(...ys)).toBeCloseTo(-2.25, 9);
     expect(Math.max(...ys)).toBeCloseTo(2.25, 9);
-    expect(Math.min(...zs)).toBeCloseTo(L.deckTop + 3, 9);
-    expect(Math.max(...zs)).toBeCloseTo(L.deckTop + 3 + 1.25, 9);
-    expect(L.hold).toMatchObject({ x0: 49.25, x1: 50.75, halfLen: 2.25, zBot: L.deckTop + 3, zTop: L.deckTop + 4.25 });
+    expect(Math.min(...zs)).toBeCloseTo(L.deckTop + 2.875, 9);
+    expect(Math.max(...zs)).toBeCloseTo(L.deckTop + 2.875 + 1.25, 9);
+    expect(L.hold).toMatchObject({ x0: 49.25, x1: 50.75, halfLen: 2.25 });
+    expect(L.hold.zBot).toBeCloseTo(L.deckTop + 2.875, 9);
+    expect(L.hold.zTop).toBeCloseTo(L.bulkhead.zCenter - defaults.liftBarMinIn, 9);
+    expect(L.hold.zBot - L.deckTop).toBeGreaterThanOrEqual(defaults.bowHoldMinClearIn);
     const hs = bowHold(makeCtx(defaults));
-    expect(hs.barIn).toBeCloseTo(5.75 - 4.25, 9); // 1.5 in of oak above it at the center
+    expect(hs.barIn).toBeCloseTo(defaults.liftBarMinIn, 9); // 3/4 in of oak above it at the center
     expect(hs.thickIn).toBe(1.5);
     expect(liftBarStressPsi(hs, 100)).toBeGreaterThan(0);
-    expect(liftBarStressPsi(hs, 100)).toBeLessThan(liftBarStressPsi(liftSlot(makeCtx(defaults)), 100)); // a thicker, deeper bar than the transom's
   });
-  it('is glued to the deck edge in a dado and to the rail, chine, gunwale and web ends; the front lamp clip plugs its hand-hold', () => {
+  it('is glued to the deck edge in a dado and to the rail ends, chine, gunwale and web ends; the front lamp clip plugs its hand-hold', () => {
     const to = new Set((b.joints ?? []).map((j) => j.to));
     for (const id of ['deck', 'rail-L', 'rail-R', 'side-L-chine', 'side-R-gunwale', 'side-L-web']) expect(to.has(id), id).toBe(true);
     expect(get(parts, 'lamp-clip').joints!.some((j) => j.to === 'bow-bulkhead')).toBe(true);

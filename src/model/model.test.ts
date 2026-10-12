@@ -420,7 +420,7 @@ const VARIANTS: Record<string, Partial<Params>> = {
   sheer0: { sheerCurveIn: 0 },
   sheer4: { sheerCurveIn: 4 },
   bulkhead3: { bowBulkheadThickIn: 3, frontOverhangIn: 8 },
-  bulkheadTall: { bowBulkheadHeightIn: 12 },
+  bulkheadCrown: { handleBowCrownIn: 2 },
   turn0: { bowWidthIn: 24 },
   turn25: { bowWidthIn: 19, bowTaperStartIn: 14 },
   handleParked: { handleBowCrownIn: 0.5 },

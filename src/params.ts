@@ -275,11 +275,6 @@ const defs = {
     default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-57, D-60',
     note: 'The shaped oak bulkhead at the bow replaces the D-54 bow curl and the separate foot-stop bar: it is the rider\'s foot brace and the structural front of the hull. One piece of 8/4 oak planed to its thickness (two thinner boards glued face to face are the alternative), so there is no cross-grain break at the hand-hold. D-60: 1-1/2 in (was 1-3/4 in): the foot-stop row was at 0.10, it goes to about 0.14.',
   },
-  bowBulkheadHeightIn: {
-    label: 'Bow bulkhead height at the center (above the deck)', group: 'body', unit: 'in',
-    default: 5.75, min: 5, max: 14, step: 0.25, status: 'explore', primary: true, ref: 'D-57, 3c-5',
-    note: 'The top is a gentle crown (the same rise as the handlebow, handleBowCrownIn) that peaks at this height at the center, so the corners stand handleBowCrownIn lower (3c-5; it was a 9 in peak over 4 in corners). The lift hand-hold is cut through it under the crown, with at least liftBarMinIn of oak above. The front lamp clip snaps into that slot (3c-5).',
-  },
   showSideSigns: {
     label: 'Show the side signs', group: 'body', unit: '',
     default: 1, min: 0, max: 1, step: 1, status: 'assumed', ref: 'D-54, D-57',
@@ -426,6 +421,11 @@ const defs = {
     label: 'Oak left above the lift slot', group: 'body', unit: 'in',
     default: 0.75, min: 0.5, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-37',
     note: 'If the slot pushes this above the gunwale line, the transom rises into a low crest.',
+  },
+  bowHoldMinClearIn: {
+    label: 'Min. hand room under the bow hand-hold (above the deck)', group: 'body', unit: 'in',
+    default: 2.5, min: 1.5, max: 5, step: 0.25, status: 'assumed', ref: 'D-69',
+    note: 'Hand room under the bow hand-hold; the bow has no box behind it. The hold hangs under the bulkhead crown with liftBarMinIn of oak above (D-69), so its clearance above the deck is sideHeightBowIn + handleBowCrownIn - liftBarMinIn - liftSlotHeightIn (2.875 in at the defaults); the validator errors below this.',
   },
   signLengthIn: {
     label: 'Side sign blank length', group: 'body', unit: 'in',
@@ -2284,10 +2284,10 @@ export function validateParams(input: Params): ParamIssue[] {
     warn(['sideHeightBowIn', 'sideHeightRearIn'], 'The sled profile is meant to be low at the bow and tall at the rear (reference/05).');
   if (p.sideHeightBowIn - 2 * p.railBandIn < 1)
     err(['sideHeightBowIn', 'railBandIn'], 'The side panel at the bow would be shorter than 1". Raise the bow side or thin the chine and gunwale.');
-  if (p.bowBulkheadHeightIn - p.handleBowCrownIn < p.sideHeightBowIn - 1e-9)
-    warn(['bowBulkheadHeightIn', 'handleBowCrownIn', 'sideHeightBowIn'], 'The bow bulkhead corners (its peak less the handlebow crown it echoes, 3c-5) are meant to be at least as high as the side tops at the bow, so the sides end against it (D-57).');
-  if (p.bowBulkheadHeightIn < p.liftSlotClearIn + p.liftSlotHeightIn + p.liftBarMinIn - 1e-9)
-    err(['bowBulkheadHeightIn', 'liftSlotClearIn', 'liftSlotHeightIn'], `The bow bulkhead is too low for the lift hand-hold: it needs ${(p.liftSlotClearIn + p.liftSlotHeightIn + p.liftBarMinIn).toFixed(2)}" at the center (hand clearance + slot + oak above).`);
+  // D-69: the bow bulkhead's bottom is the deck underside, its corners the bow side tops, its crown the handlebow's; the hand-hold hangs under the crown with liftBarMinIn of oak above it.
+  const bowHoldClear = p.sideHeightBowIn + p.handleBowCrownIn - p.liftBarMinIn - p.liftSlotHeightIn;
+  if (bowHoldClear < p.bowHoldMinClearIn - 1e-9)
+    err(['sideHeightBowIn', 'handleBowCrownIn', 'liftSlotHeightIn', 'liftBarMinIn', 'bowHoldMinClearIn'], `The bow hand-hold would leave only ${bowHoldClear.toFixed(2)}" of hand room above the deck (it hangs under the bulkhead crown with ${p.liftBarMinIn}" of oak above it); it needs at least ${p.bowHoldMinClearIn}". Raise the bow side or the crown, or shorten the slot (D-69).`);
   // Plan taper (D-66, D-62): each oak band of the sandwich side is cold-bent on the web; the S-curve's tightest bend must stay above the cold-bend limit of ONE band.
   const bandT = Math.max(0, (p.sideThicknessIn - p.panelPlyIn) / 2);
   const taper = bowTaper(p);
