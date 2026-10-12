@@ -1,5 +1,5 @@
 /**
- * Rider sweep (docs/simple-view-spec.md, D-30): "for what rider weights is this cart safe?" Pure TypeScript, no DOM.
+ * Rider sweep (docs/simple-view-spec.md, D-30): "for what rider weights is this sled safe?" Pure TypeScript, no DOM.
  *
  * For each weight w the checks run with the operating, goal and lightest rider all set to w, so every load case is the
  * same rider. Truck fit does not depend on the rider and is evaluated once (or taken from `opts.fit`). A design is a plain

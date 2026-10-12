@@ -1,5 +1,5 @@
 /**
- * Stability rows for the pivoting-front-axle cart (D-56): tip-straight (worst over the steering range), tip-lock, slide-before-tip, v-rollover, turn-radius (pass/fail against the
+ * Stability rows for the pivoting-front-axle sled (D-56): tip-straight (worst over the steering range), tip-lock, slide-before-tip, v-rollover, turn-radius (pass/fail against the
  * relaxed A-2 limit), pitch-fwd and pitch-rear. Every number is re-derived by hand from the params and the load cases (mass and CG come from `ctx.loads`; the contact geometry is
  * written out literally):
  *
@@ -240,7 +240,7 @@ describe('pitch rows (L1, H3)', () => {
 });
 
 describe('corner mass used by the bump rows is consistent with the contacts', () => {
-  it('the rigid-body corner weights are positive and below the cart weight; the rear wheel is closer to the CG and gets the larger one', () => {
+  it('the rigid-body corner weights are positive and below the sled weight; the rear wheel is closer to the CG and gets the larger one', () => {
     for (const w of ['front', 'rear'] as const) {
       const wc = cornerWeightLb(ctx, ctx.loads.goal, w);
       expect(wc).toBeGreaterThan(0);

@@ -50,7 +50,7 @@ export interface SimSpec {
   kingpinM: Vec3;
   /** Steering lock, degrees each way (the stop blocks, D-56). */
   steerLockDeg: number;
-  /** Whole-cart mass, CG (model frame, m) and weight in newtons. */
+  /** Whole-sled mass, CG (model frame, m) and weight in newtons. */
   totalMassKg: number;
   cgM: Vec3;
   weightN: number;

@@ -32,11 +32,11 @@ const PART: Record<string, { name: string; event?: string }> = {
   deck: { name: 'the floor' },
   'seat-back': { name: 'the seat back', event: 'when the rider leans back' },
   'seat-grip': { name: 'the side grab boards' },
-  lift: { name: 'the lifting hand-holds', event: 'when two people lift the cart' },
+  lift: { name: 'the lifting hand-holds', event: 'when two people lift the sled' },
   'foot-stop': { name: 'the foot brace (the bow bulkhead)', event: 'in a hard bump' },
   // The pivoting front axle (D-56), in words a parent knows: the pivot is "the bolt the front axle turns on", the tongue plate is "the pull arm".
   'bridle-eye': { name: 'the rope shackle on the pull arm', event: 'under a hard pull' },
-  kingpin: { name: 'the bolt the front axle pivots on', event: 'when the cart is pulled hard' },
+  kingpin: { name: 'the bolt the front axle pivots on', event: 'when the sled is pulled hard' },
   'king-bearing': { name: 'the plastic washer the front axle turns on' },
   'front-beam': { name: 'the front axle', event: 'in a hard bump' },
   'front-stub': { name: 'a front wheel stub', event: 'in a hard bump' },
@@ -72,10 +72,10 @@ const REASON: Record<string, string> = {
   deck: 'the floor could crack',
   'seat-back': 'the seat back could break or pull loose when the rider leans back',
   'seat-grip': 'a side grab board could break or pull off when a rider hangs on',
-  lift: 'a lifting hand-hold could crack when the cart is carried',
+  lift: 'a lifting hand-hold could crack when the sled is carried',
   'foot-stop': 'the foot brace could break or pull off the bow in a hard bump',
   'bridle-eye': 'the rope shackle on the pull arm could bend or pull out under a hard pull',
-  kingpin: 'the bolt the front axle pivots on could bend or shear when the cart is pulled hard or hits a bump',
+  kingpin: 'the bolt the front axle pivots on could bend or shear when the sled is pulled hard or hits a bump',
   'king-bearing': 'the plastic washer the front axle turns on could be crushed by the weight',
   'front-beam': 'the front axle could bend or crack in a hard bump',
   'front-stub': 'a front wheel stub could bend in a hard bump',
@@ -88,7 +88,7 @@ const REASON: Record<string, string> = {
   'brake-hinge': 'a brake flap hinge could pull out of the wood under a hard stomp',
   'brake-mount': 'the mount that holds a brake flap to the side rail could crack or pull loose under a hard stomp',
   'brake-return': 'the cord that lifts a brake flap could slip or pull out, and the flap would drag on the tire',
-  'park-hold': 'the wheel chocks could slip or be climbed and the cart roll away when parked on a steep hill',
+  'park-hold': 'the wheel chocks could slip or be climbed and the sled roll away when parked on a steep hill',
   joists: 'a floor crossmember could crack under the seat',
   'handle-bow': 'the handlebow could crack when the handler pulls back',
 };
@@ -120,11 +120,11 @@ export function limiterName(id: string): string {
 export function limiterAdvice(id: string): string {
   switch (id) {
     case 'tip-straight': case 'slide-before-tip': return 'widen the wheels or lower the floor';
-    case 'pitch-rear': case 'pitch-fwd': return 'make the cart longer between the wheels or lower the floor';
+    case 'pitch-rear': case 'pitch-fwd': return 'make the sled longer between the wheels or lower the floor';
     case 'brake-force': case 'brake-slow': case 'brake-traction': case 'park-hold': return 'ask the builders about a stronger brake';
-    case 'turn-radius': return 'make the cart shorter between the wheels';
+    case 'turn-radius': return 'make the sled shorter between the wheels';
     case 'steer-clear': return 'make the body narrower or the wheels farther apart';
-    default: return PART[id] ? `the builders need to strengthen ${PART[id].name}` : 'adjust the cart in the controls below';
+    default: return PART[id] ? `the builders need to strengthen ${PART[id].name}` : 'adjust the sled in the controls below';
   }
 }
 
@@ -188,12 +188,12 @@ export function lightTexts({ p, checks, fit }: DesignFacts): Record<Light, Light
     const slope = num(p.designSlopeDeg);
     const parts: string[] = [];
     // D-58 (Eric): the step-brake flaps are a just-in-case SLOWING brake. The row that counts is brake-slow (the steepest grade the flaps hold, both feet at the comfortable force);
-    // the foot force to hold on the ${slope} degree hill (brake-force) is only information. Holding on a steep hill is the chock's job, or a person holding the cart.
+    // the foot force to hold on the ${slope} degree hill (brake-force) is only information. Holding on a steep hill is the chock's job, or a person holding the sled.
     parts.push(bs?.status === 'fail'
-      ? `The brake flaps would slow the loaded cart on hills up to only ${num(val(bs))}° (about ${num(lim(bs))}° is wanted); on steeper hills chock a wheel or have someone hold it.`
+      ? `The brake flaps would slow the loaded sled on hills up to only ${num(val(bs))}° (about ${num(lim(bs))}° is wanted); on steeper hills chock a wheel or have someone hold it.`
       : bs?.status === 'marginal'
-        ? `The brake flaps slow the loaded cart on hills up to ${num(val(bs))}°, close to the ${num(lim(bs))}° wanted; on steeper hills chock a wheel or have someone hold it.`
-        : `The brake flaps slow the loaded cart on hills up to ${num(val(bs))}°; on steep hills (like the ${slope}° design hill) chock a wheel or have someone hold it.`);
+        ? `The brake flaps slow the loaded sled on hills up to ${num(val(bs))}°, close to the ${num(lim(bs))}° wanted; on steeper hills chock a wheel or have someone hold it.`
+        : `The brake flaps slow the loaded sled on hills up to ${num(val(bs))}°; on steep hills (like the ${slope}° design hill) chock a wheel or have someone hold it.`);
     parts.push(pr?.status === 'fail' ? 'A hard pull uphill could lift the front wheels.'
       : pr?.status === 'marginal' ? "The front won't lift when pulled uphill, but with little to spare."
       : "The front won't lift when pulled uphill.");
@@ -222,7 +222,7 @@ export function lightTexts({ p, checks, fit }: DesignFacts): Record<Light, Light
     const status = rows.length ? st(rows.map((r) => r.id)) : 'info';
     const pct = w ? Math.round((w.util ?? 0) * 100) : 0;
     const text = !w ? 'No strength checks to show.'
-      : status === 'fail' ? `The weakest point is ${partText(w.id)}, at ${pct}% of the load this design allows. The design keeps a safety factor in reserve, so this is a shortfall in margin, not a forecast that it will break, but it must be fixed before the cart is built.`
+      : status === 'fail' ? `The weakest point is ${partText(w.id)}, at ${pct}% of the load this design allows. The design keeps a safety factor in reserve, so this is a shortfall in margin, not a forecast that it will break, but it must be fixed before the sled is built.`
       : status === 'marginal' ? `Close to the limit: ${partText(w.id)} (${pct}% of what it can take).`
       : `Every part has a safety margin. Closest to its limit: ${partText(w.id)}.`;
     out.strength = { light: 'strength', status, text };
@@ -281,14 +281,14 @@ export function headline(w: number, sweep: HeadlineSweep): Headline {
   const yellows = runsOf(points, 'marginal').sort((a, b) => a.lo - b.lo);
   const status = sweep.operating.status;
   if (!safe) {
-    // The rider's own weight fails the checks. Name the limiter; when every failing row is a front-end row, say the rest of the cart passes.
+    // The rider's own weight fails the checks. Name the limiter; when every failing row is a front-end row, say the rest of the sled passes.
     // Every branch below must read cleanly when NO weight in the swept range is safe (no empty headline, no NaN).
     const worstId = sweep.operating.worst?.id ?? '';
     const fails = sweep.operating.fails ?? [];
     const frontOnly = fails.length > 0 && fails.every((id) => FRONT_END_IDS.has(id));
     const text = `Not safe for a ${w} lb rider: ${failReason(worstId)}.`;
     const rest = frontOnly ? ' Everything else passes at this weight.' : '';
-    if (greens.length) return { tone: 'fail', ok: false, text, sub: `This cart is comfortably safe for riders ${range(greens[0].lo, greens[0].hi)}.${rest}` };
+    if (greens.length) return { tone: 'fail', ok: false, text, sub: `This sled is comfortably safe for riders ${range(greens[0].lo, greens[0].hi)}.${rest}` };
     if (yellows.length) return { tone: 'fail', ok: false, text, sub: `Riders ${range(yellows[0].lo, yellows[0].hi)} would be close to the limit.${rest}` };
     const none = `No rider weight from ${fromLb} to ${toLb} lb passes the checks yet. What stops it: ${limiterName(worstId)}.${rest}`;
     return { tone: 'fail', ok: false, text, sub: `${none} To change that: ${limiterAdvice(worstId)}, or press Reset.` };
@@ -297,7 +297,7 @@ export function headline(w: number, sweep: HeadlineSweep): Headline {
     // This weight passes, but only just; say so first, then what is comfortable.
     return {
       tone: 'warn', ok: false,
-      text: `A ${w} lb rider is close to this cart's limit.`,
+      text: `A ${w} lb rider is close to this sled's limit.`,
       sub: greens.length ? `Comfortably safe for riders ${range(greens[0].lo, greens[0].hi)}.` : undefined,
     };
   }
@@ -332,7 +332,7 @@ export interface RestingText {
   status: Status;
   /** "Holds a 220 lb adult sitting or stepping in." */
   text: string;
-  /** The weight the cart holds this way, rounded down to 10 lb, or null when the row is missing. */
+  /** The weight the sled holds this way, rounded down to 10 lb, or null when the row is missing. */
   maxLb: number | null;
   /** Said once, plainly: the storage lid is not meant to be stood on. */
   note: string;
@@ -342,7 +342,7 @@ export interface RestingText {
 export function restingText(checks: readonly AnalysisCheck[], targetLb: number): RestingText {
   const note = 'Not the storage lid: it is engraved DO NOT STEP.';
   const r = checks.find((c) => c.id === 'rest-load');
-  const d = r?.details?.find((x) => /^the resting weight the cart holds/.test(x.name));
+  const d = r?.details?.find((x) => /^the resting weight the sled holds/.test(x.name));
   if (!r || !d) return { status: 'info', text: '', maxLb: null, note };
   const maxLb = Math.floor(d.limit / 10) * 10;
   const status: Status = d.limit >= targetLb ? r.status === 'marginal' ? 'marginal' : 'pass' : 'fail';

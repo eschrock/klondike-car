@@ -8,7 +8,7 @@ import { LIGHT_CHECK_IDS, cargoText, FRONT_END_IDS, headline, lightTexts, limitL
 import type { AnalysisCheck } from '../analysis/types';
 
 const p = defaultParams();
-/** Words a parent has not met, or that name parts the cart no longer has (the Ackermann front end; the brake handle). The pivoting axle's kingpin and tongue plate are "the bolt the front axle pivots on" and "the pull arm" in words. */
+/** Words a parent has not met, or that name parts the sled no longer has (the Ackermann front end; the brake handle). The pivoting axle's kingpin and tongue plate are "the bolt the front axle pivots on" and "the pull arm" in words. */
 const JARGON = /kingpin|king beam|thrust|uhmw|spindle|tongue|turntable|bolster|side bearer|bellcrank|drag link|tie rod|ackermann|steering pivot|brake handle|brake lever|hand lever/i;
 const fit = checkTruckFit(p, (v) => buildModel(p, v));
 const sweep = riderSweep(p, { fit });
@@ -65,7 +65,7 @@ describe('simple wording', () => {
     expect(bad.text).toContain('240');
     expect(bad.text).toContain('Not safe for a 240 lb rider');
     expect(bad.text).toContain('the bolt the front axle pivots on'); // kingpin is a front-end row, said in plain words
-    expect(bad.sub).toBe('This cart is comfortably safe for riders 50–190 lb.');
+    expect(bad.sub).toBe('This sled is comfortably safe for riders 50–190 lb.');
     // everything fails: a next step, and no stray " could fail"
     const none = headline(150, mk(Array(21).fill('fail'), 150));
     expect(none.sub).toMatch(/No rider weight from 50 to 250 lb passes/);
@@ -82,7 +82,7 @@ describe('simple wording', () => {
     const hd = headline(150, sw);
     expect(hd.tone).toBe('fail');
     expect(hd.ok).toBe(false);
-    // The front end is decided (D-56): a failing front-end row reads like any other failing row, with no "still being decided" note, and says the rest of the cart passes.
+    // The front end is decided (D-56): a failing front-end row reads like any other failing row, with no "still being decided" note, and says the rest of the sled passes.
     expect(hd.text).toMatch(/^Not safe for a 150 lb rider: .+\.$/);
     expect(hd.sub).toMatch(/No rider weight from 50 to 250 lb passes the checks yet\. What stops it: .+\./);
     expect(hd.sub).toMatch(/Everything else passes at this weight/); // fails lists only front-end rows
@@ -116,12 +116,12 @@ describe('simple wording', () => {
     const at = pts[10];
     const hd = headline(150, { points: pts as never, fromLb: 50, toLb: 250, stepLb: 10, safe: null, green: null, operating: at as never });
     expect(hd.text).toMatch(/^Not safe for a 150 lb rider/);
-    expect(hd.sub).toBe('This cart is comfortably safe for riders 50–100 lb. Everything else passes at this weight.');
+    expect(hd.sub).toBe('This sled is comfortably safe for riders 50–100 lb. Everything else passes at this weight.');
     // A failing row that is not a front-end row gets no "everything else" sentence.
     const ptsB = pts.map((q) => ({ ...q, worst: { ...q.worst, id: 'rails' }, fails: ['rails'] }));
     const hb = headline(150, { points: ptsB as never, fromLb: 50, toLb: 250, stepLb: 10, safe: null, green: null, operating: ptsB[10] as never });
     expect(hb.text).toMatch(/^Not safe for a 150 lb rider/);
-    expect(hb.sub).toBe('This cart is comfortably safe for riders 50–100 lb.');
+    expect(hb.sub).toBe('This sled is comfortably safe for riders 50–100 lb.');
   });
   it('names the limiting reason at an end, without jargon', () => {
     expect(limitLine('below', { loLb: 70, hiLb: 230, openLow: false, openHigh: false }, { id: 'pitch-rear', label: '', util: 1, status: 'fail' })).toBe('Below 70 lb: a hard pull uphill can lift the front wheels.');
@@ -143,14 +143,14 @@ describe('simple wording', () => {
     }
   });
   it('describes one weight for the bar note', () => {
-    expect(weightNote(190, 'marginal', 'kingpin')).toBe('190 lb: close to the limit (the bolt the front axle pivots on when the cart is pulled hard).');
+    expect(weightNote(190, 'marginal', 'kingpin')).toBe('190 lb: close to the limit (the bolt the front axle pivots on when the sled is pulled hard).');
     expect(weightNote(150, 'pass', undefined)).toBe('150 lb: OK.');
   });
 });
 
 describe('resting weight (D-58)', () => {
   it('says one number: the most an adult can weigh to sit or step in, rounded down to 10 lb, and notes the lid', () => {
-    const rest = { ...row('rest-load', 250, 223, 'fail'), details: [{ name: 'the resting weight the cart holds with every margin (the worst member reaches its limit)', value: 250, unit: 'lb', limit: 223.06, util: 1.12, sense: '<=' as const }] } as AnalysisCheck;
+    const rest = { ...row('rest-load', 250, 223, 'fail'), details: [{ name: 'the resting weight the sled holds with every margin (the worst member reaches its limit)', value: 250, unit: 'lb', limit: 223.06, util: 1.12, sense: '<=' as const }] } as AnalysisCheck;
     const t = restingText([rest], 250);
     expect(t.maxLb).toBe(220);
     expect(t.text).toBe('Holds a 220 lb adult sitting or stepping in.');
@@ -173,17 +173,17 @@ describe('Phase 3b rows in the Simple view (spec 6.3)', () => {
     for (const id of PHASE3B_CHECK_IDS) {
       expect(failReason(id), id).not.toBe('a safety check fails');
       expect(limiterName(id), id).not.toBe('a safety check');
-      expect(limiterAdvice(id), id).not.toBe('adjust the cart in the controls below');
+      expect(limiterAdvice(id), id).not.toBe('adjust the sled in the controls below');
       for (const t of [failReason(id), limiterName(id), limiterAdvice(id), weightNote(150, 'fail', id), weightNote(150, 'marginal', id)])
         expect(t, id).not.toMatch(/turntable|bolster|kingpin|king beam|thrust|spindle|tongue|side bearer|NaN|undefined|\?/i);
     }
   });
 
 
-  it('the Hills light has no stopping-distance sentence (ride mode is gone, D-53); it speaks of the brake flaps SLOWING the cart (brake-slow, D-58), says to chock or hold on steep hills, and the pitch rows', () => {
+  it('the Hills light has no stopping-distance sentence (ride mode is gone, D-53); it speaks of the brake flaps SLOWING the sled (brake-slow, D-58), says to chock or hold on steep hills, and the pitch rows', () => {
     const t = lightTexts({ p, checks: sweep.operatingChecks, fit }).hills;
     expect(t.text).not.toMatch(/stops in about|riding speed/);
-    expect(t.text).toMatch(/brake flaps slow the loaded cart on hills up to \d+/);
+    expect(t.text).toMatch(/brake flaps slow the loaded sled on hills up to \d+/);
     expect(t.text).toMatch(/chock a wheel or have someone hold it/);
     expect(t.text).not.toMatch(/foot force/); // the hold force (brake-force) is an info row now and never speaks in the Hills light
     expect(t.text).not.toMatch(/brake handle|lever|hand\b/i);
@@ -193,7 +193,7 @@ describe('Phase 3b rows in the Simple view (spec 6.3)', () => {
     // the pass / fail row is brake-slow
     const fail = lightTexts({ p, checks: [row('brake-slow', 6, 10, 'fail'), row('pitch-rear', 1, 1, 'fail')], fit }).hills;
     expect(fail.status).toBe('fail');
-    expect(fail.text).toMatch(/slow the loaded cart on hills up to only 6°/);
+    expect(fail.text).toMatch(/slow the loaded sled on hills up to only 6°/);
     expect(fail.text).toMatch(/could lift the front wheels/);
   });
 

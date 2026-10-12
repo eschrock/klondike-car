@@ -4,8 +4,8 @@
  * joists, the rails, the axle beams, the stub rods, the wheels and the front axle pivot (the thrust disc and the king beam). The storage lid is NOT checked and NOT strengthened:
  * it carries the legend DO NOT STEP (engraved), so nobody is meant to stand on it (Eric).
  *
- * The weight is a point (the seat footprint or the foot patch) moved over the deck; the cart's own weight splits between the axles by its CG. Everything is linear in the
- * weight, so the maximum resting weight is found by bisection on the worst utilization (the cart's own weight is a constant part of the load).
+ * The weight is a point (the seat footprint or the foot patch) moved over the deck; the sled's own weight splits between the axles by its CG. Everything is linear in the
+ * weight, so the maximum resting weight is found by bisection on the worst utilization (the sled's own weight is a constant part of the load).
  */
 import { totalMass, centerOfGravity } from '../model/mass';
 import type { Ctx } from './context';
@@ -57,7 +57,7 @@ export function restEval(ctx: Ctx, W: number): RestResult {
     const secF = rectSection(beff, t);
     const stand = ssUdlCentered(W / FOOT_ALONG_IN, FOOT_ALONG_IN, span, al.Eply * secF.I);
     add('standing on one foot: deck ply bending (the whole weight on a 4 in x 10 in patch, mid-bay)', stand.M / secF.S, 'psi', al.plyBend);
-    add('standing on one foot: deck ply deflection', stand.defl, 'in', span / p.deflectionLimitRatio);
+    add('standing on one foot: deck ply deflection', stand.defl, 'in', span / p.standDeflectionRatio);
   }
   // ── joists ──
   {
@@ -130,10 +130,10 @@ export function restEval(ctx: Ctx, W: number): RestResult {
     add('front pivot: king beam bending (the front axle load at midspan, net section)', (kb.M * net.c) / net.I, 'psi', al.oakBend);
   }
   const maxUtil = Math.max(...ds.map((d) => d.util));
-  return { details: ds, maxUtil, text: `cart ${f(m)} lb, CG x = ${f(xc, 1)}"` };
+  return { details: ds, maxUtil, text: `sled ${f(m)} lb, CG x = ${f(xc, 1)}"` };
 }
 
-/** The most the cart holds at rest with the full margins (lb): the weight at which the worst detail reaches its limit. */
+/** The most the sled holds at rest with the full margins (lb): the weight at which the worst detail reaches its limit. */
 export function restMaxLb(ctx: Ctx): number {
   let lo = 0, hi = 4000;
   if (restEval(ctx, hi).maxUtil <= 1) return hi;
@@ -146,11 +146,11 @@ export function restLoadCheck(ctx: Ctx): AnalysisCheck {
   const W = p.restLoadLb;
   const r = restEval(ctx, W);
   const maxLb = restMaxLb(ctx);
-  const ds: Detail[] = [detail('the resting weight the cart holds with every margin (the worst member reaches its limit)', W, 'lb', maxLb, '<='), ...r.details];
+  const ds: Detail[] = [detail('the resting weight the sled holds with every margin (the worst member reaches its limit)', W, 'lb', maxLb, '<='), ...r.details];
   const g = governing(ds, '');
   const worst = r.details.reduce((a, b) => (b.util > a.util ? b : a));
-  const how = `An adult of ${f(W, 0)} lb (restLoadLb, Eric 2026-10-11) at REST: (a) sitting still anywhere on the deck or seat, (b) standing on one foot (the whole weight on a ${FOOT_ALONG_IN} in x ${FOOT_ACROSS_IN} in patch) anywhere on the deck, worst position for each member. Static load: no bump factor, the same design allowables (full safety factors) as the other rows; the cart's own weight (${r.text}) is carried with it. `
-    + `The cart holds up to ${f(maxLb, 0)} lb this way (the tightest member is: ${worst.name}, ${f(worst.util * 100, 0)}% at ${f(W, 0)} lb). `
+  const how = `An adult of ${f(W, 0)} lb (restLoadLb, Eric 2026-10-11) at REST: (a) sitting still anywhere on the deck or seat, (b) standing on one foot (the whole weight on a ${FOOT_ALONG_IN} in x ${FOOT_ACROSS_IN} in patch) anywhere on the deck, worst position for each member. Static load (the deck ply may deflect span/${p.standDeflectionRatio} under the standing foot, a tad looser than the general span/${p.deflectionLimitRatio}, Eric): no bump factor, the same design allowables (full safety factors) as the other rows; the sled's own weight (${r.text}) is carried with it. `
+    + `The sled holds up to ${f(maxLb, 0)} lb this way (the tightest member is: ${worst.name}, ${f(worst.util * 100, 0)}% at ${f(W, 0)} lb). `
     + `The STORAGE LID is not checked and is not strengthened: it is engraved DO NOT STEP (CNC, on the lid top), so nobody is meant to stand on it (Eric, D-58). The kingpin carries no vertical load (the thrust disc does), so it is not on this list. Simple view: "Holds a ${f(Math.floor(maxLb / 10) * 10, 0)} lb adult sitting or stepping in."`;
   return singleCheck({
     id: 'rest-load', label: 'Resting weight: an adult sitting or stepping in (static)', group: 'Structure', refs: ['D-58', 'D-17'],

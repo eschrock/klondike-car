@@ -117,7 +117,7 @@ describe('simulation', () => {
     expect(Math.abs(yawDeg(sim))).toBeLessThan(2);
   });
 
-  it('braking event: the rear brake alone slows the cart, which stays straight and upright (no front brakes, D-53)', async () => {
+  it('braking event: the rear brake alone slows the sled, which stays straight and upright (no front brakes, D-53)', async () => {
     const sc = SCENARIOS.find((s) => s.id === 'brake')!;
     expect(sc.brakeAtS).toBeDefined();
     const sim = await createSim(spec, { config: sc.config, controls: { ...sc.controls, brakeLbf: 100 }, script: sc });
@@ -139,7 +139,7 @@ describe('simulation', () => {
     expect(vMax).toBeLessThan(10);
   });
 
-  it('a straight pull at the tongue tie accelerates the cart straight ahead with the axle straight (nothing to hunt)', async () => {
+  it('a straight pull at the tongue tie accelerates the sled straight ahead with the axle straight (nothing to hunt)', async () => {
     const sim = await run(6, { controls: { pullLbf: 30, pullAngleDeg: 0 } });
     expect(sim.readout().speedMph).toBeGreaterThan(3);
     expect(Math.abs(yawDeg(sim))).toBeLessThan(2);
@@ -149,7 +149,7 @@ describe('simulation', () => {
 
   it('the front axle turns freely about the kingpin: a servo (or a pull) swings it, and the stops hold it at the lock either way', async () => {
     const lock = p.steerLockDeg;
-    // Free: a sideways pull at the tongue (45 degrees off the cart's heading) turns the axle until the stop catches it.
+    // Free: a sideways pull at the tongue (45 degrees off the sled's heading) turns the axle until the stop catches it.
     const free = await createSim(spec, { controls: { pullLbf: 30, pullAngleDeg: 45 } });
     let peak = 0, peakNeg = 0;
     for (let i = 0; i < 240 * 1.5; i++) { free.step(); peak = Math.max(peak, free.readout().steerDeg); peakNeg = Math.min(peakNeg, free.readout().steerDeg); }
@@ -166,7 +166,7 @@ describe('simulation', () => {
     }
   });
 
-  it('a sideways pull at the tongue steers the axle toward the lock, and the cart follows round', async () => {
+  it('a sideways pull at the tongue steers the axle toward the lock, and the sled follows round', async () => {
     const left = await createSim(spec, { controls: { pullLbf: 40, pullAngleDeg: 30 } });
     const right = await createSim(spec, { controls: { pullLbf: 40, pullAngleDeg: -30 } });
     let pl = 0, pr = 0;
@@ -174,7 +174,7 @@ describe('simulation', () => {
     expect(pl).toBeGreaterThan(p.steerLockDeg - 1);
     expect(pr).toBeLessThan(-p.steerLockDeg + 1);
     for (let i = 0; i < 240 * 9; i++) left.step();
-    // The cart ends up heading roughly along the rope, the axle back near straight, upright.
+    // The sled ends up heading roughly along the rope, the axle back near straight, upright.
     expect(yawDeg(left)).toBeGreaterThan(15);
     expect(left.readout().tipped).toBe(false);
   });
@@ -193,7 +193,7 @@ describe('simulation', () => {
     }
   });
 
-  it('the bump scenario (5 mph into a 2 in root) spikes the wheel loads, and the cart stays upright', async () => {
+  it('the bump scenario (5 mph into a 2 in root) spikes the wheel loads, and the sled stays upright', async () => {
     const sc = SCENARIOS.find((s) => s.id === 'bump')!;
     const sim = await run(5, { config: sc.config, controls: sc.controls, script: sc });
     const r = sim.readout();
@@ -233,7 +233,7 @@ describe('simulation', () => {
 /**
  * Cross-check (BRIEF §8, phase-2 spec): the tilt-table tip onset must match the static tip angle. The static angle is
  * computed here independently from the model: the CG and the four wheel contact points, and the support edge on the downhill side. The plumb line from the
- * CG hits the ground at (x, y - h*tan(phi)), so the cart tips when that point reaches the line through the two downhill wheels:
+ * CG hits the ground at (x, y - h*tan(phi)), so the sled tips when that point reaches the line through the two downhill wheels:
  * tan(phi) = (lateral CG-to-edge distance at the CG's x) / h. Straight, the front track equals the rear track and the edge is parallel to X; steered, the front wheel contacts (and the CG, as the axle assembly swings) move and the edge tilts.
  */
 function staticTipDeg(tipTo: 'right' | 'left', steerDeg = 0): { deg: number; h: number; edge: number } {
@@ -262,7 +262,7 @@ describe('tilt table vs static tip angle (operating rider)', () => {
     expect(r.firstLiftDeg!).toBeLessThanOrEqual(r.onsetDeg! + 1e-6);
   }, 60_000);
 
-  it('left and right agree (the cart is symmetric about its centerline), in the sim and in the statics', () => {
+  it('left and right agree (the sled is symmetric about its centerline), in the sim and in the statics', () => {
     const l = results.get('left')!, r = results.get('right')!;
     expect(Math.abs(l.stat - r.stat)).toBeLessThan(0.5);
     expect(Math.abs(l.sim - r.sim)).toBeLessThan(1);

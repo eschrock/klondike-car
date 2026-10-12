@@ -134,8 +134,8 @@
 @media (max-width: 1200px) {
   #simple-left, #simple-right { border: 0; border-top: 1px solid var(--border); overflow: visible; }
   .sv-host { overflow: visible; }
-  /* The safety result is the main thing in Simple, so the pinned cart takes less of the screen. */
-  #app[data-mode='simple'] .viewer { height: min(46vh, 380px); min-height: 300px; } /* visual pass r2: taller so the cart fills the canvas */
+  /* The safety result is the main thing in Simple, so the pinned sled takes less of the screen. */
+  #app[data-mode='simple'] .viewer { height: min(46vh, 380px); min-height: 300px; } /* visual pass r2: taller so the sled fills the canvas */
 }
 
 /* At-a-glance strip */

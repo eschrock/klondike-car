@@ -11,7 +11,7 @@
  *   • Under the flap a wedge-shaped oak SHOE BLOCK carries a rubber / leather PAD on the tread, `brakePadAngleDeg` behind the top of the tire. Stepping down swings the
  *     flap about the hinge and presses the pad on the tread. Lever ratio = (hinge to foot) / (hinge to the pad, measured on the line of action of the pad force).
  *   • A BUNGEE cord from the flap to an eye screw in the rear transom lifts the flap (a stop cord limits the lift); the model default is the released pose.
- *   • Two oak wedge CHOCKS hang on cords from the knees and park the cart (a ramp the tire has to climb, `brakeChockAngleDeg`).
+ *   • Two oak wedge CHOCKS hang on cords from the knees and park the sled (a ramp the tire has to climb, `brakeChockAngleDeg`).
  *
  * Pose s ∈ [0, 1]: 1 is APPLIED (the pad on the tread), 0 is RELEASED (the model default). The geometry below is built in the applied pose and the released pose
  * is the whole flap group turned clockwise (seen with +x right, +z up) by `theta` about the hinge pin, so the pad hangs `brakePadGapIn` above the tread.
@@ -113,7 +113,7 @@ export function pointPolyGap(pt: V2, poly: V2[]): number {
   return best;
 }
 
-/** Positions across the cart (|y|, left side; the right side mirrors). */
+/** Positions across the sled (|y|, left side; the right side mirrors). */
 export interface BrakeY {
   /** Wheel center, tire inner and outer faces. */
   wheel: number; tireIn: number; tireOut: number;
@@ -132,7 +132,7 @@ export interface BrakeGeom {
   r: number;
   O: V2;
   y: BrakeY;
-  /** Pad: angle behind the top of the tire (rad) and half length angle; contact point on the tread, outward normal, forward tangent (applied pose, all fixed on the cart). */
+  /** Pad: angle behind the top of the tire (rad) and half length angle; contact point on the tread, outward normal, forward tangent (applied pose, all fixed on the sled). */
   alpha: number;
   delta: number;
   C: V2;
@@ -160,7 +160,7 @@ export interface BrakeGeom {
   /** Moment of a unit pad normal force and of a unit friction force (along the forward tangent) about the pin, M_y convention. */
   mN: number;
   mT: number;
-  /** Lever ratios N_flap / F_foot (before efficiency), cart rolling forward / backward, the smaller (critical) one. */
+  /** Lever ratios N_flap / F_foot (before efficiency), sled rolling forward / backward, the smaller (critical) one. */
   ratioFwd: number;
   ratioRev: number;
   ratioCrit: number;

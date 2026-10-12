@@ -235,7 +235,7 @@ export function computeLayout(input: Params): Layout {
   // ── Bow bulkhead and its lift hand-hold (D-57) ──
   const bulkhead = {
     x0: bh.xFlatEnd, x1: bh.xTip, thick: bh.thick, bot: deckTop - ply - Math.min(1, steer.railDepthFront),
-    zCorner: deckTop + sideBow, zCenter: deckTop + p.bowBulkheadHeightIn, halfW: p.bodyWidthIn / 2 - turnIn(bh.xFlatEnd),
+    zCorner: deckTop + p.bowBulkheadHeightIn - p.handleBowCrownIn, zCenter: deckTop + p.bowBulkheadHeightIn, halfW: p.bodyWidthIn / 2 - turnIn(bh.xFlatEnd),
   };
   const holdBot = deckTop + p.liftSlotClearIn;
   const hold = { x0: bulkhead.x0, x1: bulkhead.x1, halfLen: p.liftSlotLengthIn / 2, zBot: holdBot, zTop: holdBot + p.liftSlotHeightIn, zMid: holdBot + p.liftSlotHeightIn / 2 };

@@ -14,7 +14,7 @@
  * M = w·(H − A)²/2.
  */
 import { GRIP_BOLT_COLS, GRIP_BOLT_DIA_IN, GRIP_WASHER_OD_IN, GRIP_BOLT_ROWS_IN, GRIP_BOLTS, seatBackSupport } from '../model/seat';
-import { storageGeometry, storageInterior, packEssentials, ESSENTIALS, lashPositions, LASH_SCREWS, LASH_SCREW_DIA_IN, LASH_SCREW_LEN_IN, LASH_PLATE_T_IN, LASH_TIP_IN } from '../model/storage';
+import { storageGeometry, storageInterior, boxGear, packEssentials, ESSENTIALS, lashPositions, LASH_SCREWS, LASH_SCREW_DIA_IN, LASH_SCREW_LEN_IN, LASH_PLATE_T_IN, LASH_TIP_IN } from '../model/storage';
 import type { Ctx } from './context';
 import { dualCheck, governing, singleCheck, detail, type CaseEval } from './dual';
 import { f } from './format';
@@ -93,7 +93,7 @@ export function seatGripCheck(ctx: Ctx): AnalysisCheck {
   const { p } = ctx;
   const al = allowables(ctx);
   const ev = (c: CaseData): CaseEval => {
-    // A hard pull on the board toward the cart centerline: half the rider weight × the dynamic factor on the oak bar over the hand hole (one hand, one board).
+    // A hard pull on the board toward the sled centerline: half the rider weight × the dynamic factor on the oak bar over the hand hole (one hand, one board).
     const gF = seatFactor(ctx, c);
     const F = 0.5 * c.riderLb * gF;
     const bt = p.grabBoardThickIn, bar = p.grabBoardBarIn, hl = p.grabHoleLengthIn;
@@ -134,11 +134,15 @@ export function seatGripCheck(ctx: Ctx): AnalysisCheck {
 export function storagePackCheck(ctx: Ctx): AnalysisCheck {
   const { p, L } = ctx;
   const interior = storageInterior(p, L);
-  const r = packEssentials(interior);
+  // Race mode (3c-5): the 10 Essentials AND the wheel chocks ride in the box (the cushions are on the sled, the lamp is on the bow).
+  const chocks = boxGear(ctx.parts).chocks;
+  const r = packEssentials(interior, [...ESSENTIALS, ...chocks]);
+  const r0 = packEssentials(interior);
+  const chockIn3 = r.rigidIn3 - r0.rigidIn3;
   const lines = ESSENTIALS.map((k) => `${k.qty > 1 ? `${k.qty} × ` : ''}${k.name}${k.dims ? ` ${k.dims.join('×')}"` : ` ${k.softVolIn3} in³ soft`}`).join('; ');
   return singleCheck({
     id: 'storage-pack',
-    label: 'Storage box fits the 10 Essentials kit',
+    label: 'Storage box fits the 10 Essentials kit and the wheel chocks',
     group: 'Structure',
     value: r.fill,
     unit: '× of interior',
@@ -148,7 +152,9 @@ export function storagePackCheck(ctx: Ctx): AnalysisCheck {
     refs: ['D-19', 'D-41'],
     how: `Interior ${f(interior.lx)}" × ${f(interior.w)}" × ${f(interior.h, 2)}" under the wall tops (${f(interior.lx * interior.w * interior.h, 0)} in³) plus ${f(interior.capIn3, 0)} in³ in the lid zone = ${f(interior.totalIn3, 0)} in³ (target ${p.storageVolumeIn3} in³). `
       + `Kit: ${lines}. ${r.rigidPlaced}/${r.rigidTotal} rigid items placed in levels (bounding boxes, flat) = ${f(r.rigidIn3, 0)} in³; soft goods ${f(r.softIn3, 0)} in³ compressed to ${f(r.softCompressedIn3, 0)} in³ into the voids (90% usable). `
-      + `Fill = (rigid + soft ÷ 0.9) ÷ interior = ${f(r.fill, 2)}.${r.unplaced.length ? ` Not placed: ${r.unplaced.join(', ')}.` : ''}`,
+      + `Fill = (rigid + soft ÷ 0.9) ÷ interior = ${f(r.fill, 2)}.${r.unplaced.length ? ` Not placed: ${r.unplaced.join(', ')}.` : ''} `
+      + (chocks.length ? `Race mode (3c-5) carries the ${chocks[0].qty} wheel chocks too: ${chocks[0].dims!.map((v) => f(v, 1)).join('×')}" each (bounding box, ${f(chockIn3, 0)} in³ together) are inside the numbers above; without them the fill is ${f(r0.fill, 2)}. ` : '')
+      + (r.fits ? `Margin: ${f((1 - r.fill) * interior.totalIn3, 0)} in³ free. ` : `It does NOT fit. Lightest fix, without making the box bigger: a small printed ASA holder that clips each chock to the outside of the box wall or the rear transom (about 0.1 lb each), or carry the chocks on their cords at the wheels. `),
   });
 }
 

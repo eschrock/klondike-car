@@ -98,8 +98,8 @@ describe('no exposed plywood edges (acceptance, BRIEF §5.2)', () => {
     expect(deck.joints!.some((j) => j.type === 'dado' && j.to === 'transom-rear')).toBe(true);
     expect(deck.joints!.some((j) => j.type === 'dado' && j.to === 'bow-bulkhead')).toBe(true);
     expect(deck.joints!.some((j) => j.type === 'scarf')).toBe(false);
-    // The deck is carried by the rails and every joist (glue); the king beam (D-56) replaces the sixth joist and the end joist keeps its index (joist-7).
-    expect(deck.joints!.filter((j) => j.type === 'glue').map((j) => j.to).sort()).toEqual(['joist-1', 'joist-2', 'joist-3', 'joist-4', 'joist-5', 'joist-7', 'king-beam', 'rail-L', 'rail-R']);
+    // The deck is carried by the rails and every joist (glue); the king beam (D-56) replaces the sixth joist and the end joist keeps its index (joist-8, 3c-5: 8.5 in spacing).
+    expect(deck.joints!.filter((j) => j.type === 'glue').map((j) => j.to).sort()).toEqual(['joist-1', 'joist-2', 'joist-3', 'joist-4', 'joist-5', 'joist-6', 'joist-8', 'king-beam', 'rail-L', 'rail-R']);
     // The bulkhead is oak: no ply edge to show; its rail, chine and gunwale ends are Domino or loose-tenon joints.
     expect(get(parts, 'bow-bulkhead').material).toBe('white oak');
     expect(get(parts, 'bow-bulkhead').joints!.filter((j) => /^(rail|side)-/.test(j.to) && j.type !== 'dado').length).toBeGreaterThanOrEqual(6);
@@ -299,8 +299,12 @@ describe('joinery: structured joints', () => {
     const joist = get(parts, 'joist-2');
     const d = joist.joints!.filter((j) => j.type === 'domino');
     expect(d.map((j) => j.to).sort()).toEqual(['rail-L', 'rail-R']);
-    // The joist at x = 8 meets the step brake's oak backers (D-57): cut back 1.25 in each end, so its two Dominos are at y = +-10, at the joist's x.
-    expect(d.map((j) => Math.round(transformPoint(joist.transform, j.at![0])[1] * 100) / 100).sort((a, b) => a - b)).toEqual([-10, 10]);
+    // At 8.5 in spacing (3c-5) joist-2 stands ahead of the rear wheel brake's oak backers (x = 5.5 against the backer from x = 6.2), so it runs the full width: Dominos at y = +-11.25.
+    expect(d.map((j) => Math.round(transformPoint(joist.transform, j.at![0])[1] * 100) / 100).sort((a, b) => a - b)).toEqual([-11.25, 11.25]);
+    // At 10 in spacing the joist at x = 8 meets the backers (D-57): cut back 1.25 in each end, so its two Dominos are at y = +-10.
+    const m10 = buildModel({ ...defaults, crossmemberSpacingIn: 10 });
+    const j10 = m10.find((q) => q.id === 'joist-2')!;
+    expect(j10.joints!.filter((j) => j.type === 'domino').map((j) => Math.round(transformPoint(j10.transform, j.at![0])[1] * 100) / 100).sort((a, b) => a - b)).toEqual([-10, 10]);
     expect(transformPoint(joist.transform, d[0].at![0])[0]).toBeCloseTo(L0.joistX[1], 6);
   });
   it('a joist at the rear axle is cut back for the hanger and Domino-tied to the hanger instead of the rail', () => {
@@ -308,7 +312,7 @@ describe('joinery: structured joints', () => {
     expect(j1.joints!.filter((j) => j.type === 'domino').map((j) => j.to).sort()).toEqual(['axle-hanger-L', 'axle-hanger-R']);
     expect(j1.stock!.l).toBeCloseTo(2 * (11.25 - defaults.axleHangerThickIn), 6); // 21 in: 10.5 in each side
     expect(worldAABB(j1).max[1]).toBeCloseTo(11.25 - defaults.axleHangerThickIn, 6);
-    expect(get(parts, 'joist-2').stock!.l).toBeCloseTo(20, 6); // between the brake backers (the rails' inner faces less 1.25 in each side)
+    expect(get(parts, 'joist-2').stock!.l).toBeCloseTo(22.5, 6); // the rails' full inner width (3c-5: no brake backer meets it at 8.5 in spacing; at 10 in it is cut to 20 in between them)
   });
   it('Domino size follows the stock: thin rails get a DF 500 5×30; thick stock gets XL; 1/2" hosts get a loose tenon', () => {
     expect(chooseDomino(defaults, { stockIn: 0.75, hostIn: 0.75, widthIn: 1.75 })?.name).toBe('5×30');
@@ -469,7 +473,7 @@ describe('signs (D-9, D-35, D-57)', () => {
       expect(Math.abs(c[1])).toBeCloseTo(L.hwC + L.side + defaults.panelPlyIn / 2, 6);
       expect(c[2]).toBeGreaterThan(L.web.z0);
       expect(c[2]).toBeLessThan(8 + 14 - defaults.railBandIn);
-      expect(s.transform[2]).toBeLessThan(0); // its length axis descends toward the bow with the sheer
+      expect(s.transform[2]).toBeCloseTo(0, 9); // 3c-5: LEVEL, its length axis is not tilted to follow the sheer
     }
     expect(buildModel(defaults, { removed: true }).some((x) => x.id.startsWith('sign-'))).toBe(false);
   });
@@ -483,14 +487,14 @@ describe('signs (D-9, D-35, D-57)', () => {
 });
 
 describe('mass bookkeeping (D-35…D-37, D-54)', () => {
-  it('the body and frame groups stay near the build numbers (body about 43.8 lb with the D-57 bulkhead, frame about 13 lb; pinned from the build)', () => {
+  it('the body and frame groups stay near the build numbers (body about 40.5 lb with the 3c-5 bulkhead, frame about 14.4 lb with eight joists; pinned from the build)', () => {
     const parts = buildModel(defaults);
     const sum = (g: string) => parts.filter((x) => x.group === g && !x.payload).reduce((m, x) => m + x.massLb, 0);
     // Hand: deck 58.6 x 23.25 x 0.472 in of ply (about 13.9 lb with finish), the 24 in x 22 in rear transom (about 9 lb), the 1-3/4 in bow bulkhead (about 9 lb), two webs (1.9 lb each),
     // two chines (1.3), two gunwales (1.5), backers and scuppers (1.1), the two signs (1.1): about 44 lb.
-    expect(Math.abs(sum('body') - 43.8)).toBeLessThan(1.5);
+    expect(Math.abs(sum('body') - 40.5)).toBeLessThan(1.5); // 3c-5: the bulkhead is lower (a 5.75 in crown peak, not 9 in): 7.0 lb instead of 9
     // Rails 2 x 3.5 (extrusions with the step), hangers 2 x 1.05, six joists (0.82 to 0.88; the king beam is in the front-end group): about 13 lb.
-    expect(Math.abs(sum('frame') - 13)).toBeLessThan(1);
+    expect(Math.abs(sum('frame') - 14.4)).toBeLessThan(1); // eight joists since 3c-5 (8.5 in spacing, +0.84 lb)
   });
 });
 
@@ -584,23 +588,23 @@ describe('round 2 hull (build M2-M8, D-43)', () => {
     for (const j of lt) expect(j.size).toMatch(/loose tenon/);
   });
 
-  it('10" joists: five evenly spaced crossmembers (bays under 10 in) from the rear transom to the king beam (D-56), the king beam itself at the kingpin, and an end joist under the scarf of the deck to the bow curl', () => {
-    expect(L.joistX).toHaveLength(7);
-    expect(p.crossmemberSpacingIn).toBe(10);
-    // Even spacing from the rear transom face (-9.25) to the king beam's rear face (44 - 3/2 = 42.5): 51.75 in / 6 bays = 8.625 in.
-    const even = L.joistX.slice(0, 5);
-    for (let i = 0; i < 5; i++) expect(even[i]).toBeCloseTo(-9.25 + (51.75 * (i + 1)) / 6, 6);
-    expect(L.joistX[5]).toBe(L.king.x);
-    expect(L.joistX[6]).toBeCloseTo(L.xFlatEnd - L.joistT / 2 - 0.05, 9);
-    expect(joistId(L, 5)).toBe('king-beam');
-    expect([0, 1, 2, 3, 4, 6].map((i) => joistId(L, i))).toEqual(['joist-1', 'joist-2', 'joist-3', 'joist-4', 'joist-5', 'joist-7']);
+  it('8.5" joists (3c-5): six evenly spaced crossmembers (bays under 8.5 in) from the rear transom to the king beam (D-56), the king beam itself at the kingpin, and an end joist under the scarf of the deck to the bow bulkhead', () => {
+    expect(L.joistX).toHaveLength(8);
+    expect(p.crossmemberSpacingIn).toBe(8.5);
+    // Even spacing from the rear transom face (-9.25) to the king beam's rear face (44 - 3/2 = 42.5): 51.75 in / 7 bays = 7.39 in.
+    const even = L.joistX.slice(0, 6);
+    for (let i = 0; i < 6; i++) expect(even[i]).toBeCloseTo(-9.25 + (51.75 * (i + 1)) / 7, 6);
+    expect(L.joistX[6]).toBe(L.king.x);
+    expect(L.joistX[7]).toBeCloseTo(L.xFlatEnd - L.joistT / 2 - 0.05, 9);
+    expect(joistId(L, 6)).toBe('king-beam');
+    expect([0, 1, 2, 3, 4, 5, 7].map((i) => joistId(L, i))).toEqual(['joist-1', 'joist-2', 'joist-3', 'joist-4', 'joist-5', 'joist-6', 'joist-8']);
     for (let i = 0; i < L.joistX.length; i++) expect(parts.some((x) => x.id === joistId(L, i)), joistId(L, i)).toBe(true);
     const edges = [L.xRear + L.transom, ...L.joistX.flatMap((x) => [x - (x === L.king.x ? L.king.len : L.joistT) / 2, x + (x === L.king.x ? L.king.len : L.joistT) / 2]), L.xFlatEnd];
     let bay = 0;
     for (let i = 0; i + 1 < edges.length; i += 2) bay = Math.max(bay, edges[i + 1] - edges[i]);
-    expect(bay).toBeLessThan(10);
-    expect(bay).toBeGreaterThan(7); // 8.0 between the joists; the long bay is the 5.8 in from the king beam to the end joist, 7.1 at the rear
-    expect(get(parts, 'joist-7').notes).toMatch(/last joist, under the scarf/);
-    expect(get(parts, 'joist-5').notes).toMatch(/chain joist/); // the crossmember behind the king beam anchors the steering chains (D-58)
+    expect(bay).toBeLessThan(8.5);
+    expect(bay).toBeGreaterThan(5.5); // 6.6 between the joists; the long bay is the 5.8 in from the king beam to the end joist, 6.5 at the rear
+    expect(get(parts, 'joist-8').notes).toMatch(/last joist, under the scarf/);
+    expect(get(parts, 'joist-6').notes).toMatch(/chain joist/); // the crossmember behind the king beam anchors the steering chains (D-58)
   });
 });

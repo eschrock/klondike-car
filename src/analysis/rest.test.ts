@@ -44,13 +44,13 @@ describe('the row', () => {
     for (const re of [/seated: deck ply bending/, /standing on one foot: deck ply bending/, /deck ply deflection/, /joist bending/, /joist shear/, /rails bending/, /front axle beam bending/, /rear axle beam bending/, /front stub axle/, /rear stub axle/, /wheel: static load/, /thrust disc pressure/, /oak under the disc/, /king beam bending/])
       expect(names, String(re)).toMatch(re);
   });
-  it('is static: the load is linear in the adult\'s weight (the cart\'s own weight is a constant part), so the utilization of a pure-adult detail doubles with the weight', () => {
+  it('is static: the load is linear in the adult\'s weight (the sled\'s own weight is a constant part), so the utilization of a pure-adult detail doubles with the weight', () => {
     const a = restEval(ctx, 100).details.find((d) => /standing on one foot: deck ply bending/.test(d.name))!;
     const b = restEval(ctx, 200).details.find((d) => /standing on one foot: deck ply bending/.test(d.name))!;
     expect(b.util / a.util).toBeGreaterThan(1.9); // bending is linear in W up to the (tiny) effect of the strip modulus; no bump factor
     expect(b.util / a.util).toBeLessThan(2.1);
   });
-  it('the heavier wheel holds more than a quarter and less than 60% of (cart + adult) (the adult sits to one side over the axle): hand bound on the wheel row', () => {
+  it('the heavier wheel holds more than a quarter and less than 60% of (sled + adult) (the adult sits to one side over the axle): hand bound on the wheel row', () => {
     const m = totalMass(parts);
     const w = det(/wheel: static load/).value;
     expect(w).toBeGreaterThan((m + p.restLoadLb) / 4);
@@ -61,23 +61,37 @@ describe('the row', () => {
     const max = restMaxLb(ctx);
     expect(restEval(ctx, max * 0.999).maxUtil).toBeLessThanOrEqual(1);
     expect(restEval(ctx, max * 1.01).maxUtil).toBeGreaterThan(1);
-    expect(det(/^the resting weight the cart holds/).limit).toBeCloseTo(max, 6);
+    expect(det(/^the resting weight the sled holds/).limit).toBeCloseTo(max, 6);
     expect(row.how).toMatch(new RegExp(`holds up to ${Math.round(max)} lb`));
   });
-  it('FINDING (reported): at the defaults the cart holds about 223 lb at rest, not 250: one foot on the widest 10 in bay deflects the 12 mm ply past span/180 (util 1.12); everything else passes at 250 lb', () => {
-    expect(restMaxLb(ctx)).toBeGreaterThan(215);
-    expect(restMaxLb(ctx)).toBeLessThan(230);
-    expect(row.status).toBe('fail');
-    const worst = row.details!.filter((d) => d.util > 1 && !/^the resting weight the cart holds/.test(d.name)).map((d) => d.name);
+  it('at the defaults (D-58, 3c-5) the sled holds about 335 lb at rest: the extra joist (8.5 in spacing) and span/240 for a standing adult (Eric: a tad looser than the general span/300) clear the 223 lb finding of 3c-4a', () => {
+    expect(restMaxLb(ctx)).toBeGreaterThan(310);
+    expect(restMaxLb(ctx)).toBeLessThan(360);
+    expect(row.status).toBe('pass');
+    expect(row.details!.filter((d) => d.util > 1).map((d) => d.name)).toEqual([]);
+    expect(det(/deck ply deflection/).util).toBeLessThan(0.8);
+    expect(PARAM_DEFS.standDeflectionRatio.default).toBe(240);
+    expect(PARAM_DEFS.standDeflectionRatio.status).toBe('assumed');
+    expect(PARAM_DEFS.standDeflectionRatio.ref).toMatch(/D-58/);
+    expect(PARAM_DEFS.standDeflectionRatio.note).toMatch(/tad looser/);
+  });
+  it('the 3c-4a finding is reproduced with the old values (10 in joist spacing, span/300): 223 lb, the deck ply deflection is the one failing detail', () => {
+    const o = mk({ crossmemberSpacingIn: 10, standDeflectionRatio: 300 });
+    expect(restMaxLb(o.ctx)).toBeGreaterThan(215);
+    expect(restMaxLb(o.ctx)).toBeLessThan(230);
+    const r = restLoadCheck(o.ctx);
+    expect(r.status).toBe('fail');
+    const worst = r.details!.filter((d) => d.util > 1 && !/^the resting weight the sled holds/.test(d.name)).map((d) => d.name);
     expect(worst).toHaveLength(1);
     expect(worst[0]).toMatch(/deck ply deflection/);
   });
-  it('lightest fixes (no mass added at the defaults, listed in the notes): one more joist (spacing 8.5 in, +0.8 lb) passes with room; a 1/2 in ply (+0.7 lb) passes but is marginal', () => {
-    const a = mk({ crossmemberSpacingIn: 8.5 });
+  it('each of the two changes alone helps: the extra joist with the old limit holds 289 lb for under 1 lb more mass; the looser limit alone holds more than the 223 lb finding', () => {
+    const a = mk({ crossmemberSpacingIn: 8.5, standDeflectionRatio: 300 });
     expect(restLoadCheck(a.ctx).status).toBe('pass');
     expect(restMaxLb(a.ctx)).toBeGreaterThan(280);
-    expect(totalMass(a.parts) - totalMass(parts)).toBeLessThan(1);
-    const b = mk({ deckPlyIn: 0.5 });
+    expect(totalMass(a.parts) - totalMass(mk({ crossmemberSpacingIn: 10 }).parts)).toBeLessThan(1);
+    expect(restMaxLb(mk({ crossmemberSpacingIn: 10, standDeflectionRatio: 160 }).ctx)).toBeGreaterThan(250);
+    const b = mk({ crossmemberSpacingIn: 10, standDeflectionRatio: 300, deckPlyIn: 0.5 });
     expect(restMaxLb(b.ctx)).toBeGreaterThan(250);
   });
   it('the lid is left out and says so; the row text names DO NOT STEP', () => {

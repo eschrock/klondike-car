@@ -25,7 +25,7 @@ export function liftShares(massLb: number, xCg: number, xRear: number, xFront: n
   return { rear, front: massLb - rear };
 }
 
-/** Transport configuration (removable parts off): mass and CG x of the carried cart. */
+/** Transport configuration (removable parts off): mass and CG x of the carried sled. */
 export function transportMassCg(parts: Part[]): { massLb: number; xCg: number } {
   let m = 0, mx = 0;
   for (const x of parts) {
@@ -66,7 +66,7 @@ export function liftCheck(ctx: Ctx): AnalysisCheck {
     + `Front: ${f(Pf)} lbf on one hand; bulkhead ${f(bh.thickIn, 2)}" thick with ${f(bh.barIn, 2)}" of oak above the ${f(bh.lengthIn, 1)}" hand-hold (the crown at the center): M = P·L/4 = ${f(Pf * bh.lengthIn / 4)} lb·in, σ = ${f(sigmaF, 0)} psi (≤ ${f(al.oakBend, 0)}), τ = ${f(tauF, 0)} psi (≤ ${f(al.oakShear, 0)}).`;
   const g = governing(rows, how);
   return singleCheck({
-    id: 'lift', label: 'Lifting the cart (rear hand-hold, front hand-hold in the bow bulkhead)', group: 'Structure',
+    id: 'lift', label: 'Lifting the sled (rear hand-hold, front hand-hold in the bow bulkhead)', group: 'Structure',
     value: g.value, unit: g.unit, limit: g.limit, sense: g.sense, details: rows, how, refs: ['D-37', 'D-43', 'D-57', 'D-58', 'BRIEF 4.4'],
   });
 }

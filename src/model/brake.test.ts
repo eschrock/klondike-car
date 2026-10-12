@@ -51,7 +51,7 @@ describe('step brake layout (hand calculation)', () => {
   it('the foot area is level with or behind the rear transom: the handler standing behind it reaches the flap end', () => {
     expect(g.F[0]).toBeLessThanOrEqual(c.L.xRear);
     expect(g.xEnd).toBeLessThan(c.L.xRear);
-    expect(c.L.xRear - g.xEnd).toBeLessThan(6); // not a long tail sticking out behind the cart
+    expect(c.L.xRear - g.xEnd).toBeLessThan(6); // not a long tail sticking out behind the sled
     const flap = worldAABB(buildBrake(c).find((x) => x.id === 'brake-flap-L')!);
     expect(Math.abs(flap.min[0] - g.xEnd)).toBeLessThan(0.15); // the sloping end face's lower corner
     expect(Math.min(...[flap.min[1], flap.max[1]].map(Math.abs))).toBeGreaterThan(c.L.hwC + c.L.side); // outboard of the body
@@ -234,7 +234,7 @@ describe('step brake over the parameter extremes and old links', () => {
       }
     }
   });
-  it('old links with the D-55 drag-bar keys still load: the unknown keys are dropped and the cart builds like the defaults', () => {
+  it('old links with the D-55 drag-bar keys still load: the unknown keys are dropped and the sled builds like the defaults', () => {
     const old = { brakePedalReachIn: 9, brakePivotAboveShoeIn: 1.5, brakeBeamSizeIn: 2, brakeLatchPinDiameterIn: 0.375, brakeToeGuardHeightIn: 4, brakeSpringForceLbf: 9, brakeLinedShoeWidthIn: 2.5 };
     const s = sanitizeParams(old as unknown as Partial<Params>);
     expect(s).toEqual(defaults);

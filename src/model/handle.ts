@@ -1,6 +1,6 @@
 /**
  * Rear push handle (D-9, D-39, D-53, D-57): aluminum tube sockets on the rear transom, pinned oak uprights, and a sled-style HANDLEBOW: a gently crowned white-oak bow
- * BANDSAWN from one board (D-57; it was a laminated, 3 in crown) that arches up between and over the two posts and overhangs them to the edge of the cart (reference/05). The
+ * BANDSAWN from one board (D-57; it was a laminated, 3 in crown) that arches up between and over the two posts and overhangs them to the edge of the sled (reference/05). The
  * handle is the handler's station and comes off as one U for transport. The socket loads (D-39) are unchanged: the hold-back pull is taken at the posts, at the grip height
  * `rearHandleHeightIn`; the crown only adds height at the middle.
  *
@@ -42,13 +42,13 @@ export interface HandleGeom {
 
 /**
  * The handlebow centerline (D-53): a circular arc in the y-z plane through the two post-top points (y = ±yPost, z = grip height) that rises `crown` above them at
- * the middle; beyond the posts the bow continues on the same arc to the cart edge (`yEnd`), where it hangs below the post-top level. `crown` = 0 is a straight bar.
+ * the middle; beyond the posts the bow continues on the same arc to the sled edge (`yEnd`), where it hangs below the post-top level. `crown` = 0 is a straight bar.
  */
 export interface BowGeom {
   crownIn: number;
   /** Arc radius (in); Infinity for a straight bar. */
   radiusIn: number;
-  /** |y| of the bow ends (the cart's outer edge) and of the posts. */
+  /** |y| of the bow ends (the sled's outer edge) and of the posts. */
   yEnd: number;
   yPost: number;
   /** Centerline height at the posts (= the grip height) and at the middle. */
@@ -97,7 +97,7 @@ export function parkDrop(p: Params, L: Layout): { dropIn: number; gripZ: number 
   const bow = bowGeometry(p, L);
   const zCornerTop = L.deckTop + L.sideRear;
   const zCenterTop = zCornerTop + p.transomCrownIn;
-  // bow centerline height at the posts when parked: the underside at the cart edge clears the transom corner, the underside at the middle clears the crown
+  // bow centerline height at the posts when parked: the underside at the sled edge clears the transom corner, the underside at the middle clears the crown
   const needEnd = zCornerTop + p.handleParkClearIn + sec / 2 + (bow.zPost - bow.zEnd);
   const needMid = zCenterTop + p.handleParkClearIn + sec / 2 - bow.crownIn;
   const gripZ = Math.max(needEnd, needMid);
@@ -142,7 +142,7 @@ export function buildHandle(ctx: Ctx): Part[] {
           at: [h.zBot + 1.2, h.zTop - 1.2].map((z): Vec3 => [h.socketX / 2 - w / 2, 0, z - (h.zBot + h.zTop) / 2]), note: `grip = socket wall ${f2(w)}" + transom ${f2(L.transom)}" + backer ${f2(p.blockingThickIn)}" = ${f2(sockGrip)}"; ${f2(sockLen)}" bolt: grip + 2 washers + nut + two threads` },
         { type: 'pin', to: `handle-post-${tag}`, count: 1, size: `${p.handlePinDiameterIn}" clevis pin through both walls and the post` },
       ],
-      notes: `Aluminum 6061-T6 rectangular tube ${f2(h.socketX)} × ${f2(h.socketY)} × ${f2(p.handleSocketDepthIn)} (wall ${f2(w)}), cut on the bandsaw and drilled on the drill press; the 15/16" × 1-7/16" post is a slip fit (1/32" a side) in the 1.0" × 1.5" inside. Lighter than steel (about 0.4 lb vs 1.2 lb each, plan item 5). Anodized or epoxy-coated, and bedded in epoxy / sealant against the transom: bare aluminum corrodes against wet tannin oak. Stays on the cart when the handle is removed (D-9).`,
+      notes: `Aluminum 6061-T6 rectangular tube ${f2(h.socketX)} × ${f2(h.socketY)} × ${f2(p.handleSocketDepthIn)} (wall ${f2(w)}), cut on the bandsaw and drilled on the drill press; the 15/16" × 1-7/16" post is a slip fit (1/32" a side) in the 1.0" × 1.5" inside. Lighter than steel (about 0.4 lb vs 1.2 lb each, plan item 5). Anodized or epoxy-coated, and bedded in epoxy / sealant against the transom: bare aluminum corrodes against wet tannin oak. Stays on the sled when the handle is removed (D-9).`,
       sourcing: { vendor: `McMaster-Carr (6061-T6 aluminum rectangular tube, ${f2(h.socketX)}" × ${f2(h.socketY)}" outside, ${f2(w)}" wall)` }, explode: [-1, 0, 0.3],
     }));
     // The post top is sawn to the bow's slope (a flat-bottom bow section sits on it): the lowest points of the bow's underside over the post, inner and outer edge (D-53).
@@ -182,7 +182,7 @@ export function buildHandle(ctx: Ctx): Part[] {
     id: 'handle-bar', name: 'Push handle handlebow', group: 'removable', mat: 'oak', removable: true, step: STEP.brake, grain: 'y', fab: 'bandsaw',
     outline: barOutline, depth: sec, basis: 'yz', origin: [h.xBar - sec / 2, 0, 0], stock: { t: sec, w: zHi - zLo + 0.25, l: 2 * bw.yEnd }, explode: [-1, 0, 0.3],
     notes: bw.crownIn > 0
-      ? `Sled-style handlebow (D-53, reference/05; D-57: gentler and bandsawn): ONE white-oak board ${sec}" thick, ${(zHi - zLo + 0.25).toFixed(2)}" wide and ${(2 * bw.yEnd).toFixed(1)}" long, the long edge bandsawn to a ${bw.radiusIn.toFixed(0)}" radius arc and the other edge to a parallel arc (no lamination, no bending form), then planed and rounded over to a ${sec}" grip. Pick straight-grained stock with the grain along the board: the cut grain runs out ${bw.postSlopeDeg.toFixed(0)}° at the posts and about ${((Math.asin(Math.min(1, bw.yEnd / bw.radiusIn)) * 180) / Math.PI).toFixed(0)}° at the ends (the hold-back pull is taken between the posts, where the grain is level). The arc passes through the two post tops at ${f2(bw.zPost)}" (the grip height) and crowns ${f2(bw.crownIn)}" above them at the middle (${f2(bw.zMid)}"); the ends overhang the posts to the cart edge (y = ±${f2(bw.yEnd)}") and hang ${f2(bw.zPost - bw.zEnd)}" below the post-top level. The post tops are sawn to the bow's ${bw.postSlopeDeg.toFixed(1)}° slope and each is pinned and epoxied.`
+      ? `Sled-style handlebow (D-53, reference/05; D-57: gentler and bandsawn): ONE white-oak board ${sec}" thick, ${(zHi - zLo + 0.25).toFixed(2)}" wide and ${(2 * bw.yEnd).toFixed(1)}" long, the long edge bandsawn to a ${bw.radiusIn.toFixed(0)}" radius arc and the other edge to a parallel arc (no lamination, no bending form), then planed and rounded over to a ${sec}" grip. Pick straight-grained stock with the grain along the board: the cut grain runs out ${bw.postSlopeDeg.toFixed(0)}° at the posts and about ${((Math.asin(Math.min(1, bw.yEnd / bw.radiusIn)) * 180) / Math.PI).toFixed(0)}° at the ends (the hold-back pull is taken between the posts, where the grain is level). The arc passes through the two post tops at ${f2(bw.zPost)}" (the grip height) and crowns ${f2(bw.crownIn)}" above them at the middle (${f2(bw.zMid)}"); the ends overhang the posts to the sled edge (y = ±${f2(bw.yEnd)}") and hang ${f2(bw.zPost - bw.zEnd)}" below the post-top level. The post tops are sawn to the bow's ${bw.postSlopeDeg.toFixed(1)}° slope and each is pinned and epoxied.`
       : `Straight handlebow (crown 0): a ${sec}" thick white-oak bar bandsawn from one board, ends eased over, pinned and epoxied to the tops of the two uprights.`,
     sourcing: { vendor: `One 5/4 white-oak board, ${(zHi - zLo + 0.25).toFixed(1)}" wide, about 3 ft long (the offcut is the sign blank)`, costUsd: 12 },
   });

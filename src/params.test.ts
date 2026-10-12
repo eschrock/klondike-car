@@ -43,7 +43,7 @@ describe('PARAM_DEFS', () => {
   it('the design defaults (D-54, D-56, D-57): 24 in body, 44 in wheelbase, 10 in wheels, 8 in deck, a sheer from 4 in at the bow to 14 in at the rear, the 2 in bow bulkhead, pivoting front axle at 34 1/2 in front and 32 in rear track (D-58) and 20 deg lock', () => {
     expect(defaults).toMatchObject({
       bodyWidthIn: 24, wheelbaseIn: 44, wheelDiameterIn: 10, deckHeightIn: 8, sideHeightBowIn: 4, sideHeightRearIn: 14, sheerCurveIn: 2.5, bowTurnInIn: 1.25, bowTurnLenIn: 14,
-      bowBulkheadThickIn: 1.75, bowBulkheadHeightIn: 9, showSideSigns: 1, rearOverhangIn: 10, frontOverhangIn: 6.75, handleBowCrownIn: 0.875, seatXIn: 13.5, riderLegReachIn: 35.5, seatDepthIn: 14.5, storageVolumeIn3: 2000,
+      bowBulkheadThickIn: 1.75, bowBulkheadHeightIn: 5.75, crossmemberSpacingIn: 8.5, standDeflectionRatio: 240, showSideSigns: 1, rearOverhangIn: 10, frontOverhangIn: 6.75, handleBowCrownIn: 0.875, seatXIn: 13.5, riderLegReachIn: 35.5, seatDepthIn: 14.5, storageVolumeIn3: 2000,
       frontTrackIn: 34.5, rearTrackIn: 32, steerLockDeg: 20, steerClearIn: 0.75, kingpinDiaIn: 0.625, kingThrustOdIn: 3, kingThrustThickIn: 0.5625, kingBeamLengthIn: 3,
       tongueWidthIn: 1.5, tongueDepthIn: 2, tongueTieAheadIn: 5, steerRopesOn: 0, frontBeamThicknessIn: 2.5, rollPadRadiusIn: 11,
     });
@@ -67,7 +67,7 @@ describe('validateParams', () => {
     const issues = validateParams({ ...defaults, riderGoalMassLb: 150, riderMassLb: 200 });
     expect(issues.filter((i) => i.severity === 'warn').map((i) => i.keys[0])).toContain('riderGoalMassLb');
   });
-  it('warns when the cart is too wide for the wheel wells', () => {
+  it('warns when the sled is too wide for the wheel wells', () => {
     const issues = validateParams({ ...defaults, rearTrackIn: 40 });
     expect(issues.some((i) => i.message.startsWith('Overall width'))).toBe(true);
   });
@@ -262,7 +262,7 @@ describe('old shared URLs (Phase 3c-3a, D-54; the front end of D-56)', () => {
     }
     expect(errorsOf(d)).toEqual([]);
   });
-  it('buildModel and runChecks do not throw on it, and the model is the new cart (pivoting front axle, bow bulkhead, no casters, no curl)', () => {
+  it('buildModel and runChecks do not throw on it, and the model is the new sled (pivoting front axle, bow bulkhead, no casters, no curl)', () => {
     const d = decodeHash(hashOf({ ...OLD, wheelbaseIn: 46 }));
     let parts: ReturnType<typeof buildModel> = [];
     expect(() => (parts = buildModel(d))).not.toThrow();
@@ -321,5 +321,16 @@ describe('buildModel (block model)', () => {
     expect(x).toBeGreaterThan(0);
     expect(Math.abs(y)).toBeLessThan(0.5); // near-symmetric: the brake lever and handle sockets are the only one-sided parts
     expect(z).toBeGreaterThan(0);
+  });
+});
+
+describe('3c-5: the thing is a sled in every visible word', () => {
+  const visible = (s: string | undefined) => (s ?? '').replace(/hand cart|billy-cart/gi, '');
+  it('no parameter label, note or option says "cart" (the app and the box call it the sled)', () => {
+    for (const [k, d] of Object.entries(PARAM_DEFS)) {
+      expect(visible(d.label), k).not.toMatch(/\bcarts?\b/i);
+      expect(visible(d.note), k).not.toMatch(/\bcarts?\b/i);
+      for (const o of d.options ?? []) expect(o.label, k).not.toMatch(/\bcarts?\b/i);
+    }
   });
 });

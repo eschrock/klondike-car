@@ -6,7 +6,7 @@ import { h } from './dom';
 const TABS: { id: string; label: string; phase: number; blurb: string }[] = [
   { id: 'analysis', label: 'Analysis', phase: 2, blurb: 'Stability, braking, structure and mass checks with pass/fail.' },
   { id: 'simulation', label: 'Simulation', phase: 3, blurb: 'Rapier physics: turning, braking and bump scenarios.' },
-  { id: 'truck', label: 'Truck fit', phase: 1, blurb: 'The cart in the bed with the tailgate down; collisions highlighted.' },
+  { id: 'truck', label: 'Truck fit', phase: 1, blurb: 'The sled in the bed with the tailgate down; collisions highlighted.' },
   { id: 'cutlist', label: 'Cut list', phase: 4, blurb: 'Rough and finished dimensions, board feet, plywood nesting.' },
   { id: 'bom', label: 'BOM', phase: 4, blurb: 'Hardware and purchased parts with vendors and total cost.' },
   { id: 'exports', label: 'Exports', phase: 4, blurb: 'DXF, STL, and CSV outputs.' },
@@ -211,7 +211,7 @@ export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): Rig
       h('h3', {}, 'Truck fit (tailgate down)'),
       h('p', { class: fit.anyFits ? 'pass' : 'fail' }, fit.anyFits ? `Fits: ${fit.cases.filter((c) => c.fits).length} of ${fit.cases.length} cases.` : 'Does not fit in any case.'),
       h('p', { class: 'muted' }, `Usable length (bed + hinge gap + tailgate) ${f1(L)} in; required clearance ${fit.requiredClearanceIn} in to everything (walls, wells, bulkhead, cab wall).`),
-      h('p', { class: 'muted' }, 'Beside: the wheels pass beside the wells (tires inside the well gap, any fore-aft position). At some wheelbases the axles also clear the wells fore-aft, so only the tires are beside them and the axle ends (hub + rod, wider than the tires) are not limited by the wells: the beside max track therefore depends on the wheelbase, and can exceed the purely lateral limit of ' + f2(lastParams.lateralBesideLimit) + '" (D-6). Straddle: one axle wholly ahead of the wells, the other wholly behind (D-6, D-23). Min gap = true minimum separation; slack = how far the cart can slide fore/aft and still fit.'),
+      h('p', { class: 'muted' }, 'Beside: the wheels pass beside the wells (tires inside the well gap, any fore-aft position). At some wheelbases the axles also clear the wells fore-aft, so only the tires are beside them and the axle ends (hub + rod, wider than the tires) are not limited by the wells: the beside max track therefore depends on the wheelbase, and can exceed the purely lateral limit of ' + f2(lastParams.lateralBesideLimit) + '" (D-6). Straddle: one axle wholly ahead of the wells, the other wholly behind (D-6, D-23). Min gap = true minimum separation; slack = how far the sled can slide fore/aft and still fit.'),
     );
     cardEls.clear();
     const blocks: HTMLElement[] = [head];

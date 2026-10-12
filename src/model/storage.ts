@@ -10,6 +10,7 @@
  */
 import { STORAGE_LOCATION, type Params } from '../params';
 import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
+import { localBounds } from './bounds';
 import { sideSlopeAt, sideTopAt, type Layout } from './layout';
 import { frameJoint, gunwaleId, seatBackSupport } from './seat';
 import type { Joint, Part, Vec3 } from './types';
@@ -115,6 +116,24 @@ export const ESSENTIALS: readonly KitItem[] = [
   { name: 'Rain shell (stuffed)', qty: 6, softVolIn3: 400, essential: 'Rain gear' },
   { name: 'Spare layers', qty: 1, softVolIn3: 600, essential: 'Extra clothing, insulation' },
 ];
+
+/**
+ * Loose gear that also rides in the box (3c-5), from the real part bounding boxes (the lamp and its clip are boxy; a wedge chock's bounding box over-covers it, which is conservative):
+ * the front headlight and its printed clip (they come off to lift the nose, and ride in the box in cargo mode) and the wheel chocks (2 when the design has 2; both modes).
+ */
+export function boxGear(parts: Part[]): { lamp: KitItem[]; chocks: KitItem[] } {
+  const dimsOf = (x: Part): [number, number, number] => {
+    const b = localBounds(x.geometry);
+    return [b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]];
+  };
+  const one = (id: string, name: string, essential: string): KitItem[] => {
+    const x = parts.find((q) => q.id === id);
+    return x ? [{ name, qty: 1, dims: dimsOf(x), essential }] : [];
+  };
+  const chock = parts.filter((q) => /^brake-chock-[LR]$/.test(q.id));
+  const chocks: KitItem[] = chock.length ? [{ name: 'Wheel chock', qty: chock.length, dims: dimsOf(chock[0]), essential: 'Parking' }] : [];
+  return { lamp: [...one('front-light', 'Front LED headlight', 'Lighting'), ...one('lamp-clip', 'Lamp clip', 'Lighting')], chocks };
+}
 
 export interface Interior {
   /** Base cuboid under the wall tops (fore-aft × across × height). */

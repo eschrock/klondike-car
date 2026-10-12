@@ -1,14 +1,14 @@
 /**
  * Braking checks for the handler's STEP BRAKE (Phase 3c-4b, D-57 item 8; it replaced the D-55 steel drag bar): the foot-lever ratio DERIVED from the flap geometry
- * (`brakeGeometry`, model/brake-layout.ts), the FOOT force to hold the loaded cart on the design slope, how steep a grade the flaps stop it on at the limit foot force, the
+ * (`brakeGeometry`, model/brake-layout.ts), the FOOT force to hold the loaded sled on the design slope, how steep a grade the flaps stop it on at the limit foot force, the
  * rear-only traction (info), the members (flap, shoe block and pad; hinge and screws; knee, mounting bolts and backer; return bungee), the wheel-chock parking hold, a
  * foot-stomp abuse check, the push-handle sockets and a sweep of the moving flap group over its stroke.
  *
  * Load path (all forces in lbf, moments in lbf·in, every row is hand-checkable from its `how` string). One flap, forces ON THE FLAP, moments about the hinge pin H, M = rz·fx − rx·fz:
- *   pad: N along the tread normal n at the contact C and friction σ μ N along the forward tangent t (σ = +1 cart rolling forward);   bungee: B at its eye E;   foot: F straight down
+ *   pad: N along the tread normal n at the contact C and friction σ μ N along the forward tangent t (σ = +1 sled rolling forward);   bungee: B at its eye E;   foot: F straight down
  *   at the foot point.    F · a_F = N (m_N + σ μ m_T) + M_B     (a_F = horizontal hinge-to-foot distance; m_N, m_T = moments of a unit normal / friction force about H, brake-layout.ts)
  *   hinge reaction on the flap  R = −(N n + σ μ N t + B + F)  and the force on the knee is −R.
- * Hold: W sinθ / μ = N_total is shared by two flaps (one foot each); members are checked at λ × that (a hard stomp / jerk on a parked cart, `brakeLoadFactor`).
+ * Hold: W sinθ / μ = N_total is shared by two flaps (one foot each); members are checked at λ × that (a hard stomp / jerk on a parked sled, `brakeLoadFactor`).
  */
 import { obbOverlap, partOBB, partOBBs, worldAABB } from '../model/bounds';
 import { atPose, brakeGeometry, buildBrakeAt, type BrakeGeom, type V2 } from '../model/brake';
@@ -132,7 +132,7 @@ export function brakeRatio(ctx: Ctx): AnalysisCheck {
   });
 }
 
-/** Foot force (lbf) per foot to hold a downslope pull `down` at pad friction `mu`, both flaps pressed, cart rolling in direction σ, with the hinge efficiency. */
+/** Foot force (lbf) per foot to hold a downslope pull `down` at pad friction `mu`, both flaps pressed, sled rolling in direction σ, with the hinge efficiency. */
 export function footForce(ctx: Ctx, g: BrakeGeom, down: number, mu: number, sigma: 1 | -1): number {
   const { p } = ctx;
   const nFlap = down / (2 * mu);
@@ -152,12 +152,12 @@ export function brakeForce(ctx: Ctx): AnalysisCheck {
     const F = Math.max(Fd, Ff);
     const lim = p.brakeFootForceLimitLbf;
     return {
-      value: F, unit: 'lbf', limit: lim, sense: '<=', suffix: Ff >= Fd ? 'fouled pad' : 'wet pad', info: true, // D-58: a reported number, not pass/fail: the flaps SLOW the cart (brake-slow is the judged row); holding on steep hills is done by the chock or a person
+      value: F, unit: 'lbf', limit: lim, sense: '<=', suffix: Ff >= Fd ? 'fouled pad' : 'wet pad', info: true, // D-58: a reported number, not pass/fail: the flaps SLOW the sled (brake-slow is the judged row); holding on steep hills is done by the chock or a person
       details: [
         detail(`foot force per foot, wet rubber pad μ ${f(muD, 2)}`, Fd, 'lbf', lim, '<='),
         detail(`foot force per foot, mud / snow-fouled pad μ ${f(muF, 2)} (pass/fail)`, Ff, 'lbf', lim, '<='),
       ],
-      how: `Both flaps pressed, one foot on each. F = N (m_N ± μ m_T) / (a_F η) + M_B / a_F with N = W·sinθ / (2 μ) per flap = ${f(c.massLb)} × sin ${f(p.designSlopeDeg)}° / (2 μ); W·sinθ = ${f(down)} lbf downslope. Geometry: a_F = ${f(g.aF, 2)}", m_N = ${f(g.mN, 2)}", m_T = ${f(g.mT, 2)}" (ratio ${f(g.ratioCrit, 2)}:1 before efficiency, brake-ratio), η = ${f(p.brakeEfficiency, 2)}, bungee torque ${f(g.bungee.mApp, 1)} lbf·in (${f(g.bungee.mApp / g.aF, 1)} lbf at the foot). Worse of the two rolling directions. Wet pad: ${f(Fd)} lbf; fouled pad: ${f(Ff)} lbf per foot (limit ${f(lim, 0)} lbf per foot: about half of a ${f(2 * lim, 0)} lb handler's weight on the two flaps). Only the rear wheels brake (D-53): stepping with one foot only takes half of the retarding force. Where this is over the limit the chock parks the cart (park-hold). INFO ONLY (Eric, D-58): the flaps are a just-in-case slowing brake, so the row that passes or fails is brake-slow; to HOLD the loaded cart on a steep hill, chock a wheel or have someone hold it.`,
+      how: `Both flaps pressed, one foot on each. F = N (m_N ± μ m_T) / (a_F η) + M_B / a_F with N = W·sinθ / (2 μ) per flap = ${f(c.massLb)} × sin ${f(p.designSlopeDeg)}° / (2 μ); W·sinθ = ${f(down)} lbf downslope. Geometry: a_F = ${f(g.aF, 2)}", m_N = ${f(g.mN, 2)}", m_T = ${f(g.mT, 2)}" (ratio ${f(g.ratioCrit, 2)}:1 before efficiency, brake-ratio), η = ${f(p.brakeEfficiency, 2)}, bungee torque ${f(g.bungee.mApp, 1)} lbf·in (${f(g.bungee.mApp / g.aF, 1)} lbf at the foot). Worse of the two rolling directions. Wet pad: ${f(Fd)} lbf; fouled pad: ${f(Ff)} lbf per foot (limit ${f(lim, 0)} lbf per foot: about half of a ${f(2 * lim, 0)} lb handler's weight on the two flaps). Only the rear wheels brake (D-53): stepping with one foot only takes half of the retarding force. Where this is over the limit the chock parks the sled (park-hold). INFO ONLY (Eric, D-58): the flaps are a just-in-case slowing brake, so the row that passes or fails is brake-slow; to HOLD the loaded sled on a steep hill, chock a wheel or have someone hold it.`,
     };
   };
   return dualCheck({
@@ -207,7 +207,7 @@ export function brakeSlow(ctx: Ctx): AnalysisCheck {
         detail('steepest grade held with ONE foot only', s1.grade, '°', 0, '>='),
         detail('INFO: steepest grade the rear tires\' traction holds (the front wheels roll free; see brake-traction)', s2.gradeTrac, '°', 0, '>='),
       ],
-      how: `At the ${f(p.brakeFootForceLimitLbf, 0)} lbf foot limit per flap the pad force is N = (F a_F − M_B) η / (m_N ± μ m_T) = ${f(s2.n)} lbf per flap (the smaller rolling direction), the retarding force at the tread 2 μ N = 2 × ${f(s2.mu, 2)} × ${f(s2.n)} = ${f(s2.padForce)} lbf at the fouled pad μ, (rear tires' traction, info only as in brake-traction: μ_ground N_r = ${f(p.tireGroundMu, 2)} × ${f(s2.Nr)} = ${f(s2.traction)} lbf on ${f(p.designSlopeDeg, 0)}° nose-down, which would limit the grade to ${f(s2.gradeTrac)}°: the rear tires skid first with a nose-heavy load, and the pullers hold the rest). With W = ${f(c.massLb)} lb the pad force holds sin θ = ${f(s2.padForce)} / ${f(c.massLb)}, i.e. up to ${f(s2.grade)}° (limit ≥ ${f(p.brakeStopSlopeDeg, 0)}°: STOPS on gentler grades). On the ${f(p.designSlopeDeg, 0)}° design slope the downhill pull is ${f(s2.down)} lbf, so the flaps take ${f(100 * s2.share, 0)}% of it${s2.decelG >= 0 ? `: a net deceleration of ${f(s2.decelG, 3)} g` : `: the cart still gains ${f(-s2.decelG, 3)} g, which the flaps cut by ${f(100 * s2.share, 0)}%`} (SLOWS, and the pullers or the chock do the rest). One foot only: ${f(s1.grade)}°.`,
+      how: `At the ${f(p.brakeFootForceLimitLbf, 0)} lbf foot limit per flap the pad force is N = (F a_F − M_B) η / (m_N ± μ m_T) = ${f(s2.n)} lbf per flap (the smaller rolling direction), the retarding force at the tread 2 μ N = 2 × ${f(s2.mu, 2)} × ${f(s2.n)} = ${f(s2.padForce)} lbf at the fouled pad μ, (rear tires' traction, info only as in brake-traction: μ_ground N_r = ${f(p.tireGroundMu, 2)} × ${f(s2.Nr)} = ${f(s2.traction)} lbf on ${f(p.designSlopeDeg, 0)}° nose-down, which would limit the grade to ${f(s2.gradeTrac)}°: the rear tires skid first with a nose-heavy load, and the pullers hold the rest). With W = ${f(c.massLb)} lb the pad force holds sin θ = ${f(s2.padForce)} / ${f(c.massLb)}, i.e. up to ${f(s2.grade)}° (limit ≥ ${f(p.brakeStopSlopeDeg, 0)}°: STOPS on gentler grades). On the ${f(p.designSlopeDeg, 0)}° design slope the downhill pull is ${f(s2.down)} lbf, so the flaps take ${f(100 * s2.share, 0)}% of it${s2.decelG >= 0 ? `: a net deceleration of ${f(s2.decelG, 3)} g` : `: the sled still gains ${f(-s2.decelG, 3)} g, which the flaps cut by ${f(100 * s2.share, 0)}%`} (SLOWS, and the pullers or the chock do the rest). One foot only: ${f(s1.grade)}°.`,
     };
   };
   return dualCheck({
@@ -474,14 +474,14 @@ export function parkHold(ctx: Ctx): AnalysisCheck {
       detail(`slide margin at the design ground μ ${f(muDesign, 2)} (dirt, gravel; pass/fail)`, d.slide, '×', 1, '>='),
       detail(`slide margin at the wet / fouled ground μ ${f(muFouled, 2)} (NOT held: flagged)`, chockHold(ctx, c, muFouled).slide, '×', 1, '>='),
       detail('chock face bearing from the tire (oak, wedge face)', bear, 'psi', al.oakPerp, '<='),
-      detail('cord load if the cart drags the chock along the ground', drag, 'lbf', p.brakeCordBreakLbf / p.brakeCordSafetyFactor, '<='),
+      detail('cord load if the sled drags the chock along the ground', drag, 'lbf', p.brakeCordBreakLbf / p.brakeCordSafetyFactor, '<='),
       detail('cord length over the reach to the far side of the tire', reach, '×', 1, '>='),
     ];
     return {
       value: u.margin, unit: '×', limit: 1, sense: '>=', marginalAbs: 0.1, details: ds,
       info: c.kind === 'cargo', // the cargo case is reported, not judged (as brake-traction, D-24): the chocks sit under the rear tires, which a forward payload unloads
       suffix: u.climb < u.slide ? 'the wheel climbs it' : 'the chock slides',
-      how: `Parked on ${f(p.designSlopeDeg)}° nose-down with ${u.n} chock${u.n > 1 ? 's' : ''} (one per rear tire), the front wheels free. Load along the slope P = W sinθ − rolling ${f(p.parkRollingResistance, 3)} W cosθ = ${f(u.down)} − ${f(u.roll)} = ${f(u.P)} lbf, ${f(u.Pw)} lbf per chocked wheel. Rear normal load N_r = ${f(u.Nr)} lb (${f(u.Na)} on each wheel). A free wheel against the ramp face (ψ = ${f(u.psi / RAD, 0)}° off the ground, tangent to the tire ${f(ck.tangent[1], 2)}" up): the chock force Q = P_w / sin ψ = ${f(u.Q)} lbf along the radius. The wheel stays down if tan ψ ≥ P_w / N_wheel = ${f(u.tanNeed, 2)}; the wedge stays put if the ground μ ≥ (P_w + w sinθ) / (Q cos ψ + w cosθ) = ${f(u.muReq, 2)} (essentially tan ψ = ${f(Math.tan(u.psi), 2)}). Margins: climb ${f(u.climb, 2)}×, slide ${f(u.slide, 2)}× at the lower ground μ ${f(muUse, 2)} (the row is judged at the design ${f(muDesign, 2)} of dirt or gravel with the cleated base; on wet leaves, slush or snow the ground μ is nearer ${f(muFouled, 2)} and the chock slides at ${f(chockHold(ctx, c, muFouled).slide, 2)}×: it will NOT hold the loaded cart there, and the foot flaps or the pullers must). The cord only tethers the chock (it does not hold the cart): ${f(p.brakeChockCordLenIn, 0)}" of ${p.brakeCordBreakLbf} lbf cord.`,
+      how: `Parked on ${f(p.designSlopeDeg)}° nose-down with ${u.n} chock${u.n > 1 ? 's' : ''} (one per rear tire), the front wheels free. Load along the slope P = W sinθ − rolling ${f(p.parkRollingResistance, 3)} W cosθ = ${f(u.down)} − ${f(u.roll)} = ${f(u.P)} lbf, ${f(u.Pw)} lbf per chocked wheel. Rear normal load N_r = ${f(u.Nr)} lb (${f(u.Na)} on each wheel). A free wheel against the ramp face (ψ = ${f(u.psi / RAD, 0)}° off the ground, tangent to the tire ${f(ck.tangent[1], 2)}" up): the chock force Q = P_w / sin ψ = ${f(u.Q)} lbf along the radius. The wheel stays down if tan ψ ≥ P_w / N_wheel = ${f(u.tanNeed, 2)}; the wedge stays put if the ground μ ≥ (P_w + w sinθ) / (Q cos ψ + w cosθ) = ${f(u.muReq, 2)} (essentially tan ψ = ${f(Math.tan(u.psi), 2)}). Margins: climb ${f(u.climb, 2)}×, slide ${f(u.slide, 2)}× at the lower ground μ ${f(muUse, 2)} (the row is judged at the design ${f(muDesign, 2)} of dirt or gravel with the cleated base; on wet leaves, slush or snow the ground μ is nearer ${f(muFouled, 2)} and the chock slides at ${f(chockHold(ctx, c, muFouled).slide, 2)}×: it will NOT hold the loaded sled there, and the foot flaps or the pullers must). The cord only tethers the chock (it does not hold the sled): ${f(p.brakeChockCordLenIn, 0)}" of ${p.brakeCordBreakLbf} lbf cord.`,
     };
   };
   return dualCheck({ id: 'park-hold', label: 'Parking hold: wheel chocks and the wheels', group: 'Braking', refs: ['D-57', 'D-39'], primary: 'goal', ...evalBoth(ctx, ev) });

@@ -8,6 +8,7 @@ import { lookOf, isWood, materialsFor, signMaterials, wheelMaterials, type Look,
 import { crownDrop, crownFace, roundedBoxMesh, type RawMesh } from './shapes';
 import { densify, dashedLoop, insetLoop, mergeTubes, roundedLoop, tubeAlong, type TubeMesh, type Vec2 } from './upholstery';
 import { lashPointMesh } from './hardware';
+import { hingeMesh, lampMesh, lightKindOf, reflectorMesh, tailLightMesh } from './lights';
 import { buildRoundedSweepMesh, buildSweepMesh } from './sweep';
 import { WOOD_TILE_IN, signOutline, type SignShape } from './textures';
 import { buildWheelGeometry } from './wheel';
@@ -81,6 +82,38 @@ function applyGrain(geo: THREE.BufferGeometry, part: Part, look: 'oak' | 'okoume
   return out;
 }
 
+
+/**
+ * Bandsawn sheer member (Phase 3c-5): the grain runs along the top edge of the outline instead of straight along x, so the stripes follow the curve of the gunwale. u is the arc
+ * length along the top polyline; v on the big faces is the depth below it. Only long-grain vertices (the first group) change; end grain keeps its own mapping.
+ */
+export function followTopGrain(geo: THREE.BufferGeometry, profile: ArrayLike<readonly [number, number]>, id: string): void {
+  const top = new Map<number, number>();
+  for (const [x, z] of Array.from(profile)) top.set(x, Math.max(top.get(x) ?? -Infinity, z));
+  const xs = [...top.keys()].sort((a, b) => a - b);
+  const zs = xs.map((x) => top.get(x)!);
+  const arc: number[] = [0];
+  for (let i = 1; i < xs.length; i++) arc.push(arc[i - 1] + Math.hypot(xs[i] - xs[i - 1], zs[i] - zs[i - 1]));
+  const at = (x: number, a: number[]): number => {
+    if (x <= xs[0]) return a[0];
+    if (x >= xs[xs.length - 1]) return a[a.length - 1];
+    let lo = 0, hi = xs.length - 1;
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (xs[m] <= x) lo = m; else hi = m; }
+    const t = (x - xs[lo]) / (xs[hi] - xs[lo]);
+    return a[lo] + (a[hi] - a[lo]) * t;
+  };
+  const rnd = mulberry32(hashString(id));
+  const [o1, o2] = [rnd(), rnd()];
+  const pos = geo.getAttribute('position'), nrm = geo.getAttribute('normal'), uv = geo.getAttribute('uv');
+  const longVerts = geo.groups[0]?.count ?? 0;
+  for (let i = 0; i < longVerts; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    const u = at(x, arc) / WOOD_TILE_IN.along + o1;
+    const big = Math.abs(nrm.getY(i)) > Math.abs(nrm.getZ(i)) && Math.abs(nrm.getY(i)) > Math.abs(nrm.getX(i));
+    uv.setXY(i, u, big ? (at(x, zs) - z) / WOOD_TILE_IN.across + o2 + 0.37 : uv.getY(i));
+  }
+  uv.needsUpdate = true;
+}
 
 /** Per-part tint jitter for wood: about +/-6% lightness and a hair of hue, from the id hash, carried in vertex colors. */
 function tintJitter(id: string): [number, number, number] {
@@ -242,6 +275,15 @@ export function buildPart(part: Part): BuiltPart | null {
 
   switch (g.type) {
     case 'box': {
+      // Phase 3c-5: the lamps, reflectors and the brake hinge are drawn as the real things inside their boxes (lights.ts).
+      const lk = lightKindOf(part);
+      if (lk) {
+        const built = lk === 'lamp' ? lampMesh(size)
+          : lk === 'taillight' ? tailLightMesh(size)
+          : lk === 'hinge' ? hingeMesh(size)
+          : reflectorMesh(size, lk === 'reflector-red' ? 'red' : 'amber', part.transform[13] >= 0 ? 1 : -1);
+        return { geometry: built.geometry, material: built.materials, look, edges: null };
+      }
       const soft = look === 'vinyl';
       const thin = minAxis(size);
       if (look === 'sign') {
@@ -397,9 +439,10 @@ export function buildPart(part: Part): BuiltPart | null {
       if (isWood(look) && g.slabs) {
         // A plan-curved hull wall (D-57): box-mapped grain along x, thickness across y, crisp outline lines.
         edges = new THREE.EdgesGeometry(geo, EDGE_ANGLE_DEG);
-        const flat = geo.toNonIndexed();
-        flat.computeVertexNormals();
+        // Smooth normals across the curved face (its facets differ by about a degree), crisp 90-degree rims (Phase 3c-5: flat per-triangle normals showed the facets as streaks).
+        const flat = toCreasedNormals(geo.toNonIndexed(), (40 * Math.PI) / 180);
         geometry = applyGrain(flat, part, look, size, 1, part.grain ? grain : 0);
+        if (g.grainFollowsTop && g.profile) followTopGrain(geometry, g.profile, part.id);
         break;
       }
       // Textured looks need UVs: box-map other meshes that land on a wood / vinyl material (none do today).

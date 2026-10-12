@@ -1,5 +1,5 @@
 /**
- * Lighting (D-9, D-41) and the hardware allowance. The front lantern bracket clips over the top of the bow bulkhead at its center (D-57; the flag now stands in a plain tube in a rear corner);
+ * Lighting (D-9, D-41) and the hardware allowance. The front LED headlight rides on a printed ASA clip that snaps into the bow bulkhead's lift hand-hold (3c-5; the flag stands in a plain tube in a rear corner);
  * the rear light mounts on a flat printed plate on the rear transom. Brackets are
  * ASA (UV-stable) 2D profiles + depth, so they go straight to an STL in Phase 4; they are not on a primary load path.
  */
@@ -20,6 +20,8 @@ const unit = (x: number, y: number, z: number): Vec3 => {
 const FRONT_LIGHT_MASS_LB = 0.4;
 const FRONT_LIGHT_SIZE = [3, 2.2, 1.8] as const;
 const REAR_LIGHT_MASS_LB = 0.3;
+/** The lamp clip (3c-5): print clearance per side in the slot, and how far the plug stands proud of the bulkhead's front face (the lamp's seat). */
+export const LAMP_CLIP = { clearIn: 0.02, lipIn: 0.5 } as const;
 const REAR_LIGHT_SIZE = [0.75, 2, 1.5] as const;
 const REFLECTOR_MASS_LB = 0.05;
 export const REFLECTOR_SIZE = [2, 0.25, 1] as const;
@@ -44,8 +46,6 @@ const HARDWARE_FALLBACK_LB = 2.5;
 const HARDWARE_SIZE = [2, 2, 1.25] as const;
 /** Cabin reflectors at these fore-aft fractions of the cabin length (clear of the signs and the nose). */
 export const REFLECTOR_FRACS = [0.1, 0.95] as const;
-/** Printed clip: wall thickness, clearance to the transom, leg depth, width across, shelf length ahead of the transom. */
-export const CLIP = { wall: 0.25, clearance: 0.03, leg: 1.25, width: 2.5, shelf: 3 } as const;
 /** Rear plate: width across, height, thickness; hole radius. */
 export const REAR_PLATE = { width: 4, height: 2.4, thick: 0.25, hole: 0.1 } as const;
 /** Oak left between the lift slot's end and the rear-light plate. */
@@ -57,6 +57,15 @@ const FLAG_TUBE_LB_PER_IN = 0.036;
 export const FLAG_DRAIN_HOLE_IN = 0.1875;
 export const FLAG_BLOCK = { t: 0.75, w: 1.4, h: 1.5 } as const;
 
+/** A stadium (rounded slot) of total length `len` and height `h`, CCW, centered on the origin: the lamp clip's plug, matching the bulkhead's hand-hold hole. */
+export function stadiumOutline(len: number, h: number, seg = 8): Vec2[] {
+  const r = h / 2, straight = Math.max(0, len - h) / 2;
+  const pts: Vec2[] = [];
+  for (let i = 0; i <= seg; i++) { const a = -Math.PI / 2 + (Math.PI * i) / seg; pts.push([straight + r * Math.cos(a), r * Math.sin(a)]); }
+  for (let i = 0; i <= seg; i++) { const a = Math.PI / 2 + (Math.PI * i) / seg; pts.push([-straight + r * Math.cos(a), r * Math.sin(a)]); }
+  return pts;
+}
+
 /** Regular polygon, CCW (or CW when `ccw` is false), as a profile loop. */
 export function circleLoop(cx: number, cy: number, r: number, n = 16, ccw = true): Vec2[] {
   const pts: Vec2[] = [];
@@ -67,44 +76,38 @@ export function circleLoop(cx: number, cy: number, r: number, n = 16, ccw = true
   return pts;
 }
 
-/** Inverted-U clip over a transom of thickness `side` (x), top at z = 0; optional forward shelf for a light. Local (x aft→fore, z up). */
-export function clipOutline(side: number, shelf: boolean): Vec2[] {
-  const { wall: w, clearance: c, leg: d } = CLIP;
-  const xf = side + c + w;
-  const tail: Vec2[] = shelf
-    ? [[xf, c], [xf + CLIP.shelf, c], [xf + CLIP.shelf, c + w]]
-    : [[xf, c + w]];
-  return [[-w - c, -d], [-c, -d], [-c, c], [side + c, c], [side + c, -d], [xf, -d], ...tail, [-w - c, c + w]];
-}
-
 export function buildLighting(ctx: Ctx): Part[] {
   const { L } = ctx;
   const parts: Part[] = [];
   const common = { group: 'lighting', step: STEP.finish } as const;
 
-  // ── Front: the lantern clips over the top of the bow bulkhead at its center (D-57) ──
+  // ── Front (3c-5): the LED headlight rides on a printed ASA clip that snaps into the bow bulkhead's lift hand-hold and fills it. Pull the clip (and the lamp on it) out to lift the
+  //    nose: no finger room is needed in the slot. It replaces the D-57 bracket that clipped over the top of the bulkhead. ──
   const bh = L.bulkhead;
-  const zT = bh.zCenter;
-  const x0c = bh.x0;
-  const yc = 0;
-  const clipJoint = (to: string) => [{ type: 'knob' as const, to, count: 2, size: 'M5 thumbscrew in the leg, clamping the bulkhead', note: 'tool-free; friction clamp over the bulkhead\'s top edge (not a load path)' }];
-  const lantern = profilePart(ctx, {
-    id: 'lantern-mount', name: 'Front lantern bracket', group: 'lighting', mat: 'print', material: 'ASA', outline: clipOutline(bh.thick, true), depth: CLIP.width,
-    basis: 'xz', origin: [x0c, yc + CLIP.width / 2, zT], removable: true, step: STEP.finish, explode: [0.6, 0, 0.8],
-    joints: clipJoint('bow-bulkhead'),
-    notes: 'Printed ASA, 4+ perimeters, printed with the extrusion profile flat on the bed (layers parallel to the profile, strong in bending, P4); 0.25" shelf ribbed or printed in CF-nylon, 1/8" fillets at the inside corners. Heat-set inserts for the M5 stainless thumbscrews (brass is fine inside the plastic, away from the oak). Clips over the crown of the bow bulkhead (D-57; the crown is nearly level over the 2.5" clip) and carries the headlight on its forward shelf. Comes off with the light for transport.',
-  });
-  parts.push(lantern);
-  const shelfX0 = x0c + bh.thick + CLIP.clearance + CLIP.wall;
-  const wz = zT + CLIP.clearance + CLIP.wall;
-  parts.push(box(ctx, {
-    ...common, id: 'front-light', name: 'Front LED headlight', mat: 'fixed', massLb: FRONT_LIGHT_MASS_LB, kind: 'purchased', material: 'LED headlight', fab: 'buy',
-    removable: true, explode: unit(0.6, 0, 1), size: [...FRONT_LIGHT_SIZE],
-    center: [shelfX0 + FRONT_LIGHT_SIZE[0] / 2, yc, wz + FRONT_LIGHT_SIZE[2] / 2],
-    sourcing: { vendor: 'Generic 800 lm rechargeable LED bike headlight with a flat mount (e.g. Cygolite / NiteRider class)', costUsd: 40 },
-    joints: [{ type: 'screw', to: 'lantern-mount', count: 2, size: 'M4 stainless, into heat-set inserts in the shelf' }],
-    notes: 'Mass is an estimate. Faces forward on the shelf.',
-  }));
+  {
+    const { p } = ctx;
+    const len = p.liftSlotLengthIn - 2 * LAMP_CLIP.clearIn, h = p.liftSlotHeightIn - 2 * LAMP_CLIP.clearIn;
+    const depth = bh.thick + LAMP_CLIP.lipIn; // flush with the bulkhead's rear face (the foot brace stays smooth), a lip proud of the front face for the lamp
+    const lampX0 = bh.x0 + depth; // the lamp's rear face rests against the lip
+    parts.push(profilePart(ctx, {
+      id: 'lamp-clip', name: 'Front lamp clip (fills the hand-hold)', group: 'lighting', mat: 'print', material: 'ASA', outline: stadiumOutline(len, h), depth,
+      basis: 'yz', origin: [bh.x0, 0, L.hold.zMid], removable: true, step: STEP.finish, explode: unit(0.8, 0, 0.3), fab: 'print',
+      joints: [
+        { type: 'pin', to: 'bow-bulkhead', count: 2, size: 'two snap detent ribs, 0.04 in proud, on the long faces of the plug', note: 'tool-free: it pushes in from the front until the lamp stops against the bulkhead and pulls out the same way' },
+        { type: 'threaded-insert', to: 'front-light', count: 2, size: 'M4 heat-set inserts in the clip\'s front lip' },
+      ],
+      notes: `Printed ASA plug, ${len.toFixed(2)}" × ${h.toFixed(2)}" (the ${p.liftSlotLengthIn}" × ${p.liftSlotHeightIn}" hand-hold less ${LAMP_CLIP.clearIn}" a side), ${depth.toFixed(2)}" long: through the ${bh.thick}" bulkhead, its rear face flush with the foot brace and ${LAMP_CLIP.lipIn}" proud of the front. A stadium extrusion (outline in y-z, depth along x): print it lying on one long face so the layers run along the plug and the lip is not a stack of thin layers (P4); 4+ perimeters. Two 0.04" detent ribs make the push fit firm; the lamp's flat mount screws to two M4 heat-set inserts in the lip. To lift the nose: pull the lamp and clip out the front (it rides in the box, with the cushions), then grip the oak bar above the slot (D-37, D-57). It is not on a load path; it is removable.`,
+    }));
+    const lampW = FRONT_LIGHT_SIZE[0];
+    parts.push(box(ctx, {
+      ...common, id: 'front-light', name: 'Front LED headlight', mat: 'fixed', massLb: FRONT_LIGHT_MASS_LB, kind: 'purchased', material: 'LED headlight', fab: 'buy',
+      removable: true, explode: unit(0.8, 0, 0.2), size: [...FRONT_LIGHT_SIZE],
+      center: [lampX0 + lampW / 2, 0, L.hold.zMid],
+      sourcing: { vendor: 'Generic 800 lm rechargeable LED bike headlight with a flat mount (e.g. Cygolite / NiteRider class)', costUsd: 40 },
+      joints: [{ type: 'screw', to: 'lamp-clip', count: 2, size: 'M4 stainless, into heat-set inserts in the lip' }],
+      notes: 'Mass is an estimate. Faces forward from the front lip of the lamp clip, which sits in the bow bulkhead\'s hand-hold (3c-5). Warm-white lens.',
+    }));
+  }
 
   // ── Flag tube (D-57): a plain purchased tube standing inside a rear corner, top flush with the side top, a drain hole near the bottom, held by two screwed oak blocks ──
   {
@@ -182,12 +185,13 @@ export function buildLighting(ctx: Ctx): Part[] {
   for (const { s, tag } of SIDES) {
     REFLECTOR_FRACS.forEach((f, i) => {
       const x = Math.max(L.xRear + reach * f, SIGN_X_MAX_IN + 2); // the rear one stands ahead of the side sign (D-57)
+      const color = i === 0 ? 'red' : 'amber'; // 3c-5: red at the rear, amber at the front (DOT-C2 side marker colors)
       parts.push(box(ctx, {
-        id: `reflector-${tag}${i + 1}`, partNo: 'reflector', name: `Side reflector ${tag}${i + 1}`, group: 'lighting', mat: 'fixed', massLb: REFLECTOR_MASS_LB,
+        id: `reflector-${tag}${i + 1}`, partNo: 'reflector', name: `Side reflector ${tag}${i + 1} (${color}, ${i === 0 ? 'rear' : 'front'})`, group: 'lighting', mat: 'fixed', massLb: REFLECTOR_MASS_LB,
         kind: 'purchased', material: 'reflector', fab: 'buy', step: STEP.finish, size: [...REFLECTOR_SIZE],
         center: [x, s * (L.hwC + L.side + REFLECTOR_SIZE[1] / 2), sideTopAt(L, x) - L.railBand / 2], rot: { y: sideSlopeAt(L, x) },
-        sourcing: { vendor: 'Generic 2" × 1" adhesive-backed amber/white side reflector (DOT-C2 class)', costUsd: 2 },
-        notes: 'Stick-on reflector on the gunwale\'s outer face; wipe the varnish clean and press for 60 s (D-41).',
+        sourcing: { vendor: `Generic 2" × 1" adhesive-backed prismatic side reflector, ${color} (DOT-C2 class: amber at the front, red at the rear)`, costUsd: 2 },
+        notes: `Stick-on ${color} prismatic reflector on the gunwale's outer face; wipe the varnish clean and press for 60 s (D-41, 3c-5).`,
       }));
     });
   }

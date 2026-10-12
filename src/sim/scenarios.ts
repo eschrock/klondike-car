@@ -4,7 +4,7 @@
 export interface SimConfig {
   /** Downhill slope along the direction of travel, degrees (0-20). */
   slopeDeg: number;
-  /** Side slope / camber, degrees; positive raises the left side (the cart tips toward the right). */
+  /** Side slope / camber, degrees; positive raises the left side (the sled tips toward the right). */
   sideSlopeDeg: number;
   /** Tilt-table: the side slope keeps rising from `sideSlopeDeg` at this rate (deg/s). 0 = fixed. */
   tiltRateDegPerS: number;
@@ -77,7 +77,7 @@ export const SCENARIOS: Scenario[] = [
     config: { slopeDeg: 10 }, controls: { brakeOn: false }, endAtS: 20,
   },
   {
-    id: 'tilt', label: 'Side-slope tilt table', blurb: 'The ground tips sideways at 2°/s with the wheels chocked and high friction, μ 1.5 (the cart must tip before it slides) until a wheel lifts.',
+    id: 'tilt', label: 'Side-slope tilt table', blurb: 'The ground tips sideways at 2°/s with the wheels chocked and high friction, μ 1.5 (the sled must tip before it slides) until a wheel lifts.',
     config: { sideSlopeDeg: 0, tiltRateDegPerS: 2, frictionMu: 1.5, wheelsLocked: true }, controls: { brakeOn: false }, endAtS: 30,
   },
   {
@@ -85,7 +85,7 @@ export const SCENARIOS: Scenario[] = [
     config: { initialSpeedMph: 5, root: true, rootAtIn: 100 }, controls: {}, endAtS: 5,
   },
   {
-    id: 'turn', label: 'Turning circle', blurb: 'The front axle is held at full lock (20° each way) while the cart is pulled along the tongue at about walking pace. The cart arcs; the panel reports the turning radius it achieved (the rear axle center\'s circle) against the geometric radius.',
+    id: 'turn', label: 'Turning circle', blurb: 'The front axle is held at full lock (20° each way) while the sled is pulled along the tongue at about walking pace. The sled arcs; the panel reports the turning radius it achieved (the rear axle center\'s circle) against the geometric radius.',
     config: { initialSpeedMph: 3 }, controls: { steerDeg: 20, steerHold: true, pullLbf: 20, pullFollowsAxle: true }, endAtS: 14,
   },
   {

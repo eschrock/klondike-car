@@ -2,7 +2,7 @@ import type { Part, Vec3 } from './types';
 import { partCentroid } from './bounds';
 
 export interface MassOptions {
-  /** Include rider/cargo/other payload parts. Default false (empty cart). */
+  /** Include rider/cargo/other payload parts. Default false (empty sled). */
   includePayload?: boolean;
 }
 

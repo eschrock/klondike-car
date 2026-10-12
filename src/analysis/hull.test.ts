@@ -43,7 +43,7 @@ describe('hull checks (D-43)', () => {
   it('the lift row at the defaults by hand (D-54, D-58): the rear lifter holds the 0.75 x 0.75 in bar over the 4.5 in rear slot; the front lifter holds the hand-hold through the 1 3/4 in bow bulkhead (x = 49.9 in); the CG-weighted rear share is about 53%', () => {
     const c = liftCheck(ctx);
     const { massLb, xCg } = transportMassCg(ctx.parts);
-    expect(Math.abs(massLb / 138 - 1)).toBeLessThan(0.15); // the cart with the removable parts off (the tongue among them; it moves as parts change)
+    expect(Math.abs(massLb / 138 - 1)).toBeLessThan(0.15); // the sled with the removable parts off (the tongue among them; it moves as parts change)
     expect(xCg).toBeGreaterThan(14);
     expect(xCg).toBeLessThan(21);
     // hand-holds: rear bar at x = xRear + transom/2 = -10 + 0.375 = -9.625 in; the front hold at the middle of the bulkhead thickness
@@ -72,12 +72,12 @@ describe('hull checks (D-43)', () => {
     const Pf = (massLb - rear) * 3;
     const bh = bowHold(ctx);
     expect(bh.thickIn).toBeCloseTo(1.75, 9);
-    expect(bh.barIn).toBeGreaterThan(3);
+    expect(bh.barIn).toBeCloseTo(1.5, 6); // 3c-5: a gentle crown (5.75 in at the center) leaves 1.5 in of oak over the hand-hold (it was 4.75 in under the 9 in peak)
     const fb = c.details!.find((d) => d.name.includes('bow bulkhead') && /bending/.test(d.name))!;
     expect(fb.value).toBeCloseTo(liftBarStressPsi(bh, Pf), 6);
     const fs = c.details!.find((d) => d.name.includes('bow bulkhead') && /shear/.test(d.name))!;
     expect(fs.value).toBeCloseTo((1.5 * (Pf / 2)) / (bh.thickIn * bh.barIn), 6);
-    expect(fb.util).toBeLessThan(0.05); // the front bar is nowhere near its limit
+    expect(fb.util).toBeLessThan(0.1); // the front bar is still far from its limit
     // the rear bar is the tightest (util 0.54)
     expect(c.details!.reduce((m, d) => (d.util > m.util ? d : m)).name).toBe('rear slot bar bending');
     expect(Math.abs(bend.util / 0.541 - 1)).toBeLessThan(0.1);

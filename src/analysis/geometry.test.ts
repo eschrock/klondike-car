@@ -11,7 +11,7 @@ import { rearNormalNoseDown, tipBackAngle } from './stability';
 
 const s3 = (x: number) => Number(x.toPrecision(3));
 
-/** The default cart with the pivoting front axle (D-56) straight ahead: 44" wheelbase, 35.5" rear and front tracks. */
+/** The default sled with the pivoting front axle (D-56) straight ahead: 44" wheelbase, 35.5" rear and front tracks. */
 const P0 = { ...defaultParams(), frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5 }; // the 3c-3 hand-calc fixture (35.5 in tracks; D-58 narrowed them)
 const G: ContactInputs = { wheelbaseIn: P0.wheelbaseIn, rearTrackIn: P0.rearTrackIn, frontTrackIn: P0.frontTrackIn };
 
@@ -117,8 +117,8 @@ describe('support polygon with the fixed contacts (hand calc)', () => {
   });
 });
 
-describe('load model hand calc (119 lb cart, 150 lb rider, 25 lb cargo)', () => {
-  // Cart 119 lb at (24, 8); rider 150 lb at (16, 20.5); cargo 25 lb at (-2, 13).
+describe('load model hand calc (119 lb sled, 150 lb rider, 25 lb cargo)', () => {
+  // Sled 119 lb at (24, 8); rider 150 lb at (16, 20.5); cargo 25 lb at (-2, 13).
   const p = { ...P0, riderMassLb: 150, cargoMassLb: 25 };
   const mk = (id: string, mass: number, cg: [number, number, number], extra: Partial<Part> = {}): Part => ({
     id, name: id, group: extra.payload ? 'reference' : 'frame', kind: 'lumber', material: 'x', geometry: { type: 'box', size: [1, 1, 1] },
@@ -144,7 +144,7 @@ describe('load model hand calc (119 lb cart, 150 lb rider, 25 lb cargo)', () => 
     expect(lateralTip(contactsAt(G), [x, y], h).d).toBeCloseTo(17.75, 9);
     expect(s3(lateralTip(contactsAt(G), [x, y], h).deg)).toBe(50.2);
   });
-  it('cargo mode: a 250 lb payload at (30, 2, 22) on the 119 lb stowed cart gives W = 369, CG (28.07, 1.36, 17.49)', () => {
+  it('cargo mode: a 250 lb payload at (30, 2, 22) on the 119 lb stowed sled gives W = 369, CG (28.07, 1.36, 17.49)', () => {
     const stowed = [mk('cart', 119, [24, 0, 8])];
     const p250 = { ...p, cargoPayloadLb: 250 }; // the hand calc keeps 250 lb; the D-58 default is 200 lb
     const cm = buildLoadModel(p250, parts, { stowedParts: stowed, placements: [{ name: 'test', cg: [30, 2, 22] }] });

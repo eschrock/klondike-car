@@ -2,7 +2,7 @@
  * Truck-fit check (BRIEF §4.5, D-6, D-9, D-23). Pure TS, no three.js.
  *
  * Tries both stowage modes x both orientations x three configurations (installed / tongue and rope off / all
- * removables off, D-9), the front axle turned straight (steerDeg 0, D-56). The cart sits with its wheel contacts on the bed floor / tailgate
+ * removables off, D-9), the front axle turned straight (steerDeg 0, D-56). The sled sits with its wheel contacts on the bed floor / tailgate
  * (coplanar) and is slid fore-aft in 0.25" steps; it is centerd on the bed centerline (no lateral search).
  *
  * Modes (D-6, D-23):
@@ -13,7 +13,7 @@
  *                 bed width.
  * In both modes no wheel's contact patch may rest over the tailgate hinge gap (truckTailgateGapIn).
  *
- * Clearance is the true minimum separation of any non-payload cart part from any bed solid (walls, wells,
+ * Clearance is the true minimum separation of any non-payload sled part from any bed solid (walls, wells,
  * bulkhead, cab back wall, tailgate end): exact Euclidean for axis-aligned boxes, SAT (a lower bound) for
  * rotated ones. Floor/tailgate are contact surfaces. The ropes (bridle, steering) are excluded; the tongue plate and its shackle count. Wheels are boxes
  * (conservative laterally, exact fore-aft).
@@ -35,7 +35,7 @@ export const CONFIGS: Config[] = ['installed', 'bridle-off', 'removed'];
 /** Parts removed in the 'bridle-off' configuration (D-9, D-56): the tongue plate, its shackle and the rope, all with ids starting 'bridle'. The king beam, kingpin and axle stay. */
 const TONGUE_RE = /^bridle/i;
 
-/** Cart parts for a configuration, built through `build` (which must honor `removed`). */
+/** Sled parts for a configuration, built through `build` (which must honor `removed`). */
 export function configParts(config: Config, build: (view: CartView) => Part[]): Part[] {
   const base = { rider: 'none', cargo: false } as const;
   if (config === 'removed') return build({ ...base, removed: true });
@@ -67,7 +67,7 @@ export interface PairInfo {
 export interface AxleMargin {
   /** 'bulkhead' = the axle nearer the bulkhead, 'tailgate' = the other one. */
   side: 'bulkhead' | 'tailgate';
-  /** Which cart axle that is at this placement (depends on the orientation). */
+  /** Which sled axle that is at this placement (depends on the orientation). */
   cartAxle: 'front' | 'rear';
   /** Fore-aft extent of the tire footprints, truck frame. */
   wheelX: [number, number];
@@ -83,7 +83,7 @@ export interface AxleMargin {
 }
 
 export interface Slack {
-  /** How far the cart can slide toward the bulkhead from the placement and still fit, inches (to the search step). */
+  /** How far the sled can slide toward the bulkhead from the placement and still fit, inches (to the search step). */
   toBulkheadIn: number;
   /** ... toward the tailgate. */
   toTailgateIn: number;
@@ -91,10 +91,10 @@ export interface Slack {
 }
 
 export interface Placement {
-  /** Cart x-shift along the bed after the yaw, inches. */
+  /** Sled x-shift along the bed after the yaw, inches. */
   txIn: number;
   yawDeg: number;
-  /** Cart frame -> truck frame. */
+  /** Sled frame -> truck frame. */
   transform: Mat4;
 }
 
@@ -104,7 +104,7 @@ export interface FitCase {
   orientation: Orientation;
   config: Config;
   fits: boolean;
-  /** Best placement = max of the min clearance. Null only if the cart has no parts. */
+  /** Best placement = max of the min clearance. Null only if the sled has no parts. */
   placement: Placement | null;
   /** Min clearance at the placement (excluding floor contact), capped for display purposes at +50. */
   minClearanceIn: number;
@@ -214,7 +214,7 @@ function aabbGap(it: Item, s: SolidItem, tx: number): number {
   return Math.max(gx, gy, gz);
 }
 
-/** Separation of box pair (negative = penetration depth). Exact Euclidean when the cart box is axis-aligned. */
+/** Separation of box pair (negative = penetration depth). Exact Euclidean when the sled box is axis-aligned. */
 function separation(it: Item, s: SolidItem, tx: number, scratch: OBB): number {
   if (it.aligned) {
     const gx = Math.max(it.min[0] + tx - s.max[0], s.min[0] - (it.max[0] + tx));
@@ -232,7 +232,7 @@ function separation(it: Item, s: SolidItem, tx: number, scratch: OBB): number {
   return -obbOverlap(scratch, s.obb);
 }
 
-/** Clearance of one cart item from one solid. Infinity = harmless contact with / hovering over a floor. */
+/** Clearance of one sled item from one solid. Infinity = harmless contact with / hovering over a floor. */
 function pairClearance(it: Item, s: SolidItem, tx: number, scratch: OBB): number {
   const c = separation(it, s, tx, scratch);
   if (s.floor) return c >= -FLOOR_PENETRATION_IN ? Infinity : c;
@@ -256,7 +256,7 @@ function evaluate(p: Params, items: Item[], solids: SolidItem[], mode: Stowage, 
   const key = caseKey(mode, orientation, config);
   const yaw = orientation === 'nose-bulkhead' ? Math.PI : 0;
   if (!items.length) {
-    return { key, mode, orientation, config, fits: false, placement: null, minClearanceIn: 0, limiting: [], colliding: [], modeFeasible: false, slack: null, axles: [], axlesClearWells: null, note: 'No cart parts.' };
+    return { key, mode, orientation, config, fits: false, placement: null, minClearanceIn: 0, limiting: [], colliding: [], modeFeasible: false, slack: null, axles: [], axlesClearWells: null, note: 'No sled parts.' };
   }
   let a = Infinity, b = -Infinity;
   for (const it of items) {
@@ -326,7 +326,7 @@ function evaluate(p: Params, items: Item[], solids: SolidItem[], mode: Stowage, 
     }
   }
 
-  /** Min clearance of the whole cart at a shift (no early exit). */
+  /** Min clearance of the whole sled at a shift (no early exit). */
   const clearanceAt = (tx: number) => {
     let m = Math.min(cap, usable - (b + tx));
     for (const it of items) {
@@ -354,7 +354,7 @@ function evaluate(p: Params, items: Item[], solids: SolidItem[], mode: Stowage, 
   const fits = modeFeasible && minClr >= req - 1e-9;
   const colliding = fits ? [] : pairs.filter((q) => q.clearanceIn < req - 1e-9).slice(0, 12);
 
-  // True fore-aft slack: slide the cart each way from the placement while it still fits.
+  // True fore-aft slack: slide the sled each way from the placement while it still fits.
   let slack: Slack | null = null;
   if (fits && detail) {
     const walk = (dir: 1 | -1) => {

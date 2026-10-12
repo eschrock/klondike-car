@@ -12,7 +12,7 @@
  * pothole or root, a fail-safe case (steel ultimate / failSafeFactor, wood MOR with no safety factor, wheel retention). The caveat on every row is
  * the wheel rate: `sensitivityText` prints the result at k x 0.5 and x 2.5.
  *
- * Phase 3c-3b (D-54 follow-up): the effective mass is the rigid-body mass at the struck wheel (a rigid cart pivots about its other contacts, so it is a
+ * Phase 3c-3b (D-54 follow-up): the effective mass is the rigid-body mass at the struck wheel (a rigid sled pivots about its other contacts, so it is a
  * fraction of the total, not 1.5 x the wheel's static load) and the wheel rate is a 10 inch pneumatic hand-truck tire (500 lb/in at 30 psi). Every
  * strike also carries the conventional cross-check (bumpDlfCheck x static) so a reader sees the ratio of the physics to the textbook dynamic factor.
  *
@@ -109,7 +109,7 @@ export function staticWheelLb(ctx: Ctx, c: CaseData, wheel: BumpWheel): number {
 
 /**
  * Rigid-body corner weight (lb) at the struck wheel in a load case, from the wheel contacts and the case CG. The radii of gyration are those of a
- * uniform plate spanning the four contacts (wheelbase x track): a deliberate middle estimate, the cart's real mass is spread over a similar footprint
+ * uniform plate spanning the four contacts (wheelbase x track): a deliberate middle estimate, the sled's real mass is spread over a similar footprint
  * (rider and cargo near the middle, box and handlebow at the ends). `bumpMassShare` scales the result (default 1).
  */
 export function cornerWeightLb(ctx: Ctx, c: CaseData, wheel: BumpWheel): number {
@@ -175,7 +175,7 @@ export function sensitivityText(ctx: Ctx, c: CaseData, wheel: BumpWheel, hIn: nu
 /** The pulse as a sentence, for the `how` text of every bump row. */
 export function bumpText(b: BumpStrike, label: string, _p?: Pick<Params, 'bumpMassShare'>): string {
   const conv = b.conventionalLb > 0 ? `; conventional check ${b.conventionalLb.toFixed(0)} lbf (${(b.conventionalLb / b.staticLb).toFixed(1)}x static), this pulse is ${(b.Fn / b.conventionalLb).toFixed(2)} of it` : '';
-  return `${label}: step ${b.hIn.toFixed(2)}"${b.hEff < b.hIn ? ` (capped at ${b.hEff.toFixed(2)}")` : ''}, beta = ${(b.beta * 180 / Math.PI).toFixed(1)} deg, v_n = ${(b.vn / IN_S_PER_MPH).toFixed(1)} mph (${b.vMph} mph), m_e = ${b.meWeightLb.toFixed(0)} lb (rigid-body corner of the cart, wheel static ${b.staticLb.toFixed(0)} lb), `
+  return `${label}: step ${b.hIn.toFixed(2)}"${b.hEff < b.hIn ? ` (capped at ${b.hEff.toFixed(2)}")` : ''}, beta = ${(b.beta * 180 / Math.PI).toFixed(1)} deg, v_n = ${(b.vn / IN_S_PER_MPH).toFixed(1)} mph (${b.vMph} mph), m_e = ${b.meWeightLb.toFixed(0)} lb (rigid-body corner of the sled, wheel static ${b.staticLb.toFixed(0)} lb), `
     + `F_n = v_n sqrt(k m_e) = ${b.Fn.toFixed(0)} lbf (${b.factor.toFixed(1)}x static), H = ${b.H.toFixed(0)}, V = ${b.V.toFixed(0)} lbf${conv}`;
 }
 

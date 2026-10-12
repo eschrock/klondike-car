@@ -127,7 +127,7 @@ const defs = {
     label: 'Cargo (10 Essentials + team gear)', group: 'loads', unit: 'lb',
     default: 25, min: 0, max: 60, step: 1, status: 'locked',
   },
-  // ── Cargo mode (Phase 3c-2, D-53): the seat stows in the box and the cart hauls gear, firewood and water ──
+  // ── Cargo mode (Phase 3c-2, D-53): the seat stows in the box and the sled hauls gear, firewood and water ──
   cargoPayloadLb: {
     label: 'Cargo payload after the race', group: 'cargo', unit: 'lb',
     default: 200, min: 0, max: 600, step: 25, status: 'locked', primary: true, ref: 'D-53, D-58',
@@ -136,7 +136,7 @@ const defs = {
   restLoadLb: {
     label: 'Resting adult (sitting or stepping in)', group: 'cargo', unit: 'lb',
     default: 250, min: 150, max: 400, step: 10, status: 'assumed', ref: 'D-58',
-    note: 'Eric 2026-10-11: an adult of this weight (a) sitting still anywhere on the deck or seat and (b) standing on one foot (a 4 in x 10 in patch) anywhere on the deck must not hurt the cart, at STATIC load with the full material safety factors (the rest-load row). The storage lid is excluded: it is engraved DO NOT STEP and is not strengthened.',
+    note: 'Eric 2026-10-11: an adult of this weight (a) sitting still anywhere on the deck or seat and (b) standing on one foot (a 4 in x 10 in patch) anywhere on the deck must not hurt the sled, at STATIC load with the full material safety factors (the rest-load row). The storage lid is excluded: it is engraved DO NOT STEP and is not strengthened.',
   },
   cargoConcentratedLb: {
     label: 'Concentrated cargo item (jug pair or cooler)', group: 'cargo', unit: 'lb',
@@ -272,8 +272,8 @@ const defs = {
   },
   bowBulkheadHeightIn: {
     label: 'Bow bulkhead height at the center (above the deck)', group: 'body', unit: 'in',
-    default: 9, min: 5, max: 14, step: 0.5, status: 'explore', primary: true, ref: 'D-57',
-    note: 'The top is a curve from the side height at the bow corners up to this at the center (reference/03: a shaped prow-board). The lift hand-hold is cut through it under the crown.',
+    default: 5.75, min: 5, max: 14, step: 0.25, status: 'explore', primary: true, ref: 'D-57, 3c-5',
+    note: 'The top is a gentle crown (the same rise as the handlebow, handleBowCrownIn) that peaks at this height at the center, so the corners stand handleBowCrownIn lower (3c-5; it was a 9 in peak over 4 in corners). The lift hand-hold is cut through it under the crown, with at least liftBarMinIn of oak above. The front lamp clip snaps into that slot (3c-5).',
   },
   showSideSigns: {
     label: 'Show the side signs', group: 'body', unit: '',
@@ -425,7 +425,8 @@ const defs = {
   },
   crossmemberSpacingIn: {
     label: 'Max unsupported deck span (joist spacing)', group: 'body', unit: 'in',
-    default: 10, min: 6, max: 24, step: 0.5, status: 'explore', ref: 'D-17, D-43',
+    default: 8.5, min: 6, max: 24, step: 0.5, status: 'explore', ref: 'D-17, D-43, D-58',
+    note: 'D-58 / 3c-5: 8.5 in (was 10), one more joist (8 instead of 7, about +0.84 lb) so a standing adult\'s foot between two joists bends the 12 mm ply less (the resting-weight row).',
   },
   storageLocation: {
     label: 'Storage box location', group: 'body', unit: '',
@@ -1036,7 +1037,7 @@ const defs = {
   handleBowCrownIn: {
     label: 'Handlebow crown (rise at the middle over the post tops)', group: 'brake', unit: 'in',
     default: 0.875, min: 0, max: 3, step: 0.125, status: 'assumed', ref: 'D-53, D-57',
-    note: 'D-57: a gentle crown (was 3 in), bandsawn from one oak board rather than laminated. A sled-style handlebow (reference/05): the bow arches up between and over the two posts. 0 = the old straight bar. The bow ends overhang the posts to the edge of the cart; the grip height (rearHandleHeightIn) is measured at the posts.',
+    note: 'D-57: a gentle crown (was 3 in), bandsawn from one oak board rather than laminated. A sled-style handlebow (reference/05): the bow arches up between and over the two posts. 0 = the old straight bar. The bow ends overhang the posts to the edge of the sled; the grip height (rearHandleHeightIn) is measured at the posts.',
   },
   handleParkClearIn: {
     label: 'Parked handlebow clearance over the rear side top', group: 'brake', unit: 'in',
@@ -1075,14 +1076,14 @@ const defs = {
   handleHoldbackLbf: {
     label: 'Hold-back pull on the push handle', group: 'brake', unit: 'lbf',
     default: 50, min: 20, max: 100, step: 5, status: 'locked', ref: 'D-39',
-    note: 'A handler leaning back on the grip to hold the cart on a descent (task brief: 50 lbf at the grip height).',
+    note: 'A handler leaning back on the grip to hold the sled on a descent (task brief: 50 lbf at the grip height).',
   },
 
   // ── Brake mechanism (D-57 item 8: scooter-style step brake; the D-55 steel drag bar is gone) ───────────
   brakeFootForceLimitLbf: {
     label: 'Max foot force on each brake flap', group: 'brake', unit: 'lbf',
     default: 90, min: 30, max: 150, step: 5, status: 'assumed', ref: 'D-57',
-    note: 'D-57: one foot per flap with both flaps pressed. A 180 lb adult handler standing on both flaps puts half of his weight, 90 lbf, on each (a 150 lb scout leader 75; a 200 lb adult 100). The hold row reports the true force for the 150 lb, 200 lb and cargo cases at the fouled pad; where it exceeds the limit the chock parks the cart (park-hold).',
+    note: 'D-57: one foot per flap with both flaps pressed. A 180 lb adult handler standing on both flaps puts half of his weight, 90 lbf, on each (a 150 lb scout leader 75; a 200 lb adult 100). The hold row reports the true force for the 150 lb, 200 lb and cargo cases at the fouled pad; where it exceeds the limit the chock parks the sled (park-hold).',
   },
   brakeFootAbuseLbf: {
     label: 'Brake flap abuse stomp', group: 'brake', unit: 'lbf',
@@ -1102,7 +1103,7 @@ const defs = {
   brakeLoadFactor: {
     label: 'Brake component load factor (on the hold load)', group: 'brake', unit: '×',
     default: 2, min: 1, max: 4, step: 0.25, status: 'assumed', ref: 'D-38',
-    note: 'The flap, hinge, knee and bolts are checked at this multiple of the load needed to hold the cart on the design slope: a hard stomp or a jerk on a parked cart.',
+    note: 'The flap, hinge, knee and bolts are checked at this multiple of the load needed to hold the sled on the design slope: a hard stomp or a jerk on a parked sled.',
   },
   brakeSteelYieldPsi: {
     label: 'Brake arm plate / pin steel yield', group: 'brake', unit: 'psi',
@@ -1143,7 +1144,7 @@ const defs = {
   brakePadGapIn: {
     label: 'Pad to tread gap, released (at the pad centre)', group: 'brake', unit: 'in',
     default: 0.375, min: 0.15, max: 0.75, step: 0.025, status: 'assumed', ref: 'D-57',
-    note: 'Sets the swing of the flap (angle = gap over the pad lever) and so the foot stroke. Includes the squash of the tire and a little wear allowance; the bungee and the stop cord hold this gap while the cart rolls.',
+    note: 'Sets the swing of the flap (angle = gap over the pad lever) and so the foot stroke. Includes the squash of the tire and a little wear allowance; the bungee and the stop cord hold this gap while the sled rolls.',
   },
 
   brakeShoeBlockIn: {
@@ -1320,19 +1321,19 @@ const defs = {
   brakeChockCordLenIn: {
     label: 'Chock cord length', group: 'brake', unit: 'in',
     default: 30, min: 12, max: 72, step: 2, status: 'assumed', ref: 'D-57',
-    note: 'Ties the chock to an eye on the knee so it is never lost, long enough to reach the other side of the tire when the cart faces uphill.',
+    note: 'Ties the chock to an eye on the knee so it is never lost, long enough to reach the other side of the tire when the sled faces uphill.',
   },
 
   parkRollingResistance: {
-    label: 'Static rolling resistance of the cart (parking)', group: 'brake', unit: '',
+    label: 'Static rolling resistance of the sled (parking)', group: 'brake', unit: '',
     default: 0.02, min: 0, max: 0.08, step: 0.005, status: 'assumed', ref: 'D-57',
-    note: 'Fraction of the cart weight that bearings and tire squash resist at standstill; credited in the park-hold row with the chock friction.',
+    note: 'Fraction of the sled weight that bearings and tire squash resist at standstill; credited in the park-hold row with the chock friction.',
   },
 
   brakeStopSlopeDeg: {
-    label: 'Steepest grade the loaded cart must be STOPPED on by the flaps alone', group: 'brake', unit: '°',
+    label: 'Steepest grade the loaded sled must be STOPPED on by the flaps alone', group: 'brake', unit: '°',
     default: 10, min: 3, max: 15, step: 0.5, status: 'assumed', ref: 'D-57',
-    note: 'D-57: the flaps SLOW the loaded cart on the 15° design slope and STOP it on gentler grades. brake-slow reports the steepest grade held at the foot-force limit and the fouled pad μ for each load case, and checks it against this.',
+    note: 'D-57: the flaps SLOW the loaded sled on the 15° design slope and STOP it on gentler grades. brake-slow reports the steepest grade held at the foot-force limit and the fouled pad μ for each load case, and checks it against this.',
   },
 
   brakeHingeScrewLenIn: {
@@ -1344,13 +1345,13 @@ const defs = {
   brakeSlowShareMin: {
     label: 'Share of the design-slope pull the flaps must take (SLOWS)', group: 'brake', unit: '',
     default: 0.5, min: 0.2, max: 1, step: 0.05, status: 'assumed', ref: 'D-57',
-    note: 'D-57: the flaps must SLOW the loaded cart on the 15° design slope: at the limit foot force and the fouled pad they take at least this share of the downhill pull (the handler, the pullers and the chock do the rest).',
+    note: 'D-57: the flaps must SLOW the loaded sled on the 15° design slope: at the limit foot force and the fouled pad they take at least this share of the downhill pull (the handler, the pullers and the chock do the rest).',
   },
 
   brakeFootHeightMaxIn: {
     label: 'Highest foot-area step above the ground', group: 'brake', unit: 'in',
     default: 12, min: 8, max: 16, step: 1, status: 'assumed', ref: 'D-57',
-    note: 'The handler steps up onto the flap from behind the cart: a stair step is 7 in, a stool 12 in.',
+    note: 'The handler steps up onto the flap from behind the sled: a stair step is 7 in, a stool 12 in.',
   },
 
   brakeFootStrokeMaxIn: {
@@ -1622,6 +1623,11 @@ const defs = {
     label: 'Static deflection limit L/n', group: 'factors', unit: 'n',
     default: 300, min: 120, max: 600, step: 10, status: 'locked',
   },
+  standDeflectionRatio: {
+    label: 'Standing-adult static deflection limit L/n (deck ply between joists)', group: 'factors', unit: 'n',
+    default: 240, min: 100, max: 400, step: 10, status: 'assumed', ref: 'D-58',
+    note: 'Eric: a tad looser for a standing adult (span/240 vs the general span/300; the extra joist alone already holds 289 lb at span/300). A person on one foot at rest is an occasional static load, not a rider\'s repeated one; the other beams keep the general limit (deflectionLimitRatio). Used by the deck row (standing scout) and the resting-weight row.',
+  },
   beamLigamentMinIn: {
     label: 'Min wood ligament around the axle groove', group: 'factors', unit: 'in',
     default: 0.75, min: 0.5, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-4',
@@ -1708,12 +1714,12 @@ const defs = {
   bumpWheelRateLbIn: {
     label: 'Effective wheel radial stiffness (10" pneumatic)', group: 'bump', unit: 'lb/in',
     default: 500, min: 150, max: 1500, step: 25, status: 'verify', ref: 'D-54',
-    note: 'Phase 3c-3b: a 10" x 3.5" pneumatic hand-truck tire (4.10/3.50-4, rated about 300 lb at 30 psi) squashes about 0.6" (18% of the 3.25" section) at its rating, so k is about 300 / 0.6 = 500 lb/in; it scales with inflation pressure and runs 300 (20 psi) to 900 (rim-bound). TO MEASURE: stand a known weight on the cart at one wheel (a 150 lb person on the frame over the wheel) and measure the tire squash with a ruler against the hub; k = load / squash. docs/phase3c-3b-notes.md.',
+    note: 'Phase 3c-3b: a 10" x 3.5" pneumatic hand-truck tire (4.10/3.50-4, rated about 300 lb at 30 psi) squashes about 0.6" (18% of the 3.25" section) at its rating, so k is about 300 / 0.6 = 500 lb/in; it scales with inflation pressure and runs 300 (20 psi) to 900 (rim-bound). TO MEASURE: stand a known weight on the sled at one wheel (a 150 lb person on the frame over the wheel) and measure the tire squash with a ruler against the hub; k = load / squash. docs/phase3c-3b-notes.md.',
   },
   bumpMassShare: {
     label: 'Rigid-body bump mass multiplier', group: 'bump', unit: '×',
     default: 1, min: 0.5, max: 2, step: 0.05, status: 'assumed', ref: 'D-54',
-    note: 'Phase 3c-3b: the effective mass at the struck wheel is the rigid-body corner mass of the whole cart, W / (1 + x²/ky² + y²/kx²), about W/7 for a uniform cart struck at a corner (a rigid cart pivots about its other contacts). This multiplier scales it: 1 = mass spread like a plate over the wheel footprint; above 1 = heavy ends (cargo piled at the wheels); below 1 = mass bunched at the middle. Before 3c-3b this was 1.5 x the wheel static load.',
+    note: 'Phase 3c-3b: the effective mass at the struck wheel is the rigid-body corner mass of the whole sled, W / (1 + x²/ky² + y²/kx²), about W/7 for a uniform sled struck at a corner (a rigid sled pivots about its other contacts). This multiplier scales it: 1 = mass spread like a plate over the wheel footprint; above 1 = heavy ends (cargo piled at the wheels); below 1 = mass bunched at the middle. Before 3c-3b this was 1.5 x the wheel static load.',
   },
   bumpDlfCheck: {
     label: 'Conventional dynamic factor (cross-check only)', group: 'bump', unit: '×',
@@ -1930,7 +1936,7 @@ export function derived(p: Params) {
     oakDesignMorPsi: (p.oakMorPsi * p.wetServiceFactorStrength) / p.woodSafetyFactor,
     oakDesignMoePsi: p.oakMoePsi * p.wetServiceFactorStiffness,
     axleAllowablePsi: p.axleYieldPsi / p.steelSafetyFactor,
-    /** Vertical load for structural checks: goal rider + cargo (cart self-weight added by the analysis). */
+    /** Vertical load for structural checks: goal rider + cargo (sled self-weight added by the analysis). */
     designPayloadLb: p.riderGoalMassLb + p.cargoMassLb,
   };
 }
@@ -2000,8 +2006,8 @@ export function validateParams(input: Params): ParamIssue[] {
     warn(['sideHeightBowIn', 'sideHeightRearIn'], 'The sled profile is meant to be low at the bow and tall at the rear (reference/05).');
   if (p.sideHeightBowIn - 2 * p.railBandIn < 1)
     err(['sideHeightBowIn', 'railBandIn'], 'The side panel at the bow would be shorter than 1". Raise the bow side or thin the chine and gunwale.');
-  if (p.bowBulkheadHeightIn < p.sideHeightBowIn + 0.5)
-    warn(['bowBulkheadHeightIn', 'sideHeightBowIn'], 'The bow bulkhead is meant to rise above the side tops at the bow (a curved top, D-57).');
+  if (p.bowBulkheadHeightIn - p.handleBowCrownIn < p.sideHeightBowIn - 1e-9)
+    warn(['bowBulkheadHeightIn', 'handleBowCrownIn', 'sideHeightBowIn'], 'The bow bulkhead corners (its peak less the handlebow crown it echoes, 3c-5) are meant to be at least as high as the side tops at the bow, so the sides end against it (D-57).');
   if (p.bowBulkheadHeightIn < p.liftSlotClearIn + p.liftSlotHeightIn + p.liftBarMinIn - 1e-9)
     err(['bowBulkheadHeightIn', 'liftSlotClearIn', 'liftSlotHeightIn'], `The bow bulkhead is too low for the lift hand-hold: it needs ${(p.liftSlotClearIn + p.liftSlotHeightIn + p.liftBarMinIn).toFixed(2)}" at the center (hand clearance + slot + oak above).`);
   // Plan turn-in (D-57): the chine and gunwale are cold-bent flat in two plies; the smoothstep's tightest bend (6 x turn-in / length^2 curvature) must stay above the cold-bend limit.

@@ -301,7 +301,7 @@ export function signTexture(aspect: number, shape: SignShape = 'oval'): THREE.Ca
   const key = `sign:${shape}:${A.toFixed(1)}`;
   const hit = cache.get(key);
   if (hit) return hit;
-  const Wc = A < 1.2 ? 1024 : 2048; // a near-square sign is small on the cart: half the width is plenty
+  const Wc = A < 1.2 ? 1024 : 2048; // a near-square sign is small on the sled: half the width is plenty
   const Hl = Wc / A; // logical height (drawing units are canvas pixels along X)
   const Hc = Math.max(256, Math.min(2048, 2 ** Math.round(Math.log2(Hl)))); // canvas height: nearest power of two
   const sy = Hc / Hl;
@@ -498,7 +498,7 @@ export function signTexture(aspect: number, shape: SignShape = 'oval'): THREE.Ca
   return t;
 }
 
-/** Soft radial blob (white to transparent) used as a cheap contact shadow under the cart and its wheels. */
+/** Soft radial blob (white to transparent) used as a cheap contact shadow under the sled and its wheels. */
 export function blobTexture(): THREE.CanvasTexture {
   const hit = cache.get('blob');
   if (hit) return hit;

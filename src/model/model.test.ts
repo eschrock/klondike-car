@@ -25,7 +25,6 @@ const ALLOW: Allow[] = [
   { a: /^brake-(pad|shoe)-/, b: /^wheel-R[LR]$/, why: 'the rubber pad presses on the tread and the shoe block sits on it; the tire OBB bands are a superset of the round tire (D-57)' },
   { a: /^brake-chock-[LR]$/, b: /^wheel-R[LR]$/, why: 'the chock ramp is tangent to the tire and its toe slides under the tread; the tire bands are a superset of the round tire (D-57)' },
   { a: /^brake-/, b: /^brake-/, why: 'glued and screwed faces meet (shoe block on the flap, pad on the shoe block, hinge leaves on the knee and flap, backer on the rail), the hinge leaf lies on the knee top and hovers over the flap, and the cords end in eye screws on the flap, the knee and the chock (D-57). Moving-part clearances are swept in src/analysis/brake.test.ts' },
-  { a: /^beam-hold-down-[LR]$/, b: /^joist-1$/, why: 'the first joist butts the rear hanger\'s inner face where the hold-down angle\'s 3/16" upright leg also lies; the joist end is relieved 3/16" for the leg (fabrication detail the box model does not have). Real at the 8 in deck (D-56) only because joist-1 falls on the axle' },
   { a: /^handle-post-[LR]$/, b: /^handle-bar$/, why: 'the post top is sawn to the handlebow slope and the bow sits on it; the post OBB is its full rectangle, which pokes into the bow boxes above the sloped top (D-53)' },
   { a: /^handle-(socket|post|pin)-/, b: /^handle-(socket|post|pin)-/, why: 'the post is a slip fit in the socket tube and the clevis pin passes through both (D-9, D-39)' },
   // ---- front pivot and the bridle (D-56). Decided per pair in pivot.test.ts as well; every entry is a contact, not a clash.
@@ -39,6 +38,7 @@ const ALLOW: Allow[] = [
   { a: /^bridle-eye$/, b: /^(bridle-tongue|bridle)$/, why: 'the shackle pin passes through the tie hole in the tongue tip and the rope is tied round the shackle bow; the shackle mesh is a ring whose OBB over-covers the loop (D-56)' },
   { a: /^bridle$/, b: /^bridle-eye$/, why: 'the rope is tied to the shackle (D-56)' },
   { a: /^bow-bulkhead$/, b: /^(deck|side-[LR]-web)$/, why: 'the deck edge and the web ends sit in dados in the bulkhead\'s rear face (D-57)' },
+  { a: /^bow-bulkhead$/, b: /^lamp-clip$/, why: 'the lamp clip\'s plug fills the bulkhead\'s lift hand-hold slot (3c-5); the slot is a hole, so the bounding boxes meet' },
   { a: /^seat-hinge-[LR]$/, b: /^seat-back-(stile|rail-bottom)-?[LR]?$/, why: 'the hinge knuckle sits at the stile\'s front foot, where its leaf is let into the frame (D-57)' },
   { a: /^seat-pin-[LR]$/, b: /^(seat-back-stile|seat-wedge)-[LR]$/, why: 'the quick-release pin passes through the stile into the stop block (D-57)' },
   // ---- body: captured joints and sloped members
@@ -69,11 +69,12 @@ const KNOWN_OFF_DEFAULT: RegExp[] = [
   /^bridle-tongue x steer-stop-[LR]:/, // lock >= ~25 deg (or a wide body): the tongue plate (2.5 in bar) swings into the inboard stop blocks, which move inward as the lock grows
   /^steer-stop-L x steer-stop-R:/, // lock 35 deg: the stop contact point comes within the block width of the center line
   /^clamp-F[LR][34] x king-beam:/, // tongue + thrust washer thinner than the 3/8 in clamp plates (tongueThickIn + kingThrustThickIn < clampPlateThickIn): the king beam bottom is below the plate tops
-  /^joist-[17] x (bridle-tongue|beam-F|axle-F[LR]|clamp-F[LR]\d|axle-R|beam-R):/, // a deep crossmember (crossmemberDepthIn >= ~2 at the 8 in deck) hangs below the tops of the beams / the tongue plate: no validator rule yet
+  /^joist-[18] x (bridle-tongue|beam-F|axle-F[LR]|clamp-F[LR]\d|axle-R|beam-R):/, // a deep crossmember (crossmemberDepthIn >= ~2 at the 8 in deck) hangs below the tops of the beams / the tongue plate: no validator rule yet
   /^(axle-R|beam-R) x joist-1:/,
+  /^beam-hold-down-[LR] x joist-1:/, // 3c-5: with the joists at 8.5 in the first joist no longer falls on the rear hanger at the defaults; in a variant where it does (kingBeam5, the fuzz) its end meets the hold-down angle's upright leg by 3/16 in (it was an ALLOW entry)
   /^beam-hold-down-[LR] x deck:/, // overslung rear beam at a low deck (D-56): validateParams only asks deck >= beam top + ply
   /^wheel-F[LR] x clamp-F[LR]\d:/, // a tire wider than the hub: the tire OBB over-covers the stub clamp plate next to the hub (the same OBB conservatism as beam x wheel in ALLOW, seen only with tireWidthIn > hubLengthIn + ~1)
-  /^clamp-F[LR]\d x joist-[67]:/, // front beam at a joist (wheelbase / king beam length combos): the clamp plates on the beam top reach the joist underside
+  /^clamp-F[LR]\d x joist-[678]:/, // front beam at a joist (wheelbase / king beam length combos): the clamp plates on the beam top reach the joist underside
   /^(beam-F|clamp-F[LR]\d|axle-F[LR]) x rail-[LR]:/, // lock >= 30 deg: the beam's trailing corner passes the rail step within 0.2 in, and the 1.46 in slab cover of the 45 degree ramp over-reports (the exact swept check is in pivot.test.ts)
   /^steer-chain-[LR] x (king-beam|clamp-F[LR]\d|bridle-tongue|beam-F|axle-F[LR]|roll-pad-[LR]|king-thrust):/, // chain geometry off the defaults (a different deck height, beam position, wheelbase or lock): the straight chain between the eye rings meets the king beam or something on the beam; the steer-clear row measures the taut chain (D-58)
   /^storage-end-fore x storage-drain-[LR]:/, // seatXMin (3c-4b, reported): the drain nipple meets the front end of the short box
@@ -312,7 +313,7 @@ describe('removed', () => {
     expect(gone).toEqual(expect.arrayContaining(['seat-back-pad', 'seat-pin-L', 'sign-L', 'handle-bar', 'handle-post-L', 'handle-post-R', 'bridle', 'bridle-eye', 'bridle-tongue']));
     for (const id of ['beam-F', 'kingpin', 'king-beam', 'king-thrust', 'steer-eye-L', 'steer-anchor-L', 'axle-FL', 'wheel-FL', 'wheel-FR', 'bow-bulkhead', 'deck', 'transom-rear']) expect(removed.some((p) => p.id === id), id).toBe(true);
     expect(gone.some((id) => /^sign/.test(id))).toBe(true); // the signs are on by default (D-57) and come off for the truck
-    // taking the tongue off shortens the cart to the bow tip (the tongue reaches tongueTieAheadIn past it)
+    // taking the tongue off shortens the sled to the bow tip (the tongue reaches tongueTieAheadIn past it)
     const reach = (ps: Part[]) => Math.max(...ps.filter((x) => !x.payload).map((x) => worldAABB(x).max[0]));
     expect(reach(removed)).toBeGreaterThanOrEqual(computeLayout(defaults).xFront - 1e-6);
     expect(reach(removed)).toBeLessThan(computeLayout(defaults).xFront + 0.5); // the bow tip (the bulkhead's front face)
@@ -718,7 +719,7 @@ describe('slider ranges (L1)', () => {
 });
 
 describe('old shared links (Stage 2 flip)', () => {
-  it('parameters of the removed design are ignored, the rest still load, and the cart builds identically to the defaults', () => {
+  it('parameters of the removed design are ignored, the rest still load, and the sled builds identically to the defaults', () => {
     const old = {
       turntableType: 1, turntableSizeIn: 8, drawbar: 0, frontDeckRaiseIn: 0.5, kingpinSleeveOdIn: 1.25, frontAxleBeamThicknessIn: 4, kingpinThroughBolster: 1,
       sideBearerEmbedIn: 1, steerStopSizeIn: 2, bolsterRailWidthIn: 2, shoulderBeamIn: 1.5, rodKingpinWebMinIn: 0.5, frontEndType: 0, frontBrakeType: 0, notAKey: 7,
@@ -734,7 +735,7 @@ describe('old shared links (Stage 2 flip)', () => {
 });
 
 describe('old shared links (Phase 3c-1)', () => {
-  it('ride-mode, front-brake, hip-lever, lap-belt and cross-shaft brake params are ignored by the URL decoder and the sanitizer; the cart builds like the defaults', () => {
+  it('ride-mode, front-brake, hip-lever, lap-belt and cross-shaft brake params are ignored by the URL decoder and the sanitizer; the sled builds like the defaults', () => {
     const old = {
       rideStickLengthIn: 20, rideStickInsetIn: 4, steerRideLockDeg: 8, steerCenterSpringLbf: 3, stickCableDiaIn: 0.125, bellcrankCableArmIn: 3.8, modePinDiaIn: 0.375,
       frontBrakeBias: 0.6, frontShoeTravelIn: 0.3, brakeBiasBarIn: 6, hipLeverArmIn: 6, hipCableDiaIn: 0.0625, beltDesignG: 4, beltAnchorBoltDiaIn: 0.375,

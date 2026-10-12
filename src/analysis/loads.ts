@@ -13,7 +13,7 @@ export interface CaseData {
   /** Rider and cargo masses in this case. */
   riderLb: number;
   cargoLb: number;
-  /** Total mass (= weight in lbf) including the cart. */
+  /** Total mass (= weight in lbf) including the sled. */
   massLb: number;
   /** CG in the neutral (straight) pose. */
   cg: Vec3;
@@ -35,11 +35,11 @@ export interface LoadModel {
   cargoCases: CaseData[];
   /** Empty mass of the removable parts (transport configuration, D-9). */
   removableLb: number;
-  /** Mass per part group for the empty cart. */
+  /** Mass per part group for the empty sled. */
   emptyMassLb: number;
 }
 
-/** Mass, moments and removable mass of an empty-cart part list. (The pivoting front axle assembly turns about the kingpin: its CG shift with the steer angle, about 0.02 in on the cart CG, is neglected.) */
+/** Mass, moments and removable mass of an empty-sled part list. (The pivoting front axle assembly turns about the kingpin: its CG shift with the steer angle, about 0.02 in on the sled CG, is neglected.) */
 function sumParts(parts: Part[]) {
   let m = 0, mx = 0, my = 0, mz = 0;
   let removable = 0;
@@ -60,7 +60,7 @@ export interface CargoPlacement {
 }
 
 export interface CargoInput {
-  /** The empty-cart part list with the seat stowed in the box (cargo mode). */
+  /** The empty-sled part list with the seat stowed in the box (cargo mode). */
   stowedParts: Part[];
   placements: CargoPlacement[];
 }

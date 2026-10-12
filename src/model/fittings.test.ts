@@ -1,7 +1,7 @@
 /**
  * Workstream D (D-40, D-41, D-54, D-57): seat, storage box, grab boards, lash points and light-mount details. Complements the shared overlap / mass tests in model.test.ts.
  * D-57: the gunwale follows the sheer (14 in over the deck at the rear, 4 in at the bow, a concave curve), so the grab boards and the lash points are built along its local
- * slope; the lantern clips over the crown of the bow bulkhead and the flag stands in a plain tube in a rear corner.
+ * slope; the front lamp rides on a clip in the bow bulkhead's hand-hold (3c-5) and the flag stands in a plain tube in a rear corner.
  */
 import { describe, expect, it } from 'vitest';
 import { defaultParams, validateParams, type Params } from '../params';
@@ -30,7 +30,7 @@ const centerOf = (x: Part) => transformPoint(x.transform, [0, 0, 0]);
 const sizeOf = (x: Part) => { if (x.geometry.type !== 'box') throw new Error(`${x.id} is not a box`); return x.geometry.size; };
 
 describe('seat', () => {
-  it('the pad and the cushion come off without tools (Dual Lock); the back frame stays on the cart on its hinges and flips flat (D-57); the stop blocks are fixed', () => {
+  it('the pad and the cushion come off without tools (Dual Lock); the back frame stays on the sled on its hinges and flips flat (D-57); the stop blocks are fixed', () => {
     const removed = new Set(buildModel(defaults, { removed: true }).map((x) => x.id));
     for (const id of ['seat-back-stile-L', 'seat-back-stile-R', 'seat-back-rail-top', 'seat-back-rail-bottom', 'seat-back-panel', 'seat-wedge-L', 'seat-wedge-R', 'seat-hinge-L', 'seat-hinge-R', 'seat-cushion'])
       expect(removed.has(id), id).toBe(true);
@@ -312,7 +312,7 @@ describe('round 2 fittings: foot-stop cleats, latch blocks, stay, stainless', ()
 describe('lights and reflectors', () => {
   const printed = parts.filter((x) => x.kind === 'printed' && x.group === 'lighting');
   it('printed mounts are ASA or PETG extrusions with CCW outlines and CW holes, ready for STL', () => {
-    expect(printed.map((x) => x.id).sort()).toEqual(['lantern-mount', 'rear-light-mount']); // the flag clip and socket went with the bow curl (D-57)
+    expect(printed.map((x) => x.id).sort()).toEqual(['lamp-clip', 'rear-light-mount']); // the flag clip and socket went with the bow curl (D-57), the lantern bracket with the 3c-5 lamp clip
     for (const x of printed) {
       expect(x.material, x.id).toMatch(/ASA|PETG/);
       expect(x.fab).toBe('print');
@@ -326,21 +326,34 @@ describe('lights and reflectors', () => {
     }
     expect((byId.get('rear-light-mount')!.geometry as { holes: unknown[] }).holes).toHaveLength(4);
   });
-  it('the front lantern clips over the crown of the bow bulkhead (D-57), centered, with the headlight on the shelf ahead of it', () => {
+  it('the front lamp rides on a printed clip that fills the bow bulkhead\'s lift hand-hold (3c-5), flush at the rear, the lamp ahead of it facing forward', () => {
     const bh = worldAABB(byId.get('bow-bulkhead')!);
-    const part = byId.get('lantern-mount')!;
+    const part = byId.get('lamp-clip')!;
     const b = worldAABB(part);
-    expect(b.max[2], 'bridge above the crown').toBeGreaterThan(bh.max[2]);
-    expect(b.min[2], 'legs hang over the bulkhead').toBeLessThan(bh.max[2] - 1);
-    expect(b.min[0], 'aft leg behind the face').toBeLessThan(bh.min[0] + 0.1);
-    expect(b.max[0], 'forward leg beyond the front face').toBeGreaterThan(bh.max[0] - 0.1);
-    expect(Math.abs((b.min[1] + b.max[1]) / 2)).toBeLessThan(0.5); // centered on the crown
+    const L = computeLayout(defaults);
+    expect(byId.has('lantern-mount'), 'the bracket over the bulkhead top is gone').toBe(false);
+    expect(b.min[0], 'rear face flush with the foot brace').toBeCloseTo(bh.min[0], 6);
+    expect(b.max[0], 'a 1/2 in lip proud of the front face').toBeCloseTo(bh.max[0] + 0.5, 6);
+    expect((b.min[1] + b.max[1]) / 2).toBeCloseTo(0, 6);
+    expect(b.max[1] - b.min[1], 'fills the slot length less the print clearance').toBeCloseTo(defaults.liftSlotLengthIn - 0.04, 6);
+    expect(b.max[2] - b.min[2]).toBeCloseTo(defaults.liftSlotHeightIn - 0.04, 6);
+    expect((b.min[2] + b.max[2]) / 2).toBeCloseTo(L.hold.zMid, 6);
     expect(part.removable).toBe(true);
-    expect(part.joints!.some((j) => j.to === 'bow-bulkhead' && j.type === 'knob')).toBe(true); // tool-free thumbscrews, friction clamp
-    const light = worldAABB(byId.get('front-light')!), shelf = worldAABB(part);
-    expect(light.min[2]).toBeCloseTo(shelf.max[2], 6); // sits on the shelf
-    expect(light.min[0]).toBeGreaterThan(bh.max[0] - 0.01); // ahead of the bulkhead
-    expect(byId.get('front-light')!.removable).toBe(true);
+    expect(part.kind).toBe('printed');
+    expect(part.material).toBe('ASA');
+    expect(part.joints!.some((j) => j.to === 'bow-bulkhead')).toBe(true);
+    const lamp = byId.get('front-light')!;
+    const light = worldAABB(lamp);
+    expect(light.min[0]).toBeCloseTo(b.max[0], 6); // its rear face rests on the lip
+    expect((light.min[1] + light.max[1]) / 2).toBeCloseTo(0, 6);
+    expect((light.min[2] + light.max[2]) / 2).toBeCloseTo(L.hold.zMid, 6);
+    expect(light.max[2], 'below the crown').toBeLessThan(bh.max[2]);
+    expect(lamp.removable).toBe(true);
+    expect(lamp.joints!.some((j) => j.to === 'lamp-clip')).toBe(true);
+    // the clip is a stadium extrusion that matches the bulkhead's hole (STL-ready: outline in y-z, depth along x)
+    const g = part.geometry as { type: string; outline: [number, number][]; depth: number };
+    expect(g.type).toBe('extrusion');
+    expect(g.depth).toBeCloseTo(defaults.bowBulkheadThickIn + 0.5, 9);
   });
   it('side reflectors: four, with sourcing', () => {
     const r = parts.filter((x) => x.id.startsWith('reflector-'));

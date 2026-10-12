@@ -32,7 +32,7 @@ const muF = defaults.brakePadMuFouled; // the lower pad μ (0.25): the pass/fail
 
 /** Raw moment about the hinge pin of a force (fx, fz) at point q: M = rz fx − rx fz (positive raises a point behind the pin). */
 const mom = (q: [number, number], f: [number, number]) => (q[1] - g.H[1]) * f[0] - (q[0] - g.H[0]) * f[1];
-/** Foot force per foot by hand for a cart of weight w at pad friction mu, both flaps pressed, cart rolling in direction sigma. */
+/** Foot force per foot by hand for a sled of weight w at pad friction mu, both flaps pressed, sled rolling in direction sigma. */
 const nHat: [number, number] = [-Math.sin(g.alpha), Math.cos(g.alpha)], tHat: [number, number] = [Math.cos(g.alpha), Math.sin(g.alpha)];
 const footByHand = (w: number, mu: number, sigma: 1 | -1) => {
   const nFlap = (w * sin15) / (2 * mu);
@@ -107,7 +107,7 @@ describe('brake foot-lever ratio and foot force', () => {
   });
 });
 
-describe('brake-slow: the flaps SLOW the loaded cart on 15° and STOP it on gentler grades (D-57)', () => {
+describe('brake-slow: the flaps SLOW the loaded sled on 15° and STOP it on gentler grades (D-57)', () => {
   const ctx = ctxOf(defaults);
   const row = byId(cs, 'brake-slow');
   it('hand calc of the steepest grade held at the limit foot force (one foot per flap, fouled pad), re-derived from the moments, and the rear tires\' traction limit alongside (info)', () => {
@@ -145,7 +145,7 @@ describe('brake-slow: the flaps SLOW the loaded cart on 15° and STOP it on gent
     expect(tr).toBeDefined();
     expect(tr.limit).toBe(0);
     expect(Number.isFinite(tr.value)).toBe(true);
-    expect(byId(cs, 'brake-traction').cases!.cargo!.value).toBeLessThan(1); // parked nose-down the rear tires alone hold under half of the cargo cart's pull
+    expect(byId(cs, 'brake-traction').cases!.cargo!.value).toBeLessThan(1); // parked nose-down the rear tires alone hold under half of the cargo sled's pull
   });
   it('a bigger foot limit holds a steeper grade until the traction cap; a lower pad μ holds less', () => {
     expect(byId(run({ brakeFootForceLimitLbf: 60 }), 'brake-slow').cases!.operating!.value).toBeLessThan(row.cases!.operating!.value);
@@ -251,7 +251,7 @@ describe('brake abuse: a foot stomp on one flap (yield level)', () => {
   });
 });
 
-describe('park-hold: the wheel chocks and the wheels hold the cart on the design slope (D-57)', () => {
+describe('park-hold: the wheel chocks and the wheels hold the sled on the design slope (D-57)', () => {
   const ctx = ctxOf(defaults);
   const row = byId(cs, 'park-hold');
   it('hand calc of the climb and slide margins for the 150 lb rider, nose-down on 15° with a chock at each rear tire', () => {
@@ -284,13 +284,13 @@ describe('park-hold: the wheel chocks and the wheels hold the cart on the design
     expect(det(cs, 'park-hold', 'design ground').value).toBeGreaterThan(1);
     expect(det(cs, 'park-hold', 'cord length').value).toBeGreaterThan(1);
     expect(det(cs, 'park-hold', 'chock face bearing').value).toBeLessThan(det(cs, 'park-hold', 'chock face bearing').limit);
-    expect(det(cs, 'park-hold', 'cord load if the cart drags').value).toBeLessThan(1);
+    expect(det(cs, 'park-hold', 'cord load if the sled drags').value).toBeLessThan(1);
   });
   it('HONEST REPORT: on wet or fouled ground the chock slides (flagged in the details), and in the cargo case (rear tires unloaded by the forward payload) the wheel climbs the chock: the cargo case is reported (info), not judged', () => {
     expect(det(cs, 'park-hold', 'wet / fouled ground').value).toBeLessThan(1);
     expect(row.cases!.cargo!.value).toBeLessThan(1);
     expect(row.statusCargo).toBe('info');
-    expect(row.how).toMatch(/will NOT hold the loaded cart there/);
+    expect(row.how).toMatch(/will NOT hold the loaded sled there/);
   });
   it('one chock alone cannot hold the slope (the whole load on one wheel); a shallow ramp lets the wheel climb, a steep ramp slides', () => {
     expect(byId(run({ brakeChockCount: 1 }), 'park-hold').cases!.operating!.value).toBeLessThan(row.cases!.operating!.value);

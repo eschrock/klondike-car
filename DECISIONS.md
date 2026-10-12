@@ -154,6 +154,15 @@ The workstream notes have the full reasoning and check tables: `docs/phase3-ws{A
 10. **Handlebow:** a gentle crown, about ¾–1" (was 3"), **bandsawn from one oak board** rather than laminated.
 8. **Brake (refined, Eric):** it is judged on **slowing** the loaded cart (pass/fail). Holding still on 15° (about 85–104 lbf at the feet) is **info only**: on steep hills, chock a wheel or have someone hold the cart. The design is a scooter-style step brake. An oak flap hinged over each rear tire with a rubber pad, about 2:1 leverage and a bungee return; a wheel chock on a cord parks it. It replaces the D-55 steel-plate foot brake: no welding, no custom steel. | 🔶 |
 | D-58 | **Cargo, resting load and weight (Eric, 2026-10-11).** Post-race **cargo target 200 lb** (was 250), judged with the walking-pace bump allowance. A new **resting max weight** check: a 250 lb adult sitting still or standing on one foot anywhere on the deck, at full safety factors with no bumps. At 210 lb the current structure already passes resting load with margin; it is checked, not added to. The **storage lid is not strengthened**: it gets an engraved **"DO NOT STEP"** and is left out of the step-in check. **Eric is weight-sensitive:** no part gets heavier just to pass a check without the lightest option being shown. The front-axle fixes (roll restraint, oak tongue, stops, clearance, narrower tracks) are also recorded here when they land. | 🔶 |
+| D-59 | **Visual fixes and resting load (2026-10-12).**
+- **Side walls:** re-triangulated so each side reads cleanly as oak gunwale, okoume panel and oak chine.
+- **Bow bulkhead:** its crown now follows the handlebow (`handleBowCrownIn`, ⅞"); peak 5.75", 7.0 lb.
+- **Sign:** level on the rear sides (12.2 × 4.5", clear of the brake flap).
+- **Lights:** the front lamp sits in a printed clip in the bow hand-hold (pop it out to lift); the rear light has a red lens; reflectors are amber front, red rear.
+- **Chocks:** hidden in the viewer by default.
+- **Wording:** "sled" in all visible text.
+- **Box:** holds the cushions, lamp, clip and two chocks in cargo mode, and the 10 Essentials plus chocks in race mode.
+- **Resting load:** one more joist (8.5" spacing, +0.84 lb), and the standing-adult deck deflection limit goes to **span/240**, a tad looser than the general span/300, per Eric. The agent first used span/160, a bigger loosening than asked, and it was corrected. Resting capacity is about 335 lb. Riders are safe from 50 to over 250 lb, green to 210 lb. Cargo capacity 207 lb. 144.2 lb. Details: `docs/phase3c-5-notes.md`. | 🔶 |
 - **Axle:** one oak axle beam under the bow, with a 10" wheel on a bolt-on ¾" stub at each end. The wheels sit outboard of the body on a 35.5" track, so the deck stays low (8").
 - **Pivot:** one ⅝" grade-8 kingpin through a UHMW thrust washer into an oak king beam. Bolted only.
 - **Steering:** oak stop blocks give **±20°** (turning circle about 20 ft). The pullers steer through a short tongue plate with the bridle shackled to it. Optional axle-end ropes for the musher are off by default.

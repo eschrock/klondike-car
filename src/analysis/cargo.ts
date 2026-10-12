@@ -1,5 +1,5 @@
 /**
- * Cargo-mode rows (Phase 3c-2, D-53; D-57). The cart hauls gear, firewood and water after the race: the seat back flips flat onto the deck and the two cushions lie in the storage box (`seat-stow`),
+ * Cargo-mode rows (Phase 3c-2, D-53; D-57). The sled hauls gear, firewood and water after the race: the seat back flips flat onto the deck and the two cushions lie in the storage box (`seat-stow`),
  * the payload (default 250 lb, `cargoPayloadLb`) sits on the flat bed with no rider, and the rows below are the ones that exist only for that case or have a
  * cargo evaluation of their own:
  *   seat-stow   the two cushions fit flat in the box interior (fore-aft, across, height under the lid frame), from the real part bounding boxes; the back flips flat on the deck
@@ -12,7 +12,7 @@
 import { bowGeometry } from '../model/handle';
 import { cargoBed } from '../model/bed';
 import { seatStowPlan } from '../model/seat-stow';
-import { VOID_USABLE, packEssentials, storageInterior } from '../model/storage';
+import { VOID_USABLE, boxGear, packEssentials, storageInterior } from '../model/storage';
 import { worldAABB } from '../model/bounds';
 import type { Part } from '../model/types';
 import type { Ctx } from './context';
@@ -35,7 +35,7 @@ const STOW_MARGINAL_IN = 0.25;
 export function seatStowCheck(ctx: Ctx): AnalysisCheck {
   const { p, L } = ctx;
   const plan = seatStowPlan(p, L, ctx.parts);
-  const label = 'Seat cushions stow in the box; the back flips flat';
+  const label = 'Cushions, front lamp and chocks stow in the box; the back flips flat';
   if (!plan.applicable) {
     return singleCheck({
       id: 'seat-stow', label, group: 'Structure', value: 0, unit: 'in', limit: 0, sense: '>=', info: true, refs: ['D-57'],
@@ -49,8 +49,20 @@ export function seatStowCheck(ctx: Ctx): AnalysisCheck {
     detail('across: the cushion plus the clearance', need.widthIn, 'in', avail.w, '<='),
     detail('height: corner fillet + seat cushion + back pad, under the lid frame and battens', need.heightIn, 'in', avail.h, '<='),
   ];
+  // 3c-5: the front lamp, its clip and the wheel chocks lie in the layer above the cushions (the height left under the lid frame and battens), measured from the real parts.
+  const gear = boxGear(ctx.parts);
+  const gearKit = [...gear.lamp, ...gear.chocks];
+  const layerH = Math.max(0, margin.heightIn);
+  const layer = packEssentials({ lx: avail.l, w: avail.w, h: layerH, capIn3: 0, totalIn3: avail.l * avail.w * layerH }, gearKit);
+  const gearTall = Math.max(0, ...gearKit.map((k) => Math.min(...(k.dims ?? [0]))));
+  const gearIn3 = layer.rigidIn3;
+  if (gearKit.length) {
+    ds.push(detail('height: the tallest of the lamp, its clip and the chocks (laid on their smallest side) in the height left above the cushions', gearTall, 'in', layerH, '<='));
+    ds.push(detail('floor area: the lamp, its clip and the chocks side by side in the layer above the cushions', layer.fill, '× of layer', 1, '<='));
+  }
   const g = governing(ds, '');
-  const minMargin = Math.min(margin.lengthIn, margin.widthIn, margin.heightIn);
+  const gearMargin = gearKit.length ? layerH - gearTall : Infinity;
+  const minMargin = Math.min(margin.lengthIn, margin.widthIn, margin.heightIn, gearMargin, layer.fits ? Infinity : -1);
   const status: Status = minMargin < -1e-9 ? 'fail' : minMargin < STOW_MARGINAL_IN ? 'marginal' : 'pass';
   const ess = packEssentials(storageInterior(p, L));
   const essIn3 = ess.rigidIn3 + ess.softCompressedIn3 / VOID_USABLE;
@@ -60,6 +72,9 @@ export function seatStowCheck(ctx: Ctx): AnalysisCheck {
     + `Interior ${f(avail.l, 2)}" long × ${f(avail.w, 2)}" wide (inside the 6 mm walls); the lowest piece rides on the 3/8" corner fillets, so the stack starts ${f(i.zRest - i.zFloor, 3)}" off the floor and has ${f(avail.h, 2)}" up to the underside of the lid frame and battens. `
     + `Needs ${f(need.lengthIn, 2)}" fore-aft (incl. ${f(p.seatStowClearIn, 2)}" clearance), ${f(need.widthIn, 2)}" across, ${f(need.heightIn, 2)}" high: margins ${f(margin.lengthIn, 2)}", ${f(margin.widthIn, 2)}", ${f(margin.heightIn, 2)}" (marginal under ${STOW_MARGINAL_IN}"). `
     + `The cushions take ${f(plan.cushionsIn3, 0)} in³; the box interior under the lid frame has ${f(plan.freeIn3, 0)} in³ left, and the 10 Essentials need about ${f(essIn3, 0)} in³ (rigid items plus the soft goods at their packed volume, storage-pack row)${plan.freeIn3 >= essIn3 ? ': both fit together' : ': they do NOT both fit; carry the Essentials in a pack on the bed, or raise storageVolumeIn3'}. `
+    + (gearKit.length
+      ? `Cargo mode also carries the front lamp and its clip and the ${gear.chocks[0]?.qty ?? 0} wheel chocks in a layer on top of the cushions (${f(avail.l, 1)}" × ${f(avail.w, 1)}" and ${f(layerH, 2)}" high under the lid frame): ${gearKit.map((k) => `${k.qty > 1 ? `${k.qty} × ` : ''}${k.name} ${(k.dims ?? []).map((v) => f(v, 1)).join('×')}"`).join(', ')} = ${f(gearIn3, 0)} in³ of bounding boxes in a ${f(layer.interior.totalIn3, 0)} in³ layer (fill ${f(layer.fill, 2)}); the tallest lies ${f(gearTall, 2)}" high, leaving ${f(layerH - gearTall, 2)}" under the lid${layer.fits ? '' : `; NOT placed: ${layer.unplaced.join(', ')}`}. `
+      : '')
     + `Procedure, no tools: peel the back pad and the seat cushion off their Dual Lock, lay them in the box, pull the two pins, flip the back forward and push the pins down through the stiles into the deck.`;
   return singleCheck({
     id: 'seat-stow', label, group: 'Structure', value: g.value, unit: g.unit, limit: g.limit, sense: '<=',

@@ -12,7 +12,7 @@ import type { Part, Vec3 } from '../model/types';
 /** Display thickness of the floor slab / walls / bulkhead (cosmetic; the real bed liner is in truckClearanceIn). */
 const SLAB_IN = 1;
 
-/** Solids a cart may rest on: touching them is contact, not a collision. */
+/** Solids a sled may rest on: touching them is contact, not a collision. */
 export const FLOOR_IDS: ReadonlySet<string> = new Set(['truck-floor', 'truck-tailgate']);
 
 /** Usable stowage length along the bed: floor + hinge gap + lowered tailgate. */
@@ -50,7 +50,7 @@ export function buildTruckBed(p: Params, opts: { ground?: boolean } = {}): Part[
   const parts: Part[] = [
     solid('truck-floor', 'Bed floor', [0, -hw, -T], [L, hw, 0]),
     solid('truck-bulkhead', 'Bulkhead', [-T, -hw - T, -T], [0, hw + T, p.truckBedDepthIn]),
-    // Cab back wall above the bulkhead: tall cart parts (seat back, ornament, handle) cannot slide into it.
+    // Cab back wall above the bulkhead: tall sled parts (seat back, ornament, handle) cannot slide into it.
     ...(p.truckCabHeightIn > p.truckBedDepthIn
       ? [solid('truck-cab', 'Cab back wall', [-T, -hw - T, p.truckBedDepthIn], [0, hw + T, p.truckCabHeightIn])]
       : []),

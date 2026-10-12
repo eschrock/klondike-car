@@ -16,16 +16,16 @@ describe('riderSweep', () => {
     expect(performance.now() - t0).toBeLessThan(10000); // ~1-2 s measured with the bump-basis rows (it was ~110 ms before the flip); shared CI runners are 2-3x slower
     expect(r.points.map((x) => x.w)).toEqual(Array.from({ length: 21 }, (_, i) => 50 + 10 * i));
     // D-58: the front-axle rows are fixed (roll pads, oak tongue, check chains, lift by the body), so at the defaults the 150 lb operating weight PASSES every row.
-    // The safe range (no red) is 50-220 lb, the green range (no yellow either) 50-200 lb; the deck ply deflection and bending turn the heaviest riders red (230 lb and up).
+    // 3c-5: one more joist (8.5 in spacing) and span/160 for a standing foot (D-58): nothing is red up to 250 lb (the top of the sweep, so the safe range is open at the heavy end too);
+    // the green range (no yellow either) is 50-210 lb.
     expect(r.operating.status).toBe('pass');
     expect(r.operating.fails).toEqual([]);
-    expect(r.safe).toEqual({ loLb: 50, hiLb: 220, openLow: true, openHigh: false });
-    expect(r.green).toEqual({ loLb: 50, hiLb: 200, openLow: true, openHigh: false });
+    expect(r.safe).toEqual({ loLb: 50, hiLb: 250, openLow: true, openHigh: true });
+    expect(r.green).toEqual({ loLb: 50, hiLb: 210, openLow: true, openHigh: false });
     for (const id of ['king-bearing', 'steer-stops', 'bridle-eye', 'lift', 'brake-force']) expect(r.points.every((x) => !x.fails.includes(id)), id).toBe(true);
-    expect(r.points.filter((x) => x.w <= 200).every((x) => x.status === 'pass')).toBe(true);
-    // the deck ply fails for the heaviest riders on top of that (230 lb and up)
-    expect(r.points.find((x) => x.w === 220)!.fails).not.toContain('deck');
-    expect(r.points.find((x) => x.w === 230)!.fails).toContain('deck');
+    expect(r.points.filter((x) => x.w <= 210).every((x) => x.status === 'pass')).toBe(true);
+    // the deck ply no longer fails for the heaviest riders (it did from 230 lb at 10 in joist spacing and span/300)
+    for (const w of [220, 230, 250]) expect(r.points.find((x) => x.w === w)!.fails).not.toContain('deck');
   });
 
   it('is cached by design (rider masses excluded)', () => {

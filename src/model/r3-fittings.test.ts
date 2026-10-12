@@ -49,7 +49,7 @@ describe('S10: build order', () => {
     expect(STEP.spindles).toBeLessThan(STEP.seatStorage);
     const transom = get('transom-rear').step;
     // the king beam and the stops are part of the frame glue-up with the deck (before the sides and the transom)
-    for (const id of ['king-beam', 'joist-5', 'joist-7']) expect(get(id).step, id).toBe(STEP.frame);
+    for (const id of ['king-beam', 'joist-5', 'joist-8']) expect(get(id).step, id).toBe(STEP.frame);
     for (const id of ['axle-R', 'axle-hanger-L', 'beam-F', 'axle-FL', 'axle-FR', 'kingpin', 'steer-eye-L', 'steer-anchor-L', 'roll-pad-L']) expect(get(id).step, id).toBeGreaterThan(transom);
     // the hangers, both axles and the kingpin go on before the tongue and the bridle are bolted on with the hull upright
     expect(get('axle-hanger-L').step).toBe(STEP.gear);

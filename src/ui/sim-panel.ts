@@ -34,7 +34,7 @@ export interface SimPanel {
   setActive(active: boolean): void;
   /** True while the tab is active: the host should not repaint the viewer with its own parts. */
   readonly active: boolean;
-  /** Design parameters changed: rebuild the cart and restart the run. */
+  /** Design parameters changed: rebuild the sled and restart the run. */
   paramsChanged(): void;
   /**
    * Load a scenario by id with a custom rider mass and start it (the Simple view's "Watch it" demos). Safe to call before
@@ -144,7 +144,7 @@ export function mountSimPanel(host: HTMLElement, deps: SimPanelDeps): SimPanel {
   // ── controls ──
   const terrain = group('Terrain & start (changing restarts the run)', true,
     slider('Downhill slope', 'Slope along the direction of travel, 0-20°.', 0, 20, 1, () => config.slopeDeg, (v) => (config.slopeDeg = v), '°', false).row,
-    slider('Side slope', 'Starting camber, + raises the left side so the cart leans to the right.', -25, 25, 1, () => config.sideSlopeDeg, (v) => (config.sideSlopeDeg = v), '°', false).row,
+    slider('Side slope', 'Starting camber, + raises the left side so the sled leans to the right.', -25, 25, 1, () => config.sideSlopeDeg, (v) => (config.sideSlopeDeg = v), '°', false).row,
     slider('Tilt rate', 'Tilt table: the side slope keeps rising at this rate (deg/s). 0 = fixed slope.', -4, 4, 0.5, () => config.tiltRateDegPerS, (v) => (config.tiltRateDegPerS = v), '°/s', false).row,
     slider('Start speed', 'Initial speed along the ground.', 0, 15, 0.5, () => config.initialSpeedMph, (v) => (config.initialSpeedMph = v), ' mph', false).row,
     slider('Tire friction μ', 'Tire-ground friction coefficient (dry dirt ≈ 0.6-0.8).', 0.2, 2, 0.05, () => config.frictionMu, (v) => (config.frictionMu = v), '', false).row,
@@ -164,7 +164,7 @@ export function mountSimPanel(host: HTMLElement, deps: SimPanelDeps): SimPanel {
   const pullGroup = group('Pull & steering (live)', true,
     slider('Pull force', 'Horizontal pull at the tongue tie on the front axle, lbf.', 0, 150, 1, () => controls.pullLbf, (v) => (controls.pullLbf = v), ' lbf').row,
     slider('Pull direction', 'The way the puller walks, from the starting heading (+ = left). A pull off the tongue line turns the front axle toward it, up to the stops.', -60, 60, 1, () => controls.pullAngleDeg, (v) => (controls.pullAngleDeg = v), '°').row,
-    toggle('Pull along the axle', 'The pull direction is measured from the front axle\'s own heading, not the world: the puller keeps the rope along the tongue, so the cart drives a circle.', () => controls.pullFollowsAxle, (v) => (controls.pullFollowsAxle = v), false),
+    toggle('Pull along the axle', 'The pull direction is measured from the front axle\'s own heading, not the world: the puller keeps the rope along the tongue, so the sled drives a circle.', () => controls.pullFollowsAxle, (v) => (controls.pullFollowsAxle = v), false),
     slider('Puller circles', 'The pull direction turns at this rate: the puller walks a circle (deg/s, + = left).', -30, 30, 1, () => controls.pullTurnDegPerS, (v) => (controls.pullTurnDegPerS = v), '°/s').row,
     toggle('Hold steering', 'A servo holds the front axle at the steer angle; off, the axle swings free between the stops and the pull steers it.', () => controls.steerHold, (v) => (controls.steerHold = v), false),
     steerSlider.row);
@@ -179,7 +179,7 @@ export function mountSimPanel(host: HTMLElement, deps: SimPanelDeps): SimPanel {
       h('li', {}, 'Only the two rear wheels brake.'),
       h('li', {}, 'Each wheel is a ball at the tire radius: contact is at the tire centerline (what the static tip check uses). No tire width, sidewall flex, hub or axle bending.'),
       h('li', {}, 'The pull is a horizontal force at the tongue tie in a fixed world direction (or along the axle); real ropes go slack and real pullers react. Rolling resistance is Coulomb-like (0.05 of the load).'),
-      h('li', {}, '“Tip onset” is when a second wheel lifts: the support is then a line and the cart tips. The first lift is a load-transfer warning only.'),
+      h('li', {}, '“Tip onset” is when a second wheel lifts: the support is then a line and the sled tips. The first lift is a load-transfer warning only.'),
       h('li', {}, 'The Analysis tab, not this sim, is the validation. Fixed step 1/240 s.')));
 
   host.append(banner,
@@ -200,7 +200,7 @@ export function mountSimPanel(host: HTMLElement, deps: SimPanelDeps): SimPanel {
 
   const riderViewState = (): ViewState => ({ rider: rider === 'none' ? 'none' : rider === 'goal' ? 'goal' : 'operating', cargo: true });
 
-  /** Rebuild the cart and a fresh sim from the current parameters and settings. */
+  /** Rebuild the sled and a fresh sim from the current parameters and settings. */
   const restart = async () => {
     if (!active) return;
     const token = ++buildToken;

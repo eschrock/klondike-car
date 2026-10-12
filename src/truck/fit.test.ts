@@ -98,7 +98,7 @@ describe('checkTruckFit synthetic parts', () => {
 });
 
 describe('fit performance', () => {
-  it('stays fast with a ~150-part cart', () => {
+  it('stays fast with a ~150-part sled', () => {
     const p = defaultParams();
     const base = buildModel(p, {});
     const many: Part[] = [...base];
@@ -111,14 +111,14 @@ describe('fit performance', () => {
   });
 });
 
-describe('real cart (D-6, D-23, D-54)', () => {
+describe('real sled (D-6, D-23, D-54)', () => {
   const p = defaultParams();
   const build = (q: ReturnType<typeof defaultParams>) => (v: CartView) => buildModel(q, v as ViewState);
   const find = (r: ReturnType<typeof checkTruckFit>, mode: string, config: string) =>
     r.cases.filter((c) => c.mode === mode && c.config === config);
   const r = checkTruckFit(p, build(p));
 
-  it('has three configurations; the tongue plate and shackle (which reach 4 in past the bow) make the installed cart longer than bridle-off, and removed (handle, seat back, tongue off) is shorter and lower', () => {
+  it('has three configurations; the tongue plate and shackle (which reach 4 in past the bow) make the installed sled longer than bridle-off, and removed (handle, seat back, tongue off) is shorter and lower', () => {
     // D-56: the tongue plate reaches tongueTieAheadIn past the bow tip and carries the shackle, so the installed box is longer than bridle-off (tongue, shackle and rope off).
     // The rope is not rigid and never counts in the fit. The handlebow, seat back and the other removables are what 'removed' takes off.
     expect(r.dims.installed.lengthIn).toBeGreaterThan(r.dims['bridle-off'].lengthIn + 0.3);
@@ -156,11 +156,11 @@ describe('real cart (D-6, D-23, D-54)', () => {
     const o = partOBB(tongue);
     expect(o.center[0] + o.half[0]).toBeCloseTo(computeLayout(p).tongue.tipX, 4);
     // A tongue plate 100 in long blocks the installed fit (and fits once the tongue is off); a 100 in rope never counts.
-    const cart = (id: string, name: string) => (_v: CartView) => [box('a', [20, 20, 6], [0, 0, 3]), { ...box(id, [100, 2, 2], [40, 0, 3]), name }];
-    const rt = checkTruckFit(p, cart('bridle-tongue', 'Bridle tongue plate'));
+    const sled = (id: string, name: string) => (_v: CartView) => [box('a', [20, 20, 6], [0, 0, 3]), { ...box(id, [100, 2, 2], [40, 0, 3]), name }];
+    const rt = checkTruckFit(p, sled('bridle-tongue', 'Bridle tongue plate'));
     expect(rt.cases.filter((c) => c.config === 'installed').some((c) => c.fits)).toBe(false);
     expect(rt.cases.filter((c) => c.config === 'bridle-off').some((c) => c.fits)).toBe(true);
-    expect(checkTruckFit(p, cart('bridle', 'Bridle rope')).cases.filter((c) => c.config === 'installed').some((c) => c.fits)).toBe(true);
+    expect(checkTruckFit(p, sled('bridle', 'Bridle rope')).cases.filter((c) => c.config === 'installed').some((c) => c.fits)).toBe(true);
   });
   it('beside fits in every configuration and both orientations at the defaults, with the tires wholly inside the well gap', () => {
     for (const config of ['installed', 'bridle-off', 'removed']) {
@@ -178,13 +178,13 @@ describe('real cart (D-6, D-23, D-54)', () => {
       expect(Math.abs(cy) + half + p.truckClearanceIn).toBeLessThanOrEqual(p.truckWellGapIn / 2 + 1e-6);
     }
   });
-  it('straddle does not fit at the default 44 in wheelbase, in any configuration; beside is the only mode there (the 5 in shorter D-57 nose lets a 48 in cart straddle without its tongue)', () => {
+  it('straddle does not fit at the default 44 in wheelbase, in any configuration; beside is the only mode there (the 5 in shorter D-57 nose lets a 48 in sled straddle without its tongue)', () => {
     // Straddling needs both axles wholly outside the 34 in well zone (so >= 45 in between axle centers) and no tire over the 1 in hinge gap at x = 60.5.
     expect(p.wheelbaseIn).toBe(44);
     for (const config of ['installed', 'bridle-off', 'removed']) expect(find(r, 'straddle', config).some((x) => x.fits)).toBe(false);
     expect(r.anyFits).toBe(true);
     expect(r.cases.filter((x) => x.fits).every((x) => x.mode === 'beside')).toBe(true);
-    // At 48 in the cart straddles once the tongue is off; D-58: the longer oak tongue and shackle keep even the 52 in assembled cart from straddling.
+    // At 48 in the sled straddles once the tongue is off; D-58: the longer oak tongue and shackle keep even the 52 in assembled sled from straddling.
     const q48 = { ...p, wheelbaseIn: 48 };
     const r48 = checkTruckFit(q48, build(q48));
     expect(find(r48, 'straddle', 'installed').some((x) => x.fits)).toBe(false);
@@ -219,16 +219,16 @@ describe('real cart (D-6, D-23, D-54)', () => {
     expect(find(checkTruckFit(q, build(q)), 'beside', 'removed').some((x) => x.fits)).toBe(true);
     const wider = { ...p, rearTrackIn: beside.maxTrackIn! + 1 };
     expect(find(checkTruckFit(wider, build(wider)), 'beside', 'removed').some((x) => x.fits)).toBe(false);
-    // Wheelbase window: the validator sets the minimum (44 in, where the foot stop meets the end of the flat deck); the bed sets the maximum (the cart gets too long).
+    // Wheelbase window: the validator sets the minimum (44 in, where the foot stop meets the end of the flat deck); the bed sets the maximum (the sled gets too long).
     expect(beside.wheelbaseMinIn!).toBeCloseTo(44, 0);
     expect(beside.wheelbaseBoundedByValidator).toBe(true);
     expect(beside.wheelbaseMaxIn!).toBeGreaterThan(p.wheelbaseIn);
     expect(beside.wheelbaseMaxIn!).toBeCloseTo(60.25, 0);
     const besideInstalled = w!.windows.find((x) => x.mode === 'beside' && x.config === 'installed')!;
-    expect(besideInstalled.wheelbaseMaxIn!).toBeLessThan(beside.wheelbaseMaxIn!); // the handle makes the assembled cart longer
+    expect(besideInstalled.wheelbaseMaxIn!).toBeLessThan(beside.wheelbaseMaxIn!); // the handle makes the assembled sled longer
     expect(besideInstalled.wheelbaseMaxIn!).toBeCloseTo(54, 0);
     // Straddle: not at the default wheelbase (see the test above), and never as assembled (D-58 tongue); without the tongue it has a window from 45 in (both axles outside the 34 in well zone)
-    // up to where the cart is too long for the bed.
+    // up to where the sled is too long for the bed.
     for (const config of ['installed', 'bridle-off', 'removed']) {
       const st = w!.windows.find((x) => x.mode === 'straddle' && x.config === config)!;
       expect(st.fitsNow).toBe(false);
@@ -263,11 +263,11 @@ describe('cab and hinge gap', () => {
 });
 
 describe('fit timing', () => {
-  it('real cart fit is fast when warm', () => {
+  it('real sled fit is fast when warm', () => {
     const p = defaultParams();
     checkTruckFit(p, stub(p));
     const r = checkTruckFit(p, stub(p));
-    console.log('warm real-cart fit ms:', r.evalMs.toFixed(1));
+    console.log('warm real-sled fit ms:', r.evalMs.toFixed(1));
     expect(r.evalMs).toBeLessThan(150);
   });
 });
@@ -356,7 +356,7 @@ describe('honest mode reporting (round-2 beside/straddle)', () => {
     expect(t.fits).toBe(true);
     expect(t.slack!.totalIn).toBeLessThan(1e-9);
   });
-  it('real cart: a fitting straddle case reports both axles clear of the wells; non-fitting cases have no slack', () => {
+  it('real sled: a fitting straddle case reports both axles clear of the wells; non-fitting cases have no slack', () => {
     const p = defaultParams();
     const r = checkTruckFit(p, (v) => buildModel(p, v as ViewState));
     for (const c of r.cases) {

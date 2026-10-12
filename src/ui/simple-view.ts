@@ -1,5 +1,5 @@
 /**
- * The "Simple" view (docs/simple-view-spec.md, D-30): "Is this cart safe, and for what rider weights?" at a glance.
+ * The "Simple" view (docs/simple-view-spec.md, D-30): "Is this sled safe, and for what rider weights?" at a glance.
  * Left: the five shape controls. Right: the headline, the rider range bar with the rider-weight slider, six traffic
  * lights, an at-a-glance strip and the "watch it" demos.
  *
@@ -19,7 +19,7 @@ import './simple-view.css';
 export type DemoId = 'tilt' | 'turn' | 'bump' | 'brake';
 export const DEMOS: { id: DemoId; label: string; title: string }[] = [
   { id: 'tilt', label: 'Tip it sideways', title: 'Tip the ground sideways until a wheel lifts. Opens the detailed view.' },
-  { id: 'turn', label: 'Turn the front axle', title: 'Pull the cart with the front axle turned as far as it goes, and read off the turning circle it drives. Opens the detailed view.' },
+  { id: 'turn', label: 'Turn the front axle', title: 'Pull the sled with the front axle turned as far as it goes, and read off the turning circle it drives. Opens the detailed view.' },
   { id: 'bump', label: 'Hit a root at jogging pace', title: 'Roll into a 2 inch root at 5 mph. Opens the detailed view.' },
   { id: 'brake', label: 'Brake on a hill', title: 'Roll down a slope, then brake. Opens the detailed view.' },
 ];
@@ -63,7 +63,7 @@ const ANNOUNCE_MS = 600;
 const dims = (d: { lengthIn: number; widthIn: number; heightIn: number }) => `${Math.round(d.lengthIn)} × ${Math.round(d.widthIn)} × ${Math.round(d.heightIn)} in`;
 const fmtVal = (v: number) => String(Number(v.toFixed(4)));
 
-// ── Left: "Your cart" ────────────────────────────────────────────────────────────────────────────────────────────────
+// ── Left: "Your sled" ────────────────────────────────────────────────────────────────────────────────────────────────
 
 interface Control {
   id: string;
@@ -84,7 +84,7 @@ const CONTROLS: Control[] = [
   {
     id: 'rider', label: 'Rider weight', unit: 'lb', def: PARAM_DEFS.riderMassLb,
     // The slider writes riderMassLb (50-250 lb, the same span as the safety bar).
-    hint: 'Check the cart for this rider. The bar shows every weight.',
+    hint: 'Check the sled for this rider. The bar shows every weight.',
     get: (p) => p.riderMassLb, set: setOne('riderMassLb'), reset: resetOne('riderMassLb'),
   },
   { id: 'length', label: 'Length between wheels', unit: 'in', def: PARAM_DEFS.wheelbaseIn, hint: 'Axle to axle. Longer is steadier on hills but harder to turn.', get: (p) => p.wheelbaseIn, set: setOne('wheelbaseIn'), reset: resetOne('wheelbaseIn') },
@@ -210,7 +210,7 @@ function mountSafetyCard(host: HTMLElement, deps: Pick<SimpleViewDeps, 'onLight'
     });
   }
 
-  // Cargo mode (D-53): what the cart hauls after the race. Its own card; the rider headline above never reads it.
+  // Cargo mode (D-53): what the sled hauls after the race. Its own card; the rider headline above never reads it.
   const cargoHead = h('h3', { class: 'sv-headline info', id: 'sv-cargo-h' }, h('span', { class: 'sv-h-icon', 'aria-hidden': 'true' }), h('span', {}, 'After the race: hauling'));
   const cargoLines = h('ul', { class: 'sv-cargo-lines' });
   const cargoSection = h('section', { class: 'sv-section sv-cargo', 'aria-labelledby': 'sv-cargo-h' }, cargoHead, cargoLines);
@@ -229,7 +229,7 @@ function mountSafetyCard(host: HTMLElement, deps: Pick<SimpleViewDeps, 'onLight'
     headEl,
     sub,
     h('section', { class: 'sv-section sv-answer', 'aria-label': 'Rider weights' }, wrap, note, riderHost, legend, limits, advice, caveat),
-    h('section', { class: 'sv-section', 'aria-labelledby': 'sv-glance-h' }, h('h3', { id: 'sv-glance-h' }, 'The cart at a glance'), glance),
+    h('section', { class: 'sv-section', 'aria-labelledby': 'sv-glance-h' }, h('h3', { id: 'sv-glance-h' }, 'The sled at a glance'), glance),
     cargoSection,
     h('section', { class: 'sv-section sv-watch', 'aria-labelledby': 'sv-demo-h' },
       h('h3', { id: 'sv-demo-h' }, 'Watch it ', h('span', { class: 'sv-h3-note' }, '(opens the detailed view)')), h('div', { class: 'sv-demos' }, ...demoBtns)),
@@ -340,7 +340,7 @@ function mountSafetyCard(host: HTMLElement, deps: Pick<SimpleViewDeps, 'onLight'
 export function mountSimpleView(leftHost: HTMLElement, rightHost: HTMLElement, deps: SimpleViewDeps): SimpleView {
   leftHost.classList.add('sv-host');
   rightHost.classList.add('sv-host');
-  const section = h('section', { class: 'sv-controls', 'aria-labelledby': 'sv-cart-h' }, h('h2', { id: 'sv-cart-h' }, 'Change the cart'));
+  const section = h('section', { class: 'sv-controls', 'aria-labelledby': 'sv-cart-h' }, h('h2', { id: 'sv-cart-h' }, 'Change the sled'));
   leftHost.append(section);
   mountControls(section, deps.store, ['length', 'width', 'wheel', 'floor', 'body']);
   const card = mountSafetyCard(rightHost, deps);

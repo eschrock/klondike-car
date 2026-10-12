@@ -11,6 +11,7 @@ import { bowGeometry } from '../model/handle';
 import { computeLayout } from '../model/layout';
 import { centerOfGravity, totalMass } from '../model/mass';
 import { seatStowPlan } from '../model/seat-stow';
+import { ESSENTIALS, boxGear, packEssentials, storageInterior } from '../model/storage';
 import { makeContext } from './context';
 import { runChecks, type AnalysisCheck } from './index';
 import { seatFactor } from './bump';
@@ -44,7 +45,7 @@ describe('the parameter (D-53)', () => {
 describe('the cargo load cases', () => {
   const [aft, fore] = ctx.loads.cargoCases;
   const bed = cargoBed(defaults, L);
-  it('are two placements of the payload on the stowed cart with no rider: mass = stowed empty cart + 200 lb', () => {
+  it('are two placements of the payload on the stowed sled with no rider: mass = stowed empty sled + 200 lb', () => {
     expect(ctx.loads.cargoCases).toHaveLength(2);
     for (const c of [aft, fore]) {
       expect(c.kind).toBe('cargo');
@@ -64,7 +65,7 @@ describe('the cargo load cases', () => {
     expect(fore.cg[0]).toBeCloseTo((m0 * cg0[0] + 200 * (bed.xLoadEnd - lenC / 2)) / M, 6);
     expect(fore.cg[0]).toBeGreaterThan(aft.cg[0]);
   });
-  it('the stowed cart is a hair different from the installed one (the seat kit moved into the box), not the same list', () => {
+  it('the stowed sled is a hair different from the installed one (the seat kit moved into the box), not the same list', () => {
     expect(totalMass(stowed)).toBeCloseTo(ctx.loads.empty.massLb, 6);
     expect(centerOfGravity(stowed)[2]).not.toBeCloseTo(ctx.loads.empty.cg[2], 6);
   });
@@ -111,7 +112,7 @@ describe('the rider status never depends on the cargo (the rider headline logic 
 
 // (the brake rows with the cargo case, D-55 foot brake, are tested in brake.test.ts)
 describe('rear-only traction with the cargo forward (info number quoted by the capacity sweep)', () => {
-  it('the front axle of the loaded cart takes more than half the weight when the payload is piled at the nose end: N_r/W = cos(th) (44 - x)/44 - sin(th) h/44 is below 0.3, so mu N_r is under the downhill pull W sin(th)', () => {
+  it('the front axle of the loaded sled takes more than half the weight when the payload is piled at the nose end: N_r/W = cos(th) (44 - x)/44 - sin(th) h/44 is below 0.3, so mu N_r is under the downhill pull W sin(th)', () => {
     const f = ctx.loads.cargoCases[1];
     const th = defaults.designSlopeDeg * RAD;
     const xfc = ctx.contact.wheelbaseIn; // front contacts on the kingpin line, x = 44 in, with the axle straight
@@ -253,6 +254,39 @@ describe('the seat-stow row and the 10 Essentials row', () => {
     const c = byId(cs, 'storage-pack');
     expect(c.status).toBe('pass');
     expect(c.value).toBeLessThan(0.9);
+  });
+  it('3c-5, cargo mode: the box also holds the front lamp, its clip and the 2 wheel chocks, in the layer left above the cushions (reported with margins)', () => {
+    const gear = boxGear(installed);
+    expect(gear.lamp.map((k) => k.name)).toEqual(['Front LED headlight', 'Lamp clip']);
+    expect(gear.chocks).toHaveLength(1);
+    expect(gear.chocks[0].qty).toBe(2); // one per rear tire
+    const plan = seatStowPlan(defaults, L, installed);
+    const tall = Math.max(...[...gear.lamp, ...gear.chocks].map((k) => Math.min(...k.dims!)));
+    const g = det(cs, 'seat-stow', 'the tallest of the lamp, its clip and the chocks');
+    expect(g.value).toBeCloseTo(tall, 9);
+    expect(g.limit).toBeCloseTo(plan.margin.heightIn, 9); // the height above the cushions
+    expect(g.util).toBeLessThan(1);
+    expect(det(cs, 'seat-stow', 'floor area').util).toBeLessThan(0.5);
+    const how = byId(cs, 'seat-stow').how;
+    expect(how).toMatch(/front lamp and its clip and the 2 wheel chocks/);
+    expect(how).toMatch(/leaving [\d.]+" under the lid/);
+    // a box too shallow for the layer fails: the chocks are the tallest at 2.5 in
+    const shallow = runChecks({ ...defaults, seatDepthIn: 17 }, { includeTruck: false });
+    expect(byId(shallow, 'seat-stow').status).not.toBe('pass');
+  });
+  it('3c-5, race mode: the 10 Essentials AND the 2 chocks fit (fill under 0.9, margin reported); the row says what it would do if they did not', () => {
+    const c = byId(cs, 'storage-pack');
+    const base = packEssentials(storageInterior(defaults, L));
+    const withChocks = packEssentials(storageInterior(defaults, L), [...ESSENTIALS, ...boxGear(installed).chocks]);
+    expect(c.value).toBeCloseTo(withChocks.fill, 9);
+    expect(withChocks.fill).toBeGreaterThan(base.fill); // the chocks take room
+    expect(withChocks.fits).toBe(true);
+    expect(c.how).toMatch(/2 wheel chocks too/);
+    expect(c.how).toMatch(/Margin: \d+ in³ free/);
+    // a box 1,500 in³ does not hold them: the row fails and proposes a chock holder instead of a bigger box
+    const small = byId(runChecks({ ...defaults, storageVolumeIn3: 1500 }, { includeTruck: false }), 'storage-pack');
+    expect(small.status).toBe('fail');
+    expect(small.how).toMatch(/chock to the outside|holder/);
   });
 });
 

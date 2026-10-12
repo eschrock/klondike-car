@@ -9,6 +9,7 @@ import { buildModel } from './index';
 import { computeLayout, innerHalfWidth, outerHalfWidth, sideHeightAtX, sideSlopeAt, sideTopAt, webTopAt } from './layout';
 import { bowHold, bulkheadOutline, liftBarStressPsi, liftSlot, scupperSites, signPlacement, SIGN_X_MAX_IN } from './body';
 import { makeCtx } from './build-utils';
+import { brakeGeometry } from './brake-layout';
 import { worldAABB } from './bounds';
 import type { Part, Vec2 } from './types';
 
@@ -219,15 +220,20 @@ describe('the bow bulkhead and its hand-hold (D-57)', () => {
     expect(b.material).toBe('white oak');
     expect(b.group).toBe('body');
   });
-  it('is 1.75 in thick from the end of the flat deck to the bow tip, as wide as the narrowed hull, 4 in high at the corners rising to 9 in above the deck at the center', () => {
+  it('is 1.75 in thick from the end of the flat deck to the bow tip, as wide as the narrowed hull, 4 7/8 in high at the corners rising 7/8 in (the handlebow crown) to 5 3/4 in above the deck at the center', () => {
     const bb = worldAABB(b);
     expect(bb.min[0]).toBeCloseTo(49, 9);
     expect(bb.max[0]).toBeCloseTo(50.75, 9);
     expect(bb.max[1]).toBeCloseTo(10.75, 9);
     expect(bb.min[1]).toBeCloseTo(-10.75, 9);
-    expect(bb.max[2]).toBeCloseTo(L.deckTop + 9, 9);
+    expect(bb.max[2]).toBeCloseTo(L.deckTop + 5.75, 9);
     expect(bb.min[2]).toBeCloseTo(L.bulkhead.bot, 9);
-    expect(L.bulkhead.zCorner).toBe(L.deckTop + 4);
+    expect(L.bulkhead.zCorner).toBeCloseTo(L.deckTop + 5.75 - 0.875, 12);
+    // 3c-5: the bulkhead's crown is the handlebow's crown (the same param), so the two echo each other
+    expect(L.bulkhead.zCenter - L.bulkhead.zCorner).toBeCloseTo(defaults.handleBowCrownIn, 12);
+    const c2 = makeCtx({ ...defaults, handleBowCrownIn: 1.5 });
+    expect(c2.L.bulkhead.zCenter - c2.L.bulkhead.zCorner).toBeCloseTo(1.5, 12);
+    expect(L.bulkhead.zCorner).toBeGreaterThan(L.deckTop + defaults.sideHeightBowIn); // it stands a hair above the side tops, which end against its rear face
     expect(o.halfW).toBeCloseTo(10.75, 12);
     // the sides end exactly at its rear face (the gunwale's top at the face is the corner height)
     expect(topEdge(get(parts, 'side-L-gunwale')).slice(-1)[0][1] - L.deckTop).toBeCloseTo(4, 9);
@@ -242,15 +248,16 @@ describe('the bow bulkhead and its hand-hold (D-57)', () => {
     expect(Math.max(...zs)).toBeCloseTo(L.deckTop + 3 + 1.25, 9);
     expect(L.hold).toMatchObject({ x0: 49, x1: 50.75, halfLen: 2.25, zBot: L.deckTop + 3, zTop: L.deckTop + 4.25 });
     const hs = bowHold(makeCtx(defaults));
-    expect(hs.barIn).toBeCloseTo(9 - 4.25, 9); // 4.75 in of oak above it at the center
+    expect(hs.barIn).toBeCloseTo(5.75 - 4.25, 9); // 1.5 in of oak above it at the center
     expect(hs.thickIn).toBe(1.75);
     expect(liftBarStressPsi(hs, 100)).toBeGreaterThan(0);
     expect(liftBarStressPsi(hs, 100)).toBeLessThan(liftBarStressPsi(liftSlot(makeCtx(defaults)), 100)); // a thicker, deeper bar than the transom's
   });
-  it('is glued to the deck edge in a dado and to the rail, chine, gunwale and web ends; the front lantern clips over its crown', () => {
+  it('is glued to the deck edge in a dado and to the rail, chine, gunwale and web ends; the front lamp clip plugs its hand-hold', () => {
     const to = new Set((b.joints ?? []).map((j) => j.to));
     for (const id of ['deck', 'rail-L', 'rail-R', 'side-L-chine', 'side-R-gunwale', 'side-L-web']) expect(to.has(id), id).toBe(true);
-    expect(get(parts, 'lantern-mount').joints!.some((j) => j.to === 'bow-bulkhead')).toBe(true);
+    expect(get(parts, 'lamp-clip').joints!.some((j) => j.to === 'bow-bulkhead')).toBe(true);
+    expect(parts.some((x) => x.id === 'lantern-mount')).toBe(false); // the bracket over the bulkhead top is gone (3c-5)
     expect(b.notes).toMatch(/foot brace/);
     expect(b.notes).toMatch(/hand-hold/);
   });
@@ -356,18 +363,20 @@ describe('signs (D-57): the Troop 455 sign is back on the tall rear part of each
     expect(buildModel(defaults, { removed: true }).some((x) => /^sign/.test(x.id))).toBe(false);
     expect(buildModel({ ...defaults, showSideSigns: 0 }).some((x) => /^sign/.test(x.id))).toBe(false);
   });
-  it('is 15 x 6 in at most, starts just ahead of the transom, stops at x = 6 (clear of the wheel brake mount), follows the sheer and stays under the gunwale line and over the chine', () => {
+  it('is 15 x 6 in at most, starts just ahead of the transom, stops at x = 6 (clear of the wheel brake mount), is LEVEL (3c-5, not tilted to the sheer) and stays under the gunwale line at its forward end and over the chine', () => {
     expect(sp.length).toBeLessThanOrEqual(defaults.signLengthIn);
     const b = worldAABB(get(parts, 'sign-L'));
     expect(b.min[0]).toBeGreaterThanOrEqual(xSideStart - 1e-6);
-    expect(b.max[0]).toBeLessThanOrEqual(SIGN_X_MAX_IN + sp.height * Math.sin(Math.abs(sp.slope)) + 0.1);
-    expect(sp.slope).toBeGreaterThan(0); // descending toward the bow
+    expect(b.max[0]).toBeLessThanOrEqual(SIGN_X_MAX_IN + 1e-6);
+    expect(sp.slope).toBe(0); // level: the box is not turned
+    expect(b.max[2] - b.min[2]).toBeCloseTo(sp.height, 9);
+    expect(b.max[0] - b.min[0]).toBeCloseTo(sp.length, 9);
     const w = worldAABB(get(parts, 'side-L-web'));
     expect(b.min[1]).toBeGreaterThanOrEqual(12 - 1e-6); // outside the chine / gunwale outer face (12 in)
     expect(b.max[1]).toBeLessThan(12 + 2 * defaults.panelPlyIn);
     void w;
     expect(b.min[2]).toBeGreaterThan(L.deckTop);
-    for (const x of [b.min[0] + 0.3, (b.min[0] + b.max[0]) / 2, b.max[0] - 0.3]) expect(b.max[2], `x=${x}`).toBeLessThanOrEqual(sideTopAt(L, b.min[0]) + 1e-6);
+    for (const x of [b.min[0] + 0.3, (b.min[0] + b.max[0]) / 2, b.max[0] - 0.3]) expect(b.max[2], `x=${x}`).toBeLessThanOrEqual(sideTopAt(L, x) - 0.5);
     expect(sp.height).toBeLessThanOrEqual(defaults.signHeightIn);
     expect(sp.length / sp.height).toBeGreaterThan(2.2); // wide enough that the words do not stack (signTexture)
   });
@@ -402,5 +411,22 @@ describe('what is gone with the old hull, the Ackermann front end and the swivel
     expect(L.sideH).toBe(defaults.sideHeightBowIn);
     expect(L.sideRear).toBe(defaults.sideHeightRearIn);
     expect(L.sideH).toBeLessThan(L.sideRear);
+  });
+});
+
+describe('the sign clears the brake flap (3c-5)', () => {
+  const ctx = makeCtx(defaults);
+  const sp = signPlacement(ctx);
+  it('its bottom edge is above the top of the rear brake flap wherever the two overlap in x, so the side view shows the whole board; the aspect keeps the artwork on two lines', () => {
+    const bg = brakeGeometry(defaults, L);
+    const b = worldAABB(get(parts, 'sign-L'));
+    const slope = bg.u[1] / bg.u[0];
+    const flapAt = (x: number) => bg.H[1] + (Math.min(x, bg.H[0]) - bg.H[0]) * slope;
+    expect(b.min[2]).toBeGreaterThan(flapAt(b.max[0]));
+    expect(sp.length / sp.height).toBeGreaterThanOrEqual(2.2 - 1e-9);
+    expect(sp.height).toBeGreaterThan(4); // big enough to read
+    expect(sp.length).toBeGreaterThan(10);
+    // it never reaches the brake hinge, the knee or the reflector
+    expect(b.max[0]).toBeLessThanOrEqual(SIGN_X_MAX_IN + 1e-9);
   });
 });

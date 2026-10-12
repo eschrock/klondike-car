@@ -50,7 +50,7 @@ describe('bump: velocity-pulse (spec 5.1)', () => {
       expect(hard.H).toBeGreaterThan(normal.H);
       expect(peakVertical(hard)).toBeGreaterThan(peakVertical(normal));
     }
-    // The cart is a plate on its four tires (D-56: 44 in wheelbase, both tracks 35.5 in): the CG is 17.5 in ahead of the rear axle, so a rear wheel is closer to it and its rigid-body
+    // The sled is a plate on its four tires (D-56: 44 in wheelbase, both tracks 35.5 in): the CG is 17.5 in ahead of the rear axle, so a rear wheel is closer to it and its rigid-body
     // mass is larger than a front wheel's (61 vs 43 lb), and it carries more static load (108 vs 71 lb): the rear wheel is struck harder.
     const g = ctx.loads.goal;
     expect(cornerWeightLb(ctx, g, 'rear')).toBeGreaterThan(cornerWeightLb(ctx, g, 'front'));
@@ -113,13 +113,13 @@ describe('bump: velocity-pulse (spec 5.1)', () => {
     expect(n.Fn / 380.0).toBeCloseTo(0.6, 2);
   });
 
-  it('hand calc on the real cart, goal rider, rear wheel, 1 in at 3 mph: W = 359 lb, CG x = 17.5, rear tire at (0, 17.75) on a plate 44 in x 35.5 in -> W_c = 61 lb, F_n = 282 lbf; 2 in at 5 mph = 626 lbf', () => {
+  it('hand calc on the real sled, goal rider, rear wheel, 1 in at 3 mph: W = 359 lb, CG x = 17.5, rear tire at (0, 17.75) on a plate 44 in x 35.5 in -> W_c = 61 lb, F_n = 282 lbf; 2 in at 5 mph = 626 lbf', () => {
     const ctx = ackCtx();
     const c = ctx.loads.goal;
     // plate gyration: ky = span/sqrt(12) with span = the wheelbase 44 (the front contacts at the kingpin line, x = 44); kx from the mean of the two tracks (35.5 and 35.5)
     const ky = 44 / Math.sqrt(12), kx = 35.5 / Math.sqrt(12);
     const wc = c.massLb / (1 + ((0 - c.cg[0]) / ky) ** 2 + ((17.75 - c.cg[1]) / kx) ** 2);
-    expect(wc / 63.5).toBeGreaterThan(0.95); // 61 lb at the 134 lb empty cart, 63.5 lb at the 148 lb cart of D-58; the mass moves a little as parts change
+    expect(wc / 63.5).toBeGreaterThan(0.95); // 61 lb at the 134 lb empty sled, 63.5 lb at the 148 lb sled of D-58; the mass moves a little as parts change
     expect(wc / 63.5).toBeLessThan(1.05);
     expect(cornerWeightLb(ctx, c, 'rear')).toBeCloseTo(wc, 9);
     const sq = Math.sqrt((ctx.p.bumpWheelRateLbIn * wc) / 386.1);
@@ -133,7 +133,7 @@ describe('bump: velocity-pulse (spec 5.1)', () => {
     expect(h.Fn / 636.4).toBeCloseTo(1, 1); // 70.4 x 9.04
     // static rear wheel: rear axle share W (1 - x/44) = 359.2 (1 - 17.46/44) = 216.7 lb, split 0.5 + |y|/track: 108.4 lb
     expect(n.staticLb).toBeCloseTo((c.massLb * (1 - c.cg[0] / 44)) * (0.5 + Math.abs(c.cg[1]) / 35.5), 6);
-    expect(n.staticLb / 116.4).toBeCloseTo(1, 1); // 108.4 lb at the 134 lb cart, 116.4 lb at the 148 lb cart
+    expect(n.staticLb / 116.4).toBeCloseTo(1, 1); // 108.4 lb at the 134 lb sled, 116.4 lb at the 148 lb sled
   });
 
   it('the seat factor is 1 + V_rear / W (normal strike at walking pace, 3 mph, D-55), never below dynamicFactor', () => {
@@ -196,7 +196,7 @@ describe('bump: rigid-body mass at the struck wheel (3c-3b)', () => {
     expect(rigidCornerWeightLb(280, 100, 0, 5, 5)).toBeLessThan(1);
   });
 
-  it('10 inch wheel, 70 lb static, symmetric 280 lb cart: 1 inch at 5 mph is 380 lbf (5.4x), 2 inch at 3 mph is 304 lbf (4.3x)', () => {
+  it('10 inch wheel, 70 lb static, symmetric 280 lb sled: 1 inch at 5 mph is 380 lbf (5.4x), 2 inch at 3 mph is 304 lbf (4.3x)', () => {
     // r = 5, h = 1: sin(beta) = 0.8, cos(beta) = 0.6; v = 88 in/s; v_n = 52.8 in/s; m_e = 40 / 386.1 = 0.1036; sqrt(500 x 0.1036) = 7.197; F_n = 380.0.
     const b = bumpPulse({ rIn: 5, hIn: 1, vMph: 5, staticLb: 70, kLbIn: 500, meWeightLb: 40, dlfCheck: 3 });
     expect(b.vn).toBeCloseTo(52.8, 9);
@@ -228,7 +228,7 @@ describe('bump: rigid-body mass at the struck wheel (3c-3b)', () => {
     expect(bumpPulse({ rIn: 6.5, hIn: 1, vMph: 5, staticLb: 65, kLbIn: 400, massShare: 1.5, meWeightLb: 30 }).meWeightLb).toBe(30);
   });
 
-  it('the free-body corner mass agrees with a four-tire-spring simulation of the rigid cart within 10% (uniform mass, k 500)', () => {
+  it('the free-body corner mass agrees with a four-tire-spring simulation of the rigid sled within 10% (uniform mass, k 500)', () => {
     const L = 44, T = 30, W = 280;
     const wheels: [number, number][] = [[L, T / 2], [L, -T / 2], [0, T / 2], [0, -T / 2]];
     for (const [cgx, struck] of [[L / 2, 0], [0.4 * L, 0], [0.4 * L, 2]] as const) {
@@ -241,7 +241,7 @@ describe('bump: rigid-body mass at the struck wheel (3c-3b)', () => {
     }
   });
 
-  it('on the real cart the struck-wheel mass is a fraction of the cart weight (about W/6 front, W/10 rear), and the multiplier scales the force by its square root', () => {
+  it('on the real sled the struck-wheel mass is a fraction of the sled weight (about W/6 front, W/10 rear), and the multiplier scales the force by its square root', () => {
     const ctx = ackCtx();
     for (const c of [ctx.loads.empty, ctx.loads.goal]) {
       for (const wheel of ['front', 'rear'] as const) {

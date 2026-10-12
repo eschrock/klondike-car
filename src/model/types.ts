@@ -74,7 +74,7 @@ export type Geometry =
   /** Bent lamination: centerline path in local XZ, rectangular section (width along Y). */
   | { type: 'sweep'; path: Vec2[]; width: number; thickness: number; plies: number }
   /** Pre-built triangle mesh (purchased parts, mannequin, truck). */
-  | { type: 'mesh'; positions: number[]; indices?: number[]; /** A long thin wall (D-57 plan-curved hull members): the overlap tests cover it with boxes about this long (in) along x instead of one bounding box. */ slabs?: number; /** Wall thickness (in) of such a plan-curved member, for the finish's roundover cap. */ thickness?: number; /** The wall's (x, z) outline, so the overlap tests can clip a notch or a step exactly. */ profile?: Vec2[] };
+  | { type: 'mesh'; positions: number[]; indices?: number[]; /** A long thin wall (D-57 plan-curved hull members): the overlap tests cover it with boxes about this long (in) along x instead of one bounding box. */ slabs?: number; /** Wall thickness (in) of such a plan-curved member, for the finish's roundover cap. */ thickness?: number; /** The wall's (x, z) outline, so the overlap tests can clip a notch or a step exactly. */ profile?: Vec2[]; /** The wood grain follows the top edge of the outline (a bandsawn sheer gunwale) instead of running straight along x. Cosmetic. */ grainFollowsTop?: boolean };
 
 export interface Dims {
   t: number;
@@ -156,7 +156,7 @@ export interface Part {
   /** Assembly step number where it is installed. */
   step: number;
   sourcing?: { vendor: string; url?: string; costUsd?: number; sku?: string };
-  /** Not part of the empty cart (rider, cargo, truck). */
+  /** Not part of the empty sled (rider, cargo, truck). */
   payload?: boolean;
   /**
    * Display finishing (D-44): how the viewer dresses the part. Analysis, mass and overlap tests ignore it, so it must

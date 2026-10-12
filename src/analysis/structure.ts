@@ -2,8 +2,8 @@
  * Structural checks (D-2, D-4, D-5, D-10, D-12, D-14, D-17). Each is evaluated at the operating and the goal rider; the
  * row shows the goal case (D-2: structure is sized to the goal rider) and `statusOperating` the other.
  *
- * Load factors: payload × dynamicFactor; members that also carry the cart's weight (axles, axle beams, rear-axle side,
- * turntable) use the axle's static ground reaction × dynamicFactor, which already contains the cart mass (D-2).
+ * Load factors: payload × dynamicFactor; members that also carry the sled's weight (axles, axle beams, rear-axle side,
+ * turntable) use the axle's static ground reaction × dynamicFactor, which already contains the sled mass (D-2).
  * Wood allowables are MOR/MOE × wet-service factors, with the wood safety factor; steel is yield / steel SF.
  */
 import { AXLE_STYLE } from '../params';
@@ -268,6 +268,7 @@ export function deckCheck(ctx: Ctx): AnalysisCheck {
   const t = p.deckPlyIn;
   const b = 12;
   const lim = span / p.deflectionLimitRatio;
+  const limStand = span / p.standDeflectionRatio; // a person standing on one foot at rest: a tad looser (D-58, Eric)
   const beff = effectiveStripWidth(FOOT_ACROSS_IN, span);
   const beffAlt = FOOT_ACROSS_IN + span;
   // Standing-scout response for a ply thickness: bending stress and static deflection of the b_eff strip.
@@ -285,7 +286,7 @@ export function deckCheck(ctx: Ctx): AnalysisCheck {
   };
   const passes = (th: number, c: CaseData) => {
     const st = standing(th, c.riderLb);
-    return seatCase(th, c).sigma <= al.plyBend && st.sigma <= al.plyBend && st.defl <= lim;
+    return seatCase(th, c).sigma <= al.plyBend && st.sigma <= al.plyBend && st.defl <= limStand;
   };
   const needed = (c: CaseData): number => {
     let lo = 0.05, hi = 3;
@@ -299,7 +300,7 @@ export function deckCheck(ctx: Ctx): AnalysisCheck {
     const ds = [
       detail('seat case bending', sa.sigma, 'psi', al.plyBend, '<='),
       detail('standing scout bending', s.sigma, 'psi', al.plyBend, '<='),
-      detail('standing scout deflection', s.defl, 'in', lim, '<='),
+      detail('standing scout deflection', s.defl, 'in', limStand, '<='),
     ];
     const gN = seatFactor(ctx, c), gH = Math.max(gN, bumpSeatGHard(ctx, c));
     ds.push(detail(`HARD 2" rear hit (seat factor ${f(gH, 2)}): seat case bending (ply MOR x C_M, no safety factor)`, (sa.sigma * gH) / gN, 'psi', al.plyBend * p.woodSafetyFactor, '<='));
@@ -307,7 +308,7 @@ export function deckCheck(ctx: Ctx): AnalysisCheck {
     const stock = STOCK_PLY_MM.find((mm) => mm / 25.4 >= tReq - 1e-9);
     const sens = STOCK_PLY_MM.map((mm) => `${mm} mm: ${standing(mm / 25.4, c.riderLb).defl.toFixed(3)}"`).join(', ');
     const alt = standing(t, c.riderLb, beffAlt).defl;
-    const how = `Ply ${f(t, 3)}" (${f(t * 25.4, 1)} mm) on the largest crossmember span ${f(span, 2)}" (panel simply supported: the captured/glued edges give some fixity that is not counted). (a) Seat: ${c.riderLb} lb × ${f(seatFactor(ctx, c), 2)} spread over ${f(p.seatDepthIn)}" × ${f(L.seat.width)}" → ${f(sa.wSeat, 1)} lb/in on a 12" strip, M = ${f(sa.M)} lb·in, σ = ${f(sa.sigma, 0)} psi. (b) Standing scout: ${c.riderLb} lb static on a ${FOOT_ALONG_IN}" (along the span) × ${FOOT_ACROSS_IN}" patch at midspan, treated as a one-way plate with effective strip width b_eff = b_patch + 2.5·x(1−x/L) = ${FOOT_ACROSS_IN} + 0.625 × ${f(span, 2)} = ${f(beff, 1)}" (EN 1992 / BS 8110 rule for a point load on a one-way slab at x = L/2): M = ${f(s.M)} lb·in, σ = ${f(s.sigma, 0)} psi, δ = ${s.defl.toFixed(3)}" vs span/${p.deflectionLimitRatio} = ${lim.toFixed(3)}". Ply design stress ${f(al.plyBend, 0)} psi, E = ${f(al.Eply, 0)} psi (E × C_M ${p.wetServiceFactorStiffness}). Thickness that passes all three: ≥ ${Number.isFinite(tReq) ? `${f(tReq * 25.4, 1)} mm (${f(tReq, 3)}")` : 'more than 3"'}${stock ? `, so the next stock ply is ${stock} mm` : ''}. Standing-scout deflection by stock ply (same b_eff, this load): ${sens}. For reference, the looser b_eff = patch + span = ${f(beffAlt, 1)}" would give ${alt.toFixed(3)}" at the current ply.`;
+    const how = `Ply ${f(t, 3)}" (${f(t * 25.4, 1)} mm) on the largest crossmember span ${f(span, 2)}" (panel simply supported: the captured/glued edges give some fixity that is not counted). (a) Seat: ${c.riderLb} lb × ${f(seatFactor(ctx, c), 2)} spread over ${f(p.seatDepthIn)}" × ${f(L.seat.width)}" → ${f(sa.wSeat, 1)} lb/in on a 12" strip, M = ${f(sa.M)} lb·in, σ = ${f(sa.sigma, 0)} psi. (b) Standing scout: ${c.riderLb} lb static on a ${FOOT_ALONG_IN}" (along the span) × ${FOOT_ACROSS_IN}" patch at midspan, treated as a one-way plate with effective strip width b_eff = b_patch + 2.5·x(1−x/L) = ${FOOT_ACROSS_IN} + 0.625 × ${f(span, 2)} = ${f(beff, 1)}" (EN 1992 / BS 8110 rule for a point load on a one-way slab at x = L/2): M = ${f(s.M)} lb·in, σ = ${f(s.sigma, 0)} psi, δ = ${s.defl.toFixed(3)}" vs span/${p.standDeflectionRatio} = ${limStand.toFixed(3)}" (a standing adult may deflect a tad more, D-58). Ply design stress ${f(al.plyBend, 0)} psi, E = ${f(al.Eply, 0)} psi (E × C_M ${p.wetServiceFactorStiffness}). Thickness that passes all three: ≥ ${Number.isFinite(tReq) ? `${f(tReq * 25.4, 1)} mm (${f(tReq, 3)}")` : 'more than 3"'}${stock ? `, so the next stock ply is ${stock} mm` : ''}. Standing-scout deflection by stock ply (same b_eff, this load): ${sens}. For reference, the looser b_eff = patch + span = ${f(beffAlt, 1)}" would give ${alt.toFixed(3)}" at the current ply.`;
     return governing(ds, how);
   };
   // Cargo mode (D-53): the payload spread over the bed (a 12" strip of the panel under the bed pressure) and the concentrated item (jug pair, cooler) on its footprint.

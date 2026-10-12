@@ -103,10 +103,10 @@ describe('washerContact (the roll couple on the UHMW thrust washer)', () => {
 });
 
 describe('front wheel loads (the basis of every row)', () => {
-  it('static front axle by hand: level W x/44 = 140 lb, nose down on 15 deg W cos(th) - N_r = 167 lb (M4: the worse governs); the heavier wheel takes 0.5 + |y|/35.5', () => {
+  it('static front axle by hand: level W x/44 = 138 lb, nose down on 15 deg W cos(th) - N_r = 166 lb (M4: the worse governs); the heavier wheel takes 0.5 + |y|/35.5', () => {
     const w = wheelLoads(ctx, g);
-    expect(hw.level).toBeCloseTo(139.8, 0);
-    expect(hw.slope).toBeCloseTo(167.5, 0);
+    expect(hw.level).toBeCloseTo(138.1, 0);
+    expect(hw.slope).toBeCloseTo(165.7, 0);
     expect(w.frontAxle).toBeCloseTo(hw.axle, 6);
     expect(w.frontWheel).toBeCloseTo(hw.wheel, 6);
   });

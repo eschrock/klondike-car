@@ -273,7 +273,7 @@ describe('the oak tongue, shackle and bridle (D-56, D-58)', () => {
       expect(get(parts, id).removable, id).toBeFalsy();
       expect(removed.some((x) => x.id === id), id).toBe(true);
     }
-    // the cart (without the tongue) is shorter than the bow tip by the banding at most, and lighter by the four parts
+    // the sled (without the tongue) is shorter than the bow tip by the banding at most, and lighter by the four parts
     const reach = Math.max(...removed.filter((x) => !x.payload).map((x) => worldAABB(x).max[0]));
     expect(reach).toBeLessThan(L.xFront + 0.5);
     const lost = ['bridle-tongue', 'bridle-sleeve', 'bridle-eye', 'bridle'].reduce((m, id) => m + get(parts, id).massLb, 0);
@@ -546,7 +546,7 @@ describe('cut list and stock (D-56)', () => {
 });
 
 describe('front-end masses at the defaults (D-56): ranges, not pins', () => {
-  it('the front-end group is 10-25 lb, the empty cart about 150 lb (120-160), and the beam / tongue / king beam are in their expected bands', () => {
+  it('the front-end group is 10-25 lb, the empty sled about 150 lb (120-160), and the beam / tongue / king beam are in their expected bands', () => {
     const grp = parts.filter((x) => x.group === 'front-end').reduce((m, x) => m + x.massLb, 0);
     expect(grp).toBeGreaterThan(10);
     expect(grp).toBeLessThan(25);

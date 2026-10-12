@@ -45,7 +45,7 @@ function limitText(c: { status: Status; limit: number; sense: '>=' | '<='; unit:
   return `${isInfo ? 'ref ' : ''}${sym} ${fmtNumber(c.limit, c.unit)}${unitText(c.unit)}`;
 }
 
-const LOAD_LABEL = { empty: "empty cart", operating: "operating rider", goal: "goal rider", light: "lightest rider", cargo: "cargo" } as const;
+const LOAD_LABEL = { empty: "empty sled", operating: "operating rider", goal: "goal rider", light: "lightest rider", cargo: "cargo" } as const;
 
 type CaseKey = 'operating' | 'goal' | 'light' | 'cargo';
 
@@ -140,7 +140,7 @@ function materials(p: Params, isOpen: boolean, onToggle: (o: boolean) => void): 
         ['Bump hits (D-50)', `${p.bumpNormalHeightIn}" normal at ${p.bumpSpeedNormalMph} mph (walking), ${p.bumpHardHeightIn}" hard at ${p.bumpSpeedHardMph} mph (jogging)`, `velocity-pulse model, wheel rate ${p.bumpWheelRateLbIn} lb/in; sin β = (r − h)/r`],
         ['Axle tire friction', `H = μ·P_static, arm = tire radius`, 'combined with vertical as a resultant'],
         ['μ tire-ground / pad', `${p.tireGroundMu} / ${p.brakePadMu}`, 'D-16'],
-        ['Deflection limit', `L/${p.deflectionLimitRatio}`, 'static load'],
+        ['Deflection limit', `L/${p.deflectionLimitRatio}; a standing adult on the deck ply L/${p.standDeflectionRatio}`, 'static load (the looser limit is Eric\'s, D-58)'],
       ]),
     ));
   det.open = isOpen;

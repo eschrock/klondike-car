@@ -78,7 +78,7 @@ export function materialsFor(look: Look): SurfaceMats {
       m = new THREE.MeshStandardMaterial({ color: 0x2c2f33, roughness: 0.5, metalness: 0.75, ...SOLID });
       break;
     case 'aluminum':
-      m = new THREE.MeshStandardMaterial({ color: 0xc8ccd2, roughness: 0.42, metalness: 1, ...SOLID });
+      m = new THREE.MeshStandardMaterial({ color: 0xa9aeb5, roughness: 0.5, metalness: 1, ...SOLID }); // brushed, not mirror-white (3c-5: the handle sockets read as white plates)
       break;
     case 'asa':
       // Printed ASA, round 3: dark charcoal satin plastic (was safety orange, which read as unstained wood; review r2 MUST 1).

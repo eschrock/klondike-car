@@ -41,7 +41,9 @@ describe('step brake mounts (D-57)', () => {
     expect(bk.max[1]).toBeCloseTo(L.hwC + L.side - defaults.railThicknessIn, 2); // the rail's inner face
     expect(bk.max[1] - bk.min[1]).toBeCloseTo(defaults.brakeBackerThickIn, 6);
     expect(bk.min[0]).toBeGreaterThan(worldAABB(byId('axle-hanger-L')).max[0]);
-    const j2 = worldAABB(byId('joist-2'));
+    // 3c-5: at the 8.5 in joist spacing no crossmember meets the backer (joist-2 ends at x = 5.9, the backer starts at 6.2), so it runs the full width; at 10 in the joist at x = 8 is cut back to the backer's face
+    expect(worldAABB(byId('joist-2')).max[1]).toBeCloseTo(L.hwC + L.side - defaults.railThicknessIn, 2);
+    const j2 = worldAABB(buildModel({ ...defaults, crossmemberSpacingIn: 10 }).find((x) => x.id === 'joist-2')!);
     expect(j2.max[1]).toBeCloseTo(bk.min[1], 2);
     expect(g.backer.x1).toBeGreaterThan(g.bolts.xs[g.bolts.xs.length - 1]);
   });

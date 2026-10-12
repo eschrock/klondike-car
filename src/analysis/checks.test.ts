@@ -56,16 +56,16 @@ describe('runChecks at the defaults', () => {
     const dR = Math.abs(fr[0] * (cg[1] + 17.75) - (fr[1] + 17.75) * cg[0]) / Math.hypot(fr[0], fr[1] + 17.75);
     return Math.min(dL, dR);
   };
-  it('lateral tip by hand (operating rider, about 309 lb, CG about (17.05, 0, 14.32)): straight ahead d = 17.75 - ~0.0 -> atan(17.75 / 14.32) = 51.1 deg; at full lock the side edge to the trailing front tire is 17.25 in away: atan(17.25 / 14.32) = 50.3 deg', () => {
+  it('lateral tip by hand (operating rider, about 308 lb, CG about (16.2, 0, 14.1)): straight ahead d = 17.75 - ~0.0 -> atan(17.75 / 14.1) = 51.6 deg; at full lock the side edge to the trailing front tire is 17.25 in away: atan(17.25 / 14.1) = 50.9 deg', () => {
     const c = ctx.loads.operating;
     const [x, , h] = c.cg;
-    expect(Math.abs(x - 17.05)).toBeLessThan(1); // the CG moves as parts change (D-58: the heavier front end moves it forward 0.7 in); the hand calc below is from the case itself
-    expect(Math.abs(h - 14.32)).toBeLessThan(0.5);
+    expect(Math.abs(x - 16.2)).toBeLessThan(1); // the CG moves as parts change (D-58: the heavier front end moves it forward 0.7 in); the hand calc below is from the case itself
+    expect(Math.abs(h - 14.1)).toBeLessThan(0.5);
     let worst = Infinity;
     for (let a = -20; a <= 20; a += 1) worst = Math.min(worst, (Math.atan2(tipAt(c.cg, a), h) * 180) / Math.PI);
     expect(byId(cs, 'tip-straight').cases!.operating!.value).toBeCloseTo(worst, 2);
-    expect(worst).toBeCloseTo(50.3, 0);
-    expect((Math.atan2(tipAt(c.cg, 0), h) * 180) / Math.PI).toBeCloseTo(51.1, 0); // straight ahead is the better case
+    expect(worst).toBeCloseTo(50.9, 0);
+    expect((Math.atan2(tipAt(c.cg, 0), h) * 180) / Math.PI).toBeCloseTo(51.6, 0); // straight ahead is the better case
     // tip-lock is the same at exactly +-20 degrees (the worst case of the sweep is at full lock)
     expect(byId(cs, 'tip-lock').cases!.operating!.value).toBeCloseTo(Math.min((Math.atan2(tipAt(c.cg, 20), h) * 180) / Math.PI, (Math.atan2(tipAt(c.cg, -20), h) * 180) / Math.PI), 6);
     expect(byId(cs, 'tip-straight').cases!.operating!.limit).toBe(40);
@@ -389,5 +389,16 @@ describe('status chips and per-case results (P1/P2)', () => {
     const a = byId(cs, 'axle-stress');
     expect(a.cases![a.governingLoad as 'goal']!.status).toBe(a.status);
     for (const c of cs) if (c.cases && c.status === 'fail') expect(c.cases[c.governingLoad as 'goal']!.status, c.id).toBe('fail');
+  });
+});
+
+describe('3c-5: the rows say sled, not cart', () => {
+  it('no check label, how-text or detail name says "cart" (hand cart and billy-cart aside)', () => {
+    const strip = (s: string | undefined) => (s ?? '').replace(/hand cart|billy-cart/gi, '');
+    for (const c of runChecks(defaultParams(), { includeTruck: false })) {
+      expect(strip(c.label), c.id).not.toMatch(/\bcarts?\b/i);
+      expect(strip(c.how), c.id).not.toMatch(/\bcarts?\b/i);
+      for (const d of c.details ?? []) expect(strip(d.name), `${c.id}: ${d.name}`).not.toMatch(/\bcarts?\b/i);
+    }
   });
 });

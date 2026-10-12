@@ -21,7 +21,7 @@ export interface Ctx {
 }
 
 /**
- * `stowedParts` (the empty cart with the seat stowed in the box) switches the cargo cases on (D-53); without it the context has no cargo case and the checks
+ * `stowedParts` (the empty sled with the seat stowed in the box) switches the cargo cases on (D-53); without it the context has no cargo case and the checks
  * report the rider cases only (the rider sweeps use that fast path).
  */
 export function makeContext(p: Params, parts: Part[], stowedParts?: Part[]): Ctx {

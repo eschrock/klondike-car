@@ -79,7 +79,7 @@ steer.addEventListener('input', () => setSteer(Number(steer.value)));
 steerNum.addEventListener('change', () => setSteer(Number(steerNum.value)));
 steerZero.addEventListener('click', () => setSteer(0));
 viewer.addToolbarControl(
-  h('label', { class: 'steer-ctl', title: "Preview only: it doesn't change the cart. Turns the front axle about the kingpin, from full left to full right lock (+ = left)." }, 'Steering', steer, steerNum, h('span', { class: 'steer-unit' }, '°'), steerZero),
+  h('label', { class: 'steer-ctl', title: "Preview only: it doesn't change the sled. Turns the front axle about the kingpin, from full left to full right lock (+ = left)." }, 'Steering', steer, steerNum, h('span', { class: 'steer-unit' }, '°'), steerZero),
 );
 const checkbox = (label: string | Node[], title: string, checked: boolean, onChange: (v: boolean) => void, cls = '') => {
   const cb = h('input', { type: 'checkbox' });

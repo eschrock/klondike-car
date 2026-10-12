@@ -11,6 +11,7 @@ import { handleGeometry } from './handle';
 import { transformPoint } from './bounds';
 import { innerHalfWidth, sideSlopeAt, sideTopAt, webTopAt, type Layout } from './layout';
 import { planWallGeometry } from './plan-wall';
+import { brakeGeometry } from './brake-layout';
 import { compose } from './mat4';
 import type { Dims, EdgeCondition, Mat4, Part, PartGroup, Vec2, Vec3 } from './types';
 
@@ -116,6 +117,8 @@ interface ExtSpec {
   extraLb?: number;
   /** A plan-curved vertical wall (D-57): `outline` is then in (x, z) with thickness `depth`, centered at y = planYc(x) in the model frame (the transform must be the identity). */
   planYc?: (x: number) => number;
+  /** Cosmetic: the grain follows the top edge (the bandsawn sheer gunwale). */
+  grainFollowsTop?: boolean;
   notes?: string;
 }
 
@@ -140,7 +143,7 @@ export function extPart(ctx: Ctx, s: ExtSpec): Part {
     group: s.group,
     kind: s.mat === 'oak' ? 'lumber' : s.mat === 'ply' ? 'sheet' : 'printed',
     material: s.mat === 'oak' ? 'white oak' : s.mat === 'ply' ? ctx.plyName : 'ASA',
-    geometry: s.planYc ? planWallGeometry(s.outline, s.depth, s.planYc) : { type: 'extrusion', outline: s.outline, ...(s.holes ? { holes: s.holes } : {}), depth: s.depth },
+    geometry: s.planYc ? planWallGeometry(s.outline, s.depth, s.planYc, 1.5, s.grainFollowsTop) : { type: 'extrusion', outline: s.outline, ...(s.holes ? { holes: s.holes } : {}), depth: s.depth },
     transform: s.transform,
     body: 'chassis',
     massLb: mass,
@@ -330,7 +333,7 @@ export function buildBody(ctx: Ctx): Part[] {
       const blank = Math.abs(top(x0s) - top(x1s)) + L.railBand + 0.5;
       parts.push(extPart(ctx, {
         id: `${id}-gunwale`, partNo: 'side-gunwale', name: `${nm} gunwale`, group: 'body', mat: 'oak', step: HULL_STEP.sides, grain: 'x', fab: 'bandsaw',
-        center: [(x0s + x1s) / 2, ycOf((x0s + x1s) / 2), (top(x0s) + top(x1s)) / 2], outline, depth: L.side, transform: compose([0, 0, 0]), planYc: ycOf, extraLb: -grooveLb,
+        center: [(x0s + x1s) / 2, ycOf((x0s + x1s) / 2), (top(x0s) + top(x1s)) / 2], outline, depth: L.side, transform: compose([0, 0, 0]), planYc: ycOf, grainFollowsTop: true, extraLb: -grooveLb,
         notes: `The sheer gunwale (D-57): a ${L.railBand}" band whose top is a ${p.sheerCurveIn === 0 ? 'straight line' : `concave curve (a ${p.sheerCurveIn}" sag below the straight line at mid-length)`} from ${p.sideHeightRearIn}" above the deck at the rear transom to ${L.sideH.toFixed(2)}" at x = ${x1s.toFixed(1)}", where it ends at the bow bulkhead (${slope.toFixed(1)}° at the rear). BENT-LAMINATED AND BANDSAWN: 2 plies of ${(L.side / 2).toFixed(3)}" white oak, ${blank.toFixed(1)}" wide (the full sheer drop plus the band), bent flat on the plan form together with the chine${turned ? ` (${bendNote.trim()})` : ''} and epoxied, then the sheer line is bandsawn and planed (the grain follows the sheer; the top edge is relief-cut where it meets the transom crown). Underside groove ${(pl + slop).toFixed(3)}" × ${g}" holds the web (D-35, D-43), plowed before the sheer is sawn. ${SIDE_ASSEMBLY_NOTE}`,
       }));
     }
@@ -400,10 +403,10 @@ export function buildBody(ctx: Ctx): Part[] {
     for (const { s, tag } of SIDES) {
       const sign = box(ctx, {
         id: `sign-${tag}`, partNo: 'sign', name: `Side sign ${tag}`, group: 'removable', mat: 'ply', removable: true, edges: 'edged', step: STEP.finish,
-        size: [sg.length, pl, sg.height], center: [sg.xc, s * (L.hwC + L.side + pl / 2), sg.zc], rot: { y: sg.slope },
+        size: [sg.length, pl, sg.height], center: [sg.xc, s * (L.hwC + L.side + pl / 2), sg.zc],
       });
       sign.massLb += edgeBandLb(ctx, 2 * (sg.length + sg.height), pl);
-      sign.notes = `D-57: the sign is back, on the outside of the tall rear part of the side (${sg.length.toFixed(1)}" × ${sg.height.toFixed(1)}", turned ${((sg.slope * 180) / Math.PI).toFixed(1)}° to follow the sheer, its top edge ${sg.topMargin}" under the gunwale line). 6 mm ply blank, all four edges banded with oak, drawn as a rounded-oval plank with the Troop 455 artwork (signTexture); hung on thumb-knob screws into tee-nuts in the side so it comes off for transport. It stays clear of the rear wheel and of the brake hinge mounts.`;
+      sign.notes = `D-57: the sign is back, on the outside of the tall rear part of the side (${sg.length.toFixed(1)}" × ${sg.height.toFixed(1)}", level, not tilted to follow the sheer (3c-5), its top edge ${sg.topMargin}" under the gunwale line at its forward end). 6 mm ply blank, all four edges banded with oak, drawn as a rounded-oval plank with the Troop 455 artwork (signTexture); hung on thumb-knob screws into tee-nuts in the side so it comes off for transport. It stays clear of the rear wheel and of the brake hinge mounts.`;
       parts.push(sign);
     }
   }
@@ -412,20 +415,41 @@ export function buildBody(ctx: Ctx): Part[] {
   return parts;
 }
 
-/** Where the side sign goes (D-57): behind x = `signXMax`, starting just ahead of the rear transom, turned to the sheer's slope at its center, top edge `topMargin` under the gunwale line. */
+/**
+ * Where the side sign goes (D-57, 3c-5): LEVEL (not tilted to follow the sheer; Eric), on the outside of the tall rear part of the side, starting just ahead of the rear transom. Its
+ * top edge is `topMargin` under the gunwale line at its FORWARD end (where the sheer is lowest, so the whole board stays inside the side), and its bottom edge clears the rear
+ * wheel's brake flap, which stands out beside the side there and would hide the lower third of the board from a side view. The forward end is chosen (never ahead of `SIGN_X_MAX_IN`,
+ * the brake hinge and knee) to give the biggest board that is at least `SIGN_MIN_ASPECT` long for its height, so the artwork keeps its two lines instead of stacking.
+ */
 export function signPlacement(ctx: Pick<Ctx, 'p' | 'L'>) {
   const { p, L } = ctx;
   const x0 = L.xSideStart + 1.3; // the turned corner of the board stays ahead of the rear end of the side
-  const length = Math.max(4, Math.min(p.signLengthIn, SIGN_X_MAX_IN - x0));
-  const xc = x0 + length / 2;
-  const slope = sideSlopeAt(L, xc);
   const topMargin = 0.75;
-  const cs = Math.cos(slope);
-  const hAvail = (sideTopAt(L, xc) - topMargin - (L.deckTop + 0.5)) * cs;
-  const height = Math.max(2, Math.min(p.signHeightIn, hAvail));
-  const zc = sideTopAt(L, xc) - topMargin - height / (2 * cs);
-  return { length, height, xc, zc, slope, topMargin };
+  const bg = brakeGeometry(p, L);
+  const flapSlope = bg.u[0] !== 0 ? bg.u[1] / bg.u[0] : 0; // z per x along the flap's top surface (positive: it rises toward the hinge)
+  const flapTop = (x: number) => bg.H[1] + (Math.min(x, bg.H[0]) - bg.H[0]) * flapSlope + SIGN_FLAP_CLEAR_IN;
+  let best = { length: 4, height: 2, x1: x0 + 4, zTop: 0, zBot: 0, area: -1 };
+  for (let x1 = Math.min(SIGN_X_MAX_IN, x0 + p.signLengthIn); x1 >= x0 + 4 - 1e-9; x1 -= 0.25) {
+    const length = x1 - x0;
+    const zTop = sideTopAt(L, x1) - topMargin;
+    const zBot = Math.max(L.deckTop + 0.5, flapTop(x1));
+    const height = Math.min(p.signHeightIn, zTop - zBot, length / SIGN_MIN_ASPECT);
+    if (height < 2) continue;
+    if (length * height > best.area + 1e-9) best = { length, height, x1, zTop, zBot, area: length * height };
+  }
+  if (best.area < 0) { // no room above the flap: fall back to the old board over the chine
+    const length = Math.max(4, Math.min(p.signLengthIn, SIGN_X_MAX_IN - x0));
+    const zTop = sideTopAt(L, x0 + length) - topMargin;
+    const height = Math.max(2, Math.min(p.signHeightIn, zTop - (L.deckTop + 0.5)));
+    best = { length, height, x1: x0 + length, zTop, zBot: zTop - height, area: length * height };
+  }
+  // Center the board in the band between the flap and the gunwale line when the height is limited by the aspect rather than the room.
+  const zc = best.zTop - best.height / 2 - Math.max(0, (best.zTop - best.zBot - best.height) / 2);
+  return { length: best.length, height: best.height, xc: x0 + best.length / 2, zc, slope: 0, topMargin };
 }
+/** Least length / height of the sign (signTexture stacks the words below 2.2:1), and the clearance over the brake flap's top surface. */
+export const SIGN_MIN_ASPECT = 2.2;
+const SIGN_FLAP_CLEAR_IN = 0.3;
 /** The sign never reaches past this x (in): the rear wheel's hub, and the brake mount ahead of the tire, are beyond it (D-57). */
 export const SIGN_X_MAX_IN = 6;
 

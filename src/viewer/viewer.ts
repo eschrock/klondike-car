@@ -77,7 +77,7 @@ export class Viewer {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(32, 1, 1, 5000);
   private readonly controls: OrbitControls;
-  /** Cart meshes. In truck view its matrix is the cart-to-truck transform. */
+  /** Sled meshes. In truck view its matrix is the cart-to-truck transform. */
   private readonly partsGroup = new THREE.Group();
   private readonly truckGroup = new THREE.Group();
   private readonly envObjects: THREE.Object3D[] = [];
@@ -123,9 +123,11 @@ export class Viewer {
   private showEdges = true;
   /** Shop aids (jigs and forms such as a lamination form) are hidden until the Advanced "Shop aids" toggle asks for them. */
   private showShopAids = false;
+  /** The wheel chocks hang under the rear knees on cords; they ride in the box when the sled is carried, so the drawing hides them until the "Wheel chocks" toggle asks (3c-5). */
+  private showChocks = false;
   private sunDir = new THREE.Vector3(-10, -90, 150).normalize();
   private currentView: ViewName = 'iso';
-  /** The user orbited / zoomed since the last view button or auto-frame; until then a resize re-frames the cart. */
+  /** The user orbited / zoomed since the last view button or auto-frame; until then a resize re-frames the sled. */
   private userMoved = false;
   private sunCenter = new THREE.Vector3(30, 0, 10);
   private sunRadius = 60;
@@ -149,7 +151,7 @@ export class Viewer {
     this.canvasHost = el('div', 'viewer-canvas');
     const toolbar = el('div', 'viewer-toolbar');
     this.toggleHost = el('div', 'viewer-toggles');
-    // The controls live in their own bar above the canvas (never overlaying the cart).
+    // The controls live in their own bar above the canvas (never overlaying the sled).
     const bar = el('div', 'viewer-bar');
     bar.append(toolbar, this.toggleHost);
     const stage = el('div', 'viewer-stage');
@@ -203,7 +205,7 @@ export class Viewer {
     this.buildSectionControl();
     this.buildOverlayControls();
 
-    // alpha: the soft gradient behind the cart is CSS (`.viewer-canvas`), so it follows the app theme with no re-render.
+    // alpha: the soft gradient behind the sled is CSS (`.viewer-canvas`), so it follows the app theme with no re-render.
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -288,7 +290,7 @@ export class Viewer {
       const allow = e.ctrlKey || e.metaKey || this.canvasActive;
       this.controls.enableZoom = allow;
       setTimeout(() => (this.controls.enableZoom = true)); // only gate the wheel; pinch (touch) zoom stays available
-      if (!allow) this.showHint(isMac ? '⌘ + scroll to zoom (or click the cart first)' : 'Ctrl + scroll to zoom (or click the cart first)');
+      if (!allow) this.showHint(isMac ? '⌘ + scroll to zoom (or click the sled first)' : 'Ctrl + scroll to zoom (or click the sled first)');
     }, { capture: true, passive: true });
     dom.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse') this.canvasActive = true; });
     dom.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') this.canvasActive = false; });
@@ -373,6 +375,10 @@ export class Viewer {
     mk('Edges', 'Thin dark outlines on the parts (off shows the finish only)', true, (v) => {
       this.showEdges = v;
       for (const l of this.edgeLines) l.visible = v;
+    }, true);
+    mk('Wheel chocks', 'Show the wheel chocks parked at the rear tires (they are carried in the box when the sled is on the move)', false, (v) => {
+      this.showChocks = v;
+      this.refreshVisibility();
     }, true);
     mk('Shop aids', 'Show shop jigs and forms (for example a lamination form) as faint gray wireframes', false, (v) => {
       this.showShopAids = v;
@@ -461,12 +467,12 @@ export class Viewer {
     }
 
     if (this.showDims) {
-      const cart = parts.filter((x) => !x.payload && x.group !== 'reference' && x.id !== 'bridle' && !/rope/i.test(x.name)); // ropes are not drawn; the tongue plate and shackle are, and count in the overall length
-      if (!cart.length) return;
-      const bb = worldAABB(cart);
+      const sled = parts.filter((x) => !x.payload && x.group !== 'reference' && x.id !== 'bridle' && !/rope/i.test(x.name)); // ropes are not drawn; the tongue plate and shackle are, and count in the overall length
+      if (!sled.length) return;
+      const bb = worldAABB(sled);
       const [x0, y0, z0] = bb.min;
       const [x1, y1, z1] = bb.max;
-      const o = 5; // offset of the dimension lines from the cart
+      const o = 5; // offset of the dimension lines from the sled
       const dim = (a: Vec3, b: Vec3, text: string) => {
         line([a, b], dimMat);
         const ticks = 1.2;
@@ -477,7 +483,7 @@ export class Viewer {
       dim([x0, y0 - o, 0], [x1, y0 - o, 0], `Length ${f(x1 - x0)} overall`);
       dim([x1 + o, y0, 0], [x1 + o, y1, 0], `Width ${f(y1 - y0)}`);
       dim([x0 - o, y1 + o, 0], [x0 - o, y1 + o, z1], `Height ${f(z1 - 0)} overall`);
-      const wheels = cart.filter((x) => x.geometry.type === 'wheel').map((x) => partCentroid(x));
+      const wheels = sled.filter((x) => x.geometry.type === 'wheel').map((x) => partCentroid(x));
       if (wheels.length >= 2) {
         const xs = wheels.map((c) => c[0]);
         const rearX = Math.min(...xs), frontX = Math.max(...xs);
@@ -486,7 +492,7 @@ export class Viewer {
         if (frontX - rearX > 1) dim([rearX, y1 + o + 6, wz], [frontX, y1 + o + 6, wz], `Wheelbase ${f(frontX - rearX)}`);
         if (ys.length >= 2) dim([rearX, Math.min(...ys), 0], [rearX, Math.max(...ys), 0], `Track ${f(Math.max(...ys) - Math.min(...ys))}`);
       }
-      const deck = cart.filter((x) => /deck/i.test(x.id));
+      const deck = sled.filter((x) => /deck/i.test(x.id));
       if (deck.length) {
         const db = worldAABB(deck);
         const cx = (db.min[0] + db.max[0]) / 2;
@@ -542,7 +548,7 @@ export class Viewer {
     this.renderer.clippingPlanes = [this.sectionPlane];
   }
 
-  /** Tint the given part ids (cart parts). Pass [] to clear. */
+  /** Tint the given part ids (sled parts). Pass [] to clear. */
   highlight(ids: string[], color = '#ff3b30'): void {
     this.highlighted = new Set(ids);
     this.highlightColor = color;
@@ -584,7 +590,7 @@ export class Viewer {
     const gm = grid.material as THREE.Material;
     gm.transparent = true;
     gm.opacity = 0.3;
-    // Fade the grid with distance from the cart (review r2 SHOULD 7): full strength near it, gone by about 115".
+    // Fade the grid with distance from the sled (review r2 SHOULD 7): full strength near it, gone by about 115".
     gm.onBeforeCompile = (sh) => {
       sh.vertexShader = 'varying vec3 vGp;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvGp = (modelMatrix * vec4(transformed, 1.0)).xyz;');
       sh.fragmentShader = 'varying vec3 vGp;\n' + sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.a *= 1.0 - smoothstep(50.0, 115.0, length(vGp.xy - vec2(25.0, 0.0)));');
@@ -592,7 +598,7 @@ export class Viewer {
     this.gridMat = gm;
     this.scene.add(grid);
 
-    // A soft ground pool under the cart so it never floats on the dark background (lit warm gray, fading to nothing).
+    // A soft ground pool under the sled so it never floats on the dark background (lit warm gray, fading to nothing).
     const gc = document.createElement('canvas');
     gc.width = gc.height = 256;
     const gx = gc.getContext('2d')!;
@@ -689,9 +695,9 @@ export class Viewer {
       this.contactGroup.remove(c);
       (c as THREE.Mesh).geometry.dispose();
     }
-    const cart = parts.filter((p) => !p.payload && p.group !== 'reference' && lookOf(p) !== 'rope'); // the rope is not drawn (owner, round 3)
-    if (!cart.length) return;
-    const bb = worldAABB(cart);
+    const sled = parts.filter((p) => !p.payload && p.group !== 'reference' && lookOf(p) !== 'rope'); // the rope is not drawn (owner, round 3)
+    if (!sled.length) return;
+    const bb = worldAABB(sled);
     const dark = document.documentElement.getAttribute('data-theme') === 'dark';
     const mat = new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false, opacity: dark ? 0.8 : 0.5, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
     const blob = (cx: number, cy: number, w: number, h: number) => {
@@ -700,7 +706,7 @@ export class Viewer {
       this.contactGroup.add(m);
     };
     blob((bb.min[0] + bb.max[0]) / 2, (bb.min[1] + bb.max[1]) / 2, (bb.max[0] - bb.min[0]) * 1.2, (bb.max[1] - bb.min[1]) * 1.3);
-    for (const w of cart) {
+    for (const w of sled) {
       if (w.geometry.type !== 'wheel') continue;
       const c = partCentroid(w);
       const g = w.geometry;
@@ -758,6 +764,7 @@ export class Viewer {
       mesh.userData.group = part.group;
       // Shop aids (e.g. a bent-lam form): reference parts that are fabricated, unlike the rider/cargo figures.
       mesh.userData.shopAid = isShopAid(part);
+      mesh.userData.chock = /^brake-chock/.test(part.id);
       mesh.castShadow = !mesh.userData.shopAid;
       mesh.receiveShadow = true;
       mesh.matrixAutoUpdate = false;
@@ -794,7 +801,7 @@ export class Viewer {
   }
 
   /**
-   * Truck view: show the bed parts (TRUCK frame) and place the cart with `cartTransform` (cart frame -> truck
+   * Truck view: show the bed parts (TRUCK frame) and place the sled with `cartTransform` (sled frame -> truck
    * frame). `frameKey` re-frames the camera when it changes. Pass null to return to the normal view.
    */
   setTruck(bed: Part[] | null, cartTransform?: Mat4, frameKey = ''): void {
@@ -864,7 +871,7 @@ export class Viewer {
       this.fitSun();
       return;
     }
-    this.placeSun(new THREE.Vector3(0, 0, 0), 60); // the sim sun then follows the cart (followPoint)
+    this.placeSun(new THREE.Vector3(0, 0, 0), 60); // the sim sun then follows the sled (followPoint)
     const mat = (color: number) => {
       const m = new THREE.MeshStandardMaterial({ color, roughness: 1 });
       m.side = THREE.DoubleSide;
@@ -904,7 +911,7 @@ export class Viewer {
   }
 
   /**
-   * Orientation of the sim ground (a column-major 4x4 about the origin, inches). `focus` is the cart's world position:
+   * Orientation of the sim ground (a column-major 4x4 about the origin, inches). `focus` is the sled's world position:
    * the grid is re-centerd under it (snapped to its 48" cells) and the sun's shadow box follows it.
    */
   setSimGroundPose(pose: Mat4, focus?: Vec3): void {
@@ -918,7 +925,7 @@ export class Viewer {
   }
 
   /**
-   * Keep the orbit camera on a moving point (e.g. the cart in the sim) while leaving the user's view angle alone.
+   * Keep the orbit camera on a moving point (e.g. the sled in the sim) while leaving the user's view angle alone.
    * `snap` first jumps the orbit target onto the point (a new run).
    */
   followPoint(p: Vec3 | null, snap = false): void {
@@ -960,7 +967,7 @@ export class Viewer {
   }
 
   private shouldShow(m: THREE.Object3D): boolean {
-    return !this.hidden.has(m.userData.group as PartGroup) && !(m.userData.shopAid && (this.simple || !this.showShopAids));
+    return !this.hidden.has(m.userData.group as PartGroup) && !(m.userData.shopAid && (this.simple || !this.showShopAids)) && !(m.userData.chock && !this.showChocks);
   }
 
   private refreshVisibility(): void {
@@ -989,7 +996,7 @@ export class Viewer {
     if (!auto) this.userMoved = false;
     this.currentView = name;
     const b = box ?? (this.inTruck ? this.truckBox() : this.modelBox());
-    // Light from near the camera in the Top view, so the shadow falls under the cart instead of a detached ghost up and left.
+    // Light from near the camera in the Top view, so the shadow falls under the sled instead of a detached ghost up and left.
     if (name === 'top') this.sunDir.set(-0.12, -0.2, 1).normalize(); else this.sunDir.set(-10, -90, 150).normalize();
     this.placeSun(this.sunCenter, this.sunRadius);
     const dir = new THREE.Vector3(...VIEW_DIRS[name]).normalize();
@@ -1000,7 +1007,7 @@ export class Viewer {
     };
     if (box || this.inTruck) addCorners(b);
     else {
-      // Per-part boxes hug the silhouette far better than one big box (the rear handle would otherwise shrink the cart).
+      // Per-part boxes hug the silhouette far better than one big box (the rear handle would otherwise shrink the sled).
       this.scene.updateMatrixWorld(true);
       const pb = new THREE.Box3();
       for (const m of this.partsGroup.children) if (m.visible) addCorners(pb.setFromObject(m));
@@ -1041,7 +1048,7 @@ export class Viewer {
     this.renderNow();
   }
 
-  /** Bed (without the big ground plane) plus the cart. */
+  /** Bed (without the big ground plane) plus the sled. */
   private truckBox(): THREE.Box3 {
     const box = this.modelBox();
     for (const m of this.truckGroup.children) if (m.matrix.elements[14] > -5) box.expandByObject(m);

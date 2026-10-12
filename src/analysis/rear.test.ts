@@ -1,5 +1,5 @@
 /**
- * Rear end checks, round 3 (eng N-7; build MUST-4), re-derived for the pivoting-front-axle cart (D-56): `wheel-rating` covers the front AND rear wheels (the heavier / harder-struck
+ * Rear end checks, round 3 (eng N-7; build MUST-4), re-derived for the pivoting-front-axle sled (D-56): `wheel-rating` covers the front AND rear wheels (the heavier / harder-struck
  * one sets the row; at the defaults that is the rear wheel) and `rear-beam-seat` is the notch in the oak axle HANGER on each rail (the deck is 8 in up, so only 2.15 in of hanger is
  * left above the notch). Bump loads at the split speeds of D-55 (normal 1 in at 3 mph, hard 2 in at 5 mph). Hand numbers are re-derived from params and the layout, not read back
  * from the check code.
@@ -156,7 +156,7 @@ describe('rear axle beam seat in the oak axle hangers (MUST-4, D-54)', () => {
     const t = byId(run({ axleHangerThickIn: 0.5 }), 'rear-beam-seat');
     const b = t.details!.find((d) => d.name.includes('notch ceiling'))!.value;
     const b1 = byId(run({}), 'rear-beam-seat').details!.find((d) => d.name.includes('notch ceiling'))!.value;
-    expect(b / b1).toBeGreaterThan(1.7); // a 1/2 in hanger bears at 1.75 times the stress of the 7/8 in one, less a hair: it also lowers the cart's mass a little
+    expect(b / b1).toBeGreaterThan(1.7); // a 1/2 in hanger bears at 1.75 times the stress of the 7/8 in one, less a hair: it also lowers the sled's mass a little
     expect(b / b1).toBeLessThan(1.77);
   });
   it('an overslung beam still sits in the hanger notch (it is always evaluated since the notch depth is at least 0.5 in): the row is a pass/fail row, not info', () => {

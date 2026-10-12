@@ -39,7 +39,7 @@ describe('the seat kit (D-57)', () => {
     expect(installed.some((x) => /^(seat-knob|seat-plug|storage-backer)/.test(x.id))).toBe(false);
     expect(get(installed, 'seat-wedge-L').removable).toBeFalsy();
     expect(get(installed, 'seat-back-pad').removable).toBe(true); // Dual Lock: lifts off
-    expect(get(installed, 'seat-back-stile-L').removable).toBeFalsy(); // the back stays on the cart
+    expect(get(installed, 'seat-back-stile-L').removable).toBeFalsy(); // the back stays on the sled
   });
   it('the cushions measure 14.125 x 18 x 2 (seat) and the pad as wide as the back, 1 in thick', () => {
     expect(plan.applicable).toBe(true);
@@ -189,7 +189,7 @@ describe('the flat (stowed) view state', () => {
   it('nothing in the flat pose interpenetrates the box, the deck, the hinges or the stop blocks (tolerance 0.05 in)', () => {
     expect(overlaps(stowed)).toEqual([]);
   });
-  it('transport configuration: the cushion and pad come off (the cushion stays), the back frame stays on the cart', () => {
+  it('transport configuration: the cushion and pad come off (the cushion stays), the back frame stays on the sled', () => {
     const removed = new Set(buildModel(defaults, { removed: true, seat: 'stowed' }).map((x) => x.id));
     for (const x of kit) expect(removed.has(x.id), x.id).toBe(!x.removable);
   });
@@ -254,7 +254,7 @@ describe('the cargo block in the flat view', () => {
     expect((b.min[2] + b.max[2]) / 2).toBeCloseTo(L.deckTop + defaults.cargoCgHeightIn, 6);
     expect(view.some((x) => x.id.startsWith('rider-'))).toBe(false);
   });
-  it('the installed view keeps the 10 Essentials block in the box and the mannequin; showing the payload does not change the empty-cart mass or CG', () => {
+  it('the installed view keeps the 10 Essentials block in the box and the mannequin; showing the payload does not change the empty-sled mass or CG', () => {
     const v = buildModel(defaults, { rider: 'operating', cargo: true });
     expect(get(v, 'cargo').massLb).toBe(defaults.cargoMassLb);
     expect(v.some((x) => x.id === 'rider-torso')).toBe(true);

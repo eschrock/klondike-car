@@ -40,7 +40,7 @@ function cordPart(ctx: Ctx, s: { id: string; partNo: string; name: string; a: Ve
 
 /**
  * Brake parts at pose `s` (0 released, 1 applied; the model default is 0). `analysis/brake.ts` calls this at s = 0 … 1 to sweep the stroke. `movingOnly` leaves out the
- * parts that stay on the cart (hinge, knees, backers, chocks and their cords, the handle).
+ * parts that stay on the sled (hinge, knees, backers, chocks and their cords, the handle).
  */
 export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
   const { p, L } = ctx;
@@ -193,7 +193,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
         id: `brake-chock-${tag}`, partNo: 'brake-chock', name: `Wheel chock ${tag} (white oak wedge, shown parked)`, group: 'brake', mat: 'oak', outline: outline as Vec2[], depth: w, basis: 'xz', origin,
         grain: 'x', stock: { t: w, w: ck.height, l: ck.xBack - ck.xToe }, step: STEP.brake, fab: 'bandsaw', removable: true, explode: [1, sgn * 0.3, 0],
         joints: [screw(`brake-chock-cord-${tag}`, 1, '1 x #10 316 stainless screw eye in the back face, for the cord')],
-        notes: `Oak wedge ${f2(w)}" wide, ${f2(ck.height)}" tall, ${f2(ck.xBack - ck.xToe)}" long: the ramp face rises away from the tire at ${f2(ck.psi / (Math.PI / 180))} degrees and is tangent to the tire ${f2(ck.tangent[1])}" off the ground, so the rolling wheel has to climb it. Two stainless screw heads (or a sawtooth cut) left proud in the base bite the ground (μ ${f2(p.brakeChockMu)}, ${f2(p.brakeChockMuFouled)} when wet or fouled). Shown parked in front of the tire for a cart facing downhill; for a cart facing uphill it goes behind the tire, ${f2(p.brakeChockCordLenIn)}" of cord reaches. Comes off for transport.`,
+        notes: `Oak wedge ${f2(w)}" wide, ${f2(ck.height)}" tall, ${f2(ck.xBack - ck.xToe)}" long: the ramp face rises away from the tire at ${f2(ck.psi / (Math.PI / 180))} degrees and is tangent to the tire ${f2(ck.tangent[1])}" off the ground, so the rolling wheel has to climb it. Two stainless screw heads (or a sawtooth cut) left proud in the base bite the ground (μ ${f2(p.brakeChockMu)}, ${f2(p.brakeChockMuFouled)} when wet or fouled). Shown parked in front of the tire for a sled facing downhill; for a sled facing uphill it goes behind the tire, ${f2(p.brakeChockCordLenIn)}" of cord reaches. Comes off for transport.`,
         sourcing: { vendor: `Shop-cut white oak wedge, ${f2(w)}" x ${f2(ck.height)}" x ${f2(ck.xBack - ck.xToe)}" (a single bandsaw cut of a 2x4-class blank)` },
       });
       add1(chockPart);
@@ -203,7 +203,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
         id: `brake-chock-cord-${tag}`, partNo: 'brake-chock-cord', name: `Wheel chock cord ${tag}`, a, b, radius: 0.125, material: '1/4" braided polyester cord', removable: true, explode: [1, sgn * 0.3, 0.2],
         joints: [screw(`brake-knee-${tag}`, 1, '#10 316 stainless screw eye in the knee underside'), screw(`brake-chock-${tag}`, 1, '#10 316 stainless screw eye in the chock back face')],
         sourcing: { vendor: `McMaster-Carr (1/4" braided polyester cord, ${f2(p.brakeChockCordLenIn)}" cut, whipped ends; shown here pulled straight between the two eyes, the rest is coiled)` },
-        notes: `Ties the chock to the knee eye so it is never lost: ${f2(p.brakeChockCordLenIn)}" of 1/4" cord (${p.brakeCordBreakLbf} lbf breaking strength) reaches to the other side of the tire (the cart facing uphill) and back. The chock hangs from the cord when stowed.`,
+        notes: `Ties the chock to the knee eye so it is never lost: ${f2(p.brakeChockCordLenIn)}" of 1/4" cord (${p.brakeCordBreakLbf} lbf breaking strength) reaches to the other side of the tire (the sled facing uphill) and back. The chock hangs from the cord when stowed.`,
       }));
     }
   }

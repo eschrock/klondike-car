@@ -39,11 +39,11 @@ export function loadRapier(): Promise<Rapier> {
 
 /** Fixed timestep (spec: 1/240 s). */
 export const DT = 1 / 240;
-/** Roll angle (cart up vs ground normal) past which the cart counts as tipped over. */
+/** Roll angle (sled up vs ground normal) past which the sled counts as tipped over. */
 export const TIP_ROLL_DEG = 60;
 /** A wheel is "lifting" when its load falls under this fraction of its even share of the weight. */
 export const LIFT_FRACTION = 0.03;
-/** Beyond this distance from the start the cart has left the "course" and the run ends. */
+/** Beyond this distance from the start the sled has left the "course" and the run ends. */
 export const COURSE_LIMIT_IN = 2400;
 
 export interface EnvShape {
@@ -56,19 +56,19 @@ export interface EnvShape {
 
 export interface SimReadout {
   t: number;
-  /** Signed speed along the cart's heading, mph. */
+  /** Signed speed along the sled's heading, mph. */
   speedMph: number;
   /** Ground tilt from the side slope, degrees (rises in the tilt table). */
   groundSideSlopeDeg: number;
-  /** Cart up-axis vs the ground normal, degrees. */
+  /** Sled up-axis vs the ground normal, degrees. */
   rollDeg: number;
   /** Per-wheel normal load, lbf. */
   loadLbf: Record<WheelId, number>;
-  /** Per-wheel load as a fraction of the whole-cart weight. */
+  /** Per-wheel load as a fraction of the whole-sled weight. */
   loadFrac: Record<WheelId, number>;
   lift: Record<WheelId, boolean>;
   anyLift: boolean;
-  /** Second distinct wheel lift: the support is down to a line, so the cart tips about it (the tip-onset angle). */
+  /** Second distinct wheel lift: the support is down to a line, so the sled tips about it (the tip-onset angle). */
   secondLift: { t: number; wheel: WheelId; groundSideSlopeDeg: number } | null;
   /** First wheel lift of the run, with the side slope at that moment (the tilt-table onset). */
   firstLift: { t: number; wheel: WheelId; groundSideSlopeDeg: number } | null;
@@ -82,7 +82,7 @@ export interface SimReadout {
   brakeActive: boolean;
   /** Front-axle angle about the kingpin relative to the chassis, degrees (+ = left turn). */
   steerDeg: number;
-  /** Radius of the circle the rear axle center is driving, inches (speed / yaw rate); null when the cart is not turning. */
+  /** Radius of the circle the rear axle center is driving, inches (speed / yaw rate); null when the sled is not turning. */
   turnRadiusIn: number | null;
 }
 
@@ -147,13 +147,13 @@ export class Sim {
     world.timestep = DT;
     // Solver effort: a caster fork is a light body (pitch inertia of a few hundredths of a kg·m², less than a locked
     // wheel's spin inertia) closing a constraint loop chassis -> swivel -> fork -> wheel hinge -> ground. With few
-    // internal PGS iterations that loop does not converge and the whole cart rocks on its wheels. 16 internal
+    // internal PGS iterations that loop does not converge and the whole sled rocks on its wheels. 16 internal
     // iterations settle it for any plausible fork.
     world.numSolverIterations = 8;
     world.numInternalPgsIterations = 16;
     world.integrationParameters.contact_natural_frequency = 60;
 
-    // Ground orientation: pitch (downhill) about Y, side slope about the cart's own X axis first.
+    // Ground orientation: pitch (downhill) about Y, side slope about the sled's own X axis first.
     const qg = (roll: number) => qMul(qAxisAngle('y', rad(c.slopeDeg)), qAxisAngle('x', rad(roll)));
     this.qSlope = qg(c.sideSlopeDeg);
     const Rg = this.qSlope;
@@ -397,7 +397,7 @@ export class Sim {
     this.tipTime = this.t;
   }
 
-  /** Angle between the cart's up axis and the ground normal. */
+  /** Angle between the sled's up axis and the ground normal. */
   rollDeg(): number {
     const up = qRotate(this.bodies.chassis.rotation() as Quat, [0, 0, 1]);
     const n = qRotate(this.groundRotation(), [0, 0, 1]);
@@ -447,7 +447,7 @@ export class Sim {
     return deg(2 * Math.atan2(rel.z, rel.w));
   }
 
-  /** Radius of the rear axle center's path (speed over yaw rate about the cart's up axis), inches; null when it is not turning or not moving. */
+  /** Radius of the rear axle center's path (speed over yaw rate about the sled's up axis), inches; null when it is not turning or not moving. */
   turnRadiusIn(): number | null {
     const qc = this.bodies.chassis.rotation() as Quat;
     const up = qRotate(qc, [0, 0, 1]);
