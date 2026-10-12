@@ -154,11 +154,11 @@ describe('captured-ply sides, deck and rear transom (D-22, D-35, D-54)', () => {
     const thin = validateParams({ ...defaults, sideThicknessIn: 0.375 });
     expect(thin.some((i) => i.severity === 'warn' && i.keys.includes('sideThicknessIn'))).toBe(true);
   });
-  it('the web enters the rear transom dado at its rear end and ends against the bow bulkhead at its front end', () => {
+  it('the web enters the rear transom dado at its rear end and the bow bulkhead dado at its front end', () => {
     for (const tag of ['L', 'R']) {
       const b = worldAABB(get(parts, `side-${tag}-web`));
       expect(b.min[0]).toBeCloseTo(rearTx - dd, 6);
-      expect(b.max[0]).toBeCloseTo(L.xSideEnd, 6);
+      expect(b.max[0]).toBeCloseTo(L.xSideEnd + dd, 6); // the front end is in the bulkhead's rear-face dado, as the rear end is in the transom's (Phase 4 round 2)
     }
   });
   it('the deck is ONE flat sheet that enters the chine rabbets, the transom dado and the bulkhead dado, and follows the bow turn-in', () => {

@@ -3,7 +3,7 @@ import { buildModel } from '../model';
 import { defaultParams } from '../params';
 import { BuildData } from '../build/package';
 import {
-  bytesLabel, clampStep, dims3, featureSummary, groupByWhen, loadDone, previewSvg, saveDone, sheetSvg, stepFocus, tilePagesHtml, todayISO, usd, viewerView,
+  bytesLabel, clampStep, cureLine, dims3, featureSummary, groupByWhen, loadDone, previewSvg, saveDone, sheetSvg, stepFocus, tilePagesHtml, todayISO, usd, viewerView,
 } from './build-helpers';
 
 const p = defaultParams();
@@ -20,6 +20,13 @@ function balanced(markup: string): boolean {
   }
   return stack.length === 0;
 }
+
+describe('cureLine', () => {
+  it('prints the West System pot life, clamp and full-cure times the build tab and the build book share', () => {
+    expect(cureLine({ hardener: '206', potMin: [20, 25], clampHours: [8, 10], fullHours: 24 })).toBe('West 206 slow: pot life 20-25 min, clamp 8-10 h, full cure 24 h');
+    expect(cureLine({ hardener: '209', potMin: [90, 120], clampHours: [20, 20], fullHours: 48 })).toBe('West 209 extra slow: pot life 90-120 min, clamp 20 h, full cure 48 h');
+  });
+});
 
 describe('formatting', () => {
   it('formats dollars, dimensions, sizes and dates', () => {

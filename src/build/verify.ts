@@ -5,7 +5,7 @@
  * model. Every param whose `status` is 'verify' is claimed by a check, and any left over lands in the last item ("other params to
  * confirm") automatically, so promoting or adding a verify param never needs an edit here.
  */
-import { PARAM_DEFS, type Params } from '../params';
+import { bowTaper, PARAM_DEFS, type Params } from '../params';
 import { localBounds } from '../model/bounds';
 import type { Part } from '../model/types';
 
@@ -61,6 +61,8 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
   const squashMin = Math.ceil((testLb / rateMax) * 20) / 20;
   const tubeOd = p.axleDiameterIn;
   const tubeWall = p.axleWallIn;
+  const railStrip = (parts.find((x) => x.id === 'rail-L')?.stock?.t ?? 0.375);
+  const bandStrip = (parts.find((x) => x.id === 'side-L-chine')?.stock?.t ?? 0.234);
 
   // Lamp clip: the hand-hold is the clip outline plus 0.02" a side (clip notes, D-64).
   const clip = parts.find((x) => x.id === 'lamp-clip');
@@ -199,6 +201,32 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       paramKeys: [],
       when: 'before cutting',
       refs: ['D-64'],
+    },
+    {
+      id: 'strip-bend',
+      title: `Strip bend test: the rails and bands bend to the ${f(Math.round(bowTaper(p).minRadiusIn), 0)}" radius, in 2 plies`,
+      whatToDo:
+        `Before ordering the lumber list, buy ONE board of the stock the strips are resawn from (the cut list's resaw pool) and resaw, plane and bend two dry test strips: a rail strip (${f(railStrip, 3)}" thick) and a band strip (${f(bandStrip, 3)}" thick), ` +
+        `around a block cut to the tightest plan radius of the rail form (${f(bowTaper(p).minRadiusIn, 0)}"). Note any cracking, the spring-back, and whether damp heat is needed. The result decides 2 vs 3 plies, which changes the strip count and the boards to buy.`,
+      pass: 'Both strips take the radius without a crack or raised grain; spring-back stays under about 10 % of the turn-in (the rail-form drawing notes the allowance).',
+      ifFails: 'Plane the strips thinner (3 plies: the strip count, the cut list and the board plan all change), add damp heat, or relax the bow taper (bowTaperStartIn) and re-run the checks, all before the order goes in.',
+      partIds: ids(parts, /^(rail-[LR]|side-[LR]-(chine|gunwale)(-in)?)$/),
+      paramKeys: [],
+      when: 'before ordering',
+      refs: ['D-62', 'D-66'],
+    },
+    {
+      id: 'ply-thickness',
+      title: 'Plywood thickness: measure the real sheets before any dado is cut',
+      whatToDo:
+        `Measure the 4 mm and the 12 mm okoume with calipers on the edges at six or more points (BS 1088 12 mm often runs to 0.49" or more, and the sealed sheet is a few thousandths thicker). ` +
+        `The web dados are panelPlyIn ${f(p.panelPlyIn, 3)}" + ${f(p.grooveSlopIn, 3)}" slop = ${f(p.panelPlyIn + p.grooveSlopIn, 3)}"; the deck dado and the gap under the inner chine band are deckPlyIn ${f(p.deckPlyIn, 3)}" + ${f(p.deckSlopIn, 3)}" = ${f(p.deckPlyIn + p.deckSlopIn, 3)}".`,
+      pass: `The 4 mm sheet measures ≤ ${f(p.panelPlyIn, 3)}" and the 12 mm ≤ ${f(p.deckPlyIn, 3)}" (each plus a 0.005" seal coat still enters its dado with 0.02-0.04" to spare).`,
+      ifFails: 'Enter the measured thickness (plus the seal coat) in panelPlyIn / deckPlyIn, re-run the checks and regenerate the Shaper files BEFORE a dado is cut; a thick sheet in a nominal dado cannot be fixed afterwards.',
+      partIds: ids(parts, /^(deck|side-[LR]-web|transom-rear|bow-bulkhead)$/),
+      paramKeys: verifyKeys(['panelPlyIn', 'deckPlyIn', 'grooveSlopIn', 'deckSlopIn']),
+      when: 'before cutting',
+      refs: ['D-62', 'D-63'],
     },
   ];
 

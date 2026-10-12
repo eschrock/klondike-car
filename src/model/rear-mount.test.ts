@@ -188,11 +188,12 @@ describe('fastener stacks (S2) and the push-handle fit (S7)', () => {
     expect(inchesText(3)).toBe('3');
     expect(inchesText(1.75)).toBe('1-3/4');
   });
-  it('the socket bolts are 2 in (D-60: the 1/2 in transom; they were 2-1/4 in) as computed from the stack (not the round-2 1-1/2 carriage bolts)', () => {
+  it('the socket bolts are 1-3/4 in (grip 1.375 + a nylon washer + 0.1 in of thread past a T-nut flange; with a nylock nut they were 2 in) as computed from the stack', () => {
     const sock = byId('handle-socket-L').joints!.find((j) => j.to === 'transom-rear')!;
     const stack = defaults.handleSocketWallIn + L.transom + defaults.blockingThickIn; // 1.375
-    expect(boltLength(stack, 0.25, 2)).toBe(2);
-    expect(sock.size).toMatch(/1\/4-20 × 2 316/);
+    expect(boltLength(stack, 0.25, 2)).toBe(2); // the nylock-nut length, kept to show the T-nut saves a size
+    expect(sock.size).toMatch(/1\/4-20 × 1-3\/4 316/);
+    expect(sock.size).toMatch(/T-NUT/);
     expect(sock.size).toMatch(/button-head/);
     expect(sock.at).toHaveLength(2);
   });

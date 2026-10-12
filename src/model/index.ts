@@ -9,7 +9,7 @@ import { applyHardwareMass, buildHardware, buildLighting } from './lighting';
 import { buildPayload } from './rider';
 import { buildRunningGear } from './running-gear';
 import { buildSeat } from './seat';
-import { applySeatStow } from './seat-stow';
+import { addFlatPinDeckHoles, applySeatStow } from './seat-stow';
 import { isBrakeKit, isChockKit, isLightKit } from './removable';
 import { buildBridle } from './bridle';
 import { buildPivot } from './pivot';
@@ -40,6 +40,7 @@ export function buildModel(input: Params, view: ViewState = {}): Part[] {
     ...buildPayload(ctx),
   ];
   applyJoinery(ctx, parts); // structured joints for the hull and frame (D-35)
+  addFlatPinDeckHoles(ctx.p, ctx.L, parts); // the flat-position seat-pin clearance holes through the deck
   applySteerPose(ctx, parts); // the front axle turned about the kingpin (D-56); after the joinery so every joint location stays in the part's own frame
   if (ctx.view.seat === 'stowed') applySeatStow(ctx.p, ctx.L, parts); // cargo mode (D-53): the seat kit lies flat in the storage box
   const v = ctx.view;

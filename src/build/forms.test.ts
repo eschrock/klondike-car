@@ -3,7 +3,7 @@ import { buildModel } from '../model';
 import { computeLayout, outerHalfWidth } from '../model/layout';
 import { defaultParams } from '../params';
 import { flatPattern } from './flat';
-import { LETTER_H_IN, LETTER_W_IN, TILE_MARGIN_IN, TILE_OVERLAP_IN, formDrawings, tileForLetter, tilePlan } from './forms';
+import { LETTER_H_IN, LETTER_W_IN, PRINT_CUT_STROKE_IN, RIB_BASE_IN, TILE_MARGIN_IN, TILE_OVERLAP_IN, formDrawings, pathBounds, printStyle, tileForLetter, tilePlan } from './forms';
 
 const p = defaultParams();
 const parts = buildModel(p);
@@ -138,3 +138,89 @@ describe('tileForLetter', () => {
     expect(tileForLetter(byId('brake-flap-template').svg, 5, 4).length).toBe(1);
   });
 });
+
+describe('printing (Phase 4 round 2)', () => {
+  const pathsOf = (svg: string) => [...svg.matchAll(/<path\b[^>]*>/g)].map((m) => m[0]);
+  const att = (tag: string, name: string) => new RegExp(`\\s${name}="([^"]*)"`).exec(tag)?.[1];
+
+  it('prints cuts as black outlines, never filled, and keeps guides blue', () => {
+    for (const d of drawings) {
+      const pages = tileForLetter(d.svg, d.widthIn, d.heightIn);
+      for (const pg of pages) {
+        expect(pg).not.toContain('fill="#000000"');
+        for (const t of pathsOf(pg)) {
+          const kind = att(t, 'shaper:cutType');
+          if (kind === 'outside' || kind === 'inside' || kind === 'pocket') { expect(att(t, 'fill'), t.slice(0, 80)).toBe('none'); expect(att(t, 'stroke')).toBe('#000000'); }
+          if (kind === 'outside') expect(Number(att(t, 'stroke-width'))).toBeCloseTo(PRINT_CUT_STROKE_IN, 6);
+          if (kind === 'guide') expect(att(t, 'stroke')).toBe('#0068FF');
+        }
+      }
+    }
+    // The side form's template outline is on a page as an unfilled black path.
+    const pg = tileForLetter(byId('side-form').svg, byId('side-form').widthIn, byId('side-form').heightIn)[0];
+    expect(pathsOf(pg).some((t) => att(t, 'shaper:cutType') === 'outside' && att(t, 'fill') === 'none')).toBe(true);
+  });
+
+  it('rewrites only outside / inside / pocket paths', () => {
+    const src = '<path d="M0,0L1,1Z" fill="#000000" stroke="none" fill-rule="evenodd" shaper:cutType="outside" shaper:cutDepth="1in"></path><path d="M0,0L1,1" fill="none" stroke="#0068FF" stroke-width="0.01" shaper:cutType="guide" shaper:cutDepth="0in"></path><path d="M0,0L1,1" fill="none" stroke="#000000" stroke-width="0.01" shaper:cutType="online"></path>';
+    const out = printStyle(src);
+    expect(out).toContain('fill="none" stroke="#000000" stroke-width="0.02"');
+    expect(out).toContain('fill="none" stroke="#0068FF" stroke-width="0.01" shaper:cutType="guide"');
+    expect(out).toContain('shaper:cutType="online"');
+    expect(out).not.toContain('#000000" stroke="none"');
+  });
+
+  it('reads the bounds of the paths we draw (polygons and circles)', () => {
+    expect(pathBounds('M1,2L4,2L4,6L1,6Z')).toEqual({ x0: 1, y0: 2, x1: 4, y1: 6 });
+    const b = pathBounds('M9,5a1,1 0 1,0 2,0a1,1 0 1,0 -2,0Z')!; // circle of diameter 2 centered at (10, 5)
+    expect(b.x0).toBeCloseTo(9, 9); expect(b.x1).toBeCloseTo(11, 9); expect(b.y0).toBeCloseTo(4, 9); expect(b.y1).toBeCloseTo(6, 9);
+  });
+
+  it('skips pages with no ink on them', () => {
+    // A 20 x 22 in sheet with two small marks, far apart: 3 x 3 windows, only two of them hold a path.
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="20in" height="22in" viewBox="0 0 20 22"><title>t</title><path d="M1,1L2,1L2,2L1,2Z" fill="none" stroke="#0068FF" shaper:cutType="guide"></path><path d="M18,20L19,20L19,21L18,21Z" fill="none" stroke="#0068FF" shaper:cutType="guide"></path><text x="10" y="10">label only</text></svg>';
+    const plan = tilePlan(20, 22);
+    expect(plan.windows.length).toBeGreaterThanOrEqual(6);
+    const pages = tileForLetter(svg, 20, 22);
+    expect(pages.length).toBe(2);
+    expect(pages[0]).toContain('>A1</text>');
+    expect(pages[0]).toContain('page 1 of 2');
+    expect(pages[1]).toContain(`page 2 of 2`);
+  });
+
+  it('puts registration crosses at the same drawing coordinates on neighboring pages, so they overlay', () => {
+    const d = byId('side-form');
+    const plan = tilePlan(d.widthIn, d.heightIn);
+    const pages = tileForLetter(d.svg, d.widthIn, d.heightIn);
+    expect(pages.length).toBe(plan.windows.length); // the side form has ink on every page
+    const crosses = (i: number): Array<[number, number]> => [...pages[i].matchAll(/<circle cx="([\d.]+)" cy="([\d.]+)" r="0.06"/g)].map((m) => [Number(m[1]) - TILE_MARGIN_IN + plan.windows[i].x, Number(m[2]) - TILE_MARGIN_IN + plan.windows[i].y] as [number, number]);
+    const same = (a: Array<[number, number]>, b: Array<[number, number]>) => a.filter((q) => b.some((r) => Math.abs(q[0] - r[0]) < 1e-6 && Math.abs(q[1] - r[1]) < 1e-6));
+    const idx = (r: number, c: number) => r * plan.cols + c;
+    // Left-right neighbors share crosses at both ends of the overlap strip; so do top-bottom neighbors.
+    expect(same(crosses(idx(0, 0)), crosses(idx(0, 1))).length).toBeGreaterThanOrEqual(4);
+    expect(same(crosses(idx(0, 0)), crosses(idx(1, 0))).length).toBeGreaterThanOrEqual(4);
+    expect(same(crosses(idx(0, 1)), crosses(idx(1, 1))).length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('keeps the page label 0.3 in or more from the page bottom', () => {
+    const pg = tileForLetter(byId('brake-flap-template').svg, 5, 4)[0];
+    const y = Number(/<text x="[\d.]+" y="([\d.]+)"[^>]*font-weight="bold"/.exec(pg)![1]);
+    expect(LETTER_H_IN - y).toBeGreaterThanOrEqual(0.3 - 1e-9);
+  });
+});
+
+describe('S-ramp rib', () => {
+  it('sits on a 1/4 in base, so it never ends in a knife edge', () => {
+    expect(RIB_BASE_IN).toBeGreaterThanOrEqual(0.25);
+    expect(dim('side-form', 'rib-base')).toBeCloseTo(RIB_BASE_IN, 9);
+    const ramp = /<g id="ramp"><path d="([^"]*)"/.exec(byId('side-form').svg)!;
+    const b = pathBounds(ramp[1])!;
+    expect(b.y1 - b.y0).toBeCloseTo(RIB_BASE_IN + L.taper.turnIn, 3); // base plus the rise
+    // The first and last vertical edges of the rib are at least the base high.
+    const pts = [...ramp[1].matchAll(/[ML]([-\d.]+),([-\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
+    const xs = pts.map((q) => q[0]), lo = Math.min(...xs);
+    const startEdge = pts.filter((q) => Math.abs(q[0] - lo) < 1e-6).map((q) => q[1]);
+    expect(Math.abs(Math.max(...startEdge) - Math.min(...startEdge))).toBeGreaterThanOrEqual(RIB_BASE_IN - 1e-3);
+  });
+});
+

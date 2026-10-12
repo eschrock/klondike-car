@@ -21,7 +21,6 @@ const defaults = defaultParams();
 const parts = buildModel(defaults);
 const byId = new Map(parts.map((x) => [x.id, x]));
 const mine = (x: Part) => ['seat', 'storage', 'lighting'].includes(x.group) || x.id.startsWith('lash-');
-const L0 = computeLayout(defaults);
 /** The straight sled line by hand (D-54): the gunwale top z at x (deck 8 + 16 in at the rear transom's inner face, 4 in where the sides end at the bow curl). */
 const gunwaleTopZ = (p: Params, L: ReturnType<typeof computeLayout>, x: number) => {
   const u = Math.max(0, Math.min(1, (x - L.xSideStart) / (L.xSideEnd - L.xSideStart)));
@@ -76,10 +75,9 @@ describe('seat', () => {
       expect(gr.geometry.type).toBe('extrusion');
       if (gr.geometry.type !== 'extrusion') continue;
       const hole = gr.geometry.holes![0];
-      // The outline is in world (x, z) turned to the local slope: measure the hole across its long axis (the slope direction) and across it.
-      const slope = sideSlopeAt(L0, defaults.seatXIn - 5 + defaults.grabBoardLengthIn / 2);
-      const u = (q: number[]) => q[0] * Math.cos(slope) - q[1] * Math.sin(slope);
-      const n = (q: number[]) => q[0] * Math.sin(slope) + q[1] * Math.cos(slope);
+      // The board is modeled in its own flat (u, n) frame and turned to the sheer slope by its transform (round 2): the hole's extents are read straight off the outline.
+      const u = (q: number[]) => q[0];
+      const n = (q: number[]) => q[1];
       expect(Math.max(...hole.map(u)) - Math.min(...hole.map(u))).toBeCloseTo(defaults.grabHoleLengthIn, 3);
       expect(Math.max(...hole.map(n)) - Math.min(...hole.map(n))).toBeCloseTo(defaults.grabHoleHeightIn, 3);
       expect(defaults.grabHoleHeightIn).toBeGreaterThanOrEqual(1.25);

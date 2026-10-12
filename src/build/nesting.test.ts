@@ -92,7 +92,7 @@ describe('oakBoardFeet', () => {
       const d = [r.t, r.w, r.l].sort((a, b) => a - b);
       const b0 = boardForThickness(d[0])!;
       // a thin bucket cut from the offcuts of a thicker board counts at the thicker board's nominal thickness
-      const to = oak.consolidated.find((c) => c.from === b0.nominal && c.partNos.includes(partKey(x)))?.to;
+      const to = oak.consolidated.find((c) => c.from === b0.nominal && c.partNos.includes(partKey(x)))?.to ?? oak.folded.find((c) => c.from === b0.nominal && c.ids.includes(x.id))?.to;
       const b = to ? boardByNominal(to) : b0;
       solid += (b.nominalIn * d[1] * d[2]) / 144;
     }
@@ -144,6 +144,45 @@ describe('oakBoardFeet', () => {
     }
     // the BOM buys whole boards: the lumber is the planned board feet
     for (const t of oak.thicknesses) expect(t.purchaseBf).toBeCloseTo(t.plannedBf, 9);
+  });
+
+  it('leaves no nearly empty board: a last board with a single short lane is folded into the free lanes of thicker boards (build review: the third 4/4 board)', () => {
+    const util = (b: { lengthIn: number; lanes: Array<{ widthIn: number; usedIn: number }> }): number => b.lanes.reduce((a, l) => a + l.widthIn * (l.usedIn - p.resawKerfIn), 0) / (BOARD_WIDTH_IN * b.lengthIn);
+    for (const t of oak.thicknesses) for (const b of t.boards) expect(util(b), `${t.board} ${b.lengthIn / 12} ft`).toBeGreaterThan(0.4);
+    const t44 = oak.thicknesses.find((t) => t.board === '4/4')!;
+    expect(t44.boards.length).toBeLessThanOrEqual(2);
+    expect(oak.folded.length).toBeGreaterThan(0);
+    // each folded piece is planned once, in a lane of a thicker board that is at least as wide, and marked with the thickness it would have been bought as
+    const seen = new Map<string, number>();
+    for (const t of oak.thicknesses) for (const b of t.boards) for (const l of b.lanes) for (const c of l.cuts) if (!c.glueUp) seen.set(c.id, (seen.get(c.id) ?? 0) + 1);
+    for (const n of seen.values()) expect(n).toBe(1);
+    for (const f of oak.folded) {
+      const host = oak.thicknesses.find((t) => t.board === f.to)!;
+      expect(boardByNominal(f.to).nominalIn).toBeGreaterThan(boardByNominal(f.from).nominalIn);
+      const placed = host.boards.flatMap((b) => b.lanes.flatMap((l) => l.cuts.map((c) => ({ c, l }))));
+      for (const id of f.ids) {
+        const hit = placed.find((q) => q.c.id === id);
+        expect(hit, id).toBeDefined();
+        expect(hit!.c.fromBoard).toBe(f.from);
+        expect(hit!.c.widthIn).toBeLessThanOrEqual(hit!.l.widthIn + 1e-9);
+      }
+      expect(host.foldedIn?.some((q) => q.from === f.from && q.partNos.join() === f.partNos.join())).toBe(true);
+      expect(host.summary.join(' ')).toMatch(new RegExp(`also cut the ${f.from} parts`));
+    }
+  });
+
+  it('reports the resaw boards with the strips each yields and the spares', () => {
+    for (const pool of oak.resaw) {
+      const t = oak.thicknesses.find((q) => q.board === pool.board)!;
+      const r = t.resawBoards.find((q) => q.pool === oak.resaw.indexOf(pool))!;
+      expect(r.count).toBe(pool.boards);
+      expect(r.widthIn).toBe(pool.boardWidthIn);
+      expect(r.strips).toBe(pool.strips);
+      expect(r.spares).toBe(pool.spares);
+      expect(r.yieldPerBoard).toBe(pool.yieldPerBoard);
+      expect(t.summary.join(' ')).toContain(`${pool.strips} needed, ${pool.yieldPerBoard} per board, ${pool.spares} spare`);
+      expect(t.plannedBf).toBeGreaterThanOrEqual(pool.boardFeet - 1e-9);
+    }
   });
 
   it('scales the allowance with the waste param', () => {

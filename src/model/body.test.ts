@@ -117,7 +117,7 @@ describe('the plan taper (D-57, D-66)', () => {
         void thick;
       }
       const web = get(parts, `side-${tag}-web`);
-      const wb = verts(web).filter(([vx]) => Math.abs(vx - 49.25) < 0.01);
+      const wb = verts(web).filter(([vx]) => Math.abs(vx - (49.25 + defaults.deckCaptureDepthIn)) < 0.01); // the web's front end is in the bulkhead dado (round 2)
       expect(wb.length).toBeGreaterThan(2);
       const ys = wb.map(([, vy]) => Math.abs(vy));
       expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(defaults.panelPlyIn, 6);

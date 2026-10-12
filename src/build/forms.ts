@@ -22,6 +22,8 @@ import {
 /** Thickness (in) of the hardboard / MDF the templates and ramp ribs are cut from. */
 export const TEMPLATE_STOCK_IN = 0.25;
 export const RIB_STOCK_IN = 0.75;
+/** Least thickness (in) of the S-ramp rib anywhere, so it does not end in a knife edge: the rib's profile sits on this constant base (matches the 1/4 in hardboard template the web lies on). */
+export const RIB_BASE_IN = 0.25;
 /** Spacing (in) of cleats and clamps along a bend: "every 4 to 5 in" (HULL_STEP, build-utils.ts). */
 export const CLEAT_SPACING_IN = 4.5;
 /** Cut this much deeper than the stock (in). */
@@ -128,12 +130,12 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   const hasRamp = L.taper.turnIn > 0.01;
   const xR0 = L.taper.x0, xR1 = L.taper.x1, xRe = L.xSideEnd;
   const rampXs = samples(xR0, xRe, 48);
-  const rampProfile: Vec2[] = rampXs.map((x) => [uOf(x), L.turnIn(x)]);
+  const rampProfile: Vec2[] = rampXs.map((x) => [uOf(x), RIB_BASE_IN + L.turnIn(x)]); // on a RIB_BASE_IN base: the web's rise is the turn-in above the 1/4 in template
   const rampH = hasRamp ? L.turnIn(xRe) : 0;
   const webTallAtBow = Math.max(...rampXs.map((x) => sideTopAt(L, x) - L.chineBot));
   const ribs = Math.ceil(webTallAtBow / CLEAT_SPACING_IN) + 1;
   const GAP = 1.6;
-  const rampBlock = hasRamp ? rampH + GAP : 0;
+  const rampBlock = hasRamp ? RIB_BASE_IN + rampH + GAP : 0;
   const w = f.widthIn, h = templateH + rampBlock + 0.8;
   const dims: FormDim[] = [
     { key: 'web-length', label: 'Web flat length (development)', valueIn: f.widthIn },
@@ -147,12 +149,13 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
     { key: 'ramp-length', label: 'S-ramp length (from the S start to the bow end)', valueIn: uOf(xRe) - uOf(xR0) },
     { key: 's-length', label: 'S (taper) length', valueIn: uOf(xR1) - uOf(xR0) },
     { key: 'ramp-ribs', label: 'Ramp ribs (3/4 in MDF)', valueIn: ribs },
+    { key: 'rib-base', label: 'Rib base under the profile (least rib thickness)', valueIn: RIB_BASE_IN },
   );
   const notes = [
     `Lay the web FLAT on the bench with this template under or over it (the template is the web's flat development: length ${inch(f.widthIn)} along the plan curve, ${inch(f.heightIn)} tall at the rear).`,
     `CLEAT THE SHEER LINE: ${nCleat} cleats or screws into the sacrificial table, ${inch(cleatStep)} apart along the sheer, on the high side of the line (a straight 1.5 in strip edge-bent to the sheer pushes sideways about 65 lbf at mid-span per band until the epoxy cures).`,
     hasRamp
-      ? `S-RAMP: the bow end of the web rides up this ramp: rise ${inch(rampH)} (the turn-in per side), S from station ${inch(uOf(xR0))} to ${inch(uOf(xR1))} along the web, level to the bow end at ${inch(uOf(xRe))}. Cut ${ribs} ribs from ${RIB_STOCK_IN} in MDF about ${CLEAT_SPACING_IN} in apart under the ${inch(webTallAtBow)} the web stands at the bow, and cap them with 1/4 in hardboard. Do the other face on the mirror ramp (flip the web).`
+      ? `S-RAMP: the bow end of the web rides up this ramp: rise ${inch(rampH)} (the turn-in per side), S from station ${inch(uOf(xR0))} to ${inch(uOf(xR1))} along the web, level to the bow end at ${inch(uOf(xRe))}. Cut ${ribs} ribs from ${RIB_STOCK_IN} in MDF about ${CLEAT_SPACING_IN} in apart under the ${inch(webTallAtBow)} the web stands at the bow, and cap them with 1/4 in hardboard. The rib profile sits on a ${inch(RIB_BASE_IN)} base, so it is never thinner than ${inch(RIB_BASE_IN)} (the same height as the 1/4 in template under the flat part of the web). Do the other face on the mirror ramp (flip the web).`
       : 'No bow turn-in at these params: no ramp is needed.',
     'Lines: sheer (gunwale top, the cleat line), gunwale band lower edge, web top (the cut edge, the cap below the sheer), chine band top, inner chine band bottom (the deck-edge gap), web bottom. Both outlines are outside cuts so the template and the ramp rib can be cut on the Shaper.',
   ];
@@ -184,9 +187,9 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
       out.push(`<g id="guides">${g.join('')}</g>`);
       if (hasRamp) {
         const R: Xf = ([u, v]) => place([u, v]);
-        const poly: Vec2[] = [[uOf(xR0), 0], ...rampProfile, [uOf(xRe), 0]];
+        const poly: Vec2[] = [[uOf(xR0), 0], ...rampProfile, [uOf(xRe), 0]]; // flat bottom; the least thickness is RIB_BASE_IN (the profile starts on it)
         out.push(`<g id="ramp">${outsideCut(poly, R, RIB_STOCK_IN, 'S-ramp rib profile')}</g>`);
-        out.push(`<g id="rampdims">${dimTo(R, [uOf(xRe), 0], [uOf(xRe), rampH], `rise ${inch(rampH)}`, -0.7)}${dimTo(R, [uOf(xR0), 0], [uOf(xRe), 0], `ramp length ${inch(uOf(xRe) - uOf(xR0))}`, -0.6)}${dimTo(R, [uOf(xR0), 0], [uOf(xR1), 0], `S ${inch(uOf(xR1) - uOf(xR0))}`, -1.2)}${label(R, [uOf(xR0), rampH + 0.4], `S-RAMP rib profile (cut ${ribs} from ${RIB_STOCK_IN} in MDF); rise = turn-in per side`, 0.2)}</g>`);
+        out.push(`<g id="rampdims">${dimTo(R, [uOf(xRe), RIB_BASE_IN], [uOf(xRe), RIB_BASE_IN + rampH], `rise ${inch(rampH)} above the ${inch(RIB_BASE_IN)} base`, -0.7)}${dimTo(R, [uOf(xR0), 0], [uOf(xRe), 0], `ramp length ${inch(uOf(xRe) - uOf(xR0))}`, -0.6)}${dimTo(R, [uOf(xR0), 0], [uOf(xR1), 0], `S ${inch(uOf(xR1) - uOf(xR0))}`, -1.2)}${label(R, [uOf(xR0), RIB_BASE_IN + rampH + 0.4], `S-RAMP rib profile (cut ${ribs} from ${RIB_STOCK_IN} in MDF); rise = turn-in per side on a ${inch(RIB_BASE_IN)} base`, 0.2)}</g>`);
       }
       return out.join('');
     },
@@ -384,33 +387,90 @@ export function tilePlan(widthIn: number, heightIn: number): { cols: number; row
   return { cols, rows, windows };
 }
 
+/** Line weight (in) of a cut path in a PRINT: a cut is a black outline, never a filled shape (a filled outside cut printed solid black and hid every mark under it). */
+export const PRINT_CUT_STROKE_IN = 0.02;
+
+/**
+ * Rewrite a Shaper-style drawing for a printer: every outside / inside / pocket path becomes `fill="none"` with a black stroke (pockets a thinner dashed one), so the page shows the outline and the
+ * guides (still blue, #0068FF) and uses almost no ink. On-line paths and guides are left as they are.
+ */
+export function printStyle(inner: string): string {
+  return inner.replace(/<path\b[^>]*>/g, (tag) => {
+    const kind = /shaper:cutType="(outside|inside|pocket)"/.exec(tag)?.[1];
+    if (!kind) return tag;
+    const stripped = tag.replace(/\s(?:fill|stroke|stroke-width|stroke-dasharray)="[^"]*"/g, '');
+    const style = kind === 'pocket' ? ` fill="none" stroke="#000000" stroke-width="0.012" stroke-dasharray="0.06 0.04"` : ` fill="none" stroke="#000000" stroke-width="${PRINT_CUT_STROKE_IN}"`;
+    return stripped.replace(/^<path\b/, `<path${style}`);
+  });
+}
+
+/** The bounding box (drawing inches) of the path data our drawings use: absolute M / L / H / V / Z and the relative half-circle arcs of `circleD`. Null if it cannot tell. */
+export function pathBounds(d: string): { x0: number; y0: number; x1: number; y1: number } | null {
+  const tok = d.match(/[MLHVZmlhvzAa]|-?\d*\.?\d+(?:e-?\d+)?/g);
+  if (!tok) return null;
+  let i = 0, cx = 0, cy = 0, x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, cmd = '';
+  const add = (x: number, y: number) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); };
+  const num = () => Number(tok[i++]);
+  while (i < tok.length) {
+    if (/^[A-Za-z]$/.test(tok[i])) cmd = tok[i++];
+    switch (cmd) {
+      case 'M': case 'L': cx = num(); cy = num(); add(cx, cy); break;
+      case 'H': cx = num(); add(cx, cy); break;
+      case 'V': cy = num(); add(cx, cy); break;
+      case 'a': { const rx = num(), ry = num(); i += 3; const dx = num(), dy = num(); const mx = cx + dx / 2, my = cy + dy / 2; add(mx - rx, my - ry); add(mx + rx, my + ry); cx += dx; cy += dy; break; }
+      case 'Z': case 'z': break;
+      default: return null;
+    }
+    if (cmd === 'Z' || cmd === 'z') cmd = '';
+  }
+  return Number.isFinite(x0) ? { x0, y0, x1, y1 } : null;
+}
+
+/** True if any path of the drawing comes within the window (drawing inches, from the viewBox origin), so the page has ink on it. Text alone does not count. */
+function windowHasInk(boxes: Array<ReturnType<typeof pathBounds>>, win: TileWindow, minX: number, minY: number): boolean {
+  const wx0 = minX + win.x, wy0 = minY + win.y, wx1 = wx0 + win.w, wy1 = wy0 + win.h;
+  return boxes.some((b) => !b || (b.x1 >= wx0 - 1e-6 && b.x0 <= wx1 + 1e-6 && b.y1 >= wy0 - 1e-6 && b.y0 <= wy1 + 1e-6));
+}
+
 /** Split a full-scale drawing onto US Letter pages (8.5 x 11, 0.5 in margins): one SVG per page with its label, overlap alignment marks and a 1 in check square. */
 export function tileForLetter(svg: string, widthIn: number, heightIn: number): string[] {
   const root = /<svg\b[^>]*>/.exec(svg);
   const vb = root && /viewBox="([-\d.]+) ([-\d.]+) ([\d.]+) ([\d.]+)"/.exec(root[0]);
   const minX = vb ? Number(vb[1]) : 0, minY = vb ? Number(vb[2]) : 0;
-  const inner = root ? svg.slice(root.index + root[0].length, svg.lastIndexOf('</svg>')) : svg;
+  const inner = printStyle(root ? svg.slice(root.index + root[0].length, svg.lastIndexOf('</svg>')) : svg);
   const titleM = /<title>([^<]*)<\/title>/.exec(svg);
   const name = titleM ? titleM[1] : 'drawing';
   const { cols, rows, windows } = tilePlan(widthIn, heightIn);
+  // A page is printed only if some path crosses its window (a page of empty paper, or of text alone, is skipped).
+  const boxes = [...inner.matchAll(/<path\b[^>]*\sd="([^"]*)"/g)].map((m) => pathBounds(m[1]));
+  const printed = new Set(windows.filter((w) => windowHasInk(boxes, w, minX, minY)).map((w) => w.page));
+  if (!printed.size) windows.forEach((w) => printed.add(w.page)); // nothing parsed: keep every page rather than none
+  const at = (r: number, c: number): TileWindow | undefined => (r >= 0 && r < rows && c >= 0 && c < cols && printed.has(windows[r * cols + c].page) ? windows[r * cols + c] : undefined);
+  const total = printed.size;
   const pages: string[] = [];
+  let idx = 0;
   const cross = (x: number, y: number): string => `<path d="M${fmt(x - 0.15)},${fmt(y)}h0.3M${fmt(x)},${fmt(y - 0.15)}v0.3" stroke="#000" stroke-width="0.01" fill="none"/><circle cx="${fmt(x)}" cy="${fmt(y)}" r="0.06" fill="none" stroke="#000" stroke-width="0.01"/>`;
   for (const win of windows) {
-    const total = windows.length;
-    const idx = win.row * cols + win.col + 1;
+    if (!printed.has(win.page)) continue;
+    idx++;
     const x0 = TILE_MARGIN_IN, y0 = TILE_MARGIN_IN, x1 = x0 + win.w, y1 = y0 + win.h;
     const marks: string[] = [];
-    // Registration crosses at the four corners of the printable area, and the overlap strips drawn as dashed lines where a neighbor takes over.
-    for (const [x, y] of [[x0, y0], [x1, y0], [x0, y1], [x1, y1]]) marks.push(cross(x, y));
     const dash = 'stroke="#000" stroke-width="0.01" stroke-dasharray="0.08 0.06" fill="none"';
     const navs: string[] = [];
-    if (win.col + 1 < cols) { const nx = x1 - TILE_OVERLAP_IN; marks.push(`<path d="M${fmt(nx)},${y0}V${y1}" ${dash}/>`); navs.push(`->${windows[win.row * cols + win.col + 1].page}`); }
-    if (win.col > 0) { const nx = x0 + TILE_OVERLAP_IN; marks.push(`<path d="M${fmt(nx)},${y0}V${y1}" ${dash}/>`); navs.push(`<-${windows[win.row * cols + win.col - 1].page}`); }
-    if (win.row + 1 < rows) { const ny = y1 - TILE_OVERLAP_IN; marks.push(`<path d="M${x0},${fmt(ny)}H${x1}" ${dash}/>`); navs.push(`v${windows[(win.row + 1) * cols + win.col].page}`); }
-    if (win.row > 0) { const ny = y0 + TILE_OVERLAP_IN; marks.push(`<path d="M${x0},${fmt(ny)}H${x1}" ${dash}/>`); navs.push(`^${windows[(win.row - 1) * cols + win.col].page}`); }
+    // Registration crosses sit at the SAME DRAWING COORDINATES on neighboring pages, so two pages overlay when the crosses coincide: the window edges of this page, and the window edges of each
+    // neighbor (the ends of the dashed overlap lines). Page coordinates = margin + (drawing coordinate - this window's origin).
+    const xs = new Set<number>([x0, x1]), ys = new Set<number>([y0, y1]);
+    const right = at(win.row, win.col + 1), left = at(win.row, win.col - 1), below = at(win.row + 1, win.col), above = at(win.row - 1, win.col);
+    if (win.col + 1 < cols) { const nx = x1 - TILE_OVERLAP_IN; xs.add(nx); marks.push(`<path d="M${fmt(nx)},${y0}V${y1}" ${dash}/>`); if (right) navs.push(`->${right.page}`); }
+    if (win.col > 0) { const nx = x0 + TILE_OVERLAP_IN; xs.add(nx); marks.push(`<path d="M${fmt(nx)},${y0}V${y1}" ${dash}/>`); if (left) navs.push(`<-${left.page}`); }
+    if (win.row + 1 < rows) { const ny = y1 - TILE_OVERLAP_IN; ys.add(ny); marks.push(`<path d="M${x0},${fmt(ny)}H${x1}" ${dash}/>`); if (below) navs.push(`v${below.page}`); }
+    if (win.row > 0) { const ny = y0 + TILE_OVERLAP_IN; ys.add(ny); marks.push(`<path d="M${x0},${fmt(ny)}H${x1}" ${dash}/>`); if (above) navs.push(`^${above.page}`); }
+    for (const x of xs) for (const y of [y0, y1]) marks.push(cross(x, y));
+    for (const y of ys) if (y !== y0 && y !== y1) for (const x of [x0, x1]) marks.push(cross(x, y));
     // 1 in check square at the lower left of the printable area, on top of the drawing.
     const sq = `<rect x="${fmt(x0 + 0.1)}" y="${fmt(y1 - 1.1)}" width="1" height="1" fill="#fff" fill-opacity="0.85" stroke="#000" stroke-width="0.015"/><text x="${fmt(x0 + 0.6)}" y="${fmt(y1 - 0.55)}" font-family="Helvetica, Arial, sans-serif" font-size="0.16" text-anchor="middle">1 in</text>`;
-    const label = `<text x="${fmt(x0)}" y="${fmt(y1 + 0.32)}" font-family="Helvetica, Arial, sans-serif" font-size="0.18" font-weight="bold">${win.page}</text><text x="${fmt(x0 + 0.6)}" y="${fmt(y1 + 0.32)}" font-family="Helvetica, Arial, sans-serif" font-size="0.14">page ${idx} of ${total}   ${esc(name)}   (${fmt(win.x)}, ${fmt(win.y)}) in   neighbors: ${esc(navs.join(' ') || 'none')}   print at 100%, no scaling</text>`;
+    // The label sits 0.2 in under the printable area (0.3 in from the page edge: some printers clip the last 0.25 in).
+    const label = `<text x="${fmt(x0)}" y="${fmt(y1 + 0.2)}" font-family="Helvetica, Arial, sans-serif" font-size="0.18" font-weight="bold">${win.page}</text><text x="${fmt(x0 + 0.6)}" y="${fmt(y1 + 0.2)}" font-family="Helvetica, Arial, sans-serif" font-size="0.14">page ${idx} of ${total}   ${esc(name)}   (${fmt(win.x)}, ${fmt(win.y)}) in   neighbors: ${esc(navs.join(' ') || 'none')}   print at 100%, no scaling; overlay neighbors so the crosses coincide, then trim</text>`;
     const big = `<text x="${fmt(x1 - 0.1)}" y="${fmt(y0 + 0.5)}" font-family="Helvetica, Arial, sans-serif" font-size="0.5" text-anchor="end" fill="#999" fill-opacity="0.6">${win.page}</text>`;
     pages.push(
       `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:shaper="http://www.shapertools.com/namespaces/shaper" width="${LETTER_W_IN}in" height="${LETTER_H_IN}in" viewBox="0 0 ${LETTER_W_IN} ${LETTER_H_IN}">\n` +

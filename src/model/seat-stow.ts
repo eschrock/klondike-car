@@ -14,7 +14,7 @@ import type { Params } from '../params';
 import { localBounds, transformPoint, worldAABB } from './bounds';
 import type { Layout } from './layout';
 import { multiply, rotationY, translation } from './mat4';
-import { PIN_HEAD_IN, PIN_LEN_IN, seatBackSupport } from './seat';
+import { PIN_HEAD_IN, PIN_LEN_IN, PIN_R_IN, seatBackSupport } from './seat';
 import { BOX_FILLET_IN, storageGeometry } from './storage';
 import type { Mat4, Part, Vec3 } from './types';
 
@@ -86,6 +86,25 @@ export function flatPinHoles(p: Params, L: Layout): Array<{ tag: 'L' | 'R'; cent
   // The pin hole is at c2L up the stile, mid-thickness; its flat position is the image of that point.
   const mid = (c0: number, c2: number, y: number): Vec3 => [s.P[0] + s.col0[0] * c0 + s.col2[0] * c2, y, s.P[2] + s.col0[2] * c0 + s.col2[2] * c2];
   return ([['L', 1], ['R', -1]] as const).map(([tag, sg]) => ({ tag, center: transformPoint(M, mid(-p.seatBackThickIn / 2, sup.c2L, sg * sup.stileY)) }));
+}
+
+/**
+ * The clearance hole the flat-position latch pin needs through the 12 mm deck (D-63): with the back flipped flat, each pin goes down through the panel AND the deck into the blind hole in the hinge backer
+ * pad under it. The backer's pin joint records the blind hole; this records the hole in the deck (it was missing, so the deck's Shaper file had no hole for it, Phase 4 files review). Recorded on the deck only
+ * (a hole in a host: the pin part has no matching feature). `at` is the deck's local frame, mid-thickness. Call once after `applyJoinery`.
+ */
+export function addFlatPinDeckHoles(p: Params, L: Layout, parts: Part[]): void {
+  const deck = parts.find((x) => x.id === 'deck');
+  if (!deck) return;
+  for (const h of flatPinHoles(p, L)) {
+    if (!parts.some((x) => x.id === `seat-pin-${h.tag}`)) continue;
+    const m = deck.transform;
+    const local: Vec3 = [h.center[0] - m[12], h.center[1] - m[13], L.deckBot + L.ply / 2 - m[14]]; // the deck transform is a pure translation (compose([0, 0, deckBot]))
+    (deck.joints ??= []).push({
+      type: 'pin', to: `seat-pin-${h.tag}`, count: 1, diaIn: 2 * PIN_R_IN, size: '13/32 clearance hole through the 12 mm deck for the flat-position latch pin (the pin ends in the blind hole in the backer pad under the deck)', at: [local],
+      note: 'Bored square to the face; epoxy-seal the bore. Drill it with the backer pad glued on, one bit through the deck and into the pad (stop at the pad hole depth).',
+    });
+  }
 }
 
 /**

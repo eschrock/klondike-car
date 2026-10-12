@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
 import { defaultParams } from '../params';
-import { BREAKTHROUGH_IN, analyzeShaperPart, shaperFiles } from './shaper-svg';
+import { SHAPER_MAX_DEPTH_IN, analyzeShaperPart, grainWords, shaperCutDepth, shaperFiles } from './shaper-svg';
 import { flatPattern } from './flat';
 
 const p = defaultParams();
@@ -58,7 +58,7 @@ describe('Shaper SVG files', () => {
       const outside = ps.filter((t) => attr(t, 'shaper:cutType') === 'outside');
       expect(outside.length, f.fileName).toBe(1);
       const part = parts.find((x) => x.id === f.partId)!;
-      expect(Number.parseFloat(attr(outside[0], 'shaper:cutDepth')!), f.fileName).toBeCloseTo(flatPattern(part)!.thicknessIn + BREAKTHROUGH_IN, 3);
+      expect(Number.parseFloat(attr(outside[0], 'shaper:cutDepth')!), f.fileName).toBeCloseTo(shaperCutDepth(flatPattern(part)!.thicknessIn), 3); // through + breakthrough, but never deeper than the bit reaches
       expect(outside[0]).toMatch(/fill="#000000"/);
       for (const t of ps) {
         expect(attr(t, 'shaper:cutDepth'), `${f.fileName} ${t.slice(0, 60)}`).toMatch(/^[\d.]+in$/);
@@ -219,5 +219,102 @@ describe('Shaper SVG files', () => {
       const d = analyzeShaperPart(part, parts, p);
       if (d) expect(d.notes.filter((n) => /fall outside the pattern/.test(n)), part.id).toEqual([]);
     }
+  });
+
+  // ── Phase 4 round 2 ──
+
+  it('cuts the storage lid at its CUT size, tongues included (18.75 x 14.796), with the visible panel as a guide', () => {
+    const lid = parts.find((x) => x.id === 'storage-lid')!;
+    const f = fileOf('storage-lid');
+    expect(f.widthIn).toBeCloseTo(lid.stock!.w, 3);
+    expect(f.heightIn).toBeCloseTo(lid.stock!.l, 3);
+    expect(f.svg).toContain('visible panel (inside the rabbets)');
+    expect(f.features[0].label).toMatch(/INCLUDING the 0\.25 in tongue/);
+    // The legend is centered on the cut panel: its ink, not its advance width.
+    const eng = paths(f.svg).filter((t) => attr(t, 'shaper:cutType') === 'online');
+    const xs = eng.flatMap((t) => [...attr(t, 'd')!.matchAll(/[ML]([-\d.]+),([-\d.]+)/g)].map((m) => Number(m[1])));
+    expect((Math.min(...xs) + Math.max(...xs)) / 2).toBeCloseTo(f.widthIn / 2, 2);
+  });
+
+  it('caps every cut at the bit depth and says how to finish a deeper one (the 1.5 in bulkhead)', () => {
+    expect(SHAPER_MAX_DEPTH_IN).toBe(1);
+    const f = fileOf('bow-bulkhead');
+    expect(f.deepCut).toBe(true);
+    for (const t of paths(f.svg).filter((x) => ['outside', 'inside'].includes(attr(x, 'shaper:cutType')!))) expect(Number.parseFloat(attr(t, 'shaper:cutDepth')!)).toBeLessThanOrEqual(SHAPER_MAX_DEPTH_IN + 1e-9);
+    const deep = f.features.filter((x) => x.deep);
+    expect(deep.map((x) => x.kind).sort()).toEqual(['hole', 'outline']); // the outline and the hand hole
+    for (const x of deep) { expect(x.label).toMatch(/bandsaw and a flush-trim \(pattern\) bit/); expect(x.depthIn).toBeCloseTo(SHAPER_MAX_DEPTH_IN, 6); }
+    expect(f.svg).toMatch(/DEEP CUT/);
+    // No other file has a cut deeper than the bit.
+    for (const o of files.filter((x) => x !== f)) expect(o.deepCut, o.fileName).toBe(false);
+  });
+
+  it('names the cut face in plain words and says when the face does not matter', () => {
+    expect(fileOf('bow-bulkhead').cutFace).toMatch(/^REAR \(stern-side\) face UP/);
+    expect(fileOf('transom-rear').cutFace).toMatch(/^FORWARD \(bow-side\) face UP/);
+    expect(fileOf('storage-lid').cutFace).toMatch(/^TOP face UP/);
+    expect(fileOf('side-L-web').cutFaceMatters).toBe(false);
+    expect(fileOf('side-L-web').cutFace).toMatch(/^either face can go up/);
+    expect(fileOf('side-L-web').svg).toMatch(/2 identical pieces from this one file: cut 2, do not mirror/);
+    expect(fileOf('transom-rear').svg).toMatch(/Cut with the FORWARD \(bow-side\) face UP/);
+    for (const f of files) expect(f.svg, f.fileName).not.toMatch(/seen from the [+-]z face/);
+  });
+
+  it('writes the grain in plain words', () => {
+    const bulk = analyzeShaperPart(parts.find((x) => x.id === 'bow-bulkhead')!, parts, p)!;
+    expect(grainWords(bulk.f)).toBe('grain along the 18.5" length (horizontal in this drawing)');
+    expect(fileOf('bow-bulkhead').svg).toContain('grain along the 18.5&quot; length');
+    for (const f of files) expect(f.svg, f.fileName).toMatch(/grain (along the|not specified)/);
+  });
+
+  it('draws the grab board in its own flat frame: 8 x 5.5, not a 12-degree-turned drawing of it', () => {
+    const g = parts.find((x) => x.id === 'seat-grip-L')!;
+    const f = fileOf('seat-grip-L');
+    expect(f.widthIn).toBeCloseTo(8, 6);
+    expect(f.heightIn).toBeCloseTo(5.5, 6);
+    expect(f.widthIn).toBeCloseTo(g.stock!.l, 3);
+    expect(f.heightIn).toBeCloseTo(g.stock!.w, 3);
+    expect(f.qty).toBe(2);
+  });
+
+  it('prints the insert drill size from the joint text, not the 0.19 in thread diameter', () => {
+    const f = fileOf('seat-back-panel');
+    const ins = f.features.filter((x) => x.kind === 'drill' && /insert hole/i.test(x.label));
+    expect(ins.reduce((n, x) => n + x.count, 0)).toBe(6);
+    for (const x of ins) { expect(x.diaIn).toBeCloseTo(5 / 16, 6); expect(x.label).not.toMatch(/Ø0\.19\b/); expect(x.depthIn).toBeCloseTo(0.344, 3); }
+    expect(f.svg).toMatch(/insert hole Ø0\.3125 x 0\.344 deep \(x3\)/);
+  });
+
+  it('names the bit for each feature: 1/8 in for the 0.197 dado and the 1/4 in mortise, 1/4 in for the 0.512 deck dado and the outline', () => {
+    const t = fileOf('transom-rear');
+    const pk = t.features.filter((x) => x.kind === 'pocket');
+    expect(pk.find((x) => /web dado|side-L-web/.test(x.label) || x.to === 'side-L-web')!.bit).toBe('1/8 in');
+    expect(pk.find((x) => x.to === 'deck')!.bit).toBe('1/4 in');
+    expect(pk.find((x) => x.joint === 'mortise-tenon')!.bit).toBe('1/8 in');
+    expect(t.features[0].bit).toBe('1/4 in');
+    expect(t.bits).toEqual(expect.arrayContaining(['1/4 in', '1/8 in']));
+    expect(fileOf('storage-lid').bits).toContain('1/8 in straight bit, on-line');
+  });
+
+  it('keeps human text out of the cut paths: it lives in a guide-marked annotation group below the part', () => {
+    for (const f of files) {
+      const stripped = f.svg.replace(/<g id="(?:tags|annotations)"[^>]*>[\s\S]*?<\/g>/g, '');
+      expect(stripped, f.fileName).not.toMatch(/<text\b/);
+      for (const m of f.svg.matchAll(/<g id="(tags|annotations)"([^>]*)>/g)) expect(m[2]).toMatch(/shaper:cutType="guide" fill="none" stroke="#0068FF"/);
+      for (const m of f.svg.matchAll(/<text\b[^>]*>/g)) expect(m[0]).not.toMatch(/\sfill=/); // no filled glyph: a guide is a blue STROKE
+    }
+    // The title block sits below the part, not over its black outline.
+    const f = fileOf('transom-rear');
+    const y = [...f.svg.matchAll(/<g id="annotations"[^>]*>\s*<text x="[-\d.]+" y="([\d.]+)"/g)].map((m) => Number(m[1]));
+    expect(y[0]).toBeGreaterThan(f.heightIn);
+  });
+
+  it('puts the flat-position seat-pin clearance holes in the deck', () => {
+    const deck = fileOf('deck');
+    const pin = deck.features.filter((x) => x.kind === 'hole' && x.joint === 'pin');
+    expect(pin.reduce((n, x) => n + x.count, 0)).toBe(2);
+    for (const x of pin) expect(x.diaIn).toBeCloseTo(13 / 32, 4);
+    const holes = paths(deck.svg).filter((t) => attr(t, 'shaper:cutType') === 'inside');
+    expect(holes.length).toBe(2);
   });
 });

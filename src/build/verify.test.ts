@@ -9,11 +9,12 @@ const list = verifyChecklist(parts, p);
 const WHEN: VerifyWhen[] = ['before ordering', 'before cutting', 'at assembly'];
 
 describe('verify checklist', () => {
-  it('has the nine checks of docs/phase3-checkpoint.md, in order, then the leftover params', () => {
+  it('has the nine checks of docs/phase3-checkpoint.md, in order, then the build-review checks and the leftover params', () => {
     expect(list.slice(0, 9).map((c) => c.id)).toEqual([
       'tire-squash', 'wheel', 'axle-tube', 'steering-parts', 'bridle', 'seat-back', 'sign-knobs', 'brake-knee', 'lamp-clip',
     ]);
-    expect(list[9]?.id).toBe('other-params');
+    expect(list.slice(9, 11).map((c) => c.id)).toEqual(['strip-bend', 'ply-thickness']);
+    expect(list[11]?.id).toBe('other-params');
     expect(list.map((c) => c.n)).toEqual(list.map((_, i) => i + 1));
     expect(new Set(list.map((c) => c.id)).size).toBe(list.length);
   });
@@ -36,6 +37,18 @@ describe('verify checklist', () => {
     expect(missing).toEqual([]);
     // ... and claims nothing that is not a verify param (a confirmed param drops out by itself).
     for (const k of covered) expect(PARAM_DEFS[k as keyof typeof PARAM_DEFS]?.status, k).toBe('verify');
+  });
+
+  it('asks for the real plywood thickness before any dado is cut, and the strip bend test before ordering', () => {
+    const ply = list.find((c) => c.id === 'ply-thickness')!;
+    expect(ply.when).toBe('before cutting');
+    expect(ply.whatToDo).toContain(`${+(p.panelPlyIn + p.grooveSlopIn).toFixed(3)}"`);
+    expect(ply.whatToDo).toContain(`${+(p.deckPlyIn + p.deckSlopIn).toFixed(3)}"`);
+    for (const k of ply.paramKeys) expect(PARAM_DEFS[k as keyof typeof PARAM_DEFS].status).toBe('verify');
+    expect(ply.partIds).toEqual(expect.arrayContaining(['deck', 'side-L-web', 'transom-rear', 'bow-bulkhead']));
+    const bend = list.find((c) => c.id === 'strip-bend')!;
+    expect(bend.when).toBe('before ordering');
+    expect(bend.whatToDo).toMatch(/2 vs 3 plies/);
   });
 
   it('lists only part ids that are in the built model', () => {

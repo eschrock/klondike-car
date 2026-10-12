@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
 import { defaultParams } from '../params';
 import type { Part } from '../model/types';
-import { containers, endGrainAreaIn2, epoxyTimeFactor, finishAreas, finishMaterial, finishingSchedule, surfaceAreaIn2 } from './finishing';
+import { containers, DOMINO_FLOZ, endGrainAreaIn2, EPOXY_RESIN_PARTS, epoxyTimeFactor, finishAreas, finishMaterial, finishingSchedule, glueEpoxyFlOz, glueJointEstimates, surfaceAreaIn2 } from './finishing';
 
 const p = defaultParams();
 const parts = buildModel(p);
@@ -178,12 +178,110 @@ describe('buy list', () => {
     const resin = total(/105 epoxy resin/);
     const hardener = total(/207/);
     expect(resin + hardener).toBeGreaterThanOrEqual(mixed);
-    // 5:1 by volume: the resin and hardener bought each cover their share of the mixed volume.
-    expect(hardener).toBeGreaterThanOrEqual(mixed / 6 - 1e-9);
-    expect(resin).toBeGreaterThanOrEqual((mixed * 5) / 6 - 1e-9);
+    // 105 with 207 is 3:1 by volume: the resin and hardener bought each cover their share of the mixed volume.
+    expect(hardener).toBeGreaterThanOrEqual(mixed / 4 - 1e-9);
+    expect(resin).toBeGreaterThanOrEqual((mixed * 3) / 4 - 1e-9);
     for (const b of sched.buy) {
       expect(['gal', 'qt', 'pt']).toContain(b.unit);
       expect(Number.isInteger(b.qty)).toBe(true);
     }
+  });
+});
+
+describe('build review round 1: hardener, 209 and the pumps (MUST-10)', () => {
+  const buy = (re: RegExp) => sched.buy.filter((b) => re.test(b.item));
+
+  it('mixes 105 with 207 and 209 at 3:1, not 5:1', () => {
+    expect(EPOXY_RESIN_PARTS).toBe(3);
+    const text = sched.steps.map((s) => s.instructions.join(' ')).join(' ') + sched.assumptions.join(' ');
+    expect(text).toMatch(/3:1/);
+    expect(text).not.toMatch(/5:1 by volume, pumps/);
+    // About a quarter of the mixed volume is hardener: 0.46 qt at the defaults, one pint.
+    const mixed = sched.steps.find((s) => s.id === 'epoxy')!.products.reduce((a, q) => a + q.qtNeeded, 0);
+    expect(buy(/207/).reduce((a, b) => a + b.qt, 0)).toBeGreaterThanOrEqual(mixed / 4 - 1e-9);
+    expect(buy(/207/).reduce((a, b) => a + b.qt, 0)).toBeLessThan(mixed / 4 + 0.5);
+  });
+
+  it('buys 209 extra-slow hardener for the transom and bulkhead closes, sized from their joints at 3:1', () => {
+    const l209 = buy(/209/);
+    expect(l209.length).toBeGreaterThan(0);
+    expect(l209[0].item).toMatch(/extra slow/);
+    expect(sched.closeEpoxyFlOz).toBeGreaterThan(5);
+    expect(l209.reduce((a, b) => a + b.qt, 0) * 32).toBeGreaterThanOrEqual(sched.closeEpoxyFlOz / (EPOXY_RESIN_PARTS + 1) - 1e-9);
+    expect(l209[0].note).toMatch(/transom and bulkhead/);
+  });
+
+  it('lists the 303 mini pump set for the 3:1 hardeners', () => {
+    expect(sched.supplies).toHaveLength(1);
+    expect(sched.supplies[0].item).toMatch(/303/);
+    expect(sched.supplies[0].unit).toBe('ea');
+    expect(sched.supplies[0].qty).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('build review round 1: glue epoxy by joint type (MUST-10)', () => {
+  const est = glueJointEstimates(parts);
+  const sum = (kind: string): number => est.filter((g) => g.kind === kind).reduce((a, g) => a + g.flOz, 0);
+  const n = (kind: string): number => est.filter((g) => g.kind === kind).reduce((a, g) => a + g.count, 0);
+
+  it('is a realistic total, far above the old 0.12 fl oz a joint', () => {
+    const total = glueEpoxyFlOz(parts);
+    const joints = est.reduce((a, g) => a + g.count, 0);
+    expect(joints).toBeGreaterThan(100);
+    expect(total).toBeGreaterThan(joints * 0.12 * 2);
+    expect(total).toBeGreaterThan(30);
+    expect(total).toBeLessThan(90);
+    expect(total).toBeCloseTo(est.reduce((a, g) => a + g.flOz, 0), 9);
+  });
+
+  it('puts a Domino at 0.1-0.2 fl oz and counts a joint listed on both parts once', () => {
+    for (const k of ['4×20', '5×30']) {
+      expect(DOMINO_FLOZ[k]).toBeGreaterThanOrEqual(0.1);
+      expect(DOMINO_FLOZ[k]).toBeLessThanOrEqual(0.2);
+    }
+    // 18 chine Dominos 4×20 (rail-L / side-L-chine appear on both parts), 16 of 5×30 in the frame, 2 of 8×50 and so on.
+    expect(n('domino')).toBeGreaterThan(30);
+    expect(n('domino')).toBeLessThan(60);
+    const chine = est.filter((g) => g.kind === 'domino' && [g.a, g.b].sort().join('|') === 'rail-L|side-L-chine');
+    expect(chine).toHaveLength(1);
+    expect(chine[0].count).toBe(9);
+    expect(chine[0].flOz).toBeCloseTo(9 * DOMINO_FLOZ['4×20'], 9);
+    expect(sum('domino') / n('domino')).toBeGreaterThanOrEqual(0.1);
+    expect(sum('domino') / n('domino')).toBeLessThanOrEqual(0.25);
+  });
+
+  it('prices a full-face lamination by area (0.5-1 fl oz per ft2) and a fillet joint higher than a Domino', () => {
+    const band = est.find((g) => g.kind === 'lamination' && /side-L-chine/.test(g.a + g.b) && /side-L-web/.test(g.a + g.b))!;
+    const bandFt2 = (1.5 * 58.75) / 144;
+    expect(band.flOz).toBeGreaterThan(0.5 * bandFt2 - 1e-9);
+    expect(band.flOz).toBeLessThanOrEqual(1 * bandFt2 + 0.01);
+    expect(sum('fillet') / n('fillet')).toBeGreaterThan(DOMINO_FLOZ['5×30']);
+  });
+
+  it('can be limited to the joints that touch some parts (the end closes)', () => {
+    const closes = glueEpoxyFlOz(parts, (x) => x.step === 4.4);
+    expect(closes).toBeGreaterThan(5);
+    expect(closes).toBeLessThan(glueEpoxyFlOz(parts));
+    expect(glueEpoxyFlOz([])).toBe(0);
+  });
+});
+
+describe('build review round 1: stain, then seal (MUST-2)', () => {
+  it('stains the show faces, then epoxy-seals them, with water-based dye as the safe route', () => {
+    const ids = sched.steps.map((s) => s.id);
+    expect(ids.indexOf('stain')).toBeLessThan(ids.indexOf('epoxy'));
+    const stain = sched.steps.find((s) => s.id === 'stain')!;
+    const epoxy = sched.steps.find((s) => s.id === 'epoxy')!;
+    expect(stain.title).toMatch(/show faces/);
+    expect(stain.instructions.join(' ')).toMatch(/Water-based dye under epoxy is the safe route/);
+    expect(stain.instructions.join(' ')).toMatch(/THEN seal/);
+    expect(epoxy.title).toMatch(/show faces/);
+    expect(epoxy.instructions.join(' ')).toMatch(/dados, edges and hidden faces were already sealed/);
+    expect(epoxy.instructions.join(' ')).not.toMatch(/Seal ALL faces/);
+    expect(sched.steps[0].instructions.join(' ')).toMatch(/BEFORE any show face is sealed/);
+  });
+  it('runs in two sessions and leaves the hardware off', () => {
+    expect(sched.steps[1].instructions.join(' ')).toMatch(/underside while the hull is still inverted/);
+    expect(sched.steps[5].instructions.join(' ')).toMatch(/Hardware, hinges and the running gear stay off/);
   });
 });

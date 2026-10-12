@@ -10,7 +10,7 @@
 import type { Params } from '../params';
 import { STEP, box, cylinder, span, SIDES, IN3_PER_FT3, type Ctx } from './build-utils';
 import type { Layout } from './layout';
-import { boltLength, inchesText, localPoint } from './rear-mount';
+import { inchesText, localPoint, washerThick } from './rear-mount';
 import { multiply, translation } from './mat4';
 import { transformPoint } from './bounds';
 import { profilePart } from './profile';
@@ -142,7 +142,9 @@ export function buildHandle(ctx: Ctx): Part[] {
   // Hollow 6061 aluminum tube (plan item 5, −1.5 lb vs steel): wall area × length × density.
   const tubeLb = ((h.socketX * h.socketY - (h.socketX - 2 * w) * (h.socketY - 2 * w)) * p.handleSocketDepthIn / IN3_PER_FT3) * p.aluminumDensityPcf;
   const sockGrip = w + L.transom + p.blockingThickIn;
-  const sockLen = boltLength(sockGrip, 0.25, 2);
+  // The nut end is a 1/4-20 316 T-nut set in the backer (assembly step: the transom step), flange flush with the backer's inside face, so no wrench reaches behind the storage box. The bolt goes through the
+  // socket wall (nylon washer under the head), the transom and the whole backer, and its tip shows 0.1 in past the T-nut flange: grip + washer + 0.1, rounded up to a stocked 1/4 in.
+  const sockLen = Math.ceil((sockGrip + washerThick(0.25) + 0.1) * 4 - 1e-9) / 4;
   for (const { s, tag } of SIDES) {
     const y = s * h.yPost;
     parts.push(box(ctx, {
@@ -151,8 +153,8 @@ export function buildHandle(ctx: Ctx): Part[] {
       ...span([L.xRear - h.socketX, L.xRear], [y - h.socketY / 2, y + h.socketY / 2], [h.zBot, h.zTop]),
       material: '6061-T6 aluminum rectangular tube, anodized',
       joints: [
-        { type: 'bolt', to: 'transom-rear', count: 2, diaIn: 0.25, size: `1/4-20 × ${inchesText(sockLen)} 316 button-head cap screws (round holes: a carriage-bolt square neck will not seat in a 1/8" aluminum wall), nylon washer under the head, fender washer + nylock nut inside the backer; the heads sit INSIDE the bore on the wall against the transom, so push them in through a ${ACCESS_HOLE_IN}" (5/8 in) ACCESS HOLE in the opposite (rear) wall, directly opposite each screw (the ${SOCKET_SCREW_HEAD_IN}" button head and its ${SOCKET_SCREW_WASHER_IN}" nylon washer pass it with ${f2((ACCESS_HOLE_IN - SOCKET_SCREW_WASHER_IN) / 2)}" a side; the head seats on the inside of the near wall and the hex key goes through the same hole); plug the holes with 5/8 in button plugs after assembly (D-63)`,
-          at: [h.zBot + 1.2, h.zTop - 1.2].map((z): Vec3 => [h.socketX / 2 - w / 2, 0, z - (h.zBot + h.zTop) / 2]), note: `grip = socket wall ${f2(w)}" + transom ${f2(L.transom)}" + backer ${f2(p.blockingThickIn)}" = ${f2(sockGrip)}"; ${f2(sockLen)}" bolt: grip + 2 washers + nut + two threads` },
+        { type: 'bolt', to: 'transom-rear', count: 2, diaIn: 0.25, size: `1/4-20 × ${inchesText(sockLen)} 316 button-head cap screws (round holes: a carriage-bolt square neck will not seat in a 1/8" aluminum wall), nylon washer under the head, threaded into a 1/4-20 316 T-NUT set in the backer (barrel in the backer, flange flush with its inside face; NO nylock nut, NO wrench behind the box); the heads sit INSIDE the bore on the wall against the transom, so push them in through a ${ACCESS_HOLE_IN}" (5/8 in) ACCESS HOLE in the opposite (rear) wall, directly opposite each screw (the ${SOCKET_SCREW_HEAD_IN}" button head and its ${SOCKET_SCREW_WASHER_IN}" nylon washer pass it with ${f2((ACCESS_HOLE_IN - SOCKET_SCREW_WASHER_IN) / 2)}" a side; the head seats on the inside of the near wall and the hex key goes through the same hole); plug the holes with 5/8 in button plugs after assembly (D-63)`,
+          at: [h.zBot + 1.2, h.zTop - 1.2].map((z): Vec3 => [h.socketX / 2 - w / 2, 0, z - (h.zBot + h.zTop) / 2]), note: `grip = socket wall ${f2(w)}" + transom ${f2(L.transom)}" + backer ${f2(p.blockingThickIn)}" = ${f2(sockGrip)}"; ${f2(sockLen)}" bolt: grip + nylon washer + 0.1" of thread past the T-nut flange (no nut; the T-nut is epoxied in the backer at the transom step)` },
         { type: 'pin', to: `handle-post-${tag}`, count: 1, size: `${p.handlePinDiameterIn}" clevis pin through both walls and the post` },
       ],
       notes: `Aluminum 6061-T6 rectangular tube ${f2(h.socketX)} × ${f2(h.socketY)} × ${f2(p.handleSocketDepthIn)} (wall ${f2(w)}), cut on the bandsaw and drilled on the drill press; the ${f2(p.handlePostThickIn)}" × ${f2(p.handlePostWidthIn)}" post is a slip fit (${f2(p.handleSocketSlipIn)}" a side) in the ${f2(h.socketX - 2 * w)}" × ${f2(h.socketY - 2 * w)}" inside. The two screw heads are inside the bore (${f2(0.14 + 0.06)}" proud of the wall with the nylon washer), so drill a ${ACCESS_HOLE_IN}" (5/8 in) ACCESS HOLE in the rear wall opposite each screw (build 3c M5, enlarged from 3/8 in at D-63: the head is ${SOCKET_SCREW_HEAD_IN}" and the washer ${SOCKET_SCREW_WASHER_IN}", neither passes a 3/8 in hole) and give the post the relief groove on its transom face. Leaves ${f2((h.socketY - ACCESS_HOLE_IN) / 2)}" of wall each side of the hole on the ${f2(h.socketY)}" face; seal the bare aluminum edge of each hole with epoxy or anodize touch-up, and press a 5/8 in black button plug in each after assembly (water, grit). Lighter than steel (about 0.4 lb vs 1.2 lb each, plan item 5). Anodized or epoxy-coated, and bedded in epoxy / sealant against the transom: bare aluminum corrodes against wet tannin oak. Stays on the sled when the handle is removed (D-9).`,
@@ -166,7 +168,7 @@ export function buildHandle(ctx: Ctx): Part[] {
       : [[-yo, h.zFoot], [-yi, h.zFoot], [-yi, under(yi)], [-yo, under(yo)]];
     const zTopMax = Math.max(under(yi), under(yo));
     const postPart = profilePart(ctx, {
-      id: `handle-post-${tag}`, name: `Push handle upright ${tag}`, group: 'removable', mat: 'oak', step: STEP.brake, grain: 'z',
+      id: `handle-post-${tag}`, name: `Push handle upright ${tag}`, group: 'removable', mat: 'oak', step: STEP.brake, grain: 'y', // local y is the vertical of the upright (xz-type outline)
       outline, depth: p.handlePostThickIn, basis: 'yz', origin: [h.postX[0], 0, 0], stock: { t: p.handlePostThickIn, w: p.handlePostWidthIn, l: zTopMax - h.zFoot }, explode: [-1, 0, 0.3],
       fab: 'table-saw',
       joints: [
@@ -195,7 +197,7 @@ export function buildHandle(ctx: Ctx): Part[] {
   const barOutline: Vec2[] = [...ys.map((y): Vec2 => [y, under(y)]), ...[...ys].reverse().map((y): Vec2 => [y, over(y)])];
   const zLo = Math.min(...barOutline.map((q) => q[1])), zHi = Math.max(...barOutline.map((q) => q[1]));
   const bar = profilePart(ctx, {
-    id: 'handle-bar', name: 'Push handle handlebow', group: 'removable', mat: 'oak', step: STEP.brake, grain: 'y', fab: 'bandsaw',
+    id: 'handle-bar', name: 'Push handle handlebow', group: 'removable', mat: 'oak', step: STEP.brake, grain: 'x', fab: 'bandsaw', // local x is the 24 in span across the sled; the grain follows the bow
     outline: barOutline, depth: sec, basis: 'yz', origin: [h.xBar - sec / 2, 0, 0], stock: { t: sec, w: zHi - zLo + 0.25 + (bw.crownIn + (bw.zPost - bw.zEnd)), l: 2 * bw.yEnd }, explode: [-1, 0, 0.3],
     notes: bw.crownIn > 0
       ? `Sled-style handlebow (D-53, reference/05; D-57: gentler and bandsawn): ONE white-oak board ${sec}" thick, ${(zHi - zLo + 0.25 + bw.crownIn + (bw.zPost - bw.zEnd)).toFixed(2)}" wide (the bow's own height ${(zHi - zLo).toFixed(2)}" plus its ${(bw.crownIn + (bw.zPost - bw.zEnd)).toFixed(2)}" of sweep, so the arc can be laid on the board with the grain following it to within about 5 degrees instead of running out 11 to 14 at the ends: build 3c S7) and ${(2 * bw.yEnd).toFixed(1)}" long, the long edge bandsawn to a ${bw.radiusIn.toFixed(0)}" radius arc and the other edge to a parallel arc (no lamination, no bending form), then planed and rounded over to a ${sec}" grip. Pick straight-grained stock with the grain along the board: the cut grain runs out ${bw.postSlopeDeg.toFixed(0)}° at the posts and about ${((Math.asin(Math.min(1, bw.yEnd / bw.radiusIn)) * 180) / Math.PI).toFixed(0)}° at the ends (the hold-back pull is taken between the posts, where the grain is level). The arc passes through the two post tops at ${f2(bw.zPost)}" (the grip height) and crowns ${f2(bw.crownIn)}" above them at the middle (${f2(bw.zMid)}"); the ends overhang the posts to the sled edge (y = ±${f2(bw.yEnd)}") and hang ${f2(bw.zPost - bw.zEnd)}" below the post-top level. The post tops are sawn to the bow's ${bw.postSlopeDeg.toFixed(1)}° slope and each is pinned and epoxied.`

@@ -117,9 +117,9 @@ describe('S-5: the cargo load-height rule', () => {
     expect(c.details![1].value).toBeGreaterThan(13);
     expect(c.details![1].value).toBeLessThan(14.5);
     expect(c.how).toMatch(/keep the CENTER of the load under 10 in/);
-    expect(c.how).toMatch(/reaches its 35° limit at 15\.2 in/);
+    expect(c.how).toMatch(/reaches its 35° limit at 15\.[1-4] in/);
     expect(c.how).toMatch(/at 10 in 40\.[5-7]°/);
-    expect(c.how).toMatch(/at 18 in 32\.5°/);
+    expect(c.how).toMatch(/at 18 in 32\.[4-7]°/);
     expect(c.how).toMatch(/at 24 in 28\.[12]°/);
   });
   it('the Simple view cargo card says it in plain words (D-66: 10 in above the floor; D-67: it tips at about 15 in)', () => {

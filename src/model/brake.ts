@@ -240,7 +240,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
       const shoeAt = (fx: number): Vec3 => { const m = flapMat!; return [m[0] * fx + m[12], m[2] * fx + m[14], (qy1 - qy0) / 2]; };
       const shoe = profilePart(ctx, {
         id: `brake-shoe-${tag}`, partNo: 'brake-shoe', name: `Brake shoe block ${tag} (white oak wedge)`, group: 'brake', mat: 'oak', outline: outline as Vec2[], depth: qy1 - qy0, basis: 'xz', origin,
-        grain: 'y', stock: { t: qy1 - qy0, w: bb.z1 - bb.z0, l: bb.x1 - bb.x0 }, step: STEP.brake, fab: 'bandsaw', removable: true, explode: [0.2, sgn, 0.6],
+        grain: 'x', stock: { t: qy1 - qy0, w: bb.z1 - bb.z0, l: bb.x1 - bb.x0 }, step: STEP.brake, fab: 'bandsaw', removable: true, explode: [0.2, sgn, 0.6],
         joints: [
           { ...screw(`brake-flap-${tag}`, 2, '2 x #10 x 2" 316 screws up through the block into the flap, glued with epoxy'), at: shoeScrewX.map((x) => shoeAt(x)) },
           { type: 'glue', to: `brake-flap-${tag}`, count: 1, note: 'epoxy, full face', at: [shoeAt(shoeGlueX)] },
@@ -291,7 +291,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
       if (!movingOnly) add1(box(ctx, {
         id: `brake-snap-${tag}`, partNo: 'brake-snap', name: `Brake cord snap hook ${tag} (316 stainless)`, group: 'brake', mat: 'fixed', kind: 'purchased', step: STEP.brake, fab: 'buy', removable: true,
         massLb: SNAP_LB, material: '316 stainless snap hook, about 1-1/4" overall', size: SNAP_SIZE_IN, center: [b[0], b[1], b[2] - SNAP_SIZE_IN[2] / 2 + 0.15], explode: [-1, 0, 0.2],
-        joints: [{ type: 'knob', to: 'transom-rear', count: 1, note: 'clips to the #10 stainless screw eye in the aft face of the rear transom' }],
+        joints: [{ type: 'pin', to: 'transom-rear', count: 1, note: 'clips to the #10 stainless screw eye in the aft face of the rear transom (a clip, not a thumb-knob screw: build review MUST-11)' }],
         sourcing: { vendor: 'McMaster-Carr (316 stainless steel snap hook, about 1-1/4" long, tied or swaged into the cord end)', costUsd: 3 },
         notes: `Stainless snap hook spliced into the transom end of the return cord (the end by the handle sockets). Clip it onto the transom eye, or unclip it to take the flap off. ${REMOVE_NOTE}`,
       }));
@@ -360,13 +360,13 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
       const bk = g.backer;
       const yIn = sgn > 0 ? [bk.y0, bk.y1] : [-bk.y1, -bk.y0];
       add1(box(ctx, {
-        id: `brake-backer-${tag}`, partNo: 'brake-backer', name: `Brake knee backer ${tag} (white oak)`, group: 'brake', mat: 'oak', step: STEP.brake, grain: 'x', fab: 'table-saw',
+        id: `brake-backer-${tag}`, partNo: 'brake-backer', name: `Brake knee backer ${tag} (white oak)`, group: 'brake', mat: 'oak', step: STEP.frame, // with the frame glue-up (round 2): it is epoxied to the rail and the deck underside before the deck goes on grain: 'x', fab: 'table-saw',
         size: [bk.x1 - bk.x0, bk.t, bk.z1 - bk.z0], center: [(bk.x0 + bk.x1) / 2, sgn * (bk.y0 + bk.y1) / 2, (bk.z0 + bk.z1) / 2], explode: [0, -sgn * 0.3, -1],
         joints: [
           { type: 'glue', to: `rail-${tag}`, count: 1, note: 'epoxy, full face against the rail inner face' },
           { type: 'glue', to: 'deck', count: 1, note: 'epoxy along the top edge, against the deck underside' },
         ],
-        notes: `Oak backer ${f2(bk.t)}" thick (|y| ${f2(Math.abs(yIn[0]))}" to ${f2(Math.abs(yIn[1]))}") x ${f2(bk.x1 - bk.x0)}" x ${f2(bk.z1 - bk.z0)}" on the inner face of the rail, from x = ${f2(bk.x0)}" to ${f2(bk.x1)}" (clear of the rear axle hanger), glued to the rail and the deck underside before the bolts go in. The crossmember that meets it is cut back ${f2(bk.t)}" and butts the backer face. The ${g.bolts.count} knee bolts end here, with washers and nuts in counterbores.`,
+        notes: `Oak backer ${f2(bk.t)}" thick (|y| ${f2(Math.abs(yIn[0]))}" to ${f2(Math.abs(yIn[1]))}") x ${f2(bk.x1 - bk.x0)}" x ${f2(bk.z1 - bk.z0)}" on the inner face of the rail, from x = ${f2(bk.x0)}" to ${f2(bk.x1)}" (clear of the rear axle hanger), glued to the rail and the deck underside in the frame glue-up (before the deck goes on, the hull still right side up), so the knee bolts only have to be drilled through it later. A crossmember that lands on it is cut back ${f2(bk.t)}" and butts the backer face. The ${g.bolts.count} knee bolts end here, with washers and nuts in counterbores.`,
       }));
     }
 

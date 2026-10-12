@@ -9,9 +9,10 @@
 import { RIDER_PELVIS_Z_FRAC, STORAGE_LOCATION, type Params } from '../params';
 import { GRIP_BACKING_T_IN, STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
 import { innerHalfWidth, sideSlopeAt, sideTopAt, type Layout } from './layout';
-import { chooseDomino, DOMINOS, type DominoQuery } from './joinery';
+import { chooseDomino, DOMINOS, frac, type DominoQuery } from './joinery';
 import { joistId } from './frame';
 import { profilePart, signedArea } from './profile';
+import { boltLength, inchesText, screwLength } from './rear-mount';
 import type { Joint, Part, Vec2, Vec3 } from './types';
 
 // ── Detail dimensions and purchased-part estimates (D-18, D-40) ──
@@ -56,6 +57,11 @@ export const HINGE_LEAF_IN = 1;
 export const HINGE_HOLE_PITCH_IN = 0.5;
 /** Outermost hinge insert to the panel's side edge (in): at least the 1/2 in the insert text asks for. */
 export const INSERT_EDGE_IN = 0.6;
+/**
+ * Installation hole (in) of the #10-32 x 5/16 hex-drive threaded insert in the seat back (the thread's 0.19 in major diameter is NOT a hole size: build review MUST-5). 5/16 in is the figure for a
+ * stocked 5/16 in long hex-drive insert for wood; VERIFY IT against the maker's sheet for the exact insert before drilling (drill a scrap first).
+ */
+export const INSERT_DRILL_IN = 5 / 16;
 const HINGE_MASS_LB = 0.1;
 /** Height of the support (oak post) behind the back when the box is not behind it, along the back; and its crest thickness. */
 export const SEAT_POST_HEIGHT_IN = 4.5;
@@ -321,7 +327,7 @@ export function buildSeat(ctx: Ctx): Part[] {
   // and the insert is 1/32 in shorter than the hole: 5/16 in in a 12 mm panel (a 3/8 in insert would leave 0.10 in).
   const insertHoleIn = Math.floor((plyT - INSERT_VENEER_MIN_IN) * 32 + 1e-9) / 32;
   const insertLenIn = insertHoleIn - 1 / 32;
-  const insertTxt = `#10-32 × ${insertLenIn >= 0.3 ? '5/16' : String(insertLenIn.toFixed(2))} 316 threaded inserts (hex-drive, epoxied) in blind holes ${(insertHoleIn).toFixed(3)}" deep (a drill stop on the bit) from the front face, leaving ${(plyT - insertHoleIn).toFixed(3)}" of back veneer, 1/2 in or more from every edge`;
+  const insertTxt = `#10-32 × ${insertLenIn >= 0.3 ? '5/16' : String(insertLenIn.toFixed(2))} 316 threaded inserts (hex-drive, epoxied) in blind ${frac(INSERT_DRILL_IN)} in holes ${(insertHoleIn).toFixed(3)}" deep (a drill stop on the bit; verify the hole size against the insert maker's sheet) from the front face, leaving ${(plyT - insertHoleIn).toFixed(3)}" of back veneer, 1/2 in or more from every edge`;
   {
     const rTop = Math.min(p.seatBackCornerRadiusIn, W / 3, H / 3);
     const rBot = 0.5; // small bottom corners: the hinge leaf and the pin station sit near them
@@ -341,7 +347,7 @@ export function buildSeat(ctx: Ctx): Part[] {
       geometry: { type: 'extrusion', outline, depth: plyT },
       transform: [0, 1, 0, 0, s.col2[0], 0, s.col2[2], 0, s.col0[0], 0, s.col0[2], 0, o[0], o[1], o[2], 1],
       body: 'chassis', massLb: mass, edges: 'edged', grain: 'y', fab: 'shaper-origin', step: STEP.seatStorage, explode: unit(-0.5, 0, 0.6),
-      stock: { t: plyT, w: Math.min(W, H) + 0.25, l: Math.max(W, H) + 0.25 },
+      stock: { t: plyT, w: Math.min(W, H), l: Math.max(W, H) }, // the Shaper cut size (round 2: the cut list said +0.25, the file and the notes said 16 in); the 1/16 in banding goes on after the cut
       joints: [
         { type: 'screw', to: 'seat-hinge-L', count: 3, diaIn: 0.19, size: `3 × ${insertTxt}`, note: `hinge leaf on the front face at the foot (no screw into a ply edge); at = the insert mouths, ${leafV} in up the panel on the leaf centerline, ${HINGE_HOLE_PITCH_IN} in apart, centered ${hingeY.toFixed(2)} in off the center line`, at: insertAt(1) },
         { type: 'screw', to: 'seat-hinge-R', count: 3, diaIn: 0.19, size: `3 × ${insertTxt}`, note: `hinge leaf on the front face at the foot (no screw into a ply edge); at = the insert mouths, ${leafV} in up the panel on the leaf centerline, ${HINGE_HOLE_PITCH_IN} in apart, centered ${hingeY.toFixed(2)} in off the center line`, at: insertAt(-1) },
@@ -431,12 +437,14 @@ export function buildSeat(ctx: Ctx): Part[] {
   const depthX = Math.max(...sup.wedge.map((q) => q[0])) - Math.min(...sup.wedge.map((q) => q[0]));
   const zA = Math.max(...sup.wedge.map((q) => q[1]));
   for (const { s: sg, tag } of SIDES) {
-    const j: Joint[] = [{ type: 'glue', to: 'deck', count: 1, note: 'epoxy to the deck (and screwed from below)' }];
+    const j: Joint[] = [{ type: 'glue', to: 'deck', count: 1, note: 'epoxy to the deck (and screwed from below)' },
+      { type: 'screw', to: 'deck', count: 2, diaIn: 0.164, size: `2 × #8 × ${inchesText(screwLength(L.ply, 0.75))} 316 flat-head screws up from below through the deck and 3/4 in into the block`, note: 'clamping screws for the epoxy bed; countersink the heads in the deck underside' }];
     if (sup.rear) j.push({ type: 'glue', to: 'storage-end-fore', count: 1, note: 'epoxy to the box end; the push of the rider goes into the box through it' });
     j.push({ type: 'pin', to: `seat-pin-${tag}`, count: 1, diaIn: 2 * PIN_R_IN, size: `3/8" blind hole ${f4(lg.upHoleIn)}" deep (upright latch), with a 1/16" annular detent groove ${f4(lg.upGrooveIn)}" from the mouth`, note: `drilled square to the back's rear face ${pinZ.toFixed(2)}" up from the hinge axis; the block is ${lg.blockIn.toFixed(2)}" thick along the hole there, so ${f4(lg.upLeftIn)}" of oak is left behind it (set from the block outline, never into the box end); a ball-lock pin does not retain in a blind hole (build 3c S4)` });
     parts.push(profilePart(ctx, {
       id: `seat-wedge-${tag}`, partNo: 'seat-wedge', name: sup.rear ? `Seat back stop block ${tag}` : `Seat back post ${tag}`, group: 'seat', mat: 'oak',
-      outline: sup.wedge, depth: wedgeW, basis: 'xz', origin: [0, sg * sup.stileY + wedgeW / 2, 0], grain: 'z', step: STEP.seatStorage,
+      outline: sup.wedge, depth: wedgeW, basis: 'xz', origin: [0, sg * sup.stileY + wedgeW / 2, 0], grain: 'y', // local y is the vertical (the wedge is drawn in xz): vertical grain
+        step: STEP.seatStorage,
       stock: { t: wedgeW, w: depthX, l: zA - sup.zb }, explode: [0, 0, -1], joints: j,
       notes: `Shaped to the back angle (bandsaw + plane) and FIXED (D-57): glued against the box end and the deck, so nothing is loose in the bed. The back leans on its crest; the latch pin goes into a blind 3/8" hole in its sloped face, ${pinZ.toFixed(2)}" up from the hinge axis (D-63): ${lg.blockIn.toFixed(2)}" of block along the pin there, hole ${f4(lg.upHoleIn)}" deep with a drill stop, ${f4(lg.upLeftIn)}" of oak behind it. In cargo mode the back flips forward and this block is a 1" wedge of oak at the box end.`,
     }));
@@ -456,7 +464,8 @@ export function buildSeat(ctx: Ctx): Part[] {
       const xAft = sup.rear ? sup.xv + LID_HINGE_STANDOFF_IN + 0.01 : sup.xv; // clear of the lid hinge leaves on a box end
       const outline: Vec2[] = [[xAft, zAt(c2lo)], [xAt(c2lo), zAt(c2lo)], [xAt(sup.c2A), zAt(sup.c2A)], [xAft, zAt(sup.c2A)]];
       parts.push(profilePart(ctx, {
-        id: 'seat-crest-strip', partNo: 'seat-crest-strip', name: 'Seat back crest strip', group: 'seat', mat: 'oak', outline, depth: 2 * yIn, basis: 'xz', origin: [0, yIn, 0], grain: 'y', step: STEP.seatStorage,
+        id: 'seat-crest-strip', partNo: 'seat-crest-strip', name: 'Seat back crest strip', group: 'seat', mat: 'oak', outline, depth: 2 * yIn, basis: 'xz', origin: [0, yIn, 0], grain: 'z', step: STEP.seatStorage, // local z (the extrusion depth) runs across the sled: grain across, along the 13.5 in strip
+       
         stock: { t: Math.max(0.25, xAt(sup.c2A) - xAft), w: CREST_STRIP_IN, l: 2 * yIn }, explode: [0, 0, -1],
         joints: [
           { type: 'glue', to: 'seat-wedge-L', count: 1, note: 'epoxy, end to end with the stop block' }, { type: 'glue', to: 'seat-wedge-R', count: 1, note: 'epoxy, end to end with the stop block' },
@@ -478,12 +487,13 @@ export function buildSeat(ctx: Ctx): Part[] {
     const holeBot = p.grabBoardFootIn;
     const nTop = holeBot + p.grabHoleHeightIn + p.grabBoardBarIn; // above the gunwale top
     const nBot = -L.railBand; // down to the gunwale bottom (the foot laps the gunwale's inboard face)
-    // (u along the gunwale, n up from its top) -> world (x, z), turned to the slope
+    // (u along the gunwale, n up from its top) -> world (x, z), turned to the slope. Only the steel backing strip is still drawn in world coordinates: the board itself is modeled in its own
+    // flat (u, n) frame and turned to the slope by its transform (Phase 4 round 2), so its flat pattern is the 8 x 5.5 board, not a 12-degree-rotated drawing of it.
     const W2 = (u: number, n: number): Vec2 => [gxA + u * cs + n * sn, z0g - u * sn + n * cs];
     const rr = Math.min(GRIP_CORNER_IN, bLen / 4, (nTop - nBot) / 4);
     const outline: Vec2[] = [];
-    const arc = (cu: number, cn: number, a0: number) => { for (let i = 0; i <= 6; i++) { const aa = a0 + (Math.PI / 2) * (i / 6); outline.push(W2(cu + rr * Math.cos(aa), cn + rr * Math.sin(aa))); } };
-    outline.push(W2(0, nBot), W2(bLen, nBot));
+    const arc = (cu: number, cn: number, a0: number) => { for (let i = 0; i <= 6; i++) { const aa = a0 + (Math.PI / 2) * (i / 6); outline.push([cu + rr * Math.cos(aa), cn + rr * Math.sin(aa)]); } };
+    outline.push([0, nBot], [bLen, nBot]);
     arc(bLen - rr, nTop - rr, 0);
     arc(rr, nTop - rr, Math.PI / 2);
     // CCW in world (x, z)
@@ -491,19 +501,22 @@ export function buildSeat(ctx: Ctx): Part[] {
     const hole: Vec2[] = [];
     const cu0 = bLen / 2, cn0 = holeBot + hh / 2;
     const rh = hh / 2, straight = Math.max(0, hl - hh) / 2;
-    for (let i = 0; i <= 8; i++) { const aa = -Math.PI / 2 + (Math.PI * i) / 8; hole.push(W2(cu0 + straight + rh * Math.cos(aa), cn0 + rh * Math.sin(aa))); }
-    for (let i = 0; i <= 8; i++) { const aa = Math.PI / 2 + (Math.PI * i) / 8; hole.push(W2(cu0 - straight + rh * Math.cos(aa), cn0 + rh * Math.sin(aa))); }
+    for (let i = 0; i <= 8; i++) { const aa = -Math.PI / 2 + (Math.PI * i) / 8; hole.push([cu0 + straight + rh * Math.cos(aa), cn0 + rh * Math.sin(aa)]); }
+    for (let i = 0; i <= 8; i++) { const aa = Math.PI / 2 + (Math.PI * i) / 8; hole.push([cu0 - straight + rh * Math.cos(aa), cn0 + rh * Math.sin(aa)]); }
     const bt = p.grabBoardThickIn;
+    // Through the board, the inner band, the web, the outer band and the backing strip; a washer under the head (on the strip) and one under the nut: stocked bolt length, rounded up.
+    const gripStack = bt + 2 * L.sideBand + p.panelPlyIn + GRIP_BACKING_T_IN;
+    const gripBoltLen = boltLength(gripStack, GRIP_BOLT_DIA_IN, 2);
     for (const { s: sg, tag } of SIDES) {
       const gid = gunwaleId(p, tag);
       const yIn = sg * (innerHalfWidth(L, gxMid)); // inner face of the gunwale at the board
       // basis 'xz' extrudes toward -y from origin.y: the +y face of the board is the one nearer the gunwale for the left side
       const originY = sg > 0 ? yIn : yIn + bt;
-      const bolts = GRIP_BOLT_ROWS_IN.flatMap((d) => Array.from({ length: GRIP_BOLT_COLS }, (_, i) => W2(((i + 0.5) * bLen) / GRIP_BOLT_COLS, -d)));
+      const bolts = GRIP_BOLT_ROWS_IN.flatMap((d) => Array.from({ length: GRIP_BOLT_COLS }, (_, i) => [((i + 0.5) * bLen) / GRIP_BOLT_COLS, -d] as Vec2));
       parts.push(profilePart(ctx, {
-        id: `seat-grip-${tag}`, partNo: 'seat-grip', name: `Grab board ${tag}`, group: 'seat', mat: 'oak', outline: sg > 0 ? outline : outline, holes: [cw2(hole)], depth: bt, basis: 'xz', origin: [0, originY, 0],
+        id: `seat-grip-${tag}`, partNo: 'seat-grip', name: `Grab board ${tag}`, group: 'seat', mat: 'oak', outline, holes: [cw2(hole)], depth: bt, basis: 'xz', origin: [gxA, originY, z0g], rotation: -slope,
         grain: 'x', step: STEP.finish, stock: { t: bt, w: nTop - nBot, l: bLen }, fab: 'shaper-origin',
-        joints: [{ type: 'bolt', to: gid, count: GRIP_BOLTS, diaIn: GRIP_BOLT_DIA_IN, size: `${GRIP_BOLT_DIA_IN}" 316 button-head cap screws, ${GRIP_BOLT_COLS} columns × ${GRIP_BOLT_ROWS_IN.length} rows (${GRIP_BOLT_ROWS_IN.join('" and ')}" below the gunwale top), through the board, the inner band, the web, the outer band and the 1/16" 316 backing strip (head and a 3/8" washer on the strip outside, a 1-1/4" fender washer and nylock nut on the inside of the board; hold the nut, turn the hex key)`, at: bolts.map(([bx, bz]): Vec3 => [bx, bz, bt / 2]), note: 'the board laps the inboard face of the inner gunwale band; the screws pass through the inner band, the web and the outer band inside the 1.5 in gunwale band; the heads bear on the backing strip, not on the 0.234 in outer band (D-63)' }],
+        joints: [{ type: 'bolt', to: gid, count: GRIP_BOLTS, diaIn: GRIP_BOLT_DIA_IN, size: `${GRIP_BOLT_DIA_IN}" × ${inchesText(gripBoltLen)} 316 button-head cap screws (grip ${gripStack.toFixed(2)}": board ${bt}", inner band ${L.sideBand.toFixed(3)}", web ${p.panelPlyIn.toFixed(3)}", outer band ${L.sideBand.toFixed(3)}", strip ${GRIP_BACKING_T_IN}"), ${GRIP_BOLT_COLS} columns × ${GRIP_BOLT_ROWS_IN.length} rows (${GRIP_BOLT_ROWS_IN.join('" and ')}" below the gunwale top), through the board, the inner band, the web, the outer band and the 1/16" 316 backing strip (head and a 3/8" washer on the strip outside, a 1-1/4" fender washer and nylock nut on the inside of the board; hold the nut, turn the hex key)`, at: bolts.map(([bu, bn]): Vec3 => [bu, bn, bt / 2]), note: 'the board laps the inboard face of the inner gunwale band; the screws pass through the inner band, the web and the outer band inside the 1.5 in gunwale band; the heads bear on the backing strip, not on the 0.234 in outer band (D-63)' }],
         notes: `Grab board (D-57): ${bt}" oak, ${f1(bLen)}" long and ${f1(nTop - nBot)}" tall, its lower ${L.railBand}" lapping the inboard face of the gunwale and standing ${f1(nTop)}" above the gunwale top, turned to the sheer's ${((slope * 180) / Math.PI).toFixed(1)}° slope. A ${hl}" × ${hh}" hand hole is Shaper Origin-routed ${f1(holeBot)}" above the gunwale top (finger gap ${hh}" ≥ 1.25", clear length ${hl}" ≥ 3.5": no pinch point, BRIEF 4.7), ${p.grabBoardBarIn}" of oak above it; top corners ${GRIP_CORNER_IN}" radius, ¼" roundovers on every edge and the hole. Bolted, never glued, so a splintered board can be replaced. It replaces the D-40 pad, two posts and bar.`,
       }));
       // Backing strip on the OUTER face of the outer gunwale band under the bolt heads (D-63): 316 flat bar 1/16 x 1 x board length, cut at the sheer's slope, epoxied/bedded to the band.

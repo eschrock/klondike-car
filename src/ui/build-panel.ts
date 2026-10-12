@@ -9,10 +9,10 @@ import type { Params } from '../params';
 import { BuildData, CSV_MIME, SHAPER_CONVENTIONS, SHAPER_NOTES, SVG_MIME, zipName, zipPackage } from '../build/package';
 import { fracIn } from '../build/cutlist';
 import { tilePlan } from '../build/forms';
-import { HARDENERS, type BuildStep } from '../build/assembly';
+import type { BuildStep } from '../build/assembly';
 import { h } from './dom';
 import {
-  bytesLabel, clampStep, dims3, featureSummary, groupByWhen, hours, loadDone, maxDepth, pct, previewSvg, saveDone, sheetSvg, stepFocus, tilePagesHtml, todayISO, usd,
+  bytesLabel, clampStep, cureLine, dims3, featureSummary, groupByWhen, loadDone, maxDepth, pct, previewSvg, saveDone, sheetSvg, stepFocus, tilePagesHtml, todayISO, usd,
   type StepFocus,
 } from './build-helpers';
 import './build-panel.css';
@@ -273,7 +273,7 @@ export function mountBuildPanel(host: HTMLElement, opts: BuildPanelOptions): Bui
       String(r.strips),
     ]), 'Resawn strips'));
     for (const pool of c.resaw) {
-      out.push(note(`${pool.strips} strips of ${fracIn(pool.roughT)}" rough: ${pool.boards} × ${pool.board} × ${pool.boardLengthIn / 12} ft board (${pool.stripsPerBoard} per board thickness, ${pool.layers} layer${pool.layers === 1 ? '' : 's'}), ${pool.boardFeet.toFixed(1)} bf.`));
+      out.push(note(`${pool.strips} strips of ${fracIn(pool.roughT)}" rough: buy ${pool.boards} × ${pool.board} × ${pool.boardWidthIn}" wide × ${pool.boardLengthIn / 12} ft (${pool.boardFeet.toFixed(1)} bf). Each board gives ${pool.stripsPerBoard} slab${pool.stripsPerBoard === 1 ? '' : 's'} and ${pool.yieldPerBoard} strips, so the purchase holds ${pool.stripSlots}: ${pool.spares} spare${pool.spares === 1 ? '' : 's'}.`));
     }
     out.push(h('h5', { class: 'bp-group' }, 'Okoume plywood'));
     for (const g of c.sheets) {
@@ -400,7 +400,6 @@ export function mountBuildPanel(host: HTMLElement, opts: BuildPanelOptions): Bui
     const next = btn('Next →', () => go(steps[Math.min(steps.length - 1, stepIdx() + 1)].n), 'Next step');
     const viewNote = h('p', { class: 'muted small' });
 
-    const cureLine = (s: BuildStep) => (s.cure ? `West ${HARDENERS[s.cure.hardener].label}: pot life ${s.cure.potMin[0]}-${s.cure.potMin[1]} min, clamp ${hours(s.cure.clampHours)}, full cure ${s.cure.fullHours} h` : '');
     const detailNodes = (s: BuildStep, forPrint: boolean): Node[] => {
       const ids = s.partIds;
       const listing = ids.map((id) => nameOf.get(id) ?? id);
@@ -414,7 +413,7 @@ export function mountBuildPanel(host: HTMLElement, opts: BuildPanelOptions): Bui
         h('ol', { class: 'bp-instr' }, ...s.instructions.map((t) => h('li', {}, t))),
       ];
       if (s.clampCure) out.push(h('p', { class: 'bp-cure' }, h('strong', {}, 'Glue, clamp and cure: '), s.clampCure));
-      else if (s.cure) out.push(h('p', { class: 'bp-cure' }, h('strong', {}, 'Cure: '), cureLine(s)));
+      else if (s.cure) out.push(h('p', { class: 'bp-cure' }, h('strong', {}, 'Cure: '), cureLine(s.cure)));
       if (s.checks.length) out.push(h('div', {}, h('strong', { class: 'small' }, 'Check before moving on'), h('ul', { class: 'bp-checkboxes' }, ...s.checks.map((c) => h('li', {}, h('span', { class: 'bp-box', 'aria-hidden': 'true' }), c)))));
       if (s.tools.length) out.push(h('p', { class: 'muted small' }, h('strong', {}, 'Tools: '), s.tools.join(', ')));
       return out;
@@ -477,7 +476,14 @@ export function mountBuildPanel(host: HTMLElement, opts: BuildPanelOptions): Bui
     const files = d.files;
     const out: Node[] = [];
     const zipBtn = btn('Download all (zip)', () => download(zipName(d), 'application/zip', zipPackage(d)), 'Every file below in one zip', 'bp-primary');
-    out.push(h('div', { class: 'bp-actions' }, zipBtn));
+    const bookBtn = btn('Open build book (print or save as PDF)', () => {
+      const book = d.files.find((f) => f.name === 'build-book.html');
+      if (!book) return;
+      const url = URL.createObjectURL(new Blob([book.data as BlobPart], { type: 'text/html' }));
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }, 'The whole build on paper, from the same data as this tab: opens in a new tab');
+    out.push(h('div', { class: 'bp-actions' }, zipBtn, bookBtn));
     out.push(note(`${files.length} files, generated from the design on screen (params rev ${d.revision}). The zip is uncompressed; open it with any unzip tool.`));
     out.push(table('bp-files', ['File', 'Size', ''], files.map((f) => {
       const size = typeof f.data === 'string' ? new TextEncoder().encode(f.data).length : f.data.length;

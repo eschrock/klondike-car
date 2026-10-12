@@ -18,10 +18,17 @@
  *      dado "into the web dados" is extended at each end across the neighboring web dado, so the two make one continuous pocket at the corner.
  *  R7  Edge joints (glue, Domino, scarf, bevel, rabbet, half-lap, dado cut in the mate, anything at mid-thickness) are not Shaper features. Glue footprints of lumber / sheet mates are
  *      dashed guides; the rest become text notes (below the part and in <desc>).
- *  R8  `legend` is engraved as an on-line cut at `legend.depthIn`, single-stroke capitals, centered on the panel, readable from the legend's face.
+ *  R8  `legend` is engraved as an on-line cut at `legend.depthIn`, single-stroke capitals, its INK centered on the panel (not its advance width), readable from the legend's face.
+ *  R9  A captured-edge sheet (the storage lid) is cut at its stock size, tongues included (`FlatPattern.tongueIn`); a dashed guide shows the visible panel.
+ *  R10 Nothing is cut deeper than SHAPER_MAX_DEPTH_IN in one pass: a deeper outline or hole (the 1.5 in bow bulkhead) is Shaper-cut to the maximum depth from one face and finished with a
+ *      bandsaw and a flush-trim (pattern) bit. The file says so, and the feature is marked `deep`.
+ *  R11 Every feature names its bit: 1/4 in for outlines, hand holes and pockets wider than 0.26 in; 1/8 in for narrower pockets (a pocket exactly as wide as the bit has no offset), holes under 3/8 in
+ *      and the engraving (a straight bit, on-line).
+ *  R12 Human text (title, tags, notes) is never in a cut path: it is stroke-only text in a `<g id="annotations" shaper:cutType="guide">` group below the part, and in <desc>.
  */
 import type { Params } from '../params';
 import type { Part, Vec2, Vec3 } from '../model/types';
+import { worldAABB } from '../model/bounds';
 import { flatPattern, type FlatPattern } from './flat';
 import {
   bbox, circleD, distToPoly, fmt, guideEl, parseInches, pathEl, pointInPoly, polyD, rectAlong, rectLoop, strokeText, svgDocument, textEl, type Xf,
@@ -33,6 +40,20 @@ export const BREAKTHROUGH_IN = 0.02;
 export const DRILL_BELOW_IN = 0.25;
 /** Smallest Shaper bit (in): pockets narrower than this cannot be cut. */
 export const MIN_BIT_IN = 0.125;
+/**
+ * Deepest cut (in) the Shaper Origin makes in one pass. A 1/4 in spiral bit is rated about 1 in, so 1.0 is a conservative figure; VERIFY YOUR BIT (a longer bit may reach more). A cut deeper than this
+ * (the 1.5 in oak bow bulkhead outline and its hand hole) is made to this depth from one face and finished with a bandsaw and a flush-trim (pattern) bit.
+ */
+export const SHAPER_MAX_DEPTH_IN = 1.0;
+/** The depth (in) written to a cut path for a part of this thickness: through plus the breakthrough, but no deeper than the bit reaches. */
+export const shaperCutDepth = (thicknessIn: number): number => Math.min(thicknessIn + BREAKTHROUGH_IN, SHAPER_MAX_DEPTH_IN);
+const BIT_SMALL = '1/8 in', BIT_LARGE = '1/4 in';
+/** A pocket this narrow or narrower (in) takes the 1/8 in bit: 0.25 is exactly the 1/4 in bit (no offset), 0.197 is narrower than it. */
+const POCKET_SMALL_BIT_MAX_IN = 0.26;
+/** An inside cut whose narrowest dimension is under this (in) takes the 1/8 in bit (a 1/4 in bit leaves no room to spare in a 0.266 hole). */
+const HOLE_SMALL_BIT_MAX_IN = 0.375;
+const bitForPocket = (narrowIn: number): string => (narrowIn <= POCKET_SMALL_BIT_MAX_IN ? BIT_SMALL : BIT_LARGE);
+const bitForHole = (narrowIn: number): string => (narrowIn < HOLE_SMALL_BIT_MAX_IN ? BIT_SMALL : BIT_LARGE);
 /** Extra clearance on a pin hole over the pin diameter (in): 3/8 pin -> 13/32 hole. */
 export const PIN_CLEARANCE_IN = 1 / 32;
 /** A joint on a face if its normal coordinate is this fraction of the thickness or more away from mid-thickness; nearer is an edge joint. */
@@ -65,6 +86,10 @@ export interface ShaperFeature {
   approx?: boolean;
   /** Pattern coordinates (u, v) of each hole / mark / pocket center. */
   at?: Vec2[];
+  /** The bit that cuts it (R11): "1/4 in", "1/8 in", "1/8 in straight bit", or "drill". */
+  bit?: string;
+  /** Deeper than SHAPER_MAX_DEPTH_IN (R10): cut to the maximum depth from one face, then finished with a bandsaw and a flush-trim bit. `depthIn` is the depth of the Shaper pass. */
+  deep?: boolean;
 }
 
 export interface ShaperFile {
@@ -78,6 +103,13 @@ export interface ShaperFile {
   widthIn: number;
   heightIn: number;
   features: ShaperFeature[];
+  /** Plain words for the face to put UP, e.g. "FORWARD (bow-side) face"; `cutFaceMatters` is false when the part has no feature on a face (either face can go up). */
+  cutFace: string;
+  cutFaceMatters: boolean;
+  /** The distinct bits the file calls for, in the order they are used. */
+  bits: string[];
+  /** The file has a cut deeper than SHAPER_MAX_DEPTH_IN. */
+  deepCut: boolean;
 }
 
 // ── Internal drawing items (pattern coordinates: u right, v up, before any mirroring) ──
@@ -100,6 +132,10 @@ export interface PartDrawing {
   mirror: boolean;
   face: '+' | '-';
   engrave?: { strokes: Vec2[][]; depthIn: number; text: string };
+  /** Plain words for the cut face (see ShaperFile.cutFace) and whether it matters. */
+  cutFace: string;
+  cutFaceMatters: boolean;
+  deepCut: boolean;
 }
 
 // ── Frames ──
@@ -177,6 +213,13 @@ function parseMortise(size: string): { thin: number; wide: number; depth: number
 
 function parseDepth(text: string): number | undefined {
   const m = /(\d*\.\d+|\d+\/\d+)"?\s*(?:in\s*)?deep/.exec(text);
+  const v = m ? parseInches(m[1]) : NaN;
+  return Number.isFinite(v) ? v : undefined;
+}
+
+/** The drill size (in) of a blind insert hole from the joint text ("in blind 5/16 in holes 0.344 in deep"), or undefined when the text gives none. */
+function insertBore(text: string): number | undefined {
+  const m = new RegExp(String.raw`blind\s+${NUM}\s*(?:in\b|")?\s*holes?`).exec(text);
   const v = m ? parseInches(m[1]) : NaN;
   return Number.isFinite(v) ? v : undefined;
 }
@@ -266,7 +309,17 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
   const features: ShaperFeature[] = [];
   const notes: string[] = [];
   const W = f.widthIn, H = f.heightIn;
-  features.push({ kind: 'outline', label: `Outline ${fmt(W)} x ${fmt(H)} in, outside cut`, count: 1, depthIn: f.thicknessIn + BREAKTHROUGH_IN });
+  const deepCut = f.thicknessIn + BREAKTHROUGH_IN > SHAPER_MAX_DEPTH_IN + 1e-9;
+  const passDepth = shaperCutDepth(f.thicknessIn);
+  const deepWords = `DEEP CUT: ${fmt(f.thicknessIn)} in stock is deeper than a Shaper bit reaches (${fmt(SHAPER_MAX_DEPTH_IN)} in, verify your bit). Shaper-cut to the max depth from one face, then finish with a bandsaw and a flush-trim (pattern) bit`;
+  const tongueTxt = f.tongueIn ? `, cut size INCLUDING the ${fmt(f.tongueIn)} in tongue on every side (the rabbets capture it); the visible panel is ${fmt(W - 2 * f.tongueIn)} x ${fmt(H - 2 * f.tongueIn)} in` : '';
+  features.push({ kind: 'outline', label: `Outline ${fmt(W)} x ${fmt(H)} in, outside cut${tongueTxt}${deepCut ? `. ${deepWords}` : ''}`, count: 1, depthIn: passDepth, bit: BIT_LARGE, ...(deepCut ? { deep: true } : {}) });
+  if (deepCut) notes.push(`Outline: ${deepWords}. The file is cut ${fmt(passDepth)} in deep (stock ${fmt(f.thicknessIn)} in).`);
+  if (f.tongueIn) {
+    const t = f.tongueIn;
+    items.push({ k: 'line', pts: rectLoop(t, t, W - t, H - t), closed: true, dashed: true, label: 'visible panel (inside the rabbets)' });
+    notes.push(`The outline is the CUT size: the visible panel is ${fmt(W - 2 * t)} x ${fmt(H - 2 * t)} in and a ${fmt(t)} in tongue on each of the 4 sides goes into the rabbet of the frame (dashed guide = the visible edge).`);
+  }
 
   // R1: through holes of the geometry.
   for (const loop of f.holes) {
@@ -278,9 +331,12 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
   }
   const loopHoles = f.holes.map(bbox);
   const small = loopHoles.filter((b) => Math.max(b.u1 - b.u0, b.v1 - b.v0) < DRILL_BELOW_IN);
-  if (small.length) features.push({ kind: 'drill', label: `Through hole, drill (under ${DRILL_BELOW_IN} in)`, count: small.length, diaIn: Math.max(...small.map((b) => Math.max(b.u1 - b.u0, b.v1 - b.v0))), at: small.map((b) => [(b.u0 + b.u1) / 2, (b.v0 + b.v1) / 2] as Vec2), joint: 'geometry' });
+  if (small.length) features.push({ kind: 'drill', label: `Through hole, drill (under ${DRILL_BELOW_IN} in)`, count: small.length, diaIn: Math.max(...small.map((b) => Math.max(b.u1 - b.u0, b.v1 - b.v0))), at: small.map((b) => [(b.u0 + b.u1) / 2, (b.v0 + b.v1) / 2] as Vec2), joint: 'geometry', bit: 'drill' });
   const big = loopHoles.filter((b) => Math.max(b.u1 - b.u0, b.v1 - b.v0) >= DRILL_BELOW_IN);
-  if (big.length) features.push({ kind: 'hole', label: 'Hand hole / slot, inside cut', count: big.length, at: big.map((b) => [(b.u0 + b.u1) / 2, (b.v0 + b.v1) / 2] as Vec2), joint: 'geometry' });
+  if (big.length) {
+    features.push({ kind: 'hole', label: `Hand hole / slot, inside cut${deepCut ? `. ${deepWords}` : ''}`, count: big.length, depthIn: passDepth, at: big.map((b) => [(b.u0 + b.u1) / 2, (b.v0 + b.v1) / 2] as Vec2), joint: 'geometry', bit: bitForHole(Math.min(...big.map((b) => Math.min(b.u1 - b.u0, b.v1 - b.v0)))), ...(deepCut ? { deep: true } : {}) });
+    if (deepCut) notes.push(`Hand hole: ${deepWords} (the hole is cut ${fmt(passDepth)} in deep from the cut face, then opened through from the other face with the flush-trim bit on a template, or by hand).`);
+  }
 
   // A joint point is in the part's own local frame (types.ts); a point that lands off the pattern is reported, never moved.
   const inBox = (q: Vec2) => q[0] >= -0.05 && q[0] <= W + 0.05 && q[1] >= -0.05 && q[1] <= H + 0.05;
@@ -298,8 +354,8 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
     if (g) { g.to.push(j.to); g.count += j.count; } else edgeGroups.set(k, { type: j.type, size: j.size, note: j.note, to: [j.to], count: j.count });
   };
 
-  const holeFeature = (j: { type: string; to: string }, pts: Vec2[], dia: number, depth: number | undefined, kind: 'hole' | 'drill', label: string, approx = false) => {
-    features.push({ kind, label, count: pts.length, diaIn: dia, ...(depth !== undefined ? { depthIn: depth } : {}), to: j.to, joint: j.type, at: pts, ...(approx ? { approx } : {}) });
+  const holeFeature = (j: { type: string; to: string }, pts: Vec2[], dia: number | undefined, depth: number | undefined, kind: 'hole' | 'drill', label: string, approx = false) => {
+    features.push({ kind, label, count: pts.length, ...(dia !== undefined ? { diaIn: dia } : {}), ...(depth !== undefined ? { depthIn: depth } : {}), to: j.to, joint: j.type, at: pts, bit: kind === 'hole' ? bitForHole(dia ?? 0) : 'drill', ...(approx ? { approx } : {}) });
   };
 
   /** Rule R2-R5 for one fastener joint, given its resolved points (null where a point is off the pattern). */
@@ -323,7 +379,10 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
         features.push({ kind: 'guide', label: `Screw eye pilot in the end face at v = ${ok.map((g) => fmt(g.uv[1])).join(', ')}`, count: ok.length, to: j.to, joint: j.type, approx: true });
         return;
       }
-      const dia = kindF === 'pilot' ? pilotDia(j) : kindF === 'blind' ? (j.diaIn ?? 0.19) : clearanceDia(j);
+      // A blind insert hole is drilled to the INSERT's installation size, which the joint text gives ("in blind 5/16 in holes 0.344 in deep"); the thread diameter (diaIn) is not a hole size (build review MUST-5).
+      const bore = kindF === 'blind' ? insertBore(text) : undefined;
+      const dia = kindF === 'pilot' ? pilotDia(j) : kindF === 'blind' ? (bore ?? j.diaIn ?? 0.19) : clearanceDia(j);
+      const diaTxt = kindF === 'blind' && bore === undefined ? 'drill size per the insert maker (not in the model)' : `Ø${fmt(dia)}`;
       const depth = kindF === 'through' ? undefined : parseDepth(text);
       // R5: trust the position only if it is inside the outline and clear of the edges by the joint's own margin.
       const mm = /(\d\/\d|[\d.]+)\s*in or more from every edge/.exec(text);
@@ -333,7 +392,7 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
       for (const g of untrusted) items.push({ k: 'drill', c: g.uv, dia, approx: true, label: 'position uncertain' });
       if (untrusted.length) {
         notes.push(`${j.type} to ${j.to}: ${untrusted.length} point(s) are nearer an edge than ${fmt(margin)} in or outside the outline in the model; marked as guides only, set them from the mating part.`);
-        holeFeature(j, untrusted.map((g) => g.uv), dia, depth, 'drill', `${kindF === 'blind' ? 'Blind insert hole' : 'Hole'} Ø${fmt(dia)}: position not trusted, guide mark only`, true);
+        holeFeature(j, untrusted.map((g) => g.uv), kindF === 'blind' && bore === undefined ? undefined : dia, depth, 'drill', `${kindF === 'blind' ? 'Blind insert hole' : 'Hole'} ${diaTxt}: position not trusted, guide mark only`, true);
       }
       if (!trusted.length) return;
       const uvs = trusted.map((g) => g.uv);
@@ -346,10 +405,10 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
         // A blind hole carries its depth on the drawing: one label above the row of marks.
         if (blindish && depth !== undefined) {
           const top = trusted.reduce((a, g) => (g.uv[1] > a.uv[1] ? g : a));
-          items.push({ k: 'tag', at: [Math.min(...trusted.map((g) => g.uv[0])), top.uv[1] + dia / 2 + 0.22], text: `${kindF === 'blind' ? 'insert hole' : 'pilot'} Ø${fmt(dia)} x ${fmt(depth)} deep${trusted.length > 1 ? ` (x${trusted.length})` : ''}`, size: 0.11 });
+          items.push({ k: 'tag', at: [Math.min(...trusted.map((g) => g.uv[0])), top.uv[1] + dia / 2 + 0.22], text: `${kindF === 'blind' ? 'insert hole' : 'pilot'} ${kindF === 'blind' && bore === undefined ? 'drill per insert maker' : `Ø${fmt(dia)}`} x ${fmt(depth)} deep${trusted.length > 1 ? ` (x${trusted.length})` : ''}`, size: 0.11 });
         }
-        const what = kindF === 'through' ? `${j.type} hole Ø${fmt(dia)} through, drill` : kindF === 'blind' ? `Blind insert hole Ø${fmt(dia)}${depth ? ` x ${fmt(depth)} deep` : ''}, drill with a stop` : `Pilot hole Ø${fmt(dia)}, drill through the mating part`;
-        holeFeature(j, uvs, dia, depth, 'drill', what);
+        const what = kindF === 'through' ? `${j.type} hole Ø${fmt(dia)} through, drill` : kindF === 'blind' ? `Blind insert hole ${diaTxt}${depth ? ` x ${fmt(depth)} deep` : ''}, drill with a stop` : `Pilot hole Ø${fmt(dia)}, drill through the mating part`;
+        holeFeature(j, uvs, kindF === 'blind' && bore === undefined ? undefined : dia, depth, 'drill', what);
       }
   };
 
@@ -392,7 +451,8 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
             else if (wall < THIN_WALL_IN) notes.push(`${j.type} for ${j.to}: the pocket comes within ${fmt(wall)} in of the outline (a wall under ${THIN_WALL_IN} in); check it against the model.`);
           }
           pocketFaces.push(face);
-          const pkFeature: ShaperFeature = { kind: 'pocket', label: `${j.type === 'dado' ? 'Dado' : 'Mortise'} for ${j.to}: ${loops.desc}`, count: loops.loops.length, depthIn: loops.depth, to: j.to, joint: j.type, at: loops.loops.map((l) => { const b = bbox(l); return [(b.u0 + b.u1) / 2, (b.v0 + b.v1) / 2] as Vec2; }) };
+          const narrow = Math.min(...loops.loops.map((l) => Math.min(Math.hypot(l[1][0] - l[0][0], l[1][1] - l[0][1]), Math.hypot(l[2][0] - l[1][0], l[2][1] - l[1][1]))));
+          const pkFeature: ShaperFeature = { kind: 'pocket', label: `${j.type === 'dado' ? 'Dado' : 'Mortise'} for ${j.to}: ${loops.desc}`, count: loops.loops.length, depthIn: loops.depth, bit: bitForPocket(narrow), to: j.to, joint: j.type, at: loops.loops.map((l) => { const b = bbox(l); return [(b.u0 + b.u1) / 2, (b.v0 + b.v1) / 2] as Vec2; }) };
           features.push(pkFeature);
           if (loops.deckRun) deckRuns.push({ item: items[items.length - 1] as Extract<Item, { k: 'pocket' }>, feature: pkFeature });
           if (face !== fr.plainFace) { /* the face decides the mirror below */ }
@@ -478,7 +538,7 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
     const lg = part.legend;
     const st = strokeText(lg.text, lg.letterHeightIn);
     engrave = { strokes: st.strokes, depthIn: lg.depthIn, text: lg.text };
-    features.push({ kind: 'engrave', label: `Engrave "${lg.text}" on the ${lg.face} face, ${fmt(lg.letterHeightIn)} in letters, ${fmt(lg.depthIn)} in deep, single-stroke on-line (${lg.process})`, count: st.strokes.length, depthIn: lg.depthIn });
+    features.push({ kind: 'engrave', label: `Engrave "${lg.text}" on the ${lg.face} face, ${fmt(lg.letterHeightIn)} in letters, ${fmt(lg.depthIn)} in deep, single-stroke on-line (${lg.process}). Use a 1/8 in straight bit, on the line (a 60 degree V bit makes a 0.035 in hairline at this depth); ${fmt(lg.depthIn)} in is within Origin's depth error of a 4 mm face veneer, so test on an offcut first`, count: st.strokes.length, depthIn: lg.depthIn, bit: '1/8 in straight bit, on-line' });
     if (st.widthIn > W - 1) notes.push(`legend is ${fmt(st.widthIn)} in wide on a ${fmt(W)} in panel: check the fit.`);
   }
 
@@ -490,10 +550,30 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
     const b: Vec2 = f.grain === 'u' ? [a[0] + len, a[1]] : [a[0], a[1] + len];
     const d = f.grain === 'u' ? [1, 0] : [0, 1];
     const h1: Vec2 = [b[0] - 0.12 * d[0] - 0.06 * d[1], b[1] - 0.12 * d[1] - 0.06 * d[0]], h2: Vec2 = [b[0] - 0.12 * d[0] + 0.06 * d[1], b[1] - 0.12 * d[1] + 0.06 * d[0]];
-    items.push({ k: 'line', pts: [a, b], label: 'grain' }, { k: 'line', pts: [h1, b, h2], label: 'grain arrow' }, { k: 'tag', at: [a[0], a[1] - 0.08], text: 'GRAIN', size: 0.12 });
+    items.push({ k: 'line', pts: [a, b], label: 'grain' }, { k: 'line', pts: [h1, b, h2], label: 'grain arrow' }, { k: 'tag', at: [a[0], a[1] - 0.08], text: `GRAIN along the ${fmt(f.grain === 'u' ? W : H)}"`, size: 0.12 });
   }
 
-  return { part, f, items, features, notes, mirror, face, engrave };
+  // The face to put UP, in plain words (the part-local "+z face" means nothing at the bench). It matters when a pocket or the legend is on one face.
+  const cutFaceMatters = pocketFaces.length > 0 || !!part.legend;
+  const facing = facingWords(part, fr, face);
+  const cutFace = cutFaceMatters
+    ? `${facing} face UP${part.legend ? ' (the engraved face)' : ' (the face with the dados / mortises)'}`
+    : `either face can go up (no dado or mortise on a face); the drawing is the ${facing} face`;
+
+  for (const x of features) if (x.bit && x.bit !== 'drill') x.label += ` [bit: ${x.bit}]`;
+  return { part, f, items, features, notes, mirror, face, engrave, cutFace, cutFaceMatters, deepCut };
+}
+
+/** Plain words for the model-frame direction a face of the part points, e.g. "FORWARD (bow-side)". */
+function facingWords(part: Part, fr: Frame, face: '+' | '-'): string {
+  const m = part.transform, sgn = face === '+' ? 1 : -1;
+  const n = [m[fr.nIdx * 4] * sgn, m[fr.nIdx * 4 + 1] * sgn, m[fr.nIdx * 4 + 2] * sgn];
+  const k = [0, 1, 2].reduce((b, i) => (Math.abs(n[i]) > Math.abs(n[b]) ? i : b), 0);
+  if (k === 0) return n[0] > 0 ? 'FORWARD (bow-side)' : 'REAR (stern-side)';
+  if (k === 2) return n[2] > 0 ? 'TOP' : 'BOTTOM';
+  const bb = worldAABB(part), yc = (bb.min[1] + bb.max[1]) / 2;
+  if (Math.abs(yc) > 2) return n[1] * yc > 0 ? 'OUTBOARD (hull-outside)' : 'INBOARD (hull-inside)';
+  return n[1] > 0 ? 'LEFT-side (+y)' : 'RIGHT-side (-y)';
 }
 
 const d_pockets = (items: Item[]): Array<Extract<Item, { k: 'pocket' }>> => items.filter((i): i is Extract<Item, { k: 'pocket' }> => i.k === 'pocket');
@@ -565,26 +645,33 @@ function pocketFor(fr: Frame, j: { type: string; size?: string }, mate: Part | u
 
 // ── Rendering ──
 
+/** Attributes of the group that holds every piece of human text: stroke-only blue (a guide's colors), never a filled glyph, never a cut path (R12). */
+const ANNOTATION_ATTRS = 'shaper:cutType="guide" fill="none" stroke="#0068FF" stroke-width="0.005"';
+
 /** The SVG body (shapes, no title) for a drawing, in the part's own coordinates. */
 export function renderBody(d: PartDrawing): string {
   const { f } = d;
   const W = f.widthIn, H = f.heightIn;
   const xf: Xf = ([u, v]) => [d.mirror ? W - u : u, H - v];
-  const depth = f.thicknessIn + BREAKTHROUGH_IN;
+  const depth = shaperCutDepth(f.thicknessIn);
   const out: string[] = [];
   const g0: string[] = [];
-  out.push(`<g id="outside">${pathEl({ cutType: 'outside', d: polyD(f.outer, xf), depthIn: depth, label: 'Outline' })}</g>`);
+  const texts: string[] = [];
+  out.push(`<g id="outside">${pathEl({ cutType: 'outside', d: polyD(f.outer, xf), depthIn: depth, label: d.deepCut ? `Outline (DEEP CUT: Shaper-cut ${fmt(depth)} in deep from one face, finish with a bandsaw and a flush-trim bit)` : 'Outline' })}</g>`);
   const pockets = d.items.filter((i): i is Extract<Item, { k: 'pocket' }> => i.k === 'pocket');
   if (pockets.length) out.push(`<g id="pockets">${pockets.map((q) => pathEl({ cutType: 'pocket', d: polyD(q.loop, xf), depthIn: q.depth, label: q.label })).join('')}</g>`);
   const inside = d.items.filter((i) => i.k === 'cutHole' || i.k === 'cutLoop');
   if (inside.length) out.push(`<g id="inside">${inside.map((i) => (i.k === 'cutHole' ? pathEl({ cutType: 'inside', d: circleD(i.c, i.dia, xf), depthIn: depth }) : i.k === 'cutLoop' ? pathEl({ cutType: 'inside', d: polyD(i.loop, xf), depthIn: depth }) : '')).join('')}</g>`);
   if (d.engrave) {
     const e = d.engrave;
-    const exf: Xf = ([x, y]) => [W / 2 + x, H / 2 - y]; // engraving is laid out in the view (what you see on the face), so it reads correctly
-    out.push(`<g id="engrave">${e.strokes.map((s) => pathEl({ cutType: 'online', d: polyD(s, exf, false), depthIn: e.depthIn, label: `engrave ${e.text}` })).join('')}</g>`);
+    // The ink, not the advance width, is centered on the panel (the last letter's side bearing made the old layout sit 0.1 in left).
     const eb = bbox(e.strokes.flat());
+    const cxI = (eb.u0 + eb.u1) / 2, cyI = (eb.v0 + eb.v1) / 2;
+    const exf: Xf = ([x, y]) => [W / 2 + (x - cxI), H / 2 - (y - cyI)]; // engraving is laid out in the view (what you see on the face), so it reads correctly
+    out.push(`<g id="engrave">${e.strokes.map((s) => pathEl({ cutType: 'online', d: polyD(s, exf, false), depthIn: e.depthIn, label: `engrave ${e.text}` })).join('')}</g>`);
     // On-line paths are black strokes, so they cannot be seen on the black outline: a guide box and a label show where the lettering is.
-    g0.push(guideEl(polyD(rectLoop(eb.u0 - 0.15, eb.v0 - 0.15, eb.u1 + 0.15, eb.v1 + 0.15), exf), { dashed: true, label: 'engraving area' }), textEl(exf([eb.u0 - 0.15, eb.v1 + 0.3]), `ENGRAVE "${e.text}" ${fmt(e.depthIn)} in deep (on-line, black strokes)`, 0.14));
+    g0.push(guideEl(polyD(rectLoop(eb.u0 - 0.15, eb.v0 - 0.15, eb.u1 + 0.15, eb.v1 + 0.15), exf), { dashed: true, label: 'engraving area' }));
+    texts.push(textEl(exf([eb.u0 - 0.15, eb.v1 + 0.3]), `ENGRAVE "${e.text}" ${fmt(e.depthIn)} in deep (on-line, black strokes)`, 0.14, { guide: true }));
   }
   const g: string[] = [...g0];
   for (const i of d.items) {
@@ -596,22 +683,34 @@ export function renderBody(d: PartDrawing): string {
       g.push(guideEl(polyD([[i.c[0] - r, i.c[1]], [i.c[0] + r, i.c[1]]], xf, false)) + guideEl(polyD([[i.c[0], i.c[1] - r], [i.c[0], i.c[1] + r]], xf, false)));
     } else if (i.k === 'tag') {
       const p = xf(i.at);
-      g.push(textEl(p, i.text, i.size ?? 0.13));
+      texts.push(textEl(p, i.text, i.size ?? 0.13, { guide: true }));
     }
   }
   out.push(`<g id="guides">${g.join('')}</g>`);
+  if (texts.length) out.push(`<g id="tags" ${ANNOTATION_ATTRS}>${texts.join('')}</g>`);
   return out.join('\n');
+}
+
+/** "grain along the 18.5" length (horizontal in this drawing)": the grain direction in plain words. */
+export function grainWords(f: FlatPattern): string {
+  if (!f.grain) return 'grain not specified';
+  const along = f.grain === 'u' ? f.widthIn : f.heightIn, across = f.grain === 'u' ? f.heightIn : f.widthIn;
+  const noun = Math.abs(along - across) < 0.01 ? 'side' : along > across ? 'length' : 'width';
+  return `grain along the ${fmt(along)}" ${noun} (${f.grain === 'u' ? 'horizontal' : 'vertical'} in this drawing)`;
 }
 
 function titleLines(d: PartDrawing, qty: number): string[] {
   const { part, f } = d;
-  const grain = f.grain === 'u' ? 'along the long side (horizontal)' : f.grain === 'v' ? 'across (vertical)' : 'not specified';
-  return [
+  const lines = [
     `${part.name}`,
     `partNo ${f.partNo}   qty ${qty}   ${part.material}   ${fmt(f.thicknessIn)} in thick`,
-    `${fmt(f.widthIn)} x ${fmt(f.heightIn)} in   grain ${grain}`,
-    `drawn as seen from the ${d.face}${f.normalAxis} face${d.part.legend ? ' (the legend face)' : ''}${d.mirror ? ', mirrored against the part frame' : ''}`,
+    `${fmt(f.widthIn)} x ${fmt(f.heightIn)} in   ${grainWords(f)}`,
+    d.cutFaceMatters ? `Cut with the ${d.cutFace}. Drawing seen from that face.` : `Cut face: ${d.cutFace}.`,
   ];
+  if (qty > 1) lines.push(`${qty} identical pieces from this one file: cut ${qty}, do not mirror.`);
+  if (f.tongueIn) lines.push(`CUT SIZE: includes the ${fmt(f.tongueIn)} in tongue on every side; visible panel ${fmt(f.widthIn - 2 * f.tongueIn)} x ${fmt(f.heightIn - 2 * f.tongueIn)} in (dashed guide).`);
+  if (d.deepCut) lines.push(`DEEP CUT: Shaper-cut ${fmt(shaperCutDepth(f.thicknessIn))} in deep from one face, then bandsaw and flush-trim (pattern) bit.`);
+  return lines;
 }
 
 /** A complete Shaper SVG for one drawing. */
@@ -620,11 +719,16 @@ export function renderDocument(d: PartDrawing, qty: number): string {
   const W = f.widthIn, H = f.heightIn;
   const lines = titleLines(d, qty);
   const size = Math.min(0.22, Math.max(0.09, Math.min(W / 40, H / 16)));
-  const title = lines.map((l, i) => textEl([0.12, 0.2 + i * size * 1.25], l, size, { bold: i === 0 })).join('');
+  // The title and the notes sit BELOW the part, outside the cut area (R12): text over the black outline was unreadable and put human text on the part.
+  const title = lines.map((l, i) => textEl([0, H + 0.3 + i * size * 1.25], l, size, { bold: i === 0, guide: true })).join('');
   const noteSize = 0.14;
-  const noteEls = d.notes.slice(0, 40).map((n, i) => textEl([0, H + 0.35 + i * noteSize * 1.35], n.length > 190 ? `${n.slice(0, 187)}...` : n, noteSize)).join('');
-  const desc = [...lines, '', 'Features:', ...d.features.map((x) => `- ${x.label}${x.count > 1 ? ` (x${x.count})` : ''}`), '', 'Edge joints and notes (not Shaper features):', ...d.notes].join('\n');
-  const body = `${renderBody(d)}\n<g id="title">${title}</g>\n<g id="notes">${noteEls}</g>`;
+  const y0 = H + 0.3 + lines.length * size * 1.25 + 0.25;
+  const noteEls = d.notes.slice(0, 40).map((n, i) => textEl([0, y0 + i * noteSize * 1.35], n.length > 190 ? `${n.slice(0, 187)}...` : n, noteSize, { guide: true })).join('');
+  const desc = [
+    ...lines, '', 'Features:', ...d.features.map((x) => `- ${x.label}${x.count > 1 ? ` (x${x.count})` : ''}`), '', 'Edge joints and notes (not Shaper features):', ...d.notes, '',
+    'The <text> in this file is human annotation only: it is stroke-only text in a group marked as a guide (shaper:cutType="guide"), outside the cut area, and never a cut path.',
+  ].join('\n');
+  const body = `${renderBody(d)}\n<g id="annotations" ${ANNOTATION_ATTRS}>${title}${noteEls}</g>`;
   return svgDocument({ widthIn: W, heightIn: H, title: `${f.name} (${f.partNo})`, desc, body });
 }
 
@@ -652,10 +756,12 @@ export function shaperFiles(parts: Part[], p: Params): ShaperFile[] {
     }
     const separate = classes.size > 1;
     for (const members of classes.values()) {
-      const d = members[0];
+      // One file serves several identical pieces (the L and R webs, signs, grab boards): "the drawing is the inboard face" is true of only one of them, so a file with no face feature says only that either face can go up.
+      const d = members.length > 1 && !members[0].cutFaceMatters ? { ...members[0], cutFace: 'either face can go up (nothing is cut on a face)' } : members[0];
       files.push({
         partId: d.part.id, partNo, qty: members.length, partIds: members.map((m) => m.part.id),
         fileName: `${separate ? d.part.id : partNo}.svg`, svg: renderDocument(d, members.length), widthIn: d.f.widthIn, heightIn: d.f.heightIn, features: d.features,
+        cutFace: d.cutFace, cutFaceMatters: d.cutFaceMatters, bits: [...new Set(d.features.map((x) => x.bit).filter((b): b is string => !!b))], deepCut: d.deepCut,
       });
     }
   }

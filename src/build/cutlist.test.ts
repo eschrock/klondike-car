@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
 import { defaultParams } from '../params';
-import { BOARD_THICKNESSES, boardByNominal, boardForThickness, cutList, isBuilt, resawUsableIn, stripsPerBoard, toCsv } from './cutlist';
+import { BOARD_THICKNESSES, RESAW_BOARD_WIDTHS_IN, RESAW_MIN_SPARES, boardByNominal, boardForThickness, cutList, isBuilt, resawUsableIn, stripsPerBoard, toCsv } from './cutlist';
 
 const p = defaultParams();
 const parts = buildModel(p);
@@ -67,7 +67,7 @@ describe('cutList', () => {
       expect(pool.stripsPerBoard).toBeGreaterThanOrEqual(1);
       expect(pool.boards * pool.stripsPerBoard).toBeGreaterThanOrEqual(pool.layers);
       expect(pool.layerStrips.flat().length).toBe(pool.strips);
-      for (const layer of pool.layerStrips) expect(layer.reduce((a, s) => a + s.widthIn + p.resawKerfIn, 0)).toBeLessThanOrEqual(6 + p.resawKerfIn + 1e-9);
+      for (const layer of pool.layerStrips) expect(layer.reduce((a, s) => a + s.widthIn + p.resawKerfIn, 0)).toBeLessThanOrEqual(pool.boardWidthIn + p.resawKerfIn + 1e-9);
     }
   });
 
@@ -84,13 +84,45 @@ describe('cutList', () => {
     expect(stripsPerBoard(0.5, resawUsableIn(boardByNominal('12/4'), p), p.resawKerfIn)).toBe(4);
     const rails = cl.resaw.find((r) => Math.abs(r.roughT - 0.5) < 1e-6)!;
     expect(rails.strips).toBe(4);
-    expect(rails.board).toBe('5/4');
-    expect(rails.stripsPerBoard).toBe(2);
-    expect(rails.boards).toBe(2);
     expect(rails.boardFeet).toBeLessThan(9); // the 12/4 route was 9 bf
-    expect(cl.strips.find((r) => r.partNo === 'rail')!.resawFrom).toBe('5/4');
+    expect(cl.strips.find((r) => r.partNo === 'rail')!.resawFrom).toBe(rails.board);
     // no resaw pool is sawn from a board that yields fewer strips than a thinner board would for fewer board feet
     for (const pool of cl.resaw) expect(pool.yieldByBoard[pool.board]).toBe(pool.stripsPerBoard);
+  });
+
+  it('buys at least one spare strip per pool and reports what each board yields (the assembly steps quote these numbers)', () => {
+    for (const pool of cl.resaw) {
+      expect(pool.spares, `${pool.roughT} spares`).toBeGreaterThanOrEqual(RESAW_MIN_SPARES);
+      expect(pool.stripSlots).toBe(pool.strips + pool.spares);
+      expect(pool.yieldPerBoard).toBe(Math.floor(pool.stripSlots / pool.boards));
+      expect(RESAW_BOARD_WIDTHS_IN).toContain(pool.boardWidthIn);
+      // the bought slabs hold the layers of the plan
+      expect(pool.boards * pool.stripsPerBoard).toBeGreaterThanOrEqual(pool.layers);
+      expect(pool.boardFeet).toBeCloseTo((pool.boards * boardByNominal(pool.board).nominalIn * pool.boardWidthIn * pool.boardLengthIn) / 144, 9);
+    }
+    // 8 band strips and 4 rail strips: more than that is bought, and the spares are real room (a strip of the widest width fits in each)
+    expect(cl.resaw.find((r) => Math.abs(r.roughT - 0.359) < 1e-3)!.strips).toBe(8);
+    expect(cl.resaw.find((r) => Math.abs(r.roughT - 0.5) < 1e-3)!.stripSlots).toBeGreaterThanOrEqual(5);
+  });
+
+  it('chooses the cheapest board in board feet that leaves the spare, over every thickness and the three widths', () => {
+    for (const pool of cl.resaw) {
+      for (const b of BOARD_THICKNESSES) {
+        const k = stripsPerBoard(pool.roughT, resawUsableIn(b, p), p.resawKerfIn);
+        if (k < 1) continue;
+        for (const w of RESAW_BOARD_WIDTHS_IN) {
+          // fewest boards that hold the strips with a spare, at this width: an upper bound on the need (every strip alone in a slab)
+          const alone = pool.strips + RESAW_MIN_SPARES;
+          const perLayer = Math.floor((w + p.resawKerfIn) / (Math.max(...pool.layerStrips.flat().map((s) => s.widthIn)) + p.resawKerfIn));
+          if (perLayer < 1) continue;
+          const slots = Math.ceil(alone / perLayer);
+          const boards = Math.ceil(slots / k);
+          const bf = (boards * b.nominalIn * w * pool.boardLengthIn) / 144;
+          // no candidate that needs no more room than the pick is cheaper than it
+          if (boards * k * perLayer >= alone && bf < pool.boardFeet - 1e-9) throw new Error(`${pool.roughT}: ${b.nominal} x ${w}" needs ${bf} bf < ${pool.boardFeet}`);
+        }
+      }
+    }
   });
 
   it('splits plywood into the 4 mm and 12 mm sheets', () => {

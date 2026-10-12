@@ -7,7 +7,7 @@
  */
 import type { Part } from '../model/types';
 import type { Params } from '../params';
-import { cutList, type CutList } from './cutlist';
+import { cutList, toCsv, type CutList } from './cutlist';
 import { nestPlywood, oakBoardFeet, type NestResult, type OakPlan } from './nesting';
 import { bom, type Bom } from './bom';
 import { shaperFiles, type ShaperFile } from './shaper-svg';
@@ -18,6 +18,8 @@ import { finishingSchedule, type FinishSchedule } from './finishing';
 import { verifyChecklist, type VerifyCheck } from './verify';
 import { hash6 } from './svg-util';
 import { zipStore } from './zip';
+import { buildBookHtml } from './build-book';
+import { sheetSvg } from '../ui/build-helpers';
 
 export interface PackageFile {
   /** Path in the archive and the download name. */
@@ -50,6 +52,7 @@ export const SVG_MIME = 'image/svg+xml';
 export const CSV_MIME = 'text/csv';
 export const TEXT_MIME = 'text/plain';
 export const STL_MIME = 'model/stl';
+export const HTML_MIME = 'text/html';
 
 /** The Shaper Origin conventions (Eric's answer 1). One copy, used by the README and the Shaper section legend. */
 export const SHAPER_CONVENTIONS: { swatch: 'outside' | 'inside' | 'pocket' | 'guide'; name: string; meaning: string }[] = [
@@ -109,7 +112,11 @@ export class BuildData {
   get cutlistCsv(): string {
     const c = this.cutList.csv;
     const block = (title: string, csv: string) => `# ${title}\n${csv.replace(/\s+$/, '')}\n`;
-    return [block('Oak, by board thickness', c.oak), block('Resawn strips', c.strips), block('Okoume plywood', c.sheets), block('Metal stock', c.metal)].join('\n');
+    const boards = toCsv([
+      ['Strip rough thickness (in)', 'Strips needed', 'Buy boards', 'Board', 'Width (in)', 'Length (in)', 'Strips per board', 'Strips bought', 'Spares', 'Board feet'],
+      ...this.cutList.resaw.map((r) => [r.roughT, r.strips, r.boards, r.board, r.boardWidthIn, r.boardLengthIn, r.yieldPerBoard, r.stripSlots, r.spares, +r.boardFeet.toFixed(2)]),
+    ]);
+    return [block('Oak, by board thickness', c.oak), block('Resawn strips', c.strips), block('Resaw boards to buy', boards), block('Okoume plywood', c.sheets), block('Metal stock', c.metal)].join('\n');
   }
 
   get files(): PackageFile[] {
@@ -119,12 +126,20 @@ export class BuildData {
       for (const f of this.forms) files.push({ name: `forms/${f.fileName}`, mime: SVG_MIME, data: f.svg });
       for (const t of this.tiles) t.pages.forEach((svg, i) => files.push({ name: `forms/tiled/${t.id}-${tileLabel(i, t.pages.length, svg)}.svg`, mime: SVG_MIME, data: svg }));
       for (const s of this.stls) files.push({ name: `stl/${s.fileName}`, mime: STL_MIME, data: s.stl });
+      for (const sh of this.nest.sheets) files.push({ name: `nesting/${sh.thicknessMm}mm-sheet-${sh.index}.svg`, mime: SVG_MIME, data: nestingSvgFile(sh) });
+      files.push({ name: 'build-book.html', mime: HTML_MIME, data: buildBookHtml(this) });
       files.push({ name: 'cutlist.csv', mime: CSV_MIME, data: this.cutlistCsv });
       files.push({ name: 'bom.csv', mime: CSV_MIME, data: this.bom.csv });
       files.push({ name: 'README.txt', mime: TEXT_MIME, data: readme(this, files.map((f) => f.name)) });
       return files;
     });
   }
+}
+
+/** One nesting sheet as a standalone SVG file (the Build tab's drawing, sized to the window when opened). */
+function nestingSvgFile(sheet: Parameters<typeof sheetSvg>[0]): string {
+  const css = '<style>.bp-svg{background:#fff}</style>';
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${sheetSvg(sheet).replace(/^(<svg\b[^>]*>)/, `$1${css}`)}`;
 }
 
 /** Page label (A1, A2, ...) read back from the tile's own title, falling back to the page number. */
@@ -152,6 +167,11 @@ function readme(d: BuildData, others: string[]): string {
   lines.push('----------------------------');
   lines.push('  forms/*.svg are full size (1:1). forms/tiled/*.svg are Letter pages (A1, A2, ... row letter then column number) with');
   lines.push('  0.5 in overlap and corner crosses: print at 100% (no "fit to page") and measure the 1 in check square on every page.');
+  lines.push('');
+  lines.push('Build book');
+  lines.push('----------');
+  lines.push('  build-book.html is the whole build on paper: the verify checklist, the cut list, the board shopping list, the plywood nesting drawings, the BOM, the assembly');
+  lines.push('  steps, the finishing schedule and the Shaper file index. Open it in a browser and print it (Letter, scale 100%) or save it as a PDF.');
   lines.push('');
   lines.push('Files');
   lines.push('-----');

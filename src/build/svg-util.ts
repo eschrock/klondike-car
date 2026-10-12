@@ -84,9 +84,11 @@ export function pathEl(o: PathOpts): string {
 export const guideEl = (d: string, o: { dashed?: boolean; label?: string; id?: string } = {}): string => pathEl({ cutType: 'guide', d, ...o });
 
 /** A text element (ignored by Shaper). `xf` places the anchor; `size` is the font height in inches. */
-export function textEl(p: Vec2, text: string, size = 0.16, o: { anchor?: 'start' | 'middle' | 'end'; fill?: string; rotate?: number; bold?: boolean } = {}): string {
+export function textEl(p: Vec2, text: string, size = 0.16, o: { anchor?: 'start' | 'middle' | 'end'; fill?: string; rotate?: number; bold?: boolean; guide?: boolean } = {}): string {
   const rot = o.rotate ? ` transform="rotate(${fmt(o.rotate)} ${fmt(p[0])} ${fmt(p[1])})"` : '';
-  return `<text x="${fmt(p[0])}" y="${fmt(p[1])}" font-family="Helvetica, Arial, sans-serif" font-size="${fmt(size)}" fill="${o.fill ?? '#0068FF'}" text-anchor="${o.anchor ?? 'start'}"${o.bold ? ' font-weight="bold"' : ''}${rot}>${esc(text)}</text>`;
+  // `guide`: no fill of its own, so the text takes the stroke-only guide style of the group it sits in (a filled glyph is not a guide).
+  const fill = o.guide ? '' : ` fill="${o.fill ?? '#0068FF'}"`;
+  return `<text x="${fmt(p[0])}" y="${fmt(p[1])}" font-family="Helvetica, Arial, sans-serif" font-size="${fmt(size)}"${fill} text-anchor="${o.anchor ?? 'start'}"${o.bold ? ' font-weight="bold"' : ''}${rot}>${esc(text)}</text>`;
 }
 
 export interface DocOpts {

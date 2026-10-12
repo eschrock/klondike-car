@@ -5,7 +5,7 @@
 import type { Dims } from '../model/types';
 import type { NestedSheet } from '../build/nesting';
 import type { BuildStep, StepView } from '../build/assembly';
-import { cumulativeParts, stepParts } from '../build/assembly';
+import { HARDENERS, cumulativeParts, stepParts, type Cure } from '../build/assembly';
 import type { ShaperFeature } from '../build/shaper-svg';
 import type { VerifyCheck, VerifyWhen } from '../build/verify';
 import { fracIn } from '../build/cutlist';
@@ -32,6 +32,11 @@ export function bytesLabel(n: number): string {
 
 export function hours([lo, hi]: [number, number]): string {
   return lo === hi ? `${lo} h` : `${lo}-${hi} h`;
+}
+
+/** `West 206 slow: pot life 20-25 min, clamp 8-10 h, full cure 24 h` (the Build tab and the build book print the same line). */
+export function cureLine(c: Cure): string {
+  return `West ${HARDENERS[c.hardener].label}: pot life ${c.potMin[0]}-${c.potMin[1]} min, clamp ${hours(c.clampHours)}, full cure ${c.fullHours} h`;
 }
 
 /** Local calendar date as YYYY-MM-DD (the form title blocks and the README show it). */

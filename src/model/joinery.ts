@@ -13,6 +13,7 @@ import { SIDES, type Ctx } from './build-utils';
 import { sideTopAt } from './layout';
 import { scupperSites, signBackerPlan, signKnobPlan } from './body';
 import { worldAABB } from './bounds';
+import { boltLength, inchesText, screwLength } from './rear-mount';
 import type { Joint, JointType, Mat4, Part, Vec3 } from './types';
 
 // ── Festool Domino catalog (nominal mm, thickness × length) ──
@@ -222,7 +223,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
   for (const { s, tag } of SIDES) for (const [pre, bx] of [['axle-hanger', L.beamR.x]] as const) {
     const hy = s * (hw + L.side - railT / 2 - p.axleHangerThickIn / 2);
     add({ a: `${pre}-${tag}`, b: `rail-${tag}`, typeA: 'glue', size: `${(p.axleHangerWidthIn).toFixed(2)}" × ${p.railDepthIn.toFixed(2)}" side-grain face, epoxy`, pts: [[bx, hy, L.railTop - p.railDepthIn / 2]], noteA: 'Long-grain hanger to the rail inner face: the bolts carry the vertical load, the glue keeps the faces together.' });
-    add({ a: `${pre}-${tag}`, b: `rail-${tag}`, typeA: 'bolt', size: `${p.beamHoldDownBoltDiameterIn}" 316 bolts through the hanger and the rail, nylock nuts and fender washers on the outside face`, pts: [[bx - 0.6, hy, L.railTop - 0.8], [bx + 0.6, hy, L.railTop - 0.8]], noteA: 'Above the beam notch, one each side of the hold-down angle.' });
+    add({ a: `${pre}-${tag}`, b: `rail-${tag}`, typeA: 'bolt', size: `${p.beamHoldDownBoltDiameterIn}" × ${inchesText(boltLength(p.axleHangerThickIn + railT, p.beamHoldDownBoltDiameterIn))} 316 hex bolts through the hanger (${p.axleHangerThickIn}") and the rail (${railT}"), nylock nuts and fender washers on the outside face`, pts: [[bx - 0.6, hy, L.railTop - 0.8], [bx + 0.6, hy, L.railTop - 0.8]], noteA: 'Above the beam notch, one each side of the hold-down angle.' });
   }
 
   // ── Frame: rails to the rear transom, crossmembers to the rails, joists to the deck ──
@@ -266,7 +267,10 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
   {
     const kb = byId.get('king-beam');
     if (kb) {
-      add({ a: 'king-beam', b: 'king-thrust', typeA: 'screw', size: 'three #8 316 flat-head screws (counterbored from the disc side) holding the UHMW disc to the king beam', pts: [[L.king.x, 0, L.king.bot]], noteA: 'Keeps the disc with the king beam; the axle beam turns under it (D-58).' });
+      // Three screws on a circle between the bore and the rim (the BOM counts the joint's points: it was one, build review MUST-11); each passes through the disc and 3/4 in into the king beam.
+      const rScrew = (p.kingThrustOdIn / 4) + (p.kingpinDiaIn / 4) + 0.015;
+      const thrustScrews: Vec3[] = [90, 210, 330].map((deg): Vec3 => [L.king.x + rScrew * Math.cos((deg * Math.PI) / 180), rScrew * Math.sin((deg * Math.PI) / 180), L.king.bot]);
+      add({ a: 'king-beam', b: 'king-thrust', typeA: 'screw', size: `3 × #8 × ${inchesText(screwLength(p.kingThrustThickIn, 0.75))} 316 flat-head screws (counterbored from the disc side, ${frac(rScrew)} in from the kingpin axis) holding the UHMW disc to the king beam`, pts: thrustScrews, noteA: 'Keeps the disc with the king beam; the axle beam turns under it (D-58).' });
       add({ a: 'king-beam', b: 'kingpin', typeA: 'hole', typeB: 'pin', size: `${frac(p.kingpinDiaIn)}" bore (snug bushing fit) through the king beam, nylock nut and washer captured in a slot cut from the front face`, sizeB: `${frac(p.kingpinDiaIn)}" bolt turns in the bore; the nut only stops the axle dropping away (rebound)`, pts: [[L.king.x, 0, (L.king.bot + L.king.top) / 2]], noteA: 'Bored square to the face on the drill press; the nut slot is cut from the front before the deck goes on.' });
     }
     for (const { s, tag } of SIDES) {

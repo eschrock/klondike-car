@@ -106,6 +106,15 @@ export function boltLength(grip: number, d: number, washers = 1): number {
   return Math.ceil(need * 4 - 1e-9) / 4;
 }
 
+/**
+ * Wood-screw length (in) for a stack of `grip` (the pieces the screw passes through) plus `embed` into the last piece, rounded UP to a stocked length: 1/8" steps to 1", 1/4" steps above it
+ * (Phase 4 round 2: the BOM must be able to order the screw).
+ */
+export function screwLength(grip: number, embed: number): number {
+  const need = grip + embed;
+  return need <= 1 + 1e-9 ? Math.ceil(need * 8 - 1e-9) / 8 : Math.ceil(need * 4 - 1e-9) / 4;
+}
+
 /** 1/4"-step fractional-inch text, e.g. 1.75 -> "1-3/4", 2.25 -> "2-1/4", 3 -> "3". */
 export function inchesText(x: number): string {
   const whole = Math.floor(x + 1e-9);

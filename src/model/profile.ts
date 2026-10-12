@@ -4,6 +4,7 @@
  * straight to an STL (Phase 4) or a CNC / Shaper Origin DXF. `basis` picks which world plane the outline lies in.
  */
 import { roughOf, woodMassLb, STEP, type Ctx } from './build-utils';
+import { multiply, rotationZ } from './mat4';
 import type { Dims, Joint, Mat4, Part, PartGroup, Vec2, Vec3 } from './types';
 
 /** Printed-part density: ASA 1.07 g/cm³ ≈ 66.8 lb/ft³ at 100%, times an assumed 60% effective fill (walls + 40% gyroid), D-41. */
@@ -58,6 +59,8 @@ export interface ProfileSpec {
   depth: number;
   basis: ProfileBasis;
   origin: Vec3;
+  /** Turn the outline by this angle (rad) in its own plane, about `origin`, so the outline stays in the part's own flat frame (the grab board on the sheer slope). */
+  rotation?: number;
   /** 'oak' = shaped white-oak block (mass from volume + finish); 'print' = printed (PETG / ASA). */
   mat: 'oak' | 'print';
   material?: string;
@@ -91,7 +94,7 @@ export function profilePart(ctx: Ctx, s: ProfileSpec): Part {
     kind: s.mat === 'oak' ? 'lumber' : 'printed',
     material: s.material ?? (s.mat === 'oak' ? 'white oak' : 'ASA'),
     geometry: { type: 'extrusion', outline: s.outline.map((q) => [q[0], q[1]] as Vec2), ...(s.holes ? { holes: s.holes.map((h) => h.map((q) => [q[0], q[1]] as Vec2)) } : {}), depth: s.depth },
-    transform: basisMatrix(s.basis, s.origin),
+    transform: s.rotation ? multiply(basisMatrix(s.basis, s.origin), rotationZ(s.rotation)) : basisMatrix(s.basis, s.origin),
     body: 'chassis',
     massLb,
     fab: s.fab ?? (s.mat === 'oak' ? 'table-saw' : 'print'),

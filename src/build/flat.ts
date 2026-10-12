@@ -25,8 +25,13 @@ export interface FlatPattern {
   /** Bounding box of `outer` (in). */
   widthIn: number;
   heightIn: number;
-  /** The pattern axis the grain (or ply face grain) runs along, when the part says. */
+  /** The pattern axis the grain (or ply face grain) runs along, when the part says. `Part.grain` is a LOCAL axis (types.ts), so this is a plain local-to-pattern mapping. */
   grain?: 'u' | 'v';
+  /**
+   * A sheet whose rabbet or dado captures its edge (`edges: 'captured'`, the storage lid): the cut blank is the visible panel plus this tongue on EVERY side (in). The pattern is the cut blank
+   * (equal to `Part.stock`); the model geometry stays the visible panel, so mass and clearances do not change. Absent for every other part.
+   */
+  tongueIn?: number;
   /**
    * Map a point in the part's LOCAL frame onto the pattern (u, v), or null if the point is off the cut face's plane mapping (used to place joint
    * holes and pockets from `Joint.at`). For a plan-curved wall the local frame is the model frame.
@@ -59,9 +64,12 @@ export function flatPattern(part: Part): FlatPattern | null {
     const order = [0, 1, 2].sort((a, b) => s[a] - s[b]); // ascending: thickness, then the shorter and the longer in-plane axes
     const uAx = order[2], vAx = order[1];
     const hu = s[uAx] / 2, hv = s[vAx] / 2;
-    const outline: Vec2[] = [[-hu, -hv], [hu, -hv], [hu, hv], [-hu, hv]];
+    // A captured-edge sheet is cut at the STOCK size: the tongues that the rabbets take are part of the cut (Phase 4 round 2: the storage lid file was the visible panel, 1/2 in short each way).
+    const tongue = capturedTongue(part, s[uAx], s[vAx]);
+    const eu = hu + tongue, ev = hv + tongue;
+    const outline: Vec2[] = [[-eu, -ev], [eu, -ev], [eu, ev], [-eu, ev]];
     const axes = ['x', 'y', 'z'] as const;
-    return finish(base, s[order[0]], outline, [], (q) => [q[uAx], q[vAx]], axes[order[0]], grainUV(part.grain, axes[uAx], axes[vAx]));
+    return finish(base, s[order[0]], outline, [], (q) => [q[uAx], q[vAx]], axes[order[0]], grainUV(part.grain, axes[uAx], axes[vAx]), tongue || undefined);
   }
   if (g.type === 'mesh' && g.profile && g.thickness && g.positions.length) {
     // planWallGeometry (plan-wall.ts) writes the +y rim (x, yc(x) + t/2, z) for each profile vertex in order, then the -y rim, as the last 2n vertices.
@@ -92,13 +100,27 @@ export function flatPattern(part: Part): FlatPattern | null {
   return null;
 }
 
+/** Largest tongue (in) a captured edge may add per side; anything bigger is a different kind of stock difference (a trim allowance), not a tongue. */
+const MAX_TONGUE_IN = 0.5;
+
+/** The per-side tongue (in) of a captured-edge sheet whose stock is larger than its visible size by the same amount on both axes, else 0. */
+function capturedTongue(part: Part, longIn: number, shortIn: number): number {
+  const st = part.stock;
+  if (!st || part.kind !== 'sheet') return 0;
+  const captured = Array.isArray(part.edges) ? part.edges.includes('captured') : part.edges === 'captured';
+  if (!captured) return 0;
+  const [S0, S1] = [st.w, st.l].sort((a, b) => b - a);
+  const d0 = (S0 - longIn) / 2, d1 = (S1 - shortIn) / 2;
+  return d0 > 0.01 && d0 <= MAX_TONGUE_IN && Math.abs(d0 - d1) < 0.005 ? d0 : 0;
+}
+
 function grainUV(grain: Part['grain'], uAxis: string, vAxis: string): 'u' | 'v' | undefined {
   return grain === uAxis ? 'u' : grain === vAxis ? 'v' : undefined;
 }
 
 function finish(
   base: Pick<FlatPattern, 'partId' | 'partNo' | 'name' | 'material'>, t: number, outline: Vec2[], holes: Vec2[][],
-  map: (q: [number, number, number]) => Vec2, normalAxis: 'x' | 'y' | 'z', grain: 'u' | 'v' | undefined,
+  map: (q: [number, number, number]) => Vec2, normalAxis: 'x' | 'y' | 'z', grain: 'u' | 'v' | undefined, tongueIn?: number,
 ): FlatPattern {
   const minU = Math.min(...outline.map((o) => o[0])), minV = Math.min(...outline.map((o) => o[1]));
   const maxU = Math.max(...outline.map((o) => o[0])), maxV = Math.max(...outline.map((o) => o[1]));
@@ -107,7 +129,7 @@ function finish(
     ...base, thicknessIn: t,
     outer: ccw(outline.map(sh)), holes: holes.map((h) => cw(h.map(sh))),
     widthIn: maxU - minU, heightIn: maxV - minV,
-    ...(grain ? { grain } : {}),
+    ...(grain ? { grain } : {}), ...(tongueIn ? { tongueIn } : {}),
     toPattern: (q) => sh(map(q)), normalAxis,
   };
 }

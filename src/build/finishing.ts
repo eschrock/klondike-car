@@ -6,9 +6,12 @@
  * allowance, then rounded to what a shop buys (gallons, quarts, pints).
  *
  * Areas are GROSS: every face of every wood part, including faces that end up glued to another part. That is deliberate for the epoxy
- * (sealing happens before the glue-ups, D-62) and about 15-25 % conservative for the stain and varnish.
+ * (the dados, edges and hidden faces are sealed before the glue-ups, D-62; the show faces are stained and sealed after assembly) and about 15-25 % conservative for the stain and varnish.
+ *
+ * `glueEpoxyFlOz` estimates the epoxy the glue joints themselves use, by joint type; the BOM adds it to the schedule's coats.
  */
 import { localBounds } from '../model/bounds';
+import { HULL_STEP } from '../model/build-utils';
 import type { Geometry, Part, Vec2 } from '../model/types';
 import type { Params } from '../params';
 
@@ -18,8 +21,8 @@ import type { Params } from '../params';
 export const FINISH_WASTE = 0.15;
 /** Epoxy soaks into end grain about twice as fast as into face grain. */
 export const END_GRAIN_FACTOR = 2;
-/** 105 resin : 207 hardener = 5 : 1 by volume. */
-export const EPOXY_RESIN_PARTS = 5;
+/** 105 resin : 207 (or 209) hardener = 3 : 1 by volume. (105 with 205 / 206 is 5 : 1, the glue-up kit; the two coats and the end closes use the 3 : 1 hardeners.) */
+export const EPOXY_RESIN_PARTS = 3;
 /** ft² per quart of MIXED 105/207: 1st coat soaks into bare okoume / end grain, 2nd coat goes on a sealed surface (D-20: about 300 ft² per mixed gallon per coat on sanded hardwood). */
 export const EPOXY_COVERAGE_COAT1 = 60;
 export const EPOXY_COVERAGE_COAT2 = 80;
@@ -29,6 +32,10 @@ export const CONDITIONER_COVERAGE = 125;
 export const GEL_STAIN_COVERAGE = 125;
 export const VARNISH_COVERAGE = 125;
 export const VARNISH_COATS = 4;
+/** US fluid ounces per quart. */
+const FLOZ_PER_QT = 32;
+/** Pot leftovers and a second batch for the end closes. */
+const CLOSE_WASTE = 0.5;
 /** Letter fill: black-tinted epoxy or paint, a fraction of a pint. */
 const ENGRAVE_FILL_PT = 0.5;
 
@@ -81,10 +88,22 @@ export interface BuyLine {
   note: string;
 }
 
+/** A counted item (pumps) that is not sold by the pint, quart or gallon. */
+export interface SupplyLine {
+  item: string;
+  qty: number;
+  unit: 'ea';
+  note: string;
+}
+
 export interface FinishSchedule {
   areas: FinishAreas;
   steps: FinishStep[];
   buy: BuyLine[];
+  /** Counted supplies for the epoxy (the 303 pumps for the 3:1 hardeners). */
+  supplies: SupplyLine[];
+  /** Mixed epoxy for the transom and bulkhead closes (209), fl oz, waste included. */
+  closeEpoxyFlOz: number;
   assumptions: string[];
 }
 
@@ -206,6 +225,110 @@ export function finishAreas(parts: Part[]): FinishAreas {
   return { oakFt2: oak, okoumeFt2: okoume, oakEndGrainFt2: end, totalFt2: oak + okoume, byPart };
 }
 
+// ---- glue epoxy (the joints themselves) ----
+
+/** Mixed epoxy per ft² of thickened full-face glue line, squeeze-out included: the top of the usual 0.5-1 fl oz/ft². */
+export const GLUE_FLOZ_PER_FT2 = 1;
+/** Mixed epoxy per Domino (both mortises and the tenon), fl oz, by size: about 0.1-0.2 for the common sizes. */
+export const DOMINO_FLOZ: Readonly<Record<string, number>> = { '4×20': 0.1, '5×30': 0.15, '6×40': 0.2, '8×50': 0.25 };
+export const DOMINO_FLOZ_DEFAULT = 0.15;
+/** A loose tenon in two mortises. */
+export const LOOSE_TENON_FLOZ = 0.12;
+/** An epoxy-and-fillet butt (the band ends against the transom and the bulkhead): a thickened fillet runs the whole height of the joint. */
+export const FILLET_JOINT_FLOZ = 0.5;
+/** A dado (web end or deck edge) filled with thickened epoxy. */
+export const DADO_JOINT_FLOZ = 0.6;
+/** Smallest glue joint (a bedded nipple, a small block): the batch for it is never less. */
+export const GLUE_JOINT_MIN_FLOZ = 0.25;
+
+export type GlueKind = 'domino' | 'tenon' | 'lamination' | 'fillet' | 'dado' | 'small';
+
+export interface GlueJointEstimate {
+  a: string;
+  b: string;
+  kind: GlueKind;
+  count: number;
+  /** Mixed epoxy, fl oz, no waste. */
+  flOz: number;
+}
+
+const dominoSizeKey = (size = ''): string => /^\s*(\d+)\s*[×x]\s*(\d+)/.exec(size)?.slice(1, 3).join('×') ?? '';
+
+/** Faces of a stock piece, in²: the largest face and the narrow one (smallest dimension by length). */
+function faces(x: Part): { large: number; narrow: number } | null {
+  const s = x.stock;
+  if (!s) return null;
+  const d = [s.t, s.w, s.l].sort((u, v) => u - v);
+  return { large: d[1] * d[2], narrow: d[0] * d[2] };
+}
+
+/**
+ * One estimate per glued joint, a joint listed on both mating parts counted once. Types: Domino and loose tenon (per piece), dado, an epoxy-and-fillet butt, a full-face or full-length
+ * lamination (by contact area: the smaller of the two parts' faces, the narrow one when the note says top, edge or length), anything else the smallest batch.
+ * `only` limits the list to the joints that touch a part it accepts (the transom and bulkhead closes).
+ */
+export function glueJointEstimates(parts: Part[], only?: (x: Part) => boolean): GlueJointEstimate[] {
+  const byId = new Map(parts.map((x) => [x.id, x]));
+  const seen = new Map<string, { a: string; b: string; type: string; dir: Map<string, { count: number; size: string; text: string }> }>();
+  for (const x of parts) {
+    if (x.group === 'reference' || x.kind === 'reference' || x.payload) continue;
+    for (const j of x.joints ?? []) {
+      if (j.type !== 'glue' && j.type !== 'domino' && j.type !== 'mortise-tenon' && j.type !== 'dado') continue;
+      const mate = byId.get(j.to);
+      if (!mate || mate.group === 'reference' || mate.payload) continue;
+      if (only && !only(x) && !only(mate)) continue;
+      const [a, b] = [x.id, j.to].sort();
+      const key = `${a}~${b}|${j.type}`;
+      let e = seen.get(key);
+      if (!e) seen.set(key, (e = { a, b, type: j.type, dir: new Map() }));
+      const d = e.dir.get(x.id) ?? { count: 0, size: j.size ?? '', text: '' };
+      d.count += j.count;
+      d.text = `${d.text} ${j.size ?? ''} ${j.note ?? ''}`;
+      e.dir.set(x.id, d);
+    }
+  }
+  const out: GlueJointEstimate[] = [];
+  for (const e of seen.values()) {
+    const dirs = [...e.dir.values()];
+    const count = Math.max(...dirs.map((d) => d.count));
+    const rep = dirs.find((d) => d.count === count) ?? dirs[0];
+    const text = rep.text;
+    let kind: GlueKind;
+    let each: number;
+    if (e.type === 'domino') {
+      kind = 'domino';
+      each = DOMINO_FLOZ[dominoSizeKey(rep.size)] ?? DOMINO_FLOZ_DEFAULT;
+    } else if (e.type === 'mortise-tenon') {
+      kind = 'tenon';
+      each = LOOSE_TENON_FLOZ;
+    } else if (e.type === 'dado') {
+      kind = 'dado';
+      each = DADO_JOINT_FLOZ;
+    } else if (/fillet/i.test(text)) {
+      kind = 'fillet';
+      each = FILLET_JOINT_FLOZ;
+    } else if (/full[- ]face|full[- ]length|lamination|side-grain/i.test(text) && !/nipple|bedded/i.test(text)) {
+      kind = 'lamination';
+      const fa = faces(byId.get(e.a)!);
+      const fb = faces(byId.get(e.b)!);
+      const narrow = /\btop\b|edge|full[- ]length/i.test(text);
+      const pick = (f: { large: number; narrow: number } | null): number => (f ? (narrow ? f.narrow : f.large) : Infinity);
+      const area = Math.min(pick(fa), pick(fb));
+      each = Number.isFinite(area) ? Math.max(GLUE_JOINT_MIN_FLOZ, (area / FT2) * GLUE_FLOZ_PER_FT2) : GLUE_JOINT_MIN_FLOZ;
+    } else {
+      kind = 'small';
+      each = GLUE_JOINT_MIN_FLOZ;
+    }
+    out.push({ a: e.a, b: e.b, kind, count, flOz: each * count });
+  }
+  return out;
+}
+
+/** Mixed epoxy (fl oz, before waste) that the glue joints of these parts use. The BOM adds it to the finishing coats. */
+export function glueEpoxyFlOz(parts: Part[], only?: (x: Part) => boolean): number {
+  return glueJointEstimates(parts, only).reduce((s, g) => s + g.flOz, 0);
+}
+
 // ---- quantities ----
 
 const round1 = (n: number): number => Math.round(n * 10) / 10;
@@ -254,9 +377,9 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
     id: 'offcut-tests',
     title: 'Test on offcuts',
     instructions: [
-      'Cut two 12" × 12" test panels from the real offcuts: white oak and okoume (4 mm). Sand both to the final grit (step 2).',
+      'Do this BEFORE any show face is sealed (assembly step "Seal the dados, edges and hidden faces"): cut two 12" × 12" test panels from the real offcuts, white oak and okoume (4 mm), and sand both to the final grit (step 2).',
       'Oak: water-based dye or stain (preferred under epoxy), two strengths. Okoume: pre-stain conditioner then gel stain, vs. the same stain with no conditioner. Okoume blotches: pick the sample that is even.',
-      'Run one panel of each through the whole schedule: stain, 2 coats of epoxy, engraving with the fill (okoume lid offcut), varnish. Check the epoxy cures hard over the stain (no tack after the stated cure) and that the varnish does not craze or lift.',
+      'Run one panel of each through the whole schedule: stain, 2 coats of epoxy, engraving with the fill (okoume lid offcut), varnish. Check the epoxy cures hard over the stain (no tack after the stated cure) and that the varnish does not craze or lift. The show faces are stained and sealed only after a panel passes; if none does, leave them unstained under clear epoxy.',
       legend
         ? `Engrave the legend (${legend.letterHeightIn}" letters, ${legend.depthIn}" deep) on the okoume lid offcut: the depth must stay inside the face veneer of the 4 mm ply (about 0.03-0.04"); if the veneer shows through, go to 0.02".`
         : 'Engrave a test legend on the lid offcut.',
@@ -275,6 +398,7 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
     id: 'sand',
     title: 'Sand: 120 then 150',
     instructions: [
+      'Steps 2-6 run in two sessions with the same products and coats: the underside while the hull is still inverted (before the flip), then everything else after the box, seat, brake and handle are built, all hardware, hinges and running gear OFF. The hardware goes on after the varnish cures (assembly step "Hang the running gear and hardware").',
       `Ease every exposed oak edge to the ${f(round)}" roundover (router, then hand-sand), including hand-holes and the grab-board edges; break all sharp ply edges that are not banded by hand.`,
       'Sand with the grain: 120 grit, then 150 grit, random-orbit or sanding block. Do not go below 120 and do not sand through the face veneer of the 4 mm okoume (hand-sand it at 150).',
       'Remove any amine blush from epoxy already on the parts (warm water + Scotch-Brite, dry) and scuff glue-up squeeze-out; vacuum and wipe with a tack cloth or denatured alcohol.',
@@ -293,12 +417,14 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
   const s3: FinishStep = {
     n: 3,
     id: 'stain',
-    title: 'Stain',
+    title: 'Stain the show faces',
     instructions: [
+      'Stain goes on the show faces only (oak, and the okoume webs, deck top, box, lid, seat back). The dados, edges and hidden faces were sealed during assembly; glue faces stay bare or scuffed.',
+      'Water-based dye under epoxy is the safe route: it dries clear of oils and the epoxy bonds to it. Stain (dye) first, THEN seal; the epoxy goes over a dry, sanded, offcut-tested surface, never over a stain that has not cured.',
       'Oak: wipe the water-based stain or dye on, wipe off; raise the grain with a damp rag first and re-sand at 150 so it does not raise again under the epoxy.',
       'Okoume: pre-stain conditioner first, stain within the time on the label (about 15 min), then gel stain wiped on in thin coats. Match the oak by sample, not by the can.',
       'End grain takes stain darker: seal it with a wipe of conditioner or dilute the stain on the ends.',
-      'Let it dry completely before the epoxy: water-based stain 24 h; oil-based stain needs a FULL cure (days) or the epoxy stays tacky over it, so use oil-based only if the test panel passed.',
+      'Let it dry completely before the epoxy: water-based stain 24 h; oil-based stain or gel needs a FULL cure (days) or the epoxy stays tacky over it, so use it only if the test panel passed.',
     ],
     products: [stainOak, cond, gel],
     coats: 1,
@@ -315,14 +441,14 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
   const s4: FinishStep = {
     n: 4,
     id: 'epoxy',
-    title: 'Epoxy seal: okoume (all faces and edges) and oak end grain',
+    title: 'Epoxy seal: okoume show faces and oak end grain',
     instructions: [
-      `Seal ALL faces and edges of the okoume (${f(areas.okoumeFt2, 0)} ft²) and the end grain of the oak (${f(areas.oakEndGrainFt2, 0)} ft², counted double for the extra soak-in) with 2 coats of West System 105 resin / 207 hardener (5:1 by volume, pumps).`,
-      'Coat 1 on bare, sanded wood: roll and tip, then re-wet end grain and edges as it soaks in. Coat 2 within the recoat window (tacky, 6-12 h at 70 °F) so it bonds chemically; after that wash and sand.',
-      'The dados, deck faces and hidden faces were already sealed during assembly (D-62): that coat counts as coat 1 for those faces; sand off the blush and add coat 2 here.',
-      'Wash the cured epoxy with warm water and Scotch-Brite (dry), sand with 220, vacuum. Epoxy over oil-based stain needs the stain fully cured; prefer a water-based dye or stain under the epoxy.',
+      `After the stain has dried: seal the okoume show faces (the schedule counts all ${f(areas.okoumeFt2, 0)} ft² of okoume for 2 coats) and the end grain of the oak (${f(areas.oakEndGrainFt2, 0)} ft², counted double for the extra soak-in) with 2 coats of West System 105 resin / 207 hardener (3:1 by volume, 303 pumps).`,
+      'Coat 1 on stained, sanded wood: roll and tip, then re-wet end grain and edges as it soaks in. Coat 2 within the recoat window (tacky, 6-12 h at 70 °F) so it bonds chemically; after that wash and sand.',
+      'The dados, edges and hidden faces were already sealed during assembly (D-62): that coat counts as coat 1 for those faces; sand off the blush and add coat 2 here.',
+      'Wash the cured epoxy with warm water and Scotch-Brite (dry), sand with 220, vacuum. Epoxy over oil-based stain needs the stain fully cured; water-based dye under the epoxy is the safe route.',
       'Use a roller with a short phenolic core and a foam brush; apply while the shop temperature is falling (afternoon) to limit outgassing bubbles in the okoume.',
-      `Pot life of 207 is about 20-25 min at 70 °F in a mass; spread it as soon as it is mixed, pour leftovers thin into a tray. Mix no more than a pint at a time for rolling.`,
+      `Pot life of 105/207 is about 20-25 min at 70 °F in a mass; spread it as soon as it is mixed, pour leftovers thin into a tray. Mix no more than a pint at a time for rolling.`,
     ],
     products: [c1, c2],
     coats: 2,
@@ -365,7 +491,7 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
       'Coat 1 thinned 10-15 % with the recommended thinner (it sinks into the oak). Coats 2-4 at full strength, brushed with the grain in thin coats; tip off with a dry brush.',
       'Sand every coat with 320 (a light scuff to dull) and wipe with a tack cloth or mineral spirits before the next coat.',
       'Sand-through is touched up with the same varnish; build the edges (roundovers, hand-holes) the most since they wear first.',
-      'Hang the reflectors and fit the hardware only after the last coat has cured, or mask the screw holes (the final-fit step).',
+      'Hardware, hinges and the running gear stay off until the last coat has cured (assembly step "Hang the running gear and hardware"); mask the bolt seats and pivot bores.',
     ],
     products: [varnish],
     coats: VARNISH_COATS,
@@ -377,11 +503,17 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
   const steps = [s1, s2, s3, s4, s5, s6];
 
   // ---- buy list, in the units a store sells
+  // 105 with 207 or 209 mixes 3:1 by volume: the hardener is a quarter of the mixed volume.
   const hardenerQt = mixedQt / (EPOXY_RESIN_PARTS + 1);
   const resinQt = mixedQt - hardenerQt;
+  // The transom and bulkhead closes (and their backers) use the extra-slow 209: 105 + 209 is also 3:1. Two batches each, so allow for the pot leftovers.
+  const closeParts = new Set(parts.filter((x) => x.step === HULL_STEP.transom).map((x) => x.id));
+  const closeEpoxyFlOz = round1(glueEpoxyFlOz(parts, (x) => closeParts.has(x.id)) * (1 + CLOSE_WASTE) * 10) / 10;
+  const hardener209Qt = closeEpoxyFlOz / (EPOXY_RESIN_PARTS + 1) / FLOZ_PER_QT;
   const buy: BuyLine[] = [
-    ...buyLines('West System 105 epoxy resin', resinQt, `${f(resinQt, 1)} qt resin for ${f(mixedQt, 1)} qt mixed (two coats of ${f(epoxyArea, 0)} ft² at ${EPOXY_COVERAGE_COAT1} / ${EPOXY_COVERAGE_COAT2} ft²/qt mixed)`),
-    ...buyLines('West System 207 special clear hardener', hardenerQt, `${f(hardenerQt, 2)} qt hardener (5:1); pumps for the cans; one qt is enough for most of this`, false),
+    ...buyLines('West System 105 epoxy resin', resinQt, `${f(resinQt, 1)} qt resin for ${f(mixedQt, 1)} qt mixed (two coats of ${f(epoxyArea, 0)} ft² at ${EPOXY_COVERAGE_COAT1} / ${EPOXY_COVERAGE_COAT2} ft²/qt mixed); the glue-ups use the kit's 206`),
+    ...buyLines('West System 207 special clear hardener', hardenerQt, `${f(hardenerQt, 2)} qt hardener (3:1 with the 105 by volume) for the two coats`, false),
+    ...buyLines('West System 209 extra slow hardener', Math.max(hardener209Qt, 0.01), `closes the transom and bulkhead (120 min pot): ${f(closeEpoxyFlOz, 0)} fl oz mixed with the kit's 105 at 3:1 = ${f(closeEpoxyFlOz / (EPOXY_RESIN_PARTS + 1), 1)} fl oz of 209; the smallest can is plenty`, false),
     ...buyLines('Water-based pre-stain conditioner (okoume)', cond.qtNeeded, `${f(areas.okoumeFt2, 0)} ft² at ${CONDITIONER_COVERAGE} ft²/qt`, false),
     ...buyLines('Gel stain (okoume)', gel.qtNeeded, `${f(areas.okoumeFt2, 0)} ft² at ${GEL_STAIN_COVERAGE} ft²/qt`, false),
     ...buyLines('Water-based wood stain or dye (oak)', stainOak.qtNeeded, `${f(areas.oakFt2, 0)} ft² at ${STAIN_COVERAGE} ft²/qt`, false),
@@ -389,15 +521,21 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
     { item: 'Black enamel (or black epoxy pigment) for the lid legend', unit: 'pt', qty: 1, qt: 0.5, note: 'engraving fill' },
     { item: 'Thinner for the varnish (mineral spirits or the maker\'s thinner)', unit: 'pt', qty: 1, qt: 0.5, note: 'coat 1 thinning and brush cleaning' },
   ];
+  const supplies: SupplyLine[] = [
+    { item: 'West System 303 mini pump set (3:1, for the 207 and 209 hardeners)', qty: 1, unit: 'ea', note: 'one resin pump and one hardener pump; the 300 pumps of the glue-up kit are 5:1 and do not meter 207 or 209' },
+  ];
 
   return {
     areas,
     steps,
     buy,
+    supplies,
+    closeEpoxyFlOz,
     assumptions: [
       'Areas are gross (every face of every wood part, glued faces included), which is about 15-25 % conservative for stain and varnish.',
       `Typical coverages in ft² per quart, one coat: epoxy ${EPOXY_COVERAGE_COAT1} / ${EPOXY_COVERAGE_COAT2} (mixed volume, coat 1 / 2), stain ${STAIN_COVERAGE}, conditioner ${CONDITIONER_COVERAGE}, gel stain ${GEL_STAIN_COVERAGE}, varnish ${VARNISH_COVERAGE}.`,
       `${f(FINISH_WASTE * 100, 0)} % waste on every quantity; oak end grain counted ${END_GRAIN_FACTOR}× for epoxy.`,
+      '105 resin mixes 3:1 by volume with 207 and 209, 5:1 with 205 and 206; the glue joints (glueEpoxyFlOz) are on top of this list.',
     ],
   };
 }

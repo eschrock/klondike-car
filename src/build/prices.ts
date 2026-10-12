@@ -79,6 +79,13 @@ export const PURCHASED_FALLBACK: Price = est(5, 'ea', 'No entry in prices.ts', '
 
 const FAST = 'Fastener supplier (McMaster-Carr / Fastenal class), 316 stainless';
 export const FASTENER_PRICE: Array<{ match: RegExp; price: Price }> = [
+  { match: /T-nut/i, price: est(0.9, 'ea', FAST, '316 prong or weld-style T-nut for the handle-socket backers (epoxied in)') },
+  { match: /shaft collar/i, price: est(6, 'ea', FAST, '316 set-screw collar, 3/4" bore, for the wheel end of each axle') },
+  { match: /cotter pin/i, price: est(0.4, 'ea', FAST, '316 cotter pin through the 0.156" axle cross hole') },
+  { match: /end plug/i, price: est(0.6, 'ea', FAST, 'plastic flanged plug for the DOM tube bore') },
+  { match: /button plug/i, price: est(0.5, 'ea', FAST, 'black nylon button plug for the 5/8" access holes') },
+  { match: /nylon washer/i, price: est(0.2, 'ea', FAST, 'nylon washer under the button head') },
+  { match: /stainless rod/i, price: est(3, 'ea', FAST, 'cut from a 3/8" x 12" 316 rod (about $12): five pins per rod') },
   { match: /^Domino DF 500 4x20/, price: est(0.3, 'ea', 'Festool Domino dealer', 'beech, in the 4 x 20 mm size') },
   { match: /^Domino DF 500 5x30/, price: est(0.4, 'ea', 'Festool Domino dealer', 'beech, in the 5 x 30 mm size') },
   { match: /^Domino/, price: est(0.4, 'ea', 'Festool Domino dealer') },
@@ -111,16 +118,35 @@ const EPOXY = 'Marine supplier / local dealer';
  * West System 105 resin with 206 slow hardener (5:1 by volume). Sold as resin plus hardener; priced here as a kit of the pair: the 105-A + 206-A quart group and the 105-B + 206-B gallon group.
  * `mixedFlOz` is the mixed volume the kit makes (resin plus hardener). The gallon group is cheaper per ounce (about $1.7 against $2.4 per mixed fl oz), and three quart groups cost more than one gallon group.
  */
-export const EPOXY_KITS: Array<{ id: string; label: string; mixedFlOz: number; price: Price }> = [
-  { id: 'quart', label: 'West System 105-A resin + 206-A slow hardener, quart group', mixedFlOz: 38.4, price: est(92, 'kit', EPOXY, '32 fl oz resin + 6.4 fl oz hardener') },
-  { id: 'gallon', label: 'West System 105-B resin + 206-B slow hardener, gallon group', mixedFlOz: 153.6, price: est(265, 'kit', EPOXY, '128 fl oz resin + 25.6 fl oz hardener; the pumps are extra') },
+export const EPOXY_KITS: Array<{ id: string; label: string; /** Resin in the kit (fl oz): what the coats and the glue-ups draw on. */ resinFlOz: number; mixedFlOz: number; price: Price }> = [
+  { id: 'quart', label: 'West System 105-A resin + 206-A slow hardener, quart group', resinFlOz: 32, mixedFlOz: 38.4, price: est(92, 'kit', EPOXY, '32 fl oz resin + 6.4 fl oz hardener') },
+  { id: 'gallon', label: 'West System 105-B resin + 206-B slow hardener, gallon group', resinFlOz: 128, mixedFlOz: 153.6, price: est(265, 'kit', EPOXY, '128 fl oz resin + 25.6 fl oz hardener; the pumps are extra') },
 ];
 /** 207 special clear hardener for the two finish coats (the finishing schedule's buy list), per pint. */
+/** Hardeners sold by the pint, by West System number: 205 fast and 206 slow come with the resin kits; 207 and 209 are bought for the coats and the slow closes (3:1 by volume). */
+export const EPOXY_HARDENER_PINT: Record<string, Price> = {
+  '205': est(34, 'pt', EPOXY, '205 fast hardener (5:1 with 105), for cold-shop glue-ups'),
+  '206': est(36, 'pt', EPOXY, '206 slow hardener (5:1 with 105): in the resin kits'),
+  '207': est(38, 'pt', EPOXY, '207 special clear hardener (3:1 with 105): the coats'),
+  '209': est(40, 'pt', EPOXY, '209 extra slow hardener (3:1 with 105): the transom and bulkhead closes'),
+};
+/** Pump sets by West System number: 301 is the 5:1 set for 105 with 205/206, 303 the 3:1 set for 105 with 207/209. */
+export const EPOXY_PUMP_SET: Record<string, Price> = {
+  '301': est(18, 'pair', EPOXY, '301 pump set, 5:1 (105 with 205/206)'),
+  '303': est(20, 'pair', EPOXY, '303 pump set, 3:1 (105 with 207/209)'),
+};
 export const EPOXY_207_PINT: Price = est(38, 'pt', EPOXY, '207 special clear hardener (non-blushing, clear): the finish coats; the resin is from the kit and the kit hardener covers the glue-ups');
 export const EPOXY_PUMPS: Price = est(16, 'pair', EPOXY, 'metering pumps for the gallon and quart cans');
 export const FILLERS: Record<string, Price> = {
   silica: est(26, 'ea', EPOXY, 'colloidal silica (406 type), for thickened glue and fillets'),
   microballoons: est(28, 'ea', EPOXY, 'low-density fairing filler (407 type), for fairing the sealed deck'),
+};
+/** Items that exist only as text in a note or a joint (see `NOTE_ITEMS` in bom.ts). */
+export const NOTE_PRICE: Record<string, Price> = {
+  dualLock: est(18, 'roll', 'Hardware / 3M distributor', '3M Dual Lock reclosable fastener, 1" x 5 ft, adhesive back'),
+  edgeBanding: est(14, 'roll', 'Woodworking store', 'pre-glued white oak veneer edge banding, 3/4" wide, 25 ft roll (iron on, flush trim)'),
+  sealant: est(22, 'ea', 'Marine supplier', 'polysulfide marine sealant, 10 oz cartridge (bedding aluminum, steel and the gasket splice)'),
+  contactCement: est(14, 'ea', 'Hardware store', 'contact cement, pint (brake pads and treads, veneer banding)'),
 };
 export const GLASS_TAPE: Price = est(0.6, 'ft', EPOXY, '2" fiberglass tape, cut from a roll');
 

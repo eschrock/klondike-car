@@ -12,7 +12,7 @@
 import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
 import { customPart } from './mesh-utils';
 import { compose, translation } from './mat4';
-import { boltLength, inchesText } from './rear-mount';
+import { boltLength, inchesText, screwLength } from './rear-mount';
 import { joistId } from './frame';
 import { axleSourcing, axleStockNote } from './axle-stock';
 import type { Part, Vec2 } from './types';
@@ -144,13 +144,13 @@ export function buildPivot(ctx: Ctx): Part[] {
     const t = p.rollPadThickIn, w = p.rollPadWidthIn, l = p.rollPadLenIn;
     const vol = w * l * t;
     const sc = [-1, 1].map((k) => k * Math.min(0.58, w / 2 - 0.2));
-    (beam.joints ??= []).push({ type: 'screw', to: `roll-pad-${tag}`, count: 2, diaIn: 0.19, size: '#10 316 flat-head screws up through the pad into the oak beside the stub axle groove', at: sc.map((x) => [x, s * p.rollPadRadiusIn, b.depth / 2] as [number, number, number]), note: 'the pad lies on the beam top' });
+    (beam.joints ??= []).push({ type: 'screw', to: `roll-pad-${tag}`, count: 2, diaIn: 0.19, size: `2 × #10 × ${inchesText(screwLength(t, 0.75))} 316 flat-head screws down through the pad (${frac(t)}") and 3/4 in into the oak beside the stub axle groove`, at: sc.map((x) => [x, s * p.rollPadRadiusIn, b.depth / 2] as [number, number, number]), note: 'the pad lies on the beam top' });
     parts.push(mk({
       id: `roll-pad-${tag}`, partNo: 'roll-pad', name: `Roll pad ${tag} (UHMW)`, group: 'front-end', kind: 'purchased', material: 'UHMW polyethylene',
       geometry: { type: 'box', size: [w, l, t] }, transform: translation(kx, s * p.rollPadRadiusIn, b.top + p.axleProudIn + t / 2), massLb: (vol / 1728) * UHMW_PCF, body: 'front-axle', fab: 'table-saw', step: STEP.gear,
       explode: [0, s * 0.3, 0.8],
-      sourcing: { vendor: `McMaster-Carr (UHMW-PE sheet ${frac(t)}" thick, cut ${f2(w)}" × ${f2(l)}"; 2 × #10 316 flat-head screws into the axle beam beside the stub axle groove; a layer of packing tape under the pad sets the running gap)` },
-      joints: [{ type: 'screw', to: 'beam-F', count: 2, diaIn: 0.19, size: '#10 316 flat-head screws, countersunk, into the oak beside the stub axle groove', at: sc.map((x) => [x, 0, 0] as [number, number, number]), note: 'the pad lies on the axle beam top (and over the flush stub axle); the screws are beside the groove' }],
+      sourcing: { vendor: `McMaster-Carr (UHMW-PE sheet ${frac(t)}" thick, cut ${f2(w)}" × ${f2(l)}"; 2 × #10 × ${inchesText(screwLength(t, 0.75))} 316 flat-head screws into the axle beam beside the stub axle groove; a layer of packing tape under the pad sets the running gap)` },
+      joints: [{ type: 'screw', to: 'beam-F', count: 2, diaIn: 0.19, size: `2 × #10 × ${inchesText(screwLength(t, 0.75))} 316 flat-head screws, countersunk, through the pad and 3/4 in into the oak beside the stub axle groove`, at: sc.map((x) => [x, 0, 0] as [number, number, number]), note: 'the pad lies on the axle beam top (and over the flush stub axle); the screws are beside the groove' }],
       notes: `Roll pad (D-58): ${f2(w)}" × ${f2(l)}" × ${frac(t)}" UHMW on the axle beam top, centered ${f2(p.rollPadRadiusIn)}" from the kingpin. The rail bottom is ${f2(L.deckBot - L.railDepthF - L.beamF.top - p.axleProudIn)}" above the top of the axle tube here (beamRailClearIn; the tube stands ${f2(p.axleProudIn)}" proud of the beam top, and the pad's underside is modeled level with the tube top, so shim it ${f2(p.axleProudIn)}" off the beam with packing tape or UHMW offcut), so the pad leaves a running gap of about ${f2(L.deckBot - L.railDepthF - L.beamF.top - p.axleProudIn - t)}" (set with tape or shims, ${f2(p.rollPadGapMinIn)}" to 1/8"). In normal running the pads do not touch; when one wheel hits a bump the axle rolls a fraction of a degree and the pad on the high side meets the rail underside, which carries the roll couple into the hull. UHMW on oak: no grease. Wipe off sand.`,
     }));
   }

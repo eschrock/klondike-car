@@ -141,15 +141,23 @@ export interface ResawPool {
   /** Chosen nominal board. */
   board: string;
   boardLengthIn: number;
+  /** Width of the board to buy (in): 6, 7 or 8, whichever costs the fewest board feet while leaving a spare strip. */
+  boardWidthIn: number;
   /** Strips one board yields through its thickness, per candidate board (kerf and planing allowance included). */
   yieldByBoard: Record<string, number>;
-  /** Strips per board thickness for the chosen board. */
+  /** Slabs one board yields through its thickness for the chosen board (the old name `stripsPerBoard` is kept: a slab is one layer). */
   stripsPerBoard: number;
-  /** Resawn layers (6" wide slabs) needed, each carrying several strips side by side. */
+  /** Resawn layers (slabs the width of the board) needed, each carrying one or more strips side by side. */
   layers: number;
   /** Boards to buy for the pool, and their board feet. */
   boards: number;
   boardFeet: number;
+  /** Strips (of the widest width in the pool) the bought boards can hold: the strips needed plus the spares. */
+  stripSlots: number;
+  /** `stripSlots - strips`: extra strips the purchase yields (insurance for a bend that fails). The assembly steps quote this number. */
+  spares: number;
+  /** Strips each bought board yields (`stripSlots / boards`, rounded down). */
+  yieldPerBoard: number;
   /** Strip to layer assignment: index into the pool's strip list. */
   layerStrips: Array<Array<{ partNo: string; id: string; widthIn: number; lengthIn: number }>>;
 }
@@ -253,13 +261,13 @@ export function stripsPerBoard(stripT: number, usableIn: number, kerfIn: number)
 
 interface StripItem { partNo: string; id: string; widthIn: number; lengthIn: number }
 
-/** First-fit decreasing: pack strips side by side into 6"-wide layers (a rip kerf between them). */
-function packLayers(items: StripItem[], kerfIn: number): StripItem[][] {
+/** First-fit decreasing: pack strips side by side into layers `widthIn` wide (a rip kerf between them). */
+function packLayers(items: StripItem[], kerfIn: number, widthIn: number = BOARD_WIDTH_IN): StripItem[][] {
   const sorted = [...items].sort((a, b) => b.widthIn - a.widthIn || b.lengthIn - a.lengthIn);
   const layers: Array<{ items: StripItem[]; used: number }> = [];
   for (const it of sorted) {
     const need = it.widthIn + kerfIn;
-    let layer = layers.find((l) => l.used + need <= BOARD_WIDTH_IN + kerfIn + 1e-9);
+    let layer = layers.find((l) => l.used + need <= widthIn + kerfIn + 1e-9);
     if (!layer) layers.push((layer = { items: [], used: 0 }));
     layer.items.push(it);
     layer.used += need;
@@ -269,7 +277,26 @@ function packLayers(items: StripItem[], kerfIn: number): StripItem[][] {
 
 const boardLengthFor = (longest: number): number => BOARD_LENGTHS_IN.find((l) => l >= longest - 1e-9) ?? BOARD_LENGTHS_IN[BOARD_LENGTHS_IN.length - 1];
 
-/** Choose, for each pool of equal-thickness strips, the board thickness that costs the fewest board feet (then the fewest boards, then the thinnest). */
+/** Widths of the strip boards to ask for (in). 6 in is the assumed stock board; 7 and 8 in boards let two 3 in rail strips lie side by side in one slab. */
+export const RESAW_BOARD_WIDTHS_IN: readonly number[] = [BOARD_WIDTH_IN, 7, 8];
+/** The purchase must leave at least this many spare strips per pool (the strip bend test can fail one; a second trip to the yard costs more than a board). */
+export const RESAW_MIN_SPARES = 1;
+
+/** Strips of width `stripW` that fit in what is left of `layers` slabs `widthIn` wide, plus `emptyLayers` empty ones. */
+function spareSlots(layers: StripItem[][], emptyLayers: number, stripW: number, kerfIn: number, widthIn: number): number {
+  const per = Math.floor((widthIn + kerfIn + 1e-9) / (stripW + kerfIn));
+  let n = Math.max(0, emptyLayers) * per;
+  for (const l of layers) {
+    const used = l.reduce((a, it) => a + it.widthIn + kerfIn, 0);
+    n += Math.floor((widthIn + kerfIn - used + 1e-9) / (stripW + kerfIn));
+  }
+  return n;
+}
+
+/**
+ * Choose, for each pool of equal-thickness strips, the board (thickness and width) that costs the fewest board feet while leaving `RESAW_MIN_SPARES` spare strips
+ * (then the fewest boards, the narrowest, the thinnest). `spares` counts strips of the pool's widest width that the unused room of the bought boards can still hold.
+ */
 export function planResaw(parts: Part[], p: Params): ResawPool[] {
   const byT = new Map<number, StripItem[]>();
   for (const x of parts.filter((q) => isBuilt(q) && isStripPart(q))) {
@@ -281,22 +308,35 @@ export function planResaw(parts: Part[], p: Params): ResawPool[] {
   }
   const pools: ResawPool[] = [];
   for (const [roughT, items] of [...byT.entries()].sort((a, b) => a[0] - b[0])) {
-    const layers = packLayers(items, p.resawKerfIn);
     const boardLengthIn = boardLengthFor(Math.max(...items.map((i) => i.lengthIn)));
+    const stripW = Math.max(...items.map((i) => i.widthIn));
     const yieldByBoard: Record<string, number> = {};
-    let best: { b: BoardThickness; k: number; boards: number; bf: number } | null = null;
+    type Pick = { b: BoardThickness; k: number; boards: number; bf: number; widthIn: number; layers: StripItem[][]; slots: number };
+    let best: Pick | null = null;
     for (const b of BOARD_THICKNESSES) {
       const k = stripsPerBoard(roughT, resawUsableIn(b, p), p.resawKerfIn);
       yieldByBoard[b.nominal] = k;
       if (k < 1) continue;
-      const boards = Math.ceil(layers.length / k);
-      const bf = (boards * b.nominalIn * BOARD_WIDTH_IN * boardLengthIn) / 144;
-      if (!best || bf < best.bf - 1e-9 || (Math.abs(bf - best.bf) < 1e-9 && boards < best.boards)) best = { b, k, boards, bf };
+      for (const widthIn of RESAW_BOARD_WIDTHS_IN) {
+        if (stripW > widthIn + 1e-9) continue;
+        const layers = packLayers(items, p.resawKerfIn, widthIn);
+        let boards = Math.max(1, Math.ceil(layers.length / k));
+        let spares = 0;
+        for (; boards <= layers.length + 6; boards++) {
+          spares = spareSlots(layers, boards * k - layers.length, stripW, p.resawKerfIn, widthIn);
+          if (spares >= RESAW_MIN_SPARES) break;
+        }
+        const bf = (boards * b.nominalIn * widthIn * boardLengthIn) / 144;
+        const better = !best || bf < best.bf - 1e-9 || (Math.abs(bf - best.bf) < 1e-9 && (boards < best.boards || (boards === best.boards && widthIn < best.widthIn)));
+        if (better) best = { b, k, boards, bf, widthIn, layers, slots: items.length + spares };
+      }
     }
-    const chosen = best ?? { b: BOARD_THICKNESSES[BOARD_THICKNESSES.length - 1], k: 1, boards: layers.length, bf: 0 };
+    const fallbackLayers = packLayers(items, p.resawKerfIn);
+    const c: Pick = best ?? { b: BOARD_THICKNESSES[BOARD_THICKNESSES.length - 1], k: 1, boards: fallbackLayers.length, bf: 0, widthIn: BOARD_WIDTH_IN, layers: fallbackLayers, slots: items.length };
     pools.push({
-      roughT, strips: items.length, board: chosen.b.nominal, boardLengthIn, yieldByBoard, stripsPerBoard: chosen.k,
-      layers: layers.length, boards: chosen.boards, boardFeet: chosen.bf, layerStrips: layers,
+      roughT, strips: items.length, board: c.b.nominal, boardLengthIn, boardWidthIn: c.widthIn, yieldByBoard, stripsPerBoard: c.k,
+      layers: c.layers.length, boards: c.boards, boardFeet: c.bf, layerStrips: c.layers,
+      stripSlots: c.slots, spares: c.slots - items.length, yieldPerBoard: Math.floor(c.slots / c.boards),
     });
   }
   return pools;
