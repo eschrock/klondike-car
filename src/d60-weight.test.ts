@@ -34,7 +34,7 @@ describe('the changed params (every one cites D-60; the supplier-derived ones ar
   const VALUES: Partial<Record<ParamKey, number>> = {
     // Package A
     steerEyeBoltDiaIn: 0.375, steerEyeWllLb: 900, steerChainDiaIn: 0.1875, steerChainWllLb: 1000, chainJoistThickIn: 1.25,
-    tongueWidthIn: 1.25, tongueDepthIn: 1.75, bowBulkheadThickIn: 1.5, crossmemberThickIn: 0.625, handleSocketDepthIn: 12,
+    tongueWidthIn: 1.25, tongueDepthIn: 1.75, bowBulkheadThickIn: 1.5, crossmemberThickIn: 0.625, handleSocketDepthIn: 14,
     clampPlateThickIn: 0.25, axleBeamThicknessIn: 2.25, brakeFlapThickIn: 0.875, brakeFlapWidthIn: 3, brakeBackerThickIn: 0.75,
     storageLidRimWidthIn: 0.75, beamHoldDownThickIn: 0.125, brakeKneeLegIn: 1.75, seatBackFrameWidthIn: 1.25, grabBoardThickIn: 0.625, axleWallIn: 0.12,
     // the first four trade-offs
@@ -125,7 +125,7 @@ describe('mass (target about 120 lb; 144.4 at 3c-5, 143.0 with the cleats gone)'
     expect(saved(/^side-[LR]-web$/)).toBeGreaterThan(0.9);
     expect(saved(/^(storage-(side|end|lid)|storage-lid$)/)).toBeGreaterThan(0.6);
     expect(saved(/^brake-flap-/)).toBeGreaterThan(0.9);
-    expect(saved(/^handle-(socket|post)-/)).toBeGreaterThan(1.5);
+    expect(saved(/^handle-(socket|post)-/)).toBeGreaterThan(1.0); // 14 in sockets (Eric, 2026-10-12) give back about 0.2 lb of the 16 -> 12 in saving
     expect(saved(/^steer-(chain|eye|anchor)-/)).toBeGreaterThan(1.5);
     expect(saved(/^joist-/)).toBeGreaterThan(0.7);
   });
@@ -155,7 +155,7 @@ describe('mass (target about 120 lb; 144.4 at 3c-5, 143.0 with the cleats gone)'
     const sock = worldAABB(byId('handle-socket-L'));
     expect(sock.max[0] - sock.min[0]).toBeCloseTo(1, 9); // the standard 1 x 1-1/2 x 1/8 in 6061 tube
     expect(sock.max[1] - sock.min[1]).toBeCloseTo(1.5, 9);
-    expect(sock.max[2] - sock.min[2]).toBeCloseTo(12, 9);
+    expect(sock.max[2] - sock.min[2]).toBeCloseTo(14, 9); // 14 in sockets (Eric, 2026-10-12)
   });
   it('the wheels: 2.8 lb, a 2.28 in hub on the geometry, bore = the 3/4 in axle; the overall width falls with the hub (38.8 in, was 39.5)', () => {
     const w = byId('wheel-FL');
@@ -188,10 +188,10 @@ describe('the analysis after the package (the study predicted: safe 50-250+, gre
     expect(u('seat-stow').util!).toBeLessThan(0.97);
     expect(u('turn-radius').util!).toBeCloseTo(0.98, 2);
   });
-  it('the rows the package leans on stay where the study put them: lift 0.67 (1/2 in transom), handle-sockets 0.78, bridle-eye 0.63, joists 0.65, rest-load 0.72, wheel-rating 0.56, foot-stop low', () => {
+  it('the rows the package leans on stay where the study put them: lift 0.67 (1/2 in transom), handle-sockets 0.50 (14 in sockets), bridle-eye 0.63, joists 0.65, rest-load 0.72, wheel-rating 0.56, foot-stop low', () => {
     const u = (id: string) => cs.find((c) => c.id === id)!.util!;
     expect(u('lift')).toBeCloseTo(0.67, 1);
-    expect(u('handle-sockets')).toBeCloseTo(0.78, 1);
+    expect(u('handle-sockets')).toBeCloseTo(0.50, 1); // 14 in sockets: about 3.7 in of post engaged (was 0.78 at 12 in)
     expect(u('bridle-eye')).toBeCloseTo(0.63, 1);
     expect(u('joists')).toBeCloseTo(0.65, 1);
     expect(u('rest-load')).toBeCloseTo(0.72, 1);

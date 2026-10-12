@@ -1074,8 +1074,8 @@ const defs = {
   },
   handleSocketDepthIn: {
     label: 'Push-handle socket depth (tube length)', group: 'brake', unit: 'in',
-    default: 12, min: 3, max: 18, step: 0.5, status: 'assumed', ref: 'D-39, D-57, D-60',
-    note: 'D-57: deeper (was 6 in) so the posts can drop to the parked pin position with the bow just above the rear side top (handleParkClearIn); at 16 in about 5.7 in of post stayed in the socket when riding. Rectangular-tube socket bolted to the outside of the rear transom, its top flush with the transom top. D-60: 12 in (was 16 in). The parked position still sinks the post 9.8 in, so only about 1.7 in of post stays in the socket when riding (it was 5.7 in): the handle-sockets row passes the 50 lbf hold-back at 0.78 on that insertion, but the handle will have more play; check it on the first build.',
+    default: 14, min: 3, max: 18, step: 0.5, status: 'assumed', ref: 'D-39, D-57, D-60',
+    note: 'D-57: deeper (was 6 in) so the posts can drop to the parked pin position with the bow just above the rear side top (handleParkClearIn); at 16 in about 5.7 in of post stayed in the socket when riding. Rectangular-tube socket bolted to the outside of the rear transom, its top flush with the transom top. D-60: 12 in (was 16 in). The parked position still sinks the post 9.8 in, so only about 1.7 in of post stays in the socket when riding (it was 5.7 in): the handle-sockets row passes the 50 lbf hold-back at 0.78 on that insertion, but the handle will have more play. Eric (2026-10-12): 14 in (+0.2 lb), so about 3.7 in of post stays in the socket when riding.',
   },
   handleSocketWallIn: {
     label: 'Push-handle socket wall thickness', group: 'brake', unit: 'in',

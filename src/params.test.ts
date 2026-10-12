@@ -51,7 +51,7 @@ describe('PARAM_DEFS', () => {
        seatDepthIn: 14.5, storageVolumeIn3: 2000,
       frontTrackIn: 34.5, rearTrackIn: 32, steerLockDeg: 20, steerClearIn: 0.75, kingpinDiaIn: 0.625, kingThrustOdIn: 3, kingThrustThickIn: 0.5625, kingBeamLengthIn: 3,
       tongueWidthIn: 1.25, tongueDepthIn: 1.75, tongueTieAheadIn: 5, steerRopesOn: 0, frontBeamThicknessIn: 2.5, rollPadRadiusIn: 11.5, // D-60: tongue 1-1/4 x 1-3/4, pads out 1/2 in with the short hub
-      transomThicknessIn: 0.5, panelPlyIn: 0.157, seatBackPlyIn: 0.236, wheelMass10Lb: 2.8, wheelRatingLb: 300, hubLengthIn: 2.28, wheelBoreIn: 0.75, axleWallIn: 0.12, crossmemberThickIn: 0.625, handleSocketDepthIn: 12,
+      transomThicknessIn: 0.5, panelPlyIn: 0.157, seatBackPlyIn: 0.236, wheelMass10Lb: 2.8, wheelRatingLb: 300, hubLengthIn: 2.28, wheelBoreIn: 0.75, axleWallIn: 0.12, crossmemberThickIn: 0.625, handleSocketDepthIn: 14,
     });
     expect(PARAM_DEFS.steerLockDeg.ref).toContain('D-56');
   });

@@ -305,15 +305,15 @@ describe('the handlebow (D-53, D-57)', () => {
       expect(post.max[2]).toBeCloseTo(top, 6);
     }
   });
-  it('the sockets are 12 in deep (D-57 had 16 in; D-60 trimmed them) with the rear transom corner at 22 in; the posts sit about 1.7 in deep when riding (5.7 in with the 16 in socket), the pin 1.5 in under the socket mouth', () => {
-    expect(defaults.handleSocketDepthIn).toBe(12);
+  it('the sockets are 14 in deep (D-57 had 16 in; D-60 trimmed to 12, Eric chose 14) with the rear transom corner at 22 in; the posts sit about 3.7 in deep when riding, the pin 1.5 in under the socket mouth', () => {
+    expect(defaults.handleSocketDepthIn).toBe(14);
     const sock = worldAABB(get(installed, 'handle-socket-L'));
-    expect(sock.min[2]).toBeCloseTo(L.deckTop + L.sideRear - 12, 9);
+    expect(sock.min[2]).toBeCloseTo(L.deckTop + L.sideRear - 14, 9);
     expect(sock.max[2]).toBeCloseTo(L.deckTop + L.sideRear, 9);
     expect(h.zPin).toBeCloseTo(h.zTop - 1.5, 9);
     const post = worldAABB(get(installed, 'handle-post-L'));
     expect(post.min[2]).toBeCloseTo(h.zFoot, 9);
-    expect(h.zTop - h.zFoot).toBeGreaterThanOrEqual(1.5); // D-60: only 1.7 in of insertion with the 12 in socket (the parked position sinks the post 9.8 in); the handle-sockets row checks the hold-back pull on it (0.78)
+    expect(h.zTop - h.zFoot).toBeGreaterThanOrEqual(3.5); // 14 in socket: about 3.7 in of insertion (1.7 in at 12 in) (the parked position sinks the post 9.8 in); the handle-sockets row checks the hold-back pull on it (0.78)
     expect(h.zFoot).toBeCloseTo(h.zBot + 0.5 + h.parkDropIn, 9);
   });
   it('PARKED (the second pin position): the posts and the bow sink by parkDropIn so the bow rests ~1 in above the rear transom top, the post foot at the socket bottom + 1/2 in; sockets and pins stay', () => {
