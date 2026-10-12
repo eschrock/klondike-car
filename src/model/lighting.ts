@@ -1,10 +1,11 @@
 /**
- * Lighting (D-9, D-41) and the hardware allowance. The front lantern bracket and the flag-pole socket clip onto the tip of the bow curl (D-54);
+ * Lighting (D-9, D-41) and the hardware allowance. The front lantern bracket clips over the top of the bow bulkhead at its center (D-57; the flag now stands in a plain tube in a rear corner);
  * the rear light mounts on a flat printed plate on the rear transom. Brackets are
  * ASA (UV-stable) 2D profiles + depth, so they go straight to an STL in Phase 4; they are not on a primary load path.
  */
 import { STORAGE_LOCATION } from '../params';
-import { STEP, box, span, SIDES, type Ctx } from './build-utils';
+import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
+import { SIGN_X_MAX_IN } from './body';
 import { sideSlopeAt, sideTopAt } from './layout';
 import { profilePart } from './profile';
 import { storageGeometry } from './storage';
@@ -38,7 +39,7 @@ const FASTENER_LB = {
   screw: 0.008, boltSmall: 0.04, boltLarge: 0.09, boltTapped: 0.02, insert: 0.005, knob: 0.02, domino: 0.005, glue: 0.01, nutWasher: 0.03,
 } as const;
 /** Bolts whose shank is already a separate part (kingpin, eye bolts, U-bolts, brake and handle pins): only their nuts and washers are left for the allowance. */
-const ITEMIZED_BOLT = /^(bridle-eye|eyebolt|clamp-|brake-(pivot-pin|link-pin-[TB]|park-pin|lever-pin)|handle-pin|seat-knob)/;
+const ITEMIZED_BOLT = /^(bridle-eye|eyebolt|clamp-|handle-pin|seat-knob)/;
 const HARDWARE_FALLBACK_LB = 2.5;
 const HARDWARE_SIZE = [2, 2, 1.25] as const;
 /** Cabin reflectors at these fore-aft fractions of the cabin length (clear of the signs and the nose). */
@@ -51,8 +52,10 @@ export const REAR_PLATE = { width: 4, height: 2.4, thick: 0.25, hole: 0.1 } as c
 const REAR_PLATE_SLOT_GAP_IN = 0.75;
 /** Least height of free inner transom face (above the lid frame) that takes an inside doubler. */
 const MIN_INSIDE_DOUBLER_IN = 1.25;
-/** Flag-pole socket: outer and bore radius, height (a 1/2" fiberglass staff). */
-export const FLAG_SOCKET = { rOut: 0.6, rBore: 0.27, height: 3 } as const;
+/** Flag tube (D-57): mass per inch of 1" schedule 40 PVC, the drain hole, the oak holding blocks (thickness fore-aft, width across, height). */
+const FLAG_TUBE_LB_PER_IN = 0.036;
+export const FLAG_DRAIN_HOLE_IN = 0.1875;
+export const FLAG_BLOCK = { t: 0.75, w: 1.4, h: 1.5 } as const;
 
 /** Regular polygon, CCW (or CW when `ccw` is false), as a profile loop. */
 export function circleLoop(cx: number, cy: number, r: number, n = 16, ccw = true): Vec2[] {
@@ -79,22 +82,20 @@ export function buildLighting(ctx: Ctx): Part[] {
   const parts: Part[] = [];
   const common = { group: 'lighting', step: STEP.finish } as const;
 
-  // ── Front: clips over the tip of the bow curl (D-54), lantern left of center, flag-pole socket right of center ──
-  // The curl's tip edge is nearly vertical (bowCurlAngleDeg off the deck); the clip is drawn upright over it, centered on the panel at the tip.
-  const curl = L.curl;
-  const tipTopZ = L.deckTop - curl.thick / 2 + curl.rise + (curl.thick / 2) * Math.sin(curl.angleRad);
-  const x0c = L.xFront - curl.thick / 2 - (curl.thick / 2) * Math.cos(curl.angleRad) * 0;
-  const yc = Math.max(2.3, Math.min(4.5, L.hwC - CLIP.width / 2 - 0.15));
-  const zT = tipTopZ;
-  const clipJoint = (to: string) => [{ type: 'knob' as const, to, count: 2, size: 'M5 thumbscrew in the leg, clamping the curl', note: 'tool-free; friction clamp over the curl\'s top edge (not a load path)' }];
+  // ── Front: the lantern clips over the top of the bow bulkhead at its center (D-57) ──
+  const bh = L.bulkhead;
+  const zT = bh.zCenter;
+  const x0c = bh.x0;
+  const yc = 0;
+  const clipJoint = (to: string) => [{ type: 'knob' as const, to, count: 2, size: 'M5 thumbscrew in the leg, clamping the bulkhead', note: 'tool-free; friction clamp over the bulkhead\'s top edge (not a load path)' }];
   const lantern = profilePart(ctx, {
-    id: 'lantern-mount', name: 'Front lantern bracket', group: 'lighting', mat: 'print', material: 'ASA', outline: clipOutline(curl.thick, true), depth: CLIP.width,
+    id: 'lantern-mount', name: 'Front lantern bracket', group: 'lighting', mat: 'print', material: 'ASA', outline: clipOutline(bh.thick, true), depth: CLIP.width,
     basis: 'xz', origin: [x0c, yc + CLIP.width / 2, zT], removable: true, step: STEP.finish, explode: [0.6, 0, 0.8],
-    joints: clipJoint('bow-curl'),
-    notes: 'Printed ASA, 4+ perimeters, printed with the extrusion profile flat on the bed (layers parallel to the profile, strong in bending, P4); 0.25" shelf ribbed or printed in CF-nylon, 1/8" fillets at the inside corners. Heat-set inserts for the M5 stainless thumbscrews (brass is fine inside the plastic, away from the oak). Clips over the top of the bow curl and carries the headlight on its forward shelf. Comes off with the light for transport.',
+    joints: clipJoint('bow-bulkhead'),
+    notes: 'Printed ASA, 4+ perimeters, printed with the extrusion profile flat on the bed (layers parallel to the profile, strong in bending, P4); 0.25" shelf ribbed or printed in CF-nylon, 1/8" fillets at the inside corners. Heat-set inserts for the M5 stainless thumbscrews (brass is fine inside the plastic, away from the oak). Clips over the crown of the bow bulkhead (D-57; the crown is nearly level over the 2.5" clip) and carries the headlight on its forward shelf. Comes off with the light for transport.',
   });
   parts.push(lantern);
-  const shelfX0 = x0c + curl.thick + CLIP.clearance + CLIP.wall;
+  const shelfX0 = x0c + bh.thick + CLIP.clearance + CLIP.wall;
   const wz = zT + CLIP.clearance + CLIP.wall;
   parts.push(box(ctx, {
     ...common, id: 'front-light', name: 'Front LED headlight', mat: 'fixed', massLb: FRONT_LIGHT_MASS_LB, kind: 'purchased', material: 'LED headlight', fab: 'buy',
@@ -104,19 +105,38 @@ export function buildLighting(ctx: Ctx): Part[] {
     joints: [{ type: 'screw', to: 'lantern-mount', count: 2, size: 'M4 stainless, into heat-set inserts in the shelf' }],
     notes: 'Mass is an estimate. Faces forward on the shelf.',
   }));
-  parts.push(profilePart(ctx, {
-    id: 'flag-mount', name: 'Flag-pole clip', group: 'lighting', mat: 'print', material: 'ASA', outline: clipOutline(curl.thick, false), depth: CLIP.width,
-    basis: 'xz', origin: [x0c, -yc + CLIP.width / 2, zT], removable: true, step: STEP.finish, explode: [0.6, 0, 0.8],
-    joints: clipJoint('bow-curl'),
-    notes: 'Printed ASA, 4+ perimeters, profile flat on the bed (P4); heat-set inserts for the M5 stainless thumbscrews (brass is fine inside the plastic). Clips over the top of the bow curl, right of center (D-45: there is no prow; the staff socket carries the flag).',
-  }));
-  const sock: [Vec2[], Vec2[]] = [circleLoop(0, 0, FLAG_SOCKET.rOut), circleLoop(0, 0, FLAG_SOCKET.rBore, 16, false)];
-  parts.push(profilePart(ctx, {
-    id: 'flag-socket', name: 'Flag-pole socket', group: 'lighting', mat: 'print', material: 'ASA', outline: sock[0], holes: [sock[1]], depth: FLAG_SOCKET.height,
-    basis: 'xy', origin: [x0c + curl.thick / 2, -yc, wz], removable: true, step: STEP.finish, explode: [0, 0, 1],
-    joints: [{ type: 'pin', to: 'flag-mount', count: 2, size: '#6-32 stainless, into heat-set inserts', note: 'the staff drops in and is held by a thumbscrew' }],
-    notes: 'Printed ASA tube for a 1/2" staff, 3" deep.',
-  }));
+
+  // ── Flag tube (D-57): a plain purchased tube standing inside a rear corner, top flush with the side top, a drain hole near the bottom, held by two screwed oak blocks ──
+  {
+    const { p } = ctx;
+    const od = p.flagTubeOdIn, id = p.flagTubeIdIn;
+    const rearTx0 = L.xRear + L.transom;
+    const lane = p.storageLocation === STORAGE_LOCATION.rearOverAxle ? L.rearLane : 0;
+    const xc = rearTx0 + lane + od / 2;
+    const yIn = L.hwC - 0.05; // inner face of the side (the gutter beside the box)
+    const yTube = yIn - od / 2;
+    const zTop = sideTopAt(L, xc); // flush with the gunwale top
+    const zBot = L.deckTop;
+    const len = zTop - zBot;
+    parts.push(cylinder(ctx, {
+      ...common, id: 'flag-tube', name: 'Flag tube (1" ID)', mat: 'fixed', massLb: FLAG_TUBE_LB_PER_IN * len, kind: 'purchased', material: '1" schedule 40 PVC tube (or 1" ID aluminum)', fab: 'buy', removable: false,
+      axis: 'z', radius: od / 2, length: len, center: [xc, yTube, zBot + len / 2], explode: unit(0, 1, 0.5),
+      sourcing: { vendor: `McMaster-Carr (1" schedule 40 PVC pipe, ${od.toFixed(3)}" OD, ${id.toFixed(2)}" ID, cut ${len.toFixed(1)}" long)`, costUsd: 4 },
+      joints: [
+        { type: 'screw', to: 'flag-block-top', count: 2, size: '#8 × 1-1/4 stainless, through the block and the tube wall', note: 'the top block holds the tube; no tools to use the tube' },
+        { type: 'screw', to: 'flag-block-bottom', count: 2, size: '#8 × 1-1/4 stainless' },
+      ],
+      notes: `D-57 (replaces the printed socket on the bow): a plain ${id.toFixed(2)}" ID tube ${len.toFixed(1)}" long standing on the deck in the left rear corner, against the front of the handle-socket backer and the inside of the side, its top flush with the gunwale top (z ${zTop.toFixed(2)}"). A ${FLAG_DRAIN_HOLE_IN}" drain hole is drilled through the wall just above the deck so water cannot stand in it (it runs out through the rear scupper). The flag staff (a ${(id - 0.05).toFixed(2)}" dowel) drops in; ${len.toFixed(0)}" of socket holds it.`,
+    }));
+    const blk = (id: string, name: string, z0: number, to: string, note: string) => box(ctx, {
+      ...common, id, partNo: 'flag-block', name, mat: 'oak', grain: 'z', step: STEP.finish,
+      ...span([xc + od / 2, xc + od / 2 + FLAG_BLOCK.t], [yIn - FLAG_BLOCK.w, yIn], [z0, z0 + FLAG_BLOCK.h]), // 1.4 in across: it stays off the box wall
+      joints: [{ type: 'screw', to, count: 2, size: '#10 × 1-1/4 stainless, through the block into the side', note }, { type: 'screw', to: 'flag-tube', count: 2, size: '#8 × 1-1/4 stainless, into the tube wall' }, { type: 'glue', to, count: 1, note: 'epoxy to the side' }],
+      notes: `Oak holding block (D-57): ${FLAG_BLOCK.t}" × ${FLAG_BLOCK.w}" × ${FLAG_BLOCK.h}" with a half-round relief for the tube, epoxied and screwed to the inside of the side so it clamps the tube against the transom backer. Two blocks (top and bottom) hold a 14" tube; the tube stays put without them clipped to anything else.`,
+    });
+    parts.push(blk('flag-block-top', 'Flag tube block (top)', zTop - FLAG_BLOCK.h - 0.1, 'side-L-gunwale', 'into the gunwale band'));
+    parts.push(blk('flag-block-bottom', 'Flag tube block (bottom)', zBot + 0.4, 'side-L-web', 'into the side panel, with the epoxy bed'));
+  }
 
   // ── Rear: flat plate on the rear transom's outer face, the red light on it ──
   // The plate sits beside the lift slot (B's 4.5" hand-hold is centered on the transom; a centered plate would cover it and its screws
@@ -161,7 +181,7 @@ export function buildLighting(ctx: Ctx): Part[] {
   const reach = L.xSideEnd - L.xRear;
   for (const { s, tag } of SIDES) {
     REFLECTOR_FRACS.forEach((f, i) => {
-      const x = L.xRear + reach * f;
+      const x = Math.max(L.xRear + reach * f, SIGN_X_MAX_IN + 2); // the rear one stands ahead of the side sign (D-57)
       parts.push(box(ctx, {
         id: `reflector-${tag}${i + 1}`, partNo: 'reflector', name: `Side reflector ${tag}${i + 1}`, group: 'lighting', mat: 'fixed', massLb: REFLECTOR_MASS_LB,
         kind: 'purchased', material: 'reflector', fab: 'buy', step: STEP.finish, size: [...REFLECTOR_SIZE],

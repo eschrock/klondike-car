@@ -20,6 +20,7 @@ export function minSection(g: Part['geometry']): number {
     case 'cylinder': return 2 * g.radius;
     case 'sweep': return Math.min(g.width, g.thickness);
     case 'wheel': return Math.min(g.diameter, g.width);
+    case 'mesh': return g.thickness ?? Infinity;
     case 'extrusion': {
       const b = localBounds(g);
       return Math.min(b.max[0] - b.min[0], b.max[1] - b.min[1], g.depth);
@@ -44,12 +45,12 @@ export function surfaceOf(part: Pick<Part, 'material' | 'kind'>): Finish['surfac
 }
 
 /**
- * Surface look of the front-end family by part id / name (D-56): the tongue plate and the kingpin bolt are blackened (painted) steel.
+ * Surface look of the front-end family by part id / name (D-56): the kingpin bolt is blackened (painted) steel; the oak tongue (D-58) is finished like the rest of the oak.
  * Mirrors the viewer's fallback (viewer/materials.ts) so the tag is on the part and not only in the renderer.
  */
 export function frontSurfaceOf(part: Pick<Part, 'id' | 'name' | 'material'>): Finish['surface'] | undefined {
   // By id only: the king beam's name ("... (kingpin crossmember)") and the thrust washer's ("Kingpin thrust washer") mention the kingpin but are oak and UHMW.
-  if (/^(bridle-tongue|kingpin)$/.test(part.id)) return 'blackened';
+  if (/^kingpin$/.test(part.id)) return 'blackened';
   return undefined;
 }
 

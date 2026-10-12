@@ -33,14 +33,14 @@ describe('S3: storage box clearance to the chine', () => {
   it('the box is 2 x 1/8" narrower than the chine inner width and still holds the 10 Essentials', () => {
     const g = storageGeometry(p, L);
     expect(g.hw).toBeCloseTo(L.hwC - p.storageSideClearIn, 9);
-    expect(p.storageSideClearIn).toBeCloseTo(0.125, 9);
+    expect(p.storageSideClearIn).toBeGreaterThan(0); // 3c-4b widened the side clearance (the box stands off the chine by this much)
     const fit = packEssentials(storageInterior(p, L));
     expect(fit.fits).toBe(true);
   });
 });
 
 describe('S10: build order', () => {
-  it('hull first (with the king beam and stop blocks in the frame), then the axles and wheels on the inverted hull, then (hull upright) the tongue plate, the bridle and the seat (D-56)', () => {
+  it('hull first (with the king beam and the chain joist in the frame), then the axles and wheels on the inverted hull, then (hull upright) the tongue plate, the bridle and the seat (D-56)', () => {
     expect(STEP.frame).toBeLessThan(STEP.body);
     expect(HULL_STEP.transom).toBeLessThan(STEP.steering);
     expect(STEP.steering).toBeLessThan(STEP.gear);
@@ -49,8 +49,8 @@ describe('S10: build order', () => {
     expect(STEP.spindles).toBeLessThan(STEP.seatStorage);
     const transom = get('transom-rear').step;
     // the king beam and the stops are part of the frame glue-up with the deck (before the sides and the transom)
-    for (const id of ['king-beam', 'steer-stop-L', 'steer-stop-R', 'joist-7']) expect(get(id).step, id).toBe(STEP.frame);
-    for (const id of ['axle-R', 'axle-hanger-L', 'beam-F', 'axle-FL', 'axle-FR', 'kingpin']) expect(get(id).step, id).toBeGreaterThan(transom);
+    for (const id of ['king-beam', 'joist-5', 'joist-7']) expect(get(id).step, id).toBe(STEP.frame);
+    for (const id of ['axle-R', 'axle-hanger-L', 'beam-F', 'axle-FL', 'axle-FR', 'kingpin', 'steer-eye-L', 'steer-anchor-L', 'roll-pad-L']) expect(get(id).step, id).toBeGreaterThan(transom);
     // the hangers, both axles and the kingpin go on before the tongue and the bridle are bolted on with the hull upright
     expect(get('axle-hanger-L').step).toBe(STEP.gear);
     expect(get('axle-R').step).toBe(STEP.gear);
@@ -63,7 +63,7 @@ describe('S10: build order', () => {
     expect(get('side-L-chine').step).toBe(HULL_STEP.sides);
     expect(HULL_STEP.deck).toBeLessThan(HULL_STEP.sides);
     expect(HULL_STEP.sides).toBeLessThan(HULL_STEP.transom);
-    expect(get('bow-curl').step).toBe(HULL_STEP.sides);
+    expect(get('bow-bulkhead').step).toBe(HULL_STEP.transom);
   });
 });
 

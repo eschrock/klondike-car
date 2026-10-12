@@ -33,7 +33,7 @@ export interface TruckParams {
 }
 
 const GROUP_LABEL: Record<PartGroup, string> = {
-  frame: 'Frame', body: 'Body (sides, deck, bow curl, transom)', 'front-end': 'Front end (pivoting axle, kingpin, tongue)', 'running-gear': 'Running gear (wheels, axles)',
+  frame: 'Frame', body: 'Body (sides, deck, bow bulkhead, transom)', 'front-end': 'Front end (pivoting axle, kingpin, tongue)', 'running-gear': 'Running gear (wheels, axles)',
   seat: 'Seat', brake: 'Brake', storage: 'Storage', lighting: 'Lighting', removable: 'Removable (handle, tongue, signs)',
   hardware: 'Hardware', reference: 'Reference',
 };

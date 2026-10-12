@@ -1,8 +1,8 @@
 /**
- * Cargo-mode rows (Phase 3c-2, D-53). The cart hauls gear, firewood and water after the race: the seat back and cushion lie in the storage box (`seat-stow`),
+ * Cargo-mode rows (Phase 3c-2, D-53; D-57). The cart hauls gear, firewood and water after the race: the seat back flips flat onto the deck and the two cushions lie in the storage box (`seat-stow`),
  * the payload (default 250 lb, `cargoPayloadLb`) sits on the flat bed with no rider, and the rows below are the ones that exist only for that case or have a
  * cargo evaluation of their own:
- *   seat-stow   the seat kit fits flat in the box interior (fore-aft, across, height under the lid frame), from the real part bounding boxes
+ *   seat-stow   the two cushions fit flat in the box interior (fore-aft, across, height under the lid frame), from the real part bounding boxes; the back flips flat on the deck
  *   joists      the deck crossmembers under the rider's seat and the standing scout (operating and goal rider) and under the cargo (uniform and concentrated)
  *   lid-load    the box lid as a table: a light item on the concentrated footprint (cargo only)
  *   cargo-strap strapping the payload down: strap tension for the restraint g, against the strap and the D-ring plate (cargo only)
@@ -10,7 +10,9 @@
  * The cargo case of the generic rows (axles, wheels, bearings, rails, brake, tipping) comes from `evalBoth` (stability.ts); the deck has its own in structure.ts.
  */
 import { bowGeometry } from '../model/handle';
+import { cargoBed } from '../model/bed';
 import { seatStowPlan } from '../model/seat-stow';
+import { VOID_USABLE, packEssentials, storageInterior } from '../model/storage';
 import { worldAABB } from '../model/bounds';
 import type { Part } from '../model/types';
 import type { Ctx } from './context';
@@ -33,38 +35,42 @@ const STOW_MARGINAL_IN = 0.25;
 export function seatStowCheck(ctx: Ctx): AnalysisCheck {
   const { p, L } = ctx;
   const plan = seatStowPlan(p, L, ctx.parts);
+  const label = 'Seat cushions stow in the box; the back flips flat';
   if (!plan.applicable) {
     return singleCheck({
-      id: 'seat-stow', label: 'Seat back and cushion stow flat in the storage box', group: 'Structure', value: 0, unit: 'in', limit: 0, sense: '>=', info: true, refs: ['D-53'],
-      how: 'Not evaluated: the storage box is not behind the seat (the stow plan is for the rear box), or the seat parts are missing.',
+      id: 'seat-stow', label, group: 'Structure', value: 0, unit: 'in', limit: 0, sense: '>=', info: true, refs: ['D-57'],
+      how: 'Not evaluated: the storage box is not behind the seat (the stow plan is for the rear box), or the cushions are missing.',
     });
   }
   const { need, margin, interior: i, sizes: s } = plan;
   const avail = { l: i.x1 - i.x0, w: i.y1 - i.y0, h: i.zCeil - i.zFloor };
   const ds: Detail[] = [
-    detail('fore-aft: the cushion + backers, or the back + coaming ledges, plus the clearance', need.lengthIn, 'in', avail.l, '<='),
-    detail(plan.stack === 'floor' ? 'across: the cushion plus a wedge-and-knob strip each side, plus the clearance' : 'across: the cushion plus the clearance (the wedges and knobs lie on top of the back)', need.widthIn, 'in', avail.w, '<='),
-    detail('height: corner fillet + cushion + back (frame and pad)' + (plan.stack === 'top' ? ' + the wedges and knobs on top' : '') + ', under the lid frame and battens', need.heightIn, 'in', avail.h, '<='),
+    detail('fore-aft: the seat cushion (or the pad) plus the clearance', need.lengthIn, 'in', avail.l, '<='),
+    detail('across: the cushion plus the clearance', need.widthIn, 'in', avail.w, '<='),
+    detail('height: corner fillet + seat cushion + back pad, under the lid frame and battens', need.heightIn, 'in', avail.h, '<='),
   ];
   const g = governing(ds, '');
   const minMargin = Math.min(margin.lengthIn, margin.widthIn, margin.heightIn);
   const status: Status = minMargin < -1e-9 ? 'fail' : minMargin < STOW_MARGINAL_IN ? 'marginal' : 'pass';
-  const how = `The seat kit lies flat in the box, measured from the real parts (not nominal sizes): the cushion ${f(s.cushion[0], 2)}" × ${f(s.cushion[1], 2)}" × ${f(s.cushion[2], 2)}" lies on the floor flush to the aft wall (its fore end stops short of the 1" insert backers); `
-    + `the back (frame, panel, pad) ${f(s.back[0], 2)}" head to foot × ${f(s.back[1], 2)}" across × ${f(s.back[2], 2)}" thick lies on it, frame down and pad up, head toward the aft wall, centered so it clears the coaming ledge at both ends and rides above the backers; `
-    + `each wedge (${f(s.wedge[0], 2)}" × ${f(s.wedge[1], 2)}" × ${f(s.wedge[2], 2)}", on its long edge) and knob with its ${f(s.knob[0], 1)}" stud ${plan.stack === 'floor' ? 'lie on the floor in a strip along each side wall' : 'lie on top of the seat back, in two short lanes (D-54: the 24 in body leaves no room for floor strips)'}, and the two stud-hole plugs go into the inserts from the bed side. `
-    + `Interior ${f(avail.l, 2)}" long × ${f(avail.w, 2)}" wide (inside the 6 mm walls); the lowest piece rides on the 3/8" corner fillets, so the stack starts ${f(i.zRest - i.zFloor, 3)}" off the floor and has ${f(avail.h, 2)}" up to the underside of the lid frame and battens (the lid panel, its gasket and the coaming are above that, so the closed lid never touches the stack). `
+  const ess = packEssentials(storageInterior(p, L));
+  const essIn3 = ess.rigidIn3 + ess.softCompressedIn3 / VOID_USABLE;
+  const bed = cargoBed(p, L);
+  const how = `D-57: the seat BACK never goes in the box. It flips forward about its hinge onto the deck (rotated ${f(90 + p.seatBackAngleDeg, 0)}° about the stile feet) and lies flat from x = ${f(plan.flat.x0, 1)}" to ${f(plan.flat.x1, 1)}" (${f(plan.flat.zTop - L.deckTop, 2)}" proud of the deck, ${f(bed.xStop - plan.flat.x1, 1)}" short of the foot brace), held by the same two quick-release pins. `
+    + `Only the two cushions lie in the box, measured from the real parts: the seat cushion ${f(s.cushion[0], 2)}" × ${f(s.cushion[1], 2)}" × ${f(s.cushion[2], 2)}" on the floor flush to the aft wall, the back pad ${f(s.pad[0], 2)}" × ${f(s.pad[1], 2)}" × ${f(s.pad[2], 2)}" on it, face up. `
+    + `Interior ${f(avail.l, 2)}" long × ${f(avail.w, 2)}" wide (inside the 6 mm walls); the lowest piece rides on the 3/8" corner fillets, so the stack starts ${f(i.zRest - i.zFloor, 3)}" off the floor and has ${f(avail.h, 2)}" up to the underside of the lid frame and battens. `
     + `Needs ${f(need.lengthIn, 2)}" fore-aft (incl. ${f(p.seatStowClearIn, 2)}" clearance), ${f(need.widthIn, 2)}" across, ${f(need.heightIn, 2)}" high: margins ${f(margin.lengthIn, 2)}", ${f(margin.widthIn, 2)}", ${f(margin.heightIn, 2)}" (marginal under ${STOW_MARGINAL_IN}"). `
-    + `Procedure, no tools: unscrew both star knobs (each 3-1/2" stud comes out with its knob), lift the back off the wedges, lift the wedges off, peel the cushion off its Dual Lock, lay the cushion then the back in the box, the wedges and knobs beside them, and thread the two plugs into the inserts (hand-tight) to seal the stud holes. In race mode the 10 Essentials ride in the box (storage-pack row) and the seat is installed; in cargo mode they come out, so they are not part of this fit.`;
+    + `The cushions take ${f(plan.cushionsIn3, 0)} in³; the box interior under the lid frame has ${f(plan.freeIn3, 0)} in³ left, and the 10 Essentials need about ${f(essIn3, 0)} in³ (rigid items plus the soft goods at their packed volume, storage-pack row)${plan.freeIn3 >= essIn3 ? ': both fit together' : ': they do NOT both fit; carry the Essentials in a pack on the bed, or raise storageVolumeIn3'}. `
+    + `Procedure, no tools: peel the back pad and the seat cushion off their Dual Lock, lay them in the box, pull the two pins, flip the back forward and push the pins down through the stiles into the deck.`;
   return singleCheck({
-    id: 'seat-stow', label: 'Seat back and cushion stow flat in the storage box', group: 'Structure', value: g.value, unit: g.unit, limit: g.limit, sense: '<=',
-    status, details: ds, how, refs: ['D-53', 'D-40', 'D-41'],
+    id: 'seat-stow', label, group: 'Structure', value: g.value, unit: g.unit, limit: g.limit, sense: '<=',
+    status, details: ds, how, refs: ['D-57', 'D-53', 'D-41'],
   });
 }
 
 // ── deck joists ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** The cabin joists (crossmembers under the deck) as measured from the parts. */
-function cabinJoists(ctx: Ctx): { parts: Part[]; spanIn: number; thickIn: number; depthIn: number; xs: number[]; tribIn: number } | null {
+export function cabinJoists(ctx: Ctx): { parts: Part[]; spanIn: number; thickIn: number; depthIn: number; xs: number[]; tribIn: number } | null {
   const js = ctx.parts.filter((x) => /^joist-\d+$/.test(x.id));
   if (!js.length) return null;
   const bb = js.map((x) => worldAABB(x));
@@ -221,16 +227,20 @@ export function cargoStrapCheck(ctx: Ctx): AnalysisCheck {
 
 // ── the handlebow ───────────────────────────────────────────────────────────────────────────────────────────────
 
+/** Bending strength of clear wood with cross grain, as a fraction of straight grain, by slope of grain (rise per run), from the Wood Handbook's table (1:20 = 1.0 ... 1:5 = 0.45). */
+export function grainSlopeFactor(slope: number): number {
+  const tbl: Array<[number, number]> = [[0, 1], [0.05, 1], [1 / 15, 0.96], [0.1, 0.81], [0.2, 0.45], [0.5, 0.2]];
+  const a = Math.abs(slope);
+  for (let i = 1; i < tbl.length; i++) if (a <= tbl[i][0]) return tbl[i - 1][1] + ((a - tbl[i - 1][0]) / (tbl[i][0] - tbl[i - 1][0])) * (tbl[i][1] - tbl[i - 1][1]);
+  return tbl[tbl.length - 1][1];
+}
+
 export function handleBowCheck(ctx: Ctx): AnalysisCheck {
   const { p, L } = ctx;
   const al = allowables(ctx);
   const bw = bowGeometry(p, L);
   const sec = p.handleBarDiameterIn;
-  const plies = Math.max(2, Math.round(sec / 0.3125));
-  const t = sec / plies;
   const R = Number.isFinite(bw.radiusIn) ? bw.radiusIn : Infinity;
-  // NDS curvature factor for bent laminations: Cc = 1 − 2000 (t/R)^2.
-  const Cc = Number.isFinite(R) ? Math.max(0.2, 1 - 2000 * (t / R) ** 2) : 1;
   const span = 2 * bw.yPost;
   const F = p.handleHoldbackLbf;
   const s = rectSection(sec, sec);
@@ -238,18 +248,20 @@ export function handleBowCheck(ctx: Ctx): AnalysisCheck {
   const Mv = (F * span) / 4; // leaning down on the middle
   const arm = (bw.yEnd - bw.yPost); // a hand on the overhanging end, cantilever from the post
   const Me = F * Math.max(0, arm);
-  const allow = al.oakBend * Cc;
+  // D-57: ONE bandsawn board, so no lamination factor, but the sawn arc cuts the grain: level at the middle, running out at the posts and the ends.
+  const slopeEnd = Number.isFinite(R) ? Math.tan(Math.asin(Math.min(1, bw.yEnd / R))) : 0;
+  const Cg = grainSlopeFactor(slopeEnd);
   const pinShear = (F / 2) / ((Math.PI / 4) * 0.375 ** 2);
   const ds: Detail[] = [
-    detail('hand at the middle pulling aft, plan bending (bent lamination)', bendingStress(Mh, s), 'psi', allow, '<='),
-    detail('leaning on the middle, vertical bending (bent lamination)', bendingStress(Mv, s), 'psi', allow, '<='),
-    detail('hand on an overhanging end', bendingStress(Me, s), 'psi', allow, '<='),
+    detail('hand at the middle pulling aft, plan bending (grain level there)', bendingStress(Mh, s), 'psi', al.oakBend, '<='),
+    detail('leaning on the middle, vertical bending (grain level there)', bendingStress(Mv, s), 'psi', al.oakBend, '<='),
+    detail('hand on an overhanging end (cantilever; grain runs out at the end)', bendingStress(Me, s), 'psi', al.oakBend * Cg, '<='),
     detail('3/8 in pin at each post top, shear', pinShear, 'psi', (p.brakeSteelYieldPsi * 0.577) / p.steelSafetyFactor, '<='),
   ];
   const g = governing(ds, '');
   return singleCheck({
-    id: 'handle-bow', label: 'Handlebow (hold-back pull at the middle)', group: 'Structure', value: g.value, unit: g.unit, limit: g.limit, sense: g.sense, details: ds, refs: ['D-53', 'D-39'],
-    how: `Handlebow ${f(sec, 2)}" square, ${plies} plies of ${f(t, 3)}", bent to a ${Number.isFinite(R) ? f(R, 1) : '∞'}" radius arc (crown ${f(bw.crownIn, 1)}"), spanning ${f(span, 1)}" between the post tops with ${f(arm, 1)}" overhanging each side. The D-39 socket loads are unchanged: the hold-back pull is taken at the posts at the ${f(p.rearHandleHeightIn)}" grip height (handle-sockets row). Here the worst place for the bow itself: the hold-back ${f(F, 0)} lbf at the MIDDLE (the bow as a simply supported span, arch action ignored): M = FL/4 = ${f(Mh)} lb·in, σ = ${f(bendingStress(Mh, s), 0)} psi against the oak design bending ${f(al.oakBend, 0)} × the lamination curvature factor C_c = 1 − 2000(t/R)² = ${f(Cc, 2)} = ${f(allow, 0)} psi. The same ${f(F, 0)} lbf leaning down on the middle, and on an overhanging end (cantilever ${f(arm, 1)}"), are in the details.`,
+    id: 'handle-bow', label: 'Handlebow (hold-back pull at the middle)', group: 'Structure', value: g.value, unit: g.unit, limit: g.limit, sense: g.sense, details: ds, refs: ['D-53', 'D-39', 'D-57'],
+    how: `Handlebow ${f(sec, 2)}" square, ONE bandsawn oak board (D-57), a ${Number.isFinite(R) ? f(R, 1) : '∞'}" radius arc (crown ${f(bw.crownIn, 2)}"), spanning ${f(span, 1)}" between the post tops with ${f(arm, 1)}" overhanging each side. The D-39 socket loads are unchanged: the hold-back pull is taken at the posts at the ${f(p.rearHandleHeightIn)}" grip height (handle-sockets row). Here the worst place for the bow itself: the hold-back ${f(F, 0)} lbf at the MIDDLE (the bow as a simply supported span, arch action ignored): M = FL/4 = ${f(Mh)} lb·in, σ = ${f(bendingStress(Mh, s), 0)} psi against the oak design bending ${f(al.oakBend, 0)} (the grain is level at the middle, so no knock-down). The same ${f(F, 0)} lbf leaning down on the middle, and on an overhanging end (cantilever ${f(arm, 1)}"), are in the details; the sawn arc runs the grain out ${f((Math.atan(slopeEnd) * 180) / Math.PI, 0)}° at the ends, which cuts the bending strength there to ${f(Cg, 2)} of straight grain (Wood Handbook slope-of-grain table), so the end is checked against ${f(al.oakBend * Cg, 0)} psi.`,
   });
 }
 

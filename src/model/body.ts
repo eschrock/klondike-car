@@ -1,17 +1,16 @@
 /**
- * Body (D-54): the deck, the straight captured-ply sides on a sled profile, the curled bow, the rear transom with its lift hand-hold, the scuppers and the (provisional)
- * signs. The earlier tapering, curved hull (D-45, D-52) and its finger guards, front transom and sheer are gone with the Ackermann front end.
+ * Body (D-54, D-57): the deck, the captured-ply sides on the sheer (a concave sweep from the low bow up to the tall rear) with a gentle plan turn-in toward the bow, the shaped
+ * oak bow bulkhead (the rider's foot brace and the lift hand-hold, which replaced the D-54 bow curl), the rear transom with its lift hand-hold, the scuppers and the signs.
  *
- * The hull is straight in plan: two parallel sides a constant `bodyWidthIn` apart. Each side is a straight oak chine at deck level, a 6 mm okoume web captured in grooves,
- * and an oak gunwale whose top follows the sled profile: a straight line (plus an optional gentle sag) from `sideHeightRearIn` above the deck at the rear transom to
- * `sideHeightBowIn` where the side ends against the bow. The deck is ONE flat sheet that ends where the BOW CURL starts: a 4-ply bent lamination of 3 mm okoume, scarfed to the deck,
- * that curls up on `bowCurlRadiusIn` through `bowCurlAngleDeg`, replacing the front transom. Joint records are added in joinery.ts after all parts exist.
+ * Each side is an oak chine at deck level, a 6 mm okoume web captured in grooves, and an oak gunwale whose top follows the sheer. Chine, gunwale and web are plan-curved walls
+ * (`plan-wall.ts`): constant thickness, centerline at the hull's plan curve (`Layout.turnIn`). The deck is ONE flat sheet that ends in a dado in the bow bulkhead. Joint
+ * records are added in joinery.ts after all parts exist.
  */
-import { bowCurl, type Params } from '../params';
 import { HULL_STEP, STEP, box, cylinder, roughOf, span, SIDES, IN3_PER_FT3, woodMassLb, type Ctx } from './build-utils';
 import { handleGeometry } from './handle';
 import { transformPoint } from './bounds';
-import { sideSlopeAt, sideTopAt, webTopAt, type Layout } from './layout';
+import { innerHalfWidth, sideSlopeAt, sideTopAt, webTopAt, type Layout } from './layout';
+import { planWallGeometry } from './plan-wall';
 import { compose } from './mat4';
 import type { Dims, EdgeCondition, Mat4, Part, PartGroup, Vec2, Vec3 } from './types';
 
@@ -19,11 +18,10 @@ import type { Dims, EdgeCondition, Mat4, Part, PartGroup, Vec2, Vec3 } from './t
 const CROWN_SEGMENTS = 16;
 const CORNER_SEGMENTS = 6;
 const SIDE_SEGMENTS = 16;
-const CURL_SEGMENTS = 12;
 const LIFT_SLOT_SEGMENTS = 8;
 /** Assembly order and hydraulic-lock relief shared by the notes of the hull parts (build review M4, D-43; HULL_STEP in build-utils.ts has the whole sequence). */
-const DECK_ASSEMBLY_NOTE = 'Assembly (M4, D-54): epoxy-seal every face and edge first; the deck is glued to the frame (rails + joists + the king beam and stop blocks) as one unit; the hull is built UPSIDE DOWN, so this unit is turned over and lowered into the inverted side assemblies (the deck edge rises into the chine rabbets, the Dominos engage vertically), and the rear transom slides onto its edge last. The bow curl is scarfed to the deck edge before the sides go on.';
-const SIDE_ASSEMBLY_NOTE = 'Assembly (M4, D-54): saw the chine and gunwale straight, plow the web grooves, glue the web into its chine and gunwale on the bench (a side assembly, wipe squeeze-out from the grooves), stand the two assemblies inverted in the jig, and lower the frame + deck unit into them; the rear transom goes on after, sliding in X.';
+const DECK_ASSEMBLY_NOTE = 'Assembly (M4, D-54): epoxy-seal every face and edge first; the deck is glued to the frame (rails + joists + the king beam and stop blocks) as one unit; the hull is built UPSIDE DOWN, so this unit is turned over and lowered into the inverted side assemblies (the deck edge rises into the chine rabbets, the Dominos engage vertically), and the rear transom slides onto its edge last. The bow bulkhead goes on with the rear transom, last.';
+const SIDE_ASSEMBLY_NOTE = 'Assembly (M4, D-54): bend the chine and gunwale plies on the plan form, plow the web grooves, glue the web into its chine and gunwale on the bench (a side assembly, wipe squeeze-out from the grooves), stand the two assemblies inverted in the jig, and lower the frame + deck unit into them; the rear transom goes on after, sliding in X.';
 
 // ── Small geometry helpers ──
 export const frameMat = (ex: Vec3, ey: Vec3, ez: Vec3, o: Vec3): Mat4 => [...ex, 0, ...ey, 0, ...ez, 0, ...o, 1];
@@ -60,13 +58,13 @@ const SCUPPER_STICKOUT_IN = 0.25;
 const SCUPPER_END_INSET_IN = 0.5;
 
 export interface ScupperSite { x: number; zone: 'rear' | 'bow'; deckZ: number; hw: number; tagPos: string }
-/** Where the drains go: the rear corners (in the backer lane when there is a rear box) and the bow corners, just behind the curl. */
+/** Where the drains go: the rear corners (in the backer lane when there is a rear box) and the bow corners, just behind the bow bulkhead. */
 export function scupperSites(ctx: Ctx): ScupperSite[] {
   const { L } = ctx;
   const rearTx = L.xRear + L.transom;
   const r = ctx.p.scupperDiaIn / 2;
   const rear: ScupperSite = { x: rearTx + Math.max(SCUPPER_END_INSET_IN, r + 0.1) * 0.75, zone: 'rear', deckZ: L.deckTop, hw: L.hwC, tagPos: 'rear' };
-  const front: ScupperSite = { x: L.xFlatEnd - 1, zone: 'bow', deckZ: L.deckTop, hw: L.hwC, tagPos: 'bow' };
+  const front: ScupperSite = { x: L.xFlatEnd - 1, zone: 'bow', deckZ: L.deckTop, hw: innerHalfWidth(L, L.xFlatEnd - 1), tagPos: 'bow' };
   return [rear, front];
 }
 
@@ -116,6 +114,8 @@ interface ExtSpec {
   removable?: boolean;
   /** Extra mass (edge banding, ...) added to the computed wood mass; negative for rabbets / dados / grooves. */
   extraLb?: number;
+  /** A plan-curved vertical wall (D-57): `outline` is then in (x, z) with thickness `depth`, centered at y = planYc(x) in the model frame (the transform must be the identity). */
+  planYc?: (x: number) => number;
   notes?: string;
 }
 
@@ -140,7 +140,7 @@ export function extPart(ctx: Ctx, s: ExtSpec): Part {
     group: s.group,
     kind: s.mat === 'oak' ? 'lumber' : s.mat === 'ply' ? 'sheet' : 'printed',
     material: s.mat === 'oak' ? 'white oak' : s.mat === 'ply' ? ctx.plyName : 'ASA',
-    geometry: { type: 'extrusion', outline: s.outline, ...(s.holes ? { holes: s.holes } : {}), depth: s.depth },
+    geometry: s.planYc ? planWallGeometry(s.outline, s.depth, s.planYc) : { type: 'extrusion', outline: s.outline, ...(s.holes ? { holes: s.holes } : {}), depth: s.depth },
     transform: s.transform,
     body: 'chassis',
     massLb: mass,
@@ -150,7 +150,15 @@ export function extPart(ctx: Ctx, s: ExtSpec): Part {
     explode: box(ctx, { id: s.id, name: s.name, group: s.group, mat: 'oak', size: [1, 1, 1], center: s.center, step: s.step }).explode,
   };
   if (s.partNo) out.partNo = s.partNo;
-  if (s.outline.length > 8) {
+  if (s.planYc) {
+    let A = 0, cx = 0, cz = 0;
+    for (let i = 0; i < s.outline.length; i++) {
+      const [x1, z1] = s.outline[i], [x2, z2] = s.outline[(i + 1) % s.outline.length];
+      const cr = x1 * z2 - x2 * z1;
+      A += cr; cx += (x1 + x2) * cr; cz += (z1 + z2) * cr;
+    }
+    if (Math.abs(A) > 1e-9) { const gx = cx / (3 * A); out.cgIn = [gx, s.planYc(gx), cz / (3 * A)]; }
+  } else if (s.outline.length > 8) {
     // A sloped or curved outline: the area centroid (the bounding-box center is off), D-45.
     let A = 0, cx = 0, cy = 0;
     for (let i = 0; i < s.outline.length; i++) {
@@ -222,21 +230,29 @@ export function liftBarStressPsi(s: LiftSlot, loadLbf: number): number {
   return M / S;
 }
 
-/** Centerline of the bow curl in the x-z plane (the sweep path), from the tangent point to the tip. */
-export function curlPath(p: Params, L: Layout): Vec2[] {
-  const c = bowCurl(p);
-  const zc = L.deckTop - c.thick / 2;
-  return Array.from({ length: CURL_SEGMENTS + 1 }, (_, i) => {
-    const a = (c.angleRad * i) / CURL_SEGMENTS;
-    return [c.xFlatEnd + c.radius * Math.sin(a), zc + c.radius * (1 - Math.cos(a))] as Vec2;
-  });
-}
-
-/** Sampled outline (x, z) of a sloped side member between z offsets `dz0` (bottom) and the gunwale top: `fn(x)` gives the bottom z. */
+/** Sampled outline (x, z) of a sloped side member: bottom edge left to right, then the top edge right to left. Sampled finely enough for the sheer curve (D-57). */
 function slopedOutline(L: Layout, x0: number, x1: number, bottom: (x: number) => number, top: (x: number) => number): Vec2[] {
-  const xs = Array.from({ length: SIDE_SEGMENTS + 1 }, (_, i) => x0 + ((x1 - x0) * i) / SIDE_SEGMENTS);
+  const n = Math.max(SIDE_SEGMENTS, Math.ceil((x1 - x0) / 1));
+  const xs = Array.from({ length: n + 1 }, (_, i) => x0 + ((x1 - x0) * i) / n);
   void L;
   return [...xs.map((x): Vec2 => [x, bottom(x)]), ...[...xs].reverse().map((x): Vec2 => [x, top(x)])];
+}
+
+/** The lift hand-hold through the bow bulkhead (D-57), in the shape `liftBarStressPsi` takes: the nose is lifted by the body, not the tongue. */
+export function bowHold(ctx: Pick<Ctx, 'p' | 'L'>): LiftSlot {
+  const { p, L } = ctx;
+  const b = L.bulkhead;
+  const crownTop = b.zCenter;
+  return { zBot: L.hold.zBot, zTop: L.hold.zTop, transomTop: crownTop, barIn: crownTop - L.hold.zTop, thickIn: b.thick, lengthIn: p.liftSlotLengthIn };
+}
+
+/** Top outline of the bulkhead, right to left, and the half width at its rear face. */
+export function bulkheadOutline(ctx: Pick<Ctx, 'p' | 'L'>): { outline: Vec2[]; halfW: number } {
+  const { p, L } = ctx;
+  const b = L.bulkhead;
+  const crown = Math.max(0, b.zCenter - b.zCorner);
+  const topR = transomTopOutline(b.halfW, b.zCorner, crown, Math.min(p.transomCornerRadiusIn, (b.zCorner - b.bot) / 2));
+  return { outline: ccw([[b.halfW, b.bot], ...topR, [-b.halfW, b.bot]]), halfW: b.halfW };
 }
 
 // ── Body ──
@@ -250,89 +266,84 @@ export function buildBody(ctx: Ctx): Part[] {
   const rearTx = L.xRear + L.transom; // inner face of the rear transom
   const ds = p.deckSlopIn;
   const rabbetH = (top: number, bot: number) => top - bot + ds; // deck + clearance (build review MUST-2)
-  const curl = L.curl;
+  const xB = L.bulkhead.x0; // the bow bulkhead's rear face = the end of the flat deck and of the sides
+  const turn = L.turnIn;
 
-  // ── Deck: ONE flat sheet, captured in the chine rabbet all the way along and in a dado in the rear transom; scarfed to the bow curl at its front edge ──
+  // ── Deck: ONE flat sheet, captured in the chine rabbet all the way along, in a dado in the rear transom and in a dado in the bow bulkhead; its plan edge follows the bow turn-in (D-57) ──
   {
-    const x0 = rearTx - dd, x1 = L.xFlatEnd;
-    const hw = L.hwC + dd;
+    const x0 = rearTx - dd, x1 = xB + dd;
+    const nS = Math.max(4, Math.ceil((x1 - x0) / 2));
+    const xs = Array.from({ length: nS + 1 }, (_, i) => x0 + ((x1 - x0) * i) / nS);
+    const hwAt = (x: number) => L.hwC + dd - turn(Math.min(x, xB));
+    const outline: Vec2[] = [...xs.map((x): Vec2 => [x, -hwAt(x)]), ...[...xs].reverse().map((x): Vec2 => [x, hwAt(x)])];
     parts.push(extPart(ctx, {
       id: 'deck', name: 'Deck', group: 'body', mat: 'ply', step: HULL_STEP.deck, grain: 'x', center: [(x0 + x1) / 2, 0, L.deckTop],
-      outline: [[x0, -hw], [x1, -hw], [x1, hw], [x0, hw]], depth: L.ply, transform: compose([0, 0, L.deckBot]),
-      edges: ['captured', 'captured', 'captured', 'captured'],
-      notes: `One sheet, ${(x1 - x0).toFixed(1)}" long (fits a 4 x 8 sheet), flat: ${dd}" into a ${dd}" × ${rabbetH(L.deckTop, L.deckBot).toFixed(3)}" rabbet in the underside of each chine (deck + ${ds}" clearance, thickened epoxy fills it; the rail top is flush with the deck underside) and into a dado in the rear transom. Its front edge is scarfed (8:1, ${(8 * L.ply).toFixed(1)}") to the bow curl at x = ${x1.toFixed(1)}" over the last joist: no exposed ply edge. ${DECK_ASSEMBLY_NOTE}`,
+      outline, depth: L.ply, transform: compose([0, 0, L.deckBot]),
+      edges: 'captured',
+      notes: `One sheet, ${(x1 - x0).toFixed(1)}" long (fits a 4 x 8 sheet), flat: ${dd}" into a ${dd}" × ${rabbetH(L.deckTop, L.deckBot).toFixed(3)}" rabbet in the underside of each chine (deck + ${ds}" clearance, thickened epoxy fills it; the rail top is flush with the deck underside), into a dado in the rear transom and into a dado in the bow bulkhead. Its plan edges follow the bow turn-in (${p.bowTurnInIn}" each side over the last ${p.bowTurnLenIn}", D-57): cut the outline on the CNC or bandsaw to the form. No exposed ply edge. ${DECK_ASSEMBLY_NOTE}`,
     }));
   }
 
-  // ── The bow curl (D-54): a bent lamination that continues the deck and curls up, replacing the front transom ──
+  // ── The bow bulkhead (D-57): a shaped oak plank, the rider's foot brace and the structural front of the hull, with the lift hand-hold ──
   {
-    const path = curlPath(p, L);
-    let arc = 0;
-    for (let i = 1; i < path.length; i++) arc += Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]);
-    const width = 2 * L.hwC;
-    const vol = arc * width * curl.thick;
-    const surf = 2 * arc * width + 2 * (arc + width) * curl.thick;
-    // Edge banding: the front (top) edge, and the two side edges beyond the end of the sides, where they are exposed (the rest is glued against the side members).
-    const beyond = Math.max(0, arc * (1 - (L.xSideEnd - L.xFlatEnd) / Math.max(1e-6, curl.run)));
-    const bandLen = width + 2 * beyond;
-    const mass = woodMassLb(p, vol, surf, ctx.d.plyDensityPcf) + edgeBandLb(ctx, bandLen, curl.thick);
-    const cx = path.reduce((a, q) => a + q[0], 0) / path.length;
-    const cz = path.reduce((a, q) => a + q[1], 0) / path.length;
-    const stock: Dims = { t: curl.thick, w: width, l: arc };
-    const ply = curl.thick / p.bowCurlPlies;
-    parts.push({
-      id: 'bow-curl', partNo: 'bow-curl', name: 'Bow curl (bent lamination)', group: 'body', kind: 'bentlam', material: ctx.plyName,
-      geometry: { type: 'sweep', path, width, thickness: curl.thick, plies: p.bowCurlPlies },
-      transform: compose([0, 0, 0]), body: 'chassis', massLb: mass, fab: 'bentlam', step: HULL_STEP.sides, stock, edges: 'edged', grain: 'x',
-      cgIn: [cx, 0, cz], explode: [1, 0, 0.6],
-      notes: `${p.bowCurlPlies} plies of ${ply.toFixed(3)}" okoume bending ply (${(curl.thick).toFixed(3)}" thick, the deck's thickness) laid up with epoxy on a one-piece form: it runs flat from the deck's front edge at x = ${L.xFlatEnd.toFixed(1)}" (scarfed 8:1 to the deck over the last joist) and curls up on a ${curl.radius}" centerline radius through ${p.bowCurlAngleDeg}° to the tip at x = ${L.xFront.toFixed(1)}", ${curl.rise.toFixed(1)}" above the deck. Inside radius ${curl.rIn.toFixed(1)}" against a cold-bend limit of ${(p.hullLamMinRadiusFactor * ply).toFixed(1)}" (${p.hullLamMinRadiusFactor} x one ply). ${width.toFixed(1)}" wide (the inside width of the hull): the side members end against it where its inside face has risen to the bow side height (x = ${L.xSideEnd.toFixed(1)}"). The front edge and the exposed side edges are banded in ${p.edgeBandIn}" oak; the bridle does NOT tie to it: the steel tongue plate reaches under the bow to the tie hole (D-56). Structural: it carries the bow and the end joist under its scarf.`,
-      sourcing: { vendor: `Shop-laminated: ${p.bowCurlPlies} sheets of 3 mm okoume bending ply (Hydrotek / Aquatek 3 mm or similar), epoxied on a bending form`, costUsd: 30 },
-    } as Part);
+    const b = L.bulkhead;
+    const { outline, halfW } = bulkheadOutline(ctx);
+    const hs = bowHold(ctx);
+    const dadoLb = oakLb(ctx, 2 * halfW * (L.ply + ds) * dd);
+    parts.push(extPart(ctx, {
+      id: 'bow-bulkhead', name: 'Bow bulkhead (foot brace, lift hand-hold)', group: 'body', mat: 'oak', step: HULL_STEP.transom, grain: 'y', center: [(b.x0 + b.x1) / 2, 0, (b.bot + b.zCenter) / 2],
+      outline, holes: [slotHole(0, L.hold.zMid, hs.lengthIn, p.liftSlotHeightIn)], depth: b.thick,
+      transform: frameMat([0, 1, 0], [0, 0, 1], [1, 0, 0], [b.x0, 0, 0]), extraLb: -dadoLb,
+      notes: `Shaped oak bulkhead (D-57; it replaces the D-54 bow curl and the separate foot-stop bar): ${b.thick}" thick (one piece of 8/4 oak planed to 1-3/4", or two 7/8" boards glued face to face; grain across the width), ${(2 * halfW).toFixed(1)}" wide at the narrowed bow, ${(b.zCorner - b.bot).toFixed(1)}" tall at the corners (the side height at the bow) rising in a curve to ${(b.zCenter - L.deckTop).toFixed(1)}" above the deck at the center, with ${p.transomCornerRadiusIn}" rounded corners (CNC or bandsaw and rasp). Its REAR face is the rider's foot brace (x = ${b.x0.toFixed(1)}", the rider's heels press ${p.seatXIn + p.riderLegReachIn >= b.x0 - 1e-6 ? 'it directly' : 'the foot block, which drops into the slots ahead of it for a shorter rider'}). The deck edge enters a ${dd}" × ${(L.ply + ds).toFixed(3)}" dado in the rear face; the rails, chine and gunwale end on it with Dominos and epoxy, so the foot load (pushing it forward) goes into those joints and the deck dado (foot-stop row). The lift hand-hold ${hs.lengthIn}" × ${p.liftSlotHeightIn}" is routed through the center, ${p.liftSlotClearIn}" above the deck and ${hs.barIn.toFixed(2)}" of oak above it (lift row): the nose is lifted by the body, not by the tongue. 3/8" roundovers, hand-hold edges eased.`,
+    }));
   }
 
-  // ── Sides (D-54): straight in plan; the gunwale and web follow the sled profile ──
+  // ── Sides (D-54, D-57): the chine and gunwale are cold-bent flat in plan (2 plies) on one form, the gunwale then bandsawn to the sheer; the web is a single bent okoume sheet ──
   const x0s = L.xSideStart, x1s = L.xSideEnd;
   const zChine0 = L.chineBot;
   const sideLen = x1s - x0s;
+  const turned = p.bowTurnInIn > 1e-9;
+  const bendNote = turned
+    ? `Bent in plan: ${p.bowTurnInIn}" turn-in over the last ${p.bowTurnLenIn}" (a smooth S, straight at both ends; the tightest radius is ${((p.bowTurnLenIn * p.bowTurnLenIn) / (6 * p.bowTurnInIn)).toFixed(0)}"). `
+    : '';
   for (const { s, tag } of SIDES) {
-    const yc = s * (L.hwC + L.side / 2); // member centerline (the web plane)
-    const frameAt = (thick: number): Mat4 => frameMat([1, 0, 0], [0, 0, 1], [0, -1, 0], [0, yc + thick / 2, 0]);
+    const ycOf = (x: number) => s * (L.hwC + L.side / 2 - turn(x)); // member centerline (the web plane)
     const id = `side-${tag}`;
     const nm = s > 0 ? 'Left' : 'Right';
-    // Chine: a straight oak bar at deck level.
+    // Chine: a constant-section oak bar at deck level, laminated (2 plies) flat on the plan form.
     {
       const grooveLb = oakLb(ctx, sideLen * (pl + slop) * g);
       const rabbetLb = oakLb(ctx, sideLen * dd * rabbetH(L.deckTop, L.deckBot));
-      const chine = box(ctx, {
-        id: `${id}-chine`, partNo: 'side-chine', name: `${nm} chine`, group: 'body', mat: 'oak', step: HULL_STEP.sides, grain: 'x',
-        size: [sideLen, L.side, L.chineH], center: [(x0s + x1s) / 2, yc, zChine0 + L.chineH / 2],
-      });
-      chine.massLb -= grooveLb + rabbetLb;
-      chine.notes = `Straight oak bar ${sideLen.toFixed(1)}" long (D-54: no curve), bottom at the deck underside level (${L.chineBot.toFixed(2)}", one deck level). Top groove ${(pl + slop).toFixed(3)}" × ${g}" holds the web; an underside rabbet ${dd}" × ${rabbetH(L.deckTop, L.deckBot).toFixed(3)}" (deck + ${ds}" clearance) holds the deck edge; it rests on the rail and is Domino-tied to it (vertical Dominos, D-43). Its forward end, beyond the end of the flat deck, lies alongside the rising bow curl. ${SIDE_ASSEMBLY_NOTE}`;
-      parts.push(chine);
+      parts.push(extPart(ctx, {
+        id: `${id}-chine`, partNo: 'side-chine', name: `${nm} chine`, group: 'body', mat: 'oak', step: HULL_STEP.sides, grain: 'x', fab: 'bentlam',
+        center: [(x0s + x1s) / 2, ycOf((x0s + x1s) / 2), zChine0 + L.chineH / 2],
+        outline: [[x0s, zChine0], [x1s, zChine0], [x1s, zChine0 + L.chineH], [x0s, zChine0 + L.chineH]], depth: L.side, transform: compose([0, 0, 0]), planYc: ycOf, extraLb: -(grooveLb + rabbetLb),
+        notes: `Oak bar ${sideLen.toFixed(1)}" long, ${L.side}" × ${L.chineH}", bottom at the deck underside level (${L.chineBot.toFixed(2)}", one deck level). ${bendNote}Laminated from 2 plies of ${(L.side / 2).toFixed(3)}" white oak (the plan bend is across the thin dimension: cold-bends on a form, epoxied, no steam) and left long. Top groove ${(pl + slop).toFixed(3)}" × ${g}" holds the web; an underside rabbet ${dd}" × ${rabbetH(L.deckTop, L.deckBot).toFixed(3)}" (deck + ${ds}" clearance) holds the deck edge; it rests on the rail (which is bent the same way) and is Domino-tied to it (vertical Dominos, D-43). Its forward end meets the bow bulkhead's rear face. ${SIDE_ASSEMBLY_NOTE}`,
+      }));
     }
-    // Gunwale: sawn from a wide board to the sled line (a straight sloped bar, optionally with a gentle sag).
+    // Gunwale: the sheer (concave sweep up to the rear, D-57). BENT-LAM: two plies bent flat on the plan form from a board as wide as the sheer needs, then BANDSAWN to the sheer line.
     {
       const top = (x: number) => sideTopAt(L, x);
       const outline = slopedOutline(L, x0s, x1s, (x) => top(x) - L.railBand, top);
       const grooveLb = oakLb(ctx, sideLen * (pl + slop) * g);
       const slope = (sideSlopeAt(L, x0s) * 180) / Math.PI;
+      const blank = Math.abs(top(x0s) - top(x1s)) + L.railBand + 0.5;
       parts.push(extPart(ctx, {
         id: `${id}-gunwale`, partNo: 'side-gunwale', name: `${nm} gunwale`, group: 'body', mat: 'oak', step: HULL_STEP.sides, grain: 'x', fab: 'bandsaw',
-        center: [(x0s + x1s) / 2, yc, (top(x0s) + top(x1s)) / 2], outline, depth: L.side, transform: frameAt(L.side), extraLb: -grooveLb,
-        notes: `The sled-profile gunwale (D-54): a ${L.railBand}" band whose top is a ${p.sideProfileSagIn === 0 ? 'straight line' : `line with a ${p.sideProfileSagIn}" mid-length sag`} from ${p.sideHeightRearIn}" above the deck at the rear transom to ${L.sideH.toFixed(2)}" at x = ${x1s.toFixed(1)}", where it ends against the bow curl (${slope.toFixed(1)}° at the rear). Sawn from a ${(Math.abs(top(x0s) - top(x1s)) + L.railBand + 0.5).toFixed(1)}" wide board with the grain running the length (it follows the slope: sawn, not laminated; the line is gentle). Underside groove ${(pl + slop).toFixed(3)}" × ${g}" holds the web (D-35, D-43). ${SIDE_ASSEMBLY_NOTE}`,
+        center: [(x0s + x1s) / 2, ycOf((x0s + x1s) / 2), (top(x0s) + top(x1s)) / 2], outline, depth: L.side, transform: compose([0, 0, 0]), planYc: ycOf, extraLb: -grooveLb,
+        notes: `The sheer gunwale (D-57): a ${L.railBand}" band whose top is a ${p.sheerCurveIn === 0 ? 'straight line' : `concave curve (a ${p.sheerCurveIn}" sag below the straight line at mid-length)`} from ${p.sideHeightRearIn}" above the deck at the rear transom to ${L.sideH.toFixed(2)}" at x = ${x1s.toFixed(1)}", where it ends at the bow bulkhead (${slope.toFixed(1)}° at the rear). BENT-LAMINATED AND BANDSAWN: 2 plies of ${(L.side / 2).toFixed(3)}" white oak, ${blank.toFixed(1)}" wide (the full sheer drop plus the band), bent flat on the plan form together with the chine${turned ? ` (${bendNote.trim()})` : ''} and epoxied, then the sheer line is bandsawn and planed (the grain follows the sheer; the top edge is relief-cut where it meets the transom crown). Underside groove ${(pl + slop).toFixed(3)}" × ${g}" holds the web (D-35, D-43), plowed before the sheer is sawn. ${SIDE_ASSEMBLY_NOTE}`,
       }));
     }
-    // Web: the okoume side panel, captured in the chine and gunwale grooves and the rear transom's stopped dado; its top follows the sled line.
+    // Web: the okoume side panel, captured in the chine and gunwale grooves and the rear transom's stopped dado; its top follows the sheer; bent in plan with the turn-in.
     {
       const z0 = L.web.z0 - g;
       const xw0 = rearTx - dd;
       const top = (x: number) => webTopAt(L, x) + g;
       const outline = slopedOutline(L, xw0, x1s, () => z0, top);
       parts.push(extPart(ctx, {
-        id: `${id}-web`, partNo: 'side-web', name: `${nm} side panel`, group: 'body', mat: 'ply', step: HULL_STEP.sides, grain: 'x', center: [(xw0 + x1s) / 2, yc, (L.web.z0 + webTopAt(L, rearTx)) / 2],
-        outline, depth: pl, transform: frameAt(pl), edges: 'captured',
-        notes: `Flat 6 mm okoume panel (D-54: no curve, so one sheet and no lamination), a trapezoid whose top edge follows the sled line; captured in the chine and gunwale grooves (${g}" deep) and in a stopped dado in the rear transom; its front end butts the bow curl at x = ${x1s.toFixed(1)}". ${SIDE_ASSEMBLY_NOTE} The closed dado is vented: a ${p.ventHoleIn}" relief hole through the transom at its end lets air and epoxy escape as the transom slides on (hydraulic lock).`,
+        id: `${id}-web`, partNo: 'side-web', name: `${nm} side panel`, group: 'body', mat: 'ply', step: HULL_STEP.sides, grain: 'x', center: [(xw0 + x1s) / 2, ycOf((xw0 + x1s) / 2), (L.web.z0 + webTopAt(L, rearTx)) / 2],
+        outline, depth: pl, transform: compose([0, 0, 0]), planYc: ycOf, edges: 'captured',
+        notes: `6 mm okoume panel, one sheet (it bends easily across its thickness: ${turned ? `${p.bowTurnInIn}" of plan turn-in over the last ${p.bowTurnLenIn}" is a flat bend of the sheet, no lamination` : 'it stays flat'}), cut to the sheer on the CNC or bandsaw before bending (the top edge follows the sheer, the pattern is the flat development); captured in the chine and gunwale grooves (${g}" deep) and in a stopped dado in the rear transom; its front end butts the bow bulkhead's rear face at x = ${x1s.toFixed(1)}". ${SIDE_ASSEMBLY_NOTE} The closed dado is vented: a ${p.ventHoleIn}" relief hole through the transom at its end lets air and epoxy escape as the transom slides on (hydraulic lock).`,
       }));
     }
   }
@@ -354,7 +365,7 @@ export function buildBody(ctx: Ctx): Part[] {
       id: 'transom-rear', name: 'Rear transom', group: 'body', mat: 'oak', step: HULL_STEP.transom, grain: 'x', center: [L.xRear, 0, (zb + zt) / 2],
       outline, holes: [slotHole(0, (rs.zBot + rs.zTop) / 2, rs.lengthIn, p.liftSlotHeightIn), ...ventHoles], depth: tT,
       transform: frameMat([0, 1, 0], [0, 0, 1], [1, 0, 0], [L.xRear, 0, 0]), extraLb: -dadoLb,
-      notes: `${tT}" oak, glued up from two boards (no board is ${(w0 * 2).toFixed(0)}" wide; keep the glue line clear of the slot), as tall as the rear side of the sled profile (${p.sideHeightRearIn}" above the deck, D-54). Lift hand-hold ${rs.lengthIn}" × ${p.liftSlotHeightIn}" (gloved hand), ${rs.barIn}" of oak above it; routed 3/8" roundovers both faces. The top edge is a ${p.transomCrownIn}" crown (arc) with ${p.transomCornerRadiusIn}" rounded corners (D-44). Deck dado ${dd}" deep × ${(L.ply + ds).toFixed(3)}" (deck + ${ds}" clearance) on the front face; stopped dados for the side panels (D-35, D-37); the closed dado ends are vented with ${p.ventHoleIn}" holes through the transom (4 holes: bung or epoxy-fill them after the glue-up). `
+      notes: `${tT}" oak, glued up from two boards (no board is ${(w0 * 2).toFixed(0)}" wide; keep the glue line clear of the slot), as tall as the rear side of the sheer (${p.sideHeightRearIn}" above the deck, D-54, D-57). Lift hand-hold ${rs.lengthIn}" × ${p.liftSlotHeightIn}" (gloved hand), ${rs.barIn}" of oak above it; routed 3/8" roundovers both faces. The top edge is a ${p.transomCrownIn}" crown (arc) with ${p.transomCornerRadiusIn}" rounded corners (D-44). Deck dado ${dd}" deep × ${(L.ply + ds).toFixed(3)}" (deck + ${ds}" clearance) on the front face; stopped dados for the side panels (D-35, D-37); the closed dado ends are vented with ${p.ventHoleIn}" holes through the transom (4 holes: bung or epoxy-fill them after the glue-up). `
         + `THE TRANSOM GOES ON LAST (M4): it slides in X onto the deck edge, both web ends, the chine and gunwale tenons and the rail tenons in one glue-up (about 14 joints: use 120-minute slow epoxy, rehearse twice); the corner backers and the handle-socket holes are done on the bench first.`,
     }));
     // Backers behind the handle sockets (build review S13, D-43): the bolts pull on them from the outside.
@@ -383,27 +394,39 @@ export function buildBody(ctx: Ctx): Part[] {
     }
   }
 
-  // ── Signs: PROVISIONAL (Eric, D-54: design the shape first, then decide where a sign fits). Off by default; nothing in the body is sized to them. ──
+  // ── Signs (D-57): the Troop 455 sign on the outside of the tall rear part of each side, following the sheer ──
   if (p.showSideSigns) {
-    const xm = (x0s + x1s) / 2;
-    const signLen = Math.min(p.signLengthIn, 0.5 * sideLen);
-    const hAvail = webTopAt(L, xm) - L.web.z0 - 0.25;
-    const signH = Math.max(1, Math.min(p.signHeightIn, hAvail));
-    const slope = sideSlopeAt(L, xm);
-    const zc = (L.web.z0 + webTopAt(L, xm)) / 2;
+    const sg = signPlacement(ctx);
     for (const { s, tag } of SIDES) {
-      const sg = box(ctx, {
-        id: `sign-${tag}`, partNo: 'sign', name: `Side sign ${tag} (provisional)`, group: 'removable', mat: 'ply', removable: true, edges: 'edged', step: STEP.finish,
-        size: [signLen, pl, signH], center: [xm, s * (L.hwC + L.side + pl / 2), zc], rot: { y: slope },
+      const sign = box(ctx, {
+        id: `sign-${tag}`, partNo: 'sign', name: `Side sign ${tag}`, group: 'removable', mat: 'ply', removable: true, edges: 'edged', step: STEP.finish,
+        size: [sg.length, pl, sg.height], center: [sg.xc, s * (L.hwC + L.side + pl / 2), sg.zc], rot: { y: sg.slope },
       });
-      sg.massLb += edgeBandLb(ctx, 2 * (signLen + signH), pl);
-      sg.notes = 'PROVISIONAL placement (D-54, Eric: shape first). 6 mm ply blank, all four edges banded with oak, hung on thumb-knob screws into tee-nuts in the side; the real sign position and shape are decided after the new shape exists.';
-      parts.push(sg);
+      sign.massLb += edgeBandLb(ctx, 2 * (sg.length + sg.height), pl);
+      sign.notes = `D-57: the sign is back, on the outside of the tall rear part of the side (${sg.length.toFixed(1)}" × ${sg.height.toFixed(1)}", turned ${((sg.slope * 180) / Math.PI).toFixed(1)}° to follow the sheer, its top edge ${sg.topMargin}" under the gunwale line). 6 mm ply blank, all four edges banded with oak, drawn as a rounded-oval plank with the Troop 455 artwork (signTexture); hung on thumb-knob screws into tee-nuts in the side so it comes off for transport. It stays clear of the rear wheel and of the brake hinge mounts.`;
+      parts.push(sign);
     }
   }
 
-  // Grab handles: the real ones are `seat-grip-*` (seat.ts, D-40).
+  // Grab handles: the real ones are `seat-grip-*` (seat.ts, D-57).
   return parts;
 }
+
+/** Where the side sign goes (D-57): behind x = `signXMax`, starting just ahead of the rear transom, turned to the sheer's slope at its center, top edge `topMargin` under the gunwale line. */
+export function signPlacement(ctx: Pick<Ctx, 'p' | 'L'>) {
+  const { p, L } = ctx;
+  const x0 = L.xSideStart + 1.3; // the turned corner of the board stays ahead of the rear end of the side
+  const length = Math.max(4, Math.min(p.signLengthIn, SIGN_X_MAX_IN - x0));
+  const xc = x0 + length / 2;
+  const slope = sideSlopeAt(L, xc);
+  const topMargin = 0.75;
+  const cs = Math.cos(slope);
+  const hAvail = (sideTopAt(L, xc) - topMargin - (L.deckTop + 0.5)) * cs;
+  const height = Math.max(2, Math.min(p.signHeightIn, hAvail));
+  const zc = sideTopAt(L, xc) - topMargin - height / (2 * cs);
+  return { length, height, xc, zc, slope, topMargin };
+}
+/** The sign never reaches past this x (in): the rear wheel's hub, and the brake mount ahead of the tire, are beyond it (D-57). */
+export const SIGN_X_MAX_IN = 6;
 
 export { slotHole as _slotHole };

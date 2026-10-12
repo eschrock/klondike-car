@@ -37,15 +37,14 @@ describe('Simple view controls map to params', () => {
       expect(d.step, k).toBeGreaterThan(0);
     }
     // The controls get and set the same key.
-    expect(new Set(setKeys.filter((k) => k !== 'frontTrackIn'))).toEqual(new Set(defs));
-    expect(setKeys).toContain('frontTrackIn');
+    expect(new Set(setKeys)).toEqual(new Set(defs));
   });
 
-  it('the width control sets both tracks (the front track equals the rear track again, D-56) and resets both', () => {
+  it('the width control sets the rear track, and the front track to the same width but never below its default, the steering-clearance minimum (D-58), and resets both', () => {
     const width = controlsBlock.slice(controlsBlock.indexOf("id: 'width'"), controlsBlock.indexOf("id: 'wheel'"));
-    expect(width).toMatch(/set: \(store, v\) => store\.replace\(\{ \.\.\.store\.get\(\), frontTrackIn: v, rearTrackIn: v \}\)/);
+    expect(width).toMatch(/set: \(store, v\) => store\.replace\(\{ \.\.\.store\.get\(\), frontTrackIn: Math\.max\(v, PARAM_DEFS\.frontTrackIn\.default\), rearTrackIn: v \}\)/);
     expect(width).toMatch(/frontTrackIn: PARAM_DEFS\.frontTrackIn\.default, rearTrackIn: PARAM_DEFS\.rearTrackIn\.default/);
-    expect(PARAM_DEFS.frontTrackIn.default).toBe(PARAM_DEFS.rearTrackIn.default);
+    expect(PARAM_DEFS.frontTrackIn.default).toBeGreaterThanOrEqual(PARAM_DEFS.rearTrackIn.default);
   });
 
   it('the defaults satisfy the validator with no errors', () => {

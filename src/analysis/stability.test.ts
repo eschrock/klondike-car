@@ -21,7 +21,7 @@ import { cornerWeightLb } from './bump';
 
 const DEG = 180 / Math.PI;
 const RAD = Math.PI / 180;
-const defaults = defaultParams();
+const defaults = { ...defaultParams(), frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5 } // the 3c-3 hand-calc fixture: the 35.5 in tracks, 3/4 in hangers and 1 1/2 in clamp plates (D-58 narrowed the tracks and thickened them; the new defaults are tested in track-d58.test.ts)
 const mkCtx = (q: Partial<Params> = {}): Ctx => {
   const p = resolveParams({ ...defaults, ...q } as Params);
   return makeContext(p, buildModel(p, { rider: 'goal', cargo: true }), buildModel(p, { rider: 'none', cargo: false, seat: 'stowed' }));
@@ -83,15 +83,15 @@ describe('tip-straight (worst steer) and tip-lock (D-56)', () => {
     expect(byId('tip-straight').load).toBe('operating');
     expect(byId('tip-lock').load).toBe('operating');
     for (const id of ['tip-straight', 'tip-lock']) expect(byId(id).status).toBe('pass');
-    expect(byId('tip-straight').cases!.operating!.value).toBeCloseTo(50.3, 0);
-    expect(byId('tip-straight').cases!.goal!.value).toBeCloseTo(48.9, 0);
+    expect(byId('tip-straight').cases!.operating!.value).toBeCloseTo(50.85, 0);
+    expect(byId('tip-straight').cases!.goal!.value).toBeCloseTo(49.4, 0);
   });
-  it('the cargo case is the worse of its two placements: the payload piled at the nose end of the full-width bed (x about 31 in, 16.2 in up, 1.95 in left) tips at 42.6 degrees: marginal against the 40 degree limit, but it never moves the rider status', () => {
+  it('the cargo case is the worse of its two placements: the payload piled at the nose end of the full-width bed (x about 31 in, 16.2 in up, 1.95 in left) tips at 44.7 degrees with the 200 lb payload (D-58) at the 35.5 in fixture tracks: it passes the 40 degree limit, and it never moves the rider status', () => {
     const [aft, fore] = ctx.loads.cargoCases;
     expect(worstTip(fore.cg)).toBeLessThan(worstTip(aft.cg));
     expect(byId('tip-straight').cases!.cargo!.value).toBeCloseTo(Math.min(worstTip(aft.cg), worstTip(fore.cg)), 6);
-    expect(byId('tip-straight').cases!.cargo!.value).toBeCloseTo(42.6, 0);
-    expect(byId('tip-straight').statusCargo).toBe('marginal');
+    expect(byId('tip-straight').cases!.cargo!.value).toBeCloseTo(44.7, 0);
+    expect(byId('tip-straight').statusCargo).toBe('pass');
     expect(byId('tip-straight').how).toMatch(/fore, at the nose end/); // the cargo line names the governing placement
     expect(byId('tip-straight').statusGoal).toBe('pass');
   });
@@ -213,13 +213,15 @@ describe('pitch rows (L1, H3)', () => {
     expect(liftPull(100, 20, 10, 0, 56.4, 17.25, 0)).toBe(Infinity); // a horizontal pull above the ground has no lift moment arm
     expect(tipBackAngle(300, 17.5, 15, 0, 56, 17, 0.1).deg).toBeCloseTo(Math.atan2(17.5, 15) * DEG, 9);
   });
-  it('the pull point is the tongue tie hole (x 59, z 5.91, D-56): the rope rises 14.1 deg to the hands at 30 in over a 96 in run; x_p sin(a) - z_p cos(a) = 8.63 > 0, so the pull can lift the front', () => {
+  it('the pull point is the shackle in the oak tongue (D-58): x = the sleeve, z = mid depth of the tongue (4.2 in); the rope rises 15 deg to the hands at 30 in over a 96 in run, so the pull can lift the front', () => {
     const pt = pullPoint(ctx);
-    expect(pt.x).toBeCloseTo(59, 9);
-    expect(pt.z).toBeCloseTo(5.9125, 4);
+    expect(pt.x).toBeCloseTo(ctx.L.tongue.holeX, 9);
+    expect(pt.x).toBeCloseTo(54.25, 9);
+    expect(pt.z).toBeCloseTo(ctx.L.tongue.tieZ, 9);
+    expect(pt.z).toBeCloseTo(4.1875, 3);
     const alpha = Math.atan2(30 - pt.z, 96);
-    expect(alpha * DEG).toBeCloseTo(14.09, 1);
-    expect(pt.x * Math.sin(alpha) - pt.z * Math.cos(alpha)).toBeCloseTo(8.63, 1);
+    expect(alpha * DEG).toBeCloseTo(15.0, 1);
+    expect(pt.x * Math.sin(alpha) - pt.z * Math.cos(alpha)).toBeGreaterThan(8); // the lift moment arm
   });
   it('pitch-rear by hand: T_lift = W (x cos th - h sin th) / 8.63 for 15 deg, as a multiple of the 150 lbf peak: 3.0x for the operating rider, limit 1.25x', () => {
     const pt = pullPoint(ctx);

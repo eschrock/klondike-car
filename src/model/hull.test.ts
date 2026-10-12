@@ -1,7 +1,7 @@
 /**
- * The body (D-54): a straight-sided 24 in sled hull. Captured ply, joinery records, the rear lift hand-hold, scuppers, the bow curl, the sled profile and the (provisional)
- * signs. The old tapering curved hull, finger guards, front transom and sheer are gone; the lift check and foot-stop numbers belong to src/analysis/hull.test.ts.
- * Expected numbers are re-derived by hand from the params (deck 8, ply 0.472, side 0.625, rear 16 in, bow 4 in, rear face at x = -9.25).
+ * The body (D-54, D-57): a 24 in sled hull with the sheer and the bow turn-in. Captured ply, joinery records, the rear lift hand-hold, scuppers, the bow bulkhead, the sheer and the
+ * signs. The old tapering curved hull, finger guards, front transom, sheer and bow curl are gone; the lift check and foot-stop numbers belong to src/analysis/hull.test.ts.
+ * Expected numbers are re-derived by hand from the params (deck 8, ply 0.472, side 0.625, rear 14 in, bow 4 in, rear face at x = -9.25).
  */
 import { describe, expect, it } from 'vitest';
 import { defaultParams, derived, validateParams, type Params } from '../params';
@@ -28,16 +28,17 @@ const PATCHES: Record<string, Partial<Params>> = {
   deck9mm: { deckPlyIn: 0.354, panelPlyIn: 0.354 },
   storageForward: { storageLocation: 1 },
   storageUnderSeat: { storageLocation: 2 },
-  sag1: { sideProfileSagIn: 1 },
-  bulge1: { sideProfileSagIn: -1 },
+  sheer0: { sheerCurveIn: 0 },
+  sheer4: { sheerCurveIn: 4 },
   bowSide5: { sideHeightBowIn: 5 },
   rearSide12: { sideHeightRearIn: 12 },
   wide26: { bodyWidthIn: 26 },
   narrow23: { bodyWidthIn: 23 },
-  curl9: { bowCurlRadiusIn: 9 },
-  curl60: { bowCurlAngleDeg: 60, sideHeightBowIn: 3 },
+  bulkhead3: { bowBulkheadThickIn: 3, frontOverhangIn: 8 },
+  turn0: { bowTurnInIn: 0 },
+  turn25: { bowTurnInIn: 2.5, bowTurnLenIn: 24 },
   bigLiftSlot: { liftSlotLengthIn: 5, liftSlotHeightIn: 1.5 },
-  signsOn: { showSideSigns: 1 },
+  signsOff: { showSideSigns: 0 },
   wideTire: { tireWidthIn: 4.5 },
 };
 const VARIANTS = Object.entries(PATCHES)
@@ -48,15 +49,15 @@ const flat = (e: Part['edges']): EdgeCondition[] => (e === undefined ? [] : Arra
 /** The straight sled line by hand (D-54): height above the deck of the gunwale top at x, from the rear transom's inner face to the end of the sides. */
 const sledLine = (p: Params, x: number, xFrom: number, xTo: number) => {
   const u = Math.max(0, Math.min(1, (x - xFrom) / (xTo - xFrom)));
-  return p.sideHeightRearIn + (p.sideHeightBowIn - p.sideHeightRearIn) * u - 4 * p.sideProfileSagIn * u * (1 - u);
+  return p.sideHeightRearIn + (p.sideHeightBowIn - p.sideHeightRearIn) * u - 4 * p.sheerCurveIn * u * (1 - u);
 };
 
 describe('what D-54 removed', () => {
   it('has no front transom, finger guards, sheer, nose members, cabin/nose split or steering parts; the part ids are the plain ones', () => {
     const ids = buildModel(defaults).map((x) => x.id);
-    for (const gone of [/^transom-front$/, /^guard-/, /nose/, /cabin/, /^stringer/, /^beam-front$/, /^tongue/, /^tie-rod$/, /^sign-/])
+    for (const gone of [/^transom-front$/, /^guard-/, /nose/, /cabin/, /^stringer/, /^beam-front$/, /^tongue/, /^tie-rod$/, /^bow-curl$/, /^foot-stop/, /^flag-(mount|socket)$/])
       expect(ids.filter((i) => gone.test(i)), String(gone)).toEqual([]);
-    for (const id of ['deck', 'bow-curl', 'side-L-chine', 'side-L-gunwale', 'side-L-web', 'side-R-chine', 'side-R-gunwale', 'side-R-web', 'rail-L', 'rail-R', 'axle-hanger-L', 'axle-hanger-R', 'joist-1', 'transom-rear'])
+    for (const id of ['deck', 'bow-bulkhead', 'side-L-chine', 'side-L-gunwale', 'side-L-web', 'side-R-chine', 'side-R-gunwale', 'side-R-web', 'rail-L', 'rail-R', 'axle-hanger-L', 'axle-hanger-R', 'joist-1', 'transom-rear'])
       expect(ids, id).toContain(id);
   });
 });
@@ -86,24 +87,22 @@ describe('no exposed plywood edges (acceptance, BRIEF §5.2)', () => {
     const bad = parts.filter((x) => flat(x.edges).includes('exposed')).map((x) => x.id);
     expect(bad).toEqual(['deck']);
   });
-  it('captured vs edged is what the joinery says: captured edges have a groove, rabbet, dado or scarf on the neighbor; the bow curl is edged', () => {
+  it('captured vs edged is what the joinery says: captured edges have a groove, rabbet or dado on the neighbor; the bulkhead takes the deck edge and the web end in dados', () => {
     const parts = buildModel(defaults);
     const web = get(parts, 'side-L-web');
-    expect(web.edges).toBe('captured'); // the flat panel: the rear end in the transom dado, top and bottom in the grooves, the front end bonded to the curl
-    expect(web.joints!.filter((j) => j.type === 'dado').map((j) => j.to).sort()).toEqual(['side-L-chine', 'side-L-gunwale', 'transom-rear']);
-    expect(web.joints!.filter((j) => j.to === 'bow-curl').map((j) => j.type)).toEqual(['glue']);
+    expect(web.edges).toBe('captured'); // the flat panel: the rear end in the transom dado, top and bottom in the grooves, the front end in the bulkhead's dado
+    expect(web.joints!.filter((j) => j.type === 'dado').map((j) => j.to).sort()).toEqual(['bow-bulkhead', 'side-L-chine', 'side-L-gunwale', 'transom-rear']);
     const deck = get(parts, 'deck');
-    // D-52/D-54: one flat deck, in the chine rabbets all the way along, in a dado in the rear transom, and scarfed to the bow curl at its front edge.
+    // D-52/D-57: one deck, in the chine rabbets all the way along, in a dado in the rear transom and in a dado in the bow bulkhead.
     expect(deck.joints!.filter((j) => j.type === 'rabbet').map((j) => j.to).sort()).toEqual(['side-L-chine', 'side-R-chine']);
     expect(deck.joints!.some((j) => j.type === 'dado' && j.to === 'transom-rear')).toBe(true);
-    expect(deck.joints!.some((j) => j.type === 'scarf' && j.to === 'bow-curl')).toBe(true);
+    expect(deck.joints!.some((j) => j.type === 'dado' && j.to === 'bow-bulkhead')).toBe(true);
+    expect(deck.joints!.some((j) => j.type === 'scarf')).toBe(false);
     // The deck is carried by the rails and every joist (glue); the king beam (D-56) replaces the sixth joist and the end joist keeps its index (joist-7).
     expect(deck.joints!.filter((j) => j.type === 'glue').map((j) => j.to).sort()).toEqual(['joist-1', 'joist-2', 'joist-3', 'joist-4', 'joist-5', 'joist-7', 'king-beam', 'rail-L', 'rail-R']);
-    // The curl has no ply edge showing: banded oak on the top edge and the exposed side edges (its mass includes the banding, below).
-    expect(get(parts, 'bow-curl').edges).toBe('edged');
-    // FINDING: the deck-to-curl scarf is recorded twice on the bow curl (once in body.ts, once by applyJoinery's deck/bow-curl pair); the deck has it once.
-    expect(get(parts, 'bow-curl').joints!.filter((j) => j.type === 'scarf' && j.to === 'deck').length).toBeGreaterThanOrEqual(1);
-    expect(deck.joints!.filter((j) => j.type === 'scarf').length).toBe(1);
+    // The bulkhead is oak: no ply edge to show; its rail, chine and gunwale ends are Domino or loose-tenon joints.
+    expect(get(parts, 'bow-bulkhead').material).toBe('white oak');
+    expect(get(parts, 'bow-bulkhead').joints!.filter((j) => /^(rail|side)-/.test(j.to) && j.type !== 'dado').length).toBeGreaterThanOrEqual(6);
   });
 });
 
@@ -119,24 +118,28 @@ describe('captured-ply sides, deck and rear transom (D-22, D-35, D-54)', () => {
     expect(L.deckBot).toBeCloseTo(8 - 0.472, 9);
     expect(L.chineBot).toBeCloseTo(L.deckBot, 9); // one deck level: the chine bottom is the deck underside
     expect(L.web.z0).toBeCloseTo(8 - 0.472 + 1.5, 9); // the chine top
-    expect(L.sideTop).toBeCloseTo(8 + 16, 9);
+    expect(L.sideTop).toBeCloseTo(8 + 14, 9);
     expect(L.sideH).toBe(4);
   });
-  it('the web (a flat trapezoid) enters the chine groove at the bottom and the gunwale groove at the top by the groove depth, all along the sled line', () => {
+  it('the web (a plan-bent sheet) enters the chine groove at the bottom and the gunwale groove at the top by the groove depth, all along the sheer', () => {
     for (const tag of ['L', 'R']) {
       const web = get(parts, `side-${tag}-web`), chine = get(parts, `side-${tag}-chine`), gun = get(parts, `side-${tag}-gunwale`);
-      expect(web.geometry.type).toBe('extrusion');
-      const w = worldAABB(web), c = worldAABB(chine), q = worldAABB(gun);
+      expect(web.geometry.type).toBe('mesh');
+      const w = worldAABB(web), c = worldAABB(chine);
       expect(c.max[2] - w.min[2]).toBeCloseTo(g, 6); // bottom: the chine top is g above the web bottom
-      expect(w.max[2] - (q.max[2] - defaults.railBandIn)).toBeCloseTo(g, 6); // top at the rear: g above the gunwale underside there
-      expect(web.geometry.type === 'extrusion' ? web.geometry.depth : -1).toBeCloseTo(defaults.panelPlyIn, 9);
-      // Along the whole slope: every top vertex of the web is g above the gunwale underside (the straight sled line, by hand).
-      if (web.geometry.type !== 'extrusion') continue;
-      const n = web.geometry.outline.length / 2;
-      for (const [x, z] of web.geometry.outline.slice(n)) {
+      const gpos = (gun.geometry as { positions: number[] }).positions, wpos = (web.geometry as { positions: number[] }).positions;
+      const topAtX = (pos: number[], x: number) => { let best = -Infinity, bd = Infinity; for (let i = 0; i < pos.length; i += 3) { const d = Math.abs(pos[i] - x); if (d < bd - 1e-9) { bd = d; best = pos[i + 2]; } else if (Math.abs(d - bd) < 1e-9) best = Math.max(best, pos[i + 2]); } return best; };
+      // Along the whole sheer: the web top is g above the gunwale underside (the sheer by hand), at every sampled x of the web.
+      for (let i = 0; i < wpos.length; i += 3) {
+        const x = wpos[i];
+        if (x < L.xSideStart || x > L.xSideEnd) continue;
+        if (wpos[i + 2] < 10) continue; // bottom edge
         const under = L.deckTop + sledLine(defaults, x, L.xSideStart, L.xSideEnd) - defaults.railBandIn;
-        expect(z - under, `${tag} x ${x.toFixed(1)}`).toBeCloseTo(g, 6);
+        if (wpos[i + 2] < under - 0.5) continue; // the rim vertices below the top edge of a face
+        expect(wpos[i + 2] - under, `${tag} x ${x.toFixed(1)}`).toBeCloseTo(g, 5);
       }
+      expect(topAtX(gpos, L.xSideStart)).toBeCloseTo(L.deckTop + 14, 6);
+      expect(w.max[2]).toBeGreaterThan(L.deckTop + 12 - defaults.railBandIn);
     }
   });
   it('the groove leaves sturdy oak walls (≥ 0.1") and a ply that fits the groove', () => {
@@ -145,31 +148,31 @@ describe('captured-ply sides, deck and rear transom (D-22, D-35, D-54)', () => {
     const thin = validateParams({ ...defaults, sideThicknessIn: 0.375 });
     expect(thin.some((i) => i.severity === 'warn' && i.keys.includes('grooveSlopIn'))).toBe(true);
   });
-  it('the web enters the rear transom dado at its rear end and ends against the bow curl at its front end', () => {
+  it('the web enters the rear transom dado at its rear end and ends against the bow bulkhead at its front end', () => {
     for (const tag of ['L', 'R']) {
       const b = worldAABB(get(parts, `side-${tag}-web`));
       expect(b.min[0]).toBeCloseTo(rearTx - dd, 6);
       expect(b.max[0]).toBeCloseTo(L.xSideEnd, 6);
     }
   });
-  it('the deck is ONE flat sheet that enters the chine rabbets and the transom dado, and ends where the bow curl starts', () => {
+  it('the deck is ONE flat sheet that enters the chine rabbets, the transom dado and the bulkhead dado, and follows the bow turn-in', () => {
     const d = get(parts, 'deck');
     expect(d.geometry.type).toBe('extrusion');
     const a = worldAABB(d);
-    expect(a.max[1]).toBeCloseTo(L.hwC + dd, 6);
+    expect(a.max[1]).toBeCloseTo(L.hwC + dd, 6); // full width behind the turn-in
     expect(a.min[1]).toBeCloseTo(-(L.hwC + dd), 6);
     expect(a.min[0]).toBeCloseTo(rearTx - dd, 6);
-    expect(a.max[0]).toBeCloseTo(L.xFlatEnd, 6);
+    expect(a.max[0]).toBeCloseTo(L.xFlatEnd + dd, 6);
     expect(a.min[2]).toBeCloseTo(L.deckBot, 6);
     expect(a.max[2]).toBeCloseTo(8, 6);
     // 58.6 in long × 23.25 wide: fits one 4 x 8 sheet (96 x 48) with the width across the 48.
     expect(a.max[0] - a.min[0]).toBeLessThan(96);
     expect(a.max[1] - a.min[1]).toBeLessThan(48);
     if (d.geometry.type !== 'extrusion') return;
-    expect(d.geometry.outline).toHaveLength(4); // a plain rectangle: no steering corridor, no cable slot, no taper
     expect(d.geometry.holes ?? []).toHaveLength(0);
-    expect(d.edges).toHaveLength(4);
-    expect(flat(d.edges).every((e) => e === 'captured')).toBe(true);
+    const front = d.geometry.outline.filter((q) => q[0] > L.xFlatEnd - 1e-9);
+    expect(Math.max(...front.map((q) => Math.abs(q[1])))).toBeCloseTo(L.hwC + dd - defaults.bowTurnInIn, 6); // narrower at the bulkhead
+    expect(d.edges).toBe('captured');
   });
   it('the rear transom spans the full outside width, is as tall as the rear side plus a crown, and wraps the side ends', () => {
     const r = worldAABB(get(parts, 'transom-rear'));
@@ -180,7 +183,7 @@ describe('captured-ply sides, deck and rear transom (D-22, D-35, D-54)', () => {
     expect(r.min[0]).toBeCloseTo(-10, 6);
     expect(L.transom).toBe(0.75); // D-43: the transom is ¾", the chine and gunwale ⅝"
     expect(L.side).toBe(0.625);
-    // The corners are at the rear gunwale height (deck + 16 in); the crown arcs above them at the center (D-44).
+    // The corners are at the rear gunwale height (deck + 14 in); the crown arcs above them at the center (D-44).
     expect(r.max[2]).toBeCloseTo(8 + defaults.sideHeightRearIn + defaults.transomCrownIn, 6);
     expect(r.min[2]).toBeCloseTo(8 - defaults.crossmemberDepthIn, 6); // it hangs as far below the deck as the joists
     const side = worldAABB(get(parts, 'side-L-chine'));
@@ -188,120 +191,63 @@ describe('captured-ply sides, deck and rear transom (D-22, D-35, D-54)', () => {
   });
 });
 
-describe('the straight sled sides (D-54)', () => {
+describe('the plan-curved sheer sides (D-54, D-57)', () => {
   const parts = buildModel(defaults);
   const { L } = makeCtx(defaults);
   const xs = L.xSideStart, xe = L.xSideEnd;
-  it('the sides are straight and parallel: a constant 24 in outside, 22.75 in inside, the same section all the way', () => {
+  it('behind the turn-in the sides are parallel: a constant 24 in outside, 22.75 in inside, the same section all the way back; the bounds span the rear transom to the bulkhead', () => {
     for (const tag of ['L', 'R'] as const) {
       const s = tag === 'L' ? 1 : -1;
       for (const m of ['chine', 'gunwale'] as const) {
         const b = worldAABB(get(parts, `side-${tag}-${m}`));
-        expect(s * (s > 0 ? b.min[1] : b.max[1]), `${tag} ${m} inner face`).toBeCloseTo(11.375, 6);
         expect(s * (s > 0 ? b.max[1] : b.min[1]), `${tag} ${m} outer face`).toBeCloseTo(12, 6);
         expect(b.min[0]).toBeCloseTo(xs, 6);
         expect(b.max[0]).toBeCloseTo(xe, 6);
+        expect(get(parts, `side-${tag}-${m}`).geometry.type).toBe('mesh'); // plan-curved walls (D-57)
       }
-      const chine = get(parts, `side-${tag}-chine`);
-      expect(chine.geometry.type).toBe('box'); // a plain straight bar: no sweep, no curve
-      expect(chine.stock!.l).toBeCloseTo(xe - xs, 6);
+      expect(get(parts, `side-${tag}-chine`).stock!.l).toBeCloseTo(xe - xs, 6);
     }
     expect(2 * (L.hwC + L.side)).toBeCloseTo(24, 9);
     expect(2 * L.hwC).toBeCloseTo(22.75, 9);
+    expect(xe - xs).toBeCloseTo(58.25, 6);
   });
-  it('the gunwale top is a straight line from 16 in over the deck at the rear transom to 4 in at the end of the sides; its slope is 12 in over 64.53 in (about 10.5 degrees)', () => {
-    expect(xe - xs).toBeCloseTo(64.5298, 3);
-    for (const tag of ['L', 'R']) {
-      const gun = get(parts, `side-${tag}-gunwale`);
-      expect(gun.geometry.type).toBe('extrusion');
-      if (gun.geometry.type !== 'extrusion') continue;
-      const n = gun.geometry.outline.length / 2;
-      const bottom = gun.geometry.outline.slice(0, n), top = gun.geometry.outline.slice(n);
-      expect(Math.min(...top.map((q) => q[0]))).toBeCloseTo(xs, 6);
-      expect(Math.max(...top.map((q) => q[0]))).toBeCloseTo(xe, 6);
-      for (const [x, z] of top) expect(z - 8, `x ${x.toFixed(1)}`).toBeCloseTo(16 + (4 - 16) * ((x - xs) / (xe - xs)), 6);
-      for (let i = 0; i < n; i++) expect(top.find((q) => Math.abs(q[0] - bottom[i][0]) < 1e-9)![1] - bottom[i][1], 'a 1.5 in band').toBeCloseTo(1.5, 6);
-      const b = worldAABB(gun);
-      expect(b.max[2]).toBeCloseTo(8 + 16, 6);
-      expect(b.min[2]).toBeCloseTo(8 + 4 - 1.5, 6);
-    }
-    expect((Math.atan2(12, xe - xs) * 180) / Math.PI).toBeCloseTo(10.53, 1);
+  it('the gunwale is bent-laminated and bandsawn: the notes say so and give the bend radius; the chine is laminated flat in 2 plies', () => {
+    const gun = get(parts, 'side-L-gunwale'), chine = get(parts, 'side-L-chine');
+    expect(gun.fab).toBe('bandsaw');
+    expect(gun.notes).toMatch(/BENT-LAMINATED AND BANDSAWN/);
+    expect(gun.notes).toMatch(/tightest radius/);
+    expect(chine.fab).toBe('bentlam');
+    expect(chine.notes).toMatch(/2 plies/);
+    const rMin = (defaults.bowTurnLenIn ** 2) / (6 * defaults.bowTurnInIn);
+    expect(rMin).toBeGreaterThan(defaults.hullLamMinRadiusFactor * (defaults.sideThicknessIn / 2));
   });
-  it('the sag option bends the line down by sideProfileSagIn at mid-length (a parabola), and a negative sag bulges up; the ends do not move', () => {
-    for (const sag of [1, -1]) {
-      const p = { ...defaults, sideProfileSagIn: sag } as Params;
-      expect(errorsOf(p)).toEqual([]);
+  it('the gunwale is a constant 1.5 in band under the sheer (every vertical pair of vertices on the mesh), top at 14 in at the rear and 4 in at the bulkhead', () => {
+    const gun = get(parts, 'side-L-gunwale');
+    const pos = (gun.geometry as { positions: number[] }).positions;
+    const byX = new Map<string, number[]>();
+    for (let i = 0; i < pos.length; i += 3) { const k = pos[i].toFixed(6); (byX.get(k) ?? byX.set(k, []).get(k)!).push(pos[i + 2]); }
+    let n = 0;
+    for (const zs of byX.values()) { const hi = Math.max(...zs), lo = Math.min(...zs); expect(hi - lo, 'a 1.5 in band').toBeCloseTo(1.5, 6); n++; }
+    expect(n).toBeGreaterThan(40);
+    const b = worldAABB(gun);
+    expect(b.max[2]).toBeCloseTo(8 + 14, 6);
+    expect(b.min[2]).toBeCloseTo(8 + 4 - 1.5, 6);
+  });
+  it('the sheer is the concave curve from 14 in down to 4 in; sheerCurveIn bends the straight line down by 4 * sag * u * (1 - u)', () => {
+    for (const sag of [0, 2.5, 4]) {
+      const p = { ...defaults, sheerCurveIn: sag } as Params;
+      expect(errorsOf(p).filter((i) => !/tongue|brake|steering stops|flap/i.test(i.message))).toEqual([]);
       const gun = get(buildModel(p), 'side-L-gunwale');
-      if (gun.geometry.type !== 'extrusion') throw new Error('gunwale is not an extrusion');
-      const n = gun.geometry.outline.length / 2;
-      const top = gun.geometry.outline.slice(n);
-      const mid = top.reduce((m, q) => (Math.abs(q[0] - (xs + xe) / 2) < Math.abs(m[0] - (xs + xe) / 2) ? q : m));
-      const straight = 8 + 16 + (4 - 16) * ((mid[0] - xs) / (xe - xs));
-      expect(straight - mid[1]).toBeCloseTo(4 * sag * 0.25 * (1 - Math.pow(2 * ((mid[0] - xs) / (xe - xs)) - 1, 2)), 6);
-      expect(Math.abs(straight - mid[1])).toBeGreaterThan(0.9 * Math.abs(sag));
-      const first = top.reduce((m, q) => (q[0] < m[0] ? q : m)), last = top.reduce((m, q) => (q[0] > m[0] ? q : m));
-      expect(first[1]).toBeCloseTo(8 + 16, 6); // the ends of the line do not move
-      expect(last[1]).toBeCloseTo(8 + 4, 6);
+      const pos = (gun.geometry as { positions: number[] }).positions;
+      for (let i = 0; i < pos.length; i += 3) {
+        if (pos[i + 2] < 8 + 4 - 1.5 - 1e-9) continue;
+        const x = pos[i];
+        const top = 8 + sledLine(p, x, xs, xe);
+        // vertices are either on the top edge or the bottom edge (1.5 below)
+        const d = Math.min(Math.abs(pos[i + 2] - top), Math.abs(pos[i + 2] - (top - 1.5)));
+        expect(d, `sag ${sag} x ${x.toFixed(2)}`).toBeLessThan(1e-6);
+      }
     }
-  });
-  it('the sides end against the bow curl where its inside face has risen to the bow side height (4 in): a bigger side height moves the end forward', () => {
-    const ri = defaults.bowCurlRadiusIn - (defaults.bowCurlPlies * defaults.bowCurlPlyIn) / 2; // inside radius 6.764
-    const inside = (x: number) => ri - Math.sqrt(ri * ri - (x - L.xFlatEnd) ** 2);
-    expect(inside(xe)).toBeCloseTo(4, 6);
-    expect(L.curl.heightAt(xe)).toBeCloseTo(4, 6);
-    expect(L.curl.heightAt(L.xFlatEnd)).toBe(0);
-    expect(L.curl.angleAt(L.xFlatEnd)).toBe(0);
-    const taller = makeCtx({ ...defaults, sideHeightBowIn: 5 } as Params).L;
-    expect(taller.xSideEnd).toBeGreaterThan(xe);
-    expect(taller.curl.heightAt(taller.xSideEnd)).toBeCloseTo(5, 6);
-  });
-});
-
-describe('the bow curl (D-54)', () => {
-  const parts = buildModel(defaults);
-  const { L } = makeCtx(defaults);
-  const curl = get(parts, 'bow-curl');
-  it('is a 4-ply bent lamination of 3 mm okoume (0.472 in, the deck\'s thickness), 22.75 in wide (the inside width), scarfed 8:1 to the deck', () => {
-    expect(curl.kind).toBe('bentlam');
-    expect(curl.fab).toBe('bentlam');
-    expect(curl.geometry.type).toBe('sweep');
-    if (curl.geometry.type !== 'sweep') return;
-    expect(curl.geometry.plies).toBe(4);
-    expect(curl.geometry.thickness).toBeCloseTo(4 * 0.118, 6);
-    expect(curl.geometry.thickness).toBeCloseTo(defaults.deckPlyIn, 2);
-    expect(curl.geometry.width).toBeCloseTo(2 * L.hwC, 9);
-    const sc = curl.joints!.find((j) => j.type === 'scarf' && j.to === 'deck')!;
-    expect(sc.size).toMatch(/^8:1 scarf, 3\.8" long/); // 8 × 0.472 = 3.78 in
-  });
-  it('runs flat from the end of the flat deck and curls up on a 7 in centerline radius through 80 degrees to the tip at x = 56', () => {
-    if (curl.geometry.type !== 'sweep') throw new Error('not a sweep');
-    const path = curl.geometry.path;
-    const th = curl.geometry.thickness;
-    expect(path[0][0]).toBeCloseTo(L.xFlatEnd, 6);
-    expect(path[0][1]).toBeCloseTo(8 - th / 2, 6); // the deck's centerline: the curl continues the deck
-    const tip = path[path.length - 1];
-    expect(tip[0]).toBeCloseTo(44 + 12, 6); // wheelbase + front overhang
-    expect(tip[0]).toBeCloseTo(L.xFlatEnd + 7 * Math.sin((80 * Math.PI) / 180), 6);
-    expect(tip[1]).toBeCloseTo(8 - th / 2 + 7 * (1 - Math.cos((80 * Math.PI) / 180)), 6);
-    expect(L.xFlatEnd).toBeCloseTo(49.106, 3);
-    // Every sampled point is 7 in from the arc center (the circle), so the path really is an arc.
-    const cz = 8 - th / 2 + 7;
-    for (const [x, z] of path) expect(Math.hypot(x - L.xFlatEnd, z - cz)).toBeCloseTo(7, 6);
-    // Inside radius against the cold-bend limit: 6.76 in vs 40 × one ply (0.118) = 4.72 in.
-    expect(7 - th / 2).toBeGreaterThan(defaults.hullLamMinRadiusFactor * 0.118);
-    expect(errorsOf({ ...defaults, bowCurlRadiusIn: 3 } as Params).some((i) => i.keys.includes('bowCurlRadiusIn'))).toBe(true);
-  });
-  it('sits inside the hull width and above the end joist, with its tip well ahead of the king beam; mass includes the edge banding', () => {
-    const b = worldAABB(curl);
-    expect(b.max[1]).toBeCloseTo(L.hwC, 6);
-    expect(b.min[1]).toBeCloseTo(-L.hwC, 6);
-    expect(b.min[0]).toBeLessThan(L.xFlatEnd); // the flat run starts under the deck's front edge
-    expect(b.max[0]).toBeGreaterThan(L.xFront);
-    expect(b.min[0]).toBeGreaterThan(L.king.x + L.king.len / 2);
-    // Volume by hand: arc length 7 × 80 degrees = 9.77 in × 22.75 × 0.472 = 104.9 in³ of okoume (about 1.9 lb) plus finish and banding.
-    expect(curl.stock!.l).toBeCloseTo(7 * (80 * Math.PI) / 180, 1);
-    expect(curl.massLb).toBeGreaterThan(1.8);
-    expect(curl.massLb).toBeLessThan(3);
   });
 });
 
@@ -353,8 +299,8 @@ describe('joinery: structured joints', () => {
     const joist = get(parts, 'joist-2');
     const d = joist.joints!.filter((j) => j.type === 'domino');
     expect(d.map((j) => j.to).sort()).toEqual(['rail-L', 'rail-R']);
-    // The 22.5 in joist: its two Dominos are at y = +-11.25 (the rails' inner faces), at the joist's x.
-    expect(d.map((j) => Math.round(transformPoint(joist.transform, j.at![0])[1] * 100) / 100).sort((a, b) => a - b)).toEqual([-11.25, 11.25]);
+    // The joist at x = 8 meets the step brake's oak backers (D-57): cut back 1.25 in each end, so its two Dominos are at y = +-10, at the joist's x.
+    expect(d.map((j) => Math.round(transformPoint(joist.transform, j.at![0])[1] * 100) / 100).sort((a, b) => a - b)).toEqual([-10, 10]);
     expect(transformPoint(joist.transform, d[0].at![0])[0]).toBeCloseTo(L0.joistX[1], 6);
   });
   it('a joist at the rear axle is cut back for the hanger and Domino-tied to the hanger instead of the rail', () => {
@@ -362,7 +308,7 @@ describe('joinery: structured joints', () => {
     expect(j1.joints!.filter((j) => j.type === 'domino').map((j) => j.to).sort()).toEqual(['axle-hanger-L', 'axle-hanger-R']);
     expect(j1.stock!.l).toBeCloseTo(2 * (11.25 - defaults.axleHangerThickIn), 6); // 21 in: 10.5 in each side
     expect(worldAABB(j1).max[1]).toBeCloseTo(11.25 - defaults.axleHangerThickIn, 6);
-    expect(get(parts, 'joist-2').stock!.l).toBeCloseTo(22.5, 6); // between the rails' inner faces
+    expect(get(parts, 'joist-2').stock!.l).toBeCloseTo(20, 6); // between the brake backers (the rails' inner faces less 1.25 in each side)
   });
   it('Domino size follows the stock: thin rails get a DF 500 5×30; thick stock gets XL; 1/2" hosts get a loose tenon', () => {
     expect(chooseDomino(defaults, { stockIn: 0.75, hostIn: 0.75, widthIn: 1.75 })?.name).toBe('5×30');
@@ -390,15 +336,17 @@ describe('joinery: structured joints', () => {
       const ids = new Set(ps.map((x) => x.id));
       for (const part of ps.filter((x) => !x.payload)) {
         const b = localBounds(part.geometry);
+        const loose = !!(part.geometry as { slabs?: number }).slabs;
         for (const j of part.joints ?? []) {
           const tag = `${v.name}: ${part.id} -> ${j.to} (${j.type})`;
+          const looseJ = loose || !!(ps.find((x) => x.id === j.to)?.geometry as { slabs?: number } | undefined)?.slabs; // plan-curved bow walls (D-57) are boxed by their bounds only
           expect(ids.has(j.to), `${tag} mates a part that exists`).toBe(true);
           expect(j.at?.length, `${tag} has ${j.count} locations`).toBe(j.count);
           for (const a of j.at!) {
             expect(a.every(Number.isFinite), tag).toBe(true);
-            // Within 1" of the part's own bounds (tilted webs and sloped members are boxed loosely by their axis-aligned contact region).
-            for (let k = 0; k < 3; k++) expect(a[k], `${tag} axis ${k}`).toBeGreaterThanOrEqual(b.min[k] - 1);
-            for (let k = 0; k < 3; k++) expect(a[k], `${tag} axis ${k}`).toBeLessThanOrEqual(b.max[k] + 1);
+            // Within 1 1/2" of the part's own bounds (tilted webs, sloped members and the plan-curved bow walls of D-57 are boxed loosely by their axis-aligned contact region).
+            for (let k = 0; k < 3; k++) if (!looseJ) expect(a[k], `${tag} axis ${k}`).toBeGreaterThanOrEqual(b.min[k] - 1.5);
+            for (let k = 0; k < 3; k++) if (!looseJ) expect(a[k], `${tag} axis ${k}`).toBeLessThanOrEqual(b.max[k] + 1.5);
           }
         }
       }
@@ -407,15 +355,15 @@ describe('joinery: structured joints', () => {
   it('summary counts each physical joint once, by type (default model)', () => {
     const s = joinerySummary(parts.filter(mine));
     expect(s.total).toBeGreaterThan(40);
-    for (const k of ['domino', 'mortise-tenon', 'dado', 'rabbet', 'glue', 'scarf', 'bolt']) expect(s.byType[k] ?? 0, k).toBeGreaterThan(0);
+    for (const k of ['domino', 'mortise-tenon', 'dado', 'rabbet', 'glue', 'bolt']) expect(s.byType[k] ?? 0, k).toBeGreaterThan(0);
     // Doubled lists (both parts) would give at least twice the once-counted total.
     const both = parts.filter(mine)
       .reduce((m, x) => m + (x.joints ?? []).reduce((a, j) => a + j.count, 0), 0);
     expect(both).toBeGreaterThan(s.total);
   });
-  it('the signs come off with tee-nuts and knobs (D-9); off by default (D-54: design the shape first)', () => {
-    expect(parts.some((x) => x.id.startsWith('sign-'))).toBe(false);
-    const ps = buildModel({ ...defaults, showSideSigns: 1 });
+  it('the signs come off with tee-nuts and knobs (D-9); on by default (D-57)', () => {
+    expect(parts.some((x) => x.id.startsWith('sign-'))).toBe(true);
+    const ps = parts;
     const sign = get(ps, 'sign-L');
     expect(sign.removable).toBe(true);
     expect(sign.joints!.find((j) => j.type === 'knob')!.count).toBe(4);
@@ -431,7 +379,9 @@ describe('rails: flush under the chines, tied to them (D-43, D-54)', () => {
       const rail = worldAABB(get(parts, `rail-${tag}`)), chine = worldAABB(get(parts, `side-${tag}-chine`));
       const s = tag === 'L' ? 1 : -1;
       expect(s > 0 ? rail.max[1] : -rail.min[1], 'outer faces flush').toBeCloseTo(s > 0 ? chine.max[1] : -chine.min[1], 9);
-      expect(rail.max[1] - rail.min[1]).toBeCloseTo(defaults.railThicknessIn, 9);
+      const rp = (get(parts, `rail-${tag}`).geometry as { positions: number[] }).positions;
+      const yAt0 = rp.filter((_, i) => i % 3 === 1 && Math.abs(rp[i - 1] - 0) < 0.8).map(Math.abs);
+      expect(Math.max(...yAt0) - Math.min(...yAt0)).toBeCloseTo(defaults.railThicknessIn, 9); // the rail's thickness behind the turn-in
       expect(rail.max[2]).toBeCloseTo(chine.min[2], 9); // the chine bears on the rail top
       expect(rail.max[2]).toBeCloseTo(L.deckBot, 9);
       expect(rail.max[2] - rail.min[2]).toBeCloseTo(defaults.railDepthIn, 9);
@@ -472,12 +422,12 @@ describe('lift hand-hold (M9, D-37): the rear transom only', () => {
     expect(rear.zBot).toBeGreaterThanOrEqual(ctx.L.storage.zTop); // a box against the transom does not block the hand
     expect(parts.some((x) => x.id === 'transom-front')).toBe(false);
   });
-  it('the slot sits above the box lid: the box top (15 in) + 1/4 in, with at least the minimum oak bar left above it under the 24 in transom corners', () => {
+  it('the slot sits above the box lid: the box top (15 in) + 1/4 in, with at least the minimum oak bar left above it under the 22 in transom corners', () => {
     const r = liftSlot(ctx);
     expect(r.zBot).toBeCloseTo(ctx.L.storage.zTop + 0.25, 9);
     expect(r.zTop).toBeCloseTo(r.zBot + 1.25, 9);
     expect(r.zTop + defaults.liftBarMinIn).toBeLessThanOrEqual(r.transomTop + 1e-9);
-    expect(r.transomTop).toBeCloseTo(8 + 16, 9); // the transom corners are as tall as the rear side; the crown arcs above them
+    expect(r.transomTop).toBeCloseTo(8 + 14, 9); // the transom corners are as tall as the rear side; the crown arcs above them
     expect(r.transomTop - r.zTop).toBeGreaterThan(defaults.liftBarMinIn);
   });
   it('the grip bar carries the per-person transport lift × the dynamic factor (one hand, simply supported over the slot)', () => {
@@ -504,9 +454,9 @@ describe('lift hand-hold (M9, D-37): the rear transom only', () => {
   });
 });
 
-describe('signs (D-9, D-35; provisional, off by default in D-54)', () => {
-  const parts = buildModel({ ...defaults, showSideSigns: 1 });
-  it('two removable 6 mm blanks, banded on all edges, with four knob screws each, on the outside of the sloped side and turned to its slope', () => {
+describe('signs (D-9, D-35, D-57)', () => {
+  const parts = buildModel(defaults);
+  it('two removable 6 mm blanks, banded on all edges, with four knob screws each, on the outside of the tall rear part of the side and turned to its slope', () => {
     const { L } = makeCtx(defaults);
     for (const tag of ['L', 'R']) {
       const s = get(parts, `sign-${tag}`);
@@ -515,14 +465,13 @@ describe('signs (D-9, D-35; provisional, off by default in D-54)', () => {
       expect(s.geometry.type === 'box' && s.geometry.size[1]).toBeCloseTo(defaults.panelPlyIn, 9);
       expect(s.group).toBe('removable');
       expect(s.notes).toMatch(/banded/);
-      // It hangs just outside the outer face of the side members (|y| from 12 in out), centered in the web's height band at mid-length, and turned to the 10.5 degree slope.
       const c = transformPoint(s.transform, [0, 0, 0]);
       expect(Math.abs(c[1])).toBeCloseTo(L.hwC + L.side + defaults.panelPlyIn / 2, 6);
       expect(c[2]).toBeGreaterThan(L.web.z0);
-      expect(c[2]).toBeLessThan(8 + 16 - defaults.railBandIn);
-      expect(s.transform[2]).toBeCloseTo(-Math.sin(Math.atan2(12, L.xSideEnd - L.xSideStart)), 6); // its length axis descends toward the bow with the gunwale
+      expect(c[2]).toBeLessThan(8 + 14 - defaults.railBandIn);
+      expect(s.transform[2]).toBeLessThan(0); // its length axis descends toward the bow with the sheer
     }
-    expect(buildModel({ ...defaults, showSideSigns: 1 }, { removed: true }).some((x) => x.id.startsWith('sign-'))).toBe(false);
+    expect(buildModel(defaults, { removed: true }).some((x) => x.id.startsWith('sign-'))).toBe(false);
   });
   it('banding adds oak mass over the bare ply', () => {
     const s = get(parts, 'sign-L');
@@ -534,12 +483,12 @@ describe('signs (D-9, D-35; provisional, off by default in D-54)', () => {
 });
 
 describe('mass bookkeeping (D-35…D-37, D-54)', () => {
-  it('the body and frame groups stay near the D-54 build numbers (body about 39 lb, frame about 13 lb; pinned from the build)', () => {
+  it('the body and frame groups stay near the build numbers (body about 43.8 lb with the D-57 bulkhead, frame about 13 lb; pinned from the build)', () => {
     const parts = buildModel(defaults);
     const sum = (g: string) => parts.filter((x) => x.group === g && !x.payload).reduce((m, x) => m + x.massLb, 0);
-    // Hand: deck 58.6 x 23.25 x 0.472 in of ply (about 14 lb with finish), the 24 in x 31 in rear transom (9.2 lb), two webs (3.1 lb each), two chines
-    // (1.4), two gunwales (1.6), the curl (2.4), backers and scuppers (1.1): about 39 lb.
-    expect(Math.abs(sum('body') - 39)).toBeLessThan(1.5);
+    // Hand: deck 58.6 x 23.25 x 0.472 in of ply (about 13.9 lb with finish), the 24 in x 22 in rear transom (about 9 lb), the 1-3/4 in bow bulkhead (about 9 lb), two webs (1.9 lb each),
+    // two chines (1.3), two gunwales (1.5), backers and scuppers (1.1), the two signs (1.1): about 44 lb.
+    expect(Math.abs(sum('body') - 43.8)).toBeLessThan(1.5);
     // Rails 2 x 3.5 (extrusions with the step), hangers 2 x 1.05, six joists (0.82 to 0.88; the king beam is in the front-end group): about 13 lb.
     expect(Math.abs(sum('frame') - 13)).toBeLessThan(1);
   });
@@ -584,7 +533,7 @@ describe('round 2 hull (build M2-M8, D-43)', () => {
     expect(DOMINOS.find((x) => x.name === '6×40')!.wMm).toBe(20);
   });
 
-  it('scuppers: four 3/8" stainless nipples through the chines at deck level (M7; the rear corners and just behind the bow curl), each with a joint and `at`', () => {
+  it('scuppers: four 3/8" stainless nipples through the chines at deck level (M7; the rear corners and just behind the bow bulkhead), each with a joint and `at`', () => {
     const sc = parts.filter((x) => x.id.startsWith('scupper-'));
     expect(sc.map((x) => x.id).sort()).toEqual(['scupper-bow-L', 'scupper-bow-R', 'scupper-rear-L', 'scupper-rear-R']);
     const sites = scupperSites(ctx);
@@ -598,8 +547,9 @@ describe('round 2 hull (build M2-M8, D-43)', () => {
       // lower edge of the hole 0.05" over the deck surface
       expect(bb.min[2]).toBeCloseTo(L.deckTop + 0.05, 3);
       // through the whole 5/8" chine and 1/4" proud outside
-      expect(Math.abs(x.id.endsWith('L') ? bb.min[1] : bb.max[1])).toBeCloseTo(L.hwC, 6);
-      expect(Math.abs(x.id.endsWith('L') ? bb.max[1] : bb.min[1])).toBeCloseTo(L.hwC + L.side + 0.25, 6);
+      const hwHere = L.hwC - L.turnIn(x.id.includes('bow') ? L.xFlatEnd - 1 : 0);
+      expect(Math.abs(x.id.endsWith('L') ? bb.min[1] : bb.max[1])).toBeCloseTo(hwHere, 6);
+      expect(Math.abs(x.id.endsWith('L') ? bb.max[1] : bb.min[1])).toBeCloseTo(hwHere + L.side + 0.25, 6);
     }
   });
 
@@ -619,7 +569,7 @@ describe('round 2 hull (build M2-M8, D-43)', () => {
     expect(st('deck')).toBe(HULL_STEP.deck);
     expect(st('side-L-web')).toBe(HULL_STEP.sides);
     expect(st('side-L-chine')).toBe(HULL_STEP.sides);
-    expect(st('bow-curl')).toBe(HULL_STEP.sides);
+    expect(st('bow-bulkhead')).toBe(HULL_STEP.transom);
     expect(st('transom-rear')).toBe(HULL_STEP.transom);
     expect(HULL_STEP.deck < HULL_STEP.sides && HULL_STEP.sides < HULL_STEP.transom).toBe(true);
     expect(get(parts, 'transom-rear').notes).toMatch(/GOES ON LAST/);
@@ -650,6 +600,7 @@ describe('round 2 hull (build M2-M8, D-43)', () => {
     for (let i = 0; i + 1 < edges.length; i += 2) bay = Math.max(bay, edges[i + 1] - edges[i]);
     expect(bay).toBeLessThan(10);
     expect(bay).toBeGreaterThan(7); // 8.0 between the joists; the long bay is the 5.8 in from the king beam to the end joist, 7.1 at the rear
-    expect(get(parts, 'joist-7').notes).toMatch(/steering stop blocks hang under its ends/);
+    expect(get(parts, 'joist-7').notes).toMatch(/last joist, under the scarf/);
+    expect(get(parts, 'joist-5').notes).toMatch(/chain joist/); // the crossmember behind the king beam anchors the steering chains (D-58)
   });
 });

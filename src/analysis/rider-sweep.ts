@@ -23,17 +23,16 @@ export const LIGHTS: Light[] = ['tipping', 'turns', 'hills', 'steering', 'streng
 export const LIGHT_OF_ID: Record<string, Light | 'info'> = {
   'tip-straight': 'tipping', 'tip-lock': 'tipping',
   'slide-before-tip': 'turns', 'v-rollover': 'turns',
-  'pitch-fwd': 'hills', 'pitch-rear': 'hills', 'brake-force': 'hills', 'brake-traction': 'hills', 'brake-ratio': 'hills', 'brake-clear': 'hills',
+  'pitch-fwd': 'hills', 'pitch-rear': 'hills', 'brake-force': 'info', 'brake-slow': 'hills', 'brake-traction': 'hills', 'brake-ratio': 'hills', 'brake-clear': 'hills', 'park-hold': 'hills',
   'turn-radius': 'steering', 'steer-clear': 'steering',
-  // D-56: the bridle tie (shackle, tongue plate, tongue bolts); the handler's foot brake (D-55; park-hold is a strength row of the parking latch).
-  'park-hold': 'strength',
+  // D-56: the bridle tie (shackle, tongue plate, tongue bolts); the handler's step brake (D-57): its braking rows (and the chock parking hold) color Hills, its member rows Strength.
   'bridle-eye': 'strength',
   // The pivoting front axle (D-56): kingpin, thrust washer, front beam and stubs, steering stops and the king beam carry the rider's weight and the bumps.
   kingpin: 'strength', 'king-bearing': 'strength', 'front-beam': 'strength', 'front-stub': 'strength', 'steer-stops': 'strength', 'king-beam': 'strength',
   'truck-fit': 'truck',
   'mass-empty': 'info', cg: 'info',
   // Strength = every `group === 'Structure'` check (kept explicit so the mapping test can see them).
-  'brake-lever': 'strength', 'brake-links': 'strength', 'brake-beam': 'strength', 'brake-shoes': 'strength', 'handle-sockets': 'strength',
+  'brake-flap': 'strength', 'brake-hinge': 'strength', 'brake-mount': 'strength', 'brake-return': 'strength', 'handle-sockets': 'strength',
   'brake-abuse': 'strength', 'wheel-rating': 'strength', 'rear-beam-seat': 'strength', 'axle-stress': 'strength', 'beam-rear': 'strength', 'bearing-groove': 'strength', rails: 'strength', deck: 'strength',
   // Seat and fittings (D-40, D-41): the seat back and grips carry a rider, so they color Strength; packing, lid swing and
   // lash-point count are build-fit facts that do not change with rider weight and are reported only.
@@ -41,7 +40,7 @@ export const LIGHT_OF_ID: Record<string, Light | 'info'> = {
   // Hull (D-43): the lift does not depend on the rider; the foot stop carries the rider's restraint load. Both color Strength.
   lift: 'strength', 'foot-stop': 'strength', 'lash-load': 'info',
   // Cargo mode (D-53): the joists carry the seat and the cargo, the handlebow the handler; the stow fit, the lid and the tie-downs are cargo facts and color no light.
-  joists: 'strength', 'handle-bow': 'strength', 'seat-stow': 'info', 'lid-load': 'info', 'cargo-strap': 'info',
+  'rest-load': 'strength', joists: 'strength', 'handle-bow': 'strength', 'seat-stow': 'info', 'lid-load': 'info', 'cargo-strap': 'info',
 };
 
 export function lightOf(c: Pick<AnalysisCheck, 'id' | 'group'>): Light | 'info' {
@@ -98,7 +97,7 @@ export interface SweepResult {
 const RIDER_KEYS = ['riderMassLb', 'riderGoalMassLb', 'riderMinMassLb'] as const;
 
 /** Geometry-only checks: they don't change with rider weight, so they color their light but not the rider bar. */
-export const RIDER_INDEPENDENT = new Set(['turn-radius', 'steer-clear', 'truck-fit']);
+export const RIDER_INDEPENDENT = new Set(['turn-radius', 'steer-clear', 'truck-fit', 'rest-load']);
 
 /** Every rider case set to the same weight. */
 export const withRider = (p: Params, w: number): Params => ({ ...p, riderMassLb: w, riderGoalMassLb: w, riderMinMassLb: w });

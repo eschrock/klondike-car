@@ -11,7 +11,7 @@ import { judge } from './types';
 import { makeContext } from './context';
 import { resolveParams } from '../params';
 
-const defaults = defaultParams();
+const defaults = { ...defaultParams(), frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5 }; // the 3c-3 hand-calc fixture: the 35.5 in tracks (D-58 narrowed them to 34 1/2 / 32 in; the new defaults are in track-d58.test.ts)
 
 const byId = (cs: AnalysisCheck[], id: string) => cs.find((c) => c.id === id)!;
 const run = (p: Params) => runChecks(p, { includeTruck: false });
@@ -59,7 +59,7 @@ describe('runChecks at the defaults', () => {
   it('lateral tip by hand (operating rider, about 309 lb, CG about (17.05, 0, 14.32)): straight ahead d = 17.75 - ~0.0 -> atan(17.75 / 14.32) = 51.1 deg; at full lock the side edge to the trailing front tire is 17.25 in away: atan(17.25 / 14.32) = 50.3 deg', () => {
     const c = ctx.loads.operating;
     const [x, , h] = c.cg;
-    expect(Math.abs(x - 17.05)).toBeLessThan(0.5); // the CG moves a little as parts change; the hand calc below is from the case itself
+    expect(Math.abs(x - 17.05)).toBeLessThan(1); // the CG moves as parts change (D-58: the heavier front end moves it forward 0.7 in); the hand calc below is from the case itself
     expect(Math.abs(h - 14.32)).toBeLessThan(0.5);
     let worst = Infinity;
     for (let a = -20; a <= 20; a += 1) worst = Math.min(worst, (Math.atan2(tipAt(c.cg, a), h) * 180) / Math.PI);
@@ -86,11 +86,10 @@ describe('runChecks at the defaults', () => {
     expect(byId(cs, 'tip-straight').util).toBeLessThan(1);
     expect(byId(cs, 'tip-straight').label).toMatch(/worst steer/);
   });
-  it('FINDING (D-56): at the defaults king-bearing (11x), steer-stops (2.5x), bridle-eye (3.7x) and steer-clear fail; kingpin, front-beam, front-stub and king-beam pass', () => {
-    for (const id of ['king-bearing', 'steer-stops', 'bridle-eye', 'steer-clear']) expect(byId(cs, id).status, id).toBe('fail');
-    for (const id of ['kingpin', 'front-beam', 'front-stub', 'king-beam']) expect(byId(cs, id).statusGoal, id).not.toBe('fail');
-    expect(byId(cs, 'king-bearing').util!).toBeGreaterThan(10);
-    expect(byId(cs, 'bridle-eye').util!).toBeGreaterThan(3);
+  it('D-58: the front-end rows that failed in 3c-3 (king-bearing 11x, steer-stops 2.5x, bridle-eye 3.7x, steer-clear) all pass at the defaults, with the roll pads, the check chains, the oak tongue and the 1/8 in clearances', () => {
+    for (const id of ['king-bearing', 'steer-stops', 'bridle-eye', 'steer-clear', 'kingpin', 'front-beam', 'front-stub', 'king-beam', 'lift']) expect(byId(cs, id).status, id).not.toBe('fail');
+    expect(byId(cs, 'king-bearing').util!).toBeLessThan(1);
+    expect(byId(cs, 'bridle-eye').util!).toBeLessThan(1);
   });
   it('turn radius (A-2, D-56): the outer tire edge radius WB / sin(20 deg) + track/2 + tire/2 = 128.6 + 17.75 + 1.75 = 148.1 in against the relaxed 150 in (12.5 ft) limit: marginal', () => {
     const t = byId(cs, 'turn-radius');
@@ -206,7 +205,8 @@ describe('parameter response', () => {
   });
   it('a bigger thrust washer lowers the king-bearing util, and a bigger bridle pull raises the bridle-eye util', () => {
     const u = (q: Partial<Params>, id: string) => byId(run({ ...defaults, ...q }), id).util!;
-    expect(u({ kingThrustOdIn: 3.5 }, 'king-bearing')).toBeLessThan(u({}, 'king-bearing'));
+    const disc = (q: Partial<Params>) => byId(run({ ...defaults, ...q }), 'king-bearing').details!.find((d) => /^static front axle load on the UHMW disc/.test(d.name))!.util;
+    expect(disc({ kingThrustOdIn: 3.5 })).toBeLessThan(disc({})); // the bigger disc has more area under the same load
     expect(u({ pullForceLbf: 200 }, 'bridle-eye')).toBeGreaterThan(u({}, 'bridle-eye'));
   });
 });
@@ -249,10 +249,10 @@ function mulberry32(seed: number) {
 describe('every variant the validator accepts yields finite checks', () => {
   const KEYS: ParamKey[] = [
     'wheelbaseIn', 'rearTrackIn', 'frontTrackIn', 'steerLockDeg', 'kingThrustOdIn', 'deckHeightIn', 'bodyWidthIn', 'seatXIn', 'wheelDiameterIn',
-    'tongueThickIn', 'rearOverhangIn', 'frontOverhangIn', 'sideHeightBowIn', 'sideHeightRearIn', 'tireWidthIn', 'axleBeamThicknessIn',
+    'tongueDepthIn', 'rearOverhangIn', 'frontOverhangIn', 'sideHeightBowIn', 'sideHeightRearIn', 'tireWidthIn', 'axleBeamThicknessIn',
     'axleBeamDepthIn', 'railDepthIn', 'railThicknessIn', 'crossmemberDepthIn', 'crossmemberSpacingIn', 'deckPlyIn', 'seatDepthIn',
     'pullerHandHeightIn', 'bumpSpeedNormalMph', 'bumpSpeedHardMph', 'riderMassLb', 'riderGoalMassLb', 'cargoMassLb', 'axleDiameterIn', 'designSlopeDeg',
-    'tireGroundMu', 'dynamicFactor', 'sideThicknessIn',
+    'tireGroundMu', 'dynamicFactor', 'sideThicknessIn', 'sheerCurveIn', 'bowTurnInIn', 'bowBulkheadThickIn', 'bowBulkheadHeightIn', 'handleBowCrownIn', 'footBlockSlot', 'seatDepthIn',
   ];
   const OPTIONS: ParamKey[] = ['storageLocation', 'axleBeamPosition', 'axleStyle', 'plySpecies'];
   const samples = (() => {
@@ -314,15 +314,15 @@ describe('hand-calculated numbers at the defaults', () => {
     expect(liftPull(100, 20, 10, 0, 60, 0, Math.PI / 6)).toBeCloseTo(66.67, 1);
     expect(liftPull(100, 20, 10, 0, 0, 0, 0)).toBe(Infinity);
   });
-  it('H3 pitch-rear at the defaults: the rope runs from the tongue tie (x 59, z 5.91) up to the hands at 30 in over a 96 in run, 14.1 deg; x_p sin(a) - z_p cos(a) = 59 x 0.2434 - 5.91 x 0.9699 = 8.63 > 0, so the pull has a lift moment arm: T_lift = W (x cos th - h sin th) / 8.63, about 3x the 150 lbf peak', () => {
+  it('H3 pitch-rear at the defaults: the rope runs from the shackle in the oak tongue (x 54.25, z 4.19) up to the hands at 30 in over a 96 in run, 15.05 deg; x_p sin(a) - z_p cos(a) = 54.25 x 0.2597 - 4.19 x 0.9657 = 10.04 > 0, so the pull has a lift moment arm: T_lift = W (x cos th - h sin th) / 8.63, about 3x the 150 lbf peak', () => {
     const c = byId(cs, 'pitch-rear');
     const pt = pullPoint(ctx);
-    expect(pt.x).toBeCloseTo(59, 9); // the tie hole of the tongue
-    expect(pt.z).toBeCloseTo(5.9125, 4); // the tongue top 5.5625 + 0.35
+    expect(pt.x).toBeCloseTo(54.25, 9); // the tie hole of the oak tongue (tipX 55.75 - the 1.5 in tip edge, D-58)
+    expect(pt.z).toBeCloseTo(4.1875, 4); // mid-depth of the tongue (beam top 5.375 - 3/16 drop - 1 in)
     const alpha = Math.atan2(defaults.pullerHandHeightIn - pt.z, defaults.bridleRopeRunIn);
-    expect(alpha * 180 / Math.PI).toBeCloseTo(14.09, 1);
+    expect(alpha * 180 / Math.PI).toBeCloseTo(15.05, 1);
     const den = pt.x * Math.sin(alpha) - pt.z * Math.cos(alpha);
-    expect(den).toBeCloseTo(8.63, 1);
+    expect(den).toBeCloseTo(10.04, 1);
     const th = (defaults.designSlopeDeg * Math.PI) / 180;
     for (const k of ['operating', 'goal', 'light'] as const) {
       const w = ctx.loads[k];
@@ -343,9 +343,9 @@ describe('hand-calculated numbers at the defaults', () => {
     const c = byId(run({ ...defaults, ...q }), 'pitch-rear');
     const pt = pullPoint(ctx2);
     const alpha = Math.atan2(40 - pt.z, 36);
-    expect(alpha * 180 / Math.PI).toBeCloseTo(43.4, 1);
+    expect(alpha * 180 / Math.PI).toBeCloseTo(44.85, 1);
     const den = pt.x * Math.sin(alpha) - pt.z * Math.cos(alpha);
-    expect(den).toBeCloseTo(36.3, 0);
+    expect(den).toBeCloseTo(35.3, 0);
     const th = (defaults.designSlopeDeg * Math.PI) / 180;
     const ratio = (k: 'operating' | 'goal' | 'light') => {
       const w = ctx2.loads[k];

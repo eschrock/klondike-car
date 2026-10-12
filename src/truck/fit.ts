@@ -50,8 +50,10 @@ export interface CartView {
   removed?: boolean;
   /** Front-axle steer angle (degrees about the kingpin, + = left). The fit always builds straight (the stowed axle is straightened); only the viewer passes this. */
   steerDeg?: number;
-  /** Cargo mode (D-53): the seat kit lies in the storage box. */
+  /** Cargo mode (D-53, D-57): the back flips flat onto the deck and the two cushions lie in the storage box. */
   seat?: 'installed' | 'stowed';
+  /** Rear handlebow (D-57): riding or parked low. */
+  handle?: 'up' | 'parked';
 }
 
 export interface PairInfo {

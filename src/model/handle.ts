@@ -1,14 +1,18 @@
 /**
- * Rear push handle (D-9, D-39, D-53, D-55): aluminum tube sockets on the rear transom, pinned oak uprights, and a sled-style HANDLEBOW: a crowned, laminated white-oak
- * bow that arches up between and over the two posts and overhangs them to the edge of the cart (reference/05). The handle is the handler's station, a plain handle
- * (the brake is a foot bar, D-55) and comes off as one U for transport. The socket loads (D-39) are unchanged: the hold-back pull is taken at the
- * posts, at the grip height `rearHandleHeightIn`; the crown only adds height at the middle.
+ * Rear push handle (D-9, D-39, D-53, D-57): aluminum tube sockets on the rear transom, pinned oak uprights, and a sled-style HANDLEBOW: a gently crowned white-oak bow
+ * BANDSAWN from one board (D-57; it was a laminated, 3 in crown) that arches up between and over the two posts and overhangs them to the edge of the cart (reference/05). The
+ * handle is the handler's station and comes off as one U for transport. The socket loads (D-39) are unchanged: the hold-back pull is taken at the posts, at the grip height
+ * `rearHandleHeightIn`; the crown only adds height at the middle.
+ *
+ * Two pin positions (D-57): RIDING (the model default) and PARKED (`view.handle = 'parked'`): the sockets are `handleSocketDepthIn` deep, the posts have a second cross hole
+ * `parkDropIn` higher up, and with the pin through that hole the posts sink that far deeper so the bow rests just above the top of the rear transom.
  */
 import type { Params } from '../params';
-import { STEP, box, cylinder, roughOf, span, woodMassLb, SIDES, IN3_PER_FT3, type Ctx } from './build-utils';
+import { STEP, box, cylinder, span, SIDES, IN3_PER_FT3, type Ctx } from './build-utils';
 import type { Layout } from './layout';
 import { boltLength, inchesText, localPoint } from './rear-mount';
-import { compose } from './mat4';
+import { multiply, translation } from './mat4';
+import { transformPoint } from './bounds';
 import { profilePart } from './profile';
 import type { Part, Vec2, Vec3 } from './types';
 
@@ -22,10 +26,13 @@ export interface HandleGeom {
   socketX: number;
   socketY: number;
   postX: [number, number];
-  /** Pin height, post foot and top heights. */
+  /** Pin height, post foot (RIDING position) and top heights. */
   zPin: number;
   zFoot: number;
   zPostTop: number;
+  /** How far the posts and the bow sink in the parked position (the second pin hole is this much higher on the post), and the parked grip height at the posts. */
+  parkDropIn: number;
+  parkGripZ: number;
   /** Lever arm from the socket mouth to the grip, and from the grip to the lower contact. */
   gripArm: number;
   yPost: number;
@@ -84,6 +91,19 @@ export function bowGeometry(p: Params, L: Layout): BowGeom {
   return { crownIn: c, radiusIn: R, yEnd, yPost, zPost: barZ, zMid: zAt(0), zEnd: zAt(yEnd), postSlopeDeg: (slope * 180) / Math.PI, path, lengthIn };
 }
 
+/** The parked position (D-57): how far the posts sink so the bow rests `handleParkClearIn` above the top of the rear transom (its corners at the side ends, its crown at the middle). */
+export function parkDrop(p: Params, L: Layout): { dropIn: number; gripZ: number } {
+  const sec = p.handleBarDiameterIn;
+  const bow = bowGeometry(p, L);
+  const zCornerTop = L.deckTop + L.sideRear;
+  const zCenterTop = zCornerTop + p.transomCrownIn;
+  // bow centerline height at the posts when parked: the underside at the cart edge clears the transom corner, the underside at the middle clears the crown
+  const needEnd = zCornerTop + p.handleParkClearIn + sec / 2 + (bow.zPost - bow.zEnd);
+  const needMid = zCenterTop + p.handleParkClearIn + sec / 2 - bow.crownIn;
+  const gripZ = Math.max(needEnd, needMid);
+  return { dropIn: Math.max(0, p.rearHandleHeightIn - gripZ), gripZ };
+}
+
 export function handleGeometry(p: Params, L: Layout): HandleGeom {
   const w = p.handleSocketWallIn;
   const zTop = L.deckTop + L.sideRear; // the rear transom's top corners (D-54: the tall rear section)
@@ -92,9 +112,10 @@ export function handleGeometry(p: Params, L: Layout): HandleGeom {
   const slip = p.handleSocketSlipIn;
   const postX: [number, number] = [xo - w - slip - p.handlePostThickIn, xo - w - slip];
   const barZ = p.rearHandleHeightIn;
+  const park = parkDrop(p, L);
   return {
     zTop, zBot, socketX: p.handlePostThickIn + 2 * (w + slip), socketY: p.handlePostWidthIn + 2 * (w + slip), postX,
-    zPin: zBot + Math.min(1, p.handleSocketDepthIn / 4), zFoot: zBot + 0.5, zPostTop: barZ - p.handleBarDiameterIn / 2,
+    zPin: zTop - Math.min(1.5, p.handleSocketDepthIn / 4), zFoot: zBot + 0.5 + park.dropIn, zPostTop: barZ - p.handleBarDiameterIn / 2, parkDropIn: park.dropIn, parkGripZ: park.gripZ,
     gripArm: barZ - zTop, yPost: L.hwC - p.handleUprightInsetIn, xBar: (postX[0] + postX[1]) / 2,
     bow: bowGeometry(p, L),
   };
@@ -148,27 +169,30 @@ export function buildHandle(ctx: Ctx): Part[] {
       sourcing: { vendor: 'McMaster-Carr (clevis pin with lynch pin)' }, explode: [-1, s, 0.3],
     }));
   }
-  // The handlebow (D-53): a laminated white-oak bow of square section, bent on a form to the arc, ends rounded over by hand (and by the viewer's finish).
+  // The handlebow (D-57): one white-oak board, bandsawn to the arc (grain along the bow, so the long grain runs out at most ~12° at the overhanging ends, where the load is small),
+  // ends rounded over by hand (and by the viewer's finish). The outline is in (y, z); the board is `sec` thick along x.
   const bw = h.bow;
   const sec = p.handleBarDiameterIn;
-  const plies = Math.max(2, Math.round(sec / 0.3125));
-  const volIn3 = bw.lengthIn * sec * sec;
-  const bowStock = { t: sec, w: sec, l: bw.lengthIn };
-  const bowTransform = compose([h.xBar, 0, 0], { z: Math.PI / 2 }); // local x -> model y, local y (width) -> model -x, local z -> model z
-  const bar: Part = {
-    id: 'handle-bar', name: 'Push handle handlebow', group: 'removable', kind: 'bentlam', material: 'white oak',
-    geometry: { type: 'sweep', path: bw.path, width: sec, thickness: sec, plies },
-    transform: bowTransform, body: 'chassis', massLb: woodMassLb(p, volIn3, 4 * sec * bw.lengthIn, p.oakDensityPcf),
-    fab: 'bentlam', step: STEP.brake, stock: bowStock, rough: roughOf(p, bowStock), grain: 'x', removable: true,
-    explode: [-1, 0, 0.3],
-    cgIn: [h.xBar, 0, (bw.zMid + bw.zEnd) / 2],
+  const under = (y: number) => bowUnderZ(bw, y, sec);
+  const over = (y: number) => 2 * (Number.isFinite(bw.radiusIn) ? bw.zPost + bw.crownIn - (bw.radiusIn - Math.sqrt(Math.max(0, bw.radiusIn ** 2 - y * y))) : bw.zPost) - under(y);
+  const ys = Array.from({ length: BOW_SEGMENTS + 1 }, (_, i) => -bw.yEnd + (2 * bw.yEnd * i) / BOW_SEGMENTS);
+  const barOutline: Vec2[] = [...ys.map((y): Vec2 => [y, under(y)]), ...[...ys].reverse().map((y): Vec2 => [y, over(y)])];
+  const zLo = Math.min(...barOutline.map((q) => q[1])), zHi = Math.max(...barOutline.map((q) => q[1]));
+  const bar = profilePart(ctx, {
+    id: 'handle-bar', name: 'Push handle handlebow', group: 'removable', mat: 'oak', removable: true, step: STEP.brake, grain: 'y', fab: 'bandsaw',
+    outline: barOutline, depth: sec, basis: 'yz', origin: [h.xBar - sec / 2, 0, 0], stock: { t: sec, w: zHi - zLo + 0.25, l: 2 * bw.yEnd }, explode: [-1, 0, 0.3],
     notes: bw.crownIn > 0
-      ? `Sled-style handlebow (D-53, reference/05): ${plies} plies of ${(sec / plies).toFixed(3)}" white oak bent on a form to a ${bw.radiusIn.toFixed(1)}" radius arc, ${sec}" square before the hand rounding. The arc passes through the two post tops at ${f2(bw.zPost)}" (the grip height) and crowns ${f2(bw.crownIn)}" above them at the middle (${f2(bw.zMid)}"); the ends overhang the posts to the cart edge (y = ±${f2(bw.yEnd)}") and hang ${f2(bw.zPost - bw.zEnd)}" below the post-top level. The post tops are sawn to the bow's ${bw.postSlopeDeg.toFixed(1)}° slope and each is pinned and epoxied. Bent lamination, white-oak springback is allowed for on the form; epoxy between plies, clamped overnight, then scraped and rounded over.`
-      : `Straight handlebow (crown 0): a ${sec}" square white-oak bar, ends eased over, pinned and epoxied to the tops of the two uprights.`,
-    sourcing: { vendor: `Shop-laminated: ${plies} strips of ${(sec / plies).toFixed(3)}" white oak (resawn), epoxied on a bending form`, costUsd: 15 },
-  };
-  bar.joints = SIDES.map(({ s: sg, tag }) => ({ type: 'pin' as const, to: `handle-post-${tag}`, count: 1, diaIn: 0.375, size: '3/8" × 2-1/4" 316 stainless rod epoxied, blind hole 3/4" deep in the bow, drilled square to the post-top cut', at: [localPoint(bar.transform, [h.xBar, sg * h.yPost, h.bow.zPost - sec / 2 + 0.375])] }));
+      ? `Sled-style handlebow (D-53, reference/05; D-57: gentler and bandsawn): ONE white-oak board ${sec}" thick, ${(zHi - zLo + 0.25).toFixed(2)}" wide and ${(2 * bw.yEnd).toFixed(1)}" long, the long edge bandsawn to a ${bw.radiusIn.toFixed(0)}" radius arc and the other edge to a parallel arc (no lamination, no bending form), then planed and rounded over to a ${sec}" grip. Pick straight-grained stock with the grain along the board: the cut grain runs out ${bw.postSlopeDeg.toFixed(0)}° at the posts and about ${((Math.asin(Math.min(1, bw.yEnd / bw.radiusIn)) * 180) / Math.PI).toFixed(0)}° at the ends (the hold-back pull is taken between the posts, where the grain is level). The arc passes through the two post tops at ${f2(bw.zPost)}" (the grip height) and crowns ${f2(bw.crownIn)}" above them at the middle (${f2(bw.zMid)}"); the ends overhang the posts to the cart edge (y = ±${f2(bw.yEnd)}") and hang ${f2(bw.zPost - bw.zEnd)}" below the post-top level. The post tops are sawn to the bow's ${bw.postSlopeDeg.toFixed(1)}° slope and each is pinned and epoxied.`
+      : `Straight handlebow (crown 0): a ${sec}" thick white-oak bar bandsawn from one board, ends eased over, pinned and epoxied to the tops of the two uprights.`,
+    sourcing: { vendor: `One 5/4 white-oak board, ${(zHi - zLo + 0.25).toFixed(1)}" wide, about 3 ft long (the offcut is the sign blank)`, costUsd: 12 },
+  });
+  bar.joints = SIDES.map(({ s: sg, tag }) => ({ type: 'pin' as const, to: `handle-post-${tag}`, count: 1, diaIn: 0.375, size: '3/8" × 2-1/4" 316 stainless rod epoxied, blind hole 3/4" deep in the bow, drilled square to the post-top cut', at: [localPoint(bar.transform, [h.xBar, sg * h.yPost, bw.zPost - sec / 2 + 0.375])] }));
   parts.push(bar);
+  // The parked position (D-57): the posts and the bow sink `parkDropIn` deeper into the sockets (the second pin hole); the sockets and pins stay.
+  if (ctx.view.handle === 'parked' && h.parkDropIn > 1e-6) {
+    const down = translation(0, 0, -h.parkDropIn);
+    for (const part of parts) if (/^handle-(post|bar)/.test(part.id)) { part.transform = multiply(down, part.transform); if (part.cgIn) part.cgIn = transformPoint(down, part.cgIn); }
+  }
   return parts;
 }
 

@@ -17,10 +17,12 @@ export interface ViewState {
   /** Transport configuration: omit `removable` parts. */
   removed?: boolean;
   /**
-   * Cargo mode (D-53): 'stowed' lays the seat back, cushion, wedges, knobs and plugs flat inside the storage box and leaves the bed clear (no rider; `cargo`
+   * Cargo mode (D-53, D-57): 'stowed' (shown as "seat flat") flips the seat back forward onto the deck and lays the two cushions flat inside the storage box (no rider; `cargo`
    * then shows the payload on the bed instead of the Essentials block). Default 'installed'.
    */
   seat?: 'installed' | 'stowed';
+  /** Rear handlebow (D-57): 'up' at the riding pin position, 'parked' dropped to the second pin position so the bow rests just above the rear side top. Default 'up'. */
+  handle?: 'up' | 'parked';
 }
 
 export interface Ctx {
@@ -80,7 +82,7 @@ export function makeCtx(input: Params, v: ViewState = {}): Ctx {
     d: derived(p),
     L,
     steerRad: (steerDeg * Math.PI) / 180,
-    view: { steerDeg, rider: v.seat === 'stowed' ? 'none' : v.rider ?? 'operating', cargo: v.cargo ?? true, removed: v.removed ?? false, seat: v.seat ?? 'installed' },
+    view: { steerDeg, rider: v.seat === 'stowed' ? 'none' : v.rider ?? 'operating', cargo: v.cargo ?? true, removed: v.removed ?? false, seat: v.seat ?? 'installed', handle: v.handle ?? 'up' },
     plyName: p.plySpecies === PLY_SPECIES.okoumeMarine ? 'okoume marine plywood' : 'baltic birch plywood',
   };
 }
@@ -117,6 +119,8 @@ export interface PartSpec {
   removable?: boolean;
   payload?: boolean;
   notes?: string;
+  /** Lettering engraved into a face (D-58: DO NOT STEP on the storage lid). */
+  legend?: Part['legend'];
   grain?: 'x' | 'y' | 'z';
   edges?: EdgeCondition | EdgeCondition[];
   joints?: Joint[];
@@ -178,6 +182,7 @@ function defaultExplode(ctx: Ctx, s: PartSpec): Vec3 {
       return unit([fx * 0.6, Math.abs(c[1]) > 4 ? sy * 0.3 : 0, -0.6]);
     case 'body':
       if (/^deck/.test(id)) return unit([fx * 0.3, 0, 1]);
+      if (id === 'bow-bulkhead') return unit([1, 0, 0.3]);
       if (/^side-/.test(id)) return unit([0, sy * 1, 0.25]);
       if (/^transom-rear/.test(id)) return unit([-1, 0, 0.3]);
       return unit([0, sy * 0.5, 0.8]);
@@ -189,7 +194,10 @@ function defaultExplode(ctx: Ctx, s: PartSpec): Vec3 {
       if (/^storage-lid/.test(id)) return unit([-0.3, 0, 1]);
       return unit([-0.5, 0, 0.7]);
     case 'brake':
-      if (/^brake-shoe/.test(id)) return unit([0.2, sy * 1, 0.2]);
+      if (/^brake-(flap|shoe|pad|cord)/.test(id)) return unit([-0.4, sy * 0.5, 1]);
+      if (/^brake-(knee|hinge)/.test(id)) return unit([0.3, sy * 1, 0.4]);
+      if (/^brake-backer/.test(id)) return unit([0, -sy * 0.3, -1]);
+      if (/^brake-chock/.test(id)) return unit([1, sy * 0.3, 0]);
       return unit([-1, 0, -0.3]);
     case 'removable':
       if (/^handle/.test(id)) return unit([-1, 0, 0.3]);
@@ -239,6 +247,7 @@ function finalize(ctx: Ctx, s: PartSpec, geometry: Part['geometry'], massLb: num
   if (s.removable) out.removable = true;
   if (s.payload) out.payload = true;
   if (s.notes) out.notes = s.notes;
+  if (s.legend) out.legend = s.legend;
   if (s.sourcing) out.sourcing = s.sourcing;
   else if (s.mat === 'steel') out.sourcing = { ...STEEL_STOCK_SOURCING };
   if (s.cgIn) out.cgIn = s.cgIn;

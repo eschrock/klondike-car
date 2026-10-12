@@ -394,7 +394,15 @@ export function buildPart(part: Part): BuiltPart | null {
       if (g.indices) geo.setIndex(g.indices);
       geo.computeVertexNormals();
       geometry = geo;
-      // Textured looks need UVs: box-map meshes that land on a wood / vinyl material (none do today).
+      if (isWood(look) && g.slabs) {
+        // A plan-curved hull wall (D-57): box-mapped grain along x, thickness across y, crisp outline lines.
+        edges = new THREE.EdgesGeometry(geo, EDGE_ANGLE_DEG);
+        const flat = geo.toNonIndexed();
+        flat.computeVertexNormals();
+        geometry = applyGrain(flat, part, look, size, 1, part.grain ? grain : 0);
+        break;
+      }
+      // Textured looks need UVs: box-map other meshes that land on a wood / vinyl material (none do today).
       if (isWood(look) || look === 'vinyl') material = materialsFor('other');
       break;
     }

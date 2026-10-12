@@ -2,12 +2,14 @@
  * Hull checks (Phase 3 round 2, D-43; the prow-grab check went with the prow, D-45): `hullChecks(ctx)` returns
  *  - lift:       the rear lifter's real share of the transport mass (CG-weighted, not mass / 2) × the dynamic factor, on the grip bar over
  *                the lift slot (bending and shear), for the rear and the front slot;
- *  - foot-stop:  rider restraint in a curb strike (rider × curb-strike g × foot-stop share): board bending between the sides, cleat bearing and
- *                the deck screws in lateral shear (operating and goal rider).
+ *  - foot-stop:  rider restraint in a bump (rider × bump g × foot-stop share) on the bow bulkhead (or the drop-in foot block): plank bending between the sides, and the
+ *                glue and Domino joints that hold the bulkhead on (operating and goal rider; D-57).
  * Every formula is written out in the `how` string; hull.test.ts works each one by hand with literal numbers.
  */
 import { worldAABB } from '../model/bounds';
-import { liftBarStressPsi, liftSlot } from '../model/body';
+import { bowHold, liftBarStressPsi, liftSlot } from '../model/body';
+import { innerHalfWidth } from '../model/layout';
+import { FOOT_CLEAT_T_IN, FOOT_SLOT_DEPTH_IN, FOOT_SLOT_WALL_IN } from '../model/seat';
 import type { Part } from '../model/types';
 import type { Ctx } from './context';
 import { dualCheck, governing, singleCheck, detail, type CaseEval } from './dual';
@@ -15,8 +17,6 @@ import { f } from './format';
 import type { CaseData } from './loads';
 import { allowables } from './structure';
 import { bumpSeatG, bumpSeatGHard } from './bump';
-import { tongueBarStress } from './bridle';
-import { uncTensileArea } from './nds';
 import type { AnalysisCheck, Detail } from './types';
 
 /** Rear lifter's share of a carried mass: reaction at the rear hand-hold (xRear) for a CG at xCg between the two hand-holds (moments about the front one). */
@@ -42,9 +42,10 @@ export function liftCheck(ctx: Ctx): AnalysisCheck {
   const { p, L } = ctx;
   const al = allowables(ctx);
   const { massLb, xCg } = transportMassCg(ctx.parts);
-  // The rear lifter's hands on the rear transom bar (mid-thickness); the front lifter carries through a rope loop in the bridle shackle at the tongue tip (D-56: there is no front hand-hold).
+  // The rear lifter's hands on the rear transom bar (mid-thickness); the front lifter's hands in the hand-hold through the bow bulkhead (D-57, D-58: the nose is lifted by the body,
+  // not by the tongue, which is unbolted for transport). The hold is at the bulkhead's mid-thickness.
   const xr = L.xRear + L.transom / 2;
-  const xf = L.tongue.holeX;
+  const xf = (L.hold.x0 + L.hold.x1) / 2;
   const sh = liftShares(massLb, xCg, xr, xf);
   const rows: Detail[] = [];
   const s = liftSlot(ctx);
@@ -54,76 +55,84 @@ export function liftCheck(ctx: Ctx): AnalysisCheck {
   const tau = (1.5 * V) / (s.thickIn * s.barIn);
   rows.push(detail('rear slot bar bending', sigma, 'psi', al.oakBend, '<='));
   rows.push(detail('rear slot bar shear', tau, 'psi', al.oakShear, '<='));
+  const bh = bowHold(ctx);
   const Pf = sh.front * p.dynamicFactor;
-  // Front: the load goes shackle pin > tie hole > tongue bar (a cantilever, weak axis) and the cart hangs from the nose by the thrust washer / kingpin.
-  const d = p.eyeBoltDiameterIn;
-  const Apin = (Math.PI * d * d) / 4;
-  const tauPin = Pf / (2 * Apin);
-  const pinAllow = (0.577 * p.eyeBoltYieldPsi) / p.steelSafetyFactor;
-  rows.push(detail('front carry through the shackle pin (double shear)', tauPin, 'psi', pinAllow, '<='));
-  const bar = tongueBarStress(ctx, Pf, 0, 0);
-  rows.push(detail('front carry: tongue plate bending about its weak axis (A36)', bar.sigma, 'psi', p.bracketSteelYieldPsi / p.steelSafetyFactor, '<='));
-  const kd = p.kingpinDiaIn;
-  const At = uncTensileArea(kd);
-  const sKing = Pf / At;
-  rows.push(detail('front carry: kingpin in tension if the axle hangs from the nut (grade 8)', sKing, 'psi', p.grade8BoltYieldPsi / p.steelSafetyFactor, '<='));
-  const nutA = (Math.PI / 4) * ((2.2 * kd) ** 2 - (kd + 1 / 16) ** 2);
-  rows.push(detail('front carry: nut washer bearing on the oak slot ceiling (oak perpendicular)', Pf / nutA, 'psi', al.oakPerp, '<='));
-  const how = `Transport mass ${f(massLb)} lb (removable parts off), CG ${f(xCg)}" ahead of the rear axle. Rear lifter's hands on the rear bar at x = ${f(xr, 2)}", front lifter through a rope loop in the bridle shackle at the tongue tip, x = ${f(xf, 2)}" (D-56: no front hand-hold). The rear lifter takes M·(x_f − x_cg)/(x_f − x_r) = ${f(sh.rear)} lb (${f((100 * sh.rear) / massLb, 0)}%), the front lifter ${f(sh.front)} lb. `
+  const sigmaF = liftBarStressPsi(bh, Pf);
+  const tauF = (1.5 * (Pf / 2)) / (bh.thickIn * bh.barIn);
+  rows.push(detail('front (bow bulkhead) hand-hold bar bending', sigmaF, 'psi', al.oakBend, '<='));
+  rows.push(detail('front (bow bulkhead) hand-hold bar shear', tauF, 'psi', al.oakShear, '<='));
+  const how = `Transport mass ${f(massLb)} lb (removable parts off, the tongue among them), CG ${f(xCg)}" ahead of the rear axle. Rear lifter's hands on the rear bar at x = ${f(xr, 2)}", front lifter's hands in the hand-hold through the bow bulkhead at x = ${f(xf, 2)}" (D-57, D-58: the nose is lifted by the body, not the tongue). The rear lifter takes M·(x_f − x_cg)/(x_f − x_r) = ${f(sh.rear)} lb (${f((100 * sh.rear) / massLb, 0)}%), the front lifter ${f(sh.front)} lb. `
     + `Rear: ${f(P)} lbf on one hand (share × ${p.dynamicFactor}); bar ${f(s.thickIn, 2)}" × ${f(s.barIn, 2)}" over a ${f(s.lengthIn, 1)}" slot: M = P·L/4 = ${f(P * s.lengthIn / 4)} lb·in, σ = ${f(sigma, 0)} psi (≤ ${f(al.oakBend, 0)}), τ = 1.5·(P/2)/(t·h) = ${f(tau, 0)} psi (≤ ${f(al.oakShear, 0)}). `
-    + `Front: ${f(Pf)} lbf at the tie: shackle pin ${f(d, 3)}" in double shear ${f(tauPin, 0)} psi (≤ ${f(pinAllow, 0)}); the tongue plate is a cantilever from the beam, bending about its thin axis ${f(bar.sigma, 0)} psi (≤ ${f(p.bracketSteelYieldPsi / p.steelSafetyFactor, 0)}) — lifting the nose by the tongue bends it; lift the front by the body instead. If the axle hangs from the kingpin nut the ${f(kd, 3)}" grade 8 bolt takes ${f(Pf)} lbf in tension (${f(sKing, 0)} psi, ≤ ${f(p.grade8BoltYieldPsi / p.steelSafetyFactor, 0)}) and the nut washer bears on the slot ceiling at ${f(Pf / nutA, 0)} psi (≤ ${f(al.oakPerp, 0)}).`;
+    + `Front: ${f(Pf)} lbf on one hand; bulkhead ${f(bh.thickIn, 2)}" thick with ${f(bh.barIn, 2)}" of oak above the ${f(bh.lengthIn, 1)}" hand-hold (the crown at the center): M = P·L/4 = ${f(Pf * bh.lengthIn / 4)} lb·in, σ = ${f(sigmaF, 0)} psi (≤ ${f(al.oakBend, 0)}), τ = ${f(tauF, 0)} psi (≤ ${f(al.oakShear, 0)}).`;
   const g = governing(rows, how);
   return singleCheck({
-    id: 'lift', label: 'Lifting the cart (rear hand-hold, front through the tongue shackle)', group: 'Structure',
-    value: g.value, unit: g.unit, limit: g.limit, sense: g.sense, details: rows, how, refs: ['D-37', 'D-43', 'D-56', 'BRIEF 4.4'],
+    id: 'lift', label: 'Lifting the cart (rear hand-hold, front hand-hold in the bow bulkhead)', group: 'Structure',
+    value: g.value, unit: g.unit, limit: g.limit, sense: g.sense, details: rows, how, refs: ['D-37', 'D-43', 'D-57', 'D-58', 'BRIEF 4.4'],
   });
 }
 
-/** Numbers behind the foot-stop check for one rider mass, exported for the tests. */
+/**
+ * Numbers behind the foot-stop check for one rider mass, exported for the tests. D-57: the foot brace is the rear face of the BOW BULKHEAD (a 2" oak plank spanning the inside of the
+ * hull, glued to the deck edge in a dado and to the ends of the rails, chine and gunwale), or the drop-in FOOT BLOCK in a slot when `footBlockSlot` is set.
+ */
 export function footStopLoads(ctx: Ctx, riderLb: number, g: number) {
-  const { p } = ctx;
-  const board = ctx.byId.get('foot-stop');
-  if (!board) return null;
-  const bb = worldAABB(board);
-  const span = bb.max[1] - bb.min[1], t = bb.max[0] - bb.min[0], h = bb.max[2] - bb.min[2];
+  const { p, L } = ctx;
   const F = riderLb * g * p.footStopShare;
-  const M = (F * span) / 4;
+  const block = ctx.byId.get('foot-block');
+  const bulk = ctx.byId.get('bow-bulkhead');
+  if (!bulk) return null;
+  const bb = worldAABB(block ?? bulk);
+  const spanIn = block ? bb.max[1] - bb.min[1] : 2 * innerHalfWidth(L, L.bulkhead.x0);
+  const t = block ? bb.max[0] - bb.min[0] : L.bulkhead.thick;
+  // The heels and toes press a band `footStopHeightIn` tall; the plank section that takes it is that tall (the lower strip of the bulkhead).
+  // At mid-span the lift hand-hold is cut through that band, so the section there is the band less the part of the slot inside it.
+  const band = Math.min(p.footStopHeightIn, L.bulkhead.zCorner - L.deckTop);
+  const slotInBand = Math.max(0, Math.min(L.deckTop + band, L.hold.zTop) - Math.max(L.deckTop, L.hold.zBot));
+  const h = block ? bb.max[2] - bb.min[2] : band - slotInBand;
+  const M = (F * spanIn) / 4;
   const S = (h * t * t) / 6;
-  const cleats = ctx.parts.filter((x) => x.id.startsWith('foot-stop-cleat-'));
-  // Cleats ahead of the board take the push in compression (cleat face on the board's front face); behind it they only hold it by tenons and screws.
-  const ahead = cleats.filter((c) => worldAABB(c).min[0] >= bb.max[0] - 1e-6);
-  const cleatArea = ahead.reduce((m, c) => { const b = worldAABB(c); return m + (b.max[1] - b.min[1]) * Math.min(b.max[2], bb.max[2]) - 0 * b.min[2]; }, 0);
-  const contact = ahead.reduce((m, c) => { const b = worldAABB(c); return m + (b.max[1] - b.min[1]) * (Math.min(b.max[2], bb.max[2]) - Math.max(b.min[2], bb.min[2])); }, 0);
-  void cleatArea;
-  const screws = [board, ...cleats].reduce((n, x) => n + (x.joints ?? []).filter((j) => j.type === 'screw' && j.to === 'deck').reduce((a, j) => a + j.count, 0), 0);
-  return { F, span, t, h, M, S, sigma: M / S, aheadCount: ahead.length, contact, bearing: contact > 0 ? F / contact : Infinity, screws, screwLoad: screws > 0 ? F / screws : Infinity };
+  const dd = p.deckCaptureDepthIn;
+  // The push on the bulkhead pulls it forward off its mates: the deck edge in its dado (glue on both faces of the tongue) and the 6 member ends (Dominos).
+  const dadoArea = 2 * dd * 2 * innerHalfWidth(L, L.bulkhead.x0);
+  const slotWallArea = block ? 2 * FOOT_SLOT_DEPTH_IN * h : 0;
+  const slotWallSigma = block ? ((F / 2) * (h / 2)) / ((FOOT_CLEAT_T_IN * FOOT_SLOT_WALL_IN * FOOT_SLOT_WALL_IN) / 6) : 0;
+  const dominoPts = (bulk.joints ?? []).filter((j) => (j.type === 'domino' || j.type === 'mortise-tenon') && /^(rail|side)-/.test(j.to)).reduce((n, j) => n + j.count, 0);
+  const tenonArea = 1; // glue area of one loose tenon or Domino in this part (in²): both long faces of about 1 in × 1/2 in; the 1 in band under the rail ends only takes a loose tenon
+  return { F, span: spanIn, t, h, M, S, sigma: M / S, block: !!block, dadoArea, dadoShear: F / dadoArea, dominoPts, tenonArea, dominoShear: dominoPts > 0 ? F / (dominoPts * tenonArea) : Infinity, slotWallArea, slotBearing: block ? F / slotWallArea : 0, slotWallSigma };
 }
 
 export function footStopCheck(ctx: Ctx): AnalysisCheck | null {
   const { p } = ctx;
   const al = allowables(ctx);
-  if (!ctx.byId.get('foot-stop')) return null;
+  if (!ctx.byId.get('bow-bulkhead')) return null;
   const ev = (c: CaseData): CaseEval => {
     const gN = bumpSeatG(ctx, c);
     const k = footStopLoads(ctx, c.riderLb, gN)!;
+    const what = k.block ? 'foot block' : 'bow bulkhead';
     const ds: Detail[] = [
-      detail('foot-stop board bending between the sides', k.sigma, 'psi', al.oakBend, '<='),
-      detail('deck screws in lateral shear (each)', k.screwLoad, 'lbf', p.woodScrewLateralLbf, '<='),
+      detail(`${what} bending between the sides`, k.sigma, 'psi', al.oakBend, '<='),
+      detail('deck-edge dado glue in shear (carrying the whole push)', k.dadoShear, 'psi', al.oakShear, '<='),
     ];
-    if (k.aheadCount > 0) ds.push(detail('cleat bearing on the board face', k.bearing, 'psi', al.oakPerp, '<='));
+    if (k.dominoPts > 0) ds.push(detail('side and rail ends: Domino / loose-tenon glue in shear (carrying the whole push)', k.dominoShear, 'psi', al.oakShear, '<='));
+    if (k.block) {
+      ds.push(detail('slot wall bearing on the block end', k.slotBearing, 'psi', al.oakPerp, '<='));
+      ds.push(detail('slot wall bending (cantilever from the cleat)', k.slotWallSigma, 'psi', al.oakBend, '<='));
+    }
     // Hard hit (D-50; no lap belt at 3c-1, D-53): the 2" rear hit's seat factor, wood to MOR x C_M with no safety factor.
     const gH = bumpSeatGHard(ctx, c);
     const kh = footStopLoads(ctx, c.riderLb, gH)!;
-    ds.push(detail(`HARD 2" rear hit (seat factor ${f(gH, 2)}): foot-stop board bending (MOR x C_M, no safety factor)`, kh.sigma, 'psi', al.oakBend * p.woodSafetyFactor, '<='));
-    const hardTxt = ` Hard hit: seat factor ${f(gH, 2)} gives ${f(kh.F)} lbf and ${f(kh.sigma, 0)} psi against ${f(al.oakBend * p.woodSafetyFactor, 0)} (no safety factor); the grab handles and seat friction take the rest.`;
-    const how = `Bump: rider ${f(c.riderLb, 0)} lb × ${f(gN, 2)} g × foot-stop share ${p.footStopShare} = ${f(k.F)} lbf forward on the board (the rest goes through the grab handles and seat friction). `
-      + `Board ${f(k.span, 1)}" between the sides, ${f(k.t, 2)}" × ${f(k.h, 1)}": M = F·L/4 = ${f(k.M)} lb·in, σ = M/(h·t²/6) = ${f(k.sigma, 0)} psi (≤ ${f(al.oakBend, 0)}). `
-      + (k.aheadCount > 0 ? `${k.aheadCount} cleats ahead of the board bear on its face over ${f(k.contact, 1)} in²: ${f(k.bearing, 0)} psi (≤ ${f(al.oakPerp, 0)}). ` : 'No cleat stands ahead of the board: the load goes through the tenons and screws. ')
-      + `${k.screws} #10 stainless deck screws share it in lateral shear: ${f(k.screwLoad)} lbf each (≤ ${f(p.woodScrewLateralLbf, 0)}).${hardTxt}`;
+    ds.push(detail(`HARD 2" rear hit (seat factor ${f(gH, 2)}): ${what} bending (MOR x C_M, no safety factor)`, kh.sigma, 'psi', al.oakBend * p.woodSafetyFactor, '<='));
+    const hardTxt = ` Hard hit: seat factor ${f(gH, 2)} gives ${f(kh.F)} lbf and ${f(kh.sigma, 0)} psi against ${f(al.oakBend * p.woodSafetyFactor, 0)} (no safety factor); the grab boards and seat friction take the rest.`;
+    const how = `Bump: rider ${f(c.riderLb, 0)} lb × ${f(gN, 2)} g × foot-stop share ${p.footStopShare} = ${f(k.F)} lbf forward on the ${what} (the rest goes through the grab boards and seat friction). `
+      + `The ${what} spans ${f(k.span, 1)}" between the sides, ${f(k.t, 2)}" thick over a ${f(k.h, 1)}" band (the hand-hold slot is cut through it at mid-span): M = F·L/4 = ${f(k.M)} lb·in, σ = M/(h·t²/6) = ${f(k.sigma, 0)} psi (≤ ${f(al.oakBend, 0)}). `
+      + `The push pulls the bulkhead forward off the hull: the deck edge in its ${p.deckCaptureDepthIn}" dado has ${f(k.dadoArea, 1)} in² of glue on the two faces of the tongue (${f(k.dadoShear, 0)} psi if it took it all, ≤ ${f(al.oakShear, 0)} shear)`
+      + (k.dominoPts > 0 ? `, and the ${k.dominoPts} Dominos / loose tenons into the rail, chine and gunwale ends have ${f(k.dominoPts * k.tenonArea, 1)} in² (${f(k.dominoShear, 0)} psi alone). ` : '. ')
+      + (k.block ? `The foot block's ends bear ${f(k.slotWallArea, 1)} in² on the slot walls (${f(k.slotBearing, 0)} psi, ≤ ${f(al.oakPerp, 0)}), each wall a ${FOOT_SLOT_WALL_IN}" cantilever ${f(k.slotWallSigma, 0)} psi. ` : '')
+      + hardTxt;
     return governing(ds, how);
   };
   return dualCheck({
-    id: 'foot-stop', label: 'Foot stop and rider restraint (bump)', group: 'Structure', refs: ['D-40', 'D-43', 'eng S-foot'],
+    id: 'foot-stop', label: 'Foot brace (bow bulkhead) and rider restraint (bump)', group: 'Structure', refs: ['D-40', 'D-43', 'D-57', 'eng S-foot'],
     primary: 'goal', operating: ev(ctx.loads.operating), goal: ev(ctx.loads.goal), operatingLabel: 'Operating rider', goalLabel: 'Goal rider',
   });
 }

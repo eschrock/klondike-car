@@ -39,7 +39,7 @@ export function cargoBed(p: Params, L: Layout): CargoBed {
   // The wedge-free bed starts at the box's fore end when the box stands behind the seat; with another box location (not the stow design) the whole cabin floor is bed.
   const x0 = p.storageLocation === STORAGE_LOCATION.rearOverAxle ? L.storage.x1 : L.xRear + L.transom;
   const fx = p.seatXIn + p.riderLegReachIn;
-  const xStop = Math.min(fx - p.footStopThickIn / 2, L.railEnd);
+  const xStop = Math.min(fx, L.railEnd);
   const widthAt = (x: number) => 2 * innerHalfWidth(L, x);
   // First x (from the box) where the clear width has dropped below the payload block width.
   let xLoadEnd = x0;

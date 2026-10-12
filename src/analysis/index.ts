@@ -19,6 +19,7 @@ import { seatChecks } from './seat';
 import { hullChecks } from './hull';
 import { cgCheck, massEmpty, truckFit, truckSkipped } from './transport';
 import { cargoChecks } from './cargo';
+import { restLoadCheck } from './rest';
 import type { AnalysisCheck } from './types';
 
 export * from './types';
@@ -73,6 +74,7 @@ function allRows(ctx: Ctx, truck: AnalysisCheck): AnalysisCheck[] {
     ...seatChecks(ctx),
     ...hullChecks(ctx),
     ...cargoChecks(ctx),
+    restLoadCheck(ctx),
     truck,
   ];
 }

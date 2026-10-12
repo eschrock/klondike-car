@@ -251,8 +251,8 @@ export function maxDeckSpan(ctx: Ctx): number {
 }
 
 /** Standing-scout foot patch: 4" along the span × 10" across (spec). */
-const FOOT_ALONG_IN = 4;
-const FOOT_ACROSS_IN = 10;
+export const FOOT_ALONG_IN = 4;
+export const FOOT_ACROSS_IN = 10;
 const STOCK_PLY_MM = [6, 9, 12, 18];
 
 /**

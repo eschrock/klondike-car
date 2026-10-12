@@ -4,7 +4,7 @@ import { buildModel } from '../model';
 import { checkTruckFit } from '../truck/fit';
 import { LIGHT_OF_ID, riderSweep, runAround } from '../analysis/rider-sweep';
 import type { Status } from '../analysis/types';
-import { LIGHT_CHECK_IDS, cargoText, FRONT_END_IDS, headline, lightTexts, limitLine, failReason, weightNote, limiterName, limiterAdvice, PHASE3B_CHECK_IDS } from './simple-text';
+import { LIGHT_CHECK_IDS, cargoText, FRONT_END_IDS, headline, lightTexts, limitLine, failReason, weightNote, limiterName, limiterAdvice, PHASE3B_CHECK_IDS, restingText } from './simple-text';
 import type { AnalysisCheck } from '../analysis/types';
 
 const p = defaultParams();
@@ -148,6 +148,26 @@ describe('simple wording', () => {
   });
 });
 
+describe('resting weight (D-58)', () => {
+  it('says one number: the most an adult can weigh to sit or step in, rounded down to 10 lb, and notes the lid', () => {
+    const rest = { ...row('rest-load', 250, 223, 'fail'), details: [{ name: 'the resting weight the cart holds with every margin (the worst member reaches its limit)', value: 250, unit: 'lb', limit: 223.06, util: 1.12, sense: '<=' as const }] } as AnalysisCheck;
+    const t = restingText([rest], 250);
+    expect(t.maxLb).toBe(220);
+    expect(t.text).toBe('Holds a 220 lb adult sitting or stepping in.');
+    expect(t.status).toBe('fail');
+    expect(t.note).toMatch(/DO NOT STEP/);
+    const ok = restingText([{ ...rest, status: 'pass', details: [{ ...rest.details![0], limit: 289 }] } as AnalysisCheck], 250);
+    expect(ok.text).toBe('Holds a 280 lb adult sitting or stepping in.');
+    expect(ok.status).toBe('pass');
+    expect(restingText([], 250).maxLb).toBeNull();
+  });
+  it('is computed by the real row at the defaults', () => {
+    const t = restingText(sweep.operatingChecks, p.restLoadLb);
+    expect(t.maxLb).not.toBeNull();
+    expect(t.text).toMatch(/^Holds a \d+ lb adult sitting or stepping in\.$/);
+  });
+});
+
 describe('Phase 3b rows in the Simple view (spec 6.3)', () => {
   it('every new check id has a plain name and a failure sentence; none use the old Ackermann words or the pivot parts\' own names', () => {
     for (const id of PHASE3B_CHECK_IDS) {
@@ -160,15 +180,20 @@ describe('Phase 3b rows in the Simple view (spec 6.3)', () => {
   });
 
 
-  it('the Hills light has no stopping-distance sentence (ride mode is gone, D-53); it speaks of foot force on the brake pedal (D-55) and the pitch rows', () => {
+  it('the Hills light has no stopping-distance sentence (ride mode is gone, D-53); it speaks of the brake flaps SLOWING the cart (brake-slow, D-58), says to chock or hold on steep hills, and the pitch rows', () => {
     const t = lightTexts({ p, checks: sweep.operatingChecks, fit }).hills;
     expect(t.text).not.toMatch(/stops in about|riding speed/);
-    expect(t.text).toMatch(/brake pedal/);
-    expect(t.text).toMatch(/foot force/);
-    expect(t.text).not.toMatch(/brake handle|lever|hand/i);
-    const fail = lightTexts({ p, checks: [row('brake-force', 80, 30, 'fail'), row('pitch-rear', 1, 1, 'fail')], fit }).hills;
+    expect(t.text).toMatch(/brake flaps slow the loaded cart on hills up to \d+/);
+    expect(t.text).toMatch(/chock a wheel or have someone hold it/);
+    expect(t.text).not.toMatch(/foot force/); // the hold force (brake-force) is an info row now and never speaks in the Hills light
+    expect(t.text).not.toMatch(/brake handle|lever|hand\b/i);
+    // brake-force alone never changes the light
+    const info = lightTexts({ p, checks: [row('brake-force', 120, 90, 'info'), row('brake-slow', 14, 10), row('pitch-rear', 1, 1)], fit }).hills;
+    expect(info.status).toBe('pass');
+    // the pass / fail row is brake-slow
+    const fail = lightTexts({ p, checks: [row('brake-slow', 6, 10, 'fail'), row('pitch-rear', 1, 1, 'fail')], fit }).hills;
     expect(fail.status).toBe('fail');
-    expect(fail.text).toMatch(/takes 80 lb of foot force on the brake pedal/);
+    expect(fail.text).toMatch(/slow the loaded cart on hills up to only 6°/);
     expect(fail.text).toMatch(/could lift the front wheels/);
   });
 
@@ -226,8 +251,8 @@ describe('cargo card wording (D-53)', () => {
     const t = cargoText(base);
     expect(t.tone).toBe('pass');
     expect(t.headline).toBe('Hauls 600 lb or more after the race');
-    expect(t.lines.join(' ')).toMatch(/27 in wide all the way, 40 in long out to the foot stop, and 7 in to the top of the sides at the low \(bow\) end/);
-    expect(t.lines.join(' ')).toMatch(/lie flat in the box/);
+    expect(t.lines.join(' ')).toMatch(/27 in wide all the way, 40 in long out to the foot brace, and 7 in to the top of the sides at the low \(bow\) end/);
+    expect(t.lines.join(' ')).toMatch(/cushions lie flat in the box/);
     expect(t.lines.join(' ')).not.toMatch(/holds about \d+%/);
   });
   it('rounds the capacity to 5 lb, goes red below the target and names the limiter and the rows that fail empty', () => {
@@ -240,7 +265,7 @@ describe('cargo card wording (D-53)', () => {
     expect(all).toMatch(/What stops it first: a rear wheel in a hard bump\. 1 other check fails even with nothing on the bed/);
     expect(all).toMatch(/next limit is an axle, at about 200 lb/);
     expect(all).toMatch(/fit in the box, but only just/);
-    expect(all).toMatch(/holds about 62%/); // wording of the brake itself belongs to the brake rows (D-55)
+    expect(all).toMatch(/hold about 62%/); // wording of the brake itself belongs to the brake rows (D-57)
     expect(all).not.toMatch(/NaN|undefined/);
   });
   it('is amber when the design payload is within 10% of a limit', () => {

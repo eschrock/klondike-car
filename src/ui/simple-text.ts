@@ -17,7 +17,7 @@ export const LIGHT_TITLE: Record<Light, string> = {
 export const LIGHT_CHECK_IDS: Record<Light, string[]> = {
   tipping: ['tip-straight'],
   turns: ['slide-before-tip', 'v-rollover'],
-  hills: ['pitch-fwd', 'pitch-rear', 'brake-force', 'brake-traction'],
+  hills: ['pitch-fwd', 'pitch-rear', 'brake-slow', 'brake-traction'],
   steering: ['turn-radius', 'steer-clear'],
   strength: Object.keys(LIGHT_OF_ID).filter((k) => LIGHT_OF_ID[k] === 'strength'),
   truck: ['truck-fit'],
@@ -31,9 +31,9 @@ const PART: Record<string, { name: string; event?: string }> = {
   rails: { name: 'the side rails' },
   deck: { name: 'the floor' },
   'seat-back': { name: 'the seat back', event: 'when the rider leans back' },
-  'seat-grip': { name: 'the side grab handles' },
+  'seat-grip': { name: 'the side grab boards' },
   lift: { name: 'the lifting hand-holds', event: 'when two people lift the cart' },
-  'foot-stop': { name: 'the foot stop', event: 'in a hard bump' },
+  'foot-stop': { name: 'the foot brace (the bow bulkhead)', event: 'in a hard bump' },
   // The pivoting front axle (D-56), in words a parent knows: the pivot is "the bolt the front axle turns on", the tongue plate is "the pull arm".
   'bridle-eye': { name: 'the rope shackle on the pull arm', event: 'under a hard pull' },
   kingpin: { name: 'the bolt the front axle pivots on', event: 'when the cart is pulled hard' },
@@ -44,11 +44,11 @@ const PART: Record<string, { name: string; event?: string }> = {
   'king-beam': { name: 'the crossbar that holds the pivot bolt' },
   'wheel-rating': { name: 'a rear wheel', event: 'in a hard bump' },
   'rear-beam-seat': { name: 'the rear axle seat in the side rails', event: 'in a hard bump' },
-  'brake-lever': { name: 'the brake pedal', event: 'if it is stomped' },
-  'brake-links': { name: 'the brake arms and pivots', event: 'under a hard stomp' },
-  'brake-beam': { name: 'the brake bar' },
-  'brake-shoes': { name: 'the brake shoes' },
-  'park-hold': { name: 'the parking latch' },
+  'brake-flap': { name: 'a brake flap', event: 'if it is stomped' },
+  'brake-hinge': { name: 'a brake flap hinge', event: 'under a hard stomp' },
+  'brake-mount': { name: 'the mount that holds a brake flap to the side rail', event: 'under a hard stomp' },
+  'brake-return': { name: 'the cord that lifts a brake flap' },
+  'park-hold': { name: 'the wheel chocks' },
   joists: { name: 'the floor crossmembers' },
   'handle-bow': { name: 'the handlebow', event: 'when the handler pulls back' },
 };
@@ -63,16 +63,17 @@ const REASON: Record<string, string> = {
   'turn-radius': 'the turning circle is too wide',
   'pitch-fwd': 'braking downhill could tip it nose-first',
   'pitch-rear': 'a hard pull uphill can lift the front wheels',
-  'brake-force': 'it takes too hard a push on the brake pedal to hold it on a hill',
+  'brake-force': 'it takes a hard push on each brake flap to hold it on a steep hill (chock a wheel or hold it)',
+  'brake-slow': 'the brake flaps would not even slow it on a hill of the usual steepness',
   'axle-stress': 'an axle could bend',
   'beam-rear': 'an axle could bend',
   'bearing-groove': 'an axle could bend',
   rails: 'the side rails could crack',
   deck: 'the floor could crack',
   'seat-back': 'the seat back could break or pull loose when the rider leans back',
-  'seat-grip': 'a side grab handle could break when a rider hangs on',
+  'seat-grip': 'a side grab board could break or pull off when a rider hangs on',
   lift: 'a lifting hand-hold could crack when the cart is carried',
-  'foot-stop': 'the foot stop could break or pull loose in a hard bump',
+  'foot-stop': 'the foot brace could break or pull off the bow in a hard bump',
   'bridle-eye': 'the rope shackle on the pull arm could bend or pull out under a hard pull',
   kingpin: 'the bolt the front axle pivots on could bend or shear when the cart is pulled hard or hits a bump',
   'king-bearing': 'the plastic washer the front axle turns on could be crushed by the weight',
@@ -83,19 +84,19 @@ const REASON: Record<string, string> = {
   'steer-clear': 'a front tire could rub the body when turned all the way',
   'wheel-rating': 'a rear wheel could be overloaded in a hard bump',
   'rear-beam-seat': 'the notch that holds the rear axle in the side rails could crush or split in a hard bump',
-  'brake-lever': 'the brake pedal could bend or pull loose if it is stomped',
-  'brake-links': 'a brake arm or pivot could bend or shear under a hard stomp',
-  'brake-beam': 'the brake bar could bend under a hard stomp',
-  'brake-shoes': 'a brake shoe could wear or crush under a hard push',
-  'park-hold': 'the parking latch could slip and the cart roll away when parked on a steep hill',
+  'brake-flap': 'a brake flap could bend or split if it is stomped',
+  'brake-hinge': 'a brake flap hinge could pull out of the wood under a hard stomp',
+  'brake-mount': 'the mount that holds a brake flap to the side rail could crack or pull loose under a hard stomp',
+  'brake-return': 'the cord that lifts a brake flap could slip or pull out, and the flap would drag on the tire',
+  'park-hold': 'the wheel chocks could slip or be climbed and the cart roll away when parked on a steep hill',
   joists: 'a floor crossmember could crack under the seat',
   'handle-bow': 'the handlebow could crack when the handler pulls back',
 };
 
-/** Rows the D-56 pivoting front end and the D-55 foot brake add: each has a plain name or a failure sentence here, pinned by the simple-text test. */
+/** Rows the D-56 pivoting front end and the D-57 step brake add: each has a plain name or a failure sentence here, pinned by the simple-text test. */
 export const PHASE3B_CHECK_IDS = [
   'bridle-eye', 'kingpin', 'king-bearing', 'front-beam', 'front-stub', 'steer-stops', 'king-beam', 'steer-clear',
-  'brake-lever', 'brake-links', 'brake-beam', 'brake-shoes', 'park-hold', 'wheel-rating', 'rear-beam-seat',
+  'brake-flap', 'brake-hinge', 'brake-mount', 'brake-return', 'park-hold', 'wheel-rating', 'rear-beam-seat',
 ] as const;
 export function failReason(id: string): string {
   return REASON[id] ?? 'a safety check fails';
@@ -108,7 +109,7 @@ export function limiterName(id: string): string {
     case 'tip-straight': return 'tipping on a side slope';
     case 'slide-before-tip': case 'v-rollover': return 'a fast, sharp turn';
     case 'pitch-fwd': case 'pitch-rear': return 'hills';
-    case 'brake-force': case 'brake-traction': return 'braking on a hill';
+    case 'brake-force': case 'brake-slow': case 'brake-traction': return 'braking on a hill';
     case 'turn-radius': return 'turning';
     case 'steer-clear': return 'a front tire rubbing the body when turned';
     default: return 'a safety check';
@@ -120,7 +121,7 @@ export function limiterAdvice(id: string): string {
   switch (id) {
     case 'tip-straight': case 'slide-before-tip': return 'widen the wheels or lower the floor';
     case 'pitch-rear': case 'pitch-fwd': return 'make the cart longer between the wheels or lower the floor';
-    case 'brake-force': case 'brake-traction': return 'ask the builders about a stronger brake';
+    case 'brake-force': case 'brake-slow': case 'brake-traction': case 'park-hold': return 'ask the builders about a stronger brake';
     case 'turn-radius': return 'make the cart shorter between the wheels';
     case 'steer-clear': return 'make the body narrower or the wheels farther apart';
     default: return PART[id] ? `the builders need to strengthen ${PART[id].name}` : 'adjust the cart in the controls below';
@@ -180,17 +181,19 @@ export function lightTexts({ p, checks, fit }: DesignFacts): Record<Light, Light
     out.turns = { light: 'turns', status, text };
   }
 
-  // Hills & braking: brake pedal force, front lift under a pull, forward pitch.
+  // Hills & braking: foot force on the brake flaps, front lift under a pull, forward pitch.
   {
-    const bf = by(checks, 'brake-force'), pr = by(checks, 'pitch-rear'), pf = by(checks, 'pitch-fwd');
-    const status = st(['brake-force', 'pitch-rear', 'pitch-fwd']);
+    const bs = by(checks, 'brake-slow'), pr = by(checks, 'pitch-rear'), pf = by(checks, 'pitch-fwd');
+    const status = st(['brake-slow', 'pitch-rear', 'pitch-fwd']);
     const slope = num(p.designSlopeDeg);
     const parts: string[] = [];
-    parts.push(bf?.status === 'fail'
-      ? `Holding it on a ${slope}° hill takes ${num(val(bf))} lb of foot force on the brake pedal (about ${num(lim(bf))} is comfortable).`
-      : bf?.status === 'marginal'
-        ? `Holds on a ${slope}° hill with ${num(val(bf))} lb of foot force on the brake pedal, near the ${num(lim(bf))} lb limit.`
-        : `Holds on a ${slope}° hill with ${num(val(bf))} lb of foot force on the brake pedal (up to ${num(lim(bf))} lb is comfortable).`);
+    // D-58 (Eric): the step-brake flaps are a just-in-case SLOWING brake. The row that counts is brake-slow (the steepest grade the flaps hold, both feet at the comfortable force);
+    // the foot force to hold on the ${slope} degree hill (brake-force) is only information. Holding on a steep hill is the chock's job, or a person holding the cart.
+    parts.push(bs?.status === 'fail'
+      ? `The brake flaps would slow the loaded cart on hills up to only ${num(val(bs))}° (about ${num(lim(bs))}° is wanted); on steeper hills chock a wheel or have someone hold it.`
+      : bs?.status === 'marginal'
+        ? `The brake flaps slow the loaded cart on hills up to ${num(val(bs))}°, close to the ${num(lim(bs))}° wanted; on steeper hills chock a wheel or have someone hold it.`
+        : `The brake flaps slow the loaded cart on hills up to ${num(val(bs))}°; on steep hills (like the ${slope}° design hill) chock a wheel or have someone hold it.`);
     parts.push(pr?.status === 'fail' ? 'A hard pull uphill could lift the front wheels.'
       : pr?.status === 'marginal' ? "The front won't lift when pulled uphill, but with little to spare."
       : "The front won't lift when pulled uphill.");
@@ -323,6 +326,29 @@ export function weightNote(w: number, status: Status, worstId: string | undefine
   return `${w} lb: OK.`;
 }
 
+// ── Resting weight (D-58, Eric): an adult sitting still or stepping in, no bump. One number for the at-a-glance strip. ──
+
+export interface RestingText {
+  status: Status;
+  /** "Holds a 220 lb adult sitting or stepping in." */
+  text: string;
+  /** The weight the cart holds this way, rounded down to 10 lb, or null when the row is missing. */
+  maxLb: number | null;
+  /** Said once, plainly: the storage lid is not meant to be stood on. */
+  note: string;
+}
+
+/** The "rest-load" row in words: the most an adult can weigh to sit or step in anywhere (not on the storage lid, which says DO NOT STEP). Pure. */
+export function restingText(checks: readonly AnalysisCheck[], targetLb: number): RestingText {
+  const note = 'Not the storage lid: it is engraved DO NOT STEP.';
+  const r = checks.find((c) => c.id === 'rest-load');
+  const d = r?.details?.find((x) => /^the resting weight the cart holds/.test(x.name));
+  if (!r || !d) return { status: 'info', text: '', maxLb: null, note };
+  const maxLb = Math.floor(d.limit / 10) * 10;
+  const status: Status = d.limit >= targetLb ? r.status === 'marginal' ? 'marginal' : 'pass' : 'fail';
+  return { status, text: `Holds a ${maxLb} lb adult sitting or stepping in.`, maxLb, note };
+}
+
 // ── Cargo mode (D-53): "what can it haul after the race?" Separate from the rider headline, which it never changes. ──
 
 export interface CargoText {
@@ -342,14 +368,14 @@ export function cargoText(c: CargoCapacity): CargoText {
   const short = cap !== null && cap < c.payloadLb;
   const tone: Tone = short || c.cargoFailsAtPayload.length > 0 ? 'fail' : c.comfortableLb !== null && c.comfortableLb < c.payloadLb ? 'warn' : 'pass';
   const lines: string[] = [];
-  lines.push(`The target is ${c.payloadLb} lb of camp gear, firewood and water with the seat stowed in the storage box (to confirm with Eric). ${tone === 'pass' ? 'Every check holds at that load.' : tone === 'warn' ? 'It holds, but close to a limit.' : `${c.counts.fail} check${c.counts.fail === 1 ? ' fails' : 's fail'} at that load.`}`);
+  lines.push(`The target is ${c.payloadLb} lb of camp gear, firewood and water with the seat back flipped flat and the cushions in the storage box. ${tone === 'pass' ? 'Every check holds at that load.' : tone === 'warn' ? 'It holds, but close to a limit.' : `${c.counts.fail} check${c.counts.fail === 1 ? ' fails' : 's fail'} at that load.`}`);
   if (c.limiter && short) lines.push(`What stops it first: ${limiterName(c.limiter.id)}.${c.alwaysFailing.length ? ` ${c.alwaysFailing.length} other check${c.alwaysFailing.length === 1 ? ' fails' : 's fail'} even with nothing on the bed.` : ''}`);
   else if (c.limiter) lines.push(`Closest to its limit as the load grows: ${limiterName(c.limiter.id)}.`);
   if (c.limiterOther && c.capacityOtherLb !== null && c.limiterOther.id !== c.limiter?.id)
     lines.push(`Leaving out the checks that already fail for riders (the front end), the next limit is ${limiterName(c.limiterOther.id)}, at about ${rounded5(c.capacityOtherLb)} lb.`);
   const b = c.bed;
-  lines.push(`The bed is flat once the seat is in the box: ${n0(b.widthIn)} in wide all the way, ${n0(b.totalLengthIn)} in long out to the foot stop, and ${n0(b.heightIn)} in to the top of the sides at the low (bow) end (the sides rise toward the back). ${c.stow.applicable ? (c.stow.status === 'fail' ? 'The seat back and cushion do NOT fit in the box.' : c.stow.status === 'marginal' ? 'The seat back and cushion fit in the box, but only just.' : 'The seat back and cushion lie flat in the box.') : ''}`.trim());
+  lines.push(`The bed is flat once the seat back is flipped down and the cushions are in the box: ${n0(b.widthIn)} in wide all the way, ${n0(b.totalLengthIn)} in long out to the foot brace, and ${n0(b.heightIn)} in to the top of the sides at the low (bow) end (the sides rise toward the back). ${c.stow.applicable ? (c.stow.status === 'fail' ? 'The two cushions do NOT fit in the box.' : c.stow.status === 'marginal' ? 'The two cushions fit in the box, but only just.' : 'The two cushions lie flat in the box.') : ''}`.trim());
   if (c.rearTraction !== null && c.rearTraction < 1)
-    lines.push(`Parked nose-down on a steep hill with the full load, the rear brake alone holds about ${n0(c.rearTraction * 100)}% of it; the pullers (or a chock) hold the rest.`);
+    lines.push(`Parked nose-down on a steep hill with the full load, the rear brake flaps alone hold about ${n0(c.rearTraction * 100)}% of it; the pullers (or a chock) hold the rest.`);
   return { tone, headline, lines };
 }

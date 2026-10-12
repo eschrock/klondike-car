@@ -6,7 +6,7 @@ import { bumpCases, bumpPulse, bumpSeatG, bumpSeatGHard, bumpStrike, bumpText, c
 
 /** The default design with the goal rider and the cargo case's payload parts present, front axle straight (the same context `runChecks` builds). */
 function ackCtx(over: Partial<Params> = {}): Ctx {
-  const p = resolveParams({ ...defaultParams(), ...over });
+  const p = resolveParams({ ...defaultParams(), frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5, ...over }); // the 3c-3 hand-calc fixture (D-58 narrowed the tracks)
   return makeContext(p, buildModel(p, { rider: 'goal', cargo: true }));
 }
 
@@ -119,21 +119,21 @@ describe('bump: velocity-pulse (spec 5.1)', () => {
     // plate gyration: ky = span/sqrt(12) with span = the wheelbase 44 (the front contacts at the kingpin line, x = 44); kx from the mean of the two tracks (35.5 and 35.5)
     const ky = 44 / Math.sqrt(12), kx = 35.5 / Math.sqrt(12);
     const wc = c.massLb / (1 + ((0 - c.cg[0]) / ky) ** 2 + ((17.75 - c.cg[1]) / kx) ** 2);
-    expect(wc / 61.0).toBeGreaterThan(0.95); // 61 lb at the 134 lb empty cart; the mass moves a little as parts change
-    expect(wc / 61.0).toBeLessThan(1.05);
+    expect(wc / 63.5).toBeGreaterThan(0.95); // 61 lb at the 134 lb empty cart, 63.5 lb at the 148 lb cart of D-58; the mass moves a little as parts change
+    expect(wc / 63.5).toBeLessThan(1.05);
     expect(cornerWeightLb(ctx, c, 'rear')).toBeCloseTo(wc, 9);
     const sq = Math.sqrt((ctx.p.bumpWheelRateLbIn * wc) / 386.1);
     // normal: r = 5, h = 1 -> cos beta = 0.6; v_n = 3 x 17.6 x 0.6 = 31.68 in/s
     const n = bumpStrike(ctx, c, 'rear', 1);
     expect(n.Fn).toBeCloseTo(31.68 * sq, 6);
-    expect(n.Fn / 281.6).toBeCloseTo(1, 1);
+    expect(n.Fn / 286.4).toBeCloseTo(1, 1);
     // hard: h = 2 -> cos beta = 0.8; v_n = 5 x 17.6 x 0.8 = 70.4 in/s
     const h = bumpStrike(ctx, c, 'rear', 2, 1, 'hard');
     expect(h.Fn).toBeCloseTo(70.4 * sq, 6);
-    expect(h.Fn / 625.7).toBeCloseTo(1, 1); // 70.4 x 8.89
+    expect(h.Fn / 636.4).toBeCloseTo(1, 1); // 70.4 x 9.04
     // static rear wheel: rear axle share W (1 - x/44) = 359.2 (1 - 17.46/44) = 216.7 lb, split 0.5 + |y|/track: 108.4 lb
     expect(n.staticLb).toBeCloseTo((c.massLb * (1 - c.cg[0] / 44)) * (0.5 + Math.abs(c.cg[1]) / 35.5), 6);
-    expect(n.staticLb / 108.4).toBeCloseTo(1, 1);
+    expect(n.staticLb / 116.4).toBeCloseTo(1, 1); // 108.4 lb at the 134 lb cart, 116.4 lb at the 148 lb cart
   });
 
   it('the seat factor is 1 + V_rear / W (normal strike at walking pace, 3 mph, D-55), never below dynamicFactor', () => {

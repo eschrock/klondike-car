@@ -102,10 +102,17 @@ const setRiderShown = (v: boolean) => {
   view.cargo = v;
 };
 viewer.addToolbarControl(riderLabel);
-// Cargo mode (D-53): the seat back, cushion and wedges lie flat in the storage box and the bed is clear. View only; with "Show rider & cargo" on, the payload block shows on the bed.
+// Cargo mode (D-53, D-57): the seat back flips flat onto the deck and the two cushions lie in the storage box. View only; with "Show rider & cargo" on, the payload block shows on the bed.
 viewer.addToolbarControl(
-  checkbox('Seat stowed (cargo mode)', 'Show the seat back, cushion, wedges and knobs lying flat inside the storage box, leaving a flat cargo bed (D-53). With "Show rider & cargo" on, the cargo payload sits on the bed. View only.', false, (v) => {
+  checkbox('Seat flat (cargo mode)', 'Flip the seat back forward onto the deck and lay the seat cushion and the back pad flat inside the storage box, leaving a flat cargo bed (D-57). With "Show rider & cargo" on, the cargo payload sits on the bed. View only.', false, (v) => {
     view.seat = v ? 'stowed' : 'installed';
+    render();
+  }),
+);
+// Handlebow parked (D-57): the posts drop to the second pin position and the bow rests just above the rear side top.
+viewer.addToolbarControl(
+  checkbox('Handle parked', 'Drop the rear handlebow to its second pin position, resting just above the rear side top, as when it is not being pushed (D-57). View only.', false, (v) => {
+    view.handle = v ? 'parked' : 'up';
     render();
   }),
 );

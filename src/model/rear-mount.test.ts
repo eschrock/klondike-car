@@ -1,5 +1,5 @@
 /**
- * Rear mounts (build review r2 MUST-4 / S2 / S7, D-48; D-55): the foot brake's mounting (bolted to the top of the axle beam, nothing in the rails), the rear axle
+ * Rear mounts (build review r2 MUST-4 / S2 / S7, D-48; D-57): the step brake's mounting (knees bolted through the rails into oak backers), the rear axle
  * beam's notch seat and hold-down angles, and the fasteners long enough for their stacks. (The D-48 bearing plates, doublers and the cross shaft, and the D-53 rail notch
  * and transom bracket, are gone.)
  */
@@ -20,41 +20,41 @@ const byId = (id: string) => parts.find((x) => x.id === id)!;
 const L = computeLayout(defaults);
 const world = (part: Part, at: Vec3) => transformPoint(part.transform, at);
 
-describe('foot brake mounts (D-55)', () => {
-  it('the rails and hangers are not cut or drilled for the brake: the pivot brackets bolt to the TOP of the rear axle beam, so the thrust loop closes inside the axle (no brake joints on the rails or the hangers)', () => {
-    for (const id of ['rail-L', 'rail-R', 'axle-hanger-L', 'axle-hanger-R']) {
-      const r = byId(id);
-      expect(r.joints?.some((j) => /^brake-/.test(j.to)), id).toBeFalsy();
-    }
+describe('step brake mounts (D-57)', () => {
+  it('the rail is drilled for the brake knee (4 bolts a side) and backed by a glued oak doubler inside it; the axle hangers and the rear axle beam are not touched', () => {
     for (const tag of ['L', 'R']) {
-      const br = byId(`brake-bracket-${tag}`);
-      expect(br.joints?.some((j) => j.type === 'bolt' && j.to === 'beam-R' && j.count === 2), `${br.id} beam bolts`).toBe(true);
-      expect(br.joints?.some((j) => j.to.startsWith('rail-'))).toBeFalsy();
+      const knee = byId(`brake-knee-${tag}`);
+      const j = knee.joints?.find((q) => q.type === 'bolt' && q.to === `rail-${tag}`);
+      expect(j, `${knee.id} bolts`).toBeDefined();
+      expect(j!.diaIn).toBe(defaults.brakeMountBoltDiaIn);
+      expect(j!.count).toBe(defaults.brakeMountBoltColumns * defaults.brakeMountBoltRows);
+      const bk = byId(`brake-backer-${tag}`);
+      expect(bk.joints?.some((q) => q.type === 'glue' && q.to === `rail-${tag}`)).toBe(true);
+    }
+    for (const id of ['axle-hanger-L', 'axle-hanger-R', 'beam-R']) {
+      expect(byId(id).joints?.some((q) => /^brake-/.test(q.to)), id).toBeFalsy();
     }
   });
-  it('the bracket flange bolts clear the rod, the rod clamp plates and the hold-down angles, and stay inside the beam', () => {
+  it('the backer lies on the rail inner face, behind the hanger, and the joist that met it is cut back to its face', () => {
     const g = brakeGeometry(defaults, L);
-    const fl = g.tongue.flange;
-    for (const [x, y] of fl.bolts) {
-      expect(Math.abs(x - L.beamR.x) - defaults.brakeBracketBoltDiameterIn / 2).toBeGreaterThan(defaults.axleDiameterIn / 2);
-      expect(L.beamR.x + L.beamR.thick / 2 - x).toBeGreaterThan(defaults.brakeBracketBoltDiameterIn);
-      expect(y).toBeLessThan(L.beamR.len / 2 - 1);
-    }
-    const clamp = worldAABB(byId('clamp-RL1'));
-    expect(fl.y1).toBeLessThan(clamp.min[1]);
-    const hd = worldAABB(byId('beam-hold-down-L'));
-    expect(fl.y0).toBeGreaterThan(hd.max[1]);
+    const bk = worldAABB(byId('brake-backer-L'));
+    expect(bk.max[1]).toBeCloseTo(L.hwC + L.side - defaults.railThicknessIn, 2); // the rail's inner face
+    expect(bk.max[1] - bk.min[1]).toBeCloseTo(defaults.brakeBackerThickIn, 6);
+    expect(bk.min[0]).toBeGreaterThan(worldAABB(byId('axle-hanger-L')).max[0]);
+    const j2 = worldAABB(byId('joist-2'));
+    expect(j2.max[1]).toBeCloseTo(bk.min[1], 2);
+    expect(g.backer.x1).toBeGreaterThan(g.bolts.xs[g.bolts.xs.length - 1]);
   });
-  it('bolted only: no welding anywhere in the brake, and every steel plate is outsourced or drilled stock with a source', () => {
+  it('bolted only: no welding anywhere in the brake, no steel plate, and every purchased part has a source', () => {
     for (const x of parts.filter((q) => /^brake-/.test(q.id))) {
-      expect(`${x.notes ?? ''} ${x.sourcing?.vendor ?? ''} ${x.material}`.toLowerCase(), x.id).not.toMatch(/\bweld(ed|ing)?\b/);
+      expect(`${x.notes ?? ''} ${x.sourcing?.vendor ?? ''} ${x.material}`.toLowerCase(), x.id).not.toMatch(/\bweld(ed|ing)?\b|a36|laser/);
       if (x.kind === 'metal' || x.kind === 'purchased') expect(x.sourcing?.vendor, x.id).toBeTruthy();
     }
   });
-  it('the validator accepts the defaults and flags a rear overhang that leaves the latch stud too long to reach the hook on the transom', () => {
-    expect(validateParams(defaults).filter((i) => i.severity === 'error')).toEqual([]);
-    const bad = validateParams({ ...defaults, rearOverhangIn: 6 });
-    expect(bad.some((i) => i.keys.includes('brakePedalReachIn') && /stud/.test(i.message))).toBe(true);
+  it('the validator accepts the defaults and warns when the chock is taller than the room under the knee', () => {
+    expect(validateParams(defaults).filter((i) => i.severity !== 'info' && i.keys.some((k) => /^brake/.test(k)))).toEqual([]);
+    // railDepthIn 3.5: the knee bottom drops to 4.0 in, leaving 3.5 in for a 4 in chock
+    expect(validateParams({ ...defaults, brakeChockHeightIn: 4, railDepthIn: 3.5 }).some((i) => i.keys.includes('brakeChockHeightIn'))).toBe(true);
   });
 });
 
@@ -75,7 +75,7 @@ describe('rear axle hangers, beam seat and hold-downs (MUST-4, D-54)', () => {
       // On the inside of the rail: its outer face is the rail's inner face (|y| 11.25), 3/4 in thick (inner face at 10.5).
       expect(s * (s > 0 ? b.max[1] : b.min[1])).toBeCloseTo(11.25, 9);
       expect(s * (s > 0 ? b.min[1] : b.max[1])).toBeCloseTo(11.25 - defaults.axleHangerThickIn, 9);
-      expect(s * (s > 0 ? rail.min[1] : rail.max[1])).toBeCloseTo(11.25, 9);
+      expect(s * (s > 0 ? rail.min[1] : rail.max[1])).toBeLessThanOrEqual(11.25 + 1e-9); // the rail's box reaches further in at the bow turn-in (D-57); at the axle its inner face is at 11.25
       // The rail is a 3 in bar under the deck (D-56: the deck is only 8 in up); its bottom is 0.85 in below the beam top, so the hanger (bottom 1.35 in below the beam top) reaches just under it.
       expect(rail.min[2]).toBeCloseTo(L.railTop - defaults.railDepthIn, 9);
       expect(b.min[2]).toBeLessThan(rail.min[2]);
@@ -86,7 +86,7 @@ describe('rear axle hangers, beam seat and hold-downs (MUST-4, D-54)', () => {
     expect(rs.zBot).toBeCloseTo(5.375 - 1.35, 9);
     expect(rs.zSolidTop).toBeCloseTo(L.deckBot, 9);
     expect(rs.yOut).toBeCloseTo(11.25, 9);
-    expect(rs.yIn).toBeCloseTo(10.5, 9);
+    expect(rs.yIn).toBeCloseTo(11.25 - defaults.axleHangerThickIn, 9); // 7/8 in hanger (D-58)
   });
   it('the hanger is notched on its underside to bear on the beam top; the whitelist entry is replaced by a bounded one', () => {
     expect(seat).not.toBeNull();
@@ -109,9 +109,9 @@ describe('rear axle hangers, beam seat and hold-downs (MUST-4, D-54)', () => {
       expect(world(h, j.at![0])[0]).toBeCloseTo(L.beamR.x, 6);
       expect(Math.abs(world(h, j.at![0])[1])).toBeCloseTo(11.25 - defaults.axleHangerThickIn / 2, 6); // mid-thickness of the hanger
     }
-    // the notch volume (2.625 x 1.35 x 0.75 = 2.66 in^3) comes out of the hanger mass: a wider notch makes it lighter
+    // the notch volume (2.625 x 1.35 x 0.875 = 3.10 in^3, the 7/8 in hanger of D-58) comes out of the hanger mass: a wider notch makes it lighter
     const oakLb = (seat.volume / 1728) * defaults.oakDensityPcf;
-    expect(seat.volume).toBeCloseTo(2.625 * 1.35 * 0.75, 9);
+    expect(seat.volume).toBeCloseTo(2.625 * 1.35 * defaults.axleHangerThickIn, 9);
     expect(oakLb).toBeGreaterThan(0.05);
     const loose = { ...defaults, beamNotchClearIn: 0.25 } as Params;
     expect(validateParams(loose).filter((i) => i.severity === 'error')).toEqual([]);
@@ -208,18 +208,18 @@ describe('fastener stacks (S2) and the push-handle fit (S7)', () => {
     const j = byId('handle-post-L').joints!.find((q) => q.to === 'handle-bar' && q.type === 'pin')!;
     expect(j.size).toMatch(/epoxied/);
     expect(byId('handle-post-L').joints!.some((q) => q.to === 'handle-bar' && /wing nut/.test(q.size ?? ''))).toBe(false);
-    expect(byId('handle-bar').sourcing?.vendor).toMatch(/laminated/); // the handlebow is shop-laminated white oak (D-53), not a bought dowel
+    expect(byId('handle-bar').sourcing?.vendor).toMatch(/white-oak board/); // the handlebow is bandsawn from one white-oak board (D-57), not a bought dowel
   });
 });
 
 describe('the push-handle sockets and the girder / stub-axle variants (D-53, D-55)', () => {
-  it('the girder (hull-beam) frame and a stub-axle design still build the brake and mount the pivot brackets on the axle beam', () => {
+  it('the girder (hull-beam) frame and a stub-axle design still build the step brake and mount its knees on the rails', () => {
     for (const q of [{ frameStyle: 1 }, { axleStyle: 1 }] as Partial<Params>[]) {
       const p = { ...defaults, ...q } as Params;
       const ps = buildModel(p);
-      expect(ps.some((x) => x.id === 'brake-beam')).toBe(true);
-      expect(ps.some((x) => x.id === 'brake-bracket-L')).toBe(true);
-      expect(ps.some((x) => x.id === 'brake-arm-R')).toBe(true);
+      expect(ps.some((x) => x.id === 'brake-flap-L')).toBe(true);
+      expect(ps.some((x) => x.id === 'brake-knee-L')).toBe(true);
+      expect(ps.some((x) => x.id === 'brake-backer-R')).toBe(true);
     }
   });
 });

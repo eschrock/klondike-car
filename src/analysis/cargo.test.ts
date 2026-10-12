@@ -15,7 +15,7 @@ import { makeContext } from './context';
 import { runChecks, type AnalysisCheck } from './index';
 import { seatFactor } from './bump';
 import { cargoCapacity } from './cargo-capacity';
-import { lidLoads, strapLoads } from './cargo';
+import { grainSlopeFactor, lidLoads, strapLoads } from './cargo';
 import { riderSweep } from './rider-sweep';
 import { contactsAt, RAD } from './geometry';
 
@@ -29,13 +29,14 @@ const stowed = buildModel(defaults, { rider: 'none', cargo: false, seat: 'stowed
 const ctx = makeContext(defaults, installed, stowed);
 
 describe('the parameter (D-53)', () => {
-  it('is 250 lb, assumed, referenced to D-53, and says to confirm with Eric', async () => {
+  it('is 200 lb, locked by Eric (D-58, 2026-10-11), no longer waiting for confirmation', async () => {
     const { PARAM_DEFS } = await import('../params');
     const d = PARAM_DEFS.cargoPayloadLb;
-    expect(d.default).toBe(250);
-    expect(d.status).toBe('assumed');
-    expect(d.ref).toBe('D-53');
-    expect(d.note).toMatch(/Confirm with Eric/);
+    expect(d.default).toBe(200);
+    expect(d.status).toBe('locked');
+    expect(d.ref).toMatch(/D-58/);
+    expect(d.note).toMatch(/Eric 2026-10-11/);
+    expect(d.note).not.toMatch(/onfirm with Eric/);
     expect(PARAM_DEFS.cargoConcentratedLb.status).toBe('assumed');
   });
 });
@@ -43,24 +44,24 @@ describe('the parameter (D-53)', () => {
 describe('the cargo load cases', () => {
   const [aft, fore] = ctx.loads.cargoCases;
   const bed = cargoBed(defaults, L);
-  it('are two placements of the payload on the stowed cart with no rider: mass = stowed empty cart + 250 lb', () => {
+  it('are two placements of the payload on the stowed cart with no rider: mass = stowed empty cart + 200 lb', () => {
     expect(ctx.loads.cargoCases).toHaveLength(2);
     for (const c of [aft, fore]) {
       expect(c.kind).toBe('cargo');
       expect(c.riderLb).toBe(0);
-      expect(c.cargoLb).toBe(250);
-      expect(c.massLb).toBeCloseTo(totalMass(stowed) + 250, 6);
+      expect(c.cargoLb).toBe(200);
+      expect(c.massLb).toBeCloseTo(totalMass(stowed) + 200, 6);
     }
   });
   it('put the CG at the cargo height and lateral offset: z and y by the mass-weighted mean, x by the placement', () => {
     const m0 = totalMass(stowed), cg0 = centerOfGravity(stowed);
-    const M = m0 + 250;
+    const M = m0 + 200;
     const cz = L.deckTop + defaults.cargoCgHeightIn;
-    expect(aft.cg[2]).toBeCloseTo((m0 * cg0[2] + 250 * cz) / M, 6);
-    expect(aft.cg[1]).toBeCloseTo((m0 * cg0[1] + 250 * defaults.cargoCgOffsetYIn) / M, 6);
+    expect(aft.cg[2]).toBeCloseTo((m0 * cg0[2] + 200 * cz) / M, 6);
+    expect(aft.cg[1]).toBeCloseTo((m0 * cg0[1] + 200 * defaults.cargoCgOffsetYIn) / M, 6);
     const lenC = Math.min(defaults.cargoLoadLengthIn, bed.xLoadEnd - bed.x0);
-    expect(aft.cg[0]).toBeCloseTo((m0 * cg0[0] + 250 * (bed.x0 + lenC / 2)) / M, 6);
-    expect(fore.cg[0]).toBeCloseTo((m0 * cg0[0] + 250 * (bed.xLoadEnd - lenC / 2)) / M, 6);
+    expect(aft.cg[0]).toBeCloseTo((m0 * cg0[0] + 200 * (bed.x0 + lenC / 2)) / M, 6);
+    expect(fore.cg[0]).toBeCloseTo((m0 * cg0[0] + 200 * (bed.xLoadEnd - lenC / 2)) / M, 6);
     expect(fore.cg[0]).toBeGreaterThan(aft.cg[0]);
   });
   it('the stowed cart is a hair different from the installed one (the seat kit moved into the box), not the same list', () => {
@@ -122,25 +123,26 @@ describe('rear-only traction with the cargo forward (info number quoted by the c
 });
 
 describe('tipping with the high cargo CG', () => {
-  it('lateral tip = atan(d / h) of the 250 lb payload (CG 16.2 in up, 1.95 in left of center) worst over the steering range, hand-derived: aft and fore both pass the 40 degree limit; the fore pile (x = 31.3) is the worse', () => {
+  it('lateral tip = atan(d / h) of the 200 lb payload (CG 16.2 in up, 1.95 in left of center) worst over the steering range, hand-derived: aft and fore both pass the 40 degree limit; the fore pile (x = 31.3) is the worse', () => {
     const k = byId(cs, 'tip-straight').cases!.cargo!;
     const ct = contactsAt(ctx.contact, 0);
     expect(ct.FL[0]).toBeCloseTo(44, 9);
     // Distance from (x, y) to the side edge through the rear tire (0, +-17.75) and the front tire of the turned axle (44 -+ 17.75 sin s, +-17.75 cos s).
+    const rh = defaults.rearTrackIn / 2, fh = defaults.frontTrackIn / 2; // D-58: 32 in rear and 34 1/2 in front track
     const degAt = (c: { cg: number[] }) => {
       let worst = Infinity;
       for (let a = -20; a <= 20; a += 1) {
         const s = (a * Math.PI) / 180;
-        const fl = [44 - 17.75 * Math.sin(s), 17.75 * Math.cos(s)], fr = [44 + 17.75 * Math.sin(s), -17.75 * Math.cos(s)];
-        const dl = Math.abs(fl[0] * (c.cg[1] - 17.75) - (fl[1] - 17.75) * c.cg[0]) / Math.hypot(fl[0], fl[1] - 17.75);
-        const dr = Math.abs(fr[0] * (c.cg[1] + 17.75) - (fr[1] + 17.75) * c.cg[0]) / Math.hypot(fr[0], fr[1] + 17.75);
+        const fl = [44 - fh * Math.sin(s), fh * Math.cos(s)], fr = [44 + fh * Math.sin(s), -fh * Math.cos(s)];
+        const dl = Math.abs(fl[0] * (c.cg[1] - rh) - (fl[1] - rh) * c.cg[0]) / Math.hypot(fl[0], fl[1] - rh);
+        const dr = Math.abs(fr[0] * (c.cg[1] + rh) - (fr[1] + rh) * c.cg[0]) / Math.hypot(fr[0], fr[1] + rh);
         worst = Math.min(worst, (Math.atan2(Math.min(dl, dr), c.cg[2]) * 180) / Math.PI);
       }
       return worst;
     };
     const [aft, fore] = ctx.loads.cargoCases;
-    expect(degAt(aft)).toBeGreaterThan(degAt(fore));
-    expect(Math.abs(degAt(fore) - 42.6)).toBeLessThan(1);
+    expect(Math.abs(degAt(aft) - degAt(fore))).toBeLessThan(0.5); // D-58: the narrower REAR track makes the aft pile as bad as the fore one (41.7 vs 41.9)
+    expect(Math.abs(degAt(fore) - 43.0)).toBeLessThan(0.5); // 44.7 at the old 35.5 in tracks (200 lb; 43.2 at 250 lb); 43.0 at 34 1/2 / 32 in (D-58): 3 degrees over the 40 degree limit
     expect(k.value).toBeCloseTo(Math.min(degAt(aft), degAt(fore)), 6);
     expect(k.value).toBeLessThan(byId(cs, 'tip-straight').cases!.operating!.value); // worse than the rider cases
     expect(k.value).toBeGreaterThan(defaults.tipStraightMinDeg);
@@ -151,8 +153,8 @@ describe('tipping with the high cargo CG', () => {
 describe('the deck and joists under the cargo', () => {
   const bed = cargoBed(defaults, L);
   const g = seatFactor(ctx, ctx.loads.cargoCases[0]);
-  it('deck, uniform load: 250 lb x g over the bed area on a 12 in strip, simply supported on the longest span: M = wL^2/8', () => {
-    const q = (250 * g) / bed.areaIn2;
+  it('deck, uniform load: 200 lb x g over the bed area on a 12 in strip, simply supported on the longest span: M = wL^2/8', () => {
+    const q = (200 * g) / bed.areaIn2;
     const span = parseFloat(/largest crossmember span ([\d.]+)/.exec(byId(cs, 'deck').how)![1]);
     const t = defaults.deckPlyIn;
     const M = (q * 12 * span * span) / 8;
@@ -169,7 +171,7 @@ describe('the deck and joists under the cargo', () => {
     let trib = 0;
     for (let i = 1; i < edges.length - 1; i++) trib = Math.max(trib, (edges[i + 1] - edges[i - 1]) / 2);
     const S = (defaults.crossmemberThickIn * defaults.crossmemberDepthIn ** 2) / 6;
-    const q = (250 * g) / bed.areaIn2;
+    const q = (200 * g) / bed.areaIn2;
     const M = (q * trib * span * span) / 8;
     expect(byId(cs, 'joists').detailsCargo!.find((d) => d.name === 'uniform cargo, bending')!.value).toBeCloseTo(M / S, 0);
     // Concentrated: 90 lb x g over ceil(12 / trib) joists, point load at the middle: M = PL/4.
@@ -213,15 +215,15 @@ describe('the lid as a table (lid-load)', () => {
 });
 
 describe('tying the load down (cargo-strap)', () => {
-  it('strap tension T = W (g / mu - 1) / (2 n sin 45) by hand: 250 lb, 0.8 g, mu 0.3, 3 straps -> 98.2 lbf, a third of a 300 lbf plate', () => {
+  it('strap tension T = W (g / mu - 1) / (2 n sin 45) by hand: 200 lb, 0.8 g, mu 0.3, 3 straps -> 78.6 lbf, a quarter of a 300 lbf plate', () => {
     const k = strapLoads(ctx);
     expect(k.straps).toBe(3);
-    expect(k.hold).toBeCloseTo(250 * (0.8 / 0.3 - 1), 9);
-    expect(k.T).toBeCloseTo((250 * (0.8 / 0.3 - 1)) / (2 * 3 * Math.sin(Math.PI / 4)), 9);
-    expect(k.T).toBeCloseTo(98.2, 1);
+    expect(k.hold).toBeCloseTo(200 * (0.8 / 0.3 - 1), 9);
+    expect(k.T).toBeCloseTo((200 * (0.8 / 0.3 - 1)) / (2 * 3 * Math.sin(Math.PI / 4)), 9);
+    expect(k.T).toBeCloseTo(78.6, 1);
     const c = byId(cs, 'cargo-strap');
     expect(c.statusCargo).toBe('pass');
-    expect(c.value).toBeCloseTo(98.2, 1);
+    expect(c.value).toBeCloseTo(78.6, 1);
     expect(c.limit).toBe(defaults.lashLoadLbf);
   });
   it('the six D-rings stay (D-41): six lash points, 300 lbf working load each', () => {
@@ -237,13 +239,15 @@ describe('tying the load down (cargo-strap)', () => {
 });
 
 describe('the seat-stow row and the 10 Essentials row', () => {
-  it('seat-stow passes at the defaults with the margins of the plan; fails when the seat is back at 12 in', () => {
+  it('seat-stow (D-57: the two cushions in the box, the back flipped flat) passes at the defaults with the margins of the plan; fails when the cushion is too deep for the box', () => {
     const c = byId(cs, 'seat-stow');
     const plan = seatStowPlan(defaults, L, installed);
     expect(c.status).toBe('pass');
     expect(det(cs, 'seat-stow', 'fore-aft').value).toBeCloseTo(plan.need.lengthIn, 9);
     expect(det(cs, 'seat-stow', 'across').limit).toBeCloseTo(plan.interior.y1 - plan.interior.y0, 9);
-    expect(byId(runChecks({ ...defaults, seatXIn: 12 }, { includeTruck: false }), 'seat-stow').status).toBe('fail');
+    expect(det(cs, 'seat-stow', 'height').value).toBeCloseTo(plan.need.heightIn, 9);
+    expect(c.how).toMatch(/never goes in the box/);
+    expect(byId(runChecks({ ...defaults, seatDepthIn: 17.5 }, { includeTruck: false }), 'seat-stow').status).toBe('fail');
   });
   it('the 10 Essentials still pack into the box for race mode (storage-pack), with room', () => {
     const c = byId(cs, 'storage-pack');
@@ -253,14 +257,18 @@ describe('the seat-stow row and the 10 Essentials row', () => {
 });
 
 describe('the handlebow row (D-39 socket loads unchanged)', () => {
-  it('bow bending at the middle by hand: M = F L / 4 on the 2 x yPost span, sigma = 6 M / b^3, against oak design x the lamination curvature factor', () => {
+  it('bow bending at the middle by hand (D-57, one bandsawn board): M = F L / 4 on the 2 x yPost span, sigma = 6 M / b^3, against the oak design bending (no lamination factor; the grain is level at the middle), and a grain-runout factor at the ends', () => {
     const bw = bowGeometry(defaults, L);
     const F = defaults.handleHoldbackLbf, span = 2 * bw.yPost, b = defaults.handleBarDiameterIn;
     const M = (F * span) / 4;
     expect(det(cs, 'handle-bow', 'middle pulling aft').value).toBeCloseTo((6 * M) / b ** 3, 6);
-    const t = b / 4;
-    const Cc = 1 - 2000 * (t / bw.radiusIn) ** 2;
-    expect(det(cs, 'handle-bow', 'middle pulling aft').limit).toBeCloseTo(ctx.d.oakDesignMorPsi * Cc, 6);
+    expect(det(cs, 'handle-bow', 'middle pulling aft').limit).toBeCloseTo(ctx.d.oakDesignMorPsi, 6);
+    // the end: the sawn arc runs the grain out atan(yEnd / sqrt(R^2 - yEnd^2)) (about 12 degrees, 1:4.7): Wood Handbook factor 0.45 at 1:5
+    const slope = Math.tan(Math.asin(bw.yEnd / bw.radiusIn));
+    expect(grainSlopeFactor(0.2)).toBeCloseTo(0.45, 9);
+    expect(grainSlopeFactor(0.1)).toBeCloseTo(0.81, 9);
+    expect(grainSlopeFactor(0)).toBe(1);
+    expect(det(cs, 'handle-bow', 'overhanging end').limit).toBeCloseTo(ctx.d.oakDesignMorPsi * grainSlopeFactor(slope), 6);
     expect(byId(cs, 'handle-bow').status).toBe('pass');
   });
   // (the handle-sockets row lives in brake.ts with the foot brake rework, D-55: its post bending is tested in brake.test.ts)
@@ -268,21 +276,19 @@ describe('the handlebow row (D-39 socket loads unchanged)', () => {
 
 describe('cargo capacity (the payload sweep)', () => {
   const cap = cargoCapacity(defaults);
-  const notBrake = (id: string) => !id.startsWith('brake-') && id !== 'park-hold' && id !== 'handle-sockets'; // the foot-brake rows are in flux (D-55)
-  it('FINDING (D-56): with the pivoting front axle the cargo is limited at about 197 lb by the rear axle beam seat (the 1 in rear bump peak on the rail net section) - far past the old 8 lb tip limit; the front-end rows king-bearing and steer-stops fail with an empty bed', () => {
-    expect(cap.payloadLb).toBe(250);
+  const notBrake = (id: string) => !id.startsWith('brake-') && id !== 'park-hold' && id !== 'handle-sockets'; // the step-brake rows are covered in brake.test.ts (D-57)
+  it('D-58: with the roll pads, the oak tongue, the chain stops, the 1 in hangers and the wider clamp plates, the 200 lb cargo passes every row (capacity above the payload); what limits it first is the front axle beam bending (front-beam, 205 lb); no front-end row fails with an empty bed', () => {
+    expect(cap.payloadLb).toBe(200);
     expect(cap.capacityLb).not.toBeNull();
+    expect(cap.capacityLb!).toBeGreaterThanOrEqual(200);
     expect(cap.limiter).not.toBeNull();
-    expect(cap.limiter!.id).toBe('rear-beam-seat');
-    expect(cap.capacityLb!).toBeGreaterThan(180);
-    expect(cap.capacityLb!).toBeLessThan(215);
+    expect(cap.limiter!.id).toBe('front-beam'); // util 0.99 at 200 lb: the front beam was sized for 200 lb with no added mass (D-58)
     expect(cap.comfortableLb!).toBeGreaterThan(120);
     expect(cap.comfortableLb!).toBeLessThan(cap.capacityLb!);
     const fixed = cap.alwaysFailing.map((r) => r.id).filter(notBrake);
-    expect(fixed).toContain('king-bearing'); // the roll couple of a one-wheel strike: not cargo-limited, it fails with nothing on the bed
-    expect(fixed).toContain('steer-stops');
+    for (const id of ['king-bearing', 'steer-stops', 'bridle-eye', 'lift', 'steer-clear']) expect(fixed).not.toContain(id);
     expect(cap.alwaysFailing.map((r) => r.id)).not.toContain(cap.limiter!.id);
-    expect(cap.statusAtPayload).toBe('fail');
+    expect(cap.statusAtPayload).not.toBe('fail');
     expect(cap.counts.fail).toBe(cap.rows.filter((r) => r.statusAtPayload === 'fail').length);
   });
   it('the limiter flips from not-failing to failing across the capacity (within one 50 lb ladder step)', () => {
@@ -291,13 +297,11 @@ describe('cargo capacity (the payload sweep)', () => {
     expect(at(Math.max(0, cap.capacityLb! - 25)).statusCargo).not.toBe('fail');
     expect(at(cap.capacityLb! + 30).statusCargo).toBe('fail');
   });
-  it('leaving out the rows that already fail for the riders (the front-end rows and the tongue), the limiter is still the rear axle beam seat: nothing else is cargo-limited below it', () => {
+  it('no row fails for the riders at the defaults, so the "other" capacity is the capacity and the front-end rows are not open', () => {
     expect(cap.limiterOther).not.toBeNull();
-    for (const id of ['king-bearing', 'steer-stops', 'bridle-eye']) expect(cap.openIds).toContain(id);
+    for (const id of ['king-bearing', 'steer-stops', 'bridle-eye']) expect(cap.openIds).not.toContain(id);
     expect(cap.capacityOtherLb!).toBeGreaterThanOrEqual(cap.capacityLb!);
-    expect(cap.openIds).not.toContain(cap.limiterOther!.id);
-    expect(cap.limiterOther!.id).toBe('rear-beam-seat');
-    expect(byId(cs, 'rear-beam-seat').statusCargo).toBe('fail'); // util 1.11 at the 250 lb payload
+    expect(byId(cs, 'rear-beam-seat').statusCargo).not.toBe('fail'); // util 0.91 (marginal) at the 200 lb payload with the 7/8 in hanger
   });
   it('quotes the flat bed and the stow fit, and the rear-only traction when the foot brake rows provide it', () => {
     expect(cap.bed.widthIn).toBeCloseTo(2 * L.hwC, 9);

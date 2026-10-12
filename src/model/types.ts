@@ -74,7 +74,7 @@ export type Geometry =
   /** Bent lamination: centerline path in local XZ, rectangular section (width along Y). */
   | { type: 'sweep'; path: Vec2[]; width: number; thickness: number; plies: number }
   /** Pre-built triangle mesh (purchased parts, mannequin, truck). */
-  | { type: 'mesh'; positions: number[]; indices?: number[] };
+  | { type: 'mesh'; positions: number[]; indices?: number[]; /** A long thin wall (D-57 plan-curved hull members): the overlap tests cover it with boxes about this long (in) along x instead of one bounding box. */ slabs?: number; /** Wall thickness (in) of such a plan-curved member, for the finish's roundover cap. */ thickness?: number; /** The wall's (x, z) outline, so the overlap tests can clip a notch or a step exactly. */ profile?: Vec2[] };
 
 export interface Dims {
   t: number;
@@ -163,6 +163,8 @@ export interface Part {
    * stay a small-scale cosmetic (edge roundover, cushion crown). Real shape changes go in `geometry`.
    */
   finish?: Finish;
+  /** Lettering cut into a face (D-58: the storage lid is engraved DO NOT STEP). Data for the CNC file and, later, the viewer; no geometry. */
+  legend?: { text: string; face: 'top'; process: string; letterHeightIn: number; depthIn: number };
   notes?: string;
 }
 

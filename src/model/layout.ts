@@ -3,12 +3,14 @@
  * subsystems agree on where the deck, axle stack, seat and storage box are. Plain numbers only;
  * all design inputs come from Params (src/params.ts).
  *
- * D-54 body: straight parallel sides (a constant width, no taper), a sled side profile (a straight line from `sideHeightRearIn` at the rear transom to
- * `sideHeightBowIn` where the sides end against the curled bow), one flat deck level, and the pivoting soapbox front axle at the wheelbase (D-56; the swivel casters were rejected).
+ * D-54 body, D-57 character: a sled side profile (the sheer sweeps up in a concave curve from `sideHeightBowIn` at the bow to `sideHeightRearIn` at the rear transom,
+ * `sheerCurveIn`), sides that ease in toward the bow in plan (`bowTurnInIn`, shared with the frame and the front axle through `Layout.turnIn`), one flat deck level that ends
+ * at the rear face of the shaped oak BOW BULKHEAD (the rider's foot brace and the lift hand-hold, D-57), and the pivoting soapbox front axle at the wheelbase (D-56).
  */
 import {
   STORAGE_LOCATION,
-  bowCurl,
+  bowBulkhead,
+  bowTurnInAt,
   derived,
   resolveParams,
   sideHeightAt,
@@ -26,15 +28,18 @@ export interface Layout {
   /** Rear transom outer face (the body's rear end) and the bow tip (front-most point of the curl). */
   xRear: number;
   xFront: number;
-  /** The flat deck ends here; the bow curl carries on and curls up (D-54). */
+  /** The flat deck and the sides end here: the rear face of the bow bulkhead (the foot brace, D-57). */
   xFlatEnd: number;
-  /** The sides end against the curl here, where its inside face has risen to the bow side height. */
+  /** The sides end against the bulkhead here (= xFlatEnd). */
   xSideEnd: number;
-  curl: ReturnType<typeof bowCurl> & {
-    /** Inside-face height above the deck top at x (0 at xFlatEnd), and the tangent angle (rad) there. */
-    heightAt: (x: number) => number;
-    angleAt: (x: number) => number;
-  };
+  /** How far the hull's outer face has turned in at x, per side (D-57): 0 behind the turn-in, `bowTurnInIn` at the bulkhead. The inner faces, the deck edge and the front rails follow it. */
+  turnIn: (x: number) => number;
+  /** The shaped oak bow bulkhead (D-57): rear face `x0` (= the foot brace), front face `x1` (the bow tip), bottom z, the top z at the corners (the sheer height at the bow) and at the center, and its half width. */
+  bulkhead: { x0: number; x1: number; thick: number; bot: number; zCorner: number; zCenter: number; halfW: number };
+  /** The lift hand-hold through the bulkhead (D-57; the nose is lifted by the body, not the tongue): slot x range (the bulkhead thickness), half length across, z range and its center. */
+  hold: { x0: number; x1: number; halfLen: number; zBot: number; zTop: number; zMid: number };
+  /** Drop-in foot block (D-57): the x of its REAR face-contact (the face the heels press) in each slot position, measured as distance behind the bulkhead face, thickness and height. */
+  footBlock: { behind: number[]; thick: number; height: number };
   /** Chine bottom, chine height (= railBand), and the rail top (the deck underside level). */
   chineBot: number;
   railTop: number;
@@ -69,7 +74,8 @@ export interface Layout {
   /** Front pivot (D-56): the steer geometry (lock, stack heights, swath, stops) and the pieces placed from it. */
   steer: ReturnType<typeof steerGeometry>;
   king: { x: number; len: number; bot: number; top: number; depth: number };
-  stops: { faceX: number; y1: number; y2: number; bot: number; top: number; thick: number };
+  /** The two steering check chains (D-58), described for the RIGHT chain (the left is the mirror): the anchor eye ring on the front face of the chain joist behind the king beam (x, y < 0, z), the beam eye ring's standoff behind the axle beam's trailing face (u < 0, in the beam frame), its distance from the kingpin along the beam (v), its z, the stand-off of both rings, and the chain length between the eye rings (taut at +lock). */
+  chain: { anchor: [number, number, number]; joistX: number; joistT: number; beamU: number; beamV: number; beamZ: number; lenIn: number; stand: number };
   /** Tongue plate: tip x, bottom and top z; the bridle tie hole is `holeX` from the tip and the shackle/rope height is `tieZ`. */
   tongue: { tipX: number; z0: number; z1: number; holeX: number; tieZ: number };
   /** Rails run to the end of the flat deck; ahead of `railStepX` they are only `railDepthF` deep so the swinging axle beam passes under them. Joists (the king beam included) carry the deck. */
@@ -130,9 +136,9 @@ export function computeLayout(input: Params): Layout {
   const d = derived(p);
   const r = d.wheelRadiusIn;
   const WB = p.wheelbaseIn;
-  const curl0 = bowCurl(p);
+  const bh = bowBulkhead(p);
   const xRear = -p.rearOverhangIn;
-  const xFront = curl0.xTip;
+  const xFront = bh.xTip;
   const side = p.sideThicknessIn;
   const transom = p.transomThicknessIn;
   const rearLane = p.blockingThickIn;
@@ -142,17 +148,10 @@ export function computeLayout(input: Params): Layout {
   const rodR = p.axleDiameterIn / 2;
   const joistT = p.crossmemberThickIn;
 
-  // ── Bow curl: inside-face height above the deck top at x (0 at the tangent point) ──
-  const Ri = curl0.rIn;
-  const heightAt = (x: number) => {
-    const dd = Math.max(0, Math.min(curl0.run, x - curl0.xFlatEnd));
-    return Ri - Math.sqrt(Math.max(0, Ri * Ri - dd * dd));
-  };
-  const angleAt = (x: number) => Math.asin(Math.max(0, Math.min(1, (x - curl0.xFlatEnd) / Ri)));
-  const sideBow = Math.min(p.sideHeightBowIn, curl0.riseInner - 0.2);
-  const dEnd = Math.sqrt(Math.max(0, Ri * Ri - (Ri - sideBow) ** 2));
-  const xSideEnd = curl0.xFlatEnd + dEnd;
-  const curl = { ...curl0, heightAt, angleAt };
+  // ── Bow end (D-57): the sides end against the bulkhead's rear face ──
+  const sideBow = p.sideHeightBowIn;
+  const xSideEnd = bh.xFlatEnd;
+  const turnIn = (x: number) => bowTurnInAt(p, x);
 
   // `position` 0 = underslung (rod on top of the beam), 1 = overslung. The pivoting front beam is ALWAYS underslung (the king stack in steerGeometry assumes it, D-56).
   const mkBeam = (x: number, track: number, thick: number, position = p.axleBeamPosition): Beam => {
@@ -161,7 +160,7 @@ export function computeLayout(input: Params): Layout {
     return { x, len: Math.max(1, track - p.hubLengthIn - 0.25), thick, depth, top, bot: top - depth };
   };
   const beamR = mkBeam(0, p.rearTrackIn, p.axleBeamThicknessIn);
-  const beamF = mkBeam(WB, p.frontTrackIn, p.axleBeamThicknessIn, 0);
+  const beamF = mkBeam(WB, p.frontTrackIn, p.frontBeamThicknessIn, 0);
 
   // ── Seat ──
   const baseW = Math.max(1, Math.min(p.seatWidthIn, 2 * hwC - 1));
@@ -213,32 +212,47 @@ export function computeLayout(input: Params): Layout {
   const steer = steerGeometry(p);
   const kingX = steer.kingX;
   const king = { x: kingX, len: p.kingBeamLengthIn, bot: steer.kingBot, top: deckTop - ply, depth: steer.kingDepth };
-  const stopThick = joistT;
-  // The beam's leading face (a plane `axleBeamThickness / 2` ahead of its axis) crosses the stop's rear face at beam distance `steer.stopY1` from the kingpin, i.e. at world |y| =
-  // stopY1 cos(lock) - (thickness / 2) sin(lock). Beyond that point the swinging face is AHEAD of the stop face, so a block there would be run through by the beam: the block
-  // ENDS at the contact point (it spans the old stop width inboard of it), and the beam touches its outer end at full lock.
-  const stopContactY = steer.stopY1 * Math.cos(steer.lock) - (p.axleBeamThicknessIn / 2) * Math.sin(steer.lock);
-  const stops = { faceX: steer.stopFaceX, y1: stopContactY - Math.min(steer.railYIn - steer.stopY1, 3 * stopThick), y2: stopContactY, bot: beamF.top - 1.0, top: deckTop - ply - p.crossmemberDepthIn, thick: stopThick };
+  // D-58: the tongue is white oak set on edge, its top flush with the beam top and `tongueDepthIn` deep; the shackle hole (a sleeve, tongueHoleDiaIn) is tongueTipEdgeIn behind the tip, at mid depth.
   const tipX = xFront + p.tongueTieAheadIn;
-  const tongue = { tipX, z0: beamF.top, z1: beamF.top + p.tongueThickIn, holeX: tipX - 1, tieZ: beamF.top + p.tongueThickIn + 0.35 };
+  const tongueTop = beamF.top - p.tongueTopDropIn;
+  const tongue = { tipX, z0: tongueTop - p.tongueDepthIn, z1: tongueTop, holeX: tipX - p.tongueTipEdgeIn, tieZ: tongueTop - p.tongueDepthIn / 2 };
 
   // ── Joists: even spacing from the rear transom to the king beam, the king beam itself, and a last joist under the scarf of the deck to the bow curl ──
   const xSideStart = xRear + transom;
   const xEndJoist = steer.endJoistX;
   const joistX = [...evenInterior(xSideStart, kingX - king.len / 2, p.crossmemberSpacingIn, joistT), kingX, xEndJoist];
 
+  // D-58: the steering lock is set by two check chains: eye bolts through the ends of the axle beam (trailing face) and through the crossmember just behind the king beam (`chainJoistX`, thickened
+  // to chainJoistThickIn; its front face carries the eyes). The RIGHT chain is described (taut at +lock); the left is the mirror.
+  const kIdx = joistX.indexOf(kingX);
+  const chainJoistX = kIdx > 0 ? joistX[kIdx - 1] : kingX - king.len / 2 - 8;
+  const chainJoistT = p.chainJoistThickIn;
+  const anchorY = Math.min(p.steerChainAnchorYIn, steer.railYIn - turnIn(chainJoistX) - 1.15); // the 2 in washer on the joist's rear face must clear the rail (a narrow body pulls the eye in)
+  const anchor: Vec3 = [chainJoistX + chainJoistT / 2 + steer.stand, -anchorY, deckTop - ply - p.crossmemberDepthIn / 2 - 0.25];
+  const eyeLock = steer.beamEyeAt(steer.lock);
+  const chain = { anchor, joistX: chainJoistX, joistT: chainJoistT, beamU: steer.beamU, beamV: p.steerChainBeamYIn, beamZ: steer.beamZ, stand: steer.stand, lenIn: Math.hypot(eyeLock[0] - anchor[0], eyeLock[1] - anchor[1], eyeLock[2] - anchor[2]) };
+
+  // ── Bow bulkhead and its lift hand-hold (D-57) ──
+  const bulkhead = {
+    x0: bh.xFlatEnd, x1: bh.xTip, thick: bh.thick, bot: deckTop - ply - Math.min(1, steer.railDepthFront),
+    zCorner: deckTop + sideBow, zCenter: deckTop + p.bowBulkheadHeightIn, halfW: p.bodyWidthIn / 2 - turnIn(bh.xFlatEnd),
+  };
+  const holdBot = deckTop + p.liftSlotClearIn;
+  const hold = { x0: bulkhead.x0, x1: bulkhead.x1, halfLen: p.liftSlotLengthIn / 2, zBot: holdBot, zTop: holdBot + p.liftSlotHeightIn, zMid: holdBot + p.liftSlotHeightIn / 2 };
+  const footBlock = { behind: Array.from({ length: Math.round(p.footBlockPositions) }, (_, i) => p.footBlockStepIn * (i + 1)), thick: p.footBlockThickIn, height: p.footStopHeightIn };
+
   void len;
   return {
-    r, WB, xRear, xFront, xFlatEnd: curl.xFlatEnd, xSideEnd, curl, chineBot, railTop: chineBot, chineH,
-    sideTop: deckTop + p.sideHeightRearIn, sideH: sideBow, sideRear: p.sideHeightRearIn, sag: p.sideProfileSagIn, xSideStart,
-    railBand: p.railBandIn, joistT, side, transom, rearLane, ply, deckTop, deckBot: deckTop - ply, hwC, web, beamR, beamF, steer, king, stops, tongue,
-    railEnd: curl.xFlatEnd, railStepX: steer.railStepX, railDepthF: steer.railDepthFront, joistX, seat, storage,
+    r, WB, xRear, xFront, xFlatEnd: bh.xFlatEnd, xSideEnd, turnIn, bulkhead, hold, footBlock, chineBot, railTop: chineBot, chineH,
+    sideTop: deckTop + p.sideHeightRearIn, sideH: sideBow, sideRear: p.sideHeightRearIn, sag: p.sheerCurveIn, xSideStart,
+    railBand: p.railBandIn, joistT, side, transom, rearLane, ply, deckTop, deckBot: deckTop - ply, hwC, web, beamR, beamF, steer, king, chain, tongue,
+    railEnd: bh.xFlatEnd, railStepX: steer.railStepX, railDepthF: steer.railDepthFront, joistX, seat, storage,
   };
 }
 
 export { len as spanLen };
 
-/** Height of the gunwale top above the deck top at x (the straight sled profile from the rear transom's inner face to the end of the sides, plus the optional sag, D-54). */
+/** Height of the gunwale top above the deck top at x (the sheer: from the rear transom's inner face to the end of the sides, sagging `sheerCurveIn` below the straight line, D-54, D-57). */
 export function sideHeightAtX(L: Layout, x: number): number {
   const u = Math.max(0, Math.min(1, (x - L.xSideStart) / Math.max(1e-6, L.xSideEnd - L.xSideStart)));
   const bow = L.sideH;
@@ -258,10 +272,14 @@ export function sideSlopeAt(L: Layout, x: number): number {
 /** Top z of the side web at x: the gunwale top minus the gunwale band. */
 export const webTopAt = (L: Layout, x: number): number => sideTopAt(L, x) - L.railBand;
 
-/** Inside half width: constant (straight sides). Kept as a function so call sites read the same as before. */
-export function innerHalfWidth(L: Pick<Layout, 'hwC'>, _x?: number): number {
-  void _x;
-  return L.hwC;
+/** Inside half width at x: constant behind the bow turn-in, narrowing toward the bow after it (D-57). */
+export function innerHalfWidth(L: Pick<Layout, 'hwC' | 'turnIn'>, x?: number): number {
+  return L.hwC - (x === undefined ? 0 : L.turnIn(x));
+}
+
+/** Outer half width of the hull at x (the chine, gunwale and rail outer faces): `bodyWidthIn / 2` less the bow turn-in (D-57). */
+export function outerHalfWidth(L: Pick<Layout, 'hwC' | 'side' | 'turnIn'>, x: number): number {
+  return L.hwC + L.side - L.turnIn(x);
 }
 
 /** x samples from `a` to `b` inclusive, `n` segments. */

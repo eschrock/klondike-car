@@ -1,21 +1,20 @@
 /**
- * Plan of the foot brake (Phase 3c-3, D-55): ONE pure source for where the swing arms, pivots, pedal bar, shoe beam, shoes, spring and parking latch sit, shared by
- * `model/brake.ts` (the parts), `analysis/brake.ts` (the checks) and the tests. Plain TS, no three.js. Model frame: +X forward, +Y left, +Z up, origin on the ground
- * under the rear-axle center; inches. All planar numbers are (x, z) in the vertical plane of one side; the right side mirrors the left (the whole mechanism is symmetrical
- * about y = 0, the latch hook hangs on the centerline).
+ * Plan of the scooter-style STEP BRAKE (Phase 3c-4b, D-57 item 8): ONE pure source for where the oak flap, its hinge, the pad on the tread, the bungee, the outrigger
+ * (knee) and its backer, and the wheel chock sit, shared by `model/brake.ts` (the parts), `analysis/brake.ts` (the checks) and the tests. Plain TS, no three.js.
+ * Model frame: +X forward, +Y left, +Z up, origin on the ground under the rear-axle center; inches. Planar numbers are (x, z) in the vertical plane of one wheel;
+ * the right side mirrors the left. Every y position follows the wheels (`rearTrackIn`, `tireWidthIn`), the hull (`hwC + side`) and the rail, never a typed number.
  *
- * The mechanism (the Alaskan-sled drag bar of reference/05, on wheels):
- *   • Two swing ARMS (A36 plate) pivot on 3/8" bolts through two BRACKET tongues that reach back from the top of the rear axle beam, where each is bolted through the
- *     beam beside the rod (the shoe thrust goes tire → hub → rod → beam → bracket → arm → shoe, a closed loop inside the axle, so the rails and hangers see none of it).
- *     Each pivot sits directly ABOVE the shoe contact point, `d` = brakePivotAboveShoeIn higher.
- *   • The oak PEDAL BAR passes through a slot in the rear end of each arm, `a` = brakePedalReachIn behind the pivot, at ground clearance brakeBarClearIn.
- *   • The aluminum shoe BEAM passes through a slot at the front of each arm, just behind the rear tires, with a lined steel-backed SHOE bolted to its front face at each end.
- *   • Stepping on the bar swings both arms (rotation CCW about the pivots, seen with +x right): the bar goes down, the beam and shoes go FORWARD into the tread. Two
- *     extension springs lift the bar. A hook hung from the rear transom drops over a stud on the toe guard to hold it down (kick the hook sideways to release it).
- * The shoe force on the arm acts at the contact point `C`, a vertical distance `d` below the pivot (no horizontal offset), so the lever ratio is simply
- *   N_total / F_foot = a_applied / (d (cos β ± μ sin β)),   β = the shoe's angle below the axle line, ± for the cart rolling forward / backward.
- * Pose s ∈ [0, 1]: 0 is released (the model default, arm frame = world axes), 1 is applied (shoes on the tread): rotate the released geometry CCW by s·θ_app about the pivot.
- * The shoe is bolted to the beam with an oversize hole and rocks to follow the tread, so it only TRANSLATES with its bolt (it keeps the applied orientation).
+ * The mechanism (a kick-scooter fender brake, no welding, no custom steel):
+ *   • An oak FLAP lies over each rear tire. A 316 stainless butt HINGE at its front end sits AHEAD of the tire (x = r + brakeHingeAheadIn), on the top of an oak
+ *     OUTRIGGER ("knee") that is bolted through the hull rail into an oak BACKER glued to the inside of the rail. The flap reaches back over the tire to a foot area
+ *     level with the rear transom (the handler stands behind the transom and steps on it with one foot while pushing with the handlebow).
+ *   • Under the flap a wedge-shaped oak SHOE BLOCK carries a rubber / leather PAD on the tread, `brakePadAngleDeg` behind the top of the tire. Stepping down swings the
+ *     flap about the hinge and presses the pad on the tread. Lever ratio = (hinge to foot) / (hinge to the pad, measured on the line of action of the pad force).
+ *   • A BUNGEE cord from the flap to an eye screw in the rear transom lifts the flap (a stop cord limits the lift); the model default is the released pose.
+ *   • Two oak wedge CHOCKS hang on cords from the knees and park the cart (a ramp the tire has to climb, `brakeChockAngleDeg`).
+ *
+ * Pose s ∈ [0, 1]: 1 is APPLIED (the pad on the tread), 0 is RELEASED (the model default). The geometry below is built in the applied pose and the released pose
+ * is the whole flap group turned clockwise (seen with +x right, +z up) by `theta` about the hinge pin, so the pad hangs `brakePadGapIn` above the tread.
  */
 import type { Params } from '../params';
 import type { Layout } from './layout';
@@ -23,36 +22,24 @@ import type { Layout } from './layout';
 export type V2 = [number, number];
 
 const RAD = Math.PI / 180;
-/** Running gap between stacked flat parts (in): a tolerance, not a design number. */
-export const STACK_GAP_IN = 0.0625;
-/** Material left around a slot or hole in the arm plate (in): fabrication rule of thumb. */
-export const ARM_WEB_IN = 0.4;
-/** Total running clearance of a bar in its slot (in): a tolerance. */
-export const SLOT_CLEAR_IN = 0.0625;
-/** Radius of plate material around a pivot hole (in). */
-export const PIVOT_BOSS_IN = 0.8;
-/** Radius of the bracket tongue's boss around the pivot (in): smaller than the arm's so the shoe beam, which crosses the tongue's plane, clears it. */
-export const TONGUE_BOSS_IN = 0.65;
-/** Released spring force as a fraction of the applied force: the spring's preload (a small-rate extension spring). */
-export const SPRING_PRELOAD = 0.8;
-/** Latch hook strap width, tooth height, gap from the transom face to the hook, and the stud's lateral clearance from the strap (in). */
-export const HOOK_W_IN = 1;
-export const HOOK_TOOTH_IN = 0.45;
-export const HOOK_STANDOFF_IN = 0.45;
-export const HOOK_TAIL_IN = 0.9;
-export const STUD_SIDE_CLEAR_IN = 0.2;
-/** Stop pin radius (in) and the distance behind the pivot where it sits. */
-export const STOP_PIN_R_IN = 0.125;
-export const STOP_BEHIND_PIVOT_IN = 1.2;
-/** Height of the bracket's neck (the tongue between the pivot boss and the beam flange), the flange's length across the beam, and the bolt edge setback (in): fabrication rules. */
-export const NECK_IN = 1.2;
-export const FLANGE_Y_IN = 2;
-export const FLANGE_BOLT_SETBACK_IN = 0.55;
+/** Running gap between the flap's front face and the knee's rear face, and between stacked flat parts (in): a tolerance. */
+export const HINGE_GAP_IN = 0.125;
+/** Thickness of a butt hinge leaf (316 stainless, about 12 gauge) and the lift of a screw eye's ring above its face (in): purchased-part sizes. */
+export const HINGE_LEAF_T_IN = 0.1;
+export const EYE_LIFT_IN = 0.35;
+/** The bungee eye sits this far in from the flap's inboard edge (in): a fabrication rule. */
+export const EYE_INSET_IN = 0.5;
+/** NDS wet-service factor C_M on screw withdrawal (Table 11.3.3): a code constant, not a design number. */
+export const WITHDRAWAL_WET_CM = 0.7;
+/** Small tolerance when two faces are meant to touch (in). */
+export const TOUCH_IN = 0.02;
 
 export const sub = (a: V2, b: V2): V2 => [a[0] - b[0], a[1] - b[1]];
 export const add = (a: V2, b: V2): V2 => [a[0] + b[0], a[1] + b[1]];
 export const mul = (a: V2, k: number): V2 => [a[0] * k, a[1] * k];
-export const cross2 = (a: V2, b: V2) => a[0] * b[1] - a[1] * b[0];
+export const dot2 = (a: V2, b: V2) => a[0] * b[0] + a[1] * b[1];
+/** Moment about the +y axis of a force (fx, fz) at the point r (x, z), taking z → x as positive: M = rz·fx − rx·fz. Positive M raises a point behind the pivot (rx < 0). */
+export const momentY = (r: V2, f: V2) => r[1] * f[0] - r[0] * f[1];
 export const norm2 = (a: V2) => Math.hypot(a[0], a[1]);
 
 /** Rotate `p` counter-clockwise (seen with +x right, +z up) by `th` about `c`. */
@@ -62,8 +49,13 @@ export function rot2(p: V2, c: V2, th: number): V2 {
   return [c[0] + x * co - z * si, c[1] + x * si + z * co];
 }
 
-export const disc = (c: V2, rad: number, n = 16): V2[] => Array.from({ length: n }, (_, i): V2 => [c[0] + rad * Math.cos((2 * Math.PI * i) / n), c[1] + rad * Math.sin((2 * Math.PI * i) / n)]);
 export const rectPts = (c: V2, w: number, h: number): V2[] => [[c[0] - w / 2, c[1] - h / 2], [c[0] + w / 2, c[1] - h / 2], [c[0] + w / 2, c[1] + h / 2], [c[0] - w / 2, c[1] + h / 2]];
+
+export function polyArea(poly: V2[]): number {
+  let a = 0;
+  for (let i = 0; i < poly.length; i++) { const [x1, y1] = poly[i], [x2, y2] = poly[(i + 1) % poly.length]; a += x1 * y2 - x2 * y1; }
+  return a / 2;
+}
 
 /** Convex hull, counter-clockwise (Andrew's monotone chain). */
 export function hull2(pts: V2[]): V2[] {
@@ -93,7 +85,7 @@ export function convexGap(A: V2[], B: V2[]): number {
   return best;
 }
 
-/** [low, high] of a CONVEX polygon along the line x = `x` (null when the line misses it). */
+/** [low, high] of a polygon's section along the line x = `x` (null when the line misses it); for a non-convex shape this is the hull of the cut. */
 export function polyZAt(poly: V2[], x: number): [number, number] | null {
   let lo = Infinity, hi = -Infinity;
   for (let i = 0; i < poly.length; i++) {
@@ -106,25 +98,31 @@ export function polyZAt(poly: V2[], x: number): [number, number] | null {
   return Number.isFinite(lo) ? [lo, hi] : null;
 }
 
-/** [low, high] of a CONVEX polygon along the line z = `z`. */
-export function polyXAt(poly: V2[], z: number): [number, number] | null {
-  return polyZAt(poly.map((q): V2 => [q[1], q[0]]), z);
+/** Distance from a point to a polygon's boundary (positive outside, negative inside) for a CONVEX polygon. */
+export function pointPolyGap(pt: V2, poly: V2[]): number {
+  let best = -Infinity;
+  const area = polyArea(poly);
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length];
+    const ex = b[0] - a[0], ez = b[1] - a[1];
+    const n = Math.hypot(ex, ez) || 1;
+    // outward normal for a CCW polygon is (ez, -ex)
+    const sgn = area >= 0 ? 1 : -1;
+    best = Math.max(best, (sgn * ((pt[0] - a[0]) * ez - (pt[1] - a[1]) * ex)) / n);
+  }
+  return best;
 }
 
 /** Positions across the cart (|y|, left side; the right side mirrors). */
 export interface BrakeY {
-  /** Bracket tongue, swing arm, bar half length, guard half width, shoe beam half length. */
-  tongue: [number, number];
-  arm: [number, number];
-  barHalf: number;
-  guardHalf: number;
-  beamHalf: number;
-  /** Shoe lining face (|y| range) and its center. */
-  pad: [number, number];
-  shoeC: number;
-  /** Pivot bolt: head side face and nut side face. */
-  boltIn: number;
-  boltOut: number;
+  /** Wheel center, tire inner and outer faces. */
+  wheel: number; tireIn: number; tireOut: number;
+  /** Flap |y| range, hinge |y| range, pad |y| range. */
+  flap: [number, number]; hinge: [number, number]; pad: [number, number];
+  /** Hull outer face (the rail's and chine's outer face), rail inner face, backer inner face. */
+  face: number; railIn: number; backerIn: number;
+  /** Bungee eye on the flap, eye screw on the rear transom's aft face. */
+  eye: number; anchor: number;
 }
 
 export interface BrakeGeom {
@@ -133,201 +131,198 @@ export interface BrakeGeom {
   /** Wheel radius and center (x, z). */
   r: number;
   O: V2;
-  /** Shoe angle below the axle line (rad), the radius of the shoe back, half-angle of the shoe arc. */
-  beta: number;
-  rBack: number;
-  shoeHalfAngle: number;
-  /** Tread contact point of the shoe center, and the center of the shoe back (applied pose; both fixed on the cart). */
+  y: BrakeY;
+  /** Pad: angle behind the top of the tire (rad) and half length angle; contact point on the tread, outward normal, forward tangent (applied pose, all fixed on the cart). */
+  alpha: number;
+  delta: number;
   C: V2;
-  Sb: V2;
-  /** Pivot (fixed), its height above the contact, the pedal reach (released) and the shoe stroke. */
-  P: V2;
-  d: number;
-  reach: number;
-  stroke: number;
-  /** Arm swing from released to applied (rad, CCW). */
-  thetaApp: number;
-  /** Shoe beam tube (arm frame, released): center, depth (x), height (z), and the center of its front face (the shoe bolt point). */
-  beam: { c: V2; w: number; h: number; wall: number; face: V2 };
-  /** Oak pedal bar (arm frame, released): center, depth, height and the edges. */
-  bar: { c: V2; w: number; h: number; front: number; rear: number; top: number; bot: number };
-  /** Bar center applied, horizontal reach pivot-to-bar applied, drop of the bar (released to applied). */
-  barApp: V2;
-  aApp: number;
-  barDrop: number;
-  /** Arm plate (arm frame): outline (convex, CCW), the beam slot, the bar slot and the pivot hole (radius). */
-  arm: { outline: V2[]; beamSlot: V2[]; barSlot: V2[]; holeR: number; t: number; area: number };
-  /**
-   * Bracket tongue (fixed, one per side): the vertical plate (outline in x–z) with the pivot and stop pin holes, and the horizontal flange bent from its lower edge that lies
-   * on the top of the axle beam (not drawn): flange x range and |y| range, the two vertical bolts (x, |y|) beside the rod, the neck, and the beam it sits on.
-   */
-  tongue: { outline: V2[]; flange: { x0: number; x1: number; y0: number; y1: number; bolts: V2[]; z0: number; z1: number }; neck: { x0: number; x1: number; z0: number; z1: number }; stop: V2; t: number; railBot: number; railTop: number; beam: { x: number; top: number; thick: number; depth: number; halfLen: number } };
-  /** Toe guard plate (arm frame, released): x range, z range, half width, and the stud (center, length, tip released, tip applied). */
-  guard: { x0: number; x1: number; z0: number; z1: number; yHalf: number; t: number };
-  stud: { c: V2; len: number; r: number; y: number; x0: number; tipRel: number; tipApp: number; zApp: number };
-  /** Latch hook (fixed, hangs from a bolt through the rear transom on the centerline): bolt (x, z), plate x range, outline in (y, z), tooth. */
-  hook: { bolt: V2; x0: number; x1: number; outline: V2[]; hole: V2[]; zTooth: number; zBottom: number; yTooth: number; length: number; swing: number };
-  /** Return springs (one per arm): hook point on the arm (released) and the eye screw in the transom's rear face, spring lengths and rate, forces, released/applied torque lever. */
-  spring: { a: V2; e: V2; lenRel: number; lenApp: number; fApp: number; fRel: number; rate: number; leverApp: number; leverRel: number; y: number };
-  /** The stop pin (center) that the arm rests against when released. */
-  stop: V2;
-  /** Foot-lever ratios: total shoe normal force over foot force, cart rolling forward / backward, the smaller (critical) one. */
+  n: V2;
+  t: V2;
+  pad: { w: number; thick: number; length: number; top: V2[]; bot: V2[] };
+  /** Board (flap) direction from the hinge toward the foot end (descending), its up normal, the underside offset (plane p·v = c) and its slope (rad). */
+  sigma: number;
+  u: V2;
+  v: V2;
+  c: number;
+  /** Hinge pin axis (on the flap's top surface, applied pose = on the knee top), its x, the foot point on the top surface and the flap's rear end x. */
+  H: V2;
+  xh: number;
+  F: V2;
+  xEnd: number;
+  /** Board: start/end distance along u from the pin, length, thickness, width, and its center in the applied pose. */
+  board: { s0: number; s1: number; len: number; thick: number; w: number; c: V2 };
+  /** Shoe block outline (applied pose, x–z) and its width across. */
+  shoe: { outline: V2[]; w: number; area: number };
+  /** Swing from released to applied (rad, CCW), the drop of the foot point over the stroke (in) and the horizontal foot arm (hinge to foot). */
+  theta: number;
+  footDrop: number;
+  aF: number;
+  /** Moment of a unit pad normal force and of a unit friction force (along the forward tangent) about the pin, M_y convention. */
+  mN: number;
+  mT: number;
+  /** Lever ratios N_flap / F_foot (before efficiency), cart rolling forward / backward, the smaller (critical) one. */
   ratioFwd: number;
   ratioRev: number;
   ratioCrit: number;
   critical: 'forward' | 'reverse';
-  y: BrakeY;
+  /** Hinge hardware: x range and thickness (the box lies on the knee top, flat), length across. */
+  hinge: { x0: number; x1: number; z0: number; z1: number; len: number; leaf: number };
+  /** Bungee: eye on the flap (surface point, applied), transom anchor (x, y, z), cord lengths released / applied (3-D), cord tension released / applied, and the moment arm data. */
+  bungee: { sEye: number; E: V2; Erel: V2; A: [number, number, number]; lenRel: number; lenApp: number; tRel: number; tApp: number; rate: number; fRel: V2; fApp: V2; mRel: number; mApp: number };
+  /** Outrigger (knee), plan outline in (y, z) for the left side, x range, leg, arm; the rail, the backer and the bolt pattern. */
+  knee: { x0: number; x1: number; poly: V2[]; legT: number; armT: number; zLeg: number; zArmBot: number; zTop: number; zBot: number; yOut: number; area: number };
+  rail: { zb: number; zt: number; t: number };
+  backer: { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number; t: number };
+  bolts: { dia: number; xs: number[]; zs: number[]; count: number; stack: number; cx: number; cz: number };
+  /** Chock: ramp angle, tangent point on the tire, toe and back x, height, polygon for the FRONT chock (x–z, applied); the rear chock mirrors in x. Cord eye on the knee and on the chock. */
+  chock: { psi: number; tangent: V2; xToe: number; xBack: number; height: number; width: number; poly: V2[]; eyeX: number; kneeEye: V2; chockEye: V2; heelAngle: number };
 }
 
-/** Released-pose point `q` (arm frame) moved to pose s ∈ [0, 1]. */
-export const atPose = (g: Pick<BrakeGeom, 'P' | 'thetaApp'>, s: number, q: V2): V2 => rot2(q, g.P, s * g.thetaApp);
+/** Released-to-pose helper: a point `q` given in the APPLIED pose moved to pose s ∈ [0, 1] (s = 0 released, 1 applied) by turning about the pin. */
+export const atPose = (g: Pick<BrakeGeom, 'H' | 'theta'>, s: number, q: V2): V2 => rot2(q, g.H, -(1 - s) * g.theta);
 
 export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
   const r = L.r;
   const O: V2 = [0, r];
-  const beta = p.brakeShoeAngleDeg * RAD;
-  const lt = p.brakeLiningThickIn, bt = p.brakeShoeBackThickIn;
-  const rBack = r + lt + bt;
-  const C: V2 = [-r * Math.cos(beta), r - r * Math.sin(beta)];
-  const Sb: V2 = [-rBack * Math.cos(beta), r - rBack * Math.sin(beta)];
-  const d = p.brakePivotAboveShoeIn;
-  const P: V2 = [C[0], C[1] + d];
+  const yW = p.rearTrackIn / 2;
+  const tw = p.tireWidthIn;
+  const alpha = p.brakePadAngleDeg * RAD;
+  const tp = p.brakePadThickIn;
+  const padW = Math.max(0.5, Math.min(p.brakePadWidthIn, tw - 0.3));
+  const delta = p.brakePadLengthIn / (2 * r);
+  const nAt = (a: number): V2 => [-Math.sin(a), Math.cos(a)];
+  const tAt = (a: number): V2 => [Math.cos(a), Math.sin(a)];
+  const onCircle = (a: number, rad: number): V2 => [O[0] + rad * nAt(a)[0], O[1] + rad * nAt(a)[1]];
+  const C = onCircle(alpha, r);
+  const n = nAt(alpha), t = tAt(alpha);
+
+  // Pad: an arc strip from the tread (radius r) out to r + thickness, from the rear end of the pad to its front end.
+  const N = 8;
+  const aSamples = Array.from({ length: N + 1 }, (_, i) => alpha + delta - (2 * delta * i) / N);
+  const bot = aSamples.map((a) => onCircle(a, r));
+  const top = aSamples.map((a) => onCircle(a, r + tp));
+
+  // Flap: a straight board whose underside plane (p·v = c) clears the top of the pad by `brakeShoeBlockIn` at its highest point.
+  const sigma = p.brakeFlapSlopeDeg * RAD;
+  const u: V2 = [-Math.cos(sigma), -Math.sin(sigma)];
+  const v: V2 = [-Math.sin(sigma), Math.cos(sigma)];
+  const tf = p.brakeFlapThickIn;
+  const c = Math.max(...top.map((q) => dot2(q, v))) + p.brakeShoeBlockIn;
+  const topZ = (x: number) => (c + tf - v[0] * x) / v[1];
+  const xh = r + p.brakeHingeAheadIn;
+  const H: V2 = [xh, topZ(xh)];
+  const xf = L.xRear - p.brakeFootBehindTransomIn;
+  const F: V2 = [xf, topZ(xf)];
+  const xEnd = xf - p.brakeFootPadLengthIn / 2;
+  const s0 = (HINGE_GAP_IN + tf * Math.sin(sigma)) / Math.cos(sigma); // the gap is measured at the underside corner, which the sloping board's square end brings forward
+  const s1 = (xh - xEnd) / Math.cos(sigma);
+  const bw = p.brakeFlapWidthIn;
+  const sMid = (s0 + s1) / 2;
+  const bc: V2 = [H[0] + sMid * u[0] - (tf / 2) * v[0], H[1] + sMid * u[1] - (tf / 2) * v[1]];
+  const board = { s0, s1, len: s1 - s0, thick: tf, w: bw, c: bc };
+
+  // Shoe block: between the pad's top arc and the board's underside plane, with vertical ends.
+  const underZ = (x: number) => (c - v[0] * x) / v[1];
+  const xTopR = Math.min(...top.map((q) => q[0])), xTopF = Math.max(...top.map((q) => q[0]));
+  const shoePts: V2[] = [...top, [xTopF, underZ(xTopF)], [xTopR, underZ(xTopR)]];
+  const shoeOutline = hull2(shoePts);
+  const shoe = { outline: shoeOutline, w: padW, area: polyArea(shoeOutline) };
+
+  // Moments about the pin of the pad normal and of friction along the forward tangent (a unit force each).
+  const rC = sub(C, H);
+  const mN = momentY(rC, n);
+  const mT = momentY(rC, t);
+  const aF = H[0] - F[0];
   const mu = p.brakePadMu;
-  const stroke = p.brakeShoeTravelIn;
-  const t = p.brakePlateThickIn;
-
-  // Arm swing: the released shoe is the applied shoe moved back with the arm (translation only), `stroke` off the tread at its center.
-  const gapAt = (th: number) => {
-    const sb0 = rot2(Sb, P, -th);
-    const c0: V2 = [C[0] + sb0[0] - Sb[0], C[1] + sb0[1] - Sb[1]];
-    return Math.hypot(c0[0] - O[0], c0[1] - O[1]) - r;
-  };
-  let lo = 0, hi = 1.2;
-  let why = '';
-  if (gapAt(hi) < stroke) why = 'the arm cannot swing far enough to give the shoe stroke';
-  for (let i = 0; i < 80; i++) { const m = (lo + hi) / 2; if (gapAt(m) < stroke) lo = m; else hi = m; }
-  const thetaApp = (lo + hi) / 2;
-
-  // Beam, bar (released frame)
-  const bw = p.brakeBeamSizeIn, bh = p.brakeBeamHeightIn, wall = p.brakeBeamWallIn;
-  const face = rot2(Sb, P, -thetaApp);
-  const beam = { c: [face[0] - bw / 2, face[1]] as V2, w: bw, h: bh, wall, face };
-  const pedD = p.brakePedalDepthIn, pedH = p.brakePedalHeightIn;
-  const barZ = p.brakeBarClearIn + ARM_WEB_IN + SLOT_CLEAR_IN / 2 + pedH / 2;
-  const barC: V2 = [P[0] - p.brakePedalReachIn, barZ];
-  const bar = { c: barC, w: pedD, h: pedH, front: barC[0] + pedD / 2, rear: barC[0] - pedD / 2, top: barZ + pedH / 2, bot: barZ - pedH / 2 };
-  const barApp = rot2(barC, P, thetaApp);
-  const aApp = P[0] - barApp[0];
-  const barDrop = barC[1] - barApp[1];
-
-  // Foot-lever ratios. The shoe force acts at C, d below the pivot: moment arm d·(cos β ± μ sin β) (friction adds to the normal force's moment rolling forward).
-  const kF = Math.cos(beta) + mu * Math.sin(beta);
-  const kR = Math.cos(beta) - mu * Math.sin(beta);
-  const ratioFwd = kF > 1e-6 ? aApp / (d * kF) : 0;
-  const ratioRev = kR > 1e-6 ? aApp / (d * kR) : 0;
+  const kF = mN + mu * mT, kR = mN - mu * mT;
+  const ratioFwd = kF > 1e-6 ? aF / kF : 0;
+  const ratioRev = kR > 1e-6 ? aF / kR : 0;
   const ratioCrit = Math.min(ratioFwd, ratioRev);
 
-  // Arm plate: hull of the pivot boss, the beam slot web and the bar slot web; slots and the pivot hole are cut in it.
-  const clr = SLOT_CLEAR_IN;
-  const beamSlotC = beam.c, barSlotC = barC;
-  const hullPts = [
-    ...disc(P, PIVOT_BOSS_IN, 24),
-    ...rectPts(beamSlotC, bw + clr + 2 * ARM_WEB_IN, bh + clr + 2 * ARM_WEB_IN),
-    ...rectPts(barSlotC, pedD + clr + 2 * ARM_WEB_IN, pedH + clr + 2 * ARM_WEB_IN),
-  ];
-  const outline = hull2(hullPts);
-  const area = polyArea(outline) - (bw + clr) * (bh + clr) - (pedD + clr) * (pedH + clr) - Math.PI * (p.brakePivotBoltDiameterIn / 2 + 0.02) ** 2;
-  const arm = { outline, beamSlot: rectPts(beamSlotC, bw + clr, bh + clr), barSlot: rectPts(barSlotC, pedD + clr, pedH + clr), holeR: p.brakePivotBoltDiameterIn / 2 + 0.02, t, area };
+  // Swing: turn the pad's contact point clockwise about the pin until it hangs `brakePadGapIn` off the tread.
+  const gapAt = (th: number) => norm2(sub(rot2(C, H, -th), O)) - r;
+  let lo = 0, hi = 0.6;
+  let why = '';
+  if (gapAt(hi) < p.brakePadGapIn) why = 'the flap cannot swing far enough to lift the pad off the tread by the pad gap';
+  for (let i = 0; i < 80; i++) { const m = (lo + hi) / 2; if (gapAt(m) < p.brakePadGapIn) lo = m; else hi = m; }
+  const theta = (lo + hi) / 2;
+  const footDrop = rot2(F, H, -theta)[1] - F[1];
 
-  // Bracket tongue: a vertical plate at the rail's outer face line whose neck reaches forward to the top of the axle beam, with a flange bent inboard-to-outboard over the
-  // beam top (bolted down through the beam in front of the rod). The thrust runs along the neck in tension, at about pivot height, with almost no moment.
-  const railTop = L.railTop;
-  const railBot = L.deckBot - p.railDepthIn;
-  const bm = L.beamR;
-  const rodR = p.axleDiameterIn / 2;
-  const bd = p.brakeBracketBoltDiameterIn;
-  const flangeX0 = bm.x - bm.thick / 2;
-  const boltX = bm.x + rodR + 0.2 + bd / 2;
-  const flangeX1 = boltX + bd / 2 + 0.3;
-  const neck = { x0: flangeX0, x1: P[0] + TONGUE_BOSS_IN, z0: bm.top, z1: bm.top + NECK_IN };
-  const stopTop = polyZAt(outline, P[0] - STOP_BEHIND_PIVOT_IN);
-  const stop: V2 = [P[0] - STOP_BEHIND_PIVOT_IN, (stopTop ? stopTop[1] : P[1] + PIVOT_BOSS_IN) + STOP_PIN_R_IN];
-  const yRailFace = L.hwC + L.side;
-  const tongueOutline = hull2([...rectPts([(neck.x0 + neck.x1) / 2, (neck.z0 + neck.z1) / 2], neck.x1 - neck.x0, neck.z1 - neck.z0), ...disc(P, TONGUE_BOSS_IN, 24), ...disc(stop, 0.4, 12)]);
-  const yFl0 = yRailFace + t + 0.0;
-  const flange = { x0: flangeX0, x1: flangeX1, y0: yFl0, y1: yFl0 + FLANGE_Y_IN, bolts: [[boltX, yFl0 + FLANGE_BOLT_SETBACK_IN], [boltX, yFl0 + FLANGE_Y_IN - FLANGE_BOLT_SETBACK_IN]] as V2[], z0: bm.top, z1: bm.top + t };
-  const tongue = { outline: tongueOutline, flange, neck, stop, t, railBot, railTop, beam: { x: bm.x, top: bm.top, thick: bm.thick, depth: bm.depth, halfLen: bm.len / 2 } };
+  // ── y layers ──
+  const yFace = L.hwC + L.side;
+  const railT = p.railThicknessIn;
+  const yRailIn = yFace - railT;
+  const hl = p.brakeHingeLengthIn;
+  const y: BrakeY = {
+    wheel: yW, tireIn: yW - tw / 2, tireOut: yW + tw / 2,
+    flap: [yW - bw / 2, yW + bw / 2], hinge: [yW - hl / 2, yW + hl / 2], pad: [yW - padW / 2, yW + padW / 2],
+    face: yFace, railIn: yRailIn, backerIn: yRailIn - p.brakeBackerThickIn,
+    eye: yW - bw / 2 + EYE_INSET_IN, anchor: yFace - p.brakeBungeeAnchorInsetIn,
+  };
 
-  // y layers (left side): rail outer face, tongue, gap, arm, then the pivot bolt's head and nut sides.
-  const yRail = L.hwC + L.side;
-  const tY: [number, number] = [yRail, yRail + t];
-  const aY: [number, number] = [tY[1] + STACK_GAP_IN, tY[1] + STACK_GAP_IN + t];
-  const ry = p.rearTrackIn / 2;
-  const padW = Math.max(0.5, Math.min(p.brakeLinedShoeWidthIn, p.tireWidthIn - 0.3));
-  const pad: [number, number] = [ry - padW / 2, ry + padW / 2];
-  const y: BrakeY = { tongue: tY, arm: aY, barHalf: aY[1] + 1, guardHalf: Math.min(aY[0] - 0.1, p.brakeToeGuardWidthIn / 2), beamHalf: pad[1] + 0.25, pad, shoeC: ry, boltIn: tY[0] - 0.3, boltOut: aY[1] + 0.58 };
+  // ── Hinge hardware (flat on the knee top; its flap leaf hovers a hair over the board) ──
+  const leaf = p.brakeHingeLeafIn;
+  const hinge = { x0: xh - leaf, x1: xh + leaf, z0: H[1], z1: H[1] + HINGE_LEAF_T_IN, len: hl, leaf };
 
-  // Toe guard on the bar's front face, rising above the bar, and the latch stud through it.
-  const tg = p.brakeGuardThickIn;
-  const guard = { x0: bar.front, x1: bar.front + tg, z0: bar.top - 0.5, z1: bar.top + p.brakeToeGuardHeightIn, yHalf: y.guardHalf, t: tg };
-  const hookT = t;
-  const hookX1 = L.xRear - HOOK_STANDOFF_IN, hookX0 = hookX1 - hookT;
-  const studR = p.brakeLatchPinDiameterIn / 2;
-  const studC0: V2 = [guard.x1, guard.z1 - 0.75];
-  const tipApp = hookX1 + 0.06; // applied tip: past the front face of the hook so the stud covers its whole thickness
-  // The stud points along the arm-frame +x; at the applied pose it is tilted by thetaApp and its tip sits at tipApp. Solve the released tip from the applied stud line.
-  const studLenGuess = (xTip: number) => Math.max(0.2, xTip - guard.x1);
-  let tipRel = tipApp + 0.2;
-  for (let i = 0; i < 20; i++) {
-    const tipPt = rot2([tipRel, studC0[1]], P, thetaApp);
-    tipRel += tipApp - tipPt[0];
-  }
-  const studApp = rot2([tipRel, studC0[1]], P, thetaApp);
-  const stud = { c: studC0, len: studLenGuess(tipRel), r: studR, y: HOOK_W_IN / 2 + STUD_SIDE_CLEAR_IN + studR, x0: guard.x1, tipRel, tipApp: studApp[0], zApp: studApp[1] };
+  // ── Bungee: eye on the flap's rear end (inboard edge), cord up to an eye screw in the rear transom's aft face near its outer corner. (The gunwale's outer face is the
+  //    sign zone, D-57 item 9, and the knee stays ahead of it, so nothing of the brake is on the side above the rail.) ──
+  const xe = xEnd + EYE_INSET_IN;
+  const sEye = (xh - xe) / Math.cos(sigma);
+  const E: V2 = [xe, topZ(xe) + EYE_LIFT_IN];
+  const Erel = rot2(E, H, -theta);
+  const A: [number, number, number] = [L.xRear - EYE_LIFT_IN, y.anchor, L.sideTop - p.brakeBungeeAnchorBelowTopIn];
+  const len3 = (e: V2) => Math.hypot(A[0] - e[0], A[1] - y.eye, A[2] - e[1]);
+  const lenRel = len3(Erel), lenApp = len3(E);
+  const rate = p.brakeBungeeRateLbfPerIn;
+  const tRel = p.brakeBungeeTensionLbf;
+  const tApp = tRel + rate * (lenApp - lenRel);
+  const fOf = (e: V2, tension: number, len: number): V2 => [(tension * (A[0] - e[0])) / len, (tension * (A[2] - e[1])) / len];
+  const fRel = fOf(Erel, tRel, lenRel), fApp = fOf(E, tApp, lenApp);
+  // moment about the pin at each pose (cord force on the flap; applied-pose frame for E, released-pose frame for Erel — each about its own pin position, which is fixed)
+  const mRel = momentY(sub(Erel, H), fRel), mApp = momentY(sub(E, H), fApp);
+  const bungee = { sEye, E, Erel, A, lenRel, lenApp, tRel, tApp, rate, fRel, fApp, mRel, mApp };
 
-  // Latch hook: strap hanging from a bolt through the rear transom; the tooth sits just above the applied stud.
-  const zb = L.deckTop - p.crossmemberDepthIn;
-  // The hook bolt goes through the transom 0.7" above its lower edge, or, if that would put it in the deck dado, 0.6" above the deck top.
-  const zBoltLow = zb + 0.7;
-  const zBolt = zBoltLow + p.brakeBracketBoltDiameterIn / 2 < L.deckBot - 0.2 ? zBoltLow : L.deckTop + 0.6;
-  const zTooth = stud.zApp + studR + 0.02;
-  const zBottom = zTooth - HOOK_TAIL_IN;
-  const yTooth = stud.y + studR + 0.1;
-  const hw = HOOK_W_IN / 2;
-  const top: V2[] = Array.from({ length: 13 }, (_, i): V2 => { const a = (Math.PI * i) / 12; return [hw * Math.cos(a), zBolt + hw * Math.sin(a)]; });
-  const hookOutline: V2[] = [[-hw, zBottom], [hw, zBottom], [hw, zTooth], [yTooth, zTooth], [yTooth, zTooth + 0.1], [hw, zTooth + HOOK_TOOTH_IN], ...top];
-  const hookHole = Array.from({ length: 12 }, (_, i): V2 => { const a = -(2 * Math.PI * i) / 12; return [0.2 * Math.cos(a), zBolt + 0.2 * Math.sin(a)]; });
-  const length = zBolt + hw - zBottom;
-  const hook = { bolt: [hookX1 - hookT / 2, zBolt] as V2, x0: hookX0, x1: hookX1, outline: hookOutline, hole: hookHole, zTooth, zBottom, yTooth, length, swing: yTooth - (stud.y - studR) };
+  // ── Mount: knee on the hull's outer face over the rail, bolted through the rail into the backer ──
+  const zt = L.railTop;
+  const zb = L.railTop - p.railDepthIn;
+  const kx0 = xh, kx1 = xh + p.brakeKneeDepthIn;
+  const legT = p.brakeKneeLegIn, armT = p.brakeKneeArmIn;
+  const yOut = y.flap[1];
+  const zTop = H[1];
+  const zLeg = L.railTop + L.chineH;
+  const zArmBot = zTop - armT;
+  const poly: V2[] = [[yFace, zb], [yFace + legT, zb], [yFace + legT, zLeg], [yOut, zArmBot], [yOut, zTop], [yFace, zTop]];
+  const knee = { x0: kx0, x1: kx1, poly, legT, armT, zLeg, zArmBot, zTop, zBot: zb, yOut, area: polyArea(poly) };
+  const rail = { zb, zt, t: railT };
+  const bd = p.brakeMountBoltDiaIn;
+  const cols = Math.max(1, Math.round(p.brakeMountBoltColumns)), rows = Math.max(1, Math.round(p.brakeMountBoltRows));
+  const xs = Array.from({ length: cols }, (_, i) => kx0 + ((i + 0.5) * (kx1 - kx0)) / cols);
+  const zs = Array.from({ length: rows }, (_, j) => zb + ((j + 0.5) * (zt - zb)) / rows);
+  const stack = legT + railT + p.brakeBackerThickIn;
+  const bolts = { dia: bd, xs, zs, count: cols * rows, stack, cx: xs.reduce((a, b) => a + b, 0) / cols, cz: zs.reduce((a, b) => a + b, 0) / rows };
+  // The backer runs from behind the first bolt column to ahead of the last, clear of the axle hanger behind it (joists in the way are cut back in frame.ts).
+  const hangerFace = L.beamR.x + p.axleHangerWidthIn / 2;
+  const bx0 = Math.max(hangerFace + 0.1, xs[0] - 1.5 * bd - 0.5 * (kx1 - kx0) / cols);
+  const bx1 = xs[xs.length - 1] + 1.5 * bd + 0.5 * (kx1 - kx0) / cols;
+  const backer = { x0: bx0, x1: bx1, y0: y.backerIn, y1: yRailIn, z0: zb, z1: zt, t: p.brakeBackerThickIn };
 
-  // Return springs: from a hook in the top edge of the arm, behind the pivot and under the rear transom, up to an eye screw in the transom's rear face just above its lower
-  // edge (the rail bottom is too close to the arm when the deck is low, so the transom is the anchor; the load is vertical and small).
-  const armMinX = Math.min(...outline.map((q) => q[0]));
-  const xA = Math.min(P[0] - 1.5, Math.max(armMinX + 0.5, L.xRear - 0.4));
-  const topAt = polyZAt(outline, xA);
-  const A: V2 = [xA, (topAt ? topAt[1] : P[1]) - 0.4];
-  const E: V2 = [xA, zb + 0.45];
-  const Aapp = rot2(A, P, thetaApp);
-  const lenRel = norm2(sub(E, A)), lenApp = norm2(sub(E, Aapp));
-  const lever = (pt: V2) => { const u = sub(E, pt); const n = norm2(u) || 1; return Math.abs(cross2(sub(pt, P), [u[0] / n, u[1] / n])); };
-  const leverApp = lever(Aapp), leverRel = lever(A);
-  const fApp = leverApp > 1e-6 ? (p.brakeSpringForceLbf * aApp) / 2 / leverApp : 0;
-  const fRel = SPRING_PRELOAD * fApp;
-  const rate = lenApp - lenRel > 1e-6 ? (fApp - fRel) / (lenApp - lenRel) : 0;
-  const spring = { a: A, e: E, lenRel, lenApp, fApp, fRel, rate, leverApp, leverRel, y: L.hwC - 0.2 };
+  // ── Chock: a ramp the tire climbs; the face is tangent to the tire at the contact, rising away from it ──
+  const psi = p.brakeChockAngleDeg * RAD;
+  const tangent: V2 = [r * Math.sin(psi), r - r * Math.cos(psi)];
+  const xToe = tangent[0] - tangent[1] / Math.tan(psi);
+  const hC = p.brakeChockHeightIn;
+  const xBack = xToe + hC / Math.tan(psi);
+  const cpoly: V2[] = [[xToe, 0], [xBack, 0], [xBack, hC]];
+  const eyeX = Math.max(kx0 + 0.5, Math.min(kx1 - 0.5, xBack));
+  const chock = { psi, tangent, xToe, xBack, height: hC, width: p.brakeChockWidthIn, poly: cpoly, eyeX, kneeEye: [eyeX, zb] as V2, chockEye: [xBack, hC] as V2, heelAngle: Math.atan2(hC, xBack - xToe) };
 
-  if (!why && !(P[1] - arm.holeR > beam.c[1] + (bh + clr) / 2 + 0.2)) why = 'the pivot hole runs into the beam slot: raise the pivot or lower the beam';
   if (!why && !(ratioCrit > 0)) why = 'no lever ratio';
-  if (!why && !(stud.len > 0.3)) why = `the latch stud would stick out only ${stud.len.toFixed(1)}" to reach the hook on the rear transom: move the pedal bar back or the transom forward`;
+  if (!why && !(H[0] > r + 0.2)) why = 'the hinge is not ahead of the tire';
+  if (!why && !(xEnd < H[0] - 4)) why = 'the flap is too short';
   const ok = !why;
   return {
-    ok, why, r, O, beta, rBack, shoeHalfAngle: p.brakeLinedShoeLengthIn / (2 * r), C, Sb, P, d, reach: p.brakePedalReachIn, stroke, thetaApp, beam, bar, barApp, aApp, barDrop,
-    arm, tongue, guard, stud, hook, spring, stop, ratioFwd, ratioRev, ratioCrit, critical: ratioFwd <= ratioRev ? 'forward' : 'reverse', y,
+    ok, why, r, O, y, alpha, delta, C, n, t, pad: { w: padW, thick: tp, length: p.brakePadLengthIn, top, bot },
+    sigma, u, v, c, H, xh, F, xEnd, board, shoe, theta, footDrop, aF, mN, mT, ratioFwd, ratioRev, ratioCrit, critical: ratioFwd <= ratioRev ? 'forward' : 'reverse',
+    hinge, bungee, knee, rail, backer, bolts, chock,
   };
-}
-
-function polyArea(poly: V2[]): number {
-  let a = 0;
-  for (let i = 0; i < poly.length; i++) { const [x1, y1] = poly[i], [x2, y2] = poly[(i + 1) % poly.length]; a += x1 * y2 - x2 * y1; }
-  return Math.abs(a) / 2;
 }

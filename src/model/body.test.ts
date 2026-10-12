@@ -1,12 +1,13 @@
 /**
- * The D-54 body: straight parallel sides, the sled side profile, the curled bow, the rear transom with its lift slot, the scuppers and the provisional signs.
- * Expected numbers are re-derived from the params (docs/phase3c-3a-notes.md), not read back from the builder.
+ * The D-57 body: the sheer (a concave sweep from the low bow up to the tall rear), the plan turn-in toward the bow (plan-curved chine, gunwale, web, rails and deck), the shaped oak
+ * bow bulkhead with its lift hand-hold (it replaced the D-54 bow curl), the rear transom with its lift slot, the scuppers and the signs. Expected numbers are re-derived from the
+ * params (docs/phase3c-4b-notes.md), not read back from the builder.
  */
 import { describe, expect, it } from 'vitest';
-import { bowCurl, defaultParams, sideHeightAt, validateParams, type Params } from '../params';
+import { bowBulkhead, bowTurnInAt, defaultParams, sideHeightAt, validateParams, type Params } from '../params';
 import { buildModel } from './index';
-import { computeLayout, sideHeightAtX, sideSlopeAt, sideTopAt, webTopAt } from './layout';
-import { curlPath, liftBarStressPsi, liftSlot, scupperSites } from './body';
+import { computeLayout, innerHalfWidth, outerHalfWidth, sideHeightAtX, sideSlopeAt, sideTopAt, webTopAt } from './layout';
+import { bowHold, bulkheadOutline, liftBarStressPsi, liftSlot, scupperSites, signPlacement, SIGN_X_MAX_IN } from './body';
 import { makeCtx } from './build-utils';
 import { worldAABB } from './bounds';
 import type { Part, Vec2 } from './types';
@@ -24,317 +25,234 @@ const outlineOf = (x: Part): Vec2[] => {
   return x.geometry.outline;
 };
 const errorsOf = (p: Params) => validateParams(p).filter((i) => i.severity === 'error');
-/** World (x, z) of an extrusion outline point whose frame is [ex = x, ey = z]: the side members and webs. */
-const sideXZ = (x: Part, q: Vec2): Vec2 => [x.transform[12] + q[0] * x.transform[0], x.transform[14] + q[1] * x.transform[5 + 1]];
-/** Gunwale top edge (the second half of its outline) as world (x, z). */
-const topEdge = (g: Part): Vec2[] => {
-  const o = outlineOf(g);
-  return o.slice(o.length / 2).map((q) => sideXZ(g, q)).sort((a, b) => a[0] - b[0]);
+/** Errors that name one of the D-57 body params (the front end and brake have their own tests). */
+const ownErrors = (p: Params) => errorsOf(p).filter((i) => i.keys.some((k) => /^(side|sheer|bow|rail|lift|footBlock|seat|rider|storage|body|handle|flag|grab)/.test(k)));
+/** Vertices of a plan-wall mesh part (model frame). */
+const verts = (x: Part): Array<[number, number, number]> => {
+  if (x.geometry.type !== 'mesh') throw new Error(`${x.id} is not a mesh`);
+  const out: Array<[number, number, number]> = [];
+  for (let i = 0; i < x.geometry.positions.length; i += 3) out.push([x.geometry.positions[i], x.geometry.positions[i + 1], x.geometry.positions[i + 2]]);
+  return out;
 };
-const bottomEdge = (g: Part): Vec2[] => {
-  const o = outlineOf(g);
-  return o.slice(0, o.length / 2).map((q) => sideXZ(g, q)).sort((a, b) => a[0] - b[0]);
+/** Top edge of a plan wall as (x, z), highest vertex at each x. */
+const topEdge = (x: Part): Vec2[] => {
+  const m = new Map<string, Vec2>();
+  for (const [vx, , vz] of verts(x)) { const k = vx.toFixed(6); const q = m.get(k); if (!q) m.set(k, [vx, vz]); else q[1] = Math.max(q[1], vz); }
+  return [...m.values()].sort((a, b) => a[0] - b[0]);
+};
+/** Outer-face y (|y| max) of a wall at x. */
+const outerYAt = (x: Part, at: number): number => {
+  let best = 0, bd = Infinity;
+  for (const [vx, vy] of verts(x)) if (Math.abs(vx - at) < bd - 1e-9 || (Math.abs(Math.abs(vx - at) - bd) < 1e-9 && Math.abs(vy) > best)) { bd = Math.abs(vx - at); best = Math.abs(vy); }
+  return best;
 };
 
-// The same numbers by hand, from the defaults: rear transom outer face x = -10, 3/4 in thick; the bow tip at 44 + 12 = 56 in.
+// The same numbers by hand, from the defaults: rear transom outer face x = -10, 3/4 in thick; bow tip at 44 + 6.75 = 50.75, bulkhead 1.75 in thick so the flat deck ends at 49.
 const xRear = -defaults.rearOverhangIn;
 const xSideStart = xRear + defaults.transomThicknessIn; // -9.25
-const R = defaults.bowCurlRadiusIn;
-const thick = defaults.bowCurlPlies * defaults.bowCurlPlyIn; // 0.472
-const rIn = R - thick / 2; // inside radius 6.764
-const angle = (defaults.bowCurlAngleDeg * Math.PI) / 180;
-const xTip = defaults.wheelbaseIn + defaults.frontOverhangIn; // 56
-const xFlatEnd = xTip - R * Math.sin(angle); // 49.106
-const xSideEnd = xFlatEnd + Math.sqrt(rIn * rIn - (rIn - defaults.sideHeightBowIn) ** 2); // where the inside face has risen to 4 in
+const xTip = defaults.wheelbaseIn + defaults.frontOverhangIn; // 50.75
+const xFlatEnd = xTip - defaults.bowBulkheadThickIn; // 49
+const xSideEnd = xFlatEnd;
 const hw = defaults.bodyWidthIn / 2 - defaults.sideThicknessIn; // inside half width 11.375
 
-describe('layout numbers (D-54)', () => {
-  it('the hand-derived flat deck end, side end and tip match the layout', () => {
+describe('layout numbers (D-54, D-57)', () => {
+  it('the hand-derived flat deck end, side end and tip match the layout; the bulkhead is the last 2 in', () => {
     expect(L.xRear).toBe(xRear);
     expect(L.xSideStart).toBeCloseTo(xSideStart, 12);
     expect(L.xFront).toBeCloseTo(xTip, 12);
     expect(L.xFlatEnd).toBeCloseTo(xFlatEnd, 9);
     expect(L.xSideEnd).toBeCloseTo(xSideEnd, 9);
-    expect(L.xFlatEnd).toBeCloseTo(49.1, 1);
-    expect(L.xSideEnd).toBeCloseTo(55.3, 1);
+    expect(bowBulkhead(defaults)).toEqual({ thick: 1.75, xTip: 50.75, xFlatEnd: 49 });
+    expect(L.bulkhead.x0).toBe(49);
+    expect(L.bulkhead.x1).toBe(50.75);
     expect(L.hwC).toBeCloseTo(hw, 12);
     expect(L.deckTop).toBe(8); // D-56
-    expect(L.deckTop).toBe(defaults.deckHeightIn);
-    expect(L.sideRear).toBe(16);
+    expect(L.sideRear).toBe(14);
     expect(L.sideH).toBe(4);
-    expect(L.sideTop).toBe(24);
+    expect(L.sideTop).toBe(22);
   });
 });
 
-describe('straight parallel sides', () => {
-  it('the outer faces of chine, gunwale and rail are at +/- bodyWidth / 2 and the web is captured between the inner and outer faces', () => {
-    for (const [tag, s] of [['L', 1], ['R', -1]] as const) {
-      for (const part of ['chine', 'gunwale']) {
-        const b = worldAABB(get(parts, `side-${tag}-${part}`));
-        expect(s > 0 ? b.max[1] : -b.min[1], `${tag} ${part} outer`).toBeCloseTo(12, 9);
-        expect(s > 0 ? b.min[1] : -b.max[1], `${tag} ${part} inner`).toBeCloseTo(12 - defaults.sideThicknessIn, 9);
+describe('the plan turn-in (D-57)', () => {
+  it('is 0 behind the turn-in start (x = 35), 1.25 in at the bulkhead face, half of it half way, and smooth (zero slope at both ends)', () => {
+    expect(bowTurnInAt(defaults, 0)).toBe(0);
+    expect(bowTurnInAt(defaults, 35)).toBe(0);
+    expect(bowTurnInAt(defaults, 49)).toBeCloseTo(1.25, 12);
+    expect(bowTurnInAt(defaults, 42)).toBeCloseTo(0.625, 12);
+    expect(bowTurnInAt(defaults, 60)).toBeCloseTo(1.25, 12); // clamped beyond the face
+    expect(bowTurnInAt(defaults, 35.01) - bowTurnInAt(defaults, 35)).toBeLessThan(1e-5);
+    expect(L.turnIn(40)).toBe(bowTurnInAt(defaults, 40));
+    expect(innerHalfWidth(L, 20)).toBeCloseTo(hw, 12);
+    expect(innerHalfWidth(L, 49)).toBeCloseTo(hw - 1.25, 12);
+    expect(outerHalfWidth(L, 49)).toBeCloseTo(12 - 1.25, 12);
+  });
+  it('the chine, gunwale, web and rail of both sides follow it: outer face at 12 in behind x = 35 and 10.75 in at the bulkhead, mirrored exactly', () => {
+    for (const [tag, sg] of [['L', 1], ['R', -1]] as const) {
+      for (const [part, thick] of [['side-chine', L.side], ['side-gunwale', L.side], ['rail', defaults.railThicknessIn]] as const) {
+        const id = part === 'rail' ? `rail-${tag}` : `side-${tag}-${part.slice(5)}`;
+        const x = get(parts, id);
+        for (const at of [0, 20, 42, 48.9]) expect(Math.abs(outerYAt(x, at) - (12 - bowTurnInAt(defaults, at))), `${id} @ ${at}`).toBeLessThan(0.11); // nearest vertex, up to 0.75 in away on the curve
+        const b = worldAABB(x);
+        expect(sg > 0 ? b.max[1] : -b.min[1], id).toBeCloseTo(12, 6);
+        void thick;
       }
-      const w = worldAABB(get(parts, `side-${tag}-web`));
-      expect(Math.min(Math.abs(w.min[1]), Math.abs(w.max[1]))).toBeGreaterThan(hw);
-      expect(Math.max(Math.abs(w.min[1]), Math.abs(w.max[1]))).toBeLessThan(12);
-      expect(w.max[1] - w.min[1]).toBeCloseTo(defaults.panelPlyIn, 9);
-      // the rail runs flush under the chine: same outer face
-      const r = worldAABB(get(parts, `rail-${tag}`));
-      expect(s > 0 ? r.max[1] : -r.min[1]).toBeCloseTo(12, 9);
+      const web = get(parts, `side-${tag}-web`);
+      const wb = verts(web).filter(([vx]) => Math.abs(vx - 49) < 0.01);
+      expect(wb.length).toBeGreaterThan(2);
+      const ys = wb.map(([, vy]) => Math.abs(vy));
+      expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(defaults.panelPlyIn, 6);
+      expect((Math.max(...ys) + Math.min(...ys)) / 2).toBeCloseTo(hw + L.side / 2 - 1.25, 6);
     }
+    const a = worldAABB(get(parts, 'side-L-gunwale')), b = worldAABB(get(parts, 'side-R-gunwale'));
+    expect(a.min[1]).toBeCloseTo(-b.max[1], 9);
+    expect(a.max[0]).toBeCloseTo(b.max[0], 12);
   });
-  it('parallel: every side member has one constant y range (extrusions across y) and the two sides mirror exactly', () => {
-    for (const part of ['chine', 'gunwale', 'web']) {
-      const a = worldAABB(get(parts, `side-L-${part}`)), b = worldAABB(get(parts, `side-R-${part}`));
-      expect(a.min[1]).toBeCloseTo(-b.max[1], 12);
-      expect(a.max[1]).toBeCloseTo(-b.min[1], 12);
-      expect(a.min[0]).toBeCloseTo(b.min[0], 12);
-      expect(a.max[0]).toBeCloseTo(b.max[0], 12);
-      expect(a.max[2]).toBeCloseTo(b.max[2], 12);
-    }
-    // the deck is a plain rectangle: no taper
-    const d = outlineOf(get(parts, 'deck'));
-    expect(d).toHaveLength(4);
-    expect(d[0][1]).toBeCloseTo(-d[3][1], 12);
-    expect(d[1][1]).toBeCloseTo(d[0][1], 12); // the front edge is square to the sides
-    const ys = new Set(d.map((q) => Math.abs(q[1]).toFixed(9)));
-    expect(ys.size).toBe(1);
-    expect([...ys][0]).toBe((hw + defaults.deckCaptureDepthIn).toFixed(9));
+  it('the deck outline follows the turn-in (square at the rear, narrower at the front, one sheet inside 4 x 8) and ends in the bulkhead dado', () => {
+    const d = get(parts, 'deck');
+    const o = outlineOf(d);
+    const dd = defaults.deckCaptureDepthIn;
+    for (const q of o) expect(Math.abs(q[1]), `x=${q[0].toFixed(2)}`).toBeCloseTo(hw + dd - bowTurnInAt(defaults, Math.min(q[0], xFlatEnd)), 9);
+    const b = worldAABB(d);
+    expect(b.min[0]).toBeCloseTo(xSideStart - dd, 9);
+    expect(b.max[0]).toBeCloseTo(xFlatEnd + dd, 9);
+    expect(b.max[0] - b.min[0]).toBeLessThanOrEqual(96);
+    expect(b.max[1] - b.min[1]).toBeLessThanOrEqual(48);
+    expect(d.edges).toBe('captured');
   });
-  it('the width follows bodyWidthIn (22 and 28 in) with no change of shape', () => {
-    for (const w of [22, 28]) {
-      const p = { ...defaults, bodyWidthIn: w, frontTrackIn: 40 }; // the wider body needs the wider front track for the steering lock (D-56)
-      expect(errorsOf(p), `${w}`).toEqual([]);
-      const m = buildModel(p);
-      expect(worldAABB(get(m, 'side-L-gunwale')).max[1]).toBeCloseTo(w / 2, 9);
-      expect(worldAABB(get(m, 'side-R-chine')).min[1]).toBeCloseTo(-w / 2, 9);
-      expect(worldAABB(get(m, 'transom-rear')).max[1]).toBeCloseTo(w / 2, 9);
-      const d = outlineOf(get(m, 'deck'));
-      expect(d.every((q) => Math.abs(Math.abs(q[1]) - (w / 2 - defaults.sideThicknessIn + defaults.deckCaptureDepthIn)) < 1e-9)).toBe(true);
-    }
+  it('with no turn-in the sides are parallel again and every width is the full 24 in', () => {
+    const p = { ...defaults, bowTurnInIn: 0 };
+    const m = buildModel(p);
+    for (const at of [0, 30, 48.9]) expect(outerYAt(get(m, 'side-L-gunwale'), at)).toBeCloseTo(12, 6);
+    expect(computeLayout(p).bulkhead.halfW).toBe(12);
   });
-  it('the chine is a straight bar from the rear transom to the end of the sides at deck level; the rail runs to the end of the flat deck', () => {
+  it('the chine is a constant 1.5 in band at deck level and the rail runs to the bulkhead face; both ends are exact', () => {
     const c = worldAABB(get(parts, 'side-L-chine'));
     expect(c.min[0]).toBeCloseTo(xSideStart, 9);
     expect(c.max[0]).toBeCloseTo(xSideEnd, 9);
     expect(c.min[2]).toBeCloseTo(L.deckBot, 9);
     expect(c.max[2] - c.min[2]).toBeCloseTo(defaults.railBandIn, 9);
-    expect(get(parts, 'side-L-chine').geometry.type).toBe('box');
     const r = worldAABB(get(parts, 'rail-L'));
     expect(r.min[0]).toBeCloseTo(xSideStart, 9);
     expect(r.max[0]).toBeCloseTo(xFlatEnd, 9);
     expect(r.max[2]).toBeCloseTo(L.deckBot, 9);
-    expect(r.max[2] - r.min[2]).toBeCloseTo(defaults.railDepthIn, 9);
-  });
-  it('the deck is one flat sheet that ends where the curl starts: x from the transom dado to xFlatEnd, one ply thick, fits a 4 x 8 sheet', () => {
-    const d = get(parts, 'deck');
-    const b = worldAABB(d);
-    expect(b.min[0]).toBeCloseTo(xSideStart - defaults.deckCaptureDepthIn, 9);
-    expect(b.max[0]).toBeCloseTo(xFlatEnd, 9);
-    expect(b.min[2]).toBeCloseTo(L.deckBot, 9);
-    expect(b.max[2]).toBeCloseTo(L.deckTop, 9);
-    expect(b.max[0] - b.min[0]).toBeLessThanOrEqual(96);
-    expect(b.max[1] - b.min[1]).toBeLessThanOrEqual(48);
-    expect(d.edges).toEqual(['captured', 'captured', 'captured', 'captured']);
   });
 });
 
-describe('sled side profile', () => {
-  const sag = (s: number) => ({ ...defaults, sideProfileSagIn: s });
+describe('the sheer (D-57)', () => {
+  const sheer = (s: number) => ({ ...defaults, sheerCurveIn: s });
   const u = (x: number) => (x - xSideStart) / (xSideEnd - xSideStart);
+  const hAt = (x: number, s = 2.5) => 14 + (4 - 14) * u(x) - 4 * s * u(x) * (1 - u(x));
 
-  it('a straight line from 16 in above the deck at the rear transom inner face to 4 in at the end of the sides: gunwale top at sampled x', () => {
+  it('the gunwale top follows 14 in at the rear transom down to 4 in at the bulkhead, sagging 2.5 in below the straight line at mid-length', () => {
     for (const tag of ['L', 'R']) {
       const top = topEdge(get(parts, `side-${tag}-gunwale`));
-      expect(top.length).toBeGreaterThan(10);
+      expect(top.length).toBeGreaterThan(20);
       expect(top[0][0]).toBeCloseTo(xSideStart, 9);
       expect(top[top.length - 1][0]).toBeCloseTo(xSideEnd, 9);
-      for (const [x, z] of top) expect(z - L.deckTop, `${tag} x=${x.toFixed(2)}`).toBeCloseTo(16 + (4 - 16) * u(x), 9);
-      expect(top[0][1] - L.deckTop).toBeCloseTo(16, 9);
+      for (const [x, z] of top) expect(z - L.deckTop, `${tag} x=${x.toFixed(2)}`).toBeCloseTo(hAt(x), 9);
+      expect(top[0][1] - L.deckTop).toBeCloseTo(14, 9);
       expect(top[top.length - 1][1] - L.deckTop).toBeCloseTo(4, 9);
     }
+    const mid = xSideStart + (xSideEnd - xSideStart) / 2;
+    expect(sideHeightAtX(L, mid)).toBeCloseTo(9 - 2.5, 9); // 9 in on the straight line, 2.5 in lower
   });
-  it('is the same line in the layout helpers (sideHeightAtX, sideTopAt) and in params.sideHeightAt', () => {
-    for (const x of [-9.25, -3, 0, 10, 25, 40, 55.2]) {
-      const h = 16 - 12 * u(x);
-      expect(sideHeightAtX(L, x), `${x}`).toBeCloseTo(h, 9);
-      expect(sideTopAt(L, x)).toBeCloseTo(L.deckTop + h, 9);
-      expect(sideHeightAt(defaults, x, xSideStart, xSideEnd)).toBeCloseTo(h, 9);
-      expect(webTopAt(L, x)).toBeCloseTo(L.deckTop + h - defaults.railBandIn, 9);
-    }
-    // clamped beyond the ends
-    expect(sideHeightAtX(L, -40)).toBeCloseTo(16, 9);
-    expect(sideHeightAtX(L, 80)).toBeCloseTo(4, 9);
-    // the slope: 12 in down over the 64.5 in run, the same everywhere (straight), descending toward the bow
+  it('it is concave: the slope is shallow at the bow (level with the default sag) and twice the straight-line slope at the rear', () => {
     const run = xSideEnd - xSideStart;
-    for (const x of [-5, 20, 50]) expect(sideSlopeAt(L, x)).toBeCloseTo(Math.atan2(12, run), 6);
+    expect(sideSlopeAt(L, xSideEnd - 0.2)).toBeCloseTo(0, 1);
+    expect(sideSlopeAt(L, xSideStart + 0.2)).toBeCloseTo(Math.atan(20 / run), 1);
+    // monotone: the sheer never rises toward the bow
+    let prev = Infinity;
+    for (let x = xSideStart; x <= xSideEnd; x += 1) { const h = sideHeightAtX(L, x); expect(h).toBeLessThanOrEqual(prev + 1e-9); prev = h; }
+    // second difference positive = concave up
+    for (const x of [0, 15, 30]) expect(sideHeightAtX(L, x - 1) - 2 * sideHeightAtX(L, x) + sideHeightAtX(L, x + 1)).toBeGreaterThan(0);
   });
-  it('the gunwale is a constant 1.5 in band under that line, and the web top is the gunwale underside plus the groove depth (captured)', () => {
+  it('is the same curve in the layout helpers and in params.sideHeightAt; the web top is the gunwale underside plus the groove depth (captured)', () => {
     const g = defaults.grooveDepthIn;
+    for (const x of [-9.25, -3, 0, 10, 25, 40, 49]) {
+      expect(sideHeightAtX(L, x), `${x}`).toBeCloseTo(hAt(x), 9);
+      expect(sideTopAt(L, x)).toBeCloseTo(L.deckTop + hAt(x), 9);
+      expect(sideHeightAt(defaults, x, xSideStart, xSideEnd)).toBeCloseTo(hAt(x), 9);
+      expect(webTopAt(L, x)).toBeCloseTo(L.deckTop + hAt(x) - defaults.railBandIn, 9);
+    }
     for (const tag of ['L', 'R']) {
-      const gun = get(parts, `side-${tag}-gunwale`);
-      const top = topEdge(gun), bot = bottomEdge(gun);
-      expect(bot).toHaveLength(top.length);
-      top.forEach((q, i) => {
-        expect(q[0]).toBeCloseTo(bot[i][0], 9);
-        expect(q[1] - bot[i][1]).toBeCloseTo(defaults.railBandIn, 9);
-      });
-      const web = get(parts, `side-${tag}-web`);
-      const wo = outlineOf(web).map((q) => sideXZ(web, q));
-      // The web's top edge is the second half of the outline; each top point (inside the gunwale's x range) sits `g` into the gunwale groove
-      const wTop = wo.slice(wo.length / 2);
+      const gun = topEdge(get(parts, `side-${tag}-gunwale`));
+      const web = topEdge(get(parts, `side-${tag}-web`));
       let n = 0;
-      for (const [x, z] of wTop) {
+      for (const [x, z] of web) {
         if (x < xSideStart || x > xSideEnd + 1e-9) continue;
         n++;
-        expect(z, `${tag} web top x=${x.toFixed(2)}`).toBeCloseTo(L.deckTop + 16 - 12 * u(x) - defaults.railBandIn + g, 9);
+        expect(z, `${tag} web top x=${x.toFixed(2)}`).toBeCloseTo(L.deckTop + hAt(x) - defaults.railBandIn + g, 9);
       }
-      expect(n).toBeGreaterThan(10);
-      // the web bottom is flat, g below the chine top
-      const wBot = wo.slice(0, wo.length / 2);
-      for (const [, z] of wBot) expect(z).toBeCloseTo(L.chineBot + defaults.railBandIn - g, 9);
-      // one edge condition per outline edge, none exposed
-      expect(web.edges).toBe('captured');
-      const wb = worldAABB(web);
-      expect(wb.max[0]).toBeCloseTo(xSideEnd, 9);
-      expect(wb.min[0]).toBeCloseTo(xSideStart - defaults.deckCaptureDepthIn, 9);
+      expect(n).toBeGreaterThan(20);
+      expect(gun.length).toBeGreaterThan(20);
+      expect(get(parts, `side-${tag}-web`).edges).toBe('captured');
     }
   });
-  it('the optional sag bends the line by exactly 4 * sag * u * (1 - u): half the sag at a quarter, the full sag at the middle, and none at either end', () => {
-    for (const s of [2, -1, 3]) {
-      const p = sag(s);
-      const m = buildModel(p);
+  it('sheerCurveIn 0 is the straight D-54 line; a larger value sags more by exactly 4 * sag * u * (1 - u)', () => {
+    for (const s of [0, 1, 4]) {
+      const p = sheer(s);
       const Lp = computeLayout(p);
-      for (const tag of ['L', 'R']) {
-        for (const [x, z] of topEdge(get(m, `side-${tag}-gunwale`))) {
-          const uu = u(x);
-          expect(z - Lp.deckTop, `sag ${s} x=${x.toFixed(2)}`).toBeCloseTo(16 - 12 * uu - 4 * s * uu * (1 - uu), 9);
-        }
-      }
-      const mid = xSideStart + (xSideEnd - xSideStart) / 2;
-      expect(sideHeightAtX(Lp, mid)).toBeCloseTo(10 - s, 9); // the line gives 10 in at the middle
-      expect(sideHeightAtX(Lp, xSideStart + (xSideEnd - xSideStart) / 4)).toBeCloseTo(13 - 0.75 * s, 9);
-      expect(sideHeightAtX(Lp, xSideStart)).toBeCloseTo(16, 9);
-      expect(sideHeightAtX(Lp, xSideEnd)).toBeCloseTo(4, 9);
-      expect(sideHeightAt(p, mid, xSideStart, xSideEnd)).toBeCloseTo(10 - s, 9);
+      for (const x of [-5, 10, 30]) expect(sideHeightAtX(Lp, x), `${s} ${x}`).toBeCloseTo(14 - 10 * u(x) - 4 * s * u(x) * (1 - u(x)), 9);
+      for (const tag of ['L', 'R']) for (const [x, z] of topEdge(get(buildModel(p), `side-${tag}-gunwale`))) expect(z - Lp.deckTop).toBeCloseTo(14 - 10 * u(x) - 4 * s * u(x) * (1 - u(x)), 9);
     }
   });
-  it('the rear transom is as tall as the rear side (16 in above the deck at its corners, a crown more at the middle)', () => {
+  it('the rear transom is as tall as the rear side (14 in above the deck at its corners, a crown more at the middle)', () => {
     const t = worldAABB(get(parts, 'transom-rear'));
-    expect(t.max[2]).toBeCloseTo(L.deckTop + 16 + defaults.transomCrownIn, 9);
-    expect(t.min[2]).toBeCloseTo(L.deckBot - defaults.crossmemberDepthIn + defaults.deckPlyIn, 9); // down to the joist bottom
-    const o = outlineOf(get(parts, 'transom-rear'));
-    const wTop = Math.max(...o.map((q) => q[0]));
-    expect(wTop).toBeCloseTo(12, 9);
-    const atWall = o.filter((q) => Math.abs(q[0] - wTop) < 1e-9).map((q) => q[1]);
-    expect(Math.max(...atWall)).toBeLessThan(L.deckTop + 16 - 0.05); // the corner is rounded off below the corner height
-    expect(liftSlot(makeCtx(defaults)).transomTop).toBeCloseTo(L.deckTop + 16, 9);
-    // and the gunwale at the rear transom is the same height as the transom's corner line
-    expect(topEdge(get(parts, 'side-L-gunwale'))[0][1]).toBeCloseTo(L.deckTop + 16, 9);
+    expect(t.max[2]).toBeCloseTo(L.deckTop + 14 + defaults.transomCrownIn, 9);
+    expect(liftSlot(makeCtx(defaults)).transomTop).toBeCloseTo(L.deckTop + 14, 9);
+    expect(topEdge(get(parts, 'side-L-gunwale'))[0][1]).toBeCloseTo(L.deckTop + 14, 9);
   });
   it('lowering or raising the two heights moves the profile (sideHeightBowIn 5, sideHeightRearIn 12)', () => {
     const p = { ...defaults, sideHeightBowIn: 5, sideHeightRearIn: 12 };
-    expect(errorsOf(p)).toEqual([]);
-    const m = buildModel(p);
-    const top = topEdge(get(m, 'side-L-gunwale'));
+    expect(ownErrors(p)).toEqual([]);
+    const top = topEdge(get(buildModel(p), 'side-L-gunwale'));
     expect(top[0][1] - defaults.deckHeightIn).toBeCloseTo(12, 9);
     expect(top[top.length - 1][1] - defaults.deckHeightIn).toBeCloseTo(5, 9);
-    expect(worldAABB(get(m, 'transom-rear')).max[2]).toBeCloseTo(defaults.deckHeightIn + 12 + defaults.transomCrownIn, 9);
   });
 });
 
-describe('bow curl', () => {
-  const curl = get(parts, 'bow-curl');
-  const path = (curl.geometry as { type: 'sweep'; path: Vec2[]; width: number; thickness: number; plies: number }).path;
-  const c = bowCurl(defaults);
-  const N = path.length - 1;
-  // arc center: directly above the tangent point, one centerline radius up
-  const zFlat = defaults.deckHeightIn - thick / 2; // the centerline of the flat part (the curl is as thick as the deck, flush with the deck top)
-  const center: Vec2 = [xFlatEnd, zFlat + R];
-
-  it('a 4-ply, 12 mm bent lamination as wide as the inside of the hull, flush with the deck top at the tangent point', () => {
-    expect(curl.kind).toBe('bentlam');
-    expect(curl.geometry.type).toBe('sweep');
-    expect(thick).toBeCloseTo(0.472, 9);
-    expect(thick).toBeCloseTo(defaults.deckPlyIn, 2); // the same thickness as the deck, which it is scarfed to
-    const g = curl.geometry as { width: number; thickness: number; plies: number };
-    expect(g.plies).toBe(4);
-    expect(g.thickness).toBeCloseTo(thick, 12);
-    expect(g.width).toBeCloseTo(2 * hw, 12);
-    expect(curl.joints!.some((j) => j.type === 'scarf' && j.to === 'deck')).toBe(true);
-    expect(curl.edges).toBe('edged');
+describe('the bow bulkhead and its hand-hold (D-57)', () => {
+  const b = get(parts, 'bow-bulkhead');
+  const o = bulkheadOutline(makeCtx(defaults));
+  it('replaces the bow curl and the foot-stop bar: no bow-curl, foot-stop or foot-stop-cleat part exists', () => {
+    expect(parts.some((x) => /^(bow-curl|foot-stop)/.test(x.id))).toBe(false);
+    expect(b.material).toBe('white oak');
+    expect(b.group).toBe('body');
   });
-  it('tangent to the deck at xFlatEnd: the path starts there at the deck centerline and every point is exactly one centerline radius from the arc center directly above it', () => {
-    expect(path[0][0]).toBeCloseTo(xFlatEnd, 9);
-    expect(path[0][1]).toBeCloseTo(zFlat, 9);
-    expect(curlPath(defaults, L)).toEqual(path);
-    for (const q of path) expect(Math.hypot(q[0] - center[0], q[1] - center[1])).toBeCloseTo(R, 9);
-    // the tangent at the first point is horizontal: the first chord's heading is half a step, 80 / 12 / 2 = 3.33 deg
-    const step = defaults.bowCurlAngleDeg / N;
-    const h0 = Math.atan2(path[1][1] - path[0][1], path[1][0] - path[0][0]);
-    expect((h0 * 180) / Math.PI).toBeCloseTo(step / 2, 6);
-    // the layout agrees
-    expect(L.curl.xFlatEnd).toBeCloseTo(xFlatEnd, 9);
-    expect(L.curl.heightAt(xFlatEnd)).toBe(0);
-    expect(L.curl.angleAt(xFlatEnd)).toBe(0);
+  it('is 1.75 in thick from the end of the flat deck to the bow tip, as wide as the narrowed hull, 4 in high at the corners rising to 9 in above the deck at the center', () => {
+    const bb = worldAABB(b);
+    expect(bb.min[0]).toBeCloseTo(49, 9);
+    expect(bb.max[0]).toBeCloseTo(50.75, 9);
+    expect(bb.max[1]).toBeCloseTo(10.75, 9);
+    expect(bb.min[1]).toBeCloseTo(-10.75, 9);
+    expect(bb.max[2]).toBeCloseTo(L.deckTop + 9, 9);
+    expect(bb.min[2]).toBeCloseTo(L.bulkhead.bot, 9);
+    expect(L.bulkhead.zCorner).toBe(L.deckTop + 4);
+    expect(o.halfW).toBeCloseTo(10.75, 12);
+    // the sides end exactly at its rear face (the gunwale's top at the face is the corner height)
+    expect(topEdge(get(parts, 'side-L-gunwale')).slice(-1)[0][1] - L.deckTop).toBeCloseTo(4, 9);
+    for (const tag of ['L', 'R']) expect(worldAABB(get(parts, `side-${tag}-gunwale`)).max[0]).toBeCloseTo(49, 9);
   });
-  it('radius 7 in, angle 80 deg, tip at x = 56 in (the end of the body) and 5.78 in up the centerline', () => {
-    expect(c.radius).toBe(7);
-    expect(defaults.bowCurlAngleDeg).toBe(80);
-    const tip = path[path.length - 1];
-    expect(tip[0]).toBeCloseTo(xTip, 9);
-    expect(tip[0]).toBeCloseTo(L.xFront, 12);
-    expect(tip[1] - zFlat).toBeCloseTo(R * (1 - Math.cos(angle)), 9); // 5.78 in
-    expect(tip[1] - zFlat).toBeCloseTo(5.78, 2);
-    // the tip tangent direction is 80 deg minus half a step from horizontal
-    const last = Math.atan2(tip[1] - path[N - 1][1], tip[0] - path[N - 1][0]);
-    expect((last * 180) / Math.PI).toBeCloseTo(defaults.bowCurlAngleDeg - defaults.bowCurlAngleDeg / N / 2, 6);
-    // 90 deg gives a vertical tip, 45 a gentle upturn
-    const v = curlPath({ ...defaults, bowCurlAngleDeg: 90 }, computeLayout({ ...defaults, bowCurlAngleDeg: 90 }));
-    expect(v[v.length - 1][0] - bowCurl({ ...defaults, bowCurlAngleDeg: 90 }).xFlatEnd).toBeCloseTo(R, 9);
-    expect(bowCurl({ ...defaults, bowCurlAngleDeg: 45 }).rise).toBeCloseTo(R * (1 - Math.SQRT1_2), 9);
-    // the world box of the sweep reaches the tip (plus half the thickness)
-    const b = worldAABB(curl);
-    expect(b.max[0]).toBeGreaterThanOrEqual(xTip - 1e-9);
+  it('has the lift hand-hold: a 4.5 x 1.25 in stadium on the centerline, 3 in above the deck, with the crown of oak above it; the layout publishes it for the lift row', () => {
+    const hole = (b.geometry as { holes?: Vec2[][] }).holes![0];
+    const ys = hole.map((q) => q[0]), zs = hole.map((q) => q[1]);
+    expect(Math.min(...ys)).toBeCloseTo(-2.25, 9);
+    expect(Math.max(...ys)).toBeCloseTo(2.25, 9);
+    expect(Math.min(...zs)).toBeCloseTo(L.deckTop + 3, 9);
+    expect(Math.max(...zs)).toBeCloseTo(L.deckTop + 3 + 1.25, 9);
+    expect(L.hold).toMatchObject({ x0: 49, x1: 50.75, halfLen: 2.25, zBot: L.deckTop + 3, zTop: L.deckTop + 4.25 });
+    const hs = bowHold(makeCtx(defaults));
+    expect(hs.barIn).toBeCloseTo(9 - 4.25, 9); // 4.75 in of oak above it at the center
+    expect(hs.thickIn).toBe(1.75);
+    expect(liftBarStressPsi(hs, 100)).toBeGreaterThan(0);
+    expect(liftBarStressPsi(hs, 100)).toBeLessThan(liftBarStressPsi(liftSlot(makeCtx(defaults)), 100)); // a thicker, deeper bar than the transom's
   });
-  it('inside radius 6.76 in against the cold-bend limit of 40 plies (4.72 in): OK, and a tighter curl is rejected', () => {
-    const ply = defaults.bowCurlPlyIn; // 4 plies of 0.118 are 0.472 (lamPly agrees to within rounding)
-    expect(rIn).toBeCloseTo(6.764, 3);
-    expect(c.rIn).toBeCloseTo(rIn, 12);
-    const limit = defaults.hullLamMinRadiusFactor * ply;
-    expect(limit).toBeCloseTo(4.72, 2);
-    expect(rIn).toBeGreaterThan(limit);
-    expect(errorsOf(defaults)).toEqual([]);
-    // a 5 in centerline radius is 4.76 inside: still OK; 4.5 would be 4.26 inside, below the 4.72 limit
-    expect(errorsOf({ ...defaults, bowCurlRadiusIn: 5 }).filter((i) => i.keys.includes('hullLamMinRadiusFactor'))).toEqual([]);
-    const tight = errorsOf({ ...defaults, bowCurlRadiusIn: 4.5, sideHeightBowIn: 2 }).filter((i) => i.keys.includes('hullLamMinRadiusFactor'));
-    expect(tight).toHaveLength(1);
-    expect(tight[0].message).toMatch(/cold-bend limit/);
-    // thicker plies move the limit up with them
-    expect(errorsOf({ ...defaults, bowCurlPlyIn: 0.2, bowCurlPlies: 2 }).some((i) => i.keys.includes('hullLamMinRadiusFactor'))).toBe(true);
-  });
-  it('the sides end where the curl inside face has risen to the bow side height (4 in): the member ends, the curl height there and the inside circle agree', () => {
-    expect(L.curl.heightAt(xSideEnd)).toBeCloseTo(defaults.sideHeightBowIn, 9);
-    // the inside-face point at the end of the sides is on the inside circle of the curl
-    expect(Math.hypot(xSideEnd - center[0], L.deckTop + defaults.sideHeightBowIn - (L.deckTop + rIn))).toBeCloseTo(rIn, 9);
-    for (const tag of ['L', 'R']) {
-      for (const part of ['chine', 'gunwale', 'web']) expect(worldAABB(get(parts, `side-${tag}-${part}`)).max[0], `${tag} ${part}`).toBeCloseTo(xSideEnd, 9);
-    }
-    // a taller bow side meets the curl later; one taller than the curl rises is rejected
-    const p6 = { ...defaults, sideHeightBowIn: 5 };
-    expect(computeLayout(p6).xSideEnd).toBeGreaterThan(xSideEnd);
-    expect(computeLayout(p6).curl.heightAt(computeLayout(p6).xSideEnd)).toBeCloseTo(5, 9);
-    const err = errorsOf({ ...defaults, sideHeightBowIn: 8, bowCurlAngleDeg: 45 });
-    expect(err.some((i) => i.keys.includes('sideHeightBowIn') && /only rises/.test(i.message))).toBe(true);
-  });
-  it('the curl is epoxied to the deck by a scarf; the bridle no longer ties to it (the tongue plate reaches under the bow, D-56); its notes record the bend radius', () => {
-    expect(curl.notes).toMatch(/cold-bend limit/);
-    expect((curl.joints ?? []).some((j) => j.to === 'bow-block' || j.to === 'bridle-eye')).toBe(false);
-    expect(curl.notes).not.toMatch(/eye bolt|backing block|caster/);
-    expect(curl.notes).toMatch(/tongue plate/);
-    expect(curl.sourcing!.vendor).toMatch(/bending ply/);
-    expect(curl.massLb).toBeGreaterThan(1);
-    expect(curl.massLb).toBeLessThan(4);
+  it('is glued to the deck edge in a dado and to the rail, chine, gunwale and web ends; the front lantern clips over its crown', () => {
+    const to = new Set((b.joints ?? []).map((j) => j.to));
+    for (const id of ['deck', 'rail-L', 'rail-R', 'side-L-chine', 'side-R-gunwale', 'side-L-web']) expect(to.has(id), id).toBe(true);
+    expect(get(parts, 'lantern-mount').joints!.some((j) => j.to === 'bow-bulkhead')).toBe(true);
+    expect(b.notes).toMatch(/foot brace/);
+    expect(b.notes).toMatch(/hand-hold/);
   });
 });
 
@@ -365,7 +283,7 @@ describe('rear transom and lift slot', () => {
     expect(liftBarStressPsi(rs, 100)).toBeGreaterThan(0);
     expect(liftBarStressPsi(rs, 200)).toBeCloseTo(2 * liftBarStressPsi(rs, 100), 9);
   });
-  it('the transom is 3/4 in oak, full width over the side ends, from the joist bottom to 16 in above the deck; four 1/4 in vent holes', () => {
+  it('the transom is 3/4 in oak, full width over the side ends, from the joist bottom to 14 in above the deck; four 1/4 in vent holes', () => {
     expect(t.material).toBe('white oak');
     const b = worldAABB(t);
     expect(b.min[0]).toBeCloseTo(xRear, 9);
@@ -395,7 +313,7 @@ describe('scuppers', () => {
     const rear = worldAABB(get(parts, 'scupper-rear-L')), bow = worldAABB(get(parts, 'scupper-bow-L'));
     const cx = (b: { min: number[]; max: number[] }) => (b.min[0] + b.max[0]) / 2;
     expect(cx(rear)).toBeCloseTo(rearX, 9); // in the rear corner, just ahead of the rear transom
-    expect(cx(bow)).toBeCloseTo(xFlatEnd - 1, 9); // just behind the curl
+    expect(cx(bow)).toBeCloseTo(xFlatEnd - 1, 9); // just behind the bow bulkhead
     expect(cx(rear) - xSideStart).toBeLessThan(1);
     for (const id of ['scupper-rear-L', 'scupper-bow-L', 'scupper-rear-R', 'scupper-bow-R']) {
       const b = worldAABB(get(parts, id));
@@ -415,58 +333,70 @@ describe('scuppers', () => {
       expect(b.min[0]).toBeGreaterThan(chine.min[0]);
       expect(b.max[0]).toBeLessThan(chine.max[0]);
     }
+    // the bow drains sit in the narrowed hull (turn-in), through its chine
+    const bow = worldAABB(get(parts, 'scupper-bow-L'));
+    expect(bow.max[1]).toBeCloseTo(L.hwC - bowTurnInAt(defaults, 48) + L.side + 0.25, 1);
   });
 });
 
-describe('signs are provisional (D-54: design the shape first)', () => {
-  it('off by default', () => {
-    expect(defaults.showSideSigns).toBe(0);
-    expect(parts.some((x) => /^sign/.test(x.id))).toBe(false);
-  });
-  it('on: two removable blanks on the side webs, marked provisional, and the body is unchanged', () => {
-    const p = { ...defaults, showSideSigns: 1 };
-    expect(errorsOf(p)).toEqual([]);
-    const m = buildModel(p);
-    const signs = m.filter((x) => /^sign/.test(x.id));
+describe('signs (D-57): the Troop 455 sign is back on the tall rear part of each side', () => {
+  const sp = signPlacement(makeCtx(defaults));
+  it('on by default: two removable ply blanks banded in oak, outside the side stack, hung on thumb-knob screws', () => {
+    expect(defaults.showSideSigns).toBe(1);
+    const signs = parts.filter((x) => /^sign/.test(x.id));
     expect(signs.map((x) => x.id).sort()).toEqual(['sign-L', 'sign-R']);
     for (const s of signs) {
       expect(s.removable).toBe(true);
       expect(s.group).toBe('removable');
-      expect(s.name).toMatch(/provisional/i);
-      expect(s.notes).toMatch(/PROVISIONAL/);
       expect(s.massLb).toBeGreaterThan(0);
       expect(s.edges).toBe('edged');
+      expect(s.notes).not.toMatch(/PROVISIONAL/);
+      expect(s.joints!.some((j) => j.type === 'knob')).toBe(true);
     }
-    // hung on the OUTER face of the side stack (chine, web and gunwale are flush there), parallel to the gunwale line, between the chine bottom and the rear gunwale top
-    const w = worldAABB(get(m, 'side-L-web')), sg = worldAABB(get(m, 'sign-L'));
-    expect(sg.min[1]).toBeGreaterThanOrEqual(w.max[1] - 1e-9);
-    expect(sg.max[1]).toBeGreaterThan(12);
-    expect(sg.max[1]).toBeLessThan(12 + 2 * defaults.panelPlyIn);
-    expect(sg.min[2]).toBeGreaterThan(L.chineBot);
-    expect(sg.max[2]).toBeLessThan(L.sideTop);
-    expect(buildModel(p, { removed: true }).some((x) => /^sign/.test(x.id))).toBe(false);
-    // nothing else in the body knows about the sign
-    for (const x of parts.filter((q) => q.id !== 'hardware')) expect(get(m, x.id).massLb, x.id).toBeCloseTo(x.massLb, 9); // (the fastener remainder, 'hardware', grows with the sign screws)
-    expect(get(m, 'hardware').massLb).toBeGreaterThan(get(parts, 'hardware').massLb);
-    expect(m.length).toBe(parts.length + 2);
+    expect(buildModel(defaults, { removed: true }).some((x) => /^sign/.test(x.id))).toBe(false);
+    expect(buildModel({ ...defaults, showSideSigns: 0 }).some((x) => /^sign/.test(x.id))).toBe(false);
+  });
+  it('is 15 x 6 in at most, starts just ahead of the transom, stops at x = 6 (clear of the wheel brake mount), follows the sheer and stays under the gunwale line and over the chine', () => {
+    expect(sp.length).toBeLessThanOrEqual(defaults.signLengthIn);
+    const b = worldAABB(get(parts, 'sign-L'));
+    expect(b.min[0]).toBeGreaterThanOrEqual(xSideStart - 1e-6);
+    expect(b.max[0]).toBeLessThanOrEqual(SIGN_X_MAX_IN + sp.height * Math.sin(Math.abs(sp.slope)) + 0.1);
+    expect(sp.slope).toBeGreaterThan(0); // descending toward the bow
+    const w = worldAABB(get(parts, 'side-L-web'));
+    expect(b.min[1]).toBeGreaterThanOrEqual(12 - 1e-6); // outside the chine / gunwale outer face (12 in)
+    expect(b.max[1]).toBeLessThan(12 + 2 * defaults.panelPlyIn);
+    void w;
+    expect(b.min[2]).toBeGreaterThan(L.deckTop);
+    for (const x of [b.min[0] + 0.3, (b.min[0] + b.max[0]) / 2, b.max[0] - 0.3]) expect(b.max[2], `x=${x}`).toBeLessThanOrEqual(sideTopAt(L, b.min[0]) + 1e-6);
+    expect(sp.height).toBeLessThanOrEqual(defaults.signHeightIn);
+    expect(sp.length / sp.height).toBeGreaterThan(2.2); // wide enough that the words do not stack (signTexture)
+  });
+  it('mirrors on the right side and nothing else in the body changes mass because of it, except the fastener remainder', () => {
+    const l = worldAABB(get(parts, 'sign-L')), r = worldAABB(get(parts, 'sign-R'));
+    expect(l.min[1]).toBeCloseTo(-r.max[1], 9);
+    expect(l.min[0]).toBeCloseTo(r.min[0], 9);
+    const m = buildModel({ ...defaults, showSideSigns: 0 });
+    for (const x of m.filter((q) => q.id !== 'hardware')) expect(get(parts, x.id).massLb, x.id).toBeCloseTo(x.massLb, 9);
+    expect(parts.length).toBe(m.length + 2);
   });
 });
 
 describe('what is gone with the old hull, the Ackermann front end and the swivel casters', () => {
   it('no part id starts with side-cabin, side-nose, rail-cabin, rail-nose, guard-, transom-front, tongue, kp-, spindle, caster-, tip-swivel, bow-block, front-hanger- (or any other removed steering part)', () => {
-    const gone = /^(side-cabin|side-nose|rail-cabin|rail-nose|guard-|transom-front|tongue|kp-|spindle|tie-rod|drag-link|bellcrank|steer-(?!stop-|rope-)|stringer|girder|front-beam|turntable|bolster|eyebolt-|caster-|tip-swivel|bow-block|front-hanger-)/;
+    const gone = /^(side-cabin|side-nose|rail-cabin|rail-nose|guard-|transom-front|tongue|kp-|spindle|tie-rod|drag-link|bellcrank|steer-(?!rope-|eye-|anchor-|chain-)|stringer|girder|front-beam|turntable|bolster|eyebolt-|caster-|tip-swivel|bow-block|front-hanger-)/;
     expect(parts.filter((x) => gone.test(x.id)).map((x) => x.id)).toEqual([]);
     for (const v of [{ steerDeg: 15 }, { removed: true }, { rider: 'goal' as const }]) expect(buildModel(defaults, v).filter((x) => gone.test(x.id)).map((x) => x.id)).toEqual([]);
   });
   it('the front end is the pivoting soapbox axle (D-56): beam-F, its stubs and clamps, the kingpin, king beam, thrust washer, tongue, stops and bridle are present', () => {
-    for (const id of ['beam-F', 'axle-FL', 'axle-FR', 'clamp-FL1', 'clamp-FR4', 'kingpin', 'king-beam', 'king-thrust', 'bridle-tongue', 'steer-stop-L', 'steer-stop-R', 'bridle-eye', 'bridle']) expect(parts.some((x) => x.id === id), id).toBe(true);
+    for (const id of ['beam-F', 'axle-FL', 'axle-FR', 'clamp-FL1', 'clamp-FR4', 'kingpin', 'king-beam', 'king-thrust', 'bridle-tongue', 'bridle-sleeve', 'roll-pad-L', 'steer-eye-L', 'steer-anchor-L', 'steer-chain-L', 'steer-chain-R', 'bridle-eye', 'bridle']) expect(parts.some((x) => x.id === id), id).toBe(true);
   });
-  it('the sides are the new straight set: one chine, one gunwale and one web per side, ids side-L-* and side-R-*', () => {
+  it('the sides are one chine, one gunwale and one web per side, ids side-L-* and side-R-*', () => {
     expect(parts.filter((x) => x.id.startsWith('side-')).map((x) => x.id).sort()).toEqual(
       ['side-L-chine', 'side-L-gunwale', 'side-L-web', 'side-R-chine', 'side-R-gunwale', 'side-R-web'],
     );
     expect(parts.filter((x) => x.id.startsWith('rail-')).map((x) => x.id).sort()).toEqual(['rail-L', 'rail-R']);
     expect(parts.filter((x) => x.id.startsWith('transom-')).map((x) => x.id).sort()).toEqual(['transom-backer-L', 'transom-backer-R', 'transom-rear']);
+    expect(parts.filter((x) => x.id.startsWith('bow-')).map((x) => x.id)).toEqual(['bow-bulkhead']);
   });
   it('the structural side height the checks read is the lowest section (the bow end)', () => {
     expect(L.sideH).toBe(defaults.sideHeightBowIn);

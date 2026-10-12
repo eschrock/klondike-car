@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { PARAM_DEFS, bowCurl, defaultParams, resolveParams, sanitizeParam, sanitizeParams, steerGeometry, validateParams, type ParamKey, type Params } from './params';
+import { PARAM_DEFS, bowBulkhead, bowTurnInAt, defaultParams, resolveParams, sanitizeParam, sanitizeParams, steerGeometry, validateParams, type ParamKey, type Params } from './params';
 import { createStore, decodeHash, encodeHash } from './state';
 import { buildModel } from './model';
+import { computeLayout } from './model/layout';
 import { centerOfGravity, totalMass } from './model/mass';
 import { runChecks } from './analysis';
 
@@ -24,28 +25,34 @@ describe('PARAM_DEFS', () => {
   it('the removed front-end, caster, hull-curve and option params are gone; the new curl, profile and pivoting-axle (D-56) params are in', () => {
     const gone = ['noseWidthIn', 'hullCurveStartIn', 'tongueLengthIn', 'frameStyle', 'sideConstruction', 'bumpSpeedMph', 'kingpinLeadIn', 'sideHeightIn', 'sheerRiseIn', 'autoNoseGeometry', 'gunwaleFlareIn',
       'casterWheelDiaIn', 'casterWheelWidthIn', 'casterOverallHeightIn', 'casterSwivelRadiusIn', 'casterRatingLb', 'casterSpacingIn', 'casterBlockLengthIn', 'casterBlockWidthIn', 'casterSweepClearIn',
-      'casterPlateLengthIn', 'casterMassLb', 'bowBlockThickIn', 'bowBlockWidthIn', 'bowBlockBoltDiaIn', 'bridleEyeHeightIn', 'eyeBoltWasherDiameterIn', 'eyeBoltEyeOffsetIn'];
+      'casterPlateLengthIn', 'casterMassLb', 'bowBlockThickIn', 'bowBlockWidthIn', 'bowBlockBoltDiaIn', 'bridleEyeHeightIn', 'eyeBoltWasherDiameterIn', 'eyeBoltEyeOffsetIn',
+      // D-57: the bow curl, the straight-line sag, the foot-stop board, the star-knob seat back and the pad-and-posts grab handle
+      'sideProfileSagIn', 'bowCurlRadiusIn', 'bowCurlAngleDeg', 'bowCurlPlyIn', 'bowCurlPlies', 'footStopThickIn', 'seatBackKnobHeightIn', 'seatInsertAllowLbf', 'seatGripGapIn', 'seatGripClearLengthIn'];
     for (const k of gone) expect(keys, k).not.toContain(k);
     expect(keys.filter((k) => /^caster|^bowBlock|^swivel/.test(k))).toEqual([]);
-    const added = ['sideHeightBowIn', 'sideHeightRearIn', 'sideProfileSagIn', 'bowCurlRadiusIn', 'bowCurlAngleDeg', 'bowCurlPlyIn', 'bowCurlPlies', 'showSideSigns',
+    const added = ['sideHeightBowIn', 'sideHeightRearIn', 'sheerCurveIn', 'bowTurnInIn', 'bowTurnLenIn', 'bowBulkheadThickIn', 'bowBulkheadHeightIn', 'footBlockThickIn', 'footBlockStepIn', 'footBlockPositions', 'footBlockSlot',
+      'grabBoardLengthIn', 'grabHoleLengthIn', 'grabHoleHeightIn', 'grabBoardThickIn', 'grabBoardBarIn', 'grabBoardFootIn', 'handleParkClearIn', 'flagTubeIdIn', 'flagTubeOdIn', 'seatHingeLoadLbf', 'seatBackLatchHeightIn', 'showSideSigns',
       'axleHangerThickIn', 'axleHangerWidthIn', 'bumpSpeedNormalMph', 'bumpSpeedHardMph',
-      'frontTrackIn', 'steerLockDeg', 'steerClearIn', 'kingpinDiaIn', 'kingThrustOdIn', 'kingThrustThickIn', 'kingBeamLengthIn', 'steerBearingAllowPsi', 'tongueThickIn', 'tongueWidthIn',
-      'tongueHeadWidthIn', 'tongueTieAheadIn', 'tongueBoltDiaIn', 'steerStopBoltDiaIn', 'frontStubLenIn', 'steerRopesOn', 'steerRopeRunIn'];
+      'frontTrackIn', 'steerLockDeg', 'steerClearIn', 'kingpinDiaIn', 'kingThrustOdIn', 'kingThrustThickIn', 'kingBeamLengthIn', 'steerBearingAllowPsi', 'tongueWidthIn', 'tongueDepthIn',
+      'tongueHeadWidthIn', 'tongueHeadLenIn', 'tongueTieAheadIn', 'tongueBoltDiaIn', 'tongueBoltOffsetIn', 'tongueTipEdgeIn', 'tongueHoleDiaIn', 'tongueTopDropIn', 'frontStubLenIn', 'steerRopesOn', 'steerRopeRunIn',
+      // D-58 (3c-4a): roll pads, steering check chains, the chain joist and the front beam width
+      'rollPadRadiusIn', 'rollPadLenIn', 'rollPadWidthIn', 'rollPadThickIn', 'rollPadGapMinIn', 'steerChainDiaIn', 'steerChainWllLb', 'steerEyeBoltDiaIn', 'steerEyeWllLb', 'steerChainBeamYIn', 'steerChainAnchorYIn', 'chainJoistThickIn', 'frontBeamThicknessIn'];
+    for (const k of ['tongueThickIn', 'steerStopBoltDiaIn', 'endJoistThickIn', 'steerStopPadThickIn']) expect(keys, k).not.toContain(k);
     for (const k of added) expect(keys, k).toContain(k);
   });
-  it('the design defaults (D-54, D-56): 24 in body, 44 in wheelbase, 10 in wheels, 8 in deck, 4 in to 16 in sled sides, 7 in 80 deg curl, pivoting front axle at 35.5 in track and 20 deg lock', () => {
+  it('the design defaults (D-54, D-56, D-57): 24 in body, 44 in wheelbase, 10 in wheels, 8 in deck, a sheer from 4 in at the bow to 14 in at the rear, the 2 in bow bulkhead, pivoting front axle at 34 1/2 in front and 32 in rear track (D-58) and 20 deg lock', () => {
     expect(defaults).toMatchObject({
-      bodyWidthIn: 24, wheelbaseIn: 44, wheelDiameterIn: 10, deckHeightIn: 8, sideHeightBowIn: 4, sideHeightRearIn: 16, sideProfileSagIn: 0,
-      bowCurlRadiusIn: 7, bowCurlAngleDeg: 80, bowCurlPlies: 4, showSideSigns: 0, rearOverhangIn: 10, frontOverhangIn: 12,
-      frontTrackIn: 35.5, rearTrackIn: 35.5, steerLockDeg: 20, steerClearIn: 0.75, kingpinDiaIn: 0.625, kingThrustOdIn: 2.5, kingThrustThickIn: 0.25, kingBeamLengthIn: 3,
-      tongueThickIn: 0.1875, tongueTieAheadIn: 4, steerRopesOn: 0,
+      bodyWidthIn: 24, wheelbaseIn: 44, wheelDiameterIn: 10, deckHeightIn: 8, sideHeightBowIn: 4, sideHeightRearIn: 14, sheerCurveIn: 2.5, bowTurnInIn: 1.25, bowTurnLenIn: 14,
+      bowBulkheadThickIn: 1.75, bowBulkheadHeightIn: 9, showSideSigns: 1, rearOverhangIn: 10, frontOverhangIn: 6.75, handleBowCrownIn: 0.875, seatXIn: 13.5, riderLegReachIn: 35.5, seatDepthIn: 14.5, storageVolumeIn3: 2000,
+      frontTrackIn: 34.5, rearTrackIn: 32, steerLockDeg: 20, steerClearIn: 0.75, kingpinDiaIn: 0.625, kingThrustOdIn: 3, kingThrustThickIn: 0.5625, kingBeamLengthIn: 3,
+      tongueWidthIn: 1.5, tongueDepthIn: 2, tongueTieAheadIn: 5, steerRopesOn: 0, frontBeamThicknessIn: 2.5, rollPadRadiusIn: 11,
     });
     expect(PARAM_DEFS.steerLockDeg.ref).toContain('D-56');
   });
   it('every front-end (D-56) param carries a status and a D-56 reference', () => {
-    for (const k of ['frontTrackIn', 'steerLockDeg', 'steerClearIn', 'kingpinDiaIn', 'kingThrustOdIn', 'kingThrustThickIn', 'kingBeamLengthIn', 'steerBearingAllowPsi', 'tongueThickIn', 'tongueWidthIn', 'tongueHeadWidthIn', 'tongueTieAheadIn', 'tongueBoltDiaIn', 'steerStopBoltDiaIn', 'frontStubLenIn', 'steerRopesOn', 'steerRopeRunIn'] as ParamKey[]) {
+    for (const k of ['frontTrackIn', 'steerLockDeg', 'steerClearIn', 'kingpinDiaIn', 'kingThrustOdIn', 'kingThrustThickIn', 'kingBeamLengthIn', 'steerBearingAllowPsi', 'tongueWidthIn', 'tongueHeadWidthIn', 'tongueTieAheadIn', 'tongueBoltDiaIn', 'frontStubLenIn', 'steerRopesOn', 'steerRopeRunIn', 'rollPadRadiusIn', 'steerChainDiaIn', 'steerEyeBoltDiaIn', 'chainJoistThickIn'] as ParamKey[]) {
       expect(PARAM_DEFS[k].status, k).toBeDefined();
-      expect(PARAM_DEFS[k].ref ?? '', k).toContain('D-56');
+      expect(PARAM_DEFS[k].ref ?? '', k).toMatch(/D-5[68]/);
     }
   });
 });
@@ -69,10 +76,10 @@ describe('validateParams', () => {
     expect(validateParams(p).some((i) => i.severity === 'error' && i.message.startsWith('Rear axle beam + ply needs the deck'))).toBe(true);
     expect(validateParams(p).some((i) => i.severity === 'error' && /king beam/.test(i.message))).toBe(true);
   });
-  it('front pivot stack (D-56): a king beam under 1 in deep (a very low deck) is an error; the 8 in default leaves about 1.7 in', () => {
+  it('front pivot stack (D-56): a king beam under 1 in deep (a very low deck) is an error; the 8 in default leaves about 1.6 in (the 9/16 in disc, D-58)', () => {
     const sg = steerGeometry(defaults);
-    expect(sg.kingDepth).toBeGreaterThan(1.6);
-    expect(sg.kingDepth).toBeLessThan(1.8);
+    expect(sg.kingDepth).toBeGreaterThan(1.55);
+    expect(sg.kingDepth).toBeLessThan(1.65);
     expect(errorsOf(defaults)).toEqual([]);
     const low = errorsOf({ ...defaults, deckHeightIn: 6 });
     expect(low.some((i) => i.keys.includes('deckHeightIn') && /king beam/.test(i.message))).toBe(true);
@@ -102,36 +109,43 @@ describe('validateParams', () => {
     // a track so narrow the tires touch the body at rest is its own error
     expect(errorsOf({ ...defaults, frontTrackIn: 26 }).some((i) => i.keys.includes('frontTrackIn'))).toBe(true);
   });
-  it('steering stops (D-56): a stop position outside 2.5 in to the rail inner face less 1 in is an error (a small lock or a long front overhang pushes them out; a big lock with a short overhang pulls them in)', () => {
-    const stopErr = (p: Params) => errorsOf(p).some((i) => /steering stops/.test(i.message));
-    const sg = steerGeometry(defaults);
-    expect(stopErr(defaults)).toBe(false);
-    expect(sg.stopY1).toBeGreaterThan(2.5);
-    expect(sg.stopY1).toBeLessThan(sg.railYIn - 1);
-    expect(stopErr({ ...defaults, steerLockDeg: 10 })).toBe(true);
-    expect(stopErr({ ...defaults, frontOverhangIn: 14 })).toBe(true);
-    expect(stopErr({ ...defaults, steerLockDeg: 35, frontOverhangIn: 8 })).toBe(true);
+  it('steering check chains (D-58): the anchor eye pulls in on a narrow body so its 2 in washer clears the rail; the beam eye must lie between the kingpin disc and the end of the beam', () => {
+    const L0 = computeLayout(defaults), L1 = computeLayout({ ...defaults, bodyWidthIn: 20 });
+    expect(Math.abs(L0.chain.anchor[1])).toBeCloseTo(defaults.steerChainAnchorYIn, 9);
+    expect(Math.abs(L1.chain.anchor[1])).toBeLessThan(defaults.steerChainAnchorYIn);
+    expect(Math.abs(L1.chain.anchor[1]) + 1.15).toBeLessThanOrEqual(L1.steer.railYIn - L1.turnIn(L1.chain.joistX) + 1e-9);
+    expect(errorsOf({ ...defaults, steerChainBeamYIn: 1 }).some((i) => i.keys.includes('steerChainBeamYIn'))).toBe(true);
+    expect(errorsOf({ ...defaults, steerChainBeamYIn: 15.2 }).some((i) => i.keys.includes('steerChainBeamYIn'))).toBe(true);
+    expect(errorsOf({ ...defaults, steerChainBeamYIn: 10.4 })).toEqual([]);
   });
-  it('side profile: a bow side taller than the rear side warns; a bow side the panel cannot fit (under 1 in above the two bands) errors; one taller than the curl rises errors', () => {
+  it('side profile (D-57): a bow side taller than the rear side warns; a bow side the panel cannot fit (under 1 in above the two bands) errors; a bulkhead too low for the hand-hold errors', () => {
     expect(withKey({ ...defaults, sideHeightBowIn: 7, sideHeightRearIn: 6 }, 'sideHeightBowIn').some((i) => i.severity === 'warn')).toBe(true);
     expect(errorsOf({ ...defaults, sideHeightBowIn: 3 }).some((i) => i.keys.includes('railBandIn'))).toBe(true); // 3 - 2 x 1.5 < 1
-    const curl = bowCurl(defaults);
-    expect(curl.riseInner).toBeCloseTo(5.59, 2);
-    expect(errorsOf({ ...defaults, sideHeightBowIn: 6 }).some((i) => /only rises/.test(i.message))).toBe(true);
-    expect(errorsOf({ ...defaults, sideHeightBowIn: 5 })).toEqual([]);
+    expect(errorsOf({ ...defaults, bowBulkheadHeightIn: 4 }).some((i) => i.keys.includes('liftSlotClearIn'))).toBe(true); // 3 in of hand clearance + 1.25 slot + 0.75 oak = 5
+    expect(errorsOf({ ...defaults, sideHeightBowIn: 5 }).filter((i) => i.keys.some((k) => /^(side|bow|lift)/.test(k)))).toEqual([]);
   });
-  it('bow curl: the inside radius must meet the cold-bend limit (40 plies), and the seat and foot stop must stand on the flat deck', () => {
-    expect(errorsOf({ ...defaults, bowCurlRadiusIn: 4, sideHeightBowIn: 4 }).some((i) => /cold-bend limit/.test(i.message))).toBe(true);
-    expect(errorsOf({ ...defaults, bowCurlRadiusIn: 5 }).some((i) => /cold-bend limit/.test(i.message))).toBe(false);
-    expect(errorsOf({ ...defaults, bowCurlRadiusIn: 14 }).some((i) => i.keys.includes('frontOverhangIn'))).toBe(true); // the curl eats the flat deck
-    expect(errorsOf({ ...defaults, frontOverhangIn: 8 }).length).toBeGreaterThan(0);
+  it('bow bulkhead and turn-in (D-57): the bulkhead sits one thickness behind the tip; the turn-in is 0 behind its start and bowTurnInIn at the face, a smoothstep between; the bend radius must meet the cold-bend limit; the feet must reach the face', () => {
+    const b = bowBulkhead(defaults);
+    expect(b.xTip).toBeCloseTo(50.75, 9);
+    expect(b.xFlatEnd).toBeCloseTo(49, 9);
+    expect(b.thick).toBe(1.75);
+    expect(bowTurnInAt(defaults, 30)).toBe(0);
+    expect(bowTurnInAt(defaults, b.xFlatEnd)).toBeCloseTo(defaults.bowTurnInIn, 9);
+    expect(bowTurnInAt(defaults, b.xFlatEnd - defaults.bowTurnLenIn / 2)).toBeCloseTo(defaults.bowTurnInIn / 2, 9);
+    // a tight bend: 3 in over 6 in is a 2 in radius, far under 40 x 5/16
+    expect(errorsOf({ ...defaults, bowTurnInIn: 3, bowTurnLenIn: 6 }).some((i) => /cold-bend|bend/.test(i.message))).toBe(true);
+    expect(errorsOf({ ...defaults, bowTurnInIn: 0 }).filter((i) => i.keys.some((k) => /^(bow|side)/.test(k)))).toEqual([]);
+    // the rider's feet reach past the bulkhead face
+    expect(errorsOf({ ...defaults, riderLegReachIn: 40 }).some((i) => i.keys.includes('riderLegReachIn'))).toBe(true);
+    // the turn-in can pinch the nose
+    expect(errorsOf({ ...defaults, bodyWidthIn: 18, bowTurnInIn: 3, bowTurnLenIn: 30 }).length).toBeGreaterThan(0);
   });
   it('axle hanger: wide enough for the beam notch and 3/4 in of oak each side; body clear of the rear tires and the U-bolt plates', () => {
     expect(errorsOf({ ...defaults, axleHangerWidthIn: 3.5 }).some((i) => i.keys.includes('axleHangerWidthIn'))).toBe(true);
     expect(errorsOf({ ...defaults, axleHangerWidthIn: 5 })).toEqual([]);
     expect(errorsOf({ ...defaults, bodyWidthIn: 34 }).some((i) => i.keys.includes('rearTrackIn'))).toBe(true);
-    expect(errorsOf({ ...defaults, bodyWidthIn: 30, rearTrackIn: 35.5 }).some((i) => i.message.startsWith('The rails/sides reach'))).toBe(true);
-    expect(errorsOf({ ...defaults, bodyWidthIn: 18 }).some((i) => /steering stops/.test(i.message))).toBe(true); // a 18 in body: the rails are so close that the stops (under the end joist) fall out of range (D-56); the feet rule alone no longer binds inside the slider range
+    expect(errorsOf({ ...defaults, bodyWidthIn: 30, rearTrackIn: 36 }).some((i) => i.message.startsWith('The rails/sides reach'))).toBe(true);
+    expect(errorsOf({ ...defaults, bodyWidthIn: 20, bowTurnInIn: 3.75 }).some((i) => /pinches the nose/.test(i.message))).toBe(true); // a 13 in nose is the least (hand-hold, foot brace, tongue): 20 - 2 x 3.5 = 13 passes, 12.5 in does not
   });
   it('the rider\'s feet and the truck: a body longer than the bed is an error', () => {
     expect(errorsOf({ ...defaults, wheelbaseIn: 64, rearOverhangIn: 18, frontOverhangIn: 20, bodyWidthIn: 24 }).some((i) => /longer than bed/.test(i.message))).toBe(true);
@@ -209,12 +223,14 @@ describe('old shared URLs (Phase 3c-3a, D-54; the front end of D-56)', () => {
   // Removed keys: the hull / Ackermann keys of earlier phases and everything the caster pass added and the pivoting axle (D-56) removed again.
   const REMOVED = ['noseWidthIn', 'hullCurveStartIn', 'tongueLengthIn', 'frameStyle', 'sideConstruction', 'bumpSpeedMph', 'kingpinLeadIn', 'sideHeightIn',
     'casterWheelDiaIn', 'casterWheelWidthIn', 'casterOverallHeightIn', 'casterSwivelRadiusIn', 'casterRatingLb', 'casterSpacingIn', 'casterBlockLengthIn', 'casterBlockWidthIn', 'casterSweepClearIn',
-    'casterPlateLengthIn', 'casterMassLb', 'bowBlockThickIn', 'bowBlockWidthIn', 'bowBlockBoltDiaIn', 'bridleEyeHeightIn', 'eyeBoltWasherDiameterIn', 'eyeBoltEyeOffsetIn'];
+    'casterPlateLengthIn', 'casterMassLb', 'bowBlockThickIn', 'bowBlockWidthIn', 'bowBlockBoltDiaIn', 'bridleEyeHeightIn', 'eyeBoltWasherDiameterIn', 'eyeBoltEyeOffsetIn',
+    'sideProfileSagIn', 'bowCurlRadiusIn', 'bowCurlAngleDeg', 'bowCurlPlyIn', 'bowCurlPlies', 'footStopThickIn', 'seatBackKnobHeightIn', 'seatInsertAllowLbf', 'seatGripGapIn', 'seatGripClearLengthIn'];
   // Typical values an old shared link would carry for them.
   const OLD: Record<string, number> = {
     noseWidthIn: 14, hullCurveStartIn: 18, tongueLengthIn: 40, frameStyle: 1, sideConstruction: 2, bumpSpeedMph: 5, kingpinLeadIn: 1.5, sideHeightIn: 6,
     casterWheelDiaIn: 10, casterWheelWidthIn: 2.5, casterOverallHeightIn: 12.5, casterSwivelRadiusIn: 6.5, casterRatingLb: 300, casterSpacingIn: 9.5, casterBlockLengthIn: 7, casterBlockWidthIn: 6,
     casterSweepClearIn: 0.5, casterPlateLengthIn: 5, casterMassLb: 8, bowBlockThickIn: 1.5, bowBlockWidthIn: 8, bowBlockBoltDiaIn: 0.375, bridleEyeHeightIn: 2.5, eyeBoltWasherDiameterIn: 1.5, eyeBoltEyeOffsetIn: 1,
+    sideProfileSagIn: 1, bowCurlRadiusIn: 7, bowCurlAngleDeg: 80, bowCurlPlyIn: 0.118, bowCurlPlies: 4, footStopThickIn: 0.75, seatBackKnobHeightIn: 1.8, seatInsertAllowLbf: 400, seatGripGapIn: 1.5, seatGripClearLengthIn: 4.5,
   };
   const hashOf = (o: Record<string, number>) => '#' + Object.entries(o).map(([k, v]) => `${k}=${v}`).join('&');
 
@@ -246,13 +262,14 @@ describe('old shared URLs (Phase 3c-3a, D-54; the front end of D-56)', () => {
     }
     expect(errorsOf(d)).toEqual([]);
   });
-  it('buildModel and runChecks do not throw on it, and the model is the new cart (pivoting front axle, curl, no casters)', () => {
+  it('buildModel and runChecks do not throw on it, and the model is the new cart (pivoting front axle, bow bulkhead, no casters, no curl)', () => {
     const d = decodeHash(hashOf({ ...OLD, wheelbaseIn: 46 }));
     let parts: ReturnType<typeof buildModel> = [];
     expect(() => (parts = buildModel(d))).not.toThrow();
     expect(parts.some((x) => x.id === 'beam-F')).toBe(true);
     expect(parts.some((x) => x.id === 'king-beam')).toBe(true);
-    expect(parts.some((x) => x.id === 'bow-curl')).toBe(true);
+    expect(parts.some((x) => x.id === 'bow-bulkhead')).toBe(true);
+    expect(parts.some((x) => x.id === 'bow-curl')).toBe(false);
     expect(parts.some((x) => /^(caster-|bow-block|tip-swivel|front-hanger|kp-|spindle|tie-rod|side-cabin|side-nose)/.test(x.id))).toBe(false);
     let checks: ReturnType<typeof runChecks> = [];
     expect(() => (checks = runChecks(d, { includeTruck: false }))).not.toThrow();

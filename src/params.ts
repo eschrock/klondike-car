@@ -114,9 +114,9 @@ const defs = {
     note: 'Legs extended forward pull the whole-body CG ahead of the hip joint.',
   },
   riderLegReachIn: {
-    label: 'H-point to foot stop (horizontal)', group: 'loads', unit: 'in',
-    default: 32, min: 24, max: 44, step: 0.5, status: 'assumed', ref: 'D-3, D-53, D-54',
-    note: 'Knees bent a little more than a straight reach on a low seat; ≈ 0.48 × stature. 32.5 in (was 36): the seat moved 3.5 in forward (D-53, so the seat kit lies flat in the storage box) and the foot stop stays where it was, so the nose, the cleats and the steering do not change.',
+    label: 'H-point to foot brace (horizontal)', group: 'loads', unit: 'in',
+    default: 35.5, min: 24, max: 44, step: 0.5, status: 'assumed', ref: 'D-3, D-53, D-54, D-57',
+    note: 'Knees bent a little more than a straight reach on a low seat; ≈ 0.48 × stature (68 in rider: 32.6 in; 35.5 in is a long, relaxed reach). D-57 restores it toward 36 in (it was 32 at D-54: the seat back no longer rides in the box, so the seat can move back; the cushion still has to lie in a box that must clear the leaning back). The foot brace is the rear face of the bow bulkhead, so seatXIn + this = the bulkhead face (validateParams); a shorter rider drops in the foot block.',
   },
   bootAllowanceIn: {
     label: 'Boot allowance per side (foot room)', group: 'loads', unit: 'in',
@@ -130,8 +130,13 @@ const defs = {
   // ── Cargo mode (Phase 3c-2, D-53): the seat stows in the box and the cart hauls gear, firewood and water ──
   cargoPayloadLb: {
     label: 'Cargo payload after the race', group: 'cargo', unit: 'lb',
-    default: 250, min: 0, max: 600, step: 25, status: 'assumed', primary: true, ref: 'D-53',
-    note: 'Confirm with Eric. Camp gear, firewood and water (reference/04): a uniform load over the bed, seat stowed, no rider. Carried at a high center of gravity (cargoCgHeightIn). The cargo case runs next to the rider cases and never changes the rider range.',
+    default: 200, min: 0, max: 600, step: 25, status: 'locked', primary: true, ref: 'D-53, D-58',
+    note: 'Eric 2026-10-11: 200 lb (was 250 lb; the owner is weight-sensitive and the parts are sized to this). Camp gear, firewood and water (reference/04): a uniform load over the bed, seat stowed, no rider. Carried at a high center of gravity (cargoCgHeightIn). The cargo case runs next to the rider cases and never changes the rider range.',
+  },
+  restLoadLb: {
+    label: 'Resting adult (sitting or stepping in)', group: 'cargo', unit: 'lb',
+    default: 250, min: 150, max: 400, step: 10, status: 'assumed', ref: 'D-58',
+    note: 'Eric 2026-10-11: an adult of this weight (a) sitting still anywhere on the deck or seat and (b) standing on one foot (a 4 in x 10 in patch) anywhere on the deck must not hurt the cart, at STATIC load with the full material safety factors (the rest-load row). The storage lid is excluded: it is engraved DO NOT STEP and is not strengthened.',
   },
   cargoConcentratedLb: {
     label: 'Concentrated cargo item (jug pair or cooler)', group: 'cargo', unit: 'lb',
@@ -205,8 +210,8 @@ const defs = {
   },
   rearTrackIn: {
     label: 'Rear track (wheel center to center)', group: 'layout', unit: 'in',
-    default: 35.5, min: 26, max: 52, step: 0.25, status: 'explore', primary: true, ref: 'D-6',
-    note: 'Wheels beside the wheel wells: track + outer width (tire or hub + axle end) + 2 × clearance ≤ well gap → 35.5". Wider only with "straddle" stowage.',
+    default: 32, min: 26, max: 52, step: 0.25, status: 'explore', primary: true, ref: 'D-6, D-58',
+    note: 'D-58 (Eric): tightened from 35.5" to 32". The rear wheels do not steer, so the track is set only by the tire width plus clearance to the 24" body (tire inner face 14.25" from center vs the body side at 12", the rod clamp plates start at 12.6") and by tipping (the 250 lb cargo case: tip-straight 41.0° vs the 40° limit at 32"). Still fits between the wheel wells of the truck bed with the front track.',
   },
   rearOverhangIn: {
     label: 'Body overhang behind rear axle', group: 'layout', unit: 'in',
@@ -215,13 +220,13 @@ const defs = {
   },
   frontOverhangIn: {
     label: 'Body overhang ahead of the front axle (to the bow tip)', group: 'layout', unit: 'in',
-    default: 12, min: 6, max: 20, step: 0.5, status: 'explore', ref: 'D-54',
-    note: 'The flat deck ends where the bow curl starts (the curl radius and angle below), and the foot stop must stand on the flat deck, so this must reach past the foot stop by the curl length. Wheelbase is rear axle to the front (placeholder) axle.',
+    default: 6.75, min: 4, max: 20, step: 0.25, status: 'explore', ref: 'D-54, D-57',
+    note: 'D-57: 6.75 in (was 12, when the bow curl needed 7 in of run). The flat deck ends one bulkhead thickness (bowBulkheadThickIn) behind the bow tip, and the rider foot brace is the rear face of the bow bulkhead there, so this must reach past the front axle by the bulkhead and the front joist. Wheelbase is rear axle to the pivot.',
   },
   deckHeightIn: {
     label: 'Deck (floor top) height, between axles', group: 'layout', unit: 'in',
     default: 8, min: 6, max: 18, step: 0.25, status: 'explore', primary: true, ref: 'D-15, D-56',
-    note: 'D-56: 8 in, set by the front pivot stack (axle beam top 5.4 in + the tongue plate + the UHMW thrust washer + a king beam about 1.7 in deep, validateParams) with the 10 in wheels beside the body. The rear beam stack (beam top + ply) and the foot brake allow a little lower.',
+    note: 'D-56: 8 in, set by the front pivot stack (axle beam top 5.4 in + the 9/16 in UHMW thrust disc + a king beam about 1.6 in deep, validateParams; the oak tongue no longer lies under it, D-58) with the 10 in wheels beside the body. The rear beam stack (beam top + ply) and the foot brake allow a little lower.',
   },
   minGroundClearanceIn: {
     label: 'Minimum ground clearance', group: 'layout', unit: 'in',
@@ -242,44 +247,44 @@ const defs = {
   },
   sideHeightRearIn: {
     label: 'Side height at the rear (above the deck)', group: 'body', unit: 'in',
-    default: 16, min: 8, max: 24, step: 0.5, status: 'explore', primary: true, ref: 'D-54',
-    note: 'The storage box and the seat back stand in the tall rear section; the rear transom follows this height.',
+    default: 14, min: 8, max: 24, step: 0.5, status: 'explore', primary: true, ref: 'D-54, D-57',
+    note: 'D-57: 14 in (was 16). The rear transom follows this height, the flag tube and the handle sockets stand in the tall rear section, and the sheer curve (sheerCurveIn) sweeps down from it to the bow.',
   },
-  sideProfileSagIn: {
-    label: 'Side profile sag below the straight line (mid-length)', group: 'body', unit: 'in',
-    default: 0, min: -2, max: 3, step: 0.25, status: 'explore', ref: 'D-54',
-    note: 'Optional gentle curve: the gunwale dips this far below the straight line from the rear to the bow at mid-length (a parabola; negative = bulges up). 0 = the straight line.',
+  sheerCurveIn: {
+    label: 'Sheer curve (sag of the side top below the straight line)', group: 'body', unit: 'in',
+    default: 2.5, min: 0, max: 4, step: 0.25, status: 'explore', primary: true, ref: 'D-57',
+    note: 'The top edge of the side sweeps up from the low bow to the tall rear in a smooth concave curve, as on Wagner\'s sled (reference/05). The gunwale dips this far below the straight line from the rear to the bow at mid-length (a parabola); 2.5 in with the 10 in of rise leaves the top edge level at the bow. 0 = the straight D-54 line. The gunwale is bandsawn from a wide oak board to the curve; the web top follows it.',
   },
-  bowCurlRadiusIn: {
-    label: 'Bow curl radius (centerline)', group: 'body', unit: 'in',
-    default: 7, min: 4, max: 14, step: 0.5, status: 'assumed', ref: 'D-54',
-    note: 'The curled bow (D-54): a bent-lamination panel that runs on from the deck and curls up on this radius, replacing the front transom. validateParams() checks the inside radius against the cold-bend limit (hullLamMinRadiusFactor x one ply).',
+  bowTurnInIn: {
+    label: 'Bow turn-in (each side, in plan)', group: 'body', unit: 'in',
+    default: 1.25, min: 0, max: 3, step: 0.25, status: 'explore', primary: true, ref: 'D-57',
+    note: 'In plan the sides ease in toward the bow over bowTurnLenIn (a smooth S that is straight at both ends), so the nose is this much narrower on each side than the 24 in body. The chine, web, gunwale, deck and the front rails follow the curve; the bow bulkhead is as wide as the narrowed hull. It also gives the front tires more room at full lock. Chine and gunwale are cold-bent flat (2 plies) on a form; the web is a single bent sheet.',
   },
-  bowCurlAngleDeg: {
-    label: 'Bow curl angle', group: 'body', unit: '°',
-    default: 80, min: 45, max: 90, step: 5, status: 'assumed', ref: 'D-54',
-    note: 'How far the curl turns up from the flat deck (90 = vertical at the tip).',
+  bowTurnLenIn: {
+    label: 'Bow turn-in length (ahead of the foot brace)', group: 'body', unit: 'in',
+    default: 14, min: 6, max: 30, step: 1, status: 'explore', ref: 'D-57',
+    note: 'The plan curve starts this far behind the bow bulkhead and runs to it. Keep it long enough that the bend in the chine and gunwale stays gentle (hullLamMinRadiusFactor).',
   },
-  bowCurlPlyIn: {
-    label: 'Bow curl ply thickness (each)', group: 'body', unit: 'in',
-    default: 0.118, min: 0.059, max: 0.236, step: 0.001, status: 'assumed', ref: 'D-54',
-    note: '3 mm okoume bending ply (or 1/8 in oak veneer-core sheet). The curl is this many plies epoxied on a form.',
+  bowBulkheadThickIn: {
+    label: 'Bow bulkhead thickness', group: 'body', unit: 'in',
+    default: 1.75, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-57',
+    note: 'The shaped oak bulkhead at the bow replaces the D-54 bow curl and the separate foot-stop bar: it is the rider\'s foot brace and the structural front of the hull. One piece of 8/4 oak planed to 1-3/4 in (two 7/8 in boards glued face to face are the alternative), so there is no cross-grain break at the hand-hold.',
   },
-  bowCurlPlies: {
-    label: 'Bow curl plies', group: 'body', unit: '',
-    default: 4, min: 2, max: 8, step: 1, status: 'assumed', ref: 'D-54',
-    note: '4 x 3 mm = 12 mm: the same thickness as the deck, which it is scarfed to (8:1) at the tangent point.',
+  bowBulkheadHeightIn: {
+    label: 'Bow bulkhead height at the center (above the deck)', group: 'body', unit: 'in',
+    default: 9, min: 5, max: 14, step: 0.5, status: 'explore', primary: true, ref: 'D-57',
+    note: 'The top is a curve from the side height at the bow corners up to this at the center (reference/03: a shaped prow-board). The lift hand-hold is cut through it under the crown.',
   },
   showSideSigns: {
     label: 'Show the side signs', group: 'body', unit: '',
-    default: 0, min: 0, max: 1, step: 1, status: 'assumed', ref: 'D-54',
-    options: [{ value: 0, label: 'Off (provisional)' }, { value: 1, label: 'On (provisional placement)' }],
-    note: 'Eric: design the shape first, then decide where a sign fits. Off by default; when on, the blank is a provisional flat panel on the side web, and nothing in the body is sized to it.',
+    default: 1, min: 0, max: 1, step: 1, status: 'assumed', ref: 'D-54, D-57',
+    options: [{ value: 0, label: 'Off' }, { value: 1, label: 'On (tall rear part of each side)' }],
+    note: 'D-57: the Troop 455 sign is back, on the outside of the tall rear part of each side (signTexture, oval plank). Nothing structural is sized to it.',
   },
   hullLamMinRadiusFactor: {
     label: 'Min. bend radius / ply thickness', group: 'body', unit: '×',
-    default: 40, min: 20, max: 100, step: 5, status: 'assumed', ref: 'D-45, D-54',
-    note: 'Okoume bending ply lays up cold without steaming above this ratio; the validator flags a bow curl whose inside radius is tighter than this times one ply.',
+    default: 40, min: 20, max: 100, step: 5, status: 'assumed', ref: 'D-45, D-57',
+    note: 'Cold-bent plies lay up without steaming above this ratio of bend radius to ply thickness; the validator flags a bow turn-in whose plan radius is tighter than this times one ply of the chine and gunwale (two plies each).',
   },
   deckSlopIn: {
     label: 'Deck rabbet / dado clearance over the ply', group: 'body', unit: 'in',
@@ -389,12 +394,12 @@ const defs = {
   },
   signLengthIn: {
     label: 'Side sign blank length', group: 'body', unit: 'in',
-    default: 20, min: 8, max: 30, step: 1, status: 'assumed', ref: 'D-9',
-    note: 'Shortened automatically to fit between the rear tire and the forward reflector.',
+    default: 15, min: 8, max: 30, step: 1, status: 'assumed', ref: 'D-9, D-57',
+    note: 'Shortened automatically to fit the tall rear part of the side (the sheer falls away toward the bow) and to stay behind the rear wheel brake mount.',
   },
   signHeightIn: {
     label: 'Side sign blank height', group: 'body', unit: 'in',
-    default: 6, min: 3, max: 9, step: 0.5, status: 'assumed', ref: 'D-9',
+    default: 6, min: 3, max: 10, step: 0.5, status: 'assumed', ref: 'D-9, D-57',
   },
   tenonDepthIn: {
     label: 'Loose-tenon depth (thin stock)', group: 'stock', unit: 'in',
@@ -432,8 +437,8 @@ const defs = {
   },
   storageVolumeIn3: {
     label: 'Storage box interior volume', group: 'body', unit: 'in³',
-    default: 2500, min: 800, max: 4000, step: 50, status: 'assumed', ref: 'D-19, D-53, D-54',
-    note: 'Raised from 1,800 to 2,000 in³ (Phase 3 integration): the 10 Essentials packing check (D-41) filled 0.96 of the 1,762 in³ interior at 1,800. Raised again to 2,200 in³ (Phase 3c-2, D-53): the box also holds the seat back and cushion in cargo mode, so it needs about 4.8 in of height under the lid frame for them (seat-stow check). 2,500 in³ at D-54: the 24 in body leaves a 22 in interior, so the wedges and knobs lie on top of the seat back (about 1.7 in more height) instead of in floor strips, and the Essentials still pack.',
+    default: 2000, min: 800, max: 4000, step: 50, status: 'assumed', ref: 'D-19, D-53, D-54, D-57',
+    note: 'D-57: shrunk back to 2,000 (was 2,500 at D-54, 2,200 at D-53) because the seat back no longer rides in the box. It holds the 10 Essentials in race mode (about 1,700 in³ with the packing allowance, storage-pack) OR the two cushions in cargo mode (about 700 in³, seat-stow); both together would need about 2,400 in³.',
   },
   storageOverSideIn: {
     label: 'Storage box max height above the side top', group: 'body', unit: 'in',
@@ -446,9 +451,9 @@ const defs = {
     note: 'forwardRaised only: box bottom = the higher of (wheel diameter, rider knee top) + this.',
   },
   storageSideClearIn: {
-    label: 'Storage box clearance to the chine (each side)', group: 'body', unit: 'in',
-    default: 0.125, min: 0.0625, max: 0.25, step: 0.0156, status: 'assumed', ref: 'D-47',
-    note: 'The box drops in from above and is bonded to the deck, so it needs a gap to the chine inner face (r3 build S3); the gap is filled with thickened epoxy. The box is narrower by twice this, and the height rises to hold the volume.',
+    label: 'Storage box clearance to the side (each side)', group: 'body', unit: 'in',
+    default: 1.5, min: 0.0625, max: 2.5, step: 0.0625, status: 'assumed', ref: 'D-47, D-57',
+    note: 'D-57: 1.5 in a side, so the 1.3 in flag tube (flagTubeOdIn) stands beside the box in either rear corner. The box drops in from above and is bonded to the deck, so it needs a gap to the chine inner face anyway (r3 build S3); the gap is filled with thickened epoxy except at the flag tube. The box is narrower by twice this, and the height rises to hold the volume.',
   },
   storageLidRimWidthIn: {
     label: 'Storage lid oak rim width', group: 'body', unit: 'in',
@@ -480,6 +485,16 @@ const defs = {
     default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-41',
     note: 'Two drains at the aft corners through the floor and deck; stainless nipples keep the cut ply edges sealed.',
   },
+  flagTubeIdIn: {
+    label: 'Flag tube inside diameter', group: 'body', unit: 'in',
+    default: 1.05, min: 0.75, max: 1.5, step: 0.05, status: 'assumed', ref: 'D-57',
+    note: 'A plain purchased tube (1 in PVC or aluminum) inside a rear corner for the flag staff (D-57; replaces the printed bow socket).',
+  },
+  flagTubeOdIn: {
+    label: 'Flag tube outside diameter', group: 'body', unit: 'in',
+    default: 1.315, min: 1, max: 2, step: 0.005, status: 'assumed', ref: 'D-57',
+    note: '1 in schedule 40 PVC is 1.315 in OD (0.133 in wall).',
+  },
   lashPointsPerSide: {
     label: 'Lash points per gunwale', group: 'body', unit: '',
     default: 3, min: 2, max: 5, step: 1, status: 'assumed', ref: 'D-41',
@@ -505,12 +520,13 @@ const defs = {
   // ── Seat & rider position ────────────────────────────────────────────────
   seatXIn: {
     label: 'Seat H-point ahead of rear axle', group: 'seat', unit: 'in',
-    default: 16, min: 1.5, max: 17.5, step: 0.5, status: 'explore', primary: true, ref: 'D-53, D-54',
-    note: 'Forward → more front load, better lock stability; aft → more rear-brake traction. 15.5 in (was 12): the box behind the seat must be at least 16.9 in long inside so the seat back (16 in) and the cushion (15.6 in) lie flat in it, the cushion stopping short of the 1 in insert backers (D-53, seat-stow check).',
+    default: 13.5, min: 1.5, max: 17.5, step: 0.5, status: 'explore', primary: true, ref: 'D-53, D-54, D-57',
+    note: 'Forward → more front load, better lock stability; aft → more rear-brake traction. D-57: 13.5 in (was 16): the box behind the seat now only holds the cushions (it must be about 14.5 in long inside, and its end leans back with the seat back) and the back flips onto the deck, so the seat moves back 2.5 in and the rider gets 35.5 in of leg reach (was 32).',
   },
   seatDepthIn: {
     label: 'Seat cushion depth (fore-aft)', group: 'seat', unit: 'in',
-    default: 16, min: 10, max: 22, step: 0.5, status: 'assumed', ref: 'D-18',
+    default: 14.5, min: 10, max: 22, step: 0.5, status: 'assumed', ref: 'D-18, D-57',
+    note: '14.5 in (was 16) so the cushion lies flat in the box for cargo (seat-stow) with the seat 2 in farther back.',
   },
   seatWidthIn: {
     label: 'Seat cushion width', group: 'seat', unit: 'in',
@@ -541,13 +557,29 @@ const defs = {
     default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-18',
   },
   footStopHeightIn: {
-    label: 'Foot stop height above deck', group: 'seat', unit: 'in',
-    default: 4, min: 2, max: 8, step: 0.5, status: 'assumed', ref: 'D-3',
+    label: 'Foot block height above the deck', group: 'seat', unit: 'in',
+    default: 4, min: 2, max: 8, step: 0.5, status: 'assumed', ref: 'D-3, D-57',
+    note: 'The drop-in foot block (D-57): an oak board across the body that drops into slots in oak cleats on the sides, for riders shorter than the design rider (the bow bulkhead is the brace for the design rider).',
   },
-  footStopThickIn: {
-    label: 'Foot stop thickness', group: 'seat', unit: 'in',
-    default: 0.75, min: 0.5, max: 2, step: 0.25, status: 'assumed', ref: 'D-3',
-    note: 'An oak board across the body, braced by its sides and two cleats.',
+  footBlockThickIn: {
+    label: 'Foot block thickness (fore-aft)', group: 'seat', unit: 'in',
+    default: 1.5, min: 0.75, max: 2.5, step: 0.25, status: 'assumed', ref: 'D-57',
+  },
+  footBlockStepIn: {
+    label: 'Foot block slot spacing (shorter-rider steps)', group: 'seat', unit: 'in',
+    default: 4, min: 2, max: 6, step: 0.5, status: 'assumed', ref: 'D-57',
+    note: 'The first slot puts the block face this far behind the bulkhead face, the second twice that.',
+  },
+  footBlockSlot: {
+    label: 'Foot block in slot', group: 'seat', unit: '',
+    default: 0, min: 0, max: 2, step: 1, status: 'assumed', ref: 'D-57',
+    options: [{ value: 0, label: 'Out (the bulkhead is the brace)' }, { value: 1, label: 'Slot 1 (one step short)' }, { value: 2, label: 'Slot 2 (two steps short)' }],
+    note: 'Show the drop-in foot block in a slot, for a shorter rider (set the leg reach to match). The foot-stop row checks whichever surface the heels press.',
+  },
+  footBlockPositions: {
+    label: 'Foot block slot positions', group: 'seat', unit: '',
+    default: 2, min: 1, max: 2, step: 1, status: 'assumed', ref: 'D-57',
+    options: [{ value: 1, label: 'One' }, { value: 2, label: 'Two' }],
   },
   seatCushionIn: {
     label: 'Seat cushion thickness', group: 'seat', unit: 'in',
@@ -572,29 +604,49 @@ const defs = {
     default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-40',
     note: 'The ply panel is captured in a groove this deep in the stiles and rails; the cut size includes it.',
   },
-  seatBackKnobHeightIn: {
-    label: 'Seat-back knob height above the stile foot', group: 'seat', unit: 'in',
-    default: 1.8, min: 1.2, max: 3, step: 0.1, status: 'assumed', ref: 'D-40',
-    note: 'One 3/8-16 stud + star knob per stile, just behind the cushion edge. The farther below the crest it sits, the lower the insert pull-out force.',
+  seatBackLatchHeightIn: {
+    label: 'Seat-back latch pin height above the stile foot', group: 'seat', unit: 'in',
+    default: 3, min: 1.5, max: 6, step: 0.25, status: 'assumed', ref: 'D-57',
+    note: 'D-57: one 3/8 in quick-release (ball-lock) pin per stile, pushed in by hand with no tools. UPRIGHT: through the stile into the fixed oak stop block behind it. FLAT (flipped forward onto the deck): through the same stile hole into the deck and its backer. The farther below the stop-block crest, the lower the pin load.',
   },
   seatBackLoadFraction: {
     label: 'Share of rider weight that loads the seat back', group: 'seat', unit: '×',
     default: 0.5, min: 0.25, max: 1, step: 0.05, status: 'assumed', ref: 'D-40',
     note: 'Torso share (≈ 50%); the legs brace on the foot stop and the pelvis on the cushion. Multiplied by the dynamic factor (a hard pull on the bridle throws the rider back).',
   },
-  seatInsertAllowLbf: {
-    label: 'Seat-back insert allowable pull-out (each)', group: 'seat', unit: 'lbf',
-    default: 400, min: 100, max: 800, step: 25, status: 'verify', ref: 'D-40',
-    note: '3/8-16 stainless threaded insert in white oak: ultimate ≈ 1,200 lbf (vendor data to confirm) ÷ 3.',
+  seatHingeLoadLbf: {
+    label: 'Seat-back hinge allowable per hinge (screws in oak)', group: 'seat', unit: 'lbf',
+    default: 250, min: 100, max: 600, step: 25, status: 'verify', ref: 'D-57',
+    note: 'A 2 in 316 butt hinge on #8 screws in white oak: the back-load check keeps the pull on each hinge under this (vendor and NDS data to confirm).',
   },
-  seatGripGapIn: {
-    label: 'Side grip finger gap above the gunwale', group: 'seat', unit: 'in',
-    default: 1.5, min: 1.25, max: 2.5, step: 0.25, status: 'assumed', ref: 'D-40',
-    note: 'No pinch point: the gap under the bar is at least 1.25" (a gloved finger) and the clear length at least 3.5" (a hand).',
+  grabBoardLengthIn: {
+    label: 'Grab board length (along the side)', group: 'seat', unit: 'in',
+    default: 8, min: 6, max: 14, step: 0.5, status: 'assumed', ref: 'D-40, D-57',
+    note: 'D-57: one oak board per side, bolted to the side top and standing above it, with a routed hand hole (replaces the pad, two posts and bar).',
   },
-  seatGripClearLengthIn: {
-    label: 'Side grip clear length between posts', group: 'seat', unit: 'in',
-    default: 4.5, min: 3.5, max: 6, step: 0.25, status: 'assumed', ref: 'D-40',
+  grabHoleLengthIn: {
+    label: 'Grab hole length', group: 'seat', unit: 'in',
+    default: 4.5, min: 3.5, max: 6, step: 0.25, status: 'assumed', ref: 'D-40, D-57',
+    note: 'A gloved hand: at least 3.5 in (BRIEF 4.7).',
+  },
+  grabHoleHeightIn: {
+    label: 'Grab hole height (finger gap)', group: 'seat', unit: 'in',
+    default: 1.5, min: 1.25, max: 2.5, step: 0.25, status: 'assumed', ref: 'D-40, D-57',
+    note: 'At least 1.25 in (a gloved finger): no pinch point.',
+  },
+  grabBoardThickIn: {
+    label: 'Grab board thickness', group: 'seat', unit: 'in',
+    default: 0.75, min: 0.5, max: 1.25, step: 0.125, status: 'assumed', ref: 'D-57',
+  },
+  grabBoardBarIn: {
+    label: 'Grab board oak above the hole', group: 'seat', unit: 'in',
+    default: 1.25, min: 0.75, max: 2, step: 0.25, status: 'assumed', ref: 'D-57',
+    note: 'The bar of oak the fingers wrap; the row checks its bending.',
+  },
+  grabBoardFootIn: {
+    label: 'Grab board oak between the gunwale top and the hole', group: 'seat', unit: 'in',
+    default: 1.25, min: 0.5, max: 2.5, step: 0.25, status: 'assumed', ref: 'D-57',
+    note: 'The board laps the inboard face of the gunwale (that part is bolted) and stands this far above the gunwale top before the hole starts.',
   },
 
   // ── Wheels & axles ───────────────────────────────────────────────────────
@@ -720,8 +772,8 @@ const defs = {
   },
   axleHangerThickIn: {
     label: 'Axle hanger thickness (across, on the inside of each rail)', group: 'wheels', unit: 'in',
-    default: 0.75, min: 0.5, max: 1.5, step: 0.0625, status: 'assumed', ref: 'D-54, D-15',
-    note: 'D-54: the deck is 14.7 in up, so the rails no longer reach the axle beam. An oak hanger glued and bolted to the INSIDE face of each rail drops from the rail top to the beam and carries the old beam notch and hold-down angle (rear-mount.ts). Its grain is vertical (side-grain glue to the rail).',
+    default: 0.875, min: 0.5, max: 1.5, step: 0.0625, status: 'assumed', ref: 'D-54, D-15, D-58',
+    note: 'D-58: 7/8 in (was 3/4 in). At the 8 in deck only 2.15 in of hanger is left above the beam notch and the rail shear there is proportional to the hanger thickness; the narrower 32 in rear track (more load on a rear wheel) and the 200 lb rider / 200 lb cargo bump failed it at 1.03 to 1.06x with 3/4 in. 7/8 in oak takes 1.17x the shear. D-54: the deck is 14.7 in up, so the rails no longer reach the axle beam. An oak hanger glued and bolted to the INSIDE face of each rail drops from the rail top to the beam and carries the old beam notch and hold-down angle (rear-mount.ts). Its grain is vertical (side-grain glue to the rail).',
   },
   axleHangerWidthIn: {
     label: 'Axle hanger width (fore-aft)', group: 'wheels', unit: 'in',
@@ -743,8 +795,8 @@ const defs = {
   // ── Front end (PROVISIONAL) and the bridle eye. The swivel casters of the first D-54 pass were rejected by Eric (deck too high, too close together, 360 degrees of swivel); the front end is being redecided (a center-pivot soapbox axle with limited steering). Until then the front is a fixed placeholder axle. ──
   frontTrackIn: {
     label: 'Front track (wheel center to center)', group: 'steering', unit: 'in',
-    default: 35.5, min: 26, max: 52, step: 0.25, status: 'explore', ref: 'D-56, D-6',
-    note: 'D-56: the two front wheels sit outboard of the 24 in body on the ends of the pivoting axle beam. At full lock a wheel\'s inner rear corner swings toward the body, so the track has a minimum for the lock angle (steer-clear check in validateParams: about 34 in at 20 degrees).',
+    default: 34.5, min: 26, max: 52, step: 0.125, status: 'explore', ref: 'D-56, D-58',
+    note: 'D-56: the two front wheels sit outboard of the 24 in body on the ends of the pivoting axle beam. At full lock a wheel\'s inner rear corner swings toward the body, so the track has a minimum for the lock angle (steer-clear check in validateParams: 34.28 in at 20 degrees and a 24 in body, 0.75 in clearance). D-58 (Eric): 34 1/2 in, the true minimum (34.28) plus about 0.1 in per side (the 3/4 in clearance is already an assumed running gap). The rear tire corner at lock sits about 10 in behind the axle where the body is still full width, so a narrower bow does not lower the minimum.',
   },
   steerLockDeg: {
     label: 'Steering lock (each way)', group: 'steering', unit: '°',
@@ -763,12 +815,38 @@ const defs = {
   },
   kingThrustOdIn: {
     label: 'Kingpin thrust washer OD (UHMW)', group: 'steering', unit: 'in',
-    default: 2.5, min: 1.5, max: 3.5, step: 0.25, status: 'assumed', ref: 'D-56',
-    note: 'Large UHMW washer between the steel tongue plate (on the axle beam) and the king beam: the bearing the whole front load turns on.',
+    default: 3, min: 1.5, max: 4, step: 0.25, status: 'assumed', ref: 'D-56, D-58',
+    note: 'D-58: UHMW disc between the top of the axle beam and the king beam: the bearing the static front load and the tow-pull tilt turn on. The one-wheel roll couple no longer goes through it (the roll pads carry that, rollPadRadiusIn), so it is 3 in (was 2.5 in); the disc is screwed to the king beam and the axle beam turns under it.',
   },
   kingThrustThickIn: {
     label: 'Kingpin thrust washer thickness', group: 'steering', unit: 'in',
-    default: 0.25, min: 0.125, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-56',
+    default: 0.5625, min: 0.125, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-56, D-58',
+    note: 'D-58: 9/16 in (was 1/4 in; a 1/2 in disc plus a 1/16 in shim, or 5/8 in sheet planed). With the steel tongue plate gone the disc lies directly on the axle beam, and its thickness sets the running gap between the axle clamp plates (tops 3/8 in above the beam) and the king beam: 3/16 in (the steer-clear row wants 1/8 in).',
+  },
+  rollPadRadiusIn: {
+    label: 'Roll pads: distance from the kingpin along the axle beam', group: 'steering', unit: 'in',
+    default: 11, min: 6, max: 14, step: 0.25, status: 'assumed', ref: 'D-58',
+    note: 'D-58: two UHMW slide pads on top of the axle beam, one each side of the kingpin, that slide under the frame rails with a small running gap and catch the roll of a one-wheel bump, so the kingpin only locates. The rails are the nearest continuous frame members at this distance (they pass over the whole swing); the pad covers the rail underside at every steering angle (checked in king-bearing).',
+  },
+  rollPadLenIn: {
+    label: 'Roll pad length (along the axle beam)', group: 'steering', unit: 'in',
+    default: 3, min: 1, max: 4, step: 0.2, status: 'assumed', ref: 'D-58',
+    note: 'Long enough that part of the pad is under the 3/4 in rail whatever the steering angle (the rail curves in toward the bow, D-57): the pad turns through an arc while the rail runs straight, so the overlap is at worst about 1.5 in2.',
+  },
+  rollPadWidthIn: {
+    label: 'Roll pad width (fore-aft)', group: 'steering', unit: 'in',
+    default: 2, min: 1, max: 2.5, step: 0.25, status: 'assumed', ref: 'D-58',
+    note: 'Fore-aft size; the 2.5 in axle beam carries the screws. At full lock the corner of the pad reaches the rail end at the bow bulkhead (the overlap is clipped there).',
+  },
+  rollPadThickIn: {
+    label: 'Roll pad thickness (UHMW)', group: 'steering', unit: 'in',
+    default: 0.3125, min: 0.1875, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-58',
+    note: 'The rail bottom is 0.4 in above the axle beam top where the beam swings under it (railDepthFront); 5/16 in leaves the running gap, set with a layer of tape under the pad.',
+  },
+  rollPadGapMinIn: {
+    label: 'Roll pad running gap (minimum / maximum)', group: 'steering', unit: 'in',
+    default: 0.03, min: 0.01, max: 0.1, step: 0.01, status: 'assumed', ref: 'D-58',
+    note: 'The running gap between the pad top and the rail underside must stay between this and 1/8 in: smaller binds the steering, larger lets the axle roll before the pad bears.',
   },
   kingBeamLengthIn: {
     label: 'King beam length (fore-aft)', group: 'steering', unit: 'in',
@@ -780,34 +858,89 @@ const defs = {
     default: 1000, min: 300, max: 2500, step: 50, status: 'verify', ref: 'D-56',
     note: 'UHMW-PE is good to about 1000 psi static (PV-limited when turning slowly under load); confirm with the supplier.',
   },
-  tongueThickIn: {
-    label: 'Bridle tongue plate thickness', group: 'steering', unit: 'in',
-    default: 0.1875, min: 0.125, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-56',
-    note: 'A36 flat bar lying on top of the axle beam: it carries the kingpin hole and the thrust washer bearing face, then reaches forward under the deck and the bow to the bridle tie. Bolted to the beam (two bolts); no welding.',
-  },
   tongueWidthIn: {
-    label: 'Bridle tongue bar width', group: 'steering', unit: 'in',
-    default: 2.5, min: 1.5, max: 4, step: 0.25, status: 'assumed', ref: 'D-56',
-  },  tongueHeadWidthIn: {
-    label: 'Tongue plate width at the kingpin (the bearing plate)', group: 'steering', unit: 'in',
-    default: 4, min: 3, max: 6, step: 0.25, status: 'assumed', ref: 'D-56',
-    note: 'The tongue plate is wide where it lies on the axle beam so two bolts sit outside the thrust washer; it tapers to the bar width ahead of the beam.',
+    label: 'Bridle tongue thickness (white oak, set on edge)', group: 'steering', unit: 'in',
+    default: 1.5, min: 1, max: 2.5, step: 0.25, status: 'assumed', ref: 'D-58',
+    note: 'D-58: the steel tongue plate (it bent about its thin axis at 3.7x) is replaced by a white-oak tongue set on edge: 1.5 in across (y), tongueDepthIn deep (z), grain along its length. A bandsawn T: the wide head butts the front face of the axle beam and is bolted through it, the stem runs forward under the end joist and the bow to the shackle hole.',
+  },
+  tongueTopDropIn: {
+    label: 'Tongue top below the top of the axle beam', group: 'steering', unit: 'in',
+    default: 0.1875, min: 0.0625, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-58',
+    note: 'The UHMW thrust disc lies on the beam top and the tongue head turns under it, so the tongue top stays this far below the beam top.',
+  },
+  tongueDepthIn: {
+    label: 'Bridle tongue depth (vertical)', group: 'steering', unit: 'in',
+    default: 2, min: 1.5, max: 2.25, step: 0.125, status: 'assumed', ref: 'D-58',
+    note: 'The top is tongueTopDropIn below the top of the axle beam (the disc rides on the beam top), so 2 in leaves the bottom 1/16 in above the beam bottom (3.19 in off the ground). More depth would hang toward the 3 in ground clearance.',
+  },
+  tongueHeadWidthIn: {
+    label: 'Tongue head width (across the axle beam)', group: 'steering', unit: 'in',
+    default: 6, min: 3, max: 9, step: 0.5, status: 'assumed', ref: 'D-58',
+    note: 'The head is wide so its two carriage bolts are far enough apart (the yaw couple of a sideways yank) and clear of the kingpin.',
+  },
+  tongueHeadLenIn: {
+    label: 'Tongue head length (fore-aft)', group: 'steering', unit: 'in',
+    default: 3, min: 2, max: 5, step: 0.5, status: 'assumed', ref: 'D-58',
+    note: 'The head, then a taper over the same length, then the stem. The bolts pass through the head and the whole axle beam.',
   },
   tongueBoltDiaIn: {
-    label: 'Tongue plate bolt diameter (to the axle beam)', group: 'steering', unit: 'in',
-    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-56',
-    note: 'Two 316 bolts down through the plate and the beam, one each side of the kingpin, outside the thrust washer.',
+    label: 'Tongue carriage bolt diameter', group: 'steering', unit: 'in',
+    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-58',
+    note: 'Two 316 carriage bolts, fore-aft through the tongue head and the axle beam (domed head and square neck in the tongue, fender washer and nylock nut on the rear face of the beam), one each side of the kingpin at mid depth.',
   },
-
+  tongueBoltOffsetIn: {
+    label: 'Tongue carriage bolts: distance each side of the center line', group: 'steering', unit: 'in',
+    default: 2, min: 1, max: 4, step: 0.25, status: 'assumed', ref: 'D-58',
+  },
+  tongueTipEdgeIn: {
+    label: 'Shackle hole: distance to the tongue tip', group: 'steering', unit: 'in',
+    default: 1.5, min: 1.25, max: 4, step: 0.25, status: 'assumed', ref: 'D-58',
+    note: 'Oak tears out along the grain, so the hole needs real end distance (the old steel tongue had 1 in); 1 1/2 in with the 1 in sleeve leaves 1 in of oak ahead of it, 3x what the 300 lbf tie load needs (bridle-eye). A 1/2 in bow shackle is about 1 1/2 in inside, so its bow clears the tip.',
+  },
+  tongueHoleDiaIn: {
+    label: 'Shackle hole in the tongue (bronze or steel sleeve OD)', group: 'steering', unit: 'in',
+    default: 1, min: 0.75, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-58',
+    note: 'A 1 in hole drilled across the tongue takes a bronze (or steel) sleeve bushing (1 in OD, 5/8 in bore for the 1/2 in shackle pin) and a fender washer each side. The shackle pin stays the intended weak link.',
+  },
   tongueTieAheadIn: {
-    label: 'Bridle tie hole ahead of the bow tip', group: 'steering', unit: 'in',
-    default: 4, min: 2, max: 12, step: 0.5, status: 'assumed', ref: 'D-56',
-    note: 'The tongue reaches this far beyond the curled bow so the rope and shackle clear the bow and the axle can swing.',
+    label: 'Tongue tip ahead of the bow tip', group: 'steering', unit: 'in',
+    default: 5, min: 2, max: 12, step: 0.5, status: 'assumed', ref: 'D-56, D-58',
+    note: 'The tongue tip reaches this far beyond the bow so the shackle hole (tongueTipEdgeIn behind the tip), the ring and the rope clear the bow and the axle can swing.',
   },
-  steerStopBoltDiaIn: {
-    label: 'Steering stop block bolt diameter', group: 'steering', unit: 'in',
-    default: 0.3125, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-56',
-    note: 'Two 316 bolts down through each oak stop block and the end joist.',
+  steerChainDiaIn: {
+    label: 'Steering stop chain: link stock diameter', group: 'steering', unit: 'in',
+    default: 0.25, min: 0.1875, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-58',
+    note: 'D-58: the steering lock is set by two check chains (the old oak stop blocks hung 1 in below a 3/4 in joist and could not carry the 1.4 kip hard-hit torque: the pry crushed the joist underside 4 to 10x). Grade 43 or stainless 1/4 in chain, from an eye bolt in the trailing face of one end of the axle beam back, under the king beam, to an eye bolt in the crossmember behind it; the right chain goes taut at +lock, the left at -lock, and the other hangs slack.',
+  },
+  steerChainWllLb: {
+    label: 'Steering stop chain: working load limit', group: 'factors', unit: 'lb',
+    default: 2600, min: 1000, max: 5000, step: 100, status: 'verify', ref: 'D-58',
+    note: '1/4 in grade 43 high-test chain is rated about 2,600 lb (grade 30 proof coil about 1,300 lb); confirm on the vendor listing. Ultimate is taken as 4 x the rating.',
+  },
+  steerEyeBoltDiaIn: {
+    label: 'Steering stop eye bolts: shank diameter (forged shoulder eye bolts)', group: 'steering', unit: 'in',
+    default: 0.5, min: 0.375, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-58',
+    note: 'Four forged shoulder-type eye bolts (galvanized or stainless): two through the ends of the axle beam, two through the chain joist behind the king beam. Ultimate is taken as 5 x the rating, derated for the angle the chain pulls off the shank axis.',
+  },
+  steerEyeWllLb: {
+    label: 'Steering stop eye bolts: working load limit in line', group: 'factors', unit: 'lb',
+    default: 1500, min: 500, max: 6000, step: 100, status: 'verify', ref: 'D-58',
+    note: 'A 1/2 in forged shoulder eye bolt is rated about 1,500 lb pulled in line with the shank (5/8 in: 2,600) (confirm on the vendor listing); pulled at an angle in the plane of the eye its rating falls (the analysis derates it linearly to 60 percent at 45 degrees).',
+  },
+  steerChainBeamYIn: {
+    label: 'Steering stop chain: eye in the axle beam, distance from the kingpin', group: 'steering', unit: 'in',
+    default: 10.4, min: 4, max: 14, step: 0.2, status: 'assumed', ref: 'D-58',
+    note: 'The eye bolt goes fore-aft through the beam at mid depth (below the stub axle rod in its top groove), its eye standing out of the trailing face, between the kingpin and the stub clamp plates. A long lever keeps the chain pull low.',
+  },
+  steerChainAnchorYIn: {
+    label: 'Steering stop chain: eye in the chain joist, distance from the center line', group: 'steering', unit: 'in',
+    default: 8.4, min: 4, max: 11, step: 0.2, status: 'assumed', ref: 'D-58',
+    note: 'The eye bolt goes fore-aft through the chain joist (the crossmember just behind the king beam), the eye standing out of its front face, a little below mid depth; the 2 in washer and nut on its rear face must clear the rail. Behind the king beam the chain can run low, under it, to the beam end.',
+  },
+  chainJoistThickIn: {
+    label: 'Chain joist thickness (the crossmember behind the king beam)', group: 'steering', unit: 'in',
+    default: 1.5, min: 0.75, max: 2, step: 0.25, status: 'assumed', ref: 'D-58',
+    note: 'D-58: the joist just behind the king beam anchors the two steering chains; at 1 1/2 in (the other joists are 3/4 in) the chain pull bends it in plan with 5 times less stress. The eye bolts go through it.',
   },
   frontStubLenIn: {
     label: 'Front stub axle clamped length on the beam', group: 'steering', unit: 'in',
@@ -859,47 +992,23 @@ const defs = {
   // ── Brake & rear handle ──────────────────────────────────────────────────
   brakeLeverRatio: {
     label: 'Brake foot-lever advantage TARGET', group: 'brake', unit: ':1',
-    default: 5, min: 2, max: 12, step: 0.5, status: 'explore', ref: 'D-55',
-    note: 'D-55: a target, not an input. The analysis uses the ratio DERIVED from the pedal geometry (foot force at the pedal to total shoe normal force); brake-ratio fails if the geometry delivers less than this. The geometry gives about 7:1; a 5:1 target holds the 250 lb cargo case on 15 degrees at the mud-fouled lining with about 55 lbf of foot force at 90 percent efficiency.',
-  },
-  brakeBeamSizeIn: {
-    label: 'Brake shoe beam depth (fore-aft)', group: 'brake', unit: 'in',
-    default: 1.5, min: 1, max: 2.5, step: 0.25, status: 'assumed', ref: 'D-55',
-    note: 'D-55: the shoe beam is a 6061-T6 aluminum rectangular tube across the tail just behind the rear tires, with a lined shoe bolted to its front face at each end. It passes through a slot in each swing arm. It takes the shoe thrust as plan bending between the arms and the shoes, so its depth in the fore-aft direction is the strong way. Bolted only.',
-  },
-  brakeBeamHeightIn: {
-    label: 'Brake shoe beam height', group: 'brake', unit: 'in',
-    default: 1, min: 0.75, max: 2, step: 0.25, status: 'assumed', ref: 'D-55',
-    note: 'Kept low so the arm pivot can sit only a little above the shoe (the lever ratio is pedal reach over that height).',
-  },
-  brakeBeamWallIn: {
-    label: 'Brake shoe beam tube wall', group: 'brake', unit: 'in',
-    default: 0.125, min: 0.0625, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-53',
-  },
-  brakeAluminumYieldPsi: {
-    label: 'Brake beam and guard aluminum yield (6061-T6)', group: 'brake', unit: 'psi',
-    default: 35000, min: 15000, max: 45000, step: 1000, status: 'assumed', ref: 'D-53',
-    note: 'Allowable = yield / steelSafetyFactor (shear 0.577x). The same value for the shoe beam tube and the toe guard plate.',
+    default: 1.75, min: 1.25, max: 4, step: 0.25, status: 'explore', ref: 'D-57',
+    note: 'D-57: a target, not an input. The analysis uses the ratio DERIVED from the flap geometry (pad force on the tread over the foot force, from the moments about the hinge pin, with the pad friction in or against the swing); brake-ratio fails if the geometry delivers less than this. The owner asked for about 2:1; the geometry delivers a little over 2:1, so the target is 1.75.',
   },
   brakeEfficiency: {
     label: 'Brake linkage efficiency', group: 'brake', unit: '×',
-    default: 0.9, min: 0.5, max: 1, step: 0.05, status: 'assumed', ref: 'D-13, D-55',
-    note: 'Pivot friction only (D-55): a stepped bar on two bolted pivots has no links or cross shaft, so 0.9 (it was 0.8 for the D-53 lever and link).',
+    default: 0.95, min: 0.5, max: 1, step: 0.05, status: 'assumed', ref: 'D-13, D-57',
+    note: 'Hinge friction only (D-57): a stainless butt hinge on a stainless pin is the only moving joint of the flap brake, so 0.95.',
   },
   brakePadMu: {
-    label: 'Lining-to-tire friction μ (bonded woven / molded lining, wet design)', group: 'brake', unit: '',
-    default: 0.45, min: 0.2, max: 0.8, step: 0.05, status: 'assumed', ref: 'D-13',
-    note: 'Phase 3 r2: the oak pads are faced with a 1/8" woven or molded brake lining (bonded, brass-free), which is about 0.45 against a wet rubber tread. Bare oak on wet rubber is only about 0.25 (eng review S-3).',
+    label: 'Pad-to-tire friction μ (rubber / leather pad on a wet tread, design)', group: 'brake', unit: '',
+    default: 0.4, min: 0.2, max: 0.8, step: 0.05, status: 'assumed', ref: 'D-13, D-57',
+    note: 'D-57: a 3/8" rubber (or veg-tan leather) pad on a wet rubber tread. Rubber on rubber runs 0.6 to 1.0 dry; wet it falls to about 0.4 to 0.5, which is used here conservatively. Test a pad sample on a wet tire first.',
   },
   brakePadMuFouled: {
-    label: 'Lining-to-tire friction μ, mud / slush fouled (pass/fail case)', group: 'brake', unit: '',
-    default: 0.35, min: 0.15, max: 0.8, step: 0.05, status: 'assumed', ref: 'D-13',
-    note: 'The shoe sits on the rear-lower tread, the part that just left the ground, so mud and slush reach it first (build review S10). The foot-force check and the member loads use the lower of this and the design μ; the force must still be ≤ the foot-force limit at this μ. Test the lining on a wet tire before the build.',
-  },
-  brakeLiningThickIn: {
-    label: 'Brake lining thickness (bonded to the oak pad face)', group: 'brake', unit: 'in',
-    default: 0.25, min: 0.0625, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-13, D-56',
-    note: 'Woven or molded lining sheet bonded to the steel shoe back with contact or epoxy adhesive plus two stainless rivets. Counted inside the shoe radial thickness.',
+    label: 'Pad-to-tire friction μ, mud / snow fouled (pass/fail case)', group: 'brake', unit: '',
+    default: 0.25, min: 0.15, max: 0.8, step: 0.05, status: 'assumed', ref: 'D-13, D-57',
+    note: 'The pad rests on the shoulder of the tread, which carries mud, slush and ice from the ground. The foot-force check and the member loads use the lower of this and the design μ; the force must still be within the foot-force limit at this μ (the hold row reports it honestly).',
   },
   tireGroundMu: {
     label: 'Tire-to-ground friction μ (design)', group: 'brake', unit: '',
@@ -926,8 +1035,13 @@ const defs = {
   },
   handleBowCrownIn: {
     label: 'Handlebow crown (rise at the middle over the post tops)', group: 'brake', unit: 'in',
-    default: 3, min: 0, max: 8, step: 0.5, status: 'assumed', ref: 'D-53',
-    note: 'A sled-style handlebow (reference/05): the bow arches up between and over the two posts. 0 = the old straight bar. The bow ends overhang the posts to the edge of the cart; the grip height (rearHandleHeightIn) is measured at the posts.',
+    default: 0.875, min: 0, max: 3, step: 0.125, status: 'assumed', ref: 'D-53, D-57',
+    note: 'D-57: a gentle crown (was 3 in), bandsawn from one oak board rather than laminated. A sled-style handlebow (reference/05): the bow arches up between and over the two posts. 0 = the old straight bar. The bow ends overhang the posts to the edge of the cart; the grip height (rearHandleHeightIn) is measured at the posts.',
+  },
+  handleParkClearIn: {
+    label: 'Parked handlebow clearance over the rear side top', group: 'brake', unit: 'in',
+    default: 1, min: 0.25, max: 4, step: 0.25, status: 'assumed', ref: 'D-57',
+    note: 'Second pin position (D-57): the posts drop deeper into the sockets and the bow rests this far above the top of the rear transom when it is not being pushed.',
   },
   handlePostThickIn: {
     label: 'Push-handle upright thickness (fore-aft)', group: 'brake', unit: 'in',
@@ -946,8 +1060,8 @@ const defs = {
   },
   handleSocketDepthIn: {
     label: 'Push-handle socket depth (tube length)', group: 'brake', unit: 'in',
-    default: 6, min: 3, max: 8, step: 0.5, status: 'assumed', ref: 'D-39',
-    note: 'Steel rectangular-tube socket bolted to the outside of the rear transom, its top flush with the transom top.',
+    default: 16, min: 3, max: 18, step: 0.5, status: 'assumed', ref: 'D-39, D-57',
+    note: 'D-57: deeper (was 6 in) so the posts can drop to the parked pin position with the bow just above the rear side top (handleParkClearIn); about 5.7 in of post stays in the socket when riding. Rectangular-tube socket bolted to the outside of the rear transom, its top flush with the transom top.',
   },
   handleSocketWallIn: {
     label: 'Push-handle socket wall thickness', group: 'brake', unit: 'in',
@@ -964,138 +1078,296 @@ const defs = {
     note: 'A handler leaning back on the grip to hold the cart on a descent (task brief: 50 lbf at the grip height).',
   },
 
-  // ── Brake mechanism geometry (D-55 foot brake) ────────────────────────────
-  brakeShoeTravelIn: {
-    label: 'Brake shoe engagement stroke (shoe to tread)', group: 'brake', unit: 'in',
-    default: 0.25, min: 0.1, max: 0.75, step: 0.025, status: 'assumed', ref: 'D-38, D-55',
-    note: 'Released gap from the lining to the tread, which includes the tire squash and a little wear allowance. It sets the arm swing: angle = asin(stroke / pivot height above the shoe). A muddy shoe must retract clear of the tread (build review S10).',
-  },
-  brakeShoeAngleDeg: {
-    label: 'Brake shoe position below the axle line', group: 'brake', unit: '°',
-    default: 5, min: 0, max: 15, step: 1, status: 'assumed', ref: 'D-55',
-    note: 'The shoes press the rear of the tread this many degrees below the axle line, so the normal force is nearly horizontal. The lowest lining corner must still clear minGroundClearanceIn.',
-  },
-  brakePivotAboveShoeIn: {
-    label: 'Brake pivot height above the shoe', group: 'brake', unit: 'in',
-    default: 1.1, min: 0.75, max: 3, step: 0.05, status: 'explore', ref: 'D-55',
-    note: 'The swing arm pivots on a bolt directly above the shoe contact. The foot-lever ratio is the pedal reach over this height, so a low pivot is a strong lever; the shoe beam passes through the arm just below it.',
-  },
-  brakePedalReachIn: {
-    label: 'Brake pedal reach behind the pivot', group: 'brake', unit: 'in',
-    default: 8.5, min: 4, max: 14, step: 0.25, status: 'explore', ref: 'D-55',
-    note: 'Horizontal distance from the pivot to the middle of the pedal bar, released. With the pivot 1 in above the shoe this gives about 7:1 once the arm has turned. A longer reach puts the bar farther behind the transom (the foot reaches it, the departure angle drops).',
-  },
-  brakePedalDepthIn: {
-    label: 'Brake pedal bar depth (fore-aft)', group: 'brake', unit: 'in',
-    default: 2, min: 1.5, max: 4, step: 0.25, status: 'assumed', ref: 'D-55',
-    note: 'White oak, chosen over aluminum (D-55): the same weight, warm and grippy under a boot, cut and chamfered with the shop tools, no corrosion against the steel arms, and a section about four times stronger than the stomp needs. This is the tread depth the foot stands on.',
-  },
-  brakePedalHeightIn: {
-    label: 'Brake pedal bar height', group: 'brake', unit: 'in',
-    default: 1.25, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-55',
-  },
-  brakeBarClearIn: {
-    label: 'Brake pedal assembly ground clearance (released)', group: 'brake', unit: 'in',
-    default: 3.25, min: 2, max: 6, step: 0.25, status: 'assumed', ref: 'D-55',
-    note: 'Height of the lowest edge of the swing arms above the ground with the pedal up (the oak bar sits a little higher). Never below minGroundClearanceIn. The bar kicks up at its front-lower edge so a root or rock rides over it (brakeBarKickIn).',
-  },
-  brakeBarKickIn: {
-    label: 'Brake pedal bar front-lower chamfer ("kick")', group: 'brake', unit: 'in',
-    default: 0.75, min: 0, max: 1.25, step: 0.125, status: 'assumed', ref: 'D-55',
-    note: 'The lower front edge of the oak bar is cut at 45 degrees this far, like the turned-up nose of a sled runner, so the bar does not catch on roots as the cart rolls forward.',
-  },
-  brakeParkedClearIn: {
-    label: 'Brake pedal ground clearance when parked (latched down)', group: 'brake', unit: 'in',
-    default: 0.75, min: 0.25, max: 4, step: 0.25, status: 'assumed', ref: 'D-55',
-    note: 'The latched bar sits about 2 in lower than the released bar (the arm swing). A parked cart is stationary, so this only has to clear the ground.',
-  },
-  brakePedalTravelMaxIn: {
-    label: 'Brake pedal travel limit (bar drop, released to applied)', group: 'brake', unit: 'in',
-    default: 2.5, min: 1.5, max: 4, step: 0.25, status: 'verify', ref: 'D-55',
-    note: 'The most a boot can push the bar down in one stomp before it feels awkward. Feel-test the mock-up. Raising the shoe stroke or lowering the pivot raises the travel.',
-  },
-  brakeSpringForceLbf: {
-    label: 'Brake return spring force at the pedal, applied', group: 'brake', unit: 'lbf',
-    default: 7, min: 3, max: 20, step: 1, status: 'assumed', ref: 'D-55',
-    note: 'Both extension springs together, as the equivalent vertical force on the bar at the applied pose (the released force is 80 percent of it: a low-rate spring). The foot adds it to the force that holds the cart; the released spring torque must lift the weight of the swinging parts.',
-  },
+  // ── Brake mechanism (D-57 item 8: scooter-style step brake; the D-55 steel drag bar is gone) ───────────
   brakeFootForceLimitLbf: {
-    label: 'Max foot force on the brake pedal', group: 'brake', unit: 'lbf',
-    default: 60, min: 30, max: 120, step: 5, status: 'assumed', ref: 'D-55',
-    note: 'D-55: a handler can lean 60 lbf onto a bar with one foot without much effort (the old hand lever was 30 lbf). The loaded cart (150 lb rider, 200 lb goal rider, 250 lb cargo case) must hold on the design slope within this.',
+    label: 'Max foot force on each brake flap', group: 'brake', unit: 'lbf',
+    default: 90, min: 30, max: 150, step: 5, status: 'assumed', ref: 'D-57',
+    note: 'D-57: one foot per flap with both flaps pressed. A 180 lb adult handler standing on both flaps puts half of his weight, 90 lbf, on each (a 150 lb scout leader 75; a 200 lb adult 100). The hold row reports the true force for the 150 lb, 200 lb and cargo cases at the fouled pad; where it exceeds the limit the chock parks the cart (park-hold).',
   },
   brakeFootAbuseLbf: {
-    label: 'Brake pedal abuse stomp', group: 'brake', unit: 'lbf',
-    default: 150, min: 100, max: 300, step: 10, status: 'assumed', ref: 'D-55',
-    note: 'A scout jumping on the bar: the pedal bar, arms, pivot bolts, brackets, shoe beam and shoes must survive it at yield (SF 1). The brake may be bent after it only if the check says so.',
-  },
-  brakeToeGuardHeightIn: {
-    label: 'Toe guard height above the pedal bar', group: 'brake', unit: 'in',
-    default: 3, min: 1.5, max: 5, step: 0.25, status: 'assumed', ref: 'D-55',
-    note: 'An aluminum plate bolted to the front of the bar that stops a boot sliding forward off the bar toward the tire. It also carries the latch stud.',
-  },
-  brakeToeGuardWidthIn: {
-    label: 'Toe guard width', group: 'brake', unit: 'in',
-    default: 18, min: 8, max: 26, step: 1, status: 'assumed', ref: 'D-55',
-    note: 'Centered on the bar; never wider than the gap between the swing arms. Narrower is lighter, wider keeps a stray boot off the arms.',
-  },
-  brakeToeGuardMinIn: {
-    label: 'Toe guard minimum height (boot toe)', group: 'brake', unit: 'in',
-    default: 2, min: 1, max: 4, step: 0.25, status: 'assumed', ref: 'D-55',
-    note: 'The height of plate that reliably stops the toe of a boot.',
-  },
-  brakeFootGapMinIn: {
-    label: 'Open gap between the toe guard and the tire (foot-pinch limit)', group: 'brake', unit: 'in',
-    default: 3.5, min: 2, max: 6, step: 0.25, status: 'assumed', ref: 'D-55',
-    note: 'The space in front of the guard must stay open at least this wide (a boot cannot wedge in it; anything narrower would need a plate across it).',
-  },
-  brakeLatchPinDiameterIn: {
-    label: 'Brake parking latch stud diameter', group: 'brake', unit: 'in',
-    default: 0.5, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-55',
-    note: 'A 316 bolt through the toe guard, sticking forward about 1 in; the latch hook (a hanging steel strap on a bolt through the rear transom) drops over it when the bar is stomped down. Kick the hook sideways to release.',
-  },
-  brakePivotBoltDiameterIn: {
-    label: 'Brake arm pivot bolt diameter', group: 'brake', unit: 'in',
-    default: 0.375, min: 0.25, max: 0.625, step: 0.0625, status: 'assumed', ref: 'D-53, D-55',
-    note: 'A 316 shoulder bolt through the bracket tongue and the swing arm (one shear plane), head on the inboard side, nylock nut outboard.',
-  },
-  brakeBracketBoltDiameterIn: {
-    label: 'Brake pivot bracket bolt diameter (to the rail)', group: 'brake', unit: 'in',
-    default: 0.375, min: 0.1875, max: 0.4375, step: 0.0625, status: 'assumed', ref: 'D-55',
-    note: 'Four 316 bolts through the bracket tongue and the cabin rail, fender washers and nylock nuts on the inside face of the rail. The shoe thrust pulls the pivot straight back, so these carry it as shear and as a moment couple.',
-  },
-  brakeBracketWidthIn: {
-    label: 'Brake pivot bracket width on the rail (fore-aft)', group: 'brake', unit: 'in',
-    default: 5, min: 2.5, max: 6, step: 0.25, status: 'assumed', ref: 'D-55',
-    note: 'The flat top of each bracket tongue, bolted to the OUTER face of the cabin rail just behind the axle; the tongue tapers down to the pivot below the rail.',
-  },
-  brakePlateThickIn: {
-    label: 'Brake arm, bracket and hook plate thickness (A36, outsourced)', group: 'brake', unit: 'in',
-    default: 0.125, min: 0.125, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-53, D-55',
-  },
-  brakeGuardThickIn: {
-    label: 'Toe guard plate thickness (6061-T6 aluminum)', group: 'brake', unit: 'in',
-    default: 0.125, min: 0.0625, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-55',
+    label: 'Brake flap abuse stomp', group: 'brake', unit: 'lbf',
+    default: 150, min: 100, max: 300, step: 10, status: 'assumed', ref: 'D-55, D-57',
+    note: 'A scout jumping on one flap: the flap, hinge, screws, knee, bolts and backer must survive it at yield (SF 1). The brake may be bent after it only if the check says so.',
   },
   brakeLiningMaxPsi: {
-    label: 'Brake lining allowable contact pressure', group: 'brake', unit: 'psi',
-    default: 100, min: 30, max: 300, step: 10, status: 'assumed', ref: 'D-53',
-    note: 'Woven or molded lining against a rubber tread: a long-life limit for a brake used only now and then. Pressure = shoe normal force / lining area at the lambda hold load.',
+    label: 'Brake pad allowable contact pressure', group: 'brake', unit: 'psi',
+    default: 100, min: 30, max: 300, step: 10, status: 'assumed', ref: 'D-53, D-57',
+    note: 'A soft rubber pad against a rubber tread: a long-life limit for a brake used only now and then. Pressure = pad normal force / pad area at the lambda hold load.',
   },
   brakeClearanceIn: {
     label: 'Brake moving-part clearance (sweep limit)', group: 'brake', unit: 'in',
-    default: 0.1, min: 0.03, max: 0.5, step: 0.01, status: 'assumed', ref: 'D-38',
-    note: 'Minimum gap between the moving brake parts and the wheel, hull, rails, storage box and ground over the full stroke.',
+    default: 0.1, min: 0.03, max: 0.5, step: 0.01, status: 'assumed', ref: 'D-38, D-57',
+    note: 'Minimum gap between the moving flap group (flap, shoe block, pad, hinge leaf, bungee) and the tire, hull, rails and ground over the full stroke.',
   },
   brakeLoadFactor: {
     label: 'Brake component load factor (on the hold load)', group: 'brake', unit: '×',
     default: 2, min: 1, max: 4, step: 0.25, status: 'assumed', ref: 'D-38',
-    note: 'The pedal, arms, pivot, beam, shoes and latch are checked at this multiple of the load needed to hold the cart on the design slope: a hard stomp or a jerk on a parked cart.',
+    note: 'The flap, hinge, knee and bolts are checked at this multiple of the load needed to hold the cart on the design slope: a hard stomp or a jerk on a parked cart.',
   },
   brakeSteelYieldPsi: {
     label: 'Brake arm plate / pin steel yield', group: 'brake', unit: 'psi',
     default: 36000, min: 30000, max: 100000, step: 1000, status: 'assumed', ref: 'D-38',
     note: 'A36 plate. Allowable = yield / steel safety factor (shear 0.577×).',
+  },
+
+  brakeHingeAheadIn: {
+    label: 'Flap hinge pin ahead of the tire front', group: 'brake', unit: 'in',
+    default: 2, min: 0.25, max: 4, step: 0.25, status: 'assumed', ref: 'D-57',
+    note: 'D-57: the hinge sits ahead of the rear tire (pin at x = wheel radius + this) on top of the knee, so the flap reaches back over the tire to the foot. 2 in puts the pin and knee ahead of x = 6.5 in, clear of the sign zone on the side (D-57 item 9, x up to 6 in). The farther ahead, the longer the pad-side lever and the lower the foot lever ratio.',
+  },
+
+  brakePadAngleDeg: {
+    label: 'Pad position behind the top of the tire', group: 'brake', unit: '°',
+    default: 6, min: 0, max: 40, step: 1, status: 'explore', ref: 'D-57',
+    note: 'Centre of the pad on the tread, measured from the top of the tire toward the rear. Near the top the pad force is nearly vertical (the hinge sees little sideways load). A pad farther back is closer to the foot (lower ratio).',
+  },
+
+  brakePadLengthIn: {
+    label: 'Brake pad length (along the tread)', group: 'brake', unit: 'in',
+    default: 3, min: 2, max: 5, step: 0.25, status: 'assumed', ref: 'D-57',
+    note: 'Rubber (or leather) pad glued and screwed to an oak shoe block that is cut to the tire radius.',
+  },
+
+  brakePadWidthIn: {
+    label: 'Brake pad width (across the tread)', group: 'brake', unit: 'in',
+    default: 3, min: 1.5, max: 3.4, step: 0.1, status: 'assumed', ref: 'D-57',
+    note: 'Inside the tread edges (the model clamps it to the tire width minus 0.3 in). Pad area sets the contact pressure.',
+  },
+
+  brakePadThickIn: {
+    label: 'Brake pad thickness', group: 'brake', unit: 'in',
+    default: 0.375, min: 0.25, max: 0.75, step: 0.125, status: 'assumed', ref: 'D-57',
+    note: '3/8" 60 to 70 durometer rubber (or 3/8" veg-tan leather) sheet; replaceable.',
+  },
+
+  brakePadGapIn: {
+    label: 'Pad to tread gap, released (at the pad centre)', group: 'brake', unit: 'in',
+    default: 0.375, min: 0.15, max: 0.75, step: 0.025, status: 'assumed', ref: 'D-57',
+    note: 'Sets the swing of the flap (angle = gap over the pad lever) and so the foot stroke. Includes the squash of the tire and a little wear allowance; the bungee and the stop cord hold this gap while the cart rolls.',
+  },
+
+  brakeShoeBlockIn: {
+    label: 'Oak shoe block thickness under the flap (at its thinnest)', group: 'brake', unit: 'in',
+    default: 0.5, min: 0.25, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-57',
+    note: 'A wedge of oak between the flap and the pad that turns the flap\'s slope into the tire\'s radius. Glued and screwed (2 stainless #10) to the flap underside.',
+  },
+
+  brakeFlapThickIn: {
+    label: 'Brake flap thickness', group: 'brake', unit: 'in',
+    default: 1, min: 0.75, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-57',
+    note: 'White oak planed from 5/4 stock. Grain along the flap. The foot end is grooved or taped for grip.',
+  },
+
+  brakeFlapWidthIn: {
+    label: 'Brake flap width (across, over the tire)', group: 'brake', unit: 'in',
+    default: 3.5, min: 2.5, max: 4.5, step: 0.25, status: 'assumed', ref: 'D-57',
+    note: 'The flap is centred on the rear tire (it follows rearTrackIn) and is as wide as the tread.',
+  },
+
+  brakeFlapSlopeDeg: {
+    label: 'Brake flap slope (descending toward the rear)', group: 'brake', unit: '°',
+    default: 6, min: 0, max: 15, step: 1, status: 'assumed', ref: 'D-57',
+    note: 'The foot end is lower than the hinge by this slope, so the foot has less height to climb. The flap\'s underside clears the pad by the shoe block thickness.',
+  },
+
+  brakeFootBehindTransomIn: {
+    label: 'Foot area centre behind the rear transom face', group: 'brake', unit: 'in',
+    default: 0.5, min: -4, max: 8, step: 0.5, status: 'assumed', ref: 'D-57',
+    note: 'D-57: the handler stands behind the transom and steps on the flap with one foot, so the foot area (brakeFootPadLengthIn long) is centred just behind the transom face and outboard of the body. The flap ends at the rear of the foot area.',
+  },
+
+  brakeFootPadLengthIn: {
+    label: 'Foot area length on the flap', group: 'brake', unit: 'in',
+    default: 5, min: 3, max: 7, step: 0.5, status: 'assumed', ref: 'D-57',
+    note: 'The last stretch of the flap is the foot pad: grooved oak or a strip of rubber stair tread glued on.',
+  },
+
+  brakeHingeLengthIn: {
+    label: 'Hinge length (along the pin)', group: 'brake', unit: 'in',
+    default: 3, min: 2, max: 4, step: 0.5, status: 'assumed', ref: 'D-57',
+    note: 'McMaster 316 stainless steel butt hinge, a leaf height of this length.',
+  },
+
+  brakeHingeLeafIn: {
+    label: 'Hinge leaf width (each leaf)', group: 'brake', unit: 'in',
+    default: 1.5, min: 1, max: 2, step: 0.25, status: 'assumed', ref: 'D-57',
+    note: 'A 3 in x 3 in (open) hinge has two 1.5 in leaves: one screws to the flap top, one to the knee top.',
+  },
+
+  brakeHingePinDiaIn: {
+    label: 'Hinge pin diameter', group: 'brake', unit: 'in',
+    default: 0.25, min: 0.1875, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-57',
+    note: 'The stainless pin through the knuckles (double shear).',
+  },
+
+  brakeHingeScrewDiaIn: {
+    label: 'Hinge screw diameter (#10)', group: 'brake', unit: 'in',
+    default: 0.19, min: 0.164, max: 0.25, step: 0.001, status: 'assumed', ref: 'D-57',
+    note: '#10 316 stainless flat-head screws, 1 in long, into the oak flap and the oak knee.',
+  },
+
+  brakeHingeScrewsPerLeaf: {
+    label: 'Hinge screws per leaf', group: 'brake', unit: '',
+    default: 6, min: 2, max: 8, step: 1, status: 'assumed', ref: 'D-57',
+    note: 'Pilot holes drilled with the hinge as the template; a drop of epoxy in each hole in the end-grain side.',
+  },
+
+  brakeKneeDepthIn: {
+    label: 'Knee (outrigger) fore-aft depth', group: 'brake', unit: 'in',
+    default: 2.5, min: 2, max: 5, step: 0.25, status: 'assumed', ref: 'D-57',
+    note: 'The oak outrigger that carries the hinge sits ahead of the tire; the bolt columns spread over this depth.',
+  },
+
+  brakeKneeLegIn: {
+    label: 'Knee leg thickness (against the hull)', group: 'brake', unit: 'in',
+    default: 2, min: 1.25, max: 3, step: 0.25, status: 'assumed', ref: 'D-57',
+    note: 'The foot of the knee that sits on the rail and chine outer face; the mounting bolts pass through it.',
+  },
+
+  brakeKneeArmIn: {
+    label: 'Knee arm thickness (under the hinge)', group: 'brake', unit: 'in',
+    default: 1.25, min: 1, max: 2.5, step: 0.25, status: 'assumed', ref: 'D-57',
+    note: 'The horizontal arm that reaches out over the gap beside the tire to the hinge; braced by a sloping underside.',
+  },
+
+  brakeBackerThickIn: {
+    label: 'Backer (doubler) thickness inside the rail', group: 'brake', unit: 'in',
+    default: 1.25, min: 0.75, max: 2, step: 0.25, status: 'assumed', ref: 'D-57',
+    note: 'An oak block epoxied to the inside face of the rail (and the deck underside); the mounting bolts end in it. Joists that meet it are cut back.',
+  },
+
+  brakeMountBoltDiaIn: {
+    label: 'Knee mounting bolt diameter', group: 'brake', unit: 'in',
+    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-57',
+    note: '316 stainless hex bolts with fender washers and nylock nuts, through the knee leg, the rail and the backer.',
+  },
+
+  brakeMountBoltColumns: {
+    label: 'Knee mounting bolt columns (fore-aft)', group: 'brake', unit: '',
+    default: 2, min: 1, max: 3, step: 1, status: 'assumed', ref: 'D-57',
+  },
+
+  brakeMountBoltRows: {
+    label: 'Knee mounting bolt rows (vertical, across the rail)', group: 'brake', unit: '',
+    default: 2, min: 1, max: 3, step: 1, status: 'assumed', ref: 'D-57',
+  },
+
+  brakeBungeeTensionLbf: {
+    label: 'Return bungee tension, released', group: 'brake', unit: 'lbf',
+    default: 3, min: 1, max: 10, step: 0.5, status: 'assumed', ref: 'D-57',
+    note: 'A 1/4" shock cord from the flap to an eye screw in the gunwale, a stop cord of equal length beside it. It lifts the flap and the shoe block against the stop cord; the stomp stretches it further.',
+  },
+
+  brakeBungeeRateLbfPerIn: {
+    label: 'Return bungee rate', group: 'brake', unit: 'lbf/in',
+    default: 1.5, min: 0.5, max: 5, step: 0.5, status: 'assumed', ref: 'D-57',
+    note: 'A 1/4" shock cord of this stiffness (a few lbf per inch of stretch at a 6 to 12 in length).',
+  },
+
+  brakeBungeeAnchorBelowTopIn: {
+    label: 'Bungee eye below the rear transom top', group: 'brake', unit: 'in',
+    default: 2.5, min: 1, max: 6, step: 0.5, status: 'assumed', ref: 'D-57',
+    note: 'The stainless screw eye goes into the aft face of the rear transom near its outer corner, this far below the top edge, over the transom backer. (Not the side: its outer face is the sign zone.)',
+  },
+
+  brakeBungeeAnchorInsetIn: {
+    label: 'Bungee eye in from the hull side face', group: 'brake', unit: 'in',
+    default: 1, min: 0.5, max: 3, step: 0.25, status: 'assumed', ref: 'D-57',
+    note: 'How far inboard of the hull\'s outer side face the transom eye sits. The handle sockets are at about 9.9 in from the center line, so 1 in keeps clear of them.',
+  },
+
+  brakeCordBreakLbf: {
+    label: 'Cord breaking strength (1/4" braided polyester)', group: 'brake', unit: 'lbf',
+    default: 800, min: 300, max: 2000, step: 50, status: 'assumed', ref: 'D-57',
+    note: 'Stop cord and chock cord. The checks keep the load under a fifth of it.',
+  },
+
+  brakeChockHeightIn: {
+    label: 'Wheel chock height', group: 'brake', unit: 'in',
+    default: 2.5, min: 1, max: 4, step: 0.25, status: 'assumed', ref: 'D-57',
+    note: 'An oak wedge on a cord for parking; stays under the knee (never taller than the rail bottom).',
+  },
+
+  brakeChockAngleDeg: {
+    label: 'Wheel chock ramp angle', group: 'brake', unit: '°',
+    default: 28, min: 15, max: 55, step: 1, status: 'explore', ref: 'D-57',
+    note: 'The chock\'s face is tangent to the tire at this angle off the ground and rises away from it: the wheel has to climb it. It holds if tan(angle) is under the ground friction and over the slope load over the wheel\'s weight (park-hold).',
+  },
+
+  brakeChockWidthIn: {
+    label: 'Wheel chock width', group: 'brake', unit: 'in',
+    default: 3.5, min: 2.5, max: 5, step: 0.25, status: 'assumed', ref: 'D-57',
+  },
+
+  brakeChockCount: {
+    label: 'Wheel chocks carried (one per rear tire)', group: 'brake', unit: '',
+    default: 2, min: 1, max: 2, step: 1, status: 'assumed', ref: 'D-57',
+    note: 'Two chocks, one for each rear tire. One chock alone takes the whole slope load on one wheel and cannot hold the design slope (park-hold shows it).',
+  },
+
+  brakeChockMu: {
+    label: 'Chock-to-ground friction μ (toothed oak on packed dirt / gravel)', group: 'brake', unit: '',
+    default: 0.6, min: 0.2, max: 0.9, step: 0.05, status: 'verify', ref: 'D-57',
+    note: 'The chock\'s base has two stainless screw heads left proud (or a sawtooth cut) to bite. Smooth wood on dirt is about 0.5; on ice or packed snow far less.',
+  },
+
+  brakeChockMuFouled: {
+    label: 'Chock-to-ground friction μ, wet leaves / slush (pass/fail case)', group: 'brake', unit: '',
+    default: 0.4, min: 0.1, max: 0.9, step: 0.05, status: 'verify', ref: 'D-57',
+    note: 'The park-hold row uses the lower of this and the design μ.',
+  },
+
+  brakeChockCordLenIn: {
+    label: 'Chock cord length', group: 'brake', unit: 'in',
+    default: 30, min: 12, max: 72, step: 2, status: 'assumed', ref: 'D-57',
+    note: 'Ties the chock to an eye on the knee so it is never lost, long enough to reach the other side of the tire when the cart faces uphill.',
+  },
+
+  parkRollingResistance: {
+    label: 'Static rolling resistance of the cart (parking)', group: 'brake', unit: '',
+    default: 0.02, min: 0, max: 0.08, step: 0.005, status: 'assumed', ref: 'D-57',
+    note: 'Fraction of the cart weight that bearings and tire squash resist at standstill; credited in the park-hold row with the chock friction.',
+  },
+
+  brakeStopSlopeDeg: {
+    label: 'Steepest grade the loaded cart must be STOPPED on by the flaps alone', group: 'brake', unit: '°',
+    default: 10, min: 3, max: 15, step: 0.5, status: 'assumed', ref: 'D-57',
+    note: 'D-57: the flaps SLOW the loaded cart on the 15° design slope and STOP it on gentler grades. brake-slow reports the steepest grade held at the foot-force limit and the fouled pad μ for each load case, and checks it against this.',
+  },
+
+  brakeHingeScrewLenIn: {
+    label: 'Hinge screw length', group: 'brake', unit: 'in',
+    default: 1, min: 0.75, max: 1.5, step: 0.25, status: 'assumed', ref: 'D-57',
+    note: 'Thread engagement in the oak is this length less the hinge leaf and a 0.1 in tip.',
+  },
+
+  brakeSlowShareMin: {
+    label: 'Share of the design-slope pull the flaps must take (SLOWS)', group: 'brake', unit: '',
+    default: 0.5, min: 0.2, max: 1, step: 0.05, status: 'assumed', ref: 'D-57',
+    note: 'D-57: the flaps must SLOW the loaded cart on the 15° design slope: at the limit foot force and the fouled pad they take at least this share of the downhill pull (the handler, the pullers and the chock do the rest).',
+  },
+
+  brakeFootHeightMaxIn: {
+    label: 'Highest foot-area step above the ground', group: 'brake', unit: 'in',
+    default: 12, min: 8, max: 16, step: 1, status: 'assumed', ref: 'D-57',
+    note: 'The handler steps up onto the flap from behind the cart: a stair step is 7 in, a stool 12 in.',
+  },
+
+  brakeFootStrokeMaxIn: {
+    label: 'Longest comfortable foot stroke', group: 'brake', unit: 'in',
+    default: 1.5, min: 0.5, max: 3, step: 0.25, status: 'assumed', ref: 'D-57',
+    note: 'The drop of the foot area from released to the pad on the tread (plus a little squash).',
+  },
+
+  brakeReturnLiftMargin: {
+    label: 'Bungee lift over the weight of the flap group', group: 'brake', unit: '×',
+    default: 1.5, min: 1, max: 4, step: 0.25, status: 'assumed', ref: 'D-57',
+    note: 'The released bungee torque about the hinge over the weight torque of the flap, shoe block and pad: so a bump does not drop the pad onto the tread.',
+  },
+
+  brakeCordSafetyFactor: {
+    label: 'Cord safety factor (on breaking strength)', group: 'brake', unit: '×',
+    default: 5, min: 3, max: 10, step: 1, status: 'assumed', ref: 'D-57',
   },
 
   // ── Parking ratchet (D-39) ────────────────────────────────────────────────
@@ -1136,6 +1408,11 @@ const defs = {
   axleBeamThicknessIn: {
     label: 'Rear axle beam width (fore-aft)', group: 'stock', unit: 'in',
     default: 2.5, min: 1.5, max: 4, step: 0.125, status: 'explore',
+  },
+  frontBeamThicknessIn: {
+    label: 'Front axle beam width (fore-aft)', group: 'stock', unit: 'in',
+    default: 2.5, min: 1.5, max: 4, step: 0.125, status: 'explore', ref: 'D-56, D-58',
+    note: 'The pivoting front beam (the rear beam is axleBeamThicknessIn). It sets the swing of the beam under the rails and the room for the tongue bolts. D-58: 2 1/2 in is enough for the 200 lb cargo bump (2 3/4 in was needed at 250 lb).',
   },
   axleBeamDepthIn: {
     label: 'Axle beam depth (vertical)', group: 'stock', unit: 'in',
@@ -1408,20 +1685,6 @@ const defs = {
     default: 0.5, min: 0, max: 2, step: 0.125, status: 'assumed', ref: 'D-6',
   },
   // ── Bump loads (D-50, D-54, D-55); the Ackermann front-end and ride-mode parts of this block went at Phase 3c-1 and 3c-3a ──
-  brakeShoeBackThickIn: {
-    label: 'Steel shoe back thickness', group: 'brake', unit: 'in',
-    default: 0.125, min: 0.0625, max: 0.1875, step: 0.0625, status: 'assumed', ref: 'D-56',
-  },
-  brakeLinedShoeWidthIn: {
-    label: 'Lined steel-backed shoe width (across the tread)', group: 'brake', unit: 'in',
-    default: 3, min: 1.5, max: 3.2, step: 0.1, status: 'verify', ref: 'D-56, D-55',
-    note: 'D-55: 3.0 in on the 3.5 in tire, inside the tread edges (the model clamps it to the tire width minus 0.3 in). Shoe area sets the lining pressure.',
-  },
-  brakeLinedShoeLengthIn: {
-    label: 'Lined steel-backed shoe length (along the tread)', group: 'brake', unit: 'in',
-    default: 3, min: 2, max: 6, step: 0.25, status: 'verify', ref: 'D-56',
-    note: 'REAR lined shoe, radius-matched to the 10" tire (D-55). At the default 5 degrees below the axle line its lowest corner is 3.1 in off the ground.',
-  },
   bumpSpeedNormalMph: {
     label: 'Normal-use bump speed (walking pace)', group: 'bump', unit: 'mph',
     default: 3, min: 1, max: 6, step: 0.5, status: 'assumed', ref: 'D-55, D-53',
@@ -1540,29 +1803,36 @@ export function resolveParams(p: Params): Params {
 
 /** Rider foot box (D-3 mannequin: foot length 0.14 of stature, the foot stop's rear face at seatX + leg reach): the x range the hull must be wide enough for. */
 export function footZoneX(p: Params): [number, number] {
-  const stopRear = p.seatXIn + p.riderLegReachIn - p.footStopThickIn / 2;
+  const stopRear = p.seatXIn + p.riderLegReachIn;
   return [stopRear - 0.14 * p.riderStatureIn, stopRear];
 }
 
 /**
- * The curled bow (D-54): the deck runs flat to `xFlatEnd`, where a bent-lamination panel carries on and curls up on the centerline radius `radius` through `angleRad`.
- * Plain numbers so the validator, the layout and the model agree. `rise` is the height of the tip's centerline above the flat deck centerline.
+ * The bow end (D-57): the deck runs flat to `xFlatEnd`, where the oak bow bulkhead stands (its rear face is the rider's foot brace) and runs on to the bow tip `xTip`.
+ * Plain numbers so the validator, the layout and the model agree. (D-54's bent-lamination curl is gone; `bowCurl` keeps the old name for the front-axle geometry.)
  */
-export function bowCurl(p: Params) {
-  const radius = p.bowCurlRadiusIn;
-  const angleRad = (p.bowCurlAngleDeg * Math.PI) / 180;
+export function bowBulkhead(p: Params) {
+  const thick = p.bowBulkheadThickIn;
   const xTip = p.wheelbaseIn + p.frontOverhangIn;
-  const run = radius * Math.sin(angleRad);
-  const rise = radius * (1 - Math.cos(angleRad));
-  const thick = p.bowCurlPlies * p.bowCurlPlyIn;
-  const rIn = radius - thick / 2; // radius of the concave (upper, inside) face
-  return { radius, angleRad, xTip, run, rise, thick, rIn, riseInner: rIn * (1 - Math.cos(angleRad)), xFlatEnd: xTip - run };
+  return { thick, xTip, xFlatEnd: xTip - thick };
 }
+export const bowCurl = bowBulkhead;
 
-/** Height above the deck top of the straight side-profile line at x (before the optional sag), from `sideHeightRearIn` at the rear transom's inner face to `sideHeightBowIn` at `xEnd`. */
+/** Height above the deck top of the sheer line at x: from `sideHeightRearIn` at the rear transom's inner face down to `sideHeightBowIn` at `xEnd`, sagging `sheerCurveIn` below the straight line at mid-length (D-57). */
 export function sideHeightAt(p: Params, x: number, xRearFace: number, xEnd: number): number {
   const u = Math.max(0, Math.min(1, (x - xRearFace) / Math.max(1e-6, xEnd - xRearFace)));
-  return p.sideHeightRearIn + (p.sideHeightBowIn - p.sideHeightRearIn) * u - 4 * p.sideProfileSagIn * u * (1 - u);
+  return p.sideHeightRearIn + (p.sideHeightBowIn - p.sideHeightRearIn) * u - 4 * p.sheerCurveIn * u * (1 - u);
+}
+
+/**
+ * How far the hull's outer face has turned in at x, per side (D-57): 0 behind the turn-in start, `bowTurnInIn` at the bow bulkhead, a smoothstep between (so the sides are straight at both ends).
+ * One function shared by the layout, the body, the frame and the front axle (the front tires sweep beside this part of the hull).
+ */
+export function bowTurnInAt(p: Params, x: number): number {
+  const x1 = bowBulkhead(p).xFlatEnd;
+  const x0 = x1 - p.bowTurnLenIn;
+  const u = Math.max(0, Math.min(1, (x - x0) / Math.max(1e-6, x1 - x0)));
+  return p.bowTurnInIn * u * u * (3 - 2 * u);
 }
 
 /** Actual ply thickness of a bent lamination `t` thick glued from plies of about `ply`. */
@@ -1583,10 +1853,25 @@ export function steerGeometry(p: Params) {
   const tw = p.tireWidthIn;
   const bodyHalf = p.bodyWidthIn / 2;
   const deckBot = p.deckHeightIn - p.deckPlyIn;
-  // Tire vs body at full lock: the inner rear (or front) corner of the tire swings toward the side of the body.
-  const innerFace = trk / 2 - tw / 2;
-  const clearAtLock = innerFace * Math.cos(lock) - r * Math.sin(lock) - bodyHalf;
-  const minTrack = 2 * ((bodyHalf + p.steerClearIn + r * Math.sin(lock)) / Math.cos(lock) + tw / 2);
+  // Tire vs body at full lock: the inner face of the tire (a plan rectangle 2r long, `tw` wide) swings toward the side of the body, whose outer half width is `bodyHalf` less the bow
+  // turn-in at that x (D-57). Sampled along the inner face, both directions of lock; the rear corner governs, 10 in behind the axle where the turn-in has not started (D-58).
+  const bodyHalfAt = (x: number) => bodyHalf - bowTurnInAt(p, x);
+  const clearAtTrack = (track: number) => {
+    const inner = track / 2 - tw / 2;
+    let m = Infinity;
+    for (const a of [lock, -lock]) {
+      for (let i = 0; i <= 40; i++) {
+        const u = -r + (2 * r * i) / 40;
+        const x = kingX + u * Math.cos(a) - inner * Math.sin(a), y = u * Math.sin(a) + inner * Math.cos(a);
+        m = Math.min(m, Math.abs(y) - bodyHalfAt(x));
+      }
+    }
+    return m;
+  };
+  const clearAtLock = clearAtTrack(trk);
+  let lo = 2 * tw, hi = 80;
+  for (let i = 0; i < 50; i++) { const mid = (lo + hi) / 2; if (clearAtTrack(mid) >= p.steerClearIn) hi = mid; else lo = mid; }
+  const minTrack = hi;
   // Turning: the axle line meets the rear axle line at the turning center.
   const sinL = Math.max(1e-6, Math.sin(lock));
   const centerRadiusIn = p.wheelbaseIn / Math.max(1e-6, Math.tan(lock));
@@ -1595,21 +1880,25 @@ export function steerGeometry(p: Params) {
   // Vertical stack at the kingpin (underslung beam, axle rod in a top groove, as at the rear).
   const beamTop = r + p.axleDiameterIn / 2;
   const beamBot = beamTop - p.axleBeamDepthIn;
-  const tongueTop = beamTop + p.tongueThickIn;
-  const thrustTop = tongueTop + p.kingThrustThickIn;
+  const tongueTop = beamTop; // D-58: the oak tongue butts the front of the beam, its top flush with the beam top (the disc lies directly on the beam)
+  const thrustTop = beamTop + p.kingThrustThickIn;
   const kingBot = thrustTop;
   const kingDepth = deckBot - kingBot;
   // The axle beam sweeps under the rails at the lock angle: the rails are shallower where it passes.
   const railYIn = bodyHalf - p.railThicknessIn;
-  const swathHalf = (p.axleBeamThicknessIn / 2) * Math.cos(lock) + bodyHalf * Math.sin(lock); // at the rail's OUTER face (|y| = bodyHalf), where the beam's trailing corner reaches furthest back
+  const swathHalf = (p.frontBeamThicknessIn / 2) * Math.cos(lock) + bodyHalf * Math.sin(lock); // at the rail's OUTER face (|y| = bodyHalf), where the beam's trailing corner reaches furthest back
   const railDepthFront = Math.max(0, Math.min(p.railDepthIn, deckBot - (beamTop + 0.4)));
   const railStepX = kingX - swathHalf - 1;
-  // Stop blocks hang under the ends of the end joist (under the scarf of the deck to the bow curl): the beam's leading face meets the stop at the lock angle.
-  const c = bowCurl(p);
-  const endJoistX = c.xFlatEnd - p.crossmemberThickIn / 2 - 0.05;
-  const stopFaceX = endJoistX - p.crossmemberThickIn / 2;
-  const stopY1 = (stopFaceX - kingX - (p.axleBeamThicknessIn / 2) * Math.cos(lock)) / sinL;
-  return { lock, kingX, clearAtLock, minTrack, centerRadiusIn, outerEdgeRadiusIn, innerEdgeRadiusIn, beamTop, beamBot, tongueTop, thrustTop, kingBot, kingDepth, railYIn, swathHalf, railDepthFront, railStepX, endJoistX, stopFaceX, stopY1 };
+  // The steering lock is set by two CHECK CHAINS (D-58): an eye bolt fore-aft through each end of the axle beam (`steerChainBeamYIn` from the kingpin, mid depth, the eye standing 0.7 in out
+  // of the beam's TRAILING face) and an eye bolt fore-aft through the crossmember just behind the king beam (layout.ts: `chain`, `steerChainAnchorYIn` from the center line, the eye standing out of its
+  // FRONT face). The RIGHT chain goes taut at +lock (the right end of the beam swings forward, away from the anchor behind it), the LEFT at -lock. The chains run under the king beam.
+  const endJoistX = bowCurl(p).xFlatEnd - p.crossmemberThickIn / 2 - 0.05; // the last joist, under the scarf of the deck to the bow bulkhead
+  const stand = 0.7;
+  const beamU = -(p.frontBeamThicknessIn / 2 + stand);
+  const beamZ = (beamTop + beamBot) / 2;
+  /** The beam eye of the RIGHT chain at steering angle a (rad, + = turning left, the beam turned counter-clockwise from above). */
+  const beamEyeAt = (a: number): [number, number, number] => [kingX + beamU * Math.cos(a) + p.steerChainBeamYIn * Math.sin(a), beamU * Math.sin(a) - p.steerChainBeamYIn * Math.cos(a), beamZ];
+  return { lock, kingX, clearAtLock, minTrack, centerRadiusIn, outerEdgeRadiusIn, innerEdgeRadiusIn, beamTop, beamBot, tongueTop, thrustTop, kingBot, kingDepth, railYIn, swathHalf, railDepthFront, railStepX, endJoistX, beamU, beamZ, beamEyeAt, stand, deckBot };
 }
 
 /** Derived quantities that many modules need; no geometry here. */
@@ -1664,7 +1953,7 @@ export function validateParams(input: Params): ParamIssue[] {
   const warn = (keys: ParamKey[], message: string) => issues.push({ keys, severity: 'warn', message });
   const info = (keys: ParamKey[], message: string) => issues.push({ keys, severity: 'info', message });
   const r = p.wheelDiameterIn / 2;
-  const curl = bowCurl(p);
+  const curl = bowBulkhead(p);
   const deckBot = p.deckHeightIn - p.deckPlyIn;
 
   if (p.riderGoalMassLb < p.riderMassLb)
@@ -1677,8 +1966,8 @@ export function validateParams(input: Params): ParamIssue[] {
     err(['bodyWidthIn', 'rearTrackIn'], 'The body is too wide to clear the rear tires (needs ≥ ¾" each side).');
   if (p.seatXIn < 0 && p.rearOverhangIn < -p.seatXIn + 6)
     err(['seatXIn', 'rearOverhangIn'], 'Seat hangs off the back of the body.');
-  if (p.seatXIn + p.riderLegReachIn > curl.xFlatEnd)
-    err(['seatXIn', 'riderLegReachIn', 'frontOverhangIn', 'bowCurlRadiusIn'], 'The rider\'s feet extend onto the bow curl (the flat deck ends at x = ' + curl.xFlatEnd.toFixed(1) + '").');
+  if (p.seatXIn + p.riderLegReachIn > curl.xFlatEnd + 1e-9)
+    err(['seatXIn', 'riderLegReachIn', 'frontOverhangIn', 'bowBulkheadThickIn'], `The rider's feet would reach past the bow bulkhead's rear face (the foot brace, x = ${curl.xFlatEnd.toFixed(1)}").`);
   // The seat and the foot stop stand on the flat deck.
   const cushionFront = p.seatXIn - p.seatBehindHpointIn + p.seatDepthIn;
   if (cushionFront > curl.xFlatEnd - 0.01)
@@ -1695,11 +1984,9 @@ export function validateParams(input: Params): ParamIssue[] {
       err(['seatXIn', 'rearOverhangIn', 'storageLocation'],
         `Only ${room.toFixed(1)}" between the rear transom and the seat back; a rear storage box needs ≥ ${MIN_REAR_STORAGE_LENGTH_IN}". Move the seat forward or choose another storage location.`);
   }
-  // The foot stop (a board of footStopThickIn at seatX + leg reach) and its cleats stand on the flat deck.
-  const footStopFront = p.seatXIn + p.riderLegReachIn + p.footStopThickIn / 2;
-  if (footStopFront > curl.xFlatEnd - 0.5 + 1e-9)
-    err(['seatXIn', 'riderLegReachIn', 'frontOverhangIn', 'bowCurlRadiusIn', 'bowCurlAngleDeg'],
-      `The foot stop reaches ${footStopFront.toFixed(2)}" ahead of the rear axle; the flat deck ends at ${curl.xFlatEnd.toFixed(2)}" (needs ½" to spare for the front joist). Move the seat back, lengthen the front overhang or use a smaller curl.`);
+  // The foot brace is the rear face of the bow bulkhead (D-57); a shorter rider drops the foot block into one of its slots.
+  if (p.seatXIn + p.riderLegReachIn < curl.xFlatEnd - p.footBlockStepIn * (p.footBlockPositions + 1))
+    warn(['seatXIn', 'riderLegReachIn', 'footBlockStepIn', 'footBlockPositions'], `The rider's heel would be ${(curl.xFlatEnd - p.seatXIn - p.riderLegReachIn).toFixed(1)}" short of the bulkhead; the foot block's slots only reach ${(p.footBlockStepIn * p.footBlockPositions).toFixed(1)}" back.`);
   // The rider's feet go through the body to the foot stop.
   const footSpan = (2 * RIDER_LEG_Y_FRAC + RIDER_FOOT_Y_FRAC) * p.riderStatureIn;
   const footNeed = footSpan + 2 * p.bootAllowanceIn + 0.25;
@@ -1713,16 +2000,18 @@ export function validateParams(input: Params): ParamIssue[] {
     warn(['sideHeightBowIn', 'sideHeightRearIn'], 'The sled profile is meant to be low at the bow and tall at the rear (reference/05).');
   if (p.sideHeightBowIn - 2 * p.railBandIn < 1)
     err(['sideHeightBowIn', 'railBandIn'], 'The side panel at the bow would be shorter than 1". Raise the bow side or thin the chine and gunwale.');
-  if (p.sideHeightBowIn > curl.riseInner - 0.2 + 1e-9)
-    err(['sideHeightBowIn', 'bowCurlRadiusIn', 'bowCurlAngleDeg'], `The sides end against the curl where it has risen to the side height; the curl's inside face only rises ${curl.riseInner.toFixed(1)}" (side at the bow ${p.sideHeightBowIn}"). Lower the bow side, or use a bigger or steeper curl.`);
-  // Bow curl lamination: inside radius vs the cold-bend limit.
-  {
-    const ply = lamPly(curl.thick, p.bowCurlPlyIn);
-    const rIn = curl.radius - curl.thick / 2;
-    const lim = p.hullLamMinRadiusFactor * ply;
-    if (rIn < lim - 1e-9)
-      err(['bowCurlRadiusIn', 'bowCurlPlyIn', 'bowCurlPlies', 'hullLamMinRadiusFactor'],
-        `The bow curl's inside radius ${rIn.toFixed(1)}" is tighter than the cold-bend limit ${lim.toFixed(1)}" (${p.hullLamMinRadiusFactor} x ${ply.toFixed(3)}" ply): use a bigger radius, thinner plies or steam it.`);
+  if (p.bowBulkheadHeightIn < p.sideHeightBowIn + 0.5)
+    warn(['bowBulkheadHeightIn', 'sideHeightBowIn'], 'The bow bulkhead is meant to rise above the side tops at the bow (a curved top, D-57).');
+  if (p.bowBulkheadHeightIn < p.liftSlotClearIn + p.liftSlotHeightIn + p.liftBarMinIn - 1e-9)
+    err(['bowBulkheadHeightIn', 'liftSlotClearIn', 'liftSlotHeightIn'], `The bow bulkhead is too low for the lift hand-hold: it needs ${(p.liftSlotClearIn + p.liftSlotHeightIn + p.liftBarMinIn).toFixed(2)}" at the center (hand clearance + slot + oak above).`);
+  // Plan turn-in (D-57): the chine and gunwale are cold-bent flat in two plies; the smoothstep's tightest bend (6 x turn-in / length^2 curvature) must stay above the cold-bend limit.
+  if (p.bowTurnInIn > 1e-9) {
+    const rMin = (p.bowTurnLenIn * p.bowTurnLenIn) / (6 * p.bowTurnInIn);
+    const lim = p.hullLamMinRadiusFactor * (p.sideThicknessIn / 2);
+    if (rMin < lim - 1e-9)
+      err(['bowTurnInIn', 'bowTurnLenIn', 'hullLamMinRadiusFactor'], `The bow turn-in bends the chine and gunwale to a ${rMin.toFixed(1)}" radius; two ${(p.sideThicknessIn / 2).toFixed(3)}" plies cold-bend to ${lim.toFixed(1)}" at best: lengthen the turn-in or reduce it.`);
+    if (p.bowTurnInIn * 2 > p.bodyWidthIn - 12)
+      err(['bowTurnInIn', 'bodyWidthIn'], 'The bow turn-in would pinch the nose below 12" wide.');
   }
   // Captured-ply grooves (D-35): the oak walls left each side of the groove must stay sturdy.
   {
@@ -1738,17 +2027,31 @@ export function validateParams(input: Params): ParamIssue[] {
   else if (sg.clearAtLock < p.steerClearIn - 1e-9)
     err(['frontTrackIn', 'steerLockDeg', 'bodyWidthIn', 'steerClearIn'], `At full lock (${p.steerLockDeg}°) the front tire corner swings to ${sg.clearAtLock.toFixed(2)}" from the side of the body; it needs ${p.steerClearIn}". Widen the front track to at least ${sg.minTrack.toFixed(1)}", reduce the lock or narrow the body.`);
   if (sg.kingDepth < 1 - 1e-9)
-    err(['deckHeightIn', 'kingThrustThickIn', 'tongueThickIn', 'axleBeamDepthIn'], `The pivot stack (axle beam top ${sg.beamTop.toFixed(2)}" + tongue plate + thrust washer) leaves only ${sg.kingDepth.toFixed(2)}" for the king beam under the deck; raise the deck to at least ${(sg.kingBot + 1 + p.deckPlyIn).toFixed(2)}".`);
+    err(['deckHeightIn', 'kingThrustThickIn', 'axleBeamDepthIn'], `The pivot stack (axle beam top ${sg.beamTop.toFixed(2)}" + thrust disc) leaves only ${sg.kingDepth.toFixed(2)}" for the king beam under the deck; raise the deck to at least ${(sg.kingBot + 1 + p.deckPlyIn).toFixed(2)}".`);
   if (sg.railDepthFront < 1 - 1e-9)
     err(['deckHeightIn', 'railDepthIn'], `The rails would be only ${sg.railDepthFront.toFixed(2)}" deep where the axle beam swings under them; raise the deck.`);
   if (p.wheelbaseIn + 3 > curl.xFlatEnd + 1e-9)
-    err(['wheelbaseIn', 'frontOverhangIn'], 'The front axle runs onto the bow curl: lengthen the front overhang.');
+    err(['wheelbaseIn', 'frontOverhangIn'], 'The front axle runs onto the bow bulkhead: lengthen the front overhang.');
   {
-    const railIn = sg.railYIn;
-    if (sg.stopY1 < 2.5 || sg.stopY1 > railIn - 1)
-      err(['steerLockDeg', 'wheelbaseIn', 'frontOverhangIn', 'axleBeamThicknessIn'], `The steering stops (under the end joist) would meet the axle beam ${sg.stopY1.toFixed(1)}" from the center; they must be between 2.5" and ${(railIn - 1).toFixed(1)}" (the rail inner face less 1"). Move the front axle or change the lock.`);
-    if (p.kingThrustOdIn / 2 + p.tongueBoltDiaIn / 2 + 0.1 > 2 && p.kingThrustOdIn > p.tongueHeadWidthIn - 1)
-      warn(['kingThrustOdIn', 'tongueHeadWidthIn'], 'The thrust washer is nearly as wide as the tongue plate head; the two plate bolts need room outside it.');
+    // The steering chains (D-58): the beam eye must lie between the kingpin zone and the clamp plates (the anchor eye pulls in by itself on a narrow body, layout.ts).
+    if (p.bodyWidthIn - 2 * p.bowTurnInIn < 13)
+      err(['bodyWidthIn', 'bowTurnInIn'], `The bow turn-in pinches the nose to ${(p.bodyWidthIn - 2 * p.bowTurnInIn).toFixed(1)}" at the bulkhead; it needs 13" for the hand-hold, the foot brace and the tongue.`);
+    if (p.steerChainBeamYIn < p.kingThrustOdIn / 2 + 1 || p.steerChainBeamYIn + 1.1 > (p.frontTrackIn - p.hubLengthIn - 0.25) / 2)
+      err(['steerChainBeamYIn', 'frontTrackIn'], 'The steering chain eye in the axle beam must lie between the kingpin disc and the end of the beam (room for its 2" washer).');
+    if (p.tongueHeadWidthIn / 2 < p.tongueBoltOffsetIn + p.tongueBoltDiaIn / 2 + 0.75)
+      err(['tongueHeadWidthIn', 'tongueBoltOffsetIn', 'tongueBoltDiaIn'], 'The tongue head is too narrow for its bolts: 3/4" of oak is needed outside each carriage bolt.');
+    if (p.tongueBoltOffsetIn < p.kingpinDiaIn / 2 + p.tongueBoltDiaIn / 2 + 0.5)
+      err(['tongueBoltOffsetIn', 'kingpinDiaIn', 'tongueBoltDiaIn'], 'The tongue carriage bolts are too close to the kingpin hole in the axle beam.');
+    // The roll pads lie on the beam top between the inner clamp plate and the outer plate.
+    {
+      const yIn = (p.frontTrackIn - p.hubLengthIn - 0.25) / 2 - p.frontStubLenIn; // inner end of the stub / groove
+      const plateIn = yIn + 0.25 + p.clampPlateWidthIn; // inner station's outer edge
+      const plateOut = (p.frontTrackIn - p.hubLengthIn - 0.25) / 2 - 0.25 - p.clampPlateWidthIn; // outer station's inner edge
+      if (p.rollPadRadiusIn - p.rollPadLenIn / 2 < plateIn + 0.1 || p.rollPadRadiusIn + p.rollPadLenIn / 2 > plateOut - 0.1)
+        warn(['rollPadRadiusIn', 'rollPadLenIn', 'frontStubLenIn'], `The roll pads (${(p.rollPadRadiusIn - p.rollPadLenIn / 2).toFixed(1)}" to ${(p.rollPadRadiusIn + p.rollPadLenIn / 2).toFixed(1)}" from the center) must lie between the stub clamp plates on the axle beam (free from ${plateIn.toFixed(1)}" to ${plateOut.toFixed(1)}").`);
+    }
+    if (p.kingThrustOdIn > 4 || p.kingThrustOdIn > p.kingBeamLengthIn + 1)
+      warn(['kingThrustOdIn', 'kingBeamLengthIn'], 'The thrust disc is much wider than the king beam that carries it; lengthen the king beam.');
   }
   // ── Rear axle stack (D-15, D-54) ──
   const beamBottom =
@@ -1791,29 +2094,20 @@ export function validateParams(input: Params): ParamIssue[] {
     warn(['axleStyle', 'axleBeamDepthIn'], 'Stub axles need a deeper beam (≥ 2½") to resist the cantilever moment.');
   if (d.bodyLengthIn > d.truckUsableLengthIn - p.truckClearanceIn)
     err(['wheelbaseIn', 'rearOverhangIn', 'frontOverhangIn'], 'Body is longer than bed + tailgate.');
-  // ── Foot brake (D-55) ──
+  // ── Step brake (D-57) ──
   {
-    const bt = p.brakeShoeAngleDeg * Math.PI / 180;
-    // lowest corner of the lining must clear the ground by the minimum clearance
-    const lowShoe = r - r * Math.sin(bt + p.brakeLinedShoeLengthIn / (2 * r));
-    if (lowShoe < p.minGroundClearanceIn - 1e-9)
-      warn(['brakeLinedShoeLengthIn', 'brakeShoeAngleDeg', 'minGroundClearanceIn'], `The lowest corner of the brake shoe lining is ${lowShoe.toFixed(2)}" off the ground, below the ${p.minGroundClearanceIn}" ground clearance: shorten the shoe or raise it (a smaller angle below the axle line).`);
-    if (p.brakeBarClearIn < p.minGroundClearanceIn - 1e-9)
-      warn(['brakeBarClearIn', 'minGroundClearanceIn'], `The brake pedal arms hang ${p.brakeBarClearIn}" off the ground, below the ${p.minGroundClearanceIn}" ground clearance.`);
-    // the pivot hole must clear the slot for the shoe beam (about half the beam height + a 0.55" web and hole radius above the shoe)
-    if (p.brakePivotAboveShoeIn < p.brakeBeamHeightIn / 2 + 0.6 - 1e-9)
-      err(['brakePivotAboveShoeIn', 'brakeBeamHeightIn'], `The brake arm pivot is only ${p.brakePivotAboveShoeIn}" above the shoe: the pivot hole would run into the ${p.brakeBeamHeightIn}" shoe beam slot (needs at least ${(p.brakeBeamHeightIn / 2 + 0.6).toFixed(2)}").`);
-    // the latch stud must be able to reach the hook on the rear transom without being a long cantilever, and the pedal bar must be behind the transom
-    const barFront = -r * Math.cos(bt) - p.brakePedalReachIn + p.brakePedalDepthIn / 2 + p.brakeGuardThickIn;
-    const studLen = -p.rearOverhangIn - 0.39 - barFront + 0.25;
-    if (studLen < 0.3)
-      err(['rearOverhangIn', 'brakePedalReachIn', 'brakePedalDepthIn'], `The pedal bar is too close to the rear transom: the latch stud would stick out only ${studLen.toFixed(1)}" (it needs at least 0.3") to reach the hook (move the pedal bar back with brakePedalReachIn, or the transom forward).`);
-    else if (studLen > 3.5)
-      warn(['rearOverhangIn', 'brakePedalReachIn', 'brakePedalDepthIn'], `The brake latch stud would stick out about ${studLen.toFixed(1)}" to reach the hook on the rear transom (the brake-clear row wants at most 3.5"): move the pedal bar (brakePedalReachIn) or the transom (rearOverhangIn).`);
-    // the pivot bracket flange lies on the top of the axle beam between the hanger and the rod clamp plates
-    const clampInner = Math.min(Math.max(1, p.rearTrackIn - p.hubLengthIn - 0.25) / 2 - 0.25, p.rearTrackIn / 2 - p.tireWidthIn / 2) - p.clampPlateWidthIn;
-    if (p.bodyWidthIn / 2 + p.brakePlateThickIn + 2 + 0.1 > clampInner)
-      warn(['bodyWidthIn', 'rearTrackIn', 'clampPlateWidthIn', 'hubLengthIn'], `The brake pivot bracket flange (2" wide, on the axle beam top) does not fit between the hull side and the rod clamp plates, which start at ${clampInner.toFixed(2)}": widen the track or narrow the body (the brake-clear row also flags it).`);
+    const railBot = deckBot - p.railDepthIn;
+    if (railBot < p.minGroundClearanceIn - 1e-9)
+      warn(['railDepthIn', 'deckHeightIn', 'minGroundClearanceIn'], `The brake knees sit on the rail bottom, ${railBot.toFixed(2)}" off the ground, below the ${p.minGroundClearanceIn}" ground clearance.`);
+    if (p.brakeChockHeightIn > railBot - 0.5 + 1e-9)
+      warn(['brakeChockHeightIn', 'railDepthIn', 'deckHeightIn'], `The wheel chock (${p.brakeChockHeightIn}" tall) hangs under the knee, whose bottom is ${railBot.toFixed(2)}" off the ground: it needs half an inch of room.`);
+    const padSpanDeg = p.brakePadAngleDeg + (p.brakePadLengthIn / (2 * r)) * (180 / Math.PI);
+    if (padSpanDeg > 60)
+      warn(['brakePadAngleDeg', 'brakePadLengthIn'], `The rear end of the brake pad is ${padSpanDeg.toFixed(0)}° behind the top of the tire: the flap would have to fold steeply down behind the tire.`);
+    if (p.brakePadWidthIn > p.tireWidthIn - 0.3 + 1e-9)
+      info(['brakePadWidthIn', 'tireWidthIn'], `The brake pad is narrower than set: it is held ${0.3}" inside the tread edges (${(p.tireWidthIn - 0.3).toFixed(1)}").`);
+    if (p.brakeFlapWidthIn < p.tireWidthIn - 1e-9)
+      info(['brakeFlapWidthIn', 'tireWidthIn'], 'The brake flap is narrower than the tire.');
   }
   void info; void footZoneX;
   return issues;

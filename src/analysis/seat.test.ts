@@ -25,36 +25,42 @@ describe('seatChecks', () => {
     const c = byId['seat-back'];
     expect(c.statusOperating).not.toBe('fail');
     expect(c.statusGoal).not.toBe('fail');
-    expect(c.details!.map((d) => d.name)).toEqual(['stile bending at the crest', 'crest bearing on the wedge', 'insert pull-out (each stud)', 'ply panel bending']);
+    expect(c.details!.map((d) => d.name)).toEqual(['stile bending at the crest', 'crest bearing on the stop block', 'hinge load (each hinge, screws in oak)', 'ply panel bending']);
     for (const d of c.details!) expect(d.util, d.name).toBeLessThan(1);
   });
-  it('seat-back statics balance: R_A + R_B = w·H and moments about the stud vanish', () => {
+  it('seat-back statics balance: R_A + R_B = w·H and moments about the hinge (the stile foot, B = 0) vanish', () => {
     const k = seatBackLoads(ctx, 200);
     expect(k.Q).toBeCloseTo(200 * 3 * 0.5, 9);
     expect(k.RA + k.RB).toBeCloseTo(k.w * k.sup.H, 9);
     // Moment about B: R_A (A − B) = w H (H/2 − B).
     expect(k.RA * (k.A - k.B)).toBeCloseTo(k.w * k.sup.H * (k.sup.H / 2 - k.B), 9);
-    // The load is carried aft, so the stud (below the crest) is in tension.
+    // The hinge is at the foot, B = 0, and the crest is high up the back (D-57): the stop block takes slightly more than the whole load and the hinge is pulled toward it.
+    expect(k.B).toBe(0);
     expect(k.RB).toBeLessThan(0);
     expect(k.T).toBeCloseTo(-k.RB, 9);
+    expect(k.T / k.Q).toBeLessThan(0.3); // a small share: the hinge screws in oak are not the weak link
     // Hand check at the defaults: w = 300/2/16 = 9.375 lbf/in per stile.
     expect(k.w).toBeCloseTo(9.375, 9);
   });
   it('a heavier torso share and a weak insert fail the row (the check has teeth)', () => {
-    const bad = seatChecks(ctxFor({ seatBackLoadFraction: 1, seatInsertAllowLbf: 100 })).find((c) => c.id === 'seat-back')!;
+    const bad = seatChecks(ctxFor({ seatBackLoadFraction: 1, seatHingeLoadLbf: 10 })).find((c) => c.id === 'seat-back')!;
     expect(bad.status).toBe('fail');
     expect(bad.governingLoad).toBeDefined();
   });
-  it('pull-out force falls as the stud moves farther below the crest', () => {
-    const hi = seatBackLoads(ctxFor({ seatBackKnobHeightIn: 2.6 }), 200).T;
-    const lo = seatBackLoads(ctxFor({ seatBackKnobHeightIn: 1.4 }), 200).T;
-    expect(lo).toBeLessThan(hi);
+  it('hinge load grows with a lower crest (a stop block lower on the back leaves the foot hinge more to hold)', () => {
+    const hi = seatBackLoads(ctxFor({ seatBackLatchHeightIn: 4.5 }), 200).T;
+    const lo = seatBackLoads(ctxFor({ seatBackLatchHeightIn: 1.5 }), 200).T;
+    expect(Number.isFinite(hi) && Number.isFinite(lo)).toBe(true);
+    expect(seatBackLoads(ctx, 200).A).toBeGreaterThan(seatBackLoads(ctx, 200).sup.c2L);
   });
-  it('grip row: no pinch point and a post that holds a hard pull', () => {
+  it('grab-board row: the bar, the bolt couple and the washers hold a hard pull; no pinch point; a short, thin bar fails (teeth)', () => {
     const c = byId['seat-grip'];
     expect(c.status).not.toBe('fail');
-    const bad = seatChecks(ctxFor({ seatGripGapIn: 1.25 })).find((q) => q.id === 'seat-grip')!;
-    expect(bad.status).not.toBe('fail');
+    expect(c.details!.map((d) => d.name)).toEqual(['grab bar bending over the hole', 'bolt tension (each, the couple of the two rows)', 'washer bearing on the oak (⊥ grain)', 'finger gap (no pinch)', 'clear length (hand)']);
+    const bad = seatChecks(ctxFor({ grabBoardBarIn: 0.75, grabHoleLengthIn: 6, grabBoardThickIn: 0.5, riderMassLb: 250, riderGoalMassLb: 250 })).find((q) => q.id === 'seat-grip')!;
+    expect(bad.util ?? 0).toBeGreaterThan(c.util ?? 0);
+    const pinch = seatChecks(ctxFor({ grabHoleHeightIn: 1.25 })).find((q) => q.id === 'seat-grip')!;
+    expect(pinch.status).not.toBe('fail');
   });
   it('storage packing reports the kit against the real interior', () => {
     const c = byId['storage-pack'];

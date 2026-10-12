@@ -155,11 +155,13 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
   const topAt = (x: number) => sideTopAt(L, x);
   const webTop = (x: number) => webTopAt(L, x);
   const hw = L.hwC;
+  const hwAt = (x: number) => L.hwC - L.turnIn(x); // the inner half width follows the bow turn-in (D-57)
 
   // ── Sides: panel grooves, deck rabbets, end joints to the rear transom and the bow curl ──
   for (const { s, tag } of SIDES) {
     const id = `side-${tag}`;
     const yc = s * (hw + L.side / 2);
+    const deckTopZ = Math.max(cBot, L.deckTop + ds);
     const rabbetSize = `${frac(dd)}" × ${rabbetH(L.deckTop, bot).toFixed(3)}" rabbet (inside bottom edge; deck + ${frac(ds)}" clearance, thickened epoxy fills it)`;
     add({ a: `${id}-chine`, b: `${id}-web`, typeA: 'dado', size: groove, pts: [[xm, yc, z0 - g / 2]], noteA: 'Groove in the top of the chine (a straight cut: router table, fence).', noteB: 'Lower edge of the web, captured.' });
     add({ a: `${id}-gunwale`, b: `${id}-web`, typeA: 'dado', size: groove, pts: [[xm, yc, webTop(xm) + g / 2]], noteA: 'Groove in the underside of the gunwale, plowed along the sloped edge before the board is sawn to the sled line.', noteB: 'Upper edge of the web, captured.' });
@@ -167,7 +169,6 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     // Web end into a stopped dado in the transom.
     add({ a: 'transom-rear', b: `${id}-web`, typeA: 'dado', size: `${(pl + p.grooveSlopIn).toFixed(3)}" × ${frac(dd)}" stopped dado, ${frac(p.ventHoleIn)}" vent hole through the transom at its closed end`, pts: [[rearTx - dd / 2, yc, (z0 + webTop(rearTx)) / 2]], noteA: 'Vented: the transom slides on last, so air and epoxy must escape (hydraulic lock, M4).', noteB: 'End of the web, captured (rear); it enters the dado with the transom\'s slide in X.' });
     // Chine and gunwale ends into the transom face, clear of the deck dado and the web dado.
-    const deckTopZ = Math.max(cBot, L.deckTop + ds);
     const chineBand = z0 - g - deckTopZ - 0.2;
     if (chineBand >= MIN_BAND_IN) {
       const ej = endJoint(p, L.side, L.transom, chineBand);
@@ -178,25 +179,35 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
       const ej = endJoint(p, L.side, L.transom, gunBand);
       add({ a: `${id}-gunwale`, b: 'transom-rear', typeA: ej.type, size: ej.size, pts: [[rearTx, yc, webTop(rearTx) + g + 0.1 + gunBand / 2]], noteA: 'End of the gunwale into the transom face; epoxy fillet inside.' });
     } else add({ a: `${id}-gunwale`, b: 'transom-rear', typeA: 'glue', size: 'epoxy + fillet', pts: [[rearTx, yc, topAt(rearTx) - L.railBand / 2]] });
-    // The forward ends butt the bow curl, whose edge is bonded to the inside faces of the chine, web and gunwale.
-    for (const m of ['chine', 'web', 'gunwale'] as const) {
-      const zc = m === 'chine' ? cBot + L.chineH / 2 : m === 'web' ? (z0 + webTop(L.xSideEnd)) / 2 : topAt(L.xSideEnd) - L.railBand / 2;
-      add({ a: `${id}-${m}`, b: 'bow-curl', typeA: 'glue', size: 'thickened epoxy, the curl\'s edge against the inside face', pts: [[L.xSideEnd, s * hw, zc]], noteA: 'The bow curl\'s side edge is bonded along the member\'s inside face where the two meet (the curl rises across the end of the side).' });
+    // The forward ends meet the rear face of the bow bulkhead (D-57): the chine and gunwale on Dominos (like the rear transom), the web in a stopped dado.
+    {
+      const xe = L.xSideEnd, ye = s * (hwAt(xe) + L.side / 2);
+      add({ a: `${id}-web`, b: 'bow-bulkhead', typeA: 'dado', size: `${(pl + p.grooveSlopIn).toFixed(3)}" × ${frac(dd)}" stopped dado in the bulkhead's rear face`, pts: [[xe + dd / 2, ye, (z0 + webTop(xe)) / 2]], noteA: 'End of the web, captured (front); the bulkhead goes on with the rear transom, last.', noteB: 'Stopped dado for the web end.' });
+      const dBand = z0 - g - deckTopZ - 0.2;
+      if (dBand >= MIN_BAND_IN) {
+        const ej = endJoint(p, L.side, L.bulkhead.thick, dBand);
+        add({ a: `${id}-chine`, b: 'bow-bulkhead', typeA: ej.type, size: ej.size, pts: [[xe, ye, deckTopZ + 0.1 + dBand / 2]], noteA: 'End of the chine into the bulkhead\'s rear face; epoxy fillet inside.' });
+      } else add({ a: `${id}-chine`, b: 'bow-bulkhead', typeA: 'glue', size: 'epoxy + fillet', pts: [[xe, ye, cBot + L.chineH / 2]] });
+      const gBand = topAt(xe) - 0.1 - (webTop(xe) + g + 0.1);
+      if (gBand >= MIN_BAND_IN) {
+        const ej = endJoint(p, L.side, L.bulkhead.thick, gBand);
+        add({ a: `${id}-gunwale`, b: 'bow-bulkhead', typeA: ej.type, size: ej.size, pts: [[xe, ye, webTop(xe) + g + 0.1 + gBand / 2]], noteA: 'End of the gunwale into the bulkhead\'s rear face; epoxy fillet inside.' });
+      } else add({ a: `${id}-gunwale`, b: 'bow-bulkhead', typeA: 'glue', size: 'epoxy + fillet', pts: [[xe, ye, topAt(xe) - L.railBand / 2]] });
     }
   }
 
-  // ── Deck: rear transom dado, scarfed to the bow curl, glued to the frame ──
+  // ── Deck: rear transom dado, bow bulkhead dado, glued to the frame ──
   add({ a: 'transom-rear', b: deck, typeA: 'dado', size: `${rabbetH(L.deckTop, bot).toFixed(3)}" × ${frac(dd)}" dado across the front face (deck + ${frac(ds)}" clearance), ${frac(p.ventHoleIn)}" vent holes through the transom at both closed ends`, pts: [[rearTx - dd / 2, 0, L.deckBot + L.ply / 2]], noteB: 'Rear edge of the deck, captured.' });
-  add({ a: deck, b: 'bow-curl', typeA: 'scarf', size: `8:1 scarf, ${(8 * L.ply).toFixed(1)}" long, epoxy`, pts: [[L.xFlatEnd, 0, L.deckBot + L.ply / 2]], noteA: 'Deck to the bow curl: the scarf lies in the flat part, over the last joist.' });
+  add({ a: 'bow-bulkhead', b: deck, typeA: 'dado', size: `${rabbetH(L.deckTop, bot).toFixed(3)}" × ${frac(dd)}" dado across the rear face (deck + ${frac(ds)}" clearance)`, pts: [[L.xFlatEnd + dd / 2, 0, L.deckBot + L.ply / 2]], noteB: 'Front edge of the deck, captured; the foot load pulls the bulkhead off it, so the dado glue line is part of the foot-stop row.' });
   for (const { s, tag } of SIDES) {
-    add({ a: `rail-${tag}`, b: deck, typeA: 'glue', size: 'thickened epoxy, full face (the rail top is flush with the deck underside)', pts: [[(rearTx + L.railEnd) / 2, s * (hw + L.side - railT / 2), L.railTop]], noteA: 'Deck bonded to the rail top (and the joist tops); weights or vacuum bag.' });
+    add({ a: `rail-${tag}`, b: deck, typeA: 'glue', size: 'thickened epoxy, full face (the rail top is flush with the deck underside)', pts: [[(rearTx + L.railEnd) / 2, s * (hwAt((rearTx + L.railEnd) / 2) + L.side - railT / 2), L.railTop]], noteA: 'Deck bonded to the rail top (and the joist tops); weights or vacuum bag.' });
     // Side-to-frame tie (build review M6, D-43): the chine bears on the rail, epoxy bed + VERTICAL Dominos every chineTieSpacingIn (the hull is built inverted, MUST-2).
     const x0 = rearTx, x1 = L.railEnd;
     if (x1 - x0 >= (2 * p.chineTieSpacingIn) / 3) {
       const n = Math.max(2, Math.floor((x1 - x0) / p.chineTieSpacingIn));
       const flat = L.side - dd;
       const dom = DOMINOS.filter((d) => d.tool === 'DF 500' && d.tMm / MM + 2 * TIE_WALL_MIN_IN <= flat).sort((a, b) => b.tMm * b.wMm - a.tMm * a.wMm)[0];
-      const pts = Array.from({ length: n }, (_, i) => [x0 + ((i + 0.5) * (x1 - x0)) / n, s * (hw + dd + flat / 2), cBot] as Vec3);
+      const pts = Array.from({ length: n }, (_, i) => { const x = x0 + ((i + 0.5) * (x1 - x0)) / n; return [x, s * (hwAt(x) + dd + flat / 2), cBot] as Vec3; });
       add({
         a: `side-${tag}-chine`, b: `rail-${tag}`, typeA: dom ? 'domino' : 'glue',
         size: dom ? `${dom.name} (${dom.tool}) every ${p.chineTieSpacingIn}" + epoxy bed on the ${frac(flat)}" bearing face` : 'epoxy bed on the bearing face',
@@ -219,6 +230,15 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
       const ej = endJoint(p, railT, L.transom, bandZ - 0.2);
       add({ a: `rail-${tag}`, b: 'transom-rear', typeA: ej.type, size: ej.size, pts: [[rearTx, s * (hw + L.side - railT / 2), (L.deckTop - jD + L.deckBot) / 2]], noteA: 'Rail end into the transom face (the transom hangs jD below the deck).' });
     } else add({ a: `rail-${tag}`, b: 'transom-rear', typeA: 'glue', size: 'epoxy + fillet', pts: [[rearTx, s * (hw + L.side / 2), L.deckBot - 0.5]] });
+    // The rail's front end into the bow bulkhead's rear face (D-57): the foot load pulls the bulkhead forward off these ends, so each rail takes a Domino (or a loose tenon) and a glue fillet.
+    {
+      const bandB = L.deckBot - (L.bulkhead.bot) - 0.2;
+      const xe = L.railEnd, ye = s * (hwAt(xe) + L.side - railT / 2);
+      if (bandB >= MIN_BAND_IN) {
+        const ej = endJoint(p, railT, L.bulkhead.thick, bandB);
+        add({ a: `rail-${tag}`, b: 'bow-bulkhead', typeA: ej.type, size: ej.size, pts: [[xe, ye, L.railTop - 0.1 - bandB / 2]], noteA: 'Rail end into the bulkhead\'s rear face (the bulkhead hangs below the deck level to the rail bottom).' });
+      } else add({ a: `rail-${tag}`, b: 'bow-bulkhead', typeA: 'glue', size: 'epoxy + fillet', pts: [[xe, ye, L.railTop - 0.5]] });
+    }
   }
   const spanEnds = (id: string) => {
     const j = byId.get(id);
@@ -239,20 +259,18 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     }
     add({ a: e.j.id, b: 'deck', typeA: 'glue', size: 'thickened epoxy, full length', pts: [[e.x, 0, e.zc + jD / 2]], noteA: 'Deck bonded to the crossmember top.' });
   });
-  // ── Front pivot (D-56): the king beam holds the kingpin and the thrust washer; the stop blocks hang under the end joist (they end at the contact point of the swinging beam, inboard of the rails) ──
+  // ── Front pivot (D-56): the king beam holds the kingpin and the thrust washer; the two steering check chains anchor to it (D-58) ──
   {
     const kb = byId.get('king-beam');
     if (kb) {
-      add({ a: 'king-beam', b: 'king-thrust', typeA: 'screw', size: 'two #6 screws (or contact cement) holding the UHMW washer to the king beam', pts: [[L.king.x, 0, L.king.bot]], noteA: 'Keeps the washer with the king beam; the tongue plate slides under it.' });
+      add({ a: 'king-beam', b: 'king-thrust', typeA: 'screw', size: 'three #8 316 flat-head screws (counterbored from the disc side) holding the UHMW disc to the king beam', pts: [[L.king.x, 0, L.king.bot]], noteA: 'Keeps the disc with the king beam; the axle beam turns under it (D-58).' });
       add({ a: 'king-beam', b: 'kingpin', typeA: 'hole', typeB: 'pin', size: `${frac(p.kingpinDiaIn)}" bore (snug bushing fit) through the king beam, nylock nut and washer captured in a slot cut from the front face`, sizeB: `${frac(p.kingpinDiaIn)}" bolt turns in the bore; the nut only stops the axle dropping away (rebound)`, pts: [[L.king.x, 0, (L.king.bot + L.king.top) / 2]], noteA: 'Bored square to the face on the drill press; the nut slot is cut from the front before the deck goes on.' });
     }
-    const endJ = joistId(L, L.joistX.length - 1);
     for (const { s, tag } of SIDES) {
-      const sb = `steer-stop-${tag}`;
-      const st = L.stops;
-      const yc = s * (st.y1 + st.y2) / 2;
-      add({ a: sb, b: endJ, typeA: 'glue', size: 'epoxy on the joist underside, full face', pts: [[L.joistX[L.joistX.length - 1], yc, st.top]], noteA: 'Stop block bonded to the end joist.' });
-      add({ a: sb, b: endJ, typeA: 'bolt', size: `${frac(p.steerStopBoltDiaIn)}" 316 bolts down through the joist and the block, nylock nuts and fender washers at the bottom of the block (counterbored)`, pts: [-1, 1].map((k): Vec3 => [L.joistX[L.joistX.length - 1], yc + k * Math.max(0.3, (st.y2 - st.y1) / 4), (st.top + st.bot) / 2]), noteA: 'Carry the stop load in shear across the glue line.' });
+      const [ax, ay, az] = L.chain.anchor;
+      add({ a: `steer-anchor-${tag}`, b: joistId(L, L.joistX.indexOf(L.king.x) - 1), typeA: 'bolt', size: `${frac(p.steerEyeBoltDiaIn)}" forged shoulder eye bolt fore-aft through the chain joist, shoulder and 2" washer on its front face, nylock nut and 2" washer on the rear face`, pts: [[L.chain.joistX, s * Math.abs(ay), az]], noteA: 'Anchor of the steering check chain (D-58); the chain pulls the eye forward out of the joist.' });
+      void ax;
+      add({ a: `steer-eye-${tag}`, b: 'beam-F', typeA: 'bolt', size: `${frac(p.steerEyeBoltDiaIn)}" forged shoulder eye bolt fore-aft through the axle beam, nylock nut and 2" fender washer on its front face`, pts: [[L.king.x - L.beamF.thick / 2, s * L.chain.beamV, L.chain.beamZ]], noteA: 'Beam end of the steering check chain (D-58); the eye stands out of the trailing face.' });
     }
   }
   void deck;

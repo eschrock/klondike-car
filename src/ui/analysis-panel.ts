@@ -133,7 +133,7 @@ function materials(p: Params, isOpen: boolean, onToggle: (o: boolean) => void): 
       h('h4', {}, 'Loads and factors (D-1, D-2, D-14)'),
       rows([
         ['Operating / goal rider', `${p.riderMassLb} / ${p.riderGoalMassLb} lb`, `+ ${p.cargoMassLb} lb cargo`],
-        ['Cargo mode (D-53)', `${p.cargoPayloadLb} lb on the bed, seat stowed, no rider`, `CG ${p.cargoCgHeightIn}" above the deck, ${p.cargoCgOffsetYIn}" off center; concentrated ${p.cargoConcentratedLb} lb on ${p.cargoPatchAlongIn}" × ${p.cargoPatchAcrossIn}"; worse of two placements`],
+        ['Cargo mode (D-53)', `${p.cargoPayloadLb} lb on the bed, seat back flat, no rider`, `CG ${p.cargoCgHeightIn}" above the deck, ${p.cargoCgOffsetYIn}" off center; concentrated ${p.cargoConcentratedLb} lb on ${p.cargoPatchAlongIn}" × ${p.cargoPatchAcrossIn}"; worse of two placements`],
         ['Dynamic factor', `× ${p.dynamicFactor}`, 'payload and axle reactions'],
         ['Lightest rider (pitch-back)', `${p.riderMinMassLb} lb`, 'BRIEF §4.1; counts toward the operating status'],
         ['Design pull', `${p.pullForceLbf} lbf`, `at ${p.pullerHandHeightIn}" hand height, ${p.bridleRopeRunIn}" rope run; lift pull ≥ ${p.pitchPullMarginMin}× peak`],

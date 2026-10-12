@@ -1,16 +1,18 @@
 /**
- * Braking and handle checks for the FOOT brake (Phase 3c-3, D-55; handle D-9/D-39): each number below is re-derived by hand from the params, the derived pedal geometry and
- * the model's load cases, independently of the check code, then compared with the check's details. The numbers follow the layout (they are computed from `brakeGeometry`
- * and the model, not typed from a particular deck height).
+ * Braking and handle checks for the STEP BRAKE (Phase 3c-4b, D-57 item 8; handle D-9/D-39): each number below is re-derived by hand from the params, the derived flap
+ * geometry and the model's load cases, independently of the check code, then compared with the check's details. The numbers follow the layout (they are computed from
+ * `brakeGeometry` and the model, not typed from a particular deck height).
  */
 import { describe, expect, it } from 'vitest';
-import { defaultParams, resolveParams, validateParams, type Params } from '../params';
+import { defaultParams, type Params } from '../params';
 import { buildModel } from '../model';
 import { makeCtx } from '../model/build-utils';
-import { atPose, brakeGeometry, rot2, type V2 } from '../model/brake';
+import { brakeGeometry } from '../model/brake';
 import { handleGeometry } from '../model/handle';
 import { makeContext } from './context';
-import { brakeSweep } from './brake';
+import { brakeSweep, chockHold, loadsAt, loadsFromFoot, slowing } from './brake';
+import { rearNormalNoseDown } from './stability';
+import { contactsAt } from './geometry';
 import { runChecks, type AnalysisCheck } from './index';
 
 const defaults = defaultParams();
@@ -20,87 +22,84 @@ const byId = (c: AnalysisCheck[], id: string) => c.find((x) => x.id === id)!;
 const det = (c: AnalysisCheck[], id: string, name: string) => byId(c, id).details!.find((d) => d.name.includes(name))!;
 const mass = (p: Params, view: Parameters<typeof buildModel>[1]) => buildModel(p, view).reduce((s, x) => s + x.massLb, 0);
 const run = (q: Partial<Params>) => runChecks({ ...defaults, ...q } as Params, { includeTruck: false });
+const ctxOf = (p: Params) => makeContext(p, buildModel(p, { rider: 'goal', cargo: true }), buildModel(p, { rider: 'none', cargo: false, seat: 'stowed' }));
 
 const g = (() => { const c = makeCtx(defaults); return brakeGeometry(c.p, c.L); })();
-const L0 = makeCtx(defaults).L;
 const W = mass(defaults, { rider: 'goal', cargo: true });
-const muH = Math.min(defaults.brakePadMu, defaults.brakePadMuFouled); // members are sized at the LOWER lining μ (0.35)
-const beta = g.beta;
-const kF = (mu: number) => Math.cos(beta) + mu * Math.sin(beta);
-const circle = (d: number) => (Math.PI / 4) * d * d;
-const alAllow = defaults.brakeAluminumYieldPsi / defaults.steelSafetyFactor;
+const W150 = mass(defaults, { rider: 'operating', cargo: true });
 const sin15 = Math.sin(defaults.designSlopeDeg * RAD);
+const muF = defaults.brakePadMuFouled; // the lower pad μ (0.25): the pass/fail case
 
-/** Foot force by hand for a cart of weight w at lining friction mu: F = N d (cos β + μ sin β) / (a_app η) + F_spring, N = w sin15° / μ. */
-const footByHand = (w: number, mu: number) => ((w * sin15 / mu) * g.d * kF(mu)) / g.aApp / defaults.brakeEfficiency + defaults.brakeSpringForceLbf;
+/** Raw moment about the hinge pin of a force (fx, fz) at point q: M = rz fx − rx fz (positive raises a point behind the pin). */
+const mom = (q: [number, number], f: [number, number]) => (q[1] - g.H[1]) * f[0] - (q[0] - g.H[0]) * f[1];
+/** Foot force per foot by hand for a cart of weight w at pad friction mu, both flaps pressed, cart rolling in direction sigma. */
+const nHat: [number, number] = [-Math.sin(g.alpha), Math.cos(g.alpha)], tHat: [number, number] = [Math.cos(g.alpha), Math.sin(g.alpha)];
+const footByHand = (w: number, mu: number, sigma: 1 | -1) => {
+  const nFlap = (w * sin15) / (2 * mu);
+  const lever = -mom(g.F, [0, -1]); // moment arm of a unit downward foot force: the horizontal pin-to-foot distance
+  const mn = mom(g.C, nHat) , mt = mom(g.C, tHat);
+  return (nFlap * (mn + sigma * mu * mt)) / (lever * defaults.brakeEfficiency) + g.bungee.mApp / lever;
+};
 
-/** The pivot reaction on one arm for a total shoe normal force n, direction sigma, by statics, with the moment balance asserted. */
-function reaction(n: number, mu: number, sigma: 1 | -1) {
-  const Ns = n / 2;
-  const Fs: V2 = [Ns * (-Math.cos(beta) - sigma * mu * Math.sin(beta)), Ns * (-Math.sin(beta) + sigma * mu * Math.cos(beta))];
-  const A = atPose(g, 1, g.spring.a);
-  const u: V2 = [g.spring.e[0] - A[0], g.spring.e[1] - A[1]];
-  const un = Math.hypot(u[0], u[1]);
-  const Fsp: V2 = [(g.spring.fApp * u[0]) / un, (g.spring.fApp * u[1]) / un];
-  const mom = (pt: V2, F: V2) => (pt[0] - g.P[0]) * F[1] - (pt[1] - g.P[1]) * F[0];
-  // foot force per arm from the moment balance about the pivot: mom(shoe) + mom(spring) + mom(bar, foot) = 0
-  const foot = -(mom(g.C, Fs) + mom(A, Fsp)) / (g.barApp[0] - g.P[0]) ; // vertical force at the bar, positive up for the arm: solve and flip sign below
-  const footDown = Math.abs(foot);
-  const Rx = -(Fs[0] + Fsp[0]), Rz = -(Fs[1] + Fsp[1] - footDown);
-  const residual = mom(g.C, Fs) + mom(A, Fsp) + mom(g.barApp, [0, -footDown]);
-  return { Fs, Fsp, footDown, R: [Rx, Rz] as V2, Rmag: Math.hypot(Rx, Rz), residual };
-}
-
-describe('brake ratio and foot force', () => {
-  it('brake-ratio is the derived critical-direction ratio, above the 5:1 target with room, and passes; the pedal travel is checked', () => {
+describe('brake foot-lever ratio and foot force', () => {
+  it('brake-ratio is the derived critical-direction ratio, above the ~2:1 target and passes; the stroke, the foot height and the reach to the transom are checked', () => {
     const c = byId(cs, 'brake-ratio');
     expect(c.value).toBeCloseTo(g.ratioCrit, 9);
     expect(c.value).toBeGreaterThan(defaults.brakeLeverRatio);
+    expect(c.value).toBeGreaterThan(1.9);
+    expect(c.value).toBeLessThan(2.6);
     expect(c.limit).toBe(defaults.brakeLeverRatio);
     expect(c.status).toBe('pass');
     expect(det(cs, 'brake-ratio', 'rolling forward').value).toBeCloseTo(g.ratioFwd, 9);
     expect(det(cs, 'brake-ratio', 'rolling backward').value).toBeCloseTo(g.ratioRev, 9);
-    expect(det(cs, 'brake-ratio', 'pedal travel').value).toBeCloseTo(g.barDrop, 9);
-    expect(det(cs, 'brake-ratio', 'pedal travel').limit).toBe(defaults.brakePedalTravelMaxIn);
-    expect(c.how).toMatch(/Derived from the pedal geometry/);
+    expect(det(cs, 'brake-ratio', 'foot stroke').value).toBeCloseTo(g.footDrop, 9);
+    expect(det(cs, 'brake-ratio', 'foot stroke').limit).toBe(defaults.brakeFootStrokeMaxIn);
+    expect(det(cs, 'brake-ratio', 'foot area height').limit).toBe(defaults.brakeFootHeightMaxIn);
+    expect(det(cs, 'brake-ratio', 'transom face').value).toBeGreaterThan(0);
+    expect(c.how).toMatch(/Derived from the flap geometry/);
   });
-  it('the ratio is geometry, not an input: a lower reach lowers it until brake-ratio fails (target not met), and a short travel limit is enforced', () => {
-    expect(byId(run({ brakePedalReachIn: 4.5 }), 'brake-ratio').status).not.toBe('pass');
-    expect(byId(run({ brakePedalReachIn: 10 }), 'brake-ratio').value).toBeGreaterThan(byId(cs, 'brake-ratio').value);
-    expect(byId(run({ brakePedalTravelMaxIn: 1.5 }), 'brake-ratio').status).toBe('fail');
+  it('the ratio is geometry, not an input: moving the pad back or the hinge ahead lowers it until brake-ratio fails (target not met)', () => {
+    expect(byId(run({ brakePadAngleDeg: 35 }), 'brake-ratio').value).toBeLessThan(byId(cs, 'brake-ratio').value);
+    expect(byId(run({ brakeHingeAheadIn: 4 }), 'brake-ratio').value).toBeLessThan(byId(cs, 'brake-ratio').value);
+    expect(byId(run({ brakeLeverRatio: 3 }), 'brake-ratio').status).not.toBe('pass');
+    expect(byId(run({ brakeFootStrokeMaxIn: 0.5 }), 'brake-ratio').status).toBe('fail');
   });
-  it('hand calc: F = N d (cos β + μ sin β) / (a_app η) + F_spring at BOTH the wet lining μ 0.45 and the mud-fouled μ 0.35 (pass/fail), for the rider and cargo cases', () => {
+  it('hand calc: F = N (m_N ± μ m_T) / (a_F η) + M_B / a_F at BOTH the wet pad μ and the mud-fouled μ (worse rolling direction), for the rider and cargo cases', () => {
     const f = byId(cs, 'brake-force');
-    for (const [kind, w] of [['operating', mass(defaults, { rider: 'operating', cargo: true })], ['goal', W]] as const) {
-      const fouled = footByHand(w, defaults.brakePadMuFouled);
-      const wet = footByHand(w, defaults.brakePadMu);
+    for (const [kind, w] of [['operating', W150], ['goal', W]] as const) {
+      const fouled = Math.max(footByHand(w, defaults.brakePadMuFouled, 1), footByHand(w, defaults.brakePadMuFouled, -1));
+      const wet = Math.max(footByHand(w, defaults.brakePadMu, 1), footByHand(w, defaults.brakePadMu, -1));
       expect(f.cases![kind]!.value, kind).toBeCloseTo(Math.max(fouled, wet), 6);
       expect(fouled, kind).toBeGreaterThan(wet);
     }
     const wCargo = mass(defaults, { seat: 'stowed', cargo: true });
-    expect(f.cases!.cargo).toBeDefined();
-    // the cargo payload is 250 lb on top of the stowed cart: within 3% of the hand figure (the load model may place the payload slightly differently)
-    expect(f.cases!.cargo!.value / footByHand(wCargo, defaults.brakePadMuFouled)).toBeGreaterThan(0.97);
-    expect(f.cases!.cargo!.value / footByHand(wCargo, defaults.brakePadMuFouled)).toBeLessThan(1.03);
+    const hand = Math.max(footByHand(wCargo, muF, 1), footByHand(wCargo, muF, -1));
+    expect(f.cases!.cargo!.value / hand).toBeGreaterThan(0.95);
+    expect(f.cases!.cargo!.value / hand).toBeLessThan(1.05);
   });
-  it('THE REQUIREMENT (D-55): the loaded cart (150 lb rider, 200 lb goal rider, 250 lb cargo case) holds on 15° with at most 60 lbf of FOOT force, at the mud-fouled lining too', () => {
+  it('INFO (Eric, D-58): the 15 degree HOLD force (85 / 98 / 104 lbf per foot against a 90 lbf yardstick) is reported but does not light anything: the step brake is a "just in case" slowing brake and brake-slow is the pass/fail row', () => {
     const f = byId(cs, 'brake-force');
-    expect(f.cases!.operating!.limit).toBe(60);
-    for (const k of ['operating', 'goal', 'cargo'] as const) {
-      expect(f.cases![k]!.value, k).toBeLessThan(60);
-      expect(f.cases![k]!.status, k).toBe('pass');
-    }
-    expect(f.cases!.cargo!.value / 60).toBeLessThan(0.9); // room: the heaviest case is about 50 lbf
-    expect(f.status).toBe('pass');
+    expect(f.cases!.operating!.limit).toBe(90);
     expect(f.group).toBe('Braking');
+    expect(f.cases!.operating!.value).toBeGreaterThan(75);
+    expect(f.cases!.operating!.value).toBeLessThan(90);
+    expect(f.cases!.goal!.value).toBeGreaterThan(90); // the numbers are unchanged and still shown ...
+    expect(f.cases!.cargo!.value).toBeGreaterThan(f.cases!.operating!.value);
+    for (const k of ['operating', 'goal', 'cargo'] as const) expect(f.cases![k]!.status, k).toBe('info'); // ... but no case is pass / marginal / fail
+    expect(f.status).toBe('info');
+    expect(f.label).toMatch(/\(info\)/);
+    expect(f.how).toMatch(/one foot on each/);
     expect(f.how).toMatch(/Only the rear wheels brake/);
-    expect(f.how).toMatch(/a foot, not a hand/);
   });
-  it('the foot-force limit and the lining μ are enforced: a 40 lbf limit fails the cargo case; a mud-fouled μ of 0.2 fails', () => {
-    expect(byId(run({ brakeFootForceLimitLbf: 40 }), 'brake-force').statusCargo).toBe('fail');
-    expect(byId(run({ brakePadMuFouled: 0.2 }), 'brake-force').status).toBe('fail');
+  it('the foot-force limit and the pad mu still move the numbers (info row): a 30 lbf yardstick or a 120 lbf one never fails; a fouled mu of 0.15 raises the force', () => {
+    for (const lim of [30, 120]) {
+      const r = byId(run({ brakeFootForceLimitLbf: lim }), 'brake-force');
+      expect(r.status).toBe('info');
+      for (const k of ['operating', 'goal', 'cargo'] as const) expect(r.cases![k]!.status, `${lim} ${k}`).toBe('info');
+    }
+    expect(byId(run({ brakePadMuFouled: 0.15 }), 'brake-force').cases!.operating!.value).toBeGreaterThan(byId(cs, 'brake-force').cases!.operating!.value);
   });
-  it('brake-traction (info): rear-only locked, parked nose-down: μ_ground N_r / (W sinθ)', () => {
+  it('brake-traction (info): rear-only locked, parked nose-down: μ_ground N_r / (W sinθ); the front wheels roll free', () => {
     const c = byId(cs, 'brake-traction');
     expect(c.status).toBe('info');
     expect(c.cases!.goal!.value).toBeGreaterThan(0.5);
@@ -108,212 +107,244 @@ describe('brake ratio and foot force', () => {
   });
 });
 
+describe('brake-slow: the flaps SLOW the loaded cart on 15° and STOP it on gentler grades (D-57)', () => {
+  const ctx = ctxOf(defaults);
+  const row = byId(cs, 'brake-slow');
+  it('hand calc of the steepest grade held at the limit foot force (one foot per flap, fouled pad), re-derived from the moments, and the rear tires\' traction limit alongside (info)', () => {
+    const ev = (w: number, cg: [number, number, number], feet = 2) => {
+      const lever = g.H[0] - g.F[0];
+      const nFlap = Math.min(...[1, -1].map((s) => ((defaults.brakeFootForceLimitLbf * lever - g.bungee.mApp) * defaults.brakeEfficiency) / (mom(g.C, nHat) + s * muF * mom(g.C, tHat))));
+      const pad = feet * muF * nFlap;
+      const ct = contactsAt(ctx.contact, 0);
+      const xfc = (ct.FL[0] + ct.FR[0]) / 2;
+      const nr = (a: number) => Math.max(0, rearNormalNoseDown(w, cg[0], cg[2], a, xfc));
+      let lo = 0, hi = Math.PI / 4;
+      for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (defaults.tireGroundMu * nr(m) >= w * Math.sin(m)) lo = m; else hi = m; }
+      return { grade: Math.asin(Math.min(1, pad / w)) / RAD, trac: (lo + hi) / 2 / RAD };
+    };
+    const op = ctx.loads.operating, goal = ctx.loads.goal;
+    expect(row.cases!.operating!.value).toBeCloseTo(ev(op.massLb, op.cg).grade, 4);
+    expect(row.cases!.goal!.value).toBeCloseTo(ev(goal.massLb, goal.cg).grade, 4);
+    expect(det(cs, 'brake-slow', 'INFO: steepest grade the rear tires').value).toBeCloseTo(ev(op.massLb, op.cg).trac, 4);
+    const s = slowing(ctx, op, g, true);
+    expect(s.grade).toBeCloseTo(row.cases!.operating!.value, 6);
+    expect(slowing(ctx, op, g, false).grade).toBeLessThan(s.grade); // one foot holds less
+  });
+  it('STOPS on gentler grades: the 150 lb and 200 lb riders are held past the 10° stop grade; it SLOWS on 15°: the flaps take more than half of the downhill pull', () => {
+    expect(row.limit).toBe(defaults.brakeStopSlopeDeg);
+    for (const k of ['operating', 'goal'] as const) expect(row.cases![k]!.status, k).toBe('pass');
+    expect(row.cases!.operating!.value).toBeGreaterThan(defaults.brakeStopSlopeDeg + 2);
+    expect(det(cs, 'brake-slow', 'SLOWS').value).toBeGreaterThan(defaults.brakeSlowShareMin);
+    expect(row.how).toMatch(/STOPS on gentler grades/);
+    expect(row.how).toMatch(/SLOWS/);
+  });
+  it('the cargo case (200 lb on the bed, no rider) is held past the 10 degree stop grade, and a heavier 250 lb payload is held on a shallower grade; the rear-only traction limit is info, as in brake-traction (D-24)', () => {
+    expect(row.cases!.cargo!.value).toBeGreaterThan(defaults.brakeStopSlopeDeg);
+    expect(byId(run({ cargoPayloadLb: 250 }), 'brake-slow').cases!.cargo!.value).toBeLessThan(row.cases!.cargo!.value);
+    const tr = row.detailsCargo!.find((d) => /INFO: steepest grade the rear tires/.test(d.name))!;
+    expect(tr).toBeDefined();
+    expect(tr.limit).toBe(0);
+    expect(Number.isFinite(tr.value)).toBe(true);
+    expect(byId(cs, 'brake-traction').cases!.cargo!.value).toBeLessThan(1); // parked nose-down the rear tires alone hold under half of the cargo cart's pull
+  });
+  it('a bigger foot limit holds a steeper grade until the traction cap; a lower pad μ holds less', () => {
+    expect(byId(run({ brakeFootForceLimitLbf: 60 }), 'brake-slow').cases!.operating!.value).toBeLessThan(row.cases!.operating!.value);
+    expect(byId(run({ brakePadMuFouled: 0.15 }), 'brake-slow').cases!.operating!.value).toBeLessThan(row.cases!.operating!.value);
+  });
+});
+
 describe('brake members (hand calculations at the goal rider, load factor 2)', () => {
+  const ctx = ctxOf(defaults);
+  const goal = ctx.loads.goal;
+  const L = loadsAt(ctx, goal, g);
   const lam = defaults.brakeLoadFactor;
-  const nTot = (lam * W * sin15) / muH;
-  const Rf = reaction(nTot, muH, 1), Rr = reaction(nTot, muH, -1);
-  const R = Math.max(Rf.Rmag, Rr.Rmag);
-  const Ns = nTot / 2;
-  it('statics: the moment of the shoe, spring and foot forces about the pivot is zero, and the reaction is mostly the shoe thrust (the foot and spring nearly cancel)', () => {
-    expect(Math.abs(Rf.residual)).toBeLessThan(1e-6);
-    expect(Math.abs(Rr.residual)).toBeLessThan(1e-6);
-    expect(Rf.R[0]).toBeGreaterThan(0.9 * Ns * Math.cos(beta));
-    expect(Rf.footDown * 2).toBeGreaterThan(0);
-    // both rolling directions: the foot force is the larger rolling forward
-    expect(Rf.footDown).toBeGreaterThan(Rr.footDown);
-    const f = byId(cs, 'brake-lever');
-    expect(f.how).toContain(`N ${nTot.toFixed(1)} lbf`);
-    expect(f.how).toContain(`${(2 * Rf.footDown).toFixed(1)} lbf (${Rf.footDown.toFixed(1)} per arm`);
+  const muH = Math.min(defaults.brakePadMu, defaults.brakePadMuFouled);
+  const lever = g.H[0] - g.F[0];
+  it('statics: the pad, friction, bungee and foot forces balance their moments about the pin; the force on the knee is minus the hinge reaction on the flap', () => {
+    expect(L.nFlap).toBeCloseTo((lam * goal.massLb * sin15) / (2 * muH), 6);
+    const M = mom(g.C, L.fN) + mom(g.C, L.fF) + mom(g.bungee.E, L.fB) + mom(g.F, L.fFoot);
+    expect(Math.abs(M)).toBeLessThan(1e-6);
+    // pad force is along the tread normal, friction is σ μ N along the forward tangent
+    expect(L.fN[0]).toBeCloseTo(nHat[0] * L.nFlap, 9);
+    expect(L.fF[1]).toBeCloseTo(tHat[1] * L.sigma * muH * L.nFlap, 9);
+    expect(L.foot).toBeCloseTo((L.nFlap * (mom(g.C, nHat) + L.sigma * muH * mom(g.C, tHat)) + g.bungee.mApp) / lever, 6);
+    // the knee carries the whole sum: Rk = N n + friction + bungee + foot
+    expect(L.Rk[0]).toBeCloseTo(L.fN[0] + L.fF[0] + L.fB[0], 9);
+    expect(L.Rk[1]).toBeCloseTo(L.fN[1] + L.fF[1] + L.fB[1] - L.foot, 9);
+    expect(L.Rmag).toBeCloseTo(Math.hypot(...L.Rk), 9);
+    expect(L.Rk[1]).toBeGreaterThan(0); // the flap pulls the knee UP (the hinge is in tension)
   });
-  it('pedal and arms: oak bar bending F L / 4 over S = w h² / 6 between the arm slots; bearing of the arm edge across the grain; the arm net sections', () => {
-    const F = 2 * Rf.footDown;
-    const span = g.y.arm[0] + g.y.arm[1];
-    const S = (defaults.brakePedalDepthIn * defaults.brakePedalHeightIn ** 2) / 6;
-    expect(det(cs, 'brake-lever', 'pedal bar bending').value).toBeCloseTo(((F * span) / 4) / S, 0);
-    expect(det(cs, 'brake-lever', 'pedal bar bearing').value).toBeCloseTo((F / 2) / (defaults.brakePedalDepthIn * defaults.brakePlateThickIn), 0);
-    expect(det(cs, 'brake-lever', 'pivot hole bearing').value).toBeCloseTo(R / (defaults.brakePivotBoltDiameterIn * defaults.brakePlateThickIn), 0);
-    expect(byId(cs, 'brake-lever').status).toBe('pass');
-    expect(byId(cs, 'brake-lever').group).toBe('Structure');
+  it('hinge pin double shear and the knee-leaf screw withdrawal follow from that reaction (NDS 1380 G² D L C_M)', () => {
+    const pin = L.Rmag / (2 * (Math.PI / 4) * defaults.brakeHingePinDiaIn ** 2);
+    expect(det(cs, 'brake-hinge', 'pin double shear').value).toBeCloseTo(pin, 3);
+    const pen = defaults.brakeHingeScrewLenIn - 0.1 - 0.1;
+    const w1 = 1380 * defaults.oakSpecificGravity ** 2 * defaults.brakeHingeScrewDiaIn * pen * 0.7;
+    const dd = det(cs, 'brake-hinge', 'knee leaf screws, withdrawal each');
+    expect(dd.limit).toBeCloseTo(w1, 6);
+    expect(dd.value).toBeCloseTo(Math.max(0, L.Rk[1]) / defaults.brakeHingeScrewsPerLeaf, 6);
+    expect(byId(cs, 'brake-hinge').status).toBe('pass');
   });
-  it('pivot, bracket and beam bolts: the 3/8" bolt in single shear R / A; the two flange bolts through the axle beam share the thrust; the closed loop in the axle is checked', () => {
-    const d = defaults.brakePivotBoltDiameterIn;
-    expect(det(cs, 'brake-links', 'pivot bolt single shear').value).toBeCloseTo(R / circle(d), 0);
-    expect(det(cs, 'brake-links', 'pivot bolt single shear').limit).toBeCloseTo((0.577 * defaults.ss316BoltYieldPsi) / defaults.steelSafetyFactor, 6);
-    // flange bolts: direct share plus the plan couple of the thrust line off their centroid
-    const fl = g.tongue.flange;
-    const yb = fl.bolts.map((q) => q[1]);
-    const yBar = (yb[0] + yb[1]) / 2;
-    const yPlane = (g.y.tongue[0] + g.y.tongue[1]) / 2;
-    const Rx = Math.abs(Rf.Rmag > Rr.Rmag ? Rf.R[0] : Rr.R[0]);
-    const dy = Math.abs(yb[1] - yb[0]) / 2;
-    const worst = Rx / 2 + (Rx * (yBar - yPlane)) / (2 * dy);
-    expect(det(cs, 'brake-links', 'flange bolts shear').value).toBeCloseTo(worst / circle(defaults.brakeBracketBoltDiameterIn), -1);
-    // end distance to the beam rear face is over 4 D, so the bearing is not reduced: R / (d × beam depth)
-    const endD = (fl.bolts[0][0] - (L0.beamR.x - L0.beamR.thick / 2)) / defaults.brakeBracketBoltDiameterIn;
-    expect(endD).toBeGreaterThan(4);
-    expect(det(cs, 'brake-links', 'flange bolt bearing in the oak axle beam').value).toBeCloseTo(worst / (defaults.brakeBracketBoltDiameterIn * L0.beamR.depth), -1);
-    // the thrust comes back through the beam: the rod bears sideways on the groove wall and the beam bends in plan, both small
-    expect(det(cs, 'brake-links', 'axle rod bearing').value).toBeLessThan(det(cs, 'brake-links', 'axle rod bearing').limit);
-    expect(det(cs, 'brake-links', 'axle beam plan bending').util).toBeLessThan(0.2);
-    expect(byId(cs, 'brake-links').status).toBe('pass');
+  it('flap bending at the pad: M from the foot force and the bungee across the board, σ = M/S against the design oak MOR', () => {
+    const v = g.v;
+    const sC = (g.C[0] - g.H[0]) * g.u[0] + (g.C[1] - g.H[1]) * g.u[1], sF = (g.F[0] - g.H[0]) * g.u[0] + (g.F[1] - g.H[1]) * g.u[1];
+    const sE = (g.bungee.E[0] - g.H[0]) * g.u[0] + (g.bungee.E[1] - g.H[1]) * g.u[1];
+    const tF = Math.abs(L.fFoot[1] * v[1]); // the foot force is vertical
+    const tB = L.fB[0] * v[0] + L.fB[1] * v[1];
+    const M = Math.abs(tF * (sF - sC) - tB * (sE - sC));
+    expect(M).toBeGreaterThan(300);
+    const S = (defaults.brakeFlapWidthIn * defaults.brakeFlapThickIn ** 2) / 6;
+    const d = det(cs, 'brake-flap', 'flap bending').value;
+    expect(d).toBeGreaterThan(M / S * 0.95);
+    expect(d).toBeLessThan(M / S * 1.3); // plus the small friction eccentricity and axial terms
+    expect(det(cs, 'brake-flap', 'pad contact pressure').value).toBeCloseTo(L.nFlap / (defaults.brakePadLengthIn * Math.min(defaults.brakePadWidthIn, defaults.tireWidthIn - 0.3)), 6);
+    expect(det(cs, 'brake-flap', 'shoe block screws').value).toBeCloseTo((L.mu * L.nFlap) / 2, 6);
+    expect(byId(cs, 'brake-flap').status).toBe('pass');
   });
-  it('beam: plan bending N_s × (shoe y − arm y) over S = (h b³ − (h − 2t)(b − 2t)³) / (6b), plus the vertical friction over its own S; torsion and slot bearing too', () => {
-    const b = defaults.brakeBeamSizeIn, h = defaults.brakeBeamHeightIn, t = defaults.brakeBeamWallIn;
-    const Sz = (h * b ** 3 - (h - 2 * t) * (b - 2 * t) ** 3) / (6 * b);
-    const Sy = (b * h ** 3 - (b - 2 * t) * (h - 2 * t) ** 3) / (6 * h);
-    const lever = g.y.shoeC - (g.y.arm[0] + g.y.arm[1]) / 2;
-    // the chain uses the worse rolling direction for R only: the beam rows follow the pick, so check against either direction's friction
-    const lo = (Ns * lever) / Sz + (muH * Ns * lever) / Sy;
-    expect(det(cs, 'brake-beam', 'beam plan bending').value).toBeCloseTo(lo, 0);
-    expect(det(cs, 'brake-beam', 'beam plan bending').limit).toBeCloseTo(alAllow, 6);
-    expect(det(cs, 'brake-beam', 'beam wall bearing').value).toBeCloseTo(Ns / (defaults.brakePlateThickIn * h), 0);
-    expect(byId(cs, 'brake-beam').status).toBe('pass');
+  it('mount bolts: direct shear + twist about the bolt group, tension from the overturning couple; bearing in the rail and backer; the knee is bolted into the rail, not the side panel', () => {
+    const bt = g.bolts;
+    expect(bt.count).toBe(4);
+    const pts = bt.xs.flatMap((x) => bt.zs.map((z): [number, number] => [x, z]));
+    const r2 = pts.map(([x, z]) => (x - bt.cx) ** 2 + (z - bt.cz) ** 2);
+    const rel: [number, number] = [g.xh - bt.cx, g.knee.zTop - bt.cz];
+    const Mpl = Math.abs(rel[1] * L.Rk[0] - rel[0] * L.Rk[1]);
+    const V = L.Rmag / 4 + (Mpl * Math.sqrt(Math.max(...r2))) / r2.reduce((a, b) => a + b, 0);
+    const shear = det(cs, 'brake-mount', 'mounting bolt shear, worst bolt').value;
+    expect(shear).toBeCloseTo(V / ((Math.PI / 4) * defaults.brakeMountBoltDiaIn ** 2), 3);
+    const tComp = Math.min(g.knee.legT, g.rail.t + g.backer.t);
+    expect(det(cs, 'brake-mount', 'bolt bearing').value).toBeCloseTo(V / (defaults.brakeMountBoltDiaIn * tComp), 3);
+    expect(det(cs, 'brake-mount', 'mounting bolt tension').value).toBeGreaterThan(0);
+    expect(byId(cs, 'brake-mount').status).toBe('pass');
+    expect(byId(cs, 'brake-mount').group).toBe('Structure');
+    expect(byId(cs, 'brake-mount').how).toMatch(/rail/);
+    // fewer or smaller bolts take more load per bolt
+    expect(det(run({ brakeMountBoltColumns: 1 }), 'brake-mount', 'mounting bolt shear').value).toBeGreaterThan(shear);
   });
-  it('shoes: lining pressure N_shoe / (length × width) against the lining limit; a small shoe raises it and fails against a lower limit', () => {
-    const len = defaults.brakeLinedShoeLengthIn, wd = defaults.brakeLinedShoeWidthIn;
-    expect(det(cs, 'brake-shoes', 'lining contact pressure').value).toBeCloseTo(Ns / (len * wd), 1);
-    expect(byId(run({ brakeLinedShoeLengthIn: 2, brakeLinedShoeWidthIn: 1.5 }), 'brake-shoes').util!).toBeGreaterThan(byId(cs, 'brake-shoes').util!);
-    expect(byId(run({ brakeLinedShoeLengthIn: 2, brakeLinedShoeWidthIn: 1.5, brakeLiningMaxPsi: 60 }), 'brake-shoes').status).toBe('fail');
+  it('the return set: the released bungee torque over the weight torque of the flap group (the stop cord takes the difference), cord and eye loads', () => {
+    const r = byId(cs, 'brake-return');
+    expect(r.status).toBe('pass');
+    const lift = det(cs, 'brake-return', 'bungee torque').value;
+    expect(lift).toBeGreaterThanOrEqual(defaults.brakeReturnLiftMargin);
+    expect(det(cs, 'brake-return', 'bungee tension').value).toBeCloseTo(g.bungee.tApp, 9);
+    expect(det(cs, 'brake-return', 'bungee tension').limit).toBeCloseTo(defaults.brakeCordBreakLbf / defaults.brakeCordSafetyFactor, 9);
+    // a weak bungee cannot lift the flap group
+    expect(byId(run({ brakeBungeeTensionLbf: 1 }), 'brake-return').status).toBe('fail');
   });
-  it('parking hold: the hook pulls the stud with F = (N d (cos β + μ sin β) + F_spring a_app) / l, l = pivot to the hook plane; the stud, tooth and hook bolt are checked', () => {
-    const hookMid = (g.hook.x0 + g.hook.x1) / 2;
-    const lL = g.P[0] - hookMid;
-    const FL = (nTot * g.d * kF(muH) + defaults.brakeSpringForceLbf * g.aApp) / lL;
-    const ds0 = defaults.brakeLatchPinDiameterIn;
-    expect(det(cs, 'park-hold', 'stud shear').value).toBeCloseTo(FL / circle(ds0), 0);
-    expect(det(cs, 'park-hold', 'stud bearing on the tooth').value).toBeCloseTo(FL / (ds0 * defaults.brakePlateThickIn), 0);
-    expect(det(cs, 'park-hold', 'hook bolt shear').value).toBeCloseTo(FL / circle(defaults.brakeBracketBoltDiameterIn), 0);
-    expect(byId(cs, 'park-hold').status).toBe('pass');
-    expect(byId(cs, 'park-hold').group).toBe('Structure');
-    expect(byId(cs, 'park-hold').how).toMatch(/kick the strap sideways/);
-  });
-  it('abuse: a 150 lbf stomp is held to yield (design allowable × the steel safety factor) for the pedal, pivot, beam and shoes; it passes or is marginal, not fail', () => {
+});
+
+describe('brake abuse: a foot stomp on one flap (yield level)', () => {
+  it('the pad force follows from the moment balance in the direction that gives the larger force, the checks run at yield level, and the brake survives', () => {
+    const ctx = ctxOf(defaults);
+    const L = loadsFromFoot(ctx, g, defaults.brakeFootAbuseLbf);
+    const lever = g.H[0] - g.F[0];
+    const best = [1, -1].map((s) => ((defaults.brakeFootAbuseLbf * lever - g.bungee.mApp) * defaults.brakeEfficiency) / (mom(g.C, nHat) + s * defaults.brakePadMu * mom(g.C, tHat)));
+    expect(L.nFlap).toBeCloseTo(Math.max(...best), 6);
+    expect(L.Rk[1]).toBeGreaterThan(0);
     const c = byId(cs, 'brake-abuse');
     expect(c.group).toBe('Structure');
-    expect(c.status).not.toBe('fail');
-    for (const part of ['pedal:', 'pivot:', 'beam:', 'shoes:']) expect(c.details!.some((d) => d.name.startsWith(part)), part).toBe(true);
-    const bar = c.details!.find((d) => d.name === 'pedal: pedal bar bending at the foot (oak, between the arms)')!;
-    const S = (defaults.brakePedalDepthIn * defaults.brakePedalHeightIn ** 2) / 6;
-    expect(bar.value).toBeCloseTo((150 * (g.y.arm[0] + g.y.arm[1])) / 4 / S, 0);
-    expect(bar.limit).toBeCloseTo(defaults.steelSafetyFactor * 6460, -1); // oak: the design MOR with the safety factor removed
-    expect(c.how).toMatch(/150(\.0)? lbf stomp/);
-    // N from the foot: (F a_app − spring) / (d (cos β − μ sin β)) with the design μ
-    const mu = defaults.brakePadMu;
-    const N = (150 * g.aApp - defaults.brakeSpringForceLbf * g.aApp) / (g.d * (Math.cos(beta) - mu * Math.sin(beta)));
-    expect(c.how).toContain(`N = (F a_app − spring) / (d (cos β − μ sin β)) = ${N.toFixed(1)} lbf total`);
-  });
-  it('abuse is monotone in the stomp: 300 lbf fails, 100 lbf is easier', () => {
-    expect(byId(run({ brakeFootAbuseLbf: 300 }), 'brake-abuse').status).toBe('fail');
-    const bar = (q: Partial<Params>) => byId(run(q), 'brake-abuse').details!.find((d) => d.name.startsWith('pedal: pedal bar bending'))!.value;
-    expect(bar({ brakeFootAbuseLbf: 100 })).toBeLessThan(bar({}));
-  });
-  it('the load factor drives the member rows but not the foot-force row', () => {
-    const a = run({ brakeLoadFactor: 1 }), b = run({ brakeLoadFactor: 3 });
-    expect(byId(a, 'brake-force').cases!.goal!.value).toBeCloseTo(byId(b, 'brake-force').cases!.goal!.value, 9);
-    expect(byId(b, 'brake-beam').util!).toBeGreaterThan(byId(a, 'brake-beam').util! * 2.5);
-  });
-  it('dual rows: operating passes and the goal case carries the larger load', () => {
-    for (const id of ['brake-lever', 'brake-links', 'brake-beam', 'brake-shoes', 'park-hold']) {
-      const c = byId(cs, id);
-      expect(c.cases!.goal!.util, id).toBeGreaterThanOrEqual(c.cases!.operating!.util);
-      expect(c.statusOperating, id).toBe('pass');
-      expect(c.governingLoad, id).toBe('goal');
-    }
-  });
-});
-
-describe('push-handle sockets (50 lbf hold-back pull)', () => {
-  it('hand calc: 25 lbf per post, M = 25 × (grip − socket top), σ = M/S on the 15/16" × 1-7/16" post', () => {
-    const h = handleGeometry(defaults, L0);
-    const c = byId(cs, 'handle-sockets');
-    const M = 25 * (defaults.rearHandleHeightIn - h.zTop);
-    const S = (defaults.handlePostWidthIn * defaults.handlePostThickIn ** 2) / 6;
-    expect(det(cs, 'handle-sockets', 'post bending').value).toBeCloseTo(M / S, 0);
-    expect(det(cs, 'handle-sockets', 'post bending').limit).toBeCloseTo(6460, -1);
-    const wall = defaults.handleSocketWallIn;
-    const tubeS = ((h.socketY * h.socketX ** 3 - (h.socketY - 2 * wall) * (h.socketX - 2 * wall) ** 3) / 12) / (h.socketX / 2);
-    expect(det(cs, 'handle-sockets', 'tube bending').value).toBeCloseTo(M / tubeS, 0);
-    expect(det(cs, 'handle-sockets', 'tube bending').limit).toBeCloseTo(17500, 0);
-    expect(det(cs, 'handle-sockets', 'retaining pin bearing').value).toBeCloseTo(25 / (defaults.handlePinDiameterIn * wall), 0);
     expect(c.status).toBe('pass');
-    expect(c.group).toBe('Structure');
-    expect(c.load).toBeUndefined();
-  });
-  it('a bigger pull or a shallower socket raises the stresses; a hold-back that is too big fails', () => {
-    const u = (q: Partial<Params>) => byId(runChecks({ ...defaults, ...q }, { includeTruck: false }), 'handle-sockets').util!;
-    expect(u({ handleHoldbackLbf: 100 })).toBeGreaterThan(u({}) * 1.9);
-    expect(u({ handleSocketDepthIn: 3 })).toBeGreaterThanOrEqual(u({}));
-    expect(byId(runChecks({ ...defaults, handleHoldbackLbf: 100, handlePostThickIn: 0.75, handlePostWidthIn: 1, rearHandleHeightIn: 42, handleSocketDepthIn: 3 }, { includeTruck: false }), 'handle-sockets').status).toBe('fail');
+    expect(c.details!.length).toBeGreaterThan(15);
+    expect(c.details!.some((d) => /^hinge:/.test(d.name))).toBe(true);
+    expect(c.details!.some((d) => /^mount:/.test(d.name))).toBe(true);
+    expect(c.how).toMatch(/ONE flap/);
+    // a 400 lbf stomp on a flap that is only a 5/4 oak board and four hinge screws no longer survives
+    expect(byId(run({ brakeFootAbuseLbf: 300, brakeHingeScrewsPerLeaf: 2 }), 'brake-abuse').status).not.toBe('pass');
   });
 });
 
-describe('brake clearance sweep and foot safety', () => {
-  const p = resolveParams(defaults);
-  const parts = buildModel(p, { rider: 'goal', cargo: true });
-  const ctx = makeContext(p, parts);
-  const s = brakeSweep(ctx, 10);
-  it('FINDING (D-56, deck at 8 in): over 11 poses nothing touches anything, but the shoe beam passes only 1/16 in under the rail (brake-beam vs rail-L), short of the 0.1 in limit: brake-clear FAILS at the defaults', () => {
-    expect(s.poses).toBe(11);
-    expect(s.minClearanceIn).toBeGreaterThan(0);
-    expect(s.minClearanceIn).toBeCloseTo(0.0625, 3);
-    expect(s.minClearanceIn).toBeLessThan(defaults.brakeClearanceIn);
-    const c = byId(cs, 'brake-clear');
-    expect(c.status).toBe('fail');
-    expect(c.value).toBeCloseTo(s.minClearanceIn, 6);
-    expect(c.how).toMatch(/brake-beam vs rail-L/);
-    expect(c.group).toBe('Braking');
+describe('park-hold: the wheel chocks and the wheels hold the cart on the design slope (D-57)', () => {
+  const ctx = ctxOf(defaults);
+  const row = byId(cs, 'park-hold');
+  it('hand calc of the climb and slide margins for the 150 lb rider, nose-down on 15° with a chock at each rear tire', () => {
+    const c = ctx.loads.operating;
+    const th = defaults.designSlopeDeg * RAD;
+    const ct = contactsAt(ctx.contact, 0);
+    const xfc = (ct.FL[0] + ct.FR[0]) / 2;
+    const P = c.massLb * Math.sin(th) - defaults.parkRollingResistance * c.massLb * Math.cos(th);
+    const Nr = rearNormalNoseDown(c.massLb, c.cg[0], c.cg[2], th, xfc);
+    const need = P / 2 / (Nr / 2);
+    const psi = defaults.brakeChockAngleDeg * RAD;
+    const wC = ctx.parts.find((x) => x.id === 'brake-chock-L')!.massLb;
+    const Q = P / 2 / Math.sin(psi);
+    const muReq = (P / 2 + wC * Math.sin(th)) / (Q * Math.cos(psi) + wC * Math.cos(th));
+    const h = chockHold(ctx, c, defaults.brakeChockMu);
+    expect(h.tanNeed).toBeCloseTo(need, 9);
+    expect(h.muReq).toBeCloseTo(muReq, 9);
+    expect(h.climb).toBeCloseTo(Math.tan(psi) / need, 9);
+    expect(h.slide).toBeCloseTo(defaults.brakeChockMu / muReq, 9);
+    expect(row.cases!.operating!.value).toBeCloseTo(Math.min(h.climb, h.slide), 6);
+    // the slide requirement is essentially tan ψ, independent of the load
+    expect(muReq).toBeGreaterThan(Math.tan(psi) * 0.95);
+    expect(muReq).toBeLessThan(Math.tan(psi) * 1.15);
   });
-  it('the shoes stand a stroke off the tread released (the nearest corner at least 3/4 of it) and touch it applied', () => {
-    expect(s.padGapReleasedIn).toBeGreaterThan(0.75 * defaults.brakeShoeTravelIn);
-    expect(s.padGapReleasedIn).toBeLessThan(defaults.brakeShoeTravelIn + 0.01);
-    expect(Math.abs(s.padGapAppliedIn)).toBeLessThan(1e-6);
+  it('the chocks hold the rider cases on dirt or gravel (the design ground μ), with the wedge angle between the climb limit and the slide limit; the cord, bearing and reach are checked', () => {
+    expect(row.group).toBe('Braking');
+    expect(row.cases!.operating!.status).not.toBe('fail');
+    expect(row.cases!.goal!.status).not.toBe('fail');
+    expect(det(cs, 'park-hold', 'climb margin').value).toBeGreaterThan(1);
+    expect(det(cs, 'park-hold', 'design ground').value).toBeGreaterThan(1);
+    expect(det(cs, 'park-hold', 'cord length').value).toBeGreaterThan(1);
+    expect(det(cs, 'park-hold', 'chock face bearing').value).toBeLessThan(det(cs, 'park-hold', 'chock face bearing').limit);
+    expect(det(cs, 'park-hold', 'cord load if the cart drags').value).toBeLessThan(1);
   });
-  it('ground clearance: the bar assembly is brakeBarClearIn off the ground released (at least the 3 in minimum), the lowest lining corner is above the minimum, the parked bar clears its limit', () => {
-    expect(s.armMinZ).toBeGreaterThanOrEqual(defaults.brakeBarClearIn - 1e-6);
-    expect(s.armMinZ).toBeGreaterThanOrEqual(defaults.minGroundClearanceIn);
-    expect(s.groundMinZ).toBeGreaterThanOrEqual(defaults.minGroundClearanceIn);
-    expect(s.groundAppliedZ).toBeGreaterThanOrEqual(defaults.brakeParkedClearIn);
-    expect(det(cs, 'brake-clear', 'parked').value).toBeCloseTo(s.groundAppliedZ, 9);
+  it('HONEST REPORT: on wet or fouled ground the chock slides (flagged in the details), and in the cargo case (rear tires unloaded by the forward payload) the wheel climbs the chock: the cargo case is reported (info), not judged', () => {
+    expect(det(cs, 'park-hold', 'wet / fouled ground').value).toBeLessThan(1);
+    expect(row.cases!.cargo!.value).toBeLessThan(1);
+    expect(row.statusCargo).toBe('info');
+    expect(row.how).toMatch(/will NOT hold the loaded cart there/);
   });
-  it('foot safety: the toe guard stands above the bar, and the open gap in front of it to the tire is wide (≥ 3.5") over the whole stroke', () => {
-    expect(det(cs, 'brake-clear', 'toe guard height').value).toBe(defaults.brakeToeGuardHeightIn);
-    expect(det(cs, 'brake-clear', 'toe guard height').value).toBeGreaterThanOrEqual(defaults.brakeToeGuardMinIn);
-    expect(s.guardTireGapIn).toBeGreaterThanOrEqual(defaults.brakeFootGapMinIn);
-    expect(byId(run({ brakeToeGuardHeightIn: 1.5 }), 'brake-clear').status).toBe('fail');
-    expect(byId(run({ brakeFootGapMinIn: 12 }), 'brake-clear').status).toBe('fail');
-  });
-  it('the latch stud clears above the hook tooth released and the springs lift the swinging parts (torque over weight torque ≥ 1)', () => {
-    expect(det(cs, 'brake-clear', 'stud above the hook tooth').value).toBeGreaterThanOrEqual(0.25);
-    expect(det(cs, 'brake-clear', 'return spring torque').value).toBeGreaterThanOrEqual(1);
-    expect(byId(run({ brakeSpringForceLbf: 3 }), 'brake-clear').details!.find((d) => d.name.includes('return spring'))!.value).toBeLessThan(det(cs, 'brake-clear', 'return spring torque').value);
-  });
-  it('the sweep has teeth: a minimum ground clearance above the lining corner is reported (and the validator warns)', () => {
-    const low = { ...defaults, minGroundClearanceIn: 3.5 } as Params;
-    expect(byId(runChecks(low, { includeTruck: false }), 'brake-clear').status).toBe('fail');
-    expect(validateParams(low).some((i) => i.keys.includes('minGroundClearanceIn'))).toBe(true);
-    expect(rot2([1, 0], [0, 0], Math.PI / 2)[1]).toBeCloseTo(1, 12);
-  });
-  it('the sweep is cached by design (rider masses excluded) and fast', () => {
-    const t = performance.now();
-    const p2 = resolveParams({ ...defaults, riderMassLb: 120 });
-    brakeSweep(makeContext(p2, buildModel(p2, { rider: 'goal', cargo: true })), 10);
-    expect(performance.now() - t).toBeLessThan(500);
+  it('one chock alone cannot hold the slope (the whole load on one wheel); a shallow ramp lets the wheel climb, a steep ramp slides', () => {
+    expect(byId(run({ brakeChockCount: 1 }), 'park-hold').cases!.operating!.value).toBeLessThan(row.cases!.operating!.value);
+    expect(byId(run({ brakeChockCount: 1 }), 'park-hold').cases!.operating!.status).toBe('fail');
+    expect(byId(run({ brakeChockAngleDeg: 18 }), 'park-hold').cases!.operating!.status).toBe('fail'); // climbs
+    expect(byId(run({ brakeChockAngleDeg: 45 }), 'park-hold').cases!.operating!.status).toBe('fail'); // slides
+    expect(byId(run({ brakeChockMu: 0.8 }), 'park-hold').cases!.operating!.value).toBeGreaterThanOrEqual(row.cases!.operating!.value);
   });
 });
 
-describe('the defaults', () => {
-  it('every brake row passes except brake-clear (FINDING: 1/16 in under the rail, see above); the abuse row does not fail', () => {
-    const all = runChecks(defaults, { includeTruck: false });
-    expect(byId(all, 'brake-clear').status).toBe('fail');
-    for (const id of ['brake-ratio', 'brake-force', 'brake-lever', 'brake-links', 'brake-beam', 'brake-shoes', 'park-hold', 'handle-sockets']) expect(byId(all, id).status, id).toBe('pass');
-    expect(byId(all, 'brake-abuse').status).not.toBe('fail');
-    expect(all.filter((c) => /^(brake|park-hold|handle-sockets)/.test(c.id)).map((c) => c.id).sort()).toEqual(
-      ['brake-abuse', 'brake-beam', 'brake-clear', 'brake-force', 'brake-lever', 'brake-links', 'brake-ratio', 'brake-shoes', 'brake-traction', 'handle-sockets', 'park-hold'],
-    );
+describe('brake clearance over the stroke', () => {
+  const ctx = ctxOf(defaults);
+  it('the moving flap group clears the hull, rails, transom and the rest over the stroke; the board and shoe clear the tire; the pad lands on the tread; the hinge gap stays open', () => {
+    const sw = brakeSweep(ctx);
+    const row = byId(cs, 'brake-clear');
+    expect(row.status).toBe('pass');
+    expect(sw.minClearanceIn).toBeGreaterThanOrEqual(defaults.brakeClearanceIn);
+    expect(sw.boardTireGapIn).toBeGreaterThanOrEqual(defaults.brakeClearanceIn);
+    expect(sw.padGapReleasedIn).toBeGreaterThan(0.5 * defaults.brakePadGapIn);
+    expect(Math.abs(sw.padGapAppliedIn)).toBeLessThan(0.03);
+    expect(sw.hingeGapIn).toBeCloseTo(0.125, 3); // the designed gap at the applied pose; it opens as the flap lifts
+    expect(sw.groundMinZ).toBeGreaterThanOrEqual(defaults.minGroundClearanceIn);
+    expect(det(cs, 'brake-clear', 'knee bottom').value).toBeGreaterThanOrEqual(defaults.minGroundClearanceIn);
+    expect(det(cs, 'brake-clear', 'sign zone').value).toBeGreaterThanOrEqual(0);
+    expect(sw.poses).toBe(9);
   });
-  it('the removed rows are gone: no stop, emergency, bias, heat, front-brake, hip-cable, belt-anchor, stick-cable or ride rows, and no hand-force row', () => {
-    const ids = new Set(cs.map((c) => c.id));
-    for (const id of ['brake-stop', 'brake-emergency', 'brake-bias', 'brake-heat', 'brake-front', 'hip-cable', 'belt-anchor', 'stick-cable', 'ride-rollover', 'steer-centering', 'ride-steer-effort', 'ride-envelope', 'brake-shaft', 'brake-ratchet'])
-      expect(ids.has(id), id).toBe(false);
+  it('a lower deck takes the knee below the ground clearance and the row fails; a smaller gap setting is checked against the tire', () => {
+    expect(byId(run({ minGroundClearanceIn: 5 }), 'brake-clear').status).toBe('fail');
+    expect(byId(run({ brakeClearanceIn: 0.4 }), 'brake-clear').status).toBe('fail');
+  });
+});
+
+describe('rows and groups', () => {
+  it('the old drag-bar rows are gone and the new ones exist in their groups; the handle-sockets row is still there and unchanged in kind', () => {
+    for (const gone of ['brake-lever', 'brake-links', 'brake-beam', 'brake-shoes']) expect(cs.some((c) => c.id === gone), gone).toBe(false);
+    const groups: Record<string, string> = {
+      'brake-ratio': 'Braking', 'brake-force': 'Braking', 'brake-slow': 'Braking', 'brake-traction': 'Braking', 'brake-clear': 'Braking', 'park-hold': 'Braking',
+      'brake-flap': 'Structure', 'brake-hinge': 'Structure', 'brake-mount': 'Structure', 'brake-return': 'Structure', 'brake-abuse': 'Structure', 'handle-sockets': 'Structure',
+    };
+    for (const [id, grp] of Object.entries(groups)) expect(byId(cs, id).group, id).toBe(grp);
+    const h = handleGeometry(defaults, makeCtx(defaults).L);
+    expect(byId(cs, 'handle-sockets').status).toBe('pass');
+    expect(byId(cs, 'handle-sockets').how).toMatch(/hold-back pull at the grip/);
+    expect(h.zTop).toBeGreaterThan(0);
+  });
+  it('the member rows carry the cargo case next to the rider cases', () => {
+    for (const id of ['brake-force', 'brake-slow', 'brake-flap', 'brake-hinge', 'brake-mount', 'park-hold']) expect(byId(cs, id).cases!.cargo, id).toBeDefined();
+  });
+  it('every row is finite and its `how` is non-empty', () => {
+    for (const id of ['brake-ratio', 'brake-force', 'brake-slow', 'brake-clear', 'brake-flap', 'brake-hinge', 'brake-mount', 'brake-return', 'park-hold', 'brake-abuse']) {
+      const c = byId(cs, id);
+      expect(Number.isFinite(c.value), id).toBe(true);
+      expect(c.how.length, id).toBeGreaterThan(40);
+      for (const d of c.details ?? []) expect(Number.isFinite(d.value), `${id}: ${d.name}`).toBe(true);
+    }
   });
 });

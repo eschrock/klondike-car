@@ -73,7 +73,7 @@ function toBody(id: SimBodyId, b: BodyMass): SimBody {
 function hullBoxes(parts: Part[], cgIn: Vec3): HullBox[] {
   const out: HullBox[] = [];
   for (const p of parts) {
-    if (p.geometry.type === 'wheel' || p.payload || p.group === 'reference' || /^bridle/.test(p.id)) continue;
+    if (p.geometry.type === 'wheel' || p.payload || p.group === 'reference' || /^(bridle|brake-chock|steer-chain)/.test(p.id)) continue; // the loose wheel chocks sit on the ground by design (D-57)
     const o = partOBB(p);
     if (Math.max(...o.half) * 2 < 2) continue; // hardware and other small bits do not matter for ground contact
     out.push({

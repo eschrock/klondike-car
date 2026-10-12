@@ -12,7 +12,7 @@ import { rearNormalNoseDown, tipBackAngle } from './stability';
 const s3 = (x: number) => Number(x.toPrecision(3));
 
 /** The default cart with the pivoting front axle (D-56) straight ahead: 44" wheelbase, 35.5" rear and front tracks. */
-const P0 = defaultParams();
+const P0 = { ...defaultParams(), frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5 }; // the 3c-3 hand-calc fixture (35.5 in tracks; D-58 narrowed them)
 const G: ContactInputs = { wheelbaseIn: P0.wheelbaseIn, rearTrackIn: P0.rearTrackIn, frontTrackIn: P0.frontTrackIn };
 
 describe('contact inputs at the defaults', () => {
@@ -146,12 +146,13 @@ describe('load model hand calc (119 lb cart, 150 lb rider, 25 lb cargo)', () => 
   });
   it('cargo mode: a 250 lb payload at (30, 2, 22) on the 119 lb stowed cart gives W = 369, CG (28.07, 1.36, 17.49)', () => {
     const stowed = [mk('cart', 119, [24, 0, 8])];
-    const cm = buildLoadModel(p, parts, { stowedParts: stowed, placements: [{ name: 'test', cg: [30, 2, 22] }] });
+    const p250 = { ...p, cargoPayloadLb: 250 }; // the hand calc keeps 250 lb; the D-58 default is 200 lb
+    const cm = buildLoadModel(p250, parts, { stowedParts: stowed, placements: [{ name: 'test', cg: [30, 2, 22] }] });
     expect(cm.cargoCases).toHaveLength(1);
     const k = cm.cargoCases[0];
     expect(k.kind).toBe('cargo');
     expect(k.riderLb).toBe(0);
-    expect(k.cargoLb).toBe(p.cargoPayloadLb);
+    expect(k.cargoLb).toBe(p250.cargoPayloadLb);
     expect(k.cargoLb).toBe(250);
     expect(k.massLb).toBeCloseTo(369, 9);
     expect(k.cg[0]).toBeCloseTo((119 * 24 + 250 * 30) / 369, 9);

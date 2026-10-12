@@ -37,7 +37,7 @@ export function buildPayload(ctx: Ctx): Part[] {
   parts.push(box(ctx, { ...common, id: 'rider-head', name: 'Rider head', massLb: 0, size: [HEAD.x * S, HEAD.y * S, HEAD.z * S], center: headC, rot: { y: -lean } }));
 
   // Legs reach the foot stop.
-  const stopRear = p.seatXIn + p.riderLegReachIn - p.footStopThickIn / 2;
+  const stopRear = p.seatXIn + p.riderLegReachIn;
   const deckZ = L.deckTop;
   for (const sy of [1, -1]) {
     const y = sy * LEG_Y_FRAC * S;

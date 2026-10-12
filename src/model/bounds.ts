@@ -130,6 +130,33 @@ function computeOBBs(part: Part): OBB[] {
     }
     return out.length ? out : [partOBB(part)];
   }
+  if (g.type === 'mesh' && g.slabs) {
+    // A long, thin, plan-curved wall (a hull side member): one box per `slabs` inches of x over the vertices in that stretch.
+    const b = localBounds(g);
+    const n = Math.max(1, Math.ceil((b.max[0] - b.min[0]) / g.slabs));
+    // Slab edges: the even split plus every x where the outline has a vertex, so a notch or a step is resolved exactly (a rail with relief notches).
+    const cuts = [...Array.from({ length: n + 1 }, (_, k) => b.min[0] + ((b.max[0] - b.min[0]) * k) / n), ...(g.profile ?? []).map((q) => q[0])].sort((u, v) => u - v).filter((v, i, a) => i === 0 || v - a[i - 1] > 1e-7);
+    const out: OBB[] = [];
+    for (let k = 0; k + 1 < cuts.length; k++) {
+      const xa = cuts[k], xb = cuts[k + 1];
+      // y: the wall's face extent over the vertices in the slab (a slab edge vertex belongs to both neighbors)
+      let y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+      for (let i = 0; i < g.positions.length; i += 3) {
+        const x = g.positions[i];
+        if (x < xa - 1e-6 || x > xb + 1e-6) continue;
+        y0 = Math.min(y0, g.positions[i + 1]); y1 = Math.max(y1, g.positions[i + 1]);
+        z0 = Math.min(z0, g.positions[i + 2]); z1 = Math.max(z1, g.positions[i + 2]);
+      }
+      if (!Number.isFinite(y0)) continue;
+      if (g.profile) {
+        const c = clipStrip(g.profile, xa + 1e-6, xb - 1e-6); // a hair inside, so a vertical edge ON a slab edge belongs to neither slab's vertex set
+        if (c.length < 3) continue;
+        z0 = Math.min(...c.map((q) => q[1])); z1 = Math.max(...c.map((q) => q[1]));
+      }
+      out.push({ center: transformPoint(m, [(xa + xb) / 2, (y0 + y1) / 2, (z0 + z1) / 2]), axes: [column(m, 0), column(m, 1), column(m, 2)], half: [(xb - xa) / 2, (y1 - y0) / 2, (z1 - z0) / 2] });
+    }
+    if (out.length) return out;
+  }
   if (g.type === 'wheel') {
     // A tire is a disc in its local x-z plane, not the box of its bounding square: its corners are not there. Horizontal bands (local z), each as wide as the disc is at
     // the band's nearest edge to the axle (a superset of the disc), so a hull panel or bracket that is above the axle line is not charged for the square corner (D-45 style).

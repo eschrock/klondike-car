@@ -1,19 +1,19 @@
 /**
- * Seat, storage and fittings checks (workstream D, D-9, D-19, D-40, D-41). `seatChecks(ctx)` returns:
- *  - seat-back:    rider throws their weight on the back (rider × dynamic factor × torso share): stile bending at the support crest,
- *                  crest bearing, insert pull-out of the knob studs, ply panel bending (operating and goal rider);
- *  - seat-grip:    side grab handle post bending under a hard pull, plus the no-pinch geometry (finger gap, clear length);
+ * Seat, storage and fittings checks (workstream D, D-9, D-19, D-40, D-41, D-57). `seatChecks(ctx)` returns:
+ *  - seat-back:    rider throws their weight on the back (rider × dynamic factor × torso share): stile bending at the stop-block crest, crest bearing, hinge load, ply panel
+ *                  bending (operating and goal rider);
+ *  - seat-grip:    grab board (D-57): the bar of oak above the hand hole in bending, the bolt couple under an inboard pull and the no-pinch geometry (finger gap, clear length);
  *  - storage-pack: the 10 Essentials kit list (D-19) packed into the actual box interior;
- *  - storage-lid-open: how far the lid opens before the seat back stops it;
+ *  - storage-lid-open: how far the lid opens before the (upright) seat back stops it;
  *  - lash-points:  count of gunwale lash points (BRIEF §4.9: at least 6);
  *  - lash-load:    one lash plate pulled at its working load and angle: screw withdrawal (NDS) and lateral bearing (S-9).
  *
  * Seat-back model (per stile, 2 stiles): uniform line load w = Q / (2H) aft along the back, Q = rider mass × dynamic factor × torso share.
- * The stile bears on the oak wedge crest at height A (conservative: the face below is taken as relieved) and is held by the knob stud at
- * height B < A. Statics: R_A = w·H·(H/2 − B)/(A − B) (bearing), R_B = w·H − R_A (negative = the stud pulls the stile toward the support:
- * insert pull-out). Bending peaks at the crest: M = w·(H − A)²/2.
+ * The stile bears on the oak stop block crest at height A (conservative: the face below is taken as relieved) and is held at its front foot (B = 0) by the hinge. Statics:
+ * R_A = w·H·(H/2 − B)/(A − B) (bearing), R_B = w·H − R_A (negative = the hinge is loaded toward the support: its screws take it in shear). Bending peaks at the crest:
+ * M = w·(H − A)²/2.
  */
-import { GRIP_BAR_H_IN, GRIP_POST_IN, seatBackSupport } from '../model/seat';
+import { GRIP_BOLT_COLS, GRIP_BOLT_DIA_IN, GRIP_WASHER_OD_IN, GRIP_BOLT_ROWS_IN, GRIP_BOLTS, seatBackSupport } from '../model/seat';
 import { storageGeometry, storageInterior, packEssentials, ESSENTIALS, lashPositions, LASH_SCREWS, LASH_SCREW_DIA_IN, LASH_SCREW_LEN_IN, LASH_PLATE_T_IN, LASH_TIP_IN } from '../model/storage';
 import type { Ctx } from './context';
 import { dualCheck, governing, singleCheck, detail, type CaseEval } from './dual';
@@ -65,20 +65,20 @@ export function seatBackCheck(ctx: Ctx): AnalysisCheck {
     const S = (k.sup.fw * k.sup.t * k.sup.t) / 6;
     const ds: Detail[] = [
       detail('stile bending at the crest', k.M / S, 'psi', al.oakBend, '<='),
-      detail('crest bearing on the wedge', k.RA / (k.sup.fw * CRUSH_HEIGHT_IN), 'psi', al.oakPerp, '<='),
-      detail('insert pull-out (each stud)', k.T, 'lbf', p.seatInsertAllowLbf, '<='),
+      detail('crest bearing on the stop block', k.RA / (k.sup.fw * CRUSH_HEIGHT_IN), 'psi', al.oakPerp, '<='),
+      detail('hinge load (each hinge, screws in oak)', k.T, 'lbf', p.seatHingeLoadLbf, '<='),
       detail('ply panel bending', k.sigmaPly, 'psi', al.plyBend, '<='),
     ];
     const how = `Rider ${f(c.riderLb, 0)} lb × dynamic ${f(gF, 2)} (max of the dynamic factor and 1 + V_rear/W, spec 5.4) × torso share ${p.seatBackLoadFraction} = ${f(k.Q)} lbf aft over the ${f(k.sup.H)}" back, ${f(k.w, 2)} lbf/in on each of 2 stiles. `
-      + `Stile ${f(k.sup.fw, 2)}" × ${f(k.sup.t, 2)}" bears on the oak ${k.sup.rear ? 'wedge against the box end' : 'post'} crest at ${f(k.A, 2)}" and is held by the 3/8-16 knob stud at ${f(k.B, 2)}": `
-      + `R_A = ${f(k.RA)} lbf, stud pull ${f(k.T)} lbf; M at the crest = w(H − A)²/2 = ${f(k.M)} lb·in, σ = ${f(k.M / S, 0)} psi (≤ ${f(al.oakBend, 0)}); `
-      + `bearing ${f(k.RA / (k.sup.fw * CRUSH_HEIGHT_IN), 0)} psi on ${f(k.sup.fw, 2)}" × ${CRUSH_HEIGHT_IN}" (≤ ${f(al.oakPerp, 0)}); insert ${f(k.T, 0)} lbf (≤ ${f(p.seatInsertAllowLbf, 0)}); `
+      + `Stile ${f(k.sup.fw, 2)}" × ${f(k.sup.t, 2)}" bears on the fixed oak ${k.sup.rear ? 'stop block against the box end' : 'post'} crest at ${f(k.A, 2)}" and is held at its foot by the hinge (${f(k.B, 2)}"): `
+      + `R_A = ${f(k.RA)} lbf, hinge load ${f(k.T)} lbf per stile; M at the crest = w(H − A)²/2 = ${f(k.M)} lb·in, σ = ${f(k.M / S, 0)} psi (≤ ${f(al.oakBend, 0)}); `
+      + `bearing ${f(k.RA / (k.sup.fw * CRUSH_HEIGHT_IN), 0)} psi on ${f(k.sup.fw, 2)}" × ${CRUSH_HEIGHT_IN}" (≤ ${f(al.oakPerp, 0)}); hinge ${f(k.T, 0)} lbf (≤ ${f(p.seatHingeLoadLbf, 0)}); `
       + `ply panel ${f(k.a, 1)}" × ${f(k.b, 1)}" simply supported on 4 edges under ${f(k.q, 2)} psi: M = ${f(plateAlpha(k.b / k.a), 4)}·q·a² = ${f(k.Mp, 1)} lb·in/in, σ = ${f(k.sigmaPly, 0)} psi (≤ ${f(al.plyBend, 0)}).`;
     return governing(ds, how);
   };
   return dualCheck({
     id: 'seat-back',
-    label: 'Seat-back load (stile, insert pull-out)',
+    label: 'Seat-back load (stile, stop block, hinge)',
     group: 'Structure',
     refs: ['D-9', 'D-40', 'BRIEF 4.7'],
     primary: 'goal',
@@ -93,26 +93,36 @@ export function seatGripCheck(ctx: Ctx): AnalysisCheck {
   const { p } = ctx;
   const al = allowables(ctx);
   const ev = (c: CaseData): CaseEval => {
-    // A hard pull toward the cart centerline on the bar: half the rider weight × the dynamic factor, shared by 2 posts.
+    // A hard pull on the board toward the cart centerline: half the rider weight × the dynamic factor on the oak bar over the hand hole (one hand, one board).
     const gF = seatFactor(ctx, c);
     const F = 0.5 * c.riderLb * gF;
-    const arm = p.seatGripGapIn + GRIP_BAR_H_IN / 2;
-    const Mpost = (F / 2) * arm;
-    const S = (GRIP_POST_IN * GRIP_POST_IN ** 2) / 6;
+    const bt = p.grabBoardThickIn, bar = p.grabBoardBarIn, hl = p.grabHoleLengthIn;
+    const Sbar = (bt * bar * bar) / 6;
+    const Mbar = (F * hl) / 4; // simply supported over the hole (conservative: the ends are fixed in the board)
+    // The pull is applied on the bar at `arm` above the gunwale top; the board turns about the gunwale top edge and the bolt rows resist it as a couple: T_i = k d_i, M = k Σ d_i².
+    const arm = p.grabBoardFootIn + p.grabHoleHeightIn + bar / 2;
+    const sumD2 = GRIP_BOLT_COLS * GRIP_BOLT_ROWS_IN.reduce((m, d) => m + d * d, 0);
+    const k = (F * arm) / sumD2;
+    const Tbolt = k * Math.max(...GRIP_BOLT_ROWS_IN);
+    const boltArea = (Math.PI / 4) * (GRIP_BOLT_DIA_IN - 0.0825) ** 2; // 1/4-20 tensile stress area ≈ 0.0318 in²
+    const washerA = (Math.PI / 4) * (GRIP_WASHER_OD_IN ** 2 - (GRIP_BOLT_DIA_IN + 0.03) ** 2);
     const ds: Detail[] = [
-      detail('grip post bending', Mpost / S, 'psi', al.oakBend, '<='),
-      detail('finger gap (no pinch)', p.seatGripGapIn, 'in', 1.25, '>='),
-      detail('clear length (hand)', p.seatGripClearLengthIn, 'in', 3.5, '>='),
+      detail('grab bar bending over the hole', Mbar / Sbar, 'psi', al.oakBend, '<='),
+      detail('bolt tension (each, the couple of the two rows)', Tbolt / boltArea, 'psi', p.ss316BoltYieldPsi / p.steelSafetyFactor, '<='),
+      detail('washer bearing on the oak (⊥ grain)', Tbolt / washerA, 'psi', al.oakPerp, '<='),
+      detail('finger gap (no pinch)', p.grabHoleHeightIn, 'in', 1.25, '>='),
+      detail('clear length (hand)', hl, 'in', 3.5, '>='),
     ];
-    const how = `Pull ${f(F)} lbf (0.5 × ${f(c.riderLb, 0)} lb × ${f(gF, 2)}) on the bar, ${f(F / 2)} lbf per post at ${f(arm, 2)}" above the pad: M = ${f(Mpost)} lb·in, σ = M/S = ${f(Mpost / S, 0)} psi (≤ ${f(al.oakBend, 0)}). `
-      + `Finger gap under the bar ${f(p.seatGripGapIn, 2)}" (≥ 1.25") and ${f(p.seatGripClearLengthIn, 2)}" clear between the posts (≥ 3.5"): no pinch point (BRIEF §4.7).`;
+    const how = `Pull ${f(F)} lbf (0.5 × ${f(c.riderLb, 0)} lb × ${f(gF, 2)}) on one board: the ${f(bt, 2)}" × ${f(bar, 2)}" bar over the ${f(hl, 2)}" hole, M = F·L/4 = ${f(Mbar)} lb·in, σ = M/S = ${f(Mbar / Sbar, 0)} psi (≤ ${f(al.oakBend, 0)}). `
+      + `The pull acts ${f(arm, 2)}" above the gunwale top; the ${GRIP_BOLTS} bolts (${GRIP_BOLT_COLS} columns × 2 rows ${GRIP_BOLT_ROWS_IN.join('" and ')}" below the top) resist it as a couple: T = F·arm·d_max/(cols·Σd²) = ${f(Tbolt)} lbf on the worst bolt, ${f(Tbolt / boltArea, 0)} psi on the ${f(boltArea, 4)} in² tensile area (≤ ${f(p.ss316BoltYieldPsi / p.steelSafetyFactor, 0)}), ${f(Tbolt / washerA, 0)} psi under the ${f(GRIP_WASHER_OD_IN, 2)}" fender washer (≤ ${f(al.oakPerp, 0)}). `
+      + `Finger gap ${f(p.grabHoleHeightIn, 2)}" (≥ 1.25") and ${f(hl, 2)}" clear length (≥ 3.5"): no pinch point (BRIEF §4.7).`;
     return governing(ds, how);
   };
   return dualCheck({
     id: 'seat-grip',
-    label: 'Side grab handle (post bending, no pinch)',
+    label: 'Side grab board (bar bending, bolts, no pinch)',
     group: 'Structure',
-    refs: ['D-40', 'BRIEF 4.7'],
+    refs: ['D-40', 'D-57', 'BRIEF 4.7'],
     primary: 'goal',
     operating: ev(ctx.loads.operating),
     goal: ev(ctx.loads.goal),

@@ -36,11 +36,6 @@ export const LASH_HOLE_DX_IN = 0.5625;
 export const LASH_HOLE_DY_IN = 0.25;
 /** The 3/8" epoxy fillet in every inside corner of the box (flat things stowed in it ride on it, not in the corner). */
 export const BOX_FILLET_IN = 0.375;
-const PLUG_MASS_LB = 0.05;
-export const PLUG_R_IN = 0.3;
-export const PLUG_LEN_IN = 0.45;
-export const BACKER_IN = 1;
-const BACKER_W_IN = 1.5;
 /** Oak block under each lid latch (#8 screws need more than the 6 mm end ply or a thin transom): thickness, and width across. */
 export const LATCH_BLOCK_IN = 0.375;
 const LATCH_BLOCK_W_IN = 2;
@@ -48,6 +43,8 @@ const LATCH_BLOCK_W_IN = 2;
 const STAY_SIZE = [2, 0.3, 0.5] as const;
 const STAY_MASS_LB = 0.12;
 const BATTEN_X_IN = 1;
+/** The lid hinge backer: oak 1" thick against the inside of the box fore end. */
+const HINGE_BACKER_IN = 1;
 const HINGE_W_IN = 2.5;
 const HINGE_H_IN = 2.7;
 
@@ -225,13 +222,16 @@ export function packEssentials(interior: Interior, kit: readonly KitItem[] = ESS
 /** Lash-point x positions along one gunwale: farthest-point spread over the free stretches (clear of the grips). */
 export function lashPositions(p: Params, L: Layout, n: number): number[] {
   const margin = LASH_SIZE[0] / 2 + 0.25;
-  const lo = L.xRear + L.transom + L.rearLane + margin + 0.35; // clear of the transom and the corner backers (D-43); the doubler is turned to the slope, so its corner reaches a little farther
+  const lo = L.xRear + L.transom + L.rearLane + margin + 0.6; // clear of the transom and the corner backers (D-43); the doubler is turned to the sheer's slope (up to ~20 degrees at the rear, D-57), so its corner reaches farther
   // D-54: the whole straight side is available, turned to the sled slope; the plates stop short of the end of the sides.
-  const hi = L.xSideEnd - 2 * margin;
-  const gripLen = p.seatGripClearLengthIn + 2 * 1.5;
+  // D-57: the plates stay on the straight part of the side (the hull turns in toward the bow after `bulkhead.x0 - bowTurnLenIn`) and clear of the foot-block slot cleats.
+  const hi = Math.min(L.xSideEnd - 2 * margin, L.bulkhead.x0 - p.bowTurnLenIn - margin);
+  const gripLen = p.grabBoardLengthIn; // the grab board (D-57)
   const gx0 = p.seatXIn - GRIP_BEHIND_IN;
+  const flagClear = L.xRear + L.transom + L.rearLane + p.flagTubeOdIn + 0.75 + margin + 0.6; // the flag tube and its holding block stand in the left rear corner (D-57)
   const blocked: Array<[number, number]> = [
-    [gx0 - margin, gx0 + gripLen + margin],
+    [gx0 - margin - 0.5, gx0 + gripLen + margin + 0.5],
+    [-Infinity, flagClear],
   ];
   // A rear box that stands above the gunwale occupies the gunwale line along its length.
   const st = storageGeometry(p, L);
@@ -306,7 +306,8 @@ export function buildStorage(ctx: Ctx): Part[] {
     joints: ['storage-rim-side-L', 'storage-rim-side-R', 'storage-rim-end-aft', 'storage-rim-end-fore'].map((to): Joint => ({
       type: 'rabbet', to, count: 1, size: '1/4 deep × 1/4', note: 'panel captured in the frame (cut size includes the tongue); epoxy-sealed',
     })),
-    notes: 'Ply lid panel captured in the oak frame; the frame underside seals on the gasket.' }));
+    legend: { text: 'DO NOT STEP', face: 'top', process: 'CNC V-carve or laser engrave, then fill with black epoxy or paint', letterHeightIn: 1.5, depthIn: 0.03 },
+    notes: 'Ply lid panel captured in the oak frame; the frame underside seals on the gasket. The top face is engraved DO NOT STEP (D-58, Eric 2026-10-11): the lid is a seat-cushion box lid, not a step, and is NOT strengthened for a standing adult; the rest-load check leaves it out for that reason.' }));
   const rz: [number, number] = [zTop - pl - rimT, zTop];
   for (const [tag, y] of [['L', hw - rimW / 2], ['R', -(hw - rimW / 2)]] as const) {
     parts.push(box(ctx, { ...common, id: `storage-rim-side-${tag}`, partNo: 'storage-rim-side', name: `Storage lid frame side ${tag}`, mat: 'oak', grain: 'x',
@@ -357,7 +358,7 @@ export function buildStorage(ctx: Ctx): Part[] {
       joints: [{ type: 'screw', to: 'storage-rim-end-fore', count: 3, size: '#8 × 1/2 stainless' }, { type: 'screw', to: `storage-hinge-backer-${tag}`, count: 3, size: '#8 × 1 stainless, through the end panel into the 1" backer (S5)' }],
       notes: 'Barrel along the fore-top edge: the lid swings up and aft and the seat back (when fitted) stops it near 75° (D-41); the stay holds it open (S5).' }));
     parts.push(box(ctx, { ...common, id: `storage-hinge-backer-${tag}`, partNo: 'storage-hinge-backer', name: `Hinge backer ${tag}`, mat: 'oak', grain: 'y',
-      ...span([x1 - pl - BACKER_IN, x1 - pl], [sg * hingeY - HINGE_W_IN / 2, sg * hingeY + HINGE_W_IN / 2], [zPlyTop - 1.5, zPlyTop]),
+      ...span([x1 - pl - HINGE_BACKER_IN, x1 - pl], [sg * hingeY - HINGE_W_IN / 2, sg * hingeY + HINGE_W_IN / 2], [zPlyTop - 1.5, zPlyTop]),
       joints: [{ type: 'glue', to: 'storage-end-fore', count: 1, note: 'epoxy to the inside of the end panel' }],
       notes: 'Gives the hinge screws something to bite (#8 × 1" engages 3/4" of oak past the 6 mm ply); stops under the coaming.' }));
     // Latch block (S5): oak under each latch so the #8 screws are not in a thin ply end or a face-grain skin.
@@ -408,42 +409,6 @@ export function buildStorage(ctx: Ctx): Part[] {
     sourcing: { vendor: 'McMaster-Carr (316 stainless friction lid stay / hold-open brace, 2" fold)', costUsd: 18 },
     joints: [{ type: 'screw', to: 'storage-hinge-backer-L', count: 2, size: '#6 × 3/8 stainless, into the side grain of the 1" backer', note: 'the stay pivot' }, { type: 'screw', to: 'storage-rim-end-fore', count: 2, size: '#6 × 3/8 stainless', note: 'the stay arm end, on the lid frame' }],
     notes: 'Holds the lid at any angle so a gust or a scout cannot close it on fingers (S5). Folds flat against the backer when the lid is shut.' }));
-
-  // ── Backer cleats (box behind the seat): the inserts for the seat-back studs, inside the fore end (D-40) ──
-  if (sup.rear) {
-    const s = L.seat;
-    const c2z = s.col2[2];
-    const zS = s.Pr[2] + c2z * sup.c2B;
-    // Stud axis runs along the back normal; it reaches the box end plane just below the stile rear point.
-    const xr = s.Pr[0] + s.col2[0] * sup.c2B;
-    const dist = Math.max(0, (xr - x1) / s.col0[0]);
-    const zE = zS - s.col0[2] * dist;
-    const z0 = Math.max(g.floorZ, Math.min(zE - BACKER_IN, zPlyTop - 2 * BACKER_IN));
-    // D-53: the stowed seat back lies on the stowed cushion above the backers, so their tops stop 0.05" under it (the 3/8-16 insert still has >= 3/4" of oak).
-    const zStow = g.floorZ + BOX_FILLET_IN + p.seatCushionIn - 0.05;
-    const z1 = Math.max(z0 + 0.5, Math.min(z0 + 2 * BACKER_IN, zPlyTop, zStow)); // stops under the coaming
-    for (const { s: sg, tag } of SIDES) {
-      parts.push(box(ctx, { ...common, id: `storage-backer-${tag}`, partNo: 'storage-backer', name: `Seat-back insert backer ${tag}`, mat: 'oak', grain: 'z',
-        ...span([x1 - pl - BACKER_IN, x1 - pl], [sg * sup.knobY - BACKER_W_IN / 2, sg * sup.knobY + BACKER_W_IN / 2], [z0, z1]),
-        joints: [{ type: 'threaded-insert', to: `seat-back-stile-${tag}`, count: 1, size: '3/8-16 stainless, 3/4 deep', note: 'the seat-back stud ends here (D-9)' },
-          { type: 'glue', to: 'storage-end-fore', count: 1, note: 'epoxy to the inside of the end panel' },
-          { type: 'screw', to: 'storage-end-fore', count: 2, size: '#10 × 1¼ stainless, from the wedge side' }],
-        notes: 'Takes the knob stud pull-out (about 180 lbf each at the goal rider, seat-back check).' }));
-    }
-  }
-
-  // ── Hole plugs (D-53): with the seat off, the two stud holes through the box's fore end are closed from the outside by hand-tight sealed thumb screws that thread into the
-  //    same inserts. Seat installed: they ride loose in the box (aft corners, on the floor) with the other small parts. ──
-  if (sup.rear) {
-    for (const { s: sg, tag } of SIDES) {
-      parts.push(cylinder(ctx, { ...common, id: `seat-plug-${tag}`, partNo: 'seat-plug', name: `Stud-hole plug ${tag}`, mat: 'fixed', massLb: PLUG_MASS_LB, kind: 'purchased',
-        material: '316 stainless 3/8-16 thumb screw, bonded sealing washer', fab: 'buy', removable: true, step: STEP.finish, axis: 'y', radius: PLUG_R_IN, length: PLUG_LEN_IN,
-        center: [Math.min(x0 + pl + 3.5, (x0 + x1) / 2), sg * (yIn - 2), g.floorZ + BOX_FILLET_IN + PLUG_R_IN],
-        sourcing: { vendor: 'McMaster-Carr (316 stainless thumb screw, 3/8-16, with a bonded sealing washer)', costUsd: 4 },
-        joints: [{ type: 'threaded-insert', to: `storage-backer-${tag}`, count: 1, size: '3/8-16 into the seat-back insert', note: 'cargo mode: screwed into the insert from the outside of the box end, hand-tight, so the stud hole is sealed' }],
-        notes: 'Closes the 13/32" stud hole through the box fore end whenever the seat back is off (the box is weatherproof, D-41). Seat installed: stowed loose in the box. Cargo mode: threaded into the insert from the bed side, 0.4" proud of the end wall.' }));
-    }
-  }
 
   // ── Lash points on the gunwales: stainless D-rings on bolt plates (BRIEF §4.9), turned to the slope of the sled profile (D-54) ──
   const xs = lashPositions(p, L, p.lashPointsPerSide);

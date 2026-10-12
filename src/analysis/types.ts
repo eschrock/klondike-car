@@ -88,13 +88,13 @@ export const GROUP_OF_ID: Record<string, CheckGroup> = {
   'turn-radius': 'Steering', 'steer-clear': 'Steering',
   // The pivoting front axle (D-56)
   kingpin: 'Structure', 'king-bearing': 'Structure', 'front-beam': 'Structure', 'front-stub': 'Structure', 'steer-stops': 'Structure', 'king-beam': 'Structure',
-  'park-hold': 'Structure',
+  'park-hold': 'Braking',
   'bridle-eye': 'Structure',
-  'brake-force': 'Braking', 'brake-traction': 'Braking', 'brake-ratio': 'Braking', 'brake-clear': 'Braking',
-  'brake-lever': 'Structure', 'brake-links': 'Structure', 'brake-beam': 'Structure', 'brake-shoes': 'Structure', 'brake-abuse': 'Structure', 'handle-sockets': 'Structure',
+  'brake-force': 'Braking', 'brake-slow': 'Braking', 'brake-traction': 'Braking', 'brake-ratio': 'Braking', 'brake-clear': 'Braking',
+  'brake-flap': 'Structure', 'brake-hinge': 'Structure', 'brake-mount': 'Structure', 'brake-return': 'Structure', 'brake-abuse': 'Structure', 'handle-sockets': 'Structure',
   'axle-stress': 'Structure', 'beam-rear': 'Structure', 'bearing-groove': 'Structure', rails: 'Structure', deck: 'Structure',
   // Workstream D (seat, storage, fittings)
-  'seat-back': 'Structure', 'seat-grip': 'Structure', 'storage-pack': 'Structure', 'storage-lid-open': 'Structure', 'lash-points': 'Structure', lift: 'Structure', 'foot-stop': 'Structure', 'lash-load': 'Structure',
+  'seat-back': 'Structure', 'seat-grip': 'Structure', 'storage-pack': 'Structure', 'storage-lid-open': 'Structure', 'lash-points': 'Structure', lift: 'Structure', 'foot-stop': 'Structure', 'lash-load': 'Structure', 'rest-load': 'Structure',
   // Cargo mode (Phase 3c-2, D-53)
   'seat-stow': 'Structure', joists: 'Structure', 'lid-load': 'Structure', 'cargo-strap': 'Structure', 'handle-bow': 'Structure',
 };

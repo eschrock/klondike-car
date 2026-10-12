@@ -12,7 +12,7 @@ import { SEVERITY, type Status } from '../analysis/types';
 import { LIGHTS, isRiderSweepCached, lightOf, riderSweep, type Light, type SweepResult } from '../analysis/rider-sweep';
 import type { Store } from '../state';
 import { h } from './dom';
-import { LIGHT_CHECK_IDS, LIGHT_TITLE, cargoText, headline, lightTexts, limitLine, limiterAdvice, weightNote } from './simple-text';
+import { LIGHT_CHECK_IDS, LIGHT_TITLE, cargoText, headline, lightTexts, limitLine, limiterAdvice, restingText, weightNote } from './simple-text';
 import { cargoCapacity, isCargoCapacityCached, type CargoCapacity } from '../analysis/cargo-capacity';
 import './simple-view.css';
 
@@ -91,7 +91,8 @@ const CONTROLS: Control[] = [
   {
     id: 'width', label: 'Width between wheels', unit: 'in', def: PARAM_DEFS.rearTrackIn, hint: 'Wider = steadier, but harder to fit in the truck.',
     get: (p) => p.rearTrackIn,
-    set: (store, v) => store.replace({ ...store.get(), frontTrackIn: v, rearTrackIn: v }),
+    // D-58: the rear track follows the slider; the front track follows it too but never goes below its default (the minimum for the full-lock tire clearance).
+    set: (store, v) => store.replace({ ...store.get(), frontTrackIn: Math.max(v, PARAM_DEFS.frontTrackIn.default), rearTrackIn: v }),
     reset: (store) => store.replace({ ...store.get(), frontTrackIn: PARAM_DEFS.frontTrackIn.default, rearTrackIn: PARAM_DEFS.rearTrackIn.default }),
   },
   { id: 'wheel', label: 'Wheel size', unit: 'in', def: PARAM_DEFS.wheelDiameterIn, hint: 'All four wheels. Bigger wheels roll easier, but add weight.', get: (p) => p.wheelDiameterIn, set: setOne('wheelDiameterIn'), reset: resetOne('wheelDiameterIn') },
@@ -120,7 +121,7 @@ function controlRow(c: Control, store: Store): { row: HTMLElement; sync: (p: Par
     range.value = String(v);
     range.setAttribute('aria-valuetext', `${fmtVal(v)} ${UNIT_WORD[c.unit] ?? c.unit}`); // M9: the unit is read, not just the number
     if (document.activeElement !== num) num.value = fmtVal(v);
-    reset.hidden = Math.abs(v - d.default) < 1e-9 && (c.id !== 'width' || p.frontTrackIn === p.rearTrackIn);
+    reset.hidden = Math.abs(v - d.default) < 1e-9 && (c.id !== 'width' || p.frontTrackIn === Math.max(p.rearTrackIn, PARAM_DEFS.frontTrackIn.default));
   };
   const row = h('div', { class: 'sv-row' },
     h('div', { class: 'sv-head' }, h('label', { for: id }, c.label), reset),
@@ -292,6 +293,7 @@ function mountSafetyCard(host: HTMLElement, deps: Pick<SimpleViewDeps, 'onLight'
     // At a glance: size, weight, turning circle and the truck, colored like the lights so the two never disagree.
     const bedL = fmtVal(p.truckBedLengthIn), bedW = fmtVal(p.truckWellGapIn);
     const fits = texts.truck.status !== 'fail';
+    const rest = restingText(sweep.operatingChecks, p.restLoadLb);
     const assembled = fit.cases.some((c) => c.config === 'installed' && c.fits);
     const item = (k: string, v: string, subText: string | null, cls = '') => h('li', { class: `sv-glance-item ${cls}` },
       h('span', { class: 'sv-glance-k' }, k), h('span', { class: 'sv-glance-v' }, v), ...(subText ? [h('span', { class: 'sv-glance-s' }, subText)] : []));
@@ -299,6 +301,7 @@ function mountSafetyCard(host: HTMLElement, deps: Pick<SimpleViewDeps, 'onLight'
       item('Size (L × W × H)', dims(fit.dims.installed), null),
       item('Empty weight', `${Math.round(spec.emptyLb)} lb`, `Seat back and handle off: two people lift ${Math.round(spec.transportLb / 2)} lb each`),
       item('Front end', `Pivoting axle, ${fmtVal(Math.abs(p.steerLockDeg))} degrees each way`, 'It turns on one big bolt when the rope pulls it', texts.steering.status),
+      ...(rest.maxLb !== null ? [item('Resting weight', rest.text, `${rest.status === 'fail' ? `The goal is ${p.restLoadLb} lb. ` : ''}${rest.note}`, rest.status)] : []),
       item('Turning circle', `about ${Math.round((2 * steerGeometry(p).centerRadiusIn) / 12)} ft across`, 'The circle the rear axle drives at full turn'),
       item('Truck',
         fits ? `✔ Fits a Tacoma bed (${bedL} × ${bedW} in)` : `✖ Too big for a Tacoma bed (${bedL} × ${bedW} in)`,

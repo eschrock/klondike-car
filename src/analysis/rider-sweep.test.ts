@@ -15,18 +15,14 @@ describe('riderSweep', () => {
     const r = riderSweep(p0, { fit });
     expect(performance.now() - t0).toBeLessThan(10000); // ~1-2 s measured with the bump-basis rows (it was ~110 ms before the flip); shared CI runners are 2-3x slower
     expect(r.points.map((x) => x.w)).toEqual(Array.from({ length: 21 }, (_, i) => 50 + 10 * i));
-    // Honesty (D-56): at the defaults the operating weight FAILS - the pivoting front axle's rows: king-bearing (the roll couple of a one-wheel strike on the 2.5 in UHMW washer and the
-    // oak under it, about 11x), steer-stops (oak crush at the stop contact), bridle-eye (the 3/16 in tongue bar bends about its thin axis under the vertical part of the pull) and lift
-    // (the same tongue when the nose is lifted by it), plus the brake-clear row of the brake agent (the brake beam is 1/16 in from the rail) - so there is no safe range at any weight.
-    // Pin that it is reported and that those rows are among the reds.
-    expect(r.operating.status).toBe('fail');
-    expect(r.safe).toBeNull();
-    expect(r.green).toBeNull();
-    expect(r.operating.fails.length).toBeGreaterThan(0);
-    for (const id of r.operating.fails) expect(LIGHT_OF_ID[id], id).toBeDefined();
-    for (const id of ['king-bearing', 'steer-stops', 'bridle-eye', 'lift']) expect(r.operating.fails).toContain(id);
-    for (const id of ['tip-straight', 'tip-lock', 'slide-before-tip']) expect(r.operating.fails).not.toContain(id); // the stability rows pass with the wide 35.5 in track and the 14 in CG
-    expect(r.points.every((x) => x.status === 'fail')).toBe(true); // every rider weight from 50 to 250 lb is red at the defaults
+    // D-58: the front-axle rows are fixed (roll pads, oak tongue, check chains, lift by the body), so at the defaults the 150 lb operating weight PASSES every row.
+    // The safe range (no red) is 50-220 lb, the green range (no yellow either) 50-200 lb; the deck ply deflection and bending turn the heaviest riders red (230 lb and up).
+    expect(r.operating.status).toBe('pass');
+    expect(r.operating.fails).toEqual([]);
+    expect(r.safe).toEqual({ loLb: 50, hiLb: 220, openLow: true, openHigh: false });
+    expect(r.green).toEqual({ loLb: 50, hiLb: 200, openLow: true, openHigh: false });
+    for (const id of ['king-bearing', 'steer-stops', 'bridle-eye', 'lift', 'brake-force']) expect(r.points.every((x) => !x.fails.includes(id)), id).toBe(true);
+    expect(r.points.filter((x) => x.w <= 200).every((x) => x.status === 'pass')).toBe(true);
     // the deck ply fails for the heaviest riders on top of that (230 lb and up)
     expect(r.points.find((x) => x.w === 220)!.fails).not.toContain('deck');
     expect(r.points.find((x) => x.w === 230)!.fails).toContain('deck');
@@ -42,7 +38,7 @@ describe('riderSweep', () => {
 
   it('shows red at the right weights for a design with a known failing check', () => {
     // The tip limit is raised to 52 deg (the straight tip is 55.6 deg at 50 lb and 47.9 at 250 lb) and the slide factor to 2.4 (SSF 1.47 at 50 lb down to 1.11 at 250 vs 1.2): the tip row
-    // then fails from 110 lb and up and the slide-before-tip row from 160 lb, while the lighter riders have no stability failure. (Front-end and brake rows are ignored here.)
+    // then fails from 80 lb and up and the slide-before-tip row from 120 lb (D-58 tracks), while the lighter riders have no stability failure. (Front-end and brake rows are ignored here.)
     const bad = { ...p0, tipStraightMinDeg: 52, slideMarginFactor: 2.4 };
     const r = riderSweep(bad, { fit });
     const stab = (fails: string[]) => fails.filter((id) => ['tip-straight', 'slide-before-tip'].includes(id));
@@ -52,7 +48,7 @@ describe('riderSweep', () => {
     expect(stab(r.points[0].fails)).toEqual([]);
     // The sweep agrees with a direct run at a red weight, using the same all-riders-equal rule.
     const w = reds[0].w;
-    expect(w).toBe(110);
+    expect(w).toBe(80); // 34 1/2 / 32 in tracks (D-58): the straight tip is 48.6 deg at 150 lb
     const direct = runChecks(withRider(bad, w), { includeTruck: false });
     expect(direct.find((c) => c.id === 'tip-straight')!.status).toBe('fail');
     expect(reds[0].fails).toContain('tip-straight');
@@ -64,7 +60,7 @@ describe('riderSweep', () => {
     const slideRed = r.points.filter((x) => x.fails.includes('slide-before-tip'));
     expect(slideRed.length).toBeGreaterThan(0);
     expect(slideRed[0].w).toBeGreaterThan(w);
-    expect(slideRed[0].w).toBe(160);
+    expect(slideRed[0].w).toBe(120);
   });
 
   it('maps every check id to exactly one light (or info)', () => {

@@ -85,10 +85,12 @@ describe('shaped rear transom (D-44, D-54)', () => {
     expect(o[o.length - 1][0]).toBeCloseTo(-8, 9);
   });
 
-  it('there is no front transom and no sheer: the bow is the curl, whose top edge is a plain band', () => {
+  it('there is no front transom and no D-44 sheer rise: the bow is the shaped oak bulkhead (D-57), an extrusion with a curved top', () => {
     expect(parts.some((x) => x.id === 'transom-front')).toBe(false);
     expect(Object.keys(PARAM_DEFS)).not.toContain('sheerRiseIn');
-    expect(get(parts, 'bow-curl').geometry.type).toBe('sweep');
+    const b = get(parts, 'bow-bulkhead');
+    expect(b.geometry.type).toBe('extrusion');
+    expect(outlineOf(b).length).toBeGreaterThan(20); // crowned top, rounded corners
   });
 });
 
@@ -110,17 +112,16 @@ describe('seat back, handle and finish tags (D-44)', () => {
     expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(seatBackSupport(defaults, computeLayout(defaults)).W, 6);
   });
 
-  it('the push handle is a crowned handlebow (D-53): a bent-lamination sweep that arches up over the post tops', () => {
+  it('the push handle is a gently crowned handlebow (D-53, D-57): one bandsawn board whose top edge is highest in the middle, crown 7/8 in above the post tops', () => {
     const bar = get(parts, 'handle-bar');
-    expect(bar.geometry.type).toBe('sweep');
-    expect(bar.kind).toBe('bentlam');
+    expect(bar.geometry.type).toBe('extrusion');
+    expect(bar.kind).toBe('lumber');
     expect(bar.grain).toBeDefined();
-    const g = bar.geometry as Extract<Part['geometry'], { type: 'sweep' }>;
-    const zs = g.path.map((q) => q[1]);
-    const mid = g.path[Math.floor(g.path.length / 2)];
-    expect(mid[0]).toBeCloseTo(0, 9);
-    expect(mid[1]).toBeCloseTo(Math.max(...zs), 9); // highest in the middle
-    expect(mid[1] - defaults.rearHandleHeightIn).toBeCloseTo(defaults.handleBowCrownIn, 6);
+    const o = outlineOf(bar);
+    const top = Math.max(...o.map((q) => q[1]));
+    const atMid = o.filter((q) => Math.abs(q[0]) < 1e-9).map((q) => q[1]);
+    expect(Math.max(...atMid)).toBeCloseTo(top, 9); // highest in the middle
+    expect(top - (defaults.rearHandleHeightIn + defaults.handleBarDiameterIn / 2)).toBeCloseTo(defaults.handleBowCrownIn, 6);
   });
 
   it('every oak lumber part has a roundover of at most a third of its smallest section; okoume ply, vinyl and wheels are tagged', () => {
@@ -142,12 +143,14 @@ describe('seat back, handle and finish tags (D-44)', () => {
     expect(parts.filter((q) => q.geometry.type === 'wheel')).toHaveLength(4);
     expect(get(parts, 'handle-socket-L').finish?.surface).toBe('aluminum');
     // the pivoting front axle (D-56): the tongue plate and kingpin are blackened steel; the beam, king beam and stops are oak; the thrust washer is UHMW; the shackle is steel
-    for (const id of ['bridle-tongue', 'kingpin']) expect(get(parts, id).finish?.surface, id).toBe('blackened');
+    expect(get(parts, 'kingpin').finish?.surface).toBe('blackened');
+    expect(get(parts, 'bridle-tongue').finish?.surface).not.toBe('blackened'); // the oak tongue (D-58) is finished like the rest of the oak
     expect(get(parts, 'bridle-eye').finish?.surface).toBe('steel');
     expect(get(parts, 'king-thrust').finish?.surface).toBe('asa');
-    for (const id of ['axle-hanger-L', 'beam-F', 'king-beam', 'steer-stop-L', 'steer-stop-R']) expect(get(parts, id).finish?.surface, id).toBe('oak');
-    expect(get(parts, 'bow-curl').finish?.surface).toBe('okoume');
-    expect(get(parts, 'bow-curl').finish?.roundoverIn).toBeUndefined(); // ply: no roundover
+    for (const id of ['axle-hanger-L', 'beam-F', 'king-beam', 'bridle-tongue']) expect(get(parts, id).finish?.surface, id).toBe('oak');
+    expect(get(parts, 'bow-bulkhead').finish?.surface).toBe('oak');
+    expect(get(parts, 'bow-bulkhead').finish?.roundoverIn).toBeGreaterThan(0);
+    expect(get(parts, 'sign-L').finish?.surface).toBe('okoume');
     expect(parts.some((x) => /^(stick-cable|cable-crossbar|lap-belt|belt-anchor|guard-)/.test(x.id))).toBe(false);
     expect(parts.find((x) => x.material.includes('rope'))!.finish?.surface).toBe('rope');
   });
