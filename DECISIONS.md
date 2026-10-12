@@ -152,7 +152,7 @@ The workstream notes have the full reasoning and check tables: `docs/phase3-ws{A
 7. **Grab handles:** one oak board per side with a CNC-routed hand hole.
 9. **Sign:** restore it, placed where it fits the final shape (likely the tall rear part of each side, or a board on the back), using the aspect-independent oval sign generator; the final visual critic judges it.
 10. **Handlebow:** a gentle crown, about ¾–1" (was 3"), **bandsawn from one oak board** rather than laminated.
-8. **Brake:** a scooter-style step brake. An oak flap hinged over each rear tire with a rubber pad, about 2:1 leverage and a bungee return; a wheel chock on a cord parks it. It replaces the D-55 steel-plate foot brake: no welding, no custom steel. | 🔶 |
+8. **Brake (refined, Eric):** it is judged on **slowing** the loaded cart (pass/fail). Holding still on 15° (about 85–104 lbf at the feet) is **info only**: on steep hills, chock a wheel or have someone hold the cart. The design is a scooter-style step brake. An oak flap hinged over each rear tire with a rubber pad, about 2:1 leverage and a bungee return; a wheel chock on a cord parks it. It replaces the D-55 steel-plate foot brake: no welding, no custom steel. | 🔶 |
 - **Axle:** one oak axle beam under the bow, with a 10" wheel on a bolt-on ¾" stub at each end. The wheels sit outboard of the body on a 35.5" track, so the deck stays low (8").
 - **Pivot:** one ⅝" grade-8 kingpin through a UHMW thrust washer into an oak king beam. Bolted only.
 - **Steering:** oak stop blocks give **±20°** (turning circle about 20 ft). The pullers steer through a short tongue plate with the bridle shackled to it. Optional axle-end ropes for the musher are off by default.
