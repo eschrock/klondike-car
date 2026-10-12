@@ -462,7 +462,11 @@ describe('build review round 2: step 1 names the cut list boards, rip first (MUS
   it('prescribes rip first and quotes the yield, the spares and the lane plan from cutList().resaw', () => {
     expect(cl.resaw.length).toBeGreaterThanOrEqual(2);
     for (const pool of cl.resaw) {
-      expect(mill).toContain(`resawn from ${pool.board}, RIP FIRST: rip ${pool.lanes} lane`);
+      // r3 MUST-1: the lane count includes the spare lanes, so ripping as written yields the spares the bend test uses
+      const m = mill.match(new RegExp(`resawn from ${pool.board.replace('/', '\\/')}, RIP FIRST: rip (\\d+) lane`));
+      expect(m, pool.board).not.toBeNull();
+      expect(Number(m![1])).toBeGreaterThanOrEqual(pool.lanes);
+      if (pool.spares > 0) expect(mill).toMatch(/spare lane/);
       expect(mill).toContain(`it yields ${pool.stripSlots} strips for the ${pool.strips} needed`);
       expect(mill).toContain(pool.spares > 0 ? `${pool.spares} spare strip` : 'no spare strip');
     }

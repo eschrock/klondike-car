@@ -513,7 +513,7 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
   const closeEpoxyFlOz = round1(glueEpoxyFlOz(parts, (x) => closeParts.has(x.id)) * (1 + CLOSE_WASTE) * 10) / 10;
   const hardener209Qt = closeEpoxyFlOz / (EPOXY_RESIN_PARTS + 1) / FLOZ_PER_QT;
   const buy: BuyLine[] = [
-    ...buyLines('West System 105 epoxy resin', resinQt, `${f(resinQt, 1)} qt resin for ${f(mixedQt, 1)} qt mixed (two coats of ${f(epoxyArea, 0)} ft² at ${EPOXY_COVERAGE_COAT1} / ${EPOXY_COVERAGE_COAT2} ft²/qt mixed); the glue-ups use the kit's 206`),
+    ...buyLines('West System 105 epoxy resin', resinQt, `${f(resinQt, 1)} qt resin for ${f(mixedQt, 1)} qt mixed (two coats of ${f(epoxyArea, 0)} ft² at ${EPOXY_COVERAGE_COAT1} / ${EPOXY_COVERAGE_COAT2} ft²/qt mixed); the glue-ups use the kit's 206. NOT a separate purchase: the BOM's epoxy kit (105 resin for the glue-ups and these coats together) covers it`),
     // The 207 is the tight one: a pint that leaves under HARDENER_MARGIN spare (two finishing campaigns, pump priming) becomes a quart.
     ...buyLines('West System 207 special clear hardener', hardenerQt * (1 + HARDENER_MARGIN), `${f(hardenerQt, 2)} qt hardener (3:1 with the 105 by volume) for the two coats; bought with at least ${f(HARDENER_MARGIN * 100, 0)} % to spare for the two campaigns and pump priming`, false),
     ...buyLines('West System 209 extra slow hardener', Math.max(hardener209Qt, 0.01), `closes the transom and bulkhead (120 min pot): ${f(closeEpoxyFlOz, 0)} fl oz mixed with the kit's 105 at 3:1 = ${f(closeEpoxyFlOz / (EPOXY_RESIN_PARTS + 1), 1)} fl oz of 209; the smallest can is plenty`, false),

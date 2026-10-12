@@ -211,8 +211,14 @@ function resawText(c: StepCtx, x: Part, strips: number): string {
   const pool = poolOf(c, x);
   if (!pool) return 'resawn from thick stock (see the cut list)';
   const spare = pool.spares <= 0 ? 'no spare strip: a strip that cracks on the form means another board' : plural(pool.spares, 'spare strip');
+  // The spares are whole extra lanes of the widest strip (plus any empty slot in a full-width lane): say how many lanes to rip for them (build review r3 MUST-1).
+  const k = Math.max(1, pool.stripsPerBoard);
+  const widest = Math.max(...pool.laneStrips.flat().map((q) => q.widthIn));
+  const emptySlots = pool.laneStrips.reduce((a, l) => a + (Math.max(...l.map((q) => q.widthIn)) >= widest - 1e-9 ? k - l.length : 0), 0);
+  const spareLanes = Math.ceil(Math.max(0, pool.spares - emptySlots) / k);
+  const spareLaneText = spareLanes > 0 ? ` + ${plural(spareLanes, 'spare lane')} of ${f(widest, 3)}" (${plural(spareLanes * k, 'spare strip')})` : '';
   return (
-    `resawn from ${pool.board}, RIP FIRST: rip ${plural(pool.lanes, 'lane')} in all (${laneWidths(pool)}, kerf ${inch(c.p.resawKerfIn)}), then resaw each lane into ${plural(pool.stripsPerBoard, 'slab')} on the bandsaw ` +
+    `resawn from ${pool.board}, RIP FIRST: rip ${plural(pool.lanes + spareLanes, 'lane')} in all (${laneWidths(pool)}${spareLaneText}, kerf ${inch(c.p.resawKerfIn)}), then resaw each lane into ${plural(pool.stripsPerBoard, 'slab')} on the bandsaw ` +
     `(the cut is only one lane wide; do not resaw the full board width first, the plan does not count on it). Buy ${pool.boards} × ${pool.board} × ${pool.boardWidthIn}" × ${f(pool.boardLengthIn / 12, 0)} ft: ` +
     `it yields ${pool.stripSlots} strips for the ${strips} needed (${spare})`
   );

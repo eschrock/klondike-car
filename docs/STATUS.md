@@ -6,7 +6,7 @@
 | 1 — Block model | ✅ approved |
 | 2 — Analysis & simulation | ✅ approved 2026-10-10 |
 | 3 — Detail design | **checkpoint** (docs/phase3-checkpoint.md): critics 8/8/8, 121.0 lb, safe 50–250+ lb |
-| 4 — Build outputs | not started |
+| 4 — Build outputs | **checkpoint** (docs/phase4-checkpoint.md): critics build 8, files 8.5; BOM $2,697; 115.6 lb |
 
 ## Phase 0 log
 - 2026-10-10: params.ts, Part schema and DECISIONS.md drafted. App shell scaffolded by a subagent and checked in the browser.
@@ -53,3 +53,9 @@
 - 3c-6 (D-60, weight package): foot block and cleats gone, Package A (hollow DOM axle tubes, steering parts, transom, flaps, sockets, bulkhead, joists, small trims) and four trade-offs (2.8 lb wheel, 4 mm ply, 1/2 in transom, smaller handle posts). Empty mass 144.4 → **120.6 lb**; safe 50–250+ lb, green to 230 lb; cargo 233 lb; resting 348 lb; nothing fails. Notes: docs/phase3c-6-weight-notes.md.
 - 3c-5…3c-8: visual 7→8, weight package (144.4 → 121.0 lb), engineering 8, buildability 7→8 + last fixes (D-59…D-63). Phase 3 checkpoint written (docs/phase3-checkpoint.md). Next: Eric's sign-off, then Phase 4 build outputs.
 - Post-checkpoint (2026-10-12): rear lamp clip (D-64); pull-pin removable step brake, Brakes/Lights/Chocks toggles, Transport mode, Simple-view cleanup (D-65); 30" matched tracks + gradual bow taper + slotted brake knee (D-66); straight tip limit 35° (D-67); reflectors follow the taper; CI timeouts raised. 115.5 lb; safe 50–250+, green 50–240; cargo 274 lb. Next: Phase 4.
+
+## Phase 4 log
+- 2026-10-12: spec (docs/phase4-spec.md). Eric chose Shaper SVG only, print-styled pages, in-app downloads, and concise steps for himself and helpers. D-68: full 4x8 plywood only (2x4 scarf option removed). Merged Eric's D-69 (bow bulkhead).
+- Three parallel agents built the data (cut list, nesting, BOM), geometry (Shaper SVG, forms, STL) and process (assembly, finishing, verify) outputs, then the UI (Build tab, step-through, zip) and model data fixes.
+- Critics: build 6 -> 7 -> 8, files 6 -> 8 -> 8.5 (docs/reviews/phase4-*-round{1,2,3}.md). Fixes are in the Round 2/3 sections of docs/phase4-*-notes.md.
+- Checkpoint written (docs/phase4-checkpoint.md). Next: Eric's sign-off, cost pass?, push to Pages?
