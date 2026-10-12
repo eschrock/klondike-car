@@ -35,6 +35,11 @@ export const EYE_INSET_IN = 0.8;
 /** Corner radii of the Shaper-cut flap outline (in): the foot end and the pivot tongue's nose. */
 export const FLAP_REAR_CORNER_IN = 0.5;
 export const FLAP_NOSE_CORNER_IN = 0.25;
+/** Pivot-block screws (#10) stay this much clear of the pin's cross hole edge (screw body to hole edge, in) and this far from the block's end and the tongue's edges (screw center): fabrication rules. */
+export const PIVOT_SCREW_WOOD_IN = 0.375;
+export const PIVOT_SCREW_EDGE_IN = 0.25;
+/** The cross hole for the clevis pin is drilled this much over the pin (in). */
+export const PIVOT_HOLE_CLEAR_IN = 1 / 32;
 /** The pin enters the knee's inboard ear this deep (blind hole) and its cross hole for the clip sits this far beyond the knee's outboard face (in): a purchased-pin size. */
 export const PIN_BLIND_IN = 1;
 export const PIN_STICKOUT_IN = 0.55;
@@ -401,4 +406,21 @@ export function flapOutline(g: Pick<BrakeGeom, 'plan' | 'board'>): V2[] {
   pts.push(...arc(X(s1 - rr), wR - rr, rr, 0.5 * Math.PI, Math.PI)); // rear-left corner
   void len;
   return pts.filter((q, i) => { const o = pts[(i + pts.length - 1) % pts.length]; return Math.hypot(q[0] - o[0], q[1] - o[1]) > 1e-6; });
+}
+
+/** The flap's local x of a station `s` along its top surface (station 0 is the pin axis; the nose is at s0, the foot end at s1). */
+export const flapLocalX = (g: Pick<BrakeGeom, 'board'>, s: number): number => -(s - (g.board.s0 + g.board.s1) / 2);
+
+/**
+ * Where the `n` pivot-block screws go, as (x, y) in the flap's local frame (x forward to the nose, y across from the tire's center line; D-65). They sit on the block, which runs from the
+ * nose back to the shoulder, but BEHIND the pin: the pin's cross hole (pin + `PIVOT_HOLE_CLEAR_IN`) is in the nose end, so each screw keeps `PIVOT_SCREW_WOOD_IN` of oak between its body and
+ * the hole's edge, and `PIVOT_SCREW_EDGE_IN` from the block's rear end and the tongue's edges. That leaves a short band along the flap (about 1/3 in at the defaults), so the screws
+ * are spread across the tongue, alternating between the forward and the rearward edge of the band.
+ */
+export function pivotBlockScrewPoints(g: Pick<BrakeGeom, 'board' | 'plan'>, n: number, pinDiaIn: number, screwDiaIn: number): V2[] {
+  const xPin = flapLocalX(g, 0);
+  const xFwd = xPin - (pinDiaIn / 2 + PIVOT_HOLE_CLEAR_IN / 2 + PIVOT_SCREW_WOOD_IN + screwDiaIn / 2);
+  const xRear = Math.min(xFwd, flapLocalX(g, g.plan.sShoulder) + PIVOT_SCREW_EDGE_IN);
+  const yMax = Math.max(0, g.plan.wTongue / 2 - PIVOT_SCREW_EDGE_IN - 0.05);
+  return Array.from({ length: n }, (_, i): V2 => [i % 2 === 0 ? xFwd : xRear, n === 1 ? 0 : -yMax + (2 * yMax * i) / (n - 1)]);
 }

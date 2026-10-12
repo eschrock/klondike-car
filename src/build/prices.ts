@@ -108,13 +108,15 @@ export const FASTENER_FALLBACK: Price = est(1, 'ea', 'No entry in prices.ts', 'U
 
 const EPOXY = 'Marine supplier / local dealer';
 /**
- * West System 105 resin with 206 slow hardener (5:1 by volume). Sold as resin plus hardener; priced here as a kit of the pair.
- * `mixedFlOz` is the mixed volume the kit makes (resin plus hardener).
+ * West System 105 resin with 206 slow hardener (5:1 by volume). Sold as resin plus hardener; priced here as a kit of the pair: the 105-A + 206-A quart group and the 105-B + 206-B gallon group.
+ * `mixedFlOz` is the mixed volume the kit makes (resin plus hardener). The gallon group is cheaper per ounce (about $1.7 against $2.4 per mixed fl oz), and three quart groups cost more than one gallon group.
  */
 export const EPOXY_KITS: Array<{ id: string; label: string; mixedFlOz: number; price: Price }> = [
-  { id: 'quart', label: 'West System 105 resin + 206 slow hardener, quart size kit', mixedFlOz: 38.4, price: est(80, 'kit', EPOXY, '32 fl oz resin + 6.4 fl oz hardener, with pumps') },
-  { id: 'gallon', label: 'West System 105 resin + 206 slow hardener, gallon size kit', mixedFlOz: 153.6, price: est(310, 'kit', EPOXY, '128 fl oz resin + 25.6 fl oz hardener') },
+  { id: 'quart', label: 'West System 105-A resin + 206-A slow hardener, quart group', mixedFlOz: 38.4, price: est(92, 'kit', EPOXY, '32 fl oz resin + 6.4 fl oz hardener') },
+  { id: 'gallon', label: 'West System 105-B resin + 206-B slow hardener, gallon group', mixedFlOz: 153.6, price: est(265, 'kit', EPOXY, '128 fl oz resin + 25.6 fl oz hardener; the pumps are extra') },
 ];
+/** 207 special clear hardener for the two finish coats (the finishing schedule's buy list), per pint. */
+export const EPOXY_207_PINT: Price = est(38, 'pt', EPOXY, '207 special clear hardener (non-blushing, clear): the finish coats; the resin is from the kit and the kit hardener covers the glue-ups');
 export const EPOXY_PUMPS: Price = est(16, 'pair', EPOXY, 'metering pumps for the gallon and quart cans');
 export const FILLERS: Record<string, Price> = {
   silica: est(26, 'ea', EPOXY, 'colloidal silica (406 type), for thickened glue and fillets'),
@@ -126,10 +128,16 @@ const FINISH = 'Paint store / marine supplier';
 export const FINISH_PRICE: Record<string, Price> = {
   stain: est(18, 'qt', FINISH, 'wipe-on oak stain (or leave natural)'),
   conditioner: est(16, 'qt', FINISH, 'pre-stain conditioner or gel stain for the okoume, which blotches (BRIEF finishing stack)'),
+  gelStain: est(20, 'qt', FINISH, 'gel stain for the okoume'),
   varnish: est(42, 'qt', FINISH, 'spar varnish with UV filters'),
+  enamel: est(14, 'qt', FINISH, 'black enamel, for the lid legend (a pint is bought)'),
+  thinner: est(11, 'qt', FINISH, 'thinner for varnish coat 1 and brush cleaning (a pint is bought)'),
   sandpaper: est(30, 'lot', 'Hardware store', 'discs and sheets, 80 to 320 grit, lump sum'),
   supplies: est(35, 'lot', 'Hardware store', 'brushes, foam rollers, mixing cups, gloves, acetone, tack cloth'),
 };
+
+/** Price of a container relative to a quart, for the finishing schedule's buy list: a pint costs about 0.6 of a quart, a gallon about 3.2 quarts. */
+export const FINISH_CONTAINER_FACTOR: Record<'pt' | 'qt' | 'gal', number> = { pt: 0.6, qt: 1, gal: 3.2 };
 
 /** Reference prices for the sewn parts (the model carries their costs: 55 and 25); kept here so they can be re-priced by area or yardage. */
 export const SOFT_GOODS: Record<string, Price> = {

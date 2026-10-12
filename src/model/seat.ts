@@ -51,6 +51,11 @@ const PIN_MASS_LB = 0.06;
 /** 316 butt hinge (leaves screwed to the back's front face and, through the deck, to a backer): knuckle length across, knuckle radius, mass. */
 export const HINGE_LEN_IN = 2;
 export const HINGE_R_IN = 0.125;
+/** Leaf width (in) and the pitch (in) of its three screw holes along the knuckle; the holes are the same on both leaves, so the inserts in the panel and the deck screws match. */
+export const HINGE_LEAF_IN = 1;
+export const HINGE_HOLE_PITCH_IN = 0.5;
+/** Outermost hinge insert to the panel's side edge (in): at least the 1/2 in the insert text asks for. */
+export const INSERT_EDGE_IN = 0.6;
 const HINGE_MASS_LB = 0.1;
 /** Height of the support (oak post) behind the back when the box is not behind it, along the back; and its crest thickness. */
 export const SEAT_POST_HEIGHT_IN = 4.5;
@@ -273,7 +278,7 @@ export function buildSeat(ctx: Ctx): Part[] {
   const sup = seatBackSupport(p, L);
   const lg = latchGeometry(p, L);
   const { a, H, t, fw, W } = sup;
-  const plyT = Math.min(p.seatBackPlyIn, t); // D-60: the seat-back panel keeps its own ply (6 mm) when the sides, box and lid go to 4 mm
+  const plyT = Math.min(p.seatBackPlyIn, t); // the seat-back panel keeps its own ply setting (`seatBackPlyIn`, the 12 mm deck offcut, D-62/D-68) when the sides, box and lid go to 4 mm
 
   // Optional riser: two oak runners under the cushion (default 0 = cushion on the deck).
   const riser = s.cushionBottom - s.pan;
@@ -300,11 +305,18 @@ export function buildSeat(ctx: Ctx): Part[] {
   }));
 
   // Seat back (D-62, Eric 2026-10-12): a FRAMELESS 1/2 in (12 mm) okoume panel cut from the deck sheet's offcut, no oak stiles or rails. Its front face passes through P and it leans back by
-  // seatBackAngleDeg. The hinges and the two quick-release pin holes sit at the same two stations (`stileY`) as before, fastened directly to the panel with epoxied threaded inserts and
+  // seatBackAngleDeg. The two quick-release pin holes sit at the stile stations (`stileY`), the hinges a little inboard of them (`hingeY`), fastened directly to the panel with epoxied threaded inserts and
   // clearance holes; the edge is banded with 1/16 in oak veneer (no exposed ply edge). A thin full-width oak CREST STRIP between the two stop blocks lets the bare panel lean on a
   // continuous line instead of spanning 14.75 in between two blocks (the seat-back row checks both).
   const at = (c0: number, c2: number, y = 0): Vec3 => [s.P[0] + s.col0[0] * c0 + s.col2[0] * c2, y, s.P[2] + s.col0[2] * c0 + s.col2[2] * c2];
   const pinZ = sup.c2L;
+  // Hinge stations (D-62, D-63): the 2 in knuckle sits at the foot, inboard of the pin station so that the outer insert is INSERT_EDGE_IN from the panel's side edge (centered on the pin it would stick out of the
+  // 16 in panel by 3/8 in). The leaf's three screw holes run along the knuckle at HINGE_HOLE_PITCH_IN, on the leaf's centerline (the leaf starts at the knuckle edge, so that is v from the foot edge).
+  const hingeY = Math.max(HINGE_HOLE_PITCH_IN + 0.1, Math.min(sup.stileY, W / 2 - INSERT_EDGE_IN - HINGE_HOLE_PITCH_IN));
+  const leafV = HINGE_R_IN + (HINGE_LEAF_IN - HINGE_R_IN) / 2; // 0.5625 in up the panel from the hinge axis
+  const holeK = [-1, 0, 1];
+  /** Panel-local insert points on the front face (local z = thickness), ascending across, for one side. */
+  const insertAt = (sg: 1 | -1): Vec3[] => holeK.map((k) => sg * (hingeY + k * HINGE_HOLE_PITCH_IN)).sort((u, v) => u - v).map((y): Vec3 => [y, leafV, plyT]);
   // D-63 (build 3c-8): the hinge inserts go in blind holes in the front face; at least INSERT_VENEER_MIN_IN of back veneer must remain, so the hole is the panel less 1/8 in (rounded down to 1/32 in)
   // and the insert is 1/32 in shorter than the hole: 5/16 in in a 12 mm panel (a 3/8 in insert would leave 0.10 in).
   const insertHoleIn = Math.floor((plyT - INSERT_VENEER_MIN_IN) * 32 + 1e-9) / 32;
@@ -328,16 +340,16 @@ export function buildSeat(ctx: Ctx): Part[] {
       id: 'seat-back-panel', partNo: 'seat-back-panel', name: 'Seat back panel (frameless, 12 mm okoume)', group: 'seat', kind: 'sheet', material: ctx.plyName,
       geometry: { type: 'extrusion', outline, depth: plyT },
       transform: [0, 1, 0, 0, s.col2[0], 0, s.col2[2], 0, s.col0[0], 0, s.col0[2], 0, o[0], o[1], o[2], 1],
-      body: 'chassis', massLb: mass, edges: 'edged', grain: 'z', fab: 'shaper-origin', step: STEP.seatStorage, explode: unit(-0.5, 0, 0.6),
+      body: 'chassis', massLb: mass, edges: 'edged', grain: 'y', fab: 'shaper-origin', step: STEP.seatStorage, explode: unit(-0.5, 0, 0.6),
       stock: { t: plyT, w: Math.min(W, H) + 0.25, l: Math.max(W, H) + 0.25 },
       joints: [
-        { type: 'screw', to: 'seat-hinge-L', count: 3, diaIn: 0.19, size: `3 × ${insertTxt}`, note: 'hinge leaf on the front face at the foot (no screw into a ply edge)' },
-        { type: 'screw', to: 'seat-hinge-R', count: 3, diaIn: 0.19, size: `3 × ${insertTxt}`, note: 'hinge leaf on the front face at the foot (no screw into a ply edge)' },
-        { type: 'pin', to: 'seat-pin-L', count: 1, diaIn: 2 * PIN_R_IN, size: '13/32 clearance hole through the panel, bored square to the face; epoxy-sealed bore', note: `${pinZ.toFixed(2)}" up the panel from the hinge axis, at station y = ±${sup.stileY.toFixed(2)}" (${(W / 2 - sup.stileY - 0.203).toFixed(2)}" of panel from the hole edge to the side edge): upright into the blind hole in the stop block (${lg.upHoleIn.toFixed(4).replace(/0+$/, '')}" deep), flat through the deck into the blind hole in the backer pad (${lg.flatHoleIn.toFixed(4).replace(/0+$/, '')}" deep)` },
-        { type: 'pin', to: 'seat-pin-R', count: 1, diaIn: 2 * PIN_R_IN, size: '13/32 clearance hole through the panel, bored square to the face; epoxy-sealed bore', note: `${pinZ.toFixed(2)}" up the panel from the hinge axis, at station y = ±${sup.stileY.toFixed(2)}" (${(W / 2 - sup.stileY - 0.203).toFixed(2)}" of panel from the hole edge to the side edge): upright into the blind hole in the stop block (${lg.upHoleIn.toFixed(4).replace(/0+$/, '')}" deep), flat through the deck into the blind hole in the backer pad (${lg.flatHoleIn.toFixed(4).replace(/0+$/, '')}" deep)` },
+        { type: 'screw', to: 'seat-hinge-L', count: 3, diaIn: 0.19, size: `3 × ${insertTxt}`, note: `hinge leaf on the front face at the foot (no screw into a ply edge); at = the insert mouths, ${leafV} in up the panel on the leaf centerline, ${HINGE_HOLE_PITCH_IN} in apart, centered ${hingeY.toFixed(2)} in off the center line`, at: insertAt(1) },
+        { type: 'screw', to: 'seat-hinge-R', count: 3, diaIn: 0.19, size: `3 × ${insertTxt}`, note: `hinge leaf on the front face at the foot (no screw into a ply edge); at = the insert mouths, ${leafV} in up the panel on the leaf centerline, ${HINGE_HOLE_PITCH_IN} in apart, centered ${hingeY.toFixed(2)} in off the center line`, at: insertAt(-1) },
+        { type: 'pin', to: 'seat-pin-L', count: 1, diaIn: 2 * PIN_R_IN, size: '13/32 clearance hole through the panel, bored square to the face; epoxy-sealed bore', note: `${pinZ.toFixed(2)}" up the panel from the hinge axis, at station y = ±${sup.stileY.toFixed(2)}" (${(W / 2 - sup.stileY - 0.203).toFixed(2)}" of panel from the hole edge to the side edge): upright into the blind hole in the stop block (${lg.upHoleIn.toFixed(4).replace(/0+$/, '')}" deep), flat through the deck into the blind hole in the backer pad (${lg.flatHoleIn.toFixed(4).replace(/0+$/, '')}" deep)`, at: [[sup.stileY, pinZ, plyT / 2]] },
+        { type: 'pin', to: 'seat-pin-R', count: 1, diaIn: 2 * PIN_R_IN, size: '13/32 clearance hole through the panel, bored square to the face; epoxy-sealed bore', note: `${pinZ.toFixed(2)}" up the panel from the hinge axis, at station y = ±${sup.stileY.toFixed(2)}" (${(W / 2 - sup.stileY - 0.203).toFixed(2)}" of panel from the hole edge to the side edge): upright into the blind hole in the stop block (${lg.upHoleIn.toFixed(4).replace(/0+$/, '')}" deep), flat through the deck into the blind hole in the backer pad (${lg.flatHoleIn.toFixed(4).replace(/0+$/, '')}" deep)`, at: [[-sup.stileY, pinZ, plyT / 2]] },
         { type: 'glue', to: 'seat-back-pad', count: 1, size: 'Dual Lock strips on the face', note: 'the pad peels off by hand (D-57)' },
       ],
-      notes: `FRAMELESS seat back (D-62, Eric 2026-10-12): a ${(plyT * 25.4).toFixed(0)} mm (1/2 in) okoume panel, ${W}" × ${H}", cut from the offcut of the deck sheet on the Shaper Origin (no 6 mm sheet is bought), top corners ${rTop.toFixed(2)}" radius, bottom corners 1/2". It replaces the oak stiles, rails and 6 mm panel (3/4 in thick frame). Edge: 1/16" oak veneer banding all round (contact cement or iron-on), ironed and flush-trimmed, then epoxy-sealed with the rest, so no ply edge shows. The hinges and the two latch pins sit at stations ${sup.stileY.toFixed(2)}" either side of the center line: the hinge leaves are held by 3 stainless ${insertTxt} each, in the FRONT face (never into a ply edge); put a bucket pull-out test on a scrap before drilling the real panel. The pin holes are 13/32" clearance holes bored square to the face, ${pinZ.toFixed(2)}" up the panel from the hinge axis (D-63, Eric: 2 in), sealed with epoxy. The Dual Lock strips for the pad go on the front face above the pin holes. It leans on the oak crest strip and the two stop blocks behind it (the strip spans the whole ${(2 * (sup.stileY - fw / 2)).toFixed(1)} in between the blocks, so the panel bends only as a strip above the crest line); flat it lies ${plyT.toFixed(3)}" proud of the deck (it was 3/4").`,
+      notes: `FRAMELESS seat back (D-62, Eric 2026-10-12): a ${(plyT * 25.4).toFixed(0)} mm (1/2 in) okoume panel, ${W}" × ${H}", cut from the offcut of the deck sheet on the Shaper Origin (no 6 mm sheet is bought), top corners ${rTop.toFixed(2)}" radius, bottom corners 1/2". It replaces the oak stiles, rails and 6 mm panel (3/4 in thick frame). Edge: 1/16" oak veneer banding all round (contact cement or iron-on), ironed and flush-trimmed, then epoxy-sealed with the rest, so no ply edge shows. The two latch pins sit at stations ${sup.stileY.toFixed(2)}" either side of the center line and the hinge knuckles are centered ${hingeY.toFixed(2)}" either side (so the outer insert is ${INSERT_EDGE_IN}" from the side edge; the inserts are ${leafV}" up the panel, ${HINGE_HOLE_PITCH_IN}" apart): the hinge leaves are held by 3 stainless ${insertTxt} each, in the FRONT face (never into a ply edge); put a bucket pull-out test on a scrap before drilling the real panel. The pin holes are 13/32" clearance holes bored square to the face, ${pinZ.toFixed(2)}" up the panel from the hinge axis (D-63, Eric: 2 in), sealed with epoxy. The Dual Lock strips for the pad go on the front face above the pin holes. It leans on the oak crest strip and the two stop blocks behind it (the strip spans the whole ${(2 * (sup.stileY - fw / 2)).toFixed(1)} in between the blocks, so the panel bends only as a strip above the crest line); flat it lies ${plyT.toFixed(3)}" proud of the deck (it was 3/4").`,
     });
   }
   // The pad starts above the pelvis (and the cushion and the pins), so it supports the lumbar region and never overlaps them.
@@ -361,6 +373,12 @@ export function buildSeat(ctx: Ctx): Part[] {
     notes: `Mass is an estimate (foam + cover). Rounded-rectangle pad, ${padRadius(W, padH, p.seatBackCornerRadiusIn).toFixed(2)}" corner radius, crowned by the viewer's soft finish (D-44). Held to the back panel by Dual Lock (D-57), so it comes off with no tools and lies in the box with the seat cushion; the back then flips flat.`,
   });
 
+  // The Dual Lock bond is on the panel's front face (local z = plyT) and the pad's back face (its local z = 0), at the pad's center.
+  const panelGlue = parts.find((q) => q.id === 'seat-back-panel')?.joints?.find((j) => j.to === 'seat-back-pad');
+  if (panelGlue) panelGlue.at = [[0, h0 + padH / 2, plyT]];
+  const padGlue = parts.find((q) => q.id === 'seat-back-pad')?.joints?.find((j) => j.to === 'seat-back-panel');
+  if (padGlue) padGlue.at = [[0, padH / 2, 0]];
+
   // Hinges (D-57): two 316 butt hinges, knuckle at the stile's front foot P along y, leaves screwed to the front face and, through the deck, into an oak backer pad under it.
   const hb = hingeBacker(p, L);
   const f4 = (v: number) => v.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
@@ -370,11 +388,11 @@ export function buildSeat(ctx: Ctx): Part[] {
     parts.push(cylinder(ctx, {
       id: `seat-hinge-${tag}`, partNo: 'seat-hinge', name: `Seat-back hinge ${tag}`, group: 'seat', mat: 'fixed', massLb: HINGE_MASS_LB, kind: 'purchased',
       material: '316 stainless butt hinge, 2" × 2" open', fab: 'buy', step: STEP.seatStorage, axis: 'y', radius: HINGE_R_IN, length: HINGE_LEN_IN,
-      center: [s.P[0], sg * sup.stileY, s.P[2]], explode: unit(0, sg, 0.4),
+      center: [s.P[0], sg * hingeY, s.P[2]], explode: unit(0, sg, 0.4),
       sourcing: { vendor: 'McMaster-Carr (316 stainless butt hinge, 2" knuckle, 1" leaves)', costUsd: 9 },
       joints: [
-        { type: 'screw', to: 'seat-back-panel', count: 3, diaIn: 0.19, size: '#10-32 × 3/8 316 flat-head machine screws into the epoxied 5/16 stainless threaded inserts in the front face of the panel (3/8 in, not 1/2 in: the leaf is about 1/16 in, so the screw bites 5/16 in and cannot bottom in the 11/32 in hole)', note: 'leaf on the back\'s front face, flush with the frame' },
-        { type: 'screw', to: `seat-hinge-backer-${tag}`, count: 3, diaIn: 0.16, size: '#8 × 1-1/4 316 flat head, through the deck into the 1 in backer pad (0.7 in of bite)', note: 'leaf on the deck (the cushion\'s rear margin lies over it)' },
+        { type: 'screw', to: 'seat-back-panel', count: 3, diaIn: 0.19, size: '#10-32 × 3/8 316 flat-head machine screws into the epoxied 5/16 stainless threaded inserts in the front face of the panel (3/8 in, not 1/2 in: the leaf is about 1/16 in, so the screw bites 5/16 in and cannot bottom in the 11/32 in hole)', note: 'leaf on the back\'s front face, flush with the frame', at: holeK.map((k): Vec3 => [s.col2[0] * leafV, s.col2[2] * leafV, -sg * k * HINGE_HOLE_PITCH_IN]) },
+        { type: 'screw', to: `seat-hinge-backer-${tag}`, count: 3, diaIn: 0.16, size: '#8 × 1-1/4 316 flat head, through the deck into the 1 in backer pad (0.7 in of bite)', note: 'leaf on the deck (the cushion\'s rear margin lies over it)', at: holeK.map((k): Vec3 => [leafV, -HINGE_R_IN, -sg * k * HINGE_HOLE_PITCH_IN]) },
       ],
       notes: 'The back flips forward 105° about this knuckle onto the deck (D-57). The leaf on the deck is under the 3/8" gap behind the cushion (a 1/16" proud leaf does not show in the cargo bed).',
     }));
@@ -485,7 +503,7 @@ export function buildSeat(ctx: Ctx): Part[] {
       parts.push(profilePart(ctx, {
         id: `seat-grip-${tag}`, partNo: 'seat-grip', name: `Grab board ${tag}`, group: 'seat', mat: 'oak', outline: sg > 0 ? outline : outline, holes: [cw2(hole)], depth: bt, basis: 'xz', origin: [0, originY, 0],
         grain: 'x', step: STEP.finish, stock: { t: bt, w: nTop - nBot, l: bLen }, fab: 'shaper-origin',
-        joints: [{ type: 'bolt', to: gid, count: GRIP_BOLTS, diaIn: GRIP_BOLT_DIA_IN, size: `${GRIP_BOLT_DIA_IN}" 316 button-head cap screws, ${GRIP_BOLT_COLS} columns × ${GRIP_BOLT_ROWS_IN.length} rows (${GRIP_BOLT_ROWS_IN.join('" and ')}" below the gunwale top), through the board, the inner band, the web, the outer band and the 1/16" 316 backing strip (head and a 3/8" washer on the strip outside, a 1-1/4" fender washer and nylock nut on the inside of the board; hold the nut, turn the hex key)`, at: bolts.map(([bx, bz]): Vec3 => [bx, sg * yIn, bz]), note: 'the board laps the inboard face of the inner gunwale band; the screws pass through the inner band, the web and the outer band inside the 1.5 in gunwale band; the heads bear on the backing strip, not on the 0.234 in outer band (D-63)' }],
+        joints: [{ type: 'bolt', to: gid, count: GRIP_BOLTS, diaIn: GRIP_BOLT_DIA_IN, size: `${GRIP_BOLT_DIA_IN}" 316 button-head cap screws, ${GRIP_BOLT_COLS} columns × ${GRIP_BOLT_ROWS_IN.length} rows (${GRIP_BOLT_ROWS_IN.join('" and ')}" below the gunwale top), through the board, the inner band, the web, the outer band and the 1/16" 316 backing strip (head and a 3/8" washer on the strip outside, a 1-1/4" fender washer and nylock nut on the inside of the board; hold the nut, turn the hex key)`, at: bolts.map(([bx, bz]): Vec3 => [bx, bz, bt / 2]), note: 'the board laps the inboard face of the inner gunwale band; the screws pass through the inner band, the web and the outer band inside the 1.5 in gunwale band; the heads bear on the backing strip, not on the 0.234 in outer band (D-63)' }],
         notes: `Grab board (D-57): ${bt}" oak, ${f1(bLen)}" long and ${f1(nTop - nBot)}" tall, its lower ${L.railBand}" lapping the inboard face of the gunwale and standing ${f1(nTop)}" above the gunwale top, turned to the sheer's ${((slope * 180) / Math.PI).toFixed(1)}° slope. A ${hl}" × ${hh}" hand hole is Shaper Origin-routed ${f1(holeBot)}" above the gunwale top (finger gap ${hh}" ≥ 1.25", clear length ${hl}" ≥ 3.5": no pinch point, BRIEF 4.7), ${p.grabBoardBarIn}" of oak above it; top corners ${GRIP_CORNER_IN}" radius, ¼" roundovers on every edge and the hole. Bolted, never glued, so a splintered board can be replaced. It replaces the D-40 pad, two posts and bar.`,
       }));
       // Backing strip on the OUTER face of the outer gunwale band under the bolt heads (D-63): 316 flat bar 1/16 x 1 x board length, cut at the sheer's slope, epoxied/bedded to the band.

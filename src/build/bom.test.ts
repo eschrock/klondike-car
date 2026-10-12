@@ -4,6 +4,9 @@ import { fastenerBreakdown } from '../model/lighting';
 import { defaultParams } from '../params';
 import { bom, jointItems, shortVendor } from './bom';
 import { cutList, isBuilt } from './cutlist';
+import { finishingSchedule } from './finishing';
+import { oakBoardFeet } from './nesting';
+import { EPOXY_KITS, OAK_PRICE_PER_BF } from './prices';
 
 const p = defaultParams();
 const parts = buildModel(p);
@@ -78,6 +81,51 @@ describe('bom', () => {
     expect(JSON.stringify(b)).not.toMatch(/Aircraft Spruce/);
     const lumber = b.sections.find((s) => s.id === 'lumber')!.lines.map((l) => l.key);
     expect(lumber).toEqual(['4/4', '5/4', '6/4', '8/4', '12/4']);
+  });
+
+  it('prices the oak as the whole boards to buy (nesting.ts), not net x 1.3', () => {
+    const oak = oakBoardFeet(parts, p);
+    const lumber = b.sections.find((s) => s.id === 'lumber')!.lines;
+    expect(lumber.map((l) => l.key)).toEqual(oak.thicknesses.map((t) => t.board));
+    for (const t of oak.thicknesses) {
+      const l = lumber.find((q) => q.key === t.board)!;
+      expect(l.qty).toBeCloseTo(t.plannedBf, 2);
+      expect(l.unitUsd).toBe(OAK_PRICE_PER_BF[t.board].usd);
+      expect(l.notes!).toContain(t.summary[0]);
+    }
+    expect(lumber.reduce((a, l) => a + l.qty, 0)).toBeCloseTo(oak.thicknesses.reduce((a, t) => a + t.plannedBf, 0), 1);
+    expect(b.lumberAllowanceUsd).toBeLessThan(b.sections.find((s) => s.id === 'lumber')!.subtotalUsd); // boards run higher than the allowance
+    expect(b.wholeBoardsExtraUsd).toBe(0);
+    // a solid bucket under 1 bf is cut from thicker offcuts (nesting.test.ts); the BOM line says so whenever it happens
+    for (const c of oak.consolidated) expect(lumber.find((l) => new RegExp(`cut the ${c.from.replace('/', '\\/')} parts`).test(l.notes ?? '')), c.from).toBeTruthy();
+  });
+
+  it('takes the epoxy and the finish from the finishing schedule buy list, and prices the cheapest epoxy kits', () => {
+    const sched = finishingSchedule(parts, p);
+    const cons = b.sections.find((s) => s.id === 'consumables')!.lines;
+    // every finish product of the buy list is a BOM line with the same container and quantity
+    for (const bl of sched.buy.filter((x) => !/West System/.test(x.item))) {
+      const l = cons.find((q) => q.description === `${bl.item}, ${bl.unit}`);
+      expect(l, bl.item).toBeTruthy();
+      expect(l!.qty).toBe(bl.qty);
+      expect(l!.unit).toBe(bl.unit);
+    }
+    // the epoxy kits cover the schedule's mixed volume plus the glue-joint epoxy
+    const epoxyStep = sched.steps.find((x) => x.id === 'epoxy')!;
+    const finishFlOz = epoxyStep.products.reduce((a, q) => a + q.qtNeeded, 0) * 32;
+    expect(b.consumables.finishEpoxyFlOz).toBeCloseTo(finishFlOz, 6);
+    expect(b.consumables.glueEpoxyFlOz).toBeCloseTo(b.jointCounts.glue * 0.12 * 1.2, 6);
+    const need = finishFlOz + b.consumables.glueEpoxyFlOz;
+    const [quart, gallon] = EPOXY_KITS;
+    const nQ = cons.filter((l) => l.key === 'epoxy-quart').reduce((a, l) => a + l.qty, 0), nG = cons.filter((l) => l.key === 'epoxy-gallon').reduce((a, l) => a + l.qty, 0);
+    expect(nQ * quart.mixedFlOz + nG * gallon.mixedFlOz).toBeGreaterThanOrEqual(need);
+    const paid = nQ * quart.price.usd + nG * gallon.price.usd;
+    for (let g = 0; g <= 4; g++) for (let q = 0; q <= 8; q++) if (q * quart.mixedFlOz + g * gallon.mixedFlOz >= need) expect(g * gallon.price.usd + q * quart.price.usd, `${g} gal + ${q} qt`).toBeGreaterThanOrEqual(paid - 1e-9);
+    // a gallon group is cheaper per mixed ounce than the quart group, and than three quart groups
+    expect(gallon.price.usd / gallon.mixedFlOz).toBeLessThan(quart.price.usd / quart.mixedFlOz);
+    expect(gallon.price.usd).toBeLessThan(3 * quart.price.usd);
+    // the 207 hardener of the buy list is bought as listed
+    expect(cons.find((l) => l.key === 'epoxy-207')?.qty).toBe(sched.buy.filter((x) => /207/.test(x.item)).reduce((a, x) => a + x.qt * 2, 0));
   });
 
   it('keeps vendor names short and writes a CSV with subtotals and a total', () => {

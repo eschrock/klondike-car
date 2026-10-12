@@ -12,13 +12,13 @@
  * (the model default), s = 1 is applied (the pad on the tread). Plain TS (no three.js).
  */
 import { STEP, box, cylinder, SIDES, unitDir, type Ctx } from './build-utils';
-import { atPose, brakeGeometry, flapOutline, hull2, polyArea, rot2, type BrakeGeom, type V2 } from './brake-layout';
+import { atPose, brakeGeometry, dot2, flapLocalX, flapOutline, hull2, PIVOT_SCREW_WOOD_IN, pivotBlockScrewPoints, polyArea, rot2, sub, type BrakeGeom, type V2 } from './brake-layout';
 import { buildHandle } from './handle';
 import { multiply, rotationY, translation } from './mat4';
 import { basisMatrix, profilePart } from './profile';
 import { boltLength, inchesText } from './rear-mount';
 import { trapezoidTriangles } from './plan-wall';
-import type { Joint, Part, Vec2, Vec3 } from './types';
+import type { Joint, Mat4, Part, Vec2, Vec3 } from './types';
 
 
 /** Clip a polygon in (y, z) to the strip y0 <= y <= y1 (Sutherland-Hodgman). */
@@ -143,6 +143,22 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
   for (const { s: sgn, tag } of SIDES) {
     const yc = sgn * Y.wheel;
 
+    // Joint points on the flap are in its LOCAL frame (x forward to the nose, y across from the tire's center line, z up from the underside, 0..thick), all derived here so the Shaper file,
+    // the viewer and the block / shoe copies agree. The 'locateJoints' fallback (world box overlaps) puts points of a sloped part outside it.
+    let flapMat: Mat4 | undefined;
+    const bF = g.board;
+    const nBlockScrews = Math.round(p.brakePivotBlockScrews);
+    const xBlockMid = flapLocalX(g, (bF.s0 + g.plan.sShoulder) / 2);
+    const blockScrews = pivotBlockScrewPoints(g, nBlockScrews, p.brakePivotPinDiaIn, sd);
+    // Shoe screws and glue: along the shoe's top face (the flap underside), at 1/4 and 3/4 of its length, on the center line, drilled up from the underside.
+    const shoeXs = g.shoe.outline.map((q) => q[0]);
+    const shoeX0 = Math.min(...shoeXs), shoeX1 = Math.max(...shoeXs);
+    const shoeFlapX = (f: number): number => {
+      const wx = shoeX0 + f * (shoeX1 - shoeX0);
+      const wz = (g.c - g.v[0] * wx) / g.v[1]; // the flap underside plane
+      return flapLocalX(g, dot2(sub([wx, wz], g.P), g.u));
+    };
+    const shoeScrewX = [shoeFlapX(0.25), shoeFlapX(0.75)], shoeGlueX = shoeFlapX(0.5);
     // ── The oak flap: a Shaper-cut tapered fender over the tire (plan outline), its front end a narrow tongue for the pivot ──
     {
       const b = g.board;
@@ -155,16 +171,18 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
         id: `brake-flap-${tag}`, partNo: 'brake-flap', name: `Brake flap ${tag} (white oak fender)`, group: 'brake', mat: 'oak', outline: flapOutline(g), depth: b.thick, basis: 'xy', origin: [0, 0, 0],
         grain: 'x', stock: { t: b.thick, w: b.w, l: b.len }, step: STEP.brake, fab: 'shaper-origin', removable: true, explode: [-0.4, sgn * 0.5, 1],
         joints: [
-          { type: 'pin', to: `brake-pivot-pin-${tag}`, count: 1, diaIn: p.brakePivotPinDiaIn, size: `1 x ${f2(p.brakePivotPinDiaIn)}" 316 clevis pin through the tongue (and the pivot block on it), double shear with the knee ears` },
-          { type: 'glue', to: `brake-pivot-block-${tag}`, count: 1, note: 'epoxy over the whole face of the block on the tongue' },
-          screw(`brake-pivot-block-${tag}`, nBS, `${nBS} x #10 x 1-1/4" 316 flat-head screws down through the block into the tongue`),
-          screw(`brake-shoe-${tag}`, 2, '2 x #10 x 2" 316 screws up through the shoe block into the flap, glued with epoxy', 'the screws and the glue take the pad friction'),
-          screw(`brake-cord-${tag}`, 1, '1 x #10 316 stainless screw eye (3/16" ring) in the rear end face of the flap, inboard'),
+          { type: 'pin', to: `brake-pivot-pin-${tag}`, count: 1, diaIn: p.brakePivotPinDiaIn, size: `1 x ${f2(p.brakePivotPinDiaIn)}" 316 clevis pin through the tongue (and the pivot block on it), double shear with the knee ears`, at: [[flapLocalX(g, 0), 0, b.thick - g.plan.hPin]] },
+          { type: 'glue', to: `brake-pivot-block-${tag}`, count: 1, note: 'epoxy over the whole face of the block on the tongue', at: [[xBlockMid, 0, b.thick]] },
+          { ...screw(`brake-pivot-block-${tag}`, nBS, `${nBS} x #10 x 1-1/4" 316 flat-head screws down through the block into the tongue`, `all behind the pin, at least ${PIVOT_SCREW_WOOD_IN} in of oak between a screw and the cross-hole edge, alternating across the tongue`), at: blockScrews.map(([x, y]): Vec3 => [x, y, b.thick]) },
+          { ...screw(`brake-shoe-${tag}`, 2, '2 x #10 x 2" 316 screws up through the shoe block into the flap, glued with epoxy', 'the screws and the glue take the pad friction'), at: shoeScrewX.map((x): Vec3 => [x, 0, 0]) },
+          { type: 'glue', to: `brake-shoe-${tag}`, count: 1, note: 'epoxy, full face of the shoe block on the underside', at: [[shoeGlueX, 0, 0]] },
+          { ...screw(`brake-cord-${tag}`, 1, '1 x #10 316 stainless screw eye (3/16" ring) in the rear end face of the flap, inboard'), at: [[-b.len / 2, -sgn * (Y.wheel - Y.eye), b.thick / 2]] },
         ],
         notes: `White oak ${f2(b.thick)}" x ${f2(b.w)}" x ${f2(b.len)}" (5/4 stock planed to 7/8"), grain along the flap, one board, CUT ON THE SHAPER ORIGIN from the plan outline in the part data (D-65): a tapered fender, ${f2(g.plan.wTongue)}" wide tongue at the pivot end, an S-curved flare from ${f2(g.plan.sShoulder)}" to ${f2(g.plan.sFull)}" behind the pin out to the full ${f2(b.w)}" over the tire, a 1/2" corner radius at the foot end and 1/4" at the nose. Roundover all the edges (1/4" bit) after the cut. It slopes down ${f2(g.sigma / (Math.PI / 180))} degrees toward the rear so the foot end is lower than the pivot. The FOOT END IS AT THE REAR TRANSOM FACE (nothing sticks out behind the sled, D-65: x = ${f2(g.xEnd)}"); the ribbed rubber foot tread is the last ${f2(p.brakeFootPadLengthIn)}" (the foot point is ${f2(Math.abs(g.F[0] - L.xRear))}" ${g.F[0] < L.xRear ? 'behind' : 'ahead of'} the transom face, outboard of the body). Epoxy-seal before the finish. At the foot point it stands ${f2(g.F[1])}" off the ground; stepping on it swings the pad ${f2(p.brakePadGapIn)}" onto the tread (foot stroke about ${f2(g.footDrop)}"). The tongue is drilled ${f2(p.brakePivotPinDiaIn)}" across, ${f2(g.plan.hPin)}" below the top surface and ${f2(p.brakePivotEndIn)}" from its end, together with the pivot block (clamp the block on first). ${REMOVE_NOTE}`,
         sourcing: { vendor: `Shop-cut white oak, ${f2(b.thick)}" x ${f2(b.w)}" x ${f2(b.len)}" (a 5/4 board planed to ${f2(b.thick)}"); the pivot, shoe and eye holes are drilled from the parts as templates` },
       });
       flap.transform = multiply(translation(o3[0], o3[1], o3[2]), rotationY(ang));
+      flapMat = flap.transform;
       flap.finish = { surface: 'oak' };
       add1(flap);
     }
@@ -184,7 +202,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
         size: [sB - sA, pl.wTongue, pl.blockT], center: [cp[0], yc, cp[1]], rot: { y: -(g.sigma - phi) }, explode: [-0.2, sgn * 0.3, 1.2],
         joints: [
           { type: 'glue', to: `brake-flap-${tag}`, count: 1, note: 'epoxy, full face on the flap tongue' },
-          screw(`brake-flap-${tag}`, nBS, `${nBS} x #10 x 1-1/4" 316 flat-head screws down through the block into the tongue`),
+          { ...screw(`brake-flap-${tag}`, nBS, `${nBS} x #10 x 1-1/4" 316 flat-head screws down through the block into the tongue`), at: blockScrews.map(([x, y]): Vec3 => [x - xBlockMid, y, pl.blockT / 2]) },
           { type: 'pin', to: `brake-pivot-pin-${tag}`, count: 1, diaIn: p.brakePivotPinDiaIn, size: `${f2(p.brakePivotPinDiaIn)}" clevis pin hole across, ${f2(g.plan.hPin)}" below the flap top surface` },
         ],
         notes: `White oak block ${f2(sB - sA)}" x ${f2(pl.wTongue)}" x ${f2(pl.blockT)}" (a scrap of 5/8" stock), on top of the flap tongue from its nose to the start of the flare. It deepens the tongue to ${f2(b.thick + pl.blockT)}" so the ${f2(p.brakePivotPinDiaIn)}" pin hole has ${f2(g.pivot.edgeTongueUp)}" of oak above and ${f2(g.pivot.edgeTongueDown)}" below it. Glue and screw it on, then drill the pin hole through block and tongue together with the knee clamped to them. The block enters the slot in the knee with the tongue; its top is flush with the knee top. ${REMOVE_NOTE}`,
@@ -218,12 +236,14 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
       const [qy0, qy1] = [Y.pad[0], Y.pad[1]];
       const bb = bbox(outline);
       const origin: Vec3 = [0, sgn > 0 ? qy1 : -qy0, 0];
+      // The flap's underside points (local x on its center line) in the shoe's frame: world x and z, the middle of the pad width.
+      const shoeAt = (fx: number): Vec3 => { const m = flapMat!; return [m[0] * fx + m[12], m[2] * fx + m[14], (qy1 - qy0) / 2]; };
       const shoe = profilePart(ctx, {
         id: `brake-shoe-${tag}`, partNo: 'brake-shoe', name: `Brake shoe block ${tag} (white oak wedge)`, group: 'brake', mat: 'oak', outline: outline as Vec2[], depth: qy1 - qy0, basis: 'xz', origin,
         grain: 'y', stock: { t: qy1 - qy0, w: bb.z1 - bb.z0, l: bb.x1 - bb.x0 }, step: STEP.brake, fab: 'bandsaw', removable: true, explode: [0.2, sgn, 0.6],
         joints: [
-          screw(`brake-flap-${tag}`, 2, '2 x #10 x 2" 316 screws up through the block into the flap, glued with epoxy'),
-          { type: 'glue', to: `brake-flap-${tag}`, count: 1, note: 'epoxy, full face' },
+          { ...screw(`brake-flap-${tag}`, 2, '2 x #10 x 2" 316 screws up through the block into the flap, glued with epoxy'), at: shoeScrewX.map((x) => shoeAt(x)) },
+          { type: 'glue', to: `brake-flap-${tag}`, count: 1, note: 'epoxy, full face', at: [shoeAt(shoeGlueX)] },
           screw(`brake-pad-${tag}`, 2, '2 x #8 x 1" 316 flat-head screws (heads buried 1/8" in the rubber) through the pad into the block', 'plus contact cement over the full face'),
         ],
         notes: `Bandsawn from ${f2(g.shoe.w)}" thick white oak (the thickness is the pad width, across the wheel; the 3 in side is the tire-radius cut): the top face follows the flap underside (${f2(g.sigma / (Math.PI / 180))} degrees), the bottom face is cut to the tire radius (${f2(g.r + p.brakePadThickIn)}" from the axle, a template on a router sled or sandpaper on the tire), ${f2(p.brakeShoeBlockIn)}" thick at its thinnest. The rubber pad is glued and screwed on the curved face. Ends cut vertical. Glued and screwed to the flap, so it comes off with it. ${REMOVE_NOTE}`,

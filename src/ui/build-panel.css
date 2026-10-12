@@ -1,0 +1,138 @@
+/* The Simulation panel sets display:flex on its own tab panel (sim-panel.css), which beats the hidden attribute and leaves it showing under other tabs. */
+.tabpanels > [role='tabpanel'][hidden] { display: none; }
+
+/* Build tab (Phase 4). Uses the app's color tokens; the drawings always sit on white so black-on-white Shaper files read in dark mode. */
+.bp { font-size: 12px; line-height: 1.4; min-width: 0; }
+.bp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.bp-head h3 { margin: 0; font-size: 13px; }
+.bp-print { padding: 2px 8px; font-size: 11px; }
+.bp-nav { display: flex; flex-wrap: wrap; gap: 3px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.bp-tab { padding: 2px 7px; font-size: 11.5px; border-radius: 11px; background: transparent; }
+.bp-tab[aria-selected='true'] { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+:root[data-theme='dark'] .bp-tab[aria-selected='true'] { color: #0b1020; }
+.bp-status { margin: 4px 0 0; min-height: 1.4em; }
+.bp-body { margin-top: 6px; }
+.bp-section[hidden] { display: none; }
+.bp-title { margin: 6px 0 6px; font-size: 14px; }
+.bp-group { margin: 12px 0 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.bp-group .muted { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.bp-sub { margin: 8px 0 3px; font-size: 12px; font-weight: 600; }
+.bp p { margin: 4px 0; }
+.bp-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.bp-actions button, .bp-stepnav button, .bp-table button { padding: 2px 9px; font-size: 11.5px; }
+.bp-primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; padding: 4px 12px !important; }
+:root[data-theme='dark'] .bp-primary { color: #0b1020; }
+.bp-plain { margin: 3px 0; padding-left: 16px; }
+.bp-plain li { margin: 1px 0; }
+.bp details { margin: 4px 0; }
+.bp summary { cursor: pointer; color: var(--muted); font-size: 11.5px; }
+.bp-warn summary { color: #b26a00; }
+:root[data-theme='dark'] .bp-warn summary { color: #f0a73a; }
+
+/* Tables: left-aligned first column (the app's summary-table right-aligns values) */
+.bp-table { margin: 2px 0 6px; table-layout: auto; }
+.bp-table th, .bp-table td { vertical-align: top; padding: 3px 0 3px 6px; border-top: 1px solid var(--border); font-weight: 400; }
+.bp-table thead th { border-top: 0; text-align: left; }
+.bp-table td:first-child { text-align: left; padding-left: 0; overflow-wrap: break-word; }
+.bp-table th:first-child { padding-left: 0; }
+.bp-table td { text-align: right; font-weight: 400; }
+.bp-table td:first-child div:first-child { font-weight: 500; }
+.bp-bf td:nth-child(4) { text-align: left; }
+.bp-bf th:nth-child(n+2) { text-align: right; }
+.bp-bf th:last-child { text-align: left; }
+.bp-buy div { font-size: 11px; margin-bottom: 2px; }
+.bp-bf td:first-child { white-space: nowrap; }
+.bp-bom td:last-child, .bp-bom th:last-child { white-space: nowrap; }
+.bp-files td:first-child { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; }
+.bp-fname { word-break: break-all; }
+.bp-total { padding: 6px 8px; margin: 6px 0; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
+.bp-total > div:first-child { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; }
+.bp-total strong { font-variant-numeric: tabular-nums; }
+
+/* Verify checklist */
+.bp-progress { font-weight: 600; }
+.bp-checks { list-style: none; margin: 0 0 6px; padding: 0; }
+.bp-check { padding: 5px 0; border-top: 1px solid var(--border); }
+.bp-check-head { display: flex; align-items: flex-start; gap: 6px; }
+.bp-check-head input { margin: 2px 0 0; flex: none; }
+.bp-check-head label { cursor: pointer; font-weight: 600; }
+.bp-check.is-done .bp-check-head label { text-decoration: line-through; color: var(--muted); }
+.bp-check details { margin-left: 22px; }
+
+/* Drawings: always on white */
+.bp-file { margin: 10px 0; padding: 7px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); min-width: 0; }
+.bp-file-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; align-items: baseline; margin-bottom: 4px; overflow-wrap: anywhere; }
+.bp-preview { background: #fff; border: 1px solid var(--border); border-radius: 4px; padding: 4px; margin: 4px 0; overflow: hidden; color: #000; }
+.bp-svg { display: block; max-width: 100%; height: auto; max-height: 260px; }
+.bp-sheetbox .bp-svg { max-height: none; }
+.bp-legend { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 3px; }
+.bp-legend li { display: flex; gap: 6px; align-items: flex-start; }
+.bp-swatch { flex: none; width: 14px; height: 14px; margin-top: 1px; border-radius: 2px; box-sizing: border-box; }
+.bp-swatch.outside { background: #000; }
+.bp-swatch.inside { background: #fff; border: 2px solid #000; }
+.bp-swatch.pocket { background: #7f7f7f; }
+.bp-swatch.guide { background: transparent; border: 2px solid #0068ff; }
+
+/* Assembly */
+.bp-stepnav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bp-step-detail { margin-top: 6px; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
+.bp-step-title { margin: 0 0 4px; font-size: 13px; }
+.bp-kind { margin-left: 6px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); border: 1px solid var(--border); border-radius: 8px; padding: 0 5px; }
+.bp-instr { margin: 4px 0; padding-left: 18px; }
+.bp-instr li { margin: 3px 0; }
+.bp-cure { padding: 4px 6px; background: color-mix(in srgb, var(--accent) 8%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 4px; }
+.bp-checkboxes { list-style: none; margin: 2px 0 4px; padding: 0; }
+.bp-checkboxes li { display: flex; gap: 6px; align-items: flex-start; margin: 1px 0; }
+.bp-box { flex: none; width: 11px; height: 11px; margin-top: 2px; border: 1.5px solid currentColor; border-radius: 2px; box-sizing: border-box; }
+.bp-allsteps { margin-top: 6px; }
+.bp-steps { position: relative; list-style: none; margin: 4px 0 0; padding: 0; max-height: 15em; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; }
+.bp-steps li + li { border-top: 1px solid var(--border); }
+.bp-step-btn { all: unset; box-sizing: border-box; display: flex; gap: 6px; align-items: baseline; width: 100%; padding: 4px 6px; cursor: pointer; color: var(--text); }
+.bp-step-btn:hover { background: var(--panel-2); }
+.bp-step-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.bp-step-btn[aria-current='step'] { background: color-mix(in srgb, var(--accent) 14%, transparent); font-weight: 600; }
+.bp-step-n { flex: none; min-width: 1.6em; color: var(--muted); font-variant-numeric: tabular-nums; }
+.bp-finstep { margin: 8px 0; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.bp-print-only { display: none; }
+
+/* ── Print ──
+   Section print: only the active Build section, full width, black on white. Tile print (body.bp-print-tiles): only the Letter tile pages,
+   each tile SVG at its real inch size (the SVGs are 8.5in x 11in with a 1 unit = 1 in viewBox), no margin, no scaling.
+   The page rule is global so the tiles land exactly on the sheet; the section print gets its margin from #app padding. */
+#bp-print-tiles { display: none; }
+@page { size: letter; margin: 0; }
+@media print {
+  :root:root[data-theme] { --bg: #fff; --panel: #fff; --panel-2: #f1f1f1; --text: #000; --muted: #444; --border: #999; --accent: #000; color-scheme: light; }
+  html, body { background: #fff !important; color: #000; margin: 0; padding: 0; height: auto; }
+  #app { display: block !important; height: auto !important; min-height: 0 !important; padding: 0.5in; }
+  #app .topbar, #app .back-bar, #app .skip-link, #viewer, #simple-right, #simple-left, #params,
+  #right .summary, #right .tabs, #right .tabpanels > [role='tabpanel']:not(#panel-build),
+  .bp-nav, .bp-head button, .bp-actions, .bp-stepnav, .bp-status, .bp-screen-only, .bp-table button { display: none !important; }
+  #right { display: block !important; overflow: visible !important; border: 0 !important; }
+  #right .tabpanels { padding: 0; }
+  .bp-head { margin: 0 0 6px; }
+  .bp-section[hidden] { display: none !important; }
+  .bp-print-only { display: block; }
+  .bp, .bp * { color: #000 !important; }
+  .bp .muted, .bp .muted * { color: #444 !important; }
+  .bp { font-size: 10.5pt; }
+  .bp-table { width: 100%; }
+  .bp-table tr, .bp-file, .bp-check, .bp-step-print, .bp-finstep, .bp-total { break-inside: avoid; }
+  .bp-step-print { padding: 0 0 10px; margin: 0 0 10px; border-bottom: 1px solid #999; }
+  .bp-step-print:nth-child(odd) { break-before: auto; }
+  .bp-svg { max-height: 8in; }
+  .bp-file, .bp-total, .bp-step-detail { border-color: #999; background: #fff; }
+  .bp-cure { background: #eee; border-color: #999; }
+  .bp-sheetbox, .bp-preview { border-color: #999; }
+
+  body.bp-print-tiles #app { display: none !important; }
+  body.bp-print-tiles #bp-print-tiles { display: block; }
+  .bp-tile-page { width: 8.5in; height: 10.99in; margin: 0; padding: 0; overflow: hidden; break-after: page; page-break-after: always; }
+  .bp-tile-page:last-child { break-after: auto; page-break-after: auto; }
+  .bp-tile-page > svg { display: block; width: 8.5in; height: 11in; }
+}
+
+/* Phase 4: while the Build tab is open, the right column widens (three-column layout only) so the tables and drawings are readable. */
+@media (min-width: 1201px) {
+  #app.build-wide { grid-template-columns: minmax(250px, 290px) minmax(0, 1fr) minmax(420px, 44vw); }
+}

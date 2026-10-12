@@ -62,7 +62,7 @@ export const STEP = { frame: 3, body: 4, steering: 4.5, gear: 4.6, linkage: 4.7,
  *   2. (4.0) Frame (rails, joists, king beam) + deck glued as a unit, right side up on the bench; the Domino mortises in the rail tops are cut. The rails are two 3/8 strips bent on the form, glued into the frame 1/2" LONG at both ends (they are trimmed in step 3, once the true length is known).
  *   3. (4.2) Side assemblies on the bench: each web gets an oak band glued on EACH face at the chine and at the gunwale and is bent with them on the form (no grooves); vents drilled.
  *      GLUE-UP POSTURE (3c-8; a web with four bands is a two-direction bend: the sheer in the plane of the web, the S across it): lay the web FLAT on the bench with the S-ramp form
- *      (about 1.25 in high, 14 in long) under the bow end, where the S-bend is in the last ~14 in and the web is only about 5 in tall; CLEAT THE SHEER LINE (screws or cleats into a sacrificial
+ *      under the bow end, where the S-bend is and the web is only about 5 in tall (the ramp's rise and length come from the D-66 bow taper, `L.taper`; see `src/build/forms.ts`); CLEAT THE SHEER LINE (screws or cleats into a sacrificial
  *      table every 4 to 5 in, the whole length), because a straight 1.5 in strip edge-bent to the sheer pushes sideways about 65 lbf at mid-span per band until the epoxy cures; glue and
  *      clamp ONE FACE per cure (its chine and gunwale bands; C-clamps or spring clamps across the band every 4 to 5 in, about 14 per band pair; brads or a vacuum bag if short), let it
  *      cure, flip the web onto the mirror ramp and do the other face: TWO CURES PER SIDE. Bend-test a dry strip on the form first.

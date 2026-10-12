@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
 import { defaultParams } from '../params';
-import { BOARD_THICKNESSES, boardForThickness, cutList, isBuilt, stripsPerBoard, toCsv } from './cutlist';
+import { BOARD_THICKNESSES, boardByNominal, boardForThickness, cutList, isBuilt, resawUsableIn, stripsPerBoard, toCsv } from './cutlist';
 
 const p = defaultParams();
 const parts = buildModel(p);
@@ -18,6 +18,7 @@ describe('board thickness map', () => {
     expect(boardForThickness(0.75)!.nominal).toBe('4/4');
     expect(boardForThickness(0.8125)!.nominal).toBe('4/4');
     expect(boardForThickness(1)!.nominal).toBe('5/4');
+    expect(boardForThickness(1.828)!.nominal).toBe('8/4'); // the king beam (1.703 finished): 8/4, not 12/4
     expect(boardForThickness(1.3)!.nominal).toBe('6/4');
     expect(boardForThickness(1.625)!.nominal).toBe('8/4');
     expect(boardForThickness(2.375)!.nominal).toBe('12/4');
@@ -25,8 +26,11 @@ describe('board thickness map', () => {
   });
   it('lists the spec thicknesses', () => {
     const usable = Object.fromEntries(BOARD_THICKNESSES.map((b) => [b.nominal, b.usableIn]));
-    expect(usable['4/4']).toBeCloseTo(13 / 16);
-    expect(usable['12/4']).toBe(2.75);
+    // the thickest ROUGH part each board yields: after-surfacing thickness + the 1/8" planing allowance the part already carries
+    expect(usable['4/4']).toBeCloseTo(13 / 16 + 1 / 8);
+    expect(usable['8/4']).toBeCloseTo(1.75 + 1 / 8);
+    expect(usable['12/4']).toBeCloseTo(2.75 + 1 / 8);
+    for (const b of BOARD_THICKNESSES) expect(b.usableIn).toBeLessThanOrEqual(b.nominalIn - 1 / 16 + 1e-9);
   });
 });
 
@@ -71,6 +75,22 @@ describe('cutList', () => {
     expect(stripsPerBoard(0.359, 1.75, 0.125)).toBe(3);
     expect(stripsPerBoard(0.359, 13 / 16, 0.125)).toBe(1);
     expect(stripsPerBoard(0.359, 1.75, 0.0625)).toBeGreaterThanOrEqual(4);
+  });
+
+  it('resaws from the ROUGH board: the 0.5 in rail strips come two to a 5/4 board (2 x 0.5 + kerf in 1.25), not four to a 12/4', () => {
+    const b54 = boardByNominal('5/4');
+    expect(resawUsableIn(b54, p)).toBeCloseTo(1.25 - p.millingAllowanceIn, 9);
+    expect(stripsPerBoard(0.5, resawUsableIn(b54, p), p.resawKerfIn)).toBe(2);
+    expect(stripsPerBoard(0.5, resawUsableIn(boardByNominal('12/4'), p), p.resawKerfIn)).toBe(4);
+    const rails = cl.resaw.find((r) => Math.abs(r.roughT - 0.5) < 1e-6)!;
+    expect(rails.strips).toBe(4);
+    expect(rails.board).toBe('5/4');
+    expect(rails.stripsPerBoard).toBe(2);
+    expect(rails.boards).toBe(2);
+    expect(rails.boardFeet).toBeLessThan(9); // the 12/4 route was 9 bf
+    expect(cl.strips.find((r) => r.partNo === 'rail')!.resawFrom).toBe('5/4');
+    // no resaw pool is sawn from a board that yields fewer strips than a thinner board would for fewer board feet
+    for (const pool of cl.resaw) expect(pool.yieldByBoard[pool.board]).toBe(pool.stripsPerBoard);
   });
 
   it('splits plywood into the 4 mm and 12 mm sheets', () => {

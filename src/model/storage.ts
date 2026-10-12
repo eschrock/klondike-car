@@ -37,7 +37,7 @@ export const LASH_HOLE_DX_IN = 0.5625;
 export const LASH_HOLE_DY_IN = 0.25;
 /** The 3/8" epoxy fillet in every inside corner of the box (flat things stowed in it ride on it, not in the corner). */
 export const BOX_FILLET_IN = 0.375;
-/** Oak block under each lid latch (#8 screws need more than the 6 mm end ply or a thin transom): thickness, and width across. */
+/** Oak block under each lid latch (#8 screws need more than the 4 mm end ply or a thin transom): thickness, and width across. */
 export const LATCH_BLOCK_IN = 0.375;
 const LATCH_BLOCK_W_IN = 2;
 /** Lid hold-open stay (friction stay): size, mass. */
@@ -82,7 +82,7 @@ export function storageGeometry(p: Params, L: Layout): StorageGeometry {
   const zTop = sup.boxZTop;
   const coamT = p.storageCoamingThickIn;
   const zWallTop = zTop - pl - rimT - gasket;
-  // The box stands on the deck (rear and under-seat): the epoxy-sealed deck is the floor (round 2: the redundant 6 mm floor panel is gone).
+  // The box stands on the deck (rear and under-seat): the epoxy-sealed deck is the floor (round 2: the redundant floor panel is gone).
   const deckFloor = Math.abs(st.zBot - L.deckTop) < 0.01;
   return {
     x0: st.x0, x1: Math.max(st.x0 + 0.5, sup.boxX1), hw: st.hw, zBot: st.zBot, zTop,
@@ -297,7 +297,7 @@ export function buildStorage(ctx: Ctx): Part[] {
   const parts: Part[] = [];
   const yIn = hw - pl;
   // Tape-and-fold corners (build S4): 45° bevels on the wall panels, 2" glass tape across the outside of the open seam, fold, fillet inside.
-  const miter = (to: string): Joint => ({ type: 'glue', to, count: 1, size: '45° bevel, tape-and-fold', note: 'bevels cut on the table saw, outside seam taped, folded, then a 3/8" epoxy fillet and 2" glass tape inside the corner; no spline (6 mm ply is too thin for one)' });
+  const miter = (to: string): Joint => ({ type: 'glue', to, count: 1, size: '45° bevel, tape-and-fold', note: 'bevels cut on the table saw, outside seam taped, folded, then a 3/8" epoxy fillet and 2" glass tape inside the corner; no spline (4 mm ply is too thin for one)' });
   const fillet = (to: string): Joint => ({ type: 'glue', to, count: 1, size: '3/8" epoxy fillet', note: 'floor captured between the walls, which reach the deck' });
   const dom = (to: string): Joint => frameJoint(p, to, { stockIn: rimT, hostIn: rimW, widthIn: rimW }, { note: 'light frame (no load path through the Domino): lid frame corner' });
   const deckId = 'deck';

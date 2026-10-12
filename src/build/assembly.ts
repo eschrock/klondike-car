@@ -222,7 +222,7 @@ const TEMPLATES: Template[] = [
             : 'Side webs: one piece each from the full 4\' × 8\' sheet.',
           `S-form: two 3/4" MDF cauls for the plan turn-in, ${inch(t.turnIn, 2)} each side from x = ${f(t.x0)}" to x = ${f(t.x1)}" (tightest radius ${t.minRadiusIn > 1e6 ? 'n/a' : inch(t.minRadiusIn, 0)}, D-66); the rails bend on the same form. Mirror S-ramps about 1.25" high × 14" long for the bow end.`,
           'Templates: handlebow arc, bulkhead crown, brake flap and knee (forms.ts). Check the 1" square on each printout before cutting.',
-          'Cut the dados (stopped dados for the web ends, deck dado with deckSlopIn clearance), hand-holds and the Domino / tenon mortises as each assembly step calls for them.',
+          'Cut the dados (web-end dados open through the top edge, deck dado run into them at each corner as one pocket; see the Shaper files), hand-holds and the Domino / tenon mortises as each assembly step calls for them.',
           'Bend-test a dry oak strip on the form (cut 25 % spare strips). If it cracks, plane thinner or add a minute of damp heat.',
         ],
         checks: ['Verify items marked "before cutting" are done', 'Web blank measures the flat-development length; fits the sheet', 'A dry strip takes the S without cracking'],
@@ -434,7 +434,7 @@ const TEMPLATES: Template[] = [
       return {
         instructions: [
           `Bench, the day before: drill the push-handle socket holes, epoxy the ${plural(c.mine.filter((x) => /backer/.test(x.id)).length, 'backer')} (0.75" oak) to the inside of the transom (${sizeOf(transom)}), full face.`,
-          'Close ONE end first (S1). The transom slides in X onto the deck edge, both web ends (stopped dados), the rail tenons and the four band ends per side (epoxy fillet butts, no Dominos): about a dozen joints in one glue-up.',
+          'Close ONE end first (S1). The transom slides in X onto the deck edge, both web ends (their dados, open at the top), the rail tenons and the four band ends per side (epoxy fillet butts, no Dominos): about a dozen joints in one glue-up.',
           'Use the 120-minute slow epoxy (209) and rehearse twice. The 1/8" vent holes in the dados let air and epoxy escape; bung them after.',
           `Joint count at the transom: ${plural(bands, 'epoxy joint')}, mortise-and-tenon ×${count(c, 'mortise-tenon')}.`,
         ],
@@ -456,7 +456,7 @@ const TEMPLATES: Template[] = [
       const b = c.by('bow-bulkhead');
       return {
         instructions: [
-          `Bulkhead ${sizeOf(b)} (rear face is the rider's foot brace): stopped dados take the web ends, a deck dado takes the deck edge, loose tenons into the rails, four band ends per side butt with an epoxy fillet.`,
+          `Bulkhead ${sizeOf(b)} (rear face is the rider's foot brace): dados open at the top take the web ends, a deck dado run into them takes the deck edge, Dominos into the rails (D-69), four band ends per side butt with an epoxy fillet.`,
           'Second, fresh batch of 209 so the close never runs against the first pot life. Fillet the inside corners with thickened epoxy.',
           'The lift hand-hold is already cut; keep epoxy out of it and out of the lamp-clip fit.',
         ],

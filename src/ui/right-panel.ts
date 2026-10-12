@@ -7,10 +7,7 @@ const TABS: { id: string; label: string; phase: number; blurb: string }[] = [
   { id: 'analysis', label: 'Analysis', phase: 2, blurb: 'Stability, braking, structure and mass checks with pass/fail.' },
   { id: 'simulation', label: 'Simulation', phase: 3, blurb: 'Rapier physics: turning, braking and bump scenarios.' },
   { id: 'truck', label: 'Truck fit', phase: 1, blurb: 'The sled in the bed with the tailgate down; collisions highlighted.' },
-  { id: 'cutlist', label: 'Cut list', phase: 4, blurb: 'Rough and finished dimensions, board feet, plywood nesting.' },
-  { id: 'bom', label: 'BOM', phase: 4, blurb: 'Hardware and purchased parts with vendors and total cost.' },
-  { id: 'exports', label: 'Exports', phase: 4, blurb: 'DXF, STL, and CSV outputs.' },
-  { id: 'assembly', label: 'Assembly', phase: 5, blurb: 'Step-by-step build sequence with joinery notes.' },
+  { id: 'build', label: 'Build', phase: 4, blurb: 'Verify, cut list, nesting, BOM, Shaper files, forms, assembly, finishing and downloads.' },
 ];
 
 /** Part lists for the three summary load cases (built by the caller with buildModel). */
@@ -52,7 +49,7 @@ export interface RightPanel {
   /** Feasible-window search state: computing, done, or not available. */
   setWindows(w: FitWindows | 'computing' | null): void;
   /** Empty tab body for a self-contained panel (analysis, simulation) to mount into. */
-  panelHost(id: 'analysis' | 'simulation'): HTMLElement;
+  panelHost(id: 'analysis' | 'simulation' | 'build'): HTMLElement;
   /** Programmatically open a tab (the Simple view jumps to Analysis / Simulation). */
   showTab(id: string): void;
 }
@@ -64,7 +61,7 @@ export interface RightPanelOptions {
 }
 
 /** Tabs whose content is mounted by another module via panelHost(). */
-const MOUNTED = new Set(['analysis', 'simulation']);
+const MOUNTED = new Set(['analysis', 'simulation', 'build']);
 
 const MODE_LABEL = { beside: 'Beside wells', straddle: 'Straddle wells' } as const;
 const ORIENT_LABEL = { 'nose-tailgate': 'Nose to tailgate', 'nose-bulkhead': 'Nose to bulkhead' } as const;

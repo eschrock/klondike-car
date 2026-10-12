@@ -1,8 +1,9 @@
 /**
  * Bill of materials with costs (Phase 4). Plain TS, no three.js; a pure function of (parts, params).
  *
- * Sections: Lumber (oak board feet by thickness, from `nesting.ts`), Plywood (sheets, from the nest), Metal stock (cut-to-length feet),
- * Purchased parts (by partNo), Fasteners (expanded from the joint list), Consumables (epoxy, fillers, tape, finish, sandpaper).
+ * Sections: Lumber (the suggested WHOLE oak boards by thickness, from `nesting.ts`: a yard sells boards, not net board feet), Plywood (sheets, from the nest), Metal stock
+ * (cut-to-length feet), Purchased parts (by partNo), Fasteners (expanded from the joint list), Consumables (epoxy, fillers, tape, finish, sandpaper). The epoxy and the finish
+ * products come from `finishingSchedule` (its buy list, so the BOM and the schedule agree) plus the epoxy for the glue joints.
  * Prices come from `prices.ts`; a number the model carries (`sourcing.costUsd`) is `quoted`, every table price is an `estimate`.
  *
  * Fasteners mirror `fastenerBreakdown` (src/model/lighting.ts): a joint listed on both of its parts counts once, a joint to a part that is
@@ -13,29 +14,23 @@
 import type { Joint, Part } from '../model/types';
 import type { Params } from '../params';
 import { cutList, fracIn, isBuilt, partKey, toCsv, type CsvCell } from './cutlist';
+import { finishingSchedule } from './finishing';
 import { nestPlywood, oakBoardFeet } from './nesting';
 import {
-  EPOXY_KITS, EPOXY_PUMPS, FILLERS, FINISH_PRICE, GLASS_TAPE, METAL_CUT_ALLOWANCE_IN, OAK_PRICE_PER_BF, PLYWOOD_PRICE,
+  EPOXY_207_PINT, EPOXY_KITS, EPOXY_PUMPS, FILLERS, FINISH_CONTAINER_FACTOR, FINISH_PRICE, GLASS_TAPE, METAL_CUT_ALLOWANCE_IN, OAK_PRICE_PER_BF, PLYWOOD_PRICE,
   fastenerPrice, metalPrice, purchasedPrice, type Price, type PriceBasis,
 } from './prices';
 
 // ── Consumable assumptions (all estimates; also in docs/phase4-data-notes.md) ─
-/** Mixed epoxy per glued joint (thickened glue, fillet, squeeze-out), fl oz. */
+/** Mixed epoxy per glued joint (thickened glue, fillet, squeeze-out), fl oz. The seal coats and the finish come from `finishingSchedule`. */
 export const EPOXY_FLOZ_PER_GLUE_JOINT = 0.12;
-/** Epoxy seal coats on the okoume (both faces and the edges), and mixed epoxy per square foot per coat on plywood, fl oz. */
-export const EPOXY_SEAL_COATS = 2;
-export const EPOXY_FLOZ_PER_FT2_COAT = 0.7;
-/** Mixing, pot and brush waste on top of the computed epoxy. */
+/** Mixing, pot and brush waste on top of the glue epoxy (the schedule's own quantities carry their waste). */
 export const EPOXY_WASTE = 0.2;
 /** Glass tape per taped joint (ft), and the waste on top. */
 export const TAPE_FT_PER_JOINT = 1.5;
 export const TAPE_WASTE = 0.25;
-/** Spar varnish coats over everything, per-quart coverage (ft² per coat), and the waste. */
-export const VARNISH_COATS = 4;
-export const VARNISH_FT2_PER_QT_COAT = 100;
-export const VARNISH_WASTE = 0.15;
-/** One wiped coat of stain on the oak, one coat of conditioner or gel stain on the okoume, ft² per quart. */
-export const STAIN_FT2_PER_QT = 150;
+/** Mixed fluid ounces in a quart. */
+const FLOZ_PER_QT = 32;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -76,9 +71,12 @@ export interface Bom {
   jointCounts: FastenerJointCounts;
   /** Parts or fasteners with no price in prices.ts (empty at the defaults). */
   unpriced: string[];
-  consumables: { epoxyFlOz: number; sealedFt2: number; oakFt2: number; plyFt2: number; glueJoints: number; tapeFt: number };
-  /** Extra dollars if the suggested whole oak boards are bought instead of the allowance board feet. */
+  /** `epoxyFlOz` = mixed epoxy bought for (`finishEpoxyFlOz`: the schedule's two seal coats) + (`glueEpoxyFlOz`: the glue joints). `sealedFt2` is the okoume surface of the schedule. */
+  consumables: { epoxyFlOz: number; finishEpoxyFlOz: number; glueEpoxyFlOz: number; sealedFt2: number; oakFt2: number; plyFt2: number; glueJoints: number; tapeFt: number };
+  /** The lumber section prices the suggested whole boards now, so there is no extra to add: always 0 (kept for older readers of this field). */
   wholeBoardsExtraUsd: number;
+  /** What the old pricing (net board feet plus the waste allowance) would have cost, for comparison with the lumber subtotal. */
+  lumberAllowanceUsd: number;
   csv: string;
 }
 
@@ -203,10 +201,6 @@ export function uniqueJoints(parts: Part[]): Array<{ part: Part; joint: Joint }>
   return out;
 }
 
-// ── Areas ─────────────────────────────────────────────────────────────────────
-
-const perimeter = (o: Array<[number, number]>): number => o.reduce((a, q, i) => a + Math.hypot(o[(i + 1) % o.length][0] - q[0], o[(i + 1) % o.length][1] - q[1]), 0);
-
 // ── BOM ───────────────────────────────────────────────────────────────────────
 
 export function bom(parts: Part[], p: Params): Bom {
@@ -216,13 +210,13 @@ export function bom(parts: Part[], p: Params): Bom {
   const nest = nestPlywood(parts, p);
   const oak = oakBoardFeet(parts, p);
 
-  // Lumber
-  let wholeBoardsExtraUsd = 0;
+  // Lumber: the whole boards of the suggested list (nesting.ts), not net x (1 + waste). A thin bucket under about 1 bf is cut from the offcuts of a thicker board (OakPlan.consolidated).
+  let lumberAllowanceUsd = 0;
   const lumber: BomLine[] = oak.thicknesses.map((t) => {
     const price = OAK_PRICE_PER_BF[t.board];
-    wholeBoardsExtraUsd += Math.max(0, t.plannedBf - t.purchaseBf) * price.usd;
-    return line('Lumber', t.board, `White oak ${t.board}, rough`, r2(t.purchaseBf), price, {
-      notes: `${r2(t.netBf)} bf net on nominal thickness, +${Math.round(oak.wasteAllowance * 100)}% waste. Suggested boards (${r2(t.plannedBf)} bf as whole boards): ${t.summary.join('; ')}`,
+    lumberAllowanceUsd += t.allowanceBf * price.usd;
+    return line('Lumber', t.board, `White oak ${t.board}, rough, whole boards`, r2(t.purchaseBf), price, {
+      notes: `Buy: ${t.summary.join('; ')}. ${r2(t.netBf)} bf net on nominal thickness (${r2(t.allowanceBf)} bf with the ${Math.round(oak.wasteAllowance * 100)}% waste allowance); the boards come to ${r2(t.plannedBf)} bf.`,
     });
   });
 
@@ -293,27 +287,16 @@ export function bom(parts: Part[], p: Params): Bom {
     return line('Fasteners', label, label, qty, price, { vendor: /^Domino/.test(label) ? 'Festool dealer' : 'McMaster-Carr / Fastenal' });
   });
 
-  // Consumables
-  let sealedIn2 = 0, plyIn2 = 0;
-  for (const s of nest.sheets) {
-    for (const q of s.placements) {
-      const faces = 2 * q.areaIn2;
-      const edges = (perimeter(q.outer) + q.holes.reduce((a, h) => a + perimeter(h), 0)) * s.thicknessIn;
-      sealedIn2 += faces + edges;
-      plyIn2 += faces + edges;
-    }
-  }
-  let oakIn2 = 0;
-  for (const x of built.filter((q) => /oak/i.test(q.material) && (q.kind === 'lumber' || q.kind === 'bentlam') && q.stock)) {
-    const s = x.stock!;
-    const t = s.t * (x.plies ?? 1);
-    oakIn2 += 2 * (t * s.w + t * s.l + s.w * s.l);
-  }
-  const sealedFt2 = sealedIn2 / 144, plyFt2 = plyIn2 / 144, oakFt2 = oakIn2 / 144;
+  // Consumables. The epoxy and the finish products are the finishing schedule's buy list (so the BOM and the schedule agree); the glue joints add their own epoxy.
+  const sched = finishingSchedule(parts, p);
+  const sealedFt2 = sched.areas.okoumeFt2, plyFt2 = sched.areas.okoumeFt2, oakFt2 = sched.areas.oakFt2;
   const glueJoints = jointCounts.glue;
-  const epoxyFlOz = (glueJoints * EPOXY_FLOZ_PER_GLUE_JOINT + sealedFt2 * EPOXY_SEAL_COATS * EPOXY_FLOZ_PER_FT2_COAT) * (1 + EPOXY_WASTE);
+  const epoxyStep = sched.steps.find((x) => x.id === 'epoxy');
+  const finishEpoxyFlOz = (epoxyStep?.products ?? []).reduce((a, q) => a + q.qtNeeded, 0) * FLOZ_PER_QT;
+  const glueEpoxyFlOz = glueJoints * EPOXY_FLOZ_PER_GLUE_JOINT * (1 + EPOXY_WASTE);
+  const epoxyFlOz = finishEpoxyFlOz + glueEpoxyFlOz;
 
-  // cheapest combination of kits that covers the epoxy
+  // The cheapest combination of kits that covers the epoxy (a gallon group is cheaper per ounce than quart groups, and three quarts can cost more than one gallon).
   const [quart, gallon] = [EPOXY_KITS[0], EPOXY_KITS[1]];
   let best: { q: number; g: number; usd: number } | null = null;
   for (let g = 0; g <= Math.ceil(epoxyFlOz / gallon.mixedFlOz); g++) {
@@ -323,21 +306,35 @@ export function bom(parts: Part[], p: Params): Bom {
     if (!best || usd < best.usd - 1e-9 || (Math.abs(usd - best.usd) < 1e-9 && g + q < best.g + best.q)) best = { q, g, usd };
   }
   const consumables: BomLine[] = [];
-  const epoxyNote = `${r2(epoxyFlOz)} fl oz mixed: ${glueJoints} glue joints x ${EPOXY_FLOZ_PER_GLUE_JOINT} fl oz + ${r2(sealedFt2)} ft² of okoume (faces and edges) x ${EPOXY_SEAL_COATS} seal coats x ${EPOXY_FLOZ_PER_FT2_COAT} fl oz/ft², +${Math.round(EPOXY_WASTE * 100)}% waste`;
+  const buyText = sched.buy.filter((x) => /West System/.test(x.item)).map((x) => `${x.qty} ${x.unit} ${x.item.replace('West System ', '')}`).join(', ');
+  const epoxyNote = `${r2(epoxyFlOz)} fl oz mixed: ${r2(finishEpoxyFlOz)} fl oz for the finishing schedule's two seal coats (its buy list: ${buyText}) + ${r2(glueEpoxyFlOz)} fl oz for ${glueJoints} glue joints x ${EPOXY_FLOZ_PER_GLUE_JOINT} fl oz, +${Math.round(EPOXY_WASTE * 100)}% waste. Cheapest kit combination that covers it.`;
   if (best!.g) consumables.push(line('Consumables', 'epoxy-gallon', gallon.label, best!.g, gallon.price, { vendor: gallon.price.source, notes: epoxyNote }));
   if (best!.q) consumables.push(line('Consumables', 'epoxy-quart', quart.label, best!.q, quart.price, { vendor: quart.price.source, notes: best!.g ? undefined : epoxyNote }));
   if (best!.g) consumables.push(line('Consumables', 'epoxy-pumps', 'Epoxy metering pumps', 1, EPOXY_PUMPS, { vendor: EPOXY_PUMPS.source }));
+  const hardener207 = sched.buy.filter((x) => /207/.test(x.item));
+  const h207Pt = hardener207.reduce((a, x) => a + x.qt * 2, 0);
+  if (h207Pt > 0) consumables.push(line('Consumables', 'epoxy-207', 'West System 207 special clear hardener (finish coats)', h207Pt, EPOXY_207_PINT, { vendor: EPOXY_207_PINT.source, notes: `The schedule's buy list: ${hardener207.map((x) => `${x.qty} ${x.unit}`).join(' + ')}. Mix it with the kit's 105 resin for the two finish coats; the kit's 206 covers the glue-ups.` }));
   consumables.push(line('Consumables', 'silica', 'Colloidal silica filler (thickened glue, fillets)', 1, FILLERS.silica, { vendor: FILLERS.silica.source }));
   consumables.push(line('Consumables', 'microballoons', 'Low-density fairing filler', 1, FILLERS.microballoons, { vendor: FILLERS.microballoons.source }));
   const tapeFt = Math.ceil(tapeJoints * TAPE_FT_PER_JOINT * (1 + TAPE_WASTE));
   if (tapeFt > 0) consumables.push(line('Consumables', 'glass-tape', 'Fiberglass tape, 2" wide', tapeFt, GLASS_TAPE, { vendor: GLASS_TAPE.source, notes: `${tapeJoints} taped joints x ${TAPE_FT_PER_JOINT} ft, +${Math.round(TAPE_WASTE * 100)}%` }));
-  const allFt2 = oakFt2 + plyFt2;
-  const stainQt = Math.max(1, Math.ceil(oakFt2 / STAIN_FT2_PER_QT));
-  const condQt = Math.max(1, Math.ceil(plyFt2 / STAIN_FT2_PER_QT));
-  const varnishQt = Math.max(1, Math.ceil((allFt2 * VARNISH_COATS * (1 + VARNISH_WASTE)) / VARNISH_FT2_PER_QT_COAT));
-  consumables.push(line('Consumables', 'stain', 'Wiping stain for the oak', stainQt, FINISH_PRICE.stain, { vendor: FINISH_PRICE.stain.source, notes: `${r2(oakFt2)} ft² of oak surface, one coat` }));
-  consumables.push(line('Consumables', 'conditioner', 'Pre-stain conditioner or gel stain for the okoume', condQt, FINISH_PRICE.conditioner, { vendor: FINISH_PRICE.conditioner.source, notes: `${r2(plyFt2)} ft² of okoume surface, one coat` }));
-  consumables.push(line('Consumables', 'varnish', 'Spar varnish with UV filters', varnishQt, FINISH_PRICE.varnish, { vendor: FINISH_PRICE.varnish.source, notes: `${r2(allFt2)} ft² x ${VARNISH_COATS} coats at ${VARNISH_FT2_PER_QT_COAT} ft²/qt/coat, +${Math.round(VARNISH_WASTE * 100)}%` }));
+  // The finish products, container by container, exactly as the schedule's buy list names them.
+  const finishKey = (item: string): { key: string; price: Price } | null => {
+    if (/West System/.test(item)) return null;
+    if (/conditioner/i.test(item)) return { key: 'conditioner', price: FINISH_PRICE.conditioner };
+    if (/gel stain/i.test(item)) return { key: 'gel-stain', price: FINISH_PRICE.gelStain };
+    if (/stain or dye/i.test(item)) return { key: 'stain', price: FINISH_PRICE.stain };
+    if (/thinner/i.test(item)) return { key: 'thinner', price: FINISH_PRICE.thinner };
+    if (/varnish/i.test(item)) return { key: 'varnish', price: FINISH_PRICE.varnish };
+    if (/enamel|pigment/i.test(item)) return { key: 'enamel', price: FINISH_PRICE.enamel };
+    return null;
+  };
+  for (const bl of sched.buy) {
+    const k = finishKey(bl.item);
+    if (!k) { if (!/West System/.test(bl.item)) unpriced.push(bl.item); continue; }
+    const price: Price = { ...k.price, usd: money(k.price.usd * FINISH_CONTAINER_FACTOR[bl.unit]), unit: bl.unit };
+    consumables.push(line('Consumables', `${k.key}-${bl.unit}`, `${bl.item}, ${bl.unit}`, bl.qty, price, { vendor: k.price.source, notes: bl.note }));
+  }
   consumables.push(line('Consumables', 'sandpaper', 'Sandpaper, lump sum', 1, FINISH_PRICE.sandpaper, { vendor: FINISH_PRICE.sandpaper.source }));
   consumables.push(line('Consumables', 'supplies', 'Brushes, rollers, cups, gloves, solvent', 1, FINISH_PRICE.supplies, { vendor: FINISH_PRICE.supplies.source }));
 
@@ -361,7 +358,7 @@ export function bom(parts: Part[], p: Params): Bom {
 
   return {
     sections, totalUsd, estimateUsd, estimateShare: totalUsd ? estimateUsd / totalUsd : 0, jointCounts, unpriced: [...new Set(unpriced)],
-    consumables: { epoxyFlOz, sealedFt2, oakFt2, plyFt2, glueJoints, tapeFt }, wholeBoardsExtraUsd: money(wholeBoardsExtraUsd), csv: toCsv(rows),
+    consumables: { epoxyFlOz, finishEpoxyFlOz, glueEpoxyFlOz, sealedFt2, oakFt2, plyFt2, glueJoints, tapeFt }, wholeBoardsExtraUsd: 0, lumberAllowanceUsd: money(lumberAllowanceUsd), csv: toCsv(rows),
   };
 }
 

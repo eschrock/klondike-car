@@ -11,16 +11,19 @@ import { EDGE_MAT, EXPOSED_MAT, PLY_LINE_MAT, type SurfaceMats } from './materia
 import { blobTexture, setMaxAnisotropy } from './textures';
 import { JOINERY_LEGEND, jointColor, joineryMarkers } from './joinery';
 
-type ViewName = 'iso' | 'top' | 'side' | 'front';
+export type ViewName = 'iso' | 'top' | 'side' | 'front' | 'under';
 
 const VIEW_DIRS: Record<ViewName, [number, number, number]> = {
   iso: [1, -1.1, 0.75],
   top: [-0.001, 0, 1], // tiny offset avoids the degenerate lookAt with up = +Z
   side: [0, -1, 0.02],
   front: [1, 0, 0.05],
+  under: [0.9, -1, -0.8], // the build step-through's running-gear steps (Phase 4): looking up at the deck underside; the ground planes are one-sided, so they don't block it
 };
 
-const VIEW_LABELS: Record<ViewName, string> = { iso: 'Iso', top: 'Top', side: 'Side', front: 'Front' };
+const VIEW_LABELS: Record<ViewName, string> = { iso: 'Iso', top: 'Top', side: 'Side', front: 'Front', under: 'Under' };
+/** The toolbar's camera buttons; 'under' is reached only from the build step-through. */
+const TOOLBAR_VIEWS: ViewName[] = ['iso', 'top', 'side', 'front'];
 
 const JOINT_BOX = new THREE.BoxGeometry(1, 1, 1);
 const JOINT_CYL = new THREE.CylinderGeometry(1, 1, 1, 16).rotateX(Math.PI / 2);
@@ -179,7 +182,7 @@ export class Viewer {
     const views = el('div', 'viewer-views');
     views.setAttribute('role', 'group');
     views.setAttribute('aria-label', 'Camera view');
-    for (const name of Object.keys(VIEW_DIRS) as ViewName[]) {
+    for (const name of TOOLBAR_VIEWS) {
       const b = el('button', '');
       b.type = 'button';
       b.textContent = VIEW_LABELS[name];

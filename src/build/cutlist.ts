@@ -24,18 +24,20 @@ export interface BoardThickness {
 }
 
 /**
- * Rough-board thickness table. A part whose ROUGH thickness (finished + milling allowance, `millingAllowanceIn`) is at most `usableIn` can be milled
- * from that nominal board: 4/4 is about 13/16" after surfacing, 5/4 about 1-1/16", 6/4 about 1-5/16", 8/4 about 1-3/4", 12/4 about 2-3/4".
- * 16/4 (about 3-3/4") is not in the Phase 4 spec: it is here only because the brake chock and shoe blocks are 3.1 to 3.6" thick; yards stock it
- * less often, so those rows carry a note (or glue up two 8/4).
+ * Rough-board thickness table. `usableIn` is the thickest ROUGH part (finished + milling allowance, `millingAllowanceIn`) that a rough board of that nominal
+ * thickness yields: the part's rough size already carries its own planing allowance, so this is the board's after-surfacing thickness (4/4 about 13/16",
+ * 5/4 1-1/16", 6/4 1-5/16", 8/4 1-3/4", 12/4 2-3/4") plus that 1/8" default allowance, never more than the nominal less a 1/16" skim.
+ * (Phase 4 fix: comparing the rough part to the after-surfacing figure counted the allowance twice and pushed 1.70"-1.75" parts such as the king beam
+ * and the bridle tongue off 8/4 onto 12/4.) 16/4 is here only for the brake chock and shoe blocks; yards stock it less often, so those rows carry a note
+ * (or glue up two 8/4).
  */
 export const BOARD_THICKNESSES: readonly BoardThickness[] = [
-  { nominal: '4/4', nominalIn: 1, usableIn: 13 / 16 },
-  { nominal: '5/4', nominalIn: 1.25, usableIn: 1 + 1 / 16 },
-  { nominal: '6/4', nominalIn: 1.5, usableIn: 1 + 5 / 16 },
-  { nominal: '8/4', nominalIn: 2, usableIn: 1.75 },
-  { nominal: '12/4', nominalIn: 3, usableIn: 2.75 },
-  { nominal: '16/4', nominalIn: 4, usableIn: 3.75 },
+  { nominal: '4/4', nominalIn: 1, usableIn: 15 / 16 },
+  { nominal: '5/4', nominalIn: 1.25, usableIn: 1 + 3 / 16 },
+  { nominal: '6/4', nominalIn: 1.5, usableIn: 1 + 7 / 16 },
+  { nominal: '8/4', nominalIn: 2, usableIn: 1 + 7 / 8 },
+  { nominal: '12/4', nominalIn: 3, usableIn: 2 + 7 / 8 },
+  { nominal: '16/4', nominalIn: 4, usableIn: 3 + 7 / 8 },
 ];
 
 /** Smallest nominal board that yields a rough thickness, or null when none does. */
@@ -237,6 +239,13 @@ function oakRows(parts: Part[], p: Params, warnings: string[]): OakRow[] {
 
 // ── Resaw ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Thickness (in) of a ROUGH board that a resaw can use: the nominal thickness less one jointed face (`millingAllowanceIn`). A resawn strip is cut from the rough board BEFORE any planing
+ * (its rough thickness already includes its own planing allowance), so the "usable after surfacing both faces" in `BOARD_THICKNESSES` would throw away a strip: from a 5/4 rough board
+ * (1.25") two 0.5" rough strips plus a kerf fit (1.125"), where the surfaced 1.0625" holds only one. That made the rails come out of 12/4 (4 strips) instead of two 5/4 boards.
+ */
+export const resawUsableIn = (b: BoardThickness, p: Params): number => b.nominalIn - p.millingAllowanceIn;
+
 /** Strips of rough thickness `stripT` that one board of usable thickness `usableIn` yields: each cut costs a kerf, the last strip needs none after it. */
 export function stripsPerBoard(stripT: number, usableIn: number, kerfIn: number): number {
   return Math.max(0, Math.floor((usableIn + kerfIn + 1e-9) / (stripT + kerfIn)));
@@ -277,7 +286,7 @@ export function planResaw(parts: Part[], p: Params): ResawPool[] {
     const yieldByBoard: Record<string, number> = {};
     let best: { b: BoardThickness; k: number; boards: number; bf: number } | null = null;
     for (const b of BOARD_THICKNESSES) {
-      const k = stripsPerBoard(roughT, b.usableIn, p.resawKerfIn);
+      const k = stripsPerBoard(roughT, resawUsableIn(b, p), p.resawKerfIn);
       yieldByBoard[b.nominal] = k;
       if (k < 1) continue;
       const boards = Math.ceil(layers.length / k);

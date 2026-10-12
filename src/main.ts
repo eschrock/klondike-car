@@ -16,6 +16,8 @@ import { mountSimPanel } from './ui/sim-panel';
 import { runChecks } from './analysis';
 import { totalMass } from './model/mass';
 import { mountSimpleView, type SpecFacts } from './ui/simple-view';
+import { mountBuildPanel } from './ui/build-panel';
+import { viewerView, type StepFocus } from './ui/build-helpers';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -50,6 +52,7 @@ function scheduleWindows(delayMs: number) {
 }
 // Declared before the right panel so its onTab callback can reach it.
 let sim: ReturnType<typeof mountSimPanel> | undefined;
+let buildPanel: ReturnType<typeof mountBuildPanel> | undefined;
 const right = mountRightPanel($('right'), {
   onShowTruck(c) {
     truckKey = c.key;
@@ -58,6 +61,8 @@ const right = mountRightPanel($('right'), {
   },
   onTab(id) {
     sim?.setActive(id === 'simulation');
+    buildPanel?.setActive(id === 'build');
+    $('app').classList.toggle('build-wide', id === 'build'); // Phase 4: the Build tab's tables and drawings get a wider right column
     truckTabOpen = id === 'truck';
     if (truckTabOpen) scheduleWindows(0);
   },
@@ -158,6 +163,21 @@ viewer.addToolbarControl(exitTruck);
 
 const analysis = mountAnalysisPanel(right.panelHost('analysis'));
 
+// Build tab (Phase 4). Its Assembly section steps through the build: the viewer shows only the parts installed so far,
+// tints the current step's parts and moves the camera to the step's preset. `null` (any other section or tab) restores the full model.
+let stepFocus: StepFocus | null = null;
+buildPanel = mountBuildPanel(right.panelHost('build'), {
+  onStep(f) {
+    stepFocus = f;
+    if (f) {
+      truckKey = null; // the step-through takes over the viewer from a truck placement
+      right.setActiveTruckKey(null);
+    }
+    render();
+  },
+  getLink: () => window.location.href,
+});
+
 // The summary and the fit depend only on the design parameters, so they are cached across view-only changes.
 let cacheKey = '';
 let fit: FitResult;
@@ -190,6 +210,7 @@ const render = () => {
       { track: p.rearTrackIn, wb: p.wheelbaseIn, lateralBesideLimit: derived(p).maxTrackBesideWells },
     );
     analysis.update(p, runChecks(p, { fit }));
+    buildPanel?.setDesign(p, summary.empty);
     windowsDone = null;
     right.setWindows(null);
     scheduleWindows(400);
@@ -206,8 +227,16 @@ const render = () => {
   } else {
     viewer.setTruck(null);
     syncToggles();
-    if (!sim?.active) viewer.update(build(p, transport ? { ...effectiveView(), steerDeg: 0 } : view)); // the transport config has the axle turned straight
-    viewer.highlight([]);
+    if (!sim?.active) {
+      const all = build(p, transport ? { ...effectiveView(), steerDeg: 0 } : view); // the transport config has the axle turned straight
+      const shown = stepFocus?.visibleIds ? new Set(stepFocus.visibleIds) : null;
+      viewer.update(shown ? all.filter((x) => shown.has(x.id)) : all);
+      if (stepFocus?.reframe) { // a new step: frame what is shown from the step's camera (once: later renders keep the user's orbit)
+        stepFocus.reframe = false;
+        viewer.setView(viewerView(stepFocus.view));
+      }
+    }
+    viewer.highlight(stepFocus?.highlightIds ?? [], '#ff9f0a');
   }
 };
 // ── Simple | Advanced (D-30) ──

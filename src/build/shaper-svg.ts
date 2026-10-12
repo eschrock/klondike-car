@@ -5,7 +5,7 @@
  * Joint -> feature rules (also in docs/phase4-geometry-notes.md):
  *  R1  Holes in `FlatPattern.holes` (hand holes, vent holes) are inside cuts; a hole whose largest dimension is under DRILL_BELOW_IN is a drill mark (blue) instead.
  *  R2  bolt / screw / pin / knob joints with `at`: a hole at each point, axis normal to the cut face, when the text says "through" (the default). Diameter: a #N screw gets its clearance
- *      (#10 = 0.2 in), a bolt its standard clearance (1/4 = 0.266 in), a pin `diaIn` + 1/32 (0.375 -> 13/32), "N/M clearance" in the text wins when there is no #N. A hole under
+ *      (#10 = 0.2 in), a bolt its standard clearance (1/4 = 0.266 in), a pin `diaIn` + 1/32 (0.375 -> 13/32); an explicit "N/M clearance" in the text wins over all of these (the sign knobs: 7/32 = 0.219). A hole under
  *      DRILL_BELOW_IN is a drill mark; otherwise an inside cut.
  *  R3  Blind holes (threaded inserts, "screws down/up through the X into the tongue" pilots): drill marks with the depth in the label. A pilot hole is drilled through the mating part
  *      clamped in place, so it is a mark, not a cut. A mark on the face opposite the one being cut is dashed ("hidden face").
@@ -14,6 +14,8 @@
  *  R6  Dados and mortises on a face (the normal coordinate is in the outer part of the thickness) are pockets of the parsed width and depth. A web's stopped dado follows the web's
  *      end (its lateral station and its z range at the end x, from the web mesh); a deck dado runs the deck's width at that end; a mortise is thin across the rail (model Y). The face
  *      they are on is the face that is cut (the part is drawn from that face, mirrored in u when it is the back of the pattern's plain view).
+ *      Two joint-text flags change the pocket shape: a web dado "out through the top edge" is open at the top (the pocket runs out through the rounded corner, no thin wall), and a deck
+ *      dado "into the web dados" is extended at each end across the neighboring web dado, so the two make one continuous pocket at the corner.
  *  R7  Edge joints (glue, Domino, scarf, bevel, rabbet, half-lap, dado cut in the mate, anything at mid-thickness) are not Shaper features. Glue footprints of lumber / sheet mates are
  *      dashed guides; the rest become text notes (below the part and in <desc>).
  *  R8  `legend` is engraved as an on-line cut at `legend.depthIn`, single-stroke capitals, centered on the panel, readable from the legend's face.
@@ -82,7 +84,7 @@ export interface ShaperFile {
 type Item =
   | { k: 'cutHole'; c: Vec2; dia: number }
   | { k: 'cutLoop'; loop: Vec2[] }
-  | { k: 'pocket'; loop: Vec2[]; depth: number; label: string }
+  | { k: 'pocket'; loop: Vec2[]; depth: number; label: string; runOut?: boolean; deckRun?: boolean; web?: boolean }
   | { k: 'drill'; c: Vec2; dia: number; onFace?: '+' | '-'; approx?: boolean; label?: string }
   | { k: 'line'; pts: Vec2[]; closed?: boolean; dashed?: boolean; label?: string }
   | { k: 'tag'; at: Vec2; text: string; size?: number };
@@ -182,12 +184,12 @@ function parseDepth(text: string): number | undefined {
 /** The diameter of a through hole for a fastener joint (rule R2). */
 export function clearanceDia(j: { type: string; size?: string; diaIn?: number }): number {
   const text = j.size ?? '';
+  const clr = new RegExp(String.raw`${NUM}\s*(?:in\s*)?clearance`).exec(text);
+  if (clr && Number.isFinite(parseInches(clr[1]))) return parseInches(clr[1]);
   const gauge = /#\s*(\d+)/.exec(text);
   if (gauge && GAUGE_CLEARANCE_IN[gauge[1]]) return GAUGE_CLEARANCE_IN[gauge[1]];
   const met = /\bM(\d)\b/.exec(text);
   if (met && METRIC_CLEARANCE_IN[met[1]]) return METRIC_CLEARANCE_IN[met[1]];
-  const clr = new RegExp(String.raw`${NUM}\s*(?:in\s*)?clearance`).exec(text);
-  if (clr && Number.isFinite(parseInches(clr[1]))) return parseInches(clr[1]);
   const d = j.diaIn ?? 0.25;
   if (j.type === 'pin') return d + PIN_CLEARANCE_IN;
   return BOLT_CLEARANCE_IN[String(d)] ?? d + 1 / 64;
@@ -280,17 +282,15 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
   const big = loopHoles.filter((b) => Math.max(b.u1 - b.u0, b.v1 - b.v0) >= DRILL_BELOW_IN);
   if (big.length) features.push({ kind: 'hole', label: 'Hand hole / slot, inside cut', count: big.length, at: big.map((b) => [(b.u0 + b.u1) / 2, (b.v0 + b.v1) / 2] as Vec2), joint: 'geometry' });
 
-  // Resolve a joint point: the part's own frame first, the model frame when that lands off the pattern (the grab boards write model-frame points).
+  // A joint point is in the part's own local frame (types.ts); a point that lands off the pattern is reported, never moved.
   const inBox = (q: Vec2) => q[0] >= -0.05 && q[0] <= W + 0.05 && q[1] >= -0.05 && q[1] <= H + 0.05;
   const resolve = (at: Vec3): { uv: Vec2; local: Vec3 } | null => {
     const q = f.toPattern(at);
-    if (inBox(q)) return { uv: q, local: at };
-    const l = fr.toLocal(at);
-    const q2 = f.toPattern(l);
-    return inBox(q2) ? { uv: q2, local: l } : null;
+    return inBox(q) ? { uv: q, local: at } : null;
   };
 
   const pocketFaces: Array<'+' | '-'> = [];
+  const deckRuns: Array<{ item: Extract<Item, { k: 'pocket' }>; feature: ShaperFeature }> = [];
   const edgeGroups = new Map<string, { type: string; size?: string; note?: string; to: string[]; count: number }>();
   const addEdgeNote = (j: { type: string; to: string; count: number; size?: string; note?: string }) => {
     const k = `${j.type}|${j.size ?? ''}|${j.note ?? ''}`;
@@ -343,6 +343,11 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
       } else {
         const blindish = kindF === 'pilot' || kindF === 'blind';
         for (const g of trusted) items.push({ k: 'drill', c: g.uv, dia, ...(blindish ? { onFace: fr.signedFace(g.local) } : {}) });
+        // A blind hole carries its depth on the drawing: one label above the row of marks.
+        if (blindish && depth !== undefined) {
+          const top = trusted.reduce((a, g) => (g.uv[1] > a.uv[1] ? g : a));
+          items.push({ k: 'tag', at: [Math.min(...trusted.map((g) => g.uv[0])), top.uv[1] + dia / 2 + 0.22], text: `${kindF === 'blind' ? 'insert hole' : 'pilot'} Ø${fmt(dia)} x ${fmt(depth)} deep${trusted.length > 1 ? ` (x${trusted.length})` : ''}`, size: 0.11 });
+        }
         const what = kindF === 'through' ? `${j.type} hole Ø${fmt(dia)} through, drill` : kindF === 'blind' ? `Blind insert hole Ø${fmt(dia)}${depth ? ` x ${fmt(depth)} deep` : ''}, drill with a stop` : `Pilot hole Ø${fmt(dia)}, drill through the mating part`;
         holeFeature(j, uvs, dia, depth, 'drill', what);
       }
@@ -375,17 +380,21 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
       const got = resolve(pts[0]);
       const face = got ? fr.faceOf(got.local) : null;
       if (got && face) {
-        const loops = pocketFor(fr, j, mate, got);
+        const loops = pocketFor(fr, j, mate, got, f.outer);
         if (loops) {
           for (const loop of loops.loops) {
-            items.push({ k: 'pocket', loop, depth: loops.depth, label: `${j.type} for ${j.to}` });
+            const pk: Extract<Item, { k: 'pocket' }> = { k: 'pocket', loop, depth: loops.depth, label: `${j.type} for ${j.to}`, ...(loops.runOut ? { runOut: true } : {}), ...(loops.deckRun ? { deckRun: true } : {}), ...(loops.web ? { web: true } : {}) };
+            items.push(pk);
             const out = loop.filter((q) => !pointInPoly(q, f.outer));
             const wall = Math.min(...loop.map((q) => distToPoly(q, f.outer)));
-            if (out.length) notes.push(`${j.type} for ${j.to}: ${out.length} corner(s) of the pocket lie outside the outline (it would break through the edge); check it against the model.`);
+            if (loops.runOut) notes.push(`${j.type} for ${j.to}: runs out through the top edge on purpose (open at the top, no thin wall at the rounded corner).`);
+            else if (out.length) notes.push(`${j.type} for ${j.to}: ${out.length} corner(s) of the pocket lie outside the outline (it would break through the edge); check it against the model.`);
             else if (wall < THIN_WALL_IN) notes.push(`${j.type} for ${j.to}: the pocket comes within ${fmt(wall)} in of the outline (a wall under ${THIN_WALL_IN} in); check it against the model.`);
           }
           pocketFaces.push(face);
-          features.push({ kind: 'pocket', label: `${j.type === 'dado' ? 'Dado' : 'Mortise'} for ${j.to}: ${loops.desc}`, count: loops.loops.length, depthIn: loops.depth, to: j.to, joint: j.type, at: loops.loops.map((l) => { const b = bbox(l); return [(b.u0 + b.u1) / 2, (b.v0 + b.v1) / 2] as Vec2; }) });
+          const pkFeature: ShaperFeature = { kind: 'pocket', label: `${j.type === 'dado' ? 'Dado' : 'Mortise'} for ${j.to}: ${loops.desc}`, count: loops.loops.length, depthIn: loops.depth, to: j.to, joint: j.type, at: loops.loops.map((l) => { const b = bbox(l); return [(b.u0 + b.u1) / 2, (b.v0 + b.v1) / 2] as Vec2; }) };
+          features.push(pkFeature);
+          if (loops.deckRun) deckRuns.push({ item: items[items.length - 1] as Extract<Item, { k: 'pocket' }>, feature: pkFeature });
           if (face !== fr.plainFace) { /* the face decides the mirror below */ }
           continue;
         }
@@ -416,6 +425,28 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
       const toModelQ = (l: Vec3): Vec3 => [qm[0] * l[0] + qm[4] * l[1] + qm[8] * l[2] + qm[12], qm[1] * l[0] + qm[5] * l[1] + qm[9] * l[2] + qm[13], qm[2] * l[0] + qm[6] * l[1] + qm[10] * l[2] + qm[14]];
       const got = j.at.map((a) => { const l = fr.toLocal(toModelQ(a)); const uv = f.toPattern(l); return inBox(uv) ? { uv, local: l } : null; });
       fasten({ ...j, to: q.id }, got, `${j.size ?? ''} ${j.note ?? ''}`, kindF);
+    }
+  }
+
+  // A deck dado that "runs into the web dados" is extended at each end across the neighboring web dado (same depth, axis-aligned, touching or within a thin wall of it): one continuous pocket.
+  for (const dr of deckRuns) {
+    const D = bbox(dr.item.loop);
+    const alongU = D.u1 - D.u0 >= D.v1 - D.v0;
+    let [a0, a1] = alongU ? [D.u0, D.u1] : [D.v0, D.v1];
+    const [c0, c1] = alongU ? [D.v0, D.v1] : [D.u0, D.u1];
+    let joined = 0;
+    for (const w of d_pockets(items)) {
+      if (!w.web || Math.abs(w.depth - dr.item.depth) > 1e-6) continue;
+      const B = bbox(w.loop);
+      const [b0, b1] = alongU ? [B.u0, B.u1] : [B.v0, B.v1];
+      const [e0, e1] = alongU ? [B.v0, B.v1] : [B.u0, B.u1];
+      if (Math.min(c1, e1) - Math.max(c0, e0) <= 0) continue; // no overlap across
+      if (b0 >= a1 - 1e-9 && b0 - a1 < THIN_WALL_IN * 4) { a1 = Math.max(a1, b1); joined++; } else if (b1 <= a0 + 1e-9 && a0 - b1 < THIN_WALL_IN * 4) { a0 = Math.min(a0, b0); joined++; }
+    }
+    if (joined) {
+      dr.item.loop = alongU ? rectLoop(a0, c0, a1, c1) : rectLoop(c0, a0, c1, a1);
+      dr.feature.label += `; runs into the web dado at ${joined === 2 ? 'both ends' : 'one end'} (one continuous pocket at the corner)`;
+      dr.feature.at = [alongU ? [(a0 + a1) / 2, (c0 + c1) / 2] : [(c0 + c1) / 2, (a0 + a1) / 2]];
     }
   }
 
@@ -467,10 +498,23 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
 
 const d_pockets = (items: Item[]): Array<Extract<Item, { k: 'pocket' }>> => items.filter((i): i is Extract<Item, { k: 'pocket' }> => i.k === 'pocket');
 
-interface PocketResult { loops: Vec2[][]; depth: number; desc: string }
+interface PocketResult { loops: Vec2[][]; depth: number; desc: string; runOut?: boolean; deckRun?: boolean; web?: boolean }
+
+/** The highest v the outline reaches within u0..u1 (to run a vertical pocket out through the top edge). */
+function topOfOutline(outer: Vec2[], u0: number, u1: number): number {
+  let top = -Infinity;
+  for (let i = 0; i < outer.length; i++) {
+    const a = outer[i], b = outer[(i + 1) % outer.length];
+    for (const u of [u0, u1]) {
+      if ((a[0] - u) * (b[0] - u) > 0 || Math.abs(b[0] - a[0]) < 1e-12) continue;
+      top = Math.max(top, a[1] + ((b[1] - a[1]) * (u - a[0])) / (b[0] - a[0]));
+    }
+  }
+  return top;
+}
 
 /** The pocket shape for a dado or mortise joint (rule R6), or null when it cannot be derived. */
-function pocketFor(fr: Frame, j: { type: string; size?: string }, mate: Part | undefined, got: { uv: Vec2; local: Vec3 }): PocketResult | null {
+function pocketFor(fr: Frame, j: { type: string; size?: string }, mate: Part | undefined, got: { uv: Vec2; local: Vec3 }, outer: Vec2[]): PocketResult | null {
   const size = j.size ?? '';
   if (j.type === 'mortise-tenon') {
     const mt = parseMortise(size);
@@ -495,8 +539,12 @@ function pocketFor(fr: Frame, j: { type: string; size?: string }, mate: Part | u
     const zs = mg.profile.filter((q) => Math.abs(q[0] - xEnd) < 1e-6).map((q) => q[1]);
     if (!zs.length) return null;
     const z0 = Math.min(...zs), z1 = Math.max(...zs);
-    const a = fr.modelToPattern([modelAt[0], modelAt[1], z0]), b = fr.modelToPattern([modelAt[0], modelAt[1], z1]);
-    return { loops: [rectAlong(a, b, dd.width)], depth: dd.depth, desc: `${fmt(dd.width)} wide stopped dado, ${fmt(Math.hypot(b[0] - a[0], b[1] - a[1]))} long (the ${mate.id} end, z ${fmt(z0)} to ${fmt(z1)})` };
+    const a = fr.modelToPattern([modelAt[0], modelAt[1], z0]);
+    let b = fr.modelToPattern([modelAt[0], modelAt[1], z1]);
+    // "out through the top edge": the dado is open at the top, so it runs 0.03 in past the outline there instead of stopping short of a thin wall at the rounded corner.
+    const runOut = /out through the top edge/.test(size) && Math.abs(b[0] - a[0]) < 1e-6 && b[1] > a[1];
+    if (runOut) b = [b[0], Math.max(b[1], topOfOutline(outer, b[0] - dd.width / 2, b[0] + dd.width / 2) + 0.03)];
+    return { loops: [rectAlong(a, b, dd.width)], depth: dd.depth, web: true, ...(runOut ? { runOut } : {}), desc: `${fmt(dd.width)} wide ${runOut ? 'dado open at the top (runs out through the top edge)' : 'stopped dado'}, ${fmt(Math.hypot(b[0] - a[0], b[1] - a[1]))} long (the ${mate.id} end, z ${fmt(z0)} to ${fmt(z1)})` };
   }
   if (mg.type === 'extrusion') {
     // A deck-type sheet: the dado runs the sheet's width at its end nearest this part.
@@ -509,7 +557,8 @@ function pocketFor(fr: Frame, j: { type: string; size?: string }, mate: Part | u
     const ys = pts.filter((q) => Math.abs(q[0] - xEnd) < 1e-6).map((q) => q[1]);
     if (!ys.length) return null;
     const a = fr.modelToPattern([modelAt[0], Math.min(...ys), modelAt[2]]), b = fr.modelToPattern([modelAt[0], Math.max(...ys), modelAt[2]]);
-    return { loops: [rectAlong(a, b, dd.width)], depth: dd.depth, desc: `${fmt(dd.width)} wide closed-end dado across the ${mate.id} end, ${fmt(Math.hypot(b[0] - a[0], b[1] - a[1]))} long` };
+    const deckRun = /into the web dado/.test(size);
+    return { loops: [rectAlong(a, b, dd.width)], depth: dd.depth, ...(deckRun ? { deckRun } : {}), desc: `${fmt(dd.width)} wide ${deckRun ? 'dado' : 'closed-end dado'} across the ${mate.id} end, ${fmt(Math.hypot(b[0] - a[0], b[1] - a[1]))} long` };
   }
   return null;
 }

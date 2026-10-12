@@ -105,7 +105,7 @@ describe('Shaper SVG files', () => {
     expect(fileOf('sign-L').svg.match(/<title>drill<\/title>/g)!.length).toBe(4);
   });
 
-  it('keeps the grab-board bolt holes on the board (the joints write model-frame points)', () => {
+  it('keeps the grab-board bolt holes on the board (the joints are in the board\'s local frame)', () => {
     const d = analyzeShaperPart(parts.find((x) => x.id === 'seat-grip-L')!, parts, p)!;
     const holes = d.items.filter((i) => i.k === 'cutHole');
     expect(holes.length).toBe(6);
@@ -135,6 +135,39 @@ describe('Shaper SVG files', () => {
     }
   });
 
+  it('runs the deck dado into the web dados (one pocket at each corner) and the web dados out through the top edge: no thin walls left', () => {
+    for (const id of ['transom-rear', 'bow-bulkhead']) {
+      const d = analyzeShaperPart(parts.find((x) => x.id === id)!, parts, p)!;
+      const pk = d.items.filter((i): i is Extract<typeof i, { k: 'pocket' }> => i.k === 'pocket');
+      const bb = (l: [number, number][]) => ({ u0: Math.min(...l.map((q) => q[0])), u1: Math.max(...l.map((q) => q[0])), v0: Math.min(...l.map((q) => q[1])), v1: Math.max(...l.map((q) => q[1])) });
+      const deck = bb(pk.find((i) => i.label.includes('deck'))!.loop);
+      const webs = pk.filter((i) => /web/.test(i.label));
+      expect(webs.length, id).toBe(2);
+      for (const w of webs) {
+        const b = bb(w.loop);
+        // the deck pocket spans the whole width of the web pocket at its end, and shares its rows: one continuous pocket
+        expect(deck.u0 <= b.u0 + 1e-9 && deck.u1 >= b.u1 - 1e-9 || deck.u0 <= b.u0 + 1e-9 || deck.u1 >= b.u1 - 1e-9, `${id} ${w.label}`).toBe(true);
+        expect(Math.max(deck.v0, b.v0) < Math.min(deck.v1, b.v1), `${id} ${w.label} rows overlap`).toBe(true);
+        // open at the top: the pocket ends above the outline there
+        const top = Math.max(...d.f.outer.filter((q) => q[0] >= b.u0 - 1e-6 && q[0] <= b.u1 + 1e-6).map((q) => q[1]));
+        expect(b.v1, `${id} ${w.label} top`).toBeGreaterThanOrEqual(top - 0.5);
+        expect(b.v1).toBeGreaterThan(Math.min(...d.f.outer.map((q) => q[1]))); // sanity
+      }
+      const deckSpan = [deck.u0, deck.u1], webSpan = [Math.min(...webs.map((w) => bb(w.loop).u0)), Math.max(...webs.map((w) => bb(w.loop).u1))];
+      expect(deckSpan[0]).toBeLessThanOrEqual(webSpan[0] + 1e-9);
+      expect(deckSpan[1]).toBeGreaterThanOrEqual(webSpan[1] - 1e-9);
+      expect(d.notes.filter((n) => /only [\d.]+ in of wood|comes within|lie outside the outline/.test(n)), id).toEqual([]);
+      expect(d.features.find((x) => x.kind === 'pocket' && x.to === 'deck')!.label).toMatch(/runs into the web dado at both ends/);
+    }
+  });
+
+  it('drills the sign knob holes at 7/32 (0.219), the clearance of a #10-32 screw', () => {
+    const f = fileOf('sign-L');
+    const holes = f.features.filter((x) => x.kind === 'drill' && x.joint === 'knob');
+    expect(holes.reduce((n, x) => n + x.count, 0)).toBe(4);
+    for (const x of holes) expect(x.diaIn).toBeCloseTo(7 / 32, 6);
+  });
+
   it('engraves DO NOT STEP on the lid as on-line strokes at the legend depth', () => {
     const lid = parts.find((x) => x.id === 'storage-lid')!;
     const f = fileOf('storage-lid');
@@ -154,8 +187,37 @@ describe('Shaper SVG files', () => {
   });
 
   it('marks a joint position it cannot trust as a guide, never a cut', () => {
-    const f = fileOf('seat-back-panel');
-    expect(f.features.some((x) => x.kind === 'drill' && x.approx)).toBe(true);
-    expect(f.svg).toContain('position uncertain');
+    // A synthetic copy of the seat back with one insert moved onto its foot edge: the model's own inserts are all trusted now.
+    const panel = parts.find((x) => x.id === 'seat-back-panel')!;
+    const moved = { ...panel, joints: panel.joints!.map((j) => (j.to === 'seat-hinge-L' ? { ...j, at: j.at!.map((a, i): [number, number, number] => (i === 0 ? [a[0], 0.02, a[2]] : a)) } : j)) };
+    const d = analyzeShaperPart(moved, parts, p)!;
+    expect(d.features.some((x) => x.kind === 'drill' && x.approx)).toBe(true);
+    expect(d.items.some((i) => i.k === 'drill' && i.label === 'position uncertain')).toBe(true);
+  });
+
+  it('puts the hinge inserts of the seat back where the hinge leaf has its holes, as drill marks with depth labels', () => {
+    const d = analyzeShaperPart(parts.find((x) => x.id === 'seat-back-panel')!, parts, p)!;
+    expect(d.features.some((x) => x.approx)).toBe(false);
+    const ins = d.features.filter((x) => x.kind === 'drill' && x.joint === 'screw');
+    expect(ins.reduce((n, x) => n + x.count, 0)).toBe(6);
+    for (const x of ins) {
+      expect(x.depthIn).toBeCloseTo(0.344, 3);
+      expect(x.label).toMatch(/Blind insert hole/);
+      for (const [u, v] of x.at!) {
+        expect(v).toBeGreaterThanOrEqual(0.5); // from the foot edge
+        expect(Math.min(u, d.f.widthIn - u)).toBeGreaterThanOrEqual(0.5); // from the side edges
+      }
+    }
+    const svg = fileOf('seat-back-panel').svg;
+    expect(svg).not.toContain('position uncertain');
+    expect(svg).toMatch(/insert hole Ø[\d.]+ x 0\.344 deep \(x3\)/);
+    expect(d.notes.some((n) => /fall outside the pattern/.test(n))).toBe(false);
+  });
+
+  it('draws every joint point of every Shaper part: none falls off its pattern (all points are local-frame)', () => {
+    for (const part of parts.filter((x) => x.fab === 'shaper-origin')) {
+      const d = analyzeShaperPart(part, parts, p);
+      if (d) expect(d.notes.filter((n) => /fall outside the pattern/.test(n)), part.id).toEqual([]);
+    }
   });
 });

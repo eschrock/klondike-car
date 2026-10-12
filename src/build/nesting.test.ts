@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
 import { defaultParams } from '../params';
-import { BOARD_THICKNESSES, BOARD_WIDTH_IN, boardForThickness, isBuilt } from './cutlist';
+import { BOARD_THICKNESSES, BOARD_WIDTH_IN, boardByNominal, boardForThickness, isBuilt, partKey } from './cutlist';
 import { nestPlywood, oakBoardFeet, SHEET_LENGTH_IN, SHEET_WIDTH_IN } from './nesting';
 
 const p = defaultParams();
@@ -90,7 +90,10 @@ describe('oakBoardFeet', () => {
     for (const x of parts.filter((q) => isBuilt(q) && /oak/i.test(q.material) && q.kind === 'lumber' && q.plies === undefined)) {
       const r = x.rough!;
       const d = [r.t, r.w, r.l].sort((a, b) => a - b);
-      const b = boardForThickness(d[0])!;
+      const b0 = boardForThickness(d[0])!;
+      // a thin bucket cut from the offcuts of a thicker board counts at the thicker board's nominal thickness
+      const to = oak.consolidated.find((c) => c.from === b0.nominal && c.partNos.includes(partKey(x)))?.to;
+      const b = to ? boardByNominal(to) : b0;
       solid += (b.nominalIn * d[1] * d[2]) / 144;
     }
     expect(oak.netBf).toBeGreaterThan(10);
@@ -120,6 +123,27 @@ describe('oakBoardFeet', () => {
     for (const t of oak.thicknesses) { expect(t.plannedBf).toBeGreaterThan(0); expect(t.purchaseBf).toBeGreaterThanOrEqual(t.netBf); }
     expect(oak.resaw.every((r) => r.boardLengthIn >= 72)).toBe(true);
     expect(BOARD_THICKNESSES.map((b) => b.nominal)).toContain(oak.resaw[0].board);
+  });
+
+  it('cuts a solid bucket under 1 bf from the offcuts of a thicker board instead of buying a thin board for it (and says so)', () => {
+    // At the defaults every bucket is over 1 bf; thin the 8/4 bucket down to the king beam alone (about 0.6 bf) by dropping the bulkhead and the tongue.
+    const thin = parts.filter((x) => !/^(bow-bulkhead|bridle-tongue)$/.test(x.id));
+    const oakThin = oakBoardFeet(thin, p);
+    expect(oakThin.consolidated.length).toBeGreaterThan(0);
+    for (const o of [oak, oakThin]) for (const c of o.consolidated) {
+      const oak = o;
+      const from = oak.thicknesses.find((t) => t.board === c.from);
+      const to = oak.thicknesses.find((t) => t.board === c.to)!;
+      expect(c.netBf).toBeLessThan(1.5); // about a board foot (counted on the thicker board's nominal thickness)
+      expect(from?.boards ?? []).toEqual([]); // no solid board of the thin thickness is planned
+      if (from) expect(from.movedOut).toBe(c.to); // a thickness left with nothing (no solids, no resaw) has no row at all
+      expect(to.movedIn?.partNos).toEqual(c.partNos);
+      expect(to.summary.join(' ')).toMatch(new RegExp(`cut the ${c.from} parts`));
+      const planned = to.boards.flatMap((b) => b.lanes.flatMap((l) => l.cuts.map((q) => q.partNo)));
+      for (const no of c.partNos) expect(planned, no).toContain(no);
+    }
+    // the BOM buys whole boards: the lumber is the planned board feet
+    for (const t of oak.thicknesses) expect(t.purchaseBf).toBeCloseTo(t.plannedBf, 9);
   });
 
   it('scales the allowance with the waste param', () => {

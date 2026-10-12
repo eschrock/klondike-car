@@ -202,8 +202,12 @@ export interface OakThickness {
   allowanceBf: number;
   /** Board feet of the suggested boards (solid cut plan plus the resaw boards). */
   plannedBf: number;
-  /** What the BOM prices: the board feet with the waste allowance (the spec). The suggested boards (`plannedBf`) are whole boards and run higher. */
+  /** What the BOM prices: the suggested whole boards (`plannedBf`), since a yard sells boards, not net board feet. `allowanceBf` (net + waste allowance) is kept as the spec figure to compare against. */
   purchaseBf: number;
+  /** Small solid bucket cut from offcuts of this (next thicker) board instead of its own: the parts, and the thickness they would have been bought as. */
+  movedIn?: { from: string; partNos: string[]; netBf: number };
+  /** This thickness's own solid pieces went to the next thicker board's offcuts (see `OakPlan.consolidated`). */
+  movedOut?: string;
   /** Cut plan of the solid pieces onto boards. */
   boards: Board[];
   /** Dedicated boards that are resawn into laminate strips (from planResaw). */
@@ -221,9 +225,16 @@ export interface OakPlan {
   resaw: ResawPool[];
   /** Wide pieces split into glued-up boards (part ids). */
   glueUps: string[];
+  /** Thin solid buckets (under `SMALL_BUCKET_BF`) that are cut from offcuts of the next thicker board instead of buying a whole thin board. */
+  consolidated: Array<{ from: string; to: string; partNos: string[]; netBf: number }>;
 }
 
+/** A thickness whose SOLID pieces total less than this many board feet is not worth a whole board of its own when a thicker board's offcuts can hold them (bf). */
+export const SMALL_BUCKET_BF = 1;
+
 const lenFt = (inches: number): string => `${inches / 12} ft`;
+/** A cut shares a lane with others only when the lane is at most this much wider than the cut (in); otherwise it opens a lane of its own on a board with width left. */
+const LANE_TIGHT_IN = 0.75;
 
 /** Greedy plan: items sorted by width then length, lanes opened across a 6" board, boards trimmed to the shortest of 6, 8 and 10 ft that holds them. */
 function planBoards(cuts: BoardCut[], nominal: string, kerf: number): Board[] {
@@ -231,19 +242,16 @@ function planBoards(cuts: BoardCut[], nominal: string, kerf: number): Board[] {
   const boards: Board[] = [];
   const sorted = [...cuts].sort((a, b) => b.widthIn - a.widthIn || b.lengthIn - a.lengthIn);
   for (const c of sorted) {
-    let done = false;
-    for (const b of boards) {
-      // an existing lane of enough width with length to spare
-      const lane = b.lanes.find((l) => c.widthIn <= l.widthIn + 1e-9 && l.usedIn + c.lengthIn + kerf <= maxLen + 1e-9);
-      if (lane) { lane.cuts.push(c); lane.usedIn += c.lengthIn + kerf; done = true; break; }
-      if (b.usedWidthIn + c.widthIn + kerf <= BOARD_WIDTH_IN + kerf + 1e-9 && c.lengthIn <= maxLen) {
-        b.lanes.push({ widthIn: c.widthIn, usedIn: c.lengthIn + kerf, cuts: [c] });
-        b.usedWidthIn += c.widthIn + kerf;
-        done = true;
-        break;
-      }
-    }
-    if (!done) boards.push({ nominal, lengthIn: maxLen, lanes: [{ widthIn: c.widthIn, usedIn: c.lengthIn + kerf, cuts: [c] }], usedWidthIn: c.widthIn + kerf });
+    // 1. a lane that is about as wide as the cut (little width wasted) with length to spare; 2. a new lane on a board with width left; 3. any wider lane that fits; 4. a new board.
+    const room = (l: BoardLane) => l.usedIn + c.lengthIn + kerf <= maxLen + 1e-9;
+    let lane: BoardLane | undefined;
+    for (const b of boards) { const l = b.lanes.find((q) => c.widthIn <= q.widthIn + 1e-9 && q.widthIn - c.widthIn <= LANE_TIGHT_IN && room(q)); if (l) { lane = l; break; } }
+    if (lane) { lane.cuts.push(c); lane.usedIn += c.lengthIn + kerf; continue; }
+    const wide = boards.find((b) => b.usedWidthIn + c.widthIn + kerf <= BOARD_WIDTH_IN + kerf + 1e-9 && c.lengthIn <= maxLen);
+    if (wide) { wide.lanes.push({ widthIn: c.widthIn, usedIn: c.lengthIn + kerf, cuts: [c] }); wide.usedWidthIn += c.widthIn + kerf; continue; }
+    for (const b of boards) { const l = b.lanes.find((q) => c.widthIn <= q.widthIn + 1e-9 && room(q)); if (l) { lane = l; break; } }
+    if (lane) { lane.cuts.push(c); lane.usedIn += c.lengthIn + kerf; continue; }
+    boards.push({ nominal, lengthIn: maxLen, lanes: [{ widthIn: c.widthIn, usedIn: c.lengthIn + kerf, cuts: [c] }], usedWidthIn: c.widthIn + kerf });
   }
   for (const b of boards) {
     const longest = Math.max(...b.lanes.map((l) => l.usedIn - kerf));
@@ -275,6 +283,35 @@ export function oakBoardFeet(parts: Part[], p: Params): OakPlan {
     for (let i = 0; i < n; i++) arr.push({ partNo: partKey(x), id: x.id, widthIn: d.w / n, lengthIn: d.l, ...(n > 1 ? { glueUp: true } : {}) });
     cutsBy.set(b.nominal, arr);
   }
+  // Consolidate: a thickness whose solid pieces total under SMALL_BUCKET_BF is cut from the offcuts of the next thicker board, when they fit in that board's free lanes (no extra board).
+  const consolidated: OakPlan['consolidated'] = [];
+  const movedInTo = new Map<string, { from: string; partNos: string[]; netBf: number }>();
+  const movedOutOf = new Map<string, string>();
+  for (let i = 0; i < BOARD_THICKNESSES.length - 1; i++) {
+    const b = BOARD_THICKNESSES[i];
+    const cuts = cutsBy.get(b.nominal) ?? [];
+    if (!cuts.length || (netSolid.get(b.nominal) ?? 0) >= SMALL_BUCKET_BF) continue;
+    const sumBf = (bs: Board[]): number => bs.reduce((a, q) => a + boardBf(q), 0);
+    const ownBf = sumBf(planBoards(cuts, b.nominal, kerf));
+    // The first thicker board whose plan takes the pieces for fewer board feet than a board of their own (they fill its free lanes, or lengthen it by one step at most).
+    const nb = BOARD_THICKNESSES.slice(i + 1).find((t) => {
+      const h = cutsBy.get(t.nominal) ?? [];
+      return h.length > 0 && sumBf(planBoards([...h, ...cuts], t.nominal, kerf)) - sumBf(planBoards(h, t.nominal, kerf)) < ownBf - 1e-9;
+    });
+    if (!nb) continue;
+    const host = cutsBy.get(nb.nominal)!;
+    const movedNet = cuts.reduce((a, c) => a + (nb.nominalIn * c.widthIn * c.lengthIn) / 144, 0);
+    const partNos = [...new Set(cuts.map((c) => c.partNo))];
+    host.push(...cuts);
+    cutsBy.delete(b.nominal);
+    netSolid.set(nb.nominal, (netSolid.get(nb.nominal) ?? 0) + movedNet);
+    pieces.set(nb.nominal, (pieces.get(nb.nominal) ?? 0) + (pieces.get(b.nominal) ?? 0));
+    netSolid.set(b.nominal, 0);
+    pieces.set(b.nominal, 0);
+    consolidated.push({ from: b.nominal, to: nb.nominal, partNos, netBf: movedNet });
+    movedInTo.set(nb.nominal, { from: b.nominal, partNos, netBf: movedNet });
+    movedOutOf.set(b.nominal, nb.nominal);
+  }
   const resaw = planResaw(parts, p);
   const stripNet = new Map<string, number>();
   const resawBoards = new Map<string, OakThickness['resawBoards']>();
@@ -304,14 +341,17 @@ export function oakBoardFeet(parts: Part[], p: Params): OakPlan {
     for (const q of boards) tally.set(q.lengthIn, (tally.get(q.lengthIn) ?? 0) + 1);
     const summary = [...tally.entries()].sort((a, c) => a[0] - c[0]).map(([l, n]) => `${n} x ${b.nominal} x ${BOARD_WIDTH_IN}" x ${lenFt(l)}`);
     for (const r of rb) summary.push(`${r.count} x ${b.nominal} x ${BOARD_WIDTH_IN}" x ${lenFt(r.lengthIn)} (resaw into laminate strips)`);
+    const mi = movedInTo.get(b.nominal);
+    if (mi) summary.push(`also cut the ${mi.from} parts (${mi.partNos.join(', ')}; ${mi.netBf.toFixed(1)} bf) from the offcuts of these boards: no ${mi.from} board to buy for them`);
     thicknesses.push({
       board: b.nominal, nominalIn: b.nominalIn, usableIn: b.usableIn, pieces: (pieces.get(b.nominal) ?? 0) + (stripCount.get(b.nominal) ?? 0),
-      solidNetBf, stripNetBf, netBf, allowanceBf, plannedBf, purchaseBf: allowanceBf, boards, resawBoards: rb, summary,
+      solidNetBf, stripNetBf, netBf, allowanceBf, plannedBf, purchaseBf: plannedBf, boards, resawBoards: rb, summary,
+      ...(mi ? { movedIn: mi } : {}), ...(movedOutOf.has(b.nominal) ? { movedOut: movedOutOf.get(b.nominal) } : {}),
     });
   }
   const sum = (f: (t: OakThickness) => number): number => thicknesses.reduce((a, t) => a + f(t), 0);
   return {
     thicknesses, wasteAllowance: p.oakWasteAllowance, netBf: sum((t) => t.netBf), allowanceBf: sum((t) => t.allowanceBf),
-    purchaseBf: sum((t) => t.purchaseBf), resaw, glueUps,
+    purchaseBf: sum((t) => t.purchaseBf), resaw, glueUps, consolidated,
   };
 }
