@@ -34,7 +34,7 @@ describe('PARAM_DEFS', () => {
       'bowTurnInIn', 'bowTurnLenIn'];
     for (const k of gone) expect(keys, k).not.toContain(k);
     expect(keys.filter((k) => /^caster|^bowBlock|^swivel/.test(k))).toEqual([]);
-    const added = ['sideHeightBowIn', 'sideHeightRearIn', 'sheerCurveIn', 'bowWidthIn', 'bowTaperStartIn', 'bowTaperSlackIn', 'bowBulkheadThickIn', 'bowBulkheadHeightIn', 
+    const added = ['sideHeightBowIn', 'sideHeightRearIn', 'sheerCurveIn', 'bowWidthIn', 'bowTaperStartIn', 'bowTaperSlackIn', 'bowBulkheadThickIn',
       'grabBoardLengthIn', 'grabHoleLengthIn', 'grabHoleHeightIn', 'grabBoardThickIn', 'grabBoardBarIn', 'grabBoardFootIn', 'handleParkClearIn', 'flagTubeIdIn', 'flagTubeOdIn', 'seatHingeLoadLbf', 'seatBackLatchHeightIn', 'showSideSigns',
       'axleHangerThickIn', 'axleHangerWidthIn', 'bumpSpeedNormalMph', 'bumpSpeedHardMph',
       // D-60: the hollow axle, the wheel bore, the seat-back ply
@@ -49,7 +49,7 @@ describe('PARAM_DEFS', () => {
   it('the design defaults (D-54, D-56, D-57): 24 in body, 44 in wheelbase, 10 in wheels, 8 in deck, a sheer from 4 in at the bow to 14 in at the rear, the 1-1/2 in bow bulkhead (D-60), pivoting front axle at matched 30 in front and rear tracks (D-66) and 20 deg lock', () => {
     expect(defaults).toMatchObject({
       bodyWidthIn: 24, wheelbaseIn: 44, wheelDiameterIn: 10, deckHeightIn: 8, sideHeightBowIn: 4, sideHeightRearIn: 14, sheerCurveIn: 2.5, bowWidthIn: 18.5, bowTaperStartIn: 20, bowTaperSlackIn: 0.125,
-      bowBulkheadThickIn: 1.5, bowBulkheadHeightIn: 5.75, crossmemberSpacingIn: 8.5, standDeflectionRatio: 240, showSideSigns: 1, rearOverhangIn: 10, frontOverhangIn: 6.75, handleBowCrownIn: 0.875, seatXIn: 13.5, riderLegReachIn: 35.75, // D-60: 1/4 in more, the thinner bulkhead's face is 1/4 in further forward
+      bowBulkheadThickIn: 1.5, bowHoldMinClearIn: 2.5, crossmemberSpacingIn: 8.5, standDeflectionRatio: 240, showSideSigns: 1, rearOverhangIn: 10, frontOverhangIn: 6.75, handleBowCrownIn: 0.875, seatXIn: 13.5, riderLegReachIn: 35.75, // D-60: 1/4 in more, the thinner bulkhead's face is 1/4 in further forward
        seatDepthIn: 14.5, storageVolumeIn3: 2000,
       frontTrackIn: 30, rearTrackIn: 30, steerLockDeg: 20, // D-66: matched 30 in tracks
       steerClearIn: 0.75, kingpinDiaIn: 0.625, kingThrustOdIn: 3, kingThrustThickIn: 0.5, kingBeamLengthIn: 3,
@@ -129,10 +129,13 @@ describe('validateParams', () => {
     expect(errorsOf({ ...defaults, steerChainBeamYIn: 13.2 }).some((i) => i.keys.includes('steerChainBeamYIn'))).toBe(true);
     expect(errorsOf({ ...defaults, steerChainBeamYIn: 8 })).toEqual([]);
   });
-  it('side profile (D-57): a bow side taller than the rear side warns; a bow side the panel cannot fit (under 1 in above the two bands) errors; a bulkhead too low for the hand-hold errors', () => {
+  it('side profile (D-57): a bow side taller than the rear side warns; a bow side the panel cannot fit (under 1 in above the two bands) errors; a bow hold with under bowHoldMinClearIn of hand room errors (D-69)', () => {
     expect(withKey({ ...defaults, sideHeightBowIn: 7, sideHeightRearIn: 6 }, 'sideHeightBowIn').some((i) => i.severity === 'warn')).toBe(true);
     expect(errorsOf({ ...defaults, sideHeightBowIn: 3 }).some((i) => i.keys.includes('railBandIn'))).toBe(true); // 3 - 2 x 1.5 < 1
-    expect(errorsOf({ ...defaults, bowBulkheadHeightIn: 4 }).some((i) => i.keys.includes('liftSlotClearIn'))).toBe(true); // 3 in of hand clearance + 1.25 slot + 0.75 oak = 5
+    // D-69: the bow hand-hold hangs under the crown (side top 4 + crown 0.875 - 0.75 oak - 1.25 slot = 2.875 in of hand room); a lower bow side, or a bigger minimum, errors
+    expect(errorsOf(defaults).some((i) => i.keys.includes('bowHoldMinClearIn'))).toBe(false);
+    expect(errorsOf({ ...defaults, bowHoldMinClearIn: 3 }).some((i) => i.keys.includes('bowHoldMinClearIn'))).toBe(true);
+    expect(errorsOf({ ...defaults, liftSlotHeightIn: 1.75 }).some((i) => i.keys.includes('bowHoldMinClearIn'))).toBe(true); // 4 + 0.875 - 0.75 - 1.75 = 2.375 < 2.5
     expect(errorsOf({ ...defaults, sideHeightBowIn: 5 }).filter((i) => i.keys.some((k) => /^(side|bow|lift)/.test(k)))).toEqual([]);
   });
   it('bow bulkhead and taper (D-57, D-66): the bulkhead sits one thickness behind the tip; the taper is 0 behind bowTaperStartIn, a smootherstep (curvature-continuous) to (bodyWidthIn - bowWidthIn) / 2 at its derived end, then parallel; the bend radius must meet the cold-bend limit; the feet must reach the face', () => {

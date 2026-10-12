@@ -245,11 +245,13 @@ export function computeLayout(input: Params): Layout {
 
   // ── Bow bulkhead and its lift hand-hold (D-57) ──
   const bulkhead = {
-    x0: bh.xFlatEnd, x1: bh.xTip, thick: bh.thick, bot: deckTop - ply - Math.min(1, steer.railDepthFront),
-    zCorner: deckTop + p.bowBulkheadHeightIn - p.handleBowCrownIn, zCenter: deckTop + p.bowBulkheadHeightIn, halfW: p.bodyWidthIn / 2 - turnIn(bh.xFlatEnd),
+    x0: bh.xFlatEnd, x1: bh.xTip, thick: bh.thick, bot: deckTop - ply - steer.railDepthFront, // D-69: bottom at the bottom of the stepped front rail (the visible bottom of the side), corners at the side top at the bow, crown = the handlebow's
+    zCorner: deckTop + p.sideHeightBowIn, zCenter: deckTop + p.sideHeightBowIn + p.handleBowCrownIn, halfW: p.bodyWidthIn / 2 - turnIn(bh.xFlatEnd),
   };
-  const holdBot = deckTop + p.liftSlotClearIn;
-  const hold = { x0: bulkhead.x0, x1: bulkhead.x1, halfLen: p.liftSlotLengthIn / 2, zBot: holdBot, zTop: holdBot + p.liftSlotHeightIn, zMid: holdBot + p.liftSlotHeightIn / 2 };
+  // D-69: the hand-hold hangs under the crown with `liftBarMinIn` of oak above it; the bow has no box behind it, so the hand room is whatever is left above the deck (bowHoldMinClearIn is the floor).
+  const holdTop = bulkhead.zCenter - p.liftBarMinIn;
+  const holdBot = holdTop - p.liftSlotHeightIn;
+  const hold = { x0: bulkhead.x0, x1: bulkhead.x1, halfLen: p.liftSlotLengthIn / 2, zBot: holdBot, zTop: holdTop, zMid: holdBot + p.liftSlotHeightIn / 2 };
 
   void len;
   return {

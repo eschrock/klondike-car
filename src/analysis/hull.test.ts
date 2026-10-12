@@ -73,7 +73,7 @@ describe('hull checks (D-43)', () => {
     const Pf = (massLb - rear) * 3;
     const bh = bowHold(ctx);
     expect(bh.thickIn).toBeCloseTo(1.5, 9);
-    expect(bh.barIn).toBeCloseTo(1.5, 6); // 3c-5: a gentle crown (5.75 in at the center) leaves 1.5 in of oak over the hand-hold (it was 4.75 in under the 9 in peak)
+    expect(bh.barIn).toBeCloseTo(0.75, 6); // D-69: the hand-hold hangs under the crown (12.875) with liftBarMinIn (0.75 in) of oak above it (it was 1.5 in under the 5.75 in peak, 3c-5)
     const fb = c.details!.find((d) => d.name.includes('bow bulkhead') && /bending/.test(d.name))!;
     expect(fb.value).toBeCloseTo(liftBarStressPsi(bh, Pf), 6);
     const fs = c.details!.find((d) => d.name.includes('bow bulkhead') && /shear/.test(d.name))!;
@@ -94,7 +94,7 @@ describe('hull checks (D-43)', () => {
     expect(fwd / base).toBeLessThan(1.1);
   });
 
-  it('foot brace by hand (D-57): 200 lb x 2 g x 0.6 = 240 lbf; the bulkhead spans the 20.25 in inside width at its face (the hull has turned in 1.25 in a side); the 4 in foot band loses the 1 in of the hand-hold slot at mid-span: h = 3, t = 1.5 (D-60); M = F L / 4 = 1,215 lb.in, S = 3 x 1.5^2 / 6 = 1.125, sigma = 1,080 psi', () => {
+  it('foot brace by hand (D-57): 200 lb x 2 g x 0.6 = 240 lbf; the bulkhead spans the 20.25 in inside width at its face (the hull has turned in 1.25 in a side); the 4 in foot band loses the 1 1/8 in of the hand-hold slot at mid-span (D-69: the slot is 2 7/8 to 4 1/8 in over the deck): h = 2.875, t = 1.5 (D-60); M = F L / 4 = 1,215 lb.in, S = 2.875 x 1.5^2 / 6 = 1.078, sigma = 1,127 psi', () => {
     const k = footStopLoads(ctx, 200, 2)!;
     const span = 2 * innerHalfWidth(ctx.L, ctx.L.bulkhead.x0);
     expect(span).toBeCloseTo(24 - 2 * 0.625 - 2 * 1.25, 9);
@@ -102,11 +102,11 @@ describe('hull checks (D-43)', () => {
     expect(k.F).toBeCloseTo(240, 9);
     expect(k.span).toBeCloseTo(span, 6);
     expect(k.t).toBeCloseTo(1.5, 6);
-    expect(k.h).toBeCloseTo(3, 6);
+    expect(k.h).toBeCloseTo(2.875, 6);
     expect(k.M).toBeCloseTo((240 * span) / 4, 6);
     expect(k.M).toBeCloseTo(1215, 6);
-    expect(k.S).toBeCloseTo(1.125, 9);
-    expect(k.sigma).toBeCloseTo(1215 / 1.125, 6);
+    expect(k.S).toBeCloseTo(2.875 * 2.25 / 6, 9);
+    expect(k.sigma).toBeCloseTo(1215 / (2.875 * 2.25 / 6), 6);
     // the push pulls the bulkhead off: the deck tongue's glue (2 faces x the dado depth x 20.25 in) and the Dominos into the rail, chine and gunwale ends
     const dd = ctx.p.deckCaptureDepthIn;
     expect(k.dadoArea).toBeCloseTo(2 * dd * 20.25, 9);
