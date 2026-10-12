@@ -1,0 +1,129 @@
+import { describe, expect, it } from 'vitest';
+import { buildModel } from '../model';
+import { defaultParams } from '../params';
+import { BOARD_THICKNESSES, BOARD_WIDTH_IN, boardForThickness, isBuilt } from './cutlist';
+import { nestPlywood, oakBoardFeet, SHEET_LENGTH_IN, SHEET_WIDTH_IN } from './nesting';
+
+const p = defaultParams();
+const parts = buildModel(p);
+const nest = nestPlywood(parts, p);
+
+const bbox = (pts: Array<[number, number]>) => ({
+  x0: Math.min(...pts.map((q) => q[0])), x1: Math.max(...pts.map((q) => q[0])),
+  y0: Math.min(...pts.map((q) => q[1])), y1: Math.max(...pts.map((q) => q[1])),
+});
+
+describe('nestPlywood', () => {
+  it('places every sheet part on one sheet per thickness', () => {
+    expect(nest.unplaced).toEqual([]);
+    expect(nest.sheets.map((s) => s.label)).toEqual(['4 mm okoume', '12 mm okoume']);
+    const ply = parts.filter((x) => isBuilt(x) && x.kind === 'sheet').map((x) => x.id).sort();
+    expect(nest.sheets.flatMap((s) => s.placements.map((q) => q.partId)).sort()).toEqual(ply);
+    for (const s of nest.sheets) { expect(s.widthIn).toBe(SHEET_WIDTH_IN); expect(s.lengthIn).toBe(SHEET_LENGTH_IN); }
+  });
+
+  it('puts the seat back on the 12 mm sheet beside the deck', () => {
+    const s12 = nest.sheets.find((s) => s.thicknessMm === 12)!;
+    const ids = s12.placements.map((q) => q.partId);
+    expect(ids).toContain('seat-back-panel');
+    expect(ids).toContain('deck');
+    expect(nest.sheets.find((s) => s.thicknessMm === 4)!.placements.map((q) => q.partId)).not.toContain('seat-back-panel');
+  });
+
+  it('keeps every outline inside the sheet margin and every pair of parts a kerf apart', () => {
+    const k = nest.kerfIn;
+    for (const s of nest.sheets) {
+      const boxes = s.placements.map((q) => ({ id: q.partId, ...bbox(q.outer) }));
+      for (const b of boxes) {
+        expect(b.x0, b.id).toBeGreaterThanOrEqual(k - 1e-6);
+        expect(b.y0, b.id).toBeGreaterThanOrEqual(k - 1e-6);
+        expect(b.x1, b.id).toBeLessThanOrEqual(SHEET_LENGTH_IN - k + 1e-6);
+        expect(b.y1, b.id).toBeLessThanOrEqual(SHEET_WIDTH_IN - k + 1e-6);
+      }
+      for (let i = 0; i < boxes.length; i++) {
+        for (let j = i + 1; j < boxes.length; j++) {
+          const a = boxes[i], b = boxes[j];
+          const gapX = Math.max(a.x0 - b.x1, b.x0 - a.x1), gapY = Math.max(a.y0 - b.y1, b.y0 - a.y1);
+          expect(Math.max(gapX, gapY), `${a.id} vs ${b.id}`).toBeGreaterThanOrEqual(k - 1e-6);
+        }
+      }
+      // holes stay inside their outline's box
+      for (const q of s.placements) {
+        const o = bbox(q.outer);
+        for (const h of q.holes) { const hb = bbox(h); expect(hb.x0).toBeGreaterThan(o.x0); expect(hb.x1).toBeLessThan(o.x1); }
+      }
+    }
+  });
+
+  it('runs the long webs and the deck lengthwise and reports no turned grain at the defaults', () => {
+    const s4 = nest.sheets.find((s) => s.thicknessMm === 4)!;
+    for (const id of ['side-L-web', 'side-R-web']) {
+      const q = s4.placements.find((x) => x.partId === id)!;
+      expect(q.widthIn).toBeGreaterThan(q.heightIn * 3);
+      expect(q.turned).toBe(false);
+    }
+    expect(nest.grainTurned).toEqual([]);
+  });
+
+  it('reports a utilization and an offcut for each sheet', () => {
+    for (const s of nest.sheets) {
+      expect(s.utilizationPct).toBeGreaterThan(5);
+      expect(s.utilizationPct).toBeLessThan(100);
+      expect(s.offcut.areaIn2 + s.usedAreaIn2).toBeCloseTo(SHEET_LENGTH_IN * SHEET_WIDTH_IN, 3);
+      expect(s.offcut.largest.widthIn * s.offcut.largest.heightIn).toBeGreaterThan(500);
+    }
+  });
+
+  it('follows the nest kerf param', () => {
+    const wide = nestPlywood(parts, { ...p, nestKerfIn: 1 });
+    expect(wide.unplaced).toEqual([]);
+    const b = bbox(wide.sheets[0].placements[0].outer);
+    expect(b.x0).toBeGreaterThanOrEqual(1 - 1e-6);
+  });
+});
+
+describe('oakBoardFeet', () => {
+  const oak = oakBoardFeet(parts, p);
+
+  it('is positive and equals the rough volumes on nominal thickness', () => {
+    let solid = 0;
+    for (const x of parts.filter((q) => isBuilt(q) && /oak/i.test(q.material) && q.kind === 'lumber' && q.plies === undefined)) {
+      const r = x.rough!;
+      const d = [r.t, r.w, r.l].sort((a, b) => a - b);
+      const b = boardForThickness(d[0])!;
+      solid += (b.nominalIn * d[1] * d[2]) / 144;
+    }
+    expect(oak.netBf).toBeGreaterThan(10);
+    expect(oak.thicknesses.reduce((a, t) => a + t.solidNetBf, 0)).toBeCloseTo(solid, 6);
+    expect(oak.allowanceBf).toBeCloseTo(oak.netBf * (1 + p.oakWasteAllowance), 6);
+    for (const t of oak.thicknesses) expect(t.netBf).toBeGreaterThan(0);
+  });
+
+  it('plans every solid piece onto a board at most 6" wide and 10 ft long', () => {
+    const planned = new Set<string>();
+    for (const t of oak.thicknesses) {
+      for (const b of t.boards) {
+        expect(b.lanes.reduce((a, l) => a + l.widthIn, 0)).toBeLessThanOrEqual(BOARD_WIDTH_IN + 1e-6);
+        for (const l of b.lanes) {
+          expect(l.usedIn - p.resawKerfIn).toBeLessThanOrEqual(b.lengthIn + 1e-6);
+          for (const c of l.cuts) { planned.add(c.id); expect(c.widthIn).toBeLessThanOrEqual(l.widthIn + 1e-9); }
+        }
+        expect([72, 96, 120]).toContain(b.lengthIn);
+      }
+    }
+    const solid = parts.filter((x) => isBuilt(x) && /oak/i.test(x.material) && x.kind === 'lumber' && x.plies === undefined).map((x) => x.id);
+    expect([...planned].sort()).toEqual([...solid].sort());
+    expect(oak.glueUps).toContain('transom-rear');
+  });
+
+  it('buys at least the net volume and includes the 6 ft board for the 60" bands', () => {
+    for (const t of oak.thicknesses) { expect(t.plannedBf).toBeGreaterThan(0); expect(t.purchaseBf).toBeGreaterThanOrEqual(t.netBf); }
+    expect(oak.resaw.every((r) => r.boardLengthIn >= 72)).toBe(true);
+    expect(BOARD_THICKNESSES.map((b) => b.nominal)).toContain(oak.resaw[0].board);
+  });
+
+  it('scales the allowance with the waste param', () => {
+    const more = oakBoardFeet(parts, { ...p, oakWasteAllowance: 0.5 });
+    expect(more.allowanceBf).toBeGreaterThan(oak.allowanceBf);
+  });
+});

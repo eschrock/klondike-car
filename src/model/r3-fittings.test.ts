@@ -50,9 +50,9 @@ describe('S10: build order', () => {
     const transom = get('transom-rear').step;
     // the king beam and the stops are part of the frame glue-up with the deck (before the sides and the transom)
     for (const id of ['king-beam', 'joist-5', 'joist-8']) expect(get(id).step, id).toBe(STEP.frame);
-    for (const id of ['axle-R', 'axle-hanger-L', 'beam-F', 'axle-FL', 'axle-FR', 'kingpin', 'steer-eye-L', 'steer-anchor-L', 'roll-pad-L']) expect(get(id).step, id).toBeGreaterThan(transom);
-    // the hangers, both axles and the kingpin go on before the tongue and the bridle are bolted on with the hull upright
-    expect(get('axle-hanger-L').step).toBe(STEP.gear);
+    for (const id of ['axle-R', 'beam-F', 'axle-FL', 'axle-FR', 'kingpin', 'steer-eye-L', 'steer-anchor-L', 'roll-pad-L']) expect(get(id).step, id).toBeGreaterThan(transom);
+    // Phase 4: the hangers go in with the frame (joist-1's end Dominos are in them); both axles and the kingpin go on before the tongue and the bridle are bolted on with the hull upright
+    expect(get('axle-hanger-L').step).toBe(STEP.frame);
     expect(get('axle-R').step).toBe(STEP.gear);
     for (const id of ['beam-F', 'axle-FL', 'kingpin', 'king-thrust', 'wheel-FL', 'wheel-FR']) expect(get(id).step, id).toBe(STEP.gear);
     for (const id of ['bridle-tongue', 'bridle']) expect(get(id).step, id).toBe(STEP.spindles);

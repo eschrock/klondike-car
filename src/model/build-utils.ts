@@ -57,7 +57,7 @@ export const STEP = { frame: 3, body: 4, steering: 4.5, gear: 4.6, linkage: 4.7,
  *   0. Epoxy-seal every dado, the deck faces and edges and all ply faces (a process step, before the bench glue-ups; wash or sand the amine blush off any face that will be glued again).
  *      The deck gap under the inner chine band and the dados are the (sealed) deck + a clearance (deckSlopIn) tall: thickened epoxy fills the gap. The deck is also cut deckSideClearIn
  *      (1/16 in) narrower than the gap between the two webs on each side (D-63), so a rigid sheet drops between two bent webs; thickened epoxy fills that slot too.
- *   1. (4.0) Forms: one S-form (two 3/4" MDF cauls) for the plan turn-in. Scarf the two halves of each 4 mm web (8:1, thin okoume ships as 2 x 4 ft sheets), cut the webs to the flat
+ *   1. (4.0) Forms: one S-form (two 3/4" MDF cauls) for the plan turn-in. Cut each one-piece 4 mm web (D-68) to the flat
  *      development of the sheer, glue the sign backing strips inside them.
  *   2. (4.0) Frame (rails, joists, king beam) + deck glued as a unit, right side up on the bench; the Domino mortises in the rail tops are cut. The rails are two 3/8 strips bent on the form, glued into the frame 1/2" LONG at both ends (they are trimmed in step 3, once the true length is known).
  *   3. (4.2) Side assemblies on the bench: each web gets an oak band glued on EACH face at the chine and at the gunwale and is bent with them on the form (no grooves); vents drilled.

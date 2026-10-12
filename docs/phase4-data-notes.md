@@ -1,0 +1,48 @@
+# Phase 4 data outputs: notes (cutlist, nesting, bom, prices)
+
+Files: `src/build/{cutlist,nesting,bom,prices}.ts` and their tests. New params (group `stock`, status `assumed`): `oakWasteAllowance` 0.30, `resawKerfIn` 0.125, `nestKerfIn` 0.25.
+
+## Board thickness map (rough thickness -> smallest board; `BOARD_THICKNESSES` in cutlist.ts)
+4/4 -> 13/16" usable, 5/4 -> 1-1/16", 6/4 -> 1-5/16", 8/4 -> 1-3/4", 12/4 -> 2-3/4". 16/4 (3-3/4") is my addition (not in the spec, rarely stocked) for parts that need more than 2-3/4".
+Rough thickness already includes `millingAllowanceIn` (0.125), so a part fits a board when rough T <= usable.
+
+## Oak board feet (nominal thickness x rough W x rough L / 144; +30 % waste = the priced quantity)
+| Board | Net bf | With 30 % | Suggested boards (6" wide) | Whole boards bf |
+|---|---|---|---|---|
+| 4/4 | 7.05 | 9.17 | 2 x 10 ft | 10.0 |
+| 5/4 | 2.64 | 3.44 | 1 x 10 ft | 6.25 |
+| 6/4 | 0.61 | 0.80 | 1 x 6 ft | 4.5 |
+| 8/4 | 7.65 | 9.95 | 1 x 8 ft + 1 x 6 ft (band resaw) | 14.0 |
+| 12/4 | 11.92 | 15.50 | 1 x 6 ft + 1 x 10 ft + 1 x 6 ft (rail resaw) | 33.0 |
+| Total | 29.89 | 38.85 | | 67.75 |
+
+The suggested boards are whole boards, so they run higher than the allowance. The BOM prices the allowance (per the spec); buying exactly the suggested boards would add about $448 (`wholeBoardsExtraUsd`). Real shops will use the offcuts of the 8/4 and 12/4 boards for the 5/4 and 6/4 bits, so the truth is in between: ask the yard for an 8/4 and a 12/4 board first and see what is left.
+Resaw: the 8 bands (0.359" rough strips) come from one 8/4 x 6" x 6 ft board (3 strips per board thickness, 3 layers, 6 bf). The 4 rail strips (0.5" rough, 3.125" wide, one per layer) come from one 12/4 x 6 ft board (4 strips, 9 bf). The pool picks the board with the fewest board feet, then the fewest boards.
+
+## Sheets
+- 4 mm okoume: 9 parts, 36.7 % used; largest offcut 36.0 x 47.5 in. The two webs lie lengthwise (unrolled, 59.2 x 14.3 in), the box, lid and signs beside them.
+- 12 mm okoume: deck + seat back, 33.0 % used; offcut 79.25 x 24.2 in beside the deck.
+- Unplaced: none. Grain turned: none. Seat-back-panel has `grain: 'z'` (the thickness axis), so its grain is unknown and it was placed without a grain rule (see below).
+- Packing is by bounding box (MaxRects, 0/90 degrees); the drawing carries the true outlines.
+
+## BOM at the defaults (total $2,376.65; 84 % estimates)
+Lumber $540.79, Plywood $265.00 (2 sheets), Metal stock $109.06, Purchased $609.00 ($372 quoted from the model's `costUsd`, $237 estimates), Fasteners $240.80, Consumables $612.00 (epoxy $240, varnish $210, the rest fillers, tape, stain, sandpaper). Every table price is an estimate; only 20 purchased lines are `quoted` (the model's own `costUsd`).
+Fastener joint counts equal `fastenerBreakdown` (screws 95, bolts 55, inserts 12, knobs 10, Dominos 34, glue 115).
+
+## Assumptions
+- Prices (prices.ts) are 2026 US retail guesses, no SKUs. Both okoume sheets are full 4 x 8 sheets from a local supplier (4 mm $95, 12 mm $170). Oak $9.50/bf (4/4) to $18/bf (12/4).
+- Waste allowance 30 % on net board feet; the 6" board width and 6/8/10 ft lengths are assumed; wide parts (> 6") are split into glue-up pieces (transom, bow bulkhead, brake knees).
+- Rip, crosscut and resaw kerf are all `resawKerfIn`. Resaw yield = floor((usable + kerf) / (rough strip + kerf)); the planing allowance is already in the model's rough strip.
+- Metal: priced per foot of cut length plus 0.25" per cut.
+- Fasteners: each bolt gets a lock nut and 2 fender washers (1 for carriage bolts); the kingpin and the steering eye bolts are parts, so only the eye bolts' nut and washer are listed. All 316.
+- Epoxy: 0.12 fl oz per glue joint + okoume area (faces + edges, 46 ft2) x 2 coats x 0.7 fl oz/ft2, +20 %: 94 fl oz, bought as the cheapest kit mix (3 quart kits). Glass tape 1.5 ft per taped joint (15 ft). Varnish 4 coats at 100 ft2/qt/coat, +15 % (5 qt); stain 1 qt, conditioner 1 qt. These mirror, but do not read, the finishing schedule (`finishing.ts`).
+- Printed ASA clips are in Purchased parts at $3 each.
+
+## Model data found wrong or missing (not fixed)
+- `seat-crest-strip` stock/rough are T 13.5 x W 0.288 x L 1.5: transposed (the grain axis y is 13.5 long). The cut list treats it as 0.288 x 1.5 x 13.5 and warns.
+- `brake-chock` (3.5 x 2.5 x 4.7) and `brake-shoe` (3 x 0.92 x 3.2) also have T that is not the smallest dimension. I sort the dimensions ascending (chock -> 2.5 thick, 12/4; shoe -> 0.92 thick, 5/4); if the real thickness is the 3-3/4" one, the chock needs 16/4 or two glued 8/4.
+- `seat-grip-backing` (kind metal) has no `stock`; the size (1/16" x 1" x 6") is read from its sourcing text.
+- `seat-back-panel` grain is `z` (the plywood normal), not an in-plane axis, so the nest cannot honor it. Its face grain should run along x or y.
+- Several bolt joints give no length ("0.25" 316 button-head cap screws, 3 columns x 2 rows", the hanger bolts): listed as "length per joint note".
+- A joint listed on both parts is deduped by (mate, count, type) as in `fastenerBreakdown`; a joint whose mate lists a different count is counted from both sides.
+- `lighting.ts` treats `clamp-*` bolts as itemized (nuts and washers only), but the clamp bolts are not parts; the BOM lists them in full, so the hardware mass allowance is slightly low.

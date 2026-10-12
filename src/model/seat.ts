@@ -439,7 +439,7 @@ export function buildSeat(ctx: Ctx): Part[] {
       const outline: Vec2[] = [[xAft, zAt(c2lo)], [xAt(c2lo), zAt(c2lo)], [xAt(sup.c2A), zAt(sup.c2A)], [xAft, zAt(sup.c2A)]];
       parts.push(profilePart(ctx, {
         id: 'seat-crest-strip', partNo: 'seat-crest-strip', name: 'Seat back crest strip', group: 'seat', mat: 'oak', outline, depth: 2 * yIn, basis: 'xz', origin: [0, yIn, 0], grain: 'y', step: STEP.seatStorage,
-        stock: { t: 2 * yIn, w: Math.max(0.25, xAt(sup.c2A) - xAft), l: CREST_STRIP_IN }, explode: [0, 0, -1],
+        stock: { t: Math.max(0.25, xAt(sup.c2A) - xAft), w: CREST_STRIP_IN, l: 2 * yIn }, explode: [0, 0, -1],
         joints: [
           { type: 'glue', to: 'seat-wedge-L', count: 1, note: 'epoxy, end to end with the stop block' }, { type: 'glue', to: 'seat-wedge-R', count: 1, note: 'epoxy, end to end with the stop block' },
           ...(sup.rear ? [{ type: 'glue' as const, to: 'storage-end-fore', count: 1, note: `epoxy bed (thickened, about ${LID_HINGE_STANDOFF_IN + 0.01} in thick over the lid-hinge leaves) to the box end across the whole width (the rider's push goes into the box through it)` }] : []),

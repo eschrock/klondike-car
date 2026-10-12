@@ -390,7 +390,7 @@ export function buildStorage(ctx: Ctx): Part[] {
   const zGunTop = L.deckTop + L.sideRear;
   for (const { s: sg, tag } of SIDES) {
     parts.push(box(ctx, { ...common, id: `storage-hinge-${tag}`, partNo: 'storage-hinge', name: `Lid hinge ${tag}`, mat: 'fixed', massLb: HINGE_MASS_LB,
-      kind: 'purchased', material: '316 stainless butt hinge', fab: 'buy', step: STEP.finish, ...span([x1, x1 + 0.12], [sg * hingeY - HINGE_W_IN / 2, sg * hingeY + HINGE_W_IN / 2], [hz1 - HINGE_H_IN, hz1]),
+      kind: 'purchased', material: '316 stainless butt hinge', fab: 'buy', step: STEP.seatStorage, ...span([x1, x1 + 0.12], [sg * hingeY - HINGE_W_IN / 2, sg * hingeY + HINGE_W_IN / 2], [hz1 - HINGE_H_IN, hz1]),
       sourcing: { vendor: 'McMaster-Carr (316 stainless surface-mount butt hinge, 2½" × 2¾")', costUsd: 14 },
       joints: [{ type: 'screw', to: 'storage-rim-end-fore', count: 3, size: '#8 × 1/2 stainless' }, { type: 'screw', to: `storage-hinge-backer-${tag}`, count: 3, size: '#8 × 1 stainless, through the end panel into the 1" backer (S5)' }],
       notes: 'Barrel along the fore-top edge: the lid swings up and aft and the seat back (when fitted) stops it near 75° (D-41); the stay holds it open (S5).' }));

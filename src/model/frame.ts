@@ -81,7 +81,7 @@ export function buildFrame(ctx: Ctx): Part[] {
     for (const { s, tag } of SIDES) {
       const yOut = rsa.yOut, yIn = rsa.yIn; // |y| of the hanger's outer face (= the rail's inner face) and its inner face
       const hg = box(ctx, {
-        id: `${a.pre}-${tag}`, partNo: a.pre, name: `${a.label} axle hanger ${tag}`, group: 'frame', mat: 'oak', step: STEP.gear, grain: 'z',
+        id: `${a.pre}-${tag}`, partNo: a.pre, name: `${a.label} axle hanger ${tag}`, group: 'frame', mat: 'oak', step: STEP.frame, grain: 'z', // step: with the frame (Phase 4), because joist-1's end Dominos go into the hanger
         ...span([hx0, hx1], s > 0 ? [yIn, yOut] : [-yOut, -yIn], [rsa.zBot, rsa.zSolidTop]),
       });
       hg.massLb -= notchLb;
