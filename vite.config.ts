@@ -14,6 +14,9 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       include: ['src/**/*.test.ts'],
+      // The analysis (cargo-capacity and rider sweeps) makes many single tests take 1-2 s locally and 5-7 s on the shared CI runners (2-3x slower);
+      // the default 5 s limit flaked the Pages deploy. Heavy sweeps still set their own longer limits.
+      testTimeout: 30000,
     },
   };
 });

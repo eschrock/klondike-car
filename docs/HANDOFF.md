@@ -1,76 +1,90 @@
-# Handoff: resume Phase 3 (written 2026-10-11)
+# Handoff: start Phase 4 (build outputs), written 2026-10-12
 
 Paste the prompt below into a fresh Claude Code session started in this repo.
 
 ---
 
-You are picking up an in-progress project: a parametric design app for Troop 455's Klondike Derby cart, at /Users/eschrock/dev/klondike-car. It is deployed via GitHub Pages at https://eschrock.github.io/klondike-car/ on every push to `main`, which runs the tests first.
+You are picking up the Troop 455 Klondike Derby sled project at /Users/eschrock/dev/klondike-car: a parametric design app (TypeScript, Vite, three.js, vitest). It deploys to https://eschrock.github.io/klondike-car/ through GitHub Pages on every push to `main`, after the tests pass.
 
 **Read first:**
-- `CLAUDE.md` for conventions and workflow rules.
-- `BRIEF.md` for the spec.
-- `docs/STATUS.md` for the phase tracker and log.
-- `DECISIONS.md`, especially D-21…D-43.
-- `docs/phase3-spec.md`, `docs/phase3-round2-plan.md`, and the round-2 notes `docs/phase3-r2-F{1,2,3,4}-notes.md`.
-- The latest critic reviews in `docs/reviews/`: `phase3-eng-round1.md`, `phase3-build-round1.md`, `simple-view-ux-round2.md`.
+- `CLAUDE.md`, for the architecture rules and workflow.
+- `docs/STATUS.md`.
+- `docs/phase3-checkpoint.md`, the final Phase 3 summary.
+- `DECISIONS.md`, especially **D-49 to D-67**. These record how the design became what it is: a pulled Klondike *sled* on wheels, not a ridden cart.
+- `BRIEF.md` §10 (Phase 4 deliverables) and §4.3a.
+- `docs/phase3c-*-notes.md`, for the details of each pass.
+- The latest reviews in `docs/reviews/`: `phase3c-eng-round1.md`, `phase3c-build-round2.md` and `visual-3c-round2.md`.
 
-**Working style (the owner, Eric, insists on these):**
-- Use cost-efficient subagents (Sonnet) for implementation, in parallel where file ownership allows.
-- For anything optimized or verified, run a **critic agent** that grades 1–10 with concrete fixes. Iterate until ≥ 8 or 3 rounds, and save reviews in `docs/reviews/`.
-- Commit at milestones.
-- Stop at each phase checkpoint and summarize for Eric.
-- Use US English.
-- Parallel agents never run state-changing git commands, and edit shared files (`params.ts`, `layout.ts`, `types.ts`, the big test files) only with small exact-string edits.
-- Rider loads: 150 lb must pass; 200 lb is the goal (flagged); 80 lb is the lightest rider for rear pitch.
+**What it is now.** The concept is Ashley's: a solid, reusable white-oak Klondike sled on four 10" pneumatic wheels, which doubles as a post-race hauler.
+- **How it's used:** the rider is a passenger. The patrol pulls on a nylon-rope bridle tied to an oak tongue, and a musher at the back pushes on the handlebow and works the brake.
+- **Steering:** a center-pivot (soapbox) front axle, ±20°.
+- **Brake:** a removable scooter-style step brake.
+- **Shape:** a 24" body with a gradual bow taper to 18.5"; 30" matched tracks; a concave sheer from 4" at the bow to 14" at the rear.
+- **Construction:** sandwich sides (oak bands on each face of a 4 mm okoume web); a 12 mm okoume deck; a frameless ½" okoume seat back that flips flat.
+- **Storage:** the box holds the cushions, lamps and chocks, or the 10 Essentials.
+- **Lights:** lamps clip into the bow and rear hand-holds.
+- **Transport mode:** handle parked, seat flat, brakes, lights and chocks off.
+- **Numbers:** 115.5 lb. Riders safe 50–250+ lb, green to 240. Cargo 274 lb (target 200). Resting 348 lb.
+- **Status:** all critics are at 8/10, nothing fails, and 1,484 tests pass. No welding and no custom steel.
 
-**Where things stand:**
-- Phases 0–2 are approved.
-- Phase 3 (detail design) has finished round 1 (engineering 6/10, buildability 6/10) and round 2 fixes (F1–F4). Everything is committed, and all 918 tests pass.
-- Empty mass is **≈ 160.6 lb** (127 at Phase 2).
-- The Simple view says safe to **200 lb** (green to 160). The limiter is `kingpin-bolts` (0.98): the steering-stop torque on the plate bolts.
+**Owner preferences (Eric), which matter:**
+- **Weight:** he is weight-sensitive. Never add mass to pass a check without showing the lightest option first.
+- **Load realism:** loads are at walking pace with no curbs. Judge purchased parts by their real-world record. He has rightly pushed back on overcautious analysis.
+- **Use case:** confirm it, and sketch shapes, before any big design change. Two rework rounds came from misreading the use case.
+- **Shop:**
+  - a handheld **Shaper Origin** CNC; any part size works with ShaperTape;
+  - table saw, bandsaw, router, drill press, Domino;
+  - no welding.
+- **Materials:**
+  - **4 mm okoume:** one full 4' × 8' sheet from Aircraft Spruce (Peachtree City, GA, will-call).
+  - **12 mm (½") okoume:** one sheet from a local dealer, for the deck and the seat back.
+  - **White oak:** 4/4–12/4 from the local lumber store; he resaws and planes.
+  - **Finish:** stain (pre-stain conditioner or gel on the okoume), then epoxy seal, then spar varnish.
 
-**Next steps, in order:**
+**Working style (from CLAUDE.md):**
+- **Agents:** use Sonnet subagents for implementation, in parallel only where file ownership doesn't overlap. Parallel agents never change git state, and edit shared files only with small exact-string edits.
+- **Critics:** put every verification through a critic that grades 1–10 with concrete fixes. Iterate until 8 or better, or 3 rounds, and save the reviews in `docs/reviews/`.
+- **Commits and checkpoints:** commit at milestones, and stop at the phase checkpoint for Eric.
+- **US English** everywhere.
+- **Tests:** heavy sweep tests need CI-tolerant timeouts. Shared runners are 2–3× slower; the full suite takes about 2 minutes locally.
 
-1. **Visual fidelity pass.** Eric's feedback: "I see none of the finishing: no fine design, textures, curved wood, anything that makes it look like an actual cart. It's still basically the block version." This is a gap; do it before the critic round, since it changes geometry.
-   - Run one design-minded agent for model geometry and one for rendering, with clear file ownership. Use `reference/02-concept-overview-transport.png` and `03-concept-callouts.png` as the look to aim for: boat-like, warm oak, curved prow, sheer line.
-   - **Geometry** (`src/model/body.ts`, `frame.ts`, `seat.ts`, `steering.ts` …):
-     - a curved sheer line on the gunwales (rising toward the bow), possibly with some flare;
-     - shaped transoms (crowned top, rounded corners);
-     - rounded or chamfered edges on exposed oak, as a param (e.g. ¼" roundover);
-     - a curved seat back and real cushion shapes;
-     - shaped grab handles and a curved push-handle crossbar;
-     - tire tread and hub detail.
-     Keep the analysis valid: section properties must still come from the same params and layout, overlap and edge tests stay green, and the mass changes are reported.
-   - **Rendering** (`src/viewer/**`):
-     - procedural wood-grain textures (canvas or shader) oriented by each part's `grain` axis, separately for oak and okoume;
-     - PBR materials plus an environment map (e.g. three's RoomEnvironment) for soft lighting;
-     - better shadows and ambient occlusion where cheap;
-     - subtle edge lines;
-     - dark-mode-aware backgrounds;
-     - keep the 3D redraw under ~30 ms.
-   - Then a UX/visual critic over screenshots (light and dark, desktop and phone).
-2. **Phase 3 critic round 2.** Run the engineering and buildability critics on the round-2 model. Fix their must-fixes (round 3 at most), each as a fresh agent run.
-3. **Phase 3 checkpoint for Eric.** Present:
-   - **Weight:** 160 lb vs the 60–70 lb target; heavy-first was approved (D-21), but itemize it and offer reductions.
-   - **The front-end tradeoff:** the steel plate kingpin design added +8.9 lb and the rider range fell to 200 lb. Offer alternatives, e.g. a longer stop radius, or commercial wagon/fifth-wheel steering hardware.
-   - **Sign-offs:** stop load share via the urethane pads (D-31/D-43), the brake grip travel of 6.4" (needs a feel test), and the turntable choice.
-   - Updated screenshots, and confirmation that the Simple view is still correct.
-   - Consolidate D-43 into proper DECISIONS entries.
-4. **Phase 4: build outputs** (BRIEF §10):
-   - cut list and nesting;
-   - BOM with costs;
-   - DXFs and STLs;
-   - bent-lam form drawings (strip list for the prow);
-   - assembly steps (the data in part `step`/`notes`);
-   - finishing schedule;
-   - a single-file HTML build.
+**Phase 4: build outputs.** Everything is derived from `buildModel(params): Part[]`, where each part carries its stock, rough size, grain, fab method, joints, sourcing, notes and `step`. Add a "Build" view or tab to the app, plus exports.
+1. **Cut list:** solid oak by board thickness, with rough and final sizes, grain, and resaw/laminate strip lists for the bent and sandwich members. Plywood parts by sheet.
+2. **Nesting:**
+   - plywood on one 4' × 8' sheet of 4 mm and one of 12 mm, with the seat back from the deck offcut; the model expects that, so verify it;
+   - an oak board-foot estimate by thickness, with a waste allowance.
+3. **BOM with costs:** lumber, okoume, and purchased hardware.
+   - **Purchased parts:** wheels, DOM tube, kingpin, UHMW, eye bolts and chain, nylon rope, bronze sleeve, hinges and pins, inserts, fasteners (expanded from the joint list), lamps, reflectors and finish.
+   - **Data:** sourcing and prices where known; mark estimates.
+4. **Shaper Origin files:** SVG (and DXF) for every part tagged `fab: 'shaper-origin'`. That covers the deck, webs, seat back, grab boards with their hand holes, the bow bulkhead with its hand-hold, box panels, sign blanks and brake flaps. Include cut depths (inside, outside, pocket) and holes. Optionally add STL for the printed ASA parts (the lamp clips).
+5. **Forms and jigs:**
+   - the lamination and ramp forms for the sandwich bands (sheer and bow taper);
+   - the handlebow and bulkhead crown templates;
+   - the brake-flap template.
 
-**Deferred (do not start unless asked):**
-- The lightweight-variant preset (D-21).
-- Scenario A vs B comparison in the Simple view (D-30).
+   Give each as a drawing with dimensions, or as Shaper SVG.
+6. **Assembly steps** from part `step` and the `HULL_STEP` notes, with a viewer step-through (camera preset per step, parts appearing in order). Include the glue-ups and cure times.
+7. **Finishing schedule:** stain on offcut tests, epoxy seal for the okoume, spar varnish, and the DO NOT STEP engraving on the lid.
+8. **"Verify before ordering" checklist** from `docs/phase3-checkpoint.md`:
+   - a tire squash test (0.55" or more at 300 lb);
+   - the wheel's rating, bore and hub;
+   - DOM, not ERW, tube;
+   - the eye-bolt and chain ratings, and the rope's strength;
+   - the bronze sleeve;
+   - the seat-back pin and inserts;
+   - the sign-knob screws;
+   - a test hinge on the first knee;
+   - the lamp-clip fit.
+9. **Single-file HTML build** (`npm run build:single`) that includes the build outputs, for offline use in the shop.
 
-**Useful commands:**
-- `npm test`, `npm run typecheck`, `npm run build`, `npm run build:single`
-- `node scripts/run-ts.mjs scripts/recommend-table.ts` (check table for the recommended config)
-- `node scripts/run-ts.mjs scripts/explore.ts` (`EXPLORE_SMOKE=1` for a fast run)
-- The dev server runs from `.claude/launch.json` ("klondike-dev", port 5179). Check UI changes in the browser pane at 1440×900 and the 375×812 mobile preset, in light and dark.
+**Plan:**
+1. Start with a short Phase 4 spec (`docs/phase4-spec.md`) and confirm the output formats with Eric: SVG versus DXF for the Shaper, and whether he wants printable PDF-style sheets.
+2. Then implement with parallel agents, separating the data generation (cut list, BOM, nesting) from the export formats and from the UI.
+3. Run a critic pass from the buildability point of view: "could a volunteer build from these outputs?"
+4. Then the Phase 4 checkpoint for Eric.
+
+**Deferred, unless asked:**
+- a lightweight variant;
+- A-vs-B comparison;
+- a rear-light strap option;
+- the pin-on tongue.
