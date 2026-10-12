@@ -150,6 +150,8 @@ The workstream notes have the full reasoning and check tables: `docs/phase3-ws{A
 5. **The seat stays full size.** The **seat back is hinged:** it flips flat and **latches**, with no tools, and never goes in the box. The **box only holds the cushions plus the 10 Essentials**, so it shrinks back from the 3c-2 enlargement, and the rider room is restored (leg reach back toward 36").
 6. **Rear handlebow:** a second pin position parks it low when not pushing.
 7. **Grab handles:** one oak board per side with a CNC-routed hand hole.
+9. **Sign:** restore it, placed where it fits the final shape (likely the tall rear part of each side, or a board on the back), using the aspect-independent oval sign generator; the final visual critic judges it.
+10. **Handlebow:** a gentle crown, about ¾–1" (was 3"), **bandsawn from one oak board** rather than laminated.
 8. **Brake:** a scooter-style step brake. An oak flap hinged over each rear tire with a rubber pad, about 2:1 leverage and a bungee return; a wheel chock on a cord parks it. It replaces the D-55 steel-plate foot brake: no welding, no custom steel. | 🔶 |
 - **Axle:** one oak axle beam under the bow, with a 10" wheel on a bolt-on ¾" stub at each end. The wheels sit outboard of the body on a 35.5" track, so the deck stays low (8").
 - **Pivot:** one ⅝" grade-8 kingpin through a UHMW thrust washer into an oak king beam. Bolted only.
