@@ -1,110 +1,68 @@
-# Phase 3 checkpoint (2026-10-11)
+# Phase 3 checkpoint (final, 2026-10-12)
 
-Phase 3 (detail design) has run its three critic rounds. Final grades:
-- **Visual 8/10:** passed.
-- **Engineering 7/10:** below the bar of 8.
-- **Buildability 6/10:** below the bar of 8.
+Phase 3 (detail design) is complete. The critics pass:
 
-Per the workflow, the remaining MUSTs come to Eric rather than a fourth round. Reviews: `docs/reviews/phase3-{eng,build}-round3.md`, `visual-round3.md`.
-
-## 1. Where it stands
-
-| | Phase 2 | Phase 3 r2 | Now |
-|---|---|---|---|
-| Empty mass | 127 lb | 160.6 lb | **169.0 lb** |
-| Safe range (Simple view) | | to 200 lb | 50–210 lb, green to 170 |
-| Tests | | 918 | 1,104 |
-
-**The 210 lb figure overstates the design.** The engineering critic found two problems the app does not yet reflect:
-1. **Stop stand:** the overturning arm is understated 3–5×. The critic's hand check fails at 150 lb.
-2. **Turntable ring:** it is at 118% of the repo's own margin at 150 lb, but shown as info only.
-
-Fixing either means the honest answer is **"150 lb not yet proven"** until the front end and turntable are reworked. Nothing has been pushed, so the live site still shows the older version.
-
-## 2. Weight: 169 lb against the 60–70 lb target (heavy-first, D-21)
-
-By group, in lb:
-
-| Group | Mass |
-|---|---|
-| Running gear | 50.8 |
-| Body | 33.4 |
-| Steering | 25.4 |
-| Brake | 16.0 |
-| Frame | 13.3 |
-| Seat | 9.0 |
-| Storage | 8.8 |
-| Hardware | 7.5 |
-| Removable | 3.6 |
-| Lighting | 1.4 |
-
-Biggest single items: four 13" pneumatic wheels 22.0, the two solid steel axle rods 10.2, cabin deck 10.0, front axle beam 9.0, fasteners 6.9, brake cross shaft 6.5, rear transom 6.2, turntable 5.5, kingpin carrier plate 5.1.
-
-Reduction options. The masses are rough estimates; each needs a re-run of the checks.
-
-| Option | Saves (est.) | Cost |
+| Critic | Grade | Review |
 |---|---|---|
-| 10" wheels instead of 13" | 6–8 lb | Rolls worse on rough ground; less tip margin |
-| Tube axles or stub axles instead of solid rods | 5–7 lb | Re-check axle bending |
-| Thinner or lightened cabin deck | 3–5 lb | Deck deflection check is close |
-| Drop the storage box (soft bag instead) | ~8 lb | Loses the weatherproof box (BRIEF §4.9) |
-| Commercial wagon fifth-wheel instead of the plate kingpin and stops | 5–10 lb | Needs a vendor part rated for the strike |
-| Lighter brake (smaller abuse load, or a simpler drag brake) | 3–5 lb | Lower abuse margin |
+| Visual | 8/10 | `docs/reviews/visual-3c-round2.md` |
+| Engineering | 8/10 | `docs/reviews/phase3c-eng-round1.md` |
+| Buildability | 8/10 | `docs/reviews/phase3c-build-round2.md`, then its last must-fixes, in D-63 |
 
-## 3. Front end: the biggest open problem
+The design changed a lot along the way. The reasons are recorded in `DECISIONS.md` D-49 to D-63:
+- **A ridden cart (D-49 ride mode) became a pulled Klondike sled on wheels (D-53).** It is Ashley's solid, reusable wooden hauler. The rider is a passenger, the patrol pulls and the musher brakes.
+- **The steering changed three times:** car-style Ackermann, then swivel casters, then a center-pivot (soapbox) front axle at ±20° (D-56).
+- **Loads are at walking pace:** there are no curbs, so the design is for bumps at 3 mph, plus a hard hit at 5 mph (D-50, D-55).
 
-The plate-kingpin front end (D-43, D-46, D-47) has cost about +11 lb since round 1. It still depends on three things a home shop cannot promise:
-- shim fit-up to 0.018";
-- urethane pad stiffness;
-- welded shear ears sharing 40% of the load.
+## The design now
 
-If the ears share nothing, or the pad is soft, even 150 lb fails.
+| | |
+|---|---|
+| **Empty mass** | **121.0 lb** (174 lb at the start of 3c) |
+| **Size** | 24" body, about 38.8" overall width, 10" pneumatic wheels, 34.5" front and 32" rear track, 8" deck |
+| **Riders** | **safe 50 to over 250 lb, comfortable to 230–240 lb** |
+| **Cargo** | **269 lb** (target 200). Keep the load's center of gravity within about 14" of the deck |
+| **Resting** | holds a **348 lb** adult sitting or stepping in (target 250); the lid is marked DO NOT STEP |
+| **Steering** | center-pivot oak axle, ±20°, about a 20 ft turning circle. UHMW roll pads, check-chain stops, oak tongue, and a nylon-rope bridle whose rope is the weak link |
+| **Brake** | scooter-style step brake: oak flaps with rubber pads over the rear tires. It **slows** the loaded sled on 15°; to hold it still, use the chock or a person |
+| **Body** | white oak sandwich sides on a 4 mm okoume web. A concave sheer runs from 4" at the bow to 14" at the rear, with a bow turn-in. A 1½" oak bow bulkhead serves as foot brace and lift hold, with the lamp clipped into the hand-hold |
+| **Seat and storage** | frameless ½" okoume seat back that flips flat and pins. The box (2,000 in³) holds the cushions, lamp and chocks, or the 10 Essentials. A 14" parked/riding handlebow |
+| **Other** | one-board grab handles, level signs on the rear sides, reflectors, a rear flag tube, 6 D-ring tie-downs |
+| **Steel** | none welded and none custom-cut. Steel parts are stock DOM tube, stainless flat bar, a grade-8 kingpin, eye bolts and chain |
+| **Shop** | every flat part is tagged for the Shaper Origin |
 
-Alternatives:
-- **(a)** Stiffen it so it passes with the ears sharing nothing. Also widen the pads (more area, not thickness), and make a Phase 4 bench test a go/no-go gate. Smallest change; adds mass.
-- **(b)** A turntable bearing built from steel plates and a UHMW thrust ring, which also fixes the ring rating.
-- **(c)** A purchased wagon fifth-wheel or steering kit with a published rating. It replaces the stops, plates and lazy susan.
+Nothing fails at the defaults. The rows near their limits:
+- `turn-radius` 0.98 (12.3 ft against a 12.5 ft limit);
+- tipping with cargo, 0.95.
 
-**Recommendation:** look at (c) first, because it removes most of the fragile parts. Otherwise do (a) + (b).
+## Materials (Eric's sourcing)
+- **4 mm okoume:** one full 4' × 8' sheet from Aircraft Spruce, Peachtree City, GA, will-call.
+- **12 mm (½") okoume:** one 4' × 8' sheet from a local dealer, for the deck and the seat back.
+- **White oak:** 4/4–12/4 from the local lumber store; resaw and plane.
+- **Fallback deck:** Baltic birch, about +3–4 lb, epoxy-sealed.
+- **Finish:** stain (with pre-stain conditioner or gel on the okoume), then epoxy seal, then spar varnish. Test on offcuts first.
 
-## 4. The curved hull (D-45): what it costs to build
+## Verify before ordering or cutting
+1. **Tire squash test:** about 0.55" or more at 300 lb, i.e. a rate of 560 lb/in or less. Flat-free tires change this.
+2. **Wheel:** the 2.8 lb 10" wheel's 300 lb rating, ¾" bore and 2.28" hub. These come from the listing.
+3. **Axle tube:** DOM A513 Type 5, ¾" × 0.120" (not ERW).
+4. **Steering parts:** the eye-bolt and chain working loads.
+5. **Bridle:** the nylon rope's rated strength and stretch, and the bronze sleeve stock size.
+6. **Seat back:**
+   - the spring-detent pin (tip-to-ball distance and head height);
+   - the 5/16" #10-32 inserts, with a scrap pull-out test;
+   - whether the pin head clears the cushion.
+7. **Sign:** the 7/8" sign knob screws.
+8. **Brake:** hold a real hinge to the first beveled brake knee before cutting the rest.
+9. **Lamp:** check the lamp-clip clearance against the actual lamp.
 
-It reads as one hull and you chose it. The buildability critic says it moved the hard part from "what holds this together" to "can this be made". Its four MUSTs:
-1. Engineered laminations: a two-sided form, about 7 plies of 3/32" strips with the grooves built into the lay-up, and a test bend.
-2. Chine-to-rail joints on the curve (the Dominos there cannot be cut).
-3. Scarf joints placed in straight runs.
-4. Fab-shop specs for the welded parts.
-
-Fixing them is real but bounded work. The alternative is the angled straight shoulder, which removes the laminations but looks faceted.
-
-## 5. Decisions needed
-
-1. **Rider-limit wording.** The critic suggests: "150 lb verified, comfortable to 170, 200 is an unproven goal", once the MUSTs land.
-2. **Front end:** (a)+(b) or (c) above.
-3. **Welding:** three welded parts (shear ears, stop stand, brake pivot post). Outsource them to the steel service, or redesign them as bolted parts.
-4. **Curved hull:** keep it and fix the lamination process, or fall back to the angled shoulder.
-5. **Weight:** which reductions to take, if any.
-6. **Sign-offs carried from the handoff:**
-   - Brake grip travel is now 5.7" (was 6.4"); it needs a feel test.
-   - Steering-stop load sharing.
-   - The turntable choice (see §3).
-7. **Design asks from the visual pass:**
-   - **Prow:** dropped, done.
-   - **Grab handles:** green steel U-tubes instead of oak (D-40)?
-8. **Open questions:**
-   - Q-5: is the sign wording "TROOP 455 / WILDERNESS RANGERS"?
-   - A wheel chock in the kit.
-   - The rear lifter now carries 83 lb in one hand.
-   - The truck bed is not yet measured.
-   - Vendor data that blocks the order: turntable plate and moment rating, wheel load rating, pad durometer, brake lining.
-
-## 6. Proposed next step
-
-Fix the engineering MUSTs that make the app tell the truth, before anything is pushed:
-- correct the stop-stand arm;
-- gate `turntable-ring`;
-- quote the range honestly.
-
-Then carry out Eric's choices on the front end, the hull and weight, with one more engineering and buildability critic pass. Phase 4 (build outputs) starts after that.
-
-**Decision IDs:** D-43 is still a stub. D-44 to D-48 are proposed (🔶) and need sign-off.
+## Open decisions
+1. **Rear light:** strap it to a handlebow post (recommended; no plate, no doubler) or through-bolt it to the ½" transom.
+2. **Push to the live site** now (the deployed version is 3c-4).
+3. **Phase 4 (build outputs):**
+   - cut list and nesting (two 4' × 8' sheets plus oak boards);
+   - BOM with costs;
+   - Shaper Origin SVG/DXF files;
+   - lamination and ramp forms;
+   - assembly steps;
+   - finishing schedule;
+   - single-file HTML.
