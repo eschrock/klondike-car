@@ -25,6 +25,8 @@ export interface SimPanelDeps {
   viewer: SimViewer;
   getParams(): Params;
   buildModel(p: Params, v: ViewState): Part[];
+  /** The viewer's show/hide toggles that also apply to the simulated sled (brake kit, lights, wheel chocks). Optional; the model defaults apply when absent. */
+  displayToggles?(): Pick<ViewState, 'brakes' | 'lights' | 'chocks'>;
   /** Called when the tab is left: the host re-renders the normal (static) model. */
   restoreView(): void;
 }
@@ -198,7 +200,7 @@ export function mountSimPanel(host: HTMLElement, deps: SimPanelDeps): SimPanel {
     syncAll();
   };
 
-  const riderViewState = (): ViewState => ({ rider: rider === 'none' ? 'none' : rider === 'goal' ? 'goal' : 'operating', cargo: true });
+  const riderViewState = (): ViewState => ({ ...deps.displayToggles?.(), rider: rider === 'none' ? 'none' : rider === 'goal' ? 'goal' : 'operating', cargo: true });
 
   /** Rebuild the sled and a fresh sim from the current parameters and settings. */
   const restart = async () => {

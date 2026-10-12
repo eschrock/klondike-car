@@ -293,6 +293,8 @@ sim = mountSimPanel(right.panelHost('simulation'), {
   viewer,
   getParams: () => store.get(),
   buildModel: (p, v) => buildModel(p, v),
+  // The simulated sled follows the Advanced show/hide toggles (Eric: the chocks appeared in the sim while switched off); Transport mode does not apply to a moving sled.
+  displayToggles: () => ({ brakes: view.brakes !== false, lights: view.lights !== false, chocks: !!view.chocks }),
   restoreView: () => render(),
 });
 store.subscribe(() => {
