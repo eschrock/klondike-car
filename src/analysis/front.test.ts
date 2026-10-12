@@ -18,9 +18,10 @@ import { tieLoad } from './bridle';
 import { bumpStrike } from './bump';
 import { wheelLoads } from './structure';
 import { uncTensileArea } from './nds';
+import { PRE_D60 } from '../test-fixtures';
 
 const RAD = Math.PI / 180;
-const defaults = { ...defaultParams(), frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, cargoPayloadLb: 250 }; // the 3c-3 hand-calc fixture (35.5 in tracks, 250 lb cargo); D-58 narrowed the tracks, cargo is 200 lb; the new defaults are in the rows below and track-d58.test.ts
+const defaults = { ...defaultParams(), ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, cargoPayloadLb: 250 }; // the 3c-3 hand-calc fixture (35.5 in tracks, 250 lb cargo); D-58 narrowed the tracks, cargo is 200 lb; the new defaults are in the rows below and track-d58.test.ts
 const mkCtx = (q: Partial<Params> = {}): Ctx => {
   const p = resolveParams({ ...defaults, ...q } as Params);
   return makeContext(p, buildModel(p, { rider: 'goal', cargo: true }), buildModel(p, { rider: 'none', cargo: false, seat: 'stowed' }));
@@ -103,10 +104,10 @@ describe('washerContact (the roll couple on the UHMW thrust washer)', () => {
 });
 
 describe('front wheel loads (the basis of every row)', () => {
-  it('static front axle by hand: level W x/44 = 138 lb, nose down on 15 deg W cos(th) - N_r = 166 lb (M4: the worse governs); the heavier wheel takes 0.5 + |y|/35.5', () => {
+  it('static front axle by hand: level W x/44 = 137 lb, nose down on 15 deg W cos(th) - N_r = 164 lb (M4: the worse governs); the heavier wheel takes 0.5 + |y|/35.5', () => {
     const w = wheelLoads(ctx, g);
-    expect(hw.level).toBeCloseTo(138.1, 0);
-    expect(hw.slope).toBeCloseTo(165.7, 0);
+    expect(hw.level).toBeCloseTo(136.7, 0); // 138.1 before D-60 dropped the four foot-block cleats (the CG moves aft with them gone)
+    expect(hw.slope).toBeCloseTo(164.3, 0); // 165.7 with the foot-block cleats
     expect(w.frontAxle).toBeCloseTo(hw.axle, 6);
     expect(w.frontWheel).toBeCloseTo(hw.wheel, 6);
   });

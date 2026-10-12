@@ -11,10 +11,11 @@ import { totalMass, centerOfGravity } from '../model/mass';
 import type { Ctx } from './context';
 import { detail, governing, singleCheck } from './dual';
 import { f } from './format';
-import { rectSection, circleSection, ssUdlCentered, ssPointMid, bendingStress, rectShear } from './beams';
+import { rectSection, ssUdlCentered, ssPointMid, bendingStress, rectShear } from './beams';
 import { allowables, effectiveStripWidth, maxDeckSpan, FOOT_ACROSS_IN, FOOT_ALONG_IN } from './structure';
 import { cabinJoists } from './cargo';
 import { discOf, kingNetSection } from './front';
+import { axleSection } from './axle';
 import type { AnalysisCheck, Detail } from './types';
 
 interface RestResult { details: Detail[]; maxUtil: number; text: string }
@@ -113,7 +114,7 @@ export function restEval(ctx: Ctx, W: number): RestResult {
     const secR = (bR.thick * Math.max(0.1, bR.depth - p.axleDiameterIn) ** 2) / 6;
     add(`rear axle beam bending between the hanger and the wheel (heavier rear wheel ${f(wRear)} lb at ${atR})`, (wRear * lever) / secR, 'psi', al.oakBend);
     add('rear axle beam shear at the hanger', rectShear(wRear, bR.thick, bR.depth), 'psi', al.oakShear);
-    const rod = circleSection(p.axleDiameterIn);
+    const rod = axleSection(p);
     const aF = Math.max(0.01, Tf / 2 - bF.len / 2), aR = Math.max(0.01, Tr / 2 - bR.len / 2);
     add('front stub axle bending', bendingStress(wFront * aF, rod), 'psi', al.steel);
     add('rear stub axle bending', bendingStress(wRear * aR, rod), 'psi', al.steel);

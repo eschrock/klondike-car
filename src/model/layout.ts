@@ -38,8 +38,6 @@ export interface Layout {
   bulkhead: { x0: number; x1: number; thick: number; bot: number; zCorner: number; zCenter: number; halfW: number };
   /** The lift hand-hold through the bulkhead (D-57; the nose is lifted by the body, not the tongue): slot x range (the bulkhead thickness), half length across, z range and its center. */
   hold: { x0: number; x1: number; halfLen: number; zBot: number; zTop: number; zMid: number };
-  /** Drop-in foot block (D-57): the x of its REAR face-contact (the face the heels press) in each slot position, measured as distance behind the bulkhead face, thickness and height. */
-  footBlock: { behind: number[]; thick: number; height: number };
   /** Chine bottom, chine height (= railBand), and the rail top (the deck underside level). */
   chineBot: number;
   railTop: number;
@@ -239,11 +237,10 @@ export function computeLayout(input: Params): Layout {
   };
   const holdBot = deckTop + p.liftSlotClearIn;
   const hold = { x0: bulkhead.x0, x1: bulkhead.x1, halfLen: p.liftSlotLengthIn / 2, zBot: holdBot, zTop: holdBot + p.liftSlotHeightIn, zMid: holdBot + p.liftSlotHeightIn / 2 };
-  const footBlock = { behind: Array.from({ length: Math.round(p.footBlockPositions) }, (_, i) => p.footBlockStepIn * (i + 1)), thick: p.footBlockThickIn, height: p.footStopHeightIn };
 
   void len;
   return {
-    r, WB, xRear, xFront, xFlatEnd: bh.xFlatEnd, xSideEnd, turnIn, bulkhead, hold, footBlock, chineBot, railTop: chineBot, chineH,
+    r, WB, xRear, xFront, xFlatEnd: bh.xFlatEnd, xSideEnd, turnIn, bulkhead, hold, chineBot, railTop: chineBot, chineH,
     sideTop: deckTop + p.sideHeightRearIn, sideH: sideBow, sideRear: p.sideHeightRearIn, sag: p.sheerCurveIn, xSideStart,
     railBand: p.railBandIn, joistT, side, transom, rearLane, ply, deckTop, deckBot: deckTop - ply, hwC, web, beamR, beamF, steer, king, chain, tongue,
     railEnd: bh.xFlatEnd, railStepX: steer.railStepX, railDepthF: steer.railDepthFront, joistX, seat, storage,

@@ -126,7 +126,7 @@ describe('real sled (D-6, D-23, D-54)', () => {
     // Pinned (defaults, D-57): the nose is 5 in shorter (bulkhead, 6.75 in front overhang) and the handlebow crown is 7/8 in instead of 3: installed 69.9 x 39.5 x 35.5 in (D-58: the oak tongue's shackle reaches 2.8 in past the bow, 34 1/2 in front track), bridle-off 67.1 long,
     // removed 63.8 long and 23.6 high (the fixed grab boards and flag tube stand above the 22 in transom corners). Width = rear track 32 + tire 3.5 + hub/axle ends.
     expect(r.dims.installed.lengthIn).toBeCloseTo(69.9, 0);
-    expect(r.dims.installed.widthIn).toBeCloseTo(39.5, 1); // set by the front axle ends (34 1/2 in track + 3.5 in tire + the stub ends); 32 in rear track + tire is narrower
+    expect(r.dims.installed.widthIn).toBeCloseTo(38.78, 1); // set by the front axle ends (34 1/2 in track + the 2.28 in hub and 1 in of axle beyond it each side, D-60; 39.5 with the 3 in hub); 32 in rear track + tire is narrower
     expect(r.dims.installed.heightIn).toBeCloseTo(35.5, 0);
     expect(r.dims['bridle-off'].lengthIn).toBeCloseTo(67.1, 0);
     expect(r.dims.removed.lengthIn).toBeCloseTo(63.8, 0);

@@ -65,8 +65,8 @@ export type RigidBody =
 export type Geometry =
   /** Axis-aligned box centerd on the local origin. */
   | { type: 'box'; size: Vec3 }
-  /** Cylinder along local Z, centerd on the local origin. */
-  | { type: 'cylinder'; radius: number; length: number }
+  /** Cylinder along local Z, centerd on the local origin. `wall` > 0 makes it a tube of that wall thickness (D-60: the hollow axles); 0 or absent = solid. */
+  | { type: 'cylinder'; radius: number; length: number; wall?: number }
   /** Tire + hub; axle along local Y, centerd on the local origin. */
   | { type: 'wheel'; diameter: number; width: number; hubDiameter: number; hubLength: number; bore: number }
   /** 2D profile in local XY (outer loop CCW, holes CW), extruded along +Z from z=0. */

@@ -3,6 +3,7 @@
  * pivots about a kingpin, is in pivot.ts (D-56); the front wheels turn with it.
  */
 import { AXLE_BEAM_POSITION, AXLE_STYLE } from '../params';
+import { axleSourcing, axleStockNote } from './axle-stock';
 import { IN3_PER_FT3, STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
 import { translation } from './mat4';
 import { beamSeat, boltLength, inchesText, localPoint, railSection } from './rear-mount';
@@ -38,7 +39,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
       width: p.tireWidthIn,
       hubDiameter: Math.min(p.wheelDiameterIn * HUB_DIA_FRAC, HUB_DIA_MAX_IN),
       hubLength: p.hubLengthIn,
-      bore: p.axleDiameterIn,
+      bore: p.wheelBoreIn,
     },
     transform,
     body: id as RigidBody,
@@ -47,9 +48,9 @@ export function buildRunningGear(ctx: Ctx): Part[] {
     step: STEP.gear,
     explode: [0, (id.endsWith('L') ? 1 : -1) / Math.hypot(1, 0.25), -0.25 / Math.hypot(1, 0.25)],
     sourcing: {
-      vendor: `McMaster-Carr or equivalent: ${p.wheelDiameterIn}" ${p.tireType === 0 ? 'pneumatic' : 'flat-free'} hand-truck wheel, ${p.axleDiameterIn}" bore, ${p.hubLengthIn}" hub length, sealed ball bearings or flanged bushings pressed into the hub (confirm the bore is ${p.axleDiameterIn}" and the hub length ${p.hubLengthIn}"; D-34). READ THE LOAD RATING OFF THE LISTING: the model assumes ${p.wheelRatingLb} lb per wheel (wheelRatingLb, status verify; the wheel-rating check uses it)`,
+      vendor: `McMaster-Carr or equivalent: ${p.wheelDiameterIn}" ${p.tireType === 0 ? 'pneumatic' : 'flat-free'} hand-truck wheel, ${p.wheelBoreIn}" bore, ${p.hubLengthIn}" hub length, sealed ball bearings or flanged bushings pressed into the hub (confirm the bore is ${p.wheelBoreIn}", the same as the ${p.axleDiameterIn}" axle, and the hub length ${p.hubLengthIn}"; D-34, D-60: the listings of the light wheels do not state either). READ THE LOAD RATING OFF THE LISTING: the model assumes ${p.wheelRatingLb} lb per wheel (wheelRatingLb, status verify; the wheel-rating check uses it) and ${d.wheelMassLb.toFixed(1)} lb (wheelMass10Lb, verify)`,
     },
-    notes: `Catalog wheel mass from params (D-11). Hub spec (M11): ${p.axleDiameterIn}" bore for the ${p.axleDiameterIn}" axle, ${p.hubLengthIn}" hub, sealed ball bearings (or flanged bronze bushings) in the hub; collar + cotter pin on the axle end (${p.axleEndExtraIn}" beyond the hub).`,
+    notes: `Catalog wheel mass from params (D-11). Hub spec (M11, D-60): ${p.wheelBoreIn}" bore for the ${p.axleDiameterIn}" axle, ${p.hubLengthIn}" hub, sealed ball bearings (or flanged bronze bushings) in the hub; collar + cotter pin on the axle end (${p.axleEndExtraIn}" beyond the hub).`,
   });
   const ry = p.rearTrackIn / 2;
   const fy = p.frontTrackIn / 2;
@@ -65,9 +66,10 @@ export function buildRunningGear(ctx: Ctx): Part[] {
     const name = 'rear';
     if (p.axleStyle === AXLE_STYLE.throughRod) {
       parts.push(cylinder(ctx, {
-        id: `axle-${ax.tag}`, name: `${name} axle (through rod)`, group: 'running-gear',
-        center: [ax.x, 0, r], axis: 'y', radius: rodR, length: ax.track + p.hubLengthIn + 2 * p.axleEndExtraIn,
-        mat: 'steel', fab: 'drill-tap', step: STEP.gear, notes: 'Dead axle, clamped to the beam (D-10). Sits in a groove in the beam.',
+        id: `axle-${ax.tag}`, name: `${name} axle (through ${p.axleWallIn > 0 ? 'tube' : 'rod'})`, group: 'running-gear',
+        center: [ax.x, 0, r], axis: 'y', radius: rodR, wall: p.axleWallIn, length: ax.track + p.hubLengthIn + 2 * p.axleEndExtraIn,
+        mat: 'steel', fab: 'drill-tap', step: STEP.gear, notes: `Dead axle, clamped to the beam (D-10). Sits in a groove in the beam. ${axleStockNote(p)}`,
+        sourcing: { vendor: axleSourcing(p, ax.track + p.hubLengthIn + 2 * p.axleEndExtraIn) },
       }));
     } else {
       const stubLen = p.hubLengthIn + p.axleEndExtraIn + STUB_EMBED_IN;
@@ -76,8 +78,9 @@ export function buildRunningGear(ctx: Ctx): Part[] {
         parts.push(cylinder(ctx, {
           id: `axle-${ax.tag}${tag}`, partNo: `stub-axle`, name: `${name} ${tag === 'L' ? 'left' : 'right'} stub axle`,
           group: 'running-gear', center: [ax.x, s * (outer - stubLen / 2), r], axis: 'y',
-          radius: rodR, length: stubLen, mat: 'steel', fab: 'drill-tap', step: STEP.gear,
-          notes: `Embedded ${STUB_EMBED_IN}" into the beam (D-10).`,
+          radius: rodR, wall: p.axleWallIn, length: stubLen, mat: 'steel', fab: 'drill-tap', step: STEP.gear,
+          notes: `Embedded ${STUB_EMBED_IN}" into the beam (D-10). ${axleStockNote(p)}`,
+          sourcing: { vendor: axleSourcing(p, stubLen) },
         }));
       }
     }

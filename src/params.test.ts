@@ -27,12 +27,16 @@ describe('PARAM_DEFS', () => {
       'casterWheelDiaIn', 'casterWheelWidthIn', 'casterOverallHeightIn', 'casterSwivelRadiusIn', 'casterRatingLb', 'casterSpacingIn', 'casterBlockLengthIn', 'casterBlockWidthIn', 'casterSweepClearIn',
       'casterPlateLengthIn', 'casterMassLb', 'bowBlockThickIn', 'bowBlockWidthIn', 'bowBlockBoltDiaIn', 'bridleEyeHeightIn', 'eyeBoltWasherDiameterIn', 'eyeBoltEyeOffsetIn',
       // D-57: the bow curl, the straight-line sag, the foot-stop board, the star-knob seat back and the pad-and-posts grab handle
-      'sideProfileSagIn', 'bowCurlRadiusIn', 'bowCurlAngleDeg', 'bowCurlPlyIn', 'bowCurlPlies', 'footStopThickIn', 'seatBackKnobHeightIn', 'seatInsertAllowLbf', 'seatGripGapIn', 'seatGripClearLengthIn'];
+      'sideProfileSagIn', 'bowCurlRadiusIn', 'bowCurlAngleDeg', 'bowCurlPlyIn', 'bowCurlPlies', 'footStopThickIn', 'seatBackKnobHeightIn', 'seatInsertAllowLbf', 'seatGripGapIn', 'seatGripClearLengthIn',
+      // D-60: the drop-in foot block and its four slot cleats (old links that carry these keys still load: decodeHash ignores unknown keys)
+      'footBlockThickIn', 'footBlockStepIn', 'footBlockPositions', 'footBlockSlot'];
     for (const k of gone) expect(keys, k).not.toContain(k);
     expect(keys.filter((k) => /^caster|^bowBlock|^swivel/.test(k))).toEqual([]);
-    const added = ['sideHeightBowIn', 'sideHeightRearIn', 'sheerCurveIn', 'bowTurnInIn', 'bowTurnLenIn', 'bowBulkheadThickIn', 'bowBulkheadHeightIn', 'footBlockThickIn', 'footBlockStepIn', 'footBlockPositions', 'footBlockSlot',
+    const added = ['sideHeightBowIn', 'sideHeightRearIn', 'sheerCurveIn', 'bowTurnInIn', 'bowTurnLenIn', 'bowBulkheadThickIn', 'bowBulkheadHeightIn', 
       'grabBoardLengthIn', 'grabHoleLengthIn', 'grabHoleHeightIn', 'grabBoardThickIn', 'grabBoardBarIn', 'grabBoardFootIn', 'handleParkClearIn', 'flagTubeIdIn', 'flagTubeOdIn', 'seatHingeLoadLbf', 'seatBackLatchHeightIn', 'showSideSigns',
       'axleHangerThickIn', 'axleHangerWidthIn', 'bumpSpeedNormalMph', 'bumpSpeedHardMph',
+      // D-60: the hollow axle, the wheel bore, the seat-back ply
+      'axleWallIn', 'axleTubeYieldPsi', 'axleTubeUltimatePsi', 'axleCrossHoleDiaIn', 'axleCrossHoleFromEndIn', 'wheelBoreIn', 'seatBackPlyIn',
       'frontTrackIn', 'steerLockDeg', 'steerClearIn', 'kingpinDiaIn', 'kingThrustOdIn', 'kingThrustThickIn', 'kingBeamLengthIn', 'steerBearingAllowPsi', 'tongueWidthIn', 'tongueDepthIn',
       'tongueHeadWidthIn', 'tongueHeadLenIn', 'tongueTieAheadIn', 'tongueBoltDiaIn', 'tongueBoltOffsetIn', 'tongueTipEdgeIn', 'tongueHoleDiaIn', 'tongueTopDropIn', 'frontStubLenIn', 'steerRopesOn', 'steerRopeRunIn',
       // D-58 (3c-4a): roll pads, steering check chains, the chain joist and the front beam width
@@ -40,12 +44,14 @@ describe('PARAM_DEFS', () => {
     for (const k of ['tongueThickIn', 'steerStopBoltDiaIn', 'endJoistThickIn', 'steerStopPadThickIn']) expect(keys, k).not.toContain(k);
     for (const k of added) expect(keys, k).toContain(k);
   });
-  it('the design defaults (D-54, D-56, D-57): 24 in body, 44 in wheelbase, 10 in wheels, 8 in deck, a sheer from 4 in at the bow to 14 in at the rear, the 2 in bow bulkhead, pivoting front axle at 34 1/2 in front and 32 in rear track (D-58) and 20 deg lock', () => {
+  it('the design defaults (D-54, D-56, D-57): 24 in body, 44 in wheelbase, 10 in wheels, 8 in deck, a sheer from 4 in at the bow to 14 in at the rear, the 1-1/2 in bow bulkhead (D-60), pivoting front axle at 34 1/2 in front and 32 in rear track (D-58) and 20 deg lock', () => {
     expect(defaults).toMatchObject({
       bodyWidthIn: 24, wheelbaseIn: 44, wheelDiameterIn: 10, deckHeightIn: 8, sideHeightBowIn: 4, sideHeightRearIn: 14, sheerCurveIn: 2.5, bowTurnInIn: 1.25, bowTurnLenIn: 14,
-      bowBulkheadThickIn: 1.75, bowBulkheadHeightIn: 5.75, crossmemberSpacingIn: 8.5, standDeflectionRatio: 240, showSideSigns: 1, rearOverhangIn: 10, frontOverhangIn: 6.75, handleBowCrownIn: 0.875, seatXIn: 13.5, riderLegReachIn: 35.5, seatDepthIn: 14.5, storageVolumeIn3: 2000,
+      bowBulkheadThickIn: 1.5, bowBulkheadHeightIn: 5.75, crossmemberSpacingIn: 8.5, standDeflectionRatio: 240, showSideSigns: 1, rearOverhangIn: 10, frontOverhangIn: 6.75, handleBowCrownIn: 0.875, seatXIn: 13.5, riderLegReachIn: 35.75, // D-60: 1/4 in more, the thinner bulkhead's face is 1/4 in further forward
+       seatDepthIn: 14.5, storageVolumeIn3: 2000,
       frontTrackIn: 34.5, rearTrackIn: 32, steerLockDeg: 20, steerClearIn: 0.75, kingpinDiaIn: 0.625, kingThrustOdIn: 3, kingThrustThickIn: 0.5625, kingBeamLengthIn: 3,
-      tongueWidthIn: 1.5, tongueDepthIn: 2, tongueTieAheadIn: 5, steerRopesOn: 0, frontBeamThicknessIn: 2.5, rollPadRadiusIn: 11,
+      tongueWidthIn: 1.25, tongueDepthIn: 1.75, tongueTieAheadIn: 5, steerRopesOn: 0, frontBeamThicknessIn: 2.5, rollPadRadiusIn: 11.5, // D-60: tongue 1-1/4 x 1-3/4, pads out 1/2 in with the short hub
+      transomThicknessIn: 0.5, panelPlyIn: 0.157, seatBackPlyIn: 0.236, wheelMass10Lb: 2.8, wheelRatingLb: 300, hubLengthIn: 2.28, wheelBoreIn: 0.75, axleWallIn: 0.12, crossmemberThickIn: 0.625, handleSocketDepthIn: 12,
     });
     expect(PARAM_DEFS.steerLockDeg.ref).toContain('D-56');
   });
@@ -61,7 +67,8 @@ describe('validateParams', () => {
   it('defaults are free of errors and warnings (the one info message is the note that the rails reach the rear beam)', () => {
     const issues = validateParams(defaults);
     expect(issues.filter((i) => i.severity !== 'info')).toEqual([]);
-    expect(issues.filter((i) => i.severity === 'info').map((i) => i.keys[0])).toEqual(['railDepthIn']);
+    // the second info is the 3 in brake flap (D-60) against the 3-1/2 in tire section: it presses the flat of the tread, which is narrower than the tire
+    expect(issues.filter((i) => i.severity === 'info').map((i) => i.keys[0])).toEqual(['railDepthIn', 'brakeFlapWidthIn']);
   });
   it('warns on crossed rider masses (the Simple view sweeps every weight)', () => {
     const issues = validateParams({ ...defaults, riderGoalMassLb: 150, riderMassLb: 200 });
@@ -127,8 +134,8 @@ describe('validateParams', () => {
   it('bow bulkhead and turn-in (D-57): the bulkhead sits one thickness behind the tip; the turn-in is 0 behind its start and bowTurnInIn at the face, a smoothstep between; the bend radius must meet the cold-bend limit; the feet must reach the face', () => {
     const b = bowBulkhead(defaults);
     expect(b.xTip).toBeCloseTo(50.75, 9);
-    expect(b.xFlatEnd).toBeCloseTo(49, 9);
-    expect(b.thick).toBe(1.75);
+    expect(b.xFlatEnd).toBeCloseTo(49.25, 9); // D-60: the bulkhead is 1-1/2 in, so its face is 1/4 in further forward
+    expect(b.thick).toBe(1.5);
     expect(bowTurnInAt(defaults, 30)).toBe(0);
     expect(bowTurnInAt(defaults, b.xFlatEnd)).toBeCloseTo(defaults.bowTurnInIn, 9);
     expect(bowTurnInAt(defaults, b.xFlatEnd - defaults.bowTurnLenIn / 2)).toBeCloseTo(defaults.bowTurnInIn / 2, 9);
@@ -224,13 +231,16 @@ describe('old shared URLs (Phase 3c-3a, D-54; the front end of D-56)', () => {
   const REMOVED = ['noseWidthIn', 'hullCurveStartIn', 'tongueLengthIn', 'frameStyle', 'sideConstruction', 'bumpSpeedMph', 'kingpinLeadIn', 'sideHeightIn',
     'casterWheelDiaIn', 'casterWheelWidthIn', 'casterOverallHeightIn', 'casterSwivelRadiusIn', 'casterRatingLb', 'casterSpacingIn', 'casterBlockLengthIn', 'casterBlockWidthIn', 'casterSweepClearIn',
     'casterPlateLengthIn', 'casterMassLb', 'bowBlockThickIn', 'bowBlockWidthIn', 'bowBlockBoltDiaIn', 'bridleEyeHeightIn', 'eyeBoltWasherDiameterIn', 'eyeBoltEyeOffsetIn',
-    'sideProfileSagIn', 'bowCurlRadiusIn', 'bowCurlAngleDeg', 'bowCurlPlyIn', 'bowCurlPlies', 'footStopThickIn', 'seatBackKnobHeightIn', 'seatInsertAllowLbf', 'seatGripGapIn', 'seatGripClearLengthIn'];
+    'sideProfileSagIn', 'bowCurlRadiusIn', 'bowCurlAngleDeg', 'bowCurlPlyIn', 'bowCurlPlies', 'footStopThickIn', 'seatBackKnobHeightIn', 'seatInsertAllowLbf', 'seatGripGapIn', 'seatGripClearLengthIn',
+    // D-60: the drop-in foot block and its slot cleats
+    'footBlockSlot', 'footBlockThickIn', 'footBlockStepIn', 'footBlockPositions'];
   // Typical values an old shared link would carry for them.
   const OLD: Record<string, number> = {
     noseWidthIn: 14, hullCurveStartIn: 18, tongueLengthIn: 40, frameStyle: 1, sideConstruction: 2, bumpSpeedMph: 5, kingpinLeadIn: 1.5, sideHeightIn: 6,
     casterWheelDiaIn: 10, casterWheelWidthIn: 2.5, casterOverallHeightIn: 12.5, casterSwivelRadiusIn: 6.5, casterRatingLb: 300, casterSpacingIn: 9.5, casterBlockLengthIn: 7, casterBlockWidthIn: 6,
     casterSweepClearIn: 0.5, casterPlateLengthIn: 5, casterMassLb: 8, bowBlockThickIn: 1.5, bowBlockWidthIn: 8, bowBlockBoltDiaIn: 0.375, bridleEyeHeightIn: 2.5, eyeBoltWasherDiameterIn: 1.5, eyeBoltEyeOffsetIn: 1,
     sideProfileSagIn: 1, bowCurlRadiusIn: 7, bowCurlAngleDeg: 80, bowCurlPlyIn: 0.118, bowCurlPlies: 4, footStopThickIn: 0.75, seatBackKnobHeightIn: 1.8, seatInsertAllowLbf: 400, seatGripGapIn: 1.5, seatGripClearLengthIn: 4.5,
+    footBlockSlot: 1, footBlockThickIn: 1.5, footBlockStepIn: 4, footBlockPositions: 2, // D-60
   };
   const hashOf = (o: Record<string, number>) => '#' + Object.entries(o).map(([k, v]) => `${k}=${v}`).join('&');
 

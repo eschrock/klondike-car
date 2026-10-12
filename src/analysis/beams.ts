@@ -20,6 +20,13 @@ export function circleSection(d: number): Section {
   return { A: (Math.PI * d * d) / 4, I, c: d / 2, S: I / (d / 2) };
 }
 
+/** Round tube of outside diameter d and wall w (w >= d/2 is a solid rod). */
+export function tubeSection(d: number, w: number): Section {
+  const di = Math.max(0, d - 2 * w);
+  const I = (Math.PI * (d ** 4 - di ** 4)) / 64;
+  return { A: (Math.PI * (d * d - di * di)) / 4, I, c: d / 2, S: I / (d / 2) };
+}
+
 /** Bending stress σ = M·c / I. */
 export const bendingStress = (M: number, s: Section): number => (M * s.c) / s.I;
 

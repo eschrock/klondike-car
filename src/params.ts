@@ -115,8 +115,8 @@ const defs = {
   },
   riderLegReachIn: {
     label: 'H-point to foot brace (horizontal)', group: 'loads', unit: 'in',
-    default: 35.5, min: 24, max: 44, step: 0.5, status: 'assumed', ref: 'D-3, D-53, D-54, D-57',
-    note: 'Knees bent a little more than a straight reach on a low seat; ≈ 0.48 × stature (68 in rider: 32.6 in; 35.5 in is a long, relaxed reach). D-57 restores it toward 36 in (it was 32 at D-54: the seat back no longer rides in the box, so the seat can move back; the cushion still has to lie in a box that must clear the leaning back). The foot brace is the rear face of the bow bulkhead, so seatXIn + this = the bulkhead face (validateParams); a shorter rider drops in the foot block.',
+    default: 35.75, min: 24, max: 44, step: 0.25, status: 'assumed', ref: 'D-3, D-53, D-54, D-57, D-60',
+    note: 'Knees bent a little more than a straight reach on a low seat; ≈ 0.48 × stature (68 in rider: 32.6 in; 35.5 in is a long, relaxed reach). D-57 restores it toward 36 in (it was 32 at D-54: the seat back no longer rides in the box, so the seat can move back; the cushion still has to lie in a box that must clear the leaning back). The foot brace is the rear face of the bow bulkhead, so seatXIn + this = the bulkhead face (validateParams); a shorter rider moves the seat forward (the foot block was dropped at D-60). D-60: 35.75 in (was 35.5): the bow bulkhead is 1/4 in thinner (1-1/2 in) so its rear face, the foot brace, is 1/4 in further forward with the tip where it was (seatXIn + this = the face).',
   },
   bootAllowanceIn: {
     label: 'Boot allowance per side (foot room)', group: 'loads', unit: 'in',
@@ -267,8 +267,8 @@ const defs = {
   },
   bowBulkheadThickIn: {
     label: 'Bow bulkhead thickness', group: 'body', unit: 'in',
-    default: 1.75, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-57',
-    note: 'The shaped oak bulkhead at the bow replaces the D-54 bow curl and the separate foot-stop bar: it is the rider\'s foot brace and the structural front of the hull. One piece of 8/4 oak planed to 1-3/4 in (two 7/8 in boards glued face to face are the alternative), so there is no cross-grain break at the hand-hold.',
+    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-57, D-60',
+    note: 'The shaped oak bulkhead at the bow replaces the D-54 bow curl and the separate foot-stop bar: it is the rider\'s foot brace and the structural front of the hull. One piece of 8/4 oak planed to its thickness (two thinner boards glued face to face are the alternative), so there is no cross-grain break at the hand-hold. D-60: 1-1/2 in (was 1-3/4 in): the foot-stop row was at 0.10, it goes to about 0.14.',
   },
   bowBulkheadHeightIn: {
     label: 'Bow bulkhead height at the center (above the deck)', group: 'body', unit: 'in',
@@ -310,8 +310,8 @@ const defs = {
   },
   transomThicknessIn: {
     label: 'Transom thickness (front and rear)', group: 'stock', unit: 'in',
-    default: 0.75, min: 0.5, max: 1.25, step: 0.0625, status: 'assumed', ref: 'D-35, D-43',
-    note: '¾" gives the transom a real hand-hold bar, lets a DF 500 Domino keep a 0.15" wall, and takes the handle sockets, and quadrant bracket bolts. The chine and gunwale thickness is "Chine / gunwale stock thickness".',
+    default: 0.5, min: 0.5, max: 1.25, step: 0.0625, status: 'assumed', ref: 'D-35, D-43, D-60',
+    note: '¾" gives the transom a real hand-hold bar, lets a DF 500 Domino keep a 0.15" wall, and takes the handle sockets, and quadrant bracket bolts. The chine and gunwale thickness is "Chine / gunwale stock thickness". D-60: 1/2 in (was 3/4 in; 5/8 in is the "free" step, 1/2 in a trade-off). The Domino wall and the socket bolt edge distances are thinner; the lift row goes to 0.67 (0.54 at 3/4 in).',
   },
   scupperDiaIn: {
     label: 'Deck scupper (drain hole) diameter', group: 'body', unit: 'in',
@@ -458,8 +458,8 @@ const defs = {
   },
   storageLidRimWidthIn: {
     label: 'Storage lid oak rim width', group: 'body', unit: 'in',
-    default: 1, min: 0.5, max: 2, step: 0.25, status: 'assumed', ref: 'D-19',
-    note: 'Oak perimeter strip under the ply lid; the box walls end on it.',
+    default: 0.75, min: 0.5, max: 2, step: 0.25, status: 'assumed', ref: 'D-19, D-60',
+    note: 'Oak perimeter strip under the ply lid; the box walls end on it. D-60: 3/4 in (was 1 in).',
   },
   storageLidRimThickIn: {
     label: 'Storage lid oak rim thickness', group: 'body', unit: 'in',
@@ -505,7 +505,7 @@ const defs = {
   lashDoublerThickIn: {
     label: 'Lash-plate doubler thickness (inboard of the gunwale)', group: 'body', unit: 'in',
     default: 1, min: 0.75, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-47',
-    note: 'The lash plate (1.5 x 0.9") is centered on this oak doubler, glued to the inner face of the gunwale, and its four screws go straight down into it (r3 build S8): the 5/8" gunwale is too thin and has the web groove under it. 1" leaves 0.25" of oak beside each screw row.',
+    note: 'The lash plate (1.5 x 0.9") is centered on this oak doubler, glued to the inner face of the gunwale, and its four screws go straight down into it (r3 build S8): the 5/8" gunwale is too thin and has the web groove under it. 1" leaves 0.25" of oak beside each screw row. D-60 looked at 3/4 in (0.13 lb) and kept 1 in: the 0.9 in lash plate is wider than a 3/4 in doubler and would overhang it into the gunwale, and only 1/8 in of oak would be left beside each screw row.',
   },
   lashLoadLbf: {
     label: 'Lash point design load (strap pull)', group: 'body', unit: 'lbf',
@@ -555,32 +555,13 @@ const defs = {
   },
   seatBackFrameWidthIn: {
     label: 'Seat-back frame member width', group: 'seat', unit: 'in',
-    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-18',
+    default: 1.25, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-18, D-60',
+    note: 'D-60: 1-1/4 in (was 1-1/2 in).',
   },
   footStopHeightIn: {
-    label: 'Foot block height above the deck', group: 'seat', unit: 'in',
+    label: 'Foot-brace band height above the deck', group: 'seat', unit: 'in',
     default: 4, min: 2, max: 8, step: 0.5, status: 'assumed', ref: 'D-3, D-57',
-    note: 'The drop-in foot block (D-57): an oak board across the body that drops into slots in oak cleats on the sides, for riders shorter than the design rider (the bow bulkhead is the brace for the design rider).',
-  },
-  footBlockThickIn: {
-    label: 'Foot block thickness (fore-aft)', group: 'seat', unit: 'in',
-    default: 1.5, min: 0.75, max: 2.5, step: 0.25, status: 'assumed', ref: 'D-57',
-  },
-  footBlockStepIn: {
-    label: 'Foot block slot spacing (shorter-rider steps)', group: 'seat', unit: 'in',
-    default: 4, min: 2, max: 6, step: 0.5, status: 'assumed', ref: 'D-57',
-    note: 'The first slot puts the block face this far behind the bulkhead face, the second twice that.',
-  },
-  footBlockSlot: {
-    label: 'Foot block in slot', group: 'seat', unit: '',
-    default: 0, min: 0, max: 2, step: 1, status: 'assumed', ref: 'D-57',
-    options: [{ value: 0, label: 'Out (the bulkhead is the brace)' }, { value: 1, label: 'Slot 1 (one step short)' }, { value: 2, label: 'Slot 2 (two steps short)' }],
-    note: 'Show the drop-in foot block in a slot, for a shorter rider (set the leg reach to match). The foot-stop row checks whichever surface the heels press.',
-  },
-  footBlockPositions: {
-    label: 'Foot block slot positions', group: 'seat', unit: '',
-    default: 2, min: 1, max: 2, step: 1, status: 'assumed', ref: 'D-57',
-    options: [{ value: 1, label: 'One' }, { value: 2, label: 'Two' }],
+    note: 'The band of the bow bulkhead the heels and toes press (D-57; the foot-stop row takes the plank section of this height). The drop-in foot block and its slot cleats were dropped at D-60; a block can be added after test rides if small riders want one.',
   },
   seatCushionIn: {
     label: 'Seat cushion thickness', group: 'seat', unit: 'in',
@@ -637,7 +618,8 @@ const defs = {
   },
   grabBoardThickIn: {
     label: 'Grab board thickness', group: 'seat', unit: 'in',
-    default: 0.75, min: 0.5, max: 1.25, step: 0.125, status: 'assumed', ref: 'D-57',
+    default: 0.625, min: 0.5, max: 1.25, step: 0.125, status: 'assumed', ref: 'D-57, D-60',
+    note: 'D-60: 5/8 in (was 3/4 in).',
   },
   grabBoardBarIn: {
     label: 'Grab board oak above the hole', group: 'seat', unit: 'in',
@@ -670,11 +652,19 @@ const defs = {
   },
   hubLengthIn: {
     label: 'Wheel hub length', group: 'wheels', unit: 'in',
-    default: 3, min: 1.5, max: 4, step: 0.25, status: 'verify', ref: 'D-11',
+    default: 2.28, min: 1.5, max: 4, step: 0.02, status: 'verify', ref: 'D-11, D-60',
+    note: 'D-60: 2.28 in, a short hub (the hub width listed for the Dynaline 80105; it was a 3 in placeholder). The listing for the 2.8 lb wheel does not give a hub length: CONFIRM IT. A shorter hub moves the wheel in toward the beam end and shortens the stub cantilever (front-stub 0.62 to 0.38, front-beam 0.98 to 0.94 in the study).',
+  },
+  wheelBoreIn: {
+    label: 'Wheel bore (bearing inside diameter)', group: 'wheels', unit: 'in',
+    default: 0.75, min: 0.5, max: 1, step: 0.125, status: 'verify', ref: 'D-60',
+    note: 'D-60: the bore of the wheel you buy must equal the axle diameter (the bearings ride on the axle OD, so a tube of the same OD fits where a rod would). The retailer listings for the light wheels (Tractor Supply 4.10/3.50-4, Wesco 151551) do not state the bore, and many 10 in hand-truck wheels have a 5/8 in bore: CONFIRM 3/4 in before ordering, or choose a wheel with a 3/4 in bore (or a 5/8 in wheel and a 5/8 in axle, which is not the design). validateParams warns when the bore and the axle differ.',
+    options: [{ value: 0.625, label: '5/8"' }, { value: 0.75, label: '3/4"' }, { value: 1, label: '1"' }],
   },
   wheelMass10Lb: {
     label: 'Mass per 10" wheel assembly', group: 'wheels', unit: 'lb',
-    default: 4, min: 2, max: 8, step: 0.25, status: 'verify', ref: 'D-11',
+    default: 2.8, min: 2, max: 8, step: 0.25, status: 'verify', ref: 'D-11, D-60',
+    note: 'D-60 (weight study 3c, trade-off 1): 2.8 lb, the listing weight of the Tractor Supply 4.10/3.50-4 pneumatic wheel on a steel rim (item 3551979); the lighter alternatives are 3.5 lb (Wesco 151551) and 4.0 lb (the old placeholder). A retailer figure, not the maker\'s: weigh the wheel you order.',
   },
   wheelMass13Lb: {
     label: 'Mass per 13" wheel assembly', group: 'wheels', unit: 'lb',
@@ -694,6 +684,22 @@ const defs = {
       { value: 0.875, label: '7/8"' },
       { value: 1, label: '1"' },
     ],
+  },
+  axleWallIn: {
+    label: 'Axle tube wall (0 = solid rod)', group: 'wheels', unit: 'in',
+    default: 0.12, min: 0, max: 0.3, step: 0.005, status: 'assumed', ref: 'D-60',
+    note: 'D-60: the rear through axle and the front stub axles are hollow DOM (drawn-over-mandrel) mild-steel tube, 3/4 in OD x 0.120 in wall (1020 or 1026 DOM; McMaster-Carr and the like list 3/4 in OD x 0.120 in wall in 1020/1026 DOM tube; the same OD as the shafting, so the wheel bearings, clamp plates and beam grooves do not change). It saves 3.55 lb for the four axle pieces. 0 = the old solid 1045 rod. The section, mass and rows follow: bending of the tube, the cotter-pin cross hole, ring bearing at the clamp plates. A 0.095 in wall saves 0.4 lb more but dents under the clamps; 0.188 in saves 1.15 lb less.',
+    options: [{ value: 0, label: 'Solid rod' }, { value: 0.095, label: '0.095"' }, { value: 0.12, label: '0.120"' }, { value: 0.188, label: '0.188"' }],
+  },
+  axleCrossHoleDiaIn: {
+    label: 'Axle end cross hole (cotter pin)', group: 'wheels', unit: 'in',
+    default: 0.15625, min: 0.09375, max: 0.25, step: 0.0001, status: 'assumed', ref: 'D-60',
+    note: 'D-60: a 5/32 in hole drilled across the axle near each end for the 1/8 in cotter pin (or clevis pin) that keeps the collar on. The axle-stress and front-stub rows check the net section, the pin bearing and the tear-out at this hole (the hole is outboard of the wheel: the cross hole of a hollow axle goes through both walls).',
+  },
+  axleCrossHoleFromEndIn: {
+    label: 'Axle cross hole: center from the axle end', group: 'wheels', unit: 'in',
+    default: 0.375, min: 0.25, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-60',
+    note: 'D-60: with 1 in of axle beyond the hub (axleEndExtraIn) this leaves 5/8 in for the collar and washer. The edge distance (this less half the hole) should be about 1.5 hole diameters or more.',
   },
   axleStyle: {
     label: 'Axle style', group: 'wheels', unit: '',
@@ -735,12 +741,13 @@ const defs = {
   },
   clampPlateThickIn: {
     label: 'U-bolt plate thickness', group: 'wheels', unit: 'in',
-    default: 0.375, min: 0.1875, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-10',
+    default: 0.25, min: 0.1875, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-10, D-60',
+    note: 'D-60: 1/4 in (was 3/8 in); no row moves.',
   },
   wheelRatingLb: {
     label: 'Wheel load rating, each (vendor listing)', group: 'wheels', unit: 'lb',
-    default: 300, min: 100, max: 800, step: 25, status: 'verify', ref: 'D-11',
-    note: 'Eng r2 N-7: READ THIS OFF THE VENDOR LISTING for the exact wheel you order (13" hand-truck wheels are typically listed 250-400 lb per wheel; flat-free are often listed higher than pneumatic). 300 is an assumed placeholder. It is a static / rolling rating: the wheel-rating check compares the static goal-rider load to it and the dynamic peak to `wheelRatingPeakMult` times it.',
+    default: 300, min: 100, max: 800, step: 25, status: 'verify', ref: 'D-11, D-60',
+    note: 'D-60: 300 lb per wheel, the Tractor Supply listing rating for the 2.8 lb wheel (the Wesco 151551 is listed at 350 lb). READ THIS OFF THE VENDOR LISTING for the exact wheel you order: it is a placeholder until then. It is a static / rolling rating: the wheel-rating check compares the static goal-rider load to it and the dynamic peak to `wheelRatingPeakMult` times it; the resting-load row compares the heavier wheel\'s static load with it.',
   },
   wheelRatingPeakMult: {
     label: 'Short-duration peak allowed over the wheel rating', group: 'wheels', unit: '×',
@@ -764,7 +771,8 @@ const defs = {
   },
   beamHoldDownThickIn: {
     label: 'Rear beam hold-down angle thickness', group: 'wheels', unit: 'in',
-    default: 0.1875, min: 0.125, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-15',
+    default: 0.125, min: 0.125, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-15, D-60',
+    note: 'D-60: 1/8 in (was 3/16 in) 316 angle.',
   },
   beamHoldDownBoltDiameterIn: {
     label: 'Rear beam hold-down bolt diameter', group: 'wheels', unit: 'in',
@@ -790,6 +798,11 @@ const defs = {
     label: 'Axle steel yield strength', group: 'wheels', unit: 'psi',
     default: 70000, min: 30000, max: 120000, step: 1000, status: 'assumed', ref: 'D-4',
     note: '¾" 1045 turned-ground-polished shafting ≈ 70+ ksi (D-27; confirm vendor cert). 1018 cold-drawn would be ≈ 54 ksi.',
+  },
+  axleTubeYieldPsi: {
+    label: 'Axle tube yield strength (DOM)', group: 'wheels', unit: 'psi',
+    default: 70000, min: 30000, max: 120000, step: 1000, status: 'verify', ref: 'D-60',
+    note: 'D-60: 1026 DOM tube is listed at about 70 ksi yield / 80+ ksi tensile (1020 DOM about 60 to 70 ksi yield): CONFIRM on the vendor listing or the mill cert, and lower it if the stock you can buy is 1020 DOM at 60 ksi. Used for the bending, cross-hole and ring-bearing rows when the axle is a tube (axleWallIn > 0); the solid rod uses the 1045 value above.',
   },
 
   // ── Steering & pull ──────────────────────────────────────────────────────
@@ -826,8 +839,8 @@ const defs = {
   },
   rollPadRadiusIn: {
     label: 'Roll pads: distance from the kingpin along the axle beam', group: 'steering', unit: 'in',
-    default: 11, min: 6, max: 14, step: 0.25, status: 'assumed', ref: 'D-58',
-    note: 'D-58: two UHMW slide pads on top of the axle beam, one each side of the kingpin, that slide under the frame rails with a small running gap and catch the roll of a one-wheel bump, so the kingpin only locates. The rails are the nearest continuous frame members at this distance (they pass over the whole swing); the pad covers the rail underside at every steering angle (checked in king-bearing).',
+    default: 11.5, min: 6, max: 14, step: 0.25, status: 'assumed', ref: 'D-58, D-60',
+    note: 'D-58: two UHMW slide pads on top of the axle beam, one each side of the kingpin, that slide under the frame rails with a small running gap and catch the roll of a one-wheel bump, so the kingpin only locates. The rails are the nearest continuous frame members at this distance (they pass over the whole swing); the pad covers the rail underside at every steering angle (checked in king-bearing). D-60: 11-1/2 in (was 11 in): the shorter 2.28 in wheel hub moves the stub clamp stations outboard, so the pad moves with the inner station\'s edge (validateParams checks it); the king-bearing row is unchanged.',
   },
   rollPadLenIn: {
     label: 'Roll pad length (along the axle beam)', group: 'steering', unit: 'in',
@@ -861,8 +874,8 @@ const defs = {
   },
   tongueWidthIn: {
     label: 'Bridle tongue thickness (white oak, set on edge)', group: 'steering', unit: 'in',
-    default: 1.5, min: 1, max: 2.5, step: 0.25, status: 'assumed', ref: 'D-58',
-    note: 'D-58: the steel tongue plate (it bent about its thin axis at 3.7x) is replaced by a white-oak tongue set on edge: 1.5 in across (y), tongueDepthIn deep (z), grain along its length. A bandsawn T: the wide head butts the front face of the axle beam and is bolted through it, the stem runs forward under the end joist and the bow to the shackle hole.',
+    default: 1.25, min: 1, max: 2.5, step: 0.25, status: 'assumed', ref: 'D-58, D-60',
+    note: 'D-58: the steel tongue plate (it bent about its thin axis at 3.7x) is replaced by a white-oak tongue set on edge: 1.5 in across (y), tongueDepthIn deep (z), grain along its length. A bandsawn T: the wide head butts the front face of the axle beam and is bolted through it, the stem runs forward under the end joist and the bow to the shackle hole. D-60: 1-1/4 in (was 1-1/2 in).',
   },
   tongueTopDropIn: {
     label: 'Tongue top below the top of the axle beam', group: 'steering', unit: 'in',
@@ -871,8 +884,8 @@ const defs = {
   },
   tongueDepthIn: {
     label: 'Bridle tongue depth (vertical)', group: 'steering', unit: 'in',
-    default: 2, min: 1.5, max: 2.25, step: 0.125, status: 'assumed', ref: 'D-58',
-    note: 'The top is tongueTopDropIn below the top of the axle beam (the disc rides on the beam top), so 2 in leaves the bottom 1/16 in above the beam bottom (3.19 in off the ground). More depth would hang toward the 3 in ground clearance.',
+    default: 1.75, min: 1.5, max: 2.25, step: 0.125, status: 'assumed', ref: 'D-58, D-60',
+    note: 'The top is tongueTopDropIn below the top of the axle beam (the disc rides on the beam top), so 2 in leaves the bottom 1/16 in above the beam bottom (3.19 in off the ground). More depth would hang toward the 3 in ground clearance. D-60: 1-3/4 in (was 2 in); the bottom then clears the beam bottom by 5/16 in.',
   },
   tongueHeadWidthIn: {
     label: 'Tongue head width (across the axle beam)', group: 'steering', unit: 'in',
@@ -910,23 +923,23 @@ const defs = {
   },
   steerChainDiaIn: {
     label: 'Steering stop chain: link stock diameter', group: 'steering', unit: 'in',
-    default: 0.25, min: 0.1875, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-58',
-    note: 'D-58: the steering lock is set by two check chains (the old oak stop blocks hung 1 in below a 3/4 in joist and could not carry the 1.4 kip hard-hit torque: the pry crushed the joist underside 4 to 10x). Grade 43 or stainless 1/4 in chain, from an eye bolt in the trailing face of one end of the axle beam back, under the king beam, to an eye bolt in the crossmember behind it; the right chain goes taut at +lock, the left at -lock, and the other hangs slack.',
+    default: 0.1875, min: 0.1875, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-58, D-60',
+    note: 'D-58: the steering lock is set by two check chains (the old oak stop blocks hung 1 in below a 3/4 in joist and could not carry the 1.4 kip hard-hit torque: the pry crushed the joist underside 4 to 10x). Grade 43 or stainless 1/4 in chain, from an eye bolt in the trailing face of one end of the axle beam back, under the king beam, to an eye bolt in the crossmember behind it; the right chain goes taut at +lock, the left at -lock, and the other hangs slack. D-60: 3/16 in (was 1/4 in), about 1,000 lb working load.',
   },
   steerChainWllLb: {
     label: 'Steering stop chain: working load limit', group: 'factors', unit: 'lb',
-    default: 2600, min: 1000, max: 5000, step: 100, status: 'verify', ref: 'D-58',
-    note: '1/4 in grade 43 high-test chain is rated about 2,600 lb (grade 30 proof coil about 1,300 lb); confirm on the vendor listing. Ultimate is taken as 4 x the rating.',
+    default: 1000, min: 1000, max: 5000, step: 100, status: 'verify', ref: 'D-58, D-60',
+    note: '1/4 in grade 43 high-test chain is rated about 2,600 lb (grade 30 proof coil about 1,300 lb); confirm on the vendor listing. Ultimate is taken as 4 x the rating. D-60: 3/16 in chain, about 1,000 lb working load (grade 30 proof coil is less; confirm the grade and WLL on the vendor listing).',
   },
   steerEyeBoltDiaIn: {
     label: 'Steering stop eye bolts: shank diameter (forged shoulder eye bolts)', group: 'steering', unit: 'in',
-    default: 0.5, min: 0.375, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-58',
-    note: 'Four forged shoulder-type eye bolts (galvanized or stainless): two through the ends of the axle beam, two through the chain joist behind the king beam. Ultimate is taken as 5 x the rating, derated for the angle the chain pulls off the shank axis.',
+    default: 0.375, min: 0.375, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-58, D-60',
+    note: 'Four forged shoulder-type eye bolts (galvanized or stainless): two through the ends of the axle beam, two through the chain joist behind the king beam. Ultimate is taken as 5 x the rating, derated for the angle the chain pulls off the shank axis. D-60 (weight package): 3/8 in (was 1/2 in); the rating below is a supplier number to confirm.',
   },
   steerEyeWllLb: {
     label: 'Steering stop eye bolts: working load limit in line', group: 'factors', unit: 'lb',
-    default: 1500, min: 500, max: 6000, step: 100, status: 'verify', ref: 'D-58',
-    note: 'A 1/2 in forged shoulder eye bolt is rated about 1,500 lb pulled in line with the shank (5/8 in: 2,600) (confirm on the vendor listing); pulled at an angle in the plane of the eye its rating falls (the analysis derates it linearly to 60 percent at 45 degrees).',
+    default: 900, min: 500, max: 6000, step: 100, status: 'verify', ref: 'D-58, D-60',
+    note: 'A 1/2 in forged shoulder eye bolt is rated about 1,500 lb pulled in line with the shank (5/8 in: 2,600) (confirm on the vendor listing); pulled at an angle in the plane of the eye its rating falls (the analysis derates it linearly to 60 percent at 45 degrees). D-60: 3/8 in forged shoulder eye bolt, about 900 lb in line (listing numbers vary: confirm on the vendor listing before ordering; the steer-stops row uses this).',
   },
   steerChainBeamYIn: {
     label: 'Steering stop chain: eye in the axle beam, distance from the kingpin', group: 'steering', unit: 'in',
@@ -940,8 +953,8 @@ const defs = {
   },
   chainJoistThickIn: {
     label: 'Chain joist thickness (the crossmember behind the king beam)', group: 'steering', unit: 'in',
-    default: 1.5, min: 0.75, max: 2, step: 0.25, status: 'assumed', ref: 'D-58',
-    note: 'D-58: the joist just behind the king beam anchors the two steering chains; at 1 1/2 in (the other joists are 3/4 in) the chain pull bends it in plan with 5 times less stress. The eye bolts go through it.',
+    default: 1.25, min: 0.75, max: 2, step: 0.25, status: 'assumed', ref: 'D-58, D-60',
+    note: 'D-58: the joist just behind the king beam anchors the two steering chains; at 1 1/2 in (the other joists are 3/4 in) the chain pull bends it in plan with 5 times less stress. The eye bolts go through it. D-60: 1-1/4 in (was 1-1/2 in).',
   },
   frontStubLenIn: {
     label: 'Front stub axle clamped length on the beam', group: 'steering', unit: 'in',
@@ -1046,23 +1059,23 @@ const defs = {
   },
   handlePostThickIn: {
     label: 'Push-handle upright thickness (fore-aft)', group: 'brake', unit: 'in',
-    default: 0.9375, min: 0.75, max: 1.5, step: 0.0625, status: 'assumed', ref: 'D-39',
-    note: 'Build r2 S7: planed 15/16" so it is a slip fit (with `handleSocketSlipIn` per side) in the 1-1/4" × 1-3/4" × 1/8" aluminum tube (inside 1.0" × 1.5"). Mill from 1" stock; leave room for the oak to swell.',
+    default: 0.6875, min: 0.625, max: 1.5, step: 0.0625, status: 'assumed', ref: 'D-39, D-60',
+    note: 'Build r2 S7: a slip fit (with `handleSocketSlipIn` per side) in the aluminum tube. D-60: 11/16" (was 15/16"), so the socket is the standard 1" × 1-1/2" × 1/8" 6061 rectangular tube (inside 0.75" × 1.25") instead of the 1-1/4" × 1-3/4" one (post 11/16" + 2 × 1/32" slip = 0.75"). Mill from 3/4" stock; leave room for the oak to swell. The study\'s 3/4" × 1-1/4" post would need a 1-1/16" × 1-9/16" tube that is not a catalog size.',
   },
   handlePostWidthIn: {
     label: 'Push-handle upright width (across)', group: 'brake', unit: 'in',
-    default: 1.4375, min: 1, max: 2.5, step: 0.0625, status: 'assumed', ref: 'D-39',
-    note: 'Planed 1-7/16" from 1-1/2" stock (see the thickness).',
+    default: 1.1875, min: 1, max: 2.5, step: 0.0625, status: 'assumed', ref: 'D-39, D-60',
+    note: 'D-60: 1-3/16" (was 1-7/16"); planed from 1-1/4" stock (see the thickness).',
   },
   handleSocketSlipIn: {
     label: 'Push-handle post slip clearance per side in the socket', group: 'brake', unit: 'in',
     default: 0.03125, min: 0.015, max: 0.0625, step: 0.0078, status: 'assumed', ref: 'D-39',
-    note: 'Socket outside = post + 2 × (wall + slip): 15/16" + 2 × (1/8" + 1/32") = 1-1/4" and 1-7/16" → 1-3/4", the standard tube.',
+    note: 'Socket outside = post + 2 × (wall + slip): D-60: 11/16" + 2 × (1/8" + 1/32") = 1" and 1-3/16" + 0.3125" = 1-1/2", the standard tube (it was 15/16" and 1-7/16" → 1-1/4" × 1-3/4").',
   },
   handleSocketDepthIn: {
     label: 'Push-handle socket depth (tube length)', group: 'brake', unit: 'in',
-    default: 16, min: 3, max: 18, step: 0.5, status: 'assumed', ref: 'D-39, D-57',
-    note: 'D-57: deeper (was 6 in) so the posts can drop to the parked pin position with the bow just above the rear side top (handleParkClearIn); about 5.7 in of post stays in the socket when riding. Rectangular-tube socket bolted to the outside of the rear transom, its top flush with the transom top.',
+    default: 12, min: 3, max: 18, step: 0.5, status: 'assumed', ref: 'D-39, D-57, D-60',
+    note: 'D-57: deeper (was 6 in) so the posts can drop to the parked pin position with the bow just above the rear side top (handleParkClearIn); at 16 in about 5.7 in of post stayed in the socket when riding. Rectangular-tube socket bolted to the outside of the rear transom, its top flush with the transom top. D-60: 12 in (was 16 in). The parked position still sinks the post 9.8 in, so only about 1.7 in of post stays in the socket when riding (it was 5.7 in): the handle-sockets row passes the 50 lbf hold-back at 0.78 on that insertion, but the handle will have more play; check it on the first build.',
   },
   handleSocketWallIn: {
     label: 'Push-handle socket wall thickness', group: 'brake', unit: 'in',
@@ -1155,14 +1168,14 @@ const defs = {
 
   brakeFlapThickIn: {
     label: 'Brake flap thickness', group: 'brake', unit: 'in',
-    default: 1, min: 0.75, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-57',
-    note: 'White oak planed from 5/4 stock. Grain along the flap. The foot end is grooved or taped for grip.',
+    default: 0.875, min: 0.75, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-57, D-60',
+    note: 'White oak planed from 5/4 stock. Grain along the flap. The foot end is grooved or taped for grip. D-60: 7/8 in (was 1 in), from 4/4 stock planed to 7/8 in.',
   },
 
   brakeFlapWidthIn: {
     label: 'Brake flap width (across, over the tire)', group: 'brake', unit: 'in',
-    default: 3.5, min: 2.5, max: 4.5, step: 0.25, status: 'assumed', ref: 'D-57',
-    note: 'The flap is centred on the rear tire (it follows rearTrackIn) and is as wide as the tread.',
+    default: 3, min: 2.5, max: 4.5, step: 0.25, status: 'assumed', ref: 'D-57, D-60',
+    note: 'The flap is centred on the rear tire (it follows rearTrackIn) and is as wide as the tread. D-60: 3 in (was 3-1/2 in).',
   },
 
   brakeFlapSlopeDeg: {
@@ -1221,8 +1234,8 @@ const defs = {
 
   brakeKneeLegIn: {
     label: 'Knee leg thickness (against the hull)', group: 'brake', unit: 'in',
-    default: 2, min: 1.25, max: 3, step: 0.25, status: 'assumed', ref: 'D-57',
-    note: 'The foot of the knee that sits on the rail and chine outer face; the mounting bolts pass through it.',
+    default: 1.75, min: 1.25, max: 3, step: 0.25, status: 'assumed', ref: 'D-57, D-60',
+    note: 'The foot of the knee that sits on the rail and chine outer face; the mounting bolts pass through it. D-60: 1-3/4 in (was 2 in).',
   },
 
   brakeKneeArmIn: {
@@ -1233,8 +1246,8 @@ const defs = {
 
   brakeBackerThickIn: {
     label: 'Backer (doubler) thickness inside the rail', group: 'brake', unit: 'in',
-    default: 1.25, min: 0.75, max: 2, step: 0.25, status: 'assumed', ref: 'D-57',
-    note: 'An oak block epoxied to the inside face of the rail (and the deck underside); the mounting bolts end in it. Joists that meet it are cut back.',
+    default: 0.75, min: 0.75, max: 2, step: 0.25, status: 'assumed', ref: 'D-57, D-60',
+    note: 'An oak block epoxied to the inside face of the rail (and the deck underside); the mounting bolts end in it. Joists that meet it are cut back. D-60: 3/4 in (was 1-1/4 in).',
   },
 
   brakeMountBoltDiaIn: {
@@ -1399,7 +1412,8 @@ const defs = {
   },
   crossmemberThickIn: {
     label: 'Crossmember / deck joist thickness', group: 'stock', unit: 'in',
-    default: 0.75, min: 0.5, max: 1.5, step: 0.0625, status: 'explore',
+    default: 0.625, min: 0.5, max: 1.5, step: 0.0625, status: 'explore', ref: 'D-60',
+    note: 'D-60: 5/8 in (was 3/4 in); the joists row goes from 0.54 to about 0.65 and the resting capacity from 359 to about 350 lb.',
   },
   sideThicknessIn: {
     label: 'Chine / gunwale stock thickness', group: 'stock', unit: 'in',
@@ -1408,7 +1422,8 @@ const defs = {
   },
   axleBeamThicknessIn: {
     label: 'Rear axle beam width (fore-aft)', group: 'stock', unit: 'in',
-    default: 2.5, min: 1.5, max: 4, step: 0.125, status: 'explore',
+    default: 2.25, min: 1.5, max: 4, step: 0.125, status: 'explore', ref: 'D-60',
+    note: 'D-60: 2-1/4 in (was 2-1/2 in); beam-rear stays about 0.19.',
   },
   frontBeamThicknessIn: {
     label: 'Front axle beam width (fore-aft)', group: 'stock', unit: 'in',
@@ -1431,8 +1446,20 @@ const defs = {
     ],
   },
   panelPlyIn: {
-    label: 'Bulkhead / box / side-panel plywood', group: 'stock', unit: 'in',
-    default: 0.236, min: 0.157, max: 0.472, step: 0.001, status: 'explore',
+    label: 'Side / box / lid plywood', group: 'stock', unit: 'in',
+    default: 0.157, min: 0.157, max: 0.472, step: 0.001, status: 'explore', ref: 'D-60',
+    options: [
+      { value: 0.157, label: '4 mm' },
+      { value: 0.236, label: '6 mm' },
+      { value: 0.354, label: '9 mm' },
+      { value: 0.472, label: '12 mm' },
+    ],
+    note: 'D-60: 4 mm okoume (was 6 mm) for the side webs, the storage box and its lid and the sign blanks; the groove, dado and edge-banding widths follow it. The seat-back panel has its own size (seatBackPlyIn, still 6 mm). 4 mm skin and lid dent more easily (the cargo case of the lid-load row goes from 0.42 to 0.75); keep the lid engraved DO NOT STEP (D-58).',
+  },
+  seatBackPlyIn: {
+    label: 'Seat-back panel plywood', group: 'stock', unit: 'in',
+    default: 0.236, min: 0.157, max: 0.472, step: 0.001, status: 'explore', ref: 'D-60',
+    note: 'D-60: the seat-back panel stays 6 mm when the sides, box and lid go to 4 mm (the seat-back row was 0.53 at 6 mm and 1.09 at 4 mm).',
     options: [
       { value: 0.157, label: '4 mm' },
       { value: 0.236, label: '6 mm' },
@@ -1738,6 +1765,11 @@ const defs = {
     default: 85000, min: 45000, max: 140000, step: 1000, status: 'assumed', ref: 'D-54',
     note: 'Companion of axleYieldPsi (1045 cold-finished ~ 91 ksi nominal; 85 ksi assumed). Hard-hit rear axle row.',
   },
+  axleTubeUltimatePsi: {
+    label: 'Axle tube ultimate strength (DOM)', group: 'factors', unit: 'psi',
+    default: 80000, min: 45000, max: 140000, step: 1000, status: 'verify', ref: 'D-60',
+    note: 'D-60: companion of axleTubeYieldPsi (1026 DOM about 80 ksi tensile minimum): the hard-hit rows use it with the fail-safe factor. Confirm on the vendor listing.',
+  },
   ss316BoltYieldPsi: {
     label: '316 stainless bolt yield (cold-worked F593)', group: 'factors', unit: 'psi',
     default: 65000, min: 30000, max: 100000, step: 1000, status: 'assumed', ref: 'D-43, D-54',
@@ -1935,7 +1967,7 @@ export function derived(p: Params) {
     truckUsableLengthIn: p.truckBedLengthIn + p.truckTailgateGapIn + p.truckTailgateLengthIn,
     oakDesignMorPsi: (p.oakMorPsi * p.wetServiceFactorStrength) / p.woodSafetyFactor,
     oakDesignMoePsi: p.oakMoePsi * p.wetServiceFactorStiffness,
-    axleAllowablePsi: p.axleYieldPsi / p.steelSafetyFactor,
+    axleAllowablePsi: (p.axleWallIn > 0 ? p.axleTubeYieldPsi : p.axleYieldPsi) / p.steelSafetyFactor,
     /** Vertical load for structural checks: goal rider + cargo (sled self-weight added by the analysis). */
     designPayloadLb: p.riderGoalMassLb + p.cargoMassLb,
   };
@@ -1990,9 +2022,16 @@ export function validateParams(input: Params): ParamIssue[] {
       err(['seatXIn', 'rearOverhangIn', 'storageLocation'],
         `Only ${room.toFixed(1)}" between the rear transom and the seat back; a rear storage box needs ≥ ${MIN_REAR_STORAGE_LENGTH_IN}". Move the seat forward or choose another storage location.`);
   }
-  // The foot brace is the rear face of the bow bulkhead (D-57); a shorter rider drops the foot block into one of its slots.
-  if (p.seatXIn + p.riderLegReachIn < curl.xFlatEnd - p.footBlockStepIn * (p.footBlockPositions + 1))
-    warn(['seatXIn', 'riderLegReachIn', 'footBlockStepIn', 'footBlockPositions'], `The rider's heel would be ${(curl.xFlatEnd - p.seatXIn - p.riderLegReachIn).toFixed(1)}" short of the bulkhead; the foot block's slots only reach ${(p.footBlockStepIn * p.footBlockPositions).toFixed(1)}" back.`);
+  // The foot brace is the rear face of the bow bulkhead (D-57); D-60 dropped the foot block, so the leg reach has to land on it.
+  if (p.seatXIn + p.riderLegReachIn < curl.xFlatEnd - 1)
+    warn(['seatXIn', 'riderLegReachIn'], `The rider's heel would be ${(curl.xFlatEnd - p.seatXIn - p.riderLegReachIn).toFixed(1)}" short of the bulkhead (the foot block was dropped at D-60): move the seat forward or lengthen the leg reach.`);
+  // D-60: the axle is a tube; the wheel bore has to match its OD, and the cotter-pin hole needs an end distance.
+  if (p.axleWallIn > p.axleDiameterIn / 2 - 0.05)
+    err(['axleWallIn', 'axleDiameterIn'], `The axle tube wall (${p.axleWallIn}") leaves no bore in a ${p.axleDiameterIn}" axle. Use a thinner wall, or 0 for a solid rod.`);
+  if (Math.abs(p.wheelBoreIn - p.axleDiameterIn) > 0.01)
+    warn(['wheelBoreIn', 'axleDiameterIn'], `The wheel bore (${p.wheelBoreIn}") is not the axle diameter (${p.axleDiameterIn}"): the bearings ride on the axle OD, so they must match. Choose another wheel or change the axle.`);
+  if (p.axleCrossHoleFromEndIn - p.axleCrossHoleDiaIn / 2 < 1.5 * p.axleCrossHoleDiaIn - 1e-6 || p.axleEndExtraIn - p.axleCrossHoleFromEndIn < 0.5)
+    warn(['axleCrossHoleFromEndIn', 'axleCrossHoleDiaIn', 'axleEndExtraIn'], 'The cotter-pin cross hole is too close to the axle end (want an end distance of 1.5 hole diameters or more) or leaves less than 1/2" for the collar and washer.');
   // The rider's feet go through the body to the foot stop.
   const footSpan = (2 * RIDER_LEG_Y_FRAC + RIDER_FOOT_Y_FRAC) * p.riderStatureIn;
   const footNeed = footSpan + 2 * p.bootAllowanceIn + 0.25;

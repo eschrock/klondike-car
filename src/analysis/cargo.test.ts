@@ -143,7 +143,7 @@ describe('tipping with the high cargo CG', () => {
     };
     const [aft, fore] = ctx.loads.cargoCases;
     expect(Math.abs(degAt(aft) - degAt(fore))).toBeLessThan(0.5); // D-58: the narrower REAR track makes the aft pile as bad as the fore one (41.7 vs 41.9)
-    expect(Math.abs(degAt(fore) - 43.0)).toBeLessThan(0.5); // 44.7 at the old 35.5 in tracks (200 lb; 43.2 at 250 lb); 43.0 at 34 1/2 / 32 in (D-58): 3 degrees over the 40 degree limit
+    expect(Math.abs(degAt(fore) - 42.1)).toBeLessThan(0.5); // 44.7 at the old 35.5 in tracks (200 lb; 43.2 at 250 lb); 43.0 at 34 1/2 / 32 in (D-58); 42.1 with the D-60 weight package (the sled is 24 lb lighter, so the payload's high, off-center CG counts for more in the total): 2 degrees over the 40 degree limit, still marginal
     expect(k.value).toBeCloseTo(Math.min(degAt(aft), degAt(fore)), 6);
     expect(k.value).toBeLessThan(byId(cs, 'tip-straight').cases!.operating!.value); // worse than the rider cases
     expect(k.value).toBeGreaterThan(defaults.tipStraightMinDeg);

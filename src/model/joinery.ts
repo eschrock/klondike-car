@@ -303,7 +303,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     const pts = ([[-dx, -dz], [dx, -dz], [-dx, dz], [dx, dz]] as const).map(([x, z]) => toModel(sign.transform, [x, 0, z]));
     add({
       a: sign.id, b: `side-${tag}-web`, typeA: 'knob', typeB: 'threaded-insert',
-      size: '#10-32 × 1 thumb-knob screw through a 3/16 clearance hole', sizeB: '#10-32 short-barrel stainless tee-nut, epoxied in the 6 mm web, prongs on the inside face',
+      size: '#10-32 × 1 thumb-knob screw through a 3/16 clearance hole', sizeB: `#10-32 short-barrel stainless tee-nut, epoxied in the ${Math.round(p.panelPlyIn * 25.4)} mm web, prongs on the inside face`,
       pts, noteA: 'Sign comes off for transport (D-9). Provisional placement (D-54).',
     });
   }

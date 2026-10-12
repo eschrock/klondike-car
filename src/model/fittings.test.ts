@@ -150,7 +150,7 @@ describe('storage box', () => {
     const lid = worldAABB(byId.get('storage-lid')!);
     expect(2 * L.storage.hw).toBeCloseTo(2 * (11.375 - defaults.storageSideClearIn), 9); // narrower by the 1.5 in flag-tube gutter each side (D-57)
     expect(2 * L.storage.hw).toBeLessThan(22.75);
-    expect(L.storage.x0).toBeCloseTo(-9.25 + defaults.blockingThickIn, 9); // behind the transom backers
+    expect(L.storage.x0).toBeCloseTo(-9.5 + defaults.blockingThickIn, 9); // the transom's front face: -10 + 1/2 in (D-60) // behind the transom backers
     for (const x of [L.storage.x0, (L.storage.x0 + L.storage.x1) / 2, L.storage.x1]) expect(lid.max[2], `lid vs gunwale at x ${x.toFixed(1)}`).toBeLessThan(gunwaleTopZ(defaults, L, x) - defaults.railBandIn);
     // Volume: the interior (about 2,000 in³ target) stays within 5%, and the hull dimension that limits the height is the rear side (14 in), not the bow side (4 in).
     expect(defaults.storageVolumeIn3).toBe(2000);
@@ -270,18 +270,12 @@ describe('round 2 joinery (build M1): every Domino fits its member', () => {
   });
 });
 
-describe('round 2 fittings: foot-stop cleats, latch blocks, stay, stainless', () => {
-  it('foot brace (D-57): the bulkhead face is the brace; two slot cleats per side, each a 3/4 in oak block glued to the side with screws down through the deck', () => {
+describe('round 2 fittings: latch blocks, stay, stainless', () => {
+  it('foot brace (D-57, D-60): the bulkhead face is the only brace; the drop-in block and its slot cleats are gone', () => {
     const L = computeLayout(defaults);
     expect(byId.has('foot-stop')).toBe(false);
     expect(defaults.seatXIn + defaults.riderLegReachIn).toBeCloseTo(L.bulkhead.x0, 9);
-    for (const tag of ['L', 'R']) for (const n of [1, 2]) {
-      const c = byId.get(`foot-slot-${tag}${n}`)!;
-      expect(c.joints!.some((j) => j.type === 'glue')).toBe(true);
-      expect(c.joints!.some((j) => j.type === 'screw' && j.to === 'deck')).toBe(true);
-      expect(c.notes).toMatch(/Slot [12]/);
-      expect(worldAABB(c).max[1] - worldAABB(c).min[1]).toBeCloseTo(0.75, 6);
-    }
+    expect(parts.some((x) => /^foot-(slot|block)/.test(x.id))).toBe(false);
   });
   it('hinge screws are #8 × 1" into a 1" backer; each latch has an oak block; a friction stay holds the lid', () => {
     for (const tag of ['L', 'R']) {

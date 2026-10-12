@@ -10,8 +10,9 @@ import { effectiveStripWidth, maxDeckSpan } from './structure';
 import { judge } from './types';
 import { makeContext } from './context';
 import { resolveParams } from '../params';
+import { PRE_D60 } from '../test-fixtures';
 
-const defaults = { ...defaultParams(), frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5 }; // the 3c-3 hand-calc fixture: the 35.5 in tracks (D-58 narrowed them to 34 1/2 / 32 in; the new defaults are in track-d58.test.ts)
+const defaults = { ...defaultParams(), ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5 }; // the 3c-3 hand-calc fixture: the 35.5 in tracks (D-58 narrowed them to 34 1/2 / 32 in; the new defaults are in track-d58.test.ts)
 
 const byId = (cs: AnalysisCheck[], id: string) => cs.find((c) => c.id === id)!;
 const run = (p: Params) => runChecks(p, { includeTruck: false });
@@ -252,7 +253,7 @@ describe('every variant the validator accepts yields finite checks', () => {
     'tongueDepthIn', 'rearOverhangIn', 'frontOverhangIn', 'sideHeightBowIn', 'sideHeightRearIn', 'tireWidthIn', 'axleBeamThicknessIn',
     'axleBeamDepthIn', 'railDepthIn', 'railThicknessIn', 'crossmemberDepthIn', 'crossmemberSpacingIn', 'deckPlyIn', 'seatDepthIn',
     'pullerHandHeightIn', 'bumpSpeedNormalMph', 'bumpSpeedHardMph', 'riderMassLb', 'riderGoalMassLb', 'cargoMassLb', 'axleDiameterIn', 'designSlopeDeg',
-    'tireGroundMu', 'dynamicFactor', 'sideThicknessIn', 'sheerCurveIn', 'bowTurnInIn', 'bowBulkheadThickIn', 'bowBulkheadHeightIn', 'handleBowCrownIn', 'footBlockSlot', 'seatDepthIn',
+    'tireGroundMu', 'dynamicFactor', 'sideThicknessIn', 'sheerCurveIn', 'bowTurnInIn', 'bowBulkheadThickIn', 'bowBulkheadHeightIn', 'handleBowCrownIn', 'footStopHeightIn', 'seatDepthIn',
   ];
   const OPTIONS: ParamKey[] = ['storageLocation', 'axleBeamPosition', 'axleStyle', 'plySpecies'];
   const samples = (() => {

@@ -30,6 +30,7 @@ const ALLOW: Allow[] = [
   // ---- front pivot and the bridle (D-56). Decided per pair in pivot.test.ts as well; every entry is a contact, not a clash.
   { a: /^axle-F[LR]$/, b: /^(beam-F|wheel-F[LR])$/, why: 'the stub axle lies in a groove in the top of the beam end and passes through the hub bore (D-56; as at the rear)' },
   { a: /^beam-F$/, b: /^wheel-F[LR]$/, why: 'tire OBB is a conservative box; the beam ends sit inside the rim, 1/8" short of the hub face' },
+  { a: /^wheel-F[LR]$/, b: /^clamp-F[LR]\d$/, why: 'D-60: the 3-1/2 in tire OBB is 1.2 in wider than the 2.28 in hub, so the outer clamp plate (on the beam top beside the hub, a few inches above the axle line where the real wheel is the hub and the rim well) reaches the OBB\'s inner band by 0.24 in; the OBB over-covers the round tire (the same conservatism as beam x wheel)' },
   { a: /^kingpin$/, b: /^(beam-F|bridle-tongue|king-thrust|king-beam)$/, why: 'the kingpin bolt passes through bored holes in the axle beam, the tongue plate, the thrust washer bore and the king beam (the parts are boxes without the hole)' },
   { a: /^(beam-F|king-beam|joist-\d+)$/, b: /^steer-(eye|anchor)-[LR]$/, why: 'the forged eye bolt passes through a drilled hole in the member (D-58)' },
   { a: /^steer-(eye|anchor)-[LR]$/, b: /^steer-chain-[LR]$/, why: 'the chain hangs on the eye by a quick link; the chain is drawn straight between the eye rings (D-58)' },
@@ -81,7 +82,6 @@ const KNOWN_OFF_DEFAULT: RegExp[] = [
   /^beam-R x brake-chock-[LR]:/, // wheel8 (3c-4b, reported): the chock toe meets the beam end beside a small rear wheel
   /^transom-backer-[LR] x flag-tube:/, // a narrow body or an under-seat box (3c-4b, reported): the flag tube meets the transom backer
   /^brake-knee-[LR] x reflector-[LR]1:/, // sideRear8 (3c-4b, reported)
-  /^foot-slot-[LR]\d x foot-block:/, // footBlock1/2 (3c-4b, reported): the drop-in block meets its own slot cleats in the variants that move it
   /^rail-[LR] x king-beam:/, // wheelbase 52 and rear overhang 14: the king beam end meets the rail that curves in with the bow turn-in by 0.05 in
   /^(clamp-F[LR]\d|king-beam) x roll-pad-[LR]:/, // a short stub (clamp plates inboard of the pad) or a thick disc: the roll pad meets a plate or the king beam; validateParams warns about the pad position
   /^clamp-F[LR]\d x king-thrust:/, // a long stub: the inner clamp plate reaches under the disc
@@ -216,9 +216,9 @@ describe('overlaps', () => {
  * with the foot brake in (135 at Phase 3c-3a with the casters, 145 at Phase 3c-1, 174 at the Phase 3b flip).
  * The band is +/-10% overall, +/-25% per group (the front-end group is new and its parts move with the params). The brake group is wide and so is the hardware remainder,
  * which counts the joints of the parts actually present. */
-const EXPECTED_EMPTY_LB = 146; // D-58 (3c-4a): +the chain stops, roll pads, oak tongue and stub rods in the front end (16.2 to 21.2 lb), -the 3.5 in track change; // 3c-4b (D-57): 134 at 3c-3 + the bulkhead, signs, grab boards, hinges, longer sockets, flag tube and the step brake
+const EXPECTED_EMPTY_LB = 120.6; // D-60 (the weight package, docs/weight-study-3c.md): 144 lb at 3c-5, 120.6 lb now (hollow axles, 2.8 lb wheels, 4 mm ply, 1/2 in transom, lighter joists and the foot block gone). 146 before; // D-58 (3c-4a): +the chain stops, roll pads, oak tongue and stub rods in the front end (16.2 to 21.2 lb), -the 3.5 in track change; // 3c-4b (D-57): 134 at 3c-3 + the bulkhead, signs, grab boards, hinges, longer sockets, flag tube and the step brake
 const EXPECTED_GROUP_LB: Record<string, number> = {
-  'running-gear': 26.4, 'front-end': 21.2, frame: 13.3, body: 43.8, seat: 10.3, storage: 8.4, removable: 3.7, lighting: 1.9,
+  'running-gear': 18.6, 'front-end': 16.3, frame: 13.4, body: 36.1, seat: 8.4, storage: 7.0, removable: 2.4, lighting: 2.0, // D-60 (26.4, 21.2, 13.3, 43.8, 10.3, 8.4, 3.7, 1.9 before)
 };
 /** Groups with a wide band [low, high] (lb): the brake and the fastener remainder. */
 const WIDE_GROUP_LB: Record<string, [number, number]> = { brake: [4, 14], hardware: [2.5, 6.5] };
@@ -420,8 +420,6 @@ const VARIANTS: Record<string, Partial<Params>> = {
   bulkheadTall: { bowBulkheadHeightIn: 12 },
   turn0: { bowTurnInIn: 0 },
   turn25: { bowTurnInIn: 2.5, bowTurnLenIn: 24 },
-  footBlock1: { footBlockSlot: 1 },
-  footBlock2: { footBlockSlot: 2 },
   handleParked: { handleBowCrownIn: 0.5 },
   // the pivoting front axle (D-56)
   lock10: { steerLockDeg: 10, frontOverhangIn: 12 },
@@ -474,7 +472,6 @@ describe('variants', () => {
       expect(overlaps(buildModel(p, view), true), JSON.stringify(view)).toEqual([]);
   });
   it.each(valid.map((v) => [v.name, v.p] as const))('rider fits without cutting through the structure: %s', (_n, p) => {
-    if (/^footBlock/.test(_n)) return; // the drop-in block is for a SHORTER rider than the design rider; with the design rider its slot position meets the feet (3c-4b, reported)
     expect(riderClashes(buildModel(p))).toEqual([]);
   });
   it('rider-vs-structure test has teeth: an oversized seat cuts the rider and is caught', () => {
@@ -628,7 +625,7 @@ describe('validator rules', () => {
     expect(seatErr(defaults)).toEqual([]);
     expect(seatErr({ ...defaults, seatXIn: 17.5 }).some((i) => /feet would reach past the bow bulkhead/.test(i.message))).toBe(true);
     expect(seatErr({ ...defaults, frontOverhangIn: 5 }).some((i) => /feet would reach past the bow bulkhead/.test(i.message))).toBe(true);
-    expect(seatErr({ ...defaults, seatXIn: 1.5, seatBackHeightIn: PARAM_DEFS.seatBackHeightIn.max }).some((i) => /leaning seat back would hit/.test(i.message))).toBe(true);
+    expect(seatErr({ ...defaults, seatXIn: 1.5, rearOverhangIn: 8, seatBackHeightIn: PARAM_DEFS.seatBackHeightIn.max }).some((i) => /leaning seat back would hit/.test(i.message))).toBe(true);
   });
 });
 
@@ -649,7 +646,7 @@ describe('fuzz: validator-clean designs have no unintended overlaps', () => {
     'wheelbaseIn', 'rearTrackIn', 'deckHeightIn', 'bodyWidthIn', 'seatXIn', 'wheelDiameterIn', 'rearOverhangIn', 'frontOverhangIn', 'tireWidthIn',
     'sideHeightBowIn', 'sideHeightRearIn', 'sheerCurveIn', 'bowTurnInIn', 'bowBulkheadThickIn', 'steerLockDeg', 'frontTrackIn', 'kingBeamLengthIn', 'kingThrustOdIn', 'tongueTieAheadIn', 'tongueHeadWidthIn', 'frontStubLenIn',
     'axleBeamThicknessIn', 'axleBeamDepthIn', 'axleHangerWidthIn', 'axleHangerThickIn', 'railDepthIn', 'crossmemberDepthIn',
-    'seatDepthIn', 'hubLengthIn', 'riderStatureIn', 'seatBackAngleDeg', 'storageVolumeIn3', 'footBlockThickIn', 'panelPlyIn', 'riderLegReachIn', 'deckSlopIn',
+    'seatDepthIn', 'hubLengthIn', 'riderStatureIn', 'seatBackAngleDeg', 'storageVolumeIn3', 'footStopHeightIn', 'panelPlyIn', 'riderLegReachIn', 'deckSlopIn',
   ];
   const OPTION_KEYS: ParamKey[] = ['storageLocation', 'axleBeamPosition', 'axleStyle', 'tireType', 'showSideSigns'];
   const N = 300; // raise (and change the seed) to hunt

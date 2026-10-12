@@ -401,8 +401,20 @@ export function buildPart(part: Part): BuiltPart | null {
       break;
     }
     case 'cylinder': {
-      const c = new THREE.CylinderGeometry(g.radius, g.radius, g.length, 32);
-      c.rotateX(Math.PI / 2); // Three cylinders run along Y; ours run along Z.
+      // A tube (D-60 axles, g.wall > 0) is an annulus extruded along Z; a rod is a plain cylinder (Three cylinders run along Y, ours along Z).
+      let c: THREE.BufferGeometry;
+      if (g.wall && g.wall > 0 && g.wall < g.radius) {
+        const ring = new THREE.Shape();
+        ring.absarc(0, 0, g.radius, 0, Math.PI * 2, false);
+        const bore = new THREE.Path();
+        bore.absarc(0, 0, g.radius - g.wall, 0, Math.PI * 2, true);
+        ring.holes.push(bore);
+        c = new THREE.ExtrudeGeometry(ring, { depth: g.length, bevelEnabled: false, curveSegments: 32 });
+        c.translate(0, 0, -g.length / 2);
+      } else {
+        c = new THREE.CylinderGeometry(g.radius, g.radius, g.length, 32);
+        c.rotateX(Math.PI / 2);
+      }
       if (isWood(look)) {
         const uv = c.getAttribute('uv');
         const rnd = mulberry32(hashString(part.id));

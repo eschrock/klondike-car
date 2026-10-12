@@ -124,7 +124,9 @@ function materials(p: Params, isOpen: boolean, onToggle: (o: boolean) => void): 
       ]),
       h('h4', {}, 'Steel (D-4)'),
       rows([
-        ['Axle yield / E', `${f0(p.axleYieldPsi)} / ${f0(p.steelMoePsi)} psi`, p.axleYieldPsi >= 65000 ? '1045 turned-ground-polished shafting (≈ 70+ ksi; confirm vendor cert)' : '1018 CD, yield taken as 50 ksi (book 54)'],
+        p.axleWallIn > 0
+          ? ['Axle tube yield / E', `${f0(p.axleTubeYieldPsi)} / ${f0(p.steelMoePsi)} psi`, `${p.axleDiameterIn}" OD × ${p.axleWallIn.toFixed(3)}" wall DOM tube (D-60; 1026 DOM ≈ 70 ksi, confirm vendor cert)`]
+          : ['Axle yield / E', `${f0(p.axleYieldPsi)} / ${f0(p.steelMoePsi)} psi`, p.axleYieldPsi >= 65000 ? '1045 turned-ground-polished shafting (≈ 70+ ksi; confirm vendor cert)' : '1018 CD, yield taken as 50 ksi (book 54)'],
         ['Axle allowable', `${f0(d.axleAllowablePsi)} psi`, `yield / SF ${p.steelSafetyFactor}`],
         ['Grade 8 bolt yield / ultimate', `${f0(p.grade8BoltYieldPsi)} / ${f0(p.grade8BoltUltimatePsi)} psi`, `SAE grade 8; normal hits use yield / SF ${p.steelSafetyFactor}, the hard hit ultimate / ${p.failSafeFactor} (D-50); shear 0.577·yield`],
         ['A36 plate yield / ultimate', `${f0(p.bracketSteelYieldPsi)} / ${f0(p.bracketSteelUltimatePsi)} psi`, 'the tongue plate (D-56); bolted, never welded'],

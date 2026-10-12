@@ -1,7 +1,6 @@
 /**
  * Seat (D-3, D-9, D-18, D-40, D-57): a closed-cell foam cushion with a marine-vinyl cover on the deck, a full-size reclined back (oak stiles and rails joined with Dominos, a ply
- * panel captured in grooves, a covered foam pad that comes off with Dual Lock), a pair of grab boards bolted to the side tops, the foot-brace slots and (when used) the drop-in
- * foot block.
+ * panel captured in grooves, a covered foam pad that comes off with Dual Lock), a pair of grab boards bolted to the side tops. (D-60: the drop-in foot block and its slot cleats were dropped; the bow bulkhead is the foot brace.)
  *
  * D-57: the back is HINGED at its front foot (two 316 butt hinges screwed through the deck into a backer) and FLIPS FORWARD onto the deck for cargo; it never goes in the box.
  * Upright it leans back onto two fixed oak stop blocks ("wedges") glued against the storage box end; a 3/8" quick-release pin per stile through the stile into the stop block
@@ -51,11 +50,6 @@ export const GRIP_BOLT_COLS = 3;
 export const GRIP_BOLT_ROWS_IN = [0.4, 1] as const;
 export const GRIP_BOLTS = GRIP_BOLT_COLS * GRIP_BOLT_ROWS_IN.length;
 const GRIP_CORNER_IN = 0.75;
-/** Foot-block slot cleats (D-57): oak blocks glued to the inboard side faces; each has a slot the foot block drops into. Wall each side of the slot, slot depth into the cleat, slot slop. */
-export const FOOT_SLOT_WALL_IN = 1;
-export const FOOT_SLOT_DEPTH_IN = 0.375;
-export const FOOT_CLEAT_T_IN = 0.75;
-export const FOOT_SLOT_SLOP_IN = 0.0625;
 
 /**
  * Joint for a light, non-structural-path frame member (seat-back frame, lid frame, grip posts): the largest Domino that chooseDomino
@@ -184,7 +178,7 @@ export function buildSeat(ctx: Ctx): Part[] {
   const sup = seatBackSupport(p, L);
   const { a, H, t, fw, W } = sup;
   const g = p.seatBackGrooveDepthIn;
-  const plyT = Math.min(p.panelPlyIn, t);
+  const plyT = Math.min(p.seatBackPlyIn, t); // D-60: the seat-back panel keeps its own ply (6 mm) when the sides, box and lid go to 4 mm
 
   // Optional riser: two oak runners under the cushion (default 0 = cushion on the deck).
   const riser = s.cushionBottom - s.pan;
@@ -354,35 +348,7 @@ export function buildSeat(ctx: Ctx): Part[] {
     }
   }
 
-  // Foot-block slots (D-57): a cleat on each inboard side face at each slot position, with a slot the oak foot block drops into; the bulkhead itself is the brace for the design rider.
-  {
-    const fb = L.footBlock;
-    const xB = L.bulkhead.x0;
-    fb.behind.forEach((behind, n) => {
-      const xFace = xB - behind - fb.thick; // the block's rear (heel) face
-      for (const { s: sg, tag } of SIDES) {
-        const yi = Math.min(innerHalfWidth(L, xFace - FOOT_SLOT_WALL_IN), innerHalfWidth(L, xFace + fb.thick + FOOT_SLOT_SLOP_IN + FOOT_SLOT_WALL_IN)); // the narrowest of the cleat's run: the side curves in, so a hair of epoxy fills the gap behind the rear end
-        const slotId = `foot-slot-${tag}${n + 1}`;
-        parts.push(box(ctx, {
-          id: slotId, partNo: 'foot-slot', name: `Foot block slot cleat ${tag}${n + 1}`, group: 'seat', mat: 'oak', step: STEP.seatStorage, grain: 'z',
-          ...span([xFace - FOOT_SLOT_WALL_IN, xFace + fb.thick + FOOT_SLOT_SLOP_IN + FOOT_SLOT_WALL_IN], inboardOf(sg, yi, FOOT_CLEAT_T_IN), [L.deckTop, L.deckTop + fb.height]),
-          joints: [{ type: 'glue', to: `side-${tag}-web`, count: 1, note: 'epoxy to the inboard face of the side (thickened epoxy over the 1/8" step to the web)' }, { type: 'screw', to: 'deck', count: 2, size: '#10 × 1½ stainless, up through the deck' }],
-          notes: `Slot ${n + 1} (D-57, ${f1(behind)}" behind the bulkhead face): a ${FOOT_CLEAT_T_IN}" oak cleat with a ${f1(fb.thick + FOOT_SLOT_SLOP_IN)}" slot, ${FOOT_SLOT_DEPTH_IN}" deep, open at the top, that the ends of the foot block drop into (the walls fore and aft are ${FOOT_SLOT_WALL_IN}" of oak; the load goes into the forward wall). Rounded over ¼" on the exposed edges. Stands ${fb.height}" proud of the deck on the inside of the side, so it narrows the cargo bed by ${FOOT_CLEAT_T_IN}" a side there.`,
-        }));
-      }
-    });
-    if (p.footBlockSlot >= 1 && p.footBlockSlot <= fb.behind.length) {
-      const behind = fb.behind[p.footBlockSlot - 1];
-      const xFace = xB - behind - fb.thick;
-      const yi = Math.min(innerHalfWidth(L, xFace - FOOT_SLOT_WALL_IN), innerHalfWidth(L, xFace + fb.thick + FOOT_SLOT_SLOP_IN + FOOT_SLOT_WALL_IN)) - FOOT_CLEAT_T_IN + FOOT_SLOT_DEPTH_IN;
-      parts.push(box(ctx, {
-        id: 'foot-block', name: 'Foot block (drop-in)', group: 'seat', mat: 'oak', step: STEP.seatStorage, grain: 'y', removable: true,
-        ...span([xFace, xFace + fb.thick], [-yi, yi], [L.deckTop, L.deckTop + fb.height]),
-        joints: [{ type: 'dado', to: `foot-slot-L${p.footBlockSlot}`, count: 1, size: `${FOOT_SLOT_DEPTH_IN}" tongue in the slot`, note: 'drops in from above, no tools' }, { type: 'dado', to: `foot-slot-R${p.footBlockSlot}`, count: 1, size: `${FOOT_SLOT_DEPTH_IN}" tongue in the slot` }],
-        notes: `Drop-in foot block for a shorter rider (D-57): ${fb.thick}" × ${fb.height}" oak board across the body, its ends ${FOOT_SLOT_DEPTH_IN}" into the slot cleats at slot ${p.footBlockSlot} (${f1(behind)}" behind the bulkhead face). Lifts out for cargo or another slot. No gap under it for a foot to catch; top edge rounded 1/2".`,
-      }));
-    }
-  }
+  // D-60: the drop-in foot block and its four slot cleats are gone; the bow bulkhead is the only foot brace (D-57).
   return parts;
 }
 

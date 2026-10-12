@@ -31,7 +31,7 @@ export function knee(h: Vec3, a: Vec3, l1: number, l2: number): Vec3 {
 /** Hip and ankle of one leg (y = the leg's lateral offset), given the seat surface, the foot stop and its deck height. */
 export function legEnds(p: Params, surface: number, deckZ: number, y: number): { hip: Vec3; ankle: Vec3; stopRear: number } {
   const S = p.riderStatureIn;
-  const stopRear = p.seatXIn + p.riderLegReachIn; // the foot brace: the bulkhead's rear face, or the foot block's (D-57)
+  const stopRear = p.seatXIn + p.riderLegReachIn; // the foot brace: the bulkhead's rear face (D-57; the foot block was dropped at D-60)
   return {
     hip: [p.seatXIn, y, surface + (THIGH.z * S) / 2],
     ankle: [stopRear - FOOT.len * S + ANKLE_INSET_IN, y, deckZ + FOOT.z * S - ANKLE_DROP_IN],

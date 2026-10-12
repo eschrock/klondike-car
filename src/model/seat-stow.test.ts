@@ -1,7 +1,7 @@
 /**
  * Cargo mode and the ergonomics parts, model side (Phase 3c-4b, D-57; 3c-2, D-53): the seat BACK is hinged and flips flat onto the deck (it never goes in the box), the two cushions
  * (seat cushion and back pad) lie flat in the storage box, the bed is flat and derived from the layout, the handlebow is a gentle bandsawn crown on posts that drop to a parked pin
- * position, the grab boards are one oak board per side, the foot brace is the bulkhead (with a drop-in foot block in slots) and the flag stands in a plain tube.
+ * position, the grab boards are one oak board per side, the foot brace is the bulkhead (D-60: no foot block) and the flag stands in a plain tube.
  * Numbers are re-derived by hand from the params and the layout.
  */
 import { describe, expect, it } from 'vitest';
@@ -232,14 +232,14 @@ describe('the flat cargo bed (D-53, D-54, D-57)', () => {
     const narrow = { ...defaults, bodyWidthIn: 21 } as Params;
     if (!validateParams(narrow).some((i) => i.severity === 'error')) expect(cargoBed(narrow, computeLayout(narrow)).loadLengthIn).toBe(0);
   });
-  it('in the flat view only the foot-block slot cleats, the grab boards and the (flat) back stand above the deck ahead of the box; no foot-stop bar, cleat, knob or wedge stands on the bed except the fixed stop blocks at the box end', () => {
+  it('in the flat view only the grab boards and the (flat) back stand above the deck ahead of the box; no foot-stop bar, cleat, knob or wedge stands on the bed except the fixed stop blocks at the box end', () => {
     const intruders = stowed.filter((x) => {
       if (x.payload || x.group === 'reference') return false;
       if (!/^(seat-|foot-|storage-backer)/.test(x.id)) return false;
       const b = worldAABB(x);
       return b.max[0] > bed.x0 + 0.6 && b.min[2] < L.deckTop + L.sideH - 1e-9;
     }).map((x) => x.id).sort();
-    expect(intruders.filter((id) => !/^(seat-back-|seat-pin|seat-hinge|seat-grip|seat-wedge|foot-slot)/.test(id))).toEqual([]);
+    expect(intruders.filter((id) => !/^(seat-back-|seat-pin|seat-hinge|seat-grip|seat-wedge)/.test(id))).toEqual([]);
     expect(stowed.some((x) => x.id === 'foot-stop')).toBe(false);
   });
 });
@@ -305,15 +305,15 @@ describe('the handlebow (D-53, D-57)', () => {
       expect(post.max[2]).toBeCloseTo(top, 6);
     }
   });
-  it('the sockets are 16 in deep (D-57) with the rear transom corner at 22 in; the posts sit about 5.7 in deep when riding, the pin 1.5 in under the socket mouth', () => {
-    expect(defaults.handleSocketDepthIn).toBe(16);
+  it('the sockets are 12 in deep (D-57 had 16 in; D-60 trimmed them) with the rear transom corner at 22 in; the posts sit about 1.7 in deep when riding (5.7 in with the 16 in socket), the pin 1.5 in under the socket mouth', () => {
+    expect(defaults.handleSocketDepthIn).toBe(12);
     const sock = worldAABB(get(installed, 'handle-socket-L'));
-    expect(sock.min[2]).toBeCloseTo(L.deckTop + L.sideRear - 16, 9);
+    expect(sock.min[2]).toBeCloseTo(L.deckTop + L.sideRear - 12, 9);
     expect(sock.max[2]).toBeCloseTo(L.deckTop + L.sideRear, 9);
     expect(h.zPin).toBeCloseTo(h.zTop - 1.5, 9);
     const post = worldAABB(get(installed, 'handle-post-L'));
     expect(post.min[2]).toBeCloseTo(h.zFoot, 9);
-    expect(h.zTop - h.zFoot).toBeGreaterThanOrEqual(5); // enough insertion for the hold-back pull
+    expect(h.zTop - h.zFoot).toBeGreaterThanOrEqual(1.5); // D-60: only 1.7 in of insertion with the 12 in socket (the parked position sinks the post 9.8 in); the handle-sockets row checks the hold-back pull on it (0.78)
     expect(h.zFoot).toBeCloseTo(h.zBot + 0.5 + h.parkDropIn, 9);
   });
   it('PARKED (the second pin position): the posts and the bow sink by parkDropIn so the bow rests ~1 in above the rear transom top, the post foot at the socket bottom + 1/2 in; sockets and pins stay', () => {
@@ -334,7 +334,8 @@ describe('the handlebow (D-53, D-57)', () => {
   });
   it('the bow stands behind the rear transom and clears its top corners when riding', () => {
     const bb = worldAABB(bar);
-    expect(bb.max[0]).toBeLessThan(L.xRear + 1e-9);
+    // D-60: the 11/16 in post is thinner than the 1-1/4 in bow, which is centered on it, so the bow overhangs the transom's rear face by 1/8 in; it stays above the transom top (below).
+    expect(bb.max[0]).toBeLessThan(L.xRear + 0.2);
     expect(bb.min[2]).toBeGreaterThan(L.deckTop + L.sideRear);
   });
   it('crown 0 gives the straight bar at the grip height', () => {
@@ -370,29 +371,10 @@ describe('the grab boards (D-57)', () => {
   });
 });
 
-describe('the foot brace and the drop-in foot block (D-57)', () => {
-  it('the brace is the rear face of the bulkhead at seatX + leg reach; no foot-stop bar; two slot cleats per side per position', () => {
+describe('the foot brace (D-57, D-60)', () => {
+  it('the brace is the rear face of the bulkhead at seatX + leg reach; no foot-stop bar, foot block or slot cleat (D-60)', () => {
     expect(defaults.seatXIn + defaults.riderLegReachIn).toBeCloseTo(L.bulkhead.x0, 9);
-    const cleats = installed.filter((x) => /^foot-slot-/.test(x.id)).map((x) => x.id).sort();
-    expect(cleats).toEqual(['foot-slot-L1', 'foot-slot-L2', 'foot-slot-R1', 'foot-slot-R2']);
-    expect(installed.some((x) => x.id === 'foot-block')).toBe(false);
-    for (const [i, behind] of L.footBlock.behind.entries()) {
-      const c = worldAABB(get(installed, `foot-slot-L${i + 1}`));
-      expect(c.max[0]).toBeLessThan(L.bulkhead.x0 - behind + 2.2);
-      expect(c.min[2]).toBeCloseTo(L.deckTop, 9);
-    }
-  });
-  it('footBlockSlot 1 shows the removable block in the first slot, ends 3/8 in into the cleats, face one step behind the bulkhead', () => {
-    const p1 = { ...defaults, footBlockSlot: 1 } as Params;
-    const m = buildModel(p1, { rider: 'none', cargo: false });
-    const fb = get(m, 'foot-block');
-    expect(fb.removable).toBe(true);
-    const b = worldAABB(fb);
-    expect(b.max[0]).toBeCloseTo(L.bulkhead.x0 - defaults.footBlockStepIn, 6);
-    expect(b.max[0] - b.min[0]).toBeCloseTo(defaults.footBlockThickIn, 6);
-    expect(b.max[2] - b.min[2]).toBeCloseTo(defaults.footStopHeightIn, 6);
-    expect(buildModel(p1, { removed: true }).some((x) => x.id === 'foot-block')).toBe(false);
-    expect(partsOverlap(fb, get(m, 'foot-slot-L1'))).toBeLessThan(0.45);
+    expect(installed.some((x) => /^foot-/.test(x.id))).toBe(false);
   });
 });
 

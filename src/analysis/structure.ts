@@ -14,10 +14,11 @@ import { dualCheck, detail, governing, type CaseEval } from './dual';
 import { RAD, axleLoads, contactsAt } from './geometry';
 import { f } from './format';
 import type { CaseData } from './loads';
-import { bendingStress, cantileverTip, circleSection, rectSection, rectShear, ssPointMid, ssUdlCentered, ssUdlFull } from './beams';
+import { bendingStress, cantileverTip, rectSection, rectShear, ssPointMid, ssUdlCentered, ssUdlFull } from './beams';
 import { evalBoth, rearNormalNoseDown } from './stability';
 import { bumpCases, bumpSeatGHard, bumpText, peakVertical, seatFactor, sensitivityText } from './bump';
 import type { AnalysisCheck, Detail } from './types';
+import { axleHoleDetails, type AxleLoads, axleHoleText, axleSection, axleUltimate, axleYield } from './axle';
 
 export function allowables(ctx: Ctx) {
   const { p, d } = ctx;
@@ -84,11 +85,11 @@ function clampGeometry(ctx: Ctx, tag: 'F' | 'R'): Clamp {
  */
 export function axleStress(ctx: Ctx): AnalysisCheck {
   const { p } = ctx;
-  const sec = circleSection(p.axleDiameterIn);
+  const sec = axleSection(p);
   const E = p.steelMoePsi;
   const stub = p.axleStyle === AXLE_STYLE.stubAxles;
   const wheelR = ctx.d.wheelRadiusIn;
-  const allowN = p.axleYieldPsi / p.steelSafetyFactor, allowH = p.axleUltimatePsi / p.failSafeFactor;
+  const allowN = axleYield(p) / p.steelSafetyFactor, allowH = axleUltimate(p) / p.failSafeFactor;
   const ev = (c: CaseData): CaseEval => {
     const wheel = part(ctx, 'wheel-RL');
     const yw = wheel ? Math.abs(wheel.transform[13]) : p.rearTrackIn / 2;
@@ -115,10 +116,12 @@ export function axleStress(ctx: Ctx): AnalysisCheck {
       detail('HARD 2" rear hit: stub bending (ultimate / fail-safe factor)', sH, 'psi', allowH, '<='),
       detail('rear axle tip deflection (static)', defl, 'in', 0.05, '<='),
     ];
-    const how = `Rear: ${bumpText(cs.normal, 'normal hit', p)}; with the static wheel load still on the tire V_total = ${f(peakVertical(cs.normal))} lbf, resultant ${f(Rn)} lbf at the ${stub ? 'beam face (stub axle)' : 'clamp plate outer edge (through rod)'} cantilever a = ${f(a, 2)}": sigma = ${f(sN, 0)} psi vs ${f(allowN, 0)} (yield ${f(p.axleYieldPsi, 0)} / SF ${p.steelSafetyFactor}). ${bumpText(cs.hard, 'Hard hit', p)}; resultant ${f(Rh)} lbf: ${f(sH, 0)} psi vs ${f(allowH, 0)} (ultimate ${f(p.axleUltimatePsi, 0)} / ${p.failSafeFactor}). Cornering skid H = mu P_static = ${f(Hs)} lbf at r ${f(wheelR, 2)}" (worst angle ${f(psiW, 0)} deg): ${f(sSkid, 0)} psi. ${sensitivityText(ctx, c, 'rear', p.bumpNormalHeightIn)} If this row fails the likely fixes are a 1" rear axle, a stronger steel, or a lower bump speed (spec section 12).`;
+    const hole: AxleLoads = { Rn, Rh, Tn: p.tireGroundMu * Pst, Th: p.tireGroundMu * peakVertical(cs.hard), stations: 1 };
+    ds.push(...axleHoleDetails(ctx, hole, allowN, allowH));
+    const how = `Rear: ${bumpText(cs.normal, 'normal hit', p)}; with the static wheel load still on the tire V_total = ${f(peakVertical(cs.normal))} lbf, resultant ${f(Rn)} lbf at the ${stub ? 'beam face (stub axle)' : 'clamp plate outer edge (through rod)'} cantilever a = ${f(a, 2)}": sigma = ${f(sN, 0)} psi vs ${f(allowN, 0)} (yield ${f(axleYield(p), 0)} / SF ${p.steelSafetyFactor}). ${bumpText(cs.hard, 'Hard hit', p)}; resultant ${f(Rh)} lbf: ${f(sH, 0)} psi vs ${f(allowH, 0)} (ultimate ${f(axleUltimate(p), 0)} / ${p.failSafeFactor}). Cornering skid H = mu P_static = ${f(Hs)} lbf at r ${f(wheelR, 2)}" (worst angle ${f(psiW, 0)} deg): ${f(sSkid, 0)} psi. ${axleHoleText(ctx, hole)} ${sensitivityText(ctx, c, 'rear', p.bumpNormalHeightIn)} If this row fails the likely fixes are a thicker wall or a solid rod, a 1" rear axle, a stronger steel, or a lower bump speed (spec section 12).`;
     return governing(ds, how);
   };
-  return dualCheck({ id: 'axle-stress', label: stub ? 'Rear stub axle bending (bump basis)' : 'Rear axle bending (through rod, bump basis)', group: 'Structure', refs: ['D-2', 'D-4', 'D-10', 'D-50', 'D-54'], primary: 'goal', ...evalBoth(ctx, ev) });
+  return dualCheck({ id: 'axle-stress', label: stub ? 'Rear stub axle bending (bump basis)' : `Rear axle bending (through ${p.axleWallIn > 0 ? 'tube' : 'rod'}, bump basis)`, group: 'Structure', refs: ['D-2', 'D-4', 'D-10', 'D-50', 'D-54', 'D-60'], primary: 'goal', ...evalBoth(ctx, ev) });
 }
 
 // ── axle beams ───────────────────────────────────────────────────────────────────────────────────────────────

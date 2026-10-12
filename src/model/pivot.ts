@@ -14,6 +14,7 @@ import { customPart } from './mesh-utils';
 import { compose, translation } from './mat4';
 import { boltLength, inchesText } from './rear-mount';
 import { joistId } from './frame';
+import { axleSourcing, axleStockNote } from './axle-stock';
 import type { Part, Vec2 } from './types';
 
 const f2 = (v: number) => (Math.round(v * 100) / 100).toString();
@@ -80,9 +81,9 @@ export function buildPivot(ctx: Ctx): Part[] {
   for (const { s, tag } of SIDES) {
     const rod = cylinder(ctx, {
       id: `axle-F${tag}`, partNo: 'stub-axle-F', name: `Front ${tag === 'L' ? 'left' : 'right'} stub axle`, group: 'front-end',
-      center: [b.x, s * (inner + outer) / 2, r], axis: 'y', radius: rodR, length: outer - inner, mat: 'steel', body: 'front-axle', fab: 'drill-tap', step: STEP.gear,
-      notes: `Steel stub axle (D-56): a ${frac(p.axleDiameterIn)}" rod bolted down in a groove in the top of the beam end over ${f2(p.frontStubLenIn)}" (the clamp plates below), the wheel on the free end with a collar and cotter pin ${f2(p.axleEndExtraIn)}" beyond the hub.`,
-      sourcing: { vendor: `McMaster-Carr (${frac(p.axleDiameterIn)}" 1045 turned-ground-polished shafting, cut ${f2(outer - inner)}" long; same stock as the rear axle; collar and cotter pin)` },
+      center: [b.x, s * (inner + outer) / 2, r], axis: 'y', radius: rodR, wall: p.axleWallIn, length: outer - inner, mat: 'steel', body: 'front-axle', fab: 'drill-tap', step: STEP.gear,
+      notes: `Steel stub axle (D-56): a ${frac(p.axleDiameterIn)}" ${p.axleWallIn > 0 ? 'tube' : 'rod'} bolted down in a groove in the top of the beam end over ${f2(p.frontStubLenIn)}" (the clamp plates below), the wheel on the free end with a collar and cotter pin ${f2(p.axleEndExtraIn)}" beyond the hub. ${axleStockNote(p)}`,
+      sourcing: { vendor: axleSourcing(p, outer - inner) },
     });
     parts.push(rod);
     let k = 0;

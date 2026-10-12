@@ -168,8 +168,11 @@ describe('step brake parts', () => {
     for (const tag of ['L', 'R']) {
       const fl = worldAABB(byId(`brake-flap-${tag}`));
       const tire = worldAABB(byId(`wheel-R${tag}`));
-      expect(fl.min[1]).toBeCloseTo(tire.min[1], 2);
-      expect(fl.max[1]).toBeCloseTo(tire.max[1], 2);
+      // centered on the tire; D-60: the 3 in flap is 1/4 in narrower each side than the 3-1/2 in tire (it presses the flat of the tread)
+      expect((fl.min[1] + fl.max[1]) / 2).toBeCloseTo((tire.min[1] + tire.max[1]) / 2, 2);
+      expect(fl.max[1] - fl.min[1]).toBeCloseTo(defaults.brakeFlapWidthIn, 2);
+      expect(fl.min[1]).toBeGreaterThanOrEqual(tire.min[1] - 1e-6);
+      expect(fl.max[1]).toBeLessThanOrEqual(tire.max[1] + 1e-6);
       expect(fl.min[2]).toBeGreaterThan(defaults.minGroundClearanceIn);
     }
     const lowest = Math.min(...brake.filter((x) => !/chock/.test(x.id) && !/^handle-/.test(x.id)).map((x) => worldAABB(x).min[2]));

@@ -27,7 +27,7 @@ const outlineOf = (x: Part): Vec2[] => {
 };
 const errorsOf = (p: Params) => validateParams(p).filter((i) => i.severity === 'error');
 /** Errors that name one of the D-57 body params (the front end and brake have their own tests). */
-const ownErrors = (p: Params) => errorsOf(p).filter((i) => i.keys.some((k) => /^(side|sheer|bow|rail|lift|footBlock|seat|rider|storage|body|handle|flag|grab)/.test(k)));
+const ownErrors = (p: Params) => errorsOf(p).filter((i) => i.keys.some((k) => /^(side|sheer|bow|rail|lift|foot|seat|rider|storage|body|handle|flag|grab)/.test(k)));
 /** Vertices of a plan-wall mesh part (model frame). */
 const verts = (x: Part): Array<[number, number, number]> => {
   if (x.geometry.type !== 'mesh') throw new Error(`${x.id} is not a mesh`);
@@ -48,23 +48,23 @@ const outerYAt = (x: Part, at: number): number => {
   return best;
 };
 
-// The same numbers by hand, from the defaults: rear transom outer face x = -10, 3/4 in thick; bow tip at 44 + 6.75 = 50.75, bulkhead 1.75 in thick so the flat deck ends at 49.
+// The same numbers by hand, from the defaults: rear transom outer face x = -10, 1/2 in thick (D-60); bow tip at 44 + 6.75 = 50.75, bulkhead 1.5 in thick (D-60) so the flat deck ends at 49.25.
 const xRear = -defaults.rearOverhangIn;
 const xSideStart = xRear + defaults.transomThicknessIn; // -9.25
 const xTip = defaults.wheelbaseIn + defaults.frontOverhangIn; // 50.75
-const xFlatEnd = xTip - defaults.bowBulkheadThickIn; // 49
+const xFlatEnd = xTip - defaults.bowBulkheadThickIn; // 49.25
 const xSideEnd = xFlatEnd;
 const hw = defaults.bodyWidthIn / 2 - defaults.sideThicknessIn; // inside half width 11.375
 
 describe('layout numbers (D-54, D-57)', () => {
-  it('the hand-derived flat deck end, side end and tip match the layout; the bulkhead is the last 2 in', () => {
+  it('the hand-derived flat deck end, side end and tip match the layout; the bulkhead is the last 1.5 in (D-60)', () => {
     expect(L.xRear).toBe(xRear);
     expect(L.xSideStart).toBeCloseTo(xSideStart, 12);
     expect(L.xFront).toBeCloseTo(xTip, 12);
     expect(L.xFlatEnd).toBeCloseTo(xFlatEnd, 9);
     expect(L.xSideEnd).toBeCloseTo(xSideEnd, 9);
-    expect(bowBulkhead(defaults)).toEqual({ thick: 1.75, xTip: 50.75, xFlatEnd: 49 });
-    expect(L.bulkhead.x0).toBe(49);
+    expect(bowBulkhead(defaults)).toEqual({ thick: 1.5, xTip: 50.75, xFlatEnd: 49.25 });
+    expect(L.bulkhead.x0).toBe(49.25);
     expect(L.bulkhead.x1).toBe(50.75);
     expect(L.hwC).toBeCloseTo(hw, 12);
     expect(L.deckTop).toBe(8); // D-56
@@ -78,14 +78,14 @@ describe('the plan turn-in (D-57)', () => {
   it('is 0 behind the turn-in start (x = 35), 1.25 in at the bulkhead face, half of it half way, and smooth (zero slope at both ends)', () => {
     expect(bowTurnInAt(defaults, 0)).toBe(0);
     expect(bowTurnInAt(defaults, 35)).toBe(0);
-    expect(bowTurnInAt(defaults, 49)).toBeCloseTo(1.25, 12);
-    expect(bowTurnInAt(defaults, 42)).toBeCloseTo(0.625, 12);
+    expect(bowTurnInAt(defaults, 49.25)).toBeCloseTo(1.25, 12);
+    expect(bowTurnInAt(defaults, 42.25)).toBeCloseTo(0.625, 12);
     expect(bowTurnInAt(defaults, 60)).toBeCloseTo(1.25, 12); // clamped beyond the face
     expect(bowTurnInAt(defaults, 35.01) - bowTurnInAt(defaults, 35)).toBeLessThan(1e-5);
     expect(L.turnIn(40)).toBe(bowTurnInAt(defaults, 40));
     expect(innerHalfWidth(L, 20)).toBeCloseTo(hw, 12);
-    expect(innerHalfWidth(L, 49)).toBeCloseTo(hw - 1.25, 12);
-    expect(outerHalfWidth(L, 49)).toBeCloseTo(12 - 1.25, 12);
+    expect(innerHalfWidth(L, 49.25)).toBeCloseTo(hw - 1.25, 12);
+    expect(outerHalfWidth(L, 49.25)).toBeCloseTo(12 - 1.25, 12);
   });
   it('the chine, gunwale, web and rail of both sides follow it: outer face at 12 in behind x = 35 and 10.75 in at the bulkhead, mirrored exactly', () => {
     for (const [tag, sg] of [['L', 1], ['R', -1]] as const) {
@@ -98,7 +98,7 @@ describe('the plan turn-in (D-57)', () => {
         void thick;
       }
       const web = get(parts, `side-${tag}-web`);
-      const wb = verts(web).filter(([vx]) => Math.abs(vx - 49) < 0.01);
+      const wb = verts(web).filter(([vx]) => Math.abs(vx - 49.25) < 0.01);
       expect(wb.length).toBeGreaterThan(2);
       const ys = wb.map(([, vy]) => Math.abs(vy));
       expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(defaults.panelPlyIn, 6);
@@ -220,9 +220,9 @@ describe('the bow bulkhead and its hand-hold (D-57)', () => {
     expect(b.material).toBe('white oak');
     expect(b.group).toBe('body');
   });
-  it('is 1.75 in thick from the end of the flat deck to the bow tip, as wide as the narrowed hull, 4 7/8 in high at the corners rising 7/8 in (the handlebow crown) to 5 3/4 in above the deck at the center', () => {
+  it('is 1.5 in thick (D-60; was 1.75) from the end of the flat deck to the bow tip, as wide as the narrowed hull, 4 7/8 in high at the corners rising 7/8 in (the handlebow crown) to 5 3/4 in above the deck at the center', () => {
     const bb = worldAABB(b);
-    expect(bb.min[0]).toBeCloseTo(49, 9);
+    expect(bb.min[0]).toBeCloseTo(49.25, 9);
     expect(bb.max[0]).toBeCloseTo(50.75, 9);
     expect(bb.max[1]).toBeCloseTo(10.75, 9);
     expect(bb.min[1]).toBeCloseTo(-10.75, 9);
@@ -237,7 +237,7 @@ describe('the bow bulkhead and its hand-hold (D-57)', () => {
     expect(o.halfW).toBeCloseTo(10.75, 12);
     // the sides end exactly at its rear face (the gunwale's top at the face is the corner height)
     expect(topEdge(get(parts, 'side-L-gunwale')).slice(-1)[0][1] - L.deckTop).toBeCloseTo(4, 9);
-    for (const tag of ['L', 'R']) expect(worldAABB(get(parts, `side-${tag}-gunwale`)).max[0]).toBeCloseTo(49, 9);
+    for (const tag of ['L', 'R']) expect(worldAABB(get(parts, `side-${tag}-gunwale`)).max[0]).toBeCloseTo(49.25, 9);
   });
   it('has the lift hand-hold: a 4.5 x 1.25 in stadium on the centerline, 3 in above the deck, with the crown of oak above it; the layout publishes it for the lift row', () => {
     const hole = (b.geometry as { holes?: Vec2[][] }).holes![0];
@@ -246,10 +246,10 @@ describe('the bow bulkhead and its hand-hold (D-57)', () => {
     expect(Math.max(...ys)).toBeCloseTo(2.25, 9);
     expect(Math.min(...zs)).toBeCloseTo(L.deckTop + 3, 9);
     expect(Math.max(...zs)).toBeCloseTo(L.deckTop + 3 + 1.25, 9);
-    expect(L.hold).toMatchObject({ x0: 49, x1: 50.75, halfLen: 2.25, zBot: L.deckTop + 3, zTop: L.deckTop + 4.25 });
+    expect(L.hold).toMatchObject({ x0: 49.25, x1: 50.75, halfLen: 2.25, zBot: L.deckTop + 3, zTop: L.deckTop + 4.25 });
     const hs = bowHold(makeCtx(defaults));
     expect(hs.barIn).toBeCloseTo(5.75 - 4.25, 9); // 1.5 in of oak above it at the center
-    expect(hs.thickIn).toBe(1.75);
+    expect(hs.thickIn).toBe(1.5);
     expect(liftBarStressPsi(hs, 100)).toBeGreaterThan(0);
     expect(liftBarStressPsi(hs, 100)).toBeLessThan(liftBarStressPsi(liftSlot(makeCtx(defaults)), 100)); // a thicker, deeper bar than the transom's
   });

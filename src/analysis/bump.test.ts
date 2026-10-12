@@ -3,10 +3,11 @@ import { defaultParams, resolveParams, type Params } from '../params';
 import { buildModel } from '../model';
 import { makeContext, type Ctx } from './context';
 import { bumpCases, bumpPulse, bumpSeatG, bumpSeatGHard, bumpStrike, bumpText, cornerWeightLb, goodmanPulsating, peakVertical, plateGyration, rigidCornerWeightLb, seatFactor, sensitivityText } from './bump';
+import { PRE_D60 } from '../test-fixtures';
 
 /** The default design with the goal rider and the cargo case's payload parts present, front axle straight (the same context `runChecks` builds). */
 function ackCtx(over: Partial<Params> = {}): Ctx {
-  const p = resolveParams({ ...defaultParams(), frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5, ...over }); // the 3c-3 hand-calc fixture (D-58 narrowed the tracks)
+  const p = resolveParams({ ...defaultParams(), ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5, ...over }); // the 3c-3 hand-calc fixture (D-58 narrowed the tracks)
   return makeContext(p, buildModel(p, { rider: 'goal', cargo: true }));
 }
 

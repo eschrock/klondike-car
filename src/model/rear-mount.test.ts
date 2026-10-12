@@ -94,7 +94,7 @@ describe('rear axle hangers, beam seat and hold-downs (MUST-4, D-54)', () => {
     expect(seat).not.toBeNull();
     expect(seat.depth).toBeCloseTo(L.beamR.top - (L.beamR.top - defaults.axleSeatNotchIn), 9); // 1.35"
     expect(seat.depth).toBeCloseTo(1.35, 9);
-    expect(seat.x1 - seat.x0).toBeCloseTo(L.beamR.thick + 2 * defaults.beamNotchClearIn, 9); // 2.5 + 2 x 1/16 = 2.625
+    expect(seat.x1 - seat.x0).toBeCloseTo(L.beamR.thick + 2 * defaults.beamNotchClearIn, 9); // 2.25 + 2 x 1/16 = 2.375 (D-60: the beam is 2-1/4 in fore-aft; 2.625 before)
     expect(seat.remain).toBeGreaterThan(1.5); // 8.9" of oak above the notch (the whole hanger is solid up to the rail top)
     expect(seat.remain).toBeCloseTo(L.railTop - L.beamR.top, 9);
     // the overlap of the hanger's box and the beam is exactly the notch: no more than its depth and width
@@ -111,9 +111,9 @@ describe('rear axle hangers, beam seat and hold-downs (MUST-4, D-54)', () => {
       expect(world(h, j.at![0])[0]).toBeCloseTo(L.beamR.x, 6);
       expect(Math.abs(world(h, j.at![0])[1])).toBeCloseTo(11.25 - defaults.axleHangerThickIn / 2, 6); // mid-thickness of the hanger
     }
-    // the notch volume (2.625 x 1.35 x 0.875 = 3.10 in^3, the 7/8 in hanger of D-58) comes out of the hanger mass: a wider notch makes it lighter
+    // the notch volume (2.375 x 1.35 x 0.875 = 2.81 in^3, the 7/8 in hanger of D-58 and the D-60 2-1/4 in beam; 3.10 before) comes out of the hanger mass: a wider notch makes it lighter
     const oakLb = (seat.volume / 1728) * defaults.oakDensityPcf;
-    expect(seat.volume).toBeCloseTo(2.625 * 1.35 * defaults.axleHangerThickIn, 9);
+    expect(seat.volume).toBeCloseTo(2.375 * 1.35 * defaults.axleHangerThickIn, 9);
     expect(oakLb).toBeGreaterThan(0.05);
     const loose = { ...defaults, beamNotchClearIn: 0.25 } as Params;
     expect(validateParams(loose).filter((i) => i.severity === 'error')).toEqual([]);
@@ -188,21 +188,21 @@ describe('fastener stacks (S2) and the push-handle fit (S7)', () => {
     expect(inchesText(3)).toBe('3');
     expect(inchesText(1.75)).toBe('1-3/4');
   });
-  it('the socket bolts are 2-1/4 as computed from the stack (not the round-2 1-1/2 carriage bolts)', () => {
+  it('the socket bolts are 2 in (D-60: the 1/2 in transom; they were 2-1/4 in) as computed from the stack (not the round-2 1-1/2 carriage bolts)', () => {
     const sock = byId('handle-socket-L').joints!.find((j) => j.to === 'transom-rear')!;
-    const stack = defaults.handleSocketWallIn + L.transom + defaults.blockingThickIn; // 1.625
-    expect(boltLength(stack, 0.25, 2)).toBe(2.25);
-    expect(sock.size).toMatch(/2-1\/4/);
+    const stack = defaults.handleSocketWallIn + L.transom + defaults.blockingThickIn; // 1.375
+    expect(boltLength(stack, 0.25, 2)).toBe(2);
+    expect(sock.size).toMatch(/1\/4-20 × 2 316/);
     expect(sock.size).toMatch(/button-head/);
     expect(sock.at).toHaveLength(2);
   });
-  it('the push-handle post is a slip fit in its socket (inside 1.0" x 1.5") and the bar joint can be assembled: pinned and glued, no nut inside the tube', () => {
+  it('the push-handle post is a slip fit in its socket (inside 0.75" x 1.25", the standard 1" x 1-1/2" x 1/8" tube, D-60) and the bar joint can be assembled: pinned and glued, no nut inside the tube', () => {
     const h = handleGeometry(defaults, L);
     const w = defaults.handleSocketWallIn;
     expect(h.socketX - 2 * w - defaults.handlePostThickIn).toBeCloseTo(2 * defaults.handleSocketSlipIn, 9);
     expect(h.socketY - 2 * w - defaults.handlePostWidthIn).toBeCloseTo(2 * defaults.handleSocketSlipIn, 9);
-    expect(h.socketX).toBeCloseTo(1.25, 9);
-    expect(h.socketY).toBeCloseTo(1.75, 9);
+    expect(h.socketX).toBeCloseTo(1, 9); // D-60: the standard 1 in x 1-1/2 in tube (it was 1-1/4 x 1-3/4 in)
+    expect(h.socketY).toBeCloseTo(1.5, 9);
     const post = worldAABB(byId('handle-post-L'));
     const sock = worldAABB(byId('handle-socket-L'));
     expect(post.min[0]).toBeGreaterThanOrEqual(sock.min[0] + w - 1e-9);

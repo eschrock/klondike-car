@@ -2,14 +2,13 @@
  * Hull checks (Phase 3 round 2, D-43; the prow-grab check went with the prow, D-45): `hullChecks(ctx)` returns
  *  - lift:       the rear lifter's real share of the transport mass (CG-weighted, not mass / 2) × the dynamic factor, on the grip bar over
  *                the lift slot (bending and shear), for the rear and the front slot;
- *  - foot-stop:  rider restraint in a bump (rider × bump g × foot-stop share) on the bow bulkhead (or the drop-in foot block): plank bending between the sides, and the
+ *  - foot-stop:  rider restraint in a bump (rider × bump g × foot-stop share) on the bow bulkhead (D-60: no foot block): plank bending between the sides, and the
  *                glue and Domino joints that hold the bulkhead on (operating and goal rider; D-57).
  * Every formula is written out in the `how` string; hull.test.ts works each one by hand with literal numbers.
  */
 import { worldAABB } from '../model/bounds';
 import { bowHold, liftBarStressPsi, liftSlot } from '../model/body';
 import { innerHalfWidth } from '../model/layout';
-import { FOOT_CLEAT_T_IN, FOOT_SLOT_DEPTH_IN, FOOT_SLOT_WALL_IN } from '../model/seat';
 import type { Part } from '../model/types';
 import type { Ctx } from './context';
 import { dualCheck, governing, singleCheck, detail, type CaseEval } from './dual';
@@ -72,33 +71,29 @@ export function liftCheck(ctx: Ctx): AnalysisCheck {
 }
 
 /**
- * Numbers behind the foot-stop check for one rider mass, exported for the tests. D-57: the foot brace is the rear face of the BOW BULKHEAD (a 2" oak plank spanning the inside of the
- * hull, glued to the deck edge in a dado and to the ends of the rails, chine and gunwale), or the drop-in FOOT BLOCK in a slot when `footBlockSlot` is set.
+ * Numbers behind the foot-stop check for one rider mass, exported for the tests. D-57: the foot brace is the rear face of the BOW BULKHEAD (an oak plank spanning the inside of the
+ * hull, glued to the deck edge in a dado and to the ends of the rails, chine and gunwale). D-60: the drop-in foot block and its slot cleats are gone, so the bulkhead is the only brace.
  */
 export function footStopLoads(ctx: Ctx, riderLb: number, g: number) {
   const { p, L } = ctx;
   const F = riderLb * g * p.footStopShare;
-  const block = ctx.byId.get('foot-block');
   const bulk = ctx.byId.get('bow-bulkhead');
   if (!bulk) return null;
-  const bb = worldAABB(block ?? bulk);
-  const spanIn = block ? bb.max[1] - bb.min[1] : 2 * innerHalfWidth(L, L.bulkhead.x0);
-  const t = block ? bb.max[0] - bb.min[0] : L.bulkhead.thick;
+  const spanIn = 2 * innerHalfWidth(L, L.bulkhead.x0);
+  const t = L.bulkhead.thick;
   // The heels and toes press a band `footStopHeightIn` tall; the plank section that takes it is that tall (the lower strip of the bulkhead).
   // At mid-span the lift hand-hold is cut through that band, so the section there is the band less the part of the slot inside it.
   const band = Math.min(p.footStopHeightIn, L.bulkhead.zCorner - L.deckTop);
   const slotInBand = Math.max(0, Math.min(L.deckTop + band, L.hold.zTop) - Math.max(L.deckTop, L.hold.zBot));
-  const h = block ? bb.max[2] - bb.min[2] : band - slotInBand;
+  const h = band - slotInBand;
   const M = (F * spanIn) / 4;
   const S = (h * t * t) / 6;
   const dd = p.deckCaptureDepthIn;
   // The push on the bulkhead pulls it forward off its mates: the deck edge in its dado (glue on both faces of the tongue) and the 6 member ends (Dominos).
   const dadoArea = 2 * dd * 2 * innerHalfWidth(L, L.bulkhead.x0);
-  const slotWallArea = block ? 2 * FOOT_SLOT_DEPTH_IN * h : 0;
-  const slotWallSigma = block ? ((F / 2) * (h / 2)) / ((FOOT_CLEAT_T_IN * FOOT_SLOT_WALL_IN * FOOT_SLOT_WALL_IN) / 6) : 0;
   const dominoPts = (bulk.joints ?? []).filter((j) => (j.type === 'domino' || j.type === 'mortise-tenon') && /^(rail|side)-/.test(j.to)).reduce((n, j) => n + j.count, 0);
   const tenonArea = 1; // glue area of one loose tenon or Domino in this part (in²): both long faces of about 1 in × 1/2 in; the 1 in band under the rail ends only takes a loose tenon
-  return { F, span: spanIn, t, h, M, S, sigma: M / S, block: !!block, dadoArea, dadoShear: F / dadoArea, dominoPts, tenonArea, dominoShear: dominoPts > 0 ? F / (dominoPts * tenonArea) : Infinity, slotWallArea, slotBearing: block ? F / slotWallArea : 0, slotWallSigma };
+  return { F, span: spanIn, t, h, M, S, sigma: M / S, dadoArea, dadoShear: F / dadoArea, dominoPts, tenonArea, dominoShear: dominoPts > 0 ? F / (dominoPts * tenonArea) : Infinity };
 }
 
 export function footStopCheck(ctx: Ctx): AnalysisCheck | null {
@@ -108,16 +103,12 @@ export function footStopCheck(ctx: Ctx): AnalysisCheck | null {
   const ev = (c: CaseData): CaseEval => {
     const gN = bumpSeatG(ctx, c);
     const k = footStopLoads(ctx, c.riderLb, gN)!;
-    const what = k.block ? 'foot block' : 'bow bulkhead';
+    const what = 'bow bulkhead';
     const ds: Detail[] = [
       detail(`${what} bending between the sides`, k.sigma, 'psi', al.oakBend, '<='),
       detail('deck-edge dado glue in shear (carrying the whole push)', k.dadoShear, 'psi', al.oakShear, '<='),
     ];
     if (k.dominoPts > 0) ds.push(detail('side and rail ends: Domino / loose-tenon glue in shear (carrying the whole push)', k.dominoShear, 'psi', al.oakShear, '<='));
-    if (k.block) {
-      ds.push(detail('slot wall bearing on the block end', k.slotBearing, 'psi', al.oakPerp, '<='));
-      ds.push(detail('slot wall bending (cantilever from the cleat)', k.slotWallSigma, 'psi', al.oakBend, '<='));
-    }
     // Hard hit (D-50; no lap belt at 3c-1, D-53): the 2" rear hit's seat factor, wood to MOR x C_M with no safety factor.
     const gH = bumpSeatGHard(ctx, c);
     const kh = footStopLoads(ctx, c.riderLb, gH)!;
@@ -127,7 +118,6 @@ export function footStopCheck(ctx: Ctx): AnalysisCheck | null {
       + `The ${what} spans ${f(k.span, 1)}" between the sides, ${f(k.t, 2)}" thick over a ${f(k.h, 1)}" band (the hand-hold slot is cut through it at mid-span): M = F·L/4 = ${f(k.M)} lb·in, σ = M/(h·t²/6) = ${f(k.sigma, 0)} psi (≤ ${f(al.oakBend, 0)}). `
       + `The push pulls the bulkhead forward off the hull: the deck edge in its ${p.deckCaptureDepthIn}" dado has ${f(k.dadoArea, 1)} in² of glue on the two faces of the tongue (${f(k.dadoShear, 0)} psi if it took it all, ≤ ${f(al.oakShear, 0)} shear)`
       + (k.dominoPts > 0 ? `, and the ${k.dominoPts} Dominos / loose tenons into the rail, chine and gunwale ends have ${f(k.dominoPts * k.tenonArea, 1)} in² (${f(k.dominoShear, 0)} psi alone). ` : '. ')
-      + (k.block ? `The foot block's ends bear ${f(k.slotWallArea, 1)} in² on the slot walls (${f(k.slotBearing, 0)} psi, ≤ ${f(al.oakPerp, 0)}), each wall a ${FOOT_SLOT_WALL_IN}" cantilever ${f(k.slotWallSigma, 0)} psi. ` : '')
       + hardTxt;
     return governing(ds, how);
   };

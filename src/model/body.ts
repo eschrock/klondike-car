@@ -2,7 +2,7 @@
  * Body (D-54, D-57): the deck, the captured-ply sides on the sheer (a concave sweep from the low bow up to the tall rear) with a gentle plan turn-in toward the bow, the shaped
  * oak bow bulkhead (the rider's foot brace and the lift hand-hold, which replaced the D-54 bow curl), the rear transom with its lift hand-hold, the scuppers and the signs.
  *
- * Each side is an oak chine at deck level, a 6 mm okoume web captured in grooves, and an oak gunwale whose top follows the sheer. Chine, gunwale and web are plan-curved walls
+ * Each side is an oak chine at deck level, a 4 mm okoume web (D-60; was 6 mm) captured in grooves, and an oak gunwale whose top follows the sheer. Chine, gunwale and web are plan-curved walls
  * (`plan-wall.ts`): constant thickness, centerline at the hull's plan curve (`Layout.turnIn`). The deck is ONE flat sheet that ends in a dado in the bow bulkhead. Joint
  * records are added in joinery.ts after all parts exist.
  */
@@ -43,6 +43,10 @@ const cw = (o: Vec2[]): Vec2[] => (signedArea(o) <= 0 ? o : [...o].reverse());
 
 /** Oak mass in lb for a volume in in³ (no finish): used for groove / dado / banding adjustments. */
 const oakLb = (ctx: Ctx, vol: number) => (vol / IN3_PER_FT3) * ctx.p.oakDensityPcf;
+/** The rough hardwood stock (quarters of an inch: 4/4, 5/4, 6/4, 8/4, 12/4) that planes down to `thickIn` with a quarter inch to spare (1.5 -> 8/4, 1.75 -> 8/4, 1.0 -> 5/4). */
+const stockQuarters = (thickIn: number) => [4, 5, 6, 8, 12, 16].find((q) => q >= Math.ceil((thickIn + 0.25) * 4 - 1e-9)) ?? 16;
+/** A ply thickness in whole millimeters, for the shop notes (0.157 -> 4, 0.236 -> 6). */
+const mmOf = (plyIn: number) => Math.round(plyIn * 25.4);
 /** Oak edge banding along `lenIn` of ply `plyIn` thick (glued strip, flush both faces). */
 export const edgeBandLb = (ctx: Ctx, lenIn: number, plyIn: number) => oakLb(ctx, lenIn * ctx.p.edgeBandIn * plyIn);
 
@@ -297,7 +301,7 @@ export function buildBody(ctx: Ctx): Part[] {
       id: 'bow-bulkhead', name: 'Bow bulkhead (foot brace, lift hand-hold)', group: 'body', mat: 'oak', step: HULL_STEP.transom, grain: 'y', center: [(b.x0 + b.x1) / 2, 0, (b.bot + b.zCenter) / 2],
       outline, holes: [slotHole(0, L.hold.zMid, hs.lengthIn, p.liftSlotHeightIn)], depth: b.thick,
       transform: frameMat([0, 1, 0], [0, 0, 1], [1, 0, 0], [b.x0, 0, 0]), extraLb: -dadoLb,
-      notes: `Shaped oak bulkhead (D-57; it replaces the D-54 bow curl and the separate foot-stop bar): ${b.thick}" thick (one piece of 8/4 oak planed to 1-3/4", or two 7/8" boards glued face to face; grain across the width), ${(2 * halfW).toFixed(1)}" wide at the narrowed bow, ${(b.zCorner - b.bot).toFixed(1)}" tall at the corners (the side height at the bow) rising in a curve to ${(b.zCenter - L.deckTop).toFixed(1)}" above the deck at the center, with ${p.transomCornerRadiusIn}" rounded corners (CNC or bandsaw and rasp). Its REAR face is the rider's foot brace (x = ${b.x0.toFixed(1)}", the rider's heels press ${p.seatXIn + p.riderLegReachIn >= b.x0 - 1e-6 ? 'it directly' : 'the foot block, which drops into the slots ahead of it for a shorter rider'}). The deck edge enters a ${dd}" × ${(L.ply + ds).toFixed(3)}" dado in the rear face; the rails, chine and gunwale end on it with Dominos and epoxy, so the foot load (pushing it forward) goes into those joints and the deck dado (foot-stop row). The lift hand-hold ${hs.lengthIn}" × ${p.liftSlotHeightIn}" is routed through the center, ${p.liftSlotClearIn}" above the deck and ${hs.barIn.toFixed(2)}" of oak above it (lift row): the nose is lifted by the body, not by the tongue. 3/8" roundovers, hand-hold edges eased.`,
+      notes: `Shaped oak bulkhead (D-57; it replaces the D-54 bow curl and the separate foot-stop bar): ${b.thick}" thick (one piece of ${stockQuarters(b.thick)}/4 oak planed to ${b.thick}", or two boards glued face to face; grain across the width), ${(2 * halfW).toFixed(1)}" wide at the narrowed bow, ${(b.zCorner - b.bot).toFixed(1)}" tall at the corners (the side height at the bow) rising in a curve to ${(b.zCenter - L.deckTop).toFixed(1)}" above the deck at the center, with ${p.transomCornerRadiusIn}" rounded corners (CNC or bandsaw and rasp). Its REAR face is the rider's foot brace (x = ${b.x0.toFixed(1)}", the rider's heels press it directly; D-60 dropped the foot block, so a shorter rider moves the seat forward or pads the face). The deck edge enters a ${dd}" × ${(L.ply + ds).toFixed(3)}" dado in the rear face; the rails, chine and gunwale end on it with Dominos and epoxy, so the foot load (pushing it forward) goes into those joints and the deck dado (foot-stop row). The lift hand-hold ${hs.lengthIn}" × ${p.liftSlotHeightIn}" is routed through the center, ${p.liftSlotClearIn}" above the deck and ${hs.barIn.toFixed(2)}" of oak above it (lift row): the nose is lifted by the body, not by the tongue. 3/8" roundovers, hand-hold edges eased.`,
     }));
   }
 
@@ -346,7 +350,7 @@ export function buildBody(ctx: Ctx): Part[] {
       parts.push(extPart(ctx, {
         id: `${id}-web`, partNo: 'side-web', name: `${nm} side panel`, group: 'body', mat: 'ply', step: HULL_STEP.sides, grain: 'x', center: [(xw0 + x1s) / 2, ycOf((xw0 + x1s) / 2), (L.web.z0 + webTopAt(L, rearTx)) / 2],
         outline, depth: pl, transform: compose([0, 0, 0]), planYc: ycOf, edges: 'captured',
-        notes: `6 mm okoume panel, one sheet (it bends easily across its thickness: ${turned ? `${p.bowTurnInIn}" of plan turn-in over the last ${p.bowTurnLenIn}" is a flat bend of the sheet, no lamination` : 'it stays flat'}), cut to the sheer on the CNC or bandsaw before bending (the top edge follows the sheer, the pattern is the flat development); captured in the chine and gunwale grooves (${g}" deep) and in a stopped dado in the rear transom; its front end butts the bow bulkhead's rear face at x = ${x1s.toFixed(1)}". ${SIDE_ASSEMBLY_NOTE} The closed dado is vented: a ${p.ventHoleIn}" relief hole through the transom at its end lets air and epoxy escape as the transom slides on (hydraulic lock).`,
+        notes: `${mmOf(pl)} mm okoume panel, one sheet (it bends easily across its thickness: ${turned ? `${p.bowTurnInIn}" of plan turn-in over the last ${p.bowTurnLenIn}" is a flat bend of the sheet, no lamination` : 'it stays flat'}), cut to the sheer on the CNC or bandsaw before bending (the top edge follows the sheer, the pattern is the flat development); captured in the chine and gunwale grooves (${g}" deep) and in a stopped dado in the rear transom; its front end butts the bow bulkhead's rear face at x = ${x1s.toFixed(1)}". ${SIDE_ASSEMBLY_NOTE} The closed dado is vented: a ${p.ventHoleIn}" relief hole through the transom at its end lets air and epoxy escape as the transom slides on (hydraulic lock).`,
       }));
     }
   }
@@ -406,7 +410,7 @@ export function buildBody(ctx: Ctx): Part[] {
         size: [sg.length, pl, sg.height], center: [sg.xc, s * (L.hwC + L.side + pl / 2), sg.zc],
       });
       sign.massLb += edgeBandLb(ctx, 2 * (sg.length + sg.height), pl);
-      sign.notes = `D-57: the sign is back, on the outside of the tall rear part of the side (${sg.length.toFixed(1)}" × ${sg.height.toFixed(1)}", level, not tilted to follow the sheer (3c-5), its top edge ${sg.topMargin}" under the gunwale line at its forward end). 6 mm ply blank, all four edges banded with oak, drawn as a rounded-oval plank with the Troop 455 artwork (signTexture); hung on thumb-knob screws into tee-nuts in the side so it comes off for transport. It stays clear of the rear wheel and of the brake hinge mounts.`;
+      sign.notes = `D-57: the sign is back, on the outside of the tall rear part of the side (${sg.length.toFixed(1)}" × ${sg.height.toFixed(1)}", level, not tilted to follow the sheer (3c-5), its top edge ${sg.topMargin}" under the gunwale line at its forward end). ${mmOf(pl)} mm ply blank, all four edges banded with oak, drawn as a rounded-oval plank with the Troop 455 artwork (signTexture); hung on thumb-knob screws into tee-nuts in the side so it comes off for transport. It stays clear of the rear wheel and of the brake hinge mounts.`;
       parts.push(sign);
     }
   }

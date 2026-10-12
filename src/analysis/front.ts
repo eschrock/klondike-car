@@ -13,7 +13,8 @@
 import { worldAABB } from '../model/bounds';
 import { tongueOutline } from '../model/pivot';
 import { uncTensileArea } from './nds';
-import { circleSection, rectSection } from './beams';
+import { rectSection } from './beams';
+import { axleHoleDetails, axleHoleText, axleSection, axleUltimate, axleWhat, axleYield, type AxleLoads } from './axle';
 import type { Ctx } from './context';
 import { dualCheck, detail, governing, singleCheck, type CaseEval } from './dual';
 import { DEG, RAD } from './geometry';
@@ -411,11 +412,11 @@ const bendingNet = (M: number, s: { I: number; c: number }): number => (M * s.c)
 
 export function frontStubCheck(ctx: Ctx): AnalysisCheck {
   const { p, L } = ctx;
-  const sec = circleSection(p.axleDiameterIn);
+  const sec = axleSection(p);
   const E = p.steelMoePsi;
   const yw = p.frontTrackIn / 2;
   const a = Math.max(0.01, yw - L.beamF.len / 2); // from the beam end (where the groove ends) to the hub center
-  const allowN = p.axleYieldPsi / p.steelSafetyFactor, allowH = p.axleUltimatePsi / p.failSafeFactor;
+  const allowN = axleYield(p) / p.steelSafetyFactor, allowH = axleUltimate(p) / p.failSafeFactor;
   const wheelR = ctx.d.wheelRadiusIn;
   const ev = (c: CaseData): CaseEval => {
     const n = frontLoad(ctx, c, 'normal'), h = frontLoad(ctx, c, 'hard');
@@ -436,10 +437,12 @@ export function frontStubCheck(ctx: Ctx): AnalysisCheck {
       detail('HARD 2" front hit: stub bending (ultimate / fail-safe factor)', sH, 'psi', allowH, '<='),
       detail('front stub tip deflection (static)', defl, 'in', 0.05, '<='),
     ];
-    const how = `Front stub axle ${p.axleDiameterIn}" steel rod bolted down in the beam end, free end carrying the wheel: cantilever a = ${f(a, 2)}" from the beam end (${f(L.beamF.len / 2, 3)}") to the hub center (${f(yw, 3)}"). ${bumpText(n.strike, 'Front 1" bump', p)}; with the static wheel load still on the tire V_total = ${f(n.F1)} lbf, resultant ${f(Rn)} lbf: sigma = ${f(sN, 0)} psi vs ${f(allowN, 0)} (yield ${f(p.axleYieldPsi, 0)} / SF ${p.steelSafetyFactor}). ${bumpText(h.strike, 'Hard hit', p)}; resultant ${f(Rh)} lbf: ${f(sH, 0)} psi vs ${f(allowH, 0)} (ultimate ${f(p.axleUltimatePsi, 0)} / ${p.failSafeFactor}). Cornering skid H = mu P_static = ${f(Hs)} lbf at r ${f(wheelR, 2)}" (worst angle ${f(psiW, 0)} deg): ${f(sSkid, 0)} psi; static tip deflection ${defl.toFixed(4)}".`;
+    const hole: AxleLoads = { Rn, Rh, Tn: p.tireGroundMu * Pst, Th: p.tireGroundMu * h.F1, stations: 2 };
+    ds.push(...axleHoleDetails(ctx, hole, allowN, allowH));
+    const how = `Front stub axle ${axleWhat(p)} bolted down in the beam end, free end carrying the wheel: cantilever a = ${f(a, 2)}" from the beam end (${f(L.beamF.len / 2, 3)}") to the hub center (${f(yw, 3)}"). ${bumpText(n.strike, 'Front 1" bump', p)}; with the static wheel load still on the tire V_total = ${f(n.F1)} lbf, resultant ${f(Rn)} lbf: sigma = ${f(sN, 0)} psi vs ${f(allowN, 0)} (yield ${f(axleYield(p), 0)} / SF ${p.steelSafetyFactor}). ${bumpText(h.strike, 'Hard hit', p)}; resultant ${f(Rh)} lbf: ${f(sH, 0)} psi vs ${f(allowH, 0)} (ultimate ${f(axleUltimate(p), 0)} / ${p.failSafeFactor}). Cornering skid H = mu P_static = ${f(Hs)} lbf at r ${f(wheelR, 2)}" (worst angle ${f(psiW, 0)} deg): ${f(sSkid, 0)} psi; static tip deflection ${defl.toFixed(4)}". ${axleHoleText(ctx, hole)}`;
     return governing(ds, how);
   };
-  return dualCheck({ id: 'front-stub', label: 'Front stub axle bending (bump basis)', group: 'Structure', refs: ['D-56', 'D-4', 'D-50', 'D-55'], primary: 'goal', ...evalBoth(ctx, ev) });
+  return dualCheck({ id: 'front-stub', label: 'Front stub axle bending (bump basis)', group: 'Structure', refs: ['D-56', 'D-4', 'D-50', 'D-55', 'D-60'], primary: 'goal', ...evalBoth(ctx, ev) });
 }
 
 // ── steering stops: the check chains (D-58) ───────────────────────────────────────────────────────────────────────

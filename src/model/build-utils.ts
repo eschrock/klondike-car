@@ -136,6 +136,8 @@ export interface BoxSpec extends PartSpec {
 export interface CylSpec extends PartSpec {
   radius: number;
   length: number;
+  /** Wall thickness (in) of a hollow tube (D-60 axles); 0 or absent = a solid rod. Only the steel and oak mass follow it. */
+  wall?: number;
   /** World axis the cylinder runs along. */
   axis: 'x' | 'y' | 'z';
 }
@@ -278,12 +280,13 @@ export function box(ctx: Ctx, s: BoxSpec): Part {
 
 export function cylinder(ctx: Ctx, s: CylSpec): Part {
   const { p } = ctx;
-  const vol = Math.PI * s.radius * s.radius * s.length;
+  const wall = Math.min(Math.max(0, s.wall ?? 0), s.radius);
+  const vol = Math.PI * (wall > 0 ? s.radius * s.radius - (s.radius - wall) ** 2 : s.radius * s.radius) * s.length; // a tube's wall annulus, or the solid rod
   const mass = s.mat === 'steel' ? (vol / IN3_PER_FT3) * p.steelDensityPcf : s.mat === 'oak' ? woodMassLb(p, vol, 2 * Math.PI * s.radius * (s.radius + s.length), p.oakDensityPcf) : s.massLb ?? 0;
   const rotAxis: Mat4 = s.axis === 'y' ? rotationX(Math.PI / 2) : s.axis === 'x' ? rotationY(Math.PI / 2) : rotationX(0);
   const base = compose(s.center, s.rot);
   const m = multiply(base, rotAxis);
-  const part = finalize(ctx, s, { type: 'cylinder', radius: s.radius, length: s.length }, mass, [2 * s.radius, 2 * s.radius, s.length]);
+  const part = finalize(ctx, s, { type: 'cylinder', radius: s.radius, length: s.length, ...(wall > 0 ? { wall } : {}) }, mass, [2 * s.radius, 2 * s.radius, s.length]);
   part.transform = m;
   delete part.grain;
   return part;

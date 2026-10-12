@@ -111,8 +111,8 @@ describe('captured-ply sides, deck and rear transom (D-22, D-35, D-54)', () => {
   const ctx = makeCtx(defaults);
   const { L } = ctx;
   const dd = defaults.deckCaptureDepthIn, g = defaults.grooveDepthIn;
-  const rearTx = -10 + 0.75; // the rear transom's inner face: x = -rearOverhang + 3/4
-  it('the layout agrees with the hand numbers (24 in body, 22.75 in inside, deck 8, ply 0.472, rear face -9.25, side bar 1.5 in)', () => {
+  const rearTx = -10 + 0.5; // the rear transom's inner face: x = -rearOverhang + 1/2 (D-60; was 3/4)
+  it('the layout agrees with the hand numbers (24 in body, 22.75 in inside, deck 8, ply 0.472, rear face -9.5, side bar 1.5 in)', () => {
     expect(L.xSideStart).toBeCloseTo(rearTx, 9);
     expect(L.hwC).toBeCloseTo(24 / 2 - 0.625, 9);
     expect(L.deckBot).toBeCloseTo(8 - 0.472, 9);
@@ -181,7 +181,7 @@ describe('captured-ply sides, deck and rear transom (D-22, D-35, D-54)', () => {
     expect(r.max[1] - r.min[1]).toBeCloseTo(defaults.bodyWidthIn, 6);
     expect(r.max[0] - r.min[0]).toBeCloseTo(L.transom, 6);
     expect(r.min[0]).toBeCloseTo(-10, 6);
-    expect(L.transom).toBe(0.75); // D-43: the transom is ¾", the chine and gunwale ⅝"
+    expect(L.transom).toBe(0.5); // D-43: the transom was ¾", D-60: ½"; the chine and gunwale ⅝"
     expect(L.side).toBe(0.625);
     // The corners are at the rear gunwale height (deck + 14 in); the crown arcs above them at the center (D-44).
     expect(r.max[2]).toBeCloseTo(8 + defaults.sideHeightRearIn + defaults.transomCrownIn, 6);
@@ -209,7 +209,7 @@ describe('the plan-curved sheer sides (D-54, D-57)', () => {
     }
     expect(2 * (L.hwC + L.side)).toBeCloseTo(24, 9);
     expect(2 * L.hwC).toBeCloseTo(22.75, 9);
-    expect(xe - xs).toBeCloseTo(58.25, 6);
+    expect(xe - xs).toBeCloseTo(58.75, 6); // from the 1/2 in transom's inner face (-9.5) to the bulkhead face (49.25), D-60
   });
   it('the gunwale is bent-laminated and bandsawn: the notes say so and give the bend radius; the chine is laminated flat in 2 plies', () => {
     const gun = get(parts, 'side-L-gunwale'), chine = get(parts, 'side-L-chine');
@@ -301,10 +301,10 @@ describe('joinery: structured joints', () => {
     expect(d.map((j) => j.to).sort()).toEqual(['rail-L', 'rail-R']);
     // At 8.5 in spacing (3c-5) joist-2 stands ahead of the rear wheel brake's oak backers (x = 5.5 against the backer from x = 6.2), so it runs the full width: Dominos at y = +-11.25.
     expect(d.map((j) => Math.round(transformPoint(joist.transform, j.at![0])[1] * 100) / 100).sort((a, b) => a - b)).toEqual([-11.25, 11.25]);
-    // At 10 in spacing the joist at x = 8 meets the backers (D-57): cut back 1.25 in each end, so its two Dominos are at y = +-10.
+    // At 10 in spacing the joist at x = 8 meets the backers (D-57): cut back 0.75 in each end (D-60: 3/4 in backers, were 1-1/4 in), so its two Dominos are at y = +-10.5.
     const m10 = buildModel({ ...defaults, crossmemberSpacingIn: 10 });
     const j10 = m10.find((q) => q.id === 'joist-2')!;
-    expect(j10.joints!.filter((j) => j.type === 'domino').map((j) => Math.round(transformPoint(j10.transform, j.at![0])[1] * 100) / 100).sort((a, b) => a - b)).toEqual([-10, 10]);
+    expect(j10.joints!.filter((j) => j.type === 'domino').map((j) => Math.round(transformPoint(j10.transform, j.at![0])[1] * 100) / 100).sort((a, b) => a - b)).toEqual([-10.5, 10.5]);
     expect(transformPoint(joist.transform, d[0].at![0])[0]).toBeCloseTo(L0.joistX[1], 6);
   });
   it('a joist at the rear axle is cut back for the hanger and Domino-tied to the hanger instead of the rail', () => {
@@ -389,7 +389,7 @@ describe('rails: flush under the chines, tied to them (D-43, D-54)', () => {
       expect(rail.max[2]).toBeCloseTo(chine.min[2], 9); // the chine bears on the rail top
       expect(rail.max[2]).toBeCloseTo(L.deckBot, 9);
       expect(rail.max[2] - rail.min[2]).toBeCloseTo(defaults.railDepthIn, 9);
-      expect(rail.min[0]).toBeCloseTo(-9.25, 6); // rear transom inner face
+      expect(rail.min[0]).toBeCloseTo(-9.5, 6); // rear transom inner face (1/2 in transom, D-60)
       expect(rail.max[0]).toBeCloseTo(L.xFlatEnd, 6); // the end of the flat deck
     }
     expect(L.railTop).toBeCloseTo(L.deckBot, 9);
@@ -487,14 +487,14 @@ describe('signs (D-9, D-35, D-57)', () => {
 });
 
 describe('mass bookkeeping (D-35…D-37, D-54)', () => {
-  it('the body and frame groups stay near the build numbers (body about 40.5 lb with the 3c-5 bulkhead, frame about 14.4 lb with eight joists; pinned from the build)', () => {
+  it('the body and frame groups stay near the build numbers (body about 36 lb and frame about 13.4 lb after the D-60 weight package: 4 mm ply, 1/2 in transom, 1-1/2 in bulkhead, 5/8 in joists, no foot-block cleats; pinned from the build)', () => {
     const parts = buildModel(defaults);
     const sum = (g: string) => parts.filter((x) => x.group === g && !x.payload).reduce((m, x) => m + x.massLb, 0);
-    // Hand: deck 58.6 x 23.25 x 0.472 in of ply (about 13.9 lb with finish), the 24 in x 22 in rear transom (about 9 lb), the 1-3/4 in bow bulkhead (about 9 lb), two webs (1.9 lb each),
+    // Hand: deck 58.6 x 23.25 x 0.472 in of ply (about 13.9 lb with finish), the 24 in x 22 in rear transom (about 9 lb), the 1-1/2 in bow bulkhead (about 6 lb), two webs (1.9 lb each),
     // two chines (1.3), two gunwales (1.5), backers and scuppers (1.1), the two signs (1.1): about 44 lb.
-    expect(Math.abs(sum('body') - 40.5)).toBeLessThan(1.5); // 3c-5: the bulkhead is lower (a 5.75 in crown peak, not 9 in): 7.0 lb instead of 9
+    expect(Math.abs(sum('body') - 36.1)).toBeLessThan(1.5); // 40.5 before D-60 (4 mm ply, 1/2 in transom, 1-1/2 in bulkhead); 3c-5: the bulkhead is lower (a 5.75 in crown peak, not 9 in)
     // Rails 2 x 3.5 (extrusions with the step), hangers 2 x 1.05, six joists (0.82 to 0.88; the king beam is in the front-end group): about 13 lb.
-    expect(Math.abs(sum('frame') - 14.4)).toBeLessThan(1); // eight joists since 3c-5 (8.5 in spacing, +0.84 lb)
+    expect(Math.abs(sum('frame') - 13.4)).toBeLessThan(1); // eight joists since 3c-5 (8.5 in spacing, +0.84 lb); D-60: 5/8 in joists (-0.8 lb), 14.4 before
   });
 });
 
@@ -504,13 +504,14 @@ describe('round 2 hull (build M2-M8, D-43)', () => {
   const { L } = ctx;
   const p = defaults;
 
-  it('transoms are 3/4", chines and gunwales 5/8", the groove is 0.276" (6 mm ply + 1 mm), leaving 0.17" walls', () => {
-    expect(L.transom).toBe(0.75);
+  it('transoms are 1/2" (D-60; was 3/4"), chines and gunwales 5/8", the groove is 0.197" (4 mm ply + 1 mm; was 0.276" for 6 mm), leaving 0.21" walls', () => {
+    expect(L.transom).toBe(0.5);
     expect(L.side).toBe(0.625);
-    // groove = 0.236 + 0.04 = 0.276"; wall each side = (0.625 − 0.276) / 2 = 0.1745"
-    expect(p.panelPlyIn + p.grooveSlopIn).toBeCloseTo(0.276, 9);
-    expect((p.sideThicknessIn - p.panelPlyIn - p.grooveSlopIn) / 2).toBeCloseTo(0.1745, 4);
-    expect(get(parts, 'side-L-chine').joints!.find((j) => j.to === 'side-L-web')!.size).toMatch(/0\.276/);
+    // groove = 0.157 + 0.04 = 0.197"; wall each side = (0.625 − 0.197) / 2 = 0.214" (it follows panelPlyIn: the groove is the ply plus slop, D-60)
+    expect(p.panelPlyIn).toBeCloseTo(0.157, 9);
+    expect(p.panelPlyIn + p.grooveSlopIn).toBeCloseTo(0.197, 9);
+    expect((p.sideThicknessIn - p.panelPlyIn - p.grooveSlopIn) / 2).toBeCloseTo(0.214, 3);
+    expect(get(parts, 'side-L-chine').joints!.find((j) => j.to === 'side-L-web')!.size).toMatch(/0\.197/);
   });
 
   it('rough length gets 4× the milling allowance (M8): the straight 64.53" chine is 65.03" rough, 1/8" more each way in t and w', () => {
@@ -542,7 +543,7 @@ describe('round 2 hull (build M2-M8, D-43)', () => {
     expect(sc.map((x) => x.id).sort()).toEqual(['scupper-bow-L', 'scupper-bow-R', 'scupper-rear-L', 'scupper-rear-R']);
     const sites = scupperSites(ctx);
     expect(sites.map((s) => s.zone)).toEqual(['rear', 'bow']);
-    expect(sites[0].x).toBeCloseTo(-9.25 + 0.5 * 0.75, 6); // inside the rear transom, 3/8 in in
+    expect(sites[0].x).toBeCloseTo(-9.5 + 0.5 * 0.75, 6); // inside the rear transom (its inner face is -9.5, D-60), 3/8 in in
     expect(sites[1].x).toBeCloseTo(L.xFlatEnd - 1, 6); // 1 in behind the end of the flat deck
     for (const x of sc) {
       expect(x.joints![0].at).toHaveLength(1);
@@ -591,9 +592,9 @@ describe('round 2 hull (build M2-M8, D-43)', () => {
   it('8.5" joists (3c-5): six evenly spaced crossmembers (bays under 8.5 in) from the rear transom to the king beam (D-56), the king beam itself at the kingpin, and an end joist under the scarf of the deck to the bow bulkhead', () => {
     expect(L.joistX).toHaveLength(8);
     expect(p.crossmemberSpacingIn).toBe(8.5);
-    // Even spacing from the rear transom face (-9.25) to the king beam's rear face (44 - 3/2 = 42.5): 51.75 in / 7 bays = 7.39 in.
+    // Even spacing from the rear transom face (-9.5, D-60) to the king beam's rear face (44 - 3/2 = 42.5): 52 in / 7 bays = 7.43 in.
     const even = L.joistX.slice(0, 6);
-    for (let i = 0; i < 6; i++) expect(even[i]).toBeCloseTo(-9.25 + (51.75 * (i + 1)) / 7, 6);
+    for (let i = 0; i < 6; i++) expect(even[i]).toBeCloseTo(-9.5 + (52 * (i + 1)) / 7, 6);
     expect(L.joistX[6]).toBe(L.king.x);
     expect(L.joistX[7]).toBeCloseTo(L.xFlatEnd - L.joistT / 2 - 0.05, 9);
     expect(joistId(L, 6)).toBe('king-beam');

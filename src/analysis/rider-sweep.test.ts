@@ -17,13 +17,13 @@ describe('riderSweep', () => {
     expect(r.points.map((x) => x.w)).toEqual(Array.from({ length: 21 }, (_, i) => 50 + 10 * i));
     // D-58: the front-axle rows are fixed (roll pads, oak tongue, check chains, lift by the body), so at the defaults the 150 lb operating weight PASSES every row.
     // 3c-5: one more joist (8.5 in spacing) and span/160 for a standing foot (D-58): nothing is red up to 250 lb (the top of the sweep, so the safe range is open at the heavy end too);
-    // the green range (no yellow either) is 50-210 lb.
+    // the green range (no yellow either) is 50-210 lb. D-60 (the weight package): 50-230 lb, the lighter sled and rear beam move the marginal rows (rear-beam-seat and the tip rows) out of the yellow band.
     expect(r.operating.status).toBe('pass');
     expect(r.operating.fails).toEqual([]);
     expect(r.safe).toEqual({ loLb: 50, hiLb: 250, openLow: true, openHigh: true });
-    expect(r.green).toEqual({ loLb: 50, hiLb: 210, openLow: true, openHigh: false });
+    expect(r.green).toEqual({ loLb: 50, hiLb: 230, openLow: true, openHigh: false });
     for (const id of ['king-bearing', 'steer-stops', 'bridle-eye', 'lift', 'brake-force']) expect(r.points.every((x) => !x.fails.includes(id)), id).toBe(true);
-    expect(r.points.filter((x) => x.w <= 210).every((x) => x.status === 'pass')).toBe(true);
+    expect(r.points.filter((x) => x.w <= 230).every((x) => x.status === 'pass')).toBe(true);
     // the deck ply no longer fails for the heaviest riders (it did from 230 lb at 10 in joist spacing and span/300)
     for (const w of [220, 230, 250]) expect(r.points.find((x) => x.w === w)!.fails).not.toContain('deck');
   });
@@ -38,7 +38,7 @@ describe('riderSweep', () => {
 
   it('shows red at the right weights for a design with a known failing check', () => {
     // The tip limit is raised to 52 deg (the straight tip is 55.6 deg at 50 lb and 47.9 at 250 lb) and the slide factor to 2.4 (SSF 1.47 at 50 lb down to 1.11 at 250 vs 1.2): the tip row
-    // then fails from 80 lb and up and the slide-before-tip row from 120 lb (D-58 tracks), while the lighter riders have no stability failure. (Front-end and brake rows are ignored here.)
+    // then fails from 70 lb (D-60; 80 lb before) and up and the slide-before-tip row from 100 lb (D-58 tracks; 120 lb before D-60: the sled is 24 lb lighter, so the stability margins shift), while the lighter riders have no stability failure. (Front-end and brake rows are ignored here.)
     const bad = { ...p0, tipStraightMinDeg: 52, slideMarginFactor: 2.4 };
     const r = riderSweep(bad, { fit });
     const stab = (fails: string[]) => fails.filter((id) => ['tip-straight', 'slide-before-tip'].includes(id));
@@ -48,7 +48,7 @@ describe('riderSweep', () => {
     expect(stab(r.points[0].fails)).toEqual([]);
     // The sweep agrees with a direct run at a red weight, using the same all-riders-equal rule.
     const w = reds[0].w;
-    expect(w).toBe(80); // 34 1/2 / 32 in tracks (D-58): the straight tip is 48.6 deg at 150 lb
+    expect(w).toBe(70); // 34 1/2 / 32 in tracks (D-58): the straight tip is 48.6 deg at 150 lb; D-60: the 24 lb lighter sled has a lower total mass, so the straight tip angle drops about 1 deg for the same rider and the 52 deg limit fails from 70 lb (it was 80)
     const direct = runChecks(withRider(bad, w), { includeTruck: false });
     expect(direct.find((c) => c.id === 'tip-straight')!.status).toBe('fail');
     expect(reds[0].fails).toContain('tip-straight');
@@ -60,7 +60,7 @@ describe('riderSweep', () => {
     const slideRed = r.points.filter((x) => x.fails.includes('slide-before-tip'));
     expect(slideRed.length).toBeGreaterThan(0);
     expect(slideRed[0].w).toBeGreaterThan(w);
-    expect(slideRed[0].w).toBe(120);
+    expect(slideRed[0].w).toBe(100);
   });
 
   it('maps every check id to exactly one light (or info)', () => {

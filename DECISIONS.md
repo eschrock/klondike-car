@@ -173,7 +173,14 @@ The workstream notes have the full reasoning and check tables: `docs/phase3-ws{A
 - **Plus the first four trade-offs:** a 2.8 lb wheel rated 300 lb with a short hub, 4 mm okoume sides, box and lid (the seat back stays 6 mm), a ½" transom, and smaller handle posts.
 - **Foot block and slot cleats removed** (−1.4 lb).
 
-The target is about **120 lb**, with no change to anything Eric chose. The deck ply, axle diameter and rails stay. Ash is not used: white oak stays for durability. Wheel data and eye-bolt/chain ratings come from retailer and supplier listings and must be confirmed before ordering. | 🔶 |
+The target is about **120 lb**, with no change to anything Eric chose. The deck ply, axle diameter and rails stay. Ash is not used: white oak stays for durability. Wheel data and eye-bolt/chain ratings come from retailer and supplier listings and must be confirmed before ordering.
+
+**Implemented 2026-10-12** (`docs/phase3c-6-weight-notes.md`): empty mass **120.6 lb** (was 144.4), safe 50-250+ lb, green 50-230 lb (was 50-210), cargo capacity 233 lb (was 207), resting capacity 348 lb; nothing fails and turn-radius (0.98) is still the only marginal row. Assumptions made on the way:
+- Axle: DOM mild-steel tube, ¾" OD × 0.120" wall (`axleWallIn`; 0 = the old rod), yield 70 ksi / ultimate 80 ksi assumed from 1026 DOM and marked verify (1020 DOM is lower); a 5/32" cross hole for the cotter pin ⅜" from each end is checked (net section, pin bearing, tear-out), as is the ring bending of the wall under the clamp plates.
+- Wheel: 2.8 lb, 300 lb, 2.28" hub, bore ¾" (`wheelBoreIn`), all verify. The listing gives neither bore nor hub length.
+- Handle posts are 11/16" × 1-3/16" so the socket is the standard 1" × 1½" × ⅛" tube. Only ~1.7" of post stays in a 12" socket when riding (the parked position sinks it 9.8").
+- The lash doubler stays 1" (the ⅞" plate overhangs a ¾" one). The signs follow the 4 mm ply. The rider's leg reach is 35.75" and the roll pads sit at 11½" so the thinner bulkhead face and the shorter hub still fit.
+- The thinner tongue means the nut-washer crush (0.63) now sits above the shackle pin (0.51): D-47's "pin first" holds for anything that breaks, not for the dent in the oak. | 🔶 |
 - **Axle:** one oak axle beam under the bow, with a 10" wheel on a bolt-on ¾" stub at each end. The wheels sit outboard of the body on a 35.5" track, so the deck stays low (8").
 - **Pivot:** one ⅝" grade-8 kingpin through a UHMW thrust washer into an oak king beam. Bolted only.
 - **Steering:** oak stop blocks give **±20°** (turning circle about 20 ft). The pullers steer through a short tongue plate with the bridle shackled to it. Optional axle-end ropes for the musher are off by default.

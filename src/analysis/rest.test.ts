@@ -85,10 +85,10 @@ describe('the row', () => {
     expect(worst).toHaveLength(1);
     expect(worst[0]).toMatch(/deck ply deflection/);
   });
-  it('each of the two changes alone helps: the extra joist with the old limit holds 289 lb for under 1 lb more mass; the looser limit alone holds more than the 223 lb finding', () => {
+  it('each of the two changes alone helps: the extra joist with the old limit holds 279 lb (289 with the 3/4 in joists, D-60) for under 1 lb more mass; the looser limit alone holds more than the 223 lb finding', () => {
     const a = mk({ crossmemberSpacingIn: 8.5, standDeflectionRatio: 300 });
     expect(restLoadCheck(a.ctx).status).toBe('pass');
-    expect(restMaxLb(a.ctx)).toBeGreaterThan(280);
+    expect(restMaxLb(a.ctx)).toBeGreaterThan(270);
     expect(totalMass(a.parts) - totalMass(mk({ crossmemberSpacingIn: 10 }).parts)).toBeLessThan(1);
     expect(restMaxLb(mk({ crossmemberSpacingIn: 10, standDeflectionRatio: 160 }).ctx)).toBeGreaterThan(250);
     const b = mk({ crossmemberSpacingIn: 10, standDeflectionRatio: 300, deckPlyIn: 0.5 });

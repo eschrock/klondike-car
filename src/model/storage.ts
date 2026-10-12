@@ -243,7 +243,7 @@ export function lashPositions(p: Params, L: Layout, n: number): number[] {
   const margin = LASH_SIZE[0] / 2 + 0.25;
   const lo = L.xRear + L.transom + L.rearLane + margin + 0.6; // clear of the transom and the corner backers (D-43); the doubler is turned to the sheer's slope (up to ~20 degrees at the rear, D-57), so its corner reaches farther
   // D-54: the whole straight side is available, turned to the sled slope; the plates stop short of the end of the sides.
-  // D-57: the plates stay on the straight part of the side (the hull turns in toward the bow after `bulkhead.x0 - bowTurnLenIn`) and clear of the foot-block slot cleats.
+  // D-57: the plates stay on the straight part of the side (the hull turns in toward the bow after `bulkhead.x0 - bowTurnLenIn`).
   const hi = Math.min(L.xSideEnd - 2 * margin, L.bulkhead.x0 - p.bowTurnLenIn - margin);
   const gripLen = p.grabBoardLengthIn; // the grab board (D-57)
   const gx0 = p.seatXIn - GRIP_BEHIND_IN;
@@ -379,7 +379,7 @@ export function buildStorage(ctx: Ctx): Part[] {
     parts.push(box(ctx, { ...common, id: `storage-hinge-backer-${tag}`, partNo: 'storage-hinge-backer', name: `Hinge backer ${tag}`, mat: 'oak', grain: 'y',
       ...span([x1 - pl - HINGE_BACKER_IN, x1 - pl], [sg * hingeY - HINGE_W_IN / 2, sg * hingeY + HINGE_W_IN / 2], [zPlyTop - 1.5, zPlyTop]),
       joints: [{ type: 'glue', to: 'storage-end-fore', count: 1, note: 'epoxy to the inside of the end panel' }],
-      notes: 'Gives the hinge screws something to bite (#8 × 1" engages 3/4" of oak past the 6 mm ply); stops under the coaming.' }));
+      notes: `Gives the hinge screws something to bite (#8 × 1" engages ${(1 - pl).toFixed(2)}" of oak past the ${Math.round(pl * 25.4)} mm ply); stops under the coaming.` }));
     // Latch block (S5): oak under each latch so the #8 screws are not in a thin ply end or a face-grain skin.
     // Latch: on the inside face of the rear transom above the lid (rear box), else on the aft end's outer face; hooks a catch on the lid frame.
     // Latches sit at 8.5" off center, clear of the rear-light doubler (|y| 2.5 to 7.5) on the same transom face.
