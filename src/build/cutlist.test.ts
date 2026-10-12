@@ -236,7 +236,7 @@ describe('face lamination (D-70: no 12/4)', () => {
     const beam = lam.find((r) => r.partNo === 'beam-F')!;
     expect(beam.lamination!.layers.map((l) => l.board)).toEqual(['4/4', '4/4', '4/4']);
     expect(beam.lamination!.text).toBe('3 \u00d7 3/4" from 4/4');
-    expect(beam.note).toMatch(/^face-laminated: 3 \u00d7 3\/4" from 4\/4/);
+    expect(beam.note).toMatch(/^face-laminated \(D-70\): 3 layers of 4\/4, each planed to 25\/32" \(0\.792"\);/);
     expect(beam.lamination!.costPerFt2).toBeCloseTo(30, 6); // 3 x 1 x $10; 8/4 + 4/4 would be $40, 5/4 + 5/4 $31.25
     // the layers add up to the glued block, each fits its board, and the finished shares add up to the part
     const l = beam.lamination!;

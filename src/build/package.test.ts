@@ -131,10 +131,12 @@ describe('build book', () => {
     expect(html).not.toMatch(/<script|<link|<img|<iframe|@import|url\(/i);
     expect(html).not.toMatch(/\ssrc="/i);
     // the only URLs are the SVG namespace, the design link quoted in the header and the vendor links Eric gave (BOM lines with a `url`)
-    const vendor = new Set([...pkg.data.bom.sections.flatMap((s) => s.lines.map((l) => l.url).filter((u): u is string => !!u)), ...Object.values(OAK_ALT_PRICE_PER_BF).map((q) => q.url).filter((u): u is string => !!u)].map(esc));
+    // (a line's alternatives are named in its notes with their links, so those links are allowed too)
+    const vendor = new Set([...pkg.data.bom.sections.flatMap((s) => s.lines.flatMap((l) => [l.url, ...(l.alternatives ?? []).map((a) => a.url)]).filter((u): u is string => !!u)), ...Object.values(OAK_ALT_PRICE_PER_BF).map((q) => q.url).filter((u): u is string => !!u)].map(esc));
     expect(vendor.size).toBeGreaterThan(0);
     const urls = [...html.matchAll(/https?:\/\/[^\s"'<)]+/g)].map((m) => m[0]);
-    expect(urls.filter((u) => u !== 'http://www.w3.org/2000/svg' && u !== 'https://example.test/#x' && !vendor.has(u))).toEqual([]);
+    // (a link with a ")" in it, such as a Bolt Depot page, is cut there by the pattern: a prefix of a vendor link is fine)
+    expect(urls.filter((u) => u !== 'http://www.w3.org/2000/svg' && u !== 'https://example.test/#x' && ![...vendor].some((v) => v.startsWith(u)))).toEqual([]);
     // every external link opens in a new tab without an opener
     const anchors = [...html.matchAll(/<a href="(https?:[^"]+)"([^>]*)>/g)];
     expect(anchors.length).toBeGreaterThan(0);

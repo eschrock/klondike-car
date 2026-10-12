@@ -333,7 +333,7 @@ const TEMPLATES: Template[] = [
       const cutting = list.filter((v) => v.when === 'before cutting');
       return {
         instructions: [
-          `Work through the checklist (verify.ts): ${plural(before.length, 'item')} before ordering, ${plural(cutting.length, 'item')} before cutting.`,
+          `Work through the checklist in the Verify section: ${plural(before.length, 'item')} before ordering, ${plural(cutting.length, 'item')} before cutting.`,
           `Before ordering: ${before.map((v) => v.title).join('; ')}.`,
           `Before cutting: ${cutting.map((v) => v.title).join('; ')}.`,
           'Buy ONE of the wheel and the tube first; order the lot only when the squash, bore, hub and rating pass. Enter any measured value in its param and re-run the checks.',
@@ -423,9 +423,9 @@ const TEMPLATES: Template[] = [
           rise !== undefined && rampLen !== undefined
             ? `S-ramp (side-form drawing, the sides only): rise ${inch(rise, 2)}, ${inch(rampLen, 1)} long from the S start to the bow end, ${f(ribs ?? 0, 0)} ribs of ${RIB_STOCK_IN}" MDF under a 1/4" hardboard cap. The other web face goes on the mirror S-ramp.`
             : 'S-ramp: none, the sides are not turned in at these params.',
-          'Templates: handlebow arc, bulkhead crown, brake flap and knee (forms.ts). Check the 1" square on each printout before cutting.',
+          'Templates: handlebow arc, bulkhead crown, brake flap and knee (the Forms section). Check the 1" square on each printout before cutting.',
           'Cut the dados (web-end dados open through the top edge, deck dado run into them at each corner as one pocket; see the Shaper files), hand-holds and the Domino / tenon mortises as each assembly step calls for them. Measure the real plywood first (verify list) and set panelPlyIn / deckPlyIn before any dado is cut.',
-          `Bend-test a dry strip on the real rail form, cut from the planned spares (step 1 leaves ${railPool ? plural(railPool.spares, 'spare rail strip') : 'spares'} and ${bandPool ? plural(bandPool.spares, 'spare band strip') : 'spares'}; verify: strip-bend did the first test on a block before ordering). A strip that passes is not used up: it goes into the laminate. If it cracks, plane thinner or add a minute of damp heat; the test decides 2 vs 3 plies.`,
+          `Bend-test a dry strip on the real rail form, cut from the planned spares (step 1 leaves ${railPool ? plural(railPool.spares, 'spare rail strip') : 'spares'} and ${bandPool ? plural(bandPool.spares, 'spare band strip') : 'spares'}; the Verify item "Strip bend test" did the first test on a block before ordering). A strip that passes is not used up: it goes into the laminate. If it cracks, plane thinner or add a minute of damp heat; the test decides 2 vs 3 plies.`,
         ],
         checks: ['Verify items marked "before cutting" are done', 'Web cut net from the file; the blank nests on the sheet', 'A dry strip takes the S without cracking'],
       };
@@ -442,7 +442,7 @@ const TEMPLATES: Template[] = [
     clamp: 'Let the coat go off before handling.',
     build: (c) => ({
       instructions: [
-        'First run the finishing offcut tests (finishing.ts, step 1). They decide how the okoume takes stain under epoxy; no show face is sealed until a panel passes.',
+        'First run the finishing offcut tests (Finishing, step 1). They decide how the okoume takes stain under epoxy; no show face is sealed until a panel passes.',
         'Epoxy-seal (105/206, the one seal coat of the finishing schedule) ONLY the dados (transom, bulkhead), the deck underside and deck edges, every ply edge (webs, signs, storage panels, seat back, lid), and faces nobody will see. The show faces stay bare: both web faces, the deck top, the box, the lid, the seat back. Glue faces stay bare or are scuffed.',
         'The show faces are stained (conditioner, then dye or gel on the okoume), THEN epoxy-sealed, after assembly in the finishing schedule (steps 3-4). Water-based dye under epoxy is the safe route; oil-based stain or gel stays tacky unless it has fully cured.',
         `The deck dado and the deck gap under the inner chine band are deck + ${inch(c.p.deckSlopIn)} tall, so the sealed deck still enters; check with a feeler.`,
@@ -759,7 +759,7 @@ const TEMPLATES: Template[] = [
             : framed
               ? 'The backers went in with the frame glue-up and their bolt holes are drilled; only the knees go on here.'
               : 'No backers in this model.',
-          `Knee (${sizeOf(knee)}, bandsawn from 2.5" stock): the arm is slotted from the rear, 1.38" wide (tongue + 0.06" a side), leaving two ears. The one-knee test (verify: brake-knee) comes first: cut ONE knee, try it with the real pin and flap tongue, and cut the other only when it passes.`,
+          `Knee (${sizeOf(knee)}, bandsawn from 2.5" stock): the arm is slotted from the rear, 1.38" wide (tongue + 0.06" a side), leaving two ears. The one-knee test (the Verify item on the first brake knee) comes first: cut ONE knee, try it with the real pin and flap tongue, and cut the other only when it passes.`,
           '4 × 0.38" × 4" 316 bolts per knee (2 columns × 2 rows) through the knee leg and the rail into the backer; heads in counterbores in the knee, fender washers and nylock nuts in 1/2" counterbores in the backer (deck underside, facing up). Epoxy the holes and the leg against the rail and chine outer face; clamp, bolt, wipe the squeeze-out.',
           'Leave the knees 24 h before the wheel dry fit (next step) loads them. The 0.38" pivot hole is drilled later, with the flap tongue and block clamped in the slot.',
         ],
@@ -801,7 +801,7 @@ const TEMPLATES: Template[] = [
       const a = finishAreas(c.parts);
       return {
         instructions: [
-          `Run the finishing schedule (finishing.ts) on everything reachable from below: the deck underside, rails, joists, beams, hangers, king beam, the brake knees and their backers, the outside of the sides, the transom and bulkhead. Same products and coats as the rest (${f(a.oakFt2, 0)} ft² oak + ${f(a.okoumeFt2, 0)} ft² okoume in all).`,
+          `Run the finishing schedule (the Finishing section) on everything reachable from below: the deck underside, rails, joists, beams, hangers, king beam, the brake knees and their backers, the outside of the sides, the transom and bulkhead. Same products and coats as the rest (${f(a.oakFt2, 0)} ft² oak + ${f(a.okoumeFt2, 0)} ft² okoume in all).`,
           'Offcut test first, then sand 120 / 150, stain the show faces, epoxy-seal them (one saturation coat), and varnish (3 coats on the show faces, 2 on the hidden ones, 320 between). Mask the bolt seats, the kingpin head and the hold-down angles; brush into the knee counterbores and leave the pivot-hole spot for later.',
           'Flip only when the last coat is dry enough to handle (3 days); the horses are padded, and the hull is carried by the rails and the bulkhead, never by the sides.',
           'The inside, the topside and everything built after the flip is finished after assembly, in the finish step.',
@@ -932,7 +932,7 @@ const TEMPLATES: Template[] = [
       return {
         instructions: [
           `Back panel ${sizeOf(panel)} okoume: 2.5" radius top corners, 1/16" oak veneer banding round the edge (flush trim), epoxy-sealed. No ply edge shows.`,
-          `Inserts: 3 × #10-32 × 5/16 stainless, hex-drive, epoxied in blind holes 0.344" deep from the front face (drill stop), 1/2" or more from every edge, per hinge. Pull-test one on a scrap first (verify: seat-back).`,
+          `Inserts: 3 × #10-32 × 5/16 stainless, hex-drive, epoxied in blind holes 0.344" deep from the front face (drill stop), 1/2" or more from every edge, per hinge. Pull-test one on a scrap first (the Verify item on the seat back).`,
           'Pin holes: 13/32" clearance, bored square at stations ±7.38", 2.00" up from the hinge axis, epoxy-lined.',
           '2" 316 butt hinges: FIT AND DRILL now, hang later (hang step). #10-32 × 3/8 screws to the inserts on the back; #8 × 1-1/4 through the deck into the 1" backer pads. The flat-latch pin hole is 3/8" blind, 0.625" deep in the pad, 1/16" groove 0.256" below the deck.',
           'Spring-detent pins, lanyards and the cushions (on Dual Lock, the seat cushion set back 3/8" from the back so the hinge knuckles clear) are dry-fitted here and hang with the hinges after the varnish.',
@@ -1019,7 +1019,7 @@ const TEMPLATES: Template[] = [
       const s = finishingSchedule(c.parts, c.p);
       return {
         instructions: [
-          `Follow the finishing schedule (finishing.ts): ${s.steps.map((x) => `${x.n}. ${x.title}`).join('; ')}. The underside is already done (finish-under); this is everything else.`,
+          `Follow the finishing schedule (the Finishing section): ${s.steps.map((x) => `${x.n}. ${x.title}`).join('; ')}. The underside is already done (finish-under); this is everything else.`,
           `Wood surface: ${f(a.oakFt2, 0)} ft² oak + ${f(a.okoumeFt2, 0)} ft² okoume; epoxy and varnish quantities are in the schedule.`,
           'The show faces are stained first, then epoxy-sealed, after the offcut panel passed; the dados, edges and hidden faces were sealed at assembly. Water-based dye under the epoxy is the safe route.',
           'Finish the removable kits on the bench: the brake flap kits and chocks, the handle U and the signs. The tongue is NOT removable (D-65): it stays bolted on and is finished in place. Plug or mask the pivot bores, bolt seats and sockets.',

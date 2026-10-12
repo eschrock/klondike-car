@@ -260,3 +260,94 @@ export function clampStep(steps: BuildStep[], n: number): number {
   if (steps.some((s) => s.n === n)) return n;
   return steps.reduce((best, s) => (Math.abs(s.n - n) < Math.abs(best - n) ? s.n : best), steps[0].n);
 }
+
+// ── BOM notes: a short lead, the rest behind a fold ───────────────────────────
+
+/** The longest note shown inline (characters). */
+export const NOTE_LEAD_MAX = 140;
+
+/**
+ * The first clause of a note, for the line shown inline: a "Buy: ..." note up to its first parenthesis (the buy list itself), any other note up to its first sentence end,
+ * either capped at `max` characters on a word boundary. `rest` is what the lead leaves out ('' when the lead is the whole note); `cut` says the lead was shortened mid-sentence.
+ */
+export function noteLead(text: string, max = NOTE_LEAD_MAX): { lead: string; rest: string; cut: boolean } {
+  const t = text.replace(/\s+/g, ' ').trim();
+  let end = t.length;
+  if (/^Buy:/i.test(t)) {
+    const paren = t.indexOf(' (');
+    if (paren > 0) end = paren;
+  } else {
+    const m = /[.!?](?=\s+[A-Z(])/.exec(t); // "...per length. Need 6" ends; "0.792" and "5/8" do not
+    if (m) end = m.index + 1;
+  }
+  let lead = t.slice(0, end).trim();
+  let cut = false;
+  if (lead.length > max) {
+    const space = lead.lastIndexOf(' ', max - 1);
+    lead = `${lead.slice(0, space > max / 2 ? space : max - 1).replace(/[\s,;:(]+$/, '')}…`;
+    cut = true;
+  }
+  const rest = cut ? t : t.slice(end).trim();
+  return { lead, rest, cut };
+}
+
+export type UrlSegment = string | { url: string };
+
+/** Split text into plain strings and raw http(s) URLs (trailing punctuation and a closing parenthesis stay in the text). */
+export function splitUrls(text: string): UrlSegment[] {
+  const out: UrlSegment[] = [];
+  let last = 0;
+  for (const m of text.matchAll(/https?:\/\/[^\s<>"']+/gi)) {
+    const raw = m[0].replace(/[).,;:!?]+$/, '');
+    if (m.index > last) out.push(text.slice(last, m.index));
+    out.push({ url: raw });
+    last = m.index + raw.length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+const VENDOR_HOSTS: ReadonlyArray<[RegExp, string]> = [
+  [/thewoodyard\.com$/i, 'The Wood Yard'], [/aircraftspruce\.com$/i, 'Aircraft Spruce'], [/clinelumber\.com$/i, 'Cline Lumber'],
+  [/mcmaster\.com$/i, 'McMaster-Carr'], [/fastenal\.com$/i, 'Fastenal'], [/amazon\.com$/i, 'Amazon'], [/westsystem\.com$/i, 'West System'],
+];
+/** A short vendor name from a link: a known shop's name, else the host without "www.". '' for anything that is not an http(s) URL. */
+export function vendorFromUrl(url: string): string {
+  let host = '';
+  try {
+    const u = new URL(url);
+    if (!/^https?:$/.test(u.protocol)) return '';
+    host = u.hostname.replace(/^www\./i, '');
+  } catch { return ''; }
+  return VENDOR_HOSTS.find(([re]) => re.test(host))?.[1] ?? host;
+}
+
+/** Two notes that open with the same first sentence say the same thing for the shop (the tail varies with the parts a line is used on). */
+export const sameLead = (a: string | undefined, b: string | undefined): boolean => !!a && !!b && noteLead(a, 400).lead === noteLead(b, 400).lead;
+
+/**
+ * The material note most lines of a table share, if it is shared enough to print once (at least 3 lines and half of the lines that carry a note). Notes are compared by
+ * their first sentence (`sameLead`); the first full note of the winning sentence is returned.
+ */
+export function sharedNote(notes: (string | undefined)[]): string | undefined {
+  const groups: { note: string; n: number }[] = [];
+  let withNote = 0;
+  for (const n of notes) {
+    if (!n) continue;
+    withNote++;
+    const g = groups.find((x) => sameLead(x.note, n));
+    if (g) g.n++; else groups.push({ note: n, n: 1 });
+  }
+  const best = groups.reduce<{ note: string; n: number } | undefined>((a, g) => (!a || g.n > a.n ? g : a), undefined);
+  return best && best.n >= 3 && best.n * 2 >= withNote ? best.note : undefined;
+}
+
+/** Buy-list rows of one product (the same name and note, split into containers: "2 qt" + "1 pt") become one row: "2 qt + 1 pt". Order of first appearance is kept. */
+export function mergeBuy<T extends { item: string; unit: string; qty: number; note: string }>(lines: T[]): { item: string; note: string; buy: string }[] {
+  const out: { item: string; note: string; parts: string[] }[] = [];
+  for (const b of lines) {
+    const g = out.find((x) => x.item === b.item && x.note === b.note);
+    if (g) g.parts.push(`${b.qty} ${b.unit}`); else out.push({ item: b.item, note: b.note, parts: [`${b.qty} ${b.unit}`] });
+  }
+  return out.map((g) => ({ item: g.item, note: g.note, buy: g.parts.join(' + ') }));
+}

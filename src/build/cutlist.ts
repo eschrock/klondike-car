@@ -421,9 +421,25 @@ function oakRows(parts: Part[], p: Params, warnings: string[], stepOf?: Readonly
 }
 
 /** The note a laminated row carries into the cut list, the CSV and the build book. */
+/** A layer thickness for the shop: on the 1/16 grid the plain fraction, else the nearest 1/32 with the exact decimal after it (`25/32" (0.792")`). */
+const planedText = (t: number): string => {
+  const plain = fracIn(t);
+  if (!/^\d*\.\d+$/.test(plain)) return `${plain}"`;
+  let n = Math.round(t * 32), d = 32;
+  while (n % 2 === 0 && d > 1) { n /= 2; d /= 2; }
+  const whole = Math.floor(n / d), rem = n - whole * d;
+  return `${rem === 0 ? String(whole) : whole ? `${whole}-${rem}/${d}` : `${rem}/${d}`}" (${plain}")`;
+};
 export function laminationNote(l: Lamination): string {
-  const planed = [...new Set(l.layers.map((q) => fracIn(Math.round(q.roughT * 1000) / 1000)))].join(', ');
-  return `face-laminated: ${l.text} (D-70). Plane each layer to ${planed}" (the ${r3(l.roughT - l.finalT)}" planing allowance is taken once, on the glued block), epoxy the layers face to face, then mill the block to ${fracIn(l.finalT)}" thick.`;
+  // "3 layers of 4/4, each planed to 25/32" (0.792")": grouped by board and planed thickness, in the order the work happens.
+  const groups: Array<{ board: string; n: number; t: number }> = [];
+  for (const q of l.layers) {
+    const t = Math.round(q.roughT * 1000) / 1000;
+    const g = groups.find((x) => x.board === q.board && x.t === t);
+    if (g) g.n += 1; else groups.push({ board: q.board, n: 1, t });
+  }
+  const planed = groups.map((g) => `${g.n} layer${g.n === 1 ? '' : 's'} of ${g.board}, ${g.n === 1 ? '' : 'each '}planed to ${planedText(g.t)}`).join('; ');
+  return `face-laminated (D-70): ${planed}; epoxy the layers face to face, then mill the block to ${fracIn(l.finalT)}" thick (the ${r3(l.roughT - l.finalT)}" planing allowance comes off once, on the glued block).`;
 }
 
 /** Layer pieces of a laminated part: each layer is rough width x length, edge-glued from several pieces when wider than a board. `qty` is the number of parts. */

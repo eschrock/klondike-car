@@ -3,7 +3,7 @@ import { buildModel } from '../model';
 import { defaultParams } from '../params';
 import { BuildData } from '../build/package';
 import {
-  bytesLabel, clampStep, cureLine, dims3, featureSummary, fracDim, fracInch, groupByWhen, loadDone, loadStep, loadStepChecks, previewSvg, saveDone, saveStep, saveStepChecks, sheetSvg, stepFocus, tilePagesHtml, todayISO, usd, viewerView,
+  bytesLabel, clampStep, cureLine, dims3, featureSummary, fracDim, fracInch, groupByWhen, loadDone, loadStep, loadStepChecks, mergeBuy, noteLead, previewSvg, saveDone, saveStep, saveStepChecks, sharedNote, sheetSvg, splitUrls, stepFocus, tilePagesHtml, todayISO, usd, vendorFromUrl, viewerView,
 } from './build-helpers';
 
 const p = defaultParams();
@@ -182,5 +182,40 @@ describe('assembly step and checks persistence', () => {
     saveStepChecks(new Set(['3|Dry fit']), st);
     expect([...loadStepChecks(st)]).toEqual(['3|Dry fit']);
     expect(loadStepChecks({ getItem: () => '{bad' }).size).toBe(0);
+  });
+});
+
+describe('BOM note helpers', () => {
+  it('noteLead keeps the first clause: a Buy list up to its parenthesis, else the first sentence, capped on a word', () => {
+    const buy = 'Buy: 3 x 4/4 x 6" x 10 ft; 1 x 4/4 x 9" wide x 6 ft (resaw into strips). 14.26 bf net.';
+    expect(noteLead(buy).lead).toBe('Buy: 3 x 4/4 x 6" x 10 ft; 1 x 4/4 x 9" wide x 6 ft');
+    expect(noteLead(buy).rest).toMatch(/^\(resaw/);
+    const pack = '316 wood screw; pack of 50 per length. Need 6 pcs, sold in packs of 50.';
+    expect(noteLead(pack)).toMatchObject({ lead: '316 wood screw; pack of 50 per length.', cut: false });
+    expect(noteLead('A decimal 0.792 stays in one sentence').rest).toBe('');
+    const long = noteLead(`${'word '.repeat(60)}end`);
+    expect(long.lead.length).toBeLessThanOrEqual(141);
+    expect(long.lead.endsWith('…')).toBe(true);
+    expect(long.cut && long.rest.startsWith('word')).toBe(true);
+  });
+  it('splitUrls finds raw links and leaves the closing parenthesis and the full stop in the text', () => {
+    expect(splitUrls('see (https://clinelumber.com/a/b/). Then')).toEqual(['see (', { url: 'https://clinelumber.com/a/b/' }, '). Then']);
+    expect(splitUrls('no link')).toEqual(['no link']);
+  });
+  it('vendorFromUrl names known shops and falls back to the host', () => {
+    expect(vendorFromUrl('https://www.thewoodyard.com/current-pricing-list/')).toBe('The Wood Yard');
+    expect(vendorFromUrl('https://www.example.org/x')).toBe('example.org');
+    expect(vendorFromUrl('javascript:alert(1)')).toBe('');
+  });
+  it('sharedNote returns a note only when it is common enough to print once', () => {
+    expect(sharedNote(['a', 'a', 'a', 'b'])).toBe('a');
+    expect(sharedNote(['a', 'a', 'b', 'c'])).toBeUndefined();
+    expect(sharedNote(['a', 'a', undefined])).toBeUndefined();
+  });
+  it('mergeBuy folds one product split into containers into a single row', () => {
+    const rows = mergeBuy([
+      { item: 'Resin', unit: 'qt', qty: 2, note: 'n' }, { item: 'Resin', unit: 'pt', qty: 1, note: 'n' }, { item: 'Stain', unit: 'qt', qty: 1, note: 'm' },
+    ]);
+    expect(rows).toEqual([{ item: 'Resin', note: 'n', buy: '2 qt + 1 pt' }, { item: 'Stain', note: 'm', buy: '1 qt' }]);
   });
 });

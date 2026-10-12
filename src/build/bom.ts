@@ -4,7 +4,9 @@
  * Sections: Lumber (the suggested WHOLE oak boards by thickness, from `nesting.ts`: a yard sells boards, not net board feet), Plywood (sheets, from the nest), Metal stock
  * (cut-to-length feet), Purchased parts (by partNo), Fasteners (expanded from the joint list), Consumables (epoxy, fillers, tape, finish, sandpaper). The epoxy and the finish
  * products come from `finishingSchedule` (its buy list, so the BOM and the schedule agree) plus the epoxy for the glue joints.
- * Prices come from `prices.ts`; a number the model carries (`sourcing.costUsd`) is `quoted`, every table price is an `estimate`.
+ * Prices come from `prices.ts`; a number the model carries (`sourcing.costUsd`) is `quoted`, and so is every table price from the web price research of 2026-10-12 (with its URL); the rest are
+ * `estimate`s. A line's alternatives (cheaper or different items that do not meet the spec, labelled SPEC GAP) are in its notes and in `BomLine.alternatives`; a line that needs a decision from
+ * Eric (`BomLine.decision`) is listed in `Bom.decisions`.
  *
  * Fasteners mirror `fastenerBreakdown` (src/model/lighting.ts): a joint listed on both of its parts counts once, a joint to a part that is
  * not in the configuration is skipped, and the `hardware` mass allowance is replaced by the expanded list. Unlike the mass allowance, the
@@ -30,8 +32,8 @@ import { cutList, fracIn, isBuilt, partKey, toCsv, type CsvCell } from './cutlis
 import { finishingSchedule, glueEpoxyFlOz } from './finishing';
 import { nestPlywood, oakBoardFeet } from './nesting';
 import {
-  EPOXY_HARDENER_PINT, EPOXY_KITS, EPOXY_PUMP_SET, FILLERS, FINISH_CONTAINER_FACTOR, FINISH_PRICE, GLASS_TAPE, METAL_CUT_ALLOWANCE_IN, NOTE_PRICE, OAK_ALT_PRICE_PER_BF, OAK_PRICE_PER_BF, PLYWOOD_PRICE,
-  fastenerPrice, metalPrice, purchasedPrice, type Price, type PriceBasis,
+  EPOXY_KITS, EPOXY_PUMPS_300, FILLERS, FINISH_CONTAINER_FACTOR, FINISH_CONTAINER_PRICE, FINISH_PRICE, GLASS_TAPE, METAL_CUT_ALLOWANCE_IN, NOTE_PRICE, OAK_ALT_PRICE_PER_BF, OAK_PRICE_PER_BF, PLYWOOD_PRICE, RESEARCH_DATE,
+  PURCHASED_FALLBACK, fastenerPrice, metalPrice, modelCostNote, purchasedEntry, type Price, type PriceBasis,
 } from './prices';
 
 // ── Consumable assumptions (all estimates; also in docs/phase4-data-notes.md) ─
@@ -74,6 +76,10 @@ export interface BomLine {
   packQty?: number;
   packs?: number;
   packUsd?: number;
+  /** Cheaper or different options for the same item (`Price.alternatives`): spec gaps are flagged, never substituted. Also summarized in `notes`. */
+  alternatives?: Price[];
+  /** A decision Eric must make about this line (an item that does not exist as specified, a spec change): also in `Bom.decisions`. */
+  decision?: string;
   /** What the fastener or hardware must be made of, for exterior use, by where it lives ("316 stainless REQUIRED: ..."). Set on every fastener and metal hardware line. */
   materialNote?: string;
 }
@@ -197,6 +203,8 @@ export interface Bom {
   };
   /** Fastener lines (screws and bolts) that carry no length: empty when every line is orderable. */
   unresolved: string[];
+  /** Keys of the lines that need a decision from Eric (the line's `decision` says what): the Domino 4x20, the wheel spec, the shaft collars, the eye bolts, the carriage bolts. */
+  decisions: string[];
   /** The lumber section prices the suggested whole boards now, so there is no extra to add: always 0 (kept for older readers of this field). */
   wholeBoardsExtraUsd: number;
   /** What the old pricing (net board feet plus the waste allowance) would have cost, for comparison with the lumber subtotal. */
@@ -211,8 +219,28 @@ export interface Bom {
 const money = (v: number): number => Math.round(v * 100) / 100;
 const r2 = (v: number): number => Math.round(v * 100) / 100;
 
+/** "Alternatives: ..." for the notes of a line that needs `count` pieces: each option with its price for these pieces and its spec gap, if any. */
+export function alternativesNote(price: Price, count: number): string | undefined {
+  if (!price.alternatives?.length) return undefined;
+  const parts = price.alternatives.map((a) => {
+    const ext = a.packQty && a.packUsd ? Math.max(1, Math.ceil(count / a.packQty - 1e-9)) * a.packUsd : count * a.usd;
+    const each = a.packQty && a.packUsd ? `${usdText(a.packUsd)} per ${a.packLabel ?? `pack of ${a.packQty}`}` : `${usdText(a.usd)}/${a.unit}`;
+    return `${a.source} ${each} = ${usdText(ext)} for these${a.basis === 'estimate' ? ' (estimate)' : ''}: ${a.note ?? ''}${a.url ? ` ${a.url}` : ''}`.trim();
+  });
+  return `Alternatives (not substituted): ${parts.join(' | ')}`;
+}
+/** What a price adds to a line: its alternatives and its decision. */
+const priceExtras = (price: Price, count: number): Partial<BomLine> => ({
+  ...(price.alternatives?.length ? { alternatives: price.alternatives } : {}),
+  ...(price.decision ? { decision: price.decision } : {}),
+  ...(alternativesNote(price, count) ? { notes: alternativesNote(price, count) } : {}),
+});
+const joinNotes = (...n: Array<string | undefined>): string | undefined => n.filter(Boolean).join(' ') || undefined;
+
 function line(section: string, key: string, description: string, qty: number, price: Price, extra: Partial<BomLine> = {}): BomLine {
-  return { section, key, description, qty, unit: price.unit, unitUsd: price.usd, extUsd: money(qty * price.usd), basis: price.basis, ...(price.url ? { url: price.url } : {}), ...extra };
+  const px = priceExtras(price, qty);
+  const notes = joinNotes(extra.notes, px.notes);
+  return { section, key, description, qty, unit: price.unit, unitUsd: price.usd, extUsd: money(qty * price.usd), basis: price.basis, ...(price.url ? { url: price.url } : {}), ...px, ...extra, ...(notes ? { notes } : {}) };
 }
 function section(id: BomSection['id'], title: string, lines: BomLine[], extra: Partial<BomSection> = {}): BomSection {
   return {
@@ -234,12 +262,15 @@ export const totalsLine = (core: number, bulk: number, touches: number, total: n
 function packLine(section: string, key: string, description: string, needed: number, price: Price, extra: Partial<BomLine> = {}, shop = true): BomLine {
   const packQty = price.packQty!, packUsd = price.packUsd!;
   const packs = Math.max(1, Math.ceil(needed / packQty - 1e-9));
-  const unit = packQty === 1 ? price.unit : `pack of ${packQty}`;
+  const unit = price.packLabel ?? (packQty === 1 ? price.unit : `pack of ${packQty}`);
   const own = price.note ? `${price.note}. ` : '';
-  const share = `Need ${r2(needed)} ${price.unit === 'lot' ? 'lot' : 'pcs'}, sold in packs of ${packQty}: ${packs} pack${packs === 1 ? '' : 's'} at ${usdText(packUsd)}.${shop ? ' You may already have these in the shop; keep the rest.' : ''}`;
+  const unitWord = price.unit === 'lot' ? 'lot' : price.unit === 'ft' ? 'ft' : 'pcs';
+  const sold = price.packLabel ? `sold as a ${price.packLabel}: buy ${packs}` : `sold in packs of ${packQty}: ${packs} pack${packs === 1 ? '' : 's'}`;
+  const share = `Need ${r2(needed)} ${unitWord}, ${sold} at ${usdText(packUsd)}.${shop ? ' You may already have these in the shop; keep the rest.' : ''}`;
+  const px = priceExtras(price, needed);
   return {
     section, key, description, qty: packs, unit, unitUsd: packUsd, extUsd: money(packs * packUsd), basis: price.basis, ...(price.url ? { url: price.url } : {}),
-    needed, packQty, packs, packUsd, ...extra, notes: [own + share, extra.notes].filter(Boolean).join(' '),
+    needed, packQty, packs, packUsd, ...(px.alternatives ? { alternatives: px.alternatives } : {}), ...(px.decision ? { decision: px.decision } : {}), ...extra, notes: joinNotes(own + share, extra.notes, px.notes),
   };
 }
 
@@ -466,6 +497,8 @@ const COTTER_DIAS: Array<[number, string]> = [[1 / 16, '1/16'], [3 / 32, '3/32']
 
 /** Dual Lock strip per pad/cushion and its mate: 3 ft of 1 in strip (both halves of the pair). */
 export const DUAL_LOCK_FT_PER_PART = 3;
+/** Length of a Dual Lock roll (ft): the 3M SJ3560 retail roll of the research is 1 in x 6 ft. */
+export const DUAL_LOCK_ROLL_FT = 6;
 /** Polysulfide used per bedding, oz of a 10 oz cartridge. */
 export const SEALANT_OZ_PER_USE = 1;
 /** Contact-cement uses one pint can covers. */
@@ -539,7 +572,7 @@ export const NOTE_ITEMS: NoteItem[] = [
       const pads = byIds(built, ['seat-cushion', 'seat-back-pad']).filter((x) => /dual lock/i.test(ptext(x)));
       if (!pads.length) return null;
       const ft = pads.length * DUAL_LOCK_FT_PER_PART;
-      return { items: [{ label: 'Dual Lock reclosable fastener, 1" x 5 ft roll', qty: Math.ceil(ft / 5) }], note: `${ft} ft of 1" strip for ${pads.map((x) => x.id).join(' and ')}, both halves of each pair` };
+      return { items: [{ label: `Dual Lock reclosable fastener, 1" x ${DUAL_LOCK_ROLL_FT} ft roll`, qty: Math.ceil(ft / DUAL_LOCK_ROLL_FT) }], note: `${ft} ft of 1" strip for ${pads.map((x) => x.id).join(' and ')}, both halves of each pair` };
     },
   },
   {
@@ -621,7 +654,10 @@ export function bom(parts: Part[], p: Params): Bom {
   for (const g of metalGroups.values()) {
     const price = metalPrice(g.section);
     if (!price) { unpriced.push(g.section); continue; }
-    metal.push(line('Metal stock', g.section, g.section, r2(g.ft), price, { vendor: 'McMaster-Carr class', notes: `Cut to length: ${g.cuts.join(', ')}; ${METAL_CUT_ALLOWANCE_IN}" per cut for the kerf and squaring` }));
+    const extra = { vendor: price.url ? price.source : 'McMaster-Carr class', notes: `Cut to length: ${g.cuts.join(', ')}; ${METAL_CUT_ALLOWANCE_IN}" per cut for the kerf and squaring` };
+    // A researched bar or tube is bought as the fixed piece the vendor sells (packQty in ft); an estimate is per foot of cut length.
+    if (price.packQty && price.packUsd) metal.push(packLine('Metal stock', g.section, g.section, r2(g.ft), price, extra, false));
+    else metal.push(line('Metal stock', g.section, g.section, r2(g.ft), price, { ...extra, notes: joinNotes(price.note && `Price: ${price.note}.`, extra.notes) }));
   }
 
   // Purchased parts (and printed clips), by partNo
@@ -637,19 +673,34 @@ export function bom(parts: Part[], p: Params): Bom {
     const x = group[0];
     const tg = TOUCH_PRICED_PARTS.has(key) ? touchGroupOfPart(x) : undefined;
     const cost = x.sourcing?.costUsd;
+    const entry = purchasedEntry(key);
     let price: Price;
-    if (cost !== undefined) price = { usd: cost, unit: 'ea', source: 'part.sourcing.costUsd (model)', basis: 'quoted' };
-    else { price = purchasedPrice(key); if (price.note?.startsWith('UNPRICED')) unpriced.push(key); }
-    const vendorFull = x.sourcing?.vendor ?? '';
+    let priceNote: string | undefined;
+    if (cost !== undefined && !entry?.override) {
+      // The model's own cost wins (a quote Eric or the model gave); the research can add a note and spec-gap alternatives to it.
+      const mc = modelCostNote(key);
+      price = { usd: cost, unit: 'ea', source: 'part.sourcing.costUsd (model)', basis: 'quoted', ...(mc?.alternatives ? { alternatives: mc.alternatives } : {}) };
+      priceNote = mc ? (mc.note.includes(RESEARCH_DATE) ? mc.note : `${mc.note} (${RESEARCH_DATE} research)`) : undefined;
+    } else {
+      price = entry?.price ?? PURCHASED_FALLBACK;
+      priceNote = price.note;
+      if (cost !== undefined) priceNote = `${priceNote ?? ''} Replaces the model's $${cost} estimate.`.trim();
+      if (price.note?.startsWith('UNPRICED')) unpriced.push(key);
+    }
     const url = x.sourcing?.url ?? price.url;
-    (tg ? touchLines : purchased).push(line(tg ? TOUCHES_SECTION.title : 'Purchased parts', key, x.name, group.length, price, {
-      vendor: shortVendor(x.sourcing?.vendor, x.kind),
-      notes: clip([vendorFull, price.note && cost === undefined ? `Price: ${price.note}` : ''].filter(Boolean).join(' | '), 320),
+    const vendor = price.url ? price.source : shortVendor(x.sourcing?.vendor, x.kind);
+    const vendorFull = x.sourcing?.vendor ?? '';
+    const extra: Partial<BomLine> = {
+      vendor,
+      notes: [clip(vendorFull, 200), priceNote ? `Price: ${priceNote}` : ''].filter(Boolean).join(' | '),
       partIds: group.map((q) => q.id),
       ...(url ? { url } : {}),
       ...(tg ? { group: tg } : {}),
       ...(hardwareMaterialNote(x) ? { materialNote: hardwareMaterialNote(x) } : {}),
-    }));
+    };
+    // A part cut from a roll or a pack (a cord): the whole packs to buy, not a price per part.
+    if (price.packQty && price.packUsd && price.perPart) purchased.push(packLine('Purchased parts', key, x.name, group.length * price.perPart, price, extra, false));
+    else (tg ? touchLines : purchased).push(line(tg ? TOUCHES_SECTION.title : 'Purchased parts', key, x.name, group.length, price, extra));
   }
 
   // Fasteners: every unique joint, then the items that exist only in notes (NOTE_ITEMS)
@@ -678,8 +729,8 @@ export function bom(parts: Part[], p: Params): Bom {
     const x = item.expand(built, uj);
     if (!x) continue;
     if (item.section === 'fasteners') for (const f of x.items) { fast.set(f.label, (fast.get(f.label) ?? 0) + f.qty); noteOn(f.label, item.partIds); }
-    else if (item.touch) touchLines.push(line(TOUCHES_SECTION.title, item.key, x.items[0].label, x.items[0].qty, item.price!, { vendor: item.price!.source, notes: `${x.note} (${item.noteRef})`, group: item.touch }));
-    else noteLines.push(line('Consumables', item.key, x.items[0].label, x.items[0].qty, item.price!, { vendor: item.price!.source, notes: `${x.note} (${item.noteRef})` }));
+    else if (item.touch) touchLines.push(line(TOUCHES_SECTION.title, item.key, x.items[0].label, x.items[0].qty, item.price!, { vendor: item.price!.source, notes: joinNotes(item.price!.url ? `Price: ${item.price!.note}.` : undefined, `${x.note} (${item.noteRef})`), group: item.touch }));
+    else noteLines.push(line('Consumables', item.key, x.items[0].label, x.items[0].qty, item.price!, { vendor: item.price!.source, notes: joinNotes(item.price!.url ? `Price: ${item.price!.note}.` : undefined, `${x.note} (${item.noteRef})`) }));
   }
   const familyOrder = (l: string): number => (/^Domino/.test(l) ? 7 : /insert/i.test(l) ? 4 : /bolt|cap screw/.test(l) ? 1 : /nut/.test(l) ? 2 : /washer/.test(l) ? 3 : /Thumb/.test(l) ? 4 : /collar|cotter|plug|rod/.test(l) ? 6 : 0);
   const bulkLines: BomLine[] = [];
@@ -688,10 +739,12 @@ export function bom(parts: Part[], p: Params): Bom {
     const price = fastenerPrice(label);
     if (price.note?.startsWith('UNPRICED')) unpriced.push(label);
     const description = /^Domino/.test(label) ? `${label}, Sipo (sapele) exterior Domino, not beech` : label;
-    const extra: Partial<BomLine> = { vendor: /^Domino/.test(label) ? 'Festool dealer' : 'McMaster-Carr / Fastenal', materialNote: fastenerMaterialNote(label, [...(fastOn.get(label) ?? [])]), ...(group ? { group } : {}) };
+    const extra: Partial<BomLine> = { vendor: price.url ? price.source : /^Domino/.test(label) ? 'Festool dealer' : 'McMaster-Carr / Fastenal', materialNote: fastenerMaterialNote(label, [...(fastOn.get(label) ?? [])]), ...(group ? { group } : {}) };
     const sectionTitle = group ? TOUCHES_SECTION.title : 'Fasteners';
     if (isBulkQty(price, qty)) return packLine(group ? sectionTitle : BULK_SECTION.title, label, description, qty, price, extra);
-    return line(sectionTitle, label, description, qty, price, extra);
+    // Sold in packs and the build needs half a pack or more: still whole packs (the real purchase), in place.
+    if (price.packQty && price.packUsd) return packLine(sectionTitle, label, description, qty, price, extra, false);
+    return line(sectionTitle, label, description, qty, price, { ...extra, ...(price.note ? { notes: price.note } : {}) });
   };
   const fastenerLines: BomLine[] = [...fast.entries()].sort((a, b) => familyOrder(a[0]) - familyOrder(b[0]) || a[0].localeCompare(b[0])).map(([label, qty]) => fastenerLine(label, qty));
   const fasteners: BomLine[] = fastenerLines.filter((l) => l.section === 'Fasteners');
@@ -726,56 +779,41 @@ export function bom(parts: Part[], p: Params): Bom {
   }
   const consumables: BomLine[] = [];
   const buyText = sched.buy.filter((x) => /West System/.test(x.item)).map((x) => `${x.qty} ${x.unit} ${x.item.replace('West System ', '')}`).join(', ');
-  const epoxyNote = `${r2(resinFlOz)} fl oz resin: ${r2(glueEpoxyTotal)} fl oz mixed for the glue joints (finishing.ts estimate by joint type, +${Math.round(EPOXY_WASTE * 100)}% waste, 5:1 with the kit's 206), ${r2(finishEpoxyFlOz)} fl oz for the one seal coat (the transom and bulkhead closes are glue joints, in the first figure; the schedule's buy list: ${buyText}). Cheapest kit combination that covers it.`;
-  if (best!.g) consumables.push(line('Consumables', 'epoxy-gallon', gallon.label, best!.g, gallon.price, { vendor: gallon.price.source, notes: epoxyNote }));
-  if (best!.q) consumables.push(line('Consumables', 'epoxy-quart', quart.label, best!.q, quart.price, { vendor: quart.price.source, notes: best!.g ? undefined : epoxyNote }));
-  // Hardeners of the buy list, by West System number (207 for the coats, 209 for the slow closes); the 205/206 for the glue comes in the resin kits.
-  const hardenerLines = sched.buy.filter((x) => /West System/.test(x.item) && /hardener/i.test(x.item));
-  for (const hb of hardenerLines) {
-    const no = /\b(20[5679])\b/.exec(hb.item)?.[1];
-    const price = no ? EPOXY_HARDENER_PINT[no] : undefined;
-    if (!no || !price) { unpriced.push(hb.item); continue; }
-    const pints = hb.qt * 2;
-    const key = `epoxy-${no}`;
-    const prev = consumables.find((l) => l.key === key);
-    if (prev) { prev.qty += pints; prev.extUsd = money(prev.qty * prev.unitUsd); continue; }
-    consumables.push(line('Consumables', key, `West System ${no} ${no === '209' ? 'extra slow' : no === '207' ? 'special clear' : no === '205' ? 'fast' : 'slow'} hardener`, pints, price, { vendor: price.source, notes: `The schedule's buy list: ${hardenerLines.filter((q) => q.item === hb.item).map((q) => `${q.qty} ${q.unit}`).join(' + ')}. 3:1 with the kit's 105 resin.` }));
-  }
-  // Pumps: the schedule's counted supplies (303 for the 3:1 hardeners); a 301 set meters the 5:1 glue epoxy. Fall back to one of each when the schedule names none.
-  const pumpLines = (sched.supplies ?? []).filter((x) => /pump/i.test(x.item));
-  for (const sp of pumpLines) {
-    const no = /\b(30[0-9])\b/.exec(sp.item)?.[1] ?? '303';
-    const price = EPOXY_PUMP_SET[no];
-    if (!price) { unpriced.push(sp.item); continue; }
-    consumables.push(line('Consumables', `epoxy-pumps-${no}`, sp.item, sp.qty, price, { vendor: price.source, notes: sp.note }));
-  }
-  if (!pumpLines.some((x) => /301/.test(x.item))) consumables.push(line('Consumables', 'epoxy-pumps-301', 'West System 301 pump set (5:1, for the glue epoxy)', 1, EPOXY_PUMP_SET['301'], { vendor: EPOXY_PUMP_SET['301'].source }));
-  if (!pumpLines.some((x) => /303/.test(x.item)) && hardenerLines.some((x) => /\b20[79]\b/.test(x.item))) consumables.push(line('Consumables', 'epoxy-pumps-303', 'West System 303 pump set (3:1, for 207/209)', 1, EPOXY_PUMP_SET['303'], { vendor: EPOXY_PUMP_SET['303'].source }));
-  consumables.push(line('Consumables', 'silica', 'Colloidal silica filler (thickened glue, fillets)', 1, FILLERS.silica, { vendor: FILLERS.silica.source }));
-  consumables.push(line('Consumables', 'microballoons', 'Low-density fairing filler', 1, FILLERS.microballoons, { vendor: FILLERS.microballoons.source }));
+  const epoxyNote = `${r2(resinFlOz)} fl oz resin: ${r2(glueEpoxyTotal)} fl oz mixed for the glue joints (estimated by joint type, +${Math.round(EPOXY_WASTE * 100)}% waste, 5:1 with the kit's 206), ${r2(finishEpoxyFlOz)} fl oz for the one seal coat (the transom and bulkhead closes are glue joints, in the first figure; the schedule's buy list: ${buyText}). Cheapest kit combination that covers it.`;
+  if (best!.g) consumables.push(line('Consumables', 'epoxy-gallon', gallon.label, best!.g, gallon.price, { vendor: gallon.price.source, notes: joinNotes(`Price: ${gallon.price.note}.`, epoxyNote) }));
+  if (best!.q) consumables.push(line('Consumables', 'epoxy-quart', quart.label, best!.q, quart.price, { vendor: quart.price.source, notes: joinNotes(`Price: ${quart.price.note}.`, best!.g ? undefined : epoxyNote) }));
+  // Hardeners: 205/206 come in the resin kits (the schedule uses 206 only, so its buy list names none). 207 and 209 are not bought (their sizes are 0.66 pt and 0.33 gal, not the pint
+  // the BOM once priced): a schedule that asks for one is flagged unpriced rather than priced at a size that does not exist.
+  for (const hb of sched.buy.filter((x) => /West System/.test(x.item) && /hardener/i.test(x.item))) if (/\b20[79]\b/.test(hb.item)) unpriced.push(hb.item);
+  // Pumps: West System no longer sells the 301 and 303 sets; the 300 Mini Pump Set (resin, 205/206 and 207/209 pumps) does both ratios, one set for the sled.
+  consumables.push(line('Consumables', 'epoxy-pumps', 'West System 300 Mini Pump Set (three pumps: resin and both hardener ratios; one set does both)', 1, EPOXY_PUMPS_300, { vendor: EPOXY_PUMPS_300.source, notes: `Price: ${EPOXY_PUMPS_300.note}.` }));
+  consumables.push(line('Consumables', 'silica', 'Colloidal silica filler (thickened glue, fillets)', 1, FILLERS.silica, { vendor: FILLERS.silica.source, notes: `Price: ${FILLERS.silica.note}.` }));
+  consumables.push(line('Consumables', 'microballoons', 'Low-density fairing filler', 1, FILLERS.microballoons, { vendor: FILLERS.microballoons.source, notes: `Price: ${FILLERS.microballoons.note}.` }));
   const tapeFt = Math.ceil(tapeJoints * TAPE_FT_PER_JOINT * (1 + TAPE_WASTE));
   if (tapeFt > 0) {
     const tapeExtra = { vendor: GLASS_TAPE.source, notes: `${tapeJoints} taped joints x ${TAPE_FT_PER_JOINT} ft, +${Math.round(TAPE_WASTE * 100)}%` };
+    // Sold in 10 ft rolls: whole rolls either way (shop stock when the build needs under half a roll).
     if (isBulkQty(GLASS_TAPE, tapeFt)) bulkLines.push(packLine(BULK_SECTION.title, 'glass-tape', 'Fiberglass tape, 2" wide', tapeFt, GLASS_TAPE, tapeExtra));
-    else consumables.push(line('Consumables', 'glass-tape', 'Fiberglass tape, 2" wide', tapeFt, GLASS_TAPE, tapeExtra));
+    else consumables.push(packLine('Consumables', 'glass-tape', 'Fiberglass tape, 2" wide', tapeFt, GLASS_TAPE, tapeExtra, false));
   }
   consumables.push(...noteLines);
   // The finish products, container by container, exactly as the schedule's buy list names them.
-  const finishKey = (item: string): { key: string; price: Price } | null => {
+  const finishKey = (item: string): { key: string; table: string; price: Price } | null => {
     if (/West System/.test(item)) return null;
-    if (/conditioner/i.test(item)) return { key: 'conditioner', price: FINISH_PRICE.conditioner };
-    if (/gel stain/i.test(item)) return { key: 'gel-stain', price: FINISH_PRICE.gelStain };
-    if (/stain or dye/i.test(item)) return { key: 'stain', price: FINISH_PRICE.stain };
-    if (/thinner/i.test(item)) return { key: 'thinner', price: FINISH_PRICE.thinner };
-    if (/varnish/i.test(item)) return { key: 'varnish', price: FINISH_PRICE.varnish };
-    if (/enamel|pigment/i.test(item)) return { key: 'enamel', price: FINISH_PRICE.enamel };
+    if (/conditioner/i.test(item)) return { key: 'conditioner', table: 'conditioner', price: FINISH_PRICE.conditioner };
+    if (/gel stain/i.test(item)) return { key: 'gel-stain', table: 'gelStain', price: FINISH_PRICE.gelStain };
+    if (/stain or dye/i.test(item)) return { key: 'stain', table: 'stain', price: FINISH_PRICE.stain };
+    if (/thinner/i.test(item)) return { key: 'thinner', table: 'thinner', price: FINISH_PRICE.thinner };
+    if (/varnish/i.test(item)) return { key: 'varnish', table: 'varnish', price: FINISH_PRICE.varnish };
+    if (/enamel|pigment/i.test(item)) return { key: 'enamel', table: 'enamel', price: FINISH_PRICE.enamel };
     return null;
   };
   for (const bl of sched.buy) {
     const k = finishKey(bl.item);
     if (!k) { if (!/West System/.test(bl.item)) unpriced.push(bl.item); continue; }
-    const price: Price = { ...k.price, usd: money(k.price.usd * FINISH_CONTAINER_FACTOR[bl.unit]), unit: bl.unit };
-    consumables.push(line('Consumables', `${k.key}-${bl.unit}`, `${bl.item}, ${bl.unit}`, bl.qty, price, { vendor: k.price.source, notes: bl.note }));
+    // The real container price where the research found one, else the base per-quart price scaled by the container size.
+    const price: Price = FINISH_CONTAINER_PRICE[k.table]?.[bl.unit] ?? { ...k.price, usd: money(k.price.usd * FINISH_CONTAINER_FACTOR[bl.unit]), unit: bl.unit };
+    consumables.push(line('Consumables', `${k.key}-${bl.unit}`, `${bl.item}, ${bl.unit}`, bl.qty, price, { vendor: price.source, notes: joinNotes(price.url ? `Price: ${price.note}.` : undefined, bl.note) }));
   }
   if (BULK_ALWAYS.has('sandpaper')) bulkLines.push(packLine(BULK_SECTION.title, 'sandpaper', 'Sandpaper, lump sum', 1, FINISH_PRICE.sandpaper, { vendor: FINISH_PRICE.sandpaper.source }));
   else consumables.push(line('Consumables', 'sandpaper', 'Sandpaper, lump sum', 1, FINISH_PRICE.sandpaper, { vendor: FINISH_PRICE.sandpaper.source }));
@@ -803,7 +841,7 @@ export function bom(parts: Part[], p: Params): Bom {
   ];
   const bulk = section(BULK_SECTION.id, BULK_SECTION.title, bulkLines, {
     notes: [
-      'Sold in packs much larger than the sled needs, so each line is priced by the whole pack. You may already have these in the shop; keep the rest for the next project. Pack sizes and pack prices are estimates until the price research supplies real ones. Material requirements per line are in the Material column; the reason is in the Fasteners note.',
+      'Sold in packs much larger than the sled needs, so each line is priced by the whole pack. You may already have these in the shop; keep the rest for the next project. Packs and prices are from the 2026-10-12 price research where a line shows a vendor link; the rest are estimates. Material requirements per line are in the Material column; the reason is in the Fasteners note.',
     ],
   });
   const sections: BomSection[] = [...core, bulk, touches];
@@ -815,9 +853,12 @@ export function bom(parts: Part[], p: Params): Bom {
   const estimateUsd = money(coreEstimateUsd + bulkEstimateUsd + touchesEstimateUsd);
   const totalsText = totalsLine(coreUsd, bulkUsd, touchesUsd, totalUsd);
 
-  const rows: CsvCell[][] = [['Section', 'Item', 'Description', 'Qty', 'Unit', 'Unit USD', 'Ext USD', 'Basis', 'Vendor', 'Notes', 'URL', 'Group', 'Needed', 'Pack size', 'Packs to buy', 'Pack USD', 'Material']];
+  // Lines that need a decision from Eric (the Domino 4x20, the wheel spec, the shaft collars, the eye bolts...), in the order of the sections.
+  const decisions = [...new Set(sections.flatMap((x) => x.lines).filter((l) => l.decision).map((l) => l.key))];
+  const altText = (l: BomLine): string | undefined => l.alternatives?.map((a) => `${a.specGap ? 'SPEC GAP: ' : ''}${a.source} ${a.packUsd ?? a.usd.toFixed(2)}${a.packQty ? ` per ${a.packLabel ?? `pack of ${a.packQty}`}` : `/${a.unit}`}${a.url ? ` ${a.url}` : ''}`).join(' | ');
+  const rows: CsvCell[][] = [['Section', 'Item', 'Description', 'Qty', 'Unit', 'Unit USD', 'Ext USD', 'Basis', 'Vendor', 'Notes', 'URL', 'Group', 'Needed', 'Pack size', 'Packs to buy', 'Pack USD', 'Material', 'Alternatives', 'Decision']];
   for (const s of sections) {
-    for (const l of s.lines) rows.push([s.title, l.key, l.description, l.qty, l.unit, l.unitUsd.toFixed(2), l.extUsd.toFixed(2), l.basis, l.vendor, l.notes, l.url, l.group ? TOUCH_GROUPS.find((g) => g.id === l.group)!.title : undefined, l.needed, l.packQty, l.packs, l.packUsd?.toFixed(2), l.materialNote]);
+    for (const l of s.lines) rows.push([s.title, l.key, l.description, l.qty, l.unit, l.unitUsd.toFixed(2), l.extUsd.toFixed(2), l.basis, l.vendor, l.notes, l.url, l.group ? TOUCH_GROUPS.find((g) => g.id === l.group)!.title : undefined, l.needed, l.packQty, l.packs, l.packUsd?.toFixed(2), l.materialNote, altText(l), l.decision]);
     for (const g of s.groups ?? []) rows.push([s.title, '', `Subtotal: ${g.title}`, '', '', '', g.subtotalUsd.toFixed(2), '', '', `${g.estimateUsd.toFixed(2)} of it estimated`, '', g.title]);
     rows.push([s.title, '', 'Subtotal', '', '', '', s.subtotalUsd.toFixed(2), '', '', `${s.estimateUsd.toFixed(2)} of it estimated${s.notes?.length ? `. ${s.notes.join(' ')}` : ''}`]);
   }
@@ -829,7 +870,7 @@ export function bom(parts: Part[], p: Params): Bom {
 
   return {
     sections, totalUsd, estimateUsd, estimateShare: share(estimateUsd, totalUsd), coreUsd, bulkUsd, touchesUsd, coreEstimateUsd, bulkEstimateUsd, touchesEstimateUsd,
-    coreEstimateShare: share(coreEstimateUsd, coreUsd), bulkEstimateShare: share(bulkEstimateUsd, bulkUsd), touchesEstimateShare: share(touchesEstimateUsd, touchesUsd), totalsText, jointCounts, unpriced: [...new Set(unpriced)],
+    coreEstimateShare: share(coreEstimateUsd, coreUsd), bulkEstimateShare: share(bulkEstimateUsd, bulkUsd), touchesEstimateShare: share(touchesEstimateUsd, touchesUsd), totalsText, jointCounts, unpriced: [...new Set(unpriced)], decisions,
     consumables: { epoxyFlOz, finishEpoxyFlOz, closeEpoxyFlOz, glueEpoxyFlOz: glueEpoxyTotal, resinFlOz, sealedFt2, oakFt2, plyFt2, glueJoints, tapeFt }, unresolved, wholeBoardsExtraUsd: 0, lumberAllowanceUsd: money(lumberAllowanceUsd), lumberAltUsd: money(lumberAltUsd), csv: toCsv(rows),
   };
 }

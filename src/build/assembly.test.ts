@@ -27,8 +27,8 @@ describe('assembly steps', () => {
       expect(s.partIds, s.id).toEqual([]);
       expect(s.modelStep, s.id).toBe(0);
     }
-    // Verify points at verify.ts and its checks.
-    expect(steps[0].instructions.join(' ')).toMatch(/verify\.ts/);
+    // Verify points at the Verify section and its checks (no source file names in the text).
+    expect(steps[0].instructions.join(' ')).toMatch(/Verify section/);
     expect(steps[0].instructions.join(' ')).toMatch(/Tire squash/);
   });
 

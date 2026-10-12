@@ -15,8 +15,8 @@ import type { BuildStep } from '../build/assembly';
 import type { OakRow } from '../build/cutlist';
 import { h } from './dom';
 import {
-  bytesLabel, clampStep, cureLine, dimsParts, featureSummary, fracDim, fracInch, groupByWhen, loadDone, loadStep, loadStepChecks, maxDepth, pct, previewSvg, saveDone, saveStep, saveStepChecks,
-  sheetSvg, stepFocus, tilePagesHtml, todayISO, usd,
+  bytesLabel, clampStep, cureLine, dimsParts, featureSummary, fracDim, fracInch, groupByWhen, loadDone, loadStep, loadStepChecks, maxDepth, mergeBuy, noteLead, pct, previewSvg, saveDone, saveStep, saveStepChecks,
+  sameLead, sharedNote, sheetSvg, splitUrls, stepFocus, tilePagesHtml, todayISO, usd, vendorFromUrl,
   type StepFocus,
 } from './build-helpers';
 import './build-panel.css';
@@ -95,6 +95,8 @@ interface TableOpts {
   qty?: number;
   key?: number;
   end?: number;
+  /** Column widths in percent (a `colgroup`): consecutive cut-list tables share the first columns so Qty and Final line up. */
+  cols?: number[];
 }
 
 /** A table in a keyboard-scrollable wrapper (a wide table scrolls sideways instead of wrapping into a column of fragments). */
@@ -104,6 +106,7 @@ const table = (cls: string, head: (string | Node)[], rows: (string | Node)[][], 
   // `data-label` is the phone card's caption for the cell ("Rough", not "Rough T × W × L").
   const label = (i: number): Record<string, string> => (typeof head[i] === 'string' && head[i] ? { 'data-label': (head[i] as string).replace(/\s*T × W × L$/, '') } : {});
   const t = h('table', { class: `bp-table ${cls}`.trim(), 'aria-label': aria },
+    ...(opts.cols ? [h('colgroup', {}, ...opts.cols.map((w) => h('col', { style: `width: ${w}%` })))] : []),
     h('thead', {}, h('tr', {}, ...head.map((x, i) => h('th', { scope: 'col', ...attrs(i) }, x)))),
     h('tbody', {}, ...rows.map((r) => h('tr', {}, ...r.map((c, i) => h('td', { ...attrs(i), ...label(i) }, c))))),
     ...(opts.foot ? [h('tfoot', {}, h('tr', {}, ...opts.foot.map((c, i) => h(i === 0 ? 'th' : 'td', i === 0 ? { scope: 'row' } : attrs(i), c))))] : []));
@@ -145,6 +148,27 @@ const dimsCell = (d: Dims): Node => {
 /** A BOM item name, linked to the vendor page when the price or part carries a real http(s) link. */
 const itemName = (text: string, url?: string): string | Node =>
   url && /^https?:\/\//i.test(url) ? h('a', { href: url, target: '_blank', rel: 'noopener noreferrer', class: 'bp-link' }, text) : text;
+const isHttp = (url: string | undefined): url is string => !!url && /^https?:\/\//i.test(url);
+const extLink = (text: string, url: string): HTMLElement => h('a', { href: url, target: '_blank', rel: 'noopener noreferrer', class: 'bp-link' }, text);
+/** Text with its raw http(s) URLs turned into short "vendor page" links. */
+const linkified = (text: string): (string | Node)[] => splitUrls(text).map((seg) => (typeof seg === 'string' ? seg : extLink('vendor page', seg.url)));
+/** A cheaper option for a BOM line (`BomLine.alternatives`, from prices.ts); every field is optional so a partial record still renders. */
+interface AltLike { source?: string; vendor?: string; usd?: number; unit?: string; url?: string; note?: string; specGap?: boolean | string; packQty?: number; packUsd?: number; packLabel?: string }
+const altsOf = (l: BomLine): AltLike[] => {
+  const a = (l as { alternatives?: unknown }).alternatives;
+  return Array.isArray(a) ? (a as AltLike[]).filter((x) => x && typeof x === 'object') : [];
+};
+/** "Harbor Freight $9.99/ea (spec gap: 5/8" bore)": the vendor is the link; the why is the first clause of the price's note after "SPEC GAP:" (the rest is in the line's Details). */
+const altNode = (a: AltLike): Node => {
+  const name = a.source ?? a.vendor ?? (a.url ? vendorFromUrl(a.url) : '') ?? '';
+  const price = a.packQty && a.packUsd ? ` ${usd(a.packUsd)} per ${a.packLabel ?? `pack of ${a.packQty}`}` : typeof a.usd === 'number' ? ` ${usd(a.usd)}${a.unit ? `/${a.unit}` : ''}` : '';
+  const raw = (typeof a.specGap === 'string' ? a.specGap : a.note ?? '').replace(/^\s*SPEC GAP:\s*/i, '');
+  const why = raw ? noteLead(raw, 48).lead.replace(/[.\s]+$/, '') : '';
+  const gap = a.specGap || /^\s*SPEC GAP/i.test(a.note ?? '') ? `spec gap${why ? `: ${why}` : ''}` : why;
+  return h('span', { class: 'bp-alt', ...(raw ? { title: raw } : {}) }, isHttp(a.url) ? extLink(`${name || 'vendor page'} ↗`, a.url) : (name || 'Other'), price, gap ? ` (${gap})` : '');
+};
+/** A first sentence of a material note that warns (plated steel, a wrong type): shown inline even when the note differs from the shared one. */
+const MATERIAL_WARN = /check the listing|\bNOT\b(?! priced)/;
 const stepList = (n: number[]): string => (n.length ? n.join(', ') : '–');
 
 const note = (text: string, cls = 'muted small') => h('p', { class: cls }, text);
@@ -387,13 +411,13 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
         oakPart(r),
         String(r.qty), dimsCell(r.stock), dimsCell(r.rough), r.grainWord ?? '–',
         `${r.fab}${r.plies ? ` · ${r.plies} plies` : ''}`, stepList(r.assemblySteps),
-      ]), `Oak ${g.title}`, { num: [1], nowrap: [4], qty: 1, key: 2 }));
+      ]), `Oak ${g.title}`, { num: [1], nowrap: [4], qty: 1, key: 2, cols: [26, 5, 22, 22, 8, 10, 7] }));
     }
     out.push(h('h3', { class: 'bp-group' }, 'Resaw list'));
     out.push(table('bp-cuts', ['Strips for', 'Strips', 'Final T × W × L', 'Rough T × W × L', 'Resaw from'], c.strips.map((r) => [
       h('div', {}, h('strong', {}, r.name), sub(`${r.parts} part${r.parts === 1 ? '' : 's'} × ${r.plies} plies`)),
       String(r.strips), dimsCell(r.stock), dimsCell(r.rough), r.resawFrom,
-    ]), 'Resawn strips', { num: [1], qty: 1, key: 2 }));
+    ]), 'Resawn strips', { num: [1], qty: 1, key: 2, cols: [26, 5, 22, 22, 25] }));
     for (const pool of c.resaw) {
       out.push(note(`${pool.strips} strips of ${fracIn(pool.roughT)}" rough: buy ${pool.boards} × ${pool.board} × ${pool.boardWidthIn}" wide × ${pool.boardLengthIn / 12} ft (${pool.boardFeet.toFixed(1)} bf). RIP FIRST into ${pool.lanes} lane${pool.lanes === 1 ? '' : 's'}, then resaw each lane into ${pool.stripsPerBoard} slab${pool.stripsPerBoard === 1 ? '' : 's'}; a board yields ${pool.yieldPerBoard} strips, so the purchase holds ${pool.stripSlots}: ${pool.spares} spare${pool.spares === 1 ? '' : 's'}.`, 'muted bp-prose'));
     }
@@ -403,12 +427,12 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
       out.push(table('bp-cuts', ['Part', 'Qty', 'Size T × W × L', 'Grain', 'Fabrication', 'Step'], g.rows.map((r) => [
         partCell(r.name, r.partNo, r.note),
         String(r.qty), dimsCell(r.stock), r.grainWord ?? '–', r.fab, stepList(r.assemblySteps),
-      ]), `Plywood ${g.label}`, { num: [1], nowrap: [3], qty: 1, key: 2 }));
+      ]), `Plywood ${g.label}`, { num: [1], nowrap: [3], qty: 1, key: 2, cols: [26, 5, 22, 12, 25, 10] }));
     }
     out.push(h('h3', { class: 'bp-group' }, 'Metal stock (drill and tap)'));
     out.push(table('bp-cuts', ['Part', 'Qty', 'Section', 'Cut length', 'Step'], c.metal.map((r) => [
       partCell(r.name, r.partNo), String(r.qty), r.section, fracInch(r.cutLengthIn), stepList(r.assemblySteps),
-    ]), 'Metal stock', { num: [1], qty: 1, key: 3 }));
+    ]), 'Metal stock', { num: [1], qty: 1, key: 3, cols: [26, 5, 22, 22, 25] }));
     return out;
   }
 
@@ -454,43 +478,99 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
       el.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
       el.focus({ preventScroll: true });
     };
-    const part = (title: string, usdV: number, share: number) =>
-      h('li', { class: 'bp-part' }, h('span', { class: 'muted' }, title), h('strong', {}, usd(usdV)), h('span', { class: 'muted small' }, `${pct(share)} estimate`));
+    const jumpChip = (title: string, usdV: number, share: number, target: string) => {
+      const chip = h('button', { type: 'button', class: 'bp-chip', title: `Jump to ${title}` },
+        h('span', { class: 'muted' }, title), h('strong', {}, usd(usdV)), h('span', { class: 'muted small' }, `${pct(share)} estimate`));
+      chip.addEventListener('click', () => goTo(`bp-bom-${target}`));
+      return h('li', { class: 'bp-part' }, chip);
+    };
+    // Open decisions: each BOM line that carries a `decision` (an item that does not exist as specified, a spec change), as "item: what to decide".
+    const byText = new Map<string, string[]>();
+    for (const l of b.sections.flatMap((x) => x.lines)) if (l.decision) byText.set(l.decision, [...(byText.get(l.decision) ?? []), l.description]);
+    if (byText.size) {
+      out.push(h('aside', { class: 'bp-decisions', 'aria-label': 'Decisions needed' },
+        h('h3', { class: 'bp-group' }, 'Decisions needed'),
+        h('ul', { class: 'bp-plain' }, ...[...byText].map(([text, names]) => {
+          const nl = noteLead(text, 160); // a short lead, the full text behind a fold; lines that share a decision are named together
+          const lead = [h('strong', {}, names.join('; ')), ': ', ...linkified(nl.lead)];
+          return h('li', {}, ...(nl.rest ? [h('details', { class: 'bp-more' }, h('summary', {}, ...lead, h('span', { class: 'bp-detlink' }, ' Details')), h('p', { class: 'small' }, ...linkified(nl.rest)))] : lead));
+        }))));
+    }
+    const kinds = new Set(['bulk', 'touches']);
     out.push(h('div', { class: 'bp-total', role: 'status' },
       h('div', {}, h('span', {}, 'Total'), h('strong', {}, usd(b.totalUsd))),
       h('div', { class: 'small' }, b.totalsText),
-      h('ul', { class: 'bp-subtotals bp-parts', 'aria-label': 'Totals by kind' },
-        part('Build', b.coreUsd, b.coreEstimateShare), part('Bulk parts', b.bulkUsd, b.bulkEstimateShare), part('Finishing touches', b.touchesUsd, b.touchesEstimateShare)),
+      h('ul', { class: 'bp-subtotals bp-parts', 'aria-label': 'Totals by kind (jump to a table)' },
+        jumpChip('Build', b.coreUsd, b.coreEstimateShare, b.sections[0]?.id ?? 'lumber'),
+        jumpChip('Bulk parts', b.bulkUsd, b.bulkEstimateShare, 'bulk'),
+        jumpChip('Finishing touches', b.touchesUsd, b.touchesEstimateShare, 'touches')),
       h('div', { class: 'muted small' }, `${pct(b.estimateShare)} of this is an estimate (${usd(b.estimateUsd)}); the rest is quoted. Prices are 2026 US retail guesses until you get quotes.`),
       h('h3', { class: 'bp-group' }, 'Jump to a section'),
       h('ul', { class: 'bp-subtotals', 'aria-label': 'Subtotals by section (jump to a table)' },
-        ...b.sections.map((s) => {
-          const chip = h('button', { type: 'button', class: 'bp-chip', title: `Jump to ${s.title}` }, h('span', { class: 'muted' }, s.title), h('strong', {}, usd(s.subtotalUsd)));
-          chip.addEventListener('click', () => goTo(`bp-bom-${s.id}`));
+        ...b.sections.filter((x) => !kinds.has(x.id)).map((x) => {
+          const chip = h('button', { type: 'button', class: 'bp-chip', title: `Jump to ${x.title}` }, h('span', { class: 'muted' }, x.title), h('strong', {}, usd(x.subtotalUsd)));
+          chip.addEventListener('click', () => goTo(`bp-bom-${x.id}`));
           return h('li', {}, chip);
         }))));
-    const bomTable = (title: string, lines: BomLine[], subtotal: number): HTMLElement =>
-      table('bp-bom', ['Item', 'Qty', 'Unit price', 'Basis', 'Vendor', 'Extended'],
-        lines.map((l) => [
-          h('div', {}, itemName(l.description, l.url), ...(l.notes ? [sub(l.notes)] : []),
-            ...(l.packQty && l.packs ? [h('div', { class: 'small bp-pack' }, `need ${+(l.needed ?? 0).toFixed(2)} · ${l.packs} pack${l.packs === 1 ? '' : 's'} of ${l.packQty}${l.packUsd ? ` at ${usd(l.packUsd)}` : ''}`)] : []),
-            ...(l.materialNote ? [h('div', { class: 'small bp-material' }, h('strong', {}, 'Material: '), l.materialNote)] : [])),
-          `${l.qty % 1 ? l.qty.toFixed(2) : l.qty} ${l.unit}`, usd(l.unitUsd), l.basis === 'estimate' ? 'estimate' : 'quoted', l.vendor ?? '–', h('strong', {}, usd(l.extUsd)),
-        ]),
-        title, { num: [1, 2, 5], qty: 1, end: 5, foot: [`${title} subtotal`, '', '', '', '', usd(subtotal)] });
+    /**
+     * The item cell: name, then ONE short line (the first clause of the notes, or the pack count), then the rest of the notes behind a closed "Details" fold. A material note the table
+     * shares is printed once above the table; a line shows its own only when it differs (inline for a warning, in the fold otherwise). Alternatives are a compact line of links.
+     */
+    const itemCell = (l: BomLine, shared: string | undefined): Node => {
+      const packed = !!(l.packQty && l.packs);
+      const packText = packed ? `need ${+(l.needed ?? 0).toFixed(2)} · ${l.packs} pack${l.packs === 1 ? '' : 's'} of ${l.packQty}${l.packUsd ? ` at ${usd(l.packUsd)}` : ''}` : '';
+      const nl = l.notes ? noteLead(l.notes) : undefined;
+      const lead = packed ? packText : nl?.lead ?? '';
+      const rest: Node[] = [];
+      if (packed && l.notes) rest.push(h('p', {}, ...linkified(l.notes)));
+      else if (nl?.rest) rest.push(h('p', {}, ...linkified(nl.rest)));
+      const ownMaterial = l.materialNote && !sameLead(l.materialNote, shared) ? l.materialNote : '';
+      const mat = ownMaterial ? noteLead(ownMaterial) : undefined;
+      const warn = !!mat && MATERIAL_WARN.test(mat.lead);
+      if (mat && !warn) rest.push(h('p', {}, h('strong', {}, 'Material: '), ...linkified(ownMaterial)));
+      const name = h('span', { class: 'bp-name' }, itemName(l.description, l.url));
+      const leadEl = lead ? h('span', { class: 'bp-lead', title: lead }, ...linkified(lead)) : undefined;
+      const head = rest.length
+        ? h('details', { class: 'bp-more' },
+            h('summary', { class: 'bp-item' }, name, ...(leadEl ? [leadEl] : []), h('span', { class: 'bp-det' }, 'Details')),
+            h('div', { class: 'bp-rest muted small' }, ...rest))
+        : h('div', { class: 'bp-item' }, name, ...(leadEl ? [leadEl] : []));
+      const alts = altsOf(l);
+      return h('div', {}, head,
+        ...(mat && warn ? [h('div', { class: 'small bp-material' }, h('strong', {}, 'Material: '), mat.lead)] : []),
+        ...(alts.length ? [h('div', { class: 'small bp-alts' }, h('strong', {}, 'Alternatives: '), ...alts.flatMap((a, i) => (i ? ['; ', altNode(a)] : [altNode(a)])))] : []));
+    };
+    const vendorCell = (l: BomLine): string | Node => {
+      const url = isHttp(l.url) ? l.url : undefined;
+      const name = l.vendor ?? (url ? vendorFromUrl(url) : '');
+      if (!name) return '';
+      return url ? extLink(`${name} ↗`, url) : name;
+    };
+    const bomTable = (title: string, lines: BomLine[], subtotal: number): Node[] => {
+      const shared = sharedNote(lines.map((l) => l.materialNote));
+      return [
+        ...(shared ? [h('p', { class: 'muted small bp-prose bp-shared' }, h('strong', {}, 'Material, every line unless noted: '), shared)] : []),
+        table('bp-bom', ['Item', 'Qty', 'Unit price', 'Basis', 'Vendor', 'Extended'],
+          lines.map((l) => [
+            itemCell(l, shared),
+            `${l.qty % 1 ? l.qty.toFixed(2) : l.qty} ${l.unit}`, usd(l.unitUsd), l.basis === 'estimate' ? 'estimate' : 'quoted', vendorCell(l), h('strong', {}, usd(l.extUsd)),
+          ]),
+          title, { num: [1, 2, 5], nowrap: [4], qty: 1, end: 5, foot: [`${title} subtotal`, '', '', '', '', usd(subtotal)] }),
+      ];
+    };
     for (const s of b.sections) {
       out.push(h('h3', { class: 'bp-group bp-bom-head', id: `bp-bom-${s.id}`, tabindex: '-1' }, s.title, h('span', { class: 'muted' }, ` · ${usd(s.subtotalUsd)}`)));
       for (const t of s.notes ?? []) out.push(note(t, 'muted small bp-prose'));
       if (s.groups?.length) {
         const loose = s.lines.filter((l) => !l.group || !s.groups!.some((g) => g.id === l.group));
-        if (loose.length) out.push(bomTable(s.title, loose, loose.reduce((a, l) => a + l.extUsd, 0)));
+        if (loose.length) out.push(...bomTable(s.title, loose, loose.reduce((a, l) => a + l.extUsd, 0)));
         for (const g of s.groups) {
           const lines = s.lines.filter((l) => l.group === g.id);
           if (!lines.length) continue;
           out.push(h('h4', { class: 'bp-sub' }, g.title, h('span', { class: 'muted' }, ` · ${usd(g.subtotalUsd)}`)));
-          out.push(bomTable(g.title, lines, g.subtotalUsd));
+          out.push(...bomTable(g.title, lines, g.subtotalUsd));
         }
-      } else out.push(bomTable(s.title, s.lines, s.subtotalUsd));
+      } else out.push(...bomTable(s.title, s.lines, s.subtotalUsd));
     }
     out.push(h('div', { class: 'bp-total bp-grand' }, h('div', {}, h('span', {}, 'Grand total'), h('strong', {}, usd(b.totalUsd)))));
     if (b.unpriced.length) out.push(h('p', { class: 'fail' }, `No price: ${b.unpriced.join(', ')}`));
@@ -635,7 +715,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
       saveStep(stepN);
       items.forEach((b, j) => { if (j === i) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current'); });
       if (items[i]) list.scrollTop = items[i].offsetTop - list.clientHeight / 2;
-      counterText.textContent = `Step ${s.n} of ${lastN} ▾`;
+      counterText.textContent = (s.n === 0 ? `Step 0 · ${steps.length} steps in all ▾` : `Step ${s.n} of ${lastN} ▾`);
       jump.value = String(s.n);
       (prev as HTMLButtonElement).disabled = i === 0;
       (next as HTMLButtonElement).disabled = i === steps.length - 1;
@@ -669,7 +749,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
     const f = d.finishing;
     const out: Node[] = [h('p', { class: 'small bp-prose' }, `Finish area (net, glued faces taken off): ${f.areas.oakFt2.toFixed(0)} ft² oak, ${f.areas.okoumeFt2.toFixed(0)} ft² okoume (${f.areas.show.totalFt2.toFixed(0)} ft² show, ${f.areas.hidden.totalFt2.toFixed(0)} ft² hidden; ${f.areas.gross.totalFt2.toFixed(0)} ft² gross), ${f.areas.oakEndGrainFt2.toFixed(1)} ft² oak end grain. Quantities include ${pct(0.15)} waste.`)];
     out.push(h('h3', { class: 'bp-group' }, 'Shopping list'));
-    out.push(table('bp-fin', ['Product', 'Notes', 'Buy'], f.buy.map((b) => [h('strong', {}, b.item), b.note, `${b.qty} ${b.unit}`]), 'Finish products to buy', { num: [2] }));
+    out.push(table('bp-fin', ['Product', 'Notes', 'Buy'], mergeBuy(f.buy).map((b) => { const nl = noteLead(b.note, 120); return [h('strong', {}, b.item), nl.rest ? h('details', { class: 'bp-more small' }, h('summary', {}, nl.lead, h('span', { class: 'bp-detlink' }, ' Details')), h('p', { class: 'muted' }, nl.cut ? b.note : nl.rest)) : b.note, b.buy]; }), 'Finish products to buy', { num: [2] }));
     out.push(h('h3', { class: 'bp-group' }, 'Schedule'));
     const real = (v: string | undefined): string => (v && !/^[-–—\s]*$/.test(v) ? v : '');
     out.push(h('div', { class: 'bp-fin-steps' }, ...f.steps.map((s) =>
