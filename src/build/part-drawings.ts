@@ -849,7 +849,7 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
   const kpins = part.partNo === 'brake-knee' ? brakeOf(p).pins : undefined;
   if (kpins) {
     const kz = brakeOf(p).knee.zBot;
-    notes.push(`The tab (rear face, ${frac(kpins.tab.z0 - kz)} to ${frac(kpins.tab.z1 - kz)} up from the bottom end) and the pad (inboard face, ${frac(kpins.pad.z0 - kz)} up from the bottom end to the top end) are glued on after the knee is shaped. Drill the bottom pin hole last, through the leg, from the pin-hole plate on the knee template sheet; the sleeve goes in after.`);
+    notes.push(`The tab (rear face, ${frac(kpins.tab.z0 - kz)} to ${frac(kpins.tab.z1 - kz)} up from the bottom end) is glued on after the knee is shaped. Drill the bottom pin hole last, through the leg, from the pin-hole plate on the knee template sheet; the sleeve goes in after.`);
   }
   // D-76: the side ribs, their knees and the box tie spacers.
   if (/^side-rib(-box|-bow)?$/.test(part.partNo ?? '')) {
@@ -877,7 +877,6 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
     notes.push('A plain piece of stainless tube cut to length on the metal bandsaw: no holes. Cut it square, cut it up to 1/16" long, deburr both ends, and file the ends flush with the faces after the epoxy has set. The 3/8" pin must slide in the bore with only about five thousandths of an inch of play: try the real pin in every sleeve before any epoxy goes on.');
   }
   if (part.partNo === 'brake-tab') notes.push('Grain runs up the 2-13/32" side. The tab is glued to the knee\'s rear face only (never to the side web it lies on). The one hole takes a pin sleeve: drill it on the drill press with the tab square to the table, 1/2" through.');
-  if (part.partNo === 'brake-knee-pad') notes.push('Plane a longer piece of 4/4 oak down to the thickness shown, then crosscut the pads from it (a short piece is not safe in the planer). It is glued full face to the knee\'s inboard face and is never glued to the side web.');
 
   // Merge identical hole features (same spec and axis) across joints; drop a hole whose points another hole already has.
   const merged: Feat[] = [];

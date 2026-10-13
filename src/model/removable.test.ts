@@ -44,11 +44,11 @@ describe('kits', () => {
 describe('kits with the knee on quick-release pins (D-78; the full set is in d78.test.ts)', () => {
   const pp = { ...p, kneeMount: 1 } as typeof p;
   const pinIds = (v: Parameters<typeof buildModel>[1]) => buildModel(pp, { rider: 'none', cargo: false, ...v }).map((x) => x.id);
-  it('the knee, strap, tab, pad, both pins and the knee-side sleeves join the brake kit (34 parts); the hull sleeves and the chocks do not', () => {
+  it('the knee, strap, tab, both pins and the knee-side sleeves join the brake kit (32 parts); the hull sleeves and the chocks do not', () => {
     const parts = buildModel(pp, { rider: 'none', cargo: false });
     const kit = parts.filter((x) => isBrakeKit(x)).map((x) => x.id);
-    expect(kit).toHaveLength(34);
-    for (const id of ['brake-knee-L', 'brake-strap-R', 'brake-tab-L', 'brake-knee-pad-R', 'brake-pin-B-L', 'brake-pin-T-R', 'brake-sleeve-B-knee-L', 'brake-sleeve-T-tab-R']) expect(kit, id).toContain(id);
+    expect(kit).toHaveLength(32);
+    for (const id of ['brake-knee-L', 'brake-strap-R', 'brake-tab-L', 'brake-pin-B-L', 'brake-pin-T-R', 'brake-sleeve-B-knee-L', 'brake-sleeve-T-tab-R']) expect(kit, id).toContain(id);
     for (const id of ['brake-sleeve-B-hull-L', 'brake-sleeve-T-hull-R', 'brake-chock-L']) expect(kit, id).not.toContain(id);
   });
   it('Brakes off and Transport mode then show a hull with no knee: only the two sleeves per side remain of the mount', () => {

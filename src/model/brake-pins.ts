@@ -1,5 +1,5 @@
 /**
- * D-78: the parts of the removable brake knee on quick-release pins (`kneeMount` = pins). Per side: the knee TAB, the knee PAD, two 3/8 in ball-lock pins (B through the knee leg and the
+ * D-78: the parts of the removable brake knee on quick-release pins (`kneeMount` = pins). Per side: the knee TAB, two 3/8 in ball-lock pins (B through the knee leg and the
  * rail, T through the tab, the web, the filler and the box rib) and four stainless sleeves (two on the hull, which stay, and two on the knee side, which come off with it). All sizes and
  * places come from `BrakeGeom.pins` (brake-layout.ts); nothing is typed here. The rail's and the rib's hole joints are written by frame.ts and side-ribs.ts. Plain TS, no three.js.
  */
@@ -31,30 +31,18 @@ export function buildKneePinParts(ctx: Ctx, g: BrakeGeom, sgn: 1 | -1, tag: 'L' 
   const tab = box(ctx, {
     id: `brake-tab-${tag}`, partNo: 'brake-tab', name: `Brake knee tab ${tag} (white oak)`, group: 'brake', mat: 'oak', grain: 'z', fab: 'table-saw', step: STEP.brake, removable: true,
     size: [tb.x1 - tb.x0, tb.t, tb.z1 - tb.z0], center: [mid(tb.x0, tb.x1), yMid(tb.yIn, tb.yOut), mid(tb.z0, tb.z1)], explode: [-0.6, sgn, 0.3],
-    notes: `Oak block ${frac(tb.t)}" thick (across) x ${frac(tb.x1 - tb.x0)}" long (fore and aft) x ${frac(tb.z1 - tb.z0)}" tall, grain running up, from 4/4 stock laminated to ${frac(tb.t)}" or a single 8/4 offcut. Its long face lies against the knee's rear face and is glued to it with epoxy (the glue is only ${f2(tb.glueArea)} square inches, so clamp it square for the cure and check the fit dry); the tab sticks out behind the knee ${frac(tb.x1 - tb.x0)}" and lies flat on the side's web, over the box rib. Its inboard face is ${frac(pn.webRecess)}" inboard of the knee's inboard face (the web is recessed that much between the chine band and the gunwale band), so the tab sits flat on the web. It is NOT glued to the web. The top-pin hole (${frac(sOd)}") goes through it ${frac(p.brakeTabEndIn)}" in from its rear end and centered on its height, and holds a stainless sleeve. It stays ${f2(pn.clear.tabTopToWasher)}" under the fender washers of the D-ring and ${frac(p.brakeTabClearIn)}" clear of the side sign. ${KIT_NOTE}`,
+    notes: `Oak block ${frac(tb.t)}" thick (across) x ${frac(tb.x1 - tb.x0)}" long (fore and aft) x ${frac(tb.z1 - tb.z0)}" tall, grain running up, from 4/4 stock laminated to ${frac(tb.t)}" or a single 8/4 offcut. Its long face lies against the knee's rear face and is glued to it with epoxy (about ${f2(tb.glueArea)} square inches of glue, over the lower ${f2(tb.patch.z1 - tb.patch.z0)}" of the tab, which hangs well below the pin; clamp it square for the cure and check the fit dry); the tab sticks out behind the knee ${frac(tb.x1 - tb.x0)}" and lies flat on the side's web, the top part over the box rib, which backs the web there. The knee itself touches only the rail and the chine band. Its inboard face is ${frac(pn.webRecess)}" inboard of the knee's inboard face (the web is recessed that much between the chine band and the gunwale band), so the tab sits flat on the web. It is NOT glued to the web. The top-pin hole (${frac(sOd)}") goes through it ${frac(p.brakeTabEndIn)}" in from its rear end and ${frac(p.brakeTabAbovePinIn)}" under its top, and holds a stainless sleeve. It stays ${f2(pn.clear.tabTopToWasher)}" under the fender washers of the D-ring and ${frac(p.brakeTabClearIn)}" clear of the side sign. ${KIT_NOTE}`,
     sourcing: { vendor: `Shop-cut white oak, ${frac(tb.t)}" x ${frac(tb.x1 - tb.x0)}" x ${frac(tb.z1 - tb.z0)}"` },
   });
   const kneeX = g.knee;
   tab.joints = [
     { type: 'glue', to: `brake-knee-${tag}`, count: 1, note: `epoxy, the tab's front face against the knee's rear face, ${f2(tb.glueArea)} square inches; clamp it square`, at: [at(tab, [tb.x1, sgn * (g.y.face + (tb.yOut - g.y.face) / 2), (Math.max(tb.z0, kneeX.zBot) + Math.min(tb.z1, kneeX.zTop)) / 2])] },
     { type: 'hole', to: `brake-sleeve-T-tab-${tag}`, count: 1, diaIn: pn.sleeveOd, at: [at(tab, [pn.T.x, sgn * mid(tb.yIn, tb.yOut), pn.T.z])],
-      size: `1 x ${frac(pn.sleeveOd)}" hole through the tab for the top-pin sleeve: ${frac(pn.T.x - tb.x0)}" from the tab's rear end and centered on its ${frac(tb.z1 - tb.z0)}" height (${frac(pn.T.z - tb.z0)}" up from its bottom), square to the face`,
+      size: `1 x ${frac(pn.sleeveOd)}" hole through the tab for the top-pin sleeve: ${frac(pn.T.x - tb.x0)}" from the tab's rear end and ${frac(tb.z1 - pn.T.z)}" under its top (${frac(pn.T.z - tb.z0)}" up from its bottom, the tab is ${frac(tb.z1 - tb.z0)}" tall), square to the face`,
       note: 'drilled on the drill press with the tab square to the table; the stainless sleeve is epoxied in flush with both faces' },
     { type: 'pin', to: `brake-pin-T-${tag}`, count: 1, diaIn: pn.dia, size: `${frac(pn.dia)}" ball-lock pin through the tab's sleeve and on through the hull sleeve`, at: [at(tab, [pn.T.x, sgn * mid(tb.yIn, tb.yOut), pn.T.z])] },
   ];
   out.push(tab);
-
-  // ── The pad: a thin oak plate on the knee's inboard face, so the knee leans on the web up high ──
-  const pd = pn.pad;
-  const pad = box(ctx, {
-    id: `brake-knee-pad-${tag}`, partNo: 'brake-knee-pad', name: `Brake knee pad ${tag} (white oak)`, group: 'brake', mat: 'oak', grain: 'z', fab: 'table-saw', step: STEP.brake, removable: true,
-    size: [pd.x1 - pd.x0, pd.t, pd.z1 - pd.z0], center: [mid(pd.x0, pd.x1), yMid(pd.yIn, pd.yOut), mid(pd.z0, pd.z1)], explode: [0, -sgn * 0.4, 0.3],
-    joints: [{ type: 'glue', to: `brake-knee-${tag}`, count: 1, note: 'epoxy, full face against the knee\'s inboard face', at: [[0, sgn * pd.t / 2, 0]] }],
-    notes: `Oak plate ${f2(pd.t)}" thick (plane 1/4" stock down to the web recess), ${frac(pd.x1 - pd.x0)}" fore and aft x ${frac(pd.z1 - pd.z0)}" tall, grain running up. Glue it to the knee's inboard face from the top of the chine band (${f2(pd.z0)}" up) to the top of the knee, flush with the knee's faces. It fills the ${frac(pn.webRecess)}" recess of the web, so the knee leans on the web up high instead of rocking on the chine band when the flap pulls it up and back. It is NOT glued to the web. ${KIT_NOTE}`,
-    sourcing: { vendor: `Shop-cut white oak, ${f2(pd.t)}" x ${frac(pd.x1 - pd.x0)}" x ${frac(pd.z1 - pd.z0)}" (a 1/4" scrap planed to ${f2(pd.t)}")` },
-  });
-  pad.finish = { surface: 'oak' };
-  out.push(pad);
 
   // ── The four sleeves: stainless tube, cut to length ──
   const tubeLb = (len: number) => ((Math.PI / 4) * (sOd * sOd - sId * sId) * len) * steelLb;

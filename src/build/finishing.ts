@@ -747,7 +747,7 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
     items: [
       it('Steps 2-6 run in two sessions, with the same products and coats.', [
         parts.some((x) => x.id === 'brake-tab-L')
-          ? 'The underside while the hull is still inverted, before the flip. The brake knee units (knee, tab and pad) go through this session on the bench, sealed and coated together, with a waxed rod in each sleeve to keep the finish out of the bores.'
+          ? 'The underside while the hull is still inverted, before the flip. The brake knee units (knee and tab) go through this session on the bench, sealed and coated together, with a waxed rod in each sleeve to keep the finish out of the bores.'
           : 'The underside while the hull is still inverted, before the flip.',
         'Everything else after the box, seat, brake and handle are built.',
         'All hardware, hinges and running gear OFF: they go on after the topcoat cures (assembly step "Hang the running gear and hardware").',

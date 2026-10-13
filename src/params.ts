@@ -1482,8 +1482,20 @@ const defs = {
 
   brakeTabHeightIn: {
     label: 'Knee tab height (centered on the top pin)', group: 'brake', unit: 'in',
-    default: 2.4, min: 1.5, max: 3.5, step: 0.1, status: 'assumed', ref: 'D-78',
-    note: 'D-78: tall enough for 3/4 in of oak above and below the 1/2 in sleeve with margin for the glue line. The top is kept brakeTabClearIn under the D-ring washers.',
+    default: 4.1, min: 1.5, max: 5, step: 0.1, status: 'assumed', ref: 'D-78',
+    note: 'D-78: the tab is tall on purpose. Its top stands brakeTabAbovePinIn over the top pin (kept brakeTabClearIn under the D-ring washers); the rest hangs DOWN past the pin so the tab lies against the knee\'s rear face over about 2 in of the knee\'s height (the knee top is below the pin). That makes the glue patch about 2 in2 with its center near the pin, instead of 0.7 in2 a long way below it.',
+  },
+
+  brakeTabAbovePinIn: {
+    label: 'Knee tab: height above the top pin', group: 'brake', unit: 'in',
+    default: 1.2, min: 0.75, max: 2, step: 0.05, status: 'assumed', ref: 'D-78',
+    note: 'D-78: oak above the pin sleeve in the tab (1.2 in = 0.95 in of oak over the 1/2 in sleeve). Limited by the D-ring washers above (brakeTabClearIn).',
+  },
+
+  brakeRibBlockBelowIn: {
+    label: 'Box rib: full-width block below the top pin', group: 'brake', unit: 'in',
+    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-78',
+    note: 'D-78: with the pins the box rib is as wide as its head (sideRibHeadLengthIn) from this far below the top pin up to the head, so the 1/2 in sleeve has 3/4 in of oak each side (a 3/4 in shaft would leave 1/8 in and split). Below that it is the normal shaft. The band-strip filler behind it follows.',
   },
 
   brakeTabEndIn: {
@@ -1525,7 +1537,7 @@ const defs = {
   brakePinEdgeIn: {
     label: 'Oak left each side of a pin sleeve (minimum)', group: 'brake', unit: 'in',
     default: 0.25, min: 0.1875, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the box rib is 3/4 in wide, so a 1/2 in sleeve would leave only 1/8 in each side. With the pins the box rib\'s shaft (and its filler) is widened to the sleeve plus this much each side (1 in at the defaults).',
+    note: 'D-78: the least oak left each side of a pin sleeve (in the tab, and in the box rib block beside pin T).',
   },
 
   brakePinTipIn: {
@@ -2806,6 +2818,8 @@ export function validateParams(input: Params): ParamIssue[] {
         err(['brakeSleeveIdIn', 'brakePinDiaIn'], 'The pin sleeve\'s inside diameter is smaller than the pin.');
       if (p.brakeSleeveOdIn < p.brakeSleeveIdIn + 0.0625 - 1e-9)
         err(['brakeSleeveOdIn', 'brakeSleeveIdIn'], 'The pin sleeve needs a wall of at least 1/32 in (outside diameter at least 1/16 in over the inside).');
+      if (p.brakeTabAbovePinIn < p.brakeSleeveOdIn / 2 + p.brakePinEdgeIn - 1e-9)
+        warn(['brakeTabAbovePinIn', 'brakeSleeveOdIn', 'brakePinEdgeIn'], `The knee tab leaves less than ${p.brakePinEdgeIn}" of oak above the top pin sleeve.`);
       if (p.brakeTabHeightIn < p.brakeSleeveOdIn + 2 * p.brakePinEdgeIn - 1e-9)
         warn(['brakeTabHeightIn', 'brakeSleeveOdIn', 'brakePinEdgeIn'], `The knee tab (${p.brakeTabHeightIn}" tall) leaves less than ${p.brakePinEdgeIn}" of oak above and below the pin sleeve.`);
       if (p.brakeTabEndIn < p.brakeSleeveOdIn / 2 + p.brakePinEdgeIn - 1e-9)

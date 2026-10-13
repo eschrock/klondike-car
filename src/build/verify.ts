@@ -127,7 +127,7 @@ type Draft = Omit<VerifyCheck, 'n' | 'whatToDo' | 'pass'>;
 function kneePinChecks(parts: Part[], p: Params, kp: KneePins): Draft[] {
   const extreme = p.weatherSpec === WEATHER_SPEC.extreme;
   const pinIds = ids(parts, /^brake-pin-[BT]-[LR]$/);
-  const kneeIds = ids(parts, /^brake-(knee|tab|knee-pad|strap)-[LR]$/);
+  const kneeIds = ids(parts, /^brake-(knee|tab|strap)-[LR]$/);
   const sleeveIds = ids(parts, /^brake-sleeve-/);
   return [
     {
@@ -193,17 +193,17 @@ function kneePinChecks(parts: Part[], p: Params, kp: KneePins): Draft[] {
     },
     {
       id: 'knee-seat',
-      title: 'Knee seat: the pad on the recessed web, the tab and the leg flat',
+      title: 'Knee seat: the tab on the web over the rib, the leg on the bands',
       how: [
         it('Put the first knee unit on the hull and push both pins in.', [
-          `The pad is ${fr(kp.pad.t, 32)}" thick and fills the recess of the web; the tab lies on the web over the rib head; the leg lies on the chine band.`,
-          'Slide a strip of paper under the pad, the tab and the leg, all round: it should not pass anywhere.',
+          `The tab (${fr(kp.tab.t, 16)}" thick) lies on the web over the box rib, which backs the web there: about ${fr(kp.tab.bearing.area, 4)} square inches of bearing. The leg lies on the rail and the chine band, ${fr(kp.webRecess, 32)}" off the web.`,
+          'Slide a strip of paper under the tab and under the leg, all round: it should not pass anywhere.',
         ]),
-        it('Press the top of the knee in toward the hull with about 50 lb, a bathroom scale between your hand and the knee.', ['Watch the web under the pad: it must not flex, dent or crack.', 'The knee must not rock on the chine band.']),
+        it('Press the top of the knee in toward the hull with about 50 lb, a bathroom scale between your hand and the knee.', ['Watch the web under the tab: it must not flex, dent or crack.', 'The knee must not rock on the chine band.']),
       ],
-      passList: ['No daylight under the pad, the tab or the leg.', 'The web does not mark at 50 lb on the pad.'],
-      ifFails: 'Plane the pad to the real recess, or shim the tab; if the web marks, widen the pad or glue a 1/8" oak doubler inside the web behind it.',
-      partIds: ids(parts, /^(brake-knee-pad|brake-tab|brake-knee|side-[LR]-web)/),
+      passList: ['No daylight under the tab or the leg.', 'The web does not mark at 50 lb.'],
+      ifFails: 'Plane or shim the tab\'s inboard face to the real web; if the web marks, widen the bearing: make the tab wider, or glue a 1/8" oak doubler inside the web behind it.',
+      partIds: ids(parts, /^(brake-tab|brake-knee|side-[LR]-web)/),
       paramKeys: [],
       when: 'at assembly',
       refs: ['D-78'],

@@ -27,7 +27,7 @@ const pn = g.pins!;
 const get = (id: string, ps: Part[] = pinned): Part => ps.find((x) => x.id === id)!;
 const ids = (ps: Part[]) => new Set(ps.map((x) => x.id));
 const SIDE_TAGS = ['L', 'R'] as const;
-const KNEE_SIDE_PARTS = ['brake-tab', 'brake-knee-pad', 'brake-pin-B', 'brake-pin-T', 'brake-sleeve-B-knee', 'brake-sleeve-T-tab'];
+const KNEE_SIDE_PARTS = ['brake-tab', 'brake-pin-B', 'brake-pin-T', 'brake-sleeve-B-knee', 'brake-sleeve-T-tab'];
 const HULL_SLEEVES = ['brake-sleeve-B-hull', 'brake-sleeve-T-hull'];
 const NEW_PARTS = [...KNEE_SIDE_PARTS, ...HULL_SLEEVES];
 const SOLID: PartGroup[] = ['frame', 'body', 'front-end', 'running-gear', 'seat', 'storage', 'brake', 'removable', 'lighting', 'hardware'];
@@ -86,14 +86,14 @@ describe('D-78 the setting', () => {
 });
 
 describe('D-78 the parts with the pins on', () => {
-  it('eight new parts per side (tab, pad, two pins, four sleeves); no backer, backing plate or knee bolts; the knee and strap stay', () => {
+  it('seven new parts per side (tab, two pins, four sleeves); no backer, backing plate or knee bolts; the knee and strap stay', () => {
     const have = ids(pinned);
     for (const t of SIDE_TAGS) {
       for (const n of NEW_PARTS) expect(have.has(`${n}-${t}`), `${n}-${t}`).toBe(true);
       for (const n of ['brake-backer', 'brake-backplate']) expect(have.has(`${n}-${t}`), `${n}-${t}`).toBe(false);
       for (const n of ['brake-knee', 'brake-strap']) expect(have.has(`${n}-${t}`), `${n}-${t}`).toBe(true);
     }
-    expect(pinned.length - bolted.length).toBe(2 * (NEW_PARTS.length - 2)); // +16 new, -4 (two backers, two backing plates)
+    expect(pinned.length - bolted.length).toBe(2 * (NEW_PARTS.length - 2)); // +14 new, -4 (two backers, two backing plates)
     expect(new Set(pinned.map((x) => x.id)).size).toBe(pinned.length);
     expect(g.mount).toBe('pins');
     const kj = get('brake-knee-L').joints!;
@@ -105,12 +105,12 @@ describe('D-78 the parts with the pins on', () => {
     expect(rh[0].count).toBe(1); // ONE pin hole instead of four bolt holes
     expect(get('side-rib-L1').joints!.filter((j) => j.type === 'hole' && j.to === 'brake-sleeve-T-hull-L')).toHaveLength(1);
   });
-  it('the materials: the tab and pad are oak (grain vertical), the sleeves are stainless tube cut on the bandsaw, the pins are bought ball-lock pins; stainless follows the weather spec', () => {
+  it('the materials: the tab is oak (grain vertical), the sleeves are stainless tube cut on the bandsaw, the pins are bought ball-lock pins; stainless follows the weather spec', () => {
     for (const w of [0, 1]) {
       const ps = buildModel({ ...pp, weatherSpec: w } as Params);
       const stainless = w === 1 ? '316' : '304';
       for (const t of SIDE_TAGS) {
-        for (const n of ['brake-tab', 'brake-knee-pad']) { const x = get(`${n}-${t}`, ps); expect(x.kind).toBe('lumber'); expect(x.grain).toBe('z'); expect(x.material).toMatch(/oak/); }
+        for (const n of ['brake-tab']) { const x = get(`${n}-${t}`, ps); expect(x.kind).toBe('lumber'); expect(x.grain).toBe('z'); expect(x.material).toMatch(/oak/); }
         for (const n of NEW_PARTS.filter((q) => /sleeve/.test(q))) { const x = get(`${n}-${t}`, ps); expect(x.kind).toBe('metal'); expect(x.fab).toBe('bandsaw'); expect(x.material).toContain(stainless); expect(x.material).toMatch(/1\/2" OD x 3\/8" ID/); }
         for (const n of ['brake-pin-B', 'brake-pin-T']) {
           const x = get(`${n}-${t}`, ps);
@@ -169,36 +169,62 @@ describe('D-78 the geometry is derived from the hull, not typed', () => {
     expect(pn.issues).toEqual([]);
     expect(brakePinIssues(ctx.p, L)).toEqual([]);
   });
-  it('the box rib is widened for the sleeve (1 in at the defaults), the other ribs are not', () => {
-    expect(pn.rib.w).toBeCloseTo(pp.brakeSleeveOdIn + 2 * pp.brakePinEdgeIn, 9);
+  it('the box rib is a full-width block (the head length, 2 in) from 1.5 in below pin T up to the head, so the sleeve has 3/4 in of oak each side; the shaft, the other ribs and the tie are as before', () => {
+    expect(pn.rib.w).toBe(pp.sideRibWidthIn);
+    expect(pn.rib.blockW).toBeCloseTo(pp.sideRibHeadLengthIn, 9);
+    expect(pn.rib.blockZ0).toBeCloseTo(pn.T.z - pp.brakeRibBlockBelowIn, 9);
+    expect((pn.rib.blockW - pp.brakeSleeveOdIn) / 2).toBeGreaterThanOrEqual(0.7);
+    const rb = worldAABB(get('side-rib-L1'));
+    expect(rb.max[0] - rb.min[0]).toBeCloseTo(pp.sideRibHeadLengthIn, 3);
     expect(get('side-rib-L1').massLb).toBeGreaterThan(get('side-rib-L1', bolted).massLb);
+    expect(get('side-rib-L1').massLb - get('side-rib-L1', bolted).massLb).toBeLessThan(0.12);
     for (const id of ['side-rib-L2', 'side-rib-L3', 'box-tie-L']) expect(get(id).massLb, id).toBeCloseTo(get(id, bolted).massLb, 9);
   });
-  it('the web recess is the real one: the tab\'s inboard face is on the web\'s outer face, the pad is exactly that thick, and the knee\'s inboard face is the hull face', () => {
+  it('the web recess is the real one: the tab\'s inboard face is on the web\'s outer face, the knee\'s inboard face is the hull face, 0.21 in outboard of it; there is no pad', () => {
     const web = worldAABB(get('side-L-web'));
-    const tab = worldAABB(get('brake-tab-L')), pad = worldAABB(get('brake-knee-pad-L')), knee = worldAABB(get('brake-knee-L'));
+    const tab = worldAABB(get('brake-tab-L')), knee = worldAABB(get('brake-knee-L'));
     expect(pn.webRecess).toBeCloseTo(L.sideBand, 9);
     expect(pn.webRecess).toBeGreaterThan(0.2);
     expect(pn.webRecess).toBeLessThan(0.22);
     expect(tab.min[1]).toBeCloseTo(web.max[1], 4);
-    expect(pad.min[1]).toBeCloseTo(web.max[1], 4);
-    expect(pad.max[1]).toBeCloseTo(knee.min[1], 6);
+    expect(knee.min[1] - tab.min[1]).toBeCloseTo(pn.webRecess, 4);
     expect(knee.min[1]).toBeCloseTo(g.y.face, 9);
-    expect(pad.max[1] - pad.min[1]).toBeCloseTo(pn.webRecess, 9);
-    expect(pad.min[2]).toBeCloseTo(L.railTop + L.chineH, 9); // from the chine top...
-    expect(pad.max[2]).toBeCloseTo(g.knee.zTop, 9); // ...to the knee top
-    expect(pad.min[0]).toBeCloseTo(g.knee.x0, 9);
-    expect(pad.max[0]).toBeCloseTo(g.knee.x1, 9);
+    expect(ids(pinned).has('brake-knee-pad-L')).toBe(false);
+    expect((pn as unknown as Record<string, unknown>).pad).toBeUndefined();
   });
-  it('the tab: 1 in thick, from the knee\'s rear face back to 1 in behind pin T, 2.4 in tall centered on pin T, grain vertical', () => {
+  it('the tab bears on the web over the box rib block (the rib and filler back the web there)', () => {
+    const b = pn.tab.bearing;
+    expect(b.x0).toBeCloseTo(pn.tab.x0, 9); // all of the tab behind the knee is over the rib block (2 in wide, centered on pin T)
+    expect(b.x1).toBeCloseTo(pn.tab.x1, 9);
+    expect(b.z0).toBeCloseTo(pn.rib.blockZ0, 9);
+    expect(b.z1).toBeCloseTo(pn.tab.z1, 9);
+    expect(b.area).toBeGreaterThan(4);
+    expect(b.x0).toBeGreaterThanOrEqual(pn.rib.x - pn.rib.blockW / 2 - 1e-9);
+    expect(b.x1).toBeLessThanOrEqual(pn.rib.x + pn.rib.blockW / 2 + 1e-9);
+  });
+  it('the tab: 1 in thick, from the knee\'s rear face back to 1 in behind pin T, 1.2 in above pin T and 4.1 in tall (hanging below the pin), grain vertical', () => {
     const tab = worldAABB(get('brake-tab-L'));
     expect(tab.max[0]).toBeCloseTo(g.knee.x0, 9);
     expect(tab.min[0]).toBeCloseTo(pn.T.x - pp.brakeTabEndIn, 9);
     expect(tab.max[1] - tab.min[1]).toBeCloseTo(pp.brakeTabThickIn, 9);
     expect(tab.max[2] - tab.min[2]).toBeCloseTo(pp.brakeTabHeightIn, 9);
-    expect((tab.min[2] + tab.max[2]) / 2).toBeCloseTo(pn.T.z, 9);
-    expect(pn.tab.glueArea).toBeGreaterThan(0.5);
+    expect(tab.max[2]).toBeCloseTo(pn.T.z + pp.brakeTabAbovePinIn, 9);
+    expect(tab.min[2]).toBeGreaterThan(g.knee.zLeg); // stays above the chine band
     expect(pp.brakeTabThickIn).toBe(1);
+  });
+  it('the glue patch of the tab on the knee\'s rear face is about 2 in2 (was 0.66) with its center 1.6 in under pin T', () => {
+    const ph = pn.tab.patch;
+    expect(ph.y0).toBeCloseTo(g.y.face, 9);
+    expect(ph.y1).toBeCloseTo(pn.tab.yOut, 9);
+    expect(ph.z1).toBeCloseTo(g.knee.zTop, 9); // up to the knee top
+    expect(ph.z0).toBeCloseTo(pn.tab.z0, 9); // down to the tab bottom
+    expect(ph.area).toBeCloseTo((ph.y1 - ph.y0) * (ph.z1 - ph.z0), 9);
+    expect(ph.area).toBeGreaterThan(1.9);
+    expect(pn.tab.glueArea).toBeCloseTo(ph.area, 9);
+    expect(ph.zc).toBeCloseTo((ph.z0 + ph.z1) / 2, 9);
+    expect(ph.ePin).toBeCloseTo(pn.T.z - ph.zc, 9);
+    expect(ph.ePin).toBeLessThan(1.7);
+    expect(ph.eTab).toBeCloseTo((pn.tab.z0 + pn.tab.z1) / 2 - ph.zc, 9);
   });
   it('the sleeves: 1/2 in OD, 3/8 in ID, lengths are the members they pass; the hull ones are not removable, the knee ones are', () => {
     for (const t of SIDE_TAGS) {
@@ -217,12 +243,12 @@ describe('D-78 the geometry is derived from the hull, not typed', () => {
     expect(pn.B.kneeSleeve.len).toBe(1.75);
   });
   it('the existing wood-screw sizes are untouched (the tab is glued, no new screws)', () => {
-    for (const n of ['brake-tab-L', 'brake-knee-pad-L']) expect((get(n).joints ?? []).some((j) => j.type === 'screw'), n).toBe(false);
+    for (const n of ['brake-tab-L']) expect((get(n).joints ?? []).some((j) => j.type === 'screw'), n).toBe(false);
   });
 });
 
 describe('D-78 overlaps and clearances', () => {
-  it('the pins setting adds no unintended overlap (the sleeves and pins lie in the holes of their hosts, the tab, the pad and the knee touch face to face)', () => {
+  it('the pins setting adds no unintended overlap (the sleeves and pins lie in the holes of their hosts, the tab and the knee touch face to face)', () => {
     expect(newClashes(bolted, pinned)).toEqual([]);
     expect(newClashes(buildModel(p0, TRANSPORT_VIEW), buildModel(pp, TRANSPORT_VIEW))).toEqual([]);
   });
@@ -230,13 +256,13 @@ describe('D-78 overlaps and clearances', () => {
     expect(newClashes(buildModel(p0, { steerDeg: 20 }), buildModel(pp, { steerDeg: 20 }))).toEqual([]);
     expect(newClashes(buildModel(p0, { brakes: false }), buildModel(pp, { brakes: false }))).toEqual([]);
   });
-  it('the tab and the pad miss the side sign, the reflector, the D-ring washers, the tire and the flap; the pins miss them, too', () => {
+  it('the tab misses the side sign, the reflector, the D-ring washers, the tire and the flap; the pins miss them, too', () => {
     const tab = worldAABB(get('brake-tab-L')), sign = worldAABB(get('sign-L')), refl = worldAABB(get('reflector-L1')), tire = worldAABB(get('wheel-RL'));
     expect(sign.max[0]).toBeLessThanOrEqual(tab.min[0] - pp.brakeTabClearIn + 1e-9); // the sign stops 0.3 in short of the tab
     expect(refl.min[0]).toBeGreaterThan(tab.max[0]); // the reflector is ahead of the knee
     expect(tire.min[1] - tab.max[1]).toBeGreaterThan(0.2); // the tab is inboard of the tire
     expect(pn.rib.washerBotZ - tab.max[2]).toBeGreaterThanOrEqual(pp.brakeTabClearIn - 1e-9);
-    for (const t of ['L', 'R']) for (const n of ['brake-tab', 'brake-knee-pad', 'brake-pin-B', 'brake-pin-T']) for (const o of [`sign-${t}`, `reflector-${t}1`, `lash-${t}1`, `wheel-R${t}`, `brake-flap-${t}`, `brake-pivot-block-${t}`, `brake-shoe-${t}`, `brake-pad-${t}`, `brake-foot-tread-${t}`, `brake-cord-${t}`, `brake-pivot-pin-${t}`, `brake-chock-${t}`])
+    for (const t of ['L', 'R']) for (const n of ['brake-tab', 'brake-pin-B', 'brake-pin-T']) for (const o of [`sign-${t}`, `reflector-${t}1`, `lash-${t}1`, `wheel-R${t}`, `brake-flap-${t}`, `brake-pivot-block-${t}`, `brake-shoe-${t}`, `brake-pad-${t}`, `brake-foot-tread-${t}`, `brake-cord-${t}`, `brake-pivot-pin-${t}`, `brake-chock-${t}`])
       expect(partsOverlap(get(`${n}-${t}`), get(o)), `${n}-${t} x ${o}`).toBeLessThanOrEqual(0.0001);
   });
   it('a longer side sign (set to its largest) is still cut back short of the tab', () => {
@@ -246,11 +272,11 @@ describe('D-78 overlaps and clearances', () => {
     expect(sign.max[0]).toBeLessThanOrEqual(tab.min[0] - q.brakeTabClearIn + 1e-9);
     expect(partsOverlap(get('sign-L', ps), get('brake-tab-L', ps))).toBeLessThanOrEqual(0.0001);
   });
-  it('through the whole flap stroke (released to applied) the flap group never meets the tab, the pad, the pins, the sleeves or the strap', () => {
+  it('through the whole flap stroke (released to applied) the flap group never meets the tab, the pins, the sleeves or the strap', () => {
     for (let i = 0; i <= 10; i++) {
       const moving = buildBrakeAt(ctx, i / 10, true).filter((x) => /-L$/.test(x.id) && /^brake-(flap|pivot-block|shoe|pad|foot-tread|cord)-/.test(x.id));
       expect(moving.length).toBeGreaterThanOrEqual(5);
-      for (const m of moving) for (const n of ['brake-tab-L', 'brake-knee-pad-L', 'brake-pin-B-L', 'brake-pin-T-L', 'brake-sleeve-T-tab-L', 'brake-sleeve-B-knee-L'])
+      for (const m of moving) for (const n of ['brake-tab-L', 'brake-pin-B-L', 'brake-pin-T-L', 'brake-sleeve-T-tab-L', 'brake-sleeve-B-knee-L'])
         expect(partsOverlap(m, get(n)), `${m.id} x ${n} @${i / 10}`).toBeLessThanOrEqual(0.0001);
     }
   });
@@ -271,16 +297,16 @@ describe('D-78 mass', () => {
     expect(adjusted).toBeGreaterThan(-1.6 - 0.5);
     expect(adjusted).toBeLessThan(-1.6 + 0.5);
   });
-  it('what leaves and what arrives: the backers and plates leave (about 0.75 lb), the tabs, pads, pins and sleeves arrive (about 1.1 lb)', () => {
+  it('what leaves and what arrives: the backers and plates leave (about 0.75 lb), the tabs, pins and sleeves arrive (about 1.1 lb)', () => {
     const sum = (ps: Part[], re: RegExp) => ps.filter((x) => re.test(x.id)).reduce((a, x) => a + x.massLb, 0);
     expect(sum(bolted, /^brake-(backer|backplate)-/)).toBeGreaterThan(0.7);
-    const arrive = sum(pinned, /^brake-(tab|knee-pad|pin-[BT]|sleeve-)/);
+    const arrive = sum(pinned, /^brake-(tab|pin-[BT]|sleeve-)/);
     expect(arrive).toBeGreaterThan(1.0);
     expect(arrive).toBeLessThan(1.4);
     expect(get('brake-pin-B-L').massLb).toBeGreaterThan(0.1);
     expect(get('brake-pin-B-L').massLb).toBeLessThan(0.2);
   });
-  it('the removable brake kit weighs about 4.2 lb more with the pins (the knee and strap now come off, and the tab, pad and pins with them)', () => {
+  it('the removable brake kit weighs about 4.2 lb more with the pins (the knee and strap now come off, and the tab and pins with them)', () => {
     const kit = (ps: Part[]) => totalMass(ps) - totalMass(buildModel(ps === pinned ? pp : p0, { brakes: false }));
     expect(kit(pinned) - kit(bolted)).toBeGreaterThan(3.7);
     expect(kit(pinned) - kit(bolted)).toBeLessThan(4.7);
@@ -305,7 +331,7 @@ describe('D-78 removable: the Brakes toggle and Transport mode', () => {
     expect(isBrakeKit(get('brake-knee-L', bolted))).toBe(false);
     expect(isBrakeKit(get('brake-knee-L'))).toBe(true);
   });
-  it('removable flags: with the pins the knee, strap, tab, pad, pins and the knee-side sleeves are removable, the hull sleeves are not; bolted, none of the knee is', () => {
+  it('removable flags: with the pins the knee, strap, tab, pins and the knee-side sleeves are removable, the hull sleeves are not; bolted, none of the knee is', () => {
     for (const t of SIDE_TAGS) {
       for (const n of ['brake-knee', 'brake-strap', ...KNEE_SIDE_PARTS]) expect(get(`${n}-${t}`).removable, `${n}-${t}`).toBe(true);
       for (const n of HULL_SLEEVES) expect(get(`${n}-${t}`).removable ?? false, `${n}-${t}`).toBe(false);
@@ -427,7 +453,7 @@ describe('D-78 validateParams and the geometry issues', () => {
     expect(validateParams({ ...p0, brakeSleeveIdIn: 0.3125 } as Params).filter((i) => i.keys.includes('brakeSleeveIdIn'))).toEqual([]); // not checked when bolted
   });
   it('the hull-dependent checks catch a tab that reaches the D-ring washers and a pin clear of the rib', () => {
-    const tall = { ...pp, brakeTabHeightIn: 3.5 } as Params;
+    const tall = { ...pp, brakeTabAbovePinIn: 2 } as Params;
     const c = makeCtx(tall);
     expect(brakePinIssues(c.p, c.L).join(' ')).toMatch(/D-ring washers/);
     const high = { ...pp, brakeTopPinClearIn: 2 } as Params;

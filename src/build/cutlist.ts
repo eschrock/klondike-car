@@ -1078,8 +1078,7 @@ function cutsOf(plans: OakPartPlan[], pools: ResawPool[]): Cut[] {
       const note = pc.piece === 'board' ? 'joint the glue edges, then glue the boards edge to edge'
         : pc.piece === 'layer' ? `plane to ${fractionText(pc.rough.t, 16)}" before the glue-up${lgw(pc) ? `; grain ${lgw(pc)}` : ''}${pc.acrossOf ? `; edge-glue its boards first${unequal(pc) ? ' (the two are NOT equal: board 1 is the bottom edge, board 2 the top)' : ''}` : lgw(pc) ? `; one piece, ${fractionText(pc.rough.w, 8)}" wide across its grain` : ''}`
           : pc.piece === 'strip' ? 'rip the lane first, then resaw it on edge; plane to thickness after the resaw'
-            : pl.partNo === 'brake-knee-pad' ? 'plane a longer piece (12" or more) down to the thickness, then crosscut the pads from it; grain runs up the long side' // D-78
-              : pl.partNo === 'brake-tab' ? 'grain runs up the long side; glued to the knee only' : undefined;
+            : pl.partNo === 'brake-tab' ? 'grain runs up the long side; glued to the knee only' : undefined; // D-78
       const key = `${pl.partNo}|${pc.piece}|${pc.index}|${pc.of}|${board}|${rowKeyDims(pc.rough)}`;
       const hit = map.get(key);
       if (hit) { hit.qty += 1; hit.ids.push(pl.part.id); continue; }

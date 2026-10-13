@@ -20,7 +20,7 @@
  */
 import { KNEE_MOUNT, type Params } from '../params';
 import type { Layout } from './layout';
-import { LASH_HOLE_DZ_IN, LASH_WASHER, ribShaftWidth, sideRibStations, topPinZ, boxTieGeometry } from './side-ribs';
+import { LASH_HOLE_DZ_IN, LASH_WASHER, ribBlockWidth, ribBlockZ0, sideRibStations, topPinZ, boxTieGeometry } from './side-ribs';
 
 export type V2 = [number, number];
 
@@ -202,12 +202,17 @@ export interface BrakePins {
   B: PinSite & { fromRailRear: number; belowRailTop: number; fromKneeRear: number; fromKneeBottom: number };
   /** Top pin T: x = the box rib's center line, z = the box tie's top plus `brakeTopPinClearIn`; distances from the rib's bottom end and the gunwale top, and from the rib's center to the knee's rear face. */
   T: PinSite & { fromRibFoot: number; belowRibTop: number; ahead: number };
-  /** The box rib at T: center x, widened shaft width, z range (foot to gunwale top), and the box tie spacer's top and the D-ring fender washers' bottom z. */
-  rib: { x: number; w: number; z0: number; z1: number; tieTopZ: number; washerBotZ: number };
-  /** The knee TAB (oak, grain vertical): x from `brakeTabEndIn` behind pin T to the knee's rear face, z centered on pin T, y from the web's outer face outboard by `brakeTabThickIn`; glue area to the knee's rear face (in^2). */
-  tab: { x0: number; x1: number; z0: number; z1: number; t: number; yIn: number; yOut: number; glueArea: number };
-  /** The knee PAD (oak, thickness = the web recess): on the knee's inboard face from the chine top to the knee top, so the knee bears on the web; y from the web's outer face to the hull face. */
-  pad: { x0: number; x1: number; z0: number; z1: number; t: number; yIn: number; yOut: number };
+  /** The box rib at T: center x, shaft width `w`, the FULL-WIDTH BLOCK that carries pin T (width `blockW` = the head length, x center `x`, from `blockZ0` up to the head), z range (foot to gunwale top), and the box tie spacer's top and the D-ring fender washers' bottom z. */
+  rib: { x: number; w: number; blockW: number; blockZ0: number; z0: number; z1: number; tieTopZ: number; washerBotZ: number };
+  /**
+   * The knee TAB (oak, grain vertical): x from `brakeTabEndIn` behind pin T to the knee's rear face; z from `brakeTabAbovePinIn` over pin T DOWN `brakeTabHeightIn` (it hangs mostly below the pin, so it lies against the knee's
+   * rear face); y from the web's outer face outboard by `brakeTabThickIn`. `patch` is the glue patch on the knee's rear face: the z overlap of the tab and the knee (the knee top is below the pin) by the y overlap from the hull face
+   * to the tab's outer face; `zc` its center z, `ePin` the distance from pin T up to that center, `eTab` from the tab's own center. `bearing` is where the tab's inboard face lies on the web BACKED BY THE BOX RIB
+   * (x over the rib block, z over the block, so the web is held by the rib and the filler there); `bearing.area` in^2. (The knee leg itself bears on the rail and chine band only, 0.21 in off the web above the chine.)
+   */
+  tab: { x0: number; x1: number; z0: number; z1: number; t: number; yIn: number; yOut: number; glueArea: number;
+    patch: { y0: number; y1: number; z0: number; z1: number; area: number; zc: number; ePin: number; eTab: number };
+    bearing: { x0: number; x1: number; z0: number; z1: number; area: number } };
   /** Clearances (in): the top of the tab to the bottom of the D-ring fender washers, and pin T's ball tip to the storage box side. (The side sign's forward end is cut back to keep `brakeTabClearIn` behind the tab, body.ts.) */
   clear: { tabTopToWasher: number; ballTipToBox: number };
   /** Problems found with the geometry (empty when it is sound); validateParams cannot see them. */
@@ -526,15 +531,28 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
         fromRibFoot: tz - tg.z0, belowRibTop: st.top - tz, ahead: kx0 - tx,
       };
       const washerBotZ = st.top - L.railBand / 2 - LASH_HOLE_DZ_IN - LASH_WASHER.od / 2;
-      const tab = { x0: tx - p.brakeTabEndIn, x1: kx0, z0: tz - tabH / 2, z1: tz + tabH / 2, t: tabT, yIn: yWebOut, yOut: tYOut, glueArea: 0 };
-      tab.glueArea = Math.max(0, Math.min(tab.z1, zTop) - Math.max(tab.z0, zb)) * Math.max(0, Math.min(tYOut, yFace + legT) - yFace);
-      const pad = { x0: kx0, x1: kx1, z0: zLeg, z1: zTop, t: recess, yIn: yWebOut, yOut: yFace };
+      const tabZ1 = tz + p.brakeTabAbovePinIn;
+      const tab = { x0: tx - p.brakeTabEndIn, x1: kx0, z0: tabZ1 - tabH, z1: tabZ1, t: tabT, yIn: yWebOut, yOut: tYOut, glueArea: 0,
+        patch: { y0: yFace, y1: Math.min(tYOut, yFace + legT), z0: 0, z1: 0, area: 0, zc: 0, ePin: 0, eTab: 0 },
+        bearing: { x0: 0, x1: 0, z0: 0, z1: 0, area: 0 } };
+      const ph = tab.patch;
+      ph.z0 = Math.max(tab.z0, zb); ph.z1 = Math.min(tab.z1, zTop);
+      ph.area = Math.max(0, ph.z1 - ph.z0) * Math.max(0, ph.y1 - ph.y0);
+      ph.zc = (ph.z0 + ph.z1) / 2; ph.ePin = tz - ph.zc; ph.eTab = (tab.z0 + tab.z1) / 2 - ph.zc;
+      tab.glueArea = ph.area;
+      const bw = ribBlockWidth(p), bz0 = ribBlockZ0(p, L, st);
+      const bear = tab.bearing;
+      bear.x0 = Math.max(tab.x0, tx - bw / 2); bear.x1 = Math.min(tab.x1, tx + bw / 2);
+      bear.z0 = Math.max(tab.z0, bz0); bear.z1 = Math.min(tab.z1, st.top - L.railBand);
+      bear.area = Math.max(0, bear.x1 - bear.x0) * Math.max(0, bear.z1 - bear.z0);
       const gBox = tg.yBox; // the storage box side's |y|
       const issues: string[] = [];
-      const ribW = ribShaftWidth(p, st);
       if (tz - sOd / 2 < tg.z0 + p.brakePinEdgeIn) issues.push('pin T is too close to the foot of the box rib');
       if (tz + sOd / 2 > st.top - L.railBand) issues.push('pin T is in the rib head, among the D-ring bolts (it belongs in the shaft, under the head)');
-      if (ribW < sOd + 2 * p.brakePinEdgeIn - 1e-9) issues.push('the box rib is too narrow for the sleeve');
+      if (bw < sOd + 2 * p.brakePinEdgeIn - 1e-9) issues.push('the box rib block is too narrow for the sleeve');
+      if (tz - bz0 < sOd / 2 + p.brakePinEdgeIn - 1e-9) issues.push('the box rib block starts too close under pin T');
+      if (tab.z0 < zLeg) issues.push('the knee tab reaches down into the chine band');
+      if (ph.area < 1.5) issues.push(`the glue patch of the knee tab is only ${ph.area.toFixed(2)} in2`);
       if (tab.z1 > washerBotZ - p.brakeTabClearIn + 1e-9) issues.push(`the knee tab top (${tab.z1.toFixed(2)}") is within ${p.brakeTabClearIn}" of the D-ring washers (bottom ${washerBotZ.toFixed(2)}")`);
       if (kx0 - tx < sOd / 2 + p.brakePinEdgeIn - 1e-9) issues.push('the knee is too close to pin T: no oak ahead of the sleeve in the tab');
       if (tYOut > y.tireIn - 0.1 && tab.x0 < r) issues.push('the knee tab runs into the rear tire');
@@ -543,8 +561,8 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
       pins = {
         dia: p.brakePinDiaIn, sleeveOd: sOd, sleeveId: p.brakeSleeveIdIn, tipIn: tip, headIn: head, webRecess: recess, yWebOut,
         hull: { web: webT, filler: fillerT, rib: ribT, rail: railT }, B, T,
-        rib: { x: st.x, w: ribW, z0: tg.z0, z1: st.top, tieTopZ: tg.z1, washerBotZ },
-        tab, pad, clear: { tabTopToWasher: washerBotZ - tab.z1, ballTipToBox: tTip - gBox }, issues,
+        rib: { x: st.x, w: p.sideRibWidthIn, blockW: bw, blockZ0: bz0, z0: tg.z0, z1: st.top, tieTopZ: tg.z1, washerBotZ },
+        tab, clear: { tabTopToWasher: washerBotZ - tab.z1, ballTipToBox: tTip - gBox }, issues,
       };
     }
   }
