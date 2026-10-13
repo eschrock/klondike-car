@@ -537,12 +537,12 @@ describe('round 2 hull (build M2-M8, D-43)', () => {
     expect(get(buildModel(ok), 'side-L-chine').joints!.find((j) => j.to === 'side-L-web')!.size).toMatch(/0\.234" oak strip/);
   });
 
-  it('rough length gets 4× the milling allowance (M8): the straight 64.53" chine is 65.03" rough, 1/8" more each way in t and w', () => {
+  it('rough length gets its allowance (M8; Eric 2026-10-12): +1 in plain, +2 in for a bent strip, and 1/8" in t', () => {
     const c = get(parts, 'side-L-chine');
     expect(c.stock!.l).toBeCloseTo(L.xSideEnd - L.xSideStart, 6);
-    expect(c.rough!.l).toBeCloseTo(c.stock!.l + 0.5, 6);
+    expect(c.rough!.l).toBeCloseTo(c.stock!.l + p.laminateLengthAllowanceIn, 6); // a bent strip: the laminate allowance (Eric 2026-10-12)
     expect(c.rough!.t).toBeCloseTo(L.sideBand + p.millingAllowanceIn, 6); // a strip, not a 5/8 block (S2)
-    for (const x of parts.filter((q) => q.rough && q.stock && (q.group === 'body' || q.group === 'frame'))) expect(x.rough!.l - x.stock!.l, x.id).toBeCloseTo(4 * p.millingAllowanceIn, 6);
+    for (const x of parts.filter((q) => q.rough && q.stock && (q.group === 'body' || q.group === 'frame'))) expect(x.rough!.l - x.stock!.l, x.id).toBeCloseTo(x.kind === 'bentlam' || x.plies !== undefined ? p.laminateLengthAllowanceIn : p.roughLengthAllowanceIn, 6);
   });
 
   it('a steel box with no stock gets the bar section x cut length and a McMaster-class source (M9 net)', () => {

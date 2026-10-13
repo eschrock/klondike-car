@@ -1574,7 +1574,32 @@ const defs = {
   millingAllowanceIn: {
     label: 'Rough-stock allowance (t / w)', group: 'stock', unit: 'in',
     default: 0.125, min: 0, max: 0.5, step: 0.0625, status: 'assumed',
-    note: 'Added to thickness and width; length gets 4× this (≈ ½").',
+    note: 'Added to the THICKNESS of every rough oak piece (planing allowance). Width and length have their own allowances (roughWidthAllowanceIn, roughLengthAllowanceIn; laminate pieces: laminateWidthAllowanceIn, laminateLengthAllowanceIn).',
+  },
+  roughWidthAllowanceIn: {
+    label: 'Rough-stock width allowance (plain solid parts)', group: 'stock', unit: 'in',
+    default: 0.25, min: 0.125, max: 0.75, step: 0.0625, status: 'assumed',
+    note: 'Eric 2026-10-12: a plain solid part is cut this much wider than its finished width (was the 1/8 in milling allowance), so there is room to joint one edge and plane to width. Rough sizes are rounded UP to the next 1/8 in for the cut list.',
+  },
+  roughLengthAllowanceIn: {
+    label: 'Rough-stock length allowance (plain solid parts)', group: 'stock', unit: 'in',
+    default: 1, min: 0.5, max: 3, step: 0.125, status: 'assumed',
+    note: 'Eric 2026-10-12: a plain solid part is cut 1 in longer than its finished length (was 4 x the milling allowance = 1/2 in): room to square both ends and to cut around checking.',
+  },
+  laminateWidthAllowanceIn: {
+    label: 'Rough-stock width allowance (laminated / edge-glued / bent pieces)', group: 'stock', unit: 'in',
+    default: 0.375, min: 0.25, max: 1, step: 0.0625, status: 'assumed',
+    note: 'Eric 2026-10-12: a piece that is face-laminated (D-70 layers), edge-glued (the panel boards) or bent-laminated (the resaw strips for the rails and bands) is cut 3/8 in wider than its share of the finished width. Glued pieces end up slightly askew and have to be jointed and planed true after the glue-up; 1/8 in was too little. Rounded UP to the next 1/8 in for the cut list.',
+  },
+  laminateLengthAllowanceIn: {
+    label: 'Rough-stock length allowance (laminated / edge-glued / bent pieces)', group: 'stock', unit: 'in',
+    default: 2, min: 1, max: 4, step: 0.25, status: 'assumed',
+    note: 'Eric 2026-10-12: laminated, edge-glued and bent pieces are cut 2 in longer than finished (1 in a plain part): glued layers slip lengthwise, the ends of a glue-up are crushed or starved of glue, and a bent strip is trimmed to the measured length (S1).',
+  },
+  bandsawResawCapacityIn: {
+    label: 'Bandsaw resaw capacity (height)', group: 'stock', unit: 'in',
+    default: 6, min: 4, max: 20, step: 0.5, status: 'locked',
+    note: "Eric's bandsaw, 6 in (2026-10-12). Every resaw height must be at most this. The strips are RIPPED FIRST, so the resaw height is the strip width (a rail strip is about 1-5/8 in), never the width of the board it came from: a 9 in board is ripped into lanes on the table saw, then each lane goes through the bandsaw on edge.",
   },
   oakWasteAllowance: {
     label: 'Oak waste allowance (board feet)', group: 'stock', unit: '×',

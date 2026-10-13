@@ -82,9 +82,15 @@ export const STEP = { frame: 3, body: 4, steering: 4.5, gear: 4.6, linkage: 4.7,
 export const GRIP_BACKING_T_IN = 0.0625;
 export const HULL_STEP = { deck: 4, sides: 4.2, transom: 4.4 } as const;
 
-/** Rough (as-milled-from-the-board) size of a finished wood piece: thickness and width + the allowance, length + 4× (≈ ½", build review M8). */
-export function roughOf(p: Params, s: Dims): Dims {
-  return { t: s.t + p.millingAllowanceIn, w: s.w + p.millingAllowanceIn, l: s.l + 4 * p.millingAllowanceIn };
+/**
+ * Rough (as-cut-from-the-board) size of a finished wood piece (Eric 2026-10-12). A plain solid part: thickness + `millingAllowanceIn`, width + `roughWidthAllowanceIn`, length + `roughLengthAllowanceIn`.
+ * A piece that is face-laminated, edge-glued or bent-laminated (`laminate` true) gets the larger `laminateWidthAllowanceIn` and `laminateLengthAllowanceIn`: glued pieces end up slightly askew and are jointed after the glue-up.
+ * This is the EXACT size; the cut list rounds it up to the next 1/8 in. The mass and the analysis use `stock`, never this.
+ */
+export function roughOf(p: Params, s: Dims, laminate = false): Dims {
+  return laminate
+    ? { t: s.t + p.millingAllowanceIn, w: s.w + p.laminateWidthAllowanceIn, l: s.l + p.laminateLengthAllowanceIn }
+    : { t: s.t + p.millingAllowanceIn, w: s.w + p.roughWidthAllowanceIn, l: s.l + p.roughLengthAllowanceIn };
 }
 
 /** Default sourcing of a steel bar, plate or rod part nobody gave a source (build review M9): McMaster-class stock cut to length. */
@@ -246,7 +252,7 @@ function finalize(ctx: Ctx, s: PartSpec, geometry: Part['geometry'], massLb: num
   const [t, w, l] = dimsSorted;
   // Steel bar / plate / rod: the stock is the section × the cut length (build review M9), unless the builder says otherwise.
   const stock: Dims | undefined = s.stock === false ? undefined : s.stock ?? (wood || s.mat === 'steel' ? { t, w, l } : undefined);
-  const rough: Dims | undefined = wood && stock && s.mat === 'oak' ? roughOf(p, stock) : undefined;
+  const rough: Dims | undefined = wood && stock && s.mat === 'oak' ? roughOf(p, stock, kind === 'bentlam') : undefined;
   const fab: Fab = s.fab ?? (wood ? 'table-saw' : s.mat === 'steel' ? 'drill-tap' : 'buy');
   const out: Part = {
     id: s.id,
@@ -402,7 +408,7 @@ export function bandPart(ctx: Ctx, b: BandSpec): Part {
     cgIn: [lx, b.s * ly, b.zc], // length-weighted centroid of the path (the bounding box center of a curved member is far from it)
   };
   if (b.partNo) out.partNo = b.partNo;
-  if (oak) out.rough = roughOf(p, stock);
+  if (oak) out.rough = roughOf(p, stock, true); // a bent-laminate strip: the laminate allowances
   if (b.grain ?? 'x') out.grain = b.grain ?? 'x';
   if (b.edges) out.edges = b.edges;
   if (b.removable) out.removable = true;

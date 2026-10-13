@@ -26,14 +26,17 @@
  * Every fastener and hardware line carries a `materialNote` (exterior use: what it must be made of, by where it lives).
  */
 import { localBounds } from '../model/bounds';
+import { buildModel } from '../model';
+import { totalMass } from '../model/mass';
+import { STD_WOOD_SCREWS } from '../model/rear-mount';
 import type { Joint, Part } from '../model/types';
-import type { Params } from '../params';
+import { WEATHER_SPEC, thinSheet, type Params } from '../params';
 import { cutList, fracIn, isBuilt, partKey, toCsv, type CsvCell } from './cutlist';
 import { finishingSchedule, glueEpoxyFlOz } from './finishing';
 import { nestPlywood, oakBoardFeet } from './nesting';
 import {
-  EPOXY_KITS, EPOXY_PUMPS_300, FILLERS, FINISH_CONTAINER_FACTOR, FINISH_CONTAINER_PRICE, FINISH_PRICE, GLASS_TAPE, METAL_CUT_ALLOWANCE_IN, NOTE_PRICE, OAK_ALT_PRICE_PER_BF, OAK_PRICE_PER_BF, PLYWOOD_PRICE, RESEARCH_DATE,
-  PURCHASED_FALLBACK, fastenerPrice, metalPrice, modelCostNote, purchasedEntry, type Price, type PriceBasis,
+  EPOXY_KITS, EPOXY_KITS_SMALL, EPOXY_PUMPS_300, FILLERS, FINISH_CONTAINER_FACTOR, FINISH_CONTAINER_PRICE, FINISH_PRICE, GLASS_TAPE, METAL_CUT_ALLOWANCE_IN, NOTE_PRICE, OAK_ALT_PRICE_PER_BF, OAK_PRICE_PER_BF, PLYWOOD_PRICE, RESEARCH_DATE,
+  PURCHASED_FALLBACK, TITEBOND_BOTTLES, URETHANE_CONTAINER_PRICE, fastenerPrice, metalPrice, modelCostNote, purchasedDescribe, purchasedEntry, specOf, std304, type Price, type PriceBasis, type SpecName,
 } from './prices';
 
 // ── Consumable assumptions (all estimates; also in docs/phase4-data-notes.md) ─
@@ -92,12 +95,16 @@ export const BULK_ALWAYS: ReadonlySet<string> = new Set(['sandpaper']);
 export const isBulkQty = (price: Price, qty: number): boolean => !!price.packQty && !!price.packUsd && qty < BULK_SHARE * price.packQty;
 
 /**
- * Why every fastener is 316 stainless, said once (the section note): S7 bars zinc, brass and plated steel from wet white oak, because oak tannins corrode them and stain the wood black. 304 stainless
- * is a possible cost cut where a line says "(304 or 316)"; the prices here are 316.
+ * Why every fastener is 316 stainless in the EXTREME spec, said once (the section note): S7 bars zinc, brass and plated steel from wet white oak, because oak tannins corrode them and stain the wood black. 304 stainless
+ * is a possible cost cut where a line says "(304 or 316)"; the Extreme prices here are 316.
  */
 export const FASTENER_MATERIAL_NOTE =
   'Exterior use: every fastener is 316 stainless (S7: no zinc, brass or plated steel in wet white oak, because oak tannins corrode them and stain the wood black). ' +
   'The Dominos are Festool Sipo (sapele), the exterior hardwood type, never beech (interior only). 304 stainless is a possible cost cut where a line says "304 or 316"; the prices here are for 316 (base prices first).';
+/** The same for the STANDARD spec (garage-kept, used a few times a year, wet at most at a rainy derby): 304 / 18-8 stainless, zinc where it never sees the oak, beech Dominos. */
+export const FASTENER_MATERIAL_NOTE_STANDARD =
+  'Standard weather spec (garage-kept, used a few times a year, wet at most at a rainy derby): the screws, bolts, nuts, washers, T-nuts and pins are 18-8 (304) stainless, which tannins in wet oak will stain a little but not corrode in a garage; the shaft collars and the threaded inserts are zinc-plated; the eye bolts are galvanized. ' +
+  'The Dominos are beech (the interior type, fine kept dry). Use 316 for any of it if the sled will live outside or near salt: the weather setting switches the BOM.';
 
 const DECK_OK_PARTS = /^(storage-lid-batten|storage-rim|storage-coaming|seat-wedge|seat-crest|sign-)/;
 const SHELTERED_PARTS = /^(storage-|seat-(hinge|back|wedge|crest|pin)|sign-|flag-)/;
@@ -105,23 +112,36 @@ const SHELTERED_PARTS = /^(storage-|seat-(hinge|back|wedge|crest|pin)|sign-|flag
  * The material a fastener line must be made of, by label and by the parts it fixes. First match wins. `usedOn` are the ids of the parts of the joints that need the item (empty: unknown, so
  * the strict default applies).
  */
-export function fastenerMaterialNote(label: string, usedOn: readonly string[] = []): string {
-  if (/^Domino/.test(label)) return 'Festool SIPO (sapele) Dominos REQUIRED: the exterior/hardwood type. NOT beech: beech is interior only and swells and rots when it gets wet. Epoxy them in.';
+export function fastenerMaterialNote(label: string, usedOn: readonly string[] = [], spec: SpecName = 'extreme'): string {
+  const std = spec === 'standard';
+  if (/^Domino/.test(label)) return std
+    ? 'Festool BEECH Dominos: the interior type, swells and rots if it stays wet. Fine in a sled kept in a garage and wet at most at a rainy derby; glue them in with Titebond III (the Extreme spec uses the exterior type and epoxy).'
+    : 'Festool SIPO (sapele) Dominos REQUIRED: the exterior/hardwood type. NOT beech: beech is interior only and swells and rots when it gets wet. Epoxy them in.';
   if (/heat-set insert/i.test(label)) return 'Brass heat-set insert OK: it sits in the printed ASA lamp clip, not in wet oak (brass is barred only from wet oak, S7).';
   if (/nylon washer|button plug|end plug/i.test(label)) return 'Nylon or plastic, UV-stable: no metal involved.';
   if (/\bM[34]\b/.test(label)) return 'Stainless (304 or 316): screws into the brass insert in the printed clip, away from the oak.';
-  if (/cotter pin|shaft collar|stainless rod/i.test(label)) return '316 stainless REQUIRED: at the wheel end of the axle or in the handle pins, in slush and road salt; plated steel rusts in a week.';
+  if (std && /shaft collar/i.test(label)) return 'Zinc-plated steel is right for the Standard spec (garage-kept); it rusts and stains the axle end if the sled lives outside (use the Extreme spec, 316).';
+  if (std && /threaded insert/i.test(label)) return 'Zinc insert, epoxied into the oak: fine in a dry garage; use stainless (Extreme spec) near salt.';
+  if (/cotter pin|shaft collar|stainless rod/i.test(label)) return std ? '18-8 (304) stainless at the wheel end of the axle or in the handle pins: right for the Standard spec.' : '316 stainless REQUIRED: at the wheel end of the axle or in the handle pins, in slush and road salt; plated steel rusts in a week.';
   const on = usedOn.length ? usedOn : ['?'];
-  if (/wood screw/i.test(label) && on.every((id) => DECK_OK_PARTS.test(id))) return 'Exterior-coated deck screw OK (hidden, epoxy-sealed, wood to wood, lightly loaded); 316 stainless is the model spec and what the price assumes.';
-  if (on.every((id) => SHELTERED_PARTS.test(id))) return 'Stainless (304 or 316): sheltered in the storage box or under the seat; 316 is the model spec and what the price assumes.';
-  return '316 stainless REQUIRED: in wet white oak (tannins corrode coated steel and stain the wood black). 304 is a possible cost cut, not priced.';
+  const ss = std ? '18-8 (304) stainless' : '316 stainless';
+  if (/wood screw/i.test(label) && on.every((id) => DECK_OK_PARTS.test(id))) return `Exterior-coated deck screw OK (hidden, epoxy-sealed, wood to wood, lightly loaded); ${ss} is the spec and what the price assumes.`;
+  if (on.every((id) => SHELTERED_PARTS.test(id))) return `Stainless (304 or 316): sheltered in the storage box or under the seat; ${std ? '18-8 (304)' : '316'} is the spec and what the price assumes.`;
+  return std
+    ? '18-8 (304) stainless: right for the Standard spec (garage-kept). Tannins in wet oak stain it black over the years; use 316 (Extreme spec) if the sled lives outside.'
+    : '316 stainless REQUIRED: in wet white oak (tannins corrode coated steel and stain the wood black). 304 is a possible cost cut, not priced.';
 }
 
 const METAL_SPEC = /stainless|316|steel|bronze|zinc|galvanized|grade \d|hinge|chain|latch|clevis|hitch|snap hook|D-ring/i;
 /** The material note of a purchased hardware part (hinges, latches, pins, chain, eye bolts...), from the model's own spec; undefined for rope, foam, rubber, plastic, lights and other non-metal parts. */
-export function hardwareMaterialNote(x: Part): string | undefined {
+export function hardwareMaterialNote(x: Part, spec: SpecName = 'extreme'): string | undefined {
   const m = x.material ?? '';
   if (x.kind !== 'purchased' || !METAL_SPEC.test(m)) return undefined;
+  if (spec === 'standard') {
+    if (/316|stainless/i.test(m)) return `304 / 18-8 stainless is right for the Standard spec (garage-kept); the model says "${m}" for the Extreme spec, which uses 316.`;
+    if (/zinc|galvanized|grade \d|steel/i.test(m)) return `As specified: ${m}. Galvanized or zinc is right for the Standard spec (garage-kept); 316 for the Extreme spec.`;
+    return `As specified: ${m}.`;
+  }
   if (/316/.test(m)) return `316 stainless REQUIRED (the model spec: ${m}).`;
   if (/stainless/i.test(m)) return `Stainless REQUIRED, 316 for wet oak (the model spec: ${m}).`;
   if (/zinc|galvanized|grade \d|steel/i.test(m)) return `As specified: ${m}. Plated or galvanized steel rusts and stains white oak black; 316 stainless is the model default (S7), so check the listing before ordering.`;
@@ -170,7 +190,36 @@ export interface BomSection {
 
 export interface FastenerJointCounts { screw: number; bolt: number; 'threaded-insert': number; knob: number; domino: number; glue: number }
 
+/** The same design priced under both weather specs (D-73): what the Extreme spec adds. Differences are Extreme minus Standard. */
+export interface WeatherCompare {
+  /** False on the inner `bom` call that builds the comparison (it carries no comparison of its own). */
+  computed: boolean;
+  /** The spec the BOM it hangs on was made for. */
+  activeSpec: SpecName;
+  standardUsd: number;
+  extremeUsd: number;
+  /** extremeUsd - standardUsd: what Extreme weather adds. */
+  deltaUsd: number;
+  /** Extreme minus Standard for each section, by section id ('lumber', 'plywood', 'metal', 'purchased', 'fasteners', 'consumables', 'bulk', 'touches'). */
+  deltaBySection: Record<string, number>;
+  deltaCoreUsd: number;
+  deltaBulkUsd: number;
+  deltaTouchesUsd: number;
+  /** Empty-sled mass (lb) under each spec, and Extreme minus Standard (the thin sheet is the only part of the weather spec the model reads). */
+  standardLb: number;
+  extremeLb: number;
+  deltaLb: number;
+  thinSheetStandard: string;
+  thinSheetExtreme: string;
+}
+
 export interface Bom {
+  /** The weather spec this BOM is priced for. */
+  spec: SpecName;
+  /** The thin sheet in effect (name from `thinSheet(p)`). */
+  thinSheetName: string;
+  /** The same design under the other spec (see `bom`): computed on first read; not an enumerable property. */
+  readonly weatherCompare: WeatherCompare;
   sections: BomSection[];
   totalUsd: number;
   estimateUsd: number;
@@ -195,7 +244,7 @@ export interface Bom {
   unpriced: string[];
   /**
    * `epoxyFlOz` = mixed epoxy the purchase covers: `finishEpoxyFlOz` (the schedule's one seal coat, 5:1) + `closeEpoxyFlOz` (0 now: the closes are glue joints, 206, inside `glueEpoxyFlOz`) + `glueEpoxyFlOz` (the glue joints
-   * from `glueEpoxyFlOz()` in finishing.ts plus `EPOXY_WASTE`, 5:1). `resinFlOz` is the resin of that mix. `sealedFt2` is the okoume surface of the schedule.
+   * from `glueEpoxyFlOz()` in finishing.ts plus `EPOXY_WASTE`, 5:1). `resinFlOz` is the resin of that mix. `sealedFt2` is the plywood surface the Extreme saturation coat covers (0 under the Standard spec, which coats edges, end grain and the deck underside only).
    */
   consumables: {
     epoxyFlOz: number; finishEpoxyFlOz: number; closeEpoxyFlOz: number; glueEpoxyFlOz: number; resinFlOz: number;
@@ -356,8 +405,13 @@ export interface FastenerItem { label: string; qty: number }
 
 const GENERIC_LEN = new RegExp(String.raw`[x×]\s*${LEN}(?:"|\s*in\b)`);
 
+/** What the fasteners are made of, by weather spec: the Standard spec's screws, bolts, nuts, washers, T-nuts and pins are 18-8 (304); its threaded inserts are zinc. The Extreme spec is 316 throughout. */
+export interface FastMat { ss: string; insert: string }
+export const matOf = (spec: SpecName): FastMat => (spec === 'standard' ? { ss: '18-8', insert: 'zinc' } : { ss: '316', insert: '316' });
+
 /** Items one joint needs. Bolts bring a nut and washers; a bolt whose shank is a separate part (eye bolt, kingpin) brings only what is not in that part. `byId` is for the length fallback. */
-export function jointItems(part: Part, j: Joint, byId: PartMap = new Map()): FastenerItem[] {
+export function jointItems(part: Part, j: Joint, byId: PartMap = new Map(), spec: SpecName = 'extreme'): FastenerItem[] {
+  const mat = matOf(spec);
   const size = j.size ?? '';
   const n = j.count;
   switch (j.type) {
@@ -371,45 +425,45 @@ export function jointItems(part: Part, j: Joint, byId: PartMap = new Map()): Fas
       const m = /M(\d)\b/.exec(size);
       if (/heat-set/i.test(size) && m) return [{ label: `Heat-set insert M${m[1]}`, qty: n }];
       const t = new RegExp(String.raw`#(\d+)-(\d+)\s*[x×]\s*${LEN}`).exec(size);
-      return [{ label: t ? `316 threaded insert #${t[1]}-${t[2]} x ${lenText(t[3])}"` : '316 threaded insert (size per joint note)', qty: n }];
+      return [{ label: t ? `${mat.insert} threaded insert #${t[1]}-${t[2]} x ${lenText(t[3])}"` : `${mat.insert} threaded insert (size per joint note)`, qty: n }];
     }
     case 'knob': {
       // A thumb knob is a #10-32 screw with a size in its text. A `knob` joint without one is not a screw to buy (the brake snap hook was typed this way): nothing to order.
       const t = new RegExp(String.raw`#(\d+)-(\d+)\s*[x×]\s*${LEN}`).exec(size);
       return t ? [{ label: `Thumb-knob screw #${t[1]}-${t[2]} x ${lenText(t[3])}"`, qty: n }] : [];
     }
-    case 'screw': return screwItems(part, j, byId);
-    case 'bolt': return boltItems(part, j, byId);
+    case 'screw': return screwItems(part, j, byId, mat);
+    case 'bolt': return boltItems(part, j, byId, mat);
     case 'pin': {
       // A stainless rod epoxied into two parts (the handlebow pins) is stock to cut; clevis and hitch pins are purchased parts.
       const r = new RegExp(String.raw`(\d\/\d+)"\s*[×x]\s*${LEN}"?\s*(?:316 )?stainless rod`, 'i').exec(size);
-      return r ? [{ label: `316 stainless rod ${r[1]}" x ${lenText(r[2])}"`, qty: n }] : [];
+      return r ? [{ label: `${mat.ss} stainless rod ${r[1]}" x ${lenText(r[2])}"`, qty: n }] : [];
     }
     default: return [];
   }
 }
 
-function screwItems(part: Part, j: Joint, byId: PartMap): FastenerItem[] {
+function screwItems(part: Part, j: Joint, byId: PartMap, mat: FastMat): FastenerItem[] {
   const size = j.size ?? '';
   const n = j.count;
-  if (/screw eye/i.test(size)) { const g = /#(\d+)/.exec(size); return [{ label: `316 screw eye ${g ? '#' + g[1] : '(size per joint note)'}`, qty: n }]; }
+  if (/screw eye/i.test(size)) { const g = /#(\d+)/.exec(size); return [{ label: `${mat.ss} screw eye ${g ? '#' + g[1] : '(size per joint note)'}`, qty: n }]; }
   const ins = new RegExp(String.raw`#(\d+)-(\d+)\s*[x×]\s*${LEN}`).exec(size);
   if (/insert/i.test(size) && ins) {
-    const out: FastenerItem[] = [{ label: `316 threaded insert #${ins[1]}-${ins[2]} x ${lenText(ins[3])}"`, qty: n }];
+    const out: FastenerItem[] = [{ label: `${mat.insert} threaded insert #${ins[1]}-${ins[2]} x ${lenText(ins[3])}"`, qty: n }];
     // The hinge leaves are screwed into these inserts (assembly step: "#10-32 x 3/8 screws to the inserts"): a machine screw one leaf thicker than the insert is long.
-    if (/hinge/i.test(`${j.to} ${part.id}`)) out.push({ label: `316 flat-head machine screw #${ins[1]}-${ins[2]} x ${fracIn(Math.ceil((Number(eval16(ins[3])) + HINGE_LEAF_IN) * 8 - 1e-6) / 8)}"`, qty: n });
+    if (/hinge/i.test(`${j.to} ${part.id}`)) out.push({ label: `${mat.ss} flat-head machine screw #${ins[1]}-${ins[2]} x ${fracIn(Math.ceil((Number(eval16(ins[3])) + HINGE_LEAF_IN) * 8 - 1e-6) / 8)}"`, qty: n });
     return out;
   }
   const metric = /\bM(\d)\b(?:\s*[x×]\s*(\d+))?/.exec(size);
-  if (metric) return [{ label: `316 screw M${metric[1]} x ${metric[2] ?? METRIC_SCREW_MM[metric[1]] ?? '?'} mm`, qty: n }];
-  if (ins) return [{ label: `316 machine screw #${ins[1]}-${ins[2]} x ${lenText(ins[3])}"`, qty: n }];
+  if (metric) return [{ label: `${mat.ss} screw M${metric[1]} x ${metric[2] ?? METRIC_SCREW_MM[metric[1]] ?? '?'} mm`, qty: n }];
+  if (ins) return [{ label: `${mat.ss} machine screw #${ins[1]}-${ins[2]} x ${lenText(ins[3])}"`, qty: n }];
   const w = new RegExp(String.raw`#(\d+)\s*[x×]\s*${LEN}`).exec(size);
-  if (w) return [{ label: `316 wood screw #${w[1]} x ${lenText(w[2])}"`, qty: n }];
+  if (w) return [{ label: `${mat.ss} wood screw #${w[1]} x ${lenText(w[2])}"`, qty: n }];
   const g = /#(\d+)/.exec(size);
-  if (!g) return [{ label: '316 screw (size per joint note)', qty: n }];
+  if (!g) return [{ label: `${mat.ss} screw (size per joint note)`, qty: n }];
   const gl = GENERIC_LEN.exec(size);
   const len = gl ? Number(eval16(gl[1])) : screwLengthFromStack(part, j, byId);
-  return [{ label: `316 wood screw #${g[1]} x ${len ? fracIn(len) + '"' : '(length per joint note)'}`, qty: n }];
+  return [{ label: `${mat.ss} wood screw #${g[1]} x ${len ? fracIn(len) + '"' : '(length per joint note)'}`, qty: n }];
 }
 
 /** `1-3/4`, `7/8`, `0.875`, `2` to a number. */
@@ -419,7 +473,7 @@ function eval16(s: string): number {
   return Number(s);
 }
 
-function boltItems(part: Part, j: Joint, byId: PartMap): FastenerItem[] {
+function boltItems(part: Part, j: Joint, byId: PartMap, mat: FastMat): FastenerItem[] {
   const size = j.size ?? '';
   const n = j.count;
   if (/see the bushing/.test(size)) return [];
@@ -434,8 +488,8 @@ function boltItems(part: Part, j: Joint, byId: PartMap): FastenerItem[] {
   const t = dia ? `${dia[1]}-${dia[2]}` : '1/4-20';
   // Bolts into T-nuts set in a backer (the handle sockets) bring a T-nut instead of a lock nut, and no fender washer on the nut side.
   const tnut = /\bT-?nuts?\b/i.test(size);
-  const nut: FastenerItem = { label: tnut ? `316 T-nut ${t}` : `316 nylon-insert lock nut ${t}`, qty: n };
-  const washer = (k: number): FastenerItem => ({ label: `316 fender washer ${d}"`, qty: k * n });
+  const nut: FastenerItem = { label: tnut ? `${mat.ss} T-nut ${t}` : `${mat.ss} nylon-insert lock nut ${t}`, qty: n };
+  const washer = (k: number): FastenerItem => ({ label: `${mat.ss} fender washer ${d}"`, qty: k * n });
   if (/eye bolt/i.test(size) || /eye bolt/i.test(part.name)) return [nut, washer(1)]; // the eye bolt itself is the steer-eye / steer-anchor part
   if (/kingpin/i.test(size)) return []; // the kingpin part includes its washers and nut
   if (!len) { // no length in the text: another "x L" in it, else the stack of parts the bolt crosses
@@ -443,9 +497,9 @@ function boltItems(part: Part, j: Joint, byId: PartMap): FastenerItem[] {
     const v = gl ? eval16(gl[1]) : boltLengthFromStack(part, j, byId);
     if (v) len = fracIn(v);
   }
-  if (/tapped/.test(size)) return [{ label: `316 machine screw ${t}${len ? ` x ${len}"` : ''} (tapped)`, qty: n }];
+  if (/tapped/.test(size)) return [{ label: `${mat.ss} machine screw ${t}${len ? ` x ${len}"` : ''} (tapped)`, qty: n }];
   const type = /button-head/.test(size) ? 'button-head cap screw' : /carriage/.test(size) ? 'carriage bolt' : 'hex bolt';
-  const label = `316 ${type} ${t}${len ? ` x ${len}"` : ' (length per joint note)'}`;
+  const label = `${mat.ss} ${type} ${t}${len ? ` x ${len}"` : ' (length per joint note)'}`;
   // A nylon washer under the head (handle sockets) replaces one of the two fender washers.
   const nylon = /nylon washer/i.test(size);
   const out: FastenerItem[] = [{ label, qty: n }, nut, washer(tnut ? (nylon ? 0 : 1) : type === 'carriage bolt' || nylon ? 1 : 2)];
@@ -486,7 +540,7 @@ export interface NoteItem {
   /** Where the text is, for the BOM note. */
   noteRef: string;
   /** What to buy for the built parts of this configuration; null when none of the cited parts is built. */
-  expand(built: Part[], joints: Array<{ part: Part; joint: Joint }>): { items: FastenerItem[]; note: string } | null;
+  expand(built: Part[], joints: Array<{ part: Part; joint: Joint }>, spec?: SpecName): { items: FastenerItem[]; note: string } | null;
 }
 
 const byIds = (built: Part[], ids: string[]): Part[] => built.filter((x) => ids.includes(x.id));
@@ -514,7 +568,7 @@ export const BANDING_ROLL_FT = 25;
 export const NOTE_ITEMS: NoteItem[] = [
   {
     key: 'wheel-retention', section: 'fasteners', partIds: wheelIds, noteRef: 'wheel notes (D-60): "collar + cotter pin on the axle end"; axle notes: 0.156" cross hole',
-    expand(built) {
+    expand(built, _joints, spec) {
       const wheels = byIds(built, wheelIds).filter((x) => /collar/i.test(x.notes ?? ''));
       if (!wheels.length) return null;
       const axle = built.find((x) => axleIds.includes(x.id) && x.stock);
@@ -523,8 +577,8 @@ export const NOTE_ITEMS: NoteItem[] = [
       const cotter = [...COTTER_DIAS].reverse().find(([v]) => v <= hole + 1e-3) ?? COTTER_DIAS[0];
       return {
         items: [
-          { label: `316 stainless set-screw shaft collar, ${fracIn(od)}" bore`, qty: wheels.length },
-          { label: `316 cotter pin ${cotter[1]}" x ${fracIn(roundUpStock(od + 0.75))}"`, qty: wheels.length },
+          { label: spec === 'standard' ? `zinc-plated set-screw shaft collar, ${fracIn(od)}" bore` : `316 stainless set-screw shaft collar, ${fracIn(od)}" bore`, qty: wheels.length },
+          { label: `${matOf(spec ?? 'extreme').ss} cotter pin ${cotter[1]}" x ${fracIn(roundUpStock(od + 0.75))}"`, qty: wheels.length },
         ],
         note: `${wheels.length} wheels, one collar and one cotter pin each`,
       };
@@ -542,17 +596,17 @@ export const NOTE_ITEMS: NoteItem[] = [
   },
   {
     key: 'stop-block-screws', section: 'fasteners', partIds: ['seat-wedge-L', 'seat-wedge-R'], noteRef: 'seat-wedge glue note: "epoxy to the deck (and screwed from below)"; assembly step "Seat stop blocks and crest strip"',
-    expand(built, joints) {
+    expand(built, joints, spec) {
       // Only when the model has no screw joint of its own on the block (then the joint list already carries them).
       const blocks = byIds(built, ['seat-wedge-L', 'seat-wedge-R']).filter((x) => /screwed from below/i.test(ptext(x)) && !joints.some((q) => q.part.id === x.id && q.joint.type === 'screw'));
       const deck = thicknessIn(built.find((x) => x.id === 'deck'));
       if (!blocks.length || !deck) return null;
-      return { items: [{ label: `316 flat-head wood screw #8 x ${fracIn(roundUpStock(deck + SCREW_BITE_IN))}"`, qty: 2 * blocks.length }], note: `2 per stop block, up through the ${fracIn(deck)}" deck into the block` };
+      return { items: [{ label: `${matOf(spec ?? 'extreme').ss} flat-head wood screw #8 x ${fracIn(roundUpStock(deck + SCREW_BITE_IN))}"`, qty: 2 * blocks.length }], note: `2 per stop block, up through the ${fracIn(deck)}" deck into the block` };
     },
   },
   {
     key: 'lid-batten-screws', section: 'fasteners', partIds: ['storage-lid-batten-1', 'storage-lid-batten-2', 'storage-lid-batten-3'], noteRef: 'batten glue joint note: "epoxy + 4 stainless screws from the top"',
-    expand(built) {
+    expand(built, _joints, spec) {
       const lid = built.find((x) => x.id === 'storage-lid');
       let n = 0, t = 0;
       for (const b of built.filter((x) => /^storage-lid-batten-/.test(x.id))) {
@@ -562,8 +616,11 @@ export const NOTE_ITEMS: NoteItem[] = [
         t = thicknessIn(b);
       }
       if (!n || !lid) return null;
-      // From the lid top, countersunk and filled: through the panel and not out of the batten (1/16 in short of the batten's far face).
-      return { items: [{ label: `316 flat-head wood screw #6 x ${fracIn(roundDownStock(thicknessIn(lid) + t - 1 / 16))}"`, qty: n }], note: `${n} screws through the ${fracIn(thicknessIn(lid))}" lid panel into the ${fracIn(t)}" battens` };
+      // D-72: the lid-batten screws are the standard hardware-into-thin-stock size, #8 x 5/8 (the model has three wood-screw sizes and the BOM adds no fourth). From the lid top, countersunk and plugged:
+      // through the panel and into the batten; the batten is epoxied too, so the screws only clamp it.
+      const s58 = STD_WOOD_SCREWS.find((q) => q.gauge === 8 && Math.abs(q.lenIn - 5 / 8) < 1e-9)!;
+      const bite = s58.lenIn - thicknessIn(lid);
+      return { items: [{ label: `${matOf(spec ?? 'extreme').ss} wood screw #${s58.gauge} x ${fracIn(s58.lenIn)}"`, qty: n }], note: `${n} screws through the ${fracIn(thicknessIn(lid))}" lid panel into the ${fracIn(t)}" battens (${bite.toFixed(2)}" of thread in the batten, which is glued too)` };
     },
   },
   {
@@ -608,7 +665,50 @@ export const NOTE_ITEMS: NoteItem[] = [
 
 // ── BOM ───────────────────────────────────────────────────────────────────────
 
-export function bom(parts: Part[], p: Params): Bom {
+/** A view with nothing in it: the empty sled, for the mass of the other weather spec. */
+const EMPTY_VIEW = { steerDeg: 0, rider: 'none', cargo: false } as const;
+
+export interface BomOptions {
+  /** Skip the other-spec comparison (`Bom.weatherCompare` then says it was not computed): the comparison calls `bom` once for the other spec, and that call sets this so it cannot recurse. */
+  noCompare?: boolean;
+}
+
+/**
+ * The bill of materials for `parts` under the weather spec of `p` (`p.weatherSpec`: Standard by default). `Bom.weatherCompare` (computed on first read, never enumerated) prices the SAME design under the
+ * other spec: the same parts, unless the thin sheet follows the weather (white oak plywood vs okoume), in which case the parts are rebuilt for the other spec with `buildModel`.
+ */
+export function bom(parts: Part[], p: Params, opts: BomOptions = {}): Bom {
+  const b = bomForSpec(parts, p);
+  let cache: WeatherCompare | undefined;
+  Object.defineProperty(b, 'weatherCompare', {
+    enumerable: false,
+    configurable: true,
+    get(): WeatherCompare {
+      if (cache) return cache;
+      if (opts.noCompare) return (cache = { computed: false, activeSpec: b.spec, standardUsd: b.spec === 'standard' ? b.totalUsd : NaN, extremeUsd: b.spec === 'extreme' ? b.totalUsd : NaN, deltaUsd: 0, deltaBySection: {}, deltaCoreUsd: 0, deltaBulkUsd: 0, deltaTouchesUsd: 0, standardLb: NaN, extremeLb: NaN, deltaLb: 0, thinSheetStandard: '', thinSheetExtreme: '' });
+      const otherP: Params = { ...p, weatherSpec: b.spec === 'standard' ? WEATHER_SPEC.extreme : WEATHER_SPEC.standard };
+      const sameSheet = thinSheet(otherP).key === thinSheet(p).key;
+      const otherParts = sameSheet ? parts : buildModel(otherP, EMPTY_VIEW);
+      const o = bom(otherParts, otherP, { noCompare: true });
+      const std = b.spec === 'standard' ? b : o, ext = b.spec === 'standard' ? o : b;
+      const mine = totalMass(parts), theirs = sameSheet ? mine : totalMass(otherParts);
+      const stdLb = b.spec === 'standard' ? mine : theirs, extLb = b.spec === 'standard' ? theirs : mine;
+      const deltaBySection: Record<string, number> = {};
+      for (const sec of ext.sections) deltaBySection[sec.id] = money(sec.subtotalUsd - (std.sections.find((q) => q.id === sec.id)?.subtotalUsd ?? 0));
+      return (cache = {
+        computed: true, activeSpec: b.spec, standardUsd: std.totalUsd, extremeUsd: ext.totalUsd, deltaUsd: money(ext.totalUsd - std.totalUsd), deltaBySection,
+        deltaCoreUsd: money(ext.coreUsd - std.coreUsd), deltaBulkUsd: money(ext.bulkUsd - std.bulkUsd), deltaTouchesUsd: money(ext.touchesUsd - std.touchesUsd),
+        standardLb: stdLb, extremeLb: extLb, deltaLb: extLb - stdLb, thinSheetStandard: thinSheet({ ...p, weatherSpec: WEATHER_SPEC.standard }).name, thinSheetExtreme: thinSheet({ ...p, weatherSpec: WEATHER_SPEC.extreme }).name,
+      });
+    },
+  });
+  return b;
+}
+
+function bomForSpec(parts: Part[], p: Params): Bom {
+  const spec = specOf(p);
+  const std = spec === 'standard';
+  const thin = thinSheet(p);
   const unpriced: string[] = [];
   const built = parts.filter(isBuilt);
   const cl = cutList(parts, p);
@@ -629,16 +729,20 @@ export function bom(parts: Part[], p: Params): Bom {
     });
   });
 
-  // Plywood
+  // Plywood. The thin sheet is `thinSheet(p)` (D-73: 1/4 in white oak ply by default, 4 mm okoume, or 3 mm Baltic birch); the 12 mm deck is marine okoume (or Baltic if the species is changed).
   const plywood: BomLine[] = [];
   for (const mm of [...new Set(nest.sheets.map((s) => s.thicknessMm))]) {
     const sheets = nest.sheets.filter((s) => s.thicknessMm === mm);
     const label = `${mm} mm`;
     const price = PLYWOOD_PRICE[label];
     if (!price) { unpriced.push(`plywood ${label}`); continue; }
-    plywood.push(line('Plywood', label, `Marine okoume plywood (BS 1088), ${label}, 4 x 8 ft`, sheets.length, price, {
+    const isThin = label === thin.priceKey;
+    const desc = isThin
+      ? `${thin.name} plywood (${thin.glue} glue), ${thin.sheetWidthIn / 12} x ${thin.sheetLengthIn / 12} ft sheet (the thin sheet: sides, box, lid, signs)`
+      : `Marine okoume plywood (BS 1088), ${label}, 4 x 8 ft (the deck and seat back)`;
+    plywood.push(line('Plywood', label, desc, sheets.length, price, {
       vendor: price.source.split(/[,(]/)[0].trim(), // the shop itself (Aircraft Spruce, The Wood Yard): the full source and link are on the price
-      notes: `${sheets.map((s) => `sheet ${s.index}: ${s.placements.length} parts, ${s.utilizationPct.toFixed(0)}% used`).join('; ')}`,
+      notes: `${sheets.map((s) => `sheet ${s.index}: ${s.placements.length} parts, ${s.utilizationPct.toFixed(0)}% used`).join('; ')}${isThin && std && thin.priceKey === '5 mm' ? '. Interior / Type II glue is fine kept dry in a garage; the Extreme spec uses 4 mm okoume (BS 1088)' : ''}`,
     }));
   }
 
@@ -652,12 +756,14 @@ export function bom(parts: Part[], p: Params): Bom {
   }
   const metal: BomLine[] = [];
   for (const g of metalGroups.values()) {
-    const price = metalPrice(g.section);
+    const price = metalPrice(g.section, spec);
     if (!price) { unpriced.push(g.section); continue; }
     const extra = { vendor: price.url ? price.source : 'McMaster-Carr class', notes: `Cut to length: ${g.cuts.join(', ')}; ${METAL_CUT_ALLOWANCE_IN}" per cut for the kerf and squaring` };
+    // The Standard spec buys 304 where the cut list (the model's material text) says 316.
+    const name = std ? std304(g.section) : g.section;
     // A researched bar or tube is bought as the fixed piece the vendor sells (packQty in ft); an estimate is per foot of cut length.
-    if (price.packQty && price.packUsd) metal.push(packLine('Metal stock', g.section, g.section, r2(g.ft), price, extra, false));
-    else metal.push(line('Metal stock', g.section, g.section, r2(g.ft), price, { ...extra, notes: joinNotes(price.note && `Price: ${price.note}.`, extra.notes) }));
+    if (price.packQty && price.packUsd) metal.push(packLine('Metal stock', name, name, r2(g.ft), price, extra, false));
+    else metal.push(line('Metal stock', name, name, r2(g.ft), price, { ...extra, notes: joinNotes(price.note && `Price: ${price.note}.`, extra.notes) }));
   }
 
   // Purchased parts (and printed clips), by partNo
@@ -673,12 +779,12 @@ export function bom(parts: Part[], p: Params): Bom {
     const x = group[0];
     const tg = TOUCH_PRICED_PARTS.has(key) ? touchGroupOfPart(x) : undefined;
     const cost = x.sourcing?.costUsd;
-    const entry = purchasedEntry(key);
+    const entry = purchasedEntry(key, spec);
     let price: Price;
     let priceNote: string | undefined;
     if (cost !== undefined && !entry?.override) {
       // The model's own cost wins (a quote Eric or the model gave); the research can add a note and spec-gap alternatives to it.
-      const mc = modelCostNote(key);
+      const mc = modelCostNote(key, spec);
       price = { usd: cost, unit: 'ea', source: 'part.sourcing.costUsd (model)', basis: 'quoted', ...(mc?.alternatives ? { alternatives: mc.alternatives } : {}) };
       priceNote = mc ? (mc.note.includes(RESEARCH_DATE) ? mc.note : `${mc.note} (${RESEARCH_DATE} research)`) : undefined;
     } else {
@@ -696,11 +802,12 @@ export function bom(parts: Part[], p: Params): Bom {
       partIds: group.map((q) => q.id),
       ...(url ? { url } : {}),
       ...(tg ? { group: tg } : {}),
-      ...(hardwareMaterialNote(x) ? { materialNote: hardwareMaterialNote(x) } : {}),
+      ...(hardwareMaterialNote(x, spec) ? { materialNote: hardwareMaterialNote(x, spec) } : {}),
     };
+    const name = purchasedDescribe(key, spec) ?? (std ? std304(x.name) : x.name);
     // A part cut from a roll or a pack (a cord): the whole packs to buy, not a price per part.
-    if (price.packQty && price.packUsd && price.perPart) purchased.push(packLine('Purchased parts', key, x.name, group.length * price.perPart, price, extra, false));
-    else (tg ? touchLines : purchased).push(line(tg ? TOUCHES_SECTION.title : 'Purchased parts', key, x.name, group.length, price, extra));
+    if (price.packQty && price.packUsd && price.perPart) purchased.push(packLine('Purchased parts', key, name, group.length * price.perPart, price, extra, false));
+    else (tg ? touchLines : purchased).push(line(tg ? TOUCHES_SECTION.title : 'Purchased parts', key, name, group.length, price, extra));
   }
 
   // Fasteners: every unique joint, then the items that exist only in notes (NOTE_ITEMS)
@@ -718,7 +825,7 @@ export function bom(parts: Part[], p: Params): Bom {
     if (joint.type === 'glue' && /tape/i.test(`${joint.size ?? ''} ${joint.note ?? ''}`)) tapeJoints += joint.count;
     // A fastener that exists for a finishing touch (the lamp-clip inserts and screws, the lash-plate screws) goes to the touches section with its part.
     const tg = touchGroupOfPart(part) ?? touchGroupOfPart(byId.get(joint.to));
-    for (const it of jointItems(part, joint, byId)) {
+    for (const it of jointItems(part, joint, byId, spec)) {
       noteOn(it.label, [part.id, joint.to]);
       if (tg) { const k = `${tg}|${it.label}`; const prev = touchFast.get(k); touchFast.set(k, { label: it.label, group: tg, qty: (prev?.qty ?? 0) + it.qty }); }
       else fast.set(it.label, (fast.get(it.label) ?? 0) + it.qty);
@@ -726,7 +833,7 @@ export function bom(parts: Part[], p: Params): Bom {
   }
   const noteLines: BomLine[] = [];
   for (const item of NOTE_ITEMS) {
-    const x = item.expand(built, uj);
+    const x = item.expand(built, uj, spec);
     if (!x) continue;
     if (item.section === 'fasteners') for (const f of x.items) { fast.set(f.label, (fast.get(f.label) ?? 0) + f.qty); noteOn(f.label, item.partIds); }
     else if (item.touch) touchLines.push(line(TOUCHES_SECTION.title, item.key, x.items[0].label, x.items[0].qty, item.price!, { vendor: item.price!.source, notes: joinNotes(item.price!.url ? `Price: ${item.price!.note}.` : undefined, `${x.note} (${item.noteRef})`), group: item.touch }));
@@ -734,13 +841,23 @@ export function bom(parts: Part[], p: Params): Bom {
   }
   const familyOrder = (l: string): number => (/^Domino/.test(l) ? 7 : /insert/i.test(l) ? 4 : /bolt|cap screw/.test(l) ? 1 : /nut/.test(l) ? 2 : /washer/.test(l) ? 3 : /Thumb/.test(l) ? 4 : /collar|cotter|plug|rod/.test(l) ? 6 : 0);
   const bulkLines: BomLine[] = [];
-  /** One fastener line: pack-priced when the build needs under half a pack (bulk section, or the touches section for a touches fastener), else priced per piece in place. */
+  /**
+   * One fastener line. An item Bolt Depot sells by the piece (`Price.eachUsd`) is priced per piece, in place, when that is no dearer than the whole packs; otherwise pack-priced: bulk
+   * section (or the touches section for a touches fastener) when the build needs under half a pack, else whole packs in place.
+   */
   const fastenerLine = (label: string, qty: number, group?: TouchGroup): BomLine => {
-    const price = fastenerPrice(label);
+    const price = fastenerPrice(label, spec);
     if (price.note?.startsWith('UNPRICED')) unpriced.push(label);
-    const description = /^Domino/.test(label) ? `${label}, Sipo (sapele) exterior Domino, not beech` : label;
-    const extra: Partial<BomLine> = { vendor: price.url ? price.source : /^Domino/.test(label) ? 'Festool dealer' : 'McMaster-Carr / Fastenal', materialNote: fastenerMaterialNote(label, [...(fastOn.get(label) ?? [])]), ...(group ? { group } : {}) };
+    const isDomino = /^Domino/.test(label);
+    const description = isDomino ? (std ? `${label}, beech Domino (interior type)` : `${label}, Sipo (sapele) exterior Domino`) : label;
+    const extra: Partial<BomLine> = { vendor: price.url ? price.source : isDomino ? 'Festool dealer' : 'McMaster-Carr / Fastenal', materialNote: fastenerMaterialNote(label, [...(fastOn.get(label) ?? [])], spec), ...(group ? { group } : {}) };
     const sectionTitle = group ? TOUCHES_SECTION.title : 'Fasteners';
+    const packCost = price.packQty && price.packUsd ? Math.max(1, Math.ceil(qty / price.packQty - 1e-9)) * price.packUsd : Infinity;
+    if (price.eachUsd !== undefined && qty * price.eachUsd <= packCost + 1e-9) {
+      const { packQty: _q, packUsd: _u, packLabel: _l, ...rest } = price;
+      const single: Price = { ...rest, usd: price.eachUsd, note: `${price.note ?? ''} Bought by the piece: ${qty} x ${usdText(price.eachUsd)}${packCost < Infinity ? ` against ${usdText(packCost)} for the bag` : ''}.`.trim() };
+      return line(sectionTitle, label, description, qty, single, { ...extra, notes: single.note });
+    }
     if (isBulkQty(price, qty)) return packLine(group ? sectionTitle : BULK_SECTION.title, label, description, qty, price, extra);
     // Sold in packs and the build needs half a pack or more: still whole packs (the real purchase), in place.
     if (price.packQty && price.packUsd) return packLine(sectionTitle, label, description, qty, price, extra, false);
@@ -754,21 +871,23 @@ export function bom(parts: Part[], p: Params): Bom {
     touchFasteners.push(fastenerLine(label, qty, group));
   }
   touchLines.push(...touchFasteners);
-  const unresolved = [...fastenerLines, ...touchFasteners].map((l) => l.key).filter((k) => /per joint note/.test(k) || (/^316 .*\b(screw|bolt)\b/i.test(k) && !/screw eye|set-screw|insert/i.test(k) && !/ x \d+(?:-\d+\/\d+|\/\d+)?"| x \d+ mm/.test(k)));
+  const unresolved = [...fastenerLines, ...touchFasteners].map((l) => l.key).filter((k) => /per joint note/.test(k) || (/^(?:316|18-8) .*\b(screw|bolt)\b/i.test(k) && !/screw eye|set-screw|insert/i.test(k) && !/ x \d+(?:-\d+\/\d+|\/\d+)?"| x \d+ mm/.test(k)));
 
   // Consumables. The coats' epoxy, the closes, the hardeners, the pumps and the finish products are the finishing schedule's buy list (so the BOM and the schedule agree);
-  // the glue joints add their own epoxy (finishing.ts `glueEpoxyFlOz`, 5:1 with the kit's 206).
+  // the glue joints add their own epoxy (finishing.ts `glueEpoxyFlOz`, 5:1 with the kit's 206): all of them under the Extreme spec, only the ones that earn it under the Standard spec (the rest is Titebond III).
   const sched = finishingSchedule(parts, p);
-  const sealedFt2 = sched.areas.okoumeFt2, plyFt2 = sched.areas.okoumeFt2, oakFt2 = sched.areas.oakFt2;
+  const plyFt2 = sched.areas.plyFt2, sealedFt2 = std ? 0 : plyFt2, oakFt2 = sched.areas.oakFt2;
   const glueJoints = jointCounts.glue;
   const epoxyStep = sched.steps.find((x) => x.id === 'epoxy');
   const finishEpoxyFlOz = (epoxyStep?.products ?? []).reduce((a, q) => a + q.qtNeeded, 0) * FLOZ_PER_QT;
   const closeEpoxyFlOz = sched.closeEpoxyFlOz ?? 0;
-  const glueEpoxyTotal = glueEpoxyFlOz(parts) * (1 + EPOXY_WASTE);
+  const glueEpoxyTotal = glueEpoxyFlOz(parts, undefined, p) * (1 + EPOXY_WASTE);
   const epoxyFlOz = finishEpoxyFlOz + closeEpoxyFlOz + glueEpoxyTotal;
   const resinFlOz = glueEpoxyTotal * RESIN_SHARE_GLUE + (finishEpoxyFlOz + closeEpoxyFlOz) * RESIN_SHARE_COAT;
 
-  // The cheapest combination of resin kits that covers the resin (a gallon group is cheaper per ounce than quart groups, and three quarts can cost more than one gallon).
+  // The cheapest way to cover the resin. West System: a gallon group is cheaper per ounce than quart groups, and three quarts can cost more than one gallon; the West kits come without pumps,
+  // so the 300 Mini Pump Set is part of their cost. The Standard spec's reduced epoxy also considers the small 5:1 kits that come WITH pumps (MAS Epoxies 38.4 oz, TotalBoat quart). Each
+  // brand is a family (kits are not mixed across brands); the cheapest family is bought and the others are shown as alternatives with their totals.
   const [quart, gallon] = [EPOXY_KITS[0], EPOXY_KITS[1]];
   let best: { q: number; g: number; usd: number } | null = null;
   for (let g = 0; g <= Math.ceil(resinFlOz / gallon.resinFlOz); g++) {
@@ -777,18 +896,53 @@ export function bom(parts: Part[], p: Params): Bom {
     const usd = g * gallon.price.usd + q * quart.price.usd;
     if (!best || usd < best.usd - 1e-9 || (Math.abs(usd - best.usd) < 1e-9 && g + q < best.g + best.q)) best = { q, g, usd };
   }
+  const westTotal = best!.usd + EPOXY_PUMPS_300.usd;
+  const smallKits = std ? EPOXY_KITS_SMALL.map((k) => { const n = Math.max(1, Math.ceil(resinFlOz / k.resinFlOz - 1e-9)); return { kit: k, n, usd: money(n * k.price.usd) }; }) : [];
+  const cheapSmall = [...smallKits].sort((a, c) => a.usd - c.usd)[0];
+  const useSmall = !!cheapSmall && cheapSmall.usd < westTotal - 1e-9;
+  const familyAlts = (chosen: string): Price[] => [
+    ...(chosen !== 'west' ? [{ ...quart.price, usd: money(westTotal), unit: 'total', packQty: undefined, packUsd: undefined, alternatives: undefined, source: 'West System', note: `${[best!.g ? `${best!.g} gallon group` : '', best!.q ? `${best!.q} quart group (1.2 quart kit)` : ''].filter(Boolean).join(' + ')} plus the 300 Mini Pump Set ${usdText(EPOXY_PUMPS_300.usd)} (the West kits come without pumps)` } as Price] : []),
+    ...smallKits.filter((k) => k.kit.id !== chosen).map(({ kit, n, usd }) => ({ ...kit.price, usd, unit: 'total', packQty: undefined, packUsd: undefined, alternatives: undefined, note: `${n} x ${kit.label} (${n} kit${n === 1 ? '' : 's'}, pumps included)` } as Price)),
+  ];
+  /** "Alternatives (not substituted): ..." for the kit families that cost more (`usd` of each is the family's whole cost for this epoxy). */
+  const kitAltsNote = (alts: Price[]): string | undefined =>
+    alts.length ? `Alternatives (not substituted): ${alts.map((a) => `${a.source} ${usdText(a.usd)} in all (${a.note ?? ''})${a.url ? ` ${a.url}` : ''}`).join(' | ')}` : undefined;
   const consumables: BomLine[] = [];
   const buyText = sched.buy.filter((x) => /West System/.test(x.item)).map((x) => `${x.qty} ${x.unit} ${x.item.replace('West System ', '')}`).join(', ');
-  const epoxyNote = `${r2(resinFlOz)} fl oz resin: ${r2(glueEpoxyTotal)} fl oz mixed for the glue joints (estimated by joint type, +${Math.round(EPOXY_WASTE * 100)}% waste, 5:1 with the kit's 206), ${r2(finishEpoxyFlOz)} fl oz for the one seal coat (the transom and bulkhead closes are glue joints, in the first figure; the schedule's buy list: ${buyText}). Cheapest kit combination that covers it.`;
-  if (best!.g) consumables.push(line('Consumables', 'epoxy-gallon', gallon.label, best!.g, gallon.price, { vendor: gallon.price.source, notes: joinNotes(`Price: ${gallon.price.note}.`, epoxyNote) }));
-  if (best!.q) consumables.push(line('Consumables', 'epoxy-quart', quart.label, best!.q, quart.price, { vendor: quart.price.source, notes: joinNotes(`Price: ${quart.price.note}.`, best!.g ? undefined : epoxyNote) }));
+  let epoxyNote = `${r2(resinFlOz)} fl oz resin: ${r2(glueEpoxyTotal)} fl oz mixed for the glue joints that use epoxy (estimated by joint type, +${Math.round(EPOXY_WASTE * 100)}% waste, 5:1 with the kit's 206), ${r2(finishEpoxyFlOz)} fl oz for the ${std ? 'edge, end-grain and deck-underside coat' : 'one seal coat'} (the transom and bulkhead closes are glue joints, in the first figure; the schedule's buy list: ${buyText}). Cheapest kit combination that covers it.`;
+  if (useSmall) {
+    const over = resinFlOz - (cheapSmall.n - 1) * cheapSmall.kit.resinFlOz;
+    if (cheapSmall.n > 1 && over <= 0.2 * cheapSmall.kit.resinFlOz) epoxyNote += ` The need is only ${r2(over)} fl oz of resin past ${cheapSmall.n - 1} kit${cheapSmall.n === 2 ? '' : 's'} (the estimates carry ${Math.round(EPOXY_WASTE * 100)}% waste on the joints and 15% on the coat): ${cheapSmall.n - 1} kit${cheapSmall.n === 2 ? '' : 's'} may do if you mix tight.`;
+    consumables.push(line('Consumables', `epoxy-${cheapSmall.kit.id}`, cheapSmall.kit.label, cheapSmall.n, cheapSmall.kit.price, { vendor: cheapSmall.kit.price.source, notes: joinNotes(`Price: ${cheapSmall.kit.price.note}.`, epoxyNote, kitAltsNote(familyAlts(cheapSmall.kit.id))), alternatives: familyAlts(cheapSmall.kit.id) }));
+  } else {
+    const alts = familyAlts('west');
+    if (best!.g) consumables.push(line('Consumables', 'epoxy-gallon', gallon.label, best!.g, gallon.price, { vendor: gallon.price.source, notes: joinNotes(`Price: ${gallon.price.note}.`, epoxyNote, kitAltsNote(alts)), ...(alts.length ? { alternatives: alts } : {}) }));
+    if (best!.q) consumables.push(line('Consumables', 'epoxy-quart', quart.label, best!.q, quart.price, { vendor: quart.price.source, notes: joinNotes(`Price: ${quart.price.note}.`, best!.g ? undefined : epoxyNote, best!.g ? undefined : kitAltsNote(alts)), ...(!best!.g && alts.length ? { alternatives: alts } : {}) }));
+  }
   // Hardeners: 205/206 come in the resin kits (the schedule uses 206 only, so its buy list names none). 207 and 209 are not bought (their sizes are 0.66 pt and 0.33 gal, not the pint
   // the BOM once priced): a schedule that asks for one is flagged unpriced rather than priced at a size that does not exist.
   for (const hb of sched.buy.filter((x) => /West System/.test(x.item) && /hardener/i.test(x.item))) if (/\b20[79]\b/.test(hb.item)) unpriced.push(hb.item);
-  // Pumps: West System no longer sells the 301 and 303 sets; the 300 Mini Pump Set (resin, 205/206 and 207/209 pumps) does both ratios, one set for the sled.
-  consumables.push(line('Consumables', 'epoxy-pumps', 'West System 300 Mini Pump Set (three pumps: resin and both hardener ratios; one set does both)', 1, EPOXY_PUMPS_300, { vendor: EPOXY_PUMPS_300.source, notes: `Price: ${EPOXY_PUMPS_300.note}.` }));
+  // Pumps: West System no longer sells the 301 and 303 sets; the 300 Mini Pump Set (resin, 205/206 and 207/209 pumps) does both ratios, one set for the sled. The small 5:1 kits include their pumps.
+  if (!useSmall) consumables.push(line('Consumables', 'epoxy-pumps', 'West System 300 Mini Pump Set (three pumps: resin and both hardener ratios; one set does both)', 1, EPOXY_PUMPS_300, { vendor: EPOXY_PUMPS_300.source, notes: `Price: ${EPOXY_PUMPS_300.note}.` }));
+  // Titebond III (Standard): the glue joints that are not epoxy. The cheapest bottles that cover the joints (+waste); 16 oz does it at the defaults.
+  if (std && sched.glue.titebondJoints > 0) {
+    const need = sched.glue.titebondFlOz;
+    let tb: { counts: number[]; usd: number; n: number } | null = null;
+    for (let a = 0; a <= 3; a++) for (let b2 = 0; b2 <= 3; b2++) for (let c = 0; c <= 2; c++) {
+      const counts = [a, b2, c];
+      if (a * TITEBOND_BOTTLES[0].flOz + b2 * TITEBOND_BOTTLES[1].flOz + c * TITEBOND_BOTTLES[2].flOz < need - 1e-9 || a + b2 + c === 0) continue;
+      const usd = a * TITEBOND_BOTTLES[0].price.usd + b2 * TITEBOND_BOTTLES[1].price.usd + c * TITEBOND_BOTTLES[2].price.usd;
+      if (!tb || usd < tb.usd - 1e-9 || (Math.abs(usd - tb.usd) < 1e-9 && a + b2 + c < tb.n)) tb = { counts, usd, n: a + b2 + c };
+    }
+    const sizes = tb ? TITEBOND_BOTTLES.map((bt, i) => ({ bt, n: tb!.counts[i] })).filter((x) => x.n > 0) : [];
+    for (const { bt, n } of sizes) {
+      consumables.push(line('Consumables', `titebond-${bt.flOz}`, `Titebond III Ultimate wood glue, ${bt.label}`, n, bt.price, { vendor: bt.price.source,
+        notes: joinNotes(`Price: ${bt.price.note}.`, `${sched.glue.titebondJoints} glue joints (the Dominos, dados, tenons and general glue joints), ${r2(need)} fl oz with the ${Math.round(EPOXY_WASTE * 100)}% waste (0.4 of the epoxy estimate for the same joints: one thin coat, no filler). Epoxy is kept for the bent laminations, the face laminations, the deck, the fillets and the thickened bedding.`) }));
+    }
+  }
   consumables.push(line('Consumables', 'silica', 'Colloidal silica filler (thickened glue, fillets)', 1, FILLERS.silica, { vendor: FILLERS.silica.source, notes: `Price: ${FILLERS.silica.note}.` }));
-  consumables.push(line('Consumables', 'microballoons', 'Low-density fairing filler', 1, FILLERS.microballoons, { vendor: FILLERS.microballoons.source, notes: `Price: ${FILLERS.microballoons.note}.` }));
+  // Microballoons fair the epoxy-sealed deck top: the Standard spec does not seal it (the deck top is stained and urethaned), so it does not buy them.
+  if (!std) consumables.push(line('Consumables', 'microballoons', 'Low-density fairing filler', 1, FILLERS.microballoons, { vendor: FILLERS.microballoons.source, notes: `Price: ${FILLERS.microballoons.note}.` }));
   const tapeFt = Math.ceil(tapeJoints * TAPE_FT_PER_JOINT * (1 + TAPE_WASTE));
   if (tapeFt > 0) {
     const tapeExtra = { vendor: GLASS_TAPE.source, notes: `${tapeJoints} taped joints x ${TAPE_FT_PER_JOINT} ft, +${Math.round(TAPE_WASTE * 100)}%` };
@@ -804,6 +958,7 @@ export function bom(parts: Part[], p: Params): Bom {
     if (/gel stain/i.test(item)) return { key: 'gel-stain', table: 'gelStain', price: FINISH_PRICE.gelStain };
     if (/stain or dye/i.test(item)) return { key: 'stain', table: 'stain', price: FINISH_PRICE.stain };
     if (/thinner/i.test(item)) return { key: 'thinner', table: 'thinner', price: FINISH_PRICE.thinner };
+    if (/urethane/i.test(item)) return { key: 'urethane', table: 'urethane', price: URETHANE_CONTAINER_PRICE.qt! };
     if (/varnish/i.test(item)) return { key: 'varnish', table: 'varnish', price: FINISH_PRICE.varnish };
     if (/enamel|pigment/i.test(item)) return { key: 'enamel', table: 'enamel', price: FINISH_PRICE.enamel };
     return null;
@@ -812,7 +967,7 @@ export function bom(parts: Part[], p: Params): Bom {
     const k = finishKey(bl.item);
     if (!k) { if (!/West System/.test(bl.item)) unpriced.push(bl.item); continue; }
     // The real container price where the research found one, else the base per-quart price scaled by the container size.
-    const price: Price = FINISH_CONTAINER_PRICE[k.table]?.[bl.unit] ?? { ...k.price, usd: money(k.price.usd * FINISH_CONTAINER_FACTOR[bl.unit]), unit: bl.unit };
+    const price: Price = (k.table === 'urethane' ? URETHANE_CONTAINER_PRICE[bl.unit] : FINISH_CONTAINER_PRICE[k.table]?.[bl.unit]) ?? { ...k.price, usd: money(k.price.usd * FINISH_CONTAINER_FACTOR[bl.unit]), unit: bl.unit };
     consumables.push(line('Consumables', `${k.key}-${bl.unit}`, `${bl.item}, ${bl.unit}`, bl.qty, price, { vendor: price.source, notes: joinNotes(price.url ? `Price: ${price.note}.` : undefined, bl.note) }));
   }
   if (BULK_ALWAYS.has('sandpaper')) bulkLines.push(packLine(BULK_SECTION.title, 'sandpaper', 'Sandpaper, lump sum', 1, FINISH_PRICE.sandpaper, { vendor: FINISH_PRICE.sandpaper.source }));
@@ -836,7 +991,7 @@ export function bom(parts: Part[], p: Params): Bom {
     section('plywood', 'Plywood', plywood),
     section('metal', 'Metal stock', metal),
     section('purchased', 'Purchased parts', purchased),
-    section('fasteners', 'Fasteners', fasteners, { notes: [FASTENER_MATERIAL_NOTE] }),
+    section('fasteners', 'Fasteners', fasteners, { notes: [std ? FASTENER_MATERIAL_NOTE_STANDARD : FASTENER_MATERIAL_NOTE] }),
     section('consumables', 'Consumables', consumables),
   ];
   const bulk = section(BULK_SECTION.id, BULK_SECTION.title, bulkLines, {
@@ -867,11 +1022,12 @@ export function bom(parts: Part[], p: Params): Bom {
   rows.push(['Total', '', 'Bulk parts (shop stock)', '', '', '', bulkUsd.toFixed(2), '', '', `${(100 * share(bulkEstimateUsd, bulkUsd)).toFixed(0)}% estimates`]);
   rows.push(['Total', '', 'Finishing touches', '', '', '', touchesUsd.toFixed(2), '', '', `${(100 * share(touchesEstimateUsd, touchesUsd)).toFixed(0)}% estimates`]);
   rows.push(['Total', '', 'Grand total', '', '', '', totalUsd.toFixed(2), '', '', `${totalsText}; ${(100 * share(estimateUsd, totalUsd)).toFixed(0)}% estimates`]);
+  rows.push(['Total', '', 'Weather spec', '', '', '', '', '', '', `${std ? 'Standard (garage-kept)' : 'Extreme weather (stored outside, near salt)'}; thin sheet: ${thin.name}`]);
 
   return {
-    sections, totalUsd, estimateUsd, estimateShare: share(estimateUsd, totalUsd), coreUsd, bulkUsd, touchesUsd, coreEstimateUsd, bulkEstimateUsd, touchesEstimateUsd,
+    spec, thinSheetName: thin.name, sections, totalUsd, estimateUsd, estimateShare: share(estimateUsd, totalUsd), coreUsd, bulkUsd, touchesUsd, coreEstimateUsd, bulkEstimateUsd, touchesEstimateUsd,
     coreEstimateShare: share(coreEstimateUsd, coreUsd), bulkEstimateShare: share(bulkEstimateUsd, bulkUsd), touchesEstimateShare: share(touchesEstimateUsd, touchesUsd), totalsText, jointCounts, unpriced: [...new Set(unpriced)], decisions,
     consumables: { epoxyFlOz, finishEpoxyFlOz, closeEpoxyFlOz, glueEpoxyFlOz: glueEpoxyTotal, resinFlOz, sealedFt2, oakFt2, plyFt2, glueJoints, tapeFt }, unresolved, wholeBoardsExtraUsd: 0, lumberAllowanceUsd: money(lumberAllowanceUsd), lumberAltUsd: money(lumberAltUsd), csv: toCsv(rows),
-  };
+  } as Bom; // `weatherCompare` is added by `bom` (a lazy getter)
 }
 

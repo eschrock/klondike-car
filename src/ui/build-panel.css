@@ -385,3 +385,23 @@
   #build-main .bp-bom tbody tr { gap: 2px 12px; padding: 8px 12px; }
 }
 .bp-decisions ul { list-style: none; padding-left: 0; }
+
+/* Weather spec (D-73): the BOM's Standard / Extreme toggle, the cost chip and the per-section difference. */
+.bp-weather { margin: 10px 0 14px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
+.bp-weather-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.bp-weather-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.bp-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; background: var(--bg); }
+.bp-seg-btn { border: 0; border-radius: 0; padding: 6px 14px; font-size: 13px; background: transparent; min-height: 32px; }
+.bp-seg-btn + .bp-seg-btn { border-left: 1px solid var(--border); }
+.bp-seg-btn[aria-checked='true'] { background: var(--accent); color: #fff; font-weight: 600; }
+:root[data-theme='dark'] .bp-seg-btn[aria-checked='true'] { color: #0b1020; }
+.bp-weather-chip { padding: 4px 10px; border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--accent) 10%, transparent); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bp-weather-note { margin: 8px 0 0; }
+.bp-weather-deltas { margin-top: 8px; }
+.bp-deltas { list-style: none; margin: 6px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px 18px; }
+.bp-deltas li { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; border-bottom: 1px solid var(--border); padding: 2px 0; }
+.bp-deltas strong { font-variant-numeric: tabular-nums; }
+@media (max-width: 599px) {
+  .bp-weather { padding: 10px 12px; }
+  .bp-seg-btn { padding: 6px 12px; }
+}

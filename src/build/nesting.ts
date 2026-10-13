@@ -14,8 +14,8 @@ import type { Part, Vec2 } from '../model/types';
 import { PLY_SPECIES, thinSheet, type Params } from '../params';
 import { flatPattern, type FlatPattern } from './flat';
 import {
-  BOARD_LENGTHS_IN, BOARD_WIDTH_IN, boardByNominal, boardForThickness, isBuilt, partKey, planResaw, sheetClass,
-  BOARD_THICKNESSES, planLamination, type Lamination, type ResawPool,
+  BOARD_LENGTHS_IN, BOARD_WIDTH_IN, boardByNominal, isBuilt, partKey, planResaw, sheetClass,
+  BOARD_THICKNESSES, planOakPart, type Lamination, type ResawPool,
 } from './cutlist';
 
 export const SHEET_WIDTH_IN = 48;
@@ -197,6 +197,10 @@ export interface BoardCut {
   /** This piece is a layer of a face-laminated part (D-70): layer number from 1 and the number of layers. The part id is the laminated part. */
   layer?: number;
   layers?: number;
+  /** Which cut of its part this is (1-based among `of`; a board of an edge-glued panel, a layer, or the single solid piece), matching `CutList.cuts`. */
+  piece?: 'board' | 'layer' | 'solid' | 'strip';
+  index?: number;
+  of?: number;
 }
 export interface BoardLane { widthIn: number; usedIn: number; cuts: BoardCut[] }
 export interface Board { nominal: string; lengthIn: number; lanes: BoardLane[]; usedWidthIn: number }
@@ -359,23 +363,23 @@ export function oakBoardFeet(parts: Part[], p: Params): OakPlan {
   const netSolid = new Map<string, number>();
   const pieces = new Map<string, number>();
   for (const x of solid) {
-    const rough = x.rough ?? { t: (x.stock?.t ?? 0) + p.millingAllowanceIn, w: (x.stock?.w ?? 0) + p.millingAllowanceIn, l: (x.stock?.l ?? 0) + 4 * p.millingAllowanceIn };
-    const sorted = [rough.t, rough.w, rough.l].sort((a, b) => a - b);
-    const d = rough.t <= rough.w && rough.t <= rough.l ? rough : { t: sorted[0], w: sorted[1], l: sorted[2] }; // transposed model data (seat-crest-strip)
-    const n = Math.max(1, Math.ceil(d.w / BOARD_WIDTH_IN - 1e-9));
-    if (n > 1) glueUps.push(x.id);
-    const bt = boardForThickness(d.t);
-    // No stocked board yields this thickness (12/4 is not bought, D-70): the part is face-laminated, one set of cuts per layer, each from the board of that layer.
-    const lam = bt ? null : planLamination(x.stock ? Math.min(x.stock.t, x.stock.w, x.stock.l) : d.t - p.millingAllowanceIn, d.t);
-    if (lam) laminated.push({ id: x.id, partNo: partKey(x), lamination: lam });
-    const layerBoards = lam ? lam.layers.map((l) => boardByNominal(l.board)) : [bt ?? BOARD_THICKNESSES[BOARD_THICKNESSES.length - 1]];
-    layerBoards.forEach((b, li) => {
-      netSolid.set(b.nominal, (netSolid.get(b.nominal) ?? 0) + (b.nominalIn * d.w * d.l) / 144);
-      pieces.set(b.nominal, (pieces.get(b.nominal) ?? 0) + 1);
-      const arr = cutsBy.get(b.nominal) ?? [];
-      for (let i = 0; i < n; i++) arr.push({ partNo: partKey(x), id: x.id, widthIn: d.w / n, lengthIn: d.l, ...(n > 1 ? { glueUp: true } : {}), ...(lam ? { layer: li + 1, layers: lam.layers.length } : {}) });
-      cutsBy.set(b.nominal, arr);
-    });
+    // The cuts are the pieces sawn from boards (Eric 2026-10-12): the boards of an edge-glued panel and the layers of a face-laminated part are separate cuts, each at its rough size
+    // rounded UP to 1/8 with the laminate allowances; a plain solid part is one cut with the plain allowances.
+    const plan = planOakPart(x, p);
+    if (plan.edgeN > 1) glueUps.push(x.id);
+    if (plan.lamination) laminated.push({ id: x.id, partNo: partKey(x), lamination: plan.lamination });
+    const seenLayer = new Set<string>();
+    for (const pc of plan.pieces) {
+      const arr = cutsBy.get(pc.board) ?? [];
+      arr.push({
+        partNo: partKey(x), id: x.id, widthIn: pc.rough.w, lengthIn: pc.rough.l, ...(plan.edgeN > 1 ? { glueUp: true } : {}),
+        ...(pc.layer ? { layer: pc.layer, layers: pc.layers } : {}), piece: pc.piece, index: pc.index, of: pc.of,
+      });
+      cutsBy.set(pc.board, arr);
+      netSolid.set(pc.board, (netSolid.get(pc.board) ?? 0) + (boardByNominal(pc.board).nominalIn * pc.rough.w * pc.rough.l) / 144);
+      const k = `${pc.board}|${pc.layer ?? 0}`;
+      if (!seenLayer.has(k)) { seenLayer.add(k); pieces.set(pc.board, (pieces.get(pc.board) ?? 0) + 1); }
+    }
   }
   // Consolidate: a thickness whose solid pieces total under SMALL_BUCKET_BF is cut from the offcuts of the next thicker board, when they fit in that board's free lanes (no extra board).
   const consolidated: OakPlan['consolidated'] = [];

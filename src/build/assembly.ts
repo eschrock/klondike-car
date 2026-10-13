@@ -25,7 +25,7 @@
 import { HULL_STEP, STEP } from '../model/build-utils';
 import { computeLayout, outerHalfWidth, samples, sideTopAt } from '../model/layout';
 import type { AssemblyStep, Joint, Part } from '../model/types';
-import { axleGrooveDepthIn, bowTaper, thinSheet, type Params } from '../params';
+import { axleGrooveDepthIn, bowTaper, thinSheet, WEATHER_SPEC, type Params } from '../params';
 import { frac } from '../model/joinery';
 import { screwText } from '../model/rear-mount';
 import { transformPoint } from '../model/bounds';
@@ -117,6 +117,19 @@ interface Template {
 }
 
 // ---- helpers ----
+
+/** True for the Standard weather spec (D-73: garage-kept; the default). The Extreme spec (stored outside or near salt) keeps the 316, Sipo, epoxy and marine varnish text. */
+const isStandard = (p: Params): boolean => p.weatherSpec !== WEATHER_SPEC.extreme;
+/**
+ * The Standard spec's text for a step (D-73): 304 stainless where the step text says 316, spar urethane where it says varnish. The model's own part notes (and so the step text built from them) still
+ * say 316; this is the one place that rewrites them for the Standard spec.
+ */
+export function standardText(t: string): string {
+  return t.replace(/\b316\b/g, '304').replace(/\bvarnished\b/g, 'coated').replace(/\bVarnish\b/g, 'Urethane').replace(/\bvarnish(?:ing)?\b/g, (m) => (m === 'varnishing' ? 'coating' : 'urethane'));
+}
+/** Added to the glue note of every glue step under the Standard spec: which joints in the step are Titebond III. */
+export const STANDARD_GLUE_NOTE =
+  'STANDARD SPEC: Titebond III replaces the epoxy for the Dominos, dados, tenons and plain glue joints of this step (spread thin on both faces, clamp 30 to 60 minutes, full strength in 24 hours, wipe the squeeze-out with a damp rag while it is wet); epoxy stays only for the bent laminations, the face laminations, the deck to the frame and the deck dados, the fillets and tape and the thickened bedding the step names.';
 
 const f = (n: number, d = 2): string => String(+n.toFixed(d));
 const inch = (n: number, d = 3): string => `${f(n, d)}"`;
@@ -471,9 +484,17 @@ const TEMPLATES: Template[] = [
     clamp: 'Let the coat go off before handling.',
     build: (c) => ({
       instructions: [
-        'First run the finishing offcut tests (Finishing, step 1). They decide how the okoume takes stain under epoxy; no show face is sealed until a panel passes.',
-        'Epoxy-seal (105/206, the one seal coat of the finishing schedule) ONLY the dados (transom, bulkhead), the deck underside and deck edges, every ply edge (webs, signs, storage panels, seat back, lid), and faces nobody will see. The show faces stay bare: both web faces, the deck top, the box, the lid, the seat back. Glue faces stay bare or are scuffed.',
-        'The show faces are stained (conditioner, then dye or gel on the okoume), THEN epoxy-sealed, after assembly in the finishing schedule (steps 3-4). Water-based dye under epoxy is the safe route; oil-based stain or gel stays tacky unless it has fully cured.',
+        ...(isStandard(c.p)
+          ? [
+            'WEATHER SPEC: Standard (garage-kept, used a few times a year, wet at most at a rainy derby). The glue is Titebond III for the Dominos, dados, tenons and general glue joints; epoxy only for the bent laminations, the face laminations, the deck to the frame and the deck dados, the fillets and tape on the box and the thickened bedding. The topcoat is exterior spar urethane. The Extreme spec (stored outside or near salt) uses epoxy everywhere and marine varnish: switch the weather setting in the parameters.',
+            'First run the finishing offcut tests (Finishing, step 1). They decide how the plywood takes the stain; no show face is coated until a panel passes.',
+            `Epoxy (105/206, one coat) ONLY the deck underside and the deck edges (water pools there), the oak end grain, and any ${thinSheet(c.p).name} or deck edge that is not captured in a dado or banded with oak. The other plywood faces are NOT epoxied in the Standard spec: they are stained and urethaned in the finish step. Glue faces stay bare or are scuffed.`,
+          ]
+          : [
+            'First run the finishing offcut tests (Finishing, step 1). They decide how the okoume takes stain under epoxy; no show face is sealed until a panel passes.',
+            'Epoxy-seal (105/206, the one seal coat of the finishing schedule) ONLY the dados (transom, bulkhead), the deck underside and deck edges, every ply edge (webs, signs, storage panels, seat back, lid), and faces nobody will see. The show faces stay bare: both web faces, the deck top, the box, the lid, the seat back. Glue faces stay bare or are scuffed.',
+            'The show faces are stained (conditioner, then dye or gel on the okoume), THEN epoxy-sealed, after assembly in the finishing schedule (steps 3-4). Water-based dye under epoxy is the safe route; oil-based stain or gel stays tacky unless it has fully cured.',
+          ]),
         `The deck dado and the deck gap under the inner chine band are deck + ${inch(c.p.deckSlopIn)} tall, so the sealed deck still enters; check with a feeler.`,
         'Wash or sand the amine blush off any sealed face that will be glued again (warm water + Scotch-Brite, dry; 120 grit), and the dado walls. Keep glue faces on the oak bands and rails bare.',
         'Wipe squeeze-out off the bare show faces before it kicks during every later glue-up; it is sanded at the finish, but dried epoxy blocks the stain.',
@@ -826,11 +847,13 @@ const TEMPLATES: Template[] = [
     view: 'under',
     tools: ['random-orbit sander', 'rollers and brushes', 'epoxy pumps', 'masking tape'],
     build: (c) => {
-      const a = finishAreas(c.parts);
+      const a = finishAreas(c.parts, c.p);
       return {
         instructions: [
-          `Run the finishing schedule (the Finishing section) on everything reachable from below: the deck underside, rails, joists, beams, hangers, king beam, the brake knees and their backers, the outside of the sides, the transom and bulkhead. Same products and coats as the rest (${f(a.oakFt2, 0)} ft² oak + ${f(a.okoumeFt2, 0)} ft² okoume in all).`,
-          'Offcut test first, then sand 120 / 150, stain the show faces, epoxy-seal them (one saturation coat), and varnish (3 coats on the show faces, 2 on the hidden ones, 320 between). Mask the bolt seats, the kingpin head and the hold-down angles; brush into the knee counterbores and leave the pivot-hole spot for later.',
+          `Run the finishing schedule (the Finishing section) on everything reachable from below: the deck underside, rails, joists, beams, hangers, king beam, the brake knees and their backers, the outside of the sides, the transom and bulkhead. Same products and coats as the rest (${f(a.oakFt2, 0)} ft² oak + ${f(a.plyFt2, 0)} ft² plywood in all).`,
+          isStandard(c.p)
+            ? 'Offcut test first, then sand 120 / 150, stain the show faces, epoxy the deck underside and the oak end grain (one coat), and urethane (3 coats on the show faces, 2 on the hidden ones, 320 between). Mask the bolt seats, the kingpin head and the hold-down angles; brush into the knee counterbores and leave the pivot-hole spot for later.'
+            : 'Offcut test first, then sand 120 / 150, stain the show faces, epoxy-seal them (one saturation coat), and varnish (3 coats on the show faces, 2 on the hidden ones, 320 between). Mask the bolt seats, the kingpin head and the hold-down angles; brush into the knee counterbores and leave the pivot-hole spot for later.',
           'Flip only when the last coat is dry enough to handle (3 days); the horses are padded, and the hull is carried by the rails and the bulkhead, never by the sides.',
           'The inside, the topside and everything built after the flip is finished after assembly, in the finish step.',
         ],
@@ -1037,23 +1060,30 @@ const TEMPLATES: Template[] = [
   },
   {
     id: 'finish',
-    title: 'Finish: stain, epoxy seal, engrave, varnish',
+    title: 'Finish: stain, epoxy, engrave, topcoat',
     kind: 'process',
     steps: [STEP.finish],
     view: 'iso',
     tools: ['random-orbit sander', 'rollers and brushes', 'epoxy pumps', 'Shaper Origin (engraving)'],
     build: (c) => {
-      const a = finishAreas(c.parts);
+      const a = finishAreas(c.parts, c.p);
       const s = finishingSchedule(c.parts, c.p);
+      const std = isStandard(c.p);
       return {
         instructions: [
           `Follow the finishing schedule (the Finishing section): ${s.steps.map((x) => `${x.n}. ${x.title}`).join('; ')}. The underside is already done (finish-under); this is everything else.`,
-          `Wood surface: ${f(a.oakFt2, 0)} ft² oak + ${f(a.okoumeFt2, 0)} ft² okoume; epoxy and varnish quantities are in the schedule.`,
-          'The show faces are stained first, then epoxy-sealed, after the offcut panel passed; the dados, edges and hidden faces were sealed at assembly. Water-based dye under the epoxy is the safe route.',
+          `Wood surface: ${f(a.oakFt2, 0)} ft² oak + ${f(a.plyFt2, 0)} ft² plywood (${thinSheet(c.p).name} and the 12 mm deck sheet); ${std ? 'epoxy and urethane' : 'epoxy and varnish'} quantities are in the schedule.`,
+          std
+            ? 'The show faces are stained first, then urethaned, after the offcut panel passed; the deck underside, the end grain and the uncaptured ply edges were epoxied at assembly. Water-based dye under the urethane is the safe route.'
+            : 'The show faces are stained first, then epoxy-sealed, after the offcut panel passed; the dados, edges and hidden faces were sealed at assembly. Water-based dye under the epoxy is the safe route.',
           'Finish the removable kits on the bench: the brake flap kits and chocks, the handle U and the signs. The tongue is NOT removable (D-65): it stays bolted on and is finished in place. Plug or mask the pivot bores, bolt seats and sockets.',
           'No hardware is on the sled: no axles, wheels, plates, eye bolts, hinges, handle sockets or brake pins. They hang after the varnish has cured, in the next step.',
         ],
-        checks: ['Offcut test panel approved before anything on the sled is stained', 'Show faces stained, then epoxy-sealed; every okoume edge and all oak end grain sealed', 'Varnish fully hard before hardware goes on'],
+        checks: [
+          'Offcut test panel approved before anything on the sled is stained',
+          std ? 'Show faces stained, then urethaned; the deck underside, every uncaptured ply edge and all oak end grain epoxied' : 'Show faces stained, then epoxy-sealed; every plywood edge and all oak end grain sealed',
+          std ? 'Urethane fully hard before hardware goes on' : 'Varnish fully hard before hardware goes on',
+        ],
       };
     },
   },
@@ -1212,19 +1242,20 @@ export function assemblySteps(parts: Part[], p: Params): BuildStep[] {
     const ctx: StepCtx = { parts, p, mine, by, resaw, forms, oak, cut };
     const built = t.build(ctx);
     const modelStep = mine.length ? Math.min(...mine.map((x) => x.step)) : t.steps[0];
-    const instructions = built.instructions;
+    const std = isStandard(p);
+    const instructions = std ? built.instructions.map(standardText) : built.instructions;
     // Anything this template did not describe individually is still listed, so a reader sees every part id.
     const cure = t.hardener ? HARDENERS[t.hardener] : undefined;
-    const clampCure = cure ? cureText(t.hardener!, t.clamp ?? 'Clamp until set.') : undefined;
+    const clampCure = cure ? `${cureText(t.hardener!, t.clamp ?? 'Clamp until set.')}${std && t.kind === 'build' ? ` ${STANDARD_GLUE_NOTE}` : ''}` : undefined;
     const step: BuildStep = {
       n,
       id: t.id,
       kind: t.kind,
-      title: t.title,
+      title: std ? standardText(t.title) : t.title,
       modelStep: t.kind === 'prep' ? 0 : modelStep,
       partIds: ids,
       instructions,
-      checks: built.checks,
+      checks: std ? built.checks.map(standardText) : built.checks,
       tools: t.tools,
       view: t.view,
       ...(cure ? { cure: { hardener: cure.hardener, potMin: cure.potMin, clampHours: cure.clampHours, fullHours: cure.fullHours } } : {}),

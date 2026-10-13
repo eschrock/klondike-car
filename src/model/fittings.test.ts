@@ -302,7 +302,7 @@ describe('round 2 fittings: latch blocks, stay, stainless', () => {
   });
   it('oak parts carry the 4× rough length allowance (build M8)', () => {
     for (const x of parts.filter((q) => mine(q) && q.kind === 'lumber')) {
-      expect(x.rough!.l - x.stock!.l, x.id).toBeGreaterThanOrEqual(4 * defaults.millingAllowanceIn - 1e-9);
+      expect(x.rough!.l - x.stock!.l, x.id).toBeGreaterThanOrEqual(defaults.roughLengthAllowanceIn - 1e-9); // Eric 2026-10-12: +1 in (plain), +2 in (bent / glued)
     }
   });
 });

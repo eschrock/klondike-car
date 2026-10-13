@@ -10,7 +10,7 @@ import { oakBoardFeet } from './nesting';
 import { EPOXY_KITS, EPOXY_PUMPS_300, FASTENER_PRICE, FILLERS, FINISH_CONTAINER_PRICE, FINISH_PRICE, GLASS_TAPE, METAL_PRICE_PER_FT, NOTE_PRICE, OAK_ALT_PRICE_PER_BF, OAK_PRICE_PER_BF, PLYWOOD_PRICE, PURCHASED_PRICE, RESEARCH_DATE, SEARCH_READ_NOTE, type Price } from './prices';
 
 // D-72/D-73: this file's counts and prices are the 4 mm okoume / 4×20 Domino / DOM tube configuration (PRE_D72); the BOM for the white oak plywood and the solid rod follows the weather spec (bom.ts).
-const p = { ...defaultParams(), ...PRE_D72 };
+const p = { ...defaultParams(), ...PRE_D72, weatherSpec: 1 }; // the EXTREME weather spec (316, Sipo, epoxy everywhere, marine varnish); the Standard spec is tested in weather-spec.test.ts
 const parts = buildModel(p);
 const b = bom(parts, p);
 const cl = cutList(parts, p);
@@ -136,7 +136,7 @@ describe('bom', () => {
     expect(cons.filter((l) => /pumps/.test(l.key)).map((l) => [l.key, l.qty, l.unitUsd])).toEqual([['epoxy-pumps', 1, EPOXY_PUMPS_300.usd]]);
     expect(cons.find((l) => l.key === 'epoxy-pumps')!.description).toMatch(/300 Mini Pump Set/);
     // the glue epoxy is finishing.ts's estimate by joint type plus the waste, and per joint it is well above the old 0.12 fl oz
-    expect(b.consumables.glueEpoxyFlOz).toBeCloseTo(glueEpoxyFlOz(parts) * (1 + EPOXY_WASTE), 6);
+    expect(b.consumables.glueEpoxyFlOz).toBeCloseTo(glueEpoxyFlOz(parts, undefined, p) * (1 + EPOXY_WASTE), 6); // with `p`: the Extreme spec counts every joint, and the D-70 face laminations
     expect(b.consumables.glueEpoxyFlOz / b.jointCounts.glue).toBeGreaterThan(0.25);
     expect(b.consumables.glueEpoxyFlOz).toBeGreaterThan(40); // the critic's 40-50 fl oz for the glue, fillets and fairing
     const finishFlOz = sched.steps.find((x) => x.id === 'epoxy')!.products.reduce((a, q) => a + q.qtNeeded, 0) * 32;
@@ -196,7 +196,8 @@ describe('bom', () => {
     expect(qtyOf(f, /wood screw #6 x 2-1\/2"/)).toBe(10); // rail to chine, every zone: 4 aft (head counterbored 1 in up the 3 in rail) + 1 forward a side, #6 piloted (round 3: a #8 left 0.11 in a side of the edge)
     expect(qtyOf(f, /Button plug 5\/8"/)).toBe(4);
     expect(qtyOf(f, /Nylon washer for 1\/4"/)).toBe(4);
-    expect(qtyOf(f, /wood screw #6 x 1\/2"/)).toBe(12); // lid battens, 4 each
+    expect(qtyOf(f, /wood screw #6 x 1\/2"/)).toBe(0); // the lid battens use the standard #8 x 5/8 now (D-72: three wood-screw sizes, no fourth)
+    expect(qtyOf(f, /wood screw #8 x 5\/8"/)).toBeGreaterThanOrEqual(12 + 6); // 12 batten screws (4 each, 3 battens) plus the hardware-into-thin-stock screws
     expect(qtyOf(c, /^dual-lock$/)).toBeGreaterThanOrEqual(1);
     expect(qtyOf(c, /^edge-banding$/)).toBeGreaterThanOrEqual(1);
     expect(qtyOf(c, /^sealant$/)).toBeGreaterThanOrEqual(1);
@@ -331,7 +332,7 @@ describe('bulk parts (Eric, 2026-10-12)', () => {
   it('prices pack-sold items by the pack, in their own section between the core sections and the touches', () => {
     expect(b.sections.map((s) => s.id).slice(-2)).toEqual(['bulk', 'touches']);
     expect(b.sections.find((s) => s.id === 'bulk')!.title).toBe('Bulk parts (shop stock)');
-    expect(bulk.length).toBeGreaterThan(10);
+    expect(bulk.length).toBeGreaterThan(5); // fasteners Bolt Depot sells by the piece are priced per piece, in place, and so are not here
     for (const l of bulk) {
       expect(l.packQty, l.key).toBeGreaterThan(0);
       expect(l.packUsd, l.key).toBeGreaterThan(0);
@@ -343,7 +344,7 @@ describe('bulk parts (Eric, 2026-10-12)', () => {
       // the build needs under half a pack, or it is one of the lump-sum items
       expect(l.needed! < BULK_SHARE * l.packQty! || l.packQty === 1, l.key).toBe(true);
     }
-    for (const k of [/Domino DF 500 5x30/, /wood screw/, /lock nut/, /fender washer/, /cotter pin/, /Button plug/, /^sandpaper$/]) expect(bulk.some((l) => k.test(l.key)), String(k)).toBe(true);
+    for (const k of [/Domino DF 500 5x30/, /machine screw/, /cotter pin/, /Button plug/, /^sandpaper$/]) expect(bulk.some((l) => k.test(l.key)), String(k)).toBe(true);
   });
 
   it('leaves bolts and one-at-a-time items where they are', () => {
@@ -371,10 +372,20 @@ describe('bulk parts (Eric, 2026-10-12)', () => {
   });
 
   it('uses the pack price: the line costs the packs, not the pieces', () => {
-    const screws = bulk.filter((l) => /wood screw/.test(l.key));
-    expect(screws.length).toBeGreaterThanOrEqual(4); // D-72: #6 x 1/2 (battens), #6 x 2-1/2, #8 x 5/8 and #8 x 1-1/4 (was 12 sizes)
-    for (const l of screws) expect(l.extUsd).toBeGreaterThan(l.needed! * l.unitUsd / l.packQty! - 1e-9);
+    for (const l of bulk.filter((q) => q.packQty !== 1)) expect(l.extUsd, l.key).toBeGreaterThan((l.needed! * l.unitUsd) / l.packQty! - 1e-9);
     expect(b.bulkUsd).toBeCloseTo(b.sections.find((s) => s.id === 'bulk')!.subtotalUsd, 2);
+  });
+
+  it('prices a fastener Bolt Depot sells by the piece per piece, in place, when that is no dearer than the bag (it leaves the bulk section)', () => {
+    const screws = allFasteners().filter((l) => /wood screw/.test(l.key) && l.basis === 'quoted'); // the lengths the research read
+    expect(screws.length).toBeGreaterThanOrEqual(2);
+    for (const l of screws) {
+      expect(l.packQty, l.key).toBeUndefined(); // by the piece
+      expect(l.unit, l.key).toBe('ea');
+      expect(l.section, l.key).not.toBe('Bulk parts (shop stock)');
+      expect(l.notes, l.key).toMatch(/Bought by the piece|not found/);
+    }
+    expect(bulk.some((l) => /fender washer|lock nut/.test(l.key))).toBe(false);
   });
 });
 
@@ -537,11 +548,11 @@ describe('price research applied (2026-10-12)', () => {
     expect(b.decisions).toContain(c.key);
   });
 
-  it('prices the eye bolts galvanized at the nearest stock lengths, with 316 as an alternative and a decision', () => {
+  it('prices the eye bolts 316 at the nearest stock lengths (the Extreme spec), with galvanized as the cheaper alternative and a decision', () => {
     const eye = line('steer-eye'), anchor = line('steer-anchor');
-    expect([eye.unitUsd, anchor.unitUsd]).toEqual([11.94, 11.1]);
-    expect(eye.alternatives![0].usd).toBe(50.77);
-    expect(anchor.alternatives![0].usd).toBe(48.43);
+    expect([eye.unitUsd, anchor.unitUsd]).toEqual([50.77, 48.43]);
+    expect(eye.alternatives![0].usd).toBe(11.94);
+    expect(anchor.alternatives![0].usd).toBe(11.1);
     expect(eye.decision).toMatch(/stock 3\/8-16 shoulder eye bolts, 4-1\/2" for the axle beam/); // D-72: stock lengths checked against the stack, cut to length
     expect(b.decisions).toEqual(expect.arrayContaining(['steer-eye', 'steer-anchor']));
   });
@@ -569,13 +580,14 @@ describe('price research applied (2026-10-12)', () => {
     expect(b.csv).toContain('NO Sipo 4x20 exists');
   });
 
-  it('prices the screws, washers and nuts by the real pack (Bolt Depot packs of 100) and the Dominos by their packs', () => {
+  it('prices the screws, washers and nuts by the piece where Bolt Depot sells them singly and cheaper than the bag, and the Dominos by their packs', () => {
     const s8 = line('316 wood screw #8 x 1-1/4"');
-    expect([s8.packQty, s8.packUsd, s8.packs, s8.needed]).toEqual([100, 33.95, 1, 37]); // D-72: every general-purpose screw is the #8 x 1-1/4 (17 before)
+    expect([s8.qty, s8.unitUsd, s8.packQty]).toEqual([37, 0.53, undefined]); // D-72: every general-purpose screw is the #8 x 1-1/4 (17 before); 37 x 0.53 = 19.61 is under the $33.95 bag of 100
+    expect(s8.extUsd).toBeCloseTo(37 * 0.53, 2);
     const w = line('316 fender washer 1/4"');
-    expect([w.packQty, w.packUsd]).toEqual([100, 27.26]);
+    expect([w.qty, w.unitUsd]).toEqual([48, 0.46]); // 48 x 0.46 = 22.08, under the $27.26 bag of 100
     const n = line('316 nylon-insert lock nut 1/4-20');
-    expect([n.packQty, n.packUsd]).toEqual([100, 16.54]);
+    expect([n.qty, n.unitUsd]).toEqual([24, 0.25]);
     // a length the research did not read keeps its estimate and says so
     const unread = line('316 wood screw #6 x 2-1/2"');
     expect(unread.basis).toBe('estimate');

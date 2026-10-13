@@ -175,14 +175,14 @@ describe('the glue-up posture and the strip lengths', () => {
       expect(h, `x ${x.toFixed(1)}`).toBeLessThan(7); // D-66: the taper starts where the free web is 6.8 in tall and ends where it is 5 in
     }
   });
-  it('the gunwale strip note gives the 60.4 in rough length and says a 5 ft board does not make it; the chine note does too', () => {
+  it('the gunwale strip note gives the 61.9 in rough length and says a 5 ft board does not make it; the chine note does too', () => {
     const g = get('side-L-gunwale');
-    expect(g.rough!.l).toBeCloseTo(60.4, 1);
-    expect(g.notes).toMatch(/60\.4" ROUGH/);
+    expect(g.rough!.l).toBeCloseTo(61.9, 1);
+    expect(g.notes).toMatch(/61.9" ROUGH/);
     expect(g.notes).toMatch(/5 ft board does NOT make it/);
     expect(g.notes).toMatch(/middle third/);
     expect(get('side-L-chine').notes).toMatch(/5 ft board does NOT make it/);
-    expect(get('side-L-chine').notes).toMatch(/59\.3" rough|59\.2" rough/);
+    expect(get('side-L-chine').notes).toMatch(/60\.8" rough|60\.7" rough/);
   });
   it('HULL_STEP-derived text: the rails are glued 1/2 in long and trimmed at the dry fit; the frame notes say so', () => {
     expect(get('rail-L').notes).toMatch(/1\/2" LONG at both ends/);

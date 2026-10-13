@@ -7,16 +7,22 @@
  * HIDDEN faces (frame, joists, backers, blocks, the deck underside, the inside of the box, the web inside the hull below the deck) by the
  * per-part table `SHOW_RULES`.
  *
- * Epoxy: ONE saturation coat of 105 / 206 (5:1) on all the okoume (show and hidden) and on the oak end grain. Varnish: 3 coats on the show
- * faces, 2 on the hidden ones, over the oak and the epoxy; bought in quarts, never a gallon (an open can skins over). Stain and conditioner:
- * show faces only, one coat. ONE hardener, 206 slow, for the glue-ups, the seal coat and the two long closes (207 is a listed option).
+ * Two weather specs (D-73, Eric 2026-10-12: garage-kept, used a few times a year, wet at most at a rainy derby; the Extreme spec is stored outside or near salt).
+ *   EXTREME: ONE saturation coat of 105 / 206 (5:1) on all the plywood (show and hidden) and on the oak end grain; marine spar varnish, 3 coats on the show faces, 2 on the
+ *   hidden ones, over the oak and the epoxy, bought in quarts (an open can skins over); epoxy for every glue joint.
+ *   STANDARD (the default): epoxy only on the plywood edges that are not captured, the oak end grain and the deck underside (water pools there); exterior spar urethane
+ *   (Minwax Helmsman class), 3 coats show, 2 hidden; Titebond III for the Dominos, dados, tenons and general glue joints, epoxy only where it earns its keep
+ *   (`standardAdhesive`: the bent laminations, the deck to the frame, the deck slot gap-fill, the fillets and tape, the thickened bedding, the D-70 face laminations).
+ * Stain and conditioner: show faces only, one coat. White oak plywood takes the SAME stain as the solid oak (no conditioner or gel); okoume and Baltic birch blotch and take a conditioner
+ * (Standard) or a conditioner and gel stain (Extreme). ONE hardener, 206 slow, for the glue-ups, the seal coat and the two long closes (207 is a listed option).
  *
  * `glueEpoxyFlOz` estimates the epoxy the glue joints themselves use, by joint type. The schedule's `epoxy` summary adds it to the seal coat.
  */
 import { localBounds, worldAABB } from '../model/bounds';
 import { HULL_STEP } from '../model/build-utils';
+import { boardForThickness, planLamination } from './cutlist';
 import type { Geometry, Part, Vec2 } from '../model/types';
-import type { Params } from '../params';
+import { thinSheet, THIN_SHEET, WEATHER_SPEC, type Params } from '../params';
 
 // ---- constants (process facts, not design numbers; coverage figures are published label / WEST System values) ----
 
@@ -47,17 +53,26 @@ export const VARNISH_COVERAGE = 140;
 /** Varnish coats: 3 on the faces that take sun, weather and wear, 2 on the faces nobody sees. */
 export const VARNISH_COATS_SHOW = 3;
 export const VARNISH_COATS_HIDDEN = 2;
+/**
+ * ft² per US quart of exterior spar urethane (Standard): the can's rating, about 100 ft² per quart (Minwax Helmsman, docs/price-research-standard-2026-10.md), thin brushed coats.
+ * The marine varnish of the Extreme spec covers 140 (VARNISH_COVERAGE).
+ */
+export const URETHANE_COVERAGE = 100;
 /** US fluid ounces per quart. */
 const FLOZ_PER_QT = 32;
 /** Letter fill: black-tinted epoxy or paint, a fraction of a pint. */
 const ENGRAVE_FILL_PT = 0.5;
 
-export type FinishMaterial = 'oak' | 'okoume';
+/** Solid white oak, okoume marine plywood, white oak plywood (D-73: NOT okoume), Baltic birch plywood. */
+export type FinishMaterial = 'oak' | 'okoume' | 'oakPly' | 'birch';
 
-/** An area split by material, ft². */
+/** An area split by material, ft². `plyFt2` is every plywood (okoume + white oak ply + birch). */
 export interface AreaSplit {
   oakFt2: number;
   okoumeFt2: number;
+  oakPlyFt2: number;
+  birchFt2: number;
+  plyFt2: number;
   totalFt2: number;
 }
 
@@ -79,6 +94,10 @@ export interface FinishAreas {
   oakFt2: number;
   /** NET surface of the okoume plywood parts (both faces and all edges, less the glued contacts), ft². */
   okoumeFt2: number;
+  /** The same for the white oak plywood parts and for the Baltic birch parts (D-73: the thin sheet may be either), and for all plywood together. */
+  oakPlyFt2: number;
+  birchFt2: number;
+  plyFt2: number;
   /** End-grain area of the oak parts (estimate from the grain axis), ft². Not reduced by glue. */
   oakEndGrainFt2: number;
   /** Net oak + okoume, ft². */
@@ -154,7 +173,23 @@ export interface EpoxySummary {
   hardenerFlOz: number;
 }
 
+/** The glue side of the weather spec: the Titebond III the Standard spec uses, the Standard epoxy coat's areas, and the rule in words. */
+export interface GlueSummary {
+  /** Titebond III to buy for, fl oz, +20 % waste (0 under the Extreme spec). */
+  titebondFlOz: number;
+  /** Glue joints that are Titebond (count, with the repeats). */
+  titebondJoints: number;
+  /** Plywood edge area left exposed in the model (ft²) and the deck underside (ft²): the Standard epoxy coat's plywood areas. */
+  epoxyEdgeFt2: number;
+  deckUnderFt2: number;
+  adhesiveRule: string;
+}
+
 export interface FinishSchedule {
+  /** The weather spec this schedule was made for (D-73). */
+  spec: 'standard' | 'extreme';
+  /** Glue and coat summary of the weather spec. */
+  glue: GlueSummary;
   areas: FinishAreas;
   steps: FinishStep[];
   buy: BuyLine[];
@@ -255,11 +290,17 @@ export function endGrainAreaIn2(part: Part): number {
 }
 
 /** Wood a finish goes on: oak lumber, bent laminations, and okoume plywood. Not purchased, metal, printed or rubber parts, and not the reference mannequins. */
-export function finishMaterial(part: Part): FinishMaterial | undefined {
+export function finishMaterial(part: Part, p?: Params): FinishMaterial | undefined {
   if (part.group === 'reference' || part.kind === 'reference' || part.payload) return undefined;
   if (part.kind === 'purchased' || part.kind === 'metal' || part.kind === 'printed') return undefined;
   const m = part.material.toLowerCase();
-  if (/okoume|plywood|baltic/.test(m)) return 'okoume';
+  // D-73: a part made of the thin sheet in effect is classed by thinSheet(p) (white oak plywood is NOT okoume, and it takes the stain of the solid oak); the 12 mm deck and
+  // seat back are classed by their own material text.
+  if (p && part.material === thinSheet(p).material) {
+    const k = thinSheet(p).key;
+    return k === THIN_SHEET.whiteOakPly ? 'oakPly' : k === THIN_SHEET.balticBirch3mm ? 'birch' : 'okoume';
+  }
+  if (/plywood|\bply\b|okoume|baltic/.test(m)) return /white oak/.test(m) ? 'oakPly' : /baltic|birch/.test(m) ? 'birch' : 'okoume';
   if (/\boak\b/.test(m)) return 'oak';
   return undefined;
 }
@@ -313,9 +354,14 @@ function webShowFraction(web: Part, deck: Part | undefined): number {
   return 1 - 0.5 * below;
 }
 
-const splitOf = (oak: number, okoume: number): AreaSplit => ({ oakFt2: oak, okoumeFt2: okoume, totalFt2: oak + okoume });
+type Tally = { oak: number; okoume: number; oakPly: number; birch: number };
+const splitOf = (t: Tally): AreaSplit => {
+  const ply = t.okoume + t.oakPly + t.birch;
+  return { oakFt2: t.oak, okoumeFt2: t.okoume, oakPlyFt2: t.oakPly, birchFt2: t.birch, plyFt2: ply, totalFt2: t.oak + ply };
+};
+const tally = (): Tally => ({ oak: 0, okoume: 0, oakPly: 0, birch: 0 });
 
-export function finishAreas(parts: Part[]): FinishAreas {
+export function finishAreas(parts: Part[], p?: Params): FinishAreas {
   const deck = parts.find((x) => x.id === 'deck');
   // Glued lamination contacts, in², off BOTH mating parts.
   const glue = new Map<string, number>();
@@ -323,31 +369,29 @@ export function finishAreas(parts: Part[]): FinishAreas {
     if (!g.contactIn2) continue;
     for (const id of [g.a, g.b]) glue.set(id, (glue.get(id) ?? 0) + g.contactIn2);
   }
-  const t = { gOak: 0, gOk: 0, glOak: 0, glOk: 0, shOak: 0, shOk: 0, hiOak: 0, hiOk: 0, end: 0 };
+  const gross = tally(), glued = tally(), show = tally(), hidden = tally();
+  let end = 0;
   const byPart: Record<string, number> = {};
   const detail: Record<string, PartFinishArea> = {};
   for (const part of parts) {
-    const m = finishMaterial(part);
+    const m = finishMaterial(part, p);
     if (!m) continue;
-    const gross = surfaceAreaIn2(part.geometry) / FT2;
-    const glued = Math.min(gross, (glue.get(part.id) ?? 0) / FT2);
-    const net = gross - glued;
+    const g = surfaceAreaIn2(part.geometry) / FT2;
+    const gl = Math.min(g, (glue.get(part.id) ?? 0) / FT2);
+    const net = g - gl;
     const r = showRuleOf(part);
     const frac = r.show === 'web' ? webShowFraction(part, deck) : r.show;
-    byPart[part.id] = gross;
-    detail[part.id] = { material: m, grossFt2: gross, gluedFt2: glued, netFt2: net, showFt2: net * frac, hiddenFt2: net * (1 - frac), showFraction: frac, rule: r.rule };
-    if (m === 'oak') {
-      t.gOak += gross; t.glOak += glued; t.shOak += net * frac; t.hiOak += net * (1 - frac);
-      t.end += endGrainAreaIn2(part) / FT2;
-    } else {
-      t.gOk += gross; t.glOk += glued; t.shOk += net * frac; t.hiOk += net * (1 - frac);
-    }
+    byPart[part.id] = g;
+    detail[part.id] = { material: m, grossFt2: g, gluedFt2: gl, netFt2: net, showFt2: net * frac, hiddenFt2: net * (1 - frac), showFraction: frac, rule: r.rule };
+    gross[m] += g; glued[m] += gl; show[m] += net * frac; hidden[m] += net * (1 - frac);
+    if (m === 'oak') end += endGrainAreaIn2(part) / FT2;
   }
-  const oak = t.gOak - t.glOak;
-  const okoume = t.gOk - t.glOk;
+  const netT = tally();
+  for (const k of Object.keys(netT) as Array<keyof Tally>) netT[k] = gross[k] - glued[k];
+  const netSplit = splitOf(netT);
   return {
-    oakFt2: oak, okoumeFt2: okoume, oakEndGrainFt2: t.end, totalFt2: oak + okoume,
-    gross: splitOf(t.gOak, t.gOk), glued: splitOf(t.glOak, t.glOk), show: splitOf(t.shOak, t.shOk), hidden: splitOf(t.hiOak, t.hiOk),
+    oakFt2: netSplit.oakFt2, okoumeFt2: netSplit.okoumeFt2, oakPlyFt2: netSplit.oakPlyFt2, birchFt2: netSplit.birchFt2, plyFt2: netSplit.plyFt2, oakEndGrainFt2: end, totalFt2: netSplit.totalFt2,
+    gross: splitOf(gross), glued: splitOf(glued), show: splitOf(show), hidden: splitOf(hidden),
     byPart, detail,
   };
 }
@@ -373,11 +417,33 @@ export const DADO_JOINT_FLOZ = 0.6;
 export const GLUE_JOINT_MIN_FLOZ = 0.25;
 
 export type GlueKind = 'domino' | 'tenon' | 'lamination' | 'fillet' | 'dado' | 'small';
+/** What a glue joint is glued with. The Extreme spec uses epoxy for every joint; the Standard spec uses it only where `standardAdhesive` says so. */
+export type Adhesive = 'epoxy' | 'titebond';
+
+const isBandId = (id: string): boolean => /^side-[LR]-(chine|gunwale)(-in)?$/.test(id);
+const isWebId = (id: string): boolean => /^side-[LR]-web$/.test(id);
+
+/**
+ * The adhesive of a glue joint under the Standard weather spec (Eric, 2026-10-12): Titebond III for the Dominos, dados, tenons and the general glue joints; EPOXY only for the bent
+ * laminations (the rails' own plies and the sandwich bands on the webs), the D-70 face laminations (their own lines, `d70`), the deck to the frame, the deck slot gap-fill (the deck dados
+ * into the transom and the bulkhead), the fillets and tape (the box and the band ends against the transom and bulkhead) and the thickened bedding (a nipple bedded in epoxy, a
+ * thickened-epoxy bed or block). A `text` that says "thickened" is bedding.
+ */
+export function standardAdhesive(kind: GlueKind, a: string, b: string, text: string): Adhesive {
+  if (a === b) return 'epoxy'; // the glue lines inside a laminated (bent) part
+  if (kind === 'fillet') return 'epoxy';
+  if (kind === 'lamination' && ((isBandId(a) && isWebId(b)) || (isBandId(b) && isWebId(a)))) return 'epoxy'; // the sandwich bands
+  if ((a === 'deck' || b === 'deck') && (kind === 'lamination' || kind === 'dado')) return 'epoxy'; // deck to the frame; the deck slot gap-fill
+  if ((kind === 'small' || kind === 'lamination') && /thickened|bedded|nipple|tape/i.test(text)) return 'epoxy'; // thickened bedding
+  return 'titebond';
+}
 
 export interface GlueJointEstimate {
   a: string;
   b: string;
   kind: GlueKind;
+  /** The adhesive under the Standard spec (the Extreme spec uses epoxy for all). */
+  standard: Adhesive;
   count: number;
   /** Mixed epoxy, fl oz, no waste. */
   flOz: number;
@@ -400,7 +466,7 @@ function faces(x: Part): { large: number; narrow: number } | null {
  * lamination (by contact area: the smaller of the two parts' faces, the narrow one when the note says top, edge or length), anything else the smallest batch.
  * `only` limits the list to the joints that touch a part it accepts (the transom and bulkhead closes).
  */
-export function glueJointEstimates(parts: Part[], only?: (x: Part) => boolean): GlueJointEstimate[] {
+export function glueJointEstimates(parts: Part[], only?: (x: Part) => boolean, p?: Params): GlueJointEstimate[] {
   const byId = new Map(parts.map((x) => [x.id, x]));
   const seen = new Map<string, { a: string; b: string; type: string; dir: Map<string, { count: number; size: string; text: string }> }>();
   for (const x of parts) {
@@ -454,7 +520,7 @@ export function glueJointEstimates(parts: Part[], only?: (x: Part) => boolean): 
       kind = 'small';
       each = GLUE_JOINT_MIN_FLOZ;
     }
-    out.push({ a: e.a, b: e.b, kind, count, flOz: each * count, contactIn2 });
+    out.push({ a: e.a, b: e.b, kind, standard: standardAdhesive(kind, e.a, e.b, text), count, flOz: each * count, contactIn2 });
   }
   // The glue lines INSIDE a laminated part (Part.plies, such as the two-strip rail): (plies - 1) lines, each the strip's large face. The faces are inside the part, so no area comes off.
   for (const x of parts) {
@@ -463,14 +529,47 @@ export function glueJointEstimates(parts: Part[], only?: (x: Part) => boolean): 
     const fc = faces(x);
     if (!fc) continue;
     const lines = x.plies - 1;
-    out.push({ a: x.id, b: x.id, kind: 'lamination', count: lines, flOz: Math.max(GLUE_JOINT_MIN_FLOZ, (fc.large / FT2) * GLUE_FLOZ_PER_FT2) * lines, contactIn2: 0 });
+    out.push({ a: x.id, b: x.id, kind: 'lamination', standard: 'epoxy', count: lines, flOz: Math.max(GLUE_JOINT_MIN_FLOZ, (fc.large / FT2) * GLUE_FLOZ_PER_FT2) * lines, contactIn2: 0 });
+  }
+  // D-70: a solid part no stocked board is thick enough for (the axle beams, the brake knees and chocks) is face-laminated from layers of stocked boards: (layers - 1) full-face glue lines, EPOXY in both specs.
+  // Needs the milling allowance (the params), so only when `p` is given.
+  if (p) {
+    for (const x of parts) {
+      if (x.group === 'reference' || x.kind === 'reference' || x.payload || x.kind !== 'lumber' || x.plies !== undefined || !x.stock || !/\boak\b/i.test(x.material) || /plywood/i.test(x.material)) continue;
+      if (only && !only(x)) continue;
+      const rough = x.rough ?? { t: x.stock.t + p.millingAllowanceIn, w: x.stock.w + p.millingAllowanceIn, l: x.stock.l + 4 * p.millingAllowanceIn };
+      const d = [rough.t, rough.w, rough.l].sort((u, v) => u - v);
+      if (boardForThickness(d[0])) continue;
+      const lam = planLamination(Math.min(x.stock.t, x.stock.w, x.stock.l), d[0]);
+      const fc = faces(x);
+      if (!lam || !fc) continue;
+      const lines = lam.layers.length - 1;
+      out.push({ a: x.id, b: x.id, kind: 'lamination', standard: 'epoxy', count: lines, flOz: Math.max(GLUE_JOINT_MIN_FLOZ, (fc.large / FT2) * GLUE_FLOZ_PER_FT2) * lines, contactIn2: 0 });
+    }
   }
   return out;
 }
 
-/** Mixed epoxy (fl oz, before waste) that the glue joints of these parts use. The BOM adds it to the finishing coats. */
-export function glueEpoxyFlOz(parts: Part[], only?: (x: Part) => boolean): number {
-  return glueJointEstimates(parts, only).reduce((s, g) => s + g.flOz, 0);
+/**
+ * Mixed epoxy (fl oz, before waste) that the glue joints of these parts use. The BOM adds it to the finishing coats. With `p` the weather spec decides: Extreme glues everything with epoxy
+ * (as before), Standard only the joints `standardAdhesive` names (plus the D-70 laminations); without `p` every joint counts (the old behavior).
+ */
+export function glueEpoxyFlOz(parts: Part[], only?: (x: Part) => boolean, p?: Params): number {
+  const std = !!p && p.weatherSpec !== WEATHER_SPEC.extreme;
+  return glueJointEstimates(parts, only, p).filter((g) => !std || g.standard === 'epoxy').reduce((s, g) => s + g.flOz, 0);
+}
+
+/**
+ * Titebond III per joint as a share of the epoxy estimate for the same joint: the epoxy figures (GLUE_FLOZ_PER_FT2, DOMINO_FLOZ...) include wetting out BOTH faces, thickening, squeeze-out and fillets;
+ * Titebond is one thin bead or coat on one face, with no filler. About 0.4 of the epoxy volume (a Domino joint takes a few drops: 0.06 fl oz against 0.15 of mixed epoxy).
+ */
+export const TITEBOND_VS_EPOXY = 0.4;
+
+/** The glue the Standard spec gives to Titebond III (Dominos, dados, tenons, general glue joints): fl oz of glue before waste, and the number of joints. Zero under the Extreme spec. */
+export function glueTitebond(parts: Part[], p: Params): { flOz: number; joints: number } {
+  if (p.weatherSpec === WEATHER_SPEC.extreme) return { flOz: 0, joints: 0 };
+  const js = glueJointEstimates(parts, undefined, p).filter((g) => g.standard === 'titebond');
+  return { flOz: js.reduce((s, g) => s + g.flOz, 0) * TITEBOND_VS_EPOXY, joints: js.reduce((s, g) => s + g.count, 0) };
 }
 
 // ---- quantities ----
@@ -508,12 +607,51 @@ export function epoxyTimeFactor(tempF: number): number {
   return Math.pow(2, (70 - tempF) / 18);
 }
 
+/** Edge area (ft²) of the plywood parts whose edges are left `exposed` in the model (a captured edge sits in a dado or a rabbet, a banded one is covered with oak): the Standard seal coat covers these. */
+export function exposedPlyEdgeFt2(parts: Part[], p: Params): number {
+  let in2 = 0;
+  for (const x of parts) {
+    const m = finishMaterial(x, p);
+    if (!m || m === 'oak' || !x.stock) continue;
+    const e = x.edges;
+    const share = Array.isArray(e) ? (e.length ? e.filter((c) => c === 'exposed').length / e.length : 0) : e === 'exposed' ? 1 : 0;
+    if (!share) continue;
+    const d = [x.stock.t, x.stock.w, x.stock.l].sort((u, v) => u - v);
+    in2 += share * 2 * d[0] * (d[1] + d[2]);
+  }
+  return in2 / FT2;
+}
+
+/** Containers of exterior spar urethane (Standard): quarts, and a gallon once three quarts are needed (the gallon is cheaper than three quarts, docs/price-research-standard-2026-10.md). */
+export function urethaneContainers(qt: number): Array<{ unit: 'gal' | 'qt'; qty: number; qt: number }> {
+  const n = Math.max(1, Math.ceil(qt - 1e-9));
+  let gal = Math.floor(n / 4);
+  let rest = n - 4 * gal;
+  if (rest >= 3) { gal += 1; rest = 0; }
+  return [...(gal ? [{ unit: 'gal' as const, qty: gal, qt: gal * 4 }] : []), ...(rest ? [{ unit: 'qt' as const, qty: rest, qt: rest }] : [])];
+}
+
+/** Face veneer depth the engraving must stay inside, by thin sheet (the legend depth is a model number; this is the sheet's own limit). */
+const VENEER_TEXT: Record<string, string> = {
+  okoume: 'the face veneer of the 4 mm ply (about 0.03-0.04")',
+  oakPly: 'the face veneer of the 1/4 in white oak plywood (hardwood-veneer faces are thin, about 0.02-0.03")',
+  birch: 'the face veneer of the 3 mm Baltic birch (about 0.02")',
+};
+
 export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
-  const areas = finishAreas(parts);
+  const extreme = p.weatherSpec === WEATHER_SPEC.extreme;
+  const thin = thinSheet(p);
+  const thinClass: FinishMaterial = thin.key === THIN_SHEET.whiteOakPly ? 'oakPly' : thin.key === THIN_SHEET.balticBirch3mm ? 'birch' : 'okoume';
+  const areas = finishAreas(parts, p);
   const lid = parts.find((x) => x.id === 'storage-lid');
   const legend = lid?.legend;
   const round = p.roundoverIn;
   const f60 = round1(epoxyTimeFactor(60) * 10) / 10;
+  /** Plywood that blotches under a water-based dye (okoume, Baltic birch): it takes a conditioner. White oak plywood takes the stain of the solid oak. */
+  const blotchShowFt2 = areas.show.okoumeFt2 + areas.show.birchFt2;
+  const blotchNames = [areas.okoumeFt2 > 0 ? 'okoume' : '', areas.birchFt2 > 0 ? 'Baltic birch' : ''].filter(Boolean).join(' and ');
+  const oakStainFt2 = areas.show.oakFt2 + areas.show.oakPlyFt2;
+  const plyNames = ['white oak', ...(areas.okoumeFt2 > 0 ? ['okoume (the 12 mm deck offcut)'] : []), ...(areas.oakPlyFt2 > 0 ? ['white oak plywood'] : []), ...(areas.birchFt2 > 0 ? ['Baltic birch'] : [])];
 
   // ---- 1. offcut tests
   const s1: FinishStep = {
@@ -521,11 +659,19 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
     id: 'offcut-tests',
     title: 'Test on offcuts',
     instructions: [
-      'Do this BEFORE any show face is sealed (assembly step "Seal the dados, edges and hidden faces"): cut two 12" × 12" test panels from the real offcuts, white oak and okoume (4 mm), and sand both to the final grit (step 2).',
-      'Oak: water-based dye or stain (preferred under epoxy), two strengths. Okoume: pre-stain conditioner then gel stain, vs. the same stain with no conditioner. Okoume blotches: pick the sample that is even.',
-      'Run one panel of each through the whole schedule: stain, the one epoxy seal coat (206), engraving with the fill (okoume lid offcut), varnish (3 coats). Check the epoxy cures hard over the stain (no tack after the stated cure) and that the varnish does not craze or lift. The show faces are stained and sealed only after a panel passes; if none does, leave them unstained under clear epoxy.',
+      `Do this BEFORE any show face is sealed (assembly step "Seal the dados, edges and hidden faces"): cut two 12" × 12" test panels from the real offcuts, ${plyNames.join(', ')}, and sand both to the final grit (step 2).`,
+      'Oak: water-based dye or stain (preferred under epoxy or urethane), two strengths.' +
+        (areas.oakPlyFt2 > 0 ? ' White oak plywood: the SAME stain as the solid oak, no conditioner or gel; check on the panel that the thin face veneer takes it evenly and does not sand through.' : '') +
+        (blotchShowFt2 > 0
+          ? (extreme
+            ? ` ${blotchNames.replace(/^./, (c) => c.toUpperCase())}: pre-stain conditioner then gel stain, vs. the same stain with no conditioner. ${blotchNames.replace(/^./, (c) => c.toUpperCase())} blotches: pick the sample that is even.`
+            : ` ${blotchNames.replace(/^./, (c) => c.toUpperCase())}: pre-stain conditioner then the same water-based dye, vs. the dye with no conditioner (a gel stain is the alternative). It blotches: pick the sample that is even.`)
+          : ''),
+      extreme
+        ? 'Run one panel of each through the whole schedule: stain, the one epoxy seal coat (206), engraving with the fill (lid offcut), varnish (3 coats). Check the epoxy cures hard over the stain (no tack after the stated cure) and that the varnish does not craze or lift. The show faces are stained and sealed only after a panel passes; if none does, leave them unstained under clear epoxy.'
+        : 'Run one panel of each through the whole schedule: stain, the epoxy edge coat (206) on a cut edge, engraving with the fill (lid offcut), exterior spar urethane (3 coats). Check the urethane dries hard over the stain (no tack after the stated cure) and does not craze or lift, and that the epoxy edge coat does not show through. The show faces are stained and coated only after a panel passes; if none does, leave them unstained under clear urethane.',
       legend
-        ? `Engrave the legend (${legend.letterHeightIn}" letters, ${legend.depthIn}" deep) on the okoume lid offcut: the depth must stay inside the face veneer of the 4 mm ply (about 0.03-0.04"); if the veneer shows through, go to 0.02".`
+        ? `Engrave the legend (${legend.letterHeightIn}" letters, ${legend.depthIn}" deep) on the ${thin.name} lid offcut: the depth must stay inside ${VENEER_TEXT[thinClass]}; if the veneer shows through, go to 0.02".`
         : 'Engrave a test legend on the lid offcut.',
       'Pick products and sheen from the panels, write them on the panel back and keep it by the finishing bench.',
     ],
@@ -542,10 +688,12 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
     id: 'sand',
     title: 'Sand: 120 then 150',
     instructions: [
-      'Steps 2-6 run in two sessions with the same products and coats: the underside while the hull is still inverted (before the flip), then everything else after the box, seat, brake and handle are built, all hardware, hinges and running gear OFF. The hardware goes on after the varnish cures (assembly step "Hang the running gear and hardware").',
+      'Steps 2-6 run in two sessions with the same products and coats: the underside while the hull is still inverted (before the flip), then everything else after the box, seat, brake and handle are built, all hardware, hinges and running gear OFF. The hardware goes on after the topcoat cures (assembly step "Hang the running gear and hardware").',
       `Ease every exposed oak edge to the ${f(round)}" roundover (router, then hand-sand), including hand-holes and the grab-board edges; break all sharp ply edges that are not banded by hand.`,
-      'Sand with the grain: 120 grit, then 150 grit, random-orbit or sanding block. Do not go below 120 and do not sand through the face veneer of the 4 mm okoume (hand-sand it at 150).',
-      'Remove any amine blush from epoxy already on the parts (warm water + Scotch-Brite, dry) and scuff glue-up squeeze-out; vacuum and wipe with a tack cloth or denatured alcohol.',
+      `Sand with the grain: 120 grit, then 150 grit, random-orbit or sanding block. Do not go below 120 and do not sand through the face veneer of the ${thin.name} (hand-sand it at 150).`,
+      extreme
+        ? 'Remove any amine blush from epoxy already on the parts (warm water + Scotch-Brite, dry) and scuff glue-up squeeze-out; vacuum and wipe with a tack cloth or denatured alcohol.'
+        : 'Remove any amine blush from the epoxy already on the parts (warm water + Scotch-Brite, dry), scrape off the Titebond squeeze-out (wipe it with a damp rag while wet; dried glue seals the wood and shows as a pale patch under stain) and scuff the epoxy squeeze-out; vacuum and wipe with a tack cloth or denatured alcohol.',
     ],
     products: [],
     coats: 0,
@@ -554,41 +702,55 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
     winter: 'Sanding dust holds moisture in a cold shop: wipe, let the wood sit at shop temperature a day before staining.',
   };
 
-  // ---- 3. stain (SHOW faces only, one coat)
-  const stainOak = product('Water-based wood stain or dye (oak, show faces)', areas.show.oakFt2, 1, STAIN_COVERAGE);
-  const cond = product('Water-based pre-stain conditioner (okoume, show faces)', areas.show.okoumeFt2, 1, CONDITIONER_COVERAGE);
-  const gel = product('Gel stain (okoume, show faces)', areas.show.okoumeFt2, 1, GEL_STAIN_COVERAGE);
+  // ---- 3. stain (SHOW faces only, one coat). White oak plywood takes the oak's stain; okoume and Baltic birch take a conditioner (and, in the Extreme spec, a gel stain).
+  const stainOak = product(`Water-based wood stain or dye (oak${areas.oakPlyFt2 > 0 ? ' and white oak plywood' : ''}, show faces)`, oakStainFt2, 1, STAIN_COVERAGE);
+  const condName = `Water-based pre-stain conditioner (${blotchNames || 'okoume'}, show faces)`;
+  const cond = product(condName, blotchShowFt2, 1, CONDITIONER_COVERAGE);
+  const gel = product(`Gel stain (${blotchNames || 'okoume'}, show faces)`, blotchShowFt2, 1, GEL_STAIN_COVERAGE);
   const s3: FinishStep = {
     n: 3,
     id: 'stain',
     title: 'Stain the show faces',
     instructions: [
-      `Stain goes on the SHOW faces only, one coat (${f(areas.show.oakFt2, 0)} ft² oak, ${f(areas.show.okoumeFt2, 0)} ft² okoume: the oak bands, bulkhead, tongue and seat parts, and the okoume webs, deck top, box, lid and seat back). The hidden faces (frame, joists, backers, blocks, the deck underside, the inside of the box, the inside of the hull below the deck) get no stain: epoxy and varnish only. The dados, edges and hidden faces were sealed during assembly; glue faces stay bare or scuffed.`,
-      'Water-based dye under epoxy is the safe route: it dries clear of oils and the epoxy bonds to it. Stain (dye) first, THEN seal; the epoxy goes over a dry, sanded, offcut-tested surface, never over a stain that has not cured.',
-      'Oak: wipe the water-based stain or dye on, wipe off; raise the grain with a damp rag first and re-sand at 150 so it does not raise again under the epoxy.',
-      'Okoume: pre-stain conditioner first, stain within the time on the label (about 15 min), then gel stain wiped on in thin coats. Match the oak by sample, not by the can.',
+      `Stain goes on the SHOW faces only, one coat (${f(areas.show.oakFt2, 0)} ft² oak${areas.show.oakPlyFt2 > 0 ? `, ${f(areas.show.oakPlyFt2, 0)} ft² white oak plywood` : ''}${blotchShowFt2 > 0 ? `, ${f(blotchShowFt2, 0)} ft² ${blotchNames}` : ''}: the oak bands, bulkhead, tongue and seat parts, and the webs, deck top, box, lid and seat back). The hidden faces (frame, joists, backers, blocks, the deck underside, the inside of the box, the inside of the hull below the deck) get no stain: ${extreme ? 'epoxy and varnish' : 'urethane'} only. ${extreme ? 'The dados, edges and hidden faces were sealed during assembly' : 'The deck underside, the end grain and any uncaptured ply edge were epoxied during assembly'}; glue faces stay bare or scuffed.`,
+      extreme
+        ? 'Water-based dye under epoxy is the safe route: it dries clear of oils and the epoxy bonds to it. Stain (dye) first, THEN seal; the epoxy goes over a dry, sanded, offcut-tested surface, never over a stain that has not cured.'
+        : 'Water-based dye under the urethane is the safe route: it dries clear of oils and the urethane bonds to it. Stain (dye) first, THEN coat; the urethane goes over a dry, sanded, offcut-tested surface, never over a stain that has not cured. The epoxy edge coat and the deck underside are done separately (step 4); keep dye off the glue faces.',
+      `Oak${areas.oakPlyFt2 > 0 ? ' and the white oak plywood (the same stain, one wipe-on)' : ''}: wipe the water-based stain or dye on, wipe off; raise the grain with a damp rag first and re-sand at 150 so it does not raise again under the ${extreme ? 'epoxy' : 'urethane'}.`,
+      ...(blotchShowFt2 > 0
+        ? [extreme
+          ? `${blotchNames.replace(/^./, (c) => c.toUpperCase())}: pre-stain conditioner first, stain within the time on the label (about 15 min), then gel stain wiped on in thin coats. Match the oak by sample, not by the can.`
+          : `${blotchNames.replace(/^./, (c) => c.toUpperCase())}: pre-stain conditioner first, the same water-based dye within the time on the label (about 15 min), thin and wiped. A gel stain is the alternative if the sample is still blotchy (it must be fully cured before the urethane). Match the oak by sample, not by the can.`]
+        : []),
       'End grain takes stain darker: seal it with a wipe of conditioner or dilute the stain on the ends.',
-      'Let it dry completely before the epoxy: water-based stain 24 h; oil-based stain or gel needs a FULL cure (days) or the epoxy stays tacky over it, so use it only if the test panel passed.',
+      extreme
+        ? 'Let it dry completely before the epoxy: water-based stain 24 h; oil-based stain or gel needs a FULL cure (days) or the epoxy stays tacky over it, so use it only if the test panel passed.'
+        : 'Let it dry completely before the urethane: water-based stain 24 h; an oil-based stain or gel needs a FULL cure (days) or the urethane stays tacky over it, so use it only if the test panel passed.',
     ],
-    products: [stainOak, cond, gel],
+    products: extreme ? [stainOak, ...(blotchShowFt2 > 0 ? [cond, gel] : [])] : [stainOak, ...(blotchShowFt2 > 0 ? [cond] : [])],
     coats: 1,
     recoat: 'Second coat for depth after 2-4 h (water-based) if the panel calls for it.',
-    cure: '24 h at 70 °F before epoxy (water-based); several days for oil-based stain.',
+    cure: extreme ? '24 h at 70 °F before epoxy (water-based); several days for oil-based stain.' : '24 h at 70 °F before the urethane (water-based); several days for oil-based stain.',
     winter: 'Keep the shop and the wood at 60 °F or warmer; water-based stain dries slowly and can freeze or blush when cold. Double the dry time at 50-55 °F.',
   };
 
-  // ---- 4. epoxy seal: ONE saturation coat
-  const epoxyArea = areas.okoumeFt2 + areas.oakEndGrainFt2 * END_GRAIN_FACTOR;
-  const coat = product('West System 105 resin + 206 slow hardener, one saturation coat (mixed volume)', epoxyArea, 1, EPOXY_COVERAGE);
+  // ---- 4. epoxy. EXTREME: ONE saturation coat on all the plywood and the oak end grain. STANDARD: the plywood edges that are not captured, the oak end grain and the deck underside only.
+  const deckUnderFt2 = areas.detail['deck']?.hiddenFt2 ?? 0;
+  const plyEdgeFt2 = exposedPlyEdgeFt2(parts, p);
+  const endGrainEq = areas.oakEndGrainFt2 * END_GRAIN_FACTOR;
+  const epoxyArea = extreme ? areas.plyFt2 + endGrainEq : plyEdgeFt2 + deckUnderFt2 + endGrainEq;
+  const coat = product(
+    extreme ? 'West System 105 resin + 206 slow hardener, one saturation coat (mixed volume)' : 'Epoxy 105 resin + 206 slow hardener, edge, end-grain and deck-underside coat (mixed volume)',
+    epoxyArea, 1, EPOXY_COVERAGE);
   const coatFlOz = coat.qtNeeded * FLOZ_PER_QT;
   const deckTopFt2 = areas.detail['deck']?.showFt2 ?? 0;
   const secondCoatFlOz = ((deckTopFt2 / EPOXY_COVERAGE) * FLOZ_PER_QT);
-  const s4: FinishStep = {
+  const s4: FinishStep = extreme ? {
     n: 4,
     id: 'epoxy',
-    title: 'Epoxy seal: one saturation coat on the okoume and the oak end grain',
+    title: `Epoxy seal: one saturation coat on the ${areas.oakPlyFt2 + areas.birchFt2 > 0 ? 'plywood' : 'okoume'} and the oak end grain`,
     instructions: [
-      `After the stain has dried: ONE saturation coat of West System 105 resin / 206 slow hardener (5:1 by volume, 301 pumps) on all the okoume, show and hidden faces and every edge that is not glued (${f(areas.okoumeFt2, 0)} ft²), and on the end grain of the oak (${f(areas.oakEndGrainFt2, 0)} ft², counted double for the extra soak-in). One coat is enough for a snow sled kept dry in a garage; the varnish carries the UV and the wear.`,
+      `After the stain has dried: ONE saturation coat of West System 105 resin / 206 slow hardener (5:1 by volume, 301 pumps) on all the plywood (okoume, white oak plywood or Baltic birch), show and hidden faces and every edge that is not glued (${f(areas.plyFt2, 0)} ft²), and on the end grain of the oak (${f(areas.oakEndGrainFt2, 0)} ft², counted double for the extra soak-in). One coat is enough for a snow sled kept dry in a garage; the varnish carries the UV and the wear.`,
       'The dados, edges and hidden faces were already coated during assembly (D-62): that IS this coat for those faces. The show faces get theirs here, after the stain.',
       'Roll and tip, then re-wet end grain and edges as it soaks in. Apply while the shop temperature is falling (afternoon) to limit outgassing bubbles in the okoume. Use a roller with a short phenolic core and a foam brush.',
       'After the 206 seal coat cures, wash the amine blush off with water and a Scotch-Brite pad before sanding and varnishing; then sand with 220 and vacuum. Epoxy over oil-based stain needs the stain fully cured; water-based dye under the epoxy is the safe route.',
@@ -601,18 +763,36 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
     recoat: 'One coat. If you add the deck-top second coat, put it on while the first is tacky (about 6-12 h at 70 °F; up to 24 h) for a chemical bond; past that, wash and sand with 220.',
     cure: 'Hard to sand in 24 h at 70 °F; full cure about 7 days. Do not varnish for at least 48 h after the coat.',
     winter: `Epoxy works from about 55 °F: below that it will not cure. At 60 °F multiply pot life and cure times by about ${f60}; keep resin and hardener at 65-70 °F before mixing. Surface and air must stay above 55 °F until it kicks; use a space heater at a distance, not a flame heater (fumes).`,
+  } : {
+    n: 4,
+    id: 'epoxy',
+    title: 'Epoxy edges and end grain, and the deck underside (one coat)',
+    instructions: [
+      `Standard weather spec (garage-kept, wet at most at a rainy derby): epoxy goes only where water gets in. ONE coat of 105 resin / 206 slow hardener (5:1 by volume) on the oak end grain (${f(areas.oakEndGrainFt2, 0)} ft², counted double for the extra soak-in), on every plywood edge that is not captured in a dado or banded with oak (${f(plyEdgeFt2, 1)} ft² in this design), and on the deck underside (${f(deckUnderFt2, 0)} ft²: water pools there, so it is sealed fully). Every other plywood face is stained and given the urethane directly.`,
+      'The dados, edges and hidden faces were coated during assembly (D-62) where the assembly step says so: that IS this coat for those faces. The end grain and the deck underside are done here (the underside before the hull is flipped).',
+      'Roll and tip the deck underside, brush the end grain and re-wet it as it soaks in. Mix no more than a pint at a time; pour leftovers thin into a tray.',
+      'After the 206 coat cures, wash the amine blush off with water and a Scotch-Brite pad before sanding; then sand with 220 and vacuum. The urethane goes over the sanded, blush-free epoxy.',
+      'The Extreme spec (stored outside or near salt) saturates ALL the plywood with epoxy and varnishes with marine varnish: the weather setting in the parameters panel switches the schedule.',
+    ],
+    products: [coat],
+    coats: 1,
+    recoat: 'One coat. Put anything else on while it is tacky (about 6-12 h at 70 °F; up to 24 h) or wash and sand with 220.',
+    cure: 'Hard to sand in 24 h at 70 °F; full cure about 7 days. Do not apply the urethane for at least 48 h after the coat.',
+    winter: `Epoxy works from about 55 °F: below that it will not cure. At 60 °F multiply pot life and cure times by about ${f60}; keep resin and hardener at 65-70 °F before mixing. Surface and air must stay above 55 °F until it kicks; use a space heater at a distance, not a flame heater (fumes).`,
   };
 
   // ---- 5. engrave
   const s5: FinishStep = {
     n: 5,
     id: 'engrave',
-    title: `Engrave ${legend ? `"${legend.text}"` : 'DO NOT STEP'} on the storage lid (before the varnish)`,
+    title: `Engrave ${legend ? `"${legend.text}"` : 'DO NOT STEP'} on the storage lid (before the ${extreme ? 'varnish' : 'urethane'})`,
     instructions: [
       legend
         ? `Part storage-lid, ${legend.face} face: "${legend.text}", letter height ${legend.letterHeightIn}", depth ${legend.depthIn}". Process in the model: ${legend.process}.`
         : 'Part storage-lid, top face.',
-      'Shaper Origin with a V-bit: the legend is an SVG on the lid file (shaper-svg). Cut after the epoxy seal has cured and been sanded, so the V-groove is cut through sealed ply and clean edges, and before any varnish.',
+      extreme
+        ? 'Shaper Origin with a V-bit: the legend is an SVG on the lid file (shaper-svg). Cut after the epoxy seal has cured and been sanded, so the V-groove is cut through sealed ply and clean edges, and before any varnish.'
+        : 'Shaper Origin with a V-bit: the legend is an SVG on the lid file (shaper-svg). Cut after the stain has dried and been sanded lightly (the lid top is not epoxy-coated in the Standard spec), so the V-groove has clean edges, and before any urethane.',
       'Fill the grooves with black-tinted epoxy (pigment in the leftover 105/206) or enamel paint with a fine brush; scrape / sand flush at 220 when hard. The epoxy fill seals the bare groove walls.',
       'Letters 1.5" high read from a standing position; the lid is a seat-cushion lid, not a step (D-58).',
     ],
@@ -625,66 +805,84 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
     winter: 'Fill and sand the grooves in a warm area; epoxy fill below 55 °F stays soft and clogs the sandpaper.',
   };
 
-  // ---- 6. varnish: 3 coats on the show faces, 2 on the hidden ones
-  const vShow = product(`Spar varnish with UV absorbers, show faces, ${VARNISH_COATS_SHOW} coats`, areas.show.totalFt2, VARNISH_COATS_SHOW, VARNISH_COVERAGE);
-  const vHidden = product(`Spar varnish with UV absorbers, hidden faces, ${VARNISH_COATS_HIDDEN} coats`, areas.hidden.totalFt2, VARNISH_COATS_HIDDEN, VARNISH_COVERAGE);
+  // ---- 6. topcoat: 3 coats on the show faces, 2 on the hidden ones. EXTREME: marine spar varnish. STANDARD: exterior spar urethane (Minwax Helmsman class, about 100 ft² a quart).
+  const topCoverage = extreme ? VARNISH_COVERAGE : URETHANE_COVERAGE;
+  const topName = extreme ? 'Spar varnish with UV absorbers' : 'Exterior spar urethane (oil-based)';
+  const vShow = product(`${topName}, show faces, ${VARNISH_COATS_SHOW} coats`, areas.show.totalFt2, VARNISH_COATS_SHOW, topCoverage);
+  const vHidden = product(`${topName}, hidden faces, ${VARNISH_COATS_HIDDEN} coats`, areas.hidden.totalFt2, VARNISH_COATS_HIDDEN, topCoverage);
   const varnishQt = vShow.qtNeeded + vHidden.qtNeeded;
   const s6: FinishStep = {
     n: 6,
     id: 'varnish',
-    title: `Spar varnish: ${VARNISH_COATS_SHOW} coats on the show faces, ${VARNISH_COATS_HIDDEN} on the hidden faces, 320 between coats`,
+    title: `${extreme ? 'Spar varnish' : 'Exterior spar urethane'}: ${VARNISH_COATS_SHOW} coats on the show faces, ${VARNISH_COATS_HIDDEN} on the hidden faces, 320 between coats`,
     instructions: [
-      `Spar varnish with UV absorbers (marine, high solids) over the oak and over the epoxy: ${VARNISH_COATS_SHOW} coats on the show faces (${f(areas.show.totalFt2, 0)} ft²) and ${VARNISH_COATS_HIDDEN} on the hidden faces (${f(areas.hidden.totalFt2, 0)} ft²). It is the UV protection for the epoxy, which yellows and chalks in sunlight.`,
-      'Coat 1 thinned 10-15 % with the recommended thinner (it sinks into the oak). The later coats at full strength, brushed with the grain in thin coats; tip off with a dry brush. Hidden faces stop after coat 2.',
+      extreme
+        ? `Spar varnish with UV absorbers (marine, high solids) over the oak and over the epoxy: ${VARNISH_COATS_SHOW} coats on the show faces (${f(areas.show.totalFt2, 0)} ft²) and ${VARNISH_COATS_HIDDEN} on the hidden faces (${f(areas.hidden.totalFt2, 0)} ft²). It is the UV protection for the epoxy, which yellows and chalks in sunlight.`
+        : `Exterior spar urethane (oil-based, Minwax Helmsman class; it flexes with the wood and carries UV absorbers) over the stained oak and plywood and over the epoxy-coated end grain and deck underside: ${VARNISH_COATS_SHOW} coats on the show faces (${f(areas.show.totalFt2, 0)} ft²) and ${VARNISH_COATS_HIDDEN} on the hidden faces (${f(areas.hidden.totalFt2, 0)} ft²). On the plywood it is the only coating on the faces, so do not skip a coat on the deck top, the box or the lid.`,
+      `Coat 1 thinned 10-15 % with the recommended thinner (it sinks into the ${extreme ? 'oak' : 'wood'}). The later coats at full strength, brushed with the grain in thin coats; tip off with a dry brush. Hidden faces stop after coat 2.`,
       'Sand every coat with 320 (a light scuff to dull) and wipe with a tack cloth or mineral spirits before the next coat.',
-      'Sand-through is touched up with the same varnish; build the edges (roundovers, hand-holes) the most since they wear first.',
-      'Buy QUARTS, not a gallon: an open can skins over and the makers advise small cans. Pour each session\'s varnish into a cup and keep the can closed.',
+      'Sand-through is touched up with the same product; build the edges (roundovers, hand-holes) the most since they wear first.',
+      extreme
+        ? 'Buy QUARTS, not a gallon: an open can skins over and the makers advise small cans. Pour each session\'s varnish into a cup and keep the can closed.'
+        : 'Buy QUARTS, and a gallon only once three quarts are needed (the gallon is then cheaper). An open can skins over: pour each session\'s urethane into a cup, keep the can closed, and decant a gallon into quart jars.',
       'Hardware, hinges and the running gear stay off until the last coat has cured (assembly step "Hang the running gear and hardware"); mask the bolt seats and pivot bores.',
     ],
     products: [vShow, vHidden],
     coats: VARNISH_COATS_SHOW,
-    recoat: 'Recoat in 12-24 h at 70 °F (when it sands to a powder, not gum); after 72 h, scuff with 320 before recoating.',
+    recoat: extreme ? 'Recoat in 12-24 h at 70 °F (when it sands to a powder, not gum); after 72 h, scuff with 320 before recoating.' : 'Recoat in 24 h at 70 °F (the can says 4-6 h to touch-dry; wait until it sands to a powder, not gum); after 72 h, scuff with 320 before recoating.',
     cure: 'Dry to touch in 6-8 h; ready for handling in 3 days; full cure about 30 days. Do not load or strap the finish for 7 days.',
     winter: 'Apply at 60 °F or warmer and under about 80 % humidity; at 50-55 °F double the recoat time and thin less. Keep the sled in the warm room until the last coat is hard; a cold garage leaves it tacky for weeks.',
   };
 
   const steps = [s1, s2, s3, s4, s5, s6];
 
-  // ---- epoxy: the seal coat (15 % waste) + the glue joints (20 % waste), all 105 resin + 206 slow at 5:1.
+  // ---- epoxy: the coat (15 % waste) + the glue joints that use epoxy (20 % waste), all 105 resin + 206 slow at 5:1. Under the Standard spec the other glue joints are Titebond III (`glue`).
   // The transom and bulkhead closes are glue joints like the rest: 206 too, in SMALL batches in a wide shallow container (more surface, longer pot), a second person mixing. Their epoxy is inside glueFlOz.
   const closeParts = new Set(parts.filter((x) => x.step === HULL_STEP.transom).map((x) => x.id));
-  const closeGlueFlOz = round1(glueEpoxyFlOz(parts, (x) => closeParts.has(x.id)) * 10) / 10;
-  const glueFlOz = glueEpoxyFlOz(parts) * (1 + GLUE_WASTE);
+  const closeGlueFlOz = round1(glueEpoxyFlOz(parts, (x) => closeParts.has(x.id), p) * 10) / 10;
+  const glueFlOz = glueEpoxyFlOz(parts, undefined, p) * (1 + GLUE_WASTE);
+  const tb = glueTitebond(parts, p);
+  const titebondFlOz = tb.flOz * (1 + GLUE_WASTE);
   const totalMixedFlOz = coatFlOz + glueFlOz;
   const hardenerFlOz = totalMixedFlOz / (EPOXY_RESIN_PARTS + 1);
   const resinFlOz = totalMixedFlOz - hardenerFlOz;
   const epoxy: EpoxySummary = { coatingFlOz: coatFlOz, glueFlOz, closeGlueFlOz, totalMixedFlOz, resinFlOz, hardenerFlOz };
 
   // ---- buy list, in the units a store sells
+  const topContainers = extreme
+    ? [{ unit: 'qt' as const, qty: Math.max(1, Math.ceil(varnishQt - 1e-9)), qt: Math.max(1, Math.ceil(varnishQt - 1e-9)) }]
+    : urethaneContainers(varnishQt);
   const buy: BuyLine[] = [
-    ...buyLines('West System 105 epoxy resin', resinFlOz / FLOZ_PER_QT, `${f(resinFlOz, 0)} fl oz resin + ${f(hardenerFlOz, 0)} fl oz 206 slow hardener (5:1) = ${f(totalMixedFlOz, 0)} fl oz mixed: the one seal coat ${f(coatFlOz, 0)} fl oz (${f(epoxyArea, 0)} ft² at ${EPOXY_COVERAGE} ft² per mixed quart, +${f(FINISH_WASTE * 100, 0)} % waste) plus the glue joints ${f(glueFlOz, 0)} fl oz (+${f(GLUE_WASTE * 100, 0)} % waste). NOT a separate purchase: the BOM's 105/206 epoxy kit covers the glue-ups, the coat and the closes together; one hardener, so no 207 or 209 to buy`),
-    ...buyLines('Water-based pre-stain conditioner (okoume)', cond.qtNeeded, `${f(areas.show.okoumeFt2, 0)} ft² of show faces, 1 coat, at ${CONDITIONER_COVERAGE} ft²/qt`, false),
-    ...buyLines('Gel stain (okoume)', gel.qtNeeded, `${f(areas.show.okoumeFt2, 0)} ft² of show faces, 1 coat, at ${GEL_STAIN_COVERAGE} ft²/qt`, false),
-    ...buyLines('Water-based wood stain or dye (oak)', stainOak.qtNeeded, `${f(areas.show.oakFt2, 0)} ft² of show faces, 1 coat, at ${STAIN_COVERAGE} ft²/qt`, false),
-    // Quarts, rounded up, never a gallon: an open can skins over.
-    { item: `Marine spar varnish, UV absorbers (${VARNISH_COATS_SHOW} coats show, ${VARNISH_COATS_HIDDEN} hidden)`, unit: 'qt', qty: Math.max(1, Math.ceil(varnishQt - 1e-9)), qt: Math.max(1, Math.ceil(varnishQt - 1e-9)),
-      note: `${f(areas.show.totalFt2, 0)} ft² × ${VARNISH_COATS_SHOW} + ${f(areas.hidden.totalFt2, 0)} ft² × ${VARNISH_COATS_HIDDEN} coats at ${VARNISH_COVERAGE} ft²/qt, +${f(FINISH_WASTE * 100, 0)} % waste = ${f(varnishQt, 1)} qt; quart cans, not a gallon (an open can skins over)` },
+    ...buyLines('West System 105 epoxy resin', resinFlOz / FLOZ_PER_QT, `${f(resinFlOz, 0)} fl oz resin + ${f(hardenerFlOz, 0)} fl oz 206 slow hardener (5:1) = ${f(totalMixedFlOz, 0)} fl oz mixed: ${extreme ? `the one seal coat ${f(coatFlOz, 0)} fl oz (${f(epoxyArea, 0)} ft² at ${EPOXY_COVERAGE} ft² per mixed quart, +${f(FINISH_WASTE * 100, 0)} % waste)` : `the edge, end-grain and deck-underside coat ${f(coatFlOz, 0)} fl oz (${f(epoxyArea, 1)} ft² at ${EPOXY_COVERAGE} ft² per mixed quart, +${f(FINISH_WASTE * 100, 0)} % waste)`} plus the glue joints that use epoxy ${f(glueFlOz, 0)} fl oz (+${f(GLUE_WASTE * 100, 0)} % waste). NOT a separate purchase: the BOM's 5:1 epoxy kit covers the glue-ups, the coat and the closes together; one hardener, so no 207 or 209 to buy`),
+    ...(blotchShowFt2 > 0 ? buyLines(`Water-based pre-stain conditioner (${blotchNames})`, cond.qtNeeded, `${f(blotchShowFt2, 0)} ft² of show faces, 1 coat, at ${CONDITIONER_COVERAGE} ft²/qt`, false) : []),
+    ...(extreme && blotchShowFt2 > 0 ? buyLines(`Gel stain (${blotchNames})`, gel.qtNeeded, `${f(blotchShowFt2, 0)} ft² of show faces, 1 coat, at ${GEL_STAIN_COVERAGE} ft²/qt`, false) : []),
+    ...buyLines('Water-based wood stain or dye (oak)', stainOak.qtNeeded, `${f(oakStainFt2, 0)} ft² of show faces, 1 coat, at ${STAIN_COVERAGE} ft²/qt`, false),
+    // Quarts, rounded up. Extreme: never a gallon (an open can skins over). Standard: a gallon once three quarts are needed.
+    ...topContainers.map((c) => ({
+      item: extreme ? `Marine spar varnish, UV absorbers (${VARNISH_COATS_SHOW} coats show, ${VARNISH_COATS_HIDDEN} hidden)` : `Exterior spar urethane, oil-based (${VARNISH_COATS_SHOW} coats show, ${VARNISH_COATS_HIDDEN} hidden)`,
+      unit: c.unit, qty: c.qty, qt: c.qt,
+      note: `${f(areas.show.totalFt2, 0)} ft² × ${VARNISH_COATS_SHOW} + ${f(areas.hidden.totalFt2, 0)} ft² × ${VARNISH_COATS_HIDDEN} coats at ${topCoverage} ft²/qt, +${f(FINISH_WASTE * 100, 0)} % waste = ${f(varnishQt, 1)} qt; ${extreme ? 'quart cans, not a gallon (an open can skins over)' : 'quarts, or a gallon once three quarts are needed (decant it into jars)'}`,
+    })),
     { item: 'Black enamel (or black epoxy pigment) for the lid legend', unit: 'pt', qty: 1, qt: 0.5, note: 'engraving fill' },
-    { item: 'Thinner for the varnish (mineral spirits or the maker\'s thinner)', unit: 'pt', qty: 1, qt: 0.5, note: 'coat 1 thinning and brush cleaning' },
+    { item: extreme ? 'Thinner for the varnish (mineral spirits or the maker\'s thinner)' : 'Thinner for the urethane (mineral spirits)', unit: 'pt', qty: 1, qt: 0.5, note: 'coat 1 thinning and brush cleaning' },
   ];
 
   return {
+    spec: extreme ? 'extreme' : 'standard',
     areas,
     steps,
     buy,
     supplies: [],
     closeEpoxyFlOz: 0,
     epoxy,
+    glue: { titebondFlOz, titebondJoints: tb.joints, epoxyEdgeFt2: plyEdgeFt2, deckUnderFt2, adhesiveRule: extreme ? 'Epoxy for every glue joint (Extreme weather spec).' : 'Titebond III for the Dominos, dados, tenons and general glue joints; epoxy for the bent laminations, the D-70 face laminations, the deck to the frame, the deck slot gap-fill, the fillets and tape and the thickened bedding (Standard weather spec).' },
     assumptions: [
+      `Weather spec: ${extreme ? 'EXTREME (stored outside, near salt or exposed regularly): epoxy for every glue joint, a saturation coat on all the plywood, marine spar varnish.' : 'STANDARD (garage-kept, used a few times a year, wet at most at a rainy derby): Titebond III for the general joints, epoxy only where it earns its keep, an epoxy coat on edges, end grain and the deck underside only, exterior spar urethane.'} Thin sheet: ${thin.name}.`,
       `Areas are net of the glued faces (each lamination contact comes off both parts): ${f(areas.gross.totalFt2, 0)} ft² gross - ${f(areas.glued.totalFt2, 1)} ft² glued = ${f(areas.totalFt2, 0)} ft²; ${f(areas.show.totalFt2, 0)} ft² show and ${f(areas.hidden.totalFt2, 0)} ft² hidden (SHOW_RULES, by part).`,
-      `Typical coverages in ft² per quart, one coat: epoxy ${EPOXY_COVERAGE} (mixed volume, one saturation coat; WEST System coating-quantity table, 105/206 midpoint 378 ft² per 4.8 qt), stain ${STAIN_COVERAGE}, conditioner ${CONDITIONER_COVERAGE}, gel stain ${GEL_STAIN_COVERAGE}, varnish ${VARNISH_COVERAGE} (thin brushed coats).`,
+      `Typical coverages in ft² per quart, one coat: epoxy ${EPOXY_COVERAGE} (mixed volume, one saturation coat; WEST System coating-quantity table, 105/206 midpoint 378 ft² per 4.8 qt), stain ${STAIN_COVERAGE}, conditioner ${CONDITIONER_COVERAGE}, gel stain ${GEL_STAIN_COVERAGE}, ${extreme ? `marine varnish ${VARNISH_COVERAGE}` : `exterior spar urethane ${URETHANE_COVERAGE} (the can's rating)`} (thin brushed coats).`,
       `${f(FINISH_WASTE * 100, 0)} % waste on every finish quantity (${f(GLUE_WASTE * 100, 0)} % on the glue joints); oak end grain counted ${END_GRAIN_FACTOR}× for epoxy.`,
-      'ONE hardener: 105 resin with 206 slow, 5:1 by volume, for the glue-ups, the seal coat and the two long closes (the closes in small batches in a wide shallow container, a second person mixing). The glue joints (glueEpoxyFlOz) are in the epoxy total.',
+      'ONE hardener: 105 resin with 206 slow, 5:1 by volume, for the glue-ups, the coat and the two long closes (the closes in small batches in a wide shallow container, a second person mixing). The glue joints that use epoxy (glueEpoxyFlOz) are in the epoxy total.',
+      ...(extreme ? [] : [`Titebond III: ${tb.joints} glue joints, ${f(tb.flOz, 1)} fl oz before the ${f(GLUE_WASTE * 100, 0)} % waste (${TITEBOND_VS_EPOXY} of the epoxy estimate for the same joints: one thin coat, no filler or fillet).`]),
       'Options not in the quantities: a second epoxy coat on the deck top; 207 special clear hardener for the clearest finish under varnish.',
     ],
   };

@@ -10,7 +10,7 @@
  * Everything that turns with the axle is `body: 'front-axle'`.
  */
 import { axleGrooveDepthIn } from '../params';
-import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
+import { STEP, box, cylinder, roughOf, span, SIDES, type Ctx } from './build-utils';
 import { customPart } from './mesh-utils';
 import { compose, translation } from './mat4';
 import { boltLength, CARRIAGE_STOCK_IN, EYE_BOLT_STOCK_IN, inchesText, pickWoodScrew, SCREW_DIA_IN, screwText, stockBoltFit } from './rear-mount';
@@ -181,7 +181,7 @@ export function buildPivot(ctx: Ctx): Part[] {
       geometry: { type: 'extrusion', outline, depth }, transform: translation(0, 0, L.tongue.z0), massLb: mass, body: 'front-axle',
       fab: 'bandsaw', step: STEP.spindles, explode: [1, 0, 0.1], grain: 'x',
       stock: { t: depth, w: hw, l: len },
-      rough: { t: depth + p.millingAllowanceIn, w: hw + p.millingAllowanceIn, l: len + 4 * p.millingAllowanceIn },
+      rough: roughOf(p, { t: depth, w: hw, l: len }),
       joints: [
         { type: 'bolt', to: 'beam-F', count: 2, diaIn: tb, size: `${f2(tb)}" × ${bl} 316 carriage bolts, fore-aft through the head and the axle beam, nylock nuts + fender washers on the rear face of the beam`, at: [[kx + b.thick / 2 + p.tongueHeadLenIn / 2, boltY, depth / 2], [kx + b.thick / 2 + p.tongueHeadLenIn / 2, -boltY, depth / 2]], note: `one each side of the kingpin, ${f2(boltY)}" off the center line at mid depth (the square necks are sunk into the head)` },
         { type: 'pin', to: 'bridle-sleeve', count: 1, diaIn: p.tongueHoleDiaIn, size: `${f2(p.tongueHoleDiaIn)}" hole across the stem`, at: [[L.tongue.holeX, 0, depth / 2]] },

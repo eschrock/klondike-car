@@ -19,7 +19,7 @@ import { verifyChecklist, type VerifyCheck } from './verify';
 import { hash6 } from './svg-util';
 import { zipStore } from './zip';
 import { buildBookHtml } from './build-book';
-import { sheetSvg } from '../ui/build-helpers';
+import { SPEC_NAME, sheetSvg, weatherLine } from '../ui/build-helpers';
 
 export interface PackageFile {
   /** Path in the archive and the download name. */
@@ -121,7 +121,7 @@ export class BuildData {
       ['Strip rough thickness (in)', 'Strips needed', 'Buy boards', 'Board', 'Width (in)', 'Length (in)', 'Strips per board', 'Strips bought', 'Spares', 'Board feet'],
       ...this.cutList.resaw.map((r) => [r.roughT, r.strips, r.boards, r.board, r.boardWidthIn, r.boardLengthIn, r.yieldPerBoard, r.stripSlots, r.spares, +r.boardFeet.toFixed(2)]),
     ]);
-    return [block('Oak, by board thickness', c.oak), ...(this.cutList.layers.length ? [block('Face-laminated layers (D-70)', c.layers)] : []), block('Resawn strips', c.strips), block('Resaw boards to buy', boards), block('Okoume plywood', c.sheets), block('Metal stock', c.metal)].join('\n');
+    return [block('Oak, by board thickness', c.oak), ...(this.cutList.layers.length ? [block('Face-laminated layers (D-70)', c.layers)] : []), block('Resawn strips', c.strips), block('Resaw boards to buy', boards), block('Plywood', c.sheets), block('Metal stock', c.metal)].join('\n');
   }
 
   get files(): PackageFile[] {
@@ -159,6 +159,9 @@ function readme(d: BuildData, others: string[]): string {
   lines.push('============================================');
   lines.push(`Generated: ${d.opts.date ?? '(date not given)'}`);
   lines.push(`Params revision: ${d.revision} (a hash of every design number; the form title blocks print the same stamp)`);
+  lines.push(`Weather spec: ${SPEC_NAME[d.bom.spec]} (${d.bom.spec === 'standard' ? 'garage-kept: 304 / 18-8 fasteners, beech Dominos, Titebond III, epoxy only where it earns it, spar urethane' : 'stored outside or near salt: 316, Sipo Dominos, epoxy everywhere, marine varnish'}). Thin sheet: ${d.bom.thinSheetName}.`);
+  const wl = weatherLine(d.bom.weatherCompare);
+  if (wl) lines.push(wl);
   if (d.opts.link) lines.push(`Design link: ${d.opts.link}`);
   lines.push('');
   lines.push('Every file here was generated from the design on screen at that moment. If you change a number, download again.');

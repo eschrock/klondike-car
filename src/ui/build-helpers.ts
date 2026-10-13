@@ -9,6 +9,7 @@ import { HARDENERS, cumulativeParts, stepParts, type Cure } from '../build/assem
 import type { ShaperFeature } from '../build/shaper-svg';
 import type { VerifyCheck, VerifyWhen } from '../build/verify';
 import { fracIn } from '../build/cutlist';
+import type { WeatherCompare } from '../build/bom';
 
 export const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -49,6 +50,26 @@ export function usd(v: number, cents = true): string {
 }
 
 export const pct = (v: number, dp = 0): string => `${(v * 100).toFixed(dp)}%`;
+
+/** Names of the two weather specs (D-73) as the UI and the build book say them. */
+export const SPEC_NAME: Record<'standard' | 'extreme', string> = { standard: 'Standard', extreme: 'Extreme weather' };
+/** "+2.8 lb" / "-2.8 lb" (a real minus sign), one decimal. */
+export const lbDelta = (lb: number): string => `${lb < 0 ? '\u2212' : '+'}${Math.abs(lb).toFixed(1)} lb`;
+/**
+ * The chip beside the weather toggle (D-73): what the OTHER spec costs against the one on screen. On Standard: "Extreme weather adds $812 (-2.8 lb)"; on Extreme: "Standard saves $812 (+2.8 lb)".
+ * The mass is the empty sled's, which differs only through the thin sheet (white oak plywood is heavier than okoume).
+ */
+export function weatherChipText(c: WeatherCompare): string {
+  if (!c.computed) return '';
+  return c.activeSpec === 'standard'
+    ? `Extreme weather adds ${usd(c.deltaUsd)} (${lbDelta(c.deltaLb)})`
+    : `Standard saves ${usd(c.deltaUsd)} (${lbDelta(-c.deltaLb)})`;
+}
+/** The one-line comparison for the build book and the README: both totals, the difference and the mass. */
+export function weatherLine(c: WeatherCompare): string {
+  if (!c.computed) return '';
+  return `Weather spec: ${SPEC_NAME[c.activeSpec]}. Standard ${usd(c.standardUsd)} (${c.thinSheetStandard}); Extreme weather ${usd(c.extremeUsd)} (${c.thinSheetExtreme}); Extreme adds ${usd(c.deltaUsd)} and ${lbDelta(c.deltaLb)} on the empty sled.`;
+}
 
 export function bytesLabel(n: number): string {
   if (n < 1024) return `${n} B`;

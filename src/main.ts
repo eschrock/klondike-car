@@ -178,6 +178,7 @@ buildPanel = mountBuildPanel({ rail: $('build-rail'), main: $('build-main') }, {
     render();
   },
   getLink: () => window.location.href,
+  setParam: (k, v) => store.set(k, v),
 });
 
 // The summary and the fit depend only on the design parameters, so they are cached across view-only changes.

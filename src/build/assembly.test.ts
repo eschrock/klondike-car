@@ -10,7 +10,8 @@ import { assemblySteps, cumulativeParts, EARLY_STEP_IDS, hasGlueJoint, isEarlyBr
 import { flatPattern } from './flat';
 import { verifyChecklist } from './verify';
 
-const p = defaultParams();
+// D-73: this file tests the EXTREME weather spec's text (316, epoxy, varnish); the Standard text is tested in weather-spec.test.ts.
+const p = { ...defaultParams(), weatherSpec: 1, thinSheetMaterial: 1 }; // Extreme text on the default 1/4 in white oak plywood geometry
 const parts = buildModel(p);
 const built = parts.filter((x) => x.group !== 'reference' && x.kind !== 'reference' && !x.payload);
 const steps = assemblySteps(parts, p);

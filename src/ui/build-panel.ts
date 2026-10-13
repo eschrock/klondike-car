@@ -6,8 +6,8 @@
  * Two hosts: a left rail (section nav + the zip, book and print buttons) and the content column. Layout lives in build-panel.css.
  */
 import type { Dims, Part } from '../model/types';
-import type { Params } from '../params';
-import type { BomLine } from '../build/bom';
+import { WEATHER_SPEC, type Params, type ParamKey } from '../params';
+import type { BomLine, BomSection, WeatherCompare } from '../build/bom';
 import { BuildData, CSV_MIME, SHAPER_CONVENTIONS, SHAPER_NOTES, SVG_MIME, zipName, zipPackage } from '../build/package';
 import { fracIn } from '../build/cutlist';
 import { tilePlan } from '../build/forms';
@@ -15,8 +15,8 @@ import type { BuildStep } from '../build/assembly';
 import type { OakRow } from '../build/cutlist';
 import { h } from './dom';
 import {
-  bytesLabel, clampStep, cureLine, dimsParts, featureSummary, fracDim, fracInch, groupByWhen, loadDone, loadStep, loadStepChecks, maxDepth, mergeBuy, noteLead, pct, previewSvg, saveDone, saveStep, saveStepChecks,
-  sameLead, sharedNote, sheetSvg, splitUrls, stepFocus, tilePagesHtml, todayISO, usd, vendorFromUrl,
+  SPEC_NAME, bytesLabel, clampStep, cureLine, dimsParts, featureSummary, fracDim, fracInch, groupByWhen, loadDone, loadStep, loadStepChecks, maxDepth, mergeBuy, noteLead, pct, previewSvg, saveDone, saveStep, saveStepChecks,
+  sameLead, sharedNote, sheetSvg, splitUrls, stepFocus, tilePagesHtml, todayISO, usd, vendorFromUrl, weatherChipText,
   type StepFocus,
 } from './build-helpers';
 import './build-panel.css';
@@ -35,6 +35,8 @@ export interface BuildPanelOptions {
   onSection?(id: string): void;
   /** The shareable design link for the README. */
   getLink?(): string;
+  /** Set one design parameter (the BOM's weather toggle sets `weatherSpec`). */
+  setParam?(key: ParamKey, value: number): void;
 }
 
 export interface BuildPanel {
@@ -188,6 +190,8 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
   let stepUpdate: ((reframe: boolean) => void) | null = null;
   /** Move the Assembly step by one (the arrow keys); null outside the Assembly section. */
   let stepMove: ((delta: number) => void) | null = null;
+  /** The weather toggle was just used: its re-rendered button gets the focus back. */
+  let weatherRefocus = false;
   let done = loadDone();
   const stepChecks = loadStepChecks();
   /** Tell the viewer what to show; a `null` only goes out when a focus is active, so mounting never touches the viewer. */
@@ -293,6 +297,10 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
     const stageMs = Object.values(d.timings).reduce((a, v) => a + v, 0);
     status.textContent = `Params rev ${d.revision} · ${todayISO()} · computed in ${Math.round(stageMs + ms)} ms`;
     if (section === 'assembly') stepUpdate?.(reframe);
+    if (weatherRefocus && section === 'bom') {
+      weatherRefocus = false;
+      panel.querySelector<HTMLElement>('[data-weather][aria-checked="true"]')?.focus({ preventScroll: true });
+    }
   }
 
   function schedule(): void {
@@ -421,7 +429,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
     for (const pool of c.resaw) {
       out.push(note(`${pool.strips} strips of ${fracIn(pool.roughT)}" rough: buy ${pool.boards} × ${pool.board} × ${pool.boardWidthIn}" wide × ${pool.boardLengthIn / 12} ft (${pool.boardFeet.toFixed(1)} bf). RIP FIRST into ${pool.lanes} lane${pool.lanes === 1 ? '' : 's'}, then resaw each lane into ${pool.stripsPerBoard} slab${pool.stripsPerBoard === 1 ? '' : 's'}; a board yields ${pool.yieldPerBoard} strips, so the purchase holds ${pool.stripSlots}: ${pool.spares} spare${pool.spares === 1 ? '' : 's'}.`, 'muted bp-prose'));
     }
-    out.push(h('h3', { class: 'bp-group' }, 'Okoume plywood'));
+    out.push(h('h3', { class: 'bp-group' }, 'Plywood'));
     for (const g of c.sheets) {
       out.push(h('h4', { class: 'bp-sub' }, `${g.label} (${g.pieces} pieces)`));
       out.push(table('bp-cuts', ['Part', 'Qty', 'Size T × W × L', 'Grain', 'Fabrication', 'Step'], g.rows.map((r) => [
@@ -469,9 +477,46 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
     return out;
   }
 
+  /**
+   * Weather spec (D-73): a two-way toggle that sets `weatherSpec`, a chip with what the OTHER spec costs against this one, and the difference per section. The
+   * comparison is the BOM priced again under the other spec (same design; the thin sheet changes with it unless it was chosen by hand).
+   */
+  function weatherBlock(spec: 'standard' | 'extreme', cmp: WeatherCompare, sections: BomSection[], thinName: string): Node {
+    const choose = (next: 'standard' | 'extreme'): void => {
+      if (next === spec) return;
+      weatherRefocus = true;
+      opts.setParam?.('weatherSpec', next === 'extreme' ? WEATHER_SPEC.extreme : WEATHER_SPEC.standard);
+    };
+    const seg = (id: 'standard' | 'extreme'): HTMLButtonElement => {
+      const b = h('button', { type: 'button', role: 'radio', class: 'bp-seg-btn', 'data-weather': id, 'aria-checked': String(spec === id), tabindex: spec === id ? '0' : '-1' }, SPEC_NAME[id]);
+      b.addEventListener('click', () => choose(id));
+      b.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); choose(id === 'standard' ? 'extreme' : 'standard'); }
+      });
+      return b;
+    };
+    const titles = new Map(sections.map((x) => [x.id as string, x.title]));
+    const deltas = Object.entries(cmp.deltaBySection).filter(([, v]) => Math.abs(v) >= 0.005);
+    const sign = (v: number): string => `${v < 0 ? '-' : '+'}${usd(Math.abs(v), false)}`;
+    return h('section', { class: 'bp-weather', 'aria-label': 'Weather spec' },
+      h('div', { class: 'bp-weather-row' },
+        h('span', { class: 'bp-weather-label', id: 'bp-weather-label' }, 'Weather:'),
+        h('div', { class: 'bp-seg', role: 'radiogroup', 'aria-labelledby': 'bp-weather-label' }, seg('standard'), seg('extreme')),
+        cmp.computed ? h('span', { class: 'bp-weather-chip', role: 'status' }, weatherChipText(cmp)) : ''),
+      h('p', { class: 'muted small bp-weather-note' }, spec === 'standard'
+        ? 'Standard: garage-kept, used a few times a year, wet at most at a rainy derby. 304 / 18-8 fasteners, zinc and galvanized hardware, beech Dominos, Titebond III, epoxy only where it earns it, exterior spar urethane.'
+        : 'Extreme weather: stored outside, near salt, or exposed regularly. 316 throughout, Sipo Dominos, epoxy everywhere, a saturation coat on the plywood, marine spar varnish.',
+        ` Thin sheet: ${thinName}.`),
+      deltas.length
+        ? h('details', { class: 'bp-weather-deltas', open: '' }, h('summary', {}, `Extreme minus Standard, by section (${cmp.deltaUsd < 0 ? '-' : '+'}${usd(Math.abs(cmp.deltaUsd), false)} in all)`),
+            h('ul', { class: 'bp-plain bp-deltas' }, ...deltas.map(([id, v]) => h('li', {}, h('span', {}, titles.get(id) ?? id), h('strong', { class: v < 0 ? 'neg' : '' }, sign(v))))))
+        : '');
+  }
+
   function renderBom(d: BuildData): Node[] {
     const b = d.bom;
     const out: Node[] = [h('div', { class: 'bp-actions' }, csvButton('Download CSV', 'bom.csv', () => b.csv))];
+    out.push(weatherBlock(b.spec, b.weatherCompare, b.sections, b.thinSheetName));
     const goTo = (id: string) => {
       const el = document.getElementById(id);
       if (!el) return;
@@ -747,7 +792,8 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
 
   function renderFinishing(d: BuildData): Node[] {
     const f = d.finishing;
-    const out: Node[] = [h('p', { class: 'small bp-prose' }, `Finish area (net, glued faces taken off): ${f.areas.oakFt2.toFixed(0)} ft² oak, ${f.areas.okoumeFt2.toFixed(0)} ft² okoume (${f.areas.show.totalFt2.toFixed(0)} ft² show, ${f.areas.hidden.totalFt2.toFixed(0)} ft² hidden; ${f.areas.gross.totalFt2.toFixed(0)} ft² gross), ${f.areas.oakEndGrainFt2.toFixed(1)} ft² oak end grain. Quantities include ${pct(0.15)} waste.`)];
+    const out: Node[] = [h('p', { class: 'small bp-prose' }, `Finish area (net, glued faces taken off): ${f.areas.oakFt2.toFixed(0)} ft² oak, ${f.areas.plyFt2.toFixed(0)} ft² plywood (${f.areas.show.totalFt2.toFixed(0)} ft² show, ${f.areas.hidden.totalFt2.toFixed(0)} ft² hidden; ${f.areas.gross.totalFt2.toFixed(0)} ft² gross), ${f.areas.oakEndGrainFt2.toFixed(1)} ft² oak end grain. Quantities include ${pct(0.15)} waste.`)];
+    out.push(h('p', { class: 'small bp-prose' }, h('strong', {}, `Weather spec: ${SPEC_NAME[f.spec]}. `), f.glue.adhesiveRule, ' Switch the weather setting in the BOM section or the parameters panel.'));
     out.push(h('h3', { class: 'bp-group' }, 'Shopping list'));
     out.push(table('bp-fin', ['Product', 'Notes', 'Buy'], mergeBuy(f.buy).map((b) => { const nl = noteLead(b.note, 120); return [h('strong', {}, b.item), nl.rest ? h('details', { class: 'bp-more small' }, h('summary', {}, nl.lead, h('span', { class: 'bp-detlink' }, ' Details')), h('p', { class: 'muted' }, nl.cut ? b.note : nl.rest)) : b.note, b.buy]; }), 'Finish products to buy', { num: [2] }));
     out.push(h('h3', { class: 'bp-group' }, 'Schedule'));

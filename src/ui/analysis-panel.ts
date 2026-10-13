@@ -4,7 +4,7 @@
  * refs. A summary line counts pass / marginal / fail at the operating and the goal rider, and a footnote lists the
  * material properties, factors and sources used (BRIEF §7).
  */
-import { derived, type Params } from '../params';
+import { derived, thinSheet, type Params } from '../params';
 import { CHECK_GROUPS, GROUP_OF_ID, type AnalysisCheck, type CaseResult, type CheckGroup, type Status } from '../analysis/types';
 import type { CheckResult } from '../model/types';
 import { h } from './dom';
@@ -99,6 +99,7 @@ function materials(p: Params, isOpen: boolean, onToggle: (o: boolean) => void): 
   const oakShear = (p.oakShearPsi * p.wetServiceFactorStrength) / p.woodSafetyFactor;
   const oakPerp = (p.oakCompPerpPsi * p.wetServiceFactorCompPerp) / p.woodSafetyFactor;
   const okoume = p.plySpecies === 0;
+  const thin = thinSheet(p);
   const rows = (items: [string, string, string?][]) =>
     h('table', {}, ...items.map(([k, v, src]) => h('tr', {}, h('th', {}, k), h('td', {}, v), h('td', { class: 'src' }, src ?? ''))));
   const det = h('details', { class: 'ap-foot' },
@@ -115,12 +116,20 @@ function materials(p: Params, isOpen: boolean, onToggle: (o: boolean) => void): 
         ['Bolt bearing in oak (dowel)', `${f0((p.oakDowelBearingPsi * p.wetServiceFactorStrength) / p.woodSafetyFactor)} psi design`, `${f0(p.oakDowelBearingPsi)} psi clear × ${p.wetServiceFactorStrength} / SF`],
         ['Design E (deflection)', `${f0(d.oakDesignMoePsi)} psi`, 'MOE × C_M, static load'],
       ]),
-      h('h4', {}, `Plywood (D-5): ${okoume ? 'okoume marine' : 'Baltic birch exterior'}`),
+      h('h4', {}, `Deck ply (D-5, 12 mm): ${okoume ? 'okoume marine' : 'Baltic birch exterior'}`),
       rows([
         ['Density', `${d.plyDensityPcf} lb/ft³`, 'typical published panel values'],
         ['E / MOR (face grain along span)', `${f0(d.plyMoePsi)} / ${f0(okoume ? p.okoumeMorPsi : p.birchMorPsi)} psi`],
         ['Design bending', `${f0(d.plyDesignMorPsi)} psi`, `MOR × C_M / SF ${p.woodSafetyFactor}`],
         ['Design E', `${f0(d.plyMoePsi * p.wetServiceFactorStiffness)} psi`, 'E × C_M'],
+      ]),
+      h('h4', {}, `Thin sheet (D-73): ${thin.name}`),
+      rows([
+        ['Sheet', `${thin.thicknessIn} in, ${thin.sheetWidthIn / 12} × ${thin.sheetLengthIn / 12} ft, ${thin.glue} glue`, 'sides, box, lid and signs; weather spec and thinSheetMaterial'],
+        ['Density', `${thin.densityPcf} lb/ft³`],
+        ['E / MOR (face grain along span)', `${f0(thin.moePsi)} / ${f0(thin.morPsi)} psi`],
+        ['Design bending', `${f0(d.thinPlyDesignMorPsi)} psi`, `MOR × C_M / SF ${p.woodSafetyFactor}`],
+        ['Design E', `${f0(thin.moePsi * p.wetServiceFactorStiffness)} psi`, 'E × C_M'],
       ]),
       h('h4', {}, 'Steel (D-4)'),
       rows([

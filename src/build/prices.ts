@@ -11,7 +11,18 @@
  * substituted silently. An item the research did not find keeps its estimate with "not found in the 2026-10-12 research" in the note.
  */
 
+import { WEATHER_SPEC, type Params } from '../params';
+
 export type PriceBasis = 'quoted' | 'estimate';
+
+/**
+ * The weather spec the BOM is priced for (D-73, Eric 2026-10-12). STANDARD (the default; garage-kept, used a few times a year, wet at most at a rainy derby): 304 / 18-8 stainless, zinc and
+ * galvanized where it lives dry, beech Dominos, Titebond III, exterior spar urethane, a small epoxy kit; priced from docs/price-research-standard-2026-10.md. EXTREME (stored outside,
+ * near salt, or exposed regularly): 316 throughout, Sipo Dominos, epoxy everywhere, marine varnish, the gallon epoxy kit; priced from docs/price-research-2026-10.md.
+ * A Standard listing that is the nearest size or kind (not the exact item the model asks for) is priced as an `estimate` with its link and the gap in the note; an exact listing is `quoted`.
+ */
+export type SpecName = 'standard' | 'extreme';
+export const specOf = (p: Pick<Params, 'weatherSpec'>): SpecName => (p.weatherSpec === WEATHER_SPEC.extreme ? 'extreme' : 'standard');
 
 /** The date of the web price research whose prices are `quoted` below (docs/price-research-2026-10.md). */
 export const RESEARCH_DATE = '2026-10-12';
@@ -34,6 +45,11 @@ export interface Price {
    */
   packQty?: number;
   packUsd?: number;
+  /**
+   * Also sold by the piece (Bolt Depot sells fasteners singly or by the bag): the single-piece price. The BOM buys whichever is cheaper for the count (`qty x eachUsd` against whole packs),
+   * so a small count is priced per piece, in place, and only a count that makes the bag cheaper goes to the pack / bulk-parts logic.
+   */
+  eachUsd?: number;
   /** What one pack is called when it is not "pack of N": '60 in piece', '10 ft roll'. */
   packLabel?: string;
   /** A purchased part drawn from a pack of `unit`s (a cord cut from a roll): units used per part. The BOM prices whole packs for the parts it needs. */
@@ -58,6 +74,8 @@ const found = (usd: number, unit: string, source: string, url: string, note: str
 /** The same for something sold in packs (or fixed pieces): `usd` is per unit, the pack is `packQty` units for `packUsd`. */
 const foundPack = (packQty: number, packUsd: number, unit: string, source: string, url: string, note: string, search = false, packLabel?: string): Price =>
   ({ ...found(packUsd / packQty, unit, source, url, note, search), packQty, packUsd, ...(packLabel ? { packLabel } : {}) });
+/** The same pack price, also sold by the piece at `each`. */
+const withEach = (p: Price, each: number): Price => ({ ...p, eachUsd: each });
 /** An alternative that does not meet the spec: says so first. */
 const gap = (p: Price, why: string): Price => ({ ...p, specGap: true, note: `SPEC GAP: ${why}. ${p.note ?? ''}`.trim() });
 /** The same price with its alternatives (and, optionally, a decision for Eric). */
@@ -147,7 +165,16 @@ const MCM = 'Catalog supplier (McMaster-Carr class)';
 const BOLT_DEPOT = 'Bolt Depot';
 const BD_EYE_URL = 'https://boltdepot.com/Forged_eye_bolts_(w__nuts)_Hot_dipped_galvanized_steel_3_8-16';
 const BD_EYE_316_URL = 'https://boltdepot.com/Forged_eye_bolts_with_shoulder_(w__nuts)_Stainless_steel_316_3_8-16';
-const EYE_DECISION = 'Eye bolts (D-72): stock 3/8-16 shoulder eye bolts, 4-1/2" for the axle beam (steer-eye) and 2-1/2" for the chain joist (steer-anchor). Checked against the stack: the beam bolt needs 3.16" under the shoulder (2-1/2" beam + washer + nylock nut + 1.5 threads), so the 4-1/2" is cut to 3-1/4" after fitting (it would stand 1.4" past the nut); the joist bolt needs 1.97", so 2-1/2" is cut to 2" (or left, 0.6" of thread). Neither fouls the wheel, the chain or the tongue. Galvanized is the base (the model says "galvanized or 316"); 316 is 4x the price (about $200 for four against $46): choose galvanized (dry sled) or 316 (wet).';
+const EYE_DECISION = 'Eye bolts (D-72): stock 3/8-16 shoulder eye bolts, 4-1/2" for the axle beam (steer-eye) and 2-1/2" for the chain joist (steer-anchor). Checked against the stack: the beam bolt needs 3.16" under the shoulder (2-1/2" beam + washer + nylock nut + 1.5 threads), so the 4-1/2" is cut to 3-1/4" after fitting (it would stand 1.4" past the nut); the joist bolt needs 1.97", so 2-1/2" is cut to 2" (or left, 0.6" of thread). Neither fouls the wheel, the chain or the tongue. The Standard weather spec (garage-kept) uses galvanized; the Extreme spec (stored outside or near salt) uses 316, which is 4x the price (about $200 for four against $46).';
+/** The two eye-bolt prices, hot-dip galvanized (Standard base) and 316 (Extreme base): Bolt Depot, forged shoulder eye bolts with nuts, 3/8-16. */
+const EYE_GALV = {
+  steerEye: found(11.94, 'ea', BOLT_DEPOT, BD_EYE_URL, 'forged shoulder eye bolt with nut, hot-dip galvanized, 3/8-16 x 4-1/2" stock (the stack needs 3.16" under the shoulder, so cut it to 3-1/4" after fitting; Bolt Depot measures from under the shoulder)', true),
+  steerAnchor: found(11.1, 'ea', BOLT_DEPOT, BD_EYE_URL, 'forged shoulder eye bolt with nut, hot-dip galvanized, 3/8-16 x 2-1/2" stock (the stack needs 1.97" under the shoulder; optionally cut to 2")', true),
+};
+const EYE_316 = {
+  steerEye: found(50.77, 'ea', BOLT_DEPOT, BD_EYE_316_URL, '316 forged shoulder eye bolt with nut, 3/8-16 x 4-1/2" stock (the stack needs 3.16" under the shoulder, so cut it to 3-1/4" after fitting): 4x the galvanized price', true),
+  steerAnchor: found(48.43, 'ea', BOLT_DEPOT, BD_EYE_316_URL, '316 forged shoulder eye bolt with nut, 3/8-16 x 2-1/2" stock (the stack needs 1.97" under the shoulder; optionally cut to 2"): 4x the galvanized price', true),
+};
 const WHEEL_DECISION = 'Wheel (Eric, 2026-10-12, D-71): the Harbor Freight 10" pneumatic with black hub, $9.99, 5/8" bore, 300 lb, about 3 lb; the axles are 5/8" to match. Its hub length is not listed (the model assumes 2-1/4", as on the Uline and Martin wheels): buy one first and measure the hub, the bore and the squash. The steel-hub version is $11.99.';
 /** Cut length of a steering chain (in), from the model's vendor text: 10.89 in of 3/16" chain, a quick link to each eye. */
 const CHAIN_CUT_IN = 10.89;
@@ -171,12 +198,9 @@ export const PURCHASED_PRICE: PurchasedPriceEntry[] = [
   { match: /^kingpin$/, price: est(9, 'ea', MCM, '5/8" grade 8 bolt, 2 washers, nylock nut') },
   { match: /^roll-pad$/, price: notFound(est(2, 'ea', MCM, 'UHMW 1/4" sheet offcut (no US price found, only an import listing at about $44 before duty)')) },
   { match: /^bridle-sleeve$/, price: notFound(est(7, 'ea', MCM, 'oil-embedded bronze sleeve bearing, 5/8" ID x 1" OD x 1-1/2" (Symmco SS-2032-8 is 5/8 x 1 but 1/2" long; needs a cut-to-length or a quote)')) },
-  { match: /^steer-eye$/, price: withAlts(
-    found(11.94, 'ea', BOLT_DEPOT, BD_EYE_URL, 'forged shoulder eye bolt with nut, hot-dip galvanized, 3/8-16 x 4-1/2" stock (the stack needs 3.16" under the shoulder, so cut it to 3-1/4" after fitting; Bolt Depot measures from under the shoulder)', true),
-    [found(50.77, 'ea', BOLT_DEPOT, BD_EYE_316_URL, '316 forged shoulder eye bolt with nut, 3/8-16 x 4-1/2": 4x the galvanized price', true)], EYE_DECISION) },
-  { match: /^steer-anchor$/, price: withAlts(
-    found(11.1, 'ea', BOLT_DEPOT, BD_EYE_URL, 'forged shoulder eye bolt with nut, hot-dip galvanized, 3/8-16 x 2-1/2" stock (the stack needs 1.97" under the shoulder; optionally cut to 2")', true),
-    [found(48.43, 'ea', BOLT_DEPOT, BD_EYE_316_URL, '316 forged shoulder eye bolt with nut, 3/8-16 x 2-1/2": 4x the galvanized price', true)], EYE_DECISION) },
+  // Extreme weather: 316 eye bolts are the base; the galvanized ones are the Standard spec's base (PURCHASED_PRICE_STANDARD) and the cheaper alternative here.
+  { match: /^steer-eye$/, price: withAlts(EYE_316.steerEye, [gap(EYE_GALV.steerEye, 'hot-dip galvanized, not 316: right for the Standard weather spec (garage-kept), rusts and stains oak near salt')], EYE_DECISION) },
+  { match: /^steer-anchor$/, price: withAlts(EYE_316.steerAnchor, [gap(EYE_GALV.steerAnchor, 'hot-dip galvanized, not 316: right for the Standard weather spec (garage-kept), rusts and stains oak near salt')], EYE_DECISION) },
   { match: /^steer-chain$/, price: found(Math.round(((CHAIN_CUT_IN / 12) * CHAIN_USD_PER_FT + 2 * QUICK_LINK_USD) * 100) / 100, 'ea', 'ACE Industries / Skydog Rigging', 'https://www.aceindustries.com/3-16-nacm-industrial-chain-316l-stainless-steel',
     `3/16" NACM industrial chain 316L at $${CHAIN_USD_PER_FT}/ft (${CHAIN_CUT_IN} in) plus two 3/16" 316 quick links at $${QUICK_LINK_USD} each (Skydog, WLL 800 lb). Grade 43 is not made in 3/16": NACM chain has a looser rating, so check the working load against the 1000 lb target`, true) },
   { match: /^bridle$/, price: found(6.49, 'ea', 'Hamilton Marine', 'https://shop.hamiltonmarine.com/products/commercial-3-strand-nylon-rope--foot-or-reel--42842.html', '11 ft of commercial 3-strand nylon rope, 3/8", at $0.59/ft', true) },
@@ -218,7 +242,8 @@ export const PURCHASED_MODEL_COST_NOTE: ModelCostNote[] = [
   { match: /^seat-cushion$/, note: `model cost kept: the 1" closed-cell 24 x 24 foam sheet was not found in the ${RESEARCH_DATE} research (Penn-Elcom 1" charcoal Etha plank, 24" x 108", is $58.52, via search); marine vinyl 54" is $12.95/yd (Fabric Guru, via search, confirm on the page)` },
   { match: /^seat-back-pad$/, note: `model cost kept: foam and vinyl were priced for the seat cushion only (${RESEARCH_DATE} research); the foam sheet was not found` },
 ];
-export const modelCostNote = (partNo: string): ModelCostNote | undefined => PURCHASED_MODEL_COST_NOTE.find((r) => r.match.test(partNo));
+export const modelCostNote = (partNo: string, spec: SpecName = 'extreme'): ModelCostNote | undefined =>
+  (spec === 'standard' ? PURCHASED_MODEL_COST_NOTE_STANDARD.find((r) => r.match.test(partNo)) : undefined) ?? PURCHASED_MODEL_COST_NOTE.find((r) => r.match.test(partNo));
 
 // ── Fasteners (316 stainless unless noted), matched on the BOM label ──────────
 
@@ -228,7 +253,10 @@ const BD_SCREW_8 = 'https://boltdepot.com/Wood_screws_Phillips_flat_head_Stainle
 const BD_SCREW_10 = 'https://boltdepot.com/Wood_screws_Phillips_flat_head_Stainless_steel_316_10';
 const BD_SCREW_6 = 'https://boltdepot.com/Product-Details?product=16354';
 /** A Bolt Depot 316 Phillips flat-head wood screw sold singly or by the 100: the pack of 100 is priced. */
-const bdScrew = (url: string, gauge: number, len: string, packUsd: number, extra = ''): Price => foundPack(100, packUsd, 'ea', BOLT_DEPOT, url, `316 Phillips flat-head wood screw #${gauge} x ${len}", pack of 100${extra}`, true);
+const bdScrew = (url: string, gauge: number, len: string, packUsd: number, extra = '', each?: number): Price => {
+  const px = foundPack(100, packUsd, 'ea', BOLT_DEPOT, url, `316 Phillips flat-head wood screw #${gauge} x ${len}", pack of 100${extra}`, true);
+  return each !== undefined ? withEach(px, each) : px;
+};
 const woodScrewLabel = (gauge: number, len: string): RegExp => new RegExp(String.raw`^316 (?:flat-head )?wood screw #${gauge} x ${len.replace('/', String.raw`\/`)}"$`);
 const NOT_LISTED = 'this length is not in the Bolt Depot listing the research read';
 const CARRIAGE_DECISION = 'Carriage bolts: the stack (tongue head 3" + the 2-1/2" beam + washer + nylock nut + 1.5 threads) needs 6.16", so D-72 uses the stock 6-1/2" (the 6" bolt stops 1/16" short of the top of the nut). Priced from the 6" bolt (18411) plus a little: the 6-1/2" price was not read; quote it.';
@@ -239,7 +267,7 @@ export const FASTENER_PRICE: Array<{ match: RegExp; price: Price }> = [
     // D-71 / D-72: the wheel bore, and so the collar, is 5/8". The research found a 316 collar only in 3/4" bore ($33.36, MROSupply); the 5/8" one is that price as a stand-in until quoted.
     notFound(est(33.36, 'ea', 'MROSupply', 'ESTIMATE (D-71): a 316 stainless one-piece set-screw shaft collar, 5/8" bore (Climax-class, about 1-1/8" OD x 1/2"), for the wheel end of each axle. The research found the 316 collar only in 3/4" bore (Climax Metal CRC-075-S, $33.36 at MROSupply, https://www.mrosupply.com/products/745606/as-markdown/); a 5/8" 316 is assumed to cost the same until quoted', 'https://www.mrosupply.com/products/745606/as-markdown/')),
     [gap(found(4.43, 'ea', 'Penn Tool Co.', 'https://www.penntoolco.com/87986402', 'Climax C-062 one-piece set-screw collar, 5/8" bore, 1-1/8" OD x 1/2", zinc plated (the Standard weather spec); PartsSource GSC-062-Z zinc is $4.99 [S]', true), 'zinc-plated steel, not 316 stainless (about $18 for four against $133): fine garage-kept, rusts in the weather')],
-    'Wheel retainer collars (5/8" bore): the 316 price is an ESTIMATE (the research found 316 only in 3/4" bore, $33.36 each, $133 for four). Zinc-plated is $4.43 each at Penn Tool ($18 for four) and is right for the Standard weather spec (garage-kept); 316 is for Extreme weather. Quote a 316 5/8" collar before ordering that spec.') },
+    'Wheel retainer collars (5/8" bore), Extreme weather: the 316 price is an ESTIMATE (the research found 316 only in 3/4" bore, $33.36 each, $133 for four). Quote a 316 5/8" collar before ordering that spec. The Standard spec uses the zinc-plated collar ($4.43 each at Penn Tool, $18 for four).') },
   { match: /cotter pin/i, price: withAlts(notFound(packed(25, 8, 'ea', FAST, '316 cotter pin through the 0.156" axle cross hole; pack of 25')), [
     gap(foundPack(100, 14.95, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Product-Details?product=14570', 'cotter pin 5/32" x 1-1/4" (14570), $0.21 each, 14.95 per 100 (5/32 x 1-3/4 is $0.28, 19.68 per 100)', true), '18-8 stainless, not 316, and 1-1/4" not 1-1/2" long; Bolt Depot has no 316 cotter pin')]) },
   { match: /end plug/i, price: packed(10, 5, 'ea', FAST, 'plastic flanged plug for the DOM tube bore; pack of 10') },
@@ -264,23 +292,23 @@ export const FASTENER_PRICE: Array<{ match: RegExp; price: Price }> = [
   { match: /\bM[34]\b/, price: packed(100, 9, 'ea', FAST, 'metric socket or pan-head screw; pack of 100') },
   { match: /machine screw/, price: packed(50, 11, 'ea', FAST, 'pack of 50') },
   // Wood screws: Bolt Depot 316 Phillips flat-head, by the 100 (the lengths the research read; the rest keep their estimate).
-  { match: woodScrewLabel(8, '1/2'), price: bdScrew(BD_SCREW_8, 8, '1/2', 22.16, ' ($0.35 each)') },
-  { match: woodScrewLabel(8, '5/8'), price: bdScrew(BD_SCREW_8, 8, '5/8', 23.91, ' ($0.38 each)') },
-  { match: woodScrewLabel(8, '1'), price: bdScrew(BD_SCREW_8, 8, '1', 26.98, ' ($0.42 each)') },
-  { match: woodScrewLabel(8, '1-1/4'), price: bdScrew(BD_SCREW_8, 8, '1-1/4', 33.95, ' ($0.53 each)') },
-  { match: woodScrewLabel(10, '1'), price: bdScrew(BD_SCREW_10, 10, '1', 31.9, ' ($0.45 each)') },
-  { match: woodScrewLabel(10, '1-1/4'), price: bdScrew(BD_SCREW_10, 10, '1-1/4', 36.71, ' ($0.51 each)') },
+  { match: woodScrewLabel(8, '1/2'), price: bdScrew(BD_SCREW_8, 8, '1/2', 22.16, ' ($0.35 each)', 0.35) },
+  { match: woodScrewLabel(8, '5/8'), price: bdScrew(BD_SCREW_8, 8, '5/8', 23.91, ' ($0.38 each)', 0.38) },
+  { match: woodScrewLabel(8, '1'), price: bdScrew(BD_SCREW_8, 8, '1', 26.98, ' ($0.42 each)', 0.42) },
+  { match: woodScrewLabel(8, '1-1/4'), price: bdScrew(BD_SCREW_8, 8, '1-1/4', 33.95, ' ($0.53 each)', 0.53) },
+  { match: woodScrewLabel(10, '1'), price: bdScrew(BD_SCREW_10, 10, '1', 31.9, ' ($0.45 each)', 0.45) },
+  { match: woodScrewLabel(10, '1-1/4'), price: bdScrew(BD_SCREW_10, 10, '1-1/4', 36.71, ' ($0.51 each)', 0.51) },
   { match: woodScrewLabel(10, '2'), price: bdScrew(BD_SCREW_10, 10, '2', 58.76, ' (two snapshots disagreed, $49.87 and $58.76: the higher is used)') },
-  { match: woodScrewLabel(6, '3/8'), price: bdScrew(BD_SCREW_6, 6, '3/8', 18.17, ' ($0.25 each)') },
+  { match: woodScrewLabel(6, '3/8'), price: bdScrew(BD_SCREW_6, 6, '3/8', 18.17, ' ($0.25 each)', 0.25) },
   { match: /wood screw/, price: notFound(packed(50, 9, 'ea', FAST, `316 wood screw; pack of 50 per length (${NOT_LISTED})`)) },
   { match: /screw/, price: packed(50, 9, 'ea', FAST, 'pack of 50') },
   { match: /lock nut 5\/8/, price: packed(10, 14, 'ea', FAST, 'pack of 10') },
-  { match: /lock nut 3\/8/, price: foundPack(50, 16.15, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Hex_nylon_insert_lock_nuts_Stainless_steel_316', '316 hex nylon-insert lock nut 3/8-16 (16010), $0.48 each or 16.15 per 50 ($0.32 each); pack of 50', true) },
-  { match: /lock nut 1\/4/, price: foundPack(100, 16.54, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Hex_nylon_insert_lock_nuts_Stainless_steel_316', '316 hex nylon-insert lock nut 1/4-20 (16008), $0.25 each or 16.54 per 100; pack of 100', true) },
+  { match: /lock nut 3\/8/, price: withEach(foundPack(50, 16.15, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Hex_nylon_insert_lock_nuts_Stainless_steel_316', '316 hex nylon-insert lock nut 3/8-16 (16010), $0.48 each or 16.15 per 50 ($0.32 each); pack of 50', true), 0.48) },
+  { match: /lock nut 1\/4/, price: withEach(foundPack(100, 16.54, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Hex_nylon_insert_lock_nuts_Stainless_steel_316', '316 hex nylon-insert lock nut 1/4-20 (16008), $0.25 each or 16.54 per 100; pack of 100', true), 0.25) },
   { match: /lock nut/, price: packed(50, 18, 'ea', FAST, 'pack of 50') },
   { match: /fender washer 5\/8/, price: packed(25, 15, 'ea', FAST, 'pack of 25') },
-  { match: /fender washer 3\/8/, price: foundPack(100, 50.48, 'ea', BOLT_DEPOT, 'https://www.boltdepot.com/Fender_washers_Stainless_steel_316.aspx', '316 fender washer 3/8" x 1-1/2" (16042), $0.81 each or 50.48 per 100; the 2" OD washers of the eye bolts were not searched; pack of 100', true) },
-  { match: /fender washer 1\/4/, price: foundPack(100, 27.26, 'ea', BOLT_DEPOT, 'https://www.boltdepot.com/Fender_washers_Stainless_steel_316.aspx', '316 fender washer 1/4" x 1-1/4" (16040), $0.46 each or 27.26 per 100; pack of 100', true) },
+  { match: /fender washer 3\/8/, price: withEach(foundPack(100, 50.48, 'ea', BOLT_DEPOT, 'https://www.boltdepot.com/Fender_washers_Stainless_steel_316.aspx', '316 fender washer 3/8" x 1-1/2" (16042), $0.81 each or 50.48 per 100; the 2" OD washers of the eye bolts were not searched; pack of 100', true), 0.81) },
+  { match: /fender washer 1\/4/, price: withEach(foundPack(100, 27.26, 'ea', BOLT_DEPOT, 'https://www.boltdepot.com/Fender_washers_Stainless_steel_316.aspx', '316 fender washer 1/4" x 1-1/4" (16040), $0.46 each or 27.26 per 100; pack of 100', true), 0.46) },
   { match: /fender washer/, price: packed(100, 20, 'ea', FAST, 'pack of 100') },
   { match: /carriage bolt 3\/8/, price: { ...est(3.99, 'ea', BOLT_DEPOT, 'ESTIMATE (D-72): 316 carriage bolt 3/8-16 x 6-1/2". The research read the 6" bolt (18411, $3.68 each, 28.31 per 10); 6-1/2" is that price x 6.5/6 until quoted. 6-1/4" is not a stock length, and the 6" bolt stops 1/16" short of the top of the nylock nut on this stack', 'https://boltdepot.com/Product-Details?product=18411'), decision: CARRIAGE_DECISION } },
   { match: /hex bolt 3\/8-16 x 3-1\/4"/, price: found(1.94, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Hex_bolts_Stainless_steel_316_1_4-20', '316 hex bolt 3/8-16 x 3-1/4" (16136), $1.88 to $1.94 each (two snapshots; the higher is used), 74.65 per 50', true) },
@@ -293,7 +321,6 @@ export const FASTENER_FALLBACK: Price = est(1, 'ea', 'No entry in prices.ts', 'U
 
 // ── Consumables ───────────────────────────────────────────────────────────────
 
-const EPOXY = 'Marine supplier / local dealer';
 const ROCK_WEST = 'Rock West Composites';
 const ROCK_WEST_WEST_URL = 'https://www.rockwestcomposites.com/west-system';
 /**
@@ -303,7 +330,9 @@ const ROCK_WEST_WEST_URL = 'https://www.rockwestcomposites.com/west-system';
  * The gallon kit's contents are as the research gives them: 105-B resin 0.98 gal (125.4 fl oz) and 206-B hardener 0.86 qt (27.5 fl oz).
  */
 export const EPOXY_KITS: Array<{ id: string; label: string; /** Resin in the kit (fl oz): what the coats and the glue-ups draw on. */ resinFlOz: number; mixedFlOz: number; price: Price }> = [
-  { id: 'quart', label: 'West System 105-A resin + 206-A slow hardener, quart group', resinFlOz: 32, mixedFlOz: 38.4, price: est(92, 'kit', EPOXY, '32 fl oz resin + 6.4 fl oz hardener (the quart group was not researched)') },
+  { id: 'quart', label: 'West System 105-A resin + 206-A slow hardener, quart group (1.2 quart kit)', resinFlOz: 32, mixedFlOz: 38.4, price: withAlts(
+    found(94.12, 'kit', 'Fiberglass Supply', 'https://fiberglasssupply.com/west-system-105-a-with-206-a-slow-hardener-1-2-quart-kit/', '105-A resin + 206-A slow hardener, 1.2 quart kit (G73-7519): 32 fl oz resin + 6.4 fl oz hardener, no pumps (the 300 Mini Pump Set is extra); fetched, in stock. Other readings of the same kit: 82.35 and 87.97 [S], 82.35 on the manufacturer\'s list [L]'),
+    [found(82.35, 'kit', 'West System list price', 'https://fiberglasssupply.com/west-system-105-a-with-206-a-slow-hardener-1-2-quart-kit/', '105-A 51.47 + 206-A 30.88 on the manufacturer\'s comparative list (undated)')]) },
   { id: 'gallon', label: 'West System 105-B resin + 206-B slow hardener, gallon group', resinFlOz: 125.44, mixedFlOz: 152.96, price: withAlts(
     found(179.99, 'kit', ROCK_WEST, 'https://www.rockwestcomposites.com/ws-slow-1-2gal-kit.html', 'WS-SLOW-1.2GAL-KIT: 105-B resin 0.98 gal + 206-B slow hardener 0.86 qt; in stock, ships next business day, the pumps are extra. Rock West also lists the two parts apart at 110.99 + 66.99 (backorder), so the price may lag; epoxy is hazardous freight, call for shipping (801-566-3402)'),
     [found(205.8, 'kit', 'Fiberglass Supply', 'https://fiberglasssupply.com/epoxy/west-system/?page=3', '105-B + 206-B 1.2 gal kit (131.42 + 74.38 apart): the high end of the range, what 2026 list pricing looks like')]) },
@@ -371,17 +400,177 @@ export const SOFT_GOODS: Record<string, Price> = {
     gap(found(58.52, 'plank', 'Penn-Elcom', 'https://www.penn-elcom.com/us/1in-charcoal-etha-plank-foam-24in-wide-m62925', '1" charcoal Etha plank foam, 24" wide x 108" (sale from 181.52)', true), 'a 24" x 108" plank, not a 24" x 24" sheet')])),
 };
 
+// ── The Standard weather spec (garage-kept): 304 / 18-8 stainless, zinc, galvanized, beech Dominos ──────────
+// Source: docs/price-research-standard-2026-10.md (.json). Same rules as above: an exact listing is `quoted` (with its link), the nearest size or kind is an `estimate` that says so,
+// a spec-different cheaper item is an alternative. Bolt Depot sells fasteners by the piece AND by the bag: `eachUsd` is the piece price, the bag the pack (the BOM takes the cheaper).
+
+const FAST_STD = 'Fastener supplier (McMaster-Carr / Fastenal class), 18-8 (304) stainless';
+const BD_PRODUCT = 'https://boltdepot.com/Product-Details?product=';
+const BD_FENDER_18_8 = 'https://boltdepot.com/Fender_washers_Stainless_steel_18-8';
+/** An 18-8 Bolt Depot fastener sold by the piece and by the bag: quoted, read via search. */
+const bd18 = (id: number | string, unit: string, desc: string, each: number, bagQty: number, bagUsd: number, extra = ''): Price =>
+  withEach(foundPack(bagQty, bagUsd, unit, BOLT_DEPOT, typeof id === 'string' ? id : `${BD_PRODUCT}${id}`, `${desc}, $${each.toFixed(2)} each by the piece or ${usdPlain(bagUsd)} per ${bagQty}${extra ? `; ${extra}` : ''}`, true), each);
+const usdPlain = (v: number): string => `$${v.toFixed(2)}`;
+/** The same, an estimate (the nearest size, or a price the research did not read): says which. */
+const bd18est = (id: number | undefined, unit: string, desc: string, each: number, bagQty: number, bagUsd: number, why: string): Price =>
+  withEach({ ...packed(bagQty, bagUsd, unit, BOLT_DEPOT, `ESTIMATE (Standard spec): ${desc}; ${why}`), ...(id ? { url: `${BD_PRODUCT}${id}` } : {}) }, each);
+const stdScrewLabel = (gauge: number, len: string): RegExp => new RegExp(String.raw`^18-8 (?:flat-head )?wood screw #${gauge} x ${len.replace('/', String.raw`\/`)}"$`);
+const STD_SCREW_NOTE = 'Phillips flat-head 18-8 wood screw';
+
+export const FASTENER_PRICE_STANDARD: Array<{ match: RegExp; price: Price }> = [
+  // Wood screws (Bolt Depot, 18-8). The three sizes of D-72 are #8 x 5/8, #8 x 1-1/4 and #6 x 2-1/2.
+  { match: stdScrewLabel(8, '5/8'), price: bd18(3958, 'ea', `${STD_SCREW_NOTE} #8 x 5/8" (#3958)`, 0.22, 100, 14.01) },
+  { match: stdScrewLabel(8, '1-1/4'), price: bd18(3961, 'ea', `${STD_SCREW_NOTE} #8 x 1-1/4" (#3961)`, 0.29, 100, 18.29, '316 is 0.48 / 34.63 per 100') },
+  { match: stdScrewLabel(6, '2-1/2'), price: notFound(withEach({ ...packed(100, 40, 'ea', BOLT_DEPOT, `ESTIMATE (Standard spec): 18-8 Phillips flat-head wood screw #6 x 2-1/2" (the piloted rail-to-chine screws). The research found no 18-8 #6 above 1-1/2" (Bolt Depot's #6 table stops there; 2-1/2" exists only in other materials); this is 0.40 each by the piece, extrapolated from #6 x 1/2 at 0.12 and #8 x 3" at 0.67 (#9025). A #8 x 2-1/2" is 42.49 per 100 at Zoro [S] (a different gauge: the rails would need a bigger pilot); hand-quote Fastenal, McMaster or Zoro`), url: 'https://boltdepot.com/Wood_screws_Phillips_flat_head_Stainless_steel_18-8_6' }, 0.4)) },
+  { match: stdScrewLabel(6, '3/8'), price: bd18(9024, 'ea', `${STD_SCREW_NOTE} #6 x 3/8" (#9024)`, 0.11, 100, 6.64) },
+  { match: stdScrewLabel(6, '1/2'), price: bd18(3953, 'ea', `${STD_SCREW_NOTE} #6 x 1/2" (#3953)`, 0.12, 100, 7.41) },
+  { match: stdScrewLabel(8, '1/2'), price: bd18(3957, 'ea', `${STD_SCREW_NOTE} #8 x 1/2" (#3957)`, 0.21, 100, 13.18) },
+  { match: stdScrewLabel(8, '1'), price: bd18(3960, 'ea', `${STD_SCREW_NOTE} #8 x 1" (#3960)`, 0.27, 100, 17.31) },
+  { match: stdScrewLabel(10, '1'), price: bd18(3966, 'ea', `${STD_SCREW_NOTE} #10 x 1" (#3966)`, 0.31, 100, 19.77) },
+  { match: stdScrewLabel(10, '1-1/4'), price: bd18(3967, 'ea', `${STD_SCREW_NOTE} #10 x 1-1/4" (#3967)`, 0.35, 100, 22.63) },
+  { match: stdScrewLabel(10, '2'), price: bd18(3970, 'ea', `${STD_SCREW_NOTE} #10 x 2" (#3970)`, 0.51, 100, 33.7) },
+  { match: /^18-8 (?:flat-head )?wood screw/, price: notFound(withEach(packed(100, 30, 'ea', FAST_STD, '18-8 wood screw, a length the research did not read'), 0.35)) },
+  // Bolts (18-8 hex, socket button head, carriage)
+  { match: /button-head cap screw 1\/4-20 x 1-1\/4"/, price: bd18(4414, 'ea', '18-8 socket button-head cap screw 1/4-20 x 1-1/4" (#4414)', 0.33, 50, 11.84, '316 was 1.05 each') },
+  { match: /button-head cap screw 1\/4-20 x 2"/, price: bd18(4417, 'ea', '18-8 socket button-head cap screw 1/4-20 x 2" (#4417)', 0.56, 50, 20.04, '316 was 1.05 each') },
+  { match: /button-head cap screw/, price: notFound(withEach(packed(50, 20, 'ea', FAST_STD, '18-8 socket button-head cap screw'), 0.6)) },
+  { match: /carriage bolt 3\/8/, price: { ...bd18est(954, 'ea', '18-8 carriage bolt 3/8-16 x 6-1/2" (D-72 stock length)', 2.04, 50, 78, 'the research read the 6" bolt (#954, $1.88 each, 72.31 per 50); 6-1/2" is that price x 6.5/6 until quoted. 6-1/4" is not a stock length, and the 6" bolt stops 1/16" short of the top of the nylock nut on this stack'), decision: CARRIAGE_DECISION } },
+  { match: /hex bolt 1\/4-20 x 1-1\/2"/, price: bd18(132, 'ea', '18-8 hex bolt 1/4-20 x 1-1/2" (#132)', 0.28, 100, 21.6) },
+  { match: /hex bolt 1\/4-20 x 2-1\/4"/, price: bd18(8976, 'ea', '18-8 hex bolt 1/4-20 x 2-1/4" (#8976)', 0.43, 100, 32.98, 'a semi-standard length') },
+  { match: /hex bolt 1\/4-20 x 3"/, price: bd18(135, 'ea', '18-8 hex bolt 1/4-20 x 3" (#135)', 0.53, 100, 40.52, 'a semi-standard length') },
+  { match: /hex bolt 3\/8-16 x 3-1\/4"/, price: bd18(8991, 'ea', '18-8 hex bolt 3/8-16 x 3-1/4" (#8991)', 1.19, 50, 45.66, '316 was 1.88-1.94 each') },
+  { match: /hex bolt 3\/8-16 x 4"/, price: bd18(166, 'ea', '18-8 hex bolt 3/8-16 x 4" (#166)', 1.37, 50, 52.68) },
+  { match: /bolt 3\/8/, price: notFound(withEach(packed(50, 55, 'ea', FAST_STD, '18-8 bolt 3/8-16, a length the research did not read; Bolt Depot lists 3/8-16 x 3-1/4 at $1.19 and x 4 at $1.37'), 1.3)) },
+  { match: /bolt 1\/4/, price: notFound(withEach(packed(100, 35, 'ea', FAST_STD, '18-8 bolt 1/4-20, a length the research did not read; Bolt Depot lists 1/4-20 x 2-1/4 at $0.43 and x 3 at $0.53'), 0.4)) },
+  { match: /T-nut/i, price: bd18(10484, 'ea', '18-8 T-nut 1/4-20 (#10484), for the handle-socket backers (epoxied in)', 0.74, 100, 52.87, 'Albany County Fasteners 304 T-nut also $0.74') },
+  // Nuts and washers
+  { match: /lock nut 1\/4/, price: bd18(2554, 'ea', '18-8 nylon-insert lock nut 1/4-20 (#2554)', 0.16, 100, 10.36) },
+  { match: /lock nut 3\/8/, price: withAlts(
+    foundPack(50, 8.66, 'ea', 'Home Depot (Prime-Line)', 'https://homedepot.com/p/Prime-Line-3-8-in-16-Grade-18-8-Stainless-Steel-Nylon-Insert-Lock-Nuts-50-Pack-9075391/310550324', 'Prime-Line 3/8-16 grade 18-8 stainless nylon-insert lock nuts, 50-pack (9075391): 8.66 in one snapshot, 9.27 in another (0.17-0.19 each)', true),
+    [bd18(2556, 'ea', 'Bolt Depot 18-8 nylon-insert lock nut 3/8-16 (#2556)', 0.36, 50, 12.07, '26 by the piece is 9.36')]) },
+  { match: /fender washer 1\/4/, price: bd18(BD_FENDER_18_8, 'ea', '18-8 fender washer 1/4" x 1-1/4"', 0.28, 100, 18.81, '48 by the piece is cheaper than the bag; Home Depot Everbilt 20-pack 5.97 (0 in stock)') },
+  { match: /fender washer 3\/8/, price: bd18(BD_FENDER_18_8, 'ea', '18-8 fender washer 3/8" x 1-1/2"', 0.41, 50, 14.51, 'the bag of 50 covers 46; the page listed 0.29 a washer in the bag against 0.41 each') },
+  { match: /fender washer/, price: notFound(withEach(packed(100, 20, 'ea', FAST_STD, '18-8 fender washer'), 0.3)) },
+  // Pins, collars, eyes, inserts
+  { match: /cotter pin/i, price: withAlts(
+    withEach(bd18est(14570, 'ea', '18-8 cotter pin 5/32" x 1-1/2"', 0.32, 100, 22.5, 'the research read 5/32" x 1-1/4" at 0.27 / 19.43 per 100 (#14570) and x 1-3/4" at 0.36 / 25.58 (#14572); the 1-1/2" is between'), 0.32),
+    [gap(bd18(14570, 'ea', '18-8 cotter pin 5/32" x 1-1/4" (#14570)', 0.27, 100, 19.43), 'the pin is 1-1/4" long, not 1-1/2"')]) },
+  { match: /shaft collar/i, price: found(4.43, 'ea', 'Penn Tool Co.', 'https://www.penntoolco.com/87986402', 'Climax C-062 one-piece set-screw collar, 5/8" bore, 1-1/8" OD x 1/2", zinc plated: the Standard weather spec (garage-kept). PartsSource GSC-062-Z zinc is $4.99; 316 is $33.36 (estimate, the Extreme spec)', true) },
+  { match: /stainless rod/i, price: est(2.5, 'ea', FAST_STD, 'cut from a 3/8" x 12" 304 rod (about $10): five pins per rod. ESTIMATE, scaled from the 316 estimate; not in the Standard research') },
+  { match: /screw eye/, price: withAlts(
+    withEach({ ...packed(20, 12.82, 'ea', BOLT_DEPOT, 'ESTIMATE (Standard spec): 18-8 screw eye, nearest size. The research read trade size 8 (1/2" eye) at 1.08 each / 12.82 per 20 (#15513); the model asks for a #10 shank. Size 4 (5/8") is 1.94, size 2 is 2.63. Confirm the shank fits the brake-cord tie'), url: `${BD_PRODUCT}15513` }, 1.08),
+    [gap(foundPack(1, 2.79, 'ea', 'Ace Hardware (National Hardware)', 'https://www.acehardware.com/departments/hardware/screw-eyes/5700620', 'National Hardware stainless 5/8" screw eye, 75 lb, $2.79 each [S] (this listing and 5700554 were not told apart)', true), 'a 5/8" eye, not the #10 size')]) },
+  { match: /threaded insert/, price: withAlts(
+    withEach({ ...packed(100, 18.71, 'ea', BOLT_DEPOT, 'ESTIMATE (Standard spec): zinc flanged softwood threaded insert, #10-32, Allen drive (#23861), 0.25 each or 18.71 per 100. The research found NO 18-8 #10-32 insert at a readable price (Bolt Depot has an 18-8 hardwood insert only in #8-32 x 3/8" at 4.78 each); this one is a softwood type, 0.512" long (the model asks for 3/8" and 5/16"). Fine in a dry garage; confirm the drill size'), url: `${BD_PRODUCT}23861` }, 0.25),
+    [gap(foundPack(25, 88.61, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Threaded_inserts', 'Bolt Depot 18-8 hardwood insert, #8-32 x 0.375", $4.78 each, 88.61 per 25', true), 'a #8-32 thread, not #10-32, and about 20x the price')]) },
+  { match: /Thumb-knob/, price: withAlts(notFound(est(1.75, 'ea', FAST_STD, 'thumb-knob screw #10-32, 18-8 knurled: no exact one found (Home Depot Everbilt #10-32 x 1/2" stainless knurled, 831568, is 3.38 per bag, count not stated); the length is 1" with the 1/4 in white oak plywood web (D-73)')), [
+    gap(foundPack(100, 16.7, 'ea', BOLT_DEPOT, `${BD_PRODUCT}23989`, 'Bolt Depot thumb screws, spade type, zinc plated steel, #10-32 x 3/4" (#23989), 0.21 each or 16.70 per 100', true), 'zinc spade-type, 3/4" not 1", and not a knurled knob')]) },
+  { match: /Domino DF 500 4x20/, price: foundPack(450, 25, 'ea', 'Woodcraft', 'https://www.woodcraft.com/products/festool-dominos-4mm-x-20mm-450-pieces', 'Festool BEECH Dominos 4mm x 20mm, 450 pieces (495661), backordered online, special order (The Power Tool Store and JMP Wood also $25.00). Beech is the interior type: fine for a garage-kept sled', false) },
+  { match: /Domino DF 500 5x30/, price: foundPack(300, 25, 'ea', 'The Power Tool Store', 'https://thepowertoolstore.com/collections/power-tools/products/festool-494938', 'Festool BEECH Domino D 5x30/300 BU (494938); KJP Select Hardwoods $31.00. The listing shows availability not guaranteed', true) },
+  { match: /Domino DF 500 8x50/, price: foundPack(100, 25, 'ea', 'The Power Tool Store', 'https://thepowertoolstore.com/products/festool-494941', 'Festool BEECH Domino D 8x22x50/100 BU (494941); Acetool also $25.00 (ships in 7-14 days)', true) },
+  { match: /^Domino/, price: packed(100, 25, 'ea', DOMINO_DEALER, 'BEECH Domino, the interior type: pack of 100 (estimate: check the size)') },
+  // Material-free labels that have no 18-8 or zinc twin
+  { match: /machine screw/, price: withEach(packed(100, 12, 'ea', FAST_STD, '18-8 machine screw; pack of 100 (not in the Standard research)'), 0.2) },
+  { match: /\bM[34]\b/, price: withEach(packed(100, 7, 'ea', FAST_STD, '18-8 metric socket or pan-head screw; pack of 100 (not in the Standard research)'), 0.12) },
+  { match: /^18-8 /, price: est(1, 'ea', FAST_STD, 'No Standard price in prices.ts for this label: add it to FASTENER_PRICE_STANDARD') },
+];
+
+/**
+ * Standard-spec prices for purchased parts, by partNo; tried before PURCHASED_PRICE. `describe` replaces the model's part name in the BOM where the name says 316.
+ * A part not listed falls through to PURCHASED_PRICE (wheels, rope, cushions, lights...: spec-free items, and the model's own cost).
+ */
+export interface StdPurchasedEntry extends PurchasedPriceEntry { describe?: string }
+const SEAGOING_304 = 'the Standard weather spec: 304 stainless';
+export const PURCHASED_PRICE_STANDARD: StdPurchasedEntry[] = [
+  { match: /^steer-eye$/, price: withAlts(EYE_GALV.steerEye, [EYE_316.steerEye], EYE_DECISION) },
+  { match: /^steer-anchor$/, price: withAlts(EYE_GALV.steerAnchor, [EYE_316.steerAnchor], EYE_DECISION) },
+  { match: /^steer-chain$/, override: true, price: found(Math.round(((CHAIN_CUT_IN / 12) * 2.12 + 2 * 1.99) * 100) / 100, 'ea', 'Home Depot (Everbilt) / Ace (Campbell)', 'https://homedepot.com/p/Everbilt-3-16-in-x-1-ft-Grade-30-Zinc-Plated-Steel-Proof-Coil-Twist-Link-Chain-811646/303285928',
+    `3/16" Grade 30 zinc proof coil chain at $2.12/ft (${CHAIN_CUT_IN} in; WLL 750 lb; the page showed 0 in stock; KingChain 15 ft tub $15.59, about $1.04/ft) plus two Campbell 3/16" zinc quick links at $1.99 each (Ace Hardware item 52604; WLL 660 lb)`, true), describe: 'Steering check chain (3/16" zinc chain, zinc quick links)' },
+  { match: /^seat-hinge$/, override: true, price: found(11.005, 'ea', 'MarineEngine.com (Sea-Dog)', 'https://www.marineengine.com/boat-accessories/hardware/201582-1', `Sea-Dog 201582-1 stainless butt hinge 2" x 2", described as 304 stamped stainless, pack of 2 at $22.01 (fasteners not included), shown as half each; Ace Seachoice 2 x 2 2-pack is $25.99 (grade not stated)`, true) },
+  { match: /^storage-hinge$/, override: true, price: { ...est(9.21, 'ea', 'MarineEngine.com (Seachoice)', `ESTIMATE, nearest size (${SEAGOING_304}): Seachoice 34911 butt hinge, leaf 1-5/8" x 2-1/2", described as 304, "fast pin" type, pack of 2 at $18.42, shown as half each. The model asks for 2-1/2" x 2-3/4": not found in stainless. The lid hinge leaf runs 1-1/8" past the box end, so check the size against the lid frame`, 'https://www.marineengine.com/boat-accessories/hardware/34911') } },
+  { match: /^storage-latch$/, override: true, price: found(4.895, 'ea', 'Walmart', 'https://www.walmart.com/ip/316545201', '304 stainless draw toggle latch with spring-steel hook, 2-pack at $9.79, shown as half each (the catch comes with it, so the catch is $0); the 2.87" version is $7.69, a zinc-plated 2-set (38 mm) $8.69. Walmart blocks fetching, so the listing ID is the nearest returned', true) },
+  { match: /^storage-lid-stay$/, override: true, price: withAlts(found(26.4, 'ea', 'Sugatsune', 'https://www.sugatsune.com/s-s-stay-s-93l', 'Sugatsune S-93L stainless (304) friction lid stay, 66 lb (S-91R is 31.30, 88 lb)', true),
+    [gap(foundPack(2, 4.99, 'ea', 'Rockler', 'https://www.rockler.com/6-medium-duty-quiet-action-lid-support', 'Rockler 6" Medium-Duty Quiet Action Lid Support, $4.99 a pair on sale (13.99 regular), friction discs, plated steel', true, 'pair'), 'plated steel, not stainless, and a 6" support (check it against the lid); lid supports do not replace hinges')]) },
+  { match: /^lash-point$/, override: true, price: withAlts({ ...est(9.24, 'ea', 'etrailer', `ESTIMATE, nearest listing (${SEAGOING_304.replace('304 stainless', 'zinc')}): etrailer RRING-R6000 bolt-on D-ring, 4-7/8" wide, 2,000 lb, zinc; the hole count is not stated (probably 2) and the model asks for a 4-hole plate at 300 lbf. No zinc 4-hole plate at Harbor Freight, Northern Tool or Tractor Supply came up`, 'https://etrailer.com/Trailer-Tie-Down-Anchors/etrailer/RRING-R6000.html') },
+    [gap(est(6.82, 'ea', 'needatrailerpart.com (Brophy)', 'Brophy RR09 1/4" zinc bolt-on D-ring with plastic pan, 1,000 lb SWL, 2 holes, $6.82 to $11.58', 'https://needatrailerpart.com'), '2 holes, not 4')]) },
+  { match: /^brake-pivot-clip$/, override: true, price: found(0.82, 'ea', BOLT_DEPOT, `${BD_PRODUCT}27209`, '18-8 hitch pin clip, 0.093" wire, for 3/8" to 5/8" pins (#27209), $0.82 each, 13.43 per 25 (124.00 per 250)', true), describe: 'Brake pivot hitch-pin clip (18-8 stainless)' },
+  { match: /^(scupper|storage-drain)$/, override: true, price: { ...est(5.2, 'ea', 'Global Industrial (MSI)', 'ESTIMATE (Standard spec): 3/8" MPT x 3/8" hose barb, priced from the 316 listing (Class 150, $5.20); a 304 barb is not in the Standard research and costs a little less', 'https://www.globalindustrial.com/p/38-mpt-x-38-316-stainless-steel-hose-barb-class-150') } },
+];
+/** Model-cost notes for the Standard spec (the parts whose model cost stays the price). Falls through to PURCHASED_MODEL_COST_NOTE for the spec-free ones. */
+export const PURCHASED_MODEL_COST_NOTE_STANDARD: ModelCostNote[] = [
+  { match: /^seat-pin$/, note: `model cost kept: no 3/8" x 1-1/2" detent pin found in the ${RESEARCH_DATE} research (Whitecap S-1024C is $69.99, 304, diameter not stated, likely the wrong part)` },
+  { match: /^brake-snap$/, note: 'model cost kept: the 304 snap hook found (Hardware Essentials via ihsgonline, $6.24) does not state its size; the Everbilt 13/16 x 3-3/16" stainless fixed-eye snap hook is $13.46 (too big and dear)', alternatives: [
+    gap(foundPack(1, 6.24, 'ea', 'ihsgonline (Hardware Essentials)', 'https://ihsgonline.com/products/snap-hook/235445002/', 'Hardware Essentials snap hook, 304 stainless, size not stated', true), 'the size is not stated')] },
+  { match: /^brake-pivot-pin$/, note: `model cost kept: the Everbilt 3/8" x 2" zinc-plated universal clevis pin (815438, $3.75) is 2" long and the pin is about 3.74" (cross hole 0.15" from the end); stainless 3/8 x 2" (70518) is $4.75. No 3.74" pin found at retail: cut a 3/8" stainless rod or order a long pin`, alternatives: [
+    gap(foundPack(1, 3.75, 'ea', 'Home Depot (Everbilt)', 'https://homedepot.com/p/Everbilt-3-8-in-x-2-in-Zinc-Plated-Universal-Clevis-Pin-815438/204276615', 'Everbilt 3/8" x 2" zinc-plated universal clevis pin (815438)', true), '2" long, not 3.74"; zinc-plated')] },
+];
+
+// ── Titebond III (Standard) ──
+export interface GlueBottle { flOz: number; label: string; price: Price }
+const TB_URL = 'https://www.rockler.com/titebondtrade-iii-ultimate-wood-glue-optional-sizes';
+/** Titebond III Ultimate bottles (Rockler sale prices, 10% off, read via search): the BOM buys the cheapest combination that covers the glue joints. */
+export const TITEBOND_BOTTLES: GlueBottle[] = [
+  { flOz: 8, label: '8 oz bottle', price: withAlts(found(6.29, 'bottle', 'Rockler', TB_URL, 'Titebond III Ultimate wood glue, 8 oz (#28835), sale price (10% off 6.99); Tractor Supply 7.99, Wurth LAC 7.49', true), []) },
+  { flOz: 16, label: '16 oz bottle', price: withAlts(found(8.99, 'bottle', 'Rockler', TB_URL, 'Titebond III Ultimate wood glue, 16 oz (#23921), sale price (10% off 9.99); Home Depot 12-pack 77.98 (6.50 each)', true),
+    [found(7.97, 'bottle', 'Walmart', 'https://www.walmart.com/ip/Titebond-III-16-OZ-Ultimate-Wood-Glue-Each/223139290', 'Titebond III Ultimate 16 oz, $7.97 (was 10.00); Walmart blocks fetching and a second Walmart 16 oz listing showed 18.99, so check which seller', true)]) },
+  { flOz: 32, label: 'quart bottle', price: found(15.29, 'bottle', 'Rockler', TB_URL, 'Titebond III Ultimate wood glue, quart (#28724), sale price (10% off 16.99); gallon 35.09', true) },
+];
+
+// ── Epoxy kits for the Standard spec (the reduced epoxy fits a small kit) ──
+export interface OtherEpoxyKit { id: string; label: string; resinFlOz: number; mixedFlOz: number; price: Price; pumpsIncluded: boolean }
+export const EPOXY_KITS_SMALL: OtherEpoxyKit[] = [
+  { id: 'mas-5-1', label: 'MAS Epoxies 5:1 Traditional Marine Epoxy kit, 38.4 oz, with pumps', resinFlOz: 32, mixedFlOz: 38.4, pumpsIncluded: true,
+    price: found(59.99, 'kit', 'MAS Epoxies', 'https://masepoxies.com/products/5-1-traditional-marine-epoxy-kits', '5:1 Traditional Marine Epoxy Kit, 38.4 oz: 32 fl oz resin + 6.4 fl oz hardener, with 2 quart mixing cups and 2 pumps. The page shows the same $59.99 for the 38.4 oz and the 1.2 gallon sizes, so the 38.4 oz price is likely this figure but not certain') },
+  { id: 'totalboat-5-1', label: 'TotalBoat 5:1 Marine Epoxy kit, quart, with pumps', resinFlOz: 32, mixedFlOz: 38.4, pumpsIncluded: true,
+    price: found(68.99, 'kit', 'TotalBoat', 'https://www.totalboat.com/products/5-1-marine-epoxy-resin-kits', '5:1 Marine Epoxy Resin Kit, quart (fast or slow), with pumps; fetched. The gallon kit without pumps is 154.99') },
+];
+
+// ── Spar urethane (Standard topcoat) ──
+const URETHANE_QT_URL = 'https://www.walmart.com/ip/Minwax-Helmsman-Spar-Urethane-Indoor-Outdoor-Wood-Finish-Quart-Gloss/17253537';
+export const URETHANE_CONTAINER_PRICE: Partial<Record<'pt' | 'qt' | 'gal', Price>> = {
+  qt: withAlts(found(22.88, 'qt', 'Walmart', URETHANE_QT_URL, 'Minwax Helmsman Spar Urethane, oil-based, gloss, quart (63200444): about 100 ft² a quart on the can; Lowe\'s 29.98, Ace 31.99; street prices 22-32', true),
+    [found(29.98, 'qt', 'Home Depot', 'https://www.homedepot.com/p/Varathane-1-Quart-Clear-Gloss-Oil-Based-Exterior-Spar-Urethane-9241H/100209410', 'Varathane Ultimate oil-based exterior spar urethane, quart (9241H)', true),
+     found(29.99, 'qt', 'Ace Hardware', 'https://www.acehardware.com/departments/paint-and-supplies/stains-and-finishes/varnish/1372952', 'Minwax Helmsman WATER-based spar urethane, quart: low odor, less amber, builds thinner', true)]),
+  gal: found(59.99, 'gal', 'Ace Hardware', 'https://www.acehardware.com/departments/paint-and-supplies/stains-and-finishes/varnish/11844', 'Minwax Helmsman spar urethane, oil-based, gloss, gallon (13200000): cheaper than three quarts ($68.64); Walmart and Anderson Lumber 67.99', true),
+};
+
+/** Standard 304 estimate for a stainless metal-stock price that the research found (or estimated) in 316: 304 is not researched, so 85 % of the 316 price, flagged as an estimate. */
+export const STD_304_FACTOR = 0.85;
+
 // ── Lookups ───────────────────────────────────────────────────────────────────
 
-export function purchasedEntry(partNo: string): PurchasedPriceEntry | undefined {
+/** The 304 / 18-8 name of a model text that says 316 (the Standard spec's BOM text); the model's own part names still say 316. */
+export const std304 = (text: string): string => text.replace(/\b316( stainless)?\b/g, (_m, st) => `304${st ?? ''}`);
+
+export function purchasedEntry(partNo: string, spec: SpecName = 'extreme'): PurchasedPriceEntry | undefined {
+  if (spec === 'standard') {
+    const std = PURCHASED_PRICE_STANDARD.find((r) => r.match.test(partNo));
+    if (std) return std;
+  }
   return PURCHASED_PRICE.find((r) => r.match.test(partNo));
 }
-export function purchasedPrice(partNo: string): Price {
-  return purchasedEntry(partNo)?.price ?? PURCHASED_FALLBACK;
+export function purchasedDescribe(partNo: string, spec: SpecName): string | undefined {
+  return spec === 'standard' ? PURCHASED_PRICE_STANDARD.find((r) => r.match.test(partNo))?.describe : undefined;
 }
-export function fastenerPrice(label: string): Price {
+export function purchasedPrice(partNo: string, spec: SpecName = 'extreme'): Price {
+  return purchasedEntry(partNo, spec)?.price ?? PURCHASED_FALLBACK;
+}
+export function fastenerPrice(label: string, spec: SpecName = 'extreme'): Price {
+  if (spec === 'standard') {
+    const std = FASTENER_PRICE_STANDARD.find((r) => r.match.test(label));
+    if (std) return std.price;
+  }
   return FASTENER_PRICE.find((r) => r.match.test(label))?.price ?? FASTENER_FALLBACK;
 }
-export function metalPrice(section: string): Price | null {
-  return METAL_PRICE_PER_FT.find((r) => r.match.test(section))?.price ?? null;
+/**
+ * The metal stock price of a cut-list section. The Standard spec buys 304 where the model says 316 stainless: no 304 stock was researched, so it is the 316 price (researched or estimated)
+ * x STD_304_FACTOR, an ESTIMATE that says so. Non-stainless stock (aluminum, steel rod, DOM) is the same in both specs.
+ */
+export function metalPrice(section: string, spec: SpecName = 'extreme'): Price | null {
+  const price = METAL_PRICE_PER_FT.find((r) => r.match.test(section))?.price ?? null;
+  if (!price || spec !== 'standard' || !/\b316\b/.test(section)) return price;
+  const r2 = (v: number): number => Math.round(v * 100) / 100;
+  const alts = price.alternatives?.map((a) => ({ ...a, note: a.note ? std304(a.note) : a.note }));
+  return { ...price, basis: 'estimate', usd: r2(price.usd * STD_304_FACTOR), ...(price.packUsd ? { packUsd: r2(price.packUsd * STD_304_FACTOR) } : {}),
+    note: `ESTIMATE (Standard spec): 304 stainless, ${Math.round(STD_304_FACTOR * 100)} % of the 316 price below, because no 304 stock was researched. ${price.note ? std304(price.note) : ''}`.trim(), ...(alts ? { alternatives: alts } : {}) };
 }

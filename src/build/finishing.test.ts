@@ -4,7 +4,8 @@ import { defaultParams } from '../params';
 import type { Part } from '../model/types';
 import { containers, DOMINO_FLOZ, endGrainAreaIn2, EPOXY_COVERAGE, EPOXY_RESIN_PARTS, epoxyTimeFactor, finishAreas, finishMaterial, finishingSchedule, GLUE_FLOZ_PER_FT2, glueEpoxyFlOz, glueJointEstimates, showRuleOf, surfaceAreaIn2, VARNISH_COVERAGE } from './finishing';
 
-const p = defaultParams();
+// D-73: this file's numbers are the EXTREME weather spec (epoxy saturation coat on all the plywood, marine varnish, 4 mm okoume thin sheet); the Standard spec is tested in weather-spec.test.ts.
+const p = { ...defaultParams(), weatherSpec: 1 };
 const parts = buildModel(p);
 const sched = finishingSchedule(parts, p);
 
@@ -281,7 +282,7 @@ describe('one hardener: 105 with 206 at 5:1 (right-sized finish)', () => {
     const e = sched.epoxy;
     const coat = sched.steps.find((s) => s.id === 'epoxy')!.products[0].qtNeeded * 32;
     expect(e.coatingFlOz).toBeCloseTo(coat, 6);
-    expect(e.glueFlOz).toBeCloseTo(glueEpoxyFlOz(parts) * 1.2, 6);
+    expect(e.glueFlOz).toBeCloseTo(glueEpoxyFlOz(parts, undefined, p) * 1.2, 6);
     expect(e.totalMixedFlOz).toBeCloseTo(e.coatingFlOz + e.glueFlOz, 6);
     expect(e.resinFlOz).toBeCloseTo((e.totalMixedFlOz * 5) / 6, 6);
     expect(e.hardenerFlOz).toBeCloseTo(e.totalMixedFlOz / 6, 6);
@@ -323,7 +324,7 @@ describe('build review round 1: glue epoxy by joint type (MUST-10)', () => {
     const chine = est.filter((g) => g.kind === 'domino' && [g.a, g.b].sort().join('|') === 'rail-L|side-L-chine');
     expect(chine).toHaveLength(1);
     expect(chine[0].count).toBe(9);
-    expect(chine[0].flOz).toBeCloseTo(9 * DOMINO_FLOZ['5×30'], 9); // D-73: the 1/4 in white oak web leaves a 0.417 in land: 5×30 (4×20 with the 4 mm okoume)
+    expect(chine[0].flOz).toBeCloseTo(9 * DOMINO_FLOZ['4×20'], 9); // D-73: 4×20 with the 4 mm okoume of the Extreme spec (the 1/4 in white oak web of the Standard spec leaves a 0.417 in land: 5×30)
     expect(sum('domino') / n('domino')).toBeGreaterThanOrEqual(0.1);
     expect(sum('domino') / n('domino')).toBeLessThanOrEqual(0.25);
   });

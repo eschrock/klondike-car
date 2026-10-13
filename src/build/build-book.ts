@@ -8,7 +8,7 @@
  */
 import { fracIn } from './cutlist';
 import { SHAPER_CONVENTIONS, SHAPER_NOTES, type BuildData } from './package';
-import { cureLine, dims3, esc, featureSummary, groupByWhen, maxDepth, pct, sheetSvg, usd } from '../ui/build-helpers';
+import { SPEC_NAME, cureLine, dims3, esc, featureSummary, groupByWhen, lbDelta, maxDepth, pct, sheetSvg, usd, weatherLine } from '../ui/build-helpers';
 
 const CSS = `
 :root { color-scheme: light; --ink: #1b1b1b; --muted: #5c5c5c; --rule: #bdbdbd; --tint: #f1eee6; --accent: #7a4b00; }
@@ -127,7 +127,7 @@ function cutlistSection(d: BuildData): string {
   for (const pool of c.resaw) {
     out.push(`<p class="small">${pool.strips} strips of ${fracIn(pool.roughT)}" rough: buy ${pool.boards} × ${esc(pool.board)} × ${pool.boardWidthIn}" wide × ${pool.boardLengthIn / 12} ft (${pool.boardFeet.toFixed(1)} bf). RIP FIRST into ${pool.lanes} lane${pool.lanes === 1 ? '' : 's'}, then resaw each lane into ${pool.stripsPerBoard} slab${pool.stripsPerBoard === 1 ? '' : 's'}; a board yields ${pool.yieldPerBoard} strips; the purchase holds ${pool.stripSlots} strips, so ${pool.spares} spare${pool.spares === 1 ? '' : 's'}.</p>`);
   }
-  out.push('<h3>Okoume plywood</h3>');
+  out.push('<h3>Plywood</h3>');
   for (const g of c.sheets) {
     out.push(`<h4>${esc(g.label)} (${g.pieces} pieces)</h4>`);
     out.push(table([['Part'], ['Qty', 'num'], ['Final T × W × L'], ['Grain'], ['Assembly step', 'num']], g.rows.map((r) => [
@@ -151,10 +151,10 @@ function boardsSection(d: BuildData): string {
   ]));
   if (o.glueUps.length) out.push(`<p class="small">Wider than a board, edge-glue pieces: ${esc(o.glueUps.join(', '))}.</p>`);
   if (o.laminated.length) out.push(`<p class="small">Face-laminated from the stocked boards above (D-70; no 12/4): ${esc([...new Set(o.laminated.map((q) => `${q.partNo} (${q.lamination.text})`))].join('; '))}.</p>`);
-  const sheets = new Map<number, number>();
-  for (const s of d.nest.sheets) sheets.set(s.thicknessMm, (sheets.get(s.thicknessMm) ?? 0) + 1);
+  const sheets = new Map<string, number>();
+  for (const s of d.nest.sheets) { const k = `${s.label}|${s.widthIn}|${s.lengthIn}`; sheets.set(k, (sheets.get(k) ?? 0) + 1); }
   out.push('<h3>Plywood to buy</h3>');
-  out.push(ul([...sheets.entries()].map(([mm, n]) => `${n} × ${mm} mm marine okoume (BS 1088), 4 × 8 ft sheet`)));
+  out.push(ul([...sheets.entries()].map(([k, n]) => { const [label, w, l] = k.split('|'); return `${n} × ${esc(label)}, ${+w / 12} × ${+l / 12} ft sheet`; })));
   out.push('<h3>Where each solid piece comes from</h3>');
   for (const t of o.thicknesses) {
     t.boards.forEach((b, i) => {
@@ -188,7 +188,17 @@ function nestingSection(d: BuildData): string {
 
 function bomSection(d: BuildData): string {
   const b = d.bom;
-  const out: string[] = [`<p class="muted small">${esc(b.totalsText)}. ${pct(b.estimateShare)} of the total is an estimate (${usd(b.estimateUsd)}), the rest quoted by the model or by a vendor list. Prices are 2026 US retail guesses until you get quotes. Bulk parts (screws, nuts, washers, inserts, Dominos, tape, sandpaper) are priced by the pack in their own section: you buy a whole pack and may already have them in the shop. The finishing touches (lights, seat cushions, reflectors, tie-downs) are priced as their own section so you can build with or without them.</p>`];
+  const cmp = b.weatherCompare;
+  const out: string[] = [];
+  if (cmp.computed) {
+    out.push(`<p><strong>Weather spec: ${esc(SPEC_NAME[b.spec])}.</strong> ${esc(weatherLine(cmp).replace(/^Weather spec: [^.]*\. /, ''))}</p>`);
+    const secTitle = new Map(b.sections.map((x) => [x.id as string, x.title]));
+    out.push(table([['Section'], ['Extreme minus Standard', 'num']], [
+      ...Object.entries(cmp.deltaBySection).filter(([, v]) => Math.abs(v) >= 0.005).map(([id, v]) => [td(esc(secTitle.get(id) ?? id)), td(`${v < 0 ? '-' : '+'}${usd(Math.abs(v))}`, 'num')]),
+      [td('<strong>Total</strong>'), td(`<strong>${cmp.deltaUsd < 0 ? '-' : '+'}${usd(Math.abs(cmp.deltaUsd))}</strong> (${lbDelta(cmp.deltaLb)})`, 'num')],
+    ]));
+  }
+  out.push(`<p class="muted small">${esc(b.totalsText)}. ${pct(b.estimateShare)} of the total is an estimate (${usd(b.estimateUsd)}), the rest quoted by the model or by a vendor list. Prices are 2026 US retail guesses until you get quotes. Bulk parts (screws, nuts, washers, inserts, Dominos, tape, sandpaper) are priced by the pack in their own section: you buy a whole pack and may already have them in the shop. The finishing touches (lights, seat cushions, reflectors, tie-downs) are priced as their own section so you can build with or without them.</p>`);
   const lineRow = (l: BuildData['bom']['sections'][number]['lines'][number]): string[] => [
     td(`${esc(l.description)}${l.vendor ? `<div class="muted small">${esc(l.vendor)}</div>` : ''}${l.notes ? `<div class="muted small">${esc(l.notes)}</div>` : ''}${l.materialNote ? `<div class="small"><strong>Material:</strong> ${esc(l.materialNote)}</div>` : ''}${l.url ? `<div class="small">${link(l.url)}</div>` : ''}`),
     td(`${l.qty % 1 ? l.qty.toFixed(2) : l.qty} ${esc(l.unit)}${l.packs !== undefined ? `<div class="muted small">need ${num(l.needed ?? 0, 2)}, ${l.packs} pack${l.packs === 1 ? '' : 's'} of ${l.packQty} at ${usd(l.packUsd ?? 0)}</div>` : ''}`, 'num'), td(usd(l.unitUsd), 'num'), td(`${usd(l.extUsd)}${l.basis === 'estimate' ? ' est.' : ''}`, 'num'),
@@ -234,7 +244,7 @@ function assemblySection(d: BuildData): string {
 
 function finishingSection(d: BuildData): string {
   const f = d.finishing;
-  const out: string[] = [`<p class="small">Finish area (net, glued faces taken off): ${f.areas.oakFt2.toFixed(0)} ft² oak, ${f.areas.okoumeFt2.toFixed(0)} ft² okoume (${f.areas.show.totalFt2.toFixed(0)} ft² show, ${f.areas.hidden.totalFt2.toFixed(0)} ft² hidden; ${f.areas.gross.totalFt2.toFixed(0)} ft² gross), ${f.areas.oakEndGrainFt2.toFixed(1)} ft² oak end grain.</p>`];
+  const out: string[] = [`<p class="small"><strong>Weather spec: ${esc(SPEC_NAME[f.spec])}.</strong> ${esc(f.glue.adhesiveRule)}</p>`, `<p class="small">Finish area (net, glued faces taken off): ${f.areas.oakFt2.toFixed(0)} ft² oak, ${f.areas.plyFt2.toFixed(0)} ft² plywood (${f.areas.show.totalFt2.toFixed(0)} ft² show, ${f.areas.hidden.totalFt2.toFixed(0)} ft² hidden; ${f.areas.gross.totalFt2.toFixed(0)} ft² gross), ${f.areas.oakEndGrainFt2.toFixed(1)} ft² oak end grain.</p>`];
   out.push('<h3>Shopping list</h3>');
   out.push(table([['Product'], ['Buy', 'num']], [
     ...f.buy.map((b) => [td(`${esc(b.item)}<div class="muted small">${esc(b.note)}</div>`), td(`${b.qty} ${esc(b.unit)}`, 'num')]),
@@ -281,6 +291,8 @@ export function buildBookHtml(d: BuildData): string {
   out.push(`<style>${CSS}</style></head><body>`);
   out.push('<header><h1>Troop 455 Klondike Derby sled: build book</h1>');
   out.push(`<p class="muted">Generated ${esc(d.opts.date ?? '(date not given)')} · params revision <strong>${esc(d.revision)}</strong>${d.opts.link ? ` · ${esc(d.opts.link)}` : ''}</p>`);
+  const cmp = d.bom.weatherCompare;
+  out.push(`<p><strong>Weather spec: ${esc(SPEC_NAME[d.bom.spec])}</strong> (${d.bom.spec === 'standard' ? 'garage-kept, used a few times a year, wet at most at a rainy derby' : 'stored outside, near salt, or exposed regularly'}). Thin sheet: ${esc(d.bom.thinSheetName)}.${cmp.computed ? ` ${esc(weatherLine(cmp).replace(/^Weather spec: [^.]*\. /, ''))}` : ''}</p>`);
   out.push('<p class="small">Every number here was generated from the design on screen at that moment. If you change a design number, download again. Print this file from your browser (Letter, margins default, scale 100%) or save it as a PDF. The full-size forms and the Shaper files are separate files in the same zip.</p>');
   out.push(`<nav aria-label="Contents"><ol>${BOOK_SECTIONS.map(([id, t]) => `<li><a href="#${id}">${esc(t)}</a></li>`).join('')}</ol></nav></header>`);
   BOOK_SECTIONS.forEach(([id, title], i) => out.push(`<section class="page" id="${id}"><h2>${i + 1}. ${esc(title)}</h2>${body[id]}</section>`));

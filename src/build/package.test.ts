@@ -72,7 +72,7 @@ describe('buildPackage', () => {
 
   it('puts every cut list table in cutlist.csv', () => {
     const csv = pkg.files.find((f) => f.name === 'cutlist.csv')!.data as string;
-    for (const h of ['# Oak, by board thickness', '# Resawn strips', '# Okoume plywood', '# Metal stock']) expect(csv).toContain(h);
+    for (const h of ['# Oak, by board thickness', '# Resawn strips', '# Plywood', '# Metal stock']) expect(csv).toContain(h);
     expect(csv).toContain(pkg.data.cutList.csv.oak.split('\n')[0]);
     expect(csv).toContain('# Face-laminated layers (D-70)'); // the beams, knees and chocks (no 12/4)
   });

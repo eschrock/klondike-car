@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
 import { defaultParams } from '../params';
 import { PRE_D72 } from '../test-fixtures';
+import { isOakStocked } from './prices';
 import { assemblySteps } from './assembly';
-import { BOARD_THICKNESSES, MAX_LAMINATION_LAYERS, RESAW_BOARD_WIDTHS_IN, RESAW_MIN_SPARES, boardByNominal, boardForThickness, cutList, isBuilt, laminationText, makeLanes, planLamination, stepMapOf, resawUsableIn, spareSlots, stripsPerBoard, toCsv } from './cutlist';
+import { BOARD_THICKNESSES, MAX_LAMINATION_LAYERS, finalFrac, roughFrac, RESAW_BOARD_WIDTHS_IN, RESAW_MIN_SPARES, boardByNominal, boardForThickness, cutList, isBuilt, laminationText, makeLanes, packLanes, planLamination, stepMapOf, resawUsableIn, spareSlots, stripsPerBoard, toCsv } from './cutlist';
 
-// D-72/D-73: this file's resaw and sheet numbers (0.234 in bands in 0.359 in rough pools, the 4 mm sheet, the tube) are the 4 mm okoume design: PRE_D72. The white oak / rod cut list is in d72.test.ts.
+// D-72/D-73: this file's resaw and sheet numbers (0.234 in bands in 0.359 -> 3/8 in rough pools, the 4 mm sheet, the tube) are the 4 mm okoume design: PRE_D72. The white oak / rod cut list is in d72.test.ts.
 const p = { ...defaultParams(), ...PRE_D72 };
 const parts = buildModel(p);
 const cl = cutList(parts, p);
@@ -79,9 +80,9 @@ describe('cutList', () => {
   });
 
   it('counts resaw yield with the kerf', () => {
-    expect(stripsPerBoard(0.359, 1.75, 0.125)).toBe(3);
-    expect(stripsPerBoard(0.359, 13 / 16, 0.125)).toBe(1);
-    expect(stripsPerBoard(0.359, 1.75, 0.0625)).toBeGreaterThanOrEqual(4);
+    expect(stripsPerBoard(0.375, 1.75, 0.125)).toBe(3);
+    expect(stripsPerBoard(0.375, 13 / 16, 0.125)).toBe(1);
+    expect(stripsPerBoard(0.375, 1.75, 0.0625)).toBeGreaterThanOrEqual(4);
   });
 
   it('resaws from the ROUGH board: the 0.5 in rail strips come two to a 5/4 board (2 x 0.5 + kerf in 1.25), not four to a 12/4', () => {
@@ -106,23 +107,28 @@ describe('cutList', () => {
       expect(pool.boardFeet).toBeCloseTo((pool.boards * boardByNominal(pool.board).nominalIn * pool.boardWidthIn * pool.boardLengthIn) / 144, 9);
     }
     // 8 band strips and 4 rail strips: more than that is bought, and the spares are real room (a strip of the widest width fits in each)
-    expect(cl.resaw.find((r) => Math.abs(r.roughT - 0.359) < 1e-3)!.strips).toBe(8);
+    expect(cl.resaw.find((r) => Math.abs(r.roughT - 0.375) < 1e-3)!.strips).toBe(8); // 0.234 + 1/8 = 0.359, rounded UP to 3/8
     expect(cl.resaw.find((r) => Math.abs(r.roughT - 0.5) < 1e-3)!.stripSlots).toBeGreaterThanOrEqual(5);
   });
 
   it('chooses the cheapest board in board feet that leaves the spare, over every thickness and width', () => {
     for (const pool of cl.resaw) {
-      const stripW = Math.max(...pool.laneStrips.flat().map((s) => s.widthIn));
+      const items = pool.laneStrips.flat();
+      const stripW = Math.max(...items.map((s) => s.widthIn));
       for (const b of BOARD_THICKNESSES) {
         const k = stripsPerBoard(pool.roughT, resawUsableIn(b, p), p.resawKerfIn);
-        if (k < 1) continue;
+        if (k < 1 || !isOakStocked(b.nominal)) continue;
+        const lanes = makeLanes(items, k);
         for (const w of RESAW_BOARD_WIDTHS_IN) {
-          // a plan that cuts every lane at the widest strip width is feasible (an upper bound on the room needed): no cheaper candidate may satisfy it
-          const perBoard = Math.floor((w + p.resawKerfIn) / (stripW + p.resawKerfIn)) * k;
-          if (perBoard < 1) continue;
-          const boards = Math.ceil((pool.strips + RESAW_MIN_SPARES) / perBoard);
-          const bf = (boards * b.nominalIn * w * pool.boardLengthIn) / 144;
-          if (bf < pool.boardFeet - 1e-9) throw new Error(`${pool.roughT}: ${b.nominal} x ${w}" needs ${bf} bf < ${pool.boardFeet}`);
+          if (stripW > w + 1e-9) continue;
+          // the planner's own accounting: rip-first lanes packed first-fit across the boards, spares counted as whole lanes the width left can still take plus the empty slots of full-width lanes
+          for (let boards = 1; boards <= lanes.length + 6; boards++) {
+            const packed = packLanes(lanes, boards, p.resawKerfIn, w);
+            if (!packed || spareSlots(packed, k, stripW, p.resawKerfIn, w) < RESAW_MIN_SPARES) continue;
+            const bf = (boards * b.nominalIn * w * pool.boardLengthIn) / 144;
+            if (bf < pool.boardFeet - 1e-9) throw new Error(`${pool.roughT}: ${b.nominal} x ${w}" needs ${bf} bf < ${pool.boardFeet}`);
+            break;
+          }
         }
       }
     }
@@ -130,9 +136,9 @@ describe('cutList', () => {
 
   it("rips first, then resaws (round 3 MUST-C): the critic's numbers, 4/4 x 8\" gives 8 band strips and no spare; a wider board or a second board adds the spare", () => {
     const kerf = p.resawKerfIn;
-    const t = 0.359, wide = 1.625, narrow = 1.113;
+    const t = 0.375, wide = 1.625, narrow = 1.113;
     const k = stripsPerBoard(t, resawUsableIn(boardByNominal('4/4'), p), kerf);
-    expect(k).toBe(2); // 2 x 0.359 + 0.125 = 0.843 <= 0.875
+    expect(k).toBe(2); // 2 x 0.375 + 0.125 = 0.875 <= 0.875
     const item = (widthIn: number, i: number) => ({ partNo: 'b', id: `b${i}`, widthIn, lengthIn: 72 });
     const strips = [...Array(6)].map((_, i) => item(wide, i)).concat([item(narrow, 6), item(narrow, 7)]);
     const lanes = makeLanes(strips, k);
@@ -149,7 +155,7 @@ describe('cutList', () => {
     expect(spareSlots([lanes], k, wide, kerf, 9)).toBe(2);
     expect(spareSlots([lanes], k, wide, kerf, 10)).toBe(4);
     // so the planner does not pick 4/4 x 8 in with 0 spares; it meets the spare with the fewest board feet
-    const pool = cl.resaw.find((r) => Math.abs(r.roughT - 0.359) < 1e-3)!;
+    const pool = cl.resaw.find((r) => Math.abs(r.roughT - 0.375) < 1e-3)!;
     expect(pool.spares).toBeGreaterThanOrEqual(RESAW_MIN_SPARES);
     expect(pool.strips).toBe(8);
     expect(pool.board === '4/4' && pool.boardWidthIn <= 8 && pool.boards === 1).toBe(false);
@@ -192,7 +198,7 @@ describe('round 3: bench words, assembly steps, net web, no data warnings', () =
     const shoe = row('brake-shoe'), chock = row('brake-chock');
     expect(shoe.board).toBe('5/4');
     expect(chock.board).toBe('laminated');
-    expect(chock.r.lamination!.text).toBe('3 \u00d7 0.833" from 4/4'); // 2.5 / 3: not a sixteenth, so the decimal
+    expect(chock.r.lamination!.text).toBe('3 \u00d7 27/32" from 4/4'); // 2.5 / 3 = 0.833, shown to the nearest 1/32
     for (const x of [shoe, chock]) { expect(x.r.stock.t).toBeLessThanOrEqual(x.r.stock.w); expect(x.r.stock.t).toBeLessThanOrEqual(x.r.stock.l); }
   });
   it('writes the grain in words, not as a local axis', () => {
@@ -238,11 +244,13 @@ describe('face lamination (D-70: no 12/4)', () => {
     const beam = lam.find((r) => r.partNo === 'beam-F')!;
     expect(beam.lamination!.layers.map((l) => l.board)).toEqual(['4/4', '4/4', '4/4']);
     expect(beam.lamination!.text).toBe('3 \u00d7 3/4" from 4/4');
-    expect(beam.note).toMatch(/^face-laminated \(D-70\): 3 layers of 4\/4, each planed to 25\/32" \(0\.792"\);/);
+    expect(beam.note).toMatch(/^face-laminated \(D-70\): 3 layers of 4\/4, each planed to 7\/8";/); // the exact 25/32 (0.792) is rounded UP to 1/8
     expect(beam.lamination!.costPerFt2).toBeCloseTo(30, 6); // 3 x 1 x $10; 8/4 + 4/4 would be $40, 5/4 + 5/4 $31.25
     // the layers add up to the glued block, each fits its board, and the finished shares add up to the part
     const l = beam.lamination!;
-    expect(l.layers.reduce((a, q) => a + q.roughT, 0)).toBeCloseTo(beam.rough.t, 6);
+    expect(l.layers.reduce((a, q) => a + q.roughT, 0)).toBeCloseTo(l.roughT, 6);
+    expect(beam.roughExact.t).toBeCloseTo(l.roughT, 6);
+    expect(beam.rough.t).toBeCloseTo(3 * 0.875, 9); // the glued block is its three layers, each planed to a rounded 7/8
     expect(l.layers.reduce((a, q) => a + q.finalT, 0)).toBeCloseTo(beam.stock.t, 6);
     for (const q of l.layers) expect(q.roughT).toBeLessThanOrEqual(boardByNominal(q.board).usableIn + 1e-9);
     // the planing allowance is taken once, on the block
@@ -281,5 +289,185 @@ describe('face lamination (D-70: no 12/4)', () => {
     expect(cl.warnings).toEqual([]);
     const ids = rows.flatMap((r) => r.ids);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+// ── Eric 2026-10-12: actual cuts, rounded rough sizes, laminate allowances, bandsaw capacity ─────────────────────────
+describe('display helpers', () => {
+  it('rounds ROUGH sizes UP to 1/8 and FINAL sizes to the nearest 1/32, always as fractions', () => {
+    expect(roughFrac(15.65625)).toBe('15-3/4"'); // 15 21/32 is not a rough cut
+    expect(roughFrac(15.625)).toBe('15-5/8"');
+    expect(roughFrac(15.626)).toBe('15-3/4"');
+    expect(roughFrac(6)).toBe('6"');
+    expect(roughFrac(0.333)).toBe('3/8"');
+    expect(finalFrac(15.65625)).toBe('15-21/32"');
+    expect(finalFrac(0.234)).toBe('7/32"');
+    expect(finalFrac(24)).toBe('24"');
+  });
+});
+
+describe('rough allowances (Eric 2026-10-12)', () => {
+  const q = defaultParams();
+  const dparts = buildModel(q);
+  const dcl = cutList(dparts, q);
+  const isEighth = (v: number): boolean => Math.abs(v * 8 - Math.round(v * 8)) < 1e-9;
+
+  it('has the allowances as params: plain solid +1/4 w, +1 l; glued and bent pieces +3/8 w, +2 l; thickness +1/8', () => {
+    expect(q.millingAllowanceIn).toBe(0.125);
+    expect(q.roughWidthAllowanceIn).toBe(0.25);
+    expect(q.roughLengthAllowanceIn).toBe(1);
+    expect(q.laminateWidthAllowanceIn).toBe(0.375);
+    expect(q.laminateLengthAllowanceIn).toBe(2);
+    expect(q.bandsawResawCapacityIn).toBe(6);
+  });
+
+  it('gives a plain solid part the plain allowances, rounded UP to 1/8, and a bent strip the laminate ones', () => {
+    const joist = dparts.find((x) => x.id === 'joist-2')!;
+    const row = dcl.oak.flatMap((g) => g.rows).find((r) => r.ids.includes('joist-2'))!;
+    expect(row.roughExact.w).toBeCloseTo(joist.stock!.w + 0.25, 9);
+    expect(row.roughExact.l).toBeCloseTo(joist.stock!.l + 1, 9);
+    expect(row.rough.l).toBeCloseTo(Math.ceil((joist.stock!.l + 1) * 8 - 1e-9) / 8, 9);
+    const rail = dcl.strips.find((r) => r.partNo === 'rail')!;
+    expect(rail.rough.w).toBeCloseTo(Math.ceil((rail.stock.w + 0.375) * 8 - 1e-9) / 8, 9);
+    expect(rail.rough.l).toBeCloseTo(Math.ceil((rail.stock.l + 2) * 8 - 1e-9) / 8, 9);
+    expect(rail.rough.t).toBeCloseTo(0.5, 9);
+  });
+
+  it('rounds EVERY rough dimension in the cut list UP to 1/8 (cuts, rows, strips, layers, glue-ups), never below the exact size', () => {
+    for (const c of dcl.cuts) {
+      for (const k of ['t', 'w', 'l'] as const) {
+        expect(isEighth(c.rough[k]) || k === 't', `${c.label} ${k}`).toBe(true);
+        expect(c.rough[k], `${c.label} ${k}`).toBeGreaterThanOrEqual(c.roughExact[k] - 1e-9);
+        expect(c.rough[k], `${c.label} ${k}`).toBeLessThan(c.roughExact[k] + 1 / 8 + 1e-9);
+      }
+      expect(c.roughText, c.label).toMatch(/^[\d\-/]+ \u00d7 [\d\-/]+ \u00d7 [\d\-/]+$/); // fractions, no decimals
+    }
+    for (const r of dcl.oak.flatMap((g) => g.rows)) for (const k of ['w', 'l'] as const) expect(isEighth(r.rough[k]), `${r.partNo} ${k}`).toBe(true);
+    for (const g of dcl.glueUps) for (const k of ['t', 'w', 'l'] as const) expect(isEighth(g.roughBlock[k]), `${g.label} ${k}`).toBe(true);
+    for (const l of dcl.layers) { expect(isEighth(l.widthIn)).toBe(true); expect(isEighth(l.lengthIn)).toBe(true); }
+    expect(dcl.csv.oak.split('\r\n').map((r) => r.split(',').slice(4, 6).join(',')).join('\n')).not.toMatch(/\d\.\d/); // the final and rough columns are fractions
+  });
+
+  it('leaves the board choice and the lamination on the EXACT thickness, so rounding never moves a part to a thicker board', () => {
+    for (const g of dcl.oak) {
+      if (g.board === 'resawn' || g.board === 'laminated') continue;
+      for (const r of g.rows) expect(r.rough.t, r.partNo).toBeLessThanOrEqual(g.usableIn + 1e-9);
+    }
+    const king = dcl.cuts.find((c) => c.partNo === 'king-beam')!;
+    expect(king.board).toBe('8/4');
+    expect(king.rough.t).toBeLessThanOrEqual(boardByNominal('8/4').usableIn + 1e-9); // 1.871 exact: 1-7/8, not 2
+  });
+
+  it('does not change the mass: the mass reads stock, never rough', () => {
+    const lb = (pp: typeof dparts): number => pp.reduce((a, x) => a + (x.payload || x.group === 'reference' ? 0 : x.massLb), 0);
+    const big = { ...q, roughWidthAllowanceIn: 0.5, roughLengthAllowanceIn: 3, laminateWidthAllowanceIn: 0.75, laminateLengthAllowanceIn: 4 };
+    expect(lb(buildModel(big))).toBeCloseTo(lb(dparts), 9);
+  });
+});
+
+describe('actual cuts (Eric 2026-10-12: the cut list lists the cuts, not the glued-up parts)', () => {
+  const q = defaultParams();
+  const dparts = buildModel(q);
+  const dcl = cutList(dparts, q);
+
+  it('lists an edge-glued panel as its boards, each its share of the width plus the laminate allowance, and a glue-up row', () => {
+    const boards = dcl.cuts.filter((c) => c.partNo === 'transom-rear');
+    expect(boards).toHaveLength(3);
+    expect(boards.map((c) => c.label)).toEqual(['Rear transom, board 1 of 3', 'Rear transom, board 2 of 3', 'Rear transom, board 3 of 3']);
+    const transom = dparts.find((x) => x.id === 'transom-rear')!;
+    for (const c of boards) {
+      expect(c.piece).toBe('board');
+      expect(c.of).toBe(3);
+      expect(c.roughExact.w).toBeCloseTo(transom.stock!.w / 3 + 0.375, 9);
+      expect(c.rough.w).toBeLessThanOrEqual(6);
+      expect(c.glueUp).toBe('Rear transom panel');
+      expect(c.roughText).toMatch(/^5\/8 \u00d7 5-7\/8 \u00d7 26$/);
+    }
+    const g = dcl.glueUps.find((x) => x.partNo === 'transom-rear')!;
+    expect(g.label).toBe('Rear transom panel');
+    expect(g.from).toBe(3);
+    expect(g.kind).toBe('edge');
+    expect(g.roughBlock.w).toBeCloseTo(boards.reduce((a, c) => a + c.rough.w, 0), 9);
+    expect(g.finalText).toBe(`${finalFrac(transom.stock!.t).replace('"', '')} \u00d7 ${finalFrac(transom.stock!.w).replace('"', '')} \u00d7 ${finalFrac(transom.stock!.l).replace('"', '')}`);
+    expect(g.note).toMatch(/then mill to final/);
+  });
+
+  it('lists the layers of a face-laminated part as the cuts, with the laminated block as the glue-up', () => {
+    const layers = dcl.cuts.filter((c) => c.partNo === 'beam-R');
+    expect(layers).toHaveLength(3);
+    for (const c of layers) { expect(c.piece).toBe('layer'); expect(c.layers).toBe(3); expect(c.board).toBe('4/4'); expect(c.glueUp).toBe('rear axle beam block'); }
+    expect(layers[0].label).toBe('rear axle beam, layer 1 of 3');
+    const g = dcl.glueUps.find((x) => x.partNo === 'beam-R')!;
+    expect(g.kind).toBe('face');
+    expect(g.from).toBe(3);
+    // a laminated knee is both: edge-glue the boards of each layer, then the layers
+    const knee = dcl.glueUps.find((x) => x.partNo === 'brake-knee')!;
+    expect(knee.kind).toBe('both');
+    expect(knee.from).toBe(6);
+    expect(knee.qty).toBe(2);
+    expect(dcl.cuts.filter((c) => c.partNo === 'brake-knee').reduce((a, c) => a + c.qty, 0)).toBe(12);
+  });
+
+  it('lists the resaw strips as the strip blanks with the rip-first note, from the pool board', () => {
+    const rail = dcl.cuts.filter((c) => c.partNo === 'rail');
+    expect(rail.reduce((a, c) => a + c.qty, 0)).toBe(4);
+    for (const c of rail) { expect(c.piece).toBe('strip'); expect(c.board).toBe(dcl.strips.find((r) => r.partNo === 'rail')!.resawFrom); expect(c.note).toMatch(/rip the lane first/); }
+    expect(rail.map((c) => c.label)).toEqual(['Rail, strip 1 of 2', 'Rail, strip 2 of 2']);
+  });
+
+  it('accounts for every oak part exactly once: ids in cuts equal the oak parts, and every piece has a rough size', () => {
+    const oakIds = dparts.filter((x) => isBuilt(x) && /oak/i.test(x.material) && (x.kind === 'lumber' || x.kind === 'bentlam')).map((x) => x.id).sort();
+    expect([...new Set(dcl.cuts.flatMap((c) => c.ids))].sort()).toEqual(oakIds);
+    expect(dcl.cuts.every((c) => c.partId === c.ids[0] && c.qty === c.ids.length && c.rough.t > 0 && c.rough.w > 0 && c.rough.l > 0)).toBe(true);
+    expect(dcl.cuts.some((c) => c.piece === 'solid')).toBe(true);
+  });
+
+  it('keeps the finished sizes in a Finished parts table: exact in final, the nearest 1/32 in the text', () => {
+    const t = dcl.finished.find((f) => f.partNo === 'transom-rear')!;
+    expect(t.from).toBe('glue-up');
+    expect(t.final.w).toBeCloseTo(dparts.find((x) => x.id === 'transom-rear')!.stock!.w, 9);
+    expect(t.finalText).toBe('1/2 \u00d7 16-3/8 \u00d7 24');
+    expect(dcl.finished.find((f) => f.partNo === 'joist')!.from).toBe('board');
+    expect(dcl.finished.find((f) => f.partNo === 'rail')!.final.t).toBeCloseTo(0.75, 9); // two 3/8 plies
+    expect(dcl.csv.cuts.split('\r\n')[0]).toContain('Glue-up');
+    expect(dcl.csv.glueUps.split('\r\n')[0]).toContain('Mill to final');
+    expect(dcl.csv.finished).toContain('Final T x W x L');
+  });
+});
+
+describe('bandsaw capacity (Eric 2026-10-12: my bandsaw has 6" capacity)', () => {
+  const q = defaultParams();
+  const dparts = buildModel(q);
+  const dcl = cutList(dparts, q);
+
+  it('has a resaw height on every pool: the strip WIDTH (rip first), at most the 6" capacity, never the width of the board', () => {
+    expect(dcl.resaw.length).toBeGreaterThan(0);
+    for (const pool of dcl.resaw) {
+      expect(pool.bandsawCapacityIn).toBe(6);
+      expect(pool.resawHeightIn).toBeLessThanOrEqual(6);
+      expect(pool.withinCapacity).toBe(true);
+      expect(pool.resawHeightIn).toBeCloseTo(Math.max(...pool.laneStrips.flat().map((s) => s.widthIn)), 9);
+      expect(pool.resawHeightIn).toBeLessThan(pool.boardWidthIn); // a 9" or 10" board is ripped first
+      expect(pool.laneWidthsIn.length).toBe(pool.lanes);
+    }
+    expect(dcl.warnings.filter((w) => /bandsaw/.test(w))).toEqual([]);
+  });
+
+  it('says so in the text: the resaw height against the saw, and which board to rip the lanes from first', () => {
+    const rail = dcl.resaw.find((r) => Math.abs(r.roughT - 0.5) < 1e-6)!;
+    expect(rail.resawHeightText).toBe('resaw height 3-3/8" (your bandsaw: 6")');
+    expect(rail.ripText).toBe(`rip the lanes from a ${rail.boardWidthIn}"-wide board first`);
+    expect(rail.text).toContain(rail.ripText[0].toUpperCase() + rail.ripText.slice(1));
+    expect(rail.text).toContain(rail.resawHeightText);
+  });
+
+  it('flags a strip taller than the saw (here a 3" saw) instead of silently planning a cut it cannot make', () => {
+    const tall = cutList(dparts, { ...q, bandsawResawCapacityIn: 3 });
+    const bad = tall.resaw.filter((r) => !r.withinCapacity);
+    expect(bad.length).toBeGreaterThan(0);
+    expect(bad[0].text).toMatch(/TOO TALL/);
+    expect(tall.warnings.some((w) => /taller than your bandsaw/.test(w))).toBe(true);
+    // rip-first never needs a cut taller than the widest strip, whatever the board width
+    for (const r of tall.resaw) expect(r.resawHeightIn).toBeCloseTo(Math.max(...r.laneStrips.flat().map((s) => s.widthIn)), 9);
   });
 });
