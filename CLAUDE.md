@@ -13,7 +13,17 @@ Parametric design app for Troop 455's Klondike Derby sled (a pulled sled on whee
 - Stop at milestones and summarize for Eric. Commit at milestones. Always commit `package-lock.json` changes.
 - Use cheaper subagents (Sonnet/Haiku) for mechanical work, in parallel only when their files do not overlap. **Parallel agents must never run `git stash`, `checkout`, `reset` or `commit`.** Other agents share the working tree; only the orchestrating session commits. Parallel agents edit shared files (`src/params.ts`, `src/model/layout.ts`, `src/model/types.ts`) only with small exact-string edits, never whole-file rewrites.
 - Any optimization or verification gets a **critic agent** that grades it 1–10 with concrete fixes. Iterate until ≥ 8 or 3 rounds, whichever comes first, and report the final grade and what remains. Reviews are not kept in the repo; summarize them in the commit message or the hand-off.
-- Doc rule: `DESIGN.md` describes the sled as it is now and `DECISIONS.md` lists only decisions that hold, each with a one-line why. No history stories. When a decision is superseded, edit or remove its row and add the old ID to the Retired table. Do not add phase notes, round notes or per-round screenshots; the git log is the history.
+- **Doc management.** The repo holds only current-state docs, and each fact lives in one place:
+  - `DESIGN.md`: the sled as it is now (requirements, construction, key numbers, app layout, build outputs).
+  - `DECISIONS.md`: only decisions that hold, each with a one-line why and no history story. When one is superseded, edit or remove its row and add the old ID to the Retired table.
+  - `docs/STATUS.md`: a short current status plus the open items.
+  - `docs/studies/` and `docs/price-research/`: reference data that still backs a decision or the BOM.
+  - Update these in the same commit as the change that makes them wrong. Derive numbers from the code (`buildModel`, `runChecks`, `bom`), not from older docs.
+- **Temporary docs** (a plan, spec, workstream or round notes, a review, scratch analysis) are allowed only while multi-commit or multi-phase work is in flight.
+  - Put them under `docs/wip/<topic>/` and list them in `docs/STATUS.md` under "Work in flight" with the commit or phase that retires them.
+  - Keep them out of code comments: cite a D-ID or `DESIGN.md`, never a wip file.
+  - **In the commit that finishes the last phase, fold what still holds into `DESIGN.md` and `DECISIONS.md`, then delete the wip docs and the STATUS entry.** Git history keeps them. Reviews and per-round screenshots are never kept; summarize the grade in the commit message.
+  - Before ending a milestone, check `docs/` for anything left over.
 - **Eric is weight-sensitive and cost-sensitive.** Never add mass just to pass a check: show the lightest option first. Show the cheapest credible option first, separate quoted prices from estimates, and question over-specified hardware before adding cost. Do not cut what is structural or safety-relevant (stainless in wet oak, rated eye bolts) without showing the trade-off.
 - **Use case.** A pulled Klondike sled on wheels with a passenger rider, garage-kept and used a few times a year; not a ridden cart. Before a major design change, restate the use case and sketch the shape for Eric's OK.
 - Rider loads: 150 lb must pass everything; 200 lb is the goal (D-1).
