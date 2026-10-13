@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
 import { defaultParams } from '../params';
 import type { Part } from '../model/types';
+import { finalFrac } from './units';
 import { containers, DOMINO_FLOZ, endGrainAreaIn2, EPOXY_COVERAGE, EPOXY_RESIN_PARTS, epoxyTimeFactor, finishAreas, finishMaterial, finishingSchedule, GLUE_FLOZ_PER_FT2, glueEpoxyFlOz, glueJointEstimates, showRuleOf, surfaceAreaIn2, VARNISH_COVERAGE } from './finishing';
 
 // D-73: this file's numbers are the EXTREME weather spec (epoxy saturation coat on all the plywood, marine varnish, 4 mm okoume thin sheet); the Standard spec is tested in weather-spec.test.ts.
@@ -144,7 +145,7 @@ describe('finishing schedule', () => {
     const s = sched.steps[1].instructions.join(' ');
     expect(s).toMatch(/120/);
     expect(s).toMatch(/150/);
-    expect(s).toContain(`${p.roundoverIn}" roundover`);
+    expect(s).toContain(`${finalFrac(p.roundoverIn)} roundover`);
   });
 
   it('epoxy seals the okoume and oak end grain with ONE saturation coat of 105/206 and warns about oil-based stain', () => {
@@ -178,8 +179,9 @@ describe('finishing schedule', () => {
     const s = sched.steps[4];
     expect(lid.legend?.text).toBe('DO NOT STEP');
     expect(s.title).toContain('DO NOT STEP');
-    expect(s.instructions.join(' ')).toContain(`${lid.legend!.letterHeightIn}"`);
-    expect(s.instructions.join(' ')).toMatch(/storage-lid/);
+    expect(s.instructions.join(' ')).toContain(`${finalFrac(lid.legend!.letterHeightIn)} letters`);
+    expect(s.instructions.join(' ')).toMatch(/storage lid/);
+    expect(s.instructions.join(' ')).not.toMatch(/storage-lid/);
   });
 
   it('varnish: 3 coats on the show faces and 2 on the hidden ones, 320 between coats, with coverage cited', () => {
@@ -362,5 +364,20 @@ describe('build review round 1: stain, then seal (MUST-2)', () => {
   it('runs in two sessions and leaves the hardware off', () => {
     expect(sched.steps[1].instructions.join(' ')).toMatch(/underside while the hull is still inverted/);
     expect(sched.steps[5].instructions.join(' ')).toMatch(/Hardware, hinges and the running gear stay off/);
+  });
+});
+
+describe('finishing steps are written as short items (Eric 2026-10-12)', () => {
+  it('every step has 3-8 items with sub-bullets, flat instructions to match, no buying and no long decimals', () => {
+    for (const s of sched.steps) {
+      expect(s.items.length, s.id).toBeGreaterThanOrEqual(3);
+      expect(s.items.length, s.id).toBeLessThanOrEqual(8);
+      expect(s.items.some((q) => q.sub?.length), s.id).toBe(true);
+      expect(s.instructions.length, s.id).toBe(s.items.reduce((n, q) => n + 1 + (q.sub?.length ?? 0), 0));
+      const t = s.instructions.join(' ');
+      expect(t, s.id).not.toMatch(/\bbuy\b|\$/i);
+      expect(t, s.id).not.toMatch(/\d\.\d{3,}/);
+      expect(t, s.id).not.toMatch(/\b[a-z]+(?:[A-Z][a-z0-9]*)+(In|Lb|Psi|Deg)\b/);
+    }
   });
 });

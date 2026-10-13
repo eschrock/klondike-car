@@ -2,13 +2,15 @@
  * Pure helpers for the Build panel (no DOM, no CSS import), so they run headless under vitest.
  * Formatting, the SVG preview transforms, the nesting drawing, the print-view markup and the step-through focus.
  */
-import type { Dims } from '../model/types';
+import type { Dims, Part } from '../model/types';
 import type { NestedSheet } from '../build/nesting';
 import type { BuildStep, StepView } from '../build/assembly';
-import { HARDENERS, cumulativeParts, stepParts, type Cure } from '../build/assembly';
+import { HARDENERS, PART_TOKEN_RE, cumulativeParts, stepParts, type Cure } from '../build/assembly';
+import type { PartDims } from '../build/part-drawings';
 import type { ShaperFeature } from '../build/shaper-svg';
 import type { VerifyCheck, VerifyWhen } from '../build/verify';
-import { fracIn } from '../build/cutlist';
+import { fracIn, type Cut, type CutList } from '../build/cutlist';
+import { finalDimsText } from '../build/units';
 import type { WeatherCompare } from '../build/bom';
 
 export const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -261,6 +263,8 @@ export interface StepFocus {
   view: StepView;
   /** True when this is a new step (frame the camera); false for a refresh after a parameter change. */
   reframe: boolean;
+  /** "Show in 3D" on a part chip: tint only these parts and (once, while `frame` is true) frame the camera on them. Cleared by the next step. */
+  pin?: { ids: string[]; frame: boolean };
 }
 
 export function stepFocus(steps: BuildStep[], n: number, reframe: boolean): StepFocus | null {
@@ -372,3 +376,116 @@ export function mergeBuy<T extends { item: string; unit: string; qty: number; no
   }
   return out.map((g) => ({ item: g.item, note: g.note, buy: g.parts.join(' + ') }));
 }
+
+
+// ── Part chips and popovers ───────────────────────────────────────────────────
+
+/** A piece of instruction text: plain words, or a `{{part-id}}` token resolved to the part's label. */
+export type TextSeg = string | { part: string; label: string };
+
+/**
+ * Split text at its `{{part-id}}` tokens. The label is the part's running-text name (`partLabel`), capitalized at the start of a sentence exactly as
+ * `renderInstrText` does, so the chip reads the same as the flat text. An unknown id keeps its id as the label.
+ */
+export function instrSegments(text: string, labelOf: (id: string) => string | undefined): TextSeg[] {
+  const out: TextSeg[] = [];
+  let last = 0;
+  for (const m of text.matchAll(new RegExp(PART_TOKEN_RE.source, 'g'))) {
+    const at = m.index ?? 0;
+    if (at > last) out.push(text.slice(last, at));
+    const name = labelOf(m[1]) ?? m[1];
+    const start = at === 0 || /[.!?]\s+$/.test(text.slice(0, at));
+    out.push({ part: m[1], label: start ? name[0].toUpperCase() + name.slice(1) : name });
+    last = at + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+/** The cuts that make up one part (a `Cut` covers every identical part in `ids`). */
+export const cutsOfPart = (cuts: Cut[], id: string): Cut[] => cuts.filter((c) => c.ids.includes(id));
+
+/** "board 2 of 3", "layer 1 of 3", "resawn strip", "one piece". */
+export function pieceWord(c: Pick<Cut, 'piece' | 'index' | 'of' | 'layer' | 'layers'>): string {
+  switch (c.piece) {
+    case 'board': return c.of > 1 ? `board ${c.index} of ${c.of}` : 'one board';
+    case 'layer': return `layer ${c.layer ?? c.index} of ${c.layers ?? c.of}`;
+    case 'strip': return 'resawn strip';
+    default: return 'one piece';
+  }
+}
+
+/** Cuts grouped by the board they are sawn from, thinnest first ('4/4' before '8/4'; anything else last). */
+export function groupCutsByBoard(cuts: Cut[]): { board: string; cuts: Cut[] }[] {
+  const by = new Map<string, Cut[]>();
+  for (const c of cuts) (by.get(c.board) ?? by.set(c.board, []).get(c.board)!).push(c);
+  const rank = (b: string): number => { const m = /^(\d+)\/4$/.exec(b); return m ? Number(m[1]) : 99; };
+  return [...by].map(([board, list]) => ({ board, cuts: list })).sort((a, b) => rank(a.board) - rank(b.board) || a.board.localeCompare(b.board));
+}
+
+/** What a part popover shows. Every field is optional text so a part with no cut-list row (a purchased part) still gets a card. */
+export interface PartFacts {
+  id: string;
+  name: string;
+  partNo: string;
+  /** Identical parts this card stands for (1 when unique). */
+  qty: number;
+  /** Finished T × W × L, inches, as shop fractions. */
+  size: string;
+  /** "board 1 of 3: 3/4 × 5-7/8 × 25-1/2 (4/4)" per rough cut; empty for plywood, metal and purchased parts. */
+  cuts: string[];
+  board: string;
+  grain: string;
+  features: string[];
+  /** Features beyond the first few (the drawing lists them all). */
+  moreFeatures: number;
+}
+
+export const POPOVER_FEATURES = 4;
+
+/** Identical lines once, with a count in front when there are several: ["a", "a", "b"] -> ["2 × a", "b"]. */
+export function tally(lines: string[]): string[] {
+  const n = new Map<string, number>();
+  for (const l of lines) n.set(l, (n.get(l) ?? 0) + 1);
+  return [...n].map(([l, c]) => (c > 1 ? `${c} × ${l}` : l));
+}
+
+/**
+ * The popover's facts from the cut list (the rough and finished sizes of the actual cuts) and, when it has run, `partDims` (board, grain, features).
+ * Oak comes from `finished` and `cuts`; plywood and metal from their own rows; the size falls back to `partDims`.
+ */
+export function partFacts(part: Pick<Part, 'id' | 'name' | 'partNo'> | undefined, id: string, cut: CutList | undefined, dims: PartDims | undefined): PartFacts {
+  const fin = cut?.finished.find((f) => f.ids.includes(id));
+  const sheet = cut?.sheets.flatMap((g) => g.rows).find((r) => r.ids.includes(id));
+  const metal = cut?.metal.find((r) => r.ids.includes(id));
+  const mine = cut ? cutsOfPart(cut.cuts, id) : [];
+  const size = fin ? fin.finalText : sheet ? finalDimsText(sheet.stock) : metal ? `${metal.section}, cut to ${fracIn(metal.cutLengthIn)}` : dims?.size ?? '';
+  const feats = dims?.features ?? [];
+  return {
+    id,
+    name: part?.name ?? id,
+    partNo: part?.partNo ?? fin?.partNo ?? sheet?.partNo ?? metal?.partNo ?? '',
+    qty: fin?.qty ?? sheet?.qty ?? metal?.qty ?? 1,
+    size,
+    cuts: tally(mine.map((c) => `${pieceWord(c)}: ${c.roughText} (${c.board})`)),
+    board: dims?.board ?? (fin ? `${fin.board} white oak` : ''),
+    grain: dims?.grain && dims.grain !== 'n/a' ? dims.grain : fin?.grainWord ?? sheet?.grainWord ?? '',
+    features: feats.slice(0, POPOVER_FEATURES),
+    moreFeatures: Math.max(0, feats.length - POPOVER_FEATURES),
+  };
+}
+
+/** The step number that installs a part (the first step whose `partIds` has it), or undefined for a part no step installs. */
+export const stepOfPart = (steps: Pick<BuildStep, 'n' | 'partIds'>[], id: string): number | undefined => steps.find((s) => s.partIds.includes(id))?.n;
+
+/**
+ * "Show in 3D": the step-through focus with one part pinned. The pinned parts are always drawn (a part whose step comes later is added to the visible set), and
+ * they replace the step's own highlight until the next step.
+ */
+export function pinFocus(f: StepFocus, ids: string[], frame: boolean): StepFocus {
+  const visible = f.visibleIds ? [...new Set([...f.visibleIds, ...ids])] : null;
+  return { ...f, visibleIds: visible, pin: { ids, frame } };
+}
+
+/** A drawing file name for a download: `rail-L-drawing.svg`. */
+export const drawingDownloadName = (partNo: string, partId: string): string => `${partNo || partId}-${partId}.svg`.replace(/[^A-Za-z0-9._-]+/g, '-');

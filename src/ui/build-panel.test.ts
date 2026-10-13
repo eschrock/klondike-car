@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
 import { defaultParams } from '../params';
 import { BuildData } from '../build/package';
+import { partLabel, renderInstrText } from '../build/assembly';
+import { drawingFileName } from '../build/package';
 import {
+  groupCutsByBoard, instrSegments, partFacts, pieceWord, pinFocus, stepOfPart, tally,
   bytesLabel, clampStep, cureLine, dims3, featureSummary, fracDim, fracInch, groupByWhen, loadDone, loadStep, loadStepChecks, mergeBuy, noteLead, previewSvg, saveDone, saveStep, saveStepChecks, sharedNote, sheetSvg, splitUrls, stepFocus, tilePagesHtml, todayISO, usd, vendorFromUrl, viewerView,
 } from './build-helpers';
 
@@ -217,5 +220,75 @@ describe('BOM note helpers', () => {
       { item: 'Resin', unit: 'qt', qty: 2, note: 'n' }, { item: 'Resin', unit: 'pt', qty: 1, note: 'n' }, { item: 'Stain', unit: 'qt', qty: 1, note: 'm' },
     ]);
     expect(rows).toEqual([{ item: 'Resin', note: 'n', buy: '2 qt + 1 pt' }, { item: 'Stain', note: 'm', buy: '1 qt' }]);
+  });
+});
+
+describe('part chips (Eric 2026-10-12)', () => {
+  const byId = new Map(parts.map((x) => [x.id, x]));
+  const labelOf = (id: string): string | undefined => { const x = byId.get(id); return x ? partLabel(x) : undefined; };
+
+  it('instrSegments reads exactly like renderInstrText: the same names, capitalized at a sentence start', () => {
+    const text = '{{rail-L}} and {{rail-R}} go on first. {{transom-rear}} follows; check {{no-such-part}}.';
+    const segs = instrSegments(text, labelOf);
+    const flat = segs.map((s) => (typeof s === 'string' ? s : s.label)).join('');
+    expect(flat).toBe(renderInstrText(text, parts));
+    expect(segs.filter((s) => typeof s !== 'string').map((s) => (s as { part: string }).part)).toEqual(['rail-L', 'rail-R', 'transom-rear', 'no-such-part']);
+    expect(instrSegments('no parts here', labelOf)).toEqual(['no parts here']);
+  });
+
+  it('every part token in the assembly steps resolves to a part of the model', () => {
+    for (const s of d.steps) {
+      const walk = (items: typeof s.items): void => items.forEach((it) => {
+        for (const seg of instrSegments(it.text, labelOf)) if (typeof seg !== 'string') expect(byId.has(seg.part), `${s.title}: ${seg.part}`).toBe(true);
+        for (const id of it.parts ?? []) expect(byId.has(id), `${s.title}: ${id}`).toBe(true);
+        if (it.sub) walk(it.sub);
+      });
+      walk(s.items);
+    }
+  });
+
+  it('groups the actual cuts by board thickness, thinnest first, and names each piece', () => {
+    const groups = groupCutsByBoard(d.cutList.cuts);
+    const rank = groups.map((g) => Number(/^(\d+)\/4$/.exec(g.board)?.[1] ?? 99));
+    expect(rank).toEqual([...rank].sort((a, b) => a - b));
+    expect(groups.reduce((a, g) => a + g.cuts.length, 0)).toBe(d.cutList.cuts.length);
+    expect(pieceWord({ piece: 'board', index: 2, of: 3 })).toBe('board 2 of 3');
+    expect(pieceWord({ piece: 'board', index: 1, of: 1 })).toBe('one board');
+    expect(pieceWord({ piece: 'layer', index: 1, of: 3, layer: 1, layers: 3 })).toBe('layer 1 of 3');
+    expect(tally(['a', 'a', 'b'])).toEqual(['2 × a', 'b']);
+  });
+
+  it('partFacts gives the finished size and the rough cuts of a glued-up oak part', () => {
+    const c = d.cutList;
+    const g = c.glueUps[0];
+    const f = partFacts(byId.get(g.partId), g.partId, c, undefined);
+    expect(f.size).toBe(c.finished.find((x) => x.ids.includes(g.partId))!.finalText);
+    expect(f.cuts.length).toBeGreaterThan(0);
+    expect(f.cuts[0]).toMatch(/^(board|layer) \d of \d: .* \(\d\/4\)$/);
+    const none = partFacts(undefined, 'ghost', c, undefined);
+    expect(none).toMatchObject({ id: 'ghost', name: 'ghost', size: '', cuts: [], qty: 1 });
+  });
+
+  it('pinFocus keeps the pinned part on screen even when its step comes later', () => {
+    const steps = d.steps;
+    const last = steps[steps.length - 1];
+    const id = last.partIds[0];
+    const early = steps.find((s) => s.n > 0 && s.partIds.length)!;
+    const f = stepFocus(steps, early.n, true)!;
+    const p = pinFocus(f, [id], true);
+    expect(p.pin).toEqual({ ids: [id], frame: true });
+    if (f.visibleIds) expect(p.visibleIds).toContain(id);
+    expect(stepOfPart(steps, id)).toBe(last.n);
+    expect(stepOfPart(steps, 'ghost')).toBeUndefined();
+  });
+
+  it('the zip carries one drawing per part-drawing sheet under drawings/ and the README lists them', () => {
+    const sheets = d.partDrawings;
+    expect(sheets.length).toBeGreaterThan(10);
+    const names = d.files.map((f) => f.name);
+    for (const sh of sheets) expect(names).toContain(drawingFileName(sh));
+    expect(new Set(sheets.map(drawingFileName)).size).toBe(sheets.length);
+    const readme = d.files.find((f) => f.name === 'README.txt')!.data as string;
+    expect(readme).toContain('drawings/');
   });
 });

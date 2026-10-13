@@ -151,8 +151,15 @@ describe('build book', () => {
       expect(html, `step ${s.n}`).toContain(`${s.n}. ${esc(s.title)}`);
       if (s.clampCure) expect(html, `step ${s.n} clampCure`).toContain(esc(s.clampCure));
       for (const c of s.checks) expect(html, `step ${s.n} check`).toContain(esc(c));
-      for (const t of s.instructions) expect(html, `step ${s.n} instruction`).toContain(esc(t));
+      expect(html, `step ${s.n} goal`).toContain(esc(s.goal));
+      // Each item and sub-item, with its part tokens as links to the cut list: the text between the tokens is in the book as written.
+      const walk = (items: typeof s.items): string[] => items.flatMap((q) => [q.text, ...walk(q.sub ?? [])]);
+      for (const t of walk(s.items)) for (const piece of t.split(/\{\{[^{}]+\}\}/).map((x) => x.trim()).filter((x) => x.length > 3)) expect(html, `step ${s.n} item`).toContain(esc(piece));
+      for (const id of walk(s.items).flatMap((t) => [...t.matchAll(/\{\{([^{}]+)\}\}/g)].map((m) => m[1]))) {
+        if (html.includes(`id="part-${id}"`)) expect(html, `step ${s.n} link ${id}`).toContain(`href="#part-${id}"`);
+      }
     }
+    expect(html).toMatch(/<a class="part" href="#part-rail-L">/);
   });
 
   it('contains every Shaper file name', () => {
@@ -195,7 +202,7 @@ describe('build book: laminations, links, bulk parts and finishing touches', () 
     expect(html).toContain('Face-laminated parts');
     expect(html).toContain('Face-laminated layers');
     for (const r of pkg.data.cutList.oak.flatMap((g) => g.rows).filter((q) => q.lamination)) expect(html, r.partNo).toContain(esc(`face-laminated: ${r.lamination!.text}`));
-    expect(html).toMatch(/beam-F layer 1\/3/);
+    expect(html).toMatch(/beam-F layer 1\/3/); // the beam is three layers of 4/4 (D-74)
     expect(html).not.toMatch(/12\/4 \(usable/);
   });
 

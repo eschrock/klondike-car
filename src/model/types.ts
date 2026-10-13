@@ -113,6 +113,12 @@ export interface Joint {
   diaIn?: number;
   /** Wood screws (D-72): the standard screw picked for the stack, so a test can hold every screw to its bite and its poke-through limit. */
   fit?: ScrewFit;
+  /**
+   * A cut in THIS part (the one that owns the joint), recorded so the drawings and the instructions can locate it. Use joint type `hole` (nothing is fastened, and the fastener counts skip it).
+   * `slot`, `groove` and `relief` are a box from `lo` to `hi` in the part's local frame; `counterbore` is a round recess `dia` wide and `depth` deep at each `at` point, entering the face
+   * the point lies on. `what` is the purpose in a few plain words ("to hold the kingpin nut and washer"; for a counterbore, what it holds: "the nut and washer of the knee bolts").
+   */
+  cut?: { kind: 'slot' | 'groove' | 'relief' | 'counterbore'; lo?: Vec3; hi?: Vec3; dia?: number; depth?: number; what: string };
 }
 
 /**

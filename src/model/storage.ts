@@ -9,11 +9,11 @@
  * Also holds the 10 Essentials kit list (D-19) and a simple packing check against the interior.
  */
 import { STORAGE_LOCATION, thinSheet, type Params } from '../params';
-import { pickWoodScrew, SCREW_DIA_IN, screwText } from './rear-mount';
-import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
+import { localPoint, pickWoodScrew, SCREW_DIA_IN, screwText } from './rear-mount';
+import { STEP, box, cylinder, frac16 as frac, span, SIDES, type Ctx, stainless, dRingMat } from './build-utils';
 import { localBounds, worldAABB } from './bounds';
 import { sideSlopeAt, sideTopAt, type Layout } from './layout';
-import { frameJoint, gunwaleId, seatBackSupport } from './seat';
+import { gunwaleId, seatBackSupport } from './seat';
 import type { Joint, Part, Vec3 } from './types';
 
 // ── Hardware and detail dimensions (estimates, D-41) ──
@@ -303,7 +303,17 @@ export function buildStorage(ctx: Ctx): Part[] {
   // Tape-and-fold corners (build S4): 45° bevels on the wall panels, 2" glass tape across the outside of the open seam, fold, fillet inside.
   const miter = (to: string): Joint => ({ type: 'glue', to, count: 1, size: '45° bevel, tape-and-fold', note: 'bevels cut on the table saw, outside seam taped, folded, then a 3/8" epoxy fillet and 2" glass tape inside the corner; no spline (4 mm ply is too thin for one)' });
   const fillet = (to: string): Joint => ({ type: 'glue', to, count: 1, size: '3/8" epoxy fillet', note: 'floor captured between the walls, which reach the deck' });
-  const dom = (to: string): Joint => frameJoint(p, to, { stockIn: rimT, hostIn: rimW, widthIn: rimW }, { note: 'light frame (no load path through the Domino): lid frame corner' });
+  // Lid frame corner: the end piece's END GRAIN meets the inner face of the side, flush with the side's end, so a Domino cannot sit there (a 4x20 is 0.67" long in a 0.75" piece and the
+  // face is only 0.71" tall). A shop-made loose tenon in a mortise in BOTH pieces: a third of the frame thickness thick, as wide as leaves `endMin` of solid wood between the mortise and the
+  // side's end (and the same at the edges of the end piece), `p.tenonDepthIn` deep in each. endMin = the Domino wall minimum rounded up to 1/16 in.
+  const frameT = pl + rimT;
+  const endMin = Math.ceil(p.dominoMinWallIn * 16 - 1e-9) / 16;
+  const tenT = Math.max(0.125, Math.round((frameT / 3) * 16) / 16), tenW = Math.floor(Math.max(0.25, rimW - 2 * endMin) * 16 + 1e-9) / 16, tenD = p.tenonDepthIn;
+  const lidTenon = (to: string, pts: Vec3[], what: string): Joint => ({
+    type: 'mortise-tenon', to, count: 1,
+    size: `${frac(tenT)}" × ${frac(tenW)}" × ${frac(tenD)}" deep loose tenon (both parts mortised), ${frac((rimW - tenW) / 2)}" of wood left beyond the mortise ends`,
+    note: `light frame (no load path through the tenon): lid frame corner; ${what}`, at: pts,
+  });
   const deckId = 'deck';
 
   // ── Tray: the deck is the floor when the box stands on it; a raised box (forward) keeps its own ply floor ──
@@ -350,15 +360,20 @@ export function buildStorage(ctx: Ctx): Part[] {
     legend: { text: 'DO NOT STEP', face: 'top', process: 'CNC V-carve or laser engrave, then fill with black epoxy or paint', letterHeightIn: 1.5, depthIn: 0.03 },
     notes: 'Ply lid panel captured in the oak frame; the frame underside seals on the gasket. The top face is engraved DO NOT STEP (D-58, Eric 2026-10-11): the lid is a seat-cushion box lid, not a step, and is NOT strengthened for a standing adult; the rest-load check leaves it out for that reason.' }));
   const rz: [number, number] = [zTop - pl - rimT, zTop];
+  const zMid = (rz[0] + rz[1]) / 2;
+  const cornerPts = (xs: number, ys: number): { side: Vec3; end: Vec3 } => ({ side: [xs, ys, zMid], end: [xs, ys, zMid] });
   for (const [tag, y] of [['L', hw - rimW / 2], ['R', -(hw - rimW / 2)]] as const) {
-    parts.push(box(ctx, { ...common, id: `storage-rim-side-${tag}`, partNo: 'storage-rim-side', name: `Storage lid frame side ${tag}`, mat: 'oak', grain: 'x',
-      ...span([x0, x1], [y - rimW / 2, y + rimW / 2], rz),
-      joints: [dom('storage-rim-end-aft'), dom('storage-rim-end-fore')] }));
+    const sideP = box(ctx, { ...common, id: `storage-rim-side-${tag}`, partNo: 'storage-rim-side', name: `Storage lid frame side ${tag}`, mat: 'oak', grain: 'x',
+      ...span([x0, x1], [y - rimW / 2, y + rimW / 2], rz) });
+    const yFace = Math.sign(y) * (hw - rimW); // the side's inner face
+    sideP.joints = (['aft', 'fore'] as const).map((e) => lidTenon(`storage-rim-end-${e}`, [localPoint(sideP.transform, cornerPts(e === 'aft' ? x0 + rimW / 2 : x1 - rimW / 2, yFace).side)], 'the mortise is in the inner face of this side'));
+    parts.push(sideP);
   }
   for (const [tag, xa, xb] of [['aft', x0, x0 + rimW], ['fore', x1 - rimW, x1]] as const) {
-    parts.push(box(ctx, { ...common, id: `storage-rim-end-${tag}`, partNo: 'storage-rim-end', name: `Storage lid frame ${tag} end`, mat: 'oak', grain: 'y',
-      ...span([xa, xb], [-(hw - rimW), hw - rimW], rz),
-      joints: [dom('storage-rim-side-L'), dom('storage-rim-side-R')] }));
+    const endP = box(ctx, { ...common, id: `storage-rim-end-${tag}`, partNo: 'storage-rim-end', name: `Storage lid frame ${tag} end`, mat: 'oak', grain: 'y',
+      ...span([xa, xb], [-(hw - rimW), hw - rimW], rz) });
+    endP.joints = (['L', 'R'] as const).map((sd) => lidTenon(`storage-rim-side-${sd}`, [localPoint(endP.transform, cornerPts((xa + xb) / 2, (sd === 'L' ? 1 : -1) * (hw - rimW)).end)], 'the mortise is in the end grain of this piece'));
+    parts.push(endP);
   }
   const inner = x1 - x0 - 2 * rimW;
   // D-53: a third batten once the lid is long enough (bays of about 3.6 in), so the lid carries a light cooler (lid-load row).
@@ -397,8 +412,8 @@ export function buildStorage(ctx: Ctx): Part[] {
   const hingeBackFit = pickWoodScrew(8, LEAF_IN + pl, HINGE_BACKER_IN);
   for (const { s: sg, tag } of SIDES) {
     parts.push(box(ctx, { ...common, id: `storage-hinge-${tag}`, partNo: 'storage-hinge', name: `Lid hinge ${tag}`, mat: 'fixed', massLb: HINGE_MASS_LB,
-      kind: 'purchased', material: '316 stainless butt hinge', fab: 'buy', step: STEP.seatStorage, ...span([x1, x1 + 0.12], [sg * hingeY - HINGE_W_IN / 2, sg * hingeY + HINGE_W_IN / 2], [hz1 - HINGE_H_IN, hz1]),
-      sourcing: { vendor: 'McMaster-Carr (316 stainless surface-mount butt hinge, 2½" × 2¾")', costUsd: 14 },
+      kind: 'purchased', material: `${stainless(p)} butt hinge`, fab: 'buy', step: STEP.seatStorage, ...span([x1, x1 + 0.12], [sg * hingeY - HINGE_W_IN / 2, sg * hingeY + HINGE_W_IN / 2], [hz1 - HINGE_H_IN, hz1]),
+      sourcing: { vendor: `McMaster-Carr (${stainless(p)} surface-mount butt hinge, 2½" × 2¾")`, costUsd: 14 },
       joints: [{ type: 'screw', to: 'storage-rim-end-fore', count: 3, diaIn: SCREW_DIA_IN[8], fit: hingeRimFit, size: `${screwText(hingeRimFit)} stainless, into the lid frame end` }, { type: 'screw', to: `storage-hinge-backer-${tag}`, count: 3, diaIn: SCREW_DIA_IN[8], fit: hingeBackFit, size: `${screwText(hingeBackFit)} stainless, through the end panel into the ${HINGE_BACKER_IN}" backer (S5)` }],
       notes: 'Barrel along the fore-top edge: the lid swings up and aft and the seat back (when fitted) stops it near 75° (D-41); the stay holds it open (S5).' }));
     parts.push(box(ctx, { ...common, id: `storage-hinge-backer-${tag}`, partNo: 'storage-hinge-backer', name: `Hinge backer ${tag}`, mat: 'oak', grain: 'y',
@@ -428,22 +443,22 @@ export function buildStorage(ctx: Ctx): Part[] {
       ? span([x0 + 0.5, x0 + 0.95], [ly - 0.6, ly + 0.6], [zTop, zTop + 0.12])
       : span([x0 - 0.12, x0], [ly - 0.6, ly + 0.6], [zTop - 0.8, zTop - 0.1]);
     parts.push(box(ctx, { ...common, id: `storage-latch-${tag}`, partNo: 'storage-latch', name: `Lid latch ${tag}`, mat: 'fixed', massLb: LATCH_MASS_LB, kind: 'purchased',
-      material: '316 stainless over-center draw latch', fab: 'buy', step: STEP.finish, ...latchBox,
-      sourcing: { vendor: 'McMaster-Carr (316 stainless draw latch)', costUsd: 9 },
+      material: `${stainless(p)} over-center draw latch`, fab: 'buy', step: STEP.finish, ...latchBox,
+      sourcing: { vendor: `McMaster-Carr (${stainless(p)} draw latch)`, costUsd: 9 },
       joints: [{ type: 'screw', to: blockId, count: 2, diaIn: SCREW_DIA_IN[8], fit: latchFit, size: `${screwText(latchFit)} stainless` }],
       notes: rear
         ? 'On the oak block on the inside face of the rear transom, hooking a catch on the lid frame. Engagement in the block is about 1/2" (a #8 with a 3/8" pilot in white oak face grain holds about 100 lbf per screw, ~200 lbf per latch) against a gasket and slam load of about 20 lbf per latch, so about 10x margin (D-41).'
         : 'On the aft end (over the oak block inside it), hooking a catch on the lid frame.' }));
     parts.push(box(ctx, { ...common, id: `storage-catch-${tag}`, partNo: 'storage-catch', name: `Latch catch ${tag}`, mat: 'fixed', massLb: CATCH_MASS_LB, kind: 'purchased',
-      material: '316 stainless catch plate', fab: 'buy', step: STEP.finish, ...catchBox,
-      sourcing: { vendor: 'McMaster-Carr (316 stainless draw-latch catch; supplied with the latch)', costUsd: 0 },
+      material: `${stainless(p)} catch plate`, fab: 'buy', step: STEP.finish, ...catchBox,
+      sourcing: { vendor: `McMaster-Carr (${stainless(p)} draw-latch catch; supplied with the latch)`, costUsd: 0 },
       joints: [{ type: 'screw', to: 'storage-rim-end-aft', count: 2, diaIn: SCREW_DIA_IN[8], fit: catchFit, size: `${screwText(catchFit)} stainless` }] }));
     // Drains: stainless nipple flange at the aft corner; the hole goes through the deck (and the floor panel when the box has one).
     const r = p.storageDrainDiaIn / 2 + 0.125;
     parts.push(cylinder(ctx, { ...common, id: `storage-drain-${tag}`, partNo: 'storage-drain', name: `Drain nipple ${tag}`, mat: 'fixed', massLb: DRAIN_MASS_LB, kind: 'purchased',
-      material: '316 stainless drain nipple', fab: 'buy', step: STEP.finish, axis: 'z', radius: r, length: 0.2,
+      material: `${stainless(p)} drain nipple`, fab: 'buy', step: STEP.finish, axis: 'z', radius: r, length: 0.2,
       center: [x0 + pl + 1.5, sg * (yIn - 1.2), g.floorZ + 0.1],
-      sourcing: { vendor: 'McMaster-Carr (316 stainless tube fitting, ⅜")', costUsd: 5 },
+      sourcing: { vendor: `McMaster-Carr (${stainless(p)} tube fitting, ⅜")`, costUsd: 5 },
       joints: [{ type: 'glue', to: g.deckFloor ? deckId : 'storage-bottom', count: 1, note: 'nipple epoxied into the hole so no cut ply edge is exposed' }],
       notes: g.deckFloor
         ? `${p.storageDrainDiaIn}" hole through the deck at the aft corner (the deck is the box floor), nipple epoxied in so no cut ply edge is exposed. Fair the sealed deck with microballoon-thickened epoxy to fall about 1/8" toward each drain so the box does not hold water.`
@@ -454,9 +469,9 @@ export function buildStorage(ctx: Ctx): Part[] {
   const stayY0 = hingeY - HINGE_W_IN / 2 - STAY_SIZE[1];
   const stayBackFit = pickWoodScrew(8, LEAF_IN, HINGE_W_IN); // into the 2.5 in wide side face of the backer
   const stayRimFit = pickWoodScrew(8, LEAF_IN, rimW);
-  parts.push(box(ctx, { ...common, id: 'storage-lid-stay', name: 'Lid friction stay', mat: 'fixed', massLb: STAY_MASS_LB, kind: 'purchased', material: '316 stainless friction stay',
+  parts.push(box(ctx, { ...common, id: 'storage-lid-stay', name: 'Lid friction stay', mat: 'fixed', massLb: STAY_MASS_LB, kind: 'purchased', material: `${stainless(p)} friction stay`,
     fab: 'buy', step: STEP.finish, ...span([x1 - pl - STAY_SIZE[0], x1 - pl], [stayY0, stayY0 + STAY_SIZE[1]], [zPlyTop - STAY_SIZE[2], zPlyTop]),
-    sourcing: { vendor: 'McMaster-Carr (316 stainless friction lid stay / hold-open brace, 2" fold)', costUsd: 18 },
+    sourcing: { vendor: `McMaster-Carr (${stainless(p)} friction lid stay / hold-open brace, 2" fold)`, costUsd: 18 },
     joints: [{ type: 'screw', to: 'storage-hinge-backer-L', count: 2, diaIn: SCREW_DIA_IN[8], fit: stayBackFit, size: `${screwText(stayBackFit)} stainless, into the side grain of the ${HINGE_BACKER_IN}" backer`, note: 'the stay pivot' }, { type: 'screw', to: 'storage-rim-end-fore', count: 2, diaIn: SCREW_DIA_IN[8], fit: stayRimFit, size: `${screwText(stayRimFit)} stainless`, note: 'the stay arm end, on the lid frame' }],
     notes: 'Holds the lid at any angle so a gust or a scout cannot close it on fingers (S5). Folds flat against the backer when the lid is shut.' }));
 
@@ -484,8 +499,8 @@ export function buildStorage(ctx: Ctx): Part[] {
           { type: 'screw', to: `lash-${tag}${i + 1}`, count: LASH_SCREWS, size: `${screwText(lashFit)} stainless, straight down from the plate into the doubler`, diaIn: LASH_SCREW_DIA_IN, fit: lashFit, at: screwAt(L.railBand / 2) }],
         notes: `${T}" oak doubler on the inboard face of the gunwale under the lash plate (D-41, D-47): ${(LASH_SIZE[0] + 0.5).toFixed(1)}" long, the full ${L.railBand}" band tall, cut square to the gunwale's ${((slope * 180) / Math.PI).toFixed(1)}° slope here (D-54). The four ${screwText(lashFit)} screws sit ${LASH_HOLE_DY_IN}" either side of its centerline (${(T / 2 - LASH_HOLE_DY_IN).toFixed(2)}" from each face) and end ${(L.railBand - (LASH_SCREW_LEN_IN - LASH_PLATE_T_IN)).toFixed(2)}" above its bottom.` }));
       parts.push(box(ctx, { id: `lash-${tag}${i + 1}`, partNo: 'lash-point', name: `Lash point ${tag}${i + 1}`, group: 'hardware', mat: 'fixed', massLb: LASH_MASS_LB, kind: 'purchased',
-        material: 'stainless D-ring on a bolt plate', fab: 'buy', step: STEP.finish, size: [LASH_SIZE[0], LASH_SIZE[1], LASH_SIZE[2]], center: [x + sn * (LASH_SIZE[2] / 2), cy, zTopAt + cs * (LASH_SIZE[2] / 2)], ...(rot ? { rot } : {}),
-        sourcing: { vendor: 'McMaster-Carr (316 stainless 4-hole D-ring bolt plate, 300 lbf working load)', costUsd: 7 },
+        material: `${dRingMat(p)} D-ring on a bolt plate`, fab: 'buy', step: STEP.finish, size: [LASH_SIZE[0], LASH_SIZE[1], LASH_SIZE[2]], center: [x + sn * (LASH_SIZE[2] / 2), cy, zTopAt + cs * (LASH_SIZE[2] / 2)], ...(rot ? { rot } : {}),
+        sourcing: { vendor: `McMaster-Carr (${dRingMat(p)} 4-hole D-ring bolt plate, 300 lbf working load)`, costUsd: 7 },
         joints: [{ type: 'screw', to: dId, count: LASH_SCREWS, size: `${screwText(lashFit)} stainless, straight down into the oak doubler`, diaIn: LASH_SCREW_DIA_IN, fit: lashFit, at: screwAt(-LASH_SIZE[2] / 2) }],
         notes: `Rated for tie-down straps on coolers, duffels and firewood (post-race hauling, BRIEF §4.9). The plate (${LASH_SIZE[0]}" × ${LASH_SIZE[1]}", holes ${2 * LASH_HOLE_DX_IN}" × ${2 * LASH_HOLE_DY_IN}") lies on the top of the ${T}" doubler, entirely inboard of the gunwale; four screws land in the doubler; the lash-load check pulls it at ${p.lashLoadLbf} lbf and ${p.lashPullAngleDeg}° (D-41, S-9).` }));
     });

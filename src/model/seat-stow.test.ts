@@ -54,7 +54,7 @@ describe('the seat kit (D-57)', () => {
   it('hinge: two 316 butt hinges with the knuckle at the stile foot (the back\'s front-bottom point P), a backer under the deck between the joists', () => {
     for (const tag of ['L', 'R']) {
       const h = get(installed, `seat-hinge-${tag}`);
-      expect(h.material).toMatch(/316 stainless butt hinge/);
+      expect(h.material).toMatch(/(?:316|18-8 \(304\)) stainless butt hinge/);
       const b = worldAABB(h);
       expect((b.min[0] + b.max[0]) / 2).toBeCloseTo(L.seat.P[0], 9);
       expect((b.min[2] + b.max[2]) / 2).toBeCloseTo(L.seat.P[2], 9);

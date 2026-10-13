@@ -35,6 +35,17 @@ export function fmt(n: number): string {
 }
 export const inches = (n: number): string => `${fmt(n)}in`;
 
+/** Inches as a shop fraction to 1/`denom` (default 1/32): 1-3/32", 7/8", 12". Never a decimal. */
+export function frac(v: number, denom = 32): string {
+  const neg = v < 0;
+  const n = Math.round(Math.abs(v) * denom);
+  const whole = Math.floor(n / denom);
+  let rem = n - whole * denom, d = denom;
+  while (rem && rem % 2 === 0) { rem /= 2; d /= 2; }
+  const s = rem === 0 ? `${whole}` : whole ? `${whole}-${rem}/${d}` : `${rem}/${d}`;
+  return `${neg && n ? '-' : ''}${s}"`;
+}
+
 export function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

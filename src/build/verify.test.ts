@@ -116,3 +116,18 @@ describe('verify checklist', () => {
     expect(bend.whatToDo).toMatch(/\d+ spare strips?\)/);
   });
 });
+
+describe('verify items are written for the shop (Eric 2026-10-12)', () => {
+  it('a short title, a how-to-check list with sub-bullets, pass criteria as short lines, and no param keys anywhere', () => {
+    const keys = Object.keys(PARAM_DEFS);
+    for (const c of list) {
+      expect(c.title.length, c.id).toBeLessThanOrEqual(70);
+      expect(c.how.length, c.id).toBeGreaterThanOrEqual(1);
+      expect(c.passList.length, c.id).toBeGreaterThanOrEqual(1);
+      expect(c.pass, c.id).toBe(c.passList.join(' '));
+      const text = [c.title, ...c.how.flatMap((q) => [q.text, ...(q.sub ?? []).map((x) => x.text)]), ...c.passList, c.ifFails].join(' ');
+      for (const k of keys) expect(text, `${c.id}: ${k}`).not.toMatch(new RegExp(`\\b${k}\\b`));
+      expect(text, c.id).not.toMatch(/\.ts\b/);
+    }
+  });
+});

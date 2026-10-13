@@ -4,7 +4,7 @@
  */
 import { AXLE_BEAM_POSITION, AXLE_STYLE, axleGrooveDepthIn } from '../params';
 import { axleMaterial, axleSourcing, axleStockNote } from './axle-stock';
-import { IN3_PER_FT3, STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
+import { IN3_PER_FT3, STEP, box, cylinder, span, SIDES, type Ctx, stainless } from './build-utils';
 import { translation } from './mat4';
 import { beamSeat, boltLength, inchesText, localPoint, railSection } from './rear-mount';
 import type { Mat4, Part, RigidBody, Vec2, Vec3 } from './types';
@@ -104,7 +104,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
         });
         beamRailJoints.push({
           type: 'bolt', to: `beam-hold-down-${tag}`, count: seatInfo.hd.beamBolts.length, diaIn: seatInfo.hd.boltD,
-          size: `${f2(seatInfo.hd.boltD)}" × ${inchesText(boltLength(seatInfo.hd.t + b.depth, seatInfo.hd.boltD))} 316 hex bolts down through the angle's horizontal leg and the beam, nylock nuts and fender washers under the beam`,
+          size: `${f2(seatInfo.hd.boltD)}" × ${inchesText(boltLength(seatInfo.hd.t + b.depth, seatInfo.hd.boltD))} ${stainless(p)} hex bolts down through the angle's horizontal leg and the beam, nylock nuts and fender washers under the beam`,
           at: seatInfo.hd.beamBolts.map(([x, y]): Vec3 => [x - b.x, s * y, seatInfo.hd.zBeam - (b.top + b.bot) / 2]),
           note: 'either side of the axle rod',
         });
@@ -133,14 +133,14 @@ export function buildRunningGear(ctx: Ctx): Part[] {
         const grip = plate.z + b.depth;
         const part = box(ctx, {
           id: `clamp-${ax.tag}${tag}1`, partNo: 'axle-clamp', name: `${name} ${tag === 'L' ? 'left' : 'right'} axle clamp plate`,
-          group: 'running-gear', mat: 'steel', kind: 'metal', material: '316 stainless flat bar',
+          group: 'running-gear', mat: 'steel', kind: 'metal', material: `${stainless(p)} flat bar`,
           ...sp, fab: 'drill-tap', step: STEP.gear,
-          sourcing: { vendor: `McMaster-Carr (316 stainless flat bar ${plate.z}" × ${plate.y}": cut ${plate.x}" pieces on the bandsaw, drill 2 × ${f2(bd + 0.03)}" at ${f2(2 * legOffset)}" centers; 2 × 316 hex bolt ${f2(bd)}" × ${inchesText(boltLength(grip, bd))}, nylock nuts, fender washers). 316, not zinc (wet tannin oak, S7). Or a stocked 316 two-hole tube strap for ${p.axleDiameterIn}" OD tube.` },
+          sourcing: { vendor: `McMaster-Carr (${stainless(p)} flat bar ${plate.z}" × ${plate.y}": cut ${plate.x}" pieces on the bandsaw, drill 2 × ${f2(bd + 0.03)}" at ${f2(2 * legOffset)}" centers; 2 × ${stainless(p)} hex bolt ${f2(bd)}" × ${inchesText(boltLength(grip, bd))}, nylock nuts, fender washers). Stainless, not zinc (wet tannin oak, S7). Or a stocked ${stainless(p)} two-hole tube strap for ${p.axleDiameterIn}" OD tube.` },
           joints: [{
-            type: 'bolt', to: `beam-${ax.tag}`, count: 2, diaIn: bd, size: `2 × ${f2(bd)}" × ${inchesText(boltLength(grip, bd))} 316 hex bolts, ${f2(2 * legOffset)}" apart, down through the plate and the beam either side of the tube, nylock nuts + fender washers under the beam`,
+            type: 'bolt', to: `beam-${ax.tag}`, count: 2, diaIn: bd, size: `2 × ${f2(bd)}" × ${inchesText(boltLength(grip, bd))} ${stainless(p)} hex bolts, ${f2(2 * legOffset)}" apart, down through the plate and the beam either side of the tube, nylock nuts + fender washers under the beam`,
             at: [[legOffset, 0, 0], [-legOffset, 0, 0]], note: `the plate bears on the tube (it stands ${f2(p.axleProudIn)}" proud of the ${f2(axleGrooveDepthIn(p))}" groove); ${f2(legOffset - bd / 2 - 0.015 - rodR)}" of oak between each bolt hole and the groove wall`,
           }],
-          notes: `Clamps the axle tube in its groove (D-10, D-62): ${plate.x}" × ${plate.y}" × ${plate.z}" 316 stainless plate across the tube, two ${f2(bd)}" bolts through the beam (grip ${f2(grip)}") at ${f2(legOffset)}" either side of the tube centerline. Cut the groove ${f2(axleGrooveDepthIn(p))}" deep so the tube stands ${f2(p.axleProudIn)}" proud and the plate bears on it; shim the plate ends with tape on the first tightening and check it does not rock. Snug plus a quarter turn, re-check the nuts before each event (oak creeps; the oak caps the preload at about 800 lbf). The bolts, nuts and washers are in the fastener allowance.`,
+          notes: `Clamps the axle tube in its groove (D-10, D-62): ${plate.x}" × ${plate.y}" × ${plate.z}" ${stainless(p)} plate across the tube, two ${f2(bd)}" bolts through the beam (grip ${f2(grip)}") at ${f2(legOffset)}" either side of the tube centerline. Cut the groove ${f2(axleGrooveDepthIn(p))}" deep so the tube stands ${f2(p.axleProudIn)}" proud and the plate bears on it; shim the plate ends with tape on the first tightening and check it does not rock. Snug plus a quarter turn, re-check the nuts before each event (oak creeps; the oak caps the preload at about 800 lbf). The bolts, nuts and washers are in the fastener allowance.`,
         });
         parts.push(part);
       }
@@ -161,19 +161,19 @@ export function buildRunningGear(ctx: Ctx): Part[] {
       const area = hd.t * (2 * hd.leg - hd.t);
       const mass = ((area * w) / IN3_PER_FT3) * p.steelDensityPcf;
       const part: Part = {
-        id: `beam-hold-down-${tag}`, partNo: 'beam-hold-down', name: `Rear beam hold-down angle ${tag}`, group: 'running-gear', kind: 'metal', material: '316 stainless angle',
+        id: `beam-hold-down-${tag}`, partNo: 'beam-hold-down', name: `Rear beam hold-down angle ${tag}`, group: 'running-gear', kind: 'metal', material: `${stainless(p)} angle`,
         geometry: { type: 'extrusion', outline: profile, depth: w }, transform: m, body: 'chassis', massLb: mass, fab: 'drill-tap', step: STEP.gear,
         explode: unitVec([0, -s, 0.5]), stock: { t: hd.t, w: hd.leg, l: w },
-        sourcing: { vendor: `McMaster-Carr (316 stainless angle ${f2(hd.leg)}" × ${f2(hd.leg)}" × ${f2(hd.t)}": cut ${f2(w)}" long on the bandsaw, drill 2 × ${f2(bd + 0.03)}" in the upright leg and 2 × ${f2(bd + 0.03)}" in the flat leg; 4 × 316 hex bolts ${f2(bd)}", nylock nuts, fender washers)` },
+        sourcing: { vendor: `McMaster-Carr (${stainless(p)} angle ${f2(hd.leg)}" × ${f2(hd.leg)}" × ${f2(hd.t)}": cut ${f2(w)}" long on the bandsaw, drill 2 × ${f2(bd + 0.03)}" in the upright leg and 2 × ${f2(bd + 0.03)}" in the flat leg; 4 × ${stainless(p)} hex bolts ${f2(bd)}", nylock nuts, fender washers)` },
         notes: `Holds the rear axle beam to the axle hanger (D-54, build review r2 MUST-4): the upright leg lies on the hanger's inner face (z ${f2(hd.zBeam)}" to ${f2(hd.zTop)}"), two ${f2(bd)}" bolts through the hanger and the rail (D-72); the flat leg lies on the beam top (it also keeps the rod in its groove), two ${f2(bd)}" bolts down through the beam either side of the rod. Stays clear of the straddling deck joists (${f2(w)}" wide, centered on the beam). Rebound, side load and the rail's tendency to walk off the beam are carried here; the vertical load bears on the notch ceiling instead.`,
         joints: [],
       };
       part.joints!.push({
-        type: 'bolt', to: `axle-hanger-${tag}`, count: 2, diaIn: bd, size: `${f2(bd)}" × ${inchesText(boltLength(hd.t + rs.t + rs.railT, bd))} 316 hex bolts through the upright leg, the hanger and the rail, nylock nuts and fender washers on the outside face of the rail (D-72: the same bolt as the hanger bolts)`,
+        type: 'bolt', to: `axle-hanger-${tag}`, count: 2, diaIn: bd, size: `${f2(bd)}" × ${inchesText(boltLength(hd.t + rs.t + rs.railT, bd))} ${stainless(p)} hex bolts through the upright leg, the hanger and the rail, nylock nuts and fender washers on the outside face of the rail (D-72: these are also the hanger's bolts, one bolt at each position)`,
         at: hd.railBolts.map(([x, z]) => localPoint(part.transform, [x, s * (rs.yIn - hd.t / 2), z])),
       });
       part.joints!.push({
-        type: 'bolt', to: 'beam-R', count: 2, diaIn: bd, size: `${f2(bd)}" × ${inchesText(boltLength(hd.t + L.beamR.depth, bd))} 316 hex bolts down through the flat leg and the beam`,
+        type: 'bolt', to: 'beam-R', count: 2, diaIn: bd, size: `${f2(bd)}" × ${inchesText(boltLength(hd.t + L.beamR.depth, bd))} ${stainless(p)} hex bolts down through the flat leg and the beam`,
         at: hd.beamBolts.map(([x, y]) => localPoint(part.transform, [x, s * y, hd.zBeam + hd.t / 2])),
       });
       parts.push(part);

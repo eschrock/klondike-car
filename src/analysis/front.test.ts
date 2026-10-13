@@ -106,8 +106,8 @@ describe('washerContact (the roll couple on the UHMW thrust washer)', () => {
 describe('front wheel loads (the basis of every row)', () => {
   it('static front axle by hand: level W x/44 = 137 lb, nose down on 15 deg W cos(th) - N_r = 164 lb (M4: the worse governs); the heavier wheel takes 0.5 + |y|/35.5', () => {
     const w = wheelLoads(ctx, g);
-    expect(hw.level).toBeCloseTo(135.35, 0); // 138.1 before D-60 dropped the four foot-block cleats, 136.7 before D-62 (sandwich sides, frameless seat back, no shackle: the CG moves aft a little)
-    expect(hw.slope).toBeCloseTo(162.84, 0); // 164.3 before D-62 // 165.7 with the foot-block cleats
+    expect(hw.level).toBeCloseTo(134.56, 0); // D-74: 134.56 (2-1/8 in beams, knees and chocks: a lighter sled, the CG moves aft a little); 135.35 before; 138.1 before D-60 dropped the four foot-block cleats, 136.7 before D-62 (sandwich sides, frameless seat back, no shackle: the CG moves aft a little)
+    expect(hw.slope).toBeCloseTo(161.89, 0); // D-74 (162.84 before); // 164.3 before D-62 // 165.7 with the foot-block cleats
     expect(w.frontAxle).toBeCloseTo(hw.axle, 6);
     expect(w.frontWheel).toBeCloseTo(hw.wheel, 6);
   });
@@ -216,7 +216,7 @@ describe('kingpin (grade 8)', () => {
     const armTow = KING_BOT + KING_D / 2 - (3.1875 + 5.1875) / 2; // king beam middle to the middle of the oak tongue
     const hand1 = vm(ld.Th, Math.max(armTow, Mtilt / ld.Th), 0);
     expect(rel(det('kingpin', 'tow pull at the tie (x overload): bolt shear').value, hand1)).toBeLessThan(5e-3);
-    const kdepth = 2.25;
+    const kdepth = 2.125; // D-74: the king beam is as deep as the front beam, 2-1/8 in (was 2.25)
     const tilt = (ld.Th / 2 + Mtilt / (0.8 * kdepth)) / (0.625 * 0.4 * kdepth);
     expect(det('kingpin', 'tow pull tilt').value).toBeCloseTo(tilt, 3);
     expect(det('kingpin', 'tow pull tilt').limit).toBe(1700);
@@ -224,7 +224,7 @@ describe('kingpin (grade 8)', () => {
   it('passes at the defaults for both riders and the cargo case; the tow tilt (the nose-up couple on the hole edges of the beam, util 0.77) governs, the bolt itself is under 0.7', () => {
     expect(c.status).toBe('pass');
     expect(c.statusCargo).toBe('pass');
-    expect(c.util!).toBeCloseTo(0.77, 1);
+    expect(c.util!).toBeCloseTo(0.86, 1); // 0.855 at D-74 (2-1/8 in beam: the couple acts on a shallower king beam); 0.77 before
     expect(det('kingpin', 'NORMAL: bolt bearing in the oak king beam').value).toBeCloseTo((150 + normal.H) / (0.625 * KING_D), 6);
     expect(det('kingpin', 'NORMAL: bolt bearing in the oak king beam').limit).toBeCloseTo((4000 * 0.85) / 2, 6);
     const gov = c.details!.reduce((a, b) => (b.util > a.util ? b : a));
@@ -299,8 +299,8 @@ describe('king-bearing (UHMW disc, roll pads, the oak under them)', () => {
 
 describe('front-beam (oak axle beam)', () => {
   const f = forces(normal), fh = forces(hard);
-  it('bending at the kingpin hole: M = F x 17.75 on the net section (2.5 - 0.625) x 2.25: S = 1.875 x 2.25^2 / 6 = 1.582 in3', () => {
-    const S = (1.875 * 2.25 ** 2) / 6;
+  it('bending at the kingpin hole: M = F x 17.75 on the net section (2.5 - 0.625) x 2.125: S = 1.875 x 2.125^2 / 6 = 1.411 in3 (D-74)', () => {
+    const S = (1.875 * 2.125 ** 2) / 6;
     const d = det('front-beam', 'NORMAL 1" bump: bending at the kingpin hole');
     expect(d.value).toBeCloseTo((f.F1 * YW) / S, 6);
     expect(d.limit).toBeGreaterThan(6000);
@@ -308,11 +308,11 @@ describe('front-beam (oak axle beam)', () => {
     expect(dh.value).toBeCloseTo((fh.F1 * YW) / S, 6);
     expect(dh.limit / d.limit).toBeCloseTo(2, 9);
     const sh = det('front-beam', 'NORMAL 1" bump: shear at the kingpin');
-    expect(sh.value).toBeCloseTo((1.5 * f.F1) / (1.875 * 2.25), 6);
+    expect(sh.value).toBeCloseTo((1.5 * f.F1) / (1.875 * 2.125), 6);
   });
-  it('at the inner end of the stub groove (8.125 in from the center) the section is 2.5 x (2.25 - 0.75) and the lever is 17.75 - 8.125 = 9.625 in', () => {
+  it('at the inner end of the stub groove (8.125 in from the center) the section is 2.5 x (2.125 - 0.75) (D-74) and the lever is 17.75 - 8.125 = 9.625 in', () => {
     const d = det('front-beam', 'NORMAL 1" bump: bending at the inner end');
-    expect(d.value).toBeCloseTo((f.F1 * 9.625 * 6) / (2.5 * 1.5 ** 2), 6);
+    expect(d.value).toBeCloseTo((f.F1 * 9.625 * 6) / (2.5 * 1.375 ** 2), 6);
   });
   it('the rod is a beam on its two clamp stations (9.125 and 15.125 in out): the outer station holds it down with F (17.75 - 9.125) / 6 = 1.4375 F, shared by its two 3/8 in 316 bolts', () => {
     const d = det('front-beam', 'NORMAL: clamp-plate bolt tension');

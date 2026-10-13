@@ -108,7 +108,7 @@ describe('rear axle beam seat in the oak axle hangers (MUST-4, D-54)', () => {
     const c = byId(cs, 'rear-beam-seat');
     expect(c.status).toBe('pass');
     expect(c.statusOperating).toBe('pass');
-    expect(c.util! / 0.875).toBeCloseTo(1, 2);
+    expect(c.util! / 0.869).toBeCloseTo(1, 2); // 0.869 at D-74 (the 2-1/8 in beam is lighter: 0.875 before)
     expect(c.how).toMatch(/NOTCHED/);
     const bear = det(cs, 'rear-beam-seat', 'notch ceiling');
     const V = peakVertical(bumpCases(ctx, ctx.loads.goal, 'rear').normal);
@@ -128,8 +128,8 @@ describe('rear axle beam seat in the oak axle hangers (MUST-4, D-54)', () => {
     const v = det(cs, 'rear-beam-seat', 'NORMAL: rail shear');
     expect(v.limit).toBeCloseTo(Vr, 6);
     expect(v.limit).toBeCloseTo(399.6, 0);
-    expect(v.value / 349.8).toBeCloseTo(1, 2);
-    expect(v.util / 0.875).toBeCloseTo(1, 2);
+    expect(v.value / 347.2).toBeCloseTo(1, 2); // 347.2 lbf at D-74 (349.8 before: the lighter beam)
+    expect(v.util / 0.869).toBeCloseTo(1, 2);
     expect(seat.remain).toBeCloseTo(2.153, 2);
   });
   it('the rail shear above the notch is the tightest detail; the hold-down bolts carry the 28 lbf rebound (18.7 lb axle assembly x 3 / 2) in 316 tension, far from their limit', () => {

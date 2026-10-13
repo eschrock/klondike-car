@@ -3,8 +3,8 @@
  * the rear red tail light rides on a second printed clip that snaps into the REAR transom's hand-hold, facing aft (D-64). Brackets are
  * ASA (UV-stable) 2D profiles + depth, so they go straight to an STL in Phase 4; they are not on a primary load path.
  */
-import { STORAGE_LOCATION } from '../params';
-import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
+import { STORAGE_LOCATION, WEATHER_SPEC } from '../params';
+import { STEP, box, cylinder, span, SIDES, type Ctx, stainless, insertMat } from './build-utils';
 import { SIGN_X_MAX_IN, liftSlot } from './body';
 import { sideSlopeAt, sideTopAt } from './layout';
 import { profilePart } from './profile';
@@ -214,8 +214,8 @@ export function buildHardware(ctx: Ctx): Part[] {
   const sx = Math.min(HARDWARE_SIZE[0], gap);
   return [box(ctx, {
     id: 'hardware', name: 'Fasteners, inserts & misc', group: 'hardware', mat: 'fixed', massLb: HARDWARE_FALLBACK_LB, kind: 'purchased', fab: 'buy',
-    material: '316 stainless screws, bolts, inserts and Dominos; epoxy',
-    sourcing: { vendor: 'McMaster-Carr / Fastenal (316 stainless wood screws, machine screws and threaded inserts; Festool Dominos; West System epoxy). Stainless throughout: no zinc or brass in wet oak (S7).', costUsd: 60 },
+    material: `${stainless(ctx.p)} screws and bolts, ${insertMat(ctx.p)} inserts, Dominos; epoxy`,
+    sourcing: { vendor: `McMaster-Carr / Fastenal (${stainless(ctx.p)} wood screws and machine screws, ${insertMat(ctx.p)} threaded inserts; Festool Dominos; West System epoxy).${ctx.p.weatherSpec === WEATHER_SPEC.extreme ? ' Stainless throughout: no zinc or brass in wet oak (S7).' : ''}`, costUsd: 60 },
     step: STEP.finish, size: [sx, HARDWARE_SIZE[1], HARDWARE_SIZE[2]], center: [(bestLo + bestHi) / 2, 0, L.deckBot - HARDWARE_SIZE[2] / 2],
     notes: 'Fastener remainder, set from the joint list by applyHardwareMass. Parked under the deck center.',
   })];

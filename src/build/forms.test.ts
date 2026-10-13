@@ -3,6 +3,7 @@ import { buildModel } from '../model';
 import { computeLayout, outerHalfWidth } from '../model/layout';
 import { defaultParams } from '../params';
 import { flatPattern } from './flat';
+import { frac } from './svg-util';
 import { LETTER_H_IN, LETTER_W_IN, PRINT_CUT_STROKE_IN, RIB_BASE_IN, TILE_MARGIN_IN, TILE_OVERLAP_IN, formDrawings, pathBounds, printStyle, tileForLetter, tilePlan } from './forms';
 
 const p = defaultParams();
@@ -78,7 +79,7 @@ describe('forms and templates', () => {
     for (let i = 0; i < rail.positions.length; i += 3) if (Math.abs(rail.positions[i] - L.railEnd) < 1e-6) ys.push(rail.positions[i + 1]);
     expect(Math.max(...ys)).toBeCloseTo(outerHalfWidth(L, L.railEnd), 6);
     const note = byId('rail-form').notes.join(' ');
-    expect(note).toContain('NOT applied');
+    expect(note).toMatch(/not built in/);
     // The form's body is the face curve plus a straight bottom: its tallest point is the depth plus the turn-in.
     expect(byId('rail-form').heightIn).toBeGreaterThan(L.taper.turnIn);
   });
@@ -259,9 +260,54 @@ describe('form text is annotation only (round 3)', () => {
   });
   it('the side form quotes the web end from the flat pattern, not the band end', () => {
     const f = flatPattern(parts.find((x) => x.id === 'side-L-web')!)!;
-    const web = f.widthIn.toFixed(2);
-    expect(byId('side-form').notes.join(' ')).toContain(`the web itself ends at ${web}`);
-    expect(byId('side-form').svg).toContain(`web ends ${web}`);
-    expect(byId('side-form').notes.join(' ')).not.toMatch(/bow end at 59\.24/);
+    const web = frac(f.widthIn); // fractions in the shop text (59-1/2")
+    expect(byId('side-form').notes.join(' ')).toContain(`The web ends at ${web}`);
+    expect(byId('side-form').svg).toContain(`web ends ${web.replace(/"/g, '&quot;')}`);
+    expect(byId('side-form').notes.join(' ')).not.toMatch(/web ends at 59-1\/4"/); // the web runs 1/4" past the bands into the bulkhead dado
   });
 });
+
+describe('how to build the forms (Eric 2026-10-12)', () => {
+  const all = (id: string): string => byId(id).build.flatMap((s) => [s.step, ...(s.sub ?? [])]).join(' ');
+
+  it('gives every form an ordered list of build steps, printed in the title block and the description', () => {
+    for (const d of drawings) {
+      expect(d.build.length, d.id).toBeGreaterThanOrEqual(4);
+      expect(d.svg, d.id).toContain('HOW TO BUILD IT');
+      expect(d.svg, d.id).toContain(esc1(d.build[0].step.slice(0, 40)));
+      for (const t of d.build.flatMap((s) => [s.step, ...(s.sub ?? [])])) expect(/\d\.\d{3,}/.test(t), `${d.id}: ${t.slice(0, 60)}`).toBe(false);
+    }
+  });
+
+  it('says how to build the rail form: MDF layers to the form line, stacked to the rail depth plus 1/2, on a ply base, caul, tape, spring-back, a clamp at every station', () => {
+    const t = all('rail-form');
+    const layers = Math.ceil((p.railDepthIn + 0.5) / 0.75 - 1e-9);
+    expect(t).toContain(`${layers} layers make a stack`);
+    expect(t).toMatch(/3\/4" MDF/);
+    expect(t).toMatch(/BASE: 3\/4" plywood [\d/-]+" × [\d/-]+"/);
+    expect(t).toMatch(/CAUL: a strip of 1\/4" hardboard/);
+    expect(t).toMatch(/packing tape/);
+    expect(t).toMatch(/SPRING-BACK: none is built in/);
+    expect(t).toContain(`CLAMP: ${dim('rail-form', 'clamps')} bar or pipe clamps`);
+    expect(t).toMatch(/2 strips \(3\/8" × 3"\)/);
+    expect(byId('rail-form').svg).toContain('<g id="sketch">');
+  });
+
+  it('says how to build the side form: the template, the cleats at their spacing, the ramp ribs and cap, tape and clamps', () => {
+    const t = all('side-form');
+    expect(t).toMatch(/TEMPLATE: cut ONE piece of 1\/4" hardboard/);
+    expect(t).toContain(`CLEATS on the sheer line: ${dim('side-form', 'cleat-count')} blocks`);
+    expect(t).toContain(`S-RAMP: cut ${dim('side-form', 'ramp-ribs')} ribs from 3/4" MDF`);
+    expect(t).toMatch(/Cap: 1\/4" hardboard/);
+    expect(t).toMatch(/packing tape/);
+    expect(t).toMatch(/spring clamps/);
+  });
+
+  it('says the templates are tracing / routing patterns, not bending forms', () => {
+    expect(all('crown-templates')).toMatch(/nothing is bent/);
+    expect(all('brake-flap-template')).toMatch(/guide holes/);
+  });
+});
+
+/** The SVG text form of a string (quotes escaped). */
+function esc1(s: string): string { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }

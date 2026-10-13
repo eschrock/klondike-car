@@ -7,7 +7,7 @@
  * into a blind hole in the stop block and holds it up, and the same pin through the same hole and the deck into a blind hole in the backer pad holds it flat. The pad and the cushion are the "cushions" that lie in the box in cargo mode.
  */
 import { RIDER_PELVIS_Z_FRAC, STORAGE_LOCATION, thinSheet, type Params } from '../params';
-import { GRIP_BACKING_T_IN, STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
+import { GRIP_BACKING_T_IN, STEP, box, cylinder, span, SIDES, type Ctx, stainless, insertMat, INSERT_DRILL_IN } from './build-utils';
 import { innerHalfWidth, sideSlopeAt, sideTopAt, type Layout } from './layout';
 import { chooseDomino, DOMINOS, frac, type DominoQuery } from './joinery';
 import { joistId } from './frame';
@@ -61,11 +61,7 @@ export const HINGE_LEAF_IN = 1;
 export const HINGE_HOLE_PITCH_IN = 0.5;
 /** Outermost hinge insert to the panel's side edge (in): at least the 1/2 in the insert text asks for. */
 export const INSERT_EDGE_IN = 0.6;
-/**
- * Installation hole (in) of the #10-32 x 5/16 hex-drive threaded insert in the seat back (the thread's 0.19 in major diameter is NOT a hole size: build review MUST-5). 5/16 in is the figure for a
- * stocked 5/16 in long hex-drive insert for wood; VERIFY IT against the maker's sheet for the exact insert before drilling (drill a scrap first).
- */
-export const INSERT_DRILL_IN = 5 / 16;
+export { INSERT_DRILL_IN } from './build-utils';
 const HINGE_MASS_LB = 0.1;
 /** Height of the support (oak post) behind the back when the box is not behind it, along the back; and its crest thickness. */
 export const SEAT_POST_HEIGHT_IN = 4.5;
@@ -331,7 +327,7 @@ export function buildSeat(ctx: Ctx): Part[] {
   // and the insert is 1/32 in shorter than the hole: 5/16 in in a 12 mm panel (a 3/8 in insert would leave 0.10 in).
   const insertHoleIn = Math.floor((plyT - INSERT_VENEER_MIN_IN) * 32 + 1e-9) / 32;
   const insertLenIn = insertHoleIn - 1 / 32;
-  const insertTxt = `#10-32 × ${insertLenIn >= 0.3 ? '5/16' : String(insertLenIn.toFixed(2))} 316 threaded inserts (hex-drive, epoxied) in blind ${frac(INSERT_DRILL_IN)} in holes ${(insertHoleIn).toFixed(3)}" deep (a drill stop on the bit; verify the hole size against the insert maker's sheet) from the front face, leaving ${(plyT - insertHoleIn).toFixed(3)}" of back veneer, 1/2 in or more from every edge`;
+  const insertTxt = `#10-32 × ${insertLenIn >= 0.3 ? '5/16' : String(insertLenIn.toFixed(2))} ${insertMat(p)} threaded inserts (hex-drive, epoxied) in blind ${frac(INSERT_DRILL_IN)} in holes ${(insertHoleIn).toFixed(3)}" deep (a drill stop on the bit; verify the hole size against the insert maker's sheet) from the front face, leaving ${(plyT - insertHoleIn).toFixed(3)}" of back veneer, 1/2 in or more from every edge`;
   {
     const rTop = Math.min(p.seatBackCornerRadiusIn, W / 3, H / 3);
     const rBot = 0.5; // small bottom corners: the hinge leaf and the pin station sit near them
@@ -399,12 +395,12 @@ export function buildSeat(ctx: Ctx): Part[] {
   for (const { s: sg, tag } of SIDES) {
     parts.push(cylinder(ctx, {
       id: `seat-hinge-${tag}`, partNo: 'seat-hinge', name: `Seat-back hinge ${tag}`, group: 'seat', mat: 'fixed', massLb: HINGE_MASS_LB, kind: 'purchased',
-      material: '316 stainless butt hinge, 2" × 2" open', fab: 'buy', step: STEP.seatStorage, axis: 'y', radius: HINGE_R_IN, length: HINGE_LEN_IN,
+      material: `${stainless(p)} butt hinge, 2" × 2" open`, fab: 'buy', step: STEP.seatStorage, axis: 'y', radius: HINGE_R_IN, length: HINGE_LEN_IN,
       center: [s.P[0], sg * hingeY, s.P[2]], explode: unit(0, sg, 0.4),
-      sourcing: { vendor: 'McMaster-Carr (316 stainless butt hinge, 2" knuckle, 1" leaves)', costUsd: 9 },
+      sourcing: { vendor: `McMaster-Carr (${stainless(p)} butt hinge, 2" knuckle, 1" leaves)`, costUsd: 9 },
       joints: [
-        { type: 'screw', to: 'seat-back-panel', count: 3, diaIn: 0.19, size: '#10-32 × 3/8 316 flat-head machine screws into the epoxied 5/16 stainless threaded inserts in the front face of the panel (3/8 in, not 1/2 in: the leaf is about 1/16 in, so the screw bites 5/16 in and cannot bottom in the 11/32 in hole)', note: 'leaf on the back\'s front face, flush with the frame', at: holeK.map((k): Vec3 => [s.col2[0] * leafV, s.col2[2] * leafV, -sg * k * HINGE_HOLE_PITCH_IN]) },
-        { type: 'screw', to: `seat-hinge-backer-${tag}`, count: 3, diaIn: SCREW_DIA_IN[8], fit: hingeFit, size: `${screwText(hingeFit)} 316 flat head, through the deck into the ${f2(HINGE_BACKER_THICK_IN)} in backer pad (${f2(hingeFit.lenIn - hingeFit.gripIn)} in of bite)`, note: 'leaf on the deck (the cushion\'s rear margin lies over it)', at: holeK.map((k): Vec3 => [leafV, -HINGE_R_IN, -sg * k * HINGE_HOLE_PITCH_IN]) },
+        { type: 'screw', to: 'seat-back-panel', count: 3, diaIn: 0.19, size: `#10-32 × 3/8 ${stainless(p)} flat-head machine screws into the epoxied 5/16 stainless threaded inserts in the front face of the panel (3/8 in, not 1/2 in: the leaf is about 1/16 in, so the screw bites 5/16 in and cannot bottom in the 11/32 in hole)`, note: 'leaf on the back\'s front face, flush with the frame', at: holeK.map((k): Vec3 => [s.col2[0] * leafV, s.col2[2] * leafV, -sg * k * HINGE_HOLE_PITCH_IN]) },
+        { type: 'screw', to: `seat-hinge-backer-${tag}`, count: 3, diaIn: SCREW_DIA_IN[8], fit: hingeFit, size: `${screwText(hingeFit)} ${stainless(p)} flat head, through the deck into the ${f2(HINGE_BACKER_THICK_IN)} in backer pad (${f2(hingeFit.lenIn - hingeFit.gripIn)} in of bite)`, note: 'leaf on the deck (the cushion\'s rear margin lies over it)', at: holeK.map((k): Vec3 => [leafV, -HINGE_R_IN, -sg * k * HINGE_HOLE_PITCH_IN]) },
       ],
       notes: 'The back flips forward 105° about this knuckle onto the deck (D-57). The leaf on the deck is under the 3/8" gap behind the cushion (a 1/16" proud leaf does not show in the cargo bed).',
     }));
@@ -419,7 +415,7 @@ export function buildSeat(ctx: Ctx): Part[] {
       joints: [
         { type: 'glue', to: 'deck', count: 1, note: 'epoxy to the underside of the deck, before the frame goes on' },
         ...(buttIdx >= 0 ? [{ type: 'glue' as const, to: joistId(L, buttIdx), count: 1, note: 'butt the pad to the joist face (the pin sits in solid oak across the glue line)' }] : []),
-        { type: 'screw', to: `seat-hinge-${tag}`, count: 3, diaIn: SCREW_DIA_IN[8], fit: hingeFit, size: `${screwText(hingeFit)} 316, from the hinge leaf down through the deck` },
+        { type: 'screw', to: `seat-hinge-${tag}`, count: 3, diaIn: SCREW_DIA_IN[8], fit: hingeFit, size: `${screwText(hingeFit)} ${stainless(p)}, from the hinge leaf down through the deck` },
         { type: 'pin', to: `seat-pin-${tag}`, count: 1, diaIn: 2 * PIN_R_IN, size: `3/8" blind hole ${f4(lg.flatHoleIn)}" deep (flat latch), through the 12 mm deck first, with a 1/16" annular detent groove ${f4(lg.flatGrooveIn)}" below the deck`, note: `leaves ${f4(lg.flatLeftIn)}" of oak under the hole` },
       ],
       notes: `Oak pad ${HINGE_BACKER_THICK_IN}" thick, glued under the 12 mm deck at each hinge so the hinge screws AND the flat-position pin hole bite oak, not ply (D-57, D-63). It runs from ${hb.x0.toFixed(2)}" (a half inch behind the hinge axis) forward to ${hb.x1.toFixed(2)}", where it BUTTS the face of the next joist, so the flat pin (${(s.P[0] + sup.c2L).toFixed(2)}", ${(hb.x1 - (s.P[0] + sup.c2L)).toFixed(2)}" from the pad end and in line with the joist behind it) lands in solid oak; it is ${(2 * pinPadHalfIn).toFixed(0)}" across, ${pinPadHalfIn}" (4 pin diameters) each side of the pin station. Grain across the sled. Drill the pin hole through the deck and ${f4(lg.flatHoleIn)}" into the pad (a drill stop), 1/16" groove for the detent ball ${f4(lg.flatGrooveIn)}" below the deck, epoxy-lined, when the seat is installed: ${f4(lg.flatLeftIn)}" of oak is left under the hole. Replaces the one-piece 3/4 in strip (lighter by about 0.4 lb).`,
@@ -430,7 +426,7 @@ export function buildSeat(ctx: Ctx): Part[] {
   for (const { s: sg, tag } of SIDES) {
     parts.push(cylinder(ctx, {
       id: `seat-pin-${tag}`, partNo: 'seat-pin', name: `Seat-back latch pin ${tag}`, group: 'seat', mat: 'fixed', massLb: PIN_MASS_LB, kind: 'purchased',
-      material: '316 stainless quick-release spring-detent pin, 3/8" × 1-1/2" usable length, lanyard', fab: 'buy', step: STEP.seatStorage, removable: true,
+      material: `${stainless(p)} quick-release spring-detent pin, 3/8" × 1-1/2" usable length, lanyard`, fab: 'buy', step: STEP.seatStorage, removable: true,
       // The cylinder is the usable length (the tip at c0 = -PIN_LEN) plus the button head (to c0 = +PIN_HEAD): head seated on the panel's front face (c0 = 0).
       axis: 'x', radius: PIN_R_IN, length: PIN_LEN_IN + PIN_HEAD_IN, rot: { y: -a }, center: at((PIN_HEAD_IN - PIN_LEN_IN) / 2, pinZ, sg * sup.stileY), explode: unit(0.6, sg * 0.3, 0.8),
       sourcing: { vendor: 'McMaster-Carr (quick-release pin, 3/8" diameter, 1-1/2" usable length, with lanyard; SPRING-DETENT ball, because both holes are blind and a ball-lock pin does not retain in a blind hole): VERIFY the exact part, the distance from its tip to the ball and the head height, and prove it in a scrap block before drilling the real ones', costUsd: 9 },
@@ -445,7 +441,7 @@ export function buildSeat(ctx: Ctx): Part[] {
   const wedgeFit = pickWoodScrew(8, L.ply, zA - sup.zb); // the clamping screws cross the deck and bite the block
   for (const { s: sg, tag } of SIDES) {
     const j: Joint[] = [{ type: 'glue', to: 'deck', count: 1, note: 'epoxy to the deck (and screwed from below)' },
-      { type: 'screw', to: 'deck', count: 2, diaIn: SCREW_DIA_IN[8], fit: wedgeFit, size: `2 × ${screwText(wedgeFit)} 316 flat-head screws up from below through the deck and ${f2(wedgeFit.lenIn - wedgeFit.gripIn)} in into the block`, note: 'clamping screws for the epoxy bed; countersink the heads in the deck underside' }];
+      { type: 'screw', to: 'deck', count: 2, diaIn: SCREW_DIA_IN[8], fit: wedgeFit, size: `2 × ${screwText(wedgeFit)} ${stainless(p)} flat-head screws up from below through the deck and ${f2(wedgeFit.lenIn - wedgeFit.gripIn)} in into the block`, note: 'clamping screws for the epoxy bed; countersink the heads in the deck underside' }];
     if (sup.rear) j.push({ type: 'glue', to: 'storage-end-fore', count: 1, note: 'epoxy to the box end; the push of the rider goes into the box through it' });
     j.push({ type: 'pin', to: `seat-pin-${tag}`, count: 1, diaIn: 2 * PIN_R_IN, size: `3/8" blind hole ${f4(lg.upHoleIn)}" deep (upright latch), with a 1/16" annular detent groove ${f4(lg.upGrooveIn)}" from the mouth`, note: `drilled square to the back's rear face ${pinZ.toFixed(2)}" up from the hinge axis; the block is ${lg.blockIn.toFixed(2)}" thick along the hole there, so ${f4(lg.upLeftIn)}" of oak is left behind it (set from the block outline, never into the box end); a ball-lock pin does not retain in a blind hole (build 3c S4)` });
     parts.push(profilePart(ctx, {
@@ -523,7 +519,7 @@ export function buildSeat(ctx: Ctx): Part[] {
       parts.push(profilePart(ctx, {
         id: `seat-grip-${tag}`, partNo: 'seat-grip', name: `Grab board ${tag}`, group: 'seat', mat: 'oak', outline, holes: [cw2(hole)], depth: bt, basis: 'xz', origin: [gxA, originY, z0g], rotation: -slope,
         grain: 'x', step: STEP.finish, stock: { t: bt, w: nTop - nBot, l: bLen }, fab: 'shaper-origin',
-        joints: [{ type: 'bolt', to: gid, count: GRIP_BOLTS, diaIn: GRIP_BOLT_DIA_IN, size: `${GRIP_BOLT_DIA_IN}" × ${inchesText(gripBoltLen)} 316 button-head cap screws (grip ${gripStack.toFixed(2)}": board ${bt}", inner band ${L.sideBand.toFixed(3)}", web ${p.panelPlyIn.toFixed(3)}", outer band ${L.sideBand.toFixed(3)}", strip ${GRIP_BACKING_T_IN}"), ${GRIP_BOLT_COLS} columns × ${GRIP_BOLT_ROWS_IN.length} rows (${GRIP_BOLT_ROWS_IN.join('" and ')}" below the gunwale top), through the board, the inner band, the web, the outer band and the 1/16" 316 backing strip (head and a 3/8" washer on the strip outside, a 1-1/4" fender washer and nylock nut on the inside of the board; hold the nut, turn the hex key)`, at: bolts.map(([bu, bn]): Vec3 => [bu, bn, bt / 2]), note: 'the board laps the inboard face of the inner gunwale band; the screws pass through the inner band, the web and the outer band inside the 1.5 in gunwale band; the heads bear on the backing strip, not on the 0.234 in outer band (D-63)' }],
+        joints: [{ type: 'bolt', to: gid, count: GRIP_BOLTS, diaIn: GRIP_BOLT_DIA_IN, size: `${GRIP_BOLT_DIA_IN}" × ${inchesText(gripBoltLen)} ${stainless(p)} button-head cap screws (grip ${gripStack.toFixed(2)}": board ${bt}", inner band ${L.sideBand.toFixed(3)}", web ${p.panelPlyIn.toFixed(3)}", outer band ${L.sideBand.toFixed(3)}", strip ${GRIP_BACKING_T_IN}"), ${GRIP_BOLT_COLS} columns × ${GRIP_BOLT_ROWS_IN.length} rows (${GRIP_BOLT_ROWS_IN.join('" and ')}" below the gunwale top), through the board, the inner band, the web, the outer band and the 1/16" ${stainless(p)} backing strip (head and a 3/8" washer on the strip outside, a 1-1/4" fender washer and nylock nut on the inside of the board; hold the nut, turn the hex key)`, at: bolts.map(([bu, bn]): Vec3 => [bu, bn, bt / 2]), note: 'the board laps the inboard face of the inner gunwale band; the screws pass through the inner band, the web and the outer band inside the 1.5 in gunwale band; the heads bear on the backing strip, not on the 0.234 in outer band (D-63)' }],
         notes: `Grab board (D-57): ${bt}" oak, ${f1(bLen)}" long and ${f1(nTop - nBot)}" tall, its lower ${L.railBand}" lapping the inboard face of the gunwale and standing ${f1(nTop)}" above the gunwale top, turned to the sheer's ${((slope * 180) / Math.PI).toFixed(1)}° slope. A ${hl}" × ${hh}" hand hole is Shaper Origin-routed ${f1(holeBot)}" above the gunwale top (finger gap ${hh}" ≥ 1.25", clear length ${hl}" ≥ 3.5": no pinch point, BRIEF 4.7), ${p.grabBoardBarIn}" of oak above it; top corners ${GRIP_CORNER_IN}" radius, ¼" roundovers on every edge and the hole. Bolted, never glued, so a splintered board can be replaced. It replaces the D-40 pad, two posts and bar.`,
       }));
       // Backing strip on the OUTER face of the outer gunwale band under the bolt heads (D-63): 316 flat bar 1/16 x 1 x board length, cut at the sheer's slope, epoxied/bedded to the band.
@@ -534,13 +530,16 @@ export function buildSeat(ctx: Ctx): Part[] {
         outline: [W2(bu0, bn0), W2(bu1, bn0), W2(bu1, bn1), W2(bu0, bn1)], depth: GRIP_BACKING_T_IN, basis: 'xz', origin: [0, sg > 0 ? yOut + GRIP_BACKING_T_IN : yOut, 0], step: STEP.finish, fab: 'bandsaw',
         joints: [
           { type: 'glue', to: `side-${tag}-gunwale`, count: 1, size: 'bedded in epoxy or polysulfide sealant on the outer face of the outer gunwale band', note: 'spreads the six screw heads over about 8 in²' },
+          // the screw holes, one on each screw line of the board (local frame = model x, z; mid-thickness)
+          { type: 'hole', to: `side-${tag}-gunwale`, count: bolts.length, diaIn: GRIP_BOLT_DIA_IN + 1 / 32, size: `${bolts.length} holes ${(GRIP_BOLT_DIA_IN + 1 / 32).toFixed(3)}" (a clearance for the ${GRIP_BOLT_DIA_IN}" screws) through the strip, on the screw lines of the grab board; drill them with the board clamped on, one bit through every layer`,
+            at: bolts.map(([bu, bn]): Vec3 => { const w = W2(bu, bn); return [w[0], w[1], GRIP_BACKING_T_IN / 2]; }) },
         ],
-        sourcing: { vendor: `McMaster-Carr (316 stainless flat bar ${GRIP_BACKING_T_IN}" × ${GRIP_BACKING_H_IN}", ${f1(gripBackingLen(bLen))}" piece, hacksawed to length, ends rounded and filed, edges eased)` },
-        notes: `Backing strip for the ${GRIP_BOLTS} grab-board screw heads (D-63, build 3c-8 S9): 316 flat bar ${GRIP_BACKING_T_IN}" × ${GRIP_BACKING_H_IN}" × ${f1(gripBackingLen(bLen))}" on the outside of the outer gunwale band. A 1/4" button head on the 0.234" oak band over the thin web would pull through before the inside washer on the board fails, and a washer big enough to spread it (1-1/4") does not fit the 0.6" row spacing on a ${L.railBand}" band; the strip bears the heads on about ${f1(gripBackingLen(bLen) * GRIP_BACKING_H_IN)} in² (the seat-grip row checks it). Drill it with the board clamped on, one bit through all layers. It stands 1/16" proud of the hull face; round the ends.`,
+        sourcing: { vendor: `McMaster-Carr (${stainless(p)} flat bar ${GRIP_BACKING_T_IN}" × ${GRIP_BACKING_H_IN}", ${f1(gripBackingLen(bLen))}" piece, hacksawed to length, ends rounded and filed, edges eased)` },
+        notes: `Backing strip for the ${GRIP_BOLTS} grab-board screw heads (D-63, build 3c-8 S9): ${stainless(p)} flat bar ${GRIP_BACKING_T_IN}" × ${GRIP_BACKING_H_IN}" × ${f1(gripBackingLen(bLen))}" on the outside of the outer gunwale band. A 1/4" button head on the 0.234" oak band over the thin web would pull through before the inside washer on the board fails, and a washer big enough to spread it (1-1/4") does not fit the 0.6" row spacing on a ${L.railBand}" band; the strip bears the heads on about ${f1(gripBackingLen(bLen) * GRIP_BACKING_H_IN)} in² (the seat-grip row checks it). Drill it with the board clamped on, one bit through all layers. It stands 1/16" proud of the hull face; round the ends.`,
       });
       strip.kind = 'metal';
       strip.stock = { t: GRIP_BACKING_T_IN, w: GRIP_BACKING_H_IN, l: gripBackingLen(bLen) }; // the cut list reads the flat-bar stock from here, not from the sourcing text
-      strip.material = '316 stainless flat bar';
+      strip.material = `${stainless(p)} flat bar`;
       strip.massLb = (GRIP_BACKING_T_IN * GRIP_BACKING_H_IN * gripBackingLen(bLen) * p.steelDensityPcf) / 1728;
       parts.push(strip);
     }

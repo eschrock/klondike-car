@@ -15,7 +15,7 @@ import { PLY_SPECIES, thinSheet, type Params } from '../params';
 import { flatPattern, type FlatPattern } from './flat';
 import {
   BOARD_LENGTHS_IN, BOARD_WIDTH_IN, boardByNominal, isBuilt, partKey, planResaw, sheetClass,
-  BOARD_THICKNESSES, planOakPart, type Lamination, type ResawPool,
+  BOARD_THICKNESSES, boardFinishedIn, planOakPart, type Lamination, type ResawPool,
 } from './cutlist';
 
 export const SHEET_WIDTH_IN = 48;
@@ -210,6 +210,8 @@ export interface OakThickness {
   board: string;
   nominalIn: number;
   usableIn: number;
+  /** Reliable finished thickness of this board (in, Eric 2026-10-13): what a part bought from it can be milled to at most. */
+  finishedIn: number;
   /** Solid pieces and laminate strips milled from this thickness. */
   pieces: number;
   /** Solid pieces' board feet at rough size on nominal thickness; the share of the laminate strips (each a 1/k share of its board). */
@@ -471,7 +473,7 @@ export function oakBoardFeet(parts: Part[], p: Params): OakPlan {
     const fi = foldedInTo.get(b.nominal);
     for (const f of fi ?? []) summary.push(`also cut the ${f.from} parts ${f.partNos.join(', ')} (${f.netBf.toFixed(1)} bf) from the free lanes of these boards: it saves ${f.from} board length`);
     thicknesses.push({
-      board: b.nominal, nominalIn: b.nominalIn, usableIn: b.usableIn, pieces: (pieces.get(b.nominal) ?? 0) + (stripCount.get(b.nominal) ?? 0),
+      board: b.nominal, nominalIn: b.nominalIn, usableIn: b.usableIn, finishedIn: boardFinishedIn(b, p), pieces: (pieces.get(b.nominal) ?? 0) + (stripCount.get(b.nominal) ?? 0),
       solidNetBf, stripNetBf, netBf, allowanceBf, plannedBf, purchaseBf: plannedBf, boards, resawBoards: rb, summary,
       ...(layersIn ? { layersIn } : {}), ...(mi ? { movedIn: mi } : {}), ...(movedOutOf.has(b.nominal) ? { movedOut: movedOutOf.get(b.nominal) } : {}), ...(fi ? { foldedIn: fi } : {}),
     });

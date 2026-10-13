@@ -120,19 +120,20 @@ describe('D-72: bolts and eye bolts at stock lengths', () => {
   it('1/4-20: the hanger and the hold-down upright bolts are the same 2-1/4 (leg + hanger + rail); the others are the T-nut 1-1/4, the grips 2, the beam 3', () => {
     const hd = parts.find((x) => x.id === 'beam-hold-down-L')!;
     expect(hd.joints!.find((j) => /axle-hanger/.test(j.to))!.size).toMatch(/^0\.25" × 2-1\/4 .*through the upright leg, the hanger and the rail/);
-    expect(hd.joints!.find((j) => j.to === 'beam-R')!.size).toMatch(/^0\.25" × 3 /);
-    expect(parts.find((x) => x.id === 'axle-hanger-L')!.joints!.find((j) => j.to === 'rail-L' && j.type === 'bolt')!.size).toMatch(/^0\.25" × 2-1\/4 /);
-    expect([...boltSizes(/^0\.25"|1\/4-20/)].sort()).toEqual(['1-1/4', '2', '2-1/4', '3']); // 5 lengths before (1-1/4, 1-1/2, 2, 2-1/4, 3): four is what the stacks allow
+    expect(hd.joints!.find((j) => j.to === 'beam-R')!.size).toMatch(/^0\.25" × 2-3\/4 /); // D-74: 2-3/4 through the 2-1/8 in beam (3 through the 2-1/4 in beam before)
+    // one bolt per position, recorded once (on the angle): the hanger carries no bolt joint of its own, so the BOM does not count the pair twice
+    expect(parts.find((x) => x.id === 'axle-hanger-L')!.joints!.some((j) => j.type === 'bolt')).toBe(false);
+    expect([...boltSizes(/^0\.25"|1\/4-20/)].sort()).toEqual(['1-1/4', '2', '2-1/4', '2-3/4']); // 5 lengths before (1-1/4, 1-1/2, 2, 2-1/4, 3): four is what the stacks allow
   });
   it('3/8-16 hex bolts: two lengths (the clamp plates 3-1/4, the brake knees 4); the carriage bolt is the stock 6-1/2 (6 stops 1/16 in short of the top of the nylock nut)', () => {
-    expect([...boltSizes(/0\.38" [×x] [\d-/]+ 316 hex bolts|0\.38" x [\d-/]+" 316 hex bolts/)].filter((s) => s !== '?').sort()).toEqual(['3-1/4', '4']);
+    expect([...boltSizes(/0\.38" [×x] [\d-/]+ (?:316|18-8 \(304\) stainless) hex bolts|0\.38" x [\d-/]+" (?:316|18-8 \(304\) stainless) hex bolts/)].filter((s) => s !== '?').sort()).toEqual(['3-1/4', '4']);
     const fit = stockBoltFit(3 + 2.5, 0.375, 1, CARRIAGE_STOCK_IN);
     expect(fit.needIn).toBeCloseTo(5.5 + 0.0625 + 0.5 + 1.5 / 16, 6);
     expect(fit.stockIn).toBe(6.5);
     expect(fit.pastNutIn).toBeLessThan(0.5);
     expect(6 - 5.5 - 0.0625).toBeLessThan(0.5); // the 6 in bolt: the tip is below the top of the 0.5 in nut
     const tongue = parts.find((x) => x.id === 'bridle-tongue')!.joints!.find((j) => j.type === 'bolt' && j.to === 'beam-F')!;
-    expect(tongue.size).toMatch(/0\.38" × 6-1\/2 316 carriage bolts/);
+    expect(tongue.size).toMatch(/0\.38" × 6-1\/2 (?:316|18-8 \(304\) stainless) carriage bolts/);
     expect(parts.find((x) => x.id === 'beam-F')!.joints!.filter((j) => /carriage/.test(j.size ?? '')).every((j) => /6-1\/2/.test(j.size!))).toBe(true);
   });
   it('shoulder eye bolts: 4-1/2 for the axle beam (it needs 3.16: cut to 3-1/4 after fitting), 2-1/2 for the chain joist (it needs 1.97)', () => {
@@ -275,16 +276,16 @@ describe('D-73: the thin-sheet material and the weather spec', () => {
     for (const q of s.placements) expect(Math.max(...q.outer.map((o) => o[0]))).toBeLessThanOrEqual(60 - nest.kerfIn + 1e-6);
   });
 
-  it('the three materials side by side (empty mass, thin parts, web row): white oak 120.71 lb, okoume 117.88 lb, Baltic 117.91 lb', () => {
+  it('the three materials side by side (empty mass, thin parts, web row): white oak 119.20 lb, okoume 116.37 lb, Baltic 116.39 lb (-0.2 lb at the Phase 4 data pass: the hanger bolts counted once, the king-beam nut slot; -1.31 lb at D-74: the 2-1/8 in laminated parts)', () => {
     const rows = [OAK, OKOUME, BALTIC].map((m) => {
       const p = withMat(m);
       const parts = buildModel(p);
       const thin = parts.filter((x) => x.kind === 'sheet' && x.stock && x.stock.t < 0.3).reduce((a, x) => a + x.massLb, 0);
       return { total: totalMass(parts), thin, web: runChecks(p, { includeTruck: false }).find((c) => c.id === 'side-web')!.util! };
     });
-    expect(rows[0].total).toBeCloseTo(120.71, 1);
-    expect(rows[1].total).toBeCloseTo(117.88, 1);
-    expect(rows[2].total).toBeCloseTo(117.9, 1);
+    expect(rows[0].total).toBeCloseTo(119.20, 1);
+    expect(rows[1].total).toBeCloseTo(116.37, 1);
+    expect(rows[2].total).toBeCloseTo(116.39, 1);
     expect(rows[0].thin).toBeCloseTo(10.16, 1);
     expect(rows[1].thin).toBeCloseTo(6.91, 1);
     expect(rows[2].thin).toBeCloseTo(6.64, 1);
@@ -341,14 +342,14 @@ describe('D-71: the solid 5/8 in rod (Eric)', () => {
     expect(w.whatToDo).toMatch(/MEASURE THE HUB LENGTH/);
     expect(w.whatToDo).toMatch(/2\.25" is assumed/);
     expect(w.pass).toMatch(/Bore = 5\/8"/);
-    expect(w.pass).toMatch(/rating ≥ 300 lb/);
+    expect(w.pass).toMatch(/Rating ≥ 300 lb/);
     expect(w.pass).not.toMatch(/does not fit/);
   });
-  it('the assembly steps say 5/8" and rod, and the groove and the proud are the params (0.595 in, 0.03 in)', () => {
+  it('the assembly steps say 5/8" and rod, and the groove and the proud are the params (0.595 in = 19/32, 0.03 in = 1/32)', () => {
     const steps = assemblySteps(parts, defaults);
     const text = steps.flatMap((s) => s.instructions).join(' ');
-    expect(text).toMatch(/cut the groove 0\.595" deep, 0\.03" proud/);
-    expect(text).toMatch(/shimmed 0\.03" off the beam/);
+    expect(text).toMatch(/5\/8" wide × 19\/32" deep, so the 5\/8" rod stands 1\/32" proud/);
+    expect(text).toMatch(/shimmed 1\/32" off the beam/);
     expect(text).toMatch(/5\/8" bore on the 5\/8" rod/);
     expect(text).not.toMatch(/0\.63" bore/);
     expect(text).not.toMatch(/DOM tube/);
@@ -357,14 +358,14 @@ describe('D-71: the solid 5/8 in rod (Eric)', () => {
 });
 
 describe('the numbers at the defaults (weatherSpec Standard: 1/4 in white oak plywood, the solid rod, the 3 wood-screw sizes)', () => {
-  it('empty mass 120.7 lb (115.95 lb at D-71: +1.9 for the rod, +2.8 for the white oak sides, box and lid, +0.04 for the hinge backers and fasteners)', () => {
+  it('empty mass 119.2 lb (120.5 before D-74, 120.7 before the hanger bolts were counted once and the king-beam nut slot was cut out; 115.95 lb at D-71: +1.9 for the rod, +2.8 for the white oak sides, box and lid, +0.04 for the hinge backers and fasteners)', () => {
     const m = totalMass(buildModel(defaults, { rider: 'none', cargo: false }));
-    expect(m).toBeCloseTo(120.707, 2);
+    expect(m).toBeCloseTo(119.196, 2);
     const ok = totalMass(buildModel({ ...defaults, thinSheetMaterial: OKOUME }, { rider: 'none', cargo: false }));
-    expect(ok).toBeCloseTo(117.879, 2);
+    expect(ok).toBeCloseTo(116.37, 2);
     expect(m - ok).toBeCloseTo(2.83, 1);
     const tubeOk = totalMass(buildModel({ ...defaults, ...PRE_D72 }, { rider: 'none', cargo: false }));
-    expect(tubeOk).toBeCloseTo(115.998, 2);
+    expect(tubeOk).toBeCloseTo(114.487, 2);
     expect(ok - tubeOk).toBeCloseTo(1.88, 1); // the rod over the tube
   });
   it('riders safe 50-250+ lb, green 50-220 lb (230 with the 4 mm okoume); cargo capacity 254 lb; nothing fails', () => {
@@ -373,8 +374,8 @@ describe('the numbers at the defaults (weatherSpec Standard: 1/4 in white oak pl
     expect(sw.green).toMatchObject({ loLb: 50, hiLb: 220, openLow: true, openHigh: false });
     expect(riderSweep(withMat(OKOUME)).green).toMatchObject({ loLb: 50, hiLb: 230 });
     const cap = cargoCapacity(defaults);
-    expect(cap.capacityLb).toBe(254);
-    expect(cap.comfortableLb).toBe(204);
+    expect(cap.capacityLb).toBe(255); // 254 before D-74
+    expect(cap.comfortableLb).toBe(205);
     expect(cap.limiter!.id).toBe('bearing-groove');
     const cs = runChecks(defaults, { includeTruck: false });
     expect(cs.filter((c) => c.status === 'fail')).toEqual([]);

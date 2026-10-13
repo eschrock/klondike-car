@@ -1294,8 +1294,8 @@ const defs = {
 
   brakeKneeDepthIn: {
     label: 'Knee (outrigger) fore-aft depth', group: 'brake', unit: 'in',
-    default: 2.5, min: 2, max: 5, step: 0.25, status: 'assumed', ref: 'D-57',
-    note: 'The oak outrigger that carries the hinge sits ahead of the tire; the bolt columns spread over this depth.',
+    default: 2.125, min: 2, max: 5, step: 0.125, status: 'assumed', ref: 'D-57, D-74',
+    note: 'The oak outrigger that carries the hinge sits ahead of the tire; the bolt columns spread over this depth. D-74: 2-1/8 in = 3 layers of 3/4 in (4/4) face-laminated, less the 1/8 in cleanup (was 2-1/2 in).',
   },
 
   brakeKneeLegIn: {
@@ -1352,6 +1352,12 @@ const defs = {
     note: 'An oak block epoxied to the inside face of the rail (and the deck underside); the mounting bolts end in it. Joists that meet it are cut back. D-60: 3/4 in (was 1-1/4 in).',
   },
 
+  brakeBackerCboreDeepIn: {
+    label: 'Backer counterbore depth (nut and washer pockets)', group: 'brake', unit: 'in',
+    default: 0.5, min: 0.375, max: 0.625, step: 0.0625, status: 'assumed', ref: 'D-57, D-65',
+    note: 'The nuts and washers of the knee bolts sit in counterbores in the backer\'s inner face this deep (wide enough for the washer plus 1/8 in). A nut and a fender washer need about 0.4 in with the thread showing; the 3/4 in backer keeps 1/4 in of oak under the washer.',
+  },
+
   brakeMountBoltDiaIn: {
     label: 'Knee mounting bolt diameter', group: 'brake', unit: 'in',
     default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-57',
@@ -1406,8 +1412,8 @@ const defs = {
 
   brakeChockHeightIn: {
     label: 'Wheel chock height', group: 'brake', unit: 'in',
-    default: 2.5, min: 1, max: 4, step: 0.25, status: 'assumed', ref: 'D-57',
-    note: 'An oak wedge on a cord for parking; stays under the knee (never taller than the rail bottom).',
+    default: 2.125, min: 1, max: 4, step: 0.125, status: 'assumed', ref: 'D-57, D-74',
+    note: 'An oak wedge on a cord for parking; stays under the knee (never taller than the rail bottom). D-74: 2-1/8 in = 3 layers of 3/4 in (4/4) face-laminated, less the 1/8 in cleanup (was 2-1/2 in).',
   },
 
   brakeChockAngleDeg: {
@@ -1509,6 +1515,11 @@ const defs = {
     label: 'Frame rail depth', group: 'stock', unit: 'in',
     default: 3, min: 1.5, max: 5, step: 0.125, status: 'explore',
   },
+  railStepRunIn: {
+    label: 'Rail step: length of the sloped cut', group: 'stock', unit: 'in',
+    default: 1.5, min: 0.5, max: 4, step: 0.125, status: 'assumed', ref: 'D-56',
+    note: 'D-56: where the rail drops to its shallow front depth, its bottom edge slopes up over this much length and ends at railStepX (1 in short of the axle-beam swath). At the defaults the rise is 1.135 in, so 1-1/2 in of run is a 37 degree slope, not 45 (a 45 degree cut would start 3/8 in later and shorten the deep rail by that much; nothing needs it). A gentle slope is easier to bandsaw and leaves no sharp inside corner. The notes and drawings read the angle from this and the rise.',
+  },
   crossmemberDepthIn: {
     label: 'Crossmember / deck joist depth', group: 'stock', unit: 'in',
     default: 1.75, min: 0.75, max: 3.5, step: 0.125, status: 'explore',
@@ -1526,7 +1537,7 @@ const defs = {
   axleBeamThicknessIn: {
     label: 'Rear axle beam width (fore-aft)', group: 'stock', unit: 'in',
     default: 2.25, min: 1.5, max: 4, step: 0.125, status: 'explore', ref: 'D-60',
-    note: 'D-60: 2-1/4 in (was 2-1/2 in); beam-rear stays about 0.19.',
+    note: 'D-60: 2-1/4 in (was 2-1/2 in); beam-rear stays about 0.19. D-74: left at 2-1/4 in on purpose: this is the rip width of the boards (the lamination is across the depth), and 2-1/8 in leaves 0.69 in of wood each side of the rod groove, under the 0.75 in beamLigamentMinIn.',
   },
   frontBeamThicknessIn: {
     label: 'Front axle beam width (fore-aft)', group: 'stock', unit: 'in',
@@ -1535,8 +1546,8 @@ const defs = {
   },
   axleBeamDepthIn: {
     label: 'Axle beam depth (vertical)', group: 'stock', unit: 'in',
-    default: 2.25, min: 1.5, max: 4, step: 0.125, status: 'explore', ref: 'D-54',
-    note: '2.25 in (was 2.5): with the 10 in rear wheels the underslung beam bottom is at 5.375 - 2.25 = 3.1 in, above the 3 in ground clearance.',
+    default: 2.125, min: 1.5, max: 4, step: 0.125, status: 'explore', ref: 'D-54, D-74',
+    note: 'D-74: 2-1/8 in = 3 layers of 3/4 in (4/4) face-laminated, less the 1/8 in cleanup. Before: 2.25 in (was 2.5): with the 10 in rear wheels the underslung beam bottom is at 5.375 - 2.25 = 3.1 in, above the 3 in ground clearance.',
   },
   deckPlyIn: {
     label: 'Deck plywood thickness', group: 'stock', unit: 'in',
@@ -1575,6 +1586,41 @@ const defs = {
     label: 'Rough-stock allowance (t / w)', group: 'stock', unit: 'in',
     default: 0.125, min: 0, max: 0.5, step: 0.0625, status: 'assumed',
     note: 'Added to the THICKNESS of every rough oak piece (planing allowance). Width and length have their own allowances (roughWidthAllowanceIn, roughLengthAllowanceIn; laminate pieces: laminateWidthAllowanceIn, laminateLengthAllowanceIn).',
+  },
+  boardYield44In: {
+    label: 'Reliable finished thickness of 4/4 stock', group: 'stock', unit: 'in',
+    default: 0.75, min: 0.5, max: 4, step: 0.0625, status: 'assumed',
+    note: 'Eric 2026-10-13: the FINISHED thickness a 4/4 white oak board reliably gives after jointing and planing both faces ("4/4 stock is often actually closer to 3/4"). A solid part is bought from the thinnest stocked board whose finished thickness is at least the part\'s FINAL thickness, and a face-laminated layer is planed to at most this (rounded down to 1/16). The resaw math keeps the board\'s rough thickness (this plus millingAllowanceIn).',
+  },
+  boardYield54In: {
+    label: 'Reliable finished thickness of 5/4 stock', group: 'stock', unit: 'in',
+    default: 1, min: 0.5, max: 4, step: 0.0625, status: 'assumed',
+    note: 'Eric 2026-10-13: the FINISHED thickness a 5/4 white oak board reliably gives after jointing and planing both faces ("4/4 stock is often actually closer to 3/4"). A solid part is bought from the thinnest stocked board whose finished thickness is at least the part\'s FINAL thickness, and a face-laminated layer is planed to at most this (rounded down to 1/16). The resaw math keeps the board\'s rough thickness (this plus millingAllowanceIn).',
+  },
+  boardYield64In: {
+    label: 'Reliable finished thickness of 6/4 stock', group: 'stock', unit: 'in',
+    default: 1.25, min: 0.5, max: 4, step: 0.0625, status: 'assumed',
+    note: 'Eric 2026-10-13: the FINISHED thickness a 6/4 white oak board reliably gives after jointing and planing both faces ("4/4 stock is often actually closer to 3/4"). A solid part is bought from the thinnest stocked board whose finished thickness is at least the part\'s FINAL thickness, and a face-laminated layer is planed to at most this (rounded down to 1/16). The resaw math keeps the board\'s rough thickness (this plus millingAllowanceIn).',
+  },
+  boardYield84In: {
+    label: 'Reliable finished thickness of 8/4 stock', group: 'stock', unit: 'in',
+    default: 1.75, min: 0.5, max: 4, step: 0.0625, status: 'assumed',
+    note: 'Eric 2026-10-13: the FINISHED thickness a 8/4 white oak board reliably gives after jointing and planing both faces ("4/4 stock is often actually closer to 3/4"). A solid part is bought from the thinnest stocked board whose finished thickness is at least the part\'s FINAL thickness, and a face-laminated layer is planed to at most this (rounded down to 1/16). The resaw math keeps the board\'s rough thickness (this plus millingAllowanceIn).',
+  },
+  boardYield124In: {
+    label: 'Reliable finished thickness of 12/4 stock', group: 'stock', unit: 'in',
+    default: 2.75, min: 0.5, max: 4, step: 0.0625, status: 'assumed',
+    note: 'Eric 2026-10-13: the FINISHED thickness a 12/4 white oak board reliably gives after jointing and planing both faces ("4/4 stock is often actually closer to 3/4"). A solid part is bought from the thinnest stocked board whose finished thickness is at least the part\'s FINAL thickness, and a face-laminated layer is planed to at most this (rounded down to 1/16). The resaw math keeps the board\'s rough thickness (this plus millingAllowanceIn). 12/4 is not stocked (D-70): the parts that would need it are face-laminated.',
+  },
+  boardYield164In: {
+    label: 'Reliable finished thickness of 16/4 stock', group: 'stock', unit: 'in',
+    default: 3.75, min: 0.5, max: 4, step: 0.0625, status: 'assumed',
+    note: 'Eric 2026-10-13: the FINISHED thickness a 16/4 white oak board reliably gives after jointing and planing both faces ("4/4 stock is often actually closer to 3/4"). A solid part is bought from the thinnest stocked board whose finished thickness is at least the part\'s FINAL thickness, and a face-laminated layer is planed to at most this (rounded down to 1/16). The resaw math keeps the board\'s rough thickness (this plus millingAllowanceIn). 16/4 is a special order; only the brake shoe and chock blocks ever asked for it.',
+  },
+  laminationCleanupIn: {
+    label: 'Face-lamination cleanup allowance', group: 'stock', unit: 'in',
+    default: 0.125, min: 0, max: 0.5, step: 0.0625, status: 'assumed',
+    note: 'Eric 2026-10-13: after the layers are glued face to face the block is jointed and planed flat and square, which takes this much off its thickness. Every layer is already planed to a reliable board thickness, so the layers\' sum minus this must still be at least the part\'s final thickness. It replaces millingAllowanceIn for a glued block.',
   },
   roughWidthAllowanceIn: {
     label: 'Rough-stock width allowance (plain solid parts)', group: 'stock', unit: 'in',

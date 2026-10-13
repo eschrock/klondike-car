@@ -9,11 +9,11 @@
  */
 import { joistId } from './frame';
 import { thinSheet, type Params } from '../params';
-import { SIDES, type Ctx } from './build-utils';
+import { SIDES, type Ctx, stainless, insertMat, INSERT_DRILL_IN } from './build-utils';
 import { sideTopAt } from './layout';
 import { scupperSites, signBackerPlan, signKnobPlan } from './body';
 import { worldAABB } from './bounds';
-import { boltLength, inchesText, pickWoodScrew, screwMinBite, screwText } from './rear-mount';
+import { pickWoodScrew, screwMinBite, screwText } from './rear-mount';
 
 /** Bite of a rail-to-chine screw into the chine sandwich edge (outer band + web) after it has crossed the rail (in). */
 export const RAIL_CHINE_BITE_IN = 0.5;
@@ -129,6 +129,8 @@ interface Pair {
   sizeB?: string;
   /** Model-frame joint locations (shared). */
   pts: Vec3[];
+  /** Model-frame locations on part `b`, when they differ from `pts` (a knob screw ends in an insert at the face of its backer, not at the knob). */
+  ptsB?: Vec3[];
   noteA?: string;
   noteB?: string;
   /** Record the joint on `a` only (a hole in a host for a cable that is drawn only where it is exposed; the mating part has no matching feature). */
@@ -226,9 +228,9 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
       });
       // Rail-to-chine screws (round 3, build critic S4): #6, not #8: the bearing edge is only the outer band + the web (0.39 in), and a #8 leaves 0.11 in a side. They go BETWEEN the Dominos (a screw at a Domino would
       // hit its mortise), at the middle of every other gap, up through the rail and RAIL_CHINE_BITE_IN into the chine sandwich. The rail is 3 in deep aft of the step and railDepthF forward of it, so the length
-      // is per rail-depth zone (the 45 degree ramp is the shallower of its two ends).
-      const railD = p.railDepthIn, xs = L.railStepX;
-      const depthAt = (x: number): number => (x <= xs - 1.5 ? railD : x >= xs ? L.railDepthF : railD + ((L.railDepthF - railD) * (x - (xs - 1.5))) / 1.5);
+      // is per rail-depth zone (the sloped step is the shallower of its two ends).
+      const railD = p.railDepthIn, xs = L.railStepX, run = p.railStepRunIn;
+      const depthAt = (x: number): number => (x <= xs - run ? railD : x >= xs ? L.railDepthF : railD + ((L.railDepthF - railD) * (x - (xs - run))) / run);
       const screwPts = Array.from({ length: Math.max(0, n - 1) }, (_, i) => i).filter((i, _k, all) => i % 2 === 0 || i === all.length - 1).map((i) => { // every other gap, and the last one so the forward end is tied too
         const a = pts[i], b = pts[i + 1];
         return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, cBot] as Vec3;
@@ -244,7 +246,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
         const ds = qs.map((q) => depthAt(q[0])), dLo = Math.min(...ds), dHi = Math.max(...ds);
         const cbs = qs.map((q) => cbAt(q[0])), cbLo = Math.min(...cbs), cbHi = Math.max(...cbs);
         const depthText = Math.abs(dHi - dLo) < 0.005 ? `${frac(dHi)}" deep` : `${frac(dLo)}" to ${frac(dHi)}" deep`;
-        const where = zone === 'deep' ? `aft of x = ${(xs - 1.5).toFixed(1)}"` : zone === 'shallow' ? `forward of x = ${xs.toFixed(1)}"` : `on the 45° ramp, x = ${(xs - 1.5).toFixed(1)}" to ${xs.toFixed(1)}"`;
+        const where = zone === 'deep' ? 'behind the step' : zone === 'shallow' ? 'ahead of the step' : 'on the sloped step';
         const cbText = cbHi <= 0.005 ? 'no counterbore needed (the tip bites more than the minimum)' : `counterbore the head ${Math.abs(cbHi - cbLo) < 0.005 ? frac(cbHi) : `${frac(cbLo)}" to ${frac(cbHi)}`}" up the rail from its underside (${frac(RAIL_CHINE_PLUG_DIA_IN)}" bit), then plug it with a glued oak dowel`;
         const fits = qs.map((q): ScrewFit => ({ gauge: 6, lenIn: SCREW_LEN, gripIn: depthAt(q[0]) - cbAt(q[0]), receivingIn: L.chineH, minBiteIn: screwMinBite(L.chineH) }));
         const fit = fits.reduce((a, b) => (b.lenIn - b.gripIn < a.lenIn - a.gripIn ? b : a));
@@ -252,8 +254,8 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
         const biteText = Math.abs(biteHi - biteLo) < 0.005 ? frac(biteHi) : `${frac(biteLo)}" to ${frac(biteHi)}`;
         add({
           a: `rail-${tag}`, b: `side-${tag}-chine`, typeA: 'screw',
-          size: `${screwText(fit)} 316 flat-head wood screws up through the rail (${depthText} here: ${where}; ${cbText}), ${biteText}" into the chine sandwich edge; PILOT 1/8 in through the rail and 3/32 in into the chine edge, countersink, and keep them on the centerline of the ${frac(flat)}" edge (a #6 leaves ${((flat - 0.138) / 2).toFixed(2)}" a side)`,
-          pts: qs, noteA: `Between the Dominos, every other gap (x = ${qs.map((q) => q[0].toFixed(1)).join(', ')}"); rail ${depthText}.`, fit,
+          size: `${screwText(fit)} ${stainless(p)} flat-head wood screws up through the rail (${depthText} here: ${where}; ${cbText}), ${biteText}" into the chine sandwich edge; PILOT 1/8 in through the rail and 3/32 in into the chine edge, countersink, and keep them on the centerline of the ${frac(flat)}" edge (a #6 leaves ${((flat - 0.138) / 2).toFixed(2)}" a side)`,
+          pts: qs, noteA: `Between the Dominos, every other gap; rail ${depthText}.`, fit,
         });
       }
     }
@@ -263,7 +265,8 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
   for (const { s, tag } of SIDES) for (const [pre, bx] of [['axle-hanger', L.beamR.x]] as const) {
     const hy = s * (hw + L.side - railT / 2 - p.axleHangerThickIn / 2);
     add({ a: `${pre}-${tag}`, b: `rail-${tag}`, typeA: 'glue', size: `${(p.axleHangerWidthIn).toFixed(2)}" × ${p.railDepthIn.toFixed(2)}" side-grain face, epoxy`, pts: [[bx, hy, L.railTop - p.railDepthIn / 2]], noteA: 'Long-grain hanger to the rail inner face: the bolts carry the vertical load, the glue keeps the faces together.' });
-    add({ a: `${pre}-${tag}`, b: `rail-${tag}`, typeA: 'bolt', size: `${p.beamHoldDownBoltDiameterIn}" × ${inchesText(boltLength(p.axleHangerThickIn + railT, p.beamHoldDownBoltDiameterIn))} 316 hex bolts through the hanger (${p.axleHangerThickIn}") and the rail (${railT}"), nylock nuts and fender washers on the outside face`, pts: [[bx - 0.6, hy, L.railTop - 0.8], [bx + 0.6, hy, L.railTop - 0.8]], noteA: 'Above the beam notch, one each side of the hold-down angle.' });
+    // The hanger's two bolts are the hold-down angle's upright bolts (D-72): one bolt per position through the leg, the hanger and the rail. They are recorded ONCE, on the angle (running-gear.ts),
+    // so the fastener count is right; the hanger and rail drawings find them there (an inbound joint, and a bolt that passes through the rail).
   }
 
   // ── Frame: rails to the rear transom, crossmembers to the rails, joists to the deck ──
@@ -311,7 +314,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
       const rScrew = (p.kingThrustOdIn / 4) + (p.kingpinDiaIn / 4) + 0.015;
       const thrustScrews: Vec3[] = [90, 210, 330].map((deg): Vec3 => [L.king.x + rScrew * Math.cos((deg * Math.PI) / 180), rScrew * Math.sin((deg * Math.PI) / 180), L.king.bot]);
       const thrustFit = pickWoodScrew(8, p.kingThrustThickIn, kb.stock?.t ?? L.king.top - L.king.bot);
-      add({ a: 'king-beam', b: 'king-thrust', typeA: 'screw', size: `3 × ${screwText(thrustFit)} 316 flat-head screws (counterbored from the disc side, ${frac(rScrew)} in from the kingpin axis) holding the UHMW disc to the king beam`, fit: thrustFit, pts: thrustScrews, noteA: 'Keeps the disc with the king beam; the axle beam turns under it (D-58).' });
+      add({ a: 'king-beam', b: 'king-thrust', typeA: 'screw', size: `3 × ${screwText(thrustFit)} ${stainless(p)} flat-head screws (counterbored from the disc side, ${frac(rScrew)} in from the kingpin axis) holding the UHMW disc to the king beam`, fit: thrustFit, pts: thrustScrews, noteA: 'Keeps the disc with the king beam; the axle beam turns under it (D-58).' });
       add({ a: 'king-beam', b: 'kingpin', typeA: 'hole', typeB: 'pin', size: `${frac(p.kingpinDiaIn)}" bore (snug bushing fit) through the king beam, nylock nut and washer captured in a slot cut from the front face`, sizeB: `${frac(p.kingpinDiaIn)}" bolt turns in the bore; the nut only stops the axle dropping away (rebound)`, pts: [[L.king.x, 0, (L.king.bot + L.king.top) / 2]], noteA: 'Bored square to the face on the drill press; the nut slot is cut from the front before the deck goes on.' });
     }
     for (const { s, tag } of SIDES) {
@@ -338,7 +341,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
       const sc = byId.get(`scupper-${site.tagPos}-${tag}`);
       if (!sc) continue;
       for (const host of [`side-${tag}-chine`, `side-${tag}-chine-in`, `side-${tag}-web`])
-        add({ a: sc.id, b: host, typeA: 'glue', size: `${frac(p.scupperDiaIn)}" 316 nipple bedded in epoxy; hole epoxy-lined through the inner band, the web and the outer band`, pts: [[site.x, s * (site.hw + L.side / 2), sc.transform[14]]], noteA: 'Drains the deck at deck level; no cut oak or ply edge is left bare.' });
+        add({ a: sc.id, b: host, typeA: 'glue', size: `${frac(p.scupperDiaIn)}" ${stainless(p)} nipple bedded in epoxy; hole epoxy-lined through the inner band, the web and the outer band`, pts: [[site.x, s * (site.hw + L.side / 2), sc.transform[14]]], noteA: 'Drains the deck at deck level; no cut oak or ply edge is left bare.' });
     }
   }
 
@@ -354,8 +357,9 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
       const bk = backers[i % 2 === 0 ? 0 : 1] ?? backers[0]; // the points go left-lower, right-lower, left-upper, right-upper: even = the left strip
       if (bk) add({
         a: sign.id, b: bk, typeA: 'knob', typeB: 'threaded-insert',
-        size: `#10-32 × ${kn.lenIn} in thumb-knob screw through a 7/32 clearance hole (0.219) in the sign, a ${kn.standoffIn.toFixed(3)}" oak standoff disc (epoxied to the sign back) and the ${thinSheet(p).nominal} web: ${kn.engagedIn.toFixed(2)}" into the insert, tip ${kn.tipShortIn.toFixed(2)}" short of the back of the strip`, sizeB: '#10-32 × 5/16 stainless threaded insert (epoxied) in the oak backing strip inside the web',
-        pts: [pt], noteA: 'Sign comes off for transport (D-9). The screw goes through the web into the oak backing strip; nothing grips the thin ply alone (build 3c M4).',
+        size: `#10-32 × ${kn.lenIn} in thumb-knob screw through a 7/32 clearance hole (0.219) in the sign, a ${kn.standoffIn.toFixed(3)}" oak standoff disc (epoxied to the sign back) and the ${thinSheet(p).nominal} web: ${kn.engagedIn.toFixed(2)}" into the insert, tip ${kn.tipShortIn.toFixed(2)}" short of the back of the strip`, sizeB: `#10-32 × 5/16 ${insertMat(p)} threaded insert (epoxied) in a blind ${frac(INSERT_DRILL_IN)} in hole in the oak backing strip inside the web`,
+        pts: [pt], ptsB: [[pt[0], Math.sign(pt[1]) * (hw + bandT), pt[2]]], // the insert's mouth is on the backer's outboard face, against the web
+        noteA: 'Sign comes off for transport (D-9). The screw goes through the web into the oak backing strip; nothing grips the thin ply alone (build 3c M4).',
       });
     });
   }
@@ -375,7 +379,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     const A = byId.get(q.a)!, B = byId.get(q.b)!;
     push(q.a, { type: q.typeA, to: q.b, count: q.pts.length, size: q.size, at: q.pts.map((pt) => toLocal(A.transform, pt)), ...(q.noteA ? { note: q.noteA } : {}), ...(q.fit ? { fit: q.fit } : {}) });
     if (q.hostOnly) continue;
-    push(q.b, { type: q.typeB ?? q.typeA, to: q.a, count: q.pts.length, size: q.sizeB ?? q.size, at: q.pts.map((pt) => toLocal(B.transform, pt)), ...(q.noteB ?? q.noteA ? { note: q.noteB ?? q.noteA } : {}), ...(q.fit ? { fit: q.fit } : {}) });
+    push(q.b, { type: q.typeB ?? q.typeA, to: q.a, count: q.pts.length, size: q.sizeB ?? q.size, at: (q.ptsB ?? q.pts).map((pt) => toLocal(B.transform, pt)), ...(q.noteB ?? q.noteA ? { note: q.noteB ?? q.noteA } : {}), ...(q.fit ? { fit: q.fit } : {}) });
   }
   locateJoints(parts);
 }

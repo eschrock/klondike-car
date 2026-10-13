@@ -153,7 +153,7 @@ describe('step brake parts', () => {
       }
     }
     const knee = byId('brake-knee-L');
-    expect(knee.joints!.find((j) => j.type === 'bolt')!.size).toMatch(/316 hex bolts/);
+    expect(knee.joints!.find((j) => j.type === 'bolt')!.size).toMatch(/(?:316|18-8 \(304\) stainless) hex bolts/);
     expect(byId('brake-flap-L').grain).toBe('x');
     expect(byId('brake-flap-L').stock).toBeDefined();
   });

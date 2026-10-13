@@ -6,7 +6,7 @@
  * (`plan-wall.ts`): constant thickness, centerline at the hull's plan curve (`Layout.turnIn`). The deck is ONE flat sheet that ends in a dado in the bow bulkhead. Joint
  * records are added in joinery.ts after all parts exist.
  */
-import { GRIP_BACKING_T_IN, HULL_STEP, STEP, box, cylinder, roughOf, span, SIDES, IN3_PER_FT3, woodMassLb, type Ctx } from './build-utils';
+import { GRIP_BACKING_T_IN, HULL_STEP, STEP, box, cylinder, roughOf, span, SIDES, IN3_PER_FT3, woodMassLb, type Ctx, stainless } from './build-utils';
 import { handleGeometry } from './handle';
 import { transformPoint } from './bounds';
 import { innerHalfWidth, samples, sideSlopeAt, sideTopAt, type Layout } from './layout';
@@ -416,7 +416,7 @@ export function buildBody(ctx: Ctx): Part[] {
       parts.push(box(ctx, {
         id: `transom-backer-${tag}`, partNo: 'transom-backer', name: `Rear transom backer ${tag}`, group: 'body', mat: 'oak', step: HULL_STEP.transom, grain: 'z',
         ...span([rearTx, rearTx + bkT], [s * yLo, s * yHi].sort((x, y) => x - y) as [number, number], [bz0, bz1]),
-        notes: `${bkT}" oak backer glued (epoxy, full face) to the INSIDE of the rear transom behind the push-handle socket: the socket bolts (1/4-20 button-head screws into 316 T-nuts set in it, no nuts behind the box) pull on ${tT + bkT}" of oak instead of ${tT}". Glue it on the bench before the transom goes on; a rear storage box starts ${bkT}" farther forward (Layout.rearLane).`,
+        notes: `${bkT}" oak backer glued (epoxy, full face) to the INSIDE of the rear transom behind the push-handle socket: the socket bolts (1/4-20 button-head screws into ${stainless(p)} T-nuts set in it, no nuts behind the box) pull on ${tT + bkT}" of oak instead of ${tT}". Glue it on the bench before the transom goes on; a rear storage box starts ${bkT}" farther forward (Layout.rearLane).`,
       }));
     }
   }
@@ -425,10 +425,10 @@ export function buildBody(ctx: Ctx): Part[] {
   for (const { x, zone, deckZ, hw, tagPos } of scupperSites(ctx)) {
     for (const { s, tag } of SIDES) {
       parts.push(cylinder(ctx, {
-        id: `scupper-${tagPos}-${tag}`, partNo: 'scupper', name: `Deck scupper ${tagPos} ${tag}`, group: 'body', mat: 'fixed', kind: 'purchased', material: '316 stainless drain nipple', massLb: SCUPPER_MASS_LB,
+        id: `scupper-${tagPos}-${tag}`, partNo: 'scupper', name: `Deck scupper ${tagPos} ${tag}`, group: 'body', mat: 'fixed', kind: 'purchased', material: `${stainless(p)} drain nipple`, massLb: SCUPPER_MASS_LB,
         fab: 'buy', step: HULL_STEP.sides, center: [x, s * (hw + (L.side + SCUPPER_STICKOUT_IN) / 2), deckZ + SCUPPER_BELOW_SURFACE_IN + p.scupperDiaIn / 2], axis: 'y', radius: p.scupperDiaIn / 2, length: L.side + SCUPPER_STICKOUT_IN,
-        explode: [0, s, 0], sourcing: { vendor: 'McMaster-Carr (316 stainless barbed / threaded drain nipple, 3/8" tube)' },
-        notes: `${p.scupperDiaIn}" hole through the ${zone} chine at deck level (its lower edge just above the deck surface, epoxy-lined so no cut oak end is bare), a 316 nipple bedded in epoxy.`,
+        explode: [0, s, 0], sourcing: { vendor: `McMaster-Carr (${stainless(p)} barbed / threaded drain nipple, 3/8" tube)` },
+        notes: `${p.scupperDiaIn}" hole through the ${zone} chine at deck level (its lower edge just above the deck surface, epoxy-lined so no cut oak end is bare), a ${stainless(p)} nipple bedded in epoxy.`,
       }));
     }
   }

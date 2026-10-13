@@ -14,6 +14,7 @@ import { SHAPER_MAX_DEPTH_IN, shaperFiles, type ShaperFile } from './shaper-svg'
 import { formDrawings, tileForLetter, type FormDrawing } from './forms';
 import { lampClipStls } from './stl';
 import { assemblySteps, type BuildStep } from './assembly';
+import { partDrawings, type PartDrawingSheet } from './part-drawings';
 import { finishingSchedule, type FinishSchedule } from './finishing';
 import { verifyChecklist, type VerifyCheck } from './verify';
 import { hash6 } from './svg-util';
@@ -110,6 +111,8 @@ export class BuildData {
   get stls(): StlFile[] {
     return this.memo('stls', () => lampClipStls(this.parts).map((s) => ({ partId: s.part.id, fileName: s.fileName, stl: s.stl })));
   }
+  /** One dimensioned drawing per distinct cut (`part-drawings.ts`). The slowest input (a few tenths of a second to seconds): computed on first use only, by the Drawings section, a part popover or the zip. */
+  get partDrawings(): PartDrawingSheet[] { return this.memo('partDrawings', () => partDrawings(this.parts, this.p)); }
   get steps(): BuildStep[] { return this.memo('steps', () => assemblySteps(this.parts, this.p)); }
   get finishing(): FinishSchedule { return this.memo('finishing', () => finishingSchedule(this.parts, this.p)); }
 
@@ -129,6 +132,7 @@ export class BuildData {
       const files: PackageFile[] = [];
       for (const s of this.shaper) files.push({ name: `shaper/${s.fileName}`, mime: SVG_MIME, data: s.svg });
       for (const f of this.forms) files.push({ name: `forms/${f.fileName}`, mime: SVG_MIME, data: f.svg });
+      for (const sh of this.partDrawings) files.push({ name: drawingFileName(sh), mime: SVG_MIME, data: sh.svg });
       for (const t of this.tiles) t.pages.forEach((svg, i) => files.push({ name: `forms/tiled/${t.id}-${tileLabel(i, t.pages.length, svg)}.svg`, mime: SVG_MIME, data: svg }));
       for (const s of this.stls) files.push({ name: `stl/${s.fileName}`, mime: STL_MIME, data: s.stl });
       for (const sh of this.nest.sheets) files.push({ name: `nesting/${sh.thicknessMm}mm-sheet-${sh.index}.svg`, mime: SVG_MIME, data: nestingSvgFile(sh) });
@@ -139,6 +143,12 @@ export class BuildData {
       return files;
     });
   }
+}
+
+/** `drawings/<part no>-<part id>.svg`: the lead part's id keeps two drawings under one part number apart. */
+export function drawingFileName(sheet: Pick<PartDrawingSheet, 'partNo' | 'partId'>): string {
+  const safe = (t: string): string => t.replace(/[^A-Za-z0-9._-]+/g, '-');
+  return `drawings/${safe(sheet.partNo)}-${safe(sheet.partId)}.svg`;
 }
 
 /** One nesting sheet as a standalone SVG file (the Build tab's drawing, sized to the window when opened). */
@@ -176,6 +186,11 @@ function readme(d: BuildData, others: string[]): string {
   lines.push('  forms/*.svg are full size (1:1). forms/tiled/*.svg are Letter pages (A1, A2, ... row letter then column number) with');
   lines.push('  0.5 in overlap and corner crosses: print at 100% (no "fit to page") and measure the 1 in check square on every page.');
   lines.push('  A page with only guide lines or labels (no cut outline and no drill mark) is left out, so the labels can skip a number; the neighbors named on each page are the ones that were printed.');
+  lines.push('');
+  lines.push('Part drawings');
+  lines.push('-------------');
+  lines.push('  drawings/*.svg is one dimensioned drawing per distinct cut (identical pieces share a drawing; a left/right pair that differs only by a mirror shares one, marked MAKE 2).');
+  lines.push('  Balloon letters on a drawing match its feature list. They are for making and checking a part by hand; the Shaper files (shaper/) are the ones the router reads.');
   lines.push('');
   lines.push('Build book');
   lines.push('----------');

@@ -9,12 +9,12 @@
  * bow to a bronze sleeve for the bridle rope. (3) The disc is 1/2 in thick and lies directly on the beam, which opens a 1/8 in gap above the clamp plates.
  * Everything that turns with the axle is `body: 'front-axle'`.
  */
-import { axleGrooveDepthIn } from '../params';
-import { STEP, box, cylinder, roughOf, span, SIDES, type Ctx } from './build-utils';
+import { axleGrooveDepthIn, WEATHER_SPEC } from '../params';
+import { STEP, box, cylinder, roughOf, span, SIDES, type Ctx, stainless, eyeBoltMat } from './build-utils';
 import { customPart } from './mesh-utils';
 import { compose, translation } from './mat4';
 import { boltLength, CARRIAGE_STOCK_IN, EYE_BOLT_STOCK_IN, inchesText, pickWoodScrew, SCREW_DIA_IN, screwText, stockBoltFit } from './rear-mount';
-import { joistId } from './frame';
+import { joistId, KING_NUT_BELOW_DECK_IN } from './frame';
 import { axleMaterial, axleSourcing, axleStockNote } from './axle-stock';
 import type { Part, Vec2 } from './types';
 
@@ -97,13 +97,13 @@ export function buildPivot(ctx: Ctx): Part[] {
       const sp = span([b.x - plate.x / 2, b.x + plate.x / 2], [s * yst - wPlate / 2, s * yst + wPlate / 2], [zBase, zBase + plate.z]);
       const grip = plate.z + b.depth;
       parts.push(box(ctx, {
-        id: `clamp-F${tag}${k}`, partNo: 'axle-clamp', name: `Front ${tag === 'L' ? 'left' : 'right'} axle clamp plate ${k}`, group: 'front-end', mat: 'steel', kind: 'metal', material: '316 stainless flat bar',
+        id: `clamp-F${tag}${k}`, partNo: 'axle-clamp', name: `Front ${tag === 'L' ? 'left' : 'right'} axle clamp plate ${k}`, group: 'front-end', mat: 'steel', kind: 'metal', material: `${stainless(p)} flat bar`,
         ...sp, body: 'front-axle', fab: 'drill-tap', step: STEP.gear,
-        sourcing: { vendor: `McMaster-Carr (316 stainless flat bar ${plate.z}" × ${wPlate}": cut ${plate.x}" pieces, drill 2 × ${f2(bd + 0.03)}" at ${f2(2 * legOffset)}" centers; 2 × 316 hex bolt ${f2(bd)}" × ${inchesText(boltLength(grip, bd))}, nylock nuts, fender washers)` },
-        joints: [{ type: 'bolt', to: 'beam-F', count: 2, diaIn: bd, size: `2 × ${f2(bd)}" × ${inchesText(boltLength(grip, bd))} 316 hex bolts, ${f2(2 * legOffset)}" apart, down through the plate and the beam either side of the tube, nylock nuts + fender washers under the beam`, at: [[legOffset, 0, 0], [-legOffset, 0, 0]], note: `the plate bears on the tube (${f2(p.axleProudIn)}" proud of the groove)` }],
+        sourcing: { vendor: `McMaster-Carr (${stainless(p)} flat bar ${plate.z}" × ${wPlate}": cut ${plate.x}" pieces, drill 2 × ${f2(bd + 0.03)}" at ${f2(2 * legOffset)}" centers; 2 × ${stainless(p)} hex bolt ${f2(bd)}" × ${inchesText(boltLength(grip, bd))}, nylock nuts, fender washers)` },
+        joints: [{ type: 'bolt', to: 'beam-F', count: 2, diaIn: bd, size: `2 × ${f2(bd)}" × ${inchesText(boltLength(grip, bd))} ${stainless(p)} hex bolts, ${f2(2 * legOffset)}" apart, down through the plate and the beam either side of the tube, nylock nuts + fender washers under the beam`, at: [[legOffset, 0, 0], [-legOffset, 0, 0]], note: `the plate bears on the tube (${f2(p.axleProudIn)}" proud of the groove)` }],
         notes: `Clamps the front stub axle in its groove: the same bridge plate and bolts as the rear clamp (D-62). Cut the groove ${f2(axleGrooveDepthIn(p))} in deep so the tube stands ${f2(p.axleProudIn)} in proud; shim the plate ends with tape on the first tightening.`,
       }));
-      (beam.joints ??= []).push({ type: 'bolt', to: `clamp-F${tag}${k}`, count: 2, diaIn: bd, size: `2 × ${f2(bd)}" × ${inchesText(boltLength(grip, bd))} 316 hex bolts down through the clamp plate and the beam, nylock nuts + fender washers under the beam`, at: [[legOffset, s * yst, b.depth / 2], [-legOffset, s * yst, b.depth / 2]], note: 'either side of the stub axle; the plate presses the tube into its groove' });
+      (beam.joints ??= []).push({ type: 'bolt', to: `clamp-F${tag}${k}`, count: 2, diaIn: bd, size: `2 × ${f2(bd)}" × ${inchesText(boltLength(grip, bd))} ${stainless(p)} hex bolts down through the clamp plate and the beam, nylock nuts + fender washers under the beam`, at: [[legOffset, s * yst, b.depth / 2], [-legOffset, s * yst, b.depth / 2]], note: 'either side of the stub axle; the plate presses the tube into its groove' });
     }
   }
 
@@ -123,7 +123,7 @@ export function buildPivot(ctx: Ctx): Part[] {
   // ── Kingpin bolt: grade 8, head and plate washer under the beam, nut in a slot at the top of the king beam ──
   {
     const zHead = b.bot - 0.45;
-    const zNutTop = L.king.top - 0.45;
+    const zNutTop = L.king.top - KING_NUT_BELOW_DECK_IN;
     const len = zNutTop - zHead;
     const boltOrder = `${inchesText(Math.ceil((len + 0.45 + 0.1 + 0.64) * 2 - 1e-9) / 2)} (stock length)`;
     const shank = cylinder(ctx, {
@@ -147,13 +147,13 @@ export function buildPivot(ctx: Ctx): Part[] {
     const sc = [-1, 1].map((k) => k * Math.min(0.58, w / 2 - 0.2));
     const padFit = pickWoodScrew(8, t, b.depth);
     const padBite = padFit.lenIn - padFit.gripIn;
-    (beam.joints ??= []).push({ type: 'screw', to: `roll-pad-${tag}`, count: 2, diaIn: SCREW_DIA_IN[8], fit: padFit, size: `2 × ${screwText(padFit)} 316 flat-head screws down through the pad (${frac(t)}") and ${f2(padBite)} in into the oak beside the stub axle groove`, at: sc.map((x) => [x, s * p.rollPadRadiusIn, b.depth / 2] as [number, number, number]), note: 'the pad lies on the beam top' });
+    (beam.joints ??= []).push({ type: 'screw', to: `roll-pad-${tag}`, count: 2, diaIn: SCREW_DIA_IN[8], fit: padFit, size: `2 × ${screwText(padFit)} ${stainless(p)} flat-head screws down through the pad (${frac(t)}") and ${f2(padBite)} in into the oak beside the stub axle groove`, at: sc.map((x) => [x, s * p.rollPadRadiusIn, b.depth / 2] as [number, number, number]), note: 'the pad lies on the beam top' });
     parts.push(mk({
       id: `roll-pad-${tag}`, partNo: 'roll-pad', name: `Roll pad ${tag} (UHMW)`, group: 'front-end', kind: 'purchased', material: 'UHMW polyethylene',
       geometry: { type: 'box', size: [w, l, t] }, transform: translation(kx, s * p.rollPadRadiusIn, b.top + p.axleProudIn + t / 2), massLb: (vol / 1728) * UHMW_PCF, body: 'front-axle', fab: 'table-saw', step: STEP.gear,
       explode: [0, s * 0.3, 0.8],
-      sourcing: { vendor: `McMaster-Carr (UHMW-PE sheet ${frac(t)}" thick, cut ${f2(w)}" × ${f2(l)}"; 2 × ${screwText(padFit)} 316 flat-head screws into the axle beam beside the stub axle groove; a layer of packing tape under the pad sets the running gap)` },
-      joints: [{ type: 'screw', to: 'beam-F', count: 2, diaIn: SCREW_DIA_IN[8], fit: padFit, size: `2 × ${screwText(padFit)} 316 flat-head screws, countersunk, through the pad and ${f2(padBite)} in into the oak beside the stub axle groove`, at: sc.map((x) => [x, 0, 0] as [number, number, number]), note: 'the pad lies on the axle beam top (and over the flush stub axle); the screws are beside the groove' }],
+      sourcing: { vendor: `McMaster-Carr (UHMW-PE sheet ${frac(t)}" thick, cut ${f2(w)}" × ${f2(l)}"; 2 × ${screwText(padFit)} ${stainless(p)} flat-head screws into the axle beam beside the stub axle groove; a layer of packing tape under the pad sets the running gap)` },
+      joints: [{ type: 'screw', to: 'beam-F', count: 2, diaIn: SCREW_DIA_IN[8], fit: padFit, size: `2 × ${screwText(padFit)} ${stainless(p)} flat-head screws, countersunk, through the pad and ${f2(padBite)} in into the oak beside the stub axle groove`, at: sc.map((x) => [x, 0, 0] as [number, number, number]), note: 'the pad lies on the axle beam top (and over the flush stub axle); the screws are beside the groove' }],
       notes: `Roll pad (D-58): ${f2(w)}" × ${f2(l)}" × ${frac(t)}" UHMW on the axle beam top, centered ${f2(p.rollPadRadiusIn)}" from the kingpin. The rail bottom is ${f2(L.deckBot - L.railDepthF - L.beamF.top - p.axleProudIn)}" above the top of the axle tube here (beamRailClearIn; the tube stands ${f2(p.axleProudIn)}" proud of the beam top, and the pad's underside is modeled level with the tube top, so shim it ${f2(p.axleProudIn)}" off the beam with packing tape or UHMW offcut), so the pad leaves a running gap of about ${f2(L.deckBot - L.railDepthF - L.beamF.top - p.axleProudIn - t)}" (set with tape or shims, ${f2(p.rollPadGapMinIn)}" to 1/8"). In normal running the pads do not touch; when one wheel hits a bump the axle rolls a fraction of a degree and the pad on the high side meets the rail underside, which carries the roll couple into the hull. UHMW on oak: no grease. Wipe off sand.`,
     }));
   }
@@ -183,15 +183,15 @@ export function buildPivot(ctx: Ctx): Part[] {
       stock: { t: depth, w: hw, l: len },
       rough: roughOf(p, { t: depth, w: hw, l: len }),
       joints: [
-        { type: 'bolt', to: 'beam-F', count: 2, diaIn: tb, size: `${f2(tb)}" × ${bl} 316 carriage bolts, fore-aft through the head and the axle beam, nylock nuts + fender washers on the rear face of the beam`, at: [[kx + b.thick / 2 + p.tongueHeadLenIn / 2, boltY, depth / 2], [kx + b.thick / 2 + p.tongueHeadLenIn / 2, -boltY, depth / 2]], note: `one each side of the kingpin, ${f2(boltY)}" off the center line at mid depth (the square necks are sunk into the head)` },
+        { type: 'bolt', to: 'beam-F', count: 2, diaIn: tb, size: `${f2(tb)}" × ${bl} ${stainless(p)} carriage bolts, fore-aft through the head and the axle beam, nylock nuts + fender washers on the rear face of the beam`, at: [[kx + b.thick / 2 + p.tongueHeadLenIn / 2, boltY, depth / 2], [kx + b.thick / 2 + p.tongueHeadLenIn / 2, -boltY, depth / 2]], note: `one each side of the kingpin, ${f2(boltY)}" off the center line at mid depth (the square necks are sunk into the head)` },
         { type: 'pin', to: 'bridle-sleeve', count: 1, diaIn: p.tongueHoleDiaIn, size: `${f2(p.tongueHoleDiaIn)}" hole across the stem`, at: [[L.tongue.holeX, 0, depth / 2]] },
       ],
-      sourcing: { vendor: `White oak 8/4 board (finished ${f2(depth)}" thick, ${f2(hw)}" wide x ${f2(len)}" long), grain along the length: bandsaw the T, ease the edges. Drill ${f2(tb + 0.03)}" fore-aft for the two carriage bolts (2 x ${f2(tb)}" x ${bl} 316, nylock nuts, fender washers) and ${f2(p.tongueHoleDiaIn)}" across the stem for the bridle sleeve` },
+      sourcing: { vendor: `White oak 8/4 board (finished ${f2(depth)}" thick, ${f2(hw)}" wide x ${f2(len)}" long), grain along the length: bandsaw the T, ease the edges. Drill ${f2(tb + 0.03)}" fore-aft for the two carriage bolts (2 x ${f2(tb)}" x ${bl} ${stainless(p)}, nylock nuts, fender washers) and ${f2(p.tongueHoleDiaIn)}" across the stem for the bridle sleeve` },
       notes: `Bridle tongue (D-58, replaces the steel plate): white oak ${f2(p.tongueWidthIn)}" thick (y) by ${f2(depth)}" deep (z) set ON EDGE, so it bends about its strong axis; the T head (${f2(hw)}" wide, ${f2(p.tongueHeadLenIn)}" long) butts the front face of the axle beam (x ${f2(kx + b.thick / 2)}") and two carriage bolts go through it and the whole beam. Its top is ${f2(L.beamF.top - L.tongue.z1)}" below the top of the beam (the thrust disc and king beam stand just over it) and its bottom is flush with the beam bottom (${f2(L.tongue.z0)}" off the ground). The stem runs forward under the end joist (${f2(L.deckBot - p.crossmemberDepthIn - L.tongue.z1)}" clear) and the bow bulkhead to the tip at x ${f2(L.tongue.tipX)}", ${f2(p.tongueTipEdgeIn)}" beyond the bridle sleeve. Pulling the bridle steers the axle; the tow force goes into the beam through the bolts and the head's bearing on the beam face and on to the kingpin. Unbolts for transport (two nuts).`,
     }));
     // the beam's side of the two tongue bolts
     beam.joints = [...(beam.joints ?? []),
-      { type: 'bolt', to: 'bridle-tongue', count: 2, diaIn: tb, size: `${f2(tb)}" × ${bl} 316 carriage bolts through the tongue head and the beam, nylock nuts + fender washers on the rear face`, at: [[0, boltY, 0], [0, -boltY, 0]], note: 'one each side of the kingpin hole' },
+      { type: 'bolt', to: 'bridle-tongue', count: 2, diaIn: tb, size: `${f2(tb)}" × ${bl} ${stainless(p)} carriage bolts through the tongue head and the beam, nylock nuts + fender washers on the rear face`, at: [[0, boltY, 0], [0, -boltY, 0]], note: 'one each side of the kingpin hole' },
       { type: 'bolt', to: 'kingpin', count: 1, diaIn: kd, size: `${frac(kd)}" kingpin hole through the beam center`, at: [[0, 0, 0]] }];
 
     // Bridle sleeve (D-62): bronze sleeve bearing across the stem, with a fender washer each side, so the rope does not wear the oak. The rope (no shackle) runs through its bore.
@@ -229,16 +229,16 @@ export function buildPivot(ctx: Ctx): Part[] {
     for (const { s, tag } of SIDES) {
       const side = tag === 'L' ? 'left' : 'right';
       parts.push(mk({
-        id: `steer-eye-${tag}`, partNo: 'steer-eye', name: `Steering chain eye bolt, axle beam ${side}`, group: 'front-end', kind: 'purchased', material: 'forged shoulder eye bolt, galvanized',
+        id: `steer-eye-${tag}`, partNo: 'steer-eye', name: `Steering chain eye bolt, axle beam ${side}`, group: 'front-end', kind: 'purchased', material: `forged shoulder eye bolt, ${eyeBoltMat(p)}`,
         geometry: { type: 'cylinder', radius: d / 2, length: beamX1 - beamX0 }, transform: along(beamX0, beamX1, s * p.steerChainBeamYIn, L.chain.beamZ), massLb: eyeMass, body: 'front-axle', fab: 'buy', step: STEP.gear, explode: [-1, s * 0.4, 0],
-        sourcing: { vendor: `McMaster-Carr (forged shoulder-type eye bolt ${frac(d)}" x ${eyeText(beamEyeFit)}, galvanized or 316; ${f2(p.steerEyeWllLb)} lb rated in line; nylock nut + 2" OD fender washer on the front face of the beam)` },
+        sourcing: { vendor: `McMaster-Carr (forged shoulder-type eye bolt ${frac(d)}" x ${eyeText(beamEyeFit)}, ${eyeBoltMat(p)}; ${f2(p.steerEyeWllLb)} lb rated in line; nylock nut + 2" OD fender washer on the front face of the beam)` },
         joints: [{ type: 'bolt', to: 'beam-F', count: 1, diaIn: d, size: `${frac(d)}" shoulder eye bolt fore-aft through the beam, nut and 2" washer on the front face`, at: [[0, 0, 0]], note: `${f2(p.steerChainBeamYIn)}" ${side} of the kingpin, mid depth` }, { type: 'pin', to: `steer-chain-${tag}`, count: 1, size: 'quick link to the chain' }],
         notes: `Beam end of the ${side} steering check chain (D-58): a ${frac(d)}" forged shoulder eye bolt through the axle beam fore-aft at mid depth, ${f2(p.steerChainBeamYIn)}" from the kingpin, below the stub axle rod in its groove, the eye standing ${f2(stand)}" out of the TRAILING face. The 2" washer and nylock nut on the front face spread the chain pull over the oak. Turn the eye in the plane of the chain.`,
       }));
       parts.push(mk({
-        id: `steer-anchor-${tag}`, partNo: 'steer-anchor', name: `Steering chain anchor eye bolt, chain joist ${side}`, group: 'front-end', kind: 'purchased', material: 'forged shoulder eye bolt, galvanized',
+        id: `steer-anchor-${tag}`, partNo: 'steer-anchor', name: `Steering chain anchor eye bolt, chain joist ${side}`, group: 'front-end', kind: 'purchased', material: `forged shoulder eye bolt, ${eyeBoltMat(p)}`,
         geometry: { type: 'cylinder', radius: d / 2, length: ancX1 - ancX0 }, transform: along(ancX0, ancX1, s * ay0, az), massLb: eyeMass, body: 'chassis', fab: 'buy', step: STEP.gear, explode: [-0.5, s * 0.4, -0.5],
-        sourcing: { vendor: `McMaster-Carr (forged shoulder-type eye bolt ${frac(d)}" x ${eyeText(anchorEyeFit)}, galvanized or 316; ${f2(p.steerEyeWllLb)} lb rated in line; nylock nut + 2" OD fender washer on the rear face of the chain joist, and a 2" washer under the shoulder on its front face)` },
+        sourcing: { vendor: `McMaster-Carr (forged shoulder-type eye bolt ${frac(d)}" x ${eyeText(anchorEyeFit)}, ${eyeBoltMat(p)}; ${f2(p.steerEyeWllLb)} lb rated in line; nylock nut + 2" OD fender washer on the rear face of the chain joist, and a 2" washer under the shoulder on its front face)` },
         joints: [{ type: 'bolt', to: joistId(L, L.joistX.indexOf(L.king.x) - 1), count: 1, diaIn: d, size: `${frac(d)}" shoulder eye bolt fore-aft through the chain joist, the shoulder (with a 2" washer) on its front face, nut and 2" washer on the rear face`, at: [[0, 0, 0]], note: `${f2(ay0)}" off the center line` }, { type: 'pin', to: `steer-chain-${tag}`, count: 1, size: 'quick link to the chain', at: [[0, 0, 0]] }],
         notes: `Anchor of the ${side} steering check chain (D-58): a ${frac(d)}" forged shoulder eye bolt fore-aft through the chain joist (${f2(L.chain.joistT)}" thick, x ${f2(L.chain.joistX)}", the crossmember just behind the king beam), ${f2(ay0)}" off the center line, a little below mid depth, the eye standing ${f2(stand)}" out of the FRONT face (x ${f2(ax)}"). The chain pulls it forward and up toward the beam, out of the joist, so the 2" washer and nylock nut on the rear face carry the pull; the joist is glued to the rails at both ends, so the pull goes into the hull as plan bending of the joist and shear into the rails.`,
       }));
@@ -253,11 +253,11 @@ export function buildPivot(ctx: Ctx): Part[] {
       const uz: [number, number, number] = [ux[1] * uy[2] - ux[2] * uy[1], ux[2] * uy[0] - ux[0] * uy[2], ux[0] * uy[1] - ux[1] * uy[0]];
       const cx = (bx + ax) / 2, cy = (by + s * ay0) / 2, cz = (bz + az) / 2;
       parts.push(mk({
-        id: `steer-chain-${tag}`, partNo: 'steer-chain', name: `Steering check chain ${side}`, group: 'front-end', kind: 'purchased', material: 'grade 43 chain (or 316 stainless)',
+        id: `steer-chain-${tag}`, partNo: 'steer-chain', name: `Steering check chain ${side}`, group: 'front-end', kind: 'purchased', material: p.weatherSpec === WEATHER_SPEC.extreme ? '316 stainless chain' : 'galvanized grade 43 chain',
         geometry: { type: 'box', size: [dl, p.steerChainDiaIn * 1.5, p.steerChainDiaIn * 1.5] }, transform: [ux[0], ux[1], ux[2], 0, uy[0], uy[1], uy[2], 0, uz[0], uz[1], uz[2], 0, cx, cy, cz, 1],
         massLb: (chainLbFt * (L.chain.lenIn + 2)) / 12, body: 'chassis', fab: 'buy', step: STEP.spindles, explode: [-0.5, s * 0.5, -0.5],
         joints: [{ type: 'pin', to: `steer-eye-${tag}`, count: 1, size: 'quick link to the beam eye', at: [[-dl / 2, 0, 0]] }, { type: 'pin', to: `steer-anchor-${tag}`, count: 1, size: 'quick link to the anchor eye', at: [[dl / 2, 0, 0]] }],
-        sourcing: { vendor: `McMaster-Carr (${frac(p.steerChainDiaIn)}" grade 43 or 316 chain, ${f2(L.chain.lenIn + 2)}" cut, a quick link to each eye; rated ${f2(p.steerChainWllLb)} lb). Length: ${f2(L.chain.lenIn)}" between the eye rings so it goes taut exactly at the ${f2(p.steerLockDeg)}° lock (adjust at the quick link); drawn straight here with the axle straight, in the sled it hangs in a slack bight` },
+        sourcing: { vendor: `McMaster-Carr (${frac(p.steerChainDiaIn)}" ${p.weatherSpec === WEATHER_SPEC.extreme ? '316 stainless' : 'galvanized grade 43'} chain, ${f2(L.chain.lenIn + 2)}" cut, a quick link to each eye; rated ${f2(p.steerChainWllLb)} lb). Length: ${f2(L.chain.lenIn)}" between the eye rings so it goes taut exactly at the ${f2(p.steerLockDeg)}° lock (adjust at the quick link); drawn straight here with the axle straight, in the sled it hangs in a slack bight` },
         notes: `Steering check chain (D-58): from the beam eye (behind the trailing face of the axle beam) back, under the king beam, to the anchor eye (on the front of the chain joist behind the king beam), ${f2(L.chain.lenIn)}" between the eye rings. With the axle straight it hangs ${f2(slack0)}" slack; turning ${tag === 'R' ? 'left' : 'right'} to the ${f2(p.steerLockDeg)}° lock takes up the slack and stops the axle, the other chain slackens. It passes under the king beam (clear of it by the steer-clear row), clear of the tongue, the disc and the clamp plates. Replaces the oak stop blocks (they could not carry the hard-hit torque, D-58).`,
       }));
     }

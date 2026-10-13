@@ -239,7 +239,12 @@ const render = () => {
         viewer.setView(viewerView(stepFocus.view));
       }
     }
-    viewer.highlight(stepFocus?.highlightIds ?? [], '#ff9f0a');
+    const pin = stepFocus?.pin; // "Show in 3D" on a part chip: only those parts are tinted, and the camera frames them once
+    if (pin?.frame) {
+      pin.frame = false;
+      viewer.frameParts(pin.ids);
+    }
+    viewer.highlight(pin?.ids ?? stepFocus?.highlightIds ?? [], '#ff9f0a');
   }
 };
 // ── Simple | Advanced | Build (D-30) ──

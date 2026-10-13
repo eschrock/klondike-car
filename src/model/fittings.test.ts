@@ -291,13 +291,13 @@ describe('round 2 fittings: latch blocks, stay, stainless', () => {
       expect(blk.material).toBe('white oak');
       expect(byId.get(`storage-latch-${tag}`)!.joints![0].to).toBe(blk.id);
     }
-    expect(byId.get('storage-lid-stay')!.sourcing?.vendor).toMatch(/316/);
+    expect(byId.get('storage-lid-stay')!.sourcing?.vendor).toMatch(/(?:316|18-8 \(304\) stainless)/);
   });
   it('every purchased part in these groups names a source; metal hardware is stainless (no zinc or brass in wet oak, S7)', () => {
     for (const x of parts.filter((q) => (mine(q) || q.group === 'hardware') && q.kind === 'purchased')) {
       expect(x.sourcing?.vendor, x.id).toBeTruthy();
-      if (/hinge|latch|catch|drain|D-ring|stay|hardware/i.test(`${x.id} ${x.material}`)) expect(`${x.material} ${x.sourcing!.vendor}`, x.id).toMatch(/316|stainless/);
-      expect(`${x.material} ${x.sourcing!.vendor}`, x.id).not.toMatch(/zinc-plated|brass insert/i);
+      if (/hinge|latch|catch|drain|D-ring|stay|hardware/i.test(`${x.id} ${x.material}`)) expect(`${x.material} ${x.sourcing!.vendor}`, x.id).toMatch(/316|stainless|zinc-plated/); // Standard spec: zinc-plated D-rings (D-73); 316 under the Extreme spec
+      if (!/D-ring|inserts/i.test(x.material)) expect(`${x.material} ${x.sourcing!.vendor}`, x.id).not.toMatch(/zinc-plated|brass insert/i); // the Standard spec has zinc-plated D-rings and inserts (D-73)
     }
   });
   it('oak parts carry the 4× rough length allowance (build M8)', () => {

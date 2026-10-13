@@ -11,7 +11,7 @@
  */
 import { OAK_PRICE_PER_BF, isOakStocked } from './prices';
 import type { Dims, Part } from '../model/types';
-import type { Params } from '../params';
+import { PARAM_DEFS, type Params } from '../params';
 import { localBounds } from '../model/bounds';
 import { flatPattern } from './flat';
 import { finalDimsText, finalFrac, fractionText, roughDimsText, roughFrac, roughUp8 } from './units';
@@ -25,30 +25,37 @@ export interface BoardThickness {
   nominal: string;
   /** Nominal thickness in inches (4/4 = 1"): what board feet are computed on and what the yard prices. */
   nominalIn: number;
-  /** Thickness left after surfacing both faces of a typical rough board (the most a part can be milled to). */
+  /** Legacy "rough part this board yields" figure (rough sizes are no longer compared with it; see `finishedIn`). Kept for the group headings' history and the data shape. */
   usableIn: number;
+  /**
+   * The RELIABLE FINISHED thickness of the board (in), after jointing and planing both faces (Eric 2026-10-13: "4/4 stock is often actually closer to 3/4"). This is the default of the
+   * `yieldParam` param; pass `p` to `boardFinishedIn` for the live value. A solid part's FINAL thickness must be at most this; a face-laminated layer is planed to at most this.
+   */
+  finishedIn: number;
+  /** The params.ts key that holds `finishedIn`. */
+  yieldParam: 'boardYield44In' | 'boardYield54In' | 'boardYield64In' | 'boardYield84In' | 'boardYield124In' | 'boardYield164In';
 }
 
 /**
- * Rough-board thickness table. `usableIn` is the thickest ROUGH part (finished + milling allowance, `millingAllowanceIn`) that a rough board of that nominal
- * thickness yields: the part's rough size already carries its own planing allowance, so this is the board's after-surfacing thickness (4/4 about 13/16",
- * 5/4 1-1/16", 6/4 1-5/16", 8/4 1-3/4", 12/4 2-3/4") plus that 1/8" default allowance, never more than the nominal less a 1/16" skim.
- * (Phase 4 fix: comparing the rough part to the after-surfacing figure counted the allowance twice and pushed 1.70"-1.75" parts such as the king beam
- * and the bridle tongue off 8/4 onto 12/4.) 16/4 is here only for the brake chock and shoe blocks; yards stock it less often, so those rows carry a note
- * (or glue up two 8/4).
+ * Board thickness table. A part is bought from the thinnest STOCKED board whose reliable finished thickness (`finishedIn`: 4/4 3/4", 5/4 1", 6/4 1-1/4", 8/4 1-3/4", 12/4 2-3/4",
+ * the `boardYield*` params, Eric 2026-10-13) is at least the part's FINAL thickness. The rough piece is still the final thickness plus `millingAllowanceIn`. The resaw math uses the
+ * board's rough thickness (`resawUsableIn`). 16/4 is here only for the brake chock and shoe blocks; yards stock it less often, so those rows carry a note (or glue up two 8/4).
  */
 export const BOARD_THICKNESSES: readonly BoardThickness[] = [
-  { nominal: '4/4', nominalIn: 1, usableIn: 15 / 16 },
-  { nominal: '5/4', nominalIn: 1.25, usableIn: 1 + 3 / 16 },
-  { nominal: '6/4', nominalIn: 1.5, usableIn: 1 + 7 / 16 },
-  { nominal: '8/4', nominalIn: 2, usableIn: 1 + 7 / 8 },
-  { nominal: '12/4', nominalIn: 3, usableIn: 2 + 7 / 8 },
-  { nominal: '16/4', nominalIn: 4, usableIn: 3 + 7 / 8 },
+  { nominal: '4/4', nominalIn: 1, usableIn: 15 / 16, finishedIn: PARAM_DEFS.boardYield44In.default, yieldParam: 'boardYield44In' },
+  { nominal: '5/4', nominalIn: 1.25, usableIn: 1 + 3 / 16, finishedIn: PARAM_DEFS.boardYield54In.default, yieldParam: 'boardYield54In' },
+  { nominal: '6/4', nominalIn: 1.5, usableIn: 1 + 7 / 16, finishedIn: PARAM_DEFS.boardYield64In.default, yieldParam: 'boardYield64In' },
+  { nominal: '8/4', nominalIn: 2, usableIn: 1 + 7 / 8, finishedIn: PARAM_DEFS.boardYield84In.default, yieldParam: 'boardYield84In' },
+  { nominal: '12/4', nominalIn: 3, usableIn: 2 + 7 / 8, finishedIn: PARAM_DEFS.boardYield124In.default, yieldParam: 'boardYield124In' },
+  { nominal: '16/4', nominalIn: 4, usableIn: 3 + 7 / 8, finishedIn: PARAM_DEFS.boardYield164In.default, yieldParam: 'boardYield164In' },
 ];
 
-/** Smallest nominal board that yields a rough thickness, or null when none does. */
-export function boardForThickness(roughT: number): BoardThickness | null {
-  return BOARD_THICKNESSES.find((b) => isOakStocked(b.nominal) && b.usableIn >= roughT - 1e-6) ?? null;
+/** The reliable finished thickness of a board (in): the live param when `p` is given, else the default. */
+export const boardFinishedIn = (b: BoardThickness, p?: Pick<Params, BoardThickness['yieldParam']>): number => (p ? p[b.yieldParam] : b.finishedIn);
+
+/** Smallest STOCKED board whose reliable finished thickness is at least the part's FINAL thickness `finalT`, or null when none is (the part is face-laminated). */
+export function boardForThickness(finalT: number, p?: Pick<Params, BoardThickness['yieldParam']>): BoardThickness | null {
+  return BOARD_THICKNESSES.find((b) => isOakStocked(b.nominal) && boardFinishedIn(b, p) >= finalT - 1e-6) ?? null;
 }
 export const boardByNominal = (nominal: string): BoardThickness => BOARD_THICKNESSES.find((b) => b.nominal === nominal)!;
 
@@ -58,21 +65,24 @@ export const boardByNominal = (nominal: string): BoardThickness => BOARD_THICKNE
 export interface LaminationLayer {
   /** Stocked board it comes from ('4/4' ...). */
   board: string;
-  /** Thickness the layer is planed to BEFORE the glue-up (in): its share of the glued block's rough thickness. */
+  /** Thickness the layer is planed to BEFORE the glue-up (in): the board's reliable finished thickness rounded DOWN to 1/16. */
   roughT: number;
-  /** The layer's share of the part's finished thickness (in): what is left of it after the glued block is milled to size. */
+  /** The same planed layer thickness (in). Kept for compatibility: it used to be the layer's proportional share of the part's finished thickness, which gave odd fractions (27/32"). */
   finalT: number;
 }
 
 /** How a part too thick for any stocked board is built up: layers glued face to face, then milled to size. */
 export interface Lamination {
   layers: LaminationLayer[];
-  /** Finished thickness of the part (in) and rough thickness of the glued block (in): `roughT` = finished + the planing allowance, taken ONCE on the glued block. */
+  /** Finished thickness of the part (in). */
   finalT: number;
+  /** Thickness of the glued block (in): the sum of the planed layers. It is jointed and planed down by `cleanupIn` at least, then milled to `finalT`. */
   roughT: number;
+  /** Post-glue-up cleanup allowance (in, `laminationCleanupIn`): `roughT - cleanupIn >= finalT`. */
+  cleanupIn: number;
   /** Cost of one square foot of face (USD): the sum over layers of nominal thickness x $/bf. The measure the layer mix is chosen by. */
   costPerFt2: number;
-  /** "3 x 3/4\" from 4/4": the layers grouped by board. */
+  /** "2 layers: 1-3/4\" from 8/4 + 3/4\" from 4/4, glue up, then mill the block to 2-1/4\"": the planed layer thicknesses. */
   text: string;
 }
 
@@ -80,76 +90,62 @@ export interface Lamination {
 export const MAX_LAMINATION_LAYERS = 6;
 /** The thinnest layer worth planing and gluing (in). */
 export const MIN_LAYER_ROUGH_IN = 0.5;
+/**
+ * A lamination mix of QUOTED boards is preferred when it costs at most this fraction more per square foot than the cheapest mix (which may rest on an estimated price). It is also the
+ * "near-tie" within which fewer layers win. 15 %, not 5 %: the 5/4 price is an estimate (Cline FAS x 1.3, not on The Wood Yard list) that can easily be off by that much, and a mix that
+ * leans on one 5/4 layer per beam buys a whole 6 ft 5/4 board for a single 30 in piece (Eric 2026-10-13 review: the whole-board lumber came out $4 DEARER than 8/4 + 4/4, which is quoted).
+ */
+export const LAMINATION_QUOTED_TOLERANCE = 0.15;
+
+/** The thickness (in) a layer of this board is planed to: its reliable finished thickness rounded DOWN to 1/16. */
+export const layerThicknessOf = (b: BoardThickness, p?: Pick<Params, BoardThickness['yieldParam']>): number => Math.floor(boardFinishedIn(b, p) * 16 + 1e-6) / 16;
 
 /**
- * Face lamination for a part whose rough thickness no stocked board yields. Chooses the mix of STOCKED boards (any number from 2 to `MAX_LAMINATION_LAYERS`) that is cheapest
- * per square foot of face, the sum over layers of nominal thickness x $/bf, and fits: every layer's rough thickness must be at most its board's `usableIn`, and the layers must add up to
- * the glued block (`roughT` = finished thickness + the planing allowance, ONCE for the block: the layers are planed to their shares of it, and the block is milled to the finished size
- * after the glue-up, which also takes off the glue squeeze-out and any slip between layers). Each layer's finished share is `finalT` x its share of `roughT`, so the shares sum to the
- * part's finished thickness. The layers are scaled to the boards' usable thicknesses, so a mix of boards gives each layer a thickness in proportion to its board.
- * For the axle beams (2.375" rough) three 4/4 layers ($30 per ft2) beat 6/4 + 4/4 ($30.25), 5/4 + 5/4 ($31.25) and 8/4 + 4/4 ($40). Ties go to fewer layers, then the thinner boards.
- * Null when `roughT` is no more than the thickest stocked board yields (the part is not laminated) or nothing stocked can make it.
+ * Face lamination for a part whose FINAL thickness no stocked board reliably finishes to (Eric 2026-10-13). Every layer is planed to its board's reliable finished thickness
+ * (`layerThicknessOf`, rounded down to 1/16), the layers are glued face to face, and the glued block loses `laminationCleanupIn` jointing and planing it flat and square, so a VALID mix has
+ * sum(layer thicknesses) - cleanup >= `finalT`. Among the valid mixes of 2 to `MAX_LAMINATION_LAYERS` stocked boards (mixed boards are allowed: 8/4 + 4/4) the cheapest per square foot of face
+ * wins (sum over layers of nominal thickness x $/bf). Near-ties (within `LAMINATION_QUOTED_TOLERANCE` of the cheapest) go first to a mix of QUOTED prices only (Eric 2026-10-12: an estimated
+ * price must not flip the plan by a few cents), then to fewer layers, then to the lower cost, then the thinner boards.
+ * Null when `finalT` is no more than the thickest stocked board finishes to (the part is not laminated) or nothing stocked can make it. `_roughT` is ignored (kept so older callers compile).
  */
-/** A lamination mix of quoted boards is preferred when it costs at most this fraction more than the cheapest mix (which may rest on an estimated price). */
-export const LAMINATION_QUOTED_TOLERANCE = 0.05;
-
-export function planLamination(finalT: number, roughT: number): Lamination | null {
+export function planLamination(finalT: number, _roughT?: number, p?: Params): Lamination | null {
   const boards = BOARD_THICKNESSES.filter((b) => isOakStocked(b.nominal));
-  if (!boards.length || boardForThickness(roughT)) return null;
+  if (!boards.length || boardForThickness(finalT, p)) return null;
+  const cleanup = p ? p.laminationCleanupIn : PARAM_DEFS.laminationCleanupIn.default;
   const price = (b: BoardThickness): number => b.nominalIn * (OAK_PRICE_PER_BF[b.nominal]?.usd ?? Infinity);
-  let best: { mix: BoardThickness[]; cost: number } | null = null;
+  const quoted = (mix: BoardThickness[]): boolean => mix.every((b) => OAK_PRICE_PER_BF[b.nominal]?.basis === 'quoted');
+  const valid: Array<{ mix: BoardThickness[]; cost: number; nom: number }> = [];
   const walk = (start: number, mix: BoardThickness[]): void => {
     if (mix.length >= 2) {
-      const usable = mix.reduce((a, b) => a + b.usableIn, 0);
-      if (usable >= roughT - 1e-6 && mix.every((b) => (roughT * b.usableIn) / usable >= MIN_LAYER_ROUGH_IN - 1e-9)) {
-        const cost = mix.reduce((a, b) => a + price(b), 0);
-        const nom = mix.reduce((a, b) => a + b.nominalIn, 0), bestNom = best ? best.mix.reduce((a, b) => a + b.nominalIn, 0) : Infinity;
-        if (!best || cost < best.cost - 1e-9 || (Math.abs(cost - best.cost) < 1e-9 && (mix.length < best.mix.length || (mix.length === best.mix.length && nom < bestNom - 1e-9)))) best = { mix: [...mix], cost };
+      const sum = mix.reduce((a, b) => a + layerThicknessOf(b, p), 0);
+      if (sum - cleanup >= finalT - 1e-6 && mix.every((b) => layerThicknessOf(b, p) >= MIN_LAYER_ROUGH_IN - 1e-9)) {
+        valid.push({ mix: [...mix], cost: mix.reduce((a, b) => a + price(b), 0), nom: mix.reduce((a, b) => a + b.nominalIn, 0) });
       }
     }
     if (mix.length >= MAX_LAMINATION_LAYERS) return;
     for (let i = start; i < boards.length; i++) { mix.push(boards[i]); walk(i, mix); mix.pop(); }
   };
   walk(0, []);
-  if (!best) return null;
-  // Near-tie (within LAMINATION_QUOTED_TOLERANCE of the cheapest): prefer a mix whose every board has a QUOTED price, so an estimated price cannot flip the plan by a few
-  // cents (Eric 2026-10-12: the estimated 5/4 came out $0.25/ft2 under the quoted 4/4 for the axle beams).
-  const cheapest = (best as { cost: number }).cost;
-  const quotedMix = (mix: BoardThickness[]): boolean => mix.every((b) => OAK_PRICE_PER_BF[b.nominal]?.basis === 'quoted');
-  if (!quotedMix((best as { mix: BoardThickness[] }).mix)) {
-    let alt: { mix: BoardThickness[]; cost: number } | null = null;
-    const walkQ = (start: number, mix: BoardThickness[]): void => {
-      if (mix.length >= 2 && quotedMix(mix)) {
-        const usable = mix.reduce((a, b) => a + b.usableIn, 0);
-        if (usable >= roughT - 1e-6 && mix.every((b) => (roughT * b.usableIn) / usable >= MIN_LAYER_ROUGH_IN - 1e-9)) {
-          const cost = mix.reduce((a, b) => a + price(b), 0);
-          if (cost <= cheapest * (1 + LAMINATION_QUOTED_TOLERANCE) + 1e-9 && (!alt || cost < alt.cost - 1e-9 || (Math.abs(cost - alt.cost) < 1e-9 && mix.length < alt.mix.length))) alt = { mix: [...mix], cost };
-        }
-      }
-      if (mix.length >= MAX_LAMINATION_LAYERS) return;
-      for (let i = start; i < boards.length; i++) { mix.push(boards[i]); walkQ(i, mix); mix.pop(); }
-    };
-    walkQ(0, []);
-    if (alt) best = alt;
-  }
-  const { mix, cost } = best as { mix: BoardThickness[]; cost: number };
-  const usable = mix.reduce((a, b) => a + b.usableIn, 0);
+  if (!valid.length) return null;
+  const cheapest = Math.min(...valid.map((v) => v.cost));
+  let near = valid.filter((v) => v.cost <= cheapest * (1 + LAMINATION_QUOTED_TOLERANCE) + 1e-9);
+  if (near.some((v) => quoted(v.mix))) near = near.filter((v) => quoted(v.mix));
+  near.sort((a, b) => a.mix.length - b.mix.length || a.cost - b.cost || a.nom - b.nom);
+  const { mix, cost } = near[0];
   // thickest layers first, so the face layers are the thick ones
-  const layers: LaminationLayer[] = [...mix].sort((a, b) => b.nominalIn - a.nominalIn).map((b) => {
-    const share = b.usableIn / usable;
-    return { board: b.nominal, roughT: roughT * share, finalT: finalT * share };
-  });
-  return { layers, finalT, roughT, costPerFt2: cost, text: laminationText(layers) };
+  const layers: LaminationLayer[] = [...mix].sort((a, b) => b.nominalIn - a.nominalIn).map((b) => ({ board: b.nominal, roughT: layerThicknessOf(b, p), finalT: layerThicknessOf(b, p) }));
+  return { layers, finalT, roughT: layers.reduce((a, l) => a + l.roughT, 0), cleanupIn: cleanup, costPerFt2: cost, text: laminationText(layers, finalT) };
 }
 
-/** "3 x 3/4\" from 4/4" (several groups: "1 x 1-1/4\" from 8/4 + 1 x 5/8\" from 4/4"). */
-export function laminationText(layers: LaminationLayer[]): string {
-  const groups: Array<{ board: string; n: number; finalT: number }> = [];
+/** "2 layers: 1-3/4\" from 8/4 + 3/4\" from 4/4" (equal layers grouped: "4 layers: 4 × 3/4\" from 4/4"); with `finalT` it ends ", glue up, then mill the block to 2-1/4\"". The thicknesses are the PLANED layers (1/16 grid). */
+export function laminationText(layers: LaminationLayer[], finalT?: number): string {
+  const groups: Array<{ board: string; n: number; t: number }> = [];
   for (const l of layers) {
-    const g = groups.find((q) => q.board === l.board && Math.abs(q.finalT - l.finalT) < 1e-6);
-    if (g) g.n += 1; else groups.push({ board: l.board, n: 1, finalT: l.finalT });
+    const g = groups.find((q) => q.board === l.board && Math.abs(q.t - l.roughT) < 1e-6);
+    if (g) g.n += 1; else groups.push({ board: l.board, n: 1, t: l.roughT });
   }
-  return groups.map((g) => `${g.n} \u00d7 ${finalFrac(g.finalT)} from ${g.board}`).join(' + ');
+  const mix = groups.map((g) => `${g.n > 1 ? `${g.n} × ` : ''}${fractionText(g.t, 16)}" from ${g.board}`).join(' + ');
+  return `${layers.length} layers: ${mix}${finalT === undefined ? '' : `, glue up, then mill the block to ${finalFrac(finalT)}`}`;
 }
 
 /** Assumed width of the rough boards bought (in) and the lengths they come in (in): 6, 8 and 10 ft. */
@@ -275,11 +271,13 @@ export interface LayerPiece {
 }
 
 export interface OakGroup {
-  /** Heading for the group: '4/4 (usable 15/16"), 20 pieces', 'Face-laminated parts', 'Resawn strips'. */
+  /** Heading for the group: '4/4 (finishes to 3/4"), 20 pieces', 'Face-laminated parts', 'Resawn strips'. */
   title: string;
   board: string;
   nominalIn: number;
   usableIn: number;
+  /** Reliable finished thickness of the board (in, Eric 2026-10-13): the thickest FINAL part it is bought for. 0 for the laminated and resawn groups. */
+  finishedIn: number;
   rows: OakRow[];
   /** Pieces (sum of qty). */
   pieces: number;
@@ -487,11 +485,11 @@ export interface FinishedPart {
 
 // ── Solid oak ─────────────────────────────────────────────────────────────────
 
-/** A rough thickness rounded UP to 1/8, but never past what the board yields (`usableIn`, on the 1/16 grid): a 1.871 in part from 8/4 is 1-7/8, not 2. */
-function roughThickness(exact: number, usableIn: number | null): number {
+/** A rough thickness rounded UP to 1/8, but never past the board's nominal thickness (`capIn`): a part cannot be sawn thicker than the board it comes from. */
+function roughThickness(exact: number, capIn: number | null): number {
   const up = roughUp8(exact);
-  if (usableIn === null || up <= usableIn + 1e-9) return up;
-  return Math.min(Math.ceil(exact * 16 - 1e-6) / 16, usableIn);
+  if (capIn === null || up <= capIn + 1e-9) return up;
+  return Math.min(Math.ceil(exact * 16 - 1e-6) / 16, capIn);
 }
 
 /** One piece sawn from a board (a plan entry; `Cut` is the aggregated list entry). */
@@ -537,15 +535,17 @@ export interface OakPartPlan {
  *   laminate piece    : the boards of an edge-glued panel, the layers of a face-laminated part (D-70) and the resaw strips get `laminateWidthAllowanceIn` and `laminateLengthAllowanceIn`
  *                       instead, because glued pieces end up slightly askew and are jointed after the glue-up.
  * A part wider than a board (`BOARD_WIDTH_IN`) is edge-glued from the fewest boards whose share of the width plus the allowance fits a board. Every rough size is then rounded UP to 1/8.
- * The board and the lamination are chosen on the EXACT rough thickness, so the rounding never moves a part to a thicker board.
+ * The board is chosen on the part's FINAL thickness against the board's reliable finished thickness (Eric 2026-10-13: 4/4 gives 3/4", not 27/32"), and so is the lamination: its layers are
+ * planed to their boards' reliable finished thicknesses and the glued block loses `laminationCleanupIn`, so the rough thickness never moves a part to a thicker board.
  */
 export function planOakPart(x: Part, p: Params, warnings: string[] = []): OakPartPlan {
   const partNo = partKey(x);
   const stock = sanitize(x.stock ?? x.rough ?? { t: 0, w: 0, l: 0 }, warnings, `${partNo} stock`);
   const tExact = stock.t + p.millingAllowanceIn;
   const w: string[] = [];
-  const mk = (exact: Dims, usable: number | null): { rough: Dims; roughExact: Dims } => ({
-    roughExact: exact, rough: { t: roughThickness(exact.t, usable), w: roughUp8(exact.w), l: roughUp8(exact.l) },
+  // `layerT`: a laminate layer is planed to exactly its thickness (a 1/16 multiple at or under its board's reliable finish): never rounded up to 1/8.
+  const mk = (exact: Dims, cap: number | null, layerT = false): { rough: Dims; roughExact: Dims } => ({
+    roughExact: exact, rough: { t: layerT ? exact.t : roughThickness(exact.t, cap), w: roughUp8(exact.w), l: roughUp8(exact.l) },
   });
   if (isStripPart(x)) {
     const plies = x.plies ?? 1;
@@ -553,10 +553,10 @@ export function planOakPart(x: Part, p: Params, warnings: string[] = []): OakPar
     const pieces: PlannedPiece[] = [...Array(plies)].map((_, i) => ({ piece: 'strip' as const, index: i + 1, of: plies, board: 'resawn', rough, roughExact }));
     return { part: x, partNo, stock, strip: true, board: 'resawn', edgeN: 1, pieces, block: rough, blockExact: roughExact, warnings: w };
   }
-  const b = boardForThickness(tExact);
-  // No stocked board is thick enough (12/4 is not bought, D-70): glue the part up face to face from layers of stocked boards.
-  const lamination = b ? undefined : planLamination(stock.t, tExact) ?? undefined;
-  if (!b && !lamination) w.push(`${partNo}: rough thickness ${r3(tExact)}" is thicker than any stocked board and no stocked mix of layers makes it`);
+  const b = boardForThickness(stock.t, p);
+  // No stocked board finishes thick enough (12/4 is not bought, D-70): glue the part up face to face from layers of stocked boards.
+  const lamination = b ? undefined : planLamination(stock.t, undefined, p) ?? undefined;
+  if (!b && !lamination) w.push(`${partNo}: final thickness ${r3(stock.t)}" is thicker than any stocked board finishes to and no stocked mix of layers makes it`);
   else if (b && b.nominal === '16/4') w.push(`${partNo}: needs 16/4 (3-3/4" usable); if the yard has none, glue up two 8/4`);
   const board = lamination ? 'laminated' : (b ? b.nominal : '16/4');
   const needsGlue = roughUp8(stock.w + p.roughWidthAllowanceIn) > BOARD_WIDTH_IN + 1e-9;
@@ -573,11 +573,11 @@ export function planOakPart(x: Part, p: Params, warnings: string[] = []): OakPar
       const exact: Dims = glued
         ? { t: ls.t, w: stock.w / edgeN + p.laminateWidthAllowanceIn, l: stock.l + p.laminateLengthAllowanceIn }
         : { t: ls.t, w: stock.w + p.roughWidthAllowanceIn, l: stock.l + p.roughLengthAllowanceIn };
-      const usable = BOARD_THICKNESSES.find((q) => q.nominal === ls.board)?.usableIn ?? null;
+      const cap = BOARD_THICKNESSES.find((q) => q.nominal === ls.board)?.nominalIn ?? null;
       const piece: PlannedPiece['piece'] = lamination ? 'layer' : edgeN > 1 ? 'board' : 'solid';
       pieces.push({
         piece, index: pieces.length + 1, of: total, ...(ls.layer ? { layer: ls.layer, layers: layerSpecs.length } : {}),
-        ...(edgeN > 1 ? { across: a + 1, acrossOf: edgeN } : {}), board: ls.board, ...mk(exact, usable),
+        ...(edgeN > 1 ? { across: a + 1, acrossOf: edgeN } : {}), board: ls.board, ...mk(exact, cap, !!ls.layer),
       });
     }
   }
@@ -615,9 +615,9 @@ function oakRows(plans: OakPartPlan[], stepOf?: ReadonlyMap<string, number>): Oa
   return [...map.values()];
 }
 
-/** The note a laminated row carries into the cut list, the CSV and the build book (layers planed to the ROUNDED thickness, 7/8, not the exact 25/32). */
+/** The note a laminated row carries into the cut list, the CSV and the build book (each layer is planed to its board's reliable finished thickness, on the 1/16 grid). */
 export function laminationNote(l: Lamination, pieces?: PlannedPiece[]): string {
-  // "3 layers of 4/4, each planed to 7/8": grouped by board and planed thickness, in the order the work happens.
+  // "3 layers of 4/4, each planed to 3/4": grouped by board and planed thickness, in the order the work happens.
   const groups: Array<{ board: string; n: number; t: number }> = [];
   l.layers.forEach((q, i) => {
     const rt = pieces?.find((pc) => pc.layer === i + 1)?.rough.t ?? roughUp8(q.roughT);
@@ -625,7 +625,7 @@ export function laminationNote(l: Lamination, pieces?: PlannedPiece[]): string {
     if (g) g.n += 1; else groups.push({ board: q.board, n: 1, t: rt });
   });
   const planed = groups.map((g) => `${g.n} layer${g.n === 1 ? '' : 's'} of ${g.board}, ${g.n === 1 ? '' : 'each '}planed to ${fractionText(g.t, 16)}"`).join('; ');
-  return `face-laminated (D-70): ${planed}; epoxy the layers face to face, then mill the block to ${finalFrac(l.finalT)} thick (the planing allowance comes off once, on the glued block).`;
+  return `face-laminated (D-70): ${planed}; epoxy the layers face to face, joint and plane the glued block flat and square (${fractionText(l.cleanupIn, 16)}" cleanup allowance), then mill it to ${finalFrac(l.finalT)} thick.`;
 }
 
 /** Layer pieces of a laminated part: each layer is the rough width x length, edge-glued from several pieces when wider than a board. `qty` is the number of parts. */
@@ -640,11 +640,12 @@ export function layerPiecesOf(plan: OakPartPlan, qty = 1): LayerPiece[] {
 // ── Resaw ─────────────────────────────────────────────────────────────────────
 
 /**
- * Thickness (in) of a ROUGH board that a resaw can use: the nominal thickness less one jointed face (`millingAllowanceIn`). A resawn strip is cut from the rough board BEFORE any planing
- * (its rough thickness already includes its own planing allowance), so the "usable after surfacing both faces" in `BOARD_THICKNESSES` would throw away a strip: from a 5/4 rough board
- * (1.25") two 0.5" rough strips plus a kerf fit (1.125"), where the surfaced 1.0625" holds only one. That made the rails come out of 12/4 (4 strips) instead of two 5/4 boards.
+ * Thickness (in) of a ROUGH board that a resaw can use: the nominal thickness less one jointed face (`millingAllowanceIn`), and never more than the board's reliable finished thickness
+ * plus that same planing allowance (Eric 2026-10-13: the board is not as thick as its name, so the slabs cannot count on the full nominal). A resawn strip is cut from the rough board
+ * BEFORE any planing; its rough thickness already includes its own planing allowance (the strip's final thickness + `millingAllowanceIn`, rounded up to 1/8), so every slab has its
+ * planing allowance inside it. With the default yields the two figures agree (4/4 7/8", 5/4 1-1/8", 6/4 1-3/8", 8/4 1-7/8", 12/4 2-7/8").
  */
-export const resawUsableIn = (b: BoardThickness, p: Params): number => b.nominalIn - p.millingAllowanceIn;
+export const resawUsableIn = (b: BoardThickness, p: Params): number => Math.min(b.nominalIn - p.millingAllowanceIn, boardFinishedIn(b, p) + p.millingAllowanceIn);
 
 /** Strips of rough thickness `stripT` that one board of usable thickness `usableIn` yields: each cut costs a kerf, the last strip needs none after it. */
 export function stripsPerBoard(stripT: number, usableIn: number, kerfIn: number): number {
@@ -847,13 +848,14 @@ export function metalFamily(x: Part): string | null {
 
 function metalSection(x: Part, family: string, d: Dims): string {
   const v = x.sourcing?.vendor ?? '';
+  const grade = /316/.test(x.material) ? '316 stainless' : '18-8 (304) stainless'; // the model's own words for the weather spec (build-utils `stainless`)
   const wall = (): number | undefined => { const m = /(\d*\.\d+)"\s*wall/.exec(v); return m ? Number(m[1]) : x.geometry.type === 'cylinder' ? x.geometry.wall : undefined; };
   switch (family) {
     case 'Steel rod': return `${fracIn(d.t)}" solid 1045 / CDS steel rod (cut to length)`;
     case 'DOM tube': return `${fracIn(d.t)}" OD x ${(wall() ?? 0.12).toFixed(3)}" wall DOM tube (ASTM A513 Type 5)`;
     case 'Aluminum tube': return `6061-T6 ${fracIn(d.t)}" x ${fracIn(d.w)}" x ${(wall() ?? 0.125).toFixed(3)}" wall rectangular tube`;
-    case 'Angle': return `316 stainless angle ${fracIn(d.w)}" x ${fracIn(d.w)}" x ${(d.t).toFixed(3)}"`;
-    default: return `316 stainless flat bar ${fracIn(d.t)}" x ${fracIn(d.w)}"`;
+    case 'Angle': return `${grade} angle ${fracIn(d.w)}" x ${fracIn(d.w)}" x ${(d.t).toFixed(3)}"`;
+    default: return `${grade} flat bar ${fracIn(d.t)}" x ${fracIn(d.w)}"`;
   }
 }
 
@@ -887,7 +889,7 @@ export function cutList(parts: Part[], p: Params, stepOf?: ReadonlyMap<string, n
   const groupMap = new Map<string, OakGroup>();
   for (const r of rows) {
     const b = r.board === 'resawn' || r.board === 'laminated' ? null : boardByNominal(r.board);
-    const g = groupMap.get(r.board) ?? { title: '', board: r.board, nominalIn: b?.nominalIn ?? 0, usableIn: b?.usableIn ?? 0, rows: [], pieces: 0 };
+    const g = groupMap.get(r.board) ?? { title: '', board: r.board, nominalIn: b?.nominalIn ?? 0, usableIn: b?.usableIn ?? 0, finishedIn: b ? boardFinishedIn(b, p) : 0, rows: [], pieces: 0 };
     groupMap.set(r.board, g);
     g.rows.push(r);
     g.pieces += r.qty;
@@ -898,7 +900,7 @@ export function cutList(parts: Part[], p: Params, stepOf?: ReadonlyMap<string, n
     g.rows.sort((a, b) => b.rough.l - a.rough.l);
     g.title = g.board === 'resawn' ? `Resawn strips (${g.pieces} pieces: see the strip list)`
       : g.board === 'laminated' ? `Face-laminated parts (${g.pieces} pieces: glued from stocked boards, D-70; see the layers)`
-        : `${g.board} (usable ${fracIn(g.usableIn)}"), ${g.pieces} pieces`;
+        : `${g.board} (finishes to ${fracIn(g.finishedIn)}"), ${g.pieces} pieces`;
   }
   const layers = oak.flatMap((g) => g.rows.flatMap((r) => r.layerPieces.map((q) => ({ row: r, ...q }))));
   const strips = stripRows(plans, pools);
@@ -919,8 +921,8 @@ export function cutList(parts: Part[], p: Params, stepOf?: ReadonlyMap<string, n
       ...oak.flatMap((g) => g.rows.map((r) => [g.board, r.partNo, r.name, r.qty, finalDimsText(r.stock), roughDimsText(r.rough), r.grainWord, r.fab, stepText(r.assemblySteps), r.plies, r.lamination ? `face-laminated: ${r.lamination.text}` : undefined])),
     ]),
     layers: toCsv([
-      ['Part no', 'Name', 'Layer', 'Of', 'Board', 'Pieces', 'Rough layer T x W x L (in)', 'Layer share of final T (in)', 'Edge-glued from', 'Glued block rough T (in)', 'Final T (in)', 'Lamination'],
-      ...layers.map((q) => [q.row.partNo, q.row.name, q.layer, q.layers, q.board, q.qty, roughDimsText({ t: q.roughT, w: q.widthIn, l: q.lengthIn }), finalFrac(q.finalT), q.edgeGlued, fractionText(roughUp8(q.row.rough.t), 8), finalFrac(q.row.lamination!.finalT), q.row.lamination!.text]),
+      ['Part no', 'Name', 'Layer', 'Of', 'Board', 'Pieces', 'Rough layer T x W x L (in)', 'Planed layer T (in)', 'Edge-glued from', 'Glued block rough T (in)', 'Final T (in)', 'Lamination'],
+      ...layers.map((q) => [q.row.partNo, q.row.name, q.layer, q.layers, q.board, q.qty, roughDimsText({ t: q.roughT, w: q.widthIn, l: q.lengthIn }), finalFrac(q.finalT), q.edgeGlued, fractionText(q.row.rough.t, 16), finalFrac(q.row.lamination!.finalT), q.row.lamination!.text]),
     ]),
     strips: toCsv([
       ['Part no', 'Name', 'Parts', 'Plies', 'Strips', 'Final strip T x W x L (in)', 'Rough strip T x W x L (in)', 'Resaw from'],
@@ -1017,7 +1019,7 @@ function glueUpsOf(plans: OakPartPlan[]): GlueUp[] {
     map.set(key, {
       partId: pl.part.id, ids: [pl.part.id], qty: 1, partNo: pl.partNo, label, from: pl.pieces.length, edgeBoards: pl.edgeN, layers, kind,
       roughBlock: pl.block, roughBlockText: roughDimsText(pl.block), final: pl.stock, finalText: finalDimsText(pl.stock),
-      note: `${how}; glued block rough ${roughDimsText(pl.block)}, then mill to final ${finalDimsText(pl.stock)}`,
+      note: `${how}; glued block rough ${roughDimsText(pl.block)}${pl.lamination ? `, joint and plane it flat and square (${fractionText(pl.lamination.cleanupIn, 16)}" cleanup)` : ''}, then mill to final ${finalDimsText(pl.stock)}`,
     });
   }
   return [...map.values()];

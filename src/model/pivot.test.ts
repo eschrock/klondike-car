@@ -95,7 +95,7 @@ describe('the front-end parts (D-56, D-58)', () => {
     const b = worldAABB(get(parts, 'beam-F'));
     expect(L.beamF.top).toBeCloseTo(5.2825, 9);
     expect(b.max[2]).toBeCloseTo(5.2825, 9);
-    expect(b.min[2]).toBeCloseTo(3.0325, 9);
+    expect(b.min[2]).toBeCloseTo(5.2825 - defaults.axleBeamDepthIn, 9); // 3.1575 at D-74 (2-1/8 in deep), 3.0325 before
     expect(b.max[0] - b.min[0]).toBeCloseTo(defaults.frontBeamThicknessIn, 9); // D-58: 2 3/4 in (the rear beam is axleBeamThicknessIn)
     expect((b.min[0] + b.max[0]) / 2).toBeCloseTo(kx, 9);
     expect(b.max[1] - b.min[1]).toBeCloseTo(defaults.frontTrackIn - defaults.hubLengthIn - 0.25, 9);
@@ -544,7 +544,7 @@ describe('cut list and stock (D-56)', () => {
       }
     }
     expect(get(parts, 'rail-L').kind).toBe('lumber');
-    expect(get(parts, 'rail-L').stock!.l).toBeCloseTo(L.railEnd - (L.xRear + L.transom), 9);
+    { const ext = L.railEnd - (L.xRear + L.transom); expect(get(parts, 'rail-L').stock!.l, 'the strip is cut as long as the developed centerline, a little over the x extent').toBeGreaterThan(ext); expect(get(parts, 'rail-L').stock!.l).toBeLessThan(ext + 1); }
     expect(get(parts, 'king-beam').kind).toBe('lumber');
     expect(get(parts, 'bridle-tongue').kind).toBe('lumber');
     expect(get(parts, 'bridle-tongue').fab).toBe('bandsaw');

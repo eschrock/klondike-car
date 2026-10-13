@@ -8,17 +8,19 @@
 import type { Dims, Part } from '../model/types';
 import { WEATHER_SPEC, type Params, type ParamKey } from '../params';
 import type { BomLine, BomSection, WeatherCompare } from '../build/bom';
-import { BuildData, CSV_MIME, SHAPER_CONVENTIONS, SHAPER_NOTES, SVG_MIME, zipName, zipPackage } from '../build/package';
+import { BuildData, CSV_MIME, SHAPER_CONVENTIONS, SHAPER_NOTES, SVG_MIME, drawingFileName, zipName, zipPackage } from '../build/package';
 import { fracIn } from '../build/cutlist';
 import { tilePlan } from '../build/forms';
-import type { BuildStep } from '../build/assembly';
-import type { OakRow } from '../build/cutlist';
+import { partLabel, type BuildStep } from '../build/assembly';
+import { drawnParts, partDims, type PartDims, type PartDrawingSheet } from '../build/part-drawings';
+import { roughFrac } from '../build/units';
 import { h } from './dom';
 import {
-  SPEC_NAME, bytesLabel, clampStep, cureLine, dimsParts, featureSummary, fracDim, fracInch, groupByWhen, loadDone, loadStep, loadStepChecks, maxDepth, mergeBuy, noteLead, pct, previewSvg, saveDone, saveStep, saveStepChecks,
-  sameLead, sharedNote, sheetSvg, splitUrls, stepFocus, tilePagesHtml, todayISO, usd, vendorFromUrl, weatherChipText,
+  SPEC_NAME, bytesLabel, clampStep, cureLine, dimsParts, featureSummary, fracDim, fracInch, groupByWhen, groupCutsByBoard, loadDone, loadStep, loadStepChecks, maxDepth, mergeBuy, noteLead, partFacts, pct, pieceWord, pinFocus, previewSvg, saveDone, saveStep, saveStepChecks,
+  sameLead, sharedNote, sheetSvg, splitUrls, stepFocus, stepOfPart, tilePagesHtml, todayISO, usd, vendorFromUrl, weatherChipText,
   type StepFocus,
 } from './build-helpers';
+import { createPartUi, type DrawingView } from './part-ui';
 import './build-panel.css';
 
 export interface BuildPanelHosts {
@@ -55,6 +57,7 @@ const SECTIONS = [
   { id: 'bom', label: 'BOM', title: 'Bill of materials' },
   { id: 'shaper', label: 'Shaper', title: 'Shaper Origin files' },
   { id: 'forms', label: 'Forms', title: 'Forms and templates' },
+  { id: 'drawings', label: 'Drawings', title: 'Part drawings' },
   { id: 'assembly', label: 'Assembly', title: 'Assembly steps' },
   { id: 'finishing', label: 'Finishing', title: 'Finishing schedule' },
   { id: 'downloads', label: 'Downloads', title: 'Downloads' },
@@ -171,6 +174,7 @@ const altNode = (a: AltLike): Node => {
 };
 /** A first sentence of a material note that warns (plated steel, a wrong type): shown inline even when the note differs from the shared one. */
 const MATERIAL_WARN = /check the listing|\bNOT\b(?! priced)/;
+const cap = (t: string): string => t.charAt(0).toUpperCase() + t.slice(1);
 const stepList = (n: number[]): string => (n.length ? n.join(', ') : '–');
 
 const note = (text: string, cls = 'muted small') => h('p', { class: cls }, text);
@@ -187,13 +191,66 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
   let dataKey = '';
   let timer: ReturnType<typeof setTimeout> | undefined;
   let stepN = loadStep(); // kept for the tab session (sessionStorage); clampStep fixes it if the step list changed
-  let stepUpdate: ((reframe: boolean) => void) | null = null;
+  let stepUpdate: ((reframe: boolean, pinOnly?: boolean) => void) | null = null;
   /** Move the Assembly step by one (the arrow keys); null outside the Assembly section. */
   let stepMove: ((delta: number) => void) | null = null;
   /** The weather toggle was just used: its re-rendered button gets the focus back. */
   let weatherRefocus = false;
   let done = loadDone();
   const stepChecks = loadStepChecks();
+  /** "Show in 3D": the part(s) pinned in the viewer until the next step. `frame` is true until the first emit has asked the camera to frame them. */
+  let pin: { ids: string[]; frame: boolean } | null = null;
+  /** Bumped by every section render; a deferred fill (drawings, files) whose token is stale is dropped. */
+  let renderToken = 0;
+  /** The pause before a deferred fill: short on a section change, long after a parameter change (a slider drag should not hitch on the drawings). */
+  let lazyDelay = 30;
+  const dimsCache = new Map<string, PartDims | undefined>();
+  let byIdCache: { parts: Part[]; map: Map<string, Part> } | null = null;
+  const partById = (id: string): Part | undefined => {
+    if (!design) return undefined;
+    if (!byIdCache || byIdCache.parts !== design.parts) byIdCache = { parts: design.parts, map: new Map(design.parts.map((x) => [x.id, x])) };
+    return byIdCache.map.get(id);
+  };
+  let drawnCache: { parts: Part[]; ids: Set<string> } | null = null;
+  const drawnHas = (id: string): boolean => {
+    if (!design) return false;
+    if (!drawnCache || drawnCache.parts !== design.parts) drawnCache = { parts: design.parts, ids: new Set(drawnParts(design.parts).map((x) => x.id)) };
+    return drawnCache.ids.has(id);
+  };
+  /** A drawing modal's content for a part: its dimensioned drawing, else its Shaper file. */
+  const drawingOf = (id: string): DrawingView | undefined => {
+    if (!data) return undefined;
+    const sheet = data.partDrawings.find((x) => x.partIds.includes(id));
+    if (sheet) return sheetView(sheet, id);
+    const f = data.shaper.find((x) => x.partIds.includes(id));
+    return f ? { title: `${f.partNo} (Shaper file)`, sub: `${f.fileName} · ${f.widthIn.toFixed(2)} × ${f.heightIn.toFixed(2)} in, full size`, markup: previewSvg(f.svg, `${f.partNo} Shaper file`), fileName: f.fileName, svg: f.svg, partId: id } : undefined;
+  };
+  const sheetView = (sh: PartDrawingSheet, partId: string): DrawingView => ({
+    title: sh.name,
+    sub: [sh.partNo, sh.qty > 1 ? `${sh.qty} identical` : '', sh.scale, sh.makeNote].filter(Boolean).join(' · '),
+    markup: previewSvg(sh.svg, `${sh.name} drawing`),
+    fileName: (drawingFileName(sh).split('/').pop() ?? 'drawing.svg'),
+    svg: sh.svg,
+    partId,
+  });
+  const ui = createPartUi({
+    label: (id) => { const x = partById(id); return x ? partLabel(x) : undefined; },
+    has: (id) => !!partById(id),
+    facts: (id) => {
+      const part = partById(id);
+      if (!part || !design) return undefined;
+      if (!dimsCache.has(id)) {
+        let dims: PartDims | undefined;
+        try { dims = partDims(part, design.parts, design.p); } catch { dims = undefined; }
+        dimsCache.set(id, dims);
+      }
+      return partFacts(part, id, data?.cutList, dimsCache.get(id));
+    },
+    hasDrawing: (id) => drawnHas(id) || !!data?.shaper.some((f) => f.partIds.includes(id)),
+    drawing: drawingOf,
+    show3d: (id) => show3d(id),
+    download: (name, svg) => download(name, SVG_MIME, svg),
+  });
   /** Tell the viewer what to show; a `null` only goes out when a focus is active, so mounting never touches the viewer. */
   const emit = (f: StepFocus | null): void => {
     if (!f && !focusActive) return;
@@ -255,10 +312,40 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
       panels.get(s.id)!.hidden = !on;
     }
     navButtons.get(id)!.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    if (id !== 'assembly') { stepUpdate = null; stepMove = null; emit(null); }
+    ui.closeAll();
+    if (id !== 'assembly') { stepUpdate = null; stepMove = null; pin = null; emit(null); }
     opts.onSection?.(id);
     if (changed) main.scrollTop = 0;
     if (active) renderSection();
+  }
+
+  /**
+   * "Show in 3D" on a part chip. In Assembly the viewer highlights and frames the part now; from any other section the panel first switches to Assembly at the step
+   * that installs the part (so the part, and the parts it sits on, are drawn), then does the same.
+   */
+  function show3d(id: string): void {
+    if (!refreshData() || !data) return;
+    pin = { ids: [id], frame: true };
+    if (section === 'assembly' && stepUpdate) { stepUpdate(false, true); return; }
+    const n = stepOfPart(data.steps, id);
+    if (n !== undefined) { stepN = n; saveStep(n); }
+    show('assembly'); // renders, then emits the step with the pin
+    window.scrollTo({ top: 0 });
+  }
+
+  /** A slow output: a status line now, the content after the paint (dropped if the section was drawn again meanwhile). */
+  function lazy(slot: HTMLElement, message: string, make: () => Node[]): void {
+    slot.replaceChildren(h('p', { class: 'muted', role: 'status' }, message));
+    const mine = renderToken;
+    setTimeout(() => {
+      if (mine !== renderToken || !slot.isConnected) return;
+      try {
+        slot.replaceChildren(...make());
+      } catch (err) { // never leave "Drawing the parts…" up for good
+        console.error(err);
+        slot.replaceChildren(h('p', { class: 'fail', role: 'alert' }, `This could not be drawn: ${err instanceof Error ? err.message : String(err)}`));
+      }
+    }, lazyDelay);
   }
 
   const withData = (fn: (d: BuildData) => void): void => {
@@ -279,11 +366,15 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
     if (data && dataKey === design.key) return true;
     data = new BuildData(design.parts, design.p, { date: todayISO(), link: opts.getLink?.() });
     dataKey = design.key;
+    dimsCache.clear();
     return true;
   }
 
   function renderSection(reframe = true): void {
     root.removeAttribute('aria-busy');
+    ui.closeAll();
+    renderToken++;
+    lazyDelay = reframe ? 30 : 700;
     const panel = panels.get(section)!;
     if (!refreshData() || !data) {
       panel.replaceChildren(note('No design loaded yet.'));
@@ -318,7 +409,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
     if (!active || section !== 'assembly' || !stepMove || e.defaultPrevented) return;
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-    if ((e.target as Element | null)?.closest?.('input, select, textarea, [contenteditable=""], [contenteditable="true"], [role="slider"]')) return;
+    if ((e.target as Element | null)?.closest?.('input, select, textarea, [contenteditable=""], [contenteditable="true"], [role="slider"], .bp-pop, dialog')) return;
     e.preventDefault();
     stepMove(e.key === 'ArrowRight' ? 1 : -1);
   });
@@ -384,11 +475,13 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
           h('div', { class: 'bp-check-head' }, cb, h('label', { for: `bp-v-${c.id}` }, h('span', { class: 'muted' }, `${c.n}. `), c.title)),
           h('details', {},
             h('summary', {}, 'How to test'),
-            h('p', {}, h('strong', {}, 'Do: '), c.whatToDo),
-            h('p', {}, h('strong', {}, 'Pass: '), c.pass),
+            h('strong', { class: 'small' }, 'Do'),
+            c.how?.length ? ui.instrList(c.how) : h('p', {}, c.whatToDo),
+            h('strong', { class: 'small' }, 'Pass'),
+            c.passList?.length ? h('ul', { class: 'bp-sublist bp-pass' }, ...c.passList.map((t) => h('li', {}, ...ui.text(t)))) : h('p', {}, c.pass),
             h('p', {}, h('strong', {}, 'If it fails: '), c.ifFails),
             h('p', { class: 'muted small' }, `Params: ${c.paramKeys.join(', ') || 'none'}`),
-            h('p', { class: 'muted small' }, `Guards: ${c.partIds.join(', ') || 'no single part'}${c.refs.length ? ` · ${c.refs.join(', ')}` : ''}`)));
+            h('p', { class: 'small' }, h('span', { class: 'muted' }, 'Guards: '), ...(c.partIds.length ? [ui.chips(c.partIds)] : ['no single part']), h('span', { class: 'muted' }, c.refs.length ? ` · ${c.refs.join(', ')}` : ''))));
         ul.append(li);
       }
     }
@@ -398,48 +491,65 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
   function renderCutlist(d: BuildData): Node[] {
     const c = d.cutList;
     const out: Node[] = [h('div', { class: 'bp-actions' }, csvButton('Download CSV', 'cutlist.csv', () => d.cutlistCsv))];
-    out.push(note('Final size is the finished T × W × L; rough adds the milling allowance. Dimensions in inches: fractions to the sixteenth; a size off that grid shows the nearest 1/32 with the exact decimal after it.'));
+    out.push(note('Three steps: saw the CUTS from the boards (rough sizes round up to 1/8"), GLUE UP the panels and blocks, then MILL each part to its FINISHED size. Part names open a card with its sizes and a view in 3D.', 'muted small bp-prose'));
     if (c.warnings.length) {
       out.push(h('details', { class: 'bp-warn' }, h('summary', {}, `${c.warnings.length} data warning${c.warnings.length === 1 ? '' : 's'}`), h('ul', {}, ...c.warnings.map((w) => h('li', {}, w)))));
     }
-    const partCell = (name: string, partNo: string, extra?: string): Node => h('div', {}, h('strong', {}, name), sub(partNo), ...(extra ? [h('div', { class: 'small' }, extra)] : []));
-    /** An oak row's name cell: the sizing note and, for a face-laminated part (D-70), the layer pieces behind a fold. */
-    const oakPart = (r: OakRow): Node => {
-      const layers = r.layerPieces ?? [];
-      return h('div', {}, h('strong', {}, r.name), sub(r.partNo), ...(r.note ? [h('div', { class: 'small' }, r.note)] : []),
-        ...(layers.length
-          ? [h('details', { class: 'small bp-layers' }, h('summary', {}, `Layers (${layers.length})`),
-              h('ul', { class: 'bp-plain' }, ...layers.map((q) => h('li', {}, `Layer ${q.layer} of ${q.layers}: ${q.qty} × ${q.board}, plane to ${fracInch(q.roughT)} × ${fracInch(q.widthIn)} × ${fracInch(q.lengthIn)}${q.edgeGlued > 1 ? ` (edge-glue ${q.edgeGlued} across)` : ''}, ${fracInch(q.finalT)} of the finished thickness`))))]
-          : []));
-    };
-    out.push(h('h3', { class: 'bp-group' }, 'White oak by board thickness'));
-    for (const g of c.oak) {
-      out.push(h('h4', { class: 'bp-sub' }, g.title));
-      out.push(table('bp-cuts', ['Part', 'Qty', 'Final T × W × L', 'Rough T × W × L', 'Grain', 'Fabrication', 'Step'], g.rows.map((r) => [
-        oakPart(r),
-        String(r.qty), dimsCell(r.stock), dimsCell(r.rough), r.grainWord ?? '–',
-        `${r.fab}${r.plies ? ` · ${r.plies} plies` : ''}`, stepList(r.assemblySteps),
-      ]), `Oak ${g.title}`, { num: [1], nowrap: [4], qty: 1, key: 2, cols: [26, 5, 22, 22, 8, 10, 7] }));
+    const partCell = (id: string, name: string, partNo: string, extra?: string): Node => h('div', {}, ui.chip(id, name), sub(partNo), ...(extra ? [h('div', { class: 'small' }, extra)] : []));
+
+    // 1. CUTS: the pieces sawn from the boards, by board thickness.
+    out.push(h('h3', { class: 'bp-group' }, '1. Cuts: saw these from the boards'));
+    for (const g of groupCutsByBoard(c.cuts)) {
+      const pieces = g.cuts.reduce((a, x) => a + x.qty, 0);
+      out.push(h('h4', { class: 'bp-sub' }, `${g.board} boards`, h('span', { class: 'muted' }, ` · ${pieces} piece${pieces === 1 ? '' : 's'}`)));
+      out.push(table('bp-cuts', ['Cut', 'Qty', 'Rough T × W × L', 'Piece', 'Note'], g.cuts.map((x) => [
+        h('div', {}, ui.chip(x.partId, x.label), sub(`${x.partNo}${x.glueUp ? ` · glued into the ${x.glueUp}` : ''}`)),
+        String(x.qty), h('span', { class: 'bp-d' }, x.roughText), pieceWord(x), x.note ?? '',
+      ]), `Cuts from ${g.board} boards`, { num: [1], nowrap: [3], qty: 1, key: 2, cols: [34, 6, 24, 14, 22] }));
     }
-    out.push(h('h3', { class: 'bp-group' }, 'Resaw list'));
-    out.push(table('bp-cuts', ['Strips for', 'Strips', 'Final T × W × L', 'Rough T × W × L', 'Resaw from'], c.strips.map((r) => [
-      h('div', {}, h('strong', {}, r.name), sub(`${r.parts} part${r.parts === 1 ? '' : 's'} × ${r.plies} plies`)),
-      String(r.strips), dimsCell(r.stock), dimsCell(r.rough), r.resawFrom,
-    ]), 'Resawn strips', { num: [1], qty: 1, key: 2, cols: [26, 5, 22, 22, 25] }));
-    for (const pool of c.resaw) {
-      out.push(note(`${pool.strips} strips of ${fracIn(pool.roughT)}" rough: buy ${pool.boards} × ${pool.board} × ${pool.boardWidthIn}" wide × ${pool.boardLengthIn / 12} ft (${pool.boardFeet.toFixed(1)} bf). RIP FIRST into ${pool.lanes} lane${pool.lanes === 1 ? '' : 's'}, then resaw each lane into ${pool.stripsPerBoard} slab${pool.stripsPerBoard === 1 ? '' : 's'}; a board yields ${pool.yieldPerBoard} strips, so the purchase holds ${pool.stripSlots}: ${pool.spares} spare${pool.spares === 1 ? '' : 's'}.`, 'muted bp-prose'));
+    if (!c.cuts.length) out.push(note('No solid-wood cuts in this design.'));
+
+    // Resaw: how the laminating strips are made (rip the lanes first, then resaw each lane).
+    if (c.resaw.length) {
+      out.push(h('h4', { class: 'bp-sub' }, 'Resawing the strips'));
+      for (const pool of c.resaw) {
+        out.push(h('div', { class: `bp-card bp-resaw${pool.withinCapacity ? '' : ' is-over'}` },
+          h('strong', {}, `${pool.strips} strips, ${roughFrac(pool.roughT)} rough, from ${pool.boards} × ${pool.board} board${pool.boards === 1 ? '' : 's'}`),
+          h('ul', { class: 'bp-sublist' }, h('li', {}, cap(pool.ripText)), h('li', {}, cap(pool.resawHeightText)),
+            ...(pool.withinCapacity ? [] : [h('li', { class: 'fail' }, `Taller than the bandsaw can cut (${pool.bandsawCapacityIn}"): see the data warnings.`)])),
+          h('p', { class: 'muted small' }, pool.text)));
+      }
     }
+
+    // 2. GLUE-UPS
+    out.push(h('h3', { class: 'bp-group' }, '2. Glue-ups'));
+    if (c.glueUps.length) {
+      out.push(table('bp-cuts', ['Glue-up', 'Qty', 'From', 'Rough block T × W × L', 'Then mill to T × W × L'], c.glueUps.map((g) => [
+        h('div', {}, ui.chip(g.partId, g.label), sub(g.partNo), h('div', { class: 'small' }, g.note.split(';')[0].replace(/^./, (ch) => ch.toUpperCase()))),
+        String(g.qty), `${g.from} piece${g.from === 1 ? '' : 's'}`, h('span', { class: 'bp-d' }, g.roughBlockText), h('span', { class: 'bp-d' }, g.finalText),
+      ]), 'Glue-ups', { num: [1], nowrap: [2], qty: 1, key: 4, cols: [34, 6, 12, 24, 24] }));
+    } else out.push(note('Nothing is glued up in this design.'));
+
+    // 3. FINISHED PARTS
+    out.push(h('h3', { class: 'bp-group' }, '3. Finished parts: mill to these sizes'));
+    const FROM: Record<string, string> = { board: 'one board', 'glue-up': 'glue-up', strips: 'strips' };
+    out.push(table('bp-cuts', ['Part', 'Qty', 'Final T × W × L', 'From', 'Board', 'Grain', 'Fabrication', 'Step'], c.finished.map((f) => [
+      h('div', {}, ui.chip(f.ids[0], f.name), sub(f.partNo)),
+      String(f.qty), h('span', { class: 'bp-d' }, f.finalText), FROM[f.from] ?? f.from, f.board, f.grainWord ?? '–', f.fab, stepList(f.assemblySteps),
+    ]), 'Finished parts', { num: [1], nowrap: [3, 4, 5], qty: 1, key: 2, cols: [24, 5, 20, 10, 7, 12, 14, 8] }));
+
+    // Plywood and metal: the rest of the cut list.
     out.push(h('h3', { class: 'bp-group' }, 'Plywood'));
     for (const g of c.sheets) {
       out.push(h('h4', { class: 'bp-sub' }, `${g.label} (${g.pieces} pieces)`));
       out.push(table('bp-cuts', ['Part', 'Qty', 'Size T × W × L', 'Grain', 'Fabrication', 'Step'], g.rows.map((r) => [
-        partCell(r.name, r.partNo, r.note),
+        partCell(r.ids[0], r.name, r.partNo, r.note),
         String(r.qty), dimsCell(r.stock), r.grainWord ?? '–', r.fab, stepList(r.assemblySteps),
       ]), `Plywood ${g.label}`, { num: [1], nowrap: [3], qty: 1, key: 2, cols: [26, 5, 22, 12, 25, 10] }));
     }
     out.push(h('h3', { class: 'bp-group' }, 'Metal stock (drill and tap)'));
     out.push(table('bp-cuts', ['Part', 'Qty', 'Section', 'Cut length', 'Step'], c.metal.map((r) => [
-      partCell(r.name, r.partNo), String(r.qty), r.section, fracInch(r.cutLengthIn), stepList(r.assemblySteps),
+      partCell(r.ids[0], r.name, r.partNo), String(r.qty), r.section, fracInch(r.cutLengthIn), stepList(r.assemblySteps),
     ]), 'Metal stock', { num: [1], qty: 1, key: 3, cols: [26, 5, 22, 22, 25] }));
     return out;
   }
@@ -470,7 +580,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
         svgBox(sheetSvg(s), 'bp-preview bp-sheetbox'),
         note(`Offcut: largest ${s.offcut.largest.widthIn.toFixed(1)} × ${s.offcut.largest.heightIn.toFixed(1)} in, ${Math.round(s.offcut.areaIn2 / 144)} ft² free in all.`),
         h('details', {}, h('summary', {}, `${s.placements.length} parts on this sheet`),
-          h('ul', { class: 'bp-plain bp-cols' }, ...s.placements.map((q) => h('li', {}, `${q.name} (${q.partId}): ${q.widthIn.toFixed(1)} × ${q.heightIn.toFixed(1)} in${q.rotation ? ', turned 90°' : ''}`))))));
+          h('ul', { class: 'bp-plain bp-cols' }, ...s.placements.map((q) => h('li', {}, ui.chip(q.partId, q.name), `: ${q.widthIn.toFixed(1)} × ${q.heightIn.toFixed(1)} in${q.rotation ? ', turned 90°' : ''}`))))));
     }
     if (n.unplaced.length) out.push(h('p', { class: 'fail' }, `Did not fit: ${n.unplaced.join(', ')}`));
     if (n.grainTurned.length) out.push(h('p', { class: 'fail' }, `Grain turned across: ${n.grainTurned.map((g) => g.name).join(', ')}`));
@@ -670,27 +780,60 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
       const plan = tilePlan(f.widthIn, f.heightIn);
       const tiles = d.tiles.find((t) => t.id === f.id)!;
       const pages = plan.cols * plan.rows;
-      cards.push(h('article', { class: 'bp-file', 'aria-label': f.title },
-        svgBox(previewSvg(f.svg, `${f.title} preview`)),
-        h('div', { class: 'bp-file-head' }, h('strong', {}, f.title), h('span', { class: 'muted small' }, f.fileName)),
-        h('dl', { class: 'bp-facts' },
-          h('dt', {}, 'Size'), h('dd', {}, `${f.widthIn.toFixed(1)} × ${f.heightIn.toFixed(1)} in`),
-          h('dt', {}, 'Print'), h('dd', {}, `${pages} Letter page${pages === 1 ? '' : 's'} (${plan.cols} × ${plan.rows})`)),
-        h('details', {}, h('summary', {}, 'Dimensions and notes'),
-          h('ul', { class: 'bp-plain small' }, ...f.dims.map((x) => h('li', {}, `${x.label}: ${fracIn(Math.round(x.valueIn * 1000) / 1000)}${/count|clamps|ribs|marks/i.test(x.label) ? '' : '"'}`)),
-            ...f.notes.map((x) => h('li', { class: 'muted' }, x)))),
-        h('div', { class: 'bp-actions' },
-          btn('Download full-size SVG', () => download(f.fileName, SVG_MIME, f.svg), `Save ${f.fileName}`),
-          btn('Print tiled (Letter)', () => printTiles(tiles.pages), 'Print this drawing on Letter pages at true scale'))));
+      const steps = f.build ?? [];
+      cards.push(h('article', { class: 'bp-file bp-form', 'aria-label': f.title },
+        h('div', { class: 'bp-form-pic' },
+          svgBox(previewSvg(f.svg, `${f.title} preview`)),
+          h('div', { class: 'bp-file-head' }, h('strong', {}, f.title), h('span', { class: 'muted small' }, f.fileName)),
+          h('dl', { class: 'bp-facts' },
+            h('dt', {}, 'Size'), h('dd', {}, `${f.widthIn.toFixed(1)} × ${f.heightIn.toFixed(1)} in`),
+            h('dt', {}, 'Print'), h('dd', {}, `${pages} Letter page${pages === 1 ? '' : 's'} (${plan.cols} × ${plan.rows})`)),
+          h('div', { class: 'bp-actions' },
+            btn('Download full-size SVG', () => download(f.fileName, SVG_MIME, f.svg), `Save ${f.fileName}`),
+            btn('Print tiled (Letter)', () => printTiles(tiles.pages), 'Print this drawing on Letter pages at true scale'))),
+        h('div', { class: 'bp-form-body' },
+          ...(steps.length
+            ? [h('h4', { class: 'bp-sub' }, 'How to make it'),
+               h('ol', { class: 'bp-instr' }, ...steps.map((st) => h('li', {}, ...ui.text(st.step),
+                 ...(st.sub?.length ? [h('ul', { class: 'bp-sublist' }, ...st.sub.map((x) => h('li', {}, ...ui.text(x))))] : []))))]
+            : []),
+          h('details', {}, h('summary', {}, 'Dimensions and notes'),
+            h('ul', { class: 'bp-plain small' }, ...f.dims.map((x) => h('li', {}, `${x.label}: ${fracIn(Math.round(x.valueIn * 1000) / 1000)}${/count|clamps|ribs|marks/i.test(x.label) ? '' : '"'}`)),
+              ...f.notes.map((x) => h('li', { class: 'muted' }, x)))))));
     }
-    out.push(h('div', { class: 'bp-grid bp-grid-forms' }, ...cards));
+    out.push(h('div', { class: 'bp-forms' }, ...cards));
     return out;
+  }
+
+  /**
+   * One dimensioned drawing per distinct cut (`part-drawings.ts`). They take seconds the first time, so the section shows a status line, draws after the paint and keeps the
+   * result in `BuildData` for the popovers and the zip.
+   */
+  function renderDrawings(d: BuildData): Node[] {
+    const slot = h('div', {});
+    lazy(slot, 'Drawing the parts… (a few seconds the first time for each design)', () => {
+      const sheets = d.partDrawings;
+      const cards = sheets.map((sh) => {
+        const open = h('button', { type: 'button', class: 'bp-preview-btn', 'aria-label': `Open ${sh.name} drawing large` }, svgBox(previewSvg(sh.svg, `${sh.name} drawing preview`)));
+        open.addEventListener('click', () => ui.openDrawing(sheetView(sh, sh.partId), open));
+        const view = btn('Open large', () => ui.openDrawing(sheetView(sh, sh.partId), view), `Open the ${sh.name} drawing`);
+        return h('article', { class: 'bp-file bp-drawing', 'aria-label': sh.name },
+          open,
+          h('div', { class: 'bp-file-head' }, ui.chip(sh.partId, sh.name), h('span', { class: 'muted small' }, `${sh.partNo} · ${sh.scale}`)),
+          h('dl', { class: 'bp-facts' }, h('dt', {}, 'Qty'), h('dd', {}, String(sh.qty))),
+          ...(sh.makeNote ? [h('p', { class: 'small bp-make' }, sh.makeNote)] : []),
+          h('div', { class: 'bp-actions' }, view, btn('Download SVG', () => download(drawingFileName(sh).split('/').pop() ?? 'drawing.svg', SVG_MIME, sh.svg), `Save the ${sh.name} drawing`)));
+      });
+      return [
+        note(`${sheets.length} drawings, one per distinct cut: identical pieces share a drawing, and a left/right pair that differs only by a mirror shares one (MAKE 2). Balloon letters match the feature list on each. All of them are in the zip under drawings/.`, 'muted small bp-prose'),
+        h('div', { class: 'bp-grid' }, ...cards),
+      ];
+    });
+    return [slot];
   }
 
   function renderAssembly(d: BuildData): Node[] {
     const steps = d.steps;
-    const parts = design?.parts ?? [];
-    const nameOf = new Map(parts.map((x) => [x.id, x.name]));
     stepN = clampStep(steps, stepN);
     const stepIdx = () => Math.max(0, steps.findIndex((s) => s.n === stepN));
 
@@ -728,15 +871,13 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
 
     const detailNodes = (s: BuildStep, forPrint: boolean): Node[] => {
       const ids = s.partIds;
-      const listing = ids.map((id) => nameOf.get(id) ?? id);
       const out: Node[] = [
         h('h3', { class: 'bp-step-title' }, `${s.n}. ${s.title}`, s.kind === 'build' ? '' : h('span', { class: 'bp-kind' }, s.kind)),
+        ...(s.goal ? [h('p', { class: 'bp-goal' }, ...ui.text(s.goal))] : []),
         ids.length
-          ? (listing.length > 6 && !forPrint
-              ? h('details', { class: 'small' }, h('summary', {}, `Parts (${ids.length})`), h('div', { class: 'muted' }, listing.join(', ')))
-              : h('p', { class: 'small' }, h('strong', {}, `Parts (${ids.length}): `), listing.join(', ')))
+          ? h('p', { class: 'small bp-step-parts' }, h('strong', {}, `Parts (${ids.length}): `), ui.chips(ids, forPrint ? ids.length : 8))
           : h('p', { class: 'muted small' }, 'No parts installed in this step.'),
-        h('ol', { class: 'bp-instr' }, ...s.instructions.map((t) => h('li', {}, tidy(t)))),
+        s.items?.length ? ui.instrList(s.items) : h('ol', { class: 'bp-instr' }, ...(s.instructions ?? []).map((t) => h('li', {}, tidy(t)))),
       ];
       if (s.clampCure) out.push(h('p', { class: 'bp-cure' }, h('strong', {}, 'Glue, clamp and cure: '), s.clampCure));
       else if (s.cure) out.push(h('p', { class: 'bp-cure' }, h('strong', {}, 'Cure: '), cureLine(s.cure)));
@@ -752,7 +893,9 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
       if (detail.getBoundingClientRect().top < clear + 2) detail.scrollIntoView({ block: 'start' });
     };
 
-    const update = (reframe: boolean) => {
+    let drawnStep = -1;
+    /** Show the current step. `pinOnly`: only the 3D pin changed, so the step text (and the focus in it) stays as it is. */
+    const update = (reframe: boolean, pinOnly = false) => {
       const i = stepIdx();
       const s = steps[i];
       if (!s) { emit(null); return; }
@@ -764,15 +907,24 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
       jump.value = String(s.n);
       (prev as HTMLButtonElement).disabled = i === 0;
       (next as HTMLButtonElement).disabled = i === steps.length - 1;
-      detail.replaceChildren(...detailNodes(s, false));
+      if (!pinOnly || drawnStep !== s.n) { ui.closeAll(); detail.replaceChildren(...detailNodes(s, false)); drawnStep = s.n; }
       const f = stepFocus(steps, s.n, reframe);
-      viewNote.textContent = f?.visibleIds
-        ? `The 3D viewer shows steps 0 to ${s.n}${s.partIds.length ? '; this step’s parts are highlighted' : ' (nothing new to install in this step)'}. Camera: ${s.view}.`
-        : 'Preparation: nothing is installed yet, so the 3D viewer shows the finished sled for reference.';
-      emit(f);
+      const pinned = pin;
+      viewNote.replaceChildren(pinned
+        ? h('span', {}, `Showing ${pinned.ids.map((id) => partById(id)?.name ?? id).join(', ')} in the 3D viewer (use Explode if it is hidden inside other parts). `)
+        : f?.visibleIds
+          ? `The 3D viewer shows steps 0 to ${s.n}${s.partIds.length ? '; this step’s parts are highlighted' : ' (nothing new to install in this step)'}. Camera: ${s.view}.`
+          : 'Preparation: nothing is installed yet, so the 3D viewer shows the finished sled for reference.');
+      if (pinned) {
+        const clear = btn('Back to this step’s parts', () => { pin = null; update(true, true); }, 'Highlight the parts this step installs again', 'bp-linkbtn');
+        viewNote.append(clear);
+      }
+      emit(f && pinned ? pinFocus(f, pinned.ids, pinned.frame) : f);
+      if (pinned) pinned.frame = false; // the camera is framed once; a parameter change keeps the view
     };
     const go = (n: number) => {
       stepN = n;
+      pin = null; // a step change ends "Show in 3D"
       update(true);
       showStepTop();
     };
@@ -801,7 +953,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
     out.push(h('div', { class: 'bp-fin-steps' }, ...f.steps.map((s) =>
       h('article', { class: 'bp-card bp-finstep' },
         h('h4', { class: 'bp-sub' }, `${s.n}. ${s.title}`, s.coats ? h('span', { class: 'muted' }, ` · ${s.coats} coat${s.coats === 1 ? '' : 's'}`) : ''),
-        h('ol', { class: 'bp-instr' }, ...s.instructions.map((t) => h('li', {}, t))),
+        s.items?.length ? ui.instrList(s.items) : h('ol', { class: 'bp-instr' }, ...(s.instructions ?? []).map((t) => h('li', {}, t))),
         s.products.length
           ? table('bp-fin', ['Product', 'Area', 'Coats', 'Qt'], s.products.map((p) => [p.name, `${p.areaFt2.toFixed(0)} ft²`, String(p.coats), p.qtNeeded.toFixed(2)]), `${s.title} products`, { num: [1, 2, 3] })
           : h('span', {}),
@@ -814,22 +966,28 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
   }
 
   function renderDownloads(d: BuildData): Node[] {
-    const files = d.files;
-    const out: Node[] = [];
-    out.push(h('div', { class: 'bp-actions' },
+    const out: Node[] = [h('div', { class: 'bp-actions' },
       btn('Download all (zip)', () => saveZip(d), 'Every file below in one zip', 'bp-primary'),
-      btn('Open build book (print or save as PDF)', () => openBook(d), 'The whole build on paper, from the same data as this mode: opens in a new tab')));
-    out.push(note(`${files.length} files, generated from the design on screen (params rev ${d.revision}). The zip is uncompressed; open it with any unzip tool.`, 'muted small bp-prose'));
-    out.push(table('bp-files', ['File', 'Size', ''], files.map((f) => {
-      const size = typeof f.data === 'string' ? new TextEncoder().encode(f.data).length : f.data.length;
-      return [h('span', { class: 'bp-fname' }, f.name), bytesLabel(size), btn('Save', () => download(f.name, f.mime, f.data), `Save ${f.name}`)];
-    }), 'Package files', { num: [1] }));
+      btn('Open build book (print or save as PDF)', () => openBook(d), 'The whole build on paper, from the same data as this mode: opens in a new tab'))];
+    // The file list includes the part drawings (seconds the first time), so it is drawn after the paint.
+    const slot = h('div', {});
+    lazy(slot, 'Preparing the files… (a few seconds the first time for each design)', () => {
+      const files = d.files;
+      return [
+        note(`${files.length} files, generated from the design on screen (params rev ${d.revision}). The zip is uncompressed; open it with any unzip tool.`, 'muted small bp-prose'),
+        table('bp-files', ['File', 'Size', ''], files.map((f) => {
+          const size = typeof f.data === 'string' ? new TextEncoder().encode(f.data).length : f.data.length;
+          return [h('span', { class: 'bp-fname' }, f.name), bytesLabel(size), btn('Save', () => download(f.name, f.mime, f.data), `Save ${f.name}`)];
+        }), 'Package files', { num: [1] }),
+      ];
+    });
+    out.push(slot);
     return out;
   }
 
   const RENDER: Record<SectionId, (d: BuildData) => Node[]> = {
     verify: renderVerify, cutlist: renderCutlist, nesting: renderNesting, bom: renderBom, shaper: renderShaper,
-    forms: renderForms, assembly: renderAssembly, finishing: renderFinishing, downloads: renderDownloads,
+    forms: renderForms, drawings: renderDrawings, assembly: renderAssembly, finishing: renderFinishing, downloads: renderDownloads,
   };
 
   show(section);
@@ -852,6 +1010,8 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
       else {
         stepUpdate = null;
         stepMove = null;
+        pin = null;
+        ui.closeAll();
         clearTiles();
         emit(null);
         root.removeAttribute('aria-busy');

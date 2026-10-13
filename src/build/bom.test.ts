@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
 import { fastenerBreakdown } from '../model/lighting';
 import { defaultParams } from '../params';
-import { BULK_SHARE, EPOXY_WASTE, NOTE_ITEMS, TOUCH_GROUPS, fastenerMaterialNote, isBulkQty, touchGroupOfPart, THROUGH_STACKS, bom, boltLengthFromStack, jointItems, roundUpStock, screwLengthFromStack, shortVendor, uniqueJoints } from './bom';
+import { BULK_SHARE, EPOXY_WASTE, NOTE_ITEMS, TOUCH_GROUPS, fastenerMaterialNote, isBulkQty, touchGroupOfPart, THROUGH_STACKS, bom, boltLengthFromStack, jointItems, screwLengthFromStack, shortVendor, uniqueJoints } from './bom';
 import { PRE_D72 } from '../test-fixtures';
 import { cutList, isBuilt } from './cutlist';
 import { finishingSchedule, glueEpoxyFlOz } from './finishing';
@@ -246,9 +246,7 @@ describe('bom', () => {
     const g = strip('seat-grip-L', 'side-L-gunwale-in');
     expect(boltLengthFromStack(g.part, g.j, byId)).toBe(1.75);
     expect(jointItems(g.part, { ...g.j, size: '0.25" 316 button-head cap screws, 3 columns' }, byId)[0].label).toBe('316 button-head cap screw 1/4-20 x 1-3/4"');
-    // hanger bolts: hanger + rail + allowance
-    const h = strip('axle-hanger-L', 'rail-L');
-    expect(boltLengthFromStack(h.part, h.j, byId)).toBe(roundUpStock(0.875 + 0.75 + 0.4));
+    // (the hanger bolts are the hold-down angle's upright bolts, recorded once with their length in the text: no stack fallback needed)
     // roll pad: 1/4 pad + 3/4 bite
     const rp = byId.get('beam-F')!, rj = rp.joints!.find((q) => q.to === 'roll-pad-L')!;
     expect(screwLengthFromStack(rp, rj, byId)).toBe(1);
@@ -585,9 +583,9 @@ describe('price research applied (2026-10-12)', () => {
     expect([s8.qty, s8.unitUsd, s8.packQty]).toEqual([37, 0.53, undefined]); // D-72: every general-purpose screw is the #8 x 1-1/4 (17 before); 37 x 0.53 = 19.61 is under the $33.95 bag of 100
     expect(s8.extUsd).toBeCloseTo(37 * 0.53, 2);
     const w = line('316 fender washer 1/4"');
-    expect([w.qty, w.unitUsd]).toEqual([48, 0.46]); // 48 x 0.46 = 22.08, under the $27.26 bag of 100
+    expect([w.qty, w.unitUsd]).toEqual([40, 0.46]); // 40 x 0.46 = 18.40, under the $27.26 bag of 100 (48 before the hanger bolts were counted once: they are the angle's upright bolts)
     const n = line('316 nylon-insert lock nut 1/4-20');
-    expect([n.qty, n.unitUsd]).toEqual([24, 0.25]);
+    expect([n.qty, n.unitUsd]).toEqual([20, 0.25]); // 24 before the hanger bolts were counted once
     // a length the research did not read keeps its estimate and says so
     const unread = line('316 wood screw #6 x 2-1/2"');
     expect(unread.basis).toBe('estimate');

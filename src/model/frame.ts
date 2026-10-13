@@ -8,12 +8,15 @@
  * chine bears on the rail top and is Domino-tied and epoxied to it every `chineTieSpacingIn`.
  */
 import { AXLE_BEAM_POSITION } from '../params';
-import { beamSeat, localPoint, railSection } from './rear-mount';
-import { IN3_PER_FT3, STEP, box, roughOf, span, SIDES, woodMassLb, type Ctx } from './build-utils';
+import { beamSeat, localPoint, nutHeight, railSection, washerThick } from './rear-mount';
+import { IN3_PER_FT3, STEP, box, roughOf, span, SIDES, woodMassLb, type Ctx, stainless } from './build-utils';
 import { customPart } from './mesh-utils';
 import { planWallGeometry } from './plan-wall';
 import { brakeGeometry } from './brake-layout';
 import type { Part, Vec2 } from './types';
+
+/** The kingpin nut's slot in the king beam has its ceiling this far under the deck (the bolt tip stands this far below the king beam's top, D-56). */
+export const KING_NUT_BELOW_DECK_IN = 0.45;
 
 /** Part id of the joist at index i of `L.joistX` (the king beam is the one at the kingpin). */
 export const joistId = (L: { joistX: number[]; king: { x: number } }, i: number): string => (L.joistX[i] === L.king.x ? 'king-beam' : `joist-${i + 1}`);
@@ -49,22 +52,25 @@ export function buildFrame(ctx: Ctx): Part[] {
     for (let i = notches.length - 1; i >= 0; i--) if (notches[i].x1 <= notches[i].x0 + 1e-6) notches.splice(i, 1);
     const bottomEdge: Vec2[] = [[x0, zb], ...notches.flatMap((n): Vec2[] => [[n.x0, zb], [n.x0, n.z], [n.x1, n.z], [n.x1, zb]])];
     const outline: Vec2[] = L.railDepthF < railD - 1e-6
-      ? [...bottomEdge, [xs - 1.5, zb], [xs, zbF], [x1, zbF], [x1, L.railTop], [x0, L.railTop]]
+      ? [...bottomEdge, [xs - p.railStepRunIn, zb], [xs, zbF], [x1, zbF], [x1, L.railTop], [x0, L.railTop]]
       : [...bottomEdge, [x1, zb], [x1, L.railTop], [x0, L.railTop]];
     let a2 = 0, per = 0;
     for (let i = 0; i < outline.length; i++) { const [px, pz] = outline[i], [qx, qz] = outline[(i + 1) % outline.length]; a2 += px * qz - qx * pz; per += Math.hypot(qx - px, qz - pz); }
     const area = Math.abs(a2) / 2;
     const mass = woodMassLb(p, area * railT, 2 * area + per * railT, p.oakDensityPcf);
     // Build 3c S2: the rail is TWO strips of railT/2 glued face to face and bent on the plan form, so the cut list shows the strip (the part carries plies: 2).
-    const stock = { t: railT / 2, w: railD, l: x1 - x0 };
+    // The strip is bent on the plan form, so it is cut as long as the DEVELOPED centerline (the arc along the plan curve), not the x extent of the finished rail.
+    let developed = 0;
+    for (let i = 0, n = Math.max(1, Math.ceil((x1 - x0) / 0.25)); i < n; i++) { const xa = x0 + ((x1 - x0) * i) / n, xb = x0 + ((x1 - x0) * (i + 1)) / n; developed += Math.hypot(xb - xa, L.turnIn(xb) - L.turnIn(xa)); }
+    const stock = { t: railT / 2, w: railD, l: developed };
     const rail = customPart(ctx, {
       id: `rail-${tag}`, partNo: 'rail', name: `Rail ${tag}`, group: 'frame', kind: 'lumber', material: 'white oak',
       geometry: planWallGeometry(outline, railT, (x) => s * ((rY0 + rY1) / 2 - L.turnIn(x))), transform: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
       massLb: mass, fab: 'bentlam', step: STEP.frame, grain: 'x', stock, rough: roughOf(p, stock, true), explode: [fxOf(0.6), s * 0.3, -0.6],
     });
-    rail.notes = `${f2(railT)}" × ${f2(railD)}" oak bar, straight behind the bow turn-in and ${L.taper.turnIn > 0 ? `eased in with the hull from x = ${f2(L.taper.x0)}" to x = ${f2(L.taper.x1)}" (${f2(L.taper.turnIn)}" each side at the bow, D-66; cold-bent flat in 2 plies on the same plan form as the chine, the step and notches cut after bending)` : 'straight'}, ${f2(L.railEnd - rearTx)}" long from the rear transom's inner face to the end of the flat deck, outer face flush under the chine so the chine sits on it all the way (D-43). ${L.railDepthF < railD - 1e-6 ? `Ahead of x = ${f2(L.railStepX)}" it steps (45 degree ramp) down to ${f2(L.railDepthF)}" deep so the front axle beam, swinging ±${p.steerLockDeg}° about the kingpin, passes under it with 0.4" to spare (D-56). ` : ''}Its top is flush with the chine bottom AND the deck underside (one deck level, D-52): the deck bonds to the rail top and its edge rises into the gap under the inner chine band (D-62; no rabbet is routed). The chine sits on the top of the rail's outer ${L.side}" and is Domino-tied (vertical Dominos) and epoxied to it every ${p.chineTieSpacingIn}". Frame + deck are one glued unit, turned over and lowered into the inverted side assemblies. Glue the frame with the rails 1/2" LONG at both ends: they are trimmed with the bands and webs to the measured transom-to-bulkhead length less 1/32" at the dry fit (S1). The rear axle hangers are bolted and glued to its inner face (${seat ? 'axle-hanger-' + tag : 'no hanger'}).`;
+    rail.notes = `${f2(railT)}" × ${f2(railD)}" oak bar, straight behind the bow turn-in and ${L.taper.turnIn > 0 ? `eased in with the hull from x = ${f2(L.taper.x0)}" to x = ${f2(L.taper.x1)}" (${f2(L.taper.turnIn)}" each side at the bow, D-66; cold-bent flat in 2 plies on the same plan form as the chine, the step and notches cut after bending)` : 'straight'}, ${f2(L.railEnd - rearTx)}" long from the rear transom's inner face to the end of the flat deck, outer face flush under the chine so the chine sits on it all the way (D-43). ${L.railDepthF < railD - 1e-6 ? `Ahead of x = ${f2(L.railStepX)}" it steps (a ${f2(p.railStepRunIn)}" run for ${f2(railD - L.railDepthF)}" of rise, a ${Math.round((Math.atan2(railD - L.railDepthF, p.railStepRunIn) * 180) / Math.PI)} degree slope) down to ${f2(L.railDepthF)}" deep so the front axle beam, swinging ±${p.steerLockDeg}° about the kingpin, passes under it with 0.4" to spare (D-56). ` : ''}Its top is flush with the chine bottom AND the deck underside (one deck level, D-52): the deck bonds to the rail top and its edge rises into the gap under the inner chine band (D-62; no rabbet is routed). The chine sits on the top of the rail's outer ${L.side}" and is Domino-tied (vertical Dominos) and epoxied to it every ${p.chineTieSpacingIn}". Frame + deck are one glued unit, turned over and lowered into the inverted side assemblies. Glue the frame with the rails 1/2" LONG at both ends: they are trimmed with the bands and webs to the measured transom-to-bulkhead length less 1/32" at the dry fit (S1). The rear axle hangers are bolted and glued to its inner face (${seat ? 'axle-hanger-' + tag : 'no hanger'}).`;
     rail.plies = 2;
-    rail.notes += ` CUT LIST (build 3c S2): ${f2(railT / 2)}" × ${f2(railD + p.laminateWidthAllowanceIn)}" × ${f2(x1 - x0 + p.laminateLengthAllowanceIn)}" strips, TWO per rail (resaw from 4/4 and plane; strips this thin and ${f2(railD)}" wide need a planer sled or a drum sander), plus 25% spares; only the last ${f2(L.railEnd - L.taper.x0)}" is curved.`;
+    rail.notes += ` CUT LIST (build 3c S2): ${f2(railT / 2)}" × ${f2(railD + p.laminateWidthAllowanceIn)}" × ${f2(developed + p.laminateLengthAllowanceIn)}" strips, TWO per rail (resaw from 4/4 and plane; strips this thin and ${f2(railD)}" wide need a planer sled or a drum sander), plus 25% spares; only the last ${f2(L.railEnd - L.taper.x0)}" is curved.`;
     parts.push(rail);
   }
 
@@ -88,7 +94,7 @@ export function buildFrame(ctx: Ctx): Part[] {
       hg.joints = [
         { type: 'dado', to: a.beamId, count: 1, size: `${f2(sa.x1 - sa.x0)}" wide × ${f2(sa.depth)}" deep notch up from the hanger bottom (beam ${f2(a.beam.thick)}" + ${f2(p.beamNotchClearIn)}" each side), ceiling bears on the beam top`, at: [localPoint(hg.transform, [a.beam.x, (yOut + yIn) / 2 * s, sa.zBot + sa.depth / 2])], note: 'the beam passes under the rail and the hanger sits on it; bandsaw + chisel, corners relieved with a 1/4" radius' },
       ];
-      hg.notes = `${a.label} axle hanger (D-54): ${f2(p.axleHangerWidthIn)}" × ${f2(rsa.t)}" oak, vertical grain, from the rail top (${f2(rsa.zSolidTop)}") down to ${f2(rsa.zBot)}", glued and bolted to the INSIDE face of the rail. The bottom is notched ${f2(sa.x1 - sa.x0)}" × ${f2(sa.depth)}" so it straddles the axle beam and bears on its top (D-48 seat); ${f2(sa.remain)}" of oak is left above the notch. The 316 hold-down angle lies against its inner face.`;
+      hg.notes = `${a.label} axle hanger (D-54): ${f2(p.axleHangerWidthIn)}" × ${f2(rsa.t)}" oak, vertical grain, from the rail top (${f2(rsa.zSolidTop)}") down to ${f2(rsa.zBot)}", glued and bolted to the INSIDE face of the rail. The bottom is notched ${f2(sa.x1 - sa.x0)}" × ${f2(sa.depth)}" so it straddles the axle beam and bears on its top (D-48 seat); ${f2(sa.remain)}" of oak is left above the notch. The ${stainless(p)} hold-down angle lies against its inner face.`;
       parts.push(hg);
     }
   }
@@ -107,7 +113,17 @@ export function buildFrame(ctx: Ctx): Part[] {
         id: 'king-beam', partNo: 'king-beam', name: 'King beam (kingpin crossmember)', group: 'front-end', mat: 'oak', step: STEP.frame, grain: 'y',
         ...span([k.x - k.len / 2, k.x + k.len / 2], [-half, half], [k.bot, k.top]),
       });
-      kb.notes = `The front load path (D-56): an oak crossmember ${f2(k.len)}" fore-aft × ${f2(k.depth)}" deep between the rails at the kingpin, bonded to the deck underside and Domino-tied and epoxied to the rails. The ${f2(p.kingpinDiaIn)}" kingpin bolt is bored through its center; a slot cut from the front face (about ${f2(p.kingpinDiaIn * 1.6)}" wide × ${f2(p.kingpinDiaIn * 1.2)}" tall, at the TOP of the king beam: the nut stands 0.45" under the deck; build 3c S5 made the two descriptions agree) captures the nylock nut and its washer so they can swing with the axle. The UHMW thrust disc is screwed to its underside and the top of the axle beam turns under it (D-58); the clamp plates on the beam top pass under the king beam with 1/8 in to spare.`;
+      // The nut slot (cut from the front face): wide enough for the nylock nut and washer to turn with the axle, tall enough for both, its ceiling KING_NUT_BELOW_DECK_IN under the deck.
+      const kd = p.kingpinDiaIn, slotW = 1.6 * kd, slotCeil = k.top - KING_NUT_BELOW_DECK_IN, slotH = nutHeight(kd) + washerThick(kd), slotFloor = slotCeil - slotH;
+      const slotX0 = k.x - slotW / 2, slotX1 = k.x + k.len / 2;
+      kb.joints = [{
+        type: 'hole', to: 'kingpin', count: 1,
+        size: `slot ${f2(slotW)}" wide (across) × ${f2(slotH)}" tall × ${f2(slotX1 - slotX0)}" deep (fore-aft), cut in from the front face and centered on the kingpin bore; its ceiling leaves ${f2(KING_NUT_BELOW_DECK_IN)}" of oak under the deck`,
+        at: [localPoint(kb.transform, [slotX1, 0, (slotFloor + slotCeil) / 2])],
+        cut: { kind: 'slot', lo: localPoint(kb.transform, [slotX0, -slotW / 2, slotFloor]), hi: localPoint(kb.transform, [slotX1, slotW / 2, slotCeil]), what: 'to hold the kingpin nylock nut and washer' },
+      }];
+      kb.massLb -= (slotW * slotH * (slotX1 - slotX0) / IN3_PER_FT3) * p.oakDensityPcf;
+      kb.notes = `The front load path (D-56): an oak crossmember ${f2(k.len)}" fore-aft × ${f2(k.depth)}" deep between the rails at the kingpin, bonded to the deck underside and Domino-tied and epoxied to the rails. The ${f2(p.kingpinDiaIn)}" kingpin bolt is bored through its center; a slot cut from the front face (${f2(slotW)}" wide × ${f2(slotH)}" tall, at the TOP of the king beam: its ceiling is ${f2(KING_NUT_BELOW_DECK_IN)}" under the deck; build 3c S5 made the two descriptions agree) captures the nylock nut and its washer so they can swing with the axle. The UHMW thrust disc is screwed to its underside and the top of the axle beam turns under it (D-58); the clamp plates on the beam top pass under the king beam with 1/8 in to spare.`;
       parts.push(kb);
       return;
     }

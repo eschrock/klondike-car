@@ -2,7 +2,7 @@
  * Shared helpers for the subsystem builders: build context, part factories (box / cylinder),
  * wood / steel mass with finish (D-20), and rigid-body placement of the steered parts (Ackermann poses).
  */
-import { derived, PLY_SPECIES, resolveParams, thinSheet, type Params } from '../params';
+import { derived, PLY_SPECIES, resolveParams, thinSheet, WEATHER_SPEC, type Params } from '../params';
 import { computeLayout, type Layout } from './layout';
 import { compose, multiply, rotationX, rotationY } from './mat4';
 import type { Dims, EdgeCondition, Fab, Joint, Mat4, Part, PartGroup, PartKind, RigidBody, Vec2, Vec3 } from './types';
@@ -110,6 +110,39 @@ export function makeCtx(input: Params, v: ViewState = {}): Ctx {
     plyName: p.plySpecies === PLY_SPECIES.okoumeMarine ? 'okoume marine plywood' : 'baltic birch plywood',
     thinName: thinSheet(p).material,
   };
+}
+
+/**
+ * Installation hole (in) of the #10-32 x 5/16 hex-drive threaded insert in the seat back (the thread's 0.19 in major diameter is NOT a hole size: build review MUST-5). 5/16 in is the figure for a
+ * stocked 5/16 in long hex-drive insert for wood; VERIFY IT against the maker's sheet for the exact insert before drilling (drill a scrap first).
+ */
+export const INSERT_DRILL_IN = 5 / 16;
+
+// ── Weather-aware material words (D-73) ──
+// The Standard spec (garage-kept, wet at most at a rainy derby) is 18-8 (304) stainless fasteners and hardware, zinc collars, inserts and D-rings, galvanized eye bolts and chain; the
+// Extreme spec (stored outside or near salt) is 316 stainless throughout. Every grade the model writes into a name, a material, a note or a joint goes through these, so nothing
+// downstream has to rewrite "316".
+const isExtreme = (p: Pick<Params, 'weatherSpec'>): boolean => p.weatherSpec === WEATHER_SPEC.extreme;
+/** The stainless grade: "18-8 (304) stainless" (Standard) or "316 stainless" (Extreme). */
+export const stainless = (p: Pick<Params, 'weatherSpec'>): string => (isExtreme(p) ? '316 stainless' : '18-8 (304) stainless');
+/** The short form for a part name: "304 stainless" or "316 stainless". */
+export const stainlessName = (p: Pick<Params, 'weatherSpec'>): string => (isExtreme(p) ? '316 stainless' : '304 stainless');
+/** Threaded inserts, shaft collars and D-ring plates: zinc-plated steel (Standard), 316 stainless (Extreme). */
+export const insertMat = (p: Pick<Params, 'weatherSpec'>): string => (isExtreme(p) ? '316 stainless' : 'zinc-plated');
+export const collarMat = (p: Pick<Params, 'weatherSpec'>): string => (isExtreme(p) ? '316 stainless' : 'zinc-plated steel');
+export const dRingMat = (p: Pick<Params, 'weatherSpec'>): string => (isExtreme(p) ? '316 stainless' : 'zinc-plated steel');
+/** Forged shoulder eye bolts and the check chain: hot-dip galvanized (Standard), 316 stainless (Extreme). */
+export const eyeBoltMat = (p: Pick<Params, 'weatherSpec'>): string => (isExtreme(p) ? '316 stainless' : 'hot-dip galvanized');
+export const chainMat = (p: Pick<Params, 'weatherSpec'>): string => (isExtreme(p) ? '316 stainless' : 'galvanized');
+
+/** Nearest 1/16 in as a fraction with no inch mark: 0.1875 -> "3/16", 1.5 -> "1-1/2". */
+export function frac16(x: number): string {
+  const n = Math.round(x * 16);
+  const whole = Math.floor(n / 16);
+  let num = n % 16, den = 16;
+  while (num > 0 && num % 2 === 0) { num /= 2; den /= 2; }
+  if (num === 0) return `${whole}`;
+  return whole > 0 ? `${whole}-${num}/${den}` : `${num}/${den}`;
 }
 
 export const IN3_PER_FT3 = 1728;

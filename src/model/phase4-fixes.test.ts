@@ -225,25 +225,25 @@ describe('fastener data (build review MUST-11)', () => {
     const j = get('king-beam').joints!.find((q) => q.to === 'king-thrust')!;
     expect(j.count).toBe(3);
     expect(j.at!.length).toBe(3);
-    expect(j.size).toMatch(/3 × #8 × [\d-/]+ 316/);
+    expect(j.size).toMatch(/3 × #8 × [\d-/]+ (?:316|18-8 \(304\) stainless)/);
   });
   it('gives the grab-board screws, hanger bolts, roll-pad screws and stop-block screws real lengths, rounded up to a stocked size', () => {
     const grip = get('seat-grip-L').joints!.find((q) => q.type === 'bolt')!;
-    expect(grip.size).toMatch(/^0\.25" × 2 316 button-head cap screws/); // grip 1.31 (board + 2 bands + web + 1/16 strip) + 2 washers + nylock nut + 2 threads = 1.86, rounded up to 2
-    const hanger = get('axle-hanger-L').joints!.find((q) => q.type === 'bolt' && q.to === 'rail-L')!;
-    expect(hanger.size).toMatch(/^0\.25" × \d(-\d\/\d)? 316 hex bolts/);
+    expect(grip.size).toMatch(/^0\.25" × 2 (?:316|18-8 \(304\) stainless) button-head cap screws/); // grip 1.31 (board + 2 bands + web + 1/16 strip) + 2 washers + nylock nut + 2 threads = 1.86, rounded up to 2
+    const hanger = get('beam-hold-down-L').joints!.find((q) => q.type === 'bolt' && q.to === 'axle-hanger-L')!; // the hanger's bolts are the angle's upright bolts (one record)
+    expect(hanger.size).toMatch(/^0\.25" × \d(-\d\/\d)? (?:316|18-8 \(304\) stainless) hex bolts/);
     for (const tag of ['L', 'R']) {
       const pad = get('beam-F').joints!.find((q) => q.to === `roll-pad-${tag}`)!;
-      expect(pad.size).toMatch(/2 × #8 × 1-1\/4 316/); // D-72: the standard #8 x 1-1/4 (was #10 x 1)
+      expect(pad.size).toMatch(/2 × #8 × 1-1\/4 (?:316|18-8 \(304\) stainless)/); // D-72: the standard #8 x 1-1/4 (was #10 x 1)
       const stop = get(`seat-wedge-${tag}`).joints!.find((q) => q.type === 'screw')!;
       expect(stop.count).toBe(2);
-      expect(stop.size).toMatch(/2 × #8 × [\d-/]+ 316/);
+      expect(stop.size).toMatch(/2 × #8 × [\d-/]+ (?:316|18-8 \(304\) stainless)/);
     }
   });
   it('fastens the handle sockets with a bolt into a T-nut in the backer, length from the stack, no nylock nut', () => {
     for (const tag of ['L', 'R']) {
       const j = get(`handle-socket-${tag}`).joints!.find((q) => q.type === 'bolt')!;
-      expect(j.size).toMatch(/^1\/4-20 × [\d-/]+ 316 button-head cap screws/);
+      expect(j.size).toMatch(/^1\/4-20 × [\d-/]+ (?:316|18-8 \(304\) stainless) button-head cap screws/);
       expect(j.size).toMatch(/T-NUT/);
       expect(j.size).toMatch(/NO nylock nut/);
       expect(j.size).not.toMatch(/fender washer \+ nylock/);

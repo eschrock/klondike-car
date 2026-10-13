@@ -83,7 +83,8 @@ describe('rear axle hangers, beam seat and hold-downs (MUST-4, D-54)', () => {
       expect(b.min[2]).toBeLessThan(rail.min[2]);
       expect(hg.grain).toBe('z'); // vertical grain, side-grain glue to the rail
       expect(hg.joints!.some((j) => j.type === 'glue' && j.to === `rail-${tag}`)).toBe(true);
-      expect(hg.joints!.find((j) => j.type === 'bolt' && j.to === `rail-${tag}`)!.count).toBe(2);
+      expect(hg.joints!.some((j) => j.type === 'bolt'), 'the hanger bolts are the hold-down angle\'s upright bolts: recorded once, on the angle').toBe(false);
+      expect(byId(`beam-hold-down-${tag}`).joints!.find((j) => j.type === 'bolt' && j.to === hg.id)!.count).toBe(2);
     }
     expect(rs.zBot).toBeCloseTo(5.2825 - 1.35, 9);
     expect(rs.zSolidTop).toBeCloseTo(L.deckBot, 9);
@@ -140,8 +141,8 @@ describe('rear axle hangers, beam seat and hold-downs (MUST-4, D-54)', () => {
     for (const { tag, s } of [{ tag: 'L', s: 1 }, { tag: 'R', s: -1 }]) {
       const hd = byId(`beam-hold-down-${tag}`);
       expect(hd.kind).toBe('metal');
-      expect(hd.material).toMatch(/316/);
-      expect(hd.sourcing?.vendor).toMatch(/316/);
+      expect(hd.material).toMatch(/(?:316|18-8 \(304\) stainless)/);
+      expect(hd.sourcing?.vendor).toMatch(/(?:316|18-8 \(304\) stainless)/);
       expect(hd.stock).toBeDefined();
       const jr = hd.joints!.find((j) => j.to === `axle-hanger-${tag}`)!; // D-54: the upright leg lies on the HANGER's inner face
       const jb = hd.joints!.find((j) => j.to === 'beam-R')!;
@@ -168,9 +169,9 @@ describe('rear axle hangers, beam seat and hold-downs (MUST-4, D-54)', () => {
   it('the rear clamp plates (ONE bridge plate per side, D-62) are 316 flat bar parts with stock and sourcing and two bolts through the beam (no zinc, no "mass is an estimate")', () => {
     for (const id of ['clamp-RL1', 'clamp-RR1']) {
       const c = byId(id);
-      expect(c.material).toMatch(/316/);
+      expect(c.material).toMatch(/(?:316|18-8 \(304\) stainless)/);
       expect(c.material).not.toMatch(/zinc/);
-      expect(c.sourcing?.vendor).toMatch(/316/);
+      expect(c.sourcing?.vendor).toMatch(/(?:316|18-8 \(304\) stainless)/);
       expect(c.stock).toBeDefined();
       expect(c.joints?.some((j) => j.to === 'beam-R' && j.type === 'bolt' && j.count === 2)).toBe(true);
       expect(c.notes).not.toMatch(/estimate/);
@@ -192,7 +193,7 @@ describe('fastener stacks (S2) and the push-handle fit (S7)', () => {
     const sock = byId('handle-socket-L').joints!.find((j) => j.to === 'transom-rear')!;
     const stack = defaults.handleSocketWallIn + L.transom + defaults.blockingThickIn + washerThick(0.25); // 1.4375 to the flange
     const len = 1.25;
-    expect(sock.size).toMatch(/1\/4-20 × 1-1\/4 316/);
+    expect(sock.size).toMatch(/1\/4-20 × 1-1\/4 (?:316|18-8 \(304\) stainless)/);
     expect(len).toBeLessThanOrEqual(stack + 1e-9); // ends flush or short of the backer face
     expect(1.25 - (stack - defaults.blockingThickIn)).toBeGreaterThanOrEqual(1.5 * 0.25); // T-nut engagement
     expect(sock.note).toMatch(/SHORT of the flange/);
@@ -201,7 +202,7 @@ describe('fastener stacks (S2) and the push-handle fit (S7)', () => {
     const sock = byId('handle-socket-L').joints!.find((j) => j.to === 'transom-rear')!;
     const stack = defaults.handleSocketWallIn + L.transom + defaults.blockingThickIn; // 1.375
     expect(boltLength(stack, 0.25, 2)).toBe(2); // the nylock-nut length, kept to show the T-nut saves a size
-    expect(sock.size).toMatch(/1\/4-20 × 1-1\/4 316/);
+    expect(sock.size).toMatch(/1\/4-20 × 1-1\/4 (?:316|18-8 \(304\) stainless)/);
     expect(sock.size).toMatch(/T-NUT/);
     expect(sock.size).toMatch(/button-head/);
     expect(sock.at).toHaveLength(2);

@@ -231,17 +231,17 @@ describe('S8: the hinge insert holes leave the back veneer', () => {
     const hole = Math.floor((t - INSERT_VENEER_MIN_IN) * 32) / 32;
     expect(t - hole).toBeGreaterThanOrEqual(INSERT_VENEER_MIN_IN);
     const j = get('seat-back-panel').joints!.find((q) => q.to === 'seat-hinge-L')!;
-    expect(j.size).toMatch(/5\/16 316 threaded inserts/);
+    expect(j.size).toMatch(/5\/16 (?:316 stainless|zinc-plated) threaded inserts/);
     expect(j.size).toMatch(/0\.344" deep/);
     expect(j.size).toMatch(/leaving 0\.128" of back veneer/);
-    expect(get('seat-hinge-L').joints!.find((q) => q.to === 'seat-back-panel')!.size).toMatch(/#10-32 × 3\/8 316 flat-head/);
+    expect(get('seat-hinge-L').joints!.find((q) => q.to === 'seat-back-panel')!.size).toMatch(/#10-32 × 3\/8 (?:316|18-8 \(304\) stainless) flat-head/);
   });
 });
 
 describe('S9: the grab-board screw heads', () => {
   it('bear on a 1/16 x 1 in 316 backing strip on the outer gunwale band, bedded and drilled with the board; the heads, strip bearing and punching are checked', () => {
     const strip = get('seat-grip-backing-L');
-    expect(strip.material).toMatch(/316/);
+    expect(strip.material).toMatch(/(?:316|18-8 \(304\) stainless)/);
     expect(strip.kind).toBe('metal');
     const b = worldAABB(strip);
     expect(b.max[1] - b.min[1]).toBeCloseTo(GRIP_BACKING_T_IN, 6);

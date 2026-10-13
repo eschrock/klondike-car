@@ -150,9 +150,9 @@ describe('Bolt Depot by the piece', () => {
     // 46 3/8 in fender washers: 46 x 0.41 = 18.86 against the bag of 50 at 14.51
     const w38 = lines(bStd).find((l) => l.key === '18-8 fender washer 3/8"')!;
     expect([w38.packQty, w38.packUsd, w38.packs]).toEqual([50, 14.51, 1]);
-    // the 24 1/4-20 nylocks are 3.84 by the piece against 10.36 for the bag
+    // the 20 1/4-20 nylocks (24 before the hanger bolts were counted once) are 3.20 by the piece against 10.36 for the bag
     const nut = fast.find((l) => l.key === '18-8 nylon-insert lock nut 1/4-20')!;
-    expect([nut.qty, nut.unitUsd]).toEqual([24, 0.16]);
+    expect([nut.qty, nut.unitUsd]).toEqual([20, 0.16]);
   });
 
   it('shrinks the Bulk parts section', () => {
@@ -352,7 +352,7 @@ describe('assembly text', () => {
     const glue = sStd.filter((s) => s.kind === 'build' && s.clampCure);
     expect(glue.length).toBeGreaterThan(8);
     for (const s of glue) expect(s.clampCure, s.id).toContain(STANDARD_GLUE_NOTE);
-    expect(sStd.find((s) => s.id === 'seal')!.instructions.join(' ')).toMatch(/WEATHER SPEC: Standard/);
+    expect(sStd.find((s) => s.id === 'seal')!.instructions.join(' ')).toMatch(/Weather spec: Standard/);
     expect(textOf(sExt)).toMatch(/\b316\b/);
     expect(textOf(sExt)).toMatch(/varnish/i);
     expect(textOf(sExt)).not.toMatch(/Titebond/);

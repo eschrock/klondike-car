@@ -102,15 +102,15 @@ describe('the foot block and its slot cleats are gone (D-60; Eric, D-57 item 3)'
 
 describe('mass (target about 120 lb; 144.4 at 3c-5, 143.0 with the cleats gone)', () => {
   it('the empty sled is 119.9 lb: the D-60 package gave 120.6 (the study predicted 120.7), 14 in sockets +0.46 = 121.1, the D-62 build fixes +0.1, D-64 the tail light clip -0.15, D-65 the pull-pin brake (shorter flaps, no hinges) -0.97; the package still saves about 20 lb against the PRE_D60 numbers rebuilt with the D-62 sandwich sides, bridle and clamps', () => {
-    expect(totalMass(parts)).toBeGreaterThan(119.4);
-    expect(totalMass(parts)).toBeLessThan(120.6);
-    expect(totalMass(partsPre)).toBeCloseTo(139.6, 0); // 141.2 before D-65 (the pull-pin brake is lighter in this baseline too); the study's B0 was 143.0; the D-62 changes (sandwich sides, no shackle, frameless seat back, ...) are in this baseline too
+    expect(totalMass(parts)).toBeGreaterThan(117.8); // D-74: 118.3 lb (the 2-1/8 in laminated beams, knees and chocks: -1.3 lb); was above 119.4
+    expect(totalMass(parts)).toBeLessThan(119.1);
+    expect(totalMass(partsPre)).toBeCloseTo(137.8, 0); // D-74: 137.8 (the baseline takes the 2-1/8 in laminated parts too: -1.8 lb); 139.6 before D-74; 141.2 before D-65 (the pull-pin brake is lighter in this baseline too); the study's B0 was 143.0; the D-62 changes (sandwich sides, no shackle, frameless seat back, ...) are in this baseline too
     expect(totalMass(partsPre) - totalMass(parts)).toBeGreaterThan(19.5);
     expect(totalMass(partsPre) - totalMass(parts)).toBeLessThan(21);
   });
   it('by group (lb): body 36.5 (D-65: the signs, 0.6 lb, are in the body now, not a removable part), running gear 18.8, front end 16.0, frame 13.5, brake 10.3 (D-65: 11.1 before the pull-pin brake), seat 8.5, storage 7.0, hardware 5.9 (epoxy joints of the sandwich), removable 1.9 (the handle), lighting 1.9', () => {
     const g = groupMass(parts);
-    const want: Record<string, number> = { body: 36.5, 'running-gear': 18.8, 'front-end': 16.0, frame: 13.5, brake: 10.3, seat: 8.4, storage: 7.0, hardware: 5.8, removable: 1.9, lighting: 1.9 };
+    const want: Record<string, number> = { body: 36.5, 'running-gear': 18.8, 'front-end': 16.0, frame: 13.5, brake: 9.31, /* D-74: 2-1/8 in knees and chocks */ seat: 8.4, storage: 7.0, hardware: 5.8, removable: 1.9, lighting: 1.9 };
     for (const [k, v] of Object.entries(want)) expect(Math.abs(g[k] - v), `${k} ${g[k]?.toFixed(2)}`).toBeLessThan(0.6);
     const gp = groupMass(partsPre);
     // the same sled before the package (PRE_D60, rebuilt with the D-62 sandwich sides, bridle and clamps): running gear 26.1, front end 18.7, body 40.1

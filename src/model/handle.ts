@@ -8,7 +8,7 @@
  * `parkDropIn` higher up, and with the pin through that hole the posts sink that far deeper so the bow rests just above the top of the rear transom.
  */
 import type { Params } from '../params';
-import { STEP, box, cylinder, span, SIDES, IN3_PER_FT3, type Ctx } from './build-utils';
+import { STEP, box, cylinder, span, SIDES, IN3_PER_FT3, type Ctx, stainless } from './build-utils';
 import type { Layout } from './layout';
 import { inchesText, localPoint, washerThick } from './rear-mount';
 import { multiply, translation } from './mat4';
@@ -160,7 +160,7 @@ export function buildHandle(ctx: Ctx): Part[] {
       ...span([L.xRear - h.socketX, L.xRear], [y - h.socketY / 2, y + h.socketY / 2], [h.zBot, h.zTop]),
       material: '6061-T6 aluminum rectangular tube, anodized',
       joints: [
-        { type: 'bolt', to: 'transom-rear', count: 2, diaIn: 0.25, size: `1/4-20 × ${inchesText(sockLen)} 316 button-head cap screws (round holes: a carriage-bolt square neck will not seat in a 1/8" aluminum wall), nylon washer under the head, threaded into a 1/4-20 316 T-NUT set in the backer (barrel in the backer, flange flush with its inside face; NO nylock nut, NO wrench behind the box); the heads sit INSIDE the bore on the wall against the transom, so push them in through a ${ACCESS_HOLE_IN}" (5/8 in) ACCESS HOLE in the opposite (rear) wall, directly opposite each screw (the ${SOCKET_SCREW_HEAD_IN}" button head and its ${SOCKET_SCREW_WASHER_IN}" nylon washer pass it with ${f2((ACCESS_HOLE_IN - SOCKET_SCREW_WASHER_IN) / 2)}" a side; the head seats on the inside of the near wall and the hex key goes through the same hole); plug the holes with 5/8 in button plugs after assembly (D-63)`,
+        { type: 'bolt', to: 'transom-rear', count: 2, diaIn: 0.25, size: `1/4-20 × ${inchesText(sockLen)} ${stainless(p)} button-head cap screws (round holes: a carriage-bolt square neck will not seat in a 1/8" aluminum wall), nylon washer under the head, threaded into a 1/4-20 ${stainless(p)} T-NUT set in the backer (barrel in the backer, flange flush with its inside face; NO nylock nut, NO wrench behind the box); the heads sit INSIDE the bore on the wall against the transom, so push them in through a ${ACCESS_HOLE_IN}" (5/8 in) ACCESS HOLE in the opposite (rear) wall, directly opposite each screw (the ${SOCKET_SCREW_HEAD_IN}" button head and its ${SOCKET_SCREW_WASHER_IN}" nylon washer pass it with ${f2((ACCESS_HOLE_IN - SOCKET_SCREW_WASHER_IN) / 2)}" a side; the head seats on the inside of the near wall and the hex key goes through the same hole); plug the holes with 5/8 in button plugs after assembly (D-63)`,
           at: [h.zBot + 1.2, h.zTop - 1.2].map((z): Vec3 => [h.socketX / 2 - w / 2, 0, z - (h.zBot + h.zTop) / 2]), note: `grip = socket wall ${f2(w)}" + transom ${f2(L.transom)}" + backer ${f2(p.blockingThickIn)}" = ${f2(sockGrip)}" (+ the nylon washer ${f2(washerThick(0.25))}"); ${f2(sockLen)}" screw: the longest stocked 1/4" step that stays inside the backer, ${f2(sockEngage)}" engaged in the T-nut, tip ${sockTipPast <= 0 ? `${f2(-sockTipPast)}" SHORT of the flange` : `${f2(sockTipPast)}" PAST the flange (clearance needed in the box aft wall)`}${sockTipPast <= 0 ? ', so nothing stands past the backer face where the storage box aft wall sits' : ''} (no nut; the T-nut is epoxied in the backer at the transom step)` },
         { type: 'pin', to: `handle-post-${tag}`, count: 1, size: `${p.handlePinDiameterIn}" clevis pin through both walls and the post` },
       ],
@@ -175,12 +175,17 @@ export function buildHandle(ctx: Ctx): Part[] {
       : [[-yo, h.zFoot], [-yi, h.zFoot], [-yi, under(yi)], [-yo, under(yo)]];
     const zTopMax = Math.max(under(yi), under(yo));
     const postPart = profilePart(ctx, {
-      id: `handle-post-${tag}`, name: `Push handle upright ${tag}`, group: 'removable', mat: 'oak', step: STEP.brake, grain: 'y', // local y is the vertical of the upright (xz-type outline)
+      id: `handle-post-${tag}`, partNo: 'handle-post', name: `Push handle upright ${tag}`, group: 'removable', mat: 'oak', step: STEP.brake, grain: 'y', // local y is the vertical of the upright (xz-type outline)
       outline, depth: p.handlePostThickIn, basis: 'yz', origin: [h.postX[0], 0, 0], stock: { t: p.handlePostThickIn, w: p.handlePostWidthIn, l: zTopMax - h.zFoot }, explode: [-1, 0, 0.3],
       fab: 'table-saw',
       joints: [
-        { type: 'pin', to: `handle-socket-${tag}`, count: 1, size: `${p.handlePinDiameterIn}" clevis pin, cross-bored ${f2(h.zPin - h.zBot)}" above the socket bottom` },
-        { type: 'pin', to: 'handle-bar', count: 1, diaIn: 0.375, size: '3/8" × 2-1/4" 316 stainless rod (or an oak dowel) epoxied into a stopped 3/8" hole 1-1/2" deep in the post top and 3/4" deep in the bow underside', note: 'permanent: the posts and the bow come out of the sockets as one U' },
+        // local frame of this part: x = across (model y), y = up (model z), z = fore-aft from the rear face (model x - postX[0]); the clevis pin holes run across (local x)
+        { type: 'pin', to: `handle-socket-${tag}`, count: 1, diaIn: p.handlePinDiameterIn, size: `${p.handlePinDiameterIn}" clevis pin, cross-bored ${f2(h.zPin - h.zBot)}" above the socket bottom`, at: [[y, h.zPin, p.handlePostThickIn / 2]] },
+        { type: 'hole', to: `handle-pin-${tag}`, count: 1, diaIn: p.handlePinDiameterIn, size: `${p.handlePinDiameterIn}" second cross hole for the parked position, ${f2(h.parkDropIn)}" above the first (the post sinks that far)`, at: [[y, h.zPin + h.parkDropIn, p.handlePostThickIn / 2]] },
+        { type: 'hole', to: `handle-socket-${tag}`, count: 1, size: `relief groove ${POST_RELIEF.widthIn}" wide × ${POST_RELIEF.depthIn}" deep, ${f2(Math.max(0, p.handleSocketDepthIn - 0.5))}" long from the foot, down the middle of the transom-side face`,
+          at: [[y, h.zFoot + Math.max(0, p.handleSocketDepthIn - 0.5) / 2, p.handlePostThickIn - POST_RELIEF.depthIn / 2]],
+          cut: { kind: 'relief', lo: [y - POST_RELIEF.widthIn / 2, h.zFoot, p.handlePostThickIn - POST_RELIEF.depthIn], hi: [y + POST_RELIEF.widthIn / 2, h.zFoot + Math.max(0, p.handleSocketDepthIn - 0.5), p.handlePostThickIn], what: 'to clear the two socket screw heads' } },
+        { type: 'pin', to: 'handle-bar', count: 1, diaIn: 0.375, size: `3/8" × 2-1/4" ${stainless(p)} rod (or an oak dowel) epoxied into a stopped 3/8" hole 1-1/2" deep in the post top and 3/4" deep in the bow underside`, note: 'permanent: the posts and the bow come out of the sockets as one U' },
         { type: 'glue', to: 'handle-bar', count: 1, size: 'epoxy on the post top and the pin' },
       ],
       notes: `Planed ${f2(p.handlePostThickIn)}" × ${f2(p.handlePostWidthIn)}" from 3/4" × 1-1/4" stock (D-60; a 5/4 board makes both uprights and the bow) so it slides in the socket (inside ${f2(h.socketX - 2 * w)}" × ${f2(h.socketY - 2 * w)}", build review r2 S7). The top is sawn to the handlebow's ${h.bow.postSlopeDeg.toFixed(1)}° slope (${f2(under(yi))}" inner edge, ${f2(under(yo))}" outer edge) so the bow sits flat on it. Lifts straight out of the socket once the clevis pin is out (D-9); the bow is epoxied to the two uprights, so the handle comes off as ONE U (no wing nut inside the aluminum socket). RELIEF GROOVE (build 3c M5): the two socket screw heads stand ${f2(0.14 + 0.06)}" proud of the bore wall on the transom side, so cut a ${POST_RELIEF.widthIn}" wide × ${POST_RELIEF.depthIn}" deep groove down the middle of the post's FRONT (transom-side) face from the foot up past the parked pin hole (${f2(p.handleSocketDepthIn - 0.5)}" of it enters the socket when parked) on the table saw or router table; without it the heads bind the post. The groove is on the tension face of the hold-back bend: the handle-sockets row uses the notched section.`,
@@ -211,7 +216,7 @@ export function buildHandle(ctx: Ctx): Part[] {
       : `Straight handlebow (crown 0): a ${sec}" thick white-oak bar bandsawn from one board, ends eased over, pinned and epoxied to the tops of the two uprights.`,
     sourcing: { vendor: `One 5/4 white-oak board at least ${(zHi - zLo + 0.25 + bw.crownIn + (bw.zPost - bw.zEnd)).toFixed(1)}" wide (a 5/4 × 6 board, 5-1/4" actual, not a 3" or 4" board: the crowned bow is ${(zHi - zLo).toFixed(1)}" from its lowest end to its highest edge and needs its sweep on top of that to follow the grain), about ${Math.ceil((2 * bw.yEnd + 2) / 12)} ft long, straight-grained`, costUsd: 14 },
   });
-  bar.joints = SIDES.map(({ s: sg, tag }) => ({ type: 'pin' as const, to: `handle-post-${tag}`, count: 1, diaIn: 0.375, size: '3/8" × 2-1/4" 316 stainless rod epoxied, blind hole 3/4" deep in the bow, drilled square to the post-top cut', at: [localPoint(bar.transform, [h.xBar, sg * h.yPost, bw.zPost - sec / 2 + 0.375])] }));
+  bar.joints = SIDES.map(({ s: sg, tag }) => ({ type: 'pin' as const, to: `handle-post-${tag}`, count: 1, diaIn: 0.375, size: `3/8" × 2-1/4" ${stainless(p)} rod epoxied, blind hole 3/4" deep in the bow, drilled square to the post-top cut`, at: [localPoint(bar.transform, [h.xBar, sg * h.yPost, bw.zPost - sec / 2 + 0.375])] }));
   parts.push(bar);
   // The parked position (D-57): the posts and the bow sink `parkDropIn` deeper into the sockets (the second pin hole); the sockets and pins stay.
   if (ctx.view.handle === 'parked' && h.parkDropIn > 1e-6) {

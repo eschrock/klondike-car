@@ -131,6 +131,8 @@ export class Viewer {
   private currentView: ViewName = 'iso';
   /** The user orbited / zoomed since the last view button or auto-frame; until then a resize re-frames the sled. */
   private userMoved = false;
+  /** Part ids the camera was last framed on (`frameParts`); an automatic re-fit (resize, explode) keeps framing them until a view button or an orbit. */
+  private focusIds: string[] = [];
   private sunCenter = new THREE.Vector3(30, 0, 10);
   private sunRadius = 60;
   private readonly tmpA = new THREE.Matrix4();
@@ -1016,10 +1018,44 @@ export class Viewer {
   /** Fraction of the canvas (each axis, half-extent in NDC) the model may fill when a view is framed (~80% with a margin). */
   private static readonly FILL = 0.86;
 
+  /** The world box of the named parts that are on screen (null when none of them is). */
+  private partsBox(ids: string[]): THREE.Box3 | null {
+    const want = new Set(ids);
+    const box = new THREE.Box3();
+    this.scene.updateMatrixWorld(true);
+    for (const i of this.infos) if (want.has(i.part.id) && i.mesh.visible) box.expandByObject(i.mesh);
+    return box.isEmpty() ? null : box;
+  }
+
+  /**
+   * Frame the camera on the given parts (Build mode's "Show in 3D"): the current view direction, the parts' box padded so a washer is not a blur.
+   * Later automatic re-fits (a resize, Explode) keep this framing; a view button or an orbit ends it.
+   */
+  frameParts(ids: string[]): void {
+    if (this.inTruck || this.simActive) return;
+    const box = this.partsBox(ids);
+    if (!box) return;
+    this.focusIds = ids.slice();
+    this.setView(this.currentView, this.padFocus(box));
+  }
+
+  /** Margin around a framed part: 4 % of its span (at least 3/4 in), and never a view closer than a 14 in span. */
+  private padFocus(box: THREE.Box3): THREE.Box3 {
+    const size = box.getSize(new THREE.Vector3());
+    const span = Math.max(size.x, size.y, size.z);
+    const pad = Math.max(0.75, 0.04 * span);
+    return box.expandByScalar(pad).expandByScalar(Math.max(0, 14 - span - 2 * pad) / 2);
+  }
+
   setView(name: ViewName, box?: THREE.Box3, auto = false): void {
-    if (!auto) this.userMoved = false;
+    if (!auto) {
+      this.userMoved = false;
+      if (!box) this.focusIds = [];
+    }
     this.currentView = name;
-    const b = box ?? (this.inTruck ? this.truckBox() : this.modelBox());
+    const raw = !box && auto && !this.inTruck && this.focusIds.length ? this.partsBox(this.focusIds) : null;
+    const focus = raw ? this.padFocus(raw) : null;
+    const b = box ?? focus ?? (this.inTruck ? this.truckBox() : this.modelBox());
     // Light from near the camera in the Top view, so the shadow falls under the sled instead of a detached ghost up and left.
     if (name === 'top') this.sunDir.set(-0.12, -0.2, 1).normalize(); else this.sunDir.set(-10, -90, 150).normalize();
     this.placeSun(this.sunCenter, this.sunRadius);
@@ -1029,7 +1065,7 @@ export class Viewer {
     const addCorners = (bb: THREE.Box3): void => {
       for (const x of [bb.min.x, bb.max.x]) for (const y of [bb.min.y, bb.max.y]) for (const z of [bb.min.z, bb.max.z]) corners.push(new THREE.Vector3(x, y, z));
     };
-    if (box || this.inTruck) addCorners(b);
+    if (box || focus || this.inTruck) addCorners(b);
     else {
       // Per-part boxes hug the silhouette far better than one big box (the rear handle would otherwise shrink the sled).
       this.scene.updateMatrixWorld(true);
