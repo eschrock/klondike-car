@@ -164,7 +164,7 @@ export function brakeForce(ctx: Ctx): AnalysisCheck {
     };
   };
   return dualCheck({
-    id: 'brake-force', label: 'Foot force on each flap to hold on the slope (info)', group: 'Braking', refs: ['D-57', 'D-55', 'D-13', 'BRIEF §7'], primary: 'operating',
+    id: 'brake-force', label: 'Foot force on each flap to hold on the slope (info)', group: 'Braking', refs: ['D-57', 'D-55', 'D-13'], primary: 'operating',
     ...evalBoth(ctx, ev),
   });
 }

@@ -10,7 +10,7 @@ const list = verifyChecklist(parts, p);
 const WHEN: VerifyWhen[] = ['before ordering', 'before cutting', 'at assembly'];
 
 describe('verify checklist', () => {
-  it('has the nine checks of docs/phase3-checkpoint.md, in order (the D-77 strap check follows the brake knee), then the build-review checks and the leftover params', () => {
+  it('has the nine verify checks, in order (the D-77 strap check follows the brake knee), then the build-review checks and the leftover params', () => {
     expect(list.slice(0, 10).map((c) => c.id)).toEqual([
       'tire-squash', 'wheel', 'axle-rod', 'steering-parts', 'bridle', 'seat-back', 'sign-knobs', 'brake-knee', 'brake-strap', 'lamp-clip',
     ]);

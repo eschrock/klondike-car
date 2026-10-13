@@ -69,7 +69,7 @@ export function liftCheck(ctx: Ctx): AnalysisCheck {
   const g = governing(rows, how);
   return singleCheck({
     id: 'lift', label: 'Lifting the sled (rear hand-hold, front hand-hold in the bow bulkhead)', group: 'Structure',
-    value: g.value, unit: g.unit, limit: g.limit, sense: g.sense, details: rows, how, refs: ['D-37', 'D-43', 'D-57', 'D-58', 'BRIEF 4.4'],
+    value: g.value, unit: g.unit, limit: g.limit, sense: g.sense, details: rows, how, refs: ['D-37', 'D-43', 'D-57', 'D-58'],
   });
 }
 

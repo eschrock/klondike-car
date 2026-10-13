@@ -1,6 +1,6 @@
 /**
  * Plain-English wording for the Simple view (D-30). Pure functions of the check values: no numbers are hard-coded here,
- * only the sentence shapes (docs/simple-view-spec.md "Traffic lights" table). No DOM, so it is unit-testable.
+ * only the sentence shapes (D-30). No DOM, so it is unit-testable.
  */
 import { steerGeometry, type Params } from '../params';
 import type { FitResult } from '../truck/fit';

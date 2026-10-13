@@ -1,7 +1,7 @@
 /**
  * Test fixtures shared by the hand-calc tests. NOT part of the app (only the test files import it).
  *
- * `PRE_D60` is every design number the weight package (D-60, docs/weight-study-3c.md) changed, at its value before the package. Several analysis tests re-derive a row by hand from the
+ * `PRE_D60` is every design number the weight package (D-60) changed, at its value before the package. Several analysis tests re-derive a row by hand from the
  * numbers of an older design pass (the 3c-3 front end with 35.5 in tracks, the D-58 hanger, the 3c-5 resting load); they spread `PRE_D60` over the defaults so that hand
  * calculation stays valid against the formulas, while the tests of the real defaults (model.test, hull.test, params.test, d60-weight.test, ...) carry the D-60 numbers.
  */

@@ -1,6 +1,6 @@
 /**
  * Turns the parts list into a physics spec (SI units, model frame): rigid-body mass properties, wheel geometry, the bridle-eye pull point and hull collider boxes.
- * Pure data; no physics engine and no DOM (phase-2 spec "Simulation"; D-12, D-56).
+ * Pure data; no physics engine and no DOM (D-12, D-56).
  *
  * Bodies: chassis (all chassis parts + rider + cargo as fixed mass), the pivoting front axle ('front-axle': beam, stubs, clamps, kingpin, tongue, shackle, rope) on a vertical
  * hinge at the kingpin with the steering lock as its limits (D-56), and four wheels on revolute joints (the front pair on the front axle). Parts tagged 'truck' are ignored.

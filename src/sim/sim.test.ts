@@ -231,7 +231,7 @@ describe('simulation', () => {
 });
 
 /**
- * Cross-check (BRIEF §8, phase-2 spec): the tilt-table tip onset must match the static tip angle. The static angle is
+ * Cross-check (DESIGN.md): the tilt-table tip onset must match the static tip angle. The static angle is
  * computed here independently from the model: the CG and the four wheel contact points, and the support edge on the downhill side. The plumb line from the
  * CG hits the ground at (x, y - h*tan(phi)), so the sled tips when that point reaches the line through the two downhill wheels:
  * tan(phi) = (lateral CG-to-edge distance at the CG's x) / h. Straight, the front track equals the rear track and the edge is parallel to X; steered, the front wheel contacts (and the CG, as the axle assembly swings) move and the edge tilts.

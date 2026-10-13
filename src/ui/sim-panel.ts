@@ -1,5 +1,5 @@
 /**
- * Simulation tab (BRIEF §8, phase-2 spec "Simulation"): scenario presets, controls, readouts and play/pause/reset over the
+ * Simulation tab (DESIGN.md): scenario presets, controls, readouts and play/pause/reset over the
  * qualitative Rapier sim in src/sim. The physics is loaded lazily on first activation. Drives the 3D viewer by posing the
  * model's parts per rigid body (Viewer.setBodyPoses) and showing the sim ground and obstacles.
  */

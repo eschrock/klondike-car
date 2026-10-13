@@ -1,5 +1,5 @@
 /**
- * Side lateral stiffness and strength (D-76; docs/side-stiffness-study.md): the `side-lateral` row and the numbers the `lash-load` row reads.
+ * Side lateral stiffness and strength (D-76; docs/studies/side-stiffness-study.md): the `side-lateral` row and the numbers the `lash-load` row reads.
  *
  * The study's screening model, rebuilt here (finite differences at 1/4 in steps):
  *  - The GUNWALE BAND BEAM (both oak bands and the web between them, the sandwich thickness wide, `railBandIn` tall) bends out of plane between the rear
@@ -24,7 +24,7 @@ import { allowables } from './structure';
 import { strapLoads } from './cargo';
 import type { AnalysisCheck, Detail } from './types';
 
-/** Study assumptions (docs/side-stiffness-study.md, "Assumptions"). */
+/** Study assumptions (docs/studies/side-stiffness-study.md, "Assumptions"). */
 export const DECK_LINE_ROT = 5000; // lb.in/rad per inch of side
 export const KNEE_ROT = 100000; // lb.in/rad
 export const BOX_TIE_K = 5000; // lbf/in
@@ -310,7 +310,7 @@ export function sideLateralCheck(ctx: Ctx): AnalysisCheck {
   if (hasBox) ds.push(detail('box tie glue (rating or push), cross-grain tension', Math.max(s.push.tieForce, s.rating.tieForce) / s.tieArea, 'psi', deckAllow, '<='));
   const m = s.model;
   const ribTxt = m.ribs.map((rb) => `rib ${rb.st.n} at x = ${f(rb.st.x, 1)} (${rb.st.kind === 'box' ? `box tie ${f(rb.zBase, 1)}" up` : `knee on ${rb.st.member === 'king-beam' ? 'the king beam' : (rb.st.member ?? '').replace('-', ' ')}`}, ${f(rb.K, 0)} lbf/in at the gunwale)`).join('; ');
-  const how = `Beam-on-strips screening model (docs/side-stiffness-study.md, D-76): the gunwale band beam (EI ${f(m.EI, 0)} lb·in²) spans ${f(m.xs[m.n] - m.x0, 2)}" between the transom and bulkhead dados on the side's vertical strips (${f(Math.min(...m.k), 1)} to ${f(Math.max(...m.k), 0)} lbf/in per inch: the chine and gunwale sandwiches across the oak grain at ${f(p.oakMoePerpPsi, 0)} psi, the web across its face grain at ${f(thinSheet(p).moePerpPsi, 0)} psi, a ${DECK_LINE_ROT} lb·in/rad per inch deck line), with the ribs as springs: ${ribTxt}. `
+  const how = `Beam-on-strips screening model (docs/studies/side-stiffness-study.md, D-76): the gunwale band beam (EI ${f(m.EI, 0)} lb·in²) spans ${f(m.xs[m.n] - m.x0, 2)}" between the transom and bulkhead dados on the side's vertical strips (${f(Math.min(...m.k), 1)} to ${f(Math.max(...m.k), 0)} lbf/in per inch: the chine and gunwale sandwiches across the oak grain at ${f(p.oakMoePerpPsi, 0)} psi, the web across its face grain at ${f(thinSheet(p).moePerpPsi, 0)} psi, a ${DECK_LINE_ROT} lb·in/rad per inch deck line), with the ribs as springs: ${ribTxt}. `
     + `Conservative: no gunwale torsion or web twisting, no grab-board stiffening, pinned ends for the stresses, each stress at its own worst load position. `
     + `${f(s.push.P, 0)} lbf push at the gunwale, worst position: ${s.push.wFixed.toFixed(3)}" (fixed ends, x = ${f(s.push.xFixed, 1)}) to ${s.push.wPinned.toFixed(3)}" (pinned, x = ${f(s.push.xPinned, 1)}); without the ribs ${s.push.noRibsFixed.toFixed(3)} to ${s.push.noRibsPinned.toFixed(3)}". Eric's "feels solid" mark is ${FEEL_LIMIT_IN}" (reported, not judged): ${s.push.wPinned <= FEEL_LIMIT_IN ? 'met' : 'NOT met'}. `
     + `The D-ring rating pulls ${f(s.rating.Hin, 0)} lbf inboard (${f(p.lashLoadLbf, 0)} × cos ${p.lashPullAngleDeg}°) at one rib, the worst being rib ${s.rating.station}: the side moves ${s.rating.r.wMax.toFixed(3)}". `

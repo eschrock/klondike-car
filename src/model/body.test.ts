@@ -1,7 +1,7 @@
 /**
  * The D-57 body: the sheer (a concave sweep from the low bow up to the tall rear), the plan turn-in toward the bow (plan-curved chine, gunwale, web, rails and deck), the shaped oak
  * bow bulkhead with its lift hand-hold (it replaced the D-54 bow curl), the rear transom with its lift slot, the scuppers and the signs. Expected numbers are re-derived from the
- * params (docs/phase3c-4b-notes.md), not read back from the builder.
+ * params, not read back from the builder.
  */
 import { describe, expect, it } from 'vitest';
 import { bowBulkhead, bowTurnInAt, defaultParams, sideHeightAt, thinSheet, validateParams, type Params } from '../params';

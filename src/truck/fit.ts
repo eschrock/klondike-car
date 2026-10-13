@@ -1,5 +1,5 @@
 /**
- * Truck-fit check (BRIEF §4.5, D-6, D-9, D-23). Pure TS, no three.js.
+ * Truck-fit check (D-6, D-9, D-23). Pure TS, no three.js.
  *
  * Tries both stowage modes x both orientations x three configurations (installed / tongue and rope off / all
  * removables off, D-9), the front axle turned straight (steerDeg 0, D-56). The sled sits with its wheel contacts on the bed floor / tailgate

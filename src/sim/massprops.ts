@@ -1,5 +1,5 @@
 /**
- * Mass, center of gravity and inertia of a group of Parts (BRIEF §8, phase-2 spec "Simulation").
+ * Mass, center of gravity and inertia of a group of Parts (DESIGN.md).
  * Inertia is approximated as the sum of each part's solid-box inertia (from its OBB) plus the parallel-axis term.
  * Model units: inches and pounds; the result is also given in SI for the physics engine.
  */

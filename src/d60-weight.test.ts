@@ -1,5 +1,5 @@
 /**
- * The weight package (D-60, docs/weight-study-3c.md, notes in docs/phase3c-6-weight-notes.md) pinned end to end: the param values and their status/refs, the foot block and its
+ * The weight package (D-60) pinned end to end: the param values and their status/refs, the foot block and its
  * cleats gone (old links still load), the mass by group and the saving against the pre-package numbers (PRE_D60), the part-by-part savings, and the headline analysis results
  * (every row passes at 150 lb, 200 lb and cargo; the safe and green rider ranges; cargo and resting capacity; the rows above 0.9).
  */

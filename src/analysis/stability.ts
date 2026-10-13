@@ -60,7 +60,7 @@ export function tipStraight(ctx: Ctx): AnalysisCheck {
     };
   };
   return dualCheck({
-    id: 'tip-straight', label: 'Lateral tip (worst steer, +/- lock)', group: 'Stability', refs: ['BRIEF §7', 'A-3', 'D-1', 'D-56'], primary: 'operating',
+    id: 'tip-straight', label: 'Lateral tip (worst steer, +/- lock)', group: 'Stability', refs: ['A-3', 'D-1', 'D-56'], primary: 'operating',
     ...evalBoth(ctx, ev),
   });
 }
@@ -82,7 +82,7 @@ export function tipLock(ctx: Ctx): AnalysisCheck {
     };
   };
   return dualCheck({
-    id: 'tip-lock', label: 'Lateral tip at full lock', group: 'Stability', refs: ['BRIEF §7', 'A-3', 'D-1', 'D-56'], primary: 'operating',
+    id: 'tip-lock', label: 'Lateral tip at full lock', group: 'Stability', refs: ['A-3', 'D-1', 'D-56'], primary: 'operating',
     ...evalBoth(ctx, ev),
   });
 }
@@ -165,7 +165,7 @@ export function vRollover(ctx: Ctx): AnalysisCheck {
     };
   };
   return dualCheck({
-    id: 'v-rollover', label: 'Turn rollover speed', group: 'Stability', refs: ['A-1', 'BRIEF §7', 'D-56'], primary: 'operating',
+    id: 'v-rollover', label: 'Turn rollover speed', group: 'Stability', refs: ['A-1', 'D-56'], primary: 'operating',
     ...evalBoth(ctx, ev),
   });
 }
@@ -216,7 +216,7 @@ export function pitchForward(ctx: Ctx): AnalysisCheck {
     };
   };
   return dualCheck({
-    id: 'pitch-fwd', label: 'Forward pitch-over, braking downhill', group: 'Stability', refs: ['BRIEF §7', 'D-13', 'D-24'], primary: 'operating',
+    id: 'pitch-fwd', label: 'Forward pitch-over, braking downhill', group: 'Stability', refs: ['D-13', 'D-24'], primary: 'operating',
     ...evalBoth(ctx, ev),
   });
 }
@@ -270,7 +270,7 @@ export function pitchRear(ctx: Ctx): AnalysisCheck {
     };
   };
   return dualCheck({
-    id: 'pitch-rear', label: 'Rearward pitch: pull to lift the front (design slope)', group: 'Stability', refs: ['BRIEF §7', 'BRIEF §4.1', 'D-14'], primary: 'operating',
+    id: 'pitch-rear', label: 'Rearward pitch: pull to lift the front (design slope)', group: 'Stability', refs: ['D-1', 'D-14'], primary: 'operating',
     ...evalBoth(ctx, ev),
     light: ev(ctx.loads.light), lightLabel: cap(ctx.loads.light.label),
   });

@@ -1,8 +1,8 @@
 /**
- * Analysis panel (docs/phase2-spec.md "Analysis panel"): checks grouped Stability / Steering / Braking / Structure /
+ * Analysis panel (DESIGN.md): checks grouped Stability / Steering / Braking / Structure /
  * Mass & transport, each row with a status chip, value, limit and load case; click a row for the formula (`how`) and
  * refs. A summary line counts pass / marginal / fail at the operating and the goal rider, and a footnote lists the
- * material properties, factors and sources used (BRIEF §7).
+ * material properties, factors and sources used (DESIGN.md).
  */
 import { derived, thinSheet, type Params } from '../params';
 import { CHECK_GROUPS, GROUP_OF_ID, type AnalysisCheck, type CaseResult, type CheckGroup, type Status } from '../analysis/types';
@@ -146,7 +146,7 @@ function materials(p: Params, isOpen: boolean, onToggle: (o: boolean) => void): 
         ['Operating / goal rider', `${p.riderMassLb} / ${p.riderGoalMassLb} lb`, `+ ${p.cargoMassLb} lb cargo`],
         ['Cargo mode (D-53)', `${p.cargoPayloadLb} lb on the bed, seat back flat, no rider`, `CG ${p.cargoCgHeightIn}" above the deck, ${p.cargoCgOffsetYIn}" off center; concentrated ${p.cargoConcentratedLb} lb on ${p.cargoPatchAlongIn}" × ${p.cargoPatchAcrossIn}"; worse of two placements`],
         ['Dynamic factor', `× ${p.dynamicFactor}`, 'payload and axle reactions'],
-        ['Lightest rider (pitch-back)', `${p.riderMinMassLb} lb`, 'BRIEF §4.1; counts toward the operating status'],
+        ['Lightest rider (pitch-back)', `${p.riderMinMassLb} lb`, 'D-1; counts toward the operating status'],
         ['Design pull', `${p.pullForceLbf} lbf`, `at ${p.pullerHandHeightIn}" hand height, ${p.bridleRopeRunIn}" rope run; lift pull ≥ ${p.pitchPullMarginMin}× peak`],
         ['Bump hits (D-50)', `${p.bumpNormalHeightIn}" normal at ${p.bumpSpeedNormalMph} mph (walking), ${p.bumpHardHeightIn}" hard at ${p.bumpSpeedHardMph} mph (jogging)`, `velocity-pulse model, wheel rate ${p.bumpWheelRateLbIn} lb/in; sin β = (r − h)/r`],
         ['Axle tire friction', `H = μ·P_static, arm = tire radius`, 'combined with vertical as a resultant'],

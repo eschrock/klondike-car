@@ -39,7 +39,7 @@ import {
   PURCHASED_FALLBACK, TITEBOND_BOTTLES, URETHANE_CONTAINER_PRICE, fastenerPrice, metalPrice, modelCostNote, purchasedDescribe, purchasedEntry, specOf, std304, type Price, type PriceBasis, type SpecName,
 } from './prices';
 
-// ── Consumable assumptions (all estimates; also in docs/phase4-data-notes.md) ─
+// ── Consumable assumptions (all estimates) ─
 /** Mixing, pot and brush waste on top of the glue epoxy of `glueEpoxyFlOz` (finishing.ts: per-joint-type estimates, before waste). The coats' quantities carry their own waste. */
 export const EPOXY_WASTE = 0.2;
 /** Resin share of the mixed volume: 5:1 for everything (105 with 206: the glue, the seal coat and the closes). */

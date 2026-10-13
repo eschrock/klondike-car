@@ -1,4 +1,4 @@
-/** Sim configuration, controls and scenario presets (BRIEF §8). Plain data: no physics engine, no DOM. */
+/** Sim configuration, controls and scenario presets (DESIGN.md). Plain data: no physics engine, no DOM. */
 
 /** Set at reset: terrain and initial conditions. */
 export interface SimConfig {

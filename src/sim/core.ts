@@ -1,5 +1,5 @@
 /**
- * Qualitative physics core (BRIEF §8): Rapier rigid bodies for the chassis (with rider and cargo as fixed mass), the pivoting
+ * Qualitative physics core (DESIGN.md): Rapier rigid bodies for the chassis (with rider and cargo as fixed mass), the pivoting
  * front axle and the four wheels on revolute joints. No three.js, no DOM: runs headless under vitest.
  *
  * Front end (D-56): the front axle (beam, stubs, kingpin, tongue plate, shackle, rope) is one rigid body on a vertical hinge at the kingpin, limited to +/-steerLockDeg by the

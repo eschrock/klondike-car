@@ -422,9 +422,9 @@ describe('exterior material notes (Eric, 2026-10-12)', () => {
 });
 
 describe('links (Eric, 2026-10-12)', () => {
-  /** The price research as text (docs/price-research-2026-10.json): the only source of URLs besides Eric's own three links. */
-  const research = Object.values(import.meta.glob('../../docs/price-research-2026-10.json', { query: '?raw', import: 'default', eager: true }))[0] as string;
-  const research2 = Object.values(import.meta.glob('../../docs/price-research-standard-2026-10.json', { query: '?raw', import: 'default', eager: true }))[0] as string; // the Standard-spec pass (the Penn Tool zinc collar)
+  /** The price research as text (docs/price-research/price-research-2026-10.json): the only source of URLs besides Eric's own three links. */
+  const research = Object.values(import.meta.glob('../../docs/price-research/price-research-2026-10.json', { query: '?raw', import: 'default', eager: true }))[0] as string;
+  const research2 = Object.values(import.meta.glob('../../docs/price-research/price-research-standard-2026-10.json', { query: '?raw', import: 'default', eager: true }))[0] as string; // the Standard-spec pass (the Penn Tool zinc collar)
   const ERIC_HOSTS = /^https:\/\/(www\.thewoodyard\.com|www\.aircraftspruce\.com|clinelumber\.com)\//;
 
   it('carries only links Eric gave or the research lists, and invents none', () => {

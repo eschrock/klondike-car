@@ -38,7 +38,7 @@ export interface AnalysisCheck extends CheckResult {
   statusGoal: Status;
   /** Per-case values, for rows evaluated at both riders. */
   cases?: {
-    operating?: CaseResult; goal?: CaseResult; /** Lightest-rider case (BRIEF §4.1), for rows that get worse with a lighter rider. */ light?: CaseResult;
+    operating?: CaseResult; goal?: CaseResult; /** Lightest-rider case (D-1), for rows that get worse with a lighter rider. */ light?: CaseResult;
     /** Cargo mode (D-53): the post-race payload on the bed with the seat stowed and no rider. Reported next to the rider cases; it never sets `status` or `util`. */
     cargo?: CaseResult;
   };

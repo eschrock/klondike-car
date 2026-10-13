@@ -1,0 +1,151 @@
+# Troop 455 Klondike sled: current design
+
+This is the design as it stands today, for someone arriving fresh. Numbers come from the code at its default parameters (`buildModel`, `runChecks`, `riderSweep`, `bom`). If a number here disagrees with the app, the app is right: fix this file.
+
+Related: [DECISIONS.md](DECISIONS.md) (the decisions that hold, with IDs cited in code), [docs/STATUS.md](docs/STATUS.md) (status and open items), [CLAUDE.md](CLAUDE.md) (working rules).
+
+## 1. What it is
+
+A **Klondike Derby sled on wheels** for Boy Scout Troop 455: a solid, wide, reusable white-oak sled with four wheels.
+
+- **Use.** The patrol pulls it from town to town on a rope bridle. A passenger rides in the seat. A musher at the back pushes on the handlebow and steps on a brake flap to slow it. Walking or jogging pace, camp roads and trails, no curbs. After the race it is a hauler for camp gear (firewood, coolers, duffels) with the seat stowed.
+- **Storage.** Garage-kept, used a few times a year. It gets wet only if it rains during a derby. That sets the default weather spec (section 4).
+- **Who builds it.** Eric, an experienced woodworker, mostly alone and sometimes with helpers.
+
+## 2. Requirements
+
+### Event rules (Bert Adams Scout Camp Klondike Derby, 2026 AAC; the camp's handout)
+- Each troop or patrol builds a Klondike sled to use in the competition.
+- The sled must carry **at least one Scout** throughout, as the team goes from town to town. Someone must be riding as the team approaches each program area.
+- **Wheels are allowed** while traveling between towns.
+- The team announces itself with a **Patrol Yell** on arriving at each town and finishes with it on leaving.
+- Each team carries the **10 Essentials of Scouting**. Other equipment is provided at the towns.
+- Graded in each town on accuracy, neatness, Scout Law and completion.
+- It is a **timed race** that starts outside Staff HQ at about 7 pm (dark): collect all seven tokens, then meet the staff. First to third place are announced at closing campfire. The camp lends a cart to provisional scouts who want to team up.
+
+### Design requirements
+- **Riders.** A **150 lb** rider (the largest realistic scout) must pass every check. A **200 lb** rider is the goal (an adult or stretch case); show where it limits the design. Lightest rider considered: 80 lb (rearward pitch). Cargo mode: a **200 lb** payload on the bed with the seat stowed.
+- **Pace and loads.** Walking pace (3 mph) with a 1" bump is the normal case and carries full margins. A 2" bump at 5 mph is the bend-don't-break case. There are no curbs at camp. Pull peaks at 150 lbf (several scouts surging).
+- **Weight.** Eric is weight-sensitive. Nothing gets heavier to pass a check unless the lightest option was shown first. Empty mass is reported, not gated.
+- **Typical riders** are 80 to 150 lb. Helmets are recommended. Getting in and out must be quick (seven stations). The structural payload is the goal rider plus 25 lb of gear.
+- **Cost.** Eric is cost-sensitive too. Show the cheapest credible option first; separate quoted prices from estimates.
+- **The shop.** Full woodshop, bandsaw that resaws 6" at most, Festool Domino, Shaper Origin (handheld CNC; flat parts are cut from SVG files), a CNC router, a laser cutter and 3D printers (ASA for light clips). **No welding, no lathe.**
+- **No-fabrication rule for metal.** Every metal part is bought ready-made, or stock cut on a metal bandsaw and drilled on a drill press. No bending, welding, tapping, machining or countersinking. A test enforces it (D-77).
+- **Materials.** White oak for solid parts; plywood only as captured or sandwiched panels, with no exposed plywood edges; stainless or galvanized fasteners; threaded inserts for anything removable.
+- **Truck fit.** It rides in a 2007 Toyota Tacoma short bed with the tailgate down, loaded by two people (no ramps). The bed numbers are estimates until measured; every one is a parameter. Parts that are removable for transport come off without tools.
+- **Safety and use.** Low seat with a back, grab boards, no pinch points, lights and reflectors for the night start, a tie-down on each side rib, and a storage box sized for the 10 Essentials.
+
+## 3. The sled today
+
+### Overall
+| | Default |
+|---|---|
+| Body length, rear transom to bow | 60-3/4" (65-3/4" with the tongue) |
+| Body width | 24" outside, narrowing to 18-1/2" at the bow over a gradual 22" taper |
+| Overall width over the wheels | 34-1/4" |
+| Wheels | 10" pneumatic, 4 of them, wheelbase 44", both tracks 30" |
+| Deck height | 8" |
+| Side height | 4" at the bow rising in a concave sweep to 14" at the rear |
+| Empty mass (Standard spec) | **121.1 lb** (114.8 lb in Transport mode, 57.4 lb per person for the two-person lift) |
+
+### Construction
+- **Body.** The two sides are sandwiches: a thin plywood web with oak bands glued on both faces at the top (gunwale) and bottom (chine). No grooves. The bow bulkhead is a shaped oak board that is the foot brace and a hand-hold. A 12 mm okoume deck rides on oak rails and 8-1/2" joists. The rear transom is 1/2" oak. Three oak **ribs** per side stand on the inside face of the web (box, mid and bow-post stations). Their heads carry the six D-ring tie-downs (zinc-plated steel Standard, 316 stainless Extreme), through-bolted, and they stiffen the sides sideways (D-76).
+- **Front end.** One laminated oak axle beam under the bow carries two stub axles. It pivots about a single 5/8" grade 8 kingpin through a UHMW thrust washer into an oak king beam. UHMW roll pads take the roll. A check chain on each side is the steering stop and limits the swing to **±20°**. The pullers steer through an oak **tongue** whose rope bridle ties to it on a bowline (the rope is the intended weak link). Turning radius is about 12 ft to the outer tire edge, limit 12.5 ft (the one marginal row).
+- **Rear end.** A fixed laminated oak beam on solid 5/8" 1045 steel rod axles, held by 316 or 304 clamp plates and hold-down angles into notches in the rails.
+- **Seat.** A 2" foam cushion, and a frameless 12 mm okoume seat back that **flips flat and latches** with pins, so it stays on the sled (D-57). The leg reach is about 35-3/4". Two oak **grab boards** (one board per side with a routed hand hole) are bolted to the gunwales.
+- **Storage box.** Behind the seat, over the rear axle: a thin-ply box with an oak-framed lid on stainless hinges and draw latches, a bulb gasket and drains. About 2,000 in³. In cargo mode it holds the cushions, lamp and chocks; in race mode, the 10 Essentials (a packing check places every item).
+- **Brake.** A scooter-style **step brake**: an oak flap hinged over each rear tire with a rubber pad and a bungee return. Each flap pivots on a stainless strap and clevis pin on an oak **knee** (cross-laminated oak, D-75, D-77) bolted to the rail. A wheel chock on a cord parks it. The flap kit comes off in seconds. It is judged on slowing the loaded sled (pass/fail); the brake itself need not hold the sled on a 15° slope (info only), but the wheel chocks must (the `park-hold` row, which passes at 0.88).
+- **Handlebow.** A removable bandsawn oak handlebow on two posts that drop into sockets on the rear transom, with a second pin position that parks it low (D-57).
+- **Lights and signs.** A front lamp and a rear red light in snap-in printed ASA clips that fill the lift hand-holds; amber front and red rear reflectors; a flag tube in a rear corner; a "TROOP 455 / WILDERNESS RANGERS" oval sign on each rear side.
+
+### Lift and transport
+Two people lift it by the rear transom slot and the bow bulkhead hand-hold (the tongue is not a lift point). **Transport mode** (handle parked, seat back flat, brake kit, lights, chocks and seat pad off) fits the Tacoma bed with the tailgate down, and so does the fully assembled sled.
+
+## 4. Materials and options
+
+### Weather spec (`weatherSpec`)
+| | Standard (default) | Extreme weather |
+|---|---|---|
+| Meant for | garage-kept, used a few times a year, wet at worst at a rainy derby | stored outside or near salt |
+| Stainless | 304 (18-8) | 316 throughout |
+| Collars, inserts, D-rings, eye bolts and chain | zinc-plated or hot-dip galvanized | 316 |
+| Glue | Titebond III | epoxy everywhere |
+| Dominos | beech | Sipo |
+| Finish | exterior spar urethane; epoxy only where needed | marine varnish over epoxy, gallon epoxy kit |
+| Empty mass (follow-the-weather sheet) | 121.1 lb | 118.3 lb |
+| BOM total | **$2,303** | **$3,119** |
+
+### Thin sheet (`thinSheetMaterial`)
+The thin sheet is the side webs, storage box and lid, and sign blanks. The 12 mm deck and seat back are always okoume. The default **follows the weather spec**.
+
+| Option | Used by default in | Thickness | Notes |
+|---|---|---|---|
+| 1/4" white oak plywood | Standard | 0.21" (verify: measure the sheet) | side-web check 0.61, passes |
+| 4 mm okoume marine | Extreme | 0.157" | side-web check **2.0 (fails)**; see open items |
+| 3 mm (1/8") Baltic birch | none | 0.118" | side-web check **4.8 (fails)** |
+
+Sheets are always full 4' × 8' (D-68). Solid parts that need more thickness than a stocked board gives are face-laminated: the axle beams, brake knees and chocks are 3 × 3/4" layers from 4/4, milled to 2-1/8" (D-70, D-74).
+
+### Other materials
+- **White oak** (USDA Wood Handbook, 12% MC): design bending stress 6,460 psi after the wet-service factor and a safety factor of 2.
+- **Axles** 5/8" solid 1045 or cold-drawn steel rod (70 ksi yield; not A36, not 1018).
+- **Wheels** Harbor Freight 10" pneumatic (5/8" bore, rated 300 lb, about 3 lb each; verify the hub length).
+- **Fasteners** three wood-screw sizes only (#8 × 5/8, #8 × 1-1/4, #6 × 2-1/2) and stock bolt lengths (D-72).
+
+## 5. Key numbers (Standard spec, default parameters)
+
+- **Mass** 121.1 lb empty: white oak 57.5 lb, plywood 25.8 lb, wheels 12 lb, axles 5 lb, hardware, fasteners and everything else about 21 lb.
+- **Checks.** 54 engineering rows, **none fail**. One is marginal: turning radius (0.97 of its limit). The tightest passes: seat stowage 0.94, park-hold 0.88, storage packing 0.87, rear axle groove bearing 0.86, kingpin 0.86.
+- **Rider range.** Safe (nothing fails) **50 to 250+ lb**; green (nothing marginal) **50 to 220 lb**. The rear axle groove bearing on the oak limits it. The 150 lb rider is a plain pass; the 200 lb goal rider is green.
+- **Cargo.** The 200 lb payload passes. Capacity is **254 lb**; comfortable (still green) to **204 lb**. The rear groove bearing sets both.
+- **Resting load.** A 250 lb adult sitting or standing on one foot anywhere on the deck passes (capacity 348 lb).
+- **Stability.** Straight tip 45° against a 35° limit; full-lock tip the same; slides before it tips (0.78 of limit).
+- **Sides.** A 50 lbf push moves a gunwale about 0.10" (under the 1/8" "feels solid" mark; reported, not judged).
+- **Cost.** BOM $2,303 Standard ($3,119 Extreme); about 22% of the Standard total is estimates, the rest quoted from listings (docs/price-research/price-research-*).
+- **Materials by section (Standard BOM).** Lumber $583, plywood $203, metal $171, purchased parts $413, fasteners $154, consumables $402, bulk packs $87, finishing touches $289.
+
+## 6. How the app is organized
+
+One parameter file drives everything.
+
+```
+src/params.ts            every design number, with unit, range, status and a note; validateParams()
+src/model/               params -> Part[] (plain data, no three.js): body, front end, rear mount, brake, seat, storage, joinery, mass
+src/analysis/            runChecks(params) -> engineering rows; riderSweep; cargoCapacity (plain TS)
+src/sim/                 Rapier rigid-body sim of the sled (qualitative)
+src/truck/               truck-bed fit check
+src/build/               build outputs: cut list, nesting, BOM and prices, Shaper SVGs, forms, drawings, assembly, finishing, verify, zip
+src/viewer/              three.js viewer: materials, textures, joinery cuts, mannequin
+src/ui/                  panels: params, analysis, sim, Simple view, Build mode
+```
+
+- **Frame.** +X forward (toward the bridle), +Y left, +Z up; origin on the ground under the rear-axle center. Inches, pounds, degrees.
+- **One part is one physical piece.** `massLb` is per piece; identical pieces share a `partNo`; every view (viewer, analysis, sim, cut list, BOM, exports, assembly) reads `buildModel(params): Part[]`.
+- **Modes.** **Simple** (the default) answers "is it safe, and for what rider weights?" with a rider sweep, six traffic lights and a spec card. **Advanced** has the sliders, the viewer toggles (brakes, lights, chocks, seat flat, handle parked, Transport mode), the full analysis table and the sim. **Build** holds the outputs below.
+- **Sharing.** The whole design is in the URL hash.
+- **Tests.** `npm test` runs the model, analysis and build outputs headless, including fuzz and overlap tests of the model.
+
+## 7. Build outputs (Build mode and the zip)
+
+Everything is a pure function of the parameters.
+
+| Section | What it gives you |
+|---|---|
+| Verify | the checks to make on real parts before ordering (wheel hub, sheet thickness, axle steel, and so on) |
+| Cut list | the actual cuts (an edge-glued panel is its boards, then the glue-up), rough sizes rounded up to 1/8", laminate allowances, board yields, a bandsaw resaw check |
+| Nesting | plywood layouts on 4' × 8' sheets; oak board feet |
+| BOM | priced lines with vendor links, quoted vs estimated, Standard vs Extreme; the price research is in docs/price-research/price-research-2026-10.md and docs/price-research/price-research-standard-2026-10.md |
+| Shaper | SVG files for every flat part (outside, inside, pocket, guide conventions) |
+| Forms and drawings | glue-up forms and templates (tiled to Letter pages), and a dimensioned drawing of every non-Shaper part |
+| Assembly | numbered steps with sub-bullets, part chips with dimensions and Show in 3D, and a 3D step-through |
+| Finishing | the schedule for the chosen weather spec |
+| Downloads | one zip: Shaper SVGs, forms, drawings, nesting, STLs for the lamp clips, cutlist.csv, bom.csv, a build book (printable HTML) and a README |
+
+Build text follows Eric's shop-readability rules: fractions, no internal names, every notch, hole and mortise located from a named edge, short steps with sub-bullets.
+
+## 8. Reading the code
+
+- Design numbers live only in `src/params.ts`. Model code holds derived geometry, never a literal design dimension.
+- Code comments cite decision IDs (D-xx, A-xx) instead of repeating the reasoning; look them up in [DECISIONS.md](DECISIONS.md).
+- The studies behind a decision are kept where they are still the engineering basis: [docs/studies/side-stiffness-study.md](docs/studies/side-stiffness-study.md) (D-76).
+- Deploy: pushing to `main` runs the tests, then publishes `dist/` to GitHub Pages (`.github/workflows/pages.yml`). `npm run build:single` makes one self-contained HTML file.

@@ -1,5 +1,5 @@
 /**
- * Side ribs and the tie-downs on them (D-76; docs/side-stiffness-study.md, option E with option D at the rear station).
+ * Side ribs and the tie-downs on them (D-76; docs/studies/side-stiffness-study.md, option E with option D at the rear station).
  *
  * Three oak ribs per side stand on the inside face of the sandwich side, glued to the web between the inner chine and gunwale bands and to the
  * inner bands, and stand `sideRibDepthIn` proud of the inner band faces. Each widens at the top to a head `sideRibHeadLengthIn` long, as tall as the
@@ -242,7 +242,7 @@ export function buildSideRibs(ctx: Ctx): Part[] {
         id: `lash-${tag}${st.n}`, partNo: 'lash-point', name: `Lash point ${tag}${st.n}`, group: 'hardware', mat: 'fixed', massLb: LASH_MASS_LB, kind: 'purchased',
         material: `${dRingMat(p)} D-ring on a bolt plate`, fab: 'buy', step: STEP.finish, size: [LASH_PLATE.len, LASH_PLATE.tall, T], center: [st.x, s * cyIn, zc], rot,
         sourcing: { vendor: `McMaster-Carr (${dRingMat(p)} 4-hole D-ring bolt plate, 300 lbf working load)`, costUsd: 7 },
-        notes: `D-76: on the inner face of the ${RIB_NAME[st.n]}'s head, through-bolted: ${LASH_BOLTS} #8-32 x ${frac(bolt.len)}" ${stainless(p)} machine screws from OUTSIDE (a ${frac(LASH_WASHER.od)}" fender washer under each head on the outer band), through the side sandwich and the head, with a nylock nut on the plate inside (stack ${bolt.need.toFixed(2)}" with the nut and two threads). The plate (${LASH_PLATE.len}" x ${LASH_PLATE.tall}", holes ${2 * LASH_HOLE_DX_IN}" x ${2 * LASH_HOLE_DZ_IN}") is the drilling template. Rated for tie-down straps on coolers, duffels and firewood (BRIEF §4.9); the lash-load row pulls it at ${p.lashLoadLbf} lbf and ${p.lashPullAngleDeg}°. In race mode the ring folds flat against the head.`,
+        notes: `D-76: on the inner face of the ${RIB_NAME[st.n]}'s head, through-bolted: ${LASH_BOLTS} #8-32 x ${frac(bolt.len)}" ${stainless(p)} machine screws from OUTSIDE (a ${frac(LASH_WASHER.od)}" fender washer under each head on the outer band), through the side sandwich and the head, with a nylock nut on the plate inside (stack ${bolt.need.toFixed(2)}" with the nut and two threads). The plate (${LASH_PLATE.len}" x ${LASH_PLATE.tall}", holes ${2 * LASH_HOLE_DX_IN}" x ${2 * LASH_HOLE_DZ_IN}") is the drilling template. Rated for tie-down straps on coolers, duffels and firewood (D-76); the lash-load row pulls it at ${p.lashLoadLbf} lbf and ${p.lashPullAngleDeg}°. In race mode the ring folds flat against the head.`,
         joints: [{
           type: 'bolt', to: ribId, count: LASH_BOLTS, size: `#8-32 x ${frac(bolt.len)}" ${stainless(p)} machine screw, ${frac(LASH_WASHER.od)}" fender washer outside, nylock nut inside`, diaIn: LASH_BOLT_DIA_IN,
           at: [[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([a, b]): Vec3 => [a * LASH_HOLE_DX_IN, b * LASH_HOLE_DZ_IN, -T / 2]), // on the plate face against the head

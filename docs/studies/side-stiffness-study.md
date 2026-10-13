@@ -1,6 +1,6 @@
 # Side stiffness study: stiles, ribs and tie-downs (2026-10-13)
 
-Eric asked: "There's not much vertical support for the sides ... should we have vertical rails in one or two places?" A study only; nothing in the model changed. Sketch: [side-stiffness-options.svg](side-stiffness-options.svg).
+Eric asked: "There's not much vertical support for the sides ... should we have vertical rails in one or two places?" This study is the basis of D-76 (option E, with D at the rear station), which is built. Sketch: [side-stiffness-options.svg](side-stiffness-options.svg).
 
 ## Summary and recommendation
 

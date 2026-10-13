@@ -2,7 +2,7 @@
  * Shaper Origin SVG files (Phase 4, output 4): one drawing per `fab: 'shaper-origin'` part number, in Shaper's conventions (see svg-util.ts).
  * Plain TS, no three.js. Pure functions of `(parts, params)`.
  *
- * Joint -> feature rules (also in docs/phase4-geometry-notes.md):
+ * Joint -> feature rules:
  *  R1  Holes in `FlatPattern.holes` (hand holes, vent holes) are inside cuts; a hole whose largest dimension is under DRILL_BELOW_IN is a drill mark (blue) instead.
  *  R2  bolt / screw / pin / knob joints with `at`: a hole at each point, axis normal to the cut face, when the text says "through" (the default). Diameter: a #N screw gets its clearance
  *      (#10 = 0.2 in), a bolt its standard clearance (1/4 = 0.266 in), a pin `diaIn` + 1/32 (0.375 -> 13/32); an explicit "N/M clearance" in the text wins over all of these (the sign knobs: 7/32 = 0.219). A hole under

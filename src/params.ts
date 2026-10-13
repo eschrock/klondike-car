@@ -8,7 +8,7 @@
  * `status` records how confident we are in a default:
  *   locked  – fixed by the brief, the event rules, or Eric
  *   verify  – placeholder that Eric needs to measure/confirm
- *   assumed – engineering assumption (cited by `ref` in DECISIONS.md)
+ *   assumed – engineering assumption (cited by `ref`, see DECISIONS.md)
  *   explore – design variable that Phase 2 optimizes
  *
  * View-only state (e.g. the displayed swivel angle) does NOT live here; it is
@@ -135,7 +135,7 @@ const defs = {
   cargoPayloadLb: {
     label: 'Cargo payload after the race', group: 'cargo', unit: 'lb',
     default: 200, min: 0, max: 600, step: 25, status: 'locked', primary: true, ref: 'D-53, D-58',
-    note: 'Eric 2026-10-11: 200 lb (was 250 lb; the owner is weight-sensitive and the parts are sized to this). Camp gear, firewood and water (reference/04): a uniform load over the bed, seat stowed, no rider. Carried at a high center of gravity (cargoCgHeightIn). The cargo case runs next to the rider cases and never changes the rider range.',
+    note: 'Eric 2026-10-11: 200 lb (was 250 lb; the owner is weight-sensitive and the parts are sized to this). Camp gear, firewood and water (D-53): a uniform load over the bed, seat stowed, no rider. Carried at a high center of gravity (cargoCgHeightIn). The cargo case runs next to the rider cases and never changes the rider range.',
   },
   restLoadLb: {
     label: 'Resting adult (sitting or stepping in)', group: 'cargo', unit: 'lb',
@@ -199,7 +199,7 @@ const defs = {
   riderMinMassLb: {
     label: 'Lightest rider mass (pitch-back case)', group: 'loads', unit: 'lb',
     default: 80, min: 40, max: 150, step: 5, status: 'assumed', ref: 'D-1',
-    note: 'BRIEF §4.1: scouts run 80–150 lb. Rows that get worse with a lighter rider (rearward pitch) are also evaluated here (critic Phase 2 r1, H3).',
+    note: 'D-1: scouts run 80–150 lb. Rows that get worse with a lighter rider (rearward pitch) are also evaluated here (critic Phase 2 r1, H3).',
   },
   pullForceLbf: {
     label: 'Design bridle pull (peak)', group: 'loads', unit: 'lbf',
@@ -247,7 +247,7 @@ const defs = {
   sideHeightBowIn: {
     label: 'Side height at the bow (above the deck)', group: 'body', unit: 'in',
     default: 4, min: 2, max: 8, step: 0.25, status: 'explore', primary: true, ref: 'D-54',
-    note: 'Sled side profile (reference/05): low at the bow, rising in a straight line to the rear (sideHeightRearIn). Where the sides end against the bow curl.',
+    note: 'Sled side profile (D-57): low at the bow, rising in a straight line to the rear (sideHeightRearIn). Where the sides end against the bow curl.',
   },
   sideHeightRearIn: {
     label: 'Side height at the rear (above the deck)', group: 'body', unit: 'in',
@@ -257,7 +257,7 @@ const defs = {
   sheerCurveIn: {
     label: 'Sheer curve (sag of the side top below the straight line)', group: 'body', unit: 'in',
     default: 2.5, min: 0, max: 4, step: 0.25, status: 'explore', primary: true, ref: 'D-57',
-    note: 'The top edge of the side sweeps up from the low bow to the tall rear in a smooth concave curve, as on Wagner\'s sled (reference/05). The gunwale dips this far below the straight line from the rear to the bow at mid-length (a parabola); 2.5 in with the 10 in of rise leaves the top edge level at the bow. 0 = the straight D-54 line. The gunwale is bandsawn from a wide oak board to the curve; the web top follows it.',
+    note: 'The top edge of the side sweeps up from the low bow to the tall rear in a smooth concave curve, as on Wagner\'s sled (D-57). The gunwale dips this far below the straight line from the rear to the bow at mid-length (a parabola); 2.5 in with the 10 in of rise leaves the top edge level at the bow. 0 = the straight D-54 line. The gunwale is bandsawn from a wide oak board to the curve; the web top follows it.',
   },
   bowWidthIn: {
     label: 'Bow outside width (at the bulkhead)', group: 'body', unit: 'in',
@@ -538,19 +538,19 @@ const defs = {
   lashPointsPerSide: {
     label: 'Lash points (D-rings) per side', group: 'body', unit: '',
     default: 3, min: 2, max: 3, step: 1, status: 'assumed', ref: 'D-41, D-76',
-    note: 'D-76: the D-rings are through-bolted to the heads of the side ribs, one per rib (3 per side: the box rib, the mid rib and the bow post). 2 leaves the bow post without one (the ribs stay: they stiffen the side). BRIEF §4.9 asks for at least 6 in all. The old screwed lash doublers are gone.',
+    note: 'D-76: the D-rings are through-bolted to the heads of the side ribs, one per rib (3 per side: the box rib, the mid rib and the bow post). 2 leaves the bow post without one (the ribs stay: they stiffen the side). D-76 asks for at least 6 in all. The old screwed lash doublers are gone.',
   },
   lashLoadLbf: {
     label: 'Lash point design load (strap pull)', group: 'body', unit: 'lbf',
     default: 300, min: 100, max: 600, step: 25, status: 'assumed', ref: 'D-41, D-76',
-    note: 'BRIEF §4.9: the D-ring bolt plate is rated for 300 lbf working load. The lash-load check pulls each plate with this at the angle below (through-bolts, head bearing, rib bending, D-76), and the side-lateral row pulls the side in with it at the worst rib.',
+    note: 'D-76: the D-ring bolt plate is rated for 300 lbf working load. The lash-load check pulls each plate with this at the angle below (through-bolts, head bearing, rib bending, D-76), and the side-lateral row pulls the side in with it at the worst rib.',
   },
   lashPullAngleDeg: {
     label: 'Lash strap pull angle above the deck', group: 'body', unit: '°',
     default: 45, min: 15, max: 75, step: 5, status: 'assumed', ref: 'D-41, D-76',
     note: 'The strap runs up and inboard over the load: 45° splits the pull evenly into a vertical part (shear in the D-ring bolts) and an inboard part (bolt tension, and the side pulled in).',
   },
-  // ── Side ribs (D-76, docs/side-stiffness-study.md option E): three oak ribs per side on the inside face of the web, whose heads carry the D-rings ──
+  // ── Side ribs (D-76, docs/studies/side-stiffness-study.md option E): three oak ribs per side on the inside face of the web, whose heads carry the D-rings ──
   sideRibWidthIn: {
     label: 'Side rib width (fore-aft)', group: 'body', unit: 'in',
     default: 0.75, min: 0.5, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-76',
@@ -703,7 +703,7 @@ const defs = {
   grabHoleLengthIn: {
     label: 'Grab hole length', group: 'seat', unit: 'in',
     default: 4.5, min: 3.5, max: 6, step: 0.25, status: 'assumed', ref: 'D-40, D-57',
-    note: 'A gloved hand: at least 3.5 in (BRIEF 4.7).',
+    note: 'A gloved hand: at least 3.5 in (D-40).',
   },
   grabHoleHeightIn: {
     label: 'Grab hole height (finger gap)', group: 'seat', unit: 'in',
@@ -1186,7 +1186,7 @@ const defs = {
   handleBowCrownIn: {
     label: 'Handlebow crown (rise at the middle over the post tops)', group: 'brake', unit: 'in',
     default: 0.875, min: 0, max: 3, step: 0.125, status: 'assumed', ref: 'D-53, D-57',
-    note: 'D-57: a gentle crown (was 3 in), bandsawn from one oak board rather than laminated. A sled-style handlebow (reference/05): the bow arches up between and over the two posts. 0 = the old straight bar. The bow ends overhang the posts to the edge of the sled; the grip height (rearHandleHeightIn) is measured at the posts.',
+    note: 'D-57: a gentle crown (was 3 in), bandsawn from one oak board rather than laminated. A sled-style handlebow (D-53): the bow arches up between and over the two posts. 0 = the old straight bar. The bow ends overhang the posts to the edge of the sled; the grip height (rearHandleHeightIn) is measured at the posts.',
   },
   handleParkClearIn: {
     label: 'Parked handlebow clearance over the rear side top', group: 'brake', unit: 'in',
@@ -2094,7 +2094,7 @@ const defs = {
   bumpWheelRateLbIn: {
     label: 'Effective wheel radial stiffness (10" pneumatic)', group: 'bump', unit: 'lb/in',
     default: 500, min: 150, max: 1500, step: 25, status: 'verify', ref: 'D-54',
-    note: 'PRE-ORDER GATE (eng 3c review, D-62): the design passes only if the real rate is below about 560 lb/in with the load forward (about 800 for the rider cases); the first row to flip is the front beam groove wall under a hard hit, then the rear beam seat, the groove bearing and the king bearing. TEST BEFORE ORDERING the lot: tire at 30 psi, a known weight over one wheel, a ruler: a squash of 0.55 in or more at 300 lb is a pass (everything holds as built); 0.4 to 0.55 in means lengthen the outer front clamp plate; under 0.4 in, stop and re-run the analysis with the measured k. Flat-free or foam-filled wheels change this rate by a factor of several and are NOT modeled by the tire-type switch. Phase 3c-3b: a 10" x 3.5" pneumatic hand-truck tire (4.10/3.50-4, rated about 300 lb at 30 psi) squashes about 0.6" (18% of the 3.25" section) at its rating, so k is about 300 / 0.6 = 500 lb/in; it scales with inflation pressure and runs 300 (20 psi) to 900 (rim-bound). TO MEASURE: stand a known weight on the sled at one wheel (a 150 lb person on the frame over the wheel) and measure the tire squash with a ruler against the hub; k = load / squash. docs/phase3c-3b-notes.md.',
+    note: 'PRE-ORDER GATE (eng 3c review, D-62): the design passes only if the real rate is below about 560 lb/in with the load forward (about 800 for the rider cases); the first row to flip is the front beam groove wall under a hard hit, then the rear beam seat, the groove bearing and the king bearing. TEST BEFORE ORDERING the lot: tire at 30 psi, a known weight over one wheel, a ruler: a squash of 0.55 in or more at 300 lb is a pass (everything holds as built); 0.4 to 0.55 in means lengthen the outer front clamp plate; under 0.4 in, stop and re-run the analysis with the measured k. Flat-free or foam-filled wheels change this rate by a factor of several and are NOT modeled by the tire-type switch. Phase 3c-3b: a 10" x 3.5" pneumatic hand-truck tire (4.10/3.50-4, rated about 300 lb at 30 psi) squashes about 0.6" (18% of the 3.25" section) at its rating, so k is about 300 / 0.6 = 500 lb/in; it scales with inflation pressure and runs 300 (20 psi) to 900 (rim-bound). TO MEASURE: stand a known weight on the sled at one wheel (a 150 lb person on the frame over the wheel) and measure the tire squash with a ruler against the hub; k = load / squash.',
   },
   bumpMassShare: {
     label: 'Rigid-body bump mass multiplier', group: 'bump', unit: '×',
@@ -2104,7 +2104,7 @@ const defs = {
   bumpDlfCheck: {
     label: 'Conventional dynamic factor (cross-check only)', group: 'bump', unit: '×',
     default: 3, min: 1.5, max: 5, step: 0.25, status: 'assumed', ref: 'D-54',
-    note: 'Textbook dynamic wheel-load factor for a hand cart at walking pace, 2 to 3 (docs/phase3c-3b-notes.md). Every bump row quotes the pulse against this × the static wheel load; the checks are NOT capped to it (a square 1" step at jogging pace is physically above it).',
+    note: 'Textbook dynamic wheel-load factor for a hand cart at walking pace, 2 to 3 (D-55). Every bump row quotes the pulse against this × the static wheel load; the checks are NOT capped to it (a square 1" step at jogging pace is physically above it).',
   },
   failSafeFactor: {
     label: 'Fail-safe factor on ultimate (hard hit)', group: 'factors', unit: '×',
@@ -2571,7 +2571,7 @@ export function validateParams(input: Params): ParamIssue[] {
   // The grab handles slide aft to stay clear of the sloped gunwale's lash points; they must still reach the rider (as before).
   // Side profile (D-54).
   if (p.sideHeightBowIn > p.sideHeightRearIn)
-    warn(['sideHeightBowIn', 'sideHeightRearIn'], 'The sled profile is meant to be low at the bow and tall at the rear (reference/05).');
+    warn(['sideHeightBowIn', 'sideHeightRearIn'], 'The sled profile is meant to be low at the bow and tall at the rear (D-57).');
   if (p.sideHeightBowIn - 2 * p.railBandIn < 1)
     err(['sideHeightBowIn', 'railBandIn'], 'The side panel at the bow would be shorter than 1". Raise the bow side or thin the chine and gunwale.');
   // D-69: the bow bulkhead's bottom is the deck underside, its corners the bow side tops, its crown the handlebow's; the hand-hold hangs under the crown with liftBarMinIn of oak above it.

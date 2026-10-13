@@ -63,7 +63,7 @@ describe('what D-54 removed', () => {
   });
 });
 
-describe('no exposed plywood edges (acceptance, BRIEF §5.2)', () => {
+describe('no exposed plywood edges (acceptance, D-35)', () => {
   it('the variant set is real (most variants build)', () => {
     expect(VARIANTS.length).toBeGreaterThanOrEqual(11);
     expect(VARIANTS.some((v) => v.name === 'defaults')).toBe(true);

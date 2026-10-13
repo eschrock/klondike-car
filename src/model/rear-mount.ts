@@ -109,7 +109,7 @@ export function boltLength(grip: number, d: number, washers = 1): number {
 /** Threads showing past a nylon-insert nut: the tip must clear the insert by at least this many threads (the usual 1.5 to 2). */
 export const MIN_THREADS_PAST_NUT = 1.5;
 
-/** Stock lengths (in, measured from under the shoulder) of 3/8-16 forged shoulder eye bolts, hot-dip galvanized (Bolt Depot; docs/price-research-2026-10.md): D-72. */
+/** Stock lengths (in, measured from under the shoulder) of 3/8-16 forged shoulder eye bolts, hot-dip galvanized (Bolt Depot; docs/price-research/price-research-2026-10.md): D-72. */
 export const EYE_BOLT_STOCK_IN: readonly number[] = [2.5, 4.5, 6];
 /** Stock lengths (in) of 3/8-16 carriage bolts (Bolt Depot 316, 18-8): 1/2 in steps from 4 in up. */
 export const CARRIAGE_STOCK_IN: readonly number[] = [4, 4.5, 5, 5.5, 6, 6.5, 7, 8];

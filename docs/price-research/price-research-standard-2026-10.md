@@ -1,6 +1,6 @@
 # Price research, Standard weather spec, October 2026
 
-Accessed 2026-10-12. Prices for the **Standard** weather spec (garage-kept, used a few times a year, rained on at most): 304 / 18-8 stainless, zinc or plated steel indoors, beech Dominos, Titebond III, spar urethane, and a smaller epoxy kit. The current spec (316, Sipo, marine varnish, gallon epoxy) is the **Extreme weather** option and is in `docs/price-research-2026-10.md`. Nothing was bought. Machine-readable twin: `docs/price-research-standard-2026-10.json` (same shape as the earlier JSON, plus `spec: "standard"`).
+Accessed 2026-10-12. Prices for the **Standard** weather spec (garage-kept, used a few times a year, rained on at most): 304 / 18-8 stainless, zinc or plated steel indoors, beech Dominos, Titebond III, spar urethane, and a smaller epoxy kit. The current spec (316, Sipo, marine varnish, gallon epoxy) is the **Extreme weather** option and is in `docs/price-research/price-research-2026-10.md`. Nothing was bought. Machine-readable twin: `docs/price-research/price-research-standard-2026-10.json` (same shape as the earlier JSON, plus `spec: "standard"`).
 
 ## How to read the evidence
 

@@ -1,5 +1,5 @@
 /**
- * The "Simple" view (docs/simple-view-spec.md, D-30): "Is this sled safe, and for what rider weights?" at a glance.
+ * The "Simple" view (D-30): "Is this sled safe, and for what rider weights?" at a glance.
  * Left: the five shape controls. Right: the headline, the rider range bar with the rider-weight slider, six traffic
  * lights, an at-a-glance strip and the "watch it" demos.
  *

@@ -5,7 +5,7 @@
  *  - seat-grip:    grab board (D-57): the bar of oak above the hand hole in bending, the bolt couple under an inboard pull and the no-pinch geometry (finger gap, clear length);
  *  - storage-pack: the 10 Essentials kit list (D-19) packed into the actual box interior;
  *  - storage-lid-open: how far the lid opens before the (upright) seat back stops it;
- *  - lash-points:  count of gunwale lash points (BRIEF §4.9: at least 6);
+ *  - lash-points:  count of gunwale lash points (D-76: at least 6);
  *  - lash-load:    one D-ring plate pulled at its working load and angle (D-76: through-bolted to a rib head): bolt tension and shear, head bearing, washer bearing, rib bending.
  *
  * Seat-back model (per stile, 2 stiles): uniform line load w = Q / (2H) aft along the back, Q = rider mass × dynamic factor × torso share.
@@ -95,7 +95,7 @@ export function seatBackCheck(ctx: Ctx): AnalysisCheck {
     id: 'seat-back',
     label: 'Seat-back load (frameless 12 mm panel, crest strip, hinge inserts, latch pins)',
     group: 'Structure',
-    refs: ['D-9', 'D-40', 'D-62', 'BRIEF 4.7'],
+    refs: ['D-9', 'D-40', 'D-62'],
     primary: 'goal',
     operating: ev(ctx.loads.operating),
     goal: ev(ctx.loads.goal),
@@ -138,14 +138,14 @@ export function seatGripCheck(ctx: Ctx): AnalysisCheck {
     ];
     const how = `Pull ${f(F)} lbf (0.5 × ${f(c.riderLb, 0)} lb × ${f(gF, 2)}) on one board: the ${f(bt, 2)}" × ${f(bar, 2)}" bar over the ${f(hl, 2)}" hole, M = F·L/4 = ${f(Mbar)} lb·in, σ = M/S = ${f(Mbar / Sbar, 0)} psi (≤ ${f(al.oakBend, 0)}). `
       + `The pull acts ${f(arm, 2)}" above the gunwale top; the ${GRIP_BOLTS} bolts (${GRIP_BOLT_COLS} columns × 2 rows ${GRIP_BOLT_ROWS_IN.join('" and ')}" below the top) resist it as a couple: T = F·arm·d_max/(cols·Σd²) = ${f(Tbolt)} lbf on the worst bolt, ${f(Tbolt / boltArea, 0)} psi on the ${f(boltArea, 4)} in² tensile area (≤ ${f(p.ss316BoltYieldPsi / p.steelSafetyFactor, 0)}), ${f(Tbolt / washerA, 0)} psi under the ${f(GRIP_WASHER_OD_IN, 2)}" fender washer (≤ ${f(al.oakPerp, 0)}). The heads bear on the ${GRIP_BACKING_T_IN}" × ${GRIP_BACKING_H_IN}" × ${f(gripBackingLen(p.grabBoardLengthIn), 1)}" stainless strip (D-63): ${f(Ttotal)} lbf over ${f(stripA, 1)} in², ${f(Ttotal / stripA, 0)} psi on the outer band, ${f(punch, 0)} psi punching through the strip under a ${punchD}" washer. `
-      + `Finger gap ${f(p.grabHoleHeightIn, 2)}" (≥ 1.25") and ${f(hl, 2)}" clear length (≥ 3.5"): no pinch point (BRIEF §4.7).`;
+      + `Finger gap ${f(p.grabHoleHeightIn, 2)}" (≥ 1.25") and ${f(hl, 2)}" clear length (≥ 3.5"): no pinch point (D-40).`;
     return governing(ds, how);
   };
   return dualCheck({
     id: 'seat-grip',
     label: 'Side grab board (bar bending, bolts, no pinch)',
     group: 'Structure',
-    refs: ['D-40', 'D-57', 'BRIEF 4.7'],
+    refs: ['D-40', 'D-57'],
     primary: 'goal',
     operating: ev(ctx.loads.operating),
     goal: ev(ctx.loads.goal),
@@ -226,8 +226,8 @@ export function lashPointsCheck(ctx: Ctx): AnalysisCheck {
     limit: 6,
     sense: '>=',
     marginalAbs: 0,
-    refs: ['BRIEF 4.9', 'D-41', 'D-76'],
-    how: `${n} D-rings, through-bolted to the heads of the side ribs (D-76: ${ctx.p.lashPointsPerSide} per side, ribs at x = ${xs.join(', ')}"), so the tie-downs bracket the whole bed; each bolt plate is rated for a ${ctx.p.lashLoadLbf} lbf strap load. BRIEF §4.9 asks for at least 6.`,
+    refs: ['D-41', 'D-76'],
+    how: `${n} D-rings, through-bolted to the heads of the side ribs (D-76: ${ctx.p.lashPointsPerSide} per side, ribs at x = ${xs.join(', ')}"), so the tie-downs bracket the whole bed; each bolt plate is rated for a ${ctx.p.lashLoadLbf} lbf strap load. At least 6 are required (D-76).`,
   });
 }
 
@@ -264,7 +264,7 @@ export function lashLoadCheck(ctx: Ctx): AnalysisCheck {
     label: 'Lash point pull (through-bolts, head and rib)',
     group: 'Structure',
     value: g.value, unit: g.unit, limit: g.limit, sense: g.sense, details: ds,
-    refs: ['BRIEF 4.9', 'D-41', 'D-76'],
+    refs: ['D-41', 'D-76'],
     how: `One D-ring plate pulled at its ${p.lashLoadLbf} lbf working load, ${p.lashPullAngleDeg}° above the deck: V = ${f(k.V)} lbf up the rib head, H = ${f(k.H)} lbf inboard. `
       + `D-76: the plate is through-bolted to the rib head with ${LASH_BOLTS} #8-32 x ${k.bolt.len}" stainless machine screws (washer, side sandwich, head, plate, nylock: ${k.bolt.need.toFixed(2)}"), so nothing withdraws: each takes ${f(k.T1)} lbf of tension (${f(k.sigT, 0)} psi on ${LASH_BOLT_AT_IN2} in², allowable ${f(k.Ft, 0)} = ${f(p.lashBoltYieldPsi, 0)} / ${p.steelSafetyFactor}) and ${f(k.V1)} lbf of shear (${f(k.tau, 0)} psi on the ${LASH_BOLT_AR_IN2} in² root, allowable ${f(k.Fv, 0)}); together ${k.interaction.toFixed(2)}. `
       + `Bearing: ${f(k.V1)} lbf per bolt on ${LASH_BOLT_DIA_IN}" x ${p.sideRibDepthIn}" of head = ${f(k.headBearing, 0)} psi (≤ ${f(al.oakDowel, 0)}; the bands and web behind it not counted); the ${LASH_WASHER.od}" fender washer outside bears ${f(k.washerBearing, 0)} psi on the outer band (≤ ${f(al.oakPerp, 0)}, compression ⊥). `

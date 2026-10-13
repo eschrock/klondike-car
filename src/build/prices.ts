@@ -2,7 +2,7 @@
  * Unit prices for the BOM (Phase 4). One table, next to the part sourcing; nothing else in `src/build` holds a dollar figure.
  *
  * Every entry says where the number comes from. `basis: 'quoted'` is a real price: one the MODEL carries (`part.sourcing.costUsd`), one Eric gathered from a named vendor's
- * published list, or one from the web price research of 2026-10-12 (docs/price-research-2026-10.md: the `found(...)` entries, each with its vendor, URL and date). Every other
+ * published list, or one from the web price research of 2026-10-12 (docs/price-research/price-research-2026-10.md: the `found(...)` entries, each with its vendor, URL and date). Every other
  * entry is an `estimate`: a realistic 2026 US retail price, rounded, to be replaced by a real quote before ordering. No SKUs are invented: `source` names a vendor or a kind of vendor.
  * `url` is a real link from Eric or from the research (the vendor's price list or product page); it goes to the BOM line, the BOM CSV and the build book. Never invent one.
  *
@@ -17,14 +17,14 @@ export type PriceBasis = 'quoted' | 'estimate';
 
 /**
  * The weather spec the BOM is priced for (D-73, Eric 2026-10-12). STANDARD (the default; garage-kept, used a few times a year, wet at most at a rainy derby): 304 / 18-8 stainless, zinc and
- * galvanized where it lives dry, beech Dominos, Titebond III, exterior spar urethane, a small epoxy kit; priced from docs/price-research-standard-2026-10.md. EXTREME (stored outside,
- * near salt, or exposed regularly): 316 throughout, Sipo Dominos, epoxy everywhere, marine varnish, the gallon epoxy kit; priced from docs/price-research-2026-10.md.
+ * galvanized where it lives dry, beech Dominos, Titebond III, exterior spar urethane, a small epoxy kit; priced from docs/price-research/price-research-standard-2026-10.md. EXTREME (stored outside,
+ * near salt, or exposed regularly): 316 throughout, Sipo Dominos, epoxy everywhere, marine varnish, the gallon epoxy kit; priced from docs/price-research/price-research-2026-10.md.
  * A Standard listing that is the nearest size or kind (not the exact item the model asks for) is priced as an `estimate` with its link and the gap in the note; an exact listing is `quoted`.
  */
 export type SpecName = 'standard' | 'extreme';
 export const specOf = (p: Pick<Params, 'weatherSpec'>): SpecName => (p.weatherSpec === WEATHER_SPEC.extreme ? 'extreme' : 'standard');
 
-/** The date of the web price research whose prices are `quoted` below (docs/price-research-2026-10.md). */
+/** The date of the web price research whose prices are `quoted` below (docs/price-research/price-research-2026-10.md). */
 export const RESEARCH_DATE = '2026-10-12';
 /** Said on every price the search tool read from a vendor page without the page being fetched. */
 export const SEARCH_READ_NOTE = 'price read via search, confirm on the page';
@@ -367,7 +367,7 @@ const FINISH = 'Paint store / marine supplier';
 const OAK_TREE = 'Oak Tree Supply';
 export const FINISH_PRICE: Record<string, Price> = {
   stain: est(18, 'qt', FINISH, 'wipe-on oak stain (or leave natural)'),
-  conditioner: est(16, 'qt', FINISH, 'pre-stain conditioner or gel stain for the okoume, which blotches (BRIEF finishing stack)'),
+  conditioner: est(16, 'qt', FINISH, 'pre-stain conditioner or gel stain for the okoume, which blotches (DESIGN.md finishing)'),
   gelStain: est(20, 'qt', FINISH, 'gel stain for the okoume'),
   varnish: found(53.99, 'qt', 'TotalBoat', 'https://www.totalboat.com/products/lust-marine-spar-varnish', 'TotalBoat Lust Rapid Recoat marine spar varnish, quart (heavily fortified with UV stabilizers)'),
   enamel: est(14, 'qt', FINISH, 'black enamel, for the lid legend (a pint is bought)'),
@@ -408,7 +408,7 @@ export const SOFT_GOODS: Record<string, Price> = {
 };
 
 // ── The Standard weather spec (garage-kept): 304 / 18-8 stainless, zinc, galvanized, beech Dominos ──────────
-// Source: docs/price-research-standard-2026-10.md (.json). Same rules as above: an exact listing is `quoted` (with its link), the nearest size or kind is an `estimate` that says so,
+// Source: docs/price-research/price-research-standard-2026-10.md (.json). Same rules as above: an exact listing is `quoted` (with its link), the nearest size or kind is an `estimate` that says so,
 // a spec-different cheaper item is an alternative. Bolt Depot sells fasteners by the piece AND by the bag: `eachUsd` is the piece price, the bag the pack (the BOM takes the cheaper).
 
 const FAST_STD = 'Fastener supplier (McMaster-Carr / Fastenal class), 18-8 (304) stainless';

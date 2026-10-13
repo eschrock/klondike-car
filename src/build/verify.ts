@@ -1,5 +1,5 @@
 /**
- * Phase 4 output 8: "Verify before ordering" checklist (docs/phase3-checkpoint.md, nine checks).
+ * "Verify before ordering" checklist (nine checks).
  *
  * Pure function of (parts, params). The numbers come from the params the model uses; the part ids are the ones present in the built
  * model. Every param whose `status` is 'verify' is claimed by a check, and any left over lands in the last item ("other params to
@@ -50,7 +50,7 @@ export interface VerifyCheck {
   /** Params with `status: 'verify'` that the check confirms. */
   paramKeys: string[];
   when: VerifyWhen;
-  /** DECISIONS.md ids. */
+  /** DECISIONS.md IDs. */
   refs: string[];
 }
 

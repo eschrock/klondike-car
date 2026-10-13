@@ -1,5 +1,5 @@
 /**
- * runChecks: Params → engineering checks (BRIEF §7, docs/phase2-spec.md). Pure TypeScript, no three.js.
+ * runChecks: Params → engineering checks (DESIGN.md). Pure TypeScript, no three.js.
  *
  * Builds the model once (goal rider, steer 0), derives the empty / operating / goal load cases from it, then runs the
  * stability, steering, braking, structure and mass/transport checks. The truck-fit call is the expensive one, so it is

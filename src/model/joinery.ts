@@ -426,7 +426,7 @@ export function joinerySummary(parts: Part[], filter: (p: Part) => boolean = () 
  * bounding boxes (or, for parts a hair apart, this part's own face toward the mate). `count` points are spread over that region:
  * along its longest axis, or on a grid over its two longest axes for four or more fasteners in a region at least
  * `GRID_MIN_IN` wide. A joint listed on both parts gets the same world points on each (the region is symmetric), each
- * in its own part's local frame. Payload parts are skipped (BRIEF: not part of the sled).
+ * in its own part's local frame. Payload parts are skipped (not part of the sled).
  */
 const GRID_MIN_IN = 1;
 export function locateJoints(parts: Part[]): void {

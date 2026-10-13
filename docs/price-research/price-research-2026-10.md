@@ -1,6 +1,6 @@
 # Price research, October 2026
 
-Accessed 2026-10-12. Base prices for the non-lumber lines of the BOM (`pkg/bom.csv`) against the estimates in `src/build/prices.ts`. Nothing was bought. Lumber and plywood were skipped (Eric's quotes). Machine-readable twin: `docs/price-research-2026-10.json`.
+Accessed 2026-10-12. Base prices for the non-lumber lines of the BOM (`pkg/bom.csv`) against the estimates in `src/build/prices.ts`. Nothing was bought. Lumber and plywood were skipped (Eric's quotes). Machine-readable twin: `docs/price-research/price-research-2026-10.json`.
 
 ## How to read the evidence
 

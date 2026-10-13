@@ -223,7 +223,7 @@ describe('overlaps', () => {
  * with the foot brake in (135 at Phase 3c-3a with the casters, 145 at Phase 3c-1, 174 at the Phase 3b flip).
  * The band is +/-10% overall, +/-25% per group (the front-end group is new and its parts move with the params). The brake group is wide and so is the hardware remainder,
  * which counts the joints of the parts actually present. */
-const EXPECTED_EMPTY_LB = 120.6; // D-60 (the weight package, docs/weight-study-3c.md): 144 lb at 3c-5, 120.6 lb now (hollow axles, 2.8 lb wheels, 4 mm ply, 1/2 in transom, lighter joists and the foot block gone). 146 before; // D-58 (3c-4a): +the chain stops, roll pads, oak tongue and stub rods in the front end (16.2 to 21.2 lb), -the 3.5 in track change; // 3c-4b (D-57): 134 at 3c-3 + the bulkhead, signs, grab boards, hinges, longer sockets, flag tube and the step brake
+const EXPECTED_EMPTY_LB = 120.6; // D-60 (the weight package): 144 lb at 3c-5, 120.6 lb now (hollow axles, 2.8 lb wheels, 4 mm ply, 1/2 in transom, lighter joists and the foot block gone). 146 before; // D-58 (3c-4a): +the chain stops, roll pads, oak tongue and stub rods in the front end (16.2 to 21.2 lb), -the 3.5 in track change; // 3c-4b (D-57): 134 at 3c-3 + the bulkhead, signs, grab boards, hinges, longer sockets, flag tube and the step brake
 const EXPECTED_GROUP_LB: Record<string, number> = {
   'running-gear': 18.6, 'front-end': 16.3, frame: 13.4, body: 36.1, seat: 8.4, storage: 7.0, removable: 2.4, lighting: 2.0, // D-60 (26.4, 21.2, 13.3, 43.8, 10.3, 8.4, 3.7, 1.9 before)
 };

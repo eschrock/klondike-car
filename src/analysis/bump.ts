@@ -4,7 +4,7 @@
  *
  *   sin(beta) = (r - h) / r           contact normal tilted beta above the horizontal; h capped at 0.9 r (a taller step is a wall)
  *   v_n       = v cos(beta)           normal-direction speed of the wheel centre
- *   m_e       = bumpMassShare x W_c / g   W_c = rigid-body corner weight, W / (1 + x^2/ky^2 + y^2/kx^2) (Phase 3c-3b, docs/phase3c-3b-notes.md)
+ *   m_e       = bumpMassShare x W_c / g   W_c = rigid-body corner weight, W / (1 + x^2/ky^2 + y^2/kx^2) (D-55)
  *   F_n       = v_n sqrt(k m_e)       k = bumpWheelRateLbIn
  *   H = F_n cos(beta)   V = F_n sin(beta)       (H opposes the motion, V is up on the wheel)
  *

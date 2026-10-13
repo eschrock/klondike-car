@@ -2,7 +2,6 @@
  * D-66 (Eric 2026-10-12): matched tracks and a gradual bow taper. Rear AND front track 30 in (tire to body gap 1-1/4 in), the cargo load-height rule 10 in, and the abrupt 1-1/4 in turn-in over
  * 14 in replaced by a long S-curve taper that starts mid-cabin (x = 20) and is DERIVED from the swing of the front wheels (`bowTaper`). The results are pinned here; the pieces are in
  * params.test.ts (the taper function), body.test.ts (the model), pivot.test.ts (the posed wheels), brake.test.ts (the slotted knee) and track-d58.test.ts (the D-58 history).
- * Details: docs/phase3c-10-notes.md.
  */
 import { describe, expect, it } from 'vitest';
 import { bowTaper, defaultParams, steerGeometry, validateParams, type Params } from './params';

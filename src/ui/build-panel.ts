@@ -1,5 +1,5 @@
 /**
- * Build mode (Phase 4, docs/phase4-spec.md; top-level mode since the UI rework): verify checklist, cut list, nesting, BOM, Shaper files,
+ * Build mode (top-level mode since the UI rework): verify checklist, cut list, nesting, BOM, Shaper files,
  * forms and templates, assembly (with the 3D step-through), finishing and downloads. Everything comes from `BuildData` (src/build/package.ts),
  * a pure function of the current model and params, computed lazily for the section on screen only, while the mode is open,
  * debounced on parameter changes and cached per parameter set.

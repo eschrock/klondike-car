@@ -55,7 +55,7 @@ export const VARNISH_COVERAGE = 140;
 export const VARNISH_COATS_SHOW = 3;
 export const VARNISH_COATS_HIDDEN = 2;
 /**
- * ft² per US quart of exterior spar urethane (Standard): the can's rating, about 100 ft² per quart (Minwax Helmsman, docs/price-research-standard-2026-10.md), thin brushed coats.
+ * ft² per US quart of exterior spar urethane (Standard): the can's rating, about 100 ft² per quart (Minwax Helmsman, docs/price-research/price-research-standard-2026-10.md), thin brushed coats.
  * The marine varnish of the Extreme spec covers 140 (VARNISH_COVERAGE).
  */
 export const URETHANE_COVERAGE = 100;
@@ -630,7 +630,7 @@ export function exposedPlyEdgeFt2(parts: Part[], p: Params): number {
   return in2 / FT2;
 }
 
-/** Containers of exterior spar urethane (Standard): quarts, and a gallon once three quarts are needed (the gallon is cheaper than three quarts, docs/price-research-standard-2026-10.md). */
+/** Containers of exterior spar urethane (Standard): quarts, and a gallon once three quarts are needed (the gallon is cheaper than three quarts, docs/price-research/price-research-standard-2026-10.md). */
 export function urethaneContainers(qt: number): Array<{ unit: 'gal' | 'qt'; qty: number; qt: number }> {
   const n = Math.max(1, Math.ceil(qt - 1e-9));
   let gal = Math.floor(n / 4);

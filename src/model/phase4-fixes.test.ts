@@ -6,7 +6,7 @@ import { computeLayout } from './layout';
 import { STEP } from './build-utils';
 import type { Mat4, Part, Vec2, Vec3 } from './types';
 
-/** Model-data fixes found by the Phase 4 build-output generators (docs/phase4-geometry-notes.md, "Model fixes (Phase 4)"). */
+/** Model-data fixes found by the Phase 4 build-output generators (D-74, D-76). */
 const p = defaultParams();
 const parts = buildModel(p);
 const get = (id: string): Part => parts.find((x) => x.id === id)!;

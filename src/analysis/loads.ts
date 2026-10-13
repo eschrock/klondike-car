@@ -26,7 +26,7 @@ export interface LoadModel {
   empty: CaseData;
   operating: CaseData;
   goal: CaseData;
-  /** Lightest rider (BRIEF §4.1) + cargo, for rows that degrade with a light rider (rearward pitch). */
+  /** Lightest rider (D-1) + cargo, for rows that degrade with a light rider (rearward pitch). */
   light: CaseData;
   /**
    * Cargo mode (D-53): the post-race payload on the bed, seat stowed in the box, no rider, at the cargo CG height and lateral offset. One case per placement (piled

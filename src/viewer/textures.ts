@@ -175,7 +175,7 @@ export function pebbleBump(kind: 'vinyl' | 'rubber'): THREE.CanvasTexture {
   });
 }
 
-/** Single place for the sign wording (Q-5 in DECISIONS.md: "TROOP 455 / WILDERNESS RANGERS", as in the concept renders). */
+/** Single place for the sign wording (the troop sign wording, DESIGN.md: "TROOP 455 / WILDERNESS RANGERS"). */
 export const SIGN_LINES = { top: 'TROOP 455', bottom: 'WILDERNESS RANGERS' } as const;
 
 /** Superellipse exponent of the sign outline (2 = ellipse; 2.6 = a fuller "plank oval" like the concept renders). */

@@ -69,7 +69,7 @@ describe('seat', () => {
     expect(panel.massLb).toBeGreaterThan(1.5);
     expect(panel.massLb).toBeLessThan(3);
   });
-  it('grab boards have a hand-sized hole and no pinch gap (BRIEF 4.7)', () => {
+  it('grab boards have a hand-sized hole and no pinch gap (D-40)', () => {
     for (const tag of ['L', 'R']) {
       const gr = byId.get(`seat-grip-${tag}`)!;
       expect(gr.geometry.type).toBe('extrusion');

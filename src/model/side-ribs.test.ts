@@ -1,5 +1,5 @@
 /**
- * D-76 (docs/side-stiffness-study.md, option E with option D at the rear station): three ribs per side, their knees and box ties, and the D-rings on their heads.
+ * D-76 (docs/studies/side-stiffness-study.md, option E with option D at the rear station): three ribs per side, their knees and box ties, and the D-rings on their heads.
  * Stations, the parts, the bolts and screws, and the clearances to everything near them (inside: seat, cushion, box, lid, the seat back flipped flat, grab boards,
  * sign backers, the chocks and lamps in the box; outside: signs, grab-board backing strips, reflectors, scuppers).
  */
