@@ -381,3 +381,17 @@ describe('finishing steps are written as short items (Eric 2026-10-12)', () => {
     }
   });
 });
+
+describe('readability round 2 (finishing text)', () => {
+  for (const [name, spec] of [['Standard', 0], ['Extreme', 1]] as const) {
+    it(`${name}: no decision id, decimal or code name in the finishing steps, assumptions or glue rule`, () => {
+      const pp = { ...defaultParams(), weatherSpec: spec };
+      const sch = finishingSchedule(buildModel(pp), pp);
+      const text = [...sch.steps.flatMap((s) => [s.title, ...s.instructions, s.recoat, s.cure, s.winter]), sch.glue.adhesiveRule, ...sch.assumptions.filter((a) => !/ft²|fl oz/.test(a))].join('\n');
+      expect(text).not.toMatch(/\b[DAQ]-\d+\b/);
+      expect(text).not.toMatch(/\d\.\d/);
+      expect(text).not.toMatch(/glueEpoxyFlOz|SHOW_RULES/);
+    });
+  }
+});
+

@@ -9,7 +9,7 @@
 import { RIDER_PELVIS_Z_FRAC, STORAGE_LOCATION, thinSheet, type Params } from '../params';
 import { GRIP_BACKING_T_IN, STEP, box, cylinder, span, SIDES, type Ctx, stainless, insertMat, INSERT_DRILL_IN } from './build-utils';
 import { innerHalfWidth, sideSlopeAt, sideTopAt, type Layout } from './layout';
-import { chooseDomino, DOMINOS, frac, type DominoQuery } from './joinery';
+import { chooseDomino, DOMINOS, frac, toLocal, type DominoQuery } from './joinery';
 import { joistId } from './frame';
 import { profilePart, signedArea } from './profile';
 import { boltLength, inchesText, pickWoodScrew, SCREW_DIA_IN, screwText } from './rear-mount';
@@ -349,8 +349,8 @@ export function buildSeat(ctx: Ctx): Part[] {
       body: 'chassis', massLb: mass, edges: 'edged', grain: 'y', fab: 'shaper-origin', step: STEP.seatStorage, explode: unit(-0.5, 0, 0.6),
       stock: { t: plyT, w: Math.min(W, H), l: Math.max(W, H) }, // the Shaper cut size (round 2: the cut list said +0.25, the file and the notes said 16 in); the 1/16 in banding goes on after the cut
       joints: [
-        { type: 'screw', to: 'seat-hinge-L', count: 3, diaIn: 0.19, size: `3 × ${insertTxt}`, note: `hinge leaf on the front face at the foot (no screw into a ply edge); at = the insert mouths, ${leafV} in up the panel on the leaf centerline, ${HINGE_HOLE_PITCH_IN} in apart, centered ${hingeY.toFixed(2)} in off the center line`, at: insertAt(1) },
-        { type: 'screw', to: 'seat-hinge-R', count: 3, diaIn: 0.19, size: `3 × ${insertTxt}`, note: `hinge leaf on the front face at the foot (no screw into a ply edge); at = the insert mouths, ${leafV} in up the panel on the leaf centerline, ${HINGE_HOLE_PITCH_IN} in apart, centered ${hingeY.toFixed(2)} in off the center line`, at: insertAt(-1) },
+        { type: 'screw', to: 'seat-hinge-L', count: 3, diaIn: 0.19, size: `3 × ${insertTxt}`, note: `D-75: ONE face for both: the inserts are set from the FRONT face (the forward face, where the rider leans and the hinge leaf lies) and the #10-32 screws go in from the FRONT through the leaf; nothing is drilled from the back face, which keeps its veneer. Hinge leaf on the front face at the foot (no screw into a ply edge); at = the insert mouths on the front face, ${leafV} in up the panel on the leaf centerline, ${HINGE_HOLE_PITCH_IN} in apart, centered ${hingeY.toFixed(2)} in off the center line`, at: insertAt(1) },
+        { type: 'screw', to: 'seat-hinge-R', count: 3, diaIn: 0.19, size: `3 × ${insertTxt}`, note: `D-75: ONE face for both: the inserts are set from the FRONT face (the forward face, where the rider leans and the hinge leaf lies) and the #10-32 screws go in from the FRONT through the leaf; nothing is drilled from the back face, which keeps its veneer. Hinge leaf on the front face at the foot (no screw into a ply edge); at = the insert mouths on the front face, ${leafV} in up the panel on the leaf centerline, ${HINGE_HOLE_PITCH_IN} in apart, centered ${hingeY.toFixed(2)} in off the center line`, at: insertAt(-1) },
         { type: 'pin', to: 'seat-pin-L', count: 1, diaIn: 2 * PIN_R_IN, size: '13/32 clearance hole through the panel, bored square to the face; epoxy-sealed bore', note: `${pinZ.toFixed(2)}" up the panel from the hinge axis, at station y = ±${sup.stileY.toFixed(2)}" (${(W / 2 - sup.stileY - 0.203).toFixed(2)}" of panel from the hole edge to the side edge): upright into the blind hole in the stop block (${lg.upHoleIn.toFixed(4).replace(/0+$/, '')}" deep), flat through the deck into the blind hole in the backer pad (${lg.flatHoleIn.toFixed(4).replace(/0+$/, '')}" deep)`, at: [[sup.stileY, pinZ, plyT / 2]] },
         { type: 'pin', to: 'seat-pin-R', count: 1, diaIn: 2 * PIN_R_IN, size: '13/32 clearance hole through the panel, bored square to the face; epoxy-sealed bore', note: `${pinZ.toFixed(2)}" up the panel from the hinge axis, at station y = ±${sup.stileY.toFixed(2)}" (${(W / 2 - sup.stileY - 0.203).toFixed(2)}" of panel from the hole edge to the side edge): upright into the blind hole in the stop block (${lg.upHoleIn.toFixed(4).replace(/0+$/, '')}" deep), flat through the deck into the blind hole in the backer pad (${lg.flatHoleIn.toFixed(4).replace(/0+$/, '')}" deep)`, at: [[-sup.stileY, pinZ, plyT / 2]] },
         { type: 'glue', to: 'seat-back-pad', count: 1, size: 'Dual Lock strips on the face', note: 'the pad peels off by hand (D-57)' },
@@ -399,7 +399,7 @@ export function buildSeat(ctx: Ctx): Part[] {
       center: [s.P[0], sg * hingeY, s.P[2]], explode: unit(0, sg, 0.4),
       sourcing: { vendor: `McMaster-Carr (${stainless(p)} butt hinge, 2" knuckle, 1" leaves)`, costUsd: 9 },
       joints: [
-        { type: 'screw', to: 'seat-back-panel', count: 3, diaIn: 0.19, size: `#10-32 × 3/8 ${stainless(p)} flat-head machine screws into the epoxied 5/16 stainless threaded inserts in the front face of the panel (3/8 in, not 1/2 in: the leaf is about 1/16 in, so the screw bites 5/16 in and cannot bottom in the 11/32 in hole)`, note: 'leaf on the back\'s front face, flush with the frame', at: holeK.map((k): Vec3 => [s.col2[0] * leafV, s.col2[2] * leafV, -sg * k * HINGE_HOLE_PITCH_IN]) },
+        { type: 'screw', to: 'seat-back-panel', count: 3, diaIn: 0.19, size: `#10-32 × 3/8 ${stainless(p)} flat-head machine screws into the epoxied 5/16 stainless threaded inserts in the front face of the panel (3/8 in, not 1/2 in: the leaf is about 1/16 in, so the screw bites 5/16 in and cannot bottom in the 11/32 in hole)`, note: 'D-75: leaf on the seat back\'s FRONT face; the screws go in from the front, through the leaf, into the inserts set in that same front face (not the back)', at: holeK.map((k): Vec3 => [s.col2[0] * leafV, s.col2[2] * leafV, -sg * k * HINGE_HOLE_PITCH_IN]) },
         { type: 'screw', to: `seat-hinge-backer-${tag}`, count: 3, diaIn: SCREW_DIA_IN[8], fit: hingeFit, size: `${screwText(hingeFit)} ${stainless(p)} flat head, through the deck into the ${f2(HINGE_BACKER_THICK_IN)} in backer pad (${f2(hingeFit.lenIn - hingeFit.gripIn)} in of bite)`, note: 'leaf on the deck (the cushion\'s rear margin lies over it)', at: holeK.map((k): Vec3 => [leafV, -HINGE_R_IN, -sg * k * HINGE_HOLE_PITCH_IN]) },
       ],
       notes: 'The back flips forward 105° about this knuckle onto the deck (D-57). The leaf on the deck is under the 3/8" gap behind the cushion (a 1/16" proud leaf does not show in the cargo bed).',
@@ -407,9 +407,15 @@ export function buildSeat(ctx: Ctx): Part[] {
   }
   // One oak pad per side (D-63, build 3c-8; it was one 16.5 in strip 3 in wide and 3/4 in thick): 1 in thick for the blind flat-position pin hole, from 9 in forward to BUTTED against the next joist
   // so the flat pin lands in solid oak (the joist is glued behind the pad), 3 in wide across (1.5 in each side of the pin = 4 pin diameters, the hinge's 2 in knuckle inside it).
+  // D-75 (readability review MUST-15c): the backer's holes are placed from the real fasteners, not by the bounding-box locator (the pin is modeled UPRIGHT, so the locator put the flat-pin hole
+  // 5/32 in from the pad's rear end, where a 3/8 in hole would break out). The hinge screws are the hinge's own deck-leaf points; the flat pin is at P + c2L, 4 pin diameters from the sides.
+  const colMul = (m: number[], v: Vec3): Vec3 => [0, 1, 2].map((k) => m[k] * v[0] + m[4 + k] * v[1] + m[8 + k] * v[2] + m[12 + k]) as Vec3;
   for (const { s: sg, tag } of SIDES) {
     const yc = sg * sup.stileY;
-    parts.push(box(ctx, {
+    const hinge = parts.find((q) => q.id === `seat-hinge-${tag}`);
+    const hingeWorld = (hinge?.joints?.find((j) => j.to === `seat-hinge-backer-${tag}`)?.at ?? []).map((q) => colMul(hinge!.transform, q));
+    const pinWorld: Vec3 = [s.P[0] + sup.c2L, yc, L.deckBot];
+    const bk = box(ctx, {
       id: `seat-hinge-backer-${tag}`, partNo: 'seat-hinge-backer', name: `Seat-back hinge and pin backer ${tag}`, group: 'seat', mat: 'oak', step: STEP.frame, grain: 'y',
       ...span([hb.x0, hb.x1], [yc - pinPadHalfIn, yc + pinPadHalfIn], [L.deckBot - HINGE_BACKER_THICK_IN, L.deckBot]),
       joints: [
@@ -418,8 +424,13 @@ export function buildSeat(ctx: Ctx): Part[] {
         { type: 'screw', to: `seat-hinge-${tag}`, count: 3, diaIn: SCREW_DIA_IN[8], fit: hingeFit, size: `${screwText(hingeFit)} ${stainless(p)}, from the hinge leaf down through the deck` },
         { type: 'pin', to: `seat-pin-${tag}`, count: 1, diaIn: 2 * PIN_R_IN, size: `3/8" blind hole ${f4(lg.flatHoleIn)}" deep (flat latch), through the 12 mm deck first, with a 1/16" annular detent groove ${f4(lg.flatGrooveIn)}" below the deck`, note: `leaves ${f4(lg.flatLeftIn)}" of oak under the hole` },
       ],
-      notes: `Oak pad ${HINGE_BACKER_THICK_IN}" thick, glued under the 12 mm deck at each hinge so the hinge screws AND the flat-position pin hole bite oak, not ply (D-57, D-63). It runs from ${hb.x0.toFixed(2)}" (a half inch behind the hinge axis) forward to ${hb.x1.toFixed(2)}", where it BUTTS the face of the next joist, so the flat pin (${(s.P[0] + sup.c2L).toFixed(2)}", ${(hb.x1 - (s.P[0] + sup.c2L)).toFixed(2)}" from the pad end and in line with the joist behind it) lands in solid oak; it is ${(2 * pinPadHalfIn).toFixed(0)}" across, ${pinPadHalfIn}" (4 pin diameters) each side of the pin station. Grain across the sled. Drill the pin hole through the deck and ${f4(lg.flatHoleIn)}" into the pad (a drill stop), 1/16" groove for the detent ball ${f4(lg.flatGrooveIn)}" below the deck, epoxy-lined, when the seat is installed: ${f4(lg.flatLeftIn)}" of oak is left under the hole. Replaces the one-piece 3/4 in strip (lighter by about 0.4 lb).`,
-    }));
+      notes: `Holes (D-75): the 3 hinge screws ${f2(hingeWorld.length ? hingeWorld[0][0] - hb.x0 : 0)}" from the rear end; the 3/8" flat-pin hole ${f2(pinWorld[0] - hb.x0)}" from the rear end (${f2(hb.x1 - pinWorld[0] - PIN_R_IN)}" of oak from the hole to the front end), centered across. Oak pad ${HINGE_BACKER_THICK_IN}" thick, glued under the 12 mm deck at each hinge so the hinge screws AND the flat-position pin hole bite oak, not ply (D-57, D-63). It runs from ${hb.x0.toFixed(2)}" (a half inch behind the hinge axis) forward to ${hb.x1.toFixed(2)}", where it BUTTS the face of the next joist, so the flat pin (${(s.P[0] + sup.c2L).toFixed(2)}", ${(hb.x1 - (s.P[0] + sup.c2L)).toFixed(2)}" from the pad end and in line with the joist behind it) lands in solid oak; it is ${(2 * pinPadHalfIn).toFixed(0)}" across, ${pinPadHalfIn}" (4 pin diameters) each side of the pin station. Grain across the sled. Drill the pin hole through the deck and ${f4(lg.flatHoleIn)}" into the pad (a drill stop), 1/16" groove for the detent ball ${f4(lg.flatGrooveIn)}" below the deck, epoxy-lined, when the seat is installed: ${f4(lg.flatLeftIn)}" of oak is left under the hole. Replaces the one-piece 3/4 in strip (lighter by about 0.4 lb).`,
+    });
+    for (const j of bk.joints ?? []) {
+      if (j.to === `seat-hinge-${tag}` && hingeWorld.length === j.count) j.at = hingeWorld.map((w): Vec3 => toLocal(bk.transform, [w[0], w[1], L.deckBot]));
+      if (j.to === `seat-pin-${tag}`) j.at = [toLocal(bk.transform, pinWorld)];
+    }
+    parts.push(bk);
   }
 
   // Quick-release pins: ride in the panel holes. Upright: through the panel into the stop block (modeled here, head on the front face); flat: see seat-stow.ts.

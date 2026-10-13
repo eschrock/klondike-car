@@ -11,13 +11,14 @@
  * `brake-layout.ts` is the single source for the kinematics; both the part builder here and the analysis (`analysis/brake.ts`) read it. Pose s = 0 is released
  * (the model default), s = 1 is applied (the pad on the tread). Plain TS (no three.js).
  */
-import { STEP, box, cylinder, SIDES, unitDir, type Ctx, stainless, stainlessName } from './build-utils';
+import { STEP, box, cylinder, SIDES, unitDir, woodMassLb, type Ctx, stainless, stainlessName } from './build-utils';
 import { atPose, brakeGeometry, dot2, flapLocalX, flapOutline, hull2, PIVOT_SCREW_WOOD_IN, pivotBlockScrewPoints, polyArea, rot2, sub, type BrakeGeom, type V2 } from './brake-layout';
 import { buildHandle } from './handle';
 import { multiply, rotationY, translation } from './mat4';
 import { basisMatrix, profilePart } from './profile';
 import { boltLength, inchesText, pickWoodScrew, SCREW_DIA_IN, screwText } from './rear-mount';
 import { trapezoidTriangles } from './plan-wall';
+import { frac } from './joinery';
 import type { Joint, Mat4, Part, ScrewFit, Vec2, Vec3 } from './types';
 
 
@@ -101,6 +102,8 @@ const RUBBER_LB_PER_IN3 = 0.045;
 const PAD_SCREW_OFF_IN = 0.5;
 /** Stainless density (lb/in³) for the pivot pin. */
 const SS_LB_PER_IN3 = 0.29;
+/** Nearest 1/32 in as a fraction (a bolt clearance hole, 13/32). */
+const frac32 = (x: number): string => { const n = Math.round(x * 32); let num = n % 32, den = 32; const whole = Math.floor(n / 32); while (num > 0 && num % 2 === 0) { num /= 2; den /= 2; } return num === 0 ? `${whole}` : whole > 0 ? `${whole}-${num}/${den}` : `${num}/${den}`; };
 /** Foot tread sheet thickness on the flap (in). */
 const FOOT_TREAD_THICK_IN = 0.125;
 const CORD_LB_PER_IN = 0.004;
@@ -342,24 +345,32 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
     {
       const kn = g.knee;
       const poly = sgn > 0 ? kn.poly : [...kn.poly].reverse().map((q): V2 => [-q[0], q[1]]);
-      const stackBolt = inchesText(boltLength(g.bolts.stack, bd));
+      // D-75: the bolt clamps the head washer, the knee leg, the rail, the backer (less the plate recess) and the backing plate: boltLength adds the head washer, the nut and two threads.
+      const stackBolt = inchesText(boltLength(g.bolts.grip, bd));
+      const pl = g.bolts.plate;
+      const lay = kn.layers;
+      const layerText = lay.map((q, i) => `${i === 0 ? 'rear' : i === lay.length - 1 ? 'front' : 'center'} ${q.grain === 'y' ? 'ACROSS (grain along the arm)' : 'UPRIGHT (grain up the leg)'}`).join(', ');
+
       const bb = bbox(kn.poly);
+      const kneeH = bb.z1 - bb.z0, kneeW = Math.abs(kn.yOut - Y.face);
+      const glueUp = kn.zEdgeGlue - kn.zBot;
       const pv = g.pivot;
       const slotW = pv.ySlot[1] - pv.ySlot[0], slotL = pv.slotEndX - kn.x0;
       const zLoMid = kn.zLeg + ((kn.zArmBot - kn.zLeg) * ((pv.ySlot[0] + pv.ySlot[1]) / 2 - (Y.face + kn.legT))) / Math.max(1e-6, kn.yOut - (Y.face + kn.legT));
       const slotVol = slotW * slotL * (kn.zTop - zLoMid);
       const knee = profilePart(ctx, {
         id: `brake-knee-${tag}`, partNo: 'brake-knee', name: `Brake pivot knee ${tag} (white oak outrigger)`, group: 'brake', mat: 'oak', outline: poly as Vec2[], depth: kn.x1 - kn.x0, basis: 'yz', origin: [kn.x0, 0, 0],
-        grain: 'y', stock: { t: kn.x1 - kn.x0, w: bb.z1 - bb.z0, l: Math.abs(kn.yOut - Y.face) }, step: STEP.brake, fab: 'bandsaw', explode: [0.3, sgn, 0.3],
+        grain: 'y', stock: { t: kn.x1 - kn.x0, w: kneeH, l: kneeW }, step: STEP.brake, fab: 'bandsaw', explode: [0.3, sgn, 0.3],
         joints: [
-          { type: 'bolt', to: `rail-${tag}`, count: g.bolts.count, diaIn: bd, size: `${g.bolts.count} x ${f2(bd)}" x ${stackBolt}" ${stainless(p)} hex bolts (${g.bolts.xs.length} columns x ${g.bolts.zs.length} rows), fender washers and nylock nuts, through this leg and the rail into the backer`, note: `the nuts and washers sit in 1/2" counterbores in the backer's inner face; the heads are in counterbores in the knee's outboard face. Epoxy the holes.` },
+          { type: 'bolt', to: `rail-${tag}`, count: g.bolts.count, diaIn: bd, size: `${g.bolts.count} x ${f2(bd)}" x ${stackBolt}" ${stainless(p)} hex bolts (${g.bolts.xs.length} columns x ${g.bolts.zs.length} rows, ${f2(g.bolts.xs[1] - g.bolts.xs[0])}" x ${f2(g.bolts.zs[1] - g.bolts.zs[0])}" apart), a ${f2(p.brakeMountWasherOdIn)}" OD 3/8 USS flat washer under each head, nylock nuts on the backing plate, through this leg, the rail and the backer`, note: `D-75: the heads and their washers sit ON the leg's outboard face (no counterbore; the 1" washers clear each other by ${f2(g.bolts.xs[1] - g.bolts.xs[0] - p.brakeMountWasherOdIn)}"); the nuts bear on one ${frac(pl.t)}" x ${frac(pl.x1 - pl.x0)}" x ${frac(pl.z1 - pl.z0)}" ${stainless(p)} backing plate (brake-backplate-${tag}) let into the backer's inner face. Drill the leg from the same layout as the rail (the rail's hole joint): ${f2(g.bolts.xs[0] - kn.x0)}" and ${f2(g.bolts.xs[1] - kn.x0)}" from the knee's rear face, ${f2(g.bolts.zs[0] - kn.zBot)}" and ${f2(g.bolts.zs[g.bolts.zs.length - 1] - kn.zBot)}" up from its bottom. Epoxy the holes.` },
           { type: 'glue', to: `rail-${tag}`, count: 1, note: 'epoxy, leg against the rail and chine outer face (the bolts clamp it)' },
           { type: 'pin', to: `brake-pivot-pin-${tag}`, count: 1, diaIn: pv.dia, size: `${f2(pv.dia)}" pin hole across the ears: through the outboard ear, ${f2(pv.blind)}" blind into the inboard ear` },
           eye(`brake-chock-cord-${tag}`, 1, `1 x #10 ${stainless(p)} screw eye in the underside, for the chock cord`),
         ],
-        notes: `Oak outrigger bandsawn from ${f2(kn.x1 - kn.x0)}" stock: a ${f2(kn.legT)}" leg on the hull's outer face (rail and chine, z ${f2(kn.zBot)}" to ${f2(kn.zLeg)}"), an arm ${f2(kn.armT)}" thick that reaches out ${f2(kn.yOut - Y.face)}" over the gap beside the tire, braced by the sloping underside. Its top is FLAT at z = ${f2(kn.zTop)}", flush with the top of the pivot block (D-65). The rear of the arm is SLOTTED (bandsaw, then clean up with a chisel): a ${f2(slotW)}" wide slot (the ${f2(g.plan.wTongue)}" flap tongue plus ${f2(p.brakePivotSlotClearIn)}" a side) centered on the tire (|y| ${f2(pv.ySlot[0])}" to ${f2(pv.ySlot[1])}"), from the rear face (x = ${f2(kn.x0)}") forward to x = ${f2(pv.slotEndX)}", straight through the arm. That leaves two EARS: ${f2(pv.earOut)}" outboard and ${f2(pv.earIn)}" inboard. The ${f2(pv.dia)}" pin hole runs across the ears at x = ${f2(g.H[0])}", z = ${f2(g.H[1])}" (${f2(pv.edgeEarUp)}" below the top, ${f2(pv.edgeEarDown)}" above the arm bottom), through the outboard ear and ${f2(pv.blind)}" blind into the inboard ear; the knee's rear face is ${f2(g.H[0] - kn.x0)}" behind the pin. Drill it together with the flap tongue and block clamped in the slot. It stands ahead of the tire (x ${f2(kn.x0)}" to ${f2(kn.x1)}", the tire front is ${f2(g.r)}"), its bottom on the rail bottom (${f2(kn.zBot)}" off the ground). Bolted through the rail into the backer, not the thin side panel, so the loads go into the rail and the deck. Face-laminated from stocked boards (D-70): no 12/4 is bought; glue up the blank from 4/4 layers face to face with epoxy (each wide layer edge-glued from two pieces) and mill it to size BEFORE it is bandsawn, slotted and bored (the cut list gives the layers). Strength is taken as solid oak.`,
-        sourcing: { vendor: `Shop-cut white oak, ${f2(kn.x1 - kn.x0)}" x ${f2(bb.z1 - bb.z0)}" x ${f2(Math.abs(kn.yOut - Y.face))}" blank (face-laminated from 4/4 layers, D-70: no 12/4 is bought)` },
+        notes: `Oak outrigger bandsawn from ${f2(kn.x1 - kn.x0)}" stock: a ${f2(kn.legT)}" leg on the hull's outer face (rail and chine, z ${f2(kn.zBot)}" to ${f2(kn.zLeg)}"), an arm ${f2(kn.armT)}" thick that reaches out ${f2(kn.yOut - Y.face)}" over the gap beside the tire, braced by the sloping underside. Its top is FLAT at z = ${f2(kn.zTop)}", flush with the top of the pivot block (D-65). The rear of the arm is SLOTTED (bandsaw, then clean up with a chisel): a ${f2(slotW)}" wide slot (the ${f2(g.plan.wTongue)}" flap tongue plus ${f2(p.brakePivotSlotClearIn)}" a side) centered on the tire (|y| ${f2(pv.ySlot[0])}" to ${f2(pv.ySlot[1])}"), from the rear face (x = ${f2(kn.x0)}") forward to x = ${f2(pv.slotEndX)}", straight through the arm. That leaves two EARS: ${f2(pv.earOut)}" outboard and ${f2(pv.earIn)}" inboard. The ${f2(pv.dia)}" pin hole runs across the ears at x = ${f2(g.H[0])}", z = ${f2(g.H[1])}" (${f2(pv.edgeEarUp)}" below the top, ${f2(pv.edgeEarDown)}" above the arm bottom), through the outboard ear and ${f2(pv.blind)}" blind into the inboard ear; the knee's rear face is ${f2(g.H[0] - kn.x0)}" behind the pin. Drill it together with the flap tongue and block clamped in the slot. It stands ahead of the tire (x ${f2(kn.x0)}" to ${f2(kn.x1)}", the tire front is ${f2(g.r)}"), its bottom on the rail bottom (${f2(kn.zBot)}" off the ground). Bolted through the rail into the backer, not the thin side panel, so the loads go into the rail and the deck. CROSS-LAMINATED (D-75, like cross-laminated timber): ${lay.length} layers of ${f2(kn.x1 - kn.x0 > 0 ? (kn.x1 - kn.x0) / lay.length : 0)}" (4/4 planed, D-70/D-74) glued face to face with epoxy, ${layerText}. The UPRIGHT layer runs long grain from the leg bottom up through the shoulder to the knee top, so the bolted leg cannot split off along the grain; the ACROSS layers run long grain along the arm, through both pivot ears and across the bridge ahead of the slot (the front layer alone holds the outboard ear, so it is always ACROSS). The UPRIGHT layer is ${f2(kneeW)}" across its grain: one piece from a 6" board. Each ACROSS layer is ${f2(kneeH)}" across its grain: edge-glue it from two pieces BEFORE the face glue-up, the joint along its grain ${f2(glueUp)}" up from the bottom (${f2(kn.zEdgeGlue - (g.bolts.zs[g.bolts.zs.length - 1] + bd / 2))}" above the top bolt hole, ${f2(kn.zLeg - kn.zEdgeGlue)}" below the shoulder), where the UPRIGHT layer's grain bridges it. Use quartersawn or rift boards if you can (they move half as much across the grain) and seal the knee in epoxy with the rest, because the layers cross. Mill the block to size BEFORE it is bandsawn, slotted and bored. Strength: each check counts only the layers whose grain suits it (brake-mount and brake-pivot rows, D-75).`,
+        sourcing: { vendor: `Shop-cut white oak, ${f2(kn.x1 - kn.x0)}" x ${f2(kneeH)}" x ${f2(kneeW)}" blank, cross-laminated from ${lay.length} layers of 4/4 (D-70, D-75: no 12/4 is bought)` },
       });
+      knee.layerGrain = lay.map((q) => q.grain); // D-75: per-layer grain, rear layer first (the laminating axis is x)
       // D-66 (viewer fix): the slot is REAL geometry now: the knee is a mesh with the slot sawn through the arm, so the tongue and pivot block sit in it with their clearance.
       const km = kneeSlottedMesh(g, sgn);
       knee.geometry = { type: 'mesh', positions: km.positions, indices: km.indices, boxes: km.boxes };
@@ -372,20 +383,39 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
     // ── The oak backer inside the rail ──
     {
       const bk = g.backer;
+      const pl = g.bolts.plate;
       const yIn = sgn > 0 ? [bk.y0, bk.y1] : [-bk.y1, -bk.y0];
-      add1(box(ctx, {
+      const backer = box(ctx, {
         id: `brake-backer-${tag}`, partNo: 'brake-backer', name: `Brake knee backer ${tag} (white oak)`, group: 'brake', mat: 'oak', step: STEP.frame, // with the frame glue-up (round 2): it is epoxied to the rail and the deck underside before the deck goes on grain: 'x', fab: 'table-saw',
         size: [bk.x1 - bk.x0, bk.t, bk.z1 - bk.z0], center: [(bk.x0 + bk.x1) / 2, sgn * (bk.y0 + bk.y1) / 2, (bk.z0 + bk.z1) / 2], explode: [0, -sgn * 0.3, -1],
         joints: [
           { type: 'glue', to: `rail-${tag}`, count: 1, note: 'epoxy, full face against the rail inner face' },
           { type: 'glue', to: 'deck', count: 1, note: 'epoxy along the top edge, against the deck underside' },
-          // the nut and washer pockets in the inner face (local frame = box centered on its middle): one per knee bolt, on the bolt line, the washer's outside diameter plus 1/8 in
-          { type: 'hole', to: `rail-${tag}`, count: g.bolts.count, diaIn: p.brakeMountWasherOdIn + 0.125,
-            size: `${g.bolts.count} counterbores ${f2(p.brakeMountWasherOdIn + 0.125)}" wide × ${f2(p.brakeBackerCboreDeepIn)}" deep in the inner face, for the nut and fender washer of the knee bolts (the ${f2(bd)}" bolt hole goes through the middle)`,
-            at: g.bolts.zs.flatMap((z) => g.bolts.xs.map((x): Vec3 => [x - (bk.x0 + bk.x1) / 2, -sgn * bk.t / 2, z - (bk.z0 + bk.z1) / 2])),
-            cut: { kind: 'counterbore', dia: p.brakeMountWasherOdIn + 0.125, depth: p.brakeBackerCboreDeepIn, what: 'nut and washer of the knee bolts' } },
+          // D-75: the four knee-bolt holes at their absolute layout (from the backer's rear end and top edge; the same points as the rail's hole joint), and ONE flat-bottomed rectangular recess
+          // in the inner face for the stainless backing plate the nuts bear on (the old four 1-3/8 in counterbores at 1-1/16 in centers overlapped).
+          { type: 'hole', to: `rail-${tag}`, count: g.bolts.count, diaIn: bd,
+            size: `${g.bolts.count} x ${frac32(bd + 1 / 32)}" holes for the knee bolts, drilled square from the rail's outer face through the rail and this backer at the frame step: ${g.bolts.xs.map((x) => f2(x - bk.x0)).join('" and ')}" from the backer's rear end, ${g.bolts.zs.map((z) => f2(bk.z1 - z)).sort((a, b) => Number(a) - Number(b)).join('" and ')}" below its top edge (the rail's hole joint gives the same points from the rail's rear end)`,
+            at: g.bolts.zs.flatMap((z) => g.bolts.xs.map((x): Vec3 => [x - (bk.x0 + bk.x1) / 2, 0, z - (bk.z0 + bk.z1) / 2])) },
+          ...(pl.recess > 1e-6 ? [{ type: 'hole' as const, to: `brake-backplate-${tag}`, count: 1, size: `${frac(pl.x1 - pl.x0)}" x ${frac(pl.z1 - pl.z0)}" flat-bottomed rectangular recess ${frac(pl.recess)}" deep in the inner face for the backing plate, ${f2(pl.x0 - bk.x0)}" from the rear end and ${f2(bk.z1 - pl.z1)}" below the top edge (router with a fence, or saw and chisel)`,
+            at: [[(pl.x0 + pl.x1) / 2 - (bk.x0 + bk.x1) / 2, -sgn * bk.t / 2, (pl.z0 + pl.z1) / 2 - (bk.z0 + bk.z1) / 2] as Vec3],
+            cut: { kind: 'relief' as const, lo: [pl.x0 - (bk.x0 + bk.x1) / 2, Math.min(-sgn * bk.t / 2, -sgn * (bk.t / 2 - pl.recess)), pl.z0 - (bk.z0 + bk.z1) / 2] as Vec3, hi: [pl.x1 - (bk.x0 + bk.x1) / 2, Math.max(-sgn * bk.t / 2, -sgn * (bk.t / 2 - pl.recess)), pl.z1 - (bk.z0 + bk.z1) / 2] as Vec3, what: 'the stainless backing plate of the knee-bolt nuts' } }] : []),
         ],
-        notes: `Oak backer ${f2(bk.t)}" thick (|y| ${f2(Math.abs(yIn[0]))}" to ${f2(Math.abs(yIn[1]))}") x ${f2(bk.x1 - bk.x0)}" x ${f2(bk.z1 - bk.z0)}" on the inner face of the rail, from x = ${f2(bk.x0)}" to ${f2(bk.x1)}" (clear of the rear axle hanger), glued to the rail and the deck underside in the frame glue-up (before the deck goes on, the hull still right side up), so the knee bolts only have to be drilled through it later. A crossmember that lands on it is cut back ${f2(bk.t)}" and butts the backer face. The ${g.bolts.count} knee bolts end here, with washers and nuts in counterbores.`,
+        notes: `Oak backer ${f2(bk.t)}" thick (|y| ${f2(Math.abs(yIn[0]))}" to ${f2(Math.abs(yIn[1]))}") x ${f2(bk.x1 - bk.x0)}" x ${f2(bk.z1 - bk.z0)}" on the inner face of the rail, from x = ${f2(bk.x0)}" to ${f2(bk.x1)}" (clear of the rear axle hanger), glued to the rail and the deck underside in the frame glue-up (before the deck goes on, the hull still right side up), so the knee bolts only have to be drilled through it later. A crossmember that lands on it is cut back ${f2(bk.t)}" and butts the backer face. The ${g.bolts.count} knee bolts end here: their nylock nuts bear on one ${frac(pl.t)}" ${stainless(p)} backing plate let ${frac(pl.recess)}" into the inner face (D-75; the old four counterbores overlapped). Drill the ${g.bolts.count} bolt holes at the frame step from the layout in the hole joint (no knee needed as a template).`,
+      });
+      backer.massLb -= woodMassLb(p, (pl.x1 - pl.x0) * (pl.z1 - pl.z0) * pl.recess, 0, p.oakDensityPcf); // the recess
+      add1(backer);
+      // D-75: the nut-side backing plate (replaces four overlapping fender washers): cut from flat bar, four holes on the bolt pattern, lies in the backer's recess.
+      const hole = bd + 1 / 32;
+      const plateVol = (pl.x1 - pl.x0) * (pl.z1 - pl.z0) * pl.t - g.bolts.count * (Math.PI / 4) * hole * hole * pl.t;
+      const yPlate = bk.y0; // |y| of the backer's inner face
+      add1(box(ctx, {
+        id: `brake-backplate-${tag}`, partNo: 'brake-backplate', name: `Brake knee backing plate ${tag} (${stainlessName(p)})`, group: 'brake', mat: 'steel', kind: 'metal', material: `${stainless(p)} flat bar ${frac(pl.t)}" x ${frac(pl.x1 - pl.x0)}"`,
+        massLb: (plateVol / 1728) * p.steelDensityPcf, fab: 'drill-tap', step: STEP.frame,
+        size: [pl.x1 - pl.x0, pl.t, pl.z1 - pl.z0], center: [(pl.x0 + pl.x1) / 2, sgn * (Math.abs(yPlate) + pl.recess - pl.t / 2), (pl.z0 + pl.z1) / 2], explode: [0, -sgn, -0.3],
+        joints: [{ type: 'hole', to: `brake-backer-${tag}`, count: g.bolts.count, diaIn: bd, size: `${g.bolts.count} x ${frac32(hole)}" holes on the knee-bolt pattern (${f2(g.bolts.xs[1] - g.bolts.xs[0])}" x ${f2(g.bolts.zs[1] - g.bolts.zs[0])}" centers, ${f2(g.bolts.xs[0] - pl.x0)}" from the rear end and ${f2(pl.z1 - g.bolts.zs[g.bolts.zs.length - 1])}" from the top edge); the nylock nuts bear on it`,
+          at: g.bolts.zs.flatMap((z) => g.bolts.xs.map((x): Vec3 => [x - (pl.x0 + pl.x1) / 2, 0, z - (pl.z0 + pl.z1) / 2])) }],
+        sourcing: { vendor: `McMaster-Carr or Online Metals (${stainless(p)} flat bar ${frac(pl.t)}" x ${frac(pl.x1 - pl.x0)}", cut ${frac(pl.z1 - pl.z0)}" pieces on the bandsaw or with a hacksaw, file the corners round; drill ${g.bolts.count} x ${frac32(hole)}" through the backer as a template)`, costUsd: 4 },
+        notes: `D-75: one ${frac(pl.t)}" x ${frac(pl.x1 - pl.x0)}" x ${frac(pl.z1 - pl.z0)}" ${stainless(p)} plate under the four nylock nuts of the knee bolts, set in a ${frac(pl.recess)}" recess in the backer's inner face. It replaces four fender washers that overlapped on bolts ${f2(g.bolts.xs[1] - g.bolts.xs[0])}" apart, and spreads the bolt pull over the oak (brake-mount row: plate bearing and plate bending). Drill it through the backer's holes as a template.`,
       }));
     }
 

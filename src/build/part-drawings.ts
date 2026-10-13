@@ -25,7 +25,9 @@ import { brakeGeometry } from '../model/brake';
 import { computeLayout } from '../model/layout';
 import { flatPattern } from './flat';
 import { clearanceDia } from './shaper-svg';
-import { boardForThickness, planLamination } from './cutlist';
+import { cutList, grainInWords, type CutList } from './cutlist';
+import { defaultParams } from '../params';
+import { finalDimsText } from './units';
 import { esc, fmt, frac, hash6, parseInches, pointInPoly } from './svg-util';
 
 // ── Fractions ──
@@ -68,6 +70,7 @@ function fastenerNoun(j: Joint, text: string): string {
     const lm = new RegExp(String.raw`(?:^|[\s×x])${LEN}"?\s*[×x]\s*${LEN}\b`).exec(text);
     return `${d ? `${frac(d)} ` : ''}${lm && Math.abs(num(lm[1]) - (d ?? 0)) < 0.02 ? `× ${fracText(`${lm[2]} in`).replace(/ in$/, '')}" ` : ''}bolts`.replace(/^\s+/, '');
   }
+  if (j.type === 'hole' && /\bbolts?\b/i.test(text)) return d ? `${frac(d)} bolts` : 'bolts';
   return j.type === 'hole' ? 'screws' : 'fasteners';
 }
 
@@ -585,8 +588,12 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
         const fc = touching.length ? [...touching].sort((x, y) => hi[x.ax] - lo[x.ax] - (hi[y.ax] - lo[y.ax]))[0] : nearestFace(b, mid); // the face the cut is shallowest through
         const dep = hi[fc.ax] - lo[fc.ax];
         const others = ([0, 1, 2] as Ax[]).filter((k) => k !== fc.ax).map((k) => hi[k] - lo[k]);
-        const sizeText = c.kind === 'slot' ? `${frac(others[0])} × ${frac(others[1])} opening, ${frac(dep)} deep` : `${frac(Math.min(...others))} wide × ${frac(dep)} deep, ${frac(Math.max(...others))} long`;
-        feats.push({ k: 'region', key: `cut|${c.kind}|${r.to}`, to: [r.to], joint: j.type, kind: c.kind === 'slot' ? 'slot' : 'groove', boxes: [[lo, hi]], noun: c.kind === 'relief' ? 'relief groove' : c.kind, detail: sizeText, purpose: c.what || undefined, face: fc });
+        // A flat-bottomed rectangular recess (a plate let into a face) reads as a recess, not a groove: both sides of it are wider than the depth.
+        const recess = c.kind === 'relief' && /recess/i.test(r.text);
+        const sizeText = c.kind === 'slot' ? `${frac(others[0])} × ${frac(others[1])} opening, ${frac(dep)} deep`
+          : recess ? `${frac(Math.min(...others))} × ${frac(Math.max(...others))}, ${frac(dep)} deep, flat bottom`
+          : `${frac(Math.min(...others))} wide × ${frac(dep)} deep, ${frac(Math.max(...others))} long`;
+        feats.push({ k: 'region', key: `cut|${c.kind}|${r.to}`, to: [r.to], joint: j.type, kind: c.kind === 'slot' ? 'slot' : 'groove', boxes: [[lo, hi]], noun: recess ? 'recess' : c.kind === 'relief' ? 'relief groove' : c.kind, detail: sizeText, purpose: recess ? `for the ${frac(Math.min(...others))} × ${frac(Math.max(...others))} stainless backing plate, set flush` : (c.what || undefined), face: fc });
       }
       continue;
     }
@@ -1210,7 +1217,9 @@ function placeGroups(pts: Vec3[], ax: Ax, a: Analysis): string[] {
   }
   return [...groups.entries()].map(([g, qs]) => {
     const firsts = qs.map((q) => coordParts(q, first, a));
-    return firsts[0].val ? `${listOf(firsts.map((c) => c.val))} ${firsts[0].datum}, ${g}` : `${firsts[0].datum}, ${g}`;
+    if (!firsts.some((c) => c.val)) return `${firsts[0].datum}, ${g}`;
+    // a point centered on the datum axis has no value: name it, never leave a gap in the list (`2-3/32", centered and 13/32"`)
+    return `${listOf(firsts.map((c) => c.val || 'centered'))} ${firsts.find((c) => c.val)!.datum}, ${g}`;
   });
 }
 
@@ -1257,7 +1266,7 @@ function purposeFor(ids: string[], a: Analysis): string {
 
 interface Mark { u: number; letter?: string }
 
-function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params): { svg: string; W: number; H: number; scale: string; features: DrawingFeature[] } {
+function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: CutList): { svg: string; W: number; H: number; scale: string; features: DrawingFeature[] } {
   const { part, board: b, words: w } = a;
   const ext = EXT(b);
   const uid = `pd${hash6(part.id)}`;
@@ -1336,7 +1345,11 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params): { s
 
   // Grain.
   const grainAx = part.grain && !b.rod ? dominant(b.dirToBoard(unitAx({ x: 0, y: 1, z: 2 }[part.grain] as Ax)).map(Math.abs) as Vec3) : null;
-  const grainWords = grainAx === null ? (part.kind === 'metal' ? 'n/a (metal)' : part.kind === 'purchased' ? 'n/a' : 'not specified') : grainAx === 2 ? `through the thickness (${w.side[2][1]} to ${w.side[2][0]})` : `along the ${frac(ext[grainAx])} ${grainAx === 0 ? 'length (horizontal in the main view)' : 'height (vertical in the main view)'}`;
+  // The grain word is the cut list's (L is the stock length, W its width), so the drawing and the cut list agree; the view direction and the drawn size follow in brackets.
+  const gWord = grainInWords(part);
+  const grainWords = grainAx === null ? (part.kind === 'metal' ? 'n/a (metal)' : part.kind === 'purchased' ? 'n/a' : 'not specified')
+    : grainAx === 2 ? `through the thickness (${w.side[2][1]} to ${w.side[2][0]})`
+      : `${gWord && !/vertical/.test(gWord) ? gWord : `along the ${grainAx === 0 ? 'length' : 'height'}`} (the ${b.developed && grainAx === 0 ? 'length along the curve' : `${frac(ext[grainAx])} side`}, ${grainAx === 0 ? 'horizontal' : 'vertical'} in the main view)`;
 
   let li = 0;
   const extraNotes: string[] = [];
@@ -1445,9 +1458,12 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params): { s
   const dims = [...ext].sort((x, z) => x - z);
   const hl: Array<{ t: string; size: number; bold?: boolean; fill?: string }> = [{ t: part.name, size: 0.2, bold: true }];
   const hw = (t: string, size: number, o: { bold?: boolean; fill?: string } = {}) => { for (const l of wrap(t, Math.floor(chars * 0.105 / size))) hl.push({ t: l, size, ...o }); };
-  hw(`Part ${part.partNo ?? part.id}   qty ${qty}   scale ${scaleText(s)}${rows > 1 ? ` (in ${rows} rows)` : ''}   final ${frac(dims[0])} × ${frac(dims[1])} × ${frac(dims[2])} (T × W × L${b.developed ? ', L along the curve' : ''})   ${part.material}`, 0.12);
-  hw(`Stock: ${boardText(part)}`, 0.105);
-  hw(`Grain: ${grainWords}.   Datums: lengths from the ${w.side[0][0]}, heights from the ${w.side[1][a.vref]}, across from the ${w.side[2][1]}. Fractions to 1/32", drills to 1/64".`, 0.105, { fill: DIM });
+  hw(`qty ${qty}   scale ${scaleText(s)}${rows > 1 ? ` (in ${rows} rows)` : ''}   final ${finalText(part, cl, dims)} (T × W × L${b.developed ? ', L along the curve' : ''})   ${part.material}`, 0.12);
+  hw(`Stock: ${boardText(part, cl)}`, 0.105);
+  const lg = layerGrainOf(part);
+  const layerWords = lg ? ` By layer, face layer first: ${lg.map((ax) => (grainInWords({ ...part, grain: ax }) ?? '?').replace('vertical (T)', 'through the thickness')).join(', ')}.` : '';
+  hw(`Grain: ${grainWords}.${layerWords}`, 0.105, { fill: DIM });
+  hw(`Datums: lengths from the ${w.side[0][0]}, heights from the ${w.side[1][a.vref]}, across from the ${w.side[2][1]}. Fractions to 1/32", drills to 1/64".`, 0.105, { fill: DIM });
   if (makeNote) hw(makeNote, 0.12, { bold: true, fill: FEAT });
   const head: string[] = [];
   let hy = M + 0.05;
@@ -1578,22 +1594,75 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params): { s
     for (const n of notes) for (const l of wrap(n, chars + 4)) { rowsSvg.push(txt(M, ty, l, 0.1)); ty += 0.145; }
   }
   const H = ty + M;
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${fmt(W)}in" height="${fmt(H)}in" viewBox="0 0 ${fmt(W)} ${fmt(H)}">\n<title>${esc(`${part.name} (${part.partNo ?? part.id}) shop drawing`)}</title>\n<rect x="0" y="0" width="${fmt(W)}" height="${fmt(H)}" fill="#ffffff"/>\n<g id="title">${head.join('')}</g>\n<g id="views">${out.join('')}</g>\n<g id="features">${rowsSvg.join('')}</g>\n</svg>\n`;
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${fmt(W)}in" height="${fmt(H)}in" viewBox="0 0 ${fmt(W)} ${fmt(H)}">\n<title>${esc(`${plainName(part.name)} shop drawing`)}</title>\n<rect x="0" y="0" width="${fmt(W)}" height="${fmt(H)}" fill="#ffffff"/>\n<g id="title">${head.join('')}</g>\n<g id="views">${out.join('')}</g>\n<g id="features">${rowsSvg.join('')}</g>\n</svg>\n`;
   return { svg, W, H, scale: scaleText(s), features: feats };
 }
 
-/** The board the part comes from, in words: "rough 1 x 3-3/8 x 60-3/4, from 4/4 white oak", "face-laminated from 3 layers", "2 strips ... glued face to face". */
-function boardText(part: Part): string {
-  const st = part.stock, ro = part.rough;
+// ── Sizes and boards come from the cut list, never from here ──
+
+const cutListCache = new WeakMap<Part[], { p: Params; cl: CutList }>();
+let defaultP: Params | undefined;
+/** The cut list of a model, computed once per parts array and parameter set: every rough size and board a drawing prints is read from it (`cuts`, `glueUps`, `finished`). */
+export function cutListFor(parts: Part[], p?: Params): CutList {
+  const pp = p && typeof p.millingAllowanceIn === 'number' ? p : (defaultP ??= defaultParams());
+  const hit = cutListCache.get(parts);
+  if (hit && hit.p === pp) return hit.cl;
+  const cl = cutList(parts, pp);
+  cutListCache.set(parts, { p: pp, cl });
+  return cl;
+}
+
+/** A part's name for a drawing's header and running text: no parentheses, "Rail L" as "left rail". */
+export const plainName = (name: string): string => humanName(name);
+
+/** The final T × W × L the cut list prints for the part (oak), else the stock size, else the drawn extents in ascending order. No inch marks, like the cut list. */
+function finalText(part: Part, cl: CutList, ext: number[]): string {
+  const fin = cl.finished.find((f) => f.ids.includes(part.id));
+  if (fin) return fin.finalText;
+  if (part.stock) return finalDimsText(part.stock);
+  return ext.map((v) => frac(v).replace(/"$/, '')).join(' × ');
+}
+
+/** Layers of a cross-laminated part, one entry per layer, when the model says which way each grain runs (`Part.layerGrain`: the local axis per layer, face layer first). */
+const layerGrainOf = (part: Part): Array<'x' | 'y' | 'z'> | undefined => {
+  const g = (part as Part & { layerGrain?: Array<'x' | 'y' | 'z'> }).layerGrain;
+  return Array.isArray(g) && g.length ? g : undefined;
+};
+
+/** "1 as 3/4 × 4-3/4 × 6-1/2 from 4/4": the pieces of a part's cuts grouped by size and board, per part. */
+function pieceGroups(cuts: CutList['cuts']): Array<{ n: number; text: string; board: string; piece: string }> {
+  const out: Array<{ n: number; text: string; board: string; piece: string }> = [];
+  for (const c of cuts) {
+    const g = out.find((x) => x.text === c.roughText && x.board === c.board && x.piece === c.piece);
+    if (g) g.n += 1; else out.push({ n: 1, text: c.roughText, board: c.board, piece: c.piece });
+  }
+  return out;
+}
+
+/**
+ * The board the part comes from, in words, read from the cut list: "rough 3/4 × 2 × 21-3/4 (T × W × L), from 4/4 white oak"; "2 strips, each 1/2 × 3-3/8 × 61 rough, resawn from 8/4 ...";
+ * "cut 6 pieces ...; glue the 3 layers ...". Rough sizes are the cut list's `roughText` (rounded UP to 1/8), never recomputed.
+ */
+function boardText(part: Part, cl: CutList): string {
+  const st = part.stock;
   if (part.kind === 'metal' || part.kind === 'purchased') return st ? `${part.material}, ${frac(st.t)} × ${frac(st.w)} × ${frac(st.l)}` : part.material;
   if (!st) return part.material;
-  const r = ro ?? st;
-  const brd = boardForThickness(st.t);
-  const strip = part.plies && part.plies > 1 ? `${part.plies} strips ${frac(st.t)} × ${frac(st.w)} × ${frac(st.l)} (rough ${frac(r.t)} × ${frac(r.w)} × ${frac(r.l)}) glued face to face` : `rough ${frac(r.t)} × ${frac(r.w)} × ${frac(r.l)}`;
-  if (brd) return `${strip}, from ${brd.nominal} ${part.material}`;
-  const lam = planLamination(st.t);
-  if (lam) return `${strip}; ${lam.text}`;
-  return `${strip}, ${part.material}`;
+  const cuts = cl.cuts.filter((c) => c.ids.includes(part.id));
+  if (!cuts.length) return `${frac(st.t)} × ${frac(st.w)} × ${frac(st.l)}, ${part.material}`;
+  const groups = pieceGroups(cuts);
+  const wood = part.material;
+  if (cuts[0].piece === 'strip') {
+    const g = groups[0];
+    return cuts.length === 1 ? `1 strip, ${g.text} rough (T × W × L), resawn from ${g.board} ${wood}, planed to ${frac(st.t)}`
+      : `${cuts.length} strips, each ${g.text} rough (T × W × L), resawn from ${g.board} ${wood}, planed to ${frac(st.t)} and glued face to face`;
+  }
+  const glue = cl.glueUps.find((u) => u.ids.includes(part.id));
+  if (glue) {
+    const list = groups.map((g) => `${g.n} ${g.n === 1 ? 'piece' : 'pieces'} ${g.text} (T × W × L) from ${g.board}`).join(' and ');
+    return `cut ${list}; ${glue.note}`;
+  }
+  const c = cuts[0];
+  return `rough ${c.roughText} (T × W × L), from ${c.board} ${wood}`;
 }
 
 // ── Public API ──
@@ -1624,6 +1693,7 @@ const isLeft = (id: string): boolean => /-L(\d*|-.*)?$|L\d$/.test(id);
  */
 export function partDrawings(parts: Part[], p: Params, opts: { includeShaper?: boolean } = {}): PartDrawingSheet[] {
   const list = drawnParts(parts, opts);
+  const cl = cutListFor(parts, p);
   const groups = new Map<string, Part[]>();
   for (const x of list) { const k = x.partNo ?? x.id; if (!groups.has(k)) groups.set(k, []); groups.get(k)!.push(x); }
   const out: PartDrawingSheet[] = [];
@@ -1644,10 +1714,11 @@ export function partDrawings(parts: Part[], p: Params, opts: { includeShaper?: b
       if (mirrored.length && !items.some((x) => isLeft(x.part.id)) && mirrored.some((x) => isLeft(x.part.id))) [items, mirrored] = [mirrored, items];
       const lead = items.find((x) => isLeft(x.part.id)) ?? items[0];
       const qty = items.length + mirrored.length;
+      const names = (xs: Analysis[]): string => xs.map((x) => plainName(x.part.name)).join(', ');
       const makeNote = mirrored.length
-        ? `MAKE ${qty}: ${items.length} as drawn (${items.map((x) => x.part.id).join(', ')}), ${mirrored.length} MIRROR IMAGE (${mirrored.map((x) => x.part.id).join(', ')}).`
-        : qty > 1 ? `MAKE ${qty} identical (${items.map((x) => x.part.id).join(', ')}).` : '';
-      const r = renderSheet(lead, qty, makeNote, p);
+        ? `MAKE ${qty}: ${items.length} as drawn (${names(items)}), ${mirrored.length} MIRROR IMAGE (${names(mirrored)}).`
+        : qty > 1 ? `MAKE ${qty} identical (${names(items)}).` : '';
+      const r = renderSheet(lead, qty, makeNote, p, cl);
       out.push({ partId: lead.part.id, partNo, partIds: [...items, ...mirrored].map((x) => x.part.id), qty, name: lead.part.name, makeNote, svg: r.svg, widthIn: r.W, heightIn: r.H, scale: r.scale, features: r.features });
     }
   }
@@ -1672,10 +1743,12 @@ export function partDims(part: Part, parts: Part[] = [part], p?: Params): PartDi
   try { a = analyze(part, all, p ?? ({} as Params)); } catch { a = null; }
   const lb = localBounds(part.geometry);
   const e = a ? EXT(a.board) : [lb.max[0] - lb.min[0], lb.max[1] - lb.min[1], lb.max[2] - lb.min[2]];
-  const d = [...e].sort((x, z) => x - z);
+  const cl = cutListFor(all, p);
+  const fin = cl.finished.find((f) => f.ids.includes(part.id));
+  const d = fin ? [fin.final.t, fin.final.w, fin.final.l] : part.stock && part.kind !== 'lumber' ? [part.stock.t, part.stock.w, part.stock.l] : [...e].sort((x, z) => x - z);
   const t = frac(d[0]), w = frac(d[1]), l = frac(d[2]);
   const feats = a ? a.feats.map((f) => (f.k === 'hole' ? `${f.pts.length} ${plural(f.noun, f.pts.length)}, ${f.size}` : f.k === 'region' ? `${f.boxes.length} ${plural(f.noun, f.boxes.length)}, ${f.detail}` : f.k === 'outline' ? f.text.split(/(?<=\.) /)[0].replace(/\.$/, '') : f.text)) : [];
   let grain = 'n/a';
   if (part.grain && a) { const k = dominant(a.board.dirToBoard(unitAx({ x: 0, y: 1, z: 2 }[part.grain] as Ax)).map(Math.abs) as Vec3); grain = k === 2 ? 'through the thickness' : `along the ${frac(e[k])}`; }
-  return { t, w, l, size: `${t} × ${w} × ${l}`, board: boardText(part), grain, features: [...new Set(feats)] };
+  return { t, w, l, size: `${t} × ${w} × ${l}`, board: boardText(part, cl), grain, features: [...new Set(feats)] };
 }

@@ -206,10 +206,18 @@ describe('cutList', () => {
   });
 
   it('writes a CSV per table with a header and one row per line', () => {
-    expect(cl.csv.oak.split('\r\n').length).toBe(1 + cl.oak.reduce((a, g) => a + g.rows.length, 0) + 1);
-    expect(cl.csv.strips.startsWith('Part no,')).toBe(true);
-    expect(cl.csv.sheets).toContain('seat-back-panel');
+    expect(cl.csv.cuts.split('\r\n').length).toBe(1 + cl.cuts.length + 1);
+    expect(cl.csv.glueUps.split('\r\n').length).toBe(1 + cl.glueUps.length + 1);
+    expect(cl.csv.finished.split('\r\n').length).toBe(1 + cl.finished.length + 1);
+    expect(cl.csv.resaw.split('\r\n').length).toBe(1 + cl.resaw.length + 1);
+    expect(cl.csv.sheets).toContain('Seat back panel');
     expect(cl.csv.metal).toContain('DOM tube');
+    // the old final-size, layer and strip tables are gone, and no CSV holds a part key or a decimal length
+    expect(Object.keys(cl.csv).sort()).toEqual(['cuts', 'finished', 'glueUps', 'metal', 'resaw', 'sheets']);
+    for (const [k, csv] of Object.entries(cl.csv)) {
+      expect(csv, k).not.toMatch(/Part no|\bD-\d+|\bS1\b/);
+      expect(csv.replace(/\d\.\d+"+ wall/g, ''), k).not.toMatch(/\d\.\d+/); // a tube's wall gauge is the one catalog decimal
+    }
   });
 });
 
@@ -230,8 +238,8 @@ describe('round 3: bench words, assembly steps, net web, no data warnings', () =
     for (const r of rows) if (r.grain) expect(r.grainWord, r.partNo).toMatch(/^(along L|along W|vertical \(T\))$/);
     const bulk = rows.find((r) => r.partNo === 'bow-bulkhead')!;
     expect(bulk.grainWord).toBe('along L'); // the 18.5 in length
-    expect(cl.csv.oak).not.toMatch(/,[xyz],/);
-    expect(cl.csv.oak.split('\r\n')[0]).toContain('Assembly step');
+    expect(cl.csv.finished).not.toMatch(/,[xyz],/);
+    expect(cl.csv.finished.split('\r\n')[0]).toContain('Assembly step');
   });
   it('joins the ASSEMBLY step number (0 to 29) through the map the caller passes', () => {
     const steps = assemblySteps(parts, p);
@@ -244,11 +252,12 @@ describe('round 3: bench words, assembly steps, net web, no data warnings', () =
     // without the map the column is empty rather than the model step
     expect(cutList(parts, p).oak[0].rows[0].assemblySteps).toEqual([]);
   });
-  it('labels the Shaper file as net and the blank as longer for the side web (59.49 / 59.59)', () => {
+  it('labels the Shaper file as net and the blank as longer for the side web, in fractions with no internal tags', () => {
     const web = cl.sheets.flatMap((g) => g.rows).find((r) => r.partNo === 'side-web')!;
-    expect(web.note).toMatch(/cut net 59\.49" from the Shaper file; blank 59\.59/);
+    expect(web.note).toBe('the Shaper file cuts it to 59-1/2"; start from a 59-5/8" blank (+1/8" trim)');
     expect(web.stock.l).toBeCloseTo(59.59, 2);
-    expect(cl.csv.sheets).toContain('cut net 59.49');
+    expect(cl.csv.sheets).toContain('start from a 59-5/8"');
+    expect(web.note).not.toMatch(/S1|\d\.\d/);
     // a part whose file equals its blank has no note
     expect(cl.sheets.flatMap((g) => g.rows).find((r) => r.partNo === 'storage-lid')!.note).toBeUndefined();
   });
@@ -270,7 +279,7 @@ describe('face lamination (D-70: no 12/4)', () => {
     expect(l.layers.map((q) => q.board)).toEqual(['4/4', '4/4', '4/4']);
     expect(l.layers.map((q) => q.roughT)).toEqual([0.75, 0.75, 0.75]);
     expect(l.text).toBe('3 layers: 3 \u00d7 3/4" from 4/4, glue up, then mill the block to 2-1/8"');
-    expect(beam.note).toMatch(/^face-laminated \(D-70\): 3 layers of 4\/4, each planed to 3\/4";/);
+    expect(beam.note).toMatch(/^face-laminated: 3 layers of 4\/4, each planed to 3\/4";/);
     expect(l.costPerFt2).toBeCloseTo(30, 6); // D-74: 3 x $10 (it was 2 x $15 + 1 x $10 = 40 for 8/4 + 4/4); 2 x $15 + 1 x $10; 3 x 3/4 is too thin once the cleanup comes off, and 5/4 + 4/4 + 4/4 ($34.875 on an ESTIMATED 5/4 price) is not worth a lone 5/4 board
     // the layers add up to the glued block, which loses the cleanup and still holds the part
     expect(l.layers.reduce((a, q) => a + q.roughT, 0)).toBeCloseTo(l.roughT, 6);
@@ -297,7 +306,7 @@ describe('face lamination (D-70: no 12/4)', () => {
       expect(Math.abs(q.roughT * 16 - Math.round(q.roughT * 16))).toBeLessThan(1e-9);
     }
     const layerCuts = cl.cuts.filter((c) => c.piece === 'layer');
-    const all = [cl.csv.layers, ...lam.map((r) => `${r.lamination!.text} ${r.note}`), ...layerCuts.map((c) => `${c.roughText} ${c.note ?? ''}`), ...cl.glueUps.filter((g) => g.layers > 1).map((g) => g.note)].join('\n');
+    const all = [cl.csv.cuts, ...lam.map((r) => `${r.lamination!.text} ${r.note}`), ...layerCuts.map((c) => `${c.roughText} ${c.note ?? ''}`), ...cl.glueUps.filter((g) => g.layers > 1).map((g) => g.note)].join('\n');
     expect(all).not.toMatch(/27\/32|25\/32/);
   });
 
@@ -305,15 +314,21 @@ describe('face lamination (D-70: no 12/4)', () => {
     expect(cl.layers.length).toBe(lam.reduce((a, r) => a + r.lamination!.layers.length, 0));
     const knee = cl.layers.filter((q) => q.row.partNo === 'brake-knee');
     expect(knee.length).toBe(3); // D-74: 3 layers of 4/4 (4 before)
-    for (const q of knee) { expect(q.edgeGlued).toBe(2); expect(q.qty).toBe(4); expect(q.widthIn).toBeLessThanOrEqual(6); expect(q.board).toBe('4/4'); expect(q.roughT).toBe(0.75); } // 2 knees x 2 pieces across
+    // D-75: the knee is cross-laminated (across / upright / across). The outer layers are 8-5/8" across their grain: two pieces each (2 knees x 2 = 4). The center layer runs UP the leg, so it
+    // is only 4-1/2" across its grain: ONE piece from a 6" board (2 knees x 1 = 2).
+    expect(knee.map((q) => q.edgeGlued)).toEqual([2, 1, 2]);
+    expect(knee.map((q) => q.qty)).toEqual([4, 2, 4]);
+    expect(knee.map((q) => q.grainWord)).toEqual(['across the sled', 'upright', 'across the sled']);
+    for (const q of knee) { expect(q.widthIn).toBeLessThanOrEqual(6); expect(q.board).toBe('4/4'); expect(q.roughT).toBe(0.75); }
+    expect(knee[1].widthIn).toBeCloseTo(4.875, 6); // the upright layer is the 4-1/2" reach plus the allowance, rounded up to 1/8, across its grain
+    expect(knee[1].lengthIn).toBeGreaterThan(knee[0].lengthIn); // and it is the long one: it runs the full 8-5/8" height of the knee (plus the allowance)
+    expect(knee[0].widthIn).toBeCloseTo(5.625, 6); // the wider piece of an across layer: the model's edge joint is off center (3.47" up), so the pieces are 3-7/8 and 5-5/8, not two halves
     const beam = cl.layers.filter((q) => q.row.partNo === 'beam-R');
     expect(beam.length).toBe(3);
     expect(beam.map((q) => q.board)).toEqual(['4/4', '4/4', '4/4']);
     for (const q of beam) expect(q.edgeGlued).toBe(1);
-    expect(cl.csv.layers.split('\r\n')[0]).toContain('Rough layer T x W x L (in)');
-    expect(cl.csv.layers.split('\r\n').length).toBe(cl.layers.length + 2); // header + rows + trailing
-    expect(cl.csv.oak).toContain('face-laminated: 3 layers: 3 \u00d7 3/4"" from 4/4'); // D-74 // a quote in a CSV cell is doubled
-    expect(cl.csv.oak.split('\r\n')[0]).toContain('Lamination');
+    expect(cl.csv.cuts).toContain('layer 1 of 3'); // the layers are cuts in the CSV, then a glue-up
+    expect(cl.csv.glueUps).toContain('glue the 3 layers face to face');
   });
 
   it('chooses the cheapest valid mix per square foot of face, mixed boards allowed, and respects the cleanup and each board\'s reliable finish', () => {
@@ -405,7 +420,7 @@ describe('rough allowances (Eric 2026-10-12)', () => {
     for (const r of dcl.oak.flatMap((g) => g.rows)) for (const k of ['w', 'l'] as const) expect(isEighth(r.rough[k]), `${r.partNo} ${k}`).toBe(true);
     for (const g of dcl.glueUps) for (const k of ['t', 'w', 'l'] as const) expect(isEighth(g.roughBlock[k]), `${g.label} ${k}`).toBe(true);
     for (const l of dcl.layers) { expect(isEighth(l.widthIn)).toBe(true); expect(isEighth(l.lengthIn)).toBe(true); }
-    expect(dcl.csv.oak.split('\r\n').map((r) => r.split(',').slice(4, 6).join(',')).join('\n')).not.toMatch(/\d\.\d/); // the final and rough columns are fractions
+    expect(dcl.csv.finished + dcl.csv.cuts).not.toMatch(/\d\.\d/); // the final and rough columns are fractions
   });
 
   it('leaves the board choice and the lamination on the EXACT thickness, so rounding never moves a part to a thicker board', () => {
@@ -463,9 +478,20 @@ describe('actual cuts (Eric 2026-10-12: the cut list lists the cuts, not the glu
     // a laminated knee is both: edge-glue the boards of each layer, then the layers
     const knee = dcl.glueUps.find((x) => x.partNo === 'brake-knee')!;
     expect(knee.kind).toBe('both');
-    expect(knee.from).toBe(6); // 3 layers x 2 boards across (D-74; 8 with 4 layers)
+    expect(knee.from).toBe(5); // D-75: layers across / upright / across = 2 + 1 + 2 pieces (the upright layer is one piece from a 6" board)
+    expect(knee.note).toMatch(/layer 1: 2 boards, layer 3: 2 boards/);
+    const kneeCuts = dcl.cuts.filter((c) => c.partNo === 'brake-knee');
+    expect(kneeCuts.map((c) => c.label).sort()).toEqual([
+      'Brake pivot knee, layer 1 of 3, board 1 of 2 (grain across the sled)', 'Brake pivot knee, layer 1 of 3, board 2 of 2 (grain across the sled)',
+      'Brake pivot knee, layer 2 of 3 (grain upright)',
+      'Brake pivot knee, layer 3 of 3, board 1 of 2 (grain across the sled)', 'Brake pivot knee, layer 3 of 3, board 2 of 2 (grain across the sled)',
+    ].sort());
+    expect(kneeCuts.find((c) => c.layer === 2)!.note).toMatch(/one piece/);
+    expect(kneeCuts.find((c) => c.layer === 1 && c.index === 1)!.roughText).toBe('3/4 × 3-7/8 × 6-1/2'); // the lower piece of the off-center joint
+    expect(kneeCuts.find((c) => c.layer === 2)!.roughText).toBe('3/4 × 4-7/8 × 10-5/8'); // the upright layer: 4-7/8 across its grain, 10-5/8 along it
+    expect(kneeCuts.find((c) => c.layer === 1 && c.index === 2)!.note).toMatch(/NOT equal/);
     expect(knee.qty).toBe(2);
-    expect(dcl.cuts.filter((c) => c.partNo === 'brake-knee').reduce((a, c) => a + c.qty, 0)).toBe(12); // 2 knees x 3 layers x 2 boards
+    expect(dcl.cuts.filter((c) => c.partNo === 'brake-knee').reduce((a, c) => a + c.qty, 0)).toBe(10); // 2 knees x (2 + 1 + 2) pieces
   });
 
   it('lists the resaw strips as the strip blanks with the rip-first note, from the pool board', () => {
@@ -489,8 +515,8 @@ describe('actual cuts (Eric 2026-10-12: the cut list lists the cuts, not the glu
     expect(t.finalText).toBe('1/2 \u00d7 16-3/8 \u00d7 24');
     expect(dcl.finished.find((f) => f.partNo === 'joist')!.from).toBe('board');
     expect(dcl.finished.find((f) => f.partNo === 'rail')!.final.t).toBeCloseTo(0.75, 9); // two 3/8 plies
-    expect(dcl.csv.cuts.split('\r\n')[0]).toContain('Glue-up');
-    expect(dcl.csv.glueUps.split('\r\n')[0]).toContain('Mill to final');
+    expect(dcl.csv.cuts.split('\r\n')[0]).toContain('Glued into');
+    expect(dcl.csv.glueUps.split('\r\n')[0]).toContain('Then mill to');
     expect(dcl.csv.finished).toContain('Final T x W x L');
   });
 });
@@ -529,5 +555,22 @@ describe('bandsaw capacity (Eric 2026-10-12: my bandsaw has 6" capacity)', () =>
     expect(tall.warnings.some((w) => /taller than your bandsaw/.test(w))).toBe(true);
     // rip-first never needs a cut taller than the widest strip, whatever the board width
     for (const r of tall.resaw) expect(r.resawHeightIn).toBeCloseTo(Math.max(...r.laneStrips.flat().map((s) => s.widthIn)), 9);
+  });
+});
+
+describe('readability round 2: one lane count for the steps, the book and the cut list', () => {
+  it('every pool carries its lane count and the lanes to rip (planned lanes plus the spare lanes)', () => {
+    expect(cl.resaw.length).toBeGreaterThan(0);
+    for (const pool of cl.resaw) {
+      expect(pool.ripLanes, pool.board).toBeGreaterThanOrEqual(pool.lanes);
+      expect(pool.laneCountText, pool.board).toMatch(new RegExp(`^${pool.ripLanes} lanes?, `));
+      expect(pool.laneCountText, pool.board).not.toMatch(/\d\.\d|D-\d/); // widths are fractions
+      // each lane yields stripsPerBoard strips, so the lanes to rip hold every strip needed plus the spares
+      expect(pool.ripLanes * pool.stripsPerBoard).toBeGreaterThanOrEqual(pool.strips);
+    }
+  });
+  it('the cuts, the glue-ups and the finished parts say nothing about keys, D-numbers or decimals', () => {
+    const text = [...cl.cuts.map((c) => `${c.label} ${c.roughText} ${c.note ?? ''}`), ...cl.glueUps.map((g) => `${g.label} ${g.roughBlockText} ${g.finalText} ${g.note}`), ...cl.finished.map((f) => `${f.name} ${f.finalText}`), ...cl.oak.map((g) => g.title)].join('\n');
+    expect(text).not.toMatch(/\bD-\d+|\d\.\d/);
   });
 });

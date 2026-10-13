@@ -7,7 +7,7 @@ import { buildModel } from '../model';
 import { totalMass } from '../model/mass';
 import { THIN_SHEET, WEATHER_SPEC, defaultParams, thinSheet, type Params } from '../params';
 import { bom, type Bom, type BomLine } from './bom';
-import { STANDARD_GLUE_NOTE, assemblySteps, standardText } from './assembly';
+import { assemblySteps, standardText } from './assembly';
 import { buildBookHtml } from './build-book';
 import { URETHANE_COVERAGE, VARNISH_COVERAGE, finishAreas, finishMaterial, finishingSchedule, glueEpoxyFlOz, glueJointEstimates, glueTitebond, standardAdhesive, urethaneContainers } from './finishing';
 import { BuildData } from './package';
@@ -344,14 +344,17 @@ describe('assembly text', () => {
   const sExt = assemblySteps(extParts, ext);
   const textOf = (steps: ReturnType<typeof assemblySteps>): string => steps.map((s) => [s.title, ...s.instructions, ...s.checks, s.clampCure ?? ''].join(' ')).join(' ');
 
-  it('Standard says 304 and urethane and carries the Titebond note on every glue step; Extreme keeps 316 and varnish', () => {
+  it('Standard says 304 and urethane and has the Titebond glue card and a one-line glue note on the glue steps; Extreme keeps 316 and varnish', () => {
     const t = textOf(sStd);
     expect(t).not.toMatch(/\b316\b/);
     expect(t).not.toMatch(/\bvarnish/i);
     expect(t).toMatch(/urethane/);
     const glue = sStd.filter((s) => s.kind === 'build' && s.clampCure);
     expect(glue.length).toBeGreaterThan(8);
-    for (const s of glue) expect(s.clampCure, s.id).toContain(STANDARD_GLUE_NOTE);
+    expect(sStd.find((s) => s.id === 'mill')!.instructions.join(' ')).toMatch(/GLUE CARD[\s\S]*Titebond III/);
+    for (const s of glue.filter((q) => !['hang', 'final-fit'].includes(q.id))) expect(s.clampCure, s.id).toMatch(/glue card/); // hang and final-fit use sealant and bedding
+    expect(glue.some((s) => /Titebond III/.test(s.clampCure!))).toBe(true);
+    expect(glue.some((s) => !/Titebond/.test(s.clampCure!))).toBe(true); // a step with no Titebond joint says nothing about Titebond
     expect(sStd.find((s) => s.id === 'seal')!.instructions.join(' ')).toMatch(/Weather spec: Standard/);
     expect(textOf(sExt)).toMatch(/\b316\b/);
     expect(textOf(sExt)).toMatch(/varnish/i);

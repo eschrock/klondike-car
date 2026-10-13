@@ -14,6 +14,7 @@ import { makeContext, type Ctx } from './context';
 import { runChecks, type AnalysisCheck } from './index';
 import { bridleEye, tieLoad, tongueBarStress, tongueWidthAt, TONGUE_NUT_WASHER_OD_IN, OAK_TENSION_PAR_OF_BEND } from './bridle';
 import { uncTensileArea } from './nds';
+import { tongueSeatHalfWidth } from '../model/pivot';
 
 const RAD = Math.PI / 180;
 const defaults = defaultParams();
@@ -31,7 +32,10 @@ const ALPHA = Math.atan((40 - 4.22) / 96);
 const T = 300, Th = T * Math.cos(ALPHA), Tv = T * Math.sin(ALPHA);
 const D = 1.75; // tongue depth (on edge); the stem is 1.25 in thick (D-60)
 /** Width of the tongue by hand: 6 in to x = 48.25, linear to 1.25 in at x = 51.25, then 1.25 in. */
-const w = (x: number) => (x <= 48.25 ? 6 : x >= 51.25 ? 1.25 : 6 - (4.75 * (x - 48.25)) / 3);
+/** D-75: the head's front face is square out past the carriage-bolt heads: the flat seat reaches in to 2 - 2.375 x 3/8 / 2 - 1/16 = 1.49 in, and the taper's corner sits a 1/4 in fillet's tangent
+ *  length further in (1.29 in), then runs to the 1.25 in stem (exact taper from about x = 48.45 on). */
+const YS = tongueSeatHalfWidth(defaultParams());
+const w = (x: number) => (x <= 48.25 ? 6 : x >= 51.25 ? 1.25 : 2 * (YS - ((YS - 0.625) * (x - 48.25)) / 3));
 const al = ctx.p.oakMorPsi; // keeps the import used for the allowable check below
 void al;
 
@@ -49,9 +53,12 @@ describe('tie load', () => {
     expect(ld.latLock).toBeCloseTo(Th * Math.sin(20 * RAD), 9);
     expect(ld.axialLock).toBeCloseTo(Th * Math.cos(20 * RAD), 9);
   });
-  it('the tongue width follows the plan outline: 6 in on the head, 3.625 in halfway down the taper, 1.25 in on the stem (D-60)', () => {
-    for (const [x, ww] of [[45.25, 6], [48.25, 6], [49.75, 3.625], [51.25, 1.25], [54, 1.25], [55.75, 1.25]] as const) expect(tongueWidthAt(ctx, x), String(x)).toBeCloseTo(ww, 9);
+  it('the tongue width follows the plan outline: 6 in on the head, the taper from the square bolt seats (D-75; 1.92 in halfway down), 1.25 in on the stem (D-60)', () => {
+    for (const [x, ww] of [[45.25, 6], [48.25, 6], [49.75, YS + 0.625], [51.25, 1.25], [54, 1.25], [55.75, 1.25]] as const) expect(tongueWidthAt(ctx, x), String(x)).toBeCloseTo(ww, 9);
     for (const x of [46, 49, 50.5, 53]) expect(tongueWidthAt(ctx, x)).toBeCloseTo(w(x), 9);
+    // just past the head's square front face the section is the taper's (plus the fillet), not the head's
+    expect(tongueWidthAt(ctx, 48.3)).toBeLessThan(2 * (2 - (2.375 * 0.375) / 2 - 1 / 16));
+    expect(YS).toBeCloseTo(1.29, 2);
   });
 });
 

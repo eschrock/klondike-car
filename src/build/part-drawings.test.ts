@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
 import { computeLayout } from '../model/layout';
 import { defaultParams } from '../params';
-import { drawnParts, frac, partDims, partDrawings } from './part-drawings';
+import { cutListFor, drawnParts, frac, partDims, partDrawings } from './part-drawings';
+import { roughFrac } from './units';
 
 const p = defaultParams();
 const parts = buildModel(p);
@@ -35,7 +36,7 @@ describe('part drawings', () => {
     const rail = sheets.find((s) => s.partNo === 'rail')!;
     expect(rail.qty).toBe(2);
     expect(rail.partId).toBe('rail-L');
-    expect(rail.makeNote).toMatch(/MIRROR IMAGE \(rail-R\)/);
+    expect(rail.makeNote).toMatch(/MIRROR IMAGE \(right rail\)/);
     const clamps = sheets.find((s) => s.partNo === 'axle-clamp')!;
     expect(clamps.qty).toBe(6);
     expect(clamps.makeNote).toMatch(/identical/);
@@ -86,13 +87,20 @@ describe('part drawings', () => {
     expect(n).toBeGreaterThan(15);
   });
 
-  it('puts the knee bolts through the brake backer (no joint records them) and the slot in the knee', () => {
+  it('puts the knee bolts and the plate recess on the brake backer, and the slot in the knee', () => {
     const backer = sheets.find((s) => s.partNo === 'brake-backer')!;
-    expect(backer.features.some((f) => f.kind === 'hole' && f.joint === 'passing' && f.count === 4)).toBe(true);
     const knee = sheets.find((s) => s.partNo === 'brake-knee')!;
     expect(knee.features.some((f) => f.kind === 'slot' && /^1 slot, .*wide .*deep from the REAR face/.test(f.text) && /flap tongue/.test(f.purpose ?? ''))).toBe(true);
-    // the nut-and-washer counterbores of the knee bolts, with their size (the model records them now)
-    expect(backer.features.some((f) => f.kind === 'hole' && /counterbores?, 1-3\/8" wide × 1\/2" deep/.test(f.text))).toBe(true);
+    // D-75: the four knee-bolt holes are recorded on the backer itself (bolts, not screws), plus ONE flush plate recess (2" × 2-1/2", 1/8" deep, flat bottom) instead of four counterbores
+    const bolts = backer.features.filter((f) => f.kind === 'hole' && f.count === 4);
+    expect(bolts.length).toBe(1);
+    expect(bolts[0].text).toMatch(/[Ff]or the 3\/8" bolts/);
+    expect(backer.features.some((f) => /counterbore/.test(f.text))).toBe(false);
+    const recess = backer.features.filter((f) => /recess/.test(f.text));
+    expect(recess.length).toBe(1);
+    expect(recess[0].count).toBe(1);
+    expect(recess[0].text).toMatch(/1 recess, 2" × 2-1\/2", 1\/8" deep, flat bottom/);
+    expect(recess[0].text).toMatch(/stainless backing plate, set flush/);
   });
 
   it('cuts the axle grooves in the beams and the hanger notch', () => {
@@ -196,5 +204,87 @@ describe('part drawings', () => {
     const t1 = performance.now();
     partDrawings(model, fresh);
     expect(performance.now() - t1).toBeLessThan(1000);
+  });
+});
+
+describe('part drawings read their sizes from the cut list (readability round 2)', () => {
+  const cl = cutListFor(parts, p);
+  /** The text of the title block (the first lines of the sheet), joined: long lines are wrapped. */
+  const head = (svg: string): string => texts(/<g id="title">([\s\S]*?)<\/g>/.exec(svg)![1]).join(' ');
+
+  it('prints exactly the cut list\'s rough text for every piece it cuts (rounded UP to 1/8)', () => {
+    let n = 0;
+    for (const s of sheets) {
+      const h = head(s.svg);
+      for (const c of cl.cuts.filter((q) => q.ids.includes(s.partId))) { expect(h, `${s.partId}: ${c.roughText}`).toContain(c.roughText); n++; }
+      for (const g of cl.glueUps.filter((q) => q.ids.includes(s.partId))) expect(h, `${s.partId} block`).toContain(g.roughBlockText);
+    }
+    expect(n).toBeGreaterThan(40);
+    // the named offenders of the critic: none of these rough sizes appears any more
+    const all = sheets.map((s) => head(s.svg)).join('\n');
+    for (const bad of ['27/32', '3-27/32', '4-15/32', '7-3/32', '8-7/8', '5-1/2 (T']) expect(all.includes(`rough ${bad}`) || all.includes(` ${bad}" ×`), bad).toBe(false);
+    // a rough dimension in a Stock line is always on the 1/8 grid
+    for (const s of sheets) {
+      const stock = /Stock: ([^\n]*?)(?:Grain:|$)/.exec(head(s.svg))?.[1] ?? '';
+      for (const m of stock.matchAll(/(\d+(?:-\d+\/\d+)?|\d+\/\d+)(?= ×| rough| from|;|,| \(T)/g)) {
+        const v = m[1].includes('/') ? (m[1].includes('-') ? Number(m[1].split('-')[0]) + eval(m[1].split('-')[1]) : eval(m[1])) : Number(m[1]);
+        expect(Math.abs(v * 8 - Math.round(v * 8)) < 1e-6 || /planed to/.test(stock), `${s.partId}: ${m[1]} in "${stock}"`).toBe(true);
+      }
+    }
+  });
+
+  it('says the rail strips are resawn from the board the cut list uses (8/4), not 4/4', () => {
+    const rail = sheets.find((s) => s.partNo === 'rail')!;
+    const strip = cl.cuts.find((c) => c.ids.includes('rail-L') && c.piece === 'strip')!;
+    expect(strip.board).toBe('8/4');
+    expect(head(rail.svg)).toContain(`2 strips, each ${strip.roughText} rough`);
+    expect(head(rail.svg)).toContain('resawn from 8/4');
+    expect(head(rail.svg)).not.toMatch(/from 4\/4/);
+    expect(partDims(parts.find((x) => x.id === 'rail-L')!, parts, p).board).toContain('resawn from 8/4');
+  });
+
+  it('uses the cut list\'s T × W × L for the final size: the brake knee reads 2-1/8 × 8-5/8 × 4-1/2 everywhere', () => {
+    const knee = sheets.find((s) => s.partNo === 'brake-knee')!;
+    const fin = cl.finished.find((f) => f.ids.includes('brake-knee-L'))!;
+    expect(head(knee.svg)).toContain(`final ${fin.finalText} (T × W × L`);
+    for (const s of sheets) {
+      const f = cl.finished.find((q) => q.ids.includes(s.partId));
+      if (f) expect(head(s.svg), s.partId).toContain(`final ${f.finalText} (T × W × L`);
+    }
+    const d = partDims(parts.find((x) => x.id === 'brake-knee-L')!, parts, p);
+    expect(d.size).toBe(fin.finalText.split(' × ').map((v) => `${v}"`).join(' × '));
+  });
+
+  it('uses human names in the headers and make notes: no part keys, no decision numbers, no decimals', () => {
+    const keys = new Set<string>();
+    for (const x of parts) { keys.add(x.id); keys.add(x.partNo ?? x.id); }
+    // Plain words that are also keys ("rail") are fine on their own; a key is a hyphenated id or one with a digit/L/R suffix.
+    const key = [...keys].filter((k) => /-/.test(k) || /\d$/.test(k)).sort((a, b) => b.length - a.length);
+    for (const s of sheets) {
+      const all = texts(s.svg);
+      const title = /<title>([^<]*)<\/title>/.exec(s.svg)![1];
+      const body = [...all, s.makeNote, title].join('\n');
+      expect(head(s.svg).startsWith(s.name), s.partId).toBe(true);
+      expect(head(s.svg), s.partId).not.toMatch(/\bPart [a-z0-9-]+ +qty/);
+      for (const k of key) expect(new RegExp(`(^|[^A-Za-z0-9])${k.replace(/[-]/g, '\\-')}([^A-Za-z0-9-]|$)`).test(body), `${s.partId}: key ${k}`).toBe(false);
+      expect(body, s.partId).not.toMatch(/\bD-\d+/);
+      expect(body, s.partId).not.toMatch(/\d\.\d/);
+    }
+  });
+
+  it('shows no decimal in the feature table either', () => {
+    for (const s of sheets) for (const f of s.features) for (const t of [f.text, f.size, f.face, f.purpose, ...(f.positions ?? [])]) if (t) expect(t, `${s.partId} ${f.label}`).not.toMatch(/\d\.\d/);
+  });
+
+  it('rounds rough sizes with the same function as the cut list', () => {
+    expect(roughFrac(26.9)).toBe('27"');
+    for (const c of cl.cuts) expect(c.roughText).toBe([c.rough.t, c.rough.w, c.rough.l].map((v) => roughFrac(v).replace(/"$/, '')).join(' × '));
+  });
+});
+
+describe('position lists read cleanly', () => {
+  it('never leave an empty slot in a list of positions (a centered point is named "centered")', () => {
+    const p = defaultParams();
+    for (const s of partDrawings(buildModel(p), p)) for (const f of s.features) expect(f.text, s.partId).not.toMatch(/,\s+and|,\s+,/);
   });
 });

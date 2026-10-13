@@ -162,6 +162,11 @@ export interface Part {
   plies?: number;
   /** Local axis the wood grain (or ply face grain) runs along. */
   grain?: 'x' | 'y' | 'z';
+  /**
+   * Cross-laminated part (D-75): the grain axis (local) of each face-glued layer, face layer first (the layer at the low end of the laminating axis, `stock.t`), so the drawings and the
+   * cut list can show it. Absent = every layer runs along `grain`.
+   */
+  layerGrain?: Array<'x' | 'y' | 'z'>;
   /** Sheet parts: one entry per outline edge, or a single value for all edges. */
   edges?: EdgeCondition | EdgeCondition[];
   geometry: Geometry;

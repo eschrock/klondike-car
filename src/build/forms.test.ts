@@ -4,6 +4,7 @@ import { computeLayout, outerHalfWidth } from '../model/layout';
 import { defaultParams } from '../params';
 import { flatPattern } from './flat';
 import { frac } from './svg-util';
+import { cutListFor } from './part-drawings';
 import { LETTER_H_IN, LETTER_W_IN, PRINT_CUT_STROKE_IN, RIB_BASE_IN, TILE_MARGIN_IN, TILE_OVERLAP_IN, formDrawings, pathBounds, printStyle, tileForLetter, tilePlan } from './forms';
 
 const p = defaultParams();
@@ -282,7 +283,7 @@ describe('how to build the forms (Eric 2026-10-12)', () => {
   it('says how to build the rail form: MDF layers to the form line, stacked to the rail depth plus 1/2, on a ply base, caul, tape, spring-back, a clamp at every station', () => {
     const t = all('rail-form');
     const layers = Math.ceil((p.railDepthIn + 0.5) / 0.75 - 1e-9);
-    expect(t).toContain(`${layers} layers make a stack`);
+    expect(t).toContain(`the form is a stack of ${layers} layers of 3/4" MDF, ${frac(layers * 0.75)} tall`);
     expect(t).toMatch(/3\/4" MDF/);
     expect(t).toMatch(/BASE: 3\/4" plywood [\d/-]+" × [\d/-]+"/);
     expect(t).toMatch(/CAUL: a strip of 1\/4" hardboard/);
@@ -297,7 +298,8 @@ describe('how to build the forms (Eric 2026-10-12)', () => {
     const t = all('side-form');
     expect(t).toMatch(/TEMPLATE: cut ONE piece of 1\/4" hardboard/);
     expect(t).toContain(`CLEATS on the sheer line: ${dim('side-form', 'cleat-count')} blocks`);
-    expect(t).toContain(`S-RAMP: cut ${dim('side-form', 'ramp-ribs')} ribs from 3/4" MDF`);
+    expect(t).toContain(`S-RAMP (first face): cut ${dim('side-form', 'ramp-ribs')} ribs from 3/4" MDF`);
+    expect(t).toContain(`MIRROR RAMP (second face)`);
     expect(t).toMatch(/Cap: 1\/4" hardboard/);
     expect(t).toMatch(/packing tape/);
     expect(t).toMatch(/spring clamps/);
@@ -311,3 +313,84 @@ describe('how to build the forms (Eric 2026-10-12)', () => {
 
 /** The SVG text form of a string (quotes escaped). */
 function esc1(s: string): string { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+describe('forms read plainly (readability round 2)', () => {
+  const textsOf = (d: ReturnType<typeof formDrawings>[number]): string[] => [
+    ...[...d.svg.matchAll(/<text\b[^>]*>([^<]*)<\/text>/g)].map((m) => m[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&')),
+    d.title, ...d.notes, ...d.build.flatMap((s) => [s.step, ...(s.sub ?? [])]), ...d.dims.flatMap((x) => [x.label, x.text]),
+  ];
+
+  it('has no decimal, part key or decision number in any text of any form', () => {
+    const keys = [...new Set(parts.flatMap((x) => [x.id, x.partNo ?? x.id]))].filter((k) => /-/.test(k));
+    for (const d of drawings) for (const t of textsOf(d)) {
+      expect(t, `${d.id}: ${t}`).not.toMatch(/\d\.\d/);
+      expect(t, `${d.id}: ${t}`).not.toMatch(/\bD-\d+/);
+      for (const k of keys) expect(new RegExp(`(^|[^A-Za-z0-9])${k}([^A-Za-z0-9-]|$)`).test(t), `${d.id}: ${k} in ${t}`).toBe(false);
+    }
+  });
+
+  it('prints the dimensions table as fractions, counts as counts, angles in whole degrees', () => {
+    for (const d of drawings) for (const x of d.dims) {
+      if (x.kind === 'length') expect(x.text, `${d.id} ${x.key}`).toBe(frac(x.valueIn));
+      if (x.kind === 'count') expect(x.text, `${d.id} ${x.key}`).toMatch(new RegExp(`^${x.valueIn} [a-z][a-z ]+$`));
+      if (x.kind === 'angle') expect(x.text, `${d.id} ${x.key}`).toMatch(/^\d+°$/);
+      expect(x.text, `${d.id} ${x.key}`).not.toMatch(/\d\.\d/);
+    }
+    const cleats = byId('side-form').dims.find((x) => x.key === 'cleat-count')!;
+    expect(cleats.text).toBe(`${cleats.valueIn} cleats`);
+    expect(byId('side-form').dims.find((x) => x.key === 'web-length')!.text).toBe(frac(dim('side-form', 'web-length')));
+    expect(byId('crown-templates').dims.find((x) => x.key === 'bow-slope')!.text).toMatch(/^\d+°$/);
+  });
+
+  it('states the rail form layer count once and derives the stack height from it', () => {
+    const d = byId('rail-form');
+    const all = textsOf(d).join('\n');
+    const counts = new Set([...all.matchAll(/(\d+) layers/g)].map((m) => m[1]));
+    expect(counts.size).toBe(1);
+    const n = Number([...counts][0]);
+    expect(all).not.toMatch(/\bmore layers\b|\d+ more\b/i);
+    const railW = parts.find((x) => x.id === 'rail-L')!.stock!.w;
+    expect(n).toBe(Math.ceil((railW + 0.5) / 0.75 - 1e-9));
+    expect(all).toContain(`${n} layers of 3/4" MDF, ${frac(n * 0.75)} tall`);
+  });
+
+  it('cuts the rail strips to the cut list\'s rough length and says how much hangs off the form', () => {
+    const d = byId('rail-form');
+    const strip = cutListFor(parts, p).cuts.find((c) => c.piece === 'strip' && c.ids.includes('rail-L'))!;
+    const form = d.dims.find((x) => x.key === 'form-length')!.valueIn;
+    const step = d.build.find((s) => s.step.startsWith('STRAIGHT RUN'))!.step;
+    expect(step).toContain(`cut the strips ${frac(strip.rough.l)} long`);
+    expect(step).toContain(`about ${frac(strip.rough.l - form)} of each strip hangs off`);
+  });
+
+  it('defines the mirror ramp: a second set of ribs for the flipped web, with its own profile on the drawing, and never "the same ramp"', () => {
+    const d = byId('side-form');
+    const all = textsOf(d).join('\n');
+    const mirror = d.build.find((s) => s.step.startsWith('MIRROR RAMP'))!;
+    expect(mirror).toBeTruthy();
+    expect(mirror.step).toMatch(/lower than its rear end/);
+    expect((mirror.sub ?? []).join(' ')).toMatch(/tall from the rear end to the S start, then falling/);
+    expect(d.svg).toContain('id="mirrorramp"');
+    expect(d.dims.some((x) => x.key === 'mirror-ribs' && x.kind === 'count')).toBe(true);
+    // the glue-up step flips onto the mirror ramp, and nothing says the second face goes on the same ramp
+    expect(d.build.find((s) => s.step.startsWith('GLUE-UP'))!.sub!.join(' ')).toMatch(/flip the web over onto the MIRROR ramp/);
+    expect(all).not.toMatch(/same template and ramp|on the same ramp/);
+  });
+
+  it('gives the ramp ribs one spacing, the same in the notes, the steps and the sketch', () => {
+    const all = textsOf(byId('side-form')).join('\n');
+    const by = new Map<string, Set<string>>();
+    for (const m of all.matchAll(/(\d+) ribs(?: of 3\/4" MDF)?,? ?(?:3\/4" MDF, )?(\d[\d/-]*)" apart/g)) { if (!by.has(m[1])) by.set(m[1], new Set()); by.get(m[1])!.add(m[2]); }
+    expect(by.size).toBeGreaterThan(0);
+    for (const [n, set] of by) expect(set.size, `${n} ribs`).toBe(1);
+    expect(all).not.toMatch(/about 4-1\/2" apart/);
+  });
+
+  it('names the bands of each face with their own sizes (the inner chine band is narrower)', () => {
+    const glue = byId('side-form').build.find((s) => s.step.startsWith('GLUE-UP'))!;
+    const text = [glue.step, ...(glue.sub ?? [])].join(' ');
+    const st = (id: string) => parts.find((x) => x.id === id)!.stock!;
+    expect(text).toContain(`outer chine band (${frac(st('side-L-chine').t)} × ${frac(st('side-L-chine').w)})`);
+    expect(text).toContain(`inner chine band (${frac(st('side-L-chine-in').t)} × ${frac(st('side-L-chine-in').w)})`);
+  });
+});

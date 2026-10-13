@@ -620,7 +620,7 @@ export const NOTE_ITEMS: NoteItem[] = [
       // through the panel and into the batten; the batten is epoxied too, so the screws only clamp it.
       const s58 = STD_WOOD_SCREWS.find((q) => q.gauge === 8 && Math.abs(q.lenIn - 5 / 8) < 1e-9)!;
       const bite = s58.lenIn - thicknessIn(lid);
-      return { items: [{ label: `${matOf(spec ?? 'extreme').ss} wood screw #${s58.gauge} x ${fracIn(s58.lenIn)}"`, qty: n }], note: `${n} screws through the ${fracIn(thicknessIn(lid))}" lid panel into the ${fracIn(t)}" battens (${bite.toFixed(2)}" of thread in the batten, which is glued too)` };
+      return { items: [{ label: `${matOf(spec ?? 'extreme').ss} wood screw #${s58.gauge} x ${fracIn(s58.lenIn)}"`, qty: n }], note: `${n} screws through the ${fracIn(thicknessIn(lid))}" lid panel into the ${fracIn(t)}" battens (${fracIn(Math.floor(bite * 16) / 16)}" of thread in the batten, which is glued too)` };
     },
   },
   {
@@ -638,7 +638,7 @@ export const NOTE_ITEMS: NoteItem[] = [
       const ply = byIds(built, ['seat-back-panel', 'sign-L', 'sign-R']).filter((x) => /banding|banded/i.test(x.notes ?? '') && x.stock);
       if (!ply.length) return null;
       const ft = (ply.reduce((a, x) => a + 2 * (x.stock!.w + x.stock!.l), 0) / 12) * (1 + BANDING_WASTE);
-      return { items: [{ label: 'Oak veneer edge banding, 3/4" wide, 25 ft roll', qty: Math.max(1, Math.ceil(ft / BANDING_ROLL_FT)) }], note: `${r2(ft)} ft of edge (perimeter of ${ply.map((x) => x.id).join(', ')}, +${Math.round(BANDING_WASTE * 100)}%)` };
+      return { items: [{ label: 'Oak veneer edge banding, 3/4" wide, 25 ft roll', qty: Math.max(1, Math.ceil(ft / BANDING_ROLL_FT)) }], note: `${Math.ceil(ft)} ft of edge (perimeter of the ${[...new Set(ply.map((x) => x.name.replace(/\s+[LR]\d*$/, '').toLowerCase()))].join(', ')}, +${Math.round(BANDING_WASTE * 100)}%)` };
     },
   },
   {
@@ -649,7 +649,7 @@ export const NOTE_ITEMS: NoteItem[] = [
       const gasket = built.some((x) => x.id === 'storage-gasket-side-L' && /spliced/i.test(x.notes ?? ''));
       const oz = uses.length * SEALANT_OZ_PER_USE + (gasket ? SEALANT_OZ_PER_USE / 2 : 0);
       if (!oz) return null;
-      return { items: [{ label: 'Polysulfide marine sealant, 10 oz cartridge', qty: Math.ceil(oz / 10) }], note: `${r2(oz)} oz: beds for ${uses.map((x) => x.id).join(', ')}${gasket ? ' and the lid gasket splice' : ''}` };
+      return { items: [{ label: 'Polysulfide marine sealant, 10 oz cartridge', qty: Math.ceil(oz / 10) }], note: `${Math.ceil(oz)} oz: beds for the ${[...new Set(uses.map((x) => x.name.replace(/\s+[LR]\d*$/, '').toLowerCase()))].join(', ')}${gasket ? ' and the lid gasket splice' : ''}` };
     },
   },
   {
@@ -751,14 +751,14 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   for (const r of cl.metal) {
     const g = metalGroups.get(r.section) ?? { section: r.section, ft: 0, cuts: [] };
     g.ft += (r.qty * (r.cutLengthIn + METAL_CUT_ALLOWANCE_IN)) / 12;
-    g.cuts.push(`${r.qty} x ${Math.round(r.cutLengthIn * 100) / 100}" (${r.partNo})`);
+    g.cuts.push(`${r.qty} × ${fracIn(r.cutLengthIn)}" (${r.name.replace(/\s+[LR]\d*$/, '').toLowerCase()})`);
     metalGroups.set(r.section, g);
   }
   const metal: BomLine[] = [];
   for (const g of metalGroups.values()) {
     const price = metalPrice(g.section, spec);
     if (!price) { unpriced.push(g.section); continue; }
-    const extra = { vendor: price.url ? price.source : 'McMaster-Carr class', notes: `Cut to length: ${g.cuts.join(', ')}; ${METAL_CUT_ALLOWANCE_IN}" per cut for the kerf and squaring` };
+    const extra = { vendor: price.url ? price.source : 'McMaster-Carr class', notes: `Cut to length: ${g.cuts.join(', ')}; allow ${fracIn(METAL_CUT_ALLOWANCE_IN)}" per cut for the kerf and squaring` };
     // The Standard spec buys 304 where the cut list (the model's material text) says 316.
     const name = std ? std304(g.section) : g.section;
     // A researched bar or tube is bought as the fixed piece the vendor sells (packQty in ft); an estimate is per foot of cut length.
@@ -909,10 +909,10 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     alts.length ? `Alternatives (not substituted): ${alts.map((a) => `${a.source} ${usdText(a.usd)} in all (${a.note ?? ''})${a.url ? ` ${a.url}` : ''}`).join(' | ')}` : undefined;
   const consumables: BomLine[] = [];
   const buyText = sched.buy.filter((x) => /West System/.test(x.item)).map((x) => `${x.qty} ${x.unit} ${x.item.replace('West System ', '')}`).join(', ');
-  let epoxyNote = `${r2(resinFlOz)} fl oz resin: ${r2(glueEpoxyTotal)} fl oz mixed for the glue joints that use epoxy (estimated by joint type, +${Math.round(EPOXY_WASTE * 100)}% waste, 5:1 with the kit's 206), ${r2(finishEpoxyFlOz)} fl oz for the ${std ? 'edge, end-grain and deck-underside coat' : 'one seal coat'} (the transom and bulkhead closes are glue joints, in the first figure; the schedule's buy list: ${buyText}). Cheapest kit combination that covers it.`;
+  let epoxyNote = `${Math.ceil(resinFlOz)} fl oz resin: ${Math.ceil(glueEpoxyTotal)} fl oz mixed for the glue joints that use epoxy (estimated by joint type, +${Math.round(EPOXY_WASTE * 100)}% waste, 5:1 with the kit's 206), ${Math.ceil(finishEpoxyFlOz)} fl oz for the ${std ? 'edge, end-grain and deck-underside coat' : 'one seal coat'} (the transom and bulkhead closes are glue joints, in the first figure; the schedule's buy list: ${buyText}). Cheapest kit combination that covers it.`;
   if (useSmall) {
     const over = resinFlOz - (cheapSmall.n - 1) * cheapSmall.kit.resinFlOz;
-    if (cheapSmall.n > 1 && over <= 0.2 * cheapSmall.kit.resinFlOz) epoxyNote += ` The need is only ${r2(over)} fl oz of resin past ${cheapSmall.n - 1} kit${cheapSmall.n === 2 ? '' : 's'} (the estimates carry ${Math.round(EPOXY_WASTE * 100)}% waste on the joints and 15% on the coat): ${cheapSmall.n - 1} kit${cheapSmall.n === 2 ? '' : 's'} may do if you mix tight.`;
+    if (cheapSmall.n > 1 && over <= 0.2 * cheapSmall.kit.resinFlOz) epoxyNote += ` The need is only ${Math.ceil(over)} fl oz of resin past ${cheapSmall.n - 1} kit${cheapSmall.n === 2 ? '' : 's'} (the estimates carry ${Math.round(EPOXY_WASTE * 100)}% waste on the joints and 15% on the coat): ${cheapSmall.n - 1} kit${cheapSmall.n === 2 ? '' : 's'} may do if you mix tight.`;
     consumables.push(line('Consumables', `epoxy-${cheapSmall.kit.id}`, cheapSmall.kit.label, cheapSmall.n, cheapSmall.kit.price, { vendor: cheapSmall.kit.price.source, notes: joinNotes(`Price: ${cheapSmall.kit.price.note}.`, epoxyNote, kitAltsNote(familyAlts(cheapSmall.kit.id))), alternatives: familyAlts(cheapSmall.kit.id) }));
   } else {
     const alts = familyAlts('west');
@@ -937,7 +937,7 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     const sizes = tb ? TITEBOND_BOTTLES.map((bt, i) => ({ bt, n: tb!.counts[i] })).filter((x) => x.n > 0) : [];
     for (const { bt, n } of sizes) {
       consumables.push(line('Consumables', `titebond-${bt.flOz}`, `Titebond III Ultimate wood glue, ${bt.label}`, n, bt.price, { vendor: bt.price.source,
-        notes: joinNotes(`Price: ${bt.price.note}.`, `${sched.glue.titebondJoints} glue joints (the Dominos, dados, tenons and general glue joints), ${r2(need)} fl oz with the ${Math.round(EPOXY_WASTE * 100)}% waste (0.4 of the epoxy estimate for the same joints: one thin coat, no filler). Epoxy is kept for the bent laminations, the face laminations, the deck, the fillets and the thickened bedding.`) }));
+        notes: joinNotes(`Price: ${bt.price.note}.`, `${sched.glue.titebondJoints} glue joints (the Dominos, dados, tenons and general glue joints), ${Math.ceil(need)} fl oz with the ${Math.round(EPOXY_WASTE * 100)}% waste (0.4 of the epoxy estimate for the same joints: one thin coat, no filler). Epoxy is kept for the bent laminations, the face laminations, the deck, the fillets and the thickened bedding.`) }));
     }
   }
   consumables.push(line('Consumables', 'silica', 'Colloidal silica filler (thickened glue, fillets)', 1, FILLERS.silica, { vendor: FILLERS.silica.source, notes: `Price: ${FILLERS.silica.note}.` }));

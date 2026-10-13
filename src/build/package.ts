@@ -7,7 +7,7 @@
  */
 import type { Part } from '../model/types';
 import type { Params } from '../params';
-import { cutList, stepMapOf, toCsv, type CutList } from './cutlist';
+import { cutList, stepMapOf, type CutList } from './cutlist';
 import { nestPlywood, oakBoardFeet, type NestResult, type OakPlan } from './nesting';
 import { bom, type Bom } from './bom';
 import { SHAPER_MAX_DEPTH_IN, shaperFiles, type ShaperFile } from './shaper-svg';
@@ -65,14 +65,14 @@ export const SHAPER_CONVENTIONS: { swatch: 'outside' | 'inside' | 'pocket' | 'gu
 
 /** Notes Eric needs next to the Shaper files (also in the README). */
 export const SHAPER_NOTES: string[] = [
-  'Every path carries shaper:cutDepth in inches (part thickness + 0.02 in breakthrough for outside and inside cuts).',
+  'Every path carries shaper:cutDepth in inches (part thickness plus a breakthrough allowance of about 1/50 in for outside and inside cuts).',
   'Drill marks are blue circles and crosses, not cuts: drill them by hand or on the drill press. A dashed mark is on the face you are NOT cutting.',
   'Edge joints (rabbets, edge dados, bevels, glue faces) are notes under each drawing and in the file description; they are not cut by the Shaper.',
   'Each file is drawn as seen from the face you cut, and says which face goes UP (the bow bulkhead: REAR face up, so its drawing is the mirror image of the part seen from the front; the shared left/right files: either face, do not mirror).',
-  'Every pocket, hole and engraving names its bit in the file and the book: 1/8 in straight bit for the narrow web dados, mortises and 0.266 in holes and for the on-line lettering, 1/4 in for the wide deck dados and the 0.406 in holes. Use a bit no wider than the feature.',
+  'Every pocket, hole and engraving names its bit in the file and the book: 1/8 in straight bit for the narrow web dados, mortises and 17/64 in holes and for the on-line lettering, 1/4 in for the wide deck dados and the 13/32 in holes. Use a bit no wider than the feature.',
   `DEEP CUT parts (the bow bulkhead, the thickest solid): the stock is deeper than a Shaper bit reaches, so the file cuts the outline and hand hole ${SHAPER_MAX_DEPTH_IN} in deep from one face (verify YOUR bit's flute length), then you bandsaw the rest and finish with a flush-trim (pattern) bit riding the wall the Shaper cut.`,
   'All text in these files (titles, tags, notes, dimension labels) is annotation only: stroke-only blue text inside a group marked as a guide, outside the cut area, never a cut path. Origin should ignore it; if it shows glyph outlines they are guides, not cuts. Before the first real cut, import transom-rear.svg once and confirm that only the outline, dados, mortises and holes show as cuts.',
-  'VERIFY the insert drill: the six blind insert holes in the seat-back panel are drawn at 5/16 in (assumed) by 0.344 in deep. Check the insert maker\'s drill chart for the exact bit and depth, and test in a scrap of 12 mm okoume, before drilling the panel.',
+  'VERIFY the insert drill: the six blind insert holes in the seat-back panel are drawn at 5/16 in (assumed) by 11/32 in deep. Check the insert maker\'s drill chart for the exact bit and depth, and test in a scrap of 12 mm okoume, before drilling the panel.',
   'Check the 1:1 scale before cutting: a file is exactly as large as its part (width and height in inches).',
 ];
 
@@ -116,15 +116,21 @@ export class BuildData {
   get steps(): BuildStep[] { return this.memo('steps', () => assemblySteps(this.parts, this.p)); }
   get finishing(): FinishSchedule { return this.memo('finishing', () => finishingSchedule(this.parts, this.p)); }
 
-  /** `cutlist.csv`: the four tables one after another, each under a `# title` line. */
+  /**
+   * `cutlist.csv`: the same three stages as the cut list on screen (the cuts by board, the glue-ups, the finished parts), with the resaw plan, the plywood and the metal,
+   * each table under a `# title` line. Every size is a shop fraction.
+   */
   get cutlistCsv(): string {
     const c = this.cutList.csv;
     const block = (title: string, csv: string) => `# ${title}\n${csv.replace(/\s+$/, '')}\n`;
-    const boards = toCsv([
-      ['Strip rough thickness (in)', 'Strips needed', 'Buy boards', 'Board', 'Width (in)', 'Length (in)', 'Strips per board', 'Strips bought', 'Spares', 'Board feet'],
-      ...this.cutList.resaw.map((r) => [r.roughT, r.strips, r.boards, r.board, r.boardWidthIn, r.boardLengthIn, r.yieldPerBoard, r.stripSlots, r.spares, +r.boardFeet.toFixed(2)]),
-    ]);
-    return [block('Oak, by board thickness', c.oak), ...(this.cutList.layers.length ? [block('Face-laminated layers (D-70)', c.layers)] : []), block('Resawn strips', c.strips), block('Resaw boards to buy', boards), block('Plywood', c.sheets), block('Metal stock', c.metal)].join('\n');
+    return [
+      block('1. Cuts: saw these from the boards (rough sizes round up to 1/8 in)', c.cuts),
+      ...(this.cutList.resaw.length ? [block('Resawing the strips: rip the lanes first, then resaw each lane', c.resaw)] : []),
+      block('2. Glue-ups', c.glueUps),
+      block('3. Finished parts: mill to these sizes', c.finished),
+      block('Plywood', c.sheets),
+      block('Metal stock', c.metal),
+    ].join('\n');
   }
 
   get files(): PackageFile[] {
@@ -168,7 +174,7 @@ function readme(d: BuildData, others: string[]): string {
   lines.push('Troop 455 Klondike Derby sled: build package');
   lines.push('============================================');
   lines.push(`Generated: ${d.opts.date ?? '(date not given)'}`);
-  lines.push(`Params revision: ${d.revision} (a hash of every design number; the form title blocks print the same stamp)`);
+  lines.push(`Design revision: ${d.revision} (a code made from every design number; the form title blocks print the same stamp)`);
   lines.push(`Weather spec: ${SPEC_NAME[d.bom.spec]} (${d.bom.spec === 'standard' ? 'garage-kept: 304 / 18-8 fasteners, beech Dominos, Titebond III, epoxy only where it earns it, spar urethane' : 'stored outside or near salt: 316, Sipo Dominos, epoxy everywhere, marine varnish'}). Thin sheet: ${d.bom.thinSheetName}.`);
   const wl = weatherLine(d.bom.weatherCompare);
   if (wl) lines.push(wl);
@@ -184,7 +190,7 @@ function readme(d: BuildData, others: string[]): string {
   lines.push('Printing the full-size forms');
   lines.push('----------------------------');
   lines.push('  forms/*.svg are full size (1:1). forms/tiled/*.svg are Letter pages (A1, A2, ... row letter then column number) with');
-  lines.push('  0.5 in overlap and corner crosses: print at 100% (no "fit to page") and measure the 1 in check square on every page.');
+  lines.push('  1/2 in overlap and corner crosses: print at 100% (no "fit to page") and measure the 1 in check square on every page.');
   lines.push('  A page with only guide lines or labels (no cut outline and no drill mark) is left out, so the labels can skip a number; the neighbors named on each page are the ones that were printed.');
   lines.push('');
   lines.push('Part drawings');

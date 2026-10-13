@@ -202,10 +202,10 @@ describe('oakBoardFeet: face-laminated parts (D-70)', () => {
     expect(oak.laminated.map((q) => q.id).sort()).toEqual(['beam-F', 'beam-R', 'brake-chock-L', 'brake-chock-R', 'brake-knee-L', 'brake-knee-R']);
     const layerCuts = oak.thicknesses.flatMap((t) => t.boards.flatMap((b) => b.lanes.flatMap((l) => l.cuts.map((c) => ({ c, board: t.board })))))
       .filter((q) => q.c.layer !== undefined);
-    // every part 3 layers of 4/4 (D-74); knees 3 layers x 2 edge-glued pieces; chocks 3 layers x 1 piece (a 3.5" wide chock fits a board)
+    // every part 3 layers of 4/4 (D-74); knees 2 + 1 + 2 pieces (the upright layer is one piece); chocks 3 layers x 1 piece (a 3.5" wide chock fits a board)
     expect(layerCuts.filter((q) => q.c.id === 'beam-F')).toHaveLength(3);
     expect(layerCuts.filter((q) => q.c.id === 'beam-R')).toHaveLength(3);
-    expect(layerCuts.filter((q) => q.c.id === 'brake-knee-L')).toHaveLength(6);
+    expect(layerCuts.filter((q) => q.c.id === 'brake-knee-L')).toHaveLength(5); // D-75: across / upright / across = 2 + 1 + 2 pieces
     for (const q of layerCuts) expect(q.c.layers, q.c.id).toBe(oak.laminated.find((l) => l.id === q.c.id)!.lamination.layers.length);
     // every layer is cut from its own board (or from the free lane of a thicker board it was folded into)
     for (const q of layerCuts) {

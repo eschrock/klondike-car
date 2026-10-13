@@ -6,7 +6,7 @@ import { partLabel, renderInstrText } from '../build/assembly';
 import { drawingFileName } from '../build/package';
 import {
   groupCutsByBoard, instrSegments, partFacts, pieceWord, pinFocus, stepOfPart, tally,
-  bytesLabel, clampStep, cureLine, dims3, featureSummary, fracDim, fracInch, groupByWhen, loadDone, loadStep, loadStepChecks, mergeBuy, noteLead, previewSvg, saveDone, saveStep, saveStepChecks, sharedNote, sheetSvg, splitUrls, stepFocus, tilePagesHtml, todayISO, usd, vendorFromUrl, viewerView,
+  bytesLabel, clampStep, cureLine, dims3, featureSummary, fracDim, fracInch, fracInch64, groupByWhen, loadDone, loadStep, loadStepChecks, mergeBuy, noteLead, previewSvg, saveDone, saveStep, saveStepChecks, sharedNote, sheetSvg, splitUrls, stepFocus, tilePagesHtml, todayISO, usd, vendorFromUrl, viewerView,
 } from './build-helpers';
 
 const p = defaultParams();
@@ -150,17 +150,31 @@ describe('assembly step-through focus', () => {
   });
 });
 
-describe('off-grid sizes (visual round 2)', () => {
-  it('shows the nearest 1/32 with the exact decimal after it, and leaves sixteenths and whole numbers alone', () => {
-    expect(fracDim(21.142)).toBe('21-5/32 (21.142)');
-    expect(fracDim(0.657)).toBe('21/32 (0.657)');
-    expect(fracDim(15.796)).toBe('15-25/32 (15.796)');
+describe('off-grid sizes: fractions only, never a decimal (readability round 2)', () => {
+  it('shows the nearest 1/32 as a fraction, with no decimal after it', () => {
+    expect(fracDim(21.142)).toBe('21-5/32');
+    expect(fracDim(0.657)).toBe('21/32');
+    expect(fracDim(15.796)).toBe('15-25/32');
     expect(fracDim(24.5)).toBe('24-1/2');
     expect(fracDim(6)).toBe('6');
-    expect(fracDim(0.004)).toBe('0.004');
-    expect(fracInch(21.142)).toBe('21-5/32" (21.142")');
+    expect(fracInch(21.142)).toBe('21-5/32"');
     expect(fracInch(24.5)).toBe('24-1/2"');
-    expect(dims3({ t: 0.625, w: 1.75, l: 21.142 })).toBe('5/8 × 1-3/4 × 21-5/32 (21.142)');
+    expect(dims3({ t: 0.625, w: 1.75, l: 21.142 })).toBe('5/8 × 1-3/4 × 21-5/32');
+  });
+  it('shows a small size (a hole, a dado) to the nearest 1/64', () => {
+    expect(fracInch64(0.197)).toBe('13/64"');
+    expect(fracInch64(0.266)).toBe('17/64"');
+    expect(fracInch64(0.5)).toBe('1/2"');
+  });
+  it('labels a nesting sheet with part names and fractions, not part keys', () => {
+    for (const s of d.nest.sheets) {
+      const svg = sheetSvg(s);
+      for (const q of s.placements.slice(0, 4)) {
+        expect(svg).toContain(`<title>${q.name}, `);
+        expect(svg).not.toContain(`>${q.partNo}<`);
+      }
+      expect(svg).not.toMatch(/<title>[^<]*\d\.\d/);
+    }
   });
 });
 

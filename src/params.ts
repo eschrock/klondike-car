@@ -1353,9 +1353,21 @@ const defs = {
   },
 
   brakeBackerCboreDeepIn: {
-    label: 'Backer counterbore depth (nut and washer pockets)', group: 'brake', unit: 'in',
-    default: 0.5, min: 0.375, max: 0.625, step: 0.0625, status: 'assumed', ref: 'D-57, D-65',
-    note: 'The nuts and washers of the knee bolts sit in counterbores in the backer\'s inner face this deep (wide enough for the washer plus 1/8 in). A nut and a fender washer need about 0.4 in with the thread showing; the 3/4 in backer keeps 1/4 in of oak under the washer.',
+    label: 'Backer recess depth for the nut-side backing plate', group: 'brake', unit: 'in',
+    default: 0.125, min: 0, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-57, D-65, D-75',
+    note: 'D-75: the four nut-side fender washers (1-1/4 in on bolts 1-1/16 in apart) overlapped, and so did their 1-3/8 in counterbores. The nuts now bear on ONE stainless backing plate (brakeBackPlateThickIn) let into a flat-bottomed rectangular recess this deep in the backer\'s inner face (router or chisel; the plate size is in its part). 1/8 in sets the plate flush and keeps the stock 4 in bolt (was 1/2 in deep round counterbores).',
+  },
+
+  brakeBackPlateThickIn: {
+    label: 'Knee-bolt backing plate thickness (stainless flat bar)', group: 'brake', unit: 'in',
+    default: 0.125, min: 0.0625, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-75',
+    note: 'D-75: one stainless plate per knee under the four nuts, cut from 2 in x 1/8 in flat bar (the bolt pattern plus the same margin all round). It spreads the bolt tension over the backer like a big washer; 1/8 in keeps its overhang past the nuts within the brake-mount bending check (1/16 in would bend like a fender washer).',
+  },
+
+  brakeBackPlateYieldPsi: {
+    label: 'Knee-bolt backing plate yield (304 / 316, annealed)', group: 'brake', unit: 'psi',
+    default: 30000, min: 25000, max: 60000, step: 1000, status: 'assumed', ref: 'D-75',
+    note: 'Annealed 304 and 316 flat bar: 30 ksi minimum yield (ASTM A276 / A479). Allowable = yield / steel safety factor.',
   },
 
   brakeMountBoltDiaIn: {
@@ -1365,9 +1377,9 @@ const defs = {
   },
 
   brakeMountWasherOdIn: {
-    label: 'Knee bolt nut washer outside diameter (316 fender washer)', group: 'brake', unit: 'in',
-    default: 1.25, min: 1, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-57, D-65',
-    note: 'D-65: 3/8 in x 1-1/4 in 316 fender washers (were 1 in) under the nuts in the backer: with the shorter flap the foot force and the pin load went up about 12% at the goal rider, and the overturning couple pulled the nuts into the backer (brake-mount, washer bearing 1.16). The washers sit in 1-3/8 in counterbores; the two columns are 1-1/4 in apart, so the washers just touch.',
+    label: 'Knee bolt head washer outside diameter (3/8 in USS flat washer)', group: 'brake', unit: 'in',
+    default: 1, min: 0.75, max: 1.0625, step: 0.0625, status: 'assumed', ref: 'D-57, D-65, D-75',
+    note: 'D-75: a 3/8 in USS flat washer (1 in OD) under each bolt HEAD on the knee leg\'s outboard face, with no counterbore: the bolt columns are 1-1/16 in apart, so 1 in washers leave 1/16 in between them (the old 1-1/4 in fender washers overlapped). The head side bears mostly on the END grain of the knee\'s outer layers (D-75 cross-lamination). The nut side has the backing plate (brakeBackPlateThickIn), not washers. D-65 history: 1-1/4 in fender washers under the nuts in 1-3/8 in counterbores.',
   },
 
   brakeMountBoltColumns: {

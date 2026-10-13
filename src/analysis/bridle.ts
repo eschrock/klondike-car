@@ -28,17 +28,20 @@ export const TONGUE_NUT_WASHER_OD_IN = 2;
 const G_IN_S2 = 386.09;
 const IN_PER_S_PER_MPH = 17.6;
 
-/** Width of the tongue at x (from its plan outline, model/pivot.ts). */
+/** Width of the tongue at x (from its plan outline, model/pivot.ts): twice the largest y where the outline crosses x (D-75: the head's square front face is a vertical edge, the shoulder a fillet). */
 export function tongueWidthAt(ctx: Ctx, x: number): number {
   const o = tongueOutline(ctx);
-  // The outline is symmetric: take the upper-y edges, walking in x.
-  const top = o.filter((q) => q[1] > 0).sort((a, b) => a[0] - b[0]);
-  if (x <= top[0][0] || x >= top[top.length - 1][0]) return 2 * (x <= top[0][0] ? top[0][1] : top[top.length - 1][1]);
-  for (let i = 0; i + 1 < top.length; i++) {
-    const [x0, y0] = top[i], [x1, y1] = top[i + 1];
-    if (x >= x0 && x <= x1) return 2 * (x1 === x0 ? y1 : y0 + ((y1 - y0) * (x - x0)) / (x1 - x0));
+  const xs = o.map((q) => q[0]);
+  const xc = Math.min(Math.max(x, Math.min(...xs)), Math.max(...xs));
+  let best = 0;
+  for (let i = 0; i < o.length; i++) {
+    const [x0, y0] = o[i], [x1, y1] = o[(i + 1) % o.length];
+    if (xc < Math.min(x0, x1) - 1e-9 || xc > Math.max(x0, x1) + 1e-9) continue;
+    // a vertical edge (the head's front face) counts as the narrower end: just past the face the section is the taper's, not the head's
+    const y = Math.abs(x1 - x0) < 1e-9 ? Math.min(Math.abs(y0), Math.abs(y1)) : Math.abs(y0 + ((y1 - y0) * (xc - x0)) / (x1 - x0));
+    best = Math.max(best, y);
   }
-  return 2 * top[top.length - 1][1];
+  return 2 * best;
 }
 
 /** Everything about the tie load: the design pull x overload factor, split into its horizontal and vertical parts, and the lateral part when the axle is at full lock. */

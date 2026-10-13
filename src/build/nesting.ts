@@ -374,7 +374,7 @@ export function oakBoardFeet(parts: Part[], p: Params): OakPlan {
     for (const pc of plan.pieces) {
       const arr = cutsBy.get(pc.board) ?? [];
       arr.push({
-        partNo: partKey(x), id: x.id, widthIn: pc.rough.w, lengthIn: pc.rough.l, ...(plan.edgeN > 1 ? { glueUp: true } : {}),
+        partNo: partKey(x), id: x.id, widthIn: pc.rough.w, lengthIn: pc.rough.l, ...((plan.part.layerGrain ? !!pc.acrossOf : plan.edgeN > 1) ? { glueUp: true } : {}),
         ...(pc.layer ? { layer: pc.layer, layers: pc.layers } : {}), piece: pc.piece, index: pc.index, of: pc.of,
       });
       cutsBy.set(pc.board, arr);
@@ -467,11 +467,11 @@ export function oakBoardFeet(parts: Part[], p: Params): OakPlan {
     for (const r of rb) summary.push(`${r.count} x ${b.nominal} x ${r.widthIn}" wide x ${lenFt(r.lengthIn)} (resaw into laminate strips: ${r.strips} needed, ${r.yieldPerBoard} per board, ${r.spares} spare${r.spares === 1 ? '' : 's'})`);
     const layerCuts = boards.flatMap((q) => q.lanes.flatMap((l) => l.cuts)).filter((c) => c.layer !== undefined);
     const layersIn = layerCuts.length ? { pieces: layerCuts.length, partNos: [...new Set(layerCuts.map((c) => c.partNo))] } : undefined;
-    if (layersIn) summary.push(`includes ${layersIn.pieces} layer pieces for the face-laminated parts ${layersIn.partNos.join(', ')} (D-70: glue the layers face to face, then mill)`);
+    if (layersIn) summary.push(`includes ${layersIn.pieces} layer pieces for the face-laminated parts (glue the layers face to face, then mill)`);
     const mi = movedInTo.get(b.nominal);
-    if (mi) summary.push(`also cut the ${mi.from} parts (${mi.partNos.join(', ')}; ${mi.netBf.toFixed(1)} bf) from the offcuts of these boards: no ${mi.from} board to buy for them`);
+    if (mi) summary.push(`also cut the ${mi.from} parts (${mi.netBf.toFixed(1)} bf) from the offcuts of these boards: no ${mi.from} board to buy for them`);
     const fi = foldedInTo.get(b.nominal);
-    for (const f of fi ?? []) summary.push(`also cut the ${f.from} parts ${f.partNos.join(', ')} (${f.netBf.toFixed(1)} bf) from the free lanes of these boards: it saves ${f.from} board length`);
+    for (const f of fi ?? []) summary.push(`also cut the ${f.from} parts (${f.netBf.toFixed(1)} bf) from the free lanes of these boards: it saves ${f.from} board length`);
     thicknesses.push({
       board: b.nominal, nominalIn: b.nominalIn, usableIn: b.usableIn, finishedIn: boardFinishedIn(b, p), pieces: (pieces.get(b.nominal) ?? 0) + (stripCount.get(b.nominal) ?? 0),
       solidNetBf, stripNetBf, netBf, allowanceBf, plannedBf, purchaseBf: plannedBf, boards, resawBoards: rb, summary,

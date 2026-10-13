@@ -17,6 +17,9 @@ import { pickWoodScrew, screwMinBite, screwText } from './rear-mount';
 
 /** Bite of a rail-to-chine screw into the chine sandwich edge (outer band + web) after it has crossed the rail (in). */
 export const RAIL_CHINE_BITE_IN = 0.5;
+/** D-75: the counterbore for each #8 flat-head screw that holds the UHMW thrust disc to the king beam (from the disc's sliding face): diameter and depth (in). */
+export const THRUST_SCREW_CBORE_DIA_IN = 0.375;
+export const THRUST_SCREW_CBORE_DEEP_IN = 0.25;
 /** D-72: the one rail-to-chine screw length (#6 x 2-1/2), and the bit that counterbores its head where the rail is deeper than that. */
 export const RAIL_CHINE_SCREW_IN = 2.5;
 export const RAIL_CHINE_PLUG_DIA_IN = 5 / 16;
@@ -313,8 +316,10 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
       // Three screws on a circle between the bore and the rim (the BOM counts the joint's points: it was one, build review MUST-11); each passes through the disc and 3/4 in into the king beam.
       const rScrew = (p.kingThrustOdIn / 4) + (p.kingpinDiaIn / 4) + 0.015;
       const thrustScrews: Vec3[] = [90, 210, 330].map((deg): Vec3 => [L.king.x + rScrew * Math.cos((deg * Math.PI) / 180), rScrew * Math.sin((deg * Math.PI) / 180), L.king.bot]);
-      const thrustFit = pickWoodScrew(8, p.kingThrustThickIn, kb.stock?.t ?? L.king.top - L.king.bot);
-      add({ a: 'king-beam', b: 'king-thrust', typeA: 'screw', size: `3 × ${screwText(thrustFit)} ${stainless(p)} flat-head screws (counterbored from the disc side, ${frac(rScrew)} in from the kingpin axis) holding the UHMW disc to the king beam`, fit: thrustFit, pts: thrustScrews, noteA: 'Keeps the disc with the king beam; the axle beam turns under it (D-58).' });
+      // D-75 (review MUST-15f): the counterbore is sized: the #8 flat head (about 0.32 in) in a 3/8 in hole, 1/4 in deep from the disc's sliding face, so the head sits below the face and
+      // the screw grips only the 1/4 in of UHMW left above it.
+      const thrustFit = pickWoodScrew(8, Math.max(0.0625, p.kingThrustThickIn - THRUST_SCREW_CBORE_DEEP_IN), kb.stock?.t ?? L.king.top - L.king.bot);
+      add({ a: 'king-beam', b: 'king-thrust', typeA: 'screw', size: `3 × ${screwText(thrustFit)} ${stainless(p)} flat-head screws (each in a ${frac(THRUST_SCREW_CBORE_DIA_IN)}" wide × ${frac(THRUST_SCREW_CBORE_DEEP_IN)}" deep counterbore from the disc's sliding face, ${frac(rScrew)} in from the kingpin axis) holding the UHMW disc to the king beam`, fit: thrustFit, pts: thrustScrews, noteA: 'Keeps the disc with the king beam; the axle beam turns under it (D-58).' });
       add({ a: 'king-beam', b: 'kingpin', typeA: 'hole', typeB: 'pin', size: `${frac(p.kingpinDiaIn)}" bore (snug bushing fit) through the king beam, nylock nut and washer captured in a slot cut from the front face`, sizeB: `${frac(p.kingpinDiaIn)}" bolt turns in the bore; the nut only stops the axle dropping away (rebound)`, pts: [[L.king.x, 0, (L.king.bot + L.king.top) / 2]], noteA: 'Bored square to the face on the drill press; the nut slot is cut from the front before the deck goes on.' });
     }
     for (const { s, tag } of SIDES) {

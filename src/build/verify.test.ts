@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
-import { defaultParams, PARAM_DEFS, thinSheet } from '../params';
+import { defaultParams, PARAM_DEFS } from '../params';
 import { PRE_D72 } from '../test-fixtures';
-import { verifyChecklist, verifyParamKeys, type VerifyWhen } from './verify';
+import { paramLabels, verifyChecklist, verifyParamKeys, type VerifyWhen } from './verify';
 
 const p = defaultParams();
 const parts = buildModel(p);
@@ -43,10 +43,10 @@ describe('verify checklist', () => {
   it('asks for the real plywood thickness before any dado is cut, and the strip bend test before ordering', () => {
     const ply = list.find((c) => c.id === 'ply-thickness')!;
     expect(ply.when).toBe('before cutting');
-    expect(ply.whatToDo).toContain(`${+(thinSheet(p).thicknessIn + p.grooveSlopIn).toFixed(3)}"`); // D-73: the thin sheet in effect (0.21 in white oak plywood + slop)
+    expect(ply.whatToDo).toContain('1/4" wide (fit to the ply)'); // the thin sheet in effect (7/32 white oak plywood + slop), as a fraction
     expect(ply.whatToDo).toMatch(/white oak plywood/);
     expect(ply.paramKeys).toContain('whiteOakPlyThickIn');
-    expect(ply.whatToDo).toContain(`${+(p.deckPlyIn + p.deckSlopIn).toFixed(3)}"`);
+    expect(ply.whatToDo).toContain('33/64" wide (fit to the ply)');
     for (const k of ply.paramKeys) expect(PARAM_DEFS[k as keyof typeof PARAM_DEFS].status).toBe('verify');
     expect(ply.partIds).toEqual(expect.arrayContaining(['deck', 'side-L-web', 'transom-rear', 'bow-bulkhead']));
     const bend = list.find((c) => c.id === 'strip-bend')!;
@@ -65,12 +65,12 @@ describe('verify checklist', () => {
 
   it('takes the tire squash target from the params the model uses', () => {
     const squash = list[0];
-    // 300 lb at <= 560 lb/in => >= 0.54", rounded up to 0.55"; the model's 500 lb/in is 0.60".
+    // 300 lb at <= 560 lb/in => >= 0.54", rounded up to 9/16"; the model's 500 lb/in is 0.60", about 5/8".
     expect(squash.paramKeys).toContain('bumpWheelRateLbIn');
-    expect(squash.pass).toContain('0.55"');
+    expect(squash.pass).toContain('9/16"');
     expect(squash.pass).toContain('560 lb/in');
     expect(squash.whatToDo).toContain('500 lb/in');
-    expect(squash.whatToDo).toContain('0.6"');
+    expect(squash.whatToDo).toContain('about 5/8"');
     const stiffer = verifyChecklist(parts, { ...p, bumpWheelRateLbIn: 600 })[0];
     expect(stiffer.pass).toContain('670 lb/in');
     expect(stiffer.whatToDo).toContain('600 lb/in');
@@ -81,7 +81,7 @@ describe('verify checklist', () => {
     expect(by('wheel').pass).toContain('300 lb');
     expect(by('wheel').pass).toContain('5/8"'); // D-71: 5/8 in, printed as a fraction (D-72)
     expect(by('wheel').whatToDo).toMatch(/MEASURE THE HUB LENGTH/);
-    expect(by('wheel').pass).toContain('2.25"');
+    expect(by('wheel').pass).toContain('2-1/4"');
     // D-71: Eric chose the solid rod, so the axle item is the light rod check (1045 / cold-drawn, not hot-rolled A36) and the tube item only appears with a tube
     expect(list.some((c) => c.id === 'axle-tube')).toBe(false);
     expect(by('axle-rod').title).toMatch(/1045 or cold-drawn/);
@@ -97,7 +97,7 @@ describe('verify checklist', () => {
     expect(by('bridle').pass).toContain('370 lbf'); // the rope WLL: the documented weak link
     expect(by('seat-back').pass).toContain('150 lbf');
     expect(by('brake-knee').pass).toContain('0.4');
-    expect(by('lamp-clip').whatToDo).toContain('4.5" × 1.25"'); // hand-hold = clip + 0.02" a side
+    expect(by('lamp-clip').whatToDo).toContain('4-1/2" × 1-1/4"'); // hand-hold = clip + 1/50" a side
   });
 
   it('gates ordering on the purchased parts and cutting on the shop-made ones', () => {
@@ -129,5 +129,24 @@ describe('verify items are written for the shop (Eric 2026-10-12)', () => {
       for (const k of keys) expect(text, `${c.id}: ${k}`).not.toMatch(new RegExp(`\\b${k}\\b`));
       expect(text, c.id).not.toMatch(/\.ts\b/);
     }
+  });
+});
+
+describe('readability round 2: no IDs, no param keys, no decimal lengths', () => {
+  const text = (c: (typeof list)[number]): string => [c.title, ...c.how.flatMap((q) => [q.text, ...(q.sub ?? []).map((x) => x.text)]), ...c.passList, c.ifFails].join('\n');
+  it('prints no D-number, no Q-number and no measured length as a decimal', () => {
+    for (const c of list) {
+      expect(text(c), c.id).not.toMatch(/\b[DQ]-\d+/);
+      // a length is "<number>"" or "<number> in": none is a decimal (a tube wall in thousandths and the 0.2 lb filament are not in the default design)
+      expect(text(c), c.id).not.toMatch(/\d\.\d+\s?("|in\b|mm\b)/);
+    }
+  });
+  it('names the guarded design values by their parameters-panel label', () => {
+    for (const c of list) for (const k of c.paramKeys) expect(paramLabels([k])[0], k).toBe(PARAM_DEFS[k as keyof typeof PARAM_DEFS].label);
+    expect(paramLabels(['bumpWheelRateLbIn'])).not.toContain('bumpWheelRateLbIn');
+  });
+  it('the leftover-values check lists lengths as fractions and does not point at Q-1', () => {
+    const other = list.find((c) => c.id === 'other-params')!;
+    expect(text(other)).toMatch(/60-1\/2 in/);
   });
 });

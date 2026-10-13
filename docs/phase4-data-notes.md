@@ -105,3 +105,11 @@ Eric 2026-10-13: "4/4 stock is often closer to 3/4 ... I can't mill 4/4 reliably
 - **Board choice** (`boardForThickness(finalT, p)`): thinnest stocked board whose finished yield >= the part's FINAL thickness. No solid part changed board at the defaults (nothing sits between the old and new thresholds). Resaw keeps the rough board (`resawUsableIn` = min(nominal - 1/8, yield + 1/8), the same numbers today), so the 8 band and 4 rail strips and their boards are unchanged.
 - **Laminations** (`planLamination(finalT, _, p)`): layers planed to the yield rounded DOWN to 1/16 (3/4, 1, 1-1/4, 1-3/4); valid when sum(layers) - cleanup >= final; cheapest $/ft2 of face, then quoted-only within 15% (`LAMINATION_QUOTED_TOLERANCE`, was 5%: the 5/4 price is an estimate and a lone 5/4 board for one layer cost more in whole boards), then fewer layers. Beams (2-1/4): 8/4 + 4/4 ("1-3/4" + 3/4", then mill to 2-1/4""). Knees and chocks (2-1/2): 4 x 3/4 from 4/4. `LaminationLayer.finalT` now equals the planed layer thickness (it was a proportional share, hence 27/32).
 - **Cost:** oak 48.25 -> 51.25 bf, $583.08 -> $653.08 (+$70.00): 4/4 25 -> 20, 8/4 15 -> 23 bf. If the beams and knees/chocks were 2-1/8 (3 x 3/4 - 1/8) the old $583.08 and 48.25 bf come back.
+
+## Readability round 2 (exports)
+
+- `cutlist.csv` and the book's cut list now come from `CutList.cuts`, `glueUps` and `finished` (the UI's three tables), then the resaw plan, plywood and metal. `CutList.csv` is `{ cuts, resaw, glueUps, finished, sheets, metal }`; the old oak, layers and strips CSVs are gone. No part-key column.
+- `ResawPool.ripLanes` and `laneCountText` (`laneCount()` in `cutlist.ts`) are the one lane count; the book and the UI quote it, and `assembly.ts` should too.
+- Fractions only: `fracDim` has no decimal parenthetical; the web note is "the Shaper file cuts it to 59-1/2"; start from a 59-5/8" blank (+1/8" trim)"; small sizes use `fracInch64` (0.197 -> 13/64"). A tube's wall gauge (0.130") is the one catalog decimal left.
+- Verify (UI and book) shows design values by their parameters-panel label (`paramLabels`) and parts by name; no Params/Guards/refs, D- or Q-numbers. The book's check boxes are empty (U+2610).
+- Left for others: BOM text (`bom.ts`) still has "Cut to length: 6 x 2.25" (axle-clamp)"; nesting summaries lost their D-70 and part keys (small edit in `nesting.ts`).

@@ -38,6 +38,24 @@ export const FLAP_NOSE_CORNER_IN = 0.25;
 /** Pivot-block screws (#10) stay this much clear of the pin's cross hole edge (screw body to hole edge, in) and this far from the block's end and the tongue's edges (screw center): fabrication rules. */
 export const PIVOT_SCREW_WOOD_IN = 0.375;
 export const PIVOT_SCREW_EDGE_IN = 0.25;
+/** Nominal finished layer of the face-laminated knee (D-74: 3/4 in from 4/4); the layer count is the knee depth over this, rounded. */
+export const KNEE_LAYER_NOMINAL_IN = 0.75;
+/** Head height of a 3/8 in hex nylock nut's bearing face, as a radius: half the 9/16 in across-flats (the plate's overhang past it is checked, D-75). */
+export const KNEE_NUT_FLAT_R_IN = 0.28125;
+
+/** One face-glued layer of the knee (D-75): its x range (rear to front) and the axis its grain runs along ('y' along the arm, 'z' up the bolted leg). */
+export interface KneeLayer { x0: number; x1: number; grain: 'y' | 'z' }
+
+/**
+ * D-75 cross-lamination of the brake knee (CLT style, balanced): the layers alternate, and the FRONT layer runs along the arm ('y'), because it alone holds the bridge ahead of the
+ * pivot slot (the slot is sawn through every layer behind it). With 3 layers that is y / z / y: long grain along the arm and through both pivot ears in the outer layers, long grain up
+ * the whole leg and through the shoulder in the center layer.
+ */
+export function kneeLayers(x0: number, x1: number): KneeLayer[] {
+  const n = Math.max(1, Math.round((x1 - x0) / KNEE_LAYER_NOMINAL_IN));
+  const t = (x1 - x0) / n;
+  return Array.from({ length: n }, (_, i): KneeLayer => ({ x0: x0 + i * t, x1: x0 + (i + 1) * t, grain: (n - 1 - i) % 2 === 0 ? 'y' : 'z' }));
+}
 /** The cross hole for the clevis pin is drilled this much over the pin (in). */
 export const PIVOT_HOLE_CLEAR_IN = 1 / 32;
 /** The pin enters the knee's inboard ear this deep (blind hole) and its cross hole for the clip sits this far beyond the knee's outboard face (in): a purchased-pin size. */
@@ -187,10 +205,16 @@ export interface BrakeGeom {
   /** Bungee: eye on the flap (surface point, applied), transom anchor (x, y, z), cord lengths released / applied (3-D), cord tension released / applied, and the moment arm data. */
   bungee: { sEye: number; E: V2; Erel: V2; A: [number, number, number]; lenRel: number; lenApp: number; tRel: number; tApp: number; rate: number; fRel: V2; fApp: V2; mRel: number; mApp: number };
   /** Outrigger (knee), plan outline in (y, z) for the left side, x range, leg, arm; the rail, the backer and the bolt pattern. */
-  knee: { x0: number; x1: number; poly: V2[]; legT: number; armT: number; zLeg: number; zArmBot: number; zTop: number; zBot: number; yOut: number; area: number };
+  knee: { x0: number; x1: number; poly: V2[]; legT: number; armT: number; zLeg: number; zArmBot: number; zTop: number; zBot: number; yOut: number; area: number;
+    /** D-75: the face-glued layers, rear to front, with their grain. */
+    layers: KneeLayer[];
+    /** D-75: height (z) of the edge-glue line of each 'y'-grain layer (wider across its grain than a board): midway between the top bolt hole and the shoulder, along that layer's grain. */
+    zEdgeGlue: number };
   rail: { zb: number; zt: number; t: number };
   backer: { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number; t: number };
-  bolts: { dia: number; xs: number[]; zs: number[]; count: number; stack: number; cx: number; cz: number };
+  bolts: { dia: number; xs: number[]; zs: number[]; count: number; stack: number; cx: number; cz: number;
+    /** D-75: the clamped length (head washer on the knee leg, the leg, rail, backer less the plate recess, the backing plate) and the nut-side backing plate (x and z extents, thickness). */
+    grip: number; plate: { x0: number; x1: number; z0: number; z1: number; t: number; recess: number } };
   /** Chock: ramp angle, tangent point on the tire, toe and back x, height, polygon for the FRONT chock (x–z, applied); the rear chock mirrors in x. Cord eye on the knee and on the chock. */
   chock: { psi: number; tangent: V2; xToe: number; xBack: number; height: number; width: number; poly: V2[]; eyeX: number; kneeEye: V2; chockEye: V2; heelAngle: number };
 }
@@ -316,7 +340,7 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
   const zLeg = L.railTop + L.chineH;
   const zArmBot = zTop - armT;
   const poly: V2[] = [[yFace, zb], [yFace + legT, zb], [yFace + legT, zLeg], [yOut, zArmBot], [yOut, zTop], [yFace, zTop]];
-  const knee = { x0: kx0, x1: kx1, poly, legT, armT, zLeg, zArmBot, zTop, zBot: zb, yOut, area: polyArea(poly) };
+  const kneeLay = kneeLayers(kx0, kx1);
   // ── Pull-pin pivot (D-65): the knee arm is slotted from its rear face; the flap's tongue (with the pivot block on it) enters the slot and the pin goes through ear, tongue, ear. ──
   const slotHalf = wTongue / 2 + p.brakePivotSlotClearIn;
   const ySlot: [number, number] = [yW - slotHalf, yW + slotHalf];
@@ -340,7 +364,20 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
   const xs = Array.from({ length: cols }, (_, i) => kx0 + ((i + 0.5) * (kx1 - kx0)) / cols);
   const zs = Array.from({ length: rows }, (_, j) => zb + ((j + 0.5) * (zt - zb)) / rows);
   const stack = legT + railT + p.brakeBackerThickIn;
-  const bolts = { dia: bd, xs, zs, count: cols * rows, stack, cx: xs.reduce((a, b) => a + b, 0) / cols, cz: zs.reduce((a, b) => a + b, 0) / rows };
+  // D-75: the nut-side backing plate covers the bolt pattern with the same margin all round as the knee depth leaves fore and aft (1/16 in in from each knee face), rounded up to 1/8 in.
+  const up8 = (v: number) => Math.ceil(v * 8 - 1e-9) / 8;
+  const pw = Math.min(kx1 - kx0 - 0.125, up8(xs[xs.length - 1] - xs[0] + 2 * 0.5));
+  const margin = (pw - (xs[xs.length - 1] - xs[0])) / 2;
+  const ph = up8(zs[zs.length - 1] - zs[0] + 2 * margin);
+  const pcx = (xs[0] + xs[xs.length - 1]) / 2, pcz = (zs[0] + zs[zs.length - 1]) / 2;
+  const recess = Math.min(p.brakeBackerCboreDeepIn, p.brakeBackPlateThickIn);
+  const plate = { x0: pcx - pw / 2, x1: pcx + pw / 2, z0: pcz - ph / 2, z1: pcz + ph / 2, t: p.brakeBackPlateThickIn, recess };
+  const grip = stack - recess + plate.t;
+  const bolts = { dia: bd, xs, zs, count: cols * rows, stack, cx: xs.reduce((a, b) => a + b, 0) / cols, cz: zs.reduce((a, b) => a + b, 0) / rows, grip, plate };
+  // D-75: the 'y'-grain layers are as wide across their grain as the knee is tall, so each is edge-glued from two pieces; the joint runs along their grain midway between the top bolt hole
+  // and the shoulder (the review found the old even split landing on the shoulder); the 'z' layer crosses it with long grain.
+  const zEdgeGlue = (zs[zs.length - 1] + bd / 2 + zLeg) / 2;
+  const knee = { x0: kx0, x1: kx1, poly, legT, armT, zLeg, zArmBot, zTop, zBot: zb, yOut, area: polyArea(poly), layers: kneeLay, zEdgeGlue };
   // The backer runs from behind the first bolt column to ahead of the last, clear of the axle hanger behind it (joists in the way are cut back in frame.ts).
   const hangerFace = L.beamR.x + p.axleHangerWidthIn / 2;
   const bx0 = Math.max(hangerFace + 0.1, xs[0] - 1.5 * bd - 0.5 * (kx1 - kx0) / cols);

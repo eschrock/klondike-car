@@ -31,10 +31,50 @@ const UHMW_PCF = 59;
 /** Bronze (SAE 841 oilite-class) sleeve bushing density (lb/ft3), for the mass of the bridle sleeve. */
 const BRONZE_PCF = 530;
 
+/** Head diameter (in) of a round-head carriage bolt of shank `d` (ASME B18.5: 0.844 in max for 3/8 in, about 2.25 d; 2.375 d is used for margin). */
+export const carriageHeadDia = (d: number): number => 2.375 * d;
+/** Clearance (in) from the carriage-bolt head to the inside corner where the head's square front face turns into the taper (D-75). */
+export const TONGUE_SEAT_CLEAR_IN = 1 / 16;
+/** Fillet radius (in) at that inside corner, so the shoulder is not a sharp notch in the oak (D-75). */
+export const TONGUE_SHOULDER_FILLET_IN = 0.25;
+
+/** Points of a fillet of radius r at polygon corner b (between a and c), from the tangent point on ba to the one on bc. */
+function filletPts(a: Vec2, b: Vec2, c: Vec2, r: number, n = 6): Vec2[] {
+  const u1 = [a[0] - b[0], a[1] - b[1]], u2 = [c[0] - b[0], c[1] - b[1]];
+  const l1 = Math.hypot(u1[0], u1[1]), l2 = Math.hypot(u2[0], u2[1]);
+  const e1 = [u1[0] / l1, u1[1] / l1], e2 = [u2[0] / l2, u2[1] / l2];
+  const half = Math.acos(Math.max(-1, Math.min(1, e1[0] * e2[0] + e1[1] * e2[1]))) / 2;
+  const t = Math.min(r / Math.tan(half), 0.45 * Math.min(l1, l2));
+  const rr = t * Math.tan(half);
+  const bis = [e1[0] + e2[0], e1[1] + e2[1]], lb = Math.hypot(bis[0], bis[1]);
+  const ctr: Vec2 = [b[0] + (bis[0] / lb) * (rr / Math.sin(half)), b[1] + (bis[1] / lb) * (rr / Math.sin(half))];
+  const p1: Vec2 = [b[0] + e1[0] * t, b[1] + e1[1] * t], p2: Vec2 = [b[0] + e2[0] * t, b[1] + e2[1] * t];
+  let a1 = Math.atan2(p1[1] - ctr[1], p1[0] - ctr[0]), a2 = Math.atan2(p2[1] - ctr[1], p2[0] - ctr[0]);
+  while (a2 - a1 > Math.PI) a2 -= 2 * Math.PI;
+  while (a1 - a2 > Math.PI) a2 += 2 * Math.PI;
+  return Array.from({ length: n + 1 }, (_, i): Vec2 => { const q = a1 + ((a2 - a1) * i) / n; return [ctr[0] + rr * Math.cos(q), ctr[1] + rr * Math.sin(q)]; });
+}
+
 /**
- * Oak tongue outline in plan (x, y), counter-clockwise: the wide head butting the front face of the axle beam, a taper over the same length down to the stem, then the stem to
+ * Oak tongue outline in plan (x, y), counter-clockwise: the wide head butting the front face of the axle beam, then a taper over the same length down to the stem, then the stem to
  * the tip. (The tongue's x, y are the model frame at steer 0; the extrusion runs from z0 up `tongueDepthIn`.)
+ * D-75 (readability review MUST-15b): the head's front face is SQUARE from its outer corners in to just inside the carriage-bolt heads (`tongueSeatHalfWidth`), so the bolt holes exit on a
+ * flat, square seat `tongueHeadLenIn` from the beam (the old taper started at the head's outer corners, so the holes came out on a 38 degree slope about 4-1/4 in deep and the 6-1/2 in bolt
+ * was 3/4 in short). The taper then runs from that seat down to the stem, with a fillet at the inside corner.
  */
+export function tongueSeatHalfWidth(p: Pick<Ctx['p'], 'tongueBoltOffsetIn' | 'tongueBoltDiaIn' | 'tongueWidthIn' | 'tongueHeadWidthIn' | 'tongueHeadLenIn'>): number {
+  // The flat seat must reach in to the head's inner edge less the clearance (y0); the fillet's tangent point on the face lies t = r / tan(half the corner angle) beyond the corner, so the
+  // corner sits t further in (two passes: t depends on the taper slope, which depends on the corner).
+  const y0 = p.tongueBoltOffsetIn - carriageHeadDia(p.tongueBoltDiaIn) / 2 - TONGUE_SEAT_CLEAR_IN;
+  const bw = p.tongueWidthIn / 2;
+  let ys = y0;
+  for (let k = 0; k < 3; k++) {
+    const slope = Math.atan2(p.tongueHeadLenIn, Math.max(1e-6, ys - bw)); // angle between the face (along y) and the taper
+    const half = (Math.PI - slope) / 2;
+    ys = y0 - TONGUE_SHOULDER_FILLET_IN / Math.tan(half);
+  }
+  return Math.min(p.tongueHeadWidthIn / 2, Math.max(bw, ys));
+}
 export function tongueOutline(ctx: Pick<Ctx, 'p' | 'L'>): Vec2[] {
   const { p, L } = ctx;
   const hw = p.tongueHeadWidthIn / 2, bw = p.tongueWidthIn / 2;
@@ -42,7 +82,11 @@ export function tongueOutline(ctx: Pick<Ctx, 'p' | 'L'>): Vec2[] {
   const xh = xb + p.tongueHeadLenIn;
   const xt = xh + p.tongueHeadLenIn;
   const tip = L.tongue.tipX;
-  return [[xb, -hw], [xh, -hw], [xt, -bw], [tip, -bw], [tip, bw], [xt, bw], [xh, hw], [xb, hw]];
+  const ys = tongueSeatHalfWidth(p);
+  if (ys >= hw - 1e-6 || ys <= bw + 1e-6) return [[xb, -hw], [xh, -hw], [xt, -bw], [tip, -bw], [tip, bw], [xt, bw], [xh, hw], [xb, hw]];
+  const fR = filletPts([xh, -hw], [xh, -ys], [xt, -bw], TONGUE_SHOULDER_FILLET_IN);
+  const fL = filletPts([xt, bw], [xh, ys], [xh, hw], TONGUE_SHOULDER_FILLET_IN);
+  return [[xb, -hw], [xh, -hw], ...fR, [xt, -bw], [tip, -bw], [tip, bw], [xt, bw], ...fL, [xh, hw], [xb, hw]];
 }
 
 /** Plan area (in2) of an outline. */
@@ -183,11 +227,11 @@ export function buildPivot(ctx: Ctx): Part[] {
       stock: { t: depth, w: hw, l: len },
       rough: roughOf(p, { t: depth, w: hw, l: len }),
       joints: [
-        { type: 'bolt', to: 'beam-F', count: 2, diaIn: tb, size: `${f2(tb)}" × ${bl} ${stainless(p)} carriage bolts, fore-aft through the head and the axle beam, nylock nuts + fender washers on the rear face of the beam`, at: [[kx + b.thick / 2 + p.tongueHeadLenIn / 2, boltY, depth / 2], [kx + b.thick / 2 + p.tongueHeadLenIn / 2, -boltY, depth / 2]], note: `one each side of the kingpin, ${f2(boltY)}" off the center line at mid depth (the square necks are sunk into the head)` },
+        { type: 'bolt', to: 'beam-F', count: 2, diaIn: tb, size: `${f2(tb)}" × ${bl} ${stainless(p)} carriage bolts, fore-aft through the head and the axle beam, nylock nuts + fender washers on the rear face of the beam`, at: [[kx + b.thick / 2 + p.tongueHeadLenIn / 2, boltY, depth / 2], [kx + b.thick / 2 + p.tongueHeadLenIn / 2, -boltY, depth / 2]], note: `one each side of the kingpin, ${f2(boltY)}" off the center line at mid depth (the square necks are sunk into the head). D-75: each hole runs ${f2(p.tongueHeadLenIn)}" through the head from the beam face and exits on the head's SQUARE front face, so the domed head seats flat (the taper starts ${f2(tongueSeatHalfWidth(p))}" off the center line, inside the ${f2(carriageHeadDia(tb))}" heads, with a ${f2(TONGUE_SHOULDER_FILLET_IN)}" fillet); clamped stack ${f2(grip)}", so the stock ${bl}" bolt leaves ${f2(boltFit.pastNutIn)}" past the nut` },
         { type: 'pin', to: 'bridle-sleeve', count: 1, diaIn: p.tongueHoleDiaIn, size: `${f2(p.tongueHoleDiaIn)}" hole across the stem`, at: [[L.tongue.holeX, 0, depth / 2]] },
       ],
       sourcing: { vendor: `White oak 8/4 board (finished ${f2(depth)}" thick, ${f2(hw)}" wide x ${f2(len)}" long), grain along the length: bandsaw the T, ease the edges. Drill ${f2(tb + 0.03)}" fore-aft for the two carriage bolts (2 x ${f2(tb)}" x ${bl} ${stainless(p)}, nylock nuts, fender washers) and ${f2(p.tongueHoleDiaIn)}" across the stem for the bridle sleeve` },
-      notes: `Bridle tongue (D-58, replaces the steel plate): white oak ${f2(p.tongueWidthIn)}" thick (y) by ${f2(depth)}" deep (z) set ON EDGE, so it bends about its strong axis; the T head (${f2(hw)}" wide, ${f2(p.tongueHeadLenIn)}" long) butts the front face of the axle beam (x ${f2(kx + b.thick / 2)}") and two carriage bolts go through it and the whole beam. Its top is ${f2(L.beamF.top - L.tongue.z1)}" below the top of the beam (the thrust disc and king beam stand just over it) and its bottom is flush with the beam bottom (${f2(L.tongue.z0)}" off the ground). The stem runs forward under the end joist (${f2(L.deckBot - p.crossmemberDepthIn - L.tongue.z1)}" clear) and the bow bulkhead to the tip at x ${f2(L.tongue.tipX)}", ${f2(p.tongueTipEdgeIn)}" beyond the bridle sleeve. Pulling the bridle steers the axle; the tow force goes into the beam through the bolts and the head's bearing on the beam face and on to the kingpin. Unbolts for transport (two nuts).`,
+      notes: `Bridle tongue (D-58, replaces the steel plate): white oak ${f2(p.tongueWidthIn)}" thick (y) by ${f2(depth)}" deep (z) set ON EDGE, so it bends about its strong axis; the T head (${f2(hw)}" wide, ${f2(p.tongueHeadLenIn)}" long, its front face SQUARE out to ${f2(tongueSeatHalfWidth(p))}" off the center line so the carriage-bolt heads seat flat, D-75) butts the front face of the axle beam (x ${f2(kx + b.thick / 2)}") and two carriage bolts go through it and the whole beam. Its top is ${f2(L.beamF.top - L.tongue.z1)}" below the top of the beam (the thrust disc and king beam stand just over it) and its bottom is flush with the beam bottom (${f2(L.tongue.z0)}" off the ground). The stem runs forward under the end joist (${f2(L.deckBot - p.crossmemberDepthIn - L.tongue.z1)}" clear) and the bow bulkhead to the tip at x ${f2(L.tongue.tipX)}", ${f2(p.tongueTipEdgeIn)}" beyond the bridle sleeve. Pulling the bridle steers the axle; the tow force goes into the beam through the bolts and the head's bearing on the beam face and on to the kingpin. Unbolts for transport (two nuts).`,
     }));
     // the beam's side of the two tongue bolts
     beam.joints = [...(beam.joints ?? []),

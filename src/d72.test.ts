@@ -276,16 +276,16 @@ describe('D-73: the thin-sheet material and the weather spec', () => {
     for (const q of s.placements) expect(Math.max(...q.outer.map((o) => o[0]))).toBeLessThanOrEqual(60 - nest.kerfIn + 1e-6);
   });
 
-  it('the three materials side by side (empty mass, thin parts, web row): white oak 119.20 lb, okoume 116.37 lb, Baltic 116.39 lb (-0.2 lb at the Phase 4 data pass: the hanger bolts counted once, the king-beam nut slot; -1.31 lb at D-74: the 2-1/8 in laminated parts)', () => {
+  it('the three materials side by side (empty mass, thin parts, web row): white oak 119.27 lb, okoume 116.44 lb, Baltic 116.46 lb (-0.2 lb at the Phase 4 data pass: the hanger bolts counted once, the king-beam nut slot; -1.31 lb at D-74: the 2-1/8 in laminated parts; +0.07 lb at D-75: the knee-bolt backing plates +0.35, the square tongue seat -0.25)', () => {
     const rows = [OAK, OKOUME, BALTIC].map((m) => {
       const p = withMat(m);
       const parts = buildModel(p);
       const thin = parts.filter((x) => x.kind === 'sheet' && x.stock && x.stock.t < 0.3).reduce((a, x) => a + x.massLb, 0);
       return { total: totalMass(parts), thin, web: runChecks(p, { includeTruck: false }).find((c) => c.id === 'side-web')!.util! };
     });
-    expect(rows[0].total).toBeCloseTo(119.20, 1);
-    expect(rows[1].total).toBeCloseTo(116.37, 1);
-    expect(rows[2].total).toBeCloseTo(116.39, 1);
+    expect(rows[0].total).toBeCloseTo(119.27, 1);
+    expect(rows[1].total).toBeCloseTo(116.44, 1);
+    expect(rows[2].total).toBeCloseTo(116.46, 1);
     expect(rows[0].thin).toBeCloseTo(10.16, 1);
     expect(rows[1].thin).toBeCloseTo(6.91, 1);
     expect(rows[2].thin).toBeCloseTo(6.64, 1);
@@ -340,7 +340,7 @@ describe('D-71: the solid 5/8 in rod (Eric)', () => {
     const w = verifyChecklist(parts, defaults).find((c) => c.id === 'wheel')!;
     expect(w.title).toMatch(/Harbor Freight/);
     expect(w.whatToDo).toMatch(/MEASURE THE HUB LENGTH/);
-    expect(w.whatToDo).toMatch(/2\.25" is assumed/);
+    expect(w.whatToDo).toMatch(/2-1\/4" is assumed/);
     expect(w.pass).toMatch(/Bore = 5\/8"/);
     expect(w.pass).toMatch(/Rating ≥ 300 lb/);
     expect(w.pass).not.toMatch(/does not fit/);
@@ -358,14 +358,14 @@ describe('D-71: the solid 5/8 in rod (Eric)', () => {
 });
 
 describe('the numbers at the defaults (weatherSpec Standard: 1/4 in white oak plywood, the solid rod, the 3 wood-screw sizes)', () => {
-  it('empty mass 119.2 lb (120.5 before D-74, 120.7 before the hanger bolts were counted once and the king-beam nut slot was cut out; 115.95 lb at D-71: +1.9 for the rod, +2.8 for the white oak sides, box and lid, +0.04 for the hinge backers and fasteners)', () => {
+  it('empty mass 119.27 lb (119.2 before D-75: the knee-bolt backing plates +0.35 lb, the square tongue seat -0.25; 120.5 before D-74, 120.7 before the hanger bolts were counted once and the king-beam nut slot was cut out; 115.95 lb at D-71: +1.9 for the rod, +2.8 for the white oak sides, box and lid, +0.04 for the hinge backers and fasteners)', () => {
     const m = totalMass(buildModel(defaults, { rider: 'none', cargo: false }));
-    expect(m).toBeCloseTo(119.196, 2);
+    expect(m).toBeCloseTo(119.269, 2);
     const ok = totalMass(buildModel({ ...defaults, thinSheetMaterial: OKOUME }, { rider: 'none', cargo: false }));
-    expect(ok).toBeCloseTo(116.37, 2);
+    expect(ok).toBeCloseTo(116.44, 1);
     expect(m - ok).toBeCloseTo(2.83, 1);
     const tubeOk = totalMass(buildModel({ ...defaults, ...PRE_D72 }, { rider: 'none', cargo: false }));
-    expect(tubeOk).toBeCloseTo(114.487, 2);
+    expect(tubeOk).toBeCloseTo(114.56, 1);
     expect(ok - tubeOk).toBeCloseTo(1.88, 1); // the rod over the tube
   });
   it('riders safe 50-250+ lb, green 50-220 lb (230 with the 4 mm okoume); cargo capacity 254 lb; nothing fails', () => {

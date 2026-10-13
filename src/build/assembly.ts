@@ -13,7 +13,8 @@
  * WRITING STYLE (Eric 2026-10-12: "hard to follow"). Each step is a one-line `goal`, then 3-8 short `items` (one action each, details as sub-bullets), the glue / clamp / cure
  * in `clampCure`, and short `checks`. A part is mentioned as a `{{part-id}}` token (the UI makes it a chip that shows the part's drawing; `renderInstrText` turns it into the
  * part's name). Numbers are shop fractions (`fin`, `roughFrac`), and only the ones needed at that moment: sizes live in the cut list, locations come from the part drawings
- * (`part-drawings.ts`). No purchasing (that is the shopping list), no param or file names, no raw part ids, decision ids only as a trailing "(see D-n)" where the why matters.
+ * (`part-drawings.ts`). No purchasing (that is the shopping list), no param or file names, no raw part ids, no decision ids (D-n) and no decimals (readability round 2). The glue
+ * details are ONE glue card (first item of the mill step); each glue step's `clampCure` is a single short line naming the glue that step uses.
  * `instructions` is the same text flattened (sub-items as "– " lines) for readers that do not know `items` yet.
  *
  * FINISH AFTER HARDWARE (build review round 1, MUST-1). The running gear, eye bolts, hinges, handle sockets and the brake kit are FITTED AND DRILLED at their own
@@ -22,8 +23,8 @@
  * once they are really on it. The `hang` step's `modelStep` is clamped up to the finish step (the list stays nondecreasing); every other part is installed in its own model step.
  * The tongue, the beams, the kingpin and the hold-downs stay on the hull and are finished in place (D-65: the tongue is not removable).
  *
- * BRAKE KNEES GO ON BEFORE THE UNDERSIDE FINISH (build review round 2, MUST-A). The knee legs are epoxied to the rail and chine outer face and bolted through the backer, with the nylocks in
- * counterbores under the deck: epoxy will not bond to varnish and the nuts are reachable only while the hull is inverted. The knees (and their backers, if the model installs them late) are
+ * BRAKE KNEES GO ON BEFORE THE UNDERSIDE FINISH (build review round 2, MUST-A). The knee legs are epoxied to the rail and chine outer face and bolted through the backer, with the nylocks on a backing plate
+ * under the deck: epoxy will not bond to varnish and the nuts are reachable only while the hull is inverted. The knees (and their backers, if the model installs them late) are
  * `STEP.brake` (6) in the model, but the `brake-knees` step sits between the front beam and the wheel dry fit. Its `modelStep` is clamped DOWN to the position it occupies (the running
  * model step of the steps before it), so the list stays nondecreasing and the step-through viewer shows the knees exactly when they are glued. The flaps, pins, pads and cords stay in
  * `brake-flaps` and `hang` (model step 6 and 7).
@@ -35,12 +36,12 @@ import { axleGrooveDepthIn, bowTaper, thinSheet, WEATHER_SPEC, type Params } fro
 import { screwText } from '../model/rear-mount';
 import { transformPoint, worldAABB } from '../model/bounds';
 import { cutList, type CutList, type ResawPool } from './cutlist';
-import { epoxyTimeFactor, finishingSchedule } from './finishing';
+import { epoxyTimeFactor, finishingSchedule, glueJointEstimates } from './finishing';
 import { flatPattern } from './flat';
 import { formDrawings, RIB_STOCK_IN, type FormDrawing } from './forms';
 import { oakBoardFeet, type OakPlan } from './nesting';
 import { partDrawings, type DrawingFeature, type PartDrawingSheet } from './part-drawings';
-import { finalFrac, nearest32, roughFrac } from './units';
+import { finalFrac, fractionText, nearest32, nearestTo } from './units';
 import { verifyChecklist } from './verify';
 
 export type StepKind = 'prep' | 'build' | 'process';
@@ -175,7 +176,7 @@ export const EARLY_STEP_IDS: ReadonlySet<string> = new Set(['brake-knees']);
 const EARLY_RE = /^brake-(backer|knee)-[LR]$/;
 export const isEarlyBrakePart = (x: Part): boolean => EARLY_RE.test(x.id);
 
-interface Built { goal: string; items: Instr[]; checks: string[] }
+interface Built { goal: string; items: Instr[]; checks: string[]; /** The glues the step uses, when the parts' joints do not say (a prep step). */ glue?: GlueUse }
 
 interface Template {
   id: string;
@@ -188,9 +189,12 @@ interface Template {
   match?: RegExp;
   view: StepView;
   tools: string[];
-  /** Cure used for the clampCure text, and the clamp description. */
+  /** Epoxy hardener of the step's glue line (`clampCure`) and of `cure`. */
   hardener?: Hardener;
-  clamp?: string;
+  /** The step brushes an epoxy coat on (the line says "handle after", not "clamp"). */
+  coat?: boolean;
+  /** The glue line, when the step glues with something other than epoxy / Titebond (sealant, contact cement). */
+  glueLine?: string;
   build: (c: StepCtx) => Built;
 }
 
@@ -205,22 +209,18 @@ const isStandard = (p: Params): boolean => p.weatherSpec !== WEATHER_SPEC.extrem
 export function standardText(t: string): string {
   return t.replace(/\b316\b/g, '304').replace(/\bvarnished\b/g, 'coated').replace(/\bVarnish\b/g, 'Urethane').replace(/\bvarnish(?:ing)?\b/g, (m) => (m === 'varnishing' ? 'coating' : 'urethane'));
 }
-/** Added to the glue note of every glue step under the Standard spec: which joints in the step are Titebond III. */
-export const STANDARD_GLUE_NOTE =
-  'Standard spec: Titebond III for the Dominos, dados, tenons and plain glue joints of this step (thin coat on both faces, clamp 30-60 min, full strength in 24 h, wipe squeeze-out with a damp rag); epoxy only for the laminations, the deck, fillets and tape, and thickened bedding.';
-
 const f = (n: number, d = 2): string => String(+n.toFixed(d));
 /**
- * A dimension for the shop: a fraction to the nearest 1/32 with the inch mark. A small value that is not on the 1/32 grid (a clearance of 0.04") keeps two decimals, so
- * a fraction never misstates a gap by a third of itself.
+ * A dimension for the shop: a fraction to the nearest 1/32 with the inch mark. A small value that is not on the 1/32 grid (a clearance of 0.04") is given to the nearest 1/64, so a
+ * fraction never misstates a gap by a third of itself and the steps never show a decimal.
  */
 export function fin(n: number): string {
   const a = Math.abs(n);
-  if (a > 0 && a < 0.25 && Math.abs(nearest32(a) - a) > 0.004) return `${f(n, 2)}"`;
+  if (a > 0 && a < 0.25 && Math.abs(nearest32(a) - a) > 0.004) return `${n < 0 ? '-' : ''}${fractionText(nearestTo(a, 1 / 64), 64)}"`;
   return finalFrac(n);
 }
-/** A thin strip thickness: millimeters too when it is off the 1/32 grid (a strip planed to 0.208" is 5.3 mm, not 7/32"). */
-const thick = (t: number): string => (Math.abs(nearest32(t) - t) > 0.004 ? `${f(t * 25.4, 1)} mm (just under ${finalFrac(Math.ceil(t * 32 - 1e-6) / 32)})` : finalFrac(t));
+/** A thin strip thickness as a shop fraction (a strip planed to 0.208" is 7/32"). */
+const thick = (t: number): string => finalFrac(t);
 const cap = (s: string): string => (s ? s[0].toUpperCase() + s.slice(1) : s);
 /** `{{a}}`, `{{a}} and {{b}}`, `{{a}}, {{b}} and {{c}}`. */
 const tl = (ids: string[]): string => {
@@ -297,15 +297,55 @@ function plural(n: number, w: string): string {
   return `${n} ${w}${n === 1 ? '' : 's'}`;
 }
 
-/** Epoxy cure text at 70 °F and at 60 °F (winter shop), after the clamping note. */
-export function cureText(h: Hardener, clamp: string): string {
+/** Which glues a step uses: epoxy, Titebond III, or both. */
+export interface GlueUse { epoxy: boolean; titebond: boolean }
+
+const hRange = (r: [number, number]): string => (r[0] === r[1] ? `${r[0]}` : `${r[0]}-${r[1]}`);
+
+/**
+ * The ONE short glue line of a step (`clampCure`), naming the glue the step actually uses and pointing at the glue card: "Epoxy: clamp 8-10 h, full cure 24 h (glue card, step 1)".
+ * Under 90 characters. `coat` is for a step that brushes epoxy on (a coat, not a clamped joint).
+ */
+export function glueLine(h: Hardener, use: GlueUse, cardStep: number, coat = false): string {
   const c = HARDENERS[h];
+  const epoxy = coat ? `Epoxy coat: handle after ${hRange(c.clampHours)} h, full cure ${c.fullHours} h` : `Epoxy: clamp ${hRange(c.clampHours)} h, full cure ${c.fullHours} h`;
+  const tb = 'Titebond III: clamp 30-60 min, full strength in 24 h';
+  const ref = ` (glue card, step ${cardStep})`;
+  if (use.titebond && use.epoxy) return `Titebond III 30-60 min, epoxy ${hRange(c.clampHours)} h; full cure ${c.fullHours} h${ref}`;
+  return `${use.titebond && !use.epoxy ? tb : epoxy}${ref}`;
+}
+
+/**
+ * The GLUE CARD: which glue goes where, with the working times, in one place (first item of the first glue step). Every later glue step has only its one-line `clampCure`.
+ * Epoxy numbers come from the HARDENERS table (105 resin with the 206 slow hardener, which every glue-up uses) and `epoxyTimeFactor` (the cold-shop multiplier).
+ */
+export function glueCard(p: Params): Instr {
+  const c = HARDENERS['206'];
   const k = epoxyTimeFactor(60);
   const r = (lo: number, hi: number): string => `${f(lo * k, 0)}-${f(hi * k, 0)}`;
-  return (
-    `${clamp} Epoxy 105/${c.label}: pot life ${c.potMin[0]}-${c.potMin[1]} min, clamp ${c.clampHours[0]}-${c.clampHours[1]} h, full cure ${c.fullHours} h+ at 70 °F. ` +
-    `At 60 °F: pot life ${r(...c.potMin)} min, clamp ${r(...c.clampHours)} h; below 55 °F it will not cure. Mix small batches and pour them thin in a tray.`
-  );
+  const std = isStandard(p);
+  const slow = HARDENERS['209'];
+  return I('GLUE CARD: read it once; each glue step below has one line that points back here.', [
+    I(std ? 'Which glue: Titebond III for Dominos, dados, tenons and plain glue joints; epoxy for the laminations, the deck, fillets and tape, and thickened bedding.' : 'Which glue: epoxy for every glue joint (Extreme weather).'),
+    ...(std
+      ? [I('Titebond III:', [
+        'Thin coat on both faces; open time about 10 min, so have the clamps set out.',
+        'Clamp 30-60 min; full strength in 24 h.',
+        'Wipe squeeze-out at once with a damp rag: dried glue blocks the stain.',
+        'Do not glue below 47 °F.',
+      ])]
+      : []),
+    I(`Epoxy (105 resin with 206 slow hardener, 5 parts resin to 1 of hardener):`, [
+      `Pot life ${hRange(c.potMin)} min at 70 °F. Mix small batches in a wide, shallow container and pour leftovers thin into a tray.`,
+      `Clamp ${hRange(c.clampHours)} h at 70 °F; full cure ${c.fullHours} h.`,
+      `Use 206 for every glue-up. 205 fast sets before a rehearsed glue-up is closed; 209 extra slow (pot life ${hRange(slow.potMin)} min) is for a hot shop only.`,
+      'Thicken with 406 filler for fillets, bedding and gap-filling; keep it thin for laminating.',
+    ]),
+    I('Cold shop:', [
+      `At 60 °F epoxy pot life is ${r(...c.potMin)} min and the clamp time ${r(...c.clampHours)} h.`,
+      'Below 55 °F epoxy will not cure: warm the shop and the parts the day before and keep them warm through the cure.',
+    ]),
+  ]);
 }
 
 // ---- locations from the part drawings (part-drawings.ts) ----
@@ -345,6 +385,15 @@ function spans(q: DrawingFeature | undefined, datum: string): Array<[number, num
   if (!q?.positions) return [];
   const re = new RegExp(`(${FR})" to (${FR})" from the ${datum.toLowerCase()}`, 'g');
   return q.positions.flatMap((t) => [...t.matchAll(re)].map((m): [number, number] => [parseFrac(m[1]), parseFrac(m[2])]));
+}
+/** All the "a to b" ranges measured from one datum, in the order they appear: `3-13/16" to 4-13/16", 7-3/8" to 8-3/8" and 10-15/16" to 11-15/16" from the rear end` gives three [from, to] pairs. */
+function rangesOf(q: DrawingFeature | undefined, datum: string): Array<[number, number]> {
+  if (!q?.positions) return [];
+  const pair = `(?:${FR})" to (?:${FR})"`;
+  const re = new RegExp(`((?:${pair}(?:, | and )?)+) from the ${datum.toLowerCase()}`, 'g');
+  const out: Array<[number, number]> = [];
+  for (const t of q.positions) for (const m of t.matchAll(re)) for (const v of m[1].matchAll(new RegExp(`(${FR})" to (${FR})"`, 'g'))) out.push([parseFrac(v[1]), parseFrac(v[2])]);
+  return out;
 }
 /** Single stations measured from one datum: `3", 10-1/8" and 36-3/16" from the rear end` gives 3, 10.125, 36.1875 (spans are not stations). */
 function stations(q: DrawingFeature | undefined, datum: string): number[] {
@@ -390,8 +439,10 @@ function dominoRun(q: DrawingFeature | undefined, datum = 'REAR end'): string | 
   const c = centersOf(q, datum);
   if (!c.length) return undefined;
   if (c.length === 1) return `centered ${fin(c[0])} from the ${lc(datum)}`;
+  const gaps = c.slice(1).map((v, i) => v - c[i]);
+  if (Math.max(...gaps) - Math.min(...gaps) > 0.15) return `${c.length} Dominos, centers ${list(c)} from the ${lc(datum)}`;
   const gap = (c[c.length - 1] - c[0]) / (c.length - 1);
-  return `centers ${fin(c[0])} to ${fin(c[c.length - 1])} from the ${lc(datum)}, about ${fin(gap)} apart`;
+  return `${c.length} equally spaced, centers ${fin(c[0])} to ${fin(c[c.length - 1])} from the ${lc(datum)} (about ${fin(gap)} apart)`;
 }
 
 /** A hole feature's diameter ("Ø25/64"") and its location clause. */
@@ -400,6 +451,57 @@ function holeText(q: DrawingFeature | undefined): string | undefined {
   const dia = new RegExp(`^(${FR})"`).exec(q.size ?? '')?.[1];
   const w = whereOf(q);
   return w ? `${dia ? `Ø${dia}", ` : ''}${w}` : undefined;
+}
+
+/** Every feature of part `id`'s drawing of these kinds that passes the test, in drawing order (a feature per mating part: four clamp plates are four features). */
+function featsAll(c: StepCtx, id: string, kind: DrawingFeature['kind'] | DrawingFeature['kind'][], test: RegExp | ((q: DrawingFeature) => boolean) = () => true): DrawingFeature[] {
+  const kinds = Array.isArray(kind) ? kind : [kind];
+  const ok = typeof test === 'function' ? test : (q: DrawingFeature) => test.test(q.text);
+  return featuresOf(c, id).filter((q) => kinds.includes(q.kind) && ok(q));
+}
+/** "a, b and c" from ready-made fraction strings. */
+const listS = (t: string[]): string => (t.length <= 1 ? t.join('') : `${t.slice(0, -1).join(', ')} and ${t[t.length - 1]}`);
+
+/** The clauses of one positions entry: `1/2" and 1-3/4" from the rear face, 4-3/16" from the left end, centered across the thickness` -> two [values, datum] clauses and the tail. */
+function clausesOf(pos: string): { clauses: Array<{ vals: string[]; datum: string }>; tail: string } {
+  const re = new RegExp(`((?:(?:${FR})"(?:, | and )?)+) from the ([a-z]+(?: [a-z]+)?)(?=,|;|$)`, 'g');
+  const clauses = [...pos.matchAll(re)].map((m) => ({ vals: [...m[1].matchAll(new RegExp(`(${FR})"`, 'g'))].map((v) => `${v[1]}"`), datum: m[2] }));
+  const tail = pos.replace(re, '').replace(/[,;\s]+/g, (m) => (/[,;]/.test(m) ? ', ' : ' ')).replace(/^[,\s]+|[,\s]+$/g, '');
+  return { clauses, tail };
+}
+const fracVal = (t: string): number => parseFrac(t.replace(/"$/, ''));
+
+/**
+ * Where ALL the instances of a hole (or other feature) kind are, from the structured positions of several drawing features: the same fore-aft / depth clause once, and the
+ * varying distances together ("7/16" and 1-13/16" from the rear face, at 1-3/8" and 26-1/8" from the left end"). Features that differ in more than one distance are listed one after another.
+ */
+export function placesOf(fs: DrawingFeature[]): string | undefined {
+  const withPos = fs.filter((q) => q.positions?.length);
+  if (!withPos.length) return undefined;
+  const parsed = withPos.map((q) => clausesOf(q.positions!.join('; ')));
+  const same = parsed.every((q) => q.tail === parsed[0].tail && q.clauses.length === parsed[0].clauses.length && q.clauses.every((c, i) => c.datum === parsed[0].clauses[i].datum));
+  const varying = same ? parsed[0].clauses.map((_, i) => i).filter((i) => parsed.some((q) => q.clauses[i].vals.join() !== parsed[0].clauses[i].vals.join())) : [];
+  if (same && parsed[0].clauses.length && varying.length <= 1) {
+    const v = varying[0];
+    const text = parsed[0].clauses.map((c, i) => {
+      if (i !== v) return `${listS(c.vals)} from the ${c.datum}`;
+      const all = [...new Set(parsed.flatMap((q) => q.clauses[i].vals))].sort((a, b) => fracVal(a) - fracVal(b));
+      return `${all.length > 1 ? 'at ' : ''}${listS(all)} from the ${c.datum}`;
+    });
+    return [...text, ...(parsed[0].tail ? [parsed[0].tail] : [])].join(', ');
+  }
+  return withPos.map((q) => q.positions!.join('; ')).join('; and ');
+}
+/** "4 holes Ø25/64" in the top face (2 at each of 2 places): ..." for all the instances of a hole kind; one feature reads like `holeText`. */
+function holesText(fs: DrawingFeature[]): string | undefined {
+  const where = placesOf(fs);
+  if (!where) return undefined;
+  const total = fs.reduce((n, q) => n + q.count, 0);
+  const per = fs[0].count;
+  const dia = new RegExp(`^(${FR})"`).exec(fs[0].size ?? '')?.[1];
+  const face = fs[0].face && fs.every((q) => q.face === fs[0].face) ? ` in the ${fs[0].face}` : '';
+  const split = fs.length > 1 && per > 1 ? ` (${per} at each of ${fs.length} places)` : fs.length > 1 ? ' (one at each place)' : '';
+  return `${total > 1 ? `${total} holes ` : ''}${dia ? `Ø${dia}"` : ''}${face}${split}: ${where}`.replace(/^ /, '');
 }
 
 /** "3/8" × 3/4" × 1/2" deep" from a loose-tenon mortise feature ("3/8" wide × 3/4" long × 1/2" deep, for a loose tenon"). */
@@ -427,16 +529,8 @@ function resawSubs(c: StepCtx, x: Part, strips: number): Instr[] {
   const pool = poolOf(c, x);
   if (!pool) return [I('Resaw from thick stock: the cut list has the board.')];
   const k = Math.max(1, pool.stripsPerBoard);
-  const widest = Math.max(...pool.laneStrips.flat().map((q) => q.widthIn));
-  // The spares are whole extra lanes of the widest strip (plus any empty slot in a full-width lane): say how many lanes to rip for them (build review r3 MUST-1).
-  const emptySlots = pool.laneStrips.reduce((a, l) => a + (Math.max(...l.map((q) => q.widthIn)) >= widest - 1e-9 ? k - l.length : 0), 0);
-  const spareLanes = Math.ceil(Math.max(0, pool.spares - emptySlots) / k);
-  const by = new Map<string, number>();
-  for (const lane of pool.laneStrips) { const w = roughFrac(Math.max(...lane.map((q) => q.widthIn))); by.set(w, (by.get(w) ?? 0) + 1); }
-  if (spareLanes) by.set(roughFrac(widest), (by.get(roughFrac(widest)) ?? 0) + spareLanes);
-  const lanes = [...by.entries()].map(([w, n]) => `${n} at ${w}`).join(' and ');
   return [
-    I(`${cap(pool.ripText)}: ${plural(pool.lanes + spareLanes, 'lane')}, ${lanes}${spareLanes ? ` (${spareLanes === 1 ? 'one is the spare' : `${spareLanes} are spares`})` : ''}.`),
+    I(`${cap(pool.ripText)}: ${pool.laneCountText}.`),
     I(`Then resaw each lane on edge into ${plural(k, 'slab')}: ${pool.resawHeightText}. Never stand the whole board on edge.${pool.withinCapacity ? '' : ' TOO TALL for your bandsaw: the strip is wider than the saw can cut.'}`),
     I(`That gives ${pool.stripSlots} strips for the ${strips} needed: ${pool.spares <= 0 ? 'no spare, so a strip that cracks on the form means another board' : `${plural(pool.spares, 'spare')} for the bend test`}.`),
   ];
@@ -493,13 +587,21 @@ export function stopBlockPilots(parts: Part[], p: Params): { perBlock: number; t
   return total ? { perBlock, total, screw, xs: [...xs].sort((a, b) => a - b), offCenter: [...ys].sort((a, b) => a - b) } : null;
 }
 
-/** The handle-socket screws from the joint size text: "2 × 1/4-20 × 1-1/4 316 button-head cap screws" (count, thread, length and kind all from the model). */
+/** The handle-socket screws from the joint size text: `2 × 1/4-20 × 1-1/4" stainless button-head cap screws` (count, thread, length and kind all from the model). */
 export function socketScrewText(parts: Part[]): string {
   const j = parts.find((x) => x.id === 'handle-socket-L')?.joints?.find((q) => q.type === 'bolt');
-  const m = /^(\S+\s×\s\S+)\s+(\d+ [^,(]*?screws?)/.exec(j?.size ?? '');
-  return j && m ? `${j.count} × ${m[1]} ${m[2]}` : 'the socket screws from the parts list';
+  const m = /^(\S+)\s×\s(\S+)\s+(.*?)\b([a-z]+-head cap screws?)/.exec(j?.size ?? '');
+  return j && m ? `${j.count} × ${m[1]} × ${m[2]}"${/stainless/.test(m[3]) ? ' stainless' : ''} ${m[4]}` : 'the 1/4-20 button-head cap screws';
 }
 
+/** Where a handle socket sits on the transom, from the two parts' bounds: distance of its center off the centerline, of its outer edge in from the transom's side edge, and its ends up from / down from the transom's edges. */
+export function socketOnTransom(parts: Part[]): { off: number; inset: number; up: number; down: number } | null {
+  const t = parts.find((x) => x.id === 'transom-rear');
+  const s = parts.find((x) => x.id === 'handle-socket-L');
+  if (!t || !s) return null;
+  const tb = worldAABB(t), sb = worldAABB(s);
+  return { off: (sb.min[1] + sb.max[1]) / 2, inset: tb.max[1] - sb.max[1], up: sb.min[2] - tb.min[2], down: tb.max[2] - sb.max[2] };
+}
 /** The rail-end joint to a mating part, in words: "8×50 Domino" or "1/4 × 7/8 × 3/8 deep loose tenon". */
 function endJoint(c: StepCtx, from: string, to: string): string {
   const j = c.by(from)?.joints?.find((q) => q.to === to && (q.type === 'domino' || q.type === 'mortise-tenon'));
@@ -530,6 +632,11 @@ function formBuild(d: FormDrawing | undefined): Instr[] {
   return out;
 }
 
+/** Safety net: decision ids (D-n, A-n) never appear in shop text; "(see D-65)" and a bare "D-65" are dropped. */
+export function noIds(t: string): string {
+  return t.replace(/\s*\((?:see )?[DAQS]-\d+[^)]*\)/g, '').replace(/\s*\b[DQ]-\d+\b/g, '');
+}
+
 /** Safety net for text that comes from elsewhere (form notes, joint text): a decimal inch value with more than two places becomes a shop fraction. */
 export function tidy(t: string): string {
   return t.replace(/(\d+\.\d{3,})(?=")"/g, (_m, v: string) => fin(Number(v))).replace(/\b(\d+\.\d{3,})\b/g, (m) => f(Number(m), 2));
@@ -553,12 +660,12 @@ const TEMPLATES: Template[] = [
       return {
         goal: 'Prove the wheels, steel and plywood against the design before anything is committed.',
         items: [
-          I(`Before the shopping list goes out: the ${plural(before.length, 'check')} below (Verify section).`, before.map((v) => v.title)),
-          I(`Before the first cut: ${plural(cutting.length, 'more check')}.`, cutting.map((v) => v.title)),
-          I('Try ONE wheel first.', ['Get the other three only when its squash, bore, hub length and rating pass.', 'The axle steel should come with a mill cert.']),
+          I(`Before the shopping list goes out: do these ${plural(before.length, 'check')} (how to do each is in the Verify section).`, before.map((v) => v.title)),
+          I(`Before the first cut: do ${plural(cutting.length, 'more check')}.`, cutting.map((v) => v.title)),
+          I('The wheel and axle notes are in the Verify section.'),
           I('Enter every measured value in the design and re-run the checks before going on.'),
         ],
-        checks: [...before, ...cutting].map((v) => `${v.title}: passed`),
+        checks: ['Every check above is done, with its measured value entered in the design', 'The checks re-run clean after the values went in'],
       };
     },
   },
@@ -569,6 +676,7 @@ const TEMPLATES: Template[] = [
     steps: [0],
     view: 'iso',
     tools: ['jointer', 'planer', 'table saw', 'bandsaw', 'planer sled or drum sander', 'moisture meter', 'cauls and clamps (panel glue-ups)'],
+    hardener: '206',
     build: (c) => {
       const bands = c.parts.filter((x) => x.kind === 'bentlam' && !x.plies);
       const rails = c.parts.filter((x) => x.plies && x.plies > 1);
@@ -584,13 +692,19 @@ const TEMPLATES: Template[] = [
       const b = (id: string): string => boardOf(c, id);
       return {
         goal: 'Turn the boards into rough parts, glued blocks and bending strips, ready for the joinery.',
+        glue: { epoxy: !std || face.length > 0, titebond: std && edge.length > 0 },
         items: [
+          glueCard(c.p),
           I('Mill every solid oak part to its rough size in the cut list.', [
-            `Rough is the final size + ${fin(allow)} in thickness and width, + ${fin(4 * allow)} in length.`,
+            'The cut list already has the rough sizes, rounded up to 1/8" and with the allowances in.',
+            `The rule: a plain part is ${fin(allow)} thicker, ${fin(c.p.roughWidthAllowanceIn)} wider and ${fin(c.p.roughLengthAllowanceIn)} longer than finished.`,
+            `A glued-up piece (laminated layers, edge-glued boards, bent strips) is ${fin(c.p.laminateWidthAllowanceIn)} wider and ${fin(c.p.laminateLengthAllowanceIn)} longer, because it comes out of the clamps askew.`,
+            face.length ? `A glued block loses ${fin(c.p.laminationCleanupIn)} of thickness to jointing and planing after the glue-up.` : false,
+            `A board gives less than its name: 4/4 planes to ${fin(c.p.boardYield44In)}, 5/4 to ${fin(c.p.boardYield54In)}, 6/4 to ${fin(c.p.boardYield64In)}, 8/4 to ${fin(c.p.boardYield84In)}.`,
             'Sticker what is not used today and keep it at 6-9 % moisture.',
           ]),
           ...(face.length
-            ? [I('Face-laminate the thick parts before anything is notched, bored or slotted (see D-70).', [
+            ? [I('Face-laminate the thick parts before anything is notched, bored or slotted.', [
               ...face.map((g) => I(`${tl(g.ids)}: ${lamText(g.ids[0])}${g.kind === 'both' ? ', each layer edge-glued from boards' : ''}.`)),
               'Plane each layer to its rough thickness (cut list, layer table).',
               ...(face.some((g) => g.kind === 'both') ? ['Edge-glue any wide layer first.'] : []),
@@ -602,7 +716,7 @@ const TEMPLATES: Template[] = [
           edge.length
             ? I('Edge-glue the wide panels: they must cure before the planer and the Shaper.', [
               ...edge.map((g) => I(`${tl(g.ids)}: ${plural(g.edgeBoards, 'board')} across.`)),
-              `Rip each board ${fin(allow)} over its share and joint the mating edges.`,
+              `Rip each board ${fin(c.p.laminateWidthAllowanceIn)} wider than its share and joint the mating edges.`,
               `Glue with cauls (${std ? 'Titebond III' : '206 epoxy'}), then plane to thickness and trim to the cut-list size.`,
             ])
             : I('No part is wider than a board: no panel glue-ups.'),
@@ -668,7 +782,7 @@ const TEMPLATES: Template[] = [
       const stack = stackDim ?? layers * RIB_STOCK_IN;
       const railSteps = formBuild(railForm);
       // The form's own build steps set the stack (it stands a little taller than the rail); quote them when they say so.
-      const stackSaid = railSteps.map((q) => /(\d+) layers in all, a stack ([\d\-/]+)" tall/.exec(q.text)).find(Boolean);
+      const stackSaid = railSteps.flatMap((q) => [q.text, ...(q.sub ?? []).map((t) => t.text)]).map((t) => /(\d+) layers (?:in all, a stack|make a stack) ([\d\-/]+)" tall/.exec(t)).find(Boolean);
       const layersText = stackSaid ? `${stackSaid[1]} layers of ${fin(RIB_STOCK_IN)} MDF (${stackSaid[2]}", taller than the ${fin(railDepth)} rail)` : `${layers} layers of ${fin(RIB_STOCK_IN)} MDF (${fin(stack)}, never less than the ${fin(railDepth)} rail depth)`;
       const sideSteps = formBuild(sideForm);
       return {
@@ -681,7 +795,7 @@ const TEMPLATES: Template[] = [
             'Measure the real plywood first (Verify) and enter it in the design before any dado is cut.',
           ]),
           web
-            ? I('Cut each side web as ONE piece from a full 4\' × 8\' sheet (see D-68).', [
+            ? I('Cut each side web as ONE piece from a full 4\' × 8\' sheet.', [
               `The file cuts the flat development, ${fin(webFlat?.widthIn ?? web.stock!.l)} long; the blank is ${fin(web.stock!.l)} (it carries the trim allowance).`,
               'Nest the blank per the nesting drawing, then cut net from the file.',
               'The seat back comes from the deck offcut.',
@@ -689,14 +803,14 @@ const TEMPLATES: Template[] = [
             : I('Side webs: one piece each from a full 4\' × 8\' sheet.'),
           formLen !== undefined
             ? I(`Build the rail form (rail form drawing): ${fin(formLen)} long, ${layersText}. One form serves both rails.`, railSteps.length ? railSteps : [
-              `Its face is the rails' outer plan curve: ${fin(t.turnIn)} turn-in each side, tightest radius ${t.minRadiusIn > 1e6 ? 'none' : `${f(t.minRadiusIn, 0)}"`} (see D-66).`,
+              `Its face is the rails' outer plan curve: ${fin(t.turnIn)} turn-in each side, tightest radius ${t.minRadiusIn > 1e6 ? 'none' : `${f(t.minRadiusIn, 0)}"`}.`,
               'Every clamp bears on the full strip width.',
             ])
             : I('Rail form: no bow turn-in at this design, so the rails are straight and need no form.', ['Glue them flat on the bench with cauls.']),
           rise !== undefined && rampLen !== undefined
             ? I(`Build the S-ramp for the sides (side form drawing): rise ${fin(rise)}, ${fin(rampLen)} long from the start of the S to the bow end, ${f(ribs ?? 0, 0)} MDF ribs under a 1/4" hardboard cap.`, sideSteps.length ? sideSteps : [
               `Ribs of ${fin(RIB_STOCK_IN)} MDF, about 4-1/2" apart.`,
-              'Build a mirror S-ramp for the other web face (or flip this one).',
+              'Build the MIRROR ramp for the second web face: never the same ramp, the cured web would have to bend back.',
             ])
             : I('S-ramp: none, the sides are not turned in at this design.', ['The webs glue up flat.']),
           I('Print the templates: handlebow arc, bulkhead crown, brake flap and knee (Forms section).', ['Check the 1" square on each printout before cutting.']),
@@ -721,7 +835,7 @@ const TEMPLATES: Template[] = [
     view: 'iso',
     tools: ['foam roller', 'brush', 'epoxy pumps', 'scotch-brite'],
     hardener: '206',
-    clamp: 'Let the coat go off before handling.',
+    coat: true,
     build: (c) => {
       const std = isStandard(c.p);
       return {
@@ -731,7 +845,8 @@ const TEMPLATES: Template[] = [
             ? I('Weather spec: Standard (garage-kept, wet at most at a rainy derby).', [
               'Glue: Titebond III for the Dominos, dados, tenons and plain glue joints.',
               'Epoxy only for the bent and face laminations, the deck to the frame and its dados, the fillets and tape, and thickened bedding.',
-              'Topcoat: exterior spar urethane. The Extreme setting (stored outside) uses epoxy everywhere and a marine topcoat.',
+              'Topcoat: exterior spar urethane.',
+              '(Extreme weather, stored outside: epoxy for every glue joint and a marine topcoat.)',
             ])
             : I('Weather spec: Extreme (stored outside or near salt): epoxy for every glue joint and marine varnish.'),
           I('Run the finishing offcut tests first (Finishing, step 1).', [std ? 'They decide how the plywood takes the stain; no show face is coated until a panel passes.' : 'They decide how the okoume takes stain under epoxy; no show face is sealed until a panel passes.']),
@@ -746,7 +861,7 @@ const TEMPLATES: Template[] = [
               'The show faces stay bare: both web faces, the deck top, the box, the lid, the seat back.',
               'They are stained, THEN sealed, after assembly (Finishing, steps 3-4). Water-based dye under epoxy is the safe route.',
             ]),
-          I(`Check the deck still enters its dado: the dado is the deck + ${fin(c.p.deckSlopIn)}.`, ['Use a feeler gauge.']),
+          I(`Check the deck still enters its dado: the dado is the deck thickness plus about ${fin(c.p.deckSlopIn)}.`, ['Use a feeler gauge.']),
           I('Wash the amine blush off any sealed face that will be glued again.', ['Warm water and Scotch-Brite, dry, then 120 grit; the dado walls too.', 'Glue faces stay bare or scuffed; keep the oak bands and rails bare.']),
           I('In every later glue-up, wipe squeeze-out off the bare show faces before it kicks: dried epoxy blocks the stain.'),
         ],
@@ -765,7 +880,6 @@ const TEMPLATES: Template[] = [
     view: 'top',
     tools: ['rail form', 'clamps', 'epoxy pumps', 'planer', 'bandsaw', 'chisel', 'Domino'],
     hardener: '206',
-    clamp: 'Strips face to face on the rail form, clamped at every station, left in the form.',
     build: (c) => {
       const rail = c.mine[0];
       const ids = c.mine.map((x) => x.id);
@@ -785,6 +899,7 @@ const TEMPLATES: Template[] = [
         : undefined;
       return {
         goal: 'Laminate the two rails on the rail form, then cut their notches, bow step and mortises.',
+        glue: { epoxy: true, titebond: false },
         items: [
           I(`Glue ${plural(rail?.plies ?? 2, 'strip')} per rail on the rail form: ${tl(ids)}.`, [
             'Epoxy lightly thickened (406); wax paper on the form.',
@@ -821,7 +936,6 @@ const TEMPLATES: Template[] = [
     view: 'top',
     tools: ['bandsaw', 'chisel', 'drill', 'wrenches', 'epoxy pumps', 'clamps', 'Domino'],
     hardener: '206',
-    clamp: 'Clamp each hanger to the rail inboard face while the epoxy goes off; the bolts go in after the clamps come off.',
     build: (c) => {
       const ids = c.mine.map((x) => x.id);
       const notch = feat(c, 'axle-hanger-L', 'notch', /^1 notch/i) ?? feat(c, 'axle-hanger-L', 'outline', /^Notch/);
@@ -834,7 +948,7 @@ const TEMPLATES: Template[] = [
         items: [
           I(`Cut the beam notch in the bottom edge of each hanger: ${tl(ids)}.`, [notchText(notch) ? `${notchText(notch)}.` : `Notch for the rear beam: ${SEE}.`, `Bandsaw and chisel${radius ? `, ${radius} radius in the corners` : ''}.`]),
           I('Cut the Domino mortise for {{joist-1}} in each hanger now (5×30).', [domWhere ? `${cap(domWhere)}.` : SEE_ITEM, 'The crossmember ends engage them in the frame glue-up.']),
-          I('Glue each hanger to its rail\'s inboard face, rails flat on the bench.', ['Epoxy, side grain to side grain, the hanger notch in line with the rail notch.'], [...ids, 'rail-L', 'rail-R']),
+          I('Glue each hanger to its rail\'s inboard face, rails flat on the bench.', ['Side grain to side grain, the hanger notch in line with the rail notch.', 'Clamp it on until the glue sets.'], [...ids, 'rail-L', 'rail-R']),
           I('Bolt hanger and rail together once the clamps come off: 2 × 1/4" bolts per hanger.', [
             bolts ? `Holes ${holeText(bolts)}.` : SEE_ITEM,
             'Nylock nuts and fender washers on the outside face.',
@@ -852,9 +966,13 @@ const TEMPLATES: Template[] = [
     view: 'top',
     tools: ['Domino', 'drill press', 'clamps', 'sandbags or vacuum bag', 'epoxy pumps', 'square'],
     hardener: '206',
-    clamp: 'Right side up on a flat bench: deck on top of the frame, weighted with sandbags or a vacuum bag.',
     build: (c) => {
       const brakeBackers = c.mine.filter((x) => /^brake-backer-[LR]$/.test(x.id));
+      const brakePlates = c.mine.filter((x) => /^brake-backplate-[LR]$/.test(x.id));
+      const plateRecess = feat(c, 'brake-backer-L', 'groove', /recess/);
+      const plateHoles = feat(c, 'brake-backplate-L', 'hole');
+      const plateBox = brakePlates[0] ? worldAABB(brakePlates[0]) : undefined;
+      const plateStock = plateBox ? [0, 1, 2].map((k) => plateBox.max[k] - plateBox.min[k]).sort((x, y) => x - y).map(fin).join(' × ') : undefined; // T × W × L
       const angle = maxTaperAngleDeg(c.p);
       const kingBore = feat(c, 'king-beam', 'hole', (q) => (q.to ?? []).includes('kingpin'));
       const kneeHoles = feat(c, 'rail-L', 'hole', (q) => (q.to ?? []).some((t) => /^brake-knee/.test(t)));
@@ -867,17 +985,31 @@ const TEMPLATES: Template[] = [
         items: [
           ...(hinge.length ? [I(`The day before: epoxy the seat-hinge backers to the deck underside: ${tl(hinge)}.`, ['Butt each against the face of {{joist-3}} so the latch pin lands in solid oak.'])] : []),
           ...(brakeBackers.length
-            ? [I(`The day before: glue the brake backers to the rail inboard face and the deck underside: ${tl(brakeBackers.map((x) => x.id))}.`, [
+            ? [
+            I('The day before, on the bench: cut the plate recess in the inner face of each backer, before it is glued.', [
+              plateRecess ? `${plateRecess.size ?? 'Flat-bottomed recess'}: ${whereOf(plateRecess)}.` : `Flat-bottomed recess for the plate: ${SEE}.`,
+              'Router with a fence, or saw the edges and chisel the waste out to an even depth.',
+              'The plate must lie flush with the face: test it in the recess before gluing.',
+            ], brakeBackers.map((x) => x.id)),
+              I(`The day before: glue the brake backers to the rail inboard face and the deck underside: ${tl(brakeBackers.map((x) => x.id))}.`, [
               'Keep them clear of the axle hanger; the crossmember that meets a backer is cut back 3/4" and butts its face.',
-              `Drill the 4 knee-bolt holes through rail and backer together, the knee as a template: ${kneeHoles ? holeText(kneeHoles) : SEE}.`,
-            ])]
+              `Drill the 4 knee-bolt holes (3/8" bolts) through rail and backer together, from the rail drawing, measured from the finished rear end: ${kneeHoles ? holeText(kneeHoles) : SEE}.`,
+              'The same holes on the right rail, mirrored.',
+            ]),
+            ...(brakePlates.length
+              ? [I(`Make the two stainless backing plates for the knee nuts: ${tl(brakePlates.map((x) => x.id))}.`, [
+                `${plateStock ? `${plateStock} stainless plate` : 'Stainless plate'}, set flush in its recess in the backer's inner face. Cut it from 2" flat bar (hacksaw or bandsaw) and file the corners round.`,
+                plateHoles ? `4 holes on the knee-bolt pattern, ${holeText(plateHoles)}; clamp each plate in its backer's recess and drill through the backer's holes.` : 'Clamp each plate in its recess and drill its 4 holes through the holes in the backer.',
+                'The nylock nuts bear on this plate, so it spreads the bolt pull over the oak (four fender washers would overlap).',
+              ], brakePlates.map((x) => x.id))]
+              : [])]
             : []),
           I('Bore the {{king-beam}} for the kingpin, and cut the nut slot, before the deck goes on.', [
             kingBore ? `${fin(c.p.kingpinDiaIn)} hole, square on the drill press: ${whereOf(kingBore)}.` : `${fin(c.p.kingpinDiaIn)} hole, square on the drill press: ${SEE}.`,
             'Nut slot from the front face, about 1" × 3/4" at the top.',
           ]),
           I('Dry-fit the rails (still 1/2" long at both ends), the crossmembers and the king beam on Dominos.', [
-            joistDom ? `Crossmember Dominos (5×30): in each end, ${whereOf(joistDom)}.` : 'Crossmember Dominos (5×30) in each end.',
+            joistDom?.positions?.length ? `Crossmember Dominos (5×30), at both ends of each crossmember: ${joistDom.positions.join('; ')}.` : 'Crossmember Dominos (5×30) at both ends of each crossmember.',
             joistCut ? 'The {{joist-1}} ends go into the hanger mortises, not the rails.' : false,
             `In the bow taper the ends meet the bent rails at up to ${f(angle, 0)}°: the cut-list lengths are the long point, so scribe each end to its rail now (pencil from the rail, then bandsaw or miter).`,
           ], crossIds),
@@ -902,24 +1034,25 @@ const TEMPLATES: Template[] = [
     view: 'side',
     tools: ['S-ramp', 'cleats and screws', 'C-clamps / spring clamps', 'epoxy pumps', 'drill'],
     hardener: '206',
-    clamp: 'One face per cure: web flat on the S-ramp under the bow end, sheer line cleated every 4-5", clamps across the bands every 4-5" (about 14 per band pair).',
     build: (c) => {
       const backers = c.mine.filter((x) => /^sign-backer/.test(x.id));
       const webL = c.by('side-L-web');
       const web0 = webL ? worldAABB(webL).min[0] : 0;
       const bL = backers.filter((x) => /-L\d$/.test(x.id)).map((x) => worldAABB(x)).sort((a, b) => a.min[0] - b.min[0]);
       const ins = feat(c, 'sign-backer-L1', 'hole', /insert/);
+      const cleat = c.forms().find((d) => d.id === 'side-form')?.dims.find((q) => q.key === 'cleat-spacing')?.valueIn;
       return {
         goal: 'Glue the inner bands and the sign backers to each web while the web is bent over the S-ramp.',
         items: [
           I('Per side, glue the inner chine band and the inner gunwale band full-face to the inside of the web.', [
             'Thickened epoxy; no grooves.',
             'Bend web and bands together over the S-ramp (side form drawing).',
+            'Clamp the bands to the web every 4-1/2" with spring clamps or small C-clamps.',
           ], ['side-L-web', 'side-L-chine-in', 'side-L-gunwale-in', 'side-R-web', 'side-R-chine-in', 'side-R-gunwale-in']),
           I('Leave the deck rabbet: the inner chine band stops short of the web bottom.', [
-            `The gap is the deck thickness + ${fin(c.p.deckSlopIn)}: use a deck offcut plus a shim as the spacer stick. Nothing is routed.`,
+            `The gap is the deck thickness plus about ${fin(c.p.deckSlopIn)}: use a deck offcut plus a shim as the spacer stick. Nothing is routed.`,
           ]),
-          I('Cleat the sheer line before the glue goes on.', ['Screws into a sacrificial table every 4-5", the whole length.', 'An edge-bent band pushes about 65 lbf sideways until the epoxy cures.']),
+          I('Cleat the sheer line before the glue goes on.', [cleat ? `Cleat blocks screwed into the sacrificial table about ${fin(cleat)} apart, the whole length (side form drawing).` : 'Cleat blocks screwed into the sacrificial table, the whole length (side form drawing).', 'An edge-bent band pushes about 65 lbf sideways until the epoxy cures.']),
           backers.length
             ? I(`Glue the sign backers inside each web: ${plural(backers.length / 2, 'strip')} per side, grain vertical.`, [
               bL.length ? `Forward of the web's rear end: ${bL.map((q) => `${fin(q.min[0] - web0)} to ${fin(q.max[0] - web0)}`).join(', and ')}.` : SEE_ITEM,
@@ -927,7 +1060,7 @@ const TEMPLATES: Template[] = [
               ins ? `Two #10-32 inserts each, epoxied: ${whereOf(ins)}.` : 'Two #10-32 inserts each.',
             ], backers.map((x) => x.id))
             : I('No sign backers in this model.'),
-          I('Left and right in turn on the same S-ramp: two cures per side, four in all (a second ramp halves the time).'),
+          I('Left and right in turn: two cures per side, four in all.', ['This first face goes on the S-ramp; the second face (next step) goes on the mirror ramp (side form drawing).']),
         ],
         checks: ['Sheer line follows the web pattern', 'Bands fully bonded, no lift at the bow bend (tap test)', 'Bend-test strip behaved on the rail form'],
       };
@@ -942,7 +1075,6 @@ const TEMPLATES: Template[] = [
     view: 'side',
     tools: ['S-ramp (mirror)', 'cleats and screws', 'clamps', 'epoxy pumps', 'drill', 'Domino'],
     hardener: '206',
-    clamp: 'Flip the web onto the mirror ramp; same cleats and clamp spacing as cure 1.',
     build: (c) => {
       const out = c.by('side-L-chine');
       const web = c.by('side-L-web');
@@ -954,10 +1086,13 @@ const TEMPLATES: Template[] = [
       const ties = feat(c, 'side-L-chine', 'mortise', /domino/i);
       return {
         goal: 'Glue the outer bands, fit the scuppers and cut the chine-tie mortises in each side.',
+        glue: { epoxy: true, titebond: false },
         items: [
           I('Per side, glue the outer chine band and the outer gunwale band to the outside face.', [
             'The chine band bottom is flush with the deck underside level: it rests on the rail.',
             'The gunwale band bends on edge to the sheer and across its thickness to the S, both at once.',
+            'Flip the web over onto the MIRROR ramp for this second face (never the same ramp: the cured web would have to bend back), sheer line against the cleats.',
+            'Same cleats and clamp spacing as cure 1.',
           ], ['side-L-chine', 'side-L-gunwale', 'side-R-chine', 'side-R-gunwale']),
           I('Fill the gap at the top: the web stops 1/8" under the gunwale band top.', ['Thickened epoxy, then trim flush.']),
           I('If you scarf a band (8:1), place the joint well.', ['Middle third of the band only.', 'Never in the first 4" behind the transom, nor under the grab boards, lash doublers or signs.', 'Stagger it 12" from the joint in the band on the same face.']),
@@ -997,13 +1132,13 @@ const TEMPLATES: Template[] = [
         items: [
           I(`Stand both sides inverted on ${cradles.length} MDF station cradles: 3/4" plates notched to the sheer.`, cradles.map((q, i) => `Cradle ${i + 1}: ${fin(q.x - web0)} from the rear end of the sides, ${fin(q.widthIn)} wide outside, ${fin(q.heightIn)} tall.`)),
           I('Turn the frame + deck unit over and drop it in DRY.', ['The chine Dominos (all vertical) engage.', 'The deck edge rises into the gap under the inner chine band.']),
-          I(`Check the deck slot: ${fin(c.p.deckSideClearIn)} a side to each web (see D-63).`, ['Pare the deck edge if it binds; thickened epoxy fills the slot later.']),
+          I(`Check the deck slot: ${fin(c.p.deckSideClearIn)} a side to each web.`, ['Pare the deck edge if it binds; thickened epoxy fills the slot later.']),
           I('Measure and trim everything to one length.', [
             'Measure from the rear transom dado to the bow bulkhead dado, both sides.',
             `Cut the bands and webs to that length less 1/32"${net !== undefined ? ` (the webs came off the Shaper at ${fin(net)})` : ''}.`,
             'Trim the rails (left 1/2" long) to match: flush-cut saw or oscillating multi-tool, blade flat on the deck underside, then pare to the line.',
           ], ['rail-L', 'rail-R']),
-          I('NOW cut the rail-end mortises in the trimmed rail ends (see D-69).', [
+          I('NOW cut the rail-end mortises in the trimmed rail ends.', [
             `Transom end: ${mortiseSize(tMort) ? `${mortiseSize(tMort)} loose-tenon mortise` : endJoint(c, 'rail-L', 'transom-rear')}${fromTop(tMort) ? `, centered ${fromTop(tMort)}` : ''}.`,
             `Bulkhead end: ${mortiseSize(bMort) ? `${mortiseSize(bMort)} loose-tenon mortise` : endJoint(c, 'rail-L', 'bow-bulkhead')}${fromTop(bMort) ? `, centered ${fromTop(bMort)}` : ''}.`,
             'Domino on the glued unit, or a guided router on a fence against the end face. The mating mortises are in the transom and bulkhead Shaper files.',
@@ -1022,7 +1157,6 @@ const TEMPLATES: Template[] = [
     view: 'iso',
     tools: ['epoxy pumps', 'clamps', 'drill', 'screwdriver'],
     hardener: '206',
-    clamp: 'Clamp the chine bands to the rails between the Dominos; #6 screws up through the rails (piloted).',
     build: (c) => {
       const { key: tieKey, total: dom } = chineTie(c.parts);
       const railScrew = c.by('rail-L')?.joints?.find((j) => j.type === 'screw' && /chine/.test(j.to));
@@ -1032,6 +1166,7 @@ const TEMPLATES: Template[] = [
       const cbore = /counterbore the head ([\d.\-\/]+"?) up the rail/.exec(railScrew?.size ?? '')?.[1];
       return {
         goal: 'Glue the frame + deck unit into the inverted sides for good.',
+        glue: { epoxy: true, titebond: isStandard(c.p) },
         items: [
           I(`Bed the ${fin((c.by('side-L-chine')?.stock?.t ?? 0.234) + (c.by('side-L-web')?.stock?.t ?? 0.157))} bearing face (outer band + web edge) of each side on its rail in epoxy.`, [], ['rail-L', 'rail-R']),
           I(`Fit the ${dom} Dominos (${tieKey}, every 6", ${f(dom / 2, 0)} per side) in the rail-top mortises, then lower the unit straight down (two people).`),
@@ -1040,6 +1175,7 @@ const TEMPLATES: Template[] = [
             xs.length ? `Pilots at ${list(xs)} from the rear end.` : SEE_ITEM,
             ...(cbore ? [`Counterbore the aft heads ${/"$/.test(cbore) ? cbore : `${fin(Number(cbore))}`} up the rail (the rail is deeper there); the bow screws need none.`] : []),
             'Never on a Domino: the screw would hit the mortise.',
+            'Clamp the chine bands to the rails between the Dominos while the glue sets.',
             'Wipe squeeze-out inside the dados before it kicks.',
           ], ['rail-L', 'rail-R']),
           I('One batch per side, so the mix never outlives its pot life.'),
@@ -1059,25 +1195,31 @@ const TEMPLATES: Template[] = [
     view: 'iso',
     tools: ['pipe clamps (2)', 'cauls', 'epoxy pumps', 'router', 'drill'],
     hardener: '206',
-    clamp: 'Two pipe clamps along the length; the backers clamped with a caul the evening before.',
     build: (c) => {
       const backers = c.mine.filter((x) => /backer/.test(x.id)).map((x) => x.id);
       const bands = count(c, 'glue');
       const sockHoles = feat(c, 'handle-socket-L', 'hole', (q) => (q.to ?? []).includes('transom-rear') && !/access hole/i.test(q.text));
       const sockAt = stations(sockHoles, 'BOTTOM end');
       const sockEdge = sockHoles ? new RegExp(`(${FR})" from the outboard edge`).exec((sockHoles.positions ?? []).join('; '))?.[1] : undefined;
+      const place = socketOnTransom(c.parts);
+      const tnuts = feat(c, 'transom-backer-L', 'hole', (q) => /T-nut/i.test(q.purpose ?? q.text));
       return {
         goal: 'Close the rear of the hull: backers on the transom, then the transom onto the hull in one glue-up.',
         items: [
           I('Bench, the day before: drill the handle-socket holes through the {{transom-rear}} and the backers.', [
-            'Hold a socket in place and drill through its screw holes.',
-            sockAt.length ? `On the socket they are ${list(sockAt)} up from its bottom end${sockEdge ? `, ${sockEdge}" from its outboard edge` : ''}.` : false,
+            place ? `Both sockets: centered ${fin(place.off)} either side of the centerline (the outer edge ${fin(place.inset)} in from the transom's side edge), the bottom end ${fin(place.up)} up from the transom's bottom edge.` : false,
+            'Hold a socket there and drill through its screw holes.',
+            sockAt.length ? `On the socket the holes are ${list(sockAt)} up from its bottom end${sockEdge ? `, ${sockEdge}" from its outboard edge` : ''}.` : false,
           ]),
-          I('Set a captive 1/4-20 T-nut per socket screw in each backer, from its inside face, before the backer is glued.', ['The socket screws then drive in from outside: no wrench ever has to reach behind the storage box.']),
-          I(`Glue the backers (3/4" oak) full-face to the inside of the transom: ${tl(backers)}.`),
+          I('Set a captive 1/4-20 T-nut per socket screw in each backer, from its inside face, before the backer is glued.', [
+            tnuts?.positions?.length ? `T-nut barrel holes in each backer: ${holeText(tnuts)}.` : false,
+            'The socket screws then drive in from outside: no wrench ever has to reach behind the storage box.',
+          ]),
+          I(`Glue the backers (3/4" oak) full-face to the inside of the transom: ${tl(backers)}.`, ['Clamp them with a caul and leave them overnight.']),
           I('Close ONE end first: the transom.', [
             'It slides onto the deck edge, both web ends (their dados are open at the top), the rail tenons and the four band ends per side (epoxy fillet butts, no Dominos).',
             `${plural(bands, 'glue joint')} and ${plural(count(c, 'mortise-tenon'), 'mortise-and-tenon')} in one glue-up.`,
+            'Two pipe clamps along the length.',
           ]),
           I('Rehearse twice, then glue in small batches.', [
             '206 slow epoxy, mixed in SMALL batches in a wide shallow container, a second person mixing.',
@@ -1097,15 +1239,14 @@ const TEMPLATES: Template[] = [
     view: 'iso',
     tools: ['pipe clamps (2)', 'cauls', 'epoxy pumps'],
     hardener: '206',
-    clamp: 'Second batch, after the transom epoxy has kicked (3-6 h); two pipe clamps along the length.',
     build: () => ({
       goal: 'Close the bow with the bulkhead, the rider\'s foot brace.',
       items: [
         I('Fit the {{bow-bulkhead}}: its rear face is the rider\'s foot brace.', [
           'Dados open at the top take the web ends; the deck dado run into them takes the deck edge.',
-          'Dominos into the rails (see D-69); the four band ends per side butt with an epoxy fillet.',
+          'Dominos into the rails; the four band ends per side butt with an epoxy fillet.',
         ]),
-        I('Glue it with a second, fresh small batch of 206, once the transom epoxy has kicked.', ['Wide shallow container, a second person mixing.', 'Fillet the inside corners with thickened epoxy.']),
+        I('Glue it with a second, fresh small batch of 206, once the transom epoxy has kicked (3-6 h).', ['Wide shallow container, a second person mixing.', 'Two pipe clamps along the length.', 'Fillet the inside corners with thickened epoxy.']),
         I('Keep epoxy out of the lift hand-hold, where the lamp clip fits.'),
       ],
       checks: ['Bulkhead square and at the dry-fit mark', 'Web and deck seated in their dados, no gaps'],
@@ -1123,8 +1264,8 @@ const TEMPLATES: Template[] = [
     tools: ['drill press', 'router (groove)', 'wrenches', 'torque wrench'],
     build: (c) => {
       const groove = feat(c, 'beam-R', 'groove');
-      const plateHoles = feat(c, 'beam-R', 'hole', (q) => (q.to ?? []).some((t) => /^clamp-/.test(t)));
-      const holdHoles = feat(c, 'beam-R', 'hole', (q) => (q.to ?? []).some((t) => /hold-down/.test(t)));
+      const plateHoles = featsAll(c, 'beam-R', 'hole', (q) => (q.to ?? []).some((t) => /^clamp-/.test(t)));
+      const holdHoles = featsAll(c, 'beam-R', 'hole', (q) => (q.to ?? []).some((t) => /hold-down/.test(t)));
       const plates = c.parts.filter((x) => /^clamp-R/.test(x.id)).map((x) => x.id);
       const plateSpan = feat(c, 'clamp-RL1', 'hole');
       const pitch = spans(plateSpan, 'REAR edge').length ? undefined : stations(plateSpan, 'REAR edge');
@@ -1136,8 +1277,8 @@ const TEMPLATES: Template[] = [
             whereOf(groove) ? `${cap(whereOf(groove)!)}.` : SEE_ITEM,
           ]),
           I('Drill the beam.', [
-            plateHoles ? `Clamp-plate bolts, ${holeText(plateHoles)}.` : `Clamp-plate bolts: ${SEE}.`,
-            holdHoles ? `Hold-down bolts, ${holeText(holdHoles)}.` : `Hold-down bolts: ${SEE}.`,
+            holesText(plateHoles) ? `Clamp-plate bolts, both ends: ${holesText(plateHoles)}.` : `Clamp-plate bolts: ${SEE}.`,
+            holesText(holdHoles) ? `Hold-down bolts, both ends: ${holesText(holdHoles)}.` : `Hold-down bolts: ${SEE}.`,
           ]),
           I('Bolt the beam to the hull for good with the hold-down angles: {{beam-hold-down-L}} and {{beam-hold-down-R}}.', [
             'The beam passes under the rails and bears on the notch ceiling.',
@@ -1168,10 +1309,10 @@ const TEMPLATES: Template[] = [
       const kp = feat(c, 'beam-F', 'hole', (q) => (q.to ?? []).includes('kingpin'));
       const grooves = featuresOf(c, 'beam-F').filter((q) => q.kind === 'groove');
       const grooveLen = grooves[0] ? new RegExp(`(${FR})" long from the`).exec(grooves[0].text)?.[1] : undefined;
-      const plate = feat(c, 'beam-F', 'hole', (q) => (q.to ?? []).some((t) => /^clamp-/.test(t)));
-      const pads = feat(c, 'beam-F', 'hole', (q) => (q.to ?? []).some((t) => /^roll-pad/.test(t)));
-      const eyes = feat(c, 'beam-F', 'hole', (q) => (q.to ?? []).some((t) => /^steer-eye/.test(t)));
-      const anchors = feat(c, 'joist-6', 'hole', (q) => (q.to ?? []).some((t) => /^steer-anchor/.test(t)));
+      const plate = featsAll(c, 'beam-F', 'hole', (q) => (q.to ?? []).some((t) => /^clamp-/.test(t)));
+      const pads = featsAll(c, 'beam-F', 'hole', (q) => (q.to ?? []).some((t) => /^roll-pad/.test(t)));
+      const eyes = featsAll(c, 'beam-F', 'hole', (q) => (q.to ?? []).some((t) => /^steer-eye/.test(t)));
+      const anchors = featsAll(c, 'joist-6', 'hole', (q) => (q.to ?? []).some((t) => /^steer-anchor/.test(t)));
       const disc = feat(c, 'king-beam', 'hole', (q) => (q.to ?? []).includes('king-thrust'));
       return {
         goal: 'Hang the front beam on its kingpin, then fit and drill the stub axles, roll pads and eye bolts and take them off.',
@@ -1180,8 +1321,8 @@ const TEMPLATES: Template[] = [
           I('Drill and groove the {{beam-F}}.', [
             kp ? `Kingpin hole: ${fin(c.p.kingpinDiaIn)}, square on the drill press, ${whereOf(kp)}.` : `Kingpin hole: ${SEE}.`,
             `Stub-axle grooves: ${fin(c.p.axleDiameterIn)} wide × ${fin(axleGrooveDepthIn(c.p))} deep in the top face${grooveLen ? `, ${grooveLen}" in from each end` : ''}, so the ${axleWord(c.p)} stands ${fin(c.p.axleProudIn)} proud.`,
-            plate ? `Clamp-plate bolts, ${holeText(plate)}.` : false,
-            eyes ? `Eye-bolt holes, fore-aft, ${holeText(eyes)}.` : false,
+            holesText(plate) ? `Clamp-plate bolts, ${plate.length} plates: ${holesText(plate)}.` : false,
+            holesText(eyes) ? `Eye-bolt holes, fore-aft, one near each end: ${holesText(eyes)}.` : false,
           ]),
           I(`Hang the beam on the {{kingpin}}: ${fin(c.p.kingpinDiaIn)} grade 8 bolt, head and plate washer under the beam.`, [
             'Up through the beam, the disc and the king beam.',
@@ -1190,12 +1331,12 @@ const TEMPLATES: Template[] = [
           ]),
           I('FIT AND DRILL, then take off: the stub axles, clamp plates and roll pads.', [
             I('Stub axles in their grooves ({{axle-FL}}, {{axle-FR}}); two clamp plates per end, bolted as at the rear.'),
-            I(`Roll pads ({{roll-pad-L}}, {{roll-pad-R}}) beside the grooves, shimmed ${fin(c.p.axleProudIn)} off the beam${pads ? `; pilots ${holeText(pads)}` : ''}.`),
-            'Running gap under the rail about 0.1" (1/32" to 1/8"), set with tape.',
+            I(`Roll pads ({{roll-pad-L}}, {{roll-pad-R}}) beside the grooves, shimmed ${fin(c.p.axleProudIn)} off the beam${holesText(pads) ? `; pilots, both pads: ${holesText(pads)}` : ''}.`),
+            'Running gap under the rail 1/32" to 1/8", set with tape.',
             'Drill every hole, dry-assemble, check the lock, remove.',
           ]),
           I('Drill the steering eye-bolt holes now, while the underside is up.', [
-            I(`Anchor holes in {{joist-6}} (the chain crossmember), fore-aft${anchors ? `: ${holeText(anchors)}` : ''}.`),
+            I(`Anchor holes in {{joist-6}} (the chain crossmember), fore-aft, one near each end${holesText(anchors) ? `: ${holesText(anchors)}` : ''}.`),
             'The nylock nuts and 2" washers go on at the hang step.',
           ], ['steer-eye-L', 'steer-eye-R', 'steer-anchor-L', 'steer-anchor-R']),
           I('Tag the stubs, plates, pads, eye bolts and bolts (front L / R) and bag them with the rear kit.'),
@@ -1214,27 +1355,36 @@ const TEMPLATES: Template[] = [
     view: 'under',
     tools: ['bandsaw', 'chisel', 'drill press', 'wrenches', 'epoxy pumps', 'clamps'],
     hardener: '206',
-    clamp: 'Backers clamped to the rail and deck underside before the bolts go in; knees clamped to the rail while the bolts go through.',
     build: (c) => {
       const knees = c.mine.filter((x) => /^brake-knee/.test(x.id)).map((x) => x.id);
       const backers = c.mine.filter((x) => /^brake-backer/.test(x.id));
       const framed = c.parts.some((x) => /^brake-backer/.test(x.id) && x.step <= HULL_STEP.deck);
       const bolts = feat(c, 'brake-knee-L', 'hole', (q) => (q.to ?? []).some((t) => /^rail-/.test(t)));
       const corner = feat(c, 'brake-knee-L', 'outline', (q) => q.angleDeg !== undefined);
+      const kneeNote = c.by('brake-knee-L')?.notes ?? '';
+      const kneeJointIn = /joint along its grain (\d+(?:\.\d+)?)" up from the bottom/.exec(kneeNote)?.[1];
+      const kneeJoint = kneeJointIn ? fin(Number(kneeJointIn)) : undefined;
+      const kneeReach = c.by('brake-knee-L')?.stock ? fin(c.by('brake-knee-L')!.stock!.l) : '4-1/2"';
       const cornerPts = corner ? (corner.positions ?? []).flatMap((t) => [...t.matchAll(new RegExp(`(${FR})" from the outboard edge, (${FR})" from the top end`, 'g'))].map((m) => [m[1], m[2]])) : [];
       const ang = corner?.angleDeg !== undefined ? String(corner.angleDeg) : undefined;
       return {
         goal: 'Glue and bolt the brake knees to the rails now, while the hull is upside down.',
         items: [
           I('Do it now, not after the flip.', [
-            'The knee legs are epoxied to bare oak: epoxy will not bond to varnish.',
-            'The nylock nuts sit in counterbores under the deck, reachable only while the hull is inverted.',
+            'The knee legs are glued to bare oak: glue will not bond to varnish.',
+            'The nylock nuts sit on the stainless backing plates under the deck, reachable only while the hull is inverted.',
           ]),
           backers.length
             ? I(`Glue the backers (3/4" oak) to the rail inboard face and the deck underside, clear of the axle hanger: ${tl(backers.map((x) => x.id))}.`)
             : framed
               ? I('The backers went in with the frame glue-up and their bolt holes are drilled: only the knees go on here.', [], ['brake-backer-L', 'brake-backer-R'])
               : I('No backers in this model.'),
+          I(`Glue up each knee block cross-laminated, like plywood: ${tl(knees)}.`, [
+            `3 layers of 3/4" oak, grain across / upright / across. Rear and front layers: grain across the sled (along the arm). Center layer: grain upright (up the leg).`,
+            'The front layer must be the across one: it alone holds the outboard ear in front of the slot. The upright center layer keeps the bolted leg from splitting off.',
+            `The center layer is one piece (about ${kneeReach} across its grain, from a 6" board). Each outer layer is two pieces, edge-glued first${kneeJoint ? `, the joint ${kneeJoint} up from the bottom edge (clear of the bolt holes and the shoulder)` : ''}.`,
+            'Epoxy the three layers face to face, quartersawn or rift boards if you can. Mill the glued block to its final size (cut list) before it is sawn to shape.',
+          ], knees),
           I('Cut ONE knee first and run the one-knee test (Verify).', ['Try it with the real pin and flap tongue; cut the other knee only when it passes.'], knees),
           I(`Shape each knee from its laminated block: ${tl(knees)}.`, [
             cornerPts.length >= 2 && ang ? `Corner cut on the outboard edge: it starts ${cornerPts[0][1]}" below the top end, runs in at ${ang}° to ${cornerPts[1][0]}" from the edge at ${cornerPts[1][1]}" down, then straight to the bottom end.` : `Outline: ${SEE}.`,
@@ -1243,8 +1393,9 @@ const TEMPLATES: Template[] = [
           ]),
           I('Bolt each knee: 4 × 3/8" × 4" bolts, 2 columns × 2 rows, through the knee leg and the rail into the backer.', [
             bolts ? `Holes in the knee, ${holeText(bolts)}.` : SEE_ITEM,
-            'Heads in counterbores in the knee; fender washers and nylock nuts in 1/2" counterbores in the backer, under the deck.',
-            'Epoxy in the holes and on the leg against the rail and chine outer face; clamp, bolt, wipe the squeeze-out.',
+            `Heads with a ${fin(c.p.brakeMountWasherOdIn)} washer under each on the outer face of the knee leg (no counterbore); nylock nuts on the backing plate set in the backer, under the deck.`,
+            'Check each plate lies flush in its recess and its 4 holes line up before the bolts go in.',
+            'Glue on the leg against the rail and chine outer face; clamp, bolt, wipe the squeeze-out.',
           ], ['rail-L', 'rail-R']),
           I('Leave the knees 24 h before the wheel dry fit (next step) loads them.'),
         ],
@@ -1305,7 +1456,7 @@ const TEMPLATES: Template[] = [
           std
             ? I('Epoxy the deck underside and the oak end grain (one coat), then urethane.', ['3 coats on the show faces, 2 on the hidden ones, 320 between coats.'])
             : I('Epoxy-seal (one saturation coat), then varnish.', ['3 coats on the show faces, 2 on the hidden ones, 320 between coats.']),
-          I('Mask the bolt seats, the kingpin head and the hold-down angles.', ['Brush into the knee counterbores; leave the pivot-hole spot for later.']),
+          I('Mask the bolt seats, the kingpin head and the hold-down angles.', ['Brush epoxy into the knee bolt holes; leave the pivot-hole spot for later.']),
           I('Flip only when the last coat is dry enough to handle (3 days).', ['Padded horses; carry the hull by the rails and the bulkhead, never by the sides.']),
           I('The inside, the topside and everything built after the flip are finished later, in the Finish step.'),
         ],
@@ -1344,7 +1495,6 @@ const TEMPLATES: Template[] = [
     view: 'front',
     tools: ['wrenches', 'drill press', 'files'],
     hardener: '206',
-    clamp: 'Epoxy the bronze sleeve in its hole and let it go off before the finish.',
     build: (c) => {
       const boltT = feat(c, 'bridle-tongue', 'hole', (q) => (q.to ?? []).includes('beam-F'));
       const boltB = feat(c, 'beam-F', 'hole', (q) => (q.to ?? []).includes('bridle-tongue'));
@@ -1360,8 +1510,9 @@ const TEMPLATES: Template[] = [
             boltB ? `In the beam, ${holeText(boltB)}.` : false,
           ]),
           I(`Bolt the tongue on: two 3/8"${boltLen ? ` × ${boltLen}"` : ''} carriage bolts fore-aft through the T head and the whole beam.`, [
+            `The front face of the T head is flat and square out past both bolt holes (the taper to the stem starts inside the bolt heads), so each domed carriage-bolt head sits flat on it. Keep the holes square to that face and ${fin(c.p.tongueHeadLenIn)} deep (the head's length).`,
             'Nylock nuts and fender washers on the rear face.',
-            'The tongue is not removable (see D-65): it stays on and is finished in place.',
+            'The tongue is not removable: it stays on and is finished in place.',
           ]),
           I('Epoxy the bronze {{bridle-sleeve}} in the hole across the stem.', [
             sleeve ? `1" hole${tip ? `, ${tip}" from the tip` : `, ${whereOf(sleeve)}`}.` : '1" hole near the tip.',
@@ -1385,7 +1536,6 @@ const TEMPLATES: Template[] = [
     view: 'iso',
     tools: ['table saw (45° bevels)', 'tape', 'glass tape', 'epoxy pumps', 'router'],
     hardener: '206',
-    clamp: 'Tape-and-fold: outside seams taped, then fillets; coaming clamped with cauls.',
     build: (c) => {
       const walls = c.mine.filter((x) => /^storage-(side|end)-/.test(x.id)).map((x) => x.id);
       const coam = c.mine.filter((x) => /coaming/.test(x.id)).map((x) => x.id);
@@ -1396,7 +1546,7 @@ const TEMPLATES: Template[] = [
         items: [
           I('Bevel the wall edges at 45° on the table saw.', ['Tape the outside seams and fold the box up.', 'Inside each corner: a 3/8" epoxy fillet and 2" glass tape (no spline).'], walls),
           I('Stand the walls on the sealed deck: the deck is the floor.', ['Fillet inside and bead outside, so no ply edge is exposed.']),
-          I('Glue the oak coaming to the wall tops, butt corners.', ['Round the inboard top edge 1/8".', 'The gasket and lid sit on oak, never on a ply edge.'], coam),
+          I('Glue the oak coaming to the wall tops, butt corners.', ['Clamp it with cauls.', 'Round the inboard top edge 1/8".', 'The gasket and lid sit on oak, never on a ply edge.'], coam),
           I(`Glue the hinge backers inside the fore end: ${tl(hb)}.`, [I(`Latch blocks (grain vertical) on the inside of the transom: ${tl(lb)}.`)]),
           I('Fair the deck inside the box with microballoon epoxy.', ['Fall about 1/8" toward each aft drain; the drain nipples go in at the final fit.']),
         ],
@@ -1413,7 +1563,6 @@ const TEMPLATES: Template[] = [
     view: 'iso',
     tools: ['router (mortises, rabbet)', 'epoxy pumps', 'clamps', 'drill'],
     hardener: '206',
-    clamp: 'Panel captured in the frame rabbet; frame clamped square while the corners set.',
     build: (c) => {
       const frame = c.mine.filter((x) => /^storage-rim-/.test(x.id)).map((x) => x.id);
       const battens = c.mine.filter((x) => /batten/.test(x.id)).map((x) => x.id);
@@ -1421,18 +1570,24 @@ const TEMPLATES: Template[] = [
       const mortSize = mortiseSize(mort);
       const mortAt = centersOf(mort, 'REAR end');
       const dado = feat(c, 'storage-rim-side-L', 'dado');
-      const dadoAt = spans(dado, 'REAR end').map(([a]) => a);
+      const dadoSpans = rangesOf(dado, 'REAR end');
+      const dadoDown = dado?.positions ? /(?:^|, )((?:\d+(?:-\d+\/\d+)?|\d+\/\d+)" to (?:\d+(?:-\d+\/\d+)?|\d+\/\d+)") from the top face/.exec(dado.positions.join('; '))?.[1] : undefined;
+      const dadoDeep = /^(\S+)" deep/.exec(dado?.size ?? '')?.[1];
+      const w0 = dadoSpans[0] ? dadoSpans[0][1] - dadoSpans[0][0] : 0;
+      const dadoWide = dadoSpans.length && dadoSpans.every(([a, b]) => Math.abs(b - a - w0) < 0.01) ? `, each ${fin(w0)} wide` : '';
       return {
         goal: 'Make the oak lid frame, set the panel in it, and fit the hinges.',
         items: [
           I('Cut the lid frame joints.', [
             `Corners: blind loose tenons${mortSize ? `, ${mortSize}` : ''}; the mortises in the frame sides centered ${mortAt.length ? `at ${list(mortAt)} from the rear end` : SEE}.`,
             'Panel rabbet: 1/4" × 1/4" along the top inside edge of every frame piece.',
-            dadoAt.length ? `Batten dados, 1/4" deep in the frame sides, starting ${list(dadoAt)} from the rear end.` : `Batten dados: ${SEE}.`,
+            dadoSpans.length
+              ? `${dadoSpans.length} batten dados, ${dadoDeep ?? '1/4'}" deep, in the inboard face of each frame side, starting ${listS(dadoSpans.map(([a]) => fin(a)))} from the rear end${dadoWide}${dadoDown ? `, ${dadoDown} below the top face` : ''}.`
+              : `Batten dados: ${SEE}.`,
           ], frame),
-          I('Glue the frame square around the {{storage-lid}}, the panel in its rabbet and epoxy-sealed.'),
-          I(`Let the ${plural(battens.length, 'batten')} 1/4" into the frame sides.`, ['Epoxy plus 4 plugged stainless screws each, from the top: they keep the panel from sagging.'], battens),
-          I('The lid is engraved DO NOT STEP in the finishing schedule (step 5), before the topcoat.', ['It is a lid to sit a cushion on, not a step (see D-58).']),
+          I('Glue the frame square around the {{storage-lid}}, the panel in its rabbet and epoxy-sealed.', ['Clamp it square while the corners set.']),
+          I(`Let the ${plural(battens.length, 'batten')} 1/4" into the frame sides.`, ['Glue plus 4 plugged stainless screws each, from the top: they keep the panel from sagging.'], battens),
+          I('The lid is engraved DO NOT STEP in the finishing schedule (step 5), before the topcoat.', ['It is a lid to sit a cushion on, not a step.']),
           I('Fit and drill the hinges, then take them off.', [
             `Pilots for ${screwOf(c, 'storage-hinge-L', /rim-end-fore/)} into the lid frame, ${screwOf(c, 'storage-hinge-L', /hinge-backer/)} through the end panel into the backers.`,
             'The hinges go on after the finish; the gasket goes in at the final fit.',
@@ -1451,22 +1606,29 @@ const TEMPLATES: Template[] = [
     view: 'side',
     tools: ['bandsaw', 'plane', 'drill press with stop', 'clamps', 'epoxy pumps'],
     hardener: '206',
-    clamp: 'Blocks epoxied and held by two screws each, driven up from the underside; crest strip clamped with a caul from the front.',
     build: (c) => {
       const pilots = stopBlockPilots(c.parts, c.p);
-      const latch = feat(c, 'seat-wedge-L', 'hole', (q) => /deep/.test(q.size ?? ''));
+      // The LATCH hole: a hole for the seat pin (the 3/8" pin hole in the sloped face), never the screw pilots in the bottom end (those are for the deck screws).
+      const holes = featsAll(c, 'seat-wedge-L', 'hole');
+      const latch = holes.find((q) => (q.to ?? []).some((t) => /^seat-pin/.test(t)) || q.joint === 'pin') ?? holes.find((q) => /tilted/i.test(q.text) || q.face === 'sloped face') ?? holes.find((q) => !/pilot/.test(q.size ?? '') && /deep/.test(q.size ?? ''));
       const latchSize = latch ? new RegExp(`^(${FR})"[^,]*, (${FR})" deep`).exec(latch.size ?? '') : null;
+      const mouth = latch?.positions?.length ? latch.positions.join('; ') : undefined;
+      const cut = feat(c, 'seat-wedge-L', 'outline', (q) => q.angleDeg !== undefined && /Sloped end/i.test(q.text));
+      const tilt = latch ? (/[Tt]ilted (\d+)°/.exec(latch.text)?.[1] ?? (cut?.angleDeg !== undefined ? String(+(90 - cut.angleDeg).toFixed(1)) : undefined)) : undefined; // square to the sloped end: 90 - the cut angle
+      const cutPts = cut ? (cut.positions ?? []).flatMap((t) => [...t.matchAll(new RegExp(`(${FR})" from the rear edge, (${FR})" from the bottom end`, 'g'))].map((m) => [m[1], m[2]])) : [];
       const wedgeJ = c.by('seat-wedge-L')?.joints?.find((q) => q.type === 'pin' && /annular detent groove/.test(q.size ?? ''));
       const groove = wedgeJ ? /groove ([\d.]+)" from the mouth/.exec(wedgeJ.size ?? '')?.[1] : undefined;
-      const ang = latch?.face === 'sloped face' ? '1' : undefined;
-      const mouth = latch?.positions?.length ? latch.positions.join('; ') : undefined;
       return {
         goal: 'Glue the seat-back stop blocks and the crest strip to the box end.',
         items: [
-          I('Shape the stop blocks to the back angle: bandsaw, then plane to the line (block drawing).', [], ['seat-wedge-L', 'seat-wedge-R']),
-          I('Drill the upright latch hole in each block face before it is glued.', [
-            latchSize ? `${latchSize[1]}" blind, ${latchSize[2]}" deep with a drill stop${ang ? ', square to the sloped face' : ''}.` : '3/8" blind, with a drill stop.',
-            mouth ? `Mouth ${mouth}.` : SEE_ITEM,
+          I('Shape the stop blocks to the back angle: bandsaw, then plane to the line (block drawing).', [
+            cut?.angleDeg !== undefined && cutPts.length >= 2
+              ? `Sloped end at ${cut.angleDeg}° from level: from ${cutPts[0][0]}" from the rear edge at the bottom end, up to ${cutPts[1][0]}" from the rear edge at ${cutPts[1][1]}" up.`
+              : `Sloped end: ${SEE}.`,
+          ], ['seat-wedge-L', 'seat-wedge-R']),
+          I('Drill the upright latch hole in each block before it is glued.', [
+            latchSize ? `${latchSize[1]}" hole, ${latchSize[2]}" deep (drill stop)${tilt ? `, tilted ${tilt}° from the bottom-end line and square to the sloped face it enters` : ''}.` : '3/8" blind hole, with a drill stop.',
+            mouth ? `Mouth: ${mouth}.` : SEE_ITEM,
             groove ? `1/16" detent groove ${fin(Number(groove))} from the mouth.` : false,
           ], ['seat-wedge-L', 'seat-wedge-R']),
           I(`Glue each block to the deck and the box end, located on its ${pilots ? plural(pilots.perBlock, 'pilot') : 'pilots'} from the wheel dry fit.`, [
@@ -1477,6 +1639,7 @@ const TEMPLATES: Template[] = [
           I('Bed the {{seat-crest-strip}} over the box end.', [
             'Tape the lid-hinge leaves to the box end as spacers, wax paper under the strip.',
             'A 1/8" layer of thickened epoxy, the strip end to end with each block.',
+            'Clamp it with a caul from the front.',
             'Lift the leaves out after the cure: the strip keeps their recess.',
           ]),
         ],
@@ -1492,18 +1655,18 @@ const TEMPLATES: Template[] = [
     view: 'side',
     tools: ['drill press with stop', 'hex key', 'iron (veneer edge)', 'router'],
     hardener: '206',
-    clamp: 'Epoxy the inserts in their holes and leave them for the full cure before the first load.',
     build: (c) => {
       const pad = feat(c, 'seat-hinge-backer-L', 'hole', /pilot/);
       const pin = feat(c, 'seat-hinge-backer-L', 'hole', (q) => /deep/.test(q.size ?? '') && !/pilot/.test(q.size ?? ''));
       return {
         goal: 'Make the seat back and fit its hinges, pins and cushions (the hardware goes on for good after the finish).',
+        glue: { epoxy: true, titebond: false },
         items: [
           I('Shape the {{seat-back-panel}}.', ['2-1/2" radius top corners.', '1/16" oak veneer banding round the edge, flush-trimmed and epoxy-sealed: no ply edge shows.']),
-          I('Set the hinge inserts: 3 per hinge, #10-32 × 5/16 stainless, hex-drive.', ['Epoxied in blind holes 11/32" deep from the front face (drill stop), at least 1/2" from every edge.', 'Pull-test one on a scrap first (Verify).']),
+          I('Set the hinge inserts: 3 per hinge, #10-32 × 5/16 stainless, hex-drive.', ['Epoxied in blind holes 11/32" deep from the front face (drill stop), at least 1/2" from every edge.', 'Leave them for the full cure before the first load.', 'Pull-test one on a scrap first (Verify).']),
           I('Bore the latch-pin holes in the panel.', ['13/32" clearance, square, 7-3/8" either side of the center, 2" up from the hinge axis.', 'Line them with epoxy.']),
           I('FIT AND DRILL now, hang later: the 2" butt hinges.', [
-            '#10-32 × 3/8 screws into the inserts on the back.',
+            '#10-32 × 3/8 screws go in from the FRONT (forward) face, through the leaf, into the inserts. The hinge leaf, the inserts and the screws are all on that one face; nothing is drilled from the back face.',
             `${screwOf(c, 'seat-hinge-L', /hinge-backer/)} through the deck into the backer pads, piloted through the leaf holes${pad ? ' (positions on the backer drawing)' : ''}.`,
             pin ? `Flat-latch pin hole: 3/8" blind, 5/8" deep in the pad, ${whereOf(pin)}; 1/16" groove 1/4" below the deck.` : 'Flat-latch pin hole: 3/8" blind, 5/8" deep in the pad.',
           ], ['seat-hinge-L', 'seat-hinge-R', 'seat-hinge-backer-L', 'seat-hinge-backer-R']),
@@ -1524,7 +1687,6 @@ const TEMPLATES: Template[] = [
     view: 'side',
     tools: ['Shaper Origin', 'bandsaw', 'drill press', 'router (1/4" roundover)', 'contact cement'],
     hardener: '206',
-    clamp: 'Shoe and pivot block clamped to the flap while the epoxy sets; contact cement per the can.',
     build: (c) => {
       const pinHole = feat(c, 'brake-pivot-block-L', 'hole', (q) => /pin/.test(q.purpose ?? ''));
       const eye = feat(c, 'brake-knee-L', 'hole', (q) => /screw eye/.test(q.purpose ?? ''));
@@ -1533,13 +1695,13 @@ const TEMPLATES: Template[] = [
         items: [
           I('Cut the flaps on the Shaper from the file: {{brake-flap-L}} and {{brake-flap-R}}.', ['7/8" oak; 1/4" roundover on all edges.', 'Epoxy-seal before the finish.']),
           I('Fit a pivot block on each flap tongue: {{brake-pivot-block-L}} and {{brake-pivot-block-R}}.', [
-            `Epoxy and 3 × ${screwOf(c, 'brake-pivot-block-L', /brake-flap/)} flat-head screws.`,
+            `Glue and 3 × ${screwOf(c, 'brake-pivot-block-L', /brake-flap/)} flat-head screws; clamp it while the glue sets.`,
             `Clamp the knee on, then drill the 3/8" pin hole across block and tongue together${pinHole ? `: ${whereOf(pinHole)} of the block` : ''}.`,
             'Seal the bore in the knee ears with a brush of epoxy; fit the clevis pin (double shear) and the hitch-pin clip.',
           ]),
           I('Make the shoes: {{brake-shoe-L}} and {{brake-shoe-R}}.', [
             'Bandsaw from the blank: the top follows the 6° flap underside, the bottom is cut to the tire radius.',
-            `Epoxy and 2 × ${screwOf(c, 'brake-shoe-L', /brake-flap/)} screws up into the flap (all the brake's wood screws are one size).`,
+            `Glue and 2 × ${screwOf(c, 'brake-shoe-L', /brake-flap/)} screws up into the flap (all the brake's wood screws are one size).`,
           ]),
           I('Dry-fit the pads and treads: they go on for good at the hang step.', [
             `Pad: 3" × 3" rubber, contact cement and 2 × ${screwOf(c, 'brake-pad-L', /brake-shoe/)} flat-heads buried 1/8", 1/2" off the shoe screws.`,
@@ -1550,7 +1712,7 @@ const TEMPLATES: Template[] = [
             'Oak wedge, its ramp at 28° to meet the tire; two stainless screw heads left proud in the base.',
             `30" cord to a screw eye under the knee${eye ? `: pilot ${holeText(eye)}` : ''}.`,
           ]),
-          I('Removable: clip off, pin out, cord unhooked, flap lifted off, about 15 s a side (see D-65).', ['Finish the flap kit on the bench; the pin, clip, cord, snap hook, pad and tread stay off until the hang step.']),
+          I('Removable: clip off, pin out, cord unhooked, flap lifted off, about 15 s a side.', ['Finish the flap kit on the bench; the pin, clip, cord, snap hook, pad and tread stay off until the hang step.']),
         ],
         checks: ['Pad hangs 3/8" off the tread released and swings onto it when the flap is pressed', 'Flap clears the tire and the transom corner; foot end at the transom face', 'Flap returns by itself when released'],
       };
@@ -1565,7 +1727,6 @@ const TEMPLATES: Template[] = [
     view: 'side',
     tools: ['drill press', 'bandsaw', 'router table', 'hex keys', 'epoxy pumps'],
     hardener: '206',
-    clamp: 'Bow clamped to both posts (post tops sawn to the bow slope) until the epoxy sets.',
     build: (c) => {
       const sock = feat(c, 'handle-socket-L', 'hole', (q) => (q.to ?? []).includes('transom-rear') && !/access hole/i.test(q.text));
       const access = feat(c, 'handle-socket-L', 'hole', /access hole/i);
@@ -1577,11 +1738,13 @@ const TEMPLATES: Template[] = [
       const crossAt = crossJ ? /cross-bored ([\d.]+)" above/.exec(crossJ.size ?? '')?.[1] : undefined;
       const bowPins = feat(c, 'handle-bar', 'hole', (q) => /deep/.test(q.size ?? ''));
       const bowAt = stations(bowPins, 'LEFT end');
+      const place = socketOnTransom(c.parts);
       return {
         goal: 'Make the push handle as one removable U, and fit and drill its sockets on the transom.',
         items: [
-          I('FIT AND DRILL now, then take off: the aluminum sockets {{handle-socket-L}} and {{handle-socket-R}}.', [
-            `Hold each socket on the transom and drill through its screw holes and the backer${sockAt.length ? ` (on the socket: ${list(sockAt)} up from its bottom end)` : ''}.`,
+          I('FIT now, then take off: the aluminum sockets {{handle-socket-L}} and {{handle-socket-R}}.', [
+            place ? `Position on the transom (both sockets): centered ${fin(place.off)} either side of the centerline, the bottom end ${fin(place.up)} up from the transom's bottom edge.` : false,
+            `The screw holes were drilled when the transom was closed${sockAt.length ? ` (on the socket: ${list(sockAt)} up from its bottom end)` : ''}: hold each socket on the transom and check that they line up.`,
             accessDia ? `Drill a ${accessDia} access hole in the socket's rear wall opposite each screw: the head goes in through it. Plug it after assembly.` : false,
             `At the hang step: bedded in sealant, ${socketScrewText(c.parts)} per socket into the T-nuts, a nylon washer under each head. No wrench reaches behind the box.`,
             'Anodized or epoxy-coated aluminum only (bare aluminum corrodes against wet oak); touch up any bare edge.',
@@ -1595,7 +1758,7 @@ const TEMPLATES: Template[] = [
             'Plane and round it to a 1-1/4" grip.',
             bowAt.length ? `Pin holes 3/8" blind, 3/4" deep in the bottom edge, ${list(bowAt)} from the left end.` : 'Pin holes 3/8" blind, 3/4" deep in the bottom edge.',
           ]),
-          I('Pin and glue the bow to the post tops.', ['3/8" × 2-1/4" stainless rod: 1-1/2" deep in the post, 3/4" in the bow, epoxied.', 'The handle comes off as ONE U and is finished on the bench.']),
+          I('Pin and glue the bow to the post tops.', ['3/8" × 2-1/4" stainless rod: 1-1/2" deep in the post, 3/4" in the bow, glued in.', 'Clamp the bow to both posts (post tops sawn to the bow slope) until the glue sets.', 'The handle comes off as ONE U and is finished on the bench.']),
           I('Clevis pin (5/16") through both socket walls and the post; the parked pin hole is 13-1/2" up.', [], ['handle-pin-L', 'handle-pin-R']),
         ],
         checks: ['Posts slide in and out without binding on the screw heads', 'Bow level and the U square', 'Handle clears the brake flaps and the tail light'],
@@ -1613,7 +1776,6 @@ const TEMPLATES: Template[] = [
     view: 'iso',
     tools: ['table saw', 'spring clamps', 'epoxy pumps'],
     hardener: '206',
-    clamp: 'Spring clamps or tape; no screws into the thin web.',
     build: (c) => {
       const L = computeLayout(c.p);
       const dbl = c.mine.filter((x) => /^doubler/.test(x.id));
@@ -1624,6 +1786,7 @@ const TEMPLATES: Template[] = [
         items: [
           I(`Glue the ${plural(dbl.length, 'lash doubler')} to the inboard face of the inner gunwale band.`, [
             '1" oak, cut square to the gunwale slope at each station.',
+            'Spring clamps or tape; no screws into the thin web.',
             xs.length ? `Centers ${list(xs)} forward of the transom's outer face, each side.` : SEE_ITEM,
             'The lash plates screw into them later.',
           ], dbl.map((x) => x.id)),
@@ -1653,7 +1816,7 @@ const TEMPLATES: Template[] = [
             ? I('Show faces: stained first, then urethaned, once the offcut panel passed.', ['The deck underside, the end grain and the uncaptured ply edges were epoxied at assembly. Water-based dye under the urethane is the safe route.'])
             : I('Show faces: stained first, then epoxy-sealed, once the offcut panel passed.', ['The dados, edges and hidden faces were sealed at assembly. Water-based dye under the epoxy is the safe route.']),
           I('Finish the removable kits on the bench: the brake flaps and chocks, the handle U and the signs.', [
-            'The tongue is NOT removable (see D-65): it stays bolted on and is finished in place.',
+            'The tongue is NOT removable: it stays bolted on and is finished in place.',
             'Plug or mask the pivot bores, bolt seats and sockets.',
           ], ['brake-flap-L', 'brake-flap-R', 'handle-bar', 'sign-L', 'sign-R', 'bridle-tongue']),
           I('No hardware on the sled: axles, wheels, plates, eye bolts, hinges, handle sockets and brake pins go on after the varnish cures (next step).'),
@@ -1674,7 +1837,7 @@ const TEMPLATES: Template[] = [
     view: 'iso',
     tools: ['wrenches', 'torque wrench', 'cotter-pin pliers', 'screwdrivers', 'hex keys', 'sealant gun', 'contact cement'],
     hardener: '206',
-    clamp: 'Hinges, sockets and the rubber pads are bedded in sealant or contact cement; epoxy only where a part is glued. Nothing takes load until it has cured.',
+    glueLine: 'Sealant and contact cement: cure per the can; no load until cured',
     build: (c) => {
       const n = (re: RegExp): number => c.mine.filter((x) => re.test(x.id)).length;
       const ids = (re: RegExp): string[] => c.mine.filter((x) => re.test(x.id)).map((x) => x.id);
@@ -1697,7 +1860,7 @@ const TEMPLATES: Template[] = [
             'Bridle rope through the sleeve, once round the tongue tip, bowline round the standing part; whip the end.',
           ], ids(/^(steer-|bridle$)/)),
           I('Hinges and pins.', [
-            `Seat hinges: #10-32 × 3/8 into the inserts, ${screwOf(c, 'seat-hinge-L', /hinge-backer/)} through the deck into the backer pads.`,
+            `Seat hinges: #10-32 × 3/8 from the front face of the seat back, through the leaf into the inserts, ${screwOf(c, 'seat-hinge-L', /hinge-backer/)} through the deck into the backer pads.`,
             `Lid hinges: ${screwOf(c, 'storage-hinge-L', /rim-end-fore/)} into the lid frame, ${screwOf(c, 'storage-hinge-L', /hinge-backer/)} into the backers.`,
             'Detent pins on lanyards; cushions on Dual Lock.',
           ], ids(/^(seat-|storage-hinge)/)),
@@ -1724,7 +1887,7 @@ const TEMPLATES: Template[] = [
     view: 'iso',
     tools: ['drill', 'hex keys', 'wrenches', 'screwdrivers', 'heat-set insert tip', 'sealant gun'],
     hardener: '206',
-    clamp: 'Bedding for the standoff discs, drain nipples and backing strips: epoxy or polysulfide; do not load the grab boards until it has cured.',
+    glueLine: 'Epoxy or polysulfide bedding: no load on the grab boards until cured',
     build: (c) => {
       const rest = c.mine.filter((x) => x.id !== 'hardware');
       const ids = (re: RegExp): string[] => rest.filter((x) => re.test(x.id)).map((x) => x.id);
@@ -1866,7 +2029,7 @@ export function assemblySteps(parts: Part[], p: Params): BuildStep[] {
   const oak = (): OakPlan => (oakMemo ??= oakBoardFeet(parts, p));
   const drawings = (): PartDrawingSheet[] => (drawMemo ??= cachedDrawings(parts, p));
   const std = isStandard(p);
-  const fix = (t: string): string => tidy(std ? standardText(t) : t);
+  const fix = (t: string): string => noIds(tidy(std ? standardText(t) : t));
   // A token for a part this model does not have (an optional part named in a template) is written as plain words.
   const known = (t: string): string => t.replace(PART_TOKEN_RE, (m, id: string) => (byId.has(id) ? m : (id as string).replace(/-/g, ' ')));
   const prune = (items: Instr[]): Instr[] => items.map((it) => ({
@@ -1874,14 +2037,24 @@ export function assemblySteps(parts: Part[], p: Params): BuildStep[] {
     ...(it.parts ? { parts: it.parts.filter((id) => byId.has(id)) } : {}),
     ...(it.sub ? { sub: prune(it.sub) } : {}),
   })).map((it) => (it.parts && !it.parts.length ? (({ parts: _x, ...rest }) => rest)(it) : it));
+  const cardStep = Math.max(0, ordered.findIndex((o) => o.t.id === 'mill'));
   const steps: BuildStep[] = ordered.map(({ t, ids }, n) => {
     const mine = ids.map((i) => byId.get(i)!).filter(Boolean);
     const ctx: StepCtx = { parts, p, mine, by, resaw, forms, oak, cut, drawings };
     const built = t.build(ctx);
     const modelStep = mine.length ? Math.min(...mine.map((x) => x.step)) : t.steps[0];
     const items = mapInstr(prune(built.items), fix);
-    const cure = t.hardener ? HARDENERS[t.hardener] : undefined;
-    const clampCure = cure ? `${cureText(t.hardener!, t.clamp ?? 'Clamp until set.')}${std && t.kind === 'build' ? ` ${STANDARD_GLUE_NOTE}` : ''}` : undefined;
+    // The glues this step uses: Extreme is epoxy throughout; Standard splits the joints made in this step into Titebond III and epoxy (finishing.ts `standardAdhesive`).
+    const mineIds = new Set(ids);
+    const top = mine.length ? Math.max(...mine.map((x) => x.step)) : 0;
+    const stepOf = new Map(parts.map((x) => [x.id, x.step]));
+    const made = std && mine.length
+      ? glueJointEstimates(parts, (x) => mineIds.has(x.id), p).filter((g) => (g.a !== g.b || !!byId.get(g.a)?.plies) && [g.a, g.b].every((id) => mineIds.has(id) || (stepOf.get(id) ?? 0) <= top))
+      : [];
+    const found: GlueUse | undefined = made.length ? { epoxy: made.some((g) => g.standard === 'epoxy'), titebond: made.some((g) => g.standard === 'titebond') } : undefined;
+    const use: GlueUse = built.glue ?? found ?? { epoxy: true, titebond: false };
+    const cure = t.hardener && use.epoxy ? HARDENERS[t.hardener] : undefined;
+    const clampCure = t.hardener ? (t.glueLine ?? glueLine(t.hardener, use, cardStep, t.coat)) : undefined;
     const step: BuildStep = {
       n,
       id: t.id,

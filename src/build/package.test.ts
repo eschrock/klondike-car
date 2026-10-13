@@ -72,9 +72,15 @@ describe('buildPackage', () => {
 
   it('puts every cut list table in cutlist.csv', () => {
     const csv = pkg.files.find((f) => f.name === 'cutlist.csv')!.data as string;
-    for (const h of ['# Oak, by board thickness', '# Resawn strips', '# Plywood', '# Metal stock']) expect(csv).toContain(h);
-    expect(csv).toContain(pkg.data.cutList.csv.oak.split('\n')[0]);
-    expect(csv).toContain('# Face-laminated layers (D-70)'); // the beams, knees and chocks (no 12/4)
+    const heads = csv.split('\n').filter((l) => l.startsWith('# '));
+    expect(heads.map((h) => h.replace(/:.*$/, '').replace(/^# /, ''))).toEqual(['1. Cuts', 'Resawing the strips', '2. Glue-ups', '3. Finished parts', 'Plywood', 'Metal stock']);
+    for (const t of Object.values(pkg.data.cutList.csv)) expect(csv).toContain(t.split('\r\n')[0]);
+    // the old final-size table and the layer table are gone: no "Rail L 3/8 x 3 x 59" row, no decimal layer sizes, no part-key column
+    expect(csv).not.toMatch(/Oak, by board thickness|Face-laminated layers|Resawn strips\n|Part no|D-\d+/);
+    expect(csv).not.toMatch(/Rail L,2,3\/8 × 3 × 59/);
+    expect(csv).not.toMatch(/\d\.\d+ × \d/);
+    expect(csv).toMatch(/"?Rail, strip 1 of 2/); // the rail is cut as its strips, not listed at its final size
+    expect(csv).toContain('glue the 3 layers face to face');
   });
 
   it('zips every file with matching CRCs', () => {
@@ -150,7 +156,7 @@ describe('build book', () => {
     for (const s of pkg.data.steps) {
       expect(html, `step ${s.n}`).toContain(`${s.n}. ${esc(s.title)}`);
       if (s.clampCure) expect(html, `step ${s.n} clampCure`).toContain(esc(s.clampCure));
-      for (const c of s.checks) expect(html, `step ${s.n} check`).toContain(esc(c));
+      for (const c of s.checks) expect(html, `step ${s.n} check`).toContain(esc(c.replace(/:\s*passed$/i, ''))); // a check is a to-do (an empty box), never "passed"
       expect(html, `step ${s.n} goal`).toContain(esc(s.goal));
       // Each item and sub-item, with its part tokens as links to the cut list: the text between the tokens is in the book as written.
       const walk = (items: typeof s.items): string[] => items.flatMap((q) => [q.text, ...walk(q.sub ?? [])]);
@@ -174,7 +180,9 @@ describe('build book', () => {
     }
     for (const c of pkg.data.verify) expect(html, c.id).toContain(esc(c.title));
     const cl = pkg.data.cutList;
-    for (const g of cl.oak) for (const r of g.rows) expect(html, r.partNo).toContain(esc(r.name));
+    for (const f of cl.finished) expect(html, f.partNo).toContain(esc(f.name));
+    for (const c of cl.cuts) expect(html, c.label).toContain(esc(c.label));
+    for (const g of cl.glueUps) expect(html, g.label).toContain(esc(g.label));
     for (const g of cl.sheets) for (const r of g.rows) expect(html, r.partNo).toContain(esc(r.name));
     for (const r of cl.metal) expect(html, r.partNo).toContain(esc(r.name));
     for (const t of pkg.data.oak.thicknesses) for (const line of t.summary) expect(html, line).toContain(esc(line));
@@ -199,10 +207,11 @@ describe('build book: laminations, links, bulk parts and finishing touches', () 
   const bom = pkg.data.bom;
 
   it('shows each face-laminated part with its layers in the cut list and the board plan', () => {
-    expect(html).toContain('Face-laminated parts');
-    expect(html).toContain('Face-laminated layers');
-    for (const r of pkg.data.cutList.oak.flatMap((g) => g.rows).filter((q) => q.lamination)) expect(html, r.partNo).toContain(esc(`face-laminated: ${r.lamination!.text}`));
-    expect(html).toMatch(/beam-F layer 1\/3/); // the beam is three layers of 4/4 (D-74)
+    for (const g of pkg.data.cutList.glueUps.filter((q) => q.layers > 1)) {
+      expect(html, g.label).toContain(esc(g.label));
+      for (let i = 1; i <= g.layers; i++) expect(html, `${g.label} layer ${i}`).toContain(`${esc(g.label.replace(/ (block|panel)$/, ''))}, layer ${i} of ${g.layers}`);
+    }
+    expect(html).toMatch(/Front axle beam \(pivots\), layer 1 of 3/); // the beam is three layers of 4/4, listed as three cuts and then a glue-up
     expect(html).not.toMatch(/12\/4 \(usable/);
   });
 
@@ -229,5 +238,69 @@ describe('build book: laminations, links, bulk parts and finishing touches', () 
     expect(csv).toContain('Finishing touches');
     expect(csv).toContain('Bulk parts (shop stock)');
     expect(csv.split('\r\n')[0]).toContain('URL');
+  });
+});
+
+
+describe('readability round 2: the book reads in the shop', () => {
+  const html = (pkg.files.find((f) => f.name === 'build-book.html')!.data) as string;
+  /** The section's text without markup, style or script: what a person reads. */
+  const sectionText = (id: string): string => {
+    const m = new RegExp(`<section class="page" id="${id}">([\\s\\S]*?)</section>`).exec(html)!;
+    return m[1].replace(/<[^>]+>/g, ' ').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+  };
+  const bookText = html.replace(/<style>[\s\S]*?<\/style>/, '').replace(/<[^>]+>/g, ' ').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+
+  it('prints the checks as empty boxes to tick, never as "passed"', () => {
+    expect(bookText).not.toMatch(/:\s*passed\b/); // ("the test panel passed" in the finishing text is a sentence, not a check)
+    expect(bookText).toContain('\u2610');
+    expect((html.match(/\u2610/g) ?? []).length).toBeGreaterThanOrEqual(pkg.data.verify.length);
+    const step0 = pkg.data.steps[0];
+    for (const c of step0.checks) expect(html).toContain(`\u2610</span>${esc(c.replace(/:\s*passed$/i, ''))}`);
+  });
+
+  it('has no D-number, no Q-number and no parameter name (camelCase) in the sections it generates', () => {
+    for (const id of ['verify', 'cutlist', 'boards', 'nesting', 'shaper']) {
+      const t = sectionText(id);
+      if (id === 'shaper') expect(t, id).not.toMatch(/\bside-[LR]-web\b|\bseat-grip-[LR]\b/); // the Part column names parts, not keys
+      expect(t, id).not.toMatch(/\b[DQ]-\d+/);
+      expect(t.replace(/shaper:cutDepth/g, ''), id).not.toMatch(/\b[a-z]+(?:[A-Z][a-z0-9]+)+\b/); // (shaper:cutDepth is the attribute the Shaper reads)
+    }
+    expect(sectionText('verify')).not.toMatch(/Params:|Guards:/);
+    expect(sectionText('verify')).toContain('Design values this confirms:');
+    expect(sectionText('verify')).toContain('"Wheel hub length"'); // a design value by its parameters-panel label
+  });
+
+  it('has no decimal length in the verify, cut list, board list or nesting text (fractions only)', () => {
+    for (const id of ['verify', 'cutlist', 'boards', 'nesting']) {
+      const t = sectionText(id).replace(/\d\.\d+"+ wall/g, '').replace(/\d+\.\d+ bf|\d+\.\d+ board feet/g, '').replace(/\d\.\d+ ?%|\d\.\d+% used/g, '');
+      const hit = /(\d+\.\d+)\s?("|\bin\b|\binch|\bmm\b)/.exec(t);
+      expect(hit?.[0], `${id}: ${hit ? t.slice(Math.max(0, hit.index - 50), hit.index + 30) : ''}`).toBeUndefined();
+      expect(t, id).not.toMatch(/\d+(?:-\d+\/\d+)? \(\d+\.\d+\)/); // no "21-5/32 (21.142)" parenthetical
+    }
+  });
+
+  it('lists the cut list in the UI order: cuts by board, glue-ups, finished parts, then plywood and metal', () => {
+    const t = sectionText('cutlist');
+    const at = ['1. Cuts: saw these from the boards', '2. Glue-ups', '3. Finished parts: mill to these sizes', 'Plywood', 'Metal stock'].map((h) => t.indexOf(h));
+    expect(at.every((i) => i >= 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    expect(t).not.toMatch(/Rail L\s+2\s+3\/8 × 3 × 59|Face-laminated layers|Final size is the finished/);
+    expect(t).toContain('the Shaper file cuts it to 59-1/2"; start from a 59-5/8" blank (+1/8" trim)');
+    expect(t).not.toMatch(/\bS1\b|7\/32 \(0\.21\)/);
+  });
+
+  it('quotes the same resaw lane count as step 1 of the assembly', () => {
+    const stepText = pkg.data.steps.flatMap((s) => (s.items ?? []).flatMap(function walk(q: { text: string; sub?: { text: string; sub?: unknown[] }[] }): string[] { return [q.text, ...(q.sub ?? []).flatMap((x) => walk(x as never))]; })).join('\n');
+    expect(pkg.data.cutList.resaw.length).toBeGreaterThan(0);
+    for (const pool of pkg.data.cutList.resaw) {
+      expect(html, pool.board).toContain(esc(pool.laneCountText));
+      expect(stepText, pool.board).toContain(pool.laneCountText);
+    }
+  });
+
+  it('names parts, not keys, in the board plan and the nesting list', () => {
+    const t = sectionText('boards') + sectionText('nesting');
+    expect(t).not.toMatch(/\b(?:joist|beam-[RF]|brake-knee-[LR]|transom-rear|storage-[a-z]+-[a-z]+|seat-wedge-[LR])\b/);
   });
 });

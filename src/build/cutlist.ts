@@ -14,7 +14,7 @@ import type { Dims, Part } from '../model/types';
 import { PARAM_DEFS, type Params } from '../params';
 import { localBounds } from '../model/bounds';
 import { flatPattern } from './flat';
-import { finalDimsText, finalFrac, fractionText, roughDimsText, roughFrac, roughUp8 } from './units';
+import { finalDimsText, finalFrac, fractionText, nearest32, roughDimsText, roughFrac, roughUp8 } from './units';
 
 export { finalFrac, roughFrac, finalDimsText, roughDimsText, roughUp8 };
 
@@ -210,6 +210,25 @@ export function toCsv(rows: CsvCell[][]): string {
   return rows.map((r) => r.map(cell).join(',')).join('\r\n') + '\r\n';
 }
 
+// ── Display words ─────────────────────────────────────────────────────────────
+
+/** How a fabrication tag reads at the bench: 'shaper-origin' -> 'Shaper Origin', 'table-saw' -> 'table saw', 'bentlam' -> 'bent laminate'. */
+export function fabText(fab: string): string {
+  const words: Record<string, string> = { 'shaper-origin': 'Shaper Origin', bentlam: 'bent laminate', 'drill-tap': 'drill and tap' };
+  return words[fab] ?? fab.replace(/-/g, ' ');
+}
+/** 'board 2 of 3', 'layer 1 of 3', 'resawn strip', 'one piece': which piece of its part a cut is (the same words as the UI). */
+export function pieceText(c: Pick<Cut, 'piece' | 'index' | 'of' | 'layer' | 'layers'>): string {
+  switch (c.piece) {
+    case 'board': return c.of > 1 ? `board ${c.index} of ${c.of}` : 'one board';
+    case 'layer': return `layer ${c.layer ?? c.index} of ${c.layers ?? c.of}`;
+    case 'strip': return 'resawn strip';
+    default: return 'one piece';
+  }
+}
+/** Where a finished part comes from, in words. */
+export const FROM_TEXT: Record<FinishedPart['from'], string> = { board: 'one board', 'glue-up': 'glue-up', strips: 'strips' };
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface OakRow {
@@ -268,6 +287,8 @@ export interface LayerPiece {
   edgeGlued: number;
   /** Physical pieces in the whole row: row qty x `edgeGlued`. */
   qty: number;
+  /** Which way this layer's grain runs, for a cross-laminated part: "across the sled", "upright", "lengthwise (front to back)". */
+  grainWord?: string;
 }
 
 export interface OakGroup {
@@ -340,6 +361,10 @@ export interface ResawPool {
   withinCapacity: boolean;
   /** Width of each lane to rip (in), widest first. */
   laneWidthsIn: number[];
+  /** Lanes to rip in all: `lanes` plus the whole lanes the spare strips need. The number step 1 of the assembly and the build book both quote. */
+  ripLanes: number;
+  /** `5 lanes, 3 at 1-7/8" and 2 at 1-3/8" (one is the spare)`: the lane count, their widths and the spare lanes. One text for the steps, the book and the cut list. */
+  laneCountText: string;
   /** `resaw height 1-5/8" (your bandsaw: 6")`. */
   resawHeightText: string;
   /** `rip the lanes from a 9"-wide board first`. */
@@ -360,7 +385,7 @@ export interface SheetRow {
   /** MODEL step; see `OakRow.step`. */
   step: number;
   assemblySteps: number[];
-  /** E.g. "cut net 59.49 from the Shaper file; blank 59.59". */
+  /** E.g. "the Shaper file cuts it to 59-1/2"; start from a 59-5/8" blank (+1/8" trim)". */
   note?: string;
 }
 export interface SheetGroup {
@@ -410,7 +435,8 @@ export interface CutList {
   glueUps: GlueUp[];
   /** The finished parts: what each part is milled to (after any glue-up), to the nearest 1/32 for display, exact in `final`. */
   finished: FinishedPart[];
-  csv: { oak: string; layers: string; strips: string; sheets: string; metal: string; cuts: string; glueUps: string; finished: string };
+  /** The CSV tables of `cutlist.csv`, in the order the UI shows them: cuts, resaw pools, glue-ups, finished parts, plywood, metal. All sizes are shop fractions. */
+  csv: { cuts: string; resaw: string; glueUps: string; finished: string; sheets: string; metal: string };
 }
 
 /** One kind of piece cut from a board (`CutList.cuts`). */
@@ -503,6 +529,8 @@ export interface PlannedPiece {
   /** 1-based board across the width, and the boards across (edge-glued pieces). */
   across?: number;
   acrossOf?: number;
+  /** A cross-laminated layer whose grain runs the other way from the part's (D-75): its length is the part's width. */
+  turned?: boolean;
   /** Nominal board it is sawn from ('4/4'); 'resawn' for a laminate strip (the pool decides). */
   board: string;
   /** Rough T x W x L, each ROUNDED UP to 1/8 (thickness capped at what the board yields). */
@@ -562,33 +590,50 @@ export function planOakPart(x: Part, p: Params, warnings: string[] = []): OakPar
   const needsGlue = roughUp8(stock.w + p.roughWidthAllowanceIn) > BOARD_WIDTH_IN + 1e-9;
   const across = (min: number): number => Math.max(min, Math.ceil(stock.w / (BOARD_WIDTH_IN - p.laminateWidthAllowanceIn) - 1e-9));
   const edgeN = lamination ? across(1) : needsGlue ? across(2) : 1;
-  const glued = edgeN > 1 || !!lamination;
   const layerSpecs: Array<{ board: string; t: number; layer?: number }> = lamination
     ? lamination.layers.map((l, i) => ({ board: l.board, t: l.roughT, layer: i + 1 }))
     : [{ board, t: tExact }];
+  // Cross-laminated part (D-75): a layer whose grain differs from the part's grain runs the other way, so its LENGTH is the part's width and its WIDTH (across its grain) the part's length.
+  // It is edge-glued only if THAT width exceeds a board (the brake knee's upright layer is 4-1/2" across its grain: one piece from a 6" board).
+  const lg = lamination && x.layerGrain && x.layerGrain.length === lamination.layers.length ? x.layerGrain : undefined;
+  const turned = (layer?: number): boolean => !!lg && !!layer && lg[layer - 1] !== x.grain;
+  const edgeOf = (layer?: number): number => (lg ? Math.max(1, Math.ceil((turned(layer) ? stock.l : stock.w) / (BOARD_WIDTH_IN - p.laminateWidthAllowanceIn) - 1e-9)) : edgeN);
+  const glued = edgeN > 1 || !!lamination;
   const pieces: PlannedPiece[] = [];
-  const total = layerSpecs.length * edgeN;
+  const total = layerSpecs.reduce((a, ls) => a + edgeOf(ls.layer), 0);
   for (const ls of layerSpecs) {
-    for (let a = 0; a < edgeN; a++) {
+    const eN = edgeOf(ls.layer), tn = turned(ls.layer);
+    const lenDim = tn ? stock.w : stock.l, widDim = tn ? stock.l : stock.w;
+    // The model may place the edge joint off center (the brake knee's, clear of the bolt holes and the shoulder): its notes say how far up from the bottom edge it is.
+    const split = lg && !tn && eN === 2 ? edgeJointUp(x, stock.w) : undefined;
+    for (let a = 0; a < eN; a++) {
       const exact: Dims = glued
-        ? { t: ls.t, w: stock.w / edgeN + p.laminateWidthAllowanceIn, l: stock.l + p.laminateLengthAllowanceIn }
+        ? { t: ls.t, w: (split !== undefined ? (a === 0 ? split : widDim - split) : widDim / eN) + p.laminateWidthAllowanceIn, l: lenDim + p.laminateLengthAllowanceIn }
         : { t: ls.t, w: stock.w + p.roughWidthAllowanceIn, l: stock.l + p.roughLengthAllowanceIn };
       const cap = BOARD_THICKNESSES.find((q) => q.nominal === ls.board)?.nominalIn ?? null;
-      const piece: PlannedPiece['piece'] = lamination ? 'layer' : edgeN > 1 ? 'board' : 'solid';
+      const piece: PlannedPiece['piece'] = lamination ? 'layer' : eN > 1 ? 'board' : 'solid';
       pieces.push({
         piece, index: pieces.length + 1, of: total, ...(ls.layer ? { layer: ls.layer, layers: layerSpecs.length } : {}),
-        ...(edgeN > 1 ? { across: a + 1, acrossOf: edgeN } : {}), board: ls.board, ...mk(exact, cap, !!ls.layer),
+        ...(eN > 1 ? { across: a + 1, acrossOf: eN } : {}), ...(tn ? { turned: true } : {}), board: ls.board, ...mk(exact, cap, !!ls.layer),
       });
     }
   }
-  // the rough part as glued: the layers' thicknesses add up, the boards' widths add up
-  const first = pieces.filter((q) => q.across === undefined || q.across === 1);
-  const blockT = lamination ? first.reduce((a, q) => a + q.rough.t, 0) : pieces[0].rough.t;
+  // the rough part as glued: the layers' thicknesses add up, the boards' widths add up. A turned layer lies the other way: its width is along the part's length.
+  const blockT = lamination ? layerSpecs.reduce((a, ls) => a + pieces.find((q) => q.layer === ls.layer)!.rough.t, 0) : pieces[0].rough.t;
   const blockTExact = lamination ? lamination.roughT : pieces[0].roughExact.t;
-  const blockW = pieces.slice(0, edgeN).reduce((a, q) => a + q.rough.w, 0), blockWExact = pieces.slice(0, edgeN).reduce((a, q) => a + q.roughExact.w, 0);
+  const extentOf = (ls: { layer?: number }, dir: 'w' | 'l'): { r: number; e: number } => {
+    const mine = pieces.filter((q) => q.layer === ls.layer);
+    const sumW = (k: 'rough' | 'roughExact'): number => mine.reduce((a, q) => a + q[k].w, 0);
+    const oneL = (k: 'rough' | 'roughExact'): number => mine[0][k].l;
+    const alongW = turned(ls.layer) ? dir === 'l' : dir === 'w';
+    return alongW ? { r: sumW('rough'), e: sumW('roughExact') } : { r: oneL('rough'), e: oneL('roughExact') };
+  };
+  const dimOf = (dir: 'w' | 'l'): { r: number; e: number } => layerSpecs.map((ls) => extentOf(ls, dir)).reduce((a, b) => ({ r: Math.max(a.r, b.r), e: Math.max(a.e, b.e) }));
+  const bw = dimOf('w'), bl = dimOf('l');
+  const edgeMax = Math.max(...layerSpecs.map((ls) => edgeOf(ls.layer)));
   return {
-    part: x, partNo, stock, strip: false, board, ...(lamination ? { lamination } : {}), edgeN, pieces,
-    block: { t: blockT, w: blockW, l: pieces[0].rough.l }, blockExact: { t: blockTExact, w: blockWExact, l: pieces[0].roughExact.l }, warnings: w,
+    part: x, partNo, stock, strip: false, board, ...(lamination ? { lamination } : {}), edgeN: edgeMax, pieces,
+    block: { t: blockT, w: bw.r, l: bl.r }, blockExact: { t: blockTExact, w: bw.e, l: bl.e }, warnings: w,
   };
 }
 
@@ -625,15 +670,37 @@ export function laminationNote(l: Lamination, pieces?: PlannedPiece[]): string {
     if (g) g.n += 1; else groups.push({ board: q.board, n: 1, t: rt });
   });
   const planed = groups.map((g) => `${g.n} layer${g.n === 1 ? '' : 's'} of ${g.board}, ${g.n === 1 ? '' : 'each '}planed to ${fractionText(g.t, 16)}"`).join('; ');
-  return `face-laminated (D-70): ${planed}; epoxy the layers face to face, joint and plane the glued block flat and square (${fractionText(l.cleanupIn, 16)}" cleanup allowance), then mill it to ${finalFrac(l.finalT)} thick.`;
+  return `face-laminated: ${planed}; epoxy the layers face to face, joint and plane the glued block flat and square (${fractionText(l.cleanupIn, 16)}" cleanup allowance), then mill it to ${finalFrac(l.finalT)} thick.`;
 }
 
-/** Layer pieces of a laminated part: each layer is the rough width x length, edge-glued from several pieces when wider than a board. `qty` is the number of parts. */
+/** Where the model puts the edge joint of a cross-laminated layer, in inches from the bottom edge ("the joint along its grain 3.47" up from the bottom"); undefined if it says nothing or the number is not inside the width. */
+function edgeJointUp(x: Part, width: number): number | undefined {
+  const m = /joint along its grain (\d+(?:\.\d+)?)"\s+up from the bottom/.exec(x.notes ?? '');
+  const v = m ? Number(m[1]) : NaN;
+  return Number.isFinite(v) && v > 0.5 && v < width - 0.5 ? v : undefined;
+}
+
+/**
+ * The grain direction of one layer of a cross-laminated part (`Part.layerGrain`, local axis), in the sled's own words: "across the sled", "upright" or "lengthwise" (front to back),
+ * read off the part's placement so it means something at the bench. Undefined when the model does not say.
+ */
+export function layerGrainWord(x: Part, layer: number): string | undefined {
+  const ax = x.layerGrain?.[layer - 1];
+  if (!ax) return undefined;
+  const k = ax === 'x' ? 0 : ax === 'y' ? 1 : 2, m = x.transform;
+  const d = [m[4 * k], m[4 * k + 1], m[4 * k + 2]].map(Math.abs);
+  const w = d.indexOf(Math.max(...d));
+  return w === 0 ? 'lengthwise (front to back)' : w === 1 ? 'across the sled' : 'upright';
+}
+
+/** Layer pieces of a laminated part: each layer is the rough width x length, edge-glued from several pieces only when ITS width across its grain is wider than a board. `qty` is the number of parts. */
 export function layerPiecesOf(plan: OakPartPlan, qty = 1): LayerPiece[] {
   const l = plan.lamination!;
   return l.layers.map((q, i) => {
-    const pc = plan.pieces.find((c) => c.layer === i + 1)!;
-    return { layer: i + 1, layers: l.layers.length, board: q.board, roughT: pc.rough.t, roughTExact: q.roughT, widthIn: pc.rough.w, lengthIn: pc.rough.l, finalT: q.finalT, edgeGlued: plan.edgeN, qty: qty * plan.edgeN };
+    const mine = plan.pieces.filter((c) => c.layer === i + 1);
+    const pc = mine.reduce((a, c) => (c.rough.w > a.rough.w ? c : a)), eN = mine.length; // the widest piece when the joint is off center
+    const gw = layerGrainWord(plan.part, i + 1);
+    return { layer: i + 1, layers: l.layers.length, board: q.board, roughT: pc.rough.t, roughTExact: q.roughT, widthIn: pc.rough.w, lengthIn: pc.rough.l, finalT: q.finalT, edgeGlued: eN, qty: qty * eN, ...(gw ? { grainWord: gw } : {}) };
   });
 }
 
@@ -678,6 +745,24 @@ export function packLanes(lanes: StripItem[][], boards: number, kerfIn: number, 
     bin.used += need;
   }
   return bins.map((q) => q.lanes);
+}
+
+/**
+ * The lanes to rip for a pool, in words (the single source of the lane count). The spare strips are whole extra lanes of the widest strip (plus any empty slot in a full-width lane),
+ * so the lanes to rip are the planned lanes plus the spare lanes: `5 lanes, 3 at 1-7/8" and 2 at 1-3/8" (one is the spare)`.
+ */
+export function laneCount(laneStrips: StripItem[][], k: number, spares: number): { total: number; spareLanes: number; text: string } {
+  const kk = Math.max(1, k);
+  const widest = Math.max(...laneStrips.flat().map((q) => q.widthIn));
+  const emptySlots = laneStrips.reduce((a, l) => a + (laneWidth(l) >= widest - 1e-9 ? kk - l.length : 0), 0);
+  const spareLanes = Math.ceil(Math.max(0, spares - emptySlots) / kk);
+  const by = new Map<string, number>();
+  for (const lane of laneStrips) { const w = roughFrac(laneWidth(lane)); by.set(w, (by.get(w) ?? 0) + 1); }
+  if (spareLanes) by.set(roughFrac(widest), (by.get(roughFrac(widest)) ?? 0) + spareLanes);
+  const total = laneStrips.length + spareLanes;
+  const widths = [...by.entries()].map(([w, n]) => `${n} at ${w}`).join(' and ');
+  const spareText = spareLanes ? ` (${spareLanes === 1 ? 'one is the spare' : `${spareLanes} are spares`})` : '';
+  return { total, spareLanes, text: `${total} lane${total === 1 ? '' : 's'}, ${widths}${spareText}` };
 }
 
 const boardLengthFor = (longest: number): number => BOARD_LENGTHS_IN.find((l) => l >= longest - 1e-9) ?? BOARD_LENGTHS_IN[BOARD_LENGTHS_IN.length - 1];
@@ -750,11 +835,13 @@ export function planResaw(parts: Part[], p: Params, plans?: OakPartPlan[]): Resa
     const withinCapacity = resawHeightIn <= cap + 1e-9;
     const resawHeightText = `resaw height ${roughFrac(resawHeightIn)} (your bandsaw: ${fractionText(cap, 8)}")`;
     const ripText = `rip the lanes from a ${fractionText(c.widthIn, 8)}"-wide board first`;
+    const spares = c.slots - items.length;
+    const lc = laneCount(c.lanes, c.k, spares);
     pools.push({
       roughT, strips: items.length, board: c.b.nominal, boardLengthIn, boardWidthIn: c.widthIn, yieldByBoard, stripsPerBoard: c.k,
       lanes: c.lanes.length, boards: c.boards, boardFeet: c.bf, laneStrips: c.lanes,
-      stripSlots: c.slots, spares: c.slots - items.length, yieldPerBoard: Math.floor(c.slots / c.boards),
-      resawHeightIn, bandsawCapacityIn: cap, withinCapacity, laneWidthsIn: c.lanes.map(laneWidth), resawHeightText, ripText,
+      stripSlots: c.slots, spares, yieldPerBoard: Math.floor(c.slots / c.boards),
+      resawHeightIn, bandsawCapacityIn: cap, withinCapacity, laneWidthsIn: c.lanes.map(laneWidth), ripLanes: lc.total, laneCountText: lc.text, resawHeightText, ripText,
       text: `${ripText[0].toUpperCase()}${ripText.slice(1)}, then resaw each lane into ${c.k} slab${c.k === 1 ? '' : 's'} on edge (${resawHeightText})${withinCapacity ? '' : `: TOO TALL for your bandsaw, the strip is wider than its ${fractionText(cap, 8)}" capacity`}.`,
     });
   }
@@ -785,7 +872,7 @@ export const sheetClass = (thicknessIn: number): { label: string; mm: number } =
 };
 
 /**
- * A sheet whose Shaper file cuts a NET length shorter than the blank (the side web: the file is the flat development, the blank carries the S1 trim): say both numbers on the row.
+ * A sheet whose Shaper file cuts a NET length shorter than the blank (the side web: the file is the flat development, the blank carries the trim): say both numbers on the row, as fractions.
  * Null when the file and the blank agree (within 0.02 in).
  */
 function shaperNetNote(x: Part, stock: Dims): string | null {
@@ -793,7 +880,7 @@ function shaperNetNote(x: Part, stock: Dims): string | null {
   if (!f) return null;
   const net = Math.max(f.widthIn, f.heightIn);
   if (stock.l - net < 0.02) return null;
-  return `cut net ${r3(net)}" from the Shaper file; blank ${r3(stock.l)}" (+${r3(stock.l - net)}" trim, S1)`;
+  return `the Shaper file cuts it to ${finalFrac(net)}; start from a ${roughFrac(stock.l)} blank (+${roughFrac(stock.l - net)} trim)`;
 }
 
 function sheetGroups(parts: Part[], warnings: string[], stepOf?: ReadonlyMap<string, number>): SheetGroup[] {
@@ -854,7 +941,7 @@ function metalSection(x: Part, family: string, d: Dims): string {
     case 'Steel rod': return `${fracIn(d.t)}" solid 1045 / CDS steel rod (cut to length)`;
     case 'DOM tube': return `${fracIn(d.t)}" OD x ${(wall() ?? 0.12).toFixed(3)}" wall DOM tube (ASTM A513 Type 5)`;
     case 'Aluminum tube': return `6061-T6 ${fracIn(d.t)}" x ${fracIn(d.w)}" x ${(wall() ?? 0.125).toFixed(3)}" wall rectangular tube`;
-    case 'Angle': return `${grade} angle ${fracIn(d.w)}" x ${fracIn(d.w)}" x ${(d.t).toFixed(3)}"`;
+    case 'Angle': return `${grade} angle ${fracIn(d.w)}" x ${fracIn(d.w)}" x ${fracIn(d.t)}"`;
     default: return `${grade} flat bar ${fracIn(d.t)}" x ${fracIn(d.w)}"`;
   }
 }
@@ -898,8 +985,8 @@ export function cutList(parts: Part[], p: Params, stepOf?: ReadonlyMap<string, n
   const oak = [...groupMap.values()].sort((a, b) => order(a) - order(b));
   for (const g of oak) {
     g.rows.sort((a, b) => b.rough.l - a.rough.l);
-    g.title = g.board === 'resawn' ? `Resawn strips (${g.pieces} pieces: see the strip list)`
-      : g.board === 'laminated' ? `Face-laminated parts (${g.pieces} pieces: glued from stocked boards, D-70; see the layers)`
+    g.title = g.board === 'resawn' ? `Resawn strips (${g.pieces} pieces: see the resaw plan)`
+      : g.board === 'laminated' ? `Face-laminated parts (${g.pieces} pieces: glued up from stocked boards)`
         : `${g.board} (finishes to ${fracIn(g.finishedIn)}"), ${g.pieces} pieces`;
   }
   const layers = oak.flatMap((g) => g.rows.flatMap((r) => r.layerPieces.map((q) => ({ row: r, ...q }))));
@@ -914,39 +1001,34 @@ export function cutList(parts: Part[], p: Params, stepOf?: ReadonlyMap<string, n
   const glueUps = glueUpsOf(plans);
   const finished = finishedOf(oak);
 
-  const d = (x: Dims): string => `${r3(x.t)} x ${r3(x.w)} x ${r3(x.l)}`;
+  // The CSV mirrors the UI cut list: cuts, resaw, glue-ups, finished parts, plywood, metal. Sizes are shop fractions and the columns hold names, never part keys.
   const csv = {
-    oak: toCsv([
-      ['Board', 'Part no', 'Name', 'Qty', 'Final T x W x L (in)', 'Rough T x W x L (in)', 'Grain', 'Fab', 'Assembly step', 'Plies', 'Lamination'],
-      ...oak.flatMap((g) => g.rows.map((r) => [g.board, r.partNo, r.name, r.qty, finalDimsText(r.stock), roughDimsText(r.rough), r.grainWord, r.fab, stepText(r.assemblySteps), r.plies, r.lamination ? `face-laminated: ${r.lamination.text}` : undefined])),
-    ]),
-    layers: toCsv([
-      ['Part no', 'Name', 'Layer', 'Of', 'Board', 'Pieces', 'Rough layer T x W x L (in)', 'Planed layer T (in)', 'Edge-glued from', 'Glued block rough T (in)', 'Final T (in)', 'Lamination'],
-      ...layers.map((q) => [q.row.partNo, q.row.name, q.layer, q.layers, q.board, q.qty, roughDimsText({ t: q.roughT, w: q.widthIn, l: q.lengthIn }), finalFrac(q.finalT), q.edgeGlued, fractionText(q.row.rough.t, 16), finalFrac(q.row.lamination!.finalT), q.row.lamination!.text]),
-    ]),
-    strips: toCsv([
-      ['Part no', 'Name', 'Parts', 'Plies', 'Strips', 'Final strip T x W x L (in)', 'Rough strip T x W x L (in)', 'Resaw from'],
-      ...strips.map((r) => [r.partNo, r.name, r.parts, r.plies, r.strips, finalDimsText(r.stock), roughDimsText(r.rough), r.resawFrom]),
-    ]),
-    sheets: toCsv([
-      ['Sheet', 'Part no', 'Name', 'Qty', 'Final T x W x L (in)', 'Grain', 'Fab', 'Assembly step', 'Note'],
-      ...sheets.flatMap((g) => g.rows.map((r) => [g.label, r.partNo, r.name, r.qty, d(r.stock), r.grainWord, r.fab, stepText(r.assemblySteps), r.note])),
-    ]),
-    metal: toCsv([
-      ['Stock', 'Part no', 'Name', 'Qty', 'Cut length (in)', 'Fab', 'Assembly step'],
-      ...metal.map((r) => [r.section, r.partNo, r.name, r.qty, r.cutLengthIn, r.fab, stepText(r.assemblySteps)]),
-    ]),
     cuts: toCsv([
-      ['Board', 'Part no', 'Cut', 'Qty', 'Rough T x W x L (in)', 'Glue-up', 'Note'],
-      ...cuts.map((c) => [c.board, c.partNo, c.label, c.qty, c.roughText, c.glueUp, c.note]),
+      ['Board', 'Cut', 'Qty', 'Rough T x W x L (in)', 'Piece', 'Glued into', 'Note'],
+      ...cuts.map((c) => [c.board, c.label, c.qty, c.roughText, pieceText(c), c.glueUp, c.note]),
+    ]),
+    resaw: toCsv([
+      ['Rough strip thickness (in)', 'Strips needed', 'Buy', 'Rip first', 'Then resaw', 'Spare strips', 'Board feet'],
+      ...pools.map((r) => [
+        fractionText(roughUp8(r.roughT), 8), r.strips, `${r.boards} x ${r.board}, ${fractionText(r.boardWidthIn, 8)} in wide x ${r.boardLengthIn / 12} ft`,
+        `${r.ripText[0].toUpperCase()}${r.ripText.slice(1)}: ${r.laneCountText}`, `each lane into ${r.stripsPerBoard} slab${r.stripsPerBoard === 1 ? '' : 's'} on edge (${r.resawHeightText})`, r.spares, +r.boardFeet.toFixed(1),
+      ]),
     ]),
     glueUps: toCsv([
-      ['Part no', 'Glue-up', 'Qty', 'From pieces', 'Rough T x W x L (in)', 'Mill to final T x W x L (in)', 'Note'],
-      ...glueUps.map((g) => [g.partNo, g.label, g.qty, g.from, g.roughBlockText, g.finalText, g.note]),
+      ['Glue-up', 'Qty', 'From pieces', 'Rough T x W x L (in)', 'Then mill to T x W x L (in)', 'Note'],
+      ...glueUps.map((g) => [g.label, g.qty, g.from, g.roughBlockText, g.finalText, g.note]),
     ]),
     finished: toCsv([
-      ['Part no', 'Name', 'Qty', 'Final T x W x L (in)', 'From', 'Board', 'Grain', 'Fab', 'Assembly step'],
-      ...finished.map((f) => [f.partNo, f.name, f.qty, f.finalText, f.from, f.board, f.grainWord, f.fab, stepText(f.assemblySteps)]),
+      ['Part', 'Qty', 'Final T x W x L (in)', 'From', 'Board', 'Grain', 'Fabrication', 'Assembly step'],
+      ...finished.map((f) => [f.name, f.qty, f.finalText, FROM_TEXT[f.from], f.board, f.grainWord, fabText(f.fab), stepText(f.assemblySteps)]),
+    ]),
+    sheets: toCsv([
+      ['Sheet', 'Part', 'Qty', 'Final T x W x L (in)', 'Grain', 'Fabrication', 'Assembly step', 'Note'],
+      ...sheets.flatMap((g) => g.rows.map((r) => [g.label, r.name, r.qty, finalDimsText(r.stock), r.grainWord, fabText(r.fab), stepText(r.assemblySteps), r.note])),
+    ]),
+    metal: toCsv([
+      ['Stock', 'Part', 'Qty', 'Cut length (in)', 'Fabrication', 'Assembly step'],
+      ...metal.map((r) => [r.section, r.name, r.qty, fractionText(nearest32(r.cutLengthIn), 32), fabText(r.fab), stepText(r.assemblySteps)]),
     ]),
   };
   return { oak, layers, strips, resaw: pools, sheets, metal, warnings: [...new Set(warnings)], cuts, glueUps, finished, csv };
@@ -977,14 +1059,16 @@ function cutsOf(plans: OakPartPlan[], pools: ResawPool[]): Cut[] {
     const name = names.get(pl.partNo)!;
     const glued = pl.edgeN > 1 || !!pl.lamination;
     const glueLabel = glued ? `${name} ${pl.lamination ? 'block' : 'panel'}` : undefined;
+    const unequal = (pc: PlannedPiece): boolean => !!pc.layer && pl.pieces.some((q) => q.layer === pc.layer && Math.abs(q.rough.w - pc.rough.w) > 1e-9);
+    const lgw = (pc: PlannedPiece): string | undefined => (pc.layer ? layerGrainWord(pl.part, pc.layer) : undefined);
     for (const pc of pl.pieces) {
       const board = pc.piece === 'strip' ? (pools.find((q) => Math.abs(q.roughT - r3(pc.rough.t)) < 1e-6)?.board ?? '?') : pc.board;
       const label = pc.piece === 'solid' ? name
         : pc.piece === 'strip' ? (pc.of > 1 ? `${name}, strip ${pc.index} of ${pc.of}` : `${name}, strip`)
           : pc.piece === 'board' ? `${name}, board ${pc.across} of ${pc.acrossOf}`
-            : `${name}, layer ${pc.layer} of ${pc.layers}${pc.acrossOf ? `, board ${pc.across} of ${pc.acrossOf}` : ''}`;
+            : `${name}, layer ${pc.layer} of ${pc.layers}${pc.acrossOf ? `, board ${pc.across} of ${pc.acrossOf}` : ''}${lgw(pc) ? ` (grain ${lgw(pc)})` : ''}`;
       const note = pc.piece === 'board' ? 'joint the glue edges, then glue the boards edge to edge'
-        : pc.piece === 'layer' ? `plane to ${fractionText(pc.rough.t, 16)}" before the glue-up${pc.acrossOf ? '; edge-glue its boards first' : ''}`
+        : pc.piece === 'layer' ? `plane to ${fractionText(pc.rough.t, 16)}" before the glue-up${lgw(pc) ? `; grain ${lgw(pc)}` : ''}${pc.acrossOf ? `; edge-glue its boards first${unequal(pc) ? ' (the two are NOT equal: board 1 is the bottom edge, board 2 the top)' : ''}` : lgw(pc) ? `; one piece, ${fractionText(pc.rough.w, 8)}" wide across its grain` : ''}`
           : pc.piece === 'strip' ? 'rip the lane first, then resaw it on edge; plane to thickness after the resaw' : undefined;
       const key = `${pl.partNo}|${pc.piece}|${pc.index}|${pc.of}|${board}|${rowKeyDims(pc.rough)}`;
       const hit = map.get(key);
@@ -1015,7 +1099,9 @@ function glueUpsOf(plans: OakPartPlan[]): GlueUp[] {
     if (hit) { hit.qty += 1; hit.ids.push(pl.part.id); continue; }
     const how = kind === 'edge' ? `joint the glue edges and glue the ${pl.edgeN} boards edge to edge`
       : kind === 'face' ? `glue the ${layers} layers face to face`
-        : `edge-glue the ${pl.edgeN} boards of each layer, then glue the ${layers} layers face to face`;
+        : pl.part.layerGrain
+          ? `edge-glue the wider layers (${pl.pieces.filter((q) => q.across === 1).map((q) => `layer ${q.layer}: ${q.acrossOf} boards`).join(', ')}), then glue the ${layers} layers face to face`
+          : `edge-glue the ${pl.edgeN} boards of each layer, then glue the ${layers} layers face to face`;
     map.set(key, {
       partId: pl.part.id, ids: [pl.part.id], qty: 1, partNo: pl.partNo, label, from: pl.pieces.length, edgeBoards: pl.edgeN, layers, kind,
       roughBlock: pl.block, roughBlockText: roughDimsText(pl.block), final: pl.stock, finalText: finalDimsText(pl.stock),

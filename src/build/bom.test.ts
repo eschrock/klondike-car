@@ -87,7 +87,7 @@ describe('bom', () => {
     // Table prices carry their own basis: Eric's vendor quotes (the plywood, 4/4, 8/4, 12/4 oak) and the researched prices are quoted, the rest estimates
     expect(b.sections.find((x) => x.id === 'plywood')!.lines.every((l) => l.basis === 'quoted')).toBe(true);
     const metal = b.sections.find((x) => x.id === 'metal')!.lines;
-    expect(metal.filter((l) => l.basis === 'estimate').map((l) => l.key).sort()).toEqual(['316 stainless flat bar 1/16" x 1"', '316 stainless flat bar 1/4" x 1-3/4"', '5/8" OD x 0.120" wall DOM tube (ASTM A513 Type 5)']); // no exact 316 bar found; no price found for the 5/8 x 0.120 DOM (D-71: the Speedy 0.109 wall price is the stand-in)
+    expect(metal.filter((l) => l.basis === 'estimate').map((l) => l.key).sort()).toEqual(['316 stainless flat bar 1/16" x 1"', '316 stainless flat bar 1/4" x 1-3/4"', '316 stainless flat bar 1/8" x 2"', '5/8" OD x 0.120" wall DOM tube (ASTM A513 Type 5)']); // no exact 316 bar found; the 1/8 x 2 brake backing-plate bar is not in the research (D-75); no price found for the 5/8 x 0.120 DOM (D-71: the Speedy 0.109 wall price is the stand-in)
     expect(metal.filter((l) => l.basis === 'quoted').length).toBe(2);
     for (const l of b.sections.find((x) => x.id === 'lumber')!.lines) expect(l.basis, l.key).toBe(OAK_PRICE_PER_BF[l.key].basis);
   });

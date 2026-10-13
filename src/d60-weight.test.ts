@@ -105,7 +105,7 @@ describe('mass (target about 120 lb; 144.4 at 3c-5, 143.0 with the cleats gone)'
     expect(totalMass(parts)).toBeGreaterThan(117.8); // D-74: 118.3 lb (the 2-1/8 in laminated beams, knees and chocks: -1.3 lb); was above 119.4
     expect(totalMass(parts)).toBeLessThan(119.1);
     expect(totalMass(partsPre)).toBeCloseTo(137.8, 0); // D-74: 137.8 (the baseline takes the 2-1/8 in laminated parts too: -1.8 lb); 139.6 before D-74; 141.2 before D-65 (the pull-pin brake is lighter in this baseline too); the study's B0 was 143.0; the D-62 changes (sandwich sides, no shackle, frameless seat back, ...) are in this baseline too
-    expect(totalMass(partsPre) - totalMass(parts)).toBeGreaterThan(19.5);
+    expect(totalMass(partsPre) - totalMass(parts)).toBeGreaterThan(19.4); // D-75: 19.47 (the square tongue seat trims the baseline's deeper tongue a little more)
     expect(totalMass(partsPre) - totalMass(parts)).toBeLessThan(21);
   });
   it('by group (lb): body 36.5 (D-65: the signs, 0.6 lb, are in the body now, not a removable part), running gear 18.8, front end 16.0, frame 13.5, brake 10.3 (D-65: 11.1 before the pull-pin brake), seat 8.5, storage 7.0, hardware 5.9 (epoxy joints of the sandwich), removable 1.9 (the handle), lighting 1.9', () => {
@@ -115,7 +115,7 @@ describe('mass (target about 120 lb; 144.4 at 3c-5, 143.0 with the cleats gone)'
     const gp = groupMass(partsPre);
     // the same sled before the package (PRE_D60, rebuilt with the D-62 sandwich sides, bridle and clamps): running gear 26.1, front end 18.7, body 40.1
     expect(gp['running-gear']).toBeCloseTo(26.1, 0);
-    expect(gp['front-end']).toBeCloseTo(18.7, 0);
+    expect(Math.abs(gp['front-end'] - 18.4)).toBeLessThan(0.5); // D-75: 18.0 (the square bolt seat on the tongue head); 18.7 before
     expect(gp.body).toBeCloseTo(40.8, 0); // 40.1 before D-65 moved the signs into the body group
   });
   it('the biggest single savings are where the study said: the hollow axles (3.5 lb), the wheels (4.8 lb), the 1/2 in transom (2.6 lb), the 4 mm side webs, box and lid', () => {

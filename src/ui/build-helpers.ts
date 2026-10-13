@@ -10,41 +10,29 @@ import type { PartDims } from '../build/part-drawings';
 import type { ShaperFeature } from '../build/shaper-svg';
 import type { VerifyCheck, VerifyWhen } from '../build/verify';
 import { fracIn, type Cut, type CutList } from '../build/cutlist';
-import { finalDimsText } from '../build/units';
+import { finalDimsText, finalFrac, fractionText, nearest32 } from '../build/units';
 import type { WeatherCompare } from '../build/bom';
 
 export const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 // ── Formatting ────────────────────────────────────────────────────────────────
 
-/** `1-3/16 × 6 × 24` (sixteenths as fractions, other values as decimals). */
 /** " · assembly step 4" (or "steps 4, 6"), or '' when the part is in no step. */
 export const stepLabel = (steps: number[]): string => (steps.length ? ` · assembly step${steps.length > 1 ? 's' : ''} ${steps.join(', ')}` : '');
 export const dims3 = (d: Dims): string => `${fracDim(d.t)} × ${fracDim(d.w)} × ${fracDim(d.l)}`;
-/** The three parts of a size for a table cell: each dimension is one unbreakable piece (`21-5/32 (21.142)`), so a long size wraps between the ×. */
+/** The three parts of a size for a table cell: each dimension is one unbreakable piece (`21-5/32`), so a long size wraps between the ×. */
 export const dimsParts = (d: Dims): string[] => [fracDim(d.t), fracDim(d.w), fracDim(d.l)];
 
-/**
- * A size a tape can read. On the 1/16 grid it is the plain fraction (`1-3/16`); off the grid it is the nearest 1/32 with the decimal after it,
- * so the number to cut to and the number the drawings use are both visible: 21.142 -> `21-5/32 (21.142)`.
- */
+/** A size a tape can read: the nearest 1/32 as a fraction (`21-5/32`), never a decimal. */
 export function fracDim(v: number): string {
-  const plain = fracIn(v);
-  if (!/^\d*\.\d+$/.test(plain)) return plain; // already a fraction or a whole number
-  const n32 = Math.round(v * 32);
-  if (n32 <= 0) return plain;
-  let n = n32, d = 32;
-  while (n % 2 === 0 && d > 1) { n /= 2; d /= 2; }
-  const whole = Math.floor(n / d), rem = n - whole * d;
-  const frac = rem === 0 ? String(whole) : whole ? `${whole}-${rem}/${d}` : `${rem}/${d}`;
-  return `${frac} (${plain})`;
+  return fractionText(nearest32(v), 32);
 }
 
-/** `fracDim` with the inch mark: `21-5/32" (21.142")`. */
-export function fracInch(v: number): string {
-  const f = fracDim(v);
-  return f.includes(' (') ? f.replace(' (', '" (').replace(/\)$/, '")') : `${f}"`;
-}
+/** `fracDim` with the inch mark: `21-5/32"`. */
+export const fracInch = (v: number): string => `${fracDim(v)}"`;
+
+/** A small size (a hole, a dado width, a depth) as a fraction to the nearest 1/64 with the inch mark: 0.197 -> `13/64"`. */
+export const fracInch64 = (v: number): string => `${fractionText(Math.round(v * 64) / 64, 64)}"`;
 
 export function usd(v: number, cents = true): string {
   const s = Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: cents ? 2 : 0 });
@@ -138,6 +126,9 @@ export const maxDepth = (features: ShaperFeature[]): number | undefined => {
 
 const pathOf = (pts: [number, number][]): string => 'M' + pts.map((q) => `${q[0].toFixed(3)},${q[1].toFixed(3)}`).join('L') + 'Z';
 
+/** A part name without its trailing parenthetical, for a label on a drawing: `Left side panel (web)` -> `Left side panel`. */
+export const shortName = (name: string): string => name.replace(/\s*\([^)]*\)\s*$/, '').trim() || name;
+
 /**
  * A 4 x 8 sheet drawn long side across, to scale (1 unit = 1 in): sheet outline, the true part outlines (holes cut out),
  * a label and a grain arrow per part. Sheet x runs along the 96 in length, y along the 48 in width.
@@ -154,7 +145,7 @@ export function sheetSvg(sheet: NestedSheet): string {
   }
   for (const q of sheet.placements) {
     const d = [q.outer, ...q.holes].map((r) => pathOf(r as [number, number][])).join(' ');
-    out.push(`<g data-part="${esc(q.partId)}"><title>${esc(`${q.name} (${q.partId}) ${q.widthIn.toFixed(1)} × ${q.heightIn.toFixed(1)} in`)}</title>` +
+    out.push(`<g data-part="${esc(q.partId)}"><title>${esc(`${q.name}, ${finalFrac(q.widthIn)} × ${finalFrac(q.heightIn)}`)}</title>` +
       `<path d="${d}" fill="#d9c7a0" fill-rule="evenodd" stroke="#000" stroke-width="0.25"/>`);
     const cx = q.x + q.widthIn / 2, cy = q.y + q.heightIn / 2;
     if (q.grain) {
@@ -168,8 +159,9 @@ export function sheetSvg(sheet: NestedSheet): string {
         out.push(`<path d="M${x0.toFixed(2)},${y0.toFixed(2)}L${x1.toFixed(2)},${y1.toFixed(2)}" stroke="#5b3a00" stroke-width="0.25"/><path d="${head}" fill="#5b3a00"/>`);
       }
     }
-    const fits = q.heightIn >= 3.2 && q.widthIn >= q.partNo.length * 1.25;
-    if (fits) out.push(`<text x="${cx.toFixed(2)}" y="${(cy - 0.4).toFixed(2)}" font-size="2.4" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" fill="#000">${esc(q.partNo)}</text>`);
+    const label = shortName(q.name);
+    const fits = q.heightIn >= 3.2 && q.widthIn >= label.length * 1.25;
+    if (fits) out.push(`<text x="${cx.toFixed(2)}" y="${(cy - 0.4).toFixed(2)}" font-size="2.4" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" fill="#000">${esc(label)}</text>`);
     out.push('</g>');
   }
   out.push('</svg>');

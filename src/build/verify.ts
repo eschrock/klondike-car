@@ -60,14 +60,21 @@ export const SQUASH_TEST_PSI = 30;
 
 const f = (n: number, d = 2): string => String(+n.toFixed(d));
 
-/** Fraction text for a stock size ("5/8", "2-1/4"), to 1/16 in. */
-function fr(x: number): string {
-  const n = Math.round(x * 16);
-  const whole = Math.floor(n / 16);
-  let num = n % 16, den = 16;
+/** Fraction text for a size ("5/8", "2-1/4"), to the nearest 1/`denom` in (16 by default). */
+function fr(x: number, denom = 16): string {
+  const n = Math.round(x * denom);
+  const whole = Math.floor(n / denom);
+  let num = n % denom, den = denom;
   while (num > 0 && num % 2 === 0) { num /= 2; den /= 2; }
   if (num === 0) return `${whole}`;
   return whole > 0 ? `${whole}-${num}/${den}` : `${num}/${den}`;
+}
+/** A length rounded UP to the next 1/16, as a fraction ("3-3/16"): a bolt that must be at least this long. */
+const frUp = (x: number): string => fr(Math.ceil(x * 16 - 1e-6) / 16);
+
+/** The parameters-panel labels of design values (never their keys), in the order given. */
+export function paramLabels(keys: string[]): string[] {
+  return keys.map((k) => PARAM_DEFS[k as keyof typeof PARAM_DEFS]?.label ?? k);
 }
 
 /**
@@ -132,10 +139,10 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
 
   // Lamp clip: the hand-hold is the clip outline plus 0.02" a side (clip notes, D-64).
   const clip = parts.find((x) => x.id === 'lamp-clip');
-  let handHold = '4.5" × 1.25"';
+  let handHold = '4-1/2" × 1-1/4"';
   if (clip) {
     const b = localBounds(clip.geometry);
-    handHold = `${f(b.max[0] - b.min[0] + 0.04, 2)}" × ${f(b.max[1] - b.min[1] + 0.04, 2)}"`;
+    handHold = `${fr(b.max[0] - b.min[0] + 0.04, 32)}" × ${fr(b.max[1] - b.min[1] + 0.04, 32)}"`;
   }
 
   type Draft = Omit<VerifyCheck, 'n' | 'whatToDo' | 'pass'>;
@@ -146,11 +153,11 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       how: [
         it('Try ONE wheel before getting four.', [`Inflate it to ${SQUASH_TEST_PSI} psi and stand it on a hard floor.`]),
         it(`Load it with a known ${testLb} lb.`, [`A bathroom scale under a plank, or ${testLb} lb of weights on the axle.`]),
-        it('Measure how far the axle drops (the squash) with a ruler.', [`Rate = load / squash. The design assumes ${rate} lb/in, so it expects ${f(squashDesign)}" at ${testLb} lb.`]),
+        it('Measure how far the axle drops (the squash) with a ruler.', [`Rate = load / squash. The design assumes ${rate} lb/in, so it expects about ${fr(squashDesign)}" at ${testLb} lb.`]),
       ],
       passList: [
-        `Squash ≥ ${f(squashMin)}" at ${testLb} lb, i.e. a rate ≤ ${rateMax} lb/in.`,
-        `A rider-only sled tolerates up to about 800 lb/in; the hard-hit rows (front beam groove wall, rear beam seat, king bearing) are the first to flip above ${rateMax}.`,
+        `Squash at least ${frUp(squashMin)}" at ${testLb} lb, which is a rate of ${rateMax} lb/in or less.`,
+        `A sled with only a rider on it tolerates up to about 800 lb/in. The front beam groove wall, the rear beam seat and the kingpin bearing are the first to fail above ${rateMax}.`,
       ],
       ifFails:
         `Try a softer or larger tire, or lower the pressure; flat-free tires are stiffer (the rate roughly doubles). Enter the measured rate in ${lbl('bumpWheelRateLbIn')} and re-run the checks before getting more wheels.` +
@@ -168,13 +175,13 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
           'Read the load rating off the box or the vendor listing (not the retailer blurb).',
           `Slide a ${fr(p.wheelBoreIn)}" gauge pin (or a piece of the ${fr(tubeOd)}" axle) through the bore: no play.`,
         ]),
-        it('MEASURE THE HUB LENGTH with calipers.', [`The listing gives none, so ${f(p.hubLengthIn)}" is assumed (the Uline H-5454, same class, and the Martin wheel list 2-1/4").`]),
+        it('MEASURE THE HUB LENGTH with calipers.', [`The listing gives none, so ${fr(p.hubLengthIn)}" is assumed, not known: the Uline H-5454 (same class) and the Martin wheel list 2-1/4". The design stands on that number until you measure the real hub.`]),
         it('Weigh it and note the bearing type (sealed ball or flanged bronze) and the tire width (3-1/2").'),
       ],
       passList: [
         `Bore = ${fr(p.wheelBoreIn)}" (it matches the ${fr(tubeOd)}" axle: the bearings ride on the axle).`,
         `Rating ≥ ${p.wheelRatingLb} lb; mass ≤ ${p.wheelMass10Lb} lb + 1/4 lb.`,
-        `Hub length ≤ ${f(p.hubLengthIn)}" (shorter is fine; longer pushes the wheel out and moves the stub-axle loads and the beam ends).`,
+        `Hub length ${fr(p.hubLengthIn)}" or less (shorter is fine; longer pushes the wheel out and moves the stub-axle loads and the beam ends).`,
         `The ${p.wheelRatingPeakMult}× peak allowance and the side rating of ${f(p.wheelSideRatingFrac * 100, 0)} % of the radial rating are assumptions: ask the vendor, or drop-test one wheel.`,
       ],
       ifFails:
@@ -196,9 +203,9 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
         passList: [
           `Seamless DOM or CDS, not ERW "mechanical" tube (about 45 ksi yield, 55 ksi ultimate, which takes the rear axle row from ${f(axleBaseUtil(p), 2)} to about ${f(axleUtilAt(p, p.axleTubeYieldPsi, 45000), 2)} at the goal rider; 60 ksi 1020 DOM gives about ${f(axleUtilAt(p, p.axleTubeYieldPsi, 60000), 2)}).`,
           `Yield ≥ ${f(p.axleTubeYieldPsi / 1000, 0)} ksi, tensile ≥ ${f(p.axleTubeUltimatePsi / 1000, 0)} ksi (a cert of at least 65 ksi).`,
-          `OD ${fr(tubeOd)}" ±0.005", wall ${f(tubeWall, 3)}" ±0.010".`,
+          `OD ${fr(tubeOd)}" within 5 thousandths of an inch, wall ${f(tubeWall, 3)}" within 10 thousandths.`,
         ],
-        ifFails: `Enter the cert values in ${lbl('axleTubeYieldPsi')} and the ultimate strength and re-run the checks; if the axle rows fail, go to the 0.188" wall or the solid 5/8" rod (+1.9 lb; ${lbl('axleWallIn')} 0).`,
+        ifFails: `Enter the cert values in ${lbl('axleTubeYieldPsi')} and the ultimate strength and re-run the checks; if the axle rows fail, go to the 3/16" wall or the solid 5/8" rod (about 2 lb heavier; set ${lbl('axleWallIn')} to 0).`,
         partIds: ids(parts, /^axle-(R|F[LR])$/),
         paramKeys: verifyKeys(['axleTubeYieldPsi', 'axleTubeUltimatePsi']),
         when: 'before ordering' as VerifyWhen,
@@ -214,7 +221,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
         passList: [
           `Yield ≥ ${f(p.axleYieldPsi / 1000, 0)} ksi (1045 cold-drawn is typically 77 ksi or better).`,
           `The rear axle row is ${f(axleBaseUtil(p), 2)} at the ${p.riderGoalMassLb} lb goal rider with ${f(p.axleYieldPsi / 1000, 0)} ksi; 1018 cold-drawn at 54 ksi would be about ${f(axleUtilAt(p, p.axleYieldPsi, 54000), 2)}, hot-rolled A36 at 36 ksi about ${f(axleUtilAt(p, p.axleYieldPsi, 36000), 2)}.`,
-          `OD ${fr(tubeOd)}" ±0.005".`,
+          `OD ${fr(tubeOd)}", within 5 thousandths of an inch.`,
         ],
         ifFails: `Enter the cert yield in ${lbl('axleYieldPsi')} (and the tensile in ${lbl('axleUltimatePsi')}) and re-run the checks; if the axle rows fail, get 1045 or 4140 instead, or accept a lower green range.`,
         partIds: ids(parts, /^axle-(R|F[LR])$/),
@@ -232,10 +239,10 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
           `The ${fr(p.kingpinDiaIn)}" SAE grade 8 kingpin bolt (head marking: 6 radial lines).`,
           'The UHMW disc supplier\'s bearing-pressure limit.',
         ]),
-        it('Eye-bolt lengths (D-72, measured under the shoulder):', [
-          `Axle-beam bolt: crosses the ${fr(p.frontBeamThicknessIn)}" beam, a 2" fender washer and a nylock nut and needs ${f(beamEye.needIn)}" with 1.5 threads past the nut, so buy the stock ${fr(beamEye.stockIn)}"` +
-          `${beamEye.cutToIn ? ` and CUT it to ${fr(beamEye.cutToIn)}" after fitting (it would stand ${f(beamEye.pastNutIn)}" past the nut; file the end, touch it with cold galvanizing)` : ''}.`,
-          `Chain-crossmember bolt: crosses the ${fr(p.chainJoistThickIn)}" crossmember and two washers and needs ${f(anchorEye.needIn)}", so buy the stock ${fr(anchorEye.stockIn)}"${anchorEye.cutToIn ? ` (optionally cut to ${fr(anchorEye.cutToIn)}")` : ''}.`,
+        it('Eye-bolt lengths, measured under the shoulder:', [
+          `Axle-beam bolt: crosses the ${fr(p.frontBeamThicknessIn)}" beam, a 2" fender washer and a nylock nut and needs ${frUp(beamEye.needIn)}" with a few threads past the nut, so buy the stock ${fr(beamEye.stockIn)}"` +
+          `${beamEye.cutToIn ? ` and CUT it to ${fr(beamEye.cutToIn)}" after fitting (it would stand ${frUp(beamEye.pastNutIn)}" past the nut; file the end, touch it with cold galvanizing)` : ''}.`,
+          `Chain-crossmember bolt: crosses the ${fr(p.chainJoistThickIn)}" crossmember and two washers and needs ${frUp(anchorEye.needIn)}", so buy the stock ${fr(anchorEye.stockIn)}"${anchorEye.cutToIn ? ` (optionally cut to ${fr(anchorEye.cutToIn)}")` : ''}.`,
           `Neither fouls the wheel (the beam bolts sit ${fr(p.steerChainBeamYIn)}" from the kingpin, inboard of the tires), the chain or the tongue swing.`,
         ]),
       ],
@@ -257,8 +264,8 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
         it(`Read the minimum tensile strength of the ${fr(p.bridleRopeDiaIn)}" three-strand nylon off the listing (Cordage Institute figure).`),
         it('Field-test the stretch.', [`Tie a ${f(p.bridleRopeRunIn / 12, 0)} ft run, pull it with a luggage scale and measure the stretch at 50 lb.`]),
         it(`Confirm the bronze sleeve is a stocked size: ${fr(p.tongueSleeveBoreIn)}" ID × 1" OD oil-embedded sleeve bearing (McMaster class), for a 1" drilled hole.`),
-        it(`Tongue bolts (D-72): the two ${fr(p.tongueBoltDiaIn)}" carriage bolts cross the ${fr(p.tongueHeadLenIn)}" head, the ${fr(p.frontBeamThicknessIn)}" beam, a washer and a nylock nut.`, [
-          `They need ${f(tongueBolt.needIn)}" with 1.5 threads past the nut, so the stock length is ${fr(tongueBolt.stockIn)}" (a 6" bolt stops 1/16" short of the top of the nut).`,
+        it(`Tongue bolts: the two ${fr(p.tongueBoltDiaIn)}" carriage bolts cross the ${fr(p.tongueHeadLenIn)}" head, the ${fr(p.frontBeamThicknessIn)}" beam, a washer and a nylock nut.`, [
+          `They need ${frUp(tongueBolt.needIn)}" with a few threads past the nut, so the stock length is ${fr(tongueBolt.stockIn)}" (a 6" bolt stops 1/16" short of the top of the nut).`,
         ]),
       ],
       passList: [
@@ -298,11 +305,11 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       title: `Sign: ${fr(knob.lenIn)}" #10-32 thumb-knob screws`,
       how: [
         it(`Get one sample of the stainless #10-32 × ${fr(knob.lenIn)}" thumb-knob screw.`, [`A ${fr(knob.lenIn)}" length is not stocked by every vendor; 1" and 3/4" are common.`]),
-        it('Stack the real layers and run the screw home.', [`A ${thin.nominal} scrap, the ${f(knob.standoffIn, 2)}" standoff disc, a ${thin.nominal} web scrap and the oak backing strip with its epoxied #10-32 × 5/16 insert.`]),
+        it('Stack the real layers and run the screw home.', [`A ${thin.nominal} scrap, the ${fr(knob.standoffIn, 32)}" standoff disc, a ${thin.nominal} web scrap and the oak backing strip with its epoxied #10-32 × 5/16 insert.`]),
       ],
       passList: [
-        `The screw reaches the insert with ${f(knob.engagedIn, 2)}" of thread engaged.`,
-        `The tip stops at least 0.05" short of the back of the ${fr(knob.stripT)}" strip (design: ${f(knob.tipShortIn, 2)}" short).`,
+        `The screw reaches the insert with ${fr(knob.engagedIn, 32)}" of thread engaged.`,
+        `The tip stops at least 1/16" short of the back of the ${fr(knob.stripT)}" strip (design: ${fr(knob.tipShortIn, 32)}" short).`,
         'The knob turns by a gloved hand.',
       ],
       ifFails: 'Use the next stocked screw length and change the standoff disc thickness to suit (a 5/16" nylon spacer is the alternative).',
@@ -338,7 +345,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       id: 'lamp-clip',
       title: 'Lamp clips: fit against the real lamps',
       how: [
-        it('Print a 1" test slice of the clip.', ['0.04-0.05" clearance a side, 0.05" detent ribs; ASA, 4+ perimeters, printed on a long face.']),
+        it('Print a 1" test slice of the clip.', ['About 3/64" clearance a side and 1/16" detent ribs; ASA, 4 or more perimeters, printed on a long face.']),
         it(`Cut a ${handHold} test slot in an offcut of the bulkhead stock on the Shaper.`, ['Epoxy-seal and ease it, then push the slice in.']),
         it('Bolt each real lamp to the clip lip (M4 front, M3 rear heat-set inserts).', ['Check the mount-hole spacing, the lens clearance and the pull-out force.']),
       ],
@@ -358,7 +365,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
             ? 'Cut the test strips from the planned SPARE strips, so the test costs no extra board (a strip that bends without cracking is not used up: it goes into the laminate).'
             : 'A pool has no planned spare strip: this test needs one more board.',
         ]),
-        it('Rip a lane off each board, then resaw and plane two dry test strips.', [`A rail strip (${f(railStrip * 25.4, 1)} mm, ${fr(railStrip)}") and a band strip (${f(bandStrip * 25.4, 1)} mm).`]),
+        it('Rip a lane off each board, then resaw and plane two dry test strips.', [`A rail strip (${fr(railStrip)}") and a band strip (${fr(bandStrip, 32)}").`]),
         it(`Bend them around a block cut to the tightest plan radius of the rail form (${f(bowTaper(p).minRadiusIn, 0)}").`, ['Note any cracking, the spring-back, and whether damp heat is needed.', 'The result decides 2 vs 3 plies, which changes the strip count and the boards to get.']),
       ],
       passList: ['Both strips take the radius without a crack or raised grain.', 'Spring-back stays under about 10 % of the turn-in (the rail-form drawing notes the allowance).'],
@@ -373,17 +380,17 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       title: 'Plywood thickness: measure before any dado is cut',
       how: [
         it(`Measure the ${thin.nominal} ${thin.key === 1 ? 'white oak plywood' : thin.key === 3 ? 'Baltic birch' : 'okoume'} and the 12 mm okoume with calipers, at six or more points on the edges.`, [
-          thin.key === 1 ? 'Nominal 1/4" white oak plywood runs about 5.3 mm, and the veneer face varies.' : '',
-          'BS 1088 12 mm often runs to 0.49" or more, and the sealed sheet is a few thousandths thicker.',
+          thin.key === 1 ? 'Nominal 1/4" white oak plywood runs about 7/32", and the veneer face varies.' : '',
+          'BS 1088 12 mm often runs to 31/64" or more, and the sealed sheet is a few thousandths thicker.',
         ].filter(Boolean)),
         it('Compare with the dados the Shaper files will cut.', [
-          `Web dados: the thin sheet ${f(thin.thicknessIn, 3)}" + ${f(p.grooveSlopIn, 3)}" slop = ${f(thin.thicknessIn + p.grooveSlopIn, 3)}".`,
-          `Deck dado and the gap under the inner chine band: ${f(p.deckPlyIn, 3)}" + ${f(p.deckSlopIn, 3)}" = ${f(p.deckPlyIn + p.deckSlopIn, 3)}".`,
+          `Web dados: the thin sheet ${fr(thin.thicknessIn, 64)}" plus ${fr(p.grooveSlopIn, 64)}" of slop, so ${fr(thin.thicknessIn + p.grooveSlopIn, 64)}" wide (fit to the ply).`,
+          `Deck dado and the gap under the inner chine band: ${fr(p.deckPlyIn, 64)}" plus ${fr(p.deckSlopIn, 64)}" of slop, so ${fr(p.deckPlyIn + p.deckSlopIn, 64)}" wide (fit to the ply).`,
         ]),
         ...(thin.key === 1 ? [it('Check the glue-line type on the sheet (interior or Type II is what the Standard weather spec assumes); seal every face and edge.')] : []),
-        ...(thin.key === 3 ? [it('Confirm the sheet size: probably 5 × 5 ft (60 × 60 in); the 59.6" side web blank only just fits.')] : []),
+        ...(thin.key === 3 ? [it('Confirm the sheet size: probably 5 × 5 ft (60 × 60 in); the 59-5/8" side web blank only just fits.')] : []),
       ],
-      passList: [`The ${thin.nominal} sheet measures ≤ ${f(thin.thicknessIn, 3)}" and the 12 mm ≤ ${f(p.deckPlyIn, 3)}": each, plus a 0.005" seal coat, still enters its dado with 0.02-0.04" to spare.`],
+      passList: [`The ${thin.nominal} sheet measures ${fr(thin.thicknessIn, 64)}" or less and the 12 mm sheet ${fr(p.deckPlyIn, 64)}" or less: each, plus a seal coat of a few thousandths, still slides into its dado with a little to spare (about 1/32").`],
       ifFails: `Enter the measured thickness (plus the seal coat) in the design (${lbl(thin.key === 1 ? 'whiteOakPlyThickIn' : thin.key === 3 ? 'balticThinThickIn' : 'panelPlyIn')}, ${lbl('deckPlyIn')}), re-run the checks and regenerate the Shaper files BEFORE a dado is cut: a thick sheet in a nominal dado cannot be fixed afterwards.`,
       partIds: ids(parts, /^(deck|side-[LR]-web|transom-rear|bow-bulkhead)$/),
       paramKeys: verifyKeys(['panelPlyIn', 'whiteOakPlyThickIn', 'balticThinThickIn', 'deckPlyIn', 'grooveSlopIn', 'deckSlopIn']),
@@ -402,9 +409,9 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       how: [
         it('Measure or look up each value and enter it in the design if it differs:', other.map((k) => {
           const d = PARAM_DEFS[k as keyof typeof PARAM_DEFS];
-          return `${d.label}: ${d.default}${d.unit ? ` ${d.unit}` : ''}.`;
+          return `${d.label}: ${d.unit === 'in' ? fr(d.default, 32) : d.default}${d.unit ? ` ${d.unit}` : ''}.`;
         })),
-        it('The truck values are for a 2007 Tacoma short bed: measure yours with the tailgate down before cutting the transport fit (Q-1).'),
+        it('The truck values are for a 2007 Tacoma short bed: measure yours with the tailgate down before cutting the transport fit.'),
       ],
       passList: ['Each value is within 1/4" (dimensions) or within the vendor / code figure (strengths) of the default; otherwise change it and re-run the checks.'],
       ifFails: 'Re-run the analysis with the measured value; change the design only if a row flips.',

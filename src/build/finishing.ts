@@ -638,9 +638,9 @@ export function urethaneContainers(qt: number): Array<{ unit: 'gal' | 'qt'; qty:
 
 /** Face veneer depth the engraving must stay inside, by thin sheet (the legend depth is a model number; this is the sheet's own limit). */
 const VENEER_TEXT: Record<string, string> = {
-  okoume: 'the face veneer of the 4 mm ply (about 0.03-0.04")',
-  oakPly: 'the face veneer of the 1/4 in white oak plywood (hardwood-veneer faces are thin, about 0.02-0.03")',
-  birch: 'the face veneer of the 3 mm Baltic birch (about 0.02")',
+  okoume: 'the face veneer of the 4 mm ply (about 1/32")',
+  oakPly: 'the face veneer of the 1/4" white oak plywood (hardwood-veneer faces are thin, 1/64" to 1/32")',
+  birch: 'the face veneer of the 3 mm Baltic birch (about 1/64")',
 };
 
 /** An instruction with plain sub-items (falsy ones dropped). */
@@ -653,6 +653,19 @@ function step(s: Omit<FinishStep, 'items' | 'instructions'> & { items: Array<Ins
   const items = s.items.filter((x): x is Instr => !!x);
   return { ...s, items, instructions: items.flatMap((i) => [i.text, ...(i.sub ?? []).map((q) => `– ${q.text}`)]) };
 }
+/** A multiplier in words and fractions to the nearest 1/4: 1.47 is "1-1/2 times". */
+const timesText = (q: number): string => {
+  const n = Math.round(q * 4);
+  const w = Math.floor(n / 4), r = n % 4;
+  const fr = r === 0 ? '' : r === 2 ? '1/2' : `${r}/4`;
+  return `${w ? w : ''}${w && fr ? '-' : ''}${fr || (w ? '' : '0')} times`;
+};
+/** A small dimension as a shop fraction to 1/64 ("1/32""): an engraving depth. */
+const frac64 = (v: number): string => {
+  let num = Math.round(v * 64), den = 64;
+  while (num > 0 && num % 2 === 0) { num /= 2; den /= 2; }
+  return den === 1 ? `${num}"` : `${num}/${den}"`;
+};
 /** A dimension as a shop fraction to 1/32 ("1-1/2""). */
 const frac32 = (v: number): string => {
   const n = Math.round(v * 32);
@@ -670,7 +683,7 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
   const lid = parts.find((x) => x.id === 'storage-lid');
   const legend = lid?.legend;
   const round = p.roundoverIn;
-  const f60 = round1(epoxyTimeFactor(60) * 10) / 10;
+  const f60Text = timesText(epoxyTimeFactor(60));
   /** Plywood that blotches under a water-based dye (okoume, Baltic birch): it takes a conditioner. White oak plywood takes the stain of the solid oak. */
   const blotchShowFt2 = areas.show.okoumeFt2 + areas.show.birchFt2;
   const blotchNames = [areas.okoumeFt2 > 0 ? 'okoume' : '', areas.birchFt2 > 0 ? 'Baltic birch' : ''].filter(Boolean).join(' and ');
@@ -709,8 +722,8 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
         ]),
       legend
         ? it(`Engrave the legend on the ${thin.name} lid offcut.`, [
-          `${frac32(legend.letterHeightIn)} letters, ${f(legend.depthIn)}" deep: the depth must stay inside ${VENEER_TEXT[thinClass]}.`,
-          'If the veneer shows through, go to 0.02".',
+          `${frac32(legend.letterHeightIn)} letters, ${frac64(legend.depthIn)} deep: the depth must stay inside ${VENEER_TEXT[thinClass]}.`,
+          'If the veneer shows through, go to 1/64".',
         ])
         : it('Engrave a test legend on the lid offcut.'),
       it('Pick the products and sheen from the panels; write them on the panel back and keep it by the finishing bench.'),
@@ -800,7 +813,7 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
   const coatFlOz = coat.qtNeeded * FLOZ_PER_QT;
   const deckTopFt2 = areas.detail['deck']?.showFt2 ?? 0;
   const secondCoatFlOz = ((deckTopFt2 / EPOXY_COVERAGE) * FLOZ_PER_QT);
-  const epoxyWinter = `Epoxy works from about 55 °F: below that it will not cure. At 60 °F multiply pot life and cure times by about ${f60}; keep resin and hardener at 65-70 °F before mixing. Surface and air must stay above 55 °F until it kicks; use a space heater at a distance, not a flame heater (fumes).`;
+  const epoxyWinter = `Epoxy works from about 55 °F: below that it will not cure. At 60 °F pot life and cure times run about ${f60Text} as long; keep resin and hardener at 65-70 °F before mixing. Surface and air must stay above 55 °F until it kicks; use a space heater at a distance, not a flame heater (fumes).`;
   const s4: FinishStep = extreme ? step({
     n: 4,
     id: 'epoxy',
@@ -861,13 +874,13 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
     title: `Engrave ${legend ? `"${legend.text}"` : 'DO NOT STEP'} on the storage lid (before the ${topcoat})`,
     items: [
       legend
-        ? it(`Engrave "${legend.text}" on the storage lid, ${legend.face} face.`, [`${frac32(legend.letterHeightIn)} letters, ${f(legend.depthIn)}" deep.`, 'Shaper Origin with a V-bit: the legend is on the lid\'s Shaper file.'])
+        ? it(`Engrave "${legend.text}" on the storage lid, ${legend.face} face.`, [`${frac32(legend.letterHeightIn)} letters, ${frac64(legend.depthIn)} deep.`, 'Shaper Origin with a V-bit: the legend is on the lid\'s Shaper file.'])
         : it('Engrave the legend on the storage lid, top face.', ['Shaper Origin with a V-bit: the legend is on the lid\'s Shaper file.']),
       extreme
         ? it('Cut it after the epoxy seal has cured and been sanded, and before any varnish.', ['The V-groove then cuts through sealed ply and leaves clean edges.'])
         : it('Cut it after the stain has dried and been sanded lightly, and before any urethane.', [`The lid top is not epoxy-coated in the Standard spec; the ${thin.name} face veneer is thin, so check the depth on the offcut first.`]),
       it('Fill the grooves.', ['Black-tinted epoxy (pigment in leftover 105/206) or enamel paint, with a fine brush.', 'Scrape or sand flush at 220 when hard. The epoxy fill seals the bare groove walls.']),
-      it('The letters read from a standing position; the lid is for a cushion to sit on, not a step (see D-58).'),
+      it('The letters read from a standing position; the lid is for a cushion to sit on, not a step.'),
     ],
     products: [
       { name: 'Black pigment epoxy (from the epoxy stock) or enamel paint', areaFt2: 0.1, coats: 1, coverageFt2PerQt: 0, qtNeeded: ENGRAVE_FILL_PT / 2 },
@@ -953,14 +966,14 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
     supplies: [],
     closeEpoxyFlOz: 0,
     epoxy,
-    glue: { titebondFlOz, titebondJoints: tb.joints, epoxyEdgeFt2: plyEdgeFt2, deckUnderFt2, adhesiveRule: extreme ? 'Epoxy for every glue joint (Extreme weather spec).' : 'Titebond III for the Dominos, dados, tenons and general glue joints; epoxy for the bent laminations, the D-70 face laminations, the deck to the frame, the deck slot gap-fill, the fillets and tape and the thickened bedding (Standard weather spec).' },
+    glue: { titebondFlOz, titebondJoints: tb.joints, epoxyEdgeFt2: plyEdgeFt2, deckUnderFt2, adhesiveRule: extreme ? 'Epoxy for every glue joint (Extreme weather spec).' : 'Titebond III for the Dominos, dados, tenons and general glue joints; epoxy for the bent laminations, the glued-up thick parts, the deck to the frame, the deck slot gap-fill, the fillets and tape and the thickened bedding (Standard weather spec).' },
     assumptions: [
       `Weather spec: ${extreme ? 'EXTREME (stored outside, near salt or exposed regularly): epoxy for every glue joint, a saturation coat on all the plywood, marine spar varnish.' : 'STANDARD (garage-kept, used a few times a year, wet at most at a rainy derby): Titebond III for the general joints, epoxy only where it earns its keep, an epoxy coat on edges, end grain and the deck underside only, exterior spar urethane.'} Thin sheet: ${thin.name}.`,
-      `Areas are net of the glued faces (each lamination contact comes off both parts): ${f(areas.gross.totalFt2, 0)} ft² gross - ${f(areas.glued.totalFt2, 1)} ft² glued = ${f(areas.totalFt2, 0)} ft²; ${f(areas.show.totalFt2, 0)} ft² show and ${f(areas.hidden.totalFt2, 0)} ft² hidden (SHOW_RULES, by part).`,
+      `Areas are net of the glued faces (each lamination contact comes off both parts): ${f(areas.gross.totalFt2, 0)} ft² gross - ${f(areas.glued.totalFt2, 1)} ft² glued = ${f(areas.totalFt2, 0)} ft²; ${f(areas.show.totalFt2, 0)} ft² show and ${f(areas.hidden.totalFt2, 0)} ft² hidden, by part.`,
       `Typical coverages in ft² per quart, one coat: epoxy ${EPOXY_COVERAGE} (mixed volume, one saturation coat; WEST System coating-quantity table, 105/206 midpoint 378 ft² per 4.8 qt), stain ${STAIN_COVERAGE}, conditioner ${CONDITIONER_COVERAGE}, gel stain ${GEL_STAIN_COVERAGE}, ${extreme ? `marine varnish ${VARNISH_COVERAGE}` : `exterior spar urethane ${URETHANE_COVERAGE} (the can's rating)`} (thin brushed coats).`,
       `${f(FINISH_WASTE * 100, 0)} % waste on every finish quantity (${f(GLUE_WASTE * 100, 0)} % on the glue joints); oak end grain counted ${END_GRAIN_FACTOR}× for epoxy.`,
-      'ONE hardener: 105 resin with 206 slow, 5:1 by volume, for the glue-ups, the coat and the two long closes (the closes in small batches in a wide shallow container, a second person mixing). The glue joints that use epoxy (glueEpoxyFlOz) are in the epoxy total.',
-      ...(extreme ? [] : [`Titebond III: ${tb.joints} glue joints, ${f(tb.flOz, 1)} fl oz before the ${f(GLUE_WASTE * 100, 0)} % waste (${TITEBOND_VS_EPOXY} of the epoxy estimate for the same joints: one thin coat, no filler or fillet).`]),
+      'ONE hardener: 105 resin with 206 slow, 5:1 by volume, for the glue-ups, the coat and the two long closes (the closes in small batches in a wide shallow container, a second person mixing). The glue joints that use epoxy are in the epoxy total.',
+      ...(extreme ? [] : [`Titebond III: ${tb.joints} glue joints, ${f(tb.flOz, 1)} fl oz before the ${f(GLUE_WASTE * 100, 0)} % waste (${f(TITEBOND_VS_EPOXY * 100, 0)} % of the epoxy estimate for the same joints: one thin coat, no filler or fillet).`]),
       'Options not in the quantities: a second epoxy coat on the deck top; 207 special clear hardener for the clearest finish under varnish.',
     ],
   };

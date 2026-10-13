@@ -13,7 +13,7 @@ import { IN3_PER_FT3, STEP, box, roughOf, span, SIDES, woodMassLb, type Ctx, sta
 import { customPart } from './mesh-utils';
 import { planWallGeometry } from './plan-wall';
 import { brakeGeometry } from './brake-layout';
-import type { Part, Vec2 } from './types';
+import type { Part, Vec2, Vec3 } from './types';
 
 /** The kingpin nut's slot in the king beam has its ceiling this far under the deck (the bolt tip stands this far below the king beam's top, D-56). */
 export const KING_NUT_BELOW_DECK_IN = 0.45;
@@ -25,6 +25,8 @@ export const joistId = (L: { joistX: number[]; king: { x: number } }, i: number)
 export const ladderRailY = (hw: number, side: number, railT: number): [number, number] => [hw + side - railT, hw + side];
 
 const f2 = (v: number) => (Math.round(v * 100) / 100).toString();
+/** Nearest 1/32 in as a fraction string (a bolt clearance hole, e.g. 13/32). */
+const frac32 = (x: number): string => { const n = Math.round(x * 32); let num = n % 32, den = 32; const whole = Math.floor(n / 32); while (num > 0 && num % 2 === 0) { num /= 2; den /= 2; } return num === 0 ? `${whole}` : whole > 0 ? `${whole}-${num}/${den}` : `${num}/${den}`; };
 
 export function buildFrame(ctx: Ctx): Part[] {
   const { p, L } = ctx;
@@ -69,6 +71,20 @@ export function buildFrame(ctx: Ctx): Part[] {
       massLb: mass, fab: 'bentlam', step: STEP.frame, grain: 'x', stock, rough: roughOf(p, stock, true), explode: [fxOf(0.6), s * 0.3, -0.6],
     });
     rail.notes = `${f2(railT)}" × ${f2(railD)}" oak bar, straight behind the bow turn-in and ${L.taper.turnIn > 0 ? `eased in with the hull from x = ${f2(L.taper.x0)}" to x = ${f2(L.taper.x1)}" (${f2(L.taper.turnIn)}" each side at the bow, D-66; cold-bent flat in 2 plies on the same plan form as the chine, the step and notches cut after bending)` : 'straight'}, ${f2(L.railEnd - rearTx)}" long from the rear transom's inner face to the end of the flat deck, outer face flush under the chine so the chine sits on it all the way (D-43). ${L.railDepthF < railD - 1e-6 ? `Ahead of x = ${f2(L.railStepX)}" it steps (a ${f2(p.railStepRunIn)}" run for ${f2(railD - L.railDepthF)}" of rise, a ${Math.round((Math.atan2(railD - L.railDepthF, p.railStepRunIn) * 180) / Math.PI)} degree slope) down to ${f2(L.railDepthF)}" deep so the front axle beam, swinging ±${p.steerLockDeg}° about the kingpin, passes under it with 0.4" to spare (D-56). ` : ''}Its top is flush with the chine bottom AND the deck underside (one deck level, D-52): the deck bonds to the rail top and its edge rises into the gap under the inner chine band (D-62; no rabbet is routed). The chine sits on the top of the rail's outer ${L.side}" and is Domino-tied (vertical Dominos) and epoxied to it every ${p.chineTieSpacingIn}". Frame + deck are one glued unit, turned over and lowered into the inverted side assemblies. Glue the frame with the rails 1/2" LONG at both ends: they are trimmed with the bands and webs to the measured transom-to-bulkhead length less 1/32" at the dry fit (S1). The rear axle hangers are bolted and glued to its inner face (${seat ? 'axle-hanger-' + tag : 'no hanger'}).`;
+    // D-75 (readability review MUST-15e): the four brake-knee bolt holes get an ABSOLUTE layout on the rail (from its finished rear end and its top edge), so they are drilled with the frame
+    // through the rail and the glued backer (the backer's counterbores are from the same points), without the knee as a template; the knee is then drilled to match from the same numbers.
+    {
+      const bgk = brakeGeometry(p, L);
+      const kb = bgk.bolts;
+      const pts: Vec3[] = kb.zs.flatMap((z) => kb.xs.map((x): Vec3 => [x, s * bgk.y.face, z]));
+      const fromRear = kb.xs.map((x) => frac32(x - x0)).join('" and ');
+      const belowTop = kb.zs.map((z) => L.railTop - z).sort((a, b) => a - b).map(frac32).join('" and ');
+      (rail.joints ??= []).push({
+        type: 'hole', to: `brake-knee-${tag}`, count: pts.length, diaIn: kb.dia, at: pts,
+        size: `${pts.length} × ${frac32(kb.dia + 1 / 32)}" holes for the ${frac32(kb.dia)}" brake-knee bolts, square through the rail and the glued backer: ${fromRear}" from the rail's finished rear end (the rear transom's inner face), ${belowTop}" below its top edge`,
+        note: 'D-75: laid out from these numbers at the frame step and drilled from the outer face through the rail and the backer (no knee needed as a template); the knee leg is later drilled from the same positions (its rear face and the rail bottom)',
+      });
+    }
     rail.plies = 2;
     rail.notes += ` CUT LIST (build 3c S2): ${f2(railT / 2)}" × ${f2(railD + p.laminateWidthAllowanceIn)}" × ${f2(developed + p.laminateLengthAllowanceIn)}" strips, TWO per rail (resaw from 4/4 and plane; strips this thin and ${f2(railD)}" wide need a planer sled or a drum sander), plus 25% spares; only the last ${f2(L.railEnd - L.taper.x0)}" is curved.`;
     parts.push(rail);

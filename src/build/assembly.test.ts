@@ -101,10 +101,8 @@ describe('assembly steps', () => {
       const glued = s.partIds.some((id) => hasGlueJoint(parts.find((x) => x.id === id) as Part));
       if (glued || s.cure) {
         expect(s.clampCure, s.id).toBeTruthy();
-        expect(s.clampCure, s.id).toMatch(/pot life \d+-\d+ min/);
-        expect(s.clampCure, s.id).toMatch(/clamp \d+-\d+ h/);
-        expect(s.clampCure, s.id).toMatch(/full cure \d+ h\+/);
-        expect(s.cure, s.id).toBeDefined();
+        expect(s.clampCure, s.id).toMatch(/\d+ h|\d+-\d+ min|cure/); // one short line; the pot life and cold-shop times are on the glue card
+        expect(s.cure, s.id).toBeDefined(); // Extreme: epoxy throughout
       }
     }
     // Every build step that installs wood joints is in that set.
@@ -119,10 +117,10 @@ describe('assembly steps', () => {
     expect(get('frame').cure!.fullHours).toBe(24);
     for (const id of ['transom', 'bulkhead']) {
       expect(get(id).cure!.hardener, id).toBe('206');
-      expect(get(id).clampCure, id).toMatch(/206 slow/);
+      expect(get(id).clampCure, id).toMatch(/^Epoxy: clamp 8-10 h, full cure 24 h/);
       expect(get(id).instructions.join(' '), id).toMatch(/small batch/i);
     }
-    expect(get('frame').clampCure).toMatch(/60 °F/); // winter figures
+    expect(get('mill').instructions.join(' ')).toMatch(/GLUE CARD[\s\S]*60 °F[\s\S]*55 °F/); // the winter figures are on the glue card
   });
 
   it('have a goal, 2-10 short items, a title, tools, checks and a valid camera', () => {
@@ -232,9 +230,9 @@ describe('build review round 1: finish after hardware (MUST-1)', () => {
     for (const id of ['bridle-tongue', 'bridle-sleeve', 'beam-R', 'beam-F', 'kingpin', 'beam-hold-down-L', 'brake-flap-L', 'handle-bar', 'brake-knee-L']) expect(hang.partIds, id).not.toContain(id);
     for (const x of hardware) expect(['purchased', 'metal', 'printed'], x.id).toContain(x.kind);
     const fin = get('finish').instructions.join(' ');
-    expect(fin).toMatch(/tongue is NOT removable \(see D-65\)/);
+    expect(fin).toMatch(/tongue is NOT removable/);
     expect(fin).not.toMatch(/\(brake flaps, handle, signs, tongue\)/);
-    expect(get('tongue').instructions.join(' ')).toMatch(/not removable \(see D-65\)/);
+    expect(get('tongue').instructions.join(' ')).toMatch(/not removable/);
   });
 
   it('fits and drills the gear, takes it off, finishes the underside before the flip, and hangs it last', () => {
@@ -252,7 +250,7 @@ describe('build review round 1: finish after hardware (MUST-1)', () => {
     expect(h).toMatch(/T-nuts/);
     // The hinges are fitted dry at their steps, not screwed on.
     expect(get('seat-back').instructions.join(' ')).toMatch(/FIT AND DRILL now, hang later/);
-    expect(get('handle').instructions.join(' ')).toMatch(/FIT AND DRILL now/);
+    expect(get('handle').instructions.join(' ')).toMatch(/FIT now, then take off/);
   });
 
   it('gives wrench access to the handle-socket nuts before the box closes them in', () => {
@@ -430,7 +428,7 @@ describe('build review round 2: brake knees before the underside finish (MUST-A)
     expect(idx('brake-knees')).toBeLessThan(idx('flip'));
     expect(knees.view).toBe('under');
     const t = knees.instructions.join(' ');
-    expect(t).toMatch(/epoxy will not bond to varnish/);
+    expect(t).toMatch(/glue will not bond to varnish/);
     expect(t).toMatch(/nylock nuts/);
     expect(t).toMatch(/hull is inverted/);
     expect(t).toMatch(/one-knee test/);
@@ -539,8 +537,8 @@ describe('build review round 2: web length, socket screws, hang support, stop-bl
 
   it('quotes the handle-socket screw from the joint size text, no hardcoded length', () => {
     const j = parts.find((x) => x.id === 'handle-socket-L')!.joints!.find((q) => q.type === 'bolt')!;
-    const m = /^(\S+ × \S+) (\d+ [^,(]*?screws?)/.exec(j.size!)!;
-    const text = `${j.count} × ${m[1]} ${m[2]}`;
+    const m = /^(\S+) × (\S+) .*?([a-z]+-head cap screws?)/.exec(j.size!)!;
+    const text = `${j.count} × ${m[1]} × ${m[2]}" stainless ${m[3]}`;
     expect(socketScrewText(parts)).toBe(text);
     expect(get('hang').instructions.join(' ')).toContain(text);
     expect(get('handle').instructions.join(' ')).toContain(text);
@@ -652,7 +650,7 @@ describe('instruction style (Eric 2026-10-12: short steps, names not ids, fracti
     const cases: Array<[string, RegExp, RegExp]> = [
       ['rails', /beam notch/, /wide × [\d\-/]+" deep in the bottom edge, starting [\d\-/]+" from the rear end/],
       ['rails', /bow step/, /from the rear end/],
-      ['rails', /chine-tie Dominos/, /centers [\d\-/]+" to [\d\-/]+" from the rear end/],
+      ['rails', /chine-tie Dominos/, /centers [\d\-/]+"(?: to |, )[^.]*from the rear end/], // the drawing's positions: a run ("3-1/4" to 55-23/32"") or a list of stations
       ['rails', /crossmembers and the king beam/, /from the rear end/],
       ['hangers', /beam notch/, /from the rear edge/],
       ['hangers', /Domino mortise/, /from the rear edge/],
@@ -673,5 +671,108 @@ describe('instruction style (Eric 2026-10-12: short steps, names not ids, fracti
       expect(t, `${id} ${re}`).toMatch(want);
       expect(t, `${id} ${re}`).not.toMatch(/positions (are )?on the part drawing/i);
     }
+  });
+});
+
+describe('readability round 2 (steps)', () => {
+  const pStd = { ...defaultParams(), weatherSpec: 0 };
+  const sets: Array<[string, BuildStep[]]> = [['Standard', assemblySteps(buildModel(pStd), pStd)], ['Extreme', steps]];
+  const allText = (s: BuildStep): string => [s.title, s.goal, ...s.instructions, ...s.checks, ...s.tools, s.clampCure ?? ''].join('\n');
+
+  for (const [name, list] of sets) {
+    const get = (id: string) => list.find((s) => s.id === id)!;
+    const text = (id: string): string => get(id).instructions.join('\n');
+
+    it(`${name}: no decision id, decimal, param name or "passed" in any step`, () => {
+      for (const s of list) {
+        const t = allText(s);
+        expect(t, s.id).not.toMatch(/\b[DAQ]-\d+\b/);
+        expect(t, s.id).not.toMatch(/\d\.\d/);
+        expect(t, s.id).not.toMatch(/\b[a-z]+(?:[A-Z][a-z0-9]*)+\b/);
+        expect(t, s.id).not.toMatch(/: passed/);
+      }
+    });
+
+    it(`${name}: every clampCure is one short line`, () => {
+      const withLine = list.filter((s) => s.clampCure);
+      expect(withLine.length).toBeGreaterThan(12);
+      for (const s of withLine) {
+        expect(s.clampCure, s.id).not.toMatch(/\n/);
+        expect(s.clampCure!.length, s.id).toBeLessThan(90);
+      }
+      if (name === 'Extreme') for (const s of withLine) expect(s.clampCure, s.id).not.toMatch(/Titebond/);
+    });
+
+    it(`${name}: the glue card is the first item of the first glue step, with the working times`, () => {
+      const mill = get('mill');
+      expect(mill.items[0].text).toMatch(/^GLUE CARD/);
+      const card = mill.instructions.slice(0, 20).join('\n');
+      expect(card).toMatch(/Epoxy[^\n]*206/);
+      expect(card).toMatch(/Pot life \d+-\d+ min/);
+      expect(card).toMatch(/Clamp \d+-\d+ h/);
+      expect(card).toMatch(/full cure \d+ h/);
+      expect(card).toMatch(/Cold shop/);
+      expect(card).toMatch(/Below 55 °F/);
+      expect(/Titebond III/.test(card)).toBe(name === 'Standard');
+    });
+
+    it(`${name}: step 1 states the real allowances from the params, in fractions`, () => {
+      const t = text('mill');
+      expect(t).toMatch(/rounded up to 1\/8"/);
+      expect(t).toMatch(/plain part is 1\/8" thicker, 1\/4" wider and 1" longer/);
+      expect(t).toMatch(/3\/8" wider and 2" longer/);
+      expect(t).toMatch(/4\/4 planes to 3\/4"/);
+    });
+
+    it(`${name}: step 22 quotes the latch hole and the 75° cut, not the screw pilots`, () => {
+      const t = text('seat-blocks');
+      expect(t).toMatch(/3\/8" hole, 1-1\/16" deep/);
+      expect(t).toMatch(/tilted 15°/);
+      expect(t).toMatch(/75° from level/);
+      expect(t).toMatch(/Mouth: 1-9\/32" from the rear edge, 1-29\/32" from the bottom end/);
+      expect(t).not.toMatch(/1\/8" blind|29\/32" deep/);
+    });
+
+    it(`${name}: features with several positions give every one`, () => {
+      expect(text('rear-beam')).toMatch(/Clamp-plate bolts, both ends:[^\n]*1-3\/8" and 26-1\/8" from the left end/);
+      expect(text('rear-beam')).toMatch(/Hold-down bolts, both ends:[^\n]*4-3\/16" and 23-5\/16" from the left end/);
+      const fb = text('front-beam');
+      expect(fb).toMatch(/Clamp-plate bolts, 4 plates:[^\n]*1-1\/8", 6-7\/8", 20-5\/8" and 26-3\/8" from the left end/);
+      expect(fb).toMatch(/Eye-bolt holes[^\n]*5-3\/4" and 21-3\/4" from the left end/);
+      expect(fb).toMatch(/pilots, both pads:[^\n]*4-1\/4" and 23-1\/4" from the left end/);
+      expect(text('storage-lid')).toMatch(/3 batten dados[^\n]*3-13\/16", 7-3\/8" and 10-15\/16" from the rear end/);
+      expect(text('transom')).toMatch(/Both sockets: centered 9-3\/8" either side of the centerline/);
+    });
+
+    it(`${name}: the unfilled template text is gone`, () => {
+      for (const s of list) {
+        const t = allText(s);
+        expect(t, s.id).not.toMatch(/from the parts list|in each end, in the (left|right) end|the screws on the joint list/);
+      }
+      expect(text('handle')).toMatch(/2 × 1\/4-20 × 1-1\/4" stainless button-head cap screws per socket/);
+      expect(text('hang')).toMatch(/2 × 1\/4-20 × 1-1\/4" stainless button-head cap screws per socket/);
+      expect(text('frame')).toMatch(/at both ends of each crossmember: 7\/8" from the bottom edge/);
+    });
+
+    it(`${name}: no buying talk in step 0, the knee holes come from positions, the mirror ramp is named`, () => {
+      const v = text('verify');
+      expect(v).not.toMatch(/Get the other three|mill cert/);
+      expect(v).toMatch(/Verify section/);
+      expect(get('verify').checks.join(' ')).not.toMatch(/passed/);
+      expect(text('seal')).not.toMatch(/Extreme setting|stored outside\) uses/);
+      const fr = text('frame');
+      expect(fr).not.toMatch(/as a template/);
+      expect(fr).toMatch(/knee-bolt holes[^\n]*from the rear end[^\n]*from the top edge/);
+      expect(text('sides-outer')).toMatch(/MIRROR ramp/);
+      for (const s of list) expect(allText(s), s.id).not.toMatch(/same template and ramp|same ramp\b(?!:)/);
+    });
+  }
+
+  it('Standard: a step with no Titebond joint says nothing about Titebond, and the card names the Titebond steps', () => {
+    const std = sets[0][1];
+    expect(std.find((s) => s.id === 'rails')!.clampCure).not.toMatch(/Titebond/);
+    expect(std.find((s) => s.id === 'sides-inner')!.clampCure).not.toMatch(/Titebond/);
+    expect(std.find((s) => s.id === 'hangers')!.clampCure).toMatch(/Titebond III/);
+    expect(std.find((s) => s.id === 'frame')!.clampCure).toMatch(/Titebond III[^\n]*epoxy/);
   });
 });

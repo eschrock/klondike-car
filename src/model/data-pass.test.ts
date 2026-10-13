@@ -88,14 +88,22 @@ describe('cuts the drawings and instructions locate', () => {
     for (const a of j.at!) expect(a[2]).toBeCloseTo((strip.stock?.t ?? 0.0625) / 2, 6);
   });
 
-  it('the brake backer has a counterbore for every knee bolt, washer plus 1/8 in wide, in its inner face', () => {
+  it('D-75: the brake backer has a hole for every knee bolt at the knee joint points, and ONE flat-bottomed recess in its inner face for the nut backing plate (no overlapping counterbores)', () => {
     const bk = get('brake-backer-L');
-    const j = bk.joints!.find((q) => q.cut?.kind === 'counterbore')!;
-    expect(j.cut!.dia).toBeCloseTo(p.brakeMountWasherOdIn + 0.125, 9);
-    expect(j.cut!.depth).toBeCloseTo(p.brakeBackerCboreDeepIn, 9);
-    expect(j.at).toHaveLength(get('brake-knee-L').joints!.find((q) => q.type === 'bolt')!.count);
+    const knee = get('brake-knee-L').joints!.find((q) => q.type === 'bolt')!;
+    const holes = bk.joints!.find((q) => q.type === 'hole' && q.to === 'rail-L')!;
+    expect(holes.at).toHaveLength(knee.count);
+    expect(bk.joints!.some((q) => q.cut?.kind === 'counterbore')).toBe(false);
+    const rec = bk.joints!.find((q) => q.cut?.kind === 'relief')!;
+    expect(rec.to).toBe('brake-backplate-L');
     const sz = (bk.geometry as { size: Vec3 }).size;
-    for (const a of j.at!) expect(Math.abs(a[1])).toBeCloseTo(sz[1] / 2, 6); // on a face of the thin axis
+    expect(Math.abs(rec.cut!.hi![1] - rec.cut!.lo![1])).toBeCloseTo(p.brakeBackerCboreDeepIn, 9);
+    expect(Math.max(Math.abs(rec.cut!.lo![1]), Math.abs(rec.cut!.hi![1]))).toBeCloseTo(sz[1] / 2, 6); // it opens on a face of the thin axis
+    // every bolt hole lies inside the recess, in the backer's local frame
+    for (const a of holes.at!) {
+      expect(a[0]).toBeGreaterThan(rec.cut!.lo![0]); expect(a[0]).toBeLessThan(rec.cut!.hi![0]);
+      expect(a[2]).toBeGreaterThan(rec.cut!.lo![2]); expect(a[2]).toBeLessThan(rec.cut!.hi![2]);
+    }
   });
 });
 

@@ -12,7 +12,7 @@
  */
 import { obbOverlap, partOBB, partOBBs, worldAABB } from '../model/bounds';
 import { atPose, brakeGeometry, buildBrakeAt, type BrakeGeom, type V2 } from '../model/brake';
-import { SHOULDER_CLEAR_IN, WITHDRAWAL_WET_CM, dot2, flapHalfWidth, momentY, norm2, pointPolyGap, sub } from '../model/brake-layout';
+import { KNEE_NUT_FLAT_R_IN, SHOULDER_CLEAR_IN, WITHDRAWAL_WET_CM, dot2, flapHalfWidth, momentY, norm2, pointPolyGap, sub, type KneeLayer } from '../model/brake-layout';
 import { SIGN_X_MAX_IN } from '../model/body';
 import { makeCtx } from '../model/build-utils';
 import { handleGeometry, POST_RELIEF, SOCKET_ACCESS_HOLE_IN, type HandleGeom } from '../model/handle';
@@ -302,6 +302,31 @@ export function brakeFlap(ctx: Ctx): AnalysisCheck {
   return members('brake-flap', 'Brake flap, shoe block and pad', ctx, (L, g) => flapEval(ctx, L, g), ['D-57', 'D-2']);
 }
 
+// ── D-75: the cross-laminated knee. Each check counts only the layers whose grain suits it (the CLT practice of ignoring the cross layers in bending). ──
+/** NDS 5.2.8: radial tension (tension perpendicular to the grain) design value for species other than southern pine = F_v / 3. Used for the cross-grain glue lines of the knee. */
+export const CROSS_GRAIN_TENSION_OF_SHEAR = 1 / 3;
+/** Rolling shear (shear across the grain in a plane that contains no fibers, the cross layers of CLT) as a share of F_v: the Wood Handbook gives about 18-28 %; 0.25 is used. */
+export const ROLLING_SHEAR_OF_SHEAR = 0.25;
+/** NDS 12.3.4 end-grain factor C_eg for a dowel-type fastener whose axis runs along the grain. */
+export const END_GRAIN_CEG = 0.67;
+/** Overlap (in) of the x range [a0, a1] with a layer. */
+const overlapX = (q: KneeLayer, a0: number, a1: number) => Math.max(0, Math.min(q.x1, a1) - Math.max(q.x0, a0));
+/** The layers whose grain runs along `grain`, with their x ranges clipped to [a0, a1]. */
+const layersAlong = (g: BrakeGeom, grain: 'y' | 'z', a0 = g.knee.x0, a1 = g.knee.x1) => g.knee.layers.filter((q) => q.grain === grain).map((q) => ({ x0: Math.max(q.x0, a0), x1: Math.min(q.x1, a1) })).filter((q) => q.x1 > q.x0 + 1e-9);
+/** Area-moment data of a set of x ranges of a section `h` deep in the other direction: total thickness, centroid x, I about that centroid (bending that varies along x), c to the farthest fiber. */
+function xSection(rs: Array<{ x0: number; x1: number }>, h: number) {
+  const t = rs.reduce((s2, q) => s2 + (q.x1 - q.x0), 0);
+  if (t <= 1e-9) return { t: 0, xc: 0, I: 0, c: 1, S: 0 };
+  const xc = rs.reduce((s2, q) => s2 + (q.x1 - q.x0) * (q.x0 + q.x1) / 2, 0) / t;
+  const I = rs.reduce((s2, q) => s2 + h * ((q.x1 - q.x0) ** 3 / 12 + (q.x1 - q.x0) * ((q.x0 + q.x1) / 2 - xc) ** 2), 0);
+  const c = Math.max(...rs.map((q) => Math.max(Math.abs(q.x0 - xc), Math.abs(q.x1 - xc))));
+  return { t, xc, I, c, S: I / c };
+}
+/** The grain of the layer at x (the knee's rear layer behind it, the front layer ahead). */
+const grainAt = (g: BrakeGeom, x: number): 'y' | 'z' => (g.knee.layers.find((q) => x >= q.x0 - 1e-9 && x <= q.x1 + 1e-9) ?? g.knee.layers[0]).grain;
+/** Share of the x range [a0, a1] that lies in layers of `grain`. */
+const shareAlong = (g: BrakeGeom, grain: 'y' | 'z', a0: number, a1: number) => g.knee.layers.filter((q) => q.grain === grain).reduce((s2, q) => s2 + overlapX(q, a0, a1), 0) / Math.max(1e-9, a1 - a0);
+
 /** NDS-style screw withdrawal strength is `screwWithdrawal`; the pivot checks below are hand-checkable from the layout (pivot block, ears, pin). */
 function pivotEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
   const { p } = ctx;
@@ -320,10 +345,14 @@ function pivotEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
   const Zpin = (Math.PI * d ** 3) / 32;
   const bend = Mpin / Zpin;
   // Oak bearing of the pin (dowel bearing), on the tongue (flap + block, grain along x, the load across it) and on each ear.
-  const bearT = R / (d * wt), bearO = Ro / (d * pv.earOut), bearI = Ri / (d * pv.blind);
+  // D-75: where the pin crosses an ACROSS ('y') layer it runs along that layer's grain (end-grain dowel bearing): C_eg on the ears' bearing when any of the pin's width lies in such a layer.
+  const pinEg = shareAlong(g, 'y', g.H[0] - d / 2, g.H[0] + d / 2) > 1e-6 ? END_GRAIN_CEG : 1;
+  const bearT = R / (d * wt), bearO = Ro / (d * pv.earOut * pinEg), bearI = Ri / (d * pv.blind * pinEg);
   // Tear-out toward the loaded edge: two shear planes either side of the pin, the nearer edge (the load can come either way).
   const eT = Math.min(pv.edgeTongueUp, pv.edgeTongueDown), eE = Math.min(pv.edgeEarUp, pv.edgeEarDown);
   const tearT = R / (2 * eT * wt), tearO = Ro / (2 * eE * pv.earOut);
+  // D-75: the ear's tear-out planes (normal to x, shear along z) are rolling shear in an ACROSS layer, ordinary shear in an UPRIGHT one: the weaker if the pin touches an ACROSS layer.
+  const tearAllowE = pinEg < 1 ? al.oakShear * ROLLING_SHEAR_OF_SHEAR : al.oakShear;
   // End distance past the pin: the tongue and the ears' rear stand p.brakePivotEndIn from the pin.
   const endD = p.brakePivotEndIn;
   // The pivot block takes its share of the pin's load (by thickness) and passes it into the flap through its screws (glue ignored): it pulls up when the pin pushes the flap down.
@@ -331,12 +360,24 @@ function pivotEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
   const penBS = BRAKE_SCREW_LEN_IN - pl.blockT - 0.1; // the #8 x 1-1/4 block screw (D-72), less 0.1 in of lead at the tip
   const wBS = screwWithdrawal(p, SCREW_DIA_IN[8], penBS);
   const shareBlock = (pl.blockT / (b.thick + pl.blockT)) * R;
-  // D-66: the slot is sawn through the arm, so the outboard ear is a free-standing oak plate (earOut thick, armT deep at its outer face) that hangs from the bridge ahead of the slot end:
-  // the whole pin reaction Ro (taken in any direction, so the larger of its two components is not assumed) acts `slotEndX - pin x` from the root.
-  const earLever = Math.max(0, pv.slotEndX - g.H[0]);
-  const earS = (pv.earOut * g.knee.armT ** 2) / 6;
-  const earBend = (Ro * earLever) / earS;
-  const earShear = (1.5 * Ro) / (pv.earOut * g.knee.armT);
+  // D-66 / D-75: the slot is sawn through every layer behind slotEndX, so the outboard ear is a stack of layer ISLANDS glued to the first layer that reaches past the slot end (xAttach is
+  // that layer's rear face); that layer carries the ear across the slot to the knee (the bridge). Every layer's grain lies in the y-z plane, so the islands' pull-off along x is CROSS-GRAIN
+  // tension on the glue line (NDS 5.2.8 F_rt = F_v / 3), never bending along the grain as the old solid-block check assumed. The ear's share Ro is split into x and z like R.
+  const lay = g.knee.layers;
+  const attach = lay.find((q) => q.x1 > pv.slotEndX + 1e-9) ?? lay[lay.length - 1];
+  const xAttach = Math.max(g.H[0], attach.x0);
+  const Rx = Math.abs(L.Rk[0]), Rz = Math.abs(L.Rk[1]);
+  const Rox = R > 0 ? (Ro * Rx) / R : 0, Roz = R > 0 ? (Ro * Rz) / R : 0;
+  const glueA = pv.earOut * g.knee.armT; // the islands' footprint on the attach layer (the arm depth at the ear's outer face: the sloped underside makes it deeper inboard, ignored)
+  const glueS = (pv.earOut * g.knee.armT ** 2) / 6;
+  const earPeel = Rox / glueA + (Roz * (xAttach - g.H[0])) / glueS;
+  const earGlueShear = Roz / glueA; // shear along z on the glue line: rolling shear in an ACROSS layer
+  // The bridge: the long-grain ('y') wood ahead of the slot end spans the slot (from the outboard ear's middle to the slot's inboard wall) as a cantilever from the knee body.
+  const bridge = xSection(layersAlong(g, 'y', pv.slotEndX, g.knee.x1), 1);
+  const ySlotIn = pv.ySlot[0];
+  const hBridge = kneeSection(g, ySlotIn).h;
+  const lever = Math.max(0, (pv.ySlot[1] + g.knee.yOut) / 2 - ySlotIn);
+  const bridgeBend = bridge.t > 1e-9 ? (Roz * lever) / ((bridge.t * hBridge ** 2) / 6) + (Rox * lever) / ((hBridge * bridge.t ** 2) / 6) : Infinity;
   const ds: Detail[] = [
     detail('pivot pin double shear (316)', shear, 'psi', a.boltShear, '<='),
     detail('pivot pin bending between the ears (316)', bend, 'psi', a.bolt, '<='),
@@ -344,15 +385,16 @@ function pivotEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
     detail('oak bearing on the outboard ear', bearO, 'psi', al.oakDowel, '<='),
     detail('oak bearing on the inboard ear (blind hole depth)', bearI, 'psi', al.oakDowel, '<='),
     detail('tear-out of the tongue toward the nearer edge (oak shear, two planes)', tearT, 'psi', al.oakShear, '<='),
-    detail('tear-out of the outboard ear toward the nearer edge (oak shear, two planes)', tearO, 'psi', al.oakShear, '<='),
+    detail(`tear-out of the outboard ear toward the nearer edge (oak shear, two planes${pinEg < 1 ? '; rolling shear in the ACROSS layer, D-75' : ''})`, tearO, 'psi', tearAllowE, '<='),
     detail('edge distance, pin center to the nearer edge of the tongue stack (pin diameters, 1.5 D minimum)', eT / d, '×D', 1.5, '>='),
     detail('edge distance, pin center to the nearer edge of the ear (pin diameters)', eE / d, '×D', 1.5, '>='),
     detail('end distance, pin center past the tongue end and the ear rear face (pin diameters)', endD / d, '×D', 1.5, '>='),
     detail('pivot block screws, withdrawal each at the block share of the pin load (NDS, wet)', shareBlock / nBS, 'lbf', wBS, '<='),
-    detail('outboard ear bending at the bridge (D-66: the ear is a cantilever from the solid wood ahead of the slot, the pin load at the pin, oak)', earBend, 'psi', al.oakBend, '<='),
-    detail('outboard ear shear at the bridge (oak)', earShear, 'psi', al.oakShear, '<='),
+    detail('outboard ear: the layer islands pulled off the layer ahead of the slot, cross-grain tension on the glue line (D-75, oak F_rt = F_v / 3)', earPeel, 'psi', al.oakShear * CROSS_GRAIN_TENSION_OF_SHEAR, '<='),
+    detail('outboard ear: glue-line shear into the layer ahead of the slot (D-75, oak rolling shear)', earGlueShear, 'psi', al.oakShear * ROLLING_SHEAR_OF_SHEAR, '<='),
+    detail('bridge ahead of the slot: the long-grain (ACROSS) wood carrying the outboard ear across the slot, bending both axes (D-75, oak)', bridgeBend, 'psi', al.oakBend, '<='),
   ];
-  const how = `${loadText(L, g)}. D-65 pull-pin pivot: a ${f(d, 3)}" 316 clevis pin through the knee's two ears and the flap tongue (${f(wt, 2)}" wide, flap ${f(b.thick, 2)}" + pivot block ${f(pl.blockT, 2)}", the slot ${f(clr, 3)}" wider each side), held by a hitch-pin clip. The pin carries the whole ${f(R)} lbf in DOUBLE shear: ${f(R)} / (2 × ${f(circleA(d), 4)} in²) = ${f(shear, 0)} psi (allowable ${f(a.boltShear, 0)}). It is held by the outboard ear (${f(pv.earOut, 2)}" thick) and ${f(pv.blind, 2)}" of the inboard ear (blind hole): reactions ${f(Ro)} and ${f(Ri)} lbf at arms ${f(armO, 2)}" and ${f(armI, 2)}" from the tongue's center, so M = ${f(Mpin)} lbf·in on Z = π d³/32 = ${f(Zpin, 4)} in³ = ${f(bend, 0)} psi (allowable ${f(a.bolt, 0)}). Bearing: ${f(bearT, 0)} psi on the tongue (${f(wt, 2)}" × ${f(d, 3)}"), ${f(bearO, 0)} psi on the outboard ear, ${f(bearI, 0)} psi on the inboard ear (allowable ${f(al.oakDowel, 0)}). The pin sits ${f(pv.edgeTongueUp, 2)}" below the top of the tongue stack and ${f(pv.edgeTongueDown, 2)}" above its underside (${f(eT / d, 1)} pin diameters), ${f(pv.edgeEarUp, 2)}" below the knee top and ${f(pv.edgeEarDown, 2)}" above the arm bottom, and ${f(endD, 2)}" from the tongue end and the ears' rear faces; tear-out is checked as oak shear on two planes of the nearer edge. The pivot block's ${nBS} #10 × 1-1/4" screws (${f(penBS, 2)}" of thread in the flap, ${f(wBS)} lbf each) carry its ${f(shareBlock)} lbf share if the glue lets go.`;
+  const how = `${loadText(L, g)}. D-65 pull-pin pivot: a ${f(d, 3)}" 316 clevis pin through the knee's two ears and the flap tongue (${f(wt, 2)}" wide, flap ${f(b.thick, 2)}" + pivot block ${f(pl.blockT, 2)}", the slot ${f(clr, 3)}" wider each side), held by a hitch-pin clip. The pin carries the whole ${f(R)} lbf in DOUBLE shear: ${f(R)} / (2 × ${f(circleA(d), 4)} in²) = ${f(shear, 0)} psi (allowable ${f(a.boltShear, 0)}). It is held by the outboard ear (${f(pv.earOut, 2)}" thick) and ${f(pv.blind, 2)}" of the inboard ear (blind hole): reactions ${f(Ro)} and ${f(Ri)} lbf at arms ${f(armO, 2)}" and ${f(armI, 2)}" from the tongue's center, so M = ${f(Mpin)} lbf·in on Z = π d³/32 = ${f(Zpin, 4)} in³ = ${f(bend, 0)} psi (allowable ${f(a.bolt, 0)}). Bearing: ${f(bearT, 0)} psi on the tongue (${f(wt, 2)}" × ${f(d, 3)}"), ${f(bearO, 0)} psi on the outboard ear, ${f(bearI, 0)} psi on the inboard ear (allowable ${f(al.oakDowel, 0)}). The pin sits ${f(pv.edgeTongueUp, 2)}" below the top of the tongue stack and ${f(pv.edgeTongueDown, 2)}" above its underside (${f(eT / d, 1)} pin diameters), ${f(pv.edgeEarUp, 2)}" below the knee top and ${f(pv.edgeEarDown, 2)}" above the arm bottom, and ${f(endD, 2)}" from the tongue end and the ears' rear faces; tear-out is checked as oak shear on two planes of the nearer edge. D-75 cross-laminated knee (${lay.map((q) => (q.grain === 'y' ? 'across' : 'upright')).join(' / ')}): the pin runs along the grain of the ACROSS layers, so the ear bearing takes C_eg ${f(pinEg, 2)}; the outboard ear's layers behind the slot end are islands glued to the layer from x = ${f(xAttach, 2)}" on: they pull off it at ${f(earPeel, 0)} psi cross-grain (${f(Rox)} lbf along x over ${f(glueA, 2)} in² + ${f(Roz)} lbf × ${f(xAttach - g.H[0], 2)}" over S = ${f(glueS, 3)} in³; allowable F_v/3 = ${f(al.oakShear * CROSS_GRAIN_TENSION_OF_SHEAR, 0)}), and that layer's ${f(bridge.t, 2)}" of long grain ahead of the slot carries the ear ${f(lever, 2)}" across it at ${f(bridgeBend, 0)} psi. The pivot block's ${nBS} #10 × 1-1/4" screws (${f(penBS, 2)}" of thread in the flap, ${f(wBS)} lbf each) carry its ${f(shareBlock)} lbf share if the glue lets go.`;
   return governing(ds, how);
 }
 
@@ -401,29 +443,60 @@ function mountEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
   const bear = V / (bd * tComp);
   const edge = (g.rail.zt - g.rail.zb) / (2 * bt.zs.length); // from the first / last bolt row to the rail edge
   const tear = V / (2 * edge * tComp);
-  const dW = p.brakeMountWasherOdIn, dH = bd + 0.0625;
+  const dH = bd + 0.0625;
+  // D-75 nut side: ONE backing plate under all the nuts (the old fender washers overlapped). Each bolt's pull spreads over its share of the plate (the worst bolt's tension on a quarter of
+  // the plate, less its hole); the plate's overhang past the nut flats is a cantilever under that bearing pressure.
+  const pl = bt.plate;
+  const plateA = (pl.x1 - pl.x0) * (pl.z1 - pl.z0);
+  const tribA = (plateA - n * (Math.PI / 4) * dH * dH) / n;
+  const pull = T / tribA;
+  const halfPitch = Math.max(bt.xs.length > 1 ? (bt.xs[1] - bt.xs[0]) / 2 : 0, bt.zs.length > 1 ? (bt.zs[1] - bt.zs[0]) / 2 : 0);
+  const edgeOver = Math.max(bt.xs[0] - pl.x0, pl.x1 - bt.xs[bt.xs.length - 1], bt.zs[0] - pl.z0, pl.z1 - bt.zs[bt.zs.length - 1]);
+  const overhang = Math.max(0, Math.max(halfPitch, edgeOver) - KNEE_NUT_FLAT_R_IN);
+  const plateBend = (pull * overhang ** 2 / 2) / (pl.t ** 2 / 6);
+  const plateAllow = p.brakeBackPlateYieldPsi / p.steelSafetyFactor;
+  // D-75 head side: a USS flat washer under each head on the leg's outboard face. Under it the ACROSS layers show END grain (bearing up to F_c parallel), the UPRIGHT layer side grain (F_c perp):
+  // the washer's capacity is the sum over the layers it covers (the worst bolt).
+  const dW = p.brakeMountWasherOdIn;
   const washerA = (Math.PI / 4) * (dW ** 2 - dH ** 2);
-  const pull = T / washerA;
+  const fcPar = (p.oakCompParPsi * p.wetServiceFactorStrength) / p.woodSafetyFactor;
+  const headCap = Math.min(...bt.xs.map((x) => { const sy = shareAlong(g, 'y', x - dW / 2, x + dW / 2); return washerA * (sy * fcPar + (1 - sy) * al.oakPerp); }));
   const contactA = (k.x1 - k.x0) * lay.chineH;
   const cBear = Cbear / contactA;
-  // Knee arm: section just beyond the leg, bending from the force at the pin lever (y_pin − y_s), both axes.
+  // Knee arm: section just beyond the leg, bending from the force at the pin lever (y_pin − y_s), both axes. D-75: only the ACROSS ('y'-grain) layers carry it.
   const ys = g.y.face + k.legT + 0.1;
   const sec = kneeSection(g, ys);
   const lever = Math.max(0, g.y.wheel - ys);
-  const sigK = (Math.abs(Rk[1]) * lever) / ((sec.depth * sec.h ** 2) / 6) + (Math.abs(Rk[0]) * lever) / ((sec.h * sec.depth ** 2) / 6);
-  const tauK = (1.5 * Math.abs(Rk[1])) / (sec.depth * sec.h);
+  const armY = xSection(layersAlong(g, 'y'), sec.h);
+  const sigK = armY.t > 1e-9 ? (Math.abs(Rk[1]) * lever) / ((armY.t * sec.h ** 2) / 6) + (Math.abs(Rk[0]) * lever) / armY.S : Infinity;
+  const tauK = armY.t > 1e-9 ? (1.5 * Math.abs(Rk[1])) / (armY.t * sec.h) : Infinity;
+  // D-75 leg: just above the top bolt row the leg alone carries the pin force into the bolt group; only the UPRIGHT ('z'-grain) layers carry it (in-plane bending about y, the out-of-plane
+  // remainder about x after the chine-top contact, and the axial pull).
+  const zr = Math.max(...bt.zs);
+  const legZ = xSection(layersAlong(g, 'z'), k.legT);
+  const Mleg = Math.abs(momentY([g.xh - legZ.xc, g.H[1] - zr], Rk));
+  const yLegC = g.y.face + k.legT / 2;
+  const MlegOut = Math.abs(Math.abs(Rk[1]) * (g.y.wheel - yLegC) - Cbear * (zc - zr));
+  const sigLeg = legZ.t > 1e-9 ? Mleg / legZ.S + MlegOut / ((legZ.t * k.legT ** 2) / 6) + Math.abs(Rk[1]) / (legZ.t * k.legT) : Infinity;
+  // D-75 bolt bearing in the leg: a bolt that lies in an ACROSS layer runs along its grain (end-grain dowel bearing, C_eg).
+  const legEg = bt.xs.some((x) => grainAt(g, x) === 'y') ? END_GRAIN_CEG : 1;
+  const bearLeg = V / (bd * k.legT * legEg);
   const ds: Detail[] = [
-    detail('knee arm bending beyond the leg, both axes (oak)', sigK, 'psi', al.oakBend, '<='),
-    detail('knee arm shear (oak)', tauK, 'psi', al.oakShear, '<='),
+    detail('knee arm bending beyond the leg, both axes (oak, the ACROSS layers only, D-75)', sigK, 'psi', al.oakBend, '<='),
+    detail('knee arm shear (oak, the ACROSS layers only)', tauK, 'psi', al.oakShear, '<='),
+    detail('knee leg just above the top bolt row: in-plane and out-of-plane bending plus the pull (oak, the UPRIGHT layer only, D-75)', sigLeg, 'psi', al.oakBend, '<='),
     detail('mounting bolt shear, worst bolt, direct + twist (316)', shear, 'psi', a.boltShear, '<='),
     detail('mounting bolt tension from the overturning couple, worst (316)', sigT, 'psi', a.bolt, '<='),
     detail('mounting bolt shear + tension combined (316)', comb, '', 1, '<='),
     detail('bolt bearing in the rail + backer and the knee leg (oak, across the grain)', bear, 'psi', al.oakDowel, '<='),
     detail('bolt tear-out toward the rail edge (oak shear)', tear, 'psi', al.oakShear, '<='),
-    detail('nut washer bearing on the backer face (oak across the grain)', pull, 'psi', al.oakPerp, '<='),
+    detail(`bolt bearing in the knee leg (oak${legEg < 1 ? '; the bolts run along the grain of the ACROSS layers: end-grain dowel bearing, C_eg 0.67, D-75' : ''})`, bearLeg, 'psi', al.oakDowel, '<='),
+    detail('nut backing plate bearing on the backer face, the worst bolt on its share of the plate (oak across the grain, D-75)', pull, 'psi', al.oakPerp, '<='),
+    detail('nut backing plate bending past the nut flats (304 / 316 plate, D-75)', plateBend, 'psi', plateAllow, '<='),
+    detail('head washer bearing on the knee leg, the worst bolt (oak: end grain of the ACROSS layers, side grain of the UPRIGHT one, D-75)', T, 'lbf', headCap, '<='),
     detail('knee leg bearing on the chine / rail face at the top of the couple (oak across the grain)', cBear, 'psi', al.oakPerp, '<='),
   ];
-  const how = `${loadText(L, g)}. ${n} × ${f(bd, 3)}" 316 bolts (${bt.xs.length} columns × ${bt.zs.length} rows, centroid x ${f(bt.cx, 2)}", z ${f(bt.cz, 2)}") through the ${f(k.legT, 2)}" knee leg, the ${f(g.rail.t, 2)}" rail and the ${f(g.backer.t, 2)}" backer glued to it. In plane: M = ${f(Mpl)} lbf·in about the bolt group (pin ${f(g.xh - bt.cx, 2)}" ahead of / ${f(g.H[1] - bt.cz, 2)}" above it), twist ${f(twist)} + direct ${f(direct)} = ${f(V)} lbf on the worst bolt (shear ${f(shear, 0)} psi, bearing ${f(bear, 0)} psi on ${f(tComp, 2)}"). Out of plane: the force acts ${f(e, 2)}" outboard of the hull face: M_x = ${f(Mx)} lbf·in pivots on the chine top (z ${f(zc, 2)}") into the ${bt.zs.length} bolt rows (T ${f(Tz)} lbf) and M_z = ${f(Mz)} lbf·in over the columns (T ${f(Tx)} lbf): worst bolt tension ${f(T)} lbf = ${f(sigT, 0)} psi on ${f(At, 4)} in², washer bearing ${f(pull, 0)} psi on a ${f(dW, 3)}" fender washer. Knee arm section just beyond the leg ${f(sec.depth, 2)}" × ${f(sec.h, 2)}": σ ${f(sigK, 0)} psi. The knee bolts into the rail (backed by the glued ${f(g.backer.t, 2)}" doubler), not the 1/4" side panel.`;
+  const how = `${loadText(L, g)}. ${n} × ${f(bd, 3)}" 316 bolts (${bt.xs.length} columns × ${bt.zs.length} rows, centroid x ${f(bt.cx, 2)}", z ${f(bt.cz, 2)}") through the ${f(k.legT, 2)}" knee leg, the ${f(g.rail.t, 2)}" rail and the ${f(g.backer.t, 2)}" backer glued to it. In plane: M = ${f(Mpl)} lbf·in about the bolt group (pin ${f(g.xh - bt.cx, 2)}" ahead of / ${f(g.H[1] - bt.cz, 2)}" above it), twist ${f(twist)} + direct ${f(direct)} = ${f(V)} lbf on the worst bolt (shear ${f(shear, 0)} psi, bearing ${f(bear, 0)} psi on ${f(tComp, 2)}"). Out of plane: the force acts ${f(e, 2)}" outboard of the hull face: M_x = ${f(Mx)} lbf·in pivots on the chine top (z ${f(zc, 2)}") into the ${bt.zs.length} bolt rows (T ${f(Tz)} lbf) and M_z = ${f(Mz)} lbf·in over the columns (T ${f(Tx)} lbf): worst bolt tension ${f(T)} lbf = ${f(sigT, 0)} psi on ${f(At, 4)} in², nut side: one ${f(pl.t, 3)}" × ${f(pl.x1 - pl.x0, 2)}" × ${f(pl.z1 - pl.z0, 2)}" backing plate, ${f(pull, 0)} psi on the worst bolt's ${f(tribA, 2)} in² share, ${f(plateBend, 0)} psi bending over a ${f(overhang, 2)}" overhang past the nut; head side: a ${f(dW, 3)}" washer, ${f(T)} lbf against ${f(headCap)} lbf (end grain of the across layers). D-75 cross-laminated knee: the arm counts only the ACROSS layers (${f(armY.t, 2)}"), the leg only the UPRIGHT layer (${f(legZ.t, 2)}": ${f(Mleg)} lbf·in in plane, ${f(MlegOut)} lbf·in out of plane at the top bolt row, σ ${f(sigLeg, 0)} psi); bolt bearing in the leg ${f(bearLeg, 0)} psi${legEg < 1 ? ' (end grain, C_eg 0.67)' : ''}. Knee arm section just beyond the leg ${f(sec.depth, 2)}" × ${f(sec.h, 2)}": σ ${f(sigK, 0)} psi. The knee bolts into the rail (backed by the glued ${f(g.backer.t, 2)}" doubler), not the 1/4" side panel.`;
   return governing(ds, how);
 }
 

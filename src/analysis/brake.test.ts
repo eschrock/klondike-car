@@ -186,7 +186,8 @@ describe('brake members (hand calculations at the goal rider, load factor 2)', (
     const M = Math.max(Ro * armO, Ri * armI) - (R / 2) * (wt / 4);
     expect(det(cs, 'brake-pivot', 'pin bending').value).toBeCloseTo(M / ((Math.PI * d ** 3) / 32), 3);
     expect(det(cs, 'brake-pivot', 'oak bearing of the pin on the tongue').value).toBeCloseTo(R / (d * wt), 3);
-    expect(det(cs, 'brake-pivot', 'outboard ear').value).toBeCloseTo(Ro / (d * g.pivot.earOut), 3);
+    // D-75: the pin runs along the grain of the cross-laminated knee's ACROSS layers, so the ear bearing takes the NDS end-grain factor C_eg 0.67
+    expect(det(cs, 'brake-pivot', 'oak bearing on the outboard ear').value).toBeCloseTo(Ro / (d * g.pivot.earOut * 0.67), 3);
     // edge distances in pin diameters: 3/4 in of oak above and below the pin in the tongue stack and the ear, 3/4 in past it
     expect(det(cs, 'brake-pivot', 'edge distance, pin center to the nearer edge of the tongue').value).toBeCloseTo(0.75 / d, 2);
     expect(det(cs, 'brake-pivot', 'edge distance, pin center to the nearer edge of the ear').value).toBeCloseTo(0.75 / d, 2);

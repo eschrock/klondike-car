@@ -17,6 +17,7 @@ import { bowGeometry } from '../model/handle';
 import { transomTopOutline } from '../model/body';
 import type { Part, Vec2 } from '../model/types';
 import { flatPattern } from './flat';
+import { cutListFor } from './part-drawings';
 import { analyzeShaperPart } from './shaper-svg';
 import {
   ANNOTATION_ATTRS, checkSquareEls, circleD, dimensionEls, esc, fmt, frac, guideEl, hash6, pathEl, polyD, rectLoop, svgDocument, textEl, type Xf,
@@ -59,7 +60,18 @@ const BUILD_TEXT_IN = 0.15, BUILD_LINE_IN = 0.21;
 const MARGIN_IN = 1.3;
 const TITLE_H_IN = 2;
 
-export interface FormDim { key: string; label: string; valueIn: number }
+export interface FormDim {
+  key: string;
+  label: string;
+  /** The number (inches, a count, or degrees): for tests and sums. Shop text uses `text`. */
+  valueIn: number;
+  kind: 'length' | 'count' | 'angle';
+  /** The value as the shop reads it: a fraction with the inch mark (`59-1/2"`), a count with its noun (`15 cleats`), or whole degrees (`11°`). Never a decimal. */
+  text: string;
+}
+const lenDim = (key: string, label: string, valueIn: number): FormDim => ({ key, label, valueIn, kind: 'length', text: frac(valueIn) });
+const countDim = (key: string, label: string, n: number, noun: string): FormDim => ({ key, label, valueIn: n, kind: 'count', text: `${n} ${n === 1 ? noun : noun.endsWith('s') ? noun : `${noun}s`}` });
+const angleDim = (key: string, label: string, deg: number): FormDim => ({ key, label, valueIn: deg, kind: 'angle', text: `${Math.round(deg)}°` });
 
 /** One step of building a form: what to make, in order. `sub` are its parts (a, b, c ...). */
 export interface FormBuildStep { step: string; sub?: string[] }
@@ -204,64 +216,96 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   const rampH = hasRamp ? L.turnIn(xRe) : 0;
   const webTallAtBow = Math.max(...rampXs.map((x) => sideTopAt(L, x) - L.chineBot));
   const ribs = Math.ceil(webTallAtBow / CLEAT_SPACING_IN) + 1;
+  const ribPitch = ribs > 1 ? webTallAtBow / (ribs - 1) : 0;
+  // The MIRROR ramp (second face): the first cure leaves the web with its S, so turned over its bow end hangs `rampH` LOWER than its rear. The mirror ramp is the first one upside down:
+  // a plateau `rampH` higher than the bow end under the whole flat part, falling through the S. Its ribs run the full web length and span the web's full height at the rear.
+  const mirrorRibs = Math.ceil(f.heightIn / CLEAT_SPACING_IN) + 1;
+  const mirrorPitch = mirrorRibs > 1 ? f.heightIn / (mirrorRibs - 1) : 0;
+  const mirrorProfile: Vec2[] = rampXs.map((x) => [uOf(x), RIB_BASE_IN + rampH - L.turnIn(x)]);
+  const mirrorLen = uOf(xRe);
+  const webLowIn = RIB_BASE_IN + TEMPLATE_STOCK_IN; // the web's underside above the bench where the ramp starts (rising ramp) or where it ends (mirror ramp)
+  const webHighIn = webLowIn + rampH;
   const GAP = 1.6;
   const rampBlock = hasRamp ? RIB_BASE_IN + rampH + GAP : 0;
-  const w = f.widthIn, h = templateH + rampBlock + 0.8;
+  const mirrorBlock = hasRamp ? RIB_BASE_IN + rampH + GAP : 0;
+  const w = f.widthIn, h = templateH + rampBlock + mirrorBlock + 0.8;
   const dims: FormDim[] = [
-    { key: 'web-length', label: 'Web flat length (development)', valueIn: f.widthIn },
-    { key: 'web-height', label: 'Web height at the rear', valueIn: f.heightIn },
-    { key: 'sheer-length', label: 'Sheer line length (cleat line)', valueIn: sheerLen },
-    { key: 'cleat-spacing', label: 'Cleat spacing along the sheer', valueIn: cleatStep },
-    { key: 'cleat-count', label: 'Cleats on the sheer line', valueIn: nCleat },
+    lenDim('web-length', 'Web flat length (development)', f.widthIn),
+    lenDim('web-height', 'Web height at the rear', f.heightIn),
+    lenDim('sheer-length', 'Sheer line length (cleat line)', sheerLen),
+    lenDim('cleat-spacing', 'Cleat spacing along the sheer', cleatStep),
+    countDim('cleat-count', 'Cleats on the sheer line', nCleat, 'cleat'),
   ];
   if (hasRamp) dims.push(
-    { key: 'ramp-rise', label: 'S-ramp rise (= the turn-in per side)', valueIn: rampH },
-    { key: 'ramp-length', label: 'S-ramp length (from the S start to the bow end)', valueIn: uOf(xRe) - uOf(xR0) },
-    { key: 's-length', label: 'S (taper) length', valueIn: uOf(xR1) - uOf(xR0) },
-    { key: 'ramp-ribs', label: 'Ramp ribs (3/4 in MDF)', valueIn: ribs },
-    { key: 'rib-base', label: 'Rib base under the profile (least rib thickness)', valueIn: RIB_BASE_IN },
+    lenDim('ramp-rise', 'S-ramp rise (= the turn-in per side)', rampH),
+    lenDim('ramp-length', 'S-ramp length (from the S start to the bow end)', uOf(xRe) - uOf(xR0)),
+    lenDim('s-length', 'S (taper) length', uOf(xR1) - uOf(xR0)),
+    countDim('ramp-ribs', 'S-ramp ribs (3/4" MDF)', ribs, 'rib'),
+    lenDim('rib-base', 'Rib base under the profile (least rib thickness)', RIB_BASE_IN),
+    countDim('mirror-ribs', 'Mirror-ramp ribs (3/4" MDF, full web length)', mirrorRibs, 'rib'),
+    lenDim('mirror-rib-height', 'Mirror-ramp rib height at the rear (falls to the base at the bow end)', RIB_BASE_IN + rampH),
   );
+  // ── How to build it ──
+  const bandOf = (id: string) => parts.find((x) => x.id === id);
+  const bandText = (id: string, fallback: string): string => { const st = bandOf(id)?.stock; return st ? `${frac(st.t)} × ${frac(st.w)}` : fallback; };
+  const outChine = bandText('side-L-chine', 'oak strip'), outGun = bandText('side-L-gunwale', 'oak strip');
+  const inChine = bandText('side-L-chine-in', 'oak strip'), inGun = bandText('side-L-gunwale-in', 'oak strip');
+  const clampsPerBand = Math.ceil(f.widthIn / CLEAT_SPACING_IN) + 1;
+  const rampLen = uOf(xRe) - uOf(xR0);
+  const capW = (ribs - 1) * ribPitch + RIB_STOCK_IN + 1;
+  const mirrorCapW = (mirrorRibs - 1) * mirrorPitch + RIB_STOCK_IN + 1;
   const notes = [
     `Lay the web FLAT on the bench on this template: ${inch(f.widthIn)} along the plan curve, ${inch(f.heightIn)} tall at the rear.`,
     `Cleat the sheer line: ${nCleat} cleats ${inch(cleatStep)} apart, on the high side of the line. A straight 1-1/2" strip bent to the sheer pushes sideways about 65 lbf per band at mid-span until the epoxy cures.`,
     hasRamp
-      ? `S-ramp: the bow end of the web rides up it. Rise ${inch(rampH)} (the turn-in per side); the S runs from ${inch(uOf(xR0))} to ${inch(uOf(xR1))} along the web, then level to the bow end of the bands at ${inch(uOf(xRe))}. The web ends at ${inch(f.widthIn)}; its last ${inch(f.widthIn - uOf(xRe))} runs into the bulkhead dado, level. ${ribs} ribs of ${frac(RIB_STOCK_IN)} MDF about ${frac(CLEAT_SPACING_IN)} apart under the ${inch(webTallAtBow)} the web stands at the bow, capped with 1/4" hardboard; no rib is thinner than ${inch(RIB_BASE_IN)}. Do the other face on the mirror ramp.`
+      ? `S-ramp (first face): the bow end of the web rides up it. Rise ${inch(rampH)} (the turn-in per side); the S runs from ${inch(uOf(xR0))} to ${inch(uOf(xR1))} along the web, then level to the bow end of the bands at ${inch(uOf(xRe))}. The web ends at ${inch(f.widthIn)}; its last ${inch(f.widthIn - uOf(xRe))} runs into the bulkhead dado, level. ${ribs} ribs of ${frac(RIB_STOCK_IN)} MDF ${frac(ribPitch)} apart under the ${inch(webTallAtBow)} the web stands at the bow, capped with 1/4" hardboard; no rib is thinner than ${inch(RIB_BASE_IN)}.`
       : 'No bow turn-in at these params: no ramp is needed.',
+    ...(hasRamp ? [`Mirror ramp (second face): the first cure leaves the web with its S, so turned over its bow end hangs ${inch(rampH)} lower than its rear end and the rising ramp cannot take it. The mirror ramp is a second set of ${mirrorRibs} ribs ${frac(mirrorPitch)} apart, the full ${inch(mirrorLen)} of the bands, ${inch(RIB_BASE_IN + rampH)} tall from the rear end to the S start and falling through the S to ${inch(RIB_BASE_IN)} at the bow end (the lowest profile on this drawing). The web's underside then sits ${inch(webHighIn)} above the bench at the rear and ${inch(webLowIn)} at the bow end.`] : []),
     'Lines on the drawing: sheer (cleat line), gunwale band lower edge, web top, chine band top, inner chine band bottom, web bottom. The template and rib outlines are outside cuts for the Shaper.',
   ];
-  // ── How to build it ──
-  const bandOf = (id: string) => parts.find((x) => x.id === id);
-  const chine = bandOf('side-L-chine'), gun = bandOf('side-L-gunwale');
-  const clampsPerBand = Math.ceil(f.widthIn / CLEAT_SPACING_IN) + 1;
-  const rampLen = uOf(xRe) - uOf(xR0);
-  const ribPitch = ribs > 1 ? webTallAtBow / (ribs - 1) : 0;
-  const capW = (ribs - 1) * ribPitch + RIB_STOCK_IN + 1;
   const build: FormBuildStep[] = [
-    { step: `BENCH TOP: a flat sheet of 3/4" plywood or MDF at least ${frac(f.widthIn + 2 * BASE_END_IN)} × ${frac(f.heightIn + 2 * BASE_END_IN)} (the web is ${frac(f.widthIn)} × ${frac(f.heightIn)}). It is sacrificial: the cleats and ribs are screwed into it.` },
+    { step: `BENCH TOP: a flat sheet of 3/4" plywood or MDF at least ${frac(f.widthIn + 2 * BASE_END_IN)} × ${frac(f.heightIn + 2 * BASE_END_IN)} (the web is ${frac(f.widthIn)} × ${frac(f.heightIn)}). It is sacrificial: the cleats and ribs are screwed into it.${hasRamp ? ' The mirror ramp (step 5) takes a second one the same size.' : ''}` },
     {
       step: `TEMPLATE: cut ONE piece of ${frac(TEMPLATE_STOCK_IN)} hardboard to the web's flat outline (the outer line of this drawing), on the Shaper or bandsawn outside the line and sanded to it.`,
       sub: [
         'Mark on it the sheer (cleat line), the gunwale band lower edge, the chine band top, the inner chine band bottom and the S stations.',
-        ...(hasRamp ? [`Cut it off square at the "S starts" line, ${frac(uOf(xR0))} from the rear end. The rear piece lies under the flat part of the web; the ramp takes the front piece's place. Keep the front piece to mark the web.`, `The ramp cap puts its low end ${frac(RIB_BASE_IN + TEMPLATE_STOCK_IN)} above the bench, ${frac(RIB_BASE_IN)} above the template. Glue a second layer of ${frac(TEMPLATE_STOCK_IN)} hardboard, cut to the same outline, under the rear piece so the web runs onto the ramp with no step.`] : []),
+        ...(hasRamp ? [`Cut it off square at the "S starts" line, ${frac(uOf(xR0))} from the rear end. The rear piece lies under the flat part of the web; the ramp takes the front piece's place. Keep the front piece to mark the web.`, `The ramp cap puts its low end ${frac(webLowIn)} above the bench, ${frac(RIB_BASE_IN)} above the template. Glue a second layer of ${frac(TEMPLATE_STOCK_IN)} hardboard, cut to the same outline, under the rear piece so the web runs onto the ramp with no step.`] : []),
         'Screw the template to the bench with #6 × 3/4" flat-heads about every 12", heads flush.',
       ],
     },
     {
       step: `CLEATS on the sheer line: ${nCleat} blocks of 3/4" plywood or oak, 3/4" × 1-1/2" × 3" long, ${frac(cleatStep)} apart (numbered 1 to ${nCleat} on this drawing).`,
-      sub: ['Screw each with two #8 × 1-1/4" screws into the bench, its long edge on the sheer line and the block on the high side, so the top edge of the outer gunwale band bears on it.', 'Cover the cleat faces with packing tape.'],
+      sub: [
+        'Screw each with two #8 × 1-1/4" screws into the bench, its long edge on the sheer line and the block on the high side, so the top edge of the gunwale band being glued bears on it.',
+        ...(hasRamp ? [`Where the web rides up the ramp, stand each cleat on a spacer (plywood scraps screwed to the bench) as tall as the web's underside there: ${frac(webLowIn)} up to the S start, rising to ${frac(webHighIn)} at the bow end.`] : []),
+        'Cover the cleat faces with packing tape.',
+      ],
     },
     ...(hasRamp ? [{
-      step: `S-RAMP: cut ${ribs} ribs from ${frac(RIB_STOCK_IN)} MDF to the rib profile at the bottom of this drawing: ${frac(rampLen)} long, ${frac(RIB_BASE_IN)} tall at the low (rear) end and ${frac(RIB_BASE_IN + rampH)} at the high (bow) end.`,
+      step: `S-RAMP (first face): cut ${ribs} ribs from ${frac(RIB_STOCK_IN)} MDF to the first rib profile at the bottom of this drawing: ${frac(rampLen)} long, ${frac(RIB_BASE_IN)} tall at the low (rear) end and ${frac(RIB_BASE_IN + rampH)} at the high (bow) end.`,
       sub: [
         `Stand the ribs on edge on the bench, along the web's length, ${frac(ribPitch)} apart center to center (they span the ${frac(webTallAtBow)} the web stands at the bow); the low ends butt the template at the S start.`,
         'Fix each rib with two glue blocks (3/4" × 3/4" × 3"), screwed to the bench and the rib, one each side.',
         `Cap: ${frac(TEMPLATE_STOCK_IN)} hardboard ${frac(rampLen)} × ${frac(capW)}, glued and bradded to the rib tops. Tape it.`,
       ],
+    }, {
+      step: `MIRROR RAMP (second face): the first cure leaves the web with its S, so turned over its bow end hangs ${frac(rampH)} lower than its rear end. Build the ramp upside down: high at the rear, falling to the bench at the bow end.`,
+      sub: [
+        `Cut ${mirrorRibs} ribs from ${frac(RIB_STOCK_IN)} MDF to the mirror rib profile (the lowest on this drawing): ${frac(mirrorLen)} long, ${frac(RIB_BASE_IN + rampH)} tall from the rear end to the S start, then falling through the S to ${frac(RIB_BASE_IN)} tall at the bow end.`,
+        `Stand them on edge on the second bench top, ${frac(mirrorPitch)} apart center to center across the ${frac(f.heightIn)} the web stands at the rear, with two glue blocks each as for the first ramp.`,
+        `Cap: ${frac(TEMPLATE_STOCK_IN)} hardboard cut to the web's full outline (a second template), ${frac(mirrorCapW)} wide across the ribs, glued and bradded to the rib tops. Tape it. The web's underside now sits ${frac(webHighIn)} above the bench at the rear and ${frac(webLowIn)} at the bow end.`,
+        `Re-fix the ${nCleat} cleats on the sheer line, each on a spacer as tall as the web's underside there (${frac(webHighIn)} at the rear, falling to ${frac(webLowIn)} at the bow end).`,
+      ],
     }] : []),
     { step: 'TAPE: packing tape over the template wherever a band lies (the epoxy squeezes out at the band edges).' },
     {
-      step: `GLUE-UP, one face per cure: lay the web on the template, epoxy the chine band (${chine?.stock ? `${frac(chine.stock.t)} × ${frac(chine.stock.w)}` : 'oak strip'}) and the gunwale band (${gun?.stock ? `${frac(gun.stock.t)} × ${frac(gun.stock.w)}` : 'oak strip'}) to it, the gunwale band against the cleats.`,
-      sub: [`Clamp each band to the web every ${frac(CLEAT_SPACING_IN)}: about ${clampsPerBand} spring clamps or small C-clamps per band (${2 * clampsPerBand} per cure).`, `No spring-back allowance: the cleats hold the sheer${hasRamp ? ' and the ramp holds the S' : ''} until the epoxy cures (24 h).`, `Flip the web and glue the other face's two bands on the same template${hasRamp ? ' and ramp' : ''}: two cures per side. Build the right side the same way.`],
+      step: `GLUE-UP, one face per cure. Face one${hasRamp ? ', on the S-ramp' : ''}: lay the web on the template INSIDE face up${hasRamp ? ' (the ramp lifts the bow end toward the inside, which is the turn-in)' : ''}, and epoxy the inner chine band (${inChine}) and the inner gunwale band (${inGun}) to it, the gunwale band against the cleats. Leave the deck gap: the inner chine band stops short of the web bottom.`,
+      sub: [
+        `Clamp each band to the web every ${frac(CLEAT_SPACING_IN)}: about ${clampsPerBand} spring clamps or small C-clamps per band (${2 * clampsPerBand} per cure).`,
+        `No spring-back allowance: the cleats hold the sheer${hasRamp ? ' and the ramp holds the S' : ''} until the epoxy cures (24 h).`,
+        hasRamp ? `Face two: flip the web over onto the MIRROR ramp (never the same ramp: the cured web would have to bend back ${frac(2 * rampH)}), sheer line against the cleats, and glue the outer chine band (${outChine}) and the outer gunwale band (${outGun}) the same way. Two cures per side.` : `Face two: flip the web over onto the same template and glue the outer chine band (${outChine}) and the outer gunwale band (${outGun}) the same way. Two cures per side.`,
+        'Build the right side the same way.',
+      ],
     },
   ];
   const sketch: Sketch | undefined = hasRamp && ribs > 1 ? {
@@ -281,9 +325,9 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   } : undefined;
   return {
     id: 'side-form', title: 'Sandwich side: cleat-line template and S-ramp', w, h, dims, notes, build, ...(sketch ? { sketch } : {}),
-    subtitle: [`Web ${inch(f.widthIn)} x ${inch(f.heightIn)}; ${nCleat} cleats ${inch(cleatStep)} apart; ${hasRamp ? `S-ramp rise ${inch(rampH)}` : 'no ramp'}.`],
+    subtitle: [`Web ${inch(f.widthIn)} × ${inch(f.heightIn)}; ${nCleat} cleats ${inch(cleatStep)} apart; ${hasRamp ? `S-ramp rise ${inch(rampH)}, with a mirror ramp for the second face` : 'no ramp'}.`],
     draw: (place) => {
-      const v0 = rampBlock; // the template sits above the ramp drawing
+      const v0 = rampBlock + mirrorBlock; // the template sits above the ramp drawings
       const T: Xf = ([u, v]) => place([u, v + v0]);
       const out: string[] = [];
       out.push(`<g id="template">${outsideCut(f.outer, T, TEMPLATE_STOCK_IN, 'web flat outline (template)')}</g>`);
@@ -299,17 +343,21 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
       }
       if (hasRamp) {
         for (const [x, t] of [[xR0, 'S starts'], [xR1, 'S ends'], [xRe, `bands end; web ends ${inch(f.widthIn)}`]] as const) {
-          g.push(guideEl(polyD([[uOf(x), -rampBlock + GAP * 0.4], [uOf(x), templateH]], T, false), { dashed: true }), label(T, [uOf(x) + 0.1, templateH + 0.3], `${t} (${inch(uOf(x))})`, 0.15));
+          g.push(guideEl(polyD([[uOf(x), -v0 + GAP * 0.4], [uOf(x), templateH]], T, false), { dashed: true }), label(T, [uOf(x) + 0.1, templateH + 0.3], `${t} (${inch(uOf(x))})`, 0.15));
         }
       }
       g.push(dimTo(T, [0, 0], [w, 0], `web length ${inch(f.widthIn)}`, -0.7));
       g.push(dimTo(T, [0, 0], [0, f.heightIn], `${inch(f.heightIn)}`, 0.7));
       out.push(`<g id="guides" ${ANNOTATION_ATTRS}>${g.join('')}</g>`);
       if (hasRamp) {
-        const R: Xf = ([u, v]) => place([u, v]);
+        const R: Xf = ([u, v]) => place([u, v + mirrorBlock]);
         const poly: Vec2[] = [[uOf(xR0), 0], ...rampProfile, [uOf(xRe), 0]]; // flat bottom; the least thickness is RIB_BASE_IN (the profile starts on it)
-        out.push(`<g id="ramp">${outsideCut(poly, R, RIB_STOCK_IN, 'S-ramp rib profile')}</g>`);
-        out.push(`<g id="rampdims" ${ANNOTATION_ATTRS}>${dimTo(R, [uOf(xRe), RIB_BASE_IN], [uOf(xRe), RIB_BASE_IN + rampH], `rise ${inch(rampH)} above the ${inch(RIB_BASE_IN)} base`, -0.7)}${dimTo(R, [uOf(xR0), 0], [uOf(xRe), 0], `ramp length ${inch(uOf(xRe) - uOf(xR0))}`, -0.6)}${dimTo(R, [uOf(xR0), 0], [uOf(xR1), 0], `S ${inch(uOf(xR1) - uOf(xR0))}`, -1.2)}${label(R, [uOf(xR0), RIB_BASE_IN + rampH + 0.4], `S-RAMP rib profile (cut ${ribs} from ${RIB_STOCK_IN} in MDF); rise = turn-in per side on a ${inch(RIB_BASE_IN)} base`, 0.2)}</g>`);
+        out.push(`<g id="ramp">${outsideCut(poly, R, RIB_STOCK_IN, 'S-ramp rib profile (first face)')}</g>`);
+        out.push(`<g id="rampdims" ${ANNOTATION_ATTRS}>${dimTo(R, [uOf(xRe), RIB_BASE_IN], [uOf(xRe), RIB_BASE_IN + rampH], `rise ${inch(rampH)} above the ${inch(RIB_BASE_IN)} base`, -0.7)}${dimTo(R, [uOf(xR0), 0], [uOf(xRe), 0], `ramp length ${inch(uOf(xRe) - uOf(xR0))}`, -0.6)}${dimTo(R, [uOf(xR0), 0], [uOf(xR1), 0], `S ${inch(uOf(xR1) - uOf(xR0))}`, -1.2)}${label(R, [uOf(xR0), RIB_BASE_IN + rampH + 0.4], `S-RAMP rib profile, first face (cut ${ribs} from ${frac(RIB_STOCK_IN)} MDF); rise = turn-in per side on a ${inch(RIB_BASE_IN)} base`, 0.2)}</g>`);
+        const M: Xf = ([u, v]) => place([u, v]);
+        const mpoly: Vec2[] = [[0, 0], [0, RIB_BASE_IN + rampH], ...mirrorProfile, [uOf(xRe), 0]];
+        out.push(`<g id="mirrorramp">${outsideCut(mpoly, M, RIB_STOCK_IN, 'mirror-ramp rib profile (second face)')}</g>`);
+        out.push(`<g id="mirrordims" ${ANNOTATION_ATTRS}>${dimTo(M, [0, 0], [0, RIB_BASE_IN + rampH], `${inch(RIB_BASE_IN + rampH)} at the rear`, 0.7)}${dimTo(M, [uOf(xRe), 0], [uOf(xRe), RIB_BASE_IN], `${inch(RIB_BASE_IN)} at the bow end`, -0.7)}${dimTo(M, [0, 0], [uOf(xRe), 0], `rib length ${inch(mirrorLen)}`, -0.6)}${label(M, [0, RIB_BASE_IN + rampH + 0.4], `MIRROR-RAMP rib profile, second face (cut ${mirrorRibs} from ${frac(RIB_STOCK_IN)} MDF): the S-ramp upside down`, 0.2)}</g>`);
       }
       return out.join('');
     },
@@ -317,7 +365,7 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
 }
 
 // ── (b) The rail bending form ──
-function railFormPlan(parts: Part[], L: Layout): Plan | null {
+function railFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   const rail = parts.find((x) => x.id === 'rail-L');
   if (!rail || rail.geometry.type !== 'mesh' || !rail.geometry.profile) return null;
   const t = rail.geometry.thickness ?? 0;
@@ -336,13 +384,13 @@ function railFormPlan(parts: Part[], L: Layout): Plan | null {
   const clamps = Math.ceil((xEnd - L.taper.x0) / CLEAT_SPACING_IN) + 1;
   const [sb0, sb1] = SPRINGBACK_RANGE;
   const dims: FormDim[] = [
-    { key: 'form-length', label: 'Form length', valueIn: lengthIn },
-    { key: 'turn-in', label: 'Turn-in per side (offset at the bow)', valueIn: turn },
-    { key: 'strip', label: 'Strip thickness (2 per rail)', valueIn: strip },
-    { key: 'min-radius', label: 'Tightest plan radius', valueIn: L.taper.minRadiusIn },
-    { key: 'springback-low', label: 'Spring-back allowance, low end (noted, not applied)', valueIn: turn * sb0 },
-    { key: 'springback-high', label: 'Spring-back allowance, high end (noted, not applied)', valueIn: turn * sb1 },
-    { key: 'clamps', label: 'Clamp stations', valueIn: clamps },
+    lenDim('form-length', 'Form length', lengthIn),
+    lenDim('turn-in', 'Turn-in per side (offset at the bow)', turn),
+    lenDim('strip', `Strip thickness (${plies} per rail)`, strip),
+    lenDim('min-radius', 'Tightest plan radius', L.taper.minRadiusIn),
+    lenDim('springback-low', 'Spring-back allowance, low end (noted, not applied)', turn * sb0),
+    lenDim('springback-high', 'Spring-back allowance, high end (noted, not applied)', turn * sb1),
+    countDim('clamps', 'Clamp stations', clamps, 'clamp station'),
   ];
   const w = lengthIn, h = face.reduce((m, q) => Math.max(m, q[1]), 0) + 1.5;
   const stations: number[] = [];
@@ -350,7 +398,7 @@ function railFormPlan(parts: Part[], L: Layout): Plan | null {
   const tableText = stations.filter((s) => xStart + s >= L.taper.x0 - 1e-6 && xStart + s <= L.taper.x1 + OFFSET_STEP_IN * 2).map((s) => `${frac(s)}: ${frac(yOut(xStart) - yOut(xStart + s))}`).join(';  ');
   const notes = [
     `Form face = the rails' outer face (the chine, gunwale and rail outer faces are one curve). One form serves both rails; bend the second one the other way up. Each rail is ${plies} strips, ${inch(strip)} × ${inch(rail.stock?.w ?? 0)}, glued face to face with all ${clamps} clamp stations (${frac(CLEAT_SPACING_IN)} apart) loaded.`,
-    `Spring-back is not built in: thin dry strips spring back about ${sb0 * 100}% to ${sb1 * 100}% of the turn-in (${inch(turn * sb0)} to ${inch(turn * sb1)} at the bow). Bend a dry strip first and, if it opens, shim the form face out by that much. Once glued, the rail holds its shape.`,
+    `Spring-back is not built in: thin dry strips spring back about ${Math.round(sb0 * 100)}% to ${Math.round(sb1 * 100)}% of the turn-in (${inch(turn * sb0)} to ${inch(turn * sb1)} at the bow). Bend a dry strip first and, if it opens, shim the form face out by that much. Once glued, the rail holds its shape.`,
     `Tightest plan radius ${inch(L.taper.minRadiusIn)} on a ${inch(strip)} strip (radius ÷ thickness = ${fmt(Math.round(L.taper.minRadiusIn / Math.max(strip, 1e-6)))}). The S runs from ${inch(L.taper.x0)} to ${inch(L.taper.x1)}, parallel to the bulkhead after that. The rail is ${inch(xEnd - Math.min(...rail.geometry.profile.map((q) => q[0])))} long and only the last ${inch(xEnd - L.taper.x0)} is curved. Offsets from the straight line behind the S (station from the form start : offset): ${tableText}.`,
   ];
   // ── How to build it ──
@@ -360,17 +408,23 @@ function railFormPlan(parts: Part[], L: Layout): Plan | null {
   const deepest = FORM_DEPTH_IN + turn;
   const baseL = lengthIn + 2 * BASE_END_IN, baseW = deepest + BASE_FRONT_IN;
   const curved = xEnd - L.taper.x0;
-  const railX0 = Math.min(...rail.geometry.profile.map((q) => q[0]));
-  const behind = Math.max(0, xStart - railX0) + 0.5; // the strips are left 1/2" long at each end (S1)
+  // The strip length is the cut list's (rough, rounded up to 1/8); what hangs off the rear of the form is what is left after the form's own length.
+  const stripCut = cutListFor(parts, p).cuts.find((c) => c.piece === 'strip' && c.ids.includes(rail.id));
+  const stripL = stripCut?.rough.l ?? rail.rough?.l ?? rail.stock?.l ?? lengthIn;
+  const hang = Math.max(0, stripL - lengthIn);
   const pack = plies * strip;
   const span = deepest + pack + CAUL_IN + 1;
   const clampCap = Math.ceil((span + 2) / 6) * 6;
   const build: FormBuildStep[] = [
-    { step: `MASTER LAYER: cut ONE piece of ${frac(FORM_LAYER_IN)} MDF to the outline of this drawing (straight back, square ends, the face curve on top), on the Shaper or bandsawn outside the line. Fair the face to the line with a long sanding block: every bump in the face prints into the rail.` },
-    { step: `MORE LAYERS: cut ${nLayers - 1} more from ${frac(FORM_LAYER_IN)} MDF, bandsawn 1/16" proud and flush-trimmed to the master with a pattern bit. ${nLayers} layers make a stack ${frac(stackH)} tall: ${frac(stackH - railW)} taller than the ${frac(railW)} rail, so the strips never ride over it.` },
-    { step: `STACK: glue the layers face to face (PVA), face curves flush, and screw them together with #8 × 1-1/4" flat-heads every ${frac(STACK_SCREW_IN)}, 1" back from the face, staggered layer to layer. Sand the face fair and square to the base.` },
+    {
+      step: `LAYERS: the form is a stack of ${nLayers} layers of ${frac(FORM_LAYER_IN)} MDF, ${frac(stackH)} tall: ${frac(stackH - railW)} taller than the ${frac(railW)} rail, so the strips never ride over it.`,
+      sub: [
+        `First layer (the master): cut it to the outline of this drawing (straight back, square ends, the face curve on top), on the Shaper or bandsawn outside the line. Fair the face to the line with a long sanding block: every bump in the face prints into the rail.`,
+        `Every other layer: bandsawn 1/16" proud and flush-trimmed to the master with a pattern bit.`,
+      ],
+    },
     { step: `BASE: 3/4" plywood ${frac(baseL)} × ${frac(baseW)}. Screw the stack to it from below (#8 × 1-5/8" every ${frac(STACK_SCREW_IN)}), its straight back on the base's back edge and ${frac(BASE_END_IN)} in from each end. That leaves ${frac(BASE_FRONT_IN)} of base in front of the deepest part of the face for the strips, the caul and the clamp jaws.` },
-    { step: `STRAIGHT RUN: cut the strips about ${frac((rail.rough?.l ?? (rail.stock?.l ?? 0)))} long; only the last ${frac(curved)} is curved. The form starts ${frac(RAIL_FORM_LEAD_IN)} ahead of the S, so about ${frac(behind)} of each strip hangs off its rear end. Screw a straight 3/4" × ${frac(stackH)} fence to the bench, in line with the lead-in face, to hold that part straight.` },
+    { step: `STRAIGHT RUN: cut the strips ${frac(stripL)} long (the cut list's rough length); only the last ${frac(curved)} is curved. The form starts ${frac(RAIL_FORM_LEAD_IN)} ahead of the S, so about ${frac(hang)} of each strip hangs off its rear end. Screw a straight 3/4" × ${frac(stackH)} fence to the bench, in line with the lead-in face, to hold that part straight.` },
     { step: `CAUL: a strip of ${frac(CAUL_IN)} hardboard ${frac(railW + 0.5)} wide × ${frac(curved + RAIL_FORM_LEAD_IN)} long, between the clamps and the strips, so the pressure is even between the stations.` },
     { step: 'TAPE: packing tape (or two coats of paste wax) over the form face and the caul face, so the epoxy cannot glue the rail to the form.' },
     { step: `SPRING-BACK: none is built in. Dry-clamp one strip first; if the bow end opens more than ${frac(turn * sb0)} when released, glue 1/8" hardboard shims to the face over the curve (feathered out at the S start) and try again.` },
@@ -444,15 +498,15 @@ function crownPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   const w = Math.max(barW, 2 * b.halfW), h = barH + GAP + bulkH + 1.2;
   const sec = p.handleBarDiameterIn;
   const dims: FormDim[] = [
-    { key: 'bow-length', label: 'Handlebow overall length', valueIn: barW },
-    { key: 'bow-height', label: 'Handlebow template height (its lowest end to its crown)', valueIn: barH },
-    { key: 'bow-chord', label: 'Handlebow chord between the posts', valueIn: 2 * bw.yPost },
-    { key: 'bow-crown', label: 'Handlebow crown above the post tops', valueIn: bw.crownIn },
-    { key: 'bow-radius', label: 'Handlebow arc radius', valueIn: bw.radiusIn },
-    { key: 'bow-slope', label: 'Handlebow slope over the posts (degrees)', valueIn: bw.postSlopeDeg },
-    { key: 'bulk-span', label: 'Bulkhead width at the top', valueIn: 2 * b.halfW },
-    { key: 'bulk-crown', label: 'Bulkhead crown (center above the corners)', valueIn: crown },
-    { key: 'bulk-corner-radius', label: 'Bulkhead corner radius', valueIn: rc },
+    lenDim('bow-length', 'Handlebow overall length', barW),
+    lenDim('bow-height', 'Handlebow template height (its lowest end to its crown)', barH),
+    lenDim('bow-chord', 'Handlebow chord between the posts', 2 * bw.yPost),
+    lenDim('bow-crown', 'Handlebow crown above the post tops', bw.crownIn),
+    lenDim('bow-radius', 'Handlebow arc radius', bw.radiusIn),
+    angleDim('bow-slope', 'Handlebow slope over the posts', bw.postSlopeDeg),
+    lenDim('bulk-span', 'Bulkhead width at the top', 2 * b.halfW),
+    lenDim('bulk-crown', 'Bulkhead crown (center above the corners)', crown),
+    lenDim('bulk-corner-radius', 'Bulkhead corner radius', rc),
   ];
   const notes = [
     `Both crowns are the same height, ${inch(p.handleBowCrownIn)}. The handlebow is a circular arc (radius ${inch(bw.radiusIn)}) through the two post tops that rises ${inch(bw.crownIn)} at the middle and runs on to the sled edge. The bulkhead top is a shallow parabolic crown ${inch(crown)} above its corners (${inch(rc)} corner radius), the same curve as the transom top.`,
@@ -480,7 +534,7 @@ function crownPlan(parts: Part[], p: Params, L: Layout): Plan | null {
       out.push(`<g id="handlebow">${outsideCut(barFlat.outer, H, TEMPLATE_STOCK_IN, 'handlebow template')}</g>`);
       const g: string[] = [];
       // Bow: post stations and the post-top height line.
-      for (const u of [postU, postU2]) g.push(guideEl(polyD([[u, 0], [u, barH]], H, false), { dashed: true }), label(H, [u + 0.1, barH + 0.25], `post y = ${u < barW / 2 ? '-' : '+'}${fmt(bw.yPost)}`, 0.15));
+      for (const u of [postU, postU2]) g.push(guideEl(polyD([[u, 0], [u, barH]], H, false), { dashed: true }), label(H, [u + 0.1, barH + 0.25], `post station ${inch(bw.yPost)} ${u < barW / 2 ? 'left' : 'right'} of the center line`, 0.15));
       g.push(guideEl(polyD([[0, barH], [barW, barH]], H, false), { dashed: true, label: 'crown height' }), guideEl(polyD([[0, barH - bw.crownIn], [barW, barH - bw.crownIn]], H, false), { dashed: true, label: 'post-top height (centerline)' }));
       g.push(dimTo(H, [0, 0], [barW, 0], `overall ${inch(barW)}`, -0.6), dimTo(H, [postU, barH + 0.0], [postU2, barH + 0.0], `post chord ${inch(2 * bw.yPost)}`, 0.5));
       g.push(dimTo(H, [barW + 0.2, barH - bw.crownIn], [barW + 0.2, barH], `crown ${inch(bw.crownIn)}`, -0.6));
@@ -506,10 +560,10 @@ function flapPlan(parts: Part[], p: Params): Plan | null {
   const crossLines = d.items.filter((i): i is Extract<typeof i, { k: 'line' }> => i.k === 'line' && i.label === 'cross hole');
   const w = f.widthIn, h = f.heightIn + 0.6;
   const dims: FormDim[] = [
-    { key: 'flap-length', label: 'Flap length', valueIn: f.widthIn },
-    { key: 'flap-width', label: 'Flap full width', valueIn: f.heightIn },
-    { key: 'flap-thickness', label: 'Flap thickness (stock)', valueIn: f.thicknessIn },
-    { key: 'pilot-marks', label: 'Drill guide holes', valueIn: marks.length },
+    lenDim('flap-length', 'Flap length', f.widthIn),
+    lenDim('flap-width', 'Flap full width', f.heightIn),
+    lenDim('flap-thickness', 'Flap thickness (stock)', f.thicknessIn),
+    countDim('pilot-marks', 'Drill guide holes', marks.length, 'hole'),
   ];
   const notes = [
     `Router template for a pattern bit: the outline is the finished flap, and the bit's bearing rides its edge (${inch(TEMPLATE_STOCK_IN)} hardboard or MDF, flat on top of the ${inch(f.thicknessIn)} oak blank). Rough the blank out on the bandsaw about 1/16" proud, then flush-trim.`,
@@ -546,7 +600,7 @@ function flapPlan(parts: Part[], p: Params): Plan | null {
 /** Every form and template drawing for the current model. `opts.date` is shown beside the params revision (the caller's choice; the wall clock is never read here). */
 export function formDrawings(parts: Part[], p: Params, opts: { date?: string } = {}): FormDrawing[] {
   const L = computeLayout(p);
-  const plans = [sideFormPlan(parts, p, L), railFormPlan(parts, L), crownPlan(parts, p, L), flapPlan(parts, p)];
+  const plans = [sideFormPlan(parts, p, L), railFormPlan(parts, p, L), crownPlan(parts, p, L), flapPlan(parts, p)];
   return plans.filter((x): x is Plan => x !== null).map((x) => finishDrawing(x, p, opts.date));
 }
 
@@ -719,7 +773,7 @@ export function tileForLetter(svg: string, widthIn: number, heightIn: number): s
     const sq = `<rect x="${fmt(x0 + 0.1)}" y="${fmt(y1 - 1.1)}" width="1" height="1" fill="#fff" fill-opacity="0.85" stroke="#000" stroke-width="0.015"/><text x="${fmt(x0 + 0.6)}" y="${fmt(y1 - 0.55)}" font-family="Helvetica, Arial, sans-serif" font-size="0.16" text-anchor="middle">1 in</text>`;
     // Two short lines, each inside the printable width: the page label and its neighbors under the printable area (0.34 in from the page bottom: some printers clip the last 0.25 in), the print instructions in the top margin.
     const label = `<text x="${fmt(x0)}" y="${fmt(y1 + 0.16)}" font-family="Helvetica, Arial, sans-serif" font-size="0.18" font-weight="bold">${win.page}</text><text x="${fmt(x0 + 0.5)}" y="${fmt(y1 + 0.16)}" font-family="Helvetica, Arial, sans-serif" font-size="${FOOT_SIZE_IN}">page ${idx} of ${total}   ${esc(fitText(name, 40))}   neighbors: ${esc(navs.join(' ') || 'none')}</text>`
-      + `<text x="${fmt(x0)}" y="0.3" font-family="Helvetica, Arial, sans-serif" font-size="${FOOT_SIZE_IN}">${esc(`print at 100%, no scaling; overlay neighbors so the crosses coincide, then trim   (${fmt(win.x)}, ${fmt(win.y)}) in`)}</text>`;
+      + `<text x="${fmt(x0)}" y="0.3" font-family="Helvetica, Arial, sans-serif" font-size="${FOOT_SIZE_IN}">${esc(`print at 100%; overlay neighbors so the crosses coincide, then trim (${frac(win.x)}, ${frac(win.y)})`)}</text>`;
     const big = `<text x="${fmt(x1 - 0.1)}" y="${fmt(y0 + 0.5)}" font-family="Helvetica, Arial, sans-serif" font-size="0.5" text-anchor="end" fill="#999" fill-opacity="0.6">${win.page}</text>`;
     pages.push(
       `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:shaper="http://www.shapertools.com/namespaces/shaper" width="${LETTER_W_IN}in" height="${LETTER_H_IN}in" viewBox="0 0 ${LETTER_W_IN} ${LETTER_H_IN}">\n` +
