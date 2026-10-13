@@ -41,12 +41,12 @@ describe('D-66 matched tracks', () => {
   });
   it('mass 115.5 lb (119.9 before): the narrower bow, a shorter front beam and king beam, the shorter stubs and the lighter rear plates (D-72/D-73: 120.7 lb with the solid axle rod, +1.9, and the 1/4 in white oak sides, box and lid, +2.8)', () => {
     const m = totalMass(buildModel(defaults, { rider: 'none', cargo: false }));
-    expect(m).toBeGreaterThan(118.5); // D-74: 119.2 lb with the 2-1/8 in laminated beams, knees and chocks (-1.3 lb on 120.5)
-    expect(m).toBeLessThan(120);
+    expect(m).toBeGreaterThan(119.5); // D-76: 120.2 lb (the side ribs, +0.96); D-74: 119.2 lb with the 2-1/8 in laminated beams, knees and chocks (-1.3 lb on 120.5)
+    expect(m).toBeLessThan(121.5); // D-77: 121.09 lb (the pivot straps and the knee roofs, +0.87)
     // with the D-71 tube and the 4 mm okoume (PRE_D72) the D-66 / D-71 mass is back
     const old = totalMass(buildModel({ ...defaults, ...PRE_D72 } as Params, { rider: 'none', cargo: false }));
-    expect(old).toBeGreaterThan(113.9); // D-74: 114.5 lb (the 2-1/8 in laminated parts), 115.5 before
-    expect(old).toBeLessThan(115.2);
+    expect(old).toBeGreaterThan(114.9); // D-76: 115.5 lb (the side ribs); D-74: 114.5 lb (the 2-1/8 in laminated parts), 115.5 before
+    expect(old).toBeLessThan(116.6); // D-77: 116.40 lb (the pivot straps and the knee roofs, +0.87)
   });
 });
 
@@ -92,7 +92,7 @@ describe('D-66 the numbers that moved', () => {
   it('cargo: the load-height rule is 10 in; the 200 lb cargo tips at 40.7 deg (D-67 limit 35: a plain pass, it was marginal at the D-66 limit of 40), the capacity is 223 lb (D-71: 274 lb with the 3/4 in axle) and the rear axle-stress row limits it (D-66 had it at 226 lb on the tip row; the front beam at 269 lb before)', () => {
     expect(defaults.cargoCgHeightIn).toBe(10);
     const tip = row('tip-straight');
-    expect(tip.cases!.cargo!.value).toBeCloseTo(40.8, 1); // 40.8 after D-74 (the 1.3 lb lighter sled) // unchanged by D-67: the limit moved, not the sled (40.65 before D-71: the 0.36 lb heavier sled; 40.9 with the D-72/D-73 4.7 lb heavier sled)
+    expect(tip.cases!.cargo!.value).toBeCloseTo(40.88, 1); // D-76: 40.88 (the ribs, 0.96 lb, mostly low and forward); 40.8 after D-74 (the 1.3 lb lighter sled) // unchanged by D-67: the limit moved, not the sled (40.65 before D-71: the 0.36 lb heavier sled; 40.9 with the D-72/D-73 4.7 lb heavier sled)
     expect(tip.cases!.cargo!.limit).toBe(35);
     expect(tip.cases!.cargo!.value).toBeGreaterThan(35 * 1.1); // outside the 10% marginal band (38.5)
     expect(tip.statusCargo).toBe('pass'); // marginal at the 40 deg limit

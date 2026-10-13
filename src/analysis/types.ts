@@ -89,7 +89,7 @@ export const GROUP_OF_ID: Record<string, CheckGroup> = {
   // The pivoting front axle (D-56)
   kingpin: 'Structure', 'king-bearing': 'Structure', 'front-beam': 'Structure', 'front-stub': 'Structure', 'steer-stops': 'Structure', 'king-beam': 'Structure',
   'park-hold': 'Braking',
-  'bridle-eye': 'Structure', 'side-web': 'Structure',
+  'bridle-eye': 'Structure', 'side-web': 'Structure', 'side-lateral': 'Structure',
   'brake-force': 'Braking', 'brake-slow': 'Braking', 'brake-traction': 'Braking', 'brake-ratio': 'Braking', 'brake-clear': 'Braking',
   'brake-flap': 'Structure', 'brake-pivot': 'Structure', 'brake-mount': 'Structure', 'brake-return': 'Structure', 'brake-abuse': 'Structure', 'handle-sockets': 'Structure',
   'axle-stress': 'Structure', 'beam-rear': 'Structure', 'bearing-groove': 'Structure', rails: 'Structure', deck: 'Structure',

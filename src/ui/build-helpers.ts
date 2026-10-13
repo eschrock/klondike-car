@@ -431,6 +431,19 @@ export interface PartFacts {
   features: string[];
   /** Features beyond the first few (the drawing lists them all). */
   moreFeatures: number;
+  /** How many to make and whether the pair is mirrored: "make 2: left and right are mirror images". Empty for a single part. */
+  make: string;
+}
+
+/**
+ * What a card says about how many to make, from the part drawing's own note ("MAKE 2: 1 as drawn (...), 1 MIRROR IMAGE (...)"): "make 2: left and right are mirror images", "make 4: 2 as drawn and
+ * 2 mirror images", or "make 3, all the same". Never a part key. Empty for a single part.
+ */
+export function makeLine(qty: number, makeNote = ''): string {
+  if (qty <= 1) return '';
+  const m = /MAKE (\d+): (\d+) as drawn.*?(\d+) MIRROR IMAGE/.exec(makeNote);
+  if (!m) return `make ${qty}, all the same`;
+  return +m[2] === 1 && +m[3] === 1 ? `make ${qty}: left and right are mirror images` : `make ${qty}: ${m[2]} as drawn and ${m[3]} mirror images`;
 }
 
 export const POPOVER_FEATURES = 4;
@@ -446,12 +459,12 @@ export function tally(lines: string[]): string[] {
  * The popover's facts from the cut list (the rough and finished sizes of the actual cuts) and, when it has run, `partDims` (board, grain, features).
  * Oak comes from `finished` and `cuts`; plywood and metal from their own rows; the size falls back to `partDims`.
  */
-export function partFacts(part: Pick<Part, 'id' | 'name' | 'partNo'> | undefined, id: string, cut: CutList | undefined, dims: PartDims | undefined): PartFacts {
+export function partFacts(part: Pick<Part, 'id' | 'name' | 'partNo'> | undefined, id: string, cut: CutList | undefined, dims: PartDims | undefined, makeNote = ''): PartFacts {
   const fin = cut?.finished.find((f) => f.ids.includes(id));
   const sheet = cut?.sheets.flatMap((g) => g.rows).find((r) => r.ids.includes(id));
   const metal = cut?.metal.find((r) => r.ids.includes(id));
   const mine = cut ? cutsOfPart(cut.cuts, id) : [];
-  const size = fin ? fin.finalText : sheet ? finalDimsText(sheet.stock) : metal ? `${metal.section}, cut to ${fracIn(metal.cutLengthIn)}` : dims?.size ?? '';
+  const size = fin ? fin.finalText : sheet ? finalDimsText(sheet.final) : metal ? `${metal.section}, cut to ${fracIn(metal.cutLengthIn)}` : dims?.size ?? '';
   const feats = dims?.features ?? [];
   return {
     id,
@@ -464,6 +477,7 @@ export function partFacts(part: Pick<Part, 'id' | 'name' | 'partNo'> | undefined
     grain: dims?.grain && dims.grain !== 'n/a' ? dims.grain : fin?.grainWord ?? sheet?.grainWord ?? '',
     features: feats.slice(0, POPOVER_FEATURES),
     moreFeatures: Math.max(0, feats.length - POPOVER_FEATURES),
+    make: makeLine(fin?.qty ?? sheet?.qty ?? metal?.qty ?? 1, makeNote),
   };
 }
 

@@ -47,18 +47,25 @@ export const KNEE_NUT_FLAT_R_IN = 0.28125;
 export interface KneeLayer { x0: number; x1: number; grain: 'y' | 'z' }
 
 /**
- * D-75 cross-lamination of the brake knee (CLT style, balanced): the layers alternate, and the FRONT layer runs along the arm ('y'), because it alone holds the bridge ahead of the
- * pivot slot (the slot is sawn through every layer behind it). With 3 layers that is y / z / y: long grain along the arm and through both pivot ears in the outer layers, long grain up
- * the whole leg and through the shoulder in the center layer.
+ * Cross-lamination of the brake knee (D-75, CLT style, balanced; flipped by D-77). The layers alternate starting UPRIGHT ('z') at the rear, so with 3 layers it is z / y / z: the two
+ * outer layers run long grain from the leg bottom up through the shoulder to the top (the leg cannot split off) and take the pivot strap's screws in SIDE grain; the center layer runs
+ * long grain along the arm ('y') and carries the arm and the pocket's roof and floor out to the strap. D-75 had y / z / y because its FRONT layer alone carried the outboard ear across
+ * the slot; D-77 removed the ear.
  */
 export function kneeLayers(x0: number, x1: number): KneeLayer[] {
   const n = Math.max(1, Math.round((x1 - x0) / KNEE_LAYER_NOMINAL_IN));
   const t = (x1 - x0) / n;
-  return Array.from({ length: n }, (_, i): KneeLayer => ({ x0: x0 + i * t, x1: x0 + (i + 1) * t, grain: (n - 1 - i) % 2 === 0 ? 'y' : 'z' }));
+  return Array.from({ length: n }, (_, i): KneeLayer => ({ x0: x0 + i * t, x1: x0 + (i + 1) * t, grain: i % 2 === 0 ? 'z' : 'y' }));
 }
+/** The stocked 4/4 board's width (in): a knee layer wider than this across its grain is edge-glued from two pieces (mirrors the cut list's board width). */
+export const KNEE_BOARD_WIDTH_IN = 6;
+/** The across layer's edge joint stays this far from the shoulder and the top bolt hole (in, D-75). */
+export const KNEE_JOINT_CLEAR_IN = 0.75;
+/** D-77: the strap's #8 screw holes (3/16 in) stay this far from its ends: 1.6 hole diameters of metal (a fabrication rule). */
+export const STRAP_SCREW_EDGE_IN = 0.3;
 /** The cross hole for the clevis pin is drilled this much over the pin (in). */
 export const PIVOT_HOLE_CLEAR_IN = 1 / 32;
-/** The pin enters the knee's inboard ear this deep (blind hole) and its cross hole for the clip sits this far beyond the knee's outboard face (in): a purchased-pin size. */
+/** The pin enters the knee's inboard ear this deep (blind hole) and its cross hole for the clip sits this far beyond the strap's outboard face (in, D-77): a purchased-pin size. */
 export const PIN_BLIND_IN = 1;
 export const PIN_STICKOUT_IN = 0.55;
 /** NDS wet-service factor C_M on screw withdrawal (Table 11.3.3): a code constant, not a design number. */
@@ -200,16 +207,25 @@ export interface BrakeGeom {
   ratioRev: number;
   ratioCrit: number;
   critical: 'forward' | 'reverse';
-  /** Pull-pin pivot: pin diameter and length, the slot (y range of the tongue and slot, outboard and inboard ear thicknesses), edge distances of the pin hole (to the tongue stack's top and bottom, ear top and bottom). */
-  pivot: { dia: number; len: number; yTongue: [number, number]; ySlot: [number, number]; earOut: number; earIn: number; zTongueTop: number; zTongueBot: number; edgeTongueUp: number; edgeTongueDown: number; edgeEarUp: number; edgeEarDown: number; slotEndX: number; blind: number };
+  /** Pull-pin pivot: pin diameter and length, the slot / pocket (y range of the tongue and the pocket, the inboard ear's thickness), edge distances of the pin hole (to the tongue stack's top
+   *  and bottom, to the inboard ear's top and bottom), the pocket's front end and the blind depth. D-77: no outboard ear; the strap carries the pin's outboard end. */
+  pivot: { dia: number; len: number; yTongue: [number, number]; ySlot: [number, number]; earIn: number; zTongueTop: number; zTongueBot: number; edgeTongueUp: number; edgeTongueDown: number; edgeEarUp: number; edgeEarDown: number; slotEndX: number; blind: number;
+    /** D-77: the pocket's floor and ceiling (z): it clears the tongue and block through the whole swing by the slot clearance. */
+    zPocketBot: number; zPocketTop: number };
+  /** D-77 pivot STRAP: a straight stainless flat bar (t thick, w fore-aft, len tall) on the knee's outboard face across the pocket's open side, |y| y0 (inner face) to y1 (outer face),
+   *  x0..x1, z0..z1; the pin hole (pin + 1/32) and the #8 screws at cols x rows (side grain of the outer layers, the roof above the pocket and the floor below it). */
+  strap: { t: number; w: number; len: number; x0: number; x1: number; z0: number; z1: number; y0: number; y1: number; pinHole: number; screwDia: number; screwHole: number; xs: number[]; zs: number[]; count: number };
   /** Bungee: eye on the flap (surface point, applied), transom anchor (x, y, z), cord lengths released / applied (3-D), cord tension released / applied, and the moment arm data. */
   bungee: { sEye: number; E: V2; Erel: V2; A: [number, number, number]; lenRel: number; lenApp: number; tRel: number; tApp: number; rate: number; fRel: V2; fApp: V2; mRel: number; mApp: number };
   /** Outrigger (knee), plan outline in (y, z) for the left side, x range, leg, arm; the rail, the backer and the bolt pattern. */
   knee: { x0: number; x1: number; poly: V2[]; legT: number; armT: number; zLeg: number; zArmBot: number; zTop: number; zBot: number; yOut: number; area: number;
     /** D-75: the face-glued layers, rear to front, with their grain. */
     layers: KneeLayer[];
-    /** D-75: height (z) of the edge-glue line of each 'y'-grain layer (wider across its grain than a board): midway between the top bolt hole and the shoulder, along that layer's grain. */
-    zEdgeGlue: number };
+    /** D-75: height (z) of the edge-glue line of each 'y'-grain layer (wider across its grain than a board): midway between the top bolt hole and the shoulder, along that layer's grain;
+     *  D-77: 3/4 in above the shoulder when the taller knee's upper piece would not fit a board there. */
+    zEdgeGlue: number;
+    /** D-77: oak above the pocket (the knee top is zPocketTop + roof) and under it at the outboard face (zArmBot = zPocketBot - floor). */
+    roof: number; floor: number };
   rail: { zb: number; zt: number; t: number };
   backer: { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number; t: number };
   bolts: { dia: number; xs: number[]; zs: number[]; count: number; stack: number; cx: number; cz: number;
@@ -334,29 +350,57 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
   const zt = L.railTop;
   const zb = L.railTop - p.railDepthIn;
   const kx0 = kneeRearX, kx1 = kneeRearX + p.brakeKneeDepthIn;
-  const legT = p.brakeKneeLegIn, armT = p.brakeKneeArmIn;
-  const yOut = y.flap[1];
-  const zTop = P[1] + blockT; // the knee top stands at the top of the pivot block (D-65)
+  const legT = p.brakeKneeLegIn;
   const zLeg = L.railTop + L.chineH;
-  const zArmBot = zTop - armT;
-  const poly: V2[] = [[yFace, zb], [yFace + legT, zb], [yFace + legT, zLeg], [yOut, zArmBot], [yOut, zTop], [yFace, zTop]];
   const kneeLay = kneeLayers(kx0, kx1);
-  // ── Pull-pin pivot (D-65): the knee arm is slotted from its rear face; the flap's tongue (with the pivot block on it) enters the slot and the pin goes through ear, tongue, ear. ──
+  // ── Pull-pin pivot (D-65, D-77): the flap's tongue (with the pivot block on it) enters a POCKET in the rear of the knee arm, open at the rear and (D-77: the outboard ear is cut away) at the
+  //    outboard side, with oak above it (the roof) and below it (the floor). The pin goes through the stainless strap on the open side, the tongue and block, and blind into the inboard ear. ──
   const slotHalf = wTongue / 2 + p.brakePivotSlotClearIn;
   const ySlot: [number, number] = [yW - slotHalf, yW + slotHalf];
-  const earOut = yOut - ySlot[1];
+  const yOut = Math.max(ySlot[1], yFace + legT + 0.25); // D-77: the arm ends at the pocket's outboard face (no ear, no stub ahead of it); kept outboard of the leg on a body wider than the track
   const earIn = ySlot[0] - yFace;
-  // The slot is sawn deep enough for the tongue's nose to clear its end through the WHOLE swing (D-66): the nose end face is square to the board (tilted by the flap slope), so its top corner (on the
+  // The pocket is deep enough for the tongue's nose to clear its end through the WHOLE swing (D-66): the nose end face is square to the board (tilted by the flap slope), so its top corner (on the
   // pivot block) is the farthest forward; turn the four corners of the tongue + block stack about the pin from the applied pose to the released one and add the slot clearance to the farthest.
-  const stackCorners: V2[] = [[s0, -blockT], [s0, tf]].map(([sc, h]): V2 => [P[0] + sc * u[0] - h * v[0], P[1] + sc * u[1] - h * v[1]]);
+  const stackPt = (sc: number, h: number): V2 => [P[0] + sc * u[0] - h * v[0], P[1] + sc * u[1] - h * v[1]];
+  const stackCorners: V2[] = [[s0, -blockT], [s0, tf]].map(([sc, h]) => stackPt(sc, h));
   let noseMaxX = -Infinity;
   for (let k = 0; k <= 20; k++) for (const q of stackCorners) noseMaxX = Math.max(noseMaxX, rot2(q, H, -(k / 20) * theta)[0]);
   const slotEndX = noseMaxX + p.brakePivotSlotClearIn;
+  // D-77: the pocket's ceiling and floor clear the block top and the flap underside over the length inside the knee (nose to the knee's rear face) through the whole swing, by the slot clearance.
+  const sRear = (xp - kx0) / Math.cos(sigma);
+  let topMax = -Infinity, botMin = Infinity;
+  for (let k = 0; k <= 20; k++) for (let j = 0; j <= 10; j++) {
+    const sc = s0 + ((sRear - s0) * j) / 10;
+    topMax = Math.max(topMax, rot2(stackPt(sc, -blockT), H, -(k / 20) * theta)[1]);
+    botMin = Math.min(botMin, rot2(stackPt(sc, tf), H, -(k / 20) * theta)[1]);
+  }
+  const zPocketTop = topMax + p.brakePivotSlotClearIn, zPocketBot = botMin - p.brakePivotSlotClearIn;
+  const zTop = zPocketTop + p.brakeKneeRoofIn; // D-77: the roof stands over the pocket (D-65 had the knee top flush with the block top, the slot open above)
+  const zArmBot = Math.min(zPocketBot - p.brakeKneeFloorIn, zTop - 0.5);
+  const armT = zTop - zArmBot;
+  const poly: V2[] = [[yFace, zb], [yFace + legT, zb], [yFace + legT, zLeg], [yOut, zArmBot], [yOut, zTop], [yFace, zTop]];
+  const zUnderAt = (yy: number) => (yy <= yFace + legT ? zb : zLeg + ((zArmBot - zLeg) * (yy - (yFace + legT))) / Math.max(1e-9, yOut - (yFace + legT)));
   const pinDia = p.brakePivotPinDiaIn;
+  // ── D-77 strap: straight flat bar on the outboard face, its rear edge flush with the knee's rear face (the pin sits 0.76 in ahead of it, so the pin has the most metal behind it);
+  //    four #8 screws in the outer layers (at their middles, kept STRAP_SCREW_EDGE_IN inside the strap's ends), at the middle of the roof and of the floor ──
+  const sT = p.brakeStrapThickIn;
+  const sW = Math.min(p.brakeStrapWidthIn, kx1 - kx0 - 0.125);
+  const sx0 = kx0, sx1 = sx0 + sW;
+  const outer = [kneeLay[0], kneeLay[kneeLay.length - 1]];
+  const sXs = [...new Set(outer.map((q) => (q.x0 + q.x1) / 2))].map((x) => Math.min(sx1 - STRAP_SCREW_EDGE_IN, Math.max(sx0 + STRAP_SCREW_EDGE_IN, x)));
+  const sZs = [zPocketBot - p.brakeKneeFloorIn / 2, zPocketTop + p.brakeKneeRoofIn / 2];
+  const STRAP_END_IN = 0.375; // metal past the screw-hole centers at the strap's ends (2 hole diameters)
+  const up16 = (q: number) => Math.ceil(q * 16 - 1e-9) / 16;
+  const sLen = up16(sZs[1] - sZs[0] + 2 * STRAP_END_IN);
+  const sz0 = (sZs[0] + sZs[1]) / 2 - sLen / 2;
+  const strap = {
+    t: sT, w: sW, len: sLen, x0: sx0, x1: sx1, z0: sz0, z1: sz0 + sLen, y0: yOut, y1: yOut + sT, pinHole: pinDia + PIVOT_HOLE_CLEAR_IN,
+    screwDia: 0.164, screwHole: 0.1875, xs: sXs, zs: sZs, count: sXs.length * sZs.length,
+  };
   const pivot = {
-    dia: pinDia, len: earOut + (ySlot[1] - ySlot[0]) + PIN_BLIND_IN + PIN_STICKOUT_IN, yTongue: y.tongue, ySlot, earOut, earIn,
-    zTongueTop: P[1] + blockT, zTongueBot: P[1] - tf, edgeTongueUp: blockT + hPin, edgeTongueDown: tf - hPin, edgeEarUp: zTop - H[1], edgeEarDown: H[1] - zArmBot,
-    slotEndX, blind: PIN_BLIND_IN,
+    dia: pinDia, len: sT + (ySlot[1] - ySlot[0]) + PIN_BLIND_IN + PIN_STICKOUT_IN, yTongue: y.tongue, ySlot, earIn,
+    zTongueTop: P[1] + blockT, zTongueBot: P[1] - tf, edgeTongueUp: blockT + hPin, edgeTongueDown: tf - hPin, edgeEarUp: zTop - H[1], edgeEarDown: H[1] - zUnderAt(ySlot[0]),
+    slotEndX, blind: PIN_BLIND_IN, zPocketBot, zPocketTop,
   };
   const rail = { zb, zt, t: railT };
   const bd = p.brakeMountBoltDiaIn;
@@ -376,8 +420,12 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
   const bolts = { dia: bd, xs, zs, count: cols * rows, stack, cx: xs.reduce((a, b) => a + b, 0) / cols, cz: zs.reduce((a, b) => a + b, 0) / rows, grip, plate };
   // D-75: the 'y'-grain layers are as wide across their grain as the knee is tall, so each is edge-glued from two pieces; the joint runs along their grain midway between the top bolt hole
   // and the shoulder (the review found the old even split landing on the shoulder); the 'z' layer crosses it with long grain.
-  const zEdgeGlue = (zs[zs.length - 1] + bd / 2 + zLeg) / 2;
-  const knee = { x0: kx0, x1: kx1, poly, legT, armT, zLeg, zArmBot, zTop, zBot: zb, yOut, area: polyArea(poly), layers: kneeLay, zEdgeGlue };
+  // D-77: the knee is taller (the roof over the pocket), so the D-75 joint (midway between the top bolt hole and the shoulder) leaves an upper piece wider than a board; the joint then moves
+  // 3/4 in ABOVE the shoulder, where both pieces fit a board. It runs along the across layer's grain and both UPRIGHT layers are glued over it.
+  const fits = (zj: number) => Math.max(zj - zb, zTop - zj) + p.laminateWidthAllowanceIn <= KNEE_BOARD_WIDTH_IN + 1e-9;
+  const zMidD75 = (zs[zs.length - 1] + bd / 2 + zLeg) / 2, zAbove = zLeg + KNEE_JOINT_CLEAR_IN;
+  const zEdgeGlue = fits(zMidD75) ? zMidD75 : fits(zAbove) ? zAbove : (zb + zTop) / 2;
+  const knee = { x0: kx0, x1: kx1, poly, legT, armT, zLeg, zArmBot, zTop, zBot: zb, yOut, area: polyArea(poly), layers: kneeLay, zEdgeGlue, roof: p.brakeKneeRoofIn, floor: p.brakeKneeFloorIn };
   // The backer runs from behind the first bolt column to ahead of the last, clear of the axle hanger behind it (joists in the way are cut back in frame.ts).
   const hangerFace = L.beamR.x + p.axleHangerWidthIn / 2;
   const bx0 = Math.max(hangerFace + 0.1, xs[0] - 1.5 * bd - 0.5 * (kx1 - kx0) / cols);
@@ -401,7 +449,7 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
   return {
     ok, why, r, O, y, alpha, delta, C, n, t, pad: { w: padW, thick: tp, length: p.brakePadLengthIn, top, bot },
     sigma, u, v, c, H, xh, P, F, xEnd, board, plan, shoe, theta, footDrop, aF, mN, mT, ratioFwd, ratioRev, ratioCrit, critical: ratioFwd <= ratioRev ? 'forward' : 'reverse',
-    pivot, bungee, knee, rail, backer, bolts, chock,
+    pivot, strap, bungee, knee, rail, backer, bolts, chock,
   };
 }
 

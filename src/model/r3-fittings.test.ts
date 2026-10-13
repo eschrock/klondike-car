@@ -5,7 +5,8 @@ import { buildModel } from './index';
 import { computeLayout } from './layout';
 import { worldAABB } from './bounds';
 import { STEP, HULL_STEP } from './build-utils';
-import { storageGeometry, LASH_HOLE_DX_IN, LASH_HOLE_DY_IN } from './storage';
+import { storageGeometry } from './storage';
+import { LASH_HOLE_DX_IN, LASH_HOLE_DZ_IN, LASH_PLATE } from './side-ribs';
 import { packEssentials, storageInterior } from './storage';
 
 const p = resolveParams(defaultParams());
@@ -13,19 +14,22 @@ const L = computeLayout(p);
 const parts = buildModel(p);
 const get = (id: string) => parts.find((x) => x.id === id)!;
 
-describe('S8: lash plate pattern fits and is drawn', () => {
-  it('each plate sits on a 1" doubler with 4 screws at +-0.5625 x +-0.25 that stay 0.25" inside the doubler faces', () => {
-    const pl = get('lash-L1'), dbl = get('doubler-lash-L1');
-    const sp = pl.joints!.find((j) => j.type === 'screw')!;
+describe('S8 / D-76: lash plate pattern fits the rib head and is drawn', () => {
+  it('each plate sits on its rib head with 4 bolts at +-0.5625 x +-0.25, inside the 2" x band-tall head (the old 1" doubler is gone)', () => {
+    const pl = get('lash-L1'), rib = get('side-rib-L1');
+    const sp = pl.joints!.find((j) => j.type === 'bolt')!;
     expect(sp.at).toHaveLength(4);
-    for (const a of sp.at!) { expect(Math.abs(a[0])).toBeCloseTo(LASH_HOLE_DX_IN, 9); expect(Math.abs(a[1])).toBeCloseTo(LASH_HOLE_DY_IN, 9); }
-    expect(dbl.geometry.type === 'box' && dbl.geometry.size[1]).toBeCloseTo(p.lashDoublerThickIn, 9);
-    expect(p.lashDoublerThickIn / 2 - LASH_HOLE_DY_IN).toBeGreaterThanOrEqual(0.25 - 1e-9);
-    expect(dbl.joints!.find((j) => j.type === 'screw')!.at).toHaveLength(4);
-    // plate footprint lies wholly over the doubler, inboard of the gunwale inner face
-    const a = worldAABB(pl), d = worldAABB(dbl);
-    expect(a.min[1]).toBeGreaterThanOrEqual(d.min[1] - 1e-6);
-    expect(a.max[1]).toBeLessThanOrEqual(d.max[1] + 1e-6);
+    for (const a of sp.at!) { expect(Math.abs(a[0])).toBeCloseTo(LASH_HOLE_DX_IN, 9); expect(Math.abs(a[1])).toBeCloseTo(LASH_HOLE_DZ_IN, 9); expect(a[2]).toBeCloseTo(-LASH_PLATE.folded / 2, 9); } // local: x along the gunwale, y up, z off the head face
+    // the holes stay 3/16 in or more inside the head's ends and the band's edges
+    expect(p.sideRibHeadLengthIn / 2 - LASH_HOLE_DX_IN).toBeGreaterThanOrEqual(0.375);
+    expect(p.railBandIn / 2 - LASH_HOLE_DZ_IN).toBeGreaterThanOrEqual(0.375);
+    expect(LASH_PLATE.len).toBeLessThanOrEqual(p.sideRibHeadLengthIn);
+    expect(rib.joints!.find((j) => j.type === 'hole' && j.to === 'lash-L1')!.at).toHaveLength(4);
+    expect(get('doubler-lash-L1')).toBeUndefined();
+    // the plate's footprint lies over the head, fore and aft
+    const a = worldAABB(pl), d = worldAABB(rib);
+    expect(a.min[0]).toBeGreaterThanOrEqual(d.min[0] - 1e-6);
+    expect(a.max[0]).toBeLessThanOrEqual(d.max[0] + 1e-6);
   });
 });
 

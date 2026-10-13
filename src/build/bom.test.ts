@@ -48,7 +48,7 @@ describe('bom', () => {
     cl.metal.forEach((r) => r.ids.forEach(hit));
     // purchased parts are priced in their own section, or in the finishing touches (lights, cushions, reflectors, lash points)
     [...secLines('purchased'), ...secLines('touches')].forEach((l) => l.partIds?.forEach(hit));
-    // the lash doublers are oak: they are in the cut list (Lumber), not in the touches
+    // the side ribs, knees and box ties are oak: they are in the cut list (Lumber), not in the touches
     const built = parts.filter(isBuilt);
     expect(built.length).toBeGreaterThan(150);
     for (const x of built) expect(where.get(x.id), x.id).toBe(1);
@@ -60,7 +60,7 @@ describe('bom', () => {
     const fb = fastenerBreakdown(parts);
     const n = (k: string): number => fb[k]?.count ?? 0;
     expect(b.jointCounts.screw).toBe(n('screws'));
-    expect(b.jointCounts.bolt).toBe(n('bolt sets') + n('bolts tapped into steel') + n('nuts and washers (itemized bolts)'));
+    expect(b.jointCounts.bolt).toBe(n('bolt sets') + n('machine screw sets') + n('bolts tapped into steel') + n('nuts and washers (itemized bolts)'));
     expect(b.jointCounts['threaded-insert']).toBe(n('inserts'));
     expect(b.jointCounts.knob).toBe(n('thumb knobs'));
     expect(b.jointCounts.domino).toBe(n('Dominos'));
@@ -193,7 +193,7 @@ describe('bom', () => {
     expect(qtyOf(f, /machine screw #10-32 x 3\/8"/)).toBe(6); // seat hinge leaves into the six inserts
     expect(qtyOf(f, /stainless rod 3\/8" x 2-1\/4"/)).toBe(2); // handlebow pins
     expect(qtyOf(f, /wood screw #6 x 3-1\/2"/)).toBe(0); // D-72: one rail-to-chine length now
-    expect(qtyOf(f, /wood screw #6 x 2-1\/2"/)).toBe(10); // rail to chine, every zone: 4 aft (head counterbored 1 in up the 3 in rail) + 1 forward a side, #6 piloted (round 3: a #8 left 0.11 in a side of the edge)
+    expect(qtyOf(f, /wood screw #6 x 2-1\/2"/)).toBe(18); // rail to chine, every zone: 4 aft (head counterbored 1 in up the 3 in rail) + 1 forward a side, #6 piloted (round 3: a #8 left 0.11 in a side of the edge); plus the 8 rib-knee screws (D-76: 2 per knee, 4 knees)
     expect(qtyOf(f, /Button plug 5\/8"/)).toBe(4);
     expect(qtyOf(f, /Nylon washer for 1\/4"/)).toBe(4);
     expect(qtyOf(f, /wood screw #6 x 1\/2"/)).toBe(0); // the lid battens use the standard #8 x 5/8 now (D-72: three wood-screw sizes, no fourth)
@@ -202,7 +202,7 @@ describe('bom', () => {
     expect(qtyOf(c, /^edge-banding$/)).toBeGreaterThanOrEqual(1);
     expect(qtyOf(c, /^sealant$/)).toBeGreaterThanOrEqual(1);
     expect(qtyOf(c, /^contact-cement$/)).toBeGreaterThanOrEqual(1);
-    for (const l of c.filter((q) => ['dual-lock', 'edge-banding', 'sealant', 'contact-cement'].includes(q.key))) expect(l.notes, l.key).toMatch(/\(.+\)$/); // cites its note
+    for (const l of c.filter((q) => ['dual-lock', 'edge-banding', 'sealant', 'contact-cement'].includes(q.key))) expect(l.notes, l.key).toBeTruthy(); // the note it came from is data (noteRef), not printed
     // the stop blocks' own screw joints carry their screws; the note table does not add them twice
     expect(parts.find((x) => x.id === 'seat-wedge-L')!.joints!.some((j) => j.type === 'screw')).toBe(true);
     expect(NOTE_ITEMS.find((i) => i.key === 'stop-block-screws')!.expand(parts, uniqueJoints(parts))).toBeNull();
@@ -297,10 +297,15 @@ describe('finishing touches (Eric, 2026-10-12)', () => {
     // the lamp-clip inserts and screws and the lash-plate screws follow their parts
     expect(touches.some((l) => /Heat-set insert M4/.test(l.key))).toBe(true);
     expect(touches.some((l) => /screw M3 x 8 mm/.test(l.key))).toBe(true);
-    expect(touches.some((l) => /wood screw #8 x 1-1\/4"/.test(l.key) && l.group === 'tie-downs')).toBe(true);
-    // the oak doublers stay in Lumber (they are cut from the boards) and the section says so
-    expect(touches.some((l) => /doubler/i.test(l.key))).toBe(false);
-    expect(b.sections.find((s) => s.id === 'touches')!.notes!.join(' ')).toMatch(/doublers.*Lumber/);
+    // D-76: the D-ring plates are through-bolted: 4 #8-32 x 2" machine screws, a #8 fender washer and a nylock each, 24 sets, no wood screws
+    const tie = (re: RegExp) => touches.filter((l) => re.test(l.key) && l.group === 'tie-downs').reduce((a, l) => a + need(l), 0);
+    expect(tie(/machine screw #8-32 x 2"/)).toBe(24);
+    expect(tie(/fender washer #8 \(3\/4" OD\)/)).toBe(24);
+    expect(tie(/lock nut #8-32/)).toBe(24);
+    expect(touches.some((l) => /wood screw/.test(l.key) && l.group === 'tie-downs')).toBe(false);
+    // the oak ribs, knees and box ties stay in Lumber (bandsawn from offcuts, in the cut list) and the section says so
+    expect(touches.some((l) => /side-rib|rib knee|box-tie|doubler/i.test(l.key))).toBe(false);
+    expect(b.sections.find((s) => s.id === 'touches')!.notes!.join(' ')).toMatch(/ribs.*Lumber/);
   });
 
   it('puts every touches line in exactly one of the four groups, and core + bulk + touches = total', () => {
@@ -582,6 +587,11 @@ describe('price research applied (2026-10-12)', () => {
     const s8 = line('316 wood screw #8 x 1-1/4"');
     expect([s8.qty, s8.unitUsd, s8.packQty]).toEqual([37, 0.53, undefined]); // D-72: every general-purpose screw is the #8 x 1-1/4 (17 before); 37 x 0.53 = 19.61 is under the $33.95 bag of 100
     expect(s8.extUsd).toBeCloseTo(37 * 0.53, 2);
+    // D-77: the two brake pivot straps take 4 PAN-HEAD #8 x 1-1/4 each, a line of their own (the flat-head line stays 37); priced as the flat-head screw until quoted
+    const pan = line('316 pan-head wood screw #8 x 1-1/4"');
+    expect([pan.qty, pan.unitUsd]).toEqual([8, 0.53]);
+    expect(pan.basis).toBe('estimate');
+    expect(pan.notes).toMatch(/pan-head/);
     const w = line('316 fender washer 1/4"');
     expect([w.qty, w.unitUsd]).toEqual([40, 0.46]); // 40 x 0.46 = 18.40, under the $27.26 bag of 100 (48 before the hanger bolts were counted once: they are the angle's upright bolts)
     const n = line('316 nylon-insert lock nut 1/4-20');
@@ -611,5 +621,34 @@ describe('price research applied (2026-10-12)', () => {
     const bar = line(/flat bar 1\/16/);
     expect(bar.basis).toBe('estimate');
     expect(bar.alternatives![0].specGap).toBe(true); // the 1/8" bar is thicker
+  });
+});
+
+describe('bom text for the book', () => {
+  const keys = [...new Set(parts.flatMap((x) => [x.id, x.partNo ?? '']).filter((k) => k.includes('-')))].sort((a, z) => z.length - a.length);
+  const keyRe = new RegExp(`(?<![\\w/.-])(${keys.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?![\\w/-])`);
+  const urls = (t: string): string => t.replace(/https?:\/\/\S+/g, '');
+
+  for (const spec of [0, 1]) {
+    it(`has no decision ids, report tags or part keys in any printed text (weather spec ${spec})`, () => {
+      const bb = bom(buildModel({ ...p, weatherSpec: spec }), { ...p, weatherSpec: spec });
+      const text = [
+        ...bb.sections.flatMap((s) => [...(s.notes ?? []), ...s.lines.flatMap((l) => [l.description, l.notes, l.decision, l.materialNote].filter((q): q is string => !!q))]),
+        urls(bb.csv),
+      ];
+      for (const t of text) {
+        expect(urls(t), t.slice(0, 80)).not.toMatch(/\b[DAQ]-\d+\b/);
+        expect(t, t.slice(0, 80)).not.toMatch(/\bS7\b/);
+        expect(urls(t), t.slice(0, 80)).not.toMatch(keyRe);
+      }
+    });
+  }
+
+  it('reads the laminated parts by their names, and keeps the part key out of the CSV item column', () => {
+    const lumber = secLines('lumber').map((l) => l.notes ?? '').join(' ');
+    expect(lumber).toMatch(/face-laminated parts \(rear axle beam, front axle beam, brake pivot knee, wheel chock: /);
+    const items = b.csv.split('\n').slice(1).map((r) => r.split(',')[1]);
+    expect(items).not.toContain('king-thrust');
+    expect(items).toContain('4/4');
   });
 });

@@ -45,6 +45,7 @@ const ALLOW: Allow[] = [
   // ---- body: captured joints and sloped members
   { a: /^deck$/, b: /^(side-[LR]-(chine|chine-in|web)|transom-rear)$/, why: 'the deck edge rises into the gap under the inner chine band, against the web, and sits in the transom dado (D-35, D-45, D-62)' },
   { a: /^side-[LR]-web$/, b: /^(side-[LR]-(chine|chine-in|gunwale|gunwale-in)|transom-rear)$/, why: 'the oak bands are glued to the faces of the web (the sandwich, D-62; the plan-curved slab boxes meet along the S) and the web ends enter the transom stopped dados (D-35)' },
+  { a: /^side-rib-[LR]\d$/, b: /^side-[LR]-(chine-in|gunwale-in|web)$/, why: 'D-76: the rib\'s back is glued to the inner bands (and to a band-strip filler on the web); in the bow taper the plan-curved band slab boxes (1-1/2 in long) stand proud of the curved face the rib meets' },
   { a: /^seat-(wedge-[LR]|crest-strip)$/, b: /^seat-(back-(stile|pad|panel)|knob|wedge)-?[LR]?$/, why: 'oak wedge/post is a trapezoid extrusion whose sloped face is the stile\'s rear face; its OBB is the bounding box' },
 ];
 const matches = (r: Allow, a: Part, b: Part) => (r.a.test(a.id) && r.b.test(b.id)) || (r.a.test(b.id) && r.b.test(a.id));
@@ -80,6 +81,7 @@ const KNOWN_OFF_DEFAULT: RegExp[] = [
   /^transom-backer-[LR] x flag-tube:/, // a narrow body or an under-seat box (3c-4b, reported): the flag tube meets the transom backer
   /^brake-knee-[LR] x reflector-[LR]1:/, // sideRear8 (3c-4b, reported)
   /^seat-grip-backing-[LR] x brake-knee-[LR]:/, // wheel 11.5 in and up (D-71): the brake knee sits r + brakePivotAheadIn behind the axle line, which a bigger wheel pushes under the grab-board backing strip by 1/16 in; the 5/8 in axle lowers the front stack 1/16 in, so 11.5 in wheels now pass the 8 in deck rule (they were an error) and this off-default overlap shows. Reported, not patched
+  /^(sign-backer-[LR]\d|seat-grip-[LR]) x side-rib-[LR]1:/, // D-76 (reported): a short rear box (seatXMin, some fuzz designs) puts the box rib among the sign backers or under the grab board; it stands a fixed inset behind the box's fore end
   /^rail-[LR] x king-beam:/, // wheelbase 52 and rear overhang 14: the king beam end meets the rail that curves in with the bow turn-in by 0.05 in
   /^(clamp-F[LR]\d|king-beam) x roll-pad-[LR]:/, // a short stub (clamp plates inboard of the pad) or a thick disc: the roll pad meets a plate or the king beam; validateParams warns about the pad position
   /^clamp-F[LR]\d x king-thrust:/, // a long stub: the inner clamp plate reaches under the disc

@@ -11,7 +11,8 @@ import { obbOverlap, partOBB, partsOverlap, transformPoint, worldAABB } from './
 import { liftSlot } from './body';
 import { makeCtx } from './build-utils';
 import { REAR_LAMP_CLIP } from './lighting';
-import { ESSENTIALS, packEssentials, storageInterior, lashPositions, interiorOf, storageGeometry, type StorageGeometry } from './storage';
+import { ESSENTIALS, packEssentials, storageInterior, interiorOf, storageGeometry, type StorageGeometry } from './storage';
+import { sideRibStations } from './side-ribs';
 import { seatBackSupport, frameJoint } from './seat';
 import { DOMINOS } from './joinery';
 import { signedArea } from './profile';
@@ -29,7 +30,6 @@ const gunwaleTopZ = (p: Params, L: ReturnType<typeof computeLayout>, x: number) 
 /** Unit axes of a part's local frame in the model frame: u along its x (turned to the slope), n along its z (the normal to the sloped top). */
 const axes = (x: Part) => ({ u: [x.transform[0], x.transform[1], x.transform[2]] as Vec3, n: [x.transform[8], x.transform[9], x.transform[10]] as Vec3 });
 const centerOf = (x: Part) => transformPoint(x.transform, [0, 0, 0]);
-const sizeOf = (x: Part) => { if (x.geometry.type !== 'box') throw new Error(`${x.id} is not a box`); return x.geometry.size; };
 
 describe('seat', () => {
   it('the pad and the cushion come off without tools (Dual Lock); the frameless back panel stays on the sled on its hinges and flips flat (D-57); the stop blocks are fixed', () => {
@@ -192,50 +192,31 @@ describe('storage box', () => {
     // The same box with its own 1/4" floor panel loses 0.25 × 14.5 × 26.5 = 96.0625 in³ of height.
     expect(interiorOf({ ...g, deckFloor: false, floorZ: 9.25 }).totalIn3).toBeCloseTo(2260.875 - 96.0625, 9);
   });
-  it('lash points: at least 6, 2" or more apart along the slope, bolted to the gunwale doubler with a 4-hole plate', () => {
+  it('lash points (D-76): 6, one on the head of each side rib, through-bolted with 4 #8-32 machine screws; no lash doublers', () => {
     const lash = parts.filter((x) => x.id.startsWith('lash-'));
-    expect(lash.length).toBeGreaterThanOrEqual(6);
+    expect(lash).toHaveLength(6);
     expect(lash.filter((x) => x.id.startsWith('lash-L'))).toHaveLength(defaults.lashPointsPerSide);
-    for (const tag of ['L', 'R']) {
-      const xs = lash.filter((x) => x.id.startsWith(`lash-${tag}`)).map((x) => centerOf(x)[0]).sort((a, b) => a - b);
-      for (let i = 1; i < xs.length; i++) expect(xs[i] - xs[i - 1]).toBeGreaterThanOrEqual(2);
-    }
+    expect(parts.some((x) => x.id.startsWith('doubler-lash'))).toBe(false);
+    const xs = sideRibStations(defaults, L).map((st) => st.x);
     for (const x of lash) {
-      const doubler = byId.get(x.id.replace('lash-', 'doubler-lash-'))!;
-      expect(doubler, x.id).toBeDefined();
-      expect(x.joints!.some((j) => j.type === 'screw' && j.to === doubler.id)).toBe(true);
-      expect(x.joints!.find((j) => j.type === 'screw')!.count, x.id).toBe(4); // 4-hole plate (lash-load check needs 4 screws)
-      expect(doubler.joints!.some((j) => j.type === 'glue' && j.to === (x.id.startsWith('lash-L') ? 'side-L-gunwale-in' : 'side-R-gunwale-in')), doubler.id).toBe(true);
+      const rib = byId.get(x.id.replace('lash-', 'side-rib-'))!;
+      expect(rib, x.id).toBeDefined();
+      const bolt = x.joints!.find((j) => j.type === 'bolt' && j.to === rib.id)!;
+      expect(bolt.count, x.id).toBe(4);
+      expect(bolt.size).toMatch(/^#8-32 x 2" .*stainless machine screw/);
+      expect(xs.some((sx) => Math.abs(sx - centerOf(x)[0]) < 0.01), x.id).toBe(true);
     }
-    expect(lashPositions(defaults, L, 5).length).toBeGreaterThanOrEqual(3);
   });
-  it('lash points sit ON the sloped gunwale line, turned to its slope (D-54): the plate underside touches the line, the doubler hangs from it, all inside the straight side', () => {
+  it('lash points sit on the inner face of the rib heads, centered on the gunwale band and turned to the sheer (D-54, D-76)', () => {
     const lash = parts.filter((x) => x.id.startsWith('lash-'));
-    const xMin = L.xRear + L.transom + L.rearLane, xMax = L.xSideEnd;
     for (const x of lash) {
-      const { u, n } = axes(x);
-      expect(u[2], x.id).toBeCloseTo(-Math.sin(sideSlopeAt(L, centerOf(x)[0])), 2); // the local slope of the sheer (a curve now, D-57)
+      const { u } = axes(x);
       const c = centerOf(x);
-      const bottom = c.map((v, i) => v - (sizeOf(x)[2] / 2) * n[i]); // plate underside center (plate 0.75 in tall including the ring)
-      // Hand: z = 8 + 16 - 12 (x + 9.25) / 64.53 at the plate's foot point.
-      expect(bottom[2], x.id).toBeCloseTo(gunwaleTopZ(defaults, L, bottom[0]), 1);
-      // The doubler is the full 1.5 in band tall under the plate, on the inboard face of the gunwale (|y| from 10.375 to 11.375).
-      const d = byId.get(x.id.replace('lash-', 'doubler-lash-'))!;
-      const db = worldAABB(d);
-      expect(Math.abs(x.id.startsWith('lash-L') ? db.max[1] : db.min[1])).toBeCloseTo(L.hwC, 6);
-      expect(db.min[0], `${d.id} clear of the transom backers`).toBeGreaterThanOrEqual(xMin - 1e-6); // the corner backers fill the first 3/4 in behind the transom face
-      expect(db.max[0], `${d.id} short of the end of the sides`).toBeLessThan(xMax);
-      expect(sizeOf(d)[2]).toBeCloseTo(defaults.railBandIn, 9);
-      const top = centerOf(d).map((v, i) => v + (sizeOf(d)[2] / 2) * axes(d).n[i]);
-      expect(top[2]).toBeCloseTo(gunwaleTopZ(defaults, L, top[0]), 1); // flush with the gunwale top
-      expect(Math.abs(c[1])).toBeLessThan(L.hwC); // entirely inboard of the gunwale
-    }
-    // Clear of the grab handles (the handles stand 5 in behind the H-point and are about 6.5 in long).
-    const grips = parts.filter((x) => /^seat-grip/.test(x.id)).map((x) => worldAABB(x));
-    const gx0 = Math.min(...grips.map((b) => b.min[0])), gx1 = Math.max(...grips.map((b) => b.max[0]));
-    for (const x of lash) {
-      const b = worldAABB(x);
-      expect(b.max[0] < gx0 || b.min[0] > gx1, `${x.id} x ${b.min[0].toFixed(1)}..${b.max[0].toFixed(1)} vs grips ${gx0.toFixed(1)}..${gx1.toFixed(1)}`).toBe(true);
+      expect(u[2], x.id).toBeCloseTo(-Math.sin(sideSlopeAt(L, c[0])), 2); // the local slope of the sheer (a curve, D-57)
+      expect(c[2], x.id).toBeCloseTo(gunwaleTopZ(defaults, L, c[0]) - defaults.railBandIn / 2, 1); // on the band center
+      const st = sideRibStations(defaults, L).find((q) => Math.abs(q.x - c[0]) < 0.01)!;
+      expect(Math.abs(c[1]), x.id).toBeLessThan(st.yIn - defaults.sideRibDepthIn); // inboard of the head
+      expect(Math.abs(c[1]), x.id).toBeGreaterThan(st.yIn - defaults.sideRibDepthIn - 0.5);
     }
   });
   it('a taller rear side steepens the sheer and turns the lash points and the grab boards with it (sideHeightRearIn 20)', () => {
@@ -427,7 +408,6 @@ describe('no unintended overlaps for the seat, storage and fittings', () => {
     [/^seat-hinge-[LR]$/, /^(seat-wedge-[LR]|seat-back-(stile|rail|panel))/], // the knuckle at the foot of the back is part of the joint
     [/^seat-pin-[LR]$/, /^(seat-back-stile|seat-back-panel|seat-wedge)-?[LR]?$/], // the pin passes through the panel into the stop block
     [/^flag-block-/, /^(flag-tube|side-)/], // the blocks hold the tube against the side
-    [/^seat-grip-[LR]$/, /^doubler-lash-[LR]\d$/], // the grab board and the lash doubler share the gunwale bolts (3c-4b, reported)
   ];
   // FINDING: a seat back of 22 in or wider (the param allows up to 26) makes the stile backers overlap the box walls (0.11 in) in the 22 in box interior; validateParams has no check for it.
   const variants: Record<string, Partial<Params>> = {
@@ -435,7 +415,7 @@ describe('no unintended overlaps for the seat, storage and fittings', () => {
     riser: { seatRiserIn: 1.5 }, angle0: { seatBackAngleDeg: 0 }, angle30: { seatBackAngleDeg: 30 }, wideBack: { seatBackWidthIn: 21 },
     smallBox: { storageVolumeIn3: 800 }, bigBox: { storageVolumeIn3: 4000 }, thickRim: { storageLidRimWidthIn: 2, storageLidRimThickIn: 1 },
     ply12: { thinSheetMaterial: 2, panelPlyIn: 0.472 }, // D-73: the okoume option, so panelPlyIn is the thin sheet
-    lash5: { lashPointsPerSide: 5 }, sag: { sheerCurveIn: 1 }, steep: { sideHeightRearIn: 20 }, wide26: { bodyWidthIn: 26 }, lowBow: { sideHeightBowIn: 3 },
+    lash2: { lashPointsPerSide: 2 }, // D-76: the bow posts keep their ribs, without D-rings sag: { sheerCurveIn: 1 }, steep: { sideHeightRearIn: 20 }, wide26: { bodyWidthIn: 26 }, lowBow: { sideHeightBowIn: 3 },
     short: { riderStatureIn: 54, riderLegReachIn: 28.5 },
   };
   it.each(Object.entries(variants))('%s', (_n, patch) => {

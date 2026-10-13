@@ -174,7 +174,7 @@ export function buildPivot(ctx: Ctx): Part[] {
       id: 'kingpin', partNo: 'kingpin', name: 'Kingpin bolt (grade 8)', group: 'front-end', center: [kx, 0, zHead + len / 2], axis: 'z', radius: kd / 2, length: len, mat: 'steel',
       kind: 'purchased', material: 'SAE grade 8 hex bolt, zinc-yellow, with plate washers', body: 'front-axle', fab: 'buy', step: STEP.gear,
       massLb: steelLb(Math.PI * (kd / 2) ** 2 * len) + 0.2,
-      sourcing: { vendor: `McMaster-Carr (grade 8 hex bolt ${frac(kd)}" × ${boltOrder} (stack ${f2(len + 0.45)}" = beam ${f2(b.depth)}" + disc ${f2(p.kingThrustThickIn)}" + king beam ${f2(L.king.depth)}" + head washer, nut washer and nylock nut; catalog lengths come in 1/2" steps above 3" and a grade 8 bolt is cut with a cut-off wheel and filed, not a hacksaw), full-thread or ${f2(len - 2.5)}" shank; 2 grade 8 flat washers (one under the head, one under the nut), nylock nut; Loctite on the head washer)` },
+      sourcing: { vendor: `McMaster-Carr (grade 8 hex bolt ${frac(kd)}" × ${boltOrder} (stack ${f2(len + 0.45)}" = beam ${f2(b.depth)}" + disc ${f2(p.kingThrustThickIn)}" + king beam ${f2(L.king.depth)}" + head washer, nut washer and nylock nut; catalog lengths come in 1/2" steps above 3": buy the stock length, it is used as bought (D-77 no-fabrication rule)), full-thread or ${f2(len - 2.5)}" shank; 2 grade 8 flat washers (one under the head, one under the nut), nylock nut; Loctite on the head washer)` },
       joints: [
         { type: 'bolt', to: 'beam-F', count: 1, diaIn: kd, size: `${frac(kd)}" grade 8 kingpin through the beam, head and plate washer under the beam`, at: [[0, 0, 0]], note: 'the beam turns on the bolt; the head washer clamps the bolt to the beam' },
       ],

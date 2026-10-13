@@ -436,7 +436,7 @@ describe('what is gone with the old hull, the Ackermann front end and the swivel
     for (const id of ['beam-F', 'axle-FL', 'axle-FR', 'clamp-FL1', 'clamp-FR2', 'kingpin', 'king-beam', 'king-thrust', 'bridle-tongue', 'bridle-sleeve', 'roll-pad-L', 'steer-eye-L', 'steer-anchor-L', 'steer-chain-L', 'steer-chain-R', 'bridle']) expect(parts.some((x) => x.id === id), id).toBe(true);
   });
   it('each side is a sandwich (D-61, D-62): one web with an oak band on each face at the chine and at the gunwale, ids side-L-* and side-R-* (the outer bands keep the plain ids)', () => {
-    expect(parts.filter((x) => x.id.startsWith('side-')).map((x) => x.id).sort()).toEqual(
+    expect(parts.filter((x) => x.id.startsWith('side-') && !x.id.startsWith('side-rib-')).map((x) => x.id).sort()).toEqual(
       ['side-L-chine', 'side-L-chine-in', 'side-L-gunwale', 'side-L-gunwale-in', 'side-L-web', 'side-R-chine', 'side-R-chine-in', 'side-R-gunwale', 'side-R-gunwale-in', 'side-R-web'],
     );
     expect(parts.filter((x) => x.id.startsWith('rail-')).map((x) => x.id).sort()).toEqual(['rail-L', 'rail-R']);

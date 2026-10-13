@@ -189,7 +189,7 @@ function computeOBBs(part: Part): OBB[] {
         return rects.map((r) => ({ center: transformPoint(m, [(r[0] + r[1]) / 2, (r[2] + r[3]) / 2, g.depth / 2]), axes: [column(m, 0), column(m, 1), column(m, 2)] as [Vec3, Vec3, Vec3], half: [(r[1] - r[0]) / 2, (r[3] - r[2]) / 2, g.depth / 2] as Vec3 }));
       }
     }
-    if (bw > 2 * SLAB_IN && (g.outline.length > 4 || g.holes) && area < 0.995 * bw * bh) {
+    if (bw > SLAB_IN && (g.outline.length > 4 || g.holes) && area < 0.995 * bw * bh) { // D-76: from 1-1/4 in wide (was 2-1/2), so a small T (a side rib with its head) is its shaft and its head
       const n = Math.min(MAX_SLABS, Math.max(2, Math.ceil(bw / SLAB_IN)));
       const out: OBB[] = [];
       // Slab edges: the even split plus every x where the outline has a vertex, so a notch or a step with vertical sides is resolved exactly (a rail with relief notches).

@@ -192,8 +192,8 @@ function cutlistSection(d: BuildData): string {
   out.push('<h3>Plywood</h3>');
   for (const g of c.sheets) {
     out.push(`<h4>${esc(g.label)} <span class="muted">· ${g.pieces} pieces</span></h4>`);
-    out.push(table([['Part'], ['Qty', 'num'], ['Size T × W × L'], ['Grain'], ['Fabrication'], ['Step', 'num']], g.rows.map((r) => [
-      td(`${anchors(r.ids, seen)}${esc(r.name)}${r.note ? `<div class="small"><strong>${esc(r.note)}</strong></div>` : ''}`), td(r.qty, 'num'), td(dims3(r.stock)), td(esc(r.grainWord ?? '')), td(esc(fabText(r.fab))), td(r.assemblySteps.join(', '), 'num'),
+    out.push(table([['Part'], ['Qty', 'num'], ['Final T × W × L'], ['Grain'], ['Fabrication'], ['Step', 'num']], g.rows.map((r) => [
+      td(`${anchors(r.ids, seen)}${esc(r.name)}${r.note ? `<div class="small"><strong>${esc(r.note)}</strong></div>` : ''}`), td(r.qty, 'num'), td(dims3(r.final)), td(esc(r.grainWord ?? '')), td(esc(fabText(r.fab))), td(r.assemblySteps.join(', '), 'num'),
     ])));
   }
   out.push('<h3>Metal stock</h3>');

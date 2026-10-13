@@ -24,41 +24,33 @@ const actx = makeContext(p, buildModel(p, { rider: 'goal', cargo: true }), build
 const g = brakeGeometry(ctx.p, ctx.L);
 const toWorld = (m: Mat4, v: Vec3): Vec3 => [0, 1, 2].map((k) => m[k] * v[0] + m[4 + k] * v[1] + m[8 + k] * v[2] + m[12 + k]) as Vec3;
 
-describe('(a) the brake knee is cross-laminated', () => {
-  it('three layers, ACROSS / UPRIGHT / ACROSS (y / z / y), the front layer across (it alone holds the bridge ahead of the slot)', () => {
-    for (const tag of ['L', 'R']) expect(get(`brake-knee-${tag}`).layerGrain).toEqual(['y', 'z', 'y']);
-    expect(g.knee.layers.map((q) => q.grain)).toEqual(['y', 'z', 'y']);
+describe('(a) the brake knee is cross-laminated (D-75; the layup flipped by D-77)', () => {
+  it('three layers, UPRIGHT / ACROSS / UPRIGHT (z / y / z): D-77 removed the outboard ear the D-75 front ACROSS layer carried, so the outer layers are UPRIGHT (the leg and the strap screws)', () => {
+    for (const tag of ['L', 'R']) expect(get(`brake-knee-${tag}`).layerGrain).toEqual(['z', 'y', 'z']);
+    expect(g.knee.layers.map((q) => q.grain)).toEqual(['z', 'y', 'z']);
     const t = g.knee.layers.map((q) => q.x1 - q.x0);
     for (const v of t) expect(v).toBeCloseTo(p.brakeKneeDepthIn / 3, 9);
-    // the slot ends inside the front layer, so the bridge ahead of it is long grain
-    const front = g.knee.layers[g.knee.layers.length - 1];
-    expect(g.pivot.slotEndX).toBeGreaterThan(front.x0);
-    expect(g.pivot.slotEndX).toBeLessThan(front.x1);
   });
-  it('the UPRIGHT layer is one board wide; each ACROSS layer is edge-glued from two pieces that fit a board, the joint between the top bolt hole and the shoulder, not at it', () => {
+  it('each UPRIGHT layer is one board wide; the ACROSS layer is edge-glued from two pieces that fit a board, the joint clear of the top bolt hole and of the shoulder', () => {
     const allow = p.laminateWidthAllowanceIn;
     const height = g.knee.zTop - g.knee.zBot, reach = g.knee.yOut - g.y.face;
     expect(reach + allow).toBeLessThanOrEqual(BOARD_WIDTH_IN);
-    expect(height + allow).toBeGreaterThan(BOARD_WIDTH_IN); // so the ACROSS layers are edge-glued
+    expect(height + allow).toBeGreaterThan(BOARD_WIDTH_IN); // so the ACROSS layer is edge-glued
     const zg = g.knee.zEdgeGlue;
     expect(zg - g.knee.zBot + allow).toBeLessThanOrEqual(BOARD_WIDTH_IN);
     expect(g.knee.zTop - zg + allow).toBeLessThanOrEqual(BOARD_WIDTH_IN);
     const topHole = Math.max(...g.bolts.zs) + g.bolts.dia / 2;
     expect(zg - topHole).toBeGreaterThan(0.75);
-    expect(g.knee.zLeg - zg).toBeGreaterThan(0.75);
+    expect(Math.abs(g.knee.zLeg - zg)).toBeGreaterThanOrEqual(0.75 - 1e-9); // D-77: 3/4 in above the shoulder (the taller knee); D-75 had it below
     expect(get('brake-knee-L').notes).toMatch(/CROSS-LAMINATED \(D-75/);
   });
-  it('the analysis counts only the layers whose grain suits each check, and the ear pull-off is cross-grain tension at F_v / 3', () => {
+  it('the analysis counts only the layers whose grain suits each check: the leg on the UPRIGHT layers, the arm, roof and floor on the ACROSS layer; the D-75 ear checks are gone with the ear', () => {
     const cs = runChecks(p, { includeTruck: false });
     const mount = cs.find((c) => c.id === 'brake-mount')!, pivot = cs.find((c) => c.id === 'brake-pivot')!;
     const leg = mount.details!.find((d) => /knee leg just above the top bolt row/.test(d.name))!;
-    expect(leg.util).toBeLessThan(0.9);
-    const peel = pivot.details!.find((d) => /layer islands pulled off/.test(d.name))!;
-    const oakShear = (p.oakShearPsi * p.wetServiceFactorStrength) / p.woodSafetyFactor;
-    expect(peel.limit).toBeCloseTo(oakShear / 3, 9);
-    expect(peel.util).toBeLessThan(0.9);
-    expect(pivot.details!.some((d) => /bridge ahead of the slot/.test(d.name))).toBe(true);
-    expect(pivot.details!.some((d) => /ear bending at the bridge/.test(d.name))).toBe(false); // the old along-the-grain check of a cross-grain section is gone
+    expect(leg.util).toBeLessThan(0.5); // two UPRIGHT layers now (0.72 with one)
+    expect(pivot.details!.some((d) => /layer islands pulled off|bridge ahead of the slot|outboard ear/.test(d.name))).toBe(false);
+    expect(pivot.details!.some((d) => /knee roof over the pocket/.test(d.name))).toBe(true);
     expect(mount.status).toBe('pass');
     expect(pivot.status).toBe('pass');
   });

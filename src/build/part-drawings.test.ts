@@ -87,10 +87,15 @@ describe('part drawings', () => {
     expect(n).toBeGreaterThan(15);
   });
 
-  it('puts the knee bolts and the plate recess on the brake backer, and the slot in the knee', () => {
+  it('puts the knee bolts and the plate recess on the brake backer, and the pocket in the knee (D-77)', () => {
     const backer = sheets.find((s) => s.partNo === 'brake-backer')!;
     const knee = sheets.find((s) => s.partNo === 'brake-knee')!;
-    expect(knee.features.some((f) => f.kind === 'slot' && /^1 slot, .*wide .*deep from the REAR face/.test(f.text) && /flap tongue/.test(f.purpose ?? ''))).toBe(true);
+    const pocket = knee.features.find((f) => f.kind === 'notch' && /^1 pocket, 1-3\/8" wide × 1-25\/32" high × 1-21\/32" deep, open at the outboard edge\. In the REAR face: /.test(f.text) && /flap tongue/.test(f.purpose ?? ''))!;
+    expect(pocket).toBeTruthy();
+    expect(pocket.positions![0]).toMatch(/^0" to 1-3\/8" from the outboard edge, 3\/4" to 2-17\/32" from the top end$/); // the roof is 3/4" thick, the pocket is open at the outboard edge (no ear)
+    expect(knee.features.filter((f) => /\b(slot|ear)\b/i.test(f.text)).map((f) => f.text)).toEqual([]);
+    // the pin hole is blind, from the pocket's inboard wall, and a clearance size
+    expect(knee.features.some((f) => f.kind === 'hole' && /^1 hole, 13\/32" blind hole, 1" deep\. In the inboard wall of the pocket: 1-5\/8" from the TOP end, 3\/4" from the REAR face/.test(f.text))).toBe(true);
     // D-75: the four knee-bolt holes are recorded on the backer itself (bolts, not screws), plus ONE flush plate recess (2" × 2-1/2", 1/8" deep, flat bottom) instead of four counterbores
     const bolts = backer.features.filter((f) => f.kind === 'hole' && f.count === 4);
     expect(bolts.length).toBe(1);
@@ -286,5 +291,76 @@ describe('position lists read cleanly', () => {
   it('never leave an empty slot in a list of positions (a centered point is named "centered")', () => {
     const p = defaultParams();
     for (const s of partDrawings(buildModel(p), p)) for (const f of s.features) expect(f.text, s.partId).not.toMatch(/,\s+and|,\s+,/);
+  });
+});
+
+describe('the knee drawing shows how the block is laminated', () => {
+  const knee = sheets.find((x) => x.partNo === 'brake-knee')!;
+  const t = texts(knee.svg).join('\n');
+  const flat = texts(knee.svg).join(' '); // the stock text wraps across lines
+
+  it('has an edge view with the layer lines and each layer\'s grain, and the center-layer glue joint', () => {
+    expect(knee.svg).toContain('id="layers"');
+    expect(t).toMatch(/LAYERS: how the block is laminated \(layer 1 is the REAR face/);
+    expect(t).toContain('EDGE VIEW, from the TOP end');
+    expect(t).toContain('1  upright');
+    expect(t).toContain('2  across the sled');
+    expect(t).toContain('3  upright');
+    expect(t).toMatch(/LAYERS 1 and 3, from the rear face/);
+    expect(t).toMatch(/LAYER 2, from the rear face/);
+    expect(t).toMatch(/board 1 \(bottom edge\): 5-5\/8" wide/);
+    expect(t).toMatch(/board 2 \(top\): 4-3\/4" wide/);
+    expect(t).toMatch(/edge joint: 5-1\/4" up from/);
+    expect(t).toMatch(/ONE piece, 4-1\/8" wide across its grain/);
+    // only the cross-laminated part carries the block
+    expect(sheets.filter((x) => x.svg.includes('id="layers"')).map((x) => x.partNo)).toEqual(['brake-knee']);
+  });
+
+  it('says the rough block is not a rectangle and what each layer measures (from the cut list)', () => {
+    expect(flat).toMatch(/the layers are not the same size/);
+    expect(flat).toMatch(/layers 1 and 3: 4-1\/8 wide across its grain . 11-5\/8 long; layer 2: 10-3\/8 wide across its grain . 5-3\/4 long/);
+    expect(flat).toMatch(/not a rectangle until it is milled; it fits in 2-1\/4 . 11-5\/8 . 5-3\/4/);
+    expect(flat).not.toMatch(/glued block rough 2-1\/4/);
+  });
+});
+
+describe('D-77: the pivot strap drawing', () => {
+  const strap = sheets.find((x) => x.partNo === 'brake-strap')!;
+  it('draws the strap once for both sides, with the 13/32" pin hole and four 3/16" clearance screw holes (through the strap, never a pilot)', () => {
+    expect(strap).toBeTruthy();
+    expect(strap.qty).toBe(2);
+    expect(strap.partIds.sort()).toEqual(['brake-strap-L', 'brake-strap-R']);
+    const pin = strap.features.find((f) => /pin/.test(f.purpose ?? ''))!;
+    expect(pin.text).toMatch(/^1 hole, 13\/32" clearance, through\. .*3\/4" from the REAR edge, 1-21\/32" from the BOTTOM end/);
+    const screws = strap.features.find((f) => /#8/.test(f.purpose ?? ''))!;
+    expect(screws.text).toMatch(/^4 holes, 3\/16" clearance, through\. .*2 columns × 2 rows: 11\/32" and 1-11\/16" from the REAR edge/);
+    expect(strap.features.some((f) => /pilot|deep|tap/i.test(f.text))).toBe(false);
+  });
+  it('says cut, deburr and drill, and nothing else, in the notes; the flat bar size is in the heading', () => {
+    const txt = [...strap.svg.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]).join(' ');
+    expect(txt).toMatch(/Cut from the flat bar on the metal bandsaw and deburr the cut edges; drill on the drill press/);
+    expect(txt).toMatch(/flat bar 1\/8&quot; x 2&quot;/);
+    expect(txt).toMatch(/final 1\/8 × 2 × 3-5\/16/);
+  });
+});
+
+describe('D-76: the side rib, knee and box tie drawings', () => {
+  const sheet = (id: string) => sheets.find((d) => d.partIds.includes(id))!;
+  it('gives the rib its four D-ring holes at 1-1/8" x 1/2" with a clearance drill, the sheer-cut top dimensioned, and the do-not-drill note', () => {
+    const d = sheet('side-rib-L2');
+    const holes = d.features.find((f) => f.kind === 'hole')!;
+    expect(holes.count).toBe(4);
+    expect(holes.text).toMatch(/3\/16" clearance/);
+    expect(holes.text).toMatch(/7\/16" and 1-9\/16" from the REAR edge/);
+    expect(d.features.some((f) => /Sloped edge: a straight cut, 7° from level/.test(f.text))).toBe(true);
+    expect(d.svg).toMatch(/final fit|D-ring holes/);
+  });
+  it('draws each knee counterbore on its sloped face at its own depth, centered on its screw hole', () => {
+    const d = sheet('side-rib-knee-L2');
+    const cb = d.features.filter((f) => /counterbore/.test(f.text));
+    expect(cb.length).toBe(2);
+    expect(cb[0].text).toMatch(/3\/8" wide × 1-1\/8" deep.*sloped face: 11\/16" from the OUTBOARD edge/);
+    expect(cb[1].text).toMatch(/3\/8" wide × 1\/4" deep.*sloped face: 1-13\/32" from the OUTBOARD edge/);
+    expect(cb[0].text).not.toMatch(/the the/);
   });
 });

@@ -71,7 +71,7 @@ describe('the two specs', () => {
     for (const w of [WEATHER_SPEC.standard, WEATHER_SPEC.extreme]) for (const m of [THIN_SHEET.followWeather, THIN_SHEET.whiteOakPly, THIN_SHEET.okoumeMarine, THIN_SHEET.balticBirch3mm]) {
       const p: Params = { ...defaultParams(), weatherSpec: w, thinSheetMaterial: m };
       const b = bom(buildModel(p), p, { noCompare: true });
-      const sizes = new Set(lines(b).filter((l) => /wood screw/.test(l.key) && !/^(Heat|Thumb)/.test(l.key)).map((l) => l.key.replace(/^(316|18-8) /, '')));
+      const sizes = new Set(lines(b).filter((l) => /wood screw/.test(l.key) && !/^(Heat|Thumb)/.test(l.key)).map((l) => l.key.replace(/^(316|18-8) /, '').replace(/^pan-head /, ''))); // D-77: the strap's pan-head #8 x 1-1/4 is a head style of the second size, not a fourth size
       expect([...sizes].sort(), `weather ${w}, sheet ${m}`).toEqual(['wood screw #6 x 2-1/2"', 'wood screw #8 x 1-1/4"', 'wood screw #8 x 5/8"']);
     }
   });

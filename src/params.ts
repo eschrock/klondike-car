@@ -267,7 +267,7 @@ const defs = {
   bowTaperStartIn: {
     label: 'Bow taper start (x, from the rear axle)', group: 'body', unit: 'in',
     default: 20, min: 10, max: 40, step: 1, status: 'explore', ref: 'D-66',
-    note: 'D-66: the sides are straight (full width) behind this x and start to draw in here, about mid-cabin. Earlier = a longer, gentler taper (but it must stay ahead of the seat cushion and the lash plates); later = a tighter bend, which the cold-bend rule limits (hullLamMinRadiusFactor).',
+    note: 'D-66: the sides are straight (full width) behind this x and start to draw in here, about mid-cabin. Earlier = a longer, gentler taper (but it must stay ahead of the seat cushion); later = a tighter bend, which the cold-bend rule limits (hullLamMinRadiusFactor).',
   },
   bowTaperSlackIn: {
     label: 'Taper slack over the steering clearance', group: 'body', unit: 'in',
@@ -405,7 +405,7 @@ const defs = {
   blockingThickIn: {
     label: 'Oak doubler (blocking) thickness', group: 'body', unit: 'in',
     default: 0.75, min: 0.5, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-41',
-    note: 'Local oak blocking glued behind the gunwale and the rear transom where grip pads and lash plates screw in, so every wood screw has at least ¾" of engagement.',
+    note: 'Local oak blocking glued behind the gunwale and the rear transom where grip pads screw in, so every wood screw has at least ¾" of engagement. (The D-ring plates are through-bolted to the side ribs, D-76.)',
   },
   liftSlotLengthIn: {
     label: 'Lift hand-hold slot length (across the transom)', group: 'body', unit: 'in',
@@ -536,25 +536,70 @@ const defs = {
     note: '1 in schedule 40 PVC is 1.315 in OD (0.133 in wall).',
   },
   lashPointsPerSide: {
-    label: 'Lash points per gunwale', group: 'body', unit: '',
-    default: 3, min: 2, max: 5, step: 1, status: 'assumed', ref: 'D-41',
-    note: 'Stainless D-rings on the cabin gunwales for post-race gear hauling (BRIEF §4.9: at least 6 in all).',
-  },
-
-  lashDoublerThickIn: {
-    label: 'Lash-plate doubler thickness (inboard of the gunwale)', group: 'body', unit: 'in',
-    default: 1, min: 0.75, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-47',
-    note: 'The lash plate (1.5 x 0.9") is centered on this oak doubler, glued to the inner face of the inner gunwale band, and its four screws go straight down into it (r3 build S8): a 0.234" band is too thin for a screw, and the 4 mm web is behind it. 1" leaves 0.25" of oak beside each screw row. D-60 looked at 3/4 in (0.13 lb) and kept 1 in: the 0.9 in lash plate is wider than a 3/4 in doubler and would overhang it into the gunwale, and only 1/8 in of oak would be left beside each screw row.',
+    label: 'Lash points (D-rings) per side', group: 'body', unit: '',
+    default: 3, min: 2, max: 3, step: 1, status: 'assumed', ref: 'D-41, D-76',
+    note: 'D-76: the D-rings are through-bolted to the heads of the side ribs, one per rib (3 per side: the box rib, the mid rib and the bow post). 2 leaves the bow post without one (the ribs stay: they stiffen the side). BRIEF §4.9 asks for at least 6 in all. The old screwed lash doublers are gone.',
   },
   lashLoadLbf: {
     label: 'Lash point design load (strap pull)', group: 'body', unit: 'lbf',
-    default: 300, min: 100, max: 600, step: 25, status: 'assumed', ref: 'D-41',
-    note: 'BRIEF §4.9: the D-ring bolt plate is rated for 300 lbf working load. The lash-load check pulls each plate with this at the angle below.',
+    default: 300, min: 100, max: 600, step: 25, status: 'assumed', ref: 'D-41, D-76',
+    note: 'BRIEF §4.9: the D-ring bolt plate is rated for 300 lbf working load. The lash-load check pulls each plate with this at the angle below (through-bolts, head bearing, rib bending, D-76), and the side-lateral row pulls the side in with it at the worst rib.',
   },
   lashPullAngleDeg: {
     label: 'Lash strap pull angle above the deck', group: 'body', unit: '°',
-    default: 45, min: 15, max: 75, step: 5, status: 'assumed', ref: 'D-41',
-    note: 'The strap runs up and inboard over the load: 45° splits the pull evenly into screw withdrawal (vertical) and lateral shear (horizontal).',
+    default: 45, min: 15, max: 75, step: 5, status: 'assumed', ref: 'D-41, D-76',
+    note: 'The strap runs up and inboard over the load: 45° splits the pull evenly into a vertical part (shear in the D-ring bolts) and an inboard part (bolt tension, and the side pulled in).',
+  },
+  // ── Side ribs (D-76, docs/side-stiffness-study.md option E): three oak ribs per side on the inside face of the web, whose heads carry the D-rings ──
+  sideRibWidthIn: {
+    label: 'Side rib width (fore-aft)', group: 'body', unit: 'in',
+    default: 0.75, min: 0.5, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-76',
+    note: 'D-76: the rib shaft, the knee and the box-tie spacer are this thick fore-aft (3/4 in oak, bandsawn from 4/4 offcuts). The rib is glued to the inside face of the web between the inner chine and gunwale bands and notched over both bands.',
+  },
+  sideRibDepthIn: {
+    label: 'Side rib depth (proud of the inner bands)', group: 'body', unit: 'in',
+    default: 0.75, min: 0.5, max: 1.25, step: 0.0625, status: 'assumed', ref: 'D-76',
+    note: 'D-76: how far the rib (shaft and head) stands inboard of the inner band faces; between the bands it also fills the band thickness down to the web, so its section there is this plus the band thickness deep. 1 in would take the E2 rib from 0.87 to 0.58 at the D-ring rating for +0.06 lb (study).',
+  },
+  sideRibHeadLengthIn: {
+    label: 'Side rib head length (along the gunwale)', group: 'body', unit: 'in',
+    default: 2, min: 1.75, max: 3, step: 0.125, status: 'assumed', ref: 'D-76',
+    note: 'D-76: the rib widens to a head this long at the gunwale, as tall as the gunwale band (railBandIn) and cut to the sheer at the top. The 1.5 x 0.9 in D-ring plate sits on its inner face, through-bolted with four #8-32 machine screws.',
+  },
+  sideRibKneeHeightIn: {
+    label: 'Side rib knee height (up the rib)', group: 'body', unit: 'in',
+    default: 2.5, min: 1.5, max: 3, step: 0.125, status: 'assumed', ref: 'D-76',
+    note: 'D-76: the triangular oak knee at the foot of the mid rib and the bow post, glued to the rib\'s inner face and to the deck and screwed down through the deck into the joist (or the king beam) under it. The rib section above the knee is what the rib-bending checks read.',
+  },
+  sideRibKneeLengthIn: {
+    label: 'Side rib knee length (along the deck, inboard)', group: 'body', unit: 'in',
+    default: 2, min: 1.5, max: 3, step: 0.125, status: 'assumed', ref: 'D-76',
+    note: 'D-76: the knee\'s foot runs this far inboard from the rib face. The two screws into the joist sit along it; their withdrawal is checked in the side-lateral row (the toe lifts under an outward push).',
+  },
+  sideRibBoxInsetIn: {
+    label: 'Box rib station (behind the storage box fore end)', group: 'body', unit: 'in',
+    default: 1.4, min: 0.75, max: 4, step: 0.05, status: 'assumed', ref: 'D-76',
+    note: 'D-76: the rear rib (E1) stands this far behind the outer face of the storage box\'s fore end, beside the box (study option D), and an oak spacer ties it to the box side near the fore corner, so the box is its base. The study put it at 1.1 in (x = 5.9); 1.4 in (x = 5.6) leaves 3/8 in between its outside bolt washers and the rear reflector, which cannot move forward (the grab board\'s backing strip is right ahead of it), and 0.4 in to the side sign.',
+  },
+  sideRibMidXIn: {
+    label: 'Mid rib station (x, snaps to the nearest joist)', group: 'body', unit: 'in',
+    default: 27.6, min: 10, max: 44, step: 0.1, status: 'assumed', ref: 'D-76',
+    note: 'D-76: the mid rib (E2) and its knee stand on the joist nearest this x (joist 5 at the defaults, x = 27.6), ahead of the seat cushion: a knee on joist 4 (x = 20.2) would hit the cushion.',
+  },
+  sideRibFrontXIn: {
+    label: 'Bow rib station (x, snaps to the nearest joist or the king beam)', group: 'body', unit: 'in',
+    default: 44, min: 30, max: 48, step: 0.1, status: 'verify', ref: 'D-76',
+    note: 'D-76: the bow post (E3) and its knee stand on the member nearest this x: the king beam at 44 (the default). Its inner face is about 7-7/8 in from the center line, about 1 in outside a winter boot. VERIFY: sit a booted rider in the sled before cutting; if the post is in the way, set this to 35 (the chain joist, x = 35.1, where the post face is about 8-3/8 in from the center line).',
+  },
+  boxTieWidthIn: {
+    label: 'Box-tie spacer width (fore-aft)', group: 'body', unit: 'in',
+    default: 0.75, min: 0.75, max: 2, step: 0.125, status: 'assumed', ref: 'D-76',
+    note: 'D-76 (study option D): the oak spacer between the box rib and the storage box side, epoxied to both; it fills the gap and is this wide fore-aft. 3/4 in, flush with the rib (the study drew 1 in; the glue on the rib face is only the rib\'s width either way, and 3/4 in is 0.03 lb lighter for the pair).',
+  },
+  boxTieHeightIn: {
+    label: 'Box-tie spacer height', group: 'body', unit: 'in',
+    default: 3, min: 1.5, max: 4, step: 0.25, status: 'assumed', ref: 'D-76',
+    note: 'D-76: the spacer is this tall and its top stands 1/8 in under the box coaming: it is glued to the box side below the coaming, never to the lid frame, which moves.',
   },
 
   // ── Seat & rider position ────────────────────────────────────────────────
@@ -1304,40 +1349,64 @@ const defs = {
     note: 'The foot of the knee that sits on the rail and chine outer face; the mounting bolts pass through it. D-60: 1-3/4 in (was 2 in).',
   },
 
-  brakeKneeArmIn: {
-    label: 'Knee arm thickness (around the pivot pin)', group: 'brake', unit: 'in',
-    default: 1.5, min: 1, max: 2.5, step: 0.25, status: 'assumed', ref: 'D-57, D-65',
-    note: 'The horizontal arm that reaches out over the gap beside the tire to the pivot pin; braced by a sloping underside. D-65: 1-1/2 in (was 1-1/4): the pin passes through the ears with 3/4 in of oak above and below it.',
+  brakeKneeRoofIn: {
+    label: 'Knee roof over the pivot pocket (oak above the tongue)', group: 'brake', unit: 'in',
+    default: 0.75, min: 0.5, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-77',
+    note: 'D-77 (Eric approved, 2026-10-13): the outboard ear is gone and the slot is a POCKET open at the rear and the outboard side, with oak above it (this roof) and below it (brakeKneeFloorIn). The pivot strap spans the open side and its upper screws bite the roof; 3/4 in leaves 3/8 in of oak each side of a #8 screw. The knee top stands this much above the pocket (the pocket clears the tongue and block through the swing by brakePivotSlotClearIn).',
+  },
+
+  brakeKneeFloorIn: {
+    label: 'Knee floor under the pivot pocket (at the outboard face)', group: 'brake', unit: 'in',
+    default: 0.75, min: 0.5, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-77',
+    note: 'D-77: oak under the pocket at the knee\'s outboard face (it deepens inboard along the sloping underside); the strap\'s lower screws bite it. Replaces brakeKneeArmIn (the arm depth at its outboard end, 1-1/2 in): the arm now ends at the pocket\'s outboard face and its depth there is the floor, the pocket and the roof.',
+  },
+
+  brakeStrapThickIn: {
+    label: 'Pivot strap thickness (stainless flat bar)', group: 'brake', unit: 'in',
+    default: 0.125, min: 0.0625, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-77',
+    note: 'D-77: the pin\'s outboard end rides in a stainless strap screwed across the open side of the pocket (it replaces the oak outboard ear). Straight flat bar, cut to length on the metal bandsaw and drilled on the drill press: no bending, welding, tapping, machining or countersinking (Eric\'s no-fabrication rule). 1/8 in keeps the out-of-plane bending under a sideways push of the flap (brakeFlapSideLoadLbf) within the brake-pivot row.',
+  },
+
+  brakeStrapWidthIn: {
+    label: 'Pivot strap width (fore-aft)', group: 'brake', unit: 'in',
+    default: 2, min: 1.5, max: 2.5, step: 0.25, status: 'assumed', ref: 'D-77',
+    note: 'D-77: the same 1/8 in x 2 in flat bar as the knee-bolt backing plate (one stock for both). It covers the whole pocket opening and puts its four #8 screws in the knee\'s two outer (UPRIGHT) layers, side grain. Capped at the knee depth less 1/8 in.',
+  },
+
+  brakeFlapSideLoadLbf: {
+    label: 'Sideways push on the flap foot (a boot scuffing it)', group: 'brake', unit: 'lbf',
+    default: 10, min: 0, max: 40, step: 1, status: 'assumed', ref: 'D-77',
+    note: 'D-77: a boot scuffing sideways on the foot tread (about a ninth of the 90 lbf foot limit). The flap yaws in the pocket and the tongue pushes the strap outward, so the strap screws are loaded in withdrawal and the strap bends out of its plane (brake-pivot row). The oak ear it replaces was never checked for this.',
   },
 
   brakePivotPinDiaIn: {
     label: 'Flap pivot pin diameter (316 stainless clevis pin)', group: 'brake', unit: 'in',
     default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-65',
-    note: 'D-65 (Eric): the screwed butt hinge is replaced by a pull pin. A 3/8 in stainless clevis pin goes through the knee ears and the flap\'s tongue (double shear) and is held by a hitch-pin clip: pull the pin, unhook the cord, and the flap lifts off.',
+    note: 'D-65 (Eric): the screwed butt hinge is replaced by a pull pin. A 3/8 in stainless clevis pin goes through the strap (D-77), the flap\'s tongue and into the knee\'s inboard side (double shear) and is held by a hitch-pin clip: pull the pin, unhook the cord, and the flap lifts off. D-77: the outboard ear is a stainless strap now; the pin runs strap, tongue and block, then 1 in blind into the inboard ear (still double shear), the clip outboard of the strap.',
   },
 
   brakePivotTongueIn: {
-    label: 'Flap pivot tongue width (across, between the knee ears)', group: 'brake', unit: 'in',
+    label: 'Flap pivot tongue width (across, in the knee pocket)', group: 'brake', unit: 'in',
     default: 1.25, min: 0.75, max: 2, step: 0.125, status: 'assumed', ref: 'D-65',
-    note: 'The flap\'s front end narrows to this tongue (plan taper) and the oak pivot block lies on it; the pair enters a slot in the rear of the knee arm and the pin goes through the ears, the tongue and the block. The slot is 1/16 in wider each side.',
+    note: 'The flap\'s front end narrows to this tongue (plan taper) and the oak pivot block lies on it; the pair enters the pocket in the rear of the knee (D-77) and the pin goes through the strap and into the knee, the tongue and the block. The slot is 1/16 in wider each side.',
   },
 
   brakePivotBlockIn: {
     label: 'Pivot block thickness (on the flap tongue)', group: 'brake', unit: 'in',
     default: 0.625, min: 0.375, max: 1, step: 0.125, status: 'assumed', ref: 'D-65',
-    note: 'A small white-oak block glued and screwed on top of the flap tongue where it enters the knee. It deepens the tongue (flap 7/8 in + block 5/8 in) so the pin has 3/4 in of oak above and below it. The knee top stands this much above the flap top.',
+    note: 'A small white-oak block glued and screwed on top of the flap tongue where it enters the knee. It deepens the tongue (flap 7/8 in + block 5/8 in) so the pin has 3/4 in of oak above and below it. D-77: the knee top stands brakeKneeRoofIn above the pocket that clears the block (it was flush with the block top).',
   },
 
   brakePivotEndIn: {
     label: 'Flap tongue past the pin (end distance)', group: 'brake', unit: 'in',
     default: 0.75, min: 0.5, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-65',
-    note: 'The tongue and the pivot block reach this far past the pin axis: wood beyond the hole. Likewise the knee ears stand this far behind the pin.',
+    note: 'The tongue and the pivot block reach this far past the pin axis: wood beyond the hole. Likewise the knee\'s inboard ear stands this far behind the pin (D-77: there is no outboard ear).',
   },
 
   brakePivotSlotClearIn: {
-    label: 'Slot clearance each side of the tongue', group: 'brake', unit: 'in',
+    label: 'Pocket clearance each side of the tongue', group: 'brake', unit: 'in',
     default: 0.0625, min: 0.03, max: 0.125, step: 0.0156, status: 'assumed', ref: 'D-65',
-    note: 'The slot sawn in the knee arm is the tongue width plus this each side, so the flap swings freely and a little grit does not bind it.',
+    note: 'The slot sawn in the knee arm is the tongue width plus this each side, so the flap swings freely and a little grit does not bind it. D-77: the slot is a pocket with a roof and a floor; it also clears the tongue and block by this much above and below through the whole swing.',
   },
 
   brakePivotBlockScrews: {
@@ -1367,7 +1436,7 @@ const defs = {
   brakeBackPlateYieldPsi: {
     label: 'Knee-bolt backing plate yield (304 / 316, annealed)', group: 'brake', unit: 'psi',
     default: 30000, min: 25000, max: 60000, step: 1000, status: 'assumed', ref: 'D-75',
-    note: 'Annealed 304 and 316 flat bar: 30 ksi minimum yield (ASTM A276 / A479). Allowable = yield / steel safety factor.',
+    note: 'Annealed 304 and 316 flat bar: 30 ksi minimum yield (ASTM A276 / A479). Allowable = yield / steel safety factor. D-77: also the pivot strap (the same flat bar).',
   },
 
   brakeMountBoltDiaIn: {
@@ -1377,9 +1446,9 @@ const defs = {
   },
 
   brakeMountWasherOdIn: {
-    label: 'Knee bolt head washer outside diameter (3/8 in USS flat washer)', group: 'brake', unit: 'in',
-    default: 1, min: 0.75, max: 1.0625, step: 0.0625, status: 'assumed', ref: 'D-57, D-65, D-75',
-    note: 'D-75: a 3/8 in USS flat washer (1 in OD) under each bolt HEAD on the knee leg\'s outboard face, with no counterbore: the bolt columns are 1-1/16 in apart, so 1 in washers leave 1/16 in between them (the old 1-1/4 in fender washers overlapped). The head side bears mostly on the END grain of the knee\'s outer layers (D-75 cross-lamination). The nut side has the backing plate (brakeBackPlateThickIn), not washers. D-65 history: 1-1/4 in fender washers under the nuts in 1-3/8 in counterbores.',
+    label: 'Knee bolt head washer outside diameter (3/8 in narrow flat washer)', group: 'brake', unit: 'in',
+    default: 0.875, min: 0.75, max: 1.0625, step: 0.0625, status: 'assumed', ref: 'D-57, D-65, D-75',
+    note: 'D-75: a 3/8 in narrow (type B) flat washer, 7/8 in OD, under each bolt HEAD on the knee leg\'s outboard face, with no counterbore. The knee is 2-1/8 in deep with the bolt columns 1-1/16 in apart and 17/32 in from each face, so a 1 in washer (the first D-75 choice) stood only 1/32 in from the knee\'s face edge and would overhang with any drilling error; the 7/8 in washer leaves 3/32 in at the face and 3/16 in between the washers (the old 1-1/4 in fender washers overlapped). The head side bears on the knee\'s outer layers (D-77: UPRIGHT, side grain) and on the edge of the ACROSS center layer (end grain); the head-washer row stays well below its limit at 7/8 in. The nut side has the backing plate (brakeBackPlateThickIn), not washers. D-65 history: 1-1/4 in fender washers under the nuts in 1-3/8 in counterbores.',
   },
 
   brakeMountBoltColumns: {
@@ -1688,6 +1757,11 @@ const defs = {
     label: 'White oak modulus of elasticity', group: 'materials', unit: 'psi',
     default: 1780000, min: 1000000, max: 2000000, step: 10000, status: 'assumed', ref: 'D-4',
   },
+  oakMoePerpPsi: {
+    label: 'White oak modulus of elasticity across the grain (tangential)', group: 'materials', unit: 'psi',
+    default: 140000, min: 80000, max: 300000, step: 5000, status: 'assumed', ref: 'D-76',
+    note: 'D-76 (side-stiffness study): about 0.08 of the along-grain E (Wood Handbook E_T / E_L for white oak). The chine and gunwale bands bend across their grain when the side is pushed in or out.',
+  },
   oakShearPsi: {
     label: 'White oak shear parallel to grain', group: 'materials', unit: 'psi',
     default: 2000, min: 1000, max: 2200, step: 50, status: 'assumed', ref: 'D-4',
@@ -1803,10 +1877,30 @@ const defs = {
     default: 5500, min: 3000, max: 8000, step: 100, status: 'assumed', ref: 'D-73',
     note: 'D-73 ESTIMATE, between the okoume (5,000) and Baltic birch (7,000) values of D-5; same caveat as the E.',
   },
+  whiteOakPlyMoePerpPsi: {
+    label: 'White oak plywood effective E (across the face grain)', group: 'materials', unit: 'psi',
+    default: 500000, min: 150000, max: 900000, step: 10000, status: 'assumed', ref: 'D-76',
+    note: 'D-76 ESTIMATE (side-stiffness study): 1/4 in hardwood plywood is usually 3 plies with thin oak faces and a thick cross-banded core, so bending ACROSS the face grain runs along the core grain: about 0.5 Msi. With equal plies it could be 0.25 Msi. The side webs\' face grain runs along x, so every vertical bending of a web (the side-web row, the side-lateral strips) is across it. Ask the supplier for the construction and replace.',
+  },
+  whiteOakPlyMorPerpPsi: {
+    label: 'White oak plywood effective MOR (across the face grain)', group: 'materials', unit: 'psi',
+    default: 2750, min: 1000, max: 5500, step: 50, status: 'assumed', ref: 'D-76',
+    note: 'D-76 ESTIMATE (side-stiffness study): half the along-grain value (design 1,170 psi after the wet-service and safety factors), for the thick cross-banded core. Same caveat as the E.',
+  },
   balticThinThickIn: {
     label: '1/8" (3 mm) Baltic birch real thickness', group: 'materials', unit: 'in',
     default: 0.118, min: 0.1, max: 0.14, step: 0.001, status: 'verify', ref: 'D-73',
     note: 'D-73: 3 mm (0.118 in). Its density, E and MOR are the Baltic birch values above (birchDensityPcf 42, birchMoePsi, birchMorPsi). The sheet is probably 5 x 5 ft (60 x 60 in): every part must nest on it (the side web blank is about 59.6 in).',
+  },
+  balticThinMoePerpPsi: {
+    label: '3 mm Baltic birch effective E (across the face grain)', group: 'materials', unit: 'psi',
+    default: 80000, min: 40000, max: 400000, step: 5000, status: 'assumed', ref: 'D-76',
+    note: 'D-76: 3 equal plies, so across the face grain only the thin core runs the right way. Metsä Wood\'s declared values for 4 mm 3-ply birch give E across / along = 1,029 / 16,471 N/mm² = 0.063: 0.063 x 1.3 Msi = 80,000 psi.',
+  },
+  balticThinMorPerpPsi: {
+    label: '3 mm Baltic birch effective MOR (across the face grain)', group: 'materials', unit: 'psi',
+    default: 1100, min: 500, max: 3500, step: 50, status: 'assumed', ref: 'D-76',
+    note: 'D-76: Metsä Wood\'s declared 4 mm 3-ply birch bending strength across / along = 10.6 / 65.9 N/mm² = 0.16: 0.16 x 7,000 psi = 1,100 psi.',
   },
   okoumeDensityPcf: {
     label: 'Okoume marine ply density', group: 'materials', unit: 'lb/ft³',
@@ -1819,6 +1913,16 @@ const defs = {
   okoumeMorPsi: {
     label: 'Okoume ply effective MOR (face grain ∥ span)', group: 'materials', unit: 'psi',
     default: 5000, min: 3000, max: 8000, step: 100, status: 'assumed', ref: 'D-5',
+  },
+  okoumeMoePerpPsi: {
+    label: '4 mm okoume effective E (across the face grain)', group: 'materials', unit: 'psi',
+    default: 150000, min: 60000, max: 500000, step: 5000, status: 'assumed', ref: 'D-76',
+    note: 'D-76 ESTIMATE: 4 mm BS 1088 okoume is 3 plies with a core about half the thickness, so across the face grain the core carries most of it: about 0.17 of the along-grain E (the 3 mm Baltic, with equal plies, is 0.06). Ask the supplier.',
+  },
+  okoumeMorPerpPsi: {
+    label: '4 mm okoume effective MOR (across the face grain)', group: 'materials', unit: 'psi',
+    default: 1500, min: 600, max: 3500, step: 50, status: 'assumed', ref: 'D-76',
+    note: 'D-76 ESTIMATE: 0.3 of the along-grain MOR (the core alone gives about 0.25 for a core half the thickness; Metsä\'s equal-ply 3-ply birch is 0.16).',
   },
   birchDensityPcf: {
     label: 'Baltic birch ply density', group: 'materials', unit: 'lb/ft³',
@@ -2023,6 +2127,11 @@ const defs = {
     label: '316 stainless bolt yield (cold-worked F593)', group: 'factors', unit: 'psi',
     default: 65000, min: 30000, max: 100000, step: 1000, status: 'assumed', ref: 'D-43, D-54',
     note: 'ASTM F593 condition CW, 65 ksi min yield for 3/8 in and under. Allowable tension = yield / steel safety factor. (Was kingpinCrossBoltYieldPsi.)',
+  },
+  lashBoltYieldPsi: {
+    label: 'D-ring bolt yield (#8-32 stainless machine screw)', group: 'factors', unit: 'psi',
+    default: 30000, min: 20000, max: 65000, step: 1000, status: 'assumed', ref: 'D-76',
+    note: 'D-76: stainless machine screws carry no F593 certification, so the lash-load row uses the annealed 18-8 / 316 minimum yield (30 ksi, the floor), not the 65 ksi of a cold-worked F593 bolt. Allowable = yield / the steel safety factor.',
   },
   grade8BoltYieldPsi: {
     label: 'SAE grade 8 bolt yield', group: 'factors', unit: 'psi',
@@ -2293,6 +2402,9 @@ export interface ThinSheet {
   densityPcf: number;
   moePsi: number;
   morPsi: number;
+  /** D-76: E and MOR ACROSS the face grain (the side webs bend this way: their face grain runs along x). */
+  moePerpPsi: number;
+  morPerpPsi: number;
   /** Full sheet bought (in): 48 x 96 except the Baltic birch, which is sold 60 x 60. */
   sheetWidthIn: number;
   sheetLengthIn: number;
@@ -2306,10 +2418,10 @@ export interface ThinSheet {
 export function thinSheet(p: Params): ThinSheet {
   const key = thinSheetKey(p);
   if (key === THIN_SHEET.whiteOakPly)
-    return { key, name: '1/4 in white oak plywood', material: '1/4 in white oak plywood', nominal: '1/4 in', thicknessIn: p.whiteOakPlyThickIn, densityPcf: p.whiteOakPlyDensityPcf, moePsi: p.whiteOakPlyMoePsi, morPsi: p.whiteOakPlyMorPsi, sheetWidthIn: 48, sheetLengthIn: 96, priceKey: '5 mm', glue: 'interior / Type II' };
+    return { key, name: '1/4 in white oak plywood', material: '1/4 in white oak plywood', nominal: '1/4 in', thicknessIn: p.whiteOakPlyThickIn, densityPcf: p.whiteOakPlyDensityPcf, moePsi: p.whiteOakPlyMoePsi, morPsi: p.whiteOakPlyMorPsi, moePerpPsi: p.whiteOakPlyMoePerpPsi, morPerpPsi: p.whiteOakPlyMorPerpPsi, sheetWidthIn: 48, sheetLengthIn: 96, priceKey: '5 mm', glue: 'interior / Type II' };
   if (key === THIN_SHEET.balticBirch3mm)
-    return { key, name: '3 mm Baltic birch', material: '3 mm Baltic birch plywood', nominal: '1/8 in (3 mm)', thicknessIn: p.balticThinThickIn, densityPcf: p.birchDensityPcf, moePsi: p.birchMoePsi, morPsi: p.birchMorPsi, sheetWidthIn: 60, sheetLengthIn: 60, priceKey: '3 mm', glue: 'exterior' };
-  return { key: THIN_SHEET.okoumeMarine, name: '4 mm okoume', material: 'okoume marine plywood', nominal: '4 mm', thicknessIn: p.panelPlyIn, densityPcf: p.okoumeDensityPcf, moePsi: p.okoumeMoePsi, morPsi: p.okoumeMorPsi, sheetWidthIn: 48, sheetLengthIn: 96, priceKey: '4 mm', glue: 'marine (BS 1088)' };
+    return { key, name: '3 mm Baltic birch', material: '3 mm Baltic birch plywood', nominal: '1/8 in (3 mm)', thicknessIn: p.balticThinThickIn, densityPcf: p.birchDensityPcf, moePsi: p.birchMoePsi, morPsi: p.birchMorPsi, moePerpPsi: p.balticThinMoePerpPsi, morPerpPsi: p.balticThinMorPerpPsi, sheetWidthIn: 60, sheetLengthIn: 60, priceKey: '3 mm', glue: 'exterior' };
+  return { key: THIN_SHEET.okoumeMarine, name: '4 mm okoume', material: 'okoume marine plywood', nominal: '4 mm', thicknessIn: p.panelPlyIn, densityPcf: p.okoumeDensityPcf, moePsi: p.okoumeMoePsi, morPsi: p.okoumeMorPsi, moePerpPsi: p.okoumeMoePerpPsi, morPerpPsi: p.okoumeMorPerpPsi, sheetWidthIn: 48, sheetLengthIn: 96, priceKey: '4 mm', glue: 'marine (BS 1088)' };
 }
 
 /** Derived quantities that many modules need; no geometry here. */
@@ -2332,6 +2444,9 @@ export function derived(p: Params) {
     thinPlyDensityPcf: thin.densityPcf,
     thinPlyMoePsi: thin.moePsi,
     thinPlyDesignMorPsi: (thin.morPsi * p.wetServiceFactorStrength) / p.woodSafetyFactor,
+    /** D-76: across the face grain (vertical bending of the side webs). */
+    thinPlyMoePerpPsi: thin.moePerpPsi,
+    thinPlyDesignMorPerpPsi: (thin.morPerpPsi * p.wetServiceFactorStrength) / p.woodSafetyFactor,
     wheelMassLb,
     wheelRadiusIn: p.wheelDiameterIn / 2,
     /** Body length, rear transom to the bow tip. */

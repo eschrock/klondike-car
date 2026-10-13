@@ -5,7 +5,7 @@
  * square. The outline of the thing to cut is an outside cut (black) so Shaper Origin can cut it; the dimension layer is guides (blue). Nothing here is hand-entered: curves and stations come
  * from the layout, the parts' meshes and the params. The revision stamp is a hash of the params state (never the wall clock), unless the caller passes `opts.date`.
  *
- * Drawings (ids): 'side-form' (a: the cleat-line template and the S-ramp), 'rail-form' (b), 'crown-templates' (c: handlebow and bow bulkhead), 'brake-flap-template' (d).
+ * Drawings (ids): 'side-form' (a: the cleat-line template and the S-ramp), 'rail-form' (b), 'crown-templates' (c: handlebow and bow bulkhead), 'brake-flap-template' (d), 'brake-knee-template' (e).
  *
  * Each drawing also says how to BUILD the form (Eric 2026-10-12: "am I cutting out two pieces of plywood in that shape?"): `FormDrawing.build` is an ordered list of steps (material and
  * thickness, how many layers or pieces cut to which line, how they stack and fasten, the base, the braces, ribs or cleats and their spacing, the tape, the spring-back, the clamping), every
@@ -17,7 +17,7 @@ import { bowGeometry } from '../model/handle';
 import { transomTopOutline } from '../model/body';
 import type { Part, Vec2 } from '../model/types';
 import { flatPattern } from './flat';
-import { cutListFor } from './part-drawings';
+import { brakeOf, cutListFor } from './part-drawings';
 import { analyzeShaperPart } from './shaper-svg';
 import {
   ANNOTATION_ATTRS, checkSquareEls, circleD, dimensionEls, esc, fmt, frac, guideEl, hash6, pathEl, polyD, rectLoop, svgDocument, textEl, type Xf,
@@ -27,6 +27,8 @@ import {
 /** Thickness (in) of the hardboard / MDF the templates and ramp ribs are cut from. */
 export const TEMPLATE_STOCK_IN = 0.25;
 export const RIB_STOCK_IN = 0.75;
+/** The margin the mirror-ramp cap has beyond the web edge on each side (in): the outer ribs stand 3/8 in past the web edge, so the cap just covers them. */
+const CAP_MARGIN_IN = 0.5;
 /** Least thickness (in) of the S-ramp rib anywhere, so it does not end in a knife edge: the rib's profile sits on this constant base (matches the 1/4 in hardboard template the web lies on). */
 export const RIB_BASE_IN = 0.25;
 /** Spacing (in) of cleats and clamps along a bend: "every 4 to 5 in" (HULL_STEP, build-utils.ts). */
@@ -253,7 +255,8 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   const clampsPerBand = Math.ceil(f.widthIn / CLEAT_SPACING_IN) + 1;
   const rampLen = uOf(xRe) - uOf(xR0);
   const capW = (ribs - 1) * ribPitch + RIB_STOCK_IN + 1;
-  const mirrorCapW = (mirrorRibs - 1) * mirrorPitch + RIB_STOCK_IN + 1;
+  // The mirror cap is the web's own outline plus a margin each side: the ribs stand across the web's full height (their centers on its two edges), so the cap is the web's height plus `CAP_MARGIN_IN` each side. (It was the rib span plus the rib thickness plus 1", wider than the web by 1-3/4" for no reason.)
+  const mirrorCapW = f.heightIn + 2 * CAP_MARGIN_IN;
   const notes = [
     `Lay the web FLAT on the bench on this template: ${inch(f.widthIn)} along the plan curve, ${inch(f.heightIn)} tall at the rear.`,
     `Cleat the sheer line: ${nCleat} cleats ${inch(cleatStep)} apart, on the high side of the line. A straight 1-1/2" strip bent to the sheer pushes sideways about 65 lbf per band at mid-span until the epoxy cures.`,
@@ -264,7 +267,7 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
     'Lines on the drawing: sheer (cleat line), gunwale band lower edge, web top, chine band top, inner chine band bottom, web bottom. The template and rib outlines are outside cuts for the Shaper.',
   ];
   const build: FormBuildStep[] = [
-    { step: `BENCH TOP: a flat sheet of 3/4" plywood or MDF at least ${frac(f.widthIn + 2 * BASE_END_IN)} × ${frac(f.heightIn + 2 * BASE_END_IN)} (the web is ${frac(f.widthIn)} × ${frac(f.heightIn)}). It is sacrificial: the cleats and ribs are screwed into it.${hasRamp ? ' The mirror ramp (step 5) takes a second one the same size.' : ''}` },
+    { step: `BENCH TOP: a flat sheet of 3/4" plywood or MDF at least ${frac(f.widthIn + 2 * BASE_END_IN)} × ${frac(f.heightIn + 2 * BASE_END_IN)} (the web is ${frac(f.widthIn)} × ${frac(f.heightIn)}). It is sacrificial: the cleats and ribs are screwed into it.${hasRamp ? ' The mirror ramp (side form, item 5) takes a second one the same size.' : ''}` },
     {
       step: `TEMPLATE: cut ONE piece of ${frac(TEMPLATE_STOCK_IN)} hardboard to the web's flat outline (the outer line of this drawing), on the Shaper or bandsawn outside the line and sanded to it.`,
       sub: [
@@ -293,7 +296,7 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
       sub: [
         `Cut ${mirrorRibs} ribs from ${frac(RIB_STOCK_IN)} MDF to the mirror rib profile (the lowest on this drawing): ${frac(mirrorLen)} long, ${frac(RIB_BASE_IN + rampH)} tall from the rear end to the S start, then falling through the S to ${frac(RIB_BASE_IN)} tall at the bow end.`,
         `Stand them on edge on the second bench top, ${frac(mirrorPitch)} apart center to center across the ${frac(f.heightIn)} the web stands at the rear, with two glue blocks each as for the first ramp.`,
-        `Cap: ${frac(TEMPLATE_STOCK_IN)} hardboard cut to the web's full outline (a second template), ${frac(mirrorCapW)} wide across the ribs, glued and bradded to the rib tops. Tape it. The web's underside now sits ${frac(webHighIn)} above the bench at the rear and ${frac(webLowIn)} at the bow end.`,
+        `Cap: ${frac(TEMPLATE_STOCK_IN)} hardboard cut to the web's outline plus ${frac(CAP_MARGIN_IN)} all round (a second template): ${frac(mirrorCapW)} wide at the rear, the web's ${frac(f.heightIn)} plus ${frac(CAP_MARGIN_IN)} each side, so it covers the ribs. Glue and brad it to the rib tops. Tape it. The web's underside now sits ${frac(webHighIn)} above the bench at the rear and ${frac(webLowIn)} at the bow end.`,
         `Re-fix the ${nCleat} cleats on the sheer line, each on a spacer as tall as the web's underside there (${frac(webHighIn)} at the rear, falling to ${frac(webLowIn)} at the bow end).`,
       ],
     }] : []),
@@ -597,10 +600,69 @@ function flapPlan(parts: Part[], p: Params): Plan | null {
   };
 }
 
+// ── (e) The brake-knee router template ──
+function kneePlan(parts: Part[], p: Params): Plan | null {
+  const knee = parts.find((x) => x.id === 'brake-knee-L') ?? parts.find((x) => x.partNo === 'brake-knee');
+  if (!knee) return null;
+  const bg = brakeOf(p);
+  const k = bg.knee, pv = bg.pivot, bolts = bg.bolts;
+  const thick = k.x1 - k.x0;
+  // Seen from the REAR face, left knee: u runs inboard from the OUTBOARD edge, v runs up from the BOTTOM end (the knee drawing's datums).
+  const U = (y: number): number => k.yOut - y;
+  const V = (z: number): number => z - k.zBot;
+  const outline: Vec2[] = k.poly.map(([y, z]) => [U(y), V(z)]);
+  const wIn = Math.max(...outline.map((q) => q[0]));
+  const hIn = V(k.zTop);
+  // D-77: the flap's pocket is open at the outboard edge (no ear): its rectangle in this view runs from the outboard edge to the inboard wall, between the floor and the ceiling.
+  const pocketU: [number, number] = [U(Math.max(pv.ySlot[1], k.yOut)), U(pv.ySlot[0])];
+  const pocketV: [number, number] = [V(pv.zPocketBot), V(pv.zPocketTop)];
+  const pocketDepth = pv.slotEndX - k.x0;
+  const pinV = V(k.zTop - pv.edgeEarUp);
+  const rowsV = bolts.zs.map(V);
+  const legU: [number, number] = [U(k.poly[1][0]), wIn];
+  const dims: FormDim[] = [
+    lenDim('knee-width', 'Knee width (outboard edge to inboard edge)', wIn),
+    lenDim('knee-height', 'Knee height (bottom end to top end)', hIn),
+    lenDim('knee-thickness', 'Knee thickness (front to back)', thick),
+    countDim('bolt-rows', 'Bolt-hole rows marked', rowsV.length, 'row'),
+  ];
+  const notes = [
+    `Router template for a pattern bit: the outline is the finished knee seen from its REAR face, and the bit's bearing rides its edge (${inch(TEMPLATE_STOCK_IN)} hardboard or MDF, flat on the ${inch(thick)} thick laminated block). Bandsaw the block about 1/16" proud first, then flush-trim.`,
+    `Marks (guides, not cuts): the pocket rectangle at the top end (${inch(pocketU[1] - pocketU[0])} in from the outboard edge, ${inch(hIn - pocketV[1])} to ${inch(hIn - pocketV[0])} below the top end; it is notched in the rear and center layers before the glue-up and recessed ${inch(pocketDepth)} deep from the rear face), the pivot pin line (${inch(pv.edgeEarUp)} below the top end; the pin hole itself is drilled through the strap with the flap tongue clamped in the pocket) and the ${rowsV.length} bolt rows across the leg (the columns are measured from the rear face on the knee drawing).`,
+    'Left knee shown; the right knee is the mirror image. Flip the template over for it.',
+  ];
+  const build: FormBuildStep[] = [
+    { step: `Cut ONE template from ${frac(TEMPLATE_STOCK_IN)} hardboard to the outline at offset 0 (${frac(wIn)} wide × ${frac(hIn)} tall): the bit's bearing rides its edge. Shaper, or bandsaw outside the line and sand to it.` },
+    { step: 'Scribe the pocket rectangle, the pivot pin line and the bolt rows on its edge from this drawing, so they can be carried onto the block.' },
+    { step: `Optional: glue a second layer of ${frac(TEMPLATE_STOCK_IN)} hardboard under it and flush-trim it to the first, so a bearing up to 1/2" long has a full edge to ride.` },
+    {
+      step: `USE: bandsaw the laminated block (${inch(thick)} thick) 1/16" proud of the line, stick the template on its REAR face with double-sided tape, and flush-trim with a pattern bit.`,
+      sub: ['If your bit cuts less than the block is thick, trim half the thickness, flip the block and the template over, and trim the other half from the other face.', 'For the right knee flip the template over (mirror image). No base, braces or clamps: this is a routing template.'],
+    },
+  ];
+  return {
+    id: 'brake-knee-template', title: 'Brake knee router template (left knee)', w: wIn, h: hIn + 0.6, dims, notes, build,
+    subtitle: [`Outline offset 0; ${inch(wIn)} wide × ${inch(hIn)} tall; for a ${inch(thick)} thick cross-laminated block.`],
+    draw: (place) => {
+      const T: Xf = ([u, v]) => place([u, v + 0.3]);
+      const out: string[] = [`<g id="outline">${outsideCut(outline, T, TEMPLATE_STOCK_IN, 'brake knee outline (template, offset 0)')}</g>`];
+      const g: string[] = [];
+      g.push(guideEl(polyD([[pocketU[0], pocketV[0]], [pocketU[1], pocketV[0]], [pocketU[1], pocketV[1]], [pocketU[0], pocketV[1]]], T, true), { dashed: true }));
+      g.push(label(T, [pocketU[0], hIn + 0.15], 'pocket (open at the outboard edge)', 0.14));
+      g.push(guideEl(polyD([[0, pinV], [legU[0], pinV]], T, false), { dashed: true }), label(T, [0.1, pinV + 0.08], 'pivot pin hole line', 0.13));
+      for (const v of rowsV) g.push(guideEl(polyD([[legU[0], v], [legU[1], v]], T, false), { dashed: true }));
+      g.push(label(T, [legU[0] + 0.1, rowsV[rowsV.length - 1] + 0.1], 'bolt rows', 0.13));
+      g.push(dimTo(T, [0, 0], [wIn, 0], `width ${inch(wIn)}`, -0.5), dimTo(T, [wIn, 0], [wIn, hIn], `height ${inch(hIn)}`, 0.5));
+      out.push(`<g id="guides" ${ANNOTATION_ATTRS}>${g.join('')}</g>`);
+      return out.join('');
+    },
+  };
+}
+
 /** Every form and template drawing for the current model. `opts.date` is shown beside the params revision (the caller's choice; the wall clock is never read here). */
 export function formDrawings(parts: Part[], p: Params, opts: { date?: string } = {}): FormDrawing[] {
   const L = computeLayout(p);
-  const plans = [sideFormPlan(parts, p, L), railFormPlan(parts, p, L), crownPlan(parts, p, L), flapPlan(parts, p)];
+  const plans = [sideFormPlan(parts, p, L), railFormPlan(parts, p, L), crownPlan(parts, p, L), flapPlan(parts, p), kneePlan(parts, p)];
   return plans.filter((x): x is Plan => x !== null).map((x) => finishDrawing(x, p, opts.date));
 }
 

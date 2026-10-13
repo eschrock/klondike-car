@@ -12,7 +12,7 @@ import { innerHalfWidth, sideSlopeAt, sideTopAt, type Layout } from './layout';
 import { chooseDomino, DOMINOS, frac, toLocal, type DominoQuery } from './joinery';
 import { joistId } from './frame';
 import { profilePart, signedArea } from './profile';
-import { boltLength, inchesText, pickWoodScrew, SCREW_DIA_IN, screwText } from './rear-mount';
+import { boltLength, inchesText, localPoint, pickWoodScrew, SCREW_DIA_IN, screwText } from './rear-mount';
 
 const f2 = (v: number): string => String(Math.round(v * 100) / 100);
 import type { Joint, Part, Vec2, Vec3 } from './types';
@@ -545,8 +545,8 @@ export function buildSeat(ctx: Ctx): Part[] {
           { type: 'hole', to: `side-${tag}-gunwale`, count: bolts.length, diaIn: GRIP_BOLT_DIA_IN + 1 / 32, size: `${bolts.length} holes ${(GRIP_BOLT_DIA_IN + 1 / 32).toFixed(3)}" (a clearance for the ${GRIP_BOLT_DIA_IN}" screws) through the strip, on the screw lines of the grab board; drill them with the board clamped on, one bit through every layer`,
             at: bolts.map(([bu, bn]): Vec3 => { const w = W2(bu, bn); return [w[0], w[1], GRIP_BACKING_T_IN / 2]; }) },
         ],
-        sourcing: { vendor: `McMaster-Carr (${stainless(p)} flat bar ${GRIP_BACKING_T_IN}" × ${GRIP_BACKING_H_IN}", ${f1(gripBackingLen(bLen))}" piece, hacksawed to length, ends rounded and filed, edges eased)` },
-        notes: `Backing strip for the ${GRIP_BOLTS} grab-board screw heads (D-63, build 3c-8 S9): ${stainless(p)} flat bar ${GRIP_BACKING_T_IN}" × ${GRIP_BACKING_H_IN}" × ${f1(gripBackingLen(bLen))}" on the outside of the outer gunwale band. A 1/4" button head on the 0.234" oak band over the thin web would pull through before the inside washer on the board fails, and a washer big enough to spread it (1-1/4") does not fit the 0.6" row spacing on a ${L.railBand}" band; the strip bears the heads on about ${f1(gripBackingLen(bLen) * GRIP_BACKING_H_IN)} in² (the seat-grip row checks it). Drill it with the board clamped on, one bit through all layers. It stands 1/16" proud of the hull face; round the ends.`,
+        sourcing: { vendor: `McMaster-Carr (${stainless(p)} flat bar ${GRIP_BACKING_T_IN}" × ${GRIP_BACKING_H_IN}", ${f1(gripBackingLen(bLen))}" piece, cut square on the metal bandsaw and deburred (D-77 no-fabrication rule: cut and drill only)` },
+        notes: `Backing strip for the ${GRIP_BOLTS} grab-board screw heads (D-63, build 3c-8 S9): ${stainless(p)} flat bar ${GRIP_BACKING_T_IN}" × ${GRIP_BACKING_H_IN}" × ${f1(gripBackingLen(bLen))}" on the outside of the outer gunwale band. A 1/4" button head on the 0.234" oak band over the thin web would pull through before the inside washer on the board fails, and a washer big enough to spread it (1-1/4") does not fit the 0.6" row spacing on a ${L.railBand}" band; the strip bears the heads on about ${f1(gripBackingLen(bLen) * GRIP_BACKING_H_IN)} in² (the seat-grip row checks it). Drill it with the board clamped on, one bit through all layers. It stands 1/16" proud of the hull face; cut it square on the metal bandsaw and deburr the cut edges (D-77: cut and drill only).`,
       });
       strip.kind = 'metal';
       strip.stock = { t: GRIP_BACKING_T_IN, w: GRIP_BACKING_H_IN, l: gripBackingLen(bLen) }; // the cut list reads the flat-bar stock from here, not from the sourcing text
@@ -564,4 +564,27 @@ const f1 = (v: number) => (Math.round(v * 10) / 10).toString();
 /** A hole loop must run clockwise. */
 function cw2(o: Vec2[]): Vec2[] {
   return signedArea(o) <= 0 ? o : [...o].reverse();
+}
+
+/**
+ * The gunwale bands' own ends of the grab-board screw joints (D-75 geometry audit). The screws are recorded on the board (and the steel backing strip) at their mid-thickness, which lies 5/16 in
+ * inboard of the inner band (and 1/32 in outboard of the outer band), so the points the board and strip carry are not in the bands. Each band records its own end, at its own mid-thickness on the
+ * same screw lines, so the drawings drill the bands from points that lie in them. The joint count matches the board's, so the screws are still counted once. Call after the model is built.
+ */
+export function addGripBandJoints(L: Layout, parts: Part[]): void {
+  const worldPt = (q: Part, l: Vec3): Vec3 => { const m = q.transform; return [0, 1, 2].map((k) => m[k] * l[0] + m[4 + k] * l[1] + m[8 + k] * l[2] + m[12 + k]) as Vec3; };
+  for (const { s: sg, tag } of SIDES) {
+    const board = parts.find((x) => x.id === `seat-grip-${tag}`), strip = parts.find((x) => x.id === `seat-grip-backing-${tag}`);
+    const inner = parts.find((x) => x.id === `side-${tag}-gunwale-in`), outer = parts.find((x) => x.id === `side-${tag}-gunwale`);
+    const bj = board?.joints?.find((j) => j.to === inner?.id && j.type === 'bolt');
+    if (board && inner && bj?.at) {
+      const at = bj.at.map((l): Vec3 => { const w = worldPt(board, l); return localPoint(inner.transform, [w[0], sg * (innerHalfWidth(L, w[0]) + L.sideBand / 2), w[2]]); });
+      (inner.joints ??= []).push({ ...bj, to: board.id, at });
+    }
+    const hj = strip?.joints?.find((j) => j.to === outer?.id && j.type === 'hole');
+    if (strip && outer && hj?.at) {
+      const at = hj.at.map((l): Vec3 => { const w = worldPt(strip, l); return localPoint(outer.transform, [w[0], sg * (L.hwC + L.side - L.turnIn(w[0]) - L.sideBand / 2), w[2]]); });
+      (outer.joints ??= []).push({ ...hj, to: strip.id, at });
+    }
+  }
 }

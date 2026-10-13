@@ -244,7 +244,7 @@ const render = () => {
       pin.frame = false;
       viewer.frameParts(pin.ids);
     }
-    viewer.highlight(pin?.ids ?? stepFocus?.highlightIds ?? [], '#ff9f0a');
+    viewer.highlight(pin?.ids ?? stepFocus?.highlightIds ?? [], '#ff9f0a', !!pin); // a pinned part: the rest see-through, so a knee behind the rail still shows
   }
 };
 // ── Simple | Advanced | Build (D-30) ──

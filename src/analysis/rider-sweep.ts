@@ -39,6 +39,8 @@ export const LIGHT_OF_ID: Record<string, Light | 'info'> = {
   'seat-back': 'strength', 'seat-grip': 'strength', 'storage-pack': 'info', 'storage-lid-open': 'info', 'lash-points': 'info',
   // Hull (D-43): the lift does not depend on the rider; the foot stop carries the rider's restraint load. Both color Strength.
   lift: 'strength', 'foot-stop': 'strength', 'side-web': 'strength', 'lash-load': 'info',
+  // D-76: the side pushed in or out (a 50 lbf push, the D-ring rating): a strength row that does not change with the rider (RIDER_INDEPENDENT).
+  'side-lateral': 'strength',
   // Cargo mode (D-53): the joists carry the seat and the cargo, the handlebow the handler; the stow fit, the lid and the tie-downs are cargo facts and color no light.
   'rest-load': 'strength', joists: 'strength', 'handle-bow': 'strength', 'seat-stow': 'info', 'lid-load': 'info', 'cargo-strap': 'info',
 };
@@ -97,7 +99,8 @@ export interface SweepResult {
 const RIDER_KEYS = ['riderMassLb', 'riderGoalMassLb', 'riderMinMassLb'] as const;
 
 /** Geometry-only checks: they don't change with rider weight, so they color their light but not the rider bar. */
-export const RIDER_INDEPENDENT = new Set(['turn-radius', 'steer-clear', 'truck-fit', 'rest-load']);
+// D-76: side-lateral and side-web load the side with a push, a kick and the D-ring rating, none of which changes with the rider: a fail colors Strength, not the rider bar.
+export const RIDER_INDEPENDENT = new Set(['turn-radius', 'steer-clear', 'truck-fit', 'rest-load', 'side-lateral', 'side-web']);
 
 /** Every rider case set to the same weight. */
 export const withRider = (p: Params, w: number): Params => ({ ...p, riderMassLb: w, riderGoalMassLb: w, riderMinMassLb: w });

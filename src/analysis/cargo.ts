@@ -9,6 +9,7 @@
  *   handle-bow  the handlebow under the handler's hold-back pull at the middle and a push-down (rider independent)
  * The cargo case of the generic rows (axles, wheels, bearings, rails, brake, tipping) comes from `evalBoth` (stability.ts); the deck has its own in structure.ts.
  */
+import { sideRibStations } from '../model/side-ribs';
 import { bowGeometry } from '../model/handle';
 import { cargoBed } from '../model/bed';
 import { seatStowPlan } from '../model/seat-stow';
@@ -242,9 +243,9 @@ export function cargoStrapCheck(ctx: Ctx): AnalysisCheck {
   ];
   const g = governing(ds, '');
   return cargoOnlyCheck({
-    id: 'cargo-strap', label: 'Tie-downs hold the payload (strap tension, D-rings)', group: 'Structure', value: g.value, unit: g.unit, limit: g.limit, sense: g.sense, details: ds, refs: ['D-53', 'D-41', 'BRIEF 4.9'],
+    id: 'cargo-strap', label: 'Tie-downs hold the payload (strap tension, D-rings)', group: 'Structure', value: g.value, unit: g.unit, limit: g.limit, sense: g.sense, details: ds, refs: ['D-53', 'D-41', 'D-76', 'BRIEF 4.9'],
     how: `Payload ${f(k.W, 0)} lb must resist ${p.cargoRestraintG} g forward (US DOT cargo securement, param cargoRestraintG) on a deck with friction μ ${p.cargoStrapMu}. Friction alone gives μW = ${f(p.cargoStrapMu * k.W)} lbf, short of ${f(p.cargoRestraintG * k.W)} lbf, so the straps must add a hold-down of W(g/μ − 1) = ${f(k.hold)} lbf. `
-      + `${k.straps} straps run across the load from a D-ring on one gunwale to the opposite one (${k.anchors} plates, D-41), each pulling at ${p.lashPullAngleDeg}° above the deck, so each carries T = hold / (2 × ${k.straps} × sin ${p.lashPullAngleDeg}°) = ${f(k.T)} lbf (the sideways parts of the two ends cancel). That is ${f((100 * k.T) / p.lashLoadLbf, 0)}% of a plate's ${p.lashLoadLbf} lbf working load (the lash-load row checks the screws at that load) and ${f((100 * k.T) / p.cargoStrapWllLbf, 0)}% of a ${p.cargoStrapWllLbf} lbf cam strap. Sideways and rearward (0.5 g) need less hold-down (${f(Math.max(0, k.lateralNeed))} lbf). Cam-buckle straps over the load, snug by hand; no ratchets (a ratchet can crush a plate's oak doubler).`,
+      + `${k.straps} straps run across the load from a D-ring on one side to the opposite one (${k.anchors} plates on the heads of the side ribs, D-76: x = ${sideRibStations(p, ctx.L).map((st) => f(st.x, 1)).join(', ')}", so cross straps at each rib and an X across each bay hold a cooler fore and aft), each pulling at ${p.lashPullAngleDeg}° above the deck, so each carries T = hold / (2 × ${k.straps} × sin ${p.lashPullAngleDeg}°) = ${f(k.T)} lbf (the sideways parts of the two ends cancel). That is ${f((100 * k.T) / p.lashLoadLbf, 0)}% of a plate's ${p.lashLoadLbf} lbf working load (the lash-load row checks the bolts, the head and the rib at that load; the side-lateral row pulls the sides in with these straps) and ${f((100 * k.T) / p.cargoStrapWllLbf, 0)}% of a ${p.cargoStrapWllLbf} lbf cam strap. Sideways and rearward (0.5 g) need less hold-down (${f(Math.max(0, k.lateralNeed))} lbf). Cam-buckle straps over the load, snug by hand; no ratchets (a ratchet can pull the sides in past the rating).`,
   });
 }
 

@@ -177,7 +177,7 @@ describe('step brake parts', () => {
     expect(pin.min[0]).toBeGreaterThan(knee.min[0]); // D-65: the pin is inside the knee, with oak behind it (the ears) and ahead of it
     expect(pin.max[0]).toBeLessThan(knee.max[0]);
     expect(pin.max[1]).toBeGreaterThan(knee.max[1]); // its outboard end (the cross hole and the clip) sticks out of the knee's outer face
-    expect(pin.max[1] - knee.max[1]).toBeCloseTo(0.55, 6);
+    expect(pin.max[1] - knee.max[1]).toBeCloseTo(defaults.brakeStrapThickIn + 0.55, 6); // D-77: through the strap on the knee's outer face, 0.55 in past it
     expect(pin.min[2]).toBeGreaterThan(knee.min[2]); expect(pin.max[2]).toBeLessThan(knee.max[2]);
   });
   it('the knee stays out of the sign zone on the side (D-57 item 9: x up to 6 in) and the bungee eye is on the transom, not on the side', () => {
@@ -208,7 +208,7 @@ describe('step brake parts', () => {
       const fl = worldAABB(ps.find((x) => x.id === 'brake-flap-L')!);
       expect((fl.min[1] + fl.max[1]) / 2, `track ${track}`).toBeCloseTo(track / 2, 2);
       const kn = worldAABB(ps.find((x) => x.id === 'brake-knee-L')!);
-      expect(kn.max[1]).toBeCloseTo(track / 2 + p.brakeFlapWidthIn / 2, 2);
+      expect(kn.max[1]).toBeCloseTo(track / 2 + p.brakePivotTongueIn / 2 + p.brakePivotSlotClearIn, 2); // D-77: the knee ends at the pocket's outboard face (no outboard ear)
       expect(brakeGeometry(makeCtx(p).p, makeCtx(p).L).ok).toBe(true);
     }
   });
@@ -295,22 +295,27 @@ describe('the slotted knee is real geometry (D-65, D-66 viewer fix)', () => {
   const { c, g } = geomOf(defaults);
   const fixed = buildBrakeAt(c, 0, false);
   const kneeOf = (tag: string) => fixed.find((x) => x.id === `brake-knee-${tag}`)!;
-  it('the knee is a mesh with the slot sawn through the arm: two ears and a bridge ahead of the slot, the pin hole line passes through both ears', () => {
+  it('the knee is a mesh with the D-77 POCKET: open at the rear and outboard, a roof over it, a floor under it, the bridge ahead of it; the pin line passes through the inboard ear and nothing stands outboard of the pocket', () => {
+    type Box = [[number, number, number], [number, number, number]];
     for (const [tag, sgn] of [['L', 1], ['R', -1]] as const) {
       const k = kneeOf(tag);
       expect(k.geometry.type).toBe('mesh');
-      const boxes = (k.geometry as { boxes?: unknown[] }).boxes!;
+      const boxes = (k.geometry as { boxes?: unknown[] }).boxes! as Box[];
       expect(boxes.length).toBeGreaterThan(5);
-      // no box covers the slot: a probe line through the middle of the slot, behind the slot end, hits no box
-      const yMid = sgn * (g.pivot.ySlot[0] + g.pivot.ySlot[1]) / 2;
-      const hits = (boxes as Array<[[number, number, number], [number, number, number]]>).filter(([lo, hi]) => Math.min(lo[1], hi[1]) < yMid && Math.max(lo[1], hi[1]) > yMid && lo[0] < g.pivot.slotEndX - 0.01 && hi[0] > g.knee.x0 + 0.01);
-      expect(hits, `slot of knee ${tag}`).toHaveLength(0);
-      // the ears: solid at the pin x on both sides of the slot
-      const near = (y: number) => (boxes as Array<[[number, number, number], [number, number, number]]>).some(([lo, hi]) => Math.min(lo[1], hi[1]) < y && Math.max(lo[1], hi[1]) > y && lo[0] < g.H[0] && hi[0] > g.H[0] && lo[2] < g.H[1] && hi[2] > g.H[1]);
-      expect(near(sgn * (g.pivot.ySlot[1] + 0.3)), 'outboard ear holds the pin').toBe(true);
-      expect(near(sgn * (g.pivot.ySlot[0] - 0.5)), 'inboard ear holds the pin').toBe(true);
-      // its wood: lighter than the unslotted block by the slot's volume
-      const slotVol = (g.pivot.ySlot[1] - g.pivot.ySlot[0]) * (g.pivot.slotEndX - g.knee.x0) * g.knee.armT;
+      const inY = (b: Box, y: number) => Math.min(b[0][1], b[1][1]) < y && Math.max(b[0][1], b[1][1]) > y;
+      // no box fills the pocket: a probe through its middle, behind its end, between its floor and roof, hits nothing
+      const yMid = sgn * ((g.pivot.ySlot[0] + g.pivot.ySlot[1]) / 2 + 0.01); // off the box slice lines
+      const zMid = (g.pivot.zPocketBot + g.pivot.zPocketTop) / 2;
+      const hits = boxes.filter((b) => inY(b, yMid) && b[0][0] < g.pivot.slotEndX - 0.01 && b[1][0] > g.knee.x0 + 0.01 && b[0][2] < zMid && b[1][2] > zMid);
+      expect(hits, `pocket of knee ${tag}`).toHaveLength(0);
+      // the roof and the floor are there over the pocket
+      expect(boxes.some((b) => inY(b, yMid) && b[0][0] < g.H[0] && b[1][0] > g.H[0] && b[0][2] >= g.pivot.zPocketTop - 1e-6), 'roof').toBe(true);
+      expect(boxes.some((b) => inY(b, yMid) && b[0][0] < g.H[0] && b[1][0] > g.H[0] && b[1][2] <= g.pivot.zPocketBot + 1e-6), 'floor').toBe(true);
+      // D-77: no outboard ear: nothing of the knee stands outboard of the pocket's outboard face
+      for (const b of boxes) expect(Math.max(Math.abs(b[0][1]), Math.abs(b[1][1])), 'no outboard ear').toBeLessThanOrEqual(g.pivot.ySlot[1] + 1e-6);
+      // the inboard ear holds the pin
+      expect(boxes.some((b) => inY(b, sgn * (g.pivot.ySlot[0] - 0.5)) && b[0][0] < g.H[0] && b[1][0] > g.H[0] && b[0][2] < g.H[1] && b[1][2] > g.H[1]), 'inboard ear holds the pin').toBe(true);
+      const slotVol = (g.pivot.ySlot[1] - g.pivot.ySlot[0]) * (g.pivot.slotEndX - g.knee.x0) * (g.pivot.zPocketTop - g.pivot.zPocketBot);
       expect(slotVol).toBeGreaterThan(1);
     }
   });

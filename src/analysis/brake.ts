@@ -327,79 +327,125 @@ const grainAt = (g: BrakeGeom, x: number): 'y' | 'z' => (g.knee.layers.find((q) 
 /** Share of the x range [a0, a1] that lies in layers of `grain`. */
 const shareAlong = (g: BrakeGeom, grain: 'y' | 'z', a0: number, a1: number) => g.knee.layers.filter((q) => q.grain === grain).reduce((s2, q) => s2 + overlapX(q, a0, a1), 0) / Math.max(1e-9, a1 - a0);
 
-/** NDS-style screw withdrawal strength is `screwWithdrawal`; the pivot checks below are hand-checkable from the layout (pivot block, ears, pin). */
+/** The pin's outboard reaction on the D-77 strap, its split among the strap's screws (elastic screw group: direct share plus the twist about the group's centroid), and the yaw push. */
+export function strapLoads(ctx: Ctx, L: Loads, g: BrakeGeom) {
+  const { p } = ctx;
+  const pv = g.pivot, st = g.strap, wt = g.plan.wTongue, clr = p.brakePivotSlotClearIn;
+  const R = L.Rmag;
+  // Supports of the pin: the strap's mid-thickness (outboard) and the middle of the blind depth in the inboard ear; the load at the tongue's center.
+  const armO = wt / 2 + clr + st.t / 2, armI = wt / 2 + clr + pv.blind / 2;
+  const Ro = (R * armI) / (armO + armI), Ri = R - Ro;
+  const dir: V2 = R > 1e-9 ? [L.Rk[0] / R, L.Rk[1] / R] : [0, 0];
+  const Fo: V2 = [Ro * dir[0], Ro * dir[1]]; // the pin's push on the strap (the force on the knee's outboard support)
+  const pts: V2[] = st.zs.flatMap((z) => st.xs.map((x): V2 => [x, z]));
+  const n = pts.length;
+  const c: V2 = [pts.reduce((m, q) => m + q[0], 0) / n, pts.reduce((m, q) => m + q[1], 0) / n];
+  const J = pts.reduce((m, q) => m + (q[0] - c[0]) ** 2 + (q[1] - c[1]) ** 2, 0);
+  const r: V2 = [g.H[0] - c[0], g.H[1] - c[1]];
+  const M = r[0] * Fo[1] - r[1] * Fo[0]; // in-plane moment of the pin force about the group's centroid
+  const forces = pts.map((q): V2 => [Fo[0] / n - (J > 1e-9 ? (M * (q[1] - c[1])) / J : 0), Fo[1] / n + (J > 1e-9 ? (M * (q[0] - c[0])) / J : 0)]);
+  const worstI = forces.reduce((bi, f2, i) => (norm2(f2) > norm2(forces[bi]) ? i : bi), 0);
+  // Row resultants (the roof row is the upper z, the floor row the lower one).
+  const row = (z: number): V2 => forces.reduce((m, f2, i) => (Math.abs(pts[i][1] - z) < 1e-9 ? [m[0] + f2[0], m[1] + f2[1]] : m), [0, 0] as V2);
+  // Yaw: a sideways push F_s on the foot turns the tongue in the pocket about its two contacts (the knee's rear face and the nose): the strap takes P = F_s (x_nose - x_foot) / l at one of them.
+  const xNose = g.H[0] + p.brakePivotEndIn, engaged = Math.max(0.25, xNose - g.knee.x0);
+  const P = (p.brakeFlapSideLoadLbf * (xNose - g.F[0])) / engaged;
+  return { R, Ro, Ri, armO, armI, Fo, pts, c, J, M, forces, worst: forces[worstI], worstPt: pts[worstI], rowTop: row(Math.max(...st.zs)), rowBot: row(Math.min(...st.zs)), P, engaged, xNose };
+}
+
+/** NDS-style screw withdrawal strength is `screwWithdrawal`; the pivot checks below are hand-checkable from the layout (pivot block, strap, inboard ear, pin). */
 function pivotEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
   const { p } = ctx;
   const al = allowables(ctx);
   const a = allow(ctx);
-  const pv = g.pivot, pl = g.plan, b = g.board;
-  const R = L.Rmag;
+  const pv = g.pivot, pl = g.plan, b = g.board, st = g.strap, kn = g.knee;
   const d = pv.dia;
   const wt = pl.wTongue, clr = p.brakePivotSlotClearIn;
-  // Double shear: the pin is loaded at the tongue and held by the two ears, so two planes carry R.
+  const S = strapLoads(ctx, L, g);
+  const { R, Ro, Ri, armO, armI } = S;
+  // Double shear: the pin is loaded at the tongue and held by the strap and the inboard ear, so two planes carry R.
   const shear = R / (2 * circleA(d));
-  // The ears' reactions (the pin is held over the outboard ear's thickness and over the blind depth in the inboard ear): moment arms from the tongue's center.
-  const armO = wt / 2 + clr + pv.earOut / 2, armI = wt / 2 + clr + pv.blind / 2;
-  const Ro = (R * armI) / (armO + armI), Ri = R - Ro;
   const Mpin = Math.max(Ro * armO, Ri * armI) - (R / 2) * (wt / 4);
   const Zpin = (Math.PI * d ** 3) / 32;
   const bend = Mpin / Zpin;
-  // Oak bearing of the pin (dowel bearing), on the tongue (flap + block, grain along x, the load across it) and on each ear.
-  // D-75: where the pin crosses an ACROSS ('y') layer it runs along that layer's grain (end-grain dowel bearing): C_eg on the ears' bearing when any of the pin's width lies in such a layer.
+  // Oak bearing of the pin (dowel bearing), on the tongue (flap + block, grain along x, the load across it) and on the inboard ear's blind depth.
+  // D-75: where the pin crosses an ACROSS ('y') layer it runs along that layer's grain (end-grain dowel bearing): C_eg on the ear's bearing when any of the pin's width lies in such a layer.
   const pinEg = shareAlong(g, 'y', g.H[0] - d / 2, g.H[0] + d / 2) > 1e-6 ? END_GRAIN_CEG : 1;
-  const bearT = R / (d * wt), bearO = Ro / (d * pv.earOut * pinEg), bearI = Ri / (d * pv.blind * pinEg);
+  const bearT = R / (d * wt), bearI = Ri / (d * pv.blind * pinEg);
   // Tear-out toward the loaded edge: two shear planes either side of the pin, the nearer edge (the load can come either way).
   const eT = Math.min(pv.edgeTongueUp, pv.edgeTongueDown), eE = Math.min(pv.edgeEarUp, pv.edgeEarDown);
-  const tearT = R / (2 * eT * wt), tearO = Ro / (2 * eE * pv.earOut);
-  // D-75: the ear's tear-out planes (normal to x, shear along z) are rolling shear in an ACROSS layer, ordinary shear in an UPRIGHT one: the weaker if the pin touches an ACROSS layer.
+  const tearT = R / (2 * eT * wt), tearI = Ri / (2 * eE * pv.blind);
   const tearAllowE = pinEg < 1 ? al.oakShear * ROLLING_SHEAR_OF_SHEAR : al.oakShear;
-  // End distance past the pin: the tongue and the ears' rear stand p.brakePivotEndIn from the pin.
   const endD = p.brakePivotEndIn;
   // The pivot block takes its share of the pin's load (by thickness) and passes it into the flap through its screws (glue ignored): it pulls up when the pin pushes the flap down.
   const nBS = Math.max(1, Math.round(p.brakePivotBlockScrews));
   const penBS = BRAKE_SCREW_LEN_IN - pl.blockT - 0.1; // the #8 x 1-1/4 block screw (D-72), less 0.1 in of lead at the tip
   const wBS = screwWithdrawal(p, SCREW_DIA_IN[8], penBS);
   const shareBlock = (pl.blockT / (b.thick + pl.blockT)) * R;
-  // D-66 / D-75: the slot is sawn through every layer behind slotEndX, so the outboard ear is a stack of layer ISLANDS glued to the first layer that reaches past the slot end (xAttach is
-  // that layer's rear face); that layer carries the ear across the slot to the knee (the bridge). Every layer's grain lies in the y-z plane, so the islands' pull-off along x is CROSS-GRAIN
-  // tension on the glue line (NDS 5.2.8 F_rt = F_v / 3), never bending along the grain as the old solid-block check assumed. The ear's share Ro is split into x and z like R.
-  const lay = g.knee.layers;
-  const attach = lay.find((q) => q.x1 > pv.slotEndX + 1e-9) ?? lay[lay.length - 1];
-  const xAttach = Math.max(g.H[0], attach.x0);
-  const Rx = Math.abs(L.Rk[0]), Rz = Math.abs(L.Rk[1]);
-  const Rox = R > 0 ? (Ro * Rx) / R : 0, Roz = R > 0 ? (Ro * Rz) / R : 0;
-  const glueA = pv.earOut * g.knee.armT; // the islands' footprint on the attach layer (the arm depth at the ear's outer face: the sloped underside makes it deeper inboard, ignored)
-  const glueS = (pv.earOut * g.knee.armT ** 2) / 6;
-  const earPeel = Rox / glueA + (Roz * (xAttach - g.H[0])) / glueS;
-  const earGlueShear = Roz / glueA; // shear along z on the glue line: rolling shear in an ACROSS layer
-  // The bridge: the long-grain ('y') wood ahead of the slot end spans the slot (from the outboard ear's middle to the slot's inboard wall) as a cantilever from the knee body.
-  const bridge = xSection(layersAlong(g, 'y', pv.slotEndX, g.knee.x1), 1);
-  const ySlotIn = pv.ySlot[0];
-  const hBridge = kneeSection(g, ySlotIn).h;
-  const lever = Math.max(0, (pv.ySlot[1] + g.knee.yOut) / 2 - ySlotIn);
-  const bridgeBend = bridge.t > 1e-9 ? (Roz * lever) / ((bridge.t * hBridge ** 2) / 6) + (Rox * lever) / ((hBridge * bridge.t ** 2) / 6) : Infinity;
+  // ── D-77: the stainless STRAP (straight flat bar) on the pocket's open side carries the pin's outboard reaction Ro into its screws in the roof and the floor ──
+  const plateAllow = p.brakeBackPlateYieldPsi / p.steelSafetyFactor;
+  const hole = st.pinHole;
+  const bearS = Ro / (d * st.t); // the pin bearing on the strap's hole
+  const eS = Math.min(g.H[0] - st.x0, st.x1 - g.H[0], st.z1 - g.H[1], g.H[1] - st.z0); // pin center to the strap's nearer edge
+  const tearS = Ro / (2 * st.t * Math.max(1e-6, eS - hole / 2));
+  // The strap spans in z between its screw rows with the pin between them: in-plane bending from the fore-aft component, axial from the vertical one, on the net section at the pin hole.
+  const zTopRow = Math.max(...st.zs), zBotRow = Math.min(...st.zs);
+  const aUp = zTopRow - g.H[1], aDn = g.H[1] - zBotRow, span = Math.max(1e-6, aUp + aDn);
+  const Mip = (Math.abs(S.Fo[0]) * aUp * aDn) / span;
+  const Snet = (st.t * (st.w ** 3 - hole ** 3)) / (6 * st.w);
+  const Nax = (Math.abs(S.Fo[1]) * Math.max(aUp, aDn)) / span;
+  const sigS = Nax / ((st.w - hole) * st.t) + Mip / Snet;
+  // Screws: #8 x 1-1/4 (D-72) in the outer layers' grain at their column: lateral (side grain, or C_eg in end grain) and withdrawal (end grain at half the side-grain value, as brake-return).
+  const latSide = p.woodScrewLateralLbf * (st.screwDia / 0.19); // #8 against the #10 value (as the flap's pad screws)
+  const eg = (x: number) => (grainAt(g, x) === 'y' ? END_GRAIN_CEG : 1);
+  const latCap = Math.min(...st.xs.map((x) => latSide * eg(x)));
+  const penS = BRAKE_SCREW_LEN_IN - st.t - 0.1;
+  const wdCap = Math.min(...st.xs.map((x) => screwWithdrawal(p, st.screwDia, penS) * (grainAt(g, x) === 'y' ? 0.5 : 1)));
+  const perCol = st.zs.length; // the yaw push lands at one end of the strap: the nearer column of screws takes it
+  const wdLoad = S.P / perCol;
+  // The yaw push bends the strap out of its plane between the rows (a band load over the tongue stack's height at mid-span, the full strap width).
+  const hStack = pl.blockT + b.thick;
+  const Mop = (S.P / 2) * Math.max(0, span / 2 - hStack / 4);
+  const sigOp = Mop / ((st.w * st.t ** 2) / 6);
+  // ── The roof and the floor carry the screw rows to the inboard ear as cantilevers along y, on the ACROSS layers only (D-77, CLT practice), and the outer layers that hold the screws are
+  //    glued to them (glue-line rolling shear). Lever: the pocket's width (the screws sit at the outboard face; conservative, the bridge ahead also holds them). ──
+  const lev = kn.yOut - pv.ySlot[0];
+  const across = xSection(layersAlong(g, 'y', kn.x0, pv.slotEndX), 1);
+  const plateBend = (Fr: V2, h: number) => (across.t > 1e-9 ? (Math.abs(Fr[1]) * lev) / ((across.t * h ** 2) / 6) + (Math.abs(Fr[0]) * lev) / ((h * across.t ** 2) / 6) : Infinity);
+  const roofBend = plateBend(S.rowTop, kn.roof), floorBend = plateBend(S.rowBot, kn.floor);
+  const glueRoll = norm2(S.worst) / (lev * Math.min(kn.roof, kn.floor));
+  const screwEdge = Math.min(kn.roof, kn.floor) / 2 / st.screwDia;
+  const screwTear = norm2(S.worst) / (2 * (Math.min(kn.roof, kn.floor) / 2) * Math.max(0.1, penS));
   const ds: Detail[] = [
     detail('pivot pin double shear (316)', shear, 'psi', a.boltShear, '<='),
-    detail('pivot pin bending between the ears (316)', bend, 'psi', a.bolt, '<='),
+    detail('pivot pin bending between the strap and the inboard ear (316)', bend, 'psi', a.bolt, '<='),
     detail('oak bearing of the pin on the tongue and block (dowel bearing)', bearT, 'psi', al.oakDowel, '<='),
-    detail('oak bearing on the outboard ear', bearO, 'psi', al.oakDowel, '<='),
-    detail('oak bearing on the inboard ear (blind hole depth)', bearI, 'psi', al.oakDowel, '<='),
+    detail(`oak bearing on the inboard ear (blind hole depth${pinEg < 1 ? '; end grain of the ACROSS layer, C_eg 0.67' : ''})`, bearI, 'psi', al.oakDowel, '<='),
     detail('tear-out of the tongue toward the nearer edge (oak shear, two planes)', tearT, 'psi', al.oakShear, '<='),
-    detail(`tear-out of the outboard ear toward the nearer edge (oak shear, two planes${pinEg < 1 ? '; rolling shear in the ACROSS layer, D-75' : ''})`, tearO, 'psi', tearAllowE, '<='),
+    detail(`tear-out of the inboard ear toward the nearer edge (oak shear, two planes${pinEg < 1 ? '; rolling shear in the ACROSS layer' : ''})`, tearI, 'psi', tearAllowE, '<='),
     detail('edge distance, pin center to the nearer edge of the tongue stack (pin diameters, 1.5 D minimum)', eT / d, '×D', 1.5, '>='),
-    detail('edge distance, pin center to the nearer edge of the ear (pin diameters)', eE / d, '×D', 1.5, '>='),
-    detail('end distance, pin center past the tongue end and the ear rear face (pin diameters)', endD / d, '×D', 1.5, '>='),
+    detail('edge distance, pin center to the nearer edge of the inboard ear (pin diameters)', eE / d, '×D', 1.5, '>='),
+    detail('end distance, pin center past the tongue end and the inboard ear rear face (pin diameters)', endD / d, '×D', 1.5, '>='),
     detail('pivot block screws, withdrawal each at the block share of the pin load (NDS, wet)', shareBlock / nBS, 'lbf', wBS, '<='),
-    detail('outboard ear: the layer islands pulled off the layer ahead of the slot, cross-grain tension on the glue line (D-75, oak F_rt = F_v / 3)', earPeel, 'psi', al.oakShear * CROSS_GRAIN_TENSION_OF_SHEAR, '<='),
-    detail('outboard ear: glue-line shear into the layer ahead of the slot (D-75, oak rolling shear)', earGlueShear, 'psi', al.oakShear * ROLLING_SHEAR_OF_SHEAR, '<='),
-    detail('bridge ahead of the slot: the long-grain (ACROSS) wood carrying the outboard ear across the slot, bending both axes (D-75, oak)', bridgeBend, 'psi', al.oakBend, '<='),
+    detail('pivot strap: pin bearing on the hole (stainless strap, D-77)', bearS, 'psi', plateAllow, '<='),
+    detail('pivot strap: tear-out from the pin hole to the nearer edge, two planes (stainless strap)', tearS, 'psi', 0.577 * plateAllow, '<='),
+    detail('pivot strap: edge distance, pin center to the nearer strap edge (pin diameters)', eS / d, '×D', 1.5, '>='),
+    detail('pivot strap: tension + in-plane bending on the net section at the pin hole, spanning the screw rows (stainless strap)', sigS, 'psi', plateAllow, '<='),
+    detail('pivot strap: out-of-plane bending from a sideways push on the flap foot (stainless strap, brakeFlapSideLoadLbf)', sigOp, 'psi', plateAllow, '<='),
+    detail(`pivot strap screws: lateral, worst screw, direct + twist (#8 x 1-1/4 wood screws${latCap < latSide - 1e-9 ? ', end grain C_eg 0.67' : ', side grain of the UPRIGHT layers'})`, norm2(S.worst), 'lbf', latCap, '<='),
+    detail('pivot strap screws: withdrawal from the sideways push, the nearer column (#8 x 1-1/4 wood screws, NDS, wet)', wdLoad, 'lbf', wdCap, '<='),
+    detail('pivot strap screws: center to the pocket and to the knee top / underside (screw diameters, NDS 1.5 D minimum; the ACROSS layer glued over them stops a split)', screwEdge, '×D', 1.5, '>='),
+    detail('pivot strap screws: tear-out toward the nearer end grain (the pocket or the knee top), two planes along the UPRIGHT layer\'s grain over the thread length (oak shear)', screwTear, 'psi', al.oakShear, '<='),
+    detail('knee roof over the pocket: the upper screw row carried to the inboard ear, bending both axes (oak, the ACROSS layer only, D-77)', roofBend, 'psi', al.oakBend, '<='),
+    detail('knee floor under the pocket: the lower screw row carried to the inboard ear, bending both axes (oak, the ACROSS layer only, D-77)', floorBend, 'psi', al.oakBend, '<='),
+    detail('glue line from the screwed UPRIGHT layer into the ACROSS layer, worst screw (oak rolling shear, D-77)', glueRoll, 'psi', al.oakShear * ROLLING_SHEAR_OF_SHEAR, '<='),
   ];
-  const how = `${loadText(L, g)}. D-65 pull-pin pivot: a ${f(d, 3)}" 316 clevis pin through the knee's two ears and the flap tongue (${f(wt, 2)}" wide, flap ${f(b.thick, 2)}" + pivot block ${f(pl.blockT, 2)}", the slot ${f(clr, 3)}" wider each side), held by a hitch-pin clip. The pin carries the whole ${f(R)} lbf in DOUBLE shear: ${f(R)} / (2 × ${f(circleA(d), 4)} in²) = ${f(shear, 0)} psi (allowable ${f(a.boltShear, 0)}). It is held by the outboard ear (${f(pv.earOut, 2)}" thick) and ${f(pv.blind, 2)}" of the inboard ear (blind hole): reactions ${f(Ro)} and ${f(Ri)} lbf at arms ${f(armO, 2)}" and ${f(armI, 2)}" from the tongue's center, so M = ${f(Mpin)} lbf·in on Z = π d³/32 = ${f(Zpin, 4)} in³ = ${f(bend, 0)} psi (allowable ${f(a.bolt, 0)}). Bearing: ${f(bearT, 0)} psi on the tongue (${f(wt, 2)}" × ${f(d, 3)}"), ${f(bearO, 0)} psi on the outboard ear, ${f(bearI, 0)} psi on the inboard ear (allowable ${f(al.oakDowel, 0)}). The pin sits ${f(pv.edgeTongueUp, 2)}" below the top of the tongue stack and ${f(pv.edgeTongueDown, 2)}" above its underside (${f(eT / d, 1)} pin diameters), ${f(pv.edgeEarUp, 2)}" below the knee top and ${f(pv.edgeEarDown, 2)}" above the arm bottom, and ${f(endD, 2)}" from the tongue end and the ears' rear faces; tear-out is checked as oak shear on two planes of the nearer edge. D-75 cross-laminated knee (${lay.map((q) => (q.grain === 'y' ? 'across' : 'upright')).join(' / ')}): the pin runs along the grain of the ACROSS layers, so the ear bearing takes C_eg ${f(pinEg, 2)}; the outboard ear's layers behind the slot end are islands glued to the layer from x = ${f(xAttach, 2)}" on: they pull off it at ${f(earPeel, 0)} psi cross-grain (${f(Rox)} lbf along x over ${f(glueA, 2)} in² + ${f(Roz)} lbf × ${f(xAttach - g.H[0], 2)}" over S = ${f(glueS, 3)} in³; allowable F_v/3 = ${f(al.oakShear * CROSS_GRAIN_TENSION_OF_SHEAR, 0)}), and that layer's ${f(bridge.t, 2)}" of long grain ahead of the slot carries the ear ${f(lever, 2)}" across it at ${f(bridgeBend, 0)} psi. The pivot block's ${nBS} #10 × 1-1/4" screws (${f(penBS, 2)}" of thread in the flap, ${f(wBS)} lbf each) carry its ${f(shareBlock)} lbf share if the glue lets go.`;
+  const how = `${loadText(L, g)}. D-65 pull-pin pivot, D-77 strap: a ${f(d, 3)}" clevis pin through the stainless strap on the knee's outboard face, the flap tongue (${f(wt, 2)}" wide, flap ${f(b.thick, 2)}" + pivot block ${f(pl.blockT, 2)}", the pocket ${f(clr, 3)}" wider each side) and ${f(pv.blind, 2)}" blind into the inboard ear, held by a hitch-pin clip outboard of the strap. DOUBLE shear: ${f(R)} / (2 × ${f(circleA(d), 4)} in²) = ${f(shear, 0)} psi (allowable ${f(a.boltShear, 0)}). Reactions ${f(Ro)} lbf at the strap and ${f(Ri)} lbf in the inboard ear, at arms ${f(armO, 2)}" and ${f(armI, 2)}" from the tongue's center: M = ${f(Mpin)} lbf·in on Z = π d³/32 = ${f(Zpin, 4)} in³ = ${f(bend, 0)} psi (allowable ${f(a.bolt, 0)}). Bearing: ${f(bearT, 0)} psi on the tongue, ${f(bearI, 0)} psi on the inboard ear${pinEg < 1 ? ' (C_eg 0.67: the pin runs along the ACROSS layer\'s grain)' : ''} (allowable ${f(al.oakDowel, 0)}). Strap ${f(st.t, 3)}" × ${f(st.w, 2)}" × ${f(st.len, 2)}" (allowable ${f(plateAllow, 0)} psi = ${f(p.brakeBackPlateYieldPsi, 0)} / ${f(p.steelSafetyFactor, 1)}): pin bearing ${f(bearS, 0)} psi; tear-out ${f(tearS, 0)} psi over ${f(eS, 2)}" to the nearer edge; the push (${f(S.Fo[0])}, ${f(S.Fo[1])}) lbf spans the screw rows ${f(aUp, 2)}" above and ${f(aDn, 2)}" below the pin: ${f(Mip)} lbf·in in plane on S_net ${f(Snet, 4)} in³ plus ${f(Nax)} lbf axial = ${f(sigS, 0)} psi. ${st.count} #8 × 1-1/4 screws (${st.xs.length} columns at x ${st.xs.map((x) => f(x, 2)).join(', ')}" in the outer layers, rows at z ${st.zs.map((z) => f(z, 2)).join(', ')}"): centroid (${f(S.c[0], 2)}, ${f(S.c[1], 2)}), twist ${f(S.M)} lbf·in, worst screw ${f(norm2(S.worst))} lbf against ${f(latCap)} lbf. Sideways push ${f(p.brakeFlapSideLoadLbf)} lbf at the foot: the tongue (${f(S.engaged, 2)}" in the pocket) pushes the strap out with P = ${f(p.brakeFlapSideLoadLbf)} × ${f(S.xNose - g.F[0], 2)} / ${f(S.engaged, 2)} = ${f(S.P)} lbf: ${f(wdLoad)} lbf withdrawal on each of the nearer column's screws (capacity ${f(wdCap)} lbf with ${f(penS, 2)}" of thread), out-of-plane strap bending ${f(sigOp, 0)} psi. Roof ${f(kn.roof, 2)}" and floor ${f(kn.floor, 2)}" carry their rows ${f(lev, 2)}" to the inboard ear on the ACROSS layer (${f(across.t, 2)}"): ${f(roofBend, 0)} and ${f(floorBend, 0)} psi. The pivot block's ${nBS} #8 × 1-1/4" screws (${f(penBS, 2)}" of thread in the flap, ${f(wBS)} lbf each) carry its ${f(shareBlock)} lbf share if the glue lets go.`;
   return governing(ds, how);
 }
 
 export function brakePivot(ctx: Ctx): AnalysisCheck {
-  return members('brake-pivot', 'Brake pivot pin, ears and pivot block (pull pin)', ctx, (L, g) => pivotEval(ctx, L, g), ['D-65', 'D-57', 'D-2']);
+  return members('brake-pivot', 'Brake pivot pin, strap and pivot block (pull pin)', ctx, (L, g) => pivotEval(ctx, L, g), ['D-65', 'D-77', 'D-57', 'D-2']);
 }
 
 /** Lower z of the knee outline at |y| = y (the sloping underside beyond the leg) and its height there. */
@@ -484,7 +530,7 @@ function mountEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
   const ds: Detail[] = [
     detail('knee arm bending beyond the leg, both axes (oak, the ACROSS layers only, D-75)', sigK, 'psi', al.oakBend, '<='),
     detail('knee arm shear (oak, the ACROSS layers only)', tauK, 'psi', al.oakShear, '<='),
-    detail('knee leg just above the top bolt row: in-plane and out-of-plane bending plus the pull (oak, the UPRIGHT layer only, D-75)', sigLeg, 'psi', al.oakBend, '<='),
+    detail('knee leg just above the top bolt row: in-plane and out-of-plane bending plus the pull (oak, the UPRIGHT layers only, D-75, D-77)', sigLeg, 'psi', al.oakBend, '<='),
     detail('mounting bolt shear, worst bolt, direct + twist (316)', shear, 'psi', a.boltShear, '<='),
     detail('mounting bolt tension from the overturning couple, worst (316)', sigT, 'psi', a.bolt, '<='),
     detail('mounting bolt shear + tension combined (316)', comb, '', 1, '<='),
@@ -493,10 +539,10 @@ function mountEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
     detail(`bolt bearing in the knee leg (oak${legEg < 1 ? '; the bolts run along the grain of the ACROSS layers: end-grain dowel bearing, C_eg 0.67, D-75' : ''})`, bearLeg, 'psi', al.oakDowel, '<='),
     detail('nut backing plate bearing on the backer face, the worst bolt on its share of the plate (oak across the grain, D-75)', pull, 'psi', al.oakPerp, '<='),
     detail('nut backing plate bending past the nut flats (304 / 316 plate, D-75)', plateBend, 'psi', plateAllow, '<='),
-    detail('head washer bearing on the knee leg, the worst bolt (oak: end grain of the ACROSS layers, side grain of the UPRIGHT one, D-75)', T, 'lbf', headCap, '<='),
+    detail('head washer bearing on the knee leg, the worst bolt (oak: end grain where it covers an ACROSS layer, side grain on an UPRIGHT one, D-75)', T, 'lbf', headCap, '<='),
     detail('knee leg bearing on the chine / rail face at the top of the couple (oak across the grain)', cBear, 'psi', al.oakPerp, '<='),
   ];
-  const how = `${loadText(L, g)}. ${n} × ${f(bd, 3)}" 316 bolts (${bt.xs.length} columns × ${bt.zs.length} rows, centroid x ${f(bt.cx, 2)}", z ${f(bt.cz, 2)}") through the ${f(k.legT, 2)}" knee leg, the ${f(g.rail.t, 2)}" rail and the ${f(g.backer.t, 2)}" backer glued to it. In plane: M = ${f(Mpl)} lbf·in about the bolt group (pin ${f(g.xh - bt.cx, 2)}" ahead of / ${f(g.H[1] - bt.cz, 2)}" above it), twist ${f(twist)} + direct ${f(direct)} = ${f(V)} lbf on the worst bolt (shear ${f(shear, 0)} psi, bearing ${f(bear, 0)} psi on ${f(tComp, 2)}"). Out of plane: the force acts ${f(e, 2)}" outboard of the hull face: M_x = ${f(Mx)} lbf·in pivots on the chine top (z ${f(zc, 2)}") into the ${bt.zs.length} bolt rows (T ${f(Tz)} lbf) and M_z = ${f(Mz)} lbf·in over the columns (T ${f(Tx)} lbf): worst bolt tension ${f(T)} lbf = ${f(sigT, 0)} psi on ${f(At, 4)} in², nut side: one ${f(pl.t, 3)}" × ${f(pl.x1 - pl.x0, 2)}" × ${f(pl.z1 - pl.z0, 2)}" backing plate, ${f(pull, 0)} psi on the worst bolt's ${f(tribA, 2)} in² share, ${f(plateBend, 0)} psi bending over a ${f(overhang, 2)}" overhang past the nut; head side: a ${f(dW, 3)}" washer, ${f(T)} lbf against ${f(headCap)} lbf (end grain of the across layers). D-75 cross-laminated knee: the arm counts only the ACROSS layers (${f(armY.t, 2)}"), the leg only the UPRIGHT layer (${f(legZ.t, 2)}": ${f(Mleg)} lbf·in in plane, ${f(MlegOut)} lbf·in out of plane at the top bolt row, σ ${f(sigLeg, 0)} psi); bolt bearing in the leg ${f(bearLeg, 0)} psi${legEg < 1 ? ' (end grain, C_eg 0.67)' : ''}. Knee arm section just beyond the leg ${f(sec.depth, 2)}" × ${f(sec.h, 2)}": σ ${f(sigK, 0)} psi. The knee bolts into the rail (backed by the glued ${f(g.backer.t, 2)}" doubler), not the 1/4" side panel.`;
+  const how = `${loadText(L, g)}. ${n} × ${f(bd, 3)}" 316 bolts (${bt.xs.length} columns × ${bt.zs.length} rows, centroid x ${f(bt.cx, 2)}", z ${f(bt.cz, 2)}") through the ${f(k.legT, 2)}" knee leg, the ${f(g.rail.t, 2)}" rail and the ${f(g.backer.t, 2)}" backer glued to it. In plane: M = ${f(Mpl)} lbf·in about the bolt group (pin ${f(g.xh - bt.cx, 2)}" ahead of / ${f(g.H[1] - bt.cz, 2)}" above it), twist ${f(twist)} + direct ${f(direct)} = ${f(V)} lbf on the worst bolt (shear ${f(shear, 0)} psi, bearing ${f(bear, 0)} psi on ${f(tComp, 2)}"). Out of plane: the force acts ${f(e, 2)}" outboard of the hull face: M_x = ${f(Mx)} lbf·in pivots on the chine top (z ${f(zc, 2)}") into the ${bt.zs.length} bolt rows (T ${f(Tz)} lbf) and M_z = ${f(Mz)} lbf·in over the columns (T ${f(Tx)} lbf): worst bolt tension ${f(T)} lbf = ${f(sigT, 0)} psi on ${f(At, 4)} in², nut side: one ${f(pl.t, 3)}" × ${f(pl.x1 - pl.x0, 2)}" × ${f(pl.z1 - pl.z0, 2)}" backing plate, ${f(pull, 0)} psi on the worst bolt's ${f(tribA, 2)} in² share, ${f(plateBend, 0)} psi bending over a ${f(overhang, 2)}" overhang past the nut; head side: a ${f(dW, 3)}" washer, ${f(T)} lbf against ${f(headCap)} lbf (end grain of the across layers). D-75 cross-laminated knee: the arm counts only the ACROSS layers (${f(armY.t, 2)}"), the leg only the UPRIGHT layers (${f(legZ.t, 2)}": ${f(Mleg)} lbf·in in plane, ${f(MlegOut)} lbf·in out of plane at the top bolt row, σ ${f(sigLeg, 0)} psi); bolt bearing in the leg ${f(bearLeg, 0)} psi${legEg < 1 ? ' (end grain, C_eg 0.67)' : ''}. Knee arm section just beyond the leg ${f(sec.depth, 2)}" × ${f(sec.h, 2)}": σ ${f(sigK, 0)} psi. The knee bolts into the rail (backed by the glued ${f(g.backer.t, 2)}" doubler), not the 1/4" side panel.`;
   return governing(ds, how);
 }
 
@@ -614,7 +660,7 @@ export function brakeAbuse(ctx: Ctx): AnalysisCheck {
   const ds: Detail[] = [];
   for (const [name, e] of parts) {
     for (const d of e.details ?? []) {
-      const k = /\(316\)|screws|NDS|pin/.test(d.name) && !/oak/.test(d.name) ? kS : kW;
+      const k = /\(316\)|screws|NDS|pin|stainless/.test(d.name) && !/oak/.test(d.name) ? kS : kW;
       ds.push({ ...scaleLimits([d], k)[0], name: `${name}: ${d.name}` });
     }
   }

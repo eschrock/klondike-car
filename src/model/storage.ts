@@ -3,17 +3,17 @@
  * floor; the box has its own ply floor only when it is raised clear of the deck), oak coaming on the wall tops (the gasket seals on oak),
  * a hinged, gasketed lid
  * (oak frame capturing a ply panel, two oak battens), two butt hinges on the fore edge (so the lid opens up and aft, clear of the
- * removable seat back), two over-center latches, two drains, and the lash points on the gunwales (BRIEF §4.9).
+ * removable seat back), two over-center latches, two drains. (The lash points are on the side ribs, D-76: side-ribs.ts.)
  * Built from real panels so the cut list and mass are honest (critic M3); the interior volume is set in layout.ts.
  *
  * Also holds the 10 Essentials kit list (D-19) and a simple packing check against the interior.
  */
 import { STORAGE_LOCATION, thinSheet, type Params } from '../params';
 import { localPoint, pickWoodScrew, SCREW_DIA_IN, screwText } from './rear-mount';
-import { STEP, box, cylinder, frac16 as frac, span, SIDES, type Ctx, stainless, dRingMat } from './build-utils';
+import { STEP, box, cylinder, frac16 as frac, span, SIDES, type Ctx, stainless } from './build-utils';
 import { localBounds, worldAABB } from './bounds';
-import { sideSlopeAt, sideTopAt, type Layout } from './layout';
-import { gunwaleId, seatBackSupport } from './seat';
+import { type Layout } from './layout';
+import { seatBackSupport } from './seat';
 import type { Joint, Part, Vec3 } from './types';
 
 // ── Hardware and detail dimensions (estimates, D-41) ──
@@ -22,20 +22,6 @@ const LATCH_MASS_LB = 0.15;
 const CATCH_MASS_LB = 0.03;
 const DRAIN_MASS_LB = 0.03;
 const GASKET_LB_PER_IN = 0.002;
-const LASH_MASS_LB = 0.1;
-const LASH_SIZE = [1.5, 0.9, 0.75] as const;
-/** Grab handles stand this far behind the H-point (seat.ts GRIP_BEHIND_HPOINT_IN) and are this long: the lash points stay clear of them. */
-const GRIP_BEHIND_IN = 5;
-
-/** Bolt-plate screws per lash point (4-hole plate), the screw (#8 × 1-1/4 stainless, D-72), the plate thickness, and the tip/lead allowance (no thread bite). */
-export const LASH_SCREWS = 4;
-export const LASH_SCREW_DIA_IN = SCREW_DIA_IN[8];
-export const LASH_SCREW_LEN_IN = 1.25;
-export const LASH_PLATE_T_IN = 0.125;
-export const LASH_TIP_IN = 0.25;
-/** Half the screw spacing of the 4-hole plate along (x) and across (y) it: 1.125" × 0.5" holes in the 1.5" × 0.9" plate. */
-export const LASH_HOLE_DX_IN = 0.5625;
-export const LASH_HOLE_DY_IN = 0.25;
 /** The 3/8" epoxy fillet in every inside corner of the box (flat things stowed in it ride on it, not in the corner). */
 export const BOX_FILLET_IN = 0.375;
 /** Oak block under each lid latch (#8 screws need more than the thin end ply or a thin transom): thickness, and width across. */
@@ -260,38 +246,6 @@ export function packEssentials(interior: Interior, kit: readonly KitItem[] = ESS
   };
 }
 
-/** Lash-point x positions along one gunwale: farthest-point spread over the free stretches (clear of the grips). */
-export function lashPositions(p: Params, L: Layout, n: number): number[] {
-  const margin = LASH_SIZE[0] / 2 + 0.25;
-  const lo = L.xRear + L.transom + L.rearLane + margin + 0.6; // clear of the transom and the corner backers (D-43); the doubler is turned to the sheer's slope (up to ~20 degrees at the rear, D-57), so its corner reaches farther
-  // D-54: the whole straight side is available, turned to the sled slope; the plates stop short of the end of the sides.
-  // D-57, D-66: the plates stay on the straight part of the side (the hull starts to draw in at `L.taper.x0`).
-  const hi = Math.min(L.xSideEnd - 2 * margin, L.taper.x0 - margin);
-  const gripLen = p.grabBoardLengthIn; // the grab board (D-57)
-  const gx0 = p.seatXIn - GRIP_BEHIND_IN;
-  const flagClear = L.xRear + L.transom + L.rearLane + p.flagTubeOdIn + 0.75 + margin + 0.6; // the flag tube and its holding block stand in the left rear corner (D-57)
-  const blocked: Array<[number, number]> = [
-    [gx0 - margin - 0.5, gx0 + gripLen + margin + 0.5],
-    [-Infinity, flagClear],
-  ];
-  // A rear box that stands above the gunwale occupies the gunwale line along its length.
-  const st = storageGeometry(p, L);
-  if (st.zTop > sideTopAt(L, st.x1) - L.railBand - 0.01) blocked.push([st.x0 - margin, st.x1 + margin]);
-  const cands: number[] = [];
-  for (let x = lo; x <= hi + 1e-9; x += 0.5) if (!blocked.some(([a, b]) => x > a && x < b)) cands.push(x);
-  const chosen: number[] = [];
-  while (chosen.length < n && cands.length) {
-    let best = cands[0], bestD = -1;
-    for (const c of cands) {
-      const d = chosen.length ? Math.min(...chosen.map((q) => Math.abs(q - c))) : c - lo;
-      if (d > bestD) { bestD = d; best = c; }
-    }
-    if (chosen.length && bestD < LASH_SIZE[0] + 0.5) break;
-    chosen.push(best);
-  }
-  return chosen.sort((a, b) => a - b);
-}
-
 export function buildStorage(ctx: Ctx): Part[] {
   const { p, L } = ctx;
   const g = storageGeometry(p, L);
@@ -469,41 +423,23 @@ export function buildStorage(ctx: Ctx): Part[] {
   const stayY0 = hingeY - HINGE_W_IN / 2 - STAY_SIZE[1];
   const stayBackFit = pickWoodScrew(8, LEAF_IN, HINGE_W_IN); // into the 2.5 in wide side face of the backer
   const stayRimFit = pickWoodScrew(8, LEAF_IN, rimW);
-  parts.push(box(ctx, { ...common, id: 'storage-lid-stay', name: 'Lid friction stay', mat: 'fixed', massLb: STAY_MASS_LB, kind: 'purchased', material: `${stainless(p)} friction stay`,
+  const stay = box(ctx, { ...common, id: 'storage-lid-stay', name: 'Lid friction stay', mat: 'fixed', massLb: STAY_MASS_LB, kind: 'purchased', material: `${stainless(p)} friction stay`,
     fab: 'buy', step: STEP.finish, ...span([x1 - pl - STAY_SIZE[0], x1 - pl], [stayY0, stayY0 + STAY_SIZE[1]], [zPlyTop - STAY_SIZE[2], zPlyTop]),
     sourcing: { vendor: `McMaster-Carr (${stainless(p)} friction lid stay / hold-open brace, 2" fold)`, costUsd: 18 },
     joints: [{ type: 'screw', to: 'storage-hinge-backer-L', count: 2, diaIn: SCREW_DIA_IN[8], fit: stayBackFit, size: `${screwText(stayBackFit)} stainless, into the side grain of the ${HINGE_BACKER_IN}" backer`, note: 'the stay pivot' }, { type: 'screw', to: 'storage-rim-end-fore', count: 2, diaIn: SCREW_DIA_IN[8], fit: stayRimFit, size: `${screwText(stayRimFit)} stainless`, note: 'the stay arm end, on the lid frame' }],
-    notes: 'Holds the lid at any angle so a gust or a scout cannot close it on fingers (S5). Folds flat against the backer when the lid is shut.' }));
-
-  // ── Lash points on the gunwales: stainless D-rings on bolt plates (BRIEF §4.9), turned to the slope of the sled profile (D-54) ──
-  const xs = lashPositions(p, L, p.lashPointsPerSide);
-  for (const { s: sg, tag } of SIDES) {
-    xs.forEach((x, i) => {
-      const dId = `doubler-lash-${tag}${i + 1}`;
-      const yg = L.hwC + L.side / 2;
-      const slope = sideSlopeAt(L, x);
-      const cs = Math.cos(slope), sn = Math.sin(slope);
-      const zTopAt = sideTopAt(L, x);
-      const rot = Math.abs(slope) < 1e-9 ? undefined : { y: slope };
-      // r3 build S8: the plate is centered on a 1" oak DOUBLER glued to the inboard face of the inner gunwale band (not on the 0.234" band alone: the plate screws need a solid block);
-      // its four screws go straight down into the doubler, 1/4" either side of the plate centerline, so every screw is in solid oak 1/4" from a doubler face.
-      const T = p.lashDoublerThickIn;
-      const lashFit = pickWoodScrew(8, LASH_PLATE_T_IN, L.railBand, LASH_SCREW_LEN_IN - LASH_PLATE_T_IN - LASH_TIP_IN); // the plate (1/8 in) is the grip; the doubler is the band tall; the lash-load row counts the thread past the tip lead
-      const inN = L.side / 2 + T / 2; // doubler (and plate) center, inboard of the web plane
-      const cy = sg * (yg - inN);
-      const pat = [[-1, -1], [-1, 1], [1, -1], [1, 1]] as const;
-      const screwAt = (z: number): Vec3[] => pat.map(([a, b]): Vec3 => [a * LASH_HOLE_DX_IN, b * LASH_HOLE_DY_IN, z]);
-      parts.push(box(ctx, { id: dId, partNo: 'doubler-lash', name: `Lash point doubler ${tag}${i + 1}`, group: 'storage', mat: 'oak', grain: 'x', step: STEP.finish,
-        size: [LASH_SIZE[0] + 0.5, T, L.railBand], center: [x - sn * (L.railBand / 2), cy, zTopAt - cs * (L.railBand / 2)], ...(rot ? { rot } : {}),
-        joints: [{ type: 'glue', to: gunwaleId(p, tag), count: 1, size: `${(LASH_SIZE[0] + 0.5).toFixed(1)}" × ${L.railBand}" face, epoxy`, note: `Epoxy, full face, against the inboard face of the inner gunwale band (the thin web and the outer band are behind it; there is no groove, and the screws never reach them). The vertical shear of a ${p.lashLoadLbf} lbf pull at ${p.lashPullAngleDeg}° on ${((LASH_SIZE[0] + 0.5) * L.railBand).toFixed(1)} in² of glue is a few tens of psi.` },
-          { type: 'screw', to: `lash-${tag}${i + 1}`, count: LASH_SCREWS, size: `${screwText(lashFit)} stainless, straight down from the plate into the doubler`, diaIn: LASH_SCREW_DIA_IN, fit: lashFit, at: screwAt(L.railBand / 2) }],
-        notes: `${T}" oak doubler on the inboard face of the gunwale under the lash plate (D-41, D-47): ${(LASH_SIZE[0] + 0.5).toFixed(1)}" long, the full ${L.railBand}" band tall, cut square to the gunwale's ${((slope * 180) / Math.PI).toFixed(1)}° slope here (D-54). The four ${screwText(lashFit)} screws sit ${LASH_HOLE_DY_IN}" either side of its centerline (${(T / 2 - LASH_HOLE_DY_IN).toFixed(2)}" from each face) and end ${(L.railBand - (LASH_SCREW_LEN_IN - LASH_PLATE_T_IN)).toFixed(2)}" above its bottom.` }));
-      parts.push(box(ctx, { id: `lash-${tag}${i + 1}`, partNo: 'lash-point', name: `Lash point ${tag}${i + 1}`, group: 'hardware', mat: 'fixed', massLb: LASH_MASS_LB, kind: 'purchased',
-        material: `${dRingMat(p)} D-ring on a bolt plate`, fab: 'buy', step: STEP.finish, size: [LASH_SIZE[0], LASH_SIZE[1], LASH_SIZE[2]], center: [x + sn * (LASH_SIZE[2] / 2), cy, zTopAt + cs * (LASH_SIZE[2] / 2)], ...(rot ? { rot } : {}),
-        sourcing: { vendor: `McMaster-Carr (${dRingMat(p)} 4-hole D-ring bolt plate, 300 lbf working load)`, costUsd: 7 },
-        joints: [{ type: 'screw', to: dId, count: LASH_SCREWS, size: `${screwText(lashFit)} stainless, straight down into the oak doubler`, diaIn: LASH_SCREW_DIA_IN, fit: lashFit, at: screwAt(-LASH_SIZE[2] / 2) }],
-        notes: `Rated for tie-down straps on coolers, duffels and firewood (post-race hauling, BRIEF §4.9). The plate (${LASH_SIZE[0]}" × ${LASH_SIZE[1]}", holes ${2 * LASH_HOLE_DX_IN}" × ${2 * LASH_HOLE_DY_IN}") lies on the top of the ${T}" doubler, entirely inboard of the gunwale; four screws land in the doubler; the lash-load check pulls it at ${p.lashLoadLbf} lbf and ${p.lashPullAngleDeg}° (D-41, S-9).` }));
-    });
+    notes: 'Holds the lid at any angle so a gust or a scout cannot close it on fingers (S5). Folds flat against the backer when the lid is shut.' });
+  // The stay folds flat on the ply top, so its arm end is the gasket and coaming gap (zRimBot - zPlyTop) below the lid frame. The arm-end screws go UP into the underside of the fore lid-frame end (they are
+  // driven with the lid open), straight above the folded arm end. Each part records its own end of the joint on its own face, so every point lies in its part (D-75 geometry audit).
+  {
+    const xa = Math.max(x1 - pl - STAY_SIZE[0], x1 - rimW), xb = x1 - pl, yS = stayY0 + STAY_SIZE[1] / 2, zRimBot = zTop - pl - rimT;
+    const wpts = [0.25, 0.75].map((f): Vec3 => [xa + (xb - xa) * f, yS, 0]);
+    const rimFore = parts.find((q) => q.id === 'storage-rim-end-fore')!;
+    const armJoint = stay.joints!.find((j) => j.to === 'storage-rim-end-fore')!;
+    armJoint.at = wpts.map((w) => localPoint(stay.transform, [w[0], w[1], zPlyTop]));
+    (rimFore.joints ??= []).push({ ...armJoint, to: 'storage-lid-stay', at: wpts.map((w) => localPoint(rimFore.transform, [w[0], w[1], zRimBot])), note: `the stay arm end, screwed up into the underside of the lid frame end, straight above the folded arm end (${frac(zRimBot - zPlyTop)}" higher: the gasket and coaming gap)` });
   }
+  parts.push(stay);
+
+  // The lash points (D-rings) moved onto the heads of the side ribs (D-76, side-ribs.ts); the screwed lash doublers are gone.
   return parts;
 }

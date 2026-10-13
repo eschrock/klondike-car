@@ -4,7 +4,7 @@ import { defaultParams } from '../params';
 import { PRE_D72 } from '../test-fixtures';
 import { isOakStocked } from './prices';
 import { assemblySteps } from './assembly';
-import { BOARD_THICKNESSES, MAX_LAMINATION_LAYERS, boardFinishedIn, finalFrac, roughFrac, RESAW_BOARD_WIDTHS_IN, RESAW_MIN_SPARES, boardByNominal, boardForThickness, cutList, isBuilt, laminationText, makeLanes, packLanes, planLamination, stepMapOf, resawUsableIn, spareSlots, stripsPerBoard, toCsv } from './cutlist';
+import { BOARD_THICKNESSES, MAX_LAMINATION_LAYERS, boardFinishedIn, finalFrac, roughFrac, RESAW_BOARD_WIDTHS_IN, RESAW_MIN_SPARES, boardByNominal, boardForThickness, cutList, fabText, isBuilt, laminationText, makeLanes, packLanes, planLamination, stepMapOf, resawUsableIn, spareSlots, stripsPerBoard, toCsv } from './cutlist';
 
 // D-72/D-73: this file's resaw and sheet numbers (0.234 in bands in 0.359 -> 3/8 in rough pools, the 4 mm sheet, the tube) are the 4 mm okoume design: PRE_D72. The white oak / rod cut list is in d72.test.ts.
 const p = { ...defaultParams(), ...PRE_D72 };
@@ -212,6 +212,10 @@ describe('cutList', () => {
     expect(cl.csv.resaw.split('\r\n').length).toBe(1 + cl.resaw.length + 1);
     expect(cl.csv.sheets).toContain('Seat back panel');
     expect(cl.csv.metal).toContain('DOM tube');
+    // D-77 (no fabrication): nothing is tapped, so the model's legacy 'drill-tap' id reads "cut on the metal bandsaw and drill" in the CSV and every table
+    expect(fabText('drill-tap')).toBe('cut on the metal bandsaw and drill');
+    expect(cl.csv.metal).toContain('cut on the metal bandsaw and drill');
+    expect(cl.csv.metal + cl.csv.finished + cl.csv.cuts).not.toMatch(/\btap\b/i);
     // the old final-size, layer and strip tables are gone, and no CSV holds a part key or a decimal length
     expect(Object.keys(cl.csv).sort()).toEqual(['cuts', 'finished', 'glueUps', 'metal', 'resaw', 'sheets']);
     for (const [k, csv] of Object.entries(cl.csv)) {
@@ -314,15 +318,15 @@ describe('face lamination (D-70: no 12/4)', () => {
     expect(cl.layers.length).toBe(lam.reduce((a, r) => a + r.lamination!.layers.length, 0));
     const knee = cl.layers.filter((q) => q.row.partNo === 'brake-knee');
     expect(knee.length).toBe(3); // D-74: 3 layers of 4/4 (4 before)
-    // D-75: the knee is cross-laminated (across / upright / across). The outer layers are 8-5/8" across their grain: two pieces each (2 knees x 2 = 4). The center layer runs UP the leg, so it
-    // is only 4-1/2" across its grain: ONE piece from a 6" board (2 knees x 1 = 2).
-    expect(knee.map((q) => q.edgeGlued)).toEqual([2, 1, 2]);
-    expect(knee.map((q) => q.qty)).toEqual([4, 2, 4]);
-    expect(knee.map((q) => q.grainWord)).toEqual(['across the sled', 'upright', 'across the sled']);
+    // D-77: the knee is cross-laminated upright / across / upright. The outer layers run up the leg, only 4-1/8" across their grain (the 3-11/16" reach plus the allowance): ONE piece each
+    // from a 6" board (2 knees x 1 = 2). The center layer runs ACROSS the sled and is as wide as the knee is tall: two pieces, joined off center (2 knees x 2 = 4).
+    expect(knee.map((q) => q.edgeGlued)).toEqual([1, 2, 1]);
+    expect(knee.map((q) => q.qty)).toEqual([2, 4, 2]);
+    expect(knee.map((q) => q.grainWord)).toEqual(['upright', 'across the sled', 'upright']);
     for (const q of knee) { expect(q.widthIn).toBeLessThanOrEqual(6); expect(q.board).toBe('4/4'); expect(q.roughT).toBe(0.75); }
-    expect(knee[1].widthIn).toBeCloseTo(4.875, 6); // the upright layer is the 4-1/2" reach plus the allowance, rounded up to 1/8, across its grain
-    expect(knee[1].lengthIn).toBeGreaterThan(knee[0].lengthIn); // and it is the long one: it runs the full 8-5/8" height of the knee (plus the allowance)
-    expect(knee[0].widthIn).toBeCloseTo(5.625, 6); // the wider piece of an across layer: the model's edge joint is off center (3.47" up), so the pieces are 3-7/8 and 5-5/8, not two halves
+    expect(knee[0].widthIn).toBeCloseTo(4.125, 6); // the upright layer is the 3-11/16" reach plus the allowance, rounded up to 1/8, across its grain
+    expect(knee[0].lengthIn).toBeGreaterThan(knee[1].lengthIn); // and it is the long one: it runs the full 9-1/2" height of the knee (plus the allowance)
+    expect(knee[1].widthIn).toBeCloseTo(5.625, 6); // the wider piece of the across layer: the edge joint is 5-1/4" up (3/4" above the shoulder), so the pieces are 4-3/4 and 5-5/8, not two halves
     const beam = cl.layers.filter((q) => q.row.partNo === 'beam-R');
     expect(beam.length).toBe(3);
     expect(beam.map((q) => q.board)).toEqual(['4/4', '4/4', '4/4']);
@@ -478,20 +482,20 @@ describe('actual cuts (Eric 2026-10-12: the cut list lists the cuts, not the glu
     // a laminated knee is both: edge-glue the boards of each layer, then the layers
     const knee = dcl.glueUps.find((x) => x.partNo === 'brake-knee')!;
     expect(knee.kind).toBe('both');
-    expect(knee.from).toBe(5); // D-75: layers across / upright / across = 2 + 1 + 2 pieces (the upright layer is one piece from a 6" board)
-    expect(knee.note).toMatch(/layer 1: 2 boards, layer 3: 2 boards/);
+    expect(knee.from).toBe(4); // D-77: layers upright / across / upright = 1 + 2 + 1 pieces (the upright layers are one piece each from a 6" board)
+    expect(knee.note).toMatch(/layer 2: 2 boards/);
     const kneeCuts = dcl.cuts.filter((c) => c.partNo === 'brake-knee');
     expect(kneeCuts.map((c) => c.label).sort()).toEqual([
-      'Brake pivot knee, layer 1 of 3, board 1 of 2 (grain across the sled)', 'Brake pivot knee, layer 1 of 3, board 2 of 2 (grain across the sled)',
-      'Brake pivot knee, layer 2 of 3 (grain upright)',
-      'Brake pivot knee, layer 3 of 3, board 1 of 2 (grain across the sled)', 'Brake pivot knee, layer 3 of 3, board 2 of 2 (grain across the sled)',
+      'Brake pivot knee, layer 1 of 3 (grain upright)',
+      'Brake pivot knee, layer 2 of 3, board 1 of 2 (grain across the sled)', 'Brake pivot knee, layer 2 of 3, board 2 of 2 (grain across the sled)',
+      'Brake pivot knee, layer 3 of 3 (grain upright)',
     ].sort());
-    expect(kneeCuts.find((c) => c.layer === 2)!.note).toMatch(/one piece/);
-    expect(kneeCuts.find((c) => c.layer === 1 && c.index === 1)!.roughText).toBe('3/4 × 3-7/8 × 6-1/2'); // the lower piece of the off-center joint
-    expect(kneeCuts.find((c) => c.layer === 2)!.roughText).toBe('3/4 × 4-7/8 × 10-5/8'); // the upright layer: 4-7/8 across its grain, 10-5/8 along it
-    expect(kneeCuts.find((c) => c.layer === 1 && c.index === 2)!.note).toMatch(/NOT equal/);
+    expect(kneeCuts.find((c) => c.layer === 1)!.note).toMatch(/one piece/);
+    expect(kneeCuts.find((c) => c.layer === 2 && c.index === 2)!.roughText).toBe('3/4 × 5-5/8 × 5-3/4'); // the lower piece of the off-center joint
+    expect(kneeCuts.find((c) => c.layer === 1)!.roughText).toBe('3/4 × 4-1/8 × 11-5/8'); // the upright layer: 4-1/8 across its grain, 11-5/8 along it
+    expect(kneeCuts.find((c) => c.layer === 2 && c.index === 3)!.note).toMatch(/NOT equal/);
     expect(knee.qty).toBe(2);
-    expect(dcl.cuts.filter((c) => c.partNo === 'brake-knee').reduce((a, c) => a + c.qty, 0)).toBe(10); // 2 knees x (2 + 1 + 2) pieces
+    expect(dcl.cuts.filter((c) => c.partNo === 'brake-knee').reduce((a, c) => a + c.qty, 0)).toBe(8); // 2 knees x (1 + 2 + 1) pieces
   });
 
   it('lists the resaw strips as the strip blanks with the rip-first note, from the pool board', () => {

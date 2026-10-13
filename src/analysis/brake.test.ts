@@ -175,22 +175,24 @@ describe('brake members (hand calculations at the goal rider, load factor 2)', (
     expect(L.Rmag).toBeCloseTo(Math.hypot(...L.Rk), 9);
     expect(L.Rk[1]).toBeGreaterThan(0); // the flap pulls the knee UP (the hinge is in tension)
   });
-  it('D-65 pull-pin pivot: pin double shear, pin bending between the ears, oak bearing, tear-out and edge distance, and the pivot block screws follow from that reaction (NDS 1380 G² D L C_M)', () => {
+  it('D-65 pull-pin pivot, D-77 strap: pin double shear, pin bending between the strap and the inboard ear, oak bearing, tear-out and edge distance, and the pivot block screws follow from that reaction (NDS 1380 G² D L C_M)', () => {
     const d = defaults.brakePivotPinDiaIn, wt = defaults.brakePivotTongueIn, clr = defaults.brakePivotSlotClearIn;
     const R = L.Rmag;
     const A = (Math.PI / 4) * d ** 2;
     expect(det(cs, 'brake-pivot', 'pin double shear').value).toBeCloseTo(R / (2 * A), 3);
-    // bending: reactions at the ear bearing centers (outboard ear thickness, inboard blind depth), load spread over the tongue
-    const armO = wt / 2 + clr + g.pivot.earOut / 2, armI = wt / 2 + clr + g.pivot.blind / 2;
+    // bending: reactions at the strap's mid-thickness (D-77) and the middle of the inboard blind depth, load spread over the tongue
+    const armO = wt / 2 + clr + defaults.brakeStrapThickIn / 2, armI = wt / 2 + clr + g.pivot.blind / 2;
     const Ro = (R * armI) / (armO + armI), Ri = R - Ro;
     const M = Math.max(Ro * armO, Ri * armI) - (R / 2) * (wt / 4);
     expect(det(cs, 'brake-pivot', 'pin bending').value).toBeCloseTo(M / ((Math.PI * d ** 3) / 32), 3);
     expect(det(cs, 'brake-pivot', 'oak bearing of the pin on the tongue').value).toBeCloseTo(R / (d * wt), 3);
-    // D-75: the pin runs along the grain of the cross-laminated knee's ACROSS layers, so the ear bearing takes the NDS end-grain factor C_eg 0.67
-    expect(det(cs, 'brake-pivot', 'oak bearing on the outboard ear').value).toBeCloseTo(Ro / (d * g.pivot.earOut * 0.67), 3);
-    // edge distances in pin diameters: 3/4 in of oak above and below the pin in the tongue stack and the ear, 3/4 in past it
+    // the pin crosses the knee's ACROSS center layer (D-77 z / y / z), so the inboard ear's bearing takes the NDS end-grain factor C_eg 0.67
+    expect(det(cs, 'brake-pivot', 'oak bearing on the inboard ear').value).toBeCloseTo(Ri / (d * g.pivot.blind * 0.67), 3);
+    // the strap: the pin bears on its 1/8 in hole with the outboard reaction
+    expect(det(cs, 'brake-pivot', 'pivot strap: pin bearing').value).toBeCloseTo(Ro / (d * defaults.brakeStrapThickIn), 3);
+    // edge distances in pin diameters: 3/4 in of oak above and below the pin in the tongue stack, the inboard ear's nearer edge, 3/4 in past it
     expect(det(cs, 'brake-pivot', 'edge distance, pin center to the nearer edge of the tongue').value).toBeCloseTo(0.75 / d, 2);
-    expect(det(cs, 'brake-pivot', 'edge distance, pin center to the nearer edge of the ear').value).toBeCloseTo(0.75 / d, 2);
+    expect(det(cs, 'brake-pivot', 'edge distance, pin center to the nearer edge of the inboard ear').value).toBeCloseTo(Math.min(g.pivot.edgeEarUp, g.pivot.edgeEarDown) / d, 6);
     expect(det(cs, 'brake-pivot', 'end distance').value).toBeCloseTo(defaults.brakePivotEndIn / d, 9);
     const nBS = defaults.brakePivotBlockScrews;
     const pen = 1.25 - defaults.brakePivotBlockIn - 0.1; // the #8 x 1-1/4 block screw (D-72; was #10 x 1-1/4)

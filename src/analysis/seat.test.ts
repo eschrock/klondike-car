@@ -94,25 +94,29 @@ describe('seatChecks', () => {
     expect(byId['lash-points'].value).toBe(6);
     expect(byId['lash-points'].status).not.toBe('fail');
   });
-  it('lash-load by hand: 300 lbf at 45° on a 4-screw #8 plate (S-9; D-72: #8 x 1-1/4, was #10)', () => {
-    // V = H = 300 sin 45° = 212.13 lbf. Thread penetration = 1.25 − 0.125 plate − 0.25 tip = 0.875".
-    // NDS W = 1380 G² D = 1380 × 0.68² × 0.164 = 1380 × 0.4624 × 0.164 = 104.65 lbf/in; × 0.875" × C_M 0.7 = 64.10 lbf per screw; × 4 = 256.39 lbf (#10: 121.24 / 74.26 / 297.04, util 0.714).
-    // Withdrawal util = 212.13 / 256.39 = 0.827. Bearing: (212.13 / 4) / (0.164 × 0.875) = 53.03 / 0.1435 = 369.6 psi (allowable 4000 × 0.85 / 2 = 1,700, util 0.217).
-    const k = lashLoads(ctx.p);
+  it('lash-load by hand (D-76): 300 lbf at 45° on a plate through-bolted to a rib head with 4 #8-32 machine screws', () => {
+    // V = H = 300 sin 45° = 212.13 lbf; per bolt 53.03 lbf of tension and of shear.
+    // Tension 53.03 / 0.014 = 3,788 psi of 15,000 (30 ksi annealed stainless / 2); shear 53.03 / 0.0124 = 4,277 psi of 9,000 (0.6 x 30 ksi / 2): sqrt(0.2525² + 0.4752²) = 0.538.
+    // Head bearing 53.03 / (0.164 x 0.75) = 431.2 psi (of 1,700); fender washer 53.03 / (pi/4 (0.75² - 0.188²) = 0.4140) = 128.1 psi (of 1,070 x 0.67 / 2 = 358.5).
+    const k = lashLoads(ctx);
     expect(k.V).toBeCloseTo(212.13, 2);
-    expect(k.pen).toBeCloseTo(0.875, 9);
-    expect(k.wPerIn).toBeCloseTo(104.65, 2);
-    expect(k.wScrew).toBeCloseTo(64.1, 2);
-    expect(k.capW).toBeCloseTo(256.39, 1);
-    expect(k.bearing).toBeCloseTo(369.6, 0);
+    expect(k.T1).toBeCloseTo(53.03, 2);
+    expect(k.sigT).toBeCloseTo(3788, 0);
+    expect(k.tau).toBeCloseTo(4277, 0);
+    expect(k.interaction).toBeCloseTo(0.538, 3);
+    expect(k.headBearing).toBeCloseTo(431.2, 1);
+    expect(k.washerArea).toBeCloseTo(0.4140, 4);
+    expect(k.washerBearing).toBeCloseTo(128.1, 1);
+    expect(k.bolt.len).toBe(2); // 0.05 washer + 0.625 side + 0.75 head + 0.125 plate + 0.172 nylock + 2 threads = 1.78 in
     const c = byId['lash-load'];
-    expect(c.value).toBeCloseTo(212.13, 2);
-    expect(c.limit).toBeCloseTo(256.39, 1);
-    expect(c.util!).toBeCloseTo(0.827, 3);
     expect(c.status).toBe('pass');
-    expect(c.details!.map((d) => d.name)).toEqual(['screw withdrawal (plate, all screws)', 'screw bearing on the oak (lateral)']);
-    // Two screws would not do (2 × 64.1 = 128.2 < 212.1), and a 450 lbf pull fails the 4-screw plate (318.2 > 256.4).
-    expect(2 * k.wScrew).toBeLessThan(k.V);
+    expect(c.details!.map((d) => d.name)).toEqual(['bolt tension and shear together ((σ/Ft)² + (τ/Fv)², square root)', 'bolt bearing on the oak head (along its grain)', 'fender washer bearing on the outer gunwale band (compression ⊥)', `rib bending at the rating (rib ${k.ribN})`]);
+    // The rib governs (the box rib: it cantilevers from the top of its spacer), well under its limit; nothing withdraws any more.
+    expect(c.util!).toBeCloseTo(k.ribSig / 6460, 3);
+    expect(c.util!).toBeGreaterThan(0.6);
+    expect(c.util!).toBeLessThan(0.85);
+    // A 450 lbf pull fails it (the rib, 1.5 x).
     expect(seatChecks(ctxFor({ lashLoadLbf: 450 })).find((q) => q.id === 'lash-load')!.status).toBe('fail');
   });
+
 });

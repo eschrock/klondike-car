@@ -5,7 +5,7 @@ import { BuildData } from '../build/package';
 import { partLabel, renderInstrText } from '../build/assembly';
 import { drawingFileName } from '../build/package';
 import {
-  groupCutsByBoard, instrSegments, partFacts, pieceWord, pinFocus, stepOfPart, tally,
+  groupCutsByBoard, instrSegments, makeLine, partFacts, pieceWord, pinFocus, stepOfPart, tally,
   bytesLabel, clampStep, cureLine, dims3, featureSummary, fracDim, fracInch, fracInch64, groupByWhen, loadDone, loadStep, loadStepChecks, mergeBuy, noteLead, previewSvg, saveDone, saveStep, saveStepChecks, sharedNote, sheetSvg, splitUrls, stepFocus, tilePagesHtml, todayISO, usd, vendorFromUrl, viewerView,
 } from './build-helpers';
 
@@ -281,6 +281,17 @@ describe('part chips (Eric 2026-10-12)', () => {
     expect(f.cuts[0]).toMatch(/^(board|layer) \d of \d: .* \(\d\/4\)$/);
     const none = partFacts(undefined, 'ghost', c, undefined);
     expect(none).toMatchObject({ id: 'ghost', name: 'ghost', size: '', cuts: [], qty: 1 });
+  });
+
+  it('says "make 2: left and right are mirror images" for the knee pair, never the part key or "identical"', () => {
+    const sheet = d.partDrawings.find((x) => x.partIds.includes('brake-knee-L'))!;
+    const f = partFacts(byId.get('brake-knee-L'), 'brake-knee-L', d.cutList, undefined, sheet.makeNote);
+    expect(f.make).toBe('make 2: left and right are mirror images');
+    expect(f.qty).toBe(2);
+    expect(makeLine(1, '')).toBe('');
+    expect(makeLine(3, 'MAKE 3 identical (a, b, c).')).toBe('make 3, all the same');
+    expect(makeLine(4, 'MAKE 4: 2 as drawn (a, b), 2 MIRROR IMAGE (c, d).')).toBe('make 4: 2 as drawn and 2 mirror images');
+    expect(`${f.make}`).not.toMatch(/brake-knee|identical/);
   });
 
   it('pinFocus keeps the pinned part on screen even when its step comes later', () => {

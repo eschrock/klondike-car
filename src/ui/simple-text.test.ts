@@ -179,6 +179,12 @@ describe('Phase 3b rows in the Simple view (spec 6.3)', () => {
     }
   });
 
+  it('D-77: the brake pivot row names the metal strap that holds the pin, in plain words, and never an ear', () => {
+    expect(failReason('brake-pivot')).toBe('a brake flap pivot pin, the metal strap that holds it, or the wood the strap is screwed to could give way under a hard stomp or a sideways scuff');
+    expect(limiterName('brake-pivot')).toMatch(/pivot pin and its metal strap/);
+    expect(weightNote(190, 'marginal', 'brake-pivot')).toBe('190 lb: close to the limit (a brake flap pivot pin and its metal strap under a hard stomp or a sideways scuff).');
+    for (const t of [failReason('brake-pivot'), limiterName('brake-pivot'), weightNote(150, 'fail', 'brake-pivot')]) expect(t).not.toMatch(/\bears?\b|slot|clevis/i);
+  });
 
   it('the Hills light has no stopping-distance sentence (ride mode is gone, D-53); it speaks of the brake flaps SLOWING the sled (brake-slow, D-58), says to chock or hold on steep hills, and the pitch rows', () => {
     const t = lightTexts({ p, checks: sweep.operatingChecks, fit }).hills;
@@ -284,5 +290,17 @@ describe('cargo card wording (D-53)', () => {
   it('D-65: amber only when the capacity is below the target and nothing fails at it; red when a row fails at the target', () => {
     expect(cargoText({ ...base, payloadLb: 250, capacityLb: 240, comfortableLb: 200 }).tone).toBe('warn');
     expect(cargoText({ ...base, payloadLb: 200, capacityLb: 270, counts: { pass: 28, marginal: 0, fail: 1 }, statusAtPayload: 'fail' }).tone).toBe('fail');
+  });
+});
+
+describe('D-76: the side-lateral row in the Simple view', () => {
+  it('is a Strength row with a plain name, failure sentence and advice, and no jargon', () => {
+    expect(LIGHT_OF_ID['side-lateral']).toBe('strength');
+    expect(LIGHT_CHECK_IDS.strength).toContain('side-lateral');
+    expect(failReason('side-lateral')).not.toBe('a safety check fails');
+    expect(limiterName('side-lateral')).not.toBe('a safety check');
+    expect(limiterAdvice('side-lateral')).toMatch(/builders need to strengthen the side panels/);
+    for (const t of [failReason('side-lateral'), limiterName('side-lateral'), limiterAdvice('side-lateral'), weightNote(150, 'fail', 'side-lateral')])
+      expect(t).not.toMatch(/lateral|D-76|NaN|undefined|\?/i);
   });
 });

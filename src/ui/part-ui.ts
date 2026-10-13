@@ -107,7 +107,7 @@ export function createPartUi(host: PartUiHost): PartUi {
     const close = h('button', { type: 'button', class: 'bp-pop-x', 'aria-label': 'Close' }, '×');
     close.addEventListener('click', () => closePopover());
     el.append(h('div', { class: 'bp-pop-head' },
-      h('div', {}, h('h3', { id: titleId }, f.name), h('div', { class: 'muted small' }, [f.partNo, f.qty > 1 ? `${f.qty} identical` : ''].filter(Boolean).join(' · '))),
+      h('div', {}, h('h3', { id: titleId }, f.name), h('div', { class: 'muted small' }, f.make)),
       close));
     const rows: (string | Node)[][] = [];
     if (f.size) rows.push(['Final size', h('span', {}, f.size, h('span', { class: 'muted' }, ' (T × W × L, in)'))]);

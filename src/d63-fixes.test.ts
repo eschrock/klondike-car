@@ -276,11 +276,10 @@ describe('refreshed notes (no tenons, grooves or old gaps)', () => {
     expect(b).not.toMatch(/rails, chine and gunwale end on it with Dominos/);
     expect(b).toMatch(/band ends of each side butt against it with an epoxy fillet/);
   });
-  it('the roll pad gap is 0.10 in (rail 0.35 in over the tube, 1/4 in pad), the doublers and grab boards are on the INNER gunwale band, and the rail does not enter a rabbet', () => {
+  it('the roll pad gap is 0.10 in (rail 0.35 in over the tube, 1/4 in pad), the ribs (D-76) and grab boards are on the INNER gunwale band, and the rail does not enter a rabbet', () => {
     expect(get('roll-pad-L').notes).toMatch(/running gap of about 0\.1"/);
     expect(get('roll-pad-L').notes).not.toMatch(/about 0\.15"/);
-    expect(get('doubler-lash-L1').joints!.find((j) => j.type === 'glue')!.to).toBe('side-L-gunwale-in');
-    expect(get('doubler-lash-L1').joints![0].note).not.toMatch(/web groove/);
+    expect(get('side-rib-L2').joints!.find((j) => j.type === 'glue')!.note).toMatch(/inner gunwale band/); // D-76: the ribs replaced the lash doublers
     expect(get('seat-grip-L').joints![0].to).toBe('side-L-gunwale-in');
     expect(get('rail-L').notes).not.toMatch(/chine's rabbet/);
     for (const x of parts) expect(`${x.notes ?? ''} ${(x.joints ?? []).map((j) => `${j.size ?? ''} ${j.note ?? ''}`).join(' ')}`, x.id).not.toMatch(/web groove|1\.97" of stack/);

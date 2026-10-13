@@ -10,12 +10,13 @@ const list = verifyChecklist(parts, p);
 const WHEN: VerifyWhen[] = ['before ordering', 'before cutting', 'at assembly'];
 
 describe('verify checklist', () => {
-  it('has the nine checks of docs/phase3-checkpoint.md, in order, then the build-review checks and the leftover params', () => {
-    expect(list.slice(0, 9).map((c) => c.id)).toEqual([
-      'tire-squash', 'wheel', 'axle-rod', 'steering-parts', 'bridle', 'seat-back', 'sign-knobs', 'brake-knee', 'lamp-clip',
+  it('has the nine checks of docs/phase3-checkpoint.md, in order (the D-77 strap check follows the brake knee), then the build-review checks and the leftover params', () => {
+    expect(list.slice(0, 10).map((c) => c.id)).toEqual([
+      'tire-squash', 'wheel', 'axle-rod', 'steering-parts', 'bridle', 'seat-back', 'sign-knobs', 'brake-knee', 'brake-strap', 'lamp-clip',
     ]);
-    expect(list.slice(9, 11).map((c) => c.id)).toEqual(['strip-bend', 'ply-thickness']);
-    expect(list[11]?.id).toBe('other-params');
+    expect(list.slice(10, 12).map((c) => c.id)).toEqual(['strip-bend', 'ply-thickness']);
+    expect(list[12]?.id).toBe('bow-rib-clearance'); // D-76: the booted-rider check of the bow post
+    expect(list[13]?.id).toBe('other-params');
     expect(list.map((c) => c.n)).toEqual(list.map((_, i) => i + 1));
     expect(new Set(list.map((c) => c.id)).size).toBe(list.length);
   });
@@ -117,6 +118,28 @@ describe('verify checklist', () => {
   });
 });
 
+describe('D-77: the pivot strap check', () => {
+  const c = list.find((q) => q.id === 'brake-strap')!;
+  it('dry-fits the tongue through the swing with 1/16" all round, slides the pin through the strap and the blind hole with the clip on, and pushes the foot sideways', () => {
+    expect(c.when).toBe('at assembly');
+    expect(c.whatToDo).toMatch(/whole stroke/);
+    expect(c.whatToDo).toMatch(/1\/16" of clearance all round/);
+    expect(c.whatToDo).toMatch(/through the strap, the tongue and block, and into the blind hole/);
+    expect(c.whatToDo).toMatch(/hitch-pin clip/);
+    expect(c.pass).toMatch(/the strap does not move/);
+    expect(c.partIds).toEqual(expect.arrayContaining(['brake-strap-L', 'brake-strap-R', 'brake-knee-L', 'brake-flap-L']));
+  });
+  it('names the assumed sideways push by its params-panel label, with the number from the design, and no param key', () => {
+    expect(c.whatToDo).toContain(`"${PARAM_DEFS.brakeFlapSideLoadLbf.label}"`);
+    expect(c.whatToDo).toContain(`about ${p.brakeFlapSideLoadLbf} lb`);
+    expect(c.pass).toContain(`At ${p.brakeFlapSideLoadLbf} lb sideways`);
+    expect(c.ifFails).toContain(`"${PARAM_DEFS.brakeFlapSideLoadLbf.label}"`);
+    expect(`${c.whatToDo} ${c.ifFails}`).not.toMatch(/brakeFlapSideLoadLbf|brakeStrapThickIn/);
+    const hi = verifyChecklist(buildModel({ ...p, brakeFlapSideLoadLbf: 20 }), { ...p, brakeFlapSideLoadLbf: 20 }).find((q) => q.id === 'brake-strap')!;
+    expect(hi.whatToDo).toContain('about 20 lb');
+  });
+});
+
 describe('verify items are written for the shop (Eric 2026-10-12)', () => {
   it('a short title, a how-to-check list with sub-bullets, pass criteria as short lines, and no param keys anywhere', () => {
     const keys = Object.keys(PARAM_DEFS);
@@ -148,5 +171,20 @@ describe('readability round 2: no IDs, no param keys, no decimal lengths', () =>
   it('the leftover-values check lists lengths as fractions and does not point at Q-1', () => {
     const other = list.find((c) => c.id === 'other-params')!;
     expect(text(other)).toMatch(/60-1\/2 in/);
+  });
+});
+
+describe('D-76: the bow rib check', () => {
+  it('asks for a booted rider before the bow posts are cut, names the chain joist fallback and the parameters-panel label', () => {
+    const c = list.find((q) => q.id === 'bow-rib-clearance')!;
+    expect(c.when).toBe('before cutting');
+    expect(c.paramKeys).toEqual(['sideRibFrontXIn']);
+    expect(c.whatToDo).toMatch(/winter boots/);
+    expect(c.whatToDo).toMatch(/7-7\/8" from the center line/);
+    expect(c.whatToDo).toMatch(/chain joist/);
+    expect(c.whatToDo).toContain(`"${PARAM_DEFS.sideRibFrontXIn.label}"`);
+    expect(c.whatToDo).toMatch(/steering-chain anchor eye bolt/);
+    expect(c.whatToDo).not.toContain('sideRibFrontXIn');
+    expect(c.partIds).toEqual(expect.arrayContaining(['side-rib-L3', 'side-rib-knee-R3']));
   });
 });

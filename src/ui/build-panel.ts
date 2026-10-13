@@ -18,7 +18,7 @@ import { roughFrac } from '../build/units';
 import { h } from './dom';
 import {
   SPEC_NAME, bytesLabel, clampStep, cureLine, dimsParts, featureSummary, fracDim, fracInch, fracInch64, groupByWhen, groupCutsByBoard, loadDone, loadStep, loadStepChecks, maxDepth, mergeBuy, noteLead, partFacts, pct, pieceWord, pinFocus, previewSvg, saveDone, saveStep, saveStepChecks,
-  sameLead, sharedNote, sheetSvg, splitUrls, stepFocus, stepOfPart, tilePagesHtml, todayISO, usd, vendorFromUrl, weatherChipText,
+  makeLine, sameLead, sharedNote, sheetSvg, splitUrls, stepFocus, stepOfPart, tilePagesHtml, todayISO, usd, vendorFromUrl, weatherChipText,
   type StepFocus,
 } from './build-helpers';
 import { createPartUi, type DrawingView } from './part-ui';
@@ -228,7 +228,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
   };
   const sheetView = (sh: PartDrawingSheet, partId: string): DrawingView => ({
     title: sh.name,
-    sub: [sh.partNo, sh.qty > 1 ? `${sh.qty} identical` : '', sh.scale, sh.makeNote].filter(Boolean).join(' · '),
+    sub: [makeLine(sh.qty, sh.makeNote), `drawn at ${sh.scale}`].filter(Boolean).join(' · '),
     markup: previewSvg(sh.svg, `${sh.name} drawing`),
     fileName: (drawingFileName(sh).split('/').pop() ?? 'drawing.svg'),
     svg: sh.svg,
@@ -245,7 +245,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
         try { dims = partDims(part, design.parts, design.p); } catch { dims = undefined; }
         dimsCache.set(id, dims);
       }
-      return partFacts(part, id, data?.cutList, dimsCache.get(id));
+      return partFacts(part, id, data?.cutList, dimsCache.get(id), data?.partDrawings.find((x) => x.partIds.includes(id))?.makeNote);
     },
     hasDrawing: (id) => drawnHas(id) || !!data?.shaper.some((f) => f.partIds.includes(id)),
     drawing: drawingOf,
@@ -542,12 +542,12 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
     out.push(h('h3', { class: 'bp-group' }, 'Plywood'));
     for (const g of c.sheets) {
       out.push(h('h4', { class: 'bp-sub' }, `${g.label} (${g.pieces} pieces)`));
-      out.push(table('bp-cuts', ['Part', 'Qty', 'Size T × W × L', 'Grain', 'Fabrication', 'Step'], g.rows.map((r) => [
+      out.push(table('bp-cuts', ['Part', 'Qty', 'Final T × W × L', 'Grain', 'Fabrication', 'Step'], g.rows.map((r) => [
         partCell(r.ids[0], r.name, r.note),
-        String(r.qty), dimsCell(r.stock), r.grainWord ?? '–', fabText(r.fab), stepList(r.assemblySteps),
+        String(r.qty), dimsCell(r.final), r.grainWord ?? '–', fabText(r.fab), stepList(r.assemblySteps),
       ]), `Plywood ${g.label}`, { num: [1], nowrap: [3], qty: 1, key: 2, cols: [26, 5, 22, 12, 25, 10] }));
     }
-    out.push(h('h3', { class: 'bp-group' }, 'Metal stock (drill and tap)'));
+    out.push(h('h3', { class: 'bp-group' }, 'Metal stock (cut on the metal bandsaw and drill)'));
     out.push(table('bp-cuts', ['Part', 'Qty', 'Section', 'Cut length', 'Step'], c.metal.map((r) => [
       partCell(r.ids[0], r.name), String(r.qty), r.section, fracInch(r.cutLengthIn), stepList(r.assemblySteps),
     ]), 'Metal stock', { num: [1], qty: 1, key: 3, cols: [26, 5, 22, 22, 25] }));

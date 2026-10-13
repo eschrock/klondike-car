@@ -1,20 +1,21 @@
 import type { Params } from '../params';
 import { makeCtx, unitDir, type ViewState } from './build-utils';
 import { buildBody } from './body';
-import { buildBrake } from './brake';
+import { addTransomEyeJoints, buildBrake } from './brake';
 import { applyFinish } from './finish';
 import { buildFrame } from './frame';
 import { applyJoinery } from './joinery';
 import { applyHardwareMass, buildHardware, buildLighting } from './lighting';
 import { buildPayload } from './rider';
 import { buildRunningGear } from './running-gear';
-import { buildSeat } from './seat';
+import { addGripBandJoints, buildSeat } from './seat';
 import { addFlatPinDeckHoles, applySeatStow } from './seat-stow';
 import { isBrakeKit, isChockKit, isLightKit } from './removable';
 import { buildBridle } from './bridle';
 import { buildPivot } from './pivot';
 import { multiply, rotationZ, translation } from './mat4';
 import { buildStorage } from './storage';
+import { addSideRibJoints, buildSideRibs } from './side-ribs';
 import type { Part } from './types';
 
 export type { ViewState } from './build-utils';
@@ -34,12 +35,16 @@ export function buildModel(input: Params, view: ViewState = {}): Part[] {
     ...buildBody(ctx),
     ...buildSeat(ctx),
     ...buildStorage(ctx),
+    ...buildSideRibs(ctx), // D-76: the side ribs, their knees and box ties, and the D-rings on their heads
     ...buildBrake(ctx),
     ...buildLighting(ctx),
     ...buildHardware(ctx),
     ...buildPayload(ctx),
   ];
   applyJoinery(ctx, parts); // structured joints for the hull and frame (D-35)
+  addSideRibJoints(ctx, parts); // D-76: the web's and the joists' own ends of the rib glue and knee screws
+  addGripBandJoints(ctx.L, parts); // the gunwale bands' own ends of the grab-board screws and their backing-strip holes
+  addTransomEyeJoints(parts); // the transom's own end of the return-cord eye and snap-hook joints (the ring stands off its face)
   addFlatPinDeckHoles(ctx.p, ctx.L, parts); // the flat-position seat-pin clearance holes through the deck
   applySteerPose(ctx, parts); // the front axle turned about the kingpin (D-56); after the joinery so every joint location stays in the part's own frame
   if (ctx.view.seat === 'stowed') applySeatStow(ctx.p, ctx.L, parts); // cargo mode (D-53): the seat kit lies flat in the storage box

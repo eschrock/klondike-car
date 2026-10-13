@@ -53,6 +53,24 @@ function highlightMaterial(base: SurfaceMats, key: string, color: string): Surfa
   return m;
 }
 
+const GHOST_CACHE = new Map<string, THREE.Material>();
+
+/** A see-through copy of a part's material, for the parts around one that "Show in 3D" is pointing at (a knee behind the rail would otherwise barely show). */
+function ghostMaterial(base: SurfaceMats, key: string): SurfaceMats {
+  if (Array.isArray(base)) return base.map((b, i) => ghostMaterial(b, `${key}#${i}`) as THREE.Material);
+  const k = `${key}|ghost`;
+  let m = GHOST_CACHE.get(k);
+  if (!m) {
+    const c = base.clone() as THREE.MeshStandardMaterial;
+    c.transparent = true;
+    c.opacity = 0.16;
+    c.depthWrite = false;
+    GHOST_CACHE.set(k, c);
+    m = c;
+  }
+  return m;
+}
+
 interface MeshInfo {
   mesh: THREE.Mesh;
   part: Part;
@@ -92,6 +110,8 @@ export class Viewer {
   private lastGroups: PartGroup[] = [];
   private explodeAmount = 0;
   private highlighted = new Set<string>();
+  /** While a part is pointed at ("Show in 3D"), every other part is drawn see-through so the part is seen even behind a rail or a deck. */
+  private ghostOthers = false;
   private highlightColor = '#ff3b30';
   private readonly sectionPlane = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0);
   private sectionOut!: HTMLOutputElement;
@@ -578,10 +598,11 @@ export class Viewer {
     this.renderer.clippingPlanes = [this.sectionPlane];
   }
 
-  /** Tint the given part ids (sled parts). Pass [] to clear. */
-  highlight(ids: string[], color = '#ff3b30'): void {
+  /** Tint the given part ids (sled parts). Pass [] to clear. `ghostOthers` draws every other part see-through while the tint is on. */
+  highlight(ids: string[], color = '#ff3b30', ghostOthers = false): void {
     this.highlighted = new Set(ids);
     this.highlightColor = color;
+    this.ghostOthers = ghostOthers && ids.length > 0;
     this.applyHighlight();
   }
 
@@ -592,7 +613,7 @@ export class Viewer {
 
   private applyHighlight(): void {
     for (const i of this.infos) {
-      i.mesh.material = this.highlighted.has(i.part.id) ? highlightMaterial(i.baseMat, i.key, this.highlightColor) : i.baseMat;
+      i.mesh.material = this.highlighted.has(i.part.id) ? highlightMaterial(i.baseMat, i.key, this.highlightColor) : this.ghostOthers ? ghostMaterial(i.baseMat, i.key) : i.baseMat;
     }
   }
 

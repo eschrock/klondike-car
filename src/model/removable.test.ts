@@ -33,8 +33,8 @@ describe('kits', () => {
   });
   it('the sled is lighter without the brake kit (the flaps, pins, cords: about 3.9 lb with their fasteners) and without the lights', () => {
     const m = (v: Parameters<typeof buildModel>[1]) => totalMass(buildModel(p, { rider: 'none', cargo: false, ...v }));
-    expect(m({})).toBeGreaterThan(118.5); // D-74: 119.2 lb (2-1/8 in laminated parts) // D-66: 115.5 lb (119.9 before: the narrower bow, the shorter front beam and king beam, the narrower tracks); D-72/D-73: 120.7 lb with the solid rod (+1.9) and the 1/4 in white oak sides, box and lid (+2.8)
-    expect(m({})).toBeLessThan(120);
+    expect(m({})).toBeGreaterThan(119.5); // D-76: 120.2 lb (the side ribs); D-74: 119.2 lb (2-1/8 in laminated parts) // D-66: 115.5 lb (119.9 before: the narrower bow, the shorter front beam and king beam, the narrower tracks); D-72/D-73: 120.7 lb with the solid rod (+1.9) and the 1/4 in white oak sides, box and lid (+2.8)
+    expect(m({})).toBeLessThan(121.5); // D-77: 121.09 lb (the pivot straps and the knee roofs)
     expect(m({}) - m({ brakes: false })).toBeGreaterThan(3.4);
     expect(m({}) - m({ brakes: false })).toBeLessThan(4.4);
     expect(m({}) - m({ lights: false })).toBeGreaterThan(0.9);

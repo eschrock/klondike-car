@@ -16,7 +16,7 @@
  *  F4  Dominos, loose-tenon mortises and tenons on the face nearest their point, the long side of the mortise along the side both parts are longest on;
  *  F5  notches and dados from the joint text ("2.38" wide × 1.35" deep notch up from the hanger bottom"), a dado for a mate whose END lands on this part, rabbets for a captured panel;
  *  F6  grooves and bores for a steel rod (axle) or tube that lies in the part (no joint records them);
- *  F7  the brake knee's slot (the knee mesh has no profile; its outline and slot are read from the brake layout).
+ *  F7  the brake knee's pocket (the knee mesh has no profile; its outline and pocket are read from the brake layout).
  */
 import type { Params } from '../params';
 import type { Joint, Part, Vec2, Vec3 } from '../model/types';
@@ -25,7 +25,7 @@ import { brakeGeometry } from '../model/brake';
 import { computeLayout } from '../model/layout';
 import { flatPattern } from './flat';
 import { clearanceDia } from './shaper-svg';
-import { cutList, grainInWords, type CutList } from './cutlist';
+import { cutList, edgeJointUp, grainInWords, type CutList } from './cutlist';
 import { defaultParams } from '../params';
 import { finalDimsText } from './units';
 import { esc, fmt, frac, hash6, parseInches, pointInPoly } from './svg-util';
@@ -71,6 +71,7 @@ function fastenerNoun(j: Joint, text: string): string {
     return `${d ? `${frac(d)} ` : ''}${lm && Math.abs(num(lm[1]) - (d ?? 0)) < 0.02 ? `× ${fracText(`${lm[2]} in`).replace(/ in$/, '')}" ` : ''}bolts`.replace(/^\s+/, '');
   }
   if (j.type === 'hole' && /\bbolts?\b/i.test(text)) return d ? `${frac(d)} bolts` : 'bolts';
+  if (j.type === 'hole' && /D-ring plate/i.test(text)) return '#8-32 machine screws';
   return j.type === 'hole' ? 'screws' : 'fasteners';
 }
 
@@ -227,7 +228,7 @@ export interface DrawingFeature {
   angleDeg?: number;
 }
 
-interface HoleF { k: 'hole'; key: string; to: string[]; joint: string; pts: Vec3[]; axis: Vec3; dia: number; blind?: number; entryHi?: boolean; /** "hole" or "counterbore". */ noun: string; /** The size with no count: `1/8" pilot, through`. */ size: string; /** What it is for. */ purpose: string; depthWords?: string }
+interface HoleF { k: 'hole'; key: string; to: string[]; joint: string; pts: Vec3[]; axis: Vec3; dia: number; blind?: number; entryHi?: boolean; /** "hole" or "counterbore". */ noun: string; /** The size with no count: `1/8" pilot, through`. */ size: string; /** What it is for. */ purpose: string; depthWords?: string; /** The face it enters, in words, when that is not a board face ("sloped face"). */ faceWord?: string; /** A blind hole that starts INSIDE the part (a pocket wall): the board coordinate along its axis where it starts. */ from?: number }
 interface RegionF { k: 'region'; key: string; to: string[]; joint: string; kind: DrawingFeature['kind']; boxes: Array<[Vec3, Vec3]>; /** "Domino mortise", "dado", "slot". */ noun: string; /** The size with no count. */ detail: string; purpose?: string; face?: { ax: Ax; hi: boolean } }
 interface OutlineF { k: 'outline'; text: string; title: string; marks: Vec2[]; anchor?: Vec2; size?: string; positions?: string[]; face?: string; angleDeg?: number; /** A long list of numbers (curve offsets) that goes in the NOTES block, not the table line. */ extra?: string }
 interface NoteF { k: 'note'; text: string; to?: string[]; joint?: string }
@@ -300,7 +301,7 @@ function cylinderNear(parts: Part[], self: Part, q: Vec3, tol: number): Vec3 | n
 
 /** "fore-aft" / "down" / "up" in the joint text: the hole's model axis. */
 function textAxis(text: string): Vec3 | null {
-  const t = text.toLowerCase();
+  const t = text.toLowerCase().replace(/[\d/]+"?\s+from the (top|bottom)\b/g, ' '); // "13/32" from the top" is a distance, not a drilling direction
   if (/fore-aft/.test(t)) return [1, 0, 0];
   if (/\b(down|up) (through|from)|straight down|from below|from the top|up from below|vertical/.test(t)) return [0, 0, 1];
   return null;
@@ -328,13 +329,13 @@ function snapAxis(d: Vec3, exact: boolean): Vec3 {
 
 /** The brake layout for a parameter set, computed once per `Params` object (the layout sweeps the steering geometry: about 25 ms, and every knee lookup asks for it). */
 const brakeCache = new WeakMap<Params, ReturnType<typeof brakeGeometry>>();
-function brakeOf(p: Params): ReturnType<typeof brakeGeometry> {
+export function brakeOf(p: Params): ReturnType<typeof brakeGeometry> {
   let b = brakeCache.get(p);
   if (!b) { b = brakeGeometry(p, computeLayout(p)); brakeCache.set(p, b); }
   return b;
 }
 
-interface Solid { board: Board; extraNotes: string[]; slot?: { lo: Vec3; hi: Vec3; detail: string } }
+interface Solid { board: Board; extraNotes: string[]; pocket?: { lo: Vec3; hi: Vec3; detail: string } }
 
 /** Should an extrusion outline be turned before drawing: a tilted outline with no edge square to its bounding box (the brake shoe, the grab-board backing strip)? Returns the angle. */
 function tiltOf(outline: Vec2[]): number {
@@ -378,20 +379,23 @@ function solidOf(part: Part, p: Params, boxAxis: Ax | null): Solid | null {
     return b ? { board: b, extraNotes: [] } : null;
   }
   if (g.type === 'mesh' && part.partNo === 'brake-knee') {
-    // F7: the slotted knee is its (y, z) profile extruded along x (brake.ts builds the mesh from it; the part does not carry the profile, so it is read from the brake layout).
+    // F7: the knee is its (y, z) profile extruded along x (brake.ts builds the mesh from it; the part does not carry the profile, so it is read from the brake layout). D-77: the flap's slot is a
+    // POCKET open at the rear face and the outboard side (no outboard ear), between zPocketBot and zPocketTop, with the roof above it and the floor under it.
     const bg = brakeOf(p);
     const wb = worldAABB(part);
     const sgn = wb.min[1] + wb.max[1] >= 0 ? 1 : -1;
     const poly: Vec2[] = (sgn > 0 ? bg.knee.poly : [...bg.knee.poly].reverse().map((q) => [-q[0], q[1]])) as Vec2[];
     const board = prismBoard(m, poly, 1, 2, 0, bg.knee.x0, bg.knee.x1);
     const pv = bg.pivot;
-    const ys = [sgn * pv.ySlot[0], sgn * pv.ySlot[1]];
-    const corners = [bg.knee.x0, pv.slotEndX].flatMap((x) => ys.flatMap((y) => [bg.knee.zArmBot - 3, bg.knee.zTop].map((z) => board.toBoard(toLocalPt(m, [x, y, z])))));
+    const ys = [sgn * pv.ySlot[0], sgn * Math.max(pv.ySlot[1], bg.knee.yOut)];
+    const corners = [bg.knee.x0, pv.slotEndX].flatMap((x) => ys.flatMap((y) => [pv.zPocketBot, pv.zPocketTop].map((z) => board.toBoard(toLocalPt(m, [x, y, z])))));
     const lo = [0, 1, 2].map((k) => Math.max(0, Math.min(...corners.map((c) => c[k])))) as Vec3, hi = [0, 1, 2].map((k) => Math.min([board.U, board.V, board.N][k], Math.max(...corners.map((c) => c[k])))) as Vec3;
-    lo[1] = Math.min(spanAt(board, lo[0] + 1e-3)[0], spanAt(board, hi[0] - 1e-3)[0]); // the slot runs down through the arm to its (sloped) underside
+    const layers = bg.knee.layers, front = layers[layers.length - 1];
+    const intoFront = Math.max(0, pv.slotEndX - front.x0);
     return {
-      board, extraNotes: ['Bandsaw the slot, then clean it up with a chisel.'],
-      slot: { lo, hi, detail: `${frac(pv.ySlot[1] - pv.ySlot[0])} wide (tongue plus ${frac(p.brakePivotSlotClearIn)} a side), ${frac(pv.slotEndX - bg.knee.x0)} deep from the REAR face, through the arm` },
+      board,
+      extraNotes: [`Cut the pocket as a notch in the rear and center layers BEFORE the glue-up (bandsaw, chisel the corners square), then recess it ${frac(intoFront)} into the front layer after the glue-up (router or chisel). The roof and floor fingers of the upright rear layer are short grain until the block is glued: handle it with care.`],
+      pocket: { lo, hi, detail: `${frac(pv.ySlot[1] - pv.ySlot[0])} wide × ${frac(pv.zPocketTop - pv.zPocketBot)} high × ${frac(pv.slotEndX - bg.knee.x0)} deep, open at the outboard edge` },
     };
   }
   return null;
@@ -428,10 +432,13 @@ function holeDia(j: Joint, text: string, role: Role, mateName: string): { dia: n
     const explicitPilot = new RegExp(String.raw`PILOT\s+${NUM}\s*(?:in)?\s+through`, 'i').exec(t);
     const purpose = `for the ${noun} to the ${mateName}`;
     if (role === 'pilot') return { dia: SCREW_PILOT[g] ?? 0.125, word: 'pilot', purpose };
-    const clr = new RegExp(String.raw`${NUM}\s*(?:in\s*)?clearance`).exec(t);
+    const clr = new RegExp(String.raw`${NUM}\s*(?:in\s*)?clearance`).exec(t) ?? new RegExp(String.raw`${NUM}"\s*clearance holes?`).exec(t);
     if (clr) return { dia: num(clr[1]), word: 'clearance', purpose };
     return { dia: explicitPilot ? num(explicitPilot[1]) : SCREW_CLEAR[g] ?? 0.2, word: explicitPilot ? 'pilot' : /flat-head/.test(t) ? 'clearance, countersunk' : 'clearance', purpose };
   }
+  // a hole joint that names its drill: '11/64" (#8 clearance) through the head ...'
+  const clrN = new RegExp(String.raw`${NUM}"\s*\(#\d+ clearance\)`).exec(t);
+  if (clrN) return { dia: num(clrN[1]), word: 'clearance', purpose: `for the ${noun} to the ${mateName}` };
   // an explicit hole size: '5/8" kingpin hole', '1" hole across', '3/8" blind hole', '5/8" bore'
   const ex = new RegExp(String.raw`${NUM}"?\s*(?:in\s*)?(?:kingpin\s+)?(?:blind\s+|stopped\s+)?(?:hole|bore)\b`).exec(t);
   const lead = new RegExp(String.raw`${NUM}"\s*(?:×\s*[\d-/]+"?\s*)?(?:(?:316|18-8 \(304\))\s+)?(?:stainless\s+)?(?:forged|eye|hex|carriage|shoulder|clevis|pin|rod)`).exec(t);
@@ -576,9 +583,24 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
     if (j.cut && !r.inbound) {
       const c = j.cut;
       if (c.kind === 'counterbore' && c.dia && c.depth) {
-        const fc = onFace(b, cps[0]) ?? nearestFace(b, cps[0]);
-        feats.push({ k: 'hole', key: `cbore|${frac(c.dia)}|${frac(c.depth)}|${r.to}`, to: [r.to], joint: j.type, pts: cps, axis: unitAx(fc.ax, fc.hi ? -1 : 1), dia: c.dia, blind: c.depth, entryHi: fc.hi, noun: 'counterbore',
-          size: `${frac(c.dia)} wide × ${frac(c.depth)} deep, centered on each bolt hole`, purpose: `for the ${c.what}` });
+        // A point on a sloped face (the hypotenuse of a rib knee) is on the outline but not on the board's bounding face: the bore runs along its screw's axis, entering from the high side.
+        const sib = feats.find((q): q is HoleF => q.k === 'hole' && q.to.includes(r.to) && q.noun !== 'counterbore'); // the screw hole the bore is centered on: it gives the axis
+        const baseAxis = am ? axis : sib?.axis;
+        const sax = baseAxis ? dominant(baseAxis) : 2;
+        const onAxis = baseAxis ? onFace(b, cps[0], [sax]) : null;
+        const slopedFace = !!onAxis && (onAxis.hi ? cps[0][sax] < EXT(b)[sax] - 0.04 : cps[0][sax] > 0.04);
+        const flat = slopedFace ? null : onFace(b, cps[0]);
+        const fc = onAxis && slopedFace ? { ax: sax, hi: onAxis.hi } : flat ?? nearestFace(b, cps[0]);
+        // Each bore leaves the same oak under its head ("leaving 1/2" of oak"), so on a slope the depths differ: one feature per depth.
+        const seat = slopedFace ? new RegExp(String.raw`leaving ${NUM}"`).exec(c.what) : null;
+        const depthAt = (q: Vec3): number => { const sp = throughSpan(b, q, fc.ax); return Math.max(1 / 16, sp[1] - sp[0] - num(seat![1])); };
+        const groupsBy = new Map<string, Vec3[]>();
+        for (const q of cps) { const k = frac(seat ? depthAt(q) : c.depth); groupsBy.set(k, [...(groupsBy.get(k) ?? []), q]); }
+        for (const [k, qs] of groupsBy) {
+          const d = seat ? depthAt(qs[0]) : c.depth;
+          feats.push({ k: 'hole', key: `cbore|${frac(c.dia)}|${k}|${r.to}`, to: [r.to], joint: j.type, pts: qs, axis: unitAx(fc.ax, fc.hi ? -1 : 1), dia: c.dia, blind: d, entryHi: fc.hi, noun: 'counterbore',
+            size: `${frac(c.dia)} wide × ${frac(d)} deep, centered on the screw hole`, purpose: `for the ${c.what.replace(/^the\s+/, '')}`, ...(slopedFace ? { faceWord: 'sloped face' } : {}) });
+        }
       } else if (c.lo && c.hi) {
         const A = b.toBoard(c.lo), B = b.toBoard(c.hi);
         const lo = [0, 1, 2].map((k) => Math.max(0, Math.min(A[k], B[k]))) as Vec3, hi = [0, 1, 2].map((k) => Math.min(EXT(b)[k], Math.max(A[k], B[k]))) as Vec3;
@@ -621,7 +643,7 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
         blind = dm ? num(dm[1]) + 0.125 : j.fit ? j.fit.lenIn - j.fit.gripIn + 0.0625 : undefined;
         if (blind === undefined) { const len = new RegExp(String.raw`#\d+\s*[×x]\s*${NUM}`).exec(r.text); if (len) blind = num(len[1]) - 0.0625; }
       }
-    } else if (j.type === 'pin' && /epoxied|stopped|snug|blind hole/.test(t)) role = 'exact';
+    } else if (j.type === 'pin' && /epoxied|stopped|snug|blind hole|blind into the inboard ear/.test(t)) role = 'exact';
     else if (j.type === 'hole' && /snug|bore/.test(t)) role = 'exact';
     if (role === 'exact') {
       const dm = new RegExp(String.raw`${NUM}"?\s*(?:in\s*)?deep${part.partNo === 'handle-bar' ? ' in the bow' : /post/.test(name) ? ' in the post' : ''}`).exec(r.text) ?? new RegExp(String.raw`${NUM}"?\s*(?:in\s*)?deep`).exec(r.text);
@@ -643,16 +665,27 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
       const fc = onFace(b, cps[0], cand);
       axis = unitAx(fc ? fc.ax : cand[0] ?? 2);
     }
-    const { dia, word, purpose } = holeDia(j, r.text, role, nameOf(r.to));
+    const hd = holeDia(j, r.text, role, nameOf(r.to));
+    let { dia, word } = hd;
+    const { purpose } = hd;
     const ax = dominant(axis);
     const span = throughSpan(b, cps[0], ax);
+    // D-77: the knee's pin hole is BLIND, drilled from the pocket's inboard wall into the inboard ear (the strap carries the other end of the pin): a clearance hole that starts at the wall.
+    let from: number | undefined;
+    const pocketPin = j.type === 'pin' && /blind into the inboard ear from the pocket/.test(t);
+    if (pocketPin) {
+      const bm = new RegExp(String.raw`${NUM}"?\s*blind`).exec(t);
+      if (bm) blind = num(bm[1]);
+      dia = clearanceDia({ type: 'pin', size: '', diaIn: j.diaIn ?? 0.375 }); word = 'blind hole';
+      from = cps[0][ax];
+    }
     const entryHi = blind !== undefined || depthWords ? Math.abs(cps[0][ax] - span[1]) <= Math.abs(cps[0][ax] - span[0]) : undefined;
     const depth = depthWords ? depthWords : blind !== undefined ? `${frac(blind)} deep` : 'through';
     let size = `${dia ? `${drill(dia)} ` : ''}${word}, ${depth}`;
     const cb = new RegExp(String.raw`counterbore the head ${NUM}"?\s*(?:in\s*)?up the \w+ from its (underside|top)\s*\(${NUM}"?\s*(?:in\s*)?bit\)`).exec(r.text);
     let cbore: { dia: number; depth: number } | undefined;
     if (cb && part.partNo === 'rail') { cbore = { dia: num(cb[3]), depth: num(cb[1]) }; size += `, with a ${drill(cbore.dia)} × ${frac(cbore.depth)} counterbore from the ${cb[2] === 'underside' ? words.side[1][0] : words.side[1][1]}`; notes.push('Plug each counterbore with a glued oak dowel after the screw is in.'); }
-    feats.push({ k: 'hole', key: `${size}|${purpose}|${axis.map((c) => Math.round(c * 100)).join(',')}`, to: [r.to], joint: j.type, pts: cps, axis, dia: dia ?? 0.19, ...(blind !== undefined ? { blind } : {}), ...(entryHi !== undefined ? { entryHi } : {}), ...(depthWords ? { depthWords } : {}), noun: 'hole', size, purpose });
+    feats.push({ k: 'hole', key: `${size}|${purpose}|${axis.map((c) => Math.round(c * 100)).join(',')}`, to: [r.to], joint: j.type, pts: cps, axis, dia: dia ?? 0.19, ...(blind !== undefined ? { blind } : {}), ...(entryHi !== undefined ? { entryHi } : {}), ...(depthWords ? { depthWords } : {}), ...(from !== undefined ? { from, faceWord: "inboard wall of the pocket" } : {}), noun: 'hole', size, purpose });
     // The push-handle socket's access holes (D-63): the same size as named, in the opposite wall, opposite each screw.
     const acc = new RegExp(String.raw`${NUM}"\s*(?:\([^)]*\)\s*)?ACCESS HOLE in the opposite`).exec(r.text);
     if (acc && part.kind === 'metal') {
@@ -761,7 +794,7 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
       if (!feats.some((f) => f.k === 'region' && f.key === key)) feats.push({ k: 'region', key, to: [r.to], joint: 'rabbet', kind: 'rabbet', boxes: [[lo, hi]], noun: 'rabbet', detail: `${frac(d)} × ${frac(w)}, along the whole length`, purpose: `for the edge of the ${nameOf(r.to)}` });
     }
   }
-  if (solid.slot) feats.push({ k: 'region', key: 'slot', to: [], joint: 'slot', kind: 'slot', boxes: [[solid.slot.lo, solid.slot.hi]], noun: 'slot', detail: solid.slot.detail, purpose: 'for the flap tongue and the pivot block', face: { ax: 1, hi: true } });
+  if (solid.pocket) feats.push({ k: 'region', key: 'pocket', to: [], joint: 'pocket', kind: 'notch', boxes: [[solid.pocket.lo, solid.pocket.hi]], noun: 'pocket', detail: solid.pocket.detail, purpose: 'for the flap tongue and the pivot block', face: { ax: 2, hi: true } });
 
   // ── F6: steel rods (axles) and tubes that lie in the part: grooves and bores ──
   const notchBoxes = feats.filter((f): f is RegionF => f.k === 'region' && f.kind === 'notch').flatMap((f) => f.boxes);
@@ -807,6 +840,15 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
     const ang = part.geometry.type === 'extrusion' ? angleSection(b.main, b) : null;
     feats.push(...(ang ? [ang] : outlineFeatures(b.main, b, words, vrefOf(b.main, b))));
   }
+  // D-77: the pivot strap is bought as flat bar: cut and drill only.
+  if (part.partNo === 'brake-strap') notes.push('Cut from the flat bar on the metal bandsaw and deburr the cut edges; drill on the drill press. Cut, deburr and drill only. Drill the screw holes first; the knee\'s pin hole is drilled through this pin hole after the strap is screwed on.');
+  // D-76: the side ribs, their knees and the box tie spacers.
+  if (/^side-rib(-box|-bow)?$/.test(part.partNo ?? '')) {
+    notes.push('A T-shaped rib: a narrow shaft and a head as tall as the gunwale band, the top of the head cut to the sheer (the slope is dimensioned at both ends). The drawn face is the one that faces into the sled; the back face is glued to the bands and the filler.');
+    if ((part.joints ?? []).some((q) => q.type === 'hole' && /template/.test(q.note ?? ''))) notes.push('Do not drill the four D-ring holes on the bench: they are drilled at the final fit, through the head and the side together, with the D-ring plate as the template. The positions here check the plate.');
+  }
+  if (part.partNo === 'box-tie') notes.push('A plain stick that fills the gap between the box rib and the box side. Measure that gap at the dry fit and cut the stick a hair short of it: thickened epoxy takes up the rest. Its top stands 1/8" under the box coaming, so it is never glued to the lid frame.');
+  if (part.partNo === 'side-rib-knee') notes.push('A right-triangle knee: the tall leg is glued to the face of the rib and the foot to the deck. Drill the screw holes straight down from the sloped face, with the counterbore first, so the screw head leaves the stated oak under it.');
   if (!b.rod && part.plies && part.plies > 1) notes.push(`${part.plies} strips glued face to face and bent on the form: cut the features after the glue-up and the bend.`);
 
   // ── Notches through the thickness cut into a box's main outline ──
@@ -1266,6 +1308,89 @@ function purposeFor(ids: string[], a: Analysis): string {
 
 interface Mark { u: number; letter?: string }
 
+/**
+ * LAYERS block of a cross-laminated part (the brake knee, D-75): an edge view of the stack (layer lines, the grain of each layer) and a face view of what each layer is cut as (its boards,
+ * the off-center edge joint), at a small scale. Every size is the cut list's. Null when the part's layers all run the same way. `y0` is the top of the block; `h` is its height.
+ */
+function layersBlock(part: Part, cl: CutList, x0: number, y0: number, face: string): { svg: string; h: number } | null {
+  const row = cl.oak.flatMap((g) => g.rows).find((r) => r.ids.includes(part.id));
+  const lps = row?.layerPieces ?? [];
+  if (new Set(lps.map((q) => q.grainWord)).size < 2) return null;
+  const cuts = cl.cuts.filter((c) => c.piece === 'layer' && c.ids.includes(part.id));
+  const layers = lps.map((lp) => {
+    const mine = cuts.filter((c) => c.layer === lp.layer).sort((a, b) => a.index - b.index);
+    const widths = mine.map((c) => c.rough.w);
+    const upright = lp.grainWord === 'upright';
+    const across = widths.reduce((a, b) => a + b, 0), along = mine[0]?.rough.l ?? lp.lengthIn;
+    // Seen from the rear face: horizontal is across the sled, vertical is up the leg.
+    return { n: lp.layer, grain: lp.grainWord ?? '', widths, upright, hz: upright ? across : along, vt: upright ? along : across, t: lp.roughT, same: `${lp.grainWord}|${widths.join()}|${along}` };
+  });
+  const maxH = Math.max(...layers.map((q) => q.hz)), maxV = Math.max(...layers.map((q) => q.vt));
+  const joint = part.stock ? edgeJointUp(part, part.stock.w) : undefined;
+  const kinds: typeof layers = [];
+  for (const q of layers) if (!kinds.some((z) => z.same === q.same)) kinds.push(q);
+  // The edge view and the face views sit side by side: the largest scale at which they all fit across the sheet (8.2" less margins) and the tallest layer fits 4".
+  const gapOf = (q: { widths: number[] }): number => (q.widths.length > 1 && joint !== undefined ? 1.55 : 0.6);
+  const slotW = (z: { hz: number; widths: number[] }, q: number): number => Math.max(z.hz * q + gapOf(z), 2.35); // a face view's heading ("LAYERS 1 and 3, from the rear face") is about 2.3" wide
+  const needW = (q: number): number => maxH * q + 0.45 + kinds.reduce((a, z) => a + slotW(z, q), 0);
+  const k = [1 / 3, 1 / 4, 1 / 6, 1 / 8].find((q) => needW(q) <= 7.4 && maxV * q <= 4) ?? 1 / 8;
+  const o: string[] = [];
+  const top = y0 + 0.3;
+  o.push(txt(x0, y0 + 0.12, `LAYERS: how the block is laminated (layer 1 is the ${face}; sketch at ${scaleText(k)}, the layers 2x thicker than that)`, 0.12, { bold: true }));
+  const arrow = (a0: Vec2, a1: Vec2): string => {
+    const d: Vec2 = [Math.sign(a1[0] - a0[0]), Math.sign(a1[1] - a0[1])];
+    return line(a0, a1, GRAIN, 0.012) + line(a1, [a1[0] - d[0] * 0.08 - d[1] * 0.04, a1[1] - d[1] * 0.08 + d[0] * 0.04], GRAIN, 0.012) + line(a1, [a1[0] - d[0] * 0.08 + d[1] * 0.04, a1[1] - d[1] * 0.08 - d[0] * 0.04], GRAIN, 0.012);
+  };
+  // Edge view (seen from the top end): the layers stacked, rear layer on top, each as wide as it is across the sled.
+  const thk = (q: { t: number }): number => q.t * k * 2;
+  const eW = maxH * k, ex = x0, cx = ex + eW / 2;
+  o.push(txt(ex, top + 0.05, 'EDGE VIEW, from the TOP end', 0.1, { bold: true }));
+  let ey = top + 0.18;
+  for (const q of layers) {
+    const w = q.hz * k, h = thk(q);
+    o.push(polyEl([[cx - w / 2, ey], [cx + w / 2, ey], [cx + w / 2, ey + h], [cx - w / 2, ey + h]], INK, 0.014, WOOD));
+    o.push(txt(cx - w / 2 + 0.06, ey + h / 2 + 0.035, `${q.n}  ${q.upright ? 'upright' : 'across the sled'}`, 0.095));
+    if (q.upright) o.push(ellipse([cx + w / 2 - 0.2, ey + h / 2], 0.07, 0.07, GRAIN, 0.012), ellipse([cx + w / 2 - 0.2, ey + h / 2], 0.015, 0.015, GRAIN, 0.01, '', GRAIN));
+    else o.push(arrow([cx + w / 2 - 0.55, ey + h / 2], [cx + w / 2 - 0.1, ey + h / 2]));
+    ey += h;
+  }
+  o.push(txt(ex, ey + 0.17, 'Layer lines are glue lines.', 0.085, { fill: HID }), txt(ex, ey + 0.28, 'The dot is grain running toward you.', 0.085, { fill: HID }));
+  const edgeBottom = ey + 0.36;
+  // Face views (seen from the rear face): one rectangle per distinct layer.
+  let fx = ex + eW + 0.45;
+  const mid = top + 0.18 + maxV * k / 2;
+  let bottom = edgeBottom;
+  for (const q of kinds) {
+    const same = layers.filter((z) => z.same === q.same).map((z) => z.n);
+    const w = q.hz * k, h = q.vt * k, y1 = mid - h / 2;
+    o.push(txt(fx, top + 0.05, `LAYER${same.length > 1 ? 'S' : ''} ${same.join(' and ')}, from the rear face`, 0.1, { bold: true }));
+    o.push(polyEl([[fx, y1 + 0.18], [fx + w, y1 + 0.18], [fx + w, y1 + 0.18 + h], [fx, y1 + 0.18 + h]], INK, 0.014, WOOD));
+    const yb = y1 + 0.18 + h;
+    if (q.upright) o.push(arrow([fx + w / 2, yb - h * 0.2], [fx + w / 2, yb - h * 0.8]), txt(fx + w / 2 + 0.06, yb - h * 0.5, 'grain up the leg', 0.085, { fill: GRAIN }));
+    else o.push(arrow([fx + w * 0.2, yb - h * 0.94], [fx + w * 0.8, yb - h * 0.94]), txt(fx + w / 2, yb - h * 0.94 - 0.06, 'grain across the sled', 0.085, { anchor: 'middle', fill: GRAIN }));
+    if (q.widths.length > 1) {
+      let yy = yb;
+      q.widths.forEach((bw, i) => {
+        const hh = bw * k;
+        if (i > 0) o.push(line([fx, yy], [fx + w, yy], FEAT, 0.014));
+        o.push(txt(fx + 0.06, yy - hh / 2 + 0.035, `board ${i + 1}${i === 0 ? ' (bottom edge)' : ' (top)'}: ${frac(bw)} wide`, 0.09, { fill: INK }));
+        yy -= hh;
+      });
+      if (joint !== undefined) {
+        const jy = yb - q.widths[0] * k;
+        o.push(txt(fx + w + 0.08, jy + 0.035, `edge joint: ${frac(joint)} up from`, 0.09, { fill: FEAT, bold: true }), txt(fx + w + 0.08, jy + 0.14, 'the finished bottom edge', 0.09, { fill: FEAT, bold: true }));
+        const fy = yb - Math.max(0, q.widths[0] - joint) * k;
+        o.push(line([fx - 0.08, fy], [fx + w + 0.04, fy], DIM, 0.008, DASH), txt(fx - 0.1, fy + 0.03, 'finished bottom edge', 0.075, { anchor: 'end', fill: DIM }));
+      }
+    } else if (w < 2) o.push(txt(fx, yb + 0.28, `ONE piece, ${frac(q.widths[0])} wide across its grain`, 0.085, { fill: INK })); // too narrow to hold the words: they go under the sizes
+    else o.push(txt(fx + 0.06, yb - 0.06, `ONE piece, ${frac(q.widths[0])} wide across its grain`, 0.085, { fill: INK }));
+    o.push(txt(fx, yb + 0.15, `${frac(q.hz)} across the sled \u00d7 ${frac(q.vt)} up the leg`, 0.09, { fill: DIM }));
+    bottom = Math.max(bottom, yb + (q.widths.length === 1 && w < 2 ? 0.36 : 0.22));
+    fx += slotW(q, k);
+  }
+  return { svg: `<g id="layers">${o.join('')}</g>`, h: bottom - y0 + 0.1 };
+}
+
 function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: CutList): { svg: string; W: number; H: number; scale: string; features: DrawingFeature[] } {
   const { part, board: b, words: w } = a;
   const ext = EXT(b);
@@ -1385,20 +1510,21 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
         balloons.push({ letter, view: 'main', at: [f.pts[0][0], f.pts[0][1]] });
       } else {
         groups = placeGroups(f.pts, ax, a);
-        where = `In the ${w.side[ax][hiSide ? 1 : 0]}: ${groups.join('; ')}`;
+        where = `In the ${f.faceWord ?? w.side[ax][hiSide ? 1 : 0]}: ${groups.join('; ')}`;
         const vName = ax === 2 ? 'main' : ax === 1 ? edgeView(hiSide) : endView(hiSide);
         for (const q of f.pts) {
           if (vName) {
             const c: Vec2 = ax === 2 ? [q[0], q[1]] : ax === 1 ? [q[0], q[2]] : [q[2], q[1]];
             const r = f.dia / 2;
-            ops[vName].push({ kind: 'ell', c, rx: r, ry: r, stroke: FEAT, dash: f.blind !== undefined && ax === 2 && !hiSide ? DASH : '', cross: true });
+            ops[vName].push({ kind: 'ell', c, rx: r, ry: r, stroke: FEAT, dash: f.blind !== undefined && ((ax === 2 && !hiSide) || f.from !== undefined) ? DASH : '', cross: true });
             if (vName === 'top') nMarks.top.push(q[2]);
             if (vName === 'bottom') nMarks.bottom.push(q[2]);
           }
           if (ax !== 2) {
             // the hole's run seen from the side (hidden), in the main view
             const sp = throughSpan(b, q, ax);
-            const d0 = f.blind !== undefined ? (hiSide ? sp[1] - f.blind : sp[0]) : sp[0], d1 = f.blind !== undefined ? (hiSide ? sp[1] : sp[0] + f.blind) : sp[1];
+            const e0 = f.from ?? (hiSide ? sp[1] : sp[0]);
+            const d0 = f.blind !== undefined ? (hiSide ? e0 - f.blind : e0) : sp[0], d1 = f.blind !== undefined ? (hiSide ? e0 : e0 + f.blind) : sp[1];
             const hw = f.dia / 2;
             ops.main.push(P(ax === 1 ? [[q[0] - hw, d0], [q[0] + hw, d0], [q[0] + hw, d1], [q[0] - hw, d1]] : [[d0, q[1] - hw], [d1, q[1] - hw], [d1, q[1] + hw], [d0, q[1] + hw]], HID, 0.008, 'none', DASH));
           }
@@ -1411,8 +1537,8 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
       const nH = f.pts.length;
       const holeLine = (wh: string): string => `${nH} ${plural(f.noun, nH)}, ${f.size}. ${wh}. ${sentence(f.purpose)}.`;
       let line = holeLine(where);
-      if (line.length > MAX_LINE && groups.length > 1 && !oblique(f)) line = holeLine(`In the ${w.side[ax][hiSide ? 1 : 0]}: ${placePairs(f.pts, ax, a)}`);
-      feats.push({ label: letter, text: line, kind: 'hole', to: f.to, joint: f.joint, count: nH, size: lcDatum(f.size), positions: groups.map(lcDatum), face: oblique(f) ? 'sloped face' : lcDatum(w.side[ax][hiSide ? 1 : 0]), purpose: f.purpose });
+      if (line.length > MAX_LINE && groups.length > 1 && !oblique(f)) line = holeLine(`In the ${f.faceWord ?? w.side[ax][hiSide ? 1 : 0]}: ${placePairs(f.pts, ax, a)}`);
+      feats.push({ label: letter, text: line, kind: 'hole', to: f.to, joint: f.joint, count: nH, size: lcDatum(f.size), positions: groups.map(lcDatum), face: f.faceWord ? lcDatum(f.faceWord) : oblique(f) ? 'sloped face' : lcDatum(w.side[ax][hiSide ? 1 : 0]), purpose: f.purpose });
     } else if (f.k === 'region') {
       const letter = letterOf(li++);
       const face = f.face;
@@ -1577,8 +1703,12 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
 
   void p;
 
-  // ── Feature table ──
+  // ── Layers (a cross-laminated part): the stack, each layer's grain, its boards and the glue joint ──
   let ty = yRows0 + rows * (rowH + ROWGAP) + 0.15;
+  const lay = layersBlock(part, cl, M, ty, w.side[2][1]);
+  if (lay) { out.push(lay.svg); ty += lay.h + 0.1; }
+
+  // ── Feature table ──
   const rowsSvg: string[] = [txt(M, ty, 'FEATURES (letters on the drawing; positions from the datums above)', 0.12, { bold: true })];
   ty += 0.2;
   if (!feats.length) { rowsSvg.push(txt(M + 0.25, ty, b.rod ? 'None: cut to length, square the ends and break the edges (a light chamfer).' : 'None: a plain board, cut to the final size above.', 0.105)); ty += 0.2; }

@@ -59,3 +59,13 @@
 - Three parallel agents built the data (cut list, nesting, BOM), geometry (Shaper SVG, forms, STL) and process (assembly, finishing, verify) outputs, then the UI (Build tab, step-through, zip) and model data fixes.
 - Critics: build 6 -> 7 -> 8, files 6 -> 8 -> 8.5 (docs/reviews/phase4-*-round{1,2,3}.md). Fixes are in the Round 2/3 sections of docs/phase4-*-notes.md.
 - Checkpoint written (docs/phase4-checkpoint.md). Next: Eric's sign-off, cost pass?, push to Pages?
+
+## Parked ideas and open items (2026-10-13)
+- **Fully removable brake assembly** (Eric, parked until the current agents land): the knee bolts to the rail with two quick-release pins and comes off with the flap, so nothing sticks out in transport. It trades some stiffness for removability.
+- **Extreme-weather plywood:** with the corrected across-grain side-web check, 4 mm okoume fails at 2.0 and 3 mm Baltic at 4.8 (1/4" white oak ply passes at 0.61). Choose a sheet for the Extreme spec: probably 6 mm okoume, or the same white oak ply.
+- **D-76 rib trims (Eric's call):** a 1-3/4" head (−0.05 lb), 5/8" washers (−0.05 lb), 1/2" knees (−0.07 lb).
+- **Applied outside stiles** (frame-and-panel look): skipped for now; easy to add later.
+- **Cost pass:** after the build outputs are final.
+- **Grab-board backing strip:** the 1/16" × 1" × 6" stainless strip on the outer gunwale under the six bolt heads (D-63) shows as a bare gray bar. Options: fender washers under each head, bolts the other way (heads inside, nuts outside), or an oak strip. Eric to choose.
+- **Grab-board ends:** make the front and back edges vertical (to match the ribs and transom) instead of perpendicular to the sloping gunwale. It is a Shaper part, so only the outline changes.
+- **No extra ribs under the grab boards:** the side already passes with them through-bolted, so ribs there would only add weight. Not planned.

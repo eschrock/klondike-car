@@ -93,7 +93,8 @@ describe('no exposed plywood edges (acceptance, BRIEF §5.2)', () => {
     const web = get(parts, 'side-L-web');
     expect(web.edges).toBe('captured'); // the full-height panel: the rear end in the transom dado, the front end in the bulkhead's dado, top and bottom covered by the oak bands glued on both faces (D-62)
     expect(web.joints!.filter((j) => j.type === 'dado').map((j) => j.to).sort()).toEqual(['bow-bulkhead', 'transom-rear']);
-    expect(web.joints!.filter((j) => j.type === 'glue' && /^side-/.test(j.to)).map((j) => j.to).sort()).toEqual(['side-L-chine', 'side-L-chine-in', 'side-L-gunwale', 'side-L-gunwale-in']);
+    expect(web.joints!.filter((j) => j.type === 'glue' && /^side-[LR]-/.test(j.to)).map((j) => j.to).sort()).toEqual(['side-L-chine', 'side-L-chine-in', 'side-L-gunwale', 'side-L-gunwale-in']);
+    expect(web.joints!.filter((j) => j.type === 'glue' && /^side-rib-/.test(j.to)).map((j) => j.to).sort()).toEqual(['side-rib-L1', 'side-rib-L2', 'side-rib-L3']); // D-76: the ribs glued to its inside face
     const deck = get(parts, 'deck');
     // D-52/D-57: one deck, in the chine rabbets all the way along, in a dado in the rear transom and in a dado in the bow bulkhead.
     expect(deck.joints!.filter((j) => j.type === 'rabbet').map((j) => j.to).sort()).toEqual(['side-L-chine-in', 'side-R-chine-in']); // the gap under the inner chine band

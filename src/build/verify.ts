@@ -8,7 +8,8 @@
 import { bowTaper, PARAM_DEFS, thinSheet, type Params } from '../params';
 import { runChecks } from '../analysis';
 import { signKnobPlan } from '../model/body';
-import { computeLayout } from '../model/layout';
+import { computeLayout, innerHalfWidth } from '../model/layout';
+import { sideRibStations } from '../model/side-ribs';
 import { CARRIAGE_STOCK_IN, EYE_BOLT_STOCK_IN, stockBoltFit } from '../model/rear-mount';
 import { localBounds } from '../model/bounds';
 import type { Part } from '../model/types';
@@ -124,6 +125,16 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
   const tubeOd = p.axleDiameterIn;
   const tubeWall = p.axleWallIn;
   const railStrip = (parts.find((x) => x.id === 'rail-L')?.stock?.t ?? 0.375);
+  // D-76: the bow post's inner face against a booted rider, and the chain joist as the fallback station.
+  const ribL = computeLayout(p);
+  const bowSt = sideRibStations(p, ribL)[2];
+  const bowRib = {
+    face: bowSt.yIn - p.sideRibDepthIn,
+    fromTransom: bowSt.x - ribL.xRear,
+    alt: ribL.chain.joistX < bowSt.x - 0.5
+      ? { face: innerHalfWidth(ribL, ribL.chain.joistX) - p.sideRibDepthIn, fromTransom: ribL.chain.joistX - ribL.xRear, fromAxle: ribL.chain.joistX }
+      : null,
+  };
   const bandStrip = (parts.find((x) => x.id === 'side-L-chine')?.stock?.t ?? 0.234);
 
   // The resaw pools (rip first, then resaw; the cut list's plan): the rail and band strip boards and the spare strips each purchase leaves for the bend test.
@@ -241,7 +252,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
         ]),
         it('Eye-bolt lengths, measured under the shoulder:', [
           `Axle-beam bolt: crosses the ${fr(p.frontBeamThicknessIn)}" beam, a 2" fender washer and a nylock nut and needs ${frUp(beamEye.needIn)}" with a few threads past the nut, so buy the stock ${fr(beamEye.stockIn)}"` +
-          `${beamEye.cutToIn ? ` and CUT it to ${fr(beamEye.cutToIn)}" after fitting (it would stand ${frUp(beamEye.pastNutIn)}" past the nut; file the end, touch it with cold galvanizing)` : ''}.`,
+          `${beamEye.cutToIn ? ` and CUT it to ${fr(beamEye.cutToIn)}" after fitting (it would stand ${frUp(beamEye.pastNutIn)}" past the nut; deburr the end, touch it with cold galvanizing)` : ''}.`,
           `Chain-crossmember bolt: crosses the ${fr(p.chainJoistThickIn)}" crossmember and two washers and needs ${frUp(anchorEye.needIn)}", so buy the stock ${fr(anchorEye.stockIn)}"${anchorEye.cutToIn ? ` (optionally cut to ${fr(anchorEye.cutToIn)}")` : ''}.`,
           `Neither fouls the wheel (the beam bolts sit ${fr(p.steerChainBeamYIn)}" from the kingpin, inboard of the tires), the chain or the tongue swing.`,
         ]),
@@ -323,10 +334,10 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       title: 'Brake: pin, flap tongue and tire clearance on the first knee',
       how: [
         it('Cut ONE knee blank first, before cutting the other knee and the flaps.', [
-          `Bandsaw the slot and drill the 3/8" pin hole; use the real ${fr(p.brakePivotPinDiaIn)}" clevis pin, the hitch-pin clip and a flap tongue with its pivot block clamped in the slot.`,
+          `Notch the pocket in the layers, glue the test knee up and recess the pocket; screw the stainless strap on and drill the pin hole through its hole. Use the real ${fr(p.brakePivotPinDiaIn)}" clevis pin, the hitch-pin clip and a flap tongue with its pivot block clamped in the pocket.`,
           'This test comes BEFORE the knees are glued: the knees go on first, while the hull is inverted (assembly step "Brake knees").',
         ]),
-        it('Check the slot clearance (1/16" a side), the pin bore across the ears, the flap swing and the pad gap to the tire.'),
+        it(`Check the pocket clearance (${fr(p.brakePivotSlotClearIn)}" a side), the pin through the strap and into the blind hole, the flap swing and the pad gap to the tire.`),
         it('Drag-test a chock: pull a weighted chock across packed dirt or gravel with a scale, dry and wet.'),
         it('Test a pad sample on a wet tire.'),
       ],
@@ -335,11 +346,36 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
         `The pad hangs ${fr(p.brakePadGapIn)}" off the tread when released.`,
         `Chock μ ≥ ${p.brakeChockMuFouled} (design ${p.brakeChockMu}); pad μ ≥ 0.4 wet (0.25 fouled).`,
       ],
-      ifFails: `Adjust the slot width or the pin-hole height on the real knee before cutting the rest; enter the measured friction in the design (${lbl('brakeChockMu')}, ${lbl('brakeChockMuFouled')}; the park-hold row uses the lower).`,
+      ifFails: `Adjust the pocket width or the pin-hole height on the real knee before cutting the rest; enter the measured friction in the design (${lbl('brakeChockMu')}, ${lbl('brakeChockMuFouled')}; the park-hold row uses the lower).`,
       partIds: ids(parts, /^(brake-knee|brake-flap|brake-pivot|brake-chock|brake-pad|brake-shoe)/),
       paramKeys: verifyKeys(['brakeChockMu', 'brakeChockMuFouled']),
       when: 'before cutting',
       refs: ['D-57', 'D-65'],
+    },
+    {
+      id: 'brake-strap',
+      title: 'Brake pivot strap: pocket fit, pin and sideways push',
+      how: [
+        it('Do this on the first flap kit, on its knee with the strap screwed on (the brake flaps step).', [
+          'Clamp the flap tongue and pivot block in the pocket and swing the flap through its whole stroke, released to applied.',
+          `Look for ${fr(p.brakePivotSlotClearIn)}" of clearance all round, at every point of the swing: tongue and block to the floor, the roof, the inboard wall and the pocket's end (a strip of card or a feeler gauge).`,
+        ]),
+        it('Slide the pin through the strap, the tongue and block, and into the blind hole in the inboard ear; fit the hitch-pin clip.', ['A drop of grease on the pin. The clip goes through the cross hole outboard of the strap.']),
+        it(`Push the flap foot sideways with about ${p.brakeFlapSideLoadLbf} lb, and watch the strap.`, [
+          `This tests the sideways push the design assumes (${lbl('brakeFlapSideLoadLbf')}): a boot scuffing the foot.`,
+          'Draw a pencil line across the strap onto the knee first; use a luggage scale or a bathroom scale pressed on the foot tread to know the push.',
+        ]),
+      ],
+      passList: [
+        `The tongue and block clear the pocket by ${fr(p.brakePivotSlotClearIn)}" all round through the full swing.`,
+        'The pin slides through the strap and the blind hole with the clip on, and the flap pulls off when the pin is out.',
+        `At ${p.brakeFlapSideLoadLbf} lb sideways the strap does not move: the pencil line stays across the joint, no screw backs out and no gap opens under the strap.`,
+      ],
+      ifFails: `Pocket too tight or too loose: take a sliver off with a chisel, or re-cut the pocket in the spare knee blank. If the strap moves under the push, bed it in epoxy or design a thicker strap (${lbl('brakeStrapThickIn')}); if a boot pushes harder than this, measure it and enter it in the design (${lbl('brakeFlapSideLoadLbf')}).`,
+      partIds: ids(parts, /^(brake-knee|brake-strap|brake-flap|brake-pivot)/),
+      paramKeys: [],
+      when: 'at assembly',
+      refs: ['D-65', 'D-77'],
     },
     {
       id: 'lamp-clip',
@@ -396,6 +432,28 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       paramKeys: verifyKeys(['panelPlyIn', 'whiteOakPlyThickIn', 'balticThinThickIn', 'deckPlyIn', 'grooveSlopIn', 'deckSlopIn']),
       when: 'before cutting',
       refs: ['D-62', 'D-63', 'D-73'],
+    },
+    {
+      id: 'bow-rib-clearance',
+      title: `Bow rib: sit a booted rider in the sled before cutting the bow posts`,
+      how: [
+        it('Sit a rider in winter boots in the sled (or a mock-up of the seat and the bow).', [
+          `Mark the bow post on each side: its inner face is ${fr(bowRib.face)}" from the center line, ${fr(bowRib.fromTransom, 8)}" from the transom.`,
+          'Put the boots where the rider rests them against the foot brace, then at full steering lock.',
+        ]),
+        ...(bowRib.alt
+          ? [it(`If the post is in the way, move the front rib to the chain joist (about ${fr(bowRib.alt.fromTransom, 8)}" from the transom, ${f(bowRib.alt.fromAxle, 0)}" ahead of the rear axle; its inner face is ${fr(bowRib.alt.face)}" from the center line).`, [
+              `Change the design value ${lbl('sideRibFrontXIn')} to ${f(bowRib.alt.fromAxle, 0)}: the rib and its knee snap to the joist.`,
+              'The knee screws then go into the chain joist: check them against the steering-chain anchor eye bolt in that joist and keep the two screws clear of its hole.',
+            ])]
+          : [it('If the post is in the way, leave the bow ring off (2 lash points per side) or ask for a thinner post.')]),
+      ],
+      passList: [`The boots clear the post by about 1" at full lock (the post face is ${fr(bowRib.face)}" from the center line).`],
+      ifFails: bowRib.alt ? `Set ${lbl('sideRibFrontXIn')} to ${f(bowRib.alt.fromAxle, 0)}, re-run the checks (the side-lateral row) and cut the bow posts for the chain joist.` : 'Drop the bow ring and re-run the checks.',
+      partIds: ids(parts, /^side-rib(-knee)?-[LR]3$/),
+      paramKeys: verifyKeys(['sideRibFrontXIn']),
+      when: 'before cutting',
+      refs: ['D-76'],
     },
   ];
 

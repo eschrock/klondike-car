@@ -6,7 +6,7 @@
  *  - storage-pack: the 10 Essentials kit list (D-19) packed into the actual box interior;
  *  - storage-lid-open: how far the lid opens before the (upright) seat back stops it;
  *  - lash-points:  count of gunwale lash points (BRIEF §4.9: at least 6);
- *  - lash-load:    one lash plate pulled at its working load and angle: screw withdrawal (NDS) and lateral bearing (S-9).
+ *  - lash-load:    one D-ring plate pulled at its working load and angle (D-76: through-bolted to a rib head): bolt tension and shear, head bearing, washer bearing, rib bending.
  *
  * Seat-back model (per stile, 2 stiles): uniform line load w = Q / (2H) aft along the back, Q = rider mass × dynamic factor × torso share.
  * The stile bears on the oak stop block crest at height A (conservative: the face below is taken as relieved) and is held at its front foot (B = 0) by the hinge. Statics:
@@ -14,7 +14,9 @@
  * M = w·(H − A)²/2.
  */
 import { GRIP_BACKING_H_IN, GRIP_BACKING_T_IN, gripBackingLen, GRIP_BOLT_COLS, GRIP_BOLT_DIA_IN, GRIP_WASHER_OD_IN, GRIP_BOLT_ROWS_IN, GRIP_BOLTS, LATCH_HOLE_WALL_MIN_IN, latchGeometry, seatBackSupport } from '../model/seat';
-import { storageGeometry, storageInterior, boxGear, packEssentials, ESSENTIALS, lashPositions, LASH_SCREWS, LASH_SCREW_DIA_IN, LASH_SCREW_LEN_IN, LASH_PLATE_T_IN, LASH_TIP_IN } from '../model/storage';
+import { storageGeometry, storageInterior, boxGear, packEssentials, ESSENTIALS } from '../model/storage';
+import { LASH_BOLTS, LASH_BOLT_AR_IN2, LASH_BOLT_AT_IN2, LASH_BOLT_DIA_IN, LASH_WASHER, lashBoltLength, sideRibStations } from '../model/side-ribs';
+import { sideLateral } from './side-lateral';
 import type { Ctx } from './context';
 import { dualCheck, governing, singleCheck, detail, type CaseEval } from './dual';
 import { f } from './format';
@@ -214,7 +216,7 @@ export function lidOpenCheck(ctx: Ctx): AnalysisCheck {
 
 export function lashPointsCheck(ctx: Ctx): AnalysisCheck {
   const n = ctx.parts.filter((x) => x.id.startsWith('lash-')).length;
-  const want = lashPositions(ctx.p, ctx.L, ctx.p.lashPointsPerSide).length * 2;
+  const xs = sideRibStations(ctx.p, ctx.L).map((st) => f(st.x, 1));
   return singleCheck({
     id: 'lash-points',
     label: 'Lash points for gear hauling',
@@ -224,47 +226,49 @@ export function lashPointsCheck(ctx: Ctx): AnalysisCheck {
     limit: 6,
     sense: '>=',
     marginalAbs: 0,
-    refs: ['BRIEF 4.9', 'D-41'],
-    how: `${n} stainless D-rings on the cabin gunwales (${ctx.p.lashPointsPerSide} per side requested, ${want} fit clear of the grab handles); each bolt plate is rated for a 300 lbf strap load. BRIEF §4.9 asks for at least 6.`,
+    refs: ['BRIEF 4.9', 'D-41', 'D-76'],
+    how: `${n} D-rings, through-bolted to the heads of the side ribs (D-76: ${ctx.p.lashPointsPerSide} per side, ribs at x = ${xs.join(', ')}"), so the tie-downs bracket the whole bed; each bolt plate is rated for a ${ctx.p.lashLoadLbf} lbf strap load. BRIEF §4.9 asks for at least 6.`,
   });
 }
 
-/** White oak specific gravity (NDS Table 12.3.3A, oven-dry) and the wet-service factor C_M for screw withdrawal (NDS Table 11.3.3). */
-const OAK_G = 0.68;
-const WITHDRAWAL_WET_CM = 0.7;
-
-/** Numbers behind the lash-load check, exported for the tests. */
-export function lashLoads(p: Ctx['p']) {
+/** Numbers behind the lash-load check (D-76: four #8-32 machine screws through the rib head and the side sandwich), exported for the tests. */
+export function lashLoads(ctx: Ctx) {
+  const { p } = ctx;
   const th = (p.lashPullAngleDeg * Math.PI) / 180;
-  const V = p.lashLoadLbf * Math.sin(th);
-  const H = p.lashLoadLbf * Math.cos(th);
-  const pen = LASH_SCREW_LEN_IN - LASH_PLATE_T_IN - LASH_TIP_IN;
-  // NDS 12.2.1: W = 1380·G²·D lbf per inch of thread penetration (ASD, already includes the safety factor); wet service C_M = 0.7.
-  const wPerIn = 1380 * OAK_G * OAK_G * LASH_SCREW_DIA_IN;
-  const wScrew = wPerIn * pen * WITHDRAWAL_WET_CM;
-  const capW = LASH_SCREWS * wScrew;
-  const bearing = H / LASH_SCREWS / (LASH_SCREW_DIA_IN * pen);
-  return { V, H, pen, wPerIn, wScrew, capW, bearing };
+  const V = p.lashLoadLbf * Math.sin(th); // up the head: shear in the bolts, bearing on the head along its grain
+  const H = p.lashLoadLbf * Math.cos(th); // inboard: bolt tension, the fender washers bear on the outer band
+  const T1 = H / LASH_BOLTS, V1 = V / LASH_BOLTS;
+  const Ft = p.lashBoltYieldPsi / p.steelSafetyFactor, Fv = (0.6 * p.lashBoltYieldPsi) / p.steelSafetyFactor;
+  const sigT = T1 / LASH_BOLT_AT_IN2, tau = V1 / LASH_BOLT_AR_IN2;
+  const interaction = Math.hypot(sigT / Ft, tau / Fv);
+  const headBearing = V1 / (LASH_BOLT_DIA_IN * p.sideRibDepthIn);
+  const washerArea = (Math.PI / 4) * (LASH_WASHER.od ** 2 - LASH_WASHER.id ** 2);
+  const washerBearing = T1 / washerArea;
+  const sl = sideLateral(ctx);
+  return { V, H, T1, V1, Ft, Fv, sigT, tau, interaction, headBearing, washerArea, washerBearing, ribSig: sl.rating.ribSigMax, ribN: sl.rating.ribSigMaxN, ribM: sl.rating.ribMMax, bolt: lashBoltLength(p) };
 }
 
 export function lashLoadCheck(ctx: Ctx): AnalysisCheck {
   const { p } = ctx;
   const al = allowables(ctx);
-  const k = lashLoads(p);
+  const k = lashLoads(ctx);
   const ds: Detail[] = [
-    detail('screw withdrawal (plate, all screws)', k.V, 'lbf', k.capW, '<='),
-    detail('screw bearing on the oak (lateral)', k.bearing, 'psi', al.oakDowel, '<='),
+    detail('bolt tension and shear together ((σ/Ft)² + (τ/Fv)², square root)', k.interaction, '', 1, '<='),
+    detail('bolt bearing on the oak head (along its grain)', k.headBearing, 'psi', al.oakDowel, '<='),
+    detail('fender washer bearing on the outer gunwale band (compression ⊥)', k.washerBearing, 'psi', al.oakPerp, '<='),
+    detail(`rib bending at the rating (rib ${k.ribN})`, k.ribSig, 'psi', al.oakBend, '<='),
   ];
   const g = ds.reduce((a, b) => (b.util > a.util ? b : a), ds[0]);
   return singleCheck({
     id: 'lash-load',
-    label: 'Lash point pull (screw withdrawal)',
+    label: 'Lash point pull (through-bolts, head and rib)',
     group: 'Structure',
     value: g.value, unit: g.unit, limit: g.limit, sense: g.sense, details: ds,
-    refs: ['BRIEF 4.9', 'D-41'],
-    how: `One lash plate pulled at its ${p.lashLoadLbf} lbf working load, ${p.lashPullAngleDeg}° above the deck: withdrawal V = ${f(p.lashLoadLbf, 0)} × sin ${p.lashPullAngleDeg}° = ${f(k.V)} lbf, lateral H = ${f(k.H)} lbf. `
-      + `${LASH_SCREWS} stainless #8 × ${LASH_SCREW_LEN_IN}" screws (D-72) (D = ${LASH_SCREW_DIA_IN}"), thread penetration ${LASH_SCREW_LEN_IN} − ${LASH_PLATE_T_IN} plate − ${LASH_TIP_IN} tip = ${f(k.pen, 3)}" into oak (G = ${OAK_G}): NDS W = 1380·G²·D = ${f(k.wPerIn)} lbf/in, × ${f(k.pen, 3)}" × C_M ${WITHDRAWAL_WET_CM} (wet) = ${f(k.wScrew)} lbf per screw, ${f(k.capW)} lbf for ${LASH_SCREWS}. `
-      + `Lateral: ${f(k.H / LASH_SCREWS)} lbf per screw bears on ${f(k.pen, 3)}" × ${LASH_SCREW_DIA_IN}" = ${f(k.bearing, 0)} psi (≤ ${f(al.oakDowel, 0)}). Two screws would give ${f((2 * k.wScrew), 0)} lbf and fail; the plate is a 4-hole plate for that reason.`,
+    refs: ['BRIEF 4.9', 'D-41', 'D-76'],
+    how: `One D-ring plate pulled at its ${p.lashLoadLbf} lbf working load, ${p.lashPullAngleDeg}° above the deck: V = ${f(k.V)} lbf up the rib head, H = ${f(k.H)} lbf inboard. `
+      + `D-76: the plate is through-bolted to the rib head with ${LASH_BOLTS} #8-32 x ${k.bolt.len}" stainless machine screws (washer, side sandwich, head, plate, nylock: ${k.bolt.need.toFixed(2)}"), so nothing withdraws: each takes ${f(k.T1)} lbf of tension (${f(k.sigT, 0)} psi on ${LASH_BOLT_AT_IN2} in², allowable ${f(k.Ft, 0)} = ${f(p.lashBoltYieldPsi, 0)} / ${p.steelSafetyFactor}) and ${f(k.V1)} lbf of shear (${f(k.tau, 0)} psi on the ${LASH_BOLT_AR_IN2} in² root, allowable ${f(k.Fv, 0)}); together ${k.interaction.toFixed(2)}. `
+      + `Bearing: ${f(k.V1)} lbf per bolt on ${LASH_BOLT_DIA_IN}" x ${p.sideRibDepthIn}" of head = ${f(k.headBearing, 0)} psi (≤ ${f(al.oakDowel, 0)}; the bands and web behind it not counted); the ${LASH_WASHER.od}" fender washer outside bears ${f(k.washerBearing, 0)} psi on the outer band (≤ ${f(al.oakPerp, 0)}, compression ⊥). `
+      + `Rib: each rib pulled alone at ${f(k.H)} lbf inboard in the side-lateral model; rib ${k.ribN} takes ${f(k.ribM, 0)} lb·in above its base, ${f(k.ribSig, 0)} psi on the rib section (≤ ${f(al.oakBend, 0)}). The side's own stresses at the rating are in the side-lateral row.`,
   });
 }
 

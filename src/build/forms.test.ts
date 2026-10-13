@@ -33,7 +33,7 @@ function wellFormed(xml: string): string | null {
 
 describe('forms and templates', () => {
   it('draws the side form, rail form, crown templates and brake-flap template', () => {
-    expect(drawings.map((d) => d.id)).toEqual(['side-form', 'rail-form', 'crown-templates', 'brake-flap-template']);
+    expect(drawings.map((d) => d.id)).toEqual(['side-form', 'rail-form', 'crown-templates', 'brake-flap-template', 'brake-knee-template']);
   });
 
   it('is well-formed, in real inches, with a title block, a 1 in check square and a cuttable outline', () => {
@@ -90,6 +90,35 @@ describe('forms and templates', () => {
     expect(dim('crown-templates', 'bulk-crown')).toBeCloseTo(p.handleBowCrownIn, 6);
     expect(dim('crown-templates', 'bulk-span')).toBeCloseTo(2 * L.bulkhead.halfW, 6);
     expect(dim('crown-templates', 'bow-length')).toBeCloseTo(2 * (L.hwC + L.side), 6);
+  });
+
+  it('draws a brake-knee template from the knee outline: its size is the finished knee, with the pocket, pin and bolt-row guides (D-77)', () => {
+    const fin = cutListFor(parts, p).finished.find((f) => f.ids.includes('brake-knee-L'))!;
+    expect(dim('brake-knee-template', 'knee-width')).toBeCloseTo(fin.final.l, 6);
+    expect(dim('brake-knee-template', 'knee-height')).toBeCloseTo(fin.final.w, 6);
+    expect(dim('brake-knee-template', 'knee-thickness')).toBeCloseTo(fin.final.t, 3);
+    expect(dim('brake-knee-template', 'bolt-rows')).toBe(p.brakeMountBoltRows);
+    const t = byId('brake-knee-template');
+    expect(t.svg).toMatch(/brake knee outline \(template, offset 0\)/);
+    expect(t.svg).toMatch(/pivot pin hole line/);
+    expect(t.svg).toMatch(/pocket \(open at the outboard edge\)/);
+    expect(t.notes.join(' ')).toMatch(/mirror image/);
+    // D-77: no slot lines, no ear: the finished knee is 3-11\/16" reach and 9-1\/2" tall, the pocket rectangle 1-3\/8" wide, 3\/4" to 2-17\/32" below the top end
+    expect(t.notes.join(' ')).not.toMatch(/slot/);
+    expect(t.notes.join(' ')).toMatch(/pocket rectangle at the top end \(1-3\/8" in from the outboard edge, 3\/4" to 2-17\/32" below the top end/);
+    expect(t.notes.join(' ')).toMatch(/pivot pin line \(1-5\/8" below the top end/);
+    expect(dim('brake-knee-template', 'knee-width')).toBeCloseTo(3.6875, 3);
+    expect(dim('brake-knee-template', 'knee-height')).toBeCloseTo(9.5, 1);
+    expect(wellFormed(t.svg)).toBeNull();
+  });
+
+  it('cuts the mirror-ramp cap to the web outline plus a margin, not wider than the web needs', () => {
+    const web = flatPattern(parts.find((x) => x.id === 'side-L-web')!)!;
+    const steps = byId('side-form').build.flatMap((b) => [b.step, ...(b.sub ?? [])]);
+    const cap = steps.find((t) => /^Cap: .*second template/.test(t))!;
+    expect(cap).toContain(`${frac(web.heightIn + 1)} wide at the rear`);
+    expect(cap).toContain(`the web's ${frac(web.heightIn)} plus 1/2" each side`);
+    expect(cap).not.toContain('16-3/32');
   });
 
   it('cuts the brake-flap template at offset 0 with its drill holes', () => {

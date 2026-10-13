@@ -212,9 +212,9 @@ export function toCsv(rows: CsvCell[][]): string {
 
 // ── Display words ─────────────────────────────────────────────────────────────
 
-/** How a fabrication tag reads at the bench: 'shaper-origin' -> 'Shaper Origin', 'table-saw' -> 'table saw', 'bentlam' -> 'bent laminate'. */
+/** How a fabrication tag reads at the bench: 'shaper-origin' -> 'Shaper Origin', 'table-saw' -> 'table saw', 'bentlam' -> 'bent laminate'; the model's legacy metal id 'drill-tap' is "cut on the metal bandsaw and drill" (D-77: nothing is tapped). */
 export function fabText(fab: string): string {
-  const words: Record<string, string> = { 'shaper-origin': 'Shaper Origin', bentlam: 'bent laminate', 'drill-tap': 'drill and tap' };
+  const words: Record<string, string> = { 'shaper-origin': 'Shaper Origin', bentlam: 'bent laminate', 'drill-tap': 'cut on the metal bandsaw and drill', bandsaw: 'bandsaw' };
   return words[fab] ?? fab.replace(/-/g, ' ');
 }
 /** 'board 2 of 3', 'layer 1 of 3', 'resawn strip', 'one piece': which piece of its part a cut is (the same words as the UI). */
@@ -378,7 +378,10 @@ export interface SheetRow {
   name: string;
   qty: number;
   ids: string[];
+  /** The blank to cut (the model's stock). */
   stock: Dims;
+  /** The FINAL size: what the Shaper file cuts. It is the blank except where the file cuts a net length shorter than the blank (the side web: the flat development), where the length is that net. The tables print this. */
+  final: Dims;
   grain?: string;
   grainWord?: string;
   fab: string;
@@ -674,7 +677,7 @@ export function laminationNote(l: Lamination, pieces?: PlannedPiece[]): string {
 }
 
 /** Where the model puts the edge joint of a cross-laminated layer, in inches from the bottom edge ("the joint along its grain 3.47" up from the bottom"); undefined if it says nothing or the number is not inside the width. */
-function edgeJointUp(x: Part, width: number): number | undefined {
+export function edgeJointUp(x: Part, width: number): number | undefined {
   const m = /joint along its grain (\d+(?:\.\d+)?)"\s+up from the bottom/.exec(x.notes ?? '');
   const v = m ? Number(m[1]) : NaN;
   return Number.isFinite(v) && v > 0.5 && v < width - 0.5 ? v : undefined;
@@ -875,12 +878,12 @@ export const sheetClass = (thicknessIn: number): { label: string; mm: number } =
  * A sheet whose Shaper file cuts a NET length shorter than the blank (the side web: the file is the flat development, the blank carries the trim): say both numbers on the row, as fractions.
  * Null when the file and the blank agree (within 0.02 in).
  */
-function shaperNetNote(x: Part, stock: Dims): string | null {
+function shaperNetNote(x: Part, stock: Dims): { net: number; note: string } | null {
   const f = flatPattern(x);
   if (!f) return null;
   const net = Math.max(f.widthIn, f.heightIn);
   if (stock.l - net < 0.02) return null;
-  return `the Shaper file cuts it to ${finalFrac(net)}; start from a ${roughFrac(stock.l)} blank (+${roughFrac(stock.l - net)} trim)`;
+  return { net, note: `the Shaper file cuts it to ${finalFrac(net)}; start from a ${roughFrac(stock.l)} blank (+${roughFrac(stock.l - net)} trim)` };
 }
 
 function sheetGroups(parts: Part[], warnings: string[], stepOf?: ReadonlyMap<string, number>): SheetGroup[] {
@@ -896,8 +899,9 @@ function sheetGroups(parts: Part[], warnings: string[], stepOf?: ReadonlyMap<str
     if (row) { row.qty += 1; row.ids.push(x.id); row.step = Math.min(row.step, x.step); row.assemblySteps = stepsOf(row.ids, stepOf); }
     else {
       const gw = grainInWords(x);
-      const note = shaperNetNote(x, stock);
-      g.rows.push({ partNo: partKey(x), name: x.name, qty: 1, ids: [x.id], stock, grain: x.grain, ...(gw ? { grainWord: gw } : {}), fab: x.fab, step: x.step, assemblySteps: stepsOf([x.id], stepOf), ...(note ? { note } : {}) });
+      const net = shaperNetNote(x, stock);
+      const note = net?.note;
+      g.rows.push({ partNo: partKey(x), name: x.name, qty: 1, ids: [x.id], stock, final: net ? { ...stock, l: net.net } : stock, grain: x.grain, ...(gw ? { grainWord: gw } : {}), fab: x.fab, step: x.step, assemblySteps: stepsOf([x.id], stepOf), ...(note ? { note } : {}) });
     }
   }
   return [...groups.values()].sort((a, b) => a.thicknessMm - b.thicknessMm);
@@ -1024,7 +1028,7 @@ export function cutList(parts: Part[], p: Params, stepOf?: ReadonlyMap<string, n
     ]),
     sheets: toCsv([
       ['Sheet', 'Part', 'Qty', 'Final T x W x L (in)', 'Grain', 'Fabrication', 'Assembly step', 'Note'],
-      ...sheets.flatMap((g) => g.rows.map((r) => [g.label, r.name, r.qty, finalDimsText(r.stock), r.grainWord, fabText(r.fab), stepText(r.assemblySteps), r.note])),
+      ...sheets.flatMap((g) => g.rows.map((r) => [g.label, r.name, r.qty, finalDimsText(r.final), r.grainWord, fabText(r.fab), stepText(r.assemblySteps), r.note])),
     ]),
     metal: toCsv([
       ['Stock', 'Part', 'Qty', 'Cut length (in)', 'Fabrication', 'Assembly step'],
@@ -1084,6 +1088,27 @@ function cutsOf(plans: OakPartPlan[], pools: ResawPool[]): Cut[] {
   return [...map.values()].sort((a, b) => boardOrder(a.board) - boardOrder(b.board) || b.rough.l - a.rough.l || a.partNo.localeCompare(b.partNo) || a.index - b.index);
 }
 
+/** Each layer of a laminated part as it lies in the block: the width across ITS grain (the boards edge-glued, added up) and its length along its grain. */
+function layerExtents(pl: OakPartPlan): Array<{ layer: number; across: number; along: number }> {
+  const out: Array<{ layer: number; across: number; along: number }> = [];
+  for (const pc of pl.pieces) {
+    if (!pc.layer) continue;
+    const hit = out.find((q) => q.layer === pc.layer);
+    if (hit) hit.across += pc.rough.w; else out.push({ layer: pc.layer, across: pc.rough.w, along: pc.rough.l });
+  }
+  return out;
+}
+
+/** "layers 1 and 3: 9-1/2 wide across its grain \u00d7 6-1/2 long; layer 2: 4-7/8 wide across its grain \u00d7 10-5/8 long": layers of the same size said once. */
+function layerSizesText(lyr: Array<{ layer: number; across: number; along: number }>): string {
+  const groups: Array<{ ids: number[]; across: number; along: number }> = [];
+  for (const q of lyr) {
+    const g = groups.find((z) => Math.abs(z.across - q.across) < 1e-9 && Math.abs(z.along - q.along) < 1e-9);
+    if (g) g.ids.push(q.layer); else groups.push({ ids: [q.layer], across: q.across, along: q.along });
+  }
+  return groups.map((g) => `${g.ids.length > 1 ? 'layers' : 'layer'} ${g.ids.join(' and ')}: ${fractionText(roughUp8(g.across), 8)} wide across its grain \u00d7 ${fractionText(roughUp8(g.along), 8)} long`).join('; ');
+}
+
 /** The glue-ups that follow the cuts: each panel or laminated block, with the finished size it is milled to. */
 function glueUpsOf(plans: OakPartPlan[]): GlueUp[] {
   const map = new Map<string, GlueUp>();
@@ -1102,10 +1127,16 @@ function glueUpsOf(plans: OakPartPlan[]): GlueUp[] {
         : pl.part.layerGrain
           ? `edge-glue the wider layers (${pl.pieces.filter((q) => q.across === 1).map((q) => `layer ${q.layer}: ${q.acrossOf} boards`).join(', ')}), then glue the ${layers} layers face to face`
           : `edge-glue the ${pl.edgeN} boards of each layer, then glue the ${layers} layers face to face`;
+    // A cross-laminated block (D-75) is NOT a rectangle: its layers differ in size, so `roughBlock` is the box that holds them all. Say what each layer measures.
+    const lyr = pl.lamination ? layerExtents(pl) : [];
+    const sizes = new Set(lyr.map((q) => `${q.across}x${q.along}`));
+    const shape = sizes.size > 1
+      ? `the layers are not the same size (${layerSizesText(lyr)}), so the block is not a rectangle until it is milled; it fits in `
+      : 'glued block rough ';
     map.set(key, {
       partId: pl.part.id, ids: [pl.part.id], qty: 1, partNo: pl.partNo, label, from: pl.pieces.length, edgeBoards: pl.edgeN, layers, kind,
       roughBlock: pl.block, roughBlockText: roughDimsText(pl.block), final: pl.stock, finalText: finalDimsText(pl.stock),
-      note: `${how}; glued block rough ${roughDimsText(pl.block)}${pl.lamination ? `, joint and plane it flat and square (${fractionText(pl.lamination.cleanupIn, 16)}" cleanup)` : ''}, then mill to final ${finalDimsText(pl.stock)}`,
+      note: `${how}; ${shape}${roughDimsText(pl.block)}${pl.lamination ? `, joint and plane it flat and square (${fractionText(pl.lamination.cleanupIn, 16)}" cleanup)` : ''}, then mill to final ${finalDimsText(pl.stock)}`,
     });
   }
   return [...map.values()];

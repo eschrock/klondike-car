@@ -147,7 +147,7 @@ describe('M3 / S11 / materials', () => {
     expect(parts.some((x) => /^brake-hinge/.test(x.id))).toBe(false);
     expect('brakeHingeScrewLenIn' in defaults).toBe(false);
     expect(get('brake-pivot-block-L').joints!.find((j) => j.type === 'screw')!.size).toMatch(/3 x #8 × 1-1\/4"/);
-    expect(get('brake-knee-L').notes).toMatch(/SLOTTED/);
+    expect(get('brake-knee-L').notes).toMatch(/POCKET/); // D-77: the D-65 slot has a roof and a floor and no outboard ear
     expect(get('brake-knee-L').notes).not.toMatch(/BEVELED/);
     expect(row('brake-pivot').util!).toBeLessThan(0.9);
   });

@@ -31,10 +31,13 @@ export function allowables(ctx: Ctx) {
     plyBend: d.plyDesignMorPsi,
     /** D-73: the thin sheet (side webs, box, lid): its own design bending stress and E. */
     thinBend: d.thinPlyDesignMorPsi,
+    /** D-76: the thin sheet bent ACROSS its face grain (the side webs' vertical bending: their face grain runs along x). */
+    thinBendPerp: d.thinPlyDesignMorPerpPsi,
     steel: d.axleAllowablePsi,
     Eoak: d.oakDesignMoePsi,
     Eply: d.plyMoePsi * p.wetServiceFactorStiffness,
     Ethin: d.thinPlyMoePsi * p.wetServiceFactorStiffness,
+    EthinPerp: d.thinPlyMoePerpPsi * p.wetServiceFactorStiffness,
   };
 }
 

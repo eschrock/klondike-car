@@ -18,6 +18,7 @@ import type { CaseData } from './loads';
 import { allowables } from './structure';
 import { bumpSeatG, bumpSeatGHard } from './bump';
 import { evalBoth } from './stability';
+import { sideLateralCheck } from './side-lateral';
 import type { AnalysisCheck, Detail } from './types';
 
 /** Rear lifter's share of a carried mass: reaction at the rear hand-hold (xRear) for a CG at xCg between the two hand-holds (moments about the front one). */
@@ -171,21 +172,21 @@ export function sideWebCheck(ctx: Ctx): AnalysisCheck {
   const ev = (c: CaseData): CaseEval => {
     const k = sideWebLoads(ctx, c.cargoLb);
     const ds: Detail[] = [
-      detail(`kick / lean: ${f(p.sideKickLbf, 0)} lbf on a ${f(p.sideKickPatchIn, 0)} in patch, panel bending between the bands`, k.sigKick, 'psi', al.thinBend, '<='),
-      detail(`cargo pressure: ${f(c.cargoLb, 0)} lb x ${f(p.cargoSideG, 2)} g on the side, panel bending between the bands`, k.sigCargo, 'psi', al.thinBend, '<='),
+      detail(`kick / lean: ${f(p.sideKickLbf, 0)} lbf on a ${f(p.sideKickPatchIn, 0)} in patch, panel bending between the bands (across the face grain)`, k.sigKick, 'psi', al.thinBendPerp, '<='),
+      detail(`cargo pressure: ${f(c.cargoLb, 0)} lb x ${f(p.cargoSideG, 2)} g on the side, panel bending between the bands (across the face grain)`, k.sigCargo, 'psi', al.thinBendPerp, '<='),
     ];
     const how = `The ${f(k.t * 25.4, 1)} mm ${thinSheet(p).name} web is a strip fixed at the chine and gunwale bands (the sandwich is ${f(p.sideThicknessIn, 3)} in thick there, the web ${f(k.t, 3)} in), at its tallest ${f(k.h, 2)} in free height at x = ${f(k.x, 1)} in (not within its own height of the transom, which holds it). `
-      + `Kick: ${f(p.sideKickLbf, 0)} lbf over a ${f(p.sideKickPatchIn, 0)} in patch spreads over ${f(k.bEff, 1)} in of strip = ${f(k.lineKick, 2)} lbf/in at mid height: M = P' h / 8 = ${f(k.MKick, 2)} lb.in/in, sigma = 6M/t^2 = ${f(k.sigKick, 0)} psi (web design ${f(al.thinBend, 0)}). `
+      + `Kick: ${f(p.sideKickLbf, 0)} lbf over a ${f(p.sideKickPatchIn, 0)} in patch spreads over ${f(k.bEff, 1)} in of strip = ${f(k.lineKick, 2)} lbf/in at mid height: M = P' h / 8 = ${f(k.MKick, 2)} lb.in/in, sigma = 6M/t^2 = ${f(k.sigKick, 0)} psi against the web's design bending ACROSS its face grain, ${f(al.thinBendPerp, 0)} psi (D-76: the face grain runs along the side, so a strip spanning from band to band bends across it; the along-grain value, ${f(al.thinBend, 0)} psi, was used before D-76). `
       + `Cargo: ${f(c.cargoLb, 0)} lb x ${f(p.cargoSideG, 2)} g = ${f(k.Fc)} lbf over ${f(p.cargoSideContactIn, 0)} in x ${f(k.h, 2)} in = ${f(k.q, 3)} psi: M = q h^2 / 12 = ${f(k.MCargo, 2)} lb.in/in, sigma = ${f(k.sigCargo, 0)} psi. A person sitting on the gunwale is not covered (the gunwale is not a seat).`;
     return governing(ds, how);
   };
   return dualCheck({
-    id: 'side-web', label: `Side web (${thinSheet(p).nominal} panel between the oak bands): lean, kick and cargo pressure`, group: 'Structure', refs: ['D-60', 'D-62', 'eng 3c N-1'],
+    id: 'side-web', label: `Side web (${thinSheet(p).nominal} panel between the oak bands): lean, kick and cargo pressure`, group: 'Structure', refs: ['D-60', 'D-62', 'D-76', 'eng 3c N-1'],
     primary: 'goal', ...evalBoth(ctx, ev),
   });
 }
 
 export function hullChecks(ctx: Ctx): AnalysisCheck[] {
   const fs = footStopCheck(ctx);
-  return [liftCheck(ctx), ...(fs ? [fs] : []), sideWebCheck(ctx)];
+  return [liftCheck(ctx), ...(fs ? [fs] : []), sideWebCheck(ctx), sideLateralCheck(ctx)];
 }

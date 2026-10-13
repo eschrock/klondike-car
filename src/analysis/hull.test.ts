@@ -17,7 +17,7 @@ const al = derived(defaultParams());
 describe('hull checks (D-43)', () => {
   it('returns lift and foot-stop (the prow-grab check went with the prow, D-45), all Structure and finite; both pass at the defaults (D-58: the nose is lifted by the hand-hold in the bow bulkhead, not by the tongue whose 3/16 in plate bent at 4.8x)', () => {
     const cs = hullChecks(ctx);
-    expect(cs.map((c) => c.id)).toEqual(['lift', 'foot-stop', 'side-web']);
+    expect(cs.map((c) => c.id)).toEqual(['lift', 'foot-stop', 'side-web', 'side-lateral']); // D-76: the side pushed in or out
     for (const c of cs) {
       expect(c.group).toBe('Structure');
       expect(Number.isFinite(c.value)).toBe(true);

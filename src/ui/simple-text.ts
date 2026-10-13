@@ -37,6 +37,7 @@ const PART: Record<string, { name: string; event?: string }> = {
   // The pivoting front axle (D-56), in words a parent knows: the pivot is "the bolt the front axle turns on", the tongue plate is "the pull arm".
   'bridle-eye': { name: 'the rope tied to the pull arm', event: 'under a hard pull or a yank' },
   'side-web': { name: 'the thin side panels', event: 'if someone leans on them or kicks them' },
+  'side-lateral': { name: 'the side panels with their ribs', event: 'when someone pushes the top edge or a strap pulls on a tie-down ring' },
   kingpin: { name: 'the bolt the front axle pivots on', event: 'when the sled is pulled hard' },
   'king-bearing': { name: 'the plastic washer the front axle turns on' },
   'front-beam': { name: 'the front axle', event: 'in a hard bump' },
@@ -46,7 +47,7 @@ const PART: Record<string, { name: string; event?: string }> = {
   'wheel-rating': { name: 'a rear wheel', event: 'in a hard bump' },
   'rear-beam-seat': { name: 'the rear axle seat in the side rails', event: 'in a hard bump' },
   'brake-flap': { name: 'a brake flap', event: 'if it is stomped' },
-  'brake-pivot': { name: 'a brake flap pivot pin', event: 'under a hard stomp' },
+  'brake-pivot': { name: 'a brake flap pivot pin and its metal strap', event: 'under a hard stomp or a sideways scuff' },
   'brake-mount': { name: 'the mount that holds a brake flap to the side rail', event: 'under a hard stomp' },
   'brake-return': { name: 'the cord that lifts a brake flap' },
   'park-hold': { name: 'the wheel chocks' },
@@ -86,13 +87,14 @@ const REASON: Record<string, string> = {
   'wheel-rating': 'a rear wheel could be overloaded in a hard bump',
   'rear-beam-seat': 'the notch that holds the rear axle in the side rails could crush or split in a hard bump',
   'brake-flap': 'a brake flap could bend or split if it is stomped',
-  'brake-pivot': 'a brake flap pivot pin or its wood could give way under a hard stomp',
+  'brake-pivot': 'a brake flap pivot pin, the metal strap that holds it, or the wood the strap is screwed to could give way under a hard stomp or a sideways scuff',
   'brake-mount': 'the mount that holds a brake flap to the side rail could crack or pull loose under a hard stomp',
   'brake-return': 'the cord that lifts a brake flap could slip or pull out, and the flap would drag on the tire',
   'park-hold': 'the wheel chocks could slip or be climbed and the sled roll away when parked on a steep hill',
   joists: 'a floor crossmember could crack under the seat',
   'handle-bow': 'the handlebow could crack when the handler pulls back',
   'side-web': 'a thin side panel could crack if someone leans on it or kicks it, or if the cargo shoves against it',
+  'side-lateral': 'a side could bend too far, or a rib could split or pull loose, when someone pushes the top edge or a cargo strap pulls hard on a tie-down ring',
 };
 
 /** Rows the D-56 pivoting front end and the D-57 step brake add: each has a plain name or a failure sentence here, pinned by the simple-text test. */

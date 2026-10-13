@@ -33,7 +33,7 @@ import type { Joint, Part } from '../model/types';
 import { WEATHER_SPEC, thinSheet, type Params } from '../params';
 import { cutList, fracIn, isBuilt, partKey, toCsv, type CsvCell } from './cutlist';
 import { finishingSchedule, glueEpoxyFlOz } from './finishing';
-import { nestPlywood, oakBoardFeet } from './nesting';
+import { nestPlywood, oakBoardFeet, type OakPlan } from './nesting';
 import {
   EPOXY_KITS, EPOXY_KITS_SMALL, EPOXY_PUMPS_300, FILLERS, FINISH_CONTAINER_FACTOR, FINISH_CONTAINER_PRICE, FINISH_PRICE, GLASS_TAPE, METAL_CUT_ALLOWANCE_IN, NOTE_PRICE, OAK_ALT_PRICE_PER_BF, OAK_PRICE_PER_BF, PLYWOOD_PRICE, RESEARCH_DATE,
   PURCHASED_FALLBACK, TITEBOND_BOTTLES, URETHANE_CONTAINER_PRICE, fastenerPrice, metalPrice, modelCostNote, purchasedDescribe, purchasedEntry, specOf, std304, type Price, type PriceBasis, type SpecName,
@@ -99,7 +99,7 @@ export const isBulkQty = (price: Price, qty: number): boolean => !!price.packQty
  * is a possible cost cut where a line says "(304 or 316)"; the Extreme prices here are 316.
  */
 export const FASTENER_MATERIAL_NOTE =
-  'Exterior use: every fastener is 316 stainless (S7: no zinc, brass or plated steel in wet white oak, because oak tannins corrode them and stain the wood black). ' +
+  'Exterior use: every fastener is 316 stainless (no zinc, brass or plated steel in wet white oak, because oak tannins corrode them and stain the wood black). ' +
   'The Dominos are Festool Sipo (sapele), the exterior hardwood type, never beech (interior only). 304 stainless is a possible cost cut where a line says "304 or 316"; the prices here are for 316 (base prices first).';
 /** The same for the STANDARD spec (garage-kept, used a few times a year, wet at most at a rainy derby): 304 / 18-8 stainless, zinc where it never sees the oak, beech Dominos. */
 export const FASTENER_MATERIAL_NOTE_STANDARD =
@@ -117,7 +117,7 @@ export function fastenerMaterialNote(label: string, usedOn: readonly string[] = 
   if (/^Domino/.test(label)) return std
     ? 'Festool BEECH Dominos: the interior type, swells and rots if it stays wet. Fine in a sled kept in a garage and wet at most at a rainy derby; glue them in with Titebond III (the Extreme spec uses the exterior type and epoxy).'
     : 'Festool SIPO (sapele) Dominos REQUIRED: the exterior/hardwood type. NOT beech: beech is interior only and swells and rots when it gets wet. Epoxy them in.';
-  if (/heat-set insert/i.test(label)) return 'Brass heat-set insert OK: it sits in the printed ASA lamp clip, not in wet oak (brass is barred only from wet oak, S7).';
+  if (/heat-set insert/i.test(label)) return 'Brass heat-set insert OK: it sits in the printed ASA lamp clip, not in wet oak (brass is barred only from wet oak).';
   if (/nylon washer|button plug|end plug/i.test(label)) return 'Nylon or plastic, UV-stable: no metal involved.';
   if (/\bM[34]\b/.test(label)) return 'Stainless (304 or 316): screws into the brass insert in the printed clip, away from the oak.';
   if (std && /shaft collar/i.test(label)) return 'Zinc-plated steel is right for the Standard spec (garage-kept); it rusts and stains the axle end if the sled lives outside (use the Extreme spec, 316).';
@@ -144,7 +144,7 @@ export function hardwareMaterialNote(x: Part, spec: SpecName = 'extreme'): strin
   }
   if (/316/.test(m)) return `316 stainless REQUIRED (the model spec: ${m}).`;
   if (/stainless/i.test(m)) return `Stainless REQUIRED, 316 for wet oak (the model spec: ${m}).`;
-  if (/zinc|galvanized|grade \d|steel/i.test(m)) return `As specified: ${m}. Plated or galvanized steel rusts and stains white oak black; 316 stainless is the model default (S7), so check the listing before ordering.`;
+  if (/zinc|galvanized|grade \d|steel/i.test(m)) return `As specified: ${m}. Plated or galvanized steel rusts and stains white oak black; 316 stainless is the default, so check the listing before ordering.`;
   return `As specified: ${m}.`;
 }
 
@@ -156,17 +156,17 @@ export const TOUCH_GROUPS: ReadonlyArray<{ id: TouchGroup; title: string }> = [
   { id: 'reflectors', title: 'Reflectors' },
   { id: 'tie-downs', title: 'Tie-downs' },
 ];
-/** The finishing-touches group of a part, by part number; undefined for every part of the core build. The lash doublers are oak cut from the boards (priced in Lumber), but their screws follow the lash plates. */
+/** The finishing-touches group of a part, by part number; undefined for every part of the core build. The side ribs, knees and box ties that carry the D-rings are oak cut from the boards (priced in Lumber), but the bolts follow the D-ring plates. */
 export function touchGroupOfPart(x: Part | undefined): TouchGroup | undefined {
   switch (x ? partKey(x) : '') {
     case 'front-light': case 'rear-light': case 'lamp-clip': case 'rear-lamp-clip': return 'lights';
     case 'seat-cushion': case 'seat-back-pad': return 'seat';
     case 'reflector': return 'reflectors';
-    case 'lash-point': case 'doubler-lash': return 'tie-downs';
+    case 'lash-point': return 'tie-downs';
     default: return undefined;
   }
 }
-/** Parts bought and priced as a line of their own in the touches section: the lash doublers are NOT (they are cut from the oak boards and priced in Lumber). */
+/** Parts bought and priced as a line of their own in the touches section: the side ribs are NOT (they are cut from the oak offcuts and priced in Lumber). */
 export const TOUCH_PRICED_PARTS: ReadonlySet<string> = new Set(['front-light', 'rear-light', 'lamp-clip', 'rear-lamp-clip', 'seat-cushion', 'seat-back-pad', 'reflector', 'lash-point']);
 
 /** Id and title of the section that holds the touches, and of the section for pack-priced shop stock. */
@@ -184,7 +184,7 @@ export interface BomSection {
   estimateUsd: number;
   /** The touches section: subtotals by group (lights, seat comfort, reflectors, tie-downs); each line carries its `group`. */
   groups?: BomGroupTotal[];
-  /** Notes printed under the section (the lash doublers are in Lumber). */
+  /** Notes printed under the section (the side ribs are in Lumber). */
   notes?: string[];
 }
 
@@ -284,6 +284,8 @@ const priceExtras = (price: Price, count: number): Partial<BomLine> => ({
   ...(price.decision ? { decision: price.decision } : {}),
   ...(alternativesNote(price, count) ? { notes: alternativesNote(price, count) } : {}),
 });
+/** A part's name in running shop text: no parenthetical, lower case ("brake foot tread L"), never its key. */
+const shopName = (x: Part): string => x.name.replace(/\s*\([^)]*\)\s*$/, '').trim().replace(/^([A-Z])([a-z])/, (_m, a: string, b: string) => a.toLowerCase() + b);
 const joinNotes = (...n: Array<string | undefined>): string | undefined => n.filter(Boolean).join(' ') || undefined;
 
 function line(section: string, key: string, description: string, qty: number, price: Price, extra: Partial<BomLine> = {}): BomLine {
@@ -458,7 +460,8 @@ function screwItems(part: Part, j: Joint, byId: PartMap, mat: FastMat): Fastener
   if (metric) return [{ label: `${mat.ss} screw M${metric[1]} x ${metric[2] ?? METRIC_SCREW_MM[metric[1]] ?? '?'} mm`, qty: n }];
   if (ins) return [{ label: `${mat.ss} machine screw #${ins[1]}-${ins[2]} x ${lenText(ins[3])}"`, qty: n }];
   const w = new RegExp(String.raw`#(\d+)\s*[x×]\s*${LEN}`).exec(size);
-  if (w) return [{ label: `${mat.ss} wood screw #${w[1]} x ${lenText(w[2])}"`, qty: n }];
+  // D-77: the pivot strap's screws are PAN-HEAD (the strap is not countersunk): their own line, not the flat-head one.
+  if (w) return [{ label: `${mat.ss} ${/pan-head/i.test(size) ? 'pan-head ' : ''}wood screw #${w[1]} x ${lenText(w[2])}"`, qty: n }];
   const g = /#(\d+)/.exec(size);
   if (!g) return [{ label: `${mat.ss} screw (size per joint note)`, qty: n }];
   const gl = GENERIC_LEN.exec(size);
@@ -477,6 +480,16 @@ function boltItems(part: Part, j: Joint, byId: PartMap, mat: FastMat): FastenerI
   const size = j.size ?? '';
   const n = j.count;
   if (/see the bushing/.test(size)) return [];
+  // A numbered machine screw with its own fender washer and nylock (the D-ring plate's four through-bolts, D-76): the screw, one washer under its head (OD in the text), a lock nut.
+  const ms = new RegExp(String.raw`#(\d+)-(\d+)\s*[x×]\s*${LEN}"?[^,;]*?machine screw`, 'i').exec(size);
+  if (ms) {
+    const od = /(\d\/\d+)"\s*fender washer/i.exec(size);
+    return [
+      { label: `${mat.ss} machine screw #${ms[1]}-${ms[2]} x ${lenText(ms[3])}"`, qty: n },
+      { label: `${mat.ss} fender washer #${ms[1]}${od ? ` (${od[1]}" OD)` : ''}`, qty: n },
+      { label: `${mat.ss} nylon-insert lock nut #${ms[1]}-${ms[2]}`, qty: n },
+    ];
+  }
   let dia: [number, string, string] | null = null, len: string | undefined;
   let m = new RegExp(String.raw`(\d\/\d+)-(\d+)\s*[x×]\s*${LEN}`).exec(size);
   if (m) { dia = nearestDia(Number(m[1].split('/')[0]) / Number(m[1].split('/')[1])); len = lenText(m[3]); }
@@ -629,7 +642,7 @@ export const NOTE_ITEMS: NoteItem[] = [
       const pads = byIds(built, ['seat-cushion', 'seat-back-pad']).filter((x) => /dual lock/i.test(ptext(x)));
       if (!pads.length) return null;
       const ft = pads.length * DUAL_LOCK_FT_PER_PART;
-      return { items: [{ label: `Dual Lock reclosable fastener, 1" x ${DUAL_LOCK_ROLL_FT} ft roll`, qty: Math.ceil(ft / DUAL_LOCK_ROLL_FT) }], note: `${ft} ft of 1" strip for ${pads.map((x) => x.id).join(' and ')}, both halves of each pair` };
+      return { items: [{ label: `Dual Lock reclosable fastener, 1" x ${DUAL_LOCK_ROLL_FT} ft roll`, qty: Math.ceil(ft / DUAL_LOCK_ROLL_FT) }], note: `${ft} ft of 1" strip for ${pads.map(shopName).join(' and ')}, both halves of each pair` };
     },
   },
   {
@@ -658,7 +671,7 @@ export const NOTE_ITEMS: NoteItem[] = [
     expand(built) {
       const uses = byIds(built, ['brake-foot-tread-L', 'brake-foot-tread-R', 'brake-pad-L', 'brake-pad-R']).filter((x) => /contact cement/i.test(ptext(x)));
       if (!uses.length) return null;
-      return { items: [{ label: 'Contact cement, pint', qty: Math.ceil(uses.length / CEMENT_USES_PER_CAN) }], note: `${uses.length} glued faces: ${uses.map((x) => x.id).join(', ')}` };
+      return { items: [{ label: 'Contact cement, pint', qty: Math.ceil(uses.length / CEMENT_USES_PER_CAN) }], note: `${uses.length} glued faces: ${uses.map(shopName).join(', ')}` };
     },
   },
 ];
@@ -705,6 +718,43 @@ export function bom(parts: Part[], p: Params, opts: BomOptions = {}): Bom {
   return b;
 }
 
+/** "rear axle beam, front axle beam, brake pivot knee, wheel chock: 3 layers: 3 x 3/4" from 4/4, glue up, then mill": the laminated parts by their names, each lamination recipe said once. */
+function laminatedText(laminated: OakPlan['laminated'], parts: Part[]): string {
+  const names: string[] = [];
+  const how: string[] = [];
+  for (const q of laminated) {
+    const x = parts.find((y) => y.id === q.id);
+    const name = x ? shopName(x).replace(/\s+[LR]$/, '') : q.partNo;
+    if (!names.includes(name)) names.push(name);
+    if (!how.includes(q.lamination.text)) how.push(q.lamination.text);
+  }
+  return `${names.join(', ')}: ${how.join('; ')}`;
+}
+
+/** Every part id and part number, so running text can be checked for them. */
+function shopKeys(parts: Part[]): Set<string> {
+  const out = new Set<string>();
+  for (const x of parts) { out.add(x.id); out.add(partKey(x)); }
+  return new Set([...out].filter((k) => k.includes('-')));
+}
+
+/**
+ * Shop text for the BOM: a decision id "(D-71; text)" becomes "(text)" and "(D-72)" goes, a bare "D-72" goes, "S7" goes, and a part key ("brake-cord") is written as words ("brake cord").
+ * Wording that reads wrongly without its id was fixed where it is written; this is the net under that.
+ */
+export function shopBomText(t: string, keys: ReadonlySet<string>): string {
+  let o = t
+    .replace(/\(\s*(?:see\s+)?[DAQ]-\d+[;,]\s*/g, '(')
+    .replace(/\s*\(\s*(?:see\s+)?[DAQ]-\d+\s*\)/g, '')
+    .replace(/,?\s*\b[DAQ]-\d+\b/g, '')
+    .replace(/,?\s*\bS7\b/g, '');
+  if (keys.size) {
+    const re = new RegExp(`(?<![\\w/.-])(${[...keys].sort((a, b) => b.length - a.length).map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?![\\w/-])`, 'g');
+    o = o.replace(re, (k) => k.replace(/-/g, ' '));
+  }
+  return o.replace(/\s+([.,;)])/g, '$1').replace(/\(\s+/g, '(');
+}
+
 function bomForSpec(parts: Part[], p: Params): Bom {
   const spec = specOf(p);
   const std = spec === 'standard';
@@ -725,7 +775,7 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     return line('Lumber', t.board, `White oak ${t.board}, rough, whole boards`, r2(t.purchaseBf), price, {
       notes: `Buy: ${t.summary.join('; ')}. ${r2(t.netBf)} bf net on nominal thickness (${r2(t.allowanceBf)} bf with the ${Math.round(oak.wasteAllowance * 100)}% waste allowance); the boards come to ${r2(t.plannedBf)} bf.` +
         (alt ? ` Alternative: ${alt.source} $${alt.usd.toFixed(2)}/bf = $${(r2(t.purchaseBf) * alt.usd).toFixed(2)} for these boards (${alt.url}).` : '') +
-        (t.layersIn ? ` The face-laminated parts (D-70: ${oak.laminated.map((q) => `${q.partNo} ${q.lamination.text}`).filter((v, i, a) => a.indexOf(v) === i).join('; ')}) take their layers from the stocked boards, so no 12/4 is bought.` : ''),
+        (t.layersIn ? ` The face-laminated parts (${laminatedText(oak.laminated, built)}) take their layers from the stocked boards, so no 12/4 is bought.` : ''),
     });
   });
 
@@ -836,8 +886,8 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     const x = item.expand(built, uj, spec);
     if (!x) continue;
     if (item.section === 'fasteners') for (const f of x.items) { fast.set(f.label, (fast.get(f.label) ?? 0) + f.qty); noteOn(f.label, item.partIds); }
-    else if (item.touch) touchLines.push(line(TOUCHES_SECTION.title, item.key, x.items[0].label, x.items[0].qty, item.price!, { vendor: item.price!.source, notes: joinNotes(item.price!.url ? `Price: ${item.price!.note}.` : undefined, `${x.note} (${item.noteRef})`), group: item.touch }));
-    else noteLines.push(line('Consumables', item.key, x.items[0].label, x.items[0].qty, item.price!, { vendor: item.price!.source, notes: joinNotes(item.price!.url ? `Price: ${item.price!.note}.` : undefined, `${x.note} (${item.noteRef})`) }));
+    else if (item.touch) touchLines.push(line(TOUCHES_SECTION.title, item.key, x.items[0].label, x.items[0].qty, item.price!, { vendor: item.price!.source, notes: joinNotes(item.price!.url ? `Price: ${item.price!.note}.` : undefined, x.note), group: item.touch }));
+    else noteLines.push(line('Consumables', item.key, x.items[0].label, x.items[0].qty, item.price!, { vendor: item.price!.source, notes: joinNotes(item.price!.url ? `Price: ${item.price!.note}.` : undefined, x.note) }));
   }
   const familyOrder = (l: string): number => (/^Domino/.test(l) ? 7 : /insert/i.test(l) ? 4 : /bolt|cap screw/.test(l) ? 1 : /nut/.test(l) ? 2 : /washer/.test(l) ? 3 : /Thumb/.test(l) ? 4 : /collar|cotter|plug|rod/.test(l) ? 6 : 0);
   const bulkLines: BomLine[] = [];
@@ -983,7 +1033,7 @@ function bomForSpec(parts: Part[], p: Params): Bom {
       return { id: g.id, title: g.title, subtotalUsd: money(ls.reduce((a, l) => a + l.extUsd, 0)), estimateUsd: money(ls.filter((l) => l.basis === 'estimate').reduce((a, l) => a + l.extUsd, 0)) };
     }),
     notes: [
-      `The ${built.filter((x) => partKey(x) === 'doubler-lash').length} oak lash doublers (doubler-lash) are cut from the oak boards and priced in Lumber; the lash plates' screws are listed here.`,
+      `The ${built.filter((x) => /^side-rib/.test(partKey(x)) || partKey(x) === 'box-tie').length} oak side ribs, knees and box ties that carry the D-rings are bandsawn from 4/4 offcuts and priced in Lumber; the D-ring plates' bolts, washers and nuts are listed here.`,
     ],
   });
   const core: BomSection[] = [
@@ -1000,6 +1050,16 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     ],
   });
   const sections: BomSection[] = [...core, bulk, touches];
+  // Safety net: the BOM is printed in the book, so no decision id (D-71), report tag (S7) or part key (brake-knee) may be left in its running text (some of it comes from the model's own part notes).
+  const keyWords = shopKeys(parts);
+  for (const sec of sections) {
+    for (const l of sec.lines) {
+      if (l.notes) l.notes = shopBomText(l.notes, keyWords);
+      if (l.decision) l.decision = shopBomText(l.decision, keyWords);
+      if (l.materialNote) l.materialNote = shopBomText(l.materialNote, keyWords);
+    }
+    if (sec.notes) sec.notes = sec.notes.map((n) => shopBomText(n, keyWords));
+  }
   const coreUsd = money(core.reduce((a, s) => a + s.subtotalUsd, 0));
   const coreEstimateUsd = money(core.reduce((a, s) => a + s.estimateUsd, 0));
   const bulkUsd = bulk.subtotalUsd, bulkEstimateUsd = bulk.estimateUsd;
@@ -1013,7 +1073,7 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   const altText = (l: BomLine): string | undefined => l.alternatives?.map((a) => `${a.specGap ? 'SPEC GAP: ' : ''}${a.source} ${a.packUsd ?? a.usd.toFixed(2)}${a.packQty ? ` per ${a.packLabel ?? `pack of ${a.packQty}`}` : `/${a.unit}`}${a.url ? ` ${a.url}` : ''}`).join(' | ');
   const rows: CsvCell[][] = [['Section', 'Item', 'Description', 'Qty', 'Unit', 'Unit USD', 'Ext USD', 'Basis', 'Vendor', 'Notes', 'URL', 'Group', 'Needed', 'Pack size', 'Packs to buy', 'Pack USD', 'Material', 'Alternatives', 'Decision']];
   for (const s of sections) {
-    for (const l of s.lines) rows.push([s.title, l.key, l.description, l.qty, l.unit, l.unitUsd.toFixed(2), l.extUsd.toFixed(2), l.basis, l.vendor, l.notes, l.url, l.group ? TOUCH_GROUPS.find((g) => g.id === l.group)!.title : undefined, l.needed, l.packQty, l.packs, l.packUsd?.toFixed(2), l.materialNote, altText(l), l.decision]);
+    for (const l of s.lines) rows.push([s.title, keyWords.has(l.key) ? '' : l.key, l.description, l.qty, l.unit, l.unitUsd.toFixed(2), l.extUsd.toFixed(2), l.basis, l.vendor, l.notes, l.url, l.group ? TOUCH_GROUPS.find((g) => g.id === l.group)!.title : undefined, l.needed, l.packQty, l.packs, l.packUsd?.toFixed(2), l.materialNote, altText(l), l.decision]);
     for (const g of s.groups ?? []) rows.push([s.title, '', `Subtotal: ${g.title}`, '', '', '', g.subtotalUsd.toFixed(2), '', '', `${g.estimateUsd.toFixed(2)} of it estimated`, '', g.title]);
     rows.push([s.title, '', 'Subtotal', '', '', '', s.subtotalUsd.toFixed(2), '', '', `${s.estimateUsd.toFixed(2)} of it estimated${s.notes?.length ? `. ${s.notes.join(' ')}` : ''}`]);
   }

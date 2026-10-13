@@ -340,7 +340,9 @@ describe('cargo capacity (the payload sweep)', () => {
     const fixed = cap.alwaysFailing.map((r) => r.id).filter(notBrake);
     for (const id of ['king-bearing', 'steer-stops', 'bridle-eye', 'lift', 'steer-clear']) expect(fixed).not.toContain(id);
     expect(cap.alwaysFailing.map((r) => r.id)).not.toContain(cap.limiter!.id);
-    expect(cap.statusAtPayload).not.toBe('fail');
+    // D-76: the only failing cargo row is side-web, and it is not cargo-limited: this D-58 design's 4 mm okoume web, read across its face grain, fails the 50 lbf kick with an empty bed (2.0)
+    expect(cap.rows.filter((r) => r.statusAtPayload === 'fail').map((r) => r.id)).toEqual(['side-web']);
+    expect(cap.alwaysFailing.map((r) => r.id)).toContain('side-web');
     expect(cap.counts.fail).toBe(cap.rows.filter((r) => r.statusAtPayload === 'fail').length);
   });
   it('the limiter flips from not-failing to failing across the capacity (within one 50 lb ladder step)', () => {

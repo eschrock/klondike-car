@@ -326,7 +326,9 @@ export const SHOW_RULES: ReadonlyArray<{ re: RegExp; show: number | 'web'; why: 
   { re: /^side-[LR]-(chine|gunwale|gunwale-in)$/, show: 1, why: 'outer chine band and the gunwale bands' },
   { re: /^bow-bulkhead$/, show: 1, why: 'bow end and the rider\'s foot brace' },
   { re: /^transom-rear$/, show: 0.5, why: 'outside shows, the inside faces the hull and the box' },
-  { re: /^(transom-backer|sign-backer|seat-hinge-backer|storage-hinge-backer|storage-latch-block|doubler-lash|flag-block|brake-backer|brake-pivot-block|brake-knee)/, show: 0, why: 'backer, block or doubler behind something else' },
+  { re: /^(transom-backer|sign-backer|seat-hinge-backer|storage-hinge-backer|storage-latch-block|flag-block|brake-backer|brake-pivot-block|brake-knee)/, show: 0, why: 'backer or block behind something else' },
+  { re: /^side-rib-/, show: 1, why: 'side ribs and their knees stand inside the hull above the deck: the rider and the cargo see the inner face and edges (the glued back is credited off)' },
+  { re: /^box-tie-/, show: 0, why: 'oak spacer between a rib and the storage box side: out of sight' },
   { re: /^sign-[LR]$/, show: 0.5, why: 'plate on the web: front shows, back is hidden' },
   { re: /^(rail|joist|axle-hanger)-/, show: 0, why: 'frame under the deck' },
   { re: /^(king-beam|beam-F|beam-R)$/, show: 0, why: 'beams under the hull' },
@@ -430,12 +432,13 @@ const isWebId = (id: string): boolean => /^side-[LR]-web$/.test(id);
 /**
  * The adhesive of a glue joint under the Standard weather spec (Eric, 2026-10-12): Titebond III for the Dominos, dados, tenons and the general glue joints; EPOXY only for the bent
  * laminations (the rails' own plies and the sandwich bands on the webs), the D-70 face laminations (their own lines, `d70`), the deck to the frame, the deck slot gap-fill (the deck dados
- * into the transom and the bulkhead), the fillets and tape (the box and the band ends against the transom and bulkhead) and the thickened bedding (a nipple bedded in epoxy, a
+ * into the transom and the bulkhead), the tie-down ribs, knees and box ties (D-76), the fillets and tape (the box and the band ends against the transom and bulkhead) and the thickened bedding (a nipple bedded in epoxy, a
  * thickened-epoxy bed or block). A `text` that says "thickened" is bedding.
  */
 export function standardAdhesive(kind: GlueKind, a: string, b: string, text: string): Adhesive {
   if (a === b) return 'epoxy'; // the glue lines inside a laminated (bent) part
   if (kind === 'fillet') return 'epoxy';
+  if (/^(side-rib|box-tie)/.test(a) || /^(side-rib|box-tie)/.test(b)) return 'epoxy'; // the tie-down bases (D-76: ribs, knees, box ties) carry 300 lbf strap loads: epoxy under both specs
   if (kind === 'lamination' && ((isBandId(a) && isWebId(b)) || (isBandId(b) && isWebId(a)))) return 'epoxy'; // the sandwich bands
   if ((a === 'deck' || b === 'deck') && (kind === 'lamination' || kind === 'dado')) return 'epoxy'; // deck to the frame; the deck slot gap-fill
   if ((kind === 'small' || kind === 'lamination') && /thickened|bedded|nipple|tape/i.test(text)) return 'epoxy'; // thickened bedding
