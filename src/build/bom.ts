@@ -140,8 +140,8 @@ const KNEE_PIN_RE = /^brake-pin-[BT]$/;
  */
 export function kneePinGradeNote(spec: SpecName): string {
   return spec === 'standard'
-    ? 'Standard grade (304 class): ball-lock pins are usually 17-4 PH stainless, which is accepted. Ask the vendor for the pull-out rating of the locking balls (not published for these pins). Button end outboard; fit a short lanyard to the knee.'
-    : 'Extreme grade (316): ball-lock pins are usually 17-4 PH stainless, which is NOT 316, so a 316 pin must be sourced (ask the vendors; if none exists, 17-4 PH is a written exception). Ask the vendor for the pull-out rating of the locking balls (not published for these pins). Button end outboard; fit a short lanyard to the knee.';
+    ? 'Standard grade: stainless, and 17-4 PH is accepted (ball-lock pins are usually 17-4 PH). Order the usable length shown, which equals the stack the pin passes or is at most about 1/8" longer. Ask the vendor for the pull-out rating of the locking balls (not published for these pins). Button end outboard; fit a short lanyard to the knee.'
+    : 'Extreme grade (316): ball-lock pins are usually 17-4 PH stainless, which is NOT 316, so a 316 pin must be sourced (ask the vendors; if none exists, 17-4 PH is a written exception). Order the usable length shown, which equals the stack the pin passes or is at most about 1/8" longer. Ask the vendor for the pull-out rating of the locking balls (not published for these pins). Button end outboard; fit a short lanyard to the knee.';
 }
 
 const METAL_SPEC = /stainless|316|steel|bronze|zinc|galvanized|grade \d|hinge|chain|latch|clevis|hitch|snap hook|D-ring/i;
@@ -150,7 +150,7 @@ export function hardwareMaterialNote(x: Part, spec: SpecName = 'extreme'): strin
   const m = x.material ?? '';
   if (x.kind !== 'purchased' || !METAL_SPEC.test(m)) return undefined;
   if (KNEE_PIN_RE.test(partKey(x))) return spec === 'standard'
-    ? '304-class stainless for the Standard spec; the usual 17-4 PH ball-lock pin is accepted.'
+    ? 'Stainless for the Standard spec; the usual 17-4 PH ball-lock pin is accepted.'
     : '316 stainless REQUIRED by the Extreme spec, and ball-lock pins are usually 17-4 PH: source a 316 pin or write down 17-4 PH as the exception.';
   if (spec === 'standard') {
     if (/316|stainless/i.test(m)) return `304 / 18-8 stainless is right for the Standard spec (garage-kept); the model says "${m}" for the Extreme spec, which uses 316.`;
@@ -874,7 +874,9 @@ function bomForSpec(parts: Part[], p: Params): Bom {
       ...(hardwareMaterialNote(x, spec) ? { materialNote: hardwareMaterialNote(x, spec) } : {}),
     };
     const name0 = purchasedDescribe(key, spec) ?? (std ? std304(x.name) : x.name);
-    const name = kneePin ? name0.replace(/ [LR] \(/, ' (') : name0; // one line for both sides: "Brake knee top pin (3/8" ball-lock, ...)"
+    // one line for both sides, with the usable length to order: "Brake knee top pin (3/8" ball-lock, stainless; 17-4 PH accepted), 2-1/4" usable length"
+    const grip = kneePin ? /(\d+(?:-\d+\/\d+)?)" usable length/.exec(x.material ?? '')?.[1] : undefined;
+    const name = kneePin ? `${name0.replace(/ [LR] \(/, ' (').replace(/, 304 stainless\)/, ', stainless; 17-4 PH accepted)')}${grip ? `, ${grip}" usable length` : ''}` : name0;
     // A part cut from a roll or a pack (a cord): the whole packs to buy, not a price per part.
     if (price.packQty && price.packUsd && price.perPart) purchased.push(packLine('Purchased parts', key, name, group.length * price.perPart, price, extra, false));
     else (tg ? touchLines : purchased).push(line(tg ? TOUCHES_SECTION.title : 'Purchased parts', key, name, group.length, price, extra));

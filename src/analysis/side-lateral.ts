@@ -22,7 +22,7 @@ import { dualCheck, detail, governing, type CaseEval } from './dual';
 import { f } from './format';
 import { allowables } from './structure';
 import { strapLoads } from './cargo';
-import { brakeBundle, loadsAt } from './brake';
+import { brakeBundle, loadsBoth, loadsFromFootBoth } from './brake';
 import { pinGroupForces, pinPull } from './brake-pins';
 import type { AnalysisCheck, Detail } from './types';
 
@@ -318,9 +318,11 @@ function pinRibLoads(ctx: Ctx, m: SideModel, pin: SideSolver, Hin: number, ribFP
   const g = brakeBundle(ctx).g;
   if (!g.pins) return {};
   const pn = g.pins, rb = m.ribs[jBox];
-  const Rk = loadsAt(ctx, ctx.loads.goal, g).Rk;
-  const gp = pinGroupForces(g, Rk);
-  const pull = pinPull(p, g, Rk).T;
+  // the envelope of the goal rider's hold load (both rolling directions) and the stomp (both directions): the largest pin T force in plane and the largest pull
+  const variants = [...loadsBoth(ctx, ctx.loads.goal, g), ...loadsFromFootBoth(ctx, g, p.brakeFootAbuseLbf)].map((L) => ({ gp: pinGroupForces(g, L.Rk), pl: pinPull(p, g, L.Rk) }));
+  const worstIn = variants.reduce((a, b) => (b.gp.Tmag > a.gp.Tmag ? b : a));
+  const gp = worstIn.gp;
+  const pull = Math.max(...variants.map((v) => v.pl.T));
   const depth = rb.depth, w = pn.rib.blockW, sOd = pn.sleeveOd;
   const S = (w * depth * depth) / 6, Snet = (Math.max(1e-6, w - sOd) * depth * depth) / 6;
   const zT = pn.T.z - L.deckTop;

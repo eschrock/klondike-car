@@ -12,6 +12,7 @@ import { brakeGeometry } from '../model/brake-layout';
 import { computeLayout } from '../model/layout';
 import { fin, flattenInstr, tokensIn, type BuildStep, type Instr } from './assembly';
 import { frac } from './svg-util';
+import { finalFrac } from './units';
 import type { Bom, BomLine } from './bom';
 import { BuildData, drawingFileName, zipPackage } from './package';
 import { cutList } from './cutlist';
@@ -104,10 +105,11 @@ describe('D-78 the BOM with the pins on', () => {
       }
     });
 
-    it(`${name}: the grade text is ${name === 'Standard' ? '304 class with 17-4 PH accepted' : '316 with a 316 pin that must be sourced'}`, () => {
+    it(`${name}: the grade text is ${name === 'Standard' ? 'stainless with 17-4 PH accepted' : '316 with a 316 pin that must be sourced'}`, () => {
       const l = b.sections.find((s) => s.id === 'purchased')!.lines.find((q) => (q.partIds ?? []).some((i) => i.startsWith('brake-pin-B')))!;
       if (w === WEATHER_SPEC.standard) {
-        expect(l.notes).toMatch(/Standard grade \(304 class\).*17-4 PH.*accepted/);
+        expect(l.notes).toMatch(/Standard grade: stainless, and 17-4 PH is accepted/);
+        expect(l.description).toMatch(/stainless; 17-4 PH accepted/);
         expect(l.materialNote).toMatch(/17-4 PH/);
         expect(`${l.key} ${l.description} ${l.vendor ?? ''}`).not.toMatch(/316/);
       } else {
@@ -116,24 +118,45 @@ describe('D-78 the BOM with the pins on', () => {
         expect(l.description).toMatch(/316/);
       }
       expect(l.notes).toMatch(/pull-out rating/);
+      expect(l.notes).toMatch(/at most about 1\/8" longer/);
     });
 
-    it(`${name}: eight sleeves are cut from ONE length of stainless tube, bought as one piece (an estimate)`, () => {
+    it(`${name}: the pin lines give the usable length to order (the stack rounded up to 1/4")`, () => {
+      const { p } = get('pins', w);
+      const kp = brakeGeometry(p, computeLayout(p)).pins!;
+      const lb = b.sections.find((s) => s.id === 'purchased')!.lines;
+      const lineOf = (k: string) => lb.find((q) => (q.partIds ?? []).some((i) => i.startsWith(k)))!;
+      expect(lineOf('brake-pin-B').description).toContain(`${fin(kp.B.gripOrder)} usable length`);
+      expect(lineOf('brake-pin-T').description).toContain(`${fin(kp.T.gripOrder)} usable length`);
+      expect(kp.T.gripOrder).toBeGreaterThanOrEqual(kp.T.stack);
+      expect(kp.T.gripOrder - kp.T.stack).toBeLessThan(0.25 + 1e-9);
+    });
+
+    it(`${name}: four flanged bushings (an estimate, not quoted) are bought for the hull`, () => {
+      const l = b.sections.find((s) => s.id === 'purchased')!.lines.filter((q) => (q.partIds ?? []).some((i) => /^brake-sleeve-[BT]-hull/.test(i)));
+      expect(l.reduce((a, q) => a + q.qty, 0)).toBe(4);
+      for (const q of l) { expect(q.basis).toBe('estimate'); expect(q.notes).toMatch(/not quoted/); expect(q.description).toMatch(/flanged/); }
+    });
+
+    it(`${name}: the four knee-side sleeves are cut from ONE 2 ft length of stainless tube, bought as one piece (an estimate)`, () => {
       const tube = b.sections.find((s) => s.id === 'metal')!.lines.find((l) => /tube 1\/2" OD x 3\/8" ID/.test(l.key))!;
       expect(tube).toBeDefined();
       expect(tube.key).toMatch(w === WEATHER_SPEC.standard ? /^18-8 \(304\)/ : /^316/);
       expect(tube.qty).toBe(1);
-      expect(tube.unit).toBe('12 in length');
-      expect(tube.unitUsd).toBe(9);
+      expect(tube.unit).toBe('24 in length'); // two feet: the four knee sleeves and spares for the reaming
+      expect(tube.unitUsd).toBe(16);
       expect(tube.basis).toBe('estimate');
       expect(tube.notes).toMatch(/ESTIMATE, not quoted/);
+      expect(tube.notes).toMatch(/Order ONE pin first/);
+      expect(tube.notes).not.toMatch(/check the (real )?tube/i);
       expect(tube.notes).toMatch(/bushing/); // the other way to buy them
-      // 2 x (3/4 rail, 1-3/4 knee leg, 1-3/16 box rib, 1 tab): 8 sleeves
+      // 2 x (1-3/4 knee leg, 1 tab): 4 tube sleeves; the hull sleeves are bought flanged bushings
       const rows = data.cutList.metal.filter((m) => m.family === 'Stainless tube');
-      expect(rows.reduce((a, r) => a + r.qty, 0)).toBe(8);
-      expect(rows.map((r) => r.cutLengthIn).sort((a, c) => a - c)).toEqual([0.75, 1, 1.1875, 1.75]);
+      expect(rows.reduce((a, r) => a + r.qty, 0)).toBe(4);
+      expect(rows.map((r) => r.cutLengthIn).sort((a, c) => a - c)).toEqual([1, 1.75]);
       for (const r of rows) expect(r.cutLengthIn * 16).toBeCloseTo(Math.round(r.cutLengthIn * 16), 6); // rounded UP to 1/16
       expect(tube.notes).toMatch(/2 × 1-3\/4"/);
+      expect(tube.partIds ?? []).toBeDefined();
       expect(data.cutList.warnings.filter((x) => /unrecognized metal/.test(x))).toEqual([]);
     });
 
@@ -162,10 +185,10 @@ describe('D-78 the BOM with the pins on', () => {
       const sections: Record<string, number> = {};
       for (const s of bp.sections) sections[s.id] = Math.round((s.subtotalUsd - (bb.sections.find((q) => q.id === s.id)?.subtotalUsd ?? 0)) * 100) / 100;
       expect(Object.values(sections).reduce((a, v) => a + v, 0), name).toBeCloseTo(total, 1);
-      // four pins at $25, an estimate
-      expect(sections.purchased, name).toBe(100);
-      // one 12 in length of tube ($9) in, one 12 in piece of 1/8 x 2 flat bar ($15: the backing plates) out
-      expect(sections.metal, name).toBe(-6);
+      // four pins at $25 and four flanged bushings at $4, all estimates
+      expect(sections.purchased, name).toBe(116);
+      // one 24 in length of tube ($16) in, one 12 in piece of 1/8 x 2 flat bar ($15: the backing plates) out
+      expect(sections.metal, name).toBe(1);
       // the knee bolts, nuts and washers (3/8-16 x 4, 26 nylock nuts and 16 fender washers of the sled) leave the fasteners
       expect(sections.fasteners, name).toBeLessThan(-10);
       expect(sections.lumber, name).toBeGreaterThanOrEqual(0); // the tab (5/4) and the pad (4/4) come from the same boards or a little more
@@ -173,10 +196,10 @@ describe('D-78 the BOM with the pins on', () => {
       out[name] = { total, sections };
     }
     // the pins cost more than the bolts they replace: about +$80 Standard and +$57 Extreme at the researched prices (ball-lock pins estimated at $25)
-    expect(out.Standard.total).toBeGreaterThan(60);
-    expect(out.Standard.total).toBeLessThan(105);
-    expect(out.Extreme.total).toBeGreaterThan(40);
-    expect(out.Extreme.total).toBeLessThan(90);
+    expect(out.Standard.total).toBeGreaterThan(70);
+    expect(out.Standard.total).toBeLessThan(125);
+    expect(out.Extreme.total).toBeGreaterThan(50);
+    expect(out.Extreme.total).toBeLessThan(110);
     // the leaner way (ball-lock at the top hole only, a clevis pin and hitch-pin clip at the bottom) saves about $40 to $45 against the 4 pins
     const alt = lineIn(get('pins', WEATHER_SPEC.standard).data.bom, 'purchased', /^brake-pin-B$/) ?? get('pins', WEATHER_SPEC.standard).data.bom.sections.find((s) => s.id === 'purchased')!.lines.find((q) => (q.partIds ?? []).some((i) => i.startsWith('brake-pin-B')))!;
     const saves = (alt.unitUsd - alt.alternatives![0].usd) * 2;
@@ -205,11 +228,15 @@ describe('D-78 the cut list with the pins on', () => {
     expect(data.cutList.finished.map((f) => f.partNo)).toContain('brake-tab');
   });
 
-  it('keeps the knee as it is (same laminate, same finished size) and has no backer or plate row', () => {
+  it('keeps the knee laminate (the leg is taller over the top pin) and has no backer or plate row', () => {
     const bolted = get('bolted', WEATHER_SPEC.standard).data;
     const kneeP = data.cutList.finished.find((f) => f.partNo === 'brake-knee')!, kneeB = bolted.cutList.finished.find((f) => f.partNo === 'brake-knee')!;
-    expect(kneeP.finalText).toBe(kneeB.finalText);
-    expect(data.cutList.glueUps.find((g) => g.partNo === 'brake-knee')!.finalText).toBe(bolted.cutList.glueUps.find((g) => g.partNo === 'brake-knee')!.finalText);
+    // same laminate and width and thickness; the pins leg rises over the top pin, so it is taller by the rise
+    const dims = (t: string) => t.split(' × ');
+    expect(dims(kneeP.finalText)[0]).toBe(dims(kneeB.finalText)[0]);
+    expect(dims(kneeP.finalText)[2]).toBe(dims(kneeB.finalText)[2]);
+    expect(kneeP.final.w).toBeGreaterThan(kneeB.final.w);
+    expect(data.cutList.glueUps.find((g) => g.partNo === 'brake-knee')!.layers).toBe(bolted.cutList.glueUps.find((g) => g.partNo === 'brake-knee')!.layers);
     expect(data.cutList.cuts.some((c) => /backer/i.test(c.partNo) && /brake/.test(c.partNo))).toBe(false);
     expect(data.cutList.finished.some((f) => /brake-backer/.test(f.partNo))).toBe(false);
     expect(data.cutList.metal.some((m) => /backplate/.test(m.partNo))).toBe(false);
@@ -234,87 +261,118 @@ describe('D-78 the assembly with the pins on', () => {
     const spacing = fin(Math.hypot(kp.B.x - kp.T.x, kp.B.z - kp.T.z));
     const bySt = (id: string): string => stepText(stepById(data, id), data);
 
-    it(`${name}: the frame step drills ONE bottom-pin hole a rail (drill press, on edge against a fence, from the rear end and the top edge), no knee-bolt holes and no backers`, () => {
+    it(`${name}: the frame step drills ONE oversize bottom-pin hole a rail (rail laid flat against a fence, never on edge) with the flange counterbore, and prepares the sleeves; no knee-bolt holes, no backers`, () => {
       const t = bySt('frame');
-      expect(t).toMatch(/one bottom-pin hole through each rail/);
-      expect(t).toMatch(/on the drill press/);
-      expect(t).toMatch(/Stand the rail on its edge against a fence/);
+      expect(t).toMatch(/drill the bottom-pin hole through each rail/);
+      expect(t).toMatch(/laid flat, outboard face down, its top edge against a fence/);
+      expect(t).not.toMatch(/on its edge|Stand the rail/);
       expect(t).toMatch(rx(`${fin(kp.B.belowRailTop)} down from the rail's top edge`));
       expect(t).toMatch(rx(`${fin(kp.B.fromRailRear)} from the finished rear end`));
-      expect(t).toMatch(/1\/2" in from the rear end/); // the rail is still long at the rear
-      expect(t).toMatch(rx(`(${fin(kp.B.fromRailRear + 0.5)} from the end of the rail)`));
-      expect(t).toMatch(/Epoxy a sleeve into each hole/);
+      expect(t).toMatch(/1\/2" in from the end of the rail as it is now/); // the rail is still long at the rear
+      expect(t).toMatch(rx(`(${fin(kp.B.fromRailRear + 0.5)} from the end)`));
+      expect(t).toMatch(rx(`${fin(kp.flange.cboreDia)} Forstner, ${fin(kp.flange.cboreDepth)} deep`)); // the flange counterbore, in the inboard face
+      expect(t).toMatch(/INBOARD face/i);
+      expect(t).toMatch(/5\/8" bit straight through/);
+      expect(t).toMatch(/oversize on purpose/);
+      expect(t).toMatch(/Order ONE pin first/);
+      expect(t).toMatch(/reamer/);
       expect(t).not.toMatch(/knee-bolt/);
-      expect(t).not.toMatch(/brake knee backers/);
-      expect(t).not.toMatch(/backing plates/);
-      expect(stepById(data, 'frame').partIds).toEqual(expect.arrayContaining(['brake-sleeve-B-hull-L', 'brake-sleeve-B-hull-R']));
-      expect(stepById(data, 'frame').tools).toContain('fence');
+      expect(t).not.toMatch(/brake knee backers|backing plates/);
+      expect(stepById(data, 'frame').tools).toContain('fence and stop block');
     });
 
-    it(`${name}: the rib step drills the top-pin hole after the rib is glued, with a drill block, from the rib head's named edges, and epoxies the sleeve flush with the web`, () => {
+    it(`${name}: the rib step drills the top hole 5/8" oversize in the rib BLOCK from the rib foot, with a drill block, and beds the flanged bushing around a rod through the knee's tab sleeve with the knee pinned on at the bottom pin`, () => {
       const t = bySt('side-ribs');
-      expect(t).toMatch(/Once the rib epoxy has cured, drill the top-pin hole through each box rib head/);
+      expect(t).toMatch(/drill the top-pin hole through each box rib block and bed its flanged bushing/);
       expect(t).toMatch(/drill block/);
-      expect(t).toMatch(/1" in from the REAR edge of the head/);
-      expect(t).toMatch(rx(`${fin(kp.T.belowRibTop)} down from the TOP edge of the head`));
-      expect(t).toMatch(rx(`${fin(kp.T.fromRibFoot)} up from the BOTTOM end of the rib`));
+      expect(t).toMatch(/in from the REAR edge of the block/);
+      expect(t).toMatch(rx(`${fin(kp.T.fromRibFoot)} up from the BOTTOM end of the rib, the foot`));
+      expect(t).toMatch(/Measure from the foot, not from the top/);
+      expect(t).not.toMatch(/rib head/i.test(t) ? /^$/ : /rib head/); // the hole is in the block, not the head
+      expect(t).not.toMatch(/down from the TOP edge/);
       expect(t).toMatch(rx(`${fin(kp.T.hullSleeve.len)} deep in all`));
-      expect(t).toMatch(/flush with the web's outer face/);
+      expect(t).toMatch(rx(`${fin(kp.flange.cboreDia)} Forstner, ${fin(kp.flange.cboreDepth)} deep`));
+      expect(t).toMatch(/oversize on purpose/);
+      expect(t).toMatch(/release tape/);
+      expect(t).toMatch(/waxed 3\/8" rod through the tab's sleeve/);
+      expect(t).toMatch(/push the bottom pin through the leg sleeve and the rail bushing/);
+      expect(t).toMatch(/plain end is flush with the web's outer face/);
+      expect(t).toMatch(/T-shaped like the rib/); // the filler follows the block
+      expect(t).toMatch(/resaw a 4\/4 offcut/);
       expect(stepById(data, 'side-ribs').partIds).toEqual(expect.arrayContaining(['brake-sleeve-T-hull-L', 'brake-sleeve-T-hull-R']));
-      // the sleeve is fitted at the rib step, after the ribs, not at the frame
       const ids = data.steps.map((s) => s.id);
       expect(ids.indexOf('frame')).toBeLessThan(ids.indexOf('brake-knees'));
       expect(ids.indexOf('brake-knees')).toBeLessThan(ids.indexOf('side-ribs'));
       expect(ids.indexOf('side-ribs')).toBeLessThan(ids.indexOf('brake-flaps'));
     });
 
-    it(`${name}: the knee step is bench work: tab, pad, holes from the pin-hole plate, sleeves; the knee is not glued or bolted to the hull`, () => {
+    it(`${name}: the knee step is bench work: tab from one stick, holes from the pin-hole plate (33/64" bit, top hole first, bottom last), reamed sleeves, the rail bushings bedded; units marked L and R; the knee is not glued or bolted to the hull`, () => {
       const s = stepById(data, 'brake-knees');
       const t = stepText(s, data);
-      expect(s.title).toMatch(/bench work, off the hull/);
+      expect(s.title).toMatch(/the knee is not glued to the hull/);
       expect(t).toMatch(/not glued or bolted to the hull/);
       expect(t).toMatch(/Epoxy a tab to the rear face of each knee/);
+      expect(t).toMatch(/mill ONE 12" stick/);
       expect(t).toMatch(rx(`its bottom edge ${fin(kp.tab.z0 - bg.knee.zBot)} up from the knee's bottom end`)); // the tab
-      expect(t).toMatch(rx(`stands ${fin(kp.tab.z1 - bg.knee.zTop)} above the knee's top end`));
+      expect(t).toMatch(rx(`stands ${fin(kp.tab.z1 - bg.knee.zTopLeg)} above the top of the knee's leg`));
+      expect(t).toMatch(rx(`The knee is ${fin(bg.knee.zTopLeg - bg.knee.zBot)} tall`));
       expect(t).toMatch(/touches the knee over its lower/);
       expect(t).toMatch(/pin-hole plate/);
+      expect(t).toMatch(/1\/8" center hole/);
+      expect(t).toMatch(/33\/64" brad-point bit/);
       expect(t).toMatch(rx(`${fin(kp.B.fromKneeRear)} from the knee's rear face`)); // hole B
-      expect(t).toMatch(rx(`${fin(kp.B.fromKneeBottom)} up from the knee's bottom end`));
+      expect(t).toMatch(rx(`${fin(kp.B.fromKneeBottom)} up from its bottom end`));
       expect(t).toMatch(rx(`${fin(p.brakeTabEndIn)} from the tab's rear end and ${fin(kp.tab.z1 - kp.T.z)} under its top edge`)); // hole T
       expect(t).toMatch(rx(spacing)); // the spacing between the holes
-      expect(t).toMatch(/Epoxy a sleeve into each hole/);
-      expect(t).toMatch(/five thousandths of an inch/);
+      expect(t).toMatch(rx(`${finalFrac(kp.webRecess)} shim`));
+      expect(t).toMatch(/Drill the top hole first and the bottom hole last/);
+      expect(t).toMatch(/Mark the unit L or R/);
+      expect(t).toMatch(/Epoxy a reamed sleeve into each hole/);
+      expect(t).toMatch(/Bed a flanged bushing in each rail, with its knee clamped on/);
+      expect(t).toMatch(/release tape/);
       expect(t).toMatch(/no screw is needed/i); // no new wood-screw size
-      expect(t).not.toMatch(/Bolt each knee|nylock|backing plate|backers/);
-      expect(s.partIds).toEqual(expect.arrayContaining(['brake-tab-L', 'brake-tab-R', 'brake-sleeve-B-knee-L', 'brake-sleeve-T-tab-R']));
+      expect(t).not.toMatch(/Bolt each knee|nylock|backing plate|backers|clear of the bolt holes|bolted leg|\bpad\b.*\bknee\b.*\binboard/i);
+      expect(t).not.toMatch(/with its top flat/);
+      expect(s.tools).not.toContain('wrenches');
+      expect(s.partIds).toEqual(expect.arrayContaining(['brake-tab-L', 'brake-tab-R', 'brake-sleeve-B-knee-L', 'brake-sleeve-T-tab-R', 'brake-sleeve-B-hull-L', 'brake-sleeve-B-hull-R']));
       expect(s.partIds).not.toContain('brake-pin-B-L'); // the pins go on at the hang step
     });
 
-    it(`${name}: the fit step puts the knee on with the two pins; REMOVAL and REFIT are clear steps; Transport mode says the knees come off`, () => {
+    it(`${name}: the fit step puts the knee on bottom pin first, swings the tab onto the web, then the top pin, and prints the tire gaps; REMOVAL and REFIT are clear steps; the chock rides with its knee; Transport mode says the knees come off`, () => {
       const hang = bySt('hang');
       expect(hang).toMatch(/Fit the brake knees, each with its flap on/);
-      expect(hang).toMatch(/Push the bottom pin through the knee leg and the rail, then the top pin through the tab, the web and the rib head/);
+      expect(hang).toMatch(/Push the bottom pin through the knee leg and the rail bushing first/);
+      expect(hang).toMatch(/the tab is outside the web/);
+      expect(hang).toMatch(rx(`the knee's rear face ${fin(bg.knee.x0 - (bg.O[0] + bg.r))} ahead of the tire front`));
+      expect(hang).toMatch(rx(`the tab's bottom edge ${fin(kp.tab.z0 - (bg.O[1] + bg.r))} above the tire top`));
+      expect(hang).toMatch(rx(`the balls stand ${fin(kp.tipIn)} inside the sled`));
       expect(stepById(data, 'hang').partIds).toEqual(expect.arrayContaining(['brake-pin-B-L', 'brake-pin-B-R', 'brake-pin-T-L', 'brake-pin-T-R']));
       const ids = data.steps.map((s) => s.id);
       expect(ids.indexOf('knee-swap')).toBe(ids.indexOf('hang') + 1);
       const swap = bySt('knee-swap');
       expect(swap).toMatch(/REMOVAL, about 15 s a side/);
-      expect(swap).toMatch(/pull the top pin first/);
-      expect(swap).toMatch(/Lift the knee and the flap off the side as one piece/);
+      expect(swap).toMatch(/unclip the chock cord from the eye under the knee \(the chock rides with its knee\)/);
+      expect(swap).toMatch(/pull the top pin .* first/);
+      expect(swap).toMatch(/its flap off the side as one piece/);
       expect(swap).toMatch(/REFIT, about 25 s a side/);
-      expect(swap).toMatch(/Set the knee on the hull/);
-      expect(swap).toMatch(/Slide the tab over the rib head/);
       expect(swap).toMatch(/Push the bottom pin in from the outside/);
+      expect(swap).toMatch(/Swing the knee until the tab .* outside the web/);
+      expect(swap).toMatch(/then push the top pin through the tab, the web and the rib block/);
+      expect(swap).toMatch(/chock cord on its eye/);
       expect(swap).toMatch(/Transport mode: the knees come off with the brakes/);
+      expect(swap).toMatch(/chocks/);
       expect(stepById(data, 'knee-swap').kind).toBe('process');
-      // the flap step says the flap comes off WITH the knee
+      expect(JSON.stringify(stepById(data, 'knee-swap').items)).toMatch(/\{\{brake-pin-T-L\}\}/); // part tokens link
+      // the flap step says the flap comes off WITH the knee, and the finish step touches the knee units and the bushings up
       expect(bySt('brake-flaps')).toMatch(/Removable, knee and flap together/);
+      expect(bySt('finish')).toMatch(/Touch up the brake knee units/);
+      expect(bySt('finish')).toMatch(/Mask and touch up around the hull bushings/);
     });
 
     it(`${name}: no knee-bolt, backing-plate or backer text, no decision id, no part key and no leftover token in any step`, () => {
       const t = allStepText(data);
       expect(t).not.toMatch(/knee-bolt|knee bolt|backing plate|brake knee backers|Bolt each knee|nylock nuts sit on/i);
-      expect(t).not.toMatch(/\bD-\d+\b|\{\{|brake-(sleeve|pin|tab)|kneeMount/);
+      expect(t).not.toMatch(/\bD-\d+\b|\{\{|brake-(sleeve|pin|tab)|kneeMount|0\.005/);
       for (const s of data.steps) {
         for (const id of tokensIn(itemsText(s.items.map((i) => ({ ...i }))))) expect(data.parts.some((x) => x.id === id), `${s.id}: ${id}`).toBe(true);
       }
@@ -322,11 +380,11 @@ describe('D-78 the assembly with the pins on', () => {
       for (const id of ['frame', 'side-ribs', 'brake-knees', 'knee-swap', 'hang']) expect(stepText(stepById(data, id), data), id).not.toMatch(/\d\.\d{2,}"/);
     });
 
-    it(`${name}: each new part is in exactly one step, the knee-side parts at the knee step, the hull sleeves at the frame and rib steps, the pins at the hang step`, () => {
+    it(`${name}: each new part is in exactly one step: the knee-side parts and the rail bushings at the knee step, the rib bushings at the rib step, the pins at the hang step`, () => {
       const seen = new Map<string, string[]>();
       for (const s of data.steps) for (const id of s.partIds) seen.set(id, [...(seen.get(id) ?? []), s.id]);
       for (const tag of ['L', 'R']) {
-        expect(seen.get(`brake-sleeve-B-hull-${tag}`)).toEqual(['frame']);
+        expect(seen.get(`brake-sleeve-B-hull-${tag}`)).toEqual(['brake-knees']); // bedded at the knee step with the knee clamped on
         expect(seen.get(`brake-sleeve-T-hull-${tag}`)).toEqual(['side-ribs']);
         for (const id of ['brake-tab', 'brake-sleeve-B-knee', 'brake-sleeve-T-tab', 'brake-knee']) expect(seen.get(`${id}-${tag}`), id).toEqual(['brake-knees']);
         for (const id of ['brake-pin-B', 'brake-pin-T']) expect(seen.get(`${id}-${tag}`), id).toEqual(['hang']);
@@ -374,9 +432,11 @@ describe('D-78 the Verify items with the pins on', () => {
       }
     });
 
-    it(`${name}: pin fit and play in the sleeves, the pad on the recessed web, the top pin clearances and the first-brake-test wobble`, () => {
-      expect(v('knee-pin-fit').whatToDo).toMatch(/five thousandths of an inch \(0\.005"\)/);
-      expect(v('knee-pin-fit').whatToDo).toMatch(/Do not ream/);
+    it(`${name}: pin fit and play in the sleeves, the knee seat, the top pin clearances and the first-brake-test wobble`, () => {
+      expect(v('knee-pin-fit').whatToDo).toMatch(/about five thousandths of an inch of play/);
+      expect(v('knee-pin-fit').whatToDo).not.toMatch(/0\.005/);
+      expect(v('knee-pin-fit').whatToDo).toMatch(/Test the first pin before anything else is ordered or glued/);
+      expect(v('knee-pin-fit').whatToDo).toMatch(/Reaming only enlarges the bore of a bought piece/);
       const clear = v('knee-pin-clearance').whatToDo;
       expect(clear).toMatch(/box tie spacer/);
       expect(clear).toMatch(/D-ring fender washers/);
@@ -437,25 +497,32 @@ describe('D-78 the forms, drawings, finishing and package with the pins on', () 
       expect(data.tiles.find((t) => t.id === 'brake-knee-template')!.pages.length).toBeGreaterThan(1);
     });
 
-    it(`${name}: part drawings for the tab, pad and sleeves; one hole a place on the rail, tab, knee and rib; no backer or plate drawing`, () => {
+    it(`${name}: part drawings for the tab and the knee sleeves; one hole a place on the rail, tab, knee and rib; no backer or plate drawing`, () => {
       const sheet = (partNo: string) => data.partDrawings.find((s) => s.partNo === partNo)!;
-      for (const n of ['brake-tab', 'brake-sleeve-B-hull', 'brake-sleeve-B-knee', 'brake-sleeve-T-hull', 'brake-sleeve-T-tab']) expect(sheet(n), n).toBeDefined();
+      for (const n of ['brake-tab', 'brake-sleeve-B-knee', 'brake-sleeve-T-tab']) expect(sheet(n), n).toBeDefined(); // the hull bushings are bought: no drawing
       expect(data.partDrawings.some((s) => /brake-(backer|backplate)/.test(s.partNo))).toBe(false);
       const holes = (partNo: string) => sheet(partNo).features.filter((f) => f.kind === 'hole');
-      expect(holes('rail').filter((f) => /brake pin|sleeve/i.test(f.text))).toHaveLength(1);
-      expect(holes('rail').find((f) => /sleeve B/.test(f.text))!.text).toMatch(/1\/2" hole, through.*16-13\/16" from the REAR end, 1-1\/2" from the TOP edge/);
+      expect(holes("rail").filter((f) => /flanged bushing/i.test(f.text))).toHaveLength(1);
+      expect(holes("rail").find((f) => /flanged bushing/.test(f.text))!.text).toMatch(/5\/8" hole, through.*16-13\/16" from the REAR end, 1-1\/2" from the TOP edge/); // oversize, bedded round the knee's sleeve
       expect(holes('brake-tab')).toHaveLength(1);
+      expect(holes('brake-tab')[0].text).toMatch(/33\/64" hole, through/);
       expect(holes('brake-tab')[0].text).toMatch(new RegExp(`1" from the REAR edge, ${rx(fin(kp.T.z - kp.tab.z0)).source} from the BOTTOM (edge|end)`));
-      expect(holes('side-rib-box').filter((f) => /sleeve T/.test(f.text))).toHaveLength(1);
-      expect(holes('side-rib-box').find((f) => /sleeve T/.test(f.text))!.text).toMatch(/1" from the REAR edge, 3-5\/8" from the BOTTOM end/);
-      expect(holes('brake-knee').filter((f) => /sleeve B/.test(f.text))).toHaveLength(1);
-      expect(holes('brake-knee').filter((f) => /INBOARD edge: \d+(-\d+\/\d+)?" from the TOP end/.test(f.text))).toHaveLength(1); // no second, pin-clearance hole at the sleeve
+      expect(holes('side-rib-box').filter((f) => /5\/8" hole/.test(f.text))).toHaveLength(1);
+      expect(holes('side-rib-box').find((f) => /5\/8" hole/.test(f.text))!.text).toMatch(rx(`1" from the REAR edge, ${fin(kp.T.fromRibFoot)} from the BOTTOM end`));
+      expect(holes('brake-knee').filter((f) => /33\/64" hole/.test(f.text))).toHaveLength(1);
+      expect(holes('brake-knee').filter((f) => /INBOARD edge: \d+(-\d+\/\d+)?" from the BOTTOM end/.test(f.text))).toHaveLength(1); // no second, pin-clearance hole at the sleeve
       const words = (partNo: string): string => sheet(partNo).svg.replace(/<[^>]+>/g, ' ').replace(/&quot;|&#39;|&apos;/g, "'").replace(/\s+/g, ' ');
-      for (const n of ['brake-sleeve-B-hull', 'brake-sleeve-T-hull']) { expect(holes(n)).toHaveLength(0); expect(words(n)).toMatch(/plain piece of stainless tube/); expect(words(n)).toMatch(/five thousandths of an inch/); }
-      expect(words('brake-tab')).toMatch(/glued to the knee's rear face only/);
-      expect(words('rail')).toMatch(/drill press with the rail on edge against a fence/);
-      expect(words('side-rib-box')).toMatch(/Drill it after the rib is glued in/);
+      for (const n of ['brake-sleeve-B-knee', 'brake-sleeve-T-tab']) { expect(holes(n)).toHaveLength(0); expect(words(n)).toMatch(/piece of stainless tube or a flanged bushing/); expect(words(n)).toMatch(/five thousandths of an inch/); }
+      expect(words('brake-tab')).toMatch(/Glue the tab to the knee's rear face only/);
+      expect(words('brake-tab')).toMatch(rx(`Grain runs up the ${fin(data.parts.find((x) => x.id === 'brake-tab-L')!.stock!.l)} side`.replace('"', "'")));
+      expect(words('brake-tab')).toMatch(/AFTER it is glued to the knee/);
+      expect(words('rail')).toMatch(/Lay the rail flat on the drill press, OUTBOARD face down, top edge against a fence/);
+      expect(words('rail')).toMatch(/counterbore, .* deep, in the INBOARD face/);
+      expect(words('rail')).not.toMatch(/on edge/);
+      expect(words('side-rib-box')).toMatch(/full-width BLOCK, measured from the foot of the rib/);
+      expect(words('side-rib-box')).toMatch(/Do not drill it on the bench/);
       expect(words('brake-knee')).toMatch(/pin-hole plate/);
+      expect(words('brake-knee')).toMatch(/Then drill the top hole in the tab and, last, the bottom hole/);
     });
 
     it(`${name}: the finishing schedule seals the tab and the pad with the knee, on the bench with the underside`, () => {
@@ -467,7 +534,7 @@ describe('D-78 the forms, drawings, finishing and package with the pins on', () 
 
     it(`${name}: the package lists the new drawings, none for the backer or plate, and the book carries the removal and refit steps`, () => {
       const names = data.files.map((f) => f.name);
-      for (const n of ['brake-tab', 'brake-sleeve-B-hull', 'brake-sleeve-T-tab']) {
+      for (const n of ['brake-tab', 'brake-sleeve-B-knee', 'brake-sleeve-T-tab']) {
         const sh = data.partDrawings.find((s) => s.partNo === n)!;
         expect(names).toContain(drawingFileName(sh));
       }

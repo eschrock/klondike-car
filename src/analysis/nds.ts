@@ -8,7 +8,8 @@
  * References checked while writing: the Appendix E row tear-out and group tear-out forms (Z'RT = n_i·F'v·t·s_critical;
  * Z'GT = ½Z'RT1 + ½Z'RT2 + F't·A_group-net). The 3.4.3.3 cleavage form is used as V_r = (2/3)·F'v·b·d_e with d_e the
  * distance from the nearest fastener to the loaded edge; the caller designs mechanical reinforcement for the whole V regardless,
- * so the exact factor on d_e/d does not govern any pass / fail result (see the caster-mount row).
+ * so the exact factor on d_e/d does not govern any pass / fail result (see the caster-mount row). EXCEPTION, D-78: the removable knee's pins sit close to the ends and edges of small oak blocks, where the near-end form
+ * (`cleavageNearEnd`, V_r reduced by (d_e/d)^2 within 5d of the member end) DOES govern; the D-78 rows use it and say so.
  */
 
 /** Dowel bearing strength parallel to grain, Fe∥ = 11,200·G (NDS Table 12.3.3), psi. */
@@ -195,12 +196,35 @@ export const oakFeAt = (G: number, D: number, thetaDeg: number): number => feAtA
 
 /**
  * Adjusted wood-to-wood pin capacity (lbf): Z' = Z C_M C_D C_eg, NO group factor (two pins, not a row). C_M is the wet-service factor for fasteners (`ndsWetFactorFasteners`), C_D the pin's own
- * load-duration factor (`brakePinLoadDurationFactor`, 1.0 for the sustained hold), C_eg the end-grain factor (0.67 when the pin runs along the grain of a member, else 1).
+ * load-duration factor (`brakePinLoadDurationFactor`, 1.0 for the sustained hold), C_eg the end-grain factor (0.67 when the pin runs along the grain of a member, else 1), C_delta the end-distance geometry factor (`endDistanceFactor`, NDS 12.5.1).
  */
-export function woodPinCapacity(p: { ndsWetFactorFasteners: number; brakePinLoadDurationFactor: number }, i: WoodShearInput, cEg = 1): WoodShearResult & { Zadj: number; adjust: number } {
+export function woodPinCapacity(p: { ndsWetFactorFasteners: number; brakePinLoadDurationFactor: number }, i: WoodShearInput, cEg = 1, cDelta = 1): WoodShearResult & { Zadj: number; adjust: number } {
   const r = woodShearZ(i);
-  const adjust = p.ndsWetFactorFasteners * p.brakePinLoadDurationFactor * cEg;
+  const adjust = p.ndsWetFactorFasteners * p.brakePinLoadDurationFactor * cEg * cDelta;
   return { ...r, Zadj: r.Z * adjust, adjust };
+}
+
+/**
+ * NDS 12.5.1 end-distance geometry factor C_delta for a pin bearing toward a member END along the grain: the required end distance for a loaded end is 7 D at 0 degrees to the grain (tension-type, the
+ * conservative choice here: the member is held away from the pin by glue or a stop) falling linearly to 4 D at 90 degrees; C_delta = min(1, end / required). `endIn` is the distance from the pin center
+ * along the grain to that end (in), `thetaGrainDeg` the angle between the pin load and the grain. Below half the required distance the NDS gives no value; the ratio is then used as is and
+ * `belowHalf` is true. (Edge distances across the grain are covered by the splitting check `cleavageNearEnd`, not by this factor.)
+ */
+export function endDistanceFactor(endIn: number, D: number, thetaGrainDeg: number): { required: number; cDelta: number; belowHalf: boolean } {
+  const required = D * (7 - (3 * Math.min(90, Math.max(0, thetaGrainDeg))) / 90);
+  const cDelta = Math.min(1, Math.max(0, endIn) / required);
+  return { required, cDelta, belowHalf: endIn < required / 2 - 1e-9 };
+}
+
+/**
+ * NDS 3.4.3.3 splitting of a member loaded ACROSS the grain by a fastener (lbf). d = the member depth (in the direction of the load), sUnloaded = distance from the unloaded edge to the fastener's
+ * CENTER, D = fastener diameter: d_e = d - (sUnloaded - D/2) (the member depth less the distance from the unloaded edge to the fastener's nearest edge). Far from the member end (end distance >= 5 d):
+ * V_r = 2/3 F_v' b d_e. Within 5 d of the end: V_r = 2/3 F_v' b d_e (d_e / d)^2.
+ */
+export function cleavageNearEnd(FvPrime: number, b: number, d: number, sUnloaded: number, D: number, endDist: number): { Vr: number; de: number; near: boolean } {
+  const de = Math.min(d, Math.max(0, d - (sUnloaded - D / 2)));
+  const near = endDist < 5 * d - 1e-9;
+  return { Vr: (2 / 3) * FvPrime * b * de * (near ? (de / d) ** 2 : 1), de, near };
 }
 
 /** UNC tensile stress area of a bolt of diameter d: π/4 (d − 0.9743/n)². */

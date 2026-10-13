@@ -6,8 +6,10 @@ import { describe, expect, it } from 'vitest';
 import { KNEE_MOUNT, PARAM_DEFS, WEATHER_SPEC, defaultParams, type Params } from '../params';
 import { buildModel } from '../model';
 import { makeContext } from './context';
-import { brakeBundle, loadsAt, loadsFromFoot } from './brake';
-import { oakFeAt, sleevedPinFyb, woodPinCapacity, woodShearZ } from './nds';
+import { brakeBundle, loadsBoth, loadsFromFootBoth } from './brake';
+import { pinGroupForces, pinPull, samples, solveKnee } from './brake-pins';
+import { cleavageNearEnd, endDistanceFactor, oakFeAt, sleevedPinFyb, woodPinCapacity, woodShearZ } from './nds';
+import { thinSheet } from '../params';
 import { sideLateral } from './side-lateral';
 import { allowables } from './structure';
 import { runChecks, type AnalysisCheck } from './index';
@@ -89,6 +91,27 @@ describe('D-78 nds.ts: wood-to-wood single-shear yield modes', () => {
   });
 });
 
+describe('D-78 nds.ts: end-distance factor and near-end splitting', () => {
+  it('C_delta is end / required, required = 7 D along the grain falling linearly to 4 D across it; below half the requirement it is flagged', () => {
+    const r0 = endDistanceFactor(1.75, 0.5, 0);
+    close(r0.required, 3.5, 1e-12);
+    close(r0.cDelta, 0.5, 1e-12);
+    expect(r0.belowHalf).toBe(false);
+    close(endDistanceFactor(10, 0.5, 90).required, 2, 1e-12);
+    expect(endDistanceFactor(10, 0.5, 30).cDelta).toBe(1);
+    expect(endDistanceFactor(1.2, 0.5, 0).belowHalf).toBe(true);
+  });
+  it('near-end splitting is V_r = 2/3 Fv b d_e (d_e/d)^2 within 5 d of the end and without the square beyond; d_e = d - (unloaded edge to fastener center - D/2)', () => {
+    const near = cleavageNearEnd(199, 1, 2, 1, 0.5, 3);
+    close(near.de, 1.25, 1e-12);
+    close(near.Vr, (2 / 3) * 199 * 1 * 1.25 * (1.25 / 2) ** 2, 1e-12);
+    expect(near.near).toBe(true);
+    const far = cleavageNearEnd(199, 1, 2, 1, 0.5, 11);
+    close(far.Vr, (2 / 3) * 199 * 1.25, 1e-12);
+    expect(far.near).toBe(false);
+  });
+});
+
 describe('D-78 new params', () => {
   it('the three new analysis params carry a status, a note and the D-78 reference; the retention is a verify placeholder', () => {
     for (const k of ['brakePinRetentionLbf', 'brakeSleeveYieldPsi', 'brakePinLoadDurationFactor'] as const) {
@@ -121,151 +144,200 @@ describe('D-78 the default (bolted) rows are unchanged', () => {
   });
 });
 
+describe('D-78 the 3-D rigid-knee solve', () => {
+  const goal = loadsBoth(ctx, ctx.loads.goal, g);
+  it('every scenario of the solve is in equilibrium (sum F_y, M_x, M_z about the reference all vanish), and the contact choices are covered both ways of pushing', () => {
+    for (const L of goal) {
+      const pl = pinPull(pp, g, L.Rk);
+      expect(pl.scen.length).toBe(6);
+      for (const sc of pl.scen) {
+        for (const r of sc.resid) expect(Math.abs(r), `${sc.contacts} ${sc.push}`).toBeLessThan(1e-4);
+        expect(sc.T).toBeGreaterThanOrEqual(0);
+        expect(sc.B).toBeGreaterThanOrEqual(0);
+      }
+      close(pl.B, Math.max(...pl.scen.map((s) => s.B)), 1e-12);
+      close(pl.T, Math.max(...pl.scen.map((s) => s.T)), 1e-12);
+    }
+  });
+  it('hand case: the prying alone about the top of the leg contact pulls pin B by M_x / (z_leg_top - z_B) (about 152 lbf: the chine-top hinge), pin T not at all; about the tab bottom it is about 48 lbf', () => {
+    const e = g.y.wheel - g.y.face, Rz = 151.8;
+    const ref: [number, number] = [(pn.T.x + pn.B.x) / 2, (pn.T.z + pn.B.z) / 2];
+    const pins: Array<[number, number]> = [[pn.T.x, pn.T.z], [pn.B.x, pn.B.z]];
+    const leg = samples({ x0: g.knee.x0, x1: g.knee.x1, z0: g.knee.zBot, z1: g.knee.zLeg });
+    const load = [{ F: [0, 0, Rz] as [number, number, number], at: [g.H[0], e, g.H[1]] as [number, number, number] }];
+    const s1 = solveKnee(load, pins, leg, [], ref);
+    close(s1.pinT[1], (Rz * e) / (g.knee.zLeg - pn.B.z), 0.03);
+    expect(s1.pinT[0]).toBeLessThan(1);
+    const tab = samples({ x0: pn.tab.bearing.x0, x1: pn.tab.bearing.x1, z0: pn.tab.bearing.z0, z1: pn.tab.bearing.z1 });
+    const s2 = solveKnee(load, pins, [], tab, ref);
+    expect(s2.pinT[1]).toBeLessThan(s1.pinT[1] / 2);
+  });
+  it('yaw alone about the leg\'s rear edge pulls pin B by M_z / (x_B - x_leg_rear) (the rear-edge yaw case): 380 / 1.06 = about 358 lbf', () => {
+    const e = g.y.wheel - g.y.face, Rx = -126.6;
+    const ref: [number, number] = [(pn.T.x + pn.B.x) / 2, (pn.T.z + pn.B.z) / 2];
+    const pins: Array<[number, number]> = [[pn.T.x, pn.T.z], [pn.B.x, pn.B.z]];
+    const leg = samples({ x0: g.knee.x0, x1: g.knee.x1, z0: g.knee.zBot, z1: g.knee.zLeg });
+    const s = solveKnee([{ F: [Rx, 0, 0], at: [g.H[0], e, g.H[1]] }], pins, leg, [], ref);
+    close(s.pinT[1], (Math.abs(Rx) * e) / (pn.B.x - g.knee.x0), 0.03);
+  });
+  it('the envelope pull exceeds the both-contacts pull, and pin B is pulled most by the leg-only choice, pin T by the tab-only choice', () => {
+    const pl = pinPull(pp, g, goal[1].Rk);
+    const mx = (c: string, f: (s: (typeof pl.scen)[number]) => number) => Math.max(...pl.scen.filter((s) => s.contacts === c).map(f));
+    expect(mx('leg', (s) => s.B)).toBeGreaterThanOrEqual(mx('both', (s) => s.B));
+    expect(mx('tab', (s) => s.T)).toBeGreaterThanOrEqual(mx('both', (s) => s.T));
+    expect(pl.B).toBeGreaterThan(300);
+  });
+});
+
 describe('D-78 brake-mount in pins mode', () => {
   const mount = byId(csP, 'brake-mount');
-  const goal = loadsAt(ctx, ctx.loads.goal, g);
-  const hp = handPins(goal.Rk);
+  const goalL = loadsBoth(ctx, ctx.loads.goal, g);
+  const hps = goalL.map((L) => handPins(L.Rk));
   const G = pp.oakSpecificGravity, sOd = pn.sleeveOd;
   const Fyb = (pp.ss316BoltYieldPsi * pn.dia ** 3 + pp.brakeSleeveYieldPsi * (sOd ** 3 - pn.sleeveId ** 3)) / sOd ** 3;
-  const Fe = (th: number) => (11200 * G * ((6100 * G ** 1.45) / Math.sqrt(sOd))) / (11200 * G * Math.sin(th * RAD) ** 2 + ((6100 * G ** 1.45) / Math.sqrt(sOd)) * Math.cos(th * RAD) ** 2);
+  const Fe = (G_: number, D: number, th: number) => { const par = 11200 * G_, per = (6100 * G_ ** 1.45) / Math.sqrt(D); return (par * per) / (par * Math.sin(th * RAD) ** 2 + per * Math.cos(th * RAD) ** 2); };
   const wetC = pp.ndsWetFactorFasteners * pp.brakePinLoadDurationFactor;
+  const Gweb = thinSheet(pp).densityPcf / (62.4 * 1.12);
+  const hullOak = pn.hull.filler + pn.hull.rib, hullT = hullOak + pn.hull.web;
+  const zTHand = (F: number[]) => {
+    const th = Math.atan2(Math.abs(F[0]), Math.abs(F[1])) / RAD, thW = Math.atan2(Math.abs(F[1]), Math.abs(F[0])) / RAD;
+    const FeT = Fe(G, sOd, th), FeH = (FeT * hullOak + Fe(Gweb, sOd, thW) * pn.hull.web) / hullT;
+    const req = sOd * (7 - (3 * th) / 90);
+    const cdTab = Math.min(1, (F[1] > 0 ? pn.tab.z1 - pn.T.z : pn.T.z - pn.tab.z0) / req), cdHull = Math.min(1, (-F[1] > 0 ? pn.T.belowRibTop : pn.T.fromRibFoot) / req);
+    return handZ(sOd, hullT, pn.tab.t, FeH, FeT, Fyb, Math.max(th, thW)) * wetC * Math.min(cdTab, cdHull);
+  };
+  const zBHand = (F: number[]) => {
+    const thR = Math.atan2(Math.abs(F[1]), Math.abs(F[0])) / RAD;
+    return handZ(sOd, g.knee.legT, pn.hull.rail, Fe(G, sOd, 90), Fe(G, sOd, thR), Fyb, Math.max(90, thR)) * wetC * 0.67;
+  };
 
-  it('keeps the id and the group, and says what is true for pins: no bolt, backer or backing-plate row, the knee is on two pins', () => {
+  it('keeps the id and the group, and says what is true for pins: no bolt, backer or backing-plate row', () => {
     expect(mount.id).toBe('brake-mount');
     expect(mount.group).toBe('Structure');
     expect(mount.label).toMatch(/pin/i);
     expect(mount.label).not.toMatch(/bolt|backer/i);
     expect(mount.refs).toContain('D-78');
-    for (const d of mount.details!) expect(d.name, d.name).not.toMatch(/mounting bolt|nut backing plate|head washer|bolt bearing|bolt tear-out/i);
+    for (const d of mount.details!) expect(d.name, d.name).not.toMatch(/mounting bolt|nut backing plate|head washer|bolt bearing|bolt tear-out|\bpad\b/i);
     expect(mount.how).toMatch(/NO bolts, backer or backing plate/);
-    expect(mount.how).toMatch(/placeholder/i);
     expect(mount.how).toMatch(/TIGHTEST KNEE DETAIL/);
+    expect(mount.how).toMatch(/ENVELOPE OF BOTH ROLLING DIRECTIONS/);
   });
 
-  it('the pin loads are the elastic two-pin group: equilibrium, then within 1 % of the hand solve; about 124 and 87 lbf at the goal rider (the study: 125 and 87)', () => {
-    const Tr = det(csP, 'brake-mount', 'pin T lateral load').value, Br = det(csP, 'brake-mount', 'pin B lateral load').value;
-    close(Tr, hp.Tmag);
-    close(Br, hp.Bmag);
-    // equilibrium of the hand solution: the pin forces on the knee balance -R, and the moments about the pivot vanish
-    close(hp.FT[0] + hp.FB[0], -goal.Rk[0], 1e-9);
-    close(hp.FT[1] + hp.FB[1], -goal.Rk[1], 1e-9);
-    expect(Tr).toBeGreaterThan(120);
-    expect(Tr).toBeLessThan(130);
-    expect(Br).toBeGreaterThan(84);
-    expect(Br).toBeLessThan(90);
+  it('both rolling directions are evaluated: sigma -1 is the larger force on the knee (T about 124.6, B 87.2) and sigma +1 loads pin B more (about 98)', () => {
+    expect(goalL.map((L) => L.sigma)).toEqual([1, -1]);
+    const [hp1, hm1] = hps;
+    close(hp1.Bmag, 98, 0.03);
+    close(hm1.Tmag, 124.6, 0.02);
+    close(hm1.Bmag, 87.2, 0.02);
+    expect(hp1.Bmag).toBeGreaterThan(hm1.Bmag);
+    expect(hm1.Tmag).toBeGreaterThan(hp1.Tmag);
+    // the elastic group balances Rk and the moments about the pivot
+    for (let i = 0; i < 2; i++) {
+      close(hps[i].FT[0] + hps[i].FB[0], -goalL[i].Rk[0], 1e-9);
+      close(hps[i].FT[1] + hps[i].FB[1], -goalL[i].Rk[1], 1e-9);
+      const gp = pinGroupForces(g, goalL[i].Rk);
+      close(gp.Tmag, hps[i].Tmag, 1e-9);
+      close(gp.Bmag, hps[i].Bmag, 1e-9);
+    }
   });
 
-  it('pin T capacity: Z\' within 1 % of the hand-written NDS modes (box rib stack + 1 in tab at the load angle), utilization about 0.67, in the study\'s 0.62 to 0.89 band', () => {
-    const th = Math.atan2(Math.abs(hp.FT[0]), Math.abs(hp.FT[1])) / RAD; // angle to the vertical grain
-    const hull = pn.hull.filler + pn.hull.rib;
-    const Z = handZ(sOd, hull, pn.tab.t, Fe(th), Fe(th), Fyb, th) * wetC;
-    const d = det(csP, 'brake-mount', 'pin T lateral load');
-    close(d.limit, Z);
-    close(d.util, hp.Tmag / Z);
-    expect(d.util).toBeGreaterThan(0.55);
-    expect(d.util).toBeLessThan(0.9);
-    expect(d.name).toMatch(/mode II/);
+  it('pin T and pin B Z\' within 1 % of the hand-written NDS modes (web counted with its own Fe, C_delta on the tab\'s end, C_eg on the knee), worst of the two directions', () => {
+    const dT = det(csP, 'brake-mount', 'pin T lateral load'), dB = det(csP, 'brake-mount', 'pin B lateral load');
+    close(dT.util, Math.max(...hps.map((h) => h.Tmag / zTHand(h.FT))));
+    close(dB.util, Math.max(...hps.map((h) => h.Bmag / zBHand(h.FB))));
+    expect(dT.name).toMatch(/C_delta/);
+    expect(dB.name).toMatch(/end grain, C_eg 0\.67/);
+    expect(dT.util).toBeLessThan(1);
+    expect(dB.util).toBeLessThan(1);
   });
 
-  it('pin B capacity: knee leg in end grain (load across the grain, C_eg 0.67) and the rail at the load angle; utilization about 0.57 (0.39 without C_eg: the study\'s 0.33 to 0.55 had no C_eg)', () => {
-    const thRail = Math.atan2(Math.abs(hp.FB[1]), Math.abs(hp.FB[0])) / RAD;
-    const thMax = Math.max(90, thRail);
-    const Z = handZ(sOd, g.knee.legT, pn.hull.rail, Fe(90), Fe(thRail), Fyb, thMax) * wetC * 0.67;
-    const d = det(csP, 'brake-mount', 'pin B lateral load');
-    close(d.limit, Z);
-    close(d.util, hp.Bmag / Z);
-    expect(d.util).toBeGreaterThan(0.45);
-    expect(d.util).toBeLessThan(0.7);
-    expect(d.name).toMatch(/end grain, C_eg 0\.67/);
-    expect(g.knee.layers.find((q) => pn.B.x >= q.x0 && pn.B.x <= q.x1)!.grain).toBe('y');
+  it('the retention rows are VERIFY / info only: flagged, excluded from the status, and the how states the required rating (the computed worst pull)', () => {
+    const rows = mount.details!.filter((d) => /pull-out at the ball-lock/.test(d.name));
+    expect(rows.length).toBe(2);
+    for (const r of rows) { expect(r.info).toBe(true); expect(r.name).toMatch(/^VERIFY/); expect(r.limit).toBe(pp.brakePinRetentionLbf); }
+    expect(mount.details!.filter((d) => d.info).length).toBe(2);
+    expect(mount.label).not.toMatch(/VERIFY/);
+    const pl = goalL.map((L) => pinPull(pp, g, L.Rk));
+    const needB = Math.max(...pl.map((x) => x.B)), needT = Math.max(...pl.map((x) => x.T));
+    close(rows.find((r) => /pin B/.test(r.name))!.value, needB, 0.02);
+    close(rows.find((r) => /pin T/.test(r.name))!.value, needT, 0.02);
+    expect(mount.how).toMatch(/must be rated for at least/);
+    expect(mount.how).toMatch(/UNPUBLISHED/);
+    // a retention rating that is never met does not change the status of the row: raise the placeholder to 1 lbf and the other details keep their utilizations
+    const low = byId(run({ ...pp, brakePinRetentionLbf: 100 } as Params), 'brake-mount');
+    expect(low.status).toBe(mount.status);
   });
 
-  it('steel, bearing and retention rows by hand', () => {
-    const A = (Math.PI / 4) * pn.dia ** 2;
-    close(det(csP, 'brake-mount', 'pin steel single shear').value, Math.max(hp.Tmag, hp.Bmag) / A);
-    close(det(csP, 'brake-mount', 'pin steel single shear').limit, (0.577 * pp.ss316BoltYieldPsi) / pp.steelSafetyFactor);
-    close(det(csP, 'brake-mount', 'oak bearing under the sleeve at pin T').value, hp.Tmag / (sOd * Math.min(pn.tab.t, pn.hull.filler + pn.hull.rib)));
-    close(det(csP, 'brake-mount', 'oak bearing under the sleeve at pin B in the rail').value, hp.Bmag / (sOd * pn.hull.rail));
-    close(det(csP, 'brake-mount', 'oak bearing under the sleeve at pin B in the knee leg').limit, al.oakDowel);
-    close(det(csP, 'brake-mount', 'oak bearing under the sleeve at pin B in the knee leg').value, hp.Bmag / (sOd * g.knee.legT * 0.67));
-    // retention: prying about the tab's lowest contact on the web, yaw about the tab's rear edge, the amplified sideways push
-    const e = g.y.wheel - g.y.face;
-    const pry = (Math.abs(goal.Rk[1]) * e) / (pn.tab.bearing.z0 - pn.B.z);
-    const k = (Math.abs(goal.Rk[0]) * e) / ((pn.T.x - pn.tab.x0) ** 2 + (pn.B.x - pn.tab.x0) ** 2);
-    const xNose = g.H[0] + pp.brakePivotEndIn, P = (pp.brakeFlapSideLoadLbf * (xNose - g.F[0])) / Math.max(0.25, xNose - g.knee.x0);
-    const xs = (g.strap.x0 + g.strap.x1) / 2, fT = (pn.B.x - xs) / (pn.B.x - pn.T.x);
-    const pullT = k * (pn.T.x - pn.tab.x0) + P * fT, pullB = pry + k * (pn.B.x - pn.tab.x0) + P * (1 - fT);
-    close(det(csP, 'brake-mount', 'pin T pull-out').value, pullT);
-    close(det(csP, 'brake-mount', 'pin B pull-out').value, pullB);
-    expect(det(csP, 'brake-mount', 'pin B pull-out').limit).toBe(pp.brakePinRetentionLbf);
-    expect(pullB).toBeGreaterThan(pullT);
+  it('the pad is gone: the tab lies on the web over the rib block and the knee leg bears on the rail and chine band (both contact rows exist, in oak perpendicular to grain)', () => {
+    expect(mount.details!.some((d) => /tab on the web over the rib block/.test(d.name))).toBe(true);
+    expect(mount.details!.some((d) => /knee leg on the rail and the chine band/.test(d.name))).toBe(true);
+    const pl = goalL.map((L) => pinPull(pp, g, L.Rk));
+    close(det(csP, 'brake-mount', 'tab on the web over the rib block').value, Math.max(...pl.map((x) => x.tabMax / x.tabArea)), 0.02);
+    close(det(csP, 'brake-mount', 'knee leg on the rail and the chine band').value, Math.max(...pl.map((x) => x.legMax / x.legArea)), 0.02);
   });
 
-  it('tab glue uses the REAL patch area (2.01 in2, the tab-on-knee patch of the model); the eccentric patch rows follow from the pin height over the patch', () => {
-    const d = det(csP, 'brake-mount', 'tab glue patch (the real');
-    const A = pn.tab.glueArea;
-    expect(A).toBeCloseTo(2.01, 1);
-    close(d.value, Math.hypot(hp.FT[0], hp.FT[1]) / A);
-    close(d.limit, al.oakShear * 0.25);
-    const ph = pn.tab.patch, h = ph.z1 - ph.z0, w = A / h, zc = ph.zc;
-    const M = Math.abs((pn.T.x - pn.tab.x1) * hp.FT[1] - (pn.T.z - zc) * hp.FT[0]);
-    close(det(csP, 'brake-mount', 'peak compression on the knee').value, hp.FT[0] / A + M / ((w * h * h) / 6));
-    close(det(csP, 'brake-mount', 'peak tension across the glue line').value, M / ((w * h * h) / 6) - hp.FT[0] / A);
+  it('tab glue uses the real patch (2.89 in2) with the contact and pull y forces and the moments: the patch rows are the envelope of the scenarios', () => {
+    expect(pn.tab.patch.area).toBeCloseTo(2.89, 1);
+    const pl = goalL.map((L) => pinPull(pp, g, L.Rk));
+    close(det(csP, 'brake-mount', 'tab glue patch: peak tension').value, Math.max(...pl.map((x) => x.tens)), 0.02);
+    close(det(csP, 'brake-mount', 'tab glue patch: peak compression').value, Math.max(...pl.map((x) => x.comp)), 0.02);
+    close(det(csP, 'brake-mount', 'tab glue patch (the real').limit, al.oakShear * 0.25);
+    close(det(csP, 'brake-mount', 'peak tension across the glue').limit, al.oakShear / 3);
+    close(det(csP, 'brake-mount', 'tab bending across the grain').limit, al.oakShear / 3);
+    expect(det(csP, 'brake-mount', 'tab in-plane bending').limit).toBe(al.oakBend);
   });
 
-  it('the thin wall at pin B is stated plainly, with the numbers: 0.10 in of oak either side of the sleeve in the middle ACROSS layer', () => {
-    const layer = g.knee.layers.find((q) => pn.B.x >= q.x0 && pn.B.x <= q.x1)!;
-    const wall = (layer.x1 - layer.x0 - sOd) / 2;
-    expect(wall).toBeGreaterThan(0.09);
-    expect(wall).toBeLessThan(0.12);
-    const d = det(csP, 'brake-mount', 'pin B thin wall: the sleeve');
-    expect(d.name).toMatch(/0\.10"/);
-    close(d.value, Math.abs(hp.FB[0]) / (sOd * g.knee.legT));
+  it('the flange takes the pull: bearing on the counterbore floor by the ring outside the sleeve, and the knee-side sleeves are checked on their epoxy', () => {
+    const pl = goalL.map((L) => pinPull(pp, g, L.Rk));
+    const ring = (Math.PI / 4) * (pn.flange.od ** 2 - sOd ** 2);
+    close(det(csP, 'brake-mount', 'hull flange bearing at pin B').value, Math.max(...pl.map((x) => x.B)) / ring, 0.02);
+    close(det(csP, 'brake-mount', 'hull flange bearing at pin T').value, Math.max(...pl.map((x) => x.T)) / ring, 0.02);
+    close(det(csP, 'brake-mount', 'knee-side sleeve at pin B').value, Math.max(...pl.map((x) => x.B)) / (Math.PI * sOd * g.knee.legT), 0.02);
+    expect(det(csP, 'brake-mount', 'counterbore at pin T').limit).toBe(pp.brakePinEdgeIn);
+  });
+
+  it('the splitting rows use the NDS near-end form: rib block d_e 1.25 of 2.00 in, the tab toward its rear end; the plug text names the side that is loaded', () => {
+    const rib = det(csP, 'brake-mount', 'box rib block at pin T (brake-rib): splitting');
+    const cl = cleavageNearEnd(pp.oakNdsShearPsi * pp.ndsWetFactorShear * pp.brakePinLoadDurationFactor, hullOak, pn.rib.blockW, pn.rib.blockW / 2, sOd, Math.min(pn.T.fromRibFoot, pn.T.belowRibTop));
+    close(rib.limit, cl.Vr, 1e-9);
+    expect(rib.name).toMatch(/near-end/);
+    expect(det(csP, 'brake-mount', 'tab behind pin T').name).toMatch(/near-end|far/);
+    expect(det(csP, 'brake-mount', 'pin B thin wall: the z part').name).toMatch(/below the sleeve/);
     expect(mount.how).toMatch(/only 0\.10" of oak between the sleeve and the glued UPRIGHT layers/);
-    expect(mount.how).toMatch(/C_eg 0\.67/);
   });
 
-  it('every row passes at the defaults after the Phase 1b model change (rib block 2 in, no pad, 4.1 in tab); the tightest are the box-rib splitting and the tab\'s splitting behind T', () => {
-    const failing = mount.details!.filter((d) => d.util > 1);
-    expect(failing.map((d) => d.name)).toEqual([]);
-    expect(mount.status).toBe('pass');
-    expect(mount.util!).toBeLessThan(0.9);
-    const rib = det(csP, 'brake-mount', 'box rib at pin T (brake-rib): splitting');
-    close(rib.limit, (2 / 3) * pp.oakNdsShearPsi * pp.ndsWetFactorShear * pp.brakePinLoadDurationFactor * (pn.hull.filler + pn.hull.rib) * (pn.rib.blockW / 2), 1e-9);
-    expect(pn.rib.blockW).toBeCloseTo(2, 6);
-    expect(rib.util).toBeGreaterThan(0.7);
-    const web = det(csP, 'brake-mount', 'tab on the web over the rib block');
-    expect(web.util).toBeLessThan(0.3);
-    expect(mount.details!.some((d) => /pad on the web/.test(d.name))).toBe(false);
+  it('at the defaults pins mode FAILS (reported, not tuned): the hull flange, the tab glue patch and the box-rib splitting are over their limits, and the pin Z\' rows still pass', () => {
+    const over = mount.details!.filter((d) => !d.info && d.util > 1).map((d) => d.name);
+    expect(mount.status).toBe('fail');
+    for (const k of ['hull flange bearing at pin B', 'tab glue patch: peak tension', 'box rib block at pin T (brake-rib): splitting']) expect(over.some((n) => n.startsWith(k)), k).toBe(true);
+    for (const k of ['pin T lateral load', 'pin B lateral load', 'pin steel']) expect(over.some((n) => n.startsWith(k)), k).toBe(false);
   });
 
-  it('Standard and Extreme weather both produce the pins rows (the sleeve, pin and member numbers do not depend on the spec)', () => {
+  it('Standard and Extreme weather both produce the pins rows', () => {
     for (const w of [WEATHER_SPEC.standard, WEATHER_SPEC.extreme]) {
       const cs = run({ ...pp, weatherSpec: w } as Params);
       const m = byId(cs, 'brake-mount');
       expect(m.details!.length).toBe(mount.details!.length);
       expect(m.how).toMatch(/ball-lock/);
-      close(det(cs, 'brake-mount', 'pin T lateral load').value, hp.Tmag, 0.02);
     }
   });
 });
 
 describe('D-78 brake-abuse follows the pins mount', () => {
-  it('reuses the pins rows at yield level: the same Z\' under the stomp loads, with the limits raised by the safety factor', () => {
+  it('reuses the pins rows at yield level for both rolling directions of the stomp, limits raised by the safety factor, the VERIFY rows kept out of the headline', () => {
     const ab = byId(csP, 'brake-abuse');
-    const La = loadsFromFoot(ctx, g, pp.brakeFootAbuseLbf);
-    const ha = handPins(La.Rk);
+    const ha = loadsFromFootBoth(ctx, g, pp.brakeFootAbuseLbf).map((L) => handPins(L.Rk));
     const d = det(csP, 'brake-abuse', 'mount: pin T lateral load');
-    close(d.value, ha.Tmag);
-    const base = det(csP, 'brake-mount', 'pin T lateral load');
-    expect(d.limit).toBeGreaterThan(base.limit); // Z' for the stomp's load angle, times the steel safety factor
-    expect(ab.details!.some((x) => /^mount: /.test(x.name) && /mounting bolt/.test(x.name))).toBe(false);
+    expect(ha.some((h) => Math.abs(h.Tmag - d.value) <= 0.01 * h.Tmag)).toBe(true);
+    expect(d.limit).toBeGreaterThan(det(csP, 'brake-mount', 'pin T lateral load').limit);
     expect(ab.details!.filter((x) => /^mount: pin /.test(x.name)).length).toBeGreaterThan(5);
-    // the stomp reverses the x part (the flap pushes the knee forward): the glue patch is in tension, the hinge is the knee's front edge
-    expect(La.Rk[0]).toBeGreaterThan(0);
+    expect(ab.details!.filter((x) => x.info).length).toBe(2);
+    expect(ab.label).toMatch(/abuse/);
+    expect(ab.limit).not.toBe(pp.brakePinRetentionLbf * 2);
   });
   it('the bolted brake-abuse is unchanged: mount rows are the bolt rows', () => {
     expect(byId(csB, 'brake-abuse').details!.some((x) => /^mount: mounting bolt shear/.test(x.name))).toBe(true);
+    expect(byId(csB, 'brake-abuse').details!.some((x) => x.info)).toBe(false);
   });
 });
 
@@ -280,20 +352,22 @@ describe('D-78 the box rib carries the top pin with the D-ring (lash-load, side-
     close(pr.Snet, ((pr.w - pn.sleeveOd) * pr.depth ** 2) / 6, 1e-12);
     close(pr.zT, pn.T.z - ctx.L.deckTop, 1e-12);
   });
-  it('the T-pin loads on the rib are the brake-mount pin T force (about 125 lbf in plane) and the axial pull (about 49 lbf)', () => {
-    const hp = handPins(loadsAt(ctx, ctx.loads.goal, g).Rk);
-    close(Math.hypot(pr.FTx, pr.FTz), hp.Tmag);
-    expect(Math.hypot(pr.FTx, pr.FTz)).toBeGreaterThan(120);
-    close(pr.pull, det(csP, 'brake-mount', 'pin T pull-out').value);
+  it('the T-pin loads are the envelope of the goal hold load (both rolling directions) and the stomp: largest in-plane force and largest pull', () => {
+    const variants = [...loadsBoth(ctx, ctx.loads.goal, g), ...loadsFromFootBoth(ctx, g, pp.brakeFootAbuseLbf)];
+    const hp = variants.map((L) => handPins(L.Rk));
+    close(Math.hypot(pr.FTx, pr.FTz), Math.max(...hp.map((h) => h.Tmag)), 1e-9);
+    close(pr.pull, Math.max(...variants.map((L) => pinPull(pp, g, L.Rk).T)), 1e-9);
+    expect(pr.pull).toBeGreaterThan(det(csP, 'brake-mount', 'pin T lateral load').value);
   });
-  it('lash-load and side-lateral carry the sleeve-hole rows; the 2 in block keeps the sleeve hole well inside the limit', () => {
+  it('lash-load and side-lateral carry the sleeve-hole rows (the 2 in block keeps the hole inside the limit); the box tie with the envelope pull is what fails in side-lateral', () => {
     const l = det(csP, 'lash-load', 'knee\'s top-pin sleeve hole');
     const s = det(csP, 'side-lateral', 'D-ring rating on the box rib');
     close(l.value, (pr.ribFRating * pr.lever) / pr.Snet);
     close(s.value, l.value, 1e-9);
-    expect(l.limit).toBe(al.oakBend);
     expect(l.util).toBeLessThan(0.9);
-    expect(det(csP, 'side-lateral', 'outward push + the knee\'s top-pin pull').util).toBeLessThan(1);
+    const tie = det(csP, 'side-lateral', 'box tie glue');
+    expect(tie.name).toMatch(/knee/);
+    close(tie.value, Math.max(sl.push.tieForce + pr.tieAdd, sl.rating.tieForce) / sl.tieArea, 1e-9);
     expect(byId(csP, 'side-lateral').how).toMatch(/D-78 removable knee/);
     expect(byId(csP, 'lash-load').how).toMatch(/D-78 removable knee/);
   });

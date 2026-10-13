@@ -141,12 +141,13 @@ function kneePinChecks(parts: Part[], p: Params, kp: KneePins): Draft[] {
         extreme
           ? it('Look for a 316 ball-lock pin, since the Extreme weather spec asks for 316.', ['The usual ball-lock pin is 17-4 PH stainless, which is not 316.', 'If no 316 pin exists, write 17-4 PH down as an accepted exception, or use the clevis pin and hitch-pin clip at the bottom hole.'])
           : it('Check the pin is stainless (17-4 PH is the usual grade and is accepted for the Standard weather spec).', ['Carbon or zinc-plated pins are not accepted: they rust and stain the oak.']),
+        it('Order ONE pin first, and test-fit it (the "Knee pins: fit and play" check) before you order the other three pins and the four flanged bushings.'),
         it('Price the four pins before the order: the BOM carries about $25 each as an estimate, not a quote.', ['Ball-lock at the top hole only, and a clevis pin with a hitch-pin clip at the bottom hole, saves about $40 to $45 a sled but takes longer to remove and refit.']),
       ],
       passList: [
         `The vendor's retention rating, after a safety factor of 2, is at least ${p.brakePinRetentionLbf} lbf, and the brake-mount row of the analysis stays under its limit with it.`,
         extreme ? 'A 316 pin is quoted, or 17-4 PH is written down as the exception.' : 'The grade is stainless and written on the quote.',
-        `The pin's usable length is at least ${fr(kp.B.grip, 16)}" for the bottom hole and ${fr(kp.T.grip, 16)}" for the top hole.`,
+        `The pin's usable length equals the stack it passes, or is at most about 1/8" longer: ${fr(kp.B.gripOrder, 16)}" for the bottom pin (stack ${fr(kp.B.stack, 32)}") and ${fr(kp.T.gripOrder, 16)}" for the top pin (stack ${fr(kp.T.stack, 32)}").`,
       ],
       ifFails: 'Choose a pin with a higher rating, add a second pin through the same hole line, or use a clevis pin and hitch-pin clip at the bottom hole; enter the real rating in the design and re-run the checks.',
       partIds: pinIds,
@@ -158,15 +159,15 @@ function kneePinChecks(parts: Part[], p: Params, kp: KneePins): Draft[] {
       id: 'knee-pin-fit',
       title: 'Knee pins: fit and play in the sleeves',
       how: [
-        it('Before any epoxy goes on, slide a real pin through every sleeve you cut.', [
-          `The sleeve is ${fr(kp.sleeveOd)}" outside by ${fr(kp.sleeveId)}" inside; the pin is ${fr(kp.dia)}".`,
-          'Check the tube you buy against the pin itself: the pin should slide by hand and wobble by about five thousandths of an inch (0.005") in the bore, no more.',
-          'Do not ream a tight sleeve; get another tube.',
+        it('Test the first pin before anything else is ordered or glued.', [
+          `The sleeve is ${fr(kp.sleeveOd)}" outside by ${fr(kp.sleeveId)}" inside; the pin is ${fr(kp.dia)}". Stock tube and bushings run a few thousandths under the pin.`,
+          'Open the bore of a sleeve with a reamer (.377 to .378 inch) on the drill press, then slide the pin through: it should go in by hand and rattle a little, about five thousandths of an inch of play, and no more.',
+          'If the reamed sleeve is too loose, buy bushings that are already bored for a 3/8" pin. Reaming only enlarges the bore of a bought piece; it is not machining the sled.',
         ]),
-        it('After the epoxy has cured, slide the pin through each sleeve again, and through both sleeves of a knee together with the knee held on the hull.', ['Check that the pin button works with the pin pushed all the way in, and that the balls clear the last sleeve by about ' + fr(kp.tipIn, 16) + '".']),
+        it('After the epoxy has cured, slide the pin through each sleeve again, and through both sleeves of a knee together with the knee pinned on the hull.', ['Check that the pin button works with the pin pushed all the way in, and that the balls clear the last sleeve by about ' + fr(kp.tipIn, 32) + '".']),
       ],
-      passList: ['Every pin slides through every sleeve by hand with about five thousandths of an inch (0.005") of play.', 'The knee unit goes on the hull and comes off with a hand push, no tool and no wobble you can feel at the foot.'],
-      ifFails: 'A sleeve that is too tight: use a tube with a larger inside diameter. Too loose: a tube with a thicker wall. Bring both pins and the tube to the vendor.',
+      passList: ['Every pin slides through every sleeve by hand with about five thousandths of an inch of play.', 'The knee unit goes on the hull and comes off with a hand push, no tool and no wobble you can feel at the foot.'],
+      ifFails: 'A sleeve that is too tight: ream it a little more. Too loose: replace it with a new piece of tube or a bushing with a smaller bore and ream that. Never open a sleeve after it is bedded in the hull: pull the knee and the pin and order a new bushing instead.',
       partIds: [...pinIds, ...sleeveIds],
       paramKeys: [],
       when: 'at assembly',
@@ -176,16 +177,16 @@ function kneePinChecks(parts: Part[], p: Params, kp: KneePins): Draft[] {
       id: 'knee-pin-clearance',
       title: 'Top pin: clearance from the box tie, the side sign and the D-ring washers',
       how: [
-        it('On the real sled (the box rib glued in and the storage box and signs dry-fitted), look along the top pin line before the tab is glued.', [
-          `The top pin goes ${fr(kp.T.fromRibFoot, 16)}" up from the foot of the box rib and ${fr(kp.T.belowRibTop, 16)}" below the gunwale top; the sleeve's lower edge is about ${fr(kp.rib.z1 - kp.rib.tieTopZ - kp.T.belowRibTop - kp.sleeveOd / 2, 16)}" above the box tie spacer.`,
-          `The balls stand ${fr(kp.tipIn, 16)}" inside the rib: about ${fr(kp.clear.ballTipToBox, 16)}" is left to the storage box side.`,
+        it('On the real sled, with the box rib glued in and the storage box and the signs dry-fitted, hold a knee unit at its place and look along the top pin line before the top bushing is bedded (the rib step).', [
+          `The top pin goes ${fr(kp.T.fromRibFoot, 16)}" up from the foot of the box rib; the hole's lower edge is about ${fr(kp.rib.z1 - kp.rib.tieTopZ - kp.T.belowRibTop - kp.sleeveOd / 2, 16)}" above the box tie spacer.`,
+          `The balls stand ${fr(kp.tipIn, 32)}" inside the rib: about ${fr(kp.clear.ballTipToBox, 16)}" is left to the storage box side.`,
           `The top of the tab is ${fr(kp.clear.tabTopToWasher, 16)}" under the bottom of the D-ring fender washers.`,
           `The rear end of the tab stays ${fr(p.brakeTabClearIn, 16)}" clear of the front end of the side sign.`,
         ]),
-        it('Dry-fit a knee unit on the real hull, with a pin through the top sleeve, and look for rubbing.'),
+        it('Slide a rod through the tab sleeve and the hole, and look for rubbing.'),
       ],
       passList: ['Every gap above is within 1/8" of the number given, and nothing touches the pin tip, the tab or the washers.'],
-      ifFails: 'Move the sign or the box side, shorten the tab, or move the top hole up or down within the rib head; re-run the checks, then redo the template.',
+      ifFails: 'Cut the sign back, move the box side, or trim the tab (the knee unit is bench work: a new tab is an hour); do it before the top bushing is bedded, then run the check again.',
       partIds: ids(parts, /^(brake-tab|brake-pin-T|brake-sleeve-T|side-rib-box|box-tie|side-rib-[LR]1|sign-[LR]|lash-[LR]1)/),
       paramKeys: [],
       when: 'at assembly',
@@ -212,12 +213,12 @@ function kneePinChecks(parts: Part[], p: Params, kp: KneePins): Draft[] {
       id: 'knee-wobble',
       title: 'Knee on its pins: sideways wobble at the first brake test',
       how: [
-        it('With the flap on, push the foot end sideways with about ' + p.brakeFlapSideLoadLbf + ' lb, in and out, and watch both pins and the pad.', ['A bathroom scale on the foot tread gives the push.']),
+        it('With the flap on, push the foot end sideways with about ' + p.brakeFlapSideLoadLbf + ' lb, in and out, and watch both pins and the tab.', ['A bathroom scale on the foot tread gives the push.']),
         it('Stand on the flap as for a brake test, hold, and release, with a helper watching the top pin from the side.', ['Look for the knee lifting off the web, or a pin working out.']),
         it('Take the knee off and put it back (assembly steps "REMOVAL" and "REFIT") three times, and test again.'),
       ],
       passList: [`At ${p.brakeFlapSideLoadLbf} lb sideways the foot moves 1/16" or less, and no pin works out.`, 'Three removals and refits leave the knee seated the same way.'],
-      ifFails: 'If the foot wobbles more, check the sleeves for play first, then add a second pin through the tab or a thicker pad; enter what you measured in the design and re-run the checks.',
+      ifFails: 'If the foot wobbles more, check the sleeves for play first, then add a second pin through the tab; enter what you measured in the design and re-run the checks.',
       partIds: [...kneeIds, ...pinIds],
       paramKeys: [],
       when: 'at assembly',
@@ -453,7 +454,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
         it('Cut ONE knee blank first, before cutting the other knee and the flaps.', [
           `Notch the pocket in the layers, glue the test knee up and recess the pocket; screw the stainless strap on and drill the pin hole through its hole. Use the real ${fr(p.brakePivotPinDiaIn)}" clevis pin, the hitch-pin clip and a flap tongue with its pivot block clamped in the pocket.`,
           kp
-            ? 'This test comes BEFORE the other knee is cut and before any tab, pad or pin hole goes on a knee (assembly step "Brake knees").'
+            ? 'This test comes BEFORE the other knee is cut and before any tab or pin hole goes on a knee (assembly step "Brake knees").'
             : 'This test comes BEFORE the knees are glued: the knees go on first, while the hull is inverted (assembly step "Brake knees").',
         ]),
         it(`Check the pocket clearance (${fr(p.brakePivotSlotClearIn)}" a side), the pin through the strap and into the blind hole, the flap swing and the pad gap to the tire.`),
