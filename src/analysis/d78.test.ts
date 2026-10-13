@@ -188,9 +188,9 @@ describe('D-78 brake-mount in pins mode', () => {
     close(det(csP, 'brake-mount', 'oak bearing under the sleeve at pin B in the rail').value, hp.Bmag / (sOd * pn.hull.rail));
     close(det(csP, 'brake-mount', 'oak bearing under the sleeve at pin B in the knee leg').limit, al.oakDowel);
     close(det(csP, 'brake-mount', 'oak bearing under the sleeve at pin B in the knee leg').value, hp.Bmag / (sOd * g.knee.legT * 0.67));
-    // retention: prying about the pad top, yaw about the tab's rear edge, the amplified sideways push
+    // retention: prying about the tab's lowest contact on the web, yaw about the tab's rear edge, the amplified sideways push
     const e = g.y.wheel - g.y.face;
-    const pry = (Math.abs(goal.Rk[1]) * e) / (pn.pad.z1 - pn.B.z);
+    const pry = (Math.abs(goal.Rk[1]) * e) / (pn.tab.bearing.z0 - pn.B.z);
     const k = (Math.abs(goal.Rk[0]) * e) / ((pn.T.x - pn.tab.x0) ** 2 + (pn.B.x - pn.tab.x0) ** 2);
     const xNose = g.H[0] + pp.brakePivotEndIn, P = (pp.brakeFlapSideLoadLbf * (xNose - g.F[0])) / Math.max(0.25, xNose - g.knee.x0);
     const xs = (g.strap.x0 + g.strap.x1) / 2, fT = (pn.B.x - xs) / (pn.B.x - pn.T.x);
@@ -201,13 +201,13 @@ describe('D-78 brake-mount in pins mode', () => {
     expect(pullB).toBeGreaterThan(pullT);
   });
 
-  it('tab glue uses the REAL patch area (0.66 in2, not the tab\'s 2.4 in2 face); the eccentric patch rows follow from the pin height over the patch', () => {
+  it('tab glue uses the REAL patch area (2.01 in2, the tab-on-knee patch of the model); the eccentric patch rows follow from the pin height over the patch', () => {
     const d = det(csP, 'brake-mount', 'tab glue patch (the real');
     const A = pn.tab.glueArea;
-    expect(A).toBeLessThan(0.7);
+    expect(A).toBeCloseTo(2.01, 1);
     close(d.value, Math.hypot(hp.FT[0], hp.FT[1]) / A);
     close(d.limit, al.oakShear * 0.25);
-    const h = Math.min(pn.tab.z1, g.knee.zTop) - Math.max(pn.tab.z0, g.knee.zBot), w = A / h, zc = Math.max(pn.tab.z0, g.knee.zBot) + h / 2;
+    const ph = pn.tab.patch, h = ph.z1 - ph.z0, w = A / h, zc = ph.zc;
     const M = Math.abs((pn.T.x - pn.tab.x1) * hp.FT[1] - (pn.T.z - zc) * hp.FT[0]);
     close(det(csP, 'brake-mount', 'peak compression on the knee').value, hp.FT[0] / A + M / ((w * h * h) / 6));
     close(det(csP, 'brake-mount', 'peak tension across the glue line').value, M / ((w * h * h) / 6) - hp.FT[0] / A);
@@ -225,18 +225,18 @@ describe('D-78 brake-mount in pins mode', () => {
     expect(mount.how).toMatch(/C_eg 0\.67/);
   });
 
-  it('every row that is judged exists, and the defaults give these reported failures (the model, not the analysis, is what to change: see the report)', () => {
-    const failing = mount.details!.filter((d) => d.util > 1).map((d) => d.name.split(':')[0].replace(/ \(.*$/, '').slice(0, 60)).sort();
-    // The glue patch's eccentric compression, the narrow box-rib shaft's splitting and the pad's load on the web fail at the defaults; everything else passes.
-    expect(failing).toEqual([
-      'box rib at pin T',
-      'pad on the web',
-      'tab glue patch, eccentric force',
-    ].sort());
-    expect(mount.status).toBe('fail');
-    for (const k of ['pin T lateral load', 'pin B lateral load', 'pin steel', 'oak bearing', 'pull-out', 'tab bending', 'tab behind pin T', 'pin B in the rail', 'pin B thin wall', 'knee arm', 'knee leg']) {
-      for (const d of mount.details!.filter((x) => x.name.includes(k))) expect(d.util, d.name).toBeLessThanOrEqual(1);
-    }
+  it('every row passes at the defaults after the Phase 1b model change (rib block 2 in, no pad, 4.1 in tab); the tightest are the box-rib splitting and the tab\'s splitting behind T', () => {
+    const failing = mount.details!.filter((d) => d.util > 1);
+    expect(failing.map((d) => d.name)).toEqual([]);
+    expect(mount.status).toBe('pass');
+    expect(mount.util!).toBeLessThan(0.9);
+    const rib = det(csP, 'brake-mount', 'box rib at pin T (brake-rib): splitting');
+    close(rib.limit, (2 / 3) * pp.oakNdsShearPsi * pp.ndsWetFactorShear * pp.brakePinLoadDurationFactor * (pn.hull.filler + pn.hull.rib) * (pn.rib.blockW / 2), 1e-9);
+    expect(pn.rib.blockW).toBeCloseTo(2, 6);
+    expect(rib.util).toBeGreaterThan(0.7);
+    const web = det(csP, 'brake-mount', 'tab on the web over the rib block');
+    expect(web.util).toBeLessThan(0.3);
+    expect(mount.details!.some((d) => /pad on the web/.test(d.name))).toBe(false);
   });
 
   it('Standard and Extreme weather both produce the pins rows (the sleeve, pin and member numbers do not depend on the spec)', () => {
@@ -272,10 +272,10 @@ describe('D-78 brake-abuse follows the pins mount', () => {
 describe('D-78 the box rib carries the top pin with the D-ring (lash-load, side-lateral)', () => {
   const sl = sideLateral(ctx);
   const pr = sl.pinRib!;
-  it('exists only with pins, uses the 1 in shaft width (rib.w) for S and the 0.5 in sleeve hole for the net section', () => {
+  it('exists only with pins, uses the 2 in block width (rib.blockW) for S and the 0.5 in sleeve hole for the net section', () => {
     expect(pr).toBeDefined();
-    expect(pr.w).toBe(pn.rib.w);
-    expect(pr.w).toBeCloseTo(1, 6);
+    expect(pr.w).toBe(pn.rib.blockW);
+    expect(pr.w).toBeCloseTo(2, 6);
     close(pr.S, (pr.w * pr.depth ** 2) / 6, 1e-12);
     close(pr.Snet, ((pr.w - pn.sleeveOd) * pr.depth ** 2) / 6, 1e-12);
     close(pr.zT, pn.T.z - ctx.L.deckTop, 1e-12);
@@ -286,19 +286,18 @@ describe('D-78 the box rib carries the top pin with the D-ring (lash-load, side-
     expect(Math.hypot(pr.FTx, pr.FTz)).toBeGreaterThan(120);
     close(pr.pull, det(csP, 'brake-mount', 'pin T pull-out').value);
   });
-  it('lash-load and side-lateral carry the sleeve-hole rows; the hole at the D-ring rating is the tightest rib number (marginal)', () => {
+  it('lash-load and side-lateral carry the sleeve-hole rows; the 2 in block keeps the sleeve hole well inside the limit', () => {
     const l = det(csP, 'lash-load', 'knee\'s top-pin sleeve hole');
     const s = det(csP, 'side-lateral', 'D-ring rating on the box rib');
     close(l.value, (pr.ribFRating * pr.lever) / pr.Snet);
     close(s.value, l.value, 1e-9);
     expect(l.limit).toBe(al.oakBend);
-    expect(l.util).toBeGreaterThan(0.8);
-    expect(l.util).toBeLessThanOrEqual(1);
+    expect(l.util).toBeLessThan(0.9);
     expect(det(csP, 'side-lateral', 'outward push + the knee\'s top-pin pull').util).toBeLessThan(1);
     expect(byId(csP, 'side-lateral').how).toMatch(/D-78 removable knee/);
     expect(byId(csP, 'lash-load').how).toMatch(/D-78 removable knee/);
   });
-  it('the wider box rib lowers the plain rib-bending number (0.77 bolted, about 0.58 with the 1 in shaft)', () => {
-    expect(det(csP, 'lash-load', 'rib bending at the rating').util).toBeLessThan(det(csB, 'lash-load', 'rib bending at the rating').util);
+  it('the plain rib-bending number is unchanged (the shaft keeps the D-76 width; the pin block is a local widening)', () => {
+    expect(det(csP, 'lash-load', 'rib bending at the rating').util).toBeCloseTo(det(csB, 'lash-load', 'rib bending at the rating').util, 6);
   });
 });

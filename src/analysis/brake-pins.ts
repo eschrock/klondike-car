@@ -46,7 +46,7 @@ export function sidePushLbf(p: { brakeFlapSideLoadLbf: number; brakePivotEndIn: 
 export function pinPull(p: { brakeFlapSideLoadLbf: number; brakePivotEndIn: number }, g: BrakeGeom, Rk: V2) {
   const pn = g.pins!;
   const e = g.y.wheel - g.y.face;
-  const zContact = pn.pad.z1;
+  const zContact = pn.tab.bearing.z0; // the lowest contact of the tab on the web (backed by the rib block): the prying hinge
   const Mx = Math.abs(Rk[1]) * e;
   const armB = Math.max(1e-6, zContact - pn.B.z);
   const pryB = Mx / armB;
@@ -67,21 +67,19 @@ export function pinPull(p: { brakeFlapSideLoadLbf: number; brakePivotEndIn: numb
 }
 
 /**
- * The tab's glue patch on the knee's rear face: the tab's front face touches the knee over the z overlap of the tab and the knee (it stops at the knee's top) and the y overlap from the hull
- * face to the tab's outer face (`pins.tab.glueArea`, the REAL area, not the tab's whole 2.4 in face). Pin T's force acts at the pin, `r` from the patch centroid, so the patch carries it with an
+ * The tab's glue patch on the knee's rear face (`pins.tab.patch`, the REAL overlap of the tab and the knee). Pin T's force acts at the pin, `r` from the patch centroid, so the patch carries it with an
  * eccentric moment as well: normal stress N / A +/- M / S (N = the x part, compression when the pin pushes the knee forward), shear V / A (the z part).
  */
 export function tabPatch(g: BrakeGeom, FT: V2) {
-  const pn = g.pins!, tb = pn.tab;
-  const z0 = Math.max(tb.z0, g.knee.zBot), z1 = Math.min(tb.z1, g.knee.zTop);
-  const h = Math.max(1e-6, z1 - z0);
-  const A = tb.glueArea;
+  const pn = g.pins!, ph = pn.tab.patch;
+  const h = Math.max(1e-6, ph.z1 - ph.z0);
+  const A = ph.area;
   const w = A / h;
-  const zc = (z0 + z1) / 2;
+  const zc = ph.zc;
   const S = (w * h * h) / 6;
-  const r: V2 = [pn.T.x - tb.x1, pn.T.z - zc];
+  const r: V2 = [pn.T.x - pn.tab.x1, pn.T.z - zc];
   const M = Math.abs(cross(r, FT));
   const N = FT[0], V = Math.abs(FT[1]);
   const direct = N / A, bend = M / S;
-  return { z0, z1, h, w, A, zc, S, r, M, N, V, direct, bend, sigMax: direct + bend, sigMin: direct - bend, tau: V / A, total: len(FT) / A, comp: Math.max(0, direct + bend), tens: Math.max(0, bend - direct) };
+  return { z0: ph.z0, z1: ph.z1, h, w, A, zc, S, r, M, N, V, direct, bend, sigMax: direct + bend, sigMin: direct - bend, tau: V / A, total: len(FT) / A, comp: Math.max(0, direct + bend), tens: Math.max(0, bend - direct) };
 }
