@@ -77,7 +77,7 @@ describe('bom', () => {
     const cushion = purchased.find((l) => l.key === 'seat-cushion')!;
     expect(cushion.basis).toBe('quoted');
     expect(cushion.unitUsd).toBe(parts.find((x) => x.id === 'seat-cushion')!.sourcing!.costUsd);
-    // The wheel is a researched, quoted price (Access Casters, 2026-10-12); the roll pads and the bridle sleeve were not found and keep their estimates
+    // The wheel is a researched, quoted price (Harbor Freight, 2026-10-12, D-71); the roll pads and the bridle sleeve were not found and keep their estimates
     expect(purchased.find((l) => l.key === 'wheel')!.basis).toBe('quoted');
     expect(purchased.find((l) => l.key === 'wheel')!.qty).toBe(4);
     expect(purchased.find((l) => l.key === 'roll-pad')!.basis).toBe('estimate');
@@ -85,8 +85,8 @@ describe('bom', () => {
     // Table prices carry their own basis: Eric's vendor quotes (the plywood, 4/4, 8/4, 12/4 oak) and the researched prices are quoted, the rest estimates
     expect(b.sections.find((x) => x.id === 'plywood')!.lines.every((l) => l.basis === 'quoted')).toBe(true);
     const metal = b.sections.find((x) => x.id === 'metal')!.lines;
-    expect(metal.filter((l) => l.basis === 'estimate').map((l) => l.key).sort()).toEqual(['316 stainless flat bar 1/16" x 1"', '316 stainless flat bar 1/4" x 1-3/4"']); // no exact 316 bar found
-    expect(metal.filter((l) => l.basis === 'quoted').length).toBe(4);
+    expect(metal.filter((l) => l.basis === 'estimate').map((l) => l.key).sort()).toEqual(['316 stainless flat bar 1/16" x 1"', '316 stainless flat bar 1/4" x 1-3/4"', '5/8" OD x 0.120" wall DOM tube (ASTM A513 Type 5)']); // no exact 316 bar found; no price found for the 5/8 x 0.120 DOM (D-71: the Speedy 0.109 wall price is the stand-in)
+    expect(metal.filter((l) => l.basis === 'quoted').length).toBe(2);
     for (const l of b.sections.find((x) => x.id === 'lumber')!.lines) expect(l.basis, l.key).toBe(OAK_PRICE_PER_BF[l.key].basis);
   });
 
@@ -187,7 +187,7 @@ describe('bom', () => {
     const f = fasteners(), c = [...consumables(), ...secLines('touches')]; // the Dual Lock belongs to the seat comfort touches
     expect(qtyOf(f, /shaft collar/)).toBe(wheels);
     expect(qtyOf(f, /cotter pin 5\/32" x 1-1\/2"/)).toBe(wheels); // the 0.156" cross hole takes a 5/32 pin
-    expect(qtyOf(f, /end plug for 3\/4" OD/)).toBe(6); // three axle tubes, two ends each
+    expect(qtyOf(f, /end plug for 5\/8" OD/)).toBe(6); // three axle tubes, two ends each
     expect(qtyOf(f, /machine screw #10-32 x 3\/8"/)).toBe(6); // seat hinge leaves into the six inserts
     expect(qtyOf(f, /stainless rod 3\/8" x 2-1\/4"/)).toBe(2); // handlebow pins
     expect(qtyOf(f, /wood screw #6 x 3-1\/2"/)).toBe(8); // rail to chine, aft zone (3 in rail): 4 a side, #6 piloted (round 3: a #8 left 0.11 in a side of the 3/8 in edge)
@@ -484,18 +484,21 @@ describe('price research applied (2026-10-12)', () => {
     expect(secLines('consumables').some((q) => q.key === 'epoxy-quart')).toBe(false);
   });
 
-  it('puts the wheel decision and its spec-gap alternative on the wheel line: 3/4" bore base, 5/8" Harbor Freight alternative', () => {
+  it('puts the wheel decision and its alternatives on the wheel line: the $9.99 Harbor Freight 5/8" bore wheel (Eric, D-71), the steel hub and the Uline flat-free as alternatives', () => {
     const w = line('wheel');
-    expect(w.unitUsd).toBe(29.6);
+    expect(w.unitUsd).toBe(9.99);
     expect(w.basis).toBe('quoted');
-    expect(w.url).toBe('https://www.ebay.com/itm/123713319921');
-    expect(w.notes).toMatch(/price read via search, confirm on the page/);
+    expect(w.url).toBe('https://www.harborfreight.com/10-inch-x-3-1-2-half-inch-pneumatic-tire-67465.html');
+    expect(w.notes).toMatch(/VERIFY the hub length, bore and rating/);
     expect(w.notes).toMatch(/2026-10-12/);
-    const hf = w.alternatives!.find((a) => /Harbor Freight/.test(a.source))!;
-    expect(hf.usd).toBe(9.99);
-    expect(hf.specGap).toBe(true);
-    expect(w.notes).toMatch(/SPEC GAP: 5\/8" bore needs 5\/8" axles, a design change/);
-    expect(w.decision).toMatch(/3\/4"/);
+    const steel = w.alternatives!.find((a) => a.usd === 11.99)!;
+    expect(steel.source).toBe('Harbor Freight');
+    expect(steel.specGap).toBeUndefined(); // the same kind of wheel with the sturdier hub
+    const uline = w.alternatives!.find((a) => /Uline/.test(a.source))!;
+    expect(uline.usd).toBe(34);
+    expect(uline.specGap).toBe(true);
+    expect(w.notes).toMatch(/SPEC GAP: flat-free/);
+    expect(w.decision).toMatch(/5\/8"/);
     expect(b.decisions).toContain('wheel');
   });
 
@@ -554,7 +557,7 @@ describe('price research applied (2026-10-12)', () => {
     // the BOM line's own price is never one of its spec-gap alternatives
     for (const l of withAlts) for (const a of l.alternatives!.filter((q) => q.specGap)) expect(l.url === a.url && l.unitUsd === a.usd, `${l.key} base equals a spec-gap alternative`).toBe(false);
     // CSV: the alternatives and the decisions are columns
-    expect(b.csv).toContain('SPEC GAP: Harbor Freight');
+    expect(b.csv).toContain('SPEC GAP: flat-free');
     expect(b.csv).toContain('NO Sipo 4x20 exists');
   });
 
@@ -584,7 +587,8 @@ describe('price research applied (2026-10-12)', () => {
 
   it('buys metal bars and tubes as the fixed pieces the vendors sell', () => {
     const dom = line(/DOM tube/);
-    expect([dom.unit, dom.qty, dom.unitUsd, dom.url]).toEqual(['60 in piece', 1, 45.45, 'https://speedymetals.com/p-3432-34-od-x-120-wall-dom-steel-tube.aspx']);
+    expect([dom.unit, dom.qty, dom.unitUsd, dom.url, dom.basis]).toEqual(['60 in piece', 1, 45.45, undefined, 'estimate']); // D-71: 5/8 x 0.120 is not at Speedy Metals; their 0.109 wall 60 in price stands in (flagged)
+    expect(dom.alternatives![0].specGap).toBe(true);
     expect(dom.needed).toBeLessThanOrEqual(5); // the cuts fit the 60 in piece
     const bar = line(/flat bar 1\/16/);
     expect(bar.basis).toBe('estimate');

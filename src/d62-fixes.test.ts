@@ -58,9 +58,9 @@ describe('S-2: the front-beam chain eye bolt is centered in the ligament under t
   it('the eye is at (beamTop - groove depth + beamBot) / 2 and its net section is a row detail', () => {
     const L = computeLayout(defaults);
     const g = axleGrooveDepthIn(defaults);
-    expect(g).toBeCloseTo(0.7, 9);
+    expect(g).toBeCloseTo(0.595, 9); // D-71: the 5/8 in tube less the 0.03 in proud (0.70 at 3/4 in and 0.05 proud)
     expect(L.steer.beamZ).toBeCloseTo((L.beamF.top - g + L.beamF.bot) / 2, 9);
-    expect(L.steer.beamZ).toBeLessThan((L.beamF.top + L.beamF.bot) / 2 - 0.3); // not mid depth of the whole beam
+    expect(L.steer.beamZ).toBeLessThan((L.beamF.top + L.beamF.bot) / 2 - 0.25); // (0.3 before D-71's shallower 0.595 in groove) not mid depth of the whole beam
     const c = row('front-beam');
     expect(c.details!.some((d) => /chain eye-bolt hole/.test(d.name))).toBe(true);
     expect(c.how).toMatch(/chain eye-bolt hole/);
@@ -68,18 +68,18 @@ describe('S-2: the front-beam chain eye bolt is centered in the ligament under t
 });
 
 describe('M2: one bridge plate per station, the tube 0.05 in proud', () => {
-  it('6 plates (was 12) with the same number of bolts, bolts at +/- 0.75 in with 0.17 in of oak to the groove wall, and the front OUTER plate wider', () => {
+  it('6 plates (was 12) with the same number of bolts, bolts at +/- 0.6875 in (5/8 in tube, D-71) with 0.17 in of oak to the groove wall, and the front OUTER plate wider', () => {
     const plates = parts.filter((x) => x.partNo === 'axle-clamp');
     expect(plates).toHaveLength(6);
     expect(plates.reduce((n, x) => n + x.joints!.find((j) => j.type === 'bolt')!.count, 0)).toBe(12);
     const off = defaults.axleDiameterIn / 2 + defaults.clampLegGapIn;
-    expect(off).toBeCloseTo(0.75, 9);
+    expect(off).toBeCloseTo(0.6875, 9);
     const wall = off - (defaults.uboltRodDiameterIn + 0.03) / 2 - defaults.axleDiameterIn / 2;
     expect(wall).toBeGreaterThan(0.15);
     const outer = worldAABB(get('clamp-FL1')), inner = worldAABB(get('clamp-FL2'));
     expect(outer.max[1] - outer.min[1]).toBeCloseTo(defaults.clampPlateOuterWidthIn, 9);
     expect(inner.max[1] - inner.min[1]).toBeCloseTo(defaults.clampPlateWidthIn, 9);
-    expect(defaults.clampPlateOuterWidthIn).toBeGreaterThan(defaults.clampPlateWidthIn);
+    expect(defaults.clampPlateOuterWidthIn).toBeGreaterThanOrEqual(defaults.clampPlateWidthIn); // D-71 widened the other plates to 1.75 in (the rear groove bearing), the same as the outer one
     // the plate sits on the tube, and the beam top is 0.05 in under the tube top
     const L = computeLayout(defaults);
     expect(worldAABB(get('clamp-RL1')).min[2]).toBeCloseTo(L.r + defaults.axleDiameterIn / 2, 9);

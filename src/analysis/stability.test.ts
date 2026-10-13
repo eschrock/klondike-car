@@ -18,11 +18,11 @@ import { runChecks, type AnalysisCheck } from './index';
 import { contactsAt, contactsWorstTip } from './geometry';
 import { liftPull, pitchForward, pullPoint, rearNormalNoseDown, slideBeforeTip, tipBackAngle, tipLock, tipStraight, turnRadius } from './stability';
 import { cornerWeightLb } from './bump';
-import { PRE_D60, PRE_D66 } from '../test-fixtures';
+import { PRE_D71, PRE_D60, PRE_D66 } from '../test-fixtures';
 
 const DEG = 180 / Math.PI;
 const RAD = Math.PI / 180;
-const defaults = { ...defaultParams(), ...PRE_D66, ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5, clampPlateOuterWidthIn: 1.5 } // the 3c-3 hand-calc fixture: the 35.5 in tracks, 3/4 in hangers and 1 1/2 in clamp plates (D-58 narrowed the tracks and thickened them; the new defaults are tested in track-d58.test.ts)
+const defaults = { ...defaultParams(), ...PRE_D71, ...PRE_D66, ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5, clampPlateOuterWidthIn: 1.5 } // the 3c-3 hand-calc fixture: the 35.5 in tracks, 3/4 in hangers and 1 1/2 in clamp plates (D-58 narrowed the tracks and thickened them; the new defaults are tested in track-d58.test.ts)
 const mkCtx = (q: Partial<Params> = {}): Ctx => {
   const p = resolveParams({ ...defaults, ...q } as Params);
   return makeContext(p, buildModel(p, { rider: 'goal', cargo: true }), buildModel(p, { rider: 'none', cargo: false, seat: 'stowed' }));

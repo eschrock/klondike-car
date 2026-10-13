@@ -64,13 +64,13 @@ describe('rear axle hangers, beam seat and hold-downs (MUST-4, D-54)', () => {
   const seat = beamSeat(defaults, L)!;
   const rs = railSection(defaults, L);
   it('an oak hanger is glued and bolted to the inside face of each rail (the deck is 8 in up, D-56: the 3 in deep rail reaches only 0.85 in below the beam top): 5 x 0.75 in, from the rail top down to 1.35 in under the beam top', () => {
-    // Hand: the beam top = wheel radius 5 + rod radius 0.375 - the 0.05 the tube stands proud (D-62) = 5.325 (underslung); the hanger bottom = 5.325 - 1.35 = 3.975; the top = the deck underside 7.528.
-    expect(L.beamR.top).toBeCloseTo(5.325, 9);
+    // Hand: the beam top = wheel radius 5 + rod radius 0.3125 (D-71; 0.375 at 3/4 in) - the 0.03 the tube stands proud (D-62, D-71) = 5.3125 - 0.03 = 5.2825 (underslung; D-71 lowered the proud from 0.05 to 0.03); the hanger bottom = 5.2825 - 1.35 = 3.9325; the top = the deck underside 7.528.
+    expect(L.beamR.top).toBeCloseTo(5.2825, 9);
     for (const tag of ['L', 'R']) {
       const s = tag === 'L' ? 1 : -1;
       const hg = byId(`axle-hanger-${tag}`);
       const b = worldAABB(hg), rail = worldAABB(byId(`rail-${tag}`));
-      expect(b.min[2]).toBeCloseTo(5.325 - defaults.axleSeatNotchIn, 9);
+      expect(b.min[2]).toBeCloseTo(5.2825 - defaults.axleSeatNotchIn, 9);
       expect(b.max[2]).toBeCloseTo(L.deckBot, 9); // the rail top
       expect(b.min[0]).toBeCloseTo(L.beamR.x - defaults.axleHangerWidthIn / 2, 9);
       expect(b.max[0]).toBeCloseTo(L.beamR.x + defaults.axleHangerWidthIn / 2, 9);
@@ -85,7 +85,7 @@ describe('rear axle hangers, beam seat and hold-downs (MUST-4, D-54)', () => {
       expect(hg.joints!.some((j) => j.type === 'glue' && j.to === `rail-${tag}`)).toBe(true);
       expect(hg.joints!.find((j) => j.type === 'bolt' && j.to === `rail-${tag}`)!.count).toBe(2);
     }
-    expect(rs.zBot).toBeCloseTo(5.325 - 1.35, 9);
+    expect(rs.zBot).toBeCloseTo(5.2825 - 1.35, 9);
     expect(rs.zSolidTop).toBeCloseTo(L.deckBot, 9);
     expect(rs.yOut).toBeCloseTo(11.25, 9);
     expect(rs.yIn).toBeCloseTo(11.25 - defaults.axleHangerThickIn, 9); // 7/8 in hanger (D-58)

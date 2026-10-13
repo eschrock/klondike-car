@@ -18,10 +18,10 @@ import { tieLoad } from './bridle';
 import { bumpStrike } from './bump';
 import { wheelLoads } from './structure';
 import { uncTensileArea } from './nds';
-import { PRE_D60, PRE_D66 } from '../test-fixtures';
+import { PRE_D71, PRE_D60, PRE_D66 } from '../test-fixtures';
 
 const RAD = Math.PI / 180;
-const defaults = { ...defaultParams(), ...PRE_D66, ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, cargoPayloadLb: 250 }; // the 3c-3 hand-calc fixture (35.5 in tracks, 250 lb cargo); D-58 narrowed the tracks, cargo is 200 lb; the new defaults are in the rows below and track-d58.test.ts
+const defaults = { ...defaultParams(), ...PRE_D71, ...PRE_D66, ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, cargoPayloadLb: 250 }; // the 3c-3 hand-calc fixture (35.5 in tracks, 250 lb cargo); D-58 narrowed the tracks, cargo is 200 lb; the new defaults are in the rows below and track-d58.test.ts
 const mkCtx = (q: Partial<Params> = {}): Ctx => {
   const p = resolveParams({ ...defaults, ...q } as Params);
   return makeContext(p, buildModel(p, { rider: 'goal', cargo: true }), buildModel(p, { rider: 'none', cargo: false, seat: 'stowed' }));
@@ -499,7 +499,7 @@ describe('steer-clear (clearances at full lock)', () => {
       expect(q(trk), `track ${trk}`).toBeLessThan(0.75 + 0.125 + 0.1);
     }
     // the D-58 straight-body fixture still gives the hand number at 34 1/2 in
-    const p58 = { ...defaultParams(), ...PRE_D66 } as Params;
+    const p58 = { ...defaultParams(), ...PRE_D71, ...PRE_D66 } as Params;
     const hand1 = ((34.5 - 3.5) / 2) * Math.cos(20 * RAD) - 5 * Math.sin(20 * RAD) - 12;
     expect(runChecks(p58, { includeTruck: false }).find((x) => x.id === 'steer-clear')!.details!.find((x) => x.name.includes('tire to the side'))!.value).toBeCloseTo(hand1, 1);
   });

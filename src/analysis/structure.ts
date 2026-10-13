@@ -133,7 +133,7 @@ function beamEval(ctx: Ctx, c: CaseData): CaseEval {
   // Bump basis (D-50): the rear beam carries the struck wheel's force (bump V + static) to its rail.
   const bumpRear = bumpCases(ctx, c, 'rear');
   const F = 2 * peakVertical(bumpRear.normal);
-  const groove = axleGrooveDepthIn(p); // D-62: 0.70 in deep, the tube stands 0.05 in proud
+  const groove = axleGrooveDepthIn(p); // D-62: the tube diameter less the 0.03 in it stands proud (0.595 in for the 5/8 in tube, D-71)
   const hEff = Math.max(0.1, beam.depth - groove);
   const sec = rectSection(beam.thick, hEff);
   const clamp = clampGeometry(ctx, 'R');

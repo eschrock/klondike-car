@@ -15,10 +15,11 @@ import { cargoCapacity } from './analysis/cargo-capacity';
 import { restMaxLb } from './analysis/rest';
 import { riderSweep } from './analysis/rider-sweep';
 import { checkTruckFit } from './truck/fit';
-import { PRE_D60, PRE_D66 } from './test-fixtures';
+import { PRE_D60, PRE_D66, PRE_D71 } from './test-fixtures';
 
 // D-66 moved the tracks, the bow and the load-height rule on; the D-60 package headline numbers (mass, width, rider range, cargo) are recorded for the D-65 design, restored with PRE_D66
-const defaults = { ...defaultParams(), ...PRE_D66 } as Params;
+// D-71 (Harbor Freight wheels, 5/8 in axles) changed the wheel, axle and clamp numbers again: this file records the D-60 3/4 in design, restored with PRE_D71
+const defaults = { ...defaultParams(), ...PRE_D71, ...PRE_D66 } as Params;
 const pre = { ...defaults, ...PRE_D60 } as Params;
 const parts = buildModel(defaults);
 const partsPre = buildModel(pre);
@@ -47,7 +48,7 @@ describe('the changed params (every one cites D-60; the supplier-derived ones ar
   };
   it.each(Object.entries(VALUES) as [ParamKey, number][])('%s = %s', (k, v) => {
     if (k !== 'rollPadRadiusIn') expect(defaults[k]).toBe(v);
-    expect(PARAM_DEFS[k].default).toBe(v);
+    expect(PARAM_DEFS[k].default).toBe(({ wheelMass10Lb: 3, hubLengthIn: 2.25, wheelBoreIn: 0.625 } as Partial<Record<ParamKey, number>>)[k] ?? v); // D-71 moved these three on (the Harbor Freight wheel)
   });
   it.each(Object.keys(VALUES) as ParamKey[])('%s cites D-60 in its ref or note', (k) => {
     expect(`${PARAM_DEFS[k].ref ?? ''} ${PARAM_DEFS[k].note ?? ''}`, k).toMatch(/D-60/);
@@ -57,8 +58,8 @@ describe('the changed params (every one cites D-60; the supplier-derived ones ar
       expect(PARAM_DEFS[k].status, k).toBe('verify');
     expect(PARAM_DEFS.wheelMass10Lb.note).toMatch(/Tractor Supply/);
     expect(PARAM_DEFS.wheelRatingLb.note).toMatch(/listing/i);
-    expect(PARAM_DEFS.hubLengthIn.note).toMatch(/CONFIRM/);
-    expect(PARAM_DEFS.wheelBoreIn.note).toMatch(/CONFIRM/);
+    expect(PARAM_DEFS.hubLengthIn.note).toMatch(/MEASURE|CONFIRM/); // D-71: "measure the Harbor Freight hub"
+    expect(PARAM_DEFS.wheelBoreIn.note).toMatch(/VERIFY|CONFIRM/);
     expect(PARAM_DEFS.steerEyeWllLb.note).toMatch(/vendor listing/);
     expect(PARAM_DEFS.steerChainWllLb.note).toMatch(/vendor listing/);
   });
@@ -164,7 +165,7 @@ describe('mass (target about 120 lb; 144.4 at 3c-5, 143.0 with the cleats gone)'
     expect(w.massLb).toBe(2.8);
     expect(w.geometry).toMatchObject({ type: 'wheel', hubLength: 2.28, bore: 0.75 });
     expect(w.sourcing?.vendor).toMatch(/0\.75" bore/);
-    expect(w.sourcing?.vendor).toMatch(/READ THE LOAD RATING/);
+    expect(w.sourcing?.vendor).toMatch(/VERIFY the hub length, bore and rating/); // D-71 (was "READ THE LOAD RATING OFF THE LISTING")
     const fit = checkTruckFit(defaults, (v) => buildModel(defaults, v));
     expect(fit.dims.installed.widthIn).toBeCloseTo(38.78, 1);
   });

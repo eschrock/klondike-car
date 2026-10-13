@@ -7,7 +7,7 @@
  * `url` is a real link from Eric or from the research (the vendor's price list or product page); it goes to the BOM line, the BOM CSV and the build book. Never invent one.
  *
  * Base versus alternatives (price research, 2026-10-12): the BASE price is always the item the model specifies. A cheaper or different item that does not meet the spec
- * (5/8" wheel bore on a 3/4" axle, 304 for 316, beech Dominos for Sipo) is an ALTERNATIVE (`Price.alternatives`, `specGap: true`), shown in the BOM line notes and never
+ * (304 for 316, beech Dominos for Sipo) is an ALTERNATIVE (`Price.alternatives`, `specGap: true`), shown in the BOM line notes and never
  * substituted silently. An item the research did not find keeps its estimate with "not found in the 2026-10-12 research" in the note.
  */
 
@@ -123,7 +123,9 @@ const ONLINE_METALS = 'Online Metals';
  * is the pieces to buy, not feet; an estimate is per foot of cut length.
  */
 export const METAL_PRICE_PER_FT: Array<{ match: RegExp; price: Price }> = [
-  { match: /DOM tube/, price: foundPack(5, 45.45, 'ft', SPEEDY, 'https://speedymetals.com/p-3432-34-od-x-120-wall-dom-steel-tube.aspx', '3/4" OD x .510" ID x .120" wall DOM steel round tube, 60 in length; the cuts need 57.1 in plus kerfs. DOM only: ask for the A513 Type 5 mill cert; 36 in is 33.33, 48 in 40.00', false, '60 in piece') },
+  { match: /DOM tube/, price: withAlts(
+    { ...packed(5, 45.45, 'ft', SPEEDY, `ESTIMATE (D-71): 5/8" OD x 0.120" wall DOM (A513 Type 5, ID 0.385"), 60 in piece; the cuts need 57 in plus kerfs. Speedy Metals does not list 0.120" in 5/8" OD (it lists 0.109" at 45.45 for 60 in, 0.035", 0.049", 0.065" and 0.188"), so this is that 60 in price as a stand-in. Online Metals lists 5/8" x 0.12" x 0.39" ID A513 Type 5 DOM (part 7763) and McMaster-Carr lists it too (1020 DOM, 55 ksi yield, check it against the 70 ksi the model assumes): quote one. DOM only: ask for the A513 Type 5 mill cert [${RESEARCH_DATE}]`), packLabel: '60 in piece' },
+    [gap({ ...packed(5, 45.45, 'ft', SPEEDY, `5/8" OD x .407" ID x .109" wall DOM steel round tube (Speedy Metals p-3421, read ${RESEARCH_DATE}; not in the research file, so an estimate until quoted), 60 in length; 36 in is 33.33, 48 in 40.00`), packLabel: '60 in piece' }, '0.109" wall, not 0.120": the rear axle-stress row would be about 1.0 (marginal-to-fail) at the 200 lb goal rider')]) },
   { match: /flat bar 1\/16/, price: notFound(withAlts(est(7, 'ft', METAL, '316 stainless, thin bar (no 316 1/16" x 1" bar found; the thinnest 316 flat at Speedy Metals is 1/8")'), [
     gap(foundPack(1.5, 11.32, 'ft', SPEEDY, 'https://www.speedymetals.com/p-2538-18-x-1-316-stainless-steel-annealed-pickled.aspx', '1/8" x 1" 316 stainless flat, annealed and pickled, 18 in piece; stiffer and about twice the weight (0.036 lb/in); fine for the grip backing if the screws still fit', false, '18 in piece'), 'the bar is 1/8" thick, not 1/16"'),
   ])) },
@@ -142,7 +144,7 @@ const BOLT_DEPOT = 'Bolt Depot';
 const BD_EYE_URL = 'https://boltdepot.com/Forged_eye_bolts_(w__nuts)_Hot_dipped_galvanized_steel_3_8-16';
 const BD_EYE_316_URL = 'https://boltdepot.com/Forged_eye_bolts_with_shoulder_(w__nuts)_Stainless_steel_316_3_8-16';
 const EYE_DECISION = 'Eye bolts: the model says 3/8" x 3-7/8" and 2-5/8", which are not stock lengths. Priced at the nearest stock lengths, 4-1/2" (steer-eye) and 2-1/2" (steer-anchor); check that 2-1/2" still passes through the 1.25" chain joist with its washer and nut, and that 4-1/2" clears the axle beam. Galvanized is the base (the model says "galvanized or 316"); 316 is 4x the price (about $200 for four against $46): choose galvanized (dry sled) or 316 (wet).';
-const WHEEL_DECISION = 'Wheel spec: almost every 10" hand-truck wheel is 5/8" bore, not the 3/4" the axle needs. The base is the only 3/4"-bore pneumatic found (Access Casters 10DHTPW-53, hub 2-3/4" against the model\'s 2.28", about 5 lb against 2.8 lb): confirm the bore, hub and weight with the seller. McMaster 8353T33 (350 lb, 2-1/4" hub, 5/8" or 3/4" bore) is the closest spec but its price is hidden: check it on mcmaster.com. Or redesign for 5/8" axles and the $9.99 Harbor Freight wheel. Measure one real wheel first.';
+const WHEEL_DECISION = 'Wheel (Eric, 2026-10-12, D-71): the Harbor Freight 10" pneumatic with black hub, $9.99, 5/8" bore, 300 lb, about 3 lb; the axles are 5/8" to match. Its hub length is not listed (the model assumes 2-1/4", as on the Uline and Martin wheels): buy one first and measure the hub, the bore and the squash. The steel-hub version is $11.99.';
 /** Cut length of a steering chain (in), from the model's vendor text: 10.89 in of 3/16" chain, a quick link to each eye. */
 const CHAIN_CUT_IN = 10.89;
 const CHAIN_USD_PER_FT = 7.37, QUICK_LINK_USD = 5.66;
@@ -156,10 +158,10 @@ export interface PurchasedPriceEntry {
 /** Prices for purchased parts. A model cost (`sourcing.costUsd`) wins unless the entry says `override` (the research found a real price for exactly that part). Matched on partNo. */
 export const PURCHASED_PRICE: PurchasedPriceEntry[] = [
   { match: /^wheel$/, price: withAlts(
-    found(29.6, 'ea', 'Access Casters (eBay)', 'https://www.ebay.com/itm/123713319921', 'Access Casters 10DHTPW-53 pneumatic hand-truck wheel, 10" x 2-3/4", 3/4" ball bearings, 350 lb listed, about 5 lb shipping weight, listing last updated June 2023; the only priced 3/4"-bore pneumatic found. Differs from the model: hub 2-3/4" (model 2.28") and about 5 lb (model 2.8 lb); confirm the bore with the seller', true),
+    found(9.99, 'ea', 'Harbor Freight', 'https://www.harborfreight.com/10-inch-x-3-1-2-half-inch-pneumatic-tire-67465.html', 'HAUL-MASTER 10" pneumatic tire with black hub (SKU 67465), 5/8" bore, 300 lb, about 3 lb, 3-1/2" wide, 30 psi; hub length not listed (the model assumes 2-1/4"). Eric chose it 2026-10-12 (D-71). VERIFY the hub length, bore and rating on the real wheel'),
     [
-      gap(found(9.99, 'ea', 'Harbor Freight', 'https://www.harborfreight.com/10-inch-x-3-1-2-half-inch-pneumatic-tire-67465.html', 'HAUL-MASTER 10" pneumatic tire with black hub (SKU 67465), 300 lb, 3 lb, 3-1/2" wide, hub length not listed'), '5/8" bore needs 5/8" axles, a design change (the axle is 3/4")'),
-      gap(found(17.99, 'ea', 'Tractor Supply / Ace', 'https://tractorsupply.com/tsc/product/martin-wheel-410-350-4-10-in-stud-tread-hand-truck-wheel-2-1-4-x-5-8-in-offset-hub', 'Martin Wheel 410/350-4 10" sawtooth hand-truck wheel, 2-1/4" offset hub (the right hub length), 300 lb, tube type', true), '5/8" bore, not 3/4"'),
+      found(11.99, 'ea', 'Harbor Freight', 'https://www.harborfreight.com/heavy-duty-10-inch-groove-tread-tire-40729.html', 'HAUL-MASTER 10" pneumatic tire with steel hub (SKU 40729), 5/8" bore, 300 lb, 3.10 lb shipping; hub length not listed. The sturdier hub, +$2 a wheel (+$8 for four)'),
+      gap(found(34, 'ea', 'Uline', 'https://www.uline.com/Product/Detail/H-5454/Casters-and-Wheels/Uline-Flat-Free-Pneumatic-Wheel-300-lb-Capacity-10', 'Uline H-5454 flat-free pneumatic wheel 10 x 3-1/2", 5/8" bore, 2-1/4" steel offset hub (the hub length is listed), 300 lb, 3.41 lb'), 'flat-free: a stiffer tire than the 30 psi pneumatic the bump rate assumes (bumpWheelRateLbIn), and 0.4 lb a wheel heavier; $24 more a wheel'),
     ], WHEEL_DECISION) },
   { match: /^king-thrust$/, price: found(15.88, 'ea', 'eBay seller (Florida)', 'https://www.ebay.com/itm/143055583417', 'natural UHMW 1/2" sheet, 6" x 12" option (a 3" disc is cut from it); the listing may price one size only', true) },
   { match: /^kingpin$/, price: est(9, 'ea', MCM, '5/8" grade 8 bolt, 2 washers, nylock nut') },

@@ -149,7 +149,7 @@ describe('assembly steps', () => {
     expect(get('dry-fit').instructions.join(' ')).toContain(`${p.deckSideClearIn}"`);
     expect(get('shaper').instructions.join(' ')).toMatch(/ONE piece from the full 4' × 8' sheet/);
     expect(get('shaper').instructions.join(' ')).not.toMatch(/scarf/i);
-    expect(get('gear-fit').instructions.join(' ')).toContain(`${p.wheelBoreIn}" bore`);
+    expect(get('gear-fit').instructions.join(' ')).toMatch(/0\.63" bore on the 0\.63" tube/); // D-71: 5/8 in prints as 0.63 (assembly.ts rounds to 2 places)
   });
 
   it('count a joint listed on both mating parts once', () => {

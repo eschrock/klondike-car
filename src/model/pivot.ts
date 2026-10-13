@@ -9,6 +9,7 @@
  * bow to a bronze sleeve for the bridle rope. (3) The disc is 1/2 in thick and lies directly on the beam, which opens a 1/8 in gap above the clamp plates.
  * Everything that turns with the axle is `body: 'front-axle'`.
  */
+import { axleGrooveDepthIn } from '../params';
 import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
 import { customPart } from './mesh-utils';
 import { compose, translation } from './mat4';
@@ -100,7 +101,7 @@ export function buildPivot(ctx: Ctx): Part[] {
         ...sp, body: 'front-axle', fab: 'drill-tap', step: STEP.gear,
         sourcing: { vendor: `McMaster-Carr (316 stainless flat bar ${plate.z}" × ${wPlate}": cut ${plate.x}" pieces, drill 2 × ${f2(bd + 0.03)}" at ${f2(2 * legOffset)}" centers; 2 × 316 hex bolt ${f2(bd)}" × ${inchesText(boltLength(grip, bd))}, nylock nuts, fender washers)` },
         joints: [{ type: 'bolt', to: 'beam-F', count: 2, diaIn: bd, size: `2 × ${f2(bd)}" × ${inchesText(boltLength(grip, bd))} 316 hex bolts, ${f2(2 * legOffset)}" apart, down through the plate and the beam either side of the tube, nylock nuts + fender washers under the beam`, at: [[legOffset, 0, 0], [-legOffset, 0, 0]], note: `the plate bears on the tube (${f2(p.axleProudIn)}" proud of the groove)` }],
-        notes: 'Clamps the front stub axle in its groove: the same bridge plate and bolts as the rear clamp (D-62). Cut the groove 0.70 in deep so the tube stands 0.05 in proud; shim the plate ends with tape on the first tightening.',
+        notes: `Clamps the front stub axle in its groove: the same bridge plate and bolts as the rear clamp (D-62). Cut the groove ${f2(axleGrooveDepthIn(p))} in deep so the tube stands ${f2(p.axleProudIn)} in proud; shim the plate ends with tape on the first tightening.`,
       }));
       (beam.joints ??= []).push({ type: 'bolt', to: `clamp-F${tag}${k}`, count: 2, diaIn: bd, size: `2 × ${f2(bd)}" × ${inchesText(boltLength(grip, bd))} 316 hex bolts down through the clamp plate and the beam, nylock nuts + fender washers under the beam`, at: [[legOffset, s * yst, b.depth / 2], [-legOffset, s * yst, b.depth / 2]], note: 'either side of the stub axle; the plate presses the tube into its groove' });
     }

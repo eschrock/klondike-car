@@ -698,19 +698,19 @@ const defs = {
   },
   hubLengthIn: {
     label: 'Wheel hub length', group: 'wheels', unit: 'in',
-    default: 2.28, min: 1.5, max: 4, step: 0.02, status: 'verify', ref: 'D-11, D-60',
-    note: 'D-60: 2.28 in, a short hub (the hub width listed for the Dynaline 80105; it was a 3 in placeholder). The listing for the 2.8 lb wheel does not give a hub length: CONFIRM IT. A shorter hub moves the wheel in toward the beam end and shortens the stub cantilever (front-stub 0.62 to 0.38, front-beam 0.98 to 0.94 in the study).',
+    default: 2.25, min: 1.5, max: 4, step: 0.02, status: 'verify', ref: 'D-11, D-60, D-71',
+    note: 'D-71: 2.25 in, MEASURE THE HARBOR FREIGHT HUB (its listing gives no hub length). The Uline H-5454 (the same class, 5/8 in bore) lists a 2-1/4 in offset hub and so does the Martin wheel at Tractor Supply (2-1/4 x 5/8). D-60: it was 2.28 in, then a 3 in placeholder. The hub length sets the stub cantilever and the beam end distances. A shorter hub moves the wheel in toward the beam end and shortens the stub cantilever (front-stub 0.62 to 0.38, front-beam 0.98 to 0.94 in the study).',
   },
   wheelBoreIn: {
     label: 'Wheel bore (bearing inside diameter)', group: 'wheels', unit: 'in',
-    default: 0.75, min: 0.5, max: 1, step: 0.125, status: 'verify', ref: 'D-60',
-    note: 'D-60: the bore of the wheel you buy must equal the axle diameter (the bearings ride on the axle OD, so a tube of the same OD fits where a rod would). The retailer listings for the light wheels (Tractor Supply 4.10/3.50-4, Wesco 151551) do not state the bore, and many 10 in hand-truck wheels have a 5/8 in bore: CONFIRM 3/4 in before ordering, or choose a wheel with a 3/4 in bore (or a 5/8 in wheel and a 5/8 in axle, which is not the design). validateParams warns when the bore and the axle differ.',
+    default: 0.625, min: 0.5, max: 1, step: 0.125, status: 'verify', ref: 'D-60, D-71',
+    note: 'D-71: 5/8 in, the bore of the Harbor Freight 10 in pneumatic tire with black hub (SKU 67465) and of almost every 10 in hand-truck wheel; the axle is 5/8 in to match. VERIFY the bore on the real wheel. D-60: the bore of the wheel you buy must equal the axle diameter (the bearings ride on the axle OD, so a tube of the same OD fits where a rod would). validateParams warns when the bore and the axle differ.',
     options: [{ value: 0.625, label: '5/8"' }, { value: 0.75, label: '3/4"' }, { value: 1, label: '1"' }],
   },
   wheelMass10Lb: {
     label: 'Mass per 10" wheel assembly', group: 'wheels', unit: 'lb',
-    default: 2.8, min: 2, max: 8, step: 0.25, status: 'verify', ref: 'D-11, D-60',
-    note: 'D-60 (weight study 3c, trade-off 1): 2.8 lb, the listing weight of the Tractor Supply 4.10/3.50-4 pneumatic wheel on a steel rim (item 3551979); the lighter alternatives are 3.5 lb (Wesco 151551) and 4.0 lb (the old placeholder). A retailer figure, not the maker\'s: weigh the wheel you order.',
+    default: 3.0, min: 2, max: 8, step: 0.25, status: 'verify', ref: 'D-11, D-60, D-71',
+    note: 'D-71: 3.0 lb, the listing weight of the Harbor Freight 10 in pneumatic tire with black hub (SKU 67465); it is 0.2 lb a wheel (0.8 lb for four) over the D-60 figure of 2.8 lb (Tractor Supply 3551979). A retailer figure, not the maker\'s: weigh the wheel you order.',
   },
   wheelMass13Lb: {
     label: 'Mass per 13" wheel assembly', group: 'wheels', unit: 'lb',
@@ -722,8 +722,8 @@ const defs = {
   },
   axleDiameterIn: {
     label: 'Axle diameter', group: 'wheels', unit: 'in',
-    default: 0.75, min: 0.625, max: 1, step: 0.125, status: 'explore', ref: 'D-10',
-    note: 'Hand-truck wheels come with 5/8" or 3/4" bearings as standard; 1" bore versions exist, and 7/8"/1" bores need sourced bearings.',
+    default: 0.625, min: 0.625, max: 1, step: 0.125, status: 'explore', ref: 'D-10, D-71',
+    note: 'D-71: 5/8" to match the Harbor Freight wheel bore (the wheelBoreIn warning fires if they differ). Hand-truck wheels come with 5/8" or 3/4" bearings as standard; 1" bore versions exist, and 7/8"/1" bores need sourced bearings.',
     options: [
       { value: 0.625, label: '5/8"' },
       { value: 0.75, label: '3/4"' },
@@ -733,8 +733,8 @@ const defs = {
   },
   axleWallIn: {
     label: 'Axle tube wall (0 = solid rod)', group: 'wheels', unit: 'in',
-    default: 0.12, min: 0, max: 0.3, step: 0.005, status: 'assumed', ref: 'D-60',
-    note: 'D-60: the rear through axle and the front stub axles are hollow DOM (drawn-over-mandrel) mild-steel tube, 3/4 in OD x 0.120 in wall (1020 or 1026 DOM; McMaster-Carr and the like list 3/4 in OD x 0.120 in wall in 1020/1026 DOM tube; the same OD as the shafting, so the wheel bearings, clamp plates and beam grooves do not change). It saves 3.55 lb for the four axle pieces. 0 = the old solid 1045 rod. The section, mass and rows follow: bending of the tube, the cotter-pin cross hole, ring bearing at the clamp plates. A 0.095 in wall saves 0.4 lb more but dents under the clamps; 0.188 in saves 1.15 lb less.',
+    default: 0.12, min: 0, max: 0.3, step: 0.005, status: 'assumed', ref: 'D-60, D-71',
+    note: 'D-71: 5/8 in OD x 0.120 in wall DOM (A513 Type 5; Online Metals part 7763 and McMaster-Carr list it) for the 5/8 in Harbor Freight wheel. Measured against the rows at the 200 lb goal rider: 0.120 in axle-stress 0.92 (marginal, nothing fails; 150 lb is green), 0.095 in axle-stress 1.03 (FAILS the 200 lb goal, marginal at 150 lb), solid 5/8 in rod no better on the rows (the oak groove bearing sets the limit) and 1.9 lb heavier. D-60: the rear through axle and the front stub axles are hollow DOM (drawn-over-mandrel) mild-steel tube (1020 or 1026 DOM), the same OD as the wheel bore, so the wheel bearings, clamp plates and beam grooves follow it. 0 = a solid 1045 rod. The section, mass and rows follow: bending of the tube, the cotter-pin cross hole, ring bearing at the clamp plates.',
     options: [{ value: 0, label: 'Solid rod' }, { value: 0.095, label: '0.095"' }, { value: 0.12, label: '0.120"' }, { value: 0.188, label: '0.188"' }],
   },
   axleCrossHoleDiaIn: {
@@ -774,18 +774,18 @@ const defs = {
   },
   axleProudIn: {
     label: 'Axle tube proud of the beam top (groove depth = tube diameter less this)', group: 'wheels', unit: 'in',
-    default: 0.05, min: 0.02, max: 0.1, step: 0.01, status: 'assumed', ref: 'D-62, build 3c M2',
-    note: 'D-62: the axle tube sits in a groove (tube diameter less this) deep, so the tube stands this far above the oak and the bridge plate BEARS ON THE TUBE and not on the beam top (flush, the D-60 plates floated 0.075 in above the tube and clamped nothing). Cut the groove 0.70 in deep for the 3/4 in tube. The beam top is therefore this much below the top of the tube, which lowers the whole front stack by 0.05 in and the beam bottom to 3.075 in off the ground. Shim the plate ends with tape on the first tightening and check it does not rock.',
+    default: 0.03, min: 0.02, max: 0.1, step: 0.01, status: 'assumed', ref: 'D-62, build 3c M2, D-71',
+    note: 'D-62: the axle tube sits in a groove (tube diameter less this) deep, so the tube stands this far above the oak and the bridge plate BEARS ON THE TUBE and not on the beam top (flush, the D-60 plates floated 0.075 in above the tube and clamped nothing). D-71: 0.03 in (was 0.05 in) on the 5/8 in tube. The tube is 1/16 in smaller, which lowers the front axle beam top by 1/16 in and so makes the king beam (the deck underside down to the thrust disc) 1/16 in deeper, 1.7655 in: over the 1.75 in an 8/4 board finishes to, so it would have to be face-laminated (D-70). 0.03 in proud keeps it at 1.7455 in. Cut the groove 0.595 in deep for the 5/8 in tube (it was 0.70 in for the 3/4 in tube). The beam top is therefore this much below the top of the tube, which lowers the whole front stack by this much and the beam bottom to 3.03 in off the ground (D-71: 0.03 in proud). Shim the plate ends with tape on the first tightening and check it does not rock.',
   },
   clampLegGapIn: {
     label: 'Clamp bolt gap beside the axle tube', group: 'wheels', unit: 'in',
     default: 0.375, min: 0.125, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-10, D-62',
-    note: 'The two bolts of a bridge plate sit at the tube center +/- (tube radius + this): 0.375 + 0.375 = 0.75 in (D-62; it was 0.25, which left a 0.045 in sliver of oak between the 0.41 in bolt hole and the groove wall; now 0.17 in).',
+    note: 'The two bolts of a bridge plate sit at the tube center +/- (tube radius + this): 0.3125 + 0.375 = 0.6875 in for the 5/8 in tube (D-71; 0.75 in for the 3/4 in tube of D-62; it was 0.25, which left a 0.045 in sliver of oak between the 0.41 in bolt hole and the groove wall; now 0.17 in).',
   },
   clampPlateWidthIn: {
     label: 'Clamp bridge plate width (along the axle)', group: 'wheels', unit: 'in',
-    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-10, D-62, D-66',
-    note: 'The plate lies across the tube on a line this long (the ring-bending row of the tube wall uses it). D-66: at the 30 in rear track the tire inner face is 13.25 in from center, so the rear plate runs from 11.75 to 13.25 in: its inner 1/4 in is UNDER the 12 in rail, whose relief notch is cut high enough to clear it (frame.ts; the hanger, which carries the beam seat, is inboard of that).',
+    default: 1.75, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-10, D-62, D-66, D-71',
+    note: 'The plate lies across the tube on a line this long (the ring-bending row of the tube wall uses it, and the bearing-groove row takes the axle diameter x this as the bearing area in the oak). D-71: 1.75 in (was 1.5 in): the 5/8 in axle has 17 percent less bearing area, which took the rear groove bearing to 0.99 at the 200 lb rider and 1.03 (a fail) at the 200 lb cargo; 1.75 in brings it to 0.85 and 0.88 for about 0.16 lb in all. D-66: at the 30 in rear track the tire inner face is 13.25 in from center, so the rear plate runs from 11.75 to 13.25 in: its inner 1/4 in is UNDER the 12 in rail, whose relief notch is cut high enough to clear it (frame.ts; the hanger, which carries the beam seat, is inboard of that).',
   },
   clampPlateOuterWidthIn: {
     label: 'Front OUTER clamp plate width (along the axle)', group: 'wheels', unit: 'in',
@@ -795,7 +795,7 @@ const defs = {
   clampPlateLengthIn: {
     label: 'Clamp bridge plate length (across the tube, fore-aft)', group: 'wheels', unit: 'in',
     default: 2.25, min: 1.5, max: 4, step: 0.25, status: 'assumed', ref: 'D-10, D-62',
-    note: 'D-62: ONE plate per clamp station with two 3/8 in bolts at +/- 0.75 in (6 plates instead of 12, same bolt count): 316 flat bar 1/4 x 1.5 x 2-1/4 in, 3/8 in from each hole centre to the end. The plate in bending between the bolts (a 800 lbf tube load, the oak-limited preload) is about 19 ksi.',
+    note: 'D-62: ONE plate per clamp station with two 3/8 in bolts at +/- 0.6875 in for the 5/8 in tube (D-71; 0.75 in for the 3/4 in tube) (6 plates instead of 12, same bolt count): 316 flat bar 1/4 x 1.75 x 2-1/4 in (D-71; 1.5 in wide before), 3/8 in from each hole centre to the end. The plate in bending between the bolts (a 800 lbf tube load, the oak-limited preload) is about 19 ksi.',
   },
   clampPlateThickIn: {
     label: 'U-bolt plate thickness', group: 'wheels', unit: 'in',
@@ -804,8 +804,8 @@ const defs = {
   },
   wheelRatingLb: {
     label: 'Wheel load rating, each (vendor listing)', group: 'wheels', unit: 'lb',
-    default: 300, min: 100, max: 800, step: 25, status: 'verify', ref: 'D-11, D-60',
-    note: 'D-60: 300 lb per wheel, the Tractor Supply listing rating for the 2.8 lb wheel (the Wesco 151551 is listed at 350 lb). READ THIS OFF THE VENDOR LISTING for the exact wheel you order: it is a placeholder until then. It is a static / rolling rating: the wheel-rating check compares the static goal-rider load to it and the dynamic peak to `wheelRatingPeakMult` times it; the resting-load row compares the heavier wheel\'s static load with it.',
+    default: 300, min: 100, max: 800, step: 25, status: 'verify', ref: 'D-11, D-60, D-71',
+    note: 'D-71: 300 lb per wheel, the listing rating of the Harbor Freight 10 in pneumatic tire (SKU 67465). VERIFY it on the real wheel. D-60: 300 lb per wheel, the Tractor Supply listing rating for the 2.8 lb wheel (the Wesco 151551 is listed at 350 lb). It is a static / rolling rating: the wheel-rating check compares the static goal-rider load to it and the dynamic peak to `wheelRatingPeakMult` times it; the resting-load row compares the heavier wheel\'s static load with it.',
   },
   wheelRatingPeakMult: {
     label: 'Short-duration peak allowed over the wheel rating', group: 'wheels', unit: '×',
@@ -860,7 +860,7 @@ const defs = {
   axleTubeYieldPsi: {
     label: 'Axle tube yield strength (DOM)', group: 'wheels', unit: 'psi',
     default: 70000, min: 30000, max: 120000, step: 1000, status: 'verify', ref: 'D-60',
-    note: 'Order DOM (drawn over mandrel) or CDS tube to ASTM A513 Type 5, NOT ordinary ERW "mechanical" tube (about 45 ksi yield / 55 ksi ultimate, which takes axle-stress from 0.59 to 0.94, no margin); keep the mill cert. D-60: 1026 DOM tube is listed at about 70 ksi yield / 80+ ksi tensile (1020 DOM about 60 to 70 ksi yield): CONFIRM on the vendor listing or the mill cert, and lower it if the stock you can buy is 1020 DOM at 60 ksi. Used for the bending, cross-hole and ring-bearing rows when the axle is a tube (axleWallIn > 0); the solid rod uses the 1045 value above.',
+    note: 'Order DOM (drawn over mandrel) or CDS tube to ASTM A513 Type 5, NOT ordinary ERW "mechanical" tube (about 45 ksi yield / 55 ksi ultimate, which takes axle-stress from 0.92 to about 1.4 at the 5/8 in size of D-71, a fail); keep the mill cert. D-60: 1026 DOM tube is listed at about 70 ksi yield / 80+ ksi tensile (1020 DOM about 60 to 70 ksi yield): CONFIRM on the vendor listing or the mill cert, and lower it if the stock you can buy is 1020 DOM at 60 ksi. Used for the bending, cross-hole and ring-bearing rows when the axle is a tube (axleWallIn > 0); the solid rod uses the 1045 value above.',
   },
 
   // ── Steering & pull ──────────────────────────────────────────────────────

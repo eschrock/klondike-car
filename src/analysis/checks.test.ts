@@ -10,9 +10,9 @@ import { effectiveStripWidth, maxDeckSpan } from './structure';
 import { judge } from './types';
 import { makeContext } from './context';
 import { resolveParams } from '../params';
-import { PRE_D60, PRE_D66 } from '../test-fixtures';
+import { PRE_D71, PRE_D60, PRE_D66 } from '../test-fixtures';
 
-const defaults = { ...defaultParams(), ...PRE_D66, ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5, clampPlateOuterWidthIn: 1.5 }; // the 3c-3 hand-calc fixture: the 35.5 in tracks (D-58 narrowed them to 34 1/2 / 32 in; the new defaults are in track-d58.test.ts)
+const defaults = { ...defaultParams(), ...PRE_D71, ...PRE_D66, ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, clampPlateWidthIn: 1.5, clampPlateOuterWidthIn: 1.5 }; // the 3c-3 hand-calc fixture: the 35.5 in tracks (D-58 narrowed them to 34 1/2 / 32 in; the new defaults are in track-d58.test.ts)
 
 const byId = (cs: AnalysisCheck[], id: string) => cs.find((c) => c.id === id)!;
 const run = (p: Params) => runChecks(p, { includeTruck: false });

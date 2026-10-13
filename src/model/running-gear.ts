@@ -48,9 +48,12 @@ export function buildRunningGear(ctx: Ctx): Part[] {
     step: STEP.gear,
     explode: [0, (id.endsWith('L') ? 1 : -1) / Math.hypot(1, 0.25), -0.25 / Math.hypot(1, 0.25)],
     sourcing: {
-      vendor: `McMaster-Carr or equivalent: ${p.wheelDiameterIn}" ${p.tireType === 0 ? 'pneumatic' : 'flat-free'} hand-truck wheel, ${p.wheelBoreIn}" bore, ${p.hubLengthIn}" hub length, sealed ball bearings or flanged bushings pressed into the hub (confirm the bore is ${p.wheelBoreIn}", the same as the ${p.axleDiameterIn}" axle, and the hub length ${p.hubLengthIn}"; D-34, D-60: the listings of the light wheels do not state either). READ THE LOAD RATING OFF THE LISTING: the model assumes ${p.wheelRatingLb} lb per wheel (wheelRatingLb, status verify; the wheel-rating check uses it) and ${d.wheelMassLb.toFixed(1)} lb (wheelMass10Lb, verify)`,
+      vendor: (p.tireType === 0
+        ? `Harbor Freight 10" pneumatic tire with black hub, SKU 67465 (https://www.harborfreight.com/10-inch-x-3-1-2-half-inch-pneumatic-tire-67465.html), $9.99 each (D-71; 5/8" bore, 300 lb, about 3 lb, 3-1/2" wide, 30 psi). `
+        : `${p.wheelDiameterIn}" flat-free hand-truck wheel, ${p.wheelBoreIn}" bore, ${p.hubLengthIn}" hub length, sealed ball bearings or flanged bushings pressed into the hub. `)
+        + `VERIFY the hub length, bore and rating on the real wheel: the model assumes a ${p.wheelBoreIn}" bore (the same as the ${p.axleDiameterIn}" axle), a ${p.hubLengthIn}" hub (the Harbor Freight listing gives none; the Uline H-5454 and the Martin wheel list 2-1/4"), ${p.wheelRatingLb} lb per wheel (wheelRatingLb, status verify; the wheel-rating check uses it) and ${d.wheelMassLb.toFixed(1)} lb (wheelMass10Lb, verify)`,
     },
-    notes: `Catalog wheel mass from params (D-11). Hub spec (M11, D-60): ${p.wheelBoreIn}" bore for the ${p.axleDiameterIn}" axle, ${p.hubLengthIn}" hub, sealed ball bearings (or flanged bronze bushings) in the hub; collar + cotter pin on the axle end (${p.axleEndExtraIn}" beyond the hub). VERIFY ON THE REAL PART (build 3c-8): the bore and the hub length are the pre-order gate. Measure one real wheel (bore with a ${p.axleDiameterIn}" gauge pin or calipers, hub length, and the squash test) before ordering four; the listings of the light wheels give neither.`,
+    notes: `Catalog wheel mass from params (D-11). Hub spec (M11, D-60): ${p.wheelBoreIn}" bore for the ${p.axleDiameterIn}" axle, ${p.hubLengthIn}" hub, sealed ball bearings (or flanged bronze bushings) in the hub; collar + cotter pin on the axle end (${p.axleEndExtraIn}" beyond the hub). VERIFY ON THE REAL PART (build 3c-8, D-71): the bore and the hub length are the pre-order gate. Measure the Harbor Freight hub: its bore with a ${p.axleDiameterIn}" gauge pin or calipers, the hub length, and the squash test, before ordering four; the listing gives no hub length.`,
   });
   const ry = p.rearTrackIn / 2;
   const fy = p.frontTrackIn / 2;
@@ -113,15 +116,15 @@ export function buildRunningGear(ctx: Ctx): Part[] {
       step: STEP.gear, notes: (p.axleBeamPosition === AXLE_BEAM_POSITION.underslung ? 'Underslung (D-15).' : 'Overslung (D-15).') + ' Face-laminated from stocked boards (D-70): no 12/4 is bought; the blank is glued up from 4/4 layers face to face with epoxy and milled to size BEFORE it is notched, bored and slotted (the cut list gives the layers). Strength is taken as solid oak.',
       ...(seatInfo ? { joints: beamRailJoints } : {}),
     }));
-    // Clamps (D-62, build 3c M2): ONE bridge plate per wheel side, across the tube, with a 3/8 in bolt each side at tube center +/- (tube radius + clampLegGapIn) = 0.75 in. The groove is cut
-    // axleGrooveDepthIn (0.70 in) deep so the tube stands axleProudIn proud and the plate bears on the TUBE; it used to be two 0.8 in plates that floated 0.075 in above the tube.
+    // Clamps (D-62, build 3c M2): ONE bridge plate per wheel side, across the tube, with a 3/8 in bolt each side at tube center +/- (tube radius + clampLegGapIn) = 0.6875 in for the 5/8 in tube (0.75 in for the D-62 3/4 in tube). The groove is cut
+    // axleGrooveDepthIn (0.595 in for the 5/8 in tube, D-71) deep so the tube stands axleProudIn proud and the plate bears on the TUBE; it used to be two 0.8 in plates that floated 0.075 in above the tube.
     const under = p.axleBeamPosition === AXLE_BEAM_POSITION.underslung;
     const plate = { x: p.clampPlateLengthIn, y: p.clampPlateWidthIn, z: p.clampPlateThickIn };
     const legOffset = rodR + p.clampLegGapIn;
     const yEdge = Math.min(b.len / 2 - 0.25, ax.track / 2 - p.tireWidthIn / 2);
     const yc = yEdge - plate.y / 2;
     {
-      // REAR clamp plates (build review r2 MUST-4 / S13, eng N-10; D-62): 316 stainless flat bar cut to size (1/4 x 1.5 x 2-1/4 in), two 3/8 in 316 bolts through the plate and the beam either
+      // REAR clamp plates (build review r2 MUST-4 / S13, eng N-10; D-62): 316 stainless flat bar cut to size (1/4 x 1.75 x 2-1/4 in, D-71), two 3/8 in 316 bolts through the plate and the beam either
       // side of the tube. Real parts with a source and a stock size.
       const zc = under ? r + rodR + plate.z / 2 : r - rodR - plate.z / 2;
       const bd = p.uboltRodDiameterIn;

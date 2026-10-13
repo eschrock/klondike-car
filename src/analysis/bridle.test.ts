@@ -1,8 +1,8 @@
 /**
  * Bridle-tie row (D-56, D-58, D-62): the rope (the documented weak link, no shackle), the sleeve and oak around the bridle hole, the oak tongue stem and the two carriage bolts under the design
  * pull x the overload factor, plus the slack-then-taut SNATCH at the start of a pull. Everything is re-derived by hand:
- *   pull 150 lbf x 2 = 300 lbf, rope from the sleeve (x 54.25, z 4.2625 = mid-depth of the tongue, 0.05 in lower since the tube stands proud of the beam, D-62) up to the hands (40 in, the
- *   upper bound) over a 96 in run: alpha = atan(35.7375 / 96) = 20.40 deg -> 281.2 lbf horizontal, 104.6 lbf vertical.
+ *   pull 150 lbf x 2 = 300 lbf, rope from the sleeve (x 54.25, z 4.22 = mid-depth of the tongue, 0.05 in lower since the tube stands proud of the beam, D-62, and 0.0425 in lower again on the 5/8 in axle with 0.03 in proud, D-71) up to the hands (40 in, the
+ *   upper bound) over a 96 in run: alpha = atan(35.78 / 96) = 20.45 deg -> 281.0 lbf horizontal, 105.0 lbf vertical.
  * D-60: the tongue is 1-1/4 in thick x 1-3/4 in deep (was 1-1/2 x 2).
  * The tongue is white oak set ON EDGE: 1.25 in thick x 1.75 in deep, a 6 in wide head butting the front face of the axle beam (x 45.25) for 3 in, a 3 in taper to the 1.25 in stem
  * (x 51.25), the stem to the tip (x 55.75); the 1 in bronze sleeve is 1.5 in from the tip (x 54.25); two 3/8 in carriage bolts 2 in either side of the kingpin line at mid depth.
@@ -27,7 +27,7 @@ const c = cs.find((x) => x.id === 'bridle-eye') as AnalysisCheck;
 const det = (frag: string) => c.details!.find((d) => d.name.includes(frag))!;
 
 const XB = 45.25, XH = 54.25;
-const ALPHA = Math.atan((40 - 4.2625) / 96);
+const ALPHA = Math.atan((40 - 4.22) / 96);
 const T = 300, Th = T * Math.cos(ALPHA), Tv = T * Math.sin(ALPHA);
 const D = 1.75; // tongue depth (on edge); the stem is 1.25 in thick (D-60)
 /** Width of the tongue by hand: 6 in to x = 48.25, linear to 1.25 in at x = 51.25, then 1.25 in. */
@@ -36,12 +36,12 @@ const al = ctx.p.oakMorPsi; // keeps the import used for the allowable check bel
 void al;
 
 describe('tie load', () => {
-  it('300 lbf at 20.40 degrees: 281.2 lbf horizontal, 104.6 lbf vertical, and the lateral / axial parts at the 20 degree lock', () => {
+  it('300 lbf at 20.45 degrees: 281.0 lbf horizontal, 105.0 lbf vertical, and the lateral / axial parts at the 20 degree lock', () => {
     const ld = tieLoad(ctx);
     expect(ld.T).toBe(300);
     expect(ld.handsZ).toBe(40); // the larger of the 30 in hands and the 40 in upper bound
     expect(ld.alpha).toBeCloseTo(ALPHA, 12);
-    expect(ALPHA / RAD).toBeCloseTo(20.4, 1);
+    expect(ALPHA / RAD).toBeCloseTo(20.45, 1);
     expect(ld.Th).toBeCloseTo(Th, 9);
     expect(ld.Tv).toBeCloseTo(Tv, 9);
     expect(Th).toBeCloseTo(281.2, 0);

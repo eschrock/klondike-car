@@ -33,3 +33,12 @@ export const PRE_D60: Partial<Params> = {
 export const PRE_D66: Partial<Params> = {
   rearTrackIn: 32, frontTrackIn: 34.5, cargoCgHeightIn: 12, rollPadRadiusIn: 11.5, steerChainBeamYIn: 10.4, steerChainAnchorYIn: 8.4, bowWidthIn: 21.5, bowTaperStartIn: 35, bowTaperSlackIn: 0,
 };
+
+/**
+ * D-71 (Harbor Freight 10 in wheels, 5/8 in axles) changed the axle diameter (3/4 to 5/8 in), the wheel bore, the hub length (2.28 to 2.25 in), the wheel mass (2.8 to 3.0 lb), the clamp
+ * plate width (1.5 to 1.75 in) and the proud of the tube (0.05 to 0.03 in, which keeps the king beam inside an 8/4 board). `PRE_D71` puts the D-60 / D-62 3/4 in axle design back for the hand-calc tests whose literal numbers (the beam top at 5.325 in, the groove 0.70 in deep, the
+ * clamp bolts at 0.75 in) were worked out for it. Spread it over the defaults BEFORE the older fixtures. The D-71 defaults are tested in axle.test.ts and the rows' own files.
+ */
+export const PRE_D71: Partial<Params> = {
+  axleDiameterIn: 0.75, wheelBoreIn: 0.75, hubLengthIn: 2.28, wheelMass10Lb: 2.8, clampPlateWidthIn: 1.5, axleProudIn: 0.05,
+};

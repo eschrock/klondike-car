@@ -76,8 +76,8 @@ describe('verify checklist', () => {
   it('puts the wheel, tube, bridle and seat numbers in the procedure', () => {
     const by = (id: string) => list.find((c) => c.id === id)!;
     expect(by('wheel').pass).toContain('300 lb');
-    expect(by('wheel').pass).toContain('0.75"');
-    expect(by('wheel').pass).toContain('2.28"');
+    expect(by('wheel').pass).toContain('0.63"'); // D-71: 5/8 in (verify.ts prints two places)
+    expect(by('wheel').pass).toContain('2.25"');
     expect(by('axle-tube').whatToDo).toContain('A513 Type 5');
     expect(by('axle-tube').pass).toContain('70 ksi');
     expect(by('steering-parts').pass).toContain('900 lb');

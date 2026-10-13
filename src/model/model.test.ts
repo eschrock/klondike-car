@@ -79,6 +79,7 @@ const KNOWN_OFF_DEFAULT: RegExp[] = [
   /^beam-R x brake-chock-[LR]:/, // wheel8 (3c-4b, reported): the chock toe meets the beam end beside a small rear wheel
   /^transom-backer-[LR] x flag-tube:/, // a narrow body or an under-seat box (3c-4b, reported): the flag tube meets the transom backer
   /^brake-knee-[LR] x reflector-[LR]1:/, // sideRear8 (3c-4b, reported)
+  /^seat-grip-backing-[LR] x brake-knee-[LR]:/, // wheel 11.5 in and up (D-71): the brake knee sits r + brakePivotAheadIn behind the axle line, which a bigger wheel pushes under the grab-board backing strip by 1/16 in; the 5/8 in axle lowers the front stack 1/16 in, so 11.5 in wheels now pass the 8 in deck rule (they were an error) and this off-default overlap shows. Reported, not patched
   /^rail-[LR] x king-beam:/, // wheelbase 52 and rear overhang 14: the king beam end meets the rail that curves in with the bow turn-in by 0.05 in
   /^(clamp-F[LR]\d|king-beam) x roll-pad-[LR]:/, // a short stub (clamp plates inboard of the pad) or a thick disc: the roll pad meets a plate or the king beam; validateParams warns about the pad position
   /^clamp-F[LR]\d x king-thrust:/, // a long stub: the inner clamp plate reaches under the disc
@@ -154,10 +155,10 @@ describe('buildModel structure', () => {
     }
     for (const id of ['king-beam', 'king-thrust', 'steer-anchor-L', 'deck', 'rail-L', 'wheel-RL', 'beam-R']) expect(at.find((x) => x.id === id)!.transform, id).toEqual(neutral.find((x) => x.id === id)!.transform);
   });
-  it('REAR clamp: ONE bridge plate per wheel side across the tube (D-62), bolts at rod x ± (rod radius + gap) = 0.75 in, sitting on the tube (0.05 in proud of the beam)', () => {
+  it('REAR clamp: ONE bridge plate per wheel side across the tube (D-62), bolts at rod x ± (rod radius + gap) = 0.6875 in on the 5/8 in tube (D-71), sitting on the tube (0.05 in proud of the beam)', () => {
     const m = buildModel(defaults);
     const off = defaults.axleDiameterIn / 2 + defaults.clampLegGapIn;
-    expect(off).toBeCloseTo(0.75, 9);
+    expect(off).toBeCloseTo(0.6875, 9);
     expect(m.filter((x) => /^clamp-R/.test(x.id)).map((x) => x.id).sort()).toEqual(['clamp-RL1', 'clamp-RR1']);
     for (const tag of ['L', 'R']) {
       const part = m.find((x) => x.id === `clamp-R${tag}1`)!;

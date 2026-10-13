@@ -84,24 +84,24 @@ describe('D-66 bow taper', () => {
 });
 
 describe('D-66 the numbers that moved', () => {
-  it('cargo: the load-height rule is 10 in; the 200 lb cargo tips at 40.6 deg (D-67 limit 35: a plain pass, it was marginal at the D-66 limit of 40), the capacity is 274 lb and the bearing-groove row limits it (D-66 had it at 226 lb on the tip row; the front beam at 269 lb before)', () => {
+  it('cargo: the load-height rule is 10 in; the 200 lb cargo tips at 40.7 deg (D-67 limit 35: a plain pass, it was marginal at the D-66 limit of 40), the capacity is 223 lb (D-71: 274 lb with the 3/4 in axle) and the rear axle-stress row limits it (D-66 had it at 226 lb on the tip row; the front beam at 269 lb before)', () => {
     expect(defaults.cargoCgHeightIn).toBe(10);
     const tip = row('tip-straight');
-    expect(tip.cases!.cargo!.value).toBeCloseTo(40.65, 1); // unchanged by D-67: the limit moved, not the sled
+    expect(tip.cases!.cargo!.value).toBeCloseTo(40.7, 1); // unchanged by D-67: the limit moved, not the sled (40.65 before D-71: the 0.36 lb heavier sled)
     expect(tip.cases!.cargo!.limit).toBe(35);
     expect(tip.cases!.cargo!.value).toBeGreaterThan(35 * 1.1); // outside the 10% marginal band (38.5)
     expect(tip.statusCargo).toBe('pass'); // marginal at the 40 deg limit
     const cap = cargoCapacity(defaults);
     expect(cap.capacityLb!).toBeGreaterThanOrEqual(200);
-    expect(cap.capacityLb!).toBeLessThan(300); // 274 lb
-    expect(cap.limiter!.id).toBe('bearing-groove'); // the tip row no longer limits (it did at 226 lb with the 40 deg limit)
+    expect(cap.capacityLb!).toBeLessThan(300); // 223 lb (274 lb at 3/4 in)
+    expect(cap.limiter!.id).toBe('axle-stress'); // D-71 (it was bearing-groove with the 3/4 in axle); the tip row no longer limits (it did at 226 lb with the 40 deg limit)
     expect(cap.statusAtPayload).not.toBe('fail');
     expect(cap.cargoFailsAtPayload).toEqual([]);
   });
   it('riders: safe 50 to over 250 lb (nothing red), green 50 to 240 lb (D-67: the straight tip, 43.6 deg at 200 lb, clears its 35 deg limit with room; it was inside the 10% band of the old 40 deg limit from 190 lb, green 50-180 lb; 250 lb is yellow on the seat-back panel only)', () => {
     const sw = riderSweep(defaults);
     expect(sw.safe).toEqual({ loLb: 50, hiLb: 250, openLow: true, openHigh: true });
-    expect(sw.green).toMatchObject({ loLb: 50, hiLb: 240, openLow: true, openHigh: false });
+    expect(sw.green).toMatchObject({ loLb: 50, hiLb: 180, openLow: true, openHigh: false }); // D-71: 240 lb with the 3/4 in axle; the 5/8 in tube's axle-stress is over 0.9 from 190 lb
     expect(row('tip-straight').cases!.goal!.value).toBeCloseTo(43.6, 0);
     expect(row('tip-straight').statusGoal).toBe('pass'); // marginal at the 40 deg limit (util 0.80 now, 35 / 43.6)
     expect(row('tip-lock').status).toBe('pass');
@@ -114,7 +114,7 @@ describe('D-66 the numbers that moved', () => {
       expect(c.statusCargo ?? 'pass', c.id).not.toBe('fail');
     }
     const high = cs.filter((c) => c.status !== 'info' && ((c.util ?? 0) > 0.9 || (c.utilCargo ?? 0) > 0.9)).map((c) => c.id).sort();
-    expect(high).toEqual(['lash-points', 'park-hold', 'seat-stow', 'turn-radius']);
+    expect(high).toEqual(['axle-stress', 'lash-points', 'park-hold', 'seat-stow', 'turn-radius']); // D-71: axle-stress 0.925 at the 200 lb rider, 0.957 on the cargo
     expect(row('rest-load').status).toBe('pass'); // the resting 250 lb adult still passes: holds up to 348 lb, the heavier wheel is the tightest member (73%)
     expect(row('rest-load').how).toMatch(/holds up to 34\d lb/);
   });
@@ -128,13 +128,14 @@ describe('D-66 the numbers that moved', () => {
     expect(defaults.rollPadRadiusIn).toBe(9.5);
     expect(defaults.steerChainBeamYIn).toBe(8);
   });
-  it('rear and brake: the rear clamp plate (11-3/4 to 13-1/4 in) runs under the outer part of the rail, whose relief notch is cut over it; the brake rows pass, brake-clear still 0.22 in', () => {
+  it('rear and brake: the rear clamp plate (11-1/2 to 13-1/4 in, 1.75 in wide since D-71) runs under the outer part of the rail, whose relief notch is cut over it; the brake rows pass, brake-clear still 0.22 in', () => {
     const rail = buildModel(defaults).find((x) => x.id === 'rail-L')!;
     const plate = worldAABB(buildModel(defaults).find((x) => x.id === 'clamp-RL1')!);
-    expect(plate.min[1]).toBeCloseTo(11.75, 6);
+    expect(plate.min[1]).toBeCloseTo(11.5, 6);
     expect(plate.max[1]).toBeCloseTo(13.25, 6);
     expect(rail).toBeDefined();
-    for (const id of ['brake-slow', 'brake-ratio', 'brake-clear', 'brake-flap', 'brake-pivot', 'brake-mount', 'brake-return', 'brake-abuse', 'bearing-groove', 'rear-beam-seat', 'axle-stress']) expect(row(id).status, id).toBe('pass');
+    for (const id of ['brake-slow', 'brake-ratio', 'brake-clear', 'brake-flap', 'brake-pivot', 'brake-mount', 'brake-return', 'brake-abuse', 'bearing-groove', 'rear-beam-seat']) expect(row(id).status, id).toBe('pass');
+    expect(row('axle-stress').status).toBe('marginal'); // D-71: 0.925 at the 200 lb goal rider on the 5/8 in tube; 150 lb is a pass
     expect(row('brake-clear').value).toBeCloseTo(0.22, 1);
   });
 });

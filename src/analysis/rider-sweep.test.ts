@@ -26,9 +26,11 @@ describe('riderSweep', () => {
     // D-66 (matched 30 in tracks): nothing is red up to 250 lb, but the straight tip (43.6 deg at 200 lb, limit 40) was inside its 10% band from 190 lb, so green was 50-180 lb.
     // D-67 (the straight tip limit 35 deg): 43.6 deg at 200 lb is 8.6 deg over it (util 35 / 43.6 = 0.80, far outside the 10% band), so the tip row leaves the sweep's marginal list and green is
     // 50-240 lb; the 250 lb point is yellow only on the seat-back panel (0.909), and at 200 lb the tightest row is park-hold (0.883, a fit fact), not the tip.
-    expect(r.green).toMatchObject({ loLb: 50, hiLb: 240, openLow: true, openHigh: false });
-    expect(r.points.find((x) => x.w === 200)!.worst!.id).toBe('park-hold');
-    expect(r.points.find((x) => x.w === 250)!.worst!.id).toBe('seat-back');
+    // D-71 (Harbor Freight wheels, 5/8 in axles): the rear axle-stress row (the 5/8 in tube, 0.12 in wall) is over the 0.9 line from 190 lb (0.925 at the 200 lb goal rider), so green ends at 180 lb;
+    // nothing is red up to 250 lb (the 1.75 in clamp plate keeps the rear groove bearing at 0.85 at 200 lb).
+    expect(r.green).toMatchObject({ loLb: 50, hiLb: 180, openLow: true, openHigh: false });
+    expect(r.points.find((x) => x.w === 200)!.worst!.id).toBe('axle-stress'); // D-71: the 5/8 in axle tube (0.925); it was park-hold (0.883) with the 3/4 in axle
+    expect(r.points.find((x) => x.w === 250)!.worst!.id).toBe('axle-stress'); // D-71 (it was seat-back, 0.909); still under 1 at 250 lb
     for (const id of ['king-bearing', 'steer-stops', 'bridle-eye', 'lift', 'brake-force']) expect(r.points.every((x) => !x.fails.includes(id)), id).toBe(true);
     expect(r.points.filter((x) => x.w <= 180).every((x) => x.status === 'pass')).toBe(true);
     // the deck ply no longer fails for the heaviest riders (it did from 230 lb at 10 in joist spacing and span/300)

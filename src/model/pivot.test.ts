@@ -91,11 +91,11 @@ describe('the front-end parts (D-56, D-58)', () => {
     expect(parts.some((x) => /^(caster-|tip-swivel|bow-block|front-hanger-|beam-F-placeholder)/.test(x.id))).toBe(false);
     for (const x of parts) expect(`${x.name} ${x.notes ?? ''}`, x.id).not.toMatch(/caster|placeholder|PROVISIONAL front|bow block/i);
   });
-  it('the front axle beam: oak, 2 3/4 x 2.25 x track - hub - 1/4 long, top at wheel radius + rod radius less the 0.05 in the tube stands proud (5.325, D-62), underslung like the rear', () => {
+  it('the front axle beam: oak, 2 3/4 x 2.25 x track - hub - 1/4 long, top at wheel radius + rod radius less the 0.05 in the tube stands proud (5.2825 for the 5/8 in tube, 0.03 in proud, D-71; 5.325 at 3/4 in), underslung like the rear', () => {
     const b = worldAABB(get(parts, 'beam-F'));
-    expect(L.beamF.top).toBeCloseTo(5.325, 9);
-    expect(b.max[2]).toBeCloseTo(5.325, 9);
-    expect(b.min[2]).toBeCloseTo(3.075, 9);
+    expect(L.beamF.top).toBeCloseTo(5.2825, 9);
+    expect(b.max[2]).toBeCloseTo(5.2825, 9);
+    expect(b.min[2]).toBeCloseTo(3.0325, 9);
     expect(b.max[0] - b.min[0]).toBeCloseTo(defaults.frontBeamThicknessIn, 9); // D-58: 2 3/4 in (the rear beam is axleBeamThicknessIn)
     expect((b.min[0] + b.max[0]) / 2).toBeCloseTo(kx, 9);
     expect(b.max[1] - b.min[1]).toBeCloseTo(defaults.frontTrackIn - defaults.hubLengthIn - 0.25, 9);
@@ -105,7 +105,7 @@ describe('the front-end parts (D-56, D-58)', () => {
     expect(r.max[2]).toBeCloseTo(b.max[2], 9);
     expect(r.min[2]).toBeCloseTo(b.min[2], 9);
     // an overslung REAR beam leaves the front beam underslung (the king stack assumes it)
-    expect(computeLayout({ ...defaults, axleBeamPosition: 1, deckHeightIn: 12 }).beamF.top).toBeCloseTo(5.325, 9);
+    expect(computeLayout({ ...defaults, axleBeamPosition: 1, deckHeightIn: 12 }).beamF.top).toBeCloseTo(5.2825, 9);
   });
   it('each stub axle is a 3/4 in rod from frontStubLenIn inside the beam end to past the hub, clamped by two bridge plates (D-62); the wheel sits on the free end', () => {
     for (const [tag, s] of [['L', 1], ['R', -1]] as const) {
@@ -148,13 +148,13 @@ describe('the kingpin stack (D-56, D-58)', () => {
       expect(b.max[1], id).toBeGreaterThan(0);
     }
   });
-  it('the vertical stack (D-58, D-62): beam-F top 5.325 < UHMW thrust disc (1/2, a catalog size) < king beam bottom 5.825; the king beam top is the deck underside; the oak tongue stands 3/16 in under the beam top', () => {
+  it('the vertical stack (D-58, D-62): beam-F top 5.2825 < UHMW thrust disc (1/2, a catalog size) < king beam bottom 5.7825; the king beam top is the deck underside; the oak tongue stands 3/16 in under the beam top', () => {
     const beam = worldAABB(get(parts, 'beam-F')), tongue = worldAABB(get(parts, 'bridle-tongue'));
     const thr = worldAABB(get(parts, 'king-thrust')), king = worldAABB(get(parts, 'king-beam')), deck = worldAABB(get(parts, 'deck'));
-    expect(beam.max[2]).toBeCloseTo(5.325, 9);
+    expect(beam.max[2]).toBeCloseTo(5.2825, 9);
     expect(thr.min[2]).toBeCloseTo(beam.max[2], 9); // the disc lies on the beam top
     expect(thr.max[2] - thr.min[2]).toBeCloseTo(defaults.kingThrustThickIn, 9);
-    expect(thr.max[2]).toBeCloseTo(5.825, 9); // D-62: the catalog 1/2 in UHMW disc
+    expect(thr.max[2]).toBeCloseTo(5.7825, 9); // D-62: the catalog 1/2 in UHMW disc
     expect(king.min[2]).toBeCloseTo(thr.max[2], 9);
     expect(king.max[2]).toBeCloseTo(L.deckBot, 9);
     expect(deck.min[2]).toBeCloseTo(king.max[2], 9); // bonded to the deck underside
@@ -201,7 +201,7 @@ describe('the kingpin stack (D-56, D-58)', () => {
       expect(b.max[2]).toBeCloseTo(L.deckBot, 9);
       expect(b.min[2]).toBeCloseTo(L.deckBot - defaults.railDepthIn, 9);
     }
-    expect(L.railDepthF).toBeCloseTo(1.803, 3); // D-62: the beam top is 0.05 in lower, the tube stands 0.05 proud and the clearance over the tube is beamRailClearIn 0.35 (was 0.4) for the catalog 1/4 in roll pad
+    expect(L.railDepthF).toBeCloseTo(1.8655, 4); // D-71: 1/16 in deeper on the 5/8 in tube (1.803 at 3/4 in). D-62: the beam top is 0.05 in lower, the tube stands 0.05 proud and the clearance over the tube is beamRailClearIn 0.35 (was 0.4) for the catalog 1/4 in roll pad
     expect(L.railStepX).toBeLessThan(kx);
     expect(L.deckBot - L.railDepthF - L.beamF.top - defaults.axleProudIn).toBeCloseTo(defaults.beamRailClearIn, 6); // the rail bottom over the tube top
   });
