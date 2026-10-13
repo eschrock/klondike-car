@@ -842,6 +842,15 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
   }
   // D-77: the pivot strap is bought as flat bar: cut and drill only.
   if (part.partNo === 'brake-strap') notes.push('Cut from the flat bar on the metal bandsaw and deburr the cut edges; drill on the drill press. Cut, deburr and drill only. Drill the screw holes first; the knee\'s pin hole is drilled through this pin hole after the strap is screwed on.');
+  // D-78: the pin-sleeve holes in the rail and in the box rib are drilled at their own steps, not at the saw.
+  if (part.partNo === 'rail' && feats.some((f) => f.k === 'hole' && f.to.some((t) => /^brake-sleeve-B-hull/.test(t)))) notes.push('The one 1/2" hole is for the bottom-pin sleeve: drill it on the drill press with the rail on edge against a fence, measured from the rear end (the rail is still 1/2" long there) and from the top edge. The right rail is the mirror image.');
+  if (part.partNo === 'side-rib-box' && feats.some((f) => f.k === 'hole' && f.to.some((t) => /^brake-sleeve-T-hull/.test(t)))) notes.push('The one 1/2" hole is for the top-pin sleeve: do not drill it on the bench. Drill it after the rib is glued in, through the rib head, the filler and the web together, with a drill block square to the side.');
+  // D-78: the knee on pins carries a tab on its rear face and a pad on its inboard face; its bottom pin hole is drilled after both are glued on.
+  const kpins = part.partNo === 'brake-knee' ? brakeOf(p).pins : undefined;
+  if (kpins) {
+    const kz = brakeOf(p).knee.zBot;
+    notes.push(`The tab (rear face, ${frac(kpins.tab.z0 - kz)} to ${frac(kpins.tab.z1 - kz)} up from the bottom end) and the pad (inboard face, ${frac(kpins.pad.z0 - kz)} up from the bottom end to the top end) are glued on after the knee is shaped. Drill the bottom pin hole last, through the leg, from the pin-hole plate on the knee template sheet; the sleeve goes in after.`);
+  }
   // D-76: the side ribs, their knees and the box tie spacers.
   if (/^side-rib(-box|-bow)?$/.test(part.partNo ?? '')) {
     notes.push('A T-shaped rib: a narrow shaft and a head as tall as the gunwale band, the top of the head cut to the sheer (the slope is dimensioned at both ends). The drawn face is the one that faces into the sled; the back face is glued to the bands and the filler.');
@@ -853,6 +862,22 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
 
   // ── Notches through the thickness cut into a box's main outline ──
   if (notchBoxes.length && part.geometry.type === 'box') b.main = notchedRect(b.U, b.V, notchBoxes);
+
+  // D-78 (the knee on quick-release pins). A pin runs through a SLEEVE, so a hole for a sleeve is the only hole at that spot: drop the second, pin-clearance hole the pin's own joints add there.
+  const sleeveHoles = feats.filter((f): f is HoleF => f.k === 'hole' && f.to.some((t) => /^brake-sleeve-/.test(t)));
+  if (sleeveHoles.length) {
+    for (let i = feats.length - 1; i >= 0; i--) {
+      const f = feats[i];
+      if (f.k === 'hole' && f.to.some((t) => /^brake-pin-/.test(t)) && !f.to.some((t) => /^brake-sleeve-/.test(t)) && f.pts.every((q) => sleeveHoles.some((h) => h.pts.some((e) => samePerp(e, q, h.axis))))) feats.splice(i, 1);
+    }
+  }
+  // A sleeve is a plain piece of tube: its drawing is its length, outside and inside diameter. The holes the rail, the rib, the tab and the knee need for it are on THEIR drawings.
+  if (/^brake-sleeve-/.test(part.partNo ?? '')) {
+    feats.length = 0;
+    notes.push('A plain piece of stainless tube cut to length on the metal bandsaw: no holes. Cut it square, cut it up to 1/16" long, deburr both ends, and file the ends flush with the faces after the epoxy has set. The 3/8" pin must slide in the bore with only about five thousandths of an inch of play: try the real pin in every sleeve before any epoxy goes on.');
+  }
+  if (part.partNo === 'brake-tab') notes.push('Grain runs up the 2-13/32" side. The tab is glued to the knee\'s rear face only (never to the side web it lies on). The one hole takes a pin sleeve: drill it on the drill press with the tab square to the table, 1/2" through.');
+  if (part.partNo === 'brake-knee-pad') notes.push('Plane a longer piece of 4/4 oak down to the thickness shown, then crosscut the pads from it (a short piece is not safe in the planer). It is glued full face to the knee\'s inboard face and is never glued to the side web.');
 
   // Merge identical hole features (same spec and axis) across joints; drop a hole whose points another hole already has.
   const merged: Feat[] = [];

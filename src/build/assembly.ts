@@ -169,15 +169,16 @@ export interface StepCtx {
  * anchors, check chains and the bridle rope; hinges, pins and cushions; handle sockets and pins; the brake flap's pin, clip, cord, snap, pad and tread.
  * Only purchased, metal and printed parts qualify: every wood part, the beams, the hold-downs, the kingpin and the sleeve stay on the hull.
  */
-const HANG_RE = /^(wheel-|axle-(R|F[LR])$|clamp-|roll-pad-|steer-(eye|anchor|chain)-|bridle$|seat-(hinge|pin|cushion|back-pad)|storage-hinge-[LR]$|handle-(socket|pin)-|brake-(pivot-pin|pivot-clip|cord|snap|pad|foot-tread|chock-cord))/;
+const HANG_RE = /^(wheel-|axle-(R|F[LR])$|clamp-|roll-pad-|steer-(eye|anchor|chain)-|bridle$|seat-(hinge|pin|cushion|back-pad)|storage-hinge-[LR]$|handle-(socket|pin)-|brake-(pivot-pin|pivot-clip|cord|snap|pad|foot-tread|chock-cord|pin-[BT]-))/;
 export const isHangPart = (x: Part): boolean => (x.kind === 'purchased' || x.kind === 'metal' || x.kind === 'printed') && HANG_RE.test(x.id);
 
 /** Steps whose parts have a later model step than the step's position (the brake knees and backers: `STEP.brake`, but glued and bolted while the hull is inverted, before the underside finish). */
 export const EARLY_STEP_IDS: ReadonlySet<string> = new Set(['brake-knees']);
 const EARLY_RE = /^brake-(backer|knee)-[LR]$/;
-export const isEarlyBrakePart = (x: Part): boolean => EARLY_RE.test(x.id);
+/** The bolted knee and its backer are on the hull from the early step on. With the knee on pins (D-78, `removable`) they are bench work and never part of the hull. */
+export const isEarlyBrakePart = (x: Part): boolean => EARLY_RE.test(x.id) && !x.removable;
 
-interface Built { goal: string; items: Instr[]; checks: string[]; /** The glues the step uses, when the parts' joints do not say (a prep step). */ glue?: GlueUse }
+interface Built { goal: string; items: Instr[]; checks: string[]; /** The glues the step uses, when the parts' joints do not say (a prep step). */ glue?: GlueUse; /** Tools this step needs besides the template's (D-78 pins). */ tools?: string[] }
 
 interface Template {
   id: string;
@@ -197,6 +198,12 @@ interface Template {
   /** The glue line, when the step glues with something other than epoxy / Titebond (sealant, contact cement). */
   glueLine?: string;
   build: (c: StepCtx) => Built;
+  /** A part qualifies for this template only when this says so (the knee with its pin parts, D-78, has its own text). */
+  when?: (x: Part) => boolean;
+  /** The step exists only for these params (the removal and refit of the knee, D-78). */
+  onlyIf?: (p: Params) => boolean;
+  /** The title when the knee is on pins (D-78). */
+  pinsTitle?: string;
 }
 
 // ---- helpers ----
@@ -1063,6 +1070,8 @@ const TEMPLATES: Template[] = [
       const kneeHoles = feat(c, 'rail-L', 'hole', (q) => (q.to ?? []).some((t) => /^brake-knee/.test(t)));
       const joistDom = feat(c, 'joist-2', 'mortise', /domino/i);
       const joistCut = c.by('joist-1');
+      const hullB = c.mine.filter((x) => /^brake-sleeve-B-hull-[LR]$/.test(x.id)).map((x) => x.id);
+      const pb = brakeOf(c.p).pins?.B;
       const hinge = c.mine.filter((x) => /^seat-hinge-backer-/.test(x.id)).map((x) => x.id);
       const crossIds = c.mine.filter((x) => /^(joist-|king-beam)/.test(x.id)).map((x) => x.id);
       return {
@@ -1089,6 +1098,23 @@ const TEMPLATES: Template[] = [
               ], brakePlates.map((x) => x.id))]
               : [])]
             : []),
+          ...(hullB.length && pb
+            ? [I(`The day before: drill the one bottom-pin hole through each rail and epoxy its stainless sleeve in: ${tl(hullB)}.`, [
+              I('Drill the hole through each rail on the drill press, 1/2" bit.', [
+                `Straight through the rail's 3/4" thickness, ${fin(pb.belowRailTop)} down from the rail's top edge (the middle of its 3" depth), ${fin(pb.fromRailRear)} from the finished rear end.`,
+                `The rail is still 1/2" long at the rear end, so measure from a pencil line 1/2" in from the rear end of the rail as it is now (${fin(pb.fromRailRear + 0.5)} from the end of the rail).`,
+                'Stand the rail on its edge against a fence square to the bit, its top edge up. Support the long free end on a roller stand set to the table height.',
+                'Clamp a scrap behind the exit face so the bit does not tear the oak.',
+                'The right rail gets the same hole, measured from its rear end.',
+              ]),
+              I('Epoxy a sleeve into each hole, flush with both faces of the rail.', [
+                `Each sleeve is a ${fin(pb.hullSleeve.len)} piece of stainless tube (cut list); it is as long as the rail is thick, so file it flush after the epoxy cures.`,
+                'Smear thickened epoxy on the hole wall, push the sleeve in, and run a 3/8" rod rubbed with wax through the bore while it cures, so no epoxy stays inside.',
+                'Wipe the squeeze-out now. The sleeve stays in the rail for good; the pin only goes in when the knee is fitted (hang step).',
+                'Slide the real pin through the sleeve to prove the bore is clear before anything else is glued to the rail.',
+              ]),
+            ], hullB)]
+            : []),
           I('Bore the {{king-beam}} for the kingpin, and cut the nut slot, before the deck goes on.', [
             kingBore ? `${fin(c.p.kingpinDiaIn)} hole, square on the drill press: ${whereOf(kingBore)}.` : `${fin(c.p.kingpinDiaIn)} hole, square on the drill press: ${SEE}.`,
             'Nut slot from the front face, about 1" × 3/4" at the top.',
@@ -1104,7 +1130,8 @@ const TEMPLATES: Template[] = [
             'The rails stay long; the deck edge follows the web plan.',
           ]),
         ],
-        checks: ['Frame square: diagonals equal within 1/16"', 'Deck flat under a straightedge (no twist or rocking)', 'Squeeze-out cleaned off the deck edge before it reaches the slot under the bands'],
+        checks: ['Frame square: diagonals equal within 1/16"', 'Deck flat under a straightedge (no twist or rocking)', 'Squeeze-out cleaned off the deck edge before it reaches the slot under the bands', ...(hullB.length ? ['Each rail sleeve flush with both rail faces, its bore clear, and both sleeves the same distance from the rear end of their rails'] : [])],
+        ...(hullB.length ? { tools: ['1/2" bit', 'fence', 'waxed 3/8" rod'] } : {}),
       };
     },
   },
@@ -1433,15 +1460,16 @@ const TEMPLATES: Template[] = [
   {
     id: 'brake-knees',
     title: 'Brake knees (and backers), glued and bolted while the hull is inverted',
+    pinsTitle: 'Brake knees: tab, pad and pin holes (bench work, off the hull)',
     kind: 'build',
     steps: [STEP.brake],
     at: STEP.gear,
-    match: /^brake-(backer|knee)-[LR]$/,
+    match: /^brake-(backer|knee|tab|knee-pad|sleeve-B-knee|sleeve-T-tab)-[LR]$/,
     view: 'under',
     tools: ['bandsaw', 'chisel', 'drill press', 'wrenches', 'epoxy pumps', 'clamps'],
     hardener: '206',
     build: (c) => {
-      const knees = c.mine.filter((x) => /^brake-knee/.test(x.id)).map((x) => x.id);
+      const knees = c.mine.filter((x) => /^brake-knee-[LR]$/.test(x.id)).map((x) => x.id);
       const backers = c.mine.filter((x) => /^brake-backer/.test(x.id));
       const framed = c.parts.some((x) => /^brake-backer/.test(x.id) && x.step <= HULL_STEP.deck);
       const bolts = feat(c, 'brake-knee-L', 'hole', (q) => (q.to ?? []).some((t) => /^rail-/.test(t)));
@@ -1452,19 +1480,44 @@ const TEMPLATES: Template[] = [
       const intoFront = Math.max(0, pkv.slotEndX - pkn.layers[pkn.layers.length - 1].x0);
       const cornerPts = corner ? (corner.positions ?? []).flatMap((t) => [...t.matchAll(new RegExp(`(${FR})" from the outboard edge, (${FR})" from the top end`, 'g'))].map((m) => [m[1], m[2]])) : [];
       const ang = corner?.angleDeg !== undefined ? String(corner.angleDeg) : undefined;
-      return {
-        goal: 'Glue and bolt the brake knees to the rails now, while the hull is upside down.',
-        items: [
-          I('Do it now, not after the flip.', [
-            'The knee legs are glued to bare oak: glue will not bond to varnish.',
-            'The nylock nuts sit on the stainless backing plates under the deck, reachable only while the hull is inverted.',
-          ]),
-          backers.length
-            ? I(`Glue the backers (3/4" oak) to the rail inboard face and the deck underside, clear of the axle hanger: ${tl(backers.map((x) => x.id))}.`)
-            : framed
-              ? I('The backers went in with the frame glue-up and their bolt holes are drilled: only the knees go on here.', [], ['brake-backer-L', 'brake-backer-R'])
-              : I('No backers in this model.'),
-          I(`Start from the knee blocks you laminated in step 1 (cross-laminated, already milled to ${kneeFinal}, T \u00d7 W \u00d7 L): ${tl(knees)}.`, [
+      const kp = bgk.pins;
+      const stockOf = (id: string): string => { const s0 = c.by(id)?.stock; return s0 ? `${fin(s0.t)} × ${fin(s0.w)} × ${fin(s0.l)}` : 'see the cut list'; };
+      const tabIds = c.mine.filter((x) => /^brake-tab-[LR]$/.test(x.id)).map((x) => x.id);
+      const padIds = c.mine.filter((x) => /^brake-knee-pad-[LR]$/.test(x.id)).map((x) => x.id);
+      const slvIds = c.mine.filter((x) => /^brake-sleeve-/.test(x.id)).map((x) => x.id);
+      // D-78: the knee on two quick-release pins is bench work: it is not glued or bolted to the hull and comes off with the flap.
+      const pinItems: Instr[] = kp ? [
+        I(`Make the tab and the pad for each knee: ${tl(tabIds)}, ${tl(padIds)}.`, [
+          `Tab (oak): ${stockOf(tabIds[0])} (T × W × L), grain running up the ${fin(kp.tab.z1 - kp.tab.z0)} side. Rough size and board are in the cut list.`,
+          `Pad (oak): ${thick(kp.pad.t)} × ${fin(kp.pad.x1 - kp.pad.x0)} × ${fin(kp.pad.z1 - kp.pad.z0)}, grain running up the long side. Plane a longer piece of 4/4 down to ${thick(kp.pad.t)} and crosscut the pads from it: a short piece is not safe in the planer.`,
+          'The tab is 1" thick, so it is not cut from the knee block (its layers are 3/4"): take it from a 5/4 board, or glue two pieces of 4/4 face to face and mill to 1".',
+        ], [...tabIds, ...padIds]),
+        I(`Epoxy a pad to the inboard face of each knee: ${tl(padIds)}.`, [
+          `Full face, from ${fin(kp.pad.z0 - pkn.zBot)} up from the knee's bottom end (the top of the chine band) to the knee's top end; flush with the knee's rear and front faces.`,
+          'Clamp it flat between cauls and wipe the squeeze-out. It is glued to the knee only, never to the side web: it bears on the web and nothing more.',
+        ], padIds),
+        I(`Epoxy a tab to the rear face of each knee: ${tl(tabIds)}.`, [
+          `The tab's long face against the knee's rear face, its bottom edge ${fin(kp.tab.z0 - pkn.zBot)} up from the knee's bottom end. It stands ${fin(kp.tab.z1 - pkn.zTop)} above the knee's top end and ${fin(kp.tab.x1 - kp.tab.x0)} out behind its rear face.`,
+          `Its inboard face is flush with the pad's inboard face: lay a straightedge across both. Both lie on the side web.`,
+          `Only the lowest ${fin(pkn.zTop - kp.tab.z0)} of the tab touches the knee (about ${fractionText(Math.round(kp.tab.glueArea * 8) / 8, 8)} square inch of glue), so dry-fit it first and clamp it square with one bar clamp along the knee, a pad on the tab's rear end and one on the knee's front face. No screw is needed.`,
+        ], tabIds),
+        I(`Drill the two pin holes in each knee from the pin-hole plate (Forms section, on the brake knee template sheet): ${tl(knees)}.`, [
+          `The plate carries the hull's own numbers: the bottom hole is ${fin(kp.B.fromRailRear)} from the rail's rear end, the top hole ${fin(kp.T.fromRibFoot)} up the box rib. The two holes in a knee are ${fin(Math.hypot(kp.B.x - kp.T.x, kp.B.z - kp.T.z))} apart, center to center, and that spacing matters more than the distance to any edge.`,
+          `Bottom hole B: 1/2" through the leg, ${fin(kp.B.fromKneeRear)} from the knee's rear face (the middle of its ${fin(pkn.x1 - pkn.x0)} thickness) and ${fin(kp.B.fromKneeBottom)} up from the knee's bottom end.`,
+          `Top hole T: 1/2" through the tab, ${fin(c.p.brakeTabEndIn)} from the tab's rear end and ${fin(kp.T.z - kp.tab.z0)} up from the tab's bottom edge (centered on its ${fin(kp.tab.z1 - kp.tab.z0)} height).`,
+          `Lay the plate on the knee unit's inboard face, its rear end flush with the tab's rear end and its bottom edge flush with the knee's bottom end. Clamp it and prick both centers with an awl through its holes.`,
+          'Take the plate off and drill each center on the drill press with a 1/2" brad-point bit: the knee on its inboard face on the table with a scrap under the leg (the same thickness as the pad), and a waste board under the tab.',
+          `Measure the two centers apart with dividers before any sleeve goes in: ${fin(Math.hypot(kp.B.x - kp.T.x, kp.B.z - kp.T.z))}.`,
+        ], [...knees, ...tabIds]),
+        I(`Epoxy a sleeve into each hole: ${tl(slvIds)}.`, [
+          `The leg's sleeve is ${fin(kp.B.kneeSleeve.len)} long and the tab's is ${fin(kp.T.kneeSleeve.len)}; each is flush with both faces (file it flush after the epoxy cures).`,
+          'Thickened epoxy on the hole wall, a waxed 3/8" rod through the bore while it cures, squeeze-out wiped at once.',
+          'Slide the real pin through each sleeve when it has cured: it should move freely with about five thousandths of an inch of play, and no more. Do not ream the sleeve.',
+        ], slvIds),
+        I('Leave the knee units bare. They go through the underside finish with the hull (next steps), on the bench, with a waxed rod in each sleeve to keep the finish out of the bore.'),
+      ] : [];
+      const restOfKnee: Instr[] = [
+        I(`Start from the knee blocks you laminated in step 1 (cross-laminated, already milled to ${kneeFinal}, T \u00d7 W \u00d7 L): ${tl(knees)}.`, [
             'Do not glue anything up here: the layers, the grain directions, the joint position and the pocket notch are in step 1.',
             'Check each block before you saw: the grain of the rear and front layers runs up the leg, and the center layer runs across the sled.',
           ], knees),
@@ -1475,6 +1528,19 @@ const TEMPLATES: Template[] = [
             `Recess the pocket about ${fractionText(Math.round(intoFront * 16) / 16, 16)}" into the front layer, so it ends ${fin(pocketDeep)} from the rear face: router with a straight bit, or chisel. It is the same ${fin(pocketW)} wide and ${fin(pocketH)} high as the notch, open at the rear face and the outboard edge.`,
             'The 3/8" pin hole waits: it is drilled with the stainless strap on and the flap tongue clamped in the pocket (flap step).',
           ]),
+      ];
+      const intro: Instr[] = [
+          I('Do it now, not after the flip.', [
+            'The knee legs are glued to bare oak: glue will not bond to varnish.',
+            'The nylock nuts sit on the stainless backing plates under the deck, reachable only while the hull is inverted.',
+          ]),
+          backers.length
+            ? I(`Glue the backers (3/4" oak) to the rail inboard face and the deck underside, clear of the axle hanger: ${tl(backers.map((x) => x.id))}.`)
+            : framed
+              ? I('The backers went in with the frame glue-up and their bolt holes are drilled: only the knees go on here.', [], ['brake-backer-L', 'brake-backer-R'])
+              : I('No backers in this model.'),
+      ];
+      const bolting: Instr[] = [
           I('Bolt each knee: 4 × 3/8" × 4" bolts, 2 columns × 2 rows, through the knee leg and the rail into the backer.', [
             bolts ? `Holes in the knee, ${holeText(bolts)}.` : SEE_ITEM,
             `Heads with a ${fin(c.p.brakeMountWasherOdIn)} washer under each on the outer face of the knee leg (no counterbore); nylock nuts on the backing plate set in the backer, under the deck.`,
@@ -1482,7 +1548,25 @@ const TEMPLATES: Template[] = [
             'Glue on the leg against the rail and chine outer face; clamp, bolt, wipe the squeeze-out.',
           ], ['rail-L', 'rail-R']),
           I('Leave the knees 24 h before the wheel dry fit (next step) loads them.'),
-        ],
+      ];
+      if (kp) {
+        return {
+          goal: 'Shape the brake knees, add the tab and the pad, and drill and sleeve the two pin holes. The knees stay on the bench: they are not glued to the hull.',
+          items: [
+            I('These are bench pieces: the knee is not glued or bolted to the hull.', [
+              'Each knee, with its tab, pad and sleeves, comes off with the flap as one piece (two pins). Nothing of the knee stays on the hull but two sleeves.',
+              'Do the work now so the finished knee units go through the underside finish with the hull.',
+            ]),
+            ...restOfKnee,
+            ...pinItems,
+          ],
+          checks: ['Knee tops level with each other', 'Tab and pad inboard faces in one plane (straightedge across both)', `The two sleeve centers in each knee ${fin(Math.hypot(kp.B.x - kp.T.x, kp.B.z - kp.T.z))} apart, the same on both knees`, 'The pin slides through both sleeves of each knee by hand, with only a hair of play', 'Nothing finished yet'],
+          tools: ['1/2" brad-point bit', 'dividers', 'bar clamp', 'waxed 3/8" rod'],
+        };
+      }
+      return {
+        goal: 'Glue and bolt the brake knees to the rails now, while the hull is upside down.',
+        items: [...intro, ...restOfKnee, ...bolting],
         checks: ['Knee tops level with each other', 'Knee clears the tire front by the designed margin (check at the wheel dry fit)', 'Every nylock on and snug; nothing on the knees varnished yet'],
       };
     },
@@ -1497,12 +1581,15 @@ const TEMPLATES: Template[] = [
     build: (c) => {
       const wheels = c.parts.filter((x) => /^wheel-/.test(x.id) && x.group !== 'reference');
       const pilots = stopBlockPilots(c.parts, c.p);
+      const kneesOff = !!brakeOf(c.p).pins; // D-78: the knees are bench pieces until the hang step
       return {
         goal: 'Dry-fit the wheels to prove the running gear, drill the last holes, then take everything metal off.',
         items: [
           I(`Put the ${plural(wheels.length, 'wheel')} on the axles.`, [`${fin(c.p.wheelBoreIn)} bore on the ${fin(c.p.axleDiameterIn)} ${axleWord(c.p)}, sealed bearings.`, 'Collar and cotter pin 1" beyond the hub.'], wheels.map((x) => x.id)),
           I(`Check the track: ${fin(c.p.frontTrackIn)} front, ${fin(c.p.rearTrackIn)} rear.`, ['Inflate to the squash-test pressure (Verify).']),
-          I('Spin each wheel.', ['No rub on the beam end, the clamp plates or the brake knee.', 'Measure the knee-to-tire margin now, wheels on and knees cured.', 'No end float beyond 1/16".']),
+          I('Spin each wheel.', kneesOff
+            ? ['No rub on the beam end or the clamp plates.', 'The knees are not on the sled yet: the knee-to-tire margin is measured when they are fitted (hang step).', 'No end float beyond 1/16".']
+            : ['No rub on the beam end, the clamp plates or the brake knee.', 'Measure the knee-to-tire margin now, wheels on and knees cured.', 'No end float beyond 1/16".']),
           pilots
             ? I(`Drill the ${plural(pilots.total, 'stop-block screw pilot')} through the deck now, hull still inverted.`, [
               `Countersink them on the underside for the ${pilots.screw}" flat-heads, ${pilots.perBlock} a block, in line across the sled.`,
@@ -1528,19 +1615,22 @@ const TEMPLATES: Template[] = [
     tools: ['random-orbit sander', 'rollers and brushes', 'epoxy pumps', 'masking tape'],
     build: (c) => {
       const std = isStandard(c.p);
+      const kneeUnits = !!brakeOf(c.p).pins;
       return {
         goal: 'Finish everything you can reach from below before the hull is turned over.',
         items: [
           I('Run the finishing schedule (Finishing section) on the underside.', [
             'The deck underside, rails, crossmembers, beams, hangers and king beam.',
-            'The brake knees and their backers.',
+            kneeUnits ? 'The brake knee units (knee, tab and pad), on the bench beside the hull, with a waxed rod in each sleeve.' : 'The brake knees and their backers.',
             'The outside of the sides, the transom and the bulkhead.',
           ]),
           I('Offcut test first, then sand 120 / 150 and stain the show faces.'),
           std
             ? I('Epoxy the deck underside and the oak end grain (one coat), then urethane.', ['3 coats on the show faces, 2 on the hidden ones, 320 between coats.'])
             : I('Epoxy-seal (one saturation coat), then varnish.', ['3 coats on the show faces, 2 on the hidden ones, 320 between coats.']),
-          I('Mask the bolt seats, the kingpin head and the hold-down angles.', ['Brush epoxy into the knee bolt holes; leave the pivot-hole spot for later.']),
+          kneeUnits
+            ? I('Mask the kingpin head and the hold-down angles.', ['Leave the pivot-hole spot on each knee for later.', 'Plug the rail sleeve with a waxed rod so no finish runs into the bore.'])
+            : I('Mask the bolt seats, the kingpin head and the hold-down angles.', ['Brush epoxy into the knee bolt holes; leave the pivot-hole spot for later.']),
           I('Flip only when the last coat is dry enough to handle (3 days).', ['Padded horses; carry the hull by the rails and the bulkhead, never by the sides.']),
           I('The inside, the topside and everything built after the flip are finished later, in the Finish step.'),
         ],
@@ -1616,7 +1706,7 @@ const TEMPLATES: Template[] = [
     title: 'Side ribs and knees: the tie-down bases',
     kind: 'build',
     steps: [STEP.seatStorage],
-    match: /^side-rib-/,
+    match: /^(side-rib-|brake-sleeve-T-hull-)/,
     view: 'iso',
     tools: ['bandsaw', 'spring clamps', 'epoxy pumps', 'drill', '3/8" Forstner or brad-point bit', 'straightedge'],
     hardener: '206',
@@ -1642,6 +1732,11 @@ const TEMPLATES: Template[] = [
         if (!k) return 'see the part drawing';
         return listS(ks.d.map((d) => fin(Math.max(0, k.l * (1 - d / k.w) - KNEE_SCREW_SEAT_IN)))).replace(/ and /, ' and ');
       };
+      const hullT = c.mine.filter((x) => /^brake-sleeve-T-hull-[LR]$/.test(x.id)).map((x) => x.id);
+      const pn = brakeOf(p).pins;
+      const pt = pn?.T;
+      const ribRear = pn ? pn.rib.x - p.sideRibHeadLengthIn / 2 : 0; // the rear edge of the box rib's head
+      const tieGap = pn && pt ? pn.rib.z1 - pn.rib.tieTopZ - pt.belowRibTop - pn.sleeveOd / 2 : 0;
       const ribDims = (st: (typeof sts)[number]): string => {
         const stock = c.by(`side-rib-L${st.n}`)?.stock;
         return stock ? `${fin(p.sideRibHeadLengthIn)} head, ${fin(p.sideRibWidthIn)} shaft, ${fin(stock.l)} tall` : 'see the part drawing';
@@ -1684,8 +1779,31 @@ const TEMPLATES: Template[] = [
               'Drive them while the epoxy is wet, so they pull the knee down on the deck.',
             ]),
           ] : []),
+          ...(hullT.length && pt
+            ? [I(`Once the rib epoxy has cured, drill the top-pin hole through each box rib head and epoxy its stainless sleeve in: ${tl(hullT)}.`, [
+              I('Make a drill block first: a scrap of hardwood about 1-1/2" thick, with a 1/2" hole drilled square through it on the drill press.', [
+                'Clamp it to the inner face of the rib head with the hole over the pencil mark. The block holds the bit square to the rib, which is square to the side.',
+                'Do it after the epoxy has fully cured: the hole goes through the finished stack of rib head, filler and web.',
+              ]),
+              I('Mark the hole on the rib head, measured from its named edges.', [
+                `${fin(pt.x - ribRear)} in from the REAR edge of the head, measured on the inner face.`,
+                `${fin(pt.belowRibTop)} down from the TOP edge of the head (the gunwale top). That is ${fin(pt.fromRibFoot)} up from the BOTTOM end of the rib: check the two against each other.`,
+                `The hole's lower edge stays ${fin(tieGap)} above the top of the box tie spacer, which no pin can pass.`,
+              ]),
+              I('Drill the 1/2" hole out through the rib head, the filler and the web.', [
+                `${fin(pt.hullSleeve.len)} deep in all (the rib head, the filler and the web together), square to the side.`,
+                'Stop when the point shows on the web, then finish from outside, or clamp a scrap over the web where the bit comes out so the outer face is not torn.',
+              ]),
+              I('Epoxy a sleeve in each hole.', [
+                `${fin(pt.hullSleeve.len)} of stainless tube (cut list), flush with the web's outer face and with the rib head's inner face.`,
+                'Thickened epoxy on the hole wall, a waxed 3/8" rod through the bore while it cures, squeeze-out wiped at once.',
+                'The sleeve stays in the hull for good. The tab of the knee lies on the web over this spot, so keep the web there flat: no filler proud of it.',
+              ]),
+            ], hullT)]
+            : []),
         ],
-        checks: ['Each rib square to the side, the head top flush with the gunwale top', 'No gap behind a rib; the filler is flush with the bands', 'Each knee sits flat on the deck, its screws snug and below the oak face', `The storage box still fits: the box side stands ${fin(p.sideRibDepthIn)} from the box rib's inner face`],
+        checks: ['Each rib square to the side, the head top flush with the gunwale top', 'No gap behind a rib; the filler is flush with the bands', 'Each knee sits flat on the deck, its screws snug and below the oak face', `The storage box still fits: the box side stands ${fin(p.sideRibDepthIn)} from the box rib's inner face`, ...(hullT.length ? ['Each top-pin sleeve flush with the web, its bore clear, and both at the same height and station on the two sides'] : [])],
+        ...(hullT.length ? { tools: ['1/2" brad-point bit', 'drill block', 'waxed 3/8" rod'] } : {}),
       };
     },
   },
@@ -1869,6 +1987,7 @@ const TEMPLATES: Template[] = [
       const strapPinHole = holeText(feat(c, 'brake-strap-L', 'hole', (q) => /pin/.test(q.purpose ?? '')));
       const pilotM = new RegExp(`^(${FR})" pilot, (${FR})" deep`).exec(feat(c, 'brake-knee-L', 'hole', (q) => /strap/.test(q.purpose ?? ''))?.size ?? '');
       const strapPilot = pilotM ? `${pilotM[1]}" pilots ${pilotM[2]}" deep` : undefined;
+      const kneeOnPins = !!bgs.pins;
       const strapScrews = `${strapScrewJoint?.count ?? 4} × ${screwOf(c, 'brake-strap-L', /brake-knee/)}`;
       const strapRows = `${(strapScrewJoint?.count ?? 4) / 2} in the roof above the pocket and ${(strapScrewJoint?.count ?? 4) / 2} in the floor under it`;
       return {
@@ -1905,7 +2024,9 @@ const TEMPLATES: Template[] = [
             'Oak wedge, its ramp at 28° to meet the tire; two stainless screw heads left proud in the base.',
             `30" cord to a screw eye under the knee${eye ? `: pilot ${holeText(eye)}` : ''}.`,
           ]),
-          I('Removable: clip off (it sits outboard of the strap), pin out, cord unhooked, flap lifted off, about 15 s a side.', ['The strap stays on the knee.', 'Finish the flap kit on the bench; the pin, clip, cord, snap hook, pad and tread stay off until the hang step.']),
+          kneeOnPins
+            ? I('Removable, knee and flap together: unhook the cord, pull the two knee pins, lift the knee and the flap off as one piece, about 15 s a side.', ['The strap stays screwed to the knee, and the flap pin and clip stay in the strap.', 'The steps for taking the knees off and putting them back are after the hang step.', 'Finish the flap kit on the bench; the pin, clip, cord, snap hook, pad and tread stay off until the hang step.'])
+            : I('Removable: clip off (it sits outboard of the strap), pin out, cord unhooked, flap lifted off, about 15 s a side.', ['The strap stays on the knee.', 'Finish the flap kit on the bench; the pin, clip, cord, snap hook, pad and tread stay off until the hang step.']),
         ],
         checks: ['Pad hangs 3/8" off the tread released and swings onto it when the flap is pressed', 'Flap clears the tire and the transom corner; foot end at the transom face', 'Flap returns by itself when released'],
       };
@@ -2025,6 +2146,7 @@ const TEMPLATES: Template[] = [
     build: (c) => {
       const n = (re: RegExp): number => c.mine.filter((x) => re.test(x.id)).length;
       const ids = (re: RegExp): string[] => c.mine.filter((x) => re.test(x.id)).map((x) => x.id);
+      const kp = brakeOf(c.p).pins;
       return {
         goal: 'Put the running gear, hinges, handle and brake kits back on, for good.',
         items: [
@@ -2053,13 +2175,63 @@ const TEMPLATES: Template[] = [
             'The screw tips must stop short of the box aft wall: check with a dry screw.',
             'Then the finished U and its clevis pins.',
           ], ids(/^handle-/)),
-          I('Brake flaps.', [
-            'The flap kits on the knees: pivot pin through the strap in double shear, hitch-pin clip outboard of the strap.',
-            'Return cord and snap hook to the transom eye; pad and tread on contact cement; chock cords to the screw eyes.',
-          ], ids(/^brake-/)),
+          ...(kp
+            ? [I('Fit the brake knees, each with its flap on.', [
+              'Put each flap on its knee on the bench first: pivot pin through the strap in double shear, hitch-pin clip outboard of the strap.',
+              `Wipe the four sleeves in each side with a clean rag and slide a pin through each dry: it should go in and out by hand.`,
+              `Set the knee on the hull with its pad and leg flat on the side and its tab lying on the web over the rib head.`,
+              `Push the bottom pin through the knee leg and the rail, then the top pin through the tab, the web and the rib head, both from the outside with the button held in. Let the buttons go: the balls come out ${fin(kp.tipIn)} inside the sled and hold.`,
+              'Pull each pin and rock the knee: nothing comes out, and the knee moves only by the play of the pins in their sleeves.',
+              'Measure the knee-to-tire margin now, wheels on: it must match the design margin on both sides.',
+              'Clip each pin lanyard to its knee.',
+            ], [...ids(/^brake-pin-/), 'brake-knee-L', 'brake-knee-R'])] : []),
+          I(kp ? 'Return cords, pads and treads.' : 'Brake flaps.', kp
+            ? ['Return cord and snap hook to the transom eye; pad and tread on contact cement; chock cords to the screw eyes.']
+            : [
+              'The flap kits on the knees: pivot pin through the strap in double shear, hitch-pin clip outboard of the strap.',
+              'Return cord and snap hook to the transom eye; pad and tread on contact cement; chock cords to the screw eyes.',
+            ], ids(/^brake-/)),
           I('Recheck every nut before each event: oak creeps under the plates.'),
         ],
         checks: ['All four wheels spin freely, no end float beyond 1/16", the axle swings through the full lock', 'Chain goes taut at full lock before the tire touches anything', 'Hinges and pins work, the handle slides in the sockets, the flaps return by themselves'],
+      };
+    },
+  },
+  {
+    id: 'knee-swap',
+    title: 'Take the brake knees off and put them back',
+    kind: 'process',
+    steps: [STEP.finish],
+    view: 'side',
+    tools: ['none: the pins are tool-free'],
+    onlyIf: (p) => !!brakeOf(p).pins,
+    build: (c) => {
+      const kp = brakeOf(c.p).pins!;
+      const kn = brakeOf(c.p).knee;
+      return {
+        goal: 'Take a knee and its flap off as one piece and put it back, by hand, with nothing left sticking out of the side.',
+        items: [
+          I('REMOVAL, about 15 s a side.', [
+            'Unhook the return cord from the transom eye.',
+            'Hold the knee with one hand and pull the top pin first (push the button, slide it out toward you): the bottom pin still holds the knee.',
+            'Then pull the bottom pin.',
+            'Lift the knee and the flap off the side as one piece, straight outward. The strap, the flap pin and the clip stay on the knee.',
+            'Clip each pin lanyard to its knee, so no pin is lost.',
+            `Nothing is left outboard of the side but the flush ends of the stainless sleeves: two on each side, in the web (over the rib head) and in the rail.`,
+          ], ['brake-knee-L', 'brake-knee-R', 'brake-flap-L', 'brake-flap-R']),
+          I('REFIT, about 25 s a side.', [
+            `Set the knee on the hull: the pad and the leg flat against the side, the tab lying on the web over the rib head (${fin(kp.tab.x1 - kp.tab.x0)} of tab behind the knee's rear face).`,
+            `Slide the tab over the rib head until the knee's sleeves line up with the two sleeves in the hull: the bottom one in the rail, ${fin(kp.B.belowRailTop)} below its top edge, the top one in the web.`,
+            'Push the bottom pin in from the outside with its button held in, through the knee leg and the rail, then the top pin through the tab, the web and the rib head. Let each button go: the balls hold it.',
+            'Pull on each pin and rock the knee. Nothing should come out; the knee should sit flat with no gap at the pad, the tab or the leg.',
+            'Hook the return cord on the transom eye. Press the flap by hand: it must swing and come back by itself.',
+          ], ['brake-pin-B-L', 'brake-pin-B-R', 'brake-pin-T-L', 'brake-pin-T-R']),
+          I('Transport mode: the knees come off with the brakes.', [
+            'The viewer shows the transport configuration without the knees, flaps, tabs, pads and pins: that is how the sled travels.',
+            `Take both knee units off as above and carry them with the flaps; the sled loses nothing outboard of the side (the knee stood ${fin(kn.yOut - brakeOf(c.p).y.face)} out beside the tire).`,
+          ]),
+        ],
+        checks: ['Both pins out and back in by hand on each side, with no tool', 'No daylight under the pad, tab or leg when the knee is on', 'Nothing outboard of the side with the knees off but the flush sleeve ends'],
       };
     },
   },
@@ -2148,10 +2320,11 @@ export function assemblySteps(parts: Part[], p: Params): BuildStep[] {
   for (const t of TEMPLATES) {
     if (t.id === 'hang') continue;
     if (!t.match) continue;
+    if (t.onlyIf && !t.onlyIf(p)) continue;
     const mine: string[] = [];
     for (const x of real) {
       if (assigned.has(x.id)) continue;
-      if (t.steps.includes(x.step) && t.match.test(x.id)) {
+      if (t.steps.includes(x.step) && t.match.test(x.id) && (!t.when || t.when(x))) {
         mine.push(x.id);
         assigned.add(x.id);
       }
@@ -2198,6 +2371,7 @@ export function assemblySteps(parts: Part[], p: Params): BuildStep[] {
   const pending = [...extraByStep.entries()].sort((a, b) => a[0] - b[0]).map(([step, xs]) => ({ t: generic(step, xs), ids: xs.map((x) => x.id) }));
   const keyOf = (t: Template): number => t.at ?? t.steps[0];
   for (const t of TEMPLATES) {
+    if (t.onlyIf && !t.onlyIf(p)) continue;
     while (pending.length && keyOf(pending[0].t) < keyOf(t) && t.kind !== 'prep') ordered.push(pending.shift()!);
     const ids = taken.get(t.id) ?? [];
     if (t.kind === 'build' && ids.length === 0) continue; // nothing to install in this model
@@ -2219,6 +2393,8 @@ export function assemblySteps(parts: Part[], p: Params): BuildStep[] {
   const oak = (): OakPlan => (oakMemo ??= oakBoardFeet(parts, p));
   const drawings = (): PartDrawingSheet[] => (drawMemo ??= cachedDrawings(parts, p));
   const std = isStandard(p);
+  const kneePins = !!brakeOf(p).pins;
+  const titleOf = (t: Template): string => (kneePins && t.pinsTitle ? t.pinsTitle : t.title);
   const fix = (t: string): string => noIds(tidy(std ? standardText(t) : t));
   // A token for a part this model does not have (an optional part named in a template) is written as plain words.
   const known = (t: string): string => t.replace(PART_TOKEN_RE, (m, id: string) => (byId.has(id) ? m : (id as string).replace(/-/g, ' ')));
@@ -2249,14 +2425,14 @@ export function assemblySteps(parts: Part[], p: Params): BuildStep[] {
       n,
       id: t.id,
       kind: t.kind,
-      title: std ? standardText(t.title) : t.title,
+      title: std ? standardText(titleOf(t)) : titleOf(t),
       goal: fix(built.goal),
       items,
       modelStep: t.kind === 'prep' ? 0 : modelStep,
       partIds: ids,
       instructions: flattenInstr(items, nameOf),
       checks: built.checks.map((x) => renderInstrText(fix(known(x)), nameOf)),
-      tools: t.tools,
+      tools: built.tools?.length ? [...t.tools, ...built.tools] : t.tools,
       view: t.view,
       ...(cure ? { cure: { hardener: cure.hardener, potMin: cure.potMin, clampHours: cure.clampHours, fullHours: cure.fullHours } } : {}),
       ...(clampCure ? { clampCure } : {}),

@@ -327,6 +327,7 @@ export const SHOW_RULES: ReadonlyArray<{ re: RegExp; show: number | 'web'; why: 
   { re: /^bow-bulkhead$/, show: 1, why: 'bow end and the rider\'s foot brace' },
   { re: /^transom-rear$/, show: 0.5, why: 'outside shows, the inside faces the hull and the box' },
   { re: /^(transom-backer|sign-backer|seat-hinge-backer|storage-hinge-backer|storage-latch-block|flag-block|brake-backer|brake-pivot-block|brake-knee)/, show: 0, why: 'backer or block behind something else' },
+  { re: /^brake-tab-/, show: 0, why: 'the knee\'s tab: sealed and finished with the knee, behind the strap and the flap' },
   { re: /^side-rib-/, show: 1, why: 'side ribs and their knees stand inside the hull above the deck: the rider and the cargo see the inner face and edges (the glued back is credited off)' },
   { re: /^box-tie-/, show: 0, why: 'oak spacer between a rib and the storage box side: out of sight' },
   { re: /^sign-[LR]$/, show: 0.5, why: 'plate on the web: front shows, back is hidden' },
@@ -745,7 +746,9 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
     title: 'Sand: 120 then 150',
     items: [
       it('Steps 2-6 run in two sessions, with the same products and coats.', [
-        'The underside while the hull is still inverted, before the flip.',
+        parts.some((x) => x.id === 'brake-tab-L')
+          ? 'The underside while the hull is still inverted, before the flip. The brake knee units (knee, tab and pad) go through this session on the bench, sealed and coated together, with a waxed rod in each sleeve to keep the finish out of the bores.'
+          : 'The underside while the hull is still inverted, before the flip.',
         'Everything else after the box, seat, brake and handle are built.',
         'All hardware, hinges and running gear OFF: they go on after the topcoat cures (assembly step "Hang the running gear and hardware").',
       ]),

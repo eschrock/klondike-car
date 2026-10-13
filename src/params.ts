@@ -1546,6 +1546,24 @@ const defs = {
     note: 'D-78: added to the shaft\'s steel mass (an estimate for a 3/8 in pin\'s handle, button and spring; the shaft is counted from its volume).',
   },
 
+  brakePinRetentionLbf: {
+    label: 'Ball-lock pin axial retention (pull before the balls let go)', group: 'brake', unit: 'lbf',
+    default: 400, min: 100, max: 3000, step: 25, status: 'verify', ref: 'D-78',
+    note: 'D-78 PLACEHOLDER: the ball-lock retention rating (the axial pull the locking balls hold against the sleeve end) is not published in the research. 400 lbf is a deliberately low working value for a 3/8 in stainless ball-lock pin. GET THE VENDOR\'S NUMBER (pull-out or "ultimate tensile" rating, then divide by a safety factor) before buying, and enter it here. The brake-mount row compares the knee\'s prying, yaw and sideways-push pull at each pin with it.',
+  },
+
+  brakeSleeveYieldPsi: {
+    label: 'Pin sleeve tube yield (304 / 316 stainless tube)', group: 'brake', unit: 'psi',
+    default: 30000, min: 20000, max: 60000, step: 1000, status: 'assumed', ref: 'D-78',
+    note: 'D-78: minimum yield of annealed 304 / 316 stainless tube (30 ksi). With the pin\'s own yield (ss316BoltYieldPsi) it gives the composite bending yield of the sleeved pin in the NDS yield-mode equations: F_yb = (F_y,pin d^3 + F_y,tube (OD^3 - ID^3)) / OD^3, the plastic moment of the pin plus tube over that of a solid pin of the sleeve\'s outside diameter (about 44.8 ksi for a 3/8 in pin in a 1/2 x 3/8 in tube).',
+  },
+
+  brakePinLoadDurationFactor: {
+    label: 'Removable-knee pin load-duration factor C_D', group: 'brake', unit: '×',
+    default: 1, min: 0.9, max: 1.6, step: 0.05, status: 'assumed', ref: 'D-78',
+    note: 'D-78: NDS C_D on the pin capacity. 1.0 because the hold load (a loaded sled parked on the slope, held by the flaps) is sustained, not an impact; the stomp case is checked at yield level instead. The impact factor ndsLoadDurationFactor (1.6) used for the curb-strike rows is NOT used here.',
+  },
+
   brakeBungeeTensionLbf: {
     label: 'Return bungee tension, released', group: 'brake', unit: 'lbf',
     default: 3, min: 1, max: 10, step: 0.5, status: 'assumed', ref: 'D-57',

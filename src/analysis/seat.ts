@@ -245,7 +245,7 @@ export function lashLoads(ctx: Ctx) {
   const washerArea = (Math.PI / 4) * (LASH_WASHER.od ** 2 - LASH_WASHER.id ** 2);
   const washerBearing = T1 / washerArea;
   const sl = sideLateral(ctx);
-  return { V, H, T1, V1, Ft, Fv, sigT, tau, interaction, headBearing, washerArea, washerBearing, ribSig: sl.rating.ribSigMax, ribN: sl.rating.ribSigMaxN, ribM: sl.rating.ribMMax, bolt: lashBoltLength(p) };
+  return { V, H, T1, V1, Ft, Fv, sigT, tau, interaction, headBearing, washerArea, washerBearing, ribSig: sl.rating.ribSigMax, ribN: sl.rating.ribSigMaxN, ribM: sl.rating.ribMMax, bolt: lashBoltLength(p), pinRib: sl.pinRib };
 }
 
 export function lashLoadCheck(ctx: Ctx): AnalysisCheck {
@@ -257,6 +257,10 @@ export function lashLoadCheck(ctx: Ctx): AnalysisCheck {
     detail('bolt bearing on the oak head (along its grain)', k.headBearing, 'psi', al.oakDowel, '<='),
     detail('fender washer bearing on the outer gunwale band (compression ⊥)', k.washerBearing, 'psi', al.oakPerp, '<='),
     detail(`rib bending at the rating (rib ${k.ribN})`, k.ribSig, 'psi', al.oakBend, '<='),
+    ...(k.pinRib ? [
+      detail(`D-78 rib bending at the knee's top-pin sleeve hole at the rating (rib ${k.pinRib.n}, ${f(k.pinRib.sOd, 2)}" sleeve out of the ${f(k.pinRib.w, 2)}" shaft, net section)`, k.pinRib.sigHoleRating, 'psi', al.oakBend, '<='),
+      detail('D-78 rib shaft net section at the sleeve hole: the D-ring\'s vertical part plus the top pin\'s z part (oak along the grain)', k.pinRib.axial, 'psi', al.oakBend, '<='),
+    ] : []),
   ];
   const g = ds.reduce((a, b) => (b.util > a.util ? b : a), ds[0]);
   return singleCheck({
@@ -268,7 +272,8 @@ export function lashLoadCheck(ctx: Ctx): AnalysisCheck {
     how: `One D-ring plate pulled at its ${p.lashLoadLbf} lbf working load, ${p.lashPullAngleDeg}° above the deck: V = ${f(k.V)} lbf up the rib head, H = ${f(k.H)} lbf inboard. `
       + `D-76: the plate is through-bolted to the rib head with ${LASH_BOLTS} #8-32 x ${k.bolt.len}" stainless machine screws (washer, side sandwich, head, plate, nylock: ${k.bolt.need.toFixed(2)}"), so nothing withdraws: each takes ${f(k.T1)} lbf of tension (${f(k.sigT, 0)} psi on ${LASH_BOLT_AT_IN2} in², allowable ${f(k.Ft, 0)} = ${f(p.lashBoltYieldPsi, 0)} / ${p.steelSafetyFactor}) and ${f(k.V1)} lbf of shear (${f(k.tau, 0)} psi on the ${LASH_BOLT_AR_IN2} in² root, allowable ${f(k.Fv, 0)}); together ${k.interaction.toFixed(2)}. `
       + `Bearing: ${f(k.V1)} lbf per bolt on ${LASH_BOLT_DIA_IN}" x ${p.sideRibDepthIn}" of head = ${f(k.headBearing, 0)} psi (≤ ${f(al.oakDowel, 0)}; the bands and web behind it not counted); the ${LASH_WASHER.od}" fender washer outside bears ${f(k.washerBearing, 0)} psi on the outer band (≤ ${f(al.oakPerp, 0)}, compression ⊥). `
-      + `Rib: each rib pulled alone at ${f(k.H)} lbf inboard in the side-lateral model; rib ${k.ribN} takes ${f(k.ribM, 0)} lb·in above its base, ${f(k.ribSig, 0)} psi on the rib section (≤ ${f(al.oakBend, 0)}). The side's own stresses at the rating are in the side-lateral row.`,
+      + `Rib: each rib pulled alone at ${f(k.H)} lbf inboard in the side-lateral model; rib ${k.ribN} takes ${f(k.ribM, 0)} lb·in above its base, ${f(k.ribSig, 0)} psi on the rib section (≤ ${f(al.oakBend, 0)}). The side's own stresses at the rating are in the side-lateral row.`
+      + (k.pinRib ? ` D-78 removable knee: the box rib (rib ${k.pinRib.n}) is ${f(k.pinRib.w, 2)}" wide and carries the knee's top pin T, ${f(k.pinRib.zT, 2)}" above the deck, with ${f(Math.hypot(k.pinRib.FTx, k.pinRib.FTz), 0)} lbf in the side's plane and up to ${f(k.pinRib.pull, 0)} lbf of outward pull; the ${f(k.pinRib.sOd, 2)}" sleeve hole leaves S = ${f(k.pinRib.Snet, 3)} in³ of ${f(k.pinRib.S, 3)}: the rating's ${f(k.pinRib.ribFRating, 0)} lbf at the box rib gives ${f(k.pinRib.sigHoleRating, 0)} psi at the hole (the strap pulls the rib in, the knee out: not added above the hole), the D-ring's ${f(k.pinRib.V, 0)} lbf up plus the pin's z part ${f(Math.abs(k.pinRib.FTz), 0)} lbf over the net section ${f(k.pinRib.axial, 0)} psi. The pin's own splitting, bearing and cleavage checks on this rib are in brake-mount (brake-rib rows).` : ''),
   });
 }
 

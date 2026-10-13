@@ -132,11 +132,26 @@ export function fastenerMaterialNote(label: string, usedOn: readonly string[] = 
     : '316 stainless REQUIRED: in wet white oak (tannins corrode coated steel and stain the wood black). 304 is a possible cost cut, not priced.';
 }
 
+/** D-78: the knee's two kinds of quick-release pin (bottom B, top T). */
+const KNEE_PIN_RE = /^brake-pin-[BT]$/;
+/**
+ * The grade note of a ball-lock pin line. Ball-lock pins are usually 17-4 PH stainless: that is accepted for the Standard spec (304 class), but the Extreme spec asks for 316 and a 316 pin has to
+ * be sourced. Neither spec has a published pull-out rating for the locking balls: the shop asks the vendor.
+ */
+export function kneePinGradeNote(spec: SpecName): string {
+  return spec === 'standard'
+    ? 'Standard grade (304 class): ball-lock pins are usually 17-4 PH stainless, which is accepted. Ask the vendor for the pull-out rating of the locking balls (not published for these pins). Button end outboard; fit a short lanyard to the knee.'
+    : 'Extreme grade (316): ball-lock pins are usually 17-4 PH stainless, which is NOT 316, so a 316 pin must be sourced (ask the vendors; if none exists, 17-4 PH is a written exception). Ask the vendor for the pull-out rating of the locking balls (not published for these pins). Button end outboard; fit a short lanyard to the knee.';
+}
+
 const METAL_SPEC = /stainless|316|steel|bronze|zinc|galvanized|grade \d|hinge|chain|latch|clevis|hitch|snap hook|D-ring/i;
 /** The material note of a purchased hardware part (hinges, latches, pins, chain, eye bolts...), from the model's own spec; undefined for rope, foam, rubber, plastic, lights and other non-metal parts. */
 export function hardwareMaterialNote(x: Part, spec: SpecName = 'extreme'): string | undefined {
   const m = x.material ?? '';
   if (x.kind !== 'purchased' || !METAL_SPEC.test(m)) return undefined;
+  if (KNEE_PIN_RE.test(partKey(x))) return spec === 'standard'
+    ? '304-class stainless for the Standard spec; the usual 17-4 PH ball-lock pin is accepted.'
+    : '316 stainless REQUIRED by the Extreme spec, and ball-lock pins are usually 17-4 PH: source a 316 pin or write down 17-4 PH as the exception.';
   if (spec === 'standard') {
     if (/316|stainless/i.test(m)) return `304 / 18-8 stainless is right for the Standard spec (garage-kept); the model says "${m}" for the Extreme spec, which uses 316.`;
     if (/zinc|galvanized|grade \d|steel/i.test(m)) return `As specified: ${m}. Galvanized or zinc is right for the Standard spec (garage-kept); 316 for the Extreme spec.`;
@@ -801,13 +816,15 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   for (const r of cl.metal) {
     const g = metalGroups.get(r.section) ?? { section: r.section, ft: 0, cuts: [] };
     g.ft += (r.qty * (r.cutLengthIn + METAL_CUT_ALLOWANCE_IN)) / 12;
-    g.cuts.push(`${r.qty} × ${fracIn(r.cutLengthIn)}" (${r.name.replace(/\s+[LR]\d*$/, '').toLowerCase()})`);
+    g.cuts.push(`${r.qty} × ${fracIn(r.cutLengthIn)}" (${r.family === 'Stainless tube' ? r.name.replace(/\s*\([^)]*\)\s*$/, '').replace(/\s+[LR]$/, '') : r.name.replace(/\s+[LR]\d*$/, '').toLowerCase()})`);
     metalGroups.set(r.section, g);
   }
   const metal: BomLine[] = [];
+  const kneeOnPins = built.some((x) => x.id === 'brake-tab-L'); // D-78: no backing plates, so the bar is for the straps alone
   for (const g of metalGroups.values()) {
-    const price = metalPrice(g.section, spec);
-    if (!price) { unpriced.push(g.section); continue; }
+    const price0 = metalPrice(g.section, spec);
+    if (!price0) { unpriced.push(g.section); continue; }
+    const price: Price = kneeOnPins && price0.note ? { ...price0, note: price0.note.replace(/for the two brake backing plates.*?asks for a second piece to be safe\./s, 'for the two brake pivot straps (3-5/16" each): one 12 in piece cuts both.') } : price0;
     const extra = { vendor: price.url ? price.source : 'McMaster-Carr class', notes: `Cut to length: ${g.cuts.join(', ')}; allow ${fracIn(METAL_CUT_ALLOWANCE_IN)}" per cut for the kerf and squaring` };
     // The Standard spec buys 304 where the cut list (the model's material text) says 316.
     const name = std ? std304(g.section) : g.section;
@@ -844,17 +861,20 @@ function bomForSpec(parts: Part[], p: Params): Bom {
       if (price.note?.startsWith('UNPRICED')) unpriced.push(key);
     }
     const url = x.sourcing?.url ?? price.url;
-    const vendor = price.url ? price.source : shortVendor(x.sourcing?.vendor, x.kind);
+    // D-78: the knee's ball-lock pins say their grade and the estimate in the BOM's own words (the model's sourcing text is the long form of the same).
+    const kneePin = KNEE_PIN_RE.test(key);
+    const vendor = kneePin ? 'McMaster-Carr class' : price.url ? price.source : shortVendor(x.sourcing?.vendor, x.kind);
     const vendorFull = x.sourcing?.vendor ?? '';
     const extra: Partial<BomLine> = {
       vendor,
-      notes: [clip(vendorFull, 200), priceNote ? `Price: ${priceNote}` : ''].filter(Boolean).join(' | '),
+      notes: [kneePin ? kneePinGradeNote(spec) : clip(vendorFull, 200), priceNote ? `Price: ${priceNote}` : ''].filter(Boolean).join(' | '),
       partIds: group.map((q) => q.id),
       ...(url ? { url } : {}),
       ...(tg ? { group: tg } : {}),
       ...(hardwareMaterialNote(x, spec) ? { materialNote: hardwareMaterialNote(x, spec) } : {}),
     };
-    const name = purchasedDescribe(key, spec) ?? (std ? std304(x.name) : x.name);
+    const name0 = purchasedDescribe(key, spec) ?? (std ? std304(x.name) : x.name);
+    const name = kneePin ? name0.replace(/ [LR] \(/, ' (') : name0; // one line for both sides: "Brake knee top pin (3/8" ball-lock, ...)"
     // A part cut from a roll or a pack (a cord): the whole packs to buy, not a price per part.
     if (price.packQty && price.packUsd && price.perPart) purchased.push(packLine('Purchased parts', key, name, group.length * price.perPart, price, extra, false));
     else (tg ? touchLines : purchased).push(line(tg ? TOUCHES_SECTION.title : 'Purchased parts', key, name, group.length, price, extra));

@@ -930,6 +930,7 @@ function metalDims(x: Part, warnings: string[]): Dims {
 export function metalFamily(x: Part): string | null {
   const m = x.material.toLowerCase();
   if (/aluminum/.test(m)) return 'Aluminum tube';
+  if (/stainless/.test(m) && /\btube\b/.test(m)) return 'Stainless tube'; // D-78: the knee's pin sleeves
   if (/angle/.test(m)) return 'Angle';
   if (/flat bar/.test(m)) return 'Flat bar';
   if (/steel rod/.test(m) && !/stainless/.test(m)) return 'Steel rod';
@@ -942,6 +943,7 @@ function metalSection(x: Part, family: string, d: Dims): string {
   const grade = /316/.test(x.material) ? '316 stainless' : '18-8 (304) stainless'; // the model's own words for the weather spec (build-utils `stainless`)
   const wall = (): number | undefined => { const m = /(\d*\.\d+)"\s*wall/.exec(v); return m ? Number(m[1]) : x.geometry.type === 'cylinder' ? x.geometry.wall : undefined; };
   switch (family) {
+    case 'Stainless tube': return x.material; // the model's own words for the weather spec: "316 stainless tube 1/2" OD x 3/8" ID"
     case 'Steel rod': return `${fracIn(d.t)}" solid 1045 / CDS steel rod (cut to length)`;
     case 'DOM tube': return `${fracIn(d.t)}" OD x ${(wall() ?? 0.12).toFixed(3)}" wall DOM tube (ASTM A513 Type 5)`;
     case 'Aluminum tube': return `6061-T6 ${fracIn(d.t)}" x ${fracIn(d.w)}" x ${(wall() ?? 0.125).toFixed(3)}" wall rectangular tube`;
@@ -956,7 +958,9 @@ function metalRows(parts: Part[], warnings: string[], stepOf?: ReadonlyMap<strin
     const family = metalFamily(x);
     if (!family) { warnings.push(`${partKey(x)}: unrecognized metal material '${x.material}'`); continue; }
     const w: string[] = [];
-    const d = metalDims(x, w);
+    const d0 = metalDims(x, w);
+    // A pin sleeve is cut a hair long (up to the next 1/16 in) and filed flush after the epoxy has set.
+    const d = family === 'Stainless tube' ? { ...d0, l: Math.ceil(d0.l * 16 - 1e-6) / 16 } : d0;
     warnings.push(...w);
     const section = metalSection(x, family, d);
     const key = `${partKey(x)}|${dimKey(d)}`;
@@ -1073,7 +1077,9 @@ function cutsOf(plans: OakPartPlan[], pools: ResawPool[]): Cut[] {
             : `${name}, layer ${pc.layer} of ${pc.layers}${pc.acrossOf ? `, board ${pc.across} of ${pc.acrossOf}` : ''}${lgw(pc) ? ` (grain ${lgw(pc)})` : ''}`;
       const note = pc.piece === 'board' ? 'joint the glue edges, then glue the boards edge to edge'
         : pc.piece === 'layer' ? `plane to ${fractionText(pc.rough.t, 16)}" before the glue-up${lgw(pc) ? `; grain ${lgw(pc)}` : ''}${pc.acrossOf ? `; edge-glue its boards first${unequal(pc) ? ' (the two are NOT equal: board 1 is the bottom edge, board 2 the top)' : ''}` : lgw(pc) ? `; one piece, ${fractionText(pc.rough.w, 8)}" wide across its grain` : ''}`
-          : pc.piece === 'strip' ? 'rip the lane first, then resaw it on edge; plane to thickness after the resaw' : undefined;
+          : pc.piece === 'strip' ? 'rip the lane first, then resaw it on edge; plane to thickness after the resaw'
+            : pl.partNo === 'brake-knee-pad' ? 'plane a longer piece (12" or more) down to the thickness, then crosscut the pads from it; grain runs up the long side' // D-78
+              : pl.partNo === 'brake-tab' ? 'grain runs up the long side; glued to the knee only' : undefined;
       const key = `${pl.partNo}|${pc.piece}|${pc.index}|${pc.of}|${board}|${rowKeyDims(pc.rough)}`;
       const hit = map.get(key);
       if (hit) { hit.qty += 1; hit.ids.push(pl.part.id); continue; }
