@@ -8,8 +8,11 @@ Where the design stands (2026-10-13). The sled itself is in [DESIGN.md](../DESIG
 - Extreme-weather spec with its default 4 mm okoume: **$3,119** and the `side-web` row fails (see the plywood item below).
 - Waiting on Eric: the open choices below and measured Tacoma bed dimensions (Q-1).
 
+## Work in flight
+- **Removable brake knee (D-78), optional toggle** (Eric approved the idea as a setting, like the weather spec; default stays the bolted knee). Study and sketches: `docs/wip/removable-knee/` (retire in the commit that finishes the build outputs: fold into DESIGN.md and DECISIONS.md, delete the folder).
+
 ## Open items and parked ideas
-- **Fully removable brake assembly** (Eric, parked): the knee bolts to the rail with two quick-release pins and comes off with the flap, so nothing sticks out in transport. It trades some stiffness for removability.
+
 - **Extreme-weather plywood:** with the corrected across-grain side-web check, 4 mm okoume fails at 2.0 and 3 mm Baltic at 4.8 (1/4" white oak ply passes at 0.61). Choose a sheet for the Extreme spec: probably 6 mm okoume, or the same white oak ply.
 - **D-76 rib trims (Eric's call):** a 1-3/4" head (−0.05 lb), 5/8" washers (−0.05 lb), 1/2" knees (−0.07 lb).
 - **Applied outside stiles** (frame-and-panel look): skipped for now; easy to add later.
