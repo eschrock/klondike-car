@@ -82,7 +82,12 @@ export function buildFrame(ctx: Ctx): Part[] {
         (rail.joints ??= []).push({
           type: 'hole', to: `brake-sleeve-B-hull-${tag}`, count: 1, diaIn: pn.sleeveOd, at: [[pn.B.x, s * bgk.y.face, pn.B.z]],
           size: `1 × ${frac32(pn.sleeveOd)}" hole for the bottom-pin sleeve, square through the rail: ${f2(pn.B.fromRailRear)}" from the rail's finished rear end (the rear transom's inner face), ${f2(pn.B.belowRailTop)}" below its top edge (mid-height of the rail)`,
-          note: 'D-78: laid out from these numbers and drilled on the drill press with the rail on edge against a fence, or from the outer face with a drill block, at the frame step; the stainless sleeve is epoxied in, flush with both rail faces. The knee leg is drilled from the same numbers (its rear face and the rail bottom).',
+          note: 'D-78: laid out from these numbers and drilled on the drill press with the rail on edge against a fence, or from the outer face with a drill block, at the frame step; the stainless flanged bushing is epoxied in from the inside, flush with both rail faces. The knee leg is drilled from the same numbers (its rear face and the rail bottom).',
+        });
+        rail.joints.push({
+          type: 'hole', to: `brake-sleeve-B-hull-${tag}`, count: 1, diaIn: pn.flange.cboreDia, at: [[pn.B.x, s * bgk.y.railIn, pn.B.z]],
+          size: `1 × ${frac32(pn.flange.cboreDia)}" counterbore ${frac32(pn.flange.cboreDepth)}" deep in the rail's INNER face, centered on the bottom-pin hole (same ${f2(pn.B.fromRailRear)}" and ${f2(pn.B.belowRailTop)}" layout)`,
+          cut: { kind: 'counterbore', dia: pn.flange.cboreDia, depth: pn.flange.cboreDepth, what: 'the flange of the bottom-pin bushing, flush with the rail\'s inner face' },
         });
       } else {
       const pts: Vec3[] = kb.zs.flatMap((z) => kb.xs.map((x): Vec3 => [x, s * bgk.y.face, z]));

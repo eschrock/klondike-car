@@ -20,7 +20,7 @@
  */
 import { KNEE_MOUNT, type Params } from '../params';
 import type { Layout } from './layout';
-import { LASH_HOLE_DZ_IN, LASH_WASHER, ribBlockWidth, ribBlockZ0, sideRibStations, topPinZ, boxTieGeometry } from './side-ribs';
+import { LASH_HOLE_DZ_IN, LASH_WASHER, LASH_HOLE_DX_IN, ribBlockWidth, ribBlockZ0, sideRibStations, topPinZ, boxTieGeometry } from './side-ribs';
 
 export type V2 = [number, number];
 
@@ -170,11 +170,14 @@ export interface PinSite {
   /** Pin axis (x, z) in the model frame. */
   x: number;
   z: number;
-  /** Inboard end of the pin (the locking balls, `tipIn` past the last member), the outboard end of the handle, the modeled pin length between them, and the usable grip (the members it passes through). */
+  /** Inboard end of the pin (the locking balls, `tipIn` past the last member), the outboard end of the handle, and the modeled pin length between them. */
   yTip: number;
   yHead: number;
   len: number;
+  /** `grip` = `stack`: the members the pin passes (tab/leg, web/rail, filler, rib), measured. `gripOrder` is the usable length to BUY: the stack rounded up to the next 1/4 in (ball-lock pins come in 1/4 in grip steps). */
   grip: number;
+  stack: number;
+  gripOrder: number;
   /** The sleeve in the HULL (stays on the sled): |y| from its inner end to its outer end, and its length. */
   hullSleeve: { y0: number; y1: number; len: number };
   /** The sleeve in the KNEE side (comes off with the knee: in the knee leg at B, in the tab at T). */
@@ -196,6 +199,8 @@ export interface BrakePins {
   /** Web recess: how far the free web's outer face is inboard of the hull face (= the sandwich band thickness), and the web's outer face |y|. */
   webRecess: number;
   yWebOut: number;
+  /** The flange of the hull sleeves (flanged bushings), on the INBOARD face of the rail and of the rib block, let into a counterbore so it is flush: flange OD and thickness, counterbore diameter and depth. The balls of the pin bear on it. */
+  flange: { od: number; t: number; cboreDia: number; cboreDepth: number };
   /** Thickness of each hull member the pin passes: the web, the band-strip filler and the box rib at T, and the rail at B. */
   hull: { web: number; filler: number; rib: number; rail: number };
   /** Bottom pin B: x = the knee's center, z = the rail's mid-height; distances from the rail's rear end (the rear transom's inner face) and from its top edge. */
@@ -277,7 +282,10 @@ export interface BrakeGeom {
   /** Bungee: eye on the flap (surface point, applied), transom anchor (x, y, z), cord lengths released / applied (3-D), cord tension released / applied, and the moment arm data. */
   bungee: { sEye: number; E: V2; Erel: V2; A: [number, number, number]; lenRel: number; lenApp: number; tRel: number; tApp: number; rate: number; fRel: V2; fApp: V2; mRel: number; mApp: number };
   /** Outrigger (knee), plan outline in (y, z) for the left side, x range, leg, arm; the rail, the backer and the bolt pattern. */
-  knee: { x0: number; x1: number; poly: V2[]; legT: number; armT: number; zLeg: number; zArmBot: number; zTop: number; zBot: number; yOut: number; area: number;
+  knee: { x0: number; x1: number; poly: V2[]; legT: number; armT: number; zLeg: number; zArmBot: number; zTop: number;
+    /** D-78: the top of the knee LEG (y from the hull face to the leg's outer face): equal to `zTop`, except with the pins, where the leg stands up to `brakeKneeTopAbovePinIn` over pin T so it backs the tab's whole sleeve (the arm and the roof stay at `zTop`). */
+    zTopLeg: number;
+    zBot: number; yOut: number; area: number;
     /** D-75: the face-glued layers, rear to front, with their grain. */
     layers: KneeLayer[];
     /** D-75: height (z) of the edge-glue line of each 'y'-grain layer (wider across its grain than a board): midway between the top bolt hole and the shoulder, along that layer's grain;
@@ -437,7 +445,12 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
   const zTop = zPocketTop + p.brakeKneeRoofIn; // D-77: the roof stands over the pocket (D-65 had the knee top flush with the block top, the slot open above)
   const zArmBot = Math.min(zPocketBot - p.brakeKneeFloorIn, zTop - 0.5);
   const armT = zTop - zArmBot;
-  const poly: V2[] = [[yFace, zb], [yFace + legT, zb], [yFace + legT, zLeg], [yOut, zArmBot], [yOut, zTop], [yFace, zTop]];
+  // D-78: with the pins the knee LEG stands up over pin T (its sleeve in the tab needs oak behind it in front of the pin); the arm and the roof keep their height.
+  const pinStation = p.kneeMount === KNEE_MOUNT.pins ? sideRibStations(p, L)[0] : undefined;
+  const pinTz = pinStation && pinStation.kind === 'box' ? topPinZ(p, L, pinStation) : undefined;
+  const zTopLeg = pinTz !== undefined ? Math.max(zTop, pinTz + p.brakeKneeTopAbovePinIn) : zTop;
+  const poly: V2[] = [[yFace, zb], [yFace + legT, zb], [yFace + legT, zLeg], [yOut, zArmBot], [yOut, zTop],
+    ...(zTopLeg > zTop + 1e-9 ? [[yFace + legT, zTop], [yFace + legT, zTopLeg], [yFace, zTopLeg]] as V2[] : [[yFace, zTop]] as V2[])];
   const zUnderAt = (yy: number) => (yy <= yFace + legT ? zb : zLeg + ((zArmBot - zLeg) * (yy - (yFace + legT))) / Math.max(1e-9, yOut - (yFace + legT)));
   const pinDia = p.brakePivotPinDiaIn;
   // ── D-77 strap: straight flat bar on the outboard face, its rear edge flush with the knee's rear face (the pin sits 0.76 in ahead of it, so the pin has the most metal behind it);
@@ -481,10 +494,10 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
   // and the shoulder (the review found the old even split landing on the shoulder); the 'z' layer crosses it with long grain.
   // D-77: the knee is taller (the roof over the pocket), so the D-75 joint (midway between the top bolt hole and the shoulder) leaves an upper piece wider than a board; the joint then moves
   // 3/4 in ABOVE the shoulder, where both pieces fit a board. It runs along the across layer's grain and both UPRIGHT layers are glued over it.
-  const fits = (zj: number) => Math.max(zj - zb, zTop - zj) + p.laminateWidthAllowanceIn <= KNEE_BOARD_WIDTH_IN + 1e-9;
+  const fits = (zj: number) => Math.max(zj - zb, zTopLeg - zj) + p.laminateWidthAllowanceIn <= KNEE_BOARD_WIDTH_IN + 1e-9;
   const zMidD75 = (zs[zs.length - 1] + bd / 2 + zLeg) / 2, zAbove = zLeg + KNEE_JOINT_CLEAR_IN;
-  const zEdgeGlue = fits(zMidD75) ? zMidD75 : fits(zAbove) ? zAbove : (zb + zTop) / 2;
-  const knee = { x0: kx0, x1: kx1, poly, legT, armT, zLeg, zArmBot, zTop, zBot: zb, yOut, area: polyArea(poly), layers: kneeLay, zEdgeGlue, roof: p.brakeKneeRoofIn, floor: p.brakeKneeFloorIn };
+  const zEdgeGlue = fits(zMidD75) ? zMidD75 : fits(zAbove) ? zAbove : (zb + zTopLeg) / 2;
+  const knee = { x0: kx0, x1: kx1, poly, legT, armT, zLeg, zArmBot, zTop, zTopLeg, zBot: zb, yOut, area: polyArea(poly), layers: kneeLay, zEdgeGlue, roof: p.brakeKneeRoofIn, floor: p.brakeKneeFloorIn };
   // The backer runs from behind the first bolt column to ahead of the last, clear of the axle hanger behind it (joists in the way are cut back in frame.ts).
   const hangerFace = L.beamR.x + p.axleHangerWidthIn / 2;
   const bx0 = Math.max(hangerFace + 0.1, xs[0] - 1.5 * bd - 0.5 * (kx1 - kx0) / cols);
@@ -515,7 +528,7 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
       const bx = (kx0 + kx1) / 2, bz = (zb + zt) / 2;
       const bTip = yRailIn - tip, bHead = yFace + legT + head;
       const B = {
-        x: bx, z: bz, yTip: bTip, yHead: bHead, len: bHead - bTip, grip: railT + legT,
+        x: bx, z: bz, yTip: bTip, yHead: bHead, len: bHead - bTip, grip: railT + legT, stack: railT + legT, gripOrder: Math.ceil((railT + legT) * 4 - 1e-9) / 4,
         hullSleeve: { y0: yRailIn, y1: yFace, len: railT }, kneeSleeve: { y0: yFace, y1: yFace + legT, len: legT },
         fromRailRear: bx - (L.xRear + L.transom), belowRailTop: zt - bz, fromKneeRear: bx - kx0, fromKneeBottom: bz - zb,
       };
@@ -526,7 +539,7 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
       const tYOut = yWebOut + tabT;
       const tTip = yTIn - tip, tHead = tYOut + head;
       const T = {
-        x: tx, z: tz, yTip: tTip, yHead: tHead, len: tHead - tTip, grip: ribT + fillerT + webT + tabT,
+        x: tx, z: tz, yTip: tTip, yHead: tHead, len: tHead - tTip, grip: ribT + fillerT + webT + tabT, stack: ribT + fillerT + webT + tabT, gripOrder: Math.ceil((ribT + fillerT + webT + tabT) * 4 - 1e-9) / 4,
         hullSleeve: { y0: yTIn, y1: yWebOut, len: ribT + fillerT + webT }, kneeSleeve: { y0: yWebOut, y1: tYOut, len: tabT },
         fromRibFoot: tz - tg.z0, belowRibTop: st.top - tz, ahead: kx0 - tx,
       };
@@ -536,7 +549,7 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
         patch: { y0: yFace, y1: Math.min(tYOut, yFace + legT), z0: 0, z1: 0, area: 0, zc: 0, ePin: 0, eTab: 0 },
         bearing: { x0: 0, x1: 0, z0: 0, z1: 0, area: 0 } };
       const ph = tab.patch;
-      ph.z0 = Math.max(tab.z0, zb); ph.z1 = Math.min(tab.z1, zTop);
+      ph.z0 = Math.max(tab.z0, zb); ph.z1 = Math.min(tab.z1, zTopLeg);
       ph.area = Math.max(0, ph.z1 - ph.z0) * Math.max(0, ph.y1 - ph.y0);
       ph.zc = (ph.z0 + ph.z1) / 2; ph.ePin = tz - ph.zc; ph.eTab = (tab.z0 + tab.z1) / 2 - ph.zc;
       tab.glueArea = ph.area;
@@ -551,6 +564,8 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
       if (tz + sOd / 2 > st.top - L.railBand) issues.push('pin T is in the rib head, among the D-ring bolts (it belongs in the shaft, under the head)');
       if (bw < sOd + 2 * p.brakePinEdgeIn - 1e-9) issues.push('the box rib block is too narrow for the sleeve');
       if (tz - bz0 < sOd / 2 + p.brakePinEdgeIn - 1e-9) issues.push('the box rib block starts too close under pin T');
+      if (zTopLeg < tz + sOd / 2 + p.brakePinEdgeIn - 1e-9) issues.push('the knee leg does not stand up over the top-pin sleeve');
+      if (kx0 < tx + LASH_HOLE_DX_IN + LASH_WASHER.od / 2 && zTopLeg > washerBotZ - p.brakeTabClearIn) issues.push('the knee leg reaches the D-ring washers');
       if (tab.z0 < zLeg) issues.push('the knee tab reaches down into the chine band');
       if (ph.area < 1.5) issues.push(`the glue patch of the knee tab is only ${ph.area.toFixed(2)} in2`);
       if (tab.z1 > washerBotZ - p.brakeTabClearIn + 1e-9) issues.push(`the knee tab top (${tab.z1.toFixed(2)}") is within ${p.brakeTabClearIn}" of the D-ring washers (bottom ${washerBotZ.toFixed(2)}")`);
@@ -560,6 +575,7 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
       if (bz - sOd / 2 < zb + 0.5 || bz + sOd / 2 > zt - 0.5) issues.push('pin B is too close to the rail edges');
       pins = {
         dia: p.brakePinDiaIn, sleeveOd: sOd, sleeveId: p.brakeSleeveIdIn, tipIn: tip, headIn: head, webRecess: recess, yWebOut,
+        flange: { od: p.brakeSleeveFlangeOdIn, t: p.brakeSleeveFlangeThickIn, cboreDia: p.brakeSleeveFlangeOdIn + 1 / 32, cboreDepth: p.brakeSleeveFlangeThickIn },
         hull: { web: webT, filler: fillerT, rib: ribT, rail: railT }, B, T,
         rib: { x: st.x, w: p.sideRibWidthIn, blockW: bw, blockZ0: bz0, z0: tg.z0, z1: st.top, tieTopZ: tg.z1, washerBotZ },
         tab, clear: { tabTopToWasher: washerBotZ - tab.z1, ballTipToBox: tTip - gBox }, issues,

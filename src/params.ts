@@ -1471,7 +1471,7 @@ const defs = {
       { value: KNEE_MOUNT.bolted, label: 'Bolted to the rail (stays on)' },
       { value: KNEE_MOUNT.pins, label: 'Removable, on quick-release pins' },
     ],
-    note: 'D-78 (optional setting; the default stays the D-75 bolted knee). Pins: the oak knee, its strap, a tab and a pad come off with the flap, held on by two 3/8 in ball-lock pins per side in stainless sleeves, one through the knee leg and the rail, one through the knee tab, the side web, the filler and the rear (box) rib. No knee bolts, no backer, no backing plate. With the brakes off (or Transport mode) the hull is flush: two 1/2 in stainless sleeve ends on each side and nothing else. Needs the rear storage box (the pin rides on the box rib).',
+    note: 'D-78 (optional setting; the default stays the D-75 bolted knee). Pins: the oak knee, its strap and a tab come off with the flap, held on by two 3/8 in ball-lock pins per side in stainless sleeves, one through the knee leg and the rail, one through the knee tab, the side web, the filler and the rear (box) rib. No knee bolts, no backer, no backing plate. With the brakes off (or Transport mode) the hull is flush: two flanged stainless bushings on each side (flush with the surface) and nothing else. Needs the rear storage box (the pin rides on the box rib).',
   },
 
   brakeTabThickIn: {
@@ -1496,6 +1496,24 @@ const defs = {
     label: 'Box rib: full-width block below the top pin', group: 'brake', unit: 'in',
     default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-78',
     note: 'D-78: with the pins the box rib is as wide as its head (sideRibHeadLengthIn) from this far below the top pin up to the head, so the 1/2 in sleeve has 3/4 in of oak each side (a 3/4 in shaft would leave 1/8 in and split). Below that it is the normal shaft. The band-strip filler behind it follows.',
+  },
+
+  brakeKneeTopAbovePinIn: {
+    label: 'Knee leg top above the top pin center (pins setting)', group: 'brake', unit: 'in',
+    default: 0.75, min: 0.5, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-78',
+    note: 'D-78: the pin pushes the tab forward against the knee, so the knee leg has to stand up behind the whole sleeve (0.25 in radius) with oak to spare: its top is this far over the pin center (about 15.15 in). Only the leg (against the hull) goes up; the arm and the roof keep their D-77 height. Stays clear of the reflector and the D-ring washers.',
+  },
+
+  brakeSleeveFlangeOdIn: {
+    label: 'Hull sleeve flange outside diameter', group: 'brake', unit: 'in',
+    default: 0.75, min: 0.625, max: 1, step: 0.0625, status: 'assumed', ref: 'D-78',
+    note: 'D-78: the two sleeves in the hull (rail, box rib) are flanged bushings, flange on the INBOARD face, let into a shallow counterbore so the flange is flush. The ball-lock balls bear on the flange, not on bare wood. Bought ready-made, stainless by weather spec.',
+  },
+
+  brakeSleeveFlangeThickIn: {
+    label: 'Hull sleeve flange thickness', group: 'brake', unit: 'in',
+    default: 0.0625, min: 0.03, max: 0.125, step: 0.0156, status: 'assumed', ref: 'D-78',
+    note: 'D-78: a standard flanged bushing has a 1/16 in flange; the counterbore in the rail and the box rib is this deep.',
   },
 
   brakeTabEndIn: {

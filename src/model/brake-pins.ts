@@ -1,6 +1,6 @@
 /**
- * D-78: the parts of the removable brake knee on quick-release pins (`kneeMount` = pins). Per side: the knee TAB, two 3/8 in ball-lock pins (B through the knee leg and the
- * rail, T through the tab, the web, the filler and the box rib) and four stainless sleeves (two on the hull, which stay, and two on the knee side, which come off with it). All sizes and
+ * D-78: the parts of the removable brake knee on quick-release pins (`kneeMount` = pins). Per side: the knee TAB, two 3/8 in ball-lock pins (bottom: through the knee leg and the
+ * rail; top: through the tab, the web, the filler and the box rib) and four stainless sleeves (two FLANGED bushings in the hull, which stay, and two plain tubes on the knee side, which come off with it). All sizes and
  * places come from `BrakeGeom.pins` (brake-layout.ts); nothing is typed here. The rail's and the rib's hole joints are written by frame.ts and side-ribs.ts. Plain TS, no three.js.
  */
 import { WEATHER_SPEC } from '../params';
@@ -46,22 +46,26 @@ export function buildKneePinParts(ctx: Ctx, g: BrakeGeom, sgn: 1 | -1, tag: 'L' 
 
   // ── The four sleeves: stainless tube, cut to length ──
   const tubeLb = (len: number) => ((Math.PI / 4) * (sOd * sOd - sId * sId) * len) * steelLb;
+  const fl = pn.flange;
+  const flangeLb = (Math.PI / 4) * (fl.od * fl.od - sOd * sOd) * fl.t * steelLb; // the flange is the part of the bushing outside the tube, let into the wood so it is flush
   const sleeve = (key: 'B' | 'T', side: 'hull' | 'knee', x: number, z: number, y0: number, y1: number, host: string, step: number, extra: string): Part => {
     const len = y1 - y0;
     const id = key === 'B' ? (side === 'hull' ? `brake-sleeve-B-hull-${tag}` : `brake-sleeve-B-knee-${tag}`) : (side === 'hull' ? `brake-sleeve-T-hull-${tag}` : `brake-sleeve-T-tab-${tag}`);
     const partNo = id.replace(/-[LR]$/, '');
     const pinId = `brake-pin-${key}-${tag}`;
     const part = cylinder(ctx, {
-      id, partNo, name: `Brake pin sleeve ${key}, ${side === 'hull' ? 'hull' : key === 'B' ? 'knee leg' : 'tab'} ${tag} (${stainlessName(p)})`, group: 'brake', mat: 'steel', kind: 'metal', fab: 'bandsaw', step,
-      material: `${stainless(p)} tube ${frac(sOd)}" OD x ${frac(sId)}" ID`, center: [x, yMid(y0, y1), z], axis: 'y', radius: sOd / 2, length: len, wall,
+      id, partNo, name: `Brake ${key === 'B' ? 'bottom' : 'top'}-pin ${side === 'hull' ? 'flanged bushing in the hull' : key === 'B' ? 'sleeve in the knee leg' : 'sleeve in the tab'} ${tag} (${stainlessName(p)})`, group: 'brake', mat: 'steel', kind: side === 'hull' ? 'purchased' : 'metal', fab: side === 'hull' ? 'buy' : 'bandsaw', step,
+      material: side === 'hull' ? `${stainless(p)} flanged bushing ${frac(sOd)}" OD x ${frac(sId)}" ID, ${frac(fl.od)}" flange` : `${stainless(p)} tube ${frac(sOd)}" OD x ${frac(sId)}" ID`, center: [x, yMid(y0, y1), z], axis: 'y', radius: sOd / 2, length: len, wall,
       removable: side === 'knee', explode: [0, sgn, 0.1],
-      sourcing: { vendor: `McMaster-Carr or Online Metals (${stainless(p)} tube or plain bushing, ${frac(sOd)}" OD x ${frac(sId)}" ID, close sliding fit for a ${frac(pn.dia)}" pin; cut a ${frac(len)}" piece on the metal bandsaw and deburr the ends)`, costUsd: 2 },
-      notes: `Stainless sleeve ${frac(len)}" long, ${frac(sOd)}" outside and ${frac(sId)}" inside: the ${frac(pn.dia)}" pin bears on steel instead of on a hole in oak. ${extra} Epoxy it into its ${frac(sOd)}" hole with a smear of thickened epoxy (keep the epoxy out of the bore; run a waxed ${frac(pn.dia)}" rod through it while it cures). Cut square, deburr the ends and check the pin slides in and out by hand before the glue is on.${side === 'knee' ? ' ' + KIT_NOTE : ' It stays in the hull when the knee is off, flush with the surface.'}`,
+      sourcing: { vendor: side === 'hull'
+        ? `McMaster-Carr or similar (${stainless(p)} flanged sleeve bushing, ${frac(sOd)}" OD x ${frac(sId)}" ID, ${frac(fl.od)}" flange ${frac(fl.t)}" thick, close sliding fit for a ${frac(pn.dia)}" pin; the next stock length up, shortened to ${frac(len)}" at the plain end on the metal bandsaw and deburred)`
+        : `McMaster-Carr or Online Metals (${stainless(p)} tube or plain bushing, ${frac(sOd)}" OD x ${frac(sId)}" ID, close sliding fit for a ${frac(pn.dia)}" pin; cut a ${frac(len)}" piece on the metal bandsaw and deburr the ends)`, costUsd: side === 'hull' ? 4 : 2 },
+      notes: `Stainless ${side === 'hull' ? 'flanged bushing' : 'sleeve'} ${frac(len)}" long, ${frac(sOd)}" outside and ${frac(sId)}" inside: the ${frac(pn.dia)}" pin bears on steel instead of on a hole in oak. ${extra} Epoxy it into its ${frac(sOd)}" hole with a smear of thickened epoxy (keep the epoxy out of the bore; run a waxed ${frac(pn.dia)}" rod through it while it cures). ${side === 'hull' ? `The flange is on the INBOARD end (the rail's inner face; the box rib's inner face) and sits in a ${frac(fl.cboreDia)}" counterbore ${frac(fl.cboreDepth)}" deep so it is flush: the pin's locking balls bear on it, not on bare wood. ` : ''}Cut square, deburr the ends and check the pin slides in and out by hand before the glue is on.${side === 'knee' ? ' ' + KIT_NOTE : ' It stays in the hull when the knee is off, flush with the surface.'}`,
     });
     const w = (yy: number): Vec3 => [x, sgn * yy, z];
-    part.massLb = tubeLb(len);
+    part.massLb = side === 'hull' ? tubeLb(len - fl.t) + flangeLb : tubeLb(len);
     part.joints = [
-      { type: 'glue', to: host, count: 1, note: 'epoxy around the sleeve in its hole', at: [at(part, w(mid(y0, y1)))] },
+      { type: 'glue', to: host, count: 1, note: side === 'hull' ? 'epoxy around the bushing in its hole and under the flange in its counterbore' : 'epoxy around the sleeve in its hole', at: [at(part, w(mid(y0, y1)))] },
       { type: 'pin', to: pinId, count: 1, diaIn: pn.dia, size: `${frac(sId)}" bore, ${frac(len)}" of bearing for the ${frac(pn.dia)}" ball-lock pin`, at: [at(part, w(mid(y0, y1)))] },
     ];
     return part;
@@ -75,7 +79,7 @@ export function buildKneePinParts(ctx: Ctx, g: BrakeGeom, sgn: 1 | -1, tag: 'L' 
   // ── The two ball-lock pins (bought) ──
   const pinMass = (len: number) => (Math.PI / 4) * pn.dia * pn.dia * (len - pn.headIn) * steelLb + p.brakePinHeadLb;
   const pin = (key: 'B' | 'T', site: typeof B | typeof T, members: string, mates: Array<{ to: string; note: string }>, extra: string): Part => {
-    const usable = site.grip;
+    const usable = site.gripOrder;
     const part = cylinder(ctx, {
       id: `brake-pin-${key}-${tag}`, partNo: `brake-pin-${key}`, name: `Brake knee ${key === 'B' ? 'bottom' : 'top'} pin ${tag} (3/8" ball-lock, ${stainlessName(p)})`, group: 'brake', mat: 'fixed', kind: 'purchased', fab: 'buy', step: STEP.brake,
       massLb: pinMass(site.len), material: `${stainless(p)} ball-lock quick-release pin, ${frac(pn.dia)}" dia, ${frac(usable)}" usable length, with lanyard`,
@@ -86,7 +90,7 @@ export function buildKneePinParts(ctx: Ctx, g: BrakeGeom, sgn: 1 | -1, tag: 'L' 
           : `A 316 stainless ball-lock quick-release pin must be sourced for the Extreme spec (${frac(pn.dia)}" diameter, ${frac(usable)}" usable length); the common ones are 17-4 PH stainless, which is not 316 (ask the vendor, or accept 17-4 PH as a written exception); get the vendor's pull-out rating, the button end is outboard`,
         costUsd: 25,
       },
-      notes: `${frac(pn.dia)}" ball-lock quick-release pin, ${frac(usable)}" usable length, for the stack ${members}. Push the button, slide it in from the OUTSIDE until the balls are through the last sleeve (they stand ${f2(pn.tipIn)}" past it), let the button go: the balls hold it. The handle stands ${f2(pn.headIn)}" proud outboard. Pull the button to take it out. A short lanyard to the knee keeps it from getting lost. ${extra} Ball-lock pins are usually 17-4 PH stainless: right for the Standard spec; for the Extreme spec a 316 pin has to be sourced. The pull-out rating of the locking balls is not published for these pins: ask the vendor before buying. ${KIT_NOTE}`,
+      notes: `${frac(pn.dia)}" ball-lock quick-release pin, ${frac(usable)}" usable length, for the stack ${members} (${frac(site.stack)}" thick; buy the next 1/4" grip up, ${frac(usable)}"). Push the button, slide it in from the OUTSIDE until the balls are through the last sleeve (they stand ${f2(pn.tipIn)}" past it), let the button go: the balls hold it. The handle stands ${f2(pn.headIn)}" proud outboard. Pull the button to take it out. A short lanyard to the knee keeps it from getting lost. ${extra} Ball-lock pins are usually 17-4 PH stainless: right for the Standard spec; for the Extreme spec a 316 pin has to be sourced. The pull-out rating of the locking balls is not published for these pins: ask the vendor before buying. ${KIT_NOTE}`,
     });
     part.joints = mates.map((m): Joint => ({ type: 'pin', to: m.to, count: 1, diaIn: pn.dia, size: m.note, at: [at(part, [site.x, sgn * mid(site.yTip, site.yHead), site.z])] }));
     return part;
