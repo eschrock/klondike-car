@@ -76,6 +76,15 @@ export function buildFrame(ctx: Ctx): Part[] {
     {
       const bgk = brakeGeometry(p, L);
       const kb = bgk.bolts;
+      const pn = bgk.pins;
+      if (pn) {
+        // D-78: the removable knee has no bolts: the rail carries ONE sleeve hole for pin B, at its absolute layout (from the rail's rear end and its top edge).
+        (rail.joints ??= []).push({
+          type: 'hole', to: `brake-sleeve-B-hull-${tag}`, count: 1, diaIn: pn.sleeveOd, at: [[pn.B.x, s * bgk.y.face, pn.B.z]],
+          size: `1 × ${frac32(pn.sleeveOd)}" hole for the bottom-pin sleeve, square through the rail: ${f2(pn.B.fromRailRear)}" from the rail's finished rear end (the rear transom's inner face), ${f2(pn.B.belowRailTop)}" below its top edge (mid-height of the rail)`,
+          note: 'D-78: laid out from these numbers and drilled on the drill press with the rail on edge against a fence, or from the outer face with a drill block, at the frame step; the stainless sleeve is epoxied in, flush with both rail faces. The knee leg is drilled from the same numbers (its rear face and the rail bottom).',
+        });
+      } else {
       const pts: Vec3[] = kb.zs.flatMap((z) => kb.xs.map((x): Vec3 => [x, s * bgk.y.face, z]));
       const fromRear = kb.xs.map((x) => frac32(x - x0)).join('" and ');
       const belowTop = kb.zs.map((z) => L.railTop - z).sort((a, b) => a - b).map(frac32).join('" and ');
@@ -84,6 +93,7 @@ export function buildFrame(ctx: Ctx): Part[] {
         size: `${pts.length} × ${frac32(kb.dia + 1 / 32)}" holes for the ${frac32(kb.dia)}" brake-knee bolts, square through the rail and the glued backer: ${fromRear}" from the rail's finished rear end (the rear transom's inner face), ${belowTop}" below its top edge`,
         note: 'D-75: laid out from these numbers at the frame step and drilled from the outer face through the rail and the backer (no knee needed as a template); the knee leg is later drilled from the same positions (its rear face and the rail bottom)',
       });
+      }
     }
     rail.plies = 2;
     rail.notes += ` CUT LIST (build 3c S2): ${f2(railT / 2)}" × ${f2(railD + p.laminateWidthAllowanceIn)}" × ${f2(developed + p.laminateLengthAllowanceIn)}" strips, TWO per rail (resaw from 4/4 and plane; strips this thin and ${f2(railD)}" wide need a planer sled or a drum sander), plus 25% spares; only the last ${f2(L.railEnd - L.taper.x0)}" is curved.`;
@@ -119,8 +129,8 @@ export function buildFrame(ctx: Ctx): Part[] {
   L.joistX.forEach((x, i) => {
     const isKing = x === L.king.x;
     const meetsHanger = hangerAt(x);
-    const bkr = brakeGeometry(p, L).backer; // the step brake's oak backers on the rail inner faces (D-57): a joist that meets one is cut back to its inner face
-    const meetsBacker = x + L.joistT / 2 > bkr.x0 && x - L.joistT / 2 < bkr.x1;
+    const bkg = brakeGeometry(p, L), bkr = bkg.backer; // the step brake's oak backers on the rail inner faces (D-57): a joist that meets one is cut back to its inner face
+    const meetsBacker = !bkg.pins && x + L.joistT / 2 > bkr.x0 && x - L.joistT / 2 < bkr.x1; // D-78: no backer on the removable knee, so no cutback
     const halfT = x === L.king.x ? L.king.len : x === L.chain.joistX ? L.chain.joistT : L.joistT; // the chain joist is thicker than the others (D-58)
     const half = rY0 - L.turnIn(x + halfT / 2) - (meetsHanger ? p.axleHangerThickIn : 0) - (meetsBacker && !meetsHanger ? bkr.t : 0);
     if (isKing) {

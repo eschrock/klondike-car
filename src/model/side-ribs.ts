@@ -11,7 +11,7 @@
  * Between the bands the rib's back sits on a filler of band strip (it fills the band thickness down to the web), so the rib blank is one 3/4 in board.
  * They replace the six screwed lash doublers (D-41, D-47). Everything here is bandsawn from 4/4 offcuts and epoxied in after the deck is in.
  */
-import { STORAGE_LOCATION } from '../params';
+import { KNEE_MOUNT, STORAGE_LOCATION } from '../params';
 import { STEP, box, frac16 as frac, SIDES, stainless, dRingMat, type Ctx } from './build-utils';
 import { extPart, frameMat } from './body';
 import { transformPoint } from './bounds';
@@ -108,6 +108,15 @@ export function sideRibStations(p: Params, L: Layout): RibStation[] {
   return out;
 }
 
+/** D-78: the box rib (station 1) carries the top pin of the removable brake knee when the knee is on pins and there is a rear box beside it. */
+export const pinsOnRib = (p: Params, st: Pick<RibStation, 'n' | 'kind'>): boolean => p.kneeMount === KNEE_MOUNT.pins && st.n === 1 && st.kind === 'box';
+
+/** Width of a rib's shaft (in): the D-76 width, except that the box rib is widened to the pin sleeve plus the minimum oak each side of it when it carries the knee's top pin (D-78: a 1/2 in sleeve in a 3/4 in rib leaves 1/8 in). */
+export const ribShaftWidth = (p: Params, st: Pick<RibStation, 'n' | 'kind'>): number => (pinsOnRib(p, st) ? Math.max(p.sideRibWidthIn, p.brakeSleeveOdIn + 2 * p.brakePinEdgeIn) : p.sideRibWidthIn);
+
+/** D-78: z of the top pin's axis: the box tie spacer's top plus `brakeTopPinClearIn` (the pin cannot pass the tie, and its ball tip must clear it). */
+export const topPinZ = (p: Params, L: Layout, st: RibStation): number => boxTieGeometry(p, L, st).z1 + p.brakeTopPinClearIn;
+
 /** The box-tie spacer's z range (its top 1/8 in under the coaming, so it is glued to the box side, never to the lid frame, and under the rib head), and its y range. */
 export function boxTieGeometry(p: Params, L: Layout, st: RibStation): { z0: number; z1: number; yBox: number; yRib: number } {
   const g = storageGeometry(p, L);
@@ -144,7 +153,7 @@ export function buildSideRibs(ctx: Ctx): Part[] {
   const { p, L } = ctx;
   const parts: Part[] = [];
   const stations = sideRibStations(p, L);
-  const w = p.sideRibWidthIn, dep = p.sideRibDepthIn, hl = p.sideRibHeadLengthIn, band = L.sideBand;
+  const dep = p.sideRibDepthIn, hl = p.sideRibHeadLengthIn, band = L.sideBand;
   const bolt = lashBoltLength(p);
   const ks = kneeScrews(p, L);
   const nRings = Math.max(0, Math.min(3, Math.round(p.lashPointsPerSide)));
@@ -152,6 +161,7 @@ export function buildSideRibs(ctx: Ctx): Part[] {
   for (const { s, tag } of SIDES) {
     for (const st of stations) {
       const ribId = `side-rib-${tag}${st.n}`;
+      const w = ribShaftWidth(p, st); // D-78: wider for the box rib that carries the knee's top pin
       const yaw = Math.atan(st.dTurn);
       // Local frame: ex along the side (forward on the left, aft on the right, so the frame stays right-handed), ey up, ez inboard.
       const sgnU = s; // +1 left, -1 right
@@ -191,6 +201,13 @@ export function buildSideRibs(ctx: Ctx): Part[] {
         { type: 'glue', to: `side-${tag}-web`, count: 1, at: [[0, (zFoot + st.top) / 2, 0]], size: `${frac(w)}" back face, epoxy`, note: `epoxy, full face: the head to the inner gunwale band${st.kind === 'box' ? '' : ', the foot to the inner chine band (and a fillet to the deck)'}, and between the bands to a ${frac(band)}" filler of band strip glued to the web first` },
       ];
       if (st.kind === 'knee') rib.joints.push({ type: 'glue', to: `side-rib-knee-${tag}${st.n}`, count: 1, at: [[0, L.deckTop + Math.min(p.sideRibKneeHeightIn, st.h - L.railBand - 0.25) / 2, dep]], size: `${frac(Math.min(p.sideRibKneeHeightIn, st.h - L.railBand - 0.25))}" x ${frac(w)}" knee face, epoxy` });
+      if (pinsOnRib(p, st)) {
+        // D-78: the knee's top pin goes through the rib, the filler and the web: ONE sleeve hole at its absolute layout, from the rib's bottom end and the gunwale top (the shaft is centered on the rib's line).
+        const zPin = topPinZ(p, L, st);
+        rib.joints.push({ type: 'hole', to: `brake-sleeve-T-hull-${tag}`, count: 1, diaIn: p.brakeSleeveOdIn, at: [[0, zPin, dep / 2]],
+          size: `1 x ${frac(p.brakeSleeveOdIn)}" hole for the top-pin sleeve, centered across the rib's ${frac(w)}" shaft (${frac(w / 2)}" from each edge), ${(zPin - zFoot).toFixed(2)}" up from the rib's bottom end and ${(st.top - zPin).toFixed(2)}" below the gunwale top, square to the side`,
+          note: `D-78: drilled from the outside through the web, the filler and the rib after the rib is glued in (a drill block square to the side); the stainless sleeve is epoxied in, its outer end flush with the web's outer face. The knee's top pin (a ball-lock pin) passes through it, ${frac(p.brakeTopPinClearIn)}" above the top of the box tie spacer (no pin can pass the spacer).` });
+      }
       if (hasRing) rib.joints.push({ type: 'hole', to: `lash-${tag}${st.n}`, count: LASH_BOLTS, size: `${frac(LASH_BOLT_DIA_IN + 1 / 64)}" (#8 clearance) through the head, the inner band, the web and the outer band`, at: holeAt.map((q) => [q[0], q[1], dep / 2] as Vec3), note: 'drilled with the D-ring plate as the template, square to the side' });
       parts.push(rib);
 
@@ -267,7 +284,7 @@ export function addSideRibJoints(ctx: Ctx, parts: Part[]): void {
       const ribId = `side-rib-${tag}${st.n}`;
       const web = byId.get(`side-${tag}-web`);
       const rib = byId.get(ribId);
-      if (web && rib) (web.joints ??= []).push({ type: 'glue', to: ribId, count: 1, at: [localOf(web.transform, transformPoint(rib.transform, rib.joints![0].at![0]))], size: `${frac(p.sideRibWidthIn)}" rib back, epoxy`, note: 'through the band-strip filler (D-76)' });
+      if (web && rib) (web.joints ??= []).push({ type: 'glue', to: ribId, count: 1, at: [localOf(web.transform, transformPoint(rib.transform, rib.joints![0].at![0]))], size: `${frac(ribShaftWidth(p, st))}" rib back, epoxy`, note: 'through the band-strip filler (D-76)' });
       if (st.kind !== 'knee' || !st.member) continue;
       const mem = byId.get(st.member), kneeId = `side-rib-knee-${tag}${st.n}`;
       if (!mem || !byId.has(kneeId)) continue;

@@ -18,8 +18,9 @@
  * Pose s ∈ [0, 1]: 1 is APPLIED (the pad on the tread), 0 is RELEASED (the model default). The geometry below is built in the applied pose and the released pose
  * is the whole flap group turned clockwise (seen with +x right, +z up) by `theta` about the pivot pin, so the pad hangs `brakePadGapIn` above the tread.
  */
-import type { Params } from '../params';
+import { KNEE_MOUNT, type Params } from '../params';
 import type { Layout } from './layout';
+import { LASH_HOLE_DZ_IN, LASH_WASHER, ribShaftWidth, sideRibStations, topPinZ, boxTieGeometry } from './side-ribs';
 
 export type V2 = [number, number];
 
@@ -164,7 +165,60 @@ export interface BrakeY {
   eye: number; anchor: number;
 }
 
+/** One pin site of the removable knee (D-78): the pin axis runs along y at (x, z); every y is |y| on the left side (the right mirrors). */
+export interface PinSite {
+  /** Pin axis (x, z) in the model frame. */
+  x: number;
+  z: number;
+  /** Inboard end of the pin (the locking balls, `tipIn` past the last member), the outboard end of the handle, the modeled pin length between them, and the usable grip (the members it passes through). */
+  yTip: number;
+  yHead: number;
+  len: number;
+  grip: number;
+  /** The sleeve in the HULL (stays on the sled): |y| from its inner end to its outer end, and its length. */
+  hullSleeve: { y0: number; y1: number; len: number };
+  /** The sleeve in the KNEE side (comes off with the knee: in the knee leg at B, in the tab at T). */
+  kneeSleeve: { y0: number; y1: number; len: number };
+}
+
+/**
+ * D-78 (optional setting `kneeMount` = pins): the removable knee on two 3/8 in ball-lock pins per side. Present only when the pins are on AND the rear box rib exists; absent otherwise
+ * (the knee stays bolted, D-75). Pin B passes through the knee leg and the rail; pin T through the knee TAB, the side web, the filler and the box rib. Everything here is derived from the
+ * hull (rail, web recess, box tie, D-ring washers) and params, never typed. All y are |y| for the left side.
+ */
+export interface BrakePins {
+  /** Pin and sleeve diameters, the locking-ball tip past the last member and the handle height proud of the sleeve end. */
+  dia: number;
+  sleeveOd: number;
+  sleeveId: number;
+  tipIn: number;
+  headIn: number;
+  /** Web recess: how far the free web's outer face is inboard of the hull face (= the sandwich band thickness), and the web's outer face |y|. */
+  webRecess: number;
+  yWebOut: number;
+  /** Thickness of each hull member the pin passes: the web, the band-strip filler and the box rib at T, and the rail at B. */
+  hull: { web: number; filler: number; rib: number; rail: number };
+  /** Bottom pin B: x = the knee's center, z = the rail's mid-height; distances from the rail's rear end (the rear transom's inner face) and from its top edge. */
+  B: PinSite & { fromRailRear: number; belowRailTop: number; fromKneeRear: number; fromKneeBottom: number };
+  /** Top pin T: x = the box rib's center line, z = the box tie's top plus `brakeTopPinClearIn`; distances from the rib's bottom end and the gunwale top, and from the rib's center to the knee's rear face. */
+  T: PinSite & { fromRibFoot: number; belowRibTop: number; ahead: number };
+  /** The box rib at T: center x, widened shaft width, z range (foot to gunwale top), and the box tie spacer's top and the D-ring fender washers' bottom z. */
+  rib: { x: number; w: number; z0: number; z1: number; tieTopZ: number; washerBotZ: number };
+  /** The knee TAB (oak, grain vertical): x from `brakeTabEndIn` behind pin T to the knee's rear face, z centered on pin T, y from the web's outer face outboard by `brakeTabThickIn`; glue area to the knee's rear face (in^2). */
+  tab: { x0: number; x1: number; z0: number; z1: number; t: number; yIn: number; yOut: number; glueArea: number };
+  /** The knee PAD (oak, thickness = the web recess): on the knee's inboard face from the chine top to the knee top, so the knee bears on the web; y from the web's outer face to the hull face. */
+  pad: { x0: number; x1: number; z0: number; z1: number; t: number; yIn: number; yOut: number };
+  /** Clearances (in): the top of the tab to the bottom of the D-ring fender washers, and pin T's ball tip to the storage box side. (The side sign's forward end is cut back to keep `brakeTabClearIn` behind the tab, body.ts.) */
+  clear: { tabTopToWasher: number; ballTipToBox: number };
+  /** Problems found with the geometry (empty when it is sound); validateParams cannot see them. */
+  issues: string[];
+}
+
 export interface BrakeGeom {
+  /** D-78: how the knee is held on ('pins' only when `pins` is present). */
+  mount: 'bolted' | 'pins';
+  /** D-78 removable knee on pins; see `BrakePins`. When present the knee has NO bolts, backer or backing plate (`backer` and `bolts` below are then the bolted pattern it would have had, kept for reference only). */
+  pins?: BrakePins;
   ok: boolean;
   why: string;
   /** Wheel radius and center (x, z). */
@@ -442,12 +496,65 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
   const eyeX = Math.max(kx0 + 0.5, Math.min(kx1 - 0.5, xBack));
   const chock = { psi, tangent, xToe, xBack, height: hC, width: p.brakeChockWidthIn, poly: cpoly, eyeX, kneeEye: [eyeX, zb] as V2, chockEye: [xBack, hC] as V2, heelAngle: Math.atan2(hC, xBack - xToe) };
 
+  // ── D-78: the removable knee on two ball-lock pins (an option; the knee is then not bolted) ──
+  let pins: BrakePins | undefined;
+  if (p.kneeMount === KNEE_MOUNT.pins) {
+    const st = sideRibStations(p, L)[0];
+    if (st.kind === 'box') {
+      const tg = boxTieGeometry(p, L, st);
+      const recess = L.sideBand;
+      const yWebOut = yFace - recess;
+      const webT = L.side - 2 * L.sideBand, fillerT = L.sideBand, ribT = p.sideRibDepthIn;
+      const sOd = p.brakeSleeveOdIn, tip = p.brakePinTipIn, head = p.brakePinHeadIn;
+      // pin B: through the knee leg and the rail only, at the knee's center and the rail's mid-height
+      const bx = (kx0 + kx1) / 2, bz = (zb + zt) / 2;
+      const bTip = yRailIn - tip, bHead = yFace + legT + head;
+      const B = {
+        x: bx, z: bz, yTip: bTip, yHead: bHead, len: bHead - bTip, grip: railT + legT,
+        hullSleeve: { y0: yRailIn, y1: yFace, len: railT }, kneeSleeve: { y0: yFace, y1: yFace + legT, len: legT },
+        fromRailRear: bx - (L.xRear + L.transom), belowRailTop: zt - bz, fromKneeRear: bx - kx0, fromKneeBottom: bz - zb,
+      };
+      // pin T: through the tab, the web, the filler and the box rib, above the box tie spacer
+      const tx = st.x, tz = topPinZ(p, L, st);
+      const tabT = p.brakeTabThickIn, tabH = p.brakeTabHeightIn;
+      const yTIn = yWebOut - webT - fillerT - ribT; // the rib's inner face
+      const tYOut = yWebOut + tabT;
+      const tTip = yTIn - tip, tHead = tYOut + head;
+      const T = {
+        x: tx, z: tz, yTip: tTip, yHead: tHead, len: tHead - tTip, grip: ribT + fillerT + webT + tabT,
+        hullSleeve: { y0: yTIn, y1: yWebOut, len: ribT + fillerT + webT }, kneeSleeve: { y0: yWebOut, y1: tYOut, len: tabT },
+        fromRibFoot: tz - tg.z0, belowRibTop: st.top - tz, ahead: kx0 - tx,
+      };
+      const washerBotZ = st.top - L.railBand / 2 - LASH_HOLE_DZ_IN - LASH_WASHER.od / 2;
+      const tab = { x0: tx - p.brakeTabEndIn, x1: kx0, z0: tz - tabH / 2, z1: tz + tabH / 2, t: tabT, yIn: yWebOut, yOut: tYOut, glueArea: 0 };
+      tab.glueArea = Math.max(0, Math.min(tab.z1, zTop) - Math.max(tab.z0, zb)) * Math.max(0, Math.min(tYOut, yFace + legT) - yFace);
+      const pad = { x0: kx0, x1: kx1, z0: zLeg, z1: zTop, t: recess, yIn: yWebOut, yOut: yFace };
+      const gBox = tg.yBox; // the storage box side's |y|
+      const issues: string[] = [];
+      const ribW = ribShaftWidth(p, st);
+      if (tz - sOd / 2 < tg.z0 + p.brakePinEdgeIn) issues.push('pin T is too close to the foot of the box rib');
+      if (tz + sOd / 2 > st.top - L.railBand) issues.push('pin T is in the rib head, among the D-ring bolts (it belongs in the shaft, under the head)');
+      if (ribW < sOd + 2 * p.brakePinEdgeIn - 1e-9) issues.push('the box rib is too narrow for the sleeve');
+      if (tab.z1 > washerBotZ - p.brakeTabClearIn + 1e-9) issues.push(`the knee tab top (${tab.z1.toFixed(2)}") is within ${p.brakeTabClearIn}" of the D-ring washers (bottom ${washerBotZ.toFixed(2)}")`);
+      if (kx0 - tx < sOd / 2 + p.brakePinEdgeIn - 1e-9) issues.push('the knee is too close to pin T: no oak ahead of the sleeve in the tab');
+      if (tYOut > y.tireIn - 0.1 && tab.x0 < r) issues.push('the knee tab runs into the rear tire');
+      if (tTip < gBox + 0.1) issues.push('the top pin\'s ball tip would touch the storage box side');
+      if (bz - sOd / 2 < zb + 0.5 || bz + sOd / 2 > zt - 0.5) issues.push('pin B is too close to the rail edges');
+      pins = {
+        dia: p.brakePinDiaIn, sleeveOd: sOd, sleeveId: p.brakeSleeveIdIn, tipIn: tip, headIn: head, webRecess: recess, yWebOut,
+        hull: { web: webT, filler: fillerT, rib: ribT, rail: railT }, B, T,
+        rib: { x: st.x, w: ribW, z0: tg.z0, z1: st.top, tieTopZ: tg.z1, washerBotZ },
+        tab, pad, clear: { tabTopToWasher: washerBotZ - tab.z1, ballTipToBox: tTip - gBox }, issues,
+      };
+    }
+  }
+
   if (!why && !(ratioCrit > 0)) why = 'no lever ratio';
   if (!why && !(H[0] > r + 0.2)) why = 'the pivot pin is not ahead of the tire';
   if (!why && !(xEnd < H[0] - 4)) why = 'the flap is too short';
   const ok = !why;
   return {
-    ok, why, r, O, y, alpha, delta, C, n, t, pad: { w: padW, thick: tp, length: p.brakePadLengthIn, top, bot },
+    mount: pins ? 'pins' : 'bolted', pins, ok, why, r, O, y, alpha, delta, C, n, t, pad: { w: padW, thick: tp, length: p.brakePadLengthIn, top, bot },
     sigma, u, v, c, H, xh, P, F, xEnd, board, plan, shoe, theta, footDrop, aF, mN, mT, ratioFwd, ratioRev, ratioCrit, critical: ratioFwd <= ratioRev ? 'forward' : 'reverse',
     pivot, strap, bungee, knee, rail, backer, bolts, chock,
   };
@@ -508,4 +615,11 @@ export function pivotBlockScrewPoints(g: Pick<BrakeGeom, 'board' | 'plan'>, n: n
   const xRear = Math.min(xFwd, flapLocalX(g, g.plan.sShoulder) + PIVOT_SCREW_EDGE_IN);
   const yMax = Math.max(0, g.plan.wTongue / 2 - PIVOT_SCREW_EDGE_IN - 0.05);
   return Array.from({ length: n }, (_, i): V2 => [i % 2 === 0 ? xFwd : xRear, n === 1 ? 0 : -yMax + (2 * yMax * i) / (n - 1)]);
+}
+
+/** D-78: problems with the removable knee's pin geometry at these params (empty when the pins are off or the geometry is sound). validateParams only sees numbers; this sees the hull. */
+export function brakePinIssues(p: Params, L: Layout): string[] {
+  if (p.kneeMount !== KNEE_MOUNT.pins) return [];
+  const g = brakeGeometry(p, L);
+  return g.pins ? g.pins.issues : ['the removable knee (D-78) needs the box rib beside the rear storage box; without it the knee stays bolted'];
 }
