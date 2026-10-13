@@ -19,10 +19,10 @@ import { cargoCapacity } from './cargo-capacity';
 import { grainSlopeFactor, lidLoads, strapLoads } from './cargo';
 import { riderSweep } from './rider-sweep';
 import { contactsAt, RAD } from './geometry';
-import { PRE_D71, PRE_D66 } from '../test-fixtures';
+import { PRE_D71, PRE_D66, PRE_D72 } from '../test-fixtures';
 
 // D-66 changed the tracks, the load-height rule and the bow: this file's hand calculations are the D-58 design (PRE_D66); the D-66 numbers are in d66.test.ts
-const defaults = { ...defaultParams(), ...PRE_D71, ...PRE_D66 } as Params;
+const defaults = { ...defaultParams(), ...PRE_D72, ...PRE_D71, ...PRE_D66 } as Params; // D-72/D-73: the D-58 design had the tube and the 4 mm okoume (PRE_D72)
 const L = computeLayout(defaults);
 const cs = runChecks(defaults, { includeTruck: false });
 const byId = (c: AnalysisCheck[], id: string) => c.find((x) => x.id === id)!;
@@ -208,7 +208,7 @@ describe('the lid as a table (lid-load)', () => {
     expect(k.P).toBeCloseTo((40 * defaults.dynamicFactor) / 3, 9);
     expect(k.M).toBeCloseTo((k.P * k.spanIn) / 4, 9);
     // Transformed section: oak batten b x h, ply flange (12 t wide, but never wider than the bay) of E ratio n = E_ply / E_oak.
-    const nPly = (ctx.d.plyMoePsi * defaults.wetServiceFactorStiffness) / ctx.d.oakDesignMoePsi;
+    const nPly = (ctx.d.thinPlyMoePsi * defaults.wetServiceFactorStiffness) / ctx.d.oakDesignMoePsi; // D-73: the lid is the thin sheet
     const b = k.bIn, h = k.hIn, bf = Math.min(k.bayIn, 12 * k.plyT), tp = k.plyT;
     const A1 = b * h, A2 = nPly * bf * tp;
     const zNa = (A1 * (h / 2) + A2 * (h + tp / 2)) / (A1 + A2);

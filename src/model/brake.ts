@@ -16,9 +16,9 @@ import { atPose, brakeGeometry, dot2, flapLocalX, flapOutline, hull2, PIVOT_SCRE
 import { buildHandle } from './handle';
 import { multiply, rotationY, translation } from './mat4';
 import { basisMatrix, profilePart } from './profile';
-import { boltLength, inchesText } from './rear-mount';
+import { boltLength, inchesText, pickWoodScrew, SCREW_DIA_IN, screwText } from './rear-mount';
 import { trapezoidTriangles } from './plan-wall';
-import type { Joint, Mat4, Part, Vec2, Vec3 } from './types';
+import type { Joint, Mat4, Part, ScrewFit, Vec2, Vec3 } from './types';
 
 
 /** Clip a polygon in (y, z) to the strip y0 <= y <= y1 (Sutherland-Hodgman). */
@@ -136,8 +136,9 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
   const at = (q: V2): V2 => atPose(g, s, q);
   const add1 = (x: Part | null) => { if (x) parts.push(x); };
   const bd = p.brakeMountBoltDiaIn;
-  const sd = 0.19; // #10 wood screw shank (in)
-  const screw = (to: string, count: number, size: string, note?: string): Joint => ({ type: 'screw', to, count, diaIn: sd, size, ...(note ? { note } : {}) });
+  const sd = SCREW_DIA_IN[8]; // #8 wood screw shank (in): the brake's wood screws are the standard #8 x 1-1/4 (D-72)
+  const screw = (to: string, count: number, size: string, note?: string, fit?: ScrewFit, dia = sd): Joint => ({ type: 'screw', to, count, diaIn: dia, size, ...(fit ? { fit } : {}), ...(note ? { note } : {}) });
+  const eye = (to: string, count: number, size: string): Joint => screw(to, count, size, undefined, undefined, SCREW_DIA_IN[10]); // #10 screw eyes
   const rotPts = (pts: V2[]): V2[] => pts.map(at);
 
   for (const { s: sgn, tag } of SIDES) {
@@ -148,6 +149,13 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
     let flapMat: Mat4 | undefined;
     const bF = g.board;
     const nBlockScrews = Math.round(p.brakePivotBlockScrews);
+    // D-72: every wood screw of the brake is the standard #8 x 1-1/4 (was #10 x 1-1/4 for the pivot block, #10 x 2 for the shoe and #8 x 1 for the pad: the 2 in screw ran 0.37 in
+    // through the 7/8 in flap, since the shoe block is only about 3/4 in thick). The pivot block's screws cross the 5/8 in block and bite the tongue; the shoe's cross the shoe block
+    // and bite the flap; the pad's cross the rubber (less the 1/8 in the heads are buried) and bite the shoe block and the flap it is glued to.
+    const shoeThickIn = (() => { const o = g.shoe.outline; return Math.abs((o[2][1] + o[3][1]) / 2 - (o[0][1] + o[1][1]) / 2) * Math.cos(g.sigma); })(); // mid-length thickness, normal to the flap underside
+    const blockFit = pickWoodScrew(8, g.plan.blockT, g.board.thick);
+    const shoeFit = pickWoodScrew(8, shoeThickIn, g.board.thick);
+    const padFit = pickWoodScrew(8, g.pad.thick - 0.125, shoeThickIn + g.board.thick);
     const xBlockMid = flapLocalX(g, (bF.s0 + g.plan.sShoulder) / 2);
     const blockScrews = pivotBlockScrewPoints(g, nBlockScrews, p.brakePivotPinDiaIn, sd);
     // Shoe screws and glue: along the shoe's top face (the flap underside), at 1/4 and 3/4 of its length, on the center line, drilled up from the underside.
@@ -173,10 +181,10 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
         joints: [
           { type: 'pin', to: `brake-pivot-pin-${tag}`, count: 1, diaIn: p.brakePivotPinDiaIn, size: `1 x ${f2(p.brakePivotPinDiaIn)}" 316 clevis pin through the tongue (and the pivot block on it), double shear with the knee ears`, at: [[flapLocalX(g, 0), 0, b.thick - g.plan.hPin]] },
           { type: 'glue', to: `brake-pivot-block-${tag}`, count: 1, note: 'epoxy over the whole face of the block on the tongue', at: [[xBlockMid, 0, b.thick]] },
-          { ...screw(`brake-pivot-block-${tag}`, nBS, `${nBS} x #10 x 1-1/4" 316 flat-head screws down through the block into the tongue`, `all behind the pin, at least ${PIVOT_SCREW_WOOD_IN} in of oak between a screw and the cross-hole edge, alternating across the tongue`), at: blockScrews.map(([x, y]): Vec3 => [x, y, b.thick]) },
-          { ...screw(`brake-shoe-${tag}`, 2, '2 x #10 x 2" 316 screws up through the shoe block into the flap, glued with epoxy', 'the screws and the glue take the pad friction'), at: shoeScrewX.map((x): Vec3 => [x, 0, 0]) },
+          { ...screw(`brake-pivot-block-${tag}`, nBS, `${nBS} x ${screwText(blockFit)}" 316 flat-head screws down through the block into the tongue`, `all behind the pin, at least ${PIVOT_SCREW_WOOD_IN} in of oak between a screw and the cross-hole edge, alternating across the tongue`, blockFit), at: blockScrews.map(([x, y]): Vec3 => [x, y, b.thick]) },
+          { ...screw(`brake-shoe-${tag}`, 2, `2 x ${screwText(shoeFit)}" 316 screws up through the shoe block into the flap, glued with epoxy`, 'the screws and the glue take the pad friction', shoeFit), at: shoeScrewX.map((x): Vec3 => [x, 0, 0]) },
           { type: 'glue', to: `brake-shoe-${tag}`, count: 1, note: 'epoxy, full face of the shoe block on the underside', at: [[shoeGlueX, 0, 0]] },
-          { ...screw(`brake-cord-${tag}`, 1, '1 x #10 316 stainless screw eye (3/16" ring) in the rear end face of the flap, inboard'), at: [[-b.len / 2, -sgn * (Y.wheel - Y.eye), b.thick / 2]] },
+          { ...eye(`brake-cord-${tag}`, 1, '1 x #10 316 stainless screw eye (3/16" ring) in the rear end face of the flap, inboard'), at: [[-b.len / 2, -sgn * (Y.wheel - Y.eye), b.thick / 2]] },
         ],
         notes: `White oak ${f2(b.thick)}" x ${f2(b.w)}" x ${f2(b.len)}" (5/4 stock planed to 7/8"), grain along the flap, one board, CUT ON THE SHAPER ORIGIN from the plan outline in the part data (D-65): a tapered fender, ${f2(g.plan.wTongue)}" wide tongue at the pivot end, an S-curved flare from ${f2(g.plan.sShoulder)}" to ${f2(g.plan.sFull)}" behind the pin out to the full ${f2(b.w)}" over the tire, a 1/2" corner radius at the foot end and 1/4" at the nose. Roundover all the edges (1/4" bit) after the cut. It slopes down ${f2(g.sigma / (Math.PI / 180))} degrees toward the rear so the foot end is lower than the pivot. The FOOT END IS AT THE REAR TRANSOM FACE (nothing sticks out behind the sled, D-65: x = ${f2(g.xEnd)}"); the ribbed rubber foot tread is the last ${f2(p.brakeFootPadLengthIn)}" (the foot point is ${f2(Math.abs(g.F[0] - L.xRear))}" ${g.F[0] < L.xRear ? 'behind' : 'ahead of'} the transom face, outboard of the body). Epoxy-seal before the finish. At the foot point it stands ${f2(g.F[1])}" off the ground; stepping on it swings the pad ${f2(p.brakePadGapIn)}" onto the tread (foot stroke about ${f2(g.footDrop)}"). The tongue is drilled ${f2(p.brakePivotPinDiaIn)}" across, ${f2(g.plan.hPin)}" below the top surface and ${f2(p.brakePivotEndIn)}" from its end, together with the pivot block (clamp the block on first). ${REMOVE_NOTE}`,
         sourcing: { vendor: `Shop-cut white oak, ${f2(b.thick)}" x ${f2(b.w)}" x ${f2(b.len)}" (a 5/4 board planed to ${f2(b.thick)}"); the pivot, shoe and eye holes are drilled from the parts as templates` },
@@ -202,7 +210,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
         size: [sB - sA, pl.wTongue, pl.blockT], center: [cp[0], yc, cp[1]], rot: { y: -(g.sigma - phi) }, explode: [-0.2, sgn * 0.3, 1.2],
         joints: [
           { type: 'glue', to: `brake-flap-${tag}`, count: 1, note: 'epoxy, full face on the flap tongue' },
-          { ...screw(`brake-flap-${tag}`, nBS, `${nBS} x #10 x 1-1/4" 316 flat-head screws down through the block into the tongue`), at: blockScrews.map(([x, y]): Vec3 => [x - xBlockMid, y, pl.blockT / 2]) },
+          { ...screw(`brake-flap-${tag}`, nBS, `${nBS} x ${screwText(blockFit)}" 316 flat-head screws down through the block into the tongue`, undefined, blockFit), at: blockScrews.map(([x, y]): Vec3 => [x - xBlockMid, y, pl.blockT / 2]) },
           { type: 'pin', to: `brake-pivot-pin-${tag}`, count: 1, diaIn: p.brakePivotPinDiaIn, size: `${f2(p.brakePivotPinDiaIn)}" clevis pin hole across, ${f2(g.plan.hPin)}" below the flap top surface` },
         ],
         notes: `White oak block ${f2(sB - sA)}" x ${f2(pl.wTongue)}" x ${f2(pl.blockT)}" (a scrap of 5/8" stock), on top of the flap tongue from its nose to the start of the flare. It deepens the tongue to ${f2(b.thick + pl.blockT)}" so the ${f2(p.brakePivotPinDiaIn)}" pin hole has ${f2(g.pivot.edgeTongueUp)}" of oak above and ${f2(g.pivot.edgeTongueDown)}" below it. Glue and screw it on, then drill the pin hole through block and tongue together with the knee clamped to them. The block enters the slot in the knee with the tongue; its top is flush with the knee top. ${REMOVE_NOTE}`,
@@ -242,9 +250,9 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
         id: `brake-shoe-${tag}`, partNo: 'brake-shoe', name: `Brake shoe block ${tag} (white oak wedge)`, group: 'brake', mat: 'oak', outline: outline as Vec2[], depth: qy1 - qy0, basis: 'xz', origin,
         grain: 'x', stock: { t: bb.z1 - bb.z0, w: qy1 - qy0, l: bb.x1 - bb.x0 }, step: STEP.brake, fab: 'bandsaw', removable: true, explode: [0.2, sgn, 0.6],
         joints: [
-          { ...screw(`brake-flap-${tag}`, 2, '2 x #10 x 2" 316 screws up through the block into the flap, glued with epoxy'), at: shoeScrewX.map((x) => shoeAt(x)) },
+          { ...screw(`brake-flap-${tag}`, 2, `2 x ${screwText(shoeFit)}" 316 screws up through the block into the flap, glued with epoxy`, undefined, shoeFit), at: shoeScrewX.map((x) => shoeAt(x)) },
           { type: 'glue', to: `brake-flap-${tag}`, count: 1, note: 'epoxy, full face', at: [shoeAt(shoeGlueX)] },
-          screw(`brake-pad-${tag}`, 2, '2 x #8 x 1" 316 flat-head screws (heads buried 1/8" in the rubber) through the pad into the block', 'plus contact cement over the full face'),
+          screw(`brake-pad-${tag}`, 2, `2 x ${screwText(padFit)}" 316 flat-head screws (heads buried 1/8" in the rubber) through the pad into the block`, 'plus contact cement over the full face; set them 1/2 in off the shoe screws', padFit),
         ],
         notes: `Bandsawn from ${f2(g.shoe.w)}" thick white oak (the thickness is the pad width, across the wheel; the 3 in side is the tire-radius cut): the top face follows the flap underside (${f2(g.sigma / (Math.PI / 180))} degrees), the bottom face is cut to the tire radius (${f2(g.r + p.brakePadThickIn)}" from the axle, a template on a router sled or sandpaper on the tire), ${f2(p.brakeShoeBlockIn)}" thick at its thinnest. The rubber pad is glued and screwed on the curved face. Ends cut vertical. Glued and screwed to the flap, so it comes off with it. ${REMOVE_NOTE}`,
         sourcing: { vendor: `Shop-cut white oak, ${f2(g.shoe.w)}" wide x ${f2(bb.z1 - bb.z0)}" x ${f2(bb.x1 - bb.x0)}" blank; the tire radius is the template` },
@@ -263,7 +271,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
         id: `brake-pad-${tag}`, partNo: 'brake-pad', name: `Brake pad ${tag} (rubber)`, group: 'brake', kind: 'purchased', material: `${f2(pad.thick)}" rubber sheet (60-70A neoprene, or veg-tan leather)`,
         geometry: { type: 'extrusion', outline: outline.map((q) => [q[0], q[1]] as Vec2), depth: qy1 - qy0 }, transform: basisMatrix('xz', [0, sgn > 0 ? qy1 : -qy0, 0]), body: 'chassis',
         massLb: area * (qy1 - qy0) * RUBBER_LB_PER_IN3, fab: 'buy', step: STEP.brake, removable: true, explode: [0.2, sgn, 0.4],
-        joints: [screw(`brake-shoe-${tag}`, 2, '2 x #8 x 1" 316 flat-head screws, heads buried 1/8" in the rubber, plus contact cement over the full face')],
+        joints: [screw(`brake-shoe-${tag}`, 2, `2 x ${screwText(padFit)}" 316 flat-head screws, heads buried 1/8" in the rubber, plus contact cement over the full face`, undefined, padFit)],
         sourcing: { vendor: `McMaster-Carr (${f2(pad.thick)}" 60-70A neoprene or SBR rubber sheet; cut ${f2(pad.length)}" x ${f2(qy1 - qy0)}", or veg-tan leather of the same size)` },
         notes: `Rubber (or leather) pad ${f2(pad.length)}" x ${f2(qy1 - qy0)}" x ${f2(pad.thick)}", centered ${f2(g.alpha / (Math.PI / 180))} degrees behind the top of the tire. Design μ ${f2(p.brakePadMu)} on a wet tread, ${f2(p.brakePadMuFouled)} mud or snow fouled (pass/fail). Hangs ${f2(p.brakePadGapIn)}" off the tread released. Wears like a shoe sole: replace when the screws get close to the surface. Test a sample on a wet tire first. Comes off with the flap. ${REMOVE_NOTE}`,
       };
@@ -278,7 +286,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
       const b: Vec3 = [bg.A[0], sgn * bg.A[1], bg.A[2]];
       const returnCord = cordPart(ctx, {
         id: `brake-cord-${tag}`, partNo: 'brake-cord', name: `Brake return bungee and stop cord ${tag}`, a, b, radius: 0.125, material: '1/4" shock cord (polyester sheath) with a 3/16" polyester stop cord',
-        joints: [screw(`brake-flap-${tag}`, 1, '#10 316 stainless screw eye in the rear end face of the flap, inboard'), screw('transom-rear', 1, '#10 316 stainless screw eye in the aft face of the rear transom, near its outer corner (a backer lies behind it), the snap hook clips to it')],
+        joints: [eye(`brake-flap-${tag}`, 1, '#10 316 stainless screw eye in the rear end face of the flap, inboard'), eye('transom-rear', 1, '#10 316 stainless screw eye in the aft face of the rear transom, near its outer corner (a backer lies behind it), the snap hook clips to it')],
         explode: [-0.5, sgn * 0.5, 1], removable: true,
         sourcing: { vendor: `McMaster-Carr (1/4" shock cord with polyester sheath, ${f2(bg.lenRel + 2)}" cut, whipped ends tied to the eyes; 3/16" polyester braid for the stop cord, ${f2(bg.lenRel)}" between the eyes; two #10 316 stainless screw eyes)` },
         notes: `The bungee pulls the flap up with ${f2(bg.tRel)} lbf released (the stop cord, tied taut at the released length ${f2(bg.lenRel)}" between the eyes, sets the lift and holds the pad ${f2(p.brakePadGapIn)}" off the tread), stretching to ${f2(bg.tApp)} lbf when the flap is down (${f2(bg.rate)} lbf per inch). The flap eye is a screw eye in the rear END face of the flap, ${f2(0.8)}" in from its inboard edge; its ring reaches ${f2(Math.abs(bg.E[0] - g.xEnd))}" behind the flap end (${f2(Math.abs(bg.E[0] - L.xRear))}" ${bg.E[0] < L.xRear ? 'behind' : 'ahead of'} the transom face), which lets the cord clear the hull's rear corner; the transom eye is ${f2(p.brakeBungeeAnchorBelowTopIn)}" below the transom top and ${f2(p.brakeBungeeAnchorInsetIn)}" in from the side's outer face (clear of the handle sockets and of the sign zone on the sides, D-57). The cord is a wear item: replace it when it goes slack. D-65: a stainless SNAP HOOK on the transom end (the end by the handle sockets) clips to the transom eye, so the cord unhooks in a second and goes off with the flap; the other end stays tied to the flap eye. ${REMOVE_NOTE}`,
@@ -341,7 +349,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
           { type: 'bolt', to: `rail-${tag}`, count: g.bolts.count, diaIn: bd, size: `${g.bolts.count} x ${f2(bd)}" x ${stackBolt}" 316 hex bolts (${g.bolts.xs.length} columns x ${g.bolts.zs.length} rows), fender washers and nylock nuts, through this leg and the rail into the backer`, note: `the nuts and washers sit in 1/2" counterbores in the backer's inner face; the heads are in counterbores in the knee's outboard face. Epoxy the holes.` },
           { type: 'glue', to: `rail-${tag}`, count: 1, note: 'epoxy, leg against the rail and chine outer face (the bolts clamp it)' },
           { type: 'pin', to: `brake-pivot-pin-${tag}`, count: 1, diaIn: pv.dia, size: `${f2(pv.dia)}" pin hole across the ears: through the outboard ear, ${f2(pv.blind)}" blind into the inboard ear` },
-          screw(`brake-chock-cord-${tag}`, 1, '1 x #10 316 stainless screw eye in the underside, for the chock cord'),
+          eye(`brake-chock-cord-${tag}`, 1, '1 x #10 316 stainless screw eye in the underside, for the chock cord'),
         ],
         notes: `Oak outrigger bandsawn from ${f2(kn.x1 - kn.x0)}" stock: a ${f2(kn.legT)}" leg on the hull's outer face (rail and chine, z ${f2(kn.zBot)}" to ${f2(kn.zLeg)}"), an arm ${f2(kn.armT)}" thick that reaches out ${f2(kn.yOut - Y.face)}" over the gap beside the tire, braced by the sloping underside. Its top is FLAT at z = ${f2(kn.zTop)}", flush with the top of the pivot block (D-65). The rear of the arm is SLOTTED (bandsaw, then clean up with a chisel): a ${f2(slotW)}" wide slot (the ${f2(g.plan.wTongue)}" flap tongue plus ${f2(p.brakePivotSlotClearIn)}" a side) centered on the tire (|y| ${f2(pv.ySlot[0])}" to ${f2(pv.ySlot[1])}"), from the rear face (x = ${f2(kn.x0)}") forward to x = ${f2(pv.slotEndX)}", straight through the arm. That leaves two EARS: ${f2(pv.earOut)}" outboard and ${f2(pv.earIn)}" inboard. The ${f2(pv.dia)}" pin hole runs across the ears at x = ${f2(g.H[0])}", z = ${f2(g.H[1])}" (${f2(pv.edgeEarUp)}" below the top, ${f2(pv.edgeEarDown)}" above the arm bottom), through the outboard ear and ${f2(pv.blind)}" blind into the inboard ear; the knee's rear face is ${f2(g.H[0] - kn.x0)}" behind the pin. Drill it together with the flap tongue and block clamped in the slot. It stands ahead of the tire (x ${f2(kn.x0)}" to ${f2(kn.x1)}", the tire front is ${f2(g.r)}"), its bottom on the rail bottom (${f2(kn.zBot)}" off the ground). Bolted through the rail into the backer, not the thin side panel, so the loads go into the rail and the deck. Face-laminated from stocked boards (D-70): no 12/4 is bought; glue up the blank from 4/4 layers face to face with epoxy (each wide layer edge-glued from two pieces) and mill it to size BEFORE it is bandsawn, slotted and bored (the cut list gives the layers). Strength is taken as solid oak.`,
         sourcing: { vendor: `Shop-cut white oak, ${f2(kn.x1 - kn.x0)}" x ${f2(bb.z1 - bb.z0)}" x ${f2(Math.abs(kn.yOut - Y.face))}" blank (face-laminated from 4/4 layers, D-70: no 12/4 is bought)` },
@@ -379,7 +387,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
       const chockPart = profilePart(ctx, {
         id: `brake-chock-${tag}`, partNo: 'brake-chock', name: `Wheel chock ${tag} (white oak wedge, shown parked)`, group: 'brake', mat: 'oak', outline: outline as Vec2[], depth: w, basis: 'xz', origin,
         grain: 'x', stock: { t: ck.height, w, l: ck.xBack - ck.xToe }, step: STEP.brake, fab: 'bandsaw', removable: true, explode: [1, sgn * 0.3, 0],
-        joints: [screw(`brake-chock-cord-${tag}`, 1, '1 x #10 316 stainless screw eye in the back face, for the cord')],
+        joints: [eye(`brake-chock-cord-${tag}`, 1, '1 x #10 316 stainless screw eye in the back face, for the cord')],
         notes: `Oak wedge ${f2(w)}" wide, ${f2(ck.height)}" tall, ${f2(ck.xBack - ck.xToe)}" long: the ramp face rises away from the tire at ${f2(ck.psi / (Math.PI / 180))} degrees and is tangent to the tire ${f2(ck.tangent[1])}" off the ground, so the rolling wheel has to climb it. Two stainless screw heads (or a sawtooth cut) left proud in the base bite the ground (μ ${f2(p.brakeChockMu)}, ${f2(p.brakeChockMuFouled)} when wet or fouled). Shown parked in front of the tire for a sled facing downhill; for a sled facing uphill it goes behind the tire, ${f2(p.brakeChockCordLenIn)}" of cord reaches. Comes off for transport. Face-laminated from stocked boards (D-70): no 12/4 is bought; glue up the blank from 4/4 layers face to face with epoxy and mill it to size before the wedge is bandsawn (the cut list gives the layers). Strength is taken as solid oak.`,
         sourcing: { vendor: `Shop-cut white oak wedge, ${f2(w)}" x ${f2(ck.height)}" x ${f2(ck.xBack - ck.xToe)}" (face-laminated from 4/4 layers, D-70: no 12/4 is bought; one bandsaw cut of the glued blank)` },
       });
@@ -388,7 +396,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
       const b: Vec3 = [ck.chockEye[0], yc, ck.chockEye[1] + 0.2];
       add1(cordPart(ctx, {
         id: `brake-chock-cord-${tag}`, partNo: 'brake-chock-cord', name: `Wheel chock cord ${tag}`, a, b, radius: 0.125, material: '1/4" braided polyester cord', removable: true, explode: [1, sgn * 0.3, 0.2],
-        joints: [screw(`brake-knee-${tag}`, 1, '#10 316 stainless screw eye in the knee underside'), screw(`brake-chock-${tag}`, 1, '#10 316 stainless screw eye in the chock back face')],
+        joints: [eye(`brake-knee-${tag}`, 1, '#10 316 stainless screw eye in the knee underside'), eye(`brake-chock-${tag}`, 1, '#10 316 stainless screw eye in the chock back face')],
         sourcing: { vendor: `McMaster-Carr (1/4" braided polyester cord, ${f2(p.brakeChockCordLenIn)}" cut, whipped ends; shown here pulled straight between the two eyes, the rest is coiled)` },
         notes: `Ties the chock to the knee eye so it is never lost: ${f2(p.brakeChockCordLenIn)}" of 1/4" cord (${p.brakeCordBreakLbf} lbf breaking strength) reaches to the other side of the tire (the sled facing uphill) and back. The chock hangs from the cord when stowed.`,
       }));

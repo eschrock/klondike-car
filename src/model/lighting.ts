@@ -37,7 +37,7 @@ export const REFLECTOR_SIZE = [2, 0.25, 1] as const;
  * eye bolts, kingpin, pins and clamp plates, so it is now a REMAINDER computed from the model's own joints: every fastener that is
  * not a separate part (wood and machine screws, carriage/hex bolts with their nuts and washers, inserts, thumb-knob screws,
  * Dominos, epoxy) at a typical stainless/zinc unit mass. At the defaults the arithmetic (see `fastenerBreakdown`) is about:
- *   screws          ~114 x 0.008 lb = 0.91   (#8-#10 stainless, 3/4" to 2-1/2" long, 3 to 16 g)
+ *   screws          ~100 x 0.008 lb = 0.8    (D-72: #8 x 5/8, #8 x 1-1/4 and #6 x 2-1/2 stainless, 3 to 8 g)
  *   bolt sets        ~48 x 0.04-0.09 lb      (1/4" to 3/8" bolt + nut + washer(s); 0.02 lb for a screw tapped into a hub)
  *   inserts, knobs   ~20 x 0.005 / 0.02 lb
  *   Dominos          ~24 x 0.005 lb
@@ -127,16 +127,16 @@ export function buildLighting(ctx: Ctx): Part[] {
       axis: 'z', radius: od / 2, length: len, center: [xc, yTube, zBot + len / 2], explode: unit(0, 1, 0.5),
       sourcing: { vendor: `McMaster-Carr (1" schedule 40 PVC pipe, ${od.toFixed(3)}" OD, ${id.toFixed(2)}" ID, cut ${len.toFixed(1)}" long)`, costUsd: 4 },
       joints: [
-        { type: 'screw', to: 'flag-block-top', count: 2, size: '#8 × 1-1/4 stainless, through the block and the tube wall', note: 'the top block holds the tube; no tools to use the tube' },
-        { type: 'screw', to: 'flag-block-bottom', count: 2, size: '#8 × 1-1/4 stainless' },
+        { type: 'glue', to: 'flag-block-top', count: 1, size: 'thickened epoxy (or 3M 5200) on the scuffed tube, in the half-round relief', note: 'D-72: no screws into the tube. A wood screw long enough to hold in the block would run through the 0.13 in tube wall into the bore the flag staff slides in.' },
+        { type: 'glue', to: 'flag-block-bottom', count: 1, size: 'thickened epoxy (or 3M 5200) on the scuffed tube, in the half-round relief' },
       ],
       notes: `D-57 (replaces the printed socket on the bow): a plain ${id.toFixed(2)}" ID tube ${len.toFixed(1)}" long standing on the deck in the left rear corner, against the front of the handle-socket backer and the inside of the side, its top flush with the gunwale top (z ${zTop.toFixed(2)}"). A ${FLAG_DRAIN_HOLE_IN}" drain hole is drilled through the wall just above the deck so water cannot stand in it (it runs out through the rear scupper). The flag staff (a ${(id - 0.05).toFixed(2)}" dowel) drops in; ${len.toFixed(0)}" of socket holds it.`,
     }));
     const blk = (id: string, name: string, z0: number, to: string, note: string) => box(ctx, {
       ...common, id, partNo: 'flag-block', name, mat: 'oak', grain: 'z', step: STEP.finish,
       ...span([xc + od / 2, xc + od / 2 + FLAG_BLOCK.t], [yIn - FLAG_BLOCK.w, yIn], [z0, z0 + FLAG_BLOCK.h]), // 1.4 in across: it stays off the box wall
-      joints: [{ type: 'glue', to, count: 1, size: 'thickened epoxy, full face', note }, { type: 'screw', to: 'flag-tube', count: 2, size: '#8 × 1-1/4 stainless, into the tube wall' }],
-      notes: `Oak holding block (D-57, D-62): ${FLAG_BLOCK.t}" × ${FLAG_BLOCK.w}" × ${FLAG_BLOCK.h}" with a half-round relief for the tube, EPOXIED to the inner oak band of the sandwich side (no screws into the side: the 4 mm web holds no screw, build 3c M4; the only screws go into the tube) so it clamps the tube against the transom backer. Two blocks (top and bottom) hold a 14" tube; the tube stays put without them clipped to anything else.`,
+      joints: [{ type: 'glue', to, count: 1, size: 'thickened epoxy, full face', note }, { type: 'glue', to: 'flag-tube', count: 1, size: 'thickened epoxy (or 3M 5200) in the half-round relief', note: 'D-72: no screws into the tube wall (the tips would run into the staff bore)' }],
+      notes: `Oak holding block (D-57, D-62): ${FLAG_BLOCK.t}" × ${FLAG_BLOCK.w}" × ${FLAG_BLOCK.h}" with a half-round relief for the tube, EPOXIED to the inner oak band of the sandwich side (no screws into the side: the thin web holds no screw, build 3c M4; D-72: no screws into the tube either, the tube is bonded into the relief) so it clamps the tube against the transom backer. Two blocks (top and bottom) hold a 14" tube; the tube stays put without them clipped to anything else.`,
     });
     parts.push(blk('flag-block-top', 'Flag tube block (top)', zTop - FLAG_BLOCK.h - 0.1, 'side-L-gunwale-in', 'epoxied to the inner gunwale band (1-1/2 in tall, the block lies on it)'));
     parts.push(blk('flag-block-bottom', 'Flag tube block (bottom)', zBot + 0.4, 'side-L-chine-in', 'epoxied to the inner chine band (the block lies on it)'));

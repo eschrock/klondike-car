@@ -77,6 +77,10 @@ export const AXLE_STYLE = { throughRod: 0, stubAxles: 1 } as const;
 export const AXLE_BEAM_POSITION = { underslung: 0, overslung: 1 } as const;
 export const TIRE_TYPE = { pneumatic: 0, flatFree: 1 } as const;
 export const PLY_SPECIES = { okoumeMarine: 0, balticBirchExterior: 1 } as const;
+/** D-73: the weather the sled is built for. Standard = garage-kept, a few uses a year; Extreme = stored outside or near salt. */
+export const WEATHER_SPEC = { standard: 0, extreme: 1 } as const;
+/** D-73: the thin-sheet material (the side webs, the storage box and lid, the signs). `followWeather` picks white oak ply for Standard and okoume for Extreme. */
+export const THIN_SHEET = { followWeather: 0, whiteOakPly: 1, okoumeMarine: 2, balticBirch3mm: 3 } as const;
 export const STORAGE_LOCATION = { rearOverAxle: 0, underSeat: 2 } as const;
 
 /** Mannequin proportions (fractions of stature, D-3) that the foot-room validator also needs: hip separation and foot width. */
@@ -733,9 +737,9 @@ const defs = {
   },
   axleWallIn: {
     label: 'Axle tube wall (0 = solid rod)', group: 'wheels', unit: 'in',
-    default: 0.12, min: 0, max: 0.3, step: 0.005, status: 'assumed', ref: 'D-60, D-71',
-    note: 'D-71: 5/8 in OD x 0.120 in wall DOM (A513 Type 5; Online Metals part 7763 and McMaster-Carr list it) for the 5/8 in Harbor Freight wheel. Measured against the rows at the 200 lb goal rider: 0.120 in axle-stress 0.92 (marginal, nothing fails; 150 lb is green), 0.095 in axle-stress 1.03 (FAILS the 200 lb goal, marginal at 150 lb), solid 5/8 in rod no better on the rows (the oak groove bearing sets the limit) and 1.9 lb heavier. D-60: the rear through axle and the front stub axles are hollow DOM (drawn-over-mandrel) mild-steel tube (1020 or 1026 DOM), the same OD as the wheel bore, so the wheel bearings, clamp plates and beam grooves follow it. 0 = a solid 1045 rod. The section, mass and rows follow: bending of the tube, the cotter-pin cross hole, ring bearing at the clamp plates.',
-    options: [{ value: 0, label: 'Solid rod' }, { value: 0.095, label: '0.095"' }, { value: 0.12, label: '0.120"' }, { value: 0.188, label: '0.188"' }],
+    default: 0, min: 0, max: 0.3, step: 0.005, status: 'assumed', ref: 'D-60, D-71',
+    note: 'D-71 (Eric chose the solid rod): 5/8 in solid 1045 or cold-drawn steel rod, cut to length, for the 5/8 in Harbor Freight wheel. The rod is +1.9 lb over the 5/8 in x 0.120 in DOM tube it replaces, and it has margin: axle-stress 0.71 at 150 lb, 0.78 at the 200 lb goal rider, 0.81 for the 200 lb cargo (the tube was 0.85 / 0.925 / 0.957, and fails on 55 to 60 ksi 1020 DOM). Buy 1045 (cold-drawn or turned-ground-polished, yield about 70 ksi or better, axleYieldPsi), NOT hot-rolled A36 (36 ksi) and NOT 1018 cold-drawn (about 54 ksi: axle-stress would be about 1.0 at 200 lb). A wall above 0 gives the hollow DOM tube of D-60 (the tube numbers are axleTubeYieldPsi / axleTubeUltimatePsi): bending of the tube, the cotter-pin cross hole, ring bearing at the clamp plates. A tube needs its end plugs; the solid rod needs none.',
+    options: [{ value: 0, label: 'Solid rod' }, { value: 0.095, label: '0.095" tube' }, { value: 0.12, label: '0.120" tube' }, { value: 0.188, label: '0.188" tube' }],
   },
   axleCrossHoleDiaIn: {
     label: 'Axle end cross hole (cotter pin)', group: 'wheels', unit: 'in',
@@ -854,8 +858,8 @@ const defs = {
   },
   axleYieldPsi: {
     label: 'Axle steel yield strength', group: 'wheels', unit: 'psi',
-    default: 70000, min: 30000, max: 120000, step: 1000, status: 'assumed', ref: 'D-4',
-    note: '¾" 1045 turned-ground-polished shafting ≈ 70+ ksi (D-27; confirm vendor cert). 1018 cold-drawn would be ≈ 54 ksi.',
+    default: 70000, min: 30000, max: 120000, step: 1000, status: 'verify', ref: 'D-4, D-71',
+    note: 'D-71: the 5/8 in solid rod. 1045 cold-drawn or turned-ground-polished shafting is about 70+ ksi (D-27; confirm vendor cert). 1018 cold-drawn would be about 54 ksi and hot-rolled A36 36 ksi: both too weak for the 200 lb goal (axle-stress about 1.0 and 1.5).',
   },
   axleTubeYieldPsi: {
     label: 'Axle tube yield strength (DOM)', group: 'wheels', unit: 'psi',
@@ -1515,9 +1519,9 @@ const defs = {
     note: 'D-60: 5/8 in (was 3/4 in); the joists row goes from 0.54 to about 0.65 and the resting capacity from 359 to about 350 lb.',
   },
   sideThicknessIn: {
-    label: 'Side thickness (the sandwich: two oak bands + the 4 mm web)', group: 'stock', unit: 'in',
+    label: 'Side thickness (the sandwich: two oak bands + the thin web)', group: 'stock', unit: 'in',
     default: 0.625, min: 0.375, max: 1, step: 0.0625, status: 'explore', ref: 'D-35, D-43, D-62',
-    note: 'D-62: the side is a sandwich, an oak band on each face of the web, so 5/8 in = 2 x 0.234 in bands + 0.157 in web, the same as the grooved side it replaced. The deck edge rises into the gap under the inner chine band (depth = the band thickness); the transoms have their own thickness.',
+    note: 'D-62: the side is a sandwich, an oak band on each face of the web, so 5/8 in = 2 x 0.234 in bands + 0.157 in web (4 mm okoume), the same as the grooved side it replaced. D-73: the bands are (this - the thin sheet in effect) / 2: 0.2075 in with the 0.21 in white oak plywood, 0.2535 in with the 3 mm Baltic birch. The deck edge rises into the gap under the inner chine band (depth = the band thickness); the transoms have their own thickness.',
   },
   axleBeamThicknessIn: {
     label: 'Rear axle beam width (fore-aft)', group: 'stock', unit: 'in',
@@ -1546,15 +1550,15 @@ const defs = {
     ],
   },
   panelPlyIn: {
-    label: 'Side / box / lid plywood', group: 'stock', unit: 'in',
-    default: 0.157, min: 0.157, max: 0.472, step: 0.001, status: 'explore', ref: 'D-60',
+    label: 'Thin sheet when okoume (sides / box / lid / signs)', group: 'stock', unit: 'in',
+    default: 0.157, min: 0.157, max: 0.472, step: 0.001, status: 'explore', ref: 'D-60, D-73',
     options: [
       { value: 0.157, label: '4 mm' },
       { value: 0.236, label: '6 mm' },
       { value: 0.354, label: '9 mm' },
       { value: 0.472, label: '12 mm' },
     ],
-    note: 'D-60: 4 mm okoume (was 6 mm) for the side webs, the storage box and its lid and the sign blanks (marine okoume, a full 4 x 8 sheet from a local supplier, D-68; Baltic birch 4 mm is the fallback); the dado and edge-banding widths follow it, and the sandwich bands of the sides are (side thickness - this) / 2 thick each (D-62). The seat-back panel has its own size (seatBackPlyIn, 12 mm from the deck offcut, D-62). 4 mm skin and lid dent more easily (the cargo case of the lid-load row goes from 0.42 to 0.75); keep the lid engraved DO NOT STEP (D-58).',
+    note: 'D-73: this is the thickness of the okoume option of thinSheetMaterial only; the effective thin-sheet thickness (thinSheet(p).thicknessIn) follows the material (white oak plywood 0.21 in, Baltic birch 0.118 in) and is what the model reads. D-60: 4 mm okoume (was 6 mm) for the side webs, the storage box and its lid and the sign blanks (marine okoume, a full 4 x 8 sheet from a local supplier, D-68; Baltic birch 4 mm is the fallback); the dado and edge-banding widths follow it, and the sandwich bands of the sides are (side thickness - this) / 2 thick each (D-62). The seat-back panel has its own size (seatBackPlyIn, 12 mm from the deck offcut, D-62). 4 mm skin and lid dent more easily (the cargo case of the lid-load row goes from 0.42 to 0.75); keep the lid engraved DO NOT STEP (D-58).',
   },
   seatBackPlyIn: {
     label: 'Seat-back panel plywood', group: 'stock', unit: 'in',
@@ -1674,7 +1678,52 @@ const defs = {
       { value: PLY_SPECIES.okoumeMarine, label: 'Okoume marine (BS 1088)' },
       { value: PLY_SPECIES.balticBirchExterior, label: 'Baltic birch, exterior glue' },
     ],
-    note: 'MATERIALS AND SOURCES (Eric, 2026-10-12): the sheet goods are okoume marine plywood (BS 1088): 4 mm (sides, box, lid, signs) and 12 mm (1/2 in: the deck, and the seat back from its offcut), one FULL 4 x 8 ft sheet of each from a local supplier (D-68). Each 4 mm side web is one piece; there is no 2 x 4 ft sheet option. FALLBACK if no okoume: Baltic birch 12 mm for the deck (about 3 to 4 lb heavier at the deck alone; every cut edge and face must be epoxy-sealed, it is exterior-glue only, not marine), 4 mm Baltic birch elsewhere. Solid parts are white oak: the lumber yard stocks 4/4 to 12/4 rough, so resaw and plane to the finished thickness (the stock/rough columns of the cut list already assume this). FINISHING STACK (Phase 4): stain (pre-stain conditioner or a gel stain on okoume, which blotches) -> epoxy seal -> spar varnish with UV filters.',
+    note: 'D-73: this species covers the 12 mm deck and seat-back sheet only; the thin sheet (webs, box, lid, signs) is chosen by thinSheetMaterial. MATERIALS AND SOURCES (Eric, 2026-10-12): the sheet goods are okoume marine plywood (BS 1088): 4 mm (sides, box, lid, signs) and 12 mm (1/2 in: the deck, and the seat back from its offcut), one FULL 4 x 8 ft sheet of each from a local supplier (D-68). Each 4 mm side web is one piece; there is no 2 x 4 ft sheet option. FALLBACK if no okoume: Baltic birch 12 mm for the deck (about 3 to 4 lb heavier at the deck alone; every cut edge and face must be epoxy-sealed, it is exterior-glue only, not marine), 4 mm Baltic birch elsewhere. Solid parts are white oak: the lumber yard stocks 4/4 to 12/4 rough, so resaw and plane to the finished thickness (the stock/rough columns of the cut list already assume this). FINISHING STACK (Phase 4): stain (pre-stain conditioner or a gel stain on okoume, which blotches) -> epoxy seal -> spar varnish with UV filters.',
+  },
+  weatherSpec: {
+    label: 'Weather spec', group: 'materials', unit: '',
+    default: WEATHER_SPEC.standard, min: 0, max: 1, step: 1, status: 'explore', ref: 'D-73',
+    options: [
+      { value: WEATHER_SPEC.standard, label: 'Standard (garage-kept)' },
+      { value: WEATHER_SPEC.extreme, label: 'Extreme weather' },
+    ],
+    note: 'D-73. Standard: garage-kept, used a few times a year, gets wet at most at a rainy derby (Eric, 2026-10-12). Extreme weather: stored outside or near salt. The model reads this only for the thin-sheet material ("follow the weather setting": Standard is 1/4 in white oak plywood, Extreme is 4 mm okoume marine). The fasteners, glue and finish that follow the weather spec are chosen in the BOM and finishing schedule.',
+  },
+  thinSheetMaterial: {
+    label: 'Thin-sheet material (webs, box, lid, signs)', group: 'materials', unit: '',
+    default: THIN_SHEET.followWeather, min: 0, max: 3, step: 1, status: 'explore', ref: 'D-73, D-60',
+    options: [
+      { value: THIN_SHEET.followWeather, label: 'Follow the weather setting' },
+      { value: THIN_SHEET.whiteOakPly, label: '1/4" white oak plywood' },
+      { value: THIN_SHEET.okoumeMarine, label: '4 mm okoume marine' },
+      { value: THIN_SHEET.balticBirch3mm, label: '1/8" (3 mm) Baltic birch' },
+    ],
+    note: 'D-73 (Eric approved): the sheet for the side webs, the storage box, its lid and the signs. The dado widths, the sandwich band thickness ((side - web) / 2), the box and lid panels, the sign blanks, the masses, the web and lid rows, the nesting sheet and the cut list all follow it. The 12 mm deck and seat back stay marine okoume. 1/4 in white oak plywood (The Wood Yard, $113 per 4 x 8, https://www.thewoodyard.com/current-pricing-list/#plywood): about 0.21 in (5.3 mm) real, interior or Type II glue, fine garage-kept once sealed. 4 mm okoume marine (Aircraft Spruce, $122 per 4 x 8): the D-60 spec, BS 1088 glue. 1/8 in (3 mm) Baltic birch (The Wood Yard, $40 per 5 x 5 sheet): 0.118 in, exterior glue.',
+  },
+  whiteOakPlyThickIn: {
+    label: '1/4" white oak plywood real thickness', group: 'materials', unit: 'in',
+    default: 0.21, min: 0.15, max: 0.26, step: 0.005, status: 'verify', ref: 'D-73',
+    note: 'D-73: nominal 1/4 in hardwood plywood runs about 5.3 mm (0.21 in). MEASURE THE SHEET with calipers before cutting a dado (verify item).',
+  },
+  whiteOakPlyDensityPcf: {
+    label: 'White oak plywood density', group: 'materials', unit: 'lb/ft³',
+    default: 40, min: 30, max: 50, step: 0.5, status: 'assumed', ref: 'D-73',
+    note: 'D-73: about 40 pcf, assumed for a hardwood-veneer core (a poplar or lauan core would be lighter, an all-hardwood core heavier; the core varies by mill).',
+  },
+  whiteOakPlyMoePsi: {
+    label: 'White oak plywood effective E (face grain ∥ span)', group: 'materials', unit: 'psi',
+    default: 1100000, min: 600000, max: 1600000, step: 10000, status: 'assumed', ref: 'D-73',
+    note: 'D-73 ESTIMATE, not a published value for the sheet: between the okoume (0.9 Msi) and Baltic birch (1.3 Msi) values of D-5, since a 3-ply hardwood sheet has two face veneers of oak. Ask the supplier for the construction (plies, core) and replace.',
+  },
+  whiteOakPlyMorPsi: {
+    label: 'White oak plywood effective MOR (face grain ∥ span)', group: 'materials', unit: 'psi',
+    default: 5500, min: 3000, max: 8000, step: 100, status: 'assumed', ref: 'D-73',
+    note: 'D-73 ESTIMATE, between the okoume (5,000) and Baltic birch (7,000) values of D-5; same caveat as the E.',
+  },
+  balticThinThickIn: {
+    label: '1/8" (3 mm) Baltic birch real thickness', group: 'materials', unit: 'in',
+    default: 0.118, min: 0.1, max: 0.14, step: 0.001, status: 'verify', ref: 'D-73',
+    note: 'D-73: 3 mm (0.118 in). Its density, E and MOR are the Baltic birch values above (birchDensityPcf 42, birchMoePsi, birchMorPsi). The sheet is probably 5 x 5 ft (60 x 60 in): every part must nest on it (the side web blank is about 59.6 in).',
   },
   okoumeDensityPcf: {
     label: 'Okoume marine ply density', group: 'materials', unit: 'lb/ft³',
@@ -1879,7 +1928,7 @@ const defs = {
   // ── Phase 3b WS-D: material strengths and detail sizes for the front-end rows (analysis/front-end.ts, linkage.ts). Hard-hit rows use the ultimate values. ──
   axleUltimatePsi: {
     label: 'Axle steel ultimate strength', group: 'factors', unit: 'psi',
-    default: 85000, min: 45000, max: 140000, step: 1000, status: 'assumed', ref: 'D-54',
+    default: 85000, min: 45000, max: 140000, step: 1000, status: 'verify', ref: 'D-54, D-71',
     note: 'Companion of axleYieldPsi (1045 cold-finished ~ 91 ksi nominal; 85 ksi assumed). Hard-hit rear axle row.',
   },
   axleTubeUltimatePsi: {
@@ -2143,9 +2192,47 @@ export function steerGeometry(p: Params) {
   return { lock, kingX, clearAtLock, minTrack, centerRadiusIn, outerEdgeRadiusIn, innerEdgeRadiusIn, beamTop, beamBot, tongueTop, thrustTop, kingBot, kingDepth, railYIn, swathHalf, railDepthFront, railStepX, endJoistX, beamU, beamZ, beamEyeAt, stand, deckBot };
 }
 
+/** The thin-sheet material in effect (D-73): `followWeather` resolves to white oak plywood (Standard) or okoume (Extreme). */
+export function thinSheetKey(p: Pick<Params, 'thinSheetMaterial' | 'weatherSpec'>): number {
+  if (p.thinSheetMaterial !== THIN_SHEET.followWeather) return p.thinSheetMaterial;
+  return p.weatherSpec === WEATHER_SPEC.extreme ? THIN_SHEET.okoumeMarine : THIN_SHEET.whiteOakPly;
+}
+
+export interface ThinSheet {
+  key: number;
+  /** Short name for the cut list and BOM ("1/4 in white oak plywood"). */
+  name: string;
+  /** Material text on the parts. */
+  material: string;
+  /** Nominal size for the sheet class text ("1/4 in", "4 mm", "1/8 in (3 mm)"). */
+  nominal: string;
+  thicknessIn: number;
+  densityPcf: number;
+  moePsi: number;
+  morPsi: number;
+  /** Full sheet bought (in): 48 x 96 except the Baltic birch, which is sold 60 x 60. */
+  sheetWidthIn: number;
+  sheetLengthIn: number;
+  /** Key into PLYWOOD_PRICE (prices.ts). */
+  priceKey: string;
+  /** Glue rating of the sheet (what the finishing schedule must seal against). */
+  glue: string;
+}
+
+/** Everything the model, the analysis and the build outputs need about the thin sheet in effect (D-73). Plain numbers from the params, so every view agrees. */
+export function thinSheet(p: Params): ThinSheet {
+  const key = thinSheetKey(p);
+  if (key === THIN_SHEET.whiteOakPly)
+    return { key, name: '1/4 in white oak plywood', material: '1/4 in white oak plywood', nominal: '1/4 in', thicknessIn: p.whiteOakPlyThickIn, densityPcf: p.whiteOakPlyDensityPcf, moePsi: p.whiteOakPlyMoePsi, morPsi: p.whiteOakPlyMorPsi, sheetWidthIn: 48, sheetLengthIn: 96, priceKey: '5 mm', glue: 'interior / Type II' };
+  if (key === THIN_SHEET.balticBirch3mm)
+    return { key, name: '3 mm Baltic birch', material: '3 mm Baltic birch plywood', nominal: '1/8 in (3 mm)', thicknessIn: p.balticThinThickIn, densityPcf: p.birchDensityPcf, moePsi: p.birchMoePsi, morPsi: p.birchMorPsi, sheetWidthIn: 60, sheetLengthIn: 60, priceKey: '3 mm', glue: 'exterior' };
+  return { key: THIN_SHEET.okoumeMarine, name: '4 mm okoume', material: 'okoume marine plywood', nominal: '4 mm', thicknessIn: p.panelPlyIn, densityPcf: p.okoumeDensityPcf, moePsi: p.okoumeMoePsi, morPsi: p.okoumeMorPsi, sheetWidthIn: 48, sheetLengthIn: 96, priceKey: '4 mm', glue: 'marine (BS 1088)' };
+}
+
 /** Derived quantities that many modules need; no geometry here. */
 export function derived(p: Params) {
   const okoume = p.plySpecies === PLY_SPECIES.okoumeMarine;
+  const thin = thinSheet(p);
   const t = (p.wheelDiameterIn - 10) / 3;
   const wheelMassLb =
     p.wheelMass10Lb + t * (p.wheelMass13Lb - p.wheelMass10Lb) +
@@ -2157,6 +2244,11 @@ export function derived(p: Params) {
     plyDensityPcf: okoume ? p.okoumeDensityPcf : p.birchDensityPcf,
     plyMoePsi: okoume ? p.okoumeMoePsi : p.birchMoePsi,
     plyDesignMorPsi: ((okoume ? p.okoumeMorPsi : p.birchMorPsi) * p.wetServiceFactorStrength) / p.woodSafetyFactor,
+    /** D-73: the thin sheet (webs, box, lid, signs); the three above are the 12 mm deck / seat back sheet. */
+    thinPlyIn: thin.thicknessIn,
+    thinPlyDensityPcf: thin.densityPcf,
+    thinPlyMoePsi: thin.moePsi,
+    thinPlyDesignMorPsi: (thin.morPsi * p.wetServiceFactorStrength) / p.woodSafetyFactor,
     wheelMassLb,
     wheelRadiusIn: p.wheelDiameterIn / 2,
     /** Body length, rear transom to the bow tip. */
@@ -2289,7 +2381,8 @@ export function validateParams(input: Params): ParamIssue[] {
   if (bowHoldClear < p.bowHoldMinClearIn - 1e-9)
     err(['sideHeightBowIn', 'handleBowCrownIn', 'liftSlotHeightIn', 'liftBarMinIn', 'bowHoldMinClearIn'], `The bow hand-hold would leave only ${bowHoldClear.toFixed(2)}" of hand room above the deck (it hangs under the bulkhead crown with ${p.liftBarMinIn}" of oak above it); it needs at least ${p.bowHoldMinClearIn}". Raise the bow side or the crown, or shorten the slot (D-69).`);
   // Plan taper (D-66, D-62): each oak band of the sandwich side is cold-bent on the web; the S-curve's tightest bend must stay above the cold-bend limit of ONE band.
-  const bandT = Math.max(0, (p.sideThicknessIn - p.panelPlyIn) / 2);
+  const thinT = thinSheet(p).thicknessIn;
+  const bandT = Math.max(0, (p.sideThicknessIn - thinT) / 2);
   const taper = bowTaper(p);
   if (taper.turnIn > 1e-9) {
     const lim = p.hullLamMinRadiusFactor * bandT;
@@ -2304,7 +2397,7 @@ export function validateParams(input: Params): ParamIssue[] {
   // Sandwich sides (D-61, D-62): the oak band on each face of the web must be a real strip, and the inner chine band must keep some height above the deck gap.
   {
     if (bandT < 0.15)
-      warn(['sideThicknessIn', 'panelPlyIn'], `A ${p.panelPlyIn}" web in a ${p.sideThicknessIn}" side leaves ${bandT.toFixed(3)}" oak bands on each face (want 0.15" or more). Thicken the side stock or thin the panel.`);
+      warn(['sideThicknessIn', 'panelPlyIn', 'thinSheetMaterial'], `A ${thinT}" web in a ${p.sideThicknessIn}" side leaves ${bandT.toFixed(3)}" oak bands on each face (want 0.15" or more). Thicken the side stock or thin the panel.`);
     const innerChine = p.railBandIn - (p.deckPlyIn + p.deckSlopIn);
     if (innerChine < 0.5)
       warn(['railBandIn', 'deckPlyIn'], `The inner chine band is only ${Math.max(0, innerChine).toFixed(2)}" tall above the ${(p.deckPlyIn + p.deckSlopIn).toFixed(2)}" gap the deck edge rises into (want 1/2" or more): make the chine band taller.`);

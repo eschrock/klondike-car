@@ -28,11 +28,12 @@ describe('riderSweep', () => {
     // 50-240 lb; the 250 lb point is yellow only on the seat-back panel (0.909), and at 200 lb the tightest row is park-hold (0.883, a fit fact), not the tip.
     // D-71 (Harbor Freight wheels, 5/8 in axles): the rear axle-stress row (the 5/8 in tube, 0.12 in wall) is over the 0.9 line from 190 lb (0.925 at the 200 lb goal rider), so green ends at 180 lb;
     // nothing is red up to 250 lb (the 1.75 in clamp plate keeps the rear groove bearing at 0.85 at 200 lb).
-    expect(r.green).toMatchObject({ loLb: 50, hiLb: 180, openLow: true, openHigh: false });
-    expect(r.points.find((x) => x.w === 200)!.worst!.id).toBe('axle-stress'); // D-71: the 5/8 in axle tube (0.925); it was park-hold (0.883) with the 3/4 in axle
-    expect(r.points.find((x) => x.w === 250)!.worst!.id).toBe('axle-stress'); // D-71 (it was seat-back, 0.909); still under 1 at 250 lb
+    // D-71 (Eric chose the solid rod) and D-73 (1/4 in white oak sides, +2.8 lb): the rod's axle-stress is 0.79 at 200 lb, so the groove bearing on the oak (0.89 at 220 lb, 0.90 from 230 lb) ends green at 220 lb.
+    expect(r.green).toMatchObject({ loLb: 50, hiLb: 220, openLow: true, openHigh: false });
+    expect(r.points.find((x) => x.w === 200)!.worst!.id).toBe('park-hold'); // a fit fact (0.883), as with the 3/4 in axle; the D-71 tube had axle-stress (0.925)
+    expect(r.points.find((x) => x.w === 250)!.worst!.id).toBe('bearing-groove'); // 0.934: the rear groove bearing on the oak; still under 1 at 250 lb
     for (const id of ['king-bearing', 'steer-stops', 'bridle-eye', 'lift', 'brake-force']) expect(r.points.every((x) => !x.fails.includes(id)), id).toBe(true);
-    expect(r.points.filter((x) => x.w <= 180).every((x) => x.status === 'pass')).toBe(true);
+    expect(r.points.filter((x) => x.w <= 220).every((x) => x.status === 'pass')).toBe(true);
     // the deck ply no longer fails for the heaviest riders (it did from 230 lb at 10 in joist spacing and span/300)
     for (const w of [220, 230, 250]) expect(r.points.find((x) => x.w === w)!.fails).not.toContain('deck');
   });

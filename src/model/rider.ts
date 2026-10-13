@@ -67,12 +67,12 @@ export function buildPayload(ctx: Ctx): Part[] {
       size: [lx, w, 2 * p.cargoCgHeightIn], center: [st.x1 + 0.5 + lx / 2, 0, L.deckTop + p.cargoCgHeightIn] }));
   } else if (view.cargo) {
     const st = L.storage;
-    const lx = Math.max(0.5, st.x1 - st.x0 - 2 * p.panelPlyIn);
-    const w = Math.max(0.5, 2 * st.hw - 2 * p.panelPlyIn);
-    const h = Math.max(0.5, st.zTop - st.zBot - 2 * p.panelPlyIn);
+    const lx = Math.max(0.5, st.x1 - st.x0 - 2 * ctx.d.thinPlyIn);
+    const w = Math.max(0.5, 2 * st.hw - 2 * ctx.d.thinPlyIn);
+    const h = Math.max(0.5, st.zTop - st.zBot - 2 * ctx.d.thinPlyIn);
     parts.push(box(ctx, { ...common, id: 'cargo', name: 'Cargo (10 Essentials + team gear)', body: 'cargo', massLb: p.cargoMassLb, material: 'cargo',
       size: [lx * CARGO_FILL, w * CARGO_FILL, h * CARGO_FILL],
-      center: [(st.x0 + st.x1) / 2, 0, st.zBot + p.panelPlyIn + (h * CARGO_FILL) / 2] }));
+      center: [(st.x0 + st.x1) / 2, 0, st.zBot + ctx.d.thinPlyIn + (h * CARGO_FILL) / 2] }));
   }
   return parts;
 }

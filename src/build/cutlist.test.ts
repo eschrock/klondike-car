@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
 import { defaultParams } from '../params';
+import { PRE_D72 } from '../test-fixtures';
 import { assemblySteps } from './assembly';
 import { BOARD_THICKNESSES, MAX_LAMINATION_LAYERS, RESAW_BOARD_WIDTHS_IN, RESAW_MIN_SPARES, boardByNominal, boardForThickness, cutList, isBuilt, laminationText, makeLanes, planLamination, stepMapOf, resawUsableIn, spareSlots, stripsPerBoard, toCsv } from './cutlist';
 
-const p = defaultParams();
+// D-72/D-73: this file's resaw and sheet numbers (0.234 in bands in 0.359 in rough pools, the 4 mm sheet, the tube) are the 4 mm okoume design: PRE_D72. The white oak / rod cut list is in d72.test.ts.
+const p = { ...defaultParams(), ...PRE_D72 };
 const parts = buildModel(p);
 const cl = cutList(parts, p);
 

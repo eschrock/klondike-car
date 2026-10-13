@@ -13,9 +13,9 @@ import { axleGrooveDepthIn } from '../params';
 import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
 import { customPart } from './mesh-utils';
 import { compose, translation } from './mat4';
-import { boltLength, inchesText, screwLength } from './rear-mount';
+import { boltLength, CARRIAGE_STOCK_IN, EYE_BOLT_STOCK_IN, inchesText, pickWoodScrew, SCREW_DIA_IN, screwText, stockBoltFit } from './rear-mount';
 import { joistId } from './frame';
-import { axleSourcing, axleStockNote } from './axle-stock';
+import { axleMaterial, axleSourcing, axleStockNote } from './axle-stock';
 import type { Part, Vec2 } from './types';
 
 const f2 = (v: number) => (Math.round(v * 100) / 100).toString();
@@ -83,7 +83,7 @@ export function buildPivot(ctx: Ctx): Part[] {
   for (const { s, tag } of SIDES) {
     const rod = cylinder(ctx, {
       id: `axle-F${tag}`, partNo: 'stub-axle-F', name: `Front ${tag === 'L' ? 'left' : 'right'} stub axle`, group: 'front-end',
-      center: [b.x, s * (inner + outer) / 2, r], axis: 'y', radius: rodR, wall: p.axleWallIn, length: outer - inner, mat: 'steel', body: 'front-axle', fab: 'drill-tap', step: STEP.gear,
+      center: [b.x, s * (inner + outer) / 2, r], axis: 'y', radius: rodR, wall: p.axleWallIn, length: outer - inner, mat: 'steel', ...axleMaterial(p), body: 'front-axle', fab: 'drill-tap', step: STEP.gear,
       notes: `Steel stub axle (D-56): a ${frac(p.axleDiameterIn)}" ${p.axleWallIn > 0 ? 'tube' : 'rod'} bolted down in a groove in the top of the beam end over ${f2(p.frontStubLenIn)}" (the clamp plates below), the wheel on the free end with a collar and cotter pin ${f2(p.axleEndExtraIn)}" beyond the hub. ${axleStockNote(p)}`,
       sourcing: { vendor: axleSourcing(p, outer - inner) },
     });
@@ -145,13 +145,15 @@ export function buildPivot(ctx: Ctx): Part[] {
     const t = p.rollPadThickIn, w = p.rollPadWidthIn, l = p.rollPadLenIn;
     const vol = w * l * t;
     const sc = [-1, 1].map((k) => k * Math.min(0.58, w / 2 - 0.2));
-    (beam.joints ??= []).push({ type: 'screw', to: `roll-pad-${tag}`, count: 2, diaIn: 0.19, size: `2 × #10 × ${inchesText(screwLength(t, 0.75))} 316 flat-head screws down through the pad (${frac(t)}") and 3/4 in into the oak beside the stub axle groove`, at: sc.map((x) => [x, s * p.rollPadRadiusIn, b.depth / 2] as [number, number, number]), note: 'the pad lies on the beam top' });
+    const padFit = pickWoodScrew(8, t, b.depth);
+    const padBite = padFit.lenIn - padFit.gripIn;
+    (beam.joints ??= []).push({ type: 'screw', to: `roll-pad-${tag}`, count: 2, diaIn: SCREW_DIA_IN[8], fit: padFit, size: `2 × ${screwText(padFit)} 316 flat-head screws down through the pad (${frac(t)}") and ${f2(padBite)} in into the oak beside the stub axle groove`, at: sc.map((x) => [x, s * p.rollPadRadiusIn, b.depth / 2] as [number, number, number]), note: 'the pad lies on the beam top' });
     parts.push(mk({
       id: `roll-pad-${tag}`, partNo: 'roll-pad', name: `Roll pad ${tag} (UHMW)`, group: 'front-end', kind: 'purchased', material: 'UHMW polyethylene',
       geometry: { type: 'box', size: [w, l, t] }, transform: translation(kx, s * p.rollPadRadiusIn, b.top + p.axleProudIn + t / 2), massLb: (vol / 1728) * UHMW_PCF, body: 'front-axle', fab: 'table-saw', step: STEP.gear,
       explode: [0, s * 0.3, 0.8],
-      sourcing: { vendor: `McMaster-Carr (UHMW-PE sheet ${frac(t)}" thick, cut ${f2(w)}" × ${f2(l)}"; 2 × #10 × ${inchesText(screwLength(t, 0.75))} 316 flat-head screws into the axle beam beside the stub axle groove; a layer of packing tape under the pad sets the running gap)` },
-      joints: [{ type: 'screw', to: 'beam-F', count: 2, diaIn: 0.19, size: `2 × #10 × ${inchesText(screwLength(t, 0.75))} 316 flat-head screws, countersunk, through the pad and 3/4 in into the oak beside the stub axle groove`, at: sc.map((x) => [x, 0, 0] as [number, number, number]), note: 'the pad lies on the axle beam top (and over the flush stub axle); the screws are beside the groove' }],
+      sourcing: { vendor: `McMaster-Carr (UHMW-PE sheet ${frac(t)}" thick, cut ${f2(w)}" × ${f2(l)}"; 2 × ${screwText(padFit)} 316 flat-head screws into the axle beam beside the stub axle groove; a layer of packing tape under the pad sets the running gap)` },
+      joints: [{ type: 'screw', to: 'beam-F', count: 2, diaIn: SCREW_DIA_IN[8], fit: padFit, size: `2 × ${screwText(padFit)} 316 flat-head screws, countersunk, through the pad and ${f2(padBite)} in into the oak beside the stub axle groove`, at: sc.map((x) => [x, 0, 0] as [number, number, number]), note: 'the pad lies on the axle beam top (and over the flush stub axle); the screws are beside the groove' }],
       notes: `Roll pad (D-58): ${f2(w)}" × ${f2(l)}" × ${frac(t)}" UHMW on the axle beam top, centered ${f2(p.rollPadRadiusIn)}" from the kingpin. The rail bottom is ${f2(L.deckBot - L.railDepthF - L.beamF.top - p.axleProudIn)}" above the top of the axle tube here (beamRailClearIn; the tube stands ${f2(p.axleProudIn)}" proud of the beam top, and the pad's underside is modeled level with the tube top, so shim it ${f2(p.axleProudIn)}" off the beam with packing tape or UHMW offcut), so the pad leaves a running gap of about ${f2(L.deckBot - L.railDepthF - L.beamF.top - p.axleProudIn - t)}" (set with tape or shims, ${f2(p.rollPadGapMinIn)}" to 1/8"). In normal running the pads do not touch; when one wheel hits a bump the axle rolls a fraction of a degree and the pad on the high side meets the rail underside, which carries the roll couple into the hull. UHMW on oak: no grease. Wipe off sand.`,
     }));
   }
@@ -171,7 +173,9 @@ export function buildPivot(ctx: Ctx): Part[] {
     const vol = area * depth - Math.PI * holeR * holeR * p.tongueWidthIn - 2 * Math.PI * ((tb + 0.03) / 2) ** 2 * p.tongueHeadLenIn;
     const surface = 2 * area + depth * outline.reduce((acc, q, k) => { const r = outline[(k + 1) % outline.length]; return acc + Math.hypot(r[0] - q[0], r[1] - q[1]); }, 0);
     const mass = (vol / 1728) * p.oakDensityPcf + (surface / 144) * p.finishLbPerFt2;
-    const bl = inchesText(boltLength(grip, tb));
+    // D-72: a stock carriage-bolt length: the head and the beam (5.5 in at the defaults), a washer, the nylock nut and 1.5 threads past it need 6.16 in, so the stock 6-1/2 in (6 in leaves the tip short of the nylon insert).
+    const boltFit = stockBoltFit(grip, tb, 1, CARRIAGE_STOCK_IN);
+    const bl = inchesText(boltFit.stockIn);
     parts.push(mk({
       id: 'bridle-tongue', partNo: 'bridle-tongue', name: 'Bridle tongue (oak, on edge)', group: 'front-end', kind: 'lumber', material: 'white oak',
       geometry: { type: 'extrusion', outline, depth }, transform: translation(0, 0, L.tongue.z0), massLb: mass, body: 'front-axle',
@@ -217,19 +221,24 @@ export function buildPivot(ctx: Ctx): Part[] {
     const bEye0 = L.steer.beamEyeAt(0);
     const slack0 = L.chain.lenIn - Math.hypot(L.chain.anchor[0] - bEye0[0], L.chain.anchor[1] - bEye0[1], L.chain.anchor[2] - bEye0[2]);
     const along = (x0: number, x1: number, y: number, z: number) => compose([(x0 + x1) / 2, y, z], { y: Math.PI / 2 });
+    // D-72: stock shoulder eye bolts (3/8-16, measured under the shoulder). The beam bolt crosses the 2-1/2 in beam, a 2 in fender washer and the nylock nut; the anchor crosses the joist and two washers (one under the shoulder).
+    // A stock length that leaves more than 1/2 in of thread past the nut is cut to length after fitting (a hacksaw, a file and cold galvanizing compound).
+    const beamEyeFit = stockBoltFit(b.thick, d, 1, EYE_BOLT_STOCK_IN);
+    const anchorEyeFit = stockBoltFit(L.chain.joistT, d, 2, EYE_BOLT_STOCK_IN);
+    const eyeText = (fit: ReturnType<typeof stockBoltFit>): string => `${inchesText(fit.stockIn)}" stock${fit.cutToIn ? `, cut to ${inchesText(fit.cutToIn)}" under the shoulder after fitting (${f2(fit.pastNutIn)}" of thread would stand past the nut)` : `, ${f2(fit.pastNutIn)}" of thread past the nut`}`;
     for (const { s, tag } of SIDES) {
       const side = tag === 'L' ? 'left' : 'right';
       parts.push(mk({
         id: `steer-eye-${tag}`, partNo: 'steer-eye', name: `Steering chain eye bolt, axle beam ${side}`, group: 'front-end', kind: 'purchased', material: 'forged shoulder eye bolt, galvanized',
         geometry: { type: 'cylinder', radius: d / 2, length: beamX1 - beamX0 }, transform: along(beamX0, beamX1, s * p.steerChainBeamYIn, L.chain.beamZ), massLb: eyeMass, body: 'front-axle', fab: 'buy', step: STEP.gear, explode: [-1, s * 0.4, 0],
-        sourcing: { vendor: `McMaster-Carr (forged shoulder-type eye bolt ${frac(d)}" x ${inchesText(beamX1 - beamX0 - 0.35)}, galvanized or 316; ${f2(p.steerEyeWllLb)} lb rated in line; nylock nut + 2" OD fender washer on the front face of the beam)` },
+        sourcing: { vendor: `McMaster-Carr (forged shoulder-type eye bolt ${frac(d)}" x ${eyeText(beamEyeFit)}, galvanized or 316; ${f2(p.steerEyeWllLb)} lb rated in line; nylock nut + 2" OD fender washer on the front face of the beam)` },
         joints: [{ type: 'bolt', to: 'beam-F', count: 1, diaIn: d, size: `${frac(d)}" shoulder eye bolt fore-aft through the beam, nut and 2" washer on the front face`, at: [[0, 0, 0]], note: `${f2(p.steerChainBeamYIn)}" ${side} of the kingpin, mid depth` }, { type: 'pin', to: `steer-chain-${tag}`, count: 1, size: 'quick link to the chain' }],
         notes: `Beam end of the ${side} steering check chain (D-58): a ${frac(d)}" forged shoulder eye bolt through the axle beam fore-aft at mid depth, ${f2(p.steerChainBeamYIn)}" from the kingpin, below the stub axle rod in its groove, the eye standing ${f2(stand)}" out of the TRAILING face. The 2" washer and nylock nut on the front face spread the chain pull over the oak. Turn the eye in the plane of the chain.`,
       }));
       parts.push(mk({
         id: `steer-anchor-${tag}`, partNo: 'steer-anchor', name: `Steering chain anchor eye bolt, chain joist ${side}`, group: 'front-end', kind: 'purchased', material: 'forged shoulder eye bolt, galvanized',
         geometry: { type: 'cylinder', radius: d / 2, length: ancX1 - ancX0 }, transform: along(ancX0, ancX1, s * ay0, az), massLb: eyeMass, body: 'chassis', fab: 'buy', step: STEP.gear, explode: [-0.5, s * 0.4, -0.5],
-        sourcing: { vendor: `McMaster-Carr (forged shoulder-type eye bolt ${frac(d)}" x ${inchesText(ancX1 - ancX0 - 0.35)}, galvanized or 316; ${f2(p.steerEyeWllLb)} lb rated in line; nylock nut + 2" OD fender washer on the rear face of the chain joist, and a 2" washer under the shoulder on its front face)` },
+        sourcing: { vendor: `McMaster-Carr (forged shoulder-type eye bolt ${frac(d)}" x ${eyeText(anchorEyeFit)}, galvanized or 316; ${f2(p.steerEyeWllLb)} lb rated in line; nylock nut + 2" OD fender washer on the rear face of the chain joist, and a 2" washer under the shoulder on its front face)` },
         joints: [{ type: 'bolt', to: joistId(L, L.joistX.indexOf(L.king.x) - 1), count: 1, diaIn: d, size: `${frac(d)}" shoulder eye bolt fore-aft through the chain joist, the shoulder (with a 2" washer) on its front face, nut and 2" washer on the rear face`, at: [[0, 0, 0]], note: `${f2(ay0)}" off the center line` }, { type: 'pin', to: `steer-chain-${tag}`, count: 1, size: 'quick link to the chain', at: [[0, 0, 0]] }],
         notes: `Anchor of the ${side} steering check chain (D-58): a ${frac(d)}" forged shoulder eye bolt fore-aft through the chain joist (${f2(L.chain.joistT)}" thick, x ${f2(L.chain.joistX)}", the crossmember just behind the king beam), ${f2(ay0)}" off the center line, a little below mid depth, the eye standing ${f2(stand)}" out of the FRONT face (x ${f2(ax)}"). The chain pulls it forward and up toward the beam, out of the joist, so the 2" washer and nylock nut on the rear face carry the pull; the joist is glued to the rails at both ends, so the pull goes into the hull as plan bending of the joist and shear into the rails.`,
       }));

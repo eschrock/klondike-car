@@ -192,8 +192,8 @@ describe('brake members (hand calculations at the goal rider, load factor 2)', (
     expect(det(cs, 'brake-pivot', 'edge distance, pin center to the nearer edge of the ear').value).toBeCloseTo(0.75 / d, 2);
     expect(det(cs, 'brake-pivot', 'end distance').value).toBeCloseTo(defaults.brakePivotEndIn / d, 9);
     const nBS = defaults.brakePivotBlockScrews;
-    const pen = 1.25 - defaults.brakePivotBlockIn - 0.1;
-    const w1 = 1380 * defaults.oakSpecificGravity ** 2 * 0.19 * pen * 0.7;
+    const pen = 1.25 - defaults.brakePivotBlockIn - 0.1; // the #8 x 1-1/4 block screw (D-72; was #10 x 1-1/4)
+    const w1 = 1380 * defaults.oakSpecificGravity ** 2 * 0.164 * pen * 0.7;
     const dd = det(cs, 'brake-pivot', 'pivot block screws, withdrawal each');
     expect(dd.limit).toBeCloseTo(w1, 6);
     expect(dd.value).toBeCloseTo(((defaults.brakePivotBlockIn / (defaults.brakeFlapThickIn + defaults.brakePivotBlockIn)) * R) / nBS, 6);

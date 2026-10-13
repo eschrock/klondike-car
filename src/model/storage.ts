@@ -8,7 +8,8 @@
  *
  * Also holds the 10 Essentials kit list (D-19) and a simple packing check against the interior.
  */
-import { STORAGE_LOCATION, type Params } from '../params';
+import { STORAGE_LOCATION, thinSheet, type Params } from '../params';
+import { pickWoodScrew, SCREW_DIA_IN, screwText } from './rear-mount';
 import { STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
 import { localBounds, worldAABB } from './bounds';
 import { sideSlopeAt, sideTopAt, type Layout } from './layout';
@@ -26,9 +27,9 @@ const LASH_SIZE = [1.5, 0.9, 0.75] as const;
 /** Grab handles stand this far behind the H-point (seat.ts GRIP_BEHIND_HPOINT_IN) and are this long: the lash points stay clear of them. */
 const GRIP_BEHIND_IN = 5;
 
-/** Bolt-plate screws per lash point (4-hole plate), the screw (#10 × 1-1/4 stainless), the plate thickness, and the tip/lead allowance (no thread bite). */
+/** Bolt-plate screws per lash point (4-hole plate), the screw (#8 × 1-1/4 stainless, D-72), the plate thickness, and the tip/lead allowance (no thread bite). */
 export const LASH_SCREWS = 4;
-export const LASH_SCREW_DIA_IN = 0.19;
+export const LASH_SCREW_DIA_IN = SCREW_DIA_IN[8];
 export const LASH_SCREW_LEN_IN = 1.25;
 export const LASH_PLATE_T_IN = 0.125;
 export const LASH_TIP_IN = 0.25;
@@ -37,7 +38,7 @@ export const LASH_HOLE_DX_IN = 0.5625;
 export const LASH_HOLE_DY_IN = 0.25;
 /** The 3/8" epoxy fillet in every inside corner of the box (flat things stowed in it ride on it, not in the corner). */
 export const BOX_FILLET_IN = 0.375;
-/** Oak block under each lid latch (#8 screws need more than the 4 mm end ply or a thin transom): thickness, and width across. */
+/** Oak block under each lid latch (#8 screws need more than the thin end ply or a thin transom): thickness, and width across. */
 export const LATCH_BLOCK_IN = 0.375;
 const LATCH_BLOCK_W_IN = 2;
 /** Lid hold-open stay (friction stay): size, mass. */
@@ -45,7 +46,10 @@ const STAY_SIZE = [2, 0.3, 0.5] as const;
 const STAY_MASS_LB = 0.12;
 const BATTEN_X_IN = 1;
 /** The lid hinge backer: oak 1" thick against the inside of the box fore end. */
-const HINGE_BACKER_IN = 1;
+/** D-72: 1-1/4 in, so the standard #8 x 1-1/4 hinge screw (leaf + the ply + 1.0 in of bite) stays inside it. */
+const HINGE_BACKER_IN = 1.25;
+/** A butt hinge leaf (the model's 316 hinges). */
+const LEAF_IN = 1 / 16;
 const HINGE_W_IN = 2.5;
 const HINGE_H_IN = 2.7;
 
@@ -75,7 +79,7 @@ export interface StorageGeometry {
 export function storageGeometry(p: Params, L: Layout): StorageGeometry {
   const st = L.storage;
   const sup = seatBackSupport(p, L);
-  const pl = p.panelPlyIn;
+  const pl = thinSheet(p).thicknessIn;
   const rimW = p.storageLidRimWidthIn;
   const rimT = p.storageLidRimThickIn;
   const gasket = p.storageGasketIn;
@@ -304,20 +308,20 @@ export function buildStorage(ctx: Ctx): Part[] {
 
   // ── Tray: the deck is the floor when the box stands on it; a raised box (forward) keeps its own ply floor ──
   if (!g.deckFloor) {
-    parts.push(box(ctx, { ...common, id: 'storage-bottom', name: 'Storage box floor', mat: 'ply', edges: 'captured', fab: 'shaper-origin',
+    parts.push(box(ctx, { ...common, id: 'storage-bottom', name: 'Storage box floor', mat: 'ply', thin: true, edges: 'captured', fab: 'shaper-origin',
       ...span([x0 + pl, x1 - pl], [-yIn, yIn], [zBot, zBot + pl]),
       joints: ['storage-side-L', 'storage-side-R', 'storage-end-aft', 'storage-end-fore'].map(fillet),
       notes: `Interior volume target ${p.storageVolumeIn3} in³ (D-19). The raised box has no deck under it, so it keeps its own floor; two ${p.storageDrainDiaIn}" drain holes at the aft corners go through it, lined with stainless nipples (D-41).` }));
   }
   const deckJoint = (): Joint[] => g.deckFloor ? [{ type: 'glue', to: deckId, count: 1, size: '3/8" epoxy fillet inside, 2" glass tape', note: 'wall bottom edge stands on the epoxy-sealed deck: fillet inside, bead outside, so no ply edge is exposed and the deck is the box floor' }] : [];
   for (const [tag, y] of [['L', hw - pl / 2], ['R', -(hw - pl / 2)]] as const) {
-    parts.push(box(ctx, { ...common, id: `storage-side-${tag}`, partNo: 'storage-side', name: `Storage box side ${tag}`, mat: 'ply', edges: 'captured', fab: 'shaper-origin',
+    parts.push(box(ctx, { ...common, id: `storage-side-${tag}`, partNo: 'storage-side', name: `Storage box side ${tag}`, mat: 'ply', thin: true, edges: 'captured', fab: 'shaper-origin',
       ...span([x0, x1], [y - pl / 2, y + pl / 2], [zBot, zPlyTop]),
       joints: [miter('storage-end-aft'), miter('storage-end-fore'), ...deckJoint(), { type: 'glue', to: `storage-coaming-side-${tag}`, count: 1, note: 'oak coaming caps the wall top, epoxy' }],
       notes: 'Wall top is capped by the oak coaming so no ply edge is exposed under the gasket (S4).' }));
   }
   for (const [tag, xa, xb] of [['aft', x0, x0 + pl], ['fore', x1 - pl, x1]] as const) {
-    parts.push(box(ctx, { ...common, id: `storage-end-${tag}`, partNo: 'storage-end', name: `Storage box ${tag} end`, mat: 'ply', edges: 'captured', fab: 'shaper-origin',
+    parts.push(box(ctx, { ...common, id: `storage-end-${tag}`, partNo: 'storage-end', name: `Storage box ${tag} end`, mat: 'ply', thin: true, edges: 'captured', fab: 'shaper-origin',
       ...span([xa, xb], [-yIn, yIn], [zBot, zPlyTop]),
       joints: [miter('storage-side-L'), miter('storage-side-R'), ...deckJoint(), { type: 'glue', to: `storage-coaming-end-${tag}`, count: 1, note: 'oak coaming caps the wall top, epoxy' }] }));
   }
@@ -337,7 +341,7 @@ export function buildStorage(ctx: Ctx): Part[] {
   }
 
   // ── Lid: oak frame (rim) capturing the ply panel, two battens under the panel ──
-  parts.push(box(ctx, { ...common, id: 'storage-lid', name: 'Storage lid panel', mat: 'ply', edges: 'captured', fab: 'shaper-origin',
+  parts.push(box(ctx, { ...common, id: 'storage-lid', name: 'Storage lid panel', mat: 'ply', thin: true, edges: 'captured', fab: 'shaper-origin',
     ...span([x0 + rimW, x1 - rimW], [-(hw - rimW), hw - rimW], [zTop - pl, zTop]),
     stock: { t: pl, w: 2 * (hw - rimW) + 0.5, l: x1 - x0 - 2 * rimW + 0.5 },
     joints: ['storage-rim-side-L', 'storage-rim-side-R', 'storage-rim-end-aft', 'storage-rim-end-fore'].map((to): Joint => ({
@@ -388,28 +392,35 @@ export function buildStorage(ctx: Ctx): Part[] {
   const hz1 = zTop - 0.3;
   const rear = p.storageLocation === STORAGE_LOCATION.rearOverAxle;
   const zGunTop = L.deckTop + L.sideRear;
+  // D-72: the hinge leaves take the standard screws: #8 x 5/8 into the lid frame end (rimW deep), #8 x 1-1/4 through the end panel into the 1-1/4 in backer.
+  const hingeRimFit = pickWoodScrew(8, LEAF_IN, rimW);
+  const hingeBackFit = pickWoodScrew(8, LEAF_IN + pl, HINGE_BACKER_IN);
   for (const { s: sg, tag } of SIDES) {
     parts.push(box(ctx, { ...common, id: `storage-hinge-${tag}`, partNo: 'storage-hinge', name: `Lid hinge ${tag}`, mat: 'fixed', massLb: HINGE_MASS_LB,
       kind: 'purchased', material: '316 stainless butt hinge', fab: 'buy', step: STEP.seatStorage, ...span([x1, x1 + 0.12], [sg * hingeY - HINGE_W_IN / 2, sg * hingeY + HINGE_W_IN / 2], [hz1 - HINGE_H_IN, hz1]),
       sourcing: { vendor: 'McMaster-Carr (316 stainless surface-mount butt hinge, 2½" × 2¾")', costUsd: 14 },
-      joints: [{ type: 'screw', to: 'storage-rim-end-fore', count: 3, size: '#8 × 1/2 stainless' }, { type: 'screw', to: `storage-hinge-backer-${tag}`, count: 3, size: '#8 × 1 stainless, through the end panel into the 1" backer (S5)' }],
+      joints: [{ type: 'screw', to: 'storage-rim-end-fore', count: 3, diaIn: SCREW_DIA_IN[8], fit: hingeRimFit, size: `${screwText(hingeRimFit)} stainless, into the lid frame end` }, { type: 'screw', to: `storage-hinge-backer-${tag}`, count: 3, diaIn: SCREW_DIA_IN[8], fit: hingeBackFit, size: `${screwText(hingeBackFit)} stainless, through the end panel into the ${HINGE_BACKER_IN}" backer (S5)` }],
       notes: 'Barrel along the fore-top edge: the lid swings up and aft and the seat back (when fitted) stops it near 75° (D-41); the stay holds it open (S5).' }));
     parts.push(box(ctx, { ...common, id: `storage-hinge-backer-${tag}`, partNo: 'storage-hinge-backer', name: `Hinge backer ${tag}`, mat: 'oak', grain: 'y',
       ...span([x1 - pl - HINGE_BACKER_IN, x1 - pl], [sg * hingeY - HINGE_W_IN / 2, sg * hingeY + HINGE_W_IN / 2], [zPlyTop - 1.5, zPlyTop]),
       joints: [{ type: 'glue', to: 'storage-end-fore', count: 1, note: 'epoxy to the inside of the end panel' }],
-      notes: `Gives the hinge screws something to bite (#8 × 1" engages ${(1 - pl).toFixed(2)}" of oak past the ${Math.round(pl * 25.4)} mm ply); stops under the coaming.` }));
+      notes: `Gives the hinge screws something to bite (the ${screwText(hingeBackFit)} screw engages ${(hingeBackFit.lenIn - hingeBackFit.gripIn).toFixed(2)}" of oak past the ${Math.round(pl * 25.4)} mm ply and the leaf; the backer is ${HINGE_BACKER_IN}" thick so the tip stays inside it, D-72); stops under the coaming.` }));
     // Latch block (S5): oak under each latch so the #8 screws are not in a thin ply end or a face-grain skin.
     // Latch: on the inside face of the rear transom above the lid (rear box), else on the aft end's outer face; hooks a catch on the lid frame.
     // Latches sit at 8.5" off center, clear of the rear lamp clip in the hand-hold (|y| < 2.25, D-64) on the same transom.
     const ly = sg * Math.min(hw - 3, 8.5);
     const blockZ: [number, number] = rear ? [zTop + 0.3, Math.max(zTop + 0.8, Math.min(zTop + 1.7, zGunTop))] : [zPlyTop - 1.4, zPlyTop];
-    const blockX: [number, number] = rear ? [x0, x0 + LATCH_BLOCK_IN] : [x0 + pl, x0 + pl + 0.75];
+    // D-72: a block behind the end panel is 1-1/4 in thick so the standard #8 x 1-1/4 latch screw stays inside it; the rear block (on the transom, 0.375 in + the transom) takes the #8 x 5/8.
+    const blockT = rear ? LATCH_BLOCK_IN : 1.25;
+    const latchFit = rear ? pickWoodScrew(8, LEAF_IN, LATCH_BLOCK_IN + L.transom) : pickWoodScrew(8, LEAF_IN + pl, blockT);
+    const blockX: [number, number] = rear ? [x0, x0 + LATCH_BLOCK_IN] : [x0 + pl, x0 + pl + blockT];
+    const catchFit = pickWoodScrew(8, LEAF_IN, rimW); // the catch plate on the lid frame end
     const blockId = `storage-latch-block-${tag}`;
     parts.push(box(ctx, { ...common, id: blockId, partNo: 'storage-latch-block', name: `Latch block ${tag}`, mat: 'oak', grain: 'z',
       ...span(blockX, [ly - LATCH_BLOCK_W_IN / 2, ly + LATCH_BLOCK_W_IN / 2], blockZ),
       joints: [{ type: 'glue', to: rear ? 'transom-rear' : 'storage-end-aft', count: 1, note: rear ? 'epoxy to the inside face of the rear transom' : 'epoxy to the inside of the aft end panel' },
-        { type: 'screw', to: `storage-latch-${tag}`, count: 2, size: rear ? '#8 × 5/8 stainless, into the block' : '#8 × 7/8 stainless, through the end panel into the block' }],
-      notes: rear ? `Oak block ${LATCH_BLOCK_IN}" thick on the transom's inner face: the #8 screws bite ${(5 / 8 - 0.06).toFixed(2)}" of block (end grain avoided: block grain is vertical) instead of a bare transom face. The lid's aft edge swings up and away from the transom, so the block is never in its path (S5).` : 'Oak block behind the 6 mm aft end for the latch screws (S5).' }));
+        { type: 'screw', to: `storage-latch-${tag}`, count: 2, diaIn: SCREW_DIA_IN[8], fit: latchFit, size: rear ? `${screwText(latchFit)} stainless, into the block and the transom behind it` : `${screwText(latchFit)} stainless, through the end panel into the block` }],
+      notes: rear ? `Oak block ${LATCH_BLOCK_IN}" thick on the transom's inner face: the ${screwText(latchFit)} screws bite ${(latchFit.lenIn - latchFit.gripIn).toFixed(2)}" (the block, then the transom it is glued to; end grain avoided: block grain is vertical) instead of a bare transom face. The lid's aft edge swings up and away from the transom, so the block is never in its path (S5).` : 'Oak block behind the 6 mm aft end for the latch screws (S5).' }));
     const latchBox = rear
       ? span([x0 + LATCH_BLOCK_IN, x0 + LATCH_BLOCK_IN + 0.35], [ly - 0.6, ly + 0.6], [blockZ[0] + 0.1, blockZ[1] - 0.05])
       : span([x0 - 0.35, x0], [ly - 0.6, ly + 0.6], [zTop - 2.5, zTop - 1.2]);
@@ -419,14 +430,14 @@ export function buildStorage(ctx: Ctx): Part[] {
     parts.push(box(ctx, { ...common, id: `storage-latch-${tag}`, partNo: 'storage-latch', name: `Lid latch ${tag}`, mat: 'fixed', massLb: LATCH_MASS_LB, kind: 'purchased',
       material: '316 stainless over-center draw latch', fab: 'buy', step: STEP.finish, ...latchBox,
       sourcing: { vendor: 'McMaster-Carr (316 stainless draw latch)', costUsd: 9 },
-      joints: [{ type: 'screw', to: blockId, count: 2, size: rear ? '#8 × 5/8 stainless' : '#8 × 7/8 stainless' }],
+      joints: [{ type: 'screw', to: blockId, count: 2, diaIn: SCREW_DIA_IN[8], fit: latchFit, size: `${screwText(latchFit)} stainless` }],
       notes: rear
         ? 'On the oak block on the inside face of the rear transom, hooking a catch on the lid frame. Engagement in the block is about 1/2" (a #8 with a 3/8" pilot in white oak face grain holds about 100 lbf per screw, ~200 lbf per latch) against a gasket and slam load of about 20 lbf per latch, so about 10x margin (D-41).'
         : 'On the aft end (over the oak block inside it), hooking a catch on the lid frame.' }));
     parts.push(box(ctx, { ...common, id: `storage-catch-${tag}`, partNo: 'storage-catch', name: `Latch catch ${tag}`, mat: 'fixed', massLb: CATCH_MASS_LB, kind: 'purchased',
       material: '316 stainless catch plate', fab: 'buy', step: STEP.finish, ...catchBox,
       sourcing: { vendor: 'McMaster-Carr (316 stainless draw-latch catch; supplied with the latch)', costUsd: 0 },
-      joints: [{ type: 'screw', to: 'storage-rim-end-aft', count: 2, size: '#8 × 3/8 stainless' }] }));
+      joints: [{ type: 'screw', to: 'storage-rim-end-aft', count: 2, diaIn: SCREW_DIA_IN[8], fit: catchFit, size: `${screwText(catchFit)} stainless` }] }));
     // Drains: stainless nipple flange at the aft corner; the hole goes through the deck (and the floor panel when the box has one).
     const r = p.storageDrainDiaIn / 2 + 0.125;
     parts.push(cylinder(ctx, { ...common, id: `storage-drain-${tag}`, partNo: 'storage-drain', name: `Drain nipple ${tag}`, mat: 'fixed', massLb: DRAIN_MASS_LB, kind: 'purchased',
@@ -441,10 +452,12 @@ export function buildStorage(ctx: Ctx): Part[] {
   // Lid hold-open stay (S5): the 75° stop leaves the lid free to fall closed, so a friction stay on the inboard face of the left hinge backer
   // (oak, so the screws bite) holds it at any angle.
   const stayY0 = hingeY - HINGE_W_IN / 2 - STAY_SIZE[1];
+  const stayBackFit = pickWoodScrew(8, LEAF_IN, HINGE_W_IN); // into the 2.5 in wide side face of the backer
+  const stayRimFit = pickWoodScrew(8, LEAF_IN, rimW);
   parts.push(box(ctx, { ...common, id: 'storage-lid-stay', name: 'Lid friction stay', mat: 'fixed', massLb: STAY_MASS_LB, kind: 'purchased', material: '316 stainless friction stay',
     fab: 'buy', step: STEP.finish, ...span([x1 - pl - STAY_SIZE[0], x1 - pl], [stayY0, stayY0 + STAY_SIZE[1]], [zPlyTop - STAY_SIZE[2], zPlyTop]),
     sourcing: { vendor: 'McMaster-Carr (316 stainless friction lid stay / hold-open brace, 2" fold)', costUsd: 18 },
-    joints: [{ type: 'screw', to: 'storage-hinge-backer-L', count: 2, size: '#6 × 3/8 stainless, into the side grain of the 1" backer', note: 'the stay pivot' }, { type: 'screw', to: 'storage-rim-end-fore', count: 2, size: '#6 × 3/8 stainless', note: 'the stay arm end, on the lid frame' }],
+    joints: [{ type: 'screw', to: 'storage-hinge-backer-L', count: 2, diaIn: SCREW_DIA_IN[8], fit: stayBackFit, size: `${screwText(stayBackFit)} stainless, into the side grain of the ${HINGE_BACKER_IN}" backer`, note: 'the stay pivot' }, { type: 'screw', to: 'storage-rim-end-fore', count: 2, diaIn: SCREW_DIA_IN[8], fit: stayRimFit, size: `${screwText(stayRimFit)} stainless`, note: 'the stay arm end, on the lid frame' }],
     notes: 'Holds the lid at any angle so a gust or a scout cannot close it on fingers (S5). Folds flat against the backer when the lid is shut.' }));
 
   // ── Lash points on the gunwales: stainless D-rings on bolt plates (BRIEF §4.9), turned to the slope of the sled profile (D-54) ──
@@ -460,19 +473,20 @@ export function buildStorage(ctx: Ctx): Part[] {
       // r3 build S8: the plate is centered on a 1" oak DOUBLER glued to the inboard face of the inner gunwale band (not on the 0.234" band alone: the plate screws need a solid block);
       // its four screws go straight down into the doubler, 1/4" either side of the plate centerline, so every screw is in solid oak 1/4" from a doubler face.
       const T = p.lashDoublerThickIn;
+      const lashFit = pickWoodScrew(8, LASH_PLATE_T_IN, L.railBand, LASH_SCREW_LEN_IN - LASH_PLATE_T_IN - LASH_TIP_IN); // the plate (1/8 in) is the grip; the doubler is the band tall; the lash-load row counts the thread past the tip lead
       const inN = L.side / 2 + T / 2; // doubler (and plate) center, inboard of the web plane
       const cy = sg * (yg - inN);
       const pat = [[-1, -1], [-1, 1], [1, -1], [1, 1]] as const;
       const screwAt = (z: number): Vec3[] => pat.map(([a, b]): Vec3 => [a * LASH_HOLE_DX_IN, b * LASH_HOLE_DY_IN, z]);
       parts.push(box(ctx, { id: dId, partNo: 'doubler-lash', name: `Lash point doubler ${tag}${i + 1}`, group: 'storage', mat: 'oak', grain: 'x', step: STEP.finish,
         size: [LASH_SIZE[0] + 0.5, T, L.railBand], center: [x - sn * (L.railBand / 2), cy, zTopAt - cs * (L.railBand / 2)], ...(rot ? { rot } : {}),
-        joints: [{ type: 'glue', to: gunwaleId(p, tag), count: 1, size: `${(LASH_SIZE[0] + 0.5).toFixed(1)}" × ${L.railBand}" face, epoxy`, note: `Epoxy, full face, against the inboard face of the inner gunwale band (the 4 mm web and the outer band are behind it; there is no groove, and the screws never reach them). The vertical shear of a ${p.lashLoadLbf} lbf pull at ${p.lashPullAngleDeg}° on ${((LASH_SIZE[0] + 0.5) * L.railBand).toFixed(1)} in² of glue is a few tens of psi.` },
-          { type: 'screw', to: `lash-${tag}${i + 1}`, count: LASH_SCREWS, size: '#10 × 1-1/4 stainless, straight down from the plate into the doubler', diaIn: LASH_SCREW_DIA_IN, at: screwAt(L.railBand / 2) }],
-        notes: `${T}" oak doubler on the inboard face of the gunwale under the lash plate (D-41, D-47): ${(LASH_SIZE[0] + 0.5).toFixed(1)}" long, the full ${L.railBand}" band tall, cut square to the gunwale's ${((slope * 180) / Math.PI).toFixed(1)}° slope here (D-54). The four #10 screws sit ${LASH_HOLE_DY_IN}" either side of its centerline (${(T / 2 - LASH_HOLE_DY_IN).toFixed(2)}" from each face) and end ${(L.railBand - (LASH_SCREW_LEN_IN - LASH_PLATE_T_IN)).toFixed(2)}" above its bottom.` }));
+        joints: [{ type: 'glue', to: gunwaleId(p, tag), count: 1, size: `${(LASH_SIZE[0] + 0.5).toFixed(1)}" × ${L.railBand}" face, epoxy`, note: `Epoxy, full face, against the inboard face of the inner gunwale band (the thin web and the outer band are behind it; there is no groove, and the screws never reach them). The vertical shear of a ${p.lashLoadLbf} lbf pull at ${p.lashPullAngleDeg}° on ${((LASH_SIZE[0] + 0.5) * L.railBand).toFixed(1)} in² of glue is a few tens of psi.` },
+          { type: 'screw', to: `lash-${tag}${i + 1}`, count: LASH_SCREWS, size: `${screwText(lashFit)} stainless, straight down from the plate into the doubler`, diaIn: LASH_SCREW_DIA_IN, fit: lashFit, at: screwAt(L.railBand / 2) }],
+        notes: `${T}" oak doubler on the inboard face of the gunwale under the lash plate (D-41, D-47): ${(LASH_SIZE[0] + 0.5).toFixed(1)}" long, the full ${L.railBand}" band tall, cut square to the gunwale's ${((slope * 180) / Math.PI).toFixed(1)}° slope here (D-54). The four ${screwText(lashFit)} screws sit ${LASH_HOLE_DY_IN}" either side of its centerline (${(T / 2 - LASH_HOLE_DY_IN).toFixed(2)}" from each face) and end ${(L.railBand - (LASH_SCREW_LEN_IN - LASH_PLATE_T_IN)).toFixed(2)}" above its bottom.` }));
       parts.push(box(ctx, { id: `lash-${tag}${i + 1}`, partNo: 'lash-point', name: `Lash point ${tag}${i + 1}`, group: 'hardware', mat: 'fixed', massLb: LASH_MASS_LB, kind: 'purchased',
         material: 'stainless D-ring on a bolt plate', fab: 'buy', step: STEP.finish, size: [LASH_SIZE[0], LASH_SIZE[1], LASH_SIZE[2]], center: [x + sn * (LASH_SIZE[2] / 2), cy, zTopAt + cs * (LASH_SIZE[2] / 2)], ...(rot ? { rot } : {}),
         sourcing: { vendor: 'McMaster-Carr (316 stainless 4-hole D-ring bolt plate, 300 lbf working load)', costUsd: 7 },
-        joints: [{ type: 'screw', to: dId, count: LASH_SCREWS, size: '#10 × 1-1/4 stainless, straight down into the oak doubler', diaIn: LASH_SCREW_DIA_IN, at: screwAt(-LASH_SIZE[2] / 2) }],
+        joints: [{ type: 'screw', to: dId, count: LASH_SCREWS, size: `${screwText(lashFit)} stainless, straight down into the oak doubler`, diaIn: LASH_SCREW_DIA_IN, fit: lashFit, at: screwAt(-LASH_SIZE[2] / 2) }],
         notes: `Rated for tie-down straps on coolers, duffels and firewood (post-race hauling, BRIEF §4.9). The plate (${LASH_SIZE[0]}" × ${LASH_SIZE[1]}", holes ${2 * LASH_HOLE_DX_IN}" × ${2 * LASH_HOLE_DY_IN}") lies on the top of the ${T}" doubler, entirely inboard of the gunwale; four screws land in the doubler; the lash-load check pulls it at ${p.lashLoadLbf} lbf and ${p.lashPullAngleDeg}° (D-41, S-9).` }));
     });
   }

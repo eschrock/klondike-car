@@ -6,13 +6,15 @@
  * Upright it leans back onto two fixed oak stop blocks ("wedges") glued against the storage box end; a 3/8" spring-detent quick-release pin per side (D-63: 2 in up the panel) goes through the panel
  * into a blind hole in the stop block and holds it up, and the same pin through the same hole and the deck into a blind hole in the backer pad holds it flat. The pad and the cushion are the "cushions" that lie in the box in cargo mode.
  */
-import { RIDER_PELVIS_Z_FRAC, STORAGE_LOCATION, type Params } from '../params';
+import { RIDER_PELVIS_Z_FRAC, STORAGE_LOCATION, thinSheet, type Params } from '../params';
 import { GRIP_BACKING_T_IN, STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
 import { innerHalfWidth, sideSlopeAt, sideTopAt, type Layout } from './layout';
 import { chooseDomino, DOMINOS, frac, type DominoQuery } from './joinery';
 import { joistId } from './frame';
 import { profilePart, signedArea } from './profile';
-import { boltLength, inchesText, screwLength } from './rear-mount';
+import { boltLength, inchesText, pickWoodScrew, SCREW_DIA_IN, screwText } from './rear-mount';
+
+const f2 = (v: number): string => String(Math.round(v * 100) / 100);
 import type { Joint, Part, Vec2, Vec3 } from './types';
 
 // ── Detail dimensions and purchased-part estimates (D-18, D-40) ──
@@ -31,7 +33,7 @@ export const CUSHION_CLEAR_IN = 0.375;
  * Quick-release pin (3/8 in, 316 stainless, with lanyard): radius, usable length (under the head to the tip), head height, mass; one per side. D-63 (build 3c-8, owner-approved: pin stations 2 in up the
  * panel): 1-1/2 in usable. It is a SPRING-DETENT pin in BOTH positions, because a ball-lock pin only retains where its balls clear the far side of a THROUGH hole and both holes are blind (the stop
  * block is glued to the box end; the hinge backer is oak under the deck): the ball seats in a 1/16 in annular groove cut in each blind hole. UPRIGHT it passes the 0.47 in panel and goes 1.03 in into the
- * stop block (the block is 1.53 in thick along the pin at 2 in up, with the 4 mm box end behind it); FLAT it passes the panel and the 12 mm deck and goes 0.56 in into the 1 in backer. The older 2-1/4 in pin
+ * stop block (the block is 1.53 in thick along the pin at 2 in up, with the thin box end behind it); FLAT it passes the panel and the 12 mm deck and goes 0.56 in into the 1 in backer. The older 2-1/4 in pin
  * could not be used upright: it would have run 0.3 in into the box.
  */
 export const PIN_R_IN = 0.1875;
@@ -40,6 +42,8 @@ export const PIN_LEN_IN = 1.5;
 export const PIN_HEAD_IN = 0.3;
 /** Oak hinge/pin backer pad under the 12 mm deck (D-63): thick enough for the blind flat-position pin hole, and 3 in wide at each station (4 pin diameters each side of the pin). */
 export const HINGE_BACKER_THICK_IN = 1;
+/** A butt hinge leaf (the model's 316 hinges, 1/16 in; the BOM's HINGE_LEAF_IN). */
+export const HINGE_LEAF_THICK_IN = 1 / 16;
 /** Oak that must be left behind the bottom of a blind latch hole (the stop block against the box end, the backer under the deck), in. */
 export const LATCH_HOLE_WALL_MIN_IN = 0.25;
 /** The lid hinges (storage.ts) stand this far proud of the box end; the crest strip is bedded 0.01 in off them. */
@@ -190,7 +194,7 @@ export function seatBackSupport(p: Params, L: Layout): SeatBackSupport {
   const c2x = s.col2[0];
   const xf = (c2: number) => s.Pr[0] + c2x * c2;
   const st = L.storage;
-  const boxZTop = Math.max(st.zTop, st.zBot + 3 * p.panelPlyIn + p.storageLidRimThickIn + p.storageGasketIn, rear ? st.zBot + MIN_REAR_BOX_H_IN : 0);
+  const boxZTop = Math.max(st.zTop, st.zBot + 3 * thinSheet(p).thicknessIn + p.storageLidRimThickIn + p.storageGasketIn, rear ? st.zBot + MIN_REAR_BOX_H_IN : 0);
   const faceXAt = (z: number) => xf((z - s.Pr[2]) / c2z);
   const boxX1 = rear ? Math.min(Math.max(st.x0 + 0.5, st.x1), faceXAt(boxZTop) - 0.15) : st.x1; // 0.15 in off the leaning panel: the lid hinges stand 0.12 in proud of the box end and the frameless panel (D-62) now passes over them
   // The hinge is the stile's front foot (c2 = 0 along the back); the latch pin sits `seatBackLatchHeightIn` up.
@@ -389,6 +393,8 @@ export function buildSeat(ctx: Ctx): Part[] {
   const hb = hingeBacker(p, L);
   const f4 = (v: number) => v.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
   const buttIdx = L.joistX.findIndex((jx) => Math.abs(jx - L.joistT / 2 - hb.x1) < 1e-6); // the joist the pad is butted against, if any
+  // D-72: the hinge screw crosses the 1/16 in leaf and the deck, then bites the backer pad.
+  const hingeFit = pickWoodScrew(8, HINGE_LEAF_THICK_IN + L.ply, HINGE_BACKER_THICK_IN);
   const pinPadHalfIn = 4 * 2 * PIN_R_IN; // 4 pin diameters (1.5 in) from the pin to the end of the pad (the pin hole is the closest thing to an edge)
   for (const { s: sg, tag } of SIDES) {
     parts.push(cylinder(ctx, {
@@ -398,7 +404,7 @@ export function buildSeat(ctx: Ctx): Part[] {
       sourcing: { vendor: 'McMaster-Carr (316 stainless butt hinge, 2" knuckle, 1" leaves)', costUsd: 9 },
       joints: [
         { type: 'screw', to: 'seat-back-panel', count: 3, diaIn: 0.19, size: '#10-32 × 3/8 316 flat-head machine screws into the epoxied 5/16 stainless threaded inserts in the front face of the panel (3/8 in, not 1/2 in: the leaf is about 1/16 in, so the screw bites 5/16 in and cannot bottom in the 11/32 in hole)', note: 'leaf on the back\'s front face, flush with the frame', at: holeK.map((k): Vec3 => [s.col2[0] * leafV, s.col2[2] * leafV, -sg * k * HINGE_HOLE_PITCH_IN]) },
-        { type: 'screw', to: `seat-hinge-backer-${tag}`, count: 3, diaIn: 0.16, size: '#8 × 1-1/4 316 flat head, through the deck into the 1 in backer pad (0.7 in of bite)', note: 'leaf on the deck (the cushion\'s rear margin lies over it)', at: holeK.map((k): Vec3 => [leafV, -HINGE_R_IN, -sg * k * HINGE_HOLE_PITCH_IN]) },
+        { type: 'screw', to: `seat-hinge-backer-${tag}`, count: 3, diaIn: SCREW_DIA_IN[8], fit: hingeFit, size: `${screwText(hingeFit)} 316 flat head, through the deck into the ${f2(HINGE_BACKER_THICK_IN)} in backer pad (${f2(hingeFit.lenIn - hingeFit.gripIn)} in of bite)`, note: 'leaf on the deck (the cushion\'s rear margin lies over it)', at: holeK.map((k): Vec3 => [leafV, -HINGE_R_IN, -sg * k * HINGE_HOLE_PITCH_IN]) },
       ],
       notes: 'The back flips forward 105° about this knuckle onto the deck (D-57). The leaf on the deck is under the 3/8" gap behind the cushion (a 1/16" proud leaf does not show in the cargo bed).',
     }));
@@ -413,7 +419,7 @@ export function buildSeat(ctx: Ctx): Part[] {
       joints: [
         { type: 'glue', to: 'deck', count: 1, note: 'epoxy to the underside of the deck, before the frame goes on' },
         ...(buttIdx >= 0 ? [{ type: 'glue' as const, to: joistId(L, buttIdx), count: 1, note: 'butt the pad to the joist face (the pin sits in solid oak across the glue line)' }] : []),
-        { type: 'screw', to: `seat-hinge-${tag}`, count: 3, size: '#8 × 1-1/4 316, from the hinge leaf down through the deck' },
+        { type: 'screw', to: `seat-hinge-${tag}`, count: 3, diaIn: SCREW_DIA_IN[8], fit: hingeFit, size: `${screwText(hingeFit)} 316, from the hinge leaf down through the deck` },
         { type: 'pin', to: `seat-pin-${tag}`, count: 1, diaIn: 2 * PIN_R_IN, size: `3/8" blind hole ${f4(lg.flatHoleIn)}" deep (flat latch), through the 12 mm deck first, with a 1/16" annular detent groove ${f4(lg.flatGrooveIn)}" below the deck`, note: `leaves ${f4(lg.flatLeftIn)}" of oak under the hole` },
       ],
       notes: `Oak pad ${HINGE_BACKER_THICK_IN}" thick, glued under the 12 mm deck at each hinge so the hinge screws AND the flat-position pin hole bite oak, not ply (D-57, D-63). It runs from ${hb.x0.toFixed(2)}" (a half inch behind the hinge axis) forward to ${hb.x1.toFixed(2)}", where it BUTTS the face of the next joist, so the flat pin (${(s.P[0] + sup.c2L).toFixed(2)}", ${(hb.x1 - (s.P[0] + sup.c2L)).toFixed(2)}" from the pad end and in line with the joist behind it) lands in solid oak; it is ${(2 * pinPadHalfIn).toFixed(0)}" across, ${pinPadHalfIn}" (4 pin diameters) each side of the pin station. Grain across the sled. Drill the pin hole through the deck and ${f4(lg.flatHoleIn)}" into the pad (a drill stop), 1/16" groove for the detent ball ${f4(lg.flatGrooveIn)}" below the deck, epoxy-lined, when the seat is installed: ${f4(lg.flatLeftIn)}" of oak is left under the hole. Replaces the one-piece 3/4 in strip (lighter by about 0.4 lb).`,
@@ -428,7 +434,7 @@ export function buildSeat(ctx: Ctx): Part[] {
       // The cylinder is the usable length (the tip at c0 = -PIN_LEN) plus the button head (to c0 = +PIN_HEAD): head seated on the panel's front face (c0 = 0).
       axis: 'x', radius: PIN_R_IN, length: PIN_LEN_IN + PIN_HEAD_IN, rot: { y: -a }, center: at((PIN_HEAD_IN - PIN_LEN_IN) / 2, pinZ, sg * sup.stileY), explode: unit(0.6, sg * 0.3, 0.8),
       sourcing: { vendor: 'McMaster-Carr (quick-release pin, 3/8" diameter, 1-1/2" usable length, with lanyard; SPRING-DETENT ball, because both holes are blind and a ball-lock pin does not retain in a blind hole): VERIFY the exact part, the distance from its tip to the ball and the head height, and prove it in a scrap block before drilling the real ones', costUsd: 9 },
-      notes: `No tools: push the button and slide it out or in (D-57). UPRIGHT (head on the panel face): through the ${(t * 25.4).toFixed(0)} mm panel and ${f4(lg.upTipIn)}" into the stop block, in a BLIND hole ${f4(lg.upHoleIn)}" deep (the block is ${lg.blockIn.toFixed(2)}" thick along the pin there, so ${f4(lg.upLeftIn)}" of oak is left behind the hole and the 4 mm box end is never reached; the detent ball seats in a 1/16" groove ${f4(lg.upGrooveIn)}" from the mouth), so the back cannot flip forward. FLAT (back flipped forward, head up on the panel's rear face): through the same hole, the 12 mm deck and ${f4(lg.flatTipIn)}" into the oak backer pad, in a blind hole ${f4(lg.flatHoleIn)}" deep (groove ${f4(lg.flatGrooveIn)}" below the deck). Both grooves are 1/16" wide and about 1/32" deep, cut with a small hook tool or a ground-down Allen key; measure where the ball sits on the real pin first. The pin head stands about ${PIN_HEAD_IN}" proud of the panel face at cushion-top height: if it touches the cushion (the cushion is set 3/8" back), notch the foam's rear corners. The lanyard clips to the panel when the pin is out.`,
+      notes: `No tools: push the button and slide it out or in (D-57). UPRIGHT (head on the panel face): through the ${(t * 25.4).toFixed(0)} mm panel and ${f4(lg.upTipIn)}" into the stop block, in a BLIND hole ${f4(lg.upHoleIn)}" deep (the block is ${lg.blockIn.toFixed(2)}" thick along the pin there, so ${f4(lg.upLeftIn)}" of oak is left behind the hole and the thin box end is never reached; the detent ball seats in a 1/16" groove ${f4(lg.upGrooveIn)}" from the mouth), so the back cannot flip forward. FLAT (back flipped forward, head up on the panel's rear face): through the same hole, the 12 mm deck and ${f4(lg.flatTipIn)}" into the oak backer pad, in a blind hole ${f4(lg.flatHoleIn)}" deep (groove ${f4(lg.flatGrooveIn)}" below the deck). Both grooves are 1/16" wide and about 1/32" deep, cut with a small hook tool or a ground-down Allen key; measure where the ball sits on the real pin first. The pin head stands about ${PIN_HEAD_IN}" proud of the panel face at cushion-top height: if it touches the cushion (the cushion is set 3/8" back), notch the foam's rear corners. The lanyard clips to the panel when the pin is out.`,
     }));
   }
 
@@ -436,9 +442,10 @@ export function buildSeat(ctx: Ctx): Part[] {
   const wedgeW = fw;
   const depthX = Math.max(...sup.wedge.map((q) => q[0])) - Math.min(...sup.wedge.map((q) => q[0]));
   const zA = Math.max(...sup.wedge.map((q) => q[1]));
+  const wedgeFit = pickWoodScrew(8, L.ply, zA - sup.zb); // the clamping screws cross the deck and bite the block
   for (const { s: sg, tag } of SIDES) {
     const j: Joint[] = [{ type: 'glue', to: 'deck', count: 1, note: 'epoxy to the deck (and screwed from below)' },
-      { type: 'screw', to: 'deck', count: 2, diaIn: 0.164, size: `2 × #8 × ${inchesText(screwLength(L.ply, 0.75))} 316 flat-head screws up from below through the deck and 3/4 in into the block`, note: 'clamping screws for the epoxy bed; countersink the heads in the deck underside' }];
+      { type: 'screw', to: 'deck', count: 2, diaIn: SCREW_DIA_IN[8], fit: wedgeFit, size: `2 × ${screwText(wedgeFit)} 316 flat-head screws up from below through the deck and ${f2(wedgeFit.lenIn - wedgeFit.gripIn)} in into the block`, note: 'clamping screws for the epoxy bed; countersink the heads in the deck underside' }];
     if (sup.rear) j.push({ type: 'glue', to: 'storage-end-fore', count: 1, note: 'epoxy to the box end; the push of the rider goes into the box through it' });
     j.push({ type: 'pin', to: `seat-pin-${tag}`, count: 1, diaIn: 2 * PIN_R_IN, size: `3/8" blind hole ${f4(lg.upHoleIn)}" deep (upright latch), with a 1/16" annular detent groove ${f4(lg.upGrooveIn)}" from the mouth`, note: `drilled square to the back's rear face ${pinZ.toFixed(2)}" up from the hinge axis; the block is ${lg.blockIn.toFixed(2)}" thick along the hole there, so ${f4(lg.upLeftIn)}" of oak is left behind it (set from the block outline, never into the box end); a ball-lock pin does not retain in a blind hole (build 3c S4)` });
     parts.push(profilePart(ctx, {
@@ -505,7 +512,7 @@ export function buildSeat(ctx: Ctx): Part[] {
     for (let i = 0; i <= 8; i++) { const aa = Math.PI / 2 + (Math.PI * i) / 8; hole.push([cu0 - straight + rh * Math.cos(aa), cn0 + rh * Math.sin(aa)]); }
     const bt = p.grabBoardThickIn;
     // Through the board, the inner band, the web, the outer band and the backing strip; a washer under the head (on the strip) and one under the nut: stocked bolt length, rounded up.
-    const gripStack = bt + 2 * L.sideBand + p.panelPlyIn + GRIP_BACKING_T_IN;
+    const gripStack = bt + 2 * L.sideBand + thinSheet(p).thicknessIn + GRIP_BACKING_T_IN;
     const gripBoltLen = boltLength(gripStack, GRIP_BOLT_DIA_IN, 2);
     for (const { s: sg, tag } of SIDES) {
       const gid = gunwaleId(p, tag);
@@ -529,7 +536,7 @@ export function buildSeat(ctx: Ctx): Part[] {
           { type: 'glue', to: `side-${tag}-gunwale`, count: 1, size: 'bedded in epoxy or polysulfide sealant on the outer face of the outer gunwale band', note: 'spreads the six screw heads over about 8 in²' },
         ],
         sourcing: { vendor: `McMaster-Carr (316 stainless flat bar ${GRIP_BACKING_T_IN}" × ${GRIP_BACKING_H_IN}", ${f1(gripBackingLen(bLen))}" piece, hacksawed to length, ends rounded and filed, edges eased)` },
-        notes: `Backing strip for the ${GRIP_BOLTS} grab-board screw heads (D-63, build 3c-8 S9): 316 flat bar ${GRIP_BACKING_T_IN}" × ${GRIP_BACKING_H_IN}" × ${f1(gripBackingLen(bLen))}" on the outside of the outer gunwale band. A 1/4" button head on the 0.234" oak band over the 4 mm web would pull through before the inside washer on the board fails, and a washer big enough to spread it (1-1/4") does not fit the 0.6" row spacing on a ${L.railBand}" band; the strip bears the heads on about ${f1(gripBackingLen(bLen) * GRIP_BACKING_H_IN)} in² (the seat-grip row checks it). Drill it with the board clamped on, one bit through all layers. It stands 1/16" proud of the hull face; round the ends.`,
+        notes: `Backing strip for the ${GRIP_BOLTS} grab-board screw heads (D-63, build 3c-8 S9): 316 flat bar ${GRIP_BACKING_T_IN}" × ${GRIP_BACKING_H_IN}" × ${f1(gripBackingLen(bLen))}" on the outside of the outer gunwale band. A 1/4" button head on the 0.234" oak band over the thin web would pull through before the inside washer on the board fails, and a washer big enough to spread it (1-1/4") does not fit the 0.6" row spacing on a ${L.railBand}" band; the strip bears the heads on about ${f1(gripBackingLen(bLen) * GRIP_BACKING_H_IN)} in² (the seat-grip row checks it). Drill it with the board clamped on, one bit through all layers. It stands 1/16" proud of the hull face; round the ends.`,
       });
       strip.kind = 'metal';
       strip.stock = { t: GRIP_BACKING_T_IN, w: GRIP_BACKING_H_IN, l: gripBackingLen(bLen) }; // the cut list reads the flat-bar stock from here, not from the sourcing text

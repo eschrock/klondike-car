@@ -1,11 +1,12 @@
 /**
- * Ply sheet check (D-62, D-68; Eric 2026-10-12): every okoume part comes from ONE full 4 x 8 ft sheet per thickness, both from a local supplier: 4 mm (side webs, box, lid,
+ * Ply sheet check (D-62, D-68, D-73; Eric 2026-10-12): every ply part comes from ONE full sheet per thickness: the thin sheet (1/4 in white oak ply, 4 mm okoume or 3 mm Baltic birch; side webs, box, lid,
  * signs) and 12 mm (the deck, with the seat back from its offcut). Every part's raw blank must fit 48 x 96. `plySheets` gives a ROUGH sheet count per thickness (shelf packing
  * of the bounding blanks, with a kerf between pieces); the true-outline nesting is `src/build/nesting.ts` (Phase 4). Plain TS, no three.js.
  */
+import { thinSheet, type Params } from '../params';
 import type { Part } from './types';
 
-/** A ply sheet part is "thin" up to this thickness (in): 6 mm = 0.236. The 12 mm deck and seat back are 0.472. */
+/** A ply sheet part is "thin" up to this thickness (in): 6 mm = 0.236 (the D-73 thin sheets are 0.118 to 0.21). The 12 mm deck and seat back are 0.472. */
 export const THIN_PLY_MAX_IN = 0.26;
 /** Saw kerf allowed between nested blanks (in). */
 export const NEST_KERF_IN = 0.125;
@@ -19,6 +20,9 @@ export interface PlyBlank {
   fits: boolean;
   /** Thin (4 mm) or 12 mm. */
   thin: boolean;
+  /** The full sheet it is cut from (in): 48 x 96, or the 60 x 60 Baltic birch sheet of the thin-sheet option (D-73). */
+  sheetW: number;
+  sheetL: number;
 }
 
 /** A full 4 x 8 ft sheet (in): every ply thickness comes in one (D-68). */
@@ -28,28 +32,31 @@ export const isPly = (x: Part): boolean => x.kind === 'sheet' && !x.payload && !
 export const isThinPly = (x: Part): boolean => isPly(x) && x.stock!.t <= THIN_PLY_MAX_IN;
 
 /** The raw blank of every thin-ply part, and whether it fits the sheet (either way round). */
-export function thinPlyBlanks(parts: Part[]): PlyBlank[] {
-  return parts.filter(isThinPly).map(blankOf);
+export function thinPlyBlanks(parts: Part[], p?: Params): PlyBlank[] {
+  return parts.filter(isThinPly).map((x) => blankOf(x, p));
 }
 
 /** Every ply part against a full 4 x 8. */
-export function allPlyBlanks(parts: Part[]): PlyBlank[] {
-  return parts.filter(isPly).map(blankOf);
+export function allPlyBlanks(parts: Part[], p?: Params): PlyBlank[] {
+  return parts.filter(isPly).map((x) => blankOf(x, p));
 }
 
-function blankOf(x: Part): PlyBlank {
+/** `p` gives the thin sheet in effect (D-73: the Baltic birch is a 5 x 5 ft sheet); without it every sheet is 4 x 8. */
+function blankOf(x: Part, p?: Params): PlyBlank {
   const s = x.stock!;
   const thin = s.t <= THIN_PLY_MAX_IN;
-  const sheetL = FULL_SHEET_IN.l, sheetW = FULL_SHEET_IN.w;
+  const ts = p && thin ? thinSheet(p) : undefined;
+  const sheetL = ts?.sheetLengthIn ?? FULL_SHEET_IN.l, sheetW = ts?.sheetWidthIn ?? FULL_SHEET_IN.w;
   const l = Math.max(s.w, s.l), w = Math.min(s.w, s.l);
-  return { id: x.id, mm: Math.round(s.t * 25.4), l, w, thin, fits: l <= sheetL + 1e-9 && w <= sheetW + 1e-9 };
+  return { id: x.id, mm: Math.round(s.t * 25.4), l, w, thin, sheetL, sheetW, fits: l <= sheetL + 1e-9 && w <= sheetW + 1e-9 };
 }
 
 /** Rough count of sheets per thickness (mm): first-fit-decreasing shelf packing of the bounding blanks. */
 export function plySheets(blanks: PlyBlank[]): Record<number, number> {
   const out: Record<number, number> = {};
   for (const mm of [...new Set(blanks.map((b) => b.mm))]) {
-    const sheetL = FULL_SHEET_IN.l, sheetW = FULL_SHEET_IN.w;
+    const first = blanks.find((b) => b.mm === mm)!;
+    const sheetL = first.sheetL, sheetW = first.sheetW;
     const items = blanks.filter((b) => b.mm === mm).map((b) => ({ l: b.l + NEST_KERF_IN, w: b.w + NEST_KERF_IN })).sort((a, b) => b.w - a.w || b.l - a.l);
     type Shelf = { h: number; used: number };
     const sheets: { shelves: Shelf[]; hUsed: number }[] = [];

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
 import { HULL_STEP, STEP } from '../model/build-utils';
 import { defaultParams } from '../params';
+import { PRE_D72 } from '../test-fixtures';
 import type { Part } from '../model/types';
 import { cutList } from './cutlist';
 import { formDrawings } from './forms';
@@ -143,19 +144,26 @@ describe('assembly steps', () => {
 
   it('build instructions from the joints and the params', () => {
     const get = (id: string) => steps.find((s) => s.id === id)!;
-    // Domino counts come from the joint list (9 per side to the chine band, 18 in all).
-    expect(get('rails').instructions.join(' ')).toContain('4×20 ×18');
-    expect(get('lower').instructions.join(' ')).toMatch(/18 Dominos/);
+    // Domino counts come from the joint list (9 per side to the chine band, 18 in all). D-73: the 1/4 in white oak web leaves a 0.417 in bearing land, wide enough for the 5×30 Domino (the Sipo size that exists);
+    // with the 4 mm okoume (0.391 in land) the tie is the 4×20.
+    expect(get('rails').instructions.join(' ')).toContain('5×30 ×32');
+    expect(get('rails').instructions.join(' ')).toContain('the 18 5×30 are the chine ties');
+    expect(get('lower').instructions.join(' ')).toMatch(/18 Dominos \(5×30, every 6"/);
+    expect(get('lower').instructions.join(' ')).toMatch(/7\/16" bearing face/);
+    const okSteps = assemblySteps(buildModel({ ...p, ...PRE_D72 }, undefined), { ...p, ...PRE_D72 });
+    expect(okSteps.find((s) => s.id === 'rails')!.instructions.join(' ')).toContain('4×20 ×18');
+    expect(okSteps.find((s) => s.id === 'lower')!.instructions.join(' ')).toMatch(/18 Dominos \(4×20, every 6"/);
     expect(get('dry-fit').instructions.join(' ')).toContain(`${p.deckSideClearIn}"`);
     expect(get('shaper').instructions.join(' ')).toMatch(/ONE piece from the full 4' × 8' sheet/);
     expect(get('shaper').instructions.join(' ')).not.toMatch(/scarf/i);
-    expect(get('gear-fit').instructions.join(' ')).toMatch(/0\.63" bore on the 0\.63" tube/); // D-71: 5/8 in prints as 0.63 (assembly.ts rounds to 2 places)
+    expect(get('gear-fit').instructions.join(' ')).toMatch(/5\/8" bore on the 5\/8" rod/); // D-71/D-72: fractions, and the solid rod Eric chose
+    expect(get('gear-fit').instructions.join(' ')).not.toMatch(/0\.63"/);
   });
 
   it('count a joint listed on both mating parts once', () => {
     const ids = new Set(['rail-L', 'rail-R']);
-    const t = jointTally(parts, ids, 'domino', (j) => (/^4×20/.test(j.size ?? '') ? '4×20' : 'other'));
-    expect(t.get('4×20')).toBe(18);
+    const t = jointTally(parts, ids, 'domino', (j) => (/^5×30/.test(j.size ?? '') ? '5×30' : 'other'));
+    expect(t.get('5×30')).toBe(32); // 18 chine ties + 14 rail-end and bulkhead Dominos, all 5×30 now (with the 4 mm okoume the ties were 4×20: 18, and 5×30: 14)
   });
 });
 
@@ -316,7 +324,8 @@ describe('build review round 1: chine Domino tie (MUST-5)', () => {
     const outer = steps[idx('sides-outer')];
     const t = outer.instructions.join(' ');
     expect(t).toMatch(/Chine ties/);
-    expect(t).toMatch(/9 per side, 4×20 Dominos/);
+    expect(t).toMatch(/9 per side, 5×30 Dominos/);
+    expect(t).toMatch(/\(0\.417"\)/); // outer band 0.2075 + web 0.21
     expect(t).toMatch(/through the outer band and the web edge/);
     expect(t).toMatch(/glue line/);
     expect(outer.instructions[outer.instructions.length - 1]).toMatch(/Leave all bands and webs long/);

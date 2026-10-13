@@ -2,7 +2,7 @@
  * Shared helpers for the subsystem builders: build context, part factories (box / cylinder),
  * wood / steel mass with finish (D-20), and rigid-body placement of the steered parts (Ackermann poses).
  */
-import { derived, PLY_SPECIES, resolveParams, type Params } from '../params';
+import { derived, PLY_SPECIES, resolveParams, thinSheet, type Params } from '../params';
 import { computeLayout, type Layout } from './layout';
 import { compose, multiply, rotationX, rotationY } from './mat4';
 import type { Dims, EdgeCondition, Fab, Joint, Mat4, Part, PartGroup, PartKind, RigidBody, Vec2, Vec3 } from './types';
@@ -39,6 +39,8 @@ export interface Ctx {
   /** Steering angle in radians (clamped to the lock). */
   steerRad: number;
   plyName: string;
+  /** Material text of the thin sheet (webs, box, lid, signs; D-73). */
+  thinName: string;
 }
 
 /**
@@ -100,6 +102,7 @@ export function makeCtx(input: Params, v: ViewState = {}): Ctx {
     steerRad: (steerDeg * Math.PI) / 180,
     view: { steerDeg, rider: v.seat === 'stowed' ? 'none' : v.rider ?? 'operating', cargo: v.cargo ?? true, removed: v.removed ?? false, brakes: v.brakes ?? true, lights: v.lights ?? true, chocks: v.chocks ?? true, seat: v.seat ?? 'installed', handle: v.handle ?? 'up' },
     plyName: p.plySpecies === PLY_SPECIES.okoumeMarine ? 'okoume marine plywood' : 'baltic birch plywood',
+    thinName: thinSheet(p).material,
   };
 }
 
@@ -124,6 +127,8 @@ export interface PartSpec {
   rot?: { x?: number; y?: number; z?: number };
   body?: RigidBody;
   mat: Mat;
+  /** mat 'ply' only: the part is the THIN sheet (D-73: box, lid), not the 12 mm deck sheet. */
+  thin?: boolean;
   /** Required for mat = 'fixed' (purchased / printed / computed). */
   massLb?: number;
   kind?: PartKind;
@@ -236,7 +241,7 @@ function finalize(ctx: Ctx, s: PartSpec, geometry: Part['geometry'], massLb: num
   const { p } = ctx;
   const kind: PartKind = s.kind ?? (s.mat === 'oak' ? 'lumber' : s.mat === 'ply' ? 'sheet' : s.mat === 'steel' ? 'metal' : 'purchased');
   const material =
-    s.material ?? (s.mat === 'oak' ? 'white oak' : s.mat === 'ply' ? ctx.plyName : s.mat === 'steel' ? 'steel' : 'purchased');
+    s.material ?? (s.mat === 'oak' ? 'white oak' : s.mat === 'ply' ? (s.thin ? ctx.thinName : ctx.plyName) : s.mat === 'steel' ? 'steel' : 'purchased');
   const wood = s.mat === 'oak' || s.mat === 'ply';
   const [t, w, l] = dimsSorted;
   // Steel bar / plate / rod: the stock is the section × the cut length (build review M9), unless the builder says otherwise.
@@ -285,7 +290,7 @@ export function box(ctx: Ctx, s: BoxSpec): Part {
   let mass: number;
   switch (s.mat) {
     case 'oak': mass = woodMassLb(p, vol, area, p.oakDensityPcf); break;
-    case 'ply': mass = woodMassLb(p, vol, area, ctx.d.plyDensityPcf); break;
+    case 'ply': mass = woodMassLb(p, vol, area, s.thin ? ctx.d.thinPlyDensityPcf : ctx.d.plyDensityPcf); break;
     case 'steel': mass = (vol / IN3_PER_FT3) * p.steelDensityPcf; break;
     default: mass = s.massLb ?? 0;
   }

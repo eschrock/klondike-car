@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { defaultParams, validateParams } from './params';
+import { PRE_D72 } from './test-fixtures';
 import { buildModel } from './model';
 import { computeLayout, sideTopAt } from './model/layout';
 import { worldAABB } from './model/bounds';
@@ -17,7 +18,8 @@ import { runChecks } from './analysis';
 import { seatBackLoads } from './analysis/seat';
 import { makeContext } from './analysis/context';
 
-const defaults = defaultParams();
+// D-73: these D-63 numbers (the 0.391 in bearing land, the 7/8 in knob screw, the 0.234 in bands) are for the 4 mm okoume sandwich: PRE_D72
+const defaults = { ...defaultParams(), ...PRE_D72 };
 const L = computeLayout(defaults);
 const parts = buildModel(defaults);
 const get = (id: string) => parts.find((x) => x.id === id)!;

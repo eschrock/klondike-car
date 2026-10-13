@@ -281,12 +281,12 @@ describe('round 2 fittings: latch blocks, stay, stainless', () => {
     expect(defaults.seatXIn + defaults.riderLegReachIn).toBeCloseTo(L.bulkhead.x0, 9);
     expect(parts.some((x) => /^foot-(slot|block)/.test(x.id))).toBe(false);
   });
-  it('hinge screws are #8 × 1" into a 1" backer; each latch has an oak block; a friction stay holds the lid', () => {
+  it('hinge screws are #8 × 1-1/4 into a 1-1/4 in backer (D-72); each latch has an oak block; a friction stay holds the lid', () => {
     for (const tag of ['L', 'R']) {
       const h = byId.get(`storage-hinge-${tag}`)!;
-      expect(h.joints!.find((j) => j.to === `storage-hinge-backer-${tag}`)!.size).toMatch(/#8 × 1 stainless/);
+      expect(h.joints!.find((j) => j.to === `storage-hinge-backer-${tag}`)!.size).toMatch(/#8 × 1-1\/4 stainless/);
       const bk = worldAABB(byId.get(`storage-hinge-backer-${tag}`)!);
-      expect(bk.max[0] - bk.min[0]).toBeCloseTo(1, 6);
+      expect(bk.max[0] - bk.min[0]).toBeCloseTo(1.25, 6);
       const blk = byId.get(`storage-latch-block-${tag}`)!;
       expect(blk.material).toBe('white oak');
       expect(byId.get(`storage-latch-${tag}`)!.joints![0].to).toBe(blk.id);
@@ -434,7 +434,8 @@ describe('no unintended overlaps for the seat, storage and fittings', () => {
     base: {}, rear: { storageLocation: 0 }, under: { storageLocation: 2 }, underRiser: { storageLocation: 2, seatRiserIn: 1.5 },
     riser: { seatRiserIn: 1.5 }, angle0: { seatBackAngleDeg: 0 }, angle30: { seatBackAngleDeg: 30 }, wideBack: { seatBackWidthIn: 21 },
     smallBox: { storageVolumeIn3: 800 }, bigBox: { storageVolumeIn3: 4000 }, thickRim: { storageLidRimWidthIn: 2, storageLidRimThickIn: 1 },
-    ply12: { panelPlyIn: 0.472 }, lash5: { lashPointsPerSide: 5 }, sag: { sheerCurveIn: 1 }, steep: { sideHeightRearIn: 20 }, wide26: { bodyWidthIn: 26 }, lowBow: { sideHeightBowIn: 3 },
+    ply12: { thinSheetMaterial: 2, panelPlyIn: 0.472 }, // D-73: the okoume option, so panelPlyIn is the thin sheet
+    lash5: { lashPointsPerSide: 5 }, sag: { sheerCurveIn: 1 }, steep: { sideHeightRearIn: 20 }, wide26: { bodyWidthIn: 26 }, lowBow: { sideHeightBowIn: 3 },
     short: { riderStatureIn: 54, riderLegReachIn: 28.5 },
   };
   it.each(Object.entries(variants))('%s', (_n, patch) => {

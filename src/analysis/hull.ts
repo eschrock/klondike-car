@@ -6,6 +6,7 @@
  *                glue and Domino joints that hold the bulkhead on (operating and goal rider; D-57).
  * Every formula is written out in the `how` string; hull.test.ts works each one by hand with literal numbers.
  */
+import { thinSheet } from '../params';
 import { worldAABB } from '../model/bounds';
 import { bowHold, liftBarStressPsi, liftSlot } from '../model/body';
 import { innerHalfWidth, sideTopAt } from '../model/layout';
@@ -133,8 +134,8 @@ export function footStopCheck(ctx: Ctx): AnalysisCheck | null {
 }
 
 /**
- * The free 4 mm web between the chine and gunwale bands under a lean or kick and under cargo pressure (eng 3c N-1, D-62). The panel is a strip fixed at the two oak bands (the bands are
- * 0.625 in of glued sandwich, far stiffer than the 0.157 in ply), `free(x)` tall at x; it is checked where it is tallest outside the zone the transom supports (a panel within its own
+ * The free thin (D-73) web between the chine and gunwale bands under a lean or kick and under cargo pressure (eng 3c N-1, D-62). The panel is a strip fixed at the two oak bands (the bands are
+ * 0.625 in of glued sandwich, far stiffer than the thin ply), `free(x)` tall at x; it is checked where it is tallest outside the zone the transom supports (a panel within its own
  * height of the transom is held by it). Kick: sideKickLbf on a sideKickPatchIn patch at mid height, a line load over (patch + h/2) across the strip: fixed-fixed M = P' h / 8. Cargo: the payload
  * times cargoSideG over cargoSideContactIn x h as a uniform pressure: M = q h^2 / 12. Stress = 6 M / t^2 against the ply design bending stress.
  */
@@ -153,7 +154,7 @@ export function sideWebLoads(ctx: Ctx, cargoLb: number) {
     if (x - rearTx < h) continue; // held by the transom
     if (h > best.h) best = { x, h };
   }
-  const t = p.panelPlyIn, h = best.h;
+  const t = ctx.d.thinPlyIn, h = best.h;
   const bEff = p.sideKickPatchIn + h / 2;
   const lineKick = p.sideKickLbf / bEff; // lbf per inch of strip width, at mid height
   const MKick = (lineKick * h) / 8;
@@ -170,16 +171,16 @@ export function sideWebCheck(ctx: Ctx): AnalysisCheck {
   const ev = (c: CaseData): CaseEval => {
     const k = sideWebLoads(ctx, c.cargoLb);
     const ds: Detail[] = [
-      detail(`kick / lean: ${f(p.sideKickLbf, 0)} lbf on a ${f(p.sideKickPatchIn, 0)} in patch, panel bending between the bands`, k.sigKick, 'psi', al.plyBend, '<='),
-      detail(`cargo pressure: ${f(c.cargoLb, 0)} lb x ${f(p.cargoSideG, 2)} g on the side, panel bending between the bands`, k.sigCargo, 'psi', al.plyBend, '<='),
+      detail(`kick / lean: ${f(p.sideKickLbf, 0)} lbf on a ${f(p.sideKickPatchIn, 0)} in patch, panel bending between the bands`, k.sigKick, 'psi', al.thinBend, '<='),
+      detail(`cargo pressure: ${f(c.cargoLb, 0)} lb x ${f(p.cargoSideG, 2)} g on the side, panel bending between the bands`, k.sigCargo, 'psi', al.thinBend, '<='),
     ];
-    const how = `The ${f(k.t * 25.4, 0)} mm okoume web is a strip fixed at the chine and gunwale bands (the sandwich is ${f(p.sideThicknessIn, 3)} in thick there, the ply 0.157 in), at its tallest ${f(k.h, 2)} in free height at x = ${f(k.x, 1)} in (not within its own height of the transom, which holds it). `
-      + `Kick: ${f(p.sideKickLbf, 0)} lbf over a ${f(p.sideKickPatchIn, 0)} in patch spreads over ${f(k.bEff, 1)} in of strip = ${f(k.lineKick, 2)} lbf/in at mid height: M = P' h / 8 = ${f(k.MKick, 2)} lb.in/in, sigma = 6M/t^2 = ${f(k.sigKick, 0)} psi (ply design ${f(al.plyBend, 0)}). `
+    const how = `The ${f(k.t * 25.4, 1)} mm ${thinSheet(p).name} web is a strip fixed at the chine and gunwale bands (the sandwich is ${f(p.sideThicknessIn, 3)} in thick there, the web ${f(k.t, 3)} in), at its tallest ${f(k.h, 2)} in free height at x = ${f(k.x, 1)} in (not within its own height of the transom, which holds it). `
+      + `Kick: ${f(p.sideKickLbf, 0)} lbf over a ${f(p.sideKickPatchIn, 0)} in patch spreads over ${f(k.bEff, 1)} in of strip = ${f(k.lineKick, 2)} lbf/in at mid height: M = P' h / 8 = ${f(k.MKick, 2)} lb.in/in, sigma = 6M/t^2 = ${f(k.sigKick, 0)} psi (web design ${f(al.thinBend, 0)}). `
       + `Cargo: ${f(c.cargoLb, 0)} lb x ${f(p.cargoSideG, 2)} g = ${f(k.Fc)} lbf over ${f(p.cargoSideContactIn, 0)} in x ${f(k.h, 2)} in = ${f(k.q, 3)} psi: M = q h^2 / 12 = ${f(k.MCargo, 2)} lb.in/in, sigma = ${f(k.sigCargo, 0)} psi. A person sitting on the gunwale is not covered (the gunwale is not a seat).`;
     return governing(ds, how);
   };
   return dualCheck({
-    id: 'side-web', label: 'Side web (4 mm panel between the oak bands): lean, kick and cargo pressure', group: 'Structure', refs: ['D-60', 'D-62', 'eng 3c N-1'],
+    id: 'side-web', label: `Side web (${thinSheet(p).nominal} panel between the oak bands): lean, kick and cargo pressure`, group: 'Structure', refs: ['D-60', 'D-62', 'eng 3c N-1'],
     primary: 'goal', ...evalBoth(ctx, ev),
   });
 }

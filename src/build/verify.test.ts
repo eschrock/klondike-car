@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
-import { defaultParams, PARAM_DEFS } from '../params';
+import { defaultParams, PARAM_DEFS, thinSheet } from '../params';
+import { PRE_D72 } from '../test-fixtures';
 import { verifyChecklist, verifyParamKeys, type VerifyWhen } from './verify';
 
 const p = defaultParams();
@@ -11,7 +12,7 @@ const WHEN: VerifyWhen[] = ['before ordering', 'before cutting', 'at assembly'];
 describe('verify checklist', () => {
   it('has the nine checks of docs/phase3-checkpoint.md, in order, then the build-review checks and the leftover params', () => {
     expect(list.slice(0, 9).map((c) => c.id)).toEqual([
-      'tire-squash', 'wheel', 'axle-tube', 'steering-parts', 'bridle', 'seat-back', 'sign-knobs', 'brake-knee', 'lamp-clip',
+      'tire-squash', 'wheel', 'axle-rod', 'steering-parts', 'bridle', 'seat-back', 'sign-knobs', 'brake-knee', 'lamp-clip',
     ]);
     expect(list.slice(9, 11).map((c) => c.id)).toEqual(['strip-bend', 'ply-thickness']);
     expect(list[11]?.id).toBe('other-params');
@@ -42,7 +43,9 @@ describe('verify checklist', () => {
   it('asks for the real plywood thickness before any dado is cut, and the strip bend test before ordering', () => {
     const ply = list.find((c) => c.id === 'ply-thickness')!;
     expect(ply.when).toBe('before cutting');
-    expect(ply.whatToDo).toContain(`${+(p.panelPlyIn + p.grooveSlopIn).toFixed(3)}"`);
+    expect(ply.whatToDo).toContain(`${+(thinSheet(p).thicknessIn + p.grooveSlopIn).toFixed(3)}"`); // D-73: the thin sheet in effect (0.21 in white oak plywood + slop)
+    expect(ply.whatToDo).toMatch(/white oak plywood/);
+    expect(ply.paramKeys).toContain('whiteOakPlyThickIn');
     expect(ply.whatToDo).toContain(`${+(p.deckPlyIn + p.deckSlopIn).toFixed(3)}"`);
     for (const k of ply.paramKeys) expect(PARAM_DEFS[k as keyof typeof PARAM_DEFS].status).toBe('verify');
     expect(ply.partIds).toEqual(expect.arrayContaining(['deck', 'side-L-web', 'transom-rear', 'bow-bulkhead']));
@@ -56,7 +59,7 @@ describe('verify checklist', () => {
     for (const c of list) for (const id of c.partIds) expect(have.has(id), `${c.id}: ${id}`).toBe(true);
     // The guarded parts are really there.
     expect(list.find((c) => c.id === 'tire-squash')!.partIds).toEqual(['wheel-RL', 'wheel-RR', 'wheel-FL', 'wheel-FR']);
-    expect(list.find((c) => c.id === 'axle-tube')!.partIds.length).toBe(3);
+    expect(list.find((c) => c.id === 'axle-rod')!.partIds.length).toBe(3);
     for (const c of list.slice(0, 9)) expect(c.partIds.length, c.id).toBeGreaterThan(0);
   });
 
@@ -76,10 +79,19 @@ describe('verify checklist', () => {
   it('puts the wheel, tube, bridle and seat numbers in the procedure', () => {
     const by = (id: string) => list.find((c) => c.id === id)!;
     expect(by('wheel').pass).toContain('300 lb');
-    expect(by('wheel').pass).toContain('0.63"'); // D-71: 5/8 in (verify.ts prints two places)
+    expect(by('wheel').pass).toContain('5/8"'); // D-71: 5/8 in, printed as a fraction (D-72)
+    expect(by('wheel').whatToDo).toMatch(/MEASURE THE HUB LENGTH/);
     expect(by('wheel').pass).toContain('2.25"');
-    expect(by('axle-tube').whatToDo).toContain('A513 Type 5');
-    expect(by('axle-tube').pass).toContain('70 ksi');
+    // D-71: Eric chose the solid rod, so the axle item is the light rod check (1045 / cold-drawn, not hot-rolled A36) and the tube item only appears with a tube
+    expect(list.some((c) => c.id === 'axle-tube')).toBe(false);
+    expect(by('axle-rod').title).toMatch(/1045 or cold-drawn/);
+    expect(by('axle-rod').title).toMatch(/not hot-rolled A36/);
+    expect(by('axle-rod').pass).toContain('70 ksi');
+    expect(by('axle-rod').pass).toMatch(/1018 cold-drawn at 54 ksi would be about 1\.0/);
+    const tube = verifyChecklist(buildModel({ ...p, ...PRE_D72 }), { ...p, ...PRE_D72 }).find((c) => c.id === 'axle-tube')!;
+    expect(tube.whatToDo).toContain('A513 Type 5');
+    expect(tube.pass).toContain('70 ksi');
+    expect(tube.pass).toMatch(/ERW.*from 0\.92 to about 1\.4\d at the goal rider/s); // derived from the rows (the tube's 0.92 scaled by 70 / 45 ksi), not typed
     expect(by('steering-parts').pass).toContain('900 lb');
     expect(by('bridle').pass).toContain('3700 lbf');
     expect(by('bridle').pass).toContain('370 lbf'); // the rope WLL: the documented weak link
@@ -89,7 +101,7 @@ describe('verify checklist', () => {
   });
 
   it('gates ordering on the purchased parts and cutting on the shop-made ones', () => {
-    for (const id of ['tire-squash', 'wheel', 'axle-tube', 'steering-parts', 'bridle', 'sign-knobs']) expect(list.find((c) => c.id === id)!.when, id).toBe('before ordering');
+    for (const id of ['tire-squash', 'wheel', 'axle-rod', 'steering-parts', 'bridle', 'sign-knobs']) expect(list.find((c) => c.id === id)!.when, id).toBe('before ordering');
     for (const id of ['seat-back', 'brake-knee', 'lamp-clip']) expect(list.find((c) => c.id === id)!.when, id).toBe('before cutting');
   });
 

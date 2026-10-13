@@ -3,12 +3,14 @@ import { buildModel } from '../model';
 import { fastenerBreakdown } from '../model/lighting';
 import { defaultParams } from '../params';
 import { BULK_SHARE, EPOXY_WASTE, NOTE_ITEMS, TOUCH_GROUPS, fastenerMaterialNote, isBulkQty, touchGroupOfPart, THROUGH_STACKS, bom, boltLengthFromStack, jointItems, roundUpStock, screwLengthFromStack, shortVendor, uniqueJoints } from './bom';
+import { PRE_D72 } from '../test-fixtures';
 import { cutList, isBuilt } from './cutlist';
 import { finishingSchedule, glueEpoxyFlOz } from './finishing';
 import { oakBoardFeet } from './nesting';
 import { EPOXY_KITS, EPOXY_PUMPS_300, FASTENER_PRICE, FILLERS, FINISH_CONTAINER_PRICE, FINISH_PRICE, GLASS_TAPE, METAL_PRICE_PER_FT, NOTE_PRICE, OAK_ALT_PRICE_PER_BF, OAK_PRICE_PER_BF, PLYWOOD_PRICE, PURCHASED_PRICE, RESEARCH_DATE, SEARCH_READ_NOTE, type Price } from './prices';
 
-const p = defaultParams();
+// D-72/D-73: this file's counts and prices are the 4 mm okoume / 4×20 Domino / DOM tube configuration (PRE_D72); the BOM for the white oak plywood and the solid rod follows the weather spec (bom.ts).
+const p = { ...defaultParams(), ...PRE_D72 };
 const parts = buildModel(p);
 const b = bom(parts, p);
 const cl = cutList(parts, p);
@@ -190,8 +192,8 @@ describe('bom', () => {
     expect(qtyOf(f, /end plug for 5\/8" OD/)).toBe(6); // three axle tubes, two ends each
     expect(qtyOf(f, /machine screw #10-32 x 3\/8"/)).toBe(6); // seat hinge leaves into the six inserts
     expect(qtyOf(f, /stainless rod 3\/8" x 2-1\/4"/)).toBe(2); // handlebow pins
-    expect(qtyOf(f, /wood screw #6 x 3-1\/2"/)).toBe(8); // rail to chine, aft zone (3 in rail): 4 a side, #6 piloted (round 3: a #8 left 0.11 in a side of the 3/8 in edge)
-    expect(qtyOf(f, /wood screw #6 x 2-1\/2"/)).toBe(2); // rail to chine, forward zone (1.8 in rail): 1 a side
+    expect(qtyOf(f, /wood screw #6 x 3-1\/2"/)).toBe(0); // D-72: one rail-to-chine length now
+    expect(qtyOf(f, /wood screw #6 x 2-1\/2"/)).toBe(10); // rail to chine, every zone: 4 aft (head counterbored 1 in up the 3 in rail) + 1 forward a side, #6 piloted (round 3: a #8 left 0.11 in a side of the edge)
     expect(qtyOf(f, /Button plug 5\/8"/)).toBe(4);
     expect(qtyOf(f, /Nylon washer for 1\/4"/)).toBe(4);
     expect(qtyOf(f, /wood screw #6 x 1\/2"/)).toBe(12); // lid battens, 4 each
@@ -296,7 +298,7 @@ describe('finishing touches (Eric, 2026-10-12)', () => {
     // the lamp-clip inserts and screws and the lash-plate screws follow their parts
     expect(touches.some((l) => /Heat-set insert M4/.test(l.key))).toBe(true);
     expect(touches.some((l) => /screw M3 x 8 mm/.test(l.key))).toBe(true);
-    expect(touches.some((l) => /wood screw #10 x 1-1\/4"/.test(l.key) && l.group === 'tie-downs')).toBe(true);
+    expect(touches.some((l) => /wood screw #8 x 1-1\/4"/.test(l.key) && l.group === 'tie-downs')).toBe(true);
     // the oak doublers stay in Lumber (they are cut from the boards) and the section says so
     expect(touches.some((l) => /doubler/i.test(l.key))).toBe(false);
     expect(b.sections.find((s) => s.id === 'touches')!.notes!.join(' ')).toMatch(/doublers.*Lumber/);
@@ -341,7 +343,7 @@ describe('bulk parts (Eric, 2026-10-12)', () => {
       // the build needs under half a pack, or it is one of the lump-sum items
       expect(l.needed! < BULK_SHARE * l.packQty! || l.packQty === 1, l.key).toBe(true);
     }
-    for (const k of [/Domino DF 500 5x30/, /wood screw/, /lock nut/, /fender washer/, /threaded insert/, /cotter pin/, /Button plug/, /^sandpaper$/]) expect(bulk.some((l) => k.test(l.key)), String(k)).toBe(true);
+    for (const k of [/Domino DF 500 5x30/, /wood screw/, /lock nut/, /fender washer/, /cotter pin/, /Button plug/, /^sandpaper$/]) expect(bulk.some((l) => k.test(l.key)), String(k)).toBe(true);
   });
 
   it('leaves bolts and one-at-a-time items where they are', () => {
@@ -370,7 +372,7 @@ describe('bulk parts (Eric, 2026-10-12)', () => {
 
   it('uses the pack price: the line costs the packs, not the pieces', () => {
     const screws = bulk.filter((l) => /wood screw/.test(l.key));
-    expect(screws.length).toBeGreaterThan(5);
+    expect(screws.length).toBeGreaterThanOrEqual(4); // D-72: #6 x 1/2 (battens), #6 x 2-1/2, #8 x 5/8 and #8 x 1-1/4 (was 12 sizes)
     for (const l of screws) expect(l.extUsd).toBeGreaterThan(l.needed! * l.unitUsd / l.packQty! - 1e-9);
     expect(b.bulkUsd).toBeCloseTo(b.sections.find((s) => s.id === 'bulk')!.subtotalUsd, 2);
   });
@@ -408,6 +410,7 @@ describe('exterior material notes (Eric, 2026-10-12)', () => {
 describe('links (Eric, 2026-10-12)', () => {
   /** The price research as text (docs/price-research-2026-10.json): the only source of URLs besides Eric's own three links. */
   const research = Object.values(import.meta.glob('../../docs/price-research-2026-10.json', { query: '?raw', import: 'default', eager: true }))[0] as string;
+  const research2 = Object.values(import.meta.glob('../../docs/price-research-standard-2026-10.json', { query: '?raw', import: 'default', eager: true }))[0] as string; // the Standard-spec pass (the Penn Tool zinc collar)
   const ERIC_HOSTS = /^https:\/\/(www\.thewoodyard\.com|www\.aircraftspruce\.com|clinelumber\.com)\//;
 
   it('carries only links Eric gave or the research lists, and invents none', () => {
@@ -415,7 +418,7 @@ describe('links (Eric, 2026-10-12)', () => {
     const lines = b.sections.flatMap((s) => s.lines);
     const urls = [...lines.map((l) => l.url), ...lines.flatMap((l) => (l.alternatives ?? []).map((a) => a.url))].filter((u): u is string => !!u);
     expect(urls.length).toBeGreaterThan(40);
-    for (const u of urls) expect(ERIC_HOSTS.test(u) || research.includes(u), u).toBe(true);
+    for (const u of urls) expect(ERIC_HOSTS.test(u) || research.includes(u) || research2.includes(u), u).toBe(true);
     const lum = secLines('lumber');
     expect(lum.find((l) => l.key === '4/4')!.url).toBe('https://www.thewoodyard.com/current-pricing-list/');
     expect(lum.find((l) => l.key === '5/4')!.url).toBeUndefined(); // no yard link for the estimated 5/4 and 6/4
@@ -519,13 +522,18 @@ describe('price research applied (2026-10-12)', () => {
     expect(d850.packs).toBe(1);
   });
 
-  it('prices the 316 shaft collars at $33.36 with the 304 collar as a spec-gap alternative', () => {
+  it('prices the 5/8 in shaft collars (D-71/D-72): a 316 estimate (the research found 316 only in 3/4 in bore, $33.36) with the Penn Tool zinc collar, $4.43, as a spec-gap alternative', () => {
     const c = line(/shaft collar/);
+    expect(c.key).toMatch(/5\/8" bore/);
     expect(c.unitUsd).toBe(33.36);
+    expect(c.basis).toBe('estimate');
+    expect(c.notes).toMatch(/not found in the 2026-10-12 research/);
     expect(c.qty).toBe(4);
-    const alt = c.alternatives!.find((a) => a.usd === 4.3)!;
+    const alt = c.alternatives!.find((a) => a.usd === 4.43)!;
     expect(alt.specGap).toBe(true);
-    expect(alt.note).toMatch(/304/);
+    expect(alt.source).toMatch(/Penn Tool/);
+    expect(alt.url).toBe('https://www.penntoolco.com/87986402');
+    expect(alt.note).toMatch(/zinc/);
     expect(b.decisions).toContain(c.key);
   });
 
@@ -534,7 +542,7 @@ describe('price research applied (2026-10-12)', () => {
     expect([eye.unitUsd, anchor.unitUsd]).toEqual([11.94, 11.1]);
     expect(eye.alternatives![0].usd).toBe(50.77);
     expect(anchor.alternatives![0].usd).toBe(48.43);
-    expect(eye.decision).toMatch(/not stock lengths/);
+    expect(eye.decision).toMatch(/stock 3\/8-16 shoulder eye bolts, 4-1\/2" for the axle beam/); // D-72: stock lengths checked against the stack, cut to length
     expect(b.decisions).toEqual(expect.arrayContaining(['steer-eye', 'steer-anchor']));
   });
 
@@ -563,13 +571,13 @@ describe('price research applied (2026-10-12)', () => {
 
   it('prices the screws, washers and nuts by the real pack (Bolt Depot packs of 100) and the Dominos by their packs', () => {
     const s8 = line('316 wood screw #8 x 1-1/4"');
-    expect([s8.packQty, s8.packUsd, s8.packs, s8.needed]).toEqual([100, 33.95, 1, 17]);
+    expect([s8.packQty, s8.packUsd, s8.packs, s8.needed]).toEqual([100, 33.95, 1, 37]); // D-72: every general-purpose screw is the #8 x 1-1/4 (17 before)
     const w = line('316 fender washer 1/4"');
     expect([w.packQty, w.packUsd]).toEqual([100, 27.26]);
     const n = line('316 nylon-insert lock nut 1/4-20');
     expect([n.packQty, n.packUsd]).toEqual([100, 16.54]);
     // a length the research did not read keeps its estimate and says so
-    const unread = line('316 wood screw #6 x 3-1/2"');
+    const unread = line('316 wood screw #6 x 2-1/2"');
     expect(unread.basis).toBe('estimate');
     expect(unread.notes).toMatch(/not found in the 2026-10-12 research/);
   });

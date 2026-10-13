@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PARAM_DEFS, defaultParams, resolveParams, sanitizeParams, validateParams, type ParamKey, type Params } from '../params';
+import { PARAM_DEFS, defaultParams, resolveParams, sanitizeParams, thinSheet, validateParams, type ParamKey, type Params } from '../params';
 import { buildModel } from './index';
 import { decodeHash } from '../state';
 import { computeLayout } from './layout';
@@ -283,7 +283,7 @@ describe('masses', () => {
     expect(seatBack.reduce((m, x) => m + x.massLb, 0)).toBeLessThan(4);
     const lid = parts.find((x) => x.id === 'storage-lid')!;
     expect(lid.kind).toBe('sheet');
-    expect((lid.geometry as { size: number[] }).size[2]).toBeCloseTo(defaults.panelPlyIn, 6);
+    expect((lid.geometry as { size: number[] }).size[2]).toBeCloseTo(thinSheet(defaults).thicknessIn, 6); // D-73: the lid is the thin sheet in effect (0.21 in white oak plywood)
   });
   it('rider CG follows D-3 and mass follows the view', () => {
     const p = defaults;
@@ -651,9 +651,9 @@ describe('fuzz: validator-clean designs have no unintended overlaps', () => {
     'wheelbaseIn', 'rearTrackIn', 'deckHeightIn', 'bodyWidthIn', 'seatXIn', 'wheelDiameterIn', 'rearOverhangIn', 'frontOverhangIn', 'tireWidthIn',
     'sideHeightBowIn', 'sideHeightRearIn', 'sheerCurveIn', 'bowWidthIn', 'bowBulkheadThickIn', 'steerLockDeg', 'frontTrackIn', 'kingBeamLengthIn', 'kingThrustOdIn', 'tongueTieAheadIn', 'tongueHeadWidthIn', 'frontStubLenIn',
     'axleBeamThicknessIn', 'axleBeamDepthIn', 'axleHangerWidthIn', 'axleHangerThickIn', 'railDepthIn', 'crossmemberDepthIn',
-    'seatDepthIn', 'hubLengthIn', 'riderStatureIn', 'seatBackAngleDeg', 'storageVolumeIn3', 'footStopHeightIn', 'panelPlyIn', 'riderLegReachIn', 'deckSlopIn',
+    'seatDepthIn', 'hubLengthIn', 'riderStatureIn', 'seatBackAngleDeg', 'storageVolumeIn3', 'footStopHeightIn', 'panelPlyIn', 'whiteOakPlyThickIn', 'riderLegReachIn', 'deckSlopIn',
   ];
-  const OPTION_KEYS: ParamKey[] = ['storageLocation', 'axleBeamPosition', 'axleStyle', 'tireType', 'showSideSigns'];
+  const OPTION_KEYS: ParamKey[] = ['storageLocation', 'axleBeamPosition', 'axleStyle', 'tireType', 'showSideSigns', 'thinSheetMaterial']; // D-73: and the thin sheet's material
   const N = 300; // raise (and change the seed) to hunt
   const samples = (() => {
     const rnd = mulberry32(455);

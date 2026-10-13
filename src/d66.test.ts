@@ -5,7 +5,8 @@
  * Details: docs/phase3c-10-notes.md.
  */
 import { describe, expect, it } from 'vitest';
-import { bowTaper, defaultParams, steerGeometry, validateParams } from './params';
+import { bowTaper, defaultParams, steerGeometry, validateParams, type Params } from './params';
+import { PRE_D72 } from './test-fixtures';
 import { buildModel } from './model';
 import { computeLayout } from './model/layout';
 import { totalMass } from './model/mass';
@@ -38,10 +39,14 @@ describe('D-66 matched tracks', () => {
     for (const config of ['installed', 'removed']) expect(fit.cases.some((c) => c.mode === 'beside' && c.config === config && c.fits), config).toBe(true);
     expect(row('turn-radius').value).toBeCloseTo(145.4, 0); // outer tire edge radius in (150 limit): a hair better than 147.6 at the 34.5 in front track
   });
-  it('mass 115.5 lb (119.9 before): the narrower bow, a shorter front beam and king beam, the shorter stubs and the lighter rear plates', () => {
+  it('mass 115.5 lb (119.9 before): the narrower bow, a shorter front beam and king beam, the shorter stubs and the lighter rear plates (D-72/D-73: 120.7 lb with the solid axle rod, +1.9, and the 1/4 in white oak sides, box and lid, +2.8)', () => {
     const m = totalMass(buildModel(defaults, { rider: 'none', cargo: false }));
-    expect(m).toBeGreaterThan(115);
-    expect(m).toBeLessThan(116.2);
+    expect(m).toBeGreaterThan(120);
+    expect(m).toBeLessThan(121.5);
+    // with the D-71 tube and the 4 mm okoume (PRE_D72) the D-66 / D-71 mass is back
+    const old = totalMass(buildModel({ ...defaults, ...PRE_D72 } as Params, { rider: 'none', cargo: false }));
+    expect(old).toBeGreaterThan(115);
+    expect(old).toBeLessThan(116.2);
   });
 });
 
@@ -87,21 +92,21 @@ describe('D-66 the numbers that moved', () => {
   it('cargo: the load-height rule is 10 in; the 200 lb cargo tips at 40.7 deg (D-67 limit 35: a plain pass, it was marginal at the D-66 limit of 40), the capacity is 223 lb (D-71: 274 lb with the 3/4 in axle) and the rear axle-stress row limits it (D-66 had it at 226 lb on the tip row; the front beam at 269 lb before)', () => {
     expect(defaults.cargoCgHeightIn).toBe(10);
     const tip = row('tip-straight');
-    expect(tip.cases!.cargo!.value).toBeCloseTo(40.7, 1); // unchanged by D-67: the limit moved, not the sled (40.65 before D-71: the 0.36 lb heavier sled)
+    expect(tip.cases!.cargo!.value).toBeCloseTo(40.9, 1); // unchanged by D-67: the limit moved, not the sled (40.65 before D-71: the 0.36 lb heavier sled; 40.9 with the D-72/D-73 4.7 lb heavier sled)
     expect(tip.cases!.cargo!.limit).toBe(35);
     expect(tip.cases!.cargo!.value).toBeGreaterThan(35 * 1.1); // outside the 10% marginal band (38.5)
     expect(tip.statusCargo).toBe('pass'); // marginal at the 40 deg limit
     const cap = cargoCapacity(defaults);
     expect(cap.capacityLb!).toBeGreaterThanOrEqual(200);
-    expect(cap.capacityLb!).toBeLessThan(300); // 223 lb (274 lb at 3/4 in)
-    expect(cap.limiter!.id).toBe('axle-stress'); // D-71 (it was bearing-groove with the 3/4 in axle); the tip row no longer limits (it did at 226 lb with the 40 deg limit)
+    expect(cap.capacityLb!).toBeLessThan(300); // 254 lb with the solid rod (223 lb with the D-71 tube, 274 lb at 3/4 in)
+    expect(cap.limiter!.id).toBe('bearing-groove'); // D-71 solid rod (the tube's axle-stress limited it); the tip row no longer limits (it did at 226 lb with the 40 deg limit)
     expect(cap.statusAtPayload).not.toBe('fail');
     expect(cap.cargoFailsAtPayload).toEqual([]);
   });
   it('riders: safe 50 to over 250 lb (nothing red), green 50 to 240 lb (D-67: the straight tip, 43.6 deg at 200 lb, clears its 35 deg limit with room; it was inside the 10% band of the old 40 deg limit from 190 lb, green 50-180 lb; 250 lb is yellow on the seat-back panel only)', () => {
     const sw = riderSweep(defaults);
     expect(sw.safe).toEqual({ loLb: 50, hiLb: 250, openLow: true, openHigh: true });
-    expect(sw.green).toMatchObject({ loLb: 50, hiLb: 180, openLow: true, openHigh: false }); // D-71: 240 lb with the 3/4 in axle; the 5/8 in tube's axle-stress is over 0.9 from 190 lb
+    expect(sw.green).toMatchObject({ loLb: 50, hiLb: 220, openLow: true, openHigh: false }); // D-71: 240 lb with the 3/4 in axle, 180 lb with the 5/8 in tube; the solid 5/8 in rod and the 4.7 lb heavier D-73 sled: 220 lb (230 lb with the 4 mm okoume)
     expect(row('tip-straight').cases!.goal!.value).toBeCloseTo(43.6, 0);
     expect(row('tip-straight').statusGoal).toBe('pass'); // marginal at the 40 deg limit (util 0.80 now, 35 / 43.6)
     expect(row('tip-lock').status).toBe('pass');
@@ -114,7 +119,7 @@ describe('D-66 the numbers that moved', () => {
       expect(c.statusCargo ?? 'pass', c.id).not.toBe('fail');
     }
     const high = cs.filter((c) => c.status !== 'info' && ((c.util ?? 0) > 0.9 || (c.utilCargo ?? 0) > 0.9)).map((c) => c.id).sort();
-    expect(high).toEqual(['axle-stress', 'lash-points', 'park-hold', 'seat-stow', 'turn-radius']); // D-71: axle-stress 0.925 at the 200 lb rider, 0.957 on the cargo
+    expect(high).toEqual(['lash-points', 'park-hold', 'seat-stow', 'turn-radius']); // D-71 tube: axle-stress 0.925 at the 200 lb rider, 0.957 on the cargo; the solid rod brings it to 0.79 / 0.82
     expect(row('rest-load').status).toBe('pass'); // the resting 250 lb adult still passes: holds up to 348 lb, the heavier wheel is the tightest member (73%)
     expect(row('rest-load').how).toMatch(/holds up to 34\d lb/);
   });
@@ -135,7 +140,7 @@ describe('D-66 the numbers that moved', () => {
     expect(plate.max[1]).toBeCloseTo(13.25, 6);
     expect(rail).toBeDefined();
     for (const id of ['brake-slow', 'brake-ratio', 'brake-clear', 'brake-flap', 'brake-pivot', 'brake-mount', 'brake-return', 'brake-abuse', 'bearing-groove', 'rear-beam-seat']) expect(row(id).status, id).toBe('pass');
-    expect(row('axle-stress').status).toBe('marginal'); // D-71: 0.925 at the 200 lb goal rider on the 5/8 in tube; 150 lb is a pass
+    expect(row('axle-stress').status).toBe('pass'); // D-71 solid rod: 0.79 at the 200 lb goal rider (0.925, marginal, on the 5/8 in tube); 150 lb is a pass
     expect(row('brake-clear').value).toBeCloseTo(0.22, 1);
   });
 });

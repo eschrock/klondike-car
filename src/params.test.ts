@@ -54,7 +54,8 @@ describe('PARAM_DEFS', () => {
       frontTrackIn: 30, rearTrackIn: 30, steerLockDeg: 20, // D-66: matched 30 in tracks
       steerClearIn: 0.75, kingpinDiaIn: 0.625, kingThrustOdIn: 3, kingThrustThickIn: 0.5, kingBeamLengthIn: 3,
       tongueWidthIn: 1.25, tongueDepthIn: 1.75, tongueTieAheadIn: 5, steerRopesOn: 0, frontBeamThicknessIn: 2.5, rollPadRadiusIn: 9.5, // D-66 (was 11.5, D-60): tongue 1-1/4 x 1-3/4, pads out 1/2 in with the short hub
-      transomThicknessIn: 0.5, panelPlyIn: 0.157, seatBackPlyIn: 0.472, wheelMass10Lb: 3, wheelRatingLb: 300, hubLengthIn: 2.25, wheelBoreIn: 0.625, axleDiameterIn: 0.625, axleWallIn: 0.12, // D-71: the Harbor Freight wheel (3 lb, 5/8 in bore, 2.25 in hub assumed) on 5/8 in axles
+      transomThicknessIn: 0.5, panelPlyIn: 0.157, seatBackPlyIn: 0.472, wheelMass10Lb: 3, wheelRatingLb: 300, hubLengthIn: 2.25, wheelBoreIn: 0.625, axleDiameterIn: 0.625, axleWallIn: 0, // D-71: the Harbor Freight wheel (3 lb, 5/8 in bore, 2.25 in hub assumed) on 5/8 in axles; Eric chose the SOLID rod (axleWallIn 0)
+      weatherSpec: 0, thinSheetMaterial: 0, // D-73: Standard weather, the thin sheet follows it (1/4 in white oak plywood); panelPlyIn is the okoume option's thickness
       crossmemberThickIn: 0.625, handleSocketDepthIn: 14,
     });
     expect(PARAM_DEFS.steerLockDeg.ref).toContain('D-56');

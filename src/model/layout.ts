@@ -59,7 +59,7 @@ export interface Layout {
   joistT: number;
   /** Chine / gunwale / side-board thickness: the whole sandwich (outer band + web + inner band; hwC is measured to its inner face). */
   side: number;
-  /** Thickness of each oak band laminated onto a face of the 4 mm web, (side - panelPlyIn) / 2 (D-61, D-62), and the depth the deck edge enters the chine rabbet (the inner band's thickness at most). */
+  /** Thickness of each oak band laminated onto a face of the thin web, (side - web) / 2 (D-61, D-62), and the depth the deck edge enters the chine rabbet (the inner band's thickness at most). */
   sideBand: number;
   /** How far the deck edge reaches past hwC under the inner chine band: the band thickness (or the dado depth) less `deckSideClearIn` (D-63), so the deck is that much narrower than the web gap (the web's inner face is at hwC + sideBand). */
   deckEdge: number;
@@ -153,7 +153,7 @@ export function computeLayout(input: Params): Layout {
   const ply = p.deckPlyIn;
   const deckTop = p.deckHeightIn;
   const hwC = p.bodyWidthIn / 2 - side;
-  const sideBand = Math.max(0.05, (side - p.panelPlyIn) / 2);
+  const sideBand = Math.max(0.05, (side - d.thinPlyIn) / 2);
   const deckEdge = Math.max(0, Math.min(p.deckCaptureDepthIn, sideBand) - p.deckSideClearIn); // D-63: the deck is cut deckSideClearIn narrower than the web gap on each side (R2-M3)
   const rodR = p.axleDiameterIn / 2;
   const joistT = p.crossmemberThickIn;
@@ -175,7 +175,7 @@ export function computeLayout(input: Params): Layout {
 
   // ── Seat ──
   const baseW = Math.max(1, Math.min(p.seatWidthIn, 2 * hwC - 1));
-  const pl = p.panelPlyIn;
+  const pl = d.thinPlyIn;
   const underSeat = p.storageLocation === STORAGE_LOCATION.underSeat;
   const hCap = p.sideHeightRearIn + p.storageOverSideIn;
   const boxHeight = (lx: number, w: number, cap = hCap) =>

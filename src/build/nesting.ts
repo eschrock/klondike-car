@@ -9,8 +9,9 @@
  *
  * Oak: board feet on NOMINAL thickness x rough width x rough length / 144, times (1 + oakWasteAllowance), plus a greedy cut plan onto 6" wide boards.
  */
+import { THIN_PLY_MAX_IN } from '../model/sheets';
 import type { Part, Vec2 } from '../model/types';
-import type { Params } from '../params';
+import { PLY_SPECIES, thinSheet, type Params } from '../params';
 import { flatPattern, type FlatPattern } from './flat';
 import {
   BOARD_LENGTHS_IN, BOARD_WIDTH_IN, boardByNominal, boardForThickness, isBuilt, partKey, planResaw, sheetClass,
@@ -46,7 +47,7 @@ export interface Placement {
 export interface FreeRect { x: number; y: number; widthIn: number; heightIn: number }
 
 export interface NestedSheet {
-  /** e.g. '4 mm okoume'. */
+  /** e.g. '4 mm okoume marine plywood', '1/4 in white oak plywood', '12 mm okoume' (D-73). */
   label: string;
   thicknessMm: number;
   thicknessIn: number;
@@ -131,12 +132,16 @@ export function nestPlywood(parts: Part[], p: Params): NestResult {
   }
 
   const sheets: NestedSheet[] = [];
+  const thinCls = sheetClass(thinSheet(p).thicknessIn).mm; // D-73: the thin-sheet class sits on the sheet its material comes in (48 x 96, or the 60 x 60 Baltic birch)
   for (const [mm, items] of [...byClass.entries()].sort((a, b) => a[0] - b[0])) {
+    const isThin = mm === thinCls && items[0].flat.thicknessIn <= THIN_PLY_MAX_IN;
+    const SHEET_L = isThin ? thinSheet(p).sheetLengthIn : SHEET_LENGTH_IN, SHEET_W = isThin ? thinSheet(p).sheetWidthIn : SHEET_WIDTH_IN;
+    const label = isThin ? thinSheet(p).name : `${mm} mm ${p.plySpecies === PLY_SPECIES.okoumeMarine ? 'okoume' : 'Baltic birch'}`;
     // biggest first; the long webs and the deck go in before the small pieces
     items.sort((a, b) => b.flat.widthIn * b.flat.heightIn - a.flat.widthIn * a.flat.heightIn);
     type Open = { packer: MaxRects; placements: Placement[] };
     const open: Open[] = [];
-    const newSheet = (): Open => { const s = { packer: new MaxRects(SHEET_LENGTH_IN - k, SHEET_WIDTH_IN - k), placements: [] as Placement[] }; open.push(s); return s; };
+    const newSheet = (): Open => { const s = { packer: new MaxRects(SHEET_L - k, SHEET_W - k), placements: [] as Placement[] }; open.push(s); return s; };
     newSheet();
     for (const { part, flat: f } of items) {
       // orientations: grain along the sheet length first, then (if nothing else fits) the turned ones
@@ -164,16 +169,16 @@ export function nestPlywood(parts: Part[], p: Params): NestResult {
       };
       if (open.some(tryPlace)) continue;
       // another sheet only helps when the part fits an empty one
-      if (ordered.some((o) => new MaxRects(SHEET_LENGTH_IN - k, SHEET_WIDTH_IN - k).find(o.w + k, o.h + k))) tryPlace(newSheet());
+      if (ordered.some((o) => new MaxRects(SHEET_L - k, SHEET_W - k).find(o.w + k, o.h + k))) tryPlace(newSheet());
       else unplaced.push(part.id);
     }
     open.forEach((s, i) => {
       const used = s.placements.reduce((a, q) => a + q.areaIn2, 0);
-      const total = SHEET_LENGTH_IN * SHEET_WIDTH_IN;
+      const total = SHEET_L * SHEET_W;
       const frees = s.packer.free.map((r): FreeRect => ({ x: r.x + k, y: r.y + k, widthIn: Math.max(0, r.w - k), heightIn: Math.max(0, r.h - k) }));
       const largest = frees.sort((a, b) => b.widthIn * b.heightIn - a.widthIn * a.heightIn)[0] ?? { x: 0, y: 0, widthIn: 0, heightIn: 0 };
       sheets.push({
-        label: `${mm} mm okoume`, thicknessMm: mm, thicknessIn: items[0].flat.thicknessIn, index: i + 1, widthIn: SHEET_WIDTH_IN, lengthIn: SHEET_LENGTH_IN,
+        label, thicknessMm: mm, thicknessIn: items[0].flat.thicknessIn, index: i + 1, widthIn: SHEET_W, lengthIn: SHEET_L,
         placements: s.placements, usedAreaIn2: used, utilizationPct: (100 * used) / total, offcut: { areaIn2: total - used, largest },
       });
     });

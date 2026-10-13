@@ -234,7 +234,7 @@ describe('fastener data (build review MUST-11)', () => {
     expect(hanger.size).toMatch(/^0\.25" × \d(-\d\/\d)? 316 hex bolts/);
     for (const tag of ['L', 'R']) {
       const pad = get('beam-F').joints!.find((q) => q.to === `roll-pad-${tag}`)!;
-      expect(pad.size).toMatch(/2 × #10 × [\d-/]+ 316/);
+      expect(pad.size).toMatch(/2 × #8 × 1-1\/4 316/); // D-72: the standard #8 x 1-1/4 (was #10 x 1)
       const stop = get(`seat-wedge-${tag}`).joints!.find((q) => q.type === 'screw')!;
       expect(stop.count).toBe(2);
       expect(stop.size).toMatch(/2 × #8 × [\d-/]+ 316/);
@@ -294,21 +294,22 @@ describe('oak stock is T x W x L with T the board thickness (round 3)', () => {
 describe('rail-to-chine screws (round 3, build critic S4)', () => {
   const L3 = computeLayout(p);
   const screws = (tag: string) => get(`rail-${tag}`).joints!.filter((j) => j.type === 'screw' && j.to === `side-${tag}-chine`);
-  it('are #6, piloted, with one length per rail-depth zone (3 in aft, 1.8 in forward of the step)', () => {
+  it('are #6, piloted, ONE length (#6 x 2-1/2, D-72) in every rail-depth zone: the head is counterbored where the rail is deeper (3 in aft, 1.8 in forward of the step)', () => {
     for (const tag of ['L', 'R']) {
       const js = screws(tag);
       expect(js.length).toBe(2);
-      for (const j of js) { expect(j.size).toMatch(/^#6 × /); expect(j.size).toMatch(/PILOT/); expect(j.size).not.toMatch(/#8/); }
-      const deep = js.find((j) => /^#6 × 3-1\/2 /.test(j.size!))!, shallow = js.find((j) => /^#6 × 2-1\/2 /.test(j.size!))!;
+      for (const j of js) { expect(j.size).toMatch(/^#6 × 2-1\/2 /); expect(j.size).toMatch(/PILOT/); expect(j.size).not.toMatch(/#8/); }
+      const deep = js.find((j) => /counterbore the head/.test(j.size!))!, shallow = js.find((j) => /no counterbore needed/.test(j.size!))!;
       expect(deep).toBeDefined(); expect(shallow).toBeDefined();
       expect(deep.count).toBeGreaterThanOrEqual(3);
       expect(shallow.count).toBeGreaterThanOrEqual(1);
-      // each length = the rail depth where it sits + 0.5 in into the chine, up to the next stocked step
+      expect(deep.size).toMatch(/counterbore the head 1" up the rail/); // 3 in rail + 0.5 in bite - 2.5 in screw = 1 in
+      // each screw: 2-1/2 in long; the rail it crosses (less the counterbore) + the bite into the chine; the deep zone is 0.5 in, the shallow one the 0.63 in the longer screw gives
       const rail = get(`rail-${tag}`);
       for (const [j, depth] of [[deep, p.railDepthIn], [shallow, L3.railDepthF]] as const) {
-        const len = Number(j === deep ? 3.5 : 2.5);
-        expect(len).toBeGreaterThanOrEqual(depth + 0.5 - 1e-9);
-        expect(len).toBeLessThan(depth + 0.5 + 0.25 + 1e-9);
+        expect(j.fit!.lenIn).toBe(2.5);
+        expect(j.fit!.lenIn - j.fit!.gripIn).toBeGreaterThanOrEqual(0.5 - 1e-9);
+        expect(j.fit!.lenIn - j.fit!.gripIn).toBeLessThanOrEqual(depth > 2.5 ? 0.5 + 1e-9 : 0.7);
         for (const a of j.at!) { const x = toModel(rail.transform, a)[0]; if (j === shallow) expect(x).toBeGreaterThan(L3.railStepX - 1e-9); else expect(x).toBeLessThanOrEqual(L3.railStepX - 1.5 + 1e-9); }
       }
     }

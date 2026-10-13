@@ -19,7 +19,7 @@ export const PRE_D60: Partial<Params> = {
   axleWallIn: 0,
   // the four trade-offs
   wheelMass10Lb: 4, wheelRatingLb: 300, hubLengthIn: 3,
-  panelPlyIn: 0.236,
+  thinSheetMaterial: 2, panelPlyIn: 0.236, // D-73: the okoume option, so panelPlyIn (6 mm) is the thin sheet
   handlePostThickIn: 0.9375, handlePostWidthIn: 1.4375,
   // D-62 (3c-7): the axle groove is the full tube diameter again (no 0.05 in proud) and the clamp bolts sit 0.625 in from the tube centerline, so the older hand calcs keep their geometry.
   axleProudIn: 0, clampLegGapIn: 0.25, clampPlateLengthIn: 0.8, clampPlateOuterWidthIn: 1.5, kingThrustThickIn: 0.5625, rollPadThickIn: 0.3125, beamRailClearIn: 0.4,
@@ -41,4 +41,14 @@ export const PRE_D66: Partial<Params> = {
  */
 export const PRE_D71: Partial<Params> = {
   axleDiameterIn: 0.75, wheelBoreIn: 0.75, hubLengthIn: 2.28, wheelMass10Lb: 2.8, clampPlateWidthIn: 1.5, axleProudIn: 0.05,
+};
+
+/**
+ * D-71 (Eric chose the solid rod) and D-73 (the Standard weather spec's thin sheet is 1/4 in white oak plywood) changed two defaults: the axle is a solid 5/8 in rod (it was the 0.120 in DOM tube) and the
+ * sides, box, lid and signs are 0.21 in white oak plywood (they were 4 mm okoume). `PRE_D72` puts the D-71 tube and the 4 mm okoume back for the tests whose literal numbers were worked out for them
+ * (the D-60 weight package, the hand calculations on the tube, the 4 mm sandwich bands). Spread it over the defaults BEFORE PRE_D71 and PRE_D66. The new defaults are tested in d72.test.ts.
+ */
+export const PRE_D72: Partial<Params> = {
+  thinSheetMaterial: 2, // 4 mm okoume marine (THIN_SHEET.okoumeMarine): panelPlyIn 0.157
+  axleWallIn: 0.12,
 };

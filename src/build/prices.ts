@@ -110,6 +110,9 @@ export const isOakStocked = (nominal: string): boolean => OAK_STOCKED[nominal] !
 /** Marine plywood, full 4 x 8 sheets (D-68): prices Eric gathered 2026-10-12, plus tax. */
 export const PLYWOOD_PRICE: Record<string, Price> = {
   '4 mm': quoted(122, 'sheet', 'Aircraft Spruce, Peachtree City GA (will-call) (Eric, 2026-10-12), plus tax', '4 x 8 ft x 4 mm okoume; the sides, box, lid and signs', AIRCRAFT_SPRUCE_OKOUME_URL),
+  // D-73: the other two thin-sheet options. The keys are the sheet class (the thickness in whole mm, `sheetClass` in cutlist.ts): 5 mm = the real 1/4 in white oak plywood, 3 mm = 1/8 in Baltic birch.
+  '5 mm': quoted(113, 'sheet', WOODYARD, '4 x 8 ft x 1/4" white oak plywood (about 5.3 mm; interior / Type II glue, fine garage-kept once sealed; MEASURE the sheet); the sides, box, lid and signs under the Standard weather spec (D-73)', WOODYARD_PLYWOOD_URL),
+  '3 mm': quoted(40, 'sheet', WOODYARD, '5 x 5 ft x 1/8" (3 mm) Baltic birch plywood (exterior glue); the sides, box, lid and signs if chosen (D-73). Every part must nest on a 60 x 60 in sheet', WOODYARD_PLYWOOD_URL),
   '12 mm': quoted(90, 'sheet', WOODYARD, '4 x 8 ft x 1/2" marine plywood; the deck and, from its offcut, the seat back. VERIFY the species is okoume: meranti marine ply is about 30% heavier (+3 lb on the deck)', WOODYARD_PLYWOOD_URL),
 };
 
@@ -123,6 +126,7 @@ const ONLINE_METALS = 'Online Metals';
  * is the pieces to buy, not feet; an estimate is per foot of cut length.
  */
 export const METAL_PRICE_PER_FT: Array<{ match: RegExp; price: Price }> = [
+  { match: /solid 1045/, price: { ...packed(5, 40, 'ft', METAL, `ESTIMATE (D-71, Eric chose the solid rod): 5/8" solid 1045 / CDS steel rod, cut to length; the cuts need 57 in plus kerfs, so a 60 in piece (about $8 a foot). Not in the ${RESEARCH_DATE} research: quote McMaster-Carr or Online Metals. Ask for 1045 cold-drawn or turned-ground-polished (yield 70 ksi or better on the cert), NOT hot-rolled A36 and NOT 1018 cold-drawn`), packLabel: '60 in piece', decision: 'Axle rod: the price is an estimate. Buy 5/8" 1045 cold-drawn or TGP rod (70 ksi or better, 60 in), not 1018 cold-drawn (about 54 ksi, which takes the 200 lb goal axle-stress to about 1.0) and not hot-rolled A36.' } },
   { match: /DOM tube/, price: withAlts(
     { ...packed(5, 45.45, 'ft', SPEEDY, `ESTIMATE (D-71): 5/8" OD x 0.120" wall DOM (A513 Type 5, ID 0.385"), 60 in piece; the cuts need 57 in plus kerfs. Speedy Metals does not list 0.120" in 5/8" OD (it lists 0.109" at 45.45 for 60 in, 0.035", 0.049", 0.065" and 0.188"), so this is that 60 in price as a stand-in. Online Metals lists 5/8" x 0.12" x 0.39" ID A513 Type 5 DOM (part 7763) and McMaster-Carr lists it too (1020 DOM, 55 ksi yield, check it against the 70 ksi the model assumes): quote one. DOM only: ask for the A513 Type 5 mill cert [${RESEARCH_DATE}]`), packLabel: '60 in piece' },
     [gap({ ...packed(5, 45.45, 'ft', SPEEDY, `5/8" OD x .407" ID x .109" wall DOM steel round tube (Speedy Metals p-3421, read ${RESEARCH_DATE}; not in the research file, so an estimate until quoted), 60 in length; 36 in is 33.33, 48 in 40.00`), packLabel: '60 in piece' }, '0.109" wall, not 0.120": the rear axle-stress row would be about 1.0 (marginal-to-fail) at the 200 lb goal rider')]) },
@@ -143,7 +147,7 @@ const MCM = 'Catalog supplier (McMaster-Carr class)';
 const BOLT_DEPOT = 'Bolt Depot';
 const BD_EYE_URL = 'https://boltdepot.com/Forged_eye_bolts_(w__nuts)_Hot_dipped_galvanized_steel_3_8-16';
 const BD_EYE_316_URL = 'https://boltdepot.com/Forged_eye_bolts_with_shoulder_(w__nuts)_Stainless_steel_316_3_8-16';
-const EYE_DECISION = 'Eye bolts: the model says 3/8" x 3-7/8" and 2-5/8", which are not stock lengths. Priced at the nearest stock lengths, 4-1/2" (steer-eye) and 2-1/2" (steer-anchor); check that 2-1/2" still passes through the 1.25" chain joist with its washer and nut, and that 4-1/2" clears the axle beam. Galvanized is the base (the model says "galvanized or 316"); 316 is 4x the price (about $200 for four against $46): choose galvanized (dry sled) or 316 (wet).';
+const EYE_DECISION = 'Eye bolts (D-72): stock 3/8-16 shoulder eye bolts, 4-1/2" for the axle beam (steer-eye) and 2-1/2" for the chain joist (steer-anchor). Checked against the stack: the beam bolt needs 3.16" under the shoulder (2-1/2" beam + washer + nylock nut + 1.5 threads), so the 4-1/2" is cut to 3-1/4" after fitting (it would stand 1.4" past the nut); the joist bolt needs 1.97", so 2-1/2" is cut to 2" (or left, 0.6" of thread). Neither fouls the wheel, the chain or the tongue. Galvanized is the base (the model says "galvanized or 316"); 316 is 4x the price (about $200 for four against $46): choose galvanized (dry sled) or 316 (wet).';
 const WHEEL_DECISION = 'Wheel (Eric, 2026-10-12, D-71): the Harbor Freight 10" pneumatic with black hub, $9.99, 5/8" bore, 300 lb, about 3 lb; the axles are 5/8" to match. Its hub length is not listed (the model assumes 2-1/4", as on the Uline and Martin wheels): buy one first and measure the hub, the bore and the squash. The steel-hub version is $11.99.';
 /** Cut length of a steering chain (in), from the model's vendor text: 10.89 in of 3/16" chain, a quick link to each eye. */
 const CHAIN_CUT_IN = 10.89;
@@ -168,10 +172,10 @@ export const PURCHASED_PRICE: PurchasedPriceEntry[] = [
   { match: /^roll-pad$/, price: notFound(est(2, 'ea', MCM, 'UHMW 1/4" sheet offcut (no US price found, only an import listing at about $44 before duty)')) },
   { match: /^bridle-sleeve$/, price: notFound(est(7, 'ea', MCM, 'oil-embedded bronze sleeve bearing, 5/8" ID x 1" OD x 1-1/2" (Symmco SS-2032-8 is 5/8 x 1 but 1/2" long; needs a cut-to-length or a quote)')) },
   { match: /^steer-eye$/, price: withAlts(
-    found(11.94, 'ea', BOLT_DEPOT, BD_EYE_URL, 'forged shoulder eye bolt with nut, hot-dip galvanized, 3/8-16 x 4-1/2" (the model says 3-7/8", not a stock length; Bolt Depot measures from under the shoulder)', true),
+    found(11.94, 'ea', BOLT_DEPOT, BD_EYE_URL, 'forged shoulder eye bolt with nut, hot-dip galvanized, 3/8-16 x 4-1/2" stock (the stack needs 3.16" under the shoulder, so cut it to 3-1/4" after fitting; Bolt Depot measures from under the shoulder)', true),
     [found(50.77, 'ea', BOLT_DEPOT, BD_EYE_316_URL, '316 forged shoulder eye bolt with nut, 3/8-16 x 4-1/2": 4x the galvanized price', true)], EYE_DECISION) },
   { match: /^steer-anchor$/, price: withAlts(
-    found(11.1, 'ea', BOLT_DEPOT, BD_EYE_URL, 'forged shoulder eye bolt with nut, hot-dip galvanized, 3/8-16 x 2-1/2" (the model says 2-5/8", not a stock length)', true),
+    found(11.1, 'ea', BOLT_DEPOT, BD_EYE_URL, 'forged shoulder eye bolt with nut, hot-dip galvanized, 3/8-16 x 2-1/2" stock (the stack needs 1.97" under the shoulder; optionally cut to 2")', true),
     [found(48.43, 'ea', BOLT_DEPOT, BD_EYE_316_URL, '316 forged shoulder eye bolt with nut, 3/8-16 x 2-1/2": 4x the galvanized price', true)], EYE_DECISION) },
   { match: /^steer-chain$/, price: found(Math.round(((CHAIN_CUT_IN / 12) * CHAIN_USD_PER_FT + 2 * QUICK_LINK_USD) * 100) / 100, 'ea', 'ACE Industries / Skydog Rigging', 'https://www.aceindustries.com/3-16-nacm-industrial-chain-316l-stainless-steel',
     `3/16" NACM industrial chain 316L at $${CHAIN_USD_PER_FT}/ft (${CHAIN_CUT_IN} in) plus two 3/16" 316 quick links at $${QUICK_LINK_USD} each (Skydog, WLL 800 lb). Grade 43 is not made in 3/16": NACM chain has a looser rating, so check the working load against the 1000 lb target`, true) },
@@ -227,14 +231,15 @@ const BD_SCREW_6 = 'https://boltdepot.com/Product-Details?product=16354';
 const bdScrew = (url: string, gauge: number, len: string, packUsd: number, extra = ''): Price => foundPack(100, packUsd, 'ea', BOLT_DEPOT, url, `316 Phillips flat-head wood screw #${gauge} x ${len}", pack of 100${extra}`, true);
 const woodScrewLabel = (gauge: number, len: string): RegExp => new RegExp(String.raw`^316 (?:flat-head )?wood screw #${gauge} x ${len.replace('/', String.raw`\/`)}"$`);
 const NOT_LISTED = 'this length is not in the Bolt Depot listing the research read';
-const CARRIAGE_DECISION = 'Carriage bolts: the model length 6-1/4" is not a stock length. Priced as 6" (18411); 6-1/2" is the other choice. Check that 6" still clears the nut and washer stack.';
+const CARRIAGE_DECISION = 'Carriage bolts: the stack (tongue head 3" + the 2-1/2" beam + washer + nylock nut + 1.5 threads) needs 6.16", so D-72 uses the stock 6-1/2" (the 6" bolt stops 1/16" short of the top of the nut). Priced from the 6" bolt (18411) plus a little: the 6-1/2" price was not read; quote it.';
 const DOMINO_4X20_DECISION = 'NO Sipo 4x20 exists: decision needed (beech 4x20 fully encapsulated in epoxy, or 5x30 Sipo if the joint allows). The chine tie uses 4x20 Dominos (about 18); the model is unchanged. The price shown is the old estimate for a Sipo pack that is not made.';
 export const FASTENER_PRICE: Array<{ match: RegExp; price: Price }> = [
   { match: /T-nut/i, price: found(0.9, 'ea', 'Albany County Fasteners', 'https://www.albanycountyfasteners.com/t-nuts-316-stainless-steel-14-20-6002-016-032', '316 stainless 4-prong T-nut, 1/4"-20, for the handle-socket backers (epoxied in); $0.90 each for 1-99, $0.58 at 100+ (304 is $0.74)', true) },
   { match: /shaft collar/i, price: withAlts(
-    found(33.36, 'ea', 'MROSupply', 'https://www.mrosupply.com/products/745606/as-markdown/', 'Climax Metal CRC-075-S one-piece set-screw shaft collar, 316 stainless, 3/4" bore, 1-1/4" OD x 9/16", for the wheel end of each axle', true),
-    [gap(est(4.3, 'ea', 'Dultmeier', `set-screw collar, 3/4" bore, $4.30 [Dultmeier, ${RESEARCH_DATE}; ${SEARCH_READ_NOTE}; no separate URL recorded, so shown as an estimate]; an eBay 4-pack was $21.95, grade unstated`), '304 stainless, not 316 (about $17 for four against $133)')],
-    'Wheel retainer collars: 316 at $33.36 each ($133 for four) or 304 at $4.30 (about $17 for four). The model and the exterior-material rule say 316; 304 or zinc is the cost cut. Choose.') },
+    // D-71 / D-72: the wheel bore, and so the collar, is 5/8". The research found a 316 collar only in 3/4" bore ($33.36, MROSupply); the 5/8" one is that price as a stand-in until quoted.
+    notFound(est(33.36, 'ea', 'MROSupply', 'ESTIMATE (D-71): a 316 stainless one-piece set-screw shaft collar, 5/8" bore (Climax-class, about 1-1/8" OD x 1/2"), for the wheel end of each axle. The research found the 316 collar only in 3/4" bore (Climax Metal CRC-075-S, $33.36 at MROSupply, https://www.mrosupply.com/products/745606/as-markdown/); a 5/8" 316 is assumed to cost the same until quoted', 'https://www.mrosupply.com/products/745606/as-markdown/')),
+    [gap(found(4.43, 'ea', 'Penn Tool Co.', 'https://www.penntoolco.com/87986402', 'Climax C-062 one-piece set-screw collar, 5/8" bore, 1-1/8" OD x 1/2", zinc plated (the Standard weather spec); PartsSource GSC-062-Z zinc is $4.99 [S]', true), 'zinc-plated steel, not 316 stainless (about $18 for four against $133): fine garage-kept, rusts in the weather')],
+    'Wheel retainer collars (5/8" bore): the 316 price is an ESTIMATE (the research found 316 only in 3/4" bore, $33.36 each, $133 for four). Zinc-plated is $4.43 each at Penn Tool ($18 for four) and is right for the Standard weather spec (garage-kept); 316 is for Extreme weather. Quote a 316 5/8" collar before ordering that spec.') },
   { match: /cotter pin/i, price: withAlts(notFound(packed(25, 8, 'ea', FAST, '316 cotter pin through the 0.156" axle cross hole; pack of 25')), [
     gap(foundPack(100, 14.95, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Product-Details?product=14570', 'cotter pin 5/32" x 1-1/4" (14570), $0.21 each, 14.95 per 100 (5/32 x 1-3/4 is $0.28, 19.68 per 100)', true), '18-8 stainless, not 316, and 1-1/4" not 1-1/2" long; Bolt Depot has no 316 cotter pin')]) },
   { match: /end plug/i, price: packed(10, 5, 'ea', FAST, 'plastic flanged plug for the DOM tube bore; pack of 10') },
@@ -254,8 +259,8 @@ export const FASTENER_PRICE: Array<{ match: RegExp; price: Price }> = [
   { match: /Heat-set insert/, price: packed(50, 12, 'ea', FAST, 'brass heat-set insert for the printed ASA clips; pack of 50') },
   { match: /threaded insert/, price: notFound(packed(25, 22, 'ea', FAST, '316 epoxy-in insert; pack of 25 (E-Z Lok stainless kit $31.49 at Tractor Supply is titled 10-24; brass 25-pack $13.52 on eBay)')) },
   { match: /button-head cap screw 1\/4-20/, price: found(1.05, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Socket_button_head_Stainless_steel_316_1_4-20', '316 socket button head cap screw 1/4-20 x 2" (21746), $1.05 each, 34.94 per 50; the x 1-1/4" length was not read separately', true) },
-  { match: /Thumb-knob/, price: withAlts(notFound(est(2.75, 'ea', FAST, 'thumb-knob screw #10-32 x 7/8" (no exact length found)')), [
-    gap(found(2.38, 'ea', 'ichome (RAF)', 'https://ichome.com/product-detail/raf/7109-ss', 'RAF 7109-SS stainless knob screw #10-32 (Zoro 18-8 round thumb screw 3/4" is 5.69)', true), 'the length is 1/2", not 7/8"')]) },
+  { match: /Thumb-knob/, price: withAlts(notFound(est(2.75, 'ea', FAST, 'thumb-knob screw #10-32, 1" with the 1/4 in white oak web (D-73; 7/8" with the 4 mm okoume): no exact length found')), [
+    gap(found(2.38, 'ea', 'ichome (RAF)', 'https://ichome.com/product-detail/raf/7109-ss', 'RAF 7109-SS stainless knob screw #10-32 (Zoro 18-8 round thumb screw 3/4" is 5.69)', true), 'the length is 1/2", not the model\'s 1" (or 7/8")')]) },
   { match: /\bM[34]\b/, price: packed(100, 9, 'ea', FAST, 'metric socket or pan-head screw; pack of 100') },
   { match: /machine screw/, price: packed(50, 11, 'ea', FAST, 'pack of 50') },
   // Wood screws: Bolt Depot 316 Phillips flat-head, by the 100 (the lengths the research read; the rest keep their estimate).
@@ -277,7 +282,7 @@ export const FASTENER_PRICE: Array<{ match: RegExp; price: Price }> = [
   { match: /fender washer 3\/8/, price: foundPack(100, 50.48, 'ea', BOLT_DEPOT, 'https://www.boltdepot.com/Fender_washers_Stainless_steel_316.aspx', '316 fender washer 3/8" x 1-1/2" (16042), $0.81 each or 50.48 per 100; the 2" OD washers of the eye bolts were not searched; pack of 100', true) },
   { match: /fender washer 1\/4/, price: foundPack(100, 27.26, 'ea', BOLT_DEPOT, 'https://www.boltdepot.com/Fender_washers_Stainless_steel_316.aspx', '316 fender washer 1/4" x 1-1/4" (16040), $0.46 each or 27.26 per 100; pack of 100', true) },
   { match: /fender washer/, price: packed(100, 20, 'ea', FAST, 'pack of 100') },
-  { match: /carriage bolt 3\/8/, price: { ...found(3.68, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Product-Details?product=18411', '316 carriage bolt 3/8-16 x 6" (18411), $3.68 each, 28.31 per 10; 6-1/4" is not a stock length: the nearest are 6" and 6-1/2" (hex 16346)', true), decision: CARRIAGE_DECISION } },
+  { match: /carriage bolt 3\/8/, price: { ...est(3.99, 'ea', BOLT_DEPOT, 'ESTIMATE (D-72): 316 carriage bolt 3/8-16 x 6-1/2". The research read the 6" bolt (18411, $3.68 each, 28.31 per 10); 6-1/2" is that price x 6.5/6 until quoted. 6-1/4" is not a stock length, and the 6" bolt stops 1/16" short of the top of the nylock nut on this stack', 'https://boltdepot.com/Product-Details?product=18411'), decision: CARRIAGE_DECISION } },
   { match: /hex bolt 3\/8-16 x 3-1\/4"/, price: found(1.94, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Hex_bolts_Stainless_steel_316_1_4-20', '316 hex bolt 3/8-16 x 3-1/4" (16136), $1.88 to $1.94 each (two snapshots; the higher is used), 74.65 per 50', true) },
   { match: /hex bolt 1\/4-20 x 2-1\/4"/, price: found(0.71, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Hex_bolts_Stainless_steel_316_1_4-20', '316 hex bolt 1/4-20 x 2-1/4" (16074), $0.71 each, 54.28 per 100', true) },
   { match: /bolt 3\/8/, price: notFound(est(2.5, 'ea', FAST, `${NOT_LISTED}; Bolt Depot lists 3/8-16 x 3-1/4 at $1.94 and x 3-3/4 at $2.25`)) },

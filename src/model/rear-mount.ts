@@ -10,7 +10,7 @@
  */
 import type { Params } from '../params';
 import type { Beam, Layout } from './layout';
-import type { Mat4, Vec3 } from './types';
+import type { Mat4, ScrewFit, Vec3 } from './types';
 
 export type V2 = [number, number];
 
@@ -106,6 +106,37 @@ export function boltLength(grip: number, d: number, washers = 1): number {
   return Math.ceil(need * 4 - 1e-9) / 4;
 }
 
+/** Threads showing past a nylon-insert nut: the tip must clear the insert by at least this many threads (the usual 1.5 to 2). */
+export const MIN_THREADS_PAST_NUT = 1.5;
+
+/** Stock lengths (in, measured from under the shoulder) of 3/8-16 forged shoulder eye bolts, hot-dip galvanized (Bolt Depot; docs/price-research-2026-10.md): D-72. */
+export const EYE_BOLT_STOCK_IN: readonly number[] = [2.5, 4.5, 6];
+/** Stock lengths (in) of 3/8-16 carriage bolts (Bolt Depot 316, 18-8): 1/2 in steps from 4 in up. */
+export const CARRIAGE_STOCK_IN: readonly number[] = [4, 4.5, 5, 5.5, 6, 6.5, 7, 8];
+
+/** A shoulder eye bolt or carriage bolt against its real stack (D-72). */
+export interface StockBoltFit {
+  /** What the stack needs: the stack + the washers + the nut + `MIN_THREADS_PAST_NUT` threads. */
+  needIn: number;
+  /** The stock length bought (the next one up from `needIn`). */
+  stockIn: number;
+  /** Thread showing past the nut when the stock length is fitted (in). */
+  pastNutIn: number;
+  /** Length to cut the stock bolt to (1/8 in up from `needIn`), or null when the stock length is already within `maxPastNutIn` of the need. */
+  cutToIn: number | null;
+}
+
+/** The stock bolt for a stack of `stackIn` clamped between a head (or shoulder) and a nylon-insert nut, with `washers` washers; 3/8-16 unless `d` says otherwise. */
+export function stockBoltFit(stackIn: number, d: number, washers: number, stock: readonly number[], maxPastNutIn = 0.5): StockBoltFit {
+  const threadPitch = d >= 0.3125 ? 1 / 16 : 1 / 20; // 3/8-16, else 1/4-20
+  const base = stackIn + washers * washerThick(d) + nutHeight(d);
+  const needIn = base + MIN_THREADS_PAST_NUT * threadPitch;
+  const stockIn = stock.find((l) => l >= needIn - 1e-9) ?? Math.ceil(needIn * 2) / 2;
+  const pastNutIn = stockIn - base;
+  const cut = Math.ceil(needIn * 8 - 1e-9) / 8;
+  return { needIn, stockIn, pastNutIn, cutToIn: pastNutIn > maxPastNutIn + 1e-9 ? cut : null };
+}
+
 /**
  * Wood-screw length (in) for a stack of `grip` (the pieces the screw passes through) plus `embed` into the last piece, rounded UP to a stocked length: 1/8" steps to 1", 1/4" steps above it
  * (Phase 4 round 2: the BOM must be able to order the screw).
@@ -114,6 +145,42 @@ export function screwLength(grip: number, embed: number): number {
   const need = grip + embed;
   return need <= 1 + 1e-9 ? Math.ceil(need * 8 - 1e-9) / 8 : Math.ceil(need * 4 - 1e-9) / 4;
 }
+
+/**
+ * The wood screws the whole sled uses (D-72, Eric: "reduce the variety of screws"): three sizes in 316 stainless. #8 x 5/8 is for hardware into thin stock (latches, catches, the stay,
+ * hinge leaves into the lid frame), #8 x 1-1/4 for everything else, and #6 x 2-1/2 for the piloted rail-to-chine screws (a #8 would leave 0.11 in a side of the chine edge). A joint picks the
+ * SHORTEST standard length that gives its bite without poking through its receiving member.
+ */
+export const STD_WOOD_SCREWS: ReadonlyArray<{ gauge: 6 | 8 | 10; lenIn: number }> = [
+  { gauge: 8, lenIn: 5 / 8 },
+  { gauge: 8, lenIn: 1.25 },
+  { gauge: 6, lenIn: 2.5 },
+];
+/** Engagement a wood screw needs in oak (in): half an inch, or two thirds of a thinner receiving member. */
+export const SCREW_MIN_BITE_IN = 0.5;
+/** Wood left past the tip of a screw (in): it never reaches the far face of the receiving member. */
+export const SCREW_TIP_WOOD_IN = 1 / 16;
+export const screwMinBite = (receivingIn: number): number => Math.min(SCREW_MIN_BITE_IN, (2 / 3) * receivingIn);
+/** Shank diameter (in) by gauge. */
+export const SCREW_DIA_IN: Record<6 | 8 | 10, number> = { 6: 0.138, 8: 0.164, 10: 0.19 };
+
+/** Does this fit meet its bite and stay inside its receiving member? */
+export function screwFitOk(x: ScrewFit): boolean {
+  const bite = x.lenIn - x.gripIn;
+  return bite >= x.minBiteIn - 1e-6 && bite <= x.receivingIn - SCREW_TIP_WOOD_IN + 1e-6;
+}
+
+/** The shortest standard screw of `gauge` for a stack: `gripIn` crossed, then `receivingIn` of wood to bite (`needBiteIn` replaces the default bite when an analysis row sets it). The fit is returned even if none satisfies it (a test then reports it). */
+export function pickWoodScrew(gauge: 6 | 8 | 10, gripIn: number, receivingIn: number, needBiteIn?: number): ScrewFit {
+  const minBiteIn = needBiteIn ?? screwMinBite(receivingIn);
+  const mk = (lenIn: number): ScrewFit => ({ gauge, lenIn, gripIn, receivingIn, minBiteIn });
+  const std = STD_WOOD_SCREWS.filter((s) => s.gauge === gauge);
+  const ok = std.map((s) => mk(s.lenIn)).find(screwFitOk);
+  return ok ?? mk((std.find((s) => s.lenIn - gripIn >= minBiteIn - 1e-6) ?? std[std.length - 1]).lenIn);
+}
+
+/** "#8 × 1-1/4" for joint text; the BOM reads the first "#N × L" in a screw joint's size. */
+export const screwText = (x: Pick<ScrewFit, 'gauge' | 'lenIn'>): string => `#${x.gauge} × ${inchesText(x.lenIn)}`;
 
 /** 1/4"-step fractional-inch text, e.g. 1.75 -> "1-3/4", 2.25 -> "2-1/4", 3 -> "3". */
 export function inchesText(x: number): string {

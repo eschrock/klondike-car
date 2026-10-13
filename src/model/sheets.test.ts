@@ -32,7 +32,7 @@ describe('full 4 x 8 ft sheets of 4 mm and 12 mm okoume (local supplier), one-pi
   });
   it('rough sheet count at the default: one sheet of 4 mm and ONE 12 mm sheet (the deck, with the 12 mm frameless seat back cut from its offcut); no 6 mm sheet at all (D-62)', () => {
     const n = plySheets(allPlyBlanks(parts));
-    expect(n).toEqual({ 4: 1, 12: 1 });
+    expect(n).toEqual({ 5: 1, 12: 1 }); // D-73: the thin sheet is the 1/4 in white oak plywood (5.3 mm) by default; { 4: 1, 12: 1 } with the okoume, { 3: 1, 12: 1 } with the Baltic birch
     expect(isThinPly(parts.find((x) => x.id === 'seat-back-panel')!)).toBe(false);
     expect(NEST_KERF_IN).toBeGreaterThan(0);
   });

@@ -4,8 +4,9 @@
  * Expected numbers are re-derived by hand from the params (deck 8, ply 0.472, side 0.625, rear 14 in, bow 4 in, rear face at x = -9.25).
  */
 import { describe, expect, it } from 'vitest';
-import { defaultParams, derived, validateParams, type Params } from '../params';
+import { defaultParams, derived, thinSheet, validateParams, type Params } from '../params';
 import { buildModel } from './index';
+import { computeLayout } from './layout';
 import { liftBarStressPsi, liftSlot, scupperSites } from './body';
 import { chooseDomino, DOMINOS, endJoint, frac, joinerySummary } from './joinery';
 import { GRIP_BACKING_T_IN, HULL_STEP, box, makeCtx } from './build-utils';
@@ -25,7 +26,7 @@ const get = (parts: Part[], id: string) => {
 /** Variants of the body: deck ply, storage location, side profile, width, bow curl, lift slot. Rejected ones (validator errors) are skipped. */
 const PATCHES: Record<string, Partial<Params>> = {
   defaults: {},
-  deck9mm: { deckPlyIn: 0.354, panelPlyIn: 0.354 },
+  deck9mm: { deckPlyIn: 0.354, thinSheetMaterial: 2, panelPlyIn: 0.354 }, // D-73: the okoume option, so panelPlyIn is the thin sheet
   storageForward: { storageLocation: 1 },
   storageUnderSeat: { storageLocation: 2 },
   sheer0: { sheerCurveIn: 0 },
@@ -141,7 +142,7 @@ describe('captured-ply sides, deck and rear transom (D-22, D-35, D-54)', () => {
       }
       // the bands: outer and inner thickness = (side - ply) / 2, either side of the web
       for (const id of [`side-${tag}-chine`, `side-${tag}-chine-in`, `side-${tag}-gunwale`, `side-${tag}-gunwale-in`]) expect(get(parts, id).stock!.t).toBeCloseTo(L.sideBand, 9);
-      expect(2 * L.sideBand + defaults.panelPlyIn).toBeCloseTo(L.side, 9);
+      expect(2 * L.sideBand + thinSheet(defaults).thicknessIn).toBeCloseTo(L.side, 9);
       expect(worldAABB(gun).max[2]).toBeCloseTo(L.deckTop + 14, 6);
     }
   });
@@ -485,11 +486,11 @@ describe('signs (D-9, D-35, D-57)', () => {
       const s = get(parts, `sign-${tag}`);
       expect(s.removable).toBeFalsy();
       expect(s.edges).toBe('edged');
-      expect(s.geometry.type === 'box' && s.geometry.size[1]).toBeCloseTo(defaults.panelPlyIn, 9);
+      expect(s.geometry.type === 'box' && s.geometry.size[1]).toBeCloseTo(thinSheet(defaults).thicknessIn, 9);
       expect(s.group).toBe('body');
       expect(s.notes).toMatch(/banded/);
       const c = transformPoint(s.transform, [0, 0, 0]);
-      expect(Math.abs(c[1])).toBeCloseTo(L.hwC + L.side + GRIP_BACKING_T_IN + defaults.panelPlyIn / 2, 6); // D-63: 1/16 in proud of the band faces, clear of the grab-board backing strip
+      expect(Math.abs(c[1])).toBeCloseTo(L.hwC + L.side + GRIP_BACKING_T_IN + thinSheet(defaults).thicknessIn / 2, 6); // D-63: 1/16 in proud of the band faces, clear of the grab-board backing strip
       expect(c[2]).toBeGreaterThan(L.web.z0); // level with the free web
       expect(c[2]).toBeLessThan(8 + 14 - defaults.railBandIn);
       expect(s.transform[2]).toBeCloseTo(0, 9); // 3c-5: LEVEL, its length axis is not tilted to follow the sheer
@@ -523,13 +524,17 @@ describe('round 2 hull (build M2-M8, D-43)', () => {
   const { L } = ctx;
   const p = defaults;
 
-  it('transoms are 1/2" (D-60; was 3/4"), chines and gunwales 5/8" thick as a sandwich of two 0.234" bands and the 4 mm web (D-62)', () => {
+  it('transoms are 1/2" (D-60; was 3/4"), chines and gunwales 5/8" thick as a sandwich of two 0.2075" bands and the 1/4 in white oak plywood web (D-62, D-73; 0.234" bands on the 4 mm okoume)', () => {
     expect(L.transom).toBe(0.5);
     expect(L.side).toBe(0.625);
-    // D-61/D-62: no grooves; a band of (0.625 - 0.157) / 2 = 0.234" on each face of the 4 mm web
-    expect(p.panelPlyIn).toBeCloseTo(0.157, 9);
-    expect(L.sideBand).toBeCloseTo(0.2338, 3);
-    expect(get(parts, 'side-L-chine').joints!.find((j) => j.to === 'side-L-web')!.size).toMatch(/0\.234" oak strip/);
+    // D-61/D-62: no grooves; a band of (0.625 - web) / 2 on each face of the web: D-73's default web is the 0.21 in white oak plywood
+    expect(thinSheet(p).thicknessIn).toBeCloseTo(0.21, 9);
+    expect(L.sideBand).toBeCloseTo(0.2075, 4);
+    expect(get(parts, 'side-L-chine').joints!.find((j) => j.to === 'side-L-web')!.size).toMatch(/0\.20[78]" oak strip/);
+    // the okoume option (4 mm, panelPlyIn 0.157): the D-62 bands of 0.234"
+    const ok = { ...p, thinSheetMaterial: 2 };
+    expect(computeLayout(ok).sideBand).toBeCloseTo(0.2338, 3);
+    expect(get(buildModel(ok), 'side-L-chine').joints!.find((j) => j.to === 'side-L-web')!.size).toMatch(/0\.234" oak strip/);
   });
 
   it('rough length gets 4× the milling allowance (M8): the straight 64.53" chine is 65.03" rough, 1/8" more each way in t and w', () => {

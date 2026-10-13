@@ -350,7 +350,7 @@ export interface MetalRow {
   name: string;
   qty: number;
   ids: string[];
-  /** 'DOM tube' | 'Flat bar' | 'Angle' | 'Aluminum tube'. */
+  /** 'Steel rod' | 'DOM tube' | 'Flat bar' | 'Angle' | 'Aluminum tube'. */
   family: string;
   /** Stock description, e.g. '3/4" OD x 0.120" wall DOM tube'. */
   section: string;
@@ -643,6 +643,7 @@ export function metalFamily(x: Part): string | null {
   if (/aluminum/.test(m)) return 'Aluminum tube';
   if (/angle/.test(m)) return 'Angle';
   if (/flat bar/.test(m)) return 'Flat bar';
+  if (/steel rod/.test(m) && !/stainless/.test(m)) return 'Steel rod';
   if (/steel/.test(m) && !/stainless/.test(m)) return 'DOM tube';
   return null;
 }
@@ -651,6 +652,7 @@ function metalSection(x: Part, family: string, d: Dims): string {
   const v = x.sourcing?.vendor ?? '';
   const wall = (): number | undefined => { const m = /(\d*\.\d+)"\s*wall/.exec(v); return m ? Number(m[1]) : x.geometry.type === 'cylinder' ? x.geometry.wall : undefined; };
   switch (family) {
+    case 'Steel rod': return `${fracIn(d.t)}" solid 1045 / CDS steel rod (cut to length)`;
     case 'DOM tube': return `${fracIn(d.t)}" OD x ${(wall() ?? 0.12).toFixed(3)}" wall DOM tube (ASTM A513 Type 5)`;
     case 'Aluminum tube': return `6061-T6 ${fracIn(d.t)}" x ${fracIn(d.w)}" x ${(wall() ?? 0.125).toFixed(3)}" wall rectangular tube`;
     case 'Angle': return `316 stainless angle ${fracIn(d.w)}" x ${fracIn(d.w)}" x ${(d.t).toFixed(3)}"`;

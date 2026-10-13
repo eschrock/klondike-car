@@ -317,13 +317,13 @@ describe('build review round 1: glue epoxy by joint type (MUST-10)', () => {
       expect(DOMINO_FLOZ[k]).toBeGreaterThanOrEqual(0.1);
       expect(DOMINO_FLOZ[k]).toBeLessThanOrEqual(0.2);
     }
-    // 18 chine Dominos 4×20 (rail-L / side-L-chine appear on both parts), 16 of 5×30 in the frame, 2 of 8×50 and so on.
+    // 18 chine Dominos 5×30 (4×20 with the 4 mm okoume) (rail-L / side-L-chine appear on both parts), 16 of 5×30 in the frame, 2 of 8×50 and so on.
     expect(n('domino')).toBeGreaterThan(30);
     expect(n('domino')).toBeLessThan(60);
     const chine = est.filter((g) => g.kind === 'domino' && [g.a, g.b].sort().join('|') === 'rail-L|side-L-chine');
     expect(chine).toHaveLength(1);
     expect(chine[0].count).toBe(9);
-    expect(chine[0].flOz).toBeCloseTo(9 * DOMINO_FLOZ['4×20'], 9);
+    expect(chine[0].flOz).toBeCloseTo(9 * DOMINO_FLOZ['5×30'], 9); // D-73: the 1/4 in white oak web leaves a 0.417 in land: 5×30 (4×20 with the 4 mm okoume)
     expect(sum('domino') / n('domino')).toBeGreaterThanOrEqual(0.1);
     expect(sum('domino') / n('domino')).toBeLessThanOrEqual(0.25);
   });

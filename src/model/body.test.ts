@@ -4,7 +4,7 @@
  * params (docs/phase3c-4b-notes.md), not read back from the builder.
  */
 import { describe, expect, it } from 'vitest';
-import { bowBulkhead, bowTurnInAt, defaultParams, sideHeightAt, validateParams, type Params } from '../params';
+import { bowBulkhead, bowTurnInAt, defaultParams, sideHeightAt, thinSheet, validateParams, type Params } from '../params';
 import { buildModel } from './index';
 import { computeLayout, innerHalfWidth, outerHalfWidth, sideHeightAtX, sideSlopeAt, sideTopAt, webTopAt } from './layout';
 import { bowHold, bulkheadOutline, liftBarStressPsi, liftSlot, scupperSites, signPlacement, SIGN_X_MAX_IN } from './body';
@@ -120,7 +120,7 @@ describe('the plan taper (D-57, D-66)', () => {
       const wb = verts(web).filter(([vx]) => Math.abs(vx - (49.25 + defaults.deckCaptureDepthIn)) < 0.01); // the web's front end is in the bulkhead dado (round 2)
       expect(wb.length).toBeGreaterThan(2);
       const ys = wb.map(([, vy]) => Math.abs(vy));
-      expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(defaults.panelPlyIn, 6);
+      expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(thinSheet(defaults).thicknessIn, 6);
       expect((Math.max(...ys) + Math.min(...ys)) / 2).toBeCloseTo(hw + L.side / 2 - turn, 6);
     }
     const a = worldAABB(get(parts, 'side-L-gunwale')), b = worldAABB(get(parts, 'side-R-gunwale'));
@@ -409,7 +409,7 @@ describe('signs (D-57): the Troop 455 sign is back on the tall rear part of each
     expect(b.max[0] - b.min[0]).toBeCloseTo(sp.length, 9);
     const w = worldAABB(get(parts, 'side-L-web'));
     expect(b.min[1]).toBeGreaterThanOrEqual(12 - 1e-6); // outside the chine / gunwale outer face (12 in)
-    expect(b.max[1]).toBeLessThan(12 + 2 * defaults.panelPlyIn);
+    expect(b.max[1]).toBeLessThan(12 + 2 * thinSheet(defaults).thicknessIn);
     void w;
     expect(b.min[2]).toBeGreaterThan(L.deckTop);
     for (const x of [b.min[0] + 0.3, (b.min[0] + b.max[0]) / 2, b.max[0] - 0.3]) expect(b.max[2], `x=${x}`).toBeLessThanOrEqual(sideTopAt(L, x) - 0.5);

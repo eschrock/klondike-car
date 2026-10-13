@@ -263,7 +263,7 @@ export function lashLoadCheck(ctx: Ctx): AnalysisCheck {
     value: g.value, unit: g.unit, limit: g.limit, sense: g.sense, details: ds,
     refs: ['BRIEF 4.9', 'D-41'],
     how: `One lash plate pulled at its ${p.lashLoadLbf} lbf working load, ${p.lashPullAngleDeg}° above the deck: withdrawal V = ${f(p.lashLoadLbf, 0)} × sin ${p.lashPullAngleDeg}° = ${f(k.V)} lbf, lateral H = ${f(k.H)} lbf. `
-      + `${LASH_SCREWS} stainless #10 × ${LASH_SCREW_LEN_IN}" screws (D = ${LASH_SCREW_DIA_IN}"), thread penetration ${LASH_SCREW_LEN_IN} − ${LASH_PLATE_T_IN} plate − ${LASH_TIP_IN} tip = ${f(k.pen, 3)}" into oak (G = ${OAK_G}): NDS W = 1380·G²·D = ${f(k.wPerIn)} lbf/in, × ${f(k.pen, 3)}" × C_M ${WITHDRAWAL_WET_CM} (wet) = ${f(k.wScrew)} lbf per screw, ${f(k.capW)} lbf for ${LASH_SCREWS}. `
+      + `${LASH_SCREWS} stainless #8 × ${LASH_SCREW_LEN_IN}" screws (D-72) (D = ${LASH_SCREW_DIA_IN}"), thread penetration ${LASH_SCREW_LEN_IN} − ${LASH_PLATE_T_IN} plate − ${LASH_TIP_IN} tip = ${f(k.pen, 3)}" into oak (G = ${OAK_G}): NDS W = 1380·G²·D = ${f(k.wPerIn)} lbf/in, × ${f(k.pen, 3)}" × C_M ${WITHDRAWAL_WET_CM} (wet) = ${f(k.wScrew)} lbf per screw, ${f(k.capW)} lbf for ${LASH_SCREWS}. `
       + `Lateral: ${f(k.H / LASH_SCREWS)} lbf per screw bears on ${f(k.pen, 3)}" × ${LASH_SCREW_DIA_IN}" = ${f(k.bearing, 0)} psi (≤ ${f(al.oakDowel, 0)}). Two screws would give ${f((2 * k.wScrew), 0)} lbf and fail; the plate is a 4-hole plate for that reason.`,
   });
 }

@@ -94,24 +94,24 @@ describe('seatChecks', () => {
     expect(byId['lash-points'].value).toBe(6);
     expect(byId['lash-points'].status).not.toBe('fail');
   });
-  it('lash-load by hand: 300 lbf at 45° on a 4-screw #10 plate (S-9)', () => {
+  it('lash-load by hand: 300 lbf at 45° on a 4-screw #8 plate (S-9; D-72: #8 x 1-1/4, was #10)', () => {
     // V = H = 300 sin 45° = 212.13 lbf. Thread penetration = 1.25 − 0.125 plate − 0.25 tip = 0.875".
-    // NDS W = 1380 G² D = 1380 × 0.68² × 0.19 = 1380 × 0.4624 × 0.19 = 121.24 lbf/in; × 0.875" × C_M 0.7 = 74.26 lbf per screw; × 4 = 297.04 lbf.
-    // Withdrawal util = 212.13 / 297.04 = 0.714. Bearing: (212.13 / 4) / (0.19 × 0.875) = 53.03 / 0.16625 = 319.0 psi (allowable 4000 × 0.85 / 2 = 1,700, util 0.188).
+    // NDS W = 1380 G² D = 1380 × 0.68² × 0.164 = 1380 × 0.4624 × 0.164 = 104.65 lbf/in; × 0.875" × C_M 0.7 = 64.10 lbf per screw; × 4 = 256.39 lbf (#10: 121.24 / 74.26 / 297.04, util 0.714).
+    // Withdrawal util = 212.13 / 256.39 = 0.827. Bearing: (212.13 / 4) / (0.164 × 0.875) = 53.03 / 0.1435 = 369.6 psi (allowable 4000 × 0.85 / 2 = 1,700, util 0.217).
     const k = lashLoads(ctx.p);
     expect(k.V).toBeCloseTo(212.13, 2);
     expect(k.pen).toBeCloseTo(0.875, 9);
-    expect(k.wPerIn).toBeCloseTo(121.24, 2);
-    expect(k.wScrew).toBeCloseTo(74.26, 2);
-    expect(k.capW).toBeCloseTo(297.04, 1);
-    expect(k.bearing).toBeCloseTo(319.0, 0);
+    expect(k.wPerIn).toBeCloseTo(104.65, 2);
+    expect(k.wScrew).toBeCloseTo(64.1, 2);
+    expect(k.capW).toBeCloseTo(256.39, 1);
+    expect(k.bearing).toBeCloseTo(369.6, 0);
     const c = byId['lash-load'];
     expect(c.value).toBeCloseTo(212.13, 2);
-    expect(c.limit).toBeCloseTo(297.04, 1);
-    expect(c.util!).toBeCloseTo(0.714, 3);
+    expect(c.limit).toBeCloseTo(256.39, 1);
+    expect(c.util!).toBeCloseTo(0.827, 3);
     expect(c.status).toBe('pass');
     expect(c.details!.map((d) => d.name)).toEqual(['screw withdrawal (plate, all screws)', 'screw bearing on the oak (lateral)']);
-    // Two screws would not do (2 × 74.26 = 148.5 < 212.1), and a 450 lbf pull fails the 4-screw plate (318.2 > 297.0).
+    // Two screws would not do (2 × 64.1 = 128.2 < 212.1), and a 450 lbf pull fails the 4-screw plate (318.2 > 256.4).
     expect(2 * k.wScrew).toBeLessThan(k.V);
     expect(seatChecks(ctxFor({ lashLoadLbf: 450 })).find((q) => q.id === 'lash-load')!.status).toBe('fail');
   });

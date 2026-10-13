@@ -3,7 +3,7 @@
  * pivots about a kingpin, is in pivot.ts (D-56); the front wheels turn with it.
  */
 import { AXLE_BEAM_POSITION, AXLE_STYLE, axleGrooveDepthIn } from '../params';
-import { axleSourcing, axleStockNote } from './axle-stock';
+import { axleMaterial, axleSourcing, axleStockNote } from './axle-stock';
 import { IN3_PER_FT3, STEP, box, cylinder, span, SIDES, type Ctx } from './build-utils';
 import { translation } from './mat4';
 import { beamSeat, boltLength, inchesText, localPoint, railSection } from './rear-mount';
@@ -71,7 +71,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
       parts.push(cylinder(ctx, {
         id: `axle-${ax.tag}`, name: `${name} axle (through ${p.axleWallIn > 0 ? 'tube' : 'rod'})`, group: 'running-gear',
         center: [ax.x, 0, r], axis: 'y', radius: rodR, wall: p.axleWallIn, length: ax.track + p.hubLengthIn + 2 * p.axleEndExtraIn,
-        mat: 'steel', fab: 'drill-tap', step: STEP.gear, notes: `Dead axle, clamped to the beam (D-10). Sits in a groove in the beam. ${axleStockNote(p)}`,
+        mat: 'steel', ...axleMaterial(p), fab: 'drill-tap', step: STEP.gear, notes: `Dead axle, clamped to the beam (D-10). Sits in a groove in the beam. ${axleStockNote(p)}`,
         sourcing: { vendor: axleSourcing(p, ax.track + p.hubLengthIn + 2 * p.axleEndExtraIn) },
       }));
     } else {
@@ -81,7 +81,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
         parts.push(cylinder(ctx, {
           id: `axle-${ax.tag}${tag}`, partNo: `stub-axle`, name: `${name} ${tag === 'L' ? 'left' : 'right'} stub axle`,
           group: 'running-gear', center: [ax.x, s * (outer - stubLen / 2), r], axis: 'y',
-          radius: rodR, wall: p.axleWallIn, length: stubLen, mat: 'steel', fab: 'drill-tap', step: STEP.gear,
+          radius: rodR, wall: p.axleWallIn, length: stubLen, mat: 'steel', ...axleMaterial(p), fab: 'drill-tap', step: STEP.gear,
           notes: `Embedded ${STUB_EMBED_IN}" into the beam (D-10). ${axleStockNote(p)}`,
           sourcing: { vendor: axleSourcing(p, stubLen) },
         }));
@@ -165,11 +165,11 @@ export function buildRunningGear(ctx: Ctx): Part[] {
         geometry: { type: 'extrusion', outline: profile, depth: w }, transform: m, body: 'chassis', massLb: mass, fab: 'drill-tap', step: STEP.gear,
         explode: unitVec([0, -s, 0.5]), stock: { t: hd.t, w: hd.leg, l: w },
         sourcing: { vendor: `McMaster-Carr (316 stainless angle ${f2(hd.leg)}" × ${f2(hd.leg)}" × ${f2(hd.t)}": cut ${f2(w)}" long on the bandsaw, drill 2 × ${f2(bd + 0.03)}" in the upright leg and 2 × ${f2(bd + 0.03)}" in the flat leg; 4 × 316 hex bolts ${f2(bd)}", nylock nuts, fender washers)` },
-        notes: `Holds the rear axle beam to the axle hanger (D-54, build review r2 MUST-4): the upright leg lies on the hanger's inner face (z ${f2(hd.zBeam)}" to ${f2(hd.zTop)}"), two ${f2(bd)}" bolts through the hanger; the flat leg lies on the beam top (it also keeps the rod in its groove), two ${f2(bd)}" bolts down through the beam either side of the rod. Stays clear of the straddling deck joists (${f2(w)}" wide, centered on the beam). Rebound, side load and the rail's tendency to walk off the beam are carried here; the vertical load bears on the notch ceiling instead.`,
+        notes: `Holds the rear axle beam to the axle hanger (D-54, build review r2 MUST-4): the upright leg lies on the hanger's inner face (z ${f2(hd.zBeam)}" to ${f2(hd.zTop)}"), two ${f2(bd)}" bolts through the hanger and the rail (D-72); the flat leg lies on the beam top (it also keeps the rod in its groove), two ${f2(bd)}" bolts down through the beam either side of the rod. Stays clear of the straddling deck joists (${f2(w)}" wide, centered on the beam). Rebound, side load and the rail's tendency to walk off the beam are carried here; the vertical load bears on the notch ceiling instead.`,
         joints: [],
       };
       part.joints!.push({
-        type: 'bolt', to: `axle-hanger-${tag}`, count: 2, diaIn: bd, size: `${f2(bd)}" × ${inchesText(boltLength(hd.t + rs.t, bd))} 316 hex bolts through the upright leg and the hanger`,
+        type: 'bolt', to: `axle-hanger-${tag}`, count: 2, diaIn: bd, size: `${f2(bd)}" × ${inchesText(boltLength(hd.t + rs.t + rs.railT, bd))} 316 hex bolts through the upright leg, the hanger and the rail, nylock nuts and fender washers on the outside face of the rail (D-72: the same bolt as the hanger bolts)`,
         at: hd.railBolts.map(([x, z]) => localPoint(part.transform, [x, s * (rs.yIn - hd.t / 2), z])),
       });
       part.joints!.push({

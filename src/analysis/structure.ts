@@ -29,9 +29,12 @@ export function allowables(ctx: Ctx) {
     oakPerp: (p.oakCompPerpPsi * p.wetServiceFactorCompPerp) / p.woodSafetyFactor,
     oakDowel: (p.oakDowelBearingPsi * p.wetServiceFactorStrength) / p.woodSafetyFactor,
     plyBend: d.plyDesignMorPsi,
+    /** D-73: the thin sheet (side webs, box, lid): its own design bending stress and E. */
+    thinBend: d.thinPlyDesignMorPsi,
     steel: d.axleAllowablePsi,
     Eoak: d.oakDesignMoePsi,
     Eply: d.plyMoePsi * p.wetServiceFactorStiffness,
+    Ethin: d.thinPlyMoePsi * p.wetServiceFactorStiffness,
   };
 }
 

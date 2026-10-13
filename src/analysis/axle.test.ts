@@ -11,11 +11,12 @@ import { makeContext, type Ctx } from './context';
 import { axleHoleDetails, axleIsTube, axleSection, axleUltimate, axleWall, axleYield, type AxleLoads } from './axle';
 import { circleSection, tubeSection } from './beams';
 import { runChecks } from './index';
-import { PRE_D66 } from '../test-fixtures';
+import { PRE_D66, PRE_D72 } from '../test-fixtures';
 
 // D-66 changed the tracks, the load-height rule and the bow: this file's hand calculations are the D-58 design (PRE_D66); the D-66 numbers are in d66.test.ts
 // (the roll pads sit 12 in out here: the 1.75 in rear/inner clamp plate of D-71 leaves 10.0 to 14.0 in free on the 34 1/2 in front track, and the PRE_D66 pad at 11.5 in would touch the plate)
-const defaults = { ...defaultParams(), ...PRE_D66, rollPadRadiusIn: 12 } as Params;
+// D-71 (Eric chose the solid rod): the DEFAULT axle is now the rod; this file's tube numbers are the D-71 tube design (PRE_D72). The rod defaults are in d72.test.ts.
+const defaults = { ...defaultParams(), ...PRE_D72, ...PRE_D66, rollPadRadiusIn: 12 } as Params;
 const solid = { ...defaults, axleWallIn: 0 } as Params;
 const mkCtx = (q: Partial<Params> = {}): Ctx => {
   const p = resolveParams({ ...defaults, ...q } as Params);

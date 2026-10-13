@@ -25,7 +25,9 @@
 import { HULL_STEP, STEP } from '../model/build-utils';
 import { computeLayout, outerHalfWidth, samples, sideTopAt } from '../model/layout';
 import type { AssemblyStep, Joint, Part } from '../model/types';
-import { bowTaper, type Params } from '../params';
+import { axleGrooveDepthIn, bowTaper, thinSheet, type Params } from '../params';
+import { frac } from '../model/joinery';
+import { screwText } from '../model/rear-mount';
 import { transformPoint } from '../model/bounds';
 import { cutList, type CutList, type ResawPool } from './cutlist';
 import { epoxyTimeFactor, finishAreas, finishingSchedule } from './finishing';
@@ -118,6 +120,21 @@ interface Template {
 
 const f = (n: number, d = 2): string => String(+n.toFixed(d));
 const inch = (n: number, d = 3): string => `${f(n, d)}"`;
+/** The fraction text the shop uses for a stock size ("5/8"). */
+const fr = (n: number): string => `${frac(n)}"`;
+/** "#8 × 1-1/4" from the first screw joint of part `id` whose mate matches `to` (D-72): the steps read the model's own joint text, so they never disagree with it. */
+const screwOf = (c: Pick<StepCtx, 'by'>, id: string, to: RegExp): string => {
+  const j = c.by(id)?.joints?.find((q) => q.type === 'screw' && to.test(q.to) && q.fit);
+  return j?.fit ? screwText(j.fit) : '(see the joint list)';
+};
+/** "#10-32 × 7/8"" of the sign knob screw, read from the model's own joint. */
+const knobText = (c: Pick<StepCtx, 'by'>): string => {
+  const m = /#10-32 × ([\d.]+) in thumb-knob/.exec(c.by('sign-L')?.joints?.find((q) => q.type === 'knob')?.size ?? '');
+  return m ? `#10-32 × ${frac(Number(m[1]))}"` : '#10-32 thumb-knob screws';
+};
+/** The axle stock word: the solid rod of D-71, or the DOM tube of D-60. */
+const axleWord = (p: Params): string => (p.axleWallIn > 0 ? 'tube' : 'rod');
+const axleWhat = (p: Params): string => (p.axleWallIn > 0 ? `${fr(p.axleDiameterIn)} × ${inch(p.axleWallIn, 3)} DOM tube` : `${fr(p.axleDiameterIn)} solid 1045 / CDS steel rod`);
 
 const GLUE_JOINTS: ReadonlySet<string> = new Set(['glue', 'domino', 'mortise-tenon']);
 
@@ -152,6 +169,18 @@ export function jointTally(
 }
 
 const dominoKey = (j: Joint): string => /^\s*(\d+)\s*×\s*(\d+)/.exec(j.size ?? '')?.slice(1, 3).join('×') ?? (j.size ?? '?');
+
+/**
+ * The chine tie Dominos (side chine band to rail): their size ("4×20" with a 0.391 in bearing land, "5×30" with the 0.417 in land of the 1/4 in white oak plywood, D-73) and how many in all.
+ * Read from the chine bands' own joints, so the steps follow the material.
+ */
+function chineTie(parts: Part[]): { key: string; total: number } {
+  const t = new Map<string, number>();
+  for (const x of parts.filter((q) => /^side-[LR]-chine$/.test(q.id)))
+    for (const j of x.joints ?? []) if (j.type === 'domino' && /^rail-/.test(j.to)) t.set(dominoKey(j), (t.get(dominoKey(j)) ?? 0) + j.count);
+  const [key, total] = [...t.entries()].sort((a, b) => b[1] - a[1])[0] ?? ['4×20', 18];
+  return { key, total };
+}
 
 /** "4×20 ×18, 5×30 ×8" */
 function dominoText(c: StepCtx, maxStep = Infinity): string {
@@ -336,7 +365,7 @@ const TEMPLATES: Template[] = [
           `Work through the checklist in the Verify section: ${plural(before.length, 'item')} before ordering, ${plural(cutting.length, 'item')} before cutting.`,
           `Before ordering: ${before.map((v) => v.title).join('; ')}.`,
           `Before cutting: ${cutting.map((v) => v.title).join('; ')}.`,
-          'Buy ONE of the wheel and the tube first; order the lot only when the squash, bore, hub and rating pass. Enter any measured value in its param and re-run the checks.',
+          'Buy ONE wheel first; order the lot only when the squash, bore, hub length and rating pass (and the axle rod comes with a mill cert). Enter any measured value in its param and re-run the checks.',
         ],
         checks: before.map((v) => `${v.id}: ${v.pass}`),
       };
@@ -413,7 +442,7 @@ const TEMPLATES: Template[] = [
       const radius = t.minRadiusIn > 1e6 ? 'n/a' : inch(t.minRadiusIn, 0);
       return {
         instructions: [
-          `Shaper files (shaper-svg): ${shaper.length} parts. 4 mm okoume: ${thin.map((x) => x.id).join(', ')}. 12 mm okoume: ${thick.map((x) => x.id).join(', ')}. Oak: ${oak.map((x) => x.id).join(', ')}.`,
+          `Shaper files (shaper-svg): ${shaper.length} parts. ${thinSheet(c.p).name}: ${thin.map((x) => x.id).join(', ')}. 12 mm okoume: ${thick.map((x) => x.id).join(', ')}. Oak: ${oak.map((x) => x.id).join(', ')}.`,
           web
             ? `Each side web is ONE piece from the full 4' × 8' sheet (D-68). The Shaper file cuts the NET flat development, ${inch(webFlat?.widthIn ?? web.stock!.l, 2)} long (not the plan length); the blank is ${inch(web.stock!.l, 2)} (net + the trim allowance), so nest the blank per the nesting drawing and cut net from the file. The seat back comes from the deck offcut.`
             : 'Side webs: one piece each from the full 4\' × 8\' sheet.',
@@ -467,14 +496,15 @@ const TEMPLATES: Template[] = [
     build: (c) => {
       const rail = c.mine[0];
       const dom = jointTally(c.parts, new Set(c.mine.map((x) => x.id)), 'domino', dominoKey, HULL_STEP.sides);
-      const chine = [...dom.entries()].filter(([k]) => k === '4×20').reduce((s, [, n]) => s + n, 0);
+      const tie = chineTie(c.parts);
+      const chine = dom.has(tie.key) ? tie.total : 0;
       const clamps = c.forms().find((d) => d.id === 'rail-form')?.dims.find((q) => q.key === 'clamps')?.valueIn;
       return {
         instructions: [
           `Glue ${plural(rail?.plies ?? 2, 'strip')} per rail (${sizeOf(rail)} each), epoxy lightly thickened (406), on the rail form with wax paper; ${c.mine.length} rails, one cure each unless there are two forms.`,
           `Clamp at every station (${clamps !== undefined ? f(clamps, 0) : 'about 15'} clamps per rail, rail-form drawing); only the last 29" is curved.`,
           'After cure: plane the edges flush, leave the rail 1/2" LONG at both ends (trimmed at the dry fit, S1), cut the 45° step and the beam / hanger notches. Do NOT cut the end mortises yet: they are cut after the trim.',
-          `Mortise the rail tops: Dominos ${dominoText(c, HULL_STEP.sides) || '4×20 / 5×30'}${chine ? ` (the ${chine} 4×20 are the chine ties, every 6")` : ''}.`,
+          `Mortise the rail tops: Dominos ${dominoText(c, HULL_STEP.sides) || '4×20 / 5×30'}${chine ? ` (the ${chine} ${tie.key} are the chine ties, every 6")` : ''}.`,
         ],
         checks: ['Rails match the rail form within 1/16"', 'No gaps in the glue lines; rails flat and not twisted'],
       };
@@ -554,7 +584,7 @@ const TEMPLATES: Template[] = [
           `Per side: glue the inner chine band (${sizeOf(inn)}) and inner gunwale band (${sizeOf(gun)}) full-face to the inside of the ${inch(web?.stock?.t ?? 0.157)} web with thickened epoxy, and bend web + bands together over the S-ramp. No grooves.`,
           'The inner chine band stops 0.512" short of the web bottom (deck + clearance): that gap is the deck rabbet, nothing is routed. Use a spacer stick.',
           'Cleat the sheer line (screws into a sacrificial table every 4-5", the whole length): an edge-bent strip pushes about 65 lbf sideways at mid-span per band until the epoxy cures.',
-          `Sign backers: ${c.mine.filter((x) => /^sign-backer/.test(x.id)).length} oak strips (${sizeOf(backer)}, grain vertical) epoxied inside the web, 0.15" under the inner gunwale band, with two #10-32 × 3/8 inserts each, 1.6" apart. Keep the signs clear of the flag blocks (x ≥ -8.2").`,
+          `Sign backers: ${c.mine.filter((x) => /^sign-backer/.test(x.id)).length} oak strips (${sizeOf(backer)}, grain vertical) epoxied inside the web, 0.15" under the inner gunwale band, with two #10-32 × 5/16 inserts each, 1.6" apart. Keep the signs clear of the flag blocks (x ≥ -8.2").`,
           'Left and right in turn on the same S-ramp: two cures per side, four in all (a second ramp halves the time).',
         ],
         checks: ['Sheer line follows the web pattern', 'Bands fully bonded, no lift at the bow bend (tap test)', 'Bend-test strip behaved on the rail form'],
@@ -576,8 +606,7 @@ const TEMPLATES: Template[] = [
       const gun = c.by('side-L-gunwale');
       const web = c.by('side-L-web');
       const scup = c.mine.filter((x) => /^scupper/.test(x.id));
-      const ties = jointTally(c.parts, new Set(c.mine.filter((x) => /^side-[LR]-chine$/.test(x.id)).map((x) => x.id)), 'domino', dominoKey);
-      const [tieKey, tieTotal] = [...ties.entries()].sort((a, b) => b[1] - a[1])[0] ?? ['4×20', 18];
+      const { key: tieKey, total: tieTotal } = chineTie(c.parts);
       const perSide = Math.round(tieTotal / 2);
       return {
         instructions: [
@@ -627,15 +656,14 @@ const TEMPLATES: Template[] = [
     hardener: '206',
     clamp: 'Clamp the chine bands to the rails between the Dominos; #6 screws up through the rails (piloted).',
     build: (c) => {
-      const all = new Set(c.parts.map((x) => x.id));
-      const dom = jointTally(c.parts, all, 'domino', (j) => (/^4×20/.test(j.size ?? '') ? '4×20' : '')) .get('4×20') ?? 18;
+      const { key: tieKey, total: dom } = chineTie(c.parts);
       // Rail-to-chine screws (#6, per rail-depth zone) straight from the rail's own screw joints.
       const railScrews = new Map<string, number>();
       for (const r of c.parts.filter((x) => /^rail-[LR]$/.test(x.id))) for (const j of r.joints ?? []) if (j.type === 'screw' && /chine/.test(j.to)) railScrews.set((j.size ?? '').split(/[,;(]/)[0].trim(), (railScrews.get((j.size ?? '').split(/[,;(]/)[0].trim()) ?? 0) + j.count);
       const screwText = [...railScrews.entries()].map(([sz, n]) => `${n} × ${sz}`).join(' + ');
       return {
         instructions: [
-          `Bed the 3/8" bearing face of each rail in epoxy; fit the ${dom} Dominos (4×20, every 6", ${f(dom / 2, 0)} per side) in the rail-top mortises, then lower the unit vertically (two people).`,
+          `Bed the ${fr((c.by('side-L-chine')?.stock?.t ?? 0.234) + (c.by('side-L-web')?.stock?.t ?? 0.157))} bearing face (outer band + web edge) of each rail in epoxy; fit the ${dom} Dominos (${tieKey}, every 6", ${f(dom / 2, 0)} per side) in the rail-top mortises, then lower the unit vertically (two people).`,
           'Fill the deck slot at each web with thickened epoxy; the deck edge rises 0.17" under the inner chine band.',
           `Screws up through the rails into the chine band BETWEEN the Dominos (never on one; it would hit the mortise), piloted: ${screwText || 'per the joint list'}. Wipe squeeze-out inside the dados before it kicks.`,
           'One batch per side so the mix never outlives its pot life.',
@@ -707,9 +735,9 @@ const TEMPLATES: Template[] = [
       const bolts = count(c, 'bolt');
       return {
         instructions: [
-          `Cut the axle groove ${inch(c.p.axleDiameterIn - c.p.axleProudIn, 2)} deep so the ${inch(c.p.axleDiameterIn, 2)} tube stands ${inch(c.p.axleProudIn, 2)} proud and the clamp plate bears on the tube.`,
-          `Beam passes under the rail and bears on the notch ceiling; bolt the hold-down angles (two 1/4" bolts through the upright leg and the hanger, two 1/4" × 3 down through the flat leg and the beam, either side of the tube). The beam and angles stay on for finishing; mask the bolt heads.`,
-          `FIT AND DRILL, then take off: lay the ${inch(c.p.axleDiameterIn, 2)} × ${inch(c.p.axleWallIn, 3)} DOM tube in the groove (cotter cross holes ${inch(c.p.axleCrossHoleDiaIn, 3)} near each end), clamp the 316 plates (2.25" × 1.5" × 0.25") and drill the two 0.38" bolt holes per plate, 1.5" apart. Dry-assemble, check, then remove the axle and plates; they hang after the varnish.`,
+          `Cut the axle groove ${inch(axleGrooveDepthIn(c.p), 3)} deep so the ${fr(c.p.axleDiameterIn)} ${axleWord(c.p)} stands ${inch(c.p.axleProudIn, 2)} proud and the clamp plate bears on the ${axleWord(c.p)}.`,
+          `Beam passes under the rail and bears on the notch ceiling; bolt the hold-down angles (two 1/4" × 2-1/4 bolts through the upright leg, the hanger and the rail, nut and washer on the outside face; two 1/4" × 3 down through the flat leg and the beam, either side of the ${axleWord(c.p)}). The beam and angles stay on for finishing; mask the bolt heads.`,
+          `FIT AND DRILL, then take off: lay the ${axleWhat(c.p)} in the groove (cotter cross holes ${inch(c.p.axleCrossHoleDiaIn, 3)} near each end), clamp the 316 plates (2.25" × 1.5" × 0.25") and drill the two 0.38" bolt holes per plate, 1.5" apart. Dry-assemble, check, then remove the axle and plates; they hang after the varnish.`,
           'Tag every axle, plate and bolt (rear L / R) with tape so the kit goes back where it was drilled. Plates take nylock nuts and fender washers under the beam; shim the plate ends with tape on the first tightening; snug plus a quarter turn; recheck the nuts before each event (oak creeps).',
           `${plural(bolts, 'bolt')} in this step's holes, all 316.`,
         ],
@@ -729,7 +757,7 @@ const TEMPLATES: Template[] = [
       instructions: [
         'UHMW thrust disc to the king beam: three #8 flat-head screws, counterbored from the disc side.',
         `Kingpin: ${inch(c.p.kingpinDiaIn, 3)} grade 8 bolt, head and plate washer under the axle beam, up through beam, disc and king beam; nylock nut and washer in the slot at the top of the king beam: snug, then back off a quarter turn so the axle swings freely. The beam, disc and kingpin stay on for finishing (mask the head and the slot).`,
-        'FIT AND DRILL, then take off: stub axles in their grooves (cut the groove 0.70" deep, 0.05" proud), two clamp plates per end, same bolts as the rear (grip 2.5"); roll pads (2" × 3" × 1/4" UHMW) beside the stub grooves, shimmed 0.05" off the beam, running gap under the rail about 0.1" (0.03"-1/8") with tape. Drill every hole, dry-assemble, check the lock, remove.',
+        `FIT AND DRILL, then take off: stub axles in their grooves (cut the groove ${inch(axleGrooveDepthIn(c.p), 3)} deep, ${inch(c.p.axleProudIn, 2)} proud), two clamp plates per end, same bolts as the rear (grip 2.5"); roll pads (2" × 3" × 1/4" UHMW) beside the stub grooves, shimmed ${inch(c.p.axleProudIn, 2)} off the beam, running gap under the rail about 0.1" (0.03"-1/8") with tape. Drill every hole, dry-assemble, check the lock, remove.`,
         'Eye bolts (3/8" forged shoulder) fore-aft through the beam 8" from the kingpin, and the anchors through the chain joist 7.8" off the center line: drill all four holes now (hull inverted, the underside is up); nylock nuts and 2" washers go on at the hang step.',
         'Tag the stubs, plates, pads, eye bolts and bolts (front L / R) and bag them with the rear kit.',
       ],
@@ -779,7 +807,7 @@ const TEMPLATES: Template[] = [
       const pilots = stopBlockPilots(c.parts, c.p);
       return {
         instructions: [
-          `${plural(wheels.length, 'wheel')} on the axles: ${inch(c.p.wheelBoreIn, 2)} bore on the ${inch(c.p.axleDiameterIn, 2)} tube, sealed bearings; collar and cotter pin 1" beyond the hub.`,
+          `${plural(wheels.length, 'wheel')} on the axles: ${fr(c.p.wheelBoreIn)} bore on the ${fr(c.p.axleDiameterIn)} ${axleWord(c.p)}, sealed bearings; collar and cotter pin 1" beyond the hub.`,
           `Check track: ${f(c.p.frontTrackIn, 1)}" front, ${f(c.p.rearTrackIn, 1)}" rear; inflate to the squash-test pressure (verify item 1). Spin each wheel: no rub on the beam end, clamp plate or brake knee (measure the knee-to-tire margin now, wheels on, knees cured); no end float beyond 1/16".`,
           pilots
             ? `Hull still inverted: drill the ${plural(pilots.total, 'stop-block screw pilot')} through the deck now and countersink them on the underside for the ${pilots.screw} flat-heads (${pilots.perBlock} a block, in line across the sled). Measure from the transom's outer face: ${andList(pilots.xs)} forward, ${andList(pilots.offCenter)} off the centerline, left and right. The blocks are screwed on from the underside later, with the sled on its side.`
@@ -867,7 +895,7 @@ const TEMPLATES: Template[] = [
     clamp: 'Tape-and-fold: outside seams taped, then fillets; clamp the coaming with cauls.',
     build: () => ({
       instructions: [
-        'Bevel the 4 mm wall edges at 45° on the table saw, tape the outside seams, fold, then a 3/8" epoxy fillet and 2" glass tape inside each corner (no spline).',
+        'Bevel the thin-ply wall edges at 45° on the table saw, tape the outside seams, fold, then a 3/8" epoxy fillet and 2" glass tape inside each corner (no spline).',
         'Wall bottoms stand on the sealed deck (the deck is the floor): fillet inside, bead outside, so no ply edge is exposed.',
         'Oak coaming (3/8" × 1/2") epoxied to the wall tops with butt corners; round the inboard top edge 1/8". The gasket and lid sit on oak, never on a ply edge.',
         '1" hinge backers epoxied inside the fore end; 3/8" latch blocks (grain vertical) epoxied to the inside of the transom.',
@@ -888,10 +916,10 @@ const TEMPLATES: Template[] = [
     clamp: 'Panel captured in the frame rabbet; frame clamped square while the corners set.',
     build: (c) => ({
       instructions: [
-        'Oak lid frame: 3/8" × 3/4" × 1/2" deep blind loose tenons at the four corners; the 4 mm panel sits in a 1/4" × 1/4" rabbet (epoxy-sealed).',
+        'Oak lid frame: 3/8" × 3/4" × 1/2" deep blind loose tenons at the four corners; the thin-ply lid panel sits in a 1/4" × 1/4" rabbet (epoxy-sealed).',
         `${plural(c.mine.filter((x) => /batten/.test(x.id)).length, 'batten')} let 1/4" into the frame sides, epoxy plus 4 plugged stainless screws each from the top, to keep the panel from sagging.`,
         'The lid is engraved DO NOT STEP in the finishing schedule (step 5), before the varnish. It is a seat-cushion lid, not a step (D-58).',
-        'Fit the lid to the box, set the hinge leaves on it and drill the pilot holes (#8 × 1/2 into the rim, #8 × 1 into the backers), then take them off: the hinges hang after the varnish, and the gasket goes in at the final fit.',
+        `Fit the lid to the box, set the hinge leaves on it and drill the pilot holes (${screwOf(c, 'storage-hinge-L', /rim-end-fore/)} into the lid frame, ${screwOf(c, 'storage-hinge-L', /hinge-backer/)} through the end panel into the backers), then take them off: the hinges hang after the varnish, and the gasket goes in at the final fit.`,
       ],
       checks: ['Lid flat and square; sits on the coaming with no rocking', 'Panel flush with the frame'],
     }),
@@ -934,7 +962,7 @@ const TEMPLATES: Template[] = [
           `Back panel ${sizeOf(panel)} okoume: 2.5" radius top corners, 1/16" oak veneer banding round the edge (flush trim), epoxy-sealed. No ply edge shows.`,
           `Inserts: 3 × #10-32 × 5/16 stainless, hex-drive, epoxied in blind holes 0.344" deep from the front face (drill stop), 1/2" or more from every edge, per hinge. Pull-test one on a scrap first (the Verify item on the seat back).`,
           'Pin holes: 13/32" clearance, bored square at stations ±7.38", 2.00" up from the hinge axis, epoxy-lined.',
-          '2" 316 butt hinges: FIT AND DRILL now, hang later (hang step). #10-32 × 3/8 screws to the inserts on the back; #8 × 1-1/4 through the deck into the 1" backer pads. The flat-latch pin hole is 3/8" blind, 0.625" deep in the pad, 1/16" groove 0.256" below the deck.',
+          `2" 316 butt hinges: FIT AND DRILL now, hang later (hang step). #10-32 × 3/8 screws to the inserts on the back; ${screwOf(c, 'seat-hinge-L', /hinge-backer/)} through the deck into the 1" backer pads. The flat-latch pin hole is 3/8" blind, 0.625" deep in the pad, 1/16" groove 0.256" below the deck.`,
           'Spring-detent pins, lanyards and the cushions (on Dual Lock, the seat cushion set back 3/8" from the back so the hinge knuckles clear) are dry-fitted here and hang with the hinges after the varnish.',
         ],
         checks: ['Back flips 105° and lies flat; both latches engage in both positions', 'Pin head clears the cushion', 'Seat back does not rock against the crest strip'],
@@ -953,11 +981,11 @@ const TEMPLATES: Template[] = [
     tools: ['Shaper Origin', 'bandsaw', 'drill press', 'router (1/4" roundover)', 'contact cement'],
     hardener: '206',
     clamp: 'Shoe and pivot block clamped to the flap while the epoxy sets; contact cement per the can.',
-    build: () => ({
+    build: (c) => ({
       instructions: [
         'Flap (7/8" oak, Shaper-cut from the file): 1/4" roundover on all edges; epoxy-seal before the finish.',
-        'Pivot block (2.01" × 1.25" × 0.63") on the tongue: epoxy and 3 × #10 × 1-1/4" flat-head screws. Then drill the 0.38" pin hole across block and tongue together with the knee clamped on (seal the bore in the knee ears with a brush of epoxy); fit the clevis pin in double shear and the hitch-pin clip.',
-        'Shoe (bandsawn from 3" stock; top follows the 6° flap underside, bottom cut to the 5.38" tire radius): epoxy and 2 × #10 × 2" screws up into the flap. Pad (3" × 3" × 0.38" rubber): contact cement and 2 × #8 × 1" flat-head screws buried 1/8". Foot tread 4" × 2.5" ribbed rubber, contact cement.',
+        `Pivot block (2.01" × 1.25" × 0.63") on the tongue: epoxy and 3 × ${screwOf(c, 'brake-pivot-block-L', /brake-flap/)}" flat-head screws. Then drill the 0.38" pin hole across block and tongue together with the knee clamped on (seal the bore in the knee ears with a brush of epoxy); fit the clevis pin in double shear and the hitch-pin clip.`,
+        `Shoe (bandsawn from 3" stock; top follows the 6° flap underside, bottom cut to the 5.38" tire radius): epoxy and 2 × ${screwOf(c, 'brake-shoe-L', /brake-flap/)}" screws up into the flap (D-72: all the brake's wood screws are the one size). Pad (3" × 3" × 0.38" rubber): contact cement and 2 × ${screwOf(c, 'brake-pad-L', /brake-shoe/)}" flat-head screws buried 1/8", 1/2" off the shoe screws. Foot tread 4" × 2.5" ribbed rubber, contact cement.`,
         'Return cord: 1/4" shock cord with the 3/16" stop cord tied taut at the released length (8.99" between the eyes), snap hook to the transom eye (backer behind it); #10 screw eye in the flap rear end face.',
         'Chocks: oak wedge, ramp 28° tangent to the tire, two stainless screw heads left proud in the base; 30" cord to the eye screw in the knee underside.',
         'Removable (D-65): pull the pin (clip off first), unhook the cord, lift the flap off: about 15 s a side. For finishing, the pin, clip, cord, snap hook, pad and tread rubber are dry-fitted here and kept off; the flap kit is varnished on the bench and rehung in the hang step.',
@@ -997,7 +1025,7 @@ const TEMPLATES: Template[] = [
     view: 'iso',
     tools: ['table saw', 'spring clamps', 'epoxy pumps'],
     hardener: '206',
-    clamp: 'Spring clamps or tape; no screws into the 4 mm web.',
+    clamp: 'Spring clamps or tape; no screws into the thin web.',
     build: (c) => ({
       instructions: [
         `${plural(c.mine.filter((x) => /^doubler/.test(x.id)).length, 'doubler')} (1" oak, 2" × 1.5", cut square to the gunwale slope at each station) epoxied to the inboard face of the inner gunwale band; the lash plates screw into them later.`,
@@ -1045,7 +1073,7 @@ const TEMPLATES: Template[] = [
           `Wait until the varnish has cured (hard enough to bolt against; 7 days before loads). Running gear from the tagged kit: rear and front axles in their grooves, ${plural(n(/^clamp-/), 'clamp plate')} with their nylock nuts and fender washers (snug plus a quarter turn), ${plural(n(/^wheel-/), 'wheel')} with collars and cotter pins 1" beyond the hub, roll pads shimmed 0.05" off the beam.`,
           'Support: the clamp-plate, eye-bolt and anchor nuts go on under the beams and joists, which the sled standing on its blocks does not give you. Either roll it onto its side on a padded blanket (two people, one side at a time), or flip it onto padded horses (four people, the same lift as the first flip), do the underside, and flip it back onto the wheels.',
           `Steering: ${plural(n(/^steer-eye/), 'eye bolt')} and ${plural(n(/^steer-anchor/), 'anchor')} with nylock nuts and 2" washers; check chains (8.89" between rings; with the axle straight each hangs 2.68" slack and takes up at the lock); the bridle rope through the sleeve, once round the tongue tip, bowline round the standing part, whip the end.`,
-          'Hinges and pins: the seat hinges (#10-32 × 3/8 to the inserts, #8 × 1-1/4 through the deck into the backer pads), the storage-lid hinges (#8 × 1/2 into the rim, #8 × 1 into the backers), detent pins on lanyards; cushions on Dual Lock.',
+          `Hinges and pins: the seat hinges (#10-32 × 3/8 to the inserts, ${screwOf(c, 'seat-hinge-L', /hinge-backer/)} through the deck into the backer pads), the storage-lid hinges (${screwOf(c, 'storage-hinge-L', /rim-end-fore/)} into the lid frame, ${screwOf(c, 'storage-hinge-L', /hinge-backer/)} into the backers), detent pins on lanyards; cushions on Dual Lock.`,
           `Handle: ${plural(n(/^handle-socket/), 'socket')} bedded in sealant on the transom, ${socketScrewText(c.parts)} per socket, into the T-nuts with nylon washers (the screw tips must stop short of the box aft wall: check with a dry screw); then the finished U and its clevis pins.`,
           'Brake flaps: the flap kits on the knees with the pivot pin in double shear and the hitch-pin clip, return cord and snap hook to the transom eye, pad and foot tread rubber on contact cement, chock cords to the eye screws.',
           'Recheck the nuts before each event (oak creeps under the plates).',
@@ -1069,9 +1097,9 @@ const TEMPLATES: Template[] = [
       return {
         instructions: [
           `Grab boards (${plural(kinds(/^seat-grip-[LR]$/), 'board')}, 0.625" oak): 6 × 1/4" button-head cap screws each through board, inner band, web, outer band and the 1/16" 316 backing strip (bedded on the outside); clamp the board on and drill all layers with one bit. Nut and 1-1/4" fender washer inside. Bolted, never glued.`,
-          `Signs (${plural(kinds(/^sign-[LR]$/), 'sign')}): 4 thumb-knob screws (#10-32 × 7/8") through the 3/16" holes, the 0.296" standoff discs (epoxied to the sign back) and the web into the inserts.`,
+          `Signs (${plural(kinds(/^sign-[LR]$/), 'sign')}): 4 thumb-knob screws (${knobText(c)}) through the 3/16" holes, the 0.296" standoff discs (epoxied to the sign back) and the web into the inserts.`,
           'Storage: gaskets (continuous EPDM bulb, spliced at one corner), lid stay, draw latches on the transom blocks, catch plates, aft drain nipples epoxied in. The lid hinges hung in the previous step.',
-          `Lash plates (${plural(kinds(/^lash-/), 'plate')}): 4 × #10 × 1-1/4" stainless into each doubler. Flag tube between the blocks, 3/16" drain hole just above the deck.`,
+          `Lash plates (${plural(kinds(/^lash-/), 'plate')}): 4 × ${screwOf(c, 'lash-L1', /doubler-lash/)}" stainless into each doubler. Flag tube between the blocks, 3/16" drain hole just above the deck.`,
           'Lamp clips snap into the bulkhead and transom hand-holds; heat-set M4 / M3 inserts; reflectors on the gunwale outer face (wipe clean, press 60 s).',
           'Pooled fasteners (hardware): count against the BOM; every fastener 316 stainless.',
         ],

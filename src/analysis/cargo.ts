@@ -76,7 +76,7 @@ export function seatStowCheck(ctx: Ctx): AnalysisCheck {
   const bed = cargoBed(p, L);
   const how = `D-57: the seat BACK never goes in the box. It flips forward about its hinge onto the deck (rotated ${f(90 + p.seatBackAngleDeg, 0)}° about the stile feet) and lies flat from x = ${f(plan.flat.x0, 1)}" to ${f(plan.flat.x1, 1)}" (${f(plan.flat.zTop - L.deckTop, 2)}" proud of the deck, ${f(bed.xStop - plan.flat.x1, 1)}" short of the foot brace), held by the same two quick-release pins. `
     + `Only the two cushions lie in the box, measured from the real parts: the seat cushion ${f(s.cushion[0], 2)}" × ${f(s.cushion[1], 2)}" × ${f(s.cushion[2], 2)}" on the floor flush to the aft wall, the back pad ${f(s.pad[0], 2)}" × ${f(s.pad[1], 2)}" × ${f(s.pad[2], 2)}" on it, face up. `
-    + `Interior ${f(avail.l, 2)}" long × ${f(avail.w, 2)}" wide (inside the ${Math.round(p.panelPlyIn * 25.4)} mm walls); the lowest piece rides on the 3/8" corner fillets, so the stack starts ${f(i.zRest - i.zFloor, 3)}" off the floor and has ${f(avail.h, 2)}" up to the underside of the lid frame and battens. `
+    + `Interior ${f(avail.l, 2)}" long × ${f(avail.w, 2)}" wide (inside the ${Math.round(ctx.d.thinPlyIn * 25.4)} mm walls); the lowest piece rides on the 3/8" corner fillets, so the stack starts ${f(i.zRest - i.zFloor, 3)}" off the floor and has ${f(avail.h, 2)}" up to the underside of the lid frame and battens. `
     + `Needs ${f(need.lengthIn, 2)}" fore-aft (incl. ${f(p.seatStowClearIn, 2)}" clearance), ${f(need.widthIn, 2)}" across, ${f(need.heightIn, 2)}" high: margins ${f(margin.lengthIn, 2)}", ${f(margin.widthIn, 2)}", ${f(margin.heightIn, 2)}" (marginal under ${STOW_MARGINAL_IN}"). `
     + `The cushions take ${f(plan.cushionsIn3, 0)} in³; the box interior under the lid frame has ${f(plan.freeIn3, 0)} in³ left, and the 10 Essentials need about ${f(essIn3, 0)} in³ (rigid items plus the soft goods at their packed volume, storage-pack row)${plan.freeIn3 >= essIn3 ? ': both fit together' : ': they do NOT both fit; carry the Essentials in a pack on the bed, or raise storageVolumeIn3'}. `
     + (gearKit.length
@@ -188,7 +188,7 @@ export function lidLoads(ctx: Ctx, loadLb: number) {
   const flange = Math.min(bayIn, 12 * plyT);
   const tr = transformedSection([
     { b: bIn, z0: 0, z1: hIn, E: al.Eoak, kind: 'oak' },
-    { b: flange, z0: hIn, z1: hIn + plyT, E: al.Eply, kind: 'ply' },
+    { b: flange, z0: hIn, z1: hIn + plyT, E: al.Ethin, kind: 'ply' },
   ], al.Eoak);
   const M = (P * spanIn) / 4;
   const cOak = Math.max(...tr.layers.filter((q) => q.kind === 'oak').map((q) => q.cMax));
@@ -206,7 +206,7 @@ export function lidLoadCheck(ctx: Ctx): AnalysisCheck {
   if (!k) return cargoOnlyCheck({ id: 'lid-load', label: 'Storage lid carries a light item', group: 'Structure', value: 0, unit: 'lb', limit: 0, sense: '>=', info: true, how: 'No lid panel in this design.', refs: ['D-53'] });
   const ds: Detail[] = [
     detail('batten bending (oak, bottom fiber of the T section)', k.sOak, 'psi', k.al.oakBend, '<='),
-    detail('ply panel flange bending (top fiber)', k.sPly, 'psi', k.al.plyBend, '<='),
+    detail('ply panel flange bending (top fiber)', k.sPly, 'psi', k.al.thinBend, '<='),
     detail('batten deflection (static)', k.defl, 'in', k.lim, '<='),
   ];
   const util = Math.max(...ds.map((d) => d.util));
@@ -214,7 +214,7 @@ export function lidLoadCheck(ctx: Ctx): AnalysisCheck {
   return cargoOnlyCheck({
     id: 'lid-load', label: 'Storage lid carries a light item (capacity vs the rated load)', group: 'Structure', value: capacity, unit: 'lb', limit: rated, sense: '>=', details: ds, refs: ['D-53', 'D-41'],
     how: `A ${f(rated, 0)} lb item (a light cooler or a duffel; param cargoLidLoadLb) × dynamic ${f(k.g, 1)} on a ${p.cargoPatchAlongIn}" × ${p.cargoPatchAcrossIn}" footprint at the middle of the lid. ${k.bat} oak battens (${f(k.bIn, 2)}" × ${f(k.hIn, 2)}") run across the ${f(k.spanIn, 1)}" clear span between the lid-frame sides, ${f(k.bayIn, 1)}" apart; ${k.under} of them are under the footprint and take it equally (the panel and the frame ends share too, not counted): ${f(k.P)} lbf each at the middle, M = PL/4 = ${f(k.M)} lb·in. `
-      + `Each batten acts as a T beam with the ${f(k.plyT * 25.4, 1)} mm ply as its ${f(k.flange, 1)}" flange (transformed section, NA ${f(k.zNa, 3)}" above the batten bottom, I = ${f(k.I, 4)} in⁴): oak σ = ${f(k.sOak, 0)} psi (≤ ${f(k.al.oakBend, 0)}), ply σ = ${f(k.sPly, 0)} psi (≤ ${f(k.al.plyBend, 0)}), static δ = ${k.defl.toFixed(3)}" (≤ ${k.lim.toFixed(3)}"). The loads scale linearly, so the lid carries up to ${Number.isFinite(capacity) ? f(capacity, 0) : '∞'} lb of such an item. Heavy items (jugs, a full cooler) go on the floor of the bed, not on the lid.`,
+      + `Each batten acts as a T beam with the ${f(k.plyT * 25.4, 1)} mm ply as its ${f(k.flange, 1)}" flange (transformed section, NA ${f(k.zNa, 3)}" above the batten bottom, I = ${f(k.I, 4)} in⁴): oak σ = ${f(k.sOak, 0)} psi (≤ ${f(k.al.oakBend, 0)}), ply σ = ${f(k.sPly, 0)} psi (≤ ${f(k.al.thinBend, 0)}), static δ = ${k.defl.toFixed(3)}" (≤ ${k.lim.toFixed(3)}"). The loads scale linearly, so the lid carries up to ${Number.isFinite(capacity) ? f(capacity, 0) : '∞'} lb of such an item. Heavy items (jugs, a full cooler) go on the floor of the bed, not on the lid.`,
   });
 }
 

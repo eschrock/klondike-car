@@ -16,6 +16,7 @@ import { SHOULDER_CLEAR_IN, WITHDRAWAL_WET_CM, dot2, flapHalfWidth, momentY, nor
 import { SIGN_X_MAX_IN } from '../model/body';
 import { makeCtx } from '../model/build-utils';
 import { handleGeometry, POST_RELIEF, SOCKET_ACCESS_HOLE_IN, type HandleGeom } from '../model/handle';
+import { SCREW_DIA_IN } from '../model/rear-mount';
 import type { Part } from '../model/types';
 import type { Ctx } from './context';
 import { dualCheck, singleCheck, detail, governing, type CaseEval } from './dual';
@@ -61,6 +62,8 @@ function allow(ctx: Ctx) {
 }
 
 /** NDS withdrawal of one wood screw of diameter D with `pen` inches of thread in the oak (lbf, wet service): 1380 G² D pen C_M. */
+/** The standard #8 x 1-1/4 wood screw of the brake (D-72). */
+const BRAKE_SCREW_LEN_IN = 1.25;
 const screwWithdrawal = (p: Ctx['p'], D: number, pen: number) => 1380 * p.oakSpecificGravity ** 2 * D * Math.max(0, pen) * WITHDRAWAL_WET_CM;
 
 // ── load chain ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -271,7 +274,7 @@ function flapEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
   const press = L.nFlap / padArea;
   const fric = L.mu * L.nFlap;
   const screwLat = p.woodScrewLateralLbf;
-  const padScrewLat = screwLat * (0.164 / 0.19); // #8 against the #10 value
+  const padScrewLat = screwLat * (0.164 / 0.19); // #8 against the #10 value (D-72: the shoe, pad and pivot-block screws are all the standard #8 x 1-1/4)
   // D-65: the Shaper-cut fender narrows to a tongue at the pivot. The moment is the pin's transverse reaction times the station s (zero at the pin, the pad's M at s_C), the section the
   // flap alone (the glued block is not counted) at the width of the outline there: find the weakest station between the pin and the pad.
   const Tpin = Math.abs(dot2([-L.Rk[0], -L.Rk[1]], g.v));
@@ -288,7 +291,7 @@ function flapEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
     detail('flap shear between the pad and the foot (oak)', tau, 'psi', al.oakShear, '<='),
     detail('flap deflection at the foot (the overhang past the pad) against the foot stroke', defl, 'in', g.footDrop, '<='),
     detail('pad contact pressure (rubber on the tread)', press, 'psi', p.brakeLiningMaxPsi, '<='),
-    detail('shoe block screws, pad friction in lateral shear (2 x #10, each)', fric / 2, 'lbf', screwLat, '<='),
+    detail('shoe block screws, pad friction in lateral shear (2 x #8, each)', fric / 2, 'lbf', padScrewLat, '<='),
     detail('pad screws, pad friction in lateral shear (2 x #8, each)', fric / 2, 'lbf', padScrewLat, '<='),
   ];
   const how = `${loadText(L, g)}. Oak flap ${f(b.w, 2)}" × ${f(b.thick, 2)}" (full width): the foot (${f(tF)} lbf across the board) acts ${f(sF - sC, 1)}" past the pad, the bungee lifts back ${f(Math.abs(tB), 1)} lbf, so M at the pad = ${f(Mpad)} lbf·in (+ friction ${f(axial)} lbf × ${f(ecc, 2)}" off the center line), S = ${f(S, 3)} in³, σ = ${f(sig, 0)} psi (design ${f(al.oakBend, 0)}); τ = 1.5 V / A = ${f(tau, 0)} psi; foot-end deflection ${f(defl, 3)}" as a ${f(lo, 1)}" overhang (EI ${f(EI, 0)} lbf·in²). Tapered fender (D-65): ${f(g.plan.wTongue, 2)}" tongue at the pivot, S-curved flare to the full width by ${f(g.plan.sFull, 1)}" from the pin; the weakest station (the flap alone, M = pin reaction ${f(Tpin)} lbf × s over S = w(s) t²/6) is ${f(sAt, 1)}" from the pin at ${f(sigTaper, 0)} psi; shear in the tongue ${f(tauTongue, 0)} psi. Pad ${f(g.pad.length, 1)}" × ${f(g.pad.w, 1)}" = ${f(padArea, 1)} in²: ${f(press, 1)} psi (limit ${f(p.brakeLiningMaxPsi, 0)}). The pad friction μN = ${f(fric)} lbf is held by two #10 screws up through the shoe block into the flap (glued too) and two #8 screws through the pad.`;
@@ -325,8 +328,8 @@ function pivotEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
   const endD = p.brakePivotEndIn;
   // The pivot block takes its share of the pin's load (by thickness) and passes it into the flap through its screws (glue ignored): it pulls up when the pin pushes the flap down.
   const nBS = Math.max(1, Math.round(p.brakePivotBlockScrews));
-  const penBS = 1.25 - pl.blockT - 0.1;
-  const wBS = screwWithdrawal(p, 0.19, penBS);
+  const penBS = BRAKE_SCREW_LEN_IN - pl.blockT - 0.1; // the #8 x 1-1/4 block screw (D-72), less 0.1 in of lead at the tip
+  const wBS = screwWithdrawal(p, SCREW_DIA_IN[8], penBS);
   const shareBlock = (pl.blockT / (b.thick + pl.blockT)) * R;
   // D-66: the slot is sawn through the arm, so the outboard ear is a free-standing oak plate (earOut thick, armT deep at its outer face) that hangs from the bridge ahead of the slot end:
   // the whole pin reaction Ro (taken in any direction, so the larger of its two components is not assumed) acts `slotEndX - pin x` from the root.

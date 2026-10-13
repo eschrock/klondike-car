@@ -111,6 +111,20 @@ export interface Joint {
   note?: string;
   /** Fastener shank diameter (in), for bolts / screws / inserts, so the analysis reads real fasteners (D-33). */
   diaIn?: number;
+  /** Wood screws (D-72): the standard screw picked for the stack, so a test can hold every screw to its bite and its poke-through limit. */
+  fit?: ScrewFit;
+}
+
+/**
+ * A wood screw against the stack it crosses (D-72). `gripIn` is what the screw passes through before the member it bites (leaves, plies, plates, a counterbore leaves less);
+ * `receivingIn` is the thickness of the member the tip lands in (glued layers count together); `minBiteIn` is the engagement the joint needs. The bite is `lenIn - gripIn`.
+ */
+export interface ScrewFit {
+  gauge: 6 | 8 | 10;
+  lenIn: number;
+  gripIn: number;
+  receivingIn: number;
+  minBiteIn: number;
 }
 
 /** Display finishing for a part (see `Part.finish`, D-44). */

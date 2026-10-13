@@ -112,20 +112,20 @@ describe('S-5: the cargo load-height rule', () => {
     expect(c.how).toMatch(/LOAD-HEIGHT RULE/);
     expect(c.value).toBeGreaterThan(10); // the rule is 10 in (cargoCgHeightIn); D-67: the 35 deg tip limit is reached at about 15.2 in (10.5 in at the old 40 deg), so the rule keeps a 5 in margin on the tip
     expect(c.value).toBeGreaterThan(15);
-    expect(c.value).toBeLessThan(15.5);
+    expect(c.value).toBeLessThan(16); // 15.2 in with the 4 mm okoume and the tube; 15.6 with the D-72/D-73 heavier sled (lower CG ratio)
     expect(c.value).toBeGreaterThan(c.details![1].value); // the slide-before-tip height (13.6 in) is now the lower of the two
     expect(c.details![1].value).toBeGreaterThan(13);
-    expect(c.details![1].value).toBeLessThan(14.5);
+    expect(c.details![1].value).toBeLessThan(14.5); // 13.9 in
     expect(c.how).toMatch(/keep the CENTER of the load under 10 in/);
-    expect(c.how).toMatch(/reaches its 35° limit at 15\.[1-4] in/);
-    expect(c.how).toMatch(/at 10 in 40\.[5-7]°/);
-    expect(c.how).toMatch(/at 18 in 32\.[4-7]°/);
-    expect(c.how).toMatch(/at 24 in 28\.[12]°/);
+    expect(c.how).toMatch(/reaches its 35° limit at 15\.[1-6] in/);
+    expect(c.how).toMatch(/at 10 in 40\.[5-9]°/);
+    expect(c.how).toMatch(/at 18 in 32\.[4-9]°/);
+    expect(c.how).toMatch(/at 24 in 28\.[1-5]°/);
   });
   it('the Simple view cargo card says it in plain words (D-66: 10 in above the floor; D-67: it tips at about 15 in)', () => {
     const t = cargoText(cargoCapacity(defaults));
     expect(t.lines.some((l) => /Load-height rule: heavy things low/.test(l) && /under 10 in above the floor/.test(l))).toBe(true);
-    expect(t.lines.some((l) => /about 15 in is the tipping limit itself/.test(l))).toBe(true);
+    expect(t.lines.some((l) => /about 1[56] in is the tipping limit itself/.test(l))).toBe(true); // 15 in with the 4 mm okoume, 16 in with the D-73 heavier sled
     expect(t.lines.some((l) => /above about 14 in a sharp turn can tip it instead of skidding/.test(l))).toBe(true);
   });
 });
@@ -143,10 +143,10 @@ describe('S-4 / S-6 notes and the DOM tube', () => {
 });
 
 describe('M3 / S11 / materials', () => {
-  it('D-65: the butt hinge (D-62 #10 x 3/4 screws, the beveled knee top) is gone; the knee is slotted for the flap tongue and says so, the pivot block is screwed on with #10 x 1-1/4 screws and the row has margin', () => {
+  it('D-65: the butt hinge (D-62 #10 x 3/4 screws, the beveled knee top) is gone; the knee is slotted for the flap tongue and says so, the pivot block is screwed on with #8 x 1-1/4 screws (D-72: was #10) and the row has margin', () => {
     expect(parts.some((x) => /^brake-hinge/.test(x.id))).toBe(false);
     expect('brakeHingeScrewLenIn' in defaults).toBe(false);
-    expect(get('brake-pivot-block-L').joints!.find((j) => j.type === 'screw')!.size).toMatch(/3 x #10 x 1-1\/4"/);
+    expect(get('brake-pivot-block-L').joints!.find((j) => j.type === 'screw')!.size).toMatch(/3 x #8 × 1-1\/4"/);
     expect(get('brake-knee-L').notes).toMatch(/SLOTTED/);
     expect(get('brake-knee-L').notes).not.toMatch(/BEVELED/);
     expect(row('brake-pivot').util!).toBeLessThan(0.9);
