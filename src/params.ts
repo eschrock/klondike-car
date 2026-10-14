@@ -842,7 +842,7 @@ const defs = {
   clampPlateWidthIn: {
     label: 'Clamp bridge plate width (along the axle)', group: 'wheels', unit: 'in',
     default: 2, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-10, D-62, D-66, D-71, D-83',
-    note: 'D-83: 2 in, so the plate is cut from 1/4 x 2 stock bar (no ripping; the rear groove bearing row improves). The plate lies across the tube on a line this long (the ring-bending row of the tube wall uses it, and the bearing-groove row takes the axle diameter x this as the bearing area in the oak). D-71: 1.75 in (was 1.5 in): the 5/8 in axle has 17 percent less bearing area, which took the rear groove bearing to 0.99 at the 200 lb rider and 1.03 (a fail) at the 200 lb cargo; 1.75 in brings it to 0.85 and 0.88 for about 0.16 lb in all. D-66: at the 30 in rear track the tire inner face is 13.25 in from center, so the rear plate runs from 11.75 to 13.25 in: its inner 1/4 in is UNDER the 12 in rail, whose relief notch is cut high enough to clear it (frame.ts; the hanger, which carries the beam seat, is inboard of that).',
+    note: 'D-83: 2 in, so the plate is cut from 1/4 x 2 stock bar (no ripping). TRADE-OFF: the 2 in bar adds about 0.24 lb over 1-3/4 in, and raises the rear groove bearing margin (the green rider range goes from 220 to 240 lb, the cargo capacity from 254 to 286 lb). 1-3/4 in would need a rip of 1/4 in stainless, or two 12 in pieces of 1-3/4 in bar at about $18 more. The plate lies across the tube on a line this long (the ring-bending row of the tube wall uses it, and the bearing-groove row takes the axle diameter x this as the bearing area in the oak). D-71: 1.75 in (was 1.5 in): the 5/8 in axle has 17 percent less bearing area, which took the rear groove bearing to 0.99 at the 200 lb rider and 1.03 (a fail) at the 200 lb cargo; 1.75 in brings it to 0.85 and 0.88 for about 0.16 lb in all. D-66: at the 30 in rear track the tire inner face is 13.25 in from center, so the rear plate runs from 11.75 to 13.25 in: its inner 1/4 in is UNDER the 12 in rail, whose relief notch is cut high enough to clear it (frame.ts; the hanger, which carries the beam seat, is inboard of that).',
   },
   clampPlateOuterWidthIn: {
     label: 'Front OUTER clamp plate width (along the axle)', group: 'wheels', unit: 'in',
@@ -917,7 +917,7 @@ const defs = {
   axleTubeYieldPsi: {
     label: 'Axle tube yield strength (DOM)', group: 'wheels', unit: 'psi',
     default: 70000, min: 30000, max: 120000, step: 1000, status: 'verify', ref: 'D-60',
-    note: 'Order DOM (drawn over mandrel) or CDS tube to ASTM A513 Type 5, NOT ordinary ERW "mechanical" tube (about 45 ksi yield / 55 ksi ultimate, which takes axle-stress from 0.92 to about 1.4 at the 5/8 in size of D-71, a fail); keep the mill cert. D-60: 1026 DOM tube is listed at about 70 ksi yield / 80+ ksi tensile (1020 DOM about 60 to 70 ksi yield): CONFIRM on the vendor listing or the mill cert, and lower it if the stock you can buy is 1020 DOM at 60 ksi. Used for the bending, cross-hole and ring-bearing rows when the axle is a tube (axleWallIn > 0); the solid rod uses the 1045 value above.',
+    note: 'Used only with a hollow tube (axleWallIn above 0); with the default solid rod (D-71) the checklist does not ask for it. Order DOM (drawn over mandrel) or CDS tube to ASTM A513 Type 5, NOT ordinary ERW "mechanical" tube (about 45 ksi yield / 55 ksi ultimate, which takes axle-stress from 0.92 to about 1.4 at the 5/8 in size of D-71, a fail); keep the mill cert. D-60: 1026 DOM tube is listed at about 70 ksi yield / 80+ ksi tensile (1020 DOM about 60 to 70 ksi yield): CONFIRM on the vendor listing or the mill cert, and lower it if the stock you can buy is 1020 DOM at 60 ksi. Used for the bending, cross-hole and ring-bearing rows when the axle is a tube (axleWallIn > 0); the solid rod uses the 1045 value above.',
   },
 
   // ── Steering & pull ──────────────────────────────────────────────────────
@@ -1872,7 +1872,7 @@ const defs = {
       { value: PLY_SPECIES.okoumeMarine, label: 'Okoume marine (BS 1088)' },
       { value: PLY_SPECIES.balticBirchExterior, label: 'Baltic birch, exterior glue' },
     ],
-    note: 'D-73: this species covers the 12 mm deck and seat-back sheet only; the thin sheet (webs, box, lid, signs) is chosen by thinSheetMaterial. MATERIALS AND SOURCES (Eric, 2026-10-12): the deck and seat back are 12 mm (1/2 in) okoume marine plywood (BS 1088), one FULL 4 x 8 ft sheet from a local supplier (D-68); the thin sheet is 6 mm (D-80). Each side web is one piece. FALLBACK if no okoume: Baltic birch 12 mm for the deck (about 3 to 4 lb heavier at the deck alone; every cut edge and face must be epoxy-sealed, it is exterior-glue only, not marine). Solid parts are white oak: the lumber yard stocks 4/4 to 12/4 rough, so resaw and plane to the finished thickness (the stock/rough columns of the cut list already assume this). FINISHING STACK: epoxy seal -> clear spar varnish with UV filters (no stain, D-83).',
+    note: 'D-73: this species covers the 12 mm deck and seat-back sheet only; the thin sheet (webs, box, lid, signs) is chosen by thinSheetMaterial. MATERIALS AND SOURCES (Eric, 2026-10-12): the deck and seat back are 12 mm (1/2 in) okoume marine plywood (BS 1088), one FULL 4 x 8 ft sheet from a local supplier (D-68); the thin sheet is 6 mm (D-80). Each side web is one piece. FALLBACK if no okoume: Baltic birch 12 mm for the deck (about 3 to 4 lb heavier at the deck alone; every cut edge and face must be epoxy-sealed, it is exterior-glue only, not marine). Solid parts are white oak: the lumber yard stocks 4/4 to 12/4 rough, so resaw and plane to the finished thickness (the stock/rough columns of the cut list already assume this). FINISHING STACK: Standard is clear (no stain, no conditioner: exterior spar urethane over the bare wood, with an epoxy coat on the edges, end grain and deck underside only); Extreme keeps its stain or gel stain, the epoxy saturation coat and marine spar varnish (D-83).',
   },
   weatherSpec: {
     label: 'Weather spec', group: 'materials', unit: '',
@@ -1881,7 +1881,7 @@ const defs = {
       { value: WEATHER_SPEC.standard, label: 'Standard (garage-kept)' },
       { value: WEATHER_SPEC.extreme, label: 'Extreme weather' },
     ],
-    note: 'D-73. Standard: garage-kept, used a few times a year, gets wet at most at a rainy derby (Eric, 2026-10-12). Extreme weather: stored outside or near salt. The model reads this for the thin-sheet material ("follow the weather setting": Standard is 6 mm Baltic birch, Extreme is 6 mm okoume marine, D-80), for the drains (Standard: drilled 3/8 in holes with an epoxy-lined bore; Extreme: stainless nipples, D-83) and for the lid support (Standard: plated steel; Extreme: stainless friction stay, D-83). The fasteners, glue and finish that follow the weather spec are chosen in the BOM and finishing schedule.',
+    note: 'D-73. Standard: garage-kept, used a few times a year, gets wet at most at a rainy derby (Eric, 2026-10-12). Extreme weather: stored outside or near salt. The model reads this for the thin-sheet material ("follow the weather setting": Standard is 6 mm Baltic birch, Extreme is 6 mm okoume marine, D-80), for the drains (Standard: drilled 3/8 in holes with an epoxy-lined bore; Extreme: stainless nipples, D-83) and for the lid support (Standard: plated steel; Extreme: stainless friction stay, D-83). The fasteners, glue and finish that follow the weather spec are chosen in the BOM and finishing schedule: Standard is clear (no stain, urethane); Extreme keeps its stain, epoxy saturation coat and marine varnish (D-83).',
   },
   thinSheetMaterial: {
     label: 'Thin-sheet material (webs, box, lid, signs)', group: 'materials', unit: '',
@@ -2174,7 +2174,7 @@ const defs = {
   axleTubeUltimatePsi: {
     label: 'Axle tube ultimate strength (DOM)', group: 'factors', unit: 'psi',
     default: 80000, min: 45000, max: 140000, step: 1000, status: 'verify', ref: 'D-60',
-    note: 'D-60: companion of axleTubeYieldPsi (1026 DOM about 80 ksi tensile minimum): the hard-hit rows use it with the fail-safe factor. Confirm on the vendor listing.',
+    note: 'Used only with a hollow tube (axleWallIn above 0); with the default solid rod (D-71) the checklist does not ask for it. D-60: companion of axleTubeYieldPsi (1026 DOM about 80 ksi tensile minimum): the hard-hit rows use it with the fail-safe factor. Confirm on the vendor listing.',
   },
   ss316BoltYieldPsi: {
     label: '316 stainless bolt yield (cold-worked F593)', group: 'factors', unit: 'psi',
@@ -2475,7 +2475,7 @@ export function thinSheet(p: Params): ThinSheet {
   if (key === THIN_SHEET.balticBirch3mm)
     return { key, name: '3 mm Baltic birch', material: '3 mm Baltic birch plywood', nominal: '1/8 in (3 mm)', thicknessIn: p.balticThinThickIn, densityPcf: p.birchDensityPcf, moePsi: p.birchMoePsi, morPsi: p.birchMorPsi, moePerpPsi: p.balticThinMoePerpPsi, morPerpPsi: p.balticThinMorPerpPsi, sheetWidthIn: 60, sheetLengthIn: 60, priceKey: 'baltic-3mm', glue: 'exterior' };
   if (key === THIN_SHEET.balticBirch6mm)
-    return { key, name: '6 mm Baltic birch', material: '6 mm Baltic birch plywood', nominal: '1/4 in (6 mm)', thicknessIn: p.balticSixThickIn, densityPcf: p.birchDensityPcf, moePsi: p.birchMoePsi, morPsi: p.birchMorPsi, moePerpPsi: p.balticSixMoePerpPsi, morPerpPsi: p.balticSixMorPerpPsi, sheetWidthIn: 48, sheetLengthIn: 96, priceKey: 'baltic-6mm', glue: 'interior (verify: ask)' };
+    return { key, name: '6 mm Baltic birch', material: '6 mm Baltic birch plywood', nominal: '1/4 in (6 mm)', thicknessIn: p.balticSixThickIn, densityPcf: p.birchDensityPcf, moePsi: p.birchMoePsi, morPsi: p.birchMorPsi, moePerpPsi: p.balticSixMoePerpPsi, morPerpPsi: p.balticSixMorPerpPsi, sheetWidthIn: 48, sheetLengthIn: 96, priceKey: 'baltic-6mm', glue: 'interior, verify with the yard' };
   return { key: THIN_SHEET.okoumeMarine, name: p.panelPlyIn < 0.2 ? '4 mm okoume' : '6 mm okoume', material: 'okoume marine plywood', nominal: p.panelPlyIn < 0.2 ? '4 mm' : '6 mm', thicknessIn: p.panelPlyIn, densityPcf: p.okoumeDensityPcf, moePsi: p.okoumeMoePsi, morPsi: p.okoumeMorPsi, moePerpPsi: p.okoumeMoePerpPsi, morPerpPsi: p.okoumeMorPerpPsi, sheetWidthIn: 48, sheetLengthIn: 96, priceKey: 'okoume-6mm', glue: 'marine (BS 1088)' };
 }
 

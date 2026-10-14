@@ -10,7 +10,7 @@
  * (304 for 316, beech Dominos for Sipo) is an ALTERNATIVE (`Price.alternatives`, `specGap: true`), shown in the BOM line notes and never
  * substituted silently. An item the research did not find keeps its estimate with "not found in the 2026-10-12 research" in the note.
  *
- * Cost pass (2026-10-14, D-79 to D-83; docs/wip/cost-pass while it is in flight): the entries marked with `foundCP` / `foundPackCP` are quotes from the second research round, dated
+ * Cost pass (2026-10-14, D-79 to D-83; docs/price-research/price-research-cost-pass-2026-10.md): the entries marked with `foundCP` / `foundPackCP` are quotes from the second research round, dated
  * `RESEARCH_DATE_COST_PASS`. `basis: 'owned'` is shop stock Eric already has ($0, "from existing shop stock"): the line stays in the BOM so it is not forgotten, but it costs nothing
  * and never counts as an estimate.
  */
@@ -23,7 +23,7 @@ export type PriceBasis = 'quoted' | 'estimate' | 'owned';
 /**
  * The weather spec the BOM is priced for (D-73, Eric 2026-10-12). STANDARD (the default; garage-kept, used a few times a year, wet at most at a rainy derby): 304 / 18-8 stainless, zinc and
  * galvanized where it lives dry, beech Dominos, Titebond III, exterior spar urethane, a small epoxy kit; priced from docs/price-research/price-research-standard-2026-10.md. EXTREME (stored outside,
- * near salt, or exposed regularly): 316 throughout, Sipo Dominos, epoxy everywhere, marine varnish, the gallon epoxy kit; priced from docs/price-research/price-research-2026-10.md.
+ * near salt, or exposed regularly): 316 throughout, beech Dominos epoxied in (D-79), epoxy everywhere, marine varnish, the same U.S. Composites 96 oz epoxy kit (a second kit when the need runs past it); priced from docs/price-research/price-research-2026-10.md.
  * A Standard listing that is the nearest size or kind (not the exact item the model asks for) is priced as an `estimate` with its link and the gap in the note; an exact listing is `quoted`.
  */
 export type SpecName = 'standard' | 'extreme';
@@ -31,7 +31,7 @@ export const specOf = (p: Pick<Params, 'weatherSpec'>): SpecName => (p.weatherSp
 
 /** The date of the web price research whose prices are `quoted` below (docs/price-research/price-research-2026-10.md). */
 export const RESEARCH_DATE = '2026-10-12';
-/** The date of the cost-pass price research (docs/wip/cost-pass/research-*.md): the `foundCP(...)` entries. */
+/** The date of the cost-pass price research (docs/price-research/price-research-cost-pass-2026-10.md): the `foundCP(...)` entries. */
 export const RESEARCH_DATE_COST_PASS = '2026-10-14';
 /** Said on every price the search tool read from a vendor page without the page being fetched. */
 export const SEARCH_READ_NOTE = 'price read via search, confirm on the page';
@@ -149,7 +149,7 @@ export const isOakStocked = (nominal: string): boolean => OAK_STOCKED[nominal] !
  * The BOM prices the thin-sheet line by the priceKey of the sheet in effect, never by its thickness class.
  */
 export const PLYWOOD_PRICE: Record<string, Price> = {
-  'baltic-6mm': foundCP(49, 'sheet', 'Peach State Lumber, Kennesaw GA, plus tax', PEACH_STATE_PLYWOOD_URL, '4 x 8 ft x 6 mm (1/4") Baltic birch, 5 ply, from the plywood list ("last updated 8/9"): the Standard thin sheet (sides, box, lid, signs). Glue type is not stated: ask (probably interior, fine garage-kept once sealed), and MEASURE the sheet (6 mm or 6.5 mm). Toledo Plywood lists 4 x 8 BB/BB at $34.95 with exterior glue but delivers only within 80 miles'),
+  'baltic-6mm': foundCP(49, 'sheet', 'Peach State Lumber, Kennesaw GA, plus tax', PEACH_STATE_PLYWOOD_URL, '4 x 8 ft x 6 mm (1/4") Baltic birch from the plywood list ("last updated 8/9"; the list gives no ply count and no glue type): the Standard thin sheet (sides, box, lid, signs). Count the plies at an edge (5 expected; the side-web margin assumes 5-ply), measure 6.0 to 6.5 mm, and ask the glue (probably interior, fine garage-kept once sealed). Toledo Plywood lists 4 x 8 BB/BB at $34.95 with exterior glue but delivers only within 80 miles'),
   'okoume-6mm': withAlts(
     foundCP(158.65, 'sheet', 'Aircraft Spruce, Peachtree City GA (will-call), plus tax', AIRCRAFT_SPRUCE_OKOUME_URL, '4 x 8 ft x 6 mm okoume, 5 ply (02-00076): the Extreme thin sheet (sides, box, lid, signs); BS 1088 glue'),
     [foundCP(98, 'sheet', 'Boulter Plywood', BOULTER_URL, '6 mm okoume BS 1088, 5 ply, 4 x 8 ft; freight extra and the page is undated (call 888-958-6237). $145.08 at Boat Builder Central is the next verifiable price')]),
@@ -182,12 +182,12 @@ export const METAL_PRICE_PER_FT: Array<{ match: RegExp; price: Price; /** The St
     gap(foundCP(4.92, 'ft', SPEEDY, 'https://www.speedymetals.com/p-1713-x.aspx', '304 flat bar 1/8" x 1", annealed and pickled, by the inch: $0.41 an inch (13 in $5.33, 12 in $7.40); twice as thick as asked'), 'the bar is 1/8" thick, not 1/16"'),
   ])) },
   { match: /flat bar 1\/8" x 2"/, price: foundCP(11.64, 'ft', SPEEDY, 'https://www.speedymetals.com/p-2540-x.aspx', '316 stainless flat bar 1/8" x 2", annealed and pickled, by the inch: $0.97 an inch (13 in $12.61; fixed 12 in $17.44, 24 in $26.16). The two brake backing plates (2-1/2" each) and the two pivot straps (3-5/16" each) are 11-5/8" of bar plus kerfs. Online Metals 316 12 in is $13.34'),
-    std: foundCP(8.52, 'ft', SPEEDY, 'https://www.speedymetals.com/p-1717-x.aspx', '304 stainless flat bar 1/8" x 2", annealed and pickled, by the inch: $0.71 an inch (13 in $9.23; fixed 12 in $12.74). Online Metals 304 12 in is $8.14 if 12 in is enough') },
+    std: foundPackCP(13 / 12, 9.23, 'ft', SPEEDY, 'https://www.speedymetals.com/p-1717-x.aspx', '304 stainless flat bar 1/8" x 2", annealed and pickled, by the inch: $0.71 an inch, so 13 in is $9.23 (fixed 12 in $12.74). Online Metals 304 12 in is $8.14 if 12 in is enough', false, '13 in piece') },
   { match: /flat bar 1\/4" x (?:1-3\/4|2)"/, price: foundCP(23.28, 'ft', SPEEDY, 'https://www.speedymetals.com/p-2547-x.aspx', '316 stainless flat bar 1/4" x 2", annealed and pickled, by the inch: $1.94 an inch (15 in $29.10; fixed 12 in $34.86, 24 in $52.29). The model asks for the 2" width when the clamp plates are 1/4 x 2 (D-83); 1-3/4" is not stocked at Speedy (Online Metals 316 1/4 x 1-3/4 12 in is $31.18)'),
-    std: foundCP(15.96, 'ft', SPEEDY, 'https://www.speedymetals.com/p-1732-x.aspx', '304 stainless flat bar 1/4" x 2", annealed and pickled, by the inch: $1.33 an inch (15 in $19.95; fixed 12 in $23.89, 18 in $30.71). Six 2-1/4" plates and five kerfs are 14-1/8", so order 15 in. 1/4 x 1-3/4 exists only at Online Metals (12 in $18.93)') },
+    std: foundPackCP(15 / 12, 19.95, 'ft', SPEEDY, 'https://www.speedymetals.com/p-1732-x.aspx', '304 stainless flat bar 1/4" x 2", annealed and pickled, by the inch: $1.33 an inch, so 15 in is $19.95 (fixed 12 in $23.89, 18 in $30.71). Six 2-1/4" plates and five kerfs are 14-1/8", so order 15 in. 1/4 x 1-3/4 exists only at Online Metals (12 in $18.93)', false, '15 in piece') },
   { match: /flat bar 1\/4" x 1-1\/2/, price: foundPack(1, 27.06, 'ft', SPEEDY, 'https://www.speedymetals.com/pc-2546-8259-14-x-1-12-316-stainless-steel-annealed-pickled.aspx', '1/4" x 1-1/2" 316 stainless flat, annealed and pickled, 12 in piece (4 x 2.25 in plus kerf); 18 in is 34.79', false, '12 in piece') },
   { match: /angle/, price: foundPackCP(1, 20.09, 'ft', ONLINE_METALS, 'https://www.onlinemetals.com/buy/x/pid/2162', '1-1/2" x 1-1/2" x 1/8" stainless angle 316/316L (pid 2162), 12 in cut (was $19.83; 24 in is $39.09)', false, '12 in cut'),
-    std: foundCP(18.6, 'ft', SPEEDY, 'https://www.speedymetals.com/p-1693-x.aspx', '304 stainless angle 1/8" x 1-1/2" x 1-1/2", annealed and pickled, by the inch: $1.55 an inch (5 in $7.75; 12 in $17.15). Online Metals does not stock 304 in this size') },
+    std: foundPackCP(5 / 12, 7.75, 'ft', SPEEDY, 'https://www.speedymetals.com/p-1693-x.aspx', '304 stainless angle 1/8" x 1-1/2" x 1-1/2", annealed and pickled, by the inch: $1.55 an inch, so 5 in is $7.75 (12 in $17.15). Online Metals does not stock 304 in this size', false, '5 in piece') },
   { match: /aluminum|rectangular tube/i, price: foundPackCP(3, 29.24, 'ft', ONLINE_METALS, 'https://www.onlinemetals.com/buy/x/pid/14469', '1" x 1-1/2" x 0.125" 6061-T6 rectangle tube (pid 14469), 36 in piece ($21.39 for 24 in is too short; 48 in $36.54); the stock wall is 0.125", the model says 0.130" (not a stock wall). Speedy Metals lists 6063-T52 at $18.90 for 30 in, which is weaker (about 21 ksi yield against 40): not the same tube', false, '36 in piece') },
 ];
 /** Allowance added to every metal cut for the saw kerf and the squared end (in). */
@@ -265,7 +265,7 @@ export const PURCHASED_PRICE: PurchasedPriceEntry[] = [
   { match: /^seat-back-pad$/, override: true, price: foundCP(7.99, 'ea', 'Harbor Freight', 'https://www.harborfreight.com/foam-kneeling-pad-56572.html', 'one Foam Kneeling Pad #56572 (EVA, 11 x 18 x 1-1/2 in.) for the back pad, trimmed to size') },
   // D-83: lash points. Standard = Harbor Freight 1/4 in cargo D-rings, bought by the 2-pack (233 lb working load, 700 lb break); Extreme = 316 (PURCHASED_PRICE below).
   { match: /^lash-point$/, override: true, price: withAlts(
-    est(8, 'ea', 'Marine hardware dealer', 'ESTIMATE: a 316 stainless bolt-on D-ring with a 2-hole bracket, about 1-1/4 in ring, for the Extreme spec (D-83). A 316 ring of this kind was not priced in the cost-pass research; Fasteners Plus lists a 1 in 316 bolt-on D-ring at $2.99 with an 800 lb break'),
+    est(8, 'ea', 'Marine hardware dealer', 'ESTIMATE; no source; rating unverified: a 316 stainless bolt-on D-ring with a 2-hole bracket, about 1-1/4 in ring, for the Extreme spec (D-83). A 316 ring of this kind was not priced in the cost-pass research; Fasteners Plus lists a 1 in 316 bolt-on D-ring at $2.99 with an 800 lb break'),
     [gap(foundCP(2.99, 'ea', 'Fasteners Plus / US Cargo Control', 'https://www.fastenersplus.com/products/1-bolt-on-d-ring-with-mounting-bracket-316-stainless-800-lbs-bs', '1" 316 bolt-on D-ring with bracket, 2-hole, 800 lb break (a 2-5/16" ring with a 6000 lb break is 8.89)', true), 'an 800 lb break is about a 270 lb working load, marginal against 300 lbf')]) },
 ];
 export const PURCHASED_FALLBACK: Price = est(5, 'ea', 'No entry in prices.ts', 'UNPRICED: add the part to PURCHASED_PRICE');
@@ -274,8 +274,13 @@ export const PURCHASED_FALLBACK: Price = est(5, 'ea', 'No entry in prices.ts', '
  * Purchased parts whose model cost (`sourcing.costUsd`) stays the price because the research found no price that meets the spec: the note (research result) and the
  * alternatives (spec gaps, shown in the BOM line notes) are added to the line. Matched on partNo.
  */
-export interface ModelCostNote { match: RegExp; note: string; alternatives?: Price[] }
+export interface ModelCostNote { match: RegExp; note: string; alternatives?: Price[]; /** The model's cost has no source behind it: the BOM line is an estimate, not a quote. */ estimate?: boolean }
 export const PURCHASED_MODEL_COST_NOTE: ModelCostNote[] = [
+  // The catch is part of the latch's package: its $0 is real (the latch line carries the price and the source).
+  { match: /^storage-catch$/, note: 'comes with the latch (no separate purchase): its price is in the latch line' },
+  // No source behind these two model costs: estimates until a quote is read.
+  { match: /^brake-foot-tread$/, estimate: true, note: 'ESTIMATE, no source: the model\'s $3 a tread for a ribbed rubber stair-tread or neoprene sheet offcut; not in any price research' },
+  { match: /^flag-tube$/, estimate: true, note: 'ESTIMATE, no source: the model\'s $4 for a 1" schedule 40 PVC tube cut to length (a 10 ft stick of 1" PVC is the usual sale; ask for a cut piece); not in any price research' },
   { match: /^storage-hinge$/, note: `model cost kept: the 2-1/2" x 2-3/4" 316 hinge was not found in the ${RESEARCH_DATE} research`, alternatives: [
     gap(found(13.545, 'ea', 'Freeport Marine', 'https://www.freeportmarine.com/products/seachoice-2-316-stainless-steel-butt-hinges.oembed', 'Seachoice 33911 2" x 2" 316 butt hinges, $27.09 a pair, shown as half each', true), 'the hinge is 2" x 2", not 2-1/2" x 2-3/4"; needs a size decision')] },
   { match: /^storage-latch$/, note: `model cost kept: no 316 draw latch with catch found in the ${RESEARCH_DATE} research (only turn-button and toggle latches)` },
@@ -309,6 +314,7 @@ const NOT_LISTED = 'this length is not in the Bolt Depot listing the research re
 const CARRIAGE_DECISION = 'Carriage bolts: the stack (tongue head 3" + the 2-1/2" beam + washer + nylock nut + 1.5 threads) needs 6.16", so use the stock 6-1/2" (the 6" bolt stops 1/16" short of the top of the nut). Priced from the 6" bolt (18411) plus a little: the 6-1/2" price was not read; quote it.';
 /** D-79: the Dominos are beech from the shop, in BOTH specs. Under the Extreme spec they are epoxied in (epoxy everywhere already), so no Sipo packs are bought (Festool makes no Sipo 4x20 anyway). */
 const DOMINO_OWNED = owned('ea', 'beech Dominos (Festool DF 500, all sizes), from the shop; under the Extreme spec they are epoxied in, so the exterior Sipo type is not bought');
+const DOMINO_OWNED_STANDARD = owned('ea', 'beech Dominos (Festool DF 500, all sizes), from shop stock');
 export const FASTENER_PRICE: Array<{ match: RegExp; price: Price }> = [
   { match: /T-nut/i, price: found(0.9, 'ea', 'Albany County Fasteners', 'https://www.albanycountyfasteners.com/t-nuts-316-stainless-steel-14-20-6002-016-032', '316 stainless 4-prong T-nut, 1/4"-20, for the handle socket backers (epoxied in); $0.90 each for 1-99, $0.58 at 100+ (304 is $0.74)', true) },
   { match: /shaft collar/i, price: withAlts(
@@ -403,8 +409,8 @@ export const FILLERS: Record<string, Price> = {
 };
 /** Items that exist only as text in a note or a joint (see `NOTE_ITEMS` in bom.ts). */
 export const NOTE_PRICE: Record<string, Price> = {
-  // D-83: hook-and-loop strip for the EVA seat pads: Velcro Industrial 2" x 4 ft, $7.52 [S] (weaker in peel than Dual Lock at $19.99, and wears; fine for a 1 lb pad held in by the cushion shape).
-  dualLock: foundCP(7.52, 'roll', 'Blue Dog Ink', 'https://www.bluedogink.com/velcro-brand-industrial-strength-heavy-duty-fasteners-2-x-4-ft-white-90595.html', 'VELCRO Brand Industrial Strength 2" x 4 ft, white (90595), adhesive back (OfficeCrave $8.02; Amazon $6.19 in February 2026)', true),
+  // D-83: hook-and-loop for the EVA seat pads: Velcro Industrial 2" x 4 ft, $7.52 [S] (weaker in peel than Dual Lock at $19.99, and wears; fine for a 1 lb pad held in by the cushion shape).
+  hookLoop: foundCP(7.52, 'pack', 'Blue Dog Ink', 'https://www.bluedogink.com/velcro-brand-industrial-strength-heavy-duty-fasteners-2-x-4-ft-white-90595.html', 'VELCRO Brand Industrial Strength 2" x 4 ft, white (90595), adhesive back. the seat needs four 12" strips of each half, 4 ft of each (OfficeCrave $8.02; Amazon $6.19 in February 2026)', true),
   // D-83: Band-It iron-on banding, 3/4" x 25 ft, $9.99 [S]; the listing is red oak: look for white oak, or use the red oak (it stains a little differently).
   edgeBanding: foundCP(9.99, 'roll', 'Ace Hardware (Band-It)', 'https://www.acehardware.com/p/5005152', 'Band-It pre-glued red oak edge banding, 3/4" x 25 ft (iron on, flush trim); white oak if the store has it', true),
   // D-79 and D-83: Life-Calk 1030, the 2.8 oz tube. The handle sockets are bedded in thickened epoxy now, so the tube covers the grab-board strips and the gasket splice.
@@ -546,7 +552,7 @@ export const FASTENER_PRICE_STANDARD: Array<{ match: RegExp; price: Price }> = [
   { match: /Thumb-knob/, price: withAlts(notFound(est(1.75, 'ea', FAST_STD, 'thumb-knob screw #10-32, 18-8 knurled: no exact one found (Home Depot Everbilt #10-32 x 1/2" stainless knurled, 831568, is 3.38 per bag, count not stated); the length is set by the web thickness')), [
     gap(foundPack(100, 16.7, 'ea', BOLT_DEPOT, `${BD_PRODUCT}23989`, 'Bolt Depot thumb screws, spade type, zinc plated steel, #10-32 x 3/4" (#23989), 0.21 each or 16.70 per 100', true), 'zinc spade-type, 3/4", and not a knurled knob')]) },
   // D-79: beech Dominos from the shop (all sizes): $0, kept as a line so they are not forgotten.
-  { match: /^Domino/, price: DOMINO_OWNED },
+  { match: /^Domino/, price: DOMINO_OWNED_STANDARD },
   // Material-free labels that have no 18-8 or zinc twin
   // D-76: the D-ring plate's #8-32 x 2" through-bolt sets. Bolt Depot 18-8: pan head $0.30 (bag of 100 $20.06), washer $0.15 (100 for $9.86), nylock $0.10 (100 for $6.93).
   { match: /machine screw #8-32 x 2"/, price: bd18(1352, 'ea', '18-8 Phillips pan-head machine screw #8-32 x 2" (#1352); the flat head (#1254) is $0.27', 0.3, 100, 20.06) },
@@ -572,7 +578,7 @@ export const PURCHASED_PRICE_STANDARD: StdPurchasedEntry[] = [
     `3/16" Grade 30 zinc proof coil chain at $2.12/ft (${CHAIN_CUT_IN} in; WLL 750 lb; the page showed 0 in stock; KingChain 15 ft tub $15.59, about $1.04/ft) plus two Campbell 3/16" zinc quick links at $1.99 each (Ace Hardware item 52604; WLL 660 lb)`, true), describe: 'Steering check chain (3/16" zinc chain, zinc quick links)' },
   // D-83: the cheap stainless hinge pairs. The stainless grade is not printed on either listing: check the package for 304 (a magnet test: 304 is barely magnetic) before using them on wet oak.
   { match: /^seat-hinge$/, override: true, price: withAlts(
-    foundCP(6.495, 'ea', 'Ace Hardware', 'https://www.acehardware.com/departments/hardware/door-hardware/door-hinges/5006016', 'Ace 2" stainless narrow tight-pin hinge, pack of 2 at $12.99, shown as half each. The grade is not stated: check the package for 304', true),
+    foundCP(6.495, 'ea', 'Ace Hardware', 'https://www.acehardware.com/departments/hardware/door-hardware/door-hinges/5006016', 'Ace 2" stainless narrow tight-pin hinge, pack of 2 at $12.99, shown as half each. A narrow utility hinge: check its leaf width and screw holes against the three-insert pattern before buying. The grade is not stated: check the package for 304', true),
     [foundCP(11.005, 'ea', 'MarineEngine.com (Sea-Dog)', 'https://www.marineengine.com/boat-accessories/hardware/201582-1', 'Sea-Dog 201582-1 stainless butt hinge 2" x 2", described as 304 stamped stainless, pack of 2 at $22.01, shown as half each (fasteners not included)', true)]) },
   { match: /^storage-hinge$/, override: true, price: withAlts(
     foundCP(2.735, 'ea', 'Home Depot (Everbilt)', 'https://homedepot.com/p/Everbilt-2-1-2-in-Stainless-Steel-Non-Removable-Pin-Narrow-Utility-Hinge-2-Pack-29207/314151807', 'Everbilt 2-1/2" stainless non-removable-pin narrow utility hinge (29207), 2-pack at $5.47, shown as half each. A narrow utility hinge, not a mortise hinge, and the grade is not stated: check the package for 304. The model asks for 2-1/2" x 2-3/4": check the leaf against the lid frame', true),
@@ -582,7 +588,7 @@ export const PURCHASED_PRICE_STANDARD: StdPurchasedEntry[] = [
   { match: /^storage-gasket-end$/, override: true, price: foundCP(2.175, 'ea', 'Home Depot (Frost King)', 'https://www.homedepot.com/p/100145681', 'Frost King V25WA EPDM D-section, the same 17 ft roll as the side gaskets ($8.69 for all four lines, a quarter each)', true) },
   { match: /^storage-latch$/, override: true, price: found(4.895, 'ea', 'Walmart', 'https://www.walmart.com/ip/316545201', '304 stainless draw toggle latch with spring-steel hook, 2-pack at $9.79, shown as half each (the catch comes with it, so the catch is $0); the 2.87" version is $7.69, a zinc-plated 2-set (38 mm) $8.69. Walmart blocks fetching, so the listing ID is the nearest returned', true) },
   // D-83: a plated-steel 6" lid support (a pair; the lid takes the pair or one of them), inside the box. Extreme keeps the stainless friction stay.
-  { match: /^storage-lid-stay$/, override: true, price: withAlts(foundCP(9.99, 'ea', 'Rockler', 'https://www.rockler.com/6-medium-duty-quiet-action-lid-support', 'Rockler 6" Medium-Duty Quiet Action Lid Support, item 3952, one PAIR ($4.99 on sale, not confirmed): friction discs, plated steel, inside the box where it stays dry. Check the 6" support against the lid; lid supports do not replace hinges', true),
+  { match: /^storage-lid-stay$/, override: true, price: withAlts(foundCP(9.99, 'ea', 'Rockler', 'https://www.rockler.com/6-medium-duty-quiet-action-lid-support', 'Rockler 6" Medium-Duty Quiet Action Lid Support, item 39529, one PAIR ($4.99 on sale, not confirmed): friction discs, plated steel, inside the box where it stays dry. Check the 6" support against the lid; lid supports do not replace hinges', true),
     [gap(foundCP(26.4, 'ea', 'Sugatsune', 'https://www.sugatsune.com/s-s-stay-s-93l', 'Sugatsune S-93L stainless (304) friction lid stay, 66 lb (S-91R is 31.30, 88 lb)'), 'stainless: $16.41 more')]) },
   // D-83: Harbor Freight 1/4" cargo D-rings, bought by the 2-pack (3 packs for the six rings): 233 lb working load, 700 lb break, zinc. The cargo straps pull about 79 lbf a ring.
   { match: /^lash-point$/, override: true, price: { ...withAlts(
@@ -676,7 +682,7 @@ export function fastenerPrice(label: string, spec: SpecName = 'extreme'): Price 
 export function metalPrice(section: string, spec: SpecName = 'extreme'): Price | null {
   const entry = METAL_PRICE_PER_FT.find((r) => r.match.test(section));
   const price = entry?.price ?? null;
-  if (!entry || !price || spec !== 'standard' || !/\b316\b/.test(section)) return price;
+  if (!entry || !price || spec !== 'standard' || !/\b(316|304)\b/.test(section)) return price;
   if (entry.std) return entry.std;
   const r2 = (v: number): number => Math.round(v * 100) / 100;
   const alts = price.alternatives?.map((a) => ({ ...a, note: a.note ? std304(a.note) : a.note }));

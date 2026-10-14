@@ -181,11 +181,27 @@ describe('part drawings', () => {
     const rail = sheets.find((x) => x.partNo === 'rail')!;
     const c = rail.features.find((f) => f.kind === 'hole' && /counterbore/.test(f.text))!;
     // D-81, D-82: no Dominos in the chine tie; the rail takes the #8 screws in every gap, 7 counterbored and 1 shallow-zone hole at the bow
-    expect(c.text).toMatch(/^7 holes, 11\/64" clearance, through, with a 5\/16" × 1" counterbore from the BOTTOM edge\./);
+    expect(c.text).toMatch(/^7 holes, 11\/64" clearance, through, with a 3\/8" × 1" counterbore from the BOTTOM edge\./); // a #8 flat head is about 11/32" across: the bore is 3/8" (not 5/16")
+    expect(texts(rail.svg).join(' ')).toMatch(/3\/8" oak plug cut with a plug cutter from offcuts \(or a 3\/8" dowel\)/);
     expect(c.purpose).toMatch(/^for the #8 × 2-1\/2" screws to the left chine/);
     expect(rail.features.filter((f) => f.kind === 'hole' && /left chine/.test(f.purpose ?? '')).reduce((n, f) => n + f.count, 0)).toBe(8);
     expect(rail.features.some((f) => /chine/.test(f.purpose ?? '') && f.kind === 'mortise')).toBe(false);
     expect(c.face).toBe('top edge');
+  });
+
+  it('D-83: the side drain holes are located from ONE datum on the web and on the bands, the inner face of the rear transom', () => {
+    const all = partDrawings(parts, p, { includeShaper: true });
+    const web = all.find((x) => x.partNo === 'side-web' && x.partIds.includes('side-L-web'))!;
+    const band = all.find((x) => x.partNo === 'side-chine-out')!;
+    for (const [sheet, rear] of [[web, '3/8"'], [band, '3/8"']] as const) {
+      const f = sheet.features.find((q) => q.kind === 'hole' && /drain|side panel|chine band \(inner\)/.test(q.purpose ?? '') && q.size?.startsWith('3/8"'))!;
+      expect(f.text, sheet.partNo).toMatch(/from the inner face of the rear transom/);
+      expect(f.positions!.join(' '), sheet.partNo).toContain(`${rear} and `);
+      expect(f.text, sheet.partNo).not.toMatch(/from the REAR end/);
+    }
+    // the same two numbers on the web and on the band
+    const nums = (s: typeof web): string => s.features.find((q) => q.kind === 'hole' && /inner face of the rear transom/.test(q.text))!.positions![0];
+    expect(nums(web)).toBe(nums(band));
   });
 
   it('shows the hold-down bolts once: 2 holes in the angle, the hanger and the rail, at the same places, not 4', () => {

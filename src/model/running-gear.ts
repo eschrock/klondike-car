@@ -66,7 +66,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
   // Rear axle, beam and clamps.
   {
     const ax = { tag: 'R' as const, x: 0, track: p.rearTrackIn, beam: L.beamR };
-    const name = 'rear';
+    const name = 'Rear';
     if (p.axleStyle === AXLE_STYLE.throughRod) {
       parts.push(cylinder(ctx, {
         id: `axle-${ax.tag}`, name: `${name} axle (through ${p.axleWallIn > 0 ? 'tube' : 'rod'})`, group: 'running-gear',

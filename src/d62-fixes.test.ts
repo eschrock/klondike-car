@@ -160,7 +160,7 @@ describe('M3 / S11 / materials', () => {
     expect(n).toMatch(/local supplier \(D-68\)/);
     expect(n).toMatch(/Baltic birch 12 mm for the deck/);
     expect(n).toMatch(/4\/4 to 12\/4/);
-    expect(n).toMatch(/epoxy seal.*clear spar varnish/); // D-83: no stain, so no pre-stain conditioner step
+    expect(n).toMatch(/Standard is clear \(no stain[^)]*\); Extreme keeps its stain/); // D-83: Standard has no stain and no conditioner step; Extreme keeps its stain and marine varnish
     expect(n).not.toMatch(/pre-stain conditioner/);
   });
   it('S5: the UHMW parts are catalog thicknesses (1/2 in disc, 1/4 in pads) and the kingpin order is a stock length', () => {

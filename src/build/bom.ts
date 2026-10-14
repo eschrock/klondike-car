@@ -15,7 +15,7 @@
  *
  * Finishing touches (Eric, 2026-10-12): the lights, the seat cushions, the reflectors and the lash-point tie-downs are priced as their own section AFTER the core ones, so the
  * cost of the sled can be read with and without them. `touchGroupOfPart` says which parts belong, and every fastener or consumable that exists for one of them (the lamp-clip inserts and
- * screws, the Dual Lock, the lash-plate screws) follows its part.
+ * screws, the hook-and-loop strips, the lash-plate screws) follows its part.
  *
  * Bulk parts (Eric, 2026-10-12): an item sold in packs much larger than the sled needs (screws, nuts, washers, inserts, T-nuts, Dominos, glass tape, sandpaper, cotter pins, plugs)
  * is priced by the PACK in its own section, even when it is used in the core build: "I would keep the rest and use them in my shop (and might already have them)". The rule is
@@ -32,7 +32,7 @@ import { STD_WOOD_SCREWS } from '../model/rear-mount';
 import type { Joint, Part } from '../model/types';
 import { WEATHER_SPEC, thinSheet, type Params } from '../params';
 import { cutList, fracIn, isBuilt, partKey, toCsv, type CsvCell } from './cutlist';
-import { finishingSchedule, glueEpoxyFlOz } from './finishing';
+import { EPOXY_BUY_RE, finishingSchedule, glueEpoxyFlOz } from './finishing';
 import { nestPlywood, oakBoardFeet, type OakPlan } from './nesting';
 import {
   EPOXY_KITS, EPOXY_KITS_SMALL, EPOXY_PUMPS_300, FILLERS, FINISH_CONTAINER_FACTOR, FINISH_CONTAINER_PRICE, FINISH_PRICE, GLASS_TAPE, METAL_CUT_ALLOWANCE_IN, NOTE_PRICE, OAK_ALT_PRICE_PER_BF, OAK_PRICE_PER_BF, PLYWOOD_PRICE, RESEARCH_DATE,
@@ -42,12 +42,14 @@ import {
 // ── Consumable assumptions (all estimates) ─
 /** Mixing, pot and brush waste on top of the glue epoxy of `glueEpoxyFlOz` (finishing.ts: per-joint-type estimates, before waste). The coats' quantities carry their own waste. */
 export const EPOXY_WASTE = 0.2;
-/** Resin share of the mixed volume: 5:1 for everything (105 with 206: the glue, the seal coat and the closes). */
+/** Resin share of the mixed volume for the West System groups only (5:1, 105 resin with 206 hardener). The small kits carry their own `resinShare` (U.S. Composites 635 is 2:1, D-79). */
 const RESIN_SHARE_GLUE = 5 / 6;
 const RESIN_SHARE_COAT = 5 / 6;
 /** Glass tape per taped joint (ft), and the waste on top. */
 export const TAPE_FT_PER_JOINT = 1.5;
 export const TAPE_WASTE = 0.25;
+/** A single epoxy kit with less than this share of its mixed volume to spare gets a "plan a second kit or a top-up" note. */
+export const EPOXY_THIN_MARGIN = 0.15;
 /** Mixed fluid ounces in a quart. */
 const FLOZ_PER_QT = 32;
 
@@ -236,8 +238,12 @@ export interface Bom {
   coreEstimateShare: number;
   bulkEstimateShare: number;
   touchesEstimateShare: number;
-  /** "Build $2,100.00 + bulk parts $190.00 + finishing touches $240.00 = $2,530.00" */
+  /** "Build $2,100.00 + bulk parts $190.00 + finishing touches $240.00 = $2,530.00, excluding shipping and tax" */
   totalsText: string;
+  /** The vendors on this BOM that ship the order (so freight is extra), in `SHIPPING_VENDORS` order. Empty when none is on the list. */
+  shippingVendors: string[];
+  /** Why the total is short of the card charge: "Shipping and tax are not in these prices. These orders ship: ..." (no number is invented). */
+  shippingNote: string;
   /** Joint counts the fastener lines were expanded from (equal to `fastenerBreakdown`'s counts). */
   jointCounts: FastenerJointCounts;
   /** Parts or fasteners with no price in prices.ts (empty at the defaults). */
@@ -306,8 +312,26 @@ function section(id: BomSection['id'], title: string, lines: BomLine[], extra: P
 
 /** "$2,279.80": dollars and cents with a thousands separator (the same format the Build tab prints). */
 export const usdText = (v: number): string => `${v < 0 ? '-' : ''}$${Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-/** "Build $X + bulk parts $B + finishing touches $Y = $Z". */
-export const totalsLine = (core: number, bulk: number, touches: number, total: number): string => `Build ${usdText(core)} + bulk parts ${usdText(bulk)} + finishing touches ${usdText(touches)} = ${usdText(total)}`;
+/** The text every total carries: shipping and sales tax are not in any price. */
+export const SHIPPING_TAX_PHRASE = 'excluding shipping and tax';
+/** "Build $X + bulk parts $B + finishing touches $Y = $Z, excluding shipping and tax". */
+export const totalsLine = (core: number, bulk: number, touches: number, total: number): string =>
+  `Build ${usdText(core)} + bulk parts ${usdText(bulk)} + finishing touches ${usdText(touches)} = ${usdText(total)}, ${SHIPPING_TAX_PHRASE}`;
+/**
+ * Online or mail-order sellers on the BOM whose orders ship (freight is extra, and no shipping figure was read for any of them). Bicycle Warehouse ships unless the lights are bought in
+ * its store; the others have no walk-in counter in Atlanta. Local pickups (Peach State Lumber, Harbor Freight, Home Depot, Ace, Rockler) are not listed.
+ */
+export const SHIPPING_VENDORS: ReadonlyArray<{ match: RegExp; name: string }> = [
+  { match: /U\.S\. Composites/, name: 'U.S. Composites' },
+  { match: /Speedy Metals/, name: 'Speedy Metals' },
+  { match: /Online Metals/, name: 'Online Metals' },
+  { match: /Bolt Depot/, name: 'Bolt Depot' },
+  { match: /Knot & Rope Supply/, name: 'Knot & Rope Supply' },
+  { match: /Bicycle Warehouse/, name: 'Bicycle Warehouse (unless bought in the store)' },
+  { match: /Blue Dog Ink/, name: 'Blue Dog Ink' },
+];
+export const shippingNoteText = (vendors: readonly string[]): string =>
+  `Shipping and sales tax are not in any price here (no shipping figure was read, so none is invented).${vendors.length ? ` These orders ship, so freight is extra: ${vendors.join(', ')}. Batch each vendor's items into one order.` : ''}`;
 
 /**
  * A line priced by the pack: `needed` pieces, `ceil(needed / packQty)` packs at `packUsd` each. `qty` carries the packs so `extUsd = qty x unitUsd`; the note says what to do with the rest.
@@ -517,7 +541,8 @@ function boltItems(part: Part, j: Joint, byId: PartMap, mat: FastMat): FastenerI
   const label = `${mat.ss} ${type} ${t}${len ? ` x ${len}"` : ' (length per joint note)'}`;
   // A nylon washer under the head (handle sockets) replaces one of the two fender washers.
   const nylon = /nylon washer/i.test(size);
-  const out: FastenerItem[] = [{ label, qty: n }, nut, washer(tnut ? (nylon ? 0 : 1) : type === 'carriage bolt' || nylon ? 1 : 2)];
+  const oneWasher = /one washer a bolt/i.test(size); // the D-ring bolts (D-83): a washer under the head only, the nylock bears on the bracket
+  const out: FastenerItem[] = [{ label, qty: n }, nut, washer(tnut ? (nylon ? 0 : 1) : type === 'carriage bolt' || nylon || oneWasher ? 1 : 2)];
   if (out[2].qty === 0) out.splice(2, 1);
   if (nylon) out.push({ label: `Nylon washer for ${d}" screw`, qty: n });
   if (/button plugs?/i.test(size)) { const bp = /(\d\/\d+)\s*in\b[^,;]*?button plugs?/i.exec(size); out.push({ label: `Button plug ${bp ? bp[1] : '5/8'}" black nylon`, qty: n }); }
@@ -564,9 +589,9 @@ const wheelIds = ['wheel-RL', 'wheel-RR', 'wheel-FL', 'wheel-FR'];
 const axleIds = ['axle-R', 'axle-FL', 'axle-FR'];
 const COTTER_DIAS: Array<[number, string]> = [[1 / 16, '1/16'], [3 / 32, '3/32'], [1 / 8, '1/8'], [5 / 32, '5/32'], [3 / 16, '3/16']];
 
-/** Hook-and-loop strip per pad/cushion and its mate: 3 ft of 1 in strip (both halves of the pair); the 2 in Velcro roll takes half that length. */
-export const DUAL_LOCK_FT_PER_PART = 3;
-/** Length of a hook-and-loop roll (ft): Velcro Industrial Strength 2 in x 4 ft (D-83; it replaced the 1 in x 6 ft Dual Lock roll). */
+/** Hook-and-loop per seat pad part (cushion, back pad): two 12 in strips of EACH half (hook and loop), so 2 ft of each half; the seat (cushion plus back pad) takes four 12 in strips of each half, 4 ft of each. */
+export const HOOK_LOOP_FT_PER_PART = 2;
+/** Length of each half (hook, loop) in a hook-and-loop pack (ft): Velcro Industrial Strength 2 in x 4 ft (D-83). */
 export const HOOK_LOOP_ROLL_FT = 4;
 /** Polysulfide used per bedding, oz. */
 export const SEALANT_OZ_PER_USE = 1;
@@ -643,13 +668,13 @@ export const NOTE_ITEMS: NoteItem[] = [
     },
   },
   {
-    key: 'dual-lock', section: 'consumables', touch: 'seat', price: NOTE_PRICE.dualLock, partIds: ['seat-cushion', 'seat-back-pad'], noteRef: 'seat cushion and seat back pad notes: hook-and-loop strips (D-83: Velcro Industrial 2" x 4 ft)',
+    key: 'hook-and-loop', section: 'consumables', touch: 'seat', price: NOTE_PRICE.hookLoop, partIds: ['seat-cushion', 'seat-back-pad'], noteRef: 'seat cushion and seat back pad notes: hook-and-loop strips (D-83: Velcro Industrial 2" x 4 ft)',
     expand(built) {
-      // Every built seat pad rides on a strip, whatever its note says today (D-83 swapped the 1" Dual Lock for 2" Velcro, same job).
+      // Every built seat pad rides on hook-and-loop strips, whatever its note says today (D-83: 2" Velcro Industrial).
       const pads = byIds(built, ['seat-cushion', 'seat-back-pad']);
       if (!pads.length) return null;
-      const ft = (pads.length * DUAL_LOCK_FT_PER_PART) / 2; // the old strip was 1" wide; the Velcro is 2" wide, so half the length
-      return { items: [{ label: `Velcro Industrial hook-and-loop strip, 2" x ${HOOK_LOOP_ROLL_FT} ft roll`, qty: Math.ceil(ft / HOOK_LOOP_ROLL_FT) }], note: `${ft} ft of 2" strip for ${pads.map(shopName).join(' and ')}, both halves of each pair` };
+      const ft = pads.length * HOOK_LOOP_FT_PER_PART; // feet of EACH half
+      return { items: [{ label: `Velcro Industrial hook-and-loop, 2" x ${HOOK_LOOP_ROLL_FT} ft pack`, qty: Math.ceil(ft / HOOK_LOOP_ROLL_FT) }], note: `${ft} ft of 2" hook and ${ft} ft of 2" loop (${ft} twelve-inch strips of each half) for ${pads.map(shopName).join(' and ')}. Check that the pack holds BOTH a hook strip and a loop strip, each 4 ft; if it is one 4 ft strip of a single half, buy two` };
     },
   },
   {
@@ -878,8 +903,8 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     if (cost !== undefined && !entry?.override) {
       // The model's own cost wins (a quote Eric or the model gave); the research can add a note and spec-gap alternatives to it.
       const mc = modelCostNote(key, spec);
-      price = { usd: cost, unit: 'ea', source: 'part.sourcing.costUsd (model)', basis: 'quoted', ...(mc?.alternatives ? { alternatives: mc.alternatives } : {}) };
-      priceNote = mc ? (mc.note.includes(RESEARCH_DATE) ? mc.note : `${mc.note} (${RESEARCH_DATE} research)`) : undefined;
+      price = { usd: cost, unit: 'ea', source: 'part.sourcing.costUsd (model)', basis: mc?.estimate ? 'estimate' : 'quoted', ...(mc?.alternatives ? { alternatives: mc.alternatives } : {}) };
+      priceNote = mc ? (mc.note.includes(RESEARCH_DATE) || mc.estimate || !/^model cost kept/.test(mc.note) ? mc.note : `${mc.note} (${RESEARCH_DATE} research)`) : undefined;
     } else {
       price = entry?.price ?? PURCHASED_FALLBACK;
       priceNote = price.note;
@@ -1019,12 +1044,15 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   const kitAltsNote = (alts: Price[]): string | undefined =>
     alts.length ? `Alternatives (not substituted): ${alts.map((a) => `${a.source} ${usdText(a.usd)} in all (${a.note ?? ''})${a.url ? ` ${a.url}` : ''}`).join(' | ')}` : undefined;
   const consumables: BomLine[] = [];
-  const buyText = sched.buy.filter((x) => /West System/.test(x.item)).map((x) => `${x.qty} ${x.unit} ${x.item.replace('West System ', '')}`).join(', ');
-  const epoxyNoteFor = (resinText: string, ratio: string): string => `${resinText} fl oz resin: ${Math.ceil(glueEpoxyTotal)} fl oz mixed for the glue joints that use epoxy (estimated by joint type, +${Math.round(EPOXY_WASTE * 100)}% waste, mixed at the kit's ${ratio}), ${Math.ceil(finishEpoxyFlOz)} fl oz for the ${std ? 'edge, end-grain and deck-underside coat' : 'one seal coat'} (the transom and bulkhead closes are glue joints, in the first figure; the schedule's quantities are mixed volume, so they hold for any kit: ${buyText}). Cheapest kit combination that covers it.`;
+  const buyText = sched.buy.filter((x) => /West System/.test(x.item) || EPOXY_BUY_RE.test(x.item)).map((x) => `${x.qty} ${x.unit} ${x.item.replace('West System ', '')}`).join(', ');
+  const epoxyNoteFor = (resinText: string, ratio: string): string => `${resinText} fl oz resin: ${Math.ceil(glueEpoxyTotal)} fl oz mixed for the glue joints that use epoxy (estimated by joint type, +${Math.round(EPOXY_WASTE * 100)}% waste, mixed at the kit's ${ratio}), ${Math.ceil(finishEpoxyFlOz)} fl oz for the ${std ? 'edge, end-grain and deck-underside coat' : 'one seal coat'} (the transom and bulkhead closes are glue joints, in the first figure; the schedule's quantities are mixed volume, so they hold for any kit${buyText ? `: ${buyText}` : ''}). Cheapest kit combination that covers it.`;
   if (useSmall) {
     const over = cheapSmall.resinNeed - (cheapSmall.n - 1) * cheapSmall.kit.resinFlOz;
     let epoxyNote = epoxyNoteFor(String(Math.ceil(cheapSmall.resinNeed)), ratioText(cheapSmall.kit));
     if (cheapSmall.n > 1 && over <= 0.2 * cheapSmall.kit.resinFlOz) epoxyNote += ` The need is only ${Math.ceil(over)} fl oz of resin past ${cheapSmall.n - 1} kit${cheapSmall.n === 2 ? '' : 's'} (the estimates carry ${Math.round(EPOXY_WASTE * 100)}% waste on the joints and 15% on the coat): ${cheapSmall.n - 1} kit${cheapSmall.n === 2 ? '' : 's'} may do if you mix tight.`;
+    // A single kit with a thin margin: the estimates are rough, so say to plan a second kit or a top-up (the extra-kit note above only fires when more than one kit is bought).
+    const capacity = cheapSmall.n * cheapSmall.kit.mixedFlOz, spare = (capacity - epoxyFlOz) / capacity;
+    if (spare < EPOXY_THIN_MARGIN) epoxyNote += ` Thin margin: the need is about ${Math.ceil(epoxyFlOz)} fl oz mixed from ${capacity} fl oz of kit (${Math.max(0, Math.round(spare * 100))}% to spare). Plan a second kit, or a quart of epoxy as a top-up (keep each batch to one brand and ratio), before the glue-up starts.`;
     consumables.push(line('Consumables', `epoxy-${cheapSmall.kit.id}`, cheapSmall.kit.label, cheapSmall.n, cheapSmall.kit.price, { vendor: cheapSmall.kit.price.source, notes: joinNotes(`Price: ${cheapSmall.kit.price.note}.`, epoxyNote, kitAltsNote(familyAlts(cheapSmall.kit.id))), alternatives: familyAlts(cheapSmall.kit.id) }));
     if (!cheapSmall.kit.pumpsIncluded && cheapSmall.kit.pumps) consumables.push(line('Consumables', 'epoxy-pumps', `Pump set for the ${cheapSmall.kit.label.split(',')[0]}`, 1, cheapSmall.kit.pumps, { vendor: cheapSmall.kit.pumps.source, notes: `Price: ${cheapSmall.kit.pumps.note}.` }));
   } else {
@@ -1056,7 +1084,7 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   consumables.push(...noteLines);
   // The finish products, container by container, exactly as the schedule's buy list names them.
   const finishKey = (item: string): { key: string; table: string; price: Price } | null => {
-    if (/West System/.test(item)) return null;
+    if (/West System/.test(item) || EPOXY_BUY_RE.test(item)) return null; // the epoxy is priced as a kit above
     if (/conditioner/i.test(item)) return { key: 'conditioner', table: 'conditioner', price: FINISH_PRICE.conditioner };
     if (/gel stain/i.test(item)) return { key: 'gel-stain', table: 'gelStain', price: FINISH_PRICE.gelStain };
     if (/stain or dye/i.test(item)) return { key: 'stain', table: 'stain', price: FINISH_PRICE.stain };
@@ -1068,7 +1096,7 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   };
   for (const bl of sched.buy) {
     const k = finishKey(bl.item);
-    if (!k) { if (!/West System/.test(bl.item)) unpriced.push(bl.item); continue; }
+    if (!k) { if (!/West System/.test(bl.item) && !EPOXY_BUY_RE.test(bl.item)) unpriced.push(bl.item); continue; }
     // The real container price where the research found one, else the base per-quart price scaled by the container size.
     const price: Price = (k.table === 'urethane' ? URETHANE_CONTAINER_PRICE[bl.unit] : FINISH_CONTAINER_PRICE[k.table]?.[bl.unit]) ?? { ...k.price, usd: money(k.price.usd * FINISH_CONTAINER_FACTOR[bl.unit]), unit: bl.unit };
     // The paint marker is bought as a marker, not by the pint (the schedule counts it as a half pint of fill).
@@ -1123,6 +1151,9 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   const totalUsd = money(coreUsd + bulkUsd + touchesUsd);
   const estimateUsd = money(coreEstimateUsd + bulkEstimateUsd + touchesEstimateUsd);
   const totalsText = totalsLine(coreUsd, bulkUsd, touchesUsd, totalUsd);
+  const lineVendors = sections.flatMap((x) => x.lines).map((l) => l.vendor ?? '');
+  const shippingVendors = SHIPPING_VENDORS.filter((v) => lineVendors.some((x) => v.match.test(x))).map((v) => v.name);
+  const shippingNote = shippingNoteText(shippingVendors);
 
   // Lines that need a decision from Eric (the Domino 4x20, the wheel spec, the shaft collars, the eye bolts...), in the order of the sections.
   const decisions = [...new Set(sections.flatMap((x) => x.lines).filter((l) => l.decision).map((l) => l.key))];
@@ -1138,11 +1169,12 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   rows.push(['Total', '', 'Bulk parts (shop stock)', '', '', '', bulkUsd.toFixed(2), '', '', `${(100 * share(bulkEstimateUsd, bulkUsd)).toFixed(0)}% estimates`]);
   rows.push(['Total', '', 'Finishing touches', '', '', '', touchesUsd.toFixed(2), '', '', `${(100 * share(touchesEstimateUsd, touchesUsd)).toFixed(0)}% estimates`]);
   rows.push(['Total', '', 'Grand total', '', '', '', totalUsd.toFixed(2), '', '', `${totalsText}; ${(100 * share(estimateUsd, totalUsd)).toFixed(0)}% estimates`]);
+  rows.push(['Total', '', 'Shipping and tax', '', '', '', '', '', '', shippingNote]);
   rows.push(['Total', '', 'Weather spec', '', '', '', '', '', '', `${std ? 'Standard (garage-kept)' : 'Extreme weather (stored outside, near salt)'}; thin sheet: ${thin.name}`]);
 
   return {
     spec, thinSheetName: thin.name, sections, totalUsd, estimateUsd, estimateShare: share(estimateUsd, totalUsd), coreUsd, bulkUsd, touchesUsd, coreEstimateUsd, bulkEstimateUsd, touchesEstimateUsd,
-    coreEstimateShare: share(coreEstimateUsd, coreUsd), bulkEstimateShare: share(bulkEstimateUsd, bulkUsd), touchesEstimateShare: share(touchesEstimateUsd, touchesUsd), totalsText, jointCounts, unpriced: [...new Set(unpriced)], decisions,
+    coreEstimateShare: share(coreEstimateUsd, coreUsd), bulkEstimateShare: share(bulkEstimateUsd, bulkUsd), touchesEstimateShare: share(touchesEstimateUsd, touchesUsd), totalsText, shippingVendors, shippingNote, jointCounts, unpriced: [...new Set(unpriced)], decisions,
     consumables: { epoxyFlOz, finishEpoxyFlOz, closeEpoxyFlOz, glueEpoxyFlOz: glueEpoxyTotal, resinFlOz, sealedFt2, oakFt2, plyFt2, glueJoints, tapeFt }, unresolved, wholeBoardsExtraUsd: 0, lumberAllowanceUsd: money(lumberAllowanceUsd), lumberAltUsd: money(lumberAltUsd), csv: toCsv(rows),
   } as Bom; // `weatherCompare` is added by `bom` (a lazy getter)
 }

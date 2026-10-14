@@ -150,6 +150,11 @@ export function laminationText(layers: LaminationLayer[], finalT?: number): stri
 
 /** Assumed width of the rough boards bought (in) and the lengths they come in (in): 6, 8 and 10 ft. */
 export const BOARD_WIDTH_IN = 6;
+/**
+ * Edge-glued layers of a face-laminated part (not cross-laminated): the seam of each layer sits this far from the seam of the layer next to it (the boards of a layer are unequal, mirrored from one
+ * layer to the next), so two seams never stack. A stacked seam is a weak line through the whole thickness: the bridle pull would load the tongue's, the hand-hold sits on the bulkhead's.
+ */
+export const LAMINATION_SEAM_OFFSET_IN = 2;
 export const BOARD_LENGTHS_IN: readonly number[] = [72, 96, 120];
 
 // ── Part selection ────────────────────────────────────────────────────────────
@@ -609,9 +614,13 @@ export function planOakPart(x: Part, p: Params, warnings: string[] = []): OakPar
     const lenDim = tn ? stock.w : stock.l, widDim = tn ? stock.l : stock.w;
     // The model may place the edge joint off center (the brake knee's, clear of the bolt holes and the shoulder): its notes say how far up from the bottom edge it is.
     const split = lg && !tn && eN === 2 ? edgeJointUp(x, stock.w) : undefined;
+    // Plain face laminate of two boards a layer: odd layers put the seam half the offset one way of the middle, even layers the other (capped so the wider board still fits a board).
+    const half = lamination && !lg && eN === 2 && ls.layer
+      ? (ls.layer % 2 === 1 ? -1 : 1) * Math.max(0, Math.min(LAMINATION_SEAM_OFFSET_IN / 2, BOARD_WIDTH_IN - p.laminateWidthAllowanceIn - widDim / 2))
+      : 0;
     for (let a = 0; a < eN; a++) {
       const exact: Dims = glued
-        ? { t: ls.t, w: (split !== undefined ? (a === 0 ? split : widDim - split) : widDim / eN) + p.laminateWidthAllowanceIn, l: lenDim + p.laminateLengthAllowanceIn }
+        ? { t: ls.t, w: (split !== undefined ? (a === 0 ? split : widDim - split) : widDim / eN + (a === 0 ? half : -half)) + p.laminateWidthAllowanceIn, l: lenDim + p.laminateLengthAllowanceIn }
         : { t: ls.t, w: stock.w + p.roughWidthAllowanceIn, l: stock.l + p.roughLengthAllowanceIn };
       const cap = BOARD_THICKNESSES.find((q) => q.nominal === ls.board)?.nominalIn ?? null;
       const piece: PlannedPiece['piece'] = lamination ? 'layer' : eN > 1 ? 'board' : 'solid';
@@ -1055,6 +1064,16 @@ function sharedNames(plans: OakPartPlan[]): Map<string, string> {
   return out;
 }
 
+/** The name a glue-up and its layer cuts go by: "Seat back stop block" is "Seat back stop" (the glue-up is then "Seat back stop block", the cuts "Seat back stop, layer 1 of 2"), so the kind is never said twice. */
+export function glueBaseName(name: string, laminated: boolean): string {
+  const kind = laminated ? 'block' : 'panel';
+  return name.trim().replace(new RegExp(`\\s+${kind}$`, 'i'), '');
+}
+/** The label of a glue-up: "Hinge backer block", "Rear transom panel". */
+export function glueUpName(name: string, laminated: boolean): string {
+  return `${glueBaseName(name, laminated)} ${laminated ? 'block' : 'panel'}`;
+}
+
 /** The pieces sawn from boards: identical pieces of identical parts are one entry with a quantity. */
 function cutsOf(plans: OakPartPlan[], pools: ResawPool[]): Cut[] {
   const map = new Map<string, Cut>();
@@ -1062,17 +1081,19 @@ function cutsOf(plans: OakPartPlan[], pools: ResawPool[]): Cut[] {
   for (const pl of plans) {
     const name = names.get(pl.partNo)!;
     const glued = pl.edgeN > 1 || !!pl.lamination;
-    const glueLabel = glued ? `${name} ${pl.lamination ? 'block' : 'panel'}` : undefined;
+    const glueLabel = glued ? glueUpName(name, !!pl.lamination) : undefined;
+    const cutName = glued ? glueBaseName(name, !!pl.lamination) : name;
     const unequal = (pc: PlannedPiece): boolean => !!pc.layer && pl.pieces.some((q) => q.layer === pc.layer && Math.abs(q.rough.w - pc.rough.w) > 1e-9);
     const lgw = (pc: PlannedPiece): string | undefined => (pc.layer ? layerGrainWord(pl.part, pc.layer) : undefined);
+    const crossLam = !!pl.part.layerGrain;
     for (const pc of pl.pieces) {
       const board = pc.piece === 'strip' ? (pools.find((q) => Math.abs(q.roughT - r3(pc.rough.t)) < 1e-6)?.board ?? '?') : pc.board;
       const label = pc.piece === 'solid' ? name
         : pc.piece === 'strip' ? (pc.of > 1 ? `${name}, strip ${pc.index} of ${pc.of}` : `${name}, strip`)
-          : pc.piece === 'board' ? `${name}, board ${pc.across} of ${pc.acrossOf}`
-            : `${name}, layer ${pc.layer} of ${pc.layers}${pc.acrossOf ? `, board ${pc.across} of ${pc.acrossOf}` : ''}${lgw(pc) ? ` (grain ${lgw(pc)})` : ''}`;
+          : pc.piece === 'board' ? `${cutName}, board ${pc.across} of ${pc.acrossOf}`
+            : `${cutName}, layer ${pc.layer} of ${pc.layers}${pc.acrossOf ? `, board ${pc.across} of ${pc.acrossOf}` : ''}${lgw(pc) ? ` (grain ${lgw(pc)})` : ''}`;
       const note = pc.piece === 'board' ? 'joint the glue edges, then glue the boards edge to edge'
-        : pc.piece === 'layer' ? `plane to ${fractionText(pc.rough.t, 16)}" before the glue-up${lgw(pc) ? `; grain ${lgw(pc)}` : ''}${pc.acrossOf ? `; edge-glue its boards first${unequal(pc) ? ' (the two are NOT equal: board 1 is the bottom edge, board 2 the top)' : ''}` : lgw(pc) ? `; one piece, ${fractionText(pc.rough.w, 8)}" wide across its grain` : ''}`
+        : pc.piece === 'layer' ? `plane to ${fractionText(pc.rough.t, 16)}" before the glue-up${lgw(pc) ? `; grain ${lgw(pc)}` : ''}${pc.acrossOf ? `; edge-glue its boards first${unequal(pc) ? (crossLam ? ' (the two are NOT equal: board 1 is the bottom edge, board 2 the top)' : ` (the two are NOT equal: the seam sits ${fractionText(LAMINATION_SEAM_OFFSET_IN, 8)}" off the seam of the next layer)`) : ''}` : lgw(pc) ? `; one piece, ${fractionText(pc.rough.w, 8)}" wide across its grain` : ''}`
           : pc.piece === 'strip' ? 'rip the lane first, then resaw it on edge; plane to thickness after the resaw' : undefined;
       const key = `${pl.partNo}|${pc.piece}|${pc.index}|${pc.of}|${board}|${rowKeyDims(pc.rough)}`;
       const hit = map.get(key);
@@ -1118,7 +1139,7 @@ function glueUpsOf(plans: OakPartPlan[]): GlueUp[] {
     const name = names.get(pl.partNo)!;
     const layers = pl.lamination ? pl.lamination.layers.length : 1;
     const kind: GlueUp['kind'] = pl.lamination ? (pl.edgeN > 1 ? 'both' : 'face') : 'edge';
-    const label = `${name} ${pl.lamination ? 'block' : 'panel'}`;
+    const label = glueUpName(name, !!pl.lamination);
     const key = `${pl.partNo}|${rowKeyDims(pl.block)}`;
     const hit = map.get(key);
     if (hit) { hit.qty += 1; hit.ids.push(pl.part.id); continue; }

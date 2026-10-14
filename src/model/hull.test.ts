@@ -636,6 +636,6 @@ describe('round 2 hull (build M2-M8, D-43)', () => {
     expect(bay).toBeLessThan(8.5);
     expect(bay).toBeGreaterThan(5.5); // 6.6 between the joists; the long bay is the 5.8 in from the king beam to the end joist, 6.5 at the rear
     expect(get(parts, 'joist-8').notes).toMatch(/last joist, under the scarf/);
-    expect(get(parts, 'joist-6').notes).toMatch(/chain joist/); // the crossmember behind the king beam anchors the steering chains (D-58)
+    expect(get(parts, 'joist-6').notes).toMatch(/chain crossmember/); // the crossmember behind the king beam anchors the steering chains (D-58)
   });
 });

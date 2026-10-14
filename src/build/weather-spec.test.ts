@@ -11,7 +11,7 @@ import { assemblySteps, standardText } from './assembly';
 import { buildBookHtml } from './build-book';
 import { URETHANE_COVERAGE, VARNISH_COVERAGE, finishAreas, finishMaterial, finishingSchedule, glueEpoxyFlOz, glueJointEstimates, glueTitebond, standardAdhesive, urethaneContainers } from './finishing';
 import { BuildData } from './package';
-import { OWNED_NOTE, PLYWOOD_PRICE, TITEBOND_BOTTLES, specOf, std304 } from './prices';
+import { OWNED_NOTE, PLYWOOD_PRICE, TITEBOND_BOTTLES, metalPrice, specOf, std304 } from './prices';
 import { lbDelta, weatherChipText, weatherLine } from '../ui/build-helpers';
 
 const std: Params = { ...defaultParams(), weatherSpec: WEATHER_SPEC.standard };
@@ -470,5 +470,82 @@ describe('the build book', () => {
     expect(html).not.toMatch(/marine okoume \(BS 1088\), 4 × 8 ft/);
     const htmlE = buildBookHtml(new BuildData(extParts, ext, { date: '2026-10-12' }));
     expect(htmlE).toContain('Weather spec: Extreme weather');
+  });
+});
+
+describe('cost critic round 2: Standard metal, notes, shipping and tax', () => {
+  const metalLines = (b: Bom): BomLine[] => b.sections.find((x) => x.id === 'metal')!.lines;
+
+  it('Standard prices its stainless stock at the researched 304 pieces, not the 316 rows', () => {
+    // the cut-list section reads "18-8 (304) stainless ...": the 316 guard once missed it
+    expect(metalPrice('18-8 (304) stainless flat bar 1/4" x 2"', 'standard')!.packUsd).toBe(19.95);
+    expect(metalPrice('18-8 (304) stainless flat bar 1/8" x 2"', 'standard')!.packUsd).toBe(9.23);
+    expect(metalPrice('18-8 (304) stainless angle 1-1/2" x 1-1/2" x 1/8"', 'standard')!.packUsd).toBe(7.75);
+    expect(metalPrice('316 stainless flat bar 1/4" x 2"', 'standard')!.packUsd).toBe(19.95); // a 316 section text reaches the same 304 row under Standard
+    expect(metalPrice('316 stainless flat bar 1/4" x 2"', 'extreme')!.usd).toBeCloseTo(23.28, 2); // Extreme keeps the 316 price
+    const std = metalLines(bStd);
+    const ext = metalLines(bExt);
+    const ext316 = (re: RegExp): BomLine => ext.find((l) => re.test(l.key))!;
+    const std304 = (re: RegExp): BomLine => std.find((l) => re.test(l.key))!;
+    expect(std304(/flat bar 1\/4" x 2"/).extUsd).toBe(19.95);
+    expect(std304(/flat bar 1\/8" x 2"/).extUsd).toBe(9.23);
+    expect(std304(/angle/).extUsd).toBe(7.75);
+    expect(std304(/flat bar 1\/4" x 2"/).basis).toBe('quoted');
+    expect(std304(/flat bar 1\/16"/).basis).toBe('estimate'); // no 304 1/16" x 1" bar was found
+    // each Standard 304 line is cheaper than its 316 line, and the three together are about $25 less than the old 85 % estimates plus 316 pieces
+    for (const re of [/flat bar 1\/4" x 2"/, /flat bar 1\/8" x 2"/, /angle/]) expect(std304(re).extUsd, String(re)).toBeLessThan(ext316(re).extUsd);
+    for (const l of std.filter((q) => /stainless/.test(q.key) && !/1\/16/.test(q.key))) expect(l.notes ?? '', l.key).not.toMatch(/85 %|no 304 stock was researched/);
+  });
+
+  it('the Baltic birch price note makes no ply or glue claim the vendor list does not', () => {
+    const note = PLYWOOD_PRICE['baltic-6mm'].note ?? '';
+    expect(note).not.toMatch(/\b5 ply\b/);
+    expect(note).toMatch(/Count the plies at an edge \(5 expected; the side-web margin assumes 5-ply\), measure 6\.0 to 6\.5 mm, and ask the glue/);
+  });
+
+  it('every total says it excludes shipping and tax, and the orders that ship are named', () => {
+    for (const b of [bStd, bExt]) {
+      expect(b.totalsText).toMatch(/, excluding shipping and tax$/);
+      expect(b.csv).toContain('excluding shipping and tax');
+      expect(b.shippingNote).toMatch(/Shipping and sales tax are not in any price/);
+      for (const v of ['U.S. Composites', 'Speedy Metals', 'Online Metals', 'Bolt Depot', 'Knot & Rope Supply', 'Bicycle Warehouse']) expect(b.shippingVendors.join('|'), v).toContain(v);
+      expect(b.shippingNote).not.toMatch(/\$\d/); // no shipping number is invented
+    }
+    expect(lines(bStd).every((l) => !/^(shipping|tax)/i.test(l.key))).toBe(true);
+    const book = buildBookHtml(new BuildData(stdParts, std, { date: '2026-10-14' }));
+    expect(book).toMatch(/excluding shipping and tax/);
+    expect(book).toContain('These orders ship, so freight is extra');
+  });
+
+  it('prices that have no source behind them are estimates; the latch catch comes with the latch', () => {
+    for (const b of [bStd, bExt]) {
+      const by = (k: string): BomLine => lines(b).find((l) => l.key === k)!;
+      expect(by('brake-foot-tread').basis).toBe('estimate');
+      expect(by('flag-tube').basis).toBe('estimate');
+      expect(by('storage-catch').extUsd).toBe(0);
+      expect(by('storage-catch').notes).toMatch(/comes with the latch/);
+    }
+  });
+
+  it('a single epoxy kit with a thin margin says to plan a second kit or a top-up', () => {
+    const e = lines(bExt).find((l) => /^epoxy-uscomposites/.test(l.key))!;
+    const spare = (e.qty * 96 - bExt.consumables.epoxyFlOz) / (e.qty * 96);
+    if (spare < 0.15) expect(e.notes).toMatch(/Thin margin[\s\S]*second kit, or a quart of epoxy as a top-up/);
+    else expect(e.notes).not.toMatch(/Thin margin/);
+  });
+
+  it('stale text is gone: no wip path in prices, the Rockler item number, no Sipo in the Standard Domino note, hook-and-loop key', () => {
+    const k = (b: Bom, key: string): BomLine | undefined => lines(b).find((l) => l.key === key);
+    expect(k(bStd, 'storage-lid-stay')!.notes).toMatch(/item 39529/);
+    expect(k(bStd, 'storage-lid-stay')!.description).toBe(stdParts.find((x) => x.id === 'storage-lid-stay')!.name.replace(/\b316\b/, '304')); // the BOM follows the part name
+    const dom = lines(bStd).filter((l) => /^Domino/.test(l.key));
+    expect(dom.length).toBeGreaterThan(0);
+    for (const l of dom) expect(`${l.notes} ${l.description}`, l.key).not.toMatch(/sipo/i);
+    expect(k(bStd, 'dual-lock')).toBeUndefined();
+    const hl = k(bStd, 'hook-and-loop')!;
+    expect(hl.notes).toMatch(/BOTH a hook strip and a loop strip/);
+    expect(hl.notes).toMatch(/4 ft of 2" hook and 4 ft of 2" loop/);
+    expect(k(bStd, 'seat-hinge')!.notes).toMatch(/leaf width and screw holes against the three-insert pattern/);
+    expect(k(bExt, 'lash-point')!.notes).toMatch(/estimate; no source; rating unverified/i);
   });
 });

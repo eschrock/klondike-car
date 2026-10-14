@@ -457,6 +457,31 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       when: 'before ordering',
       refs: ['D-79', 'D-80'],
     },
+    ...(thin.key === 4 || thin.key === 2
+      ? [{
+        id: 'web-bend',
+        title: `${thin.name}: count the plies, ask the glue, dry-bend a web strip`,
+        how: [
+          it('Count the plies at the edge of the sheet.', [
+            `${thin.name} should show 5 plies. The side-web strength row assumes a 5-ply sheet: a 3-ply 6 mm sheet must NOT be used (it is far weaker across the grain). Reject it at the yard.`,
+            'Do this at the lumberyard, with the sheet in front of you, before you pay.',
+          ]),
+          it(thin.key === 4 ? 'Ask what glue the sheet carries (interior or exterior).' : 'Ask for the BS 1088 stamp and the glue type (marine).', [thin.key === 4 ? 'The sled is garage-kept and every face and edge is sealed, so an interior glue line is acceptable; ask anyway.' : 'The Extreme weather spec is built for a wet life: a plain exterior sheet is not a substitute.']),
+          it('Dry-bend a strip of the sheet over the S-ramp.', [
+            'Cut a strip 6" × 24" along the length of the sheet (the web runs along the sheet), from the waste of the web blank.',
+            `Clamp it dry over the S-ramp ribs or a block of the same rise (${fr(computeLayout(p).turnIn(computeLayout(p).xSideEnd), 8)}" over about 29-1/2").`,
+            'No glue, no water: it must lie down on the ramp with no crack, no splintering and no white lines in the outer ply.',
+            'Release it and see how much it springs back. The bands and cleats hold the bend in the real glue-up.',
+          ]),
+        ],
+        passList: ['Five plies at the edge; the glue is known; the dry strip takes the S-ramp without a crack or white line.'],
+        ifFails: 'A 3-ply sheet, a cracked strip or an unknown glue: reject the sheet, ask for another or change the thin-sheet material before ordering the rest. Re-run the side-web check with the real sheet before going on.',
+        partIds: ids(parts, /^side-[LR]-web$/),
+        paramKeys: [],
+        when: 'before ordering' as VerifyWhen,
+        refs: ['D-80'],
+      }]
+      : []),
     {
       id: 'ply-thickness',
       title: 'Plywood thickness: measure before any dado is cut',
@@ -464,6 +489,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
         it(`Measure the ${thin.nominal} ${thin.key === 1 ? 'white oak plywood' : thin.key === 3 || thin.key === 4 ? 'Baltic birch' : 'okoume'} and the 12 mm okoume with calipers, at six or more points on the edges.`, [
           thin.key === 1 ? 'Nominal 1/4" white oak plywood runs about 7/32", and the veneer face varies.' : '',
           thin.key === 4 ? `Measure the sheet you will cut, not the listing: 6 mm Baltic birch is sold as "1/4 in" and runs from about 7/32" to 1/4". The design assumes ${fr(p.balticSixThickIn, 64)}".` : '',
+          thin.key === 4 ? 'A typical "1/4 in" Baltic sheet measures a full 1/4", a little over the design figure: expect that case. Enter the measured value; the dado width follows it (the sheet plus the slop below), so no dado is cut to the nominal size.' : '',
           'BS 1088 12 mm often runs to 31/64" or more, and the sealed sheet is a few thousandths thicker.',
         ].filter(Boolean)),
         it('Compare with the dados the Shaper files will cut.', [
@@ -619,7 +645,8 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
 
   // Leftovers: any 'verify' param no check claims (the truck bed measurements, the NDS value, ...).
   const claimed = new Set(drafts.flatMap((c) => c.paramKeys));
-  const other = verifyParamKeys().filter((k) => !claimed.has(k));
+  // The axle is solid rod (wall 0, D-71): the tube's yield and ultimate are not in the design, so the checklist does not ask for them.
+  const other = verifyParamKeys().filter((k) => !claimed.has(k) && !(p.axleWallIn <= 0 && /^axleTube/.test(k)));
   if (other.length) {
     drafts.push({
       id: 'other-params',

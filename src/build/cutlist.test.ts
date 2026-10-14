@@ -4,7 +4,7 @@ import { defaultParams } from '../params';
 import { PRE_D72 } from '../test-fixtures';
 import { isOakStocked } from './prices';
 import { assemblySteps } from './assembly';
-import { BOARD_THICKNESSES, MAX_LAMINATION_LAYERS, boardFinishedIn, finalFrac, roughFrac, RESAW_BOARD_WIDTHS_IN, RESAW_MIN_SPARES, boardByNominal, boardForThickness, cutList, fabText, isBuilt, laminationText, makeLanes, packLanes, planLamination, stepMapOf, resawUsableIn, spareSlots, stripsPerBoard, toCsv } from './cutlist';
+import { BOARD_THICKNESSES, MAX_LAMINATION_LAYERS, boardFinishedIn, finalFrac, roughFrac, RESAW_BOARD_WIDTHS_IN, RESAW_MIN_SPARES, boardByNominal, boardForThickness, cutList, fabText, glueUpName, isBuilt, laminationText, makeLanes, packLanes, planLamination, stepMapOf, resawUsableIn, spareSlots, stripsPerBoard, toCsv } from './cutlist';
 
 // D-72/D-73: this file's resaw and sheet numbers (0.234 in bands in 0.359 -> 3/8 in rough pools, the 4 mm sheet, the tube) are the 4 mm okoume design: PRE_D72. The white oak / rod cut list is in d72.test.ts.
 const p = { ...defaultParams(), ...PRE_D72 };
@@ -472,8 +472,8 @@ describe('actual cuts (Eric 2026-10-12: the cut list lists the cuts, not the glu
   it('lists the layers of a face-laminated part as the cuts, with the laminated block as the glue-up', () => {
     const layers = dcl.cuts.filter((c) => c.partNo === 'beam-R');
     expect(layers).toHaveLength(3);
-    for (const c of layers) { expect(c.piece).toBe('layer'); expect(c.layers).toBe(3); expect(c.board).toBe('4/4'); expect(c.glueUp).toBe('rear axle beam block'); }
-    expect(layers.map((c) => c.label).sort()).toEqual(['rear axle beam, layer 1 of 3', 'rear axle beam, layer 2 of 3', 'rear axle beam, layer 3 of 3']);
+    for (const c of layers) { expect(c.piece).toBe('layer'); expect(c.layers).toBe(3); expect(c.board).toBe('4/4'); expect(c.glueUp).toBe('Rear axle beam block'); }
+    expect(layers.map((c) => c.label).sort()).toEqual(['Rear axle beam, layer 1 of 3', 'Rear axle beam, layer 2 of 3', 'Rear axle beam, layer 3 of 3']);
     const g = dcl.glueUps.find((x) => x.partNo === 'beam-R')!;
     expect(g.kind).toBe('face');
     expect(g.from).toBe(3);
@@ -574,5 +574,28 @@ describe('readability round 2: one lane count for the steps, the book and the cu
   it('the cuts, the glue-ups and the finished parts say nothing about keys, D-numbers or decimals', () => {
     const text = [...cl.cuts.map((c) => `${c.label} ${c.roughText} ${c.note ?? ''}`), ...cl.glueUps.map((g) => `${g.label} ${g.roughBlockText} ${g.finalText} ${g.note}`), ...cl.finished.map((f) => `${f.name} ${f.finalText}`), ...cl.oak.map((g) => g.title)].join('\n');
     expect(text).not.toMatch(/\bD-\d+|\d\.\d/);
+  });
+});
+
+describe('glue-up and layer-cut labels never say the kind twice (cost pass round 2)', () => {
+  it('a name that ends in "block" is not given a second one; the layer cuts use the same base name', () => {
+    const pp = defaultParams();
+    const cl = cutList(buildModel(pp), pp);
+    for (const g of cl.glueUps) expect(g.label, g.label).not.toMatch(/\b(\w+) \1$/i);
+    expect(cl.glueUps.map((g) => g.label)).toContain('Seat back stop block');
+    expect(cl.cuts.filter((c) => c.layer).map((c) => c.label)).toContain('Seat back stop, layer 1 of 2');
+    expect(glueUpName('Hinge backer', true)).toBe('Hinge backer block');
+    expect(glueUpName('Rear transom', false)).toBe('Rear transom panel');
+  });
+  it('the edge-glued layers of a laminate are unequal and mirrored: neighboring seams sit at least 1-1/2" apart', () => {
+    const pp = defaultParams();
+    const cl = cutList(buildModel(pp), pp);
+    for (const id of ['bridle-tongue', 'bow-bulkhead']) {
+      const first = (layer: number): number => cl.cuts.filter((c) => c.piece === 'layer' && c.ids.includes(id) && c.layer === layer).sort((a, b) => a.index - b.index)[0].roughExact.w;
+      expect(Math.abs(first(1) - first(2)), id).toBeGreaterThanOrEqual(1.5);
+      const sum = (layer: number): number => cl.cuts.filter((c) => c.piece === 'layer' && c.ids.includes(id) && c.layer === layer).reduce((a, c) => a + c.roughExact.w, 0);
+      expect(sum(1)).toBeCloseTo(sum(2), 6); // same width of block either way
+      expect(cl.cuts.filter((c) => c.ids.includes(id) && c.layer === 1)[0].note).toMatch(/NOT equal: the seam sits 2" off the seam of the next layer/);
+    }
   });
 });

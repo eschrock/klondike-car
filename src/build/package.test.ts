@@ -228,7 +228,9 @@ describe('build book: laminations, links, bulk parts and finishing touches', () 
     expect(html).toContain('Bulk parts (shop stock) subtotal');
     expect(html).toContain(`Lights subtotal`);
     expect(html).toContain(esc(bom.totalsText));
-    expect(bom.totalsText).toBe(`Build ${usd(bom.coreUsd)} + bulk parts ${usd(bom.bulkUsd)} + finishing touches ${usd(bom.touchesUsd)} = ${usd(bom.totalUsd)}`);
+    expect(bom.totalsText).toBe(`Build ${usd(bom.coreUsd)} + bulk parts ${usd(bom.bulkUsd)} + finishing touches ${usd(bom.touchesUsd)} = ${usd(bom.totalUsd)}, excluding shipping and tax`);
+    expect(html).toContain(esc(bom.shippingNote)); // the shipping orders are named where the total shows (no number invented)
+    expect(html).toMatch(/Grand total \$[\d,.]+ \(excluding shipping and tax\)/);
     expect(html).toMatch(/need [\d.]+, \d+ packs? of \d+ at \$/);
   });
 

@@ -5,7 +5,7 @@ import { defaultParams } from '../params';
 import { BULK_SHARE, EPOXY_WASTE, NOTE_ITEMS, TOUCH_GROUPS, fastenerMaterialNote, isBulkQty, touchGroupOfPart, THROUGH_STACKS, bom, boltLengthFromStack, jointItems, screwLengthFromStack, shortVendor, uniqueJoints } from './bom';
 import { PRE_D72 } from '../test-fixtures';
 import { cutList, isBuilt } from './cutlist';
-import { finishingSchedule, glueEpoxyFlOz } from './finishing';
+import { EPOXY_BUY_RE, finishingSchedule, glueEpoxyFlOz } from './finishing';
 import { oakBoardFeet } from './nesting';
 import { EPOXY_KITS, EPOXY_KITS_SMALL, EPOXY_PUMPS_300, EPOXY_PUMPS_USC_2TO1, FASTENER_PRICE, FASTENER_PRICE_STANDARD, FILLERS, FINISH_CONTAINER_PRICE, FINISH_PRICE, GLASS_TAPE, METAL_PRICE_PER_FT, NOTE_PRICE, OAK_ALT_PRICE_PER_BF, OAK_PRICE_PER_BF, OWNED_NOTE, PEACH_STATE_LUMBER_URL, PLYWOOD_PRICE, PURCHASED_PRICE, PURCHASED_PRICE_STANDARD, RESEARCH_DATE, RESEARCH_DATE_COST_PASS, SEARCH_READ_NOTE, TITEBOND_OWNED, type Price } from './prices';
 
@@ -124,7 +124,7 @@ describe('bom', () => {
     const sched = finishingSchedule(parts, p);
     const cons = b.sections.find((s) => s.id === 'consumables')!.lines;
     // every finish product of the buy list is a BOM line with the same container and quantity
-    for (const bl of sched.buy.filter((x) => !/West System/.test(x.item))) {
+    for (const bl of sched.buy.filter((x) => !/West System/.test(x.item) && !EPOXY_BUY_RE.test(x.item))) { // the epoxy is a kit line, checked below
       const marker = /paint marker/.test(bl.item); // D-83: bought as a marker, not by the pint
       const l = cons.find((q) => q.description === (marker ? bl.item : `${bl.item}, ${bl.unit}`));
       expect(l, bl.item).toBeTruthy();
@@ -191,10 +191,10 @@ describe('bom', () => {
   const consumables = () => b.sections.find((x) => x.id === 'consumables')!.lines;
   const qtyOf = (lines: typeof b.sections[number]['lines'], re: RegExp): number => lines.filter((l) => re.test(l.key)).reduce((a, l) => a + need(l), 0);
 
-  it('lists what the steps and notes use (build MUST-10): axle retention, hinge screws, handlebow rods, rail screws, plugs, washers, Dual Lock, banding, sealant, cement, batten screws', () => {
+  it('lists what the steps and notes use (build MUST-10): axle retention, hinge screws, handlebow rods, rail screws, plugs, washers, hook-and-loop, banding, sealant, cement, batten screws', () => {
     const wheels = parts.filter((x) => /^wheel-/.test(x.id)).length;
     expect(wheels).toBe(4);
-    const f = fasteners(), c = [...consumables(), ...secLines('touches')]; // the Dual Lock belongs to the seat comfort touches
+    const f = fasteners(), c = [...consumables(), ...secLines('touches')]; // the hook-and-loop belongs to the seat comfort touches
     expect(qtyOf(f, /shaft collar/)).toBe(wheels);
     expect(qtyOf(f, /cotter pin 5\/32" x 1-1\/2"/)).toBe(wheels); // the 0.156" cross hole takes a 5/32 pin
     expect(qtyOf(f, /end plug for 5\/8" OD/)).toBe(6); // three axle tubes, two ends each
@@ -207,11 +207,11 @@ describe('bom', () => {
     expect(qtyOf(f, /Nylon washer for 1\/4"/)).toBe(4);
     expect(qtyOf(f, /wood screw #6 x 1\/2"/)).toBe(0); // the lid battens use the standard #8 x 5/8 now (D-72: three wood-screw sizes, no fourth)
     expect(qtyOf(f, /wood screw #8 x 5\/8"/)).toBeGreaterThanOrEqual(12 + 6); // 12 batten screws (4 each, 3 battens) plus the hardware-into-thin-stock screws
-    expect(qtyOf(c, /^dual-lock$/)).toBeGreaterThanOrEqual(1);
+    expect(qtyOf(c, /^hook-and-loop$/)).toBeGreaterThanOrEqual(1);
     expect(qtyOf(c, /^edge-banding$/)).toBeGreaterThanOrEqual(1);
     expect(qtyOf(c, /^sealant$/)).toBeGreaterThanOrEqual(1);
     expect(qtyOf(c, /^contact-cement$/)).toBeGreaterThanOrEqual(1);
-    for (const l of c.filter((q) => ['dual-lock', 'edge-banding', 'sealant', 'contact-cement'].includes(q.key))) expect(l.notes, l.key).toBeTruthy(); // the note it came from is data (noteRef), not printed
+    for (const l of c.filter((q) => ['hook-and-loop', 'edge-banding', 'sealant', 'contact-cement'].includes(q.key))) expect(l.notes, l.key).toBeTruthy(); // the note it came from is data (noteRef), not printed
     // the stop blocks' own screw joints carry their screws; the note table does not add them twice
     expect(parts.find((x) => x.id === 'seat-wedge-L')!.joints!.some((j) => j.type === 'screw')).toBe(true);
     expect(NOTE_ITEMS.find((i) => i.key === 'stop-block-screws')!.expand(parts, uniqueJoints(parts))).toBeNull();
@@ -272,7 +272,7 @@ describe('bom', () => {
     const cons = consumables();
     expect(b.unpriced).toEqual([]);
     for (const bl of sched.buy) {
-      if (/West System 105/.test(bl.item)) continue; // resin: bought as the kits
+      if (/West System 105/.test(bl.item) || EPOXY_BUY_RE.test(bl.item)) continue; // resin: bought as the kits
       const hard = /\b(20[5679])\b/.exec(bl.item)?.[1];
       const l = hard ? cons.find((q) => q.key === `epoxy-${hard}`) : cons.find((q) => q.description === (/paint marker/.test(bl.item) ? bl.item : `${bl.item}, ${bl.unit}`));
       expect(l, bl.item).toBeTruthy();
@@ -301,7 +301,7 @@ describe('finishing touches (Eric, 2026-10-12)', () => {
     expect(b.sections[b.sections.length - 1].id).toBe('touches');
     expect(b.sections[b.sections.length - 1].title).toBe('Finishing touches');
     const keys = touches.map((l) => l.key);
-    for (const k of ['front-light', 'rear-light', 'lamp-clip', 'rear-lamp-clip', 'seat-cushion', 'seat-back-pad', 'dual-lock', 'reflector', 'lash-point']) expect(keys, k).toContain(k);
+    for (const k of ['front-light', 'rear-light', 'lamp-clip', 'rear-lamp-clip', 'seat-cushion', 'seat-back-pad', 'hook-and-loop', 'reflector', 'lash-point']) expect(keys, k).toContain(k);
     expect(touches.find((l) => l.key === 'reflector')!.qty).toBe(4);
     expect(touches.find((l) => l.key === 'lash-point')!.qty).toBe(6);
     // the lamp-clip inserts and screws and the lash-plate screws follow their parts
@@ -310,7 +310,7 @@ describe('finishing touches (Eric, 2026-10-12)', () => {
     // D-83: the D-ring brackets are through-bolted on two 1/4-20 button-head bolts each (6 rings, 12 bolts), a fender washer under each head and each nut, and a nylock; no wood screws
     const tie = (re: RegExp) => touches.filter((l) => re.test(l.key) && l.group === 'tie-downs').reduce((a, l) => a + need(l), 0);
     expect(tie(/button-head cap screw 1\/4-20 x 2"/)).toBe(12);
-    expect(tie(/fender washer 1\/4"/)).toBe(24);
+    expect(tie(/fender washer 1\/4"/)).toBe(12); // D-83: one washer a bolt, under the head
     expect(tie(/lock nut 1\/4-20/)).toBe(12);
     expect(tie(/#8-32/)).toBe(0); // the #8-32 sets are gone
     expect(touches.some((l) => /wood screw/.test(l.key) && l.group === 'tie-downs')).toBe(false);
@@ -331,7 +331,7 @@ describe('finishing touches (Eric, 2026-10-12)', () => {
     expect(b.coreUsd + b.bulkUsd + b.touchesUsd).toBeCloseTo(b.totalUsd, 2);
     expect(b.coreEstimateUsd + b.bulkEstimateUsd + b.touchesEstimateUsd).toBeCloseTo(b.estimateUsd, 2);
     for (const sh of [b.coreEstimateShare, b.bulkEstimateShare, b.touchesEstimateShare]) { expect(sh).toBeGreaterThanOrEqual(0); expect(sh).toBeLessThanOrEqual(1); }
-    expect(b.totalsText).toMatch(/^Build \$[\d,.]+ \+ bulk parts \$[\d,.]+ \+ finishing touches \$[\d,.]+ = \$[\d,.]+$/);
+    expect(b.totalsText).toMatch(/^Build \$[\d,.]+ \+ bulk parts \$[\d,.]+ \+ finishing touches \$[\d,.]+ = \$[\d,.]+, excluding shipping and tax$/);
   });
 
   it('keeps every touches part out of the core purchased section', () => {
@@ -409,7 +409,7 @@ describe('bulk parts (Eric, 2026-10-12)', () => {
 
 describe('exterior material notes (Eric, 2026-10-12)', () => {
   it('states a material requirement on every fastener and metal hardware line', () => {
-    const lines = [...secLines('fasteners'), ...secLines('bulk').filter((l) => l.packQty !== 1 && !/glass-tape|sandpaper/.test(l.key)), ...secLines('touches').filter((l) => !/dual-lock/.test(l.key))];
+    const lines = [...secLines('fasteners'), ...secLines('bulk').filter((l) => l.packQty !== 1 && !/glass-tape|sandpaper/.test(l.key)), ...secLines('touches').filter((l) => !/hook-and-loop/.test(l.key))];
     for (const l of lines.filter((q) => /^(316|Domino|Heat-set|Nylon|Button|Flanged)/.test(q.key))) expect(l.materialNote, l.key).toBeTruthy();
     for (const l of secLines('purchased').filter((q) => /hinge|latch|pin|chain|snap|clip|kingpin|steer|scupper|drain|stay|bridle-sleeve/.test(q.key))) expect(l.materialNote, l.key).toBeTruthy();
     expect(secLines('fasteners').find((l) => /hex bolt 3\/8-16 x 3-1\/4/.test(l.key))!.materialNote).toMatch(/316 stainless REQUIRED.*tannins/);

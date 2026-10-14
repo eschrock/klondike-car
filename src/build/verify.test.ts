@@ -14,10 +14,10 @@ describe('verify checklist', () => {
     expect(list.slice(0, 10).map((c) => c.id)).toEqual([
       'tire-squash', 'wheel', 'axle-rod', 'steering-parts', 'bridle', 'seat-back', 'sign-knobs', 'brake-knee', 'brake-strap', 'lamp-clip',
     ]);
-    expect(list.slice(10, 14).map((c) => c.id)).toEqual(['strip-bend', 'oak-supplier', 'deck-sheet', 'ply-thickness']); // D-79, D-80: the cost-pass sourcing checks come before the dado check
-    expect(list[14]?.id).toBe('bow-rib-clearance'); // D-76: the booted-rider check of the bow post
-    expect(list.slice(15, 19).map((c) => c.id)).toEqual(['d-ring', 'eva-pads', 'hinges-304', 'lid-support']); // D-83: the bought-hardware checks of the Standard spec
-    expect(list[19]?.id).toBe('other-params');
+    expect(list.slice(10, 15).map((c) => c.id)).toEqual(['strip-bend', 'oak-supplier', 'deck-sheet', 'web-bend', 'ply-thickness']); // D-79, D-80: the cost-pass sourcing checks (the sheet's plies and a dry bend) come before the dado check
+    expect(list[15]?.id).toBe('bow-rib-clearance'); // D-76: the booted-rider check of the bow post
+    expect(list.slice(16, 20).map((c) => c.id)).toEqual(['d-ring', 'eva-pads', 'hinges-304', 'lid-support']); // D-83: the bought-hardware checks of the Standard spec
+    expect(list[20]?.id).toBe('other-params');
     expect(list.map((c) => c.n)).toEqual(list.map((_, i) => i + 1));
     expect(new Set(list.map((c) => c.id)).size).toBe(list.length);
   });
@@ -36,7 +36,7 @@ describe('verify checklist', () => {
     const verify = verifyParamKeys();
     expect(verify.length).toBeGreaterThan(10);
     const covered = new Set(list.flatMap((c) => c.paramKeys));
-    const missing = verify.filter((k) => !covered.has(k));
+    const missing = verify.filter((k) => !covered.has(k) && !(p.axleWallIn <= 0 && /^axleTube/.test(k))); // the solid rod has no tube numbers to confirm
     expect(missing).toEqual([]);
     // ... and claims nothing that is not a verify param (a confirmed param drops out by itself).
     for (const k of covered) expect(PARAM_DEFS[k as keyof typeof PARAM_DEFS]?.status, k).toBe('verify');
@@ -55,6 +55,17 @@ describe('verify checklist', () => {
     const bend = list.find((c) => c.id === 'strip-bend')!;
     expect(bend.when).toBe('before ordering');
     expect(bend.whatToDo).toMatch(/2 vs 3 plies/);
+  });
+
+  it('D-80: the thin sheet is checked for plies (5 expected, never a 3-ply 6 mm sheet), its glue, and a dry bend over the S-ramp; a typical 1/4" sheet is the expected thickness case; no axle-tube items for the solid rod', () => {
+    const web = list.find((c) => c.id === 'web-bend')!;
+    expect(web.when).toBe('before ordering');
+    expect(web.whatToDo).toMatch(/should show 5 plies/);
+    expect(web.whatToDo).toMatch(/3-ply 6 mm sheet must NOT be used/);
+    expect(web.whatToDo).toMatch(/Ask what glue the sheet carries/);
+    expect(web.whatToDo).toMatch(/Dry-bend a strip of the sheet over the S-ramp/);
+    expect(list.find((c) => c.id === 'ply-thickness')!.whatToDo).toMatch(/measures a full 1\/4"[^.]*expect that case[\s\S]*the dado width follows it/);
+    expect(JSON.stringify(list.map((c) => c.whatToDo))).not.toMatch(/Axle tube yield|Axle tube ultimate/);
   });
 
   it('D-80: the Baltic birch thickness is a check before the dados, with its parameters-panel label and no decimal', () => {

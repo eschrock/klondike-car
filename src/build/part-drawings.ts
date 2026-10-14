@@ -228,7 +228,7 @@ export interface DrawingFeature {
   angleDeg?: number;
 }
 
-interface HoleF { k: 'hole'; key: string; to: string[]; joint: string; pts: Vec3[]; axis: Vec3; dia: number; blind?: number; entryHi?: boolean; /** "hole" or "counterbore". */ noun: string; /** The size with no count: `1/8" pilot, through`. */ size: string; /** What it is for. */ purpose: string; depthWords?: string; /** The face it enters, in words, when that is not a board face ("sloped face"). */ faceWord?: string; /** A blind hole that starts INSIDE the part (a pocket wall): the board coordinate along its axis where it starts. */ from?: number }
+interface HoleF { k: 'hole'; key: string; to: string[]; joint: string; pts: Vec3[]; axis: Vec3; dia: number; blind?: number; entryHi?: boolean; /** "hole" or "counterbore". */ noun: string; /** Drain holes of a side part are measured from the inner face of the rear transom, not from the part's own end: the shift (in) that turns the part's "from the rear end" into that datum (the web's rear end sits in the transom dado, behind the face). */ uShift?: number; /** The size with no count: `1/8" pilot, through`. */ size: string; /** What it is for. */ purpose: string; depthWords?: string; /** The face it enters, in words, when that is not a board face ("sloped face"). */ faceWord?: string; /** A blind hole that starts INSIDE the part (a pocket wall): the board coordinate along its axis where it starts. */ from?: number }
 interface RegionF { k: 'region'; key: string; to: string[]; joint: string; kind: DrawingFeature['kind']; boxes: Array<[Vec3, Vec3]>; /** "Domino mortise", "dado", "slot". */ noun: string; /** The size with no count. */ detail: string; purpose?: string; face?: { ax: Ax; hi: boolean } }
 interface OutlineF { k: 'outline'; text: string; title: string; marks: Vec2[]; anchor?: Vec2; size?: string; positions?: string[]; face?: string; angleDeg?: number; /** A long list of numbers (curve offsets) that goes in the NOTES block, not the table line. */ extra?: string }
 interface NoteF { k: 'note'; text: string; to?: string[]; joint?: string }
@@ -687,8 +687,11 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
     let size = `${dia ? `${drill(dia)} ` : ''}${word}, ${depth}`;
     const cb = new RegExp(String.raw`counterbore the head ${NUM}"?\s*(?:in\s*)?up the \w+ from its (underside|top)\s*\(${NUM}"?\s*(?:in\s*)?bit\)`).exec(r.text);
     let cbore: { dia: number; depth: number } | undefined;
-    if (cb && part.partNo === 'rail') { cbore = { dia: num(cb[3]), depth: num(cb[1]) }; size += `, with a ${drill(cbore.dia)} × ${frac(cbore.depth)} counterbore from the ${cb[2] === 'underside' ? words.side[1][0] : words.side[1][1]}`; notes.push('Plug each counterbore with a glued oak dowel after the screw is in.'); }
-    feats.push({ k: 'hole', key: `${size}|${purpose}|${axis.map((c) => Math.round(c * 100)).join(',')}`, to: [r.to], joint: j.type, pts: cps, axis, dia: dia ?? 0.19, ...(blind !== undefined ? { blind } : {}), ...(entryHi !== undefined ? { entryHi } : {}), ...(depthWords ? { depthWords } : {}), ...(from !== undefined ? { from, faceWord: "inboard wall of the pocket" } : {}), noun: 'hole', size, purpose });
+    if (cb && part.partNo === 'rail') { cbore = { dia: num(cb[3]), depth: num(cb[1]) }; size += `, with a ${drill(cbore.dia)} × ${frac(cbore.depth)} counterbore from the ${cb[2] === 'underside' ? words.side[1][0] : words.side[1][1]}`; notes.push('Plug each counterbore after the screw is in: a 3/8" oak plug cut with a plug cutter from offcuts (or a 3/8" dowel), glued in and trimmed flush.'); }
+    // D-83: the side drain holes are located from ONE datum, the inner face of the rear transom (the web's rear end sits in its dado, the bands start at the face).
+    const trFace = byId.get('transom-rear');
+    const uShift = /drain hole/.test(t) && /^side-/.test(part.id) && trFace ? worldAABB(part).min[0] - worldAABB(trFace).max[0] : undefined;
+    feats.push({ k: 'hole', key: `${size}|${purpose}|${axis.map((c) => Math.round(c * 100)).join(',')}${uShift !== undefined ? '|transom-datum' : ''}`, to: [r.to], joint: j.type, pts: cps, axis, dia: dia ?? 0.19, ...(uShift !== undefined ? { uShift } : {}), ...(blind !== undefined ? { blind } : {}), ...(entryHi !== undefined ? { entryHi } : {}), ...(depthWords ? { depthWords } : {}), ...(from !== undefined ? { from, faceWord: "inboard wall of the pocket" } : {}), noun: 'hole', size, purpose });
     // The push-handle socket's access holes (D-63): the same size as named, in the opposite wall, opposite each screw.
     const acc = new RegExp(String.raw`${NUM}"\s*(?:\([^)]*\)\s*)?ACCESS HOLE in the opposite`).exec(r.text);
     if (acc && part.kind === 'metal') {
@@ -1495,6 +1498,8 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
     if (f.k === 'hole') {
       const letter = letterOf(li++);
       const ax = holeAx(f), hiSide = entryOf(f);
+      const shown = f.uShift !== undefined ? f.pts.map((q): Vec3 => [q[0] + f.uShift!, q[1], q[2]]) : f.pts;
+      const fixDatum = (g: string): string => (f.uShift !== undefined ? g.replace(`from the ${w.side[0][0]}`, 'from the inner face of the rear transom') : g);
       let where: string;
       let groups: string[] = [];
       if (oblique(f)) {
@@ -1512,7 +1517,7 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
         }
         balloons.push({ letter, view: 'main', at: [f.pts[0][0], f.pts[0][1]] });
       } else {
-        groups = placeGroups(f.pts, ax, a);
+        groups = placeGroups(shown, ax, a).map(fixDatum);
         where = `In the ${f.faceWord ?? w.side[ax][hiSide ? 1 : 0]}: ${groups.join('; ')}`;
         const vName = ax === 2 ? 'main' : ax === 1 ? edgeView(hiSide) : endView(hiSide);
         for (const q of f.pts) {
@@ -1540,7 +1545,7 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
       const nH = f.pts.length;
       const holeLine = (wh: string): string => `${nH} ${plural(f.noun, nH)}, ${f.size}. ${wh}. ${sentence(f.purpose)}.`;
       let line = holeLine(where);
-      if (line.length > MAX_LINE && groups.length > 1 && !oblique(f)) line = holeLine(`In the ${f.faceWord ?? w.side[ax][hiSide ? 1 : 0]}: ${placePairs(f.pts, ax, a)}`);
+      if (line.length > MAX_LINE && groups.length > 1 && !oblique(f)) line = holeLine(`In the ${f.faceWord ?? w.side[ax][hiSide ? 1 : 0]}: ${fixDatum(placePairs(shown, ax, a))}`);
       feats.push({ label: letter, text: line, kind: 'hole', to: f.to, joint: f.joint, count: nH, size: lcDatum(f.size), positions: groups.map(lcDatum), face: f.faceWord ? lcDatum(f.faceWord) : oblique(f) ? 'sloped face' : lcDatum(w.side[ax][hiSide ? 1 : 0]), purpose: f.purpose });
     } else if (f.k === 'region') {
       const letter = letterOf(li++);

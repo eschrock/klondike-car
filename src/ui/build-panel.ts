@@ -655,6 +655,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
     out.push(h('div', { class: 'bp-total', role: 'status' },
       h('div', {}, h('span', {}, 'Total'), h('strong', {}, usd(b.totalUsd))),
       h('div', { class: 'small' }, b.totalsText),
+      h('div', { class: 'muted small' }, b.shippingNote),
       h('ul', { class: 'bp-subtotals bp-parts', 'aria-label': 'Totals by kind (jump to a table)' },
         jumpChip('Build', b.coreUsd, b.coreEstimateShare, b.sections[0]?.id ?? 'lumber'),
         jumpChip('Bulk parts', b.bulkUsd, b.bulkEstimateShare, 'bulk'),

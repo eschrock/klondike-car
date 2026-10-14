@@ -121,7 +121,7 @@ export function ribWasherSpan(st: RibStation): [number, number] {
   return [st.x - (LASH_HOLE_DX_IN + LASH_WASHER.od / 2) * c, st.x + (LASH_HOLE_DX_IN + LASH_WASHER.od / 2) * c];
 }
 
-/** The bolt length for the D-ring stack: washer + side sandwich + head + plate + nylock + 2 threads, rounded up to a stock length. */
+/** The bolt length for the D-ring stack: washer + side sandwich + head + plate + nylock + 2 threads, rounded up to a stock length (ONE fender washer a bolt, under the head; the nylock nut bears on the bracket). */
 export function lashBoltLength(p: Params): { need: number; len: number } {
   const need = LASH_WASHER.t + p.sideThicknessIn + p.sideRibDepthIn + LASH_PLATE.thick + LASH_NYLOCK_IN + LASH_THREADS_PAST_IN;
   return { need, len: MACHINE_SCREW_LENGTHS.find((l) => l >= need - 1e-9) ?? MACHINE_SCREW_LENGTHS[MACHINE_SCREW_LENGTHS.length - 1] };
@@ -244,9 +244,9 @@ export function buildSideRibs(ctx: Ctx): Part[] {
         sourcing: p.weatherSpec === WEATHER_SPEC.extreme
           ? { vendor: `ESTIMATE: ${dRingMat(p)} bolt-on D-ring, 2-hole bracket, about the same working load (marine hardware supplier)`, costUsd: 12 }
           : { vendor: `Harbor Freight (1/4" cargo D-ring, 2-pack #60319, zinc-plated, 233 lbf working load)`, costUsd: 1.5 },
-        notes: `D-76, D-83: on the inner face of the ${RIB_NAME[st.n]}'s head, through-bolted: ${LASH_BOLTS} 1/4-20 x ${frac(bolt.len)}" ${stainless(p)} button-head bolts from OUTSIDE (a ${frac(LASH_WASHER.od)}" fender washer under each head on the outer band), through the side sandwich and the head, with a nylock nut on the bracket inside (stack ${bolt.need.toFixed(2)}" with the nut and two threads). The bracket (about ${LASH_PLATE.len}" x ${LASH_PLATE.tall}", holes ${2 * LASH_HOLE_DX_IN}" apart) is the drilling template: VERIFY the real bracket's holes before drilling. Rated ${p.lashLoadLbf} lbf working load for tie-down straps on coolers, duffels and firewood (D-76); the lash-load row pulls it at ${p.lashLoadLbf} lbf and ${p.lashPullAngleDeg}°. In race mode the ring folds flat against the head.`,
+        notes: `D-76, D-83: on the inner face of the ${RIB_NAME[st.n]}'s head, through-bolted: ${LASH_BOLTS} 1/4-20 x ${frac(bolt.len)}" ${stainless(p)} button-head bolts from OUTSIDE (a ${frac(LASH_WASHER.od)}" fender washer under each head on the outer band), through the side sandwich and the head, with a nylock nut on the bracket inside, no washer under the nut (one fender washer a bolt: 12 for the six D-rings; stack ${bolt.need.toFixed(2)}" with the nut and two threads). The bracket (about ${LASH_PLATE.len}" x ${LASH_PLATE.tall}", holes ${2 * LASH_HOLE_DX_IN}" apart) is the drilling template: VERIFY the real bracket's holes before drilling. Rated ${p.lashLoadLbf} lbf working load for tie-down straps on coolers, duffels and firewood (D-76); the lash-load row pulls it at ${p.lashLoadLbf} lbf and ${p.lashPullAngleDeg}°. In race mode the ring folds flat against the head.`,
         joints: [{
-          type: 'bolt', to: ribId, count: LASH_BOLTS, size: `1/4-20 x ${frac(bolt.len)}" ${stainless(p)} button-head bolt, ${frac(LASH_WASHER.od)}" fender washer outside, nylock nut inside`, diaIn: LASH_BOLT_DIA_IN,
+          type: 'bolt', to: ribId, count: LASH_BOLTS, size: `1/4-20 x ${frac(bolt.len)}" ${stainless(p)} button-head bolt, ${frac(LASH_WASHER.od)}" fender washer under the head outside (one washer a bolt), nylock nut on the bracket inside with no washer under the nut`, diaIn: LASH_BOLT_DIA_IN,
           at: [-1, 1].map((a): Vec3 => [a * LASH_HOLE_DX_IN, 0, -T / 2]), // on the bracket face against the head
           note: `through the head, the inner gunwale band, the web and the outer gunwale band (${s > 0 ? 'left' : 'right'} side, x = ${st.x.toFixed(1)}"); drill with the bracket as the template`,
         }],

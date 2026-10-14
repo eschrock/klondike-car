@@ -6,6 +6,7 @@
  *
  * Plain TS, no DOM. Every string that came from the model goes through `esc`.
  */
+import { SHIPPING_TAX_PHRASE } from './bom';
 import { FROM_TEXT, fabText, pieceText } from './cutlist';
 import { fractionText, roughFrac } from './units';
 import { paramLabels } from './verify';
@@ -283,7 +284,8 @@ function bomSection(d: BuildData): string {
     for (const n of s.notes ?? []) out.push(`<p class="muted small">${esc(n)}</p>`);
   }
   out.push(`<p class="total">${esc(b.totalsText)}</p>`);
-  out.push(`<p class="total">Grand total ${usd(b.totalUsd)}</p>`);
+  out.push(`<p class="total">Grand total ${usd(b.totalUsd)} (${esc(SHIPPING_TAX_PHRASE)})</p>`);
+  out.push(`<p class="muted small">${esc(b.shippingNote)}</p>`);
   if (b.unpriced.length) out.push(`<p><strong>No price:</strong> ${esc(b.unpriced.join(', '))}</p>`);
   return out.join('');
 }
@@ -291,7 +293,7 @@ function bomSection(d: BuildData): string {
 function assemblySection(d: BuildData): string {
   const nameOf = new Map(d.parts.map((x) => [x.id, x.name]));
   const link = partLinker(d);
-  const out: string[] = ['<p class="muted small">Do the steps in order. Cure blocks give the West System pot life, clamp time and full-cure time; in a cold shop allow longer. Tick each check before you move on.</p>'];
+  const out: string[] = ['<p class="muted small">Do the steps in order. Cure blocks give the epoxy pot life, clamp time and full-cure time; in a cold shop allow longer. Tick each check before you move on.</p>'];
   for (const s of d.steps) {
     const listing = s.partIds.map((id) => nameOf.get(id) ?? id);
     out.push(`<div class="step" id="step-${s.n}"><h3>${s.n}. ${esc(s.title)}${s.kind === 'build' ? '' : `<span class="kind">${esc(s.kind)}</span>`}</h3>`);

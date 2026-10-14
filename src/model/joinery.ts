@@ -20,9 +20,12 @@ export const RAIL_CHINE_BITE_IN = 0.5;
 /** D-75: the counterbore for each #8 flat-head screw that holds the UHMW thrust disc to the king beam (from the disc's sliding face): diameter and depth (in). */
 export const THRUST_SCREW_CBORE_DIA_IN = 0.375;
 export const THRUST_SCREW_CBORE_DEEP_IN = 0.25;
-/** D-72, D-82: the one rail-to-chine screw length (#8 x 2-1/2), and the bit that counterbores its head where the rail is deeper than that. */
+/**
+ * D-72, D-82: the one rail-to-chine screw length (#8 x 2-1/2), and the bit that counterbores its head where the rail is deeper than that. The bit is 3/8" (like the thrust disc's seat):
+ * a #8 flat head is about 0.32 to 0.34" across, so a 5/16" bore would not take it. The bore is plugged with a 3/8" oak plug (a plug cutter on offcuts, or a 3/8" dowel).
+ */
 export const RAIL_CHINE_SCREW_IN = 2.5;
-export const RAIL_CHINE_PLUG_DIA_IN = 5 / 16;
+export const RAIL_CHINE_PLUG_DIA_IN = 3 / 8;
 import type { Joint, JointType, Mat4, Part, ScrewFit, Vec3 } from './types';
 
 // ── Festool Domino catalog (nominal mm, thickness × length) ──
@@ -230,9 +233,9 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
         a: `side-${tag}-chine`, b: `rail-${tag}`, typeA: 'glue',
         size: `thickened epoxy bed, full length of the ${frac(flat)}" bearing face (outer band + web edge), screwed every ${p.chineTieSpacingIn}" (no Dominos, D-81)`,
         pts: [[xMid, s * (hwAt(xMid) + webFace + flat / 2), cBot]],
-        noteA: 'SIDE-TO-FRAME TIE (D-43, D-81): the sandwich (outer chine band + web) sits on the rail top. Spread a thickened-epoxy bed along the whole bearing face; the piloted screws up through the rail, in EVERY gap at even spacing, locate the side as the inverted frame + deck unit is lowered into the inverted side assembly, and clamps and cauls hold it while the epoxy cures.',
+        noteA: 'SIDE-TO-FRAME TIE (D-43, D-81): the sandwich (outer chine band + web) sits on the rail top. Spread a thickened-epoxy bed along the whole bearing face; the screws through the rail, in EVERY gap at even spacing, register the side: their pilots are drilled into the side at the dry fit through the rail holes, so when the inverted frame + deck unit is lowered into the inverted side assembly (two temporary alignment blocks keep the side from sliding while the screws are started) each screw finds its pilot and draws the side onto the rail; clamps and cauls between the screws hold it while the epoxy cures.',
       });
-      // Rail-to-chine screws (D-82): #8, piloted, at the middle of every gap between the n tie stations (even spacing; they locate the side as the frame is lowered), up through the rail and RAIL_CHINE_BITE_IN into the chine sandwich.
+      // Rail-to-chine screws (D-82): #8, piloted, at the middle of every gap between the n tie stations (even spacing; pilots drilled at the dry fit register the side), up through the rail and RAIL_CHINE_BITE_IN into the chine sandwich.
       // The rail is 3 in deep aft of the step and railDepthF forward of it, so the length is per rail-depth zone (the sloped step is the shallower of its two ends).
       const railD = p.railDepthIn, xs = L.railStepX, run = p.railStepRunIn;
       const depthAt = (x: number): number => (x <= xs - run ? railD : x >= xs ? L.railDepthF : railD + ((L.railDepthF - railD) * (x - (xs - run))) / run);
@@ -252,7 +255,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
         const cbs = qs.map((q) => cbAt(q[0])), cbLo = Math.min(...cbs), cbHi = Math.max(...cbs);
         const depthText = Math.abs(dHi - dLo) < 0.005 ? `${frac(dHi)}" deep` : `${frac(dLo)}" to ${frac(dHi)}" deep`;
         const where = zone === 'deep' ? 'behind the step' : zone === 'shallow' ? 'ahead of the step' : 'on the sloped step';
-        const cbText = cbHi <= 0.005 ? 'no counterbore needed (the tip bites more than the minimum)' : `counterbore the head ${Math.abs(cbHi - cbLo) < 0.005 ? frac(cbHi) : `${frac(cbLo)}" to ${frac(cbHi)}`}" up the rail from its underside (${frac(RAIL_CHINE_PLUG_DIA_IN)}" bit), then plug it with a glued oak dowel`;
+        const cbText = cbHi <= 0.005 ? `no counterbore needed (the rail is shallow here, and the tip bites more than the minimum): countersink the head flush with a #8 countersink bit from the rail's underside` : `counterbore the head ${Math.abs(cbHi - cbLo) < 0.005 ? frac(cbHi) : `${frac(cbLo)}" to ${frac(cbHi)}`}" up the rail from its underside (${frac(RAIL_CHINE_PLUG_DIA_IN)}" bit), a #8 flat head is about 11/32" across so the bore is ${frac(RAIL_CHINE_PLUG_DIA_IN)}"; then plug it with a ${frac(RAIL_CHINE_PLUG_DIA_IN)}" oak plug (a plug cutter on offcuts, or a ${frac(RAIL_CHINE_PLUG_DIA_IN)}" dowel), glued in and trimmed flush`;
         const fits = qs.map((q): ScrewFit => ({ gauge: 8, lenIn: SCREW_LEN, gripIn: depthAt(q[0]) - cbAt(q[0]), receivingIn: L.chineH, minBiteIn: screwMinBite(L.chineH) }));
         const fit = fits.reduce((a, b) => (b.lenIn - b.gripIn < a.lenIn - a.gripIn ? b : a));
         const biteLo = SCREW_LEN - Math.max(...fits.map((q) => q.gripIn)), biteHi = SCREW_LEN - Math.min(...fits.map((q) => q.gripIn));
@@ -326,7 +329,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     }
     for (const { s, tag } of SIDES) {
       const [ax, ay, az] = L.chain.anchor;
-      add({ a: `steer-anchor-${tag}`, b: joistId(L, L.joistX.indexOf(L.king.x) - 1), typeA: 'bolt', size: `${frac(p.steerEyeBoltDiaIn)}" forged shoulder eye bolt fore-aft through the chain joist, shoulder and 2" washer on its front face, nylock nut and 2" washer on the rear face`, pts: [[L.chain.joistX, s * Math.abs(ay), az]], noteA: 'Anchor of the steering check chain (D-58); the chain pulls the eye forward out of the joist.' });
+      add({ a: `steer-anchor-${tag}`, b: joistId(L, L.joistX.indexOf(L.king.x) - 1), typeA: 'bolt', size: `${frac(p.steerEyeBoltDiaIn)}" forged shoulder eye bolt fore-aft through crossmember 6, shoulder and 2" washer on its front face, nylock nut and 2" washer on the rear face`, pts: [[L.chain.joistX, s * Math.abs(ay), az]], noteA: 'Anchor of the steering check chain (D-58); the chain pulls the eye forward out of the joist.' });
       void ax;
       add({ a: `steer-eye-${tag}`, b: 'beam-F', typeA: 'bolt', size: `${frac(p.steerEyeBoltDiaIn)}" forged shoulder eye bolt fore-aft through the axle beam, nylock nut and 2" fender washer on its front face`, pts: [[L.king.x - L.beamF.thick / 2, s * L.chain.beamV, L.chain.beamZ]], noteA: 'Beam end of the steering check chain (D-58); the eye stands out of the trailing face.' });
     }

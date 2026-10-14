@@ -221,7 +221,7 @@ export function buildHardware(ctx: Ctx): Part[] {
   return [box(ctx, {
     id: 'hardware', name: 'Fasteners, inserts & misc', group: 'hardware', mat: 'fixed', massLb: HARDWARE_FALLBACK_LB, kind: 'purchased', fab: 'buy',
     material: `${stainless(ctx.p)} screws and bolts, ${insertMat(ctx.p)} inserts, Dominos; epoxy`,
-    sourcing: { vendor: `McMaster-Carr / Fastenal (${stainless(ctx.p)} wood screws and machine screws, ${insertMat(ctx.p)} threaded inserts; Festool Dominos; West System epoxy).${ctx.p.weatherSpec === WEATHER_SPEC.extreme ? ' Stainless throughout: no zinc or brass in wet oak (S7).' : ''}`, costUsd: 60 },
+    sourcing: { vendor: `McMaster-Carr / Fastenal (${stainless(ctx.p)} wood screws and machine screws, ${insertMat(ctx.p)} threaded inserts; Festool Dominos; the epoxy kit of the parts list).${ctx.p.weatherSpec === WEATHER_SPEC.extreme ? ' Stainless throughout: no zinc or brass in wet oak (S7).' : ''}`, costUsd: 60 },
     step: STEP.finish, size: [sx, HARDWARE_SIZE[1], HARDWARE_SIZE[2]], center: [(bestLo + bestHi) / 2, 0, L.deckBot - HARDWARE_SIZE[2] / 2],
     notes: 'Fastener remainder, set from the joint list by applyHardwareMass. Parked under the deck center.',
   })];

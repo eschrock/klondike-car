@@ -8,13 +8,13 @@
  * per-part table `SHOW_RULES`.
  *
  * Two weather specs (D-73, Eric 2026-10-12: garage-kept, used a few times a year, wet at most at a rainy derby; the Extreme spec is stored outside or near salt).
- *   EXTREME: ONE saturation coat of 105 / 206 (5:1) on all the plywood (show and hidden) and on the oak end grain; marine spar varnish, 3 coats on the show faces, 2 on the
+ *   EXTREME: ONE saturation coat of the 635 epoxy (`EPOXY_SYSTEM`, 2:1) on all the plywood (show and hidden) and on the oak end grain; marine spar varnish, 3 coats on the show faces, 2 on the
  *   hidden ones, over the oak and the epoxy, bought in quarts (an open can skins over); epoxy for every glue joint.
  *   STANDARD (the default): epoxy only on the plywood edges that are not captured, the oak end grain and the deck underside (water pools there); exterior spar urethane
  *   (Minwax Helmsman class), 3 coats show, 2 hidden; Titebond III for the Dominos, dados, tenons and general glue joints, epoxy only where it earns its keep
  *   (`standardAdhesive`: the bent laminations, the deck to the frame, the deck slot gap-fill, the fillets and tape, the thickened bedding, the D-70 face laminations).
  * Stain and conditioner (EXTREME only, D-83: the Standard spec is clear urethane over the bare wood, and its step 3 is the grain-raising pass): show faces only, one coat. White oak plywood takes the SAME
- * stain as the solid oak (no conditioner or gel); okoume and Baltic birch blotch and take a conditioner and a gel stain. ONE hardener, 206 slow, for the glue-ups, the seal coat and the two long closes (207 is a listed option).
+ * stain as the solid oak (no conditioner or gel); okoume and Baltic birch blotch and take a conditioner and a gel stain. ONE epoxy system (`EPOXY_SYSTEM`) for the glue-ups, the seal coat and the two long closes.
  *
  * `glueEpoxyFlOz` estimates the epoxy the glue joints themselves use, by joint type. The schedule's `epoxy` summary adds it to the seal coat.
  */
@@ -33,11 +33,38 @@ export const FINISH_WASTE = 0.15;
 export const GLUE_WASTE = 0.2;
 /** Epoxy soaks into end grain about twice as fast as into face grain. */
 export const END_GRAIN_FACTOR = 2;
-/** 105 resin : 206 slow hardener = 5 : 1 by volume. ONE hardener for everything: the glue-ups, the seal coat and the two long closes (the closes in small batches). */
-export const EPOXY_RESIN_PARTS = 5;
+/**
+ * THE epoxy system of the build (D-79): the one the BOM buys, under both weather specs. Every ratio, pot life, hardener name, thickener and pump in the
+ * build text and the buy list reads these facts; assembly.ts (glue card, steps) and the BOM notes do not repeat them. U.S. Composites 635 thin epoxy with the #556 hardener, 2:1 by volume;
+ * pot life as the vendor's price list gives it (docs/price-research/price-research-cost-pass-2026-10.md item 22); the data sheet's clamp and cure times were not read, so assembly.ts uses planning times and tells the builder to check the can.
+ */
+export const EPOXY_SYSTEM = {
+  /** Resin parts to 1 part hardener, by volume. */
+  resinParts: 2,
+  /** The ratio as the shop reads it. */
+  ratio: '2:1',
+  ratioText: '2 parts resin to 1 part hardener by volume',
+  /** "U.S. Composites 635 thin epoxy" */
+  name: 'U.S. Composites 635 thin epoxy',
+  hardener: '#556 hardener',
+  /** Pot life of a mixed batch at 70 °F, minutes, from the vendor's list (confirm on the label). */
+  potMin: [35, 40] as [number, number],
+  pumps: 'the 2:1 pump set (one pump on each can)',
+  /** The resin is thin and runny: every glue joint, fillet and bedding is thickened. */
+  thickener: 'fumed silica',
+  /** Sanding dust of the oak, stirred in where a fillet or a plug should match the wood. */
+  colorMatch: 'fine white oak sanding dust',
+  /** The buy-list item. */
+  buyItem: 'Epoxy, U.S. Composites 635 thin, 2:1 (the kit in the bill of materials)',
+} as const;
+/** Resin parts : 1 part hardener by volume (2 : 1). */
+export const EPOXY_RESIN_PARTS = EPOXY_SYSTEM.resinParts;
+/** The buy-list line of the epoxy (the BOM prices it as the epoxy kit, not as a finish product). */
+export const EPOXY_BUY_RE = /^Epoxy, U\.S\. Composites 635/;
+
 /**
  * ft² per US quart of MIXED epoxy, ONE saturation coat on porous wood and plywood. WEST System's published coating-quantity table
- * (https://www.westsystem.com/coating-quantity/): a gallon-size kit of 105-B + 207 (about 1.3 gal mixed) covers 370-430 ft² as a saturation coat on porous surfaces,
+ * (https://www.westsystem.com/coating-quantity/; a thin 635 coats about as far, D-79): a gallon-size kit of 105-B + 207 (about 1.3 gal mixed) covers 370-430 ft² as a saturation coat on porous surfaces,
  * and 105 with 205 / 206 (1.2 gal mixed) covers 350-405 ft². The midpoint for 206 is 377.5 ft² ÷ 4.8 qt = 78.6, used as 78 ft² per mixed quart. West's rule of
  * thumb for a sealer coat agrees: about 40 ft² per lb of mixed epoxy (a mixed quart weighs about 2.3 lb, so about 92 ft²/qt), so 78 is on the careful side.
  */
@@ -162,7 +189,7 @@ export interface SupplyLine {
   note: string;
 }
 
-/** All the epoxy of the build in one place, 105 resin + 206 slow hardener at 5:1 by volume, fl oz. The BOM chooses its kits from `resinFlOz`. */
+/** All the epoxy of the build in one place, mixed at `EPOXY_SYSTEM`'s ratio (2:1), fl oz. The BOM chooses its kits from `resinFlOz`. */
 export interface EpoxySummary {
   /** The one saturation coat (okoume + oak end grain), 15 % waste included. */
   coatingFlOz: number;
@@ -197,9 +224,9 @@ export interface FinishSchedule {
   areas: FinishAreas;
   steps: FinishStep[];
   buy: BuyLine[];
-  /** Counted supplies for the epoxy. Empty now: no 303 pumps (one 5:1 hardener); the 301 pumps of the 105/206 kit are added by the BOM. */
+  /** Counted supplies for the epoxy. Empty: the BOM adds the pump set of the kit it buys. */
   supplies: SupplyLine[];
-  /** Kept for the BOM's field: 0, because the closes use 206 like every glue-up and their epoxy is inside `glueEpoxyFlOz` (see `epoxy.closeGlueFlOz`). */
+  /** Kept for the BOM's field: 0, because the closes use the same epoxy as every glue-up and their epoxy is inside `glueEpoxyFlOz` (see `epoxy.closeGlueFlOz`). */
   closeEpoxyFlOz: number;
   epoxy: EpoxySummary;
   assumptions: string[];
@@ -719,12 +746,12 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
         ]),
       extreme
         ? it('Run one panel of each through the whole schedule.', [
-          'Stain, the one epoxy seal coat (206), engraving with its fill (lid offcut), varnish (3 coats).',
+          'Stain, the one epoxy seal coat, engraving with its fill (lid offcut), varnish (3 coats).',
           'Check the epoxy cures hard over the stain (no tack after the stated cure) and the varnish does not craze or lift.',
           'Stain and seal the show faces only after a panel passes; if none does, leave them unstained under clear epoxy.',
         ])
         : it('Run one panel of each through the whole schedule.', [
-          'The epoxy edge coat (206) on a cut edge, engraving with its fill (lid offcut), exterior spar urethane (3 coats).',
+          'The epoxy edge coat on a cut edge, engraving with its fill (lid offcut), exterior spar urethane (3 coats).',
           'Check the urethane dries hard (no tack after the stated cure), does not craze or lift, and the edge coat does not show through.',
           'Coat the show faces only after a panel passes.',
         ]),
@@ -841,7 +868,7 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
   const endGrainEq = areas.oakEndGrainFt2 * END_GRAIN_FACTOR;
   const epoxyArea = extreme ? areas.plyFt2 + endGrainEq : plyEdgeFt2 + deckUnderFt2 + endGrainEq;
   const coat = product(
-    extreme ? 'West System 105 resin + 206 slow hardener, one saturation coat (mixed volume)' : 'Epoxy 105 resin + 206 slow hardener, edge, end-grain and deck-underside coat (mixed volume)',
+    extreme ? `${EPOXY_SYSTEM.name} (${EPOXY_SYSTEM.ratio}), one saturation coat (mixed volume)` : `${EPOXY_SYSTEM.name} (${EPOXY_SYSTEM.ratio}), edge, end-grain and deck-underside coat (mixed volume)`,
     epoxyArea, 1, EPOXY_COVERAGE);
   const coatFlOz = coat.qtNeeded * FLOZ_PER_QT;
   const deckTopFt2 = areas.detail['deck']?.showFt2 ?? 0;
@@ -852,7 +879,7 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
     id: 'epoxy',
     title: `Epoxy seal: one saturation coat on the ${areas.oakPlyFt2 + areas.birchFt2 > 0 ? 'plywood' : 'okoume'} and the oak end grain`,
     items: [
-      it('After the stain has dried: ONE saturation coat of 105 resin / 206 slow hardener (5:1 by volume, the 301 pumps).', [
+      it(`After the stain has dried: ONE saturation coat of the ${EPOXY_SYSTEM.name}: ${EPOXY_SYSTEM.ratioText}, with ${EPOXY_SYSTEM.pumps}.`, [
         `All the plywood, show and hidden faces and every edge that is not glued (${f(areas.plyFt2, 0)} ft²).`,
         `The oak end grain (${f(areas.oakEndGrainFt2, 0)} ft²; it soaks up about twice as much).`,
         'One coat is enough for a sled kept dry in a garage; the varnish carries the UV and the wear.',
@@ -861,15 +888,14 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
       it('Roll and tip.', [
         'Short phenolic-core roller and a foam brush; re-wet the end grain and edges as they soak in.',
         'Coat while the shop is cooling (afternoon) to limit outgassing bubbles in the okoume.',
-        'Pot life is 20-25 min at 70 °F: spread each batch as soon as it is mixed, a pint at most, and pour leftovers thin into a tray.',
+        `Pot life is about ${EPOXY_SYSTEM.potMin[0]}-${EPOXY_SYSTEM.potMin[1]} min at 70 °F (the vendor's list; check the can): spread each batch as soon as it is mixed, a pint at most, and pour leftovers thin into a tray.`,
       ]),
-      it('After the 206 seal coat cures, wash the amine blush off with water and a Scotch-Brite pad before sanding and varnishing.', [
+      it('After the seal coat cures, wash the amine blush off with water and a Scotch-Brite pad before sanding and varnishing.', [
         'Then sand with 220 and vacuum.',
         'Epoxy over oil-based stain needs the stain fully cured; water-based dye under the epoxy is the safe route.',
       ]),
-      it('Two options, not in the quantities.', [
+      it('One option, not in the quantities.', [
         `OPTION, not in the quantities: a second coat on the deck top, the wear surface (about ${f(deckTopFt2, 0)} ft², ${f(secondCoatFlOz, 0)} fl oz mixed), while the first is tacky or after a wash and 220.`,
-        'OPTION, not in the quantities: 207 special clear hardener for the clearest finish under varnish, in place of 206 for the seal coat only (105/207 is 3:1 and needs its own 303 pumps).',
       ]),
     ],
     products: [coat],
@@ -882,7 +908,7 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
     id: 'epoxy',
     title: 'Epoxy edges and end grain, and the deck underside (one coat)',
     items: [
-      it('ONE coat of epoxy, only where water gets in. Mix at the ratio of the kit you bought (the U.S. Composites 635 kit is 2:1 by volume, with its own pumps; West System 105/206 is 5:1).', [
+      it(`ONE coat of epoxy, only where water gets in: the ${EPOXY_SYSTEM.name}, ${EPOXY_SYSTEM.ratioText}, with ${EPOXY_SYSTEM.pumps}.`, [
         'The oak end grain.',
         'Every plywood edge not captured in a dado or banded with oak.',
         'The deck underside: water pools there, so it is sealed fully.',
@@ -890,7 +916,7 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
       ]),
       it('Where an assembly step already coated a face, that IS this coat.', ['The end grain and the deck underside are done here (the underside before the hull is flipped).']),
       it('Roll and tip the deck underside; brush the end grain and re-wet it as it soaks in.', ['A pint at most per batch; pour leftovers thin into a tray.']),
-      it('After the 206 coat cures, wash off the amine blush (water and a Scotch-Brite pad) before sanding.', ['Sand with 220 and vacuum: the urethane goes over sanded, blush-free epoxy.']),
+      it('After the coat cures, wash off the amine blush (water and a Scotch-Brite pad) before sanding.', ['Sand with 220 and vacuum: the urethane goes over sanded, blush-free epoxy.']),
       it('The Extreme spec (stored outside or near salt) saturates ALL the plywood with epoxy and uses marine varnish: the weather setting in the parameters panel switches the schedule.'),
     ],
     products: [coat],
@@ -960,8 +986,8 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
 
   const steps = [s1, s2, s3, s4, s5, s6];
 
-  // ---- epoxy: the coat (15 % waste) + the glue joints that use epoxy (20 % waste), all 105 resin + 206 slow at 5:1. Under the Standard spec the other glue joints are Titebond III (`glue`).
-  // The transom and bulkhead closes are glue joints like the rest: 206 too, in SMALL batches in a wide shallow container (more surface, longer pot), a second person mixing. Their epoxy is inside glueFlOz.
+  // ---- epoxy: the coat (15 % waste) + the glue joints that use epoxy (20 % waste), all the one epoxy system (`EPOXY_SYSTEM`, 2:1). Under the Standard spec the other glue joints are Titebond III (`glue`).
+  // The transom and bulkhead closes are glue joints like the rest: the same epoxy, in SMALL batches in a wide shallow container (more surface, longer pot). Their epoxy is inside glueFlOz.
   const closeParts = new Set(parts.filter((x) => x.step === HULL_STEP.transom).map((x) => x.id));
   const closeGlueFlOz = round1(glueEpoxyFlOz(parts, (x) => closeParts.has(x.id), p) * 10) / 10;
   const glueFlOz = glueEpoxyFlOz(parts, undefined, p) * (1 + GLUE_WASTE);
@@ -977,7 +1003,7 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
     ? [{ unit: 'qt' as const, qty: Math.max(1, Math.ceil(varnishQt - 1e-9)), qt: Math.max(1, Math.ceil(varnishQt - 1e-9)) }]
     : urethaneContainers(varnishQt);
   const buy: BuyLine[] = [
-    ...buyLines('West System 105 epoxy resin', resinFlOz / FLOZ_PER_QT, `${f(resinFlOz, 0)} fl oz resin + ${f(hardenerFlOz, 0)} fl oz 206 slow hardener (5:1) = ${f(totalMixedFlOz, 0)} fl oz mixed: ${extreme ? `the one seal coat ${f(coatFlOz, 0)} fl oz (${f(epoxyArea, 0)} ft² at ${EPOXY_COVERAGE} ft² per mixed quart, +${f(FINISH_WASTE * 100, 0)} % waste)` : `the edge, end-grain and deck-underside coat ${f(coatFlOz, 0)} fl oz (${f(epoxyArea, 1)} ft² at ${EPOXY_COVERAGE} ft² per mixed quart, +${f(FINISH_WASTE * 100, 0)} % waste)`} plus the glue joints that use epoxy ${f(glueFlOz, 0)} fl oz (+${f(GLUE_WASTE * 100, 0)} % waste). NOT a separate purchase: the BOM's 5:1 epoxy kit covers the glue-ups, the coat and the closes together; one hardener, so no 207 or 209 to buy`),
+    ...buyLines(EPOXY_SYSTEM.buyItem, resinFlOz / FLOZ_PER_QT, `${f(resinFlOz, 0)} fl oz resin + ${f(hardenerFlOz, 0)} fl oz #556 hardener (${EPOXY_SYSTEM.ratio}) = ${f(totalMixedFlOz, 0)} fl oz mixed: ${extreme ? `the one seal coat ${f(coatFlOz, 0)} fl oz (${f(epoxyArea, 0)} ft² at ${EPOXY_COVERAGE} ft² per mixed quart, +${f(FINISH_WASTE * 100, 0)} % waste)` : `the edge, end-grain and deck-underside coat ${f(coatFlOz, 0)} fl oz (${f(epoxyArea, 1)} ft² at ${EPOXY_COVERAGE} ft² per mixed quart, +${f(FINISH_WASTE * 100, 0)} % waste)`} plus the glue joints that use epoxy ${f(glueFlOz, 0)} fl oz (+${f(GLUE_WASTE * 100, 0)} % waste). NOT a separate purchase: the BOM's one epoxy kit (${EPOXY_SYSTEM.ratio}, with ${EPOXY_SYSTEM.pumps}) covers the glue-ups, the coat and the closes together; there is nothing else to buy for the mix. Thicken with ${EPOXY_SYSTEM.thickener} (a separate line)`),
     // The Standard spec takes no stain and no conditioner (clear urethane only): only the Extreme spec buys them.
     ...(extreme && blotchShowFt2 > 0 ? buyLines(`Water-based pre-stain conditioner (${blotchNames})`, cond.qtNeeded, `${f(blotchShowFt2, 0)} ft² of show faces, 1 coat, at ${CONDITIONER_COVERAGE} ft²/qt`, false) : []),
     ...(extreme && blotchShowFt2 > 0 ? buyLines(`Gel stain (${blotchNames})`, gel.qtNeeded, `${f(blotchShowFt2, 0)} ft² of show faces, 1 coat, at ${GEL_STAIN_COVERAGE} ft²/qt`, false) : []),
@@ -1004,11 +1030,11 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
     assumptions: [
       `Weather spec: ${extreme ? 'EXTREME (stored outside, near salt or exposed regularly): epoxy for every glue joint, a saturation coat on all the plywood, marine spar varnish.' : 'STANDARD (garage-kept, used a few times a year, wet at most at a rainy derby): Titebond III for the general joints, epoxy only where it earns its keep, an epoxy coat on edges, end grain and the deck underside only, exterior spar urethane.'} Thin sheet: ${thin.name}.`,
       `Areas are net of the glued faces (each lamination contact comes off both parts): ${f(areas.gross.totalFt2, 0)} ft² gross - ${f(areas.glued.totalFt2, 1)} ft² glued = ${f(areas.totalFt2, 0)} ft²; ${f(areas.show.totalFt2, 0)} ft² show and ${f(areas.hidden.totalFt2, 0)} ft² hidden, by part.`,
-      `Typical coverages in ft² per quart, one coat: epoxy ${EPOXY_COVERAGE} (mixed volume, one saturation coat; WEST System coating-quantity table, 105/206 midpoint 378 ft² per 4.8 qt), ${extreme ? `stain ${STAIN_COVERAGE}, conditioner ${CONDITIONER_COVERAGE}, gel stain ${GEL_STAIN_COVERAGE}, ` : ''}${extreme ? `marine varnish ${VARNISH_COVERAGE}` : `exterior spar urethane ${URETHANE_COVERAGE} (the can's rating)`} (thin brushed coats).`,
+      `Typical coverages in ft² per quart, one coat: epoxy ${EPOXY_COVERAGE} (mixed volume, one saturation coat; WEST System's published coating-quantity table, midpoint 378 ft² per 4.8 qt, taken to hold for the thin 635), ${extreme ? `stain ${STAIN_COVERAGE}, conditioner ${CONDITIONER_COVERAGE}, gel stain ${GEL_STAIN_COVERAGE}, ` : ''}${extreme ? `marine varnish ${VARNISH_COVERAGE}` : `exterior spar urethane ${URETHANE_COVERAGE} (the can's rating)`} (thin brushed coats).`,
       `${f(FINISH_WASTE * 100, 0)} % waste on every finish quantity (${f(GLUE_WASTE * 100, 0)} % on the glue joints); oak end grain counted ${END_GRAIN_FACTOR}× for epoxy.`,
-      'ONE hardener: 105 resin with 206 slow, 5:1 by volume, for the glue-ups, the coat and the two long closes (the closes in small batches in a wide shallow container, a second person mixing). The glue joints that use epoxy are in the epoxy total.',
+      `ONE epoxy for everything: the ${EPOXY_SYSTEM.name}, ${EPOXY_SYSTEM.ratioText}, for the glue-ups, the coat and the two long closes (the closes in small batches in a wide shallow container). The glue joints that use epoxy are in the epoxy total.`,
       ...(extreme ? [] : [`Titebond III: ${tb.joints} glue joints, ${f(tb.flOz, 1)} fl oz before the ${f(GLUE_WASTE * 100, 0)} % waste (${f(TITEBOND_VS_EPOXY * 100, 0)} % of the epoxy estimate for the same joints: one thin coat, no filler or fillet).`]),
-      'Options not in the quantities: a second epoxy coat on the deck top; 207 special clear hardener for the clearest finish under varnish.',
+      'Option not in the quantities: a second epoxy coat on the deck top.',
     ],
   };
 }

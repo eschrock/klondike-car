@@ -28,9 +28,9 @@ export const BOX_FILLET_IN = 0.375;
 export const LATCH_BLOCK_IN = 0.375;
 const LATCH_BLOCK_W_IN = 2;
 /** Lid hold-open stay, size (folded) and mass. Extreme: the stainless friction stay (2 in fold). Standard (D-83): a Rockler 6 in quiet-action lid support, plated steel, the arm folds flat. */
-const STAY_SIZE_EXTREME = [2, 0.3, 0.5] as const;
+const STAY_SIZE_EXTREME = [2, 0.6, 0.5] as const;
 const STAY_MASS_EXTREME_LB = 0.12;
-const STAY_SIZE_STD = [6, 0.3, 0.5] as const;
+const STAY_SIZE_STD = [6, 0.6, 0.5] as const;
 const STAY_MASS_STD_LB = 0.15;
 const BATTEN_X_IN = 1;
 /** The lid hinge backer: oak 1" thick against the inside of the box fore end. */
@@ -99,7 +99,7 @@ export function addStorageDrainHoles(ctx: Ctx, parts: Part[]): void {
     (host.joints ??= []).push({ // a hole in this part alone, so `to` is the part itself (no mating part)
       type: 'hole', to: host.id, count: 1, diaIn: p.storageDrainDiaIn, at: [localPoint(host.transform, [site.x, site.y, site.z])],
       size: `${frac(p.storageDrainDiaIn)}" drain hole through ${site.hostId === 'deck' ? 'the deck (the box floor)' : 'the box floor panel'} at the aft ${site.tag === 'L' ? 'left' : 'right'} corner of the box; the bore is sealed with epoxy`,
-      note: 'D-83: drilled before the box goes in; seal the bore and fair the floor to fall about 1/8" toward each drain with microballoon-thickened epoxy. The Extreme spec fits a stainless nipple here instead.',
+      note: 'D-83: drilled up through the deck from below while the hull is inverted (before the box goes on); seal the bore with epoxy, and fair the floor to fall about 1/8" toward each drain with epoxy thickened with fumed silica or wood flour. The Extreme spec fits a stainless nipple here instead.',
     });
   }
 }
@@ -448,7 +448,7 @@ export function buildStorage(ctx: Ctx): Part[] {
         sourcing: { vendor: `McMaster-Carr (${stainless(p)} tube fitting, ⅜")`, costUsd: 5 },
         joints: [{ type: 'glue', to: g.deckFloor ? deckId : 'storage-bottom', count: 1, note: 'nipple epoxied into the hole so no cut ply edge is exposed' }],
         notes: g.deckFloor
-          ? `${p.storageDrainDiaIn}" hole through the deck at the aft corner (the deck is the box floor), nipple epoxied in so no cut ply edge is exposed. Fair the sealed deck with microballoon-thickened epoxy to fall about 1/8" toward each drain so the box does not hold water.`
+          ? `${p.storageDrainDiaIn}" hole through the deck at the aft corner (the deck is the box floor), nipple epoxied in so no cut ply edge is exposed. Fair the sealed deck with microballoon-thickened epoxy (bought under this spec) to fall about 1/8" toward each drain so the box does not hold water.`
           : `${p.storageDrainDiaIn}" hole through the floor panel, nipple epoxied in so no cut ply edge is exposed.` }));
     }
   }
@@ -461,7 +461,7 @@ export function buildStorage(ctx: Ctx): Part[] {
   const stayY0 = hingeY - HINGE_W_IN / 2 - STAY_SIZE[1];
   const stayBackFit = pickWoodScrew(8, LEAF_IN, HINGE_W_IN); // into the 2.5 in wide side face of the backer
   const stayRimFit = pickWoodScrew(8, LEAF_IN, rimW);
-  const stay = box(ctx, { ...common, id: 'storage-lid-stay', name: 'Lid friction stay', mat: 'fixed', massLb: extreme ? STAY_MASS_EXTREME_LB : STAY_MASS_STD_LB, kind: 'purchased', material: extreme ? `${stainless(p)} friction stay` : 'plated steel lid support (Rockler 6" quiet-action)',
+  const stay = box(ctx, { ...common, id: 'storage-lid-stay', name: extreme ? 'Lid friction stay' : 'Lid support', mat: 'fixed', massLb: extreme ? STAY_MASS_EXTREME_LB : STAY_MASS_STD_LB, kind: 'purchased', material: extreme ? `${stainless(p)} friction stay` : 'plated steel lid support (Rockler 6" quiet-action)',
     fab: 'buy', step: STEP.finish, ...span([x1 - pl - STAY_SIZE[0], x1 - pl], [stayY0, stayY0 + STAY_SIZE[1]], [zPlyTop - STAY_SIZE[2], zPlyTop]),
     sourcing: extreme ? { vendor: `McMaster-Carr (${stainless(p)} friction lid stay / hold-open brace, 2" fold)`, costUsd: 18 } : { vendor: 'Rockler (quiet-action lid support, 6", plated steel; sold as a pair, #39529)', costUsd: 5 },
     joints: [{ type: 'screw', to: 'storage-hinge-backer-L', count: 2, diaIn: SCREW_DIA_IN[8], fit: stayBackFit, size: `${screwText(stayBackFit)} stainless, into the side grain of the ${HINGE_BACKER_IN}" backer`, note: 'the stay pivot' }, { type: 'screw', to: 'storage-rim-end-fore', count: 2, diaIn: SCREW_DIA_IN[8], fit: stayRimFit, size: `${screwText(stayRimFit)} stainless`, note: 'the stay arm end, on the lid frame' }],
@@ -471,8 +471,10 @@ export function buildStorage(ctx: Ctx): Part[] {
   // The stay folds flat on the ply top, so its arm end is the gasket and coaming gap (zRimBot - zPlyTop) below the lid frame. The arm-end screws go UP into the underside of the fore lid-frame end (they are
   // driven with the lid open), straight above the folded arm end. Each part records its own end of the joint on its own face, so every point lies in its part (D-75 geometry audit).
   {
-    const xa = Math.max(x1 - pl - STAY_SIZE[0], x1 - rimW), xb = x1 - pl, yS = stayY0 + STAY_SIZE[1] / 2, zRimBot = zTop - pl - rimT;
-    const wpts = [0.25, 0.75].map((f): Vec3 => [xa + (xb - xa) * f, yS, 0]);
+    // The two arm-end screws go in a line ACROSS the lid frame end (2/5 in apart), centered on the frame piece's width: a #8 pilot then keeps (rimW - 1/8)/2 of oak each side, 5/16 in at the default
+    // 3/4 in piece (at least 3/16 in is wanted). In line along the arm they would sit 1/8 in and 3/8 in from the faces: a 1/16 in wall.
+    const yS = stayY0 + STAY_SIZE[1] / 2, zRimBot = zTop - pl - rimT, xc = x1 - rimW / 2;
+    const wpts = [-0.2, 0.2].map((dy): Vec3 => [xc, yS + dy, 0]);
     const rimFore = parts.find((q) => q.id === 'storage-rim-end-fore')!;
     const armJoint = stay.joints!.find((j) => j.to === 'storage-rim-end-fore')!;
     armJoint.at = wpts.map((w) => localPoint(stay.transform, [w[0], w[1], zPlyTop]));
