@@ -158,8 +158,10 @@ export function storagePackCheck(ctx: Ctx): AnalysisCheck {
   const { p, L } = ctx;
   const interior = storageInterior(p, L);
   // Race mode (3c-5): the 10 Essentials AND the wheel chocks ride in the box (the cushions are on the sled, the lamp is on the bow).
-  const chocks = boxGear(ctx.parts).chocks;
-  const r = packEssentials(interior, [...ESSENTIALS, ...chocks]);
+  const gearBox = boxGear(ctx.parts, ctx.p);
+  const chocks = gearBox.chocks;
+  // D-78: with the removable knees the ratchet and socket pouch rides in the box too
+  const r = packEssentials(interior, [...ESSENTIALS, ...chocks, ...gearBox.tools]);
   const r0 = packEssentials(interior);
   const chockIn3 = r.rigidIn3 - r0.rigidIn3;
   const lines = ESSENTIALS.map((k) => `${k.qty > 1 ? `${k.qty} × ` : ''}${k.name}${k.dims ? ` ${k.dims.join('×')}"` : ` ${k.softVolIn3} in³ soft`}`).join('; ');
@@ -258,8 +260,8 @@ export function lashLoadCheck(ctx: Ctx): AnalysisCheck {
     detail('fender washer bearing on the outer gunwale band (compression ⊥)', k.washerBearing, 'psi', al.oakPerp, '<='),
     detail(`rib bending at the rating (rib ${k.ribN})`, k.ribSig, 'psi', al.oakBend, '<='),
     ...(k.pinRib ? [
-      detail(`D-78 rib bending at the knee's top-pin sleeve hole at the rating (rib ${k.pinRib.n}, ${f(k.pinRib.sOd, 2)}" sleeve out of the ${f(k.pinRib.w, 2)}" shaft, net section)`, k.pinRib.sigHoleRating, 'psi', al.oakBend, '<='),
-      detail('D-78 rib shaft net section at the sleeve hole: the D-ring\'s vertical part plus the top pin\'s z part (oak along the grain)', k.pinRib.axial, 'psi', al.oakBend, '<='),
+      detail(`D-78 rib bending at the knee's top-bolt insert hole at the rating (rib ${k.pinRib.n}, ${f(k.pinRib.sOd, 2)}" insert out of the ${f(k.pinRib.w, 2)}" shaft, net section)`, k.pinRib.sigHoleRating, 'psi', al.oakBend, '<='),
+      detail('D-78 rib block net section at the insert hole: the D-ring\'s vertical part plus the top bolt\'s z part (oak along the grain)', k.pinRib.axial, 'psi', al.oakBend, '<='),
     ] : []),
   ];
   const g = ds.reduce((a, b) => (b.util > a.util ? b : a), ds[0]);
@@ -273,7 +275,7 @@ export function lashLoadCheck(ctx: Ctx): AnalysisCheck {
       + `D-76: the plate is through-bolted to the rib head with ${LASH_BOLTS} #8-32 x ${k.bolt.len}" stainless machine screws (washer, side sandwich, head, plate, nylock: ${k.bolt.need.toFixed(2)}"), so nothing withdraws: each takes ${f(k.T1)} lbf of tension (${f(k.sigT, 0)} psi on ${LASH_BOLT_AT_IN2} in², allowable ${f(k.Ft, 0)} = ${f(p.lashBoltYieldPsi, 0)} / ${p.steelSafetyFactor}) and ${f(k.V1)} lbf of shear (${f(k.tau, 0)} psi on the ${LASH_BOLT_AR_IN2} in² root, allowable ${f(k.Fv, 0)}); together ${k.interaction.toFixed(2)}. `
       + `Bearing: ${f(k.V1)} lbf per bolt on ${LASH_BOLT_DIA_IN}" x ${p.sideRibDepthIn}" of head = ${f(k.headBearing, 0)} psi (≤ ${f(al.oakDowel, 0)}; the bands and web behind it not counted); the ${LASH_WASHER.od}" fender washer outside bears ${f(k.washerBearing, 0)} psi on the outer band (≤ ${f(al.oakPerp, 0)}, compression ⊥). `
       + `Rib: each rib pulled alone at ${f(k.H)} lbf inboard in the side-lateral model; rib ${k.ribN} takes ${f(k.ribM, 0)} lb·in above its base, ${f(k.ribSig, 0)} psi on the rib section (≤ ${f(al.oakBend, 0)}). The side's own stresses at the rating are in the side-lateral row.`
-      + (k.pinRib ? ` D-78 removable knee: the box rib (rib ${k.pinRib.n}) is ${f(k.pinRib.w, 2)}" wide and carries the knee's top pin T, ${f(k.pinRib.zT, 2)}" above the deck, with ${f(Math.hypot(k.pinRib.FTx, k.pinRib.FTz), 0)} lbf in the side's plane and up to ${f(k.pinRib.pull, 0)} lbf of outward pull; the ${f(k.pinRib.sOd, 2)}" sleeve hole leaves S = ${f(k.pinRib.Snet, 3)} in³ of ${f(k.pinRib.S, 3)}: the rating's ${f(k.pinRib.ribFRating, 0)} lbf at the box rib gives ${f(k.pinRib.sigHoleRating, 0)} psi at the hole (the strap pulls the rib in, the knee out: not added above the hole), the D-ring's ${f(k.pinRib.V, 0)} lbf up plus the pin's z part ${f(Math.abs(k.pinRib.FTz), 0)} lbf over the net section ${f(k.pinRib.axial, 0)} psi. The pin's own splitting, bearing and cleavage checks on this rib are in brake-mount (brake-rib rows).` : ''),
+      + (k.pinRib ? ` D-78 removable knee: the box rib (rib ${k.pinRib.n}) is ${f(k.pinRib.w, 2)}" wide and carries the knee's top bolt, ${f(k.pinRib.zT, 2)}" above the deck, with ${f(Math.hypot(k.pinRib.FTx, k.pinRib.FTz), 0)} lbf in the side's plane and up to ${f(k.pinRib.pull, 0)} lbf of net outward pull; the ${f(k.pinRib.sOd, 2)}" insert hole leaves S = ${f(k.pinRib.Snet, 3)} in³ of ${f(k.pinRib.S, 3)}: the rating's ${f(k.pinRib.ribFRating, 0)} lbf at the box rib gives ${f(k.pinRib.sigHoleRating, 0)} psi at the hole (the strap pulls the rib in, the knee out: not added above the hole), the D-ring's ${f(k.pinRib.V, 0)} lbf up plus the bolt's z part ${f(Math.abs(k.pinRib.FTz), 0)} lbf over the net section ${f(k.pinRib.axial, 0)} psi. The bolt's own splitting, bearing and cleavage checks on this rib are in brake-mount (brake-rib rows).` : ''),
   });
 }
 

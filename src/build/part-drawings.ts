@@ -842,23 +842,24 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
   }
   // D-77: the pivot strap is bought as flat bar: cut and drill only.
   if (part.partNo === 'brake-strap') notes.push('Cut from the flat bar on the metal bandsaw and deburr the cut edges; drill on the drill press. Cut, deburr and drill only. Drill the screw holes first; the knee\'s pin hole is drilled through this pin hole after the strap is screwed on.');
-  // D-78: the pin holes in the rail, the box rib, the tab and the knee are drilled at their own steps, not at the saw.
-  let pinsHere: ReturnType<typeof brakeOf>['pins'];
-  try { pinsHere = /^(rail|side-rib-box|brake-tab|brake-knee)$/.test(part.partNo ?? '') ? brakeOf(p).pins : undefined; } catch { pinsHere = undefined; } // a call without the design (partDims of one part) has no layout
-  if (pinsHere && part.partNo === 'rail' && feats.some((f) => f.k === 'hole' && f.to.some((t) => /^brake-sleeve-B-hull/.test(t)))) {
-    notes.push(`The one hole is for the bottom-pin sleeve and is oversize on purpose (5/8"): the sleeve is bedded in epoxy at the knee step, with the real knee clamped on, so it lines up with the knee's own sleeve. Lay the rail flat on the drill press, OUTBOARD face down, top edge against a fence, measured from the rear end (the rail is still 1/2" long there). Cut the ${frac(pinsHere.washer.cboreDia)} counterbore for the bearing washer, ${frac(pinsHere.washer.cboreDepth)} deep, in the INBOARD face (the face that is up) first, then drill through. The right rail is the mirror image.`);
+  // D-78: the insert holes in the rail and the box rib are drilled at their own steps; the knee's and the tab's bolt holes are match-drilled from the inserts.
+  let rmHere: ReturnType<typeof brakeOf>['removable'];
+  try { rmHere = /^(rail|side-rib-box|brake-tab|brake-knee)$/.test(part.partNo ?? '') ? brakeOf(p).removable : undefined; } catch { rmHere = undefined; } // a call without the design (partDims of one part) has no layout
+  if (rmHere && part.partNo === 'rail' && feats.some((f) => f.k === 'hole' && f.to.some((t) => /^brake-insert-bottom/.test(t)))) {
+    const ins = rmHere.bottom.insert;
+    notes.push(`The holes are for the bottom-bolt insert. Lay the rail flat on the drill press, OUTBOARD face down, top edge against a fence, measured from the rear end (the rail is still 1/2" long there). All from the INBOARD face (the face that is up): the ${frac(ins.cboreDia)} counterbore for the insert's flange, ${frac(ins.cboreDepth)} deep; the ${frac(ins.od)} pilot hole ${frac(ins.len)} deeper; then the ${frac(rmHere.clearHole)} clear hole on through the rest of the rail. Epoxy the insert in with its flange flush. The right rail is the mirror image.`);
   }
-  if (pinsHere && part.partNo === 'side-rib-box' && feats.some((f) => f.k === 'hole' && f.to.some((t) => /^brake-sleeve-T-hull/.test(t)))) {
-    notes.push(`The one hole is for the top-pin sleeve and sits in the full-width BLOCK, measured from the foot of the rib (the top is cut at the sheer slope, so do not measure down from it). Do not drill it on the bench: drill it 5/8" oversize after the rib is glued in, through the block, the filler and the web together, with a drill block square to the side, after the ${frac(pinsHere.washer.cboreDia)} counterbore for the bearing washer (${frac(pinsHere.washer.cboreDepth)} deep) in the inner face. The sleeve is bedded in epoxy around the knee's own sleeve, with the knee pinned on at the bottom pin.`);
+  if (rmHere && part.partNo === 'side-rib-box' && feats.some((f) => f.k === 'hole' && f.to.some((t) => /^brake-insert-top/.test(t)))) {
+    const ins = rmHere.top.insert;
+    notes.push(`The holes are for the top-bolt insert and sit in the full-width BLOCK, measured from the foot of the rib (the top is cut at the sheer slope, so do not measure down from it). Do not drill them on the bench: drill after the rib is glued in and before the storage box goes in, with a drill block square to the side, all from the inner face: the ${frac(ins.cboreDia)} counterbore ${frac(ins.cboreDepth)} deep, the ${frac(ins.od)} pilot hole ${frac(ins.len)} deeper, then the ${frac(rmHere.clearHole)} clear hole on out through the rib, the filler and the web. Epoxy the insert in with its flange flush.`);
   }
-  // D-78: the tab is glued to the knee first; both pin holes in the knee unit are then drilled from the pin-hole plate.
-  if (pinsHere && part.partNo === 'brake-tab') {
-    const tl = part.stock?.l ?? pinsHere.tab.z1 - pinsHere.tab.z0;
-    notes.push(`Grain runs up the ${frac(tl)} side. Glue the tab to the knee's rear face only (never to the side web it lies on). Drill its one hole AFTER it is glued to the knee, from the pin-hole plate with the knee unit, 33/64" through, on the drill press with a ${frac(pinsHere.webRecess)} shim under the leg; the sleeve is reamed first and epoxied in.`);
+  if (rmHere && part.partNo === 'brake-tab') {
+    const tl = part.stock?.l ?? rmHere.tab.z1 - rmHere.tab.z0;
+    notes.push(`Grain runs up the ${frac(tl)} side. Glue the tab to the knee's rear face only (never to the side web it lies on). Do not drill its hole on the bench: it is match-drilled with the knee unit at the rib step, ${frac(rmHere.clearHole)} straight through at the dimple the dowel center leaves. The position shown is where the dimple should land.`);
   }
-  if (pinsHere && part.partNo === 'brake-knee') {
+  if (rmHere && part.partNo === 'brake-knee') {
     const kz = brakeOf(p).knee.zBot;
-    notes.push(`The tab (rear face, ${frac(pinsHere.tab.z0 - kz)} to ${frac(pinsHere.tab.z1 - kz)} up from the bottom end) is glued on first. Then drill the top hole in the tab and, last, the bottom hole through the leg, both 33/64" from the pin-hole plate on the knee template sheet; the reamed sleeves go in after.`);
+    notes.push(`The tab (rear face, ${frac(rmHere.tab.z0 - kz)} to ${frac(rmHere.tab.z1 - kz)} up from the bottom end) is glued on first. The bottom bolt hole is not drilled on the bench: it is match-drilled at the rib step, ${frac(rmHere.clearHole)} straight through at the dimple the dowel center leaves in the rail. The position shown is where the dimple should land.`);
   }
   // D-76: the side ribs, their knees and the box tie spacers.
   if (/^side-rib(-box|-bow)?$/.test(part.partNo ?? '')) {
@@ -871,27 +872,6 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
 
   // ── Notches through the thickness cut into a box's main outline ──
   if (notchBoxes.length && part.geometry.type === 'box') b.main = notchedRect(b.U, b.V, notchBoxes);
-
-  // D-78 (the knee on quick-release pins). A pin runs through a SLEEVE, so a hole for a sleeve is the only hole at that spot: drop the second, pin-clearance hole the pin's own joints add there.
-  const sleeveHoles = feats.filter((f): f is HoleF => f.k === 'hole' && f.to.some((t) => /^brake-sleeve-/.test(t)));
-  if (sleeveHoles.length) {
-    for (let i = feats.length - 1; i >= 0; i--) {
-      const f = feats[i];
-      if (f.k === 'hole' && f.to.some((t) => /^brake-pin-/.test(t)) && !f.to.some((t) => /^brake-sleeve-/.test(t)) && f.pts.every((q) => sleeveHoles.some((h) => h.pts.some((e) => samePerp(e, q, h.axis))))) feats.splice(i, 1);
-    }
-    // The hole sizes the shop drills: 33/64" for a 1/2" tube (a glue line around it), 5/8" for a hull sleeve (bedded in epoxy around the knee's sleeve).
-    for (const h of sleeveHoles) {
-      const hull = h.to.some((t) => /sleeve-[BT]-hull/.test(t));
-      const nd = hull ? 0.625 : h.dia + 1 / 64;
-      h.size = h.size.replace(drill(h.dia), drill(nd));
-      h.dia = nd;
-    }
-  }
-  // A sleeve is a plain piece of tube: its drawing is its length, outside and inside diameter. The holes the rail, the rib, the tab and the knee need for it are on THEIR drawings.
-  if (/^brake-sleeve-/.test(part.partNo ?? '')) {
-    feats.length = 0;
-    notes.push('A piece of stainless tube, cut to length on the metal bandsaw: no holes. Cut it square, a hair short rather than long, and deburr both ends. Open the bore with a reamer (.377 to .378 inch) on the drill press: this only enlarges the bore of a bought piece by a couple of thousandths. The 3/8" pin must slide in with about five thousandths of an inch of play: try the first pin in every sleeve before any epoxy goes on.');
-  }
 
   // Merge identical hole features (same spec and axis) across joints; drop a hole whose points another hole already has.
   const merged: Feat[] = [];

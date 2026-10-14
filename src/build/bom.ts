@@ -132,26 +132,14 @@ export function fastenerMaterialNote(label: string, usedOn: readonly string[] = 
     : '316 stainless REQUIRED: in wet white oak (tannins corrode coated steel and stain the wood black). 304 is a possible cost cut, not priced.';
 }
 
-/** D-78: the knee's two kinds of quick-release pin (bottom B, top T). */
-const KNEE_PIN_RE = /^brake-pin-[BT]$/;
-/**
- * The grade note of a ball-lock pin line. Ball-lock pins are usually 17-4 PH stainless: that is accepted for the Standard spec (304 class), but the Extreme spec asks for 316 and a 316 pin has to
- * be sourced. Neither spec has a published pull-out rating for the locking balls: the shop asks the vendor.
- */
-export function kneePinGradeNote(spec: SpecName): string {
-  return spec === 'standard'
-    ? 'Standard grade: stainless, and 17-4 PH is accepted (ball-lock pins are usually 17-4 PH). Order the usable length shown, which equals the stack the pin passes or is at most about 1/8" longer. Ask the vendor for the pull-out rating of the locking balls (not published for these pins). Button end outboard; fit a short lanyard to the knee.'
-    : 'Extreme grade (316): ball-lock pins are usually 17-4 PH stainless, which is NOT 316, so a 316 pin must be sourced (ask the vendors; if none exists, 17-4 PH is a written exception). Order the usable length shown, which equals the stack the pin passes or is at most about 1/8" longer. Ask the vendor for the pull-out rating of the locking balls (not published for these pins). Button end outboard; fit a short lanyard to the knee.';
-}
+/** D-78: the removable knee's bought parts (bolts, washers, inserts): one BOM line for both sides. */
+const KNEE_BUY_RE = /^brake-(bolt|washer|insert)-(bottom|top)$/;
 
 const METAL_SPEC = /stainless|316|steel|bronze|zinc|galvanized|grade \d|hinge|chain|latch|clevis|hitch|snap hook|D-ring/i;
 /** The material note of a purchased hardware part (hinges, latches, pins, chain, eye bolts...), from the model's own spec; undefined for rope, foam, rubber, plastic, lights and other non-metal parts. */
 export function hardwareMaterialNote(x: Part, spec: SpecName = 'extreme'): string | undefined {
   const m = x.material ?? '';
   if (x.kind !== 'purchased' || !METAL_SPEC.test(m)) return undefined;
-  if (KNEE_PIN_RE.test(partKey(x))) return spec === 'standard'
-    ? 'Stainless for the Standard spec; the usual 17-4 PH ball-lock pin is accepted.'
-    : '316 stainless REQUIRED by the Extreme spec, and ball-lock pins are usually 17-4 PH: source a 316 pin or write down 17-4 PH as the exception.';
   if (spec === 'standard') {
     if (/316|stainless/i.test(m)) return `304 / 18-8 stainless is right for the Standard spec (garage-kept); the model says "${m}" for the Extreme spec, which uses 316.`;
     if (/zinc|galvanized|grade \d|steel/i.test(m)) return `As specified: ${m}. Galvanized or zinc is right for the Standard spec (garage-kept); 316 for the Extreme spec.`;
@@ -593,6 +581,9 @@ export const BANDING_ROLL_FT = 25;
  * The note table. Each entry cites the text it comes from; quantities come from the model (parts present, their sizes), never from the text.
  * Items that live in a JOINT's text (hinge machine screws, handlebow rods, rail-to-chine screws, button plugs, nylon washers) are expanded in `jointItems` instead.
  */
+/** D-78: an estimate for a knee tool (ratchet, dowel centers). */
+const kneeToolPrice = (usd: number, note: string): Price => ({ usd, unit: 'ea', source: 'Hardware store', basis: 'estimate', note });
+
 export const NOTE_ITEMS: NoteItem[] = [
   {
     key: 'wheel-retention', section: 'fasteners', partIds: wheelIds, noteRef: 'wheel notes (D-60): "collar + cotter pin on the axle end"; axle notes: 0.156" cross hole',
@@ -687,6 +678,25 @@ export const NOTE_ITEMS: NoteItem[] = [
       const uses = byIds(built, ['brake-foot-tread-L', 'brake-foot-tread-R', 'brake-pad-L', 'brake-pad-R']).filter((x) => /contact cement/i.test(ptext(x)));
       if (!uses.length) return null;
       return { items: [{ label: 'Contact cement, pint', qty: Math.ceil(uses.length / CEMENT_USES_PER_CAN) }], note: `${uses.length} glued faces: ${uses.map(shopName).join(', ')}` };
+    },
+  },
+  {
+    // D-78: the tools of the clamped-bolt knee. A ratchet and a socket live in the storage box; the dowel centers are for match-drilling the knee. Both are bought only if the shop has none.
+    key: 'knee-ratchet', section: 'consumables', price: kneeToolPrice(22, 'ESTIMATE, not quoted: a 3/8" drive ratchet and a 9/16" deep socket (a 6-point, about $22 for the two). A tool, not part of the sled; you may already own one'),
+    partIds: ['brake-bolt-top-L', 'brake-bolt-top-R'], noteRef: 'brake bolt notes: "tighten it firmly with the 3/8" drive ratchet and the 9/16" deep socket kept in the storage box"',
+    expand(built) {
+      const n = byIds(built, ['brake-bolt-top-L', 'brake-bolt-top-R']).length;
+      if (!n) return null;
+      return { items: [{ label: 'TOOL: 3/8" drive ratchet with a 9/16" deep socket (you may already own one)', qty: 1 }], note: 'one ratchet and socket for all four bolts; it lives in the storage box and is not counted in the sled weight' };
+    },
+  },
+  {
+    key: 'knee-dowel-centers', section: 'consumables', price: kneeToolPrice(8, 'ESTIMATE, not quoted: a set of 3/8" dowel centers (point markers), about $8. A tool; you may already own a set'),
+    partIds: ['brake-bolt-bottom-L', 'brake-bolt-bottom-R'], noteRef: 'knee fitting: the bolt holes in the knee and tab are match-drilled from the rail and rib block holes',
+    expand(built) {
+      const n = byIds(built, ['brake-bolt-bottom-L', 'brake-bolt-bottom-R']).length;
+      if (!n) return null;
+      return { items: [{ label: 'TOOL: 3/8" dowel centers, set of 4 (you may already own a set)', qty: 1 }], note: 'marks the bolt holes on the knee and the tab from the holes already in the rail and rib block' };
     },
   },
 ];
@@ -816,7 +826,7 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   for (const r of cl.metal) {
     const g = metalGroups.get(r.section) ?? { section: r.section, ft: 0, cuts: [] };
     g.ft += (r.qty * (r.cutLengthIn + METAL_CUT_ALLOWANCE_IN)) / 12;
-    g.cuts.push(`${r.qty} × ${fracIn(r.cutLengthIn)}" (${r.family === 'Stainless tube' ? r.name.replace(/\s*\([^)]*\)\s*$/, '').replace(/\s+[LR]$/, '') : r.name.replace(/\s+[LR]\d*$/, '').toLowerCase()})`);
+    g.cuts.push(`${r.qty} × ${fracIn(r.cutLengthIn)}" (${r.name.replace(/\s+[LR]\d*$/, '').toLowerCase()})`);
     metalGroups.set(r.section, g);
   }
   const metal: BomLine[] = [];
@@ -861,22 +871,20 @@ function bomForSpec(parts: Part[], p: Params): Bom {
       if (price.note?.startsWith('UNPRICED')) unpriced.push(key);
     }
     const url = x.sourcing?.url ?? price.url;
-    // D-78: the knee's ball-lock pins say their grade and the estimate in the BOM's own words (the model's sourcing text is the long form of the same).
-    const kneePin = KNEE_PIN_RE.test(key);
-    const vendor = kneePin ? 'McMaster-Carr class' : price.url ? price.source : shortVendor(x.sourcing?.vendor, x.kind);
+    const vendor = price.url ? price.source : shortVendor(x.sourcing?.vendor, x.kind);
     const vendorFull = x.sourcing?.vendor ?? '';
     const extra: Partial<BomLine> = {
       vendor,
-      notes: [kneePin ? kneePinGradeNote(spec) : clip(vendorFull, 200), priceNote ? `Price: ${priceNote}` : ''].filter(Boolean).join(' | '),
+      notes: [clip(vendorFull, 200), priceNote ? `Price: ${priceNote}` : ''].filter(Boolean).join(' | '),
       partIds: group.map((q) => q.id),
       ...(url ? { url } : {}),
       ...(tg ? { group: tg } : {}),
       ...(hardwareMaterialNote(x, spec) ? { materialNote: hardwareMaterialNote(x, spec) } : {}),
     };
     const name0 = purchasedDescribe(key, spec) ?? (std ? std304(x.name) : x.name);
-    // one line for both sides, with the usable length to order: "Brake knee top pin (3/8" ball-lock, stainless; 17-4 PH accepted), 2-1/4" usable length"
-    const grip = kneePin ? /(\d+(?:-\d+\/\d+)?)" usable length/.exec(x.material ?? '')?.[1] : undefined;
-    const name = kneePin ? `${name0.replace(/ [LR] \(/, ' (').replace(/, 304 stainless\)/, ', stainless; 17-4 PH accepted)')}${grip ? `, ${grip}" usable length` : ''}` : name0;
+    // D-78: one line for both sides of a removable-knee part (the model names say L or R).
+    const kneeLen = /^brake-bolt-/.test(key) ? /x ([\d-/]+)"/.exec(x.material ?? '')?.[1] : undefined;
+    const name = KNEE_BUY_RE.test(key) ? `${name0.replace(/ [LR]( \(|$)/, '$1')}${kneeLen ? `, ${kneeLen}" long` : ''}` : name0;
     // A part cut from a roll or a pack (a cord): the whole packs to buy, not a price per part.
     if (price.packQty && price.packUsd && price.perPart) purchased.push(packLine('Purchased parts', key, name, group.length * price.perPart, price, extra, false));
     else (tg ? touchLines : purchased).push(line(tg ? TOUCHES_SECTION.title : 'Purchased parts', key, name, group.length, price, extra));

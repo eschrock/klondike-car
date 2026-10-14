@@ -930,7 +930,6 @@ function metalDims(x: Part, warnings: string[]): Dims {
 export function metalFamily(x: Part): string | null {
   const m = x.material.toLowerCase();
   if (/aluminum/.test(m)) return 'Aluminum tube';
-  if (/stainless/.test(m) && /\btube\b/.test(m)) return 'Stainless tube'; // D-78: the knee's pin sleeves
   if (/angle/.test(m)) return 'Angle';
   if (/flat bar/.test(m)) return 'Flat bar';
   if (/steel rod/.test(m) && !/stainless/.test(m)) return 'Steel rod';
@@ -943,7 +942,6 @@ function metalSection(x: Part, family: string, d: Dims): string {
   const grade = /316/.test(x.material) ? '316 stainless' : '18-8 (304) stainless'; // the model's own words for the weather spec (build-utils `stainless`)
   const wall = (): number | undefined => { const m = /(\d*\.\d+)"\s*wall/.exec(v); return m ? Number(m[1]) : x.geometry.type === 'cylinder' ? x.geometry.wall : undefined; };
   switch (family) {
-    case 'Stainless tube': return x.material; // the model's own words for the weather spec: "316 stainless tube 1/2" OD x 3/8" ID"
     case 'Steel rod': return `${fracIn(d.t)}" solid 1045 / CDS steel rod (cut to length)`;
     case 'DOM tube': return `${fracIn(d.t)}" OD x ${(wall() ?? 0.12).toFixed(3)}" wall DOM tube (ASTM A513 Type 5)`;
     case 'Aluminum tube': return `6061-T6 ${fracIn(d.t)}" x ${fracIn(d.w)}" x ${(wall() ?? 0.125).toFixed(3)}" wall rectangular tube`;
@@ -959,8 +957,7 @@ function metalRows(parts: Part[], warnings: string[], stepOf?: ReadonlyMap<strin
     if (!family) { warnings.push(`${partKey(x)}: unrecognized metal material '${x.material}'`); continue; }
     const w: string[] = [];
     const d0 = metalDims(x, w);
-    // A pin sleeve is cut a hair SHORT (down to the 1/16 in): it must not stand proud of the wood, and nothing is filed.
-    const d = family === 'Stainless tube' ? { ...d0, l: Math.floor(d0.l * 16 + 1e-6) / 16 } : d0;
+    const d = d0;
     warnings.push(...w);
     const section = metalSection(x, family, d);
     const key = `${partKey(x)}|${dimKey(d)}`;

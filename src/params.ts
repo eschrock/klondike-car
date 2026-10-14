@@ -1598,6 +1598,43 @@ const defs = {
     default: 2, min: 1.5, max: 4, step: 0.25, status: 'assumed', ref: 'D-78',
   },
 
+  // ── D-78 clamped-bolt analysis (brake-mount, preload) ──
+  brakeBoltTorqueFtLb: {
+    label: 'Removable knee: tightening torque of a hand ratchet', group: 'brake', unit: 'ft·lb',
+    default: 15, min: 5, max: 30, step: 1, status: 'verify', ref: 'D-78',
+    note: 'D-78 ASSUMED, TO CONFIRM: what a person reaches tightening a 3/8-16 stainless bolt "firmly" with a 3/8 in drive ratchet (about 15 ft·lb). The usable preload is the smaller of this torque and the bearing / proof / thread limits (brake-mount).',
+  },
+  brakeBoltNutFactor: {
+    label: 'Removable knee: torque-tension (nut) factor K', group: 'brake', unit: '',
+    default: 0.2, min: 0.1, max: 0.4, step: 0.01, status: 'verify', ref: 'D-78',
+    note: 'D-78: preload P = T / (K d). 0.2 is the usual value for plain or lightly lubricated steel; stainless on stainless galls and can read higher (0.25 to 0.3) without anti-seize, 0.15 with it. Confirm on the real bolts.',
+  },
+  brakeJointFrictionMu: {
+    label: 'Removable knee: friction between knee, tab and hull (oak on oak, wet)', group: 'brake', unit: '',
+    default: 0.3, min: 0.15, max: 0.6, step: 0.05, status: 'assumed', ref: 'D-78',
+    note: 'D-78: wood on wood, wet, varnished or oiled faces. The clamped joint carries the in-plane force by friction mu x clamp force while the preload stays; the bolt in its clearance hole is the fallback if it slips.',
+  },
+  brakeBoltPreloadMaxFrac: {
+    label: 'Removable knee: bolt preload limit (share of yield)', group: 'brake', unit: '',
+    default: 0.75, min: 0.5, max: 0.9, step: 0.05, status: 'assumed', ref: 'D-78',
+    note: 'D-78: the usual 75 % of proof / yield for a reusable fastener. Proof load = this x ss316BoltYieldPsi x the tensile stress area.',
+  },
+  brakeInsertWithdrawalFactor: {
+    label: 'Removable knee: threaded insert pull-out, share of the NDS lag-screw value', group: 'brake', unit: '',
+    default: 0.5, min: 0.25, max: 1, step: 0.05, status: 'verify', ref: 'D-78',
+    note: 'D-78 ASSUMED, TO CONFIRM: pull-out of a flanged threaded insert (coarse external thread, outside diameter D, body length L) in oak is taken as this fraction of the NDS lag-screw withdrawal 1800 G^1.5 D^0.75 L x C_M (wet 0.7). No vendor rating is used. Confirm with a pull test on a scrap rail.',
+  },
+  brakeBoltLoadDurationFactor: {
+    label: 'Removable knee: bolt load-duration factor C_D', group: 'brake', unit: '×',
+    default: 1, min: 0.9, max: 1.6, step: 0.05, status: 'assumed', ref: 'D-78',
+    note: 'D-78: NDS C_D on the bolt in its clearance hole. 1.0 because the hold load is sustained, not an impact (the stomp is checked at yield level instead).',
+  },
+  brakeStainlessModulusPsi: {
+    label: 'Stainless steel modulus (bolt stiffness)', group: 'brake', unit: 'psi',
+    default: 28000000, min: 26000000, max: 30000000, step: 500000, status: 'assumed', ref: 'D-78',
+    note: 'D-78: Young\'s modulus of 304 / 316 stainless, for the stiffness of the clamping bolts against the oak they clamp (how an external pull splits between the bolt and the joint).',
+  },
+
   brakeBungeeTensionLbf: {
     label: 'Return bungee tension, released', group: 'brake', unit: 'lbf',
     default: 3, min: 1, max: 10, step: 0.5, status: 'assumed', ref: 'D-57',
