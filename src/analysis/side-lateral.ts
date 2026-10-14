@@ -15,15 +15,13 @@
  * (no web flange) while its stiffness counts one, and every stress criterion takes its own worst load position.
  */
 import { thinSheet } from '../params';
-import { sideRibStations, boxTieGeometry, kneeScrews, ribShaftWidth, LASH_BOLTS, type RibStation } from '../model/side-ribs';
+import { sideRibStations, boxTieGeometry, kneeScrews, LASH_BOLTS, type RibStation } from '../model/side-ribs';
 import { sideHeightAtX } from '../model/layout';
 import type { Ctx } from './context';
 import { dualCheck, detail, governing, type CaseEval } from './dual';
 import { f } from './format';
 import { allowables } from './structure';
 import { strapLoads } from './cargo';
-import { brakeBundle, clampSolveAt, loadsBoth, loadsFromFootBoth } from './brake';
-import { clampGroupForces } from './brake-clamp';
 import type { AnalysisCheck, Detail } from './types';
 
 /** Study assumptions (docs/studies/side-stiffness-study.md, "Assumptions"). */
@@ -95,20 +93,15 @@ export function sideModel(ctx: Pick<Ctx, 'p' | 'L' | 'd'>, withRibs = true): Sid
   }
   const ribs: RibSpring[] = [];
   if (withRibs) {
-    const depth = p.sideRibDepthIn + L.sideBand;
+    const w = p.sideRibWidthIn, depth = p.sideRibDepthIn + L.sideBand;
     // Stiffness section: the rib on a web flange (12 web thicknesses plus the rib width, transformed by the web's across-grain E). Stress section: the rib alone.
-    const section = (w: number) => {
-      const bf = ((w + 12 * tW) * EwP) / Eoak;
-      const A1 = w * depth, y1 = tW + depth / 2, A2 = bf * tW, y2 = tW / 2;
-      const yb = (A1 * y1 + A2 * y2) / (A1 + A2);
-      const Ic = (w * depth ** 3) / 12 + A1 * (y1 - yb) ** 2 + (bf * tW ** 3) / 12 + A2 * (y2 - yb) ** 2;
-      return { EIr: Eoak * Ic, S: (w * depth * depth) / 6 };
-    };
-    const base = section(p.sideRibWidthIn);
+    const bf = ((w + 12 * tW) * EwP) / Eoak;
+    const A1 = w * depth, y1 = tW + depth / 2, A2 = bf * tW, y2 = tW / 2;
+    const yb = (A1 * y1 + A2 * y2) / (A1 + A2);
+    const Ic = (w * depth ** 3) / 12 + A1 * (y1 - yb) ** 2 + (bf * tW ** 3) / 12 + A2 * (y2 - yb) ** 2;
+    const EIr = Eoak * Ic;
+    const S = (w * depth * depth) / 6;
     for (const st of sideRibStations(p, L)) {
-      // D-78: with the removable knee on pins the box rib's shaft is widened (to the sleeve plus the edge oak each side); every other rib keeps the plain width.
-      const wSt = ribShaftWidth(p, st);
-      const { EIr, S } = wSt === p.sideRibWidthIn ? base : section(wSt);
       const node = Math.max(1, Math.min(n - 1, Math.round((st.x - x0) / h)));
       const Hr = st.h - hb / 2;
       let zBase: number, zCrit: number, flex: number;
@@ -222,24 +215,6 @@ export interface SideLateral {
   strap: { T: number; Hin: number; r: SideResponse; tieForce: number } | null;
   knee: ReturnType<typeof kneeScrewLoads>;
   tieArea: number;
-  /** D-78 (pins only): what the knee's top bolt adds to the box rib, with the D-ring rating and the 50 lbf push. */
-  pinRib?: PinRibLoads;
-}
-
-/** D-78: the box rib carrying the knee's top bolt T together with the D-ring (goal rider, hold load x lambda). Rib heights are above the deck; moments in lbf in. */
-export interface PinRibLoads {
-  /** Rib number and index among the model's ribs; the shaft width and depth (in), the sleeve OD, the sleeve's height above the deck and the lever from it up to the gunwale load. */
-  n: number; j: number; w: number; depth: number; sOd: number; zT: number; lever: number; leverCrit: number;
-  /** Section moduli (in^3): the shaft alone and net of the insert hole. */
-  S: number; Snet: number;
-  /** Pin T force on the rib in the side's plane (x, z) and its axial pull outward (lbf). */
-  FTx: number; FTz: number; pull: number;
-  /** Rib force at the gunwale (lbf) for the D-ring rating pulled alone at the box rib and for the worst 50 lbf push position. */
-  ribFRating: number; ribFPush: number; ribMPush: number;
-  /** Bending stresses (psi): at the T-hole section (net) for the rating and the push, at the tie-top section for the push plus the pull. */
-  sigHoleRating: number; sigHolePush: number; sigCritPushPull: number;
-  /** Extra box tie force (lbf) from the outward pull (same sense as the outward push), and the D-ring's vertical part plus the pin's z part over the shaft's net section (psi). */
-  tieAdd: number; axial: number; V: number;
 }
 
 const tieForceOf = (m: SideModel, r: SideResponse) => m.ribs.reduce((mx, rb, j) => (rb.st.kind === 'box' ? Math.max(mx, (r.ribF[j] * rb.H) / rb.zBase) : mx), 0);
@@ -267,8 +242,6 @@ function sideLateralUncached(ctx: Ctx, strapTension?: number): SideLateral {
   const knee = kneeScrewLoads(ctx);
   const P = p.sideKickLbf;
   const push = { P, wPinned: 0, xPinned: 0, wFixed: 0, xFixed: 0, noRibsPinned: 0, noRibsFixed: 0, sigBand: 0, sigWeb: 0, sigDeck: 0, ribSig: 0, ribSigN: 0, kneeMoment: 0, kneePull: 0, tieForce: 0 };
-  const jBox = m.ribs.findIndex((rb) => rb.st.kind === 'box');
-  let boxRibFPush = 0;
   for (let i = 1; i < m.n; i++) {
     const rp = sideResponse(pin, [[i, P]]);
     if (Math.abs(rp.w[i]) > push.wPinned) { push.wPinned = Math.abs(rp.w[i]); push.xPinned = m.xs[i]; }
@@ -284,7 +257,6 @@ function sideLateralUncached(ctx: Ctx, strapTension?: number): SideLateral {
     rp.ribSig.forEach((s, j) => { if (s > push.ribSig) { push.ribSig = s; push.ribSigN = m.ribs[j].st.n; } });
     m.ribs.forEach((rb, j) => { if (rb.st.kind === 'knee') push.kneeMoment = Math.max(push.kneeMoment, rp.ribF[j] * rb.H); });
     push.tieForce = Math.max(push.tieForce, tieForceOf(m, rp));
-    if (jBox >= 0) boxRibFPush = Math.max(boxRibFPush, rp.ribF[jBox]);
   }
   push.kneePull = push.kneeMoment * knee.pullPerMoment;
   const th = (p.lashPullAngleDeg * Math.PI) / 180;
@@ -308,36 +280,7 @@ function sideLateralUncached(ctx: Ctx, strapTension?: number): SideLateral {
     strap = { T, Hin: Hs, r, tieForce: tieForceOf(m, r) };
   }
   const tieArea = Math.min(p.sideRibWidthIn, p.boxTieWidthIn) * p.boxTieHeightIn;
-  return { model: m, push, rating, strap, knee, tieArea, ...pinRibLoads(ctx, m, pin, Hin, boxRibFPush, jBox) };
-}
-
-/** D-78: the knee's top bolt on the box rib (removable knee only; `{}` otherwise, so the default result object is unchanged). */
-function pinRibLoads(ctx: Ctx, m: SideModel, pin: SideSolver, Hin: number, ribFPush: number, jBox: number): { pinRib?: PinRibLoads } {
-  const { p, L } = ctx;
-  if (jBox < 0) return {};
-  const g = brakeBundle(ctx).g;
-  if (!g.removable) return {};
-  const rm = g.removable, rb = m.ribs[jBox];
-  // the envelope of the goal rider's hold load (both rolling directions) and the stomp (both directions): the largest top-bolt force in plane and the largest net pull (bolt tension less the clamp)
-  const variants = [...loadsBoth(ctx, ctx.loads.goal, g), ...loadsFromFootBoth(ctx, g, p.brakeFootAbuseLbf)].map((Ld) => ({ gp: clampGroupForces(g, Ld.Rk), pl: clampSolveAt(ctx, g, Ld.Rk).pl }));
-  const worstIn = variants.reduce((a, b) => (b.gp.Tmag > a.gp.Tmag ? b : a));
-  const gp = worstIn.gp;
-  const pull = Math.max(...variants.map((v) => v.pl.pullT));
-  const depth = rb.depth, w = rm.rib.blockW, hole = rm.top.insert.od;
-  const S = (w * depth * depth) / 6, Snet = (Math.max(1e-6, w - hole) * depth * depth) / 6;
-  const zT = rm.top.z - L.deckTop;
-  const lever = Math.max(0, rb.H - zT), leverCrit = Math.max(0, zT - rb.zCrit);
-  const r = sideResponse(pin, [[rb.node, Hin]]);
-  const ribFRating = r.ribF[jBox];
-  const ribMPush = ribFPush * Math.max(0, rb.H - rb.zCrit);
-  const hullT = rm.hull.filler + rm.hull.rib;
-  const V = p.lashLoadLbf * Math.sin((p.lashPullAngleDeg * Math.PI) / 180);
-  return { pinRib: {
-    n: rb.st.n, j: jBox, w, depth, sOd: hole, zT, lever, leverCrit, S, Snet, FTx: gp.FT[0], FTz: gp.FT[1], pull,
-    ribFRating, ribFPush, ribMPush,
-    sigHoleRating: (ribFRating * lever) / Snet, sigHolePush: (ribFPush * lever) / Snet, sigCritPushPull: (ribMPush + pull * leverCrit) / S,
-    tieAdd: (pull * zT) / rb.zBase, axial: (V + Math.abs(gp.FT[1])) / (hullT * Math.max(1e-6, w - hole)), V,
-  } };
+  return { model: m, push, rating, strap, knee, tieArea };
 }
 
 function unitAt(n: number, i: number, P: number): number[] {
@@ -364,13 +307,7 @@ export function sideLateralCheck(ctx: Ctx): AnalysisCheck {
     detail(`D-ring rating: rib bending (rib ${s.rating.ribSigMaxN}, each rib pulled alone)`, s.rating.ribSigMax, 'psi', al.oakBend, '<='),
   ];
   if (hasKnee) ds.push(detail(`${f(s.push.P, 0)} lbf outward push: knee toe screw withdrawal (${s.knee.ks.d.length} ${s.knee.ks.fit.gauge === 6 ? '#6' : `#${s.knee.ks.fit.gauge}`} into the joist)`, s.push.kneePull, 'lbf', s.knee.cap, '<='));
-  const pr = s.pinRib;
-  if (hasBox) ds.push(detail(pr ? 'box tie glue (rating, or push + the knee\'s top-bolt pull), cross-grain tension' : 'box tie glue (rating or push), cross-grain tension', Math.max(s.push.tieForce + (pr ? pr.tieAdd : 0), s.rating.tieForce) / s.tieArea, 'psi', deckAllow, '<='));
-  if (pr) {
-    ds.push(detail(`D-78 D-ring rating on the box rib: bending at the knee's top-bolt insert hole, ${f(pr.sOd, 2)}" insert out of the ${f(pr.w, 2)}" shaft (net section)`, pr.sigHoleRating, 'psi', al.oakBend, '<='));
-    ds.push(detail(`D-78 ${f(s.push.P, 0)} lbf outward push at the box rib: bending at the insert hole (net section)`, pr.sigHolePush, 'psi', al.oakBend, '<='));
-    ds.push(detail(`D-78 ${f(s.push.P, 0)} lbf outward push + the knee's top-bolt pull ${f(pr.pull, 0)} lbf (same sense): box rib bending at the top of its tie`, pr.sigCritPushPull, 'psi', al.oakBend, '<='));
-  }
+  if (hasBox) ds.push(detail('box tie glue (rating or push), cross-grain tension', Math.max(s.push.tieForce, s.rating.tieForce) / s.tieArea, 'psi', deckAllow, '<='));
   const m = s.model;
   const ribTxt = m.ribs.map((rb) => `rib ${rb.st.n} at x = ${f(rb.st.x, 1)} (${rb.st.kind === 'box' ? `box tie ${f(rb.zBase, 1)}" up` : `knee on ${rb.st.member === 'king-beam' ? 'the king beam' : (rb.st.member ?? '').replace('-', ' ')}`}, ${f(rb.K, 0)} lbf/in at the gunwale)`).join('; ');
   const how = `Beam-on-strips screening model (docs/studies/side-stiffness-study.md, D-76): the gunwale band beam (EI ${f(m.EI, 0)} lb·in²) spans ${f(m.xs[m.n] - m.x0, 2)}" between the transom and bulkhead dados on the side's vertical strips (${f(Math.min(...m.k), 1)} to ${f(Math.max(...m.k), 0)} lbf/in per inch: the chine and gunwale sandwiches across the oak grain at ${f(p.oakMoePerpPsi, 0)} psi, the web across its face grain at ${f(thinSheet(p).moePerpPsi, 0)} psi, a ${DECK_LINE_ROT} lb·in/rad per inch deck line), with the ribs as springs: ${ribTxt}. `
@@ -378,8 +315,7 @@ export function sideLateralCheck(ctx: Ctx): AnalysisCheck {
     + `${f(s.push.P, 0)} lbf push at the gunwale, worst position: ${s.push.wFixed.toFixed(3)}" (fixed ends, x = ${f(s.push.xFixed, 1)}) to ${s.push.wPinned.toFixed(3)}" (pinned, x = ${f(s.push.xPinned, 1)}); without the ribs ${s.push.noRibsFixed.toFixed(3)} to ${s.push.noRibsPinned.toFixed(3)}". Eric's "feels solid" mark is ${FEEL_LIMIT_IN}" (reported, not judged): ${s.push.wPinned <= FEEL_LIMIT_IN ? 'met' : 'NOT met'}. `
     + `The D-ring rating pulls ${f(s.rating.Hin, 0)} lbf inboard (${f(p.lashLoadLbf, 0)} × cos ${p.lashPullAngleDeg}°) at one rib, the worst being rib ${s.rating.station}: the side moves ${s.rating.r.wMax.toFixed(3)}". `
     + (hasKnee ? `Knee: the outward push puts up to ${f(s.push.kneeMoment, 0)} lb·in through a knee; the toe screws (${s.knee.ks.d.map((d) => f(d, 2)).join(' and ')}" from the rib face, levers ${s.knee.levers.map((l) => f(l, 2)).join(' / ')}" about the rib's back) pull ${f(s.push.kneePull, 0)} lbf on the outer one, against ${f(s.knee.cap, 0)} lbf (NDS 1380·G²·D × ${f(s.knee.pen, 2)}" past the tip lead × C_M ${WITHDRAWAL_WET_CM}); under an inboard strap the toe bears on the deck. ` : '')
-    + (hasBox ? `Box tie: up to ${f(Math.max(s.push.tieForce + (pr ? pr.tieAdd : 0), s.rating.tieForce), 0)} lbf into the box's fore corner (the rib pivots at the deck) on ${f(s.tieArea, 2)} in² of glue. ` : '')
-    + (pr ? `D-78 removable knee: the box rib is a ${f(pr.w, 2)}" wide block here (it carries the top bolt's ${f(pr.sOd, 2)}" sleeve) and also takes pin T at ${f(pr.zT, 2)}" above the deck: ${f(Math.hypot(pr.FTx, pr.FTz), 0)} lbf in the side's plane (x ${f(pr.FTx, 0)}, z ${f(pr.FTz, 0)}; the hold load at the goal rider) and up to ${f(pr.pull, 0)} lbf of axial pull OUTWARD (prying, yaw and the sideways push, brake-mount). The strap pulls the rib INWARD and the knee pulls it OUTWARD, so at the rating the two partly cancel above the hole; they are not added there. What the knee does add is the insert hole, which takes ${f(pr.sOd, 2)}" out of the ${f(pr.w, 2)}" shaft: net S = ${f(pr.Snet, 3)} in³ against ${f(pr.S, 3)} in³ solid, and the hole is ${f(pr.lever, 2)}" under the gunwale load (${f(pr.leverCrit, 2)}" above the tie top): the rating's ${f(pr.ribFRating, 0)} lbf at the box rib gives ${f(pr.sigHoleRating, 0)} psi there, and the outward push (same sense as the pull) with the pull at the tie top ${f(pr.sigCritPushPull, 0)} psi. ` : '')
+    + (hasBox ? `Box tie: up to ${f(Math.max(s.push.tieForce, s.rating.tieForce), 0)} lbf into the box's fore corner (the rib pivots at the deck) on ${f(s.tieArea, 2)} in² of glue. ` : '')
     + `The cargo case pulls every D-ring at the cargo-strap row's tension.`;
   const g = governing(ds, how);
   const ev: CaseEval = g;

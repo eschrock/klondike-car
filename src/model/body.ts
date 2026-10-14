@@ -474,11 +474,9 @@ export function signPlacement(ctx: Pick<Ctx, 'p' | 'L'>) {
   const topMargin = 0.75;
   const bg = brakeGeometry(p, L);
   const flapSlope = bg.u[0] !== 0 ? bg.u[1] / bg.u[0] : 0; // z per x along the flap's top surface (positive: it rises toward the pivot)
-  const xMax = bg.removable ? Math.min(SIGN_X_MAX_IN, bg.removable.tab.x0 - p.brakeTabClearIn) : SIGN_X_MAX_IN; // D-78: the sign stops short of the removable knee's tab
   const flapTop = (x: number) => bg.P[1] + (Math.min(x, bg.P[0]) - bg.P[0]) * flapSlope + SIGN_FLAP_CLEAR_IN;
   let best = { length: 4, height: 2, x1: x0 + 4, zTop: 0, zBot: 0, area: -1 };
   for (let x1 = Math.min(SIGN_X_MAX_IN, x0 + p.signLengthIn); x1 >= x0 + 4 - 1e-9; x1 -= 0.25) {
-    if (x1 > xMax + 1e-9) continue;
     const length = x1 - x0;
     const zTop = sideTopAt(L, x1) - topMargin;
     const zBot = Math.max(L.deckTop + 0.5, flapTop(x1));
@@ -487,7 +485,7 @@ export function signPlacement(ctx: Pick<Ctx, 'p' | 'L'>) {
     if (length * height > best.area + 1e-9) best = { length, height, x1, zTop, zBot, area: length * height };
   }
   if (best.area < 0) { // no room above the flap: fall back to the old board over the chine
-    const length = Math.max(4, Math.min(p.signLengthIn, xMax - x0));
+    const length = Math.max(4, Math.min(p.signLengthIn, SIGN_X_MAX_IN - x0));
     const zTop = sideTopAt(L, x0 + length) - topMargin;
     const height = Math.max(2, Math.min(p.signHeightIn, zTop - (L.deckTop + 0.5)));
     best = { length, height, x1: x0 + length, zTop, zBot: zTop - height, area: length * height };

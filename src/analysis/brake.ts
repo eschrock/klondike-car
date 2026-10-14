@@ -12,11 +12,9 @@
  */
 import { obbOverlap, partOBB, partOBBs, worldAABB } from '../model/bounds';
 import { atPose, brakeGeometry, buildBrakeAt, type BrakeGeom, type V2 } from '../model/brake';
-import type { BoltSite } from '../model/brake-layout';
 import { KNEE_NUT_FLAT_R_IN, SHOULDER_CLEAR_IN, WITHDRAWAL_WET_CM, dot2, flapHalfWidth, momentY, norm2, pointPolyGap, sub, type KneeLayer } from '../model/brake-layout';
 import { SIGN_X_MAX_IN } from '../model/body';
 import { makeCtx } from '../model/build-utils';
-import { thinSheet } from '../params';
 import { handleGeometry, POST_RELIEF, SOCKET_ACCESS_HOLE_IN, type HandleGeom } from '../model/handle';
 import { SCREW_DIA_IN } from '../model/rear-mount';
 import type { Part } from '../model/types';
@@ -25,15 +23,14 @@ import { dualCheck, singleCheck, detail, governing, type CaseEval } from './dual
 import { RAD, contactsAt } from './geometry';
 import { f } from './format';
 import type { CaseData } from './loads';
-import { cleavageNearEnd, endDistanceFactor, oakFeAt, uncTensileArea, woodPinCapacity } from './nds';
-import { angleToX, angleToZ, boltPreload, clampSolve, tabPatch, type BoltPreload } from './brake-clamp';
+import { uncTensileArea } from './nds';
 import { evalBoth, rearNormalNoseDown } from './stability';
 import { allowables } from './structure';
 import { judge, worst, type AnalysisCheck, type Detail, type Status } from './types';
 
 /** Raise the limit of every '<=' detail by k (the abuse case is held to strength, not to the design allowable). */
 export function scaleLimits(ds: Detail[], k: number): Detail[] {
-  return ds.map((d) => (d.sense === '<=' ? (d.info ? { ...detail(d.name, d.value, d.unit, d.limit * k, '<='), info: true } : detail(d.name, d.value, d.unit, d.limit * k, '<=')) : d));
+  return ds.map((d) => (d.sense === '<=' ? detail(d.name, d.value, d.unit, d.limit * k, '<=') : d));
 }
 
 // ── shared bundle ────────────────────────────────────────────────────────────────────────────────────────────
@@ -549,210 +546,7 @@ function mountEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
   return governing(ds, how);
 }
 
-// ── D-78: the removable knee on two clamped ball-lock pins (kneeMount = pins). Same row id (brake-mount), different truth: no bolts, backer or backing plate. ──
-
-/** Loads on one flap at the hold load x lambda for BOTH rolling directions (D-78 takes the envelope: the pin loads and their directions change with the direction the tire drags the pad). */
-export function loadsBoth(ctx: Ctx, c: CaseData, g: BrakeGeom): Loads[] {
-  const { p } = ctx;
-  const down = c.massLb * Math.sin(p.designSlopeDeg * RAD);
-  const mu = holdMu(p);
-  const nHold = down / (2 * mu);
-  const base = { W: c.massLb, down, lam: p.brakeLoadFactor };
-  return SIGMAS.map((s) => chain(g, p.brakeLoadFactor * nHold, mu, s, base));
-}
-
-/** Loads for a foot force F on ONE flap (the stomp) for BOTH rolling directions. */
-export function loadsFromFootBoth(ctx: Ctx, g: BrakeGeom, F: number): Loads[] {
-  const { p } = ctx;
-  const mu = p.brakePadMu;
-  return SIGMAS.map((s) => {
-    const den = g.mN + s * mu * g.mT;
-    const n = den > 1e-6 ? Math.max(0, (F * g.aF - g.bungee.mApp) * p.brakeEfficiency / den) : 0;
-    const l = chain(g, n, mu, s, { W: 0, down: 0, lam: 0 });
-    const Rk: V2 = [l.fN[0] + l.fF[0] + l.fB[0], l.fN[1] + l.fF[1] + l.fB[1] - F];
-    return { ...l, foot: F, fFoot: [0, -F], Rk, Rmag: norm2(Rk) };
-  });
-}
-
-/** D-78: the preload of both bolts and the out-of-plane solve for a force `Rk` of the flap on the knee (shared by the brake-mount row and the rib rows). */
-export function clampSolveAt(ctx: Ctx, g: BrakeGeom, Rk: V2) {
-  const { p } = ctx;
-  const al = allowables(ctx);
-  const rm = g.removable!;
-  const oak = { perp: al.oakPerp, par: (p.oakCompParPsi * p.wetServiceFactorStrength) / p.woodSafetyFactor, perpCrush: p.oakCompPerpPsi * p.wetServiceFactorCompPerp, parCrush: p.oakCompParPsi * p.wetServiceFactorStrength };
-  const syB = shareAlong(g, 'y', rm.bottom.x - rm.bottom.washer.od / 2, rm.bottom.x + rm.bottom.washer.od / 2);
-  const preT = boltPreload(p, rm.top, rm.clearHole, rm.dia, oak, 0), preB = boltPreload(p, rm.bottom, rm.clearHole, rm.dia, oak, syB);
-  return { oak, syB, preT, preB, pl: clampSolve(p, g, Rk, { top: preT, bottom: preB }) };
-}
-
-/** Everything for ONE rolling direction (one `Loads`): the detail rows and the `how`. D-78 merges the directions below. */
-function boltEval1(ctx: Ctx, L: Loads, g: BrakeGeom) {
-  const { p } = ctx;
-  const al = allowables(ctx), a = allow(ctx);
-  const rm = g.removable!, k = g.knee, top = rm.top, bot = rm.bottom;
-  const Rk = L.Rk;
-  const d = rm.dia, hole = rm.clearHole;
-  const G = p.oakSpecificGravity;
-  const FvP = p.oakNdsShearPsi * p.ndsWetFactorShear * p.brakeBoltLoadDurationFactor; // NDS lumber Fv' for splitting
-  const Fyb = p.ss316BoltYieldPsi;
-  const adj = { ndsWetFactorFasteners: p.ndsWetFactorFasteners, brakePinLoadDurationFactor: p.brakeBoltLoadDurationFactor };
-  const glueLim = al.oakShear * ROLLING_SHEAR_OF_SHEAR, tensLim = al.oakShear * CROSS_GRAIN_TENSION_OF_SHEAR;
-  const endB = grainAt(g, bot.x) === 'y';
-  const { oak, syB, preT, preB, pl } = clampSolveAt(ctx, g, Rk);
-  const gp = pl.gp;
-  const mu = p.brakeJointFrictionMu;
-  const fricT = mu * pl.clampT, fricB = mu * pl.clampB;
-  // ── the bolt in its clearance hole (the slip case): NDS single shear, bolt bearing diameter d. T: the tab against the hull stack web + filler + rib (the web with its own Fe); B: the knee leg (end grain) and the rail ──
-  const tabT = rm.tab.t, hullOak = rm.hull.filler + rm.hull.rib, hullT = hullOak + rm.hull.web;
-  const thT = angleToZ(gp.FT), thWeb = angleToX(gp.FT);
-  const FeT = oakFeAt(G, d, thT);
-  const Gweb = thinSheet(p).densityPcf / (62.4 * 1.12);
-  const FeWeb = oakFeAt(Gweb, d, thWeb);
-  const FeHull = (FeT * hullOak + FeWeb * rm.hull.web) / hullT;
-  const endTab = gp.FT[1] > 0 ? rm.tab.z1 - top.z : top.z - rm.tab.z0;
-  const endHull = -gp.FT[1] > 0 ? top.belowRibTop : top.fromRibFoot;
-  const cdTab = endDistanceFactor(endTab, d, thT), cdHull = endDistanceFactor(endHull, d, thT);
-  const cdT = Math.min(cdTab.cDelta, cdHull.cDelta);
-  const zT = woodPinCapacity(adj, { D: d, l1: hullT, l2: tabT, Fe1: FeHull, Fe2: FeT, Fyb, thetaDeg: Math.max(thT, thWeb) }, 1, cdT);
-  const railT = rm.hull.rail;
-  const thKnee = endB ? 90 : angleToZ(gp.FB), thRail = angleToX(gp.FB), thB = Math.max(thKnee, thRail);
-  const FeKnee = oakFeAt(G, d, thKnee), FeRail = oakFeAt(G, d, thRail);
-  const cEgB = endB ? END_GRAIN_CEG : 1;
-  const zB = woodPinCapacity(adj, { D: d, l1: k.legT, l2: railT, Fe1: FeKnee, Fe2: FeRail, Fyb, thetaDeg: thB }, cEgB);
-  const capT = Math.max(fricT, zT.Zadj), capB = Math.max(fricB, zB.Zadj);
-  const slipT = gp.Tmag > fricT, slipB = gp.Bmag > fricB; // friction does not hold: the bolt bears in its hole (the fallback)
-  const lat = (slip: boolean, v: number) => (slip ? v : 0);
-  // ── bolt steel ──
-  const At = preT.At;
-  const bendLen = (m: number) => m / 2;
-  const shearBolt = Math.max(lat(slipT, gp.Tmag), lat(slipB, gp.Bmag)) / circleA(d);
-  const Zb = (Math.PI * d ** 3) / 32;
-  const bendBolt = Math.max(lat(slipT, gp.Tmag) * bendLen(Math.min(tabT, hullT)), lat(slipB, gp.Bmag) * bendLen(Math.min(k.legT, railT))) / Zb;
-  const sigT = pl.FbT / At, sigB = pl.FbB / At;
-  // ── bearing of the washers and the insert flanges at the bolt tension (preload + pull share), against the CRUSH level (no safety factor: a transient on top of the self-limited preload) ──
-  const pressT = pl.FbT / preT.washerArea, pressB = pl.FbB / preB.washerArea;
-  const flT = pl.FbT / preT.flangeArea, flB = pl.FbB / preB.flangeArea;
-  const torqueIn = (p.brakeBoltTorqueFtLb * 12) / 2; // lbf in: about half the tightening torque is reacted by the thread
-  const tqCap = (ins: BoltSite['insert']) => al.oakShear * Math.PI * ins.od * ins.len * (ins.od / 2);
-  // ── lateral bearing under the bolt (slip case) ──
-  const bearT = lat(slipT, gp.Tmag) / (d * Math.min(tabT, hullOak));
-  const bearRail = lat(slipB, gp.Bmag) / (d * railT);
-  const bearKnee = lat(slipB, gp.Bmag) / (d * k.legT * cEgB);
-  // ── tab ──
-  const tp = tabPatch(g, gp.FT);
-  const tabH = rm.tab.z1 - rm.tab.z0;
-  const sigTabIn = (Math.abs(gp.FT[1]) * (rm.tab.x1 - top.x)) / ((tabT * tabH ** 2) / 6);
-  // splitting (NDS 3.4.3.3, near-end form); with friction holding there is NO lateral bolt bearing load, so the load is the in-plane x part only in the slip case
-  const dTab = rm.tab.x1 - rm.tab.x0, endAlongTab = Math.min(rm.tab.z1 - top.z, top.z - rm.tab.z0);
-  const clTab = cleavageNearEnd(FvP, tabT, dTab, rm.tab.x1 - top.x, d, endAlongTab);
-  const tabRearLoad = slipT && gp.FT[0] < 0 ? -gp.FT[0] : 0;
-  const clRib = cleavageNearEnd(FvP, hullOak, rm.rib.blockW, rm.rib.blockW / 2, d, Math.min(top.fromRibFoot, top.belowRibTop));
-  const ribNet = lat(slipT, Math.abs(gp.FT[1])) / (hullOak * Math.max(1e-6, rm.rib.blockW - top.insert.od));
-  const railD = g.rail.zt - g.rail.zb, eRail = bot.belowRailTop;
-  const clRail = cleavageNearEnd(FvP, railT, railD, gp.FB[1] < 0 ? bot.z - g.rail.zb : g.rail.zt - bot.z, d, bot.fromRailRear);
-  const tearRail = lat(slipB, Math.abs(gp.FB[1])) / (2 * Math.max(1e-6, eRail - d / 2) * railT);
-  // thin wall at the bottom bolt (slip case)
-  const layerB = k.layers.find((q) => bot.x >= q.x0 - 1e-9 && bot.x <= q.x1 + 1e-9) ?? k.layers[0];
-  const wall = Math.max(0, ((layerB.x1 - layerB.x0) - hole) / 2);
-  const wallBear = lat(slipB, Math.abs(gp.FB[0])) / (d * k.legT);
-  const plugBelow = gp.FB[1] <= 0;
-  const eKneeB = Math.max(1e-6, (plugBelow ? bot.z - k.zBot : k.zTopLeg - bot.z) - hole / 2);
-  const plugRoll = lat(slipB, Math.abs(gp.FB[1])) / (2 * eKneeB * k.legT);
-  // counterbore edges
-  const edgeCbT = rm.rib.blockW / 2 - top.insert.cboreDia / 2, edgeCbB = Math.min(bot.belowRailTop, bot.z - g.rail.zb) - bot.insert.cboreDia / 2;
-  // knee arm and leg
-  const ys = g.y.face + k.legT + 0.1;
-  const sec = kneeSection(g, ys);
-  const lever = Math.max(0, g.y.wheel - ys);
-  const armY = xSection(layersAlong(g, 'y'), sec.h);
-  const sigK = armY.t > 1e-9 ? (Math.abs(Rk[1]) * lever) / ((armY.t * sec.h ** 2) / 6) + (Math.abs(Rk[0]) * lever) / armY.S : Infinity;
-  const tauK = armY.t > 1e-9 ? (1.5 * Math.abs(Rk[1])) / (armY.t * sec.h) : Infinity;
-  const legZ = xSection(layersAlong(g, 'z'), k.legT);
-  const zSh = k.zLeg;
-  const MlegIn = Math.abs(gp.FB[0]) * (zSh - bot.z) + Math.abs(gp.FB[1]) * Math.abs(bot.x - legZ.xc);
-  const MlegOut = pl.pullB * (zSh - bot.z);
-  const sigLeg = legZ.t > 1e-9 ? MlegIn / legZ.S + MlegOut / ((legZ.t * k.legT ** 2) / 6) + Math.abs(gp.FB[1]) / (legZ.t * k.legT) : Infinity;
-  const ds: Detail[] = [
-    { ...detail('bolt T preload (ratchet torque, capped by the weakest limit; shown for the record)', preT.P, 'lbf', preT.limits.torque, '<='), info: true },
-    { ...detail('bolt B preload (ratchet torque, capped by the weakest limit; shown for the record)', preB.P, 'lbf', preB.limits.torque, '<='), info: true },
-    detail(`bolt T in-plane load vs the joint capacity: friction mu x clamp ${f(fricT, 0)} lbf while the preload stays, else the bolt in its ${f(hole, 3)}" hole by NDS yield mode ${f(zT.Zadj, 0)} lbf (mode ${zT.mode}, C_delta ${f(cdT, 2)})`, gp.Tmag, 'lbf', capT, '<='),
-    detail(`bolt B in-plane load vs the joint capacity: friction mu x clamp ${f(fricB, 0)} lbf while the preload stays, else the bolt in its ${f(hole, 3)}" hole by NDS yield mode ${f(zB.Zadj, 0)} lbf (mode ${zB.mode}${endB ? ', knee leg end grain C_eg 0.67' : ''})`, gp.Bmag, 'lbf', capB, '<='),
-    { ...detail('bolt T in-plane load vs friction alone (slips when over 1)', gp.Tmag, 'lbf', fricT, '<='), info: true },
-    { ...detail('bolt B in-plane load vs friction alone (slips when over 1)', gp.Bmag, 'lbf', fricB, '<='), info: true },
-    detail('bolt T joint separation: the external pull against the preload (k_m w / P; 1 = the clamp is gone)', pl.sepT, '', 1, '<='),
-    detail('bolt B joint separation: the external pull against the preload (k_m w / P; 1 = the clamp is gone)', pl.sepB, '', 1, '<='),
-    detail('bolt T tension, preload plus its share of the pull (316 bolt on the tensile stress area)', sigT, 'psi', a.bolt, '<='),
-    detail('bolt B tension, preload plus its share of the pull (316 bolt on the tensile stress area)', sigB, 'psi', a.bolt, '<='),
-    detail('bolt steel single shear if the clamp slips (slip case; 316 bolt alone)', shearBolt, 'psi', a.boltShear, '<='),
-    detail('bolt steel bending if the clamp slips (slip case; F l/2 over the thinner member)', bendBolt, 'psi', a.bolt, '<='),
-    detail(`oak bearing under the bolt at T if the clamp slips (the ${f(Math.min(tabT, hullOak), 2)}" thinner of the tab and the rib + filler)`, bearT, 'psi', al.oakDowel, '<='),
-    detail(`oak bearing under the bolt at B in the rail if the clamp slips (${f(railT, 2)}")`, bearRail, 'psi', al.oakDowel, '<='),
-    detail(`oak bearing under the bolt at B in the knee leg if the clamp slips (${f(k.legT, 2)}"${endB ? '; the hole runs along the grain of the ACROSS layer: end-grain dowel bearing, C_eg 0.67' : ''})`, bearKnee, 'psi', al.oakDowel, '<='),
-    detail(`head washer at T: bearing at preload + pull on the ${f(top.washer.od, 2)}" washer's ${f(preT.washerArea, 2)} in² (tab, oak ⊥ grain; crush level, no safety factor)`, pressT, 'psi', preT.washerCrush, '<='),
-    detail(`head washer at B: bearing at preload + pull on the ${f(bot.washer.od, 2)}" washer's ${f(preB.washerArea, 2)} in² (knee leg: ${f(100 * syB, 0)} % end grain of the ACROSS layer; crush level, no safety factor)`, pressB, 'psi', preB.washerCrush, '<='),
-    detail(`insert flange at T: bearing at preload + pull on its ${f(preT.flangeArea, 2)} in² ring on the rib block's counterbore floor (oak ⊥ grain; crush level, no safety factor)`, flT, 'psi', preT.flangeCrush, '<='),
-    detail(`insert flange at B: bearing at preload + pull on its ${f(preB.flangeArea, 2)} in² ring on the rail's counterbore floor (oak ⊥ grain; crush level, no safety factor)`, flB, 'psi', preB.flangeCrush, '<='),
-    detail('insert thread pull-out at T at preload + pull (NDS lag-screw withdrawal x the assumed insert factor, wet; verify)', pl.FbT, 'lbf', preT.insertPull, '<='),
-    detail('insert thread pull-out at B at preload + pull (NDS lag-screw withdrawal x the assumed insert factor, wet; verify)', pl.FbB, 'lbf', preB.insertPull, '<='),
-    detail('insert torque-out at T while tightening (half the ratchet torque against the threads\' shear in the rib block, oak shear)', torqueIn, 'lbf·in', tqCap(top.insert), '<='),
-    detail('insert torque-out at B while tightening (half the ratchet torque against the threads\' shear in the rail, oak shear)', torqueIn, 'lbf·in', tqCap(bot.insert), '<='),
-    detail('counterbore at T: oak left between the insert\'s counterbore and the block edge (vs the least oak beside a hole)', edgeCbT, 'in', p.brakeBoltEdgeIn, '>='),
-    detail('counterbore at B: oak left between the insert\'s counterbore and the rail edge (vs the least oak beside a hole)', edgeCbB, 'in', p.brakeBoltEdgeIn, '>='),
-    detail(`tab glue patch (the real ${f(tp.A, 2)} in²): shear from the y forces (bolt pull less the clamp, web contact) and the in-plane force, plus the torque (glue limit as brake-pivot)`, pl.shear, 'psi', glueLim, '<='),
-    detail('tab glue patch: peak compression on the knee leg\'s rear face with the eccentric force and the contact moments (oak ⊥ grain)', pl.comp, 'psi', al.oakPerp, '<='),
-    detail('tab glue patch: peak tension across the glue line with the eccentric force, the net bolt pull and the contact moments (oak cross-grain tension, F_v / 3)', pl.tens, 'psi', tensLim, '<='),
-    detail('tab bending across the grain between the top bolt and the knee leg: net pull, web contact and the force\'s y offset (oak cross-grain tension, F_v / 3)', pl.bendTab, 'psi', tensLim, '<='),
-    detail('tab in-plane bending between the top bolt and the glue patch (along the grain, oak)', sigTabIn, 'psi', al.oakBend, '<='),
-    detail(`tab behind the top bolt: splitting toward the rear end if the clamp slips (NDS 3.4.3.3 ${clTab.near ? 'near-end' : 'far'} form, d_e ${f(clTab.de, 2)}" of ${f(dTab, 2)}", ${f(top.x - rm.tab.x0, 2)}" = ${f((top.x - rm.tab.x0) / d, 1)} bolt D)`, tabRearLoad, 'lbf', clTab.Vr, '<='),
-    detail(`box rib block at the top bolt (brake-rib): splitting toward either edge if the clamp slips (NDS 3.4.3.3 ${clRib.near ? 'near-end' : 'far'} form, d_e ${f(clRib.de, 2)}" of ${f(rm.rib.blockW, 2)}", filler + rib ${f(hullOak, 2)}")`, lat(slipT, Math.abs(gp.FT[0])), 'lbf', clRib.Vr, '<='),
-    detail('box rib block at the top bolt (brake-rib): z part of the bolt force on the net section of the insert hole if the clamp slips (oak along the grain)', ribNet, 'psi', al.oakBend, '<='),
-    detail(`bolt B in the rail: tear-out toward the loaded edge ${f(eRail, 2)}" away if the clamp slips (oak shear, two planes)`, tearRail, 'psi', al.oakShear, '<='),
-    detail(`bolt B in the rail: splitting toward the loaded edge if the clamp slips, ${f(eRail / d, 1)} bolt D from it (NDS 3.4.3.3 ${clRail.near ? 'near-end' : 'far'} form, d_e ${f(clRail.de, 2)}" of ${f(railD, 2)}")`, lat(slipB, Math.abs(gp.FB[1])), 'lbf', clRail.Vr, '<='),
-    ...(endB ? [
-      detail(`bolt B thin wall: the clearance hole in the ACROSS layer (${f(layerB.x1 - layerB.x0, 2)}") leaves only ${f(wall, 2)}" of oak each side before the glued UPRIGHT layers; the x part bears through it if the clamp slips (oak ⊥ grain)`, wallBear, 'psi', al.oakPerp, '<='),
-      detail(`bolt B thin wall: the z part presses the ACROSS layer's oak ${plugBelow ? 'below' : 'above'} the hole (${f(eKneeB, 2)}") and goes out through its two glue lines if the clamp slips (rolling shear)`, plugRoll, 'psi', glueLim, '<='),
-    ] : []),
-    detail(`knee leg on the rail and the chine band (contact ${f(pl.legMax)} lbf over ${f(pl.legArea, 1)} in², prying hinge, oak ⊥ grain)`, pl.legMax / pl.legArea, 'psi', al.oakPerp, '<='),
-    detail(`tab on the web over the rib block (contact ${f(pl.tabMax)} lbf over the ${f(pl.tabArea, 1)} in² the rib and filler back, oak ⊥ grain)`, pl.tabMax / pl.tabArea, 'psi', al.oakPerp, '<='),
-    detail('knee arm bending beyond the leg, both axes (oak, the ACROSS layers only, D-75)', sigK, 'psi', al.oakBend, '<='),
-    detail('knee arm shear (oak, the ACROSS layers only)', tauK, 'psi', al.oakShear, '<='),
-    detail('knee leg from bolt B to the shoulder: in-plane and out-of-plane bending plus the pull (oak, the UPRIGHT layers only, D-75, D-78)', sigLeg, 'psi', al.oakBend, '<='),
-  ];
-  const mode = (r: { modes: Record<string, number> }) => Object.entries(r.modes).map(([n, v]) => `${n} ${f(v, 0)}`).join(', ');
-  const sc = (c: string) => pl.scen.filter((s) => s.contacts === c);
-  const scTxt = (['both', 'leg', 'tab'] as const).map((c) => `${c === 'both' ? 'both contacts' : c === 'leg' ? 'the leg only' : 'the tab only'}: bolt T ${f(Math.max(...sc(c).map((s) => s.Ft)), 0)}, B ${f(Math.max(...sc(c).map((s) => s.Fb)), 0)} lbf`).join('; ');
-  const lim = (b: BoltPreload) => `torque ${f(b.limits.torque, 0)}, proof ${f(b.limits.proof, 0)}, head washer ${f(b.limits.washer, 0)}, insert flange ${f(b.limits.flange, 0)}, insert thread ${f(b.limits.insert, 0)}`;
-  const how = `${loadText(L, g)}. D-78 removable knee: two CLAMPED 3/8-16 stainless bolts per side, tightened with a ratchet into flanged threaded inserts in the hull, a ${f(top.washer.od, 2)}" washer under each head: bottom bolt (x ${f(bot.x, 2)}", z ${f(bot.z, 2)}") through the knee leg and the ${f(railT, 2)}" rail, top bolt (x ${f(top.x, 2)}", z ${f(top.z, 2)}") through the ${f(tabT, 2)}" tab and the hull stack (web ${f(rm.hull.web, 2)}" + filler + rib block ${f(hullOak, 2)}"); no sleeves, pins or bearing washers. `
-    + `PRELOAD: P = T / (K d) = ${f(p.brakeBoltTorqueFtLb, 0)} ft·lb × 12 / (${f(p.brakeBoltNutFactor, 2)} × ${f(d, 3)}") = ${f(preT.limits.torque, 0)} lbf (assumed torque and K, to confirm), capped by the weakest oak or thread limit: top bolt ${f(preT.P, 0)} lbf, governed by ${preT.governs} (${lim(preT)} lbf); bottom bolt ${f(preB.P, 0)} lbf, governed by ${preB.governs} (${lim(preB)} lbf). The limits on the oak use the design allowable (with the safety factor, ${f(oak.perp, 0)} psi ⊥ grain); at the crush level (${f(oak.perpCrush, 0)} psi) the flange would allow ${f(preB.flangeArea * oak.perpCrush, 0)} lbf. `
-    + `IN PLANE: a rigid knee on the two bolts (${f(gp.d, 2)}" apart), elastic group as the bolted row: the load at the pivot (${f(Rk[0])}, ${f(Rk[1])}) lbf has M = ${f(Math.abs(gp.M))} lbf·in about the bolts' centroid, a twist M/d = ${f(Math.abs(gp.twist))} lbf on each bolt plus the direct half ${f(gp.directMag)} lbf: top bolt ${f(gp.Tmag)} lbf (${f(gp.FT[0])}, ${f(gp.FT[1])}), bottom bolt ${f(gp.Bmag)} lbf (${f(gp.FB[0])}, ${f(gp.FB[1])}) on the knee (this rolling direction, σ ${L.sigma > 0 ? '+1' : '−1'}; the row takes the worse of the two). `
-    + `FRICTION: mu ${f(mu, 2)} × the smallest clamp force left over the contact choices (top ${f(pl.clampT, 0)}, bottom ${f(pl.clampB, 0)} lbf) = ${f(fricT, 0)} / ${f(fricB, 0)} lbf against ${f(gp.Tmag, 0)} / ${f(gp.Bmag, 0)}: ${slipT || slipB ? `the clamp SLIPS at the ${slipT && slipB ? 'top and bottom bolts' : slipT ? 'top bolt' : 'bottom bolt'} (in a ${f(hole, 3)}" hole there is 1/64" of slop), and the bolt bears on the wood by the NDS yield modes` : 'the clamp holds, so the bolts carry no lateral load'}. FALLBACK (bolt in its hole, NDS single shear, D = ${f(d, 3)}", F_yb ${f(Fyb, 0)} psi, wet C_M ${f(p.ndsWetFactorFasteners, 2)}, C_D ${f(p.brakeBoltLoadDurationFactor, 2)}): top bolt: Fe tab and oak ${f(FeT, 0)} psi at ${f(thT, 0)}° to the grain, the ${f(rm.hull.web, 2)}" web ${f(FeWeb, 0)} psi (okoume ply G ${f(Gweb, 2)}), stack mean ${f(FeHull, 0)} psi over ${f(hullT, 2)}"; end distance toward the load ${f(endTab, 2)}" in the tab (needs ${f(cdTab.required, 2)}") → C_delta ${f(cdT, 2)}; modes ${mode(zT)} → Z' = ${f(zT.Zadj, 0)} lbf. Bottom bolt: knee leg ${f(k.legT, 2)}" (${endB ? `end grain, load ⊥ grain, Fe ${f(FeKnee, 0)}, C_eg 0.67` : `Fe ${f(FeKnee, 0)}`}) and rail ${f(railT, 2)}" (Fe ${f(FeRail, 0)} at ${f(thRail, 0)}°): modes ${mode(zB)} → Z' = ${f(zB.Zadj, 0)} lbf (${f(zB.Z * zB.adjust / cEgB, 0)} without C_eg). `
-    + `OUT OF PLANE (3-D rigid-knee solve: each bolt a PRELOADED TIE, bolt tension P + k_b w with k_b ${f(preT.kb / 1000, 0)}k / ${f(preB.kb / 1000, 0)}k lbf/in, the clamped oak pushing back max(0, P − k_m w) with k_m ${f(preT.km / 1000, 0)}k / ${f(preB.km / 1000, 0)}k lbf/in; two contact patches, the knee leg on the rail and chine band (z ${f(g.knee.zBot, 2)} to ${f(g.knee.zLeg, 2)}") and the tab on the web (z ${f(rm.tab.bearing.z0, 2)} to ${f(rm.tab.bearing.z1, 2)}"); F_y, M_x, M_z balanced with the load ${f(pl.e, 2)}" outboard (prying M_x = ${f(pl.Mpry)}, yaw M_z = ${f(pl.Myaw)} lbf·in), the in-plane bolt forces at their y and the ${f(p.brakeFlapSideLoadLbf)} lbf boot push amplified as brake-pivot does (${f(pl.P)} lbf at the strap, out and in); envelope over the contact choices: ${scTxt}): bolt tension top ${f(pl.FbT, 0)}, bottom ${f(pl.FbB, 0)} lbf (net external pull ${f(pl.pullT, 0)} / ${f(pl.pullB, 0)} lbf); joint separation ratio ${f(pl.sepT, 2)} / ${f(pl.sepB, 2)} (above 1 the joint OPENS and the bolt takes the whole pull). `
-    + `BEARING at preload + pull (crush level ${f(oak.perpCrush, 0)} psi across the grain): head washer ${f(pressT, 0)} / ${f(pressB, 0)} psi, insert flange ${f(flT, 0)} / ${f(flB, 0)} psi; insert thread pull-out ${f(pl.FbT, 0)} / ${f(pl.FbB, 0)} lbf against ${f(preT.insertPull, 0)} / ${f(preB.insertPull, 0)} lbf (NDS lag withdrawal × ${f(p.brakeInsertWithdrawalFactor, 2)}, assumed); tightening torque-out ${f(torqueIn)} lbf·in against ${f(tqCap(top.insert), 0)} / ${f(tqCap(bot.insert), 0)}. `
-    + `TAB: glued to the knee leg's rear face on ${f(tp.A, 2)} in² (${f(tp.h, 2)}" of height), the top bolt ${f(tp.r[1], 2)}" above the patch's middle: the in-plane force alone gives ${f(tp.direct, 0)} psi direct ± ${f(tp.bend, 0)} bending; with the net bolt pull (bolt tension less the clamp), the web contact and the torque the worst scenario is compression ${f(pl.comp, 0)} (against ${f(al.oakPerp, 0)}), tension ${f(pl.tens, 0)} (against ${f(tensLim, 0)}), shear ${f(pl.shear, 0)} (against ${f(glueLim, 0)}) psi; the tab bends across the grain ${f(pl.bendTab, 0)} psi. `
-    + `SPLITTING (NDS 3.4.3.3, V_r = 2/3 F_v' b d_e (d_e/d)² within 5 d of the member end, F_v' = ${f(FvP, 0)} psi; only if the clamp slips): tab rear ${f(clTab.Vr)} lbf; rib block ${f(clRib.Vr)} lbf against ${f(Math.abs(gp.FT[0]))} lbf; rail at B ${f(clRail.Vr)} lbf against ${f(Math.abs(gp.FB[1]))} lbf. `
-    + (endB ? `BOLT B IS THE TIGHTEST KNEE DETAIL: it sits in the middle ACROSS layer (${f(layerB.x1 - layerB.x0, 2)}" thick, hole along its grain, C_eg 0.67), which leaves only ${f(wall, 2)}" of oak between the hole and the glued UPRIGHT layers; ${slipB ? `if the clamp slips the x part (${f(Math.abs(gp.FB[0]))} lbf) bears through that wall (${f(wallBear, 0)} psi) and the z part (${f(Math.abs(gp.FB[1]))} lbf, ${plugBelow ? 'pressing the oak BELOW the hole' : 'pressing the oak ABOVE the hole'}) goes into ${f(eKneeB, 2)}" of oak and out through two glue lines (${f(plugRoll, 0)} psi rolling shear)` : 'the clamp holds, so the wall carries no lateral load'}. ` : '')
-    + `KNEE: arm beyond the leg ${f(sec.depth, 2)}" × ${f(sec.h, 2)}", ACROSS layers ${f(armY.t, 2)}": σ ${f(sigK, 0)} psi; the leg from bolt B up to the shoulder (z ${f(zSh, 2)}", UPRIGHT layers ${f(legZ.t, 2)}"): ${f(MlegIn)} lbf·in in plane, ${f(MlegOut)} lbf·in out of plane, ${f(Math.abs(gp.FB[1]))} lbf axial: ${f(sigLeg, 0)} psi.`;
-  return { ds, how, pl, preT, preB, gp };
-}
-
-/** D-78 brake-mount row: the envelope of the rolling directions (one `Loads` each). Details marked `info` are listed but never decide the status. */
-function boltMountEval(ctx: Ctx, Ls: Loads[], g: BrakeGeom): CaseEval {
-  const rs = Ls.map((L) => boltEval1(ctx, L, g));
-  const merged = rs[0].ds.map((_d, i) => rs.map((r) => r.ds[i]).reduce((x, y) => (y.util > x.util ? y : x)));
-  const judged = merged.filter((d) => !d.info);
-  const peak = (r: (typeof rs)[number]) => Math.max(...r.ds.filter((d) => !d.info).map((d) => d.util));
-  const wi = rs.reduce((bi, r, i) => (peak(r) > peak(rs[bi]) ? i : bi), 0);
-  const head = rs.length > 1 ? `ENVELOPE OF BOTH ROLLING DIRECTIONS (the row takes the worse of each detail): ${rs.map((r, i) => `σ ${Ls[i].sigma > 0 ? '+1' : '−1'}: top bolt ${f(r.gp.Tmag)}, bottom bolt ${f(r.gp.Bmag)} lbf in plane, bolt tension ${f(r.pl.FbT, 0)} / ${f(r.pl.FbB, 0)} lbf`).join('; ')}. The text below is the direction with the higher peak. ` : '';
-  const gv = governing(judged, head + rs[wi].how);
-  return { ...gv, details: merged };
-}
-
 export function brakeMount(ctx: Ctx): AnalysisCheck {
-  const g0 = brakeBundle(ctx).g;
-  if (g0.mount === 'removable') {
-    const ev = (c: CaseData): CaseEval => boltMountEval(ctx, loadsBoth(ctx, c, g0), g0);
-    return dualCheck({ id: 'brake-mount', label: 'Brake knee on its two clamped bolts (removable, D-78)', group: 'Structure', refs: ['D-57', 'D-78', 'D-2'], primary: 'goal', ...evalBoth(ctx, ev) });
-  }
   return members('brake-mount', 'Brake knee, mounting bolts and backer', ctx, (L, g) => mountEval(ctx, L, g), ['D-57', 'D-2']);
 }
 
@@ -862,7 +656,7 @@ export function brakeAbuse(ctx: Ctx): AnalysisCheck {
   const L = loadsFromFoot(ctx, g, p.brakeFootAbuseLbf);
   const kS = p.steelSafetyFactor; // yield-level: the design allowables carry the safety factor, remove it
   const kW = p.woodSafetyFactor;
-  const parts: Array<[string, CaseEval]> = [['flap', flapEval(ctx, L, g)], ['pivot', pivotEval(ctx, L, g)], ['mount', g.mount === 'removable' ? boltMountEval(ctx, loadsFromFootBoth(ctx, g, p.brakeFootAbuseLbf), g) : mountEval(ctx, L, g)]];
+  const parts: Array<[string, CaseEval]> = [['flap', flapEval(ctx, L, g)], ['pivot', pivotEval(ctx, L, g)], ['mount', mountEval(ctx, L, g)]];
   const ds: Detail[] = [];
   for (const [name, e] of parts) {
     for (const d of e.details ?? []) {
@@ -870,7 +664,7 @@ export function brakeAbuse(ctx: Ctx): AnalysisCheck {
       ds.push({ ...scaleLimits([d], k)[0], name: `${name}: ${d.name}` });
     }
   }
-  const worstD = ds.filter((d) => !d.info).reduce((a, c) => (c.util > a.util ? c : a), ds[0]);
+  const worstD = ds.reduce((a, c) => (c.util > a.util ? c : a), ds[0]);
   const how = `A ${f(p.brakeFootAbuseLbf)} lbf stomp on the foot area of ONE flap (a scout jumping on it, ${f(p.brakeFootAbuseLbf / Math.max(1, p.brakeFootForceLimitLbf), 1)}× the ${f(p.brakeFootForceLimitLbf, 0)} lbf limit) with the tire turning: the pad sees N = (F a_F − M_B) η / (m_N ${L.sigma > 0 ? '+' : '−'} μ|m_T|) = ${f(L.nFlap)} lbf (the rolling direction and the dry pad μ ${f(p.brakePadMu, 2)} that give the larger force), the knee ${f(L.Rmag)} lbf at the pivot pin. The flap, pivot and mount are checked at yield level (limits raised by the safety factors, ${f(kW, 1)} on wood and ${f(kS, 1)} on steel): the brake may bend after it, but must not break.`;
   return singleCheck({
     id: 'brake-abuse', label: `Brake flap abuse, ${f(p.brakeFootAbuseLbf)} lbf stomp (yield level)`, group: 'Structure', refs: ['D-57', 'D-55', 'eng r2 N-8'],

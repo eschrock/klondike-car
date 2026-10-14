@@ -612,7 +612,7 @@ function kneePlan(parts: Part[], p: Params): Plan | null {
   const V = (z: number): number => z - k.zBot;
   const outline: Vec2[] = k.poly.map(([y, z]) => [U(y), V(z)]);
   const wIn = Math.max(...outline.map((q) => q[0]));
-  const hIn = V(k.zTopLeg); // D-78: with the pins the leg rises over the top pin (zTopLeg); otherwise it is the knee top
+  const hIn = V(k.zTop);
   // D-77: the flap's pocket is open at the outboard edge (no ear): its rectangle in this view runs from the outboard edge to the inboard wall, between the floor and the ceiling.
   const pocketU: [number, number] = [U(Math.max(pv.ySlot[1], k.yOut)), U(pv.ySlot[0])];
   const pocketV: [number, number] = [V(pv.zPocketBot), V(pv.zPocketTop)];
@@ -620,39 +620,18 @@ function kneePlan(parts: Part[], p: Params): Plan | null {
   const pinV = V(k.zTop - pv.edgeEarUp);
   const rowsV = bolts.zs.map(V);
   const legU: [number, number] = [U(k.poly[1][0]), wIn];
-  // D-78 (removable knee): the tab's footprint and the approximate heights of the two bolt holes on the router template. The holes themselves are match-drilled from the hull inserts at the rib step,
-  // so they are marks to check against, never a drilling guide.
-  const pn = bg.removable;
-  const tab = pn?.tab;
-  const tabU: [number, number] = tab ? [U(tab.yOut), U(tab.yIn)] : [0, 0];
-  const tabV: [number, number] = tab ? [V(tab.z0), V(tab.z1)] : [0, 0];
-  const bV = pn ? V(pn.bottom.z) : 0, tV = pn ? V(pn.top.z) : 0;
   const dims: FormDim[] = [
     lenDim('knee-width', 'Knee width (outboard edge to inboard edge)', wIn),
     lenDim('knee-height', 'Knee height (bottom end to top end)', hIn),
     lenDim('knee-thickness', 'Knee thickness (front to back)', thick),
-    ...(pn
-      ? [lenDim('bolt-b-height', 'Bottom bolt hole, about, up from the knee\'s bottom end (match-drilled)', bV), lenDim('bolt-t-height', 'Top bolt hole, about, up from the knee\'s bottom end (match-drilled)', tV)]
-      : [countDim('bolt-rows', 'Bolt-hole rows marked', rowsV.length, 'row')]),
+    countDim('bolt-rows', 'Bolt-hole rows marked', rowsV.length, 'row'),
   ];
-  const notes = pn && tab ? [
-    `Router template for a pattern bit: the outline is the finished knee seen from its REAR face, and the bit's bearing rides its edge (${inch(TEMPLATE_STOCK_IN)} hardboard or MDF, flat on the ${inch(thick)} thick laminated block). Bandsaw the block about 1/16" proud first, then flush-trim.`,
-    `Marks (guides, not cuts): the pocket rectangle at the top end (${inch(pocketU[1] - pocketU[0])} in from the outboard edge, ${inch(pocketV[0])} to ${inch(pocketV[1])} up from the bottom end; it is notched in the rear and center layers before the glue-up and recessed ${inch(pocketDepth)} deep from the rear face), the pivot pin line (${inch(pinV)} up from the bottom end; the pin hole itself is drilled through the strap with the flap tongue clamped in the pocket), the tab's footprint on the rear face (${inch(tabV[0])} to ${inch(tabV[1])} up from the bottom end; it stands ${inch(tab.z1 - k.zTopLeg)} above the top of the leg) and the approximate heights of the two bolt holes (${inch(bV)} and ${inch(tV)} up from the bottom end).`,
-    `The two bolt holes (${inch(pn.clearHole)}) are NOT drilled from this drawing: they are match-drilled at the rib step with the knee held against the hull and a dowel center in each hull insert. The marks show about where the dimples should land (${inch(bV)} and ${inch(tV)} up from the bottom end) so a wrong dimple is caught.`,
-    'Left knee shown; the right knee is the mirror image. Flip the template over for it.',
-  ] : [
+  const notes = [
     `Router template for a pattern bit: the outline is the finished knee seen from its REAR face, and the bit's bearing rides its edge (${inch(TEMPLATE_STOCK_IN)} hardboard or MDF, flat on the ${inch(thick)} thick laminated block). Bandsaw the block about 1/16" proud first, then flush-trim.`,
     `Marks (guides, not cuts): the pocket rectangle at the top end (${inch(pocketU[1] - pocketU[0])} in from the outboard edge, ${inch(hIn - pocketV[1])} to ${inch(hIn - pocketV[0])} below the top end; it is notched in the rear and center layers before the glue-up and recessed ${inch(pocketDepth)} deep from the rear face), the pivot pin line (${inch(pv.edgeEarUp)} below the top end; the pin hole itself is drilled through the strap with the flap tongue clamped in the pocket) and the ${rowsV.length} bolt rows across the leg (the columns are measured from the rear face on the knee drawing).`,
     'Left knee shown; the right knee is the mirror image. Flip the template over for it.',
   ];
-  const build: FormBuildStep[] = pn && tab ? [
-    { step: `Cut ONE router template from ${frac(TEMPLATE_STOCK_IN)} hardboard to the outline at offset 0 (${frac(wIn)} wide × ${frac(hIn)} tall): the bit's bearing rides its edge. Shaper, or bandsaw outside the line and sand to it.` },
-    { step: 'Scribe the pocket rectangle, the pivot pin line and the tab footprint on its edge from this drawing, so they can be carried onto the block.' },
-    {
-      step: `USE: bandsaw the laminated block (${inch(thick)} thick) 1/16" proud of the line, stick the template on its REAR face with double-sided tape, and flush-trim with a pattern bit.`,
-      sub: ['If your bit cuts less than the block is thick, trim half the thickness, flip the block and the template over, and trim the other half from the other face.', 'For the right knee flip the template over (mirror image). No base, braces or clamps: this is a routing template.'],
-    },
-  ] : [
+  const build: FormBuildStep[] = [
     { step: `Cut ONE template from ${frac(TEMPLATE_STOCK_IN)} hardboard to the outline at offset 0 (${frac(wIn)} wide × ${frac(hIn)} tall): the bit's bearing rides its edge. Shaper, or bandsaw outside the line and sand to it.` },
     { step: 'Scribe the pocket rectangle, the pivot pin line and the bolt rows on its edge from this drawing, so they can be carried onto the block.' },
     { step: `Optional: glue a second layer of ${frac(TEMPLATE_STOCK_IN)} hardboard under it and flush-trim it to the first, so a bearing up to 1/2" long has a full edge to ride.` },
@@ -661,10 +640,9 @@ function kneePlan(parts: Part[], p: Params): Plan | null {
       sub: ['If your bit cuts less than the block is thick, trim half the thickness, flip the block and the template over, and trim the other half from the other face.', 'For the right knee flip the template over (mirror image). No base, braces or clamps: this is a routing template.'],
     },
   ];
-  const contentH = Math.max(hIn, pn ? tabV[1] : 0);
   return {
-    id: 'brake-knee-template', title: 'Brake knee router template (left knee)', w: wIn, h: contentH + 0.6, dims, notes, build,
-    subtitle: [`Outline offset 0; ${inch(wIn)} wide × ${inch(hIn)} tall; for a ${inch(thick)} thick cross-laminated block.`, ...(pn ? ['Tab footprint and the approximate bolt-hole heights are marked; the holes are match-drilled at the rib step.'] : [])],
+    id: 'brake-knee-template', title: 'Brake knee router template (left knee)', w: wIn, h: hIn + 0.6, dims, notes, build,
+    subtitle: [`Outline offset 0; ${inch(wIn)} wide × ${inch(hIn)} tall; for a ${inch(thick)} thick cross-laminated block.`],
     draw: (place) => {
       const T: Xf = ([u, v]) => place([u, v + 0.3]);
       const out: string[] = [`<g id="outline">${outsideCut(outline, T, TEMPLATE_STOCK_IN, 'brake knee outline (template, offset 0)')}</g>`];
@@ -672,15 +650,8 @@ function kneePlan(parts: Part[], p: Params): Plan | null {
       g.push(guideEl(polyD([[pocketU[0], pocketV[0]], [pocketU[1], pocketV[0]], [pocketU[1], pocketV[1]], [pocketU[0], pocketV[1]]], T, true), { dashed: true }));
       g.push(label(T, [pocketU[0], hIn + 0.15], 'pocket (open at the outboard edge)', 0.14));
       g.push(guideEl(polyD([[0, pinV], [legU[0], pinV]], T, false), { dashed: true }), label(T, [0.1, pinV + 0.08], 'pivot pin hole line', 0.13));
-      if (pn && tab) {
-        // the tab's footprint on the rear face (it stands above the knee's top end), and the heights of the two pin holes
-        g.push(guideEl(polyD([[tabU[0], tabV[0]], [tabU[1], tabV[0]], [tabU[1], tabV[1]], [tabU[0], tabV[1]]], T, true), { dashed: true }), label(T, [tabU[1] + 0.1, tabV[1] - 0.2], 'tab (glued to this face)', 0.13));
-        g.push(guideEl(polyD([[legU[0], bV], [legU[1], bV]], T, false), { dashed: true }), label(T, [legU[0] + 0.1, bV + 0.08], `bottom bolt hole: about ${inch(bV)} up (match-drilled)`, 0.13));
-        g.push(guideEl(polyD([[tabU[0] - 0.4, tV], [tabU[1] + 0.4, tV]], T, false), { dashed: true }), label(T, [tabU[1] + 0.5, tV - 0.05], `top bolt hole: about ${inch(tV)} up (match-drilled)`, 0.13));
-      } else {
-        for (const v of rowsV) g.push(guideEl(polyD([[legU[0], v], [legU[1], v]], T, false), { dashed: true }));
-        g.push(label(T, [legU[0] + 0.1, rowsV[rowsV.length - 1] + 0.1], 'bolt rows', 0.13));
-      }
+      for (const v of rowsV) g.push(guideEl(polyD([[legU[0], v], [legU[1], v]], T, false), { dashed: true }));
+      g.push(label(T, [legU[0] + 0.1, rowsV[rowsV.length - 1] + 0.1], 'bolt rows', 0.13));
       g.push(dimTo(T, [0, 0], [wIn, 0], `width ${inch(wIn)}`, -0.5), dimTo(T, [wIn, 0], [wIn, hIn], `height ${inch(hIn)}`, 0.5));
       out.push(`<g id="guides" ${ANNOTATION_ATTRS}>${g.join('')}</g>`);
       return out.join('');

@@ -956,8 +956,7 @@ function metalRows(parts: Part[], warnings: string[], stepOf?: ReadonlyMap<strin
     const family = metalFamily(x);
     if (!family) { warnings.push(`${partKey(x)}: unrecognized metal material '${x.material}'`); continue; }
     const w: string[] = [];
-    const d0 = metalDims(x, w);
-    const d = d0;
+    const d = metalDims(x, w);
     warnings.push(...w);
     const section = metalSection(x, family, d);
     const key = `${partKey(x)}|${dimKey(d)}`;
@@ -1074,8 +1073,7 @@ function cutsOf(plans: OakPartPlan[], pools: ResawPool[]): Cut[] {
             : `${name}, layer ${pc.layer} of ${pc.layers}${pc.acrossOf ? `, board ${pc.across} of ${pc.acrossOf}` : ''}${lgw(pc) ? ` (grain ${lgw(pc)})` : ''}`;
       const note = pc.piece === 'board' ? 'joint the glue edges, then glue the boards edge to edge'
         : pc.piece === 'layer' ? `plane to ${fractionText(pc.rough.t, 16)}" before the glue-up${lgw(pc) ? `; grain ${lgw(pc)}` : ''}${pc.acrossOf ? `; edge-glue its boards first${unequal(pc) ? ' (the two are NOT equal: board 1 is the bottom edge, board 2 the top)' : ''}` : lgw(pc) ? `; one piece, ${fractionText(pc.rough.w, 8)}" wide across its grain` : ''}`
-          : pc.piece === 'strip' ? 'rip the lane first, then resaw it on edge; plane to thickness after the resaw'
-            : pl.partNo === 'brake-tab' ? 'mill ONE 12 in stick with the grain along it, then crosscut the tabs from it; the grain runs up the long side; glued to the knee only' : undefined; // D-78
+          : pc.piece === 'strip' ? 'rip the lane first, then resaw it on edge; plane to thickness after the resaw' : undefined;
       const key = `${pl.partNo}|${pc.piece}|${pc.index}|${pc.of}|${board}|${rowKeyDims(pc.rough)}`;
       const hit = map.get(key);
       if (hit) { hit.qty += 1; hit.ids.push(pl.part.id); continue; }

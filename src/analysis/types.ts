@@ -17,8 +17,6 @@ export interface Detail {
   sense: '>=' | '<=';
   /** Demand / capacity (1 = at the limit; > 1 fails). */
   util: number;
-  /** Report only: the limit is an unpublished placeholder (verify with the vendor); the row's status ignores this detail. */
-  info?: boolean;
 }
 
 /** The evaluated result for one rider case. */

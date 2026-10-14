@@ -41,25 +41,6 @@ describe('kits', () => {
   });
 });
 
-describe('kits with the removable knee (D-78; the full set is in d78.test.ts)', () => {
-  const pp = { ...p, kneeMount: 1 } as typeof p;
-  const pinIds = (v: Parameters<typeof buildModel>[1]) => buildModel(pp, { rider: 'none', cargo: false, ...v }).map((x) => x.id);
-  it('the knee, strap, tab, both bolts and both washers join the brake kit (32 parts); the inserts and the chocks do not', () => {
-    const parts = buildModel(pp, { rider: 'none', cargo: false });
-    const kit = parts.filter((x) => isBrakeKit(x)).map((x) => x.id);
-    expect(kit).toHaveLength(32);
-    for (const id of ['brake-knee-L', 'brake-strap-R', 'brake-tab-L', 'brake-bolt-bottom-L', 'brake-bolt-top-R', 'brake-washer-bottom-L', 'brake-washer-top-R']) expect(kit, id).toContain(id);
-    for (const id of ['brake-insert-bottom-L', 'brake-insert-top-R', 'brake-chock-L']) expect(kit, id).not.toContain(id);
-  });
-  it('Brakes off and Transport mode then show a hull with no knee: only the two inserts per side remain of the mount', () => {
-    for (const v of [{ brakes: false }, TRANSPORT_VIEW]) {
-      const t = pinIds(v);
-      for (const id of ['brake-knee-L', 'brake-knee-R', 'brake-strap-L', 'brake-tab-L', 'brake-bolt-top-R', 'brake-washer-top-L']) expect(t, `${JSON.stringify(v)} ${id}`).not.toContain(id);
-      for (const id of ['brake-insert-bottom-L', 'brake-insert-top-R']) expect(t, `${JSON.stringify(v)} ${id}`).toContain(id);
-    }
-  });
-});
-
 describe('Transport mode', () => {
   it('is TRANSPORT_VIEW: removed, handle parked, seat flat; the truck-fit "removed" configuration builds exactly the same parts as the viewer', () => {
     expect(TRANSPORT_VIEW).toEqual({ removed: true, handle: 'parked', seat: 'stowed' });

@@ -141,8 +141,8 @@ addToggle('seat', 'Seat flat', 'Flip the seat back forward onto the deck and lay
 addToggle('handle', 'Handle parked', 'Drop the rear handlebow to its second pin position, resting just above the rear side top, as when it is not being pushed (D-57). View only.', (v) => {
   view.handle = v ? 'parked' : 'up';
 });
-// Removable kits (D-65): the brake flaps (with the bolted knees the knees and backers stay on the rails; with the pin knees, D-78, the knees come off too) and the lights.
-addToggle('brakes', 'Brakes', 'Show the removable brake parts: the flaps, pivot blocks and pins, shoe blocks and pads, foot treads and return cords. Off hides them. With bolted knees (the default) the knees and backers stay on; with the removable pin knees (setting in Advanced) the knees, tabs and pins come off too. View only.', (v) => {
+// Removable kits (D-65): the brake flaps (the knees and backers stay on the rails) and the lights.
+addToggle('brakes', 'Brakes', 'Show the removable brake parts: the flaps, pivot blocks and pins, shoe blocks and pads, foot treads and return cords. Off hides them (the knees and backers stay bolted on). View only.', (v) => {
   view.brakes = v;
 });
 addToggle('lights', 'Lights', 'Show the front lamp and its clip and the rear light and its clip. Off hides them. View only.', (v) => {

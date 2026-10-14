@@ -8,8 +8,7 @@
  * References checked while writing: the Appendix E row tear-out and group tear-out forms (Z'RT = n_i·F'v·t·s_critical;
  * Z'GT = ½Z'RT1 + ½Z'RT2 + F't·A_group-net). The 3.4.3.3 cleavage form is used as V_r = (2/3)·F'v·b·d_e with d_e the
  * distance from the nearest fastener to the loaded edge; the caller designs mechanical reinforcement for the whole V regardless,
- * so the exact factor on d_e/d does not govern any pass / fail result (see the caster-mount row). EXCEPTION, D-78: the removable knee's pins sit close to the ends and edges of small oak blocks, where the near-end form
- * (`cleavageNearEnd`, V_r reduced by (d_e/d)^2 within 5d of the member end) DOES govern; the D-78 rows use it and say so.
+ * so the exact factor on d_e/d does not govern any pass / fail result (see the caster-mount row).
  */
 
 /** Dowel bearing strength parallel to grain, Fe∥ = 11,200·G (NDS Table 12.3.3), psi. */
@@ -131,100 +130,6 @@ export function boltCapacity(ctx: Ctx, D: number, lm: number, ls0: number, theta
   const Fem = feAtAngle(feParallel(p.oakSpecificGravity), fePerp(p.oakSpecificGravity, D), thetaDeg);
   const r = lateralZ({ D, lm, ls, Fem, Fes: p.steelDowelBearingPsi, Fyb: p.grade8BoltYieldPsi, thetaDeg });
   return { Zref: r.Z, Z: r.Z * ndsAdjust(p), mode: r.mode, Fem, Re: Fem / p.steelDowelBearingPsi, ls };
-}
-
-// ── D-78: wood-to-wood single shear (two oak members, a sleeved pin) ─────────────────────────────────────────────
-
-export interface WoodShearInput {
-  /** Pin (bearing) diameter D (in): the SLEEVE's outside diameter when the pin runs in a stainless sleeve. */
-  D: number;
-  /** Member 1 ("main") and member 2 ("side"): dowel bearing length in each (in) and dowel bearing strength at the load angle in each (psi). The equations are symmetric in the two. */
-  l1: number; l2: number; Fe1: number; Fe2: number;
-  /** Bending yield strength of the pin (the composite value for a sleeved pin, psi). */
-  Fyb: number;
-  /** The LARGEST angle between the load and the grain over both members (degrees), which sets K_theta and so R_d for every mode (NDS 12.3.1). */
-  thetaDeg: number;
-}
-
-export interface WoodShearResult {
-  /** Reference lateral design value, the smallest mode (lbf, before C_M / C_D / C_eg), and its mode name. */
-  Z: number; mode: string;
-  modes: Record<'Im' | 'Is' | 'II' | 'IIIm' | 'IIIs' | 'IV', number>;
-  Re: number; Rt: number; k1: number; k2: number; k3: number; Kt: number;
-}
-
-/**
- * Reference lateral design value Z (lbf) of ONE dowel-type fastener in SINGLE shear between two wood members (NDS Table 12.3.1A, wood-to-wood), the smallest of the yield modes:
- *   Im   = D l1 Fe1 / Rd                    Is   = D l2 Fe2 / Rd
- *   II   = k1 D l2 Fe2 / (3.6 Ktheta)       k1 = (sqrt(Re + 2 Re^2 (1 + Rt + Rt^2) + Rt^2 Re^3) - Re (1 + Rt)) / (1 + Re)
- *   IIIm = k2 D l1 Fe1 / ((1 + 2 Re) Rd)    k2 = -1 + sqrt(2 (1 + Re) + 2 Fyb (1 + 2 Re) D^2 / (3 Fe1 l1^2))
- *   IIIs = k3 D l2 Fe1 / ((2 + Re) Rd)      k3 = -1 + sqrt(2 (1 + Re) / Re + 2 Fyb (2 + Re) D^2 / (3 Fe1 l2^2))
- *   IV   = D^2 / Rd sqrt(2 Fe1 Fyb / (3 (1 + Re)))
- * with Re = Fe1 / Fe2, Rt = l1 / l2, Rd = 4 Ktheta (Im, Is), 3.6 Ktheta (II), 3.2 Ktheta (IIIm, IIIs, IV), Ktheta = 1 + 0.25 theta / 90 (Table 12.3.1B, 1/4 in <= D <= 1 in).
- * Member 1 is the NDS "main" member, 2 the "side" member; swapping them gives the same Z.
- */
-export function woodShearZ(i: WoodShearInput): WoodShearResult {
-  const { D, l1, l2, Fe1, Fe2, Fyb, thetaDeg } = i;
-  const rd = rdFactors(thetaDeg);
-  const Kt = kTheta(thetaDeg);
-  const Re = Fe1 / Fe2, Rt = l1 / l2;
-  const k1 = (Math.sqrt(Re + 2 * Re * Re * (1 + Rt + Rt * Rt) + Rt * Rt * Re ** 3) - Re * (1 + Rt)) / (1 + Re);
-  const k2 = -1 + Math.sqrt(2 * (1 + Re) + (2 * Fyb * (1 + 2 * Re) * D * D) / (3 * Fe1 * l1 * l1));
-  const k3 = -1 + Math.sqrt((2 * (1 + Re)) / Re + (2 * Fyb * (2 + Re) * D * D) / (3 * Fe1 * l2 * l2));
-  const modes = {
-    Im: (D * l1 * Fe1) / rd.Im,
-    Is: (D * l2 * Fe2) / rd.Is,
-    II: (k1 * D * l2 * Fe2) / rd.II,
-    IIIm: (k2 * D * l1 * Fe1) / ((1 + 2 * Re) * rd.IIIm),
-    IIIs: (k3 * D * l2 * Fe1) / ((2 + Re) * rd.IIIs),
-    IV: ((D * D) / rd.IV) * Math.sqrt((2 * Fe1 * Fyb) / (3 * (1 + Re))),
-  };
-  let mode = 'Im';
-  let Z = Infinity;
-  for (const [m, v] of Object.entries(modes)) if (v < Z) { Z = v; mode = m; }
-  return { Z, mode, modes, Re, Rt, k1, k2, k3, Kt };
-}
-
-/**
- * Composite bending yield (psi) of a pin running in a stainless sleeve (tube), for the NDS equations: the plastic moment of the pin plus that of the tube, over the plastic moment of a solid
- * pin of the sleeve's outside diameter: F_yb = (F_y,pin d^3 + F_y,tube (OD^3 - ID^3)) / OD^3. The pin is taken to fill the tube's bore (d = ID) unless a smaller `dPin` is given.
- */
-export const sleevedPinFyb = (fyPin: number, fyTube: number, od: number, id: number, dPin = id): number => (fyPin * Math.min(dPin, id) ** 3 + fyTube * (od ** 3 - id ** 3)) / od ** 3;
-
-/** Dowel bearing strength (psi) of oak at `thetaDeg` between the load and the grain, for a bearing diameter D (in): Hankinson of Fe parallel and Fe perpendicular (NDS Table 12.3.3). */
-export const oakFeAt = (G: number, D: number, thetaDeg: number): number => feAtAngle(feParallel(G), fePerp(G, D), thetaDeg);
-
-/**
- * Adjusted wood-to-wood pin capacity (lbf): Z' = Z C_M C_D C_eg, NO group factor (two pins, not a row). C_M is the wet-service factor for fasteners (`ndsWetFactorFasteners`), C_D the pin's own
- * load-duration factor (`brakePinLoadDurationFactor`, 1.0 for the sustained hold), C_eg the end-grain factor (0.67 when the pin runs along the grain of a member, else 1), C_delta the end-distance geometry factor (`endDistanceFactor`, NDS 12.5.1).
- */
-export function woodPinCapacity(p: { ndsWetFactorFasteners: number; brakePinLoadDurationFactor: number }, i: WoodShearInput, cEg = 1, cDelta = 1): WoodShearResult & { Zadj: number; adjust: number } {
-  const r = woodShearZ(i);
-  const adjust = p.ndsWetFactorFasteners * p.brakePinLoadDurationFactor * cEg * cDelta;
-  return { ...r, Zadj: r.Z * adjust, adjust };
-}
-
-/**
- * NDS 12.5.1 end-distance geometry factor C_delta for a pin bearing toward a member END along the grain: the required end distance for a loaded end is 7 D at 0 degrees to the grain (tension-type, the
- * conservative choice here: the member is held away from the pin by glue or a stop) falling linearly to 4 D at 90 degrees; C_delta = min(1, end / required). `endIn` is the distance from the pin center
- * along the grain to that end (in), `thetaGrainDeg` the angle between the pin load and the grain. Below half the required distance the NDS gives no value; the ratio is then used as is and
- * `belowHalf` is true. (Edge distances across the grain are covered by the splitting check `cleavageNearEnd`, not by this factor.)
- */
-export function endDistanceFactor(endIn: number, D: number, thetaGrainDeg: number): { required: number; cDelta: number; belowHalf: boolean } {
-  const required = D * (7 - (3 * Math.min(90, Math.max(0, thetaGrainDeg))) / 90);
-  const cDelta = Math.min(1, Math.max(0, endIn) / required);
-  return { required, cDelta, belowHalf: endIn < required / 2 - 1e-9 };
-}
-
-/**
- * NDS 3.4.3.3 splitting of a member loaded ACROSS the grain by a fastener (lbf). d = the member depth (in the direction of the load), sUnloaded = distance from the unloaded edge to the fastener's
- * CENTER, D = fastener diameter: d_e = d - (sUnloaded - D/2) (the member depth less the distance from the unloaded edge to the fastener's nearest edge). Far from the member end (end distance >= 5 d):
- * V_r = 2/3 F_v' b d_e. Within 5 d of the end: V_r = 2/3 F_v' b d_e (d_e / d)^2.
- */
-export function cleavageNearEnd(FvPrime: number, b: number, d: number, sUnloaded: number, D: number, endDist: number): { Vr: number; de: number; near: boolean } {
-  const de = Math.min(d, Math.max(0, d - (sUnloaded - D / 2)));
-  const near = endDist < 5 * d - 1e-9;
-  return { Vr: (2 / 3) * FvPrime * b * de * (near ? (de / d) ** 2 : 1), de, near };
 }
 
 /** UNC tensile stress area of a bolt of diameter d: π/4 (d − 0.9743/n)². */

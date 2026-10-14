@@ -5,8 +5,7 @@
  * model. Every param whose `status` is 'verify' is claimed by a check, and any left over lands in the last item ("other params to
  * confirm") automatically, so promoting or adding a verify param never needs an edit here.
  */
-import { bowTaper, PARAM_DEFS, thinSheet, WEATHER_SPEC, type Params } from '../params';
-import { brakeGeometry } from '../model/brake-layout';
+import { bowTaper, PARAM_DEFS, thinSheet, type Params } from '../params';
 import { runChecks } from '../analysis';
 import { signKnobPlan } from '../model/body';
 import { computeLayout, innerHalfWidth } from '../model/layout';
@@ -101,131 +100,17 @@ function ids(parts: Part[], re: RegExp): string[] {
   return parts.filter((x) => x.group !== 'reference' && re.test(x.id)).map((x) => x.id);
 }
 
-/** The ball-lock retention rating is a verify item only when the knee is on pins (D-78); with the bolted knee it is not part of the design and not listed. */
-const PIN_ONLY_KEYS: ReadonlySet<string> = new Set(['brakeBoltTorqueFtLb', 'brakeBoltNutFactor', 'brakeInsertWithdrawalFactor']);
-
 /** Param keys that are still 'verify' (a param Eric has confirmed and promoted drops out of the list by itself). */
 function verifyKeys(keys: string[]): string[] {
   return keys.filter((k) => PARAM_DEFS[k as keyof typeof PARAM_DEFS]?.status === 'verify');
 }
 
-/**
- * Every param key currently at status 'verify', for any design. The ones that exist only with the removable knee (D-78: `PIN_ONLY_KEYS`) are left out: with the pins on, the pin checks claim them
- * (`kneeBoltChecks`), with the bolted knee they are not part of the design and not listed.
- */
+/** Every param key currently at status 'verify'. */
 export function verifyParamKeys(): string[] {
-  return Object.entries(PARAM_DEFS).filter(([k, d]) => d.status === 'verify' && !PIN_ONLY_KEYS.has(k)).map(([k]) => k);
-}
-
-type KneeBolts = NonNullable<ReturnType<typeof brakeGeometry>['removable']>;
-type Draft = Omit<VerifyCheck, 'n' | 'whatToDo' | 'pass'>;
-
-/**
- * D-78 (removable knee on two clamped bolts): the checks the bolts add. Each is a shop action with a number from the design, all in fractions. The insert stock comes before the order is placed;
- * the others are done on the first insert, the first knee unit and the real sled.
- */
-function kneeBoltChecks(parts: Part[], p: Params, rm: KneeBolts): Draft[] {
-  const extreme = p.weatherSpec === WEATHER_SPEC.extreme;
-  const boltIds = ids(parts, /^brake-(bolt|washer)-(bottom|top)-[LR]$/);
-  const insertIds = ids(parts, /^brake-insert-(bottom|top)-[LR]$/);
-  const kneeIds = ids(parts, /^brake-(knee|tab|strap)-[LR]$/);
-  const bi = rm.bottom.insert, ti = rm.top.insert;
-  // the clamp load at the design torque (T = K d F), for the scrap test
-  const preload = Math.round(((p.brakeBoltTorqueFtLb * 12) / (p.brakeBoltNutFactor * rm.dia)) / 100) * 100;
-  return [
-    {
-      id: 'knee-insert-stock',
-      title: 'Knee inserts and bolts: confirm the stock size before anything is drilled',
-      how: [
-        it(`Find a ${extreme ? '316' : 'stainless'} flanged threaded insert for wood, 3/8-16, near these sizes: about ${fr(bi.od, 16)}" across the body, ${fr(bi.len, 4)}" long for the rail and ${fr(ti.len, 4)}" long for the rib block, with a ${fr(bi.flangeOd, 16)}" flange ${fr(bi.flangeT, 16)}" thick.`, [
-          'The BOM carries an estimate for it, not a quote. Ask the vendor for the body diameter, the pilot hole it wants, the flange diameter and thickness, and the thread.',
-          `If the real insert differs, change the insert sizes in the design (${lbl('brakeInsertOdIn')}, ${lbl('brakeInsertFlangeOdIn')}, ${lbl('brakeInsertFlangeThickIn')}) BEFORE the counterbores are cut, because the counterbore is the flange diameter plus a hair.`,
-          extreme ? 'A 316 insert is wanted for the Extreme spec; if only 18-8 exists, write it down as an exception.' : 'An 18-8 (304) stainless insert is right for the Standard spec.',
-        ]),
-        it('Order ONE insert and one bolt with its washer first, and try them on scrap oak (the next check) before you order the rest.'),
-        it(`The bolts are ${fr(rm.bottom.orderLen, 4)}" long for the bottom hole and ${fr(rm.top.orderLen, 4)}" for the top hole (hex head, 3/8-16, with a 1" flat washer): each is the stack it clamps plus two threads, up to the next 1/4".`),
-      ],
-      passList: ['The insert is in stock at about these sizes, or the design carries the real ones.', `The bolt lengths are ${fr(rm.bottom.orderLen, 4)}" and ${fr(rm.top.orderLen, 4)}", or the real stack is measured and the next 1/4" up chosen.`],
-      ifFails: 'Use the nearest stock insert, enter its sizes in the design and re-run the checks; if none exists in stainless, use a plain 18-8 insert and say so.',
-      partIds: insertIds,
-      paramKeys: [],
-      when: 'before ordering',
-      refs: ['D-78'],
-    },
-    {
-      id: 'knee-insert-pullout',
-      title: 'Knee insert: pull-out and torque-out test on scrap oak',
-      how: [
-        it(`Make a test piece like the hull: a scrap of ${fr(rm.hull.rail, 8)}" white oak (a rail offcut), a counterbore for the flange, the pilot hole and the clear hole, and the insert epoxied in. Let the epoxy cure fully.`),
-        it(`Run a bolt with its washer through a second scrap and tighten it into the insert with the ratchet to firm hand ratchet, about ${p.brakeBoltTorqueFtLb} ft-lb.`, [
-          `That is a clamp load of about ${preload} lbf if the thread is about as dry as the design assumes (${lbl('brakeBoltNutFactor')}); a torque wrench on the ratchet shows what "firm" is in your hand.`,
-          'Hang a weight on the bolt or pull it with a lever and a scale until the insert moves or the oak splits; note the load.',
-        ]),
-      ],
-      passList: [`The insert holds the full ${p.brakeBoltTorqueFtLb} ft-lb without turning, and does not pull out below about ${preload} lbf.`, 'The oak around the flange does not crack.'],
-      ifFails: `A longer insert, a bigger flange or thicker epoxy; a lower torque; or enter the measured withdrawal in the design (${lbl('brakeInsertWithdrawalFactor')}) and re-run the checks. If the box-rib block cracks, make it wider.`,
-      partIds: insertIds,
-      paramKeys: verifyKeys(['brakeInsertWithdrawalFactor']),
-      when: 'at assembly',
-      refs: ['D-78'],
-    },
-    {
-      id: 'knee-bolt-clearance',
-      title: 'Top bolt: clearance from the box tie, the side sign and the D-ring washers; grip and tip',
-      how: [
-        it('On the real sled, with the box rib glued in and the storage box and the signs dry-fitted, hold a knee unit at its place and look along the top bolt line before the top insert is set (the rib step).', [
-          `The top bolt goes ${fr(rm.top.fromRibFoot, 16)}" up from the foot of the box rib; the counterbore's lower edge is about ${fr(rm.rib.z1 - rm.rib.tieTopZ - rm.top.belowRibTop - ti.cboreDia / 2, 16)}" above the box tie spacer.`,
-          `The bolt tip stands about ${fr(rm.top.tipPast, 32)}" past the rib block; about ${fr(rm.clear.boltTipToBox, 16)}" is left to the storage box side.`,
-          `The top of the tab is ${fr(rm.clear.tabTopToWasher, 16)}" under the bottom of the D-ring fender washers.`,
-          `The rear end of the tab stays ${fr(p.brakeTabClearIn, 16)}" clear of the front end of the side sign.`,
-        ]),
-        it('Check the grip: with the real washer and bolt in each hole, about two threads show past the insert and the head does not bottom on the washer.'),
-      ],
-      passList: ['Every gap above is within 1/8" of the number given, and nothing touches the bolt tip, the tab or the washers.', 'Two or more threads show past each insert.'],
-      ifFails: 'Cut the sign back, move the box side, or trim the tab; a bolt too short or too long goes back for the next 1/4" size. Do it before the top insert is set, then run the check again.',
-      partIds: ids(parts, /^(brake-tab|brake-bolt-top|brake-insert-top|side-rib-box|box-tie|side-rib-[LR]1|sign-[LR]|lash-[LR]1)/),
-      paramKeys: [],
-      when: 'at assembly',
-      refs: ['D-78', 'D-76'],
-    },
-    {
-      id: 'knee-seat',
-      title: 'Knee seat: the leg flat on the chine band, the tab on the web',
-      how: [
-        it('Put the first knee unit on the hull and run both bolts in snug.', [
-          `The leg lies flat on the rail and the chine band; the tab (${fr(rm.tab.t, 16)}" thick) lies on the web over the box rib, which backs the web there: about ${fr(rm.tab.bearing.area, 4)} square inches of bearing. The leg is ${fr(rm.webRecess, 32)}" off the web.`,
-          'Slide a strip of paper under the tab and under the leg, all round: it should not pass anywhere.',
-        ]),
-        it('Tighten both bolts to firm hand ratchet and look again.', ['The knee must not rock on the chine band, and the web under the tab must not flex, dent or crack.']),
-      ],
-      passList: ['No daylight under the tab or the leg, before and after tightening.', 'The web does not mark.'],
-      ifFails: 'Plane or shim the leg or the tab where the paper passes; if the web marks, widen the bearing: make the tab wider, or glue a 1/8" oak doubler inside the web behind it.',
-      partIds: ids(parts, /^(brake-tab|brake-knee|side-[LR]-web)/),
-      paramKeys: [],
-      when: 'at assembly',
-      refs: ['D-78'],
-    },
-    {
-      id: 'knee-wobble',
-      title: 'Knee on its bolts: wobble at the first brake test, and the retorque',
-      how: [
-        it('With the flap on, push the foot end sideways with about ' + p.brakeFlapSideLoadLbf + ' lb, in and out, and watch both bolts and the tab.', ['A bathroom scale on the foot tread gives the push.']),
-        it('Stand on the flap as for a brake test, hold, and release, with a helper watching the top bolt from the side.', ['Look for the knee lifting off the web, or a bolt turning.']),
-        it('Take the knee off and put it back (assembly steps "REMOVAL" and "REFIT") three times, and test again.'),
-        it(`After the first outing, put the ratchet on both bolts again: they should still take about ${p.brakeBoltTorqueFtLb} ft-lb.`, [`Compare a firm hand ratchet with a torque wrench once; the design assumes ${p.brakeBoltTorqueFtLb} ft-lb (${lbl('brakeBoltTorqueFtLb')}).`]),
-      ],
-      passList: [`At ${p.brakeFlapSideLoadLbf} lb sideways the foot moves 1/16" or less, and no bolt turns.`, 'Three removals and refits leave the knee seated the same way.', 'Both bolts are still tight after the first outing.'],
-      ifFails: 'If the foot wobbles more, check that both bolts are really tight and that the leg and tab sit flat; then make the tab bigger or add a third bolt; enter what you measured in the design and re-run the checks.',
-      partIds: [...kneeIds, ...boltIds],
-      paramKeys: verifyKeys(['brakeBoltTorqueFtLb', 'brakeBoltNutFactor']),
-      when: 'at assembly',
-      refs: ['D-78', 'D-65'],
-    },
-  ];
+  return Object.entries(PARAM_DEFS).filter(([, d]) => d.status === 'verify').map(([k]) => k);
 }
 
 export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
-  const kp = brakeGeometry(p, computeLayout(p)).removable; // D-78: present only with the removable knee on and the box rib there
   const rate = p.bumpWheelRateLbIn;
   const rateMax = Math.round((rate * BUMP_RATE_PASS_MARGIN) / 10) * 10;
   const testLb = p.wheelRatingLb;
@@ -450,9 +335,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       how: [
         it('Cut ONE knee blank first, before cutting the other knee and the flaps.', [
           `Notch the pocket in the layers, glue the test knee up and recess the pocket; screw the stainless strap on and drill the pin hole through its hole. Use the real ${fr(p.brakePivotPinDiaIn)}" clevis pin, the hitch-pin clip and a flap tongue with its pivot block clamped in the pocket.`,
-          kp
-            ? 'This test comes BEFORE the other knee is cut and before any tab or bolt hole goes on a knee (assembly step "Brake knees").'
-            : 'This test comes BEFORE the knees are glued: the knees go on first, while the hull is inverted (assembly step "Brake knees").',
+          'This test comes BEFORE the knees are glued: the knees go on first, while the hull is inverted (assembly step "Brake knees").',
         ]),
         it(`Check the pocket clearance (${fr(p.brakePivotSlotClearIn)}" a side), the pin through the strap and into the blind hole, the flap swing and the pad gap to the tire.`),
         it('Drag-test a chock: pull a weighted chock across packed dirt or gravel with a scale, dry and wet.'),
@@ -494,7 +377,6 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       when: 'at assembly',
       refs: ['D-65', 'D-77'],
     },
-    ...(kp ? kneeBoltChecks(parts, p, kp) : []),
     {
       id: 'lamp-clip',
       title: 'Lamp clips: fit against the real lamps',

@@ -82,8 +82,6 @@ export const WEATHER_SPEC = { standard: 0, extreme: 1 } as const;
 /** D-73: the thin-sheet material (the side webs, the storage box and lid, the signs). `followWeather` picks white oak ply for Standard and okoume for Extreme. */
 export const THIN_SHEET = { followWeather: 0, whiteOakPly: 1, okoumeMarine: 2, balticBirch3mm: 3 } as const;
 export const STORAGE_LOCATION = { rearOverAxle: 0, underSeat: 2 } as const;
-/** D-78: how the brake knee is held on. Bolted = four 3/8 in bolts through the rail into a backer (D-75, the default); removable = two clamped 3/8-16 hex bolts per side into threaded inserts in the hull, tightened with a ratchet, so the knee comes off with the flap. */
-export const KNEE_MOUNT = { bolted: 0, removable: 1 } as const;
 
 /** Mannequin proportions (fractions of stature, D-3) that the foot-room validator also needs: hip separation and foot width. */
 /** Solid-spring rule of thumb (D-57): a member bent from solid stock needs an inside radius of at least this many times its thickness. */
@@ -1463,178 +1461,6 @@ const defs = {
     default: 2, min: 1, max: 3, step: 1, status: 'assumed', ref: 'D-57',
   },
 
-  // ── D-78: the removable knee on two clamped bolts ──
-  kneeMount: {
-    label: 'Brake knee mount', group: 'brake', unit: '',
-    default: KNEE_MOUNT.bolted, min: 0, max: 1, step: 1, status: 'explore', ref: 'D-78',
-    options: [
-      { value: KNEE_MOUNT.bolted, label: 'Bolted to the rail (stays on)' },
-      { value: KNEE_MOUNT.removable, label: 'Removable knees (two bolts, ratchet)' },
-    ],
-    note: 'D-78 (optional setting; the default stays the D-75 bolted knee). Removable: the oak knee, its strap and a glued-on tab come off with the flap, held on by two clamped 3/8-16 stainless hex bolts per side, each with a 1 in flat washer under the head: the bottom bolt through the knee leg and the rail into a flanged threaded insert in the rail, the top bolt through the tab, the side web, the filler and the box rib block into a flanged threaded insert in the rib. The bolts are tightened with a 3/8 in drive ratchet and a 9/16 in deep socket that ride in the storage box (no tool is needed to leave them out; the sled needs the tool only to take the knees off or put them on). Preload clamps the knee to the hull like the bolted knee, so prying and yaw are carried by the clamp and shear by friction. No knee-side hardware but the bolts and washers, no backer, no backing plate. With the brakes off (or Transport mode) the hull shows two flush stainless flange faces per side and nothing else. Needs the rear storage box (the top bolt rides in the box rib).',
-  },
-
-  brakeBoltClearHoleIn: {
-    label: 'Removable knee: clearance hole for the 3/8 in bolts', group: 'brake', unit: 'in',
-    default: 0.40625, min: 0.390625, max: 0.4375, step: 0.015625, status: 'assumed', ref: 'D-78',
-    note: 'D-78: 13/32 in plain holes in the knee leg and the tab (and through the rail, rib, filler and web outboard of the insert). The bolt is the mounting bolt diameter, brakeMountBoltDiaIn.',
-  },
-
-  brakeBoltWasherOdIn: {
-    label: 'Removable knee: flat washer under each bolt head, outside diameter', group: 'brake', unit: 'in',
-    default: 1, min: 0.875, max: 1.25, step: 0.0625, status: 'assumed', ref: 'D-78',
-    note: 'D-78: a 3/8 in USS flat washer (1 in OD, 7/16 in hole) spreads the bolt\'s clamp over the knee leg and the tab. It comes off with the bolt.',
-  },
-
-  brakeBoltWasherIdIn: {
-    label: 'Removable knee: flat washer hole diameter', group: 'brake', unit: 'in',
-    default: 0.4375, min: 0.375, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the hole of a 3/8 in USS flat washer is 7/16 in.',
-  },
-
-  brakeBoltWasherThickIn: {
-    label: 'Removable knee: flat washer thickness', group: 'brake', unit: 'in',
-    default: 0.083, min: 0.05, max: 0.125, step: 0.001, status: 'assumed', ref: 'D-78',
-    note: 'D-78: a 3/8 in USS flat washer is about 0.08 in thick.',
-  },
-
-  brakeInsertOdIn: {
-    label: 'Removable knee: threaded insert body outside diameter (3/8-16, flanged)', group: 'brake', unit: 'in',
-    default: 0.625, min: 0.5, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-78',
-    note: 'D-78: a stainless flanged threaded insert for wood, 3/8-16 inside, set in a pilot hole from the INBOARD face with epoxy; its flange lies in a counterbore, flush, and takes the bolt\'s pull against the oak. Stainless by weather spec (304 Standard, 316 Extreme). Bought ready-made: confirm a stock size near these numbers before buying, and adjust these params to it (the analysis reads them).',
-  },
-
-  brakeInsertFlangeOdIn: {
-    label: 'Removable knee: insert flange outside diameter', group: 'brake', unit: 'in',
-    default: 1, min: 0.75, max: 1.5, step: 0.0625, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the flange is the bearing area under the bolt\'s preload (it replaces a separate washer); the counterbore is 1/16 in wider.',
-  },
-
-  brakeInsertFlangeThickIn: {
-    label: 'Removable knee: insert flange thickness (= counterbore depth)', group: 'brake', unit: 'in',
-    default: 0.0625, min: 0.04, max: 0.125, step: 0.0156, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the counterbore is exactly this deep so the flange is flush with the rail\'s and the rib\'s inner face.',
-  },
-
-  brakeInsertMinWoodIn: {
-    label: 'Removable knee: oak left beyond the end of an insert', group: 'brake', unit: 'in',
-    default: 0.125, min: 0.0625, max: 0.5, step: 0.0156, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the insert length is the longest 1/4 in step that leaves this much wood outboard of it inside the member (0.5 in in the 3/4 in rail, 3/4 in in the rib, filler and web).',
-  },
-
-  brakeTabThickIn: {
-    label: 'Knee tab thickness (across, on the side web)', group: 'brake', unit: 'in',
-    default: 1, min: 0.75, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the tab is a separate oak block, grain vertical, face-glued to the knee\'s rear face. It lies on the side web (its inboard face is at the web\'s outer face, the web recess behind the knee\'s face plane) and carries the top bolt.',
-  },
-
-  brakeTabHeightIn: {
-    label: 'Knee tab height', group: 'brake', unit: 'in',
-    default: 4.1, min: 1.5, max: 5, step: 0.1, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the tab is tall on purpose. Its top stands brakeTabAboveBoltIn over the top bolt (kept brakeTabClearIn under the D-ring washers); the rest hangs DOWN past the bolt so the tab lies against the knee\'s rear face over about 2 in of the knee\'s height (the knee leg top is just over the bolt). That makes the glue patch about 3 in2.',
-  },
-
-  brakeTabAboveBoltIn: {
-    label: 'Knee tab: height above the top bolt', group: 'brake', unit: 'in',
-    default: 1.2, min: 0.75, max: 2, step: 0.05, status: 'assumed', ref: 'D-78',
-    note: 'D-78: oak above the top bolt\'s clearance hole in the tab. Limited by the D-ring washers above (brakeTabClearIn).',
-  },
-
-  brakeTabEndIn: {
-    label: 'Knee tab: oak behind the top bolt (end distance)', group: 'brake', unit: 'in',
-    default: 1, min: 0.75, max: 2, step: 0.125, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the tab runs from the knee\'s rear face back to this far behind the top bolt\'s center. It stops short of the side sign by brakeTabClearIn.',
-  },
-
-  brakeTabClearIn: {
-    label: 'Knee tab clearance to the D-ring washers and the side sign', group: 'brake', unit: 'in',
-    default: 0.3, min: 0.1, max: 1, step: 0.05, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the tab top stays this far under the bottom of the D-ring fender washers on the box rib, and its rear end this far ahead of the side sign (the sign\'s forward end is cut back to keep it).',
-  },
-
-  brakeTopBoltClearIn: {
-    label: 'Top bolt center above the box tie spacer top', group: 'brake', unit: 'in',
-    default: 0.7, min: 0.5, max: 2, step: 0.05, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the top bolt goes through the box rib above the box tie spacer, which no bolt can pass. The insert flange\'s counterbore reaches about 1/2 in below the bolt center, so 0.7 in keeps it above the spacer\'s top; it also keeps the knee leg top (3/4 in over the bolt) under the side reflector.',
-  },
-
-  brakeRibBlockWidthIn: {
-    label: 'Box rib block width (the full-width part that carries the top bolt)', group: 'brake', unit: 'in',
-    default: 2, min: 2, max: 4, step: 0.25, status: 'assumed', ref: 'D-78',
-    note: 'D-78: centered on the top bolt. The clamped bolt does not load the oak sideways through its hole the way a loose pin would, so 2 in (the rib head\'s width) is the starting size; the analysis says whether it needs more. Never narrower than the rib head (sideRibHeadLengthIn). On the inside face of the side web.',
-  },
-
-  brakeRibBlockBelowIn: {
-    label: 'Box rib: full-width block below the top bolt', group: 'brake', unit: 'in',
-    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-78',
-    note: 'D-78: with the removable knee the box rib is a full-width block (brakeRibBlockWidthIn) from this far below the top bolt up to the head, so the insert has oak all round. Below that it is the normal shaft. The band-strip filler behind it follows.',
-  },
-
-  brakeKneeTopAboveBoltIn: {
-    label: 'Knee leg top above the top bolt center (removable knee)', group: 'brake', unit: 'in',
-    default: 0.75, min: 0.5, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the bolt\'s washer bears on the tab, and the tab pushes forward against the knee, so the knee leg stands up behind the whole bolt and washer with oak to spare: its top is this far over the bolt center (about 15.2 in). Only the leg (against the hull) goes up; the arm and the roof keep their D-77 height. Stays clear of the reflector and the D-ring washers.',
-  },
-
-  brakeBoltEdgeIn: {
-    label: 'Removable knee: least oak beside a bolt hole or insert', group: 'brake', unit: 'in',
-    default: 0.25, min: 0.1875, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the least oak left each side of a bolt hole in the tab and of an insert in the box rib block.',
-  },
-
-  brakeRatchetLenIn: {
-    label: 'Ratchet and socket in a pouch: length (removable knees)', group: 'brake', unit: 'in',
-    default: 8, min: 6, max: 14, step: 0.5, status: 'assumed', ref: 'D-78',
-    note: 'D-78: a 3/8 in drive ratchet with a 9/16 in deep socket for the knee bolts rides in the storage box (race and cargo mode) when the knees are removable: about 8 x 2 x 2 in in a pouch. It is a tool, not sled mass (like the 10 Essentials, it is part of the carried load).',
-  },
-
-  brakeRatchetWidthIn: {
-    label: 'Ratchet and socket in a pouch: width', group: 'brake', unit: 'in',
-    default: 2, min: 1.5, max: 4, step: 0.25, status: 'assumed', ref: 'D-78',
-  },
-
-  brakeRatchetHeightIn: {
-    label: 'Ratchet and socket in a pouch: height', group: 'brake', unit: 'in',
-    default: 2, min: 1.5, max: 4, step: 0.25, status: 'assumed', ref: 'D-78',
-  },
-
-  // ── D-78 clamped-bolt analysis (brake-mount, preload) ──
-  brakeBoltTorqueFtLb: {
-    label: 'Removable knee: tightening torque of a hand ratchet', group: 'brake', unit: 'ft·lb',
-    default: 15, min: 5, max: 30, step: 1, status: 'verify', ref: 'D-78',
-    note: 'D-78 ASSUMED, TO CONFIRM: what a person reaches tightening a 3/8-16 stainless bolt "firmly" with a 3/8 in drive ratchet (about 15 ft·lb). The usable preload is the smaller of this torque and the bearing / proof / thread limits (brake-mount).',
-  },
-  brakeBoltNutFactor: {
-    label: 'Removable knee: torque-tension (nut) factor K', group: 'brake', unit: '',
-    default: 0.2, min: 0.1, max: 0.4, step: 0.01, status: 'verify', ref: 'D-78',
-    note: 'D-78: preload P = T / (K d). 0.2 is the usual value for plain or lightly lubricated steel; stainless on stainless galls and can read higher (0.25 to 0.3) without anti-seize, 0.15 with it. Confirm on the real bolts.',
-  },
-  brakeJointFrictionMu: {
-    label: 'Removable knee: friction between knee, tab and hull (oak on oak, wet)', group: 'brake', unit: '',
-    default: 0.3, min: 0.15, max: 0.6, step: 0.05, status: 'assumed', ref: 'D-78',
-    note: 'D-78: wood on wood, wet, varnished or oiled faces. The clamped joint carries the in-plane force by friction mu x clamp force while the preload stays; the bolt in its clearance hole is the fallback if it slips.',
-  },
-  brakeBoltPreloadMaxFrac: {
-    label: 'Removable knee: bolt preload limit (share of yield)', group: 'brake', unit: '',
-    default: 0.75, min: 0.5, max: 0.9, step: 0.05, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the usual 75 % of proof / yield for a reusable fastener. Proof load = this x ss316BoltYieldPsi x the tensile stress area.',
-  },
-  brakeInsertWithdrawalFactor: {
-    label: 'Removable knee: threaded insert pull-out, share of the NDS lag-screw value', group: 'brake', unit: '',
-    default: 0.5, min: 0.25, max: 1, step: 0.05, status: 'verify', ref: 'D-78',
-    note: 'D-78 ASSUMED, TO CONFIRM: pull-out of a flanged threaded insert (coarse external thread, outside diameter D, body length L) in oak is taken as this fraction of the NDS lag-screw withdrawal 1800 G^1.5 D^0.75 L x C_M (wet 0.7). No vendor rating is used. Confirm with a pull test on a scrap rail.',
-  },
-  brakeBoltLoadDurationFactor: {
-    label: 'Removable knee: bolt load-duration factor C_D', group: 'brake', unit: '×',
-    default: 1, min: 0.9, max: 1.6, step: 0.05, status: 'assumed', ref: 'D-78',
-    note: 'D-78: NDS C_D on the bolt in its clearance hole. 1.0 because the hold load is sustained, not an impact (the stomp is checked at yield level instead).',
-  },
-  brakeStainlessModulusPsi: {
-    label: 'Stainless steel modulus (bolt stiffness)', group: 'brake', unit: 'psi',
-    default: 28000000, min: 26000000, max: 30000000, step: 500000, status: 'assumed', ref: 'D-78',
-    note: 'D-78: Young\'s modulus of 304 / 316 stainless, for the stiffness of the clamping bolts against the oak they clamp (how an external pull splits between the bolt and the joint).',
-  },
-
   brakeBungeeTensionLbf: {
     label: 'Return bungee tension, released', group: 'brake', unit: 'lbf',
     default: 3, min: 1, max: 10, step: 0.5, status: 'assumed', ref: 'D-57',
@@ -2869,21 +2695,6 @@ export function validateParams(input: Params): ParamIssue[] {
       info(['brakePadWidthIn', 'tireWidthIn'], `The brake pad is narrower than set: it is held ${0.3}" inside the tread edges (${(p.tireWidthIn - 0.3).toFixed(1)}").`);
     if (p.brakeFlapWidthIn < p.tireWidthIn - 1e-9)
       info(['brakeFlapWidthIn', 'tireWidthIn'], 'The brake flap is narrower than the tire.');
-    // ── D-78: the removable knee on two clamped bolts ──
-    if (p.kneeMount === KNEE_MOUNT.removable) {
-      if (p.storageLocation !== STORAGE_LOCATION.rearOverAxle)
-        warn(['kneeMount', 'storageLocation'], 'The removable knee (D-78) bolts to the box rib beside the rear storage box; with the box under the seat there is no box rib, so the knee stays bolted to the rail.');
-      if (p.brakeBoltClearHoleIn < p.brakeMountBoltDiaIn + 1 / 64 - 1e-9)
-        err(['brakeBoltClearHoleIn', 'brakeMountBoltDiaIn'], 'The clearance hole for the knee bolts is not bigger than the bolt.');
-      if (p.brakeInsertFlangeOdIn < p.brakeInsertOdIn + 0.125 - 1e-9)
-        err(['brakeInsertFlangeOdIn', 'brakeInsertOdIn'], 'The insert flange is too small to be a flange (at least 1/8 in wider than the body).');
-      if (p.brakeBoltWasherOdIn < p.brakeBoltClearHoleIn + 0.25 - 1e-9)
-        warn(['brakeBoltWasherOdIn', 'brakeBoltClearHoleIn'], 'The flat washer under the knee bolt head barely covers the clearance hole.');
-      if (p.brakeTabAboveBoltIn < p.brakeBoltClearHoleIn / 2 + p.brakeBoltEdgeIn - 1e-9)
-        warn(['brakeTabAboveBoltIn', 'brakeBoltEdgeIn'], `The knee tab leaves less than ${p.brakeBoltEdgeIn}" of oak above the top bolt hole.`);
-      if (p.brakeTabEndIn < p.brakeBoltClearHoleIn / 2 + p.brakeBoltEdgeIn - 1e-9)
-        warn(['brakeTabEndIn', 'brakeBoltEdgeIn'], `The knee tab ends ${p.brakeTabEndIn}" behind the top bolt: less than ${p.brakeBoltEdgeIn}" of oak is left behind the hole.`);
-    }
   }
   void info; void footZoneX;
   return issues;

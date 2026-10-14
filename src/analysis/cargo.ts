@@ -51,8 +51,8 @@ export function seatStowCheck(ctx: Ctx): AnalysisCheck {
     detail('height: corner fillet + seat cushion + back pad, under the lid frame and battens', need.heightIn, 'in', avail.h, '<='),
   ];
   // 3c-5, D-65: the front lamp and the rear tail light with their clips, and the wheel chocks, lie in the layer above the cushions (the height left under the lid frame and battens), measured from the real parts.
-  const gear = boxGear(ctx.parts, ctx.p);
-  const gearKit = [...gear.lamp, ...gear.chocks, ...gear.tools];
+  const gear = boxGear(ctx.parts);
+  const gearKit = [...gear.lamp, ...gear.chocks];
   const layerH = Math.max(0, margin.heightIn);
   const layer = packEssentials({ lx: avail.l, w: avail.w, h: layerH, capIn3: 0, totalIn3: avail.l * avail.w * layerH }, gearKit);
   const gearTall = Math.max(0, ...gearKit.map((k) => Math.min(...(k.dims ?? [0]))));

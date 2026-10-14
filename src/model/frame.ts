@@ -76,22 +76,6 @@ export function buildFrame(ctx: Ctx): Part[] {
     {
       const bgk = brakeGeometry(p, L);
       const kb = bgk.bolts;
-      const pn = bgk.removable;
-      if (pn) {
-        // D-78: the removable knee has no D-75 bolts: the rail carries ONE threaded-insert site for the bottom bolt, at its absolute layout (from the rail's rear end and its top edge).
-        const bt = pn.bottom, ins = bt.insert;
-        const where = `${f2(bt.fromRailRear)}" from the rail's finished rear end (the rear transom's inner face), ${f2(bt.belowRailTop)}" below its top edge (mid-height of the rail)`;
-        (rail.joints ??= []).push({
-          type: 'hole', to: `brake-insert-bottom-${tag}`, count: 1, diaIn: ins.cboreDia, at: [[bt.x, s * bgk.y.railIn, bt.z]],
-          size: `1 × ${ins.cboreDia.toFixed(4)}" (${frac32(ins.cboreDia)}") counterbore ${ins.cboreDepth.toFixed(4)}" deep in the rail's INNER face for the insert flange, ${where}`,
-          cut: { kind: 'counterbore', dia: ins.cboreDia, depth: ins.cboreDepth, what: 'the flange of the bottom bolt\'s threaded insert, flush with the rail\'s inner face' },
-        });
-        rail.joints.push({
-          type: 'hole', to: `brake-insert-bottom-${tag}`, count: 1, diaIn: ins.od, at: [[bt.x, s * bgk.y.face, bt.z]],
-          size: `1 × ${frac32(ins.od)}" pilot hole ${frac32(ins.len)}" deep from the counterbore floor for the insert body, then ${frac32(pn.clearHole)}" clear on through the rest of the rail, same place (${where})`,
-          note: 'D-78: laid out from these numbers at the frame step; counterbore from the inside, the clearance hole from the outer face; the stainless threaded insert is screwed in from the inside with epoxy, flange flush. The knee leg is drilled from the same numbers (its rear face and the rail bottom).',
-        });
-      } else {
       const pts: Vec3[] = kb.zs.flatMap((z) => kb.xs.map((x): Vec3 => [x, s * bgk.y.face, z]));
       const fromRear = kb.xs.map((x) => frac32(x - x0)).join('" and ');
       const belowTop = kb.zs.map((z) => L.railTop - z).sort((a, b) => a - b).map(frac32).join('" and ');
@@ -100,7 +84,6 @@ export function buildFrame(ctx: Ctx): Part[] {
         size: `${pts.length} × ${frac32(kb.dia + 1 / 32)}" holes for the ${frac32(kb.dia)}" brake-knee bolts, square through the rail and the glued backer: ${fromRear}" from the rail's finished rear end (the rear transom's inner face), ${belowTop}" below its top edge`,
         note: 'D-75: laid out from these numbers at the frame step and drilled from the outer face through the rail and the backer (no knee needed as a template); the knee leg is later drilled from the same positions (its rear face and the rail bottom)',
       });
-      }
     }
     rail.plies = 2;
     rail.notes += ` CUT LIST (build 3c S2): ${f2(railT / 2)}" × ${f2(railD + p.laminateWidthAllowanceIn)}" × ${f2(developed + p.laminateLengthAllowanceIn)}" strips, TWO per rail (resaw from 4/4 and plane; strips this thin and ${f2(railD)}" wide need a planer sled or a drum sander), plus 25% spares; only the last ${f2(L.railEnd - L.taper.x0)}" is curved.`;
@@ -136,8 +119,8 @@ export function buildFrame(ctx: Ctx): Part[] {
   L.joistX.forEach((x, i) => {
     const isKing = x === L.king.x;
     const meetsHanger = hangerAt(x);
-    const bkg = brakeGeometry(p, L), bkr = bkg.backer; // the step brake's oak backers on the rail inner faces (D-57): a joist that meets one is cut back to its inner face
-    const meetsBacker = !bkg.removable && x + L.joistT / 2 > bkr.x0 && x - L.joistT / 2 < bkr.x1; // D-78: no backer on the removable knee, so no cutback
+    const bkr = brakeGeometry(p, L).backer; // the step brake's oak backers on the rail inner faces (D-57): a joist that meets one is cut back to its inner face
+    const meetsBacker = x + L.joistT / 2 > bkr.x0 && x - L.joistT / 2 < bkr.x1;
     const halfT = x === L.king.x ? L.king.len : x === L.chain.joistX ? L.chain.joistT : L.joistT; // the chain joist is thicker than the others (D-58)
     const half = rY0 - L.turnIn(x + halfT / 2) - (meetsHanger ? p.axleHangerThickIn : 0) - (meetsBacker && !meetsHanger ? bkr.t : 0);
     if (isKing) {

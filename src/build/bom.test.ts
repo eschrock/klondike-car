@@ -209,8 +209,7 @@ describe('bom', () => {
   });
 
   it('cites parts that still exist for every item that lives only in a note', () => {
-    // the removable knee's note items (D-78) cite parts that exist only with that setting
-    const ids = new Set([...parts, ...buildModel({ ...p, kneeMount: 1 })].map((x) => x.id));
+    const ids = new Set(parts.map((x) => x.id));
     for (const item of NOTE_ITEMS) {
       expect(item.partIds.length, item.key).toBeGreaterThan(0);
       for (const id of item.partIds) expect(ids.has(id), `${item.key} cites ${id}`).toBe(true);

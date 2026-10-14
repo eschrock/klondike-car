@@ -842,25 +842,6 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
   }
   // D-77: the pivot strap is bought as flat bar: cut and drill only.
   if (part.partNo === 'brake-strap') notes.push('Cut from the flat bar on the metal bandsaw and deburr the cut edges; drill on the drill press. Cut, deburr and drill only. Drill the screw holes first; the knee\'s pin hole is drilled through this pin hole after the strap is screwed on.');
-  // D-78: the insert holes in the rail and the box rib are drilled at their own steps; the knee's and the tab's bolt holes are match-drilled from the inserts.
-  let rmHere: ReturnType<typeof brakeOf>['removable'];
-  try { rmHere = /^(rail|side-rib-box|brake-tab|brake-knee)$/.test(part.partNo ?? '') ? brakeOf(p).removable : undefined; } catch { rmHere = undefined; } // a call without the design (partDims of one part) has no layout
-  if (rmHere && part.partNo === 'rail' && feats.some((f) => f.k === 'hole' && f.to.some((t) => /^brake-insert-bottom/.test(t)))) {
-    const ins = rmHere.bottom.insert;
-    notes.push(`The holes are for the bottom-bolt insert. Lay the rail flat on the drill press, OUTBOARD face down, top edge against a fence, measured from the rear end (the rail is still 1/2" long there). All from the INBOARD face (the face that is up): the ${frac(ins.cboreDia)} counterbore for the insert's flange, ${frac(ins.cboreDepth)} deep; the ${frac(ins.od)} pilot hole ${frac(ins.len)} deeper; then the ${frac(rmHere.clearHole)} clear hole on through the rest of the rail. Epoxy the insert in with its flange flush. The right rail is the mirror image.`);
-  }
-  if (rmHere && part.partNo === 'side-rib-box' && feats.some((f) => f.k === 'hole' && f.to.some((t) => /^brake-insert-top/.test(t)))) {
-    const ins = rmHere.top.insert;
-    notes.push(`The holes are for the top-bolt insert and sit in the full-width BLOCK, measured from the foot of the rib (the top is cut at the sheer slope, so do not measure down from it). Do not drill them on the bench: drill after the rib is glued in and before the storage box goes in, with a drill block square to the side, all from the inner face: the ${frac(ins.cboreDia)} counterbore ${frac(ins.cboreDepth)} deep, the ${frac(ins.od)} pilot hole ${frac(ins.len)} deeper, then the ${frac(rmHere.clearHole)} clear hole on out through the rib, the filler and the web. Epoxy the insert in with its flange flush.`);
-  }
-  if (rmHere && part.partNo === 'brake-tab') {
-    const tl = part.stock?.l ?? rmHere.tab.z1 - rmHere.tab.z0;
-    notes.push(`Grain runs up the ${frac(tl)} side. Glue the tab to the knee's rear face only (never to the side web it lies on). Do not drill its hole on the bench: it is match-drilled with the knee unit at the rib step, ${frac(rmHere.clearHole)} straight through at the dimple the dowel center leaves. The position shown is where the dimple should land.`);
-  }
-  if (rmHere && part.partNo === 'brake-knee') {
-    const kz = brakeOf(p).knee.zBot;
-    notes.push(`The tab (rear face, ${frac(rmHere.tab.z0 - kz)} to ${frac(rmHere.tab.z1 - kz)} up from the bottom end) is glued on first. The bottom bolt hole is not drilled on the bench: it is match-drilled at the rib step, ${frac(rmHere.clearHole)} straight through at the dimple the dowel center leaves in the rail. The position shown is where the dimple should land.`);
-  }
   // D-76: the side ribs, their knees and the box tie spacers.
   if (/^side-rib(-box|-bow)?$/.test(part.partNo ?? '')) {
     notes.push('A T-shaped rib: a narrow shaft and a head as tall as the gunwale band, the top of the head cut to the sheer (the slope is dimensioned at both ends). The drawn face is the one that faces into the sled; the back face is glued to the bands and the filler.');
