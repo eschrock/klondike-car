@@ -1490,6 +1490,8 @@ const TEMPLATES: Template[] = [
       const cornerPts = corner ? (corner.positions ?? []).flatMap((t) => [...t.matchAll(new RegExp(`(${FR})" from the outboard edge, (${FR})" from the top end`, 'g'))].map((m) => [m[1], m[2]])) : [];
       const ang = corner?.angleDeg !== undefined ? String(corner.angleDeg) : undefined;
       const kp = bgk.pins;
+      const domKnee = kp?.tab.dominos ? feat(c, 'brake-knee-L', 'mortise', (q) => q.face === 'rear face') : undefined;
+      const domTab = kp?.tab.dominos ? feat(c, 'brake-tab-L', 'mortise') : undefined;
       const topStep = kp ? feat(c, 'brake-knee-L', 'outline', (q) => /TOP end/.test(q.text)) : undefined;
       const stockOf = (id: string): string => { const s0 = c.by(id)?.stock; return s0 ? `${fin(s0.t)} × ${fin(s0.w)} × ${fin(s0.l)}` : 'see the cut list'; };
       const tabIds = c.mine.filter((x) => /^brake-tab-[LR]$/.test(x.id)).map((x) => x.id);
@@ -1502,10 +1504,18 @@ const TEMPLATES: Template[] = [
           `Oak: ${stockOf(tabIds[0])} (T × W × L) each, grain running up the ${fin(kp.tab.z1 - kp.tab.z0)} side. The cut list has the rough size and the board: mill ONE 12" stick of 1" × ${fin(kp.tab.x1 - kp.tab.x0)} with the grain along it, then crosscut the tabs from it.`,
           'The tab is 1" thick, so it is not cut from the knee block (its layers are 3/4"): take it from a 5/4 board, or glue two pieces of 4/4 face to face and mill to 1".',
         ], tabIds),
+        ...(kp.tab.dominos
+          ? [I(`Cut the Domino mortises before the tab is glued: in ${tl(tabIds)} and in ${tl(knees)}.`, [
+            `${kp.tab.dominos.count} Festool ${kp.tab.dominos.name} Dominos (${kp.tab.dominos.tool}, ${fin(kp.tab.dominos.depthEach)} deep in each piece) join each tab to its knee, set in epoxy.`,
+            `In the knee's rear face, in its upright rear layer: ${whereOf(domKnee) ?? 'positions on the knee drawing'}.`,
+            `In the tab's end face (the face that goes against the knee): ${whereOf(domTab) ?? 'positions on the tab drawing'}.`,
+            'Hold the Domino machine square to the face and cut every mortise from the same reference edge. Dry-fit a Domino in each pair, with the tab against the knee, before any epoxy is mixed.',
+          ], [...tabIds, ...knees])]
+          : []),
         I(`Epoxy a tab to the rear face of each knee: ${tl(tabIds)}.`, [
           `The tab's long face against the knee's rear face, its bottom edge ${fin(kp.tab.z0 - pkn.zBot)} up from the knee's bottom end. It stands ${fin(kp.tab.z1 - pkn.zTopLeg)} above the top of the knee's leg and ${fin(kp.tab.x1 - kp.tab.x0)} out behind its rear face.`,
           `Its face against the web stands ${thick(kp.webRecess)} proud of the face of the knee's leg (the web is recessed that much), so the tab lies flat on the web while the leg lies on the rail and the chine band. Lay a straightedge across both faces to check the step.`,
-          `The tab touches the knee over its lower ${fin(kp.tab.patch.z1 - kp.tab.patch.z0)} (about ${fractionText(Math.round(kp.tab.patch.area * 4) / 4, 4)} square inches of glue): dry-fit it first, then clamp it square with one bar clamp along the knee, a pad on the tab's rear end and one on the knee's front face. No screw is needed.`,
+          `The tab touches the knee over its lower ${fin(kp.tab.patch.z1 - kp.tab.patch.z0)} (about ${fractionText(Math.round(kp.tab.patch.area * 4) / 4, 4)} square inches of glue): dry-fit it first, then clamp it square with one bar clamp along the knee, a pad on the tab's rear end and one on the knee's front face. ${kp.tab.dominos ? 'The Dominos keep it square' : 'No screw is needed'}.`,
         ], tabIds),
         I(`Drill the two pin holes in each knee unit, after the tab is glued on: ${tl(knees)}.`, [
           `Use the pin-hole plate (Forms section, on the brake knee template sheet). It has a 1/8" center hole for each pin, ${gap1(Math.hypot(kp.B.x - kp.T.x, kp.B.z - kp.T.z))} apart, center to center: that spacing is the hull's own.`,
@@ -1750,7 +1760,7 @@ const TEMPLATES: Template[] = [
       const washT = c.mine.filter((x) => /^brake-washer-T-hull-[LR]$/.test(x.id)).map((x) => x.id);
       const pn = brakeOf(p).pins;
       const pt = pn?.T;
-      const ribRear = pn ? pn.rib.x - p.sideRibHeadLengthIn / 2 : 0; // the rear edge of the box rib's head
+      const ribRear = pn ? pn.rib.x - pn.rib.blockW / 2 : 0; // the rear edge of the box rib block
       const tieGap = pn && pt ? pn.rib.z1 - pn.rib.tieTopZ - pt.belowRibTop - pn.sleeveOd / 2 : 0;
       const ribDims = (st: (typeof sts)[number]): string => {
         const stock = c.by(`side-rib-L${st.n}`)?.stock;

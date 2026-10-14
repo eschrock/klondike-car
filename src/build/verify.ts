@@ -102,7 +102,7 @@ function ids(parts: Part[], re: RegExp): string[] {
 }
 
 /** The ball-lock retention rating is a verify item only when the knee is on pins (D-78); with the bolted knee it is not part of the design and not listed. */
-const PIN_ONLY_KEYS: ReadonlySet<string> = new Set(['brakePinRetentionLbf']);
+const PIN_ONLY_KEYS: ReadonlySet<string> = new Set(['brakePinRetentionLbf', 'brakeDominoBondPsi']);
 
 /** Param keys that are still 'verify' (a param Eric has confirmed and promoted drops out of the list by itself). */
 function verifyKeys(keys: string[]): string[] {
@@ -141,7 +141,7 @@ function kneePinChecks(parts: Part[], p: Params, kp: KneePins): Draft[] {
         extreme
           ? it('Look for a 316 ball-lock pin, since the Extreme weather spec asks for 316.', ['The usual ball-lock pin is 17-4 PH stainless, which is not 316.', 'If no 316 pin exists, write 17-4 PH down as an accepted exception, or use the clevis pin and hitch-pin clip at the bottom hole.'])
           : it('Check the pin is stainless (17-4 PH is the usual grade and is accepted for the Standard weather spec).', ['Carbon or zinc-plated pins are not accepted: they rust and stain the oak.']),
-        it('Order ONE pin first, and test-fit it (the "Knee pins: fit and play" check) before you order the other three pins and the four flanged bushings.'),
+        it('Order ONE pin first, and test-fit it (the "Knee pins: fit and play" check) before you order the other three pins and the four bearing washers.'),
         it('Price the four pins before the order: the BOM carries about $25 each as an estimate, not a quote.', ['Ball-lock at the top hole only, and a clevis pin with a hitch-pin clip at the bottom hole, saves about $40 to $45 a sled but takes longer to remove and refit.']),
       ],
       passList: [
@@ -160,14 +160,16 @@ function kneePinChecks(parts: Part[], p: Params, kp: KneePins): Draft[] {
       title: 'Knee pins: fit and play in the sleeves',
       how: [
         it('Test the first pin before anything else is ordered or glued.', [
-          `The sleeve is ${fr(kp.sleeveOd)}" outside by ${fr(kp.sleeveId)}" inside; the pin is ${fr(kp.dia)}". Stock tube and bushings run a few thousandths under the pin.`,
+          `The sleeve is ${fr(kp.sleeveOd)}" outside by ${fr(kp.sleeveId)}" inside; the pin is ${fr(kp.dia)}". Stock tube runs a few thousandths under the pin.`,
+          `Cut the sleeves to length: ${fr(Math.floor(kp.B.hullSleeve.len * 16) / 16, 16)}" in the rail, ${fr(Math.floor(kp.T.hullSleeve.len * 16) / 16, 16)}" in the rib block (each stops against its washer), ${fr(kp.B.kneeSleeve.len, 16)}" in the knee leg and ${fr(kp.T.kneeSleeve.len, 16)}" in the tab.`,
+          `The bearing washers are ${fr(kp.washer.od, 16)}" across with a ${fr(kp.washer.id, 16)}" hole, ${fr(kp.washer.t, 16)}" thick, in a ${fr(kp.washer.cboreDia, 32)}" counterbore: try one in a scrap of oak and over the pin before you order the rest.`,
           'Open the bore of a sleeve with a reamer (.377 to .378 inch) on the drill press, then slide the pin through: it should go in by hand and rattle a little, about five thousandths of an inch of play, and no more.',
-          'If the reamed sleeve is too loose, buy bushings that are already bored for a 3/8" pin. Reaming only enlarges the bore of a bought piece; it is not machining the sled.',
+          'If the reamed sleeve is too loose, buy tube or a bushing already bored for a 3/8" pin. Reaming only enlarges the bore of a bought piece; it is not machining the sled.',
         ]),
         it('After the epoxy has cured, slide the pin through each sleeve again, and through both sleeves of a knee together with the knee pinned on the hull.', ['Check that the pin button works with the pin pushed all the way in, and that the balls clear the last sleeve by about ' + fr(kp.tipIn, 32) + '".']),
       ],
       passList: ['Every pin slides through every sleeve by hand with about five thousandths of an inch of play.', 'The knee unit goes on the hull and comes off with a hand push, no tool and no wobble you can feel at the foot.'],
-      ifFails: 'A sleeve that is too tight: ream it a little more. Too loose: replace it with a new piece of tube or a bushing with a smaller bore and ream that. Never open a sleeve after it is bedded in the hull: pull the knee and the pin and order a new bushing instead.',
+      ifFails: 'A sleeve that is too tight: ream it a little more. Too loose: replace it with a new piece of tube with a smaller bore and ream that. Never open a sleeve after it is bedded in the hull: pull the knee and the pin, break the sleeve out and bed a new one.',
       partIds: [...pinIds, ...sleeveIds],
       paramKeys: [],
       when: 'at assembly',
@@ -177,7 +179,7 @@ function kneePinChecks(parts: Part[], p: Params, kp: KneePins): Draft[] {
       id: 'knee-pin-clearance',
       title: 'Top pin: clearance from the box tie, the side sign and the D-ring washers',
       how: [
-        it('On the real sled, with the box rib glued in and the storage box and the signs dry-fitted, hold a knee unit at its place and look along the top pin line before the top bushing is bedded (the rib step).', [
+        it('On the real sled, with the box rib glued in and the storage box and the signs dry-fitted, hold a knee unit at its place and look along the top pin line before the top sleeve is bedded (the rib step).', [
           `The top pin goes ${fr(kp.T.fromRibFoot, 16)}" up from the foot of the box rib; the hole's lower edge is about ${fr(kp.rib.z1 - kp.rib.tieTopZ - kp.T.belowRibTop - kp.sleeveOd / 2, 16)}" above the box tie spacer.`,
           `The balls stand ${fr(kp.tipIn, 32)}" inside the rib: about ${fr(kp.clear.ballTipToBox, 16)}" is left to the storage box side.`,
           `The top of the tab is ${fr(kp.clear.tabTopToWasher, 16)}" under the bottom of the D-ring fender washers.`,
@@ -186,11 +188,25 @@ function kneePinChecks(parts: Part[], p: Params, kp: KneePins): Draft[] {
         it('Slide a rod through the tab sleeve and the hole, and look for rubbing.'),
       ],
       passList: ['Every gap above is within 1/8" of the number given, and nothing touches the pin tip, the tab or the washers.'],
-      ifFails: 'Cut the sign back, move the box side, or trim the tab (the knee unit is bench work: a new tab is an hour); do it before the top bushing is bedded, then run the check again.',
+      ifFails: 'Cut the sign back, move the box side, or trim the tab (the knee unit is bench work: a new tab is an hour); do it before the top sleeve is bedded, then run the check again.',
       partIds: ids(parts, /^(brake-tab|brake-pin-T|brake-sleeve-T|side-rib-box|box-tie|side-rib-[LR]1|sign-[LR]|lash-[LR]1)/),
       paramKeys: [],
       when: 'at assembly',
       refs: ['D-78', 'D-76'],
+    },
+    {
+      id: 'knee-tab-joint',
+      title: 'Knee tab: the Domino joint in epoxy',
+      how: [
+        it(`Make a scrap joint like the real one: two pieces of the tab oak joined face to end with ${kp.tab.dominos ? `${kp.tab.dominos.count} ${kp.tab.dominos.name} Dominos` : 'the Dominos'} in epoxy, the same mortises and the same glue.`, ['Let it cure as long as the real parts will.']),
+        it('Break it in shear in a vise or with a lever and a scale, and look at the broken faces.', [`The design uses ${p.brakeDominoBondPsi} psi on the epoxy faces (${lbl('brakeDominoBondPsi')}); if your joint fails at a lower stress, enter the lower figure and re-run the checks.`, 'The wood should tear, not the glue line.']),
+      ],
+      passList: ['The scrap joint breaks in the wood, not at the Dominos or the glue line.', `It holds at least ${p.brakeDominoBondPsi} psi on the Domino faces.`],
+      ifFails: 'Cut the mortises a hair tighter, use thickened epoxy and clamp longer; if the figure is still low, enter it in the design, and add a third Domino or a screw only if the analysis row asks for it.',
+      partIds: ids(parts, /^(brake-tab|brake-knee)-[LR]$/),
+      paramKeys: verifyKeys(['brakeDominoBondPsi']),
+      when: 'before cutting',
+      refs: ['D-78'],
     },
     {
       id: 'knee-seat',

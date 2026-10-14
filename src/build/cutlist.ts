@@ -959,8 +959,8 @@ function metalRows(parts: Part[], warnings: string[], stepOf?: ReadonlyMap<strin
     if (!family) { warnings.push(`${partKey(x)}: unrecognized metal material '${x.material}'`); continue; }
     const w: string[] = [];
     const d0 = metalDims(x, w);
-    // A pin sleeve is cut a hair long (up to the next 1/16 in) and filed flush after the epoxy has set.
-    const d = family === 'Stainless tube' ? { ...d0, l: Math.ceil(d0.l * 16 - 1e-6) / 16 } : d0;
+    // A pin sleeve is cut a hair SHORT (down to the 1/16 in): it must not stand proud of the wood, and nothing is filed.
+    const d = family === 'Stainless tube' ? { ...d0, l: Math.floor(d0.l * 16 + 1e-6) / 16 } : d0;
     warnings.push(...w);
     const section = metalSection(x, family, d);
     const key = `${partKey(x)}|${dimKey(d)}`;

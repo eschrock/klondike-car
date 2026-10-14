@@ -682,6 +682,12 @@ function kneePlan(parts: Part[], p: Params): Plan | null {
       if (pn && tab) {
         // the tab's footprint on the rear face (it stands above the knee's top end), and the heights of the two pin holes
         g.push(guideEl(polyD([[tabU[0], tabV[0]], [tabU[1], tabV[0]], [tabU[1], tabV[1]], [tabU[0], tabV[1]]], T, true), { dashed: true }), label(T, [tabU[1] + 0.1, tabV[1] - 0.2], 'tab (glued to this face)', 0.13));
+        const dm = tab.dominos;
+        if (dm) for (const zz of dm.zs) {
+          const uc = U(dm.y), vc = V(zz);
+          g.push(guideEl(polyD([[uc - dm.tIn / 2, vc - dm.wIn / 2], [uc + dm.tIn / 2, vc - dm.wIn / 2], [uc + dm.tIn / 2, vc + dm.wIn / 2], [uc - dm.tIn / 2, vc + dm.wIn / 2]], T, true), { dashed: true }));
+        }
+        if (dm) g.push(label(T, [U(dm.y) + 0.35, V(dm.zs[0]) - 0.05], `${dm.count} Domino mortises (${dm.name}), in this rear face`, 0.12));
         g.push(guideEl(polyD([[legU[0], bPt[1]], [legU[1], bPt[1]]], T, false), { dashed: true }), label(T, [legU[0] + 0.1, bPt[1] + 0.08], `bottom pin hole: ${inch(bPt[1])} up`, 0.13));
         g.push(guideEl(polyD([[tabU[0] - 0.4, tPt[1]], [tabU[1] + 0.4, tPt[1]]], T, false), { dashed: true }), label(T, [tabU[1] + 0.5, tPt[1] - 0.05], `top pin hole: ${inch(tPt[1])} up`, 0.13));
       } else {

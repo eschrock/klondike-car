@@ -132,13 +132,21 @@ describe('D-78 the BOM with the pins on', () => {
       expect(kp.T.gripOrder - kp.T.stack).toBeLessThan(0.25 + 1e-9);
     });
 
-    it(`${name}: four flanged bushings (an estimate, not quoted) are bought for the hull`, () => {
-      const l = b.sections.find((s) => s.id === 'purchased')!.lines.filter((q) => (q.partIds ?? []).some((i) => /^brake-sleeve-[BT]-hull/.test(i)));
+    it(`${name}: four bearing washers (an estimate, not quoted) are bought for the hull, and no flanged bushing is`, () => {
+      const l = b.sections.find((s) => s.id === 'purchased')!.lines.filter((q) => (q.partIds ?? []).some((i) => /^brake-washer-[BT]-hull/.test(i)));
       expect(l.reduce((a, q) => a + q.qty, 0)).toBe(4);
-      for (const q of l) { expect(q.basis).toBe('estimate'); expect(q.notes).toMatch(/not quoted/); expect(q.description).toMatch(/flanged/); }
+      for (const q of l) { expect(q.basis).toBe('estimate'); expect(q.notes).toMatch(/not quoted/); expect(q.description).toMatch(/washer/); }
+      expect(JSON.stringify(b.sections)).not.toMatch(/flanged (sleeve )?bushing/i);
     });
 
-    it(`${name}: the four knee-side sleeves are cut from ONE 2 ft length of stainless tube, bought as one piece (an estimate)`, () => {
+    it(`${name}: the Dominos of the tab joint are in the BOM (${name === 'Standard' ? 'beech' : 'Sipo'}, 6x40) and only with the pins`, () => {
+      const dom = lines(b).find((q) => /Domino DF 500 6x40/.test(q.key));
+      expect(dom).toBeDefined();
+      expect(dom!.description).toMatch(w === WEATHER_SPEC.standard ? /beech/ : /Sipo/);
+      expect(lines(get('bolted', w).data.bom).some((q) => /Domino DF 500 6x40/.test(q.key))).toBe(false);
+    });
+
+    it(`${name}: the eight sleeves are cut from ONE 2 ft length of stainless tube, bought as one piece (an estimate)`, () => {
       const tube = b.sections.find((s) => s.id === 'metal')!.lines.find((l) => /tube 1\/2" OD x 3\/8" ID/.test(l.key))!;
       expect(tube).toBeDefined();
       expect(tube.key).toMatch(w === WEATHER_SPEC.standard ? /^18-8 \(304\)/ : /^316/);
@@ -150,10 +158,10 @@ describe('D-78 the BOM with the pins on', () => {
       expect(tube.notes).toMatch(/Order ONE pin first/);
       expect(tube.notes).not.toMatch(/check the (real )?tube/i);
       expect(tube.notes).toMatch(/bushing/); // the other way to buy them
-      // 2 x (1-3/4 knee leg, 1 tab): 4 tube sleeves; the hull sleeves are bought flanged bushings
+      // 2 x (11/16 rail, 1-1/16 rib block, 1-3/4 knee leg, 1 tab): 8 tube sleeves
       const rows = data.cutList.metal.filter((m) => m.family === 'Stainless tube');
-      expect(rows.reduce((a, r) => a + r.qty, 0)).toBe(4);
-      expect(rows.map((r) => r.cutLengthIn).sort((a, c) => a - c)).toEqual([1, 1.75]);
+      expect(rows.reduce((a, r) => a + r.qty, 0)).toBe(8);
+      expect(rows.map((r) => r.cutLengthIn).sort((a, c) => a - c)).toEqual([0.6875, 1, 1.0625, 1.75]); // hull sleeves 11/16 and 1-1/16 stop against their washers; cut a hair short
       for (const r of rows) expect(r.cutLengthIn * 16).toBeCloseTo(Math.round(r.cutLengthIn * 16), 6); // rounded UP to 1/16
       expect(tube.notes).toMatch(/2 × 1-3\/4"/);
       expect(tube.partIds ?? []).toBeDefined();
@@ -185,8 +193,8 @@ describe('D-78 the BOM with the pins on', () => {
       const sections: Record<string, number> = {};
       for (const s of bp.sections) sections[s.id] = Math.round((s.subtotalUsd - (bb.sections.find((q) => q.id === s.id)?.subtotalUsd ?? 0)) * 100) / 100;
       expect(Object.values(sections).reduce((a, v) => a + v, 0), name).toBeCloseTo(total, 1);
-      // four pins at $25 and four flanged bushings at $4, all estimates
-      expect(sections.purchased, name).toBe(116);
+      // four pins at $25 and four bearing washers at $1, all estimates
+      expect(sections.purchased, name).toBe(104);
       // one 24 in length of tube ($16) in, one 12 in piece of 1/8 x 2 flat bar ($15: the backing plates) out
       expect(sections.metal, name).toBe(1);
       // the knee bolts, nuts and washers (3/8-16 x 4, 26 nylock nuts and 16 fender washers of the sled) leave the fasteners
@@ -195,11 +203,11 @@ describe('D-78 the BOM with the pins on', () => {
       expect(sections.lumber, name).toBeLessThan(15);
       out[name] = { total, sections };
     }
-    // the pins cost more than the bolts they replace: about +$80 Standard and +$57 Extreme at the researched prices (ball-lock pins estimated at $25)
-    expect(out.Standard.total).toBeGreaterThan(70);
-    expect(out.Standard.total).toBeLessThan(125);
-    expect(out.Extreme.total).toBeGreaterThan(50);
-    expect(out.Extreme.total).toBeLessThan(110);
+    // the pins cost more than the bolts they replace: about +$117 Standard and +$118 Extreme (ball-lock pins estimated at $25, and a pack of 6x40 Dominos: $25 beech, $50 Sipo)
+    expect(out.Standard.total).toBeGreaterThan(100);
+    expect(out.Standard.total).toBeLessThan(135);
+    expect(out.Extreme.total).toBeGreaterThan(100);
+    expect(out.Extreme.total).toBeLessThan(135);
     // the leaner way (ball-lock at the top hole only, a clevis pin and hitch-pin clip at the bottom) saves about $40 to $45 against the 4 pins
     const alt = lineIn(get('pins', WEATHER_SPEC.standard).data.bom, 'purchased', /^brake-pin-B$/) ?? get('pins', WEATHER_SPEC.standard).data.bom.sections.find((s) => s.id === 'purchased')!.lines.find((q) => (q.partIds ?? []).some((i) => i.startsWith('brake-pin-B')))!;
     const saves = (alt.unitUsd - alt.alternatives![0].usd) * 2;
@@ -270,7 +278,7 @@ describe('D-78 the assembly with the pins on', () => {
       expect(t).toMatch(rx(`${fin(kp.B.fromRailRear)} from the finished rear end`));
       expect(t).toMatch(/1\/2" in from the end of the rail as it is now/); // the rail is still long at the rear
       expect(t).toMatch(rx(`(${fin(kp.B.fromRailRear + 0.5)} from the end)`));
-      expect(t).toMatch(rx(`${fin(kp.flange.cboreDia)} Forstner, ${fin(kp.flange.cboreDepth)} deep`)); // the flange counterbore, in the inboard face
+      expect(t).toMatch(rx(`${fin(kp.washer.cboreDia)} Forstner, ${fin(kp.washer.cboreDepth)} deep`)); // the flange counterbore, in the inboard face
       expect(t).toMatch(/INBOARD face/i);
       expect(t).toMatch(/5\/8" bit straight through/);
       expect(t).toMatch(/oversize on purpose/);
@@ -281,24 +289,24 @@ describe('D-78 the assembly with the pins on', () => {
       expect(stepById(data, 'frame').tools).toContain('fence and stop block');
     });
 
-    it(`${name}: the rib step drills the top hole 5/8" oversize in the rib BLOCK from the rib foot, with a drill block, and beds the flanged bushing around a rod through the knee's tab sleeve with the knee pinned on at the bottom pin`, () => {
+    it(`${name}: the rib step drills the top hole 5/8" oversize in the rib BLOCK from the rib foot, with a drill block, and beds the sleeve around a rod through the knee's tab sleeve with the knee pinned on at the bottom pin`, () => {
       const t = bySt('side-ribs');
-      expect(t).toMatch(/drill the top-pin hole through each box rib block and bed its flanged bushing/);
+      expect(t).toMatch(/drill the top-pin hole through each box rib block, epoxy its washer in and bed its sleeve/);
       expect(t).toMatch(/drill block/);
       expect(t).toMatch(/in from the REAR edge of the block/);
       expect(t).toMatch(rx(`${fin(kp.T.fromRibFoot)} up from the BOTTOM end of the rib, the foot`));
       expect(t).toMatch(/Measure from the foot, not from the top/);
       expect(t).not.toMatch(/rib head/i.test(t) ? /^$/ : /rib head/); // the hole is in the block, not the head
       expect(t).not.toMatch(/down from the TOP edge/);
-      expect(t).toMatch(rx(`${fin(kp.T.hullSleeve.len)} deep in all`));
-      expect(t).toMatch(rx(`${fin(kp.flange.cboreDia)} Forstner, ${fin(kp.flange.cboreDepth)} deep`));
+      expect(t).toMatch(rx(`${fin(kp.T.hullSleeve.len + kp.washer.t)} deep in all`));
+      expect(t).toMatch(rx(`${fin(kp.washer.cboreDia)} Forstner, ${fin(kp.washer.cboreDepth)} deep`));
       expect(t).toMatch(/oversize on purpose/);
       expect(t).toMatch(/release tape/);
       expect(t).toMatch(/waxed 3\/8" rod through the tab's sleeve/);
-      expect(t).toMatch(/push the bottom pin through the leg sleeve and the rail bushing/);
-      expect(t).toMatch(/plain end is flush with the web's outer face/);
+      expect(t).toMatch(/push the bottom pin through the leg sleeve and the rail sleeve/);
+      expect(t).toMatch(/outer end is then flush with the web's outer face/);
       expect(t).toMatch(/T-shaped like the rib/); // the filler follows the block
-      expect(t).toMatch(/resaw a 4\/4 offcut/);
+      expect(t).toMatch(/resaw it from a 4\/4 offcut/);
       expect(stepById(data, 'side-ribs').partIds).toEqual(expect.arrayContaining(['brake-sleeve-T-hull-L', 'brake-sleeve-T-hull-R']));
       const ids = data.steps.map((s) => s.id);
       expect(ids.indexOf('frame')).toBeLessThan(ids.indexOf('brake-knees'));
@@ -328,9 +336,11 @@ describe('D-78 the assembly with the pins on', () => {
       expect(t).toMatch(/Drill the top hole first and the bottom hole last/);
       expect(t).toMatch(/Mark the unit L or R/);
       expect(t).toMatch(/Epoxy a reamed sleeve into each hole/);
-      expect(t).toMatch(/Bed a flanged bushing in each rail, with its knee clamped on/);
+      expect(t).toMatch(/Bed a sleeve in each rail, against its washer, with its knee clamped on/);
       expect(t).toMatch(/release tape/);
-      expect(t).toMatch(/no screw is needed/i); // no new wood-screw size
+      expect(t).toMatch(/Dominos keep it square/); // no screw: no new wood-screw size
+      expect(t).toMatch(/Cut the Domino mortises before the tab is glued/);
+      expect(t).toMatch(/6×40 Dominos/);
       expect(t).not.toMatch(/Bolt each knee|nylock|backing plate|backers|clear of the bolt holes|bolted leg|\bpad\b.*\bknee\b.*\binboard/i);
       expect(t).not.toMatch(/with its top flat/);
       expect(s.tools).not.toContain('wrenches');
@@ -341,7 +351,7 @@ describe('D-78 the assembly with the pins on', () => {
     it(`${name}: the fit step puts the knee on bottom pin first, swings the tab onto the web, then the top pin, and prints the tire gaps; REMOVAL and REFIT are clear steps; the chock rides with its knee; Transport mode says the knees come off`, () => {
       const hang = bySt('hang');
       expect(hang).toMatch(/Fit the brake knees, each with its flap on/);
-      expect(hang).toMatch(/Push the bottom pin through the knee leg and the rail bushing first/);
+      expect(hang).toMatch(/Push the bottom pin through the knee leg and the rail sleeve first/);
       expect(hang).toMatch(/the tab is outside the web/);
       expect(hang).toMatch(rx(`the knee's rear face ${fin(bg.knee.x0 - (bg.O[0] + bg.r))} ahead of the tire front`));
       expect(hang).toMatch(rx(`the tab's bottom edge ${fin(kp.tab.z0 - (bg.O[1] + bg.r))} above the tire top`));
@@ -366,7 +376,7 @@ describe('D-78 the assembly with the pins on', () => {
       // the flap step says the flap comes off WITH the knee, and the finish step touches the knee units and the bushings up
       expect(bySt('brake-flaps')).toMatch(/Removable, knee and flap together/);
       expect(bySt('finish')).toMatch(/Touch up the brake knee units/);
-      expect(bySt('finish')).toMatch(/Mask and touch up around the hull bushings/);
+      expect(bySt('finish')).toMatch(/Mask and touch up around the hull sleeves/);
     });
 
     it(`${name}: no knee-bolt, backing-plate or backer text, no decision id, no part key and no leftover token in any step`, () => {
@@ -502,17 +512,17 @@ describe('D-78 the forms, drawings, finishing and package with the pins on', () 
       for (const n of ['brake-tab', 'brake-sleeve-B-knee', 'brake-sleeve-T-tab']) expect(sheet(n), n).toBeDefined(); // the hull bushings are bought: no drawing
       expect(data.partDrawings.some((s) => /brake-(backer|backplate)/.test(s.partNo))).toBe(false);
       const holes = (partNo: string) => sheet(partNo).features.filter((f) => f.kind === 'hole');
-      expect(holes("rail").filter((f) => /flanged bushing/i.test(f.text))).toHaveLength(1);
-      expect(holes("rail").find((f) => /flanged bushing/.test(f.text))!.text).toMatch(/5\/8" hole, through.*16-13\/16" from the REAR end, 1-1\/2" from the TOP edge/); // oversize, bedded round the knee's sleeve
+      expect(holes("rail").filter((f) => /5\/8" hole/.test(f.text))).toHaveLength(1);
+      expect(holes("rail").find((f) => /5\/8" hole/.test(f.text))!.text).toMatch(/5\/8" hole, through.*16-13\/16" from the REAR end, 1-1\/2" from the TOP edge/); // oversize, bedded round the knee's sleeve
       expect(holes('brake-tab')).toHaveLength(1);
       expect(holes('brake-tab')[0].text).toMatch(/33\/64" hole, through/);
       expect(holes('brake-tab')[0].text).toMatch(new RegExp(`1" from the REAR edge, ${rx(fin(kp.T.z - kp.tab.z0)).source} from the BOTTOM (edge|end)`));
       expect(holes('side-rib-box').filter((f) => /5\/8" hole/.test(f.text))).toHaveLength(1);
-      expect(holes('side-rib-box').find((f) => /5\/8" hole/.test(f.text))!.text).toMatch(rx(`1" from the REAR edge, ${fin(kp.T.fromRibFoot)} from the BOTTOM end`));
+      expect(holes('side-rib-box').find((f) => /5\/8" hole/.test(f.text))!.text).toMatch(rx(`${fin(kp.rib.blockW / 2)} from the REAR edge, ${fin(kp.T.fromRibFoot)} from the BOTTOM end`));
       expect(holes('brake-knee').filter((f) => /33\/64" hole/.test(f.text))).toHaveLength(1);
       expect(holes('brake-knee').filter((f) => /INBOARD edge: \d+(-\d+\/\d+)?" from the BOTTOM end/.test(f.text))).toHaveLength(1); // no second, pin-clearance hole at the sleeve
       const words = (partNo: string): string => sheet(partNo).svg.replace(/<[^>]+>/g, ' ').replace(/&quot;|&#39;|&apos;/g, "'").replace(/\s+/g, ' ');
-      for (const n of ['brake-sleeve-B-knee', 'brake-sleeve-T-tab']) { expect(holes(n)).toHaveLength(0); expect(words(n)).toMatch(/piece of stainless tube or a flanged bushing/); expect(words(n)).toMatch(/five thousandths of an inch/); }
+      for (const n of ['brake-sleeve-B-knee', 'brake-sleeve-T-tab']) { expect(holes(n)).toHaveLength(0); expect(words(n)).toMatch(/piece of stainless tube, cut to length/); expect(words(n)).toMatch(/five thousandths of an inch/); }
       expect(words('brake-tab')).toMatch(/Glue the tab to the knee's rear face only/);
       expect(words('brake-tab')).toMatch(rx(`Grain runs up the ${fin(data.parts.find((x) => x.id === 'brake-tab-L')!.stock!.l)} side`.replace('"', "'")));
       expect(words('brake-tab')).toMatch(/AFTER it is glued to the knee/);
