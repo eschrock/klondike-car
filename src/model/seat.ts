@@ -85,14 +85,14 @@ export const GRIP_BACKING_H_IN = 1.25;
 export const GRIP_BACKING_END_IN = 0.75;
 /** Length of the backing strip for a board of length `bLen`. */
 export const gripBackingLen = (bLen: number): number => Math.max(1, bLen - 2 * GRIP_BACKING_END_IN);
-/** Oak cap over the strip (D-84): 3/8 in thick with a 1/8 in pocket for the strip and a 1/4 in cover; as tall as the gunwale band; 1/4 in longer than the strip at each end; 9/16 in holes for the bolt heads. */
+/** Oak cap over the strip (D-84): 3/8 in thick with a 1/8 in pocket for the strip and a 1/4 in cover; as tall as the gunwale band; as long as the board (its plumb ends line up with the board's); 9/16 in holes for the bolt heads. */
 export const GRIP_CAP_T_IN = 0.375;
 export const GRIP_CAP_POCKET_IN = GRIP_BACKING_T_IN;
-export const GRIP_CAP_END_IN = 0.25;
+export const GRIP_CAP_END_IN = 0.375;
 export const GRIP_CAP_HOLE_IN = 0.5625;
 /** Radius of the cap's four corners (in): the vertical ends meet the sheer at 82 and 98 degrees. */
 export const GRIP_CAP_CORNER_IN = 0.25;
-export const gripCapLen = (bLen: number): number => gripBackingLen(bLen) + 2 * GRIP_CAP_END_IN;
+export const gripCapLen = (bLen: number): number => bLen; // the cap is as long as the board and its plumb ends line up with the board's
 /** The two bolt rows, this far below the gunwale top (the lower stays inside the 1.5 in gunwale band, the heads clear the strip edges by 1/16 in): the pull is resisted by the couple between them (grab-board row). */
 export const GRIP_BOLT_ROWS_IN = [0.40625, 1.0625] as const;
 /** The screws are STAGGERED (D-84): three in the upper row, two in the lower row between them, so the fender washers on the board do not collide (rows are only 0.65 in apart). */
@@ -580,7 +580,7 @@ export function buildSeat(ctx: Ctx): Part[] {
     const sLen = gripBackingLen(bLen), cLen = gripCapLen(bLen);
     const sc = uShift + colShift; // u of the bolt-pattern center
     const sn0 = -(GRIP_BOLT_ROWS_IN[0] + GRIP_BOLT_ROWS_IN[1]) / 2 - GRIP_BACKING_H_IN / 2, sn1 = sn0 + GRIP_BACKING_H_IN;
-    const capOutlineU: Vec2[] = roundCorners([[F.uRear(nBot, cLen / 2) + colShift, nBot], [F.uFront(nBot, cLen / 2) + colShift, nBot], [F.uFront(0, cLen / 2) + colShift, 0], [F.uRear(0, cLen / 2) + colShift, 0]], [0, 1, 2, 3], GRIP_CAP_CORNER_IN); // the cap in the board's flat frame (vertical ends, corners eased)
+    const capOutlineU: Vec2[] = roundCorners([[F.uRear(nBot), nBot], [F.uFront(nBot), nBot], [F.uFront(0), 0], [F.uRear(0), 0]], [0, 1, 2, 3], GRIP_CAP_CORNER_IN); // the cap in the board's flat frame (vertical ends, corners eased)
     for (const { s: sg, tag } of SIDES) {
       const gid = gunwaleId(p, tag);
       // The board and the cap are flat; the side turns in toward the bow past x = 20 in, so they stand on the face at the board's FRONT end (the farthest in) and the rear is bedded (a gap of 1/16 in at most; the validator warns past that).
@@ -625,7 +625,7 @@ export function buildSeat(ctx: Ctx): Part[] {
           { type: 'glue', to: `seat-grip-backing-${tag}`, count: 1, size: 'the strip epoxied into the 1/8" pocket on the back of the cap', note: 'the pair is bedded on the outer band and held by the five screws' },
           { type: 'hole', to: `seat-grip-backing-${tag}`, count: bolts.length, diaIn: GRIP_CAP_HOLE_IN, size: `${bolts.length} holes ${GRIP_CAP_HOLE_IN}" (9/16") for the screw heads, routed through the cap on the screw lines`, at: bolts.map(([bu, bn]): Vec3 => [bu, bn, GRIP_CAP_T_IN / 2]) },
         ],
-        notes: `Oak cap over the backing strip: ${frac(GRIP_CAP_T_IN)}" oak, ${frac(cLen)}" long along the sheer and ${frac(L.railBand)}" tall (the height of the gunwale band). Both ends are plumb, to match the board; round the four corners to ${frac(GRIP_CAP_CORNER_IN)}". Cut a pocket in the back face for the strip: ${frac(GRIP_CAP_POCKET_IN)}" deep (set the router's depth stop), ${frac(GRIP_BACKING_H_IN + 1 / 16)}" × ${frac(sLen + 1 / 16)}" (1/32" bigger than the strip all round, for the epoxy), centered on the cap's length and ${frac((L.railBand - GRIP_BACKING_H_IN) / 2)}" down from the top edge; that leaves ${frac(GRIP_CAP_T_IN - GRIP_CAP_POCKET_IN)}" of oak over the strip, ${frac(GRIP_CAP_END_IN)}" of oak at each end and ${frac((L.railBand - GRIP_BACKING_H_IN) / 2)}" above and below. Rout ${GRIP_BOLTS} holes of ${frac(GRIP_CAP_HOLE_IN)}" through the ${frac(GRIP_CAP_T_IN - GRIP_CAP_POCKET_IN)}" cover, on the board's screw lines, for the screw heads. The cap hides the stainless strip from outside. The strip is epoxied into the pocket on the bench; the pair is bedded on the outer band and held by the ${GRIP_BOLTS} screws (never glued to the hull, so the board can come off).`,
+        notes: `Oak cap over the backing strip: ${frac(GRIP_CAP_T_IN)}" oak, ${frac(cLen)}" long along the sheer and ${frac(L.railBand)}" tall (the height of the gunwale band). Both ends are plumb, to match the board; round the four corners to ${frac(GRIP_CAP_CORNER_IN)}". Cut a pocket in the back face for the strip: ${frac(GRIP_CAP_POCKET_IN)}" deep (set the router's depth stop), ${frac(GRIP_BACKING_H_IN + 1 / 16)}" × ${frac(sLen + 1 / 16)}" (1/32" bigger than the strip all round, for the epoxy), set ${frac(Math.max(0, sc - sLen / 2 - F.uRear(-0.75)))}" in from the rear end and ${frac(Math.max(0, F.uFront(-0.75) - (sc + sLen / 2)))}" in from the front end (measured along the sheer at the pocket's mid-height), and ${frac((L.railBand - GRIP_BACKING_H_IN) / 2)}" down from the top edge; that leaves ${frac(GRIP_CAP_T_IN - GRIP_CAP_POCKET_IN)}" of oak over the strip and ${frac((L.railBand - GRIP_BACKING_H_IN) / 2)}" above and below it. Rout ${GRIP_BOLTS} holes of ${frac(GRIP_CAP_HOLE_IN)}" through the ${frac(GRIP_CAP_T_IN - GRIP_CAP_POCKET_IN)}" cover, on the board's screw lines, for the screw heads. The cap hides the stainless strip from outside. The strip is epoxied into the pocket on the bench; the pair is bedded on the outer band and held by the ${GRIP_BOLTS} screws (never glued to the hull, so the board can come off).`,
       });
       cap.massLb = Math.max(0, cap.massLb - (GRIP_CAP_POCKET_IN * GRIP_BACKING_H_IN * sLen * (p.oakDensityPcf / 1728)));
       cap.finish = { roundoverIn: 0.1 }; // a light edge ease: the oak is only 5/32" wide between the top screw holes and the edge

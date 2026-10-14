@@ -46,7 +46,7 @@ A **Klondike Derby sled on wheels** for Boy Scout Troop 455: a solid, wide, reus
 | Wheels | 10" pneumatic, 4 of them, wheelbase 44", both tracks 30" |
 | Deck height | 8" |
 | Side height | 4" at the bow rising in a concave sweep to 14" at the rear |
-| Empty mass (Standard spec) | **121.9 lb** (115.7 lb in Transport mode, 57.8 lb per person for the two-person lift; 112.4 lb and 56.2 lb with removable knees) |
+| Empty mass (Standard spec) | **122.0 lb** (115.7 lb in Transport mode, 57.8 lb per person for the two-person lift; 112.4 lb and 56.2 lb with removable knees) |
 
 ### Construction
 - **Body.** The two sides are sandwiches: a thin plywood web with oak bands glued on both faces at the top (gunwale) and bottom (chine). No grooves. The bow bulkhead is a shaped oak board that is the foot brace and a hand-hold. A 12 mm okoume deck rides on oak rails and 8-1/2" joists. The rear transom is 1/2" oak. Three oak **ribs** per side stand on the inside face of the web (box, mid and bow-post stations). Their heads carry the six D-ring tie-downs (zinc-plated steel Standard, 316 stainless Extreme), through-bolted on two bolts each (D-83), and they stiffen the sides sideways (D-76).
@@ -74,7 +74,7 @@ Two people lift it by the rear transom slot and the bow bulkhead hand-hold (the 
 | Finish | exterior spar urethane; epoxy only where needed | marine varnish over epoxy, gallon epoxy kit |
 | Thin sheet (follows the spec, D-80) | 6 mm Baltic birch | 6 mm okoume |
 | Drains, lid stay | drilled holes, plated lid support | stainless nipples, stainless friction stay |
-| Empty mass | 121.9 lb | 120.1 lb |
+| Empty mass | 122.0 lb | 120.2 lb |
 | BOM total (no shipping or tax) | **$1,377** | **$2,271** |
 
 ### Brake knees (`kneeMount`, D-78)
@@ -90,7 +90,7 @@ Default **Knees stay on (bolted, glued)**: the knee is epoxied to the rail and c
 | Tools | none | a 3/8" drive ratchet, 9/16" socket and 9/16" wrench in a 9" × 3" × 2" pouch (a tool, not sled mass; in the box in cargo mode only), eight spare lock nuts, anti-seize |
 | Tightening | snug | snug, then a quarter turn (about 35 in-lb; the quarter turn is the spec, more crushes the 7/8" washers and the oak); check snug before each outing, retighten after the first |
 | Time | flap off in about 15 s a side | knee and flap off in about 5 minutes a side (longer the first time), lying beside the sled and reaching in under the deck between the two crossmembers just ahead of the rear wheel |
-| Empty mass | 121.9 lb | 121.9 lb (identical); Transport mode drops 4.0 lb more in the viewer (2 knees and 2 straps 3.2 lb, their 8 bolt sets about 0.8 lb); the mass and lift rows count only the 3.2 lb |
+| Empty mass | 122.0 lb | 122.0 lb (identical); Transport mode drops 4.0 lb more in the viewer (2 knees and 2 straps 3.2 lb, their 8 bolt sets about 0.8 lb); the mass and lift rows count only the 3.2 lb |
 | Storage packing | 0.87 / 0.88 (Standard / Extreme) | the same in race mode; the pouch lies in the cargo-mode layer (floor-area fill 0.11 to 0.17) |
 | BOM | $1,377 / $2,271 | +$33.97 Standard (the tool pouch and anti-seize, estimates; you may already own them) |
 
@@ -116,7 +116,7 @@ Sheets are always full 4' × 8' (D-68). Solid parts that need more thickness tha
 
 ## 5. Key numbers (Standard spec, default parameters)
 
-- **Mass** 121.9 lb empty: white oak 57.4 lb, plywood 27.3 lb, wheels 12 lb, axles 5 lb, hardware, fasteners and everything else about 21 lb.
+- **Mass** 122.0 lb empty: white oak 57.4 lb, plywood 27.3 lb, wheels 12 lb, axles 5 lb, hardware, fasteners and everything else about 21 lb.
 - **Checks.** 54 engineering rows, **none fail**. One is marginal: turning radius (0.97 of its limit). The tightest passes: seat stowage 0.95, park-hold 0.88, storage packing 0.87, kingpin 0.86.
 - **Rider range.** Safe (nothing fails) **50 to 230 lb**; green (nothing marginal) **50 to 210 lb** (the grab-board row sets both ends, D-84; the brake-mount row also sets 210 with removable knees). The 150 lb rider is a plain pass; the 200 lb goal rider is green.
 - **Cargo.** The 200 lb payload passes. Capacity is **286 lb**; comfortable (still green) to **232 lb**. The rear beam under the seat sets both.

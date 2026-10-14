@@ -4,7 +4,7 @@ Where the design stands (2026-10-14). The sled itself is in [DESIGN.md](../DESIG
 
 ## Now
 - The design, analysis and build outputs are complete and deployed to GitHub Pages on every push to `main` once the tests pass.
-- **Cost pass done (D-79 to D-83, 2026-10-14).** Standard BOM **$1,377** (was $2,303), Extreme **$2,271** (was $3,119), excluding shipping and tax; estimates are 3.5% of the Standard total. Standard empty mass **121.9 lb**, 54 engineering rows with no failure (turn radius marginal at 0.97), riders safe **50 to 230 lb**, green **50 to 210 lb** (the grab-board row, D-84), cargo capacity **286 lb**. The Extreme spec's 6 mm okoume passes the side-web row (0.44).
+- **Cost pass done (D-79 to D-83, 2026-10-14).** Standard BOM **$1,377** (was $2,303), Extreme **$2,271** (was $3,119), excluding shipping and tax; estimates are 3.5% of the Standard total. Standard empty mass **122.0 lb**, 54 engineering rows with no failure (turn radius marginal at 0.97), riders safe **50 to 230 lb**, green **50 to 210 lb** (the grab-board row, D-84), cargo capacity **286 lb**. The Extreme spec's 6 mm okoume passes the side-web row (0.44).
 - Optional **removable brake knees** (D-78): same empty mass; +$34 in the BOM (tool pouch and anti-seize, estimates).
 - Waiting on Eric: the open choices below, measured Tacoma bed dimensions (Q-1), and the yard calls in the open items.
 
