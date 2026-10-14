@@ -19,6 +19,7 @@
  * is the whole flap group turned clockwise (seen with +x right, +z up) by `theta` about the pivot pin, so the pad hangs `brakePadGapIn` above the tread.
  */
 import { KNEE_MOUNT, type Params } from '../params';
+import { chooseDomino, type DominoSize } from './domino';
 import type { Layout } from './layout';
 import { LASH_HOLE_DZ_IN, LASH_WASHER, LASH_HOLE_DX_IN, ribBlockWidth, ribBlockZ0, sideRibStations, topPinZ, boxTieGeometry } from './side-ribs';
 
@@ -178,8 +179,10 @@ export interface PinSite {
   grip: number;
   stack: number;
   gripOrder: number;
-  /** The sleeve in the HULL (stays on the sled): |y| from its inner end to its outer end, and its length. */
+  /** The plain tube sleeve in the HULL (stays on the sled): |y| from its inner end (against the washer) to its outer end, and its length (the member thickness less the washer). */
   hullSleeve: { y0: number; y1: number; len: number };
+  /** The bearing washer let flush into the INBOARD face of the hull member (rail at B, box rib block at T): |y| from the member's inner face outboard by the washer thickness. */
+  hullWasher: { y0: number; y1: number };
   /** The sleeve in the KNEE side (comes off with the knee: in the knee leg at B, in the tab at T). */
   kneeSleeve: { y0: number; y1: number; len: number };
 }
@@ -199,8 +202,8 @@ export interface BrakePins {
   /** Web recess: how far the free web's outer face is inboard of the hull face (= the sandwich band thickness), and the web's outer face |y|. */
   webRecess: number;
   yWebOut: number;
-  /** The flange of the hull sleeves (flanged bushings), on the INBOARD face of the rail and of the rib block, let into a counterbore so it is flush: flange OD and thickness, counterbore diameter and depth. The balls of the pin bear on it. */
-  flange: { od: number; t: number; cboreDia: number; cboreDepth: number };
+  /** The bearing washers (stainless fender washers) on the INBOARD face of the rail and of the rib block, epoxied in a counterbore so they are flush; the pins' locking balls bear on them. OD, hole, thickness, counterbore diameter and depth (= thickness), and the ring of oak they bear on outside the sleeve (in^2). */
+  washer: { od: number; id: number; t: number; cboreDia: number; cboreDepth: number; ringArea: number };
   /** Thickness of each hull member the pin passes: the web, the band-strip filler and the box rib at T, and the rail at B. */
   hull: { web: number; filler: number; rib: number; rail: number };
   /** Bottom pin B: x = the knee's center, z = the rail's mid-height; distances from the rail's rear end (the rear transom's inner face) and from its top edge. */
@@ -217,6 +220,8 @@ export interface BrakePins {
    */
   tab: { x0: number; x1: number; z0: number; z1: number; t: number; yIn: number; yOut: number; glueArea: number;
     patch: { y0: number; y1: number; z0: number; z1: number; area: number; zc: number; ePin: number; eTab: number };
+    /** Festool Dominos through the tab's end face (x = `xFace`, the knee's rear face) into the knee's rear (UPRIGHT) layer, stacked in z below the top-pin sleeve and centered across the patch (y = `y`); null when none. Each is `tIn` thick (y), `wIn` wide (z), mortised `depthEach` into the tab and into the knee. */
+    dominos: { name: string; tool: string; count: number; xFace: number; y: number; zs: number[]; tIn: number; wIn: number; lIn: number; depthEach: number; zLo: number; zHi: number } | null;
     bearing: { x0: number; x1: number; z0: number; z1: number; area: number } };
   /** Clearances (in): the top of the tab to the bottom of the D-ring fender washers, and pin T's ball tip to the storage box side. (The side sign's forward end is cut back to keep `brakeTabClearIn` behind the tab, body.ts.) */
   clear: { tabTopToWasher: number; ballTipToBox: number };
@@ -523,13 +528,13 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
       const recess = L.sideBand;
       const yWebOut = yFace - recess;
       const webT = L.side - 2 * L.sideBand, fillerT = L.sideBand, ribT = p.sideRibDepthIn;
-      const sOd = p.brakeSleeveOdIn, tip = p.brakePinTipIn, head = p.brakePinHeadIn;
+      const sOd = p.brakeSleeveOdIn, tip = p.brakePinTipIn, head = p.brakePinHeadIn, wT = p.brakeWasherThickIn;
       // pin B: through the knee leg and the rail only, at the knee's center and the rail's mid-height
       const bx = (kx0 + kx1) / 2, bz = (zb + zt) / 2;
       const bTip = yRailIn - tip, bHead = yFace + legT + head;
       const B = {
         x: bx, z: bz, yTip: bTip, yHead: bHead, len: bHead - bTip, grip: railT + legT, stack: railT + legT, gripOrder: Math.ceil((railT + legT) * 4 - 1e-9) / 4,
-        hullSleeve: { y0: yRailIn, y1: yFace, len: railT }, kneeSleeve: { y0: yFace, y1: yFace + legT, len: legT },
+        hullSleeve: { y0: yRailIn + wT, y1: yFace, len: railT - wT }, hullWasher: { y0: yRailIn, y1: yRailIn + wT }, kneeSleeve: { y0: yFace, y1: yFace + legT, len: legT },
         fromRailRear: bx - (L.xRear + L.transom), belowRailTop: zt - bz, fromKneeRear: bx - kx0, fromKneeBottom: bz - zb,
       };
       // pin T: through the tab, the web, the filler and the box rib, above the box tie spacer
@@ -540,19 +545,31 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
       const tTip = yTIn - tip, tHead = tYOut + head;
       const T = {
         x: tx, z: tz, yTip: tTip, yHead: tHead, len: tHead - tTip, grip: ribT + fillerT + webT + tabT, stack: ribT + fillerT + webT + tabT, gripOrder: Math.ceil((ribT + fillerT + webT + tabT) * 4 - 1e-9) / 4,
-        hullSleeve: { y0: yTIn, y1: yWebOut, len: ribT + fillerT + webT }, kneeSleeve: { y0: yWebOut, y1: tYOut, len: tabT },
+        hullSleeve: { y0: yTIn + wT, y1: yWebOut, len: ribT + fillerT + webT - wT }, hullWasher: { y0: yTIn, y1: yTIn + wT }, kneeSleeve: { y0: yWebOut, y1: tYOut, len: tabT },
         fromRibFoot: tz - tg.z0, belowRibTop: st.top - tz, ahead: kx0 - tx,
       };
       const washerBotZ = st.top - L.railBand / 2 - LASH_HOLE_DZ_IN - LASH_WASHER.od / 2;
       const tabZ1 = tz + p.brakeTabAbovePinIn;
       const tab = { x0: tx - p.brakeTabEndIn, x1: kx0, z0: tabZ1 - tabH, z1: tabZ1, t: tabT, yIn: yWebOut, yOut: tYOut, glueArea: 0,
         patch: { y0: yFace, y1: Math.min(tYOut, yFace + legT), z0: 0, z1: 0, area: 0, zc: 0, ePin: 0, eTab: 0 },
-        bearing: { x0: 0, x1: 0, z0: 0, z1: 0, area: 0 } };
+        bearing: { x0: 0, x1: 0, z0: 0, z1: 0, area: 0 }, dominos: null as BrakePins['tab']['dominos'] };
       const ph = tab.patch;
       ph.z0 = Math.max(tab.z0, zb); ph.z1 = Math.min(tab.z1, zTopLeg);
       ph.area = Math.max(0, ph.z1 - ph.z0) * Math.max(0, ph.y1 - ph.y0);
       ph.zc = (ph.z0 + ph.z1) / 2; ph.ePin = tz - ph.zc; ph.eTab = (tab.z0 + tab.z1) / 2 - ph.zc;
       tab.glueArea = ph.area;
+      // Dominos through the tab's end face into the knee's rear layer: the largest that suits the layer, below the top-pin sleeve (their mortises reach back into the tab as far as the sleeve's x)
+      const nDom = Math.max(0, Math.round(p.brakeTabDominoCount));
+      const layerT = kneeLay[0].x1 - kneeLay[0].x0;
+      const dsz: DominoSize | null = nDom > 0 ? chooseDomino(p, { stockIn: layerT, hostIn: tab.x1 - tab.x0, widthIn: ph.z1 - ph.z0, stockAlongIn: kx1 - kx0 }) : null;
+      if (dsz) {
+        const dw = dsz.wMm / 25.4, dd = dsz.lMm / 2 / 25.4;
+        const zLo = ph.z0 + p.dominoEdgeIn;
+        const zHiRaw = ph.z1 - p.dominoEdgeIn;
+        const zHi = kx0 - dd < tx + sOd / 2 ? Math.min(zHiRaw, tz - sOd / 2 - p.dominoMinWallIn) : zHiRaw; // clear of the sleeve in the tab when the mortise reaches back to it
+        const zs = Array.from({ length: nDom }, (_, i) => (nDom === 1 ? (zLo + zHi) / 2 : zLo + dw / 2 + (i * (zHi - zLo - dw)) / (nDom - 1)));
+        tab.dominos = { name: dsz.name, tool: dsz.tool, count: nDom, xFace: kx0, y: (ph.y0 + ph.y1) / 2, zs, tIn: dsz.tMm / 25.4, wIn: dw, lIn: dsz.lMm / 25.4, depthEach: dd, zLo, zHi };
+      }
       const bw = ribBlockWidth(p), bz0 = ribBlockZ0(p, L, st);
       const bear = tab.bearing;
       bear.x0 = Math.max(tab.x0, tx - bw / 2); bear.x1 = Math.min(tab.x1, tx + bw / 2);
@@ -566,6 +583,12 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
       if (tz - bz0 < sOd / 2 + p.brakePinEdgeIn - 1e-9) issues.push('the box rib block starts too close under pin T');
       if (zTopLeg < tz + sOd / 2 + p.brakePinEdgeIn - 1e-9) issues.push('the knee leg does not stand up over the top-pin sleeve');
       if (kx0 < tx + LASH_HOLE_DX_IN + LASH_WASHER.od / 2 && zTopLeg > washerBotZ - p.brakeTabClearIn) issues.push('the knee leg reaches the D-ring washers');
+      if (nDom > 0 && !tab.dominos) issues.push('no Domino fits the knee tab joint');
+      if (tab.dominos && (tab.dominos.zHi - tab.dominos.zLo < nDom * tab.dominos.wIn - 1e-9)) issues.push('the Dominos do not fit up the glue patch');
+      const cb = p.brakeWasherOdIn / 2 + 1 / 32;
+      if (bz - cb < zb + 0.25 || bz + cb > zt - 0.25) issues.push('the bearing washer\'s counterbore comes too close to the rail edges');
+      if (tz - cb < tg.z1) issues.push('the top-pin bearing washer reaches down onto the box tie spacer');
+      if (tz + cb > st.top - L.railBand + 0.5) issues.push('the top-pin bearing washer is among the D-ring bolts');
       if (tab.z0 < zLeg) issues.push('the knee tab reaches down into the chine band');
       if (ph.area < 1.5) issues.push(`the glue patch of the knee tab is only ${ph.area.toFixed(2)} in2`);
       if (tab.z1 > washerBotZ - p.brakeTabClearIn + 1e-9) issues.push(`the knee tab top (${tab.z1.toFixed(2)}") is within ${p.brakeTabClearIn}" of the D-ring washers (bottom ${washerBotZ.toFixed(2)}")`);
@@ -575,7 +598,7 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
       if (bz - sOd / 2 < zb + 0.5 || bz + sOd / 2 > zt - 0.5) issues.push('pin B is too close to the rail edges');
       pins = {
         dia: p.brakePinDiaIn, sleeveOd: sOd, sleeveId: p.brakeSleeveIdIn, tipIn: tip, headIn: head, webRecess: recess, yWebOut,
-        flange: { od: p.brakeSleeveFlangeOdIn, t: p.brakeSleeveFlangeThickIn, cboreDia: p.brakeSleeveFlangeOdIn + 1 / 32, cboreDepth: p.brakeSleeveFlangeThickIn },
+        washer: { od: p.brakeWasherOdIn, id: p.brakeWasherIdIn, t: wT, cboreDia: p.brakeWasherOdIn + 1 / 16, cboreDepth: wT, ringArea: (Math.PI / 4) * (p.brakeWasherOdIn ** 2 - sOd * sOd) },
         hull: { web: webT, filler: fillerT, rib: ribT, rail: railT }, B, T,
         rib: { x: st.x, w: p.sideRibWidthIn, blockW: bw, blockZ0: bz0, z0: tg.z0, z1: st.top, tieTopZ: tg.z1, washerBotZ },
         tab, clear: { tabTopToWasher: washerBotZ - tab.z1, ballTipToBox: tTip - gBox }, issues,

@@ -115,7 +115,7 @@ export const pinsOnRib = (p: Params, st: Pick<RibStation, 'n' | 'kind'>): boolea
 export const ribBlockZ0 = (p: Params, L: Layout, st: RibStation): number => topPinZ(p, L, st) - p.brakeRibBlockBelowIn;
 /** Width of a rib's shaft: always the D-76 width (kept for callers; the pin block is `ribBlockWidth`). */
 export const ribShaftWidth = (p: Params, _st?: Pick<RibStation, 'n' | 'kind'>): number => p.sideRibWidthIn;
-export const ribBlockWidth = (p: Params): number => Math.max(p.sideRibHeadLengthIn, p.brakeSleeveOdIn + 2 * p.brakePinEdgeIn);
+export const ribBlockWidth = (p: Params): number => Math.max(p.brakeRibBlockWidthIn, p.sideRibHeadLengthIn, p.brakeSleeveOdIn + 2 * p.brakePinEdgeIn);
 
 /** D-78: z of the top pin's axis: the box tie spacer's top plus `brakeTopPinClearIn` (the pin cannot pass the tie, and its ball tip must clear it). */
 export const topPinZ = (p: Params, L: Layout, st: RibStation): number => boxTieGeometry(p, L, st).z1 + p.brakeTopPinClearIn;
@@ -214,13 +214,13 @@ export function buildSideRibs(ctx: Ctx): Part[] {
         const zPin = topPinZ(p, L, st);
         rib.joints.push({ type: 'hole', to: `brake-sleeve-T-hull-${tag}`, count: 1, diaIn: p.brakeSleeveOdIn, at: [[0, zPin, dep / 2]],
           size: `1 x ${frac(p.brakeSleeveOdIn)}" hole for the top-pin sleeve, centered across the rib's ${frac(bw)}" full-width block (${frac(bw / 2)}" from each edge; the block runs ${frac(p.brakeRibBlockBelowIn)}" below the pin up to the head), ${(zPin - zFoot).toFixed(2)}" up from the rib's bottom end and ${(st.top - zPin).toFixed(2)}" below the gunwale top, square to the side`,
-          note: `D-78: drilled from the outside through the web, the filler and the rib after the rib is glued in (a drill block square to the side); the stainless flanged bushing is epoxied in from the inside, its plain end flush with the web's outer face and its flange flush with the rib's inner face. The knee's top pin (a ball-lock pin) passes through it, ${frac(p.brakeTopPinClearIn)}" above the top of the box tie spacer (no pin can pass the spacer).` });
+          note: `D-78: drilled from the outside through the web, the filler and the rib after the rib is glued in (a drill block square to the side); the stainless sleeve is epoxied in, its outer end flush with the web's outer face and its inner end against the bearing washer let into the rib's inner face. The knee's top pin (a ball-lock pin) passes through it, ${frac(p.brakeTopPinClearIn)}" above the top of the box tie spacer (no pin can pass the spacer).` });
       }
       if (pinsOnRib(p, st)) {
-        const zPin = topPinZ(p, L, st), fl = { d: p.brakeSleeveFlangeOdIn + 1 / 32, t: p.brakeSleeveFlangeThickIn };
-        rib.joints.push({ type: 'hole', to: `brake-sleeve-T-hull-${tag}`, count: 1, diaIn: fl.d, at: [[0, zPin, dep]],
-          size: `1 x ${(Math.round(fl.d * 1000) / 1000).toString()}" counterbore ${frac(fl.t)}" deep in the rib's INNER face, centered on the top-pin hole (${(zPin - zFoot).toFixed(2)}" up from the rib's bottom end)`,
-          cut: { kind: 'counterbore', dia: fl.d, depth: fl.t, what: 'the flange of the top-pin bushing, flush with the rib\'s inner face' } });
+        const zPin = topPinZ(p, L, st), wd = { d: p.brakeWasherOdIn + 1 / 16, t: p.brakeWasherThickIn };
+        rib.joints.push({ type: 'hole', to: `brake-washer-T-hull-${tag}`, count: 1, diaIn: wd.d, at: [[0, zPin, dep]],
+          size: `1 x ${(Math.round(wd.d * 10000) / 10000).toString()}" (${frac(wd.d)}") counterbore ${(Math.round(wd.t * 10000) / 10000).toString()}" deep in the rib's INNER face, centered on the top-pin hole (${(zPin - zFoot).toFixed(2)}" up from the rib's bottom end)`,
+          cut: { kind: 'counterbore', dia: wd.d, depth: wd.t, what: 'the bearing washer of the top pin, flush with the rib\'s inner face' } });
       }
       if (hasRing) rib.joints.push({ type: 'hole', to: `lash-${tag}${st.n}`, count: LASH_BOLTS, size: `${frac(LASH_BOLT_DIA_IN + 1 / 64)}" (#8 clearance) through the head, the inner band, the web and the outer band`, at: holeAt.map((q) => [q[0], q[1], dep / 2] as Vec3), note: 'drilled with the D-ring plate as the template, square to the side' });
       parts.push(rib);

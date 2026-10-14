@@ -1495,7 +1495,7 @@ const defs = {
   brakeRibBlockBelowIn: {
     label: 'Box rib: full-width block below the top pin', group: 'brake', unit: 'in',
     default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-78',
-    note: 'D-78: with the pins the box rib is as wide as its head (sideRibHeadLengthIn) from this far below the top pin up to the head, so the 1/2 in sleeve has 3/4 in of oak each side (a 3/4 in shaft would leave 1/8 in and split). Below that it is the normal shaft. The band-strip filler behind it follows.',
+    note: 'D-78: with the pins the box rib is a full-width block (brakeRibBlockWidthIn) from this far below the top pin up to the head, so the 1/2 in sleeve has oak all round (a 3/4 in shaft would leave 1/8 in and split). Below that it is the normal shaft. The block\'s width is brakeRibBlockWidthIn. The band-strip filler behind it follows.',
   },
 
   brakeKneeTopAbovePinIn: {
@@ -1504,16 +1504,34 @@ const defs = {
     note: 'D-78: the pin pushes the tab forward against the knee, so the knee leg has to stand up behind the whole sleeve (0.25 in radius) with oak to spare: its top is this far over the pin center (about 15.15 in). Only the leg (against the hull) goes up; the arm and the roof keep their D-77 height. Stays clear of the reflector and the D-ring washers.',
   },
 
-  brakeSleeveFlangeOdIn: {
-    label: 'Hull sleeve flange outside diameter', group: 'brake', unit: 'in',
-    default: 0.75, min: 0.625, max: 1, step: 0.0625, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the two sleeves in the hull (rail, box rib) are flanged bushings, flange on the INBOARD face, let into a shallow counterbore so the flange is flush. The ball-lock balls bear on the flange, not on bare wood. Bought ready-made, stainless by weather spec.',
+  brakeWasherOdIn: {
+    label: 'Hull bearing washer outside diameter (stainless fender washer)', group: 'brake', unit: 'in',
+    default: 1.25, min: 1, max: 1.5, step: 0.0625, status: 'assumed', ref: 'D-78',
+    note: 'D-78: the pins\' locking balls bear on a stainless flat (fender) washer let flush into the INBOARD face of the rail and of the box rib block, epoxied in, with the sleeve ending against it. A 1-1/4 in washer gives about 1 in2 of oak bearing outside the sleeve (the 3/4 in flange it replaces gave 0.25 in2). Bought ready-made.',
   },
 
-  brakeSleeveFlangeThickIn: {
-    label: 'Hull sleeve flange thickness', group: 'brake', unit: 'in',
-    default: 0.0625, min: 0.03, max: 0.125, step: 0.0156, status: 'assumed', ref: 'D-78',
-    note: 'D-78: a standard flanged bushing has a 1/16 in flange; the counterbore in the rail and the box rib is this deep.',
+  brakeWasherIdIn: {
+    label: 'Hull bearing washer hole diameter', group: 'brake', unit: 'in',
+    default: 0.4375, min: 0.375, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-78',
+    note: 'D-78: a fender washer for a 3/8 in bolt has a 7/16 in hole (a 3/8 in hole would not pass the 3/8 in pin). The washer lies against the end of the sleeve and bears around the pin\'s hole.',
+  },
+
+  brakeWasherThickIn: {
+    label: 'Hull bearing washer thickness (= counterbore depth)', group: 'brake', unit: 'in',
+    default: 0.0625, min: 0.04, max: 0.125, step: 0.0156, status: 'assumed', ref: 'D-78',
+    note: 'D-78: a standard 3/8 in fender washer is about 1/16 in thick. The counterbore is exactly this deep (and 1/16 in wider than the washer) so it is flush with the rail\'s and the rib\'s inner face.',
+  },
+
+  brakeRibBlockWidthIn: {
+    label: 'Box rib block width (the full-width part that carries the top pin)', group: 'brake', unit: 'in',
+    default: 3, min: 2, max: 4, step: 0.25, status: 'assumed', ref: 'D-78',
+    note: 'D-78: centered on the top pin. 3 in puts the pin 1-1/2 in from the block\'s ends (the near-end splitting check at 2 in was 1.7 over). Never narrower than the rib head (sideRibHeadLengthIn). On the inside face of the side web: clear of the box (whose fore end is further in), the joists (lower), the sign backing strips and the knee.',
+  },
+
+  brakeTabDominoCount: {
+    label: 'Knee tab Dominos (through the tab\'s end into the knee)', group: 'brake', unit: '',
+    default: 2, min: 0, max: 3, step: 1, status: 'assumed', ref: 'D-78, D-35',
+    note: 'D-78: Festool Dominos (beech for Standard, Sipo for Extreme, as the other Dominos), grain along the knee\'s upright rear layer, set in epoxy through the tab\'s end face into the knee\'s rear layer, stacked up the glue patch below the top pin sleeve. They take the shear and the pull-off of the tab on the knee that the 3 in2 glue patch alone does not. Size chosen by chooseDomino (6x40 at the defaults).',
   },
 
   brakeTabEndIn: {
@@ -1548,8 +1566,8 @@ const defs = {
 
   brakeTopPinClearIn: {
     label: 'Top pin center above the box tie spacer top', group: 'brake', unit: 'in',
-    default: 0.625, min: 0.5, max: 2, step: 0.125, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the top pin goes through the box rib above the box tie spacer, which no pin can pass (and whose far side the ball cannot reach). Center 5/8 in above the tie top leaves 3/8 in of rib under the 1/2 in sleeve and about 1/4 in from the ball tip to the tie.',
+    default: 0.7, min: 0.5, max: 2, step: 0.05, status: 'assumed', ref: 'D-78',
+    note: 'D-78: the top pin goes through the box rib above the box tie spacer, which no pin can pass (and whose far side the ball cannot reach). The 1-1/4 in bearing washer on the rib\'s inner face reaches 5/8 in below the pin center, so 0.7 in keeps it above the spacer\'s top; it also keeps the knee leg top (3/4 in over the pin) under the side reflector.',
   },
 
   brakePinEdgeIn: {

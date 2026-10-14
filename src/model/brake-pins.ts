@@ -42,39 +42,59 @@ export function buildKneePinParts(ctx: Ctx, g: BrakeGeom, sgn: 1 | -1, tag: 'L' 
       note: 'drilled on the drill press with the tab square to the table; the stainless sleeve is epoxied in flush with both faces' },
     { type: 'pin', to: `brake-pin-T-${tag}`, count: 1, diaIn: pn.dia, size: `${frac(pn.dia)}" ball-lock pin through the tab's sleeve and on through the hull sleeve`, at: [at(tab, [pn.T.x, sgn * mid(tb.yIn, tb.yOut), pn.T.z])] },
   ];
+  const dm = tb.dominos;
+  if (dm) tab.joints.push({ type: 'domino', to: `brake-knee-${tag}`, count: dm.count, size: `${dm.name} (${dm.tool})`,
+    at: dm.zs.map((z) => at(tab, [dm.xFace, sgn * dm.y, z])),
+    note: `${dm.count} Dominos in the tab's end face (the face against the knee), each ${f2(dm.wIn)}" wide up the face and ${f2(dm.tIn)}" thick, ${f2(dm.depthEach)}" deep into the tab and the same into the knee's rear layer (grain running up in both, so the Domino's grain matches). Centers ${dm.zs.map((z) => f2(z - tb.z0)).join('" and ')}" up from the tab's bottom, ${f2(dm.y - tb.yIn)}" in from the tab's inboard face; the topmost stays ${f2(pn.T.z - pn.sleeveOd / 2 - (dm.zs[dm.zs.length - 1] + dm.wIn / 2))}" under the top-pin sleeve. Mortise the knee's rear face and the tab's end face from the same layout (a stop on the Domino cutter), dry-fit, then glue with epoxy.` });
   out.push(tab);
 
   // ── The four sleeves: stainless tube, cut to length ──
   const tubeLb = (len: number) => ((Math.PI / 4) * (sOd * sOd - sId * sId) * len) * steelLb;
-  const fl = pn.flange;
-  const flangeLb = (Math.PI / 4) * (fl.od * fl.od - sOd * sOd) * fl.t * steelLb; // the flange is the part of the bushing outside the tube, let into the wood so it is flush
   const sleeve = (key: 'B' | 'T', side: 'hull' | 'knee', x: number, z: number, y0: number, y1: number, host: string, step: number, extra: string): Part => {
     const len = y1 - y0;
     const id = key === 'B' ? (side === 'hull' ? `brake-sleeve-B-hull-${tag}` : `brake-sleeve-B-knee-${tag}`) : (side === 'hull' ? `brake-sleeve-T-hull-${tag}` : `brake-sleeve-T-tab-${tag}`);
     const partNo = id.replace(/-[LR]$/, '');
     const pinId = `brake-pin-${key}-${tag}`;
     const part = cylinder(ctx, {
-      id, partNo, name: `Brake ${key === 'B' ? 'bottom' : 'top'}-pin ${side === 'hull' ? 'flanged bushing in the hull' : key === 'B' ? 'sleeve in the knee leg' : 'sleeve in the tab'} ${tag} (${stainlessName(p)})`, group: 'brake', mat: 'steel', kind: side === 'hull' ? 'purchased' : 'metal', fab: side === 'hull' ? 'buy' : 'bandsaw', step,
-      material: side === 'hull' ? `${stainless(p)} flanged bushing ${frac(sOd)}" OD x ${frac(sId)}" ID, ${frac(fl.od)}" flange` : `${stainless(p)} tube ${frac(sOd)}" OD x ${frac(sId)}" ID`, center: [x, yMid(y0, y1), z], axis: 'y', radius: sOd / 2, length: len, wall,
+      id, partNo, name: `Brake ${key === 'B' ? 'bottom' : 'top'}-pin sleeve in the ${side === 'hull' ? (key === 'B' ? 'rail' : 'box rib') : key === 'B' ? 'knee leg' : 'tab'} ${tag} (${stainlessName(p)})`, group: 'brake', mat: 'steel', kind: 'metal', fab: 'bandsaw', step,
+      material: `${stainless(p)} tube ${frac(sOd)}" OD x ${frac(sId)}" ID`, center: [x, yMid(y0, y1), z], axis: 'y', radius: sOd / 2, length: len, wall,
       removable: side === 'knee', explode: [0, sgn, 0.1],
-      sourcing: { vendor: side === 'hull'
-        ? `McMaster-Carr or similar (${stainless(p)} flanged sleeve bushing, ${frac(sOd)}" OD x ${frac(sId)}" ID, ${frac(fl.od)}" flange ${frac(fl.t)}" thick, close sliding fit for a ${frac(pn.dia)}" pin; the next stock length up, shortened to ${frac(len)}" at the plain end on the metal bandsaw and deburred)`
-        : `McMaster-Carr or Online Metals (${stainless(p)} tube or plain bushing, ${frac(sOd)}" OD x ${frac(sId)}" ID, close sliding fit for a ${frac(pn.dia)}" pin; cut a ${frac(len)}" piece on the metal bandsaw and deburr the ends)`, costUsd: side === 'hull' ? 4 : 2 },
-      notes: `Stainless ${side === 'hull' ? 'flanged bushing' : 'sleeve'} ${frac(len)}" long, ${frac(sOd)}" outside and ${frac(sId)}" inside: the ${frac(pn.dia)}" pin bears on steel instead of on a hole in oak. ${extra} Epoxy it into its ${frac(sOd)}" hole with a smear of thickened epoxy (keep the epoxy out of the bore; run a waxed ${frac(pn.dia)}" rod through it while it cures). ${side === 'hull' ? `The flange is on the INBOARD end (the rail's inner face; the box rib's inner face) and sits in a ${frac(fl.cboreDia)}" counterbore ${frac(fl.cboreDepth)}" deep so it is flush: the pin's locking balls bear on it, not on bare wood. ` : ''}Cut square, deburr the ends and check the pin slides in and out by hand before the glue is on.${side === 'knee' ? ' ' + KIT_NOTE : ' It stays in the hull when the knee is off, flush with the surface.'}`,
+      sourcing: { vendor: `McMaster-Carr or Online Metals (${stainless(p)} tube or plain bushing, ${frac(sOd)}" OD x ${frac(sId)}" ID, close sliding fit for a ${frac(pn.dia)}" pin; cut a ${frac(len)}" piece on the metal bandsaw and deburr the ends)`, costUsd: 2 },
+      notes: `Stainless sleeve ${frac(len)}" long, ${frac(sOd)}" outside and ${frac(sId)}" inside: the ${frac(pn.dia)}" pin bears on steel instead of on a hole in oak. ${extra} Epoxy it into its ${frac(sOd)}" hole with a smear of thickened epoxy (keep the epoxy out of the bore; run a waxed ${frac(pn.dia)}" rod through it while it cures). ${side === 'hull' ? `Its inboard end stops against the bearing washer let into the ${key === 'B' ? "rail's" : "box rib's"} inner face (${frac(pn.washer.t)}" shorter than the member). ` : ''}Cut square, deburr the ends and check the pin slides in and out by hand before the glue is on.${side === 'knee' ? ' ' + KIT_NOTE : ' It stays in the hull when the knee is off, flush with the surface.'}`,
     });
     const w = (yy: number): Vec3 => [x, sgn * yy, z];
-    part.massLb = side === 'hull' ? tubeLb(len - fl.t) + flangeLb : tubeLb(len);
+    part.massLb = tubeLb(len);
     part.joints = [
-      { type: 'glue', to: host, count: 1, note: side === 'hull' ? 'epoxy around the bushing in its hole and under the flange in its counterbore' : 'epoxy around the sleeve in its hole', at: [at(part, w(mid(y0, y1)))] },
+      { type: 'glue', to: host, count: 1, note: 'epoxy around the sleeve in its hole', at: [at(part, w(mid(y0, y1)))] },
       { type: 'pin', to: pinId, count: 1, diaIn: pn.dia, size: `${frac(sId)}" bore, ${frac(len)}" of bearing for the ${frac(pn.dia)}" ball-lock pin`, at: [at(part, w(mid(y0, y1)))] },
     ];
     return part;
   };
   const B = pn.B, T = pn.T;
-  out.push(sleeve('B', 'hull', B.x, B.z, B.hullSleeve.y0, B.hullSleeve.y1, `rail-${tag}`, STEP.frame, `It goes through the rail ${f2(B.fromRailRear)}" from the rail's rear end and ${f2(B.belowRailTop)}" below its top edge, flush with both faces of the rail.`));
+  out.push(sleeve('B', 'hull', B.x, B.z, B.hullSleeve.y0, B.hullSleeve.y1, `rail-${tag}`, STEP.frame, `It goes through the rail ${f2(B.fromRailRear)}" from the rail's rear end and ${f2(B.belowRailTop)}" below its top edge, its outer end flush with the rail's outer face and its inner end against the bearing washer.`));
   out.push(sleeve('B', 'knee', B.x, B.z, B.kneeSleeve.y0, B.kneeSleeve.y1, `brake-knee-${tag}`, STEP.brake, `It goes through the knee leg ${f2(B.fromKneeRear)}" from the knee's rear face and ${f2(B.fromKneeBottom)}" up from its bottom, flush with both faces of the leg.`));
-  out.push(sleeve('T', 'hull', T.x, T.z, T.hullSleeve.y0, T.hullSleeve.y1, `side-rib-${tag}1`, STEP.seatStorage, `It goes through the box rib, the filler behind it and the web, ${f2(T.fromRibFoot)}" up from the bottom of the rib and ${f2(T.belowRibTop)}" under the gunwale top, flush with the web's outer face and with the rib's inner face.`));
+  out.push(sleeve('T', 'hull', T.x, T.z, T.hullSleeve.y0, T.hullSleeve.y1, `side-rib-${tag}1`, STEP.seatStorage, `It goes through the box rib, the filler behind it and the web, ${f2(T.fromRibFoot)}" up from the bottom of the rib and ${f2(T.belowRibTop)}" under the gunwale top, its outer end flush with the web's outer face and its inner end against the bearing washer.`));
   out.push(sleeve('T', 'knee', T.x, T.z, T.kneeSleeve.y0, T.kneeSleeve.y1, `brake-tab-${tag}`, STEP.brake, `It goes through the tab, ${frac(p.brakeTabEndIn)}" in from the tab's rear end, flush with both faces of the tab.`));
+
+  // ── The two bearing washers (bought): stainless fender washers let flush into the hull members' inboard faces ──
+  const wa = pn.washer;
+  const washer = (key: 'B' | 'T', site: typeof B | typeof T, host: string, step: number, where: string): Part => {
+    const part = cylinder(ctx, {
+      id: `brake-washer-${key}-hull-${tag}`, partNo: `brake-washer-${key}-hull`, name: `Brake ${key === 'B' ? 'bottom' : 'top'}-pin bearing washer on the ${key === 'B' ? 'rail' : 'box rib'} ${tag} (${stainlessName(p)})`, group: 'brake', mat: 'fixed', kind: 'purchased', fab: 'buy', step,
+      massLb: ((Math.PI / 4) * (wa.od * wa.od - wa.id * wa.id) * wa.t) * steelLb, material: `${stainless(p)} flat (fender) washer ${frac(wa.od)}" OD x ${frac(wa.id)}" hole x ${frac(wa.t)}" thick`,
+      center: [site.x, yMid(site.hullWasher.y0, site.hullWasher.y1), site.z], axis: 'y', radius: wa.od / 2, length: wa.t, wall: (wa.od - wa.id) / 2, explode: [0, -sgn, 0.1],
+      sourcing: { vendor: `McMaster-Carr or similar (${stainless(p)} flat (fender) washer for a 3/8" bolt, ${frac(wa.od)}" OD, ${frac(wa.id)}" hole)`, costUsd: 1 },
+      notes: `Stainless fender washer, ${frac(wa.od)}" across, let into a ${(Math.round(wa.cboreDia * 10000) / 10000).toString()}" counterbore ${frac(wa.cboreDepth)}" deep in the ${where}, epoxied in so its face is flush with the wood (cut the counterbore first, then drill the pin hole through its center). The sleeve ends against its outer face; the pin passes the hole and its locking balls bear on the washer, spread over about ${f2(wa.ringArea)} square inches of oak outside the sleeve. It stays in the hull when the knee is off.`,
+    });
+    const c = at(part, [site.x, sgn * mid(site.hullWasher.y0, site.hullWasher.y1), site.z]);
+    part.joints = [
+      { type: 'glue', to: host, count: 1, note: 'epoxy in the counterbore, face flush', at: [c] },
+      { type: 'pin', to: `brake-pin-${key}-${tag}`, count: 1, diaIn: pn.dia, size: `${frac(wa.id)}" hole for the ${frac(pn.dia)}" ball-lock pin; the balls bear on the washer`, at: [c] },
+    ];
+    return part;
+  };
+  out.push(washer('B', B, `rail-${tag}`, STEP.frame, "rail's inner face"));
+  out.push(washer('T', T, `side-rib-${tag}1`, STEP.seatStorage, "box rib's inner face"));
 
   // ── The two ball-lock pins (bought) ──
   const pinMass = (len: number) => (Math.PI / 4) * pn.dia * pn.dia * (len - pn.headIn) * steelLb + p.brakePinHeadLb;
