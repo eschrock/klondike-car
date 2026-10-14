@@ -659,7 +659,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
         jumpChip('Build', b.coreUsd, b.coreEstimateShare, b.sections[0]?.id ?? 'lumber'),
         jumpChip('Bulk parts', b.bulkUsd, b.bulkEstimateShare, 'bulk'),
         jumpChip('Finishing touches', b.touchesUsd, b.touchesEstimateShare, 'touches')),
-      h('div', { class: 'muted small' }, `${pct(b.estimateShare)} of this is an estimate (${usd(b.estimateUsd)}); the rest is quoted from a vendor page (each with its link and date) or by the model. Confirm prices before ordering.`),
+      h('div', { class: 'muted small' }, `${pct(b.estimateShare)} of this is an estimate (${usd(b.estimateUsd)}); the rest is quoted from a vendor page (each with its link and date), by the model, or is $0 shop stock you already own (marked "shop stock"). Confirm prices before ordering.`),
       h('h3', { class: 'bp-group' }, 'Jump to a section'),
       h('ul', { class: 'bp-subtotals', 'aria-label': 'Subtotals by section (jump to a table)' },
         ...b.sections.filter((x) => !kinds.has(x.id)).map((x) => {
@@ -708,7 +708,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
         table('bp-bom', ['Item', 'Qty', 'Unit price', 'Basis', 'Vendor', 'Extended'],
           lines.map((l) => [
             itemCell(l, shared),
-            `${l.qty % 1 ? l.qty.toFixed(2) : l.qty} ${l.unit}`, usd(l.unitUsd), l.basis === 'estimate' ? 'estimate' : 'quoted', vendorCell(l), h('strong', {}, usd(l.extUsd)),
+            `${l.qty % 1 ? l.qty.toFixed(2) : l.qty} ${l.unit}`, usd(l.unitUsd), l.basis === 'estimate' ? 'estimate' : l.basis === 'owned' ? 'shop stock' : 'quoted', vendorCell(l), h('strong', {}, usd(l.extUsd)),
           ]),
           title, { num: [1, 2, 5], nowrap: [4], qty: 1, end: 5, foot: [`${title} subtotal`, '', '', '', '', usd(subtotal)] }),
       ];

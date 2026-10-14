@@ -118,8 +118,8 @@ describe.each([['Standard', WEATHER_SPEC.standard], ['Extreme', WEATHER_SPEC.ext
     expect(pouch.notes).toMatch(/not part of the sled and not in its weight/);
     expect(pouch.notes).toMatch(/may already own/);
     const seize = lr.find((l) => l.key === 'anti-seize')!;
-    expect(seize.basis).toBe('estimate');
-    expect(seize.unitUsd).toBe(8);
+    expect(seize.basis).toBe('quoted'); // D-79 research: the Permatex 1 oz tube, $3.97 at Walmart (via search)
+    expect(seize.unitUsd).toBe(3.97);
     const nut = (ls: BomLine[]) => ls.find((l) => /nylon-insert lock nut 3\/8-16/.test(l.key))!;
     expect(nut(lr).key).toMatch(spec === WEATHER_SPEC.standard ? /^18-8/ : /^316/);
     // eight spares on top of the 26 the build uses: the stale "26 by the piece" note is restated
@@ -127,7 +127,7 @@ describe.each([['Standard', WEATHER_SPEC.standard], ['Extreme', WEATHER_SPEC.ext
     expect(nut(lf).needed ?? nut(lf).qty).toBe(26);
     expect(JSON.stringify(nut(lr))).not.toMatch(/26 by the piece/);
     if (spec === WEATHER_SPEC.standard) expect(JSON.stringify(nut(lr))).toMatch(/34 by the piece is 12\.24/);
-    expect(br.totalUsd).toBeGreaterThan(bf.totalUsd + 37);
+    expect(br.totalUsd).toBeGreaterThan(bf.totalUsd + 33); // pouch $30 + anti-seize $3.97 (+ spare nuts: already inside a bag under Standard)
     expect(br.totalUsd).toBeLessThan(bf.totalUsd + 43);
     expect(br.unpriced).toEqual([]);
   });

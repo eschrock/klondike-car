@@ -3,15 +3,15 @@
  *
  * Three oak ribs per side stand on the inside face of the sandwich side, glued to the web between the inner chine and gunwale bands and to the
  * inner bands, and stand `sideRibDepthIn` proud of the inner band faces. Each widens at the top to a head `sideRibHeadLengthIn` long, as tall as the
- * gunwale band and cut to the sheer, and the head carries a D-ring plate, through-bolted with four #8-32 stainless machine screws (head, inner band,
- * web, outer band; a fender washer outside, a nylock nut on the plate inside). The bases tie the side to the structure:
+ * gunwale band and cut to the sheer, and the head carries a bolt-on cargo D-ring (D-83: a 2-hole strap bracket), through-bolted with two 1/4-20 button-head
+ * bolts (head, inner band, web, outer band; a fender washer outside, a nylock nut on the bracket inside). The bases tie the side to the structure:
  *   1. the box rib (E1): an oak spacer epoxied between it and the storage box side, near the box's fore corner (the box is its base, study option D);
  *   2. the mid rib (E2): a knee on the joist nearest `sideRibMidXIn`, screwed down through the deck into it;
  *   3. the bow post (E3): a knee on the member nearest `sideRibFrontXIn` (the king beam at the defaults; the chain joist is the fallback, a verify item).
  * Between the bands the rib's back sits on a filler of band strip (it fills the band thickness down to the web), so the rib blank is one 3/4 in board.
  * They replace the six screwed lash doublers (D-41, D-47). Everything here is bandsawn from 4/4 offcuts and epoxied in after the deck is in.
  */
-import { STORAGE_LOCATION } from '../params';
+import { STORAGE_LOCATION, WEATHER_SPEC } from '../params';
 import { STEP, box, frac16 as frac, SIDES, stainless, dRingMat, type Ctx } from './build-utils';
 import { extPart, frameMat } from './body';
 import { transformPoint } from './bounds';
@@ -23,27 +23,27 @@ import { storageGeometry } from './storage';
 import type { Params } from '../params';
 import type { Part, Vec2, Vec3 } from './types';
 
-// ── The D-ring plate and its bolts (bought hardware) ──
-/** The D-ring bolt plate: length along the gunwale, height, plate thickness, and how far the folded ring stands off the head. */
-export const LASH_PLATE = { len: 1.5, tall: 0.9, thick: 0.125, folded: 0.4 } as const;
-/** Half the bolt spacing of the 4-hole plate along the gunwale and up it: holes 1-1/8" x 1/2". */
-export const LASH_HOLE_DX_IN = 0.5625;
-export const LASH_HOLE_DZ_IN = 0.25;
-export const LASH_BOLTS = 4;
-/** #8-32 stainless machine screw: shank diameter, tensile stress area and root (minor-diameter) area (ASME B1.1). */
-export const LASH_BOLT_DIA_IN = 0.164;
-export const LASH_BOLT_AT_IN2 = 0.014;
-export const LASH_BOLT_AR_IN2 = 0.0124;
-/** 3/4" fender washer for #8 (OD, hole, thickness) under the screw head on the outer band; the #8-32 nylock nut's height; threads to show past it. */
-export const LASH_WASHER = { od: 0.75, id: 0.188, t: 0.05 } as const;
-export const LASH_NYLOCK_IN = 0.172;
+// ── The D-ring bracket and its bolts (bought hardware, D-83: a bolt-on cargo D-ring with a 2-hole strap bracket, rated 233 lb working load) ──
+/** The D-ring bracket (VERIFY against the real part's holes): length along the gunwale, height, thickness, and how far the folded ring stands off the head. */
+export const LASH_PLATE = { len: 1.75, tall: 0.75, thick: 0.125, folded: 0.4 } as const;
+/** Half the bolt spacing of the 2-hole bracket along the gunwale (holes 1-1/4" apart), and up it (both holes at the head's mid height). */
+export const LASH_HOLE_DX_IN = 0.625;
+export const LASH_HOLE_DZ_IN = 0;
+export const LASH_BOLTS = 2;
+/** 1/4-20 button-head bolt: shank diameter, tensile stress area and root (minor-diameter) area (ASME B1.1: 0.0318 and 0.0269 in²). */
+export const LASH_BOLT_DIA_IN = 0.25;
+export const LASH_BOLT_AT_IN2 = 0.0318;
+export const LASH_BOLT_AR_IN2 = 0.0269;
+/** 1/4 fender washer, 3/4 in OD (OD, hole, thickness) under the bolt head on the outer band; the 1/4-20 nylock nut's height; threads to show past it. */
+export const LASH_WASHER = { od: 0.75, id: 0.281, t: 0.063 } as const;
+export const LASH_NYLOCK_IN = 0.3125;
 const LASH_THREADS_PAST_IN = 2 / 32;
-/** Stock lengths of #8-32 machine screws (in). */
-const MACHINE_SCREW_LENGTHS = [1, 1.25, 1.5, 1.75, 2, 2.25, 2.5];
-const LASH_MASS_LB = 0.1;
+/** Stock lengths of 1/4-20 button-head bolts (in). */
+const MACHINE_SCREW_LENGTHS = [1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3];
+const LASH_MASS_LB = 0.11;
 
 /** Knee screws: gauge, how far each sits from the rib face along the knee's foot (fraction of the foot), and the oak left under the head in the counterbore. */
-export const KNEE_SCREW_GAUGE = 6 as const;
+export const KNEE_SCREW_GAUGE = 8 as const; // D-82: #8 x 2-1/2, piloted
 export const KNEE_SCREW_AT = [0.35, 0.7] as const;
 export const KNEE_SCREW_SEAT_IN = 0.5;
 const KNEE_CBORE_DIA_IN = 0.375;
@@ -121,7 +121,7 @@ export function ribWasherSpan(st: RibStation): [number, number] {
   return [st.x - (LASH_HOLE_DX_IN + LASH_WASHER.od / 2) * c, st.x + (LASH_HOLE_DX_IN + LASH_WASHER.od / 2) * c];
 }
 
-/** The machine-screw length for the D-ring stack: washer + side sandwich + head + plate + nylock + 2 threads, rounded up to a stock length. */
+/** The bolt length for the D-ring stack: washer + side sandwich + head + plate + nylock + 2 threads, rounded up to a stock length. */
 export function lashBoltLength(p: Params): { need: number; len: number } {
   const need = LASH_WASHER.t + p.sideThicknessIn + p.sideRibDepthIn + LASH_PLATE.thick + LASH_NYLOCK_IN + LASH_THREADS_PAST_IN;
   return { need, len: MACHINE_SCREW_LENGTHS.find((l) => l >= need - 1e-9) ?? MACHINE_SCREW_LENGTHS[MACHINE_SCREW_LENGTHS.length - 1] };
@@ -177,7 +177,7 @@ export function buildSideRibs(ctx: Ctx): Part[] {
       let backArea = 0;
       for (let i = 0; i < outline.length; i++) { const [a1, b1] = outline[i], [a2, b2] = outline[(i + 1) % outline.length]; backArea += a1 * b2 - a2 * b1; }
       const finishCredit = -(Math.abs(backArea) / 2 / 144) * p.finishLbPerFt2;
-      const holeAt: Vec3[] = [[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([a, b]): Vec3 => [a * LASH_HOLE_DX_IN, (topAt(0) - L.railBand / 2) + b * LASH_HOLE_DZ_IN, 0]);
+      const holeAt: Vec3[] = [-1, 1].map((a): Vec3 => [a * LASH_HOLE_DX_IN, topAt(0) - L.railBand / 2, 0]);
       const hasRing = st.n === 2 ? nRings >= 1 : st.n === 1 ? nRings >= 2 : nRings >= 3;
       const baseText = st.kind === 'box'
         ? 'Its base is the storage box: the box tie spacer is epoxied between its inner face and the box side near the fore corner (study option D).'
@@ -185,13 +185,13 @@ export function buildSideRibs(ctx: Ctx): Part[] {
       const rib = extPart(ctx, {
         id: ribId, partNo: RIB_PART_NO[st.n], name: `Side ${RIB_NAME[st.n]} ${tag}${st.n}`, group: 'body', mat: 'oak', step: STEP.seatStorage, grain: 'y', fab: 'bandsaw',
         outline, depth: dep, transform: frameMat(ex, ey, ez, o), center: [st.x, s * (st.yIn - dep / 2), (L.deckTop + st.top) / 2], extraLb: fillerLb + finishCredit,
-        notes: `D-76: oak rib on the inside face of the ${s > 0 ? 'left' : 'right'} side at x = ${st.x.toFixed(1)}", ${frac(st.top - zFoot)}" tall (${st.kind === 'box' ? 'from the bottom of its box tie spacer' : 'from the deck'} to the gunwale top), bandsawn from a 4/4 offcut planed to ${frac(dep)}" (grain up the rib): a ${frac(w)}" wide shaft that widens to a ${frac(hl)}" head as tall as the gunwale band, its top cut to the sheer${Math.abs(st.dTurn) > 0.01 ? ` (the side draws in ${(yaw * 180 / Math.PI).toFixed(1)}° here; the rib stands square to it)` : ''}. It stands ${frac(dep)}" proud of the inner bands: its back sits on the inner chine and gunwale bands, and between them on a ${frac(w)}" wide filler of band strip (${frac(band)}" thick, grain up) glued to the web first, so the back is flat. Epoxy, full face, to the bands and the filler after the deck is in. ${baseText}${hasRing ? ' The head carries a D-ring plate: drill the four holes through the head and the side with the plate as the template.' : ''}`,
+        notes: `D-76: oak rib on the inside face of the ${s > 0 ? 'left' : 'right'} side at x = ${st.x.toFixed(1)}", ${frac(st.top - zFoot)}" tall (${st.kind === 'box' ? 'from the bottom of its box tie spacer' : 'from the deck'} to the gunwale top), bandsawn from a 4/4 offcut planed to ${frac(dep)}" (grain up the rib): a ${frac(w)}" wide shaft that widens to a ${frac(hl)}" head as tall as the gunwale band, its top cut to the sheer${Math.abs(st.dTurn) > 0.01 ? ` (the side draws in ${(yaw * 180 / Math.PI).toFixed(1)}° here; the rib stands square to it)` : ''}. It stands ${frac(dep)}" proud of the inner bands: its back sits on the inner chine and gunwale bands, and between them on a ${frac(w)}" wide filler of band strip (${frac(band)}" thick, grain up) glued to the web first, so the back is flat. Epoxy, full face, to the bands and the filler after the deck is in. ${baseText}${hasRing ? ' The head carries a D-ring bracket: drill the two holes through the head and the side with the bracket as the template.' : ''}`,
       });
       rib.joints = [
         { type: 'glue', to: `side-${tag}-web`, count: 1, at: [[0, (zFoot + st.top) / 2, 0]], size: `${frac(w)}" back face, epoxy`, note: `epoxy, full face: the head to the inner gunwale band${st.kind === 'box' ? '' : ', the foot to the inner chine band (and a fillet to the deck)'}, and between the bands to a ${frac(band)}" filler of band strip glued to the web first` },
       ];
       if (st.kind === 'knee') rib.joints.push({ type: 'glue', to: `side-rib-knee-${tag}${st.n}`, count: 1, at: [[0, L.deckTop + Math.min(p.sideRibKneeHeightIn, st.h - L.railBand - 0.25) / 2, dep]], size: `${frac(Math.min(p.sideRibKneeHeightIn, st.h - L.railBand - 0.25))}" x ${frac(w)}" knee face, epoxy` });
-      if (hasRing) rib.joints.push({ type: 'hole', to: `lash-${tag}${st.n}`, count: LASH_BOLTS, size: `${frac(LASH_BOLT_DIA_IN + 1 / 64)}" (#8 clearance) through the head, the inner band, the web and the outer band`, at: holeAt.map((q) => [q[0], q[1], dep / 2] as Vec3), note: 'drilled with the D-ring plate as the template, square to the side' });
+      if (hasRing) rib.joints.push({ type: 'hole', to: `lash-${tag}${st.n}`, count: LASH_BOLTS, size: `${frac(LASH_BOLT_DIA_IN + 1 / 64)}" (1/4-20 clearance) through the head, the inner band, the web and the outer band`, at: holeAt.map((q) => [q[0], q[1], dep / 2] as Vec3), note: 'drilled with the D-ring bracket as the template, square to the side' });
       parts.push(rib);
 
       // ── The base: the box tie, or a knee on the member under it ──
@@ -240,13 +240,15 @@ export function buildSideRibs(ctx: Ctx): Part[] {
       const rot = { z: -s * yaw, ...(Math.abs(st.slope) > 1e-9 ? { y: st.slope } : {}), x: (s * Math.PI) / 2 };
       const ring = box(ctx, {
         id: `lash-${tag}${st.n}`, partNo: 'lash-point', name: `Lash point ${tag}${st.n}`, group: 'hardware', mat: 'fixed', massLb: LASH_MASS_LB, kind: 'purchased',
-        material: `${dRingMat(p)} D-ring on a bolt plate`, fab: 'buy', step: STEP.finish, size: [LASH_PLATE.len, LASH_PLATE.tall, T], center: [st.x, s * cyIn, zc], rot,
-        sourcing: { vendor: `McMaster-Carr (${dRingMat(p)} 4-hole D-ring bolt plate, 300 lbf working load)`, costUsd: 7 },
-        notes: `D-76: on the inner face of the ${RIB_NAME[st.n]}'s head, through-bolted: ${LASH_BOLTS} #8-32 x ${frac(bolt.len)}" ${stainless(p)} machine screws from OUTSIDE (a ${frac(LASH_WASHER.od)}" fender washer under each head on the outer band), through the side sandwich and the head, with a nylock nut on the plate inside (stack ${bolt.need.toFixed(2)}" with the nut and two threads). The plate (${LASH_PLATE.len}" x ${LASH_PLATE.tall}", holes ${2 * LASH_HOLE_DX_IN}" x ${2 * LASH_HOLE_DZ_IN}") is the drilling template. Rated for tie-down straps on coolers, duffels and firewood (D-76); the lash-load row pulls it at ${p.lashLoadLbf} lbf and ${p.lashPullAngleDeg}°. In race mode the ring folds flat against the head.`,
+        material: `${dRingMat(p)} cargo D-ring on a 2-hole strap bracket`, fab: 'buy', step: STEP.finish, size: [LASH_PLATE.len, LASH_PLATE.tall, T], center: [st.x, s * cyIn, zc], rot,
+        sourcing: p.weatherSpec === WEATHER_SPEC.extreme
+          ? { vendor: `ESTIMATE: ${dRingMat(p)} bolt-on D-ring, 2-hole bracket, about the same working load (marine hardware supplier)`, costUsd: 12 }
+          : { vendor: `Harbor Freight (1/4" cargo D-ring, 2-pack #60319, zinc-plated, 233 lbf working load)`, costUsd: 1.5 },
+        notes: `D-76, D-83: on the inner face of the ${RIB_NAME[st.n]}'s head, through-bolted: ${LASH_BOLTS} 1/4-20 x ${frac(bolt.len)}" ${stainless(p)} button-head bolts from OUTSIDE (a ${frac(LASH_WASHER.od)}" fender washer under each head on the outer band), through the side sandwich and the head, with a nylock nut on the bracket inside (stack ${bolt.need.toFixed(2)}" with the nut and two threads). The bracket (about ${LASH_PLATE.len}" x ${LASH_PLATE.tall}", holes ${2 * LASH_HOLE_DX_IN}" apart) is the drilling template: VERIFY the real bracket's holes before drilling. Rated ${p.lashLoadLbf} lbf working load for tie-down straps on coolers, duffels and firewood (D-76); the lash-load row pulls it at ${p.lashLoadLbf} lbf and ${p.lashPullAngleDeg}°. In race mode the ring folds flat against the head.`,
         joints: [{
-          type: 'bolt', to: ribId, count: LASH_BOLTS, size: `#8-32 x ${frac(bolt.len)}" ${stainless(p)} machine screw, ${frac(LASH_WASHER.od)}" fender washer outside, nylock nut inside`, diaIn: LASH_BOLT_DIA_IN,
-          at: [[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([a, b]): Vec3 => [a * LASH_HOLE_DX_IN, b * LASH_HOLE_DZ_IN, -T / 2]), // on the plate face against the head
-          note: `through the head, the inner gunwale band, the web and the outer gunwale band (${s > 0 ? 'left' : 'right'} side, x = ${st.x.toFixed(1)}"); drill with the plate as the template`,
+          type: 'bolt', to: ribId, count: LASH_BOLTS, size: `1/4-20 x ${frac(bolt.len)}" ${stainless(p)} button-head bolt, ${frac(LASH_WASHER.od)}" fender washer outside, nylock nut inside`, diaIn: LASH_BOLT_DIA_IN,
+          at: [-1, 1].map((a): Vec3 => [a * LASH_HOLE_DX_IN, 0, -T / 2]), // on the bracket face against the head
+          note: `through the head, the inner gunwale band, the web and the outer gunwale band (${s > 0 ? 'left' : 'right'} side, x = ${st.x.toFixed(1)}"); drill with the bracket as the template`,
         }],
       });
       parts.push(ring);

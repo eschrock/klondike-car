@@ -84,7 +84,7 @@ export function seatStowCheck(ctx: Ctx): AnalysisCheck {
       ? `Cargo mode also carries the front lamp and its clip, the rear tail light and its clip and the ${gear.chocks[0]?.qty ?? 0} wheel chocks in a layer on top of the cushions (${f(avail.l, 1)}" × ${f(avail.w, 1)}" and ${f(layerH, 2)}" high under the lid frame): ${gearKit.map((k) => `${k.qty > 1 ? `${k.qty} × ` : ''}${k.name} ${(k.dims ?? []).map((v) => f(v, 1)).join('×')}"`).join(', ')} = ${f(gearIn3, 0)} in³ of bounding boxes in a ${f(layer.interior.totalIn3, 0)} in³ layer (fill ${f(layer.fill, 2)}); the tallest lies ${f(gearTall, 2)}" high, leaving ${f(layerH - gearTall, 2)}" under the lid${layer.fits ? '' : `; NOT placed: ${layer.unplaced.join(', ')}`}. `
       : '')
     + flapOption
-    + `Procedure, no tools: peel the back pad and the seat cushion off their Dual Lock, lay them in the box, pull the two pins, flip the back forward and push the pins down through the stiles into the deck.`;
+    + `Procedure, no tools: peel the back pad and the seat cushion off their Velcro Industrial, lay them in the box, pull the two pins, flip the back forward and push the pins down through the stiles into the deck.`;
   return singleCheck({
     id: 'seat-stow', label, group: 'Structure', value: g.value, unit: g.unit, limit: g.limit, sense: '<=',
     status, details: ds, how, refs: ['D-57', 'D-53', 'D-41'],

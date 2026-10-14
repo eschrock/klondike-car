@@ -94,26 +94,26 @@ describe('seatChecks', () => {
     expect(byId['lash-points'].value).toBe(6);
     expect(byId['lash-points'].status).not.toBe('fail');
   });
-  it('lash-load by hand (D-76): 300 lbf at 45° on a plate through-bolted to a rib head with 4 #8-32 machine screws', () => {
-    // V = H = 300 sin 45° = 212.13 lbf; per bolt 53.03 lbf of tension and of shear.
-    // Tension 53.03 / 0.014 = 3,788 psi of 15,000 (30 ksi annealed stainless / 2); shear 53.03 / 0.0124 = 4,277 psi of 9,000 (0.6 x 30 ksi / 2): sqrt(0.2525² + 0.4752²) = 0.538.
-    // Head bearing 53.03 / (0.164 x 0.75) = 431.2 psi (of 1,700); fender washer 53.03 / (pi/4 (0.75² - 0.188²) = 0.4140) = 128.1 psi (of 1,070 x 0.67 / 2 = 358.5).
+  it('lash-load by hand (D-83): 233 lbf at 45° on a D-ring bracket through-bolted to a rib head with 2 1/4-20 button-head bolts', () => {
+    // V = H = 233 sin 45° = 164.76 lbf; per bolt 82.38 lbf of tension and of shear.
+    // Tension 82.38 / 0.0318 = 2,591 psi of 15,000 (30 ksi annealed stainless / 2); shear 82.38 / 0.0269 = 3,062 psi of 9,000 (0.6 x 30 ksi / 2): sqrt(0.1727² + 0.3403²) = 0.382.
+    // Head bearing 82.38 / (0.25 x 0.75) = 439.3 psi (of 1,700); fender washer 82.38 / (pi/4 (0.75² - 0.281²) = 0.3798) = 216.9 psi (of 1,070 x 0.67 / 2 = 358.5).
     const k = lashLoads(ctx);
-    expect(k.V).toBeCloseTo(212.13, 2);
-    expect(k.T1).toBeCloseTo(53.03, 2);
-    expect(k.sigT).toBeCloseTo(3788, 0);
-    expect(k.tau).toBeCloseTo(4277, 0);
-    expect(k.interaction).toBeCloseTo(0.538, 3);
-    expect(k.headBearing).toBeCloseTo(431.2, 1);
-    expect(k.washerArea).toBeCloseTo(0.4140, 4);
-    expect(k.washerBearing).toBeCloseTo(128.1, 1);
-    expect(k.bolt.len).toBe(2); // 0.05 washer + 0.625 side + 0.75 head + 0.125 plate + 0.172 nylock + 2 threads = 1.78 in
+    expect(k.V).toBeCloseTo(164.76, 2);
+    expect(k.T1).toBeCloseTo(82.38, 2);
+    expect(k.sigT).toBeCloseTo(2591, 0);
+    expect(k.tau).toBeCloseTo(3062, 0);
+    expect(k.interaction).toBeCloseTo(0.382, 3);
+    expect(k.headBearing).toBeCloseTo(439.35, 1);
+    expect(k.washerArea).toBeCloseTo(0.3798, 4);
+    expect(k.washerBearing).toBeCloseTo(216.9, 1);
+    expect(k.bolt.len).toBe(2); // 0.063 washer + 0.625 side + 0.75 head + 0.125 bracket + 0.3125 nylock + 2 threads = 1.94 in
     const c = byId['lash-load'];
     expect(c.status).toBe('pass');
     expect(c.details!.map((d) => d.name)).toEqual(['bolt tension and shear together ((σ/Ft)² + (τ/Fv)², square root)', 'bolt bearing on the oak head (along its grain)', 'fender washer bearing on the outer gunwale band (compression ⊥)', `rib bending at the rating (rib ${k.ribN})`]);
-    // The rib governs (the box rib: it cantilevers from the top of its spacer), well under its limit; nothing withdraws any more.
-    expect(c.util!).toBeCloseTo(k.ribSig / 6460, 3);
-    expect(c.util!).toBeGreaterThan(0.6);
+    // The fender washer on the outer band (0.61) and the box rib (it cantilevers from the top of its spacer, 0.59) govern, well under their limits; nothing withdraws any more.
+    expect(c.util!).toBeCloseTo(Math.max(k.ribSig / 6460, k.washerBearing / 358.5), 3);
+    expect(c.util!).toBeGreaterThan(0.5);
     expect(c.util!).toBeLessThan(0.85);
     // A 450 lbf pull fails it (the rib, 1.5 x).
     expect(seatChecks(ctxFor({ lashLoadLbf: 450 })).find((q) => q.id === 'lash-load')!.status).toBe('fail');

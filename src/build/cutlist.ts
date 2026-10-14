@@ -92,7 +92,7 @@ export const MAX_LAMINATION_LAYERS = 6;
 export const MIN_LAYER_ROUGH_IN = 0.5;
 /**
  * A lamination mix of QUOTED boards is preferred when it costs at most this fraction more per square foot than the cheapest mix (which may rest on an estimated price). It is also the
- * "near-tie" within which fewer layers win. 15 %, not 5 %: the 5/4 price is an estimate (Cline FAS x 1.3, not on The Wood Yard list) that can easily be off by that much, and a mix that
+ * "near-tie" within which fewer layers win. 15 %, not 5 %: a price can easily be off by that much, and a mix that
  * leans on one 5/4 layer per beam buys a whole 6 ft 5/4 board for a single 30 in piece (Eric 2026-10-13 review: the whole-board lumber came out $4 DEARER than 8/4 + 4/4, which is quoted).
  */
 export const LAMINATION_QUOTED_TOLERANCE = 0.15;

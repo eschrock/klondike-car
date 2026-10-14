@@ -327,12 +327,13 @@ describe('joinery: structured joints', () => {
     expect(worldAABB(j1).max[1]).toBeCloseTo(11.25 - defaults.axleHangerThickIn, 6);
     expect(get(parts, 'joist-2').stock!.l).toBeCloseTo(22.5, 6); // the rails' full inner width (3c-5: no brake backer meets it at 8.5 in spacing; at 10 in it is cut to 20 in between them)
   });
-  it('Domino size follows the stock: thin rails get a DF 500 5×30; thick stock gets XL; 1/2" hosts get a loose tenon', () => {
+  it('Domino size follows the stock (D-81): thin rails get a DF 500 5×30; thick stock gets a DF 500 10×50 and never an XL size; a tenon is at most 0.34 of its stock; 1/2" hosts get a loose tenon', () => {
     expect(chooseDomino(defaults, { stockIn: 0.75, hostIn: 0.75, widthIn: 1.75 })?.name).toBe('5×30');
+    expect(chooseDomino(defaults, { stockIn: 0.75, hostIn: 1.5, widthIn: 3 })?.name).toBe('6×40'); // the rail end into the bow bulkhead: 6 mm is 0.31 of the 3/4 in rail (8 mm was 0.42)
     const thick = chooseDomino(defaults, { stockIn: 1.5, hostIn: 1.5, widthIn: 3 });
     expect(thick?.tool).toBe('DF 500');
     expect(thick!.tMm).toBeGreaterThanOrEqual(10);
-    expect(chooseDomino(defaults, { stockIn: 3, hostIn: 3, widthIn: 5 })?.tool).toBe('DF 700 XL');
+    expect(chooseDomino(defaults, { stockIn: 3, hostIn: 3, widthIn: 5 })?.tool).toBe('DF 500'); // Eric has no DF 700 XL: the XL sizes stay in the table and are never picked
     expect(chooseDomino(defaults, { stockIn: 0.5, hostIn: 0.5, widthIn: 1.5 })).toBeNull();
     expect(endJoint(defaults, 0.5, 0.5, 1.5).type).toBe('mortise-tenon');
     expect(endJoint(defaults, 0.75, 0.75, 1.75).type).toBe('domino');
@@ -415,14 +416,14 @@ describe('rails: flush under the chines, tied to them (D-43, D-54)', () => {
     }
     expect(L.railTop).toBeCloseTo(L.deckBot, 9);
   });
-  it('the chine is Domino-tied to the rail every 6 in with vertical Dominos', () => {
+  it('the chine is tied to the rail by a thickened-epoxy bed and screws every 6 in, with NO Dominos (D-81)', () => {
     const chine = get(parts, 'side-L-chine');
-    const tie = chine.joints!.find((j) => j.to === 'rail-L')!;
-    expect(tie.type).toBe('domino');
-    expect(tie.count).toBe(Math.floor((L.xFlatEnd - (-9.25)) / defaults.chineTieSpacingIn)); // 58.36 / 6 = 9
-    expect(tie.count).toBe(9);
-    expect(tie.size).toMatch(/DF 500/);
-    expect(tie.note).toMatch(/VERTICAL/);
+    const tie = chine.joints!.find((j) => j.to === 'rail-L' && j.type === 'glue')!;
+    expect(tie.size).toMatch(/thickened epoxy bed/);
+    expect(chine.joints!.some((j) => j.type === 'domino')).toBe(false);
+    const n = Math.floor((L.xFlatEnd - (-9.25)) / defaults.chineTieSpacingIn); // 58.36 / 6 = 9 stations
+    const screws = chine.joints!.filter((j) => j.to === 'rail-L' && j.type === 'screw');
+    expect(screws.reduce((m, j) => m + j.count, 0)).toBe(n - 1); // a screw in EVERY gap (they locate the side as the frame is lowered)
     expect(get(parts, 'rail-L').joints!.some((j) => j.to === 'side-L-chine')).toBe(true);
   });
 });
@@ -508,12 +509,13 @@ describe('signs (D-9, D-35, D-57)', () => {
 });
 
 describe('mass bookkeeping (D-35…D-37, D-54)', () => {
+  const BODY_LB = 37.9;
   it('the body and frame groups stay near the build numbers (body about 36 lb and frame about 13.4 lb after the D-60 weight package: 4 mm ply, 1/2 in transom, 1-1/2 in bulkhead, 5/8 in joists, no foot-block cleats; pinned from the build)', () => {
     const parts = buildModel(defaults);
     const sum = (g: string) => parts.filter((x) => x.group === g && !x.payload).reduce((m, x) => m + x.massLb, 0);
     // Hand: deck 58.6 x 23.25 x 0.472 in of ply (about 13.9 lb with finish), the 24 in x 22 in rear transom (about 9 lb), the 1-1/2 in bow bulkhead (about 6 lb), two webs (1.9 lb each),
     // two chines (1.3), two gunwales (1.5), backers and scuppers (1.1), the two signs (1.1): about 44 lb.
-    expect(Math.abs(sum('body') - 36.1)).toBeLessThan(1.5); // 40.5 before D-60 (4 mm ply, 1/2 in transom, 1-1/2 in bulkhead); 3c-5: the bulkhead is lower (a 5.75 in crown peak, not 9 in)
+    expect(Math.abs(sum('body') - BODY_LB)).toBeLessThan(1.5); // D-80: +1.9 lb for the 6 mm Baltic birch webs, box, lid and signs (36.1 on the 1/4 in white oak ply of D-73); 40.5 before D-60 (4 mm ply, 1/2 in transom, 1-1/2 in bulkhead); 3c-5: the bulkhead is lower (a 5.75 in crown peak, not 9 in)
     // Rails 2 x 3.5 (extrusions with the step), hangers 2 x 1.05, six joists (0.82 to 0.88; the king beam is in the front-end group): about 13 lb.
     expect(Math.abs(sum('frame') - 13.4)).toBeLessThan(1); // eight joists since 3c-5 (8.5 in spacing, +0.84 lb); D-60: 5/8 in joists (-0.8 lb), 14.4 before
   });
@@ -525,15 +527,17 @@ describe('round 2 hull (build M2-M8, D-43)', () => {
   const { L } = ctx;
   const p = defaults;
 
-  it('transoms are 1/2" (D-60; was 3/4"), chines and gunwales 5/8" thick as a sandwich of two 0.2075" bands and the 1/4 in white oak plywood web (D-62, D-73; 0.234" bands on the 4 mm okoume)', () => {
+  it('transoms are 1/2" (D-60; was 3/4"), chines and gunwales 5/8" thick as a sandwich of two 0.1945" bands and the 6 mm Baltic birch web (D-62, D-73, D-80; 0.2075" on the 1/4 in white oak plywood, 0.234" on the 4 mm okoume)', () => {
     expect(L.transom).toBe(0.5);
     expect(L.side).toBe(0.625);
-    // D-61/D-62: no grooves; a band of (0.625 - web) / 2 on each face of the web: D-73's default web is the 0.21 in white oak plywood
-    expect(thinSheet(p).thicknessIn).toBeCloseTo(0.21, 9);
-    expect(L.sideBand).toBeCloseTo(0.2075, 4);
-    expect(get(parts, 'side-L-chine').joints!.find((j) => j.to === 'side-L-web')!.size).toMatch(/0\.20[78]" oak strip/);
-    // the okoume option (4 mm, panelPlyIn 0.157): the D-62 bands of 0.234"
-    const ok = { ...p, thinSheetMaterial: 2 };
+    // D-61/D-62: no grooves; a band of (0.625 - web) / 2 on each face of the web: D-80's default web is the 0.236 in (6 mm) Baltic birch
+    expect(thinSheet(p).thicknessIn).toBeCloseTo(0.236, 9);
+    expect(L.sideBand).toBeCloseTo(0.1945, 4);
+    expect(get(parts, 'side-L-chine').joints!.find((j) => j.to === 'side-L-web')!.size).toMatch(/0\.19[45]" oak strip/);
+    // the 1/4 in white oak plywood option (0.21 in): bands of 0.2075"
+    expect(computeLayout({ ...p, thinSheetMaterial: 1 }).sideBand).toBeCloseTo(0.2075, 4);
+    // the okoume option at 4 mm (panelPlyIn 0.157): the D-62 bands of 0.234"
+    const ok = { ...p, thinSheetMaterial: 2, panelPlyIn: 0.157 };
     expect(computeLayout(ok).sideBand).toBeCloseTo(0.2338, 3);
     expect(get(buildModel(ok), 'side-L-chine').joints!.find((j) => j.to === 'side-L-web')!.size).toMatch(/0\.234" oak strip/);
   });
@@ -562,7 +566,9 @@ describe('round 2 hull (build M2-M8, D-43)', () => {
     expect(DOMINOS.find((x) => x.name === '6×40')!.wMm).toBe(20);
   });
 
-  it('scuppers: four 3/8" stainless nipples through the chines at deck level (M7; the rear corners and just behind the bow bulkhead), each with a joint and `at`', () => {
+  it('scuppers (Extreme spec; Standard drills plain holes, D-83): four 3/8" stainless nipples through the chines at deck level (M7; the rear corners and just behind the bow bulkhead), each with a joint and `at`', () => {
+    const parts = buildModel({ ...defaults, weatherSpec: 1 });
+    const ctx = makeCtx({ ...defaults, weatherSpec: 1 });
     const sc = parts.filter((x) => x.id.startsWith('scupper-'));
     expect(sc.map((x) => x.id).sort()).toEqual(['scupper-bow-L', 'scupper-bow-R', 'scupper-rear-L', 'scupper-rear-R']);
     const sites = scupperSites(ctx);

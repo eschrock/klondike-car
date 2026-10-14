@@ -4,7 +4,7 @@
  * params, not read back from the builder.
  */
 import { describe, expect, it } from 'vitest';
-import { bowBulkhead, bowTurnInAt, defaultParams, sideHeightAt, thinSheet, validateParams, type Params } from '../params';
+import { bowBulkhead, bowTurnInAt, defaultParams, sideHeightAt, thinSheet, validateParams, WEATHER_SPEC, type Params } from '../params';
 import { buildModel } from './index';
 import { computeLayout, innerHalfWidth, outerHalfWidth, sideHeightAtX, sideSlopeAt, sideTopAt, webTopAt } from './layout';
 import { bowHold, bulkheadOutline, liftBarStressPsi, liftSlot, scupperSites, signPlacement, SIGN_X_MAX_IN } from './body';
@@ -341,8 +341,9 @@ describe('rear transom and lift slot', () => {
   });
 });
 
-describe('scuppers', () => {
-  const ctx = makeCtx(defaults);
+describe('scuppers (the nipples exist under the Extreme spec only, D-83; Standard drills plain holes: d83.test.ts)', () => {
+  const parts = buildModel({ ...defaults, weatherSpec: WEATHER_SPEC.extreme });
+  const ctx = makeCtx({ ...defaults, weatherSpec: WEATHER_SPEC.extreme });
   const sites = scupperSites(ctx);
   it('four drains: two at the rear and two at the bow, through the chines at deck level, a hair above the deck surface', () => {
     expect(sites.map((s) => s.zone)).toEqual(['rear', 'bow']);

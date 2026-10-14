@@ -11,7 +11,7 @@ import { assemblySteps, standardText } from './assembly';
 import { buildBookHtml } from './build-book';
 import { URETHANE_COVERAGE, VARNISH_COVERAGE, finishAreas, finishMaterial, finishingSchedule, glueEpoxyFlOz, glueJointEstimates, glueTitebond, standardAdhesive, urethaneContainers } from './finishing';
 import { BuildData } from './package';
-import { PLYWOOD_PRICE, TITEBOND_BOTTLES, specOf, std304 } from './prices';
+import { OWNED_NOTE, PLYWOOD_PRICE, TITEBOND_BOTTLES, specOf, std304 } from './prices';
 import { lbDelta, weatherChipText, weatherLine } from '../ui/build-helpers';
 
 const std: Params = { ...defaultParams(), weatherSpec: WEATHER_SPEC.standard };
@@ -33,26 +33,33 @@ describe('the two specs', () => {
     expect(bExt.spec).toBe('extreme');
   });
 
-  it('Standard has no 316 line and no Sipo line; Extreme has no beech line', () => {
+  it('Standard has no 316 line; neither spec has a Sipo line (D-79: beech Dominos from the shop, epoxied in under Extreme); Standard has no stain, conditioner, scupper or box-drain line (D-83)', () => {
     for (const l of lines(bStd)) {
       expect(allText(l), l.key).not.toMatch(/316/);
       expect(allText(l), l.key).not.toMatch(/sipo/i);
       expect(l.vendor ?? '', l.key).not.toMatch(/316/);
+      expect(l.key, l.key).not.toMatch(/^(stain|conditioner|gel-stain)|^(scupper|storage-drain)/);
+      expect(allText(l), l.key).not.toMatch(/stain or dye|pre-stain conditioner|gel stain|nipple|scupper/i);
     }
-    for (const l of lines(bExt)) expect(allText(l), l.key).not.toMatch(/beech/i);
+    for (const l of lines(bExt)) expect(allText(l), l.key).not.toMatch(/sipo/i);
     // and the other way round: the specs do differ
     expect(lines(bExt).some((l) => /316/.test(l.key))).toBe(true);
-    expect(lines(bExt).some((l) => /^Domino/.test(l.key) && /Sipo/.test(l.description))).toBe(true);
+    expect(lines(bExt).some((l) => /^Domino/.test(l.key) && /beech.*epoxied in/.test(l.description))).toBe(true);
     expect(lines(bStd).some((l) => /^Domino/.test(l.key) && /beech/.test(l.description))).toBe(true);
     expect(lines(bStd).some((l) => /^18-8 /.test(l.key))).toBe(true);
+    // Extreme keeps the nipples (316, real price) and the stain products; Standard's clear urethane is the whole finish
+    expect(lines(bExt).some((l) => l.key === 'scupper')).toBe(true);
+    expect(lines(bExt).some((l) => /^stain-/.test(l.key))).toBe(true);
   });
 
-  it('Standard uses Titebond III (a 16 oz bottle) and less epoxy than Extreme; Extreme uses epoxy everywhere', () => {
-    const tb = lines(bStd).filter((l) => /^titebond-/.test(l.key));
+  it('Standard uses Titebond III (shop stock, $0, kept on the list) and less epoxy than Extreme; Extreme uses epoxy everywhere', () => {
+    const tb = lines(bStd).filter((l) => /^titebond/.test(l.key));
     expect(tb.length).toBe(1);
     expect(tb[0].description).toMatch(/Titebond III/);
-    expect(tb[0].key).toBe('titebond-16');
-    expect(tb[0].unitUsd).toBe(8.99);
+    expect(tb[0].key).toBe('titebond');
+    expect([tb[0].basis, tb[0].unitUsd, tb[0].extUsd]).toEqual(['owned', 0, 0]);
+    expect(tb[0].notes).toContain(OWNED_NOTE);
+    expect(tb[0].qty).toBe(Math.ceil(finishingSchedule(stdParts, std).glue.titebondFlOz)); // fl oz of glue the joints need
     expect(lines(bExt).some((l) => /titebond/i.test(allText(l)))).toBe(false);
     expect(bStd.consumables.epoxyFlOz).toBeLessThan(bExt.consumables.epoxyFlOz);
     expect(bStd.consumables.finishEpoxyFlOz).toBeLessThan(bExt.consumables.finishEpoxyFlOz);
@@ -68,11 +75,11 @@ describe('the two specs', () => {
   });
 
   it('the wood-screw sizes number 3 or fewer in both specs, whatever the thin sheet (nothing in the BOM adds a fourth)', () => {
-    for (const w of [WEATHER_SPEC.standard, WEATHER_SPEC.extreme]) for (const m of [THIN_SHEET.followWeather, THIN_SHEET.whiteOakPly, THIN_SHEET.okoumeMarine, THIN_SHEET.balticBirch3mm]) {
+    for (const w of [WEATHER_SPEC.standard, WEATHER_SPEC.extreme]) for (const m of [THIN_SHEET.followWeather, THIN_SHEET.whiteOakPly, THIN_SHEET.okoumeMarine, THIN_SHEET.balticBirch3mm, THIN_SHEET.balticBirch6mm]) {
       const p: Params = { ...defaultParams(), weatherSpec: w, thinSheetMaterial: m };
       const b = bom(buildModel(p), p, { noCompare: true });
       const sizes = new Set(lines(b).filter((l) => /wood screw/.test(l.key) && !/^(Heat|Thumb)/.test(l.key)).map((l) => l.key.replace(/^(316|18-8) /, '').replace(/^pan-head /, ''))); // D-77: the strap's pan-head #8 x 1-1/4 is a head style of the second size, not a fourth size
-      expect([...sizes].sort(), `weather ${w}, sheet ${m}`).toEqual(['wood screw #6 x 2-1/2"', 'wood screw #8 x 1-1/4"', 'wood screw #8 x 5/8"']);
+      expect([...sizes].sort(), `weather ${w}, sheet ${m}`).toEqual(['wood screw #8 x 1-1/4"', 'wood screw #8 x 2-1/2"', 'wood screw #8 x 5/8"']); // D-82: every wood screw is a #8
     }
   });
 
@@ -105,13 +112,13 @@ describe('the price difference', () => {
     expect(e.deltaLb).toBeCloseTo(c.deltaLb, 6);
   });
 
-  it('carries the mass of the thin sheet: the white oak plywood (Standard) is heavier than the okoume (Extreme)', () => {
-    expect(c.thinSheetStandard).toBe('1/4 in white oak plywood');
-    expect(c.thinSheetExtreme).toBe('4 mm okoume');
+  it('carries the mass of the thin sheet: the 6 mm Baltic birch (Standard) is heavier than the 6 mm okoume (Extreme)', () => {
+    expect(c.thinSheetStandard).toBe('6 mm Baltic birch');
+    expect(c.thinSheetExtreme).toBe('6 mm okoume');
     expect(c.standardLb).toBeCloseTo(totalMass(stdParts), 6);
     expect(c.extremeLb).toBeCloseTo(totalMass(extParts), 6);
     expect(c.deltaLb).toBeLessThan(-1); // Extreme is lighter
-    expect(c.deltaLb).toBeGreaterThan(-6);
+    expect(c.deltaLb).toBeGreaterThan(-8);
   });
 
   it('a thin sheet chosen by hand does not change with the weather: the same parts, no mass difference', () => {
@@ -159,28 +166,37 @@ describe('Bolt Depot by the piece', () => {
     expect(bStd.bulkUsd).toBeLessThan(bExt.bulkUsd);
     expect(bStd.bulkUsd).toBeLessThan(120);
     expect(lines(bStd).filter((l) => l.section === 'Bulk parts (shop stock)').length).toBeLessThan(8);
-    // 18-8 #6 x 2-1/2 was not found in the research: an estimate that says so
-    const six = lines(bStd).find((l) => l.key === '18-8 wood screw #6 x 2-1/2"')!;
-    expect(six.basis).toBe('estimate');
-    expect(six.notes).toMatch(/not found in the 2026-10-12 research/);
+    // the #10-32 screw-in insert for hardwood was not found in the research (twice): an estimate that says so
+    const ins = lines(bStd).find((l) => /threaded insert/.test(l.key))!;
+    expect(ins.basis).toBe('estimate');
+    expect(ins.notes).toMatch(/NO 18-8 or zinc #10-32 screw-in insert/);
+    // the #8 x 2-1/2 that replaced the #6 is a real quoted screw (D-82)
+    const eight = lines(bStd).find((l) => l.key === '18-8 wood screw #8 x 2-1/2"')!;
+    expect([eight.basis, eight.unitUsd, eight.qty]).toEqual(['quoted', 0.6, 24]);
   });
 });
 
 describe('Standard hardware', () => {
   const byKey = (k: string): BomLine => lines(bStd).find((l) => l.key === k)!;
   it('prices the 304 hinges, latch and stay, the zinc collars and D-rings, the galvanized eye bolts and chain from the Standard research', () => {
-    expect(byKey('seat-hinge').unitUsd).toBeCloseTo(11.005, 3); // Sea-Dog 304, pair 22.01
+    expect(byKey('seat-hinge').extUsd).toBeCloseTo(12.99, 2); // D-83: Ace 2" stainless pair (check the package for 304)
+    expect(byKey('seat-hinge').notes).toMatch(/check the package for 304/);
     expect(byKey('storage-latch').unitUsd).toBeCloseTo(4.895, 3); // Walmart 304 2-pack 9.79
-    expect(byKey('storage-lid-stay').unitUsd).toBe(26.4); // Sugatsune S-93L 304
-    expect(byKey('storage-hinge').basis).toBe('estimate'); // nearest size
-    expect(byKey('lash-point').unitUsd).toBe(9.24); // etrailer zinc D-ring
-    expect(byKey('lash-point').basis).toBe('estimate');
+    expect(byKey('storage-lid-stay').unitUsd).toBe(9.99); // D-83: Rockler 6" lid support pair (plated steel); the Sugatsune S-93L stays an alternative
+    expect(byKey('storage-lid-stay').alternatives![0].usd).toBe(26.4);
+    expect(byKey('storage-hinge').extUsd).toBeCloseTo(5.47, 2); // D-83: Everbilt 2-1/2" stainless pair
+    expect(byKey('storage-hinge').notes).toMatch(/check the package for 304/);
+    const gaskets = lines(bStd).filter((l) => /^storage-gasket/.test(l.key));
+    expect(gaskets.reduce((a, l) => a + l.extUsd, 0)).toBeCloseTo(8.69, 2); // D-83: ONE Frost King 17 ft roll covers all four gasket lines
+    const ring = byKey('lash-point'); // D-83: Harbor Freight 1/4" cargo D-rings by the 2-pack, 6 rings = 3 packs
+    expect([ring.unitUsd, ring.qty, ring.packQty, ring.needed, ring.extUsd]).toEqual([2.99, 3, 2, 6, 8.97]);
+    expect(ring.basis).toBe('quoted');
     expect(byKey('steer-eye').unitUsd).toBe(11.94);
     expect(byKey('steer-anchor').unitUsd).toBe(11.1);
     expect(byKey('steer-chain').unitUsd).toBeCloseTo((10.89 / 12) * 2.12 + 2 * 1.99, 2);
     const collar = lines(bStd).find((l) => /shaft collar/.test(l.key))!;
     expect(collar.key).toMatch(/^zinc-plated/);
-    expect(collar.unitUsd).toBe(4.43);
+    expect(collar.unitUsd).toBe(4.52);
     const insert = lines(bStd).find((l) => /threaded insert/.test(l.key))!;
     expect(insert.key).toMatch(/^zinc /);
     // the model's part names say 316: the Standard BOM says 304
@@ -191,11 +207,23 @@ describe('Standard hardware', () => {
     expect(lines(bExt).find((l) => /shaft collar/.test(l.key))!.key).toMatch(/^316/);
   });
 
-  it('has a Domino pack price for beech (Standard) and Sipo (Extreme)', () => {
-    const dStd = lines(bStd).find((l) => l.key === 'Domino DF 500 5x30')!;
-    expect(dStd.packUsd).toBe(25);
-    const dExt = lines(bExt).find((l) => l.key === 'Domino DF 500 5x30')!;
-    expect(dExt.packUsd).toBe(57);
+  it('lists the beech Dominos from the shop at $0 in both specs, each with a quantity (D-79)', () => {
+    for (const b of [bStd, bExt]) {
+      const d = lines(b).filter((l) => /^Domino/.test(l.key));
+      expect(d.length).toBeGreaterThanOrEqual(2);
+      for (const l of d) { expect([l.basis, l.unitUsd, l.extUsd], l.key).toEqual(['owned', 0, 0]); expect(l.qty, l.key).toBeGreaterThan(0); expect(l.packUsd, l.key).toBeUndefined(); }
+    }
+  });
+
+  it('puts the shop stock on the list at $0, never as an estimate, in both specs (D-79)', () => {
+    for (const b of [bStd, bExt]) {
+      const owned = lines(b).filter((l) => l.basis === 'owned');
+      const keys = owned.map((l) => l.key);
+      for (const re of [/^Domino/, /^sandpaper$/, /^supplies$/, /^thinner-/, /^contact-cement$/, /^brake-chock-cord$/, /^brake-stop-cord$/]) expect(keys.some((k) => re.test(k)), `${b.spec} ${re}`).toBe(true);
+      for (const l of owned) { expect(l.extUsd, l.key).toBe(0); expect(l.notes, l.key).toContain(OWNED_NOTE); }
+      expect(b.estimateUsd).toBeCloseTo(lines(b).filter((l) => l.basis === 'estimate').reduce((a, l) => a + l.extUsd, 0), 2); // owned lines add nothing to the estimate share
+    }
+    expect(lines(bStd).some((l) => l.key === 'titebond' && l.basis === 'owned')).toBe(true);
   });
 });
 
@@ -218,24 +246,75 @@ describe('plywood, from thinSheet(p)', () => {
   });
 });
 
+describe('the thin-sheet line is priced by priceKey (D-80)', () => {
+  const expected: Record<string, number> = { 'baltic-6mm': 49, 'okoume-6mm': 158.65, 'white-oak-1/4': 113, 'baltic-3mm': 40 };
+  it('prices each THIN_SHEET option by its own key, in both specs: Peach State Baltic birch $49, Aircraft Spruce okoume $158.65, The Wood Yard white oak ply $113 and 3 mm Baltic $40', () => {
+    for (const w of [WEATHER_SPEC.standard, WEATHER_SPEC.extreme]) for (const m of Object.values(THIN_SHEET)) {
+      const p: Params = { ...defaultParams(), weatherSpec: w, thinSheetMaterial: m };
+      const t = thinSheet(p);
+      const b = bom(buildModel(p), p, { noCompare: true });
+      const ply = b.sections.find((x) => x.id === 'plywood')!.lines;
+      const thin = ply.find((l) => /thin sheet/.test(l.description))!;
+      expect(thin.key, `${w}/${m}`).toBe(t.priceKey);
+      expect(thin.unitUsd, `${w}/${m}`).toBe(expected[t.priceKey]);
+      expect(thin.basis, `${w}/${m}`).toBe('quoted');
+      expect(thin.url, `${w}/${m}`).toMatch(/^https:\/\//);
+      expect(ply.find((l) => l.key === '12 mm')!.unitUsd).toBe(90); // the deck sheet stays The Wood Yard's
+      expect(ply.find((l) => l.key === '12 mm')!.notes ?? '').not.toMatch(/undefined/);
+      expect(b.unpriced, `${w}/${m}`).toEqual([]);
+    }
+    // 6 mm Baltic birch (Standard default) and 6 mm okoume (Extreme default) are the follow-the-weather picks
+    expect(thinSheet(std).priceKey).toBe('baltic-6mm');
+    expect(thinSheet(ext).priceKey).toBe('okoume-6mm');
+    // Peach State's white oak ply and Boulter's okoume are shown as alternatives, not substituted
+    expect(PLYWOOD_PRICE['white-oak-1/4'].alternatives![0].usd).toBe(75);
+    expect(PLYWOOD_PRICE['okoume-6mm'].alternatives![0].usd).toBe(98);
+    expect(PLYWOOD_PRICE['12 mm'].note).toMatch(/Randall Brothers/);
+  });
+});
+
+describe('the cost pass totals (D-79 to D-83)', () => {
+  it('Standard costs about $1,400 to $1,500 and mostly quoted; Extreme about $2,300; the shop stock adds nothing to the estimate', () => {
+    expect(bStd.totalUsd).toBeGreaterThan(1350);
+    expect(bStd.totalUsd).toBeLessThan(1560);
+    expect(bExt.totalUsd).toBeGreaterThan(2000);
+    expect(bExt.totalUsd).toBeLessThan(2700);
+    expect(bStd.estimateShare).toBeLessThan(0.15);
+    expect(bStd.unpriced).toEqual([]);
+    expect(bExt.unpriced).toEqual([]);
+    // the lumber is Peach State's 4/4 and 5/4 only
+    const lum = bStd.sections.find((x) => x.id === 'lumber')!.lines;
+    expect(lum.map((l) => [l.key, l.unitUsd, l.basis])).toEqual([['4/4', 8.25, 'quoted'], ['5/4', 10, 'quoted']]);
+    // the 2:1 U.S. Composites kit with its pumps and the fumed silica by the quart
+    expect(lines(bStd).find((l) => l.key === 'silica')!.unit).toBe('qt');
+    expect(lines(bStd).find((l) => l.key === 'epoxy-pumps')!.unitUsd).toBe(8.5);
+    // the brake bungee is bought by the foot, not by the roll; the D-rings by the 2-pack
+    const cord = lines(bStd).find((l) => l.key === 'brake-cord')!;
+    expect([cord.unit, cord.unitUsd]).toEqual(['ft', 0.19]);
+    expect(lines(bStd).find((l) => l.key === 'lash-point')!.unit).toBe('pack of 2');
+  });
+});
+
 describe('finishing schedule by spec', () => {
   const sS = finishingSchedule(stdParts, std);
   const sE = finishingSchedule(extParts, ext);
 
-  it('classes white oak plywood as itself, not okoume, by thinSheet(p)', () => {
+  it('classes each thin sheet as itself by thinSheet(p): 6 mm Baltic birch (Standard) is birch, white oak plywood is not okoume', () => {
     const web = stdParts.find((x) => x.id === 'side-L-web')!;
-    expect(finishMaterial(web, std)).toBe('oakPly');
-    expect(finishMaterial(web)).toBe('oakPly');
+    expect(finishMaterial(web, std)).toBe('birch');
     expect(finishMaterial(extParts.find((x) => x.id === 'side-L-web')!, ext)).toBe('okoume');
     expect(finishMaterial(stdParts.find((x) => x.id === 'deck')!, std)).toBe('okoume');
+    const oakPly: Params = { ...defaultParams(), thinSheetMaterial: THIN_SHEET.whiteOakPly };
+    expect(finishMaterial(buildModel(oakPly).find((x) => x.id === 'side-L-web')!, oakPly)).toBe('oakPly');
     const baltic: Params = { ...defaultParams(), thinSheetMaterial: THIN_SHEET.balticBirch3mm };
     expect(finishMaterial(buildModel(baltic).find((x) => x.id === 'side-L-web')!, baltic)).toBe('birch');
     const a = finishAreas(stdParts, std);
-    expect(a.oakPlyFt2).toBeGreaterThan(10);
+    expect(a.birchFt2).toBeGreaterThan(10);
     expect(a.okoumeFt2).toBeGreaterThan(10); // the 12 mm deck and the seat back
     expect(a.plyFt2).toBeCloseTo(a.okoumeFt2 + a.oakPlyFt2 + a.birchFt2, 9);
     expect(a.totalFt2).toBeCloseTo(a.oakFt2 + a.plyFt2, 9);
     expect(finishAreas(extParts, ext).oakPlyFt2).toBe(0);
+    expect(finishAreas(extParts, ext).birchFt2).toBe(0);
   });
 
   it('Standard coats edges, end grain and the deck underside with epoxy; Extreme saturates all the plywood', () => {
@@ -263,18 +342,26 @@ describe('finishing schedule by spec', () => {
     expect(urethaneContainers(4.2).map((c) => `${c.qty} ${c.unit}`)).toEqual(['1 gal', '1 qt']);
   });
 
-  it('white oak plywood takes the oak\'s stain (no conditioner or gel); okoume takes a conditioner; Extreme adds the gel stain', () => {
-    const stain = sS.steps.find((s) => s.id === 'stain')!;
-    expect(stain.products[0].areaFt2).toBeCloseTo(sS.areas.show.oakFt2 + sS.areas.show.oakPlyFt2, 0);
-    expect(stain.products.map((q) => q.name).join(' ')).not.toMatch(/Gel stain/);
-    expect(stain.products[1].areaFt2).toBeCloseTo(sS.areas.show.okoumeFt2 + sS.areas.show.birchFt2, 0); // the 12 mm okoume deck only
-    expect(sS.buy.some((b) => /Gel stain/.test(b.item))).toBe(false);
-    expect(stain.instructions.join(' ')).toMatch(/white oak plywood/);
+  it('Standard takes no stain and no conditioner (D-83): step 3 is the grain-raising pass and the buy list has none; Extreme keeps the stain, the conditioner and the gel stain', () => {
+    expect(sS.steps.map((x) => x.id)).toEqual(['offcut-tests', 'sand', 'grain', 'epoxy', 'engrave', 'varnish']);
+    const grain = sS.steps.find((x) => x.id === 'grain')!;
+    expect(grain.n).toBe(3);
+    expect(grain.products).toEqual([]);
+    expect(grain.instructions.join(' ')).toMatch(/Skip the stain and the conditioner/);
+    expect(sS.buy.some((b) => /stain|conditioner/i.test(b.item))).toBe(false);
+    // the lid legend is filled with a paint marker, not enamel
+    expect(sS.buy.some((b) => /paint marker/.test(b.item))).toBe(true);
+    expect(sS.buy.some((b) => /enamel/i.test(b.item))).toBe(false);
+    // Extreme: the oak takes the stain, okoume a conditioner and a gel stain
+    const stain = sE.steps.find((x) => x.id === 'stain')!;
+    expect(stain.products[0].areaFt2).toBeCloseTo(sE.areas.show.oakFt2 + sE.areas.show.oakPlyFt2, 0);
+    expect(stain.products[1].areaFt2).toBeCloseTo(sE.areas.show.okoumeFt2 + sE.areas.show.birchFt2, 0);
     expect(sE.buy.some((b) => /Gel stain/.test(b.item))).toBe(true);
-    // a Baltic birch thin sheet blotches: it takes the conditioner too
-    const baltic: Params = { ...defaultParams(), thinSheetMaterial: THIN_SHEET.balticBirch3mm };
+    expect(sE.buy.some((b) => /conditioner/i.test(b.item))).toBe(true);
+    // a Baltic birch thin sheet under the Extreme spec blotches: it takes the conditioner too
+    const baltic: Params = { ...defaultParams(), weatherSpec: WEATHER_SPEC.extreme, thinSheetMaterial: THIN_SHEET.balticBirch6mm };
     const sB = finishingSchedule(buildModel(baltic), baltic);
-    const stainB = sB.steps.find((s) => s.id === 'stain')!;
+    const stainB = sB.steps.find((x) => x.id === 'stain')!;
     expect(sB.areas.birchFt2).toBeGreaterThan(5);
     expect(stainB.products[1].areaFt2).toBeCloseTo(sB.areas.show.okoumeFt2 + sB.areas.show.birchFt2, 0);
     expect(stainB.products[1].name).toMatch(/Baltic birch/);
@@ -282,9 +369,9 @@ describe('finishing schedule by spec', () => {
 
   it('names the thin sheet, not "4 mm okoume", in the offcut, sanding and engraving text', () => {
     const t1 = sS.steps[0].instructions.join(' ') + sS.steps[1].instructions.join(' ') + sS.steps.find((s) => s.id === 'engrave')!.instructions.join(' ');
-    expect(t1).toContain('1/4 in white oak plywood');
+    expect(t1).toContain('6 mm Baltic birch');
     expect(t1).not.toMatch(/4 mm/);
-    expect(sE.steps[0].instructions.join(' ')).toContain('4 mm okoume');
+    expect(sE.steps[0].instructions.join(' ')).toContain('6 mm okoume');
   });
 });
 
@@ -327,15 +414,20 @@ describe('the epoxy kits', () => {
     for (const a of alts) expect(a.usd, a.source).toBeGreaterThanOrEqual(cost - 1e-9);
     expect(ep[0].notes).toMatch(/Alternatives \(not substituted\)/);
     expect(alts.map((a) => a.source).join(' ')).toMatch(/West System/);
-    // a small kit comes with its pumps: no West pump set; a West kit needs the 300 pumps
+    // a small 5:1 kit comes with its pumps; a West kit needs the 300 pumps; the U.S. Composites 2:1 kit needs its own $8.50 set. Whichever is bought, exactly one pump line
     const west = ep.some((l) => /^epoxy-(gallon|quart)$/.test(l.key));
-    expect(lines(bStd).some((l) => l.key === 'epoxy-pumps')).toBe(west);
+    expect(lines(bStd).filter((l) => l.key === 'epoxy-pumps').length).toBe(west || ep.some((l) => /uscomposites/.test(l.key)) ? 1 : 0);
+    expect(ep[0].key).toBe('epoxy-uscomposites-635-2-1'); // D-79: the 635 thin epoxy 2:1 is the cheapest family (96 oz mixed for $53.45 plus pumps)
+    expect(ep[0].qty).toBe(1);
     // enough resin
     expect(bStd.consumables.resinFlOz).toBeGreaterThan(20);
     expect(bStd.consumables.resinFlOz).toBeLessThan(bExt.consumables.resinFlOz);
-    // Extreme keeps the West gallon group
-    expect(lines(bExt).some((l) => l.key === 'epoxy-gallon')).toBe(true);
-    expect(lines(bExt).some((l) => l.key === 'epoxy-pumps')).toBe(true);
+    // Extreme considers the 635 kit too: its 96 oz mixed (64 oz resin at 2:1) is cheaper than the West gallon group, which is listed as the alternative
+    const eep = lines(bExt).filter((l) => /^epoxy-/.test(l.key) && l.key !== 'epoxy-pumps');
+    expect(eep.map((l) => l.key)).toEqual(['epoxy-uscomposites-635-2-1']);
+    expect(eep[0].qty).toBe(Math.ceil((bExt.consumables.epoxyFlOz * 2) / 3 / 64 - 1e-9)); // the resin is 2/3 of the mixed epoxy at 2:1, 64 oz a kit
+    expect(eep[0].alternatives!.some((a) => a.source === 'West System')).toBe(true);
+    expect(lines(bExt).filter((l) => l.key === 'epoxy-pumps').length).toBe(1);
   });
 });
 
@@ -373,7 +465,8 @@ describe('the build book', () => {
     expect(html).toContain('Weather spec: Standard');
     expect(html).toContain('Extreme adds $');
     expect(html).toContain('Extreme minus Standard');
-    expect(html).toContain('1/4 in white oak plywood');
+    expect(html).toContain('6 mm Baltic birch');
+    expect(html).toContain('shop stock');
     expect(html).not.toMatch(/marine okoume \(BS 1088\), 4 × 8 ft/);
     const htmlE = buildBookHtml(new BuildData(extParts, ext, { date: '2026-10-12' }));
     expect(htmlE).toContain('Weather spec: Extreme weather');

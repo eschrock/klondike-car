@@ -79,8 +79,8 @@ export const TIRE_TYPE = { pneumatic: 0, flatFree: 1 } as const;
 export const PLY_SPECIES = { okoumeMarine: 0, balticBirchExterior: 1 } as const;
 /** D-73: the weather the sled is built for. Standard = garage-kept, a few uses a year; Extreme = stored outside or near salt. */
 export const WEATHER_SPEC = { standard: 0, extreme: 1 } as const;
-/** D-73: the thin-sheet material (the side webs, the storage box and lid, the signs). `followWeather` picks white oak ply for Standard and okoume for Extreme. */
-export const THIN_SHEET = { followWeather: 0, whiteOakPly: 1, okoumeMarine: 2, balticBirch3mm: 3 } as const;
+/** D-73, D-80: the thin-sheet material (the side webs, the storage box and lid, the signs). `followWeather` picks 6 mm Baltic birch for Standard and 6 mm okoume for Extreme. */
+export const THIN_SHEET = { followWeather: 0, whiteOakPly: 1, okoumeMarine: 2, balticBirch3mm: 3, balticBirch6mm: 4 } as const;
 /** D-78: how the step-brake knees are mounted. `fixed` = bolted and glued on for good (the default); `removable` = the same four bolts, fitted dry, taken off with a ratchet and wrench. */
 export const KNEE_MOUNT = { fixed: 0, removable: 1 } as const;
 export const STORAGE_LOCATION = { rearOverAxle: 0, underSeat: 2 } as const;
@@ -540,12 +540,12 @@ const defs = {
   lashPointsPerSide: {
     label: 'Lash points (D-rings) per side', group: 'body', unit: '',
     default: 3, min: 2, max: 3, step: 1, status: 'assumed', ref: 'D-41, D-76',
-    note: 'D-76: the D-rings are through-bolted to the heads of the side ribs, one per rib (3 per side: the box rib, the mid rib and the bow post). 2 leaves the bow post without one (the ribs stay: they stiffen the side). D-76 asks for at least 6 in all. The old screwed lash doublers are gone.',
+    note: 'D-76, D-83: the D-rings are through-bolted (two 1/4-20 bolts each) to the heads of the side ribs, one per rib (3 per side: the box rib, the mid rib and the bow post). 2 leaves the bow post without one (the ribs stay: they stiffen the side). D-76 asks for at least 6 in all. The old screwed lash doublers are gone.',
   },
   lashLoadLbf: {
     label: 'Lash point design load (strap pull)', group: 'body', unit: 'lbf',
-    default: 300, min: 100, max: 600, step: 25, status: 'assumed', ref: 'D-41, D-76',
-    note: 'D-76: the D-ring bolt plate is rated for 300 lbf working load. The lash-load check pulls each plate with this at the angle below (through-bolts, head bearing, rib bending, D-76), and the side-lateral row pulls the side in with it at the worst rib.',
+    default: 233, min: 100, max: 600, step: 25, status: 'assumed', ref: 'D-41, D-76, D-83',
+    note: 'D-83: the bolt-on cargo D-ring (Harbor Freight 1/4 in D-ring, #60319) is rated 233 lbf working load. The lash-load check pulls each ring with this at the angle below (through-bolts, head bearing, rib bending, D-76), and the side-lateral row pulls the side in with it at the worst rib. The cargo straps pull 79 lbf a ring.',
   },
   lashPullAngleDeg: {
     label: 'Lash strap pull angle above the deck', group: 'body', unit: '°',
@@ -651,7 +651,13 @@ const defs = {
   },
   seatCushionIn: {
     label: 'Seat cushion thickness', group: 'seat', unit: 'in',
-    default: 2, min: 1, max: 5, step: 0.25, status: 'assumed', ref: 'D-18',
+    default: 1.5, min: 1, max: 5, step: 0.25, status: 'assumed', ref: 'D-18, D-83',
+    note: 'D-83: 1-1/2 in, the thickness of the Harbor Freight EVA kneeling pad (#56572, 11 x 18 x 1-1/2 in). The cushion is one whole pad plus a strip of a second, edge-glued with contact cement; the seat back pad is a third pad (1-1/2 in, BACK_PAD_THICK_IN), trimmed to size. No cover.',
+  },
+  evaFoamDensityPcf: {
+    label: 'EVA kneeling-pad foam density', group: 'seat', unit: 'lb/ft³',
+    default: 5.8, min: 3, max: 9, step: 0.1, status: 'assumed', ref: 'D-83',
+    note: 'D-83: the Harbor Freight EVA kneeling pad is about 1 lb for 11 x 18 x 1-1/2 in (297 in³): 1 lb / 297 in³ = 5.8 lb/ft³. WEIGH A PAD to confirm.',
   },
   seatStowClearIn: {
     label: 'Clearance around the stowed seat in the box', group: 'seat', unit: 'in',
@@ -835,18 +841,18 @@ const defs = {
   },
   clampPlateWidthIn: {
     label: 'Clamp bridge plate width (along the axle)', group: 'wheels', unit: 'in',
-    default: 1.75, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-10, D-62, D-66, D-71',
-    note: 'The plate lies across the tube on a line this long (the ring-bending row of the tube wall uses it, and the bearing-groove row takes the axle diameter x this as the bearing area in the oak). D-71: 1.75 in (was 1.5 in): the 5/8 in axle has 17 percent less bearing area, which took the rear groove bearing to 0.99 at the 200 lb rider and 1.03 (a fail) at the 200 lb cargo; 1.75 in brings it to 0.85 and 0.88 for about 0.16 lb in all. D-66: at the 30 in rear track the tire inner face is 13.25 in from center, so the rear plate runs from 11.75 to 13.25 in: its inner 1/4 in is UNDER the 12 in rail, whose relief notch is cut high enough to clear it (frame.ts; the hanger, which carries the beam seat, is inboard of that).',
+    default: 2, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-10, D-62, D-66, D-71, D-83',
+    note: 'D-83: 2 in, so the plate is cut from 1/4 x 2 stock bar (no ripping; the rear groove bearing row improves). The plate lies across the tube on a line this long (the ring-bending row of the tube wall uses it, and the bearing-groove row takes the axle diameter x this as the bearing area in the oak). D-71: 1.75 in (was 1.5 in): the 5/8 in axle has 17 percent less bearing area, which took the rear groove bearing to 0.99 at the 200 lb rider and 1.03 (a fail) at the 200 lb cargo; 1.75 in brings it to 0.85 and 0.88 for about 0.16 lb in all. D-66: at the 30 in rear track the tire inner face is 13.25 in from center, so the rear plate runs from 11.75 to 13.25 in: its inner 1/4 in is UNDER the 12 in rail, whose relief notch is cut high enough to clear it (frame.ts; the hanger, which carries the beam seat, is inboard of that).',
   },
   clampPlateOuterWidthIn: {
     label: 'Front OUTER clamp plate width (along the axle)', group: 'wheels', unit: 'in',
-    default: 1.75, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-62, eng 3c S-3',
-    note: 'D-62: the outer front clamp plate takes the fore-aft bump force on the groove wall (front-beam, HARD 2 in hit, 200 lb cargo forward). The 0.70 in groove (the tube stands proud) cut the wall area 7 percent and put that detail at 1.00; 1/4 in more plate (the eng review S-3 asked for 1/2 in more) brings it to 0.88 for 0.04 lb a plate. The inner front plates and the rear plate stay clampPlateWidthIn.',
+    default: 2, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-62, eng 3c S-3, D-83',
+    note: 'D-83: 2 in, cut from the same 1/4 x 2 stock bar as the other plates. D-62: the outer front clamp plate takes the fore-aft bump force on the groove wall (front-beam, HARD 2 in hit, 200 lb cargo forward). The 0.70 in groove (the tube stands proud) cut the wall area 7 percent and put that detail at 1.00; 1/4 in more plate (the eng review S-3 asked for 1/2 in more) brings it to 0.88 for 0.04 lb a plate. The inner front plates and the rear plate stay clampPlateWidthIn.',
   },
   clampPlateLengthIn: {
     label: 'Clamp bridge plate length (across the tube, fore-aft)', group: 'wheels', unit: 'in',
     default: 2.25, min: 1.5, max: 4, step: 0.25, status: 'assumed', ref: 'D-10, D-62',
-    note: 'D-62: ONE plate per clamp station with two 3/8 in bolts at +/- 0.6875 in for the 5/8 in tube (D-71; 0.75 in for the 3/4 in tube) (6 plates instead of 12, same bolt count): 316 flat bar 1/4 x 1.75 x 2-1/4 in (D-71; 1.5 in wide before), 3/8 in from each hole centre to the end. The plate in bending between the bolts (a 800 lbf tube load, the oak-limited preload) is about 19 ksi.',
+    note: 'D-62: ONE plate per clamp station with two 3/8 in bolts at +/- 0.6875 in for the 5/8 in tube (D-71; 0.75 in for the 3/4 in tube) (6 plates instead of 12, same bolt count): 316 flat bar 1/4 x 2 x 2-1/4 in (D-83: 2 in stock bar; 1.75 in at D-71, 1.5 in before), 3/8 in from each hole centre to the end. The plate in bending between the bolts (a 800 lbf tube load, the oak-limited preload) is about 19 ksi.',
   },
   clampPlateThickIn: {
     label: 'U-bolt plate thickness', group: 'wheels', unit: 'in',
@@ -948,8 +954,8 @@ const defs = {
   },
   rollPadRadiusIn: {
     label: 'Roll pads: distance from the kingpin along the axle beam', group: 'steering', unit: 'in',
-    default: 9.5, min: 6, max: 14, step: 0.25, status: 'assumed', ref: 'D-58, D-60, D-66',
-    note: 'D-58: two UHMW slide pads on top of the axle beam, one each side of the kingpin, that slide under the frame rails with a small running gap and catch the roll of a one-wheel bump, so the kingpin only locates. The rails are the nearest continuous frame members at this distance (they pass over the whole swing); the pad covers the rail underside at every steering angle (checked in king-bearing). D-60: 11-1/2 in (was 11 in): the shorter 2.28 in wheel hub moves the stub clamp stations outboard, so the pad moves with the inner station\'s edge (validateParams checks it); the king-bearing row is unchanged.',
+    default: 9.75, min: 6, max: 14, step: 0.25, status: 'assumed', ref: 'D-58, D-60, D-66, D-83',
+    note: 'D-58: two UHMW slide pads on top of the axle beam, one each side of the kingpin, that slide under the frame rails with a small running gap and catch the roll of a one-wheel bump, so the kingpin only locates. The rails are the nearest continuous frame members at this distance (they pass over the whole swing); the pad covers the rail underside at every steering angle (checked in king-bearing). D-60: the pad moves with the inner station\'s edge (validateParams checks it); the king-bearing row is unchanged. D-83: 9-3/4 in (was 9-1/2 in): the inner clamp plates are 2 in wide now (cut from 1/4 x 2 bar), so the pad moves 1/4 in out to keep its clearance from them.',
   },
   rollPadLenIn: {
     label: 'Roll pad length (along the axle beam)', group: 'steering', unit: 'in',
@@ -1072,8 +1078,8 @@ const defs = {
   },
   frontStubLenIn: {
     label: 'Front stub axle clamped length on the beam', group: 'steering', unit: 'in',
-    default: 8, min: 4, max: 14, step: 0.5, status: 'assumed', ref: 'D-56',
-    note: 'Each front stub axle is a steel rod bolted down in a groove in the top of the beam end (two clamp plates, as on the rear axle), the wheel on the free end.',
+    default: 8, min: 4.5, max: 14, step: 0.5, status: 'assumed', ref: 'D-56, D-83',
+    note: 'D-83: at least 4-1/2 in, so the two 2 in clamp plates of a stub fit. Each front stub axle is a steel rod bolted down in a groove in the top of the beam end (two clamp plates, as on the rear axle), the wheel on the free end.',
   },
   steerRopesOn: {
     label: 'Steering ropes from the axle ends to the musher', group: 'steering', unit: '',
@@ -1644,7 +1650,7 @@ const defs = {
   sideThicknessIn: {
     label: 'Side thickness (the sandwich: two oak bands + the thin web)', group: 'stock', unit: 'in',
     default: 0.625, min: 0.375, max: 1, step: 0.0625, status: 'explore', ref: 'D-35, D-43, D-62',
-    note: 'D-62: the side is a sandwich, an oak band on each face of the web, so 5/8 in = 2 x 0.234 in bands + 0.157 in web (4 mm okoume), the same as the grooved side it replaced. D-73: the bands are (this - the thin sheet in effect) / 2: 0.2075 in with the 0.21 in white oak plywood, 0.2535 in with the 3 mm Baltic birch. The deck edge rises into the gap under the inner chine band (depth = the band thickness); the transoms have their own thickness.',
+    note: 'D-62: the side is a sandwich, an oak band on each face of the web, D-73, D-80: the bands are (this - the thin sheet in effect) / 2: 0.195 in with the 0.236 in (6 mm) Baltic birch or okoume, 0.2075 in with the 0.21 in white oak plywood, 0.2535 in with the 3 mm Baltic birch. The deck edge rises into the gap under the inner chine band (depth = the band thickness); the transoms have their own thickness.',
   },
   axleBeamThicknessIn: {
     label: 'Rear axle beam width (fore-aft)', group: 'stock', unit: 'in',
@@ -1674,14 +1680,14 @@ const defs = {
   },
   panelPlyIn: {
     label: 'Thin sheet when okoume (sides / box / lid / signs)', group: 'stock', unit: 'in',
-    default: 0.157, min: 0.157, max: 0.472, step: 0.001, status: 'explore', ref: 'D-60, D-73',
+    default: 0.236, min: 0.157, max: 0.472, step: 0.001, status: 'explore', ref: 'D-60, D-73, D-80',
     options: [
       { value: 0.157, label: '4 mm' },
       { value: 0.236, label: '6 mm' },
       { value: 0.354, label: '9 mm' },
       { value: 0.472, label: '12 mm' },
     ],
-    note: 'D-73: this is the thickness of the okoume option of thinSheetMaterial only; the effective thin-sheet thickness (thinSheet(p).thicknessIn) follows the material (white oak plywood 0.21 in, Baltic birch 0.118 in) and is what the model reads. D-60: 4 mm okoume (was 6 mm) for the side webs, the storage box and its lid and the sign blanks (marine okoume, a full 4 x 8 sheet from a local supplier, D-68; Baltic birch 4 mm is the fallback); the dado and edge-banding widths follow it, and the sandwich bands of the sides are (side thickness - this) / 2 thick each (D-62). The seat-back panel has its own size (seatBackPlyIn, 12 mm from the deck offcut, D-62). 4 mm skin and lid dent more easily (the cargo case of the lid-load row goes from 0.42 to 0.75); keep the lid engraved DO NOT STEP (D-58).',
+    note: 'D-80: 6 mm (0.236 in) okoume BS 1088, the Extreme spec thin sheet (the 4 mm sheet failed the side-web row, 2.0). This is the thickness of the okoume option of thinSheetMaterial only; the effective thin-sheet thickness (thinSheet(p).thicknessIn) follows the material (6 mm Baltic birch 0.236 in, white oak plywood 0.21 in, 3 mm Baltic birch 0.118 in) and is what the model reads. The dado and edge-banding widths follow it, and the sandwich bands of the sides are (side thickness - this) / 2 thick each (D-62). The seat-back panel has its own size (seatBackPlyIn, 12 mm from the deck offcut, D-62). Keep the lid engraved DO NOT STEP (D-58).',
   },
   seatBackPlyIn: {
     label: 'Seat-back panel plywood', group: 'stock', unit: 'in',
@@ -1866,7 +1872,7 @@ const defs = {
       { value: PLY_SPECIES.okoumeMarine, label: 'Okoume marine (BS 1088)' },
       { value: PLY_SPECIES.balticBirchExterior, label: 'Baltic birch, exterior glue' },
     ],
-    note: 'D-73: this species covers the 12 mm deck and seat-back sheet only; the thin sheet (webs, box, lid, signs) is chosen by thinSheetMaterial. MATERIALS AND SOURCES (Eric, 2026-10-12): the sheet goods are okoume marine plywood (BS 1088): 4 mm (sides, box, lid, signs) and 12 mm (1/2 in: the deck, and the seat back from its offcut), one FULL 4 x 8 ft sheet of each from a local supplier (D-68). Each 4 mm side web is one piece; there is no 2 x 4 ft sheet option. FALLBACK if no okoume: Baltic birch 12 mm for the deck (about 3 to 4 lb heavier at the deck alone; every cut edge and face must be epoxy-sealed, it is exterior-glue only, not marine), 4 mm Baltic birch elsewhere. Solid parts are white oak: the lumber yard stocks 4/4 to 12/4 rough, so resaw and plane to the finished thickness (the stock/rough columns of the cut list already assume this). FINISHING STACK (Phase 4): stain (pre-stain conditioner or a gel stain on okoume, which blotches) -> epoxy seal -> spar varnish with UV filters.',
+    note: 'D-73: this species covers the 12 mm deck and seat-back sheet only; the thin sheet (webs, box, lid, signs) is chosen by thinSheetMaterial. MATERIALS AND SOURCES (Eric, 2026-10-12): the deck and seat back are 12 mm (1/2 in) okoume marine plywood (BS 1088), one FULL 4 x 8 ft sheet from a local supplier (D-68); the thin sheet is 6 mm (D-80). Each side web is one piece. FALLBACK if no okoume: Baltic birch 12 mm for the deck (about 3 to 4 lb heavier at the deck alone; every cut edge and face must be epoxy-sealed, it is exterior-glue only, not marine). Solid parts are white oak: the lumber yard stocks 4/4 to 12/4 rough, so resaw and plane to the finished thickness (the stock/rough columns of the cut list already assume this). FINISHING STACK: epoxy seal -> clear spar varnish with UV filters (no stain, D-83).',
   },
   weatherSpec: {
     label: 'Weather spec', group: 'materials', unit: '',
@@ -1875,18 +1881,19 @@ const defs = {
       { value: WEATHER_SPEC.standard, label: 'Standard (garage-kept)' },
       { value: WEATHER_SPEC.extreme, label: 'Extreme weather' },
     ],
-    note: 'D-73. Standard: garage-kept, used a few times a year, gets wet at most at a rainy derby (Eric, 2026-10-12). Extreme weather: stored outside or near salt. The model reads this only for the thin-sheet material ("follow the weather setting": Standard is 1/4 in white oak plywood, Extreme is 4 mm okoume marine). The fasteners, glue and finish that follow the weather spec are chosen in the BOM and finishing schedule.',
+    note: 'D-73. Standard: garage-kept, used a few times a year, gets wet at most at a rainy derby (Eric, 2026-10-12). Extreme weather: stored outside or near salt. The model reads this for the thin-sheet material ("follow the weather setting": Standard is 6 mm Baltic birch, Extreme is 6 mm okoume marine, D-80), for the drains (Standard: drilled 3/8 in holes with an epoxy-lined bore; Extreme: stainless nipples, D-83) and for the lid support (Standard: plated steel; Extreme: stainless friction stay, D-83). The fasteners, glue and finish that follow the weather spec are chosen in the BOM and finishing schedule.',
   },
   thinSheetMaterial: {
     label: 'Thin-sheet material (webs, box, lid, signs)', group: 'materials', unit: '',
-    default: THIN_SHEET.followWeather, min: 0, max: 3, step: 1, status: 'explore', ref: 'D-73, D-60',
+    default: THIN_SHEET.followWeather, min: 0, max: 4, step: 1, status: 'explore', ref: 'D-73, D-80',
     options: [
       { value: THIN_SHEET.followWeather, label: 'Follow the weather setting' },
       { value: THIN_SHEET.whiteOakPly, label: '1/4" white oak plywood' },
-      { value: THIN_SHEET.okoumeMarine, label: '4 mm okoume marine' },
+      { value: THIN_SHEET.okoumeMarine, label: '6 mm okoume marine' },
       { value: THIN_SHEET.balticBirch3mm, label: '1/8" (3 mm) Baltic birch' },
+      { value: THIN_SHEET.balticBirch6mm, label: '6 mm (1/4") Baltic birch' },
     ],
-    note: 'D-73 (Eric approved): the sheet for the side webs, the storage box, its lid and the signs. The dado widths, the sandwich band thickness ((side - web) / 2), the box and lid panels, the sign blanks, the masses, the web and lid rows, the nesting sheet and the cut list all follow it. The 12 mm deck and seat back stay marine okoume. 1/4 in white oak plywood (The Wood Yard, $113 per 4 x 8, https://www.thewoodyard.com/current-pricing-list/#plywood): about 0.21 in (5.3 mm) real, interior or Type II glue, fine garage-kept once sealed. 4 mm okoume marine (Aircraft Spruce, $122 per 4 x 8): the D-60 spec, BS 1088 glue. 1/8 in (3 mm) Baltic birch (The Wood Yard, $40 per 5 x 5 sheet): 0.118 in, exterior glue.',
+    note: 'D-73, D-80: the sheet for the side webs, the storage box, its lid and the signs. The dado widths, the sandwich band thickness ((side - web) / 2), the box and lid panels, the sign blanks, the masses, the web and lid rows, the nesting sheet and the cut list all follow it. The 12 mm deck and seat back stay marine okoume. Follow the weather: Standard is 6 mm (1/4 in) Baltic birch (4 x 8, interior glue probably, garage-kept and sealed: ask), Extreme is 6 mm okoume BS 1088. Other choices: 1/4 in white oak plywood (about 0.21 in real, interior glue), 3 mm Baltic birch (0.118 in, 5 x 5 ft sheet).',
   },
   whiteOakPlyThickIn: {
     label: '1/4" white oak plywood real thickness', group: 'materials', unit: 'in',
@@ -1933,6 +1940,21 @@ const defs = {
     default: 1100, min: 500, max: 3500, step: 50, status: 'assumed', ref: 'D-76',
     note: 'D-76: Metsä Wood\'s declared 4 mm 3-ply birch bending strength across / along = 10.6 / 65.9 N/mm² = 0.16: 0.16 x 7,000 psi = 1,100 psi.',
   },
+  balticSixThickIn: {
+    label: '6 mm (1/4") Baltic birch real thickness', group: 'materials', unit: 'in',
+    default: 0.236, min: 0.2, max: 0.27, step: 0.001, status: 'verify', ref: 'D-80',
+    note: 'D-80: 6 mm (0.236 in); 6.5 mm sheets (0.256 in) are sold too. MEASURE THE SHEET with calipers before cutting a dado. Density, along-grain E and MOR are the Baltic birch values (birchDensityPcf, birchMoePsi, birchMorPsi).',
+  },
+  balticSixMoePerpPsi: {
+    label: '6 mm Baltic birch effective E (across the face grain)', group: 'materials', unit: 'psi',
+    default: 486000, min: 100000, max: 900000, step: 5000, status: 'assumed', ref: 'D-80',
+    note: 'D-80: Metsä Wood declared values for 6.5 mm 5-ply birch give bending E across / along = 4,763 / 12,737 N/mm² = 0.374: 0.374 x 1.3 Msi = 486,000 psi.',
+  },
+  balticSixMorPerpPsi: {
+    label: '6 mm Baltic birch effective MOR (across the face grain)', group: 'materials', unit: 'psi',
+    default: 3990, min: 1000, max: 7000, step: 50, status: 'assumed', ref: 'D-80',
+    note: 'D-80: Metsä Wood declared strength across / along = 29.0 / 50.9 N/mm² = 0.57 for 6.5 mm 5-ply birch: 0.57 x 7,000 psi = 3,990 psi.',
+  },
   okoumeDensityPcf: {
     label: 'Okoume marine ply density', group: 'materials', unit: 'lb/ft³',
     default: 33, min: 26, max: 40, step: 0.5, status: 'assumed', ref: 'D-5',
@@ -1946,14 +1968,14 @@ const defs = {
     default: 5000, min: 3000, max: 8000, step: 100, status: 'assumed', ref: 'D-5',
   },
   okoumeMoePerpPsi: {
-    label: '4 mm okoume effective E (across the face grain)', group: 'materials', unit: 'psi',
-    default: 150000, min: 60000, max: 500000, step: 5000, status: 'assumed', ref: 'D-76',
-    note: 'D-76 ESTIMATE: 4 mm BS 1088 okoume is 3 plies with a core about half the thickness, so across the face grain the core carries most of it: about 0.17 of the along-grain E (the 3 mm Baltic, with equal plies, is 0.06). Ask the supplier.',
+    label: '6 mm okoume effective E (across the face grain)', group: 'materials', unit: 'psi',
+    default: 315000, min: 60000, max: 500000, step: 5000, status: 'assumed', ref: 'D-76, D-80',
+    note: 'D-80: 6 mm BS 1088 okoume is 5-ply (Joubert). Bellotti\'s EN 310 data for 6 mm give cross / long E of 3,770 / 4,650 N/mm²; this value takes 0.35 of the along-grain D-5 value (900,000 psi), conservative against that 0.81. Ask the supplier for the sheet\'s data. (D-76 had 150,000 psi for the 4 mm, 3-ply sheet.)',
   },
   okoumeMorPerpPsi: {
-    label: '4 mm okoume effective MOR (across the face grain)', group: 'materials', unit: 'psi',
-    default: 1500, min: 600, max: 3500, step: 50, status: 'assumed', ref: 'D-76',
-    note: 'D-76 ESTIMATE: 0.3 of the along-grain MOR (the core alone gives about 0.25 for a core half the thickness; Metsä\'s equal-ply 3-ply birch is 0.16).',
+    label: '6 mm okoume effective MOR (across the face grain)', group: 'materials', unit: 'psi',
+    default: 3000, min: 600, max: 3500, step: 50, status: 'assumed', ref: 'D-76, D-80',
+    note: 'D-80: Bellotti\'s EN 310 data for 6 mm BS 1088 give cross / long strength of 32 / 35 N/mm²; this value takes 0.6 of the along-grain D-5 value (5,000 psi), conservative against that 0.91. (D-76 had 1,500 psi for the 4 mm, 3-ply sheet.)',
   },
   birchDensityPcf: {
     label: 'Baltic birch ply density', group: 'materials', unit: 'lb/ft³',
@@ -2160,9 +2182,9 @@ const defs = {
     note: 'ASTM F593 condition CW, 65 ksi min yield for 3/8 in and under. Allowable tension = yield / steel safety factor. (Was kingpinCrossBoltYieldPsi.)',
   },
   lashBoltYieldPsi: {
-    label: 'D-ring bolt yield (#8-32 stainless machine screw)', group: 'factors', unit: 'psi',
+    label: 'D-ring bolt yield (1/4-20 stainless button-head bolt)', group: 'factors', unit: 'psi',
     default: 30000, min: 20000, max: 65000, step: 1000, status: 'assumed', ref: 'D-76',
-    note: 'D-76: stainless machine screws carry no F593 certification, so the lash-load row uses the annealed 18-8 / 316 minimum yield (30 ksi, the floor), not the 65 ksi of a cold-worked F593 bolt. Allowable = yield / the steel safety factor.',
+    note: 'D-76, D-83: the two 1/4-20 button-head bolts of each D-ring; stainless machine screws and bolts carry no F593 certification, so the lash-load row uses the annealed 18-8 / 316 minimum yield (30 ksi, the floor), not the 65 ksi of a cold-worked F593 bolt. Allowable = yield / the steel safety factor.',
   },
   grade8BoltYieldPsi: {
     label: 'SAE grade 8 bolt yield', group: 'factors', unit: 'psi',
@@ -2415,10 +2437,10 @@ export function steerGeometry(p: Params) {
   return { lock, kingX, clearAtLock, minTrack, centerRadiusIn, outerEdgeRadiusIn, innerEdgeRadiusIn, beamTop, beamBot, tongueTop, thrustTop, kingBot, kingDepth, railYIn, swathHalf, railDepthFront, railStepX, endJoistX, beamU, beamZ, beamEyeAt, stand, deckBot };
 }
 
-/** The thin-sheet material in effect (D-73): `followWeather` resolves to white oak plywood (Standard) or okoume (Extreme). */
+/** The thin-sheet material in effect (D-73, D-80): `followWeather` resolves to 6 mm Baltic birch (Standard) or 6 mm okoume (Extreme). */
 export function thinSheetKey(p: Pick<Params, 'thinSheetMaterial' | 'weatherSpec'>): number {
   if (p.thinSheetMaterial !== THIN_SHEET.followWeather) return p.thinSheetMaterial;
-  return p.weatherSpec === WEATHER_SPEC.extreme ? THIN_SHEET.okoumeMarine : THIN_SHEET.whiteOakPly;
+  return p.weatherSpec === WEATHER_SPEC.extreme ? THIN_SHEET.okoumeMarine : THIN_SHEET.balticBirch6mm;
 }
 
 export interface ThinSheet {
@@ -2449,10 +2471,12 @@ export interface ThinSheet {
 export function thinSheet(p: Params): ThinSheet {
   const key = thinSheetKey(p);
   if (key === THIN_SHEET.whiteOakPly)
-    return { key, name: '1/4 in white oak plywood', material: '1/4 in white oak plywood', nominal: '1/4 in', thicknessIn: p.whiteOakPlyThickIn, densityPcf: p.whiteOakPlyDensityPcf, moePsi: p.whiteOakPlyMoePsi, morPsi: p.whiteOakPlyMorPsi, moePerpPsi: p.whiteOakPlyMoePerpPsi, morPerpPsi: p.whiteOakPlyMorPerpPsi, sheetWidthIn: 48, sheetLengthIn: 96, priceKey: '5 mm', glue: 'interior / Type II' };
+    return { key, name: '1/4 in white oak plywood', material: '1/4 in white oak plywood', nominal: '1/4 in', thicknessIn: p.whiteOakPlyThickIn, densityPcf: p.whiteOakPlyDensityPcf, moePsi: p.whiteOakPlyMoePsi, morPsi: p.whiteOakPlyMorPsi, moePerpPsi: p.whiteOakPlyMoePerpPsi, morPerpPsi: p.whiteOakPlyMorPerpPsi, sheetWidthIn: 48, sheetLengthIn: 96, priceKey: 'white-oak-1/4', glue: 'interior / Type II' };
   if (key === THIN_SHEET.balticBirch3mm)
-    return { key, name: '3 mm Baltic birch', material: '3 mm Baltic birch plywood', nominal: '1/8 in (3 mm)', thicknessIn: p.balticThinThickIn, densityPcf: p.birchDensityPcf, moePsi: p.birchMoePsi, morPsi: p.birchMorPsi, moePerpPsi: p.balticThinMoePerpPsi, morPerpPsi: p.balticThinMorPerpPsi, sheetWidthIn: 60, sheetLengthIn: 60, priceKey: '3 mm', glue: 'exterior' };
-  return { key: THIN_SHEET.okoumeMarine, name: '4 mm okoume', material: 'okoume marine plywood', nominal: '4 mm', thicknessIn: p.panelPlyIn, densityPcf: p.okoumeDensityPcf, moePsi: p.okoumeMoePsi, morPsi: p.okoumeMorPsi, moePerpPsi: p.okoumeMoePerpPsi, morPerpPsi: p.okoumeMorPerpPsi, sheetWidthIn: 48, sheetLengthIn: 96, priceKey: '4 mm', glue: 'marine (BS 1088)' };
+    return { key, name: '3 mm Baltic birch', material: '3 mm Baltic birch plywood', nominal: '1/8 in (3 mm)', thicknessIn: p.balticThinThickIn, densityPcf: p.birchDensityPcf, moePsi: p.birchMoePsi, morPsi: p.birchMorPsi, moePerpPsi: p.balticThinMoePerpPsi, morPerpPsi: p.balticThinMorPerpPsi, sheetWidthIn: 60, sheetLengthIn: 60, priceKey: 'baltic-3mm', glue: 'exterior' };
+  if (key === THIN_SHEET.balticBirch6mm)
+    return { key, name: '6 mm Baltic birch', material: '6 mm Baltic birch plywood', nominal: '1/4 in (6 mm)', thicknessIn: p.balticSixThickIn, densityPcf: p.birchDensityPcf, moePsi: p.birchMoePsi, morPsi: p.birchMorPsi, moePerpPsi: p.balticSixMoePerpPsi, morPerpPsi: p.balticSixMorPerpPsi, sheetWidthIn: 48, sheetLengthIn: 96, priceKey: 'baltic-6mm', glue: 'interior (verify: ask)' };
+  return { key: THIN_SHEET.okoumeMarine, name: p.panelPlyIn < 0.2 ? '4 mm okoume' : '6 mm okoume', material: 'okoume marine plywood', nominal: p.panelPlyIn < 0.2 ? '4 mm' : '6 mm', thicknessIn: p.panelPlyIn, densityPcf: p.okoumeDensityPcf, moePsi: p.okoumeMoePsi, morPsi: p.okoumeMorPsi, moePerpPsi: p.okoumeMoePerpPsi, morPerpPsi: p.okoumeMorPerpPsi, sheetWidthIn: 48, sheetLengthIn: 96, priceKey: 'okoume-6mm', glue: 'marine (BS 1088)' };
 }
 
 /** Derived quantities that many modules need; no geometry here. */

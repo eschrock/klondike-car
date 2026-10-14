@@ -32,7 +32,7 @@ const axes = (x: Part) => ({ u: [x.transform[0], x.transform[1], x.transform[2]]
 const centerOf = (x: Part) => transformPoint(x.transform, [0, 0, 0]);
 
 describe('seat', () => {
-  it('the pad and the cushion come off without tools (Dual Lock); the frameless back panel stays on the sled on its hinges and flips flat (D-57); the stop blocks are fixed', () => {
+  it('the pad and the cushion come off without tools (Velcro Industrial); the frameless back panel stays on the sled on its hinges and flips flat (D-57); the stop blocks are fixed', () => {
     const removed = new Set(buildModel(defaults, { removed: true }).map((x) => x.id));
     for (const id of ['seat-back-panel', 'seat-crest-strip', 'seat-wedge-L', 'seat-wedge-R', 'seat-hinge-L', 'seat-hinge-R', 'seat-cushion'])
       expect(removed.has(id), id).toBe(true);
@@ -84,12 +84,13 @@ describe('seat', () => {
       expect(defaults.grabHoleLengthIn).toBeGreaterThanOrEqual(3.5);
     }
   });
-  it('the cushion and pad are covered closed-cell foam from a vendor', () => {
+  it('the cushion and pad are closed-cell EVA kneeling pads from Harbor Freight, with no cover (D-83)', () => {
     for (const id of ['seat-cushion', 'seat-back-pad']) {
       const x = byId.get(id)!;
       expect(x.kind).toBe('purchased');
-      expect(x.material).toMatch(/closed-cell foam/);
-      expect(x.material).toMatch(/vinyl/);
+      expect(x.material).toMatch(/closed-cell EVA foam/);
+      expect(x.material).not.toMatch(/vinyl/);
+      expect(x.sourcing?.vendor).toMatch(/Harbor Freight/);
       expect(x.sourcing?.vendor).toBeTruthy();
     }
   });
@@ -118,11 +119,12 @@ describe('storage box', () => {
     expect(packEssentials({ ...i, h: 2 }).unplaced.length).toBeGreaterThan(0);
     expect(ESSENTIALS.length).toBeGreaterThanOrEqual(7);
   });
-  it('weatherproofing: gasket on the wall tops, two hinges, two latches, two drains', () => {
+  it('weatherproofing: gasket on the wall tops, two hinges, two latches; two drain nipples under the Extreme spec only (D-83)', () => {
     expect(parts.filter((x) => x.id.startsWith('storage-gasket-'))).toHaveLength(4);
     expect(parts.filter((x) => /^storage-hinge-[LR]$/.test(x.id))).toHaveLength(2);
     expect(parts.filter((x) => /^storage-latch-[LR]$/.test(x.id))).toHaveLength(2);
-    expect(parts.filter((x) => /^storage-drain-[LR]$/.test(x.id))).toHaveLength(2);
+    expect(parts.filter((x) => /^storage-drain-[LR]$/.test(x.id))).toHaveLength(0);
+    expect(buildModel({ ...defaults, weatherSpec: 1 }).filter((x) => /^storage-drain-[LR]$/.test(x.id))).toHaveLength(2);
     // Gasket sits exactly between the oak coaming on the wall top and the lid frame underside (S4: never on a ply edge).
     const wall = worldAABB(byId.get('storage-side-L')!);
     const coam = worldAABB(byId.get('storage-coaming-side-L')!);
@@ -153,7 +155,8 @@ describe('storage box', () => {
     // Standing walls are bonded to the deck with a fillet; the drains go through the deck into the sealed hole.
     for (const id of ['storage-side-L', 'storage-side-R', 'storage-end-aft', 'storage-end-fore'])
       expect(byId.get(id)!.joints!.some((j) => j.to === 'deck' && j.type === 'glue'), id).toBe(true);
-    expect(byId.get('storage-drain-L')!.joints!.some((j) => j.to === 'deck')).toBe(true);
+    expect(byId.get('deck')!.joints!.filter((j) => j.type === 'hole' && /drain hole/.test(j.size ?? ''))).toHaveLength(2); // D-83: drilled and epoxy-sealed, no nipple
+    expect(buildModel({ ...defaults, weatherSpec: 1 }).find((x) => x.id === 'storage-drain-L')!.joints!.some((j) => j.to === 'deck')).toBe(true);
   });
   it('the box stands in the tall rear section of the sled sides (D-54, D-57): 19.75 in wide in the 22.75 in cabin, its lid below the sloped gunwale along its whole length', () => {
     const lid = worldAABB(byId.get('storage-lid')!);
@@ -192,7 +195,7 @@ describe('storage box', () => {
     // The same box with its own 1/4" floor panel loses 0.25 × 14.5 × 26.5 = 96.0625 in³ of height.
     expect(interiorOf({ ...g, deckFloor: false, floorZ: 9.25 }).totalIn3).toBeCloseTo(2260.875 - 96.0625, 9);
   });
-  it('lash points (D-76): 6, one on the head of each side rib, through-bolted with 4 #8-32 machine screws; no lash doublers', () => {
+  it('lash points (D-76, D-83): 6, one on the head of each side rib, through-bolted with 2 1/4-20 button-head bolts; no lash doublers', () => {
     const lash = parts.filter((x) => x.id.startsWith('lash-'));
     expect(lash).toHaveLength(6);
     expect(lash.filter((x) => x.id.startsWith('lash-L'))).toHaveLength(defaults.lashPointsPerSide);
@@ -202,8 +205,8 @@ describe('storage box', () => {
       const rib = byId.get(x.id.replace('lash-', 'side-rib-'))!;
       expect(rib, x.id).toBeDefined();
       const bolt = x.joints!.find((j) => j.type === 'bolt' && j.to === rib.id)!;
-      expect(bolt.count, x.id).toBe(4);
-      expect(bolt.size).toMatch(/^#8-32 x 2" .*stainless machine screw/);
+      expect(bolt.count, x.id).toBe(2);
+      expect(bolt.size).toMatch(/^1\/4-20 x 2" .*stainless button-head bolt/);
       expect(xs.some((sx) => Math.abs(sx - centerOf(x)[0]) < 0.01), x.id).toBe(true);
     }
   });
@@ -272,12 +275,14 @@ describe('round 2 fittings: latch blocks, stay, stainless', () => {
       expect(blk.material).toBe('white oak');
       expect(byId.get(`storage-latch-${tag}`)!.joints![0].to).toBe(blk.id);
     }
-    expect(byId.get('storage-lid-stay')!.sourcing?.vendor).toMatch(/(?:316|18-8 \(304\) stainless)/);
+    expect(byId.get('storage-lid-stay')!.sourcing?.vendor).toMatch(/Rockler/); // D-83: Standard is a plated-steel Rockler 6 in lid support; the Extreme spec keeps the stainless friction stay
+    expect(byId.get('storage-lid-stay')!.material).toMatch(/plated steel/);
+    expect(buildModel({ ...defaults, weatherSpec: 1 }).find((x) => x.id === 'storage-lid-stay')!.sourcing?.vendor).toMatch(/316/);
   });
   it('every purchased part in these groups names a source; metal hardware is stainless (no zinc or brass in wet oak, S7)', () => {
     for (const x of parts.filter((q) => (mine(q) || q.group === 'hardware') && q.kind === 'purchased')) {
       expect(x.sourcing?.vendor, x.id).toBeTruthy();
-      if (/hinge|latch|catch|drain|D-ring|stay|hardware/i.test(`${x.id} ${x.material}`)) expect(`${x.material} ${x.sourcing!.vendor}`, x.id).toMatch(/316|stainless|zinc-plated/); // Standard spec: zinc-plated D-rings (D-73); 316 under the Extreme spec
+      if (/hinge|latch|catch|drain|D-ring|stay|hardware/i.test(`${x.id} ${x.material}`)) expect(`${x.material} ${x.sourcing!.vendor}`, x.id).toMatch(/316|stainless|zinc-plated|plated steel/); // Standard spec: zinc-plated D-rings (D-73) and the plated-steel lid support (D-83); 316 under the Extreme spec
       if (!/D-ring|inserts/i.test(x.material)) expect(`${x.material} ${x.sourcing!.vendor}`, x.id).not.toMatch(/zinc-plated|brass insert/i); // the Standard spec has zinc-plated D-rings and inserts (D-73)
     }
   });
@@ -364,7 +369,8 @@ describe('lights and reflectors', () => {
     expect((light.min[2] + light.max[2]) / 2).toBeCloseTo(zMid, 6);
     expect(lamp.removable).toBe(true);
     expect(lamp.joints!.some((j) => j.to === 'rear-lamp-clip')).toBe(true);
-    expect(lamp.sourcing!.vendor).toMatch(/USB rechargeable/);
+    expect(lamp.sourcing!.vendor).toMatch(/Planet Bike Spok/); // D-83
+    expect(lamp.massLb).toBeCloseTo(0.06, 6);
     // the thinnest rear lane the validator allows still keeps the inside end 1/8 in off the box end
     const thin = { ...defaults, blockingThickIn: 0.5 };
     const tl = computeLayout(thin);

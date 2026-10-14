@@ -148,13 +148,13 @@ export function screwLength(grip: number, embed: number): number {
 
 /**
  * The wood screws the whole sled uses (D-72, Eric: "reduce the variety of screws"): three sizes in 316 stainless. #8 x 5/8 is for hardware into thin stock (latches, catches, the stay,
- * hinge leaves into the lid frame), #8 x 1-1/4 for everything else, and #6 x 2-1/2 for the piloted rail-to-chine screws (a #8 would leave 0.11 in a side of the chine edge). A joint picks the
+ * hinge leaves into the lid frame), #8 x 1-1/4 for everything else, and #8 x 2-1/2 for the piloted rail-to-chine and rib-knee screws (D-82: no stainless #6 that long exists, so every wood screw is a #8; pilot the long one). A joint picks the
  * SHORTEST standard length that gives its bite without poking through its receiving member.
  */
 export const STD_WOOD_SCREWS: ReadonlyArray<{ gauge: 6 | 8 | 10; lenIn: number }> = [
   { gauge: 8, lenIn: 5 / 8 },
   { gauge: 8, lenIn: 1.25 },
-  { gauge: 6, lenIn: 2.5 },
+  { gauge: 8, lenIn: 2.5 },
 ];
 /** Engagement a wood screw needs in oak (in): half an inch, or two thirds of a thinner receiving member. */
 export const SCREW_MIN_BITE_IN = 0.5;

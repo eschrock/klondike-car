@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PARAM_DEFS, defaultParams, resolveParams, sanitizeParams, thinSheet, validateParams, type ParamKey, type Params } from '../params';
+import { PARAM_DEFS, defaultParams, resolveParams, sanitizeParams, thinSheet, validateParams, WEATHER_SPEC, type ParamKey, type Params } from '../params';
 import { buildModel } from './index';
 import { decodeHash } from '../state';
 import { computeLayout } from './layout';
@@ -203,8 +203,9 @@ describe('overlaps', () => {
   it('ALLOW is minimal: every entry (apart from the brake and handle ones) is used by some part pair at the defaults or a steered pose (a dead entry is a contact that no longer exists)', () => {
     const seen = new Set<string>();
     const pairs: [Part, Part][] = [];
+    for (const q of [defaults, { ...defaults, weatherSpec: WEATHER_SPEC.extreme } as Params]) // D-83: the drain nipples exist under the Extreme spec only
     for (const deg of [0, lock, -lock]) {
-      const set = buildModel(defaults, { steerDeg: deg }).filter((p) => !p.payload && SOLID.includes(p.group));
+      const set = buildModel(q, { steerDeg: deg }).filter((p) => !p.payload && SOLID.includes(p.group));
       for (let i = 0; i < set.length; i++) for (let j = i + 1; j < set.length; j++) {
         if (partsOverlap(set[i], set[j]) <= TOL) continue;
         const k = `${set[i].id}|${set[j].id}`;
@@ -225,7 +226,7 @@ describe('overlaps', () => {
  * which counts the joints of the parts actually present. */
 const EXPECTED_EMPTY_LB = 120.6; // D-60 (the weight package): 144 lb at 3c-5, 120.6 lb now (hollow axles, 2.8 lb wheels, 4 mm ply, 1/2 in transom, lighter joists and the foot block gone). 146 before; // D-58 (3c-4a): +the chain stops, roll pads, oak tongue and stub rods in the front end (16.2 to 21.2 lb), -the 3.5 in track change; // 3c-4b (D-57): 134 at 3c-3 + the bulkhead, signs, grab boards, hinges, longer sockets, flag tube and the step brake
 const EXPECTED_GROUP_LB: Record<string, number> = {
-  'running-gear': 18.6, 'front-end': 16.3, frame: 13.4, body: 36.1, seat: 8.4, storage: 7.0, removable: 2.4, lighting: 2.0, // D-60 (26.4, 21.2, 13.3, 43.8, 10.3, 8.4, 3.7, 1.9 before)
+  'running-gear': 18.6, 'front-end': 16.3, frame: 13.4, body: 36.1, seat: 8.4, storage: 7.0, removable: 2.4, lighting: 1.5, // D-83: lighting 1.4 lb with the 0.19 lb and 0.06 lb lights (2.0 before); D-60 (26.4, 21.2, 13.3, 43.8, 10.3, 8.4, 3.7, 1.9 before)
 };
 /** Groups with a wide band [low, high] (lb): the brake and the fastener remainder. */
 const WIDE_GROUP_LB: Record<string, [number, number]> = { brake: [4, 14], hardware: [2.5, 6.5] };
@@ -442,7 +443,7 @@ const VARIANTS: Record<string, Partial<Params>> = {
   tongueShort: { tongueTieAheadIn: 2 },
   tongueLong: { tongueTieAheadIn: 12 },
   tongueSlim: { tongueDepthIn: 1.75, tongueWidthIn: 1.75 },
-  stubShort: { frontStubLenIn: 4 },
+  stubShort: { frontStubLenIn: 4.5 }, // D-83: the shortest stub that holds its two 2 in clamp plates
   stubLong: { frontStubLenIn: 11 }, // D-66: 14 in no longer fits the 30 in track (the beam is 27.5 in long: the stubs would meet under the kingpin)
   kingpin3_4: { kingpinDiaIn: 0.75, tongueBoltDiaIn: 0.5 },
   kingpin1_2: { kingpinDiaIn: 0.5, tongueBoltDiaIn: 0.25 },

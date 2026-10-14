@@ -15,16 +15,16 @@ const parts = buildModel(p);
 const get = (id: string) => parts.find((x) => x.id === id)!;
 
 describe('S8 / D-76: lash plate pattern fits the rib head and is drawn', () => {
-  it('each plate sits on its rib head with 4 bolts at +-0.5625 x +-0.25, inside the 2" x band-tall head (the old 1" doubler is gone)', () => {
+  it('each D-ring bracket sits on its rib head with 2 bolts at +-0.625 (1-1/4 in apart, D-83), inside the 2" x band-tall head (the old 1" doubler is gone)', () => {
     const pl = get('lash-L1'), rib = get('side-rib-L1');
     const sp = pl.joints!.find((j) => j.type === 'bolt')!;
-    expect(sp.at).toHaveLength(4);
+    expect(sp.at).toHaveLength(2);
     for (const a of sp.at!) { expect(Math.abs(a[0])).toBeCloseTo(LASH_HOLE_DX_IN, 9); expect(Math.abs(a[1])).toBeCloseTo(LASH_HOLE_DZ_IN, 9); expect(a[2]).toBeCloseTo(-LASH_PLATE.folded / 2, 9); } // local: x along the gunwale, y up, z off the head face
     // the holes stay 3/16 in or more inside the head's ends and the band's edges
     expect(p.sideRibHeadLengthIn / 2 - LASH_HOLE_DX_IN).toBeGreaterThanOrEqual(0.375);
     expect(p.railBandIn / 2 - LASH_HOLE_DZ_IN).toBeGreaterThanOrEqual(0.375);
     expect(LASH_PLATE.len).toBeLessThanOrEqual(p.sideRibHeadLengthIn);
-    expect(rib.joints!.find((j) => j.type === 'hole' && j.to === 'lash-L1')!.at).toHaveLength(4);
+    expect(rib.joints!.find((j) => j.type === 'hole' && j.to === 'lash-L1')!.at).toHaveLength(2);
     expect(get('doubler-lash-L1')).toBeUndefined();
     // the plate's footprint lies over the head, fore and aft
     const a = worldAABB(pl), d = worldAABB(rib);

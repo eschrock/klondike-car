@@ -22,10 +22,10 @@ const ours = (x: Part) => /^(side-rib|box-tie|lash-)/.test(x.id);
 
 describe('stations (D-76)', () => {
   const st = sideRibStations(p, L);
-  it('box rib 1.4 in behind the box fore end (x = 5.6), mid rib on joist 5 (27.6), bow post on the king beam (44)', () => {
+  it('box rib 1.4 in behind the box fore end (x = 5.56), mid rib on joist 5 (27.6), bow post on the king beam (44)', () => {
     expect(st.map((s) => s.kind)).toEqual(['box', 'knee', 'knee']);
     expect(st[0].x).toBeCloseTo(storageGeometry(p, L).x1 - 1.4, 9);
-    expect(st[0].x).toBeCloseTo(5.59, 2);
+    expect(st[0].x).toBeCloseTo(5.56, 2); // D-83: 5.56 (5.59 before the 1-1/2 in seat pads moved the seat back and the box end)
     expect(st[1].member).toBe('joist-5');
     expect(st[1].x).toBeCloseTo(27.64, 2);
     expect(st[2].member).toBe('king-beam');
@@ -93,23 +93,24 @@ describe('parts (D-76)', () => {
     expect(tg.z1).toBeLessThan(st.top - L.railBand);
     expect(get('box-tie-L').joints!.some((j) => j.type === 'glue' && j.to === 'storage-side-L')).toBe(true);
   });
-  it('D-rings: 4 #8-32 x 2 in stainless machine screws each (washer + sandwich + head + plate + nylock + 2 threads = 1.78 in), weather-aware', () => {
+  it('D-rings (D-83): 2 1/4-20 x 2 in stainless button-head bolts each (washer + sandwich + head + bracket + nylock + 2 threads = 1.94 in), weather-aware', () => {
     const lb = lashBoltLength(p);
-    expect(lb.need).toBeCloseTo(0.05 + 0.625 + 0.75 + 0.125 + 0.172 + 1 / 16, 9);
+    expect(lb.need).toBeCloseTo(0.063 + 0.625 + 0.75 + 0.125 + 0.3125 + 1 / 16, 9);
     expect(lb.len).toBe(2);
     const j = get('lash-L2').joints![0];
     expect(j.type).toBe('bolt');
-    expect(j.count).toBe(4);
-    expect(j.diaIn).toBeCloseTo(0.164, 9);
-    expect(j.size).toMatch(/18-8 \(304\) stainless machine screw/);
-    expect(get('lash-L2').material).toMatch(/zinc-plated steel D-ring/);
+    expect(j.count).toBe(2);
+    expect(j.diaIn).toBeCloseTo(0.25, 9);
+    expect(j.size).toMatch(/^1\/4-20 x 2" 18-8 \(304\) stainless button-head bolt/);
+    expect(get('lash-L2').material).toMatch(/zinc-plated steel cargo D-ring/);
+    expect(get('lash-L2').notes).toMatch(/VERIFY the real bracket/);
     const ext = buildModel({ ...p, weatherSpec: 1 } as Params);
     expect(ext.find((x) => x.id === 'lash-L2')!.joints![0].size).toMatch(/316 stainless/);
-    expect(ext.find((x) => x.id === 'lash-L2')!.material).toMatch(/316 stainless D-ring/);
+    expect(ext.find((x) => x.id === 'lash-L2')!.material).toMatch(/316 stainless cargo D-ring/);
   });
-  it('knee screws: 2 standard #6 x 2-1/2 (D-72: no new screw size) through the counterbored knee and the deck into the member, within its depth', () => {
+  it('knee screws: 2 standard #8 x 2-1/2 (D-72, D-82: every wood screw is a #8) through the counterbored knee and the deck into the member, within its depth', () => {
     const ks = kneeScrews(p, L);
-    expect(ks.fit.gauge).toBe(6);
+    expect(ks.fit.gauge).toBe(8);
     expect(ks.fit.lenIn).toBe(2.5);
     expect(screwFitOk(ks.fit)).toBe(true);
     for (const id of ['side-rib-knee-L2', 'side-rib-knee-R3']) {
@@ -154,8 +155,8 @@ describe('clearances (D-76)', () => {
         expect(gap, `${x.id} vs the rib ${st.n} washers`).toBeGreaterThanOrEqual(0.25);
       }
     }
-    // the rear reflector did not have to move: 3/8 in clear of the box rib's washers
-    expect(worldAABB(get('reflector-L1')).min[0] - ribWasherSpan(sideRibStations(p, L)[0])[1]).toBeGreaterThan(0.35);
+    // the rear reflector did not have to move: about 3/8 in clear of the box rib's washers
+    expect(worldAABB(get('reflector-L1')).min[0] - ribWasherSpan(sideRibStations(p, L)[0])[1]).toBeGreaterThan(0.3); // D-83: 0.35 clear with the old #8 washers, 0.30 with the 3/4 in 1/4 fender washers 1/8 in farther apart
   });
 });
 

@@ -83,8 +83,9 @@ describe('finishing areas', () => {
     const chine = a.detail['side-L-chine'];
     const web = a.detail['side-L-web'];
     const band = (1.5 * 58.75) / 144;
-    expect(chine.gluedFt2).toBeCloseTo(band, 6);
-    expect(chine.netFt2).toBeCloseTo(chine.grossFt2 - band, 9);
+    expect(chine.gluedFt2).toBeGreaterThanOrEqual(band - 1e-6); // the web contact, plus the epoxy bed on the rail (D-81: the chine-to-rail tie has no Dominos any more, it is an epoxy bed and screws)
+    expect(chine.gluedFt2).toBeLessThan(band * 1.5);
+    expect(chine.netFt2).toBeCloseTo(chine.grossFt2 - chine.gluedFt2, 9);
     expect(web.gluedFt2).toBeGreaterThan(band); // all four bands
     // The deck gives up its contact with the rails and the joists.
     expect(a.detail['deck'].gluedFt2).toBeGreaterThan(0.3);
@@ -320,13 +321,12 @@ describe('build review round 1: glue epoxy by joint type (MUST-10)', () => {
       expect(DOMINO_FLOZ[k]).toBeGreaterThanOrEqual(0.1);
       expect(DOMINO_FLOZ[k]).toBeLessThanOrEqual(0.2);
     }
-    // 18 chine Dominos 5×30 (4×20 with the 4 mm okoume) (rail-L / side-L-chine appear on both parts), 16 of 5×30 in the frame, 2 of 8×50 and so on.
-    expect(n('domino')).toBeGreaterThan(30);
+    // D-81: the chine-to-rail tie has NO Dominos (an epoxy bed and screws; the analysis never credited them): 16 of 5×30 in the frame, 2 of 6×40 at the rail ends, and so on.
+    expect(n('domino')).toBeGreaterThan(10);
     expect(n('domino')).toBeLessThan(60);
     const chine = est.filter((g) => g.kind === 'domino' && [g.a, g.b].sort().join('|') === 'rail-L|side-L-chine');
-    expect(chine).toHaveLength(1);
-    expect(chine[0].count).toBe(9);
-    expect(chine[0].flOz).toBeCloseTo(9 * DOMINO_FLOZ['4×20'], 9); // D-73: 4×20 with the 4 mm okoume of the Extreme spec (the 1/4 in white oak web of the Standard spec leaves a 0.417 in land: 5×30)
+    expect(chine).toHaveLength(0);
+    expect(est.some((g) => g.kind === 'domino')).toBe(true);
     expect(sum('domino') / n('domino')).toBeGreaterThanOrEqual(0.1);
     expect(sum('domino') / n('domino')).toBeLessThanOrEqual(0.25);
   });

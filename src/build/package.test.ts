@@ -216,8 +216,8 @@ describe('build book: laminations, links, bulk parts and finishing touches', () 
   });
 
   it('prints the BOM links as anchors that open in a new tab, and the material of each fastener line', () => {
-    expect(html).toContain('<a href="https://www.thewoodyard.com/current-pricing-list/" target="_blank" rel="noopener">thewoodyard.com</a>');
-    expect(html).toContain('href="https://www.thewoodyard.com/current-pricing-list/#plywood"'); // D-73: the thin sheet is the Wood Yard's 1/4 in white oak plywood by default (Aircraft Spruce's 4 mm okoume under Extreme weather)
+    expect(html).toContain('target="_blank" rel="noopener">cdn.hibuwebsites.com</a>'); // D-79: the oak is Peach State Lumber's price sheet (a PDF on its website host)
+    expect(html).toContain('href="https://www.thewoodyard.com/current-pricing-list/#plywood"'); // the 12 mm deck sheet is still The Wood Yard's (D-80: the 6 mm Baltic birch thin sheet is Peach State's plywood sheet, okoume under Extreme weather is Aircraft Spruce's)
     expect(html).toContain('<strong>Material:</strong>');
     expect(html).toContain(esc(bom.sections.find((s) => s.id === 'fasteners')!.notes![0]));
   });
