@@ -60,6 +60,32 @@ function plainExtrusion(g: Extract<Geometry, { type: 'extrusion' }>): THREE.Buff
   return new THREE.ExtrudeGeometry(shape, { depth: g.depth, bevelEnabled: false });
 }
 
+/** Button-head screw dimensions (1/4-20): the head's diameter and height (in). */
+export const BUTTON_HEAD_DIA_IN = 0.5, BUTTON_HEAD_H_IN = 0.14;
+
+/**
+ * The grab board's six screw heads on the outside of its backing strip (D-84): low domes at the strip's hole joints, drawn on the outboard face (local z = 0 on the left side, local z = depth on the
+ * right), so they show in the holes of the oak cap. The extrusion's own material groups are dropped (steel has one material).
+ */
+export function withBoltHeads(geo: THREE.BufferGeometry, part: Part, depth: number): THREE.BufferGeometry {
+  const pts = (part.joints ?? []).filter((j) => j.type === 'hole' && j.at).flatMap((j) => j.at!);
+  if (!pts.length) return geo;
+  const dir = part.transform[13] >= 0 ? -1 : 1; // local +z is world -y; the outboard side is world +y on the left, -y on the right
+  const base = dir < 0 ? 0 : depth;
+  const flat = geo.index ? geo.toNonIndexed() : geo;
+  flat.clearGroups();
+  const parts: THREE.BufferGeometry[] = [flat];
+  for (const [x, y] of pts) {
+    const dome = new THREE.CylinderGeometry(BUTTON_HEAD_DIA_IN * 0.42, BUTTON_HEAD_DIA_IN / 2, BUTTON_HEAD_H_IN, 20, 1).toNonIndexed();
+    dome.rotateX(Math.PI / 2); // axis along z
+    dome.translate(x, y, base + (dir * BUTTON_HEAD_H_IN) / 2);
+    parts.push(dome);
+  }
+  const merged = mergeGeometries(parts, false);
+  for (const q of parts) q.dispose();
+  return merged ?? geo;
+}
+
 /** Re-project a (possibly indexed) geometry with grain-aligned UVs and split it into long-grain / end-grain groups. */
 function applyGrain(geo: THREE.BufferGeometry, part: Part, look: 'oak' | 'okoume' | 'vinyl', size: ArrayLike<number>, thickness: Axis, grain: Axis): THREE.BufferGeometry {
   const src = geo.index ? geo.toNonIndexed() : geo;
@@ -404,6 +430,10 @@ export function buildPart(part: Part): BuiltPart | null {
         break;
       }
       geometry = r > 0.01 ? bevelledExtrusion(g, r) : plainExtrusion(g);
+      if (look === 'steel' && part.partNo === 'seat-grip-backing') {
+        geometry = withBoltHeads(geometry, part, g.depth);
+        break;
+      }
       const thick: Axis = 2;
       if (isWood(look)) geometry = applyGrain(geometry, part, look, size, thick, grain);
       if (r > 0.01 || look !== 'other') {

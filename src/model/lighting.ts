@@ -9,7 +9,7 @@ import { STEP, box, cylinder, span, SIDES, type Ctx, stainless, insertMat } from
 import { SIGN_X_MAX_IN, liftSlot } from './body';
 import { sideSlopeAt, sideTopAt } from './layout';
 import { profilePart } from './profile';
-import { GRIP_BACKING_END_IN, GRIP_BEHIND_HPOINT_IN } from './seat';
+import { gripCapLen, gripFrame } from './seat';
 import type { Part, Vec2, Vec3 } from './types';
 
 const unit = (x: number, y: number, z: number): Vec3 => {
@@ -183,8 +183,9 @@ export function buildLighting(ctx: Ctx): Part[] {
   for (const { s, tag } of SIDES) {
     REFLECTOR_FRACS.forEach((f, i) => {
       let x = Math.max(L.xRear + reach * f, SIGN_X_MAX_IN + 2); // the rear one stands ahead of the side sign (D-57)
-      // D-63: the grab board's 316 backing strip is on the same outer gunwale face; a reflector that would sit on it moves just ahead of it
-      const stripX0 = p.seatXIn - GRIP_BEHIND_HPOINT_IN + GRIP_BACKING_END_IN - 0.3, stripX1 = p.seatXIn - GRIP_BEHIND_HPOINT_IN + p.grabBoardLengthIn - GRIP_BACKING_END_IN + 0.3;
+      // D-63, D-84: the grab board's oak cap is on the same outer gunwale face; a reflector that would sit on it moves just ahead of it
+      const gf = gripFrame(p, L), capHalf = (gripCapLen(p.grabBoardLengthIn) * gf.cs) / 2;
+      const stripX0 = gf.xh - capHalf - 0.3, stripX1 = gf.xh + capHalf + 0.3;
       // D-76: and it stays 1/4 in clear of the outside fender washers of the side-rib D-ring bolts (D-83) (the box rib's station is set so the rear one does not have to move).
       for (const [wa, wb] of washers) if (x + REFLECTOR_SIZE[0] / 2 + 0.25 > wa && x - REFLECTOR_SIZE[0] / 2 - 0.25 < wb) x = wb + REFLECTOR_SIZE[0] / 2 + 0.25;
       if (x + REFLECTOR_SIZE[0] / 2 + 0.1 > stripX0 && x - REFLECTOR_SIZE[0] / 2 - 0.1 < stripX1) x = stripX1 + REFLECTOR_SIZE[0] / 2 + 0.3;

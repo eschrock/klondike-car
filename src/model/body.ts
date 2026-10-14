@@ -6,7 +6,7 @@
  * (`plan-wall.ts`): constant thickness, centerline at the hull's plan curve (`Layout.turnIn`). The deck is ONE flat sheet that ends in a dado in the bow bulkhead. Joint
  * records are added in joinery.ts after all parts exist.
  */
-import { GRIP_BACKING_T_IN, HULL_STEP, STEP, box, cylinder, roughOf, span, SIDES, IN3_PER_FT3, woodMassLb, type Ctx, stainless } from './build-utils';
+import { SIGN_PROUD_IN, HULL_STEP, STEP, box, cylinder, roughOf, span, SIDES, IN3_PER_FT3, woodMassLb, type Ctx, stainless } from './build-utils';
 import { handleGeometry } from './handle';
 import { transformPoint } from './bounds';
 import { innerHalfWidth, samples, sideSlopeAt, sideTopAt, type Layout } from './layout';
@@ -439,7 +439,7 @@ export function buildBody(ctx: Ctx): Part[] {
     for (const { s, tag } of SIDES) {
       const sign = box(ctx, {
         id: `sign-${tag}`, partNo: 'sign', name: `Side sign ${tag}`, group: 'body', mat: 'ply', thin: true, edges: 'edged', step: STEP.finish, fab: 'shaper-origin',
-        size: [sg.length, pl, sg.height], center: [sg.xc, s * (L.hwC + L.side + GRIP_BACKING_T_IN + pl / 2), sg.zc], // 1/16 in proud of the band faces: clear of the grab-board backing strip (D-63)
+        size: [sg.length, pl, sg.height], center: [sg.xc, s * (L.hwC + L.side + SIGN_PROUD_IN + pl / 2), sg.zc], // 1/16 in proud of the band faces
       });
       sign.massLb += edgeBandLb(ctx, 2 * (sg.length + sg.height), pl);
       sign.notes = `D-57: the sign is back, on the outside of the tall rear part of the side (${sg.length.toFixed(1)}" × ${sg.height.toFixed(1)}", level, not tilted to follow the sheer (3c-5), its top edge ${sg.topMargin}" under the gunwale line at its forward end). ${mmOf(pl)} mm ply blank, all four edges banded with oak, a plain RECTANGLE (the Shaper file is a rectangle; the viewer paints the Troop 455 artwork on it with signTexture. A rounded-oval outline would be a new outline: ask Eric). The file and the cut list are the PLY blank; the 1/16 in oak banding adds to it; hung on four thumb-knob screws (#10-32 x ${signKnobPlan(ctx).lenIn} in) that go through four ${signKnobPlan(ctx).standoffIn.toFixed(3)}" standoff discs epoxied to its back (oak, or 5/16 in nylon spacers) and the thin web into threaded inserts in two oak backing strips glued inside it (nothing is screwed into the ply alone, D-62), so it CAN come off for repairs, but it STAYS ON for transport (D-65, Eric: taking the signs off "seems excessive"; it is not a removable part). Cut the blank on the Shaper Origin (D-61). It stays clear of the rear wheel and of the brake knees.`;
@@ -514,7 +514,7 @@ export const SIGN_INSERT_LEN_IN = 0.3125;
 const SIGN_SCREW_BEHIND_IN = 0.125;
 
 /**
- * The sign's knob screws against its standoff and the backing strip (D-63, build 3c-8 S4). The sign hangs level with the OUTER faces of the bands plus the 1/16 in grab-board backing strip
+ * The sign's knob screws against its standoff and the backing strip (D-63, build 3c-8 S4). The sign hangs level with the OUTER faces of the bands plus 1/16 in
  * (so it clears the strip wherever the seat puts the board); the bands stand about 0.21 to 0.25 in proud of the thin web, so the gap behind the sign (`standoffIn`, 0.297 in) is crossed by each screw before it
  * reaches the strip: sign + standoff + web. The standoff is filled by four oak discs (about 0.30 in thick, 1/2 in across) epoxied to the sign back around the screw holes, or 5/16 in nylon spacers,
  * so the sign cannot flex or be levered across an air gap. The screw is the longest 1/8 in length that leaves 1/8 in of wood behind its tip in the strip: 7/8 in at the defaults, 0.26 in engaged
@@ -523,7 +523,7 @@ const SIGN_SCREW_BEHIND_IN = 0.125;
 export function signKnobPlan(ctx: Pick<Ctx, 'p' | 'L'>) {
   const { p, L } = ctx;
   const pl = thinSheet(p).thicknessIn;
-  const standoffIn = Math.max(0, L.side - L.sideBand - pl + GRIP_BACKING_T_IN); // the gap between the sign's inner face (1/16 in proud of the band faces, clear of the grab-board backing strip) and the web's outer face
+  const standoffIn = Math.max(0, L.side - L.sideBand - pl + SIGN_PROUD_IN); // the gap between the sign's inner face (1/16 in proud of the band faces) and the web's outer face
   const stackIn = pl + standoffIn + pl; // sign + standoff + web
   const stripT = p.signBackerThickIn;
   const lenIn = Math.max(0.5, Math.floor((stackIn + stripT - SIGN_SCREW_BEHIND_IN) * 8 + 1e-9) / 8);

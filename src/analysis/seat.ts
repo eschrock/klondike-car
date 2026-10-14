@@ -13,7 +13,7 @@
  * R_A = w·H·(H/2 − B)/(A − B) (bearing), R_B = w·H − R_A (negative = the hinge is loaded toward the support: its screws take it in shear). Bending peaks at the crest:
  * M = w·(H − A)²/2.
  */
-import { GRIP_BACKING_H_IN, GRIP_BACKING_T_IN, gripBackingLen, GRIP_BOLT_COLS, GRIP_BOLT_DIA_IN, GRIP_WASHER_OD_IN, GRIP_BOLT_ROWS_IN, GRIP_BOLTS, LATCH_HOLE_WALL_MIN_IN, latchGeometry, seatBackSupport } from '../model/seat';
+import { GRIP_BACKING_H_IN, GRIP_BACKING_T_IN, GRIP_BOLT_COLS, GRIP_BOLT_DIA_IN, GRIP_WASHER_OD_IN, GRIP_WASHER_LOW_OD_IN, gripBolts, GRIP_BOLT_ROWS_IN, GRIP_BOLTS, LATCH_HOLE_WALL_MIN_IN, latchGeometry, seatBackSupport } from '../model/seat';
 import { storageGeometry, storageInterior, boxGear, packEssentials, ESSENTIALS } from '../model/storage';
 import { LASH_BOLTS, LASH_BOLT_AR_IN2, LASH_BOLT_AT_IN2, LASH_BOLT_DIA_IN, LASH_WASHER, lashBoltLength, sideRibStations } from '../model/side-ribs';
 import { sideLateral } from './side-lateral';
@@ -104,6 +104,33 @@ export function seatBackCheck(ctx: Ctx): AnalysisCheck {
   });
 }
 
+/**
+ * Elastic estimate for the grab board (D-84): a rigid board turning about a neutral axis `h` above its lower edge, screws at heights `y` (above that edge) stretching with stiffness `kb`, the band below
+ * the axis squashing like a bed of springs (`kc` psi per inch of depth, board length `len`). `m` is the moment of the pull about the lower edge. Returns the neutral axis, the peak pressure at the
+ * lower edge and each screw's tension (zero when it lies below the axis).
+ */
+export function gripElastic(F: number, m: number, bolts: Array<{ y: number; n: number }>, kb: number, kc: number, len: number, lap: number): { h: number; pmax: number; T: number[] } {
+  const parts = (h: number) => {
+    const T = bolts.reduce((a, b) => a + (b.y > h ? b.n * kb * (b.y - h) : 0), 0);
+    const MT = bolts.reduce((a, b) => a + (b.y > h ? b.n * kb * (b.y - h) * b.y : 0), 0);
+    const C = (kc * len * h * h) / 2, MC = (kc * len * h ** 3) / 6;
+    return { T, C, M: MT - MC };
+  };
+  let prev: number | null = null, prevH = 0;
+  const N = 2000;
+  for (let i = 1; i < N; i++) {
+    const h = (i * lap) / N, q = parts(h);
+    if (q.M <= 0) continue;
+    const s = m / q.M, r = s * (q.T - q.C) - F;
+    if (prev !== null && prev * r < 0) {
+      const hh = (h + prevH) / 2, qq = parts(hh), ss = m / qq.M;
+      return { h: hh, pmax: ss * kc * hh, T: bolts.map((b) => (b.y > hh ? ss * kb * (b.y - hh) : 0)) };
+    }
+    prev = r; prevH = h;
+  }
+  return { h: 0, pmax: 0, T: bolts.map(() => 0) };
+}
+
 export function seatGripCheck(ctx: Ctx): AnalysisCheck {
   const { p } = ctx;
   const al = allowables(ctx);
@@ -114,30 +141,45 @@ export function seatGripCheck(ctx: Ctx): AnalysisCheck {
     const bt = p.grabBoardThickIn, bar = p.grabBoardBarIn, hl = p.grabHoleLengthIn;
     const Sbar = (bt * bar * bar) / 6;
     const Mbar = (F * hl) / 4; // simply supported over the hole (conservative: the ends are fixed in the board)
-    // The pull is applied on the bar at `arm` above the gunwale top; the board turns about the gunwale top edge and the bolt rows resist it as a couple: T_i = k d_i, M = k Σ d_i².
+    // D-84: the pull is applied on the bar at `arm` above the gunwale top. The board is a rigid lever that turns about its LOWER edge (the lowest point it bears on the band), so each bolt's tension is
+    // proportional to its height above that edge (d_i = lap - row_i): M = F (arm + lap) = k Σ d_i². The TOP row takes the most; the five together pull ΣT out of the band and the board's lower edge pushes back C = ΣT - F.
+    const lap = ctx.L.railBand;
     const arm = p.grabBoardFootIn + p.grabHoleHeightIn + bar / 2;
-    const sumD2 = GRIP_BOLT_COLS * GRIP_BOLT_ROWS_IN.reduce((m, d) => m + d * d, 0);
-    const k = (F * arm) / sumD2;
-    const Tbolt = k * Math.max(...GRIP_BOLT_ROWS_IN);
-    const boltArea = (Math.PI / 4) * (GRIP_BOLT_DIA_IN - 0.0825) ** 2; // 1/4-20 tensile stress area ≈ 0.0318 in²
-    const washerA = (Math.PI / 4) * (GRIP_WASHER_OD_IN ** 2 - (GRIP_BOLT_DIA_IN + 0.03) ** 2);
-    // D-63 (3c-8 S9): the screw heads bear on a continuous 316 backing strip (1/16 x 1 in x board length) on the outer face of the outer gunwale band; all six tensions load the strip against the band,
-    // and each head's 3/8 in washer punches the strip.
-    const Ttotal = GRIP_BOLT_COLS * k * GRIP_BOLT_ROWS_IN.reduce((m, d) => m + d, 0);
-    const stripA = gripBackingLen(p.grabBoardLengthIn) * GRIP_BACKING_H_IN - (GRIP_BOLTS * Math.PI * 0.28 ** 2) / 4; // net of the 9/32 in holes
-    const punchD = 0.375;
-    const punch = Tbolt / (Math.PI * punchD * GRIP_BACKING_T_IN);
+    const bolts = gripBolts(p.grabBoardLengthIn).map(([e, row]) => ({ e, row, d: lap - row }));
+    const sumD2 = bolts.reduce((m, b) => m + b.d * b.d, 0);
+    const k = (F * (arm + lap)) / sumD2;
+    // The elastic estimate: the board turns about a neutral axis `h` above its lower edge; screws above it stretch in proportion (stiffness kb), the band below it squashes (foundation kc per in of depth).
+    const el = gripElastic(F, F * (arm + lap), bolts.map((b) => ({ y: b.d, n: 1 })), p.gripBoltStiffnessLbIn, p.gripBearingFoundationPsiIn, p.grabBoardLengthIn, lap);
+    // Each screw takes the larger of the rigid-lever and the elastic load (the two bracket the truth).
+    const T = (b: { d: number }, i: number) => Math.max(k * b.d, el.T[i] ?? 0);
+    const Ts = bolts.map(T);
+    const Tbolt = Math.max(...Ts);
+    const Tlow = Math.max(...bolts.map((b, i) => (b.row === GRIP_BOLT_ROWS_IN[1] ? Ts[i] : 0)));
+        const Crigid = Math.max(0, bolts.reduce((m, b) => m + k * b.d, 0) - F); // the rigid lever's push-back at the lower edge (the elastic estimate spreads it deeper and peaks higher; it is reported below)
+    const zone = lap - Math.max(...GRIP_BOLT_ROWS_IN); // the lap below the lowest bolt row: where the board's lower edge bears
+    const edgeA = zone * p.grabBoardLengthIn;
+    const boltArea = (Math.PI / 4) * (GRIP_BOLT_DIA_IN - 0.0825) ** 2; // 1/4-20 tensile stress area is 0.0318 in²; this takes the thread root (the conservative 0.0220 in²)
+    const washerAof = (od: number) => (Math.PI / 4) * (od ** 2 - (GRIP_BOLT_DIA_IN + 0.03) ** 2);
+    const washerA = washerAof(GRIP_WASHER_OD_IN);
+    const washerBear = Math.max(Tbolt / washerA, Tlow / washerAof(GRIP_WASHER_LOW_OD_IN));
+    // The heads bear on the 1/8 in strip, which spreads the screws within about its own width (any window of that length along the band): their load over H x H.
+    const colLoad = Math.max(...bolts.map((b0) => bolts.reduce((m, b, i) => (b.e >= b0.e - 1e-9 && b.e < b0.e + GRIP_BACKING_H_IN - 1e-9 ? m + Ts[i] : m), 0)));
+    const stripA = GRIP_BACKING_H_IN * GRIP_BACKING_H_IN;
+    const headD = 0.5; // button head diameter
+    const punch = Tbolt / (Math.PI * headD * GRIP_BACKING_T_IN);
     const ds: Detail[] = [
       detail('grab bar bending over the hole', Mbar / Sbar, 'psi', al.oakBend, '<='),
-      detail('bolt tension (each, the couple of the two rows)', Tbolt / boltArea, 'psi', p.ss316BoltYieldPsi / p.steelSafetyFactor, '<='),
-      detail('washer bearing on the oak (⊥ grain)', Tbolt / washerA, 'psi', al.oakPerp, '<='),
-      detail('heads: 316 backing strip bearing on the outer gunwale band (⊥ grain, all six bolts)', Ttotal / stripA, 'psi', al.oakPerp, '<='),
-      detail('heads: 3/8" washer punching the 1/16" backing strip (shear)', punch, 'psi', (0.577 * p.ss316BoltYieldPsi) / p.steelSafetyFactor, '<='),
+      detail('bolt tension (worst, the top row; the board turns about its lower edge)', Tbolt / boltArea, 'psi', p.ss316BoltYieldPsi / p.steelSafetyFactor, '<='),
+      detail('fender washer bearing on the oak board (⊥ grain, worst bolt)', washerBear, 'psi', al.oakPerp, '<='),
+      detail('heads: 1/8" strip bearing on the outer gunwale band (⊥ grain, the screws within one strip width)', colLoad / stripA, 'psi', al.oakPerp, '<='),
+      detail('heads: button head punching the 1/8" backing strip (shear)', punch, 'psi', (0.577 * p.ss316BoltYieldPsi) / p.steelSafetyFactor, '<='),
+      detail("board's lower edge bearing on the inner band (⊥ grain)", Crigid / edgeA, 'psi', al.oakPerp, '<='),
       detail('finger gap (no pinch)', p.grabHoleHeightIn, 'in', 1.25, '>='),
       detail('clear length (hand)', hl, 'in', 3.5, '>='),
     ];
     const how = `Pull ${f(F)} lbf (0.5 × ${f(c.riderLb, 0)} lb × ${f(gF, 2)}) on one board: the ${f(bt, 2)}" × ${f(bar, 2)}" bar over the ${f(hl, 2)}" hole, M = F·L/4 = ${f(Mbar)} lb·in, σ = M/S = ${f(Mbar / Sbar, 0)} psi (≤ ${f(al.oakBend, 0)}). `
-      + `The pull acts ${f(arm, 2)}" above the gunwale top; the ${GRIP_BOLTS} bolts (${GRIP_BOLT_COLS} columns × 2 rows ${GRIP_BOLT_ROWS_IN.join('" and ')}" below the top) resist it as a couple: T = F·arm·d_max/(cols·Σd²) = ${f(Tbolt)} lbf on the worst bolt, ${f(Tbolt / boltArea, 0)} psi on the ${f(boltArea, 4)} in² tensile area (≤ ${f(p.ss316BoltYieldPsi / p.steelSafetyFactor, 0)}), ${f(Tbolt / washerA, 0)} psi under the ${f(GRIP_WASHER_OD_IN, 2)}" fender washer (≤ ${f(al.oakPerp, 0)}). The heads bear on the ${GRIP_BACKING_T_IN}" × ${GRIP_BACKING_H_IN}" × ${f(gripBackingLen(p.grabBoardLengthIn), 1)}" stainless strip (D-63): ${f(Ttotal)} lbf over ${f(stripA, 1)} in², ${f(Ttotal / stripA, 0)} psi on the outer band, ${f(punch, 0)} psi punching through the strip under a ${punchD}" washer. `
+      + `The pull acts ${f(arm, 2)}" above the gunwale top and the board turns about its lower edge, ${f(lap, 2)}" below it: the ${GRIP_BOLTS} bolts (${GRIP_BOLT_COLS} in a row ${GRIP_BOLT_ROWS_IN[0]}" below the top, ${GRIP_BOLT_COLS - 1} between them ${GRIP_BOLT_ROWS_IN[1]}" below it) resist it as a couple, T = F·(arm + lap)·d/Σd² with d measured from that edge (the elastic estimate, screws stretching and the band squashing, gives up to ${f(Math.max(...el.T))} lbf on a top screw and about ${f(el.pmax, 0)} psi at the lower edge, which may dent the band face by a few thousandths but is not a failure; each screw takes the larger of the two): ${f(Tbolt)} lbf on each top-row bolt, ${f(Tbolt / boltArea, 0)} psi on the ${f(boltArea, 4)} in² tensile area (≤ ${f(p.ss316BoltYieldPsi / p.steelSafetyFactor, 0)}), ${f(Tbolt / washerA, 0)} psi under the ${f(GRIP_WASHER_OD_IN, 2)}" fender washer on the board (the lower two, ${f(Tlow)} lbf, have ${f(GRIP_WASHER_LOW_OD_IN, 3)}" washers; ≤ ${f(al.oakPerp, 0)}). `
+      + `In the rigid lever the five screws pull ${f(bolts.reduce((m, b) => m + k * b.d, 0))} lbf out of the band, so the board's lower edge pushes back ${f(Crigid)} lbf over the ${f(zone, 2)}" × ${f(p.grabBoardLengthIn, 1)}" below the lowest row: ${f(Crigid / edgeA, 0)} psi. The heads bear on the ${GRIP_BACKING_T_IN}" × ${GRIP_BACKING_H_IN}" stainless strip under the oak cap (D-63, D-84), which spreads the ${f(colLoad)} lbf of the screws within one strip width over about that width (${f(stripA, 2)} in²): ${f(colLoad / stripA, 0)} psi on the outer band, ${f(punch, 0)} psi punching through the strip under the 1/2" head. `
       + `Finger gap ${f(p.grabHoleHeightIn, 2)}" (≥ 1.25") and ${f(hl, 2)}" clear length (≥ 3.5"): no pinch point (D-40).`;
     return governing(ds, how);
   };

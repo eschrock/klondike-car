@@ -80,12 +80,12 @@ describe('cuts the drawings and instructions locate', () => {
     }
   });
 
-  it('the grab-board backing strip has its 6 screw holes at the screw lines (mid-thickness)', () => {
+  it('the grab-board backing strip has its screw holes (one per screw) at the screw lines (mid-thickness)', () => {
     const strip = get('seat-grip-backing-L');
     const j = strip.joints!.find((q) => q.type === 'hole')!;
-    expect(j.count).toBe(6);
-    expect(j.at).toHaveLength(6);
-    for (const a of j.at!) expect(a[2]).toBeCloseTo((strip.stock?.t ?? 0.0625) / 2, 6);
+    expect(j.count).toBe(5);
+    expect(j.at).toHaveLength(5);
+    for (const a of j.at!) expect(a[2]).toBeCloseTo((strip.stock?.t ?? 0.125) / 2, 6);
   });
 
   it('D-75: the brake backer has a hole for every knee bolt at the knee joint points, and ONE flat-bottomed recess in its inner face for the nut backing plate (no overlapping counterbores)', () => {

@@ -69,8 +69,8 @@ describe('seatChecks', () => {
   it('grab-board row: the bar, the bolt couple and the washers hold a hard pull; no pinch point; a short, thin bar fails (teeth)', () => {
     const c = byId['seat-grip'];
     expect(c.status).not.toBe('fail');
-    expect(c.details!.map((d) => d.name)).toEqual(['grab bar bending over the hole', 'bolt tension (each, the couple of the two rows)', 'washer bearing on the oak (⊥ grain)',
-      'heads: 316 backing strip bearing on the outer gunwale band (⊥ grain, all six bolts)', 'heads: 3/8" washer punching the 1/16" backing strip (shear)', 'finger gap (no pinch)', 'clear length (hand)']);
+    expect(c.details!.map((d) => d.name)).toEqual(['grab bar bending over the hole', 'bolt tension (worst, the top row; the board turns about its lower edge)', 'fender washer bearing on the oak board (⊥ grain, worst bolt)',
+      'heads: 1/8" strip bearing on the outer gunwale band (⊥ grain, the screws within one strip width)', 'heads: button head punching the 1/8" backing strip (shear)', "board's lower edge bearing on the inner band (⊥ grain)", 'finger gap (no pinch)', 'clear length (hand)']);
     const bad = seatChecks(ctxFor({ grabBoardBarIn: 0.75, grabHoleLengthIn: 6, grabBoardThickIn: 0.5, riderMassLb: 250, riderGoalMassLb: 250 })).find((q) => q.id === 'seat-grip')!;
     expect(bad.util ?? 0).toBeGreaterThan(c.util ?? 0);
     const pinch = seatChecks(ctxFor({ grabHoleHeightIn: 1.25 })).find((q) => q.id === 'seat-grip')!;

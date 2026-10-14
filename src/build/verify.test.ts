@@ -14,7 +14,7 @@ describe('verify checklist', () => {
     expect(list.map((c) => c.id)).toEqual([
       'tire-squash', 'wheel', 'axle-rod', 'steering-parts', 'bridle', 'sign-knobs', 'strip-bend',
       'oak-supplier', 'deck-sheet', 'web-bend', 'd-ring', 'eva-pads', 'hinges-304', // before ordering (D-79, D-80, D-83: the cost-pass sourcing and bought-hardware checks)
-      'seat-back', 'brake-knee', 'lamp-clip', 'ply-thickness', 'lid-support', 'other-params', // before cutting
+      'seat-back', 'brake-knee', 'grab-reach', 'lamp-clip', 'ply-thickness', 'lid-support', 'other-params', // before cutting
       'bow-rib-clearance', 'brake-strap', // at assembly
     ]);
     expect(list.map((c) => c.n)).toEqual(list.map((_, i) => i + 1));

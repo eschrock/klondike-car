@@ -94,12 +94,12 @@ describe('Shaper SVG files', () => {
   it('puts as many holes in the seat back, grab boards and signs as their joints have', () => {
     expect(jointHoles('seat-back-panel')).toBe(8);
     expect(featureHoles(fileOf('seat-back-panel'))).toBe(jointHoles('seat-back-panel'));
-    expect(jointHoles('seat-grip-L')).toBe(6);
-    expect(featureHoles(fileOf('seat-grip-L'))).toBe(6 + 1); // six bolts and the hand hole
+    expect(jointHoles('seat-grip-L')).toBe(5);
+    expect(featureHoles(fileOf('seat-grip-L'))).toBe(5 + 1); // five bolts and the hand hole
     expect(jointHoles('sign-L')).toBe(4);
     expect(featureHoles(fileOf('sign-L'))).toBe(4);
-    // And the SVG carries them: the grab board has 7 inside cuts, the seat back 2 pin holes (the inserts are untrusted guide marks).
-    expect(paths(fileOf('seat-grip-L').svg).filter((t) => attr(t, 'shaper:cutType') === 'inside').length).toBe(7);
+    // And the SVG carries them: the grab board has 6 inside cuts, the seat back 2 pin holes (the inserts are untrusted guide marks).
+    expect(paths(fileOf('seat-grip-L').svg).filter((t) => attr(t, 'shaper:cutType') === 'inside').length).toBe(6);
     expect(paths(fileOf('seat-back-panel').svg).filter((t) => attr(t, 'shaper:cutType') === 'inside').length).toBe(2);
     expect(paths(fileOf('sign-L').svg).filter((t) => attr(t, 'shaper:cutType') === 'inside').length).toBe(0); // #10 holes are under the routing size: drill marks
     expect(fileOf('sign-L').svg.match(/<title>drill<\/title>/g)!.length).toBe(4);
@@ -108,7 +108,7 @@ describe('Shaper SVG files', () => {
   it('keeps the grab-board bolt holes on the board (the joints are in the board\'s local frame)', () => {
     const d = analyzeShaperPart(parts.find((x) => x.id === 'seat-grip-L')!, parts, p)!;
     const holes = d.items.filter((i) => i.k === 'cutHole');
-    expect(holes.length).toBe(6);
+    expect(holes.length).toBe(5);
     for (const h of holes) if (h.k === 'cutHole') { expect(h.c[0]).toBeGreaterThan(0.5); expect(h.c[0]).toBeLessThan(d.f.widthIn - 0.5); expect(h.c[1]).toBeGreaterThan(0.2); expect(h.c[1]).toBeLessThan(d.f.heightIn / 2); }
   });
 
@@ -267,11 +267,12 @@ describe('Shaper SVG files', () => {
     for (const f of files) expect(f.svg, f.fileName).toMatch(/grain (along the|not specified)/);
   });
 
-  it('draws the grab board in its own flat frame: 8 x 5.5, not a 12-degree-turned drawing of it', () => {
+  it('draws the grab board in its own flat frame: a 5" tall parallelogram with vertical ends, not a turned drawing of it (D-84)', () => {
     const g = parts.find((x) => x.id === 'seat-grip-L')!;
     const f = fileOf('seat-grip-L');
-    expect(f.widthIn).toBeCloseTo(8, 6);
-    expect(f.heightIn).toBeCloseTo(5.5, 6);
+    expect(f.widthIn).toBeGreaterThan(8.2);
+    expect(f.widthIn).toBeLessThan(9.2);
+    expect(f.heightIn).toBeCloseTo(5, 6);
     expect(f.widthIn).toBeCloseTo(g.stock!.l, 3);
     expect(f.heightIn).toBeCloseTo(g.stock!.w, 3);
     expect(f.qty).toBe(2);

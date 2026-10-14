@@ -159,7 +159,7 @@ describe('Bolt Depot by the piece', () => {
     expect([w38.qty, w38.unitUsd, w38.packQty]).toEqual([20, 0.41, undefined]);
     // the 20 1/4-20 nylocks (24 before the hanger bolts were counted once) are 3.20 by the piece against 10.36 for the bag
     const nut = fast.find((l) => l.key === '18-8 nylon-insert lock nut 1/4-20')!;
-    expect([nut.qty, nut.unitUsd]).toEqual([20, 0.16]);
+    expect([nut.qty, nut.unitUsd]).toEqual([18, 0.16]);
   });
 
   it('shrinks the Bulk parts section', () => {
@@ -491,7 +491,7 @@ describe('cost critic round 2: Standard metal, notes, shipping and tax', () => {
     expect(std304(/flat bar 1\/8" x 2"/).extUsd).toBe(9.23);
     expect(std304(/angle/).extUsd).toBe(7.75);
     expect(std304(/flat bar 1\/4" x 2"/).basis).toBe('quoted');
-    expect(std304(/flat bar 1\/16"/).basis).toBe('estimate'); // no 304 1/16" x 1" bar was found
+    expect(std304(/flat bar 1\/8" x 1-1\/4"/).basis).toBe('estimate'); // no 304 1/8" x 1-1/4" bar was found
     // each Standard 304 line is cheaper than its 316 line, and the three together are about $25 less than the old 85 % estimates plus 316 pieces
     for (const re of [/flat bar 1\/4" x 2"/, /flat bar 1\/8" x 2"/, /angle/]) expect(std304(re).extUsd, String(re)).toBeLessThan(ext316(re).extUsd);
     for (const l of std.filter((q) => /stainless/.test(q.key) && !/1\/16/.test(q.key))) expect(l.notes ?? '', l.key).not.toMatch(/85 %|no 304 stock was researched/);

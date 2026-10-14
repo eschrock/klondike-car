@@ -64,11 +64,12 @@ describe('flatPattern', () => {
       expect(along, `${x.id}: grain runs along the longer side`).toBeGreaterThanOrEqual(across - 1e-6);
     }
   });
-  it('flattens the grab board in its own frame: 8 x 5.5 in, whatever the slope of the sheer', () => {
+  it('flattens the grab board in its own frame: a parallelogram 5 in tall and about 8-2/3 in long, whatever the slope of the sheer (D-84)', () => {
     for (const tag of ['L', 'R']) {
       const f = flatPattern(parts.find((x) => x.id === `seat-grip-${tag}`)!)!;
-      expect(f.widthIn).toBeCloseTo(8, 6);
-      expect(f.heightIn).toBeCloseTo(5.5, 6);
+      expect(f.widthIn).toBeGreaterThan(8.2);
+      expect(f.widthIn).toBeLessThan(9.2);
+      expect(f.heightIn).toBeCloseTo(5, 6);
     }
   });
 });

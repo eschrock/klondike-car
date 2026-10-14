@@ -78,8 +78,10 @@ export const STEP = { frame: 3, body: 4, steering: 4.5, gear: 4.6, linkage: 4.7,
  *      (flipping the finished hull with axles and wheels is about 100 lb: four people and padded horses). THEN turn the hull upright and fit the tongue, bridle, linkage (STEP.linkage 4.7,
  *      STEP.spindles 4.9), the seat and storage (5), the brake (6) and the finish (7).
  */
-/** Thickness of the 316 backing strip under the grab-board screw heads, on the outer gunwale band (D-63). The side signs hang this much farther out, so they clear it. */
-export const GRIP_BACKING_T_IN = 0.0625;
+/** Thickness of the 316 backing strip (1/8 in, D-84) under the grab-board screw heads, on the outer gunwale band (D-63). The side signs hang this much farther out, so they clear it. */
+export const GRIP_BACKING_T_IN = 0.125;
+/** The side signs and their backers hang this far proud of the outer band faces (1/16 in: they used to clear the 1/16 in grab-board strip; the grab board is now far forward of them, D-84). */
+export const SIGN_PROUD_IN = 0.0625;
 export const HULL_STEP = { deck: 4, sides: 4.2, transom: 4.4 } as const;
 
 /**

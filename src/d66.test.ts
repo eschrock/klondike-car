@@ -104,8 +104,8 @@ describe('D-66 the numbers that moved', () => {
   });
   it('riders: safe 50 to over 250 lb (nothing red), green 50 to 240 lb (D-67: the straight tip, 43.6 deg at 200 lb, clears its 35 deg limit with room; it was inside the 10% band of the old 40 deg limit from 190 lb, green 50-180 lb; 250 lb is yellow on the seat-back panel only)', () => {
     const sw = riderSweep(defaults);
-    expect(sw.safe).toEqual({ loLb: 50, hiLb: 250, openLow: true, openHigh: true });
-    expect(sw.green).toMatchObject({ loLb: 50, hiLb: 240, openLow: true, openHigh: false }); // D-83: 240 lb again with the 2 in clamp plates (more groove bearing area); D-73: 220 lb. D-71: 240 lb with the 3/4 in axle, 180 lb with the 5/8 in tube; the solid 5/8 in rod and the 4.7 lb heavier D-73 sled: 220 lb (230 lb with the 4 mm okoume)
+    expect(sw.safe).toEqual({ loLb: 50, hiLb: 230, openLow: true, openHigh: false }); // D-84: the honest grab-board row
+    expect(sw.green).toMatchObject({ loLb: 50, hiLb: 210, openLow: true, openHigh: false }); // D-83: 240 lb again with the 2 in clamp plates (more groove bearing area); D-73: 220 lb. D-71: 240 lb with the 3/4 in axle, 180 lb with the 5/8 in tube; the solid 5/8 in rod and the 4.7 lb heavier D-73 sled: 220 lb (230 lb with the 4 mm okoume)
     expect(row('tip-straight').cases!.goal!.value).toBeCloseTo(44.3, 0); // D-83: 44.3 deg (the 6 mm Baltic sides and the lighter EVA seat move the center of gravity a little); 43.6 before
     expect(row('tip-straight').statusGoal).toBe('pass'); // marginal at the 40 deg limit (util 0.80 now, 35 / 43.6)
     expect(row('tip-lock').status).toBe('pass');

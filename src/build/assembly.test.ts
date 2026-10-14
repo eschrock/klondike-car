@@ -1030,7 +1030,7 @@ describe('D-76: side ribs, knees and box ties (tie-down bases)', () => {
       expect(rib).toMatch(/through the bracket, the head, the inner band, the web and the outer band in one pass/);
       expect(rib).toMatch(/scrap block on the outside of the side behind the holes, to stop tear-out/);
       expect(rib).toMatch(/Brush epoxy into each hole[^\n]*run the bit through again/);
-      expect(rib).toMatch(/Grab boards:[\s\S]*drill all the layers through the board's holes/);
+      expect(rib).toMatch(/Grab boards:[\s\S]*drill through the board, the inner band, the web, the outer band and the strip/);
       const fit = txt(get('final-fit'));
       expect(fit).not.toMatch(/Drill all \d holes|drill all the layers/i);
       expect(fit).toContain(`drilled at step ${list.map((q) => q.id).indexOf('side-holes')}, before the finish`);

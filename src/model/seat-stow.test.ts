@@ -363,7 +363,7 @@ describe('the handlebow (D-53, D-57)', () => {
 describe('the grab boards (D-57)', () => {
   const gr = get(installed, 'seat-grip-L');
   it('one oak board per side, ids seat-grip-L/R, with a routed hole and bolts through the gunwale; the old pad, posts, bar and doubler are gone', () => {
-    expect(installed.filter((x) => /^seat-grip/.test(x.id)).map((x) => x.id).sort()).toEqual(['seat-grip-L', 'seat-grip-R', 'seat-grip-backing-L', 'seat-grip-backing-R']); // D-63: a 316 backing strip under the bolt heads on each outer gunwale band
+    expect(installed.filter((x) => /^seat-grip/.test(x.id)).map((x) => x.id).sort()).toEqual(['seat-grip-L', 'seat-grip-R', 'seat-grip-backing-L', 'seat-grip-backing-R', 'seat-grip-cap-L', 'seat-grip-cap-R']); // D-63, D-84: a stainless backing strip under the bolt heads on each outer gunwale band, hidden under an oak cap
     expect(installed.some((x) => /^(doubler-grip|seat-grip-(pad|post|bar))/.test(x.id))).toBe(false);
     expect(gr.material).toBe('white oak');
     expect(gr.geometry.type).toBe('extrusion');
@@ -372,13 +372,15 @@ describe('the grab boards (D-57)', () => {
     expect(bolts.to).toBe('side-L-gunwale-in'); // the board laps the inner band (D-63: the bolt heads bear on the backing strip on the outer band)
     expect(bolts.count).toBe(GRIP_BOLTS);
   });
-  it('lies against the inboard face of the gunwale, stands above its top by foot + hole + bar, and is 8 in long from 5 in behind the H-point', () => {
+  it('lies against the inboard face of the gunwale, stands above its top by foot + hole + bar, and its hole is centered 5-1/2 in ahead of the H-point with vertical ends (D-84)', () => {
     const b = worldAABB(gr);
     expect(b.max[1]).toBeCloseTo(innerHalfWidth(L, (b.min[0] + b.max[0]) / 2), 1);
     expect(b.max[1] - b.min[1]).toBeCloseTo(defaults.grabBoardThickIn, 1);
     const top = sideTopAt(L, b.min[0]);
     expect(b.max[2]).toBeGreaterThan(top + defaults.grabBoardFootIn + defaults.grabHoleHeightIn);
-    expect(b.min[0]).toBeGreaterThan(defaults.seatXIn - 5 - 1);
+    const holeX = defaults.seatXIn + defaults.grabHoleAheadOfHpointIn;
+    expect(b.min[0]).toBeGreaterThan(holeX - defaults.grabBoardLengthIn / 2 - 1); // the oriented box of the turned board is a little wider than the board
+    expect(b.max[0]).toBeLessThan(holeX + defaults.grabBoardLengthIn / 2 + 1);
     const l = worldAABB(get(installed, 'seat-grip-L')), r = worldAABB(get(installed, 'seat-grip-R'));
     expect(l.min[1]).toBeCloseTo(-r.max[1], 6);
   });

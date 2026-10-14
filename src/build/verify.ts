@@ -375,6 +375,21 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       refs: ['D-57', 'D-65'],
     },
     {
+      id: 'grab-reach',
+      title: 'Grab board: can a scout reach the hand hole?',
+      how: [
+        it('Cut a cardboard board the size of the grab board (Shaper pattern, hole cut out) and tape it in place on one gunwale.', [`The hole's center is ${fr(p.grabHoleAheadOfHpointIn, 8)}" ahead of the hip point, which is ${fr(p.seatBehindHpointIn, 8)}" ahead of the rear edge of the seat cushion, and ${fr(p.grabBoardFootIn + p.grabHoleHeightIn / 2, 16)}" above the gunwale top.`]),
+        it('Sit the smallest and the biggest scout in the sled, gloved, with the seat pad on and the seat back up.', ['Let the arm hang, then bring the forearm up and forward to the hole.']),
+        it('Watch where the hand lands and how the wrist and elbow sit.'),
+      ],
+      passList: ['The gloved hand finds the hole without reaching or folding the arm back.', 'The elbow stays bent, never locked or behind the hip.', 'The knuckles clear the gunwale top and the thigh.'],
+      ifFails: `Slide the hole fore or aft (${lbl('grabHoleAheadOfHpointIn')}: forward for long arms, back for short ones; the flat board cannot go much farther forward than it is, where the sides start to turn in) or change the oak under the hole (${lbl('grabBoardFootIn')}), then re-run the checks.`,
+      partIds: ids(parts, /^seat-grip-[LR]$/),
+      paramKeys: [],
+      when: 'before cutting',
+      refs: ['D-84', 'D-57'],
+    },
+    {
       id: 'bow-rib-clearance',
       title: 'Bow post: sit a booted rider in the bare hull before the ribs go in',
       how: [

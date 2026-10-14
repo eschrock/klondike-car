@@ -414,6 +414,7 @@ describe('no unintended overlaps for the seat, storage and fittings', () => {
     [/^seat-hinge-[LR]$/, /^(seat-wedge-[LR]|seat-back-(stile|rail|panel))/], // the knuckle at the foot of the back is part of the joint
     [/^seat-pin-[LR]$/, /^(seat-back-stile|seat-back-panel|seat-wedge)-?[LR]?$/], // the pin passes through the panel into the stop block
     [/^flag-block-/, /^(flag-tube|side-)/], // the blocks hold the tube against the side
+    [/^seat-grip-backing-[LR]$/, /^seat-grip-cap-[LR]$/], // D-84: the strip is epoxied into the pocket on the back of the oak cap (the pocket is not cut out of the model)
   ];
   // FINDING: a seat back of 22 in or wider (the param allows up to 26) makes the stile backers overlap the box walls (0.11 in) in the 22 in box interior; validateParams has no check for it.
   const variants: Record<string, Partial<Params>> = {

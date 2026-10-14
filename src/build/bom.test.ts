@@ -88,7 +88,7 @@ describe('bom', () => {
     // Table prices carry their own basis: Eric's vendor quotes (the plywood, 4/4, 8/4, 12/4 oak) and the researched prices are quoted, the rest estimates
     expect(b.sections.find((x) => x.id === 'plywood')!.lines.every((l) => l.basis === 'quoted')).toBe(true);
     const metal = b.sections.find((x) => x.id === 'metal')!.lines;
-    expect(metal.filter((l) => l.basis === 'estimate').map((l) => l.key).sort()).toEqual(['316 stainless flat bar 1/16" x 1"', '5/8" OD x 0.120" wall DOM tube (ASTM A513 Type 5)']); // 2026-10-14 research: the 1/4 x 2 and 1/8 x 2 bars, the angle, the aluminum tube and the 1045 rod have real prices; the 1/16 x 1 strip is stocked nowhere; the Speedy 0.109 wall price is the DOM stand-in (D-71)
+    expect(metal.filter((l) => l.basis === 'estimate').map((l) => l.key).sort()).toEqual(['316 stainless flat bar 1/8" x 1-1/4"', '5/8" OD x 0.120" wall DOM tube (ASTM A513 Type 5)']); // 2026-10-14 research: the 1/4 x 2 and 1/8 x 2 bars, the angle, the aluminum tube and the 1045 rod have real prices; the 1/16 x 1 strip is stocked nowhere; the Speedy 0.109 wall price is the DOM stand-in (D-71)
     expect(metal.filter((l) => l.basis === 'quoted').length).toBe(4);
     for (const l of b.sections.find((x) => x.id === 'lumber')!.lines) expect(l.basis, l.key).toBe(OAK_PRICE_PER_BF[l.key].basis);
   });
@@ -264,10 +264,10 @@ describe('bom', () => {
       const j = part.joints!.find((q) => q.to === to && (q.type === 'bolt' || q.type === 'screw'))!;
       return { part, j: { ...j, size: j.size!.replace(/\d+(?:-\d+\/\d+)?\s+316/, '316').replace(/(?:× |x )\d+(?:-\d+\/\d+)?(?= 316)/g, '').replace(/#(\d+) × [\d-/]+/, '#$1') } };
     };
-    // grab board: board + inner band + web + outer band + 1/16 strip + washers and nut: the critic's 1-3/4 in
+    // grab board: board + inner band + web + outer band + 1/8 strip + a washer and nut: 2 in (D-84)
     const g = strip('seat-grip-L', 'side-L-gunwale-in');
-    expect(boltLengthFromStack(g.part, g.j, byId)).toBe(1.75);
-    expect(jointItems(g.part, { ...g.j, size: '0.25" 316 button-head cap screws, 3 columns' }, byId)[0].label).toBe('316 button-head cap screw 1/4-20 x 1-3/4"');
+    expect(boltLengthFromStack(g.part, g.j, byId)).toBe(2);
+    expect(jointItems(g.part, { ...g.j, size: '0.25" 316 button-head cap screws, 3 columns' }, byId)[0].label).toBe('316 button-head cap screw 1/4-20 x 2"');
     // (the hanger bolts are the hold-down angle's upright bolts, recorded once with their length in the text: no stack fallback needed)
     // roll pad: 1/4 pad + 3/4 bite
     const rp = byId.get('beam-F')!, rj = rp.joints!.find((q) => q.to === 'roll-pad-L')!;
@@ -629,9 +629,9 @@ describe('price research applied (2026-10-12)', () => {
     expect(pan.basis).toBe('estimate');
     expect(pan.notes).toMatch(/pan-head/);
     const w = line('316 fender washer 1/4"');
-    expect([w.qty, w.unitUsd]).toEqual([32, 0.46]); // 32 x 0.46 = 14.72, under the $27.26 bag of 100 (a nut-side washer only on the hold-down and clamp bolts, whose text puts the washers under the beam)
+    expect([w.qty, w.unitUsd]).toEqual([28, 0.46]); // 28 x 0.46 = 12.88 (D-84: the grab boards take 5 screws and a washer each side on the board, no head washer), under the $27.26 bag of 100 (a nut-side washer only on the hold-down and clamp bolts, whose text puts the washers under the beam)
     const n = line('316 nylon-insert lock nut 1/4-20');
-    expect([n.qty, n.unitUsd]).toEqual([20, 0.25]); // 24 before the hanger bolts were counted once
+    expect([n.qty, n.unitUsd]).toEqual([18, 0.25]); // 24 before the hanger bolts were counted once
     // a length the research did not read keeps its estimate and says so
     const unread = line('316 wood screw #8 x 2-1/2"'); // D-82: no 316 #8 x 2-1/2 exists; the real #8 x 2 is $0.57
     expect(unread.basis).toBe('estimate');
@@ -655,9 +655,9 @@ describe('price research applied (2026-10-12)', () => {
     expect([dom.unit, dom.qty, dom.unitUsd, dom.url, dom.basis]).toEqual(['60 in piece', 1, 45.45, undefined, 'estimate']); // D-71: 5/8 x 0.120 is not at Speedy Metals; their 0.109 wall 60 in price stands in (flagged)
     expect(dom.alternatives![0].specGap).toBe(true);
     expect(dom.needed).toBeLessThanOrEqual(5); // the cuts fit the 60 in piece
-    const bar = line(/flat bar 1\/16/);
+    const bar = line(/flat bar 1\/8" x 1-1\/4"/);
     expect(bar.basis).toBe('estimate');
-    expect(bar.alternatives![0].specGap).toBe(true); // the 1/8" bar is thicker
+    expect(bar.alternatives![0].specGap).toBe(true); // the 1/8" x 1" bar is narrower
   });
 });
 

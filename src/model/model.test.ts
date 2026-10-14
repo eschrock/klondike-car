@@ -21,6 +21,7 @@ const ALLOW: Allow[] = [
   { a: /^axle-/, b: /^(wheel-|beam-)/, why: 'axle passes through the hub bore and lies in a groove in the beam (D-10, D-15)' },
   { a: /^beam-/, b: /^wheel-/, why: 'tire OBB is a conservative box; the beam ends sit inside the rim, 1/8" short of the hub face' },
   { a: /^(axle-R[LR]?|beam-R)$/, b: /^axle-hanger-[LR]$/, why: 'the hanger is notched up from its bottom to straddle the beam and bear on its top (D-48 seat, moved to the hanger at D-54); the sweep has no notch geometry' },
+  { a: /^seat-grip-backing-[LR]$/, b: /^seat-grip-cap-[LR]$/, why: 'D-84: the strip is epoxied into the pocket on the back of the oak cap; the cap is modeled as a solid plate and the pocket is not cut out of it' },
   // ---- brake and handle
   { a: /^brake-(pad|shoe)-/, b: /^wheel-R[LR]$/, why: 'the rubber pad presses on the tread and the shoe block sits on it; the tire OBB bands are a superset of the round tire (D-57)' },
   { a: /^brake-chock-[LR]$/, b: /^wheel-R[LR]$/, why: 'the chock ramp is tangent to the tire and its toe slides under the tread; the tire bands are a superset of the round tire (D-57)' },
@@ -80,6 +81,8 @@ const KNOWN_OFF_DEFAULT: RegExp[] = [
   /^beam-R x brake-chock-[LR]:/, // wheel8 (3c-4b, reported): the chock toe meets the beam end beside a small rear wheel
   /^transom-backer-[LR] x flag-tube:/, // a narrow body or an under-seat box (3c-4b, reported): the flag tube meets the transom backer
   /^brake-knee-[LR] x reflector-[LR]1:/, // sideRear8 (3c-4b, reported)
+  /^(sign-[LR]|sign-backer-[LR]\d) x seat-grip-(backing|cap)-[LR]:/, // seatXMin (D-84): the grab board is held to the seat, so a short rear box puts the cap and strip back among the side sign and its backers
+  /^seat-grip-(backing|cap)-[LR] x reflector-[LR]\d:/, // seatXMin (D-84): the rear reflector cannot move ahead of the sign past the cap
   /^seat-grip-backing-[LR] x brake-knee-[LR]:/, // wheel 11.5 in and up (D-71): the brake knee sits r + brakePivotAheadIn behind the axle line, which a bigger wheel pushes under the grab-board backing strip by 1/16 in; the 5/8 in axle lowers the front stack 1/16 in, so 11.5 in wheels now pass the 8 in deck rule (they were an error) and this off-default overlap shows. Reported, not patched
   /^(sign-backer-[LR]\d|seat-grip-[LR]) x side-rib-[LR]1:/, // D-76 (reported): a short rear box (seatXMin, some fuzz designs) puts the box rib among the sign backers or under the grab board; it stands a fixed inset behind the box's fore end
   /^(sign-[LR]|sign-backer-[LR]\d|seat-grip-backing-[LR]|reflector-[LR]\d) x dring-plate-[LR]\d:/, // D-76 (reported): in a design where the sign, its backer or a grab-board backing strip lands on a rib's D-ring station (a short rear box, some fuzz designs) it meets the outside bearing plate; at the defaults they clear it by 1/4 in (side-ribs.test.ts)

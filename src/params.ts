@@ -730,8 +730,28 @@ const defs = {
   },
   grabBoardFootIn: {
     label: 'Grab board oak between the gunwale top and the hole', group: 'seat', unit: 'in',
-    default: 1.25, min: 0.5, max: 2.5, step: 0.25, status: 'assumed', ref: 'D-57',
-    note: 'The board laps the inboard face of the gunwale (that part is bolted) and stands this far above the gunwale top before the hole starts.',
+    default: 0.75, min: 0.5, max: 2.5, step: 0.25, status: 'assumed', ref: 'D-57, D-84',
+    note: 'The board laps the inboard face of the gunwale (that part is bolted) and stands this far above the gunwale top before the hole starts. D-84: 3/4 in (was 1-1/4 in) so the hole follows the lower sheer toward the palm height of a seated rider.',
+  },
+  grabHoleAheadOfHpointIn: {
+    label: 'Grab hole center ahead of the seat H-point', group: 'seat', unit: 'in',
+    default: 5.5, min: 0, max: 12, step: 0.5, status: 'assumed', ref: 'D-84',
+    note: 'D-84: a seated rider\'s elbow hangs about 5 in behind the H-point; with the forearm about level the palm lands 11 to 12 in ahead of it, about 6 in ahead of the H-point. The hole center is 5-1/2 in ahead of the H-point (it was 1 in behind, at the elbow) and the 4-1/2 in hole spans the palm. Farther forward the sides start to turn in toward the bow (x = 20 in) and a flat board would stand off the band by more than 1/16 in at its front end (the validator warns). Body numbers are estimates for a 68 in rider: try a real scout in a mock-up (Verify list).',
+  },
+  gripBoltStiffnessLbIn: {
+    label: 'Grab board screw stiffness (screw, washer and head bearing in series)', group: 'seat', unit: 'lb/in',
+    default: 120000, min: 30000, max: 600000, step: 10000, status: 'assumed', ref: 'D-84',
+    note: 'D-84: a 1/4-20 screw over a 1-1/2 in grip is about 590,000 lb/in alone; the oak under the head strip and under the nut washer is softer, and in series they come to about 120,000 lb/in. It sets how the pull is shared between the screws and the board\'s lower edge in the elastic estimate of the grab-board row (the row also takes the rigid-lever loads and keeps the larger).',
+  },
+  gripBearingFoundationPsiIn: {
+    label: 'Band bearing stiffness under the board (oak across the grain, per inch of depth)', group: 'seat', unit: 'psi/in',
+    default: 400000, min: 100000, max: 1000000, step: 50000, status: 'assumed', ref: 'D-84',
+    note: 'D-84: oak across the grain is about 200,000 psi, over about 1/2 in of band and web it gives about 400,000 psi per inch of squash. Used in the elastic estimate of the grab-board row.',
+  },
+  grabBoardCornerIn: {
+    label: 'Grab board top corner radius', group: 'seat', unit: 'in',
+    default: 1, min: 0.25, max: 1.25, step: 0.25, status: 'assumed', ref: 'D-84',
+    note: 'D-84: 1 in (was 3/4 in): the two top corners are rounded well off so they are not sharp on a hand or a knee. The board ends are vertical (to match the ribs and the transom), so the corners are 98 and 82 degrees.',
   },
 
   // ── Wheels & axles ───────────────────────────────────────────────────────
@@ -2374,6 +2394,14 @@ export function bowTurnInAt(p: Params, x: number): number {
   return taperTurnIn(bowTaper(p), x);
 }
 
+/** Where the grab board's hole is centered (x, in; D-84): `grabHoleAheadOfHpointIn` ahead of the H-point, held back (in 1/4 in steps) until the side's turn-in over the board's length is 1/16 in at most, because the board is flat. */
+export function gripHoleX(p: Params): number {
+  const half = p.grabBoardLengthIn / 2;
+  let x = p.seatXIn + p.grabHoleAheadOfHpointIn;
+  while (x > p.seatXIn - 4 && bowTurnInAt(p, x + half) - bowTurnInAt(p, x - half) > 1 / 16 + 1e-9) x -= 0.25;
+  return x;
+}
+
 /** Actual ply thickness of a bent lamination `t` thick glued from plies of about `ply`. */
 export function lamPly(t: number, ply: number): number {
   return t / Math.max(1, Math.round(t / Math.max(0.01, ply)));
@@ -2646,6 +2674,12 @@ export function validateParams(input: Params): ParamIssue[] {
     const inside = p.bowWidthIn - 2 * p.sideThicknessIn;
     if (inside < footNeed)
       err(['bowWidthIn', 'riderStatureIn', 'bootAllowanceIn'], `The bow is only ${inside.toFixed(1)}" wide inside; the rider's feet need ≥ ${footNeed.toFixed(1)}" there. Widen the bow.`);
+  }
+  // D-84: the grab board and its cap are flat; where the sides turn in toward the bow they would stand off the band, so the model holds the board back (gripHoleX).
+  {
+    const want = p.seatXIn + p.grabHoleAheadOfHpointIn, got = gripHoleX(p);
+    if (got < want - 1e-9)
+      warn(['grabHoleAheadOfHpointIn', 'grabBoardLengthIn', 'seatXIn'], `The grab board (a flat piece) would reach where the sides turn in toward the bow, so it is held back ${(want - got).toFixed(2)}" from where you set it (its rear end would stand more than 1/16" off the band).`);
   }
   // Sandwich sides (D-61, D-62): the oak band on each face of the web must be a real strip, and the inner chine band must keep some height above the deck gap.
   {

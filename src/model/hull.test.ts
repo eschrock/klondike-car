@@ -9,7 +9,7 @@ import { buildModel } from './index';
 import { computeLayout } from './layout';
 import { liftBarStressPsi, liftSlot, scupperSites } from './body';
 import { chooseDomino, DOMINOS, endJoint, frac, joinerySummary } from './joinery';
-import { GRIP_BACKING_T_IN, HULL_STEP, box, makeCtx } from './build-utils';
+import { SIGN_PROUD_IN, HULL_STEP, box, makeCtx } from './build-utils';
 import { localBounds, transformPoint, worldAABB } from './bounds';
 import { totalMass } from './mass';
 import { joistId } from './frame';
@@ -490,7 +490,7 @@ describe('signs (D-9, D-35, D-57)', () => {
       expect(s.group).toBe('body');
       expect(s.notes).toMatch(/banded/);
       const c = transformPoint(s.transform, [0, 0, 0]);
-      expect(Math.abs(c[1])).toBeCloseTo(L.hwC + L.side + GRIP_BACKING_T_IN + thinSheet(defaults).thicknessIn / 2, 6); // D-63: 1/16 in proud of the band faces, clear of the grab-board backing strip
+      expect(Math.abs(c[1])).toBeCloseTo(L.hwC + L.side + SIGN_PROUD_IN + thinSheet(defaults).thicknessIn / 2, 6); // D-63: 1/16 in proud of the band faces, 
       expect(c[2]).toBeGreaterThan(L.web.z0); // level with the free web
       expect(c[2]).toBeLessThan(8 + 14 - defaults.railBandIn);
       expect(s.transform[2]).toBeCloseTo(0, 9); // 3c-5: LEVEL, its length axis is not tilted to follow the sheer

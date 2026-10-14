@@ -10,7 +10,8 @@ import { buildModel } from './model';
 import { computeLayout, sideTopAt } from './model/layout';
 import { worldAABB } from './model/bounds';
 import { HULL_STEP } from './model/build-utils';
-import { GRIP_BACKING_H_IN, GRIP_BACKING_T_IN, HINGE_BACKER_THICK_IN, INSERT_VENEER_MIN_IN, LATCH_HOLE_WALL_MIN_IN, PIN_LEN_IN, PIN_R_IN, gripBackingLen, hingeBacker, latchGeometry, seatBackSupport } from './model/seat';
+import { SIGN_PROUD_IN } from './model/build-utils';
+import { GRIP_BACKING_H_IN, GRIP_BACKING_T_IN, GRIP_CAP_T_IN, HINGE_BACKER_THICK_IN, INSERT_VENEER_MIN_IN, LATCH_HOLE_WALL_MIN_IN, PIN_LEN_IN, PIN_R_IN, gripBackingLen, hingeBacker, latchGeometry, seatBackSupport } from './model/seat';
 import { signKnobPlan } from './model/body';
 import { makeCtx } from './model/build-utils';
 import { SOCKET_ACCESS_HOLE_IN, SOCKET_SCREW_HEAD_IN, SOCKET_SCREW_WASHER_IN } from './model/handle';
@@ -193,7 +194,7 @@ describe('the glue-up posture and the strip lengths', () => {
 describe('S4: the sign standoff and knob screws', () => {
   const kn = signKnobPlan(makeCtx(defaults));
   it('the knob screw is the longest 1/8 in length that leaves 1/8 in of wood behind its tip, and engages at least 0.2 in of the insert', () => {
-    expect(kn.standoffIn).toBeCloseTo(L.side - L.sideBand - defaults.panelPlyIn + GRIP_BACKING_T_IN, 9);
+    expect(kn.standoffIn).toBeCloseTo(L.side - L.sideBand - defaults.panelPlyIn + SIGN_PROUD_IN, 9);
     expect(kn.standoffIn).toBeGreaterThan(0.234);
     expect(kn.lenIn).toBeCloseTo(0.875, 9);
     expect(kn.engagedIn).toBeGreaterThanOrEqual(0.2);
@@ -239,30 +240,35 @@ describe('S8: the hinge insert holes leave the back veneer', () => {
 });
 
 describe('S9: the grab-board screw heads', () => {
-  it('bear on a 1/16 x 1 in 316 backing strip on the outer gunwale band, bedded and drilled with the board; the heads, strip bearing and punching are checked', () => {
+  it('bear on a 1/8 x 1-1/4 in stainless backing strip under an oak cap on the outer gunwale band, bedded and drilled with the board (D-84); the heads, strip bearing and punching are checked', () => {
     const strip = get('seat-grip-backing-L');
     expect(strip.material).toMatch(/(?:316|18-8 \(304\) stainless)/);
     expect(strip.kind).toBe('metal');
     const b = worldAABB(strip);
     expect(b.max[1] - b.min[1]).toBeCloseTo(GRIP_BACKING_T_IN, 6);
-    expect(b.min[1]).toBeCloseTo(L.hwC + L.side, 3); // the outer face of the outer band
-    expect(strip.massLb).toBeGreaterThan(0.05);
-    expect(strip.massLb).toBeLessThan(0.15);
+    expect(b.min[1]).toBeGreaterThan(L.hwC + L.side - 0.1); // the outer face of the outer band, within 1/16 in of it where the side starts to turn in
+    expect(b.min[1]).toBeLessThan(L.hwC + L.side + 0.001);
+    const cap = worldAABB(get('seat-grip-cap-L'));
+    expect(cap.max[1] - cap.min[1]).toBeCloseTo(GRIP_CAP_T_IN, 6);
+    expect(cap.min[1]).toBeCloseTo(b.min[1], 6); // the cap and the strip stand on the band together; the strip lies in the cap's pocket
+    expect(strip.massLb).toBeGreaterThan(0.1);
+    expect(strip.massLb).toBeLessThan(0.3);
     const grip = get('seat-grip-L');
     expect(grip.joints![0].size).toMatch(/button-head cap screws/);
     expect(grip.joints![0].size).toMatch(/backing strip/);
+    expect(grip.joints![0].size).toMatch(/oak cap/);
     expect(strip.joints!.some((j) => j.type === 'glue' && j.to === 'side-L-gunwale')).toBe(true);
     const c = row('seat-grip');
     expect(c.status).toBe('pass');
-    expect(c.details!.some((d) => /backing strip bearing/.test(d.name))).toBe(true);
+    expect(c.details!.some((d) => /strip bearing/.test(d.name))).toBe(true);
     expect(c.details!.some((d) => /punching/.test(d.name))).toBe(true);
     for (const d of c.details!) expect(d.util, d.name).toBeLessThan(0.9);
     expect(gripBackingLen(defaults.grabBoardLengthIn)).toBeGreaterThan(5);
-    expect(GRIP_BACKING_H_IN).toBe(1);
+    expect(GRIP_BACKING_H_IN).toBe(1.25);
   });
-  it('the sign hangs 1/16 in proud so it clears the strip, wherever the seat puts the board', () => {
+  it('the sign hangs 1/16 in proud of the band face', () => {
     const s = worldAABB(get('sign-L'));
-    expect(s.min[1]).toBeCloseTo(L.hwC + L.side + GRIP_BACKING_T_IN, 6);
+    expect(s.min[1]).toBeCloseTo(L.hwC + L.side + SIGN_PROUD_IN, 6);
   });
 });
 

@@ -6,7 +6,7 @@
  * Upright it leans back onto two fixed oak stop blocks ("wedges") glued against the storage box end; a 3/8" spring-detent quick-release pin per side (D-63: 2 in up the panel) goes through the panel
  * into a blind hole in the stop block and holds it up, and the same pin through the same hole and the deck into a blind hole in the backer pad holds it flat. The pad and the cushion are the "cushions" that lie in the box in cargo mode.
  */
-import { RIDER_PELVIS_Z_FRAC, STORAGE_LOCATION, thinSheet, type Params } from '../params';
+import { gripHoleX, RIDER_PELVIS_Z_FRAC, STORAGE_LOCATION, thinSheet, type Params } from '../params';
 import { GRIP_BACKING_T_IN, STEP, box, cylinder, span, SIDES, type Ctx, stainless, insertMat, INSERT_DRILL_IN } from './build-utils';
 import { innerHalfWidth, sideSlopeAt, sideTopAt, type Layout } from './layout';
 import { chooseDomino, DOMINOS, frac, toLocal, type DominoQuery } from './joinery';
@@ -69,27 +69,90 @@ const POST_CREST_IN = 0.75;
 const WEDGE_BELOW_LID_IN = 1;
 /** A rear box is never lower than this (top above the deck), so the seat-back backers and the hinge backers fit inside it. */
 export const MIN_REAR_BOX_H_IN = 3.4;
-/** Grab board (D-57): starts this far behind the H-point (hands rest at the hips), bolts through the gunwale (1/4" 316 button-head screws), top corners rounded. */
-export const GRIP_BEHIND_HPOINT_IN = 5;
+/** Grab board (D-57, D-84): bolts through the gunwale (1/4" button-head screws); its hole sits `grabHoleAheadOfHpointIn` ahead of the H-point, its ends are vertical, its top corners rounded (`grabBoardCornerIn`). */
 export const GRIP_BOLT_DIA_IN = 0.25;
 /** Fender washer under each nut, on the oak board (the bearing check of the grab board). */
-export const GRIP_WASHER_OD_IN = 1.25;
+export const GRIP_WASHER_OD_IN = 1.5;
 export const GRIP_BOLT_COLS = 3;
 /**
- * Backing strip under the bolt heads, on the outer face of the outer gunwale band (D-63, build 3c-8 S9): a 1/4-20 button head (0.5 in) on a 0.234 in oak band over 4 mm ply would pull through before the
- * 1-1/4 in washer on the board does (the same pull on a 3/4 in washer would be 765 psi against 358 ⊥ grain). The rows are only 0.6 in apart on a 1.5 in band, so a 1-1/4 in washer does not fit under the head;
- * a continuous 316 flat bar 1/16 x 1 x (board length - 2 in) bears the heads on about 6 in² instead (about 220 psi, 0.61 of the allowable), through a small 3/8 in washer under each head.
+ * Backing strip under the bolt heads, on the outer face of the outer gunwale band (D-63, D-84): the pull turns the board about its lower edge, so the heads pull about 1,400 lbf out of a 0.236 in oak
+ * band over 6 mm ply; oak across the grain allows 358 psi, and a 1/4-20 button head (0.5 in) or any washer that fits the 1-1/2 in band cannot spread that. A continuous 1/8 x 1-1/4 in flat bar does
+ * (1/8 in is the thinnest 316 flat bar sold; the old 1/16 in bar was too limber to spread the load evenly). Under an oak cap (D-84) it does not show.
  */
 export { GRIP_BACKING_T_IN };
-export const GRIP_BACKING_H_IN = 1;
-/** The strip stops this far in from each end of the board (the first and last screw columns sit bLen/6 in from the ends; the rear side reflector sits just behind the board). */
-export const GRIP_BACKING_END_IN = 1;
+export const GRIP_BACKING_H_IN = 1.25;
+/** The strip stops this far in from each end of the board (the end columns sit bLen/6 in from the ends; 0.58 in of strip is left past each end screw). */
+export const GRIP_BACKING_END_IN = 0.75;
 /** Length of the backing strip for a board of length `bLen`. */
 export const gripBackingLen = (bLen: number): number => Math.max(1, bLen - 2 * GRIP_BACKING_END_IN);
-/** The two bolt rows, this far below the gunwale top (the lower stays inside the 1.5 in gunwale band): the pull is resisted by the couple between them (grab-board row). */
-export const GRIP_BOLT_ROWS_IN = [0.4, 1] as const;
-export const GRIP_BOLTS = GRIP_BOLT_COLS * GRIP_BOLT_ROWS_IN.length;
-const GRIP_CORNER_IN = 0.75;
+/** Oak cap over the strip (D-84): 3/8 in thick with a 1/8 in pocket for the strip and a 1/4 in cover; as tall as the gunwale band; 1/4 in longer than the strip at each end; 9/16 in holes for the bolt heads. */
+export const GRIP_CAP_T_IN = 0.375;
+export const GRIP_CAP_POCKET_IN = GRIP_BACKING_T_IN;
+export const GRIP_CAP_END_IN = 0.25;
+export const GRIP_CAP_HOLE_IN = 0.5625;
+/** Radius of the cap's four corners (in): the vertical ends meet the sheer at 82 and 98 degrees. */
+export const GRIP_CAP_CORNER_IN = 0.25;
+export const gripCapLen = (bLen: number): number => gripBackingLen(bLen) + 2 * GRIP_CAP_END_IN;
+/** The two bolt rows, this far below the gunwale top (the lower stays inside the 1.5 in gunwale band, the heads clear the strip edges by 1/16 in): the pull is resisted by the couple between them (grab-board row). */
+export const GRIP_BOLT_ROWS_IN = [0.40625, 1.0625] as const;
+/** The screws are STAGGERED (D-84): three in the upper row, two in the lower row between them, so the fender washers on the board do not collide (rows are only 0.65 in apart). */
+export const GRIP_BOLTS = GRIP_BOLT_COLS + (GRIP_BOLT_COLS - 1);
+/** Fender washer OD (in) under the lower row's nuts (7/8 in so it stays on the board: the row is 1.05 in below the gunwale top and the board ends 1.5 in below it) (those screws take less). */
+export const GRIP_WASHER_LOW_OD_IN = 0.875;
+/** Screw positions along the board, measured from the hole center: [along the sheer (in), below the gunwale top (in)]. */
+export const gripBolts = (bLen: number): Array<[number, number]> => [
+  ...Array.from({ length: GRIP_BOLT_COLS }, (_, i): [number, number] => [(i - (GRIP_BOLT_COLS - 1) / 2) * (bLen / GRIP_BOLT_COLS), GRIP_BOLT_ROWS_IN[0]]),
+  ...Array.from({ length: GRIP_BOLT_COLS - 1 }, (_, i): [number, number] => [(i - (GRIP_BOLT_COLS - 2) / 2) * (bLen / GRIP_BOLT_COLS), GRIP_BOLT_ROWS_IN[1]]),
+];
+
+/**
+ * Where the grab board stands (D-84), in its own flat frame turned to the sheer slope: u along the sheer, n up from the gunwale top, origin at world x = `gxA` on the sheer line through `z0g`.
+ * The hole center is `grabHoleAheadOfHpointIn` ahead of the H-point. The ends are VERTICAL in the world, so in the flat frame they lean aft going up by tan(slope): `uRear(n)` and `uFront(n)`.
+ */
+export function gripFrame(p: Params, L: Layout) {
+  const bLen = p.grabBoardLengthIn, foot = p.grabBoardFootIn, hh = p.grabHoleHeightIn;
+  const nMid = foot + hh / 2, nTop = foot + hh + p.grabBoardBarIn, nBot = -L.railBand;
+  const xh = gripHoleX(p);
+  const slope = sideSlopeAt(L, xh);
+  const cs = Math.cos(slope), sn = Math.sin(slope), tn = Math.tan(slope);
+  const uShift = bLen / 2 + (nTop - nMid) * tn; // so the rear edge at the top of the board is at u >= 0
+  const ox = xh - nMid * sn;
+  const gxA = ox - uShift * cs;
+  const z0g = sideTopAt(L, ox) + uShift * sn;
+  const uRear = (n: number, half = bLen / 2) => uShift - half - (n - nMid) * tn;
+  const uFront = (n: number, half = bLen / 2) => uShift + half - (n - nMid) * tn;
+  const W = (u: number, n: number): Vec2 => [gxA + u * cs + n * sn, z0g - u * sn + n * cs];
+  /** World x of the rear and front edges (vertical). */
+  const xRear = xh - (bLen / 2) * cs, xFront = xh + (bLen / 2) * cs;
+  return { bLen, foot, hh, nMid, nTop, nBot, xh, slope, cs, sn, tn, uShift, gxA, z0g, uRear, uFront, W, xRear, xFront };
+}
+
+/** The flat board and cap stand on the face 1 in back from their front end (the side's plan curve is under 1/16 in off the plane there, the validator's limit). */
+const GRIP_PLANE_SETBACK_IN = 1;
+
+/** Round the corner `i` of a convex CCW polygon with radius `r` (clamped to fit the shorter neighbor edge). */
+function roundCorners(poly: Vec2[], which: number[], r: number): Vec2[] {
+  const out: Vec2[] = [];
+  poly.forEach((c, i) => {
+    if (!which.includes(i)) { out.push(c); return; }
+    const prev = poly[(i + poly.length - 1) % poly.length], next = poly[(i + 1) % poly.length];
+    const a: Vec2 = [prev[0] - c[0], prev[1] - c[1]], b: Vec2 = [next[0] - c[0], next[1] - c[1]];
+    const la = Math.hypot(a[0], a[1]), lb = Math.hypot(b[0], b[1]);
+    const ua: Vec2 = [a[0] / la, a[1] / la], ub: Vec2 = [b[0] / lb, b[1] / lb];
+    const th = Math.acos(Math.max(-1, Math.min(1, ua[0] * ub[0] + ua[1] * ub[1])));
+    const rr = Math.min(r, (Math.min(la, lb) / 2) * Math.tan(th / 2));
+    const d = rr / Math.tan(th / 2);
+    const t1: Vec2 = [c[0] + ua[0] * d, c[1] + ua[1] * d];
+    const bis: Vec2 = [ua[0] + ub[0], ua[1] + ub[1]]; const lbis = Math.hypot(bis[0], bis[1]);
+    const cen: Vec2 = [c[0] + (bis[0] / lbis) * (rr / Math.sin(th / 2)), c[1] + (bis[1] / lbis) * (rr / Math.sin(th / 2))];
+    const a1 = Math.atan2(t1[1] - cen[1], t1[0] - cen[0]);
+    const t2: Vec2 = [c[0] + ub[0] * d, c[1] + ub[1] * d];
+    let a2 = Math.atan2(t2[1] - cen[1], t2[0] - cen[0]); while (a2 < a1) a2 += 2 * Math.PI;
+    const n = 8;
+    for (let k = 0; k <= n; k++) { const q = a1 + ((a2 - a1) * k) / n; out.push([cen[0] + rr * Math.cos(q), cen[1] + rr * Math.sin(q)]); }
+  });
+  return out;
+}
 
 /**
  * Joint for a light, non-structural-path frame member (seat-back frame, lid frame, grip posts): the largest Domino that chooseDomino
@@ -489,69 +552,84 @@ export function buildSeat(ctx: Ctx): Part[] {
     }
   }
 
-  // Grab boards (D-57): one oak board per side, standing on the gunwale top and bolted through the gunwale, with a Shaper Origin-routed hand hole (replaces the pad, two posts and bar).
+  // Grab boards (D-57, D-84): one oak board per side, standing on the gunwale top and bolted through the gunwale, with a Shaper Origin-routed hand hole (replaces the pad, two posts and bar).
   {
-    const bLen = p.grabBoardLengthIn;
-    const gxA = p.seatXIn - GRIP_BEHIND_HPOINT_IN;
-    const gxMid = gxA + bLen / 2;
-    const slope = sideSlopeAt(L, gxMid);
-    const cs = Math.cos(slope), sn = Math.sin(slope);
-    const z0g = sideTopAt(L, gxA);
+    const F = gripFrame(p, L);
+    const { bLen, nTop, nBot, nMid, slope, uShift, gxA, z0g, W, tn } = F;
     const holeBot = p.grabBoardFootIn;
-    const nTop = holeBot + p.grabHoleHeightIn + p.grabBoardBarIn; // above the gunwale top
-    const nBot = -L.railBand; // down to the gunwale bottom (the foot laps the gunwale's inboard face)
-    // (u along the gunwale, n up from its top) -> world (x, z), turned to the slope. Only the steel backing strip is still drawn in world coordinates: the board itself is modeled in its own
-    // flat (u, n) frame and turned to the slope by its transform (Phase 4 round 2), so its flat pattern is the 8 x 5.5 board, not a 12-degree-rotated drawing of it.
-    const W2 = (u: number, n: number): Vec2 => [gxA + u * cs + n * sn, z0g - u * sn + n * cs];
-    const rr = Math.min(GRIP_CORNER_IN, bLen / 4, (nTop - nBot) / 4);
-    const outline: Vec2[] = [];
-    const arc = (cu: number, cn: number, a0: number) => { for (let i = 0; i <= 6; i++) { const aa = a0 + (Math.PI / 2) * (i / 6); outline.push([cu + rr * Math.cos(aa), cn + rr * Math.sin(aa)]); } };
-    outline.push([0, nBot], [bLen, nBot]);
-    arc(bLen - rr, nTop - rr, 0);
-    arc(rr, nTop - rr, Math.PI / 2);
+    // The board in its own flat (u, n) frame, turned to the slope by its transform (Phase 4 round 2). Vertical ends: a parallelogram in this frame; the two top corners are rounded.
+    const rr = Math.min(p.grabBoardCornerIn, p.grabBoardBarIn);
+    const rect: Vec2[] = [[F.uRear(nBot), nBot], [F.uFront(nBot), nBot], [F.uFront(nTop), nTop], [F.uRear(nTop), nTop]];
+    const outline = roundCorners(rect, [2, 3], rr);
+    const stockL = Math.max(...outline.map((q) => q[0])) - Math.min(...outline.map((q) => q[0]));
     // CCW in world (x, z)
     const hl = p.grabHoleLengthIn, hh = p.grabHoleHeightIn;
     const hole: Vec2[] = [];
-    const cu0 = bLen / 2, cn0 = holeBot + hh / 2;
+    const cu0 = uShift, cn0 = nMid;
     const rh = hh / 2, straight = Math.max(0, hl - hh) / 2;
     for (let i = 0; i <= 8; i++) { const aa = -Math.PI / 2 + (Math.PI * i) / 8; hole.push([cu0 + straight + rh * Math.cos(aa), cn0 + rh * Math.sin(aa)]); }
     for (let i = 0; i <= 8; i++) { const aa = Math.PI / 2 + (Math.PI * i) / 8; hole.push([cu0 - straight + rh * Math.cos(aa), cn0 + rh * Math.sin(aa)]); }
     const bt = p.grabBoardThickIn;
-    // Through the board, the inner band, the web, the outer band and the backing strip; a washer under the head (on the strip) and one under the nut: stocked bolt length, rounded up.
+    // Through the board, the inner band, the web, the outer band and the strip (the head bears on the strip, in the cap's hole); a fender washer and a nylock nut on the board: stocked bolt length, rounded up.
     const gripStack = bt + 2 * L.sideBand + thinSheet(p).thicknessIn + GRIP_BACKING_T_IN;
-    const gripBoltLen = boltLength(gripStack, GRIP_BOLT_DIA_IN, 2);
+    const gripBoltLen = boltLength(gripStack, GRIP_BOLT_DIA_IN, 1);
+    // Columns: bLen/3 apart, centered on the hole and slid so each column's distance to the leaning ends is the same at the bolt rows.
+    const colShift = (nMid + (GRIP_BOLT_ROWS_IN[0] + GRIP_BOLT_ROWS_IN[1]) / 2) * tn;
+    const bolts: Vec2[] = gripBolts(bLen).map(([e, d]): Vec2 => [uShift + colShift + e, -d]);
+    // Strip (in the sloped frame, square ends) and cap (vertical ends), centered on the bolt columns on the band: n from the cap's top at the gunwale top down to the band's bottom.
+    const sLen = gripBackingLen(bLen), cLen = gripCapLen(bLen);
+    const sc = uShift + colShift; // u of the bolt-pattern center
+    const sn0 = -(GRIP_BOLT_ROWS_IN[0] + GRIP_BOLT_ROWS_IN[1]) / 2 - GRIP_BACKING_H_IN / 2, sn1 = sn0 + GRIP_BACKING_H_IN;
+    const capOutlineU: Vec2[] = roundCorners([[F.uRear(nBot, cLen / 2) + colShift, nBot], [F.uFront(nBot, cLen / 2) + colShift, nBot], [F.uFront(0, cLen / 2) + colShift, 0], [F.uRear(0, cLen / 2) + colShift, 0]], [0, 1, 2, 3], GRIP_CAP_CORNER_IN); // the cap in the board's flat frame (vertical ends, corners eased)
     for (const { s: sg, tag } of SIDES) {
       const gid = gunwaleId(p, tag);
-      const yIn = sg * (innerHalfWidth(L, gxMid)); // inner face of the gunwale at the board
+      // The board and the cap are flat; the side turns in toward the bow past x = 20 in, so they stand on the face at the board's FRONT end (the farthest in) and the rear is bedded (a gap of 1/16 in at most; the validator warns past that).
+      const yIn = sg * (innerHalfWidth(L, F.xFront - GRIP_PLANE_SETBACK_IN)); // inner face of the gunwale at the board
       // basis 'xz' extrudes toward -y from origin.y: the +y face of the board is the one nearer the gunwale for the left side
       const originY = sg > 0 ? yIn : yIn + bt;
-      const bolts = GRIP_BOLT_ROWS_IN.flatMap((d) => Array.from({ length: GRIP_BOLT_COLS }, (_, i) => [((i + 0.5) * bLen) / GRIP_BOLT_COLS, -d] as Vec2));
       parts.push(profilePart(ctx, {
         id: `seat-grip-${tag}`, partNo: 'seat-grip', name: `Grab board ${tag}`, group: 'seat', mat: 'oak', outline, holes: [cw2(hole)], depth: bt, basis: 'xz', origin: [gxA, originY, z0g], rotation: -slope,
-        grain: 'x', step: STEP.finish, stock: { t: bt, w: nTop - nBot, l: bLen }, fab: 'shaper-origin',
-        joints: [{ type: 'bolt', to: gid, count: GRIP_BOLTS, diaIn: GRIP_BOLT_DIA_IN, size: `${GRIP_BOLT_DIA_IN}" × ${inchesText(gripBoltLen)} ${stainless(p)} button-head cap screws (grip ${gripStack.toFixed(2)}": board ${bt}", inner band ${L.sideBand.toFixed(3)}", web ${p.panelPlyIn.toFixed(3)}", outer band ${L.sideBand.toFixed(3)}", strip ${GRIP_BACKING_T_IN}"), ${GRIP_BOLT_COLS} columns × ${GRIP_BOLT_ROWS_IN.length} rows (${GRIP_BOLT_ROWS_IN.join('" and ')}" below the gunwale top), through the board, the inner band, the web, the outer band and the 1/16" ${stainless(p)} backing strip (head and a 3/8" washer on the strip outside, a 1-1/4" fender washer and nylock nut on the inside of the board; hold the nut, turn the hex key)`, at: bolts.map(([bu, bn]): Vec3 => [bu, bn, bt / 2]), note: 'the board laps the inboard face of the inner gunwale band; the screws pass through the inner band, the web and the outer band inside the 1.5 in gunwale band; the heads bear on the backing strip, not on the 0.234 in outer band (D-63)' }],
-        notes: `Grab board (D-57): ${bt}" oak, ${f1(bLen)}" long and ${f1(nTop - nBot)}" tall, its lower ${L.railBand}" lapping the inboard face of the gunwale and standing ${f1(nTop)}" above the gunwale top, turned to the sheer's ${((slope * 180) / Math.PI).toFixed(1)}° slope. A ${hl}" × ${hh}" hand hole is Shaper Origin-routed ${f1(holeBot)}" above the gunwale top (finger gap ${hh}" ≥ 1.25", clear length ${hl}" ≥ 3.5": no pinch point, D-40), ${p.grabBoardBarIn}" of oak above it; top corners ${GRIP_CORNER_IN}" radius, ¼" roundovers on every edge and the hole. Bolted, never glued, so a splintered board can be replaced. It replaces the D-40 pad, two posts and bar.`,
+        grain: 'x', step: STEP.finish, stock: { t: bt, w: nTop - nBot, l: stockL }, fab: 'shaper-origin',
+        joints: [{ type: 'bolt', to: gid, count: GRIP_BOLTS, diaIn: GRIP_BOLT_DIA_IN, size: `1/4" × ${inchesText(gripBoltLen)} ${stainless(p)} button-head cap screws (the stack is ${frac(gripStack)}": board ${frac(bt)}", inner band ${frac(L.sideBand)}", web ${frac(p.panelPlyIn)}", outer band ${frac(L.sideBand)}", strip ${frac(GRIP_BACKING_T_IN)}"), ${GRIP_BOLT_COLS} in the upper row (${frac(GRIP_BOLT_ROWS_IN[0])}" below the gunwale top) and ${GRIP_BOLT_COLS - 1} in the lower row between them (${frac(GRIP_BOLT_ROWS_IN[1])}" below it), through the board, the inner band, the web, the outer band and the ${frac(GRIP_BACKING_T_IN)}" ${stainless(p)} backing strip (the head bears on the strip in its hole in the oak cap; a nylock nut and a fender washer on the inside of the board: 1-1/2" under the upper three, 7/8" under the lower two; hold the nut, turn the hex key)`, at: bolts.map(([bu, bn]): Vec3 => [bu, bn, bt / 2]), note: `the board laps the inboard face of the inner gunwale band; the screws pass through the inner band, the web and the outer band inside the ${frac(L.railBand)}" gunwale band; the heads bear on the backing strip, not on the ${frac(L.sideBand)}" outer band` }],
+        notes: `Grab board: ${frac(bt)}" oak, ${frac(bLen)}" long along the sheer and ${frac(nTop - nBot)}" tall (${frac(stockL)}" overall at the cut). The lower ${frac(L.railBand)}" laps the inboard face of the gunwale and ${frac(nTop)}" stands above its top; the board is square to the gunwale, so its bottom edge follows the ${((slope * 180) / Math.PI).toFixed(0)}° fall of the sheer. Both ends are plumb (straight up and down, like the ribs and the transom), so the board is a parallelogram on the sheer. Round the two top corners to a ${frac(rr)}" radius. The hand hole is ${frac(hl)}" × ${frac(hh)}" with full-round ends, Shaper Origin-routed, centered along the board (${frac((bLen - hl) / 2)}" of oak at each end of the hole, measured along the sheer at the hole's mid-height) with ${frac(holeBot)}" of oak between the gunwale top and the hole and ${frac(p.grabBoardBarIn)}" above it. The hole's center is ${frac(F.xh - p.seatXIn)}" ahead of the hip point, which is ${frac(p.seatBehindHpointIn)}" ahead of the rear edge of the seat cushion, and ${frac(F.xh - L.xSideStart)}" from the rear end of the side. Screws (all measured down from the top edge of the gunwale, the board's ${frac(L.railBand)}" lap): three in an upper row ${frac(GRIP_BOLT_ROWS_IN[0])}" down and ${frac(bLen / GRIP_BOLT_COLS)}" apart, centered on the hole, and two in a lower row ${frac(GRIP_BOLT_ROWS_IN[1])}" down, ${frac(bLen / GRIP_BOLT_COLS)}" apart and centered between the upper ones. Ease every edge and the hole with a ¼" roundover. Bolted, never glued, so a splintered board can be replaced.`,
       }));
-      // Backing strip on the OUTER face of the outer gunwale band under the bolt heads (D-63): 316 flat bar 1/16 x 1 x board length, cut at the sheer's slope, epoxied/bedded to the band.
-      const bu0 = GRIP_BACKING_END_IN, bu1 = bLen - GRIP_BACKING_END_IN, bn0 = -GRIP_BOLT_ROWS_IN[GRIP_BOLT_ROWS_IN.length - 1] - 0.2, bn1 = bn0 + GRIP_BACKING_H_IN;
-      const yOut = sg * (L.hwC + L.side - L.turnIn(gxMid));
+      const yOut = sg * (L.hwC + L.side - L.turnIn(F.xFront - GRIP_PLANE_SETBACK_IN));
+      // Strip: 316 flat bar 1/8 x 1-1/4, square ends along the sheer, bedded on the outer band, hidden under the cap.
+      const bu0 = sc - sLen / 2, bu1 = sc + sLen / 2;
       const strip = profilePart(ctx, {
         id: `seat-grip-backing-${tag}`, partNo: 'seat-grip-backing', name: `Grab board bolt backing strip ${tag}`, group: 'seat', mat: 'print',
-        outline: [W2(bu0, bn0), W2(bu1, bn0), W2(bu1, bn1), W2(bu0, bn1)], depth: GRIP_BACKING_T_IN, basis: 'xz', origin: [0, sg > 0 ? yOut + GRIP_BACKING_T_IN : yOut, 0], step: STEP.finish, fab: 'bandsaw',
+        outline: [W(bu0, sn0), W(bu1, sn0), W(bu1, sn1), W(bu0, sn1)], depth: GRIP_BACKING_T_IN, basis: 'xz', origin: [0, sg > 0 ? yOut + GRIP_BACKING_T_IN : yOut, 0], step: STEP.finish, fab: 'bandsaw',
         joints: [
-          { type: 'glue', to: `side-${tag}-gunwale`, count: 1, size: 'bedded in epoxy or polysulfide sealant on the outer face of the outer gunwale band', note: 'spreads the six screw heads over about 8 in²' },
+          { type: 'glue', to: `side-${tag}-gunwale`, count: 1, size: 'bedded in polysulfide sealant (not epoxy: the board must come off) on the outer face of the outer gunwale band', note: 'spreads the five screw heads over the band' },
+          { type: 'glue', to: `seat-grip-cap-${tag}`, count: 1, size: 'epoxied into the pocket on the back of the oak cap', note: 'the strip and the cap are one piece when bedded on the band' },
           // the screw holes, one on each screw line of the board (local frame = model x, z; mid-thickness)
-          { type: 'hole', to: `side-${tag}-gunwale`, count: bolts.length, diaIn: GRIP_BOLT_DIA_IN + 1 / 32, size: `${bolts.length} holes ${(GRIP_BOLT_DIA_IN + 1 / 32).toFixed(3)}" (a clearance for the ${GRIP_BOLT_DIA_IN}" screws) through the strip, on the screw lines of the grab board; drill them with the board clamped on, one bit through every layer`,
-            at: bolts.map(([bu, bn]): Vec3 => { const w = W2(bu, bn); return [w[0], w[1], GRIP_BACKING_T_IN / 2]; }) },
+          { type: 'hole', to: `side-${tag}-gunwale`, count: bolts.length, diaIn: GRIP_BOLT_DIA_IN + 1 / 32, size: `${bolts.length} holes 9/32" (a clearance for the 1/4" screws) through the strip, on the screw lines of the grab board; drill them with the board clamped on, one bit through every layer`,
+            at: bolts.map(([bu, bn]): Vec3 => { const w = W(bu, bn); return [w[0], w[1], GRIP_BACKING_T_IN / 2]; }) },
         ],
-        sourcing: { vendor: `McMaster-Carr (${stainless(p)} flat bar ${GRIP_BACKING_T_IN}" × ${GRIP_BACKING_H_IN}", ${f1(gripBackingLen(bLen))}" piece, cut square on the metal bandsaw and deburred (D-77 no-fabrication rule: cut and drill only)` },
-        notes: `Backing strip for the ${GRIP_BOLTS} grab-board screw heads (D-63, build 3c-8 S9): ${stainless(p)} flat bar ${GRIP_BACKING_T_IN}" × ${GRIP_BACKING_H_IN}" × ${f1(gripBackingLen(bLen))}" on the outside of the outer gunwale band. A 1/4" button head on the 0.234" oak band over the thin web would pull through before the inside washer on the board fails, and a washer big enough to spread it (1-1/4") does not fit the 0.6" row spacing on a ${L.railBand}" band; the strip bears the heads on about ${f1(gripBackingLen(bLen) * GRIP_BACKING_H_IN)} in² (the seat-grip row checks it). Drill it with the board clamped on, one bit through all layers. It stands 1/16" proud of the hull face; cut it square on the metal bandsaw and deburr the cut edges (D-77: cut and drill only).`,
+        sourcing: { vendor: `McMaster-Carr or Speedy Metals (${stainless(p)} flat bar ${frac(GRIP_BACKING_T_IN)}" × ${frac(GRIP_BACKING_H_IN)}", a ${frac(sLen)}" piece, cut square on the metal bandsaw and deburred; cut and drill only)` },
+        notes: `Backing strip for the ${GRIP_BOLTS} grab-board screw heads: ${stainless(p)} flat bar ${frac(GRIP_BACKING_T_IN)}" × ${frac(GRIP_BACKING_H_IN)}" × ${frac(sLen)}" that goes on the outside of the outer gunwale band, under the oak cap. It spreads the pull of the screw heads over the band, which is too thin to take them. Cut it square on the metal bandsaw and deburr the cut edges (cut and drill only, no bending or filing to shape). Drill it with the board clamped on, one bit through all the layers. It lies in the pocket on the back of the oak cap (the cap's note says where) and is epoxied there first.`,
       });
       strip.kind = 'metal';
-      strip.stock = { t: GRIP_BACKING_T_IN, w: GRIP_BACKING_H_IN, l: gripBackingLen(bLen) }; // the cut list reads the flat-bar stock from here, not from the sourcing text
+      strip.stock = { t: GRIP_BACKING_T_IN, w: GRIP_BACKING_H_IN, l: sLen }; // the cut list reads the flat-bar stock from here, not from the sourcing text
       strip.material = `${stainless(p)} flat bar`;
-      strip.massLb = (GRIP_BACKING_T_IN * GRIP_BACKING_H_IN * gripBackingLen(bLen) * p.steelDensityPcf) / 1728;
+      strip.massLb = (GRIP_BACKING_T_IN * GRIP_BACKING_H_IN * sLen * p.steelDensityPcf) / 1728;
       parts.push(strip);
+      // Oak cap over the strip (D-84): hides the strip; five holes for the bolt heads.
+      const capHoles = bolts;
+      const capHoleLoops = capHoles.map(([cx, cz]): Vec2[] => Array.from({ length: 12 }, (_, i) => { const a = -(2 * Math.PI * i) / 12; return [cx + (GRIP_CAP_HOLE_IN / 2) * Math.cos(a), cz + (GRIP_CAP_HOLE_IN / 2) * Math.sin(a)] as Vec2; }));
+      const cap = profilePart(ctx, {
+        id: `seat-grip-cap-${tag}`, partNo: 'seat-grip-cap', name: `Grab board oak cap ${tag}`, group: 'seat', mat: 'oak',
+        outline: capOutlineU, holes: capHoleLoops, depth: GRIP_CAP_T_IN, basis: 'xz', origin: [gxA, sg > 0 ? yOut + GRIP_CAP_T_IN : yOut, z0g], rotation: -slope, grain: 'x', step: STEP.finish,
+        stock: { t: GRIP_CAP_T_IN, w: L.railBand, l: Math.max(...capOutlineU.map((q) => q[0])) - Math.min(...capOutlineU.map((q) => q[0])) }, fab: 'shaper-origin',
+        joints: [
+          { type: 'glue', to: `seat-grip-backing-${tag}`, count: 1, size: 'the strip epoxied into the 1/8" pocket on the back of the cap', note: 'the pair is bedded on the outer band and held by the five screws' },
+          { type: 'hole', to: `seat-grip-backing-${tag}`, count: bolts.length, diaIn: GRIP_CAP_HOLE_IN, size: `${bolts.length} holes ${GRIP_CAP_HOLE_IN}" (9/16") for the screw heads, routed through the cap on the screw lines`, at: bolts.map(([bu, bn]): Vec3 => [bu, bn, GRIP_CAP_T_IN / 2]) },
+        ],
+        notes: `Oak cap over the backing strip: ${frac(GRIP_CAP_T_IN)}" oak, ${frac(cLen)}" long along the sheer and ${frac(L.railBand)}" tall (the height of the gunwale band). Both ends are plumb, to match the board; round the four corners to ${frac(GRIP_CAP_CORNER_IN)}". Cut a pocket in the back face for the strip: ${frac(GRIP_CAP_POCKET_IN)}" deep (set the router's depth stop), ${frac(GRIP_BACKING_H_IN + 1 / 16)}" × ${frac(sLen + 1 / 16)}" (1/32" bigger than the strip all round, for the epoxy), centered on the cap's length and ${frac((L.railBand - GRIP_BACKING_H_IN) / 2)}" down from the top edge; that leaves ${frac(GRIP_CAP_T_IN - GRIP_CAP_POCKET_IN)}" of oak over the strip, ${frac(GRIP_CAP_END_IN)}" of oak at each end and ${frac((L.railBand - GRIP_BACKING_H_IN) / 2)}" above and below. Rout ${GRIP_BOLTS} holes of ${frac(GRIP_CAP_HOLE_IN)}" through the ${frac(GRIP_CAP_T_IN - GRIP_CAP_POCKET_IN)}" cover, on the board's screw lines, for the screw heads. The cap hides the stainless strip from outside. The strip is epoxied into the pocket on the bench; the pair is bedded on the outer band and held by the ${GRIP_BOLTS} screws (never glued to the hull, so the board can come off).`,
+      });
+      cap.massLb = Math.max(0, cap.massLb - (GRIP_CAP_POCKET_IN * GRIP_BACKING_H_IN * sLen * (p.oakDensityPcf / 1728)));
+      cap.finish = { roundoverIn: 0.1 }; // a light edge ease: the oak is only 5/32" wide between the top screw holes and the edge
+      parts.push(cap);
     }
   }
 
@@ -559,7 +637,6 @@ export function buildSeat(ctx: Ctx): Part[] {
   return parts;
 }
 
-const f1 = (v: number) => (Math.round(v * 10) / 10).toString();
 /** A hole loop must run clockwise. */
 function cw2(o: Vec2[]): Vec2[] {
   return signedArea(o) <= 0 ? o : [...o].reverse();

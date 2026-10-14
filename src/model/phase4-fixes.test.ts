@@ -30,7 +30,7 @@ describe('grab boards (local-frame joint points)', () => {
   it.each(['L', 'R'])('seat-grip-%s: every joint point is inside the board in its own frame, at mid-thickness', (tag) => {
     const g = get(`seat-grip-${tag}`);
     const at = g.joints!.flatMap((j) => j.at ?? []);
-    expect(at.length).toBe(6);
+    expect(at.length).toBe(5);
     for (const a of at) { expect(inside(g, a), JSON.stringify(a)).toBe(true); expect(a[2]).toBeCloseTo(p.grabBoardThickIn / 2, 9); }
   });
   it('the board points map to the model frame inside the board, in the gunwale band zone, on the correct side', () => {
@@ -229,7 +229,7 @@ describe('fastener data (build review MUST-11)', () => {
   });
   it('gives the grab-board screws, hanger bolts, roll-pad screws and stop-block screws real lengths, rounded up to a stocked size', () => {
     const grip = get('seat-grip-L').joints!.find((q) => q.type === 'bolt')!;
-    expect(grip.size).toMatch(/^0\.25" × 2 (?:316|18-8 \(304\) stainless) button-head cap screws/); // grip 1.31 (board + 2 bands + web + 1/16 strip) + 2 washers + nylock nut + 2 threads = 1.86, rounded up to 2
+    expect(grip.size).toMatch(/^1\/4" × 2 (?:316|18-8 \(304\) stainless) button-head cap screws/); // grip 1.38 (board + 2 bands + web + 1/8 strip) + 1 washer + nylock nut + 2 threads = 1.86, rounded up to 2
     const hanger = get('beam-hold-down-L').joints!.find((q) => q.type === 'bolt' && q.to === 'axle-hanger-L')!; // the hanger's bolts are the angle's upright bolts (one record)
     expect(hanger.size).toMatch(/^0\.25" × \d(-\d\/\d)? (?:316|18-8 \(304\) stainless) hex bolts/);
     for (const tag of ['L', 'R']) {

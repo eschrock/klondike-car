@@ -55,3 +55,23 @@ describe('roundover keeps the model dimensions exact (D-44)', () => {
     }
   });
 });
+
+describe('the grab board screw heads (D-84)', () => {
+  it('the backing strip draws its screw heads on the outboard face, 0.14 in proud, inside the cap holes', async () => {
+    const { buildModel } = await import('../model');
+    const { defaultParams } = await import('../params');
+    const { buildPart, BUTTON_HEAD_H_IN } = await import('./partMesh');
+    const parts = buildModel(defaultParams());
+    for (const tag of ['L', 'R']) {
+      const strip = parts.find((q) => q.id === `seat-grip-backing-${tag}`)!;
+      const built = buildPart(strip)!;
+      built.geometry.computeBoundingBox();
+      const bb = built.geometry.boundingBox!;
+      const depth = (strip.geometry as { depth: number }).depth;
+      const out = tag === 'L' ? -bb.min.z : bb.max.z - depth; // local z=0 is the outboard face on the left, z=depth on the right
+      expect(out).toBeCloseTo(BUTTON_HEAD_H_IN, 3);
+      expect(built.geometry.getAttribute('position').count).toBeGreaterThan(5 * 20 * 3);
+      expect(BUTTON_HEAD_H_IN + depth).toBeLessThan(0.375); // under the cap face
+    }
+  });
+});
