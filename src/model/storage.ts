@@ -8,7 +8,7 @@
  *
  * Also holds the 10 Essentials kit list (D-19) and a simple packing check against the interior.
  */
-import { STORAGE_LOCATION, thinSheet, type Params } from '../params';
+import { KNEE_MOUNT, STORAGE_LOCATION, thinSheet, type Params } from '../params';
 import { localPoint, pickWoodScrew, SCREW_DIA_IN, screwText } from './rear-mount';
 import { STEP, box, cylinder, frac16 as frac, span, SIDES, type Ctx, stainless } from './build-utils';
 import { localBounds, worldAABB } from './bounds';
@@ -113,7 +113,7 @@ export const ESSENTIALS: readonly KitItem[] = [
  * both modes). `flaps` is an OPTION, not part of the default stow (D-65): the two removed brake flaps, each with its shoe block, pad, pivot block and foot tread still on (what lifts off as
  * one piece when the pin is pulled), as one bounding box each.
  */
-export function boxGear(parts: Part[]): { lamp: KitItem[]; chocks: KitItem[]; flaps: KitItem[] } {
+export function boxGear(parts: Part[], p?: Pick<Params, 'kneeMount' | 'brakeRatchetLenIn' | 'brakeRatchetWidthIn' | 'brakeRatchetHeightIn'>): { lamp: KitItem[]; chocks: KitItem[]; flaps: KitItem[]; tools: KitItem[] } {
   const dimsOf = (x: Part): [number, number, number] => {
     const b = localBounds(x.geometry);
     return [b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]];
@@ -134,12 +134,16 @@ export function boxGear(parts: Part[]): { lamp: KitItem[]; chocks: KitItem[]; fl
     const h = (lb.max[2] - lb.min[2]) + Math.max(under.max[2] - under.min[2], bb.max[2] - bb.min[2]);
     flaps = [{ name: 'Brake flap with shoe block and pad', qty: parts.filter((q) => /^brake-flap-[LR]$/.test(q.id)).length, dims: [lb.max[0] - lb.min[0], lb.max[1] - lb.min[1], h], essential: 'Parking' }];
   }
+  // D-78: with the removable knees the 3/8 in drive ratchet and 9/16 in deep socket for the two knee bolts ride in the box with the chocks (race and cargo mode alike). A tool, not a sled part: its weight is
+  // carried load like the 10 Essentials (cargoMassLb), not sled mass. Pass the params to get it.
+  const tools: KitItem[] = p && p.kneeMount === KNEE_MOUNT.removable && parts.some((q) => /^brake-bolt-(bottom|top)-[LR]$/.test(q.id))
+    ? [{ name: 'Ratchet (3/8 in drive) and 9/16 in deep socket, in a pouch', qty: 1, dims: [p.brakeRatchetLenIn, p.brakeRatchetWidthIn, p.brakeRatchetHeightIn], essential: 'Tools' }] : [];
   return {
     lamp: [
       ...one('front-light', 'Front LED headlight', 'Lighting'), ...one('lamp-clip', 'Lamp clip', 'Lighting'),
       ...one('rear-light', 'Rear LED tail light', 'Lighting'), ...one('rear-lamp-clip', 'Rear lamp clip', 'Lighting'),
     ],
-    chocks, flaps,
+    chocks, flaps, tools,
   };
 }
 

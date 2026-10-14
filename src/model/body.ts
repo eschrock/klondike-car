@@ -474,7 +474,7 @@ export function signPlacement(ctx: Pick<Ctx, 'p' | 'L'>) {
   const topMargin = 0.75;
   const bg = brakeGeometry(p, L);
   const flapSlope = bg.u[0] !== 0 ? bg.u[1] / bg.u[0] : 0; // z per x along the flap's top surface (positive: it rises toward the pivot)
-  const xMax = bg.pins ? Math.min(SIGN_X_MAX_IN, bg.pins.tab.x0 - p.brakeTabClearIn) : SIGN_X_MAX_IN; // D-78: the sign stops short of the removable knee's tab
+  const xMax = bg.removable ? Math.min(SIGN_X_MAX_IN, bg.removable.tab.x0 - p.brakeTabClearIn) : SIGN_X_MAX_IN; // D-78: the sign stops short of the removable knee's tab
   const flapTop = (x: number) => bg.P[1] + (Math.min(x, bg.P[0]) - bg.P[0]) * flapSlope + SIGN_FLAP_CLEAR_IN;
   let best = { length: 4, height: 2, x1: x0 + 4, zTop: 0, zBot: 0, area: -1 };
   for (let x1 = Math.min(SIGN_X_MAX_IN, x0 + p.signLengthIn); x1 >= x0 + 4 - 1e-9; x1 -= 0.25) {

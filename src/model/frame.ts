@@ -76,18 +76,20 @@ export function buildFrame(ctx: Ctx): Part[] {
     {
       const bgk = brakeGeometry(p, L);
       const kb = bgk.bolts;
-      const pn = bgk.pins;
+      const pn = bgk.removable;
       if (pn) {
-        // D-78: the removable knee has no bolts: the rail carries ONE sleeve hole for pin B, at its absolute layout (from the rail's rear end and its top edge).
+        // D-78: the removable knee has no D-75 bolts: the rail carries ONE threaded-insert site for the bottom bolt, at its absolute layout (from the rail's rear end and its top edge).
+        const bt = pn.bottom, ins = bt.insert;
+        const where = `${f2(bt.fromRailRear)}" from the rail's finished rear end (the rear transom's inner face), ${f2(bt.belowRailTop)}" below its top edge (mid-height of the rail)`;
         (rail.joints ??= []).push({
-          type: 'hole', to: `brake-sleeve-B-hull-${tag}`, count: 1, diaIn: pn.sleeveOd, at: [[pn.B.x, s * bgk.y.face, pn.B.z]],
-          size: `1 × ${frac32(pn.sleeveOd)}" hole for the bottom-pin sleeve, square through the rail: ${f2(pn.B.fromRailRear)}" from the rail's finished rear end (the rear transom's inner face), ${f2(pn.B.belowRailTop)}" below its top edge (mid-height of the rail)`,
-          note: 'D-78: laid out from these numbers and drilled on the drill press with the rail on edge against a fence, or from the outer face with a drill block, at the frame step; the stainless sleeve is epoxied in, its outer end flush with the rail\'s outer face, its inner end against the bearing washer. The knee leg is drilled from the same numbers (its rear face and the rail bottom).',
+          type: 'hole', to: `brake-insert-bottom-${tag}`, count: 1, diaIn: ins.cboreDia, at: [[bt.x, s * bgk.y.railIn, bt.z]],
+          size: `1 × ${ins.cboreDia.toFixed(4)}" (${frac32(ins.cboreDia)}") counterbore ${ins.cboreDepth.toFixed(4)}" deep in the rail's INNER face for the insert flange, ${where}`,
+          cut: { kind: 'counterbore', dia: ins.cboreDia, depth: ins.cboreDepth, what: 'the flange of the bottom bolt\'s threaded insert, flush with the rail\'s inner face' },
         });
         rail.joints.push({
-          type: 'hole', to: `brake-washer-B-hull-${tag}`, count: 1, diaIn: pn.washer.cboreDia, at: [[pn.B.x, s * bgk.y.railIn, pn.B.z]],
-          size: `1 × ${(Math.round(pn.washer.cboreDia * 10000) / 10000).toString()}" (${frac32(pn.washer.cboreDia)}") counterbore ${(Math.round(pn.washer.cboreDepth * 10000) / 10000).toString()}" deep in the rail's INNER face, centered on the bottom-pin hole (same ${f2(pn.B.fromRailRear)}" from the rear end and ${f2(pn.B.belowRailTop)}" below the top edge; ${f2(pn.B.belowRailTop - pn.washer.cboreDia / 2)}" of rail is left above and below it)`,
-          cut: { kind: 'counterbore', dia: pn.washer.cboreDia, depth: pn.washer.cboreDepth, what: 'the bearing washer of the bottom pin, flush with the rail\'s inner face' },
+          type: 'hole', to: `brake-insert-bottom-${tag}`, count: 1, diaIn: ins.od, at: [[bt.x, s * bgk.y.face, bt.z]],
+          size: `1 × ${frac32(ins.od)}" pilot hole ${frac32(ins.len)}" deep from the counterbore floor for the insert body, then ${frac32(pn.clearHole)}" clear on through the rest of the rail, same place (${where})`,
+          note: 'D-78: laid out from these numbers at the frame step; counterbore from the inside, the clearance hole from the outer face; the stainless threaded insert is screwed in from the inside with epoxy, flange flush. The knee leg is drilled from the same numbers (its rear face and the rail bottom).',
         });
       } else {
       const pts: Vec3[] = kb.zs.flatMap((z) => kb.xs.map((x): Vec3 => [x, s * bgk.y.face, z]));
@@ -135,7 +137,7 @@ export function buildFrame(ctx: Ctx): Part[] {
     const isKing = x === L.king.x;
     const meetsHanger = hangerAt(x);
     const bkg = brakeGeometry(p, L), bkr = bkg.backer; // the step brake's oak backers on the rail inner faces (D-57): a joist that meets one is cut back to its inner face
-    const meetsBacker = !bkg.pins && x + L.joistT / 2 > bkr.x0 && x - L.joistT / 2 < bkr.x1; // D-78: no backer on the removable knee, so no cutback
+    const meetsBacker = !bkg.removable && x + L.joistT / 2 > bkr.x0 && x - L.joistT / 2 < bkr.x1; // D-78: no backer on the removable knee, so no cutback
     const halfT = x === L.king.x ? L.king.len : x === L.chain.joistX ? L.chain.joistT : L.joistT; // the chain joist is thicker than the others (D-58)
     const half = rY0 - L.turnIn(x + halfT / 2) - (meetsHanger ? p.axleHangerThickIn : 0) - (meetsBacker && !meetsHanger ? bkr.t : 0);
     if (isKing) {

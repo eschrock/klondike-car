@@ -108,17 +108,21 @@ export function sideRibStations(p: Params, L: Layout): RibStation[] {
   return out;
 }
 
-/** D-78: the box rib (station 1) carries the top pin of the removable brake knee when the knee is on pins and there is a rear box beside it. */
-export const pinsOnRib = (p: Params, st: Pick<RibStation, 'n' | 'kind'>): boolean => p.kneeMount === KNEE_MOUNT.pins && st.n === 1 && st.kind === 'box';
+/** D-78: the box rib (station 1) carries the top bolt of the removable brake knee when the knee is removable and there is a rear box beside it. */
+export const removableOnRib = (p: Params, st: Pick<RibStation, 'n' | 'kind'>): boolean => p.kneeMount === KNEE_MOUNT.removable && st.n === 1 && st.kind === 'box';
 
-/** D-78: z where the box rib's full-width block starts (below pin T by `brakeRibBlockBelowIn`) and the block's width (the head length): a 1/2 in sleeve in the 3/4 in shaft would leave 1/8 in. */
-export const ribBlockZ0 = (p: Params, L: Layout, st: RibStation): number => topPinZ(p, L, st) - p.brakeRibBlockBelowIn;
-/** Width of a rib's shaft: always the D-76 width (kept for callers; the pin block is `ribBlockWidth`). */
+/** D-78: z where the box rib's full-width block starts (below the top bolt by `brakeRibBlockBelowIn`) and the block's width (never less than the head): a threaded insert in the 3/4 in shaft would leave too little oak. */
+export const ribBlockZ0 = (p: Params, L: Layout, st: RibStation): number => topBoltZ(p, L, st) - p.brakeRibBlockBelowIn;
+/** Width of a rib's shaft: always the D-76 width (kept so callers compile; the bolt block is `ribBlockWidth`). */
 export const ribShaftWidth = (p: Params, _st?: Pick<RibStation, 'n' | 'kind'>): number => p.sideRibWidthIn;
-export const ribBlockWidth = (p: Params): number => Math.max(p.brakeRibBlockWidthIn, p.sideRibHeadLengthIn, p.brakeSleeveOdIn + 2 * p.brakePinEdgeIn);
+export const ribBlockWidth = (p: Params): number => Math.max(p.brakeRibBlockWidthIn, p.sideRibHeadLengthIn);
 
-/** D-78: z of the top pin's axis: the box tie spacer's top plus `brakeTopPinClearIn` (the pin cannot pass the tie, and its ball tip must clear it). */
-export const topPinZ = (p: Params, L: Layout, st: RibStation): number => boxTieGeometry(p, L, st).z1 + p.brakeTopPinClearIn;
+/** D-78: z of the top bolt's axis: the box tie spacer's top plus `brakeTopBoltClearIn` (no bolt can pass the tie spacer, and the insert's counterbore must clear it). */
+export const topBoltZ = (p: Params, L: Layout, st: RibStation): number => boxTieGeometry(p, L, st).z1 + p.brakeTopBoltClearIn;
+
+/** D-78: insert and bolt stock lengths come in 1/4 in steps; an insert is the longest step that leaves `brakeInsertMinWoodIn` of oak beyond it in a member `member` thick (less the flange). */
+export const INSERT_STEP_IN = 0.25;
+export const insertBodyLenIn = (p: Params, member: number): number => Math.max(INSERT_STEP_IN, Math.floor((member - p.brakeInsertFlangeThickIn - p.brakeInsertMinWoodIn) / INSERT_STEP_IN + 1e-9) * INSERT_STEP_IN);
 
 /** The box-tie spacer's z range (its top 1/8 in under the coaming, so it is glued to the box side, never to the lid frame, and under the rib head), and its y range. */
 export function boxTieGeometry(p: Params, L: Layout, st: RibStation): { z0: number; z1: number; yBox: number; yRib: number } {
@@ -165,7 +169,7 @@ export function buildSideRibs(ctx: Ctx): Part[] {
     for (const st of stations) {
       const ribId = `side-rib-${tag}${st.n}`;
       const w = p.sideRibWidthIn;
-      const zBlock = pinsOnRib(p, st) ? ribBlockZ0(p, L, st) : null; // D-78: the box rib is a full-width block from here up (it carries the knee's top pin)
+      const zBlock = removableOnRib(p, st) ? ribBlockZ0(p, L, st) : null; // D-78: the box rib is a full-width block from here up (it carries the knee's top bolt)
       const bw = ribBlockWidth(p);
       const yaw = Math.atan(st.dTurn);
       // Local frame: ex along the side (forward on the left, aft on the right, so the frame stays right-handed), ey up, ez inboard.
@@ -203,24 +207,22 @@ export function buildSideRibs(ctx: Ctx): Part[] {
       const rib = extPart(ctx, {
         id: ribId, partNo: RIB_PART_NO[st.n], name: `Side ${RIB_NAME[st.n]} ${tag}${st.n}`, group: 'body', mat: 'oak', step: STEP.seatStorage, grain: 'y', fab: 'bandsaw',
         outline, depth: dep, transform: frameMat(ex, ey, ez, o), center: [st.x, s * (st.yIn - dep / 2), (L.deckTop + st.top) / 2], extraLb: fillerLb + finishCredit,
-        notes: `D-76: oak rib on the inside face of the ${s > 0 ? 'left' : 'right'} side at x = ${st.x.toFixed(1)}", ${frac(st.top - zFoot)}" tall (${st.kind === 'box' ? 'from the bottom of its box tie spacer' : 'from the deck'} to the gunwale top), bandsawn from a 4/4 offcut planed to ${frac(dep)}" (grain up the rib): a ${frac(w)}" wide shaft that widens to a ${frac(hl)}" head as tall as the gunwale band, its top cut to the sheer${Math.abs(st.dTurn) > 0.01 ? ` (the side draws in ${(yaw * 180 / Math.PI).toFixed(1)}° here; the rib stands square to it)` : ''}. It stands ${frac(dep)}" proud of the inner bands: its back sits on the inner chine and gunwale bands, and between them on a ${frac(w)}" wide filler of band strip (${frac(band)}" thick, grain up) glued to the web first, so the back is flat. Epoxy, full face, to the bands and the filler after the deck is in. ${baseText}${pinsOnRib(p, st) ? ` With the removable brake knee on pins this rib is ${frac(bw)}" wide from ${frac(p.brakeRibBlockBelowIn)}" below the top-pin hole (${(ribBlockZ0(p, L, st) - zFoot).toFixed(2)}" up from the rib's foot, the bottom of its box tie spacer) right up into the head, so the pin's ${frac(p.brakeSleeveOdIn)}" sleeve has ${frac((bw - p.brakeSleeveOdIn) / 2)}" of oak each side; below that it is the ${frac(w)}" shaft. The band-strip filler behind it is as wide as the block there.` : ''}${hasRing ? ' The head carries a D-ring plate: drill the four holes through the head and the side with the plate as the template.' : ''}`,
+        notes: `D-76: oak rib on the inside face of the ${s > 0 ? 'left' : 'right'} side at x = ${st.x.toFixed(1)}", ${frac(st.top - zFoot)}" tall (${st.kind === 'box' ? 'from the bottom of its box tie spacer' : 'from the deck'} to the gunwale top), bandsawn from a 4/4 offcut planed to ${frac(dep)}" (grain up the rib): a ${frac(w)}" wide shaft that widens to a ${frac(hl)}" head as tall as the gunwale band, its top cut to the sheer${Math.abs(st.dTurn) > 0.01 ? ` (the side draws in ${(yaw * 180 / Math.PI).toFixed(1)}° here; the rib stands square to it)` : ''}. It stands ${frac(dep)}" proud of the inner bands: its back sits on the inner chine and gunwale bands, and between them on a ${frac(w)}" wide filler of band strip (${frac(band)}" thick, grain up) glued to the web first, so the back is flat. Epoxy, full face, to the bands and the filler after the deck is in. ${baseText}${removableOnRib(p, st) ? ` With the removable brake knee this rib is ${frac(bw)}" wide from ${frac(p.brakeRibBlockBelowIn)}" below the top bolt hole (${(ribBlockZ0(p, L, st) - zFoot).toFixed(2)}" up from the rib's foot, the bottom of its box tie spacer) right up into the head, so the 3/8-16 threaded insert has oak all round; below that it is the ${frac(w)}" shaft. The band-strip filler behind it is as wide as the block there.` : ''}${hasRing ? ' The head carries a D-ring plate: drill the four holes through the head and the side with the plate as the template.' : ''}`,
       });
       rib.joints = [
         { type: 'glue', to: `side-${tag}-web`, count: 1, at: [[0, (zFoot + st.top) / 2, 0]], size: `${frac(w)}" back face, epoxy`, note: `epoxy, full face: the head to the inner gunwale band${st.kind === 'box' ? '' : ', the foot to the inner chine band (and a fillet to the deck)'}, and between the bands to a ${frac(band)}" filler of band strip glued to the web first` },
       ];
       if (st.kind === 'knee') rib.joints.push({ type: 'glue', to: `side-rib-knee-${tag}${st.n}`, count: 1, at: [[0, L.deckTop + Math.min(p.sideRibKneeHeightIn, st.h - L.railBand - 0.25) / 2, dep]], size: `${frac(Math.min(p.sideRibKneeHeightIn, st.h - L.railBand - 0.25))}" x ${frac(w)}" knee face, epoxy` });
-      if (pinsOnRib(p, st)) {
-        // D-78: the knee's top pin goes through the rib, the filler and the web: ONE sleeve hole at its absolute layout, from the rib's bottom end and the gunwale top (the shaft is centered on the rib's line).
-        const zPin = topPinZ(p, L, st);
-        rib.joints.push({ type: 'hole', to: `brake-sleeve-T-hull-${tag}`, count: 1, diaIn: p.brakeSleeveOdIn, at: [[0, zPin, dep / 2]],
-          size: `1 x ${frac(p.brakeSleeveOdIn)}" hole for the top-pin sleeve, centered across the rib's ${frac(bw)}" full-width block (${frac(bw / 2)}" from each edge; the block runs ${frac(p.brakeRibBlockBelowIn)}" below the pin up to the head), ${(zPin - zFoot).toFixed(2)}" up from the rib's bottom end and ${(st.top - zPin).toFixed(2)}" below the gunwale top, square to the side`,
-          note: `D-78: drilled from the outside through the web, the filler and the rib after the rib is glued in (a drill block square to the side); the stainless sleeve is epoxied in, its outer end flush with the web's outer face and its inner end against the bearing washer let into the rib's inner face. The knee's top pin (a ball-lock pin) passes through it, ${frac(p.brakeTopPinClearIn)}" above the top of the box tie spacer (no pin can pass the spacer).` });
-      }
-      if (pinsOnRib(p, st)) {
-        const zPin = topPinZ(p, L, st), wd = { d: p.brakeWasherOdIn + 1 / 16, t: p.brakeWasherThickIn };
-        rib.joints.push({ type: 'hole', to: `brake-washer-T-hull-${tag}`, count: 1, diaIn: wd.d, at: [[0, zPin, dep]],
-          size: `1 x ${(Math.round(wd.d * 10000) / 10000).toString()}" (${frac(wd.d)}") counterbore ${(Math.round(wd.t * 10000) / 10000).toString()}" deep in the rib's INNER face, centered on the top-pin hole (${(zPin - zFoot).toFixed(2)}" up from the rib's bottom end)`,
-          cut: { kind: 'counterbore', dia: wd.d, depth: wd.t, what: 'the bearing washer of the top pin, flush with the rib\'s inner face' } });
+      if (removableOnRib(p, st)) {
+        // D-78: the knee's top bolt screws into a flanged threaded insert in the rib block: a counterbore for the flange in the rib's INNER face, a pilot hole for the insert body, and 13/32 clearance on through the rest.
+        const zB = topBoltZ(p, L, st), ins = { od: p.brakeInsertOdIn, fl: p.brakeInsertFlangeOdIn + 1 / 16, t: p.brakeInsertFlangeThickIn, len: insertBodyLenIn(p, dep + band + (L.side - 2 * band)) };
+        const up = `${(zB - zFoot).toFixed(2)}" up from the rib's bottom end and ${(st.top - zB).toFixed(2)}" below the gunwale top`;
+        rib.joints.push({ type: 'hole', to: `brake-insert-top-${tag}`, count: 1, diaIn: ins.fl, at: [[0, zB, dep]],
+          size: `1 x ${ins.fl.toFixed(4)}" (${frac(ins.fl)}") counterbore ${ins.t.toFixed(4)}" deep in the rib's INNER face, centered on the top bolt (${up})`,
+          cut: { kind: 'counterbore', dia: ins.fl, depth: ins.t, what: 'the flange of the top bolt\'s threaded insert, flush with the rib\'s inner face' } });
+        rib.joints.push({ type: 'hole', to: `brake-insert-top-${tag}`, count: 1, diaIn: ins.od, at: [[0, zB, dep / 2]],
+          size: `1 x ${frac(ins.od)}" pilot hole ${frac(ins.len)}" deep from the counterbore floor for the insert body, then ${frac(p.brakeBoltClearHoleIn)}" clear through the rest of the rib, the filler and the web, centered across the rib's ${frac(bw)}" full-width block (${frac(bw / 2)}" from each edge; the block runs ${frac(p.brakeRibBlockBelowIn)}" below the bolt up to the head), square to the side`,
+          note: `drilled from the outside after the rib is glued in (a drill block square to the side), counterbore cut from the inside first; the stainless threaded insert is screwed in from the inside with epoxy, its flange flush with the rib's inner face. The knee's top bolt (3/8-16, from the outside) threads into it, ${frac(p.brakeTopBoltClearIn)}" above the top of the box tie spacer (no bolt can pass the spacer).` });
       }
       if (hasRing) rib.joints.push({ type: 'hole', to: `lash-${tag}${st.n}`, count: LASH_BOLTS, size: `${frac(LASH_BOLT_DIA_IN + 1 / 64)}" (#8 clearance) through the head, the inner band, the web and the outer band`, at: holeAt.map((q) => [q[0], q[1], dep / 2] as Vec3), note: 'drilled with the D-ring plate as the template, square to the side' });
       parts.push(rib);

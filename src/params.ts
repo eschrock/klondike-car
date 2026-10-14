@@ -82,8 +82,8 @@ export const WEATHER_SPEC = { standard: 0, extreme: 1 } as const;
 /** D-73: the thin-sheet material (the side webs, the storage box and lid, the signs). `followWeather` picks white oak ply for Standard and okoume for Extreme. */
 export const THIN_SHEET = { followWeather: 0, whiteOakPly: 1, okoumeMarine: 2, balticBirch3mm: 3 } as const;
 export const STORAGE_LOCATION = { rearOverAxle: 0, underSeat: 2 } as const;
-/** D-78: how the brake knee is held on. Bolted = four 3/8 in bolts through the rail into a backer (D-75, the default); pins = two 3/8 in ball-lock quick-release pins in stainless sleeves, so the knee comes off with the flap. */
-export const KNEE_MOUNT = { bolted: 0, pins: 1 } as const;
+/** D-78: how the brake knee is held on. Bolted = four 3/8 in bolts through the rail into a backer (D-75, the default); removable = two clamped 3/8-16 hex bolts per side into threaded inserts in the hull, tightened with a ratchet, so the knee comes off with the flap. */
+export const KNEE_MOUNT = { bolted: 0, removable: 1 } as const;
 
 /** Mannequin proportions (fractions of stature, D-3) that the foot-room validator also needs: hip separation and foot width. */
 /** Solid-spring rule of thumb (D-57): a member bent from solid stock needs an inside radius of at least this many times its thickness. */
@@ -1463,81 +1463,87 @@ const defs = {
     default: 2, min: 1, max: 3, step: 1, status: 'assumed', ref: 'D-57',
   },
 
-  // ── D-78: the removable knee on quick-release pins ──
+  // ── D-78: the removable knee on two clamped bolts ──
   kneeMount: {
     label: 'Brake knee mount', group: 'brake', unit: '',
     default: KNEE_MOUNT.bolted, min: 0, max: 1, step: 1, status: 'explore', ref: 'D-78',
     options: [
       { value: KNEE_MOUNT.bolted, label: 'Bolted to the rail (stays on)' },
-      { value: KNEE_MOUNT.pins, label: 'Removable, on quick-release pins' },
+      { value: KNEE_MOUNT.removable, label: 'Removable knees (two bolts, ratchet)' },
     ],
-    note: 'D-78 (optional setting; the default stays the D-75 bolted knee). Pins: the oak knee, its strap and a tab come off with the flap, held on by two 3/8 in ball-lock pins per side in stainless sleeves, one through the knee leg and the rail, one through the knee tab, the side web, the filler and the rear (box) rib. No knee bolts, no backer, no backing plate. With the brakes off (or Transport mode) the hull is flush: two flanged stainless bushings on each side (flush with the surface) and nothing else. Needs the rear storage box (the pin rides on the box rib).',
+    note: 'D-78 (optional setting; the default stays the D-75 bolted knee). Removable: the oak knee, its strap and a glued-on tab come off with the flap, held on by two clamped 3/8-16 stainless hex bolts per side, each with a 1 in flat washer under the head: the bottom bolt through the knee leg and the rail into a flanged threaded insert in the rail, the top bolt through the tab, the side web, the filler and the box rib block into a flanged threaded insert in the rib. The bolts are tightened with a 3/8 in drive ratchet and a 9/16 in deep socket that ride in the storage box (no tool is needed to leave them out; the sled needs the tool only to take the knees off or put them on). Preload clamps the knee to the hull like the bolted knee, so prying and yaw are carried by the clamp and shear by friction. No knee-side hardware but the bolts and washers, no backer, no backing plate. With the brakes off (or Transport mode) the hull shows two flush stainless flange faces per side and nothing else. Needs the rear storage box (the top bolt rides in the box rib).',
+  },
+
+  brakeBoltClearHoleIn: {
+    label: 'Removable knee: clearance hole for the 3/8 in bolts', group: 'brake', unit: 'in',
+    default: 0.40625, min: 0.390625, max: 0.4375, step: 0.015625, status: 'assumed', ref: 'D-78',
+    note: 'D-78: 13/32 in plain holes in the knee leg and the tab (and through the rail, rib, filler and web outboard of the insert). The bolt is the mounting bolt diameter, brakeMountBoltDiaIn.',
+  },
+
+  brakeBoltWasherOdIn: {
+    label: 'Removable knee: flat washer under each bolt head, outside diameter', group: 'brake', unit: 'in',
+    default: 1, min: 0.875, max: 1.25, step: 0.0625, status: 'assumed', ref: 'D-78',
+    note: 'D-78: a 3/8 in USS flat washer (1 in OD, 7/16 in hole) spreads the bolt\'s clamp over the knee leg and the tab. It comes off with the bolt.',
+  },
+
+  brakeBoltWasherIdIn: {
+    label: 'Removable knee: flat washer hole diameter', group: 'brake', unit: 'in',
+    default: 0.4375, min: 0.375, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-78',
+    note: 'D-78: the hole of a 3/8 in USS flat washer is 7/16 in.',
+  },
+
+  brakeBoltWasherThickIn: {
+    label: 'Removable knee: flat washer thickness', group: 'brake', unit: 'in',
+    default: 0.083, min: 0.05, max: 0.125, step: 0.001, status: 'assumed', ref: 'D-78',
+    note: 'D-78: a 3/8 in USS flat washer is about 0.08 in thick.',
+  },
+
+  brakeInsertOdIn: {
+    label: 'Removable knee: threaded insert body outside diameter (3/8-16, flanged)', group: 'brake', unit: 'in',
+    default: 0.625, min: 0.5, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-78',
+    note: 'D-78: a stainless flanged threaded insert for wood, 3/8-16 inside, set in a pilot hole from the INBOARD face with epoxy; its flange lies in a counterbore, flush, and takes the bolt\'s pull against the oak. Stainless by weather spec (304 Standard, 316 Extreme). Bought ready-made: confirm a stock size near these numbers before buying, and adjust these params to it (the analysis reads them).',
+  },
+
+  brakeInsertFlangeOdIn: {
+    label: 'Removable knee: insert flange outside diameter', group: 'brake', unit: 'in',
+    default: 1, min: 0.75, max: 1.5, step: 0.0625, status: 'assumed', ref: 'D-78',
+    note: 'D-78: the flange is the bearing area under the bolt\'s preload (it replaces a separate washer); the counterbore is 1/16 in wider.',
+  },
+
+  brakeInsertFlangeThickIn: {
+    label: 'Removable knee: insert flange thickness (= counterbore depth)', group: 'brake', unit: 'in',
+    default: 0.0625, min: 0.04, max: 0.125, step: 0.0156, status: 'assumed', ref: 'D-78',
+    note: 'D-78: the counterbore is exactly this deep so the flange is flush with the rail\'s and the rib\'s inner face.',
+  },
+
+  brakeInsertMinWoodIn: {
+    label: 'Removable knee: oak left beyond the end of an insert', group: 'brake', unit: 'in',
+    default: 0.125, min: 0.0625, max: 0.5, step: 0.0156, status: 'assumed', ref: 'D-78',
+    note: 'D-78: the insert length is the longest 1/4 in step that leaves this much wood outboard of it inside the member (0.5 in in the 3/4 in rail, 3/4 in in the rib, filler and web).',
   },
 
   brakeTabThickIn: {
     label: 'Knee tab thickness (across, on the side web)', group: 'brake', unit: 'in',
     default: 1, min: 0.75, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the tab is a separate oak block, grain vertical, face-glued to the knee\'s rear face. It lies on the side web (its inboard face is at the web\'s outer face, the web recess behind the knee\'s face plane) and carries the top pin. 1 in keeps the 3/8 in pin in single shear with 1 in of oak bearing (a 3/4 in tab does not pass the top-pin bearing check).',
+    note: 'D-78: the tab is a separate oak block, grain vertical, face-glued to the knee\'s rear face. It lies on the side web (its inboard face is at the web\'s outer face, the web recess behind the knee\'s face plane) and carries the top bolt.',
   },
 
   brakeTabHeightIn: {
-    label: 'Knee tab height (centered on the top pin)', group: 'brake', unit: 'in',
+    label: 'Knee tab height', group: 'brake', unit: 'in',
     default: 4.1, min: 1.5, max: 5, step: 0.1, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the tab is tall on purpose. Its top stands brakeTabAbovePinIn over the top pin (kept brakeTabClearIn under the D-ring washers); the rest hangs DOWN past the pin so the tab lies against the knee\'s rear face over about 2 in of the knee\'s height (the knee top is below the pin). That makes the glue patch about 2 in2 with its center near the pin, instead of 0.7 in2 a long way below it.',
+    note: 'D-78: the tab is tall on purpose. Its top stands brakeTabAboveBoltIn over the top bolt (kept brakeTabClearIn under the D-ring washers); the rest hangs DOWN past the bolt so the tab lies against the knee\'s rear face over about 2 in of the knee\'s height (the knee leg top is just over the bolt). That makes the glue patch about 3 in2.',
   },
 
-  brakeTabAbovePinIn: {
-    label: 'Knee tab: height above the top pin', group: 'brake', unit: 'in',
+  brakeTabAboveBoltIn: {
+    label: 'Knee tab: height above the top bolt', group: 'brake', unit: 'in',
     default: 1.2, min: 0.75, max: 2, step: 0.05, status: 'assumed', ref: 'D-78',
-    note: 'D-78: oak above the pin sleeve in the tab (1.2 in = 0.95 in of oak over the 1/2 in sleeve). Limited by the D-ring washers above (brakeTabClearIn).',
-  },
-
-  brakeRibBlockBelowIn: {
-    label: 'Box rib: full-width block below the top pin', group: 'brake', unit: 'in',
-    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-78',
-    note: 'D-78: with the pins the box rib is a full-width block (brakeRibBlockWidthIn) from this far below the top pin up to the head, so the 1/2 in sleeve has oak all round (a 3/4 in shaft would leave 1/8 in and split). Below that it is the normal shaft. The block\'s width is brakeRibBlockWidthIn. The band-strip filler behind it follows.',
-  },
-
-  brakeKneeTopAbovePinIn: {
-    label: 'Knee leg top above the top pin center (pins setting)', group: 'brake', unit: 'in',
-    default: 0.75, min: 0.5, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the pin pushes the tab forward against the knee, so the knee leg has to stand up behind the whole sleeve (0.25 in radius) with oak to spare: its top is this far over the pin center (about 15.15 in). Only the leg (against the hull) goes up; the arm and the roof keep their D-77 height. Stays clear of the reflector and the D-ring washers.',
-  },
-
-  brakeWasherOdIn: {
-    label: 'Hull bearing washer outside diameter (stainless fender washer)', group: 'brake', unit: 'in',
-    default: 1.25, min: 1, max: 1.5, step: 0.0625, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the pins\' locking balls bear on a stainless flat (fender) washer let flush into the INBOARD face of the rail and of the box rib block, epoxied in, with the sleeve ending against it. A 1-1/4 in washer gives about 1 in2 of oak bearing outside the sleeve (the 3/4 in flange it replaces gave 0.25 in2). Bought ready-made.',
-  },
-
-  brakeWasherIdIn: {
-    label: 'Hull bearing washer hole diameter', group: 'brake', unit: 'in',
-    default: 0.4375, min: 0.375, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-78',
-    note: 'D-78: a fender washer for a 3/8 in bolt has a 7/16 in hole (a 3/8 in hole would not pass the 3/8 in pin). The washer lies against the end of the sleeve and bears around the pin\'s hole.',
-  },
-
-  brakeWasherThickIn: {
-    label: 'Hull bearing washer thickness (= counterbore depth)', group: 'brake', unit: 'in',
-    default: 0.0625, min: 0.04, max: 0.125, step: 0.0156, status: 'assumed', ref: 'D-78',
-    note: 'D-78: a standard 3/8 in fender washer is about 1/16 in thick. The counterbore is exactly this deep (and 1/16 in wider than the washer) so it is flush with the rail\'s and the rib\'s inner face.',
-  },
-
-  brakeRibBlockWidthIn: {
-    label: 'Box rib block width (the full-width part that carries the top pin)', group: 'brake', unit: 'in',
-    default: 3, min: 2, max: 4, step: 0.25, status: 'assumed', ref: 'D-78',
-    note: 'D-78: centered on the top pin. 3 in puts the pin 1-1/2 in from the block\'s ends (the near-end splitting check at 2 in was 1.7 over). Never narrower than the rib head (sideRibHeadLengthIn). On the inside face of the side web: clear of the box (whose fore end is further in), the joists (lower), the sign backing strips and the knee.',
-  },
-
-  brakeTabDominoCount: {
-    label: 'Knee tab Dominos (through the tab\'s end into the knee)', group: 'brake', unit: '',
-    default: 2, min: 0, max: 3, step: 1, status: 'assumed', ref: 'D-78, D-35',
-    note: 'D-78: Festool Dominos (beech for Standard, Sipo for Extreme, as the other Dominos), grain along the knee\'s upright rear layer, set in epoxy through the tab\'s end face into the knee\'s rear layer, stacked up the glue patch below the top pin sleeve. They take the shear and the pull-off of the tab on the knee that the 3 in2 glue patch alone does not. Size chosen by chooseDomino (6x40 at the defaults).',
+    note: 'D-78: oak above the top bolt\'s clearance hole in the tab. Limited by the D-ring washers above (brakeTabClearIn).',
   },
 
   brakeTabEndIn: {
-    label: 'Knee tab: oak behind the top pin (end distance)', group: 'brake', unit: 'in',
+    label: 'Knee tab: oak behind the top bolt (end distance)', group: 'brake', unit: 'in',
     default: 1, min: 0.75, max: 2, step: 0.125, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the tab runs from the knee\'s rear face back to this far behind the top pin\'s center (two and a half sleeve diameters of end grain distance). It stops short of the side sign by brakeTabClearIn.',
+    note: 'D-78: the tab runs from the knee\'s rear face back to this far behind the top bolt\'s center. It stops short of the side sign by brakeTabClearIn.',
   },
 
   brakeTabClearIn: {
@@ -1546,76 +1552,50 @@ const defs = {
     note: 'D-78: the tab top stays this far under the bottom of the D-ring fender washers on the box rib, and its rear end this far ahead of the side sign (the sign\'s forward end is cut back to keep it).',
   },
 
-  brakePinDiaIn: {
-    label: 'Knee quick-release pin diameter (ball-lock)', group: 'brake', unit: 'in',
-    default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-78',
-    note: 'D-78: a 3/8 in ball-lock pin (the button is outboard, the balls inboard, so it can be pulled from outside; the inboard end cannot be reached). Ball-lock pins are normally 17-4 PH stainless: fine for Standard; for Extreme (316) a 316 pin has to be sourced or the 17-4 PH accepted as an exception. The retention rating (pull-out against the prying of the knee) is not published for these pins: ask the vendor before buying.',
-  },
-
-  brakeSleeveOdIn: {
-    label: 'Knee pin sleeve outside diameter (stainless tube)', group: 'brake', unit: 'in',
-    default: 0.5, min: 0.4375, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-78',
-    note: 'D-78: every pin hole in oak (rail, knee leg, tab, web, filler and rib) is lined with a stainless sleeve so the pin bears on 1/2 in of steel, not on a 3/8 in hole in wood. Bought ready-made (a plain bushing) or stainless tube cut to length on the metal bandsaw (no machining). Stainless by weather spec: 304 Standard, 316 Extreme.',
-  },
-
-  brakeSleeveIdIn: {
-    label: 'Knee pin sleeve inside diameter', group: 'brake', unit: 'in',
-    default: 0.375, min: 0.25, max: 0.625, step: 0.0625, status: 'assumed', ref: 'D-78',
-    note: 'D-78: nominal 3/8 in for the 3/8 in pin. A real sleeve needs a few thousandths of running clearance; buy the tube or bushing with a close sliding fit and check the pin on it before the sleeves are glued in.',
-  },
-
-  brakeTopPinClearIn: {
-    label: 'Top pin center above the box tie spacer top', group: 'brake', unit: 'in',
+  brakeTopBoltClearIn: {
+    label: 'Top bolt center above the box tie spacer top', group: 'brake', unit: 'in',
     default: 0.7, min: 0.5, max: 2, step: 0.05, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the top pin goes through the box rib above the box tie spacer, which no pin can pass (and whose far side the ball cannot reach). The 1-1/4 in bearing washer on the rib\'s inner face reaches 5/8 in below the pin center, so 0.7 in keeps it above the spacer\'s top; it also keeps the knee leg top (3/4 in over the pin) under the side reflector.',
+    note: 'D-78: the top bolt goes through the box rib above the box tie spacer, which no bolt can pass. The insert flange\'s counterbore reaches about 1/2 in below the bolt center, so 0.7 in keeps it above the spacer\'s top; it also keeps the knee leg top (3/4 in over the bolt) under the side reflector.',
   },
 
-  brakePinEdgeIn: {
-    label: 'Oak left each side of a pin sleeve (minimum)', group: 'brake', unit: 'in',
+  brakeRibBlockWidthIn: {
+    label: 'Box rib block width (the full-width part that carries the top bolt)', group: 'brake', unit: 'in',
+    default: 2, min: 2, max: 4, step: 0.25, status: 'assumed', ref: 'D-78',
+    note: 'D-78: centered on the top bolt. The clamped bolt does not load the oak sideways through its hole the way a loose pin would, so 2 in (the rib head\'s width) is the starting size; the analysis says whether it needs more. Never narrower than the rib head (sideRibHeadLengthIn). On the inside face of the side web.',
+  },
+
+  brakeRibBlockBelowIn: {
+    label: 'Box rib: full-width block below the top bolt', group: 'brake', unit: 'in',
+    default: 1.5, min: 1, max: 3, step: 0.25, status: 'assumed', ref: 'D-78',
+    note: 'D-78: with the removable knee the box rib is a full-width block (brakeRibBlockWidthIn) from this far below the top bolt up to the head, so the insert has oak all round. Below that it is the normal shaft. The band-strip filler behind it follows.',
+  },
+
+  brakeKneeTopAboveBoltIn: {
+    label: 'Knee leg top above the top bolt center (removable knee)', group: 'brake', unit: 'in',
+    default: 0.75, min: 0.5, max: 1.5, step: 0.125, status: 'assumed', ref: 'D-78',
+    note: 'D-78: the bolt\'s washer bears on the tab, and the tab pushes forward against the knee, so the knee leg stands up behind the whole bolt and washer with oak to spare: its top is this far over the bolt center (about 15.2 in). Only the leg (against the hull) goes up; the arm and the roof keep their D-77 height. Stays clear of the reflector and the D-ring washers.',
+  },
+
+  brakeBoltEdgeIn: {
+    label: 'Removable knee: least oak beside a bolt hole or insert', group: 'brake', unit: 'in',
     default: 0.25, min: 0.1875, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the least oak left each side of a pin sleeve (in the tab, and in the box rib block beside pin T).',
+    note: 'D-78: the least oak left each side of a bolt hole in the tab and of an insert in the box rib block.',
   },
 
-  brakePinTipIn: {
-    label: 'Ball-lock pin: tip past the last member (balls out)', group: 'brake', unit: 'in',
-    default: 0.15, min: 0.1, max: 0.4, step: 0.05, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the locking balls stand about 0.15 in past the end of the sleeve on the inboard side (the underdeck side of the rail, the gap beside the box). Nothing else may be there.',
+  brakeRatchetLenIn: {
+    label: 'Ratchet and socket in a pouch: length (removable knees)', group: 'brake', unit: 'in',
+    default: 8, min: 6, max: 14, step: 0.5, status: 'assumed', ref: 'D-78',
+    note: 'D-78: a 3/8 in drive ratchet with a 9/16 in deep socket for the knee bolts rides in the storage box (race and cargo mode) when the knees are removable: about 8 x 2 x 2 in in a pouch. It is a tool, not sled mass (like the 10 Essentials, it is part of the carried load).',
   },
 
-  brakePinHeadIn: {
-    label: 'Ball-lock pin: handle height proud of the sleeve end', group: 'brake', unit: 'in',
-    default: 0.5, min: 0.3, max: 1, step: 0.05, status: 'assumed', ref: 'D-78',
-    note: 'D-78: the button and handle of a 3/8 in ball-lock pin stand about 1/2 in outboard of the sleeve end (the knee leg, the tab). They come off with the knee.',
+  brakeRatchetWidthIn: {
+    label: 'Ratchet and socket in a pouch: width', group: 'brake', unit: 'in',
+    default: 2, min: 1.5, max: 4, step: 0.25, status: 'assumed', ref: 'D-78',
   },
 
-  brakePinHeadLb: {
-    label: 'Ball-lock pin: handle and lanyard ring mass', group: 'brake', unit: 'lb',
-    default: 0.045, min: 0.02, max: 0.1, step: 0.005, status: 'assumed', ref: 'D-78',
-    note: 'D-78: added to the shaft\'s steel mass (an estimate for a 3/8 in pin\'s handle, button and spring; the shaft is counted from its volume).',
-  },
-
-  brakePinRetentionLbf: {
-    label: 'Ball-lock pin axial retention (pull before the balls let go)', group: 'brake', unit: 'lbf',
-    default: 400, min: 100, max: 3000, step: 25, status: 'verify', ref: 'D-78',
-    note: 'D-78 PLACEHOLDER: the ball-lock retention rating (the axial pull the locking balls hold against the sleeve end) is not published in the research. 400 lbf is a deliberately low working value for a 3/8 in stainless ball-lock pin. GET THE VENDOR\'S NUMBER (pull-out or "ultimate tensile" rating, then divide by a safety factor) before buying, and enter it here. The brake-mount row compares the knee\'s prying, yaw and sideways-push pull at each pin with it.',
-  },
-
-  brakeSleeveYieldPsi: {
-    label: 'Pin sleeve tube yield (304 / 316 stainless tube)', group: 'brake', unit: 'psi',
-    default: 30000, min: 20000, max: 60000, step: 1000, status: 'assumed', ref: 'D-78',
-    note: 'D-78: minimum yield of annealed 304 / 316 stainless tube (30 ksi). With the pin\'s own yield (ss316BoltYieldPsi) it gives the composite bending yield of the sleeved pin in the NDS yield-mode equations: F_yb = (F_y,pin d^3 + F_y,tube (OD^3 - ID^3)) / OD^3, the plastic moment of the pin plus tube over that of a solid pin of the sleeve\'s outside diameter (about 44.8 ksi for a 3/8 in pin in a 1/2 x 3/8 in tube).',
-  },
-
-  brakePinLoadDurationFactor: {
-    label: 'Removable-knee pin load-duration factor C_D', group: 'brake', unit: '×',
-    default: 1, min: 0.9, max: 1.6, step: 0.05, status: 'assumed', ref: 'D-78',
-    note: 'D-78: NDS C_D on the pin capacity. 1.0 because the hold load (a loaded sled parked on the slope, held by the flaps) is sustained, not an impact; the stomp case is checked at yield level instead. The impact factor ndsLoadDurationFactor (1.6) used for the curb-strike rows is NOT used here.',
-  },
-
-  brakeDominoBondPsi: {
-    label: 'Knee tab Domino tenon: epoxy shear / pull-out stress (allowable)', group: 'brake', unit: 'psi',
-    default: 210, min: 100, max: 800, step: 10, status: 'verify', ref: 'D-78',
-    note: 'D-78 ASSUMED VALUE, TO CONFIRM (no manufacturer rating is used or invented): the allowable stress on the epoxied side surface of a Festool Domino tenon (beech) in oak, for pull-out and for lateral shear. It is set equal to the repo\'s glue limit for oak (F_v x 0.25, about 212 psi, brake-pivot) so the Dominos earn only what the glue line already earns on their surface. Capacity per Domino = this x 2 (thickness + width) x depth in the shallower member; lateral shear is also capped by oak bearing on the tenon\'s width x depth. Confirm with a pull test on a scrap tab and knee before relying on it.',
+  brakeRatchetHeightIn: {
+    label: 'Ratchet and socket in a pouch: height', group: 'brake', unit: 'in',
+    default: 2, min: 1.5, max: 4, step: 0.25, status: 'assumed', ref: 'D-78',
   },
 
   brakeBungeeTensionLbf: {
@@ -2852,22 +2832,20 @@ export function validateParams(input: Params): ParamIssue[] {
       info(['brakePadWidthIn', 'tireWidthIn'], `The brake pad is narrower than set: it is held ${0.3}" inside the tread edges (${(p.tireWidthIn - 0.3).toFixed(1)}").`);
     if (p.brakeFlapWidthIn < p.tireWidthIn - 1e-9)
       info(['brakeFlapWidthIn', 'tireWidthIn'], 'The brake flap is narrower than the tire.');
-    // ── D-78: the removable knee on quick-release pins ──
-    if (p.kneeMount === KNEE_MOUNT.pins) {
+    // ── D-78: the removable knee on two clamped bolts ──
+    if (p.kneeMount === KNEE_MOUNT.removable) {
       if (p.storageLocation !== STORAGE_LOCATION.rearOverAxle)
-        warn(['kneeMount', 'storageLocation'], 'The removable knee (D-78) pins to the box rib beside the rear storage box; with the box under the seat there is no box rib, so the knee stays bolted to the rail.');
-      if (p.brakeSleeveIdIn < p.brakePinDiaIn - 1e-9)
-        err(['brakeSleeveIdIn', 'brakePinDiaIn'], 'The pin sleeve\'s inside diameter is smaller than the pin.');
-      if (p.brakeSleeveOdIn < p.brakeSleeveIdIn + 0.0625 - 1e-9)
-        err(['brakeSleeveOdIn', 'brakeSleeveIdIn'], 'The pin sleeve needs a wall of at least 1/32 in (outside diameter at least 1/16 in over the inside).');
-      if (p.brakeTabAbovePinIn < p.brakeSleeveOdIn / 2 + p.brakePinEdgeIn - 1e-9)
-        warn(['brakeTabAbovePinIn', 'brakeSleeveOdIn', 'brakePinEdgeIn'], `The knee tab leaves less than ${p.brakePinEdgeIn}" of oak above the top pin sleeve.`);
-      if (p.brakeTabHeightIn < p.brakeSleeveOdIn + 2 * p.brakePinEdgeIn - 1e-9)
-        warn(['brakeTabHeightIn', 'brakeSleeveOdIn', 'brakePinEdgeIn'], `The knee tab (${p.brakeTabHeightIn}" tall) leaves less than ${p.brakePinEdgeIn}" of oak above and below the pin sleeve.`);
-      if (p.brakeTabEndIn < p.brakeSleeveOdIn / 2 + p.brakePinEdgeIn - 1e-9)
-        warn(['brakeTabEndIn', 'brakeSleeveOdIn', 'brakePinEdgeIn'], `The knee tab ends ${p.brakeTabEndIn}" behind the top pin: less than ${p.brakePinEdgeIn}" of oak is left behind the sleeve.`);
-      if (p.brakeTabThickIn < p.brakeSleeveOdIn + 0.25 - 1e-9)
-        warn(['brakeTabThickIn', 'brakeSleeveOdIn'], 'The knee tab is too thin for the sleeve and the pin\'s bearing length.');
+        warn(['kneeMount', 'storageLocation'], 'The removable knee (D-78) bolts to the box rib beside the rear storage box; with the box under the seat there is no box rib, so the knee stays bolted to the rail.');
+      if (p.brakeBoltClearHoleIn < p.brakeMountBoltDiaIn + 1 / 64 - 1e-9)
+        err(['brakeBoltClearHoleIn', 'brakeMountBoltDiaIn'], 'The clearance hole for the knee bolts is not bigger than the bolt.');
+      if (p.brakeInsertFlangeOdIn < p.brakeInsertOdIn + 0.125 - 1e-9)
+        err(['brakeInsertFlangeOdIn', 'brakeInsertOdIn'], 'The insert flange is too small to be a flange (at least 1/8 in wider than the body).');
+      if (p.brakeBoltWasherOdIn < p.brakeBoltClearHoleIn + 0.25 - 1e-9)
+        warn(['brakeBoltWasherOdIn', 'brakeBoltClearHoleIn'], 'The flat washer under the knee bolt head barely covers the clearance hole.');
+      if (p.brakeTabAboveBoltIn < p.brakeBoltClearHoleIn / 2 + p.brakeBoltEdgeIn - 1e-9)
+        warn(['brakeTabAboveBoltIn', 'brakeBoltEdgeIn'], `The knee tab leaves less than ${p.brakeBoltEdgeIn}" of oak above the top bolt hole.`);
+      if (p.brakeTabEndIn < p.brakeBoltClearHoleIn / 2 + p.brakeBoltEdgeIn - 1e-9)
+        warn(['brakeTabEndIn', 'brakeBoltEdgeIn'], `The knee tab ends ${p.brakeTabEndIn}" behind the top bolt: less than ${p.brakeBoltEdgeIn}" of oak is left behind the hole.`);
     }
   }
   void info; void footZoneX;
