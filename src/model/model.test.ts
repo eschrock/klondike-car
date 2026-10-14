@@ -82,6 +82,7 @@ const KNOWN_OFF_DEFAULT: RegExp[] = [
   /^brake-knee-[LR] x reflector-[LR]1:/, // sideRear8 (3c-4b, reported)
   /^seat-grip-backing-[LR] x brake-knee-[LR]:/, // wheel 11.5 in and up (D-71): the brake knee sits r + brakePivotAheadIn behind the axle line, which a bigger wheel pushes under the grab-board backing strip by 1/16 in; the 5/8 in axle lowers the front stack 1/16 in, so 11.5 in wheels now pass the 8 in deck rule (they were an error) and this off-default overlap shows. Reported, not patched
   /^(sign-backer-[LR]\d|seat-grip-[LR]) x side-rib-[LR]1:/, // D-76 (reported): a short rear box (seatXMin, some fuzz designs) puts the box rib among the sign backers or under the grab board; it stands a fixed inset behind the box's fore end
+  /^(sign-[LR]|sign-backer-[LR]\d|seat-grip-backing-[LR]|reflector-[LR]\d) x dring-plate-[LR]\d:/, // D-76 (reported): in a design where the sign, its backer or a grab-board backing strip lands on a rib's D-ring station (a short rear box, some fuzz designs) it meets the outside bearing plate; at the defaults they clear it by 1/4 in (side-ribs.test.ts)
   /^rail-[LR] x king-beam:/, // wheelbase 52 and rear overhang 14: the king beam end meets the rail that curves in with the bow turn-in by 0.05 in
   /^(clamp-F[LR]\d|king-beam) x roll-pad-[LR]:/, // a short stub (clamp plates inboard of the pad) or a thick disc: the roll pad meets a plate or the king beam; validateParams warns about the pad position
   /^clamp-F[LR]\d x king-thrust:/, // a long stub: the inner clamp plate reaches under the disc

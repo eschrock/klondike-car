@@ -154,9 +154,9 @@ describe('Bolt Depot by the piece', () => {
     expect([screw.unitUsd, screw.packQty]).toEqual([0.29, undefined]);
     expect(screw.extUsd).toBeCloseTo(screw.qty * 0.29, 2);
     expect(screw.section).not.toBe('Bulk parts (shop stock)');
-    // 46 3/8 in fender washers: 46 x 0.41 = 18.86 against the bag of 50 at 14.51
+    // 3/8 in fender washers (the knee bolts no longer buy any: they take a narrow flat washer under each head): 20 x 0.41 = 8.20 against the bag of 50 at 14.51
     const w38 = lines(bStd).find((l) => l.key === '18-8 fender washer 3/8"')!;
-    expect([w38.packQty, w38.packUsd, w38.packs]).toEqual([50, 14.51, 1]);
+    expect([w38.qty, w38.unitUsd, w38.packQty]).toEqual([20, 0.41, undefined]);
     // the 20 1/4-20 nylocks (24 before the hanger bolts were counted once) are 3.20 by the piece against 10.36 for the bag
     const nut = fast.find((l) => l.key === '18-8 nylon-insert lock nut 1/4-20')!;
     expect([nut.qty, nut.unitUsd]).toEqual([20, 0.16]);
@@ -235,7 +235,7 @@ describe('plywood, from thinSheet(p)', () => {
       const b = bom(buildModel(p), p, { noCompare: true });
       const l = b.sections.find((s) => s.id === 'plywood')!.lines.find((q) => q.key === t.priceKey && /thin sheet/.test(q.description))!;
       expect(l, `${w}/${m}`).toBeTruthy();
-      expect(l.description).toContain(t.name);
+      expect(l.description).toContain(t.name.replace(/(\d+\/\d+) in\b/, '$1"')); // the shop writes the inch mark
       expect(l.description).toContain(t.glue);
       expect(l.description).toContain(`${t.sheetWidthIn / 12} x ${t.sheetLengthIn / 12} ft`);
       expect(l.unitUsd).toBe(PLYWOOD_PRICE[t.priceKey].usd);

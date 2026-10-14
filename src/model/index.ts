@@ -26,6 +26,25 @@ export type { ViewState } from './build-utils';
  * `removed: true` omits `removable` parts (transport configuration, D-9, D-65); `brakes: false` / `lights: false` / `chocks: false` omit just that kit (D-65).
  */
 export function buildModel(input: Params, view: ViewState = {}): Part[] {
+  // One design change asks for the same (params, view) build several times (the viewer, the four summary cases, the truck fit and every analysis pass),
+  // so the last few builds are kept. Callers get a fresh array over the shared Part objects, which they only read.
+  const key = JSON.stringify(input) + JSON.stringify(view);
+  const hit = buildCache.get(key);
+  if (hit) {
+    buildCache.delete(key);
+    buildCache.set(key, hit); // most recent last
+    return [...hit];
+  }
+  const out = buildModelUncached(input, view);
+  buildCache.set(key, out);
+  if (buildCache.size > BUILD_CACHE_MAX) buildCache.delete(buildCache.keys().next().value as string);
+  return [...out];
+}
+
+const buildCache = new Map<string, Part[]>();
+const BUILD_CACHE_MAX = 24;
+
+function buildModelUncached(input: Params, view: ViewState): Part[] {
   const ctx = makeCtx(input, view); // resolves auto nose geometry (resolveParams) so every part and ctx.p agree
   const parts = [
     ...buildRunningGear(ctx),

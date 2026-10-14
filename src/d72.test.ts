@@ -371,16 +371,16 @@ describe('D-71: the solid 5/8 in rod (Eric)', () => {
 });
 
 describe('the numbers at the defaults (weatherSpec Standard: 6 mm Baltic birch, the solid rod, the 3 wood-screw sizes)', () => {
-  it('empty mass 121.64 lb (D-80/D-83: the 6 mm Baltic sides, box and lid and the 2 in clamp plates, less the lighter EVA seat pads and lights; 121.09 lb with the 1/4 in white oak ply at D-77, +0.87 lb the pivot straps and knee roofs; D-76: +0.96 lb the side ribs; 115.95 lb at D-71)', () => {
+  it('empty mass 121.62 lb (D-80/D-83: the 6 mm Baltic sides, box and lid and the 2 in clamp plates, less the lighter EVA seat pads and lights; 121.09 lb with the 1/4 in white oak ply at D-77, +0.87 lb the pivot straps and knee roofs; D-76: +0.96 lb the side ribs; 115.95 lb at D-71)', () => {
     const m = totalMass(buildModel(defaults, { rider: 'none', cargo: false }));
-    expect(m).toBeCloseTo(121.639, 2);
+    expect(m).toBeCloseTo(121.617, 2); // merged with the final review of the build outputs (121.639 before: 13/32 knee holes, 7/8 narrow washers and the rib-knee shift)
     const oak = totalMass(buildModel({ ...defaults, thinSheetMaterial: OAK }, { rider: 'none', cargo: false }));
-    expect(oak).toBeCloseTo(120.314, 2);
+    expect(oak).toBeCloseTo(120.293, 2);
     expect(m - oak).toBeCloseTo(1.33, 1); // the 6 mm Baltic over the 1/4 in white oak ply
     const ok = totalMass(buildModel({ ...defaults, thinSheetMaterial: OKOUME }, { rider: 'none', cargo: false }));
-    expect(ok).toBeCloseTo(119.545, 2); // D-80: the 6 mm okoume (Extreme)
+    expect(ok).toBeCloseTo(119.523, 2); // D-80: the 6 mm okoume (Extreme)
     const tubeOk = totalMass(buildModel({ ...defaults, ...PRE_D72 }, { rider: 'none', cargo: false }));
-    expect(tubeOk).toBeCloseTo(115.621, 2); // the D-71 tube and the 4 mm okoume (PRE_D72)
+    expect(tubeOk).toBeCloseTo(115.600, 2); // the D-71 tube and the 4 mm okoume (PRE_D72)
     const rodOk4 = totalMass(buildModel({ ...defaults, ...PRE_D72, axleWallIn: 0 }, { rider: 'none', cargo: false }));
     expect(rodOk4 - tubeOk).toBeCloseTo(1.88, 1); // the rod over the tube
   });

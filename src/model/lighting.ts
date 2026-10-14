@@ -185,7 +185,7 @@ export function buildLighting(ctx: Ctx): Part[] {
       let x = Math.max(L.xRear + reach * f, SIGN_X_MAX_IN + 2); // the rear one stands ahead of the side sign (D-57)
       // D-63: the grab board's 316 backing strip is on the same outer gunwale face; a reflector that would sit on it moves just ahead of it
       const stripX0 = p.seatXIn - GRIP_BEHIND_HPOINT_IN + GRIP_BACKING_END_IN - 0.3, stripX1 = p.seatXIn - GRIP_BEHIND_HPOINT_IN + p.grabBoardLengthIn - GRIP_BACKING_END_IN + 0.3;
-      // D-76: and it stays 1/4 in clear of the outside fender washers of the side-rib D-ring bolts (the box rib's station is set so the rear one does not have to move).
+      // D-76: and it stays 1/4 in clear of the outside fender washers of the side-rib D-ring bolts (D-83) (the box rib's station is set so the rear one does not have to move).
       for (const [wa, wb] of washers) if (x + REFLECTOR_SIZE[0] / 2 + 0.25 > wa && x - REFLECTOR_SIZE[0] / 2 - 0.25 < wb) x = wb + REFLECTOR_SIZE[0] / 2 + 0.25;
       if (x + REFLECTOR_SIZE[0] / 2 + 0.1 > stripX0 && x - REFLECTOR_SIZE[0] / 2 - 0.1 < stripX1) x = stripX1 + REFLECTOR_SIZE[0] / 2 + 0.3;
       const color = i === 0 ? 'red' : 'amber'; // 3c-5: red at the rear, amber at the front (DOT-C2 side marker colors)

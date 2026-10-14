@@ -82,9 +82,7 @@ describe('no exposed plywood edges (acceptance, D-35)', () => {
     }
   });
   it('the check really fails if an edge is exposed', () => {
-    const parts = buildModel(defaults);
-    const deck = get(parts, 'deck');
-    deck.edges = ['captured', 'exposed', 'captured', 'captured'];
+    const parts = buildModel(defaults).map((x) => (x.id === 'deck' ? { ...x, edges: ['captured', 'exposed', 'captured', 'captured'] as Part['edges'] } : x)); // a copy: built models are shared through the build cache
     const bad = parts.filter((x) => flat(x.edges).includes('exposed')).map((x) => x.id);
     expect(bad).toEqual(['deck']);
   });
@@ -635,7 +633,7 @@ describe('round 2 hull (build M2-M8, D-43)', () => {
     for (let i = 0; i + 1 < edges.length; i += 2) bay = Math.max(bay, edges[i + 1] - edges[i]);
     expect(bay).toBeLessThan(8.5);
     expect(bay).toBeGreaterThan(5.5); // 6.6 between the joists; the long bay is the 5.8 in from the king beam to the end joist, 6.5 at the rear
-    expect(get(parts, 'joist-8').notes).toMatch(/last joist, under the scarf/);
+    expect(get(parts, 'joist-8').notes).toMatch(/last crossmember, under the scarf/);
     expect(get(parts, 'joist-6').notes).toMatch(/chain crossmember/); // the crossmember behind the king beam anchors the steering chains (D-58)
   });
 });

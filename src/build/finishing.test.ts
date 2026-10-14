@@ -238,8 +238,10 @@ describe('buy list', () => {
     expect(total(EPOXY_BUY_RE)).toBeGreaterThanOrEqual(e.resinFlOz / 32 - 1e-9);
     for (const b of sched.buy) {
       expect(['gal', 'qt', 'pt']).toContain(b.unit);
-      expect(Number.isInteger(b.qty)).toBe(true);
+      expect(Number.isInteger(b.qty * 2)).toBe(true); // whole containers, or a product sold in two sizes as one row ("1 qt + 1 pt" = 1.5 qt)
     }
+    // one product is one row: no two rows share an item and a note
+    expect(new Set(sched.buy.map((b) => `${b.item}|${b.note}`)).size).toBe(sched.buy.length);
   });
 
   it('buys varnish in whole quarts, never a gallon', () => {

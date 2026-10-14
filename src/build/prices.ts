@@ -200,7 +200,7 @@ const BOLT_DEPOT = 'Bolt Depot';
 const BD_PRODUCT = 'https://boltdepot.com/Product-Details?product=';
 const BD_EYE_URL = 'https://boltdepot.com/Forged_eye_bolts_(w__nuts)_Hot_dipped_galvanized_steel_3_8-16';
 const BD_EYE_316_URL = 'https://boltdepot.com/Forged_eye_bolts_with_shoulder_(w__nuts)_Stainless_steel_316_3_8-16';
-const EYE_DECISION = 'Eye bolts: stock 3/8-16 shoulder eye bolts, 4-1/2" for the axle beam and 2-1/2" for the chain joist. Checked against the stack: the beam bolt needs 3.16" under the shoulder (2-1/2" beam + washer + nylock nut + 1.5 threads), so the 4-1/2" is cut to 3-1/4" after fitting (it would stand 1.4" past the nut); the joist bolt needs 1.97", so 2-1/2" is cut to 2" (or left, 0.6" of thread). Neither fouls the wheel, the chain or the tongue. The Standard weather spec (garage-kept) uses galvanized; the Extreme spec (stored outside or near salt) uses 316, which is 4x the price (about $200 for four against $46).';
+const EYE_DECISION = 'Eye bolts: stock 3/8-16 shoulder eye bolts, 4-1/2" for the axle beam and 2-1/2" for the chain crossmember. Checked against the stack: the beam bolt needs 3.16" under the shoulder (2-1/2" beam + washer + nylock nut + 1.5 threads), so the 4-1/2" is cut to 3-1/4" after fitting (it would stand 1.4" past the nut); the crossmember bolt needs 1.97", so 2-1/2" is cut to 2" (or left, 0.6" of thread). Neither fouls the wheel, the chain or the tongue. The Standard weather spec (garage-kept) uses galvanized; the Extreme spec (stored outside or near salt) uses 316, which is 4x the price (about $200 for four against $46).';
 /** The two eye-bolt prices, hot-dip galvanized (Standard base) and 316 (Extreme base): Bolt Depot, forged shoulder eye bolts with nuts, 3/8-16. */
 const EYE_GALV = {
   steerEye: found(11.94, 'ea', BOLT_DEPOT, BD_EYE_URL, 'forged shoulder eye bolt with nut, hot-dip galvanized, 3/8-16 x 4-1/2" stock (the stack needs 3.16" under the shoulder, so cut it to 3-1/4" after fitting; Bolt Depot measures from under the shoulder)', true),
@@ -210,7 +210,7 @@ const EYE_316 = {
   steerEye: found(50.77, 'ea', BOLT_DEPOT, BD_EYE_316_URL, '316 forged shoulder eye bolt with nut, 3/8-16 x 4-1/2" stock (the stack needs 3.16" under the shoulder, so cut it to 3-1/4" after fitting): 4x the galvanized price', true),
   steerAnchor: found(48.43, 'ea', BOLT_DEPOT, BD_EYE_316_URL, '316 forged shoulder eye bolt with nut, 3/8-16 x 2-1/2" stock (the stack needs 1.97" under the shoulder; optionally cut to 2"): 4x the galvanized price', true),
 };
-const WHEEL_DECISION = 'Wheel (Eric, 2026-10-12): the Harbor Freight 10" pneumatic with black hub, $9.99, 5/8" bore, 300 lb, about 3 lb; the axles are 5/8" to match. Its hub length is not listed (the model assumes 2-1/4", as on the Uline and Martin wheels): buy one first and measure the hub, the bore and the squash. The steel-hub version is $11.99.';
+const WHEEL_DECISION = 'Wheel: the Harbor Freight 10" pneumatic with black hub, $9.99, 5/8" bore, 300 lb, about 3 lb; the axles are 5/8" to match. Its hub length is not listed (the model assumes 2-1/4", as on the Uline and Martin wheels): buy one first and measure the hub, the bore and the squash. The steel-hub version is $11.99.';
 /** Cut length of a steering chain (in), from the model's vendor text: 10.89 in of 3/16" chain, a quick link to each eye. */
 const CHAIN_CUT_IN = 10.89;
 const CHAIN_USD_PER_FT = 7.37, QUICK_LINK_USD = 5.66;
@@ -224,10 +224,10 @@ export interface PurchasedPriceEntry {
 /** Prices for purchased parts. A model cost (`sourcing.costUsd`) wins unless the entry says `override` (the research found a real price for exactly that part). Matched on partNo. */
 export const PURCHASED_PRICE: PurchasedPriceEntry[] = [
   { match: /^wheel$/, price: withAlts(
-    found(9.99, 'ea', 'Harbor Freight', 'https://www.harborfreight.com/10-inch-x-3-1-2-half-inch-pneumatic-tire-67465.html', 'HAUL-MASTER 10" pneumatic tire with black hub (SKU 67465), 5/8" bore, 300 lb, about 3 lb, 3-1/2" wide, 30 psi; hub length not listed (the model assumes 2-1/4"). Eric chose it 2026-10-12. VERIFY the hub length, bore and rating on the real wheel'),
+    found(9.99, 'ea', 'Harbor Freight', 'https://www.harborfreight.com/10-inch-x-3-1-2-half-inch-pneumatic-tire-67465.html', 'HAUL-MASTER 10" pneumatic tire with black hub (SKU 67465), 5/8" bore, 300 lb, about 3 lb, 3-1/2" wide, 30 psi; hub length not listed (the model assumes 2-1/4"). VERIFY the hub length, bore and rating on the real wheel'),
     [
       found(11.99, 'ea', 'Harbor Freight', 'https://www.harborfreight.com/heavy-duty-10-inch-groove-tread-tire-40729.html', 'HAUL-MASTER 10" pneumatic tire with steel hub (SKU 40729), 5/8" bore, 300 lb, 3.10 lb shipping; hub length not listed. The sturdier hub, +$2 a wheel (+$8 for four)'),
-      gap(found(34, 'ea', 'Uline', 'https://www.uline.com/Product/Detail/H-5454/Casters-and-Wheels/Uline-Flat-Free-Pneumatic-Wheel-300-lb-Capacity-10', 'Uline H-5454 flat-free pneumatic wheel 10 x 3-1/2", 5/8" bore, 2-1/4" steel offset hub (the hub length is listed), 300 lb, 3.41 lb'), 'flat-free: a stiffer tire than the 30 psi pneumatic the bump rate assumes (bumpWheelRateLbIn), and 0.4 lb a wheel heavier; $24 more a wheel'),
+      gap(found(34, 'ea', 'Uline', 'https://www.uline.com/Product/Detail/H-5454/Casters-and-Wheels/Uline-Flat-Free-Pneumatic-Wheel-300-lb-Capacity-10', 'Uline H-5454 flat-free pneumatic wheel 10 x 3-1/2", 5/8" bore, 2-1/4" steel offset hub (the hub length is listed), 300 lb, 3.41 lb'), 'flat-free: a stiffer tire than the 30 psi pneumatic tire the design assumes, and 0.4 lb a wheel heavier; $24 more a wheel'),
     ], WHEEL_DECISION) },
   { match: /^king-thrust$/, price: found(15.88, 'ea', 'eBay seller (Florida)', 'https://www.ebay.com/itm/143055583417', 'natural UHMW 1/2" sheet, 6" x 12" option (a 3" disc is cut from it); the listing may price one size only', true) },
   { match: /^kingpin$/, price: foundCP(5, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Product-Details?product=678', '5/8" kingpin set: 5/8-11 x 6 hex bolt, zinc grade 8 yellow $4.14 (#678) + 5/8-11 zinc nylon-insert lock nut $0.56 (#2628) + 2 SAE flat washers $0.30 (#4273) = $5.00') },
@@ -364,6 +364,7 @@ export const FASTENER_PRICE: Array<{ match: RegExp; price: Price }> = [
   { match: /lock nut 3\/8/, price: withEach(foundPack(50, 16.15, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Hex_nylon_insert_lock_nuts_Stainless_steel_316', '316 hex nylon-insert lock nut 3/8-16 (16010), $0.48 each or 16.15 per 50 ($0.32 each); pack of 50', true), 0.48) },
   { match: /lock nut 1\/4/, price: withEach(foundPack(100, 16.54, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Hex_nylon_insert_lock_nuts_Stainless_steel_316', '316 hex nylon-insert lock nut 1/4-20 (16008), $0.25 each or 16.54 per 100; pack of 100', true), 0.25) },
   { match: /lock nut/, price: packed(50, 18, 'ea', FAST, 'pack of 50') },
+  { match: /narrow flat washer 3\/8/, price: withEach(packed(100, 30, 'ea', FAST, `ESTIMATE: 316 narrow flat washer 3/8" x 7/8" OD, under each brake-knee bolt head (not in the ${RESEARCH_DATE} research; the 3/8" x 1-1/2" fender washer is 0.81 each, a narrow one is about half); pack of 100`), 0.4) },
   { match: /fender washer 5\/8/, price: packed(25, 15, 'ea', FAST, 'pack of 25') },
   { match: /fender washer 3\/8/, price: withEach(foundPack(100, 50.48, 'ea', BOLT_DEPOT, 'https://www.boltdepot.com/Fender_washers_Stainless_steel_316.aspx', '316 fender washer 3/8" x 1-1/2" (16042), $0.81 each or 50.48 per 100; the 2" OD washers of the eye bolts were not searched; pack of 100', true), 0.81) },
   { match: /fender washer 1\/4/, price: withEach(foundPack(100, 27.26, 'ea', BOLT_DEPOT, 'https://www.boltdepot.com/Fender_washers_Stainless_steel_316.aspx', '316 fender washer 1/4" x 1-1/4" (16040), $0.46 each or 27.26 per 100; pack of 100', true), 0.46) },
@@ -529,6 +530,7 @@ export const FASTENER_PRICE_STANDARD: Array<{ match: RegExp; price: Price }> = [
   { match: /lock nut 3\/8/, price: withAlts(
     foundPack(50, 8.66, 'ea', 'Home Depot (Prime-Line)', 'https://homedepot.com/p/Prime-Line-3-8-in-16-Grade-18-8-Stainless-Steel-Nylon-Insert-Lock-Nuts-50-Pack-9075391/310550324', 'Prime-Line 3/8-16 grade 18-8 stainless nylon-insert lock nuts, 50-pack (9075391): 8.66 in one snapshot, 9.27 in another (0.17-0.19 each)', true),
     [bd18(2556, 'ea', 'Bolt Depot 18-8 nylon-insert lock nut 3/8-16 (#2556)', 0.36, 50, 12.07, '26 by the piece is 9.36')]) },
+  { match: /narrow flat washer 3\/8/, price: withEach(packed(100, 12, 'ea', FAST_STD, `ESTIMATE (Standard spec): 18-8 narrow flat washer 3/8" x 7/8" OD, under each brake-knee bolt head (not in the Standard research); pack of 100`), 0.15) },
   { match: /fender washer #8/, price: withEach(packed(100, 14, 'ea', FAST_STD, 'ESTIMATE (Standard spec): 18-8 fender washer for #8, 3/4" OD (not in the Standard research); pack of 100'), 0.2) },
   { match: /fender washer 1\/4/, price: bd18(BD_FENDER_18_8, 'ea', '18-8 fender washer 1/4" x 1-1/4"', 0.28, 100, 18.81, '48 by the piece is cheaper than the bag; Home Depot Everbilt 20-pack 5.97 (0 in stock)') },
   { match: /fender washer 3\/8/, price: bd18(BD_FENDER_18_8, 'ea', '18-8 fender washer 3/8" x 1-1/2"', 0.41, 50, 14.51, 'the bag of 50 covers 46; the page listed 0.29 a washer in the bag against 0.41 each') },
@@ -603,7 +605,7 @@ export const PURCHASED_MODEL_COST_NOTE_STANDARD: ModelCostNote[] = [
   { match: /^seat-pin$/, note: `model cost kept: no 3/8" x 1-1/2" detent pin found in the ${RESEARCH_DATE} research (Whitecap S-1024C is $69.99, 304, diameter not stated, likely the wrong part)` },
   { match: /^brake-snap$/, note: 'model cost kept: the 304 snap hook found (Hardware Essentials via ihsgonline, $6.24) does not state its size; the Everbilt 13/16 x 3-3/16" stainless fixed-eye snap hook is $13.46 (too big and dear)', alternatives: [
     gap(foundPack(1, 6.24, 'ea', 'ihsgonline (Hardware Essentials)', 'https://ihsgonline.com/products/snap-hook/235445002/', 'Hardware Essentials snap hook, 304 stainless, size not stated', true), 'the size is not stated')] },
-  { match: /^brake-pivot-pin$/, note: `model cost kept: the Everbilt 3/8" x 2" zinc-plated universal clevis pin (815438, $3.75) is 2" long and the pin is about 3-1/16" (through the strap, the tongue and 1" into the inboard ear, D-77); stainless 3/8 x 2" (70518) is $4.75. No 3-1/16" pin found at retail: cut a 3/8" stainless rod or order a long pin`, alternatives: [
+  { match: /^brake-pivot-pin$/, note: `model cost kept: the Everbilt 3/8" x 2" zinc-plated universal clevis pin (815438, $3.75) is 2" long and the pin is about 3-1/16" (through the strap, the tongue and 1" into the inboard ear); stainless 3/8 x 2" (70518) is $4.75. No 3-1/16" pin found at retail: cut a 3/8" stainless rod or order a long pin`, alternatives: [
     gap(foundPack(1, 3.75, 'ea', 'Home Depot (Everbilt)', 'https://homedepot.com/p/Everbilt-3-8-in-x-2-in-Zinc-Plated-Universal-Clevis-Pin-815438/204276615', 'Everbilt 3/8" x 2" zinc-plated universal clevis pin (815438)', true), '2" long, not 3-1/16"; zinc-plated')] },
 ];
 
@@ -682,7 +684,8 @@ export function fastenerPrice(label: string, spec: SpecName = 'extreme'): Price 
 export function metalPrice(section: string, spec: SpecName = 'extreme'): Price | null {
   const entry = METAL_PRICE_PER_FT.find((r) => r.match.test(section));
   const price = entry?.price ?? null;
-  if (!entry || !price || spec !== 'standard' || !/\b(316|304)\b/.test(section)) return price;
+  // The price table is researched in 316; the Standard spec buys 304 / 18-8 stainless (its cut-list text says "18-8 (304)" or, in older callers, "316").
+  if (!entry || !price || spec !== 'standard' || !/\b(316|304)\b|stainless/i.test(section)) return price;
   if (entry.std) return entry.std;
   const r2 = (v: number): number => Math.round(v * 100) / 100;
   const alts = price.alternatives?.map((a) => ({ ...a, note: a.note ? std304(a.note) : a.note }));

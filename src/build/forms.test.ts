@@ -50,10 +50,10 @@ describe('forms and templates', () => {
   it('dates the title block from the params state, never the clock', () => {
     const again = formDrawings(parts, p);
     expect(again[0].svg === drawings[0].svg).toBe(true);
-    const rev = /Params rev ([0-9a-f]{6})/.exec(drawings[0].svg)![1];
+    const rev = /Design revision ([0-9a-f]{6})/.exec(drawings[0].svg)![1];
     expect(rev).toMatch(/^[0-9a-f]{6}$/);
     const other = formDrawings(buildModel({ ...p, handleBowCrownIn: p.handleBowCrownIn + 0.25 }), { ...p, handleBowCrownIn: p.handleBowCrownIn + 0.25 });
-    expect(/Params rev ([0-9a-f]{6})/.exec(other[0].svg)![1]).not.toBe(rev);
+    expect(/Design revision ([0-9a-f]{6})/.exec(other[0].svg)![1]).not.toBe(rev);
     expect(formDrawings(parts, p, { date: '2026-10-12' })[0].svg.includes('2026-10-12')).toBe(true);
   });
 

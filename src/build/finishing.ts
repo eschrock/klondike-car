@@ -24,6 +24,7 @@ import { boardForThickness, planLamination } from './cutlist';
 import type { Geometry, Part, Vec2 } from '../model/types';
 import type { Instr } from './assembly';
 import { thinSheet, THIN_SHEET, WEATHER_SPEC, type Params } from '../params';
+import { inchMarks } from './units';
 
 // ---- constants (process facts, not design numbers; coverage figures are published label / WEST System values) ----
 
@@ -636,7 +637,10 @@ function product(name: string, areaFt2: number, coats: number, coverage: number)
 }
 
 function buyLines(item: string, qt: number, note: string, allowGal = true): BuyLine[] {
-  return containers(qt, allowGal).map((c) => ({ item, unit: c.unit, qty: c.qty, qt: c.qt, note }));
+  const cs = containers(qt, allowGal);
+  // One product is one row, even when it is sold in two sizes ("1 qt + 1 pt" is 1.5 qt): two rows of the same name and note read as a duplicate in the book.
+  if (cs.length > 1) { const total = cs.reduce((a, c) => a + c.qt, 0); return [{ item, unit: 'qt', qty: total, qt: total, note }]; }
+  return cs.map((c) => ({ item, unit: c.unit, qty: c.qty, qt: c.qt, note }));
 }
 
 /** Epoxy time at a temperature: pot life and cure roughly double for each 18 °F (10 °C) below 70 °F (WEST System guidance). */
@@ -709,7 +713,7 @@ const frac32 = (v: number): string => {
 
 export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
   const extreme = p.weatherSpec === WEATHER_SPEC.extreme;
-  const thin = thinSheet(p);
+  const thin = { ...thinSheet(p), name: inchMarks(thinSheet(p).name) };
   const thinClass: FinishMaterial = thin.key === THIN_SHEET.whiteOakPly ? 'oakPly' : thin.key === THIN_SHEET.balticBirch3mm || thin.key === THIN_SHEET.balticBirch6mm ? 'birch' : 'okoume';
   const areas = finishAreas(parts, p);
   const lid = parts.find((x) => x.id === 'storage-lid');
@@ -818,7 +822,7 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
         : it('Stain first, THEN coat.', [
           'Water-based dye under the urethane is the safe route: it dries clear of oils and the urethane bonds to it.',
           'The urethane goes over a dry, sanded, offcut-tested surface, never over a stain that has not cured.',
-          'The epoxy edge coat and the deck underside are done separately (step 4); keep dye off the glue faces.',
+          'The epoxy edge coat and the deck underside are done separately (Finishing step 4); keep dye off the glue faces.',
         ]),
       it(`Oak${areas.oakPlyFt2 > 0 ? ' and white oak plywood' : ''}: raise the grain, then stain.`, [
         `Damp rag, dry, re-sand at 150, so the grain does not rise again under the ${extreme ? 'epoxy' : 'urethane'}.`,

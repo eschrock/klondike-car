@@ -566,7 +566,7 @@ const defs = {
   sideRibHeadLengthIn: {
     label: 'Side rib head length (along the gunwale)', group: 'body', unit: 'in',
     default: 2, min: 1.75, max: 3, step: 0.125, status: 'assumed', ref: 'D-76',
-    note: 'D-76: the rib widens to a head this long at the gunwale, as tall as the gunwale band (railBandIn) and cut to the sheer at the top. The 1.5 x 0.9 in D-ring plate sits on its inner face, through-bolted with four #8-32 machine screws.',
+    note: 'D-76: the rib widens to a head this long at the gunwale, as tall as the gunwale band (railBandIn) and cut to the sheer at the top. The 1.75 x 0.75 in D-ring bracket (D-83) sits on its inner face, through-bolted with two 1/4-20 button-head bolts.',
   },
   sideRibKneeHeightIn: {
     label: 'Side rib knee height (up the rib)', group: 'body', unit: 'in',
@@ -584,12 +584,12 @@ const defs = {
     note: 'D-76: the rear rib (E1) stands this far behind the outer face of the storage box\'s fore end, beside the box (study option D), and an oak spacer ties it to the box side near the fore corner, so the box is its base. The study put it at 1.1 in (x = 5.9); 1.4 in (x = 5.6) leaves 3/8 in between its outside bolt washers and the rear reflector, which cannot move forward (the grab board\'s backing strip is right ahead of it), and 0.4 in to the side sign.',
   },
   sideRibMidXIn: {
-    label: 'Mid rib station (x, snaps to the nearest joist)', group: 'body', unit: 'in',
+    label: 'Mid rib station (inches ahead of the rear axle; snaps to the nearest crossmember)', group: 'body', unit: 'in',
     default: 27.6, min: 10, max: 44, step: 0.1, status: 'assumed', ref: 'D-76',
     note: 'D-76: the mid rib (E2) and its knee stand on the joist nearest this x (joist 5 at the defaults, x = 27.6), ahead of the seat cushion: a knee on joist 4 (x = 20.2) would hit the cushion.',
   },
   sideRibFrontXIn: {
-    label: 'Bow rib station (x, snaps to the nearest joist or the king beam)', group: 'body', unit: 'in',
+    label: 'Bow-post rib station (inches ahead of the rear axle; snaps to the nearest crossmember or the king beam)', group: 'body', unit: 'in',
     default: 44, min: 30, max: 48, step: 0.1, status: 'verify', ref: 'D-76',
     note: 'D-76: the bow post (E3) and its knee stand on the member nearest this x: the king beam at 44 (the default). Its inner face is about 7-7/8 in from the center line, about 1 in outside a winter boot. VERIFY: sit a booted rider in the sled before cutting; if the post is in the way, set this to 35 (the chain joist, x = 35.1, where the post face is about 8-3/8 in from the center line).',
   },
@@ -1259,7 +1259,7 @@ const defs = {
   },
   brakeLoadFactor: {
     label: 'Brake component load factor (on the hold load)', group: 'brake', unit: '×',
-    default: 2, min: 1, max: 4, step: 0.25, status: 'assumed', ref: 'D-38',
+    default: 2, min: 1, max: 4, step: 0.25, status: 'assumed', ref: 'D-65',
     note: 'The flap, pivot, knee and bolts are checked at this multiple of the load needed to hold the sled on the design slope: a hard stomp or a jerk on a parked sled.',
   },
   brakeSteelYieldPsi: {
@@ -1545,8 +1545,8 @@ const defs = {
   },
   kneeBoltTightenLbIn: {
     label: 'Knee bolt tightening (removable knees)', group: 'brake', unit: 'lbf·in',
-    default: 60, min: 30, max: 120, step: 5, status: 'assumed', ref: 'D-78',
-    note: 'D-78: snug, then a quarter turn, about 60 lbf in (5 ft lb). More than that crushes the washers and the oak: a hand ratchet easily gives 15 ft lb. Used in the knee, hang and refit steps and the Verify item. Retighten after the first outing; the stainless threads get anti-seize.',
+    default: 35, min: 30, max: 120, step: 5, status: 'assumed', ref: 'D-78',
+    note: 'D-78: snug, then a quarter turn is the primary spec (about 0.016 in of travel through about 3-1/4 in of oak, roughly 25 to 40 lbf in, about 600 lbf of clamp); 35 lbf in is the check value. It keeps the 7/8 in narrow washer at about 0.6 of its wet crush onset (about 1,080 lbf); 60 lbf in with anti-seize sits right at the onset, and a hand ratchet easily gives 15 ft lb. Used in the knee, hang and refit steps and the Verify item. Check snug before each outing; retighten after the first; the stainless threads get anti-seize.',
   },
   toolPouchLengthIn: {
     label: 'Tool pouch length (ratchet, socket, wrench)', group: 'brake', unit: 'in',
@@ -1853,7 +1853,7 @@ const defs = {
   ndsLoadDurationFactor: {
     label: 'NDS load-duration factor on the strike (connections)', group: 'materials', unit: '×',
     default: 1.6, min: 1, max: 1.6, step: 0.05, status: 'assumed', ref: 'D-35',
-    note: 'A curb strike is a transient impact; the 3× dynamic factor is already in the load. NDS 10.3.2 caps C_D at 1.6 for connections, so 1.6 is used and no more.',
+    note: 'A curb strike is a transient impact; the 3× dynamic factor is already in the load. NDS 10.3.2 caps C_D at 1.6 for connections, so 1.6 is used and no more. It also applies to the brake λ = 2 stomp or jerk impact in the dry (removable) knee check (D-78); the sustained hold (λ = 1) is checked with C_D 1.0.',
   },
   ndsGroupFactor: {
     label: 'NDS group action factor Cg for the plate bolt rows', group: 'materials', unit: '×',

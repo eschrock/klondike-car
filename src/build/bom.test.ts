@@ -175,6 +175,19 @@ describe('bom', () => {
     expect(b.csv.match(/Subtotal: /g)!.length).toBe(4);
   });
 
+  it('buys exactly the washers the joint names: a narrow flat washer under each knee bolt head, none under the nuts that bear on the backing plate', () => {
+    const part = parts.find((x) => x.id === 'brake-knee-L')!;
+    const knee = part.joints!.find((q) => q.type === 'bolt' && /narrow flat washer/.test(q.size ?? ''))!;
+    const items = jointItems(part, knee, new Map(parts.map((x) => [x.id, x])));
+    expect(items.map((i) => `${i.qty} ${i.label}`)).toEqual([`4 316 hex bolt 3/8-16 x 4"`, '4 316 nylon-insert lock nut 3/8-16', '4 316 narrow flat washer 3/8" (7/8" OD)']);
+    // a bolt whose washers are all on the nut side gets one per bolt, not two
+    const j2 = { type: 'bolt' as const, to: 'x', count: 2, size: '0.25" × 2-3/4 316 hex bolts down through the leg, nylock nuts and fender washers under the beam' };
+    expect(jointItems(part, j2).map((i) => `${i.qty} ${i.label}`)).toContain('2 316 fender washer 1/4"');
+    // a screw whose heads bear on a plate has no washer
+    const j3 = { type: 'bolt' as const, to: 'x', count: 4, size: '#8-32 x 2" 316 machine screw, pan head on the outside bearing plate (no washer), nylock nut inside' };
+    expect(jointItems(part, j3).some((i) => /washer/.test(i.label))).toBe(false);
+  });
+
   it('classifies fastener size text', () => {
     const part = parts.find((x) => x.id === 'beam-R')!;
     const j = (type: any, size: string, count = 2) => ({ type, to: 'x', count, size });
@@ -616,7 +629,7 @@ describe('price research applied (2026-10-12)', () => {
     expect(pan.basis).toBe('estimate');
     expect(pan.notes).toMatch(/pan-head/);
     const w = line('316 fender washer 1/4"');
-    expect([w.qty, w.unitUsd]).toEqual([40, 0.46]); // 40 x 0.46 = 18.40, under the $27.26 bag of 100 (48 before the hanger bolts were counted once: they are the angle's upright bolts)
+    expect([w.qty, w.unitUsd]).toEqual([32, 0.46]); // 32 x 0.46 = 14.72, under the $27.26 bag of 100 (a nut-side washer only on the hold-down and clamp bolts, whose text puts the washers under the beam)
     const n = line('316 nylon-insert lock nut 1/4-20');
     expect([n.qty, n.unitUsd]).toEqual([20, 0.25]); // 24 before the hanger bolts were counted once
     // a length the research did not read keeps its estimate and says so

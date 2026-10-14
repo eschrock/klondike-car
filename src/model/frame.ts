@@ -25,6 +25,8 @@ export const joistId = (L: { joistX: number[]; king: { x: number } }, i: number)
 export const ladderRailY = (hw: number, side: number, railT: number): [number, number] => [hw + side - railT, hw + side];
 
 const f2 = (v: number) => (Math.round(v * 100) / 100).toString();
+/** The clearance hole for a brake-knee bolt (D-75, D-78): the bolt diameter plus 1/32 in, so 13/32 for the 3/8 in bolts. One number for the rail, the backer, the backing plate and the knee leg, and kinder to repeated dry refits of the removable knee than a tighter 25/64. */
+export const kneeBoltHoleIn = (boltDiaIn: number): number => boltDiaIn + 1 / 32;
 /** Nearest 1/32 in as a fraction string (a bolt clearance hole, e.g. 13/32). */
 const frac32 = (x: number): string => { const n = Math.round(x * 32); let num = n % 32, den = 32; const whole = Math.floor(n / 32); while (num > 0 && num % 2 === 0) { num /= 2; den /= 2; } return num === 0 ? `${whole}` : whole > 0 ? `${whole}-${num}/${den}` : `${num}/${den}`; };
 
@@ -81,7 +83,7 @@ export function buildFrame(ctx: Ctx): Part[] {
       const belowTop = kb.zs.map((z) => L.railTop - z).sort((a, b) => a - b).map(frac32).join('" and ');
       (rail.joints ??= []).push({
         type: 'hole', to: `brake-knee-${tag}`, count: pts.length, diaIn: kb.dia, at: pts,
-        size: `${pts.length} × ${frac32(kb.dia + 1 / 32)}" holes for the ${frac32(kb.dia)}" brake-knee bolts, square through the rail and the glued backer: ${fromRear}" from the rail's finished rear end (the rear transom's inner face), ${belowTop}" below its top edge`,
+        size: `${pts.length} × ${frac32(kneeBoltHoleIn(kb.dia))}" holes for the ${frac32(kb.dia)}" brake-knee bolts, square through the rail and the glued backer: ${fromRear}" from the rail's finished rear end (the rear transom's inner face), ${belowTop}" below its top edge`,
         note: 'D-75: laid out from these numbers at the frame step and drilled from the outer face through the rail and the backer (no knee needed as a template); the knee leg is later drilled from the same positions (its rear face and the rail bottom)',
       });
     }
@@ -148,8 +150,8 @@ export function buildFrame(ctx: Ctx): Part[] {
     parts.push(box(ctx, {
       id: joistId(L, i), partNo: isChain ? 'chain-joist' : 'joist', name: `Crossmember ${i + 1}`, group: 'frame', mat: 'oak', step: STEP.frame, grain: 'y',
       ...span([x - jt / 2, x + jt / 2], [-half, half], [L.deckBot - jD, L.deckBot]),
-      ...(x === L.joistX[L.joistX.length - 1] ? { notes: 'The last joist, under the scarf of the deck to the bow bulkhead (D-54, D-57).' } : {}),
-      ...(isChain ? { notes: `Crossmember 6, the chain crossmember (D-58): ${f2(jt)}" thick (the others are ${f2(L.joistT)}") because the two steering check chains are anchored to it, ${f2(Math.abs(L.chain.anchor[1]))}" either side of the center line, by forged eye bolts through it (the eyes stand out of the front face, the 2" washers and nuts are on the rear face). The chain pull is plan bending toward the rails. ` } : {}),
+      ...(x === L.joistX[L.joistX.length - 1] ? { notes: 'The last crossmember, under the scarf of the deck to the bow bulkhead (D-54, D-57).' } : {}),
+      ...(isChain ? { notes: `The chain crossmember (D-58): ${f2(jt)}" thick (the others are ${f2(L.joistT)}") because the two steering check chains are anchored to it, ${f2(Math.abs(L.chain.anchor[1]))}" either side of the center line, by forged eye bolts through it (the eyes stand out of the front face, the 2" washers and nuts are on the rear face). The chain pull is plan bending toward the rails. ` } : {}),
       ...(meetsHanger || meetsBacker ? { notes: `${meetsHanger ? `Cut back ${f2(p.axleHangerThickIn)}" at each end to clear an axle hanger. ` : ''}${meetsBacker && !meetsHanger ? `Cut back ${f2(bkr.t)}" at each end to clear the brake knee backers (D-57). ` : ''}` } : {}),
     }));
   });

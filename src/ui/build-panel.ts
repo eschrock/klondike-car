@@ -387,7 +387,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
     panel.replaceChildren(h('h2', { class: 'bp-title', id: `bp-h-${section}` }, SECTIONS.find((s) => s.id === section)!.title), ...rendered);
     const ms = performance.now() - t0;
     const stageMs = Object.values(d.timings).reduce((a, v) => a + v, 0);
-    status.textContent = `Params rev ${d.revision} · ${todayISO()} · computed in ${Math.round(stageMs + ms)} ms`;
+    status.textContent = `Design revision ${d.revision} · ${todayISO()} · computed in ${Math.round(stageMs + ms)} ms`;
     if (section === 'assembly') stepUpdate?.(reframe);
     if (weatherRefocus && section === 'bom') {
       weatherRefocus = false;
@@ -820,7 +820,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
         const view = btn('Open large', () => ui.openDrawing(sheetView(sh, sh.partId), view), `Open the ${sh.name} drawing`);
         return h('article', { class: 'bp-file bp-drawing', 'aria-label': sh.name },
           open,
-          h('div', { class: 'bp-file-head' }, ui.chip(sh.partId, sh.name), h('span', { class: 'muted small' }, `${sh.partNo} · ${sh.scale}`)),
+          h('div', { class: 'bp-file-head' }, ui.chip(sh.partId, sh.name), h('span', { class: 'muted small' }, `Drawn at ${sh.scale}`)),
           h('dl', { class: 'bp-facts' }, h('dt', {}, 'Qty'), h('dd', {}, String(sh.qty))),
           ...(sh.makeNote ? [h('p', { class: 'small bp-make' }, sh.makeNote)] : []),
           h('div', { class: 'bp-actions' }, view, btn('Download SVG', () => download(drawingFileName(sh).split('/').pop() ?? 'drawing.svg', SVG_MIME, sh.svg), `Save the ${sh.name} drawing`)));
@@ -975,7 +975,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
     lazy(slot, 'Preparing the files… (a few seconds the first time for each design)', () => {
       const files = d.files;
       return [
-        note(`${files.length} files, generated from the design on screen (params rev ${d.revision}). The zip is uncompressed; open it with any unzip tool.`, 'muted small bp-prose'),
+        note(`${files.length} files, generated from the design on screen (design revision ${d.revision}). The zip is uncompressed; open it with any unzip tool.`, 'muted small bp-prose'),
         table('bp-files', ['File', 'Size', ''], files.map((f) => {
           const size = typeof f.data === 'string' ? new TextEncoder().encode(f.data).length : f.data.length;
           return [h('span', { class: 'bp-fname' }, f.name), bytesLabel(size), btn('Save', () => download(f.name, f.mime, f.data), `Save ${f.name}`)];
