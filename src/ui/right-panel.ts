@@ -1,5 +1,5 @@
-import type { Part, PartGroup } from '../model/types';
-import { centerOfGravity, totalMass } from '../model/mass';
+import type { PartGroup } from '../model/types';
+import type { SummaryStats } from '../analysis/summary';
 import { CONFIGS, type AxleMargin, type Config, type FitCase, type FitResult, type FitWindow, type FitWindows } from '../truck/fit';
 import { h } from './dom';
 
@@ -8,17 +8,6 @@ const TABS: { id: string; label: string; phase: number; blurb: string }[] = [
   { id: 'simulation', label: 'Simulation', phase: 3, blurb: 'Rapier physics: turning, braking and bump scenarios.' },
   { id: 'truck', label: 'Truck fit', phase: 1, blurb: 'The sled in the bed with the tailgate down; collisions highlighted.' },
 ];
-
-/** Part lists for the three summary load cases (built by the caller with buildModel). */
-export interface SummaryInput {
-  empty: Part[];
-  /** Operating rider + cargo (150 lb must pass, D-1). */
-  operating: Part[];
-  /** Goal rider + cargo (200 lb). */
-  goal: Part[];
-  /** Transport configuration, no rider (removables off): the two-person lift (D-7, D-9). */
-  transport: Part[];
-}
 
 /** Design numbers the truck view quotes next to its results. */
 export interface TruckParams {
@@ -34,15 +23,8 @@ const GROUP_LABEL: Record<PartGroup, string> = {
   hardware: 'Hardware', reference: 'Reference',
 };
 
-/** Empty mass per part group, heaviest first (payload and reference parts excluded). */
-export function massByGroup(parts: Part[]): { group: PartGroup; massLb: number }[] {
-  const m = new Map<PartGroup, number>();
-  for (const p of parts) if (!p.payload && p.group !== 'reference') m.set(p.group, (m.get(p.group) ?? 0) + p.massLb);
-  return [...m.entries()].map(([group, massLb]) => ({ group, massLb })).sort((a, b) => b.massLb - a.massLb);
-}
-
 export interface RightPanel {
-  update(summary: SummaryInput, fit: FitResult, params: TruckParams): void;
+  update(summary: SummaryStats, fit: FitResult, params: TruckParams): void;
   /** Mark the row currently shown in the Truck view (null = none). */
   setActiveTruckKey(key: string | null): void;
   /** Feasible-window search state: computing, done, or not available. */
@@ -275,24 +257,15 @@ export function mountRightPanel(host: HTMLElement, opts: RightPanelOptions): Rig
     },
     update(sum, fit, params) {
       lastParams = params;
-      const cases = [
-        { parts: sum.empty, payload: false },
-        { parts: sum.operating, payload: true },
-        { parts: sum.goal, payload: true },
-      ];
-      cases.forEach((c, j) => {
-        const m = totalMass(c.parts, { includePayload: c.payload });
-        const [x, y, z] = centerOfGravity(c.parts, { includePayload: c.payload });
-        [m, x, y, z].forEach((v, r) => (rows[r].cells[j].textContent = f1(v)));
-      });
+      sum.cases.forEach((c, j) => [c.massLb, c.cog[0], c.cog[1], c.cog[2]].forEach((v, r) => (rows[r].cells[j].textContent = f1(v))));
       const sz = (d: { lengthIn: number; widthIn: number; heightIn: number }) => `${f1(d.lengthIn)} × ${f1(d.widthIn)} × ${f1(d.heightIn)} in`;
-      const groups = massByGroup(sum.empty);
+      const groups = sum.groups;
       const total = groups.reduce((t, g) => t + g.massLb, 0);
       groupBody.replaceChildren(
         ...groups.map((g) => h('tr', {}, h('th', {}, GROUP_LABEL[g.group] ?? g.group), h('td', {}, f1(g.massLb)), h('td', { class: 'muted' }, total > 0 ? `${Math.round((100 * g.massLb) / total)}` : '–'))),
         h('tr', { class: 'total' }, h('th', {}, 'Total (empty)'), h('td', {}, f1(total)), h('td', {}, '')),
       );
-      lift.textContent = `${f1(totalMass(sum.transport))} lb`;
+      lift.textContent = `${f1(sum.transportLb)} lb`;
       sizeInstalled.textContent = sz(fit.dims.installed);
       sizeTransport.textContent = sz(fit.dims.removed);
       lastFit = fit;

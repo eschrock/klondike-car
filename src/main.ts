@@ -6,21 +6,23 @@ import { buildModel, type ViewState } from './model';
 import { h } from './ui/dom';
 import { Viewer } from './viewer/viewer';
 import { buildTruckBed } from './truck/bed';
-import { checkTruckFit, computeFeasibleWindows, configParts, type CartView, type FitResult, type FitWindows } from './truck/fit';
+import { configParts, type CartView, type FitResult, type FitWindows } from './truck/fit';
+import { createAnalysisClient } from './analysis/client';
+import AnalysisWorker from './analysis/analysis.worker?worker&inline';
 import { TRANSPORT_VIEW } from './model/removable';
 import type { Part } from './model/types';
 import { mountParamsPanel } from './ui/params-panel';
 import { mountRightPanel } from './ui/right-panel';
 import { mountAnalysisPanel } from './ui/analysis-panel';
 import { mountSimPanel } from './ui/sim-panel';
-import { runChecks } from './analysis';
-import { totalMass } from './model/mass';
 import { mountSimpleView, type SpecFacts } from './ui/simple-view';
 import { mountBuildPanel } from './ui/build-panel';
 import { viewerView, type StepFocus } from './ui/build-helpers';
 import { BUILD_HISTORY_STATE, MODE_KEY, isBuildEntry, parseMode, type Mode } from './ui/mode';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+// The truck fit, the engineering checks, the summary and the rider/cargo sweeps run in Web Workers (src/analysis/engine.ts), so the page stays responsive while they work.
+const analysisWorker = createAnalysisClient(() => new AnalysisWorker());
 
 mountParamsPanel($('params'), store);
 let truckKey: string | null = null; // case shown in the Truck view, if any
@@ -44,7 +46,7 @@ function scheduleWindows(delayMs: number) {
   right.setWindows('computing');
   clearTimeout(windowsTimer);
   windowsTimer = setTimeout(async () => {
-    const w = await computeFeasibleWindows(p, (q, v) => buildModel(q, v as ViewState), () => run !== windowsRun);
+    const w = await analysisWorker.call({ op: 'windows', p, run }).catch(() => null);
     if (run !== windowsRun || !w) return;
     windowsKey = key;
     windowsDone = w;
@@ -189,35 +191,36 @@ buildPanel = mountBuildPanel({ rail: $('build-rail'), main: $('build-main') }, {
 
 // The summary and the fit depend only on the design parameters, so they are cached across view-only changes.
 let cacheKey = '';
-let fit: FitResult;
+let fit: FitResult | undefined;
 let specFacts: SpecFacts = { emptyLb: 0, transportLb: 0 };
-// The checks, the summary and the truck fit are the slow part of a design change (the sled is rebuilt for each and every check runs), so a burst of changes (a slider drag)
-// updates the 3D view at once and recomputes these once, after a short pause. The first design is computed straight away.
+// The checks, the summary and the truck fit are the slow part of a design change (the sled is rebuilt for each and every check runs), so they run in the analysis worker,
+// and a burst of changes (a slider drag) updates the 3D view at once and starts them once, after a short pause. The first design starts straight away.
 const RECOMPUTE_PAUSE_MS = 300;
 let recomputeTimer: ReturnType<typeof setTimeout> | undefined;
+let designRun = 0;
+/** The Build mode's part list is built only while Build mode is showing (and when it is entered). */
+const pushBuildDesign = () => {
+  const p = store.get();
+  buildPanel?.setDesign(p, build(p, { steerDeg: 0, rider: 'none', cargo: false }));
+};
 const recompute = () => {
   recomputeTimer = undefined;
   const p = store.get();
   cacheKey = JSON.stringify(p);
-  fit = checkTruckFit(p, (v) => build(p, v));
-  const summary = {
-    empty: build(p, { steerDeg: 0, rider: 'none', cargo: false }),
-    operating: build(p, { steerDeg: 0, rider: 'operating', cargo: true }),
-    goal: build(p, { steerDeg: 0, rider: 'goal', cargo: true }),
-    transport: build(p, { steerDeg: 0, rider: 'none', cargo: false, ...TRANSPORT_VIEW }),
-  };
-  specFacts = { emptyLb: totalMass(summary.empty), transportLb: totalMass(summary.transport) };
-  right.update(
-    summary,
-    fit,
-    { track: p.rearTrackIn, wb: p.wheelbaseIn, lateralBesideLimit: derived(p).maxTrackBesideWells },
-  );
-  analysis.update(p, runChecks(p, { fit }));
-  buildPanel?.setDesign(p, summary.empty);
-  windowsDone = null;
+  const run = ++designRun;
   right.setWindows(null);
-  scheduleWindows(400);
-  simple.setDesign(p, fit, specFacts);
+  windowsDone = null;
+  analysisWorker.call({ op: 'design', p }).then(({ fit: f, rows, stats }) => {
+    if (run !== designRun) return; // a newer design is already on its way
+    fit = f;
+    specFacts = { emptyLb: stats.emptyLb, transportLb: stats.transportLb };
+    right.update(stats, f, { track: p.rearTrackIn, wb: p.wheelbaseIn, lateralBesideLimit: derived(p).maxTrackBesideWells });
+    analysis.update(p, rows);
+    if (mode === 'build') pushBuildDesign();
+    scheduleWindows(0);
+    simple.setDesign(p, f, specFacts);
+    if (truckKey) render(); // the Truck view shows this design's placement
+  }, (err) => console.error('analysis failed', err));
 };
 const render = () => {
   const p = store.get();
@@ -233,14 +236,11 @@ const render = () => {
   const key = JSON.stringify(p);
   if (key !== cacheKey) {
     clearTimeout(recomputeTimer);
-    if (!fit) recompute();
+    if (!cacheKey) recompute();
     else recomputeTimer = setTimeout(recompute, RECOMPUTE_PAUSE_MS);
-  } else {
-    // Simple view: only the view changed; it caches its own sweep.
-    simple.setDesign(p, fit, specFacts);
   }
 
-  const tc = truckKey ? fit.cases.find((c) => c.key === truckKey) : undefined;
+  const tc = truckKey && fit ? fit.cases.find((c) => c.key === truckKey) : undefined;
   exitTruck.hidden = !tc;
   if (tc && tc.placement) {
     if (!sim?.active) viewer.update(configParts(tc.config, (v) => build(p, v)));
@@ -306,6 +306,8 @@ function focusAnalysisRow(checkId: string) {
 
 const simple = mountSimpleView($('simple-left'), $('simple-right'), {
   store,
+  sweep: (p, range) => analysisWorker.call({ op: 'sweep', p, range }),
+  cargo: (p) => analysisWorker.call({ op: 'cargo', p }),
   onLight(_light, checkId) {
     simpleScrollY = window.scrollY;
     setMode('advanced', { fromSimple: true });
@@ -357,6 +359,7 @@ function setMode(next: Mode, opts: { fromSimple?: boolean; persist?: boolean } =
   }
   simple.setVisible(mode === 'simple');
   // Entering Build computes the section on screen; leaving it sends stepFocus null (which restores the full model) before the render below.
+  if (mode === 'build') pushBuildDesign();
   buildPanel?.setActive(mode === 'build');
   if (was === 'build' && mode !== 'build') window.scrollTo({ top: 0 }); // the Build page may have been scrolled far down
   if ((mode === 'build') !== viewerInBuild) { viewerInBuild = mode === 'build'; viewer.setBuildMode(viewerInBuild); }

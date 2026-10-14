@@ -202,8 +202,12 @@ export function riderSweep(p: Params, opts: SweepOptions = {}): SweepResult {
   return { ...c, operating: at.point, operatingChecks: at.checks, ...safeRange(c.points, at.point) };
 }
 
+/** The cache key of the sweep for this design (rider masses ignored): equal keys mean `riderSweep` returns at once. */
+export function riderSweepKey(p: Params, opts: SweepOptions = {}): string {
+  return `${designKey(p)}|${opts.fromLb ?? 50}|${opts.toLb ?? 250}|${opts.stepLb ?? 10}`;
+}
+
 /** True when a sweep for this design (rider masses ignored) is already cached, so `riderSweep` returns at once. */
 export function isRiderSweepCached(p: Params, opts: SweepOptions = {}): boolean {
-  const ck = `${designKey(p)}|${opts.fromLb ?? 50}|${opts.toLb ?? 250}|${opts.stepLb ?? 10}`;
-  return coreCache.has(ck);
+  return coreCache.has(riderSweepKey(p, opts));
 }

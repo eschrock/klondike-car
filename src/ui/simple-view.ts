@@ -9,11 +9,11 @@
 import { PARAM_DEFS, steerGeometry, type ParamDef, type Params } from '../params';
 import type { FitResult } from '../truck/fit';
 import { SEVERITY, type Status } from '../analysis/types';
-import { LIGHTS, isRiderSweepCached, lightOf, riderSweep, type Light, type SweepResult } from '../analysis/rider-sweep';
+import { LIGHTS, lightOf, riderSweepKey, type Light, type SweepResult } from '../analysis/rider-sweep';
 import type { Store } from '../state';
 import { h } from './dom';
 import { LIGHT_CHECK_IDS, LIGHT_TITLE, cargoText, headline, lightTexts, limitLine, limiterAdvice, restingText, weightNote } from './simple-text';
-import { cargoCapacity, isCargoCapacityCached, type CargoCapacity } from '../analysis/cargo-capacity';
+import { cargoCapacityKey, type CargoCapacity } from '../analysis/cargo-capacity';
 import './simple-view.css';
 
 export type DemoId = 'tilt' | 'turn' | 'bump' | 'brake';
@@ -44,6 +44,9 @@ export interface SimpleViewDeps {
   onLight(light: Light, checkId: string): void;
   /** A "watch it" demo was clicked: open Advanced → Simulation with this scenario at this rider weight. */
   onDemo(id: DemoId, riderLb: number): void;
+  /** The rider sweep and the cargo sweep for a design, computed off the page's thread (the analysis worker). */
+  sweep(p: Params, range: { fromLb: number; toLb: number; stepLb: number }): Promise<SweepResult>;
+  cargo(p: Params): Promise<CargoCapacity>;
 }
 
 export interface SimpleView {
@@ -349,21 +352,31 @@ export function mountSimpleView(leftHost: HTMLElement, rightHost: HTMLElement, d
   let visible = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
+  // The sweeps run in the analysis worker; the card says "checking…" only for a design whose sweep has not come back before (a rider-weight change on a known design answers at once).
+  const RANGE = { fromLb: FROM, toLb: TO, stepLb: STEP };
+  const sweepsDone = new Set<string>();
+  const cargoDone = new Set<string>();
+  let run = 0;
   const compute = () => {
     timer = undefined;
     if (!pendingDesign || !visible) return;
     const { p, fit, spec } = pendingDesign;
-    const sweep = riderSweep(p, { fit, fromLb: FROM, toLb: TO, stepLb: STEP });
-    card.update({ p, fit, spec, sweep });
-    // The payload sweep is about a dozen runs of the checks: let the rider answer paint first, then fill the cargo card (cached by the design).
-    cardCargo(p);
+    const mine = ++run;
+    deps.sweep(p, RANGE).then((sweep) => {
+      sweepsDone.add(riderSweepKey(p, RANGE));
+      if (mine !== run || !visible) return;
+      card.update({ p, fit, spec, sweep });
+      // The payload sweep is about a dozen runs of the checks: let the rider answer paint first, then fill the cargo card.
+      cardCargo(p, mine);
+    }, () => { /* the worker failed twice: the card stays on "checking…" */ });
   };
-  let cargoTimer: ReturnType<typeof setTimeout> | undefined;
-  const cardCargo = (p: Params) => {
-    clearTimeout(cargoTimer);
-    if (isCargoCapacityCached(p)) { card.updateCargo(cargoCapacity(p)); return; }
-    card.updateCargo(null);
-    cargoTimer = setTimeout(() => { if (visible) card.updateCargo(cargoCapacity(p)); }, 30);
+  const cardCargo = (p: Params, mine: number) => {
+    const key = cargoCapacityKey(p);
+    if (!cargoDone.has(key)) card.updateCargo(null);
+    deps.cargo(p).then((c) => {
+      cargoDone.add(key);
+      if (mine === run && visible) card.updateCargo(c);
+    }, () => {});
   };
 
   return {
@@ -372,7 +385,7 @@ export function mountSimpleView(leftHost: HTMLElement, rightHost: HTMLElement, d
       if (!visible) return;
       clearTimeout(timer);
       // A rider-weight change on a cached design needs no wait; anything else is debounced behind "checking…".
-      if (isRiderSweepCached(p, { fit, fromLb: FROM, toLb: TO, stepLb: STEP })) { compute(); return; }
+      if (sweepsDone.has(riderSweepKey(p, RANGE))) { compute(); return; }
       card.pending(p);
       timer = setTimeout(compute, DEBOUNCE_MS);
     },

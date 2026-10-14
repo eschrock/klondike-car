@@ -80,9 +80,14 @@ function designKey(p: Params): string {
   return JSON.stringify(q);
 }
 
+/** The cache key of the sweep for this design: equal keys mean `cargoCapacity` returns at once. */
+export function cargoCapacityKey(p: Params): string {
+  return `${designKey(p)}|${p.cargoPayloadLb}`;
+}
+
 /** True when the sweep for this design is already cached, so `cargoCapacity` returns at once. */
 export function isCargoCapacityCached(p: Params): boolean {
-  return cache.has(`${designKey(p)}|${p.cargoPayloadLb}`);
+  return cache.has(cargoCapacityKey(p));
 }
 
 export function clearCargoCapacityCache(): void {

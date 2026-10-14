@@ -130,7 +130,8 @@ One parameter file drives everything.
 ```
 src/params.ts            every design number, with unit, range, status and a note; validateParams()
 src/model/               params -> Part[] (plain data, no three.js): body, front end, rear mount, brake, seat, storage, joinery, mass
-src/analysis/            runChecks(params) -> engineering rows; riderSweep; cargoCapacity (plain TS)
+src/analysis/            runChecks(params) -> engineering rows; riderSweep; cargoCapacity (plain TS); engine.ts runs
+                         them (and the truck fit) in two Web Workers (client.ts, analysis.worker.ts) so the page never waits
 src/sim/                 Rapier rigid-body sim of the sled (qualitative)
 src/truck/               truck-bed fit check
 src/build/               build outputs: cut list, nesting, BOM and prices, Shaper SVGs, forms, drawings, assembly, finishing, verify, zip
