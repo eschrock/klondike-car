@@ -255,7 +255,9 @@ describe('D-78 brake-mount in pins mode', () => {
     const rows = mount.details!.filter((d) => /pull-out at the ball-lock/.test(d.name));
     expect(rows.length).toBe(2);
     for (const r of rows) { expect(r.info).toBe(true); expect(r.name).toMatch(/^VERIFY/); expect(r.limit).toBe(pp.brakePinRetentionLbf); }
-    expect(mount.details!.filter((d) => d.info).length).toBe(2);
+    expect(mount.details!.filter((d) => d.info && /^VERIFY/.test(d.name)).length).toBe(2);
+    // with the Dominos the glue-alone tension and shear rows are reference only
+    expect(mount.details!.filter((d) => d.info && /glue alone/.test(d.name)).length).toBe(2);
     expect(mount.label).not.toMatch(/VERIFY/);
     const pl = goalL.map((L) => pinPull(pp, g, L.Rk));
     const needB = Math.max(...pl.map((x) => x.B)), needT = Math.max(...pl.map((x) => x.T));
@@ -287,11 +289,12 @@ describe('D-78 brake-mount in pins mode', () => {
     expect(det(csP, 'brake-mount', 'tab in-plane bending').limit).toBe(al.oakBend);
   });
 
-  it('the flange takes the pull: bearing on the counterbore floor by the ring outside the sleeve, and the knee-side sleeves are checked on their epoxy', () => {
+  it('the bearing washer takes the pull: bearing on the counterbore floor by its ring (washer.ringArea), and the knee-side sleeves are checked on their epoxy', () => {
     const pl = goalL.map((L) => pinPull(pp, g, L.Rk));
-    const ring = (Math.PI / 4) * (pn.flange.od ** 2 - sOd ** 2);
-    close(det(csP, 'brake-mount', 'hull flange bearing at pin B').value, Math.max(...pl.map((x) => x.B)) / ring, 0.02);
-    close(det(csP, 'brake-mount', 'hull flange bearing at pin T').value, Math.max(...pl.map((x) => x.T)) / ring, 0.02);
+    const ring = pn.washer.ringArea;
+    expect(ring).toBeGreaterThan(1);
+    close(det(csP, 'brake-mount', 'hull bearing washer at pin B').value, Math.max(...pl.map((x) => x.B)) / ring, 0.02);
+    close(det(csP, 'brake-mount', 'hull bearing washer at pin T').value, Math.max(...pl.map((x) => x.T)) / ring, 0.02);
     close(det(csP, 'brake-mount', 'knee-side sleeve at pin B').value, Math.max(...pl.map((x) => x.B)) / (Math.PI * sOd * g.knee.legT), 0.02);
     expect(det(csP, 'brake-mount', 'counterbore at pin T').limit).toBe(pp.brakePinEdgeIn);
   });
@@ -306,11 +309,31 @@ describe('D-78 brake-mount in pins mode', () => {
     expect(mount.how).toMatch(/only 0\.10" of oak between the sleeve and the glued UPRIGHT layers/);
   });
 
-  it('at the defaults pins mode FAILS (reported, not tuned): the hull flange, the tab glue patch and the box-rib splitting are over their limits, and the pin Z\' rows still pass', () => {
+  it('at the defaults pins mode FAILS (reported, not tuned): the hull bearing washer, the tab glue patch and the box-rib splitting are over their limits, and the pin Z\' rows still pass', () => {
     const over = mount.details!.filter((d) => !d.info && d.util > 1).map((d) => d.name);
     expect(mount.status).toBe('fail');
-    for (const k of ['hull flange bearing at pin B', 'tab glue patch: peak tension', 'box rib block at pin T (brake-rib): splitting']) expect(over.some((n) => n.startsWith(k)), k).toBe(true);
+    for (const k of ['hull bearing washer at pin B', 'tab joint with 2 Dominos: shear', 'tab glue patch: peak compression', 'box rib block at pin T (brake-rib): splitting']) expect(over.some((n) => n.startsWith(k)), k).toBe(true);
     for (const k of ['pin T lateral load', 'pin B lateral load', 'pin steel']) expect(over.some((n) => n.startsWith(k)), k).toBe(false);
+  });
+
+  it('the Dominos are credited on top of the glue left around their mortises: peel and shear resultants vs glue + tenon capacity, with the assumed (verify) bond stress', () => {
+    const dom = pn.tab.dominos!;
+    expect(dom).toBeTruthy();
+    expect(dom.count).toBe(2);
+    expect(PARAM_DEFS.brakeDominoBondPsi.status).toBe('verify');
+    expect(PARAM_DEFS.brakeDominoBondPsi.note).toMatch(/ASSUMED/);
+    const A = pn.tab.patch.area, aGlue = A - dom.count * dom.tIn * dom.wIn;
+    const pull = pp.brakeDominoBondPsi * 2 * (dom.tIn + dom.wIn) * dom.depthEach;
+    const t = det(csP, 'brake-mount', 'tab joint with 2');
+    close(t.limit, (al.oakShear / 3) * aGlue + dom.count * pull, 1e-9);
+    const sh = det(csP, 'brake-mount', 'tab joint with 2 Dominos: shear');
+    close(sh.limit, al.oakShear * 0.25 * aGlue + dom.count * Math.min(pull, al.oakPerp * dom.wIn * dom.depthEach), 1e-9);
+    const pl = goalL.map((L) => pinPull(pp, g, L.Rk));
+    close(det(csP, 'brake-mount', 'peel / tension resultant').value, Math.max(...pl.map((x) => (x.tens * A) / 2)), 0.02);
+    close(sh.value, Math.max(...pl.map((x) => x.shear * A)), 0.02);
+    expect(mount.how).toMatch(/ASSUMED/);
+    // without Dominos the joint rows are absent
+    expect(det(csP, 'brake-mount', 'tab glue patch: peak tension').limit).toBeCloseTo(al.oakShear / 3, 6);
   });
 
   it('Standard and Extreme weather both produce the pins rows', () => {
@@ -331,7 +354,7 @@ describe('D-78 brake-abuse follows the pins mount', () => {
     expect(ha.some((h) => Math.abs(h.Tmag - d.value) <= 0.01 * h.Tmag)).toBe(true);
     expect(d.limit).toBeGreaterThan(det(csP, 'brake-mount', 'pin T lateral load').limit);
     expect(ab.details!.filter((x) => /^mount: pin /.test(x.name)).length).toBeGreaterThan(5);
-    expect(ab.details!.filter((x) => x.info).length).toBe(2);
+    expect(ab.details!.filter((x) => x.info && /VERIFY/.test(x.name)).length).toBe(2);
     expect(ab.label).toMatch(/abuse/);
     expect(ab.limit).not.toBe(pp.brakePinRetentionLbf * 2);
   });
@@ -344,10 +367,10 @@ describe('D-78 brake-abuse follows the pins mount', () => {
 describe('D-78 the box rib carries the top pin with the D-ring (lash-load, side-lateral)', () => {
   const sl = sideLateral(ctx);
   const pr = sl.pinRib!;
-  it('exists only with pins, uses the 2 in block width (rib.blockW) for S and the 0.5 in sleeve hole for the net section', () => {
+  it('exists only with pins, uses the 3 in block width (rib.blockW) for S and the 0.5 in sleeve hole for the net section', () => {
     expect(pr).toBeDefined();
     expect(pr.w).toBe(pn.rib.blockW);
-    expect(pr.w).toBeCloseTo(2, 6);
+    expect(pr.w).toBeCloseTo(3, 6);
     close(pr.S, (pr.w * pr.depth ** 2) / 6, 1e-12);
     close(pr.Snet, ((pr.w - pn.sleeveOd) * pr.depth ** 2) / 6, 1e-12);
     close(pr.zT, pn.T.z - ctx.L.deckTop, 1e-12);
@@ -359,7 +382,7 @@ describe('D-78 the box rib carries the top pin with the D-ring (lash-load, side-
     close(pr.pull, Math.max(...variants.map((L) => pinPull(pp, g, L.Rk).T)), 1e-9);
     expect(pr.pull).toBeGreaterThan(det(csP, 'brake-mount', 'pin T lateral load').value);
   });
-  it('lash-load and side-lateral carry the sleeve-hole rows (the 2 in block keeps the hole inside the limit); the box tie with the envelope pull is what fails in side-lateral', () => {
+  it('lash-load and side-lateral carry the sleeve-hole rows (the 3 in block keeps the hole inside the limit); the box tie with the envelope pull is what fails in side-lateral', () => {
     const l = det(csP, 'lash-load', 'knee\'s top-pin sleeve hole');
     const s = det(csP, 'side-lateral', 'D-ring rating on the box rib');
     close(l.value, (pr.ribFRating * pr.lever) / pr.Snet);

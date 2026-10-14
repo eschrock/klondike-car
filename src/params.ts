@@ -1612,6 +1612,12 @@ const defs = {
     note: 'D-78: NDS C_D on the pin capacity. 1.0 because the hold load (a loaded sled parked on the slope, held by the flaps) is sustained, not an impact; the stomp case is checked at yield level instead. The impact factor ndsLoadDurationFactor (1.6) used for the curb-strike rows is NOT used here.',
   },
 
+  brakeDominoBondPsi: {
+    label: 'Knee tab Domino tenon: epoxy shear / pull-out stress (allowable)', group: 'brake', unit: 'psi',
+    default: 210, min: 100, max: 800, step: 10, status: 'verify', ref: 'D-78',
+    note: 'D-78 ASSUMED VALUE, TO CONFIRM (no manufacturer rating is used or invented): the allowable stress on the epoxied side surface of a Festool Domino tenon (beech) in oak, for pull-out and for lateral shear. It is set equal to the repo\'s glue limit for oak (F_v x 0.25, about 212 psi, brake-pivot) so the Dominos earn only what the glue line already earns on their surface. Capacity per Domino = this x 2 (thickness + width) x depth in the shallower member; lateral shear is also capped by oak bearing on the tenon\'s width x depth. Confirm with a pull test on a scrap tab and knee before relying on it.',
+  },
+
   brakeBungeeTensionLbf: {
     label: 'Return bungee tension, released', group: 'brake', unit: 'lbf',
     default: 3, min: 1, max: 10, step: 0.5, status: 'assumed', ref: 'D-57',

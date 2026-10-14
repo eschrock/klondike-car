@@ -846,10 +846,10 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
   let pinsHere: ReturnType<typeof brakeOf>['pins'];
   try { pinsHere = /^(rail|side-rib-box|brake-tab|brake-knee)$/.test(part.partNo ?? '') ? brakeOf(p).pins : undefined; } catch { pinsHere = undefined; } // a call without the design (partDims of one part) has no layout
   if (pinsHere && part.partNo === 'rail' && feats.some((f) => f.k === 'hole' && f.to.some((t) => /^brake-sleeve-B-hull/.test(t)))) {
-    notes.push(`The one hole is for the bottom-pin bushing and is oversize on purpose (5/8"): the bushing is bedded in epoxy at the knee step, with the real knee pinned on, so it lines up with the knee's own sleeve. Lay the rail flat on the drill press, OUTBOARD face down, top edge against a fence, measured from the rear end (the rail is still 1/2" long there). Cut the ${frac(pinsHere.flange.cboreDia)} counterbore, ${frac(pinsHere.flange.cboreDepth)} deep, in the INBOARD face (the face that is up) first, then drill through. The right rail is the mirror image.`);
+    notes.push(`The one hole is for the bottom-pin sleeve and is oversize on purpose (5/8"): the sleeve is bedded in epoxy at the knee step, with the real knee clamped on, so it lines up with the knee's own sleeve. Lay the rail flat on the drill press, OUTBOARD face down, top edge against a fence, measured from the rear end (the rail is still 1/2" long there). Cut the ${frac(pinsHere.washer.cboreDia)} counterbore for the bearing washer, ${frac(pinsHere.washer.cboreDepth)} deep, in the INBOARD face (the face that is up) first, then drill through. The right rail is the mirror image.`);
   }
   if (pinsHere && part.partNo === 'side-rib-box' && feats.some((f) => f.k === 'hole' && f.to.some((t) => /^brake-sleeve-T-hull/.test(t)))) {
-    notes.push(`The one hole is for the top-pin bushing and sits in the full-width BLOCK, measured from the foot of the rib (the top is cut at the sheer slope, so do not measure down from it). Do not drill it on the bench: drill it 5/8" oversize after the rib is glued in, through the block, the filler and the web together, with a drill block square to the side, after the ${frac(pinsHere.flange.cboreDia)} counterbore (${frac(pinsHere.flange.cboreDepth)} deep) in the inner face. The bushing is bedded in epoxy around the knee's own sleeve, with the knee pinned on at the bottom pin.`);
+    notes.push(`The one hole is for the top-pin sleeve and sits in the full-width BLOCK, measured from the foot of the rib (the top is cut at the sheer slope, so do not measure down from it). Do not drill it on the bench: drill it 5/8" oversize after the rib is glued in, through the block, the filler and the web together, with a drill block square to the side, after the ${frac(pinsHere.washer.cboreDia)} counterbore for the bearing washer (${frac(pinsHere.washer.cboreDepth)} deep) in the inner face. The sleeve is bedded in epoxy around the knee's own sleeve, with the knee pinned on at the bottom pin.`);
   }
   // D-78: the tab is glued to the knee first; both pin holes in the knee unit are then drilled from the pin-hole plate.
   if (pinsHere && part.partNo === 'brake-tab') {
@@ -879,7 +879,7 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
       const f = feats[i];
       if (f.k === 'hole' && f.to.some((t) => /^brake-pin-/.test(t)) && !f.to.some((t) => /^brake-sleeve-/.test(t)) && f.pts.every((q) => sleeveHoles.some((h) => h.pts.some((e) => samePerp(e, q, h.axis))))) feats.splice(i, 1);
     }
-    // The hole sizes the shop drills: 33/64" for a 1/2" tube (a glue line around it), 5/8" for a hull bushing (bedded in epoxy around the knee's sleeve).
+    // The hole sizes the shop drills: 33/64" for a 1/2" tube (a glue line around it), 5/8" for a hull sleeve (bedded in epoxy around the knee's sleeve).
     for (const h of sleeveHoles) {
       const hull = h.to.some((t) => /sleeve-[BT]-hull/.test(t));
       const nd = hull ? 0.625 : h.dia + 1 / 64;
@@ -890,7 +890,7 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
   // A sleeve is a plain piece of tube: its drawing is its length, outside and inside diameter. The holes the rail, the rib, the tab and the knee need for it are on THEIR drawings.
   if (/^brake-sleeve-/.test(part.partNo ?? '')) {
     feats.length = 0;
-    notes.push('A piece of stainless tube or a flanged bushing, cut to length on the metal bandsaw: no holes. Cut it square, a hair short rather than long, and deburr both ends. Open the bore with a reamer (.377 to .378 inch) on the drill press: this only enlarges the bore of a bought piece by a couple of thousandths. The 3/8" pin must slide in with about five thousandths of an inch of play: try the first pin in every sleeve before any epoxy goes on.');
+    notes.push('A piece of stainless tube, cut to length on the metal bandsaw: no holes. Cut it square, a hair short rather than long, and deburr both ends. Open the bore with a reamer (.377 to .378 inch) on the drill press: this only enlarges the bore of a bought piece by a couple of thousandths. The 3/8" pin must slide in with about five thousandths of an inch of play: try the first pin in every sleeve before any epoxy goes on.');
   }
 
   // Merge identical hole features (same spec and axis) across joints; drop a hole whose points another hole already has.
