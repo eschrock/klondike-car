@@ -36,10 +36,10 @@ describe('the D-58 tracks', () => {
 describe('tip angles before (35.5 / 35.5 in) and after (34 1/2 / 32 in), the straight tip limit (40 degrees in D-58, 35 since D-67)', () => {
   const tip = (cs: ReturnType<typeof run>, k: 'operating' | 'goal' | 'cargo') => row(cs, 'tip-straight').cases![k]!.value;
   it('150 lb rider 50.9 -> 48.7 deg; 200 lb rider 49.4 -> 47.3 deg; both far above the limit', () => {
-    expect(tip(old, 'operating')).toBeCloseTo(50.72, 1); // D-77: 50.72 (the straps and knee roofs); D-74: 50.66 (the 2-1/8 in laminated parts, 1.3 lb lighter);  50.73 before; 50.79 before D-65 (the lighter, shorter brake flaps), 50.84 before D-62 // 50.9 before D-60 dropped the four foot-block cleats (a little less mass forward)
-    expect(tip(nw, 'operating')).toBeCloseTo(48.56, 1); // D-77: 48.56; D-74: 48.50;  48.57 before; 48.62 before D-65, 48.7 before D-62
-    expect(tip(old, 'goal')).toBeCloseTo(49.29, 1); // D-77: 49.29; D-74: 49.23 (49.30 before)
-    expect(tip(nw, 'goal')).toBeCloseTo(47.13, 1); // D-77: 47.13; D-74: 47.08 (47.14 before)
+    expect(tip(old, 'operating')).toBeCloseTo(51.17, 1); // D-83: 51.17 (the 1-1/2 in EVA seat pads lower the rider 1/2 in); D-77: 50.72 (the straps and knee roofs); D-74: 50.66 (the 2-1/8 in laminated parts, 1.3 lb lighter);  50.73 before; 50.79 before D-65 (the lighter, shorter brake flaps), 50.84 before D-62 // 50.9 before D-60 dropped the four foot-block cleats (a little less mass forward)
+    expect(tip(nw, 'operating')).toBeCloseTo(49.01, 1); // D-83: 49.01; D-77: 48.56; D-74: 48.50;  48.57 before; 48.62 before D-65, 48.7 before D-62
+    expect(tip(old, 'goal')).toBeCloseTo(49.79, 1); // D-83: 49.79; D-77: 49.29; D-74: 49.23 (49.30 before)
+    expect(tip(nw, 'goal')).toBeCloseTo(47.63, 1); // D-83: 47.63; D-77: 47.13; D-74: 47.08 (47.14 before)
     for (const k of ['operating', 'goal'] as const) expect(tip(nw, k)).toBeGreaterThan(40 + 5);
     expect(row(nw, 'tip-straight').statusOperating).toBe('pass');
     expect(row(nw, 'tip-straight').statusGoal).toBe('pass');

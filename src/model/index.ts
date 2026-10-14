@@ -14,7 +14,7 @@ import { isBrakeKit, isChockKit, isLightKit } from './removable';
 import { buildBridle } from './bridle';
 import { buildPivot } from './pivot';
 import { multiply, rotationZ, translation } from './mat4';
-import { buildStorage } from './storage';
+import { addStorageDrainHoles, buildStorage } from './storage';
 import { addSideRibJoints, buildSideRibs } from './side-ribs';
 import type { Part } from './types';
 
@@ -62,6 +62,7 @@ function buildModelUncached(input: Params, view: ViewState): Part[] {
   ];
   applyJoinery(ctx, parts); // structured joints for the hull and frame (D-35)
   addSideRibJoints(ctx, parts); // D-76: the web's and the joists' own ends of the rib glue and knee screws
+  addStorageDrainHoles(ctx, parts); // D-83: the Standard box drains are drilled holes, recorded on the deck or the box floor
   addGripBandJoints(ctx.L, parts); // the gunwale bands' own ends of the grab-board screws and their backing-strip holes
   addTransomEyeJoints(parts); // the transom's own end of the return-cord eye and snap-hook joints (the ring stands off its face)
   addFlatPinDeckHoles(ctx.p, ctx.L, parts); // the flat-position seat-pin clearance holes through the deck

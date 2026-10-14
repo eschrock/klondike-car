@@ -175,7 +175,7 @@ function readme(d: BuildData, others: string[]): string {
   lines.push('============================================');
   lines.push(`Generated: ${d.opts.date ?? '(date not given)'}`);
   lines.push(`Design revision: ${d.revision} (a code made from every design number; the form title blocks print the same stamp)`);
-  lines.push(`Weather spec: ${SPEC_NAME[d.bom.spec]} (${d.bom.spec === 'standard' ? 'garage-kept: 304 / 18-8 fasteners, beech Dominos, Titebond III, epoxy only where it earns it, spar urethane' : 'stored outside or near salt: 316, Sipo Dominos, epoxy everywhere, marine varnish'}). Thin sheet: ${d.bom.thinSheetName}.`);
+  lines.push(`Weather spec: ${SPEC_NAME[d.bom.spec]} (${d.bom.spec === 'standard' ? 'garage-kept: 304 / 18-8 fasteners, beech Dominos, Titebond III, epoxy only where it earns it, clear spar urethane, no stain' : 'stored outside or near salt: 316, beech Dominos epoxied in, epoxy everywhere, marine varnish'}). Thin sheet: ${d.bom.thinSheetName}.`);
   const wl = weatherLine(d.bom.weatherCompare);
   if (wl) lines.push(wl);
   if (d.opts.link) lines.push(`Design link: ${d.opts.link}`);

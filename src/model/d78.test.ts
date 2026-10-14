@@ -130,8 +130,8 @@ describe('D-78 dry fit: no epoxy against the rail', () => {
 });
 
 describe('D-78 mass', () => {
-  it('the tightening param is 60 lbf-in, snug plus a quarter turn', () => {
-    expect(fixed.kneeBoltTightenLbIn).toBe(60);
+  it('the tightening param is 35 lbf-in, snug plus a quarter turn', () => {
+    expect(fixed.kneeBoltTightenLbIn).toBe(35);
     expect(PARAM_DEFS.kneeBoltTightenLbIn.status).toBe('assumed');
     expect(PARAM_DEFS.kneeBoltTightenLbIn.note).toMatch(/quarter turn/);
   });

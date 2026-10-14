@@ -13,7 +13,7 @@ import { innerHalfWidth, samples, sideSlopeAt, sideTopAt, type Layout } from './
 import { planWallGeometry } from './plan-wall';
 import { SIGN_X_MAX_IN, brakeGeometry } from './brake-layout';
 import { compose } from './mat4';
-import { thinSheet } from '../params';
+import { thinSheet, WEATHER_SPEC } from '../params';
 import type { Dims, EdgeCondition, Mat4, Part, PartGroup, Vec2, Vec3 } from './types';
 
 /** Cosmetic sampling of the curved outlines (D-44): transom crown, rounded corners; the sloped sides and the curl. */
@@ -59,7 +59,7 @@ function circleLoop(cy: number, cz: number, r: number, n: number): Vec2[] {
 // ── Scuppers (build review M7, D-43) ──
 const SCUPPER_MASS_LB = 0.03;
 /** Hole bottom sits this far above the deck surface (so standing water drains to it); the nipple sticks out this far past the chine. */
-const SCUPPER_BELOW_SURFACE_IN = 0.05;
+export const SCUPPER_BELOW_SURFACE_IN = 0.05;
 const SCUPPER_STICKOUT_IN = 0.25;
 const SCUPPER_END_INSET_IN = 0.5;
 
@@ -421,8 +421,8 @@ export function buildBody(ctx: Ctx): Part[] {
     }
   }
 
-  // ── Scuppers: 3/8" epoxy-lined holes THROUGH THE CHINE at deck level, with stainless nipples (build review M7, D-43) ──
-  for (const { x, zone, deckZ, hw, tagPos } of scupperSites(ctx)) {
+  // ── Scuppers: 3/8" epoxy-lined holes THROUGH THE CHINE at deck level (build review M7, D-43). Extreme spec: with stainless nipples; Standard: the bare epoxy-lined hole, recorded as hole joints (D-83, joinery.ts) ──
+  if (p.weatherSpec === WEATHER_SPEC.extreme) for (const { x, zone, deckZ, hw, tagPos } of scupperSites(ctx)) {
     for (const { s, tag } of SIDES) {
       parts.push(cylinder(ctx, {
         id: `scupper-${tagPos}-${tag}`, partNo: 'scupper', name: `Deck scupper ${tagPos} ${tag}`, group: 'body', mat: 'fixed', kind: 'purchased', material: `${stainless(p)} drain nipple`, massLb: SCUPPER_MASS_LB,

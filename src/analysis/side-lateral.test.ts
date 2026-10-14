@@ -16,10 +16,11 @@ const ctx = ctxFor();
 
 describe('the model by hand', () => {
   const m = sideModel(ctx);
-  it('gunwale band beam EI = E_oak x 1.5 (0.625³ - 0.21³) / 12 + E_ply x 1.5 x 0.21³ / 12 = 53,534 lb·in² (the study: 53,500)', () => {
-    const want = (1.78e6 * 1.5 * (0.625 ** 3 - 0.21 ** 3)) / 12 + (1.1e6 * 1.5 * 0.21 ** 3) / 12;
+  it('gunwale band beam EI = E_oak x 1.5 (0.625³ - t³) / 12 + E_ply x 1.5 t³ / 12 for the 6 mm (0.236 in) Baltic birch web (D-80; 53,534 with the D-73 0.21 in white oak ply)', () => {
+    const t = 0.236;
+    const want = (1.78e6 * 1.5 * (0.625 ** 3 - t ** 3)) / 12 + (1.3e6 * 1.5 * t ** 3) / 12;
     expect(m.EI).toBeCloseTo(want, 6);
-    expect(m.EI).toBeCloseTo(53534, 0);
+    expect(m.EI).toBeCloseTo(53533, -1);
   });
   it('strip stiffness at the rear (13 in tall) is under 1 lbf/in per inch, at the bow tens (the study: 0.7 and 68)', () => {
     expect(Math.min(...m.k)).toBeGreaterThan(0.4);
@@ -33,7 +34,7 @@ describe('the model by hand', () => {
     expect(1 / r.K).toBeGreaterThan((r.H * r.H) / KNEE_ROT);
     expect(r.K).toBeGreaterThan(4000);
     expect(r.K).toBeLessThan(4800);
-    expect(r.S).toBeCloseTo((0.75 * (0.75 + 0.2075) ** 2) / 6, 9); // the rib and its filler alone, no web flange
+    expect(r.S).toBeCloseTo((0.75 * (0.75 + 0.1945) ** 2) / 6, 9); // the rib and its filler alone, no web flange (bands 0.1945 in on the 6 mm sheet, D-80)
   });
 });
 
@@ -68,25 +69,25 @@ describe('the side-lateral row (D-76)', () => {
     expect(s.push.noRibsFixed).toBeGreaterThan(0.2);
     expect(s.push.noRibsPinned / s.push.wPinned).toBeGreaterThan(3);
   });
-  it('passes; the knee toe screws or the rating rib bending govern, about 0.78', () => {
+  it('passes; the knee toe screws or the rating rib bending govern, about 0.65 (0.78 before D-83: the D-ring rating is 233 lbf now, not 300)', () => {
     expect(row.status).toBe('pass');
-    expect(row.util!).toBeGreaterThan(0.7);
+    expect(row.util!).toBeGreaterThan(0.55);
     expect(row.util!).toBeLessThan(0.85);
     expect(row.details!.every((d) => d.util < 0.8)).toBe(true);
     expect(row.statusCargo).toBe('pass');
     expect(row.utilCargo!).toBeLessThan(0.4); // 79 lbf straps at every D-ring
   });
-  it('the knee screws by hand: NDS 1380 G² D = 88.06 lbf/in for a #6, x 1.28 in past the tip lead x C_M 0.7 = 78.8 lbf per screw', () => {
+  it('the knee screws by hand: NDS 1380 G² D = 104.6 lbf/in for a #8 (D-82), x 1.28 in past the tip lead x C_M 0.7 per screw', () => {
     const k = kneeScrewLoads(ctx);
     expect(k.bite).toBeCloseTo(2.5 - (0.5 + 0.472), 6);
-    expect(k.perIn).toBeCloseTo(1380 * 0.68 ** 2 * 0.138, 6);
-    expect(k.cap).toBeCloseTo(88.06 * (k.bite - 0.25) * 0.7, 1);
+    expect(k.perIn).toBeCloseTo(1380 * 0.68 ** 2 * 0.164, 6);
+    expect(k.cap).toBeCloseTo(104.6 * (k.bite - 0.25) * 0.7, 1);
     expect(s.push.kneePull).toBeCloseTo(s.push.kneeMoment * k.pullPerMoment, 9);
   });
   it('the D-ring rating pulls the box rib hardest: it cantilevers from the top of its spacer', () => {
     expect(s.rating.ribSigMaxN).toBe(1);
     expect(s.rating.ribSigMax).toBeLessThan(6460);
-    expect(s.rating.Hin).toBeCloseTo(300 * Math.SQRT1_2, 6);
+    expect(s.rating.Hin).toBeCloseTo(233 * Math.SQRT1_2, 6); // D-83: the 233 lbf working load
   });
   it('without the bow post a rating pull at the bow is carried by the side alone (the study: the deck line goes to 1.35); the row reads the stations the D-rings are on', () => {
     const two = sideLateral(ctxFor({ lashPointsPerSide: 2 }));

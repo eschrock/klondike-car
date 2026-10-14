@@ -1,6 +1,6 @@
 /**
  * Cargo mode of the seat (D-57, Eric; it replaced the D-53 "kit lies in the box"): the SEAT BACK stays on the sled. It FLIPS FORWARD about its hinge onto the deck and is
- * held flat by the same quick-release pins; it never goes in the box. Only the two CUSHIONS (the seat cushion and the back pad, both on Dual Lock) lie flat in the storage
+ * held flat by the same quick-release pins; it never goes in the box. Only the two CUSHIONS (the seat cushion and the back pad, both on Velcro Industrial) lie flat in the storage
  * box, together with the 10 Essentials. This module is the one source for how they lie: `seatStowPlan` measures the real part bounding boxes, packs the cushions into the box
  * interior and reports the fit and its margins (and what is left for the Essentials); `applySeatStow` moves the parts for the viewer's "flat" state and the analysis.
  * Plain math, no three.js.

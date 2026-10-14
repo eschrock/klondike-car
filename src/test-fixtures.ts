@@ -49,6 +49,7 @@ export const PRE_D71: Partial<Params> = {
  * (the D-60 weight package, the hand calculations on the tube, the 4 mm sandwich bands). Spread it over the defaults BEFORE PRE_D71 and PRE_D66. The new defaults are tested in d72.test.ts.
  */
 export const PRE_D72: Partial<Params> = {
-  thinSheetMaterial: 2, // 4 mm okoume marine (THIN_SHEET.okoumeMarine): panelPlyIn 0.157
+  thinSheetMaterial: 2, // 4 mm okoume marine (THIN_SHEET.okoumeMarine)
+  panelPlyIn: 0.157, okoumeMoePerpPsi: 150000, okoumeMorPerpPsi: 1500, // D-80 made the okoume option 6 mm (0.236 in, 315,000 / 3,000 psi across the grain); these are the 4 mm values
   axleWallIn: 0.12,
 };

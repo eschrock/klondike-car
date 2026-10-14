@@ -4,10 +4,11 @@
  */
 import { AXLE_BEAM_POSITION, AXLE_STYLE, axleGrooveDepthIn } from '../params';
 import { axleMaterial, axleSourcing, axleStockNote } from './axle-stock';
-import { IN3_PER_FT3, STEP, box, cylinder, span, SIDES, type Ctx, stainless } from './build-utils';
+import { IN3_PER_FT3, STEP, box, cylinder, frac16, span, SIDES, type Ctx, stainless } from './build-utils';
 import { translation } from './mat4';
 import { beamSeat, boltLength, inchesText, localPoint, railSection } from './rear-mount';
-import type { Mat4, Part, RigidBody, Vec2, Vec3 } from './types';
+import type { Params } from '../params';
+import type { Joint, Mat4, Part, RigidBody, Vec2, Vec3 } from './types';
 
 // ── Block-model placeholders ──
 /** Hub outer diameter as a fraction of the wheel diameter, capped (viewer-only detail). */
@@ -19,6 +20,34 @@ const STUB_EMBED_IN = 4;
 const f2 = (v: number) => (Math.round(v * 100) / 100).toString();
 const unitVec = (v: Vec3): Vec3 => { const n = Math.hypot(...v) || 1; return [v[0] / n, v[1] / n, v[2] / n]; };
 
+/** Nearest 1/32 in as a fraction string (the 5/32" cotter hole). */
+const frac32 = (x: number): string => { let n = Math.round(x * 32), d = 32; while (n % 2 === 0 && d > 1) { n /= 2; d /= 2; } return n >= d ? `${Math.floor(n / d)}${n % d ? `-${n % d}/${d}` : ''}` : `${n}/${d}`; };
+
+/**
+ * The cotter cross hole near the outboard end of an axle rod (D-60, D-71): the rear through rod and each front stub carry one per wheel. It sits `axleCrossHoleFromEndIn` in from the
+ * rod's end, which is `axleEndExtraIn - axleCrossHoleFromEndIn` beyond the hub (the collar and washer lie between), drilled vertically across the rod (its axis in the bending plane: the
+ * worst orientation, which the axle-stress row assumes). A cylinder's own axis is its local z, and local z runs toward -y here, so the outboard end of the `s` side is at local z = -s L / 2.
+ * `s` is +1 for the left end, -1 for the right; `length` the rod's length; `wheelId` the wheel whose collar the pin holds.
+ */
+export function cotterHoleJoint(p: Params, s: 1 | -1, length: number, wheelId: string): Joint {
+  const from = p.axleCrossHoleFromEndIn;
+  const beyondHub = p.axleEndExtraIn - from;
+  return {
+    type: 'hole', to: wheelId, count: 1, diaIn: p.axleCrossHoleDiaIn,
+    size: `${frac32(p.axleCrossHoleDiaIn)}" hole across the rod, drilled vertically, ${frac16(from)}" in from the outboard end (${frac16(beyondHub)}" beyond the hub: room for the collar and washer, ${frac16(p.axleEndExtraIn)}" of rod stands out) for the cotter pin`,
+    at: [[0, 0, -s * (length / 2 - from)]],
+    note: `the pin keeps the collar on; the hole is ${frac16(from - p.axleCrossHoleDiaIn / 2)}" from the end to its edge (the axle-stress row checks the net section, the pin bearing and the tear-out)`,
+  };
+}
+
+/** The hold-down angle's bolts (D-48, D-72): the stock lengths of the two beam bolts down through the flat leg and the beam, and of the two rail bolts through the upright leg, the hanger and the rail. */
+export function holdDownBolts(p: Params, L: Ctx['L']): { dia: number; beamLenIn: number; railLenIn: number } | null {
+  const seat = beamSeat(p, L);
+  if (!seat) return null;
+  const rs = railSection(p, L), hd = seat.hd;
+  return { dia: hd.boltD, beamLenIn: boltLength(hd.t + L.beamR.depth, hd.boltD), railLenIn: boltLength(hd.t + rs.t + rs.railT, hd.boltD) };
+}
+
 export function buildRunningGear(ctx: Ctx): Part[] {
   const { p, d, L } = ctx;
   const parts: Part[] = [];
@@ -26,6 +55,8 @@ export function buildRunningGear(ctx: Ctx): Part[] {
   const rodR = p.axleDiameterIn / 2;
 
   // Wheels
+  // The axle each wheel runs on (its end carries the cotter cross hole, see `cotterHoleJoint`): the through rod or a rear stub; the front stubs.
+  const axleOf = (id: 'wheel-RL' | 'wheel-RR' | 'wheel-FL' | 'wheel-FR'): string => (id.startsWith('wheel-F') ? `axle-${id.slice(6)}` : p.axleStyle === AXLE_STYLE.throughRod ? 'axle-R' : `axle-${id.slice(6)}`);
   const wheel = (id: 'wheel-RL' | 'wheel-RR' | 'wheel-FL' | 'wheel-FR', name: string, transform: number[]): Part => ({
     id,
     partNo: 'wheel',
@@ -42,6 +73,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
       bore: p.wheelBoreIn,
     },
     transform,
+    joints: [{ type: 'pin', to: axleOf(id), count: 1, size: `collar and cotter pin on the axle end, ${frac16(p.axleEndExtraIn - p.axleCrossHoleFromEndIn)}" beyond the hub (the cotter cross hole is in the axle)`, note: 'purchased wheel: nothing is drilled in it' }],
     body: id as RigidBody,
     massLb: d.wheelMassLb,
     fab: 'buy',
@@ -66,13 +98,14 @@ export function buildRunningGear(ctx: Ctx): Part[] {
   // Rear axle, beam and clamps.
   {
     const ax = { tag: 'R' as const, x: 0, track: p.rearTrackIn, beam: L.beamR };
-    const name = 'rear';
+    const name = 'Rear';
     if (p.axleStyle === AXLE_STYLE.throughRod) {
       parts.push(cylinder(ctx, {
         id: `axle-${ax.tag}`, name: `${name} axle (through ${p.axleWallIn > 0 ? 'tube' : 'rod'})`, group: 'running-gear',
         center: [ax.x, 0, r], axis: 'y', radius: rodR, wall: p.axleWallIn, length: ax.track + p.hubLengthIn + 2 * p.axleEndExtraIn,
         mat: 'steel', ...axleMaterial(p), fab: 'drill-tap', step: STEP.gear, notes: `Dead axle, clamped to the beam (D-10). Sits in a groove in the beam. ${axleStockNote(p)}`,
         sourcing: { vendor: axleSourcing(p, ax.track + p.hubLengthIn + 2 * p.axleEndExtraIn) },
+        joints: [cotterHoleJoint(p, 1, ax.track + p.hubLengthIn + 2 * p.axleEndExtraIn, 'wheel-RL'), cotterHoleJoint(p, -1, ax.track + p.hubLengthIn + 2 * p.axleEndExtraIn, 'wheel-RR')],
       }));
     } else {
       const stubLen = p.hubLengthIn + p.axleEndExtraIn + STUB_EMBED_IN;
@@ -84,6 +117,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
           radius: rodR, wall: p.axleWallIn, length: stubLen, mat: 'steel', ...axleMaterial(p), fab: 'drill-tap', step: STEP.gear,
           notes: `Embedded ${STUB_EMBED_IN}" into the beam (D-10). ${axleStockNote(p)}`,
           sourcing: { vendor: axleSourcing(p, stubLen) },
+          joints: [cotterHoleJoint(p, s, stubLen, `wheel-R${tag}`)],
         }));
       }
     }
@@ -165,7 +199,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
         geometry: { type: 'extrusion', outline: profile, depth: w }, transform: m, body: 'chassis', massLb: mass, fab: 'drill-tap', step: STEP.gear,
         explode: unitVec([0, -s, 0.5]), stock: { t: hd.t, w: hd.leg, l: w },
         sourcing: { vendor: `McMaster-Carr (${stainless(p)} angle ${f2(hd.leg)}" × ${f2(hd.leg)}" × ${f2(hd.t)}": cut ${f2(w)}" long on the bandsaw, drill 2 × ${f2(bd + 0.03)}" in the upright leg and 2 × ${f2(bd + 0.03)}" in the flat leg; 4 × ${stainless(p)} hex bolts ${f2(bd)}", nylock nuts, fender washers)` },
-        notes: `Holds the rear axle beam to the axle hanger (D-54, build review r2 MUST-4): the upright leg lies on the hanger's inner face (z ${f2(hd.zBeam)}" to ${f2(hd.zTop)}"), two ${f2(bd)}" bolts through the hanger and the rail (D-72); the flat leg lies on the beam top (it also keeps the rod in its groove), two ${f2(bd)}" bolts down through the beam either side of the rod. Stays clear of the straddling deck joists (${f2(w)}" wide, centered on the beam). Rebound, side load and the rail's tendency to walk off the beam are carried here; the vertical load bears on the notch ceiling instead.`,
+        notes: `Holds the rear axle beam to the axle hanger (D-54, build review r2 MUST-4): the upright leg lies on the hanger's inner face (z ${f2(hd.zBeam)}" to ${f2(hd.zTop)}"), two ${f2(bd)}" bolts through the hanger and the rail (D-72); the flat leg lies on the beam top (it also keeps the rod in its groove), two ${f2(bd)}" bolts down through the beam either side of the rod. Stays clear of the straddling deck crossmembers (${f2(w)}" wide, centered on the beam). Rebound, side load and the rail's tendency to walk off the beam are carried here; the vertical load bears on the notch ceiling instead.`,
         joints: [],
       };
       part.joints!.push({

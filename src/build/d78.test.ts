@@ -36,7 +36,7 @@ describe.each([['Standard', WEATHER_SPEC.standard], ['Extreme', WEATHER_SPEC.ext
     expect(step.goal).toMatch(/About 5 minutes a side; the first time takes longer/);
     expect(t).toMatch(/Hang the knee on one bolt first/);
     expect(t).toMatch(/one person/);
-    expect(t).toMatch(/snug, then a quarter turn \(about 60 in-lb\)/);
+    expect(t).toMatch(/snug, then a quarter turn \(about 35 in-lb\)/);
     expect(t).toMatch(/anti-seize/);
     expect(t).toMatch(/dry/);
     expect(t).toMatch(/after the first outing/);
@@ -63,10 +63,14 @@ describe.each([['Standard', WEATHER_SPEC.standard], ['Extreme', WEATHER_SPEC.ext
     expect(knees.title).toBe('Brake knees (and backers), fitted dry while the hull is inverted');
     expect(knees.tools).toContain('3/8" drive ratchet and 9/16" socket');
     expect(t).toMatch(/easiest to reach now, while the hull is inverted/);
-    expect(t).toMatch(/Drill each knee through the rail's holes/);
-    expect(t).toMatch(/transfer drill/);
+    // one way to drill the knee: on the drill press from its layout (a chuck cannot reach the top row through the rail), offered up with all four bolts, never the rail's holes opened
+    expect(t).toMatch(/Drill each knee leg on the drill press, from its layout/);
+    expect(t).not.toMatch(/transfer drill|marked from the rail drawing/);
+    expect(t).toMatch(/Offer the knee up to the rail with all 4 bolts through it: its rear face [\d\-/]+" from the rail's rear end/);
+    expect(t).toMatch(/If a bolt binds, open that knee hole a hair with the drill\. Never open the rail's holes/);
+    expect(t).toMatch(/Hold each nut with the wrench from inside the frame/);
     expect(t).toMatch(/seal the bolt holes/);
-    expect(t.indexOf("Drill each knee through the rail's holes")).toBeLessThan(t.indexOf('seal the bolt holes'));
+    expect(t.indexOf('Drill each knee leg on the drill press')).toBeLessThan(t.indexOf('seal the bolt holes'));
     expect(t).toMatch(/No glue on the leg/);
     expect(t).not.toMatch(/Seal the two faces/);
     expect(at('gear-fit')).toBeGreaterThan(at('brake-knees'));
@@ -78,7 +82,13 @@ describe.each([['Standard', WEATHER_SPEC.standard], ['Extreme', WEATHER_SPEC.ext
     expect(sR.find((x) => x.id === 'finish')!.items.some((i) => (i.parts ?? []).includes('brake-knee-L'))).toBe(true);
     expect(txt('hang')).toMatch(/Brake knees, from the bench/);
     expect(txt('hang')).toMatch(/Hang the knee on one bolt first/);
-    expect(txt('frame')).toMatch(/Bed each plate in thickened epoxy in its recess, with 4 waxed 3\/8" bolts/);
+    expect(txt('frame')).toMatch(/Bed each plate in thickened epoxy in its recess/);
+    expect(txt('frame')).toMatch(/sand its back and edges with 80 grit, wipe it with acetone, and bed it within the hour/);
+    expect(txt('frame')).toMatch(/Pass 4 waxed 3\/8" bolts through the rail, backer and plate holes from the outside, each with a waxed nut on the plate and a waxed caul block/);
+    expect(txt('frame')).toMatch(/Snug the nuts just enough to seat the plate flush/);
+    expect(txt('hang')).toMatch(/Screw each strap back on its knee, 4 screws with a drop of epoxy in each pilot/);
+    expect(txt('hang')).toMatch(/put a bottom rear bolt through the knee and the rail/);
+    expect(txt('finish')).toMatch(/Take the strap off each knee/);
     expect(sF.find((x) => x.id === 'frame')!.instructions.join('\n')).not.toMatch(/Bed each plate/);
     expect(textOf(sR)).not.toMatch(/epoxy[^.\n]*\b(knee|leg)\b[^.\n]*\bagainst the rail|glue[^.\n]*\bleg\b[^.\n]*\bagainst the rail/i);
     expect(textOf(sR)).not.toMatch(/\bfirm\b|design clamp/);
@@ -118,8 +128,8 @@ describe.each([['Standard', WEATHER_SPEC.standard], ['Extreme', WEATHER_SPEC.ext
     expect(pouch.notes).toMatch(/not part of the sled and not in its weight/);
     expect(pouch.notes).toMatch(/may already own/);
     const seize = lr.find((l) => l.key === 'anti-seize')!;
-    expect(seize.basis).toBe('estimate');
-    expect(seize.unitUsd).toBe(8);
+    expect(seize.basis).toBe('quoted'); // D-79 research: the Permatex 1 oz tube, $3.97 at Walmart (via search)
+    expect(seize.unitUsd).toBe(3.97);
     const nut = (ls: BomLine[]) => ls.find((l) => /nylon-insert lock nut 3\/8-16/.test(l.key))!;
     expect(nut(lr).key).toMatch(spec === WEATHER_SPEC.standard ? /^18-8/ : /^316/);
     // eight spares on top of the 26 the build uses: the stale "26 by the piece" note is restated
@@ -127,7 +137,7 @@ describe.each([['Standard', WEATHER_SPEC.standard], ['Extreme', WEATHER_SPEC.ext
     expect(nut(lf).needed ?? nut(lf).qty).toBe(26);
     expect(JSON.stringify(nut(lr))).not.toMatch(/26 by the piece/);
     if (spec === WEATHER_SPEC.standard) expect(JSON.stringify(nut(lr))).toMatch(/34 by the piece is 12\.24/);
-    expect(br.totalUsd).toBeGreaterThan(bf.totalUsd + 37);
+    expect(br.totalUsd).toBeGreaterThan(bf.totalUsd + 33); // pouch $30 + anti-seize $3.97 (+ spare nuts: already inside a bag under Standard)
     expect(br.totalUsd).toBeLessThan(bf.totalUsd + 43);
     expect(br.unpriced).toEqual([]);
   });
@@ -143,7 +153,7 @@ describe.each([['Standard', WEATHER_SPEC.standard], ['Extreme', WEATHER_SPEC.ext
     expect(t).toMatch(/does not enter the joint line/);
     expect(t).toMatch(/backing plate is still in its recess/);
     expect(t).toMatch(/No washer is pressed into the oak/);
-    expect(t).toMatch(/snug, then a quarter turn \(about 60 in-lb\)/);
+    expect(t).toMatch(/snug, then a quarter turn \(about 35 in-lb; the quarter turn past snug is the spec/);
     expect(t).toMatch(/tight after the first outing/);
     expect(t).toMatch(/chock cord/);
     expect(t).not.toMatch(/clip/i);

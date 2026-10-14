@@ -294,11 +294,11 @@ describe('oak stock is T x W x L with T the board thickness (round 3)', () => {
 describe('rail-to-chine screws (round 3, build critic S4)', () => {
   const L3 = computeLayout(p);
   const screws = (tag: string) => get(`rail-${tag}`).joints!.filter((j) => j.type === 'screw' && j.to === `side-${tag}-chine`);
-  it('are #6, piloted, ONE length (#6 x 2-1/2, D-72) in every rail-depth zone: the head is counterbored where the rail is deeper (3 in aft, 1.8 in forward of the step)', () => {
+  it('are #8 (D-82), piloted, ONE length (#8 x 2-1/2, D-72) in every rail-depth zone: the head is counterbored where the rail is deeper (3 in aft, 1.8 in forward of the step)', () => {
     for (const tag of ['L', 'R']) {
       const js = screws(tag);
       expect(js.length).toBe(2);
-      for (const j of js) { expect(j.size).toMatch(/^#6 × 2-1\/2 /); expect(j.size).toMatch(/PILOT/); expect(j.size).not.toMatch(/#8/); }
+      for (const j of js) { expect(j.size).toMatch(/^#8 × 2-1\/2 /); expect(j.size).toMatch(/PILOT/); expect(j.size).toMatch(/11\/64" clearance hole through the rail/); expect(j.size).not.toMatch(/#6/); }
       const deep = js.find((j) => /counterbore the head/.test(j.size!))!, shallow = js.find((j) => /no counterbore needed/.test(j.size!))!;
       expect(deep).toBeDefined(); expect(shallow).toBeDefined();
       expect(deep.count).toBeGreaterThanOrEqual(3);
@@ -314,13 +314,14 @@ describe('rail-to-chine screws (round 3, build critic S4)', () => {
       }
     }
   });
-  it('sit between the Dominos, not on them', () => {
-    const dom = get('rail-L').joints!.find((j) => j.type === 'domino' && j.to === 'side-L-chine')!;
-    const dx = dom.at!.map((a) => toModel(get('rail-L').transform, a)[0]);
-    for (const j of screws('L')) for (const a of j.at!) {
-      const x = toModel(get('rail-L').transform, a)[0];
-      expect(Math.min(...dx.map((q) => Math.abs(q - x)))).toBeGreaterThan(1.5);
-    }
+  it('go in EVERY gap between the tie stations, at even spacing, with no Dominos on the joint (D-81)', () => {
+    expect(get('rail-L').joints!.some((j) => j.type === 'domino' && j.to === 'side-L-chine')).toBe(false);
+    const xs = screws('L').flatMap((j) => j.at!.map((a) => toModel(get('rail-L').transform, a)[0])).sort((a, b) => a - b);
+    expect(xs.length).toBe(Math.floor((L3.railEnd - L3.xRear - L3.transom) / p.chineTieSpacingIn) - 1);
+    const gaps = xs.slice(1).map((x, i) => x - xs[i]);
+    for (const g of gaps) expect(g).toBeCloseTo(gaps[0], 6);
+    expect(gaps[0]).toBeGreaterThan(4);
+    expect(gaps[0]).toBeLessThan(p.chineTieSpacingIn + 1);
   });
 });
 

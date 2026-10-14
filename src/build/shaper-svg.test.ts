@@ -285,10 +285,10 @@ describe('Shaper SVG files', () => {
     expect(f.svg).toMatch(/insert hole Ø0\.3125 x 0\.344 deep \(x3\)/);
   });
 
-  it('names the bit for each feature: 1/8 in for the 0.197 dado and the 1/4 in mortise, 1/4 in for the 0.512 deck dado and the outline', () => {
+  it('names the bit for each feature: 1/4 in for the 0.281 web dado (6 mm Baltic birch + slop, D-80; it was 1/8 in for the 4 mm okoume) and the 0.512 deck dado and the outline, 1/8 in for the mortise', () => {
     const t = fileOf('transom-rear');
     const pk = t.features.filter((x) => x.kind === 'pocket');
-    expect(pk.find((x) => /web dado|side-L-web/.test(x.label) || x.to === 'side-L-web')!.bit).toBe('1/8 in');
+    expect(pk.find((x) => /web dado|side-L-web/.test(x.label) || x.to === 'side-L-web')!.bit).toBe('1/4 in');
     expect(pk.find((x) => x.to === 'deck')!.bit).toBe('1/4 in');
     expect(pk.find((x) => x.joint === 'mortise-tenon')!.bit).toBe('1/8 in');
     expect(t.features[0].bit).toBe('1/4 in');
@@ -323,12 +323,25 @@ describe('Shaper SVG files', () => {
     expect(n).toBeGreaterThan(3);
   });
 
-  it('puts the flat-position seat-pin clearance holes in the deck', () => {
+  it('puts the flat-position seat-pin clearance holes in the deck, and (Standard spec, D-83) the two 3/8 in box drain holes beside them', () => {
     const deck = fileOf('deck');
     const pin = deck.features.filter((x) => x.kind === 'hole' && x.joint === 'pin');
     expect(pin.reduce((n, x) => n + x.count, 0)).toBe(2);
     for (const x of pin) expect(x.diaIn).toBeCloseTo(13 / 32, 4);
+    const drain = deck.features.filter((x) => x.kind === 'hole' && x.joint === 'hole');
+    expect(drain.reduce((n, x) => n + x.count, 0)).toBe(2);
+    for (const x of drain) expect(x.diaIn).toBeCloseTo(3 / 8, 4); // exactly the drain size, not a bolt clearance
     const holes = paths(deck.svg).filter((t) => attr(t, 'shaper:cutType') === 'inside');
-    expect(holes.length).toBe(2);
+    expect(holes.length).toBe(4);
+  });
+
+  it('D-83: the side drains are drilled after glue-up, marked on the web as 3/8 in drill guides (no cut), and the Extreme spec keeps the nipple drill marks', () => {
+    const web = fileOf('side-L-web');
+    const drains = web.features.filter((x) => /drain/i.test(x.label));
+    expect(drains.reduce((n, x) => n + x.count, 0)).toBe(2);
+    for (const x of drains) { expect(x.diaIn).toBeCloseTo(3 / 8, 4); expect(x.label).toMatch(/glued-up sandwich/); }
+    const ext = { ...p, weatherSpec: 1 };
+    const w2 = shaperFiles(buildModel(ext), ext).find((f) => f.partIds.includes('side-L-web'))!;
+    expect(w2.features.filter((x) => /drain/i.test(x.label)).reduce((n, x) => n + x.count, 0)).toBe(2);
   });
 });

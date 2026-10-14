@@ -34,13 +34,24 @@ describe.each([['Standard', WEATHER_SPEC.standard], ['Extreme', WEATHER_SPEC.ext
     expect(x.details!.some((d) => /dry knee/.test(d.name))).toBe(false);
     const rest = y.details!.filter((d) => !/^dry knee/.test(d.name));
     expect(JSON.stringify(rest)).toBe(JSON.stringify(x.details));
-    // hand check: Z' about 306 lbf (mode II) against the worst bolt about 255 lbf
-    expect(added[0].limit).toBeGreaterThan(300);
-    expect(added[0].limit).toBeLessThan(312);
+    // hand check: Z' about 296 lbf (mode II, 1.375" of rail and backer left by the 1/8" plate recess) against the worst bolt about 255 lbf
+    expect(added[0].limit).toBeGreaterThan(290);
+    expect(added[0].limit).toBeLessThan(302);
     expect(added[0].value).toBeGreaterThan(240);
     expect(added[0].value).toBeLessThan(270);
-    expect(added[0].value / added[0].limit).toBeGreaterThan(0.78);
-    expect(added[0].value / added[0].limit).toBeLessThan(0.9);
+    expect(added[0].value / added[0].limit).toBeGreaterThan(0.82);
+    expect(added[0].value / added[0].limit).toBeLessThan(0.92);
+    // the pass leans on C_D 1.6: the sustained hold (lambda 1, C_D 1.0) is judged too, at V/lambda against Z_ref x C_M x C_g (about 128 / 185 = 0.69)
+    const sus = y.details!.filter((d) => /^dry knee: sustained hold/.test(d.name));
+    expect(sus).toHaveLength(1);
+    expect(sus[0].value).toBeCloseTo(added[0].value / defaultParams().brakeLoadFactor, 6);
+    expect(sus[0].limit).toBeCloseTo((added[0].limit / (defaultParams().ndsWetFactorFasteners * defaultParams().ndsLoadDurationFactor * defaultParams().ndsGroupFactor)) * defaultParams().ndsWetFactorFasteners * defaultParams().ndsGroupFactor, 6);
+    expect(sus[0].value / sus[0].limit).toBeGreaterThan(0.6);
+    expect(sus[0].value / sus[0].limit).toBeLessThan(0.8);
+    expect(y.how).toMatch(/C_D 1\.6 \(the λ = 2 stomp or jerk is an impact/);
+    expect(y.how).toMatch(/C_Δ is not applied/);
+    // the abuse row skips the sustained (lambda 1) detail: it is meaningless at the stomp load
+    expect(byId(b, 'brake-abuse').details!.some((d) => /sustained hold/.test(d.name))).toBe(false);
     expect(y.status).toBe(x.status === 'fail' ? 'fail' : y.status);
     expect(y.status).not.toBe('fail');
     expect(y.how).toContain('Removable knees (D-78)');

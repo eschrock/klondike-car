@@ -1,7 +1,7 @@
 /**
  * Forms and templates (Phase 4, output 5): full-scale, dimensioned SVG drawings derived from the model, plus a tiler that splits a drawing onto US Letter pages for printing. Plain TS, no three.js.
  *
- * Every drawing is in real inches (the viewBox is in inches) with a title block (name, scale 1:1, units, the params revision), key dimensions as text and dimension lines, and a 1 in check
+ * Every drawing is in real inches (the viewBox is in inches) with a title block (name, scale 1:1, units, the design revision), key dimensions as text and dimension lines, and a 1 in check
  * square. The outline of the thing to cut is an outside cut (black) so Shaper Origin can cut it; the dimension layer is guides (blue). Nothing here is hand-entered: curves and stations come
  * from the layout, the parts' meshes and the params. The revision stamp is a hash of the params state (never the wall clock), unless the caller passes `opts.date`.
  *
@@ -121,8 +121,8 @@ function wrap(t: string, chars: number): string[] {
 
 function finishDrawing(plan: Plan, p: Params, date?: string): FormDrawing {
   const W = plan.w + 2 * MARGIN_IN;
-  const rev = `rev ${hash6(JSON.stringify(p))}${date ? `, ${date}` : ''}`;
-  const lines = [...plan.subtitle, `Scale 1:1 (full size), units: inches. Check the 1 in square before use.`, `Klondike sled, Troop 455. Params ${rev}.`];
+  const rev = `revision ${hash6(JSON.stringify(p))}${date ? `, ${date}` : ''}`;
+  const lines = [...plan.subtitle, `Scale 1:1 (full size), units: inches. Check the 1 in square before use.`, `Klondike sled, Troop 455. Design ${rev}.`];
   // The HOW TO BUILD IT panel: numbered steps, lettered sub-steps, wrapped to the room left by the sketch and the check square.
   const sk = plan.sketch;
   // a readable column, at most 11" wide (a long line on a 44" sheet is hard to follow); the sketch sits to its right
@@ -267,13 +267,13 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
     'Lines on the drawing: sheer (cleat line), gunwale band lower edge, web top, chine band top, inner chine band bottom, web bottom. The template and rib outlines are outside cuts for the Shaper.',
   ];
   const build: FormBuildStep[] = [
-    { step: `BENCH TOP: a flat sheet of 3/4" plywood or MDF at least ${frac(f.widthIn + 2 * BASE_END_IN)} × ${frac(f.heightIn + 2 * BASE_END_IN)} (the web is ${frac(f.widthIn)} × ${frac(f.heightIn)}). It is sacrificial: the cleats and ribs are screwed into it.${hasRamp ? ' The mirror ramp (side form, item 5) takes a second one the same size.' : ''}` },
+    { step: `BENCH TOP: a flat sheet of 3/4" plywood or MDF at least ${frac(f.widthIn + 2 * BASE_END_IN)} × ${frac(f.heightIn + 2 * BASE_END_IN)} (the web is ${frac(f.widthIn)} × ${frac(f.heightIn)}). It is sacrificial: the cleats and ribs are screwed into it.${hasRamp ? ' The mirror ramp (the MIRROR RAMP item below) takes a second one the same size.' : ''}` },
     {
       step: `TEMPLATE: cut ONE piece of ${frac(TEMPLATE_STOCK_IN)} hardboard to the web's flat outline (the outer line of this drawing), on the Shaper or bandsawn outside the line and sanded to it.`,
       sub: [
         'Mark on it the sheer (cleat line), the gunwale band lower edge, the chine band top, the inner chine band bottom and the S stations.',
         ...(hasRamp ? [`Cut it off square at the "S starts" line, ${frac(uOf(xR0))} from the rear end. The rear piece lies under the flat part of the web; the ramp takes the front piece's place. Keep the front piece to mark the web.`, `The ramp cap puts its low end ${frac(webLowIn)} above the bench, ${frac(RIB_BASE_IN)} above the template. Glue a second layer of ${frac(TEMPLATE_STOCK_IN)} hardboard, cut to the same outline, under the rear piece so the web runs onto the ramp with no step.`] : []),
-        'Screw the template to the bench with #6 × 3/4" flat-heads about every 12", heads flush.',
+        'Screw the template to the bench with #8 × 3/4" flat-heads about every 12", heads flush.',
       ],
     },
     {
@@ -429,11 +429,11 @@ function railFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
     { step: `BASE: 3/4" plywood ${frac(baseL)} × ${frac(baseW)}. Screw the stack to it from below (#8 × 1-5/8" every ${frac(STACK_SCREW_IN)}), its straight back on the base's back edge and ${frac(BASE_END_IN)} in from each end. That leaves ${frac(BASE_FRONT_IN)} of base in front of the deepest part of the face for the strips, the caul and the clamp jaws.` },
     { step: `STRAIGHT RUN: cut the strips ${frac(stripL)} long (the cut list's rough length); only the last ${frac(curved)} is curved. The form starts ${frac(RAIL_FORM_LEAD_IN)} ahead of the S, so about ${frac(hang)} of each strip hangs off its rear end. Screw a straight 3/4" × ${frac(stackH)} fence to the bench, in line with the lead-in face, to hold that part straight.` },
     { step: `CAUL: a strip of ${frac(CAUL_IN)} hardboard ${frac(railW + 0.5)} wide × ${frac(curved + RAIL_FORM_LEAD_IN)} long, between the clamps and the strips, so the pressure is even between the stations.` },
-    { step: 'TAPE: packing tape (or two coats of paste wax) over the form face and the caul face, so the epoxy cannot glue the rail to the form.' },
+    { step: 'TAPE: packing tape over the form face and the caul face, so the epoxy cannot glue the rail to the form.' },
     { step: `SPRING-BACK: none is built in. Dry-clamp one strip first; if the bow end opens more than ${frac(turn * sb0)} when released, glue 1/8" hardboard shims to the face over the curve (feathered out at the S start) and try again.` },
     {
-      step: `CLAMP: ${clamps} bar or pipe clamps of ${clampCap}" capacity or more (the pack is about ${frac(span)} across), one at each station ${frac(CLEAT_SPACING_IN)} apart from the S start (the circles on this drawing), from the back of the form to the caul, plus 2 or 3 on the straight lead-in.`,
-      sub: [`Roll epoxy on both mating faces of the ${plies} strips (${frac(strip)} × ${frac(railW)}), butter one face with thickened epoxy, and stand them on edge on the base against the face, the caul outside.`, 'Clamp the straight lead-in first, then work station by station toward the bow end, closing each gap before the next.', 'Cure 24 h (60 °F or warmer) before unclamping. Bend the second rail on the same form, the other way up.'],
+      step: `CLAMP: ${clamps} bar or pipe clamps of ${clampCap}" capacity or more (the pack is about ${frac(span)} across), one at each station ${frac(CLEAT_SPACING_IN)} apart from the S start (the circles on the rail form drawing), from the back of the form to the caul, plus 2 or 3 on the straight lead-in.`,
+      sub: [`Roll epoxy on both mating faces of the ${plies} strips (${frac(strip)} × ${frac(railW)}), butter one face with thickened epoxy, and stand them on edge on the base against the face, the caul outside.`, 'Clamp the straight lead-in first, then work station by station toward the bow end, closing each gap before the next.', 'Leave it clamped for the full cure, 24 h at 60 °F or warmer, before unclamping: a bent strip springs back if it comes off early. Bend the second rail on the same form, the other way up.'],
     },
   ];
   const sketch: Sketch = {
@@ -659,7 +659,7 @@ function kneePlan(parts: Part[], p: Params): Plan | null {
   };
 }
 
-/** Every form and template drawing for the current model. `opts.date` is shown beside the params revision (the caller's choice; the wall clock is never read here). */
+/** Every form and template drawing for the current model. `opts.date` is shown beside the design revision (the caller's choice; the wall clock is never read here). */
 export function formDrawings(parts: Part[], p: Params, opts: { date?: string } = {}): FormDrawing[] {
   const L = computeLayout(p);
   const plans = [sideFormPlan(parts, p, L), railFormPlan(parts, p, L), crownPlan(parts, p, L), flapPlan(parts, p), kneePlan(parts, p)];

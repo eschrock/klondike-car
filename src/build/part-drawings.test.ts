@@ -180,9 +180,28 @@ describe('part drawings', () => {
     }
     const rail = sheets.find((x) => x.partNo === 'rail')!;
     const c = rail.features.find((f) => f.kind === 'hole' && /counterbore/.test(f.text))!;
-    expect(c.text).toMatch(/^4 holes, 1\/8" pilot, through, with a 5\/16" × 1" counterbore from the BOTTOM edge\./);
-    expect(c.purpose).toMatch(/^for the #6 × 2-1\/2" screws to the left chine/);
+    // D-81, D-82: no Dominos in the chine tie; the rail takes the #8 screws in every gap, 7 counterbored and 1 shallow-zone hole at the bow
+    expect(c.text).toMatch(/^7 holes, 11\/64" clearance, through, with a 3\/8" × 1" counterbore from the BOTTOM edge\./); // a #8 flat head is about 11/32" across: the bore is 3/8" (not 5/16")
+    expect(texts(rail.svg).join(' ')).toMatch(/3\/8" oak plug cut with a plug cutter from offcuts \(or a 3\/8" dowel\)/);
+    expect(c.purpose).toMatch(/^for the #8 × 2-1\/2" screws to the left chine/);
+    expect(rail.features.filter((f) => f.kind === 'hole' && /left chine/.test(f.purpose ?? '')).reduce((n, f) => n + f.count, 0)).toBe(8);
+    expect(rail.features.some((f) => /chine/.test(f.purpose ?? '') && f.kind === 'mortise')).toBe(false);
     expect(c.face).toBe('top edge');
+  });
+
+  it('D-83: the side drain holes are located from ONE datum on the web and on the bands, the inner face of the rear transom', () => {
+    const all = partDrawings(parts, p, { includeShaper: true });
+    const web = all.find((x) => x.partNo === 'side-web' && x.partIds.includes('side-L-web'))!;
+    const band = all.find((x) => x.partNo === 'side-chine-out')!;
+    for (const [sheet, rear] of [[web, '3/8"'], [band, '3/8"']] as const) {
+      const f = sheet.features.find((q) => q.kind === 'hole' && /drain|side panel|chine band \(inner\)/.test(q.purpose ?? '') && q.size?.startsWith('3/8"'))!;
+      expect(f.text, sheet.partNo).toMatch(/from the inner face of the rear transom/);
+      expect(f.positions!.join(' '), sheet.partNo).toContain(`${rear} and `);
+      expect(f.text, sheet.partNo).not.toMatch(/from the REAR end/);
+    }
+    // the same two numbers on the web and on the band
+    const nums = (s: typeof web): string => s.features.find((q) => q.kind === 'hole' && /inner face of the rear transom/.test(q.text))!.positions![0];
+    expect(nums(web)).toBe(nums(band));
   });
 
   it('shows the hold-down bolts once: 2 holes in the angle, the hanger and the rail, at the same places, not 4', () => {
@@ -233,31 +252,58 @@ describe('part drawings read their sizes from the cut list (readability round 2)
       const stock = /Stock: ([^\n]*?)(?:Grain:|$)/.exec(head(s.svg))?.[1] ?? '';
       for (const m of stock.matchAll(/(\d+(?:-\d+\/\d+)?|\d+\/\d+)(?= ×| rough| from|;|,| \(T)/g)) {
         const v = m[1].includes('/') ? (m[1].includes('-') ? Number(m[1].split('-')[0]) + eval(m[1].split('-')[1]) : eval(m[1])) : Number(m[1]);
-        expect(Math.abs(v * 8 - Math.round(v * 8)) < 1e-6 || /planed to/.test(stock), `${s.partId}: ${m[1]} in "${stock}"`).toBe(true);
+        // a laminated part's line ends with the block's final (milled) size, which is on the 1/32 grid, not a rough size
+        expect(Math.abs(v * 8 - Math.round(v * 8)) < 1e-6 || /planed to|mill to final/.test(stock), `${s.partId}: ${m[1]} in "${stock}"`).toBe(true);
       }
     }
   });
 
-  it('says the rail strips are resawn from the board the cut list uses (8/4), not 4/4', () => {
+  it('says the rail strips are resawn from the board the cut list uses (5/4 now: 8/4 is not bought, D-79), not 4/4', () => {
     const rail = sheets.find((s) => s.partNo === 'rail')!;
     const strip = cl.cuts.find((c) => c.ids.includes('rail-L') && c.piece === 'strip')!;
-    expect(strip.board).toBe('8/4');
+    expect(strip.board).toBe('5/4');
     expect(head(rail.svg)).toContain(`2 strips, each ${strip.roughText} rough`);
-    expect(head(rail.svg)).toContain('resawn from 8/4');
+    expect(head(rail.svg)).toContain('resawn from 5/4');
     expect(head(rail.svg)).not.toMatch(/from 4\/4/);
-    expect(partDims(parts.find((x) => x.id === 'rail-L')!, parts, p).board).toContain('resawn from 8/4');
+    expect(head(rail.svg)).not.toMatch(/from 8\/4/);
+    expect(partDims(parts.find((x) => x.id === 'rail-L')!, parts, p).board).toContain('resawn from 5/4');
   });
 
-  it('uses the cut list\'s T × W × L for the final size: the brake knee reads 2-1/8 × 8-5/8 × 4-1/2 everywhere', () => {
+  it('uses the cut list\'s sizes for the final size: T × W × L for a board, thick × tall × across for the brake knee block, a diameter for a rod', () => {
     const knee = sheets.find((s) => s.partNo === 'brake-knee')!;
     const fin = cl.finished.find((f) => f.ids.includes('brake-knee-L'))!;
-    expect(head(knee.svg)).toContain(`final ${fin.finalText} (T × W × L`);
+    expect(fin.finalText).toBe('2-1/8" thick × 9-1/2" tall × 3-11/16" across');
+    expect(head(knee.svg)).toContain(`final ${fin.finalText}`);
+    expect(head(knee.svg)).not.toContain(`${fin.finalText} (T × W × L`);
     for (const s of sheets) {
       const f = cl.finished.find((q) => q.ids.includes(s.partId));
-      if (f) expect(head(s.svg), s.partId).toContain(`final ${f.finalText} (T × W × L`);
+      if (f && f.partNo !== 'brake-knee') expect(head(s.svg), s.partId).toContain(`final ${f.finalText} (T × W × L`);
     }
     const d = partDims(parts.find((x) => x.id === 'brake-knee-L')!, parts, p);
-    expect(d.size).toBe(fin.finalText.split(' × ').map((v) => `${v}"`).join(' × '));
+    expect(d.size).toBe(fin.finalText);
+  });
+
+  it('writes the grain of the cross-laminated knee by layer (face layers up the leg, center layer across), in the drawing and in the popup', () => {
+    const knee = sheets.find((s) => s.partNo === 'brake-knee')!;
+    const h = head(knee.svg);
+    expect(h).toMatch(/Grain: face layers: grain up the leg; center layer: across the sled/);
+    expect(h).not.toMatch(/Grain: along L/);
+    expect(h).not.toMatch(/By layer, face layer first/);
+    const d = partDims(parts.find((x) => x.id === 'brake-knee-L')!, parts, p);
+    expect(d.grain).toMatch(/^face layers: grain up the leg; center layer: across the sled/);
+    expect(d.grain).not.toMatch(/^along/);
+  });
+
+  it('draws a round rod as a diameter and a length, with its cotter holes measured from a named end', () => {
+    const axle = sheets.find((s) => s.partId === 'axle-R')!;
+    const h = head(axle.svg);
+    expect(h).toContain('final 5/8" dia × 34-1/4"');
+    expect(h).not.toMatch(/5\/8 × 5\/8 × 34-1\/4/);
+    expect(h).not.toMatch(/heights from the/);
+    expect(h).toMatch(/Datums: lengths from the LEFT end\./);
+    expect(axle.features.length).toBeGreaterThanOrEqual(2);
+    for (const f of axle.features) expect(f.text, f.label).toMatch(/Drilled straight through the rod, across its diameter, at .* from the LEFT end/);
+    expect(partDims(parts.find((x) => x.id === 'axle-R')!, parts, p).size).toBe('5/8" dia × 34-1/4"');
   });
 
   it('uses human names in the headers and make notes: no part keys, no decision numbers, no decimals', () => {
@@ -319,7 +365,7 @@ describe('the knee drawing shows how the block is laminated', () => {
   it('says the rough block is not a rectangle and what each layer measures (from the cut list)', () => {
     expect(flat).toMatch(/the layers are not the same size/);
     expect(flat).toMatch(/layers 1 and 3: 4-1\/8 wide across its grain . 11-5\/8 long; layer 2: 10-3\/8 wide across its grain . 5-3\/4 long/);
-    expect(flat).toMatch(/not a rectangle until it is milled; it fits in 2-1\/4 . 11-5\/8 . 5-3\/4/);
+    expect(flat).toMatch(/not a rectangle until it is milled; it fits in 2-1\/4" thick . 11-5\/8" tall . 5-3\/4" across/);
     expect(flat).not.toMatch(/glued block rough 2-1\/4/);
   });
 });
@@ -346,14 +392,17 @@ describe('D-77: the pivot strap drawing', () => {
 
 describe('D-76: the side rib, knee and box tie drawings', () => {
   const sheet = (id: string) => sheets.find((d) => d.partIds.includes(id))!;
-  it('gives the rib its four D-ring holes at 1-1/8" x 1/2" with a clearance drill, the sheer-cut top dimensioned, and the do-not-drill note', () => {
+  it('gives the rib its two D-ring bracket holes 1-1/4" apart with the 1/4-20 clearance drill, the sheer-cut top dimensioned, and the do-not-drill note', () => {
     const d = sheet('side-rib-L2');
     const holes = d.features.find((f) => f.kind === 'hole')!;
-    expect(holes.count).toBe(4);
-    expect(holes.text).toMatch(/3\/16" clearance/);
-    expect(holes.text).toMatch(/7\/16" and 1-9\/16" from the REAR edge/);
+    expect(holes.count).toBe(2);
+    expect(holes.text).toMatch(/17\/64" clearance/);
+    expect(holes.purpose).toMatch(/1\/4-20 bolts/);
+    expect(holes.text).toMatch(/3\/8" and 1-5\/8" from the REAR edge/);
     expect(d.features.some((f) => /Sloped edge: a straight cut, 7° from level/.test(f.text))).toBe(true);
     expect(d.svg).toMatch(/final fit|D-ring holes/);
+    expect(d.svg).toMatch(/two D-ring holes/);
+    expect(d.svg).not.toMatch(/four D-ring/);
   });
   it('draws each knee counterbore on its sloped face at its own depth, centered on its screw hole', () => {
     const d = sheet('side-rib-knee-L2');
@@ -362,5 +411,20 @@ describe('D-76: the side rib, knee and box tie drawings', () => {
     expect(cb[0].text).toMatch(/3\/8" wide × 1-1\/8" deep.*sloped face: 11\/16" from the OUTBOARD edge/);
     expect(cb[1].text).toMatch(/3\/8" wide × 1\/4" deep.*sloped face: 1-13\/32" from the OUTBOARD edge/);
     expect(cb[0].text).not.toMatch(/the the/);
+  });
+});
+
+describe('the bridle tongue drawing agrees with its own offsets table and with the step', () => {
+  const t = sheets.find((x) => x.partNo === 'bridle-tongue')!;
+  it('says the head face runs square before each curve, in the feature line and in the table of offsets', () => {
+    const [a, b] = t.features.filter((f) => f.kind === 'outline');
+    expect(a.text).toMatch(/starts with a straight run at 3" from the REAR end, 0" to 1-1\/2" from the RIGHT edge/);
+    expect(b.text).toMatch(/ends with a straight run at 3" from the REAR end, 6" to 4-1\/2" from the RIGHT edge/);
+    expect(t.svg).toMatch(/3&quot;: 0&quot; and 1-1\/2&quot; \(a straight run across\)/);
+    expect(t.svg).toMatch(/3&quot;: 4-1\/2&quot; and 6&quot; \(a straight run across\)/);
+  });
+  it('gives the depth of the bolt holes the step gives (3" through the head)', () => {
+    const holes = t.features.find((f) => f.kind === 'hole' && /25\/64/.test(f.text))!;
+    expect(holes.text).toMatch(/through \(3" deep\)/);
   });
 });

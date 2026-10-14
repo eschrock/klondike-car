@@ -306,7 +306,7 @@ export function sideLateralCheck(ctx: Ctx): AnalysisCheck {
     detail('D-ring rating: deck-line glue and chine sandwich (cross-grain tension)', s.rating.r.sigDeck, 'psi', deckAllow, '<='),
     detail(`D-ring rating: rib bending (rib ${s.rating.ribSigMaxN}, each rib pulled alone)`, s.rating.ribSigMax, 'psi', al.oakBend, '<='),
   ];
-  if (hasKnee) ds.push(detail(`${f(s.push.P, 0)} lbf outward push: knee toe screw withdrawal (${s.knee.ks.d.length} ${s.knee.ks.fit.gauge === 6 ? '#6' : `#${s.knee.ks.fit.gauge}`} into the joist)`, s.push.kneePull, 'lbf', s.knee.cap, '<='));
+  if (hasKnee) ds.push(detail(`${f(s.push.P, 0)} lbf outward push: knee toe screw withdrawal (${s.knee.ks.d.length} #${s.knee.ks.fit.gauge} into the joist)`, s.push.kneePull, 'lbf', s.knee.cap, '<='));
   if (hasBox) ds.push(detail('box tie glue (rating or push), cross-grain tension', Math.max(s.push.tieForce, s.rating.tieForce) / s.tieArea, 'psi', deckAllow, '<='));
   const m = s.model;
   const ribTxt = m.ribs.map((rb) => `rib ${rb.st.n} at x = ${f(rb.st.x, 1)} (${rb.st.kind === 'box' ? `box tie ${f(rb.zBase, 1)}" up` : `knee on ${rb.st.member === 'king-beam' ? 'the king beam' : (rb.st.member ?? '').replace('-', ' ')}`}, ${f(rb.K, 0)} lbf/in at the gunwale)`).join('; ');

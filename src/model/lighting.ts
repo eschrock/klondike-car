@@ -18,10 +18,12 @@ const unit = (x: number, y: number, z: number): Vec3 => {
 };
 
 // ── Estimates / placeholders (D-41) ──
-const FRONT_LIGHT_MASS_LB = 0.4;
+/** D-83: Giant Recon 600 headlight, 87 g (0.19 lb). */
+const FRONT_LIGHT_MASS_LB = 0.19;
 /** 3c visual round 2: 1.25x across and tall (was 3 x 2.2 x 1.8; the reviewer found it small against the 21 in bulkhead). Same length (no longer overall), the top at about 4.75 in over the deck, still under the 4 7/8 in bulkhead corners. */
 const FRONT_LIGHT_SIZE = [3, 2.75, 2.25] as const;
-const REAR_LIGHT_MASS_LB = 0.3;
+/** D-83: Planet Bike Spok tail light, about 0.06 lb (VERIFY the weight). */
+const REAR_LIGHT_MASS_LB = 0.06;
 /** The lamp clip (3c-5): print clearance per side in the slot, and how far the plug stands proud of the bulkhead's front face (the lamp's seat). */
 export const LAMP_CLIP = { clearIn: 0.02, lipIn: 0.5 } as const;
 const REAR_LIGHT_SIZE = [0.75, 2, 1.5] as const;
@@ -38,7 +40,7 @@ export const REFLECTOR_SIZE = [2, 0.25, 1] as const;
  * eye bolts, kingpin, pins and clamp plates, so it is now a REMAINDER computed from the model's own joints: every fastener that is
  * not a separate part (wood and machine screws, carriage/hex bolts with their nuts and washers, inserts, thumb-knob screws,
  * Dominos, epoxy) at a typical stainless/zinc unit mass. At the defaults the arithmetic (see `fastenerBreakdown`) is about:
- *   screws          ~100 x 0.008 lb = 0.8    (D-72: #8 x 5/8, #8 x 1-1/4 and #6 x 2-1/2 stainless, 3 to 8 g)
+ *   screws          ~100 x 0.008 lb = 0.8    (D-72, D-82: #8 x 5/8, #8 x 1-1/4 and #8 x 2-1/2 stainless, 3 to 8 g)
  *   bolt sets        ~48 x 0.04-0.09 lb      (1/4" to 3/8" bolt + nut + washer(s); 0.02 lb for a screw tapped into a hub)
  *   inserts, knobs   ~20 x 0.005 / 0.02 lb
  *   Dominos          ~24 x 0.005 lb
@@ -102,12 +104,12 @@ export function buildLighting(ctx: Ctx): Part[] {
     }));
     const lampW = FRONT_LIGHT_SIZE[0];
     parts.push(box(ctx, {
-      ...common, id: 'front-light', name: 'Front LED headlight', mat: 'fixed', massLb: FRONT_LIGHT_MASS_LB, kind: 'purchased', material: 'LED headlight', fab: 'buy',
+      ...common, id: 'front-light', name: 'Front LED headlight', mat: 'fixed', massLb: FRONT_LIGHT_MASS_LB, kind: 'purchased', material: 'LED headlight (Giant Recon 600)', fab: 'buy',
       removable: true, explode: unit(0.8, 0, 0.2), size: [...FRONT_LIGHT_SIZE],
       center: [lampX0 + lampW / 2, 0, L.hold.zMid],
-      sourcing: { vendor: 'Generic 800 lm rechargeable LED bike headlight with a flat mount (e.g. Cygolite / NiteRider class)', costUsd: 40 },
+      sourcing: { vendor: 'Bicycle Warehouse (Giant Recon 600 rechargeable LED headlight, 87 g, flat mount)', costUsd: 41.95 },
       joints: [{ type: 'screw', to: 'lamp-clip', count: 2, size: 'M4 stainless, into heat-set inserts in the lip' }],
-      notes: 'Mass is an estimate. Faces forward from the front lip of the lamp clip, which sits in the bow bulkhead\'s hand-hold (3c-5). Warm-white lens.',
+      notes: 'D-83: Giant Recon 600 (87 g); the printed clip was drawn for a different light, so RE-MEASURE the clip and its two screw inserts to the real light before printing. Faces forward from the front lip of the lamp clip, which sits in the bow bulkhead\'s hand-hold (3c-5). Warm-white lens.',
     }));
   }
 
@@ -166,11 +168,11 @@ export function buildLighting(ctx: Ctx): Part[] {
       notes: `D-64: printed ASA plug, ${len.toFixed(2)}" × ${h.toFixed(2)}" (the ${p.liftSlotLengthIn}" × ${p.liftSlotHeightIn}" rear hand-hold less ${LAMP_CLIP.clearIn}" a side), ${depth.toFixed(2)}" long: through the ${L.transom}" transom, ${outer}" proud of the outer face (the lip that carries the tail light) and ${inner.toFixed(2)}" past the inner face, which leaves ${(gap - inner).toFixed(2)}" to the storage box end (at least ${REAR_LAMP_CLIP.boxClearIn}"). The same stadium extrusion as the front clip (outline in y-z, depth along x): print it lying on one long face, 4+ perimeters (P4). Two 0.04" detent ribs make the push fit firm; the light's flat mount screws to two M3 heat-set inserts in the outer lip. Pop it out before lifting: the rear lifter's hands need the slot, so both lamps come out (D-37, D-64). It is not on a load path; it is removable. VERIFY ON THE REAL PARTS: only ${LAMP_CLIP.clearIn}" of clearance a side in a Shaper-cut, epoxy-sealed slot in a ${L.transom}" transom whose slot edges are eased; print a 1" test slice at 0.04 to 0.05" a side with 0.05" ribs and try it in the real hand-hold before printing the whole clip.`,
     }));
     parts.push(box(ctx, {
-      ...common, id: 'rear-light', name: 'Rear red light', mat: 'fixed', massLb: REAR_LIGHT_MASS_LB, kind: 'purchased', material: 'LED light', fab: 'buy',
+      ...common, id: 'rear-light', name: 'Rear red light', mat: 'fixed', massLb: REAR_LIGHT_MASS_LB, kind: 'purchased', material: 'LED tail light (Planet Bike Spok)', fab: 'buy',
       removable: true, size: [...REAR_LIGHT_SIZE], center: [clipX0 - REAR_LIGHT_SIZE[0] / 2, 0, zMid],
-      sourcing: { vendor: 'Generic red LED bike tail light (USB rechargeable, rear-facing, with a screw-on bracket)', costUsd: 20 },
+      sourcing: { vendor: 'Bicycle Warehouse (Planet Bike Spok rear LED light)', costUsd: 21.99 },
       joints: [{ type: 'screw', to: 'rear-lamp-clip', count: 2, size: 'M3 × 8 stainless, into heat-set inserts in the outer lip' }],
-      explode: unit(-1, 0, 0.5), notes: 'D-64: faces aft from the outer lip of the rear lamp clip, centered on the transom\'s hand-hold; mass includes the light (estimate). Red lens. Pops out with the clip before lifting.',
+      explode: unit(-1, 0, 0.5), notes: 'D-64, D-83: Planet Bike Spok (mass about 0.06 lb: VERIFY); the printed clip must be RE-MEASURED to the real light before printing. Faces aft from the outer lip of the rear lamp clip, centered on the transom\'s hand-hold. Red lens. Pops out with the clip before lifting.',
     }));
   }
 
@@ -183,7 +185,7 @@ export function buildLighting(ctx: Ctx): Part[] {
       let x = Math.max(L.xRear + reach * f, SIGN_X_MAX_IN + 2); // the rear one stands ahead of the side sign (D-57)
       // D-63: the grab board's 316 backing strip is on the same outer gunwale face; a reflector that would sit on it moves just ahead of it
       const stripX0 = p.seatXIn - GRIP_BEHIND_HPOINT_IN + GRIP_BACKING_END_IN - 0.3, stripX1 = p.seatXIn - GRIP_BEHIND_HPOINT_IN + p.grabBoardLengthIn - GRIP_BACKING_END_IN + 0.3;
-      // D-76: and it stays 1/4 in clear of the outside fender washers of the side-rib D-ring bolts (the box rib's station is set so the rear one does not have to move).
+      // D-76: and it stays 1/4 in clear of the outside fender washers of the side-rib D-ring bolts (D-83) (the box rib's station is set so the rear one does not have to move).
       for (const [wa, wb] of washers) if (x + REFLECTOR_SIZE[0] / 2 + 0.25 > wa && x - REFLECTOR_SIZE[0] / 2 - 0.25 < wb) x = wb + REFLECTOR_SIZE[0] / 2 + 0.25;
       if (x + REFLECTOR_SIZE[0] / 2 + 0.1 > stripX0 && x - REFLECTOR_SIZE[0] / 2 - 0.1 < stripX1) x = stripX1 + REFLECTOR_SIZE[0] / 2 + 0.3;
       const color = i === 0 ? 'red' : 'amber'; // 3c-5: red at the rear, amber at the front (DOT-C2 side marker colors)
@@ -219,7 +221,7 @@ export function buildHardware(ctx: Ctx): Part[] {
   return [box(ctx, {
     id: 'hardware', name: 'Fasteners, inserts & misc', group: 'hardware', mat: 'fixed', massLb: HARDWARE_FALLBACK_LB, kind: 'purchased', fab: 'buy',
     material: `${stainless(ctx.p)} screws and bolts, ${insertMat(ctx.p)} inserts, Dominos; epoxy`,
-    sourcing: { vendor: `McMaster-Carr / Fastenal (${stainless(ctx.p)} wood screws and machine screws, ${insertMat(ctx.p)} threaded inserts; Festool Dominos; West System epoxy).${ctx.p.weatherSpec === WEATHER_SPEC.extreme ? ' Stainless throughout: no zinc or brass in wet oak (S7).' : ''}`, costUsd: 60 },
+    sourcing: { vendor: `McMaster-Carr / Fastenal (${stainless(ctx.p)} wood screws and machine screws, ${insertMat(ctx.p)} threaded inserts; Festool Dominos; the epoxy kit of the parts list).${ctx.p.weatherSpec === WEATHER_SPEC.extreme ? ' Stainless throughout: no zinc or brass in wet oak (S7).' : ''}`, costUsd: 60 },
     step: STEP.finish, size: [sx, HARDWARE_SIZE[1], HARDWARE_SIZE[2]], center: [(bestLo + bestHi) / 2, 0, L.deckBot - HARDWARE_SIZE[2] / 2],
     notes: 'Fastener remainder, set from the joint list by applyHardwareMass. Parked under the deck center.',
   })];
@@ -245,7 +247,7 @@ export function fastenerBreakdown(parts: Part[]): Record<string, { count: number
           if (/see the bushing/.test(size)) break; // cross-reference to the bushing's own bolts, already counted
           if (/tapped/.test(size)) { add('bolts tapped into steel', n, FASTENER_LB.boltTapped); break; }
           const dia = j.diaIn ?? parseDia(size);
-          if (dia < 0.2) { add('machine screw sets', n, FASTENER_LB.machineScrew); break; } // D-76: #8-32 x 2 in + 3/4 in fender washer + nylock, about 7 g
+          if (dia < 0.2) { add('machine screw sets', n, FASTENER_LB.machineScrew); break; } // 6-32 and #8-32 machine-screw sets (the D-ring bolts are 1/4-20 now, D-83: bolt sets)
           add('bolt sets', n, dia > 0.33 ? FASTENER_LB.boltLarge : FASTENER_LB.boltSmall);
           break;
         }

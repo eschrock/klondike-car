@@ -3,6 +3,7 @@ import { buildModel } from '../model';
 import { defaultParams } from '../params';
 import { BOARD_THICKNESSES, BOARD_WIDTH_IN, boardByNominal, isBuilt, partKey, planOakPart } from './cutlist';
 import { nestPlywood, oakBoardFeet, SHEET_LENGTH_IN, SHEET_WIDTH_IN } from './nesting';
+import { OAK_STOCKED } from './prices';
 
 const p = defaultParams();
 const parts = buildModel(p);
@@ -16,7 +17,7 @@ const bbox = (pts: Array<[number, number]>) => ({
 describe('nestPlywood', () => {
   it('places every sheet part on one sheet per thickness', () => {
     expect(nest.unplaced).toEqual([]);
-    expect(nest.sheets.map((s) => s.label)).toEqual(['1/4 in white oak plywood', '12 mm okoume']); // D-73: the thin sheet follows the weather spec (Standard: white oak plywood, 5.3 mm; Extreme: '4 mm okoume')
+    expect(nest.sheets.map((s) => s.label)).toEqual(['6 mm Baltic birch', '12 mm okoume']); // D-73, D-80: the thin sheet follows the weather spec (Standard: 6 mm Baltic birch; Extreme: '6 mm okoume')
     const ply = parts.filter((x) => isBuilt(x) && x.kind === 'sheet').map((x) => x.id).sort();
     expect(nest.sheets.flatMap((s) => s.placements.map((q) => q.partId)).sort()).toEqual(ply);
     for (const s of nest.sheets) { expect(s.widthIn).toBe(SHEET_WIDTH_IN); expect(s.lengthIn).toBe(SHEET_LENGTH_IN); }
@@ -27,7 +28,7 @@ describe('nestPlywood', () => {
     const ids = s12.placements.map((q) => q.partId);
     expect(ids).toContain('seat-back-panel');
     expect(ids).toContain('deck');
-    expect(nest.sheets.find((s) => s.thicknessMm === 5)!.placements.map((q) => q.partId)).not.toContain('seat-back-panel');
+    expect(nest.sheets.find((s) => s.thicknessMm === 6)!.placements.map((q) => q.partId)).not.toContain('seat-back-panel');
   });
 
   it('keeps every outline inside the sheet margin and every pair of parts a kerf apart', () => {
@@ -56,7 +57,7 @@ describe('nestPlywood', () => {
   });
 
   it('runs the long webs and the deck lengthwise and reports no turned grain at the defaults', () => {
-    const s4 = nest.sheets.find((s) => s.thicknessMm === 5)!; // the 1/4 in white oak sheet (5 mm class)
+    const s4 = nest.sheets.find((s) => s.thicknessMm === 6)!; // the 6 mm Baltic birch sheet (6 mm class)
     for (const id of ['side-L-web', 'side-R-web']) {
       const q = s4.placements.find((x) => x.partId === id)!;
       expect(q.widthIn).toBeGreaterThan(q.heightIn * 3);
@@ -129,21 +130,28 @@ describe('oakBoardFeet', () => {
   });
 
   it('cuts a solid bucket under 1 bf from the offcuts of a thicker board instead of buying a thin board for it (and says so)', () => {
-    // At the defaults every bucket is over 1 bf; thin the 6/4 bucket down to the chain joist and the seat wedges (about 0.6 bf) by dropping the handlebow; the 8/4 board is its host.
-    const thin = parts.filter((x) => x.id !== 'handle-bar');
-    const oakThin = oakBoardFeet(thin, p);
-    expect(oakThin.consolidated.length).toBeGreaterThan(0);
-    for (const o of [oak, oakThin]) for (const c of o.consolidated) {
-      const oak = o;
-      const from = oak.thicknesses.find((t) => t.board === c.from);
-      const to = oak.thicknesses.find((t) => t.board === c.to)!;
-      expect(c.netBf).toBeLessThan(1.5); // about a board foot (counted on the thicker board's nominal thickness)
-      expect(from?.boards ?? []).toEqual([]); // no solid board of the thin thickness is planned
-      if (from) expect(from.movedOut).toBe(c.to); // a thickness left with nothing (no solids, no resaw) has no row at all
-      expect(to.movedIn?.partNos).toEqual(c.partNos);
-      expect(to.summary.join(' ')).toMatch(new RegExp(`cut the ${c.from} parts`));
-      const planned = to.boards.flatMap((b) => b.lanes.flatMap((l) => l.cuts.map((q) => q.partNo)));
-      for (const no of c.partNos) expect(planned, no).toContain(no);
+    // Only 4/4 and 5/4 are bought (D-79) and no bucket is under 1 bf at the defaults, so stock 8/4 again and keep a few oak parts: the 4/4 joists are then a small bucket cut from a thicker board's offcuts.
+    const saved = { ...OAK_STOCKED };
+    OAK_STOCKED['8/4'] = true;
+    try {
+      const isOak = (x: { material: string; kind: string; plies?: number }): boolean => /oak/i.test(x.material) && x.kind === 'lumber' && x.plies === undefined;
+      const keep = new Set(['king-beam', 'bridle-tongue', 'joist-2', 'joist-3', 'joist-4', 'seat-hinge-backer-L']);
+      const small = parts.filter((x) => !isBuilt(x) || !isOak(x) || keep.has(x.id));
+      const o = oakBoardFeet(small, p);
+      expect(o.consolidated.length).toBeGreaterThan(0);
+      for (const c of o.consolidated) {
+        const from = o.thicknesses.find((t) => t.board === c.from);
+        expect(c.netBf).toBeLessThan(1.5); // about a board foot (counted on the thicker board's nominal thickness)
+        expect(from?.boards ?? []).toEqual([]); // no solid board of the thin thickness is planned
+        if (from) expect(from.movedOut).toBe(c.to); // a thickness left with nothing (no solids, no resaw) has no row at all
+        const to = o.thicknesses.find((t) => t.board === c.to);
+        if (to) {
+          expect(to.movedIn?.partNos).toEqual(c.partNos);
+          expect(to.summary.join(' ')).toMatch(new RegExp(`cut the ${c.from} parts`));
+        }
+      }
+    } finally {
+      Object.assign(OAK_STOCKED, saved);
     }
     // the BOM buys whole boards: the lumber is the planned board feet
     for (const t of oak.thicknesses) expect(t.purchaseBf).toBeCloseTo(t.plannedBf, 9);
@@ -153,7 +161,7 @@ describe('oakBoardFeet', () => {
     const util = (b: { lengthIn: number; lanes: Array<{ widthIn: number; usedIn: number }> }): number => b.lanes.reduce((a, l) => a + l.widthIn * (l.usedIn - p.resawKerfIn), 0) / (BOARD_WIDTH_IN * b.lengthIn);
     for (const t of oak.thicknesses) for (const b of t.boards) expect(util(b), `${t.board} ${b.lengthIn / 12} ft`).toBeGreaterThan(0.4);
     const t44 = oak.thicknesses.find((t) => t.board === '4/4')!;
-    expect(t44.boards.length).toBeLessThanOrEqual(4); // the face-laminated layers (D-70) take a third 4/4 board; the +1 in / +2 in length allowances (Eric 2026-10-12) a fourth
+    expect(t44.boards.length).toBeLessThanOrEqual(5); // D-79: with only 4/4 and 5/4 bought, the layers of the face-laminated parts (D-70) take most of the 4/4 boards (5 of 10 ft at the defaults)
     // (at the defaults the +1 in / +2 in length allowances leave nothing to fold; the checks below run on whatever did fold)
     // each folded piece is planned once, in a lane of a thicker board that is at least as wide, and marked with the thickness it would have been bought as
     const seen = new Map<string, number>();
@@ -197,9 +205,9 @@ describe('oakBoardFeet', () => {
 describe('oakBoardFeet: face-laminated parts (D-70)', () => {
   const oak = oakBoardFeet(parts, p);
 
-  it('buys no 12/4: the axle beams, brake knees and chocks take their layers from the 4/4 boards (D-74: every laminated part is 3 x 3/4)', () => {
-    expect(oak.thicknesses.map((t) => t.board)).not.toContain('12/4');
-    expect(oak.laminated.map((q) => q.id).sort()).toEqual(['beam-F', 'beam-R', 'brake-chock-L', 'brake-chock-R', 'brake-knee-L', 'brake-knee-R']);
+  it('buys no 6/4, 8/4 or 12/4 (D-79): the axle beams, brake knees and chocks take their layers from the 4/4 boards (D-74: 3 x 3/4), and the thick blocks from 4/4 and 5/4', () => {
+    expect(oak.thicknesses.map((t) => t.board)).toEqual(['4/4', '5/4']);
+    expect(oak.laminated.map((q) => q.id).sort()).toEqual(['beam-F', 'beam-R', 'bow-bulkhead', 'brake-chock-L', 'brake-chock-R', 'brake-knee-L', 'brake-knee-R', 'bridle-tongue', 'handle-bar', 'joist-6', 'king-beam', 'seat-wedge-L', 'seat-wedge-R', 'storage-hinge-backer-L', 'storage-hinge-backer-R']);
     const layerCuts = oak.thicknesses.flatMap((t) => t.boards.flatMap((b) => b.lanes.flatMap((l) => l.cuts.map((c) => ({ c, board: t.board })))))
       .filter((q) => q.c.layer !== undefined);
     // every part 3 layers of 4/4 (D-74); knees 1 + 2 + 1 pieces (the upright layers are one piece each); chocks 3 layers x 1 piece (a 3.5" wide chock fits a board)

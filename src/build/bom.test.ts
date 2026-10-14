@@ -5,9 +5,9 @@ import { defaultParams } from '../params';
 import { BULK_SHARE, EPOXY_WASTE, NOTE_ITEMS, TOUCH_GROUPS, fastenerMaterialNote, isBulkQty, touchGroupOfPart, THROUGH_STACKS, bom, boltLengthFromStack, jointItems, screwLengthFromStack, shortVendor, uniqueJoints } from './bom';
 import { PRE_D72 } from '../test-fixtures';
 import { cutList, isBuilt } from './cutlist';
-import { finishingSchedule, glueEpoxyFlOz } from './finishing';
+import { EPOXY_BUY_RE, finishingSchedule, glueEpoxyFlOz } from './finishing';
 import { oakBoardFeet } from './nesting';
-import { EPOXY_KITS, EPOXY_PUMPS_300, FASTENER_PRICE, FILLERS, FINISH_CONTAINER_PRICE, FINISH_PRICE, GLASS_TAPE, METAL_PRICE_PER_FT, NOTE_PRICE, OAK_ALT_PRICE_PER_BF, OAK_PRICE_PER_BF, PLYWOOD_PRICE, PURCHASED_PRICE, RESEARCH_DATE, SEARCH_READ_NOTE, type Price } from './prices';
+import { EPOXY_KITS, EPOXY_KITS_SMALL, EPOXY_PUMPS_300, EPOXY_PUMPS_USC_2TO1, FASTENER_PRICE, FASTENER_PRICE_STANDARD, FILLERS, FINISH_CONTAINER_PRICE, FINISH_PRICE, GLASS_TAPE, METAL_PRICE_PER_FT, NOTE_PRICE, OAK_ALT_PRICE_PER_BF, OAK_PRICE_PER_BF, OWNED_NOTE, PEACH_STATE_LUMBER_URL, PLYWOOD_PRICE, PURCHASED_PRICE, PURCHASED_PRICE_STANDARD, RESEARCH_DATE, RESEARCH_DATE_COST_PASS, SEARCH_READ_NOTE, TITEBOND_OWNED, type Price } from './prices';
 
 // D-72/D-73: this file's counts and prices are the 4 mm okoume / 4×20 Domino / DOM tube configuration (PRE_D72); the BOM for the white oak plywood and the solid rod follows the weather spec (bom.ts).
 const p = { ...defaultParams(), ...PRE_D72, weatherSpec: 1 }; // the EXTREME weather spec (316, Sipo, epoxy everywhere, marine varnish); the Standard spec is tested in weather-spec.test.ts
@@ -70,8 +70,9 @@ describe('bom', () => {
     expect(sum(/^Domino/)).toBe(b.jointCounts.domino);
     // every bolt brings a nut, except the kingpin (nut is in the part)
     expect(sum(/lock nut/) + sum(/T-nut/)).toBeGreaterThanOrEqual(b.jointCounts.bolt - 1); // every bolt gets a lock nut, or a T-nut set in its backer (the handle sockets)
-    expect(lines.some((l) => /Domino DF 500 4x20/.test(l.key))).toBe(true);
     expect(lines.some((l) => /Domino DF 500 5x30/.test(l.key))).toBe(true);
+    expect(lines.some((l) => /Domino DF 500 6x40/.test(l.key))).toBe(true); // D-81: the rail end into the bulkhead is a 6x40 (the 8x50 is gone); the chine-to-rail tie has no Dominos
+    expect(lines.some((l) => /Domino DF 500 (4x20|8x50)/.test(l.key))).toBe(false);
   });
 
   it('marks model costs quoted and table prices estimated', () => {
@@ -87,17 +88,19 @@ describe('bom', () => {
     // Table prices carry their own basis: Eric's vendor quotes (the plywood, 4/4, 8/4, 12/4 oak) and the researched prices are quoted, the rest estimates
     expect(b.sections.find((x) => x.id === 'plywood')!.lines.every((l) => l.basis === 'quoted')).toBe(true);
     const metal = b.sections.find((x) => x.id === 'metal')!.lines;
-    expect(metal.filter((l) => l.basis === 'estimate').map((l) => l.key).sort()).toEqual(['316 stainless flat bar 1/16" x 1"', '316 stainless flat bar 1/4" x 1-3/4"', '316 stainless flat bar 1/8" x 2"', '5/8" OD x 0.120" wall DOM tube (ASTM A513 Type 5)']); // no exact 316 bar found; the 1/8 x 2 brake backing-plate bar is not in the research (D-75); no price found for the 5/8 x 0.120 DOM (D-71: the Speedy 0.109 wall price is the stand-in)
-    expect(metal.filter((l) => l.basis === 'quoted').length).toBe(2);
+    expect(metal.filter((l) => l.basis === 'estimate').map((l) => l.key).sort()).toEqual(['316 stainless flat bar 1/16" x 1"', '5/8" OD x 0.120" wall DOM tube (ASTM A513 Type 5)']); // 2026-10-14 research: the 1/4 x 2 and 1/8 x 2 bars, the angle, the aluminum tube and the 1045 rod have real prices; the 1/16 x 1 strip is stocked nowhere; the Speedy 0.109 wall price is the DOM stand-in (D-71)
+    expect(metal.filter((l) => l.basis === 'quoted').length).toBe(4);
     for (const l of b.sections.find((x) => x.id === 'lumber')!.lines) expect(l.basis, l.key).toBe(OAK_PRICE_PER_BF[l.key].basis);
   });
 
-  it('prices the two sheets where Eric found them (4 mm Aircraft Spruce, 12 mm The Wood Yard) and 4/4 to 8/4 oak, no 12/4 (D-70)', () => {
+  it('prices the thin sheet by its priceKey (this file runs the 4 mm okoume: Aircraft Spruce $121.75) and the 12 mm deck sheet at The Wood Yard, and the oak as 4/4 and 5/4 only (D-79, D-80)', () => {
     const ply = b.sections.find((s) => s.id === 'plywood')!.lines;
     expect(ply.map((l) => l.qty)).toEqual([1, 1]);
+    expect(ply.map((l) => l.key)).toEqual(['okoume-4mm', '12 mm']);
+    expect(ply[0].unitUsd).toBe(PLYWOOD_PRICE['okoume-4mm'].usd);
     expect(ply.map((l) => l.vendor)).toEqual(['Aircraft Spruce', 'The Wood Yard']);
     const lumber = b.sections.find((s) => s.id === 'lumber')!.lines.map((l) => l.key);
-    expect(lumber).toEqual(['4/4', '5/4', '6/4', '8/4']); // 12/4 is not stocked: the beams, knees and chocks are face-laminated from 4/4 (D-70)
+    expect(lumber).toEqual(['4/4', '5/4']); // Peach State has no 6/4 and 8/4 is not bought: the thick parts are face-laminated from 4/4 and 5/4 (D-70, D-79)
   });
 
   it('prices the oak as the whole boards to buy (nesting.ts), not net x 1.3', () => {
@@ -121,20 +124,22 @@ describe('bom', () => {
     const sched = finishingSchedule(parts, p);
     const cons = b.sections.find((s) => s.id === 'consumables')!.lines;
     // every finish product of the buy list is a BOM line with the same container and quantity
-    for (const bl of sched.buy.filter((x) => !/West System/.test(x.item))) {
-      const l = cons.find((q) => q.description === `${bl.item}, ${bl.unit}`);
+    for (const bl of sched.buy.filter((x) => !/West System/.test(x.item) && !EPOXY_BUY_RE.test(x.item))) { // the epoxy is a kit line, checked below
+      const marker = /paint marker/.test(bl.item); // D-83: bought as a marker, not by the pint
+      const l = cons.find((q) => q.description === (marker ? bl.item : `${bl.item}, ${bl.unit}`));
       expect(l, bl.item).toBeTruthy();
       expect(l!.qty).toBe(bl.qty);
-      expect(l!.unit).toBe(bl.unit);
+      if (!marker) expect(l!.unit).toBe(bl.unit);
     }
     // hardeners by West System number: the pints of the buy list (207 for the coats, 209 for the slow closes)
     const hardeners = sched.buy.filter((x) => /West System/.test(x.item) && /hardener/i.test(x.item));
     for (const no of new Set(hardeners.map((x) => /\b(20\d)\b/.exec(x.item)![1]))) {
       expect(cons.find((l) => l.key === `epoxy-${no}`)?.qty, no).toBe(hardeners.filter((x) => new RegExp(no).test(x.item)).reduce((a, x) => a + x.qt * 2, 0));
     }
-    // pumps: West System no longer sells the 301 and 303 sets; one 300 Mini Pump Set does both ratios
-    expect(cons.filter((l) => /pumps/.test(l.key)).map((l) => [l.key, l.qty, l.unitUsd])).toEqual([['epoxy-pumps', 1, EPOXY_PUMPS_300.usd]]);
-    expect(cons.find((l) => l.key === 'epoxy-pumps')!.description).toMatch(/300 Mini Pump Set/);
+    // pumps: one set, with whichever kit is bought (West System no longer sells the 301 and 303 sets; one 300 Mini Pump Set does both ratios; the U.S. Composites 2:1 kit has its own $8.50 set)
+    const west = cons.some((l) => /^epoxy-(gallon|quart)$/.test(l.key));
+    expect(cons.filter((l) => /pumps/.test(l.key)).map((l) => [l.key, l.qty, l.unitUsd])).toEqual([['epoxy-pumps', 1, west ? EPOXY_PUMPS_300.usd : EPOXY_PUMPS_USC_2TO1.usd]]);
+    expect(cons.find((l) => l.key === 'epoxy-pumps')!.description).toMatch(west ? /300 Mini Pump Set/ : /Pump set for the U\.S\. Composites/);
     // the glue epoxy is finishing.ts's estimate by joint type plus the waste, and per joint it is well above the old 0.12 fl oz
     expect(b.consumables.glueEpoxyFlOz).toBeCloseTo(glueEpoxyFlOz(parts, undefined, p) * (1 + EPOXY_WASTE), 6); // with `p`: the Extreme spec counts every joint, and the D-70 face laminations
     expect(b.consumables.glueEpoxyFlOz / b.jointCounts.glue).toBeGreaterThan(0.25);
@@ -142,14 +147,17 @@ describe('bom', () => {
     const finishFlOz = sched.steps.find((x) => x.id === 'epoxy')!.products.reduce((a, q) => a + q.qtNeeded, 0) * 32;
     expect(b.consumables.finishEpoxyFlOz).toBeCloseTo(finishFlOz, 6);
     expect(b.consumables.closeEpoxyFlOz).toBeCloseTo(sched.closeEpoxyFlOz, 6);
-    // resin: 5/6 of everything (105/206 at 5:1); the kits cover it, and no cheaper combination does
+    // resin: 5/6 of the mixed epoxy at 5:1 (the West kits); the 2:1 U.S. Composites kit needs 2/3 of it. The cheapest family is bought, and no West combination is cheaper
     const need = (b.consumables.glueEpoxyFlOz * 5) / 6 + ((b.consumables.finishEpoxyFlOz + b.consumables.closeEpoxyFlOz) * 5) / 6;
     expect(b.consumables.resinFlOz).toBeCloseTo(need, 6);
     const [quart, gallon] = EPOXY_KITS;
     const nQ = cons.filter((l) => l.key === 'epoxy-quart').reduce((a, l) => a + l.qty, 0), nG = cons.filter((l) => l.key === 'epoxy-gallon').reduce((a, l) => a + l.qty, 0);
-    expect(nQ * quart.resinFlOz + nG * gallon.resinFlOz).toBeGreaterThanOrEqual(need);
-    const paid = nQ * quart.price.usd + nG * gallon.price.usd;
-    for (let g = 0; g <= 4; g++) for (let q = 0; q <= 8; q++) if (q * quart.resinFlOz + g * gallon.resinFlOz >= need) expect(g * gallon.price.usd + q * quart.price.usd, `${g} gal + ${q} qt`).toBeGreaterThanOrEqual(paid - 1e-9);
+    const usc = EPOXY_KITS_SMALL.find((k) => k.id === 'uscomposites-635-2-1')!;
+    const nU = cons.filter((l) => l.key === `epoxy-${usc.id}`).reduce((a, l) => a + l.qty, 0);
+    if (nU > 0) expect(nU * usc.resinFlOz).toBeGreaterThanOrEqual(b.consumables.epoxyFlOz * usc.resinShare); // the 2:1 kit's resin share is 2/3 of the mixed volume
+    else expect(nQ * quart.resinFlOz + nG * gallon.resinFlOz).toBeGreaterThanOrEqual(need);
+    const paid = cons.filter((l) => /^epoxy-/.test(l.key)).reduce((a, l) => a + l.extUsd, 0);
+    for (let g = 0; g <= 4; g++) for (let q = 0; q <= 8; q++) if (q * quart.resinFlOz + g * gallon.resinFlOz >= need) expect(g * gallon.price.usd + q * quart.price.usd + EPOXY_PUMPS_300.usd, `${g} gal + ${q} qt`).toBeGreaterThanOrEqual(paid - 1e-9);
     // a gallon group is cheaper per ounce of resin than the quart group, and than three quart groups
     expect(gallon.price.usd / gallon.resinFlOz).toBeLessThan(quart.price.usd / quart.resinFlOz);
     expect(gallon.price.usd).toBeLessThan(3 * quart.price.usd);
@@ -165,6 +173,19 @@ describe('bom', () => {
     // one subtotal row per section, one per touches group
     expect(b.csv.match(/,Subtotal,/g)!.length).toBe(8);
     expect(b.csv.match(/Subtotal: /g)!.length).toBe(4);
+  });
+
+  it('buys exactly the washers the joint names: a narrow flat washer under each knee bolt head, none under the nuts that bear on the backing plate', () => {
+    const part = parts.find((x) => x.id === 'brake-knee-L')!;
+    const knee = part.joints!.find((q) => q.type === 'bolt' && /narrow flat washer/.test(q.size ?? ''))!;
+    const items = jointItems(part, knee, new Map(parts.map((x) => [x.id, x])));
+    expect(items.map((i) => `${i.qty} ${i.label}`)).toEqual([`4 316 hex bolt 3/8-16 x 4"`, '4 316 nylon-insert lock nut 3/8-16', '4 316 narrow flat washer 3/8" (7/8" OD)']);
+    // a bolt whose washers are all on the nut side gets one per bolt, not two
+    const j2 = { type: 'bolt' as const, to: 'x', count: 2, size: '0.25" × 2-3/4 316 hex bolts down through the leg, nylock nuts and fender washers under the beam' };
+    expect(jointItems(part, j2).map((i) => `${i.qty} ${i.label}`)).toContain('2 316 fender washer 1/4"');
+    // a screw whose heads bear on a plate has no washer
+    const j3 = { type: 'bolt' as const, to: 'x', count: 4, size: '#8-32 x 2" 316 machine screw, pan head on the outside bearing plate (no washer), nylock nut inside' };
+    expect(jointItems(part, j3).some((i) => /washer/.test(i.label))).toBe(false);
   });
 
   it('classifies fastener size text', () => {
@@ -183,26 +204,27 @@ describe('bom', () => {
   const consumables = () => b.sections.find((x) => x.id === 'consumables')!.lines;
   const qtyOf = (lines: typeof b.sections[number]['lines'], re: RegExp): number => lines.filter((l) => re.test(l.key)).reduce((a, l) => a + need(l), 0);
 
-  it('lists what the steps and notes use (build MUST-10): axle retention, hinge screws, handlebow rods, rail screws, plugs, washers, Dual Lock, banding, sealant, cement, batten screws', () => {
+  it('lists what the steps and notes use (build MUST-10): axle retention, hinge screws, handlebow rods, rail screws, plugs, washers, hook-and-loop, banding, sealant, cement, batten screws', () => {
     const wheels = parts.filter((x) => /^wheel-/.test(x.id)).length;
     expect(wheels).toBe(4);
-    const f = fasteners(), c = [...consumables(), ...secLines('touches')]; // the Dual Lock belongs to the seat comfort touches
+    const f = fasteners(), c = [...consumables(), ...secLines('touches')]; // the hook-and-loop belongs to the seat comfort touches
     expect(qtyOf(f, /shaft collar/)).toBe(wheels);
     expect(qtyOf(f, /cotter pin 5\/32" x 1-1\/2"/)).toBe(wheels); // the 0.156" cross hole takes a 5/32 pin
     expect(qtyOf(f, /end plug for 5\/8" OD/)).toBe(6); // three axle tubes, two ends each
     expect(qtyOf(f, /machine screw #10-32 x 3\/8"/)).toBe(6); // seat hinge leaves into the six inserts
     expect(qtyOf(f, /stainless rod 3\/8" x 2-1\/4"/)).toBe(2); // handlebow pins
     expect(qtyOf(f, /wood screw #6 x 3-1\/2"/)).toBe(0); // D-72: one rail-to-chine length now
-    expect(qtyOf(f, /wood screw #6 x 2-1\/2"/)).toBe(18); // rail to chine, every zone: 4 aft (head counterbored 1 in up the 3 in rail) + 1 forward a side, #6 piloted (round 3: a #8 left 0.11 in a side of the edge); plus the 8 rib-knee screws (D-76: 2 per knee, 4 knees)
+    expect(qtyOf(f, /wood screw #6 x 2-1\/2"/)).toBe(0); // D-82: no stainless #6 that long exists
+    expect(qtyOf(f, /wood screw #8 x 2-1\/2"/)).toBe(24); // rail to chine, every zone (D-82: #8, piloted), plus the rib-knee screws; the chine tie has no Dominos (D-81)
     expect(qtyOf(f, /Button plug 5\/8"/)).toBe(4);
     expect(qtyOf(f, /Nylon washer for 1\/4"/)).toBe(4);
     expect(qtyOf(f, /wood screw #6 x 1\/2"/)).toBe(0); // the lid battens use the standard #8 x 5/8 now (D-72: three wood-screw sizes, no fourth)
     expect(qtyOf(f, /wood screw #8 x 5\/8"/)).toBeGreaterThanOrEqual(12 + 6); // 12 batten screws (4 each, 3 battens) plus the hardware-into-thin-stock screws
-    expect(qtyOf(c, /^dual-lock$/)).toBeGreaterThanOrEqual(1);
+    expect(qtyOf(c, /^hook-and-loop$/)).toBeGreaterThanOrEqual(1);
     expect(qtyOf(c, /^edge-banding$/)).toBeGreaterThanOrEqual(1);
     expect(qtyOf(c, /^sealant$/)).toBeGreaterThanOrEqual(1);
     expect(qtyOf(c, /^contact-cement$/)).toBeGreaterThanOrEqual(1);
-    for (const l of c.filter((q) => ['dual-lock', 'edge-banding', 'sealant', 'contact-cement'].includes(q.key))) expect(l.notes, l.key).toBeTruthy(); // the note it came from is data (noteRef), not printed
+    for (const l of c.filter((q) => ['hook-and-loop', 'edge-banding', 'sealant', 'contact-cement'].includes(q.key))) expect(l.notes, l.key).toBeTruthy(); // the note it came from is data (noteRef), not printed
     // the stop blocks' own screw joints carry their screws; the note table does not add them twice
     expect(parts.find((x) => x.id === 'seat-wedge-L')!.joints!.some((j) => j.type === 'screw')).toBe(true);
     expect(NOTE_ITEMS.find((i) => i.key === 'stop-block-screws')!.expand(parts, uniqueJoints(parts))).toBeNull();
@@ -263,12 +285,13 @@ describe('bom', () => {
     const cons = consumables();
     expect(b.unpriced).toEqual([]);
     for (const bl of sched.buy) {
-      if (/West System 105/.test(bl.item)) continue; // resin: bought as the kits
+      if (/West System 105/.test(bl.item) || EPOXY_BUY_RE.test(bl.item)) continue; // resin: bought as the kits
       const hard = /\b(20[5679])\b/.exec(bl.item)?.[1];
-      const l = hard ? cons.find((q) => q.key === `epoxy-${hard}`) : cons.find((q) => q.description === `${bl.item}, ${bl.unit}`);
+      const l = hard ? cons.find((q) => q.key === `epoxy-${hard}`) : cons.find((q) => q.description === (/paint marker/.test(bl.item) ? bl.item : `${bl.item}, ${bl.unit}`));
       expect(l, bl.item).toBeTruthy();
-      expect(l!.unitUsd, bl.item).toBeGreaterThan(0);
+      expect(l!.basis === 'owned' || l!.unitUsd > 0, bl.item).toBe(true); // shop stock (the thinner) is $0 and says so
     }
+    expect(cons.find((q) => /^thinner-/.test(q.key))!.basis).toBe('owned'); // D-79: the thinner is mineral spirits from the shop, a $0 line that stays on the list
     // whichever hardeners the buy list names (not a fixed 207/209) are lines of the BOM
     for (const no of new Set(sched.buy.filter((x) => /West System/.test(x.item) && /hardener/i.test(x.item)).map((x) => /\b(20\d)\b/.exec(x.item)![1]))) expect(cons.find((q) => q.key === `epoxy-${no}`), no).toBeTruthy();
     for (const sp of sched.supplies) { const l = cons.find((q) => q.description === sp.item); expect(l, sp.item).toBeTruthy(); expect(l!.qty).toBe(sp.qty); expect(l!.unitUsd).toBeGreaterThan(0); }
@@ -291,17 +314,18 @@ describe('finishing touches (Eric, 2026-10-12)', () => {
     expect(b.sections[b.sections.length - 1].id).toBe('touches');
     expect(b.sections[b.sections.length - 1].title).toBe('Finishing touches');
     const keys = touches.map((l) => l.key);
-    for (const k of ['front-light', 'rear-light', 'lamp-clip', 'rear-lamp-clip', 'seat-cushion', 'seat-back-pad', 'dual-lock', 'reflector', 'lash-point']) expect(keys, k).toContain(k);
+    for (const k of ['front-light', 'rear-light', 'lamp-clip', 'rear-lamp-clip', 'seat-cushion', 'seat-back-pad', 'hook-and-loop', 'reflector', 'lash-point']) expect(keys, k).toContain(k);
     expect(touches.find((l) => l.key === 'reflector')!.qty).toBe(4);
     expect(touches.find((l) => l.key === 'lash-point')!.qty).toBe(6);
     // the lamp-clip inserts and screws and the lash-plate screws follow their parts
     expect(touches.some((l) => /Heat-set insert M4/.test(l.key))).toBe(true);
     expect(touches.some((l) => /screw M3 x 8 mm/.test(l.key))).toBe(true);
-    // D-76: the D-ring plates are through-bolted: 4 #8-32 x 2" machine screws, a #8 fender washer and a nylock each, 24 sets, no wood screws
+    // D-83: the D-ring brackets are through-bolted on two 1/4-20 button-head bolts each (6 rings, 12 bolts), a fender washer under each head and each nut, and a nylock; no wood screws
     const tie = (re: RegExp) => touches.filter((l) => re.test(l.key) && l.group === 'tie-downs').reduce((a, l) => a + need(l), 0);
-    expect(tie(/machine screw #8-32 x 2"/)).toBe(24);
-    expect(tie(/fender washer #8 \(3\/4" OD\)/)).toBe(24);
-    expect(tie(/lock nut #8-32/)).toBe(24);
+    expect(tie(/button-head cap screw 1\/4-20 x 2"/)).toBe(12);
+    expect(tie(/fender washer 1\/4"/)).toBe(12); // D-83: one washer a bolt, under the head
+    expect(tie(/lock nut 1\/4-20/)).toBe(12);
+    expect(tie(/#8-32/)).toBe(0); // the #8-32 sets are gone
     expect(touches.some((l) => /wood screw/.test(l.key) && l.group === 'tie-downs')).toBe(false);
     // the oak ribs, knees and box ties stay in Lumber (bandsawn from offcuts, in the cut list) and the section says so
     expect(touches.some((l) => /side-rib|rib knee|box-tie|doubler/i.test(l.key))).toBe(false);
@@ -320,12 +344,12 @@ describe('finishing touches (Eric, 2026-10-12)', () => {
     expect(b.coreUsd + b.bulkUsd + b.touchesUsd).toBeCloseTo(b.totalUsd, 2);
     expect(b.coreEstimateUsd + b.bulkEstimateUsd + b.touchesEstimateUsd).toBeCloseTo(b.estimateUsd, 2);
     for (const sh of [b.coreEstimateShare, b.bulkEstimateShare, b.touchesEstimateShare]) { expect(sh).toBeGreaterThanOrEqual(0); expect(sh).toBeLessThanOrEqual(1); }
-    expect(b.totalsText).toMatch(/^Build \$[\d,.]+ \+ bulk parts \$[\d,.]+ \+ finishing touches \$[\d,.]+ = \$[\d,.]+$/);
+    expect(b.totalsText).toMatch(/^Build \$[\d,.]+ \+ bulk parts \$[\d,.]+ \+ finishing touches \$[\d,.]+ = \$[\d,.]+, excluding shipping and tax$/);
   });
 
   it('keeps every touches part out of the core purchased section', () => {
     const purchased = secLines('purchased');
-    for (const l of purchased) expect(touchGroupOfPart(parts.find((x) => x.id === l.partIds![0])), l.key).toBeUndefined();
+    for (const l of purchased) expect(touchGroupOfPart(parts.find((x) => x.id === l.partIds?.[0])), l.key).toBeUndefined();
   });
 });
 
@@ -335,8 +359,12 @@ describe('bulk parts (Eric, 2026-10-12)', () => {
   it('prices pack-sold items by the pack, in their own section between the core sections and the touches', () => {
     expect(b.sections.map((s) => s.id).slice(-2)).toEqual(['bulk', 'touches']);
     expect(b.sections.find((s) => s.id === 'bulk')!.title).toBe('Bulk parts (shop stock)');
-    expect(bulk.length).toBeGreaterThan(5); // fasteners Bolt Depot sells by the piece are priced per piece, in place, and so are not here
-    for (const l of bulk) {
+    expect(bulk.length).toBeGreaterThanOrEqual(5); // fasteners Bolt Depot sells by the piece are priced per piece, in place, and so are not here
+    // D-79: the shop stock (the Dominos, the sandpaper) is listed at $0, marked owned, and never an estimate
+    const shop = bulk.filter((l) => l.basis === 'owned');
+    expect(shop.map((l) => l.key)).toEqual(expect.arrayContaining(['Domino DF 500 5x30', 'sandpaper']));
+    for (const l of shop) { expect(l.unitUsd, l.key).toBe(0); expect(l.extUsd, l.key).toBe(0); expect(l.notes, l.key).toContain(OWNED_NOTE); }
+    for (const l of bulk.filter((q) => q.basis !== 'owned')) {
       expect(l.packQty, l.key).toBeGreaterThan(0);
       expect(l.packUsd, l.key).toBeGreaterThan(0);
       expect(l.needed, l.key).toBeGreaterThan(0);
@@ -347,7 +375,7 @@ describe('bulk parts (Eric, 2026-10-12)', () => {
       // the build needs under half a pack, or it is one of the lump-sum items
       expect(l.needed! < BULK_SHARE * l.packQty! || l.packQty === 1, l.key).toBe(true);
     }
-    for (const k of [/Domino DF 500 5x30/, /machine screw/, /cotter pin/, /Button plug/, /^sandpaper$/]) expect(bulk.some((l) => k.test(l.key)), String(k)).toBe(true);
+    for (const k of [/Domino DF 500 5x30/, /cotter pin/, /Button plug/, /^sandpaper$/]) expect(bulk.some((l) => k.test(l.key)), String(k)).toBe(true);
   });
 
   it('leaves bolts and one-at-a-time items where they are', () => {
@@ -365,17 +393,17 @@ describe('bulk parts (Eric, 2026-10-12)', () => {
     expect(fast.some((l) => /T-nut/.test(l.key))).toBe(true);
   });
 
-  it('prices the glass tape by the 10 ft roll: the 15 ft the sled needs is two rolls, in place (over half a roll)', () => {
+  it('prices the glass tape by the yard (D-79): whole yards of the feet the sled needs, in place', () => {
     const tape = secLines('consumables').find((l) => l.key === 'glass-tape')!;
-    expect(tape.packQty).toBe(10);
-    expect(tape.needed).toBe(b.consumables.tapeFt);
-    expect(tape.qty).toBe(Math.ceil(tape.needed! / 10));
-    expect(tape.extUsd).toBeCloseTo(tape.qty * GLASS_TAPE.packUsd!, 2);
+    expect(tape.unit).toBe('yd');
+    expect(tape.qty).toBe(Math.ceil(b.consumables.tapeFt / 3));
+    expect(tape.unitUsd).toBe(GLASS_TAPE.usd);
+    expect(tape.extUsd).toBeCloseTo(tape.qty * 0.7, 2);
     expect(bulk.some((l) => l.key === 'glass-tape')).toBe(false);
   });
 
   it('uses the pack price: the line costs the packs, not the pieces', () => {
-    for (const l of bulk.filter((q) => q.packQty !== 1)) expect(l.extUsd, l.key).toBeGreaterThan((l.needed! * l.unitUsd) / l.packQty! - 1e-9);
+    for (const l of bulk.filter((q) => q.packQty !== undefined && q.packQty !== 1)) expect(l.extUsd, l.key).toBeGreaterThan((l.needed! * l.unitUsd) / l.packQty! - 1e-9);
     expect(b.bulkUsd).toBeCloseTo(b.sections.find((s) => s.id === 'bulk')!.subtotalUsd, 2);
   });
 
@@ -394,22 +422,30 @@ describe('bulk parts (Eric, 2026-10-12)', () => {
 
 describe('exterior material notes (Eric, 2026-10-12)', () => {
   it('states a material requirement on every fastener and metal hardware line', () => {
-    const lines = [...secLines('fasteners'), ...secLines('bulk').filter((l) => l.packQty !== 1 && !/glass-tape|sandpaper/.test(l.key)), ...secLines('touches').filter((l) => !/dual-lock/.test(l.key))];
+    const lines = [...secLines('fasteners'), ...secLines('bulk').filter((l) => l.packQty !== 1 && !/glass-tape|sandpaper/.test(l.key)), ...secLines('touches').filter((l) => !/hook-and-loop/.test(l.key))];
     for (const l of lines.filter((q) => /^(316|Domino|Heat-set|Nylon|Button|Flanged)/.test(q.key))) expect(l.materialNote, l.key).toBeTruthy();
     for (const l of secLines('purchased').filter((q) => /hinge|latch|pin|chain|snap|clip|kingpin|steer|scupper|drain|stay|bridle-sleeve/.test(q.key))) expect(l.materialNote, l.key).toBeTruthy();
     expect(secLines('fasteners').find((l) => /hex bolt 3\/8-16 x 3-1\/4/.test(l.key))!.materialNote).toMatch(/316 stainless REQUIRED.*tannins/);
   });
 
-  it('says Sipo, not beech, on every Domino line and in its price entry', () => {
+  it('lists every Domino as beech from the shop at $0 under both specs (D-79): the Extreme spec epoxies them in and buys no Sipo', () => {
     const dom = allFasteners().filter((l) => /^Domino/.test(l.key));
-    expect(dom.map((l) => l.key).sort()).toEqual(expect.arrayContaining(['Domino DF 500 4x20', 'Domino DF 500 5x30', 'Domino DF 500 8x50']));
+    expect(dom.map((l) => l.key).sort()).toEqual(expect.arrayContaining(['Domino DF 500 5x30', 'Domino DF 500 6x40']));
     for (const l of dom) {
-      expect(l.materialNote, l.key).toMatch(/SIPO.*NOT beech/);
-      expect(l.description, l.key).toMatch(/Sipo/);
-      expect(l.notes, l.key).toMatch(/SIPO/);
-      expect(l.notes, l.key).not.toMatch(/beech\)/); // "beech" only in the NOT sentence
+      expect(l.basis, l.key).toBe('owned');
+      expect(l.unitUsd, l.key).toBe(0);
+      expect(l.materialNote, l.key).toMatch(/BEECH.*epoxied in/);
+      expect(l.materialNote, l.key).not.toMatch(/SIPO.*REQUIRED/);
+      expect(l.description, l.key).toMatch(/beech/);
+      expect(l.description, l.key).not.toMatch(/Sipo/);
+      expect(l.notes, l.key).toContain(OWNED_NOTE);
     }
-    expect(fastenerMaterialNote('Domino DF 500 5x30')).toMatch(/REQUIRED.*NOT beech/);
+    expect(fastenerMaterialNote('Domino DF 500 5x30')).toMatch(/BEECH.*epoxied in/);
+    expect(fastenerMaterialNote('Domino DF 500 5x30', [], 'standard')).toMatch(/BEECH/);
+    for (const spec of [0, 1]) {
+      const q = { ...p, weatherSpec: spec }, bb = bom(buildModel(q), q);
+      for (const l of bb.sections.flatMap((s) => s.lines).filter((x) => /^Domino/.test(x.key))) expect(l.extUsd, `${spec} ${l.key}`).toBe(0);
+    }
   });
 
   it('sorts a fastener by where it lives', () => {
@@ -425,6 +461,7 @@ describe('links (Eric, 2026-10-12)', () => {
   /** The price research as text (docs/price-research/price-research-2026-10.json): the only source of URLs besides Eric's own three links. */
   const research = Object.values(import.meta.glob('../../docs/price-research/price-research-2026-10.json', { query: '?raw', import: 'default', eager: true }))[0] as string;
   const research2 = Object.values(import.meta.glob('../../docs/price-research/price-research-standard-2026-10.json', { query: '?raw', import: 'default', eager: true }))[0] as string; // the Standard-spec pass (the Penn Tool zinc collar)
+  const research3 = Object.values(import.meta.glob('../../docs/price-research/price-research-cost-pass-2026-10.json', { query: '?raw', import: 'default', eager: true }))[0] as string; // the cost pass (2026-10-14): Peach State, U.S. Composites, Speedy Metals, Harbor Freight...
   const ERIC_HOSTS = /^https:\/\/(www\.thewoodyard\.com|www\.aircraftspruce\.com|clinelumber\.com)\//;
 
   it('carries only links Eric gave or the research lists, and invents none', () => {
@@ -432,14 +469,16 @@ describe('links (Eric, 2026-10-12)', () => {
     const lines = b.sections.flatMap((s) => s.lines);
     const urls = [...lines.map((l) => l.url), ...lines.flatMap((l) => (l.alternatives ?? []).map((a) => a.url))].filter((u): u is string => !!u);
     expect(urls.length).toBeGreaterThan(40);
-    for (const u of urls) expect(ERIC_HOSTS.test(u) || research.includes(u) || research2.includes(u), u).toBe(true);
+    for (const u of urls) expect(ERIC_HOSTS.test(u) || research.includes(u) || research2.includes(u) || research3.includes(u), u).toBe(true);
     const lum = secLines('lumber');
-    expect(lum.find((l) => l.key === '4/4')!.url).toBe('https://www.thewoodyard.com/current-pricing-list/');
-    expect(lum.find((l) => l.key === '5/4')!.url).toBeUndefined(); // no yard link for the estimated 5/4 and 6/4
+    expect(lum.find((l) => l.key === '4/4')!.url).toBe(PEACH_STATE_LUMBER_URL); // D-79: Peach State's price sheet
+    expect(lum.find((l) => l.key === '5/4')!.url).toBe(PEACH_STATE_LUMBER_URL);
+    expect(lum.find((l) => l.key === '4/4')!.alternatives).toBeUndefined();
+    expect(OAK_ALT_PRICE_PER_BF['4/4'].url).toBe('https://www.thewoodyard.com/current-pricing-list/'); // the alternative is The Wood Yard; Cline's 2023 list is gone
     const ply = secLines('plywood');
-    expect(ply.find((l) => l.key === '4 mm')!.url).toBe('https://www.aircraftspruce.com/catalog/wppages/okume.php');
+    expect(ply.find((l) => l.key === 'okoume-4mm')!.url).toBe('https://www.aircraftspruce.com/catalog/wppages/okume.php');
     expect(ply.find((l) => l.key === '12 mm')!.url).toBe('https://www.thewoodyard.com/current-pricing-list/#plywood');
-    expect(PLYWOOD_PRICE['4 mm'].source).not.toMatch(/okume\.php|aircraftspruce\.com/);
+    expect(PLYWOOD_PRICE['okoume-4mm'].source).not.toMatch(/okume\.php|aircraftspruce\.com/);
     expect(b.csv).toContain('https://www.thewoodyard.com/current-pricing-list/#plywood');
   });
 
@@ -450,10 +489,13 @@ describe('links (Eric, 2026-10-12)', () => {
     Object.entries(OAK_PRICE_PER_BF).forEach(([k, v]) => add(`oak ${k}`, v));
     Object.entries(OAK_ALT_PRICE_PER_BF).forEach(([k, v]) => add(`oak alt ${k}`, v));
     Object.entries(PLYWOOD_PRICE).forEach(([k, v]) => add(`ply ${k}`, v));
-    METAL_PRICE_PER_FT.forEach((r) => add(`metal ${r.match}`, r.price));
+    METAL_PRICE_PER_FT.forEach((r) => { add(`metal ${r.match}`, r.price); add(`metal std ${r.match}`, r.std); });
     PURCHASED_PRICE.forEach((r) => add(`purchased ${r.match}`, r.price));
+    PURCHASED_PRICE_STANDARD.forEach((r) => add(`purchased std ${r.match}`, r.price));
     FASTENER_PRICE.forEach((r) => add(`fastener ${r.match}`, r.price));
+    FASTENER_PRICE_STANDARD.forEach((r) => add(`fastener std ${r.match}`, r.price));
     EPOXY_KITS.forEach((k) => add(`kit ${k.id}`, k.price));
+    EPOXY_KITS_SMALL.forEach((k) => { add(`small kit ${k.id}`, k.price); add(`small kit pumps ${k.id}`, k.pumps); });
     [EPOXY_PUMPS_300, GLASS_TAPE, ...Object.values(FILLERS), ...Object.values(NOTE_PRICE), ...Object.values(FINISH_PRICE)].forEach((p, i) => add(`consumable ${i}`, p));
     Object.entries(FINISH_CONTAINER_PRICE).forEach(([k, m]) => Object.entries(m).forEach(([u, p]) => add(`finish ${k} ${u}`, p)));
     return out;
@@ -463,12 +505,18 @@ describe('links (Eric, 2026-10-12)', () => {
     const quotedPrices = tablePrices().filter((x) => x.price.basis === 'quoted');
     expect(quotedPrices.length).toBeGreaterThan(60);
     for (const { where, price } of quotedPrices) {
-      expect(price.url, where).toMatch(/^https:\/\//);
+      expect(price.url ?? `NO URL: ${where}`, where).toMatch(/^https:\/\//);
       if (!/^(oak|ply)/.test(where)) expect(price.note, where).toBeTruthy(); // (Eric's own lumber and plywood quotes carry their notes in the BOM line)
     }
-    const researched = quotedPrices.filter((x) => (x.price.note ?? '').includes(RESEARCH_DATE));
+    const researched = quotedPrices.filter((x) => (x.price.note ?? '').includes(RESEARCH_DATE) || (x.price.note ?? '').includes(RESEARCH_DATE_COST_PASS));
     expect(researched.length).toBeGreaterThan(55);
     expect(researched.filter((x) => (x.price.note ?? '').includes(SEARCH_READ_NOTE)).length).toBeGreaterThan(30);
+    expect(quotedPrices.filter((x) => (x.price.note ?? '').includes(RESEARCH_DATE_COST_PASS)).length).toBeGreaterThan(40); // the cost-pass research (D-79 to D-83)
+    // shop stock (D-79) is $0, owned, and says where it came from
+    const ownedPrices = tablePrices().filter((x) => x.price.basis === 'owned');
+    expect(ownedPrices.length).toBeGreaterThanOrEqual(6);
+    for (const { where, price } of ownedPrices) { expect(price.usd, where).toBe(0); expect(price.note, where).toContain(OWNED_NOTE); }
+    expect(TITEBOND_OWNED.basis).toBe('owned');
   });
 
   it('gives every quoted BOM line a link, except the lines the model prices itself (part.sourcing.costUsd)', () => {
@@ -486,19 +534,24 @@ describe('price research applied (2026-10-12)', () => {
   it('prices no 207 or 209 hardener and no 301 or 303 pump set (the schedule uses 206 only; the 300 set does both ratios)', () => {
     for (const l of lines()) expect(`${l.key} ${l.description}`, l.key).not.toMatch(/\b(207|209|301|303)\b/);
     expect(b.unpriced).toEqual([]);
-    expect(line('epoxy-pumps').description).toMatch(/300 Mini Pump Set/);
+    expect(line('epoxy-pumps').description).toMatch(/pump set/i);
   });
 
-  it('picks the cheapest kit combination that covers the resin, with the gallon group at the Rock West price and Fiberglass Supply as the alternative', () => {
+  it('picks the cheapest kit family: the U.S. Composites 635 thin epoxy 2:1 (96 oz mixed, $53.45, plus its $8.50 pumps) beats the West System gallon group, which stays the alternative', () => {
     const gallon = EPOXY_KITS[1].price;
     expect(gallon.usd).toBe(179.99);
     expect(gallon.url).toBe('https://www.rockwestcomposites.com/ws-slow-1-2gal-kit.html');
     expect(gallon.alternatives!.map((a) => [a.source, a.usd])).toEqual([['Fiberglass Supply', 205.8]]);
-    const l = line('epoxy-gallon');
-    expect(l.alternatives!.length).toBe(1);
-    expect(l.notes).toMatch(/Fiberglass Supply \$205\.80/);
-    expect(b.consumables.resinFlOz).toBeLessThanOrEqual(EPOXY_KITS[1].resinFlOz); // one gallon group covers the resin
-    expect(secLines('consumables').some((q) => q.key === 'epoxy-quart')).toBe(false);
+    const usc = EPOXY_KITS_SMALL.find((k) => k.id === 'uscomposites-635-2-1')!;
+    expect([usc.price.usd, usc.mixedFlOz, usc.resinFlOz, usc.resinShare, usc.pumpsIncluded]).toEqual([53.45, 96, 64, 2 / 3, false]);
+    expect(usc.pumps!.usd).toBe(8.5);
+    const l = line('epoxy-uscomposites-635-2-1');
+    expect(l.qty).toBe(1); // 96 oz mixed covers the glue, the coat and the closes
+    expect(l.basis).toBe('quoted');
+    expect(l.notes).toMatch(/West System \$\d/); // the West family is listed with its total, not substituted
+    expect(l.alternatives!.some((a) => a.source === 'West System')).toBe(true);
+    expect(b.consumables.epoxyFlOz * usc.resinShare).toBeLessThanOrEqual(usc.resinFlOz); // 2:1 resin share, not the 5:1 share
+    expect(secLines('consumables').some((q) => /^epoxy-(quart|gallon)$/.test(q.key))).toBe(false);
   });
 
   it('puts the wheel decision and its alternatives on the wheel line: the $9.99 Harbor Freight 5/8" bore wheel (Eric, D-71), the steel hub and the Uline flat-free as alternatives', () => {
@@ -519,36 +572,19 @@ describe('price research applied (2026-10-12)', () => {
     expect(b.decisions).toContain('wheel');
   });
 
-  it('flags the Domino 4x20 (no Sipo exists) as a decision, with the beech pack as a spec-gap alternative; the 5x30 and 8x50 are the real Sipo packs', () => {
-    const d = line('Domino DF 500 4x20');
-    expect(d.decision).toMatch(/NO Sipo 4x20 exists: decision needed/);
-    expect(d.basis).toBe('estimate'); // no price exists for a Sipo 4x20
-    const beech = d.alternatives!.find((a) => /Woodcraft/.test(a.source))!;
-    expect(beech.specGap).toBe(true);
-    expect(beech.packQty).toBe(450);
-    expect(beech.packUsd).toBe(25);
-    expect(d.notes).toMatch(/interior type/);
-    expect(b.decisions).toContain('Domino DF 500 4x20');
-    const d530 = line('Domino DF 500 5x30'), d850 = line('Domino DF 500 8x50');
-    expect([d530.packQty, d530.packUsd, d530.basis]).toEqual([300, 57, 'quoted']);
-    expect([d850.packQty, d850.packUsd, d850.basis]).toEqual([100, 57, 'quoted']);
-    expect(d530.packs).toBe(1);
-    expect(d850.packs).toBe(1);
-  });
-
-  it('prices the 5/8 in shaft collars (D-71/D-72): a 316 estimate (the research found 316 only in 3/4 in bore, $33.36) with the Penn Tool zinc collar, $4.43, as a spec-gap alternative', () => {
+  it('prices the 5/8 in shaft collars: the 316 Climax CRC-062-S at $19.89 (Newegg/Zoro) with the Penn Tool zinc collar, $4.52, as a spec-gap alternative', () => {
     const c = line(/shaft collar/);
     expect(c.key).toMatch(/5\/8" bore/);
-    expect(c.unitUsd).toBe(33.36);
-    expect(c.basis).toBe('estimate');
-    expect(c.notes).toMatch(/not found in the 2026-10-12 research/);
+    expect(c.unitUsd).toBe(19.89);
+    expect(c.basis).toBe('quoted');
     expect(c.qty).toBe(4);
-    const alt = c.alternatives!.find((a) => a.usd === 4.43)!;
+    const alt = c.alternatives!.find((a) => a.usd === 4.52)!;
     expect(alt.specGap).toBe(true);
     expect(alt.source).toMatch(/Penn Tool/);
     expect(alt.url).toBe('https://www.penntoolco.com/87986402');
     expect(alt.note).toMatch(/zinc/);
     expect(b.decisions).toContain(c.key);
+    expect(b.decisions.some((k) => /^Domino/.test(k))).toBe(false); // D-79: no Sipo 4x20 decision any more
   });
 
   it('prices the eye bolts 316 at the nearest stock lengths (the Extreme spec), with galvanized as the cheaper alternative and a decision', () => {
@@ -580,7 +616,7 @@ describe('price research applied (2026-10-12)', () => {
     for (const l of withAlts) for (const a of l.alternatives!.filter((q) => q.specGap)) expect(l.url === a.url && l.unitUsd === a.usd, `${l.key} base equals a spec-gap alternative`).toBe(false);
     // CSV: the alternatives and the decisions are columns
     expect(b.csv).toContain('SPEC GAP: flat-free');
-    expect(b.csv).toContain('NO Sipo 4x20 exists');
+    expect(b.csv).toContain('SPEC GAP: zinc-plated steel, not 316');
   });
 
   it('prices the screws, washers and nuts by the piece where Bolt Depot sells them singly and cheaper than the bag, and the Dominos by their packs', () => {
@@ -589,15 +625,15 @@ describe('price research applied (2026-10-12)', () => {
     expect(s8.extUsd).toBeCloseTo(37 * 0.53, 2);
     // D-77: the two brake pivot straps take 4 PAN-HEAD #8 x 1-1/4 each, a line of their own (the flat-head line stays 37); priced as the flat-head screw until quoted
     const pan = line('316 pan-head wood screw #8 x 1-1/4"');
-    expect([pan.qty, pan.unitUsd]).toEqual([8, 0.53]);
+    expect([pan.qty, pan.unitUsd]).toEqual([8, 0.53]); // 316 pan-head wood screws: still the flat-head price, not found
     expect(pan.basis).toBe('estimate');
     expect(pan.notes).toMatch(/pan-head/);
     const w = line('316 fender washer 1/4"');
-    expect([w.qty, w.unitUsd]).toEqual([40, 0.46]); // 40 x 0.46 = 18.40, under the $27.26 bag of 100 (48 before the hanger bolts were counted once: they are the angle's upright bolts)
+    expect([w.qty, w.unitUsd]).toEqual([32, 0.46]); // 32 x 0.46 = 14.72, under the $27.26 bag of 100 (a nut-side washer only on the hold-down and clamp bolts, whose text puts the washers under the beam)
     const n = line('316 nylon-insert lock nut 1/4-20');
     expect([n.qty, n.unitUsd]).toEqual([20, 0.25]); // 24 before the hanger bolts were counted once
     // a length the research did not read keeps its estimate and says so
-    const unread = line('316 wood screw #6 x 2-1/2"');
+    const unread = line('316 wood screw #8 x 2-1/2"'); // D-82: no 316 #8 x 2-1/2 exists; the real #8 x 2 is $0.57
     expect(unread.basis).toBe('estimate');
     expect(unread.notes).toMatch(/not found in the 2026-10-12 research/);
   });
@@ -605,12 +641,13 @@ describe('price research applied (2026-10-12)', () => {
   it('keeps the model\'s own cost where the research found no qualifying price, and replaces it where it did', () => {
     expect(line('storage-hinge').unitUsd).toBe(14); // model cost kept, the 2" hinge is a spec gap
     expect(line('storage-hinge').notes).toMatch(/not found in the 2026-10-12 research/);
-    expect(line('lash-point').unitUsd).toBe(7);
+    expect(line('lash-point').unitUsd).toBe(8); // D-83: the Extreme ring is a 316 2-hole bolt-on D-ring, an estimate
+    expect(line('lash-point').basis).toBe('estimate');
     expect(line('lash-point').alternatives![0].specGap).toBe(true);
     expect(line('seat-hinge').unitUsd).toBeCloseTo(13.545, 3); // Seachoice 316 pair, $27.09
     expect(line('seat-hinge').extUsd).toBeCloseTo(27.09, 2);
-    expect(line('front-light').unitUsd).toBe(58.95);
-    expect(line('rear-light').unitUsd).toBe(44.95);
+    expect(line('front-light').unitUsd).toBe(41.95); // D-83: Giant Recon 600 (Bicycle Warehouse), Planet Bike Spok
+    expect(line('rear-light').unitUsd).toBe(21.99);
   });
 
   it('buys metal bars and tubes as the fixed pieces the vendors sell', () => {
@@ -646,7 +683,7 @@ describe('bom text for the book', () => {
 
   it('reads the laminated parts by their names, and keeps the part key out of the CSV item column', () => {
     const lumber = secLines('lumber').map((l) => l.notes ?? '').join(' ');
-    expect(lumber).toMatch(/face-laminated parts \(rear axle beam, front axle beam, brake pivot knee, wheel chock: /);
+    expect(lumber).toMatch(/face-laminated parts \(.*rear axle beam.*wheel chock.*: /); // D-79: with only 4/4 and 5/4 bought, every part thicker than 1" is laminated
     const items = b.csv.split('\n').slice(1).map((r) => r.split(',')[1]);
     expect(items).not.toContain('king-thrust');
     expect(items).toContain('4/4');

@@ -41,7 +41,7 @@ describe('D-66 matched tracks', () => {
   it('mass 115.5 lb (119.9 before): the narrower bow, a shorter front beam and king beam, the shorter stubs and the lighter rear plates (D-72/D-73: 120.7 lb with the solid axle rod, +1.9, and the 1/4 in white oak sides, box and lid, +2.8)', () => {
     const m = totalMass(buildModel(defaults, { rider: 'none', cargo: false }));
     expect(m).toBeGreaterThan(119.5); // D-76: 120.2 lb (the side ribs, +0.96); D-74: 119.2 lb with the 2-1/8 in laminated beams, knees and chocks (-1.3 lb on 120.5)
-    expect(m).toBeLessThan(121.5); // D-77: 121.09 lb (the pivot straps and the knee roofs, +0.87)
+    expect(m).toBeLessThan(122.2); // D-80/D-83: 121.64 lb (the 6 mm Baltic birch thin sheet is heavier than the 1/4 in white oak ply, the 2 in clamp plates, less the lighter EVA seat pads); D-77: 121.09 lb (the pivot straps and the knee roofs, +0.87)
     // with the D-71 tube and the 4 mm okoume (PRE_D72) the D-66 / D-71 mass is back
     const old = totalMass(buildModel({ ...defaults, ...PRE_D72 } as Params, { rider: 'none', cargo: false }));
     expect(old).toBeGreaterThan(114.9); // D-76: 115.5 lb (the side ribs); D-74: 114.5 lb (the 2-1/8 in laminated parts), 115.5 before
@@ -98,15 +98,15 @@ describe('D-66 the numbers that moved', () => {
     const cap = cargoCapacity(defaults);
     expect(cap.capacityLb!).toBeGreaterThanOrEqual(200);
     expect(cap.capacityLb!).toBeLessThan(300); // 254 lb with the solid rod (223 lb with the D-71 tube, 274 lb at 3/4 in)
-    expect(cap.limiter!.id).toBe('bearing-groove'); // D-71 solid rod (the tube's axle-stress limited it); the tip row no longer limits (it did at 226 lb with the 40 deg limit)
+    expect(cap.limiter!.id).toBe('rear-beam-seat'); // D-83: the 2 in clamp plates raise the groove bearing, so the rear beam seat limits; D-71 solid rod: bearing-groove (the tube's axle-stress limited it); the tip row no longer limits (it did at 226 lb with the 40 deg limit)
     expect(cap.statusAtPayload).not.toBe('fail');
     expect(cap.cargoFailsAtPayload).toEqual([]);
   });
   it('riders: safe 50 to over 250 lb (nothing red), green 50 to 240 lb (D-67: the straight tip, 43.6 deg at 200 lb, clears its 35 deg limit with room; it was inside the 10% band of the old 40 deg limit from 190 lb, green 50-180 lb; 250 lb is yellow on the seat-back panel only)', () => {
     const sw = riderSweep(defaults);
     expect(sw.safe).toEqual({ loLb: 50, hiLb: 250, openLow: true, openHigh: true });
-    expect(sw.green).toMatchObject({ loLb: 50, hiLb: 220, openLow: true, openHigh: false }); // D-71: 240 lb with the 3/4 in axle, 180 lb with the 5/8 in tube; the solid 5/8 in rod and the 4.7 lb heavier D-73 sled: 220 lb (230 lb with the 4 mm okoume)
-    expect(row('tip-straight').cases!.goal!.value).toBeCloseTo(43.6, 0);
+    expect(sw.green).toMatchObject({ loLb: 50, hiLb: 240, openLow: true, openHigh: false }); // D-83: 240 lb again with the 2 in clamp plates (more groove bearing area); D-73: 220 lb. D-71: 240 lb with the 3/4 in axle, 180 lb with the 5/8 in tube; the solid 5/8 in rod and the 4.7 lb heavier D-73 sled: 220 lb (230 lb with the 4 mm okoume)
+    expect(row('tip-straight').cases!.goal!.value).toBeCloseTo(44.3, 0); // D-83: 44.3 deg (the 6 mm Baltic sides and the lighter EVA seat move the center of gravity a little); 43.6 before
     expect(row('tip-straight').statusGoal).toBe('pass'); // marginal at the 40 deg limit (util 0.80 now, 35 / 43.6)
     expect(row('tip-lock').status).toBe('pass');
     expect(row('slide-before-tip').status).toBe('pass');
@@ -122,20 +122,20 @@ describe('D-66 the numbers that moved', () => {
     expect(row('rest-load').status).toBe('pass'); // the resting 250 lb adult still passes: holds up to 348 lb, the heavier wheel is the tightest member (73%)
     expect(row('rest-load').how).toMatch(/holds up to 34\d lb/);
   });
-  it('front end at the narrow bow: the roll pads (9-1/2 in out) are under the rails at every angle, the chain eyes stay inside the rails, the king beam is 17 in between the rails; every front row passes', () => {
+  it('front end at the narrow bow: the roll pads (9-3/4 in out, D-83) are under the rails at every angle, the chain eyes stay inside the rails, the king beam is 17 in between the rails; every front row passes', () => {
     for (const id of ['king-bearing', 'kingpin', 'front-beam', 'front-stub', 'steer-stops', 'king-beam', 'steer-clear', 'bridle-eye']) {
       expect(row(id).status, id).toBe('pass');
       expect(row(id).statusCargo ?? 'pass', id).not.toBe('fail');
     }
     expect(row('king-bearing').util!).toBeLessThan(0.9);
     expect(row('steer-stops').util!).toBeLessThan(0.6);
-    expect(defaults.rollPadRadiusIn).toBe(9.5);
+    expect(defaults.rollPadRadiusIn).toBe(9.75); // D-83: 1/4 in further out for the 2 in clamp plates (was 9.5)
     expect(defaults.steerChainBeamYIn).toBe(8);
   });
-  it('rear and brake: the rear clamp plate (11-1/2 to 13-1/4 in, 1.75 in wide since D-71) runs under the outer part of the rail, whose relief notch is cut over it; the brake rows pass, brake-clear still 0.22 in', () => {
+  it('rear and brake: the rear clamp plate (11-1/4 to 13-1/4 in, 2 in wide since D-83) runs under the outer part of the rail, whose relief notch is cut over it; the brake rows pass, brake-clear still 0.22 in', () => {
     const rail = buildModel(defaults).find((x) => x.id === 'rail-L')!;
     const plate = worldAABB(buildModel(defaults).find((x) => x.id === 'clamp-RL1')!);
-    expect(plate.min[1]).toBeCloseTo(11.5, 6);
+    expect(plate.min[1]).toBeCloseTo(11.25, 6); // D-83: 2 in wide (was 11.5, 1.75 in wide)
     expect(plate.max[1]).toBeCloseTo(13.25, 6);
     expect(rail).toBeDefined();
     for (const id of ['brake-slow', 'brake-ratio', 'brake-clear', 'brake-flap', 'brake-pivot', 'brake-mount', 'brake-return', 'brake-abuse', 'bearing-groove', 'rear-beam-seat']) expect(row(id).status, id).toBe('pass');

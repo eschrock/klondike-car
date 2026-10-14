@@ -11,6 +11,12 @@ import { EDGE_MAT, EXPOSED_MAT, PLY_LINE_MAT, type SurfaceMats } from './materia
 import { blobTexture, setMaxAnisotropy } from './textures';
 import { JOINERY_LEGEND, jointColor, joineryMarkers } from './joinery';
 
+/** Part-group checkbox labels (the ids stay the values). */
+const GROUP_LABEL: Record<PartGroup, string> = {
+  frame: 'Frame', body: 'Body', 'front-end': 'Front end', 'running-gear': 'Running gear', seat: 'Seat', brake: 'Brake', storage: 'Storage',
+  lighting: 'Lighting', removable: 'Push handle', hardware: 'Hardware', reference: 'Reference',
+};
+
 export type ViewName = 'iso' | 'top' | 'side' | 'front' | 'under';
 
 const VIEW_DIRS: Record<ViewName, [number, number, number]> = {
@@ -1041,7 +1047,7 @@ export class Viewer {
         if (cb.checked) this.hidden.delete(g); else this.hidden.add(g);
         this.refreshVisibility();
       });
-      label.append(cb, document.createTextNode(' ' + g));
+      label.append(cb, document.createTextNode(' ' + (GROUP_LABEL[g] ?? g)));
       this.toggleHost.append(label);
     }
   }

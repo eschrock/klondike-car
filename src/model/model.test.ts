@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PARAM_DEFS, defaultParams, resolveParams, sanitizeParams, thinSheet, validateParams, type ParamKey, type Params } from '../params';
+import { PARAM_DEFS, defaultParams, resolveParams, sanitizeParams, thinSheet, validateParams, WEATHER_SPEC, type ParamKey, type Params } from '../params';
 import { buildModel } from './index';
 import { decodeHash } from '../state';
 import { computeLayout } from './layout';
@@ -82,6 +82,7 @@ const KNOWN_OFF_DEFAULT: RegExp[] = [
   /^brake-knee-[LR] x reflector-[LR]1:/, // sideRear8 (3c-4b, reported)
   /^seat-grip-backing-[LR] x brake-knee-[LR]:/, // wheel 11.5 in and up (D-71): the brake knee sits r + brakePivotAheadIn behind the axle line, which a bigger wheel pushes under the grab-board backing strip by 1/16 in; the 5/8 in axle lowers the front stack 1/16 in, so 11.5 in wheels now pass the 8 in deck rule (they were an error) and this off-default overlap shows. Reported, not patched
   /^(sign-backer-[LR]\d|seat-grip-[LR]) x side-rib-[LR]1:/, // D-76 (reported): a short rear box (seatXMin, some fuzz designs) puts the box rib among the sign backers or under the grab board; it stands a fixed inset behind the box's fore end
+  /^(sign-[LR]|sign-backer-[LR]\d|seat-grip-backing-[LR]|reflector-[LR]\d) x dring-plate-[LR]\d:/, // D-76 (reported): in a design where the sign, its backer or a grab-board backing strip lands on a rib's D-ring station (a short rear box, some fuzz designs) it meets the outside bearing plate; at the defaults they clear it by 1/4 in (side-ribs.test.ts)
   /^rail-[LR] x king-beam:/, // wheelbase 52 and rear overhang 14: the king beam end meets the rail that curves in with the bow turn-in by 0.05 in
   /^(clamp-F[LR]\d|king-beam) x roll-pad-[LR]:/, // a short stub (clamp plates inboard of the pad) or a thick disc: the roll pad meets a plate or the king beam; validateParams warns about the pad position
   /^clamp-F[LR]\d x king-thrust:/, // a long stub: the inner clamp plate reaches under the disc
@@ -203,8 +204,9 @@ describe('overlaps', () => {
   it('ALLOW is minimal: every entry (apart from the brake and handle ones) is used by some part pair at the defaults or a steered pose (a dead entry is a contact that no longer exists)', () => {
     const seen = new Set<string>();
     const pairs: [Part, Part][] = [];
+    for (const q of [defaults, { ...defaults, weatherSpec: WEATHER_SPEC.extreme } as Params]) // D-83: the drain nipples exist under the Extreme spec only
     for (const deg of [0, lock, -lock]) {
-      const set = buildModel(defaults, { steerDeg: deg }).filter((p) => !p.payload && SOLID.includes(p.group));
+      const set = buildModel(q, { steerDeg: deg }).filter((p) => !p.payload && SOLID.includes(p.group));
       for (let i = 0; i < set.length; i++) for (let j = i + 1; j < set.length; j++) {
         if (partsOverlap(set[i], set[j]) <= TOL) continue;
         const k = `${set[i].id}|${set[j].id}`;
@@ -225,7 +227,7 @@ describe('overlaps', () => {
  * which counts the joints of the parts actually present. */
 const EXPECTED_EMPTY_LB = 120.6; // D-60 (the weight package): 144 lb at 3c-5, 120.6 lb now (hollow axles, 2.8 lb wheels, 4 mm ply, 1/2 in transom, lighter joists and the foot block gone). 146 before; // D-58 (3c-4a): +the chain stops, roll pads, oak tongue and stub rods in the front end (16.2 to 21.2 lb), -the 3.5 in track change; // 3c-4b (D-57): 134 at 3c-3 + the bulkhead, signs, grab boards, hinges, longer sockets, flag tube and the step brake
 const EXPECTED_GROUP_LB: Record<string, number> = {
-  'running-gear': 18.6, 'front-end': 16.3, frame: 13.4, body: 36.1, seat: 8.4, storage: 7.0, removable: 2.4, lighting: 2.0, // D-60 (26.4, 21.2, 13.3, 43.8, 10.3, 8.4, 3.7, 1.9 before)
+  'running-gear': 18.6, 'front-end': 16.3, frame: 13.4, body: 36.1, seat: 8.4, storage: 7.0, removable: 2.4, lighting: 1.5, // D-83: lighting 1.4 lb with the 0.19 lb and 0.06 lb lights (2.0 before); D-60 (26.4, 21.2, 13.3, 43.8, 10.3, 8.4, 3.7, 1.9 before)
 };
 /** Groups with a wide band [low, high] (lb): the brake and the fastener remainder. */
 const WIDE_GROUP_LB: Record<string, [number, number]> = { brake: [4, 14], hardware: [2.5, 6.5] };
@@ -442,7 +444,7 @@ const VARIANTS: Record<string, Partial<Params>> = {
   tongueShort: { tongueTieAheadIn: 2 },
   tongueLong: { tongueTieAheadIn: 12 },
   tongueSlim: { tongueDepthIn: 1.75, tongueWidthIn: 1.75 },
-  stubShort: { frontStubLenIn: 4 },
+  stubShort: { frontStubLenIn: 4.5 }, // D-83: the shortest stub that holds its two 2 in clamp plates
   stubLong: { frontStubLenIn: 11 }, // D-66: 14 in no longer fits the 30 in track (the beam is 27.5 in long: the stubs would meet under the kingpin)
   kingpin3_4: { kingpinDiaIn: 0.75, tongueBoltDiaIn: 0.5 },
   kingpin1_2: { kingpinDiaIn: 0.5, tongueBoltDiaIn: 0.25 },

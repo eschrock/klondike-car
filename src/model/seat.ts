@@ -1,6 +1,6 @@
 /**
- * Seat (D-3, D-9, D-18, D-40, D-57, D-62, D-63): a closed-cell foam cushion with a marine-vinyl cover on the deck, a full-size reclined back (D-62: a frameless 12 mm okoume panel on an oak crest
- * strip, with a covered foam pad that comes off with Dual Lock), a pair of grab boards bolted to the side tops. (D-60: the drop-in foot block and its slot cleats were dropped; the bow bulkhead is the foot brace.)
+ * Seat (D-3, D-9, D-18, D-40, D-57, D-62, D-63): a closed-cell EVA foam cushion (kneeling pads, no cover) on the deck, a full-size reclined back (D-62: a frameless 12 mm okoume panel on an oak crest
+ * strip, with an EVA foam pad that comes off with Velcro Industrial), a pair of grab boards bolted to the side tops. (D-60: the drop-in foot block and its slot cleats were dropped; the bow bulkhead is the foot brace.)
  *
  * D-57: the back is HINGED at its front foot (two 316 butt hinges screwed through the deck into oak backer pads) and FLIPS FORWARD onto the deck for cargo; it never goes in the box.
  * Upright it leans back onto two fixed oak stop blocks ("wedges") glued against the storage box end; a 3/8" spring-detent quick-release pin per side (D-63: 2 in up the panel) goes through the panel
@@ -18,11 +18,10 @@ const f2 = (v: number): string => String(Math.round(v * 100) / 100);
 import type { Joint, Part, Vec2, Vec3 } from './types';
 
 // ── Detail dimensions and purchased-part estimates (D-18, D-40) ──
-/** Closed-cell foam density used for the cushion and the back pad (estimate, D-18). */
-const FOAM_DENSITY_PCF = 4.5;
-export const BACK_PAD_THICK_IN = 1;
-/** Marine vinyl cover: 24 oz per 54" yard ≈ 0.11 lb/ft² (estimate). */
-const VINYL_LB_PER_FT2 = 0.11;
+/** D-83: the seat back pad is the third Harbor Freight EVA kneeling pad (11 x 18 x 1-1/2 in), trimmed to size: 1-1/2 in thick (the cushion's thickness is `seatCushionIn`). */
+export const BACK_PAD_THICK_IN = 1.5;
+/** The Harbor Freight EVA kneeling pad (#56572) blank, in: the cushion is one whole pad plus a strip of a second (edge-glued). */
+const EVA_PAD_LEN_IN = 11;
 /** Gap between the pelvis top and the start of the back pad. */
 const PAD_GAP_IN = 0.25;
 /** Riser runner width (across). */
@@ -279,8 +278,7 @@ export function buildSeat(ctx: Ctx): Part[] {
   const s = L.seat;
   const parts: Part[] = [];
   const hw = s.width / 2;
-  const foam = (volIn3: number) => (volIn3 / 1728) * FOAM_DENSITY_PCF;
-  const vinyl = (areaIn2: number) => (areaIn2 / 144) * VINYL_LB_PER_FT2;
+  const foam = (volIn3: number) => (volIn3 / 1728) * p.evaFoamDensityPcf;
   const sup = seatBackSupport(p, L);
   const lg = latchGeometry(p, L);
   const { a, H, t, fw, W } = sup;
@@ -299,15 +297,17 @@ export function buildSeat(ctx: Ctx): Part[] {
     }
   }
 
-  // Cushion: 2" closed-cell foam, marine-vinyl cover with four drain grommets (D-18). Held by Dual Lock strips so it lifts off for hauling.
+  // Cushion (D-83): EVA kneeling pads, no cover. One whole pad plus a strip of a second, edge-glued with contact cement; held by Velcro strips so it lifts off for hauling.
   const cx0 = s.xRear + CUSHION_CLEAR_IN;
-  const cushionVol = (s.xFront - cx0) * s.width * p.seatCushionIn;
-  const cushionCover = 2 * (s.xFront - cx0) * s.width + 2 * (s.xFront - cx0 + s.width) * p.seatCushionIn;
+  const cushionLen = s.xFront - cx0;
+  const cushionVol = cushionLen * s.width * p.seatCushionIn;
+  const stripLen = Math.max(0, cushionLen - EVA_PAD_LEN_IN);
+  const frac8 = (v: number) => { const n = Math.round(v * 8); const w = Math.floor(n / 8), r = n % 8; if (r === 0) return `${w}`; let a = r, b = 8; while (a % 2 === 0) { a /= 2; b /= 2; } return w > 0 ? `${w}-${a}/${b}` : `${a}/${b}`; };
   parts.push(box(ctx, {
-    id: 'seat-cushion', name: 'Seat cushion', group: 'seat', mat: 'fixed', massLb: foam(cushionVol) + vinyl(cushionCover), kind: 'purchased',
-    material: 'closed-cell foam, marine-vinyl cover', fab: 'buy', step: STEP.seatStorage, ...span([cx0, s.xFront], [-hw, hw], [s.cushionBottom, s.surface]),
-    sourcing: { vendor: 'Closed-cell polyethylene foam (McMaster-Carr / Foam Factory); marine vinyl (Sailrite / Hancock); sewn in-house', costUsd: 55 },
-    notes: 'Sits directly on the deck (or the storage lid / riser) on Dual Lock strips. Four drain grommets in the cover. Set back 3/8" from the back so the hinge knuckles clear it (D-40, D-57). Mass is an estimate (foam + cover, D-18). Cargo mode (D-57): peel it off the Dual Lock by hand and lay it flat in the storage box with the back pad (the strips stay on the deck, 0.1" proud: the bed is flat).',
+    id: 'seat-cushion', name: 'Seat cushion', group: 'seat', mat: 'fixed', massLb: foam(cushionVol), kind: 'purchased',
+    material: 'closed-cell EVA foam (kneeling pads), no cover', fab: 'buy', step: STEP.seatStorage, ...span([cx0, s.xFront], [-hw, hw], [s.cushionBottom, s.surface]),
+    sourcing: { vendor: 'Harbor Freight (EVA kneeling pad #56572, 11 x 18 x 1-1/2 in): 2 pads for the cushion, 1 for the back pad', costUsd: 15.98 },
+    notes: `D-83: ${frac8(cushionLen)}" x ${frac8(s.width)}" x ${frac8(p.seatCushionIn)}" of closed-cell EVA, with no cover (it sheds rain and wipes clean). Cut it from two Harbor Freight kneeling pads (11" x 18" x 1-1/2"): one whole pad${stripLen > 0.05 ? ` plus a ${frac8(stripLen)}" strip cut from the second`  : ''}, edge-glued with contact cement (the strip goes at the rear; the offcut is spare). Sits directly on the deck (or the storage lid / riser) on Velcro Industrial strips. Set back 3/8" from the back so the hinge knuckles clear it (D-40, D-57). Mass is from the pad (about 1 lb for 297 in³). Cargo mode (D-57): peel it off the strips by hand and lay it flat in the storage box with the back pad (the strips stay on the deck, 0.1" proud: the bed is flat).`,
   }));
 
   // Seat back (D-62, Eric 2026-10-12): a FRAMELESS 1/2 in (12 mm) okoume panel cut from the deck sheet's offcut, no oak stiles or rails. Its front face passes through P and it leans back by
@@ -353,9 +353,9 @@ export function buildSeat(ctx: Ctx): Part[] {
         { type: 'screw', to: 'seat-hinge-R', count: 3, diaIn: 0.19, size: `3 × ${insertTxt}`, note: `D-75: ONE face for both: the inserts are set from the FRONT face (the forward face, where the rider leans and the hinge leaf lies) and the #10-32 screws go in from the FRONT through the leaf; nothing is drilled from the back face, which keeps its veneer. Hinge leaf on the front face at the foot (no screw into a ply edge); at = the insert mouths on the front face, ${leafV} in up the panel on the leaf centerline, ${HINGE_HOLE_PITCH_IN} in apart, centered ${hingeY.toFixed(2)} in off the center line`, at: insertAt(-1) },
         { type: 'pin', to: 'seat-pin-L', count: 1, diaIn: 2 * PIN_R_IN, size: '13/32 clearance hole through the panel, bored square to the face; epoxy-sealed bore', note: `${pinZ.toFixed(2)}" up the panel from the hinge axis, at station y = ±${sup.stileY.toFixed(2)}" (${(W / 2 - sup.stileY - 0.203).toFixed(2)}" of panel from the hole edge to the side edge): upright into the blind hole in the stop block (${lg.upHoleIn.toFixed(4).replace(/0+$/, '')}" deep), flat through the deck into the blind hole in the backer pad (${lg.flatHoleIn.toFixed(4).replace(/0+$/, '')}" deep)`, at: [[sup.stileY, pinZ, plyT / 2]] },
         { type: 'pin', to: 'seat-pin-R', count: 1, diaIn: 2 * PIN_R_IN, size: '13/32 clearance hole through the panel, bored square to the face; epoxy-sealed bore', note: `${pinZ.toFixed(2)}" up the panel from the hinge axis, at station y = ±${sup.stileY.toFixed(2)}" (${(W / 2 - sup.stileY - 0.203).toFixed(2)}" of panel from the hole edge to the side edge): upright into the blind hole in the stop block (${lg.upHoleIn.toFixed(4).replace(/0+$/, '')}" deep), flat through the deck into the blind hole in the backer pad (${lg.flatHoleIn.toFixed(4).replace(/0+$/, '')}" deep)`, at: [[-sup.stileY, pinZ, plyT / 2]] },
-        { type: 'glue', to: 'seat-back-pad', count: 1, size: 'Dual Lock strips on the face', note: 'the pad peels off by hand (D-57)' },
+        { type: 'glue', to: 'seat-back-pad', count: 1, size: 'Velcro Industrial strips on the face', note: 'the pad peels off by hand (D-57)' },
       ],
-      notes: `FRAMELESS seat back (D-62, Eric 2026-10-12): a ${(plyT * 25.4).toFixed(0)} mm (1/2 in) okoume panel, ${W}" × ${H}", cut from the offcut of the deck sheet on the Shaper Origin (no 6 mm sheet is bought), top corners ${rTop.toFixed(2)}" radius, bottom corners 1/2". It replaces the oak stiles, rails and 6 mm panel (3/4 in thick frame). Edge: 1/16" oak veneer banding all round (contact cement or iron-on), ironed and flush-trimmed, then epoxy-sealed with the rest, so no ply edge shows. The two latch pins sit at stations ${sup.stileY.toFixed(2)}" either side of the center line and the hinge knuckles are centered ${hingeY.toFixed(2)}" either side (so the outer insert is ${INSERT_EDGE_IN}" from the side edge; the inserts are ${leafV}" up the panel, ${HINGE_HOLE_PITCH_IN}" apart): the hinge leaves are held by 3 stainless ${insertTxt} each, in the FRONT face (never into a ply edge); put a bucket pull-out test on a scrap before drilling the real panel. The pin holes are 13/32" clearance holes bored square to the face, ${pinZ.toFixed(2)}" up the panel from the hinge axis (D-63, Eric: 2 in), sealed with epoxy. The Dual Lock strips for the pad go on the front face above the pin holes. It leans on the oak crest strip and the two stop blocks behind it (the strip spans the whole ${(2 * (sup.stileY - fw / 2)).toFixed(1)} in between the blocks, so the panel bends only as a strip above the crest line); flat it lies ${plyT.toFixed(3)}" proud of the deck (it was 3/4").`,
+      notes: `FRAMELESS seat back (D-62, Eric 2026-10-12): a ${(plyT * 25.4).toFixed(0)} mm (1/2 in) okoume panel, ${W}" × ${H}", cut from the offcut of the deck sheet on the Shaper Origin (no 6 mm sheet is bought), top corners ${rTop.toFixed(2)}" radius, bottom corners 1/2". It replaces the oak stiles, rails and 6 mm panel (3/4 in thick frame). Edge: 1/16" oak veneer banding all round (contact cement or iron-on), ironed and flush-trimmed, then epoxy-sealed with the rest, so no ply edge shows. The two latch pins sit at stations ${sup.stileY.toFixed(2)}" either side of the center line and the hinge knuckles are centered ${hingeY.toFixed(2)}" either side (so the outer insert is ${INSERT_EDGE_IN}" from the side edge; the inserts are ${leafV}" up the panel, ${HINGE_HOLE_PITCH_IN}" apart): the hinge leaves are held by 3 stainless ${insertTxt} each, in the FRONT face (never into a ply edge); put a bucket pull-out test on a scrap before drilling the real panel. The pin holes are 13/32" clearance holes bored square to the face, ${pinZ.toFixed(2)}" up the panel from the hinge axis (D-63, Eric: 2 in), sealed with epoxy. The Velcro Industrial strips for the pad go on the front face above the pin holes. It leans on the oak crest strip and the two stop blocks behind it (the strip spans the whole ${(2 * (sup.stileY - fw / 2)).toFixed(1)} in between the blocks, so the panel bends only as a strip above the crest line); flat it lies ${plyT.toFixed(3)}" proud of the deck (it was 3/4").`,
     });
   }
   // The pad starts above the pelvis (and the cushion and the pins), so it supports the lumbar region and never overlaps them.
@@ -366,20 +366,19 @@ export function buildSeat(ctx: Ctx): Part[] {
   // The pad is a padded backrest with rounded corners (D-44): a rounded-rectangle extrusion along the back's normal. Local x → across (Y), local y → up the back, local z → forward (the back's normal).
   const padOutline = roundedRect(W, padH, Math.min(p.seatBackCornerRadiusIn, W / 3, padH / 3));
   const padArea = signedArea(padOutline);
-  const padPerim = padOutline.reduce((m, q, i) => m + Math.hypot(padOutline[(i + 1) % padOutline.length][0] - q[0], padOutline[(i + 1) % padOutline.length][1] - q[1]), 0);
   const padO = at(0, h0);
   parts.push({
-    id: 'seat-back-pad', name: 'Seat back pad', group: 'seat', kind: 'purchased', material: 'closed-cell foam, marine-vinyl cover',
+    id: 'seat-back-pad', name: 'Seat back pad', group: 'seat', kind: 'purchased', material: 'closed-cell EVA foam (kneeling pad), no cover',
     geometry: { type: 'extrusion', outline: padOutline, depth: BACK_PAD_THICK_IN },
     transform: [0, 1, 0, 0, s.col2[0], 0, s.col2[2], 0, s.col0[0], 0, s.col0[2], 0, padO[0], padO[1], padO[2], 1],
-    body: 'chassis', massLb: foam(BACK_PAD_THICK_IN * padArea) + vinyl(2 * padArea + padPerim * BACK_PAD_THICK_IN),
+    body: 'chassis', massLb: foam(BACK_PAD_THICK_IN * padArea),
     fab: 'buy', step: STEP.seatStorage, removable: true, explode: unit(-0.7, 0, 1), finish: { soft: true, surface: 'vinyl' },
-    sourcing: { vendor: 'Closed-cell polyethylene foam and marine vinyl (as the cushion); sewn in-house', costUsd: 25 },
-    joints: [{ type: 'glue', to: 'seat-back-panel', count: 1, size: 'Dual Lock strips (adhesive back) on the panel and the pad: peels off by hand', note: 'D-57: the pad is the second "cushion" that lies in the storage box in cargo mode, so the back can flip flat' }],
-    notes: `Mass is an estimate (foam + cover). Rounded-rectangle pad, ${padRadius(W, padH, p.seatBackCornerRadiusIn).toFixed(2)}" corner radius, crowned by the viewer's soft finish (D-44). Held to the back panel by Dual Lock (D-57), so it comes off with no tools and lies in the box with the seat cushion; the back then flips flat.`,
+    sourcing: { vendor: 'Harbor Freight (EVA kneeling pad #56572, 11 x 18 x 1-1/2 in; the third pad)', costUsd: 7.99 },
+    joints: [{ type: 'glue', to: 'seat-back-panel', count: 1, size: 'Velcro Industrial strips (adhesive back) on the panel and the pad: peels off by hand', note: 'D-57: the pad is the second "cushion" that lies in the storage box in cargo mode, so the back can flip flat' }],
+    notes: `D-83: the third Harbor Freight EVA kneeling pad (11" x 18" x 1-1/2"), trimmed to size, no cover; mass from the pad. Rounded-rectangle pad, ${padRadius(W, padH, p.seatBackCornerRadiusIn).toFixed(2)}" corner radius, crowned by the viewer's soft finish (D-44). Held to the back panel by Velcro Industrial strips (D-57), so it comes off with no tools and lies in the box with the seat cushion; the back then flips flat.`,
   });
 
-  // The Dual Lock bond is on the panel's front face (local z = plyT) and the pad's back face (its local z = 0), at the pad's center.
+  // The Velcro Industrial bond is on the panel's front face (local z = plyT) and the pad's back face (its local z = 0), at the pad's center.
   const panelGlue = parts.find((q) => q.id === 'seat-back-panel')?.joints?.find((j) => j.to === 'seat-back-pad');
   if (panelGlue) panelGlue.at = [[0, h0 + padH / 2, plyT]];
   const padGlue = parts.find((q) => q.id === 'seat-back-pad')?.joints?.find((j) => j.to === 'seat-back-panel');
@@ -420,11 +419,11 @@ export function buildSeat(ctx: Ctx): Part[] {
       ...span([hb.x0, hb.x1], [yc - pinPadHalfIn, yc + pinPadHalfIn], [L.deckBot - HINGE_BACKER_THICK_IN, L.deckBot]),
       joints: [
         { type: 'glue', to: 'deck', count: 1, note: 'epoxy to the underside of the deck, before the frame goes on' },
-        ...(buttIdx >= 0 ? [{ type: 'glue' as const, to: joistId(L, buttIdx), count: 1, note: 'butt the pad to the joist face (the pin sits in solid oak across the glue line)' }] : []),
+        ...(buttIdx >= 0 ? [{ type: 'glue' as const, to: joistId(L, buttIdx), count: 1, note: 'butt the pad to the crossmember face (the pin sits in solid oak across the glue line)' }] : []),
         { type: 'screw', to: `seat-hinge-${tag}`, count: 3, diaIn: SCREW_DIA_IN[8], fit: hingeFit, size: `${screwText(hingeFit)} ${stainless(p)}, from the hinge leaf down through the deck` },
         { type: 'pin', to: `seat-pin-${tag}`, count: 1, diaIn: 2 * PIN_R_IN, size: `3/8" blind hole ${f4(lg.flatHoleIn)}" deep (flat latch), through the 12 mm deck first, with a 1/16" annular detent groove ${f4(lg.flatGrooveIn)}" below the deck`, note: `leaves ${f4(lg.flatLeftIn)}" of oak under the hole` },
       ],
-      notes: `Holes (D-75): the 3 hinge screws ${f2(hingeWorld.length ? hingeWorld[0][0] - hb.x0 : 0)}" from the rear end; the 3/8" flat-pin hole ${f2(pinWorld[0] - hb.x0)}" from the rear end (${f2(hb.x1 - pinWorld[0] - PIN_R_IN)}" of oak from the hole to the front end), centered across. Oak pad ${HINGE_BACKER_THICK_IN}" thick, glued under the 12 mm deck at each hinge so the hinge screws AND the flat-position pin hole bite oak, not ply (D-57, D-63). It runs from ${hb.x0.toFixed(2)}" (a half inch behind the hinge axis) forward to ${hb.x1.toFixed(2)}", where it BUTTS the face of the next joist, so the flat pin (${(s.P[0] + sup.c2L).toFixed(2)}", ${(hb.x1 - (s.P[0] + sup.c2L)).toFixed(2)}" from the pad end and in line with the joist behind it) lands in solid oak; it is ${(2 * pinPadHalfIn).toFixed(0)}" across, ${pinPadHalfIn}" (4 pin diameters) each side of the pin station. Grain across the sled. Drill the pin hole through the deck and ${f4(lg.flatHoleIn)}" into the pad (a drill stop), 1/16" groove for the detent ball ${f4(lg.flatGrooveIn)}" below the deck, epoxy-lined, when the seat is installed: ${f4(lg.flatLeftIn)}" of oak is left under the hole. Replaces the one-piece 3/4 in strip (lighter by about 0.4 lb).`,
+      notes: `Holes (D-75): the 3 hinge screws ${f2(hingeWorld.length ? hingeWorld[0][0] - hb.x0 : 0)}" from the rear end; the 3/8" flat-pin hole ${f2(pinWorld[0] - hb.x0)}" from the rear end (${f2(hb.x1 - pinWorld[0] - PIN_R_IN)}" of oak from the hole to the front end), centered across. Oak pad ${HINGE_BACKER_THICK_IN}" thick, glued under the 12 mm deck at each hinge so the hinge screws AND the flat-position pin hole bite oak, not ply (D-57, D-63). It runs from ${hb.x0.toFixed(2)}" (a half inch behind the hinge axis) forward to ${hb.x1.toFixed(2)}", where it BUTTS the face of the next crossmember, so the flat pin (${(s.P[0] + sup.c2L).toFixed(2)}", ${(hb.x1 - (s.P[0] + sup.c2L)).toFixed(2)}" from the pad end and in line with the crossmember behind it) lands in solid oak; it is ${(2 * pinPadHalfIn).toFixed(0)}" across, ${pinPadHalfIn}" (4 pin diameters) each side of the pin station. Grain across the sled. Drill the pin hole through the deck and ${f4(lg.flatHoleIn)}" into the pad (a drill stop), 1/16" groove for the detent ball ${f4(lg.flatGrooveIn)}" below the deck, epoxy-lined, when the seat is installed: ${f4(lg.flatLeftIn)}" of oak is left under the hole. Replaces the one-piece 3/4 in strip (lighter by about 0.4 lb).`,
     });
     for (const j of bk.joints ?? []) {
       if (j.to === `seat-hinge-${tag}` && hingeWorld.length === j.count) j.at = hingeWorld.map((w): Vec3 => toLocal(bk.transform, [w[0], w[1], L.deckBot]));

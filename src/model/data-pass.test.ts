@@ -176,7 +176,7 @@ describe('weather-aware material words (D-73)', () => {
     expect(bad.map(([k, v]) => `${k}: ${v.slice(0, 80)}`)).toEqual([]);
     expect(std.some(([, v]) => /18-8 \(304\) stainless/.test(v))).toBe(true);
     // collars, inserts and D-rings are zinc, the eye bolts and chain galvanized
-    expect(get('lash-L1').material).toMatch(/zinc-plated steel D-ring/);
+    expect(get('lash-L1').material).toMatch(/zinc-plated steel cargo D-ring/);
     expect(get('steer-eye-L').material).toMatch(/galvanized/);
     expect(get('steer-chain-L').material).toMatch(/galvanized/);
     expect(get('brake-snap-L').name).toMatch(/304 stainless/);
@@ -191,7 +191,7 @@ describe('weather-aware material words (D-73)', () => {
     expect(byId('beam-hold-down-L').material).toBe('316 stainless angle');
     expect(byId('steer-eye-L').material).toMatch(/316 stainless/);
     expect(byId('steer-chain-L').material).toMatch(/316 stainless chain/);
-    expect(byId('lash-L1').material).toMatch(/316 stainless D-ring/);
+    expect(byId('lash-L1').material).toMatch(/316 stainless cargo D-ring/);
     expect(byId('brake-snap-L').name).toMatch(/316 stainless/);
   });
 });

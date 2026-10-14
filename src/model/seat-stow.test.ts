@@ -38,7 +38,7 @@ describe('the seat kit (D-57)', () => {
     ]);
     expect(installed.some((x) => /^(seat-knob|seat-plug|storage-backer)/.test(x.id))).toBe(false);
     expect(get(installed, 'seat-wedge-L').removable).toBeFalsy();
-    expect(get(installed, 'seat-back-pad').removable).toBe(true); // Dual Lock: lifts off
+    expect(get(installed, 'seat-back-pad').removable).toBe(true); // Velcro Industrial: lifts off
     expect(get(installed, 'seat-back-panel').removable).toBeFalsy(); // the back stays on the sled
   });
   it('the cushions measure 14.125 x 18 x 2 (seat) and the pad as wide as the back, 1 in thick', () => {

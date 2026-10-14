@@ -4,8 +4,8 @@
  * Sections: Lumber (the suggested WHOLE oak boards by thickness, from `nesting.ts`: a yard sells boards, not net board feet), Plywood (sheets, from the nest), Metal stock
  * (cut-to-length feet), Purchased parts (by partNo), Fasteners (expanded from the joint list), Consumables (epoxy, fillers, tape, finish, sandpaper). The epoxy and the finish
  * products come from `finishingSchedule` (its buy list, so the BOM and the schedule agree) plus the epoxy for the glue joints.
- * Prices come from `prices.ts`; a number the model carries (`sourcing.costUsd`) is `quoted`, and so is every table price from the web price research of 2026-10-12 (with its URL); the rest are
- * `estimate`s. A line's alternatives (cheaper or different items that do not meet the spec, labelled SPEC GAP) are in its notes and in `BomLine.alternatives`; a line that needs a decision from
+ * Prices come from `prices.ts`; a number the model carries (`sourcing.costUsd`) is `quoted`, and so is every table price from the web price research of 2026-10-12 and 2026-10-14 (with its URL); the rest are
+ * `estimate`s. Shop stock Eric already owns (D-79: the Dominos, sandpaper, the supplies lot, Titebond III, mineral spirits, contact cement, paracord) is `owned`: a $0 line that stays visible and is never an estimate. A line's alternatives (cheaper or different items that do not meet the spec, labelled SPEC GAP) are in its notes and in `BomLine.alternatives`; a line that needs a decision from
  * Eric (`BomLine.decision`) is listed in `Bom.decisions`.
  *
  * Fasteners mirror `fastenerBreakdown` (src/model/lighting.ts): a joint listed on both of its parts counts once, a joint to a part that is
@@ -15,7 +15,7 @@
  *
  * Finishing touches (Eric, 2026-10-12): the lights, the seat cushions, the reflectors and the lash-point tie-downs are priced as their own section AFTER the core ones, so the
  * cost of the sled can be read with and without them. `touchGroupOfPart` says which parts belong, and every fastener or consumable that exists for one of them (the lamp-clip inserts and
- * screws, the Dual Lock, the lash-plate screws) follows its part.
+ * screws, the hook-and-loop strips, the lash-plate screws) follows its part.
  *
  * Bulk parts (Eric, 2026-10-12): an item sold in packs much larger than the sled needs (screws, nuts, washers, inserts, T-nuts, Dominos, glass tape, sandpaper, cotter pins, plugs)
  * is priced by the PACK in its own section, even when it is used in the core build: "I would keep the rest and use them in my shop (and might already have them)". The rule is
@@ -31,23 +31,26 @@ import { totalMass } from '../model/mass';
 import { STD_WOOD_SCREWS } from '../model/rear-mount';
 import type { Joint, Part } from '../model/types';
 import { WEATHER_SPEC, thinSheet, type Params } from '../params';
-import { cutList, fracIn, isBuilt, partKey, toCsv, type CsvCell } from './cutlist';
-import { finishingSchedule, glueEpoxyFlOz } from './finishing';
+import { cutList, fracIn, groupedName, isBuilt, partKey, toCsv, type CsvCell } from './cutlist';
+import { ceilTo, fractionText, fractionizeInches, inchMarks } from './units';
+import { EPOXY_BUY_RE, finishingSchedule, glueEpoxyFlOz } from './finishing';
 import { nestPlywood, oakBoardFeet, type OakPlan } from './nesting';
 import {
   EPOXY_KITS, EPOXY_KITS_SMALL, EPOXY_PUMPS_300, FILLERS, FINISH_CONTAINER_FACTOR, FINISH_CONTAINER_PRICE, FINISH_PRICE, GLASS_TAPE, METAL_CUT_ALLOWANCE_IN, NOTE_PRICE, OAK_ALT_PRICE_PER_BF, OAK_PRICE_PER_BF, PLYWOOD_PRICE, RESEARCH_DATE,
-  PURCHASED_FALLBACK, TITEBOND_BOTTLES, URETHANE_CONTAINER_PRICE, fastenerPrice, metalPrice, modelCostNote, purchasedDescribe, purchasedEntry, specOf, std304, type Price, type PriceBasis, type SpecName,
+  OWNED_NOTE, PURCHASED_FALLBACK, TITEBOND_OWNED, URETHANE_CONTAINER_PRICE, fastenerPrice, metalPrice, modelCostNote, purchasedDescribe, purchasedEntry, specOf, std304, type Price, type PriceBasis, type SpecName,
 } from './prices';
 
 // ── Consumable assumptions (all estimates) ─
 /** Mixing, pot and brush waste on top of the glue epoxy of `glueEpoxyFlOz` (finishing.ts: per-joint-type estimates, before waste). The coats' quantities carry their own waste. */
 export const EPOXY_WASTE = 0.2;
-/** Resin share of the mixed volume: 5:1 for everything (105 with 206: the glue, the seal coat and the closes). */
+/** Resin share of the mixed volume for the West System groups only (5:1, 105 resin with 206 hardener). The small kits carry their own `resinShare` (U.S. Composites 635 is 2:1, D-79). */
 const RESIN_SHARE_GLUE = 5 / 6;
 const RESIN_SHARE_COAT = 5 / 6;
 /** Glass tape per taped joint (ft), and the waste on top. */
 export const TAPE_FT_PER_JOINT = 1.5;
 export const TAPE_WASTE = 0.25;
+/** A single epoxy kit with less than this share of its mixed volume to spare gets a "plan a second kit or a top-up" note. */
+export const EPOXY_THIN_MARGIN = 0.15;
 /** Mixed fluid ounces in a quart. */
 const FLOZ_PER_QT = 32;
 
@@ -89,7 +92,7 @@ export interface BomLine {
 
 /** A line is bulk when the build needs less than this share of the smallest pack. */
 export const BULK_SHARE = 0.5;
-/** Priced by the pack whatever the share (the lump-sum items): keys of the consumable lines. */
+/** Listed in the bulk section whatever the share (the lump-sum items): keys of the consumable lines. */
 export const BULK_ALWAYS: ReadonlySet<string> = new Set(['sandpaper']);
 /** True when `qty` pieces are under `BULK_SHARE` of the price's smallest pack (a price without a pack is never bulk). */
 export const isBulkQty = (price: Price, qty: number): boolean => !!price.packQty && !!price.packUsd && qty < BULK_SHARE * price.packQty;
@@ -100,7 +103,7 @@ export const isBulkQty = (price: Price, qty: number): boolean => !!price.packQty
  */
 export const FASTENER_MATERIAL_NOTE =
   'Exterior use: every fastener is 316 stainless (no zinc, brass or plated steel in wet white oak, because oak tannins corrode them and stain the wood black). ' +
-  'The Dominos are Festool Sipo (sapele), the exterior hardwood type, never beech (interior only). 304 stainless is a possible cost cut where a line says "304 or 316"; the prices here are for 316 (base prices first).';
+  'The Dominos are beech from the shop, epoxied in (epoxy everywhere under this spec, so the exterior Sipo type is not bought). 304 stainless is a possible cost cut where a line says "304 or 316"; the prices here are for 316 (base prices first).';
 /** The same for the STANDARD spec (garage-kept, used a few times a year, wet at most at a rainy derby): 304 / 18-8 stainless, zinc where it never sees the oak, beech Dominos. */
 export const FASTENER_MATERIAL_NOTE_STANDARD =
   'Standard weather spec (garage-kept, used a few times a year, wet at most at a rainy derby): the screws, bolts, nuts, washers, T-nuts and pins are 18-8 (304) stainless, which tannins in wet oak will stain a little but not corrode in a garage; the shaft collars and the threaded inserts are zinc-plated; the eye bolts are galvanized. ' +
@@ -115,8 +118,8 @@ const SHELTERED_PARTS = /^(storage-|seat-(hinge|back|wedge|crest|pin)|sign-|flag
 export function fastenerMaterialNote(label: string, usedOn: readonly string[] = [], spec: SpecName = 'extreme'): string {
   const std = spec === 'standard';
   if (/^Domino/.test(label)) return std
-    ? 'Festool BEECH Dominos: the interior type, swells and rots if it stays wet. Fine in a sled kept in a garage and wet at most at a rainy derby; glue them in with Titebond III (the Extreme spec uses the exterior type and epoxy).'
-    : 'Festool SIPO (sapele) Dominos REQUIRED: the exterior/hardwood type. NOT beech: beech is interior only and swells and rots when it gets wet. Epoxy them in.';
+    ? 'Festool BEECH Dominos from the shop: the interior type, swells and rots if it stays wet. Fine in a sled kept in a garage and wet at most at a rainy derby; glue them in with Titebond III.'
+    : 'Festool BEECH Dominos from the shop, epoxied in: epoxy coats every mortise and tenon under this spec, which keeps the water out. (The exterior Sipo type is not bought.)';
   if (/heat-set insert/i.test(label)) return 'Brass heat-set insert OK: it sits in the printed ASA lamp clip, not in wet oak (brass is barred only from wet oak).';
   if (/nylon washer|button plug|end plug/i.test(label)) return 'Nylon or plastic, UV-stable: no metal involved.';
   if (/\bM[34]\b/.test(label)) return 'Stainless (304 or 316): screws into the brass insert in the printed clip, away from the oak.';
@@ -236,8 +239,12 @@ export interface Bom {
   coreEstimateShare: number;
   bulkEstimateShare: number;
   touchesEstimateShare: number;
-  /** "Build $2,100.00 + bulk parts $190.00 + finishing touches $240.00 = $2,530.00" */
+  /** "Build $2,100.00 + bulk parts $190.00 + finishing touches $240.00 = $2,530.00, excluding shipping and tax" */
   totalsText: string;
+  /** The vendors on this BOM that ship the order (so freight is extra), in `SHIPPING_VENDORS` order. Empty when none is on the list. */
+  shippingVendors: string[];
+  /** Why the total is short of the card charge: "Shipping and tax are not in these prices. These orders ship: ..." (no number is invented). */
+  shippingNote: string;
   /** Joint counts the fastener lines were expanded from (equal to `fastenerBreakdown`'s counts). */
   jointCounts: FastenerJointCounts;
   /** Parts or fasteners with no price in prices.ts (empty at the defaults). */
@@ -258,7 +265,7 @@ export interface Bom {
   wholeBoardsExtraUsd: number;
   /** What the old pricing (net board feet plus the waste allowance) would have cost, for comparison with the lumber subtotal. */
   lumberAllowanceUsd: number;
-  /** The same whole boards at the alternative (far, cheaper) published prices (`OAK_ALT_PRICE_PER_BF`, Cline Lumber); thicknesses with no alternative count at the base price. */
+  /** The same whole boards at the alternative (`OAK_ALT_PRICE_PER_BF`, The Wood Yard, the other Atlanta yard); thicknesses with no alternative count at the base price. */
   lumberAltUsd: number;
   csv: string;
 }
@@ -290,7 +297,9 @@ const joinNotes = (...n: Array<string | undefined>): string | undefined => n.fil
 
 function line(section: string, key: string, description: string, qty: number, price: Price, extra: Partial<BomLine> = {}): BomLine {
   const px = priceExtras(price, qty);
-  const notes = joinNotes(extra.notes, px.notes);
+  // Shop stock (D-79): the line says so first, once.
+  const ownNote = price.basis === 'owned' && !(extra.notes ?? '').includes(OWNED_NOTE) ? price.note : undefined;
+  const notes = joinNotes(ownNote, extra.notes, px.notes);
   return { section, key, description, qty, unit: price.unit, unitUsd: price.usd, extUsd: money(qty * price.usd), basis: price.basis, ...(price.url ? { url: price.url } : {}), ...px, ...extra, ...(notes ? { notes } : {}) };
 }
 function section(id: BomSection['id'], title: string, lines: BomLine[], extra: Partial<BomSection> = {}): BomSection {
@@ -304,8 +313,26 @@ function section(id: BomSection['id'], title: string, lines: BomLine[], extra: P
 
 /** "$2,279.80": dollars and cents with a thousands separator (the same format the Build tab prints). */
 export const usdText = (v: number): string => `${v < 0 ? '-' : ''}$${Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-/** "Build $X + bulk parts $B + finishing touches $Y = $Z". */
-export const totalsLine = (core: number, bulk: number, touches: number, total: number): string => `Build ${usdText(core)} + bulk parts ${usdText(bulk)} + finishing touches ${usdText(touches)} = ${usdText(total)}`;
+/** The text every total carries: shipping and sales tax are not in any price. */
+export const SHIPPING_TAX_PHRASE = 'excluding shipping and tax';
+/** "Build $X + bulk parts $B + finishing touches $Y = $Z, excluding shipping and tax". */
+export const totalsLine = (core: number, bulk: number, touches: number, total: number): string =>
+  `Build ${usdText(core)} + bulk parts ${usdText(bulk)} + finishing touches ${usdText(touches)} = ${usdText(total)}, ${SHIPPING_TAX_PHRASE}`;
+/**
+ * Online or mail-order sellers on the BOM whose orders ship (freight is extra, and no shipping figure was read for any of them). Bicycle Warehouse ships unless the lights are bought in
+ * its store; the others have no walk-in counter in Atlanta. Local pickups (Peach State Lumber, Harbor Freight, Home Depot, Ace, Rockler) are not listed.
+ */
+export const SHIPPING_VENDORS: ReadonlyArray<{ match: RegExp; name: string }> = [
+  { match: /U\.S\. Composites/, name: 'U.S. Composites' },
+  { match: /Speedy Metals/, name: 'Speedy Metals' },
+  { match: /Online Metals/, name: 'Online Metals' },
+  { match: /Bolt Depot/, name: 'Bolt Depot' },
+  { match: /Knot & Rope Supply/, name: 'Knot & Rope Supply' },
+  { match: /Bicycle Warehouse/, name: 'Bicycle Warehouse (unless bought in the store)' },
+  { match: /Blue Dog Ink/, name: 'Blue Dog Ink' },
+];
+export const shippingNoteText = (vendors: readonly string[]): string =>
+  `Shipping and sales tax are not in any price here (no shipping figure was read, so none is invented).${vendors.length ? ` These orders ship, so freight is extra: ${vendors.join(', ')}. Batch each vendor's items into one order.` : ''}`;
 
 /**
  * A line priced by the pack: `needed` pieces, `ceil(needed / packQty)` packs at `packUsd` each. `qty` carries the packs so `extUsd = qty x unitUsd`; the note says what to do with the rest.
@@ -317,7 +344,8 @@ function packLine(section: string, key: string, description: string, needed: num
   const own = price.note ? `${price.note}. ` : '';
   const unitWord = price.unit === 'lot' ? 'lot' : price.unit === 'ft' ? 'ft' : 'pcs';
   const sold = price.packLabel ? `sold as a ${price.packLabel}: buy ${packs}` : `sold in packs of ${packQty}: ${packs} pack${packs === 1 ? '' : 's'}`;
-  const share = `Need ${r2(needed)} ${unitWord}, ${sold} at ${usdText(packUsd)}.${shop ? ' You may already have these in the shop; keep the rest.' : ''}`;
+  const needText = price.unit === 'ft' ? `${fractionText(ceilTo(needed * 12, 1 / 8), 8)}"` : `${r2(needed)} ${unitWord}`; // a length is said in inches, as a shop fraction rounded up
+  const share = `Need ${needText}, ${sold} at ${usdText(packUsd)}.${shop ? ' You may already have these in the shop; keep the rest.' : ''}`;
   const px = priceExtras(price, needed);
   return {
     section, key, description, qty: packs, unit, unitUsd: packUsd, extUsd: money(packs * packUsd), basis: price.basis, ...(price.url ? { url: price.url } : {}),
@@ -484,9 +512,10 @@ function boltItems(part: Part, j: Joint, byId: PartMap, mat: FastMat): FastenerI
   const ms = new RegExp(String.raw`#(\d+)-(\d+)\s*[x×]\s*${LEN}"?[^,;]*?machine screw`, 'i').exec(size);
   if (ms) {
     const od = /(\d\/\d+)"\s*fender washer/i.exec(size);
+    const noWasher = /\bno washers?\b/i.test(size); // the heads bear on a plate (the D-ring's outside bearing plate): the model says so, so no washer is bought
     return [
       { label: `${mat.ss} machine screw #${ms[1]}-${ms[2]} x ${lenText(ms[3])}"`, qty: n },
-      { label: `${mat.ss} fender washer #${ms[1]}${od ? ` (${od[1]}" OD)` : ''}`, qty: n },
+      ...(noWasher ? [] : [{ label: `${mat.ss} fender washer #${ms[1]}${od ? ` (${od[1]}" OD)` : ''}`, qty: n }]),
       { label: `${mat.ss} nylon-insert lock nut #${ms[1]}-${ms[2]}`, qty: n },
     ];
   }
@@ -503,7 +532,7 @@ function boltItems(part: Part, j: Joint, byId: PartMap, mat: FastMat): FastenerI
   const tnut = /\bT-?nuts?\b/i.test(size);
   const nut: FastenerItem = { label: tnut ? `${mat.ss} T-nut ${t}` : `${mat.ss} nylon-insert lock nut ${t}`, qty: n };
   const washer = (k: number): FastenerItem => ({ label: `${mat.ss} fender washer ${d}"`, qty: k * n });
-  if (/eye bolt/i.test(size) || /eye bolt/i.test(part.name)) return [nut, washer(1)]; // the eye bolt itself is the steer-eye / steer-anchor part
+  if (/eye bolt/i.test(size) || /eye bolt/i.test(part.name)) return [nut, washer(Math.max(1, (size.match(/\bwashers?\b/gi) ?? []).length))]; // one washer per mention: the chain-crossmember bolt has one on each face // the eye bolt itself is the steer-eye / steer-anchor part
   if (/kingpin/i.test(size)) return []; // the kingpin part includes its washers and nut
   if (!len) { // no length in the text: another "x L" in it, else the stack of parts the bolt crosses
     const gl = GENERIC_LEN.exec(size);
@@ -515,7 +544,17 @@ function boltItems(part: Part, j: Joint, byId: PartMap, mat: FastMat): FastenerI
   const label = `${mat.ss} ${type} ${t}${len ? ` x ${len}"` : ' (length per joint note)'}`;
   // A nylon washer under the head (handle sockets) replaces one of the two fender washers.
   const nylon = /nylon washer/i.test(size);
-  const out: FastenerItem[] = [{ label, qty: n }, nut, washer(tnut ? (nylon ? 0 : 1) : type === 'carriage bolt' || nylon ? 1 : 2)];
+  // The joint names its washer: "a 7/8" OD 3/8 narrow flat washer under each head, nylock nuts on the backing plate" (the brake knee bolts). Buy exactly that: one narrow washer per head and
+  // none under the nut when the nuts bear on a plate; never the two fender washers a plain bolt gets.
+  const narrow = /(\d+\/\d+)"\s*OD\s+(\d+\/\d+)\s+narrow flat washer/i.exec(size);
+  if (narrow) {
+    const onPlate = /\bnuts?\s+on\s+(?:the\s+|one\s+)?(?:[a-z-]+\s+)*(?:backing|bearing)\s+plate/i.test(size);
+    return [{ label, qty: n }, nut, { label: `${mat.ss} narrow flat washer ${narrow[2]}" (${narrow[1]}" OD)`, qty: n }, ...(onPlate ? [] : [{ label: `${mat.ss} narrow flat washer ${narrow[2]}" (${narrow[1]}" OD)`, qty: n }])];
+  }
+  // "nylock nuts and fender washers under the beam": the washers are on the nut side only, so one per bolt (the head bears on the part itself).
+  const nutSideOnly = /\bnylock nuts?\s*(?:and|\+)\s*(?:fender )?washers?\s+(?:under|on)\b/i.test(size);
+  const oneWasher = /one washer a bolt/i.test(size); // the D-ring bolts (D-83): a washer under the head only, the nylock bears on the bracket
+  const out: FastenerItem[] = [{ label, qty: n }, nut, washer(tnut ? (nylon ? 0 : 1) : type === 'carriage bolt' || nylon || nutSideOnly || oneWasher ? 1 : 2)];
   if (out[2].qty === 0) out.splice(2, 1);
   if (nylon) out.push({ label: `Nylon washer for ${d}" screw`, qty: n });
   if (/button plugs?/i.test(size)) { const bp = /(\d\/\d+)\s*in\b[^,;]*?button plugs?/i.exec(size); out.push({ label: `Button plug ${bp ? bp[1] : '5/8'}" black nylon`, qty: n }); }
@@ -562,12 +601,14 @@ const wheelIds = ['wheel-RL', 'wheel-RR', 'wheel-FL', 'wheel-FR'];
 const axleIds = ['axle-R', 'axle-FL', 'axle-FR'];
 const COTTER_DIAS: Array<[number, string]> = [[1 / 16, '1/16'], [3 / 32, '3/32'], [1 / 8, '1/8'], [5 / 32, '5/32'], [3 / 16, '3/16']];
 
-/** Dual Lock strip per pad/cushion and its mate: 3 ft of 1 in strip (both halves of the pair). */
-export const DUAL_LOCK_FT_PER_PART = 3;
-/** Length of a Dual Lock roll (ft): the 3M SJ3560 retail roll of the research is 1 in x 6 ft. */
-export const DUAL_LOCK_ROLL_FT = 6;
-/** Polysulfide used per bedding, oz of a 10 oz cartridge. */
+/** Hook-and-loop per seat pad part (cushion, back pad): two 12 in strips of EACH half (hook and loop), so 2 ft of each half; the seat (cushion plus back pad) takes four 12 in strips of each half, 4 ft of each. */
+export const HOOK_LOOP_FT_PER_PART = 2;
+/** Length of each half (hook, loop) in a hook-and-loop pack (ft): Velcro Industrial Strength 2 in x 4 ft (D-83). */
+export const HOOK_LOOP_ROLL_FT = 4;
+/** Polysulfide used per bedding, oz. */
 export const SEALANT_OZ_PER_USE = 1;
+/** The tube bought (oz): BoatLIFE Life-Calk 1030, 2.8 oz (D-79; the handle sockets no longer take sealant, so the small tube is enough). */
+export const SEALANT_TUBE_OZ = 2.8;
 /** Contact-cement uses one pint can covers. */
 export const CEMENT_USES_PER_CAN = 8;
 /** Edge-banding waste (trimming, corners) and the roll length (ft). */
@@ -639,12 +680,13 @@ export const NOTE_ITEMS: NoteItem[] = [
     },
   },
   {
-    key: 'dual-lock', section: 'consumables', touch: 'seat', price: NOTE_PRICE.dualLock, partIds: ['seat-cushion', 'seat-back-pad'], noteRef: 'seat cushion and seat back pad notes: "on Dual Lock strips"',
+    key: 'hook-and-loop', section: 'consumables', touch: 'seat', price: NOTE_PRICE.hookLoop, partIds: ['seat-cushion', 'seat-back-pad'], noteRef: 'seat cushion and seat back pad notes: hook-and-loop strips (D-83: Velcro Industrial 2" x 4 ft)',
     expand(built) {
-      const pads = byIds(built, ['seat-cushion', 'seat-back-pad']).filter((x) => /dual lock/i.test(ptext(x)));
+      // Every built seat pad rides on hook-and-loop strips, whatever its note says today (D-83: 2" Velcro Industrial).
+      const pads = byIds(built, ['seat-cushion', 'seat-back-pad']);
       if (!pads.length) return null;
-      const ft = pads.length * DUAL_LOCK_FT_PER_PART;
-      return { items: [{ label: `Dual Lock reclosable fastener, 1" x ${DUAL_LOCK_ROLL_FT} ft roll`, qty: Math.ceil(ft / DUAL_LOCK_ROLL_FT) }], note: `${ft} ft of 1" strip for ${pads.map(shopName).join(' and ')}, both halves of each pair` };
+      const ft = pads.length * HOOK_LOOP_FT_PER_PART; // feet of EACH half
+      return { items: [{ label: `Velcro Industrial hook-and-loop, 2" x ${HOOK_LOOP_ROLL_FT} ft pack`, qty: Math.ceil(ft / HOOK_LOOP_ROLL_FT) }], note: `${ft} ft of 2" hook and ${ft} ft of 2" loop (${ft} twelve-inch strips of each half) for ${pads.map(shopName).join(' and ')}. Check that the pack holds BOTH a hook strip and a loop strip, each 4 ft; if it is one 4 ft strip of a single half, buy two` };
     },
   },
   {
@@ -657,14 +699,14 @@ export const NOTE_ITEMS: NoteItem[] = [
     },
   },
   {
-    key: 'sealant', section: 'consumables', price: NOTE_PRICE.sealant, partIds: ['seat-grip-backing-L', 'seat-grip-backing-R', 'handle-socket-L', 'handle-socket-R', 'storage-gasket-side-L'],
-    noteRef: 'grab-board backing joint note: "epoxy or polysulfide sealant"; handle-socket note: "bedded in epoxy / sealant"; gasket note: "continuous strip, spliced at a corner"',
+    key: 'sealant', section: 'consumables', price: NOTE_PRICE.sealant, partIds: ['seat-grip-backing-L', 'seat-grip-backing-R', 'storage-gasket-side-L'],
+    noteRef: 'grab-board backing joint note: "epoxy or polysulfide sealant"; gasket note: "continuous strip, spliced at a corner". The handle sockets are bedded in thickened epoxy (D-79), not sealant',
     expand(built) {
-      const uses = byIds(built, ['seat-grip-backing-L', 'seat-grip-backing-R', 'handle-socket-L', 'handle-socket-R']).filter((x) => /sealant|polysulfide/i.test(ptext(x)));
+      const uses = byIds(built, ['seat-grip-backing-L', 'seat-grip-backing-R']).filter((x) => /sealant|polysulfide/i.test(ptext(x)));
       const gasket = built.some((x) => x.id === 'storage-gasket-side-L' && /spliced/i.test(x.notes ?? ''));
       const oz = uses.length * SEALANT_OZ_PER_USE + (gasket ? SEALANT_OZ_PER_USE / 2 : 0);
       if (!oz) return null;
-      return { items: [{ label: 'Polysulfide marine sealant, 10 oz cartridge', qty: Math.ceil(oz / 10) }], note: `${Math.ceil(oz)} oz: beds for the ${[...new Set(uses.map((x) => x.name.replace(/\s+[LR]\d*$/, '').toLowerCase()))].join(', ')}${gasket ? ' and the lid gasket splice' : ''}` };
+      return { items: [{ label: `Polysulfide marine sealant, ${SEALANT_TUBE_OZ} oz tube`, qty: Math.ceil(oz / SEALANT_TUBE_OZ) }], note: `${Math.ceil(oz)} oz: beds for the ${[...new Set(uses.map((x) => x.name.replace(/\s+[LR]\d*$/, '').toLowerCase()))].join(', ')}${gasket ? ' and the lid gasket splice' : ''} (the handle sockets are bedded in thickened epoxy, not sealant)` };
     },
   },
   {
@@ -682,6 +724,15 @@ export const NOTE_ITEMS: NoteItem[] = [
       const knees = byIds(built, ['brake-knee-L', 'brake-knee-R']).filter((x) => x.removable);
       if (!knees.length) return null;
       return { items: [{ label: `${matOf(spec ?? 'extreme').ss} nylon-insert lock nut 3/8-16`, qty: KNEE_SPARE_NUTS }], note: `${KNEE_SPARE_NUTS} spare lock nuts for the knee bolts: the nylon wears, so fit new nuts after about five removals` };
+    },
+  },
+  {
+    key: 'brake-stop-cord', section: 'purchased', price: NOTE_PRICE.paracord, partIds: ['brake-cord-L', 'brake-cord-R'], noteRef: 'brake cord notes and vendor text: "3/16" polyester braid for the stop cord"',
+    expand(built) {
+      const cords = byIds(built, ['brake-cord-L', 'brake-cord-R']).filter((x) => /stop cord/i.test(`${x.name} ${x.material ?? ''} ${x.sourcing?.vendor ?? ''}`));
+      if (!cords.length) return null;
+      const between = Number(/(\d+(?:\.\d+)?)"\s*between the eyes/.exec(cords[0].sourcing?.vendor ?? '')?.[1] ?? 0);
+      return { items: [{ label: `Paracord stop cord, 3/16"${between ? `, about ${fracIn(Math.ceil(between * 8 + 16) / 8)}" each with the knots` : ''}`, qty: cords.length }], note: `${cords.length} stop cords tied taut between the flap eye and the transom eye, cut from the paracord already in the shop` };
     },
   },
   {
@@ -750,7 +801,9 @@ function laminatedText(laminated: OakPlan['laminated'], parts: Part[]): string {
   const how: string[] = [];
   for (const q of laminated) {
     const x = parts.find((y) => y.id === q.id);
-    const name = x ? shopName(x).replace(/\s+[LR]$/, '') : q.partNo;
+    const mates = laminated.filter((m) => m.partNo === q.partNo).map((m) => parts.find((y) => y.id === m.id)?.name).filter((n): n is string => !!n);
+    const shared = mates.length ? groupedName(mates).replace(/\s*\([^)]*\)\s*$/, '') : '';
+    const name = x ? shared.replace(/^([A-Z])([a-z])/, (_m, a: string, b: string) => a.toLowerCase() + b) : q.partNo; // one name for the left and right pair
     if (!names.includes(name)) names.push(name);
     if (!how.includes(q.lamination.text)) how.push(q.lamination.text);
   }
@@ -773,18 +826,20 @@ export function shopBomText(t: string, keys: ReadonlySet<string>): string {
     .replace(/\(\s*(?:see\s+)?[DAQ]-\d+[;,]\s*/g, '(')
     .replace(/\s*\(\s*(?:see\s+)?[DAQ]-\d+\s*\)/g, '')
     .replace(/,?\s*\b[DAQ]-\d+\b/g, '')
-    .replace(/,?\s*\bS7\b/g, '');
+    .replace(/,?\s*\bS7\b/g, '')
+    .replace(/\s*\(\s*[a-z]+(?:[A-Z][a-z0-9]*)+\s*\)/g, ''); // a parameter name in brackets, e.g. (somethingRateLbIn)
   if (keys.size) {
     const re = new RegExp(`(?<![\\w/.-])(${[...keys].sort((a, b) => b.length - a.length).map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?![\\w/-])`, 'g');
     o = o.replace(re, (k) => k.replace(/-/g, ' '));
   }
-  return o.replace(/\s+([.,;)])/g, '$1').replace(/\(\s+/g, '(');
+  // shop fractions, not long decimals ("0.69\"" is 11/16\")
+  return fractionizeInches(o.replace(/\s+([.,;)])/g, '$1').replace(/\(\s+/g, '('));
 }
 
 function bomForSpec(parts: Part[], p: Params): Bom {
   const spec = specOf(p);
   const std = spec === 'standard';
-  const thin = thinSheet(p);
+  const thin = { ...thinSheet(p), name: inchMarks(thinSheet(p).name) };
   const unpriced: string[] = [];
   const built = parts.filter(isBuilt);
   const cl = cutList(parts, p);
@@ -801,24 +856,27 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     return line('Lumber', t.board, `White oak ${t.board}, rough, whole boards`, r2(t.purchaseBf), price, {
       notes: `Buy: ${t.summary.join('; ')}. ${r2(t.netBf)} bf net on nominal thickness (${r2(t.allowanceBf)} bf with the ${Math.round(oak.wasteAllowance * 100)}% waste allowance); the boards come to ${r2(t.plannedBf)} bf.` +
         (alt ? ` Alternative: ${alt.source} $${alt.usd.toFixed(2)}/bf = $${(r2(t.purchaseBf) * alt.usd).toFixed(2)} for these boards (${alt.url}).` : '') +
-        (t.layersIn ? ` The face-laminated parts (${laminatedText(oak.laminated, built)}) take their layers from the stocked boards, so no 12/4 is bought.` : ''),
+        (t.layersIn ? ` The face-laminated parts (${laminatedText(oak.laminated, built)}) take their layers from the stocked 4/4 and 5/4 boards, so no thicker board is bought.` : ''),
     });
   });
 
-  // Plywood. The thin sheet is `thinSheet(p)` (D-73: 1/4 in white oak ply by default, 4 mm okoume, or 3 mm Baltic birch); the 12 mm deck is marine okoume (or Baltic if the species is changed).
+  // Plywood. The thin sheet is `thinSheet(p)` (D-80: 6 mm Baltic birch by default, 6 mm okoume under the Extreme spec, or white oak ply / 3 mm Baltic by choice) and is priced by its `priceKey`, never by its
+  // thickness class; the 12 mm deck is marine okoume (or Baltic if the species is changed).
   const plywood: BomLine[] = [];
   for (const mm of [...new Set(nest.sheets.map((s) => s.thicknessMm))]) {
     const sheets = nest.sheets.filter((s) => s.thicknessMm === mm);
     const label = `${mm} mm`;
-    const price = PLYWOOD_PRICE[label];
-    if (!price) { unpriced.push(`plywood ${label}`); continue; }
-    const isThin = label === thin.priceKey;
+    const isThin = sheets.some((s) => s.label === thinSheet(p).name); // the nest labels the sheet with the plain name; `thin.name` has the inch marks
+    // The okoume option is priced for its real thickness: 'okoume-6mm' is the 6 mm sheet (D-80); a 4 mm panelPlyIn is the 4 mm sheet.
+    const priceKey = isThin ? (thin.priceKey === 'okoume-6mm' && thin.thicknessIn < 0.2 ? 'okoume-4mm' : thin.priceKey) : label;
+    const price = PLYWOOD_PRICE[priceKey];
+    if (!price) { unpriced.push(`plywood ${priceKey}`); continue; }
     const desc = isThin
-      ? `${thin.name} plywood (${thin.glue} glue), ${thin.sheetWidthIn / 12} x ${thin.sheetLengthIn / 12} ft sheet (the thin sheet: sides, box, lid, signs)`
+      ? `${/plywood/i.test(thin.name) ? thin.name : `${thin.name} plywood`} (${thin.glue} glue), ${thin.sheetWidthIn / 12} x ${thin.sheetLengthIn / 12} ft sheet (the thin sheet: sides, box, lid, signs)`
       : `Marine okoume plywood (BS 1088), ${label}, 4 x 8 ft (the deck and seat back)`;
-    plywood.push(line('Plywood', label, desc, sheets.length, price, {
+    plywood.push(line('Plywood', priceKey, desc, sheets.length, price, {
       vendor: price.source.split(/[,(]/)[0].trim(), // the shop itself (Aircraft Spruce, The Wood Yard): the full source and link are on the price
-      notes: `${sheets.map((s) => `sheet ${s.index}: ${s.placements.length} parts, ${s.utilizationPct.toFixed(0)}% used`).join('; ')}${isThin && std && thin.priceKey === '5 mm' ? '. Interior / Type II glue is fine kept dry in a garage; the Extreme spec uses 4 mm okoume (BS 1088)' : ''}`,
+      notes: `${sheets.map((s) => `sheet ${s.index}: ${s.placements.length} parts, ${s.utilizationPct.toFixed(0)}% used`).join('; ')}${isThin && std && /interior/.test(thin.glue) ? `. ${thin.glue} glue is fine kept dry in a garage and sealed; the Extreme spec uses 6 mm okoume (BS 1088)` : ''}`,
     }));
   }
 
@@ -827,7 +885,7 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   for (const r of cl.metal) {
     const g = metalGroups.get(r.section) ?? { section: r.section, ft: 0, cuts: [] };
     g.ft += (r.qty * (r.cutLengthIn + METAL_CUT_ALLOWANCE_IN)) / 12;
-    g.cuts.push(`${r.qty} × ${fracIn(r.cutLengthIn)}" (${r.name.replace(/\s+[LR]\d*$/, '').toLowerCase()})`);
+    g.cuts.push(`${r.qty} × ${fracIn(r.cutLengthIn)}" (${r.name.toLowerCase()})`);
     metalGroups.set(r.section, g);
   }
   const metal: BomLine[] = [];
@@ -861,8 +919,8 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     if (cost !== undefined && !entry?.override) {
       // The model's own cost wins (a quote Eric or the model gave); the research can add a note and spec-gap alternatives to it.
       const mc = modelCostNote(key, spec);
-      price = { usd: cost, unit: 'ea', source: 'part.sourcing.costUsd (model)', basis: 'quoted', ...(mc?.alternatives ? { alternatives: mc.alternatives } : {}) };
-      priceNote = mc ? (mc.note.includes(RESEARCH_DATE) ? mc.note : `${mc.note} (${RESEARCH_DATE} research)`) : undefined;
+      price = { usd: cost, unit: 'ea', source: 'part.sourcing.costUsd (model)', basis: mc?.estimate ? 'estimate' : 'quoted', ...(mc?.alternatives ? { alternatives: mc.alternatives } : {}) };
+      priceNote = mc ? (mc.note.includes(RESEARCH_DATE) || mc.estimate || !/^model cost kept/.test(mc.note) ? mc.note : `${mc.note} (${RESEARCH_DATE} research)`) : undefined;
     } else {
       price = entry?.price ?? PURCHASED_FALLBACK;
       priceNote = price.note;
@@ -880,10 +938,14 @@ function bomForSpec(parts: Part[], p: Params): Bom {
       ...(tg ? { group: tg } : {}),
       ...(hardwareMaterialNote(x, spec) ? { materialNote: hardwareMaterialNote(x, spec) } : {}),
     };
-    const name = purchasedDescribe(key, spec) ?? (std ? std304(x.name) : x.name);
-    // A part cut from a roll or a pack (a cord): the whole packs to buy, not a price per part.
-    if (price.packQty && price.packUsd && price.perPart) purchased.push(packLine('Purchased parts', key, name, group.length * price.perPart, price, extra, false));
-    else (tg ? touchLines : purchased).push(line(tg ? TOUCHES_SECTION.title : 'Purchased parts', key, name, group.length, price, extra));
+    const groupName = groupedName(group.map((q) => q.name));
+    const name = purchasedDescribe(key, spec) ?? (std ? std304(groupName) : groupName);
+    const dest = tg ? touchLines : purchased, destTitle = tg ? TOUCHES_SECTION.title : 'Purchased parts';
+    // A part cut from a roll or a pack (a cord) or sold in packs (D-rings by the 2-pack, a neoprene sheet): the whole packs to buy, not a price per part.
+    if (price.packQty && price.packUsd && price.perPart) dest.push(packLine(destTitle, key, name, group.length * price.perPart, price, extra, false));
+    // A part cut from stock sold by the foot (the shock cord): whole units to buy, at the unit price.
+    else if (price.perPart) dest.push(line(destTitle, key, name, Math.ceil(group.length * price.perPart - 1e-9), price, extra));
+    else dest.push(line(destTitle, key, name, group.length, price, extra));
   }
 
   // Fasteners: every unique joint, then the items that exist only in notes (NOTE_ITEMS)
@@ -926,9 +988,11 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     const price = fastenerPrice(label, spec);
     if (price.note?.startsWith('UNPRICED')) unpriced.push(label);
     const isDomino = /^Domino/.test(label);
-    const description = isDomino ? (std ? `${label}, beech Domino (interior type)` : `${label}, Sipo (sapele) exterior Domino`) : label;
+    const description = isDomino ? `${label}, beech Domino (shop stock${std ? '' : ', epoxied in'})` : label;
     const extra: Partial<BomLine> = { vendor: price.url ? price.source : isDomino ? 'Festool dealer' : 'McMaster-Carr / Fastenal', materialNote: fastenerMaterialNote(label, [...(fastOn.get(label) ?? [])], spec), ...(group ? { group } : {}) };
     const sectionTitle = group ? TOUCHES_SECTION.title : 'Fasteners';
+    // Shop stock (D-79): a $0 line in the bulk section (or the touches section), so it is listed and not bought.
+    if (price.basis === 'owned') return line(group ? sectionTitle : BULK_SECTION.title, label, description, qty, price, extra);
     const packCost = price.packQty && price.packUsd ? Math.max(1, Math.ceil(qty / price.packQty - 1e-9)) * price.packUsd : Infinity;
     if (price.eachUsd !== undefined && qty * price.eachUsd <= packCost + 1e-9) {
       const { packQty: _q, packUsd: _u, packLabel: _l, ...rest } = price;
@@ -968,9 +1032,10 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   const epoxyFlOz = finishEpoxyFlOz + closeEpoxyFlOz + glueEpoxyTotal;
   const resinFlOz = glueEpoxyTotal * RESIN_SHARE_GLUE + (finishEpoxyFlOz + closeEpoxyFlOz) * RESIN_SHARE_COAT;
 
-  // The cheapest way to cover the resin. West System: a gallon group is cheaper per ounce than quart groups, and three quarts can cost more than one gallon; the West kits come without pumps,
-  // so the 300 Mini Pump Set is part of their cost. The Standard spec's reduced epoxy also considers the small 5:1 kits that come WITH pumps (MAS Epoxies 38.4 oz, TotalBoat quart). Each
-  // brand is a family (kits are not mixed across brands); the cheapest family is bought and the others are shown as alternatives with their totals.
+  // The cheapest way to cover the epoxy. West System: a gallon group is cheaper per ounce than quart groups, and three quarts can cost more than one gallon; the West kits come without pumps,
+  // so the 300 Mini Pump Set is part of their cost. The small kits (D-79) are the U.S. Composites 635 thin epoxy 2:1 (96 oz mixed, pumps extra; considered for both specs) and, for the Standard spec only,
+  // the 5:1 kits that come WITH pumps (MAS Epoxies 38.4 oz, TotalBoat quart). Each brand is a family (kits are not mixed across brands) and mixes at its own ratio, so the resin it needs is the mixed epoxy times
+  // its resin share (5/6 for 5:1, 2/3 for 2:1); the cheapest family is bought and the others are shown as alternatives with their totals.
   const [quart, gallon] = [EPOXY_KITS[0], EPOXY_KITS[1]];
   let best: { q: number; g: number; usd: number } | null = null;
   for (let g = 0; g <= Math.ceil(resinFlOz / gallon.resinFlOz); g++) {
@@ -980,24 +1045,35 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     if (!best || usd < best.usd - 1e-9 || (Math.abs(usd - best.usd) < 1e-9 && g + q < best.g + best.q)) best = { q, g, usd };
   }
   const westTotal = best!.usd + EPOXY_PUMPS_300.usd;
-  const smallKits = std ? EPOXY_KITS_SMALL.map((k) => { const n = Math.max(1, Math.ceil(resinFlOz / k.resinFlOz - 1e-9)); return { kit: k, n, usd: money(n * k.price.usd) }; }) : [];
+  const smallKits = EPOXY_KITS_SMALL.filter((k) => std || k.anySpec).map((k) => {
+    const resinNeed = epoxyFlOz * k.resinShare;
+    const n = Math.max(1, Math.ceil(resinNeed / k.resinFlOz - 1e-9));
+    return { kit: k, n, resinNeed, usd: money(n * k.price.usd + (k.pumpsIncluded ? 0 : k.pumps?.usd ?? 0)) };
+  });
   const cheapSmall = [...smallKits].sort((a, c) => a.usd - c.usd)[0];
   const useSmall = !!cheapSmall && cheapSmall.usd < westTotal - 1e-9;
+  const ratioText = (k: { resinShare: number }): string => (k.resinShare > 0.7 ? '5:1' : '2:1');
   const familyAlts = (chosen: string): Price[] => [
     ...(chosen !== 'west' ? [{ ...quart.price, usd: money(westTotal), unit: 'total', packQty: undefined, packUsd: undefined, alternatives: undefined, source: 'West System', note: `${[best!.g ? `${best!.g} gallon group` : '', best!.q ? `${best!.q} quart group (1.2 quart kit)` : ''].filter(Boolean).join(' + ')} plus the 300 Mini Pump Set ${usdText(EPOXY_PUMPS_300.usd)} (the West kits come without pumps)` } as Price] : []),
-    ...smallKits.filter((k) => k.kit.id !== chosen).map(({ kit, n, usd }) => ({ ...kit.price, usd, unit: 'total', packQty: undefined, packUsd: undefined, alternatives: undefined, note: `${n} x ${kit.label} (${n} kit${n === 1 ? '' : 's'}, pumps included)` } as Price)),
+    ...smallKits.filter((k) => k.kit.id !== chosen).map(({ kit, n, usd }) => ({ ...kit.price, usd, unit: 'total', packQty: undefined, packUsd: undefined, alternatives: undefined, note: `${n} x ${kit.label} (${n} kit${n === 1 ? '' : 's'}, ${kit.pumpsIncluded ? 'pumps included' : `plus ${usdText(kit.pumps?.usd ?? 0)} pumps`})` } as Price)),
   ];
   /** "Alternatives (not substituted): ..." for the kit families that cost more (`usd` of each is the family's whole cost for this epoxy). */
   const kitAltsNote = (alts: Price[]): string | undefined =>
     alts.length ? `Alternatives (not substituted): ${alts.map((a) => `${a.source} ${usdText(a.usd)} in all (${a.note ?? ''})${a.url ? ` ${a.url}` : ''}`).join(' | ')}` : undefined;
   const consumables: BomLine[] = [];
-  const buyText = sched.buy.filter((x) => /West System/.test(x.item)).map((x) => `${x.qty} ${x.unit} ${x.item.replace('West System ', '')}`).join(', ');
-  let epoxyNote = `${Math.ceil(resinFlOz)} fl oz resin: ${Math.ceil(glueEpoxyTotal)} fl oz mixed for the glue joints that use epoxy (estimated by joint type, +${Math.round(EPOXY_WASTE * 100)}% waste, 5:1 with the kit's 206), ${Math.ceil(finishEpoxyFlOz)} fl oz for the ${std ? 'edge, end-grain and deck-underside coat' : 'one seal coat'} (the transom and bulkhead closes are glue joints, in the first figure; the schedule's buy list: ${buyText}). Cheapest kit combination that covers it.`;
+  const buyText = sched.buy.filter((x) => /West System/.test(x.item) || EPOXY_BUY_RE.test(x.item)).map((x) => `${x.qty} ${x.unit} ${x.item.replace('West System ', '')}`).join(', ');
+  const epoxyNoteFor = (resinText: string, ratio: string): string => `${resinText} fl oz resin: ${Math.ceil(glueEpoxyTotal)} fl oz mixed for the glue joints that use epoxy (estimated by joint type, +${Math.round(EPOXY_WASTE * 100)}% waste, mixed at the kit's ${ratio}), ${Math.ceil(finishEpoxyFlOz)} fl oz for the ${std ? 'edge, end-grain and deck-underside coat' : 'one seal coat'} (the transom and bulkhead closes are glue joints, in the first figure; the schedule's quantities are mixed volume, so they hold for any kit${buyText ? `: ${buyText}` : ''}). Cheapest kit combination that covers it.`;
   if (useSmall) {
-    const over = resinFlOz - (cheapSmall.n - 1) * cheapSmall.kit.resinFlOz;
+    const over = cheapSmall.resinNeed - (cheapSmall.n - 1) * cheapSmall.kit.resinFlOz;
+    let epoxyNote = epoxyNoteFor(String(Math.ceil(cheapSmall.resinNeed)), ratioText(cheapSmall.kit));
     if (cheapSmall.n > 1 && over <= 0.2 * cheapSmall.kit.resinFlOz) epoxyNote += ` The need is only ${Math.ceil(over)} fl oz of resin past ${cheapSmall.n - 1} kit${cheapSmall.n === 2 ? '' : 's'} (the estimates carry ${Math.round(EPOXY_WASTE * 100)}% waste on the joints and 15% on the coat): ${cheapSmall.n - 1} kit${cheapSmall.n === 2 ? '' : 's'} may do if you mix tight.`;
+    // A single kit with a thin margin: the estimates are rough, so say to plan a second kit or a top-up (the extra-kit note above only fires when more than one kit is bought).
+    const capacity = cheapSmall.n * cheapSmall.kit.mixedFlOz, spare = (capacity - epoxyFlOz) / capacity;
+    if (spare < EPOXY_THIN_MARGIN) epoxyNote += ` Thin margin: the need is about ${Math.ceil(epoxyFlOz)} fl oz mixed from ${capacity} fl oz of kit (${Math.max(0, Math.round(spare * 100))}% to spare). Plan a second kit, or a quart of epoxy as a top-up (keep each batch to one brand and ratio), before the glue-up starts.`;
     consumables.push(line('Consumables', `epoxy-${cheapSmall.kit.id}`, cheapSmall.kit.label, cheapSmall.n, cheapSmall.kit.price, { vendor: cheapSmall.kit.price.source, notes: joinNotes(`Price: ${cheapSmall.kit.price.note}.`, epoxyNote, kitAltsNote(familyAlts(cheapSmall.kit.id))), alternatives: familyAlts(cheapSmall.kit.id) }));
+    if (!cheapSmall.kit.pumpsIncluded && cheapSmall.kit.pumps) consumables.push(line('Consumables', 'epoxy-pumps', `Pump set for the ${cheapSmall.kit.label.split(',')[0]}`, 1, cheapSmall.kit.pumps, { vendor: cheapSmall.kit.pumps.source, notes: `Price: ${cheapSmall.kit.pumps.note}.` }));
   } else {
+    const epoxyNote = epoxyNoteFor(String(Math.ceil(resinFlOz)), '5:1 (105 resin with 206 slow hardener)');
     const alts = familyAlts('west');
     if (best!.g) consumables.push(line('Consumables', 'epoxy-gallon', gallon.label, best!.g, gallon.price, { vendor: gallon.price.source, notes: joinNotes(`Price: ${gallon.price.note}.`, epoxyNote, kitAltsNote(alts)), ...(alts.length ? { alternatives: alts } : {}) }));
     if (best!.q) consumables.push(line('Consumables', 'epoxy-quart', quart.label, best!.q, quart.price, { vendor: quart.price.source, notes: joinNotes(`Price: ${quart.price.note}.`, best!.g ? undefined : epoxyNote, best!.g ? undefined : kitAltsNote(alts)), ...(!best!.g && alts.length ? { alternatives: alts } : {}) }));
@@ -1007,53 +1083,45 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   for (const hb of sched.buy.filter((x) => /West System/.test(x.item) && /hardener/i.test(x.item))) if (/\b20[79]\b/.test(hb.item)) unpriced.push(hb.item);
   // Pumps: West System no longer sells the 301 and 303 sets; the 300 Mini Pump Set (resin, 205/206 and 207/209 pumps) does both ratios, one set for the sled. The small 5:1 kits include their pumps.
   if (!useSmall) consumables.push(line('Consumables', 'epoxy-pumps', 'West System 300 Mini Pump Set (three pumps: resin and both hardener ratios; one set does both)', 1, EPOXY_PUMPS_300, { vendor: EPOXY_PUMPS_300.source, notes: `Price: ${EPOXY_PUMPS_300.note}.` }));
-  // Titebond III (Standard): the glue joints that are not epoxy. The cheapest bottles that cover the joints (+waste); 16 oz does it at the defaults.
+  // Titebond III (Standard): shop stock (D-79), $0, kept as a line. The quantity is the glue joints that are not epoxy (+waste).
   if (std && sched.glue.titebondJoints > 0) {
     const need = sched.glue.titebondFlOz;
-    let tb: { counts: number[]; usd: number; n: number } | null = null;
-    for (let a = 0; a <= 3; a++) for (let b2 = 0; b2 <= 3; b2++) for (let c = 0; c <= 2; c++) {
-      const counts = [a, b2, c];
-      if (a * TITEBOND_BOTTLES[0].flOz + b2 * TITEBOND_BOTTLES[1].flOz + c * TITEBOND_BOTTLES[2].flOz < need - 1e-9 || a + b2 + c === 0) continue;
-      const usd = a * TITEBOND_BOTTLES[0].price.usd + b2 * TITEBOND_BOTTLES[1].price.usd + c * TITEBOND_BOTTLES[2].price.usd;
-      if (!tb || usd < tb.usd - 1e-9 || (Math.abs(usd - tb.usd) < 1e-9 && a + b2 + c < tb.n)) tb = { counts, usd, n: a + b2 + c };
-    }
-    const sizes = tb ? TITEBOND_BOTTLES.map((bt, i) => ({ bt, n: tb!.counts[i] })).filter((x) => x.n > 0) : [];
-    for (const { bt, n } of sizes) {
-      consumables.push(line('Consumables', `titebond-${bt.flOz}`, `Titebond III Ultimate wood glue, ${bt.label}`, n, bt.price, { vendor: bt.price.source,
-        notes: joinNotes(`Price: ${bt.price.note}.`, `${sched.glue.titebondJoints} glue joints (the Dominos, dados, tenons and general glue joints), ${Math.ceil(need)} fl oz with the ${Math.round(EPOXY_WASTE * 100)}% waste (0.4 of the epoxy estimate for the same joints: one thin coat, no filler). Epoxy is kept for the bent laminations, the face laminations, the deck, the fillets and the thickened bedding.`) }));
-    }
+    consumables.push(line('Consumables', 'titebond', 'Titebond III Ultimate wood glue', Math.ceil(need), TITEBOND_OWNED, { vendor: TITEBOND_OWNED.source,
+      notes: `${sched.glue.titebondJoints} glue joints (the Dominos, dados, tenons and general glue joints), about ${Math.ceil(need)} fl oz with the ${Math.round(EPOXY_WASTE * 100)}% waste (0.4 of the epoxy estimate for the same joints: one thin coat, no filler). Epoxy is kept for the bent laminations, the face laminations, the deck, the fillets and the thickened bedding. Check the bottle in the shop holds that much.` }));
   }
-  consumables.push(line('Consumables', 'silica', 'Colloidal silica filler (thickened glue, fillets)', 1, FILLERS.silica, { vendor: FILLERS.silica.source, notes: `Price: ${FILLERS.silica.note}.` }));
-  // Microballoons fair the epoxy-sealed deck top: the Standard spec does not seal it (the deck top is stained and urethaned), so it does not buy them.
+  consumables.push(line('Consumables', 'silica', 'Fumed silica filler (thickened glue, fillets)', 1, FILLERS.silica, { vendor: FILLERS.silica.source, notes: `Price: ${FILLERS.silica.note}.` }));
+  // Microballoons fair the epoxy-sealed deck top: the Standard spec does not seal it (the deck top is urethaned), so it does not buy them.
   if (!std) consumables.push(line('Consumables', 'microballoons', 'Low-density fairing filler', 1, FILLERS.microballoons, { vendor: FILLERS.microballoons.source, notes: `Price: ${FILLERS.microballoons.note}.` }));
   const tapeFt = Math.ceil(tapeJoints * TAPE_FT_PER_JOINT * (1 + TAPE_WASTE));
   if (tapeFt > 0) {
-    const tapeExtra = { vendor: GLASS_TAPE.source, notes: `${tapeJoints} taped joints x ${TAPE_FT_PER_JOINT} ft, +${Math.round(TAPE_WASTE * 100)}%` };
-    // Sold in 10 ft rolls: whole rolls either way (shop stock when the build needs under half a roll).
-    if (isBulkQty(GLASS_TAPE, tapeFt)) bulkLines.push(packLine(BULK_SECTION.title, 'glass-tape', 'Fiberglass tape, 2" wide', tapeFt, GLASS_TAPE, tapeExtra));
-    else consumables.push(packLine('Consumables', 'glass-tape', 'Fiberglass tape, 2" wide', tapeFt, GLASS_TAPE, tapeExtra, false));
+    // Sold by the yard (D-79): whole yards.
+    const tapeYd = Math.ceil(tapeFt / 3 - 1e-9);
+    consumables.push(line('Consumables', 'glass-tape', 'Fiberglass tape, 2" wide, by the yard', tapeYd, GLASS_TAPE, { vendor: GLASS_TAPE.source, notes: joinNotes(`Price: ${GLASS_TAPE.note}.`, `${tapeJoints} taped joints x ${TAPE_FT_PER_JOINT} ft, +${Math.round(TAPE_WASTE * 100)}%: ${tapeFt} ft, ${tapeYd} yd`) }));
   }
   consumables.push(...noteLines);
   // The finish products, container by container, exactly as the schedule's buy list names them.
   const finishKey = (item: string): { key: string; table: string; price: Price } | null => {
-    if (/West System/.test(item)) return null;
+    if (/West System/.test(item) || EPOXY_BUY_RE.test(item)) return null; // the epoxy is priced as a kit above
     if (/conditioner/i.test(item)) return { key: 'conditioner', table: 'conditioner', price: FINISH_PRICE.conditioner };
     if (/gel stain/i.test(item)) return { key: 'gel-stain', table: 'gelStain', price: FINISH_PRICE.gelStain };
     if (/stain or dye/i.test(item)) return { key: 'stain', table: 'stain', price: FINISH_PRICE.stain };
     if (/thinner/i.test(item)) return { key: 'thinner', table: 'thinner', price: FINISH_PRICE.thinner };
     if (/urethane/i.test(item)) return { key: 'urethane', table: 'urethane', price: URETHANE_CONTAINER_PRICE.qt! };
     if (/varnish/i.test(item)) return { key: 'varnish', table: 'varnish', price: FINISH_PRICE.varnish };
-    if (/enamel|pigment/i.test(item)) return { key: 'enamel', table: 'enamel', price: FINISH_PRICE.enamel };
+    if (/paint marker|enamel|pigment/i.test(item)) return { key: 'paint-marker', table: 'enamel', price: FINISH_PRICE.enamel };
     return null;
   };
   for (const bl of sched.buy) {
     const k = finishKey(bl.item);
-    if (!k) { if (!/West System/.test(bl.item)) unpriced.push(bl.item); continue; }
+    if (!k) { if (!/West System/.test(bl.item) && !EPOXY_BUY_RE.test(bl.item)) unpriced.push(bl.item); continue; }
     // The real container price where the research found one, else the base per-quart price scaled by the container size.
     const price: Price = (k.table === 'urethane' ? URETHANE_CONTAINER_PRICE[bl.unit] : FINISH_CONTAINER_PRICE[k.table]?.[bl.unit]) ?? { ...k.price, usd: money(k.price.usd * FINISH_CONTAINER_FACTOR[bl.unit]), unit: bl.unit };
-    consumables.push(line('Consumables', `${k.key}-${bl.unit}`, `${bl.item}, ${bl.unit}`, bl.qty, price, { vendor: price.source, notes: joinNotes(price.url ? `Price: ${price.note}.` : undefined, bl.note) }));
+    // The paint marker is bought as a marker, not by the pint (the schedule counts it as a half pint of fill).
+    const desc = k.key === 'paint-marker' ? bl.item : `${bl.item}, ${bl.unit}`;
+    consumables.push(line('Consumables', k.key === 'paint-marker' ? 'paint-marker' : `${k.key}-${bl.unit}`, desc, bl.qty, price, { vendor: price.source, notes: joinNotes(price.url ? `Price: ${price.note}.` : undefined, bl.note) }));
   }
-  if (BULK_ALWAYS.has('sandpaper')) bulkLines.push(packLine(BULK_SECTION.title, 'sandpaper', 'Sandpaper, lump sum', 1, FINISH_PRICE.sandpaper, { vendor: FINISH_PRICE.sandpaper.source }));
+  // Sandpaper and the supplies lot are shop stock (D-79): $0 lines so they are not forgotten.
+  if (BULK_ALWAYS.has('sandpaper')) bulkLines.push(line(BULK_SECTION.title, 'sandpaper', 'Sandpaper, lump sum', 1, FINISH_PRICE.sandpaper, { vendor: FINISH_PRICE.sandpaper.source }));
   else consumables.push(line('Consumables', 'sandpaper', 'Sandpaper, lump sum', 1, FINISH_PRICE.sandpaper, { vendor: FINISH_PRICE.sandpaper.source }));
   consumables.push(line('Consumables', 'supplies', 'Brushes, rollers, cups, gloves, solvent', 1, FINISH_PRICE.supplies, { vendor: FINISH_PRICE.supplies.source }));
 
@@ -1079,7 +1147,7 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   ];
   const bulk = section(BULK_SECTION.id, BULK_SECTION.title, bulkLines, {
     notes: [
-      'Sold in packs much larger than the sled needs, so each line is priced by the whole pack. You may already have these in the shop; keep the rest for the next project. Packs and prices are from the 2026-10-12 price research where a line shows a vendor link; the rest are estimates. Material requirements per line are in the Material column; the reason is in the Fasteners note.',
+      'Sold in packs much larger than the sled needs, so each line is priced by the whole pack. You may already have these in the shop; keep the rest for the next project. The Dominos and the sandpaper are shop stock Eric already owns: they are listed at $0 so they are not forgotten. Packs and prices are from the price research (2026-10-12 and 2026-10-14) where a line shows a vendor link; the rest are estimates. Material requirements per line are in the Material column; the reason is in the Fasteners note.',
     ],
   });
   const sections: BomSection[] = [...core, bulk, touches];
@@ -1087,6 +1155,8 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   const keyWords = shopKeys(parts);
   for (const sec of sections) {
     for (const l of sec.lines) {
+      l.description = shopBomText(l.description, keyWords);
+      if (l.vendor) l.vendor = shopBomText(l.vendor, keyWords);
       if (l.notes) l.notes = shopBomText(l.notes, keyWords);
       if (l.decision) l.decision = shopBomText(l.decision, keyWords);
       if (l.materialNote) l.materialNote = shopBomText(l.materialNote, keyWords);
@@ -1100,6 +1170,9 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   const totalUsd = money(coreUsd + bulkUsd + touchesUsd);
   const estimateUsd = money(coreEstimateUsd + bulkEstimateUsd + touchesEstimateUsd);
   const totalsText = totalsLine(coreUsd, bulkUsd, touchesUsd, totalUsd);
+  const lineVendors = sections.flatMap((x) => x.lines).map((l) => l.vendor ?? '');
+  const shippingVendors = SHIPPING_VENDORS.filter((v) => lineVendors.some((x) => v.match.test(x))).map((v) => v.name);
+  const shippingNote = shippingNoteText(shippingVendors);
 
   // Lines that need a decision from Eric (the Domino 4x20, the wheel spec, the shaft collars, the eye bolts...), in the order of the sections.
   const decisions = [...new Set(sections.flatMap((x) => x.lines).filter((l) => l.decision).map((l) => l.key))];
@@ -1115,11 +1188,12 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   rows.push(['Total', '', 'Bulk parts (shop stock)', '', '', '', bulkUsd.toFixed(2), '', '', `${(100 * share(bulkEstimateUsd, bulkUsd)).toFixed(0)}% estimates`]);
   rows.push(['Total', '', 'Finishing touches', '', '', '', touchesUsd.toFixed(2), '', '', `${(100 * share(touchesEstimateUsd, touchesUsd)).toFixed(0)}% estimates`]);
   rows.push(['Total', '', 'Grand total', '', '', '', totalUsd.toFixed(2), '', '', `${totalsText}; ${(100 * share(estimateUsd, totalUsd)).toFixed(0)}% estimates`]);
+  rows.push(['Total', '', 'Shipping and tax', '', '', '', '', '', '', shippingNote]);
   rows.push(['Total', '', 'Weather spec', '', '', '', '', '', '', `${std ? 'Standard (garage-kept)' : 'Extreme weather (stored outside, near salt)'}; thin sheet: ${thin.name}`]);
 
   return {
     spec, thinSheetName: thin.name, sections, totalUsd, estimateUsd, estimateShare: share(estimateUsd, totalUsd), coreUsd, bulkUsd, touchesUsd, coreEstimateUsd, bulkEstimateUsd, touchesEstimateUsd,
-    coreEstimateShare: share(coreEstimateUsd, coreUsd), bulkEstimateShare: share(bulkEstimateUsd, bulkUsd), touchesEstimateShare: share(touchesEstimateUsd, touchesUsd), totalsText, jointCounts, unpriced: [...new Set(unpriced)], decisions,
+    coreEstimateShare: share(coreEstimateUsd, coreUsd), bulkEstimateShare: share(bulkEstimateUsd, bulkUsd), touchesEstimateShare: share(touchesEstimateUsd, touchesUsd), totalsText, shippingVendors, shippingNote, jointCounts, unpriced: [...new Set(unpriced)], decisions,
     consumables: { epoxyFlOz, finishEpoxyFlOz, closeEpoxyFlOz, glueEpoxyFlOz: glueEpoxyTotal, resinFlOz, sealedFt2, oakFt2, plyFt2, glueJoints, tapeFt }, unresolved, wholeBoardsExtraUsd: 0, lumberAllowanceUsd: money(lumberAllowanceUsd), lumberAltUsd: money(lumberAltUsd), csv: toCsv(rows),
   } as Bom; // `weatherCompare` is added by `bom` (a lazy getter)
 }

@@ -111,6 +111,21 @@ describe('lid-stay arm-end screws land in the fore lid-frame end', () => {
   });
 });
 
+describe('lid-support arm-end screws keep real wood around each pilot (at least 3/16 in)', () => {
+  it('every pilot is at least 3/16 in + the pilot radius from every face of the frame piece', () => {
+    const rim = get('storage-rim-end-fore'), stay = get('storage-lid-stay');
+    const b = localBounds(rim.geometry);
+    for (const a of jointTo(rim, stay.id, 'screw').at!) {
+      for (const k of [0, 1]) {
+        // the edge distance in the piece's two across-grain/along directions, less the 1/16 in pilot radius: the narrow direction governs
+        const edge = Math.min(a[k] - b.min[k], b.max[k] - a[k]) - 1 / 16;
+        if (b.max[k] - b.min[k] < 1.5) expect(edge, `axis ${k}`).toBeGreaterThanOrEqual(3 / 16 - 1e-9);
+      }
+    }
+    expect(stay.name).toBe('Lid support');
+  });
+});
+
 describe('return-cord eyes on the rear transom', () => {
   for (const tag of ['L', 'R']) {
     it(`${tag}: the transom records its own end of the cord eye and the snap hook on its aft face, under the ring`, () => {

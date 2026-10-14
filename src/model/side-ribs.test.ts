@@ -9,7 +9,8 @@ import { buildModel } from './index';
 import { computeLayout } from './layout';
 import { partsOverlap, worldAABB } from './bounds';
 import { storageGeometry } from './storage';
-import { boxTieGeometry, kneeScrews, lashBoltLength, ribWasherSpan, sideRibStations } from './side-ribs';
+import { boxTieGeometry, kneeScrewDriftLimitIn, kneeScrews, lashBoltLength, ribWasherSpan, sideRibStations, KNEE_MIN_WOOD_IN } from './side-ribs';
+import { transformPoint } from './bounds';
 import { screwFitOk } from './rear-mount';
 import type { Part } from './types';
 
@@ -22,14 +23,15 @@ const ours = (x: Part) => /^(side-rib|box-tie|lash-)/.test(x.id);
 
 describe('stations (D-76)', () => {
   const st = sideRibStations(p, L);
-  it('box rib 1.4 in behind the box fore end (x = 5.6), mid rib on joist 5 (27.6), bow post on the king beam (44)', () => {
+  it('box rib 1.4 in behind the box fore end (x = 5.56), mid rib on joist 5 (27.6), bow post on the king beam (44)', () => {
     expect(st.map((s) => s.kind)).toEqual(['box', 'knee', 'knee']);
     expect(st[0].x).toBeCloseTo(storageGeometry(p, L).x1 - 1.4, 9);
-    expect(st[0].x).toBeCloseTo(5.59, 2);
+    expect(st[0].x).toBeCloseTo(5.56, 2); // D-83: 5.56 (5.59 before the 1-1/2 in seat pads moved the seat back and the box end)
     expect(st[1].member).toBe('joist-5');
-    expect(st[1].x).toBeCloseTo(27.64, 2);
+    expect(st[1].memberX).toBeCloseTo(27.64, 2);
+    expect(st[1].x).toBeCloseTo(27.99, 2); // the rib stands 0.35 in ahead of joist 5 so the knee's two screws land on its centerline (the side is turned 10.7 degrees there)
     expect(st[2].member).toBe('king-beam');
-    expect(st[2].x).toBe(L.king.x);
+    expect(st[2].x).toBe(L.king.x); // the side is square at x = 44 and the king beam is 3 in thick: no shift
   });
   it('the bow station is one number: sideRibFrontXIn 35 moves the post to the chain joist (the verify fallback)', () => {
     const q = { ...p, sideRibFrontXIn: 35 } as Params;
@@ -93,23 +95,24 @@ describe('parts (D-76)', () => {
     expect(tg.z1).toBeLessThan(st.top - L.railBand);
     expect(get('box-tie-L').joints!.some((j) => j.type === 'glue' && j.to === 'storage-side-L')).toBe(true);
   });
-  it('D-rings: 4 #8-32 x 2 in stainless machine screws each (washer + sandwich + head + plate + nylock + 2 threads = 1.78 in), weather-aware', () => {
+  it('D-rings (D-83): 2 1/4-20 x 2 in stainless button-head bolts each (washer + sandwich + head + bracket + nylock + 2 threads = 1.94 in), weather-aware', () => {
     const lb = lashBoltLength(p);
-    expect(lb.need).toBeCloseTo(0.05 + 0.625 + 0.75 + 0.125 + 0.172 + 1 / 16, 9);
+    expect(lb.need).toBeCloseTo(0.063 + 0.625 + 0.75 + 0.125 + 0.3125 + 1 / 16, 9);
     expect(lb.len).toBe(2);
     const j = get('lash-L2').joints![0];
     expect(j.type).toBe('bolt');
-    expect(j.count).toBe(4);
-    expect(j.diaIn).toBeCloseTo(0.164, 9);
-    expect(j.size).toMatch(/18-8 \(304\) stainless machine screw/);
-    expect(get('lash-L2').material).toMatch(/zinc-plated steel D-ring/);
+    expect(j.count).toBe(2);
+    expect(j.diaIn).toBeCloseTo(0.25, 9);
+    expect(j.size).toMatch(/^1\/4-20 x 2" 18-8 \(304\) stainless button-head bolt/);
+    expect(get('lash-L2').material).toMatch(/zinc-plated steel cargo D-ring/);
+    expect(get('lash-L2').notes).toMatch(/VERIFY the real bracket/);
     const ext = buildModel({ ...p, weatherSpec: 1 } as Params);
     expect(ext.find((x) => x.id === 'lash-L2')!.joints![0].size).toMatch(/316 stainless/);
-    expect(ext.find((x) => x.id === 'lash-L2')!.material).toMatch(/316 stainless D-ring/);
+    expect(ext.find((x) => x.id === 'lash-L2')!.material).toMatch(/316 stainless cargo D-ring/);
   });
-  it('knee screws: 2 standard #6 x 2-1/2 (D-72: no new screw size) through the counterbored knee and the deck into the member, within its depth', () => {
+  it('knee screws: 2 standard #8 x 2-1/2 (D-72, D-82: every wood screw is a #8) through the counterbored knee and the deck into the member, within its depth', () => {
     const ks = kneeScrews(p, L);
-    expect(ks.fit.gauge).toBe(6);
+    expect(ks.fit.gauge).toBe(8);
     expect(ks.fit.lenIn).toBe(2.5);
     expect(screwFitOk(ks.fit)).toBe(true);
     for (const id of ['side-rib-knee-L2', 'side-rib-knee-R3']) {
@@ -118,6 +121,51 @@ describe('parts (D-76)', () => {
       const mate = get(j.to);
       expect(mate.joints!.some((q) => q.type === 'screw' && q.to === id && q.count === 2), id).toBe(true); // the member records its own end
     }
+  });
+});
+
+describe('knee screws keep wood to the member (D-76)', () => {
+  // Every knee screw, in model coordinates, against the member it goes into: the shank leaves at least 1/8 in of wood to each fore-aft face, and the point is within the member's length.
+  const cases: Array<[string, Params]> = [['defaults', p], ['bow post on the chain crossmember', { ...p, sideRibFrontXIn: 35 } as Params], ['mid rib at 24 in', { ...p, sideRibMidXIn: 24 } as Params], ['under-seat box', { ...p, storageLocation: 2 } as Params]];
+  for (const [label, q] of cases) {
+    it(`${label}: both screws of every knee sit at least 1/8 in of wood from each face of the member`, () => {
+      const ps = buildModel(q), by = new Map(ps.map((x) => [x.id, x]));
+      const knees = ps.filter((x) => /^side-rib-knee-/.test(x.id));
+      expect(knees.length).toBeGreaterThanOrEqual(4);
+      for (const k of knees) {
+        const j = k.joints!.find((c) => c.type === 'screw')!;
+        const mem = by.get(j.to)!;
+        const xm = mem.transform[12], t = mem.stock!.t;
+        expect(j.at!.length, k.id).toBe(2);
+        for (const a of j.at!) {
+          const w = transformPoint(k.transform, a);
+          const wood = t / 2 - Math.abs(w[0] - xm) - j.diaIn! / 2;
+          expect(wood, `${k.id} screw at x ${w[0].toFixed(3)} vs ${mem.id} ${(xm - t / 2).toFixed(3)}..${(xm + t / 2).toFixed(3)}`).toBeGreaterThanOrEqual(KNEE_MIN_WOOD_IN - 1e-9);
+        }
+        // the member's own end of the joint records the same points, in its top edge
+        const mj = mem.joints!.find((c) => c.type === 'screw' && c.to === k.id)!;
+        for (const a of mj.at!) expect(Math.abs(transformPoint(mem.transform, a)[0] - xm), mem.id).toBeLessThanOrEqual(kneeScrewDriftLimitIn(t) + 1e-9);
+      }
+    });
+  }
+  it('the turned side was the failure: with the rib on the member the same screws would break out (a regression guard on the shift)', () => {
+    const st = sideRibStations(p, L)[1];
+    const yaw = Math.atan(st.dTurn);
+    const ks = kneeScrews(p, L);
+    const unshifted = ks.d.map((d) => Math.abs(Math.sin(yaw) * (p.sideRibDepthIn + d)));
+    expect(Math.max(...unshifted)).toBeGreaterThan(kneeScrewDriftLimitIn(st.memberT));
+  });
+});
+
+describe('part names (D-76)', () => {
+  it('part names read by role and side', () => {
+    expect(get('side-rib-L2').name).toBe('Side rib, mid, left');
+    expect(get('side-rib-R3').name).toBe('Side rib, bow post, right');
+    expect(get('side-rib-knee-L2').name).toBe('Rib knee, mid, left');
+    expect(get('side-rib-knee-R3').name).toBe('Rib knee, bow post, right');
+    expect(get('box-tie-R').name).toBe('Box tie spacer, right');
+    expect(get('lash-L1').name).toBe('Lash point, box, left');
+    expect(new Set(parts.filter((x) => /^side-rib-knee-/.test(x.id)).map((x) => x.name)).size).toBe(4);
   });
 });
 
@@ -154,8 +202,8 @@ describe('clearances (D-76)', () => {
         expect(gap, `${x.id} vs the rib ${st.n} washers`).toBeGreaterThanOrEqual(0.25);
       }
     }
-    // the rear reflector did not have to move: 3/8 in clear of the box rib's washers
-    expect(worldAABB(get('reflector-L1')).min[0] - ribWasherSpan(sideRibStations(p, L)[0])[1]).toBeGreaterThan(0.35);
+    // the rear reflector did not have to move: about 3/8 in clear of the box rib's washers
+    expect(worldAABB(get('reflector-L1')).min[0] - ribWasherSpan(sideRibStations(p, L)[0])[1]).toBeGreaterThan(0.3); // D-83: 0.35 clear with the old #8 washers, 0.30 with the 3/4 in 1/4 fender washers 1/8 in farther apart
   });
 });
 

@@ -231,9 +231,9 @@ describe('tying the load down (cargo-strap)', () => {
     expect(c.value).toBeCloseTo(78.6, 1);
     expect(c.limit).toBe(defaults.lashLoadLbf);
   });
-  it('the six D-rings stay (D-41): six lash points, 300 lbf working load each', () => {
+  it('the six D-rings stay (D-41): six lash points, 233 lbf working load each (D-83: the bolt-on cargo D-ring)', () => {
     expect(installed.filter((x) => x.id.startsWith('lash-') && x.group === 'hardware')).toHaveLength(6);
-    expect(defaults.lashLoadLbf).toBe(300);
+    expect(defaults.lashLoadLbf).toBe(233);
     expect(byId(cs, 'lash-points').value).toBe(6);
   });
   it('a heavier load needs more tension and eventually fails against the plates', () => {
@@ -329,12 +329,12 @@ describe('the handlebow row (D-39 socket loads unchanged)', () => {
 describe('cargo capacity (the payload sweep)', () => {
   const cap = cargoCapacity(defaults);
   const notBrake = (id: string) => !id.startsWith('brake-') && id !== 'park-hold' && id !== 'handle-sockets'; // the step-brake rows are covered in brake.test.ts (D-57)
-  it('D-58: with the roll pads, the oak tongue, the chain stops, the 1 in hangers and the wider clamp plates, the 200 lb cargo passes every row (capacity above the payload); what limits it first is the front axle beam bending (front-beam, 205 lb); no front-end row fails with an empty bed', () => {
+  it('D-58: with the roll pads, the oak tongue, the chain stops, the 1 in hangers and the wider clamp plates, the 200 lb cargo passes every row (capacity above the payload); what limits it first is the rear axle bearing in the groove (bearing-groove, on the 1.5 in clamp plate of the D-58 design); no front-end row fails with an empty bed', () => {
     expect(cap.payloadLb).toBe(200);
     expect(cap.capacityLb).not.toBeNull();
     expect(cap.capacityLb!).toBeGreaterThanOrEqual(200);
     expect(cap.limiter).not.toBeNull();
-    expect(cap.limiter!.id).toBe('front-beam'); // util 0.99 at 200 lb: the front beam was sized for 200 lb with no added mass (D-58)
+    expect(cap.limiter!.id).toBe('bearing-groove'); // D-83: with the thin sheet, pads and the lighter seat the front beam is no longer first (it was front-beam at 0.99 at 200 lb)
     expect(cap.comfortableLb!).toBeGreaterThan(120);
     expect(cap.comfortableLb!).toBeLessThan(cap.capacityLb!);
     const fixed = cap.alwaysFailing.map((r) => r.id).filter(notBrake);

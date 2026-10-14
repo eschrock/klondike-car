@@ -161,8 +161,8 @@ describe('axle-stress and front-stub rows', () => {
     expect(byName(/NORMAL side thrust: tear-out/).value).toBeCloseTo(100 / (2 * e * 0.24), 4);
     expect(byName(/NORMAL side thrust: tear-out/).limit).toBeCloseTo(0.58 * 35000, 6);
     expect(byName(/HARD side thrust.*bearing/).value).toBeCloseTo(300 / (dh * 0.24), 4);
-    // ring bending of the wall under a clamp line contact: 6 x 0.318 P' rm / t^2 with P' = R / (stations x 1.75 in), rm = (0.625 - 0.12) / 2 = 0.2525
-    const ring = (R: number, st: number) => (6 * 0.318 * (R / (st * 1.75)) * 0.2525) / 0.12 ** 2;
+    // ring bending of the wall under a clamp line contact: 6 x 0.318 P' rm / t^2 with P' = R / (stations x 2 in, D-83), rm = (0.625 - 0.12) / 2 = 0.2525
+    const ring = (R: number, st: number) => (6 * 0.318 * (R / (st * 2)) * 0.2525) / 0.12 ** 2; // D-83: the plate line is 2 in (was 1.75)
     expect(byName(/NORMAL tube wall ring/).value).toBeCloseTo(ring(600, 1), 4);
     expect(byName(/HARD tube wall ring/).value).toBeCloseTo(ring(900, 1), 4);
     expect(axleHoleDetails(ctx, { ...ld, stations: 2 }, 35000, 64000).find((q) => /NORMAL tube wall ring/.test(q.name))!.value).toBeCloseTo(ring(600, 2), 4);

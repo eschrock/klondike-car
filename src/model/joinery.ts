@@ -8,10 +8,10 @@
  * and threaded inserts + knobs for everything that comes off (D-9).
  */
 import { joistId } from './frame';
-import { thinSheet, type Params } from '../params';
+import { thinSheet, WEATHER_SPEC, type Params } from '../params';
 import { SIDES, type Ctx, stainless, insertMat, INSERT_DRILL_IN } from './build-utils';
 import { sideTopAt } from './layout';
-import { scupperSites, signBackerPlan, signKnobPlan } from './body';
+import { SCUPPER_BELOW_SURFACE_IN, scupperSites, signBackerPlan, signKnobPlan } from './body';
 import { worldAABB } from './bounds';
 import { pickWoodScrew, screwMinBite, screwText } from './rear-mount';
 
@@ -20,9 +20,12 @@ export const RAIL_CHINE_BITE_IN = 0.5;
 /** D-75: the counterbore for each #8 flat-head screw that holds the UHMW thrust disc to the king beam (from the disc's sliding face): diameter and depth (in). */
 export const THRUST_SCREW_CBORE_DIA_IN = 0.375;
 export const THRUST_SCREW_CBORE_DEEP_IN = 0.25;
-/** D-72: the one rail-to-chine screw length (#6 x 2-1/2), and the bit that counterbores its head where the rail is deeper than that. */
+/**
+ * D-72, D-82: the one rail-to-chine screw length (#8 x 2-1/2), and the bit that counterbores its head where the rail is deeper than that. The bit is 3/8" (like the thrust disc's seat):
+ * a #8 flat head is about 0.32 to 0.34" across, so a 5/16" bore would not take it. The bore is plugged with a 3/8" oak plug (a plug cutter on offcuts, or a 3/8" dowel).
+ */
 export const RAIL_CHINE_SCREW_IN = 2.5;
-export const RAIL_CHINE_PLUG_DIA_IN = 5 / 16;
+export const RAIL_CHINE_PLUG_DIA_IN = 3 / 8;
 import type { Joint, JointType, Mat4, Part, ScrewFit, Vec3 } from './types';
 
 // ── Festool Domino catalog (nominal mm, thickness × length) ──
@@ -48,13 +51,11 @@ export const DOMINOS: readonly DominoSize[] = [
   { name: '14×100', tool: 'DF 700 XL', tMm: 14, lMm: 100, wMm: 34 },
 ];
 const MM = 25.4;
-/** The tenon should be about a third of the stock; never more than this fraction. */
-const DOMINO_MAX_T_FRAC = 0.42;
+/** D-81: the tenon should be about a third of the stock; never more than this fraction (0.34; it was 0.42). */
+const DOMINO_MAX_T_FRAC = 0.34;
 /** CNC stub tenon: thickness is a third of the stock, width capped here. */
 const STUB_MAX_WIDTH_IN = 1;
 const MIN_BAND_IN = 0.4;
-/** Oak left each side of a Domino cut in a face (the same ≥ 0.1" rule as the groove walls). */
-const TIE_WALL_MIN_IN = 0.1;
 
 export interface DominoQuery {
   /** Thickness of the piece that carries the tenon (the Domino sits in its end or edge), in. */
@@ -68,13 +69,14 @@ export interface DominoQuery {
 }
 
 /**
- * Largest Domino (by tenon area) that (a) is no thicker than ~0.42× the stock, (b) has mortise depth L/2 that keeps a sound wall in the host
+ * Largest DF 500 Domino (by tenon area, D-81) that (a) is no thicker than 0.34× the stock, (b) has mortise depth L/2 that keeps a sound wall in the host
  * (and in the tenon-carrying piece if `stockAlongIn` is given), and (c) whose FACE WIDTH (wMm, not L) fits the joint face with an edge margin; null if none.
- * Example: 6×40 in ¾" × 1½" stiles: T 6 mm ≤ 0.75·0.42 in; depth 20 mm = 0.79" into a 1.5" member; face width 20 mm = 0.79" along a 1.5" rail end, 0.36" margins.
+ * Example: 6×40 in 1½" × 1½" stiles: T 6 mm ≤ 1.5·0.34 in; depth 20 mm = 0.79" into a 1.5" member; face width 20 mm = 0.79" along a 1.5" rail end, 0.36" margins.
  */
 export function chooseDomino(p: Params, q: DominoQuery): DominoSize | null {
   let best: DominoSize | null = null;
   for (const d of DOMINOS) {
+    if (d.tool !== 'DF 500') continue; // D-81: the shop tool is the Festool Domino DF 500; the DF 700 XL sizes stay in the table but are never chosen
     const wall = q.hostIn - d.lMm / 2 / MM;
     if (d.tMm / MM > q.stockIn * DOMINO_MAX_T_FRAC) continue;
     if (wall < p.dominoMinWallIn) continue;
@@ -140,6 +142,8 @@ interface Pair {
   hostOnly?: boolean;
   /** A wood screw's fit against its stack (D-72), copied to both ends of the joint. */
   fit?: ScrewFit;
+  /** Hole diameter (in), for a `hole` joint. */
+  diaIn?: number;
 }
 
 /** Add the structured joints for the hull and frame to `parts` (mutates them). Call once on a freshly built model. */
@@ -215,30 +219,31 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
   add({ a: 'transom-rear', b: deck, typeA: 'dado', size: `${rabbetH(L.deckTop, bot).toFixed(3)}" × ${frac(dd)}" dado across the front face (deck + ${frac(ds)}" clearance), run out at each end into the web dados (one continuous pocket at each corner, no thin wall between them), ${frac(p.ventHoleIn)}" vent holes through the transom at both ends`, pts: [[rearTx - dd / 2, 0, L.deckBot + L.ply / 2]], noteB: 'Rear edge of the deck, captured; the dado joins the web dados at both corners.' });
   add({ a: 'bow-bulkhead', b: deck, typeA: 'dado', size: `${rabbetH(L.deckTop, bot).toFixed(3)}" × ${frac(dd)}" dado across the rear face (deck + ${frac(ds)}" clearance), run out at each end into the web dados (one continuous pocket at each corner, no thin wall between them)`, pts: [[L.xFlatEnd + dd / 2, 0, L.deckBot + L.ply / 2]], noteB: 'Front edge of the deck, captured (the dado joins the web dados at both corners); the foot load pulls the bulkhead off it, so the dado glue line is part of the foot-stop row.' });
   for (const { s, tag } of SIDES) {
-    add({ a: `rail-${tag}`, b: deck, typeA: 'glue', size: 'thickened epoxy, full face (the rail top is flush with the deck underside)', pts: [[(rearTx + L.railEnd) / 2, s * (hwAt((rearTx + L.railEnd) / 2) + L.side - railT / 2), L.railTop]], noteA: 'Deck bonded to the rail top (and the joist tops); weights or vacuum bag.' });
-    // Side-to-frame tie (build review M6, D-43): the chine bears on the rail, epoxy bed + VERTICAL Dominos every chineTieSpacingIn (the hull is built inverted, MUST-2).
+    add({ a: `rail-${tag}`, b: deck, typeA: 'glue', size: 'thickened epoxy, full face (the rail top is flush with the deck underside)', pts: [[(rearTx + L.railEnd) / 2, s * (hwAt((rearTx + L.railEnd) / 2) + L.side - railT / 2), L.railTop]], noteA: 'Deck bonded to the rail top (and the crossmember tops); weights or vacuum bag.' });
+    // Side-to-frame tie (build review M6, D-43, D-81): the chine bears on the rail; a thickened-epoxy bed on the bearing face plus piloted screws up through the rail at even spacing.
+    // No Dominos (D-81): the bearing edge is only the outer band + the web, so a tenon in it was 40 to 47 percent of the edge, and the analysis never credited it.
     const x0 = rearTx, x1 = L.railEnd;
     if (x1 - x0 >= (2 * p.chineTieSpacingIn) / 3) {
       const n = Math.max(2, Math.floor((x1 - x0) / p.chineTieSpacingIn));
       const webFace = Math.min(dd, L.sideBand); // the web's inner face, measured from hwC (the deck edge stops deckSideClearIn short of it, D-63)
       const flat = L.side - webFace; // the bearing face under the sandwich: outer band + web edge
-      const dom = DOMINOS.filter((d) => d.tool === 'DF 500' && d.tMm / MM + 2 * TIE_WALL_MIN_IN <= flat).sort((a, b) => b.tMm * b.wMm - a.tMm * a.wMm)[0];
       const pts = Array.from({ length: n }, (_, i) => { const x = x0 + ((i + 0.5) * (x1 - x0)) / n; return [x, s * (hwAt(x) + webFace + flat / 2), cBot] as Vec3; });
+      const xMid = (x0 + x1) / 2;
       add({
-        a: `side-${tag}-chine`, b: `rail-${tag}`, typeA: dom ? 'domino' : 'glue',
-        size: dom ? `${dom.name} (${dom.tool}) every ${p.chineTieSpacingIn}" + epoxy bed on the ${frac(flat)}" bearing face (outer band + web edge; the mortise runs across both)` : 'epoxy bed on the bearing face',
-        pts, noteA: 'SIDE-TO-FRAME TIE (D-43, D-62): the sandwich (outer chine band + web) sits on the rail top; the Dominos are VERTICAL and engage as the frame + deck unit is lowered into the inverted side assembly (a protruding Domino cannot be fitted any other way); epoxy bed, then piloted screws up through the rail BETWEEN the Dominos (every other gap, so they miss the mortises).',
+        a: `side-${tag}-chine`, b: `rail-${tag}`, typeA: 'glue',
+        size: `thickened epoxy bed, full length of the ${frac(flat)}" bearing face (outer band + web edge), screwed every ${p.chineTieSpacingIn}" (no Dominos, D-81)`,
+        pts: [[xMid, s * (hwAt(xMid) + webFace + flat / 2), cBot]],
+        noteA: 'SIDE-TO-FRAME TIE (D-43, D-81): the sandwich (outer chine band + web) sits on the rail top. Spread a thickened-epoxy bed along the whole bearing face; the screws through the rail, in EVERY gap at even spacing, register the side: their pilots are drilled into the side at the dry fit through the rail holes, so when the inverted frame + deck unit is lowered into the inverted side assembly (two temporary alignment blocks keep the side from sliding while the screws are started) each screw finds its pilot and draws the side onto the rail; clamps and cauls between the screws hold it while the epoxy cures.',
       });
-      // Rail-to-chine screws (round 3, build critic S4): #6, not #8: the bearing edge is only the outer band + the web (0.39 in), and a #8 leaves 0.11 in a side. They go BETWEEN the Dominos (a screw at a Domino would
-      // hit its mortise), at the middle of every other gap, up through the rail and RAIL_CHINE_BITE_IN into the chine sandwich. The rail is 3 in deep aft of the step and railDepthF forward of it, so the length
-      // is per rail-depth zone (the sloped step is the shallower of its two ends).
+      // Rail-to-chine screws (D-82): #8, piloted, at the middle of every gap between the n tie stations (even spacing; pilots drilled at the dry fit register the side), up through the rail and RAIL_CHINE_BITE_IN into the chine sandwich.
+      // The rail is 3 in deep aft of the step and railDepthF forward of it, so the length is per rail-depth zone (the sloped step is the shallower of its two ends).
       const railD = p.railDepthIn, xs = L.railStepX, run = p.railStepRunIn;
       const depthAt = (x: number): number => (x <= xs - run ? railD : x >= xs ? L.railDepthF : railD + ((L.railDepthF - railD) * (x - (xs - run))) / run);
-      const screwPts = Array.from({ length: Math.max(0, n - 1) }, (_, i) => i).filter((i, _k, all) => i % 2 === 0 || i === all.length - 1).map((i) => { // every other gap, and the last one so the forward end is tied too
+      const screwPts = Array.from({ length: Math.max(0, n - 1) }, (_, i) => i).map((i) => { // every gap (D-81): even spacing, they locate the side
         const a = pts[i], b = pts[i + 1];
         return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, cBot] as Vec3;
       });
-      // D-72: ONE screw length for every rail depth (#6 x 2-1/2, the shortest standard #6 that bites RAIL_CHINE_BITE_IN where the rail is shallowest). Where the rail is deeper than the
+      // D-72, D-82: ONE screw length for every rail depth (#8 x 2-1/2, the shortest standard #8 that bites RAIL_CHINE_BITE_IN where the rail is shallowest). Where the rail is deeper than the
       // screw can reach, the head is counterbored up the rail from its underside, so the tip still lands RAIL_CHINE_BITE_IN in the chine (the counterbore is plugged).
       const SCREW_LEN = RAIL_CHINE_SCREW_IN;
       const cbAt = (x: number): number => Math.max(0, depthAt(x) + RAIL_CHINE_BITE_IN - SCREW_LEN);
@@ -250,15 +255,15 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
         const cbs = qs.map((q) => cbAt(q[0])), cbLo = Math.min(...cbs), cbHi = Math.max(...cbs);
         const depthText = Math.abs(dHi - dLo) < 0.005 ? `${frac(dHi)}" deep` : `${frac(dLo)}" to ${frac(dHi)}" deep`;
         const where = zone === 'deep' ? 'behind the step' : zone === 'shallow' ? 'ahead of the step' : 'on the sloped step';
-        const cbText = cbHi <= 0.005 ? 'no counterbore needed (the tip bites more than the minimum)' : `counterbore the head ${Math.abs(cbHi - cbLo) < 0.005 ? frac(cbHi) : `${frac(cbLo)}" to ${frac(cbHi)}`}" up the rail from its underside (${frac(RAIL_CHINE_PLUG_DIA_IN)}" bit), then plug it with a glued oak dowel`;
-        const fits = qs.map((q): ScrewFit => ({ gauge: 6, lenIn: SCREW_LEN, gripIn: depthAt(q[0]) - cbAt(q[0]), receivingIn: L.chineH, minBiteIn: screwMinBite(L.chineH) }));
+        const cbText = cbHi <= 0.005 ? `no counterbore needed (the rail is shallow here, and the tip bites more than the minimum): countersink the head flush with a #8 countersink bit from the rail's underside` : `counterbore the head ${Math.abs(cbHi - cbLo) < 0.005 ? frac(cbHi) : `${frac(cbLo)}" to ${frac(cbHi)}`}" up the rail from its underside (${frac(RAIL_CHINE_PLUG_DIA_IN)}" bit), a #8 flat head is about 11/32" across so the bore is ${frac(RAIL_CHINE_PLUG_DIA_IN)}"; then plug it with a ${frac(RAIL_CHINE_PLUG_DIA_IN)}" oak plug (a plug cutter on offcuts, or a ${frac(RAIL_CHINE_PLUG_DIA_IN)}" dowel), glued in and trimmed flush`;
+        const fits = qs.map((q): ScrewFit => ({ gauge: 8, lenIn: SCREW_LEN, gripIn: depthAt(q[0]) - cbAt(q[0]), receivingIn: L.chineH, minBiteIn: screwMinBite(L.chineH) }));
         const fit = fits.reduce((a, b) => (b.lenIn - b.gripIn < a.lenIn - a.gripIn ? b : a));
         const biteLo = SCREW_LEN - Math.max(...fits.map((q) => q.gripIn)), biteHi = SCREW_LEN - Math.min(...fits.map((q) => q.gripIn));
         const biteText = Math.abs(biteHi - biteLo) < 0.005 ? frac(biteHi) : `${frac(biteLo)}" to ${frac(biteHi)}`;
         add({
           a: `rail-${tag}`, b: `side-${tag}-chine`, typeA: 'screw',
-          size: `${screwText(fit)} ${stainless(p)} flat-head wood screws up through the rail (${depthText} here: ${where}; ${cbText}), ${biteText}" into the chine sandwich edge; PILOT 1/8 in through the rail and 3/32 in into the chine edge, countersink, and keep them on the centerline of the ${frac(flat)}" edge (a #6 leaves ${((flat - 0.138) / 2).toFixed(2)}" a side)`,
-          pts: qs, noteA: `Between the Dominos, every other gap; rail ${depthText}.`, fit,
+          size: `${screwText(fit)} ${stainless(p)} flat-head wood screws up through the rail (${depthText} here: ${where}; ${cbText}), ${biteText}" into the chine sandwich edge; PILOT (D-82): an 11/64" clearance hole through the rail, then a 1/8" pilot ${frac(biteHi + 1 / 16)}" deep into the chine edge (the threaded part of a #8 in white oak); countersink, and keep them on the centerline of the ${frac(flat)}" edge (a #8 leaves ${((flat - 0.164) / 2).toFixed(2)}" a side; verify on a test piece that the edge does not split)`,
+          pts: qs, noteA: `Every gap between the tie stations, at even spacing; rail ${depthText}.`, fit,
         });
       }
     }
@@ -324,7 +329,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     }
     for (const { s, tag } of SIDES) {
       const [ax, ay, az] = L.chain.anchor;
-      add({ a: `steer-anchor-${tag}`, b: joistId(L, L.joistX.indexOf(L.king.x) - 1), typeA: 'bolt', size: `${frac(p.steerEyeBoltDiaIn)}" forged shoulder eye bolt fore-aft through the chain joist, shoulder and 2" washer on its front face, nylock nut and 2" washer on the rear face`, pts: [[L.chain.joistX, s * Math.abs(ay), az]], noteA: 'Anchor of the steering check chain (D-58); the chain pulls the eye forward out of the joist.' });
+      add({ a: `steer-anchor-${tag}`, b: joistId(L, L.joistX.indexOf(L.king.x) - 1), typeA: 'bolt', size: `${frac(p.steerEyeBoltDiaIn)}" forged shoulder eye bolt fore-aft through the chain crossmember, shoulder and 2" washer on its front face, nylock nut and 2" washer on the rear face`, pts: [[L.chain.joistX, s * Math.abs(ay), az]], noteA: 'Anchor of the steering check chain (D-58); the chain pulls the eye forward out of the crossmember.' });
       void ax;
       add({ a: `steer-eye-${tag}`, b: 'beam-F', typeA: 'bolt', size: `${frac(p.steerEyeBoltDiaIn)}" forged shoulder eye bolt fore-aft through the axle beam, nylock nut and 2" fender washer on its front face`, pts: [[L.king.x - L.beamF.thick / 2, s * L.chain.beamV, L.chain.beamZ]], noteA: 'Beam end of the steering check chain (D-58); the eye stands out of the trailing face.' });
     }
@@ -341,12 +346,32 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
   }
 
   // ── Scuppers through the chine sandwich (M7, D-62): inner band, web and outer band ──
-  for (const site of scupperSites(ctx)) {
-    for (const { s, tag } of SIDES) {
-      const sc = byId.get(`scupper-${site.tagPos}-${tag}`);
-      if (!sc) continue;
-      for (const host of [`side-${tag}-chine`, `side-${tag}-chine-in`, `side-${tag}-web`])
-        add({ a: sc.id, b: host, typeA: 'glue', size: `${frac(p.scupperDiaIn)}" ${stainless(p)} nipple bedded in epoxy; hole epoxy-lined through the inner band, the web and the outer band`, pts: [[site.x, s * (site.hw + L.side / 2), sc.transform[14]]], noteA: 'Drains the deck at deck level; no cut oak or ply edge is left bare.' });
+  if (p.weatherSpec === WEATHER_SPEC.extreme) {
+    for (const site of scupperSites(ctx)) {
+      for (const { s, tag } of SIDES) {
+        const sc = byId.get(`scupper-${site.tagPos}-${tag}`);
+        if (!sc) continue;
+        for (const host of [`side-${tag}-chine`, `side-${tag}-chine-in`, `side-${tag}-web`])
+          add({ a: sc.id, b: host, typeA: 'glue', size: `${frac(p.scupperDiaIn)}" ${stainless(p)} nipple bedded in epoxy; hole epoxy-lined through the inner band, the web and the outer band`, pts: [[site.x, s * (site.hw + L.side / 2), sc.transform[14]]], noteA: 'Drains the deck at deck level; no cut oak or ply edge is left bare.' });
+      }
+    }
+  } else {
+    // D-83 (Standard): no nipples. A plain drilled hole through the same sites, its bore sealed with epoxy, so no cut oak or ply edge is bare. One hole joint per host, on the host only.
+    const dia = frac(p.scupperDiaIn);
+    for (const site of scupperSites(ctx)) {
+      for (const { s, tag } of SIDES) {
+        const z = site.deckZ + SCUPPER_BELOW_SURFACE_IN + p.scupperDiaIn / 2;
+        const hosts: [string, string, number, string][] = [
+          [`side-${tag}-chine-in`, `side-${tag}-web`, site.hw + bandT / 2, 'inner chine band'],
+          [`side-${tag}-web`, `side-${tag}-chine-in`, site.hw + L.side / 2, 'web'],
+          [`side-${tag}-chine`, `side-${tag}-web`, site.hw + L.side - bandT / 2, 'outer chine band'],
+        ];
+        for (const [host, mate, ay, what] of hosts) add({
+          a: host, b: mate, typeA: 'hole', hostOnly: true, diaIn: p.scupperDiaIn,
+          size: `${dia}" drain hole through the ${what}, square to the side, its lower edge ${frac(SCUPPER_BELOW_SURFACE_IN)}" above the deck surface (${site.zone} corner); the bore is brushed with epoxy so no cut edge is bare`,
+          pts: [[site.x, s * ay, z]], noteA: 'D-83: drilled with the others in one pass through the sandwich (a backer board behind the exit to stop tear-out); then seal the bore with epoxy. The Extreme spec fits a stainless nipple here instead.',
+        });
+      }
     }
   }
 
@@ -382,7 +407,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
   };
   for (const q of pairs) {
     const A = byId.get(q.a)!, B = byId.get(q.b)!;
-    push(q.a, { type: q.typeA, to: q.b, count: q.pts.length, size: q.size, at: q.pts.map((pt) => toLocal(A.transform, pt)), ...(q.noteA ? { note: q.noteA } : {}), ...(q.fit ? { fit: q.fit } : {}) });
+    push(q.a, { type: q.typeA, to: q.b, count: q.pts.length, size: q.size, at: q.pts.map((pt) => toLocal(A.transform, pt)), ...(q.noteA ? { note: q.noteA } : {}), ...(q.fit ? { fit: q.fit } : {}), ...(q.diaIn ? { diaIn: q.diaIn } : {}) });
     if (q.hostOnly) continue;
     push(q.b, { type: q.typeB ?? q.typeA, to: q.a, count: q.pts.length, size: q.sizeB ?? q.size, at: (q.ptsB ?? q.pts).map((pt) => toLocal(B.transform, pt)), ...(q.noteB ?? q.noteA ? { note: q.noteB ?? q.noteA } : {}), ...(q.fit ? { fit: q.fit } : {}) });
   }

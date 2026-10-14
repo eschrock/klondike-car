@@ -231,7 +231,7 @@ export function lashPointsCheck(ctx: Ctx): AnalysisCheck {
   });
 }
 
-/** Numbers behind the lash-load check (D-76: four #8-32 machine screws through the rib head and the side sandwich), exported for the tests. */
+/** Numbers behind the lash-load check (D-83: two 1/4-20 button-head bolts through the rib head and the side sandwich), exported for the tests. */
 export function lashLoads(ctx: Ctx) {
   const { p } = ctx;
   const th = (p.lashPullAngleDeg * Math.PI) / 180;
@@ -266,7 +266,7 @@ export function lashLoadCheck(ctx: Ctx): AnalysisCheck {
     value: g.value, unit: g.unit, limit: g.limit, sense: g.sense, details: ds,
     refs: ['D-41', 'D-76'],
     how: `One D-ring plate pulled at its ${p.lashLoadLbf} lbf working load, ${p.lashPullAngleDeg}° above the deck: V = ${f(k.V)} lbf up the rib head, H = ${f(k.H)} lbf inboard. `
-      + `D-76: the plate is through-bolted to the rib head with ${LASH_BOLTS} #8-32 x ${k.bolt.len}" stainless machine screws (washer, side sandwich, head, plate, nylock: ${k.bolt.need.toFixed(2)}"), so nothing withdraws: each takes ${f(k.T1)} lbf of tension (${f(k.sigT, 0)} psi on ${LASH_BOLT_AT_IN2} in², allowable ${f(k.Ft, 0)} = ${f(p.lashBoltYieldPsi, 0)} / ${p.steelSafetyFactor}) and ${f(k.V1)} lbf of shear (${f(k.tau, 0)} psi on the ${LASH_BOLT_AR_IN2} in² root, allowable ${f(k.Fv, 0)}); together ${k.interaction.toFixed(2)}. `
+      + `D-76: the plate is through-bolted to the rib head with ${LASH_BOLTS} 1/4-20 x ${k.bolt.len}" stainless button-head bolts (washer, side sandwich, head, plate, nylock: ${k.bolt.need.toFixed(2)}"), so nothing withdraws: each takes ${f(k.T1)} lbf of tension (${f(k.sigT, 0)} psi on ${LASH_BOLT_AT_IN2} in², allowable ${f(k.Ft, 0)} = ${f(p.lashBoltYieldPsi, 0)} / ${p.steelSafetyFactor}) and ${f(k.V1)} lbf of shear (${f(k.tau, 0)} psi on the ${LASH_BOLT_AR_IN2} in² root, allowable ${f(k.Fv, 0)}); together ${k.interaction.toFixed(2)}. `
       + `Bearing: ${f(k.V1)} lbf per bolt on ${LASH_BOLT_DIA_IN}" x ${p.sideRibDepthIn}" of head = ${f(k.headBearing, 0)} psi (≤ ${f(al.oakDowel, 0)}; the bands and web behind it not counted); the ${LASH_WASHER.od}" fender washer outside bears ${f(k.washerBearing, 0)} psi on the outer band (≤ ${f(al.oakPerp, 0)}, compression ⊥). `
       + `Rib: each rib pulled alone at ${f(k.H)} lbf inboard in the side-lateral model; rib ${k.ribN} takes ${f(k.ribM, 0)} lb·in above its base, ${f(k.ribSig, 0)} psi on the rib section (≤ ${f(al.oakBend, 0)}). The side's own stresses at the rating are in the side-lateral row.`,
   });

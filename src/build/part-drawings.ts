@@ -25,7 +25,7 @@ import { brakeGeometry } from '../model/brake';
 import { computeLayout } from '../model/layout';
 import { flatPattern } from './flat';
 import { clearanceDia } from './shaper-svg';
-import { cutList, edgeJointUp, grainInWords, type CutList } from './cutlist';
+import { crossGrainWords, cutList, groupedName, edgeJointUp, grainInWords, isTallBlock, type CutList } from './cutlist';
 import { defaultParams } from '../params';
 import { finalDimsText } from './units';
 import { esc, fmt, frac, hash6, parseInches, pointInPoly } from './svg-util';
@@ -71,7 +71,7 @@ function fastenerNoun(j: Joint, text: string): string {
     return `${d ? `${frac(d)} ` : ''}${lm && Math.abs(num(lm[1]) - (d ?? 0)) < 0.02 ? `× ${fracText(`${lm[2]} in`).replace(/ in$/, '')}" ` : ''}bolts`.replace(/^\s+/, '');
   }
   if (j.type === 'hole' && /\bbolts?\b/i.test(text)) return d ? `${frac(d)} bolts` : 'bolts';
-  if (j.type === 'hole' && /D-ring plate/i.test(text)) return '#8-32 machine screws';
+  if (j.type === 'hole' && /D-ring (?:plate|bracket)/i.test(text)) return '1/4-20 bolts';
   return j.type === 'hole' ? 'screws' : 'fasteners';
 }
 
@@ -228,7 +228,7 @@ export interface DrawingFeature {
   angleDeg?: number;
 }
 
-interface HoleF { k: 'hole'; key: string; to: string[]; joint: string; pts: Vec3[]; axis: Vec3; dia: number; blind?: number; entryHi?: boolean; /** "hole" or "counterbore". */ noun: string; /** The size with no count: `1/8" pilot, through`. */ size: string; /** What it is for. */ purpose: string; depthWords?: string; /** The face it enters, in words, when that is not a board face ("sloped face"). */ faceWord?: string; /** A blind hole that starts INSIDE the part (a pocket wall): the board coordinate along its axis where it starts. */ from?: number }
+interface HoleF { k: 'hole'; key: string; to: string[]; joint: string; pts: Vec3[]; axis: Vec3; dia: number; blind?: number; entryHi?: boolean; /** "hole" or "counterbore". */ noun: string; /** Drain holes of a side part are measured from the inner face of the rear transom, not from the part's own end: the shift (in) that turns the part's "from the rear end" into that datum (the web's rear end sits in the transom dado, behind the face). */ uShift?: number; /** The size with no count: `1/8" pilot, through`. */ size: string; /** What it is for. */ purpose: string; depthWords?: string; /** The face it enters, in words, when that is not a board face ("sloped face"). */ faceWord?: string; /** A blind hole that starts INSIDE the part (a pocket wall): the board coordinate along its axis where it starts. */ from?: number }
 interface RegionF { k: 'region'; key: string; to: string[]; joint: string; kind: DrawingFeature['kind']; boxes: Array<[Vec3, Vec3]>; /** "Domino mortise", "dado", "slot". */ noun: string; /** The size with no count. */ detail: string; purpose?: string; face?: { ax: Ax; hi: boolean } }
 interface OutlineF { k: 'outline'; text: string; title: string; marks: Vec2[]; anchor?: Vec2; size?: string; positions?: string[]; face?: string; angleDeg?: number; /** A long list of numbers (curve offsets) that goes in the NOTES block, not the table line. */ extra?: string }
 interface NoteF { k: 'note'; text: string; to?: string[]; joint?: string }
@@ -236,8 +236,8 @@ type Feat = HoleF | RegionF | OutlineF | NoteF;
 
 const FASTENERS = new Set<Joint['type']>(['bolt', 'screw', 'pin', 'hole', 'threaded-insert', 'knob']);
 /** Wood-screw clearance and hardwood pilot drills by gauge (in). */
-const SCREW_CLEAR: Record<number, number> = { 6: 9 / 64, 8: 11 / 64, 10: 13 / 64, 12: 7 / 32 };
-const SCREW_PILOT: Record<number, number> = { 6: 7 / 64, 8: 1 / 8, 10: 9 / 64, 12: 5 / 32 };
+export const SCREW_CLEAR: Record<number, number> = { 6: 9 / 64, 8: 11 / 64, 10: 13 / 64, 12: 7 / 32 };
+export const SCREW_PILOT: Record<number, number> = { 6: 7 / 64, 8: 1 / 8, 10: 9 / 64, 12: 5 / 32 };
 /** Festool Domino tenon widths (mm) by thickness: 5x30 is 5 x 19 x 30, 8x50 is 8 x 22 x 50. */
 const DOMINO_WIDTH_MM: Record<number, number> = { 4: 17, 5: 19, 6: 20, 8: 22, 10: 24, 12: 28, 14: 28 };
 const MM = 1 / 25.4;
@@ -439,6 +439,12 @@ function holeDia(j: Joint, text: string, role: Role, mateName: string): { dia: n
   // a hole joint that names its drill: '11/64" (#8 clearance) through the head ...'
   const clrN = new RegExp(String.raw`${NUM}"\s*\(#\d+ clearance\)`).exec(t);
   if (clrN) return { dia: num(clrN[1]), word: 'clearance', purpose: `for the ${noun} to the ${mateName}` };
+  // ... or the thread of a machine bolt: '1/4" (1/4-20 clearance) through the head ...' is the bolt's clearance drill (17/64"), not the 1/4" thread (D-83: the D-ring bracket's bolts)
+  const clrT = new RegExp(String.raw`${NUM}"\s*\((\d+\/\d+)-\d+ clearance\)`).exec(t);
+  if (clrT) return { dia: clearanceDia({ type: 'bolt', size: '', diaIn: num(clrT[2]) }), word: 'clearance', purpose: `for the ${noun} to the ${mateName}` };
+  // the joint names its clearance hole: 'in 13/32 clearance holes' (the brake-knee bolts, one size through the rail, backer, plate and knee); read it, never derive a tighter 25/64
+  const named = new RegExp(String.raw`${NUM}"?\s+clearance\s+holes?\b`).exec(t) ?? new RegExp(String.raw`${NUM}"?\s+holes?\s+(?:for|on) the\b`).exec(t);
+  if (named && (j.type === 'bolt' || j.type === 'hole')) return { dia: num(named[1]), word: 'clearance', purpose: `for the ${noun} to the ${mateName}` };
   // an explicit hole size: '5/8" kingpin hole', '1" hole across', '3/8" blind hole', '5/8" bore'
   const ex = new RegExp(String.raw`${NUM}"?\s*(?:in\s*)?(?:kingpin\s+)?(?:blind\s+|stopped\s+)?(?:hole|bore)\b`).exec(t);
   const lead = new RegExp(String.raw`${NUM}"\s*(?:×\s*[\d-/]+"?\s*)?(?:(?:316|18-8 \(304\))\s+)?(?:stainless\s+)?(?:forged|eye|hex|carriage|shoulder|clevis|pin|rod)`).exec(t);
@@ -651,6 +657,8 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
     }
     if (role === 'insert') { const il = new RegExp(String.raw`[×x]\s*${NUM}"?\s*(?:(?:316|18-8 \(304\)|zinc-plated)\s+)?(?:stainless\s+)?threaded insert`).exec(r.text); if (il) blind = num(il[1]) + 0.0625; }
     if (role === 'eye') depthWords = "as deep as the screw eye's thread";
+    // The rib knees' screw pilots are drilled straight up through the member and the deck at the wheel fit (so the deck shows them), not blind.
+    if (j.type === 'screw' && role === 'pilot' && /^side-rib-knee-/.test(r.to)) { blind = undefined; depthWords = 'through, drilled up through the member and the deck at the wheel fit'; }
     const bi = new RegExp(String.raw`through the (\w+) ear,?\s*${NUM}"?\s*blind into the (\w+) ear`).exec(r.text);
     if (bi) depthWords = `through the ${bi[1]} ear (and the slot), then ${frac(num(bi[2]))} deep into the ${bi[3]} ear`;
     // A blind hole (insert, epoxied pin, latch hole, screw eye) enters the face its point sits on, unless a real cylinder or the text says otherwise.
@@ -667,7 +675,8 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
     }
     const hd = holeDia(j, r.text, role, nameOf(r.to));
     let { dia, word } = hd;
-    const { purpose } = hd;
+    // On a drawing shared by the left and right parts the mate's name would be one side's: the D-ring is "its D-ring".
+    const purpose = /^lash-/.test(r.to) ? hd.purpose.replace(/ to the .*$/, ' to its D-ring') : hd.purpose;
     const ax = dominant(axis);
     const span = throughSpan(b, cps[0], ax);
     // D-77: the knee's pin hole is BLIND, drilled from the pocket's inboard wall into the inboard ear (the strap carries the other end of the pin): a clearance hole that starts at the wall.
@@ -680,12 +689,17 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
       from = cps[0][ax];
     }
     const entryHi = blind !== undefined || depthWords ? Math.abs(cps[0][ax] - span[1]) <= Math.abs(cps[0][ax] - span[0]) : undefined;
-    const depth = depthWords ? depthWords : blind !== undefined ? `${frac(blind)} deep` : 'through';
+    // The joint's own note may give the run ("each hole runs 3" through the head"): say it, so the drawing agrees with the step that gives the depth.
+    const runsM = new RegExp(String.raw`\bruns\s+${NUM}"\s*through\b`).exec(r.text);
+    const depth = depthWords ? depthWords : blind !== undefined ? `${frac(blind)} deep` : runsM ? `through (${frac(num(runsM[1]))} deep)` : 'through';
     let size = `${dia ? `${drill(dia)} ` : ''}${word}, ${depth}`;
     const cb = new RegExp(String.raw`counterbore the head ${NUM}"?\s*(?:in\s*)?up the \w+ from its (underside|top)\s*\(${NUM}"?\s*(?:in\s*)?bit\)`).exec(r.text);
     let cbore: { dia: number; depth: number } | undefined;
-    if (cb && part.partNo === 'rail') { cbore = { dia: num(cb[3]), depth: num(cb[1]) }; size += `, with a ${drill(cbore.dia)} × ${frac(cbore.depth)} counterbore from the ${cb[2] === 'underside' ? words.side[1][0] : words.side[1][1]}`; notes.push('Plug each counterbore with a glued oak dowel after the screw is in.'); }
-    feats.push({ k: 'hole', key: `${size}|${purpose}|${axis.map((c) => Math.round(c * 100)).join(',')}`, to: [r.to], joint: j.type, pts: cps, axis, dia: dia ?? 0.19, ...(blind !== undefined ? { blind } : {}), ...(entryHi !== undefined ? { entryHi } : {}), ...(depthWords ? { depthWords } : {}), ...(from !== undefined ? { from, faceWord: "inboard wall of the pocket" } : {}), noun: 'hole', size, purpose });
+    if (cb && part.partNo === 'rail') { cbore = { dia: num(cb[3]), depth: num(cb[1]) }; size += `, with a ${drill(cbore.dia)} × ${frac(cbore.depth)} counterbore from the ${cb[2] === 'underside' ? words.side[1][0] : words.side[1][1]}`; notes.push('Plug each counterbore after the screw is in: a 3/8" oak plug cut with a plug cutter from offcuts (or a 3/8" dowel), glued in and trimmed flush.'); }
+    // D-83: the side drain holes are located from ONE datum, the inner face of the rear transom (the web's rear end sits in its dado, the bands start at the face).
+    const trFace = byId.get('transom-rear');
+    const uShift = /drain hole/.test(t) && /^side-/.test(part.id) && trFace ? worldAABB(part).min[0] - worldAABB(trFace).max[0] : undefined;
+    feats.push({ k: 'hole', key: `${size}|${purpose}|${axis.map((c) => Math.round(c * 100)).join(',')}${uShift !== undefined ? '|transom-datum' : ''}`, to: [r.to], joint: j.type, pts: cps, axis, dia: dia ?? 0.19, ...(uShift !== undefined ? { uShift } : {}), ...(blind !== undefined ? { blind } : {}), ...(entryHi !== undefined ? { entryHi } : {}), ...(depthWords ? { depthWords } : {}), ...(from !== undefined ? { from, faceWord: "inboard wall of the pocket" } : {}), noun: 'hole', size, purpose });
     // The push-handle socket's access holes (D-63): the same size as named, in the opposite wall, opposite each screw.
     const acc = new RegExp(String.raw`${NUM}"\s*(?:\([^)]*\)\s*)?ACCESS HOLE in the opposite`).exec(r.text);
     if (acc && part.kind === 'metal') {
@@ -845,7 +859,7 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
   // D-76: the side ribs, their knees and the box tie spacers.
   if (/^side-rib(-box|-bow)?$/.test(part.partNo ?? '')) {
     notes.push('A T-shaped rib: a narrow shaft and a head as tall as the gunwale band, the top of the head cut to the sheer (the slope is dimensioned at both ends). The drawn face is the one that faces into the sled; the back face is glued to the bands and the filler.');
-    if ((part.joints ?? []).some((q) => q.type === 'hole' && /template/.test(q.note ?? ''))) notes.push('Do not drill the four D-ring holes on the bench: they are drilled at the final fit, through the head and the side together, with the D-ring plate as the template. The positions here check the plate.');
+    if ((part.joints ?? []).some((q) => q.type === 'hole' && /template/.test(q.note ?? ''))) notes.push('Do not drill the two D-ring holes on the bench: they are drilled at the final fit, through the head and the side together, with the D-ring bracket as the template. The positions here check the bracket (measure the real bracket first).');
   }
   if (part.partNo === 'box-tie') notes.push('A plain stick that fills the gap between the box rib and the box side. Measure that gap at the dry fit and cut the stick a hair short of it: thickened epoxy takes up the rest. Its top stands 1/8" under the box coaming, so it is never glued to the lid frame.');
   if (part.partNo === 'side-rib-knee') notes.push('A right-triangle knee: the tall leg is glued to the face of the rib and the foot to the deck. Drill the screw holes straight down from the sloped face, with the counterbore first, so the screw head leaves the stated oak under it.');
@@ -930,7 +944,10 @@ function addPassingBolts(part: Part, parts: Part[], b: Board, feats: Feat[], byI
       // A T-nut set in this part takes a hole for its barrel, not a bolt clearance (the push-handle socket screws, D-63).
       const tnut = new RegExp(String.raw`T-NUT set in the (\w+)`, 'i').exec(text);
       const isTnut = !!tnut && part.name.toLowerCase().includes(tnut[1].toLowerCase());
-      const dia = isTnut ? d0 + 1 / 16 : j.type === 'pin' ? clearanceDia({ type: 'pin', size: '', diaIn: d0 }) : clearanceDia({ type: 'bolt', size: j.size, diaIn: d0 });
+      const namedC = new RegExp(String.raw`${NUM}"?\s+clearance\s+holes?\b`).exec(text);
+      const dia = namedC && j.type === 'bolt' && !isTnut ? num(namedC[1]) : isTnut ? d0 + 1 / 16 : j.type === 'pin' ? clearanceDia({ type: 'pin', size: '', diaIn: d0 }) : clearanceDia({ type: 'bolt', size: j.size, diaIn: d0 });
+      // This part already records its own hole for that bolt's part (the D-ring bearing plate's 3/16" holes for the lash point's screws): a second set from the screws' crossing, a hair off, is the same holes twice.
+      if (feats.some((f) => f.k === 'hole' && f.joint !== 'passing' && f.to.includes(q.id))) continue;
       if (feats.some((f) => f.k === 'hole' && Math.abs(f.dia - dia) < 1 / 64 && pts.every((q2) => f.pts.some((e) => samePerp(e, q2, f.axis))))) continue;
       // a pin of another part that ends in a hole this part already has for it (the seat-back latch pin in the stop block)
       if (j.type === 'pin' && feats.some((f) => f.k === 'hole' && f.to.includes(j.to) && pts.every((q2) => f.pts.some((e) => Math.hypot(e[0] - q2[0], e[1] - q2[1], e[2] - q2[2]) < 0.75)))) continue;
@@ -1072,7 +1089,11 @@ function narrate(run: Vec2[], sa: Side, sb: Side, b: Board, w: Words, vref: 0 | 
   const opposite = sa[0] === sb[0];
   if (curve) {
     const arc = fitArc(run);
-    return { k: 'outline', title: opposite ? 'Curved edge' : 'Curved corner', text: `Curve from the ${sideName(sa)} at ${posUV(A, b, w, vref)} to the ${sideName(sb)} at ${posUV(B, b, w, vref)}${arc ? `: a circular arc, ${frac(arc.r)} radius` : ''}. Cut it to the offsets in the notes.`, marks, ...(arc ? { size: `${frac(arc.r)} radius` } : {}), positions: [posUV(A, b, w, vref), posUV(B, b, w, vref)], extra: `Offsets of the curve, ${offsets(run, b, w, vref)}.` };
+    // A curve that leaves (or reaches) its side by a straight run across the board (the bridle tongue's square head face): say so, so the table of offsets and this line agree.
+    const vFrom = (q: Vec2): string => `${frac(vref ? b.V - q[1] : q[1])}`;
+    const shoulder = (p0: Vec2, p1: Vec2, lead: 'starts' | 'ends'): string => `It ${lead} with a straight run at ${frac(p0[0])} from the ${w.side[0][0]}, ${vFrom(p0)} to ${vFrom(p1)} from the ${w.side[1][vref]}. `;
+    const shoulders = (Math.abs(run[1][0] - A[0]) < 0.004 ? shoulder(A, run[1], 'starts') : '') + (Math.abs(run[run.length - 2][0] - B[0]) < 0.004 ? shoulder(B, run[run.length - 2], 'ends') : '');
+    return { k: 'outline', title: opposite ? 'Curved edge' : 'Curved corner', text: `Curve from the ${sideName(sa)} at ${posUV(A, b, w, vref)} to the ${sideName(sb)} at ${posUV(B, b, w, vref)}${arc ? `: a circular arc, ${frac(arc.r)} radius` : ''}. ${shoulders}Cut it to the offsets in the notes.`, marks, ...(arc ? { size: `${frac(arc.r)} radius` } : {}), positions: [posUV(A, b, w, vref), posUV(B, b, w, vref)], extra: `Offsets of the curve, ${offsets(run, b, w, vref)}.` };
   }
   // A step: the run ends with a stretch parallel to the side it left, running out through the other side (the rail's front step). Walked either way round.
   const parallelTo = (sd: Side, p0: Vec2, p1: Vec2): boolean => (sideLine(sd).ax === 1 ? Math.abs(p0[1] - p1[1]) < 0.004 : Math.abs(p0[0] - p1[0]) < 0.004);
@@ -1145,7 +1166,18 @@ function offsets(run: Vec2[], b: Board, w: Words, vref: 0 | 1): string {
     return NaN;
   };
   const rows: string[] = [];
-  for (let k = 0; k <= n; k++) { const u = u0 + ((u1 - u0) * k) / n; const v = at(u); if (Number.isFinite(v)) rows.push(`${frac(u)}: ${frac(vref ? b.V - v : v)}`); }
+  // a straight run across the board at the first or last station (the tongue's square head face) has two heights there, not one
+  const vv = (v: number): string => frac(vref ? b.V - v : v);
+  const lead = (u: number): { a: number; c: number } | null => {
+    for (let i = 1; i < run.length; i++) if (Math.abs(run[i][0] - u) < 0.004 && Math.abs(run[i - 1][0] - u) < 0.004) return { a: run[i - 1][1], c: run[i][1] };
+    return null;
+  };
+  for (let k = 0; k <= n; k++) {
+    const u = u0 + ((u1 - u0) * k) / n; const v = at(u);
+    const ld = k === 0 || k === n ? lead(u) : null;
+    if (ld) rows.push(`${frac(u)}: ${vv(ld.a)} and ${vv(ld.c)} (a straight run across)`);
+    else if (Number.isFinite(v)) rows.push(`${frac(u)}: ${vv(v)}`);
+  }
   return `station from the ${w.side[0][0]} : height from the ${w.side[1][vref]} = ${rows.join('; ')}`;
 }
 
@@ -1391,7 +1423,7 @@ function layersBlock(part: Part, cl: CutList, x0: number, y0: number, face: stri
   return { svg: `<g id="layers">${o.join('')}</g>`, h: bottom - y0 + 0.1 };
 }
 
-function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: CutList): { svg: string; W: number; H: number; scale: string; features: DrawingFeature[] } {
+function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: CutList, title?: string): { svg: string; W: number; H: number; scale: string; features: DrawingFeature[] } {
   const { part, board: b, words: w } = a;
   const ext = EXT(b);
   const uid = `pd${hash6(part.id)}`;
@@ -1469,10 +1501,13 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
   }
 
   // Grain.
-  const grainAx = part.grain && !b.rod ? dominant(b.dirToBoard(unitAx({ x: 0, y: 1, z: 2 }[part.grain] as Ax)).map(Math.abs) as Vec3) : null;
+  // A cross-laminated part has no one grain (`Part.grain` is its center layer's): the arrow and the line follow the FACE layers, and the line names the center layer too.
+  const lgAxes = layerGrainOf(part);
+  const crossLine = lgAxes && lgAxes.length > 1 && !b.rod ? crossGrainLine(part, b, ext) : undefined;
+  const grainAx = (lgAxes?.[0] ?? part.grain) && !b.rod ? dominant(b.dirToBoard(unitAx({ x: 0, y: 1, z: 2 }[(lgAxes?.[0] ?? part.grain) as 'x' | 'y' | 'z'] as Ax)).map(Math.abs) as Vec3) : null;
   // The grain word is the cut list's (L is the stock length, W its width), so the drawing and the cut list agree; the view direction and the drawn size follow in brackets.
   const gWord = grainInWords(part);
-  const grainWords = grainAx === null ? (part.kind === 'metal' ? 'n/a (metal)' : part.kind === 'purchased' ? 'n/a' : 'not specified')
+  const grainWords = crossLine ? crossLine : grainAx === null ? (part.kind === 'metal' ? 'n/a (metal)' : part.kind === 'purchased' ? 'n/a' : 'not specified')
     : grainAx === 2 ? `through the thickness (${w.side[2][1]} to ${w.side[2][0]})`
       : `${gWord && !/vertical/.test(gWord) ? gWord : `along the ${grainAx === 0 ? 'length' : 'height'}`} (the ${b.developed && grainAx === 0 ? 'length along the curve' : `${frac(ext[grainAx])} side`}, ${grainAx === 0 ? 'horizontal' : 'vertical'} in the main view)`;
 
@@ -1492,6 +1527,8 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
     if (f.k === 'hole') {
       const letter = letterOf(li++);
       const ax = holeAx(f), hiSide = entryOf(f);
+      const shown = f.uShift !== undefined ? f.pts.map((q): Vec3 => [q[0] + f.uShift!, q[1], q[2]]) : f.pts;
+      const fixDatum = (g: string): string => (f.uShift !== undefined ? g.replace(`from the ${w.side[0][0]}`, 'from the inner face of the rear transom') : g);
       let where: string;
       let groups: string[] = [];
       if (oblique(f)) {
@@ -1509,8 +1546,10 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
         }
         balloons.push({ letter, view: 'main', at: [f.pts[0][0], f.pts[0][1]] });
       } else {
-        groups = placeGroups(f.pts, ax, a);
+        groups = placeGroups(shown, ax, a).map(fixDatum);
         where = `In the ${f.faceWord ?? w.side[ax][hiSide ? 1 : 0]}: ${groups.join('; ')}`;
+        // A round rod has no face, height or thickness to measure from: a cross hole is drilled through the diameter, and its place is the distance from a named end (the nearer end too, when that is the other one).
+        if (b.rod) where = `Drilled straight through the rod, across its diameter, at ${listOf(f.pts.map((q) => `${frac(q[0])} from the ${w.side[0][0]}${q[0] > ext[0] / 2 ? ` (${frac(ext[0] - q[0])} from the ${w.side[0][1]})` : ''}`))}`;
         const vName = ax === 2 ? 'main' : ax === 1 ? edgeView(hiSide) : endView(hiSide);
         for (const q of f.pts) {
           if (vName) {
@@ -1537,7 +1576,7 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
       const nH = f.pts.length;
       const holeLine = (wh: string): string => `${nH} ${plural(f.noun, nH)}, ${f.size}. ${wh}. ${sentence(f.purpose)}.`;
       let line = holeLine(where);
-      if (line.length > MAX_LINE && groups.length > 1 && !oblique(f)) line = holeLine(`In the ${f.faceWord ?? w.side[ax][hiSide ? 1 : 0]}: ${placePairs(f.pts, ax, a)}`);
+      if (line.length > MAX_LINE && groups.length > 1 && !oblique(f)) line = holeLine(`In the ${f.faceWord ?? w.side[ax][hiSide ? 1 : 0]}: ${fixDatum(placePairs(shown, ax, a))}`);
       feats.push({ label: letter, text: line, kind: 'hole', to: f.to, joint: f.joint, count: nH, size: lcDatum(f.size), positions: groups.map(lcDatum), face: f.faceWord ? lcDatum(f.faceWord) : oblique(f) ? 'sloped face' : lcDatum(w.side[ax][hiSide ? 1 : 0]), purpose: f.purpose });
     } else if (f.k === 'region') {
       const letter = letterOf(li++);
@@ -1582,14 +1621,13 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
   const chars = Math.floor((W - 2 * M - 0.3) / (0.52 * 0.105));
   // ── Title block ──
   const dims = [...ext].sort((x, z) => x - z);
-  const hl: Array<{ t: string; size: number; bold?: boolean; fill?: string }> = [{ t: part.name, size: 0.2, bold: true }];
+  const tallBlock = !!part.stock && isTallBlock(part, part.stock);
+  const hl: Array<{ t: string; size: number; bold?: boolean; fill?: string }> = [{ t: title ?? part.name, size: 0.2, bold: true }];
   const hw = (t: string, size: number, o: { bold?: boolean; fill?: string } = {}) => { for (const l of wrap(t, Math.floor(chars * 0.105 / size))) hl.push({ t: l, size, ...o }); };
-  hw(`qty ${qty}   scale ${scaleText(s)}${rows > 1 ? ` (in ${rows} rows)` : ''}   final ${finalText(part, cl, dims)} (T × W × L${b.developed ? ', L along the curve' : ''})   ${part.material}`, 0.12);
+  hw(`qty ${qty}   scale ${scaleText(s)}${rows > 1 ? ` (in ${rows} rows)` : ''}   final ${b.rod ? `${frac(b.rod.dia)} dia × ${frac(ext[0])}` : finalText(part, cl, dims)}${b.rod || tallBlock ? '' : ` (T × W × L${b.developed ? ', L along the curve' : ''})`}   ${part.material}`, 0.12);
   hw(`Stock: ${boardText(part, cl)}`, 0.105);
-  const lg = layerGrainOf(part);
-  const layerWords = lg ? ` By layer, face layer first: ${lg.map((ax) => (grainInWords({ ...part, grain: ax }) ?? '?').replace('vertical (T)', 'through the thickness')).join(', ')}.` : '';
-  hw(`Grain: ${grainWords}.${layerWords}`, 0.105, { fill: DIM });
-  hw(`Datums: lengths from the ${w.side[0][0]}, heights from the ${w.side[1][a.vref]}, across from the ${w.side[2][1]}. Fractions to 1/32", drills to 1/64".`, 0.105, { fill: DIM });
+  hw(`Grain: ${grainWords}.`, 0.105, { fill: DIM });
+  hw(b.rod ? `Datums: lengths from the ${w.side[0][0]}. Fractions to 1/32", drills to 1/64".` : `Datums: lengths from the ${w.side[0][0]}, heights from the ${w.side[1][a.vref]}, across from the ${w.side[2][1]}. Fractions to 1/32", drills to 1/64".`, 0.105, { fill: DIM });
   if (makeNote) hw(makeNote, 0.12, { bold: true, fill: FEAT });
   const head: string[] = [];
   let hy = M + 0.05;
@@ -1732,6 +1770,27 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
 
 const cutListCache = new WeakMap<Part[], { p: Params; cl: CutList }>();
 let defaultP: Params | undefined;
+/**
+ * What a group of identical parts is called on its drawing: the shared name, then what tells the members apart, as in "D-ring bearing plate (box, mid, bow post; left and right)".
+ * The qualifiers are the comma-separated words after the first segment of each name (its roles), and the sides.
+ */
+export function describeGroup(names: readonly string[]): string {
+  const base = groupedName(names);
+  const roles: string[] = [], sides = new Set<string>();
+  for (const n of names) {
+    const segs = n.replace(/\s*\([^)]*\)\s*$/, '').split(/,\s*/);
+    for (const sg of segs.slice(1)) {
+      const t = sg.trim().toLowerCase();
+      if (t === 'left' || t === 'right') sides.add(t); else if (t && !roles.includes(t) && !base.toLowerCase().includes(t)) roles.push(t); // a role the shared name already says is not said twice
+    }
+    const m = /\b(left|right)\b/i.exec(segs[0]) ?? /\s([LR])\d*$/.exec(segs[0]);
+    if (m) sides.add(/^l/i.test(m[1]) ? 'left' : 'right');
+  }
+  const both = sides.size === 2 ? 'left and right' : [...sides].join('');
+  const detail = [roles.join(', '), both].filter(Boolean).join('; ');
+  return detail ? `${base} (${detail})` : base;
+}
+
 /** The cut list of a model, computed once per parts array and parameter set: every rough size and board a drawing prints is read from it (`cuts`, `glueUps`, `finished`). */
 export function cutListFor(parts: Part[], p?: Params): CutList {
   const pp = p && typeof p.millingAllowanceIn === 'number' ? p : (defaultP ??= defaultParams());
@@ -1751,6 +1810,20 @@ function finalText(part: Part, cl: CutList, ext: number[]): string {
   if (fin) return fin.finalText;
   if (part.stock) return finalDimsText(part.stock);
   return ext.map((v) => frac(v).replace(/"$/, '')).join(' × ');
+}
+
+/**
+ * The grain line of a cross-laminated part (the brake knee), face layers first: "face layers: grain upright; center layer: across the sled (face layers: the 9-1/2" side, vertical in the main view;
+ * center layer: the 3-11/16" side, horizontal)". Never one axis for the whole part: `Part.grain` is the center layer's.
+ */
+function crossGrainLine(part: Part, b: Board, ext: number[]): string | undefined {
+  const lg = layerGrainOf(part), words = crossGrainWords(part);
+  if (!lg || lg.length < 2 || !words) return undefined;
+  const side = (g: 'x' | 'y' | 'z'): string => {
+    const k = dominant(b.dirToBoard(unitAx({ x: 0, y: 1, z: 2 }[g] as Ax)).map(Math.abs) as Vec3);
+    return k === 2 ? 'through the thickness' : `the ${frac(ext[k])} side, ${k === 0 ? 'horizontal' : 'vertical'} in the main view`;
+  };
+  return `${part.partNo === 'brake-knee' ? words.replace('grain upright', 'grain up the leg') : words} (face layers: ${side(lg[0])}; center layer: ${side(lg[Math.floor(lg.length / 2)])})`;
 }
 
 /** Layers of a cross-laminated part, one entry per layer, when the model says which way each grain runs (`Part.layerGrain`: the local axis per layer, face layer first). */
@@ -1775,7 +1848,10 @@ function pieceGroups(cuts: CutList['cuts']): Array<{ n: number; text: string; bo
  */
 function boardText(part: Part, cl: CutList): string {
   const st = part.stock;
-  if (part.kind === 'metal' || part.kind === 'purchased') return st ? `${part.material}, ${frac(st.t)} × ${frac(st.w)} × ${frac(st.l)}` : part.material;
+  if (part.kind === 'metal' || part.kind === 'purchased') {
+    if (st && part.geometry.type === 'cylinder') return `${part.material}, ${frac(2 * part.geometry.radius)} dia × ${frac(st.l)}`; // a round rod: a diameter and a length, not a T × W × L
+    return st ? `${part.material}, ${frac(st.t)} × ${frac(st.w)} × ${frac(st.l)}` : part.material;
+  }
   if (!st) return part.material;
   const cuts = cl.cuts.filter((c) => c.ids.includes(part.id));
   if (!cuts.length) return `${frac(st.t)} × ${frac(st.w)} × ${frac(st.l)}, ${part.material}`;
@@ -1845,11 +1921,12 @@ export function partDrawings(parts: Part[], p: Params, opts: { includeShaper?: b
       const lead = items.find((x) => isLeft(x.part.id)) ?? items[0];
       const qty = items.length + mirrored.length;
       const names = (xs: Analysis[]): string => xs.map((x) => plainName(x.part.name)).join(', ');
+      const all = [...items, ...mirrored].map((x) => x.part.name);
       const makeNote = mirrored.length
         ? `MAKE ${qty}: ${items.length} as drawn (${names(items)}), ${mirrored.length} MIRROR IMAGE (${names(mirrored)}).`
-        : qty > 1 ? `MAKE ${qty} identical (${names(items)}).` : '';
-      const r = renderSheet(lead, qty, makeNote, p, cl);
-      out.push({ partId: lead.part.id, partNo, partIds: [...items, ...mirrored].map((x) => x.part.id), qty, name: lead.part.name, makeNote, svg: r.svg, widthIn: r.W, heightIn: r.H, scale: r.scale, features: r.features });
+        : qty > 1 ? `MAKE ${qty} identical: ${describeGroup(all)}.` : '';
+      const r = renderSheet(lead, qty, makeNote, p, cl, qty > 1 ? groupedName(all) : undefined);
+      out.push({ partId: lead.part.id, partNo, partIds: [...items, ...mirrored].map((x) => x.part.id), qty, name: qty > 1 ? groupedName(all) : lead.part.name, makeNote, svg: r.svg, widthIn: r.W, heightIn: r.H, scale: r.scale, features: r.features });
     }
   }
   return out;
@@ -1879,6 +1956,10 @@ export function partDims(part: Part, parts: Part[] = [part], p?: Params): PartDi
   const t = frac(d[0]), w = frac(d[1]), l = frac(d[2]);
   const feats = a ? a.feats.map((f) => (f.k === 'hole' ? `${f.pts.length} ${plural(f.noun, f.pts.length)}, ${f.size}` : f.k === 'region' ? `${f.boxes.length} ${plural(f.noun, f.boxes.length)}, ${f.detail}` : f.k === 'outline' ? f.text.split(/(?<=\.) /)[0].replace(/\.$/, '') : f.text)) : [];
   let grain = 'n/a';
-  if (part.grain && a) { const k = dominant(a.board.dirToBoard(unitAx({ x: 0, y: 1, z: 2 }[part.grain] as Ax)).map(Math.abs) as Vec3); grain = k === 2 ? 'through the thickness' : `along the ${frac(e[k])}`; }
-  return { t, w, l, size: `${t} × ${w} × ${l}`, board: boardText(part, cl), grain, features: [...new Set(feats)] };
+  const lgx = layerGrainOf(part);
+  if (lgx && lgx.length > 1 && a) grain = crossGrainLine(part, a.board, [...e]) ?? 'n/a';
+  else if (part.grain && a) { const k = dominant(a.board.dirToBoard(unitAx({ x: 0, y: 1, z: 2 }[part.grain] as Ax)).map(Math.abs) as Vec3); grain = k === 2 ? 'through the thickness' : `along the ${frac(e[k])}`; }
+  const rodSize = part.geometry.type === 'cylinder' ? `${frac(2 * part.geometry.radius)} dia × ${frac(part.geometry.length)}` : undefined;
+  const tallSize = part.stock && isTallBlock(part, part.stock) ? `${t} thick × ${w} tall × ${l} across` : undefined;
+  return { t, w, l, size: rodSize ?? tallSize ?? `${t} × ${w} × ${l}`, board: boardText(part, cl), grain, features: [...new Set(feats)] };
 }

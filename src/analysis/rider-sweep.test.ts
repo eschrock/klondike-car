@@ -29,9 +29,10 @@ describe('riderSweep', () => {
     // D-71 (Harbor Freight wheels, 5/8 in axles): the rear axle-stress row (the 5/8 in tube, 0.12 in wall) is over the 0.9 line from 190 lb (0.925 at the 200 lb goal rider), so green ends at 180 lb;
     // nothing is red up to 250 lb (the 1.75 in clamp plate keeps the rear groove bearing at 0.85 at 200 lb).
     // D-71 (Eric chose the solid rod) and D-73 (1/4 in white oak sides, +2.8 lb): the rod's axle-stress is 0.79 at 200 lb, so the groove bearing on the oak (0.89 at 220 lb, 0.90 from 230 lb) ends green at 220 lb.
-    expect(r.green).toMatchObject({ loLb: 50, hiLb: 220, openLow: true, openHigh: false });
+    // D-83 (the 233 lbf D-rings, the 2 in clamp plates, the 1-1/2 in EVA seat that seats the rider lower): the groove bearing drops to 0.75 at 200 lb and green runs to 240 lb.
+    expect(r.green).toMatchObject({ loLb: 50, hiLb: 240, openLow: true, openHigh: false });
     expect(r.points.find((x) => x.w === 200)!.worst!.id).toBe('park-hold'); // a fit fact (0.883), as with the 3/4 in axle; the D-71 tube had axle-stress (0.925)
-    expect(r.points.find((x) => x.w === 250)!.worst!.id).toBe('bearing-groove'); // 0.934: the rear groove bearing on the oak; still under 1 at 250 lb
+    expect(r.points.find((x) => x.w === 250)!.worst!.id).toBe('brake-slow'); // D-83: the rear groove bearing is no longer the tightest at 250 lb (it was 0.934); still under 1
     for (const id of ['king-bearing', 'steer-stops', 'bridle-eye', 'lift', 'brake-force']) expect(r.points.every((x) => !x.fails.includes(id)), id).toBe(true);
     expect(r.points.filter((x) => x.w <= 220).every((x) => x.status === 'pass')).toBe(true);
     // the deck ply no longer fails for the heaviest riders (it did from 230 lb at 10 in joist spacing and span/300)
@@ -58,7 +59,7 @@ describe('riderSweep', () => {
     expect(stab(r.points[0].fails)).toEqual([]);
     // The sweep agrees with a direct run at a red weight, using the same all-riders-equal rule.
     const w = reds[0].w;
-    expect(w).toBe(70); // 34 1/2 / 32 in tracks (D-58): the straight tip is 48.6 deg at 150 lb; D-60: the 24 lb lighter sled has a lower total mass, so the straight tip angle drops about 1 deg for the same rider and the 52 deg limit fails from 70 lb (it was 80)
+    expect(w).toBe(80); // D-83: 80 (the lower seat raises the tip angle about 0.45 deg, so the 52 deg limit first fails at 80 lb, not 70); earlier: 70; 34 1/2 / 32 in tracks (D-58): the straight tip is 48.6 deg at 150 lb; D-60: the 24 lb lighter sled has a lower total mass, so the straight tip angle drops about 1 deg for the same rider and the 52 deg limit fails from 70 lb (it was 80)
     const direct = runChecks(withRider(bad, w), { includeTruck: false });
     expect(direct.find((c) => c.id === 'tip-straight')!.status).toBe('fail');
     expect(reds[0].fails).toContain('tip-straight');
@@ -70,7 +71,7 @@ describe('riderSweep', () => {
     const slideRed = r.points.filter((x) => x.fails.includes('slide-before-tip'));
     expect(slideRed.length).toBeGreaterThan(0);
     expect(slideRed[0].w).toBeGreaterThan(w);
-    expect(slideRed[0].w).toBe(100);
+    expect(slideRed[0].w).toBe(110); // D-83: 110 (was 100: the lower seat is more stable)
   });
 
   it('maps every check id to exactly one light (or info)', () => {

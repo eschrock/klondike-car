@@ -29,6 +29,12 @@ import { evalBoth, rearNormalNoseDown } from './stability';
 import { allowables } from './structure';
 import { judge, worst, type AnalysisCheck, type Detail, type Status } from './types';
 
+/** Details whose limit is a steel or fastener allowable (the abuse row raises these by the steel safety factor, the rest by the wood one). Marked at creation with steelDetail, not by name. */
+const STEEL_BASIS = new WeakSet<Detail>();
+/** The dry-knee sustained-hold detail: a λ = 1 hold check, not meaningful at the abuse stomp load, so the abuse row skips it. */
+const SUSTAINED = new WeakSet<Detail>();
+const steelDetail = (...a: Parameters<typeof detail>): Detail => { const d = detail(...a); STEEL_BASIS.add(d); return d; };
+
 /** Raise the limit of every '<=' detail by k (the abuse case is held to strength, not to the design allowable). */
 export function scaleLimits(ds: Detail[], k: number): Detail[] {
   return ds.map((d) => (d.sense === '<=' ? detail(d.name, d.value, d.unit, d.limit * k, '<=') : d));
@@ -418,21 +424,21 @@ function pivotEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
   const screwEdge = Math.min(kn.roof, kn.floor) / 2 / st.screwDia;
   const screwTear = norm2(S.worst) / (2 * (Math.min(kn.roof, kn.floor) / 2) * Math.max(0.1, penS));
   const ds: Detail[] = [
-    detail('pivot pin double shear (316)', shear, 'psi', a.boltShear, '<='),
-    detail('pivot pin bending between the strap and the inboard ear (316)', bend, 'psi', a.bolt, '<='),
+    steelDetail('pivot pin double shear (316)', shear, 'psi', a.boltShear, '<='),
+    steelDetail('pivot pin bending between the strap and the inboard ear (316)', bend, 'psi', a.bolt, '<='),
     detail('oak bearing of the pin on the tongue and block (dowel bearing)', bearT, 'psi', al.oakDowel, '<='),
     detail(`oak bearing on the inboard ear (blind hole depth${pinEg < 1 ? '; end grain of the ACROSS layer, C_eg 0.67' : ''})`, bearI, 'psi', al.oakDowel, '<='),
     detail('tear-out of the tongue toward the nearer edge (oak shear, two planes)', tearT, 'psi', al.oakShear, '<='),
     detail(`tear-out of the inboard ear toward the nearer edge (oak shear, two planes${pinEg < 1 ? '; rolling shear in the ACROSS layer' : ''})`, tearI, 'psi', tearAllowE, '<='),
-    detail('edge distance, pin center to the nearer edge of the tongue stack (pin diameters, 1.5 D minimum)', eT / d, '×D', 1.5, '>='),
-    detail('edge distance, pin center to the nearer edge of the inboard ear (pin diameters)', eE / d, '×D', 1.5, '>='),
-    detail('end distance, pin center past the tongue end and the inboard ear rear face (pin diameters)', endD / d, '×D', 1.5, '>='),
+    steelDetail('edge distance, pin center to the nearer edge of the tongue stack (pin diameters, 1.5 D minimum)', eT / d, '×D', 1.5, '>='),
+    steelDetail('edge distance, pin center to the nearer edge of the inboard ear (pin diameters)', eE / d, '×D', 1.5, '>='),
+    steelDetail('end distance, pin center past the tongue end and the inboard ear rear face (pin diameters)', endD / d, '×D', 1.5, '>='),
     detail('pivot block screws, withdrawal each at the block share of the pin load (NDS, wet)', shareBlock / nBS, 'lbf', wBS, '<='),
-    detail('pivot strap: pin bearing on the hole (stainless strap, D-77)', bearS, 'psi', plateAllow, '<='),
-    detail('pivot strap: tear-out from the pin hole to the nearer edge, two planes (stainless strap)', tearS, 'psi', 0.577 * plateAllow, '<='),
-    detail('pivot strap: edge distance, pin center to the nearer strap edge (pin diameters)', eS / d, '×D', 1.5, '>='),
-    detail('pivot strap: tension + in-plane bending on the net section at the pin hole, spanning the screw rows (stainless strap)', sigS, 'psi', plateAllow, '<='),
-    detail('pivot strap: out-of-plane bending from a sideways push on the flap foot (stainless strap, brakeFlapSideLoadLbf)', sigOp, 'psi', plateAllow, '<='),
+    steelDetail('pivot strap: pin bearing on the hole (stainless strap, D-77)', bearS, 'psi', plateAllow, '<='),
+    steelDetail('pivot strap: tear-out from the pin hole to the nearer edge, two planes (stainless strap)', tearS, 'psi', 0.577 * plateAllow, '<='),
+    steelDetail('pivot strap: edge distance, pin center to the nearer strap edge (pin diameters)', eS / d, '×D', 1.5, '>='),
+    steelDetail('pivot strap: tension + in-plane bending on the net section at the pin hole, spanning the screw rows (stainless strap)', sigS, 'psi', plateAllow, '<='),
+    steelDetail('pivot strap: out-of-plane bending from a sideways push on the flap foot (stainless strap, brakeFlapSideLoadLbf)', sigOp, 'psi', plateAllow, '<='),
     detail(`pivot strap screws: lateral, worst screw, direct + twist (#8 x 1-1/4 wood screws${latCap < latSide - 1e-9 ? ', end grain C_eg 0.67' : ', side grain of the UPRIGHT layers'})`, norm2(S.worst), 'lbf', latCap, '<='),
     detail('pivot strap screws: withdrawal from the sideways push, the nearer column (#8 x 1-1/4 wood screws, NDS, wet)', wdLoad, 'lbf', wdCap, '<='),
     detail('pivot strap screws: center to the pocket and to the knee top / underside (screw diameters, NDS 1.5 D minimum; the ACROSS layer glued over them stops a split)', screwEdge, '×D', 1.5, '>='),
@@ -532,14 +538,20 @@ function mountEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
   // (load across the grain, both members oak) must carry the worst bolt. The rows above are the same in both settings; this detail is added only for the dry knee.
   const dry = ctx.p.kneeMount === KNEE_MOUNT.removable;
   const dryFem = dry ? feAtAngle(feParallel(ctx.p.oakSpecificGravity), fePerp(ctx.p.oakSpecificGravity, bd), 90) : 0;
-  const dryZ = dry ? (() => { const r = lateralZWood({ D: bd, ls: k.legT, lm: g.rail.t + g.backer.t, Fes: dryFem, Fem: dryFem, Fyb: ctx.p.ss316BoltYieldPsi, thetaDeg: 90 }); return { ...r, Z: r.Z * ndsAdjust(ctx.p) }; })() : undefined;
+  // The backing plate sits in a recess in the backer's inner face, so the main member at the bolts is the rail + backer less the recess depth (not the full thickness).
+  const lmDry = g.rail.t + g.backer.t - pl.recess;
+  const dryZ = dry ? (() => { const r = lateralZWood({ D: bd, ls: k.legT, lm: lmDry, Fes: dryFem, Fem: dryFem, Fyb: ctx.p.ss316BoltYieldPsi, thetaDeg: 90 }); return { ...r, Z: r.Z * ndsAdjust(ctx.p) }; })() : undefined;
+  // Sustained hold (λ = 1, C_D 1.0): the worst bolt at the hold load V/λ against Z_ref × C_M × C_g (no duration credit). The bungee's moment about the foot does not scale with λ, so V/λ slightly understates the λ = 1 load (about 1%, neglected).
+  const dryZref = dry ? dryZ!.Z / ndsAdjust(ctx.p) : 0;
+  const drySustained = dry ? detail('dry knee: sustained hold (load factor 1, no duration credit), bolt lateral capacity, wood to wood', V / ctx.p.brakeLoadFactor, 'lbf', dryZref * ctx.p.ndsWetFactorFasteners * ctx.p.ndsGroupFactor, '<=') : undefined;
+  if (drySustained) SUSTAINED.add(drySustained);
   const ds: Detail[] = [
     detail('knee arm bending beyond the leg, both axes (oak, the ACROSS layers only, D-75)', sigK, 'psi', al.oakBend, '<='),
     detail('knee arm shear (oak, the ACROSS layers only)', tauK, 'psi', al.oakShear, '<='),
     detail('knee leg just above the top bolt row: in-plane and out-of-plane bending plus the pull (oak, the UPRIGHT layers only, D-75, D-77)', sigLeg, 'psi', al.oakBend, '<='),
-    detail('mounting bolt shear, worst bolt, direct + twist (316)', shear, 'psi', a.boltShear, '<='),
-    detail('mounting bolt tension from the overturning couple, worst (316)', sigT, 'psi', a.bolt, '<='),
-    detail('mounting bolt shear + tension combined (316)', comb, '', 1, '<='),
+    steelDetail('mounting bolt shear, worst bolt, direct + twist (316)', shear, 'psi', a.boltShear, '<='),
+    steelDetail('mounting bolt tension from the overturning couple, worst (316)', sigT, 'psi', a.bolt, '<='),
+    steelDetail('mounting bolt shear + tension combined (316)', comb, '', 1, '<='),
     detail('bolt bearing in the rail + backer and the knee leg (oak, across the grain)', bear, 'psi', al.oakDowel, '<='),
     detail('bolt tear-out toward the rail edge (oak shear)', tear, 'psi', al.oakShear, '<='),
     detail(`bolt bearing in the knee leg (oak${legEg < 1 ? '; the bolts run along the grain of the ACROSS layers: end-grain dowel bearing, C_eg 0.67, D-75' : ''})`, bearLeg, 'psi', al.oakDowel, '<='),
@@ -548,11 +560,12 @@ function mountEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
     detail('head washer bearing on the knee leg, the worst bolt (oak: end grain where it covers an ACROSS layer, side grain on an UPRIGHT one, D-75)', T, 'lbf', headCap, '<='),
     detail('knee leg bearing on the chine / rail face at the top of the couple (oak across the grain)', cBear, 'psi', al.oakPerp, '<='),
     ...(dry ? [detail('dry knee: bolt lateral capacity, wood to wood, leg on rail and backer (yield modes, across the grain, worst bolt)', V, 'lbf', dryZ!.Z, '<=')] : []),
+    ...(drySustained ? [drySustained] : []),
   ];
   const how = `${loadText(L, g)}. ${n} × ${f(bd, 3)}" ${dry ? stainless(ctx.p) : '316'} bolts (${bt.xs.length} columns × ${bt.zs.length} rows, centroid x ${f(bt.cx, 2)}", z ${f(bt.cz, 2)}") through the ${f(k.legT, 2)}" knee leg, the ${f(g.rail.t, 2)}" rail and the ${f(g.backer.t, 2)}" backer glued to it. In plane: M = ${f(Mpl)} lbf·in about the bolt group (pin ${f(g.xh - bt.cx, 2)}" ahead of / ${f(g.H[1] - bt.cz, 2)}" above it), twist ${f(twist)} + direct ${f(direct)} = ${f(V)} lbf on the worst bolt (shear ${f(shear, 0)} psi, bearing ${f(bear, 0)} psi on ${f(tComp, 2)}"). Out of plane: the force acts ${f(e, 2)}" outboard of the hull face: M_x = ${f(Mx)} lbf·in pivots on the chine top (z ${f(zc, 2)}") into the ${bt.zs.length} bolt rows (T ${f(Tz)} lbf) and M_z = ${f(Mz)} lbf·in over the columns (T ${f(Tx)} lbf): worst bolt tension ${f(T)} lbf = ${f(sigT, 0)} psi on ${f(At, 4)} in², nut side: one ${f(pl.t, 3)}" × ${f(pl.x1 - pl.x0, 2)}" × ${f(pl.z1 - pl.z0, 2)}" backing plate, ${f(pull, 0)} psi on the worst bolt's ${f(tribA, 2)} in² share, ${f(plateBend, 0)} psi bending over a ${f(overhang, 2)}" overhang past the nut; head side: a ${f(dW, 3)}" washer, ${f(T)} lbf against ${f(headCap)} lbf (end grain of the across layers). D-75 cross-laminated knee: the arm counts only the ACROSS layers (${f(armY.t, 2)}"), the leg only the UPRIGHT layers (${f(legZ.t, 2)}": ${f(Mleg)} lbf·in in plane, ${f(MlegOut)} lbf·in out of plane at the top bolt row, σ ${f(sigLeg, 0)} psi); bolt bearing in the leg ${f(bearLeg, 0)} psi${legEg < 1 ? ' (end grain, C_eg 0.67)' : ''}. Knee arm section just beyond the leg ${f(sec.depth, 2)}" × ${f(sec.h, 2)}": σ ${f(sigK, 0)} psi. The knee bolts into the rail (backed by the glued ${f(g.backer.t, 2)}" doubler), not the 1/4" side panel.`;
   // D-78: removable knees are fitted dry and held by the four bolts alone. The rows above never counted glue or clamp friction (the bolts carry the shear and the pull), so they are the same in both settings.
   const removableNote = dry
-    ? ` Removable knees (D-78): the knee is fitted DRY with no epoxy against the rail, so the uniform dowel bearing above (which treats the knee, rail and backer as one unit) is not enough: the last detail checks the worst bolt (${f(V)} lbf) as a single-shear dowel between the ${f(k.legT, 2)}" leg and the ${f(g.rail.t + g.backer.t, 2)}" of rail and backer, NDS yield modes wood to wood across the grain, Fe = ${f(dryFem, 0)} psi, ${stainless(ctx.p)} bolt yield ${f(ctx.p.ss316BoltYieldPsi, 0)} psi: Z = ${f(dryZ!.Z / ndsAdjust(ctx.p), 0)} lbf (mode ${dryZ!.mode}) x ${f(ndsAdjust(ctx.p), 2)} (wet, duration, group) = ${f(dryZ!.Z, 0)} lbf. No glue or friction is counted anywhere; the bolts must be tightened to the stated snug-plus-a-quarter-turn each refit and rechecked after the first outing.`
+    ? ` Removable knees (D-78): the knee is fitted DRY with no epoxy against the rail, so the uniform dowel bearing above (which treats the knee, rail and backer as one unit) is not enough: the last detail checks the worst bolt (${f(V)} lbf) as a single-shear dowel between the ${f(k.legT, 2)}" leg and the ${f(lmDry, 3)}" of rail and backer left by the plate recess, NDS yield modes wood to wood across the grain, Fe = ${f(dryFem, 0)} psi, ${stainless(ctx.p)} bolt yield ${f(ctx.p.ss316BoltYieldPsi, 0)} psi: Z = ${f(dryZref, 0)} lbf (mode ${dryZ!.mode}) × C_M ${f(ctx.p.ndsWetFactorFasteners, 2)} (wet) × C_D ${f(ctx.p.ndsLoadDurationFactor, 1)} (the λ = ${f(ctx.p.brakeLoadFactor, 0)} stomp or jerk is an impact; NDS caps connections at 1.6) × C_g ${f(ctx.p.ndsGroupFactor, 2)} = ${f(dryZref * ndsAdjust(ctx.p), 0)} lbf. The pass depends on that C_D: the second dry-knee detail is the sustained hold (λ = 1, C_D 1.0), V/λ = ${f(V / ctx.p.brakeLoadFactor)} lbf against Z × C_M × C_g = ${f(drySustained!.limit, 0)} lbf. NDS spacing and edge minimums are not met (rail loaded edge 2D, leg faces 1.4D, column spacing 2.8D), so C_Δ is not applied and the yield-mode value is an estimate; tear-out and splitting are carried by the tear-out row and the cross-laminated leg. No glue or friction is counted anywhere; the bolts must be tightened to the stated snug-plus-a-quarter-turn each refit, checked snug before each outing and retightened after the first.`
     : '';
   return governing(ds, how + removableNote);
 }
@@ -671,7 +684,8 @@ export function brakeAbuse(ctx: Ctx): AnalysisCheck {
   const ds: Detail[] = [];
   for (const [name, e] of parts) {
     for (const d of e.details ?? []) {
-      const k = /\(316\)|screws|NDS|pin|stainless/.test(d.name) && !/oak/.test(d.name) ? kS : kW;
+      if (SUSTAINED.has(d)) continue;
+      const k = STEEL_BASIS.has(d) ? kS : kW;
       ds.push({ ...scaleLimits([d], k)[0], name: `${name}: ${d.name}` });
     }
   }

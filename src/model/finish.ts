@@ -62,7 +62,7 @@ export function finishFor(p: Pick<Params, 'roundoverIn'>, part: Part): Finish | 
   if (part.geometry.type === 'wheel') {
     out.tread ??= 'lug';
     out.surface ??= 'rubber';
-  } else if (/foam/.test(m) && /vinyl/.test(m)) {
+  } else if (/foam/.test(m) && /vinyl|eva/.test(m)) { // D-83: the EVA seat pads are soft and uncovered; the viewer keeps the dark matte look
     out.soft ??= true;
     out.surface ??= 'vinyl';
   } else {

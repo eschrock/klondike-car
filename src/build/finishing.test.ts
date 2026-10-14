@@ -3,7 +3,7 @@ import { buildModel } from '../model';
 import { defaultParams } from '../params';
 import type { Part } from '../model/types';
 import { finalFrac } from './units';
-import { containers, DOMINO_FLOZ, endGrainAreaIn2, EPOXY_COVERAGE, EPOXY_RESIN_PARTS, epoxyTimeFactor, finishAreas, finishMaterial, finishingSchedule, GLUE_FLOZ_PER_FT2, glueEpoxyFlOz, glueJointEstimates, showRuleOf, surfaceAreaIn2, VARNISH_COVERAGE } from './finishing';
+import { containers, DOMINO_FLOZ, endGrainAreaIn2, EPOXY_BUY_RE, EPOXY_COVERAGE, EPOXY_RESIN_PARTS, EPOXY_SYSTEM, epoxyTimeFactor, finishAreas, finishMaterial, finishingSchedule, GLUE_FLOZ_PER_FT2, glueEpoxyFlOz, glueJointEstimates, showRuleOf, surfaceAreaIn2, VARNISH_COVERAGE } from './finishing';
 
 // D-73: this file's numbers are the EXTREME weather spec (epoxy saturation coat on all the plywood, marine varnish, 4 mm okoume thin sheet); the Standard spec is tested in weather-spec.test.ts.
 const p = { ...defaultParams(), weatherSpec: 1 };
@@ -83,8 +83,9 @@ describe('finishing areas', () => {
     const chine = a.detail['side-L-chine'];
     const web = a.detail['side-L-web'];
     const band = (1.5 * 58.75) / 144;
-    expect(chine.gluedFt2).toBeCloseTo(band, 6);
-    expect(chine.netFt2).toBeCloseTo(chine.grossFt2 - band, 9);
+    expect(chine.gluedFt2).toBeGreaterThanOrEqual(band - 1e-6); // the web contact, plus the epoxy bed on the rail (D-81: the chine-to-rail tie has no Dominos any more, it is an epoxy bed and screws)
+    expect(chine.gluedFt2).toBeLessThan(band * 1.5);
+    expect(chine.netFt2).toBeCloseTo(chine.grossFt2 - chine.gluedFt2, 9);
     expect(web.gluedFt2).toBeGreaterThan(band); // all four bands
     // The deck gives up its contact with the rails and the joists.
     expect(a.detail['deck'].gluedFt2).toBeGreaterThan(0.3);
@@ -148,23 +149,22 @@ describe('finishing schedule', () => {
     expect(s).toContain(`${finalFrac(p.roundoverIn)} roundover`);
   });
 
-  it('epoxy seals the okoume and oak end grain with ONE saturation coat of 105/206 and warns about oil-based stain', () => {
+  it('epoxy seals the okoume and oak end grain with ONE saturation coat of the 635 epoxy and warns about oil-based stain', () => {
     const e = sched.steps[3];
     expect(e.coats).toBe(1);
     expect(e.title).toMatch(/one saturation coat/i);
     expect(e.title).toMatch(/okoume/i);
     expect(e.title).toMatch(/end grain/i);
     const text = e.instructions.join(' ');
-    expect(text).toMatch(/105/);
-    expect(text).toMatch(/206/);
-    expect(text).not.toMatch(/207 hardener \(3:1/);
+    expect(text).toMatch(/U\.S\. Composites 635 thin epoxy: 2 parts resin to 1 part hardener by volume/);
+    expect(text).not.toMatch(/105|206|207|West System|\b301\b/);
     expect(text).toMatch(/oil-based stain needs the stain fully cured/);
     expect(text).toMatch(/water-based/);
     // The seal step washes the blush before sanding and varnishing.
-    expect(text).toMatch(/After the 206 seal coat cures, wash the amine blush off with water and a Scotch-Brite pad before sanding and varnishing/);
-    // Options, not quantities.
+    expect(text).toMatch(/After the seal coat cures, wash the amine blush off with water and a Scotch-Brite pad before sanding and varnishing/);
+    expect(text).toMatch(/Pot life is about 35-40 min at 70 °F \(the vendor's list; check the can\)/);
+    // The option, not in the quantities.
     expect(text).toMatch(/OPTION, not in the quantities: a second coat on the deck top/);
-    expect(text).toMatch(/OPTION, not in the quantities: 207 special clear hardener for the clearest finish under varnish/);
     expect(e.products).toHaveLength(1);
     // Quantity = area / coverage x (1 + waste): the okoume (show and hidden) and 2x the end grain.
     const a = sched.areas;
@@ -233,13 +233,15 @@ describe('buy list', () => {
     expect(total(/conditioner/i)).toBeGreaterThanOrEqual(need('stain', 1));
     expect(total(/gel stain/i)).toBeGreaterThanOrEqual(need('stain', 2));
     expect(total(/wood stain/i)).toBeGreaterThanOrEqual(need('stain', 0));
-    // 105 resin: 5/6 of the mixed epoxy (seal coat + glue joints).
+    // the epoxy: 2/3 of the mixed epoxy is resin (seal coat + glue joints), bought as the kit the BOM prices.
     const e = sched.epoxy;
-    expect(total(/105 epoxy resin/)).toBeGreaterThanOrEqual(e.resinFlOz / 32 - 1e-9);
+    expect(total(EPOXY_BUY_RE)).toBeGreaterThanOrEqual(e.resinFlOz / 32 - 1e-9);
     for (const b of sched.buy) {
       expect(['gal', 'qt', 'pt']).toContain(b.unit);
-      expect(Number.isInteger(b.qty)).toBe(true);
+      expect(Number.isInteger(b.qty * 2)).toBe(true); // whole containers, or a product sold in two sizes as one row ("1 qt + 1 pt" = 1.5 qt)
     }
+    // one product is one row: no two rows share an item and a note
+    expect(new Set(sched.buy.map((b) => `${b.item}|${b.note}`)).size).toBe(sched.buy.length);
   });
 
   it('buys varnish in whole quarts, never a gallon', () => {
@@ -263,32 +265,35 @@ describe('buy list', () => {
   });
 });
 
-describe('one hardener: 105 with 206 at 5:1 (right-sized finish)', () => {
+describe('one epoxy, the kit the BOM buys: U.S. Composites 635 at 2:1 (right-sized finish)', () => {
   const buy = (re: RegExp) => sched.buy.filter((b) => re.test(b.item));
   const text = sched.steps.map((s) => s.instructions.join(' ')).join(' ') + sched.assumptions.join(' ');
 
-  it('drops 207, 209 and the 303 pumps from the buy list; the 301 pumps of the kit are the BOM\'s', () => {
-    expect(EPOXY_RESIN_PARTS).toBe(5);
-    expect(buy(/207|209|hardener/i)).toHaveLength(0);
+  it('has no West System 207, 209 or pump lines in the buy list; the pumps of the kit are the BOM\'s; every ratio is 2:1', () => {
+    expect(EPOXY_RESIN_PARTS).toBe(2);
+    expect(EPOXY_SYSTEM.ratio).toBe('2:1');
+    expect(buy(/207|209|hardener|West System/i)).toHaveLength(0);
+    expect(buy(EPOXY_BUY_RE).length).toBeGreaterThan(0);
     expect(sched.supplies).toHaveLength(0);
-    expect(JSON.stringify(sched.buy)).not.toMatch(/\b303\b/);
-    expect(text).toMatch(/5:1/);
+    expect(JSON.stringify(sched.buy)).not.toMatch(/\b303\b|\b301\b|5:1/);
+    expect(text).toMatch(/2 parts resin to 1 part hardener by volume/);
+    expect(text).not.toMatch(/5:1|\b105\b|\b206\b|\b207\b/);
   });
 
-  it('keeps 207 as an option and the second deck-top coat as an option, outside the quantities', () => {
-    expect(text).toMatch(/207 special clear hardener for the clearest finish under varnish/);
+  it('keeps the second deck-top coat as an option, outside the quantities (no 207 option: that hardener is not bought)', () => {
     expect(text).toMatch(/second coat on the deck top/);
+    expect(text).not.toMatch(/207 special clear hardener/);
   });
 
-  it('totals the mixed epoxy as the seal coat (+15 %) plus the glue joints (+20 %), resin 5/6 and hardener 1/6', () => {
+  it('totals the mixed epoxy as the seal coat (+15 %) plus the glue joints (+20 %), resin 2/3 and hardener 1/3', () => {
     const e = sched.epoxy;
     const coat = sched.steps.find((s) => s.id === 'epoxy')!.products[0].qtNeeded * 32;
     expect(e.coatingFlOz).toBeCloseTo(coat, 6);
     expect(e.glueFlOz).toBeCloseTo(glueEpoxyFlOz(parts, undefined, p) * 1.2, 6);
     expect(e.totalMixedFlOz).toBeCloseTo(e.coatingFlOz + e.glueFlOz, 6);
-    expect(e.resinFlOz).toBeCloseTo((e.totalMixedFlOz * 5) / 6, 6);
-    expect(e.hardenerFlOz).toBeCloseTo(e.totalMixedFlOz / 6, 6);
-    // The closes are glue joints (206): no separate close epoxy, and the note about the small batches is in the schedule.
+    expect(e.resinFlOz).toBeCloseTo((e.totalMixedFlOz * 2) / 3, 6);
+    expect(e.hardenerFlOz).toBeCloseTo(e.totalMixedFlOz / 3, 6);
+    // The closes are glue joints (the same epoxy): no separate close epoxy, and the note about the small batches is in the schedule.
     expect(sched.closeEpoxyFlOz).toBe(0);
     expect(e.closeGlueFlOz).toBeGreaterThan(5);
     expect(e.closeGlueFlOz).toBeLessThan(glueEpoxyFlOz(parts));
@@ -320,13 +325,12 @@ describe('build review round 1: glue epoxy by joint type (MUST-10)', () => {
       expect(DOMINO_FLOZ[k]).toBeGreaterThanOrEqual(0.1);
       expect(DOMINO_FLOZ[k]).toBeLessThanOrEqual(0.2);
     }
-    // 18 chine Dominos 5×30 (4×20 with the 4 mm okoume) (rail-L / side-L-chine appear on both parts), 16 of 5×30 in the frame, 2 of 8×50 and so on.
-    expect(n('domino')).toBeGreaterThan(30);
+    // D-81: the chine-to-rail tie has NO Dominos (an epoxy bed and screws; the analysis never credited them): 16 of 5×30 in the frame, 2 of 6×40 at the rail ends, and so on.
+    expect(n('domino')).toBeGreaterThan(10);
     expect(n('domino')).toBeLessThan(60);
     const chine = est.filter((g) => g.kind === 'domino' && [g.a, g.b].sort().join('|') === 'rail-L|side-L-chine');
-    expect(chine).toHaveLength(1);
-    expect(chine[0].count).toBe(9);
-    expect(chine[0].flOz).toBeCloseTo(9 * DOMINO_FLOZ['4×20'], 9); // D-73: 4×20 with the 4 mm okoume of the Extreme spec (the 1/4 in white oak web of the Standard spec leaves a 0.417 in land: 5×30)
+    expect(chine).toHaveLength(0);
+    expect(est.some((g) => g.kind === 'domino')).toBe(true);
     expect(sum('domino') / n('domino')).toBeGreaterThanOrEqual(0.1);
     expect(sum('domino') / n('domino')).toBeLessThanOrEqual(0.25);
   });
