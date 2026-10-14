@@ -543,7 +543,7 @@ export function uniqueJoints(parts: Part[]): Array<{ part: Part; joint: Joint }>
 export interface NoteItem {
   /** BOM line key (consumables) or a short id. */
   key: string;
-  section: 'fasteners' | 'consumables';
+  section: 'fasteners' | 'consumables' | 'purchased';
   /** Price of the consumable line (fasteners are priced by label in prices.ts). */
   price?: Price;
   /** Set when the item exists for a finishing-touches group: the line goes to that section instead. */
@@ -574,7 +574,7 @@ export const CEMENT_USES_PER_CAN = 8;
 export const BANDING_WASTE = 0.15;
 export const BANDING_ROLL_FT = 25;
 /** Removable knees: spare nylon-insert lock nuts for the knee bolts that ride in the box. */
-export const KNEE_SPARE_NUTS = 4;
+export const KNEE_SPARE_NUTS = 8;
 
 /**
  * The note table. Each entry cites the text it comes from; quantities come from the model (parts present, their sizes), never from the text.
@@ -685,11 +685,19 @@ export const NOTE_ITEMS: NoteItem[] = [
     },
   },
   {
-    key: 'tool-pouch', section: 'consumables', price: NOTE_PRICE.toolPouch, partIds: ['brake-knee-L', 'brake-knee-R'], noteRef: 'brake knee notes (removable knees): "ratchet and wrench"',
+    key: 'tool-pouch', section: 'purchased', price: NOTE_PRICE.toolPouch, partIds: ['brake-knee-L', 'brake-knee-R'], noteRef: 'brake knee notes (removable knees): "ratchet and wrench"',
     expand(built) {
       const knees = byIds(built, ['brake-knee-L', 'brake-knee-R']).filter((x) => x.removable);
       if (!knees.length) return null;
-      return { items: [{ label: 'TOOL: pouch with a 3/8" drive ratchet, a 9/16" deep socket and a 9/16" combination wrench', qty: 1 }], note: 'A tool, not part of the sled and not in its weight. It rides in the storage box so the brake knees can come off on the road. You may already own a set: this is an estimate, not a quote' };
+      return { items: [{ label: 'TOOL: pouch with a 3/8" drive ratchet, a 9/16" socket and a 9/16" combination wrench', qty: 1 }], note: 'A tool, not part of the sled and not in its weight. It rides in the storage box in cargo mode, so the brake knees can come off at the truck or in the garage. You may already own a set: this is an estimate, not a quote' };
+    },
+  },
+  {
+    key: 'anti-seize', section: 'consumables', price: NOTE_PRICE.antiSeize, partIds: ['brake-knee-L', 'brake-knee-R'], noteRef: 'brake knee notes (removable knees): bolts bolted and unbolted again and again',
+    expand(built) {
+      const knees = byIds(built, ['brake-knee-L', 'brake-knee-R']).filter((x) => x.removable);
+      if (!knees.length) return null;
+      return { items: [{ label: 'Anti-seize compound for stainless, small tube', qty: 1 }], note: 'A thin smear on the knee bolt threads at every refit: stainless threads gall (seize) when they are run in and out of a nut' };
     },
   },
 ];
@@ -905,6 +913,7 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     if (!x) continue;
     if (item.section === 'fasteners') for (const f of x.items) { fast.set(f.label, (fast.get(f.label) ?? 0) + f.qty); noteOn(f.label, item.partIds); }
     else if (item.touch) touchLines.push(line(TOUCHES_SECTION.title, item.key, x.items[0].label, x.items[0].qty, item.price!, { vendor: item.price!.source, notes: joinNotes(item.price!.url ? `Price: ${item.price!.note}.` : undefined, x.note), group: item.touch }));
+    else if (item.section === 'purchased') purchased.push(line('Purchased parts', item.key, x.items[0].label, x.items[0].qty, item.price!, { vendor: item.price!.source, notes: joinNotes(item.price!.url ? `Price: ${item.price!.note}.` : undefined, x.note) }));
     else noteLines.push(line('Consumables', item.key, x.items[0].label, x.items[0].qty, item.price!, { vendor: item.price!.source, notes: joinNotes(item.price!.url ? `Price: ${item.price!.note}.` : undefined, x.note) }));
   }
   const familyOrder = (l: string): number => (/^Domino/.test(l) ? 7 : /insert/i.test(l) ? 4 : /bolt|cap screw/.test(l) ? 1 : /nut/.test(l) ? 2 : /washer/.test(l) ? 3 : /Thumb/.test(l) ? 4 : /collar|cotter|plug|rod/.test(l) ? 6 : 0);
@@ -932,6 +941,12 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     return line(sectionTitle, label, description, qty, price, { ...extra, ...(price.note ? { notes: price.note } : {}) });
   };
   const fastenerLines: BomLine[] = [...fast.entries()].sort((a, b) => familyOrder(a[0]) - familyOrder(b[0]) || a[0].localeCompare(b[0])).map(([label, qty]) => fastenerLine(label, qty));
+  // A listing note that quotes "N by the piece is $X" for the quantity the default build needs (26 nuts) is restated for the quantity this build needs (removable knees add spares).
+  for (const l of fastenerLines) {
+    const restate = (t: string): string => t.replace(/\b(\d+) by the piece is (\d+\.\d+)/, (m, n0: string, t0: string) => (Number(n0) === (l.needed ?? l.qty) ? m : `${l.needed ?? l.qty} by the piece is ${(Math.round((Number(t0) / Number(n0)) * (l.needed ?? l.qty) * 100) / 100).toFixed(2)}`));
+    if (l.notes) l.notes = restate(l.notes);
+    if (l.alternatives) l.alternatives = l.alternatives.map((a) => (a.note ? { ...a, note: restate(a.note) } : a));
+  }
   const fasteners: BomLine[] = fastenerLines.filter((l) => l.section === 'Fasteners');
   bulkLines.push(...fastenerLines.filter((l) => l.section !== 'Fasteners'));
   const touchFasteners: BomLine[] = [];

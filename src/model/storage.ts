@@ -144,7 +144,7 @@ export function boxGear(parts: Part[], p?: Pick<Params, 'kneeMount' | 'toolPouch
 }
 
 /**
- * D-78: with removable knees the box carries the tool pouch (a 3/8" drive ratchet, a 9/16" deep socket and a 9/16" combination wrench) as one rigid item. It is a TOOL, not sled mass
+ * D-78: with removable knees the box carries (in CARGO mode only; the seat-stow row packs it) the tool pouch (a 3/8" drive ratchet, a 9/16" socket and a 9/16" combination wrench) as one rigid item. It is a TOOL, not sled mass
  * (like the Essentials), so it has no part and no weight in the model. Empty with the default fixed knees.
  */
 export function toolPouch(p?: Pick<Params, 'kneeMount' | 'toolPouchLengthIn' | 'toolPouchWidthIn' | 'toolPouchHeightIn'>): KitItem[] {

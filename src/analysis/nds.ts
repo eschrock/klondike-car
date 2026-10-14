@@ -72,6 +72,46 @@ export function lateralZ(i: LateralInput): LateralResult {
   return { Z, mode, modes };
 }
 
+export interface WoodLateralInput {
+  /** Bolt diameter (in), side-member thickness l_s and main-member thickness l_m (in), dowel bearing strengths of the two members (psi), bolt bending yield (psi), load angle to the grain (deg). */
+  D: number;
+  ls: number;
+  lm: number;
+  Fes: number;
+  Fem: number;
+  Fyb: number;
+  thetaDeg: number;
+}
+
+/**
+ * Reference lateral design value Z (lbf, one bolt, single shear, WOOD side member on a WOOD main member) = min of all six NDS yield modes (Table 12.3.1A):
+ *   Im = D·l_m·Fem/Rd;  Is = D·l_s·Fes/Rd;  II = k1·D·l_s·Fes/Rd
+ *   IIIm = k2·D·l_m·Fem/((1+2Re)·Rd);  IIIs = k3·D·l_s·Fem/((2+Re)·Rd);  IV = D²/Rd·√(2·Fem·Fyb/(3(1+Re)))
+ *   Re = Fem/Fes, Rt = l_m/l_s, k1 = (√(Re + 2Re²(1+Rt+Rt²) + Rt²Re³) − Re(1+Rt))/(1+Re),
+ *   k2 = −1 + √(2(1+Re) + 2Fyb(1+2Re)D²/(3Fem·l_m²)),  k3 = −1 + √(2(1+Re)/Re + 2Fyb(2+Re)D²/(3Fem·l_s²)).
+ * Rd is from `rdFactors` (4Kθ for Im and Is, 3.6Kθ for II, 3.2Kθ for IIIm, IIIs and IV). The NDS text was not at hand: these are the published equations as worked in the Caltrans falsework examples.
+ */
+export function lateralZWood(i: WoodLateralInput): LateralResult {
+  const { D, ls, lm, Fes, Fem, Fyb, thetaDeg } = i;
+  const rd = rdFactors(thetaDeg);
+  const Re = Fem / Fes, Rt = lm / ls;
+  const k1 = (Math.sqrt(Re + 2 * Re * Re * (1 + Rt + Rt * Rt) + Rt * Rt * Re ** 3) - Re * (1 + Rt)) / (1 + Re);
+  const k2 = -1 + Math.sqrt(2 * (1 + Re) + (2 * Fyb * (1 + 2 * Re) * D * D) / (3 * Fem * lm * lm));
+  const k3 = -1 + Math.sqrt((2 * (1 + Re)) / Re + (2 * Fyb * (2 + Re) * D * D) / (3 * Fem * ls * ls));
+  const modes = {
+    Im: (D * lm * Fem) / rd.Im,
+    Is: (D * ls * Fes) / rd.Is,
+    II: (k1 * D * ls * Fes) / rd.II,
+    IIIm: (k2 * D * lm * Fem) / ((1 + 2 * Re) * rd.IIIm),
+    IIIs: (k3 * D * ls * Fem) / ((2 + Re) * rd.IIIs),
+    IV: ((D * D) / rd.IV) * Math.sqrt((2 * Fem * Fyb) / (3 * (1 + Re))),
+  };
+  let mode = 'Im';
+  let Z = Infinity;
+  for (const [m, v] of Object.entries(modes)) if (v < Z) { Z = v; mode = m; }
+  return { Z, mode, modes };
+}
+
 /** Row tear-out of n fasteners in a row (NDS Appendix E): Z'RT = n·F'v·t·s_critical, s_critical = lesser of the end distance and half the in-row spacing. */
 export function rowTearOut(n: number, FvPrime: number, t: number, endDist: number, rowSpacing: number): { sCrit: number; Z: number } {
   const sCrit = Math.min(endDist, rowSpacing / 2);

@@ -15,7 +15,7 @@ import { obbOverlap, partOBB, partOBBs, worldAABB } from '../model/bounds';
 import { atPose, brakeGeometry, buildBrakeAt, type BrakeGeom, type V2 } from '../model/brake';
 import { KNEE_NUT_FLAT_R_IN, SHOULDER_CLEAR_IN, WITHDRAWAL_WET_CM, dot2, flapHalfWidth, momentY, norm2, pointPolyGap, sub, type KneeLayer } from '../model/brake-layout';
 import { SIGN_X_MAX_IN } from '../model/body';
-import { makeCtx } from '../model/build-utils';
+import { makeCtx, stainless } from '../model/build-utils';
 import { handleGeometry, POST_RELIEF, SOCKET_ACCESS_HOLE_IN, type HandleGeom } from '../model/handle';
 import { SCREW_DIA_IN } from '../model/rear-mount';
 import type { Part } from '../model/types';
@@ -24,7 +24,7 @@ import { dualCheck, singleCheck, detail, governing, type CaseEval } from './dual
 import { RAD, contactsAt } from './geometry';
 import { f } from './format';
 import type { CaseData } from './loads';
-import { uncTensileArea } from './nds';
+import { feAtAngle, fePerp, feParallel, lateralZWood, ndsAdjust, uncTensileArea } from './nds';
 import { evalBoth, rearNormalNoseDown } from './stability';
 import { allowables } from './structure';
 import { judge, worst, type AnalysisCheck, type Detail, type Status } from './types';
@@ -528,6 +528,11 @@ function mountEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
   // D-75 bolt bearing in the leg: a bolt that lies in an ACROSS layer runs along its grain (end-grain dowel bearing, C_eg).
   const legEg = bt.xs.some((x) => grainAt(g, x) === 'y') ? END_GRAIN_CEG : 1;
   const bearLeg = V / (bd * k.legT * legEg);
+  // D-78: a DRY (removable) knee is not a glued unit with the rail, so each bolt is a single-shear dowel between the 1.75 in leg and the rail + backer: the NDS wood-to-wood yield modes
+  // (load across the grain, both members oak) must carry the worst bolt. The rows above are the same in both settings; this detail is added only for the dry knee.
+  const dry = ctx.p.kneeMount === KNEE_MOUNT.removable;
+  const dryFem = dry ? feAtAngle(feParallel(ctx.p.oakSpecificGravity), fePerp(ctx.p.oakSpecificGravity, bd), 90) : 0;
+  const dryZ = dry ? (() => { const r = lateralZWood({ D: bd, ls: k.legT, lm: g.rail.t + g.backer.t, Fes: dryFem, Fem: dryFem, Fyb: ctx.p.ss316BoltYieldPsi, thetaDeg: 90 }); return { ...r, Z: r.Z * ndsAdjust(ctx.p) }; })() : undefined;
   const ds: Detail[] = [
     detail('knee arm bending beyond the leg, both axes (oak, the ACROSS layers only, D-75)', sigK, 'psi', al.oakBend, '<='),
     detail('knee arm shear (oak, the ACROSS layers only)', tauK, 'psi', al.oakShear, '<='),
@@ -542,11 +547,12 @@ function mountEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
     detail('nut backing plate bending past the nut flats (304 / 316 plate, D-75)', plateBend, 'psi', plateAllow, '<='),
     detail('head washer bearing on the knee leg, the worst bolt (oak: end grain where it covers an ACROSS layer, side grain on an UPRIGHT one, D-75)', T, 'lbf', headCap, '<='),
     detail('knee leg bearing on the chine / rail face at the top of the couple (oak across the grain)', cBear, 'psi', al.oakPerp, '<='),
+    ...(dry ? [detail('dry knee: bolt lateral capacity, wood to wood, leg on rail and backer (yield modes, across the grain, worst bolt)', V, 'lbf', dryZ!.Z, '<=')] : []),
   ];
-  const how = `${loadText(L, g)}. ${n} × ${f(bd, 3)}" 316 bolts (${bt.xs.length} columns × ${bt.zs.length} rows, centroid x ${f(bt.cx, 2)}", z ${f(bt.cz, 2)}") through the ${f(k.legT, 2)}" knee leg, the ${f(g.rail.t, 2)}" rail and the ${f(g.backer.t, 2)}" backer glued to it. In plane: M = ${f(Mpl)} lbf·in about the bolt group (pin ${f(g.xh - bt.cx, 2)}" ahead of / ${f(g.H[1] - bt.cz, 2)}" above it), twist ${f(twist)} + direct ${f(direct)} = ${f(V)} lbf on the worst bolt (shear ${f(shear, 0)} psi, bearing ${f(bear, 0)} psi on ${f(tComp, 2)}"). Out of plane: the force acts ${f(e, 2)}" outboard of the hull face: M_x = ${f(Mx)} lbf·in pivots on the chine top (z ${f(zc, 2)}") into the ${bt.zs.length} bolt rows (T ${f(Tz)} lbf) and M_z = ${f(Mz)} lbf·in over the columns (T ${f(Tx)} lbf): worst bolt tension ${f(T)} lbf = ${f(sigT, 0)} psi on ${f(At, 4)} in², nut side: one ${f(pl.t, 3)}" × ${f(pl.x1 - pl.x0, 2)}" × ${f(pl.z1 - pl.z0, 2)}" backing plate, ${f(pull, 0)} psi on the worst bolt's ${f(tribA, 2)} in² share, ${f(plateBend, 0)} psi bending over a ${f(overhang, 2)}" overhang past the nut; head side: a ${f(dW, 3)}" washer, ${f(T)} lbf against ${f(headCap)} lbf (end grain of the across layers). D-75 cross-laminated knee: the arm counts only the ACROSS layers (${f(armY.t, 2)}"), the leg only the UPRIGHT layers (${f(legZ.t, 2)}": ${f(Mleg)} lbf·in in plane, ${f(MlegOut)} lbf·in out of plane at the top bolt row, σ ${f(sigLeg, 0)} psi); bolt bearing in the leg ${f(bearLeg, 0)} psi${legEg < 1 ? ' (end grain, C_eg 0.67)' : ''}. Knee arm section just beyond the leg ${f(sec.depth, 2)}" × ${f(sec.h, 2)}": σ ${f(sigK, 0)} psi. The knee bolts into the rail (backed by the glued ${f(g.backer.t, 2)}" doubler), not the 1/4" side panel.`;
+  const how = `${loadText(L, g)}. ${n} × ${f(bd, 3)}" ${dry ? stainless(ctx.p) : '316'} bolts (${bt.xs.length} columns × ${bt.zs.length} rows, centroid x ${f(bt.cx, 2)}", z ${f(bt.cz, 2)}") through the ${f(k.legT, 2)}" knee leg, the ${f(g.rail.t, 2)}" rail and the ${f(g.backer.t, 2)}" backer glued to it. In plane: M = ${f(Mpl)} lbf·in about the bolt group (pin ${f(g.xh - bt.cx, 2)}" ahead of / ${f(g.H[1] - bt.cz, 2)}" above it), twist ${f(twist)} + direct ${f(direct)} = ${f(V)} lbf on the worst bolt (shear ${f(shear, 0)} psi, bearing ${f(bear, 0)} psi on ${f(tComp, 2)}"). Out of plane: the force acts ${f(e, 2)}" outboard of the hull face: M_x = ${f(Mx)} lbf·in pivots on the chine top (z ${f(zc, 2)}") into the ${bt.zs.length} bolt rows (T ${f(Tz)} lbf) and M_z = ${f(Mz)} lbf·in over the columns (T ${f(Tx)} lbf): worst bolt tension ${f(T)} lbf = ${f(sigT, 0)} psi on ${f(At, 4)} in², nut side: one ${f(pl.t, 3)}" × ${f(pl.x1 - pl.x0, 2)}" × ${f(pl.z1 - pl.z0, 2)}" backing plate, ${f(pull, 0)} psi on the worst bolt's ${f(tribA, 2)} in² share, ${f(plateBend, 0)} psi bending over a ${f(overhang, 2)}" overhang past the nut; head side: a ${f(dW, 3)}" washer, ${f(T)} lbf against ${f(headCap)} lbf (end grain of the across layers). D-75 cross-laminated knee: the arm counts only the ACROSS layers (${f(armY.t, 2)}"), the leg only the UPRIGHT layers (${f(legZ.t, 2)}": ${f(Mleg)} lbf·in in plane, ${f(MlegOut)} lbf·in out of plane at the top bolt row, σ ${f(sigLeg, 0)} psi); bolt bearing in the leg ${f(bearLeg, 0)} psi${legEg < 1 ? ' (end grain, C_eg 0.67)' : ''}. Knee arm section just beyond the leg ${f(sec.depth, 2)}" × ${f(sec.h, 2)}": σ ${f(sigK, 0)} psi. The knee bolts into the rail (backed by the glued ${f(g.backer.t, 2)}" doubler), not the 1/4" side panel.`;
   // D-78: removable knees are fitted dry and held by the four bolts alone. The rows above never counted glue or clamp friction (the bolts carry the shear and the pull), so they are the same in both settings.
-  const removableNote = ctx.p.kneeMount === KNEE_MOUNT.removable
-    ? ' Removable knees (D-78): the knee is fitted dry with no epoxy against the rail; no glue or friction was counted in these rows, so the bolts carry everything, and they are assumed to be at their design clamp (retighten them after every refit and after the first outing).'
+  const removableNote = dry
+    ? ` Removable knees (D-78): the knee is fitted DRY with no epoxy against the rail, so the uniform dowel bearing above (which treats the knee, rail and backer as one unit) is not enough: the last detail checks the worst bolt (${f(V)} lbf) as a single-shear dowel between the ${f(k.legT, 2)}" leg and the ${f(g.rail.t + g.backer.t, 2)}" of rail and backer, NDS yield modes wood to wood across the grain, Fe = ${f(dryFem, 0)} psi, ${stainless(ctx.p)} bolt yield ${f(ctx.p.ss316BoltYieldPsi, 0)} psi: Z = ${f(dryZ!.Z / ndsAdjust(ctx.p), 0)} lbf (mode ${dryZ!.mode}) x ${f(ndsAdjust(ctx.p), 2)} (wet, duration, group) = ${f(dryZ!.Z, 0)} lbf. No glue or friction is counted anywhere; the bolts must be tightened to the stated snug-plus-a-quarter-turn each refit and rechecked after the first outing.`
     : '';
   return governing(ds, how + removableNote);
 }

@@ -1535,12 +1535,17 @@ const defs = {
       { value: KNEE_MOUNT.fixed, label: 'Knees stay on (bolted, glued)' },
       { value: KNEE_MOUNT.removable, label: 'Removable knees (bolts, ratchet)' },
     ],
-    note: 'D-78 (Eric): the same four 3/8 in bolts through the knee, rail and backer in both settings, so every strength row is the same. Removable: the knee is fitted DRY (no epoxy against the rail; the four bolts clamp it, and the checks never counted the glue), and a 3/8 in drive ratchet with a 9/16 in socket and a 9/16 in wrench rides in the storage box, so each knee, with its strap and flap, comes off in about 3 minutes and nothing sticks out beside the tires in transport or cargo use. The analysis assumes the bolts are at their design clamp (retighten after every refit). Pins and clamped inserts were rejected (the 3 in lever loads the thin rail and rib).',
+    note: 'D-78 (Eric): the same four 3/8 in bolts through the knee, rail and backer, nuts on the backing plate (bedded in its recess so it stays when the bolts come out). Removable: the knee is fitted DRY (no epoxy against the rail), finished on the bench and bolted on at the hang step, and a 3/8 in drive ratchet with a 9/16 in socket and a 9/16 in wrench rides in the storage box in cargo mode. Each knee, with its strap and flap, comes off in about 5 minutes (longer the first time). Nothing sticks out beside the tires in transport or cargo use. The chock stays tied to the eye on its knee and travels with it. The brake-mount row adds a wood-to-wood bolt check for the dry knee. Pins and clamped inserts were rejected (the 3 in lever loads the thin rail and rib).',
+  },
+  kneeBoltTightenLbIn: {
+    label: 'Knee bolt tightening (removable knees)', group: 'brake', unit: 'lbf·in',
+    default: 60, min: 30, max: 120, step: 5, status: 'assumed', ref: 'D-78',
+    note: 'D-78: snug, then a quarter turn, about 60 lbf in (5 ft lb). More than that crushes the washers and the oak: a hand ratchet easily gives 15 ft lb. Used in the knee, hang and refit steps and the Verify item. Retighten after the first outing; the stainless threads get anti-seize.',
   },
   toolPouchLengthIn: {
     label: 'Tool pouch length (ratchet, socket, wrench)', group: 'brake', unit: 'in',
     default: 9, min: 6, max: 14, step: 0.5, status: 'assumed', ref: 'D-78',
-    note: 'D-78: a 3/8 in drive ratchet with a 9/16 in deep socket and a 9/16 in combination wrench, in a small pouch. About 9 x 3 x 2 in. It rides in the storage box when kneeMount is removable; it is a tool, not sled mass.',
+    note: 'D-78: a 3/8 in drive ratchet with a 9/16 in socket and a 9/16 in combination wrench, in a small pouch. About 9 x 3 x 2 in. It rides in the storage box in CARGO mode only (the knees come off at the truck or in the garage, not at the race); it is a tool, not sled mass.',
   },
   toolPouchWidthIn: {
     label: 'Tool pouch width', group: 'brake', unit: 'in',

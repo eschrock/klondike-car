@@ -11,7 +11,6 @@ import { verifyChecklist } from './verify';
 import { BuildData } from './package';
 
 const make = (spec: number, knee: number): Params => ({ ...defaultParams(), weatherSpec: spec, kneeMount: knee }) as Params;
-const lines = (p: Params): BomLine[] => bom(buildModel(p), p).sections.flatMap((s) => s.lines);
 const stepsOf = (p: Params) => assemblySteps(buildModel(p), p);
 const textOf = (steps: ReturnType<typeof stepsOf>) => steps.map((s) => [s.title, s.goal, ...s.instructions, ...s.checks].join('\n')).join('\n');
 
@@ -27,49 +26,77 @@ describe.each([['Standard', WEATHER_SPEC.standard], ['Extreme', WEATHER_SPEC.ext
     const t = step.instructions.join('\n');
     expect(t).toMatch(/REMOVAL/);
     expect(t).toMatch(/REFIT/);
-    expect(t).toMatch(/Hold each nut on the 2" × 2-1\/2" backing plate with the wrench/);
-    expect(t).toMatch(/Back each of the 4 bolts out with the ratchet and the 9\/16" socket/);
+    expect(t).toMatch(/Work on a hard floor, not in snow/);
+    expect(t).toMatch(/reach in under the deck, behind the rail, between the two crossmembers just ahead of the rear wheel/);
+    expect(t).toMatch(/Angle the wrench handle down/);
+    expect(t).toMatch(/2" × 2-1\/2" backing plate/);
+    expect(t).toMatch(/Hold each nut with the wrench and back the bolt out with the ratchet and the 9\/16" socket/);
     expect(t).toMatch(/Lift the knee off the rail with the flap still on it, as one piece/);
     expect(t).toMatch(/Thread the bolts, washers and nuts back into the knee loosely, so none is lost/);
-    expect(t).toMatch(/unclip the chock cord/);
-    expect(step.goal).toMatch(/About 3 minutes a side/);
+    expect(step.goal).toMatch(/About 5 minutes a side; the first time takes longer/);
+    expect(t).toMatch(/Hang the knee on one bolt first/);
+    expect(t).toMatch(/one person/);
+    expect(t).toMatch(/snug, then a quarter turn \(about 60 in-lb\)/);
+    expect(t).toMatch(/anti-seize/);
     expect(t).toMatch(/dry/);
-    expect(t).toMatch(/firm/);
     expect(t).toMatch(/after the first outing/);
     expect(t).toMatch(/Replace the lock nuts after about five removals/);
-    expect(t).toMatch(/spares ride in the tool pouch/);
     expect(t).toMatch(/Nothing then stands out beside the tires/);
-    // the knees are linked in the step so the 3D model shows them
+    // the chock stays tied: no clip wording, and the chocks do not go to the box in this step
+    expect(textOf(sR)).not.toMatch(/unclip|clip the chock|clip it back|chock cord back on/i);
+    expect(t).toMatch(/Leave the chock tied/);
+    expect(t).not.toMatch(/chocks go in the storage box/);
+    // no app words in the shop text of the removable steps
+    for (const id of ['brake-knee-off', 'brake-knees', 'gear-fit', 'finish-under', 'final-fit']) {
+      expect(sR.find((x) => x.id === id)!.instructions.join('\n'), id).not.toMatch(/viewer|Transport mode|Brakes off/);
+    }
     expect(step.items.some((i) => (i.parts ?? []).includes('brake-knee-L'))).toBe(true);
-    expect(step.tools).toEqual(['3/8" drive ratchet', '9/16" deep socket', '9/16" combination wrench']);
+    expect(step.tools).toEqual(['3/8" drive ratchet', '9/16" socket', '9/16" combination wrench']);
+    expect(t).not.toMatch(/deep socket/);
   });
 
-  it('the knee step seals the faces and fits the knee dry: no glue against the rail', () => {
+  it('the build order: knees fitted dry and drilled early, off after the wheel dry fit, finished on the bench, bolted on at the hang step', () => {
+    const at = (id: string) => sR.findIndex((x) => x.id === id);
+    const txt = (id: string) => sR[at(id)].instructions.join('\n');
     const knees = sR.find((s) => s.id === 'brake-knees')!;
     const t = knees.instructions.join('\n');
-    expect(knees.title).toMatch(/sealed and bolted on dry/);
-    expect(t).toMatch(/Seal the two faces that meet/);
-    expect(t).toMatch(/inboard face of the leg/);
-    expect(t).toMatch(/fit it dry/);
-    expect(t).not.toMatch(/Glue on the leg/);
-    // the other steps never tell the shop to epoxy the knee against the rail
+    expect(knees.title).toBe('Brake knees (and backers), fitted dry while the hull is inverted');
+    expect(knees.tools).toContain('3/8" drive ratchet and 9/16" socket');
+    expect(t).toMatch(/easiest to reach now, while the hull is inverted/);
+    expect(t).toMatch(/Drill each knee through the rail's holes/);
+    expect(t).toMatch(/transfer drill/);
+    expect(t).toMatch(/seal the bolt holes/);
+    expect(t.indexOf("Drill each knee through the rail's holes")).toBeLessThan(t.indexOf('seal the bolt holes'));
+    expect(t).toMatch(/No glue on the leg/);
+    expect(t).not.toMatch(/Seal the two faces/);
+    expect(at('gear-fit')).toBeGreaterThan(at('brake-knees'));
+    expect(txt('gear-fit')).toMatch(/Take the brake knees off too, now that the margin is measured/);
+    expect(txt('finish-under')).toMatch(/rail and chine face where each knee will sit/);
+    expect(txt('finish-under')).not.toMatch(/Brush epoxy into the knee bolt holes/);
+    expect(txt('finish')).toMatch(/the brake knees with their flaps and chocks/);
+    expect(txt('finish')).toMatch(/No finish may run onto the rail/);
+    expect(sR.find((x) => x.id === 'finish')!.items.some((i) => (i.parts ?? []).includes('brake-knee-L'))).toBe(true);
+    expect(txt('hang')).toMatch(/Brake knees, from the bench/);
+    expect(txt('hang')).toMatch(/Hang the knee on one bolt first/);
+    expect(txt('frame')).toMatch(/Bed each plate in thickened epoxy in its recess, with 4 waxed 3\/8" bolts/);
+    expect(sF.find((x) => x.id === 'frame')!.instructions.join('\n')).not.toMatch(/Bed each plate/);
     expect(textOf(sR)).not.toMatch(/epoxy[^.\n]*\b(knee|leg)\b[^.\n]*\bagainst the rail|glue[^.\n]*\bleg\b[^.\n]*\bagainst the rail/i);
-    expect(textOf(sR)).not.toMatch(/leg against the rail and chine outer face; clamp/);
+    expect(textOf(sR)).not.toMatch(/\bfirm\b|design clamp/);
   });
 
   it('the default text is unchanged: the knees are glued, there is no removal step and no ratchet', () => {
     const knees = sF.find((s) => s.id === 'brake-knees')!;
     expect(knees.title).toBe('Brake knees (and backers), glued and bolted while the hull is inverted');
     expect(knees.instructions.join('\n')).toMatch(/Glue on the leg against the rail and chine outer face/);
-    expect(textOf(sF)).not.toMatch(/ratchet|REMOVAL|REFIT|tool pouch/);
+    expect(textOf(sF)).not.toMatch(/ratchet|REMOVAL|REFIT|tool pouch|anti-seize/);
   });
 
-  it('the shop text names no internal ids or param names, and the box text carries the tool pouch', () => {
+  it('the shop text names no internal ids or param names, and the box text carries the tool pouch for cargo use', () => {
     const t = textOf(sR);
     expect(t).not.toMatch(/\bD-\d+\b/);
-    expect(t).not.toMatch(/kneeMount|toolPouch|brake-knee-[LR]\b(?!\})/);
+    expect(t).not.toMatch(/kneeMount|toolPouch|kneeBoltTighten|brake-knee-[LR]\b(?!\})/);
     const fit = sR.find((s) => s.id === 'final-fit')!.instructions.join('\n');
-    expect(fit).toMatch(/Put the tool pouch in the box \(9" × 3" × 2": ratchet, socket and wrench\) with the spare lock nuts/);
+    expect(fit).toMatch(/Keep the tool pouch \(9" × 3" × 2": ratchet, socket and wrench\) with the spare lock nuts and the anti-seize. It rides in the box for cargo use/);
     expect(sF.find((s) => s.id === 'final-fit')!.instructions.join('\n')).not.toMatch(/tool pouch/);
   });
 
@@ -79,31 +106,48 @@ describe.each([['Standard', WEATHER_SPEC.standard], ['Extreme', WEATHER_SPEC.ext
     for (let i = 1; i < sR.length; i++) expect(sR[i].modelStep).toBeGreaterThanOrEqual(sR[i - 1].modelStep);
   });
 
-  it('the BOM adds the tool pouch (an estimate, a tool) and four spare lock nuts; the default does not', () => {
-    const lf = lines(fixed), lr = lines(rm);
-    expect(lf.some((l) => l.key === 'tool-pouch')).toBe(false);
+  it('the BOM adds the tool pouch (an estimate, a TOOL in Purchased parts), anti-seize and spare lock nuts; the default does not', () => {
+    const bf = bom(buildModel(fixed), fixed), br = bom(buildModel(rm), rm);
+    const lf = bf.sections.flatMap((s) => s.lines), lr = br.sections.flatMap((s) => s.lines);
+    expect(lf.some((l) => l.key === 'tool-pouch' || l.key === 'anti-seize')).toBe(false);
     const pouch = lr.find((l) => l.key === 'tool-pouch')!;
+    expect(br.sections.find((s) => s.lines.includes(pouch))!.id).toBe('purchased');
     expect(pouch.basis).toBe('estimate');
-    expect(pouch.description).toMatch(/^TOOL: .*ratchet.*9\/16" deep socket.*9\/16" combination wrench/);
+    expect(pouch.description).toMatch(/^TOOL: .*ratchet.*9\/16" socket.*9\/16" combination wrench/);
+    expect(pouch.description).not.toMatch(/deep/);
     expect(pouch.notes).toMatch(/not part of the sled and not in its weight/);
     expect(pouch.notes).toMatch(/may already own/);
+    const seize = lr.find((l) => l.key === 'anti-seize')!;
+    expect(seize.basis).toBe('estimate');
+    expect(seize.unitUsd).toBe(8);
     const nut = (ls: BomLine[]) => ls.find((l) => /nylon-insert lock nut 3\/8-16/.test(l.key))!;
     expect(nut(lr).key).toMatch(spec === WEATHER_SPEC.standard ? /^18-8/ : /^316/);
-    expect(spec === WEATHER_SPEC.standard ? true : nut(lr).qty - nut(lf).qty).toBe(spec === WEATHER_SPEC.standard ? true : 4);
-    expect(bom(buildModel(rm), rm).totalUsd).toBeGreaterThan(bom(buildModel(fixed), fixed).totalUsd + 29);
-    expect(bom(buildModel(rm), rm).totalUsd).toBeLessThan(bom(buildModel(fixed), fixed).totalUsd + 33);
-    expect(bom(buildModel(rm), rm).unpriced).toEqual([]);
+    // eight spares on top of the 26 the build uses: the stale "26 by the piece" note is restated
+    expect(nut(lr).needed ?? nut(lr).qty).toBe(34);
+    expect(nut(lf).needed ?? nut(lf).qty).toBe(26);
+    expect(JSON.stringify(nut(lr))).not.toMatch(/26 by the piece/);
+    if (spec === WEATHER_SPEC.standard) expect(JSON.stringify(nut(lr))).toMatch(/34 by the piece is 12\.24/);
+    expect(br.totalUsd).toBeGreaterThan(bf.totalUsd + 37);
+    expect(br.totalUsd).toBeLessThan(bf.totalUsd + 43);
+    expect(br.unpriced).toEqual([]);
   });
 
-  it('the verify list gains the refit check (flat seat, bolts after the first outing, chock cord eye, wobble); the default list does not', () => {
+  it('the verify list gains the refit check (flat seat, paper, plate, washers, bolts after the first outing, chock cord eye, wobble); the default list does not', () => {
     const vf = verifyChecklist(buildModel(fixed), fixed), vr = verifyChecklist(buildModel(rm), rm);
     expect(vf.some((c) => c.id === 'brake-knee-refit')).toBe(false);
     expect(vr.length).toBe(vf.length + 1);
     const c = vr.find((q) => q.id === 'brake-knee-refit')!;
     const t = `${c.whatToDo} ${c.pass}`;
-    expect(t).toMatch(/flat on the rail and on the chine band, with no gap/);
-    expect(t).toMatch(/firm after the first outing/);
+    expect(t).toMatch(/flat on the rail and on the chine band/);
+    expect(t).toMatch(/slip of paper/);
+    expect(t).toMatch(/does not enter the joint line/);
+    expect(t).toMatch(/backing plate is still in its recess/);
+    expect(t).toMatch(/No washer is pressed into the oak/);
+    expect(t).toMatch(/snug, then a quarter turn \(about 60 in-lb\)/);
+    expect(t).toMatch(/tight after the first outing/);
     expect(t).toMatch(/chock cord/);
+    expect(t).not.toMatch(/clip/i);
+    expect(t).not.toMatch(/\bfirm\b|design clamp/);
     expect(t).toMatch(/wobble/);
     expect(c.partIds).toEqual(expect.arrayContaining(['brake-knee-L', 'brake-knee-R']));
     expect(vr.map((q) => q.n)).toEqual(vr.map((_q, i) => i + 1));

@@ -158,17 +158,14 @@ export function storagePackCheck(ctx: Ctx): AnalysisCheck {
   const { p, L } = ctx;
   const interior = storageInterior(p, L);
   // Race mode (3c-5): the 10 Essentials AND the wheel chocks ride in the box (the cushions are on the sled, the lamp is on the bow).
-  const gear = boxGear(ctx.parts, p);
-  const chocks = gear.chocks;
-  const tools = gear.tools; // D-78: the ratchet pouch, only with removable knees
-  const r = packEssentials(interior, [...ESSENTIALS, ...chocks, ...tools]);
+  const chocks = boxGear(ctx.parts).chocks; // D-78: the tool pouch rides in the box in cargo mode only (seat-stow row), not here
+  const r = packEssentials(interior, [...ESSENTIALS, ...chocks]);
   const r0 = packEssentials(interior);
-  const rNoTools = tools.length ? packEssentials(interior, [...ESSENTIALS, ...chocks]) : r;
   const chockIn3 = r.rigidIn3 - r0.rigidIn3;
   const lines = ESSENTIALS.map((k) => `${k.qty > 1 ? `${k.qty} × ` : ''}${k.name}${k.dims ? ` ${k.dims.join('×')}"` : ` ${k.softVolIn3} in³ soft`}`).join('; ');
   return singleCheck({
     id: 'storage-pack',
-    label: tools.length ? 'Storage box fits the 10 Essentials kit, the wheel chocks and the tool pouch' : 'Storage box fits the 10 Essentials kit and the wheel chocks',
+    label: 'Storage box fits the 10 Essentials kit and the wheel chocks',
     group: 'Structure',
     value: r.fill,
     unit: '× of interior',
@@ -180,7 +177,6 @@ export function storagePackCheck(ctx: Ctx): AnalysisCheck {
       + `Kit: ${lines}. ${r.rigidPlaced}/${r.rigidTotal} rigid items placed in levels (bounding boxes, flat) = ${f(r.rigidIn3, 0)} in³; soft goods ${f(r.softIn3, 0)} in³ compressed to ${f(r.softCompressedIn3, 0)} in³ into the voids (90% usable). `
       + `Fill = (rigid + soft ÷ 0.9) ÷ interior = ${f(r.fill, 2)}.${r.unplaced.length ? ` Not placed: ${r.unplaced.join(', ')}.` : ''} `
       + (chocks.length ? `Race mode (3c-5) carries the ${chocks[0].qty} wheel chocks too: ${chocks[0].dims!.map((v) => f(v, 1)).join('×')}" each (bounding box, ${f(chockIn3, 0)} in³ together) are inside the numbers above; without them the fill is ${f(r0.fill, 2)}. ` : '')
-      + (tools.length ? `Removable knees (D-78) add the tool pouch for the ratchet, the 9/16" socket and the 9/16" wrench: ${tools[0].dims!.map((v) => f(v, 1)).join('×')}" (a tool, not sled mass, ${f(tools[0].dims!.reduce((a, b) => a * b, 1), 0)} in³) is inside the numbers above; without it the fill is ${f(rNoTools.fill, 2)}. ` : '')
       + (r.fits ? `Margin: ${f((1 - r.fill) * interior.totalIn3, 0)} in³ free. ` : `It does NOT fit. Lightest fix, without making the box bigger: a small printed ASA holder that clips each chock to the outside of the box wall or the rear transom (about 0.1 lb each), or carry the chocks on their cords at the wheels. `),
   });
 }

@@ -232,8 +232,6 @@ export function fastenerBreakdown(parts: Part[]): Record<string, { count: number
   const live = parts.filter((x) => !x.payload && x.id !== 'hardware');
   const byId = new Map(live.map((x) => [x.id, x]));
   for (const part of live) {
-    // D-78: a removable knee is fitted dry, so it has no glue joint to the rail; its inboard face and the rail face get a seal coat of epoxy instead, which weighs what the glue line did (the lump stays the same in both settings).
-    if (part.removable && /^brake-knee-[LR]$/.test(part.id)) add('epoxy joints', 1, FASTENER_LB.glue);
     for (const j of part.joints ?? []) {
       const mate = byId.get(j.to)?.joints?.find((k) => k.to === part.id && k.count === j.count && k.type === j.type);
       if (mate && j.to < part.id) continue; // same physical joint, listed on the other part

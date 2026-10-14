@@ -76,7 +76,9 @@ describe('D-78 the knees are removable only in the removable setting', () => {
     const ps = view(removable);
     const note = (id: string) => ps.find((x) => x.id === id)!.notes ?? '';
     expect(note('brake-chock-L')).toMatch(/rides with its knee/);
-    expect(note('brake-chock-cord-L')).toMatch(/rides with its knee/);
+    expect(note('brake-chock-cord-L')).toMatch(/travels with its knee/);
+    expect(note('brake-chock-cord-L')).not.toMatch(/unclip|clip it back/);
+    expect(note('brake-chock-L')).not.toMatch(/unclip/);
     expect(view(fixed).find((x) => x.id === 'brake-chock-L')!.notes).not.toMatch(/rides with its knee/);
   });
 });
@@ -93,7 +95,17 @@ describe('D-78 dry fit: no epoxy against the rail', () => {
     }
     const notes = view(removable).find((x) => x.id === 'brake-knee-L')!.notes!;
     expect(notes).toMatch(/fitted DRY/);
-    expect(notes).toMatch(/epoxy and finish its inboard face and the rail face/);
+    expect(notes).toMatch(/seal and finish its inboard face on the bench, and the rail face under it with the underside/);
+    expect(notes).not.toMatch(/unclip/);
+  });
+  it('the backing plate is bedded in thickened epoxy in its recess in removable mode (a glue joint to the backer), so it stays when the bolts come out; the default plate is only drilled', () => {
+    const plateGlue = (p: Params) => (view(p).find((x) => x.id === 'brake-backplate-L')!.joints ?? []).filter((j) => j.type === 'glue');
+    expect(plateGlue(fixed)).toHaveLength(0);
+    expect(plateGlue(removable)).toHaveLength(1);
+    expect(plateGlue(removable)[0].to).toBe('brake-backer-L');
+    expect(view(removable).find((x) => x.id === 'brake-backplate-L')!.notes).toMatch(/bed the plate in thickened epoxy/);
+    // not removable, so it is still on the sled in the Transport view
+    expect(ids(removable, TRANSPORT_VIEW)).toContain('brake-backplate-L');
   });
   it('the rail keeps its four bolt holes, and the backer and backing plate are unchanged', () => {
     for (const p of [fixed, removable]) {
@@ -118,6 +130,11 @@ describe('D-78 dry fit: no epoxy against the rail', () => {
 });
 
 describe('D-78 mass', () => {
+  it('the tightening param is 60 lbf-in, snug plus a quarter turn', () => {
+    expect(fixed.kneeBoltTightenLbIn).toBe(60);
+    expect(PARAM_DEFS.kneeBoltTightenLbIn.status).toBe('assumed');
+    expect(PARAM_DEFS.kneeBoltTightenLbIn.note).toMatch(/quarter turn/);
+  });
   it('the empty sled weighs the same in both settings and both weather specs; the Transport mode drop is bigger by the knees, straps and their bolts', () => {
     for (const spec of [WEATHER_SPEC.standard, WEATHER_SPEC.extreme]) {
       const f = { ...fixed, weatherSpec: spec } as Params, r = { ...removable, weatherSpec: spec } as Params;

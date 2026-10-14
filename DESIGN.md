@@ -76,20 +76,23 @@ Two people lift it by the rear transom slot and the bow bulkhead hand-hold (the 
 | BOM total | **$2,303** | **$3,119** |
 
 ### Brake knees (`kneeMount`, D-78)
-Default **Knees stay on (bolted, glued)**: the knee is epoxied to the rail and chine band and held by four 3/8" bolts. Setting **Removable knees (bolts, ratchet)** keeps the same four bolts, washers, nylock nuts, backer and backing plate, so every strength row is the same, and changes only how the knee is fitted:
+Default **Knees stay on (bolted, glued)**: the knee is epoxied to the rail and chine band and held by four 3/8" bolts. Setting **Removable knees (bolts, ratchet)** keeps the same four bolts, washers, nylock nuts and backer, and changes how the knee is fitted:
 
 | | Knees stay on (default) | Removable knees |
 |---|---|---|
-| Knee to rail | epoxy plus four bolts | fitted dry, four bolts clamp it; its inboard face and the rail face are epoxy-sealed first |
-| Comes off with the flap kit (Brakes off, Transport mode) | flaps, pivot blocks and pins, shoes, pads, treads, cords | the same, plus both knees and straps (the chocks stay their own toggle and ride with their knee, whose eye holds the cord) |
+| Knee to rail | epoxy plus four bolts | fitted dry, the four bolts clamp it; no finish bridges the joint |
+| Build order | knees glued and bolted with the hull inverted, finished in place | knees drilled through the rail's holes and fitted dry with the hull inverted for the wheel dry fit, taken off, finished on the bench with the flap kits (the rail patch is finished with the underside), bolted on at the hang step |
+| Backing plate | drilled only | bedded in thickened epoxy in its recess at the frame step, so it stays when the bolts come out |
+| Comes off with the flap kit (Brakes off, Transport mode) | flaps, pivot blocks and pins, shoes, pads, treads, cords | the same, plus both knees and straps; the chock stays its own toggle, stays tied to the eye under its knee and travels with it |
 | Stays on the rail | knees, backers, backing plates | backers, backing plates and four open bolt holes a side |
-| Tools | none | a 3/8" drive ratchet, 9/16" deep socket and 9/16" wrench in a 9" × 3" × 2" pouch in the storage box (a tool, not sled mass), plus four spare lock nuts |
-| Time | flap off in about 15 s a side | knee and flap off in about 3 minutes a side |
-| Empty mass | 121.1 lb | 121.1 lb (identical); the knees and straps add 3.2 lb to the Transport-mode drop and their 8 bolt sets about 0.8 lb more |
-| Storage packing (Standard / Extreme) | 0.87 / 0.88 | 0.90 / 0.91 (marginal in Extreme; the pouch fits in race and cargo mode) |
-| BOM | $2,303 / $3,119 | +$30.00 Standard, +$31.92 Extreme: the tool pouch (an estimate; you may already own one) and four spare lock nuts (free in the Standard pack of 50) |
+| Tools | none | a 3/8" drive ratchet, 9/16" socket and 9/16" wrench in a 9" × 3" × 2" pouch (a tool, not sled mass; in the box in cargo mode only), eight spare lock nuts, anti-seize |
+| Tightening | snug | snug, then a quarter turn, about 60 in-lb (more crushes the washers and the oak); recheck after the first outing |
+| Time | flap off in about 15 s a side | knee and flap off in about 5 minutes a side (longer the first time), lying beside the sled and reaching in under the deck between the two crossmembers just ahead of the rear wheel |
+| Empty mass | 121.1 lb | 121.1 lb (identical); Transport mode drops 4.0 lb more (2 knees and 2 straps 3.2 lb, their 8 bolt sets about 0.8 lb) |
+| Storage packing | 0.87 / 0.88 (Standard / Extreme) | the same in race mode; the pouch lies in the cargo-mode layer (floor-area fill 0.11 to 0.17) |
+| BOM | $2,303 / $3,119 | +$38.00 Standard, +$41.67 Extreme: the tool pouch ($30, an estimate; you may already own one), anti-seize ($8, an estimate) and eight spare lock nuts (free in the Standard pack of 50, +$3.67 in Extreme) |
 
-The analysis never counted the glue or friction at the knee, so the brake-mount row is the same in both settings; it assumes the bolts are at their design clamp (retighten after every refit and after the first outing). Why not pins or clamped inserts: [docs/studies/removable-knee.md](docs/studies/removable-knee.md).
+The analysis is the same in both settings except `brake-mount` (and `brake-abuse`, which reuses it): the glued knee never counted glue or friction, but its uniform dowel bearing treated knee, rail and backer as one unit. For a dry knee the row adds the NDS single-shear yield-mode check of the worst bolt between the 1-3/4" leg and the 1-1/2" of rail and backer, across the grain: Z' about 306 lbf (mode II) against a worst bolt of about 255 lbf, **0.84**, which governs the row and passes. Why not pins or clamped inserts: [docs/studies/removable-knee.md](docs/studies/removable-knee.md).
 
 ### Thin sheet (`thinSheetMaterial`)
 The thin sheet is the side webs, storage box and lid, and sign blanks. The 12 mm deck and seat back are always okoume. The default **follows the weather spec**.
@@ -147,13 +150,13 @@ Everything is a pure function of the parameters.
 
 | Section | What it gives you |
 |---|---|
-| Verify | the checks to make on real parts before ordering (wheel hub, sheet thickness, axle steel, and so on); with removable knees, a refit check (flat seat, bolts after the first outing, chock cord eye, wobble) |
+| Verify | the checks to make on real parts before ordering (wheel hub, sheet thickness, axle steel, and so on); with removable knees, a refit check (flat seat, a slip of paper at the joint, the backing plate in its recess, no washer pressed into the oak, bolts after the first outing, the chock cord eye, wobble) |
 | Cut list | the actual cuts (an edge-glued panel is its boards, then the glue-up), rough sizes rounded up to 1/8", laminate allowances, board yields, a bandsaw resaw check |
 | Nesting | plywood layouts on 4' × 8' sheets; oak board feet |
 | BOM | priced lines with vendor links, quoted vs estimated, Standard vs Extreme; the price research is in docs/price-research/price-research-2026-10.md and docs/price-research/price-research-standard-2026-10.md |
 | Shaper | SVG files for every flat part (outside, inside, pocket, guide conventions) |
 | Forms and drawings | glue-up forms and templates (tiled to Letter pages), and a dimensioned drawing of every non-Shaper part |
-| Assembly | numbered steps with sub-bullets, part chips with dimensions and Show in 3D, and a 3D step-through; with removable knees the knee step seals and bolts the knees on dry and a last step takes them off and puts them back |
+| Assembly | numbered steps with sub-bullets, part chips with dimensions and Show in 3D, and a 3D step-through; with removable knees the knee step fits the knees dry, they are finished on the bench and bolted on at the hang step, and a last step takes them off and puts them back |
 | Finishing | the schedule for the chosen weather spec |
 | Downloads | one zip: Shaper SVGs, forms, drawings, nesting, STLs for the lamp clips, cutlist.csv, bom.csv, a build book (printable HTML) and a README |
 

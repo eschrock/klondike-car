@@ -346,6 +346,8 @@ export const SHOW_RULES: ReadonlyArray<{ re: RegExp; show: number | 'web'; why: 
 
 /** The show fraction of a part, and the rule it came from ('default' when no rule matches). */
 export function showRuleOf(part: Part): { rule: string; show: number | 'web' } {
+  // D-78: a removable knee is a visible outrigger beside the tire, handled and bolted on after the finish: it takes the coats of a visible part.
+  if (part.removable && /^brake-knee-/.test(part.id)) return { rule: 'removable brake knee (visible, handled)', show: 1 };
   const r = SHOW_RULES.find((x) => x.re.test(part.id));
   return r ? { rule: r.re.source, show: r.show } : { rule: 'default', show: 1 };
 }
