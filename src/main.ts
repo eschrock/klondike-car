@@ -1,7 +1,7 @@
 import './style.css';
 import { mountThemeToggle } from './theme';
 import { store } from './state';
-import { derived } from './params';
+import { derived, KNEE_MOUNT } from './params';
 import { buildModel, type ViewState } from './model';
 import { h } from './ui/dom';
 import { Viewer } from './viewer/viewer';
@@ -128,11 +128,17 @@ const addToggle = (key: keyof typeof toggles, label: string, title: string, on: 
   toggles[key] = l.querySelector('input') as HTMLInputElement;
   viewer.addToolbarControl(l);
 };
-const transportCb = checkbox('Transport mode', 'Show the sled as it rides in the truck: the brake flaps, the lights and the wheel chocks off (and the brake knees too, with the Advanced "Removable knees" setting, D-78), the handlebow parked and the seat back flat. The tongue and the signs stay on. This is the same set the Truck fit tab uses (D-65). View only.', false, (v) => {
+const transportCb = checkbox('Transport mode', 'Show the sled as it rides in the truck: the brake flaps, the lights and the wheel chocks off (and the brake knees too, with the "Removable knees" checkbox, D-78), the handlebow parked and the seat back flat. The tongue and the signs stay on. This is the same set the Truck fit tab uses (D-65). View only.', false, (v) => {
   transport = v;
   render();
 });
 viewer.addToolbarControl(transportCb);
+// Removable brake knees (D-78): the same setting as the Advanced "Brake knees" parameter, here beside Transport mode so it is easy to find. A design setting, not a view toggle: it changes the BOM and the build steps too.
+const kneeCb = checkbox('Removable knees', 'Make the brake knees removable with a ratchet and wrench (D-78): the knees and straps then come off with the brake flaps in Transport mode, and the build steps and BOM change to match. The knee itself is the same bolted knee. Same as the Brake knees setting in the Advanced panel.', store.get().kneeMount === KNEE_MOUNT.removable, (v) => {
+  store.set('kneeMount', v ? KNEE_MOUNT.removable : KNEE_MOUNT.fixed);
+});
+const kneeInput = kneeCb.querySelector('input') as HTMLInputElement;
+viewer.addToolbarControl(kneeCb);
 // Cargo mode (D-53, D-57): the seat back flips flat onto the deck and the two cushions lie in the storage box. View only; with "Show rider & cargo" on, the payload block shows on the bed.
 addToggle('seat', 'Seat flat', 'Flip the seat back forward onto the deck and lay the seat cushion and the back pad flat inside the storage box, leaving a flat cargo bed (D-57). With "Show rider & cargo" on, the cargo payload sits on the bed. View only.', (v) => {
   view.seat = v ? 'stowed' : 'installed';
@@ -142,7 +148,7 @@ addToggle('handle', 'Handle parked', 'Drop the rear handlebow to its second pin 
   view.handle = v ? 'parked' : 'up';
 });
 // Removable kits (D-65): the brake flaps (the knees and backers stay on the rails unless the knees are set removable, D-78) and the lights.
-addToggle('brakes', 'Brakes', 'Show the removable brake parts: the flaps, pivot blocks and pins, shoe blocks and pads, foot treads and return cords. Off hides them. The knees and backers stay bolted on, unless the Advanced setting "Brake knees" is "Removable knees (bolts, ratchet)" (D-78): then the knees and their straps come off with the flaps (taken off with a ratchet and wrench); the backers, backing plates and the four bolt holes in each rail stay. View only.', (v) => {
+addToggle('brakes', 'Brakes', 'Show the removable brake parts: the flaps, pivot blocks and pins, shoe blocks and pads, foot treads and return cords. Off hides them. The knees and backers stay bolted on, unless "Removable knees" is ticked. View only.', (v) => {
   view.brakes = v;
 });
 addToggle('lights', 'Lights', 'Show the front lamp and its clip and the rear light and its clip. Off hides them. View only.', (v) => {
@@ -386,6 +392,7 @@ sim = mountSimPanel(right.panelHost('simulation'), {
   restoreView: () => render(),
 });
 store.subscribe(() => {
+  kneeInput.checked = store.get().kneeMount === KNEE_MOUNT.removable; // follows the Advanced dropdown, a pasted link and Reset
   sim?.paramsChanged();
   render();
 });

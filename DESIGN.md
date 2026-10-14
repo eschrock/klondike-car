@@ -76,7 +76,7 @@ Two people lift it by the rear transom slot and the bow bulkhead hand-hold (the 
 | BOM total | **$2,303** | **$3,119** |
 
 ### Brake knees (`kneeMount`, D-78)
-Default **Knees stay on (bolted, glued)**: the knee is epoxied to the rail and chine band and held by four 3/8" bolts. Setting **Removable knees (bolts, ratchet)** keeps the same four bolts, washers, nylock nuts and backer, and changes how the knee is fitted:
+Default **Knees stay on (bolted, glued)**: the knee is epoxied to the rail and chine band and held by four 3/8" bolts. Setting **Removable knees (bolts, ratchet)** (a checkbox in the viewer toolbar beside Transport mode, and the Brake knees dropdown in Advanced) keeps the same four bolts, washers, nylock nuts and backer, and changes how the knee is fitted:
 
 | | Knees stay on (default) | Removable knees |
 |---|---|---|
