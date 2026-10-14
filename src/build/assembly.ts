@@ -2101,11 +2101,13 @@ const TEMPLATES: Template[] = [
   },
   {
     id: 'side-holes',
-    title: 'Drill the D-ring and grab-board holes (before the finish)',
+    title: 'Drill the D-ring holes and fit the grab boards (before the finish)',
     kind: 'process',
     steps: [STEP.seatStorage],
     view: 'side',
-    tools: ['drill', 'drill press', 'clamps', 'scrap blocks', 'small brush'],
+    tools: ['drill', 'drill press', 'cobalt bit', 'hex keys', 'wrenches', 'clamps', 'scrap blocks', 'small brush'],
+    hardener: '556',
+    glueLine: 'Epoxy: no load on the grab boards until cured',
     build: (c) => {
       const p = c.p, L = computeLayout(p);
       const lashIds = c.parts.filter((x) => /^lash-/.test(x.id)).map((x) => x.id);
@@ -2115,7 +2117,7 @@ const TEMPLATES: Template[] = [
       const web0 = c.by('side-L-web') ? worldAABB(c.by('side-L-web')!).min[0] : L.xSideStart;
       const gripPlace = c.by('seat-grip-L') ? (() => { const b = worldAABB(c.by('seat-grip-L')!); return { from: near16(b.min[0] - web0), to: near16(b.max[0] - web0) }; })() : undefined;
       return {
-        goal: 'Drill the D-ring and grab-board holes through the sides now, while every face is bare.',
+        goal: 'Drill the D-ring holes through the sides now, and fit the grab boards for good, while every face is bare.',
         items: [
           I('Wait until the ribs and knees have cured (the next day). Nothing here is drilled through a finished face.'),
           ...(lashIds.length ? [I(`D-ring brackets: ${tl(lashIds)}.`, [
@@ -2125,14 +2127,17 @@ const TEMPLATES: Template[] = [
             'Brush epoxy into each hole to seal the plies of the web, let it cure, then run the bit through again so the bolts slide in.',
             'Number each bracket to its rib. They are bolted on after the finish (final fit step).',
           ], lashIds)] : []),
-          ...(gripIds.length ? [I(`Grab boards: ${tl(gripIds)}.`, [
+          ...(gripIds.length ? [I(`Grab boards: ${tl(gripIds)}, with their strips and caps (${tl(gripBack)}). They go on for good now, before the finish.`, [
             gripPlace ? `Each board lies on the inner gunwale band, from ${gripPlace.from} to ${gripPlace.to} from the rear end of the side.` : 'Each board lies on the inner gunwale band at its place on the drawing.',
-            `Dry-fit each stainless strip in the pocket on the back of its oak cap and mark the pair so they go back together the same way. Clamp each board in place with its cap and strip${gripBack.length ? ` (${tl(gripBack)})` : ''} on the outside face, and drill through the board, the inner band, the web, the outer band and the strip with one 9/32" bit, square to the side. The 9/16" holes in the cap were routed on the Shaper first, so the bit passes through them. The five hole positions are on the board and band drawings: three in an upper row ${fractionText(GRIP_BOLT_ROWS_IN[0], 16)}" below the gunwale top and two in a lower row ${fractionText(GRIP_BOLT_ROWS_IN[1], 16)}" below it, between the upper ones. Use a cobalt bit and cutting oil for the stainless.`,
-            'Brush epoxy into the holes in the web, let it cure, and run the bit through again.',
-            'Number each board, strip and cap to its side. The boards and caps are finished on the bench and bolted on after the finish (final fit step).',
+            `Drill: clamp each board in place with its stainless strip on the outside face and drill through the board, the inner band, the web, the outer band and the strip with one 9/32" bit, square to the side. The five hole positions are on the board and band drawings: three in an upper row ${fractionText(GRIP_BOLT_ROWS_IN[0], 16)}" below the gunwale top and two in a lower row ${fractionText(GRIP_BOLT_ROWS_IN[1], 16)}" below it, between the upper ones. Use a cobalt bit and cutting oil for the stainless. Mark the strip and board to their side.`,
+            'Seal: take everything apart. Brush epoxy into the holes in the web and onto the back of each board and the band face under it. Leave the outer band face bare where the strip and cap will sit, so the glue bites.',
+            'Strip: epoxy each strip to the outer band, holes lined up (push a 9/32" rod through each hole while it cures).',
+            'Bolt: set each board, push the screws through from the outside, and tighten the nylock nuts (1-1/2" fender washers under the upper three, 7/8" under the lower two). The heads sit on the strip. Nothing can be tightened after the cap is on, so check every nut.',
+            'Cap: dry-fit each oak cap over the strip and the heads (its recesses fit over them), then epoxy it to the outer band, clamp it with a caul on its face, and wipe off the squeeze-out. Keep the heads\' hex sockets clear.',
+            'No load on a board until the epoxy has cured.',
           ], [...gripIds, ...gripBack])] : []),
         ],
-        checks: ['D-ring and grab-board holes drilled square, with no tear-out on the outside face', 'Every bracket, board, strip and cap numbered to its place'],
+        checks: ['D-ring holes drilled square, with no tear-out on the outside face', 'Every bracket numbered to its rib', 'Each grab board tight against the band, each cap tight to the band with no gap at its ends'],
       };
     },
   },
@@ -2499,15 +2504,15 @@ const TEMPLATES: Template[] = [
           std
             ? I('Show faces: no stain. Raise the grain once, then the clear urethane, once the offcut panel passed.', ['The deck underside, the end grain and the uncaptured ply edges were epoxied at assembly.'])
             : I('Show faces: stained first, then epoxy-sealed, once the offcut panel passed.', ['The dados, edges and hidden faces were sealed at assembly. Water-based dye under the epoxy is the safe route.']),
-          I(isRemovable(c.p) ? 'Finish the removable kits on the bench: the brake knees with their flaps and chocks, the handle U, the signs and the grab boards.' : 'Finish the removable kits on the bench: the brake flaps and chocks, the handle U, the signs and the grab boards.', [
-            'The tongue is NOT removable: it stays bolted on and is finished in place.',
+          I(isRemovable(c.p) ? 'Finish the removable kits on the bench: the brake knees with their flaps and chocks, the handle U and the signs.' : 'Finish the removable kits on the bench: the brake flaps and chocks, the handle U and the signs.', [
+            'The tongue and the grab boards (with their caps) are NOT removable: they stay on and are finished in place, with the screw nuts and washers masked.',
             'Plug or mask the pivot bores, bolt seats and sockets.',
             'Grab boards: epoxy each stainless strip into the 1/8" pocket on the back of its oak cap, with the screw holes lined up (push a 9/32" rod or waxed screw through each pair of holes while the epoxy cures) and the strip flush with the cap\'s back. Let it cure before you finish the cap with the board. Keep finish off the strip\'s back, which beds on the band.',
             ...(isRemovable(c.p) ? [
               'Take the strap off each knee (its 4 screws) and finish the knee all over: every face, the inboard face against the rail too, with epoxy and the topcoats, and the strap\'s seat. Keep the four bolt holes open, and keep finish out of the pin hole and the strap pilots.',
               'No finish may run onto the rail: the knee is bolted on dry at the hang step.',
             ] : []),
-          ], ['brake-flap-L', 'brake-flap-R', 'handle-bar', 'sign-L', 'sign-R', 'bridle-tongue', 'seat-grip-L', 'seat-grip-R', 'seat-grip-cap-L', 'seat-grip-cap-R', ...(isRemovable(c.p) ? ['brake-knee-L', 'brake-knee-R'] : [])]),
+          ], ['brake-flap-L', 'brake-flap-R', 'handle-bar', 'sign-L', 'sign-R', 'bridle-tongue', ...(isRemovable(c.p) ? ['brake-knee-L', 'brake-knee-R'] : [])]),
           I('No hardware on the sled: axles, wheels, plates, eye bolts, hinges, handle sockets and brake pins go on after the varnish cures (next step).'),
         ],
         checks: [
@@ -2582,32 +2587,24 @@ const TEMPLATES: Template[] = [
   },
   {
     id: 'final-fit',
-    title: 'Final fit: grab boards, signs, hardware, lights, reflectors',
+    title: 'Final fit: signs, hardware, lights, reflectors',
     kind: 'build',
     steps: [STEP.finish],
     view: 'iso',
     tools: ['drill', 'hex keys', 'wrenches', 'screwdrivers', 'heat-set insert tip', 'sealant gun'],
     hardener: '556',
-    glueLine: 'Epoxy or polysulfide bedding: no load on the grab boards until cured',
+    glueLine: 'Polysulfide bedding on the hardware: let it cure before use',
     build: (c) => {
       const rest = c.mine.filter((x) => x.id !== 'hardware');
       const ids = (re: RegExp): string[] => rest.filter((x) => re.test(x.id)).map((x) => x.id);
-      const grip = feat(c, 'side-L-gunwale-in', 'hole', (q) => (q.to ?? []).some((t) => /seat-grip/.test(t)));
       const stay = c.parts.find((x) => x.id === 'storage-lid-stay');
       const nipples = c.parts.some((x) => /^storage-drain-/.test(x.id));
-      // The grab boards and D-rings are fitted and drilled at the side ribs step (so no hole is drilled through a finished face); here they are only bolted on.
+      // The D-rings are drilled at the side-holes step (so no hole is drilled through a finished face); here they are only bolted on. The grab boards were fitted for good at that step.
       const every = (re: RegExp): string[] => c.parts.filter((x) => re.test(x.id)).map((x) => x.id);
-      const gm = /([\d\/-]+)" × ([\d\/-]+)" bolts/.exec(grip?.purpose ?? '');
-      const gripScrews = `${grip?.count ?? ''} ${grip?.count ? '× ' : ''}${gm ? `${gm[1]}" × ${gm[2]}"` : 'stainless'} button-head cap screws`.trim();
       const lash = lashBoltLength(c.p);
       return {
-        goal: 'Bolt on the last fittings: grab boards, signs, storage hardware, D-rings, lights and reflectors.',
+        goal: 'Bolt on the last fittings: signs, storage hardware, D-rings, lights and reflectors.',
         items: [
-          I(`Bolt on the grab boards: ${tl(every(/^seat-grip-[LR]$/))}.`, [
-            I(`${gripScrews} each, through board, inner band, web, outer band and the stainless strip in its oak cap (${tl(every(/^seat-grip-(backing|cap)/))}, bedded on the outside).`),
-            'The holes were drilled at [[step:side-holes]], before the finish: bed the cap and strip in sealant, set the board, push the screws through. The screw heads sit in the holes in the cap.',
-            'Nylock nut and fender washer inside: 1-1/2" on the upper three, 7/8" on the lower two. Bolted, never glued.',
-          ]),
           I(`Hang the signs (${tl(ids(/^sign-[LR]$/))}): 4 thumb-knob screws each (${knobText(c)}).`, ['Through the 3/16" holes, the standoff discs (epoxied to the sign back) and the web, into the inserts.']),
           I('Storage hardware.', [
             'Gaskets: continuous EPDM bulb, spliced at one corner.',

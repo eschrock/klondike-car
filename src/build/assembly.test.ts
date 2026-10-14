@@ -240,7 +240,7 @@ describe('build review round 1: finish after hardware (MUST-1)', () => {
     for (const id of ['bridle-tongue', 'bridle-sleeve', 'beam-R', 'beam-F', 'kingpin', 'beam-hold-down-L', 'brake-flap-L', 'handle-bar', 'brake-knee-L']) expect(hang.partIds, id).not.toContain(id);
     for (const x of hardware) expect(['purchased', 'metal', 'printed'], x.id).toContain(x.kind);
     const fin = get('finish').instructions.join(' ');
-    expect(fin).toMatch(/tongue is NOT removable/);
+    expect(fin).toMatch(/tongue and the grab boards \(with their caps\) are NOT removable/);
     expect(fin).not.toMatch(/\(brake flaps, handle, signs, tongue\)/);
     expect(get('tongue').instructions.join(' ')).toMatch(/not removable/);
   });
@@ -1023,7 +1023,7 @@ describe('D-76: side ribs, knees and box ties (tie-down bases)', () => {
       expect(box).toMatch(/never glued to the lid frame/);
       // D-ring and grab-board holes are drilled at the rib step, before any finish, with the bracket as the template and a scrap block outside; the final fit only bolts
       const rib = txt(get('side-holes'));
-      expect(get('side-holes').title).toBe('Drill the D-ring and grab-board holes (before the finish)');
+      expect(get('side-holes').title).toBe('Drill the D-ring holes and fit the grab boards (before the finish)');
       expect(txt(get('side-ribs'))).not.toMatch(/Grab boards:|scrap block/);
       expect(list.map((q) => q.id).indexOf('side-holes')).toBe(list.map((q) => q.id).indexOf('side-ribs') + 1);
       expect(rib).toMatch(/Hold each bracket on the inner face of its rib head[^\n]*The bracket is the template/);

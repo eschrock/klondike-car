@@ -91,7 +91,7 @@ describe('D-66 the numbers that moved', () => {
   it('cargo: the load-height rule is 10 in; the 200 lb cargo tips at 40.7 deg (D-67 limit 35: a plain pass, it was marginal at the D-66 limit of 40), the capacity is 223 lb (D-71: 274 lb with the 3/4 in axle) and the rear axle-stress row limits it (D-66 had it at 226 lb on the tip row; the front beam at 269 lb before)', () => {
     expect(defaults.cargoCgHeightIn).toBe(10);
     const tip = row('tip-straight');
-    expect(tip.cases!.cargo!.value).toBeCloseTo(40.88, 1); // D-76: 40.88 (the ribs, 0.96 lb, mostly low and forward); 40.8 after D-74 (the 1.3 lb lighter sled) // unchanged by D-67: the limit moved, not the sled (40.65 before D-71: the 0.36 lb heavier sled; 40.9 with the D-72/D-73 4.7 lb heavier sled)
+    expect(tip.cases!.cargo!.value).toBeCloseTo(40.93, 1); // D-84: 40.93 (the 1/2 in grab-board caps); D-76: 40.88 (the ribs, 0.96 lb, mostly low and forward); 40.8 after D-74 (the 1.3 lb lighter sled) // unchanged by D-67: the limit moved, not the sled (40.65 before D-71: the 0.36 lb heavier sled; 40.9 with the D-72/D-73 4.7 lb heavier sled)
     expect(tip.cases!.cargo!.limit).toBe(35);
     expect(tip.cases!.cargo!.value).toBeGreaterThan(35 * 1.1); // outside the 10% marginal band (38.5)
     expect(tip.statusCargo).toBe('pass'); // marginal at the 40 deg limit
