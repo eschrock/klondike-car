@@ -359,6 +359,7 @@ export const NOTE_PRICE: Record<string, Price> = {
   edgeBanding: est(14, 'roll', 'Woodworking store', 'pre-glued white oak veneer edge banding, 3/4" wide, 25 ft roll (iron on, flush trim)'),
   sealant: found(27, 'ea', 'Flecks Marine', 'https://flecksmarine.com/products/boatlife-life-calk-cartridge-white-1033', 'BoatLIFE Life-Calk 1033 polysulfide marine sealant, 10.6 oz cartridge (bedding aluminum, steel and the gasket splice); polyurethane 3M 5200 is not polysulfide', true),
   contactCement: est(14, 'ea', 'Hardware store', 'contact cement, pint (brake pads and treads, veneer banding)'),
+  toolPouch: est(30, 'ea', 'Hardware store', 'a small tool pouch with a 3/8" drive ratchet, a 9/16" deep socket and a 9/16" combination wrench (a basic set; you may already own one)'),
 };
 /** 729 glass tape, 2" wide, sold in 10 ft rolls: the 15 ft a sled needs is two rolls. */
 export const GLASS_TAPE: Price = foundPack(10, 14.88, 'ft', 'Powerboat Supply', 'https://powerboatsupply.com/boat-supplies-accessories/paint-maintenance/west-system-products/west-system-9oz-glass-tape-2-x-10-72910', 'West System 729-10 woven E-glass tape 9 oz, 2" x 10 ft roll (the 50 yd roll is $81.38 on the 2024 list)', true, '10 ft roll');

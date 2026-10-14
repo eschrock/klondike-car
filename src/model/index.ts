@@ -49,7 +49,7 @@ export function buildModel(input: Params, view: ViewState = {}): Part[] {
   applySteerPose(ctx, parts); // the front axle turned about the kingpin (D-56); after the joinery so every joint location stays in the part's own frame
   if (ctx.view.seat === 'stowed') applySeatStow(ctx.p, ctx.L, parts); // cargo mode (D-53): the seat kit lies flat in the storage box
   const v = ctx.view;
-  const out = parts.filter((x) => !(v.removed && x.removable) && !(!v.brakes && isBrakeKit(x)) && !(!v.lights && isLightKit(x)) && !(!v.chocks && isChockKit(x)));
+  const out = parts.filter((x) => !(v.removed && x.removable) && !(!v.brakes && isBrakeKit(x, ctx.p)) && !(!v.lights && isLightKit(x)) && !(!v.chocks && isChockKit(x)));
   applyHardwareMass(out); // the fastener remainder, from the joints of the parts actually present
   applyFinish(out, ctx.p); // display finishing for the viewer (D-44): cosmetic, never read by the analysis
   for (const x of out) if (x.explode) x.explode = unitDir(x.explode)!; // the exploded view moves a part along a UNIT direction; builders pass rough directions

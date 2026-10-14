@@ -128,7 +128,7 @@ const addToggle = (key: keyof typeof toggles, label: string, title: string, on: 
   toggles[key] = l.querySelector('input') as HTMLInputElement;
   viewer.addToolbarControl(l);
 };
-const transportCb = checkbox('Transport mode', 'Show the sled as it rides in the truck: the brake flaps, the lights and the wheel chocks off, the handlebow parked and the seat back flat. The tongue and the signs stay on. This is the same set the Truck fit tab uses (D-65). View only.', false, (v) => {
+const transportCb = checkbox('Transport mode', 'Show the sled as it rides in the truck: the brake flaps, the lights and the wheel chocks off (and the brake knees too, with the Advanced "Removable knees" setting, D-78), the handlebow parked and the seat back flat. The tongue and the signs stay on. This is the same set the Truck fit tab uses (D-65). View only.', false, (v) => {
   transport = v;
   render();
 });
@@ -141,8 +141,8 @@ addToggle('seat', 'Seat flat', 'Flip the seat back forward onto the deck and lay
 addToggle('handle', 'Handle parked', 'Drop the rear handlebow to its second pin position, resting just above the rear side top, as when it is not being pushed (D-57). View only.', (v) => {
   view.handle = v ? 'parked' : 'up';
 });
-// Removable kits (D-65): the brake flaps (the knees and backers stay on the rails) and the lights.
-addToggle('brakes', 'Brakes', 'Show the removable brake parts: the flaps, pivot blocks and pins, shoe blocks and pads, foot treads and return cords. Off hides them (the knees and backers stay bolted on). View only.', (v) => {
+// Removable kits (D-65): the brake flaps (the knees and backers stay on the rails unless the knees are set removable, D-78) and the lights.
+addToggle('brakes', 'Brakes', 'Show the removable brake parts: the flaps, pivot blocks and pins, shoe blocks and pads, foot treads and return cords. Off hides them. The knees and backers stay bolted on, unless the Advanced setting "Brake knees" is "Removable knees (bolts, ratchet)" (D-78): then the knees and their straps come off with the flaps (taken off with a ratchet and wrench); the backers, backing plates and the four bolt holes in each rail stay. View only.', (v) => {
   view.brakes = v;
 });
 addToggle('lights', 'Lights', 'Show the front lamp and its clip and the rear light and its clip. Off hides them. View only.', (v) => {

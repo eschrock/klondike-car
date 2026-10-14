@@ -8,7 +8,7 @@
  *
  * Also holds the 10 Essentials kit list (D-19) and a simple packing check against the interior.
  */
-import { STORAGE_LOCATION, thinSheet, type Params } from '../params';
+import { KNEE_MOUNT, STORAGE_LOCATION, thinSheet, type Params } from '../params';
 import { localPoint, pickWoodScrew, SCREW_DIA_IN, screwText } from './rear-mount';
 import { STEP, box, cylinder, frac16 as frac, span, SIDES, type Ctx, stainless } from './build-utils';
 import { localBounds, worldAABB } from './bounds';
@@ -108,12 +108,12 @@ export const ESSENTIALS: readonly KitItem[] = [
 ];
 
 /**
- * Loose gear that also rides in the box (3c-5, D-65), from the real part bounding boxes (the lamps and their clips are boxy; a wedge chock's bounding box over-covers it, which is conservative):
+ * Loose gear that also rides in the box (3c-5, D-65), from the real part bounding boxes (the lamps and their clips are boxy; a wedge chock's bounding box over-covers it, which is conservative; `tools` is the D-78 tool pouch, present only with removable knees):
  * the front headlight and its printed clip and the rear tail light and its clip (they come off to lift the ends, and ride in the box in cargo mode), and the wheel chocks (2 when the design has 2;
  * both modes). `flaps` is an OPTION, not part of the default stow (D-65): the two removed brake flaps, each with its shoe block, pad, pivot block and foot tread still on (what lifts off as
  * one piece when the pin is pulled), as one bounding box each.
  */
-export function boxGear(parts: Part[]): { lamp: KitItem[]; chocks: KitItem[]; flaps: KitItem[] } {
+export function boxGear(parts: Part[], p?: Pick<Params, 'kneeMount' | 'toolPouchLengthIn' | 'toolPouchWidthIn' | 'toolPouchHeightIn'>): { lamp: KitItem[]; chocks: KitItem[]; flaps: KitItem[]; tools: KitItem[] } {
   const dimsOf = (x: Part): [number, number, number] => {
     const b = localBounds(x.geometry);
     return [b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]];
@@ -139,8 +139,17 @@ export function boxGear(parts: Part[]): { lamp: KitItem[]; chocks: KitItem[]; fl
       ...one('front-light', 'Front LED headlight', 'Lighting'), ...one('lamp-clip', 'Lamp clip', 'Lighting'),
       ...one('rear-light', 'Rear LED tail light', 'Lighting'), ...one('rear-lamp-clip', 'Rear lamp clip', 'Lighting'),
     ],
-    chocks, flaps,
+    chocks, flaps, tools: toolPouch(p),
   };
+}
+
+/**
+ * D-78: with removable knees the box carries the tool pouch (a 3/8" drive ratchet, a 9/16" deep socket and a 9/16" combination wrench) as one rigid item. It is a TOOL, not sled mass
+ * (like the Essentials), so it has no part and no weight in the model. Empty with the default fixed knees.
+ */
+export function toolPouch(p?: Pick<Params, 'kneeMount' | 'toolPouchLengthIn' | 'toolPouchWidthIn' | 'toolPouchHeightIn'>): KitItem[] {
+  if (!p || p.kneeMount !== KNEE_MOUNT.removable) return [];
+  return [{ name: 'Tool pouch (ratchet, socket, wrench)', qty: 1, dims: [p.toolPouchLengthIn, p.toolPouchWidthIn, p.toolPouchHeightIn], essential: 'Tools' }];
 }
 
 export interface Interior {

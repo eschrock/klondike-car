@@ -16,7 +16,7 @@ export interface ViewState {
   cargo?: boolean;
   /** Transport configuration: omit `removable` parts. */
   removed?: boolean;
-  /** The brake flap kit (flaps, pivot blocks, pins, clips, shoe blocks, pads, foot treads, cords, snap hooks) is on the sled. Default true; false hides it (the knees and backers stay), D-65. */
+  /** The brake flap kit (flaps, pivot blocks, pins, clips, shoe blocks, pads, foot treads, cords, snap hooks) is on the sled. Default true; false hides it (the knees and backers stay, unless the knees are set removable: then the knees and straps hide too, D-78), D-65. */
   brakes?: boolean;
   /** The lights (front lamp and clip, rear light and clip) are on the sled. Default true, D-65. */
   lights?: boolean;

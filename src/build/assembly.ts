@@ -32,7 +32,7 @@
 import { HULL_STEP, STEP } from '../model/build-utils';
 import { computeLayout, outerHalfWidth, samples, sideTopAt } from '../model/layout';
 import type { AssemblyStep, Joint, Part } from '../model/types';
-import { axleGrooveDepthIn, bowTaper, thinSheet, WEATHER_SPEC, type Params } from '../params';
+import { axleGrooveDepthIn, bowTaper, KNEE_MOUNT, thinSheet, WEATHER_SPEC, type Params } from '../params';
 import { screwText } from '../model/rear-mount';
 import { boxTieGeometry, kneeScrews, lashBoltLength, sideRibStations, KNEE_SCREW_SEAT_IN, LASH_BOLT_DIA_IN, LASH_HOLE_DX_IN, LASH_HOLE_DZ_IN, LASH_BOLTS, LASH_WASHER } from '../model/side-ribs';
 import { transformPoint, worldAABB } from '../model/bounds';
@@ -197,6 +197,8 @@ interface Template {
   /** The glue line, when the step glues with something other than epoxy / Titebond (sealant, contact cement). */
   glueLine?: string;
   build: (c: StepCtx) => Built;
+  /** A different title for a setting of the design (the brake knees step, D-78). */
+  retitle?: (p: Params) => string | undefined;
 }
 
 // ---- helpers ----
@@ -1433,6 +1435,7 @@ const TEMPLATES: Template[] = [
   {
     id: 'brake-knees',
     title: 'Brake knees (and backers), glued and bolted while the hull is inverted',
+    retitle: (p) => (p.kneeMount === KNEE_MOUNT.removable ? 'Brake knees (and backers), sealed and bolted on dry while the hull is inverted' : undefined),
     kind: 'build',
     steps: [STEP.brake],
     at: STEP.gear,
@@ -1452,11 +1455,13 @@ const TEMPLATES: Template[] = [
       const intoFront = Math.max(0, pkv.slotEndX - pkn.layers[pkn.layers.length - 1].x0);
       const cornerPts = corner ? (corner.positions ?? []).flatMap((t) => [...t.matchAll(new RegExp(`(${FR})" from the outboard edge, (${FR})" from the top end`, 'g'))].map((m) => [m[1], m[2]])) : [];
       const ang = corner?.angleDeg !== undefined ? String(corner.angleDeg) : undefined;
+      const rm = c.p.kneeMount === KNEE_MOUNT.removable; // removable knees: fitted dry, taken off with a ratchet and wrench
+      const legH = pkn.zLeg - pkn.zBot;
       return {
-        goal: 'Glue and bolt the brake knees to the rails now, while the hull is upside down.',
+        goal: rm ? 'Seal the faces, then bolt the brake knees to the rails dry (no glue) now, while the hull is upside down.' : 'Glue and bolt the brake knees to the rails now, while the hull is upside down.',
         items: [
           I('Do it now, not after the flip.', [
-            'The knee legs are glued to bare oak: glue will not bond to varnish.',
+            rm ? 'The knees go on dry, held only by their bolts, so the sealed faces are what keeps water out of the joint.' : 'The knee legs are glued to bare oak: glue will not bond to varnish.',
             'The nylock nuts sit on the stainless backing plates under the deck, reachable only while the hull is inverted.',
           ]),
           backers.length
@@ -1475,15 +1480,23 @@ const TEMPLATES: Template[] = [
             `Recess the pocket about ${fractionText(Math.round(intoFront * 16) / 16, 16)}" into the front layer, so it ends ${fin(pocketDeep)} from the rear face: router with a straight bit, or chisel. It is the same ${fin(pocketW)} wide and ${fin(pocketH)} high as the notch, open at the rear face and the outboard edge.`,
             'The 3/8" pin hole waits: it is drilled with the stainless strap on and the flap tongue clamped in the pocket (flap step).',
           ]),
+          ...(rm ? [I('Seal the two faces that meet, before the knees go on.', [
+            `On each knee: the inboard face of the leg, the face that lies against the rail (about ${fin(pkn.x1 - pkn.x0)} wide and ${fin(legH)} high).`,
+            `On each rail: the outer face of the rail and the chine band where the leg lands. Hold the knee on with its four holes over the rail's holes, pencil round the leg, and seal the face inside the line, up the ${fin(legH)} of the leg from the rail bottom.`,
+            'One saturation coat of epoxy on each face. Let it cure, then sand it lightly (220) and wipe it clean.',
+            'Keep the bolt holes open: run the drill through them again if epoxy has crept in.',
+          ], knees)] : []),
           I('Bolt each knee: 4 × 3/8" × 4" bolts, 2 columns × 2 rows, through the knee leg and the rail into the backer.', [
             bolts ? `Holes in the knee, ${holeText(bolts)}.` : SEE_ITEM,
             `Heads with a ${fin(c.p.brakeMountWasherOdIn)} washer under each on the outer face of the knee leg (no counterbore); nylock nuts on the backing plate set in the backer, under the deck.`,
             'Check each plate lies flush in its recess and its 4 holes line up before the bolts go in.',
-            'Glue on the leg against the rail and chine outer face; clamp, bolt, wipe the squeeze-out.',
+            rm ? 'No glue on the leg: fit it dry against the sealed rail and chine face, with the four bolts and washers, and the nuts on the backing plate. Tighten them firm, a little at a time in turn, with the ratchet and the wrench.' : 'Glue on the leg against the rail and chine outer face; clamp, bolt, wipe the squeeze-out.',
           ], ['rail-L', 'rail-R']),
-          I('Leave the knees 24 h before the wheel dry fit (next step) loads them.'),
+          ...(rm ? [I('Mark the knee to its side and rail with tape (L or R, and the bolt order), so each goes back where it came from.')] : [I('Leave the knees 24 h before the wheel dry fit (next step) loads them.')]),
         ],
-        checks: ['Knee tops level with each other', 'Knee clears the tire front by the designed margin (check at the wheel dry fit)', 'Every nylock on and snug; nothing on the knees varnished yet'],
+        checks: rm
+          ? ['Knee tops level with each other', 'Knee clears the tire front by the designed margin (check at the wheel dry fit)', 'Each knee seats flat on the rail and the chine band with no gap', 'Every nylock on and firm; only the seal coat on the knees so far']
+          : ['Knee tops level with each other', 'Knee clears the tire front by the designed margin (check at the wheel dry fit)', 'Every nylock on and snug; nothing on the knees varnished yet'],
       };
     },
   },
@@ -1905,7 +1918,10 @@ const TEMPLATES: Template[] = [
             'Oak wedge, its ramp at 28° to meet the tire; two stainless screw heads left proud in the base.',
             `30" cord to a screw eye under the knee${eye ? `: pilot ${holeText(eye)}` : ''}.`,
           ]),
-          I('Removable: clip off (it sits outboard of the strap), pin out, cord unhooked, flap lifted off, about 15 s a side.', ['The strap stays on the knee.', 'Finish the flap kit on the bench; the pin, clip, cord, snap hook, pad and tread stay off until the hang step.']),
+          I('Removable: clip off (it sits outboard of the strap), pin out, cord unhooked, flap lifted off, about 15 s a side.', [
+            c.p.kneeMount === KNEE_MOUNT.removable ? 'The strap stays on the knee, and the knee can come off with the flap on it (step "Take the brake knees off and put them back").' : 'The strap stays on the knee.',
+            'Finish the flap kit on the bench; the pin, clip, cord, snap hook, pad and tread stay off until the hang step.',
+          ]),
         ],
         checks: ['Pad hangs 3/8" off the tread released and swings onto it when the flap is pressed', 'Flap clears the tire and the transom corner; foot end at the transom face', 'Flap returns by itself when released'],
       };
@@ -2085,7 +2101,12 @@ const TEMPLATES: Template[] = [
             'Nut and 1-1/4" fender washer inside. Bolted, never glued.',
           ]),
           I(`Hang the signs (${tl(ids(/^sign-[LR]$/))}): 4 thumb-knob screws each (${knobText(c)}).`, ['Through the 3/16" holes, the standoff discs (epoxied to the sign back) and the web, into the inserts.']),
-          I('Storage hardware.', ['Gaskets: continuous EPDM bulb, spliced at one corner.', 'Lid stay, draw latches on the transom blocks, catch plates.', 'Aft drain nipples, epoxied in.'], ids(/^storage-/)),
+          I('Storage hardware.', [
+            'Gaskets: continuous EPDM bulb, spliced at one corner.',
+            'Lid stay, draw latches on the transom blocks, catch plates.',
+            'Aft drain nipples, epoxied in.',
+            ...(c.p.kneeMount === KNEE_MOUNT.removable ? [`Put the tool pouch in the box (${fin(c.p.toolPouchLengthIn)} × ${fin(c.p.toolPouchWidthIn)} × ${fin(c.p.toolPouchHeightIn)}: ratchet, socket and wrench) with the spare lock nuts. It is for taking the brake knees off.`] : []),
+          ], ids(/^storage-/)),
           I(`Bolt on the D-ring plates: ${tl(ids(/^lash-/))}.`, [
             `Hold each plate on the inner face of its rib head, centered on the head: the holes are ${fin(2 * LASH_HOLE_DX_IN)} apart along the gunwale and ${fin(2 * LASH_HOLE_DZ_IN)} apart up it.`,
             `Drill all ${LASH_BOLTS} holes through the plate, the head and the side in one pass with a ${fin(Math.round((LASH_BOLT_DIA_IN + 1 / 64) * 16) / 16)} bit, square to the side. The plate is the template.`,
@@ -2100,7 +2121,54 @@ const TEMPLATES: Template[] = [
       };
     },
   },
+  {
+    // Removable knees only (assemblySteps leaves this template out with the default fixed knees).
+    id: 'brake-knee-off',
+    title: 'Take the brake knees off and put them back',
+    kind: 'process',
+    steps: [STEP.finish],
+    view: 'side',
+    tools: ['3/8" drive ratchet', '9/16" deep socket', '9/16" combination wrench'],
+    build: (c) => {
+      const bg = brakeOf(c.p), pl = bg.bolts.plate;
+      const n = bg.bolts.count;
+      const hexAf = wrenchFor(c.p.brakeMountBoltDiaIn);
+      const nutPlate = `${fin(pl.x1 - pl.x0)} × ${fin(pl.z1 - pl.z0)} backing plate`;
+      return {
+        goal: 'Take a brake knee off for the truck or for cargo, and put it back for the brake. About 3 minutes a side.',
+        items: [
+          I('Gather the tools from the box.', [`The tool pouch holds the 3/8" drive ratchet, the ${hexAf}" deep socket and the ${hexAf}" combination wrench.`, 'The spare lock nuts are in it too.']),
+          I('REMOVAL: take one knee off at a time, {{brake-knee-L}} then {{brake-knee-R}}.', [
+            'Unhook the return cord at the transom and unclip the chock cord from the eye under the knee.',
+            `Get under the rail. Hold each nut on the ${nutPlate} with the wrench.`,
+            `Back each of the ${n} bolts out with the ratchet and the ${hexAf}" socket, from the outer face of the knee.`,
+            'Lift the knee off the rail with the flap still on it, as one piece.',
+            'Thread the bolts, washers and nuts back into the knee loosely, so none is lost.',
+          ], ['brake-knee-L', 'brake-knee-R']),
+          I('Stow them.', ['The chocks go in the storage box.', 'The knees, with their flaps, lie padded on the bed or on the seat, never loose against the paint.', 'The rail keeps its open bolt holes, and the backer and backing plate stay on.']),
+          I('REFIT: put the knee back where it came from, left or right as taped.', [
+            'Wipe the rail and chine face and the inboard face of the knee leg. Both are sealed, so no glue goes on: the knee goes on dry.',
+            `Set the knee on the rail and line up its ${n} holes with the holes in the rail.`,
+            `Fit the ${n} bolts with a washer under each head, through the knee, the rail and the backer.`,
+            `Put the nuts on the backing plate. Hold each with the wrench from beneath and tighten the bolts with the ratchet, firm, a little at a time in turn.`,
+            'Clip the chock cord back on and hook the return cord at the transom.',
+            'Check every bolt again after the first outing.',
+          ], ['brake-knee-L', 'brake-knee-R']),
+          I('Replace the lock nuts after about five removals.', ['The nylon wears. Four spares ride in the tool pouch.']),
+          I('For the truck or cargo mode, take the knees off with the flaps.', ['Nothing then stands out beside the tires.', 'The viewer\'s Brakes off and Transport mode show the same: knees, straps and flaps off; backers, backing plates and rail holes stay.']),
+        ],
+        checks: ['Each knee seats flat on the rail and the chine band, with no gap', `All ${n} bolts firm and every nut on its backing plate`, 'Chock cord eye solid; the first brake test shows no wobble'],
+      };
+    },
+  },
 ];
+
+/** The wrench size across the flats for a bolt diameter (inches, a shop fraction): 3/8" bolts take 9/16". */
+function wrenchFor(boltDiaIn: number): string {
+  const table: Array<[number, string]> = [[0.25, '7/16'], [0.3125, '1/2'], [0.375, '9/16'], [0.4375, '5/8'], [0.5, '3/4'], [0.625, '15/16']];
+  const hit = table.find(([d]) => Math.abs(d - boltDiaIn) < 1e-3);
+  return hit ? hit[1] : fin(boltDiaIn * 1.5);
+}
 
 // ---- builder ----
 
@@ -2142,10 +2210,12 @@ export function assemblySteps(parts: Part[], p: Params): BuildStep[] {
   // 1. Hand each part to the first template that names it for its model step.
   const taken = new Map<string, string[]>();
   const assigned = new Set<string>();
+  // D-78: the step that takes the brake knees off and puts them back exists only with removable knees.
+  const templates = p.kneeMount === KNEE_MOUNT.removable ? TEMPLATES : TEMPLATES.filter((t) => t.id !== 'brake-knee-off');
   // 0. The removable hardware belongs to the hang step whatever its model step is (see the header).
   taken.set('hang', real.filter(isHangPart).map((x) => x.id));
   for (const id of taken.get('hang')!) assigned.add(id);
-  for (const t of TEMPLATES) {
+  for (const t of templates) {
     if (t.id === 'hang') continue;
     if (!t.match) continue;
     const mine: string[] = [];
@@ -2182,7 +2252,7 @@ export function assemblySteps(parts: Part[], p: Params): BuildStep[] {
   const orphans = real.filter((x) => !assigned.has(x.id));
   const extraByStep = new Map<number, Part[]>();
   for (const x of orphans) {
-    const host = [...TEMPLATES].reverse().find((t) => t.kind === 'build' && t.steps.includes(x.step));
+    const host = [...templates].reverse().find((t) => t.kind === 'build' && t.steps.includes(x.step));
     if (host) {
       taken.get(host.id)!.push(x.id);
       assigned.add(x.id);
@@ -2197,7 +2267,7 @@ export function assemblySteps(parts: Part[], p: Params): BuildStep[] {
   const ordered: { t: Template; ids: string[] }[] = [];
   const pending = [...extraByStep.entries()].sort((a, b) => a[0] - b[0]).map(([step, xs]) => ({ t: generic(step, xs), ids: xs.map((x) => x.id) }));
   const keyOf = (t: Template): number => t.at ?? t.steps[0];
-  for (const t of TEMPLATES) {
+  for (const t of templates) {
     while (pending.length && keyOf(pending[0].t) < keyOf(t) && t.kind !== 'prep') ordered.push(pending.shift()!);
     const ids = taken.get(t.id) ?? [];
     if (t.kind === 'build' && ids.length === 0) continue; // nothing to install in this model
@@ -2249,7 +2319,7 @@ export function assemblySteps(parts: Part[], p: Params): BuildStep[] {
       n,
       id: t.id,
       kind: t.kind,
-      title: std ? standardText(t.title) : t.title,
+      title: std ? standardText(t.retitle?.(p) ?? t.title) : (t.retitle?.(p) ?? t.title),
       goal: fix(built.goal),
       items,
       modelStep: t.kind === 'prep' ? 0 : modelStep,

@@ -46,7 +46,7 @@ A **Klondike Derby sled on wheels** for Boy Scout Troop 455: a solid, wide, reus
 | Wheels | 10" pneumatic, 4 of them, wheelbase 44", both tracks 30" |
 | Deck height | 8" |
 | Side height | 4" at the bow rising in a concave sweep to 14" at the rear |
-| Empty mass (Standard spec) | **121.1 lb** (114.8 lb in Transport mode, 57.4 lb per person for the two-person lift) |
+| Empty mass (Standard spec) | **121.1 lb** (114.8 lb in Transport mode, 57.4 lb per person for the two-person lift; 111.6 lb and 55.8 lb with removable knees) |
 
 ### Construction
 - **Body.** The two sides are sandwiches: a thin plywood web with oak bands glued on both faces at the top (gunwale) and bottom (chine). No grooves. The bow bulkhead is a shaped oak board that is the foot brace and a hand-hold. A 12 mm okoume deck rides on oak rails and 8-1/2" joists. The rear transom is 1/2" oak. Three oak **ribs** per side stand on the inside face of the web (box, mid and bow-post stations). Their heads carry the six D-ring tie-downs (zinc-plated steel Standard, 316 stainless Extreme), through-bolted, and they stiffen the sides sideways (D-76).
@@ -54,12 +54,12 @@ A **Klondike Derby sled on wheels** for Boy Scout Troop 455: a solid, wide, reus
 - **Rear end.** A fixed laminated oak beam on solid 5/8" 1045 steel rod axles, held by 316 or 304 clamp plates and hold-down angles into notches in the rails.
 - **Seat.** A 2" foam cushion, and a frameless 12 mm okoume seat back that **flips flat and latches** with pins, so it stays on the sled (D-57). The leg reach is about 35-3/4". Two oak **grab boards** (one board per side with a routed hand hole) are bolted to the gunwales.
 - **Storage box.** Behind the seat, over the rear axle: a thin-ply box with an oak-framed lid on stainless hinges and draw latches, a bulb gasket and drains. About 2,000 in³. In cargo mode it holds the cushions, lamp and chocks; in race mode, the 10 Essentials (a packing check places every item).
-- **Brake.** A scooter-style **step brake**: an oak flap hinged over each rear tire with a rubber pad and a bungee return. Each flap pivots on a stainless strap and clevis pin on an oak **knee** (cross-laminated oak, D-75, D-77) bolted to the rail. A wheel chock on a cord parks it. The flap kit comes off in seconds. It is judged on slowing the loaded sled (pass/fail); the brake itself need not hold the sled on a 15° slope (info only), but the wheel chocks must (the `park-hold` row, which passes at 0.88).
+- **Brake.** A scooter-style **step brake**: an oak flap hinged over each rear tire with a rubber pad and a bungee return. Each flap pivots on a stainless strap and clevis pin on an oak **knee** (cross-laminated oak, D-75, D-77) bolted to the rail. A wheel chock on a cord parks it. The flap kit comes off in seconds. With the optional **removable knees** (D-78, section 4) the knee comes off too, with a ratchet and wrench. It is judged on slowing the loaded sled (pass/fail); the brake itself need not hold the sled on a 15° slope (info only), but the wheel chocks must (the `park-hold` row, which passes at 0.88).
 - **Handlebow.** A removable bandsawn oak handlebow on two posts that drop into sockets on the rear transom, with a second pin position that parks it low (D-57).
 - **Lights and signs.** A front lamp and a rear red light in snap-in printed ASA clips that fill the lift hand-holds; amber front and red rear reflectors; a flag tube in a rear corner; a "TROOP 455 / WILDERNESS RANGERS" oval sign on each rear side.
 
 ### Lift and transport
-Two people lift it by the rear transom slot and the bow bulkhead hand-hold (the tongue is not a lift point). **Transport mode** (handle parked, seat back flat, brake kit, lights, chocks and seat pad off) fits the Tacoma bed with the tailgate down, and so does the fully assembled sled.
+Two people lift it by the rear transom slot and the bow bulkhead hand-hold (the tongue is not a lift point). **Transport mode** (handle parked, seat back flat, brake kit, lights, chocks and seat pad off, plus the knees and their straps with the removable-knee setting) fits the Tacoma bed with the tailgate down, and so does the fully assembled sled.
 
 ## 4. Materials and options
 
@@ -74,6 +74,22 @@ Two people lift it by the rear transom slot and the bow bulkhead hand-hold (the 
 | Finish | exterior spar urethane; epoxy only where needed | marine varnish over epoxy, gallon epoxy kit |
 | Empty mass (follow-the-weather sheet) | 121.1 lb | 118.3 lb |
 | BOM total | **$2,303** | **$3,119** |
+
+### Brake knees (`kneeMount`, D-78)
+Default **Knees stay on (bolted, glued)**: the knee is epoxied to the rail and chine band and held by four 3/8" bolts. Setting **Removable knees (bolts, ratchet)** keeps the same four bolts, washers, nylock nuts, backer and backing plate, so every strength row is the same, and changes only how the knee is fitted:
+
+| | Knees stay on (default) | Removable knees |
+|---|---|---|
+| Knee to rail | epoxy plus four bolts | fitted dry, four bolts clamp it; its inboard face and the rail face are epoxy-sealed first |
+| Comes off with the flap kit (Brakes off, Transport mode) | flaps, pivot blocks and pins, shoes, pads, treads, cords | the same, plus both knees and straps (the chocks stay their own toggle and ride with their knee, whose eye holds the cord) |
+| Stays on the rail | knees, backers, backing plates | backers, backing plates and four open bolt holes a side |
+| Tools | none | a 3/8" drive ratchet, 9/16" deep socket and 9/16" wrench in a 9" × 3" × 2" pouch in the storage box (a tool, not sled mass), plus four spare lock nuts |
+| Time | flap off in about 15 s a side | knee and flap off in about 3 minutes a side |
+| Empty mass | 121.1 lb | 121.1 lb (identical); the knees and straps add 3.2 lb to the Transport-mode drop and their 8 bolt sets about 0.8 lb more |
+| Storage packing (Standard / Extreme) | 0.87 / 0.88 | 0.90 / 0.91 (marginal in Extreme; the pouch fits in race and cargo mode) |
+| BOM | $2,303 / $3,119 | +$30.00 Standard, +$31.92 Extreme: the tool pouch (an estimate; you may already own one) and four spare lock nuts (free in the Standard pack of 50) |
+
+The analysis never counted the glue or friction at the knee, so the brake-mount row is the same in both settings; it assumes the bolts are at their design clamp (retighten after every refit and after the first outing). Why not pins or clamped inserts: [docs/studies/removable-knee.md](docs/studies/removable-knee.md).
 
 ### Thin sheet (`thinSheetMaterial`)
 The thin sheet is the side webs, storage box and lid, and sign blanks. The 12 mm deck and seat back are always okoume. The default **follows the weather spec**.
@@ -131,13 +147,13 @@ Everything is a pure function of the parameters.
 
 | Section | What it gives you |
 |---|---|
-| Verify | the checks to make on real parts before ordering (wheel hub, sheet thickness, axle steel, and so on) |
+| Verify | the checks to make on real parts before ordering (wheel hub, sheet thickness, axle steel, and so on); with removable knees, a refit check (flat seat, bolts after the first outing, chock cord eye, wobble) |
 | Cut list | the actual cuts (an edge-glued panel is its boards, then the glue-up), rough sizes rounded up to 1/8", laminate allowances, board yields, a bandsaw resaw check |
 | Nesting | plywood layouts on 4' × 8' sheets; oak board feet |
 | BOM | priced lines with vendor links, quoted vs estimated, Standard vs Extreme; the price research is in docs/price-research/price-research-2026-10.md and docs/price-research/price-research-standard-2026-10.md |
 | Shaper | SVG files for every flat part (outside, inside, pocket, guide conventions) |
 | Forms and drawings | glue-up forms and templates (tiled to Letter pages), and a dimensioned drawing of every non-Shaper part |
-| Assembly | numbered steps with sub-bullets, part chips with dimensions and Show in 3D, and a 3D step-through |
+| Assembly | numbered steps with sub-bullets, part chips with dimensions and Show in 3D, and a 3D step-through; with removable knees the knee step seals and bolts the knees on dry and a last step takes them off and puts them back |
 | Finishing | the schedule for the chosen weather spec |
 | Downloads | one zip: Shaper SVGs, forms, drawings, nesting, STLs for the lamp clips, cutlist.csv, bom.csv, a build book (printable HTML) and a README |
 
@@ -147,5 +163,5 @@ Build text follows Eric's shop-readability rules: fractions, no internal names, 
 
 - Design numbers live only in `src/params.ts`. Model code holds derived geometry, never a literal design dimension.
 - Code comments cite decision IDs (D-xx, A-xx) instead of repeating the reasoning; look them up in [DECISIONS.md](DECISIONS.md).
-- The studies behind a decision are kept where they are still the engineering basis: [docs/studies/side-stiffness-study.md](docs/studies/side-stiffness-study.md) (D-76).
+- The studies behind a decision are kept where they are still the engineering basis: [docs/studies/side-stiffness-study.md](docs/studies/side-stiffness-study.md) (D-76), [docs/studies/removable-knee.md](docs/studies/removable-knee.md) (D-78).
 - Deploy: pushing to `main` runs the tests, then publishes `dist/` to GitHub Pages (`.github/workflows/pages.yml`). `npm run build:single` makes one self-contained HTML file.

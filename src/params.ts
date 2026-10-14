@@ -81,6 +81,8 @@ export const PLY_SPECIES = { okoumeMarine: 0, balticBirchExterior: 1 } as const;
 export const WEATHER_SPEC = { standard: 0, extreme: 1 } as const;
 /** D-73: the thin-sheet material (the side webs, the storage box and lid, the signs). `followWeather` picks white oak ply for Standard and okoume for Extreme. */
 export const THIN_SHEET = { followWeather: 0, whiteOakPly: 1, okoumeMarine: 2, balticBirch3mm: 3 } as const;
+/** D-78: how the step-brake knees are mounted. `fixed` = bolted and glued on for good (the default); `removable` = the same four bolts, fitted dry, taken off with a ratchet and wrench. */
+export const KNEE_MOUNT = { fixed: 0, removable: 1 } as const;
 export const STORAGE_LOCATION = { rearOverAxle: 0, underSeat: 2 } as const;
 
 /** Mannequin proportions (fractions of stature, D-3) that the foot-room validator also needs: hip separation and foot width. */
@@ -1526,6 +1528,30 @@ const defs = {
     note: 'The park-hold row uses the lower of this and the design μ.',
   },
 
+  kneeMount: {
+    label: 'Brake knees', group: 'brake', unit: '',
+    default: KNEE_MOUNT.fixed, min: 0, max: 1, step: 1, status: 'explore', ref: 'D-78',
+    options: [
+      { value: KNEE_MOUNT.fixed, label: 'Knees stay on (bolted, glued)' },
+      { value: KNEE_MOUNT.removable, label: 'Removable knees (bolts, ratchet)' },
+    ],
+    note: 'D-78 (Eric): the same four 3/8 in bolts through the knee, rail and backer in both settings, so every strength row is the same. Removable: the knee is fitted DRY (no epoxy against the rail; the four bolts clamp it, and the checks never counted the glue), and a 3/8 in drive ratchet with a 9/16 in socket and a 9/16 in wrench rides in the storage box, so each knee, with its strap and flap, comes off in about 3 minutes and nothing sticks out beside the tires in transport or cargo use. The analysis assumes the bolts are at their design clamp (retighten after every refit). Pins and clamped inserts were rejected (the 3 in lever loads the thin rail and rib).',
+  },
+  toolPouchLengthIn: {
+    label: 'Tool pouch length (ratchet, socket, wrench)', group: 'brake', unit: 'in',
+    default: 9, min: 6, max: 14, step: 0.5, status: 'assumed', ref: 'D-78',
+    note: 'D-78: a 3/8 in drive ratchet with a 9/16 in deep socket and a 9/16 in combination wrench, in a small pouch. About 9 x 3 x 2 in. It rides in the storage box when kneeMount is removable; it is a tool, not sled mass.',
+  },
+  toolPouchWidthIn: {
+    label: 'Tool pouch width', group: 'brake', unit: 'in',
+    default: 3, min: 2, max: 6, step: 0.5, status: 'assumed', ref: 'D-78',
+    note: 'D-78: see toolPouchLengthIn.',
+  },
+  toolPouchHeightIn: {
+    label: 'Tool pouch height', group: 'brake', unit: 'in',
+    default: 2, min: 1, max: 4, step: 0.5, status: 'assumed', ref: 'D-78',
+    note: 'D-78: see toolPouchLengthIn.',
+  },
   brakeChockCordLenIn: {
     label: 'Chock cord length', group: 'brake', unit: 'in',
     default: 30, min: 12, max: 72, step: 2, status: 'assumed', ref: 'D-57',

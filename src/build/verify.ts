@@ -5,7 +5,7 @@
  * model. Every param whose `status` is 'verify' is claimed by a check, and any left over lands in the last item ("other params to
  * confirm") automatically, so promoting or adding a verify param never needs an edit here.
  */
-import { bowTaper, PARAM_DEFS, thinSheet, type Params } from '../params';
+import { bowTaper, KNEE_MOUNT, PARAM_DEFS, thinSheet, type Params } from '../params';
 import { runChecks } from '../analysis';
 import { signKnobPlan } from '../model/body';
 import { computeLayout, innerHalfWidth } from '../model/layout';
@@ -335,7 +335,9 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       how: [
         it('Cut ONE knee blank first, before cutting the other knee and the flaps.', [
           `Notch the pocket in the layers, glue the test knee up and recess the pocket; screw the stainless strap on and drill the pin hole through its hole. Use the real ${fr(p.brakePivotPinDiaIn)}" clevis pin, the hitch-pin clip and a flap tongue with its pivot block clamped in the pocket.`,
-          'This test comes BEFORE the knees are glued: the knees go on first, while the hull is inverted (assembly step "Brake knees").',
+          p.kneeMount === KNEE_MOUNT.removable
+            ? 'This test comes BEFORE the knees are bolted on: the knees go on first, while the hull is inverted (assembly step "Brake knees").'
+            : 'This test comes BEFORE the knees are glued: the knees go on first, while the hull is inverted (assembly step "Brake knees").',
         ]),
         it(`Check the pocket clearance (${fr(p.brakePivotSlotClearIn)}" a side), the pin through the strap and into the blind hole, the flap swing and the pad gap to the tire.`),
         it('Drag-test a chock: pull a weighted chock across packed dirt or gravel with a scale, dry and wet.'),
@@ -456,6 +458,36 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       refs: ['D-76'],
     },
   ];
+
+  // Removable knees: the check on the first refit (the ratchet and wrench setting).
+  if (p.kneeMount === KNEE_MOUNT.removable) {
+    const at = drafts.findIndex((c) => c.id === 'brake-strap');
+    drafts.splice(at < 0 ? drafts.length : at + 1, 0, {
+      id: 'brake-knee-refit',
+      title: 'Removable brake knees: refit, bolts and chock cord',
+      how: [
+        it('Take one knee off and put it back with the ratchet and wrench, as the assembly step "Take the brake knees off and put them back" says.', [
+          'Do it on the finished sled, with the flap on the knee.',
+          'Time it: about 3 minutes a side.',
+        ]),
+        it('Look along the joint after the refit.', ['Seat a straightedge or a feeler gauge along the knee leg: it must sit flat on the rail and on the chine band, with no gap.']),
+        it('Clip the chock cord to the eye under the knee and tug it.'),
+        it('Use the sled for the first outing, then check every bolt with the ratchet.', ['The bolts are held by clamping alone (no glue), so they must still be firm after the first outing.']),
+        it('Press the brake and rock the flap sideways.', ['Look for wobble at the knee: there should be none.']),
+      ],
+      passList: [
+        'The knee seats flat on the rail and the chine band, with no gap, after every refit.',
+        'All four bolts are still firm after the first outing; the nuts are on the backing plate.',
+        'The chock cord eye is solid and the cord clips on and off by hand.',
+        'The first brake test shows no wobble at the knee.',
+      ],
+      ifFails: 'A gap or a wobble: take the knee off, clean both faces, check the bolt holes for dirt and refit, tightening the bolts a little at a time in turn. New lock nuts after about five removals. If it still moves, stop using the brake and measure the holes against the drawing.',
+      partIds: ids(parts, /^(brake-knee|brake-chock)/),
+      paramKeys: [],
+      when: 'at assembly',
+      refs: ['D-78'],
+    });
+  }
 
   // Leftovers: any 'verify' param no check claims (the truck bed measurements, the NDS value, ...).
   const claimed = new Set(drafts.flatMap((c) => c.paramKeys));

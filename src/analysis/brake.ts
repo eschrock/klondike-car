@@ -10,6 +10,7 @@
  *   pivot reaction on the flap  R = −(N n + σ μ N t + B + F)  and the force on the knee is −R (D-65: the pull pin, in double shear).
  * Hold: W sinθ / μ = N_total is shared by two flaps (one foot each); members are checked at λ × that (a hard stomp / jerk on a parked sled, `brakeLoadFactor`).
  */
+import { KNEE_MOUNT } from '../params';
 import { obbOverlap, partOBB, partOBBs, worldAABB } from '../model/bounds';
 import { atPose, brakeGeometry, buildBrakeAt, type BrakeGeom, type V2 } from '../model/brake';
 import { KNEE_NUT_FLAT_R_IN, SHOULDER_CLEAR_IN, WITHDRAWAL_WET_CM, dot2, flapHalfWidth, momentY, norm2, pointPolyGap, sub, type KneeLayer } from '../model/brake-layout';
@@ -543,7 +544,11 @@ function mountEval(ctx: Ctx, L: Loads, g: BrakeGeom): CaseEval {
     detail('knee leg bearing on the chine / rail face at the top of the couple (oak across the grain)', cBear, 'psi', al.oakPerp, '<='),
   ];
   const how = `${loadText(L, g)}. ${n} × ${f(bd, 3)}" 316 bolts (${bt.xs.length} columns × ${bt.zs.length} rows, centroid x ${f(bt.cx, 2)}", z ${f(bt.cz, 2)}") through the ${f(k.legT, 2)}" knee leg, the ${f(g.rail.t, 2)}" rail and the ${f(g.backer.t, 2)}" backer glued to it. In plane: M = ${f(Mpl)} lbf·in about the bolt group (pin ${f(g.xh - bt.cx, 2)}" ahead of / ${f(g.H[1] - bt.cz, 2)}" above it), twist ${f(twist)} + direct ${f(direct)} = ${f(V)} lbf on the worst bolt (shear ${f(shear, 0)} psi, bearing ${f(bear, 0)} psi on ${f(tComp, 2)}"). Out of plane: the force acts ${f(e, 2)}" outboard of the hull face: M_x = ${f(Mx)} lbf·in pivots on the chine top (z ${f(zc, 2)}") into the ${bt.zs.length} bolt rows (T ${f(Tz)} lbf) and M_z = ${f(Mz)} lbf·in over the columns (T ${f(Tx)} lbf): worst bolt tension ${f(T)} lbf = ${f(sigT, 0)} psi on ${f(At, 4)} in², nut side: one ${f(pl.t, 3)}" × ${f(pl.x1 - pl.x0, 2)}" × ${f(pl.z1 - pl.z0, 2)}" backing plate, ${f(pull, 0)} psi on the worst bolt's ${f(tribA, 2)} in² share, ${f(plateBend, 0)} psi bending over a ${f(overhang, 2)}" overhang past the nut; head side: a ${f(dW, 3)}" washer, ${f(T)} lbf against ${f(headCap)} lbf (end grain of the across layers). D-75 cross-laminated knee: the arm counts only the ACROSS layers (${f(armY.t, 2)}"), the leg only the UPRIGHT layers (${f(legZ.t, 2)}": ${f(Mleg)} lbf·in in plane, ${f(MlegOut)} lbf·in out of plane at the top bolt row, σ ${f(sigLeg, 0)} psi); bolt bearing in the leg ${f(bearLeg, 0)} psi${legEg < 1 ? ' (end grain, C_eg 0.67)' : ''}. Knee arm section just beyond the leg ${f(sec.depth, 2)}" × ${f(sec.h, 2)}": σ ${f(sigK, 0)} psi. The knee bolts into the rail (backed by the glued ${f(g.backer.t, 2)}" doubler), not the 1/4" side panel.`;
-  return governing(ds, how);
+  // D-78: removable knees are fitted dry and held by the four bolts alone. The rows above never counted glue or clamp friction (the bolts carry the shear and the pull), so they are the same in both settings.
+  const removableNote = ctx.p.kneeMount === KNEE_MOUNT.removable
+    ? ' Removable knees (D-78): the knee is fitted dry with no epoxy against the rail; no glue or friction was counted in these rows, so the bolts carry everything, and they are assumed to be at their design clamp (retighten them after every refit and after the first outing).'
+    : '';
+  return governing(ds, how + removableNote);
 }
 
 export function brakeMount(ctx: Ctx): AnalysisCheck {

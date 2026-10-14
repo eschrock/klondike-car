@@ -51,15 +51,15 @@ export function seatStowCheck(ctx: Ctx): AnalysisCheck {
     detail('height: corner fillet + seat cushion + back pad, under the lid frame and battens', need.heightIn, 'in', avail.h, '<='),
   ];
   // 3c-5, D-65: the front lamp and the rear tail light with their clips, and the wheel chocks, lie in the layer above the cushions (the height left under the lid frame and battens), measured from the real parts.
-  const gear = boxGear(ctx.parts);
-  const gearKit = [...gear.lamp, ...gear.chocks];
+  const gear = boxGear(ctx.parts, p);
+  const gearKit = [...gear.lamp, ...gear.chocks, ...gear.tools]; // D-78: the tool pouch rides in this layer too (removable knees only)
   const layerH = Math.max(0, margin.heightIn);
   const layer = packEssentials({ lx: avail.l, w: avail.w, h: layerH, capIn3: 0, totalIn3: avail.l * avail.w * layerH }, gearKit);
   const gearTall = Math.max(0, ...gearKit.map((k) => Math.min(...(k.dims ?? [0]))));
   const gearIn3 = layer.rigidIn3;
   if (gearKit.length) {
-    ds.push(detail('height: the tallest of the lamps, their clips and the chocks (laid on their smallest side) in the height left above the cushions', gearTall, 'in', layerH, '<='));
-    ds.push(detail('floor area: the lamps, their clips and the chocks side by side in the layer above the cushions', layer.fill, '× of layer', 1, '<='));
+    ds.push(detail(gear.tools.length ? 'height: the tallest of the lamps, their clips, the chocks and the tool pouch (laid on their smallest side) in the height left above the cushions' : 'height: the tallest of the lamps, their clips and the chocks (laid on their smallest side) in the height left above the cushions', gearTall, 'in', layerH, '<='));
+    ds.push(detail(gear.tools.length ? 'floor area: the lamps, their clips, the chocks and the tool pouch side by side in the layer above the cushions' : 'floor area: the lamps, their clips and the chocks side by side in the layer above the cushions', layer.fill, '× of layer', 1, '<='));
   }
   // D-65 OPTION (not in the default stow): the two removed brake flaps, laid in the same layer with the lamps and the chocks.
   const flap = gear.flaps[0];

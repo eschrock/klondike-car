@@ -6,13 +6,12 @@ Where the design stands (2026-10-13). The sled itself is in [DESIGN.md](../DESIG
 - The design, analysis and build outputs are complete and deployed to GitHub Pages on every push to `main` once the tests pass.
 - Standard spec: empty mass **121.1 lb**, 54 engineering rows with no failure (turn radius is marginal at 0.97), riders safe **50 to 250+ lb**, green **50 to 220 lb**, cargo capacity **254 lb**, BOM **$2,303**.
 - Extreme-weather spec with its default 4 mm okoume: **$3,119** and the `side-web` row fails (see the plywood item below).
+- Optional **removable brake knees** (D-78): same strength rows and empty mass; adds a tool pouch in the box (Standard storage packing 0.87 to 0.90; in the Extreme spec 0.88 to 0.91, marginal) and about $30 of tools (estimate).
 - Waiting on Eric: the open choices below and measured Tacoma bed dimensions (Q-1).
-
-## Work in flight
-- **Removable brake knee (D-78), optional toggle** (Eric approved the idea as a setting, like the weather spec; default stays the bolted knee). Study and sketches: `docs/wip/removable-knee/` (retire in the commit that finishes the build outputs: fold into DESIGN.md and DECISIONS.md, delete the folder).
 
 ## Open items and parked ideas
 
+- **Removable knees in the Extreme spec:** the tool pouch takes storage packing from 0.88 to 0.91, so the row reads marginal (it still fits). If Eric wants it green, raise the box volume a little or shrink the pouch (both are parameters).
 - **Extreme-weather plywood:** with the corrected across-grain side-web check, 4 mm okoume fails at 2.0 and 3 mm Baltic at 4.8 (1/4" white oak ply passes at 0.61). Choose a sheet for the Extreme spec: probably 6 mm okoume, or the same white oak ply.
 - **D-76 rib trims (Eric's call):** a 1-3/4" head (−0.05 lb), 5/8" washers (−0.05 lb), 1/2" knees (−0.07 lb).
 - **Applied outside stiles** (frame-and-panel look): skipped for now; easy to add later.

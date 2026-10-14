@@ -573,6 +573,8 @@ export const CEMENT_USES_PER_CAN = 8;
 /** Edge-banding waste (trimming, corners) and the roll length (ft). */
 export const BANDING_WASTE = 0.15;
 export const BANDING_ROLL_FT = 25;
+/** Removable knees: spare nylon-insert lock nuts for the knee bolts that ride in the box. */
+export const KNEE_SPARE_NUTS = 4;
 
 /**
  * The note table. Each entry cites the text it comes from; quantities come from the model (parts present, their sizes), never from the text.
@@ -672,6 +674,22 @@ export const NOTE_ITEMS: NoteItem[] = [
       const uses = byIds(built, ['brake-foot-tread-L', 'brake-foot-tread-R', 'brake-pad-L', 'brake-pad-R']).filter((x) => /contact cement/i.test(ptext(x)));
       if (!uses.length) return null;
       return { items: [{ label: 'Contact cement, pint', qty: Math.ceil(uses.length / CEMENT_USES_PER_CAN) }], note: `${uses.length} glued faces: ${uses.map(shopName).join(', ')}` };
+    },
+  },
+  {
+    key: 'knee-spare-nuts', section: 'fasteners', partIds: ['brake-knee-L', 'brake-knee-R'], noteRef: 'brake knee notes (removable knees): "the four bolts, washers and nuts come off with it"',
+    expand(built, _joints, spec) {
+      const knees = byIds(built, ['brake-knee-L', 'brake-knee-R']).filter((x) => x.removable);
+      if (!knees.length) return null;
+      return { items: [{ label: `${matOf(spec ?? 'extreme').ss} nylon-insert lock nut 3/8-16`, qty: KNEE_SPARE_NUTS }], note: `${KNEE_SPARE_NUTS} spare lock nuts for the knee bolts: the nylon wears, so fit new nuts after about five removals` };
+    },
+  },
+  {
+    key: 'tool-pouch', section: 'consumables', price: NOTE_PRICE.toolPouch, partIds: ['brake-knee-L', 'brake-knee-R'], noteRef: 'brake knee notes (removable knees): "ratchet and wrench"',
+    expand(built) {
+      const knees = byIds(built, ['brake-knee-L', 'brake-knee-R']).filter((x) => x.removable);
+      if (!knees.length) return null;
+      return { items: [{ label: 'TOOL: pouch with a 3/8" drive ratchet, a 9/16" deep socket and a 9/16" combination wrench', qty: 1 }], note: 'A tool, not part of the sled and not in its weight. It rides in the storage box so the brake knees can come off on the road. You may already own a set: this is an estimate, not a quote' };
     },
   },
 ];
