@@ -92,6 +92,12 @@ function axleBaseUtil(p: Params): number {
   axleUtilCache.set(key, util);
   return util;
 }
+/** The margin a utilization leaves, in plain words: "passes with about 20 % to spare" (to the nearest 5 %), "is at its limit", or "fails by about 50 %". */
+export function marginWords(util: number): string {
+  if (util < 0.975) return `passes with about ${Math.max(5, Math.round((1 - util) * 20) * 5)} % to spare`;
+  if (util <= 1.025) return 'is right at its limit, with nothing to spare';
+  return `fails by about ${Math.max(5, Math.round((util - 1) * 20) * 5)} %`;
+}
 /** The row at the goal rider if the axle steel yielded `yieldPsi` instead of the assumed `assumedPsi`. */
 const axleUtilAt = (p: Params, assumedPsi: number, yieldPsi: number): number => (axleBaseUtil(p) * assumedPsi) / yieldPsi;
 
@@ -103,6 +109,16 @@ function ids(parts: Part[], re: RegExp): string[] {
 /** Param keys that are still 'verify' (a param Eric has confirmed and promoted drops out of the list by itself). */
 function verifyKeys(keys: string[]): string[] {
   return keys.filter((k) => PARAM_DEFS[k as keyof typeof PARAM_DEFS]?.status === 'verify');
+}
+
+/** Verify params of parts or materials THIS design does not use (the axle tube's strengths with a solid rod, the other thin sheets' thicknesses): they never go on the confirm list. */
+export function unusedVerifyKeys(p: Params): string[] {
+  const thin = thinSheet(p);
+  return [
+    ...(p.axleWallIn > 0 ? ['axleYieldPsi', 'axleUltimatePsi'] : ['axleTubeYieldPsi', 'axleTubeUltimatePsi']),
+    ...(thin.key === 1 ? [] : ['whiteOakPlyThickIn']),
+    ...(thin.key === 3 ? [] : ['balticThinThickIn']),
+  ];
 }
 
 /** Every param key currently at status 'verify'. */
@@ -122,6 +138,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
   const beamEye = stockBoltFit(p.frontBeamThicknessIn, p.steerEyeBoltDiaIn, 1, EYE_BOLT_STOCK_IN);
   const anchorEye = stockBoltFit(p.chainJoistThickIn, p.steerEyeBoltDiaIn, 2, EYE_BOLT_STOCK_IN);
   const tongueBolt = stockBoltFit(p.tongueHeadLenIn + p.frontBeamThicknessIn, p.tongueBoltDiaIn, 1, CARRIAGE_STOCK_IN);
+  const thinKey = thin.key === 1 ? 'whiteOakPlyThickIn' : thin.key === 3 ? 'balticThinThickIn' : 'panelPlyIn';
   const tubeOd = p.axleDiameterIn;
   const tubeWall = p.axleWallIn;
   const railStrip = (parts.find((x) => x.id === 'rail-L')?.stock?.t ?? 0.375);
@@ -212,7 +229,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
           it('Read the yield and tensile strength off the cert or the vendor listing.'),
         ],
         passList: [
-          `Seamless DOM or CDS, not ERW "mechanical" tube (about 45 ksi yield, 55 ksi ultimate, which takes the rear axle row from ${f(axleBaseUtil(p), 2)} to about ${f(axleUtilAt(p, p.axleTubeYieldPsi, 45000), 2)} at the goal rider; 60 ksi 1020 DOM gives about ${f(axleUtilAt(p, p.axleTubeYieldPsi, 60000), 2)}).`,
+          `Seamless DOM or CDS, not ERW "mechanical" tube (about 45 ksi yield, 55 ksi ultimate): at the goal rider the rear axle ${marginWords(axleBaseUtil(p))} with the design steel, but with ERW tube it ${marginWords(axleUtilAt(p, p.axleTubeYieldPsi, 45000))}, and with 60 ksi 1020 DOM it ${marginWords(axleUtilAt(p, p.axleTubeYieldPsi, 60000))}.`,
           `Yield ≥ ${f(p.axleTubeYieldPsi / 1000, 0)} ksi, tensile ≥ ${f(p.axleTubeUltimatePsi / 1000, 0)} ksi (a cert of at least 65 ksi).`,
           `OD ${fr(tubeOd)}" within 5 thousandths of an inch, wall ${f(tubeWall, 3)}" within 10 thousandths.`,
         ],
@@ -231,7 +248,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
         ],
         passList: [
           `Yield ≥ ${f(p.axleYieldPsi / 1000, 0)} ksi (1045 cold-drawn is typically 77 ksi or better).`,
-          `The rear axle row is ${f(axleBaseUtil(p), 2)} at the ${p.riderGoalMassLb} lb goal rider with ${f(p.axleYieldPsi / 1000, 0)} ksi; 1018 cold-drawn at 54 ksi would be about ${f(axleUtilAt(p, p.axleYieldPsi, 54000), 2)}, hot-rolled A36 at 36 ksi about ${f(axleUtilAt(p, p.axleYieldPsi, 36000), 2)}.`,
+          `At the ${p.riderGoalMassLb} lb goal rider the rear axle ${marginWords(axleBaseUtil(p))} with ${f(p.axleYieldPsi / 1000, 0)} ksi steel; with 1018 cold-drawn at 54 ksi it ${marginWords(axleUtilAt(p, p.axleYieldPsi, 54000))}, and with hot-rolled A36 at 36 ksi it ${marginWords(axleUtilAt(p, p.axleYieldPsi, 36000))}.`,
           `OD ${fr(tubeOd)}", within 5 thousandths of an inch.`,
         ],
         ifFails: `Enter the cert yield in ${lbl('axleYieldPsi')} (and the tensile in ${lbl('axleUltimatePsi')}) and re-run the checks; if the axle rows fail, get 1045 or 4140 instead, or accept a lower green range.`,
@@ -355,6 +372,28 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       refs: ['D-57', 'D-65'],
     },
     {
+      id: 'bow-rib-clearance',
+      title: 'Bow post: sit a booted rider in the bare hull before the ribs go in',
+      how: [
+        it('With the hull built and the deck in, but no side ribs cut or fitted yet, sit a rider in winter boots in it (or a mock-up of the seat and the bow).', [
+          `Mark the bow post on each side: its inner face is ${fr(bowRib.face)}" from the center line, ${fr(bowRib.fromTransom, 8)}" from the transom.`,
+          'Put the boots where the rider rests them against the foot brace, then at full steering lock.',
+        ]),
+        ...(bowRib.alt
+          ? [it(`If the post is in the way, move the front rib to the chain crossmember (about ${fr(bowRib.alt.fromTransom, 8)}" from the transom, ${f(bowRib.alt.fromAxle, 0)}" ahead of the rear axle; its inner face is ${fr(bowRib.alt.face)}" from the center line).`, [
+              `Change the design value ${lbl('sideRibFrontXIn')} to ${f(bowRib.alt.fromAxle, 0)}: the rib and its knee snap to the crossmember.`,
+              'The knee screws then go into the chain crossmember: check them against the steering-chain anchor eye bolt in that crossmember and keep the two screws clear of its hole.',
+            ])]
+          : [it('If the post is in the way, leave the bow ring off (2 lash points per side) or ask for a thinner post.')]),
+      ],
+      passList: [`The boots clear the post by about 1" at full lock (the post face is ${fr(bowRib.face)}" from the center line).`],
+      ifFails: bowRib.alt ? `Set ${lbl('sideRibFrontXIn')} to ${f(bowRib.alt.fromAxle, 0)}, re-run the checks (the side-lateral row) and cut the bow posts for the chain crossmember.` : 'Drop the bow ring and re-run the checks.',
+      partIds: ids(parts, /^side-rib(-knee)?-[LR]3$/),
+      paramKeys: verifyKeys(['sideRibFrontXIn']),
+      when: 'at assembly',
+      refs: ['D-76'],
+    },
+    {
       id: 'brake-strap',
       title: 'Brake pivot strap: pocket fit, pin and sideways push',
       how: [
@@ -417,7 +456,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       id: 'ply-thickness',
       title: 'Plywood thickness: measure before any dado is cut',
       how: [
-        it(`Measure the ${thin.nominal} ${thin.key === 1 ? 'white oak plywood' : thin.key === 3 ? 'Baltic birch' : 'okoume'} and the 12 mm okoume with calipers, at six or more points on the edges.`, [
+        it(`Measure the ${thin.nominal} ${thin.key === 1 ? 'white oak plywood' : thin.key === 3 ? 'Baltic birch' : 'okoume'} and the 12 mm okoume deck sheet with calipers, at six or more points on the edges.`, [
           thin.key === 1 ? 'Nominal 1/4" white oak plywood runs about 7/32", and the veneer face varies.' : '',
           'BS 1088 12 mm often runs to 31/64" or more, and the sealed sheet is a few thousandths thicker.',
         ].filter(Boolean)),
@@ -429,33 +468,12 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
         ...(thin.key === 3 ? [it('Confirm the sheet size: probably 5 × 5 ft (60 × 60 in); the 59-5/8" side web blank only just fits.')] : []),
       ],
       passList: [`The ${thin.nominal} sheet measures ${fr(thin.thicknessIn, 64)}" or less and the 12 mm sheet ${fr(p.deckPlyIn, 64)}" or less: each, plus a seal coat of a few thousandths, still slides into its dado with a little to spare (about 1/32").`],
-      ifFails: `Enter the measured thickness (plus the seal coat) in the design (${lbl(thin.key === 1 ? 'whiteOakPlyThickIn' : thin.key === 3 ? 'balticThinThickIn' : 'panelPlyIn')}, ${lbl('deckPlyIn')}), re-run the checks and regenerate the Shaper files BEFORE a dado is cut: a thick sheet in a nominal dado cannot be fixed afterwards.`,
+      ifFails: `Enter the measured thickness (plus the seal coat) in the design (${lbl(thinKey)}, ${lbl('deckPlyIn')}), re-run the checks and regenerate the Shaper files BEFORE a dado is cut: a thick sheet in a nominal dado cannot be fixed afterwards.`,
       partIds: ids(parts, /^(deck|side-[LR]-web|transom-rear|bow-bulkhead)$/),
-      paramKeys: verifyKeys(['panelPlyIn', 'whiteOakPlyThickIn', 'balticThinThickIn', 'deckPlyIn', 'grooveSlopIn', 'deckSlopIn']),
+      // the sheet this design uses and the deck ply: the two values the fail text tells you to enter (not the other thin sheets' thicknesses)
+      paramKeys: [thinKey, 'deckPlyIn'],
       when: 'before cutting',
       refs: ['D-62', 'D-63', 'D-73'],
-    },
-    {
-      id: 'bow-rib-clearance',
-      title: `Bow rib: sit a booted rider in the sled before cutting the bow posts`,
-      how: [
-        it('Sit a rider in winter boots in the sled (or a mock-up of the seat and the bow).', [
-          `Mark the bow post on each side: its inner face is ${fr(bowRib.face)}" from the center line, ${fr(bowRib.fromTransom, 8)}" from the transom.`,
-          'Put the boots where the rider rests them against the foot brace, then at full steering lock.',
-        ]),
-        ...(bowRib.alt
-          ? [it(`If the post is in the way, move the front rib to the chain joist (about ${fr(bowRib.alt.fromTransom, 8)}" from the transom, ${f(bowRib.alt.fromAxle, 0)}" ahead of the rear axle; its inner face is ${fr(bowRib.alt.face)}" from the center line).`, [
-              `Change the design value ${lbl('sideRibFrontXIn')} to ${f(bowRib.alt.fromAxle, 0)}: the rib and its knee snap to the joist.`,
-              'The knee screws then go into the chain joist: check them against the steering-chain anchor eye bolt in that joist and keep the two screws clear of its hole.',
-            ])]
-          : [it('If the post is in the way, leave the bow ring off (2 lash points per side) or ask for a thinner post.')]),
-      ],
-      passList: [`The boots clear the post by about 1" at full lock (the post face is ${fr(bowRib.face)}" from the center line).`],
-      ifFails: bowRib.alt ? `Set ${lbl('sideRibFrontXIn')} to ${f(bowRib.alt.fromAxle, 0)}, re-run the checks (the side-lateral row) and cut the bow posts for the chain joist.` : 'Drop the bow ring and re-run the checks.',
-      partIds: ids(parts, /^side-rib(-knee)?-[LR]3$/),
-      paramKeys: verifyKeys(['sideRibFrontXIn']),
-      when: 'before cutting',
-      refs: ['D-76'],
     },
   ];
 
@@ -469,7 +487,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
         it('Take one knee off and put it back with the ratchet and wrench, as the assembly step "Take the brake knees off and put them back" says.', [
           'Do it on the finished sled, with the flap on the knee.',
           `Time it: about 5 minutes a side, longer the first time.`,
-          `Tighten each bolt snug, then a quarter turn (about ${p.kneeBoltTightenLbIn} in-lb) and no more.`,
+          `Tighten each bolt snug, then a quarter turn (about ${p.kneeBoltTightenLbIn} in-lb; the quarter turn past snug is the spec, the torque only a check) and no more.`,
         ]),
         it('Look along the joint after the refit.', [
           'Seat a straightedge along the knee leg: it must sit flat on the rail and on the chine band.',
@@ -478,7 +496,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
         ]),
         it('Reach under the deck and look at the backing plate.', ['It is still in its recess, bedded flush, with all four nuts on it.']),
         it('Tug the chock on its cord, still tied to the eye under the knee.'),
-        it('Use the sled for the first outing, then check every bolt with the ratchet.', ['The bolts are held by clamping alone (no glue), so they must still be tight after the first outing.']),
+        it('Use the sled for the first outing, then check every bolt with the ratchet.', ['The bolts are held by clamping alone (no glue), so they must still be tight after the first outing.', 'After that, check each bolt is snug before every outing.']),
         it('Press the brake and rock the flap sideways.', ['Look for wobble at the knee: there should be none.']),
       ],
       passList: [
@@ -489,7 +507,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
         'The chock cord eye is solid and the cord is still tied.',
         'The first brake test shows no wobble at the knee.',
       ],
-      ifFails: 'A gap or a wobble: take the knee off, clean both faces, check the bolt holes for dirt and refit, tightening a little at a time in turn. New lock nuts after about five removals. A washer sunk into the oak means the bolts were over-tightened: stop at snug plus a quarter turn. If the backing plate has come loose, bed it again in thickened epoxy. If it still moves, stop using the brake and measure the holes against the drawing.',
+      ifFails: 'A gap or a wobble: take the knee off, clean both faces, check the bolt holes for dirt and refit, tightening a little at a time in turn. New lock nuts after about five removals. A washer sunk into the oak means the bolts were over-tightened: stop at a quarter turn past snug. If the backing plate has come loose, bed it again in thickened epoxy. If it still moves, stop using the brake and measure the holes against the drawing.',
       partIds: ids(parts, /^(brake-knee|brake-chock|brake-backplate)/),
       paramKeys: [],
       when: 'at assembly',
@@ -499,7 +517,8 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
 
   // Leftovers: any 'verify' param no check claims (the truck bed measurements, the NDS value, ...).
   const claimed = new Set(drafts.flatMap((c) => c.paramKeys));
-  const other = verifyParamKeys().filter((k) => !claimed.has(k));
+  const unused = new Set(unusedVerifyKeys(p));
+  const other = verifyParamKeys().filter((k) => !claimed.has(k) && !unused.has(k));
   if (other.length) {
     drafts.push({
       id: 'other-params',
@@ -520,5 +539,23 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
     });
   }
 
-  return drafts.map((c, i) => ({ ...c, n: i + 1, whatToDo: flatText(c.how), pass: c.passList.join(' ') }));
+  // Number the checks in the order they are shown: before ordering, then before cutting, then at assembly (each group keeps its build order).
+  const order: VerifyWhen[] = ['before ordering', 'before cutting', 'at assembly'];
+  const sorted = order.flatMap((w) => drafts.filter((c) => c.when === w));
+  return sorted.map((c, i) => ({ ...c, n: i + 1, whatToDo: flatText(c.how), pass: c.passList.join(' ') }));
+}
+
+/**
+ * The three lines of the "Verify before ordering" step: one per group of checks, with the real counts (checks before ordering, before the first cut, and at their assembly steps).
+ * `text` is the line, `titles` the checks it lists.
+ */
+export function verifyGroups(checks: VerifyCheck[]): Array<{ when: VerifyWhen; text: string; titles: string[] }> {
+  const n = (w: VerifyWhen): VerifyCheck[] => checks.filter((c) => c.when === w);
+  const pl = (k: number, w: string): string => `${k} ${w}${k === 1 ? '' : 's'}`;
+  const out: Array<{ when: VerifyWhen; text: string; titles: string[] }> = [];
+  const b = n('before ordering'), c = n('before cutting'), a = n('at assembly');
+  if (b.length) out.push({ when: 'before ordering', text: `Before the shopping list goes out: do these ${pl(b.length, 'check')} (how to do each is in the Verify section).`, titles: b.map((v) => v.title) });
+  if (c.length) out.push({ when: 'before cutting', text: `Before the first cut: do ${b.length ? `${c.length} more` : String(c.length)} ${c.length === 1 ? 'check' : 'checks'}.`, titles: c.map((v) => v.title) });
+  if (a.length) out.push({ when: 'at assembly', text: `During the build: ${pl(a.length, 'more check')}, each at its own step (the Verify section says which).`, titles: a.map((v) => v.title) });
+  return out;
 }

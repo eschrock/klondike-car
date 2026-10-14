@@ -284,9 +284,9 @@ describe('D-73: the thin-sheet material and the weather spec', () => {
       const thin = parts.filter((x) => x.kind === 'sheet' && x.stock && x.stock.t < 0.3).reduce((a, x) => a + x.massLb, 0);
       return { total: totalMass(parts), thin, web: runChecks(p, { includeTruck: false }).find((c) => c.id === 'side-web')!.util! };
     });
-    expect(rows[0].total).toBeCloseTo(121.09, 1); // D-77: +0.87 lb (the pivot straps and the knee roofs); D-76: +0.96 lb (the ribs, knees, box ties and through-bolts, less the lash doublers and their screws)
-    expect(rows[1].total).toBeCloseTo(118.28, 1); // D-77 (117.41 before)
-    expect(rows[2].total).toBeCloseTo(118.32, 1); // D-77 (117.45 before)
+    expect(rows[0].total).toBeCloseTo(121.27, 1); // final review: +0.18 lb (the D-ring outside plates replace the overlapping washers); D-77: +0.87 lb (the pivot straps and the knee roofs); D-76: +0.96 lb (the ribs, knees, box ties and through-bolts, less the lash doublers and their screws)
+    expect(rows[1].total).toBeCloseTo(118.46, 1); // D-77 (117.41 before)
+    expect(rows[2].total).toBeCloseTo(118.49, 1); // D-77 (117.45 before)
     expect(rows[0].thin).toBeCloseTo(10.16, 1);
     expect(rows[1].thin).toBeCloseTo(6.91, 1);
     expect(rows[2].thin).toBeCloseTo(6.64, 1);
@@ -362,12 +362,12 @@ describe('D-71: the solid 5/8 in rod (Eric)', () => {
 describe('the numbers at the defaults (weatherSpec Standard: 1/4 in white oak plywood, the solid rod, the 3 wood-screw sizes)', () => {
   it('empty mass 120.22 lb (D-76: +0.96 lb for the side ribs; 119.27 before, 119.2 before D-75: the knee-bolt backing plates +0.35 lb, the square tongue seat -0.25; 120.5 before D-74, 120.7 before the hanger bolts were counted once and the king-beam nut slot was cut out; 115.95 lb at D-71: +1.9 for the rod, +2.8 for the white oak sides, box and lid, +0.04 for the hinge backers and fasteners)', () => {
     const m = totalMass(buildModel(defaults, { rider: 'none', cargo: false }));
-    expect(m).toBeCloseTo(121.090, 2); // D-77: +0.865 lb (the pivot straps +0.47, the taller knees with their roofs +0.38, the strap screws, the shorter pins; 120.225 before); D-76: +0.956 lb (119.269 before)
+    expect(m).toBeCloseTo(121.267, 2); // final review: +0.177 lb (the D-ring outside plates replace the overlapping washers); D-77: +0.865 lb (the pivot straps +0.47, the taller knees with their roofs +0.38, the strap screws, the shorter pins; 120.225 before); D-76: +0.956 lb (119.269 before)
     const ok = totalMass(buildModel({ ...defaults, thinSheetMaterial: OKOUME }, { rider: 'none', cargo: false }));
-    expect(ok).toBeCloseTo(118.28, 1); // D-77 (117.41 before)
+    expect(ok).toBeCloseTo(118.46, 1); // D-77 (117.41 before)
     expect(m - ok).toBeCloseTo(2.83, 1);
     const tubeOk = totalMass(buildModel({ ...defaults, ...PRE_D72 }, { rider: 'none', cargo: false }));
-    expect(tubeOk).toBeCloseTo(116.40, 1); // D-77 (115.53 before); 114.56 before D-76
+    expect(tubeOk).toBeCloseTo(116.58, 1); // D-77 (115.53 before); 114.56 before D-76
     expect(ok - tubeOk).toBeCloseTo(1.88, 1); // the rod over the tube
   });
   it('riders safe 50-250+ lb, green 50-220 lb (230 with the 4 mm okoume); cargo capacity 254 lb; nothing fails', () => {

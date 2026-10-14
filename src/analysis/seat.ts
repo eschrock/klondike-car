@@ -15,7 +15,7 @@
  */
 import { GRIP_BACKING_H_IN, GRIP_BACKING_T_IN, gripBackingLen, GRIP_BOLT_COLS, GRIP_BOLT_DIA_IN, GRIP_WASHER_OD_IN, GRIP_BOLT_ROWS_IN, GRIP_BOLTS, LATCH_HOLE_WALL_MIN_IN, latchGeometry, seatBackSupport } from '../model/seat';
 import { storageGeometry, storageInterior, boxGear, packEssentials, ESSENTIALS } from '../model/storage';
-import { LASH_BOLTS, LASH_BOLT_AR_IN2, LASH_BOLT_AT_IN2, LASH_BOLT_DIA_IN, LASH_WASHER, lashBoltLength, sideRibStations } from '../model/side-ribs';
+import { LASH_BOLTS, LASH_HOLE_DX_IN, LASH_HOLE_DZ_IN, LASH_BOLT_AR_IN2, LASH_BOLT_AT_IN2, LASH_BOLT_DIA_IN, LASH_OUTER_PLATE, lashBoltLength, lashPlateAreaPerBoltIn2, sideRibStations } from '../model/side-ribs';
 import { sideLateral } from './side-lateral';
 import type { Ctx } from './context';
 import { dualCheck, governing, singleCheck, detail, type CaseEval } from './dual';
@@ -231,21 +231,29 @@ export function lashPointsCheck(ctx: Ctx): AnalysisCheck {
   });
 }
 
+/** #8-32 pan head diameter (ASME B18.6.3, about 0.33 in): the screw head's footprint on the outside plate. A constant here because the model has no head size (it belongs next to LASH_OUTER_PLATE). */
+const LASH_SCREW_HEAD_DIA_IN = 0.33;
+
 /** Numbers behind the lash-load check (D-76: four #8-32 machine screws through the rib head and the side sandwich), exported for the tests. */
 export function lashLoads(ctx: Ctx) {
   const { p } = ctx;
   const th = (p.lashPullAngleDeg * Math.PI) / 180;
   const V = p.lashLoadLbf * Math.sin(th); // up the head: shear in the bolts, bearing on the head along its grain
-  const H = p.lashLoadLbf * Math.cos(th); // inboard: bolt tension, the fender washers bear on the outer band
+  const H = p.lashLoadLbf * Math.cos(th); // inboard: bolt tension, the outside bearing plate bears on the outer band
   const T1 = H / LASH_BOLTS, V1 = V / LASH_BOLTS;
   const Ft = p.lashBoltYieldPsi / p.steelSafetyFactor, Fv = (0.6 * p.lashBoltYieldPsi) / p.steelSafetyFactor;
   const sigT = T1 / LASH_BOLT_AT_IN2, tau = V1 / LASH_BOLT_AR_IN2;
   const interaction = Math.hypot(sigT / Ft, tau / Fv);
   const headBearing = V1 / (LASH_BOLT_DIA_IN * p.sideRibDepthIn);
-  const washerArea = (Math.PI / 4) * (LASH_WASHER.od ** 2 - LASH_WASHER.id ** 2);
-  const washerBearing = T1 / washerArea;
+  const plateArea = lashPlateAreaPerBoltIn2(); // each screw bears on its quarter of the outside plate (D-76: the 3/4" washers overlapped on the 1/2" rows)
+  const plateBearing = T1 / plateArea;
+  // Plate bending (D-76, same style as the knee backing-plate row): each screw's quarter of the plate is a cantilever from the head edge under the bearing pressure q. The holes sit LASH_HOLE_DX_IN / LASH_HOLE_DZ_IN from the plate center, so the longer
+  // side of the quarter (toward the plate center line in x) governs.
+  const plateCant = Math.max(LASH_HOLE_DX_IN, LASH_OUTER_PLATE.len / 2 - LASH_HOLE_DX_IN, LASH_HOLE_DZ_IN, LASH_OUTER_PLATE.tall / 2 - LASH_HOLE_DZ_IN) - LASH_SCREW_HEAD_DIA_IN / 2;
+  const plateBend = ((plateBearing * plateCant ** 2) / 2) / (LASH_OUTER_PLATE.thick ** 2 / 6);
+  const plateAllow = p.brakeBackPlateYieldPsi / p.steelSafetyFactor;
   const sl = sideLateral(ctx);
-  return { V, H, T1, V1, Ft, Fv, sigT, tau, interaction, headBearing, washerArea, washerBearing, ribSig: sl.rating.ribSigMax, ribN: sl.rating.ribSigMaxN, ribM: sl.rating.ribMMax, bolt: lashBoltLength(p) };
+  return { V, H, T1, V1, Ft, Fv, sigT, tau, interaction, headBearing, plateArea, plateBearing, plateCant, plateBend, plateAllow, ribSig: sl.rating.ribSigMax, ribN: sl.rating.ribSigMaxN, ribM: sl.rating.ribMMax, bolt: lashBoltLength(p) };
 }
 
 export function lashLoadCheck(ctx: Ctx): AnalysisCheck {
@@ -255,7 +263,8 @@ export function lashLoadCheck(ctx: Ctx): AnalysisCheck {
   const ds: Detail[] = [
     detail('bolt tension and shear together ((σ/Ft)² + (τ/Fv)², square root)', k.interaction, '', 1, '<='),
     detail('bolt bearing on the oak head (along its grain)', k.headBearing, 'psi', al.oakDowel, '<='),
-    detail('fender washer bearing on the outer gunwale band (compression ⊥)', k.washerBearing, 'psi', al.oakPerp, '<='),
+    detail('outside plate bearing on the outer gunwale band (compression ⊥)', k.plateBearing, 'psi', al.oakPerp, '<='),
+    detail('outside plate bending past the screw head, each screw\'s quarter as a cantilever (stainless flat bar)', k.plateBend, 'psi', k.plateAllow, '<='),
     detail(`rib bending at the rating (rib ${k.ribN})`, k.ribSig, 'psi', al.oakBend, '<='),
   ];
   const g = ds.reduce((a, b) => (b.util > a.util ? b : a), ds[0]);
@@ -266,8 +275,8 @@ export function lashLoadCheck(ctx: Ctx): AnalysisCheck {
     value: g.value, unit: g.unit, limit: g.limit, sense: g.sense, details: ds,
     refs: ['D-41', 'D-76'],
     how: `One D-ring plate pulled at its ${p.lashLoadLbf} lbf working load, ${p.lashPullAngleDeg}° above the deck: V = ${f(k.V)} lbf up the rib head, H = ${f(k.H)} lbf inboard. `
-      + `D-76: the plate is through-bolted to the rib head with ${LASH_BOLTS} #8-32 x ${k.bolt.len}" stainless machine screws (washer, side sandwich, head, plate, nylock: ${k.bolt.need.toFixed(2)}"), so nothing withdraws: each takes ${f(k.T1)} lbf of tension (${f(k.sigT, 0)} psi on ${LASH_BOLT_AT_IN2} in², allowable ${f(k.Ft, 0)} = ${f(p.lashBoltYieldPsi, 0)} / ${p.steelSafetyFactor}) and ${f(k.V1)} lbf of shear (${f(k.tau, 0)} psi on the ${LASH_BOLT_AR_IN2} in² root, allowable ${f(k.Fv, 0)}); together ${k.interaction.toFixed(2)}. `
-      + `Bearing: ${f(k.V1)} lbf per bolt on ${LASH_BOLT_DIA_IN}" x ${p.sideRibDepthIn}" of head = ${f(k.headBearing, 0)} psi (≤ ${f(al.oakDowel, 0)}; the bands and web behind it not counted); the ${LASH_WASHER.od}" fender washer outside bears ${f(k.washerBearing, 0)} psi on the outer band (≤ ${f(al.oakPerp, 0)}, compression ⊥). `
+      + `D-76: the plate is through-bolted to the rib head with ${LASH_BOLTS} #8-32 x ${k.bolt.len}" stainless machine screws (outside plate, side sandwich, head, plate, nylock: ${k.bolt.need.toFixed(2)}"), so nothing withdraws: each takes ${f(k.T1)} lbf of tension (${f(k.sigT, 0)} psi on ${LASH_BOLT_AT_IN2} in², allowable ${f(k.Ft, 0)} = ${f(p.lashBoltYieldPsi, 0)} / ${p.steelSafetyFactor}) and ${f(k.V1)} lbf of shear (${f(k.tau, 0)} psi on the ${LASH_BOLT_AR_IN2} in² root, allowable ${f(k.Fv, 0)}); together ${k.interaction.toFixed(2)}. `
+      + `Bearing: ${f(k.V1)} lbf per bolt on ${LASH_BOLT_DIA_IN}" x ${p.sideRibDepthIn}" of head = ${f(k.headBearing, 0)} psi (≤ ${f(al.oakDowel, 0)}; the bands and web behind it not counted); the ${LASH_OUTER_PLATE.thick}" x ${LASH_OUTER_PLATE.tall}" x ${LASH_OUTER_PLATE.len}" stainless plate outside (one per D-ring: the four 3/4" fender washers overlapped on the 1/2" rows) gives each screw ${f(k.plateArea, 3)} in² and bears ${f(k.plateBearing, 0)} psi on the outer band (≤ ${f(al.oakPerp, 0)}, compression ⊥); that pressure bends the plate as a ${f(k.plateCant, 3)}" cantilever past the ${LASH_SCREW_HEAD_DIA_IN}" head, ${f(k.plateBend, 0)} psi (≤ ${f(k.plateAllow, 0)}). `
       + `Rib: each rib pulled alone at ${f(k.H)} lbf inboard in the side-lateral model; rib ${k.ribN} takes ${f(k.ribM, 0)} lb·in above its base, ${f(k.ribSig, 0)} psi on the rib section (≤ ${f(al.oakBend, 0)}). The side's own stresses at the rating are in the side-lateral row.`,
   });
 }

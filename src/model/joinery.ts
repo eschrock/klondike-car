@@ -215,7 +215,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
   add({ a: 'transom-rear', b: deck, typeA: 'dado', size: `${rabbetH(L.deckTop, bot).toFixed(3)}" × ${frac(dd)}" dado across the front face (deck + ${frac(ds)}" clearance), run out at each end into the web dados (one continuous pocket at each corner, no thin wall between them), ${frac(p.ventHoleIn)}" vent holes through the transom at both ends`, pts: [[rearTx - dd / 2, 0, L.deckBot + L.ply / 2]], noteB: 'Rear edge of the deck, captured; the dado joins the web dados at both corners.' });
   add({ a: 'bow-bulkhead', b: deck, typeA: 'dado', size: `${rabbetH(L.deckTop, bot).toFixed(3)}" × ${frac(dd)}" dado across the rear face (deck + ${frac(ds)}" clearance), run out at each end into the web dados (one continuous pocket at each corner, no thin wall between them)`, pts: [[L.xFlatEnd + dd / 2, 0, L.deckBot + L.ply / 2]], noteB: 'Front edge of the deck, captured (the dado joins the web dados at both corners); the foot load pulls the bulkhead off it, so the dado glue line is part of the foot-stop row.' });
   for (const { s, tag } of SIDES) {
-    add({ a: `rail-${tag}`, b: deck, typeA: 'glue', size: 'thickened epoxy, full face (the rail top is flush with the deck underside)', pts: [[(rearTx + L.railEnd) / 2, s * (hwAt((rearTx + L.railEnd) / 2) + L.side - railT / 2), L.railTop]], noteA: 'Deck bonded to the rail top (and the joist tops); weights or vacuum bag.' });
+    add({ a: `rail-${tag}`, b: deck, typeA: 'glue', size: 'thickened epoxy, full face (the rail top is flush with the deck underside)', pts: [[(rearTx + L.railEnd) / 2, s * (hwAt((rearTx + L.railEnd) / 2) + L.side - railT / 2), L.railTop]], noteA: 'Deck bonded to the rail top (and the crossmember tops); weights or vacuum bag.' });
     // Side-to-frame tie (build review M6, D-43): the chine bears on the rail, epoxy bed + VERTICAL Dominos every chineTieSpacingIn (the hull is built inverted, MUST-2).
     const x0 = rearTx, x1 = L.railEnd;
     if (x1 - x0 >= (2 * p.chineTieSpacingIn) / 3) {
@@ -324,7 +324,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     }
     for (const { s, tag } of SIDES) {
       const [ax, ay, az] = L.chain.anchor;
-      add({ a: `steer-anchor-${tag}`, b: joistId(L, L.joistX.indexOf(L.king.x) - 1), typeA: 'bolt', size: `${frac(p.steerEyeBoltDiaIn)}" forged shoulder eye bolt fore-aft through the chain joist, shoulder and 2" washer on its front face, nylock nut and 2" washer on the rear face`, pts: [[L.chain.joistX, s * Math.abs(ay), az]], noteA: 'Anchor of the steering check chain (D-58); the chain pulls the eye forward out of the joist.' });
+      add({ a: `steer-anchor-${tag}`, b: joistId(L, L.joistX.indexOf(L.king.x) - 1), typeA: 'bolt', size: `${frac(p.steerEyeBoltDiaIn)}" forged shoulder eye bolt fore-aft through the chain crossmember, shoulder and 2" washer on its front face, nylock nut and 2" washer on the rear face`, pts: [[L.chain.joistX, s * Math.abs(ay), az]], noteA: 'Anchor of the steering check chain (D-58); the chain pulls the eye forward out of the crossmember.' });
       void ax;
       add({ a: `steer-eye-${tag}`, b: 'beam-F', typeA: 'bolt', size: `${frac(p.steerEyeBoltDiaIn)}" forged shoulder eye bolt fore-aft through the axle beam, nylock nut and 2" fender washer on its front face`, pts: [[L.king.x - L.beamF.thick / 2, s * L.chain.beamV, L.chain.beamZ]], noteA: 'Beam end of the steering check chain (D-58); the eye stands out of the trailing face.' });
     }

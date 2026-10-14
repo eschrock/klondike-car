@@ -13,10 +13,24 @@ import { OAK_PRICE_PER_BF, isOakStocked } from './prices';
 import type { Dims, Part } from '../model/types';
 import { PARAM_DEFS, type Params } from '../params';
 import { localBounds } from '../model/bounds';
+import { computeLayout, sideTopAt } from '../model/layout';
+import { boxTieGeometry, sideRibStations } from '../model/side-ribs';
 import { flatPattern } from './flat';
-import { finalDimsText, finalFrac, fractionText, nearest32, roughDimsText, roughFrac, roughUp8 } from './units';
+import { finalDimsText, finalFrac, fractionText, fractionizeInches, nearest32, roughDimsText, roughFrac, roughUp8 } from './units';
 
 export { finalFrac, roughFrac, finalDimsText, roughDimsText, roughUp8 };
+
+/**
+ * True for a cross-laminated block (the brake knee) whose W is its tall side and whose L is the short one: "T x W x L" misleads there (the 9-1/2" side is not a "width" and the 3-11/16" side
+ * is not a "length"), so the sizes are written "2-1/8" thick x 9-1/2" tall x 3-11/16" across".
+ */
+export const isTallBlock = (x: Pick<Part, 'layerGrain'>, d: Dims): boolean => !!x.layerGrain && d.w > d.l + 1e-6;
+/** A size as the shop reads it: "3/4 x 5-7/8 x 25-1/2" (T x W x L), or for a tall cross-laminated block `2-1/8" thick x 9-1/2" tall x 3-11/16" across`. `rough` rounds up to 1/8, else to the nearest 1/32. */
+export function sizeText(d: Dims, rough: boolean, tall = false): string {
+  if (!tall) return rough ? roughDimsText(d) : finalDimsText(d);
+  const f = rough ? roughFrac : finalFrac;
+  return `${f(d.t)} thick \u00d7 ${f(d.w)} tall \u00d7 ${f(d.l)} across`;
+}
 
 // ── Board thickness map ───────────────────────────────────────────────────────
 
@@ -169,6 +183,8 @@ const dimKey = (d: Dims): string => `${d.t.toFixed(2)}x${d.w.toFixed(2)}x${d.l.t
  * that axis and matches it to the stock length, width or thickness (a tie goes to L, then W).
  */
 export function grainInWords(x: Part): string | undefined {
+  // A cross-laminated part has no single grain: say the face layers' and the center layer's (`Part.grain` is the center layer's there, which would contradict the face layers).
+  if (x.layerGrain && x.layerGrain.length > 1) return crossGrainWords(x);
   if (!x.grain || !x.stock) return undefined;
   const b = localBounds(x.geometry);
   const k = x.grain === 'x' ? 0 : x.grain === 'y' ? 1 : 2;
@@ -179,14 +195,31 @@ export function grainInWords(x: Part): string | undefined {
   return best[0];
 }
 
+/**
+ * The grain of a cross-laminated part, layer by layer: "face layers: grain upright; center layer: across the sled". The face layers are the first and last, the center layers the ones between.
+ * Undefined when the model does not say.
+ */
+export function crossGrainWords(x: Part): string | undefined {
+  const n = x.layerGrain?.length ?? 0;
+  const words = Array.from({ length: n }, (_, i) => layerGrainWord(x, i + 1));
+  if (n < 2 || words.some((w) => !w)) return undefined;
+  const face = words[0], inner = [...new Set(words.slice(1, -1))];
+  return inner.length ? `face layers: grain ${face}; center layer${words.length > 3 ? 's' : ''}: ${inner.join(' / ')}` : `grain ${face}`;
+}
+
 /** Assembly step numbers (`BuildStep.n`) of each part id, from the step list (structural type: `cutlist.ts` cannot import `assembly.ts`, which imports it). */
 export function stepMapOf(steps: ReadonlyArray<{ n: number; partIds: readonly string[] }>): Map<string, number> {
   const m = new Map<string, number>();
   for (const s of steps) for (const id of s.partIds) if (!m.has(id)) m.set(id, s.n);
   return m;
 }
+/**
+ * Parts that are cut and drilled at another part's step than the one that names them: the D-ring bearing plate is cut from flat bar and drilled with the D-ring plate as the template at the
+ * rib-fitting step (the plate's rib is `side-rib-<side><n>`), and bolted on at the hardware step. Both steps are listed.
+ */
+const cutWith = (id: string): string | undefined => { const m = /^dring-plate-(.+)$/.exec(id); return m ? `side-rib-${m[1]}` : undefined; };
 const stepsOf = (ids: string[], m?: ReadonlyMap<string, number>): number[] =>
-  m ? [...new Set(ids.map((i) => m.get(i)).filter((v): v is number => v !== undefined))].sort((a, b) => a - b) : [];
+  m ? [...new Set(ids.flatMap((i) => [m.get(i), (() => { const w = cutWith(i); return w ? m.get(w) : undefined; })()]).filter((v): v is number => v !== undefined))].sort((a, b) => a - b) : [];
 const stepText = (n: number[]): string => n.join(', ');
 
 /** Put a T x W x L into ascending-thickness order when the model gave a long or wide "thickness" (seat-crest-strip has T 13.5 in), and say so. */
@@ -252,8 +285,10 @@ export interface OakRow {
   board: string;
   /** Grain as a LOCAL axis ('x' | 'y' | 'z'), as the model gives it. */
   grain?: string;
-  /** Grain in words for the bench: 'along L', 'along W' or 'vertical (T)'. */
+  /** Grain in words for the bench: 'along L', 'along W' or 'vertical (T)'. For a cross-laminated part this is the FACE layers' grain ("face layers up the leg, center layer across"), never one axis. */
   grainWord?: string;
+  /** A cross-laminated block whose W is its tall side (the brake knee): its sizes read "thick x tall x across" (see `isTallBlock`). */
+  tall?: boolean;
   fab: string;
   /** MODEL step (`Part.step`, e.g. 4.2; lowest, when pieces differ). Not the assembly step. */
   step: number;
@@ -645,6 +680,7 @@ const rowKeyDims = (d: Dims): string => `${d.t.toFixed(3)}x${d.w.toFixed(3)}x${d
 function oakRows(plans: OakPartPlan[], stepOf?: ReadonlyMap<string, number>): OakRow[] {
   const map = new Map<string, OakRow>();
   const planOf = new Map<string, OakPartPlan>();
+  const names = nameByIdentity(plans);
   for (const pl of plans) {
     const x = pl.part;
     const key = `${pl.partNo}|${rowKeyDims(pl.block)}|${pl.board}`;
@@ -652,7 +688,8 @@ function oakRows(plans: OakPartPlan[], stepOf?: ReadonlyMap<string, number>): Oa
     if (row) { row.qty += 1; row.ids.push(x.id); row.step = Math.min(row.step, x.step); row.assemblySteps = stepsOf(row.ids, stepOf); continue; }
     const gw = grainInWords(x);
     map.set(key, {
-      partNo: pl.partNo, name: x.name, qty: 1, ids: [x.id], stock: pl.stock, rough: pl.block, roughExact: pl.blockExact, edgeBoards: pl.edgeN, board: pl.board, grain: x.grain,
+      partNo: pl.partNo, name: names.get(identityOf(pl)) ?? x.name, qty: 1, ids: [x.id], stock: pl.stock, rough: pl.block, roughExact: pl.blockExact, edgeBoards: pl.edgeN, board: pl.board, grain: x.grain,
+      ...(isTallBlock(x, pl.stock) ? { tall: true } : {}),
       ...(gw ? { grainWord: gw } : {}), fab: x.fab, step: x.step, assemblySteps: stepsOf([x.id], stepOf),
       ...(x.plies !== undefined ? { plies: x.plies } : {}), ...(pl.lamination ? { lamination: pl.lamination, note: laminationNote(pl.lamination, pl.pieces) } : {}),
       layerPieces: [], warnings: pl.warnings,
@@ -853,6 +890,7 @@ export function planResaw(parts: Part[], p: Params, plans?: OakPartPlan[]): Resa
 
 function stripRows(plans: OakPartPlan[], pools: ResawPool[]): StripRow[] {
   const map = new Map<string, StripRow>();
+  const names = nameByIdentity(plans);
   for (const pl of plans.filter((q) => q.strip)) {
     const x = pl.part;
     const rough = pl.pieces[0].rough;
@@ -861,7 +899,7 @@ function stripRows(plans: OakPartPlan[], pools: ResawPool[]): StripRow[] {
     const row = map.get(key);
     if (row) { row.parts += 1; row.strips += plies; row.ids.push(x.id); continue; }
     const pool = pools.find((q) => Math.abs(q.roughT - r3(rough.t)) < 1e-6);
-    map.set(key, { partNo: pl.partNo, name: x.name, parts: 1, plies, strips: plies, ids: [x.id], stock: pl.stock, rough, resawFrom: pool?.board ?? '?' });
+    map.set(key, { partNo: pl.partNo, name: names.get(identityOf(pl)) ?? x.name, parts: 1, plies, strips: plies, ids: [x.id], stock: pl.stock, rough, resawFrom: pool?.board ?? '?' });
   }
   return [...map.values()];
 }
@@ -888,6 +926,7 @@ function shaperNetNote(x: Part, stock: Dims): { net: number; note: string } | nu
 
 function sheetGroups(parts: Part[], warnings: string[], stepOf?: ReadonlyMap<string, number>): SheetGroup[] {
   const groups = new Map<number, SheetGroup>();
+  const members = new Map<SheetRow, string[]>();
   for (const x of parts.filter((q) => isBuilt(q) && q.kind === 'sheet')) {
     const stock = sanitize(x.stock ?? { t: 0, w: 0, l: 0 }, warnings, `${partKey(x)} stock`);
     const c = sheetClass(stock.t);
@@ -896,14 +935,17 @@ function sheetGroups(parts: Part[], warnings: string[], stepOf?: ReadonlyMap<str
     g.pieces += 1;
     const key = `${partKey(x)}|${dimKey(stock)}`;
     const row = g.rows.find((r) => `${r.partNo}|${dimKey(r.stock)}` === key);
-    if (row) { row.qty += 1; row.ids.push(x.id); row.step = Math.min(row.step, x.step); row.assemblySteps = stepsOf(row.ids, stepOf); }
+    if (row) { row.qty += 1; row.ids.push(x.id); row.step = Math.min(row.step, x.step); row.assemblySteps = stepsOf(row.ids, stepOf); members.get(row)!.push(x.name); }
     else {
       const gw = grainInWords(x);
       const net = shaperNetNote(x, stock);
       const note = net?.note;
-      g.rows.push({ partNo: partKey(x), name: x.name, qty: 1, ids: [x.id], stock, final: net ? { ...stock, l: net.net } : stock, grain: x.grain, ...(gw ? { grainWord: gw } : {}), fab: x.fab, step: x.step, assemblySteps: stepsOf([x.id], stepOf), ...(note ? { note } : {}) });
+      const nr: SheetRow = { partNo: partKey(x), name: x.name, qty: 1, ids: [x.id], stock, final: net ? { ...stock, l: net.net } : stock, grain: x.grain, ...(gw ? { grainWord: gw } : {}), fab: x.fab, step: x.step, assemblySteps: stepsOf([x.id], stepOf), ...(note ? { note } : {}) };
+      members.set(nr, [x.name]);
+      g.rows.push(nr);
     }
   }
+  for (const [r, names] of members) r.name = groupedName(names);
   return [...groups.values()].sort((a, b) => a.thicknessMm - b.thicknessMm);
 }
 
@@ -944,7 +986,7 @@ function metalSection(x: Part, family: string, d: Dims): string {
   switch (family) {
     case 'Steel rod': return `${fracIn(d.t)}" solid 1045 / CDS steel rod (cut to length)`;
     case 'DOM tube': return `${fracIn(d.t)}" OD x ${(wall() ?? 0.12).toFixed(3)}" wall DOM tube (ASTM A513 Type 5)`;
-    case 'Aluminum tube': return `6061-T6 ${fracIn(d.t)}" x ${fracIn(d.w)}" x ${(wall() ?? 0.125).toFixed(3)}" wall rectangular tube`;
+    case 'Aluminum tube': return fractionizeInches(`6061-T6 ${fracIn(d.t)}" x ${fracIn(d.w)}" x ${(wall() ?? 0.125).toFixed(3)}" wall rectangular tube`); // a shop fraction, 1/8", not 0.130"
     case 'Angle': return `${grade} angle ${fracIn(d.w)}" x ${fracIn(d.w)}" x ${fracIn(d.t)}"`;
     default: return `${grade} flat bar ${fracIn(d.t)}" x ${fracIn(d.w)}"`;
   }
@@ -952,6 +994,7 @@ function metalSection(x: Part, family: string, d: Dims): string {
 
 function metalRows(parts: Part[], warnings: string[], stepOf?: ReadonlyMap<string, number>): MetalRow[] {
   const map = new Map<string, MetalRow>();
+  const members = new Map<MetalRow, string[]>();
   for (const x of parts.filter((q) => isBuilt(q) && q.kind === 'metal')) {
     const family = metalFamily(x);
     if (!family) { warnings.push(`${partKey(x)}: unrecognized metal material '${x.material}'`); continue; }
@@ -961,9 +1004,12 @@ function metalRows(parts: Part[], warnings: string[], stepOf?: ReadonlyMap<strin
     const section = metalSection(x, family, d);
     const key = `${partKey(x)}|${dimKey(d)}`;
     const row = map.get(key);
-    if (row) { row.qty += 1; row.ids.push(x.id); row.step = Math.min(row.step, x.step); row.assemblySteps = stepsOf(row.ids, stepOf); continue; }
-    map.set(key, { partNo: partKey(x), name: x.name, qty: 1, ids: [x.id], family, section, material: x.material, cutLengthIn: d.l, stock: d, fab: x.fab, step: x.step, assemblySteps: stepsOf([x.id], stepOf), warnings: w });
+    if (row) { row.qty += 1; row.ids.push(x.id); row.step = Math.min(row.step, x.step); row.assemblySteps = stepsOf(row.ids, stepOf); members.get(row)!.push(x.name); continue; }
+    const nr: MetalRow = { partNo: partKey(x), name: x.name, qty: 1, ids: [x.id], family, section, material: x.material, cutLengthIn: d.l, stock: d, fab: x.fab, step: x.step, assemblySteps: stepsOf([x.id], stepOf), warnings: w };
+    members.set(nr, [x.name]);
+    map.set(key, nr);
   }
+  for (const [r, names] of members) r.name = groupedName(names);
   return [...map.values()].sort((a, b) => a.family.localeCompare(b.family) || b.cutLengthIn - a.cutLengthIn);
 }
 
@@ -1001,7 +1047,7 @@ export function cutList(parts: Part[], p: Params, stepOf?: ReadonlyMap<string, n
   for (const pool of pools) {
     if (!pool.withinCapacity) warnings.push(`Resaw: the ${roughFrac(pool.roughT)}-thick strips are ${roughFrac(pool.resawHeightIn)} wide, which is taller than your bandsaw can resaw (${fractionText(pool.bandsawCapacityIn, 8)}" capacity): a thinner or narrower strip, a planer sled on thicker boards, or a different build is needed`);
   }
-  const cuts = cutsOf(plans, pools);
+  const cuts = cutsOf(plans, pools, p);
   const glueUps = glueUpsOf(plans);
   const finished = finishedOf(oak);
 
@@ -1040,27 +1086,73 @@ export function cutList(parts: Part[], p: Params, stepOf?: ReadonlyMap<string, n
 
 // ── Actual cuts, glue-ups and finished parts ──────────────────────────────────
 
-const stripName = (name: string): string => name.replace(/\s*\((?:oak|white oak)[^)]*\)\s*$/i, '').trim();
+/** A part name without its material parenthetical ("Brake knee backer L (white oak)" -> "Brake knee backer L"). */
+const stripName = (name: string): string => name.replace(/\s*\((?:oak|white oak|(?:18-8 )?\d+ stainless)[^)]*\)\s*$/i, '').trim();
+const cap1 = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
-/** The name shared by the identical parts of one part number: the name itself when they agree, else the first name without its side or number ('Wheel chock L' -> 'Wheel chock', 'Left chine band' -> 'chine band'). */
-function sharedNames(plans: OakPartPlan[]): Map<string, string> {
-  const by = new Map<string, string[]>();
-  for (const pl of plans) (by.get(pl.partNo) ?? by.set(pl.partNo, []).get(pl.partNo)!).push(stripName(pl.part.name));
-  const out = new Map<string, string>();
-  for (const [no, names] of by) {
-    if (names.every((n) => n === names[0])) { out.set(no, names[0]); continue; }
-    const base = names[0].replace(/^(?:left|right)\s+/i, '').replace(/\s+(?:\d+|[LR])(?=\s*(?:\(|$))/, '').trim();
-    out.set(no, base.charAt(0).toUpperCase() + base.slice(1));
+/**
+ * One name for a row of identical parts (a cut-list row, a BOM cut line): what its members share, without one instance's side or number. "Side box rib, left" + "Side box rib, right" -> "Side box rib";
+ * "Sign backing strip L1" ... "R2" -> "Sign backing strip"; "rear left axle clamp plate" + "Front right axle clamp plate 1" -> "Axle clamp plate" (the words the names end with in common).
+ * Members that carry a plain number keep them, so a reviewer can find them in the drawings: "Crossmember 2", "Crossmember 3", "Crossmember 4" -> "Crossmembers 2, 3, 4". With `keepPosition` an
+ * "L2" / "R2" keeps its digit ("Rib knee 2"): the caller asks for it when two different rows would otherwise get the same name.
+ */
+export function groupedName(names: readonly string[], keepPosition = false): string {
+  const uniq = [...new Set(names.map(stripName))];
+  if (uniq.length === 1) return cap1(uniq[0]);
+  const norm = (n: string): { base: string; num?: number } => {
+    let b = n.replace(/^(?:left|right)\s+/i, '').replace(/,\s*(?:left|right)\b/gi, '').replace(/\s+(?:left|right)\b/gi, '');
+    const pos = /\s+[LR](\d*)(?=\s*(?:\(|,|$))/.exec(b);
+    if (pos) b = b.replace(pos[0], keepPosition && pos[1] ? ` ${pos[1]}` : '');
+    const m = /\s+(\d+)$/.exec(b);
+    return m ? { base: b.slice(0, m.index).trim(), num: Number(m[1]) } : { base: b.trim() };
+  };
+  const parts = uniq.map(norm);
+  const lc = parts.map((q) => q.base.toLowerCase());
+  if (lc.every((b) => b === lc[0])) {
+    const base = cap1(parts[0].base);
+    if (parts.some((q) => q.num === undefined)) return base;
+    const nums = [...new Set(parts.map((q) => q.num as number))].sort((x, y) => x - y);
+    return `${nums.length > 1 && !/s$/i.test(base) ? `${base}s` : base} ${nums.join(', ')}`;
   }
+  // bases that differ only by a position word ("Storage coaming aft end" / "fore end", "rear" / "Front axle clamp plate"): drop it
+  const noPos = (b: string): string => b.replace(/\s*\((?:fore|aft|front|rear|top|bottom|upper|lower)\)/gi, '').replace(/\b(?:fore|aft|front|rear|top|bottom|upper|lower)\b/gi, '').replace(/\s+/g, ' ').replace(/\s+,/g, ',').trim();
+  const stripped = parts.map((q) => noPos(q.base));
+  if (stripped[0] && stripped.every((b) => b.toLowerCase() === stripped[0].toLowerCase())) return cap1(stripped[0]);
+  // different bases: the words they end with in common ("rear axle clamp plate" / "Front axle clamp plate" -> "axle clamp plate")
+  const words = lc.map((b) => b.split(/\s+/));
+  const common: string[] = [];
+  for (let i = 1; i <= Math.min(...words.map((w) => w.length)); i++) {
+    const w = words[0][words[0].length - i];
+    if (words.every((q) => q[q.length - i] === w)) common.unshift(w); else break;
+  }
+  if (common.length >= 2 || (common.length === 1 && words.every((q) => q.length <= 2))) return cap1(common.join(' '));
+  const lead: string[] = [];
+  for (let i = 0; i < Math.min(...words.map((w) => w.length)) && words.every((q) => q[i] === words[0][i]); i++) lead.push(words[0][i]);
+  if (lead.length >= 2) return cap1(lead.join(' ').replace(/,$/, ''));
+  return cap1(parts[0].base);
+}
+
+/** A row's identity in the oak tables: the part number and the rough block, the same key `oakRows`, the cuts and the glue-ups group on. */
+const identityOf = (pl: OakPartPlan): string => `${pl.partNo}|${rowKeyDims(pl.block)}`;
+
+/** One display name per row of identical oak parts (see `groupedName`); two different rows that would share a name keep their position digits ("Rib knee 2" and "Rib knee 3"). */
+function nameByIdentity(plans: OakPartPlan[]): Map<string, string> {
+  const by = new Map<string, string[]>();
+  for (const pl of plans) (by.get(identityOf(pl)) ?? by.set(identityOf(pl), []).get(identityOf(pl))!).push(pl.part.name);
+  const out = new Map<string, string>();
+  for (const [k, names] of by) out.set(k, groupedName(names));
+  const count = new Map<string, number>();
+  for (const n of out.values()) count.set(n, (count.get(n) ?? 0) + 1);
+  for (const [k, n] of out) if ((count.get(n) ?? 0) > 1) out.set(k, groupedName(by.get(k)!, true));
   return out;
 }
 
 /** The pieces sawn from boards: identical pieces of identical parts are one entry with a quantity. */
-function cutsOf(plans: OakPartPlan[], pools: ResawPool[]): Cut[] {
+function cutsOf(plans: OakPartPlan[], pools: ResawPool[], p: Params): Cut[] {
   const map = new Map<string, Cut>();
-  const names = sharedNames(plans);
+  const names = nameByIdentity(plans);
   for (const pl of plans) {
-    const name = names.get(pl.partNo)!;
+    const name = names.get(identityOf(pl))!;
     const glued = pl.edgeN > 1 || !!pl.lamination;
     const glueLabel = glued ? `${name} ${pl.lamination ? 'block' : 'panel'}` : undefined;
     const unequal = (pc: PlannedPiece): boolean => !!pc.layer && pl.pieces.some((q) => q.layer === pc.layer && Math.abs(q.rough.w - pc.rough.w) > 1e-9);
@@ -1084,8 +1176,61 @@ function cutsOf(plans: OakPartPlan[], pools: ResawPool[]): Cut[] {
       });
     }
   }
+  return sortCuts([...map.values(), ...ribFillerCuts(plans, pools, p)]);
+}
+
+const sortCuts = (cuts: Cut[]): Cut[] => {
   const boardOrder = (b: string): number => (b === 'resawn' ? 1000 : BOARD_THICKNESSES.findIndex((q) => q.nominal === b));
-  return [...map.values()].sort((a, b) => boardOrder(a.board) - boardOrder(b.board) || b.rough.l - a.rough.l || a.partNo.localeCompare(b.partNo) || a.index - b.index);
+  return cuts.sort((a, b) => boardOrder(a.board) - boardOrder(b.board) || b.rough.l - a.rough.l || a.partNo.localeCompare(b.partNo) || a.index - b.index);
+};
+
+/** One filler behind a side rib (D-76): a piece of band strip, `widthIn` wide, glued to the web between the inner chine and gunwale bands so the rib's back sits flat. */
+export interface RibFiller {
+  /** Rib station (1 box rib, 2 mid rib, 3 bow post), and its role in words. */
+  n: 1 | 2 | 3;
+  role: string;
+  /** Fillers of this station (one per side). */
+  count: number;
+  /** Length of the gap to fill (in, up the web), the width (the rib shaft) and the thickness (the band, `sideBand`). */
+  lengthIn: number;
+  widthIn: number;
+  thickIn: number;
+}
+
+/** The side-rib fillers, per station, derived from the layout the way the assembly step is (the gap between the inner chine band's top and the gunwale band's underside, or from the box tie's foot). Empty when the model has no ribs. */
+export function ribFillers(parts: ReadonlyArray<Pick<Part, 'id'>>, p: Params): RibFiller[] {
+  const ribs = parts.filter((x) => /^side-rib-[LR]\d$/.test(x.id));
+  if (!ribs.length) return [];
+  const L = computeLayout(p);
+  const zChineTop = L.chineBot + L.chineH;
+  const roles: Record<number, string> = { 1: 'box rib', 2: 'mid rib', 3: 'bow post' };
+  return sideRibStations(p, L).map((st) => {
+    const foot = st.kind === 'box' ? boxTieGeometry(p, L, st).z0 : L.deckTop;
+    return {
+      n: st.n, role: roles[st.n], count: ribs.filter((x) => x.id.endsWith(String(st.n))).length,
+      lengthIn: Math.max(0, sideTopAt(L, st.x) - L.railBand - Math.max(zChineTop, foot)), widthIn: p.sideRibWidthIn, thickIn: L.sideBand,
+    };
+  }).filter((f) => f.count > 0);
+}
+
+/**
+ * The rib fillers as rows of the cuts table. They are spare band strips (the strip purchase carries spares): each filler is the band's own plies glued face to face (the band thickness),
+ * cut to fit its gap, so a station's row is `count x plies` pieces. Sizes follow the strip allowances; the length is "about" because the filler is fitted to the gap.
+ */
+function ribFillerCuts(plans: OakPartPlan[], pools: ResawPool[], p: Params): Cut[] {
+  const band = plans.find((q) => q.strip && /^side-[LR]-gunwale-in$/.test(q.part.id));
+  if (!band) return [];
+  const plies = band.pieces.length;
+  const pool = pools.find((q) => Math.abs(q.roughT - r3(band.pieces[0].rough.t)) < 1e-6);
+  return ribFillers(plans.map((q) => q.part), p).map((f, i): Cut => {
+    const roughExact: Dims = { t: band.pieces[0].roughExact.t, w: f.widthIn + p.laminateWidthAllowanceIn, l: f.lengthIn + 1 / 8 }; // cut to fit its gap: a hair over, not the allowance of a bent part
+    const rough: Dims = { t: band.pieces[0].rough.t, w: roughUp8(roughExact.w), l: roughUp8(roughExact.l) };
+    return {
+      partId: `rib-filler-${f.n}`, ids: [], qty: f.count * plies, partNo: 'side-rib-filler', name: `Rib filler, ${f.role}`, label: `Rib filler, ${f.role} (spare band strip)`,
+      piece: 'strip', index: i + 1, of: 3, board: pool?.board ?? band.pieces[0].board, rough, roughExact, roughText: roughDimsText(rough),
+      note: `a spare band strip, grain up the web${plies > 1 ? `, ${plies} layers glued face to face` : ''}, planed to ${finalFrac(band.stock.t * plies)} thick like the bands; ${f.count} of them, one per side; cut each to fit its gap, about ${fractionText(roughUp8(f.lengthIn), 8)}" long`,
+    };
+  });
 }
 
 /** Each layer of a laminated part as it lies in the block: the width across ITS grain (the boards edge-glued, added up) and its length along its grain. */
@@ -1112,10 +1257,10 @@ function layerSizesText(lyr: Array<{ layer: number; across: number; along: numbe
 /** The glue-ups that follow the cuts: each panel or laminated block, with the finished size it is milled to. */
 function glueUpsOf(plans: OakPartPlan[]): GlueUp[] {
   const map = new Map<string, GlueUp>();
-  const names = sharedNames(plans);
+  const names = nameByIdentity(plans);
   for (const pl of plans) {
     if (pl.strip || (pl.edgeN <= 1 && !pl.lamination)) continue;
-    const name = names.get(pl.partNo)!;
+    const name = names.get(identityOf(pl))!;
     const layers = pl.lamination ? pl.lamination.layers.length : 1;
     const kind: GlueUp['kind'] = pl.lamination ? (pl.edgeN > 1 ? 'both' : 'face') : 'edge';
     const label = `${name} ${pl.lamination ? 'block' : 'panel'}`;
@@ -1128,6 +1273,7 @@ function glueUpsOf(plans: OakPartPlan[]): GlueUp[] {
           ? `edge-glue the wider layers (${pl.pieces.filter((q) => q.across === 1).map((q) => `layer ${q.layer}: ${q.acrossOf} boards`).join(', ')}), then glue the ${layers} layers face to face`
           : `edge-glue the ${pl.edgeN} boards of each layer, then glue the ${layers} layers face to face`;
     // A cross-laminated block (D-75) is NOT a rectangle: its layers differ in size, so `roughBlock` is the box that holds them all. Say what each layer measures.
+    const tall = isTallBlock(pl.part, pl.stock);
     const lyr = pl.lamination ? layerExtents(pl) : [];
     const sizes = new Set(lyr.map((q) => `${q.across}x${q.along}`));
     const shape = sizes.size > 1
@@ -1135,8 +1281,8 @@ function glueUpsOf(plans: OakPartPlan[]): GlueUp[] {
       : 'glued block rough ';
     map.set(key, {
       partId: pl.part.id, ids: [pl.part.id], qty: 1, partNo: pl.partNo, label, from: pl.pieces.length, edgeBoards: pl.edgeN, layers, kind,
-      roughBlock: pl.block, roughBlockText: roughDimsText(pl.block), final: pl.stock, finalText: finalDimsText(pl.stock),
-      note: `${how}; ${shape}${roughDimsText(pl.block)}${pl.lamination ? `, joint and plane it flat and square (${fractionText(pl.lamination.cleanupIn, 16)}" cleanup)` : ''}, then mill to final ${finalDimsText(pl.stock)}`,
+      roughBlock: pl.block, roughBlockText: sizeText(pl.block, true, tall), final: pl.stock, finalText: sizeText(pl.stock, false, tall),
+      note: `${how}; ${shape}${sizeText(pl.block, true, tall)}${pl.lamination ? `, joint and plane it flat and square (${fractionText(pl.lamination.cleanupIn, 16)}" cleanup)` : ''}, then mill to final ${sizeText(pl.stock, false, tall)}`,
     });
   }
   return [...map.values()];
@@ -1150,7 +1296,7 @@ function finishedOf(oak: OakGroup[]): FinishedPart[] {
       const final: Dims = r.plies && r.plies > 1 ? { t: r.stock.t * r.plies, w: r.stock.w, l: r.stock.l } : r.stock;
       const from: FinishedPart['from'] = g.board === 'resawn' ? 'strips' : r.edgeBoards > 1 || r.lamination ? 'glue-up' : 'board';
       out.push({
-        partNo: r.partNo, name: r.name, qty: r.qty, ids: r.ids, final, finalText: finalDimsText(final), from, board: r.board,
+        partNo: r.partNo, name: r.name, qty: r.qty, ids: r.ids, final, finalText: sizeText(final, false, r.tall), from, board: r.board,
         ...(r.grainWord ? { grainWord: r.grainWord } : {}), fab: r.fab, assemblySteps: r.assemblySteps,
       });
     }

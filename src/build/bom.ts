@@ -31,7 +31,8 @@ import { totalMass } from '../model/mass';
 import { STD_WOOD_SCREWS } from '../model/rear-mount';
 import type { Joint, Part } from '../model/types';
 import { WEATHER_SPEC, thinSheet, type Params } from '../params';
-import { cutList, fracIn, isBuilt, partKey, toCsv, type CsvCell } from './cutlist';
+import { cutList, fracIn, groupedName, isBuilt, partKey, toCsv, type CsvCell } from './cutlist';
+import { ceilTo, fractionText, fractionizeInches, inchMarks } from './units';
 import { finishingSchedule, glueEpoxyFlOz } from './finishing';
 import { nestPlywood, oakBoardFeet, type OakPlan } from './nesting';
 import {
@@ -317,7 +318,8 @@ function packLine(section: string, key: string, description: string, needed: num
   const own = price.note ? `${price.note}. ` : '';
   const unitWord = price.unit === 'lot' ? 'lot' : price.unit === 'ft' ? 'ft' : 'pcs';
   const sold = price.packLabel ? `sold as a ${price.packLabel}: buy ${packs}` : `sold in packs of ${packQty}: ${packs} pack${packs === 1 ? '' : 's'}`;
-  const share = `Need ${r2(needed)} ${unitWord}, ${sold} at ${usdText(packUsd)}.${shop ? ' You may already have these in the shop; keep the rest.' : ''}`;
+  const needText = price.unit === 'ft' ? `${fractionText(ceilTo(needed * 12, 1 / 8), 8)}"` : `${r2(needed)} ${unitWord}`; // a length is said in inches, as a shop fraction rounded up
+  const share = `Need ${needText}, ${sold} at ${usdText(packUsd)}.${shop ? ' You may already have these in the shop; keep the rest.' : ''}`;
   const px = priceExtras(price, needed);
   return {
     section, key, description, qty: packs, unit, unitUsd: packUsd, extUsd: money(packs * packUsd), basis: price.basis, ...(price.url ? { url: price.url } : {}),
@@ -484,9 +486,10 @@ function boltItems(part: Part, j: Joint, byId: PartMap, mat: FastMat): FastenerI
   const ms = new RegExp(String.raw`#(\d+)-(\d+)\s*[x×]\s*${LEN}"?[^,;]*?machine screw`, 'i').exec(size);
   if (ms) {
     const od = /(\d\/\d+)"\s*fender washer/i.exec(size);
+    const noWasher = /\bno washers?\b/i.test(size); // the heads bear on a plate (the D-ring's outside bearing plate): the model says so, so no washer is bought
     return [
       { label: `${mat.ss} machine screw #${ms[1]}-${ms[2]} x ${lenText(ms[3])}"`, qty: n },
-      { label: `${mat.ss} fender washer #${ms[1]}${od ? ` (${od[1]}" OD)` : ''}`, qty: n },
+      ...(noWasher ? [] : [{ label: `${mat.ss} fender washer #${ms[1]}${od ? ` (${od[1]}" OD)` : ''}`, qty: n }]),
       { label: `${mat.ss} nylon-insert lock nut #${ms[1]}-${ms[2]}`, qty: n },
     ];
   }
@@ -503,7 +506,7 @@ function boltItems(part: Part, j: Joint, byId: PartMap, mat: FastMat): FastenerI
   const tnut = /\bT-?nuts?\b/i.test(size);
   const nut: FastenerItem = { label: tnut ? `${mat.ss} T-nut ${t}` : `${mat.ss} nylon-insert lock nut ${t}`, qty: n };
   const washer = (k: number): FastenerItem => ({ label: `${mat.ss} fender washer ${d}"`, qty: k * n });
-  if (/eye bolt/i.test(size) || /eye bolt/i.test(part.name)) return [nut, washer(1)]; // the eye bolt itself is the steer-eye / steer-anchor part
+  if (/eye bolt/i.test(size) || /eye bolt/i.test(part.name)) return [nut, washer(Math.max(1, (size.match(/\bwashers?\b/gi) ?? []).length))]; // one washer per mention: the chain-crossmember bolt has one on each face // the eye bolt itself is the steer-eye / steer-anchor part
   if (/kingpin/i.test(size)) return []; // the kingpin part includes its washers and nut
   if (!len) { // no length in the text: another "x L" in it, else the stack of parts the bolt crosses
     const gl = GENERIC_LEN.exec(size);
@@ -515,7 +518,16 @@ function boltItems(part: Part, j: Joint, byId: PartMap, mat: FastMat): FastenerI
   const label = `${mat.ss} ${type} ${t}${len ? ` x ${len}"` : ' (length per joint note)'}`;
   // A nylon washer under the head (handle sockets) replaces one of the two fender washers.
   const nylon = /nylon washer/i.test(size);
-  const out: FastenerItem[] = [{ label, qty: n }, nut, washer(tnut ? (nylon ? 0 : 1) : type === 'carriage bolt' || nylon ? 1 : 2)];
+  // The joint names its washer: "a 7/8" OD 3/8 narrow flat washer under each head, nylock nuts on the backing plate" (the brake knee bolts). Buy exactly that: one narrow washer per head and
+  // none under the nut when the nuts bear on a plate; never the two fender washers a plain bolt gets.
+  const narrow = /(\d+\/\d+)"\s*OD\s+(\d+\/\d+)\s+narrow flat washer/i.exec(size);
+  if (narrow) {
+    const onPlate = /\bnuts?\s+on\s+(?:the\s+|one\s+)?(?:[a-z-]+\s+)*(?:backing|bearing)\s+plate/i.test(size);
+    return [{ label, qty: n }, nut, { label: `${mat.ss} narrow flat washer ${narrow[2]}" (${narrow[1]}" OD)`, qty: n }, ...(onPlate ? [] : [{ label: `${mat.ss} narrow flat washer ${narrow[2]}" (${narrow[1]}" OD)`, qty: n }])];
+  }
+  // "nylock nuts and fender washers under the beam": the washers are on the nut side only, so one per bolt (the head bears on the part itself).
+  const nutSideOnly = /\bnylock nuts?\s*(?:and|\+)\s*(?:fender )?washers?\s+(?:under|on)\b/i.test(size);
+  const out: FastenerItem[] = [{ label, qty: n }, nut, washer(tnut ? (nylon ? 0 : 1) : type === 'carriage bolt' || nylon || nutSideOnly ? 1 : 2)];
   if (out[2].qty === 0) out.splice(2, 1);
   if (nylon) out.push({ label: `Nylon washer for ${d}" screw`, qty: n });
   if (/button plugs?/i.test(size)) { const bp = /(\d\/\d+)\s*in\b[^,;]*?button plugs?/i.exec(size); out.push({ label: `Button plug ${bp ? bp[1] : '5/8'}" black nylon`, qty: n }); }
@@ -750,7 +762,9 @@ function laminatedText(laminated: OakPlan['laminated'], parts: Part[]): string {
   const how: string[] = [];
   for (const q of laminated) {
     const x = parts.find((y) => y.id === q.id);
-    const name = x ? shopName(x).replace(/\s+[LR]$/, '') : q.partNo;
+    const mates = laminated.filter((m) => m.partNo === q.partNo).map((m) => parts.find((y) => y.id === m.id)?.name).filter((n): n is string => !!n);
+    const shared = mates.length ? groupedName(mates).replace(/\s*\([^)]*\)\s*$/, '') : '';
+    const name = x ? shared.replace(/^([A-Z])([a-z])/, (_m, a: string, b: string) => a.toLowerCase() + b) : q.partNo; // one name for the left and right pair
     if (!names.includes(name)) names.push(name);
     if (!how.includes(q.lamination.text)) how.push(q.lamination.text);
   }
@@ -773,18 +787,20 @@ export function shopBomText(t: string, keys: ReadonlySet<string>): string {
     .replace(/\(\s*(?:see\s+)?[DAQ]-\d+[;,]\s*/g, '(')
     .replace(/\s*\(\s*(?:see\s+)?[DAQ]-\d+\s*\)/g, '')
     .replace(/,?\s*\b[DAQ]-\d+\b/g, '')
-    .replace(/,?\s*\bS7\b/g, '');
+    .replace(/,?\s*\bS7\b/g, '')
+    .replace(/\s*\(\s*[a-z]+(?:[A-Z][a-z0-9]*)+\s*\)/g, ''); // a parameter name in brackets, e.g. (somethingRateLbIn)
   if (keys.size) {
     const re = new RegExp(`(?<![\\w/.-])(${[...keys].sort((a, b) => b.length - a.length).map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?![\\w/-])`, 'g');
     o = o.replace(re, (k) => k.replace(/-/g, ' '));
   }
-  return o.replace(/\s+([.,;)])/g, '$1').replace(/\(\s+/g, '(');
+  // shop fractions, not long decimals ("0.69\"" is 11/16\")
+  return fractionizeInches(o.replace(/\s+([.,;)])/g, '$1').replace(/\(\s+/g, '('));
 }
 
 function bomForSpec(parts: Part[], p: Params): Bom {
   const spec = specOf(p);
   const std = spec === 'standard';
-  const thin = thinSheet(p);
+  const thin = { ...thinSheet(p), name: inchMarks(thinSheet(p).name) };
   const unpriced: string[] = [];
   const built = parts.filter(isBuilt);
   const cl = cutList(parts, p);
@@ -814,7 +830,7 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     if (!price) { unpriced.push(`plywood ${label}`); continue; }
     const isThin = label === thin.priceKey;
     const desc = isThin
-      ? `${thin.name} plywood (${thin.glue} glue), ${thin.sheetWidthIn / 12} x ${thin.sheetLengthIn / 12} ft sheet (the thin sheet: sides, box, lid, signs)`
+      ? `${/plywood/i.test(thin.name) ? thin.name : `${thin.name} plywood`} (${thin.glue} glue), ${thin.sheetWidthIn / 12} x ${thin.sheetLengthIn / 12} ft sheet (the thin sheet: sides, box, lid, signs)`
       : `Marine okoume plywood (BS 1088), ${label}, 4 x 8 ft (the deck and seat back)`;
     plywood.push(line('Plywood', label, desc, sheets.length, price, {
       vendor: price.source.split(/[,(]/)[0].trim(), // the shop itself (Aircraft Spruce, The Wood Yard): the full source and link are on the price
@@ -827,7 +843,7 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   for (const r of cl.metal) {
     const g = metalGroups.get(r.section) ?? { section: r.section, ft: 0, cuts: [] };
     g.ft += (r.qty * (r.cutLengthIn + METAL_CUT_ALLOWANCE_IN)) / 12;
-    g.cuts.push(`${r.qty} × ${fracIn(r.cutLengthIn)}" (${r.name.replace(/\s+[LR]\d*$/, '').toLowerCase()})`);
+    g.cuts.push(`${r.qty} × ${fracIn(r.cutLengthIn)}" (${r.name.toLowerCase()})`);
     metalGroups.set(r.section, g);
   }
   const metal: BomLine[] = [];
@@ -880,7 +896,8 @@ function bomForSpec(parts: Part[], p: Params): Bom {
       ...(tg ? { group: tg } : {}),
       ...(hardwareMaterialNote(x, spec) ? { materialNote: hardwareMaterialNote(x, spec) } : {}),
     };
-    const name = purchasedDescribe(key, spec) ?? (std ? std304(x.name) : x.name);
+    const groupName = groupedName(group.map((q) => q.name));
+    const name = purchasedDescribe(key, spec) ?? (std ? std304(groupName) : groupName);
     // A part cut from a roll or a pack (a cord): the whole packs to buy, not a price per part.
     if (price.packQty && price.packUsd && price.perPart) purchased.push(packLine('Purchased parts', key, name, group.length * price.perPart, price, extra, false));
     else (tg ? touchLines : purchased).push(line(tg ? TOUCHES_SECTION.title : 'Purchased parts', key, name, group.length, price, extra));
@@ -1087,6 +1104,8 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   const keyWords = shopKeys(parts);
   for (const sec of sections) {
     for (const l of sec.lines) {
+      l.description = shopBomText(l.description, keyWords);
+      if (l.vendor) l.vendor = shopBomText(l.vendor, keyWords);
       if (l.notes) l.notes = shopBomText(l.notes, keyWords);
       if (l.decision) l.decision = shopBomText(l.decision, keyWords);
       if (l.materialNote) l.materialNote = shopBomText(l.materialNote, keyWords);

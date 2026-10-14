@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
 import { defaultParams, PARAM_DEFS } from '../params';
 import { PRE_D72 } from '../test-fixtures';
-import { paramLabels, verifyChecklist, verifyParamKeys, type VerifyWhen } from './verify';
+import { paramLabels, unusedVerifyKeys, verifyChecklist, verifyGroups, verifyParamKeys, type VerifyWhen } from './verify';
 
 const p = defaultParams();
 const parts = buildModel(p);
@@ -10,15 +10,27 @@ const list = verifyChecklist(parts, p);
 const WHEN: VerifyWhen[] = ['before ordering', 'before cutting', 'at assembly'];
 
 describe('verify checklist', () => {
-  it('has the nine verify checks, in order (the D-77 strap check follows the brake knee), then the build-review checks and the leftover params', () => {
-    expect(list.slice(0, 10).map((c) => c.id)).toEqual([
-      'tire-squash', 'wheel', 'axle-rod', 'steering-parts', 'bridle', 'seat-back', 'sign-knobs', 'brake-knee', 'brake-strap', 'lamp-clip',
+  it('numbers the checks in the order they are shown: before ordering, then before cutting, then at assembly (the D-77 strap check follows the bow rib check)', () => {
+    expect(list.map((c) => c.id)).toEqual([
+      'tire-squash', 'wheel', 'axle-rod', 'steering-parts', 'bridle', 'sign-knobs', 'strip-bend', // before ordering
+      'seat-back', 'brake-knee', 'lamp-clip', 'ply-thickness', 'other-params', // before cutting
+      'bow-rib-clearance', 'brake-strap', // at assembly
     ]);
-    expect(list.slice(10, 12).map((c) => c.id)).toEqual(['strip-bend', 'ply-thickness']);
-    expect(list[12]?.id).toBe('bow-rib-clearance'); // D-76: the booted-rider check of the bow post
-    expect(list[13]?.id).toBe('other-params');
     expect(list.map((c) => c.n)).toEqual(list.map((_, i) => i + 1));
     expect(new Set(list.map((c) => c.id)).size).toBe(list.length);
+    // the display order and the numbering agree: each group is a run of consecutive numbers, in the order of WHEN
+    const whenIdx = list.map((c) => WHEN.indexOf(c.when));
+    expect([...whenIdx].sort((x, y) => x - y)).toEqual(whenIdx);
+  });
+
+  it('the intro lines of the step count the checks that are really there, one line per group', () => {
+    const g = verifyGroups(list);
+    expect(g.map((q) => q.when)).toEqual(WHEN);
+    expect(g.map((q) => q.titles.length)).toEqual(WHEN.map((w) => list.filter((c) => c.when === w).length));
+    expect(g[0].text).toContain(`do these ${g[0].titles.length} checks`);
+    expect(g[1].text).toContain(`${g[1].titles.length} more checks`);
+    expect(g[2].text).toMatch(new RegExp(`${g[2].titles.length} more checks?, each at its own step`));
+    expect(g.flatMap((q) => q.titles)).toEqual(list.map((c) => c.title));
   });
 
   it('every check says what to do, how to pass, and when', () => {
@@ -32,13 +44,16 @@ describe('verify checklist', () => {
   });
 
   it('covers every param whose status is verify', () => {
-    const verify = verifyParamKeys();
+    const unused = unusedVerifyKeys(p); // the axle tube's strengths (the axle is a solid rod) and the other thin sheets' thicknesses are not this design's
+    expect(unused).toEqual(expect.arrayContaining(['axleTubeYieldPsi', 'axleTubeUltimatePsi', 'balticThinThickIn']));
+    const verify = verifyParamKeys().filter((k) => !unused.includes(k));
     expect(verify.length).toBeGreaterThan(10);
     const covered = new Set(list.flatMap((c) => c.paramKeys));
     const missing = verify.filter((k) => !covered.has(k));
     expect(missing).toEqual([]);
-    // ... and claims nothing that is not a verify param (a confirmed param drops out by itself).
-    for (const k of covered) expect(PARAM_DEFS[k as keyof typeof PARAM_DEFS]?.status, k).toBe('verify');
+    // ... and claims no unused param, and no param that is not a verify param except the ones the plywood check tells you to enter (the deck ply thickness).
+    for (const k of covered) { expect(unused, k).not.toContain(k); if (k !== 'deckPlyIn') expect(PARAM_DEFS[k as keyof typeof PARAM_DEFS]?.status, k).toBe('verify'); }
+    expect(list.find((c) => c.id === 'other-params')!.paramKeys.some((k) => unused.includes(k))).toBe(false);
   });
 
   it('asks for the real plywood thickness before any dado is cut, and the strip bend test before ordering', () => {
@@ -48,7 +63,9 @@ describe('verify checklist', () => {
     expect(ply.whatToDo).toMatch(/white oak plywood/);
     expect(ply.paramKeys).toContain('whiteOakPlyThickIn');
     expect(ply.whatToDo).toContain('33/64" wide (fit to the ply)');
-    for (const k of ply.paramKeys) expect(PARAM_DEFS[k as keyof typeof PARAM_DEFS].status).toBe('verify');
+    // the sheet this design uses (white oak plywood, not Baltic birch) and the deck ply: the two values its fail text tells you to enter
+    expect(ply.paramKeys).toEqual(['whiteOakPlyThickIn', 'deckPlyIn']);
+    expect(ply.ifFails).toContain(`"${PARAM_DEFS.deckPlyIn.label}"`);
     expect(ply.partIds).toEqual(expect.arrayContaining(['deck', 'side-L-web', 'transom-rear', 'bow-bulkhead']));
     const bend = list.find((c) => c.id === 'strip-bend')!;
     expect(bend.when).toBe('before ordering');
@@ -88,11 +105,14 @@ describe('verify checklist', () => {
     expect(by('axle-rod').title).toMatch(/1045 or cold-drawn/);
     expect(by('axle-rod').title).toMatch(/not hot-rolled A36/);
     expect(by('axle-rod').pass).toContain('70 ksi');
-    expect(by('axle-rod').pass).toMatch(/1018 cold-drawn at 54 ksi would be about 1\.0/);
+    expect(by('axle-rod').pass).toMatch(/the rear axle passes with about 20 % to spare with 70 ksi steel/); // plain words, not "the row is 0.79"
+    expect(by('axle-rod').pass).toMatch(/1018 cold-drawn at 54 ksi it is right at its limit/);
+    expect(by('axle-rod').pass).toMatch(/hot-rolled A36 at 36 ksi it fails by about/);
+    expect(by('axle-rod').pass).not.toMatch(/\b0\.\d\d\b/);
     const tube = verifyChecklist(buildModel({ ...p, ...PRE_D72 }), { ...p, ...PRE_D72 }).find((c) => c.id === 'axle-tube')!;
     expect(tube.whatToDo).toContain('A513 Type 5');
     expect(tube.pass).toContain('70 ksi');
-    expect(tube.pass).toMatch(/ERW.*from 0\.92 to about 1\.4\d at the goal rider/s); // derived from the rows (the tube's 0.92 scaled by 70 / 45 ksi), not typed
+    expect(tube.pass).toMatch(/ERW.*the rear axle passes with about \d+ % to spare.*with ERW tube it fails by about \d+ %/s); // derived from the rows (scaled by 70 / 45 ksi), not typed
     expect(by('steering-parts').pass).toContain('900 lb');
     expect(by('bridle').pass).toContain('3700 lbf');
     expect(by('bridle').pass).toContain('370 lbf'); // the rope WLL: the documented weak link
@@ -175,13 +195,15 @@ describe('readability round 2: no IDs, no param keys, no decimal lengths', () =>
 });
 
 describe('D-76: the bow rib check', () => {
-  it('asks for a booted rider before the bow posts are cut, names the chain joist fallback and the parameters-panel label', () => {
+  it('asks for a booted rider in the bare hull before the ribs go in, names the chain crossmember fallback and the parameters-panel label', () => {
     const c = list.find((q) => q.id === 'bow-rib-clearance')!;
-    expect(c.when).toBe('before cutting');
+    expect(c.when).toBe('at assembly');
+    expect(c.whatToDo).toMatch(/no side ribs cut or fitted yet/);
     expect(c.paramKeys).toEqual(['sideRibFrontXIn']);
     expect(c.whatToDo).toMatch(/winter boots/);
     expect(c.whatToDo).toMatch(/7-7\/8" from the center line/);
-    expect(c.whatToDo).toMatch(/chain joist/);
+    expect(c.whatToDo).toMatch(/chain crossmember/);
+    expect((c.whatToDo + c.ifFails).split(`"${PARAM_DEFS.sideRibFrontXIn.label}"`).join('')).not.toMatch(/joist/i); // the panel label (params.ts) is the only place left that says joist
     expect(c.whatToDo).toContain(`"${PARAM_DEFS.sideRibFrontXIn.label}"`);
     expect(c.whatToDo).toMatch(/steering-chain anchor eye bolt/);
     expect(c.whatToDo).not.toContain('sideRibFrontXIn');

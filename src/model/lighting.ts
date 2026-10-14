@@ -46,7 +46,7 @@ export const REFLECTOR_SIZE = [2, 0.25, 1] as const;
  *   itemized bolts   nuts + washers for the kingpin, eye bolts and U-bolts, 0.03 lb per leg
  */
 const FASTENER_LB = {
-  screw: 0.008, machineScrew: 0.016, boltSmall: 0.04, boltLarge: 0.09, boltTapped: 0.02, insert: 0.005, knob: 0.02, domino: 0.005, glue: 0.01, nutWasher: 0.03,
+  screw: 0.008, machineScrew: 0.010, boltSmall: 0.04, boltLarge: 0.09, boltTapped: 0.02, insert: 0.005, knob: 0.02, domino: 0.005, glue: 0.01, nutWasher: 0.03,
 } as const;
 /** Bolts whose shank is already a separate part (kingpin, eye bolts, U-bolts, brake and handle pins): only their nuts and washers are left for the allowance. */
 const ITEMIZED_BOLT = /^(bridle-eye|eyebolt|clamp-|handle-pin|seat-knob)/;
@@ -183,7 +183,7 @@ export function buildLighting(ctx: Ctx): Part[] {
       let x = Math.max(L.xRear + reach * f, SIGN_X_MAX_IN + 2); // the rear one stands ahead of the side sign (D-57)
       // D-63: the grab board's 316 backing strip is on the same outer gunwale face; a reflector that would sit on it moves just ahead of it
       const stripX0 = p.seatXIn - GRIP_BEHIND_HPOINT_IN + GRIP_BACKING_END_IN - 0.3, stripX1 = p.seatXIn - GRIP_BEHIND_HPOINT_IN + p.grabBoardLengthIn - GRIP_BACKING_END_IN + 0.3;
-      // D-76: and it stays 1/4 in clear of the outside fender washers of the side-rib D-ring bolts (the box rib's station is set so the rear one does not have to move).
+      // D-76: and it stays 1/4 in clear of the outside bearing plates of the side-rib D-ring bolts (the box rib's station is set so the rear one does not have to move).
       for (const [wa, wb] of washers) if (x + REFLECTOR_SIZE[0] / 2 + 0.25 > wa && x - REFLECTOR_SIZE[0] / 2 - 0.25 < wb) x = wb + REFLECTOR_SIZE[0] / 2 + 0.25;
       if (x + REFLECTOR_SIZE[0] / 2 + 0.1 > stripX0 && x - REFLECTOR_SIZE[0] / 2 - 0.1 < stripX1) x = stripX1 + REFLECTOR_SIZE[0] / 2 + 0.3;
       const color = i === 0 ? 'red' : 'amber'; // 3c-5: red at the rear, amber at the front (DOT-C2 side marker colors)
@@ -245,7 +245,7 @@ export function fastenerBreakdown(parts: Part[]): Record<string, { count: number
           if (/see the bushing/.test(size)) break; // cross-reference to the bushing's own bolts, already counted
           if (/tapped/.test(size)) { add('bolts tapped into steel', n, FASTENER_LB.boltTapped); break; }
           const dia = j.diaIn ?? parseDia(size);
-          if (dia < 0.2) { add('machine screw sets', n, FASTENER_LB.machineScrew); break; } // D-76: #8-32 x 2 in + 3/4 in fender washer + nylock, about 7 g
+          if (dia < 0.2) { add('machine screw sets', n, FASTENER_LB.machineScrew); break; } // D-76: #8-32 x 2 in + nylock, about 4.5 g (the bearing plate is its own part)
           add('bolt sets', n, dia > 0.33 ? FASTENER_LB.boltLarge : FASTENER_LB.boltSmall);
           break;
         }

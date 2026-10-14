@@ -280,6 +280,36 @@ describe('brake abuse: a foot stomp on one flap (yield level)', () => {
   });
 });
 
+describe('brake abuse: which safety factor raises each limit', () => {
+  // Wood-governed details (oak bending, wood-screw capacities, NDS withdrawal) are raised by the WOOD factor; pin, bolt and strap/plate stresses by the STEEL factor.
+  // With the two factors apart (wood 3, steel 2) each abuse limit is its member-row limit times the right factor, so a mismarked detail shows up.
+  const cs3 = run({ woodSafetyFactor: 3, steelSafetyFactor: 2 });
+  const ab = byId(cs3, 'brake-abuse');
+  const abLimit = (name: string) => ab.details!.find((d) => d.name.includes(name))!.limit;
+  const WOOD: Array<[string, string]> = [
+    ['brake-flap', 'flap bending, weakest station of the tapered fender'],
+    ['brake-flap', 'shoe block screws, pad friction in lateral shear'],
+    ['brake-flap', 'pad screws, pad friction in lateral shear'],
+    ['brake-pivot', 'pivot block screws, withdrawal'],
+    ['brake-pivot', 'pivot strap screws: lateral'],
+    ['brake-pivot', 'pivot strap screws: withdrawal'],
+  ];
+  const STEEL: Array<[string, string]> = [
+    ['brake-pivot', 'pivot pin double shear'],
+    ['brake-pivot', 'pivot pin bending'],
+    ['brake-pivot', 'pivot strap: pin bearing on the hole'],
+    ['brake-pivot', 'pivot strap: tension + in-plane bending'],
+    ['brake-mount', 'mounting bolt shear, worst bolt'],
+    ['brake-mount', 'mounting bolt tension'],
+  ];
+  it.each(WOOD)('%s: "%s" is raised by the wood safety factor', (row, name) => {
+    expect(abLimit(name) / det(cs3, row, name).limit).toBeCloseTo(3, 9);
+  });
+  it.each(STEEL)('%s: "%s" is raised by the steel safety factor', (row, name) => {
+    expect(abLimit(name) / det(cs3, row, name).limit).toBeCloseTo(2, 9);
+  });
+});
+
 describe('park-hold: the wheel chocks and the wheels hold the sled on the design slope (D-57)', () => {
   const ctx = ctxOf(defaults);
   const row = byId(cs, 'park-hold');

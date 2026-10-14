@@ -46,10 +46,10 @@ A **Klondike Derby sled on wheels** for Boy Scout Troop 455: a solid, wide, reus
 | Wheels | 10" pneumatic, 4 of them, wheelbase 44", both tracks 30" |
 | Deck height | 8" |
 | Side height | 4" at the bow rising in a concave sweep to 14" at the rear |
-| Empty mass (Standard spec) | **121.1 lb** (114.8 lb in Transport mode, 57.4 lb per person for the two-person lift; 111.6 lb and 55.8 lb with removable knees) |
+| Empty mass (Standard spec) | **121.3 lb** (115.0 lb in Transport mode, 57.5 lb per person for the two-person lift; 111.7 lb and 55.9 lb with removable knees) |
 
 ### Construction
-- **Body.** The two sides are sandwiches: a thin plywood web with oak bands glued on both faces at the top (gunwale) and bottom (chine). No grooves. The bow bulkhead is a shaped oak board that is the foot brace and a hand-hold. A 12 mm okoume deck rides on oak rails and 8-1/2" joists. The rear transom is 1/2" oak. Three oak **ribs** per side stand on the inside face of the web (box, mid and bow-post stations). Their heads carry the six D-ring tie-downs (zinc-plated steel Standard, 316 stainless Extreme), through-bolted, and they stiffen the sides sideways (D-76).
+- **Body.** The two sides are sandwiches: a thin plywood web with oak bands glued on both faces at the top (gunwale) and bottom (chine). No grooves. The bow bulkhead is a shaped oak board that is the foot brace and a hand-hold. A 12 mm okoume deck rides on oak rails and 8-1/2" joists. The rear transom is 1/2" oak. Three oak **ribs** per side stand on the inside face of the web (box, mid and bow-post stations). Their heads carry the six D-ring tie-downs (zinc-plated steel Standard, 316 stainless Extreme), through-bolted onto a small stainless plate on the outer band, and they stiffen the sides sideways (D-76).
 - **Front end.** One laminated oak axle beam under the bow carries two stub axles. It pivots about a single 5/8" grade 8 kingpin through a UHMW thrust washer into an oak king beam. UHMW roll pads take the roll. A check chain on each side is the steering stop and limits the swing to **±20°**. The pullers steer through an oak **tongue** whose rope bridle ties to it on a bowline (the rope is the intended weak link). Turning radius is about 12 ft to the outer tire edge, limit 12.5 ft (the one marginal row).
 - **Rear end.** A fixed laminated oak beam on solid 5/8" 1045 steel rod axles, held by 316 or 304 clamp plates and hold-down angles into notches in the rails.
 - **Seat.** A 2" foam cushion, and a frameless 12 mm okoume seat back that **flips flat and latches** with pins, so it stays on the sled (D-57). The leg reach is about 35-3/4". Two oak **grab boards** (one board per side with a routed hand hole) are bolted to the gunwales.
@@ -72,8 +72,8 @@ Two people lift it by the rear transom slot and the bow bulkhead hand-hold (the 
 | Glue | Titebond III | epoxy everywhere |
 | Dominos | beech | Sipo |
 | Finish | exterior spar urethane; epoxy only where needed | marine varnish over epoxy, gallon epoxy kit |
-| Empty mass (follow-the-weather sheet) | 121.1 lb | 118.3 lb |
-| BOM total | **$2,303** | **$3,119** |
+| Empty mass (follow-the-weather sheet) | 121.3 lb | 118.5 lb |
+| BOM total | **$2,286** | **$3,100** |
 
 ### Brake knees (`kneeMount`, D-78)
 Default **Knees stay on (bolted, glued)**: the knee is epoxied to the rail and chine band and held by four 3/8" bolts. Setting **Removable knees (bolts, ratchet)** (a checkbox in the viewer toolbar beside Transport mode, and the Brake knees dropdown in Advanced) keeps the same four bolts, washers, nylock nuts and backer, and changes how the knee is fitted:
@@ -86,13 +86,13 @@ Default **Knees stay on (bolted, glued)**: the knee is epoxied to the rail and c
 | Comes off with the flap kit (Brakes off, Transport mode) | flaps, pivot blocks and pins, shoes, pads, treads, cords | the same, plus both knees and straps; the chock stays its own toggle, stays tied to the eye under its knee and travels with it |
 | Stays on the rail | knees, backers, backing plates | backers, backing plates and four open bolt holes a side |
 | Tools | none | a 3/8" drive ratchet, 9/16" socket and 9/16" wrench in a 9" × 3" × 2" pouch (a tool, not sled mass; in the box in cargo mode only), eight spare lock nuts, anti-seize |
-| Tightening | snug | snug, then a quarter turn, about 60 in-lb (more crushes the washers and the oak); recheck after the first outing |
+| Tightening | snug | snug, then a quarter turn (about 35 in-lb; the quarter turn is the spec, more crushes the 7/8" washers and the oak); check snug before each outing, retighten after the first |
 | Time | flap off in about 15 s a side | knee and flap off in about 5 minutes a side (longer the first time), lying beside the sled and reaching in under the deck between the two crossmembers just ahead of the rear wheel |
-| Empty mass | 121.1 lb | 121.1 lb (identical); Transport mode drops 4.0 lb more (2 knees and 2 straps 3.2 lb, their 8 bolt sets about 0.8 lb) |
+| Empty mass | 121.3 lb | 121.3 lb (identical); Transport mode drops 4.0 lb more in the viewer (2 knees and 2 straps 3.2 lb, their 8 bolt sets about 0.8 lb); the mass and lift rows count only the 3.2 lb |
 | Storage packing | 0.87 / 0.88 (Standard / Extreme) | the same in race mode; the pouch lies in the cargo-mode layer (floor-area fill 0.11 to 0.17) |
-| BOM | $2,303 / $3,119 | +$38.00 Standard, +$41.67 Extreme: the tool pouch ($30, an estimate; you may already own one), anti-seize ($8, an estimate) and eight spare lock nuts (free in the Standard pack of 50, +$3.67 in Extreme) |
+| BOM | $2,286 / $3,100 | +$38.00 Standard, +$41.67 Extreme: the tool pouch ($30, an estimate; you may already own one), anti-seize ($8, an estimate) and eight spare lock nuts (free in the Standard pack of 50, +$3.67 in Extreme) |
 
-The analysis is the same in both settings except `brake-mount` (and `brake-abuse`, which reuses it): the glued knee never counted glue or friction, but its uniform dowel bearing treated knee, rail and backer as one unit. For a dry knee the row adds the NDS single-shear yield-mode check of the worst bolt between the 1-3/4" leg and the 1-1/2" of rail and backer, across the grain: Z' about 306 lbf (mode II) against a worst bolt of about 255 lbf, **0.84**, which governs the row and passes. Why not pins or clamped inserts: [docs/studies/removable-knee.md](docs/studies/removable-knee.md).
+The analysis is the same in both settings except `brake-mount` (and `brake-abuse`, which reuses it): the glued knee never counted glue or friction, but its uniform dowel bearing treated knee, rail and backer as one unit. For a dry knee the row adds the NDS single-shear yield-mode check of the worst bolt between the 1-3/4" leg and the 1-3/8" of rail and backer left by the plate recess, across the grain: Z' about 296 lbf (mode II, with C_M 0.70 wet, C_D 1.6 for the stomp as an impact, C_g 0.85) against a worst bolt of about 256 lbf, **0.87**, which governs the row and passes. Because that pass leans on C_D 1.6, a second detail holds the knee to a sustained hold at C_D 1.0: **0.69**. The NDS spacing and edge minimums are not met, so the yield-mode value is an estimate (tear-out and splitting are checked separately). Why not pins or clamped inserts: [docs/studies/removable-knee.md](docs/studies/removable-knee.md).
 
 ### Thin sheet (`thinSheetMaterial`)
 The thin sheet is the side webs, storage box and lid, and sign blanks. The 12 mm deck and seat back are always okoume. The default **follows the weather spec**.
@@ -113,15 +113,15 @@ Sheets are always full 4' × 8' (D-68). Solid parts that need more thickness tha
 
 ## 5. Key numbers (Standard spec, default parameters)
 
-- **Mass** 121.1 lb empty: white oak 57.5 lb, plywood 25.8 lb, wheels 12 lb, axles 5 lb, hardware, fasteners and everything else about 21 lb.
+- **Mass** 121.3 lb empty: white oak 57.5 lb, plywood 25.8 lb, wheels 12 lb, axles 5 lb, hardware, fasteners and everything else about 21 lb.
 - **Checks.** 54 engineering rows, **none fail**. One is marginal: turning radius (0.97 of its limit). The tightest passes: seat stowage 0.94, park-hold 0.88, storage packing 0.87, rear axle groove bearing 0.86, kingpin 0.86.
 - **Rider range.** Safe (nothing fails) **50 to 250+ lb**; green (nothing marginal) **50 to 220 lb**. The rear axle groove bearing on the oak limits it. The 150 lb rider is a plain pass; the 200 lb goal rider is green.
 - **Cargo.** The 200 lb payload passes. Capacity is **254 lb**; comfortable (still green) to **204 lb**. The rear groove bearing sets both.
 - **Resting load.** A 250 lb adult sitting or standing on one foot anywhere on the deck passes (capacity 348 lb).
 - **Stability.** Straight tip 45° against a 35° limit; full-lock tip the same; slides before it tips (0.78 of limit).
 - **Sides.** A 50 lbf push moves a gunwale about 0.10" (under the 1/8" "feels solid" mark; reported, not judged).
-- **Cost.** BOM $2,303 Standard ($3,119 Extreme); about 22% of the Standard total is estimates, the rest quoted from listings (docs/price-research/price-research-*).
-- **Materials by section (Standard BOM).** Lumber $583, plywood $203, metal $171, purchased parts $413, fasteners $154, consumables $402, bulk packs $87, finishing touches $289.
+- **Cost.** BOM $2,286 Standard ($3,100 Extreme); about 23% of the Standard total is estimates, the rest quoted from listings (docs/price-research/price-research-*).
+- **Materials by section (Standard BOM).** Lumber $583, plywood $203, metal $166, purchased parts $413, fasteners $147, consumables $402, bulk packs $87, finishing touches $284.
 
 ## 6. How the app is organized
 

@@ -4,7 +4,7 @@ import { defaultParams } from '../params';
 import { PRE_D72 } from '../test-fixtures';
 import { isOakStocked } from './prices';
 import { assemblySteps } from './assembly';
-import { BOARD_THICKNESSES, MAX_LAMINATION_LAYERS, boardFinishedIn, finalFrac, roughFrac, RESAW_BOARD_WIDTHS_IN, RESAW_MIN_SPARES, boardByNominal, boardForThickness, cutList, fabText, isBuilt, laminationText, makeLanes, packLanes, planLamination, stepMapOf, resawUsableIn, spareSlots, stripsPerBoard, toCsv } from './cutlist';
+import { BOARD_THICKNESSES, MAX_LAMINATION_LAYERS, boardFinishedIn, finalFrac, roughFrac, RESAW_BOARD_WIDTHS_IN, RESAW_MIN_SPARES, boardByNominal, boardForThickness, cutList, fabText, groupedName, isBuilt, ribFillers, sizeText, laminationText, makeLanes, packLanes, planLamination, stepMapOf, resawUsableIn, spareSlots, stripsPerBoard, toCsv } from './cutlist';
 
 // D-72/D-73: this file's resaw and sheet numbers (0.234 in bands in 0.359 -> 3/8 in rough pools, the 4 mm sheet, the tube) are the 4 mm okoume design: PRE_D72. The white oak / rod cut list is in d72.test.ts.
 const p = { ...defaultParams(), ...PRE_D72 };
@@ -239,7 +239,7 @@ describe('round 3: bench words, assembly steps, net web, no data warnings', () =
   });
   it('writes the grain in words, not as a local axis', () => {
     const rows = [...cl.oak.flatMap((g) => g.rows), ...cl.sheets.flatMap((g) => g.rows)];
-    for (const r of rows) if (r.grain) expect(r.grainWord, r.partNo).toMatch(/^(along L|along W|vertical \(T\))$/);
+    for (const r of rows) if (r.grain) expect(r.grainWord, r.partNo).toMatch(r.partNo === 'brake-knee' ? /^face layers: grain upright; center layer: across the sled$/ : /^(along L|along W|vertical \(T\))$/); // a cross-laminated part names its face and center layers, never one axis
     const bulk = rows.find((r) => r.partNo === 'bow-bulkhead')!;
     expect(bulk.grainWord).toBe('along L'); // the 18.5 in length
     expect(cl.csv.finished).not.toMatch(/,[xyz],/);
@@ -474,8 +474,8 @@ describe('actual cuts (Eric 2026-10-12: the cut list lists the cuts, not the glu
   it('lists the layers of a face-laminated part as the cuts, with the laminated block as the glue-up', () => {
     const layers = dcl.cuts.filter((c) => c.partNo === 'beam-R');
     expect(layers).toHaveLength(3);
-    for (const c of layers) { expect(c.piece).toBe('layer'); expect(c.layers).toBe(3); expect(c.board).toBe('4/4'); expect(c.glueUp).toBe('rear axle beam block'); }
-    expect(layers.map((c) => c.label).sort()).toEqual(['rear axle beam, layer 1 of 3', 'rear axle beam, layer 2 of 3', 'rear axle beam, layer 3 of 3']);
+    for (const c of layers) { expect(c.piece).toBe('layer'); expect(c.layers).toBe(3); expect(c.board).toBe('4/4'); expect(c.glueUp).toBe('Rear axle beam block'); }
+    expect(layers.map((c) => c.label).sort()).toEqual(['Rear axle beam, layer 1 of 3', 'Rear axle beam, layer 2 of 3', 'Rear axle beam, layer 3 of 3']);
     const g = dcl.glueUps.find((x) => x.partNo === 'beam-R')!;
     expect(g.kind).toBe('face');
     expect(g.from).toBe(3);
@@ -486,9 +486,9 @@ describe('actual cuts (Eric 2026-10-12: the cut list lists the cuts, not the glu
     expect(knee.note).toMatch(/layer 2: 2 boards/);
     const kneeCuts = dcl.cuts.filter((c) => c.partNo === 'brake-knee');
     expect(kneeCuts.map((c) => c.label).sort()).toEqual([
-      'Brake pivot knee, layer 1 of 3 (grain upright)',
-      'Brake pivot knee, layer 2 of 3, board 1 of 2 (grain across the sled)', 'Brake pivot knee, layer 2 of 3, board 2 of 2 (grain across the sled)',
-      'Brake pivot knee, layer 3 of 3 (grain upright)',
+      'Brake knee, layer 1 of 3 (grain upright)',
+      'Brake knee, layer 2 of 3, board 1 of 2 (grain across the sled)', 'Brake knee, layer 2 of 3, board 2 of 2 (grain across the sled)',
+      'Brake knee, layer 3 of 3 (grain upright)',
     ].sort());
     expect(kneeCuts.find((c) => c.layer === 1)!.note).toMatch(/one piece/);
     expect(kneeCuts.find((c) => c.layer === 2 && c.index === 2)!.roughText).toBe('3/4 × 5-5/8 × 5-3/4'); // the lower piece of the off-center joint
@@ -507,8 +507,9 @@ describe('actual cuts (Eric 2026-10-12: the cut list lists the cuts, not the glu
 
   it('accounts for every oak part exactly once: ids in cuts equal the oak parts, and every piece has a rough size', () => {
     const oakIds = dparts.filter((x) => isBuilt(x) && /oak/i.test(x.material) && (x.kind === 'lumber' || x.kind === 'bentlam')).map((x) => x.id).sort();
-    expect([...new Set(dcl.cuts.flatMap((c) => c.ids))].sort()).toEqual(oakIds);
-    expect(dcl.cuts.every((c) => c.partId === c.ids[0] && c.qty === c.ids.length && c.rough.t > 0 && c.rough.w > 0 && c.rough.l > 0)).toBe(true);
+    const own = dcl.cuts.filter((c) => c.partNo !== 'side-rib-filler'); // the rib fillers are spare band strips, not model parts (see below)
+    expect([...new Set(own.flatMap((c) => c.ids))].sort()).toEqual(oakIds);
+    expect(own.every((c) => c.partId === c.ids[0] && c.qty === c.ids.length && c.rough.t > 0 && c.rough.w > 0 && c.rough.l > 0)).toBe(true);
     expect(dcl.cuts.some((c) => c.piece === 'solid')).toBe(true);
   });
 
@@ -576,5 +577,54 @@ describe('readability round 2: one lane count for the steps, the book and the cu
   it('the cuts, the glue-ups and the finished parts say nothing about keys, D-numbers or decimals', () => {
     const text = [...cl.cuts.map((c) => `${c.label} ${c.roughText} ${c.note ?? ''}`), ...cl.glueUps.map((g) => `${g.label} ${g.roughBlockText} ${g.finalText} ${g.note}`), ...cl.finished.map((f) => `${f.name} ${f.finalText}`), ...cl.oak.map((g) => g.title)].join('\n');
     expect(text).not.toMatch(/\bD-\d+|\d\.\d/);
+  });
+});
+
+describe('review round: names, the tall knee block, the rib fillers', () => {
+  const dp = defaultParams();
+  const dm = buildModel(dp);
+  const dc = cutList(dm, dp);
+
+  it('names a row of identical parts by what its members share, never one instance', () => {
+    expect(groupedName(['Side box rib, left', 'Side box rib, right'])).toBe('Side box rib');
+    expect(groupedName(['Sign backing strip L1', 'Sign backing strip L2', 'Sign backing strip R1', 'Sign backing strip R2'])).toBe('Sign backing strip');
+    expect(groupedName(['Crossmember 2', 'Crossmember 3', 'Crossmember 4'])).toBe('Crossmembers 2, 3, 4');
+    expect(groupedName(['Crossmember 6'])).toBe('Crossmember 6');
+    expect(groupedName(['rear left axle clamp plate', 'Front left axle clamp plate 1', 'Front right axle clamp plate 2'])).toBe('Axle clamp plate');
+    expect(groupedName(['Storage coaming aft end', 'Storage coaming fore end'])).toBe('Storage coaming end');
+    expect(groupedName(['Brake pivot strap L (304 stainless)', 'Brake pivot strap R (304 stainless)'])).toBe('Brake pivot strap');
+    expect(groupedName(['Rib knee L2', 'Rib knee R2'], true)).toBe('Rib knee 2');
+  });
+
+  it('puts one name on each row in the cuts, the glue-ups and the finished table (no single-instance suffix), and numbers every crossmember row', () => {
+    const names = [...dc.cuts.map((c) => c.name), ...dc.finished.map((f) => f.name), ...dc.metal.map((m) => m.name)];
+    for (const n of names) expect(n, n).not.toMatch(/\s(?:[LR]\d?|left|right)$|,\s*(?:left|right)\b/i);
+    const cm = (rows: Array<{ name: string }>): string[] => rows.map((r) => r.name).filter((n) => /^Crossmember/.test(n)).sort();
+    expect(cm(dc.cuts)).toEqual(cm(dc.finished));
+    expect(cm(dc.finished).every((n) => /\d/.test(n))).toBe(true);
+    expect(cm(dc.finished)).toContain('Crossmembers 2, 3, 4');
+    // each row of the finished table is a different name, and the two rib knees are told apart by role
+    expect(new Set(dc.finished.map((f) => f.name)).size).toBe(dc.finished.length);
+    expect(dc.finished.map((f) => f.name)).toEqual(expect.arrayContaining(['Rib knee, mid', 'Rib knee, bow post']));
+    expect(dc.metal.find((m) => /clamp plate/i.test(m.name))).toMatchObject({ name: 'Axle clamp plate', qty: 6 });
+    expect(dc.metal.find((m) => /stub axle/i.test(m.name))?.qty).toBe(2);
+  });
+
+  it('writes the brake knee block as thick x tall x across, and its grain by layer', () => {
+    const knee = dc.finished.find((f) => f.partNo === 'brake-knee')!;
+    expect(knee.finalText).toBe('2-1/8" thick \u00d7 9-1/2" tall \u00d7 3-11/16" across');
+    expect(knee.grainWord).toBe('face layers: grain upright; center layer: across the sled');
+    const g = dc.glueUps.find((x) => x.partNo === 'brake-knee')!;
+    expect(g.finalText).toBe(knee.finalText);
+    expect(g.roughBlockText).toMatch(/thick .* tall .* across/);
+    expect(sizeText({ t: 1, w: 2, l: 3 }, false)).toBe('1 \u00d7 2 \u00d7 3'); // every other part stays T x W x L
+  });
+
+  it('lists the six rib fillers (spare band strips) in the cuts', () => {
+    const f = dc.cuts.filter((c) => c.partNo === 'side-rib-filler');
+    expect(f.map((c) => c.name)).toEqual(expect.arrayContaining(['Rib filler, box rib', 'Rib filler, mid rib', 'Rib filler, bow post']));
+    expect(ribFillers(dm, dp)).toHaveLength(3);
+    expect(f.reduce((a, c) => a + c.qty, 0)).toBe(6);
+    for (const c of f) { expect(c.ids).toEqual([]); expect(c.note).toMatch(/spare band strip/); }
   });
 });

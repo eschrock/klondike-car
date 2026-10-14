@@ -248,16 +248,41 @@ describe('part drawings read their sizes from the cut list (readability round 2)
     expect(partDims(parts.find((x) => x.id === 'rail-L')!, parts, p).board).toContain('resawn from 8/4');
   });
 
-  it('uses the cut list\'s T × W × L for the final size: the brake knee reads 2-1/8 × 8-5/8 × 4-1/2 everywhere', () => {
+  it('uses the cut list\'s sizes for the final size: T × W × L for a board, thick × tall × across for the brake knee block, a diameter for a rod', () => {
     const knee = sheets.find((s) => s.partNo === 'brake-knee')!;
     const fin = cl.finished.find((f) => f.ids.includes('brake-knee-L'))!;
-    expect(head(knee.svg)).toContain(`final ${fin.finalText} (T × W × L`);
+    expect(fin.finalText).toBe('2-1/8" thick × 9-1/2" tall × 3-11/16" across');
+    expect(head(knee.svg)).toContain(`final ${fin.finalText}`);
+    expect(head(knee.svg)).not.toContain(`${fin.finalText} (T × W × L`);
     for (const s of sheets) {
       const f = cl.finished.find((q) => q.ids.includes(s.partId));
-      if (f) expect(head(s.svg), s.partId).toContain(`final ${f.finalText} (T × W × L`);
+      if (f && f.partNo !== 'brake-knee') expect(head(s.svg), s.partId).toContain(`final ${f.finalText} (T × W × L`);
     }
     const d = partDims(parts.find((x) => x.id === 'brake-knee-L')!, parts, p);
-    expect(d.size).toBe(fin.finalText.split(' × ').map((v) => `${v}"`).join(' × '));
+    expect(d.size).toBe(fin.finalText);
+  });
+
+  it('writes the grain of the cross-laminated knee by layer (face layers up the leg, center layer across), in the drawing and in the popup', () => {
+    const knee = sheets.find((s) => s.partNo === 'brake-knee')!;
+    const h = head(knee.svg);
+    expect(h).toMatch(/Grain: face layers: grain up the leg; center layer: across the sled/);
+    expect(h).not.toMatch(/Grain: along L/);
+    expect(h).not.toMatch(/By layer, face layer first/);
+    const d = partDims(parts.find((x) => x.id === 'brake-knee-L')!, parts, p);
+    expect(d.grain).toMatch(/^face layers: grain up the leg; center layer: across the sled/);
+    expect(d.grain).not.toMatch(/^along/);
+  });
+
+  it('draws a round rod as a diameter and a length, with its cotter holes measured from a named end', () => {
+    const axle = sheets.find((s) => s.partId === 'axle-R')!;
+    const h = head(axle.svg);
+    expect(h).toContain('final 5/8" dia × 34-1/4"');
+    expect(h).not.toMatch(/5\/8 × 5\/8 × 34-1\/4/);
+    expect(h).not.toMatch(/heights from the/);
+    expect(h).toMatch(/Datums: lengths from the LEFT end\./);
+    expect(axle.features.length).toBeGreaterThanOrEqual(2);
+    for (const f of axle.features) expect(f.text, f.label).toMatch(/Drilled straight through the rod, across its diameter, at .* from the LEFT end/);
+    expect(partDims(parts.find((x) => x.id === 'axle-R')!, parts, p).size).toBe('5/8" dia × 34-1/4"');
   });
 
   it('uses human names in the headers and make notes: no part keys, no decision numbers, no decimals', () => {
@@ -319,7 +344,7 @@ describe('the knee drawing shows how the block is laminated', () => {
   it('says the rough block is not a rectangle and what each layer measures (from the cut list)', () => {
     expect(flat).toMatch(/the layers are not the same size/);
     expect(flat).toMatch(/layers 1 and 3: 4-1\/8 wide across its grain . 11-5\/8 long; layer 2: 10-3\/8 wide across its grain . 5-3\/4 long/);
-    expect(flat).toMatch(/not a rectangle until it is milled; it fits in 2-1\/4 . 11-5\/8 . 5-3\/4/);
+    expect(flat).toMatch(/not a rectangle until it is milled; it fits in 2-1\/4" thick . 11-5\/8" tall . 5-3\/4" across/);
     expect(flat).not.toMatch(/glued block rough 2-1\/4/);
   });
 });
@@ -362,5 +387,20 @@ describe('D-76: the side rib, knee and box tie drawings', () => {
     expect(cb[0].text).toMatch(/3\/8" wide × 1-1\/8" deep.*sloped face: 11\/16" from the OUTBOARD edge/);
     expect(cb[1].text).toMatch(/3\/8" wide × 1\/4" deep.*sloped face: 1-13\/32" from the OUTBOARD edge/);
     expect(cb[0].text).not.toMatch(/the the/);
+  });
+});
+
+describe('the bridle tongue drawing agrees with its own offsets table and with the step', () => {
+  const t = sheets.find((x) => x.partNo === 'bridle-tongue')!;
+  it('says the head face runs square before each curve, in the feature line and in the table of offsets', () => {
+    const [a, b] = t.features.filter((f) => f.kind === 'outline');
+    expect(a.text).toMatch(/starts with a straight run at 3" from the REAR end, 0" to 1-1\/2" from the RIGHT edge/);
+    expect(b.text).toMatch(/ends with a straight run at 3" from the REAR end, 6" to 4-1\/2" from the RIGHT edge/);
+    expect(t.svg).toMatch(/3&quot;: 0&quot; and 1-1\/2&quot; \(a straight run across\)/);
+    expect(t.svg).toMatch(/3&quot;: 4-1\/2&quot; and 6&quot; \(a straight run across\)/);
+  });
+  it('gives the depth of the bolt holes the step gives (3" through the head)', () => {
+    const holes = t.features.find((f) => f.kind === 'hole' && /25\/64/.test(f.text))!;
+    expect(holes.text).toMatch(/through \(3" deep\)/);
   });
 });
