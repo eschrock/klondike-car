@@ -9,6 +9,9 @@ Where the design stands (2026-10-13). The sled itself is in [DESIGN.md](../DESIG
 - Optional **removable brake knees** (D-78): same empty mass and race packing; the `brake-mount` row adds a dry-knee bolt check (0.84, passes); about $38 more in the BOM (tool pouch and anti-seize, estimates).
 - Waiting on Eric: the open choices below and measured Tacoma bed dimensions (Q-1).
 
+## Work in flight
+- **Cost pass** (2026-10-14): research and the savings analysis are in [docs/wip/cost-pass/](wip/cost-pass/) (savings.md, picks.md, shopping-checklist.md, the three research-*.md/json files). Waiting on Eric's picks; the commit that implements them folds what holds into DESIGN.md, DECISIONS.md and docs/price-research/ and deletes the folder.
+
 ## Open items and parked ideas
 
 - **Extreme-weather plywood:** with the corrected across-grain side-web check, 4 mm okoume fails at 2.0 and 3 mm Baltic at 4.8 (1/4" white oak ply passes at 0.61). Choose a sheet for the Extreme spec: probably 6 mm okoume, or the same white oak ply.
