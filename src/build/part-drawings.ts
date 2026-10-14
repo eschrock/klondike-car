@@ -71,7 +71,7 @@ function fastenerNoun(j: Joint, text: string): string {
     return `${d ? `${frac(d)} ` : ''}${lm && Math.abs(num(lm[1]) - (d ?? 0)) < 0.02 ? `× ${fracText(`${lm[2]} in`).replace(/ in$/, '')}" ` : ''}bolts`.replace(/^\s+/, '');
   }
   if (j.type === 'hole' && /\bbolts?\b/i.test(text)) return d ? `${frac(d)} bolts` : 'bolts';
-  if (j.type === 'hole' && /D-ring plate/i.test(text)) return '#8-32 machine screws';
+  if (j.type === 'hole' && /D-ring (?:plate|bracket)/i.test(text)) return '1/4-20 bolts';
   return j.type === 'hole' ? 'screws' : 'fasteners';
 }
 
@@ -236,8 +236,8 @@ type Feat = HoleF | RegionF | OutlineF | NoteF;
 
 const FASTENERS = new Set<Joint['type']>(['bolt', 'screw', 'pin', 'hole', 'threaded-insert', 'knob']);
 /** Wood-screw clearance and hardwood pilot drills by gauge (in). */
-const SCREW_CLEAR: Record<number, number> = { 6: 9 / 64, 8: 11 / 64, 10: 13 / 64, 12: 7 / 32 };
-const SCREW_PILOT: Record<number, number> = { 6: 7 / 64, 8: 1 / 8, 10: 9 / 64, 12: 5 / 32 };
+export const SCREW_CLEAR: Record<number, number> = { 6: 9 / 64, 8: 11 / 64, 10: 13 / 64, 12: 7 / 32 };
+export const SCREW_PILOT: Record<number, number> = { 6: 7 / 64, 8: 1 / 8, 10: 9 / 64, 12: 5 / 32 };
 /** Festool Domino tenon widths (mm) by thickness: 5x30 is 5 x 19 x 30, 8x50 is 8 x 22 x 50. */
 const DOMINO_WIDTH_MM: Record<number, number> = { 4: 17, 5: 19, 6: 20, 8: 22, 10: 24, 12: 28, 14: 28 };
 const MM = 1 / 25.4;
@@ -439,6 +439,9 @@ function holeDia(j: Joint, text: string, role: Role, mateName: string): { dia: n
   // a hole joint that names its drill: '11/64" (#8 clearance) through the head ...'
   const clrN = new RegExp(String.raw`${NUM}"\s*\(#\d+ clearance\)`).exec(t);
   if (clrN) return { dia: num(clrN[1]), word: 'clearance', purpose: `for the ${noun} to the ${mateName}` };
+  // ... or the thread of a machine bolt: '1/4" (1/4-20 clearance) through the head ...' is the bolt's clearance drill (17/64"), not the 1/4" thread (D-83: the D-ring bracket's bolts)
+  const clrT = new RegExp(String.raw`${NUM}"\s*\((\d+\/\d+)-\d+ clearance\)`).exec(t);
+  if (clrT) return { dia: clearanceDia({ type: 'bolt', size: '', diaIn: num(clrT[2]) }), word: 'clearance', purpose: `for the ${noun} to the ${mateName}` };
   // an explicit hole size: '5/8" kingpin hole', '1" hole across', '3/8" blind hole', '5/8" bore'
   const ex = new RegExp(String.raw`${NUM}"?\s*(?:in\s*)?(?:kingpin\s+)?(?:blind\s+|stopped\s+)?(?:hole|bore)\b`).exec(t);
   const lead = new RegExp(String.raw`${NUM}"\s*(?:×\s*[\d-/]+"?\s*)?(?:(?:316|18-8 \(304\))\s+)?(?:stainless\s+)?(?:forged|eye|hex|carriage|shoulder|clevis|pin|rod)`).exec(t);
@@ -845,7 +848,7 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
   // D-76: the side ribs, their knees and the box tie spacers.
   if (/^side-rib(-box|-bow)?$/.test(part.partNo ?? '')) {
     notes.push('A T-shaped rib: a narrow shaft and a head as tall as the gunwale band, the top of the head cut to the sheer (the slope is dimensioned at both ends). The drawn face is the one that faces into the sled; the back face is glued to the bands and the filler.');
-    if ((part.joints ?? []).some((q) => q.type === 'hole' && /template/.test(q.note ?? ''))) notes.push('Do not drill the four D-ring holes on the bench: they are drilled at the final fit, through the head and the side together, with the D-ring plate as the template. The positions here check the plate.');
+    if ((part.joints ?? []).some((q) => q.type === 'hole' && /template/.test(q.note ?? ''))) notes.push('Do not drill the two D-ring holes on the bench: they are drilled at the final fit, through the head and the side together, with the D-ring bracket as the template. The positions here check the bracket (measure the real bracket first).');
   }
   if (part.partNo === 'box-tie') notes.push('A plain stick that fills the gap between the box rib and the box side. Measure that gap at the dry fit and cut the stick a hair short of it: thickened epoxy takes up the rest. Its top stands 1/8" under the box coaming, so it is never glued to the lid frame.');
   if (part.partNo === 'side-rib-knee') notes.push('A right-triangle knee: the tall leg is glued to the face of the rib and the foot to the deck. Drill the screw holes straight down from the sloped face, with the counterbore first, so the screw head leaves the stated oak under it.');

@@ -180,8 +180,11 @@ describe('part drawings', () => {
     }
     const rail = sheets.find((x) => x.partNo === 'rail')!;
     const c = rail.features.find((f) => f.kind === 'hole' && /counterbore/.test(f.text))!;
-    expect(c.text).toMatch(/^4 holes, 1\/8" pilot, through, with a 5\/16" × 1" counterbore from the BOTTOM edge\./);
-    expect(c.purpose).toMatch(/^for the #6 × 2-1\/2" screws to the left chine/);
+    // D-81, D-82: no Dominos in the chine tie; the rail takes the #8 screws in every gap, 7 counterbored and 1 shallow-zone hole at the bow
+    expect(c.text).toMatch(/^7 holes, 11\/64" clearance, through, with a 5\/16" × 1" counterbore from the BOTTOM edge\./);
+    expect(c.purpose).toMatch(/^for the #8 × 2-1\/2" screws to the left chine/);
+    expect(rail.features.filter((f) => f.kind === 'hole' && /left chine/.test(f.purpose ?? '')).reduce((n, f) => n + f.count, 0)).toBe(8);
+    expect(rail.features.some((f) => /chine/.test(f.purpose ?? '') && f.kind === 'mortise')).toBe(false);
     expect(c.face).toBe('top edge');
   });
 
@@ -233,19 +236,21 @@ describe('part drawings read their sizes from the cut list (readability round 2)
       const stock = /Stock: ([^\n]*?)(?:Grain:|$)/.exec(head(s.svg))?.[1] ?? '';
       for (const m of stock.matchAll(/(\d+(?:-\d+\/\d+)?|\d+\/\d+)(?= ×| rough| from|;|,| \(T)/g)) {
         const v = m[1].includes('/') ? (m[1].includes('-') ? Number(m[1].split('-')[0]) + eval(m[1].split('-')[1]) : eval(m[1])) : Number(m[1]);
-        expect(Math.abs(v * 8 - Math.round(v * 8)) < 1e-6 || /planed to/.test(stock), `${s.partId}: ${m[1]} in "${stock}"`).toBe(true);
+        // a laminated part's line ends with the block's final (milled) size, which is on the 1/32 grid, not a rough size
+        expect(Math.abs(v * 8 - Math.round(v * 8)) < 1e-6 || /planed to|mill to final/.test(stock), `${s.partId}: ${m[1]} in "${stock}"`).toBe(true);
       }
     }
   });
 
-  it('says the rail strips are resawn from the board the cut list uses (8/4), not 4/4', () => {
+  it('says the rail strips are resawn from the board the cut list uses (5/4 now: 8/4 is not bought, D-79), not 4/4', () => {
     const rail = sheets.find((s) => s.partNo === 'rail')!;
     const strip = cl.cuts.find((c) => c.ids.includes('rail-L') && c.piece === 'strip')!;
-    expect(strip.board).toBe('8/4');
+    expect(strip.board).toBe('5/4');
     expect(head(rail.svg)).toContain(`2 strips, each ${strip.roughText} rough`);
-    expect(head(rail.svg)).toContain('resawn from 8/4');
+    expect(head(rail.svg)).toContain('resawn from 5/4');
     expect(head(rail.svg)).not.toMatch(/from 4\/4/);
-    expect(partDims(parts.find((x) => x.id === 'rail-L')!, parts, p).board).toContain('resawn from 8/4');
+    expect(head(rail.svg)).not.toMatch(/from 8\/4/);
+    expect(partDims(parts.find((x) => x.id === 'rail-L')!, parts, p).board).toContain('resawn from 5/4');
   });
 
   it('uses the cut list\'s T × W × L for the final size: the brake knee reads 2-1/8 × 8-5/8 × 4-1/2 everywhere', () => {
@@ -346,14 +351,17 @@ describe('D-77: the pivot strap drawing', () => {
 
 describe('D-76: the side rib, knee and box tie drawings', () => {
   const sheet = (id: string) => sheets.find((d) => d.partIds.includes(id))!;
-  it('gives the rib its four D-ring holes at 1-1/8" x 1/2" with a clearance drill, the sheer-cut top dimensioned, and the do-not-drill note', () => {
+  it('gives the rib its two D-ring bracket holes 1-1/4" apart with the 1/4-20 clearance drill, the sheer-cut top dimensioned, and the do-not-drill note', () => {
     const d = sheet('side-rib-L2');
     const holes = d.features.find((f) => f.kind === 'hole')!;
-    expect(holes.count).toBe(4);
-    expect(holes.text).toMatch(/3\/16" clearance/);
-    expect(holes.text).toMatch(/7\/16" and 1-9\/16" from the REAR edge/);
+    expect(holes.count).toBe(2);
+    expect(holes.text).toMatch(/17\/64" clearance/);
+    expect(holes.purpose).toMatch(/1\/4-20 bolts/);
+    expect(holes.text).toMatch(/3\/8" and 1-5\/8" from the REAR edge/);
     expect(d.features.some((f) => /Sloped edge: a straight cut, 7° from level/.test(f.text))).toBe(true);
     expect(d.svg).toMatch(/final fit|D-ring holes/);
+    expect(d.svg).toMatch(/two D-ring holes/);
+    expect(d.svg).not.toMatch(/four D-ring/);
   });
   it('draws each knee counterbore on its sloped face at its own depth, centered on its screw hole', () => {
     const d = sheet('side-rib-knee-L2');

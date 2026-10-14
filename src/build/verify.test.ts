@@ -14,9 +14,10 @@ describe('verify checklist', () => {
     expect(list.slice(0, 10).map((c) => c.id)).toEqual([
       'tire-squash', 'wheel', 'axle-rod', 'steering-parts', 'bridle', 'seat-back', 'sign-knobs', 'brake-knee', 'brake-strap', 'lamp-clip',
     ]);
-    expect(list.slice(10, 12).map((c) => c.id)).toEqual(['strip-bend', 'ply-thickness']);
-    expect(list[12]?.id).toBe('bow-rib-clearance'); // D-76: the booted-rider check of the bow post
-    expect(list[13]?.id).toBe('other-params');
+    expect(list.slice(10, 14).map((c) => c.id)).toEqual(['strip-bend', 'oak-supplier', 'deck-sheet', 'ply-thickness']); // D-79, D-80: the cost-pass sourcing checks come before the dado check
+    expect(list[14]?.id).toBe('bow-rib-clearance'); // D-76: the booted-rider check of the bow post
+    expect(list.slice(15, 19).map((c) => c.id)).toEqual(['d-ring', 'eva-pads', 'hinges-304', 'lid-support']); // D-83: the bought-hardware checks of the Standard spec
+    expect(list[19]?.id).toBe('other-params');
     expect(list.map((c) => c.n)).toEqual(list.map((_, i) => i + 1));
     expect(new Set(list.map((c) => c.id)).size).toBe(list.length);
   });
@@ -44,15 +45,70 @@ describe('verify checklist', () => {
   it('asks for the real plywood thickness before any dado is cut, and the strip bend test before ordering', () => {
     const ply = list.find((c) => c.id === 'ply-thickness')!;
     expect(ply.when).toBe('before cutting');
-    expect(ply.whatToDo).toContain('1/4" wide (fit to the ply)'); // the thin sheet in effect (7/32 white oak plywood + slop), as a fraction
-    expect(ply.whatToDo).toMatch(/white oak plywood/);
-    expect(ply.paramKeys).toContain('whiteOakPlyThickIn');
+    expect(ply.whatToDo).toContain('9/32" wide (fit to the ply)'); // the thin sheet in effect (6 mm Baltic birch, 15/64 + 3/64 of slop), as a fraction
+    expect(ply.whatToDo).toMatch(/Baltic birch/);
+    expect(ply.whatToDo).toMatch(/Measure the sheet you will cut, not the listing/);
+    expect(ply.paramKeys).toContain('balticSixThickIn');
     expect(ply.whatToDo).toContain('33/64" wide (fit to the ply)');
     for (const k of ply.paramKeys) expect(PARAM_DEFS[k as keyof typeof PARAM_DEFS].status).toBe('verify');
     expect(ply.partIds).toEqual(expect.arrayContaining(['deck', 'side-L-web', 'transom-rear', 'bow-bulkhead']));
     const bend = list.find((c) => c.id === 'strip-bend')!;
     expect(bend.when).toBe('before ordering');
     expect(bend.whatToDo).toMatch(/2 vs 3 plies/);
+  });
+
+  it('D-80: the Baltic birch thickness is a check before the dados, with its parameters-panel label and no decimal', () => {
+    const ply = list.find((c) => c.id === 'ply-thickness')!;
+    expect(ply.ifFails).toContain(`"${PARAM_DEFS.balticSixThickIn.label}"`);
+    expect(ply.how.flatMap((q) => [q.text, ...(q.sub ?? []).map((x) => x.text)]).join(' ')).toMatch(/6 mm Baltic birch is sold as "1\/4 in"/);
+    // under the Extreme spec the thin sheet is okoume: the Baltic wording and parameter go away
+    const ext = { ...p, weatherSpec: 1 };
+    const e = verifyChecklist(buildModel(ext), ext).find((c) => c.id === 'ply-thickness')!;
+    expect(e.whatToDo).toMatch(/okoume/);
+    expect(e.whatToDo).not.toMatch(/Baltic/);
+    expect(e.ifFails).toContain(`"${PARAM_DEFS.panelPlyIn.label}"`);
+  });
+
+  it('D-79, D-83: asks Peach State about the walk-in price and kiln drying, whether the deck sheet is okoume, whether the pads are closed-cell, and what the hinge packages say', () => {
+    const oak = list.find((c) => c.id === 'oak-supplier')!;
+    expect(oak.when).toBe('before ordering');
+    expect(oak.whatToDo).toMatch(/walk-in price/);
+    expect(oak.whatToDo).toMatch(/kiln dried/);
+    expect(oak.whatToDo).toMatch(/\$8\.25 a board foot for 4\/4/);
+    const deck = list.find((c) => c.id === 'deck-sheet')!;
+    expect(deck.title).toMatch(/12 mm okoume, not meranti/);
+    expect(deck.whatToDo).toMatch(/3 lb heavier/);
+    expect(deck.partIds).toEqual(expect.arrayContaining(['deck', 'seat-back-panel']));
+    const eva = list.find((c) => c.id === 'eva-pads')!;
+    expect(eva.pass).toMatch(/closed-cell/);
+    expect(eva.partIds).toEqual(['seat-cushion', 'seat-back-pad']);
+    const hinge = list.find((c) => c.id === 'hinges-304')!;
+    expect(hinge.pass).toMatch(/304 or 18-8/);
+    expect(hinge.partIds).toEqual(expect.arrayContaining(['seat-hinge-L', 'storage-hinge-L']));
+  });
+
+  it('D-83: checks the D-ring bracket (hole count, size, spacing) and the working load on the package, in numbers from the model', () => {
+    const d = list.find((c) => c.id === 'd-ring')!;
+    expect(d.when).toBe('before ordering');
+    expect(d.whatToDo).toMatch(/Count the holes \(the design assumes 2\)/);
+    expect(d.whatToDo).toMatch(/assumed 1-1\/4"/);
+    expect(d.whatToDo).toMatch(/working load limit off the package/);
+    expect(d.pass).toContain(`${p.lashLoadLbf} lb`);
+    expect(d.paramKeys).toEqual(verifyChecklist(parts, p).find((c) => c.id === 'd-ring')!.paramKeys);
+    expect(d.partIds).toEqual(expect.arrayContaining(['lash-L1', 'side-rib-L2']));
+  });
+
+  it('D-83: the lamp clip check says to measure the real Giant Recon and Planet Bike lights before printing', () => {
+    const c = list.find((q) => q.id === 'lamp-clip')!;
+    expect(c.whatToDo).toMatch(/Measure the real lights before anything is printed/);
+    expect(c.whatToDo).toMatch(/Giant Recon 600/);
+    expect(c.whatToDo).toMatch(/Planet Bike Spok/);
+  });
+
+  it('under the Extreme spec the Standard-only lid support check is not listed (the stainless stay needs no new check)', () => {
+    const ext = { ...p, weatherSpec: 1 };
+    expect(verifyChecklist(buildModel(ext), ext).some((c) => c.id === 'lid-support')).toBe(false);
+    expect(list.some((c) => c.id === 'lid-support')).toBe(true);
   });
 
   it('lists only part ids that are in the built model', () => {

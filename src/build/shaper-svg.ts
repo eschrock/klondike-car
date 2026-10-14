@@ -227,6 +227,7 @@ function insertBore(text: string): number | undefined {
 /** The diameter of a through hole for a fastener joint (rule R2). */
 export function clearanceDia(j: { type: string; size?: string; diaIn?: number }): number {
   const text = j.size ?? '';
+  if (/\bdrain hole\b/.test(text) && j.diaIn) return j.diaIn; // D-83: a drain is exactly its own size (3/8"), not a bolt clearance
   const clr = new RegExp(String.raw`${NUM}\s*(?:in\s*)?clearance`).exec(text);
   if (clr && Number.isFinite(parseInches(clr[1]))) return parseInches(clr[1]);
   const gauge = /#\s*(\d+)/.exec(text);
@@ -419,10 +420,10 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
     const kindF = fastenerKind(j);
     const isFastener = ['bolt', 'screw', 'pin', 'knob', 'threaded-insert', 'hole'].includes(j.type);
 
-    // Scupper drains: a glue joint to a nipple, drilled through the glued-up sandwich.
-    if (j.type === 'glue' && /nipple/.test(text) && /\bhole\b/.test(text)) {
-      const m = new RegExp(String.raw`${NUM}"?\s*(?:316\s*)?nipple`).exec(text);
-      const dia = m ? parseInches(m[1]) : 0.375;
+    // Scupper drains: a glue joint to a nipple (Extreme), or the plain drain hole of the Standard spec (D-83); either is drilled through the glued-up sandwich, after glue-up.
+    if ((j.type === 'glue' && /nipple/.test(text) && /\bhole\b/.test(text)) || (j.type === 'hole' && /drain hole/.test(text) && /^side-/.test(part.id))) {
+      const m = new RegExp(String.raw`${NUM}"?\s*(?:316\s*)?(?:nipple|drain hole)`).exec(text);
+      const dia = j.diaIn ?? (m ? parseInches(m[1]) : 0.375);
       const got = pts.map(resolve).filter((x): x is NonNullable<typeof x> => x !== null);
       for (const g of got) items.push({ k: 'drill', c: g.uv, dia, label: `drain Ø${fmt(dia)} after glue-up` });
       if (got.length) holeFeature(j, got.map((g) => g.uv), dia, undefined, 'drill', `Drain hole Ø${fmt(dia)}, drill through the glued-up sandwich (inner band, web, outer band)`);

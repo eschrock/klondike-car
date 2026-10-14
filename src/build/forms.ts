@@ -273,7 +273,7 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
       sub: [
         'Mark on it the sheer (cleat line), the gunwale band lower edge, the chine band top, the inner chine band bottom and the S stations.',
         ...(hasRamp ? [`Cut it off square at the "S starts" line, ${frac(uOf(xR0))} from the rear end. The rear piece lies under the flat part of the web; the ramp takes the front piece's place. Keep the front piece to mark the web.`, `The ramp cap puts its low end ${frac(webLowIn)} above the bench, ${frac(RIB_BASE_IN)} above the template. Glue a second layer of ${frac(TEMPLATE_STOCK_IN)} hardboard, cut to the same outline, under the rear piece so the web runs onto the ramp with no step.`] : []),
-        'Screw the template to the bench with #6 × 3/4" flat-heads about every 12", heads flush.',
+        'Screw the template to the bench with #8 × 3/4" flat-heads about every 12", heads flush.',
       ],
     },
     {

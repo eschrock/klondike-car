@@ -5,15 +5,16 @@
  * model. Every param whose `status` is 'verify' is claimed by a check, and any left over lands in the last item ("other params to
  * confirm") automatically, so promoting or adding a verify param never needs an edit here.
  */
-import { bowTaper, KNEE_MOUNT, PARAM_DEFS, thinSheet, type Params } from '../params';
+import { bowTaper, KNEE_MOUNT, PARAM_DEFS, thinSheet, WEATHER_SPEC, type Params } from '../params';
 import { runChecks } from '../analysis';
 import { signKnobPlan } from '../model/body';
 import { computeLayout, innerHalfWidth } from '../model/layout';
-import { sideRibStations } from '../model/side-ribs';
+import { LASH_BOLTS, LASH_BOLT_DIA_IN, LASH_HOLE_DX_IN, LASH_PLATE, lashBoltLength, sideRibStations } from '../model/side-ribs';
 import { CARRIAGE_STOCK_IN, EYE_BOLT_STOCK_IN, stockBoltFit } from '../model/rear-mount';
 import { localBounds } from '../model/bounds';
 import type { Part } from '../model/types';
 import { cutList } from './cutlist';
+import { OAK_PRICE_PER_BF } from './prices';
 import type { Instr } from './assembly';
 
 /** An instruction with plain sub-items. */
@@ -117,6 +118,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
   const squashDesign = testLb / rate;
   const squashMin = Math.ceil((testLb / rateMax) * 20) / 20;
   const thin = thinSheet(p);
+  const std = p.weatherSpec !== WEATHER_SPEC.extreme;
   const knob = signKnobPlan({ p, L: computeLayout(p) });
   // D-72: stock lengths of the eye bolts and the tongue's carriage bolts against their real stacks.
   const beamEye = stockBoltFit(p.frontBeamThicknessIn, p.steerEyeBoltDiaIn, 1, EYE_BOLT_STOCK_IN);
@@ -381,18 +383,23 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
     },
     {
       id: 'lamp-clip',
-      title: 'Lamp clips: fit against the real lamps',
+      title: 'Lamp clips: measure the real lights, then fit the clips',
       how: [
+        it('Measure the real lights before anything is printed.', [
+          'The clips were drawn for different lights. The front light is a Giant Recon 600 (87 g), the rear a Planet Bike Spok.',
+          'Measure each light\'s flat mount: the distance between its two screw holes, the hole size, the width and thickness of the mount, and the lens clearance.',
+          'The clip lips carry M4 (front) and M3 (rear) heat-set inserts: check the real screws are those sizes and set the insert spacing to the light.',
+        ]),
         it('Print a 1" test slice of the clip.', ['About 3/64" clearance a side and 1/16" detent ribs; ASA, 4 or more perimeters, printed on a long face.']),
         it(`Cut a ${handHold} test slot in an offcut of the bulkhead stock on the Shaper.`, ['Epoxy-seal and ease it, then push the slice in.']),
-        it('Bolt each real lamp to the clip lip (M4 front, M3 rear heat-set inserts).', ['Check the mount-hole spacing, the lens clearance and the pull-out force.']),
+        it('Bolt each real light to its clip lip.', ['Check the mount-hole spacing, the lens clearance and the pull-out force.']),
       ],
-      passList: ['The slice is a firm push fit that pulls out by hand (detent ribs, no wobble).', 'The lamp mount-hole spacing matches the inserts.', 'Nothing binds once the slot is sealed with epoxy.'],
-      ifFails: 'Re-print the clip at the measured clearance (the clip is a pure function of the hand-hold size), then cut the real slots.',
+      passList: ['The slice is a firm push fit that pulls out by hand (detent ribs, no wobble).', 'The lamp mount-hole spacing matches the inserts on the clip lip.', 'Nothing binds once the slot is sealed with epoxy.'],
+      ifFails: 'Re-print the clip at the measured clearance and insert spacing (the clip is a pure function of the hand-hold size and the light\'s mount), then cut the real slots.',
       partIds: ids(parts, /^(lamp-clip|rear-lamp-clip|front-light|rear-light|bow-bulkhead|transom-rear)$/),
       paramKeys: [],
       when: 'before cutting',
-      refs: ['D-64'],
+      refs: ['D-64', 'D-83'],
     },
     {
       id: 'strip-bend',
@@ -414,26 +421,65 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       refs: ['D-62', 'D-66'],
     },
     {
+      id: 'oak-supplier',
+      title: 'Lumber: Peach State price sheet and kiln drying',
+      how: [
+        it('Call Peach State Lumber (Kennesaw) before the lumber list goes out.', [
+          `Ask whether the printed price sheet ("Hardwoods LEVEL 2") is the walk-in price: the design is priced on $${f(OAK_PRICE_PER_BF['4/4'].usd, 2)} a board foot for 4/4 FAS white oak and $${f(OAK_PRICE_PER_BF['5/4'].usd, 2)} for 5/4.`,
+          'Ask whether the white oak is kiln dried. The sheet does not say.',
+          'Ask whether they hold 4/4 and 5/4 white oak in boards wide and long enough for the cut list (the widest and longest board in the lumber list).',
+        ]),
+        it('When the boards arrive, put a moisture meter on every one.', ['Reject a board over 9 %. Sticker the lot and let it settle in the shop before milling.']),
+        it('Only 4/4 and 5/4 are bought. Do not accept a substitute thickness without redoing the cut list: the thick parts are glued up from layers.'),
+      ],
+      passList: ['The walk-in price is at or under the sheet price.', 'The oak is kiln dried: 6 to 9 % on the meter.', '4/4 and 5/4 FAS are in stock in the widths and lengths the cut list needs.'],
+      ifFails: 'If the price is higher, enter it in the price list and re-check the total. If the oak is green or air dried, sticker it for a few weeks first (bent strips cup and crack in wet boards) or use another yard: The Wood Yard has 4/4 at a higher price and no 5/4.',
+      partIds: [],
+      paramKeys: [],
+      when: 'before ordering',
+      refs: ['D-79'],
+    },
+    {
+      id: 'deck-sheet',
+      title: 'Deck sheet: 12 mm okoume, not meranti',
+      how: [
+        it('Ask the yard what species the 12 mm marine plywood is.', [
+          'Peach State lists no marine plywood. Ask them, and Randall Brothers (Atlanta), for 12 mm okoume BS 1088. The Wood Yard\'s sheet is the price reference.',
+          'Marine plywood sold as "BS 1088" can be meranti: it is about 3 lb heavier over the deck and the seat back, and the design weights assume okoume.',
+        ]),
+        it('Look at the stamp on the sheet edge and the face veneer.', ['Okoume is pale pinkish-tan with a soft, even grain; meranti is darker and reddish.']),
+        it('Measure the sheet (see "Plywood thickness") before the deck dado is cut.'),
+      ],
+      passList: ['The 12 mm sheet is okoume (BS 1088 or equivalent), glue line WBP or marine.', 'If it is meranti, the sled weighs about 3 lb more and the weight rows are re-run with the heavier density.'],
+      ifFails: 'Enter the heavier density in the design if you accept meranti and re-run the checks; otherwise order okoume (Aircraft Spruce lists it only in 4 and 6 mm, so ask a local yard first).',
+      partIds: ids(parts, /^(deck|seat-back-panel)$/),
+      paramKeys: [],
+      when: 'before ordering',
+      refs: ['D-79', 'D-80'],
+    },
+    {
       id: 'ply-thickness',
       title: 'Plywood thickness: measure before any dado is cut',
       how: [
-        it(`Measure the ${thin.nominal} ${thin.key === 1 ? 'white oak plywood' : thin.key === 3 ? 'Baltic birch' : 'okoume'} and the 12 mm okoume with calipers, at six or more points on the edges.`, [
+        it(`Measure the ${thin.nominal} ${thin.key === 1 ? 'white oak plywood' : thin.key === 3 || thin.key === 4 ? 'Baltic birch' : 'okoume'} and the 12 mm okoume with calipers, at six or more points on the edges.`, [
           thin.key === 1 ? 'Nominal 1/4" white oak plywood runs about 7/32", and the veneer face varies.' : '',
+          thin.key === 4 ? `Measure the sheet you will cut, not the listing: 6 mm Baltic birch is sold as "1/4 in" and runs from about 7/32" to 1/4". The design assumes ${fr(p.balticSixThickIn, 64)}".` : '',
           'BS 1088 12 mm often runs to 31/64" or more, and the sealed sheet is a few thousandths thicker.',
         ].filter(Boolean)),
         it('Compare with the dados the Shaper files will cut.', [
           `Web dados: the thin sheet ${fr(thin.thicknessIn, 64)}" plus ${fr(p.grooveSlopIn, 64)}" of slop, so ${fr(thin.thicknessIn + p.grooveSlopIn, 64)}" wide (fit to the ply).`,
           `Deck dado and the gap under the inner chine band: ${fr(p.deckPlyIn, 64)}" plus ${fr(p.deckSlopIn, 64)}" of slop, so ${fr(p.deckPlyIn + p.deckSlopIn, 64)}" wide (fit to the ply).`,
         ]),
-        ...(thin.key === 1 ? [it('Check the glue-line type on the sheet (interior or Type II is what the Standard weather spec assumes); seal every face and edge.')] : []),
+        ...(thin.key === 1 ? [it('Check the glue-line type on the sheet (interior or Type II is what the Standard weather spec assumed); seal every face and edge.')] : []),
+        ...(thin.key === 4 ? [it('Ask what glue the sheet carries (interior or exterior).', ['The sled is garage-kept and every face and edge is sealed, so an interior glue line is acceptable; ask anyway.'])] : []),
         ...(thin.key === 3 ? [it('Confirm the sheet size: probably 5 × 5 ft (60 × 60 in); the 59-5/8" side web blank only just fits.')] : []),
       ],
       passList: [`The ${thin.nominal} sheet measures ${fr(thin.thicknessIn, 64)}" or less and the 12 mm sheet ${fr(p.deckPlyIn, 64)}" or less: each, plus a seal coat of a few thousandths, still slides into its dado with a little to spare (about 1/32").`],
-      ifFails: `Enter the measured thickness (plus the seal coat) in the design (${lbl(thin.key === 1 ? 'whiteOakPlyThickIn' : thin.key === 3 ? 'balticThinThickIn' : 'panelPlyIn')}, ${lbl('deckPlyIn')}), re-run the checks and regenerate the Shaper files BEFORE a dado is cut: a thick sheet in a nominal dado cannot be fixed afterwards.`,
+      ifFails: `Enter the measured thickness (plus the seal coat) in the design (${lbl(thin.key === 1 ? 'whiteOakPlyThickIn' : thin.key === 3 ? 'balticThinThickIn' : thin.key === 4 ? 'balticSixThickIn' : 'panelPlyIn')}, ${lbl('deckPlyIn')}), re-run the checks and regenerate the Shaper files BEFORE a dado is cut: a thick sheet in a nominal dado cannot be fixed afterwards.`,
       partIds: ids(parts, /^(deck|side-[LR]-web|transom-rear|bow-bulkhead)$/),
-      paramKeys: verifyKeys(['panelPlyIn', 'whiteOakPlyThickIn', 'balticThinThickIn', 'deckPlyIn', 'grooveSlopIn', 'deckSlopIn']),
+      paramKeys: verifyKeys(['panelPlyIn', 'whiteOakPlyThickIn', 'balticThinThickIn', 'balticSixThickIn', 'deckPlyIn', 'grooveSlopIn', 'deckSlopIn']),
       when: 'before cutting',
-      refs: ['D-62', 'D-63', 'D-73'],
+      refs: ['D-62', 'D-63', 'D-73', 'D-80'],
     },
     {
       id: 'bow-rib-clearance',
@@ -457,6 +503,80 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       when: 'before cutting',
       refs: ['D-76'],
     },
+    {
+      id: 'd-ring',
+      title: 'D-ring brackets: holes, bolts and working load',
+      how: [
+        it('Open one package of the bolt-on cargo D-rings and measure the bracket.', [
+          `Count the holes (the design assumes ${LASH_BOLTS}), measure their diameter and the distance between their centers (assumed ${fr(2 * LASH_HOLE_DX_IN, 16)}", along the length of the bracket), and the bracket's length, width and thickness (assumed about ${fr(LASH_PLATE.len, 16)}" × ${fr(LASH_PLATE.tall, 16)}" × ${fr(LASH_PLATE.thick, 16)}").`,
+          'Read the working load limit off the package. Ignore any breaking strength printed beside it.',
+        ]),
+        it(`Try a ${fr(LASH_BOLT_DIA_IN, 16)}"-20 button-head bolt in each hole.`, [`A 1/4-20 bolt must pass with a little play. Bolts of ${fr(lashBoltLength(p).len, 4)}" are long enough for the side, the rib head and the bracket.`]),
+        it('Check the ring folds flat against the bracket.', ['In race mode it lies flat against the rib head.']),
+      ],
+      passList: [
+        `The bracket has two holes for 1/4" bolts, about ${fr(2 * LASH_HOLE_DX_IN, 16)}" apart; if the holes are another size or spacing, the rib head and the drilling follow the bracket (it is the drilling template).`,
+        `The working load is at least ${p.lashLoadLbf} lb (the lash-load row pulls each ring at ${p.lashLoadLbf} lb, at ${p.lashPullAngleDeg}°).`,
+        'The ring folds flat.',
+      ],
+      ifFails: `Enter the real working load in the design (${lbl('lashLoadLbf')}) and re-run the checks; if it is lower, add a ring or limit the strap load. If the holes are not 1/4", change the bolt size and the drill with the bracket in hand.`,
+      partIds: ids(parts, /^(lash-|side-rib-[LR]\d$)/),
+      paramKeys: verifyKeys(['lashLoadLbf']),
+      when: 'before ordering',
+      refs: ['D-76', 'D-83'],
+    },
+    {
+      id: 'eva-pads',
+      title: 'Seat pads: closed-cell EVA',
+      how: [
+        it('Buy one kneeling pad first and look at it.', [
+          'Press a thumb into the edge, then cut a small piece off a corner: closed-cell EVA is smooth and has no visible bubbles; open-cell foam (sponge) is rough and soaks up water.',
+          'Drop a cut piece in water for a day; it should not gain weight.',
+          'Check the pad size against the design: 11" × 18" × 1-1/2".',
+        ]),
+        it('Try the contact cement on a scrap of the pad.', ['Glue two cut edges together, let it set a day, and pull: the glue line should hold and the foam should tear before it lets go.']),
+        it('Try a hook-and-loop strip on the pad and on a sealed wood scrap.', ['Press, load with the rider\'s weight, pull off: the strip should hold and release cleanly.']),
+      ],
+      passList: ['The pad is closed-cell (does not soak up water).', 'The edge-glued seam holds.', 'The strips hold on the foam and release without tearing it.'],
+      ifFails: 'If the pad is open-cell, use a different closed-cell foam (polyethylene or EVA sheet) and re-run the seat checks with its thickness and weight.',
+      partIds: ids(parts, /^seat-(cushion|back-pad)$/),
+      paramKeys: [],
+      when: 'before ordering',
+      refs: ['D-83'],
+    },
+    {
+      id: 'hinges-304',
+      title: std ? 'Hinges: 304 / 18-8 stainless on the package' : 'Hinges: 316 stainless on the package',
+      how: [
+        it('Read the package of each hinge pair (the lid hinges and the seat hinges).', [
+          std ? 'It must say stainless steel and give the grade: 304 or 18-8 (the same steel). "Stainless" alone can be 201 or a plated steel.' : 'It must say stainless steel and give the grade: 316 (marine). "Stainless" alone can be 201, 304 or a plated steel.',
+          'Check the screws that come with them: the sled uses its own stainless screws, so the hinge holes must take a #8 (lid) and a #10-32 (seat back) screw.',
+        ]),
+        it('Hold a magnet to a hinge.', [std ? '304 is barely magnetic or not at all; a strong pull means plated steel or 430.' : '316 is barely magnetic or not at all; a strong pull means plated steel or 430.']),
+      ],
+      passList: [std ? 'Each package says 304 or 18-8.' : 'Each package says 316.', 'The hinge holes are the size the sled needs.'],
+      ifFails: 'Buy another brand that states the grade. A plated hinge rusts and stains the oak.',
+      partIds: ids(parts, /^(seat-hinge|storage-hinge)/),
+      paramKeys: [],
+      when: 'before ordering',
+      refs: ['D-73', 'D-83'],
+    },
+    ...(parts.some((x) => x.id === 'storage-lid-stay' && /plated/.test(x.material))
+      ? [{
+        id: 'lid-support',
+        title: 'Lid support: bracket holes and arm length',
+        how: [
+          it('Open the package of the 6" lid support.', ['Measure the base bracket and the arm-end bracket: the screw holes (size and spacing) and the arm length, open and folded.']),
+          it('Hold it in the box on the left hinge backer and check the lid.', ['The arm folds flat when the lid is shut, and holds the lid open at about 75°.']),
+        ],
+        passList: ['The two brackets take #8 × 5/8" screws at the pilots the drawings give (or the pilots move to suit the bracket).', 'The lid stays open at its stop, and closes on the gasket with no gap.'],
+        ifFails: 'Move the pilots to the real holes before they are drilled, or use the stainless friction stay.',
+        partIds: ids(parts, /^(storage-lid-stay|storage-hinge-backer-L)$/),
+        paramKeys: [],
+        when: 'before cutting' as VerifyWhen,
+        refs: ['D-83'],
+      }]
+      : []),
   ];
 
   // Removable knees: the check on the first refit (the ratchet and wrench setting).
