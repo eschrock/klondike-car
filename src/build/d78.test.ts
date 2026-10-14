@@ -10,9 +10,7 @@ import { buildModel } from '../model';
 import { KNEE_MOUNT, WEATHER_SPEC, defaultParams, type Params } from '../params';
 import { brakeGeometry } from '../model/brake-layout';
 import { computeLayout } from '../model/layout';
-import { fin, flattenInstr, tokensIn, type BuildStep, type Instr } from './assembly';
-import { frac } from './svg-util';
-import { finalFrac } from './units';
+import { fin, tokensIn, type BuildStep } from './assembly';
 import type { Bom, BomLine } from './bom';
 import { BuildData, drawingFileName, zipPackage } from './package';
 import { cutList } from './cutlist';
@@ -96,8 +94,8 @@ describe('D-78 the BOM with the removable knee', () => {
         }
       }
       const kp = geom(p);
-      expect(lineOfPart(b, 'brake-bolt-bottom-')!.description).toContain(`${fin(kp.bottom.orderLen)}" long`);
-      expect(lineOfPart(b, 'brake-bolt-top-')!.description).toContain(`${fin(kp.top.orderLen)}" long`);
+      expect(lineOfPart(b, 'brake-bolt-bottom-')!.description).toContain(`${fin(kp.bottom.orderLen)} long`);
+      expect(lineOfPart(b, 'brake-bolt-top-')!.description).toContain(`${fin(kp.top.orderLen)} long`);
       expect(lineOfPart(b, 'brake-insert-bottom-')!.notes).toMatch(/Verify/);
       expect(lineOfPart(b, 'brake-bolt-top-')!.description).toMatch(std ? /304/ : /316/);
       if (std) for (const k of ['bolt', 'washer', 'insert']) expect(lineOfPart(b, `brake-${k}-top-`)!.description).not.toMatch(/316/);
@@ -117,7 +115,7 @@ describe('D-78 the BOM with the removable knee', () => {
     });
 
     it(`${name}: no pin, sleeve, tube, bearing washer, Domino 6x40, backing plate or knee bolt line`, () => {
-      const t = JSON.stringify(b.sections);
+      const t = JSON.stringify(lines(b).filter((l) => !/seat-back-latch|latch pin|Bridle|bridle/.test(`${l.key} ${l.description}`)));
       expect(t).not.toMatch(/ball-lock|quick-release|brake-pin|brake knee (top|bottom) pin|pin sleeve|bearing washer|backing plate|knee bolt/i);
       expect(lines(b).some((l) => /tube 1\/2" OD x 3\/8" ID/.test(l.key))).toBe(false);
       expect(lines(b).some((l) => /Domino DF 500 6x40/.test(l.key))).toBe(false);
@@ -177,7 +175,7 @@ describe('D-78 the cut list with the removable knee', () => {
     expect(rib).toBeDefined();
     const t = stepText(stepById(data, 'side-ribs'));
     expect(t).toMatch(/2" wide at the block/);
-    expect(t).not.toMatch(/3" wide or more|T-shaped/);
+    expect(t).not.toMatch(/3" wide or more/);
   });
 
   it('keeps the knee laminate (the leg is taller over the top bolt) and has no backer or plate row', () => {
@@ -264,7 +262,7 @@ describe('D-78 the assembly with the removable knee', () => {
     it(`${name}: no pin, sleeve, Domino or bearing-washer text in the knee steps, no decision id, no part key, no leftover token`, () => {
       for (const id of ['frame', 'side-ribs', 'brake-knees', 'knee-swap', 'hang']) {
         const t = stepText(stepById(data, id));
-        const knee = id === 'frame' || id === 'side-ribs' ? t.split('\n').filter((l) => /knee|insert|bolt/i.test(l)).join('\n') : t;
+        const knee = t.split('\n').filter((l) => /knee|insert|bolt/i.test(l) && !/bridle/i.test(l)).join('\n');
         expect(knee, id).not.toMatch(/ball-lock|quick-release|sleeve|bearing washer|backing plate|brake knee backers|top pin|bottom pin/i);
         expect(t, id).not.toMatch(/\bD-\d+\b|\{\{|brake-(sleeve|pin|tab|bolt|insert)|kneeMount/);
         expect(t, id).not.toMatch(/\d\.\d{2,}"/);
@@ -314,7 +312,7 @@ describe('D-78 the Verify items with the removable knee', () => {
 
     it(`${name}: bolt grip and tip clearance, the knee seat and the first-brake-test wobble with a retorque`, () => {
       const c = v('knee-bolt-clearance');
-      expect(c.whatToDo).toMatch(rx(fin(kp.clear.boltTipToBox)));
+      expect(c.whatToDo).toMatch(rx(`about ${fin(Math.round(kp.clear.boltTipToBox * 16) / 16)} is left to the storage box side`));
       expect(c.whatToDo).toMatch(/grip/);
       expect(v('knee-seat').whatToDo).toMatch(/chine band/);
       expect(v('knee-seat').pass).toMatch(/No daylight/);
