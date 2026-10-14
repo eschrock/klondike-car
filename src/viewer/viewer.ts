@@ -93,6 +93,10 @@ export interface SimSceneShape {
   center: Vec3;
 }
 
+/** How long the viewer keeps drawing every frame after a change, and the longest it goes without a frame while idle. */
+const ACTIVE_MS = 1500;
+const IDLE_FRAME_MS = 500;
+
 export class Viewer {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
@@ -278,12 +282,25 @@ export class Viewer {
 
     document.addEventListener('visibilitychange', () => { if (!document.hidden) this.renderNow(); });
     (window as unknown as { __klondikeViewer?: Viewer }).__klondikeViewer = this; // debug hook: benchmark(), perf checks
+    // Draw only while something is changing (a full 60-120 fps render of a 300-draw-call scene with shadows, forever, kept a laptop fan and a browser busy
+    // when nothing moved). Orbit damping, any change through the public methods, and any pointer/wheel/key/form event on the viewer keep it drawing for a moment; an
+    // occasional frame in between is the safety net for anything that slipped past.
+    for (const ev of ['pointerdown', 'pointermove', 'pointerup', 'wheel', 'keydown', 'input', 'change', 'click', 'touchstart', 'touchmove'])
+      container.addEventListener(ev, () => this.touch(), { passive: true, capture: true });
     const loop = () => {
       requestAnimationFrame(loop);
-      this.controls.update();
-      this.renderNow();
+      const moved = this.controls.update();
+      const now = performance.now();
+      if (moved || now < this.activeUntil || now - this.lastRender > IDLE_FRAME_MS) this.renderNow();
     };
     loop();
+  }
+
+  private activeUntil = 0;
+  private lastRender = 0;
+  /** Keep drawing at full rate for a moment: something changed. */
+  private touch(): void {
+    this.activeUntil = performance.now() + ACTIVE_MS;
   }
 
   /** Debug: average milliseconds per `renderer.render` over `frames` frames (GPU-synchronized with a 1-pixel readback). */
@@ -426,6 +443,7 @@ export class Viewer {
 
   /** Joint markers (Advanced, Joinery checkbox): drawn once per physical joint, hidden while exploded. */
   private rebuildJoinery(): void {
+    this.touch();
     for (const c of [...this.joineryGroup.children]) {
       this.joineryGroup.remove(c); // geometries and materials are shared; nothing to dispose
     }
@@ -465,6 +483,7 @@ export class Viewer {
 
   /** CG marker + drop line and the dimension lines, in the (possibly truck-placed) model frame. */
   private rebuildOverlay(): void {
+    this.touch();
     this.rebuildJoinery();
     for (const c of [...this.overlay.children]) {
       if (c === this.joineryGroup) continue;
@@ -542,6 +561,7 @@ export class Viewer {
    * The layout itself is CSS (`#app[data-mode='build']` in build-panel.css); this only moves Explode out of the sheet and back, and folds the sheet.
    */
   setBuildMode(on: boolean): void {
+    this.touch();
     if (!this.explodeLabel) return;
     this.moreHost.classList.remove('open');
     this.moreBtn.setAttribute('aria-expanded', 'false');
@@ -556,6 +576,7 @@ export class Viewer {
    * visible. Leaving simple mode restores the CG / dimension overlays to their checkboxes.
    */
   setSimpleMode(simple: boolean): void {
+    this.touch();
     this.simple = simple;
     this.showEdges = simple ? true : this.edgesCb?.checked ?? true; // the outline toggle is Advanced only; Simple always draws them
     for (const l of this.edgeLines) l.visible = this.showEdges;
@@ -579,6 +600,7 @@ export class Viewer {
 
   /** Exploded distance in inches (part.explode × amount). */
   setExplode(amount: number): void {
+    this.touch();
     const was = this.explodeAmount > 0;
     this.explodeAmount = amount;
     this.applyMatrices();
@@ -587,6 +609,7 @@ export class Viewer {
   }
 
   setSection(axis: SectionAxis, pos: number): void {
+    this.touch();
     this.sectionOut.textContent = axis === 'off' ? '' : `${pos}"`;
     if (axis === 'off') {
       this.renderer.clippingPlanes = [];
@@ -600,6 +623,7 @@ export class Viewer {
 
   /** Tint the given part ids (sled parts). Pass [] to clear. `ghostOthers` draws every other part see-through while the tint is on. */
   highlight(ids: string[], color = '#ff3b30', ghostOthers = false): void {
+    this.touch();
     this.highlighted = new Set(ids);
     this.highlightColor = color;
     this.ghostOthers = ghostOthers && ids.length > 0;
@@ -618,6 +642,7 @@ export class Viewer {
   }
 
   private applyMatrices(): void {
+    this.touch();
     for (const i of this.infos) {
       const pose = this.bodyPoses?.get(i.part.body);
       if (pose) {
@@ -719,6 +744,7 @@ export class Viewer {
 
   /** The 3D background is a CSS gradient on the canvas host (see `.viewer-canvas`); here only the grid / shadow follow the theme. */
   private applyTheme(): void {
+    this.touch();
     const dark = document.documentElement.getAttribute('data-theme') === 'dark';
     this.scene.background = null;
     const gm = this.gridMat as THREE.LineBasicMaterial | undefined;
@@ -780,6 +806,7 @@ export class Viewer {
   }
 
   private renderNow(): void {
+    this.lastRender = performance.now();
     this.renderer.render(this.scene, this.camera);
     this.labelRenderer.render(this.scene, this.camera);
   }
@@ -796,6 +823,7 @@ export class Viewer {
 
   /** Rebuild meshes from the part list; disposes old geometry. Frames the model on first call. */
   update(parts: Part[]): void {
+    this.touch();
     this.clearGroup(this.partsGroup);
     this.infos = [];
     const cg = centerOfGravity(parts);
@@ -852,6 +880,7 @@ export class Viewer {
    * frame). `frameKey` re-frames the camera when it changes. Pass null to return to the normal view.
    */
   setTruck(bed: Part[] | null, cartTransform?: Mat4, frameKey = ''): void {
+    this.touch();
     this.clearGroup(this.truckGroup);
     if (!bed) {
       if (this.inTruck) {
@@ -895,6 +924,7 @@ export class Viewer {
    * pose, inches). Pass null to return to the static model. Parts must have been built with the neutral steer angle.
    */
   setBodyPoses(poses: Map<RigidBody, Mat4> | null): void {
+    this.touch();
     this.bodyPoses = poses;
     this.applyMatrices();
   }
@@ -904,6 +934,7 @@ export class Viewer {
    * and the CG / dimension overlay are hidden; the shapes live in the ground frame set by `setSimGroundPose`.
    */
   setSimEnvironment(shapes: SimSceneShape[] | null): void {
+    this.touch();
     for (const c of [...this.simGroup.children]) {
       this.simGroup.remove(c);
       (c as THREE.Mesh).geometry?.dispose();
@@ -962,6 +993,7 @@ export class Viewer {
    * the grid is re-centerd under it (snapped to its 48" cells) and the sun's shadow box follows it.
    */
   setSimGroundPose(pose: Mat4, focus?: Vec3): void {
+    this.touch();
     this.simGroup.matrix.fromArray(pose);
     this.simGroup.matrixWorldNeedsUpdate = true;
     if (focus && this.simGrid) {
@@ -976,6 +1008,7 @@ export class Viewer {
    * `snap` first jumps the orbit target onto the point (a new run).
    */
   followPoint(p: Vec3 | null, snap = false): void {
+    this.touch();
     if (!p) {
       this.lastFollow = null;
       return;
@@ -1018,6 +1051,7 @@ export class Viewer {
   }
 
   private refreshVisibility(): void {
+    this.touch();
     for (const m of this.partsGroup.children) m.visible = this.shouldShow(m);
   }
 
@@ -1053,6 +1087,7 @@ export class Viewer {
    * Later automatic re-fits (a resize, Explode) keep this framing; a view button or an orbit ends it.
    */
   frameParts(ids: string[]): void {
+    this.touch();
     if (this.inTruck || this.simActive) return;
     const box = this.partsBox(ids);
     if (!box) return;
@@ -1069,6 +1104,7 @@ export class Viewer {
   }
 
   setView(name: ViewName, box?: THREE.Box3, auto = false): void {
+    this.touch();
     if (!auto) {
       this.userMoved = false;
       if (!box) this.focusIds = [];

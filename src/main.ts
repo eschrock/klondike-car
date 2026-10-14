@@ -191,6 +191,34 @@ buildPanel = mountBuildPanel({ rail: $('build-rail'), main: $('build-main') }, {
 let cacheKey = '';
 let fit: FitResult;
 let specFacts: SpecFacts = { emptyLb: 0, transportLb: 0 };
+// The checks, the summary and the truck fit are the slow part of a design change (the sled is rebuilt for each and every check runs), so a burst of changes (a slider drag)
+// updates the 3D view at once and recomputes these once, after a short pause. The first design is computed straight away.
+const RECOMPUTE_PAUSE_MS = 300;
+let recomputeTimer: ReturnType<typeof setTimeout> | undefined;
+const recompute = () => {
+  recomputeTimer = undefined;
+  const p = store.get();
+  cacheKey = JSON.stringify(p);
+  fit = checkTruckFit(p, (v) => build(p, v));
+  const summary = {
+    empty: build(p, { steerDeg: 0, rider: 'none', cargo: false }),
+    operating: build(p, { steerDeg: 0, rider: 'operating', cargo: true }),
+    goal: build(p, { steerDeg: 0, rider: 'goal', cargo: true }),
+    transport: build(p, { steerDeg: 0, rider: 'none', cargo: false, ...TRANSPORT_VIEW }),
+  };
+  specFacts = { emptyLb: totalMass(summary.empty), transportLb: totalMass(summary.transport) };
+  right.update(
+    summary,
+    fit,
+    { track: p.rearTrackIn, wb: p.wheelbaseIn, lateralBesideLimit: derived(p).maxTrackBesideWells },
+  );
+  analysis.update(p, runChecks(p, { fit }));
+  buildPanel?.setDesign(p, summary.empty);
+  windowsDone = null;
+  right.setWindows(null);
+  scheduleWindows(400);
+  simple.setDesign(p, fit, specFacts);
+};
 const render = () => {
   const p = store.get();
   const lock = Math.abs(p.steerLockDeg);
@@ -204,28 +232,13 @@ const render = () => {
 
   const key = JSON.stringify(p);
   if (key !== cacheKey) {
-    cacheKey = key;
-    fit = checkTruckFit(p, (v) => build(p, v));
-    const summary = {
-      empty: build(p, { steerDeg: 0, rider: 'none', cargo: false }),
-      operating: build(p, { steerDeg: 0, rider: 'operating', cargo: true }),
-      goal: build(p, { steerDeg: 0, rider: 'goal', cargo: true }),
-      transport: build(p, { steerDeg: 0, rider: 'none', cargo: false, ...TRANSPORT_VIEW }),
-    };
-    specFacts = { emptyLb: totalMass(summary.empty), transportLb: totalMass(summary.transport) };
-    right.update(
-      summary,
-      fit,
-      { track: p.rearTrackIn, wb: p.wheelbaseIn, lateralBesideLimit: derived(p).maxTrackBesideWells },
-    );
-    analysis.update(p, runChecks(p, { fit }));
-    buildPanel?.setDesign(p, summary.empty);
-    windowsDone = null;
-    right.setWindows(null);
-    scheduleWindows(400);
+    clearTimeout(recomputeTimer);
+    if (!fit) recompute();
+    else recomputeTimer = setTimeout(recompute, RECOMPUTE_PAUSE_MS);
+  } else {
+    // Simple view: only the view changed; it caches its own sweep.
+    simple.setDesign(p, fit, specFacts);
   }
-  // Simple view: the design (rider weight included) changed; it debounces and caches its own sweep.
-  simple.setDesign(p, fit, specFacts);
 
   const tc = truckKey ? fit.cases.find((c) => c.key === truckKey) : undefined;
   exitTruck.hidden = !tc;

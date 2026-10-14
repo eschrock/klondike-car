@@ -82,9 +82,7 @@ describe('no exposed plywood edges (acceptance, D-35)', () => {
     }
   });
   it('the check really fails if an edge is exposed', () => {
-    const parts = buildModel(defaults);
-    const deck = get(parts, 'deck');
-    deck.edges = ['captured', 'exposed', 'captured', 'captured'];
+    const parts = buildModel(defaults).map((x) => (x.id === 'deck' ? { ...x, edges: ['captured', 'exposed', 'captured', 'captured'] as Part['edges'] } : x)); // a copy: built models are shared through the build cache
     const bad = parts.filter((x) => flat(x.edges).includes('exposed')).map((x) => x.id);
     expect(bad).toEqual(['deck']);
   });
