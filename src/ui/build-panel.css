@@ -503,3 +503,6 @@
   .bp-form { grid-template-columns: 1fr 1.3fr; }
   .bp-drawing .bp-preview-btn { display: block !important; }
 }
+
+.bp-laser-yes { color: var(--ok, #2e7d32); }
+.bp-laser-no { color: var(--muted, #6b6b6b); }

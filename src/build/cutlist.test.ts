@@ -641,11 +641,11 @@ describe('review round: names, the tall knee block, the rib fillers', () => {
     expect(sizeText({ t: 1, w: 2, l: 3 }, false)).toBe('1 \u00d7 2 \u00d7 3'); // every other part stays T x W x L
   });
 
-  it('lists the six rib fillers (spare band strips) in the cuts', () => {
+  it('lists the eight rib fillers (spare band strips) in the cuts', () => {
     const f = dc.cuts.filter((c) => c.partNo === 'side-rib-filler');
-    expect(f.map((c) => c.name)).toEqual(expect.arrayContaining(['Rib filler, box rib', 'Rib filler, mid rib', 'Rib filler, bow post']));
-    expect(ribFillers(dm, dp)).toHaveLength(3);
-    expect(f.reduce((a, c) => a + c.qty, 0)).toBe(6);
+    expect(f.map((c) => c.name)).toEqual(expect.arrayContaining(['Rib filler, box rib', 'Rib filler, mid rib', 'Rib filler, bow post', 'Rib filler, rear rib']));
+    expect(ribFillers(dm, dp)).toHaveLength(4);
+    expect(f.reduce((a, c) => a + c.qty, 0)).toBe(8);
     for (const c of f) { expect(c.ids).toEqual([]); expect(c.note).toMatch(/spare band strip/); }
   });
 });

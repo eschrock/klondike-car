@@ -309,13 +309,14 @@ describe('how to build the forms (Eric 2026-10-12)', () => {
     }
   });
 
-  it('says how to build the rail form: MDF layers to the form line, stacked to the rail depth plus 1/2, on a ply base, caul, tape, spring-back, a clamp at every station', () => {
+  it('says how to build the rail form: MDF layers to the form line, stacked to the rail depth plus 1/2, on a ply base, counter-form, tape, spring-back, a clamp at every station', () => {
     const t = all('rail-form');
     const layers = Math.ceil((p.railDepthIn + 0.5) / 0.75 - 1e-9);
     expect(t).toContain(`the form is a stack of ${layers} layers of 3/4" MDF, ${frac(layers * 0.75)} tall`);
     expect(t).toMatch(/3\/4" MDF/);
     expect(t).toMatch(/BASE: 3\/4" plywood [\d/-]+" × [\d/-]+"/);
-    expect(t).toMatch(/CAUL: a strip of 1\/4" hardboard/);
+    expect(t).toMatch(/COUNTER-FORM: the reverse image of the form/);
+    expect(t).not.toMatch(/CAUL/);
     expect(t).toMatch(/packing tape/);
     expect(t).toMatch(/SPRING-BACK: none is built in/);
     expect(t).toContain(`CLAMP: ${dim('rail-form', 'clamps')} bar or pipe clamps`);
@@ -325,7 +326,7 @@ describe('how to build the forms (Eric 2026-10-12)', () => {
 
   it('says how to build the side form: the template, the cleats at their spacing, the ramp ribs and cap, tape and clamps', () => {
     const t = all('side-form');
-    expect(t).toMatch(/TEMPLATE: cut ONE piece of 1\/4" hardboard/);
+    expect(t).toMatch(/TEMPLATE \(laser\): the web's flat outline/);
     expect(t).toContain(`CLEATS on the sheer line: ${dim('side-form', 'cleat-count')} blocks`);
     expect(t).toContain(`S-RAMP (first face): cut ${dim('side-form', 'ramp-ribs')} ribs from 3/4" MDF`);
     expect(t).toContain(`MIRROR RAMP (second face)`);

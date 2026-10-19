@@ -316,15 +316,15 @@ describe('finishing touches (Eric, 2026-10-12)', () => {
     const keys = touches.map((l) => l.key);
     for (const k of ['front-light', 'rear-light', 'lamp-clip', 'rear-lamp-clip', 'seat-cushion', 'seat-back-pad', 'hook-and-loop', 'reflector', 'lash-point']) expect(keys, k).toContain(k);
     expect(touches.find((l) => l.key === 'reflector')!.qty).toBe(4);
-    expect(touches.find((l) => l.key === 'lash-point')!.qty).toBe(6);
+    expect(touches.find((l) => l.key === 'lash-point')!.qty).toBe(8);
     // the lamp-clip inserts and screws and the lash-plate screws follow their parts
     expect(touches.some((l) => /Heat-set insert M4/.test(l.key))).toBe(true);
     expect(touches.some((l) => /screw M3 x 8 mm/.test(l.key))).toBe(true);
     // D-83: the D-ring brackets are through-bolted on two 1/4-20 button-head bolts each (6 rings, 12 bolts), a fender washer under each head and each nut, and a nylock; no wood screws
     const tie = (re: RegExp) => touches.filter((l) => re.test(l.key) && l.group === 'tie-downs').reduce((a, l) => a + need(l), 0);
-    expect(tie(/button-head cap screw 1\/4-20 x 2"/)).toBe(12);
-    expect(tie(/fender washer 1\/4"/)).toBe(12); // D-83: one washer a bolt, under the head
-    expect(tie(/lock nut 1\/4-20/)).toBe(12);
+    expect(tie(/button-head cap screw 1\/4-20 x 2"/)).toBe(16); // D-85: eight rings, two bolts each
+    expect(tie(/fender washer 1\/4"/)).toBe(16); // D-83: one washer a bolt, under the head
+    expect(tie(/lock nut 1\/4-20/)).toBe(16);
     expect(tie(/#8-32/)).toBe(0); // the #8-32 sets are gone
     expect(touches.some((l) => /wood screw/.test(l.key) && l.group === 'tie-downs')).toBe(false);
     // the oak ribs, knees and box ties stay in Lumber (bandsawn from offcuts, in the cut list) and the section says so

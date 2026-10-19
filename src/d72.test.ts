@@ -98,7 +98,7 @@ describe('D-72: three wood-screw sizes, every screw inside its stack with its bi
   });
   it('the lash row passes (D-76: through-bolts; D-83: 0.61 at the 233 lbf D-ring rating, 0.77 at 300 lbf), and the brake pivot-block row too', () => {
     const cs = runChecks(defaults, { includeTruck: false });
-    expect(cs.find((c) => c.id === 'lash-load')!.util!).toBeCloseTo(0.605, 2); // D-83: 0.605 with the 233 lbf D-ring load (0.767 at 300 lbf)
+    expect(cs.find((c) => c.id === 'lash-load')!.util!).toBeCloseTo(0.664, 2); // D-85: 0.664 (the box rib moved aft, a softer base); D-83: 0.605 with the 233 lbf D-ring load (0.767 at 300 lbf)
     expect(cs.find((c) => c.id === 'lash-load')!.status).toBe('pass');
     expect(cs.find((c) => c.id === 'brake-pivot')!.status).toBe('pass');
     expect(cs.find((c) => c.id === 'brake-flap')!.status).toBe('pass');
@@ -291,10 +291,10 @@ describe('D-73: the thin-sheet material and the weather spec', () => {
       const thin = parts.filter((x) => x.kind === 'sheet' && x.stock && x.stock.t < 0.3).reduce((a, x) => a + x.massLb, 0);
       return { total: totalMass(parts), thin, web: runChecks(p, { includeTruck: false }).find((c) => c.id === 'side-web')!.util! };
     });
-    expect(rows[0].total).toBeCloseTo(122.08, 1);
-    expect(rows[1].total).toBeCloseTo(120.75, 1); // D-77: 121.09 with the old seat pads and 1.75 in plates
-    expect(rows[2].total).toBeCloseTo(119.99, 1); // the 6 mm okoume (118.28 for the 4 mm before D-80)
-    expect(rows[3].total).toBeCloseTo(117.98, 1);
+    expect(rows[0].total).toBeCloseTo(122.8, 1); // D-85: +0.72 lb (the rear ribs, rings and ties, less the sign strips); 122.08 before
+    expect(rows[1].total).toBeCloseTo(121.47, 1); // D-77: 121.09 with the old seat pads and 1.75 in plates
+    expect(rows[2].total).toBeCloseTo(120.71, 1); // the 6 mm okoume (118.28 for the 4 mm before D-80)
+    expect(rows[3].total).toBeCloseTo(118.7, 1);
     expect(rows[0].thin).toBeCloseTo(11.70, 1);
     expect(rows[1].thin).toBeCloseTo(10.16, 1);
     expect(rows[2].thin).toBeCloseTo(9.60, 1);
@@ -373,14 +373,14 @@ describe('D-71: the solid 5/8 in rod (Eric)', () => {
 describe('the numbers at the defaults (weatherSpec Standard: 6 mm Baltic birch, the solid rod, the 3 wood-screw sizes)', () => {
   it('empty mass 122.08 lb (D-84, D-80/D-83: the 6 mm Baltic sides, box and lid and the 2 in clamp plates, less the lighter EVA seat pads and lights; 121.09 lb with the 1/4 in white oak ply at D-77, +0.87 lb the pivot straps and knee roofs; D-76: +0.96 lb the side ribs; 115.95 lb at D-71)', () => {
     const m = totalMass(buildModel(defaults, { rider: 'none', cargo: false }));
-    expect(m).toBeCloseTo(122.080, 2); // D-84: +0.32 lb (the 1/8 in grab-board strip and the oak caps, one screw and washer fewer); was 121.617; merged with the final review of the build outputs (121.639 before: 13/32 knee holes, 7/8 narrow washers and the rib-knee shift)
+    expect(m).toBeCloseTo(122.805, 2); // D-85: +0.725 lb (the rear ribs, rings and ties, the box rib moved, no sign strips); 122.080 before. Older note: // D-84: +0.32 lb (the 1/8 in grab-board strip and the oak caps, one screw and washer fewer); was 121.617; merged with the final review of the build outputs (121.639 before: 13/32 knee holes, 7/8 narrow washers and the rib-knee shift)
     const oak = totalMass(buildModel({ ...defaults, thinSheetMaterial: OAK }, { rider: 'none', cargo: false }));
-    expect(oak).toBeCloseTo(120.756, 2);
+    expect(oak).toBeCloseTo(121.48, 1);
     expect(m - oak).toBeCloseTo(1.33, 1); // the 6 mm Baltic over the 1/4 in white oak ply
     const ok = totalMass(buildModel({ ...defaults, thinSheetMaterial: OKOUME }, { rider: 'none', cargo: false }));
-    expect(ok).toBeCloseTo(119.986, 2); // D-80: the 6 mm okoume (Extreme)
+    expect(ok).toBeCloseTo(120.712, 2); // D-80: the 6 mm okoume (Extreme)
     const tubeOk = totalMass(buildModel({ ...defaults, ...PRE_D72 }, { rider: 'none', cargo: false }));
-    expect(tubeOk).toBeCloseTo(116.063, 2); // the D-71 tube and the 4 mm okoume (PRE_D72)
+    expect(tubeOk).toBeCloseTo(116.813, 2); // D-85: +0.75 lb; // the D-71 tube and the 4 mm okoume (PRE_D72)
     const rodOk4 = totalMass(buildModel({ ...defaults, ...PRE_D72, axleWallIn: 0 }, { rider: 'none', cargo: false }));
     expect(rodOk4 - tubeOk).toBeCloseTo(1.88, 1); // the rod over the tube
   });
@@ -390,11 +390,11 @@ describe('the numbers at the defaults (weatherSpec Standard: 6 mm Baltic birch, 
     expect(sw.green).toMatchObject({ loLb: 50, hiLb: 210, openLow: true, openHigh: false }); // D-83: 220 lb (230 with the 4 mm okoume) before the 2 in clamp plates added groove bearing area
     expect(riderSweep(withMat(OKOUME)).green).toMatchObject({ loLb: 50, hiLb: 210 });
     const cap = cargoCapacity(defaults);
-    expect(cap.capacityLb).toBe(277); // D-78 removable knees (the default): the dry knee's brake-mount row limits it
-    expect(cap.comfortableLb).toBe(232);
+    expect(cap.capacityLb).toBe(276); // D-78 removable knees (the default): the dry knee's brake-mount row limits it
+    expect(cap.comfortableLb).toBe(231); // D-85: 232 before (0.7 lb heavier sled)
     expect(cap.limiter!.id).toBe('brake-mount');
     const glued = cargoCapacity({ ...defaults, kneeMount: KNEE_MOUNT.fixed });
-    expect(glued.capacityLb).toBe(286); // D-83: 254 before the 2 in clamp plates (the groove bearing limited it)
+    expect(glued.capacityLb).toBe(285); // D-85: 285 (the 0.7 lb heavier sled); D-83: 254 before the 2 in clamp plates (the groove bearing limited it)
     expect(glued.limiter!.id).toBe('rear-beam-seat'); // was 'bearing-groove'
     const cs = runChecks(defaults, { includeTruck: false });
     expect(cs.filter((c) => c.status === 'fail')).toEqual([]);

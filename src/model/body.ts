@@ -13,7 +13,7 @@ import { innerHalfWidth, samples, sideSlopeAt, sideTopAt, type Layout } from './
 import { planWallGeometry } from './plan-wall';
 import { SIGN_X_MAX_IN, brakeGeometry } from './brake-layout';
 import { compose } from './mat4';
-import { thinSheet, WEATHER_SPEC } from '../params';
+import { STORAGE_LOCATION, thinSheet, WEATHER_SPEC } from '../params';
 import type { Dims, EdgeCondition, Mat4, Part, PartGroup, Vec2, Vec3 } from './types';
 
 /** Cosmetic sampling of the curved outlines (D-44): transom crown, rounded corners; the sloped sides and the curl. */
@@ -442,11 +442,12 @@ export function buildBody(ctx: Ctx): Part[] {
         size: [sg.length, pl, sg.height], center: [sg.xc, s * (L.hwC + L.side + SIGN_PROUD_IN + pl / 2), sg.zc], // 1/16 in proud of the band faces
       });
       sign.massLb += edgeBandLb(ctx, 2 * (sg.length + sg.height), pl);
-      sign.notes = `D-57: the sign is back, on the outside of the tall rear part of the side (${sg.length.toFixed(1)}" × ${sg.height.toFixed(1)}", level, not tilted to follow the sheer (3c-5), its top edge ${sg.topMargin}" under the gunwale line at its forward end). ${mmOf(pl)} mm ply blank, all four edges banded with oak, a plain RECTANGLE (the Shaper file is a rectangle; the viewer paints the Troop 455 artwork on it with signTexture. A rounded-oval outline would be a new outline: ask Eric). The file and the cut list are the PLY blank; the 1/16 in oak banding adds to it; hung on four thumb-knob screws (#10-32 x ${signKnobPlan(ctx).lenIn} in) that go through four ${signKnobPlan(ctx).standoffIn.toFixed(3)}" standoff discs epoxied to its back (oak, or 5/16 in nylon spacers) and the thin web into threaded inserts in two oak backing strips glued inside it (nothing is screwed into the ply alone, D-62), so it CAN come off for repairs, but it STAYS ON for transport (D-65, Eric: taking the signs off "seems excessive"; it is not a removable part). Cut the blank on the Shaper Origin (D-61). It stays clear of the rear wheel and of the brake knees.`;
+      sign.notes = `D-57: the sign is back, on the outside of the tall rear part of the side (${sg.length.toFixed(1)}" × ${sg.height.toFixed(1)}", level, not tilted to follow the sheer (3c-5), its top edge ${sg.topMargin}" under the gunwale line at its forward end). ${mmOf(pl)} mm ply blank, all four edges banded with oak, a plain RECTANGLE (the Shaper file is a rectangle; the viewer paints the Troop 455 artwork on it with signTexture. A rounded-oval outline would be a new outline: ask Eric). The file and the cut list are the PLY blank; the 1/16 in oak banding adds to it; hung on four thumb-knob screws (#10-32 x ${signKnobPlan(ctx).lenIn} in) that go through four ${signKnobPlan(ctx).standoffIn.toFixed(3)}" standoff discs epoxied to its back (oak, or 5/16 in nylon spacers) and the thin web into threaded inserts in ${p.storageLocation === STORAGE_LOCATION.rearOverAxle ? 'the box rib and the rear rib of that side (D-85: two knobs in each)' : 'two oak backing strips glued inside it'} (nothing is screwed into the ply alone, D-62), so it CAN come off for repairs, but it STAYS ON for transport (D-65, Eric: taking the signs off "seems excessive"; it is not a removable part). Cut the blank on the Shaper Origin (D-61). It stays clear of the rear wheel and of the brake knees.`;
       parts.push(sign);
       // Two oak backing strips glued inside the web, one per knob pair (build 3c M4): the sign screws through the thin web into threaded inserts in them.
       const bk = signBackerPlan(ctx);
       const kn = signKnobPlan(ctx);
+      // D-85: with a rear box the knobs screw into the box rib and the rear rib (side-ribs.ts), which drops these strips (dropSignBackers); they stay for an under-seat design.
       bk.xs.forEach((bx, i) => {
         const yInnerFace = L.hwC + L.sideBand; // the web's inboard face, |y|
         parts.push(box(ctx, {
@@ -476,7 +477,7 @@ export function signPlacement(ctx: Pick<Ctx, 'p' | 'L'>) {
   const flapSlope = bg.u[0] !== 0 ? bg.u[1] / bg.u[0] : 0; // z per x along the flap's top surface (positive: it rises toward the pivot)
   const flapTop = (x: number) => bg.P[1] + (Math.min(x, bg.P[0]) - bg.P[0]) * flapSlope + SIGN_FLAP_CLEAR_IN;
   let best = { length: 4, height: 2, x1: x0 + 4, zTop: 0, zBot: 0, area: -1 };
-  for (let x1 = Math.min(SIGN_X_MAX_IN, x0 + p.signLengthIn); x1 >= x0 + 4 - 1e-9; x1 -= 0.25) {
+  for (let x1 = Math.min(SIGN_X_MAX_IN, x0 + p.signLengthIn); x1 >= Math.max(x0 + 4, Math.min(p.signEndMinXIn, SIGN_X_MAX_IN)) - 1e-9; x1 -= 0.25) {
     const length = x1 - x0;
     const zTop = sideTopAt(L, x1) - topMargin;
     const zBot = Math.max(L.deckTop + 0.5, flapTop(x1));

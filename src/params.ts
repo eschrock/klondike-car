@@ -438,6 +438,11 @@ const defs = {
     default: 15, min: 8, max: 30, step: 1, status: 'assumed', ref: 'D-9, D-57',
     note: 'Shortened automatically to fit the tall rear part of the side (the sheer falls away toward the bow) and to stay behind the rear wheel brake mount.',
   },
+  signEndMinXIn: {
+    label: 'Side sign: least forward end (inches ahead of the rear axle)', group: 'body', unit: 'in',
+    default: 5.5, min: 0, max: 6, step: 0.1, status: 'assumed', ref: 'D-85',
+    note: 'D-85: the sign reaches at least this far forward, so the box rib\'s fender washers (on the outside of the gunwale band, up to 1 in ahead of the rib) stay clear under the level sign\'s top edge. The sheer falls toward the bow, so a sign that ends farther forward sits lower. The sign\'s area barely changes (it is boxed in by the brake flap below and the sheer above).',
+  },
   signHeightIn: {
     label: 'Side sign blank height', group: 'body', unit: 'in',
     default: 6, min: 3, max: 10, step: 0.5, status: 'assumed', ref: 'D-9, D-57',
@@ -539,8 +544,8 @@ const defs = {
   },
   lashPointsPerSide: {
     label: 'Lash points (D-rings) per side', group: 'body', unit: '',
-    default: 3, min: 2, max: 3, step: 1, status: 'assumed', ref: 'D-41, D-76',
-    note: 'D-76, D-83: the D-rings are through-bolted (two 1/4-20 bolts each) to the heads of the side ribs, one per rib (3 per side: the box rib, the mid rib and the bow post). 2 leaves the bow post without one (the ribs stay: they stiffen the side). D-76 asks for at least 6 in all. The old screwed lash doublers are gone.',
+    default: 4, min: 2, max: 4, step: 1, status: 'assumed', ref: 'D-41, D-76',
+    note: 'D-76, D-83: the D-rings are through-bolted (two 1/4-20 bolts each) to the heads of the side ribs, one per rib (4 per side with the rear rib, D-85: the rear rib, the box rib, the mid rib and the bow post). 3 leaves the rear rib without one and 2 leaves the bow post without one too (the ribs stay: they stiffen the side). D-76 asks for at least 6 in all. The old screwed lash doublers are gone.',
   },
   lashLoadLbf: {
     label: 'Lash point design load (strap pull)', group: 'body', unit: 'lbf',
@@ -580,8 +585,13 @@ const defs = {
   },
   sideRibBoxInsetIn: {
     label: 'Box rib station (behind the storage box fore end)', group: 'body', unit: 'in',
-    default: 1.4, min: 0.75, max: 4, step: 0.05, status: 'assumed', ref: 'D-76',
-    note: 'D-76: the rear rib (E1) stands this far behind the outer face of the storage box\'s fore end, beside the box (study option D), and an oak spacer ties it to the box side near the fore corner, so the box is its base. The study put it at 1.1 in (x = 5.9); 1.4 in (x = 5.6) leaves 3/8 in between its outside bolt washers and the rear reflector, which cannot move forward (the grab board\'s backing strip is right ahead of it), and 0.4 in to the side sign.',
+    default: 4, min: 0.75, max: 6.5, step: 0.05, status: 'assumed', ref: 'D-76, D-85',
+    note: 'D-76, D-85: the box rib (E1) stands this far behind the outer face of the storage box\'s fore end, beside the box (study option D), and an oak spacer ties it to the box side, so the box is its base. D-85: 4 in (x = 3.0; it was 1.4 in, x = 5.6) puts it under the front pair of the sign\'s knobs, so the sign screws into this rib and the sign backing strips are gone. Farther back is softer between it and the mid rib (the 50 lbf push is 0.100 in at 1.4 in and 0.124 at 4 in; the limit is 0.125), and nearer the sign\'s forward end its outside bolt washers (1-1/8 in under the sheer at the lowest) would foul the sign\'s top edge (see signEndMinXIn).',
+  },
+  sideRibRearInsetIn: {
+    label: 'Rear rib station (ahead of the storage box aft end)', group: 'body', unit: 'in',
+    default: 3.25, min: 2.5, max: 6, step: 0.05, status: 'assumed', ref: 'D-85',
+    note: 'D-85: the rear rib (E0) stands this far ahead of the box\'s aft end (x = -5.5), beside the box and the flag tube, with the same oak spacer to the box side. Its head clears the flag tube\'s blocks (they end at x = -6.7). Its ring is at the gunwale like the others, so a strap from it to the opposite side or to a box rib ring crosses the closed lid. It holds the sign\'s two rear knobs.',
   },
   sideRibMidXIn: {
     label: 'Mid rib station (inches ahead of the rear axle; snaps to the nearest crossmember)', group: 'body', unit: 'in',

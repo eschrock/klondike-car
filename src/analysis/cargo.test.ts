@@ -220,21 +220,21 @@ describe('the lid as a table (lid-load)', () => {
 });
 
 describe('tying the load down (cargo-strap)', () => {
-  it('strap tension T = W (g / mu - 1) / (2 n sin 45) by hand: 200 lb, 0.8 g, mu 0.3, 3 straps -> 78.6 lbf, a quarter of a 300 lbf plate', () => {
+  it('strap tension T = W (g / mu - 1) / (2 n sin 45) by hand: 200 lb, 0.8 g, mu 0.3, 4 straps (D-85: eight rings) -> 59.0 lbf', () => {
     const k = strapLoads(ctx);
-    expect(k.straps).toBe(3);
+    expect(k.straps).toBe(4);
     expect(k.hold).toBeCloseTo(200 * (0.8 / 0.3 - 1), 9);
-    expect(k.T).toBeCloseTo((200 * (0.8 / 0.3 - 1)) / (2 * 3 * Math.sin(Math.PI / 4)), 9);
-    expect(k.T).toBeCloseTo(78.6, 1);
+    expect(k.T).toBeCloseTo((200 * (0.8 / 0.3 - 1)) / (2 * 4 * Math.sin(Math.PI / 4)), 9);
+    expect(k.T).toBeCloseTo(58.9, 1);
     const c = byId(cs, 'cargo-strap');
     expect(c.statusCargo).toBe('pass');
-    expect(c.value).toBeCloseTo(78.6, 1);
+    expect(c.value).toBeCloseTo(58.9, 1);
     expect(c.limit).toBe(defaults.lashLoadLbf);
   });
-  it('the six D-rings stay (D-41): six lash points, 233 lbf working load each (D-83: the bolt-on cargo D-ring)', () => {
-    expect(installed.filter((x) => x.id.startsWith('lash-') && x.group === 'hardware')).toHaveLength(6);
+  it('the eight D-rings (D-41, D-85): eight lash points, 233 lbf working load each (D-83: the bolt-on cargo D-ring)', () => {
+    expect(installed.filter((x) => x.id.startsWith('lash-') && x.group === 'hardware')).toHaveLength(8);
     expect(defaults.lashLoadLbf).toBe(233);
-    expect(byId(cs, 'lash-points').value).toBe(6);
+    expect(byId(cs, 'lash-points').value).toBe(8);
   });
   it('a heavier load needs more tension and eventually fails against the plates', () => {
     const t = (w: number) => strapLoads(makeContext({ ...defaults, cargoPayloadLb: w }, installed, stowed)).T;

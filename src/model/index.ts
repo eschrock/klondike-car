@@ -15,7 +15,7 @@ import { buildBridle } from './bridle';
 import { buildPivot } from './pivot';
 import { multiply, rotationZ, translation } from './mat4';
 import { addStorageDrainHoles, buildStorage } from './storage';
-import { addSideRibJoints, buildSideRibs } from './side-ribs';
+import { addSideRibJoints, buildSideRibs, dropSignBackers } from './side-ribs';
 import type { Part } from './types';
 
 export type { ViewState } from './build-utils';
@@ -46,7 +46,7 @@ const BUILD_CACHE_MAX = 24;
 
 function buildModelUncached(input: Params, view: ViewState): Part[] {
   const ctx = makeCtx(input, view); // resolves auto nose geometry (resolveParams) so every part and ctx.p agree
-  const parts = [
+  const parts = dropSignBackers(ctx.p, ctx.L, [
     ...buildRunningGear(ctx),
     ...buildPivot(ctx),
     ...buildBridle(ctx),
@@ -59,7 +59,7 @@ function buildModelUncached(input: Params, view: ViewState): Part[] {
     ...buildLighting(ctx),
     ...buildHardware(ctx),
     ...buildPayload(ctx),
-  ];
+  ]); // D-85: the sign backing strips go when the sign's knobs are in the ribs
   applyJoinery(ctx, parts); // structured joints for the hull and frame (D-35)
   addSideRibJoints(ctx, parts); // D-76: the web's and the joists' own ends of the rib glue and knee screws
   addStorageDrainHoles(ctx, parts); // D-83: the Standard box drains are drilled holes, recorded on the deck or the box floor

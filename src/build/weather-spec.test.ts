@@ -187,8 +187,8 @@ describe('Standard hardware', () => {
     expect(byKey('storage-hinge').notes).toMatch(/check the package for 304/);
     const gaskets = lines(bStd).filter((l) => /^storage-gasket/.test(l.key));
     expect(gaskets.reduce((a, l) => a + l.extUsd, 0)).toBeCloseTo(8.69, 2); // D-83: ONE Frost King 17 ft roll covers all four gasket lines
-    const ring = byKey('lash-point'); // D-83: Harbor Freight 1/4" cargo D-rings by the 2-pack, 6 rings = 3 packs
-    expect([ring.unitUsd, ring.qty, ring.packQty, ring.needed, ring.extUsd]).toEqual([2.99, 3, 2, 6, 8.97]);
+    const ring = byKey('lash-point'); // D-83: Harbor Freight 1/4" cargo D-rings by the 2-pack, 8 rings = 4 packs
+    expect([ring.unitUsd, ring.qty, ring.packQty, ring.needed, ring.extUsd]).toEqual([2.99, 4, 2, 8, 11.96]);
     expect(ring.basis).toBe('quoted');
     expect(byKey('steer-eye').unitUsd).toBe(11.94);
     expect(byKey('steer-anchor').unitUsd).toBe(11.1);
