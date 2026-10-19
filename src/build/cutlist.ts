@@ -16,6 +16,7 @@ import { localBounds } from '../model/bounds';
 import { computeLayout, sideTopAt } from '../model/layout';
 import { boxTieGeometry, sideRibStations } from '../model/side-ribs';
 import { flatPattern } from './flat';
+import { laserVerdict, type LaserVerdict } from './laser-svg';
 import { finalDimsText, finalFrac, fractionText, fractionizeInches, nearest32, roughDimsText, roughFrac, roughUp8 } from './units';
 
 export { finalFrac, roughFrac, finalDimsText, roughDimsText, roughUp8 };
@@ -425,6 +426,8 @@ export interface SheetRow {
   grain?: string;
   grainWord?: string;
   fab: string;
+  /** Can the XTool S1 laser cut it (D-86)? `text` is "yes" or why not. */
+  laser: LaserVerdict;
   /** MODEL step; see `OakRow.step`. */
   step: number;
   assemblySteps: number[];
@@ -933,6 +936,12 @@ function shaperNetNote(x: Part, stock: Dims): { net: number; note: string } | nu
   return { net, note: `the Shaper file cuts it to ${finalFrac(net)}; start from a ${roughFrac(stock.l)} blank (+${roughFrac(stock.l - net)} trim)` };
 }
 
+/** Can the XTool S1 laser cut this sheet part (D-86)? Judged on its flat pattern: thickness, material and the short side against the bed. */
+function laserOf(x: Part): LaserVerdict {
+  const f = flatPattern(x);
+  return f ? laserVerdict({ thicknessIn: f.thicknessIn, material: x.material, widthIn: f.widthIn, heightIn: f.heightIn }) : { ok: false, text: 'no: not a flat part' };
+}
+
 function sheetGroups(parts: Part[], warnings: string[], stepOf?: ReadonlyMap<string, number>): SheetGroup[] {
   const groups = new Map<number, SheetGroup>();
   const members = new Map<SheetRow, string[]>();
@@ -949,7 +958,7 @@ function sheetGroups(parts: Part[], warnings: string[], stepOf?: ReadonlyMap<str
       const gw = grainInWords(x);
       const net = shaperNetNote(x, stock);
       const note = net?.note;
-      const nr: SheetRow = { partNo: partKey(x), name: x.name, qty: 1, ids: [x.id], stock, final: net ? { ...stock, l: net.net } : stock, grain: x.grain, ...(gw ? { grainWord: gw } : {}), fab: x.fab, step: x.step, assemblySteps: stepsOf([x.id], stepOf), ...(note ? { note } : {}) };
+      const nr: SheetRow = { partNo: partKey(x), name: x.name, qty: 1, ids: [x.id], stock, final: net ? { ...stock, l: net.net } : stock, grain: x.grain, ...(gw ? { grainWord: gw } : {}), fab: x.fab, laser: laserOf(x), step: x.step, assemblySteps: stepsOf([x.id], stepOf), ...(note ? { note } : {}) };
       members.set(nr, [x.name]);
       g.rows.push(nr);
     }
@@ -1082,8 +1091,8 @@ export function cutList(parts: Part[], p: Params, stepOf?: ReadonlyMap<string, n
       ...finished.map((f) => [f.name, f.qty, f.finalText, FROM_TEXT[f.from], f.board, f.grainWord, fabText(f.fab), stepText(f.assemblySteps)]),
     ]),
     sheets: toCsv([
-      ['Sheet', 'Part', 'Qty', 'Final T x W x L (in)', 'Grain', 'Fabrication', 'Assembly step', 'Note'],
-      ...sheets.flatMap((g) => g.rows.map((r) => [g.label, r.name, r.qty, finalDimsText(r.final), r.grainWord, fabText(r.fab), stepText(r.assemblySteps), r.note])),
+      ['Sheet', 'Part', 'Qty', 'Final T x W x L (in)', 'Grain', 'Fabrication', 'Laser', 'Assembly step', 'Note'],
+      ...sheets.flatMap((g) => g.rows.map((r) => [g.label, r.name, r.qty, finalDimsText(r.final), r.grainWord, fabText(r.fab), r.laser.text, stepText(r.assemblySteps), r.note])),
     ]),
     metal: toCsv([
       ['Stock', 'Part', 'Qty', 'Cut length (in)', 'Fabrication', 'Assembly step'],

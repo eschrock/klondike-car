@@ -11,7 +11,7 @@ import { FROM_TEXT, fabText, pieceText } from './cutlist';
 import { fractionText, roughFrac } from './units';
 import { paramLabels } from './verify';
 import { PART_TOKEN_RE, partLabel, tokensIn, type Instr } from './assembly';
-import { SHAPER_CONVENTIONS, SHAPER_NOTES, type BuildData } from './package';
+import { LASER_CONVENTIONS, LASER_NOTES, SHAPER_CONVENTIONS, SHAPER_NOTES, type BuildData } from './package';
 import { SPEC_NAME, cureLine, dims3, esc, featureSummary, fracDim, fracInch, fracInch64, groupByWhen, groupCutsByBoard, lbDelta, maxDepth, pct, sheetSvg, usd, weatherLine } from '../ui/build-helpers';
 
 const CSS = `
@@ -130,6 +130,7 @@ export const BOOK_SECTIONS: Array<[string, string]> = [
   ['assembly', 'Assembly steps'],
   ['finishing', 'Finishing schedule'],
   ['shaper', 'Shaper Origin file index'],
+  ['laser', 'Laser (XTool S1) file index'],
 ];
 
 function verifySection(d: BuildData): string {
@@ -193,8 +194,8 @@ function cutlistSection(d: BuildData): string {
   out.push('<h3>Plywood</h3>');
   for (const g of c.sheets) {
     out.push(`<h4>${esc(g.label)} <span class="muted">· ${g.pieces} pieces</span></h4>`);
-    out.push(table([['Part'], ['Qty', 'num'], ['Final T × W × L'], ['Grain'], ['Fabrication'], ['Step', 'num']], g.rows.map((r) => [
-      td(`${anchors(r.ids, seen)}${esc(r.name)}${r.note ? `<div class="small"><strong>${esc(r.note)}</strong></div>` : ''}`), td(r.qty, 'num'), td(dims3(r.final)), td(esc(r.grainWord ?? '')), td(esc(fabText(r.fab))), td(r.assemblySteps.join(', '), 'num'),
+    out.push(table([['Part'], ['Qty', 'num'], ['Final T × W × L'], ['Grain'], ['Fabrication'], ['Laser'], ['Step', 'num']], g.rows.map((r) => [
+      td(`${anchors(r.ids, seen)}${esc(r.name)}${r.note ? `<div class="small"><strong>${esc(r.note)}</strong></div>` : ''}`), td(r.qty, 'num'), td(dims3(r.final)), td(esc(r.grainWord ?? '')), td(esc(fabText(r.fab))), td(esc(r.laser.text)), td(r.assemblySteps.join(', '), 'num'),
     ])));
   }
   out.push('<h3>Metal stock</h3>');
@@ -328,6 +329,19 @@ function finishingSection(d: BuildData): string {
   return out.join('');
 }
 
+function laserSection(d: BuildData): string {
+  const files = d.laser;
+  const out: string[] = [];
+  out.push(`<ul class="legend" style="list-style:none;padding-left:0">${LASER_CONVENTIONS.map((c) => `<li><strong>${esc(c.name)}</strong>: ${esc(c.meaning)}</li>`).join('')}</ul>`);
+  out.push(ul(LASER_NOTES.map(esc), 'small'));
+  out.push(`<p class="small">${files.length} files in the zip, folder <code>laser/</code>. SVG only, full size.</p>`);
+  out.push(table([['File'], ['Job'], ['Material'], ['Cut', 'num'], ['Size (in)', 'num'], ['Bed']], files.map((f) => [
+    td(`<code>${esc(f.fileName)}</code>`), td(esc(f.title)), td(esc(f.material)), td(f.kind === 'part' ? f.qty : f.pieces.length, 'num'),
+    td(`${fracDim(f.widthIn)} × ${fracDim(f.heightIn)}`, 'num'), td(esc(f.fits ? 'fits' : f.verdict.text)),
+  ])));
+  return out.join('');
+}
+
 function shaperSection(d: BuildData): string {
   const files = d.shaper;
   const out: string[] = [];
@@ -350,7 +364,7 @@ function shaperSection(d: BuildData): string {
 export function buildBookHtml(d: BuildData): string {
   const body: Record<string, string> = {
     verify: verifySection(d), cutlist: cutlistSection(d), boards: boardsSection(d), nesting: nestingSection(d), bom: bomSection(d),
-    assembly: assemblySection(d), finishing: finishingSection(d), shaper: shaperSection(d),
+    assembly: assemblySection(d), finishing: finishingSection(d), shaper: shaperSection(d), laser: laserSection(d),
   };
   const out: string[] = [];
   out.push('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">');

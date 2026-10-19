@@ -18,7 +18,7 @@ describe('parseMode', () => {
 describe('buildShowsViewer', () => {
   it('shows the viewer only for the assembly step-through', () => {
     expect(buildShowsViewer('assembly')).toBe(true);
-    for (const s of ['verify', 'cutlist', 'nesting', 'bom', 'shaper', 'forms', 'finishing', 'downloads']) expect(buildShowsViewer(s)).toBe(false);
+    for (const s of ['verify', 'cutlist', 'nesting', 'bom', 'shaper', 'laser', 'forms', 'finishing', 'downloads']) expect(buildShowsViewer(s)).toBe(false);
   });
 });
 
