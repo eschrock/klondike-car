@@ -40,6 +40,8 @@ export interface BuildPanelOptions {
   getLink?(): string;
   /** Set one design parameter (the BOM's weather toggle sets `weatherSpec`). */
   setParam?(key: ParamKey, value: number): void;
+  /** Save the briefing book for the troop committee as an HTML file (it needs the 3D viewer for its pictures, so the app makes it). */
+  openBriefing?(): void;
 }
 
 export interface BuildPanel {
@@ -300,7 +302,9 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
   rail.append(
     h('h2', { class: 'bp-rail-title' }, 'Build'),
     navList,
-    h('div', { class: 'bp-rail-actions', role: 'group', 'aria-label': 'Build downloads and print' }, zipBtn, bookBtn, printBtn),
+    h('div', { class: 'bp-rail-actions', role: 'group', 'aria-label': 'Build downloads and print' }, zipBtn, bookBtn,
+      ...(opts.openBriefing ? [btn('Download briefing book', () => opts.openBriefing?.(), 'A short handout for the troop committee: what the sled is for, pictures and the cost by group. Saves one HTML file that opens in any browser (print or save as PDF from there)')] : []),
+      printBtn),
   );
   root.append(body, status);
 
@@ -652,14 +656,13 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
           return h('li', {}, ...(nl.rest ? [h('details', { class: 'bp-more' }, h('summary', {}, ...lead, h('span', { class: 'bp-detlink' }, ' Details')), h('p', { class: 'small' }, ...linkified(nl.rest)))] : lead));
         }))));
     }
-    const kinds = new Set(['bulk', 'touches']);
+    const kinds = new Set(['touches']);
     out.push(h('div', { class: 'bp-total', role: 'status' },
       h('div', {}, h('span', {}, 'Total'), h('strong', {}, usd(b.totalUsd))),
       h('div', { class: 'small' }, b.totalsText),
       h('div', { class: 'muted small' }, b.shippingNote),
       h('ul', { class: 'bp-subtotals bp-parts', 'aria-label': 'Totals by kind (jump to a table)' },
         jumpChip('Build', b.coreUsd, b.coreEstimateShare, b.sections[0]?.id ?? 'lumber'),
-        jumpChip('Bulk parts', b.bulkUsd, b.bulkEstimateShare, 'bulk'),
         jumpChip('Finishing touches', b.touchesUsd, b.touchesEstimateShare, 'touches')),
       h('div', { class: 'muted small' }, `${pct(b.estimateShare)} of this is an estimate (${usd(b.estimateUsd)}); the rest is quoted from a vendor page (each with its link and date), by the model, or is $0 shop stock you already own (marked "shop stock"). Confirm prices before ordering.`),
       h('h3', { class: 'bp-group' }, 'Jump to a section'),

@@ -17,7 +17,9 @@ import { mountAnalysisPanel } from './ui/analysis-panel';
 import { mountSimPanel } from './ui/sim-panel';
 import { mountSimpleView, type SpecFacts } from './ui/simple-view';
 import { mountBuildPanel } from './ui/build-panel';
-import { viewerView, type StepFocus } from './ui/build-helpers';
+import { todayISO, viewerView, type StepFocus } from './ui/build-helpers';
+import { briefingBookHtml } from './build/briefing-book';
+import { bom } from './build/bom';
 import { BUILD_HISTORY_STATE, MODE_KEY, isBuildEntry, parseMode, type Mode } from './ui/mode';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -187,7 +189,29 @@ buildPanel = mountBuildPanel({ rail: $('build-rail'), main: $('build-main') }, {
   },
   getLink: () => window.location.href,
   setParam: (k, v) => store.set(k, v),
+  openBriefing,
 });
+
+/** The briefing book for the troop committee: two pictures from the viewer (ready to roll, and Transport mode), the BOM by section. */
+function briefingHtml(): string {
+  const p = store.get();
+  const parts = build(p, { steerDeg: 0, rider: 'none', cargo: false }); // the sled the BOM and the Build mode price (wheel chocks included)
+  const transportParts = build(p, { steerDeg: 0, rider: 'none', cargo: false, ...TRANSPORT_VIEW });
+  const ready: CartView = { steerDeg: 0, rider: 'none', cargo: false, removed: false, seat: 'installed', handle: 'up', brakes: true, lights: true, chocks: false };
+  const W = 1800, H = 900; // 2:1, so both pictures fit one printed page
+  const images = { mobile: viewer.snapshot(build(p, ready), W, H), transport: viewer.snapshot(transportParts, W, H) };
+  const link = window.location.origin + window.location.pathname + window.location.hash; // the design link, without ?briefing
+  return briefingBookHtml({ p, parts, transportParts, bom: bom(parts, p), images, date: todayISO(), link });
+}
+/** Save the briefing book as one self-contained HTML file (the pictures are inside it): it opens in any browser, prints, and can be emailed. */
+function openBriefing(): void {
+  const url = URL.createObjectURL(new Blob([briefingHtml()], { type: 'text/html' }));
+  const a = h('a', { href: url, download: `klondike-sled-briefing-${todayISO()}.html` });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
 
 // The summary and the fit depend only on the design parameters, so they are cached across view-only changes.
 let cacheKey = '';
@@ -426,3 +450,14 @@ $('btn-copy-link').addEventListener('click', async (e) => {
   }
   setTimeout(() => (btn.textContent = 'Copy link'), 1500);
 });
+
+// `?briefing` in the address shows the briefing book in place of the app (for reading it and editing its text: the dev server reloads it on every save of
+// src/build/briefing-book.ts). The app draws first, since the two pictures come from its 3D view.
+if (new URLSearchParams(window.location.search).has('briefing')) {
+  setTimeout(() => {
+    const html = briefingHtml();
+    document.open();
+    document.write(html);
+    document.close();
+  }, 800);
+}

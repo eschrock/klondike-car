@@ -102,7 +102,7 @@ describe('the price difference', () => {
     expect(c.extremeUsd).toBeCloseTo(bExt.totalUsd, 2);
     expect(c.deltaUsd).toBeCloseTo(bExt.totalUsd - bStd.totalUsd, 2);
     expect(Object.values(c.deltaBySection).reduce((a, v) => a + v, 0)).toBeCloseTo(c.deltaUsd, 1);
-    expect(c.deltaCoreUsd + c.deltaBulkUsd + c.deltaTouchesUsd).toBeCloseTo(c.deltaUsd, 1);
+    expect(c.deltaCoreUsd + c.deltaTouchesUsd).toBeCloseTo(c.deltaUsd, 1);
     for (const s of bStd.sections) expect(c.deltaBySection[s.id], s.id).toBeCloseTo(bExt.sections.find((q) => q.id === s.id)!.subtotalUsd - s.subtotalUsd, 2);
     expect(c.deltaBySection.fasteners).toBeGreaterThan(0);
     expect(c.deltaBySection.consumables).toBeGreaterThan(0);
@@ -153,7 +153,7 @@ describe('Bolt Depot by the piece', () => {
     const screw = fast.find((l) => l.key === '18-8 wood screw #8 x 1-1/4"')!;
     expect([screw.unitUsd, screw.packQty]).toEqual([0.29, undefined]);
     expect(screw.extUsd).toBeCloseTo(screw.qty * 0.29, 2);
-    expect(screw.section).not.toBe('Bulk parts (shop stock)');
+    expect(screw.section).toBe('Fasteners');
     // 3/8 in fender washers (the knee bolts no longer buy any: they take a narrow flat washer under each head): 20 x 0.41 = 8.20 against the bag of 50 at 14.51
     const w38 = lines(bStd).find((l) => l.key === '18-8 fender washer 3/8"')!;
     expect([w38.qty, w38.unitUsd, w38.packQty]).toEqual([20, 0.41, undefined]);
@@ -162,10 +162,9 @@ describe('Bolt Depot by the piece', () => {
     expect([nut.qty, nut.unitUsd]).toEqual([18, 0.16]);
   });
 
-  it('shrinks the Bulk parts section', () => {
-    expect(bStd.bulkUsd).toBeLessThan(bExt.bulkUsd);
-    expect(bStd.bulkUsd).toBeLessThan(120);
-    expect(lines(bStd).filter((l) => l.section === 'Bulk parts (shop stock)').length).toBeLessThan(8);
+  it('prices the Standard fasteners below the Extreme ones', () => {
+    const sub = (b: typeof bStd) => b.sections.find((s) => s.id === 'fasteners')!.subtotalUsd;
+    expect(sub(bStd)).toBeLessThan(sub(bExt));
     // the #10-32 screw-in insert for hardwood was not found in the research (twice): an estimate that says so
     const ins = lines(bStd).find((l) => /threaded insert/.test(l.key))!;
     expect(ins.basis).toBe('estimate');

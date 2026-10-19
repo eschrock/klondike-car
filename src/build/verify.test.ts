@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
-import { defaultParams, PARAM_DEFS } from '../params';
+import { KNEE_MOUNT, defaultParams, PARAM_DEFS } from '../params';
 import { PRE_D72 } from '../test-fixtures';
 import { paramLabels, unusedVerifyKeys, verifyChecklist, verifyGroups, verifyParamKeys, type VerifyWhen } from './verify';
 
@@ -15,7 +15,7 @@ describe('verify checklist', () => {
       'tire-squash', 'wheel', 'axle-rod', 'steering-parts', 'bridle', 'sign-knobs', 'strip-bend',
       'oak-supplier', 'deck-sheet', 'web-bend', 'd-ring', 'eva-pads', 'hinges-304', // before ordering (D-79, D-80, D-83: the cost-pass sourcing and bought-hardware checks)
       'seat-back', 'brake-knee', 'grab-reach', 'lamp-clip', 'ply-thickness', 'lid-support', 'other-params', // before cutting
-      'bow-rib-clearance', 'brake-strap', // at assembly
+      'bow-rib-clearance', 'brake-strap', 'brake-knee-refit', // at assembly (the refit check: removable knees, the default)
     ]);
     expect(list.map((c) => c.n)).toEqual(list.map((_, i) => i + 1));
     expect(new Set(list.map((c) => c.id)).size).toBe(list.length);
@@ -197,7 +197,9 @@ describe('verify checklist', () => {
     const knee = list.find((c) => c.id === 'brake-knee')!;
     expect(knee.whatToDo).toMatch(/before cutting the other knee/);
     expect(knee.whatToDo).not.toMatch(/three knees/);
-    expect(knee.whatToDo).toMatch(/BEFORE the knees are glued/);
+    expect(knee.whatToDo).toMatch(/BEFORE the knees are bolted on/); // removable knees (the default)
+    const fx = { ...p, kneeMount: KNEE_MOUNT.fixed };
+    expect(verifyChecklist(buildModel(fx), fx).find((c) => c.id === 'brake-knee')!.whatToDo).toMatch(/BEFORE the knees are glued/);
     const bend = list.find((c) => c.id === 'strip-bend')!;
     expect(bend.whatToDo).toMatch(/FIRST board of each strip pool/);
     expect(bend.whatToDo).toMatch(/planned SPARE strips/);

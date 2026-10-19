@@ -47,14 +47,14 @@ export interface Price {
   url?: string;
   /**
    * Sold in packs much larger than a sled needs (screws, nuts, washers, inserts, Dominos, tape...) or in fixed stock pieces (metal bars, tape rolls): the PACK size and pack price.
-   * `usd` is then the per-unit equivalent (`packUsd / packQty`). A fastener that needs under `BULK_SHARE` of a pack (bom.ts) goes to the 'Bulk parts' section; every packed
+   * `usd` is then the per-unit equivalent (`packUsd / packQty`). A fastener that needs under `BULK_SHARE` of a pack (bom.ts) gets the "you may already have these" note; every packed
    * line is priced by whole packs.
    */
   packQty?: number;
   packUsd?: number;
   /**
    * Also sold by the piece (Bolt Depot sells fasteners singly or by the bag): the single-piece price. The BOM buys whichever is cheaper for the count (`qty x eachUsd` against whole packs),
-   * so a small count is priced per piece, in place, and only a count that makes the bag cheaper goes to the pack / bulk-parts logic.
+   * so a small count is priced per piece, in place, and only a count that makes the bag cheaper is priced by the pack.
    */
   eachUsd?: number;
   /** What one pack is called when it is not "pack of N": '60 in piece', '10 ft roll'. */

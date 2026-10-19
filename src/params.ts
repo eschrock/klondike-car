@@ -1566,12 +1566,12 @@ const defs = {
 
   kneeMount: {
     label: 'Brake knees', group: 'brake', unit: '',
-    default: KNEE_MOUNT.fixed, min: 0, max: 1, step: 1, status: 'explore', ref: 'D-78',
+    default: KNEE_MOUNT.removable, min: 0, max: 1, step: 1, status: 'explore', ref: 'D-78',
     options: [
       { value: KNEE_MOUNT.fixed, label: 'Knees stay on (bolted, glued)' },
       { value: KNEE_MOUNT.removable, label: 'Removable knees (bolts, ratchet)' },
     ],
-    note: 'D-78 (Eric): the same four 3/8 in bolts through the knee, rail and backer, nuts on the backing plate (bedded in its recess so it stays when the bolts come out). Removable: the knee is fitted DRY (no epoxy against the rail), finished on the bench and bolted on at the hang step, and a 3/8 in drive ratchet with a 9/16 in socket and a 9/16 in wrench rides in the storage box in cargo mode. Each knee, with its strap and flap, comes off in about 5 minutes (longer the first time). Nothing sticks out beside the tires in transport or cargo use. The chock stays tied to the eye on its knee and travels with it. The brake-mount row adds a wood-to-wood bolt check for the dry knee. Pins and clamped inserts were rejected (the 3 in lever loads the thin rail and rib).',
+    note: 'D-78 (Eric): removable is the default (2026-10-19); fixed is the option. The same four 3/8 in bolts through the knee, rail and backer, nuts on the backing plate (bedded in its recess so it stays when the bolts come out). Removable: the knee is fitted DRY (no epoxy against the rail), finished on the bench and bolted on at the hang step, and a 3/8 in drive ratchet with a 9/16 in socket and a 9/16 in wrench rides in the storage box in cargo mode. Each knee, with its strap and flap, comes off in about 5 minutes (longer the first time). Nothing sticks out beside the tires in transport or cargo use. The chock stays tied to the eye on its knee and travels with it. The brake-mount row adds a wood-to-wood bolt check for the dry knee. Pins and clamped inserts were rejected (the 3 in lever loads the thin rail and rib).',
   },
   kneeBoltTightenLbIn: {
     label: 'Knee bolt tightening (removable knees)', group: 'brake', unit: 'lbf·in',

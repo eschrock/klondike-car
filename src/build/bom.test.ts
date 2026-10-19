@@ -17,14 +17,14 @@ const cl = cutList(parts, p);
 const secLines = (id: string) => b.sections.find((s) => s.id === id)!.lines;
 /** Pieces a line stands for: the quantity needed of a pack-priced line, else its quantity. */
 const need = (l: { qty: number; needed?: number }): number => l.needed ?? l.qty;
-/** Every fastener line wherever it is priced: in place, in the bulk section (by the pack) or in the finishing touches. */
-const allFasteners = () => [...secLines('fasteners'), ...secLines('bulk'), ...secLines('touches')];
+/** Every fastener line wherever it is priced: in Fasteners or in the finishing touches. */
+const allFasteners = () => [...secLines('fasteners'), ...secLines('touches')];
 
 describe('bom', () => {
   it('totals to a finite positive number, section by section', () => {
     expect(Number.isFinite(b.totalUsd)).toBe(true);
     expect(b.totalUsd).toBeGreaterThan(500);
-    expect(b.sections.map((s) => s.id)).toEqual(['lumber', 'plywood', 'metal', 'purchased', 'fasteners', 'consumables', 'bulk', 'touches']);
+    expect(b.sections.map((s) => s.id)).toEqual(['lumber', 'plywood', 'metal', 'purchased', 'fasteners', 'consumables', 'touches']);
     expect(b.sections.reduce((a, s) => a + s.subtotalUsd, 0)).toBeCloseTo(b.totalUsd, 1);
     for (const s of b.sections) {
       expect(s.lines.length, s.id).toBeGreaterThan(0);
@@ -171,7 +171,7 @@ describe('bom', () => {
     expect(b.csv).toContain('Grand total');
     expect(b.csv).toContain(b.totalsText);
     // one subtotal row per section, one per touches group
-    expect(b.csv.match(/,Subtotal,/g)!.length).toBe(8);
+    expect(b.csv.match(/,Subtotal,/g)!.length).toBe(7);
     expect(b.csv.match(/Subtotal: /g)!.length).toBe(4);
   });
 
@@ -332,19 +332,19 @@ describe('finishing touches (Eric, 2026-10-12)', () => {
     expect(b.sections.find((s) => s.id === 'touches')!.notes!.join(' ')).toMatch(/ribs.*Lumber/);
   });
 
-  it('puts every touches line in exactly one of the four groups, and core + bulk + touches = total', () => {
+  it('puts every touches line in exactly one of the four groups, and core + touches = total', () => {
     for (const l of touches) expect(groupIds.has(l.group!), l.key).toBe(true);
     const sec = b.sections.find((s) => s.id === 'touches')!;
     expect(sec.groups!.map((g) => g.id)).toEqual(['lights', 'seat', 'reflectors', 'tie-downs']);
     for (const g of sec.groups!) expect(g.subtotalUsd, g.id).toBeCloseTo(touches.filter((l) => l.group === g.id).reduce((a, l) => a + l.extUsd, 0), 1);
     expect(sec.groups!.reduce((a, g) => a + g.subtotalUsd, 0)).toBeCloseTo(sec.subtotalUsd, 1);
     expect(b.touchesUsd).toBeCloseTo(sec.subtotalUsd, 2);
-    const core = b.sections.filter((s) => !['touches', 'bulk'].includes(s.id)).reduce((a, s) => a + s.subtotalUsd, 0);
+    const core = b.sections.filter((s) => s.id !== 'touches').reduce((a, s) => a + s.subtotalUsd, 0);
     expect(b.coreUsd).toBeCloseTo(core, 2);
-    expect(b.coreUsd + b.bulkUsd + b.touchesUsd).toBeCloseTo(b.totalUsd, 2);
-    expect(b.coreEstimateUsd + b.bulkEstimateUsd + b.touchesEstimateUsd).toBeCloseTo(b.estimateUsd, 2);
-    for (const sh of [b.coreEstimateShare, b.bulkEstimateShare, b.touchesEstimateShare]) { expect(sh).toBeGreaterThanOrEqual(0); expect(sh).toBeLessThanOrEqual(1); }
-    expect(b.totalsText).toMatch(/^Build \$[\d,.]+ \+ bulk parts \$[\d,.]+ \+ finishing touches \$[\d,.]+ = \$[\d,.]+, excluding shipping and tax$/);
+    expect(b.coreUsd + b.touchesUsd).toBeCloseTo(b.totalUsd, 2);
+    expect(b.coreEstimateUsd + b.touchesEstimateUsd).toBeCloseTo(b.estimateUsd, 2);
+    for (const sh of [b.coreEstimateShare, b.touchesEstimateShare]) { expect(sh).toBeGreaterThanOrEqual(0); expect(sh).toBeLessThanOrEqual(1); }
+    expect(b.totalsText).toMatch(/^Build \$[\d,.]+ \+ finishing touches \$[\d,.]+ = \$[\d,.]+, excluding shipping and tax$/);
   });
 
   it('keeps every touches part out of the core purchased section', () => {
@@ -353,18 +353,19 @@ describe('finishing touches (Eric, 2026-10-12)', () => {
   });
 });
 
-describe('bulk parts (Eric, 2026-10-12)', () => {
-  const bulk = secLines('bulk');
+describe('pack-priced parts (no bulk section: Eric, 2026-10-19)', () => {
+  // The lines the build needs under half a pack of: priced by the whole pack in their own section, with the shop note.
+  const bulk = secLines('fasteners').filter((l) => l.basis === 'owned' || (l.packQty !== undefined && l.needed! < BULK_SHARE * l.packQty));
 
-  it('prices pack-sold items by the pack, in their own section between the core sections and the touches', () => {
-    expect(b.sections.map((s) => s.id).slice(-2)).toEqual(['bulk', 'touches']);
-    expect(b.sections.find((s) => s.id === 'bulk')!.title).toBe('Bulk parts (shop stock)');
-    expect(bulk.length).toBeGreaterThanOrEqual(5); // fasteners Bolt Depot sells by the piece are priced per piece, in place, and so are not here
-    // D-79: the shop stock (the Dominos, the sandpaper) is listed at $0, marked owned, and never an estimate
-    const shop = bulk.filter((l) => l.basis === 'owned');
+  it('prices pack-sold items by the pack in Fasteners, and lists the shop stock at $0 where it belongs', () => {
+    expect(b.sections.some((s) => (s.id as string) === 'bulk')).toBe(false);
+    expect(bulk.length).toBeGreaterThanOrEqual(4); // fasteners Bolt Depot sells by the piece are priced per piece, and so are not here
+    // D-79: the shop stock (the Dominos in Fasteners, the sandpaper in Consumables) is listed at $0, marked owned, and never an estimate
+    const shop = [...bulk, ...secLines('consumables')].filter((l) => l.basis === 'owned');
     expect(shop.map((l) => l.key)).toEqual(expect.arrayContaining(['Domino DF 500 5x30', 'sandpaper']));
     for (const l of shop) { expect(l.unitUsd, l.key).toBe(0); expect(l.extUsd, l.key).toBe(0); expect(l.notes, l.key).toContain(OWNED_NOTE); }
     for (const l of bulk.filter((q) => q.basis !== 'owned')) {
+      expect(l.section, l.key).toBe('Fasteners');
       expect(l.packQty, l.key).toBeGreaterThan(0);
       expect(l.packUsd, l.key).toBeGreaterThan(0);
       expect(l.needed, l.key).toBeGreaterThan(0);
@@ -372,17 +373,16 @@ describe('bulk parts (Eric, 2026-10-12)', () => {
       expect(l.qty, l.key).toBe(l.packs);
       expect(l.extUsd, l.key).toBeCloseTo(l.packs! * l.packUsd!, 2);
       expect(l.notes, l.key).toMatch(/already have these in the shop/);
-      // the build needs under half a pack, or it is one of the lump-sum items
-      expect(l.needed! < BULK_SHARE * l.packQty! || l.packQty === 1, l.key).toBe(true);
     }
-    for (const k of [/Domino DF 500 5x30/, /cotter pin/, /Button plug/, /^sandpaper$/]) expect(bulk.some((l) => k.test(l.key)), String(k)).toBe(true);
+    for (const k of [/Domino DF 500 5x30/, /cotter pin/, /Button plug/]) expect(bulk.some((l) => k.test(l.key)), String(k)).toBe(true);
+    expect(secLines('consumables').some((l) => l.key === 'sandpaper')).toBe(true);
   });
 
   it('leaves bolts and one-at-a-time items where they are', () => {
-    const fast = secLines('fasteners');
+    const fast = secLines('fasteners').filter((l) => !bulk.includes(l));
     expect(fast.some((l) => /hex bolt|carriage bolt|cap screw|shaft collar|Thumb-knob|screw eye|stainless rod/.test(l.key))).toBe(true);
     expect(bulk.some((l) => /hex bolt|carriage bolt|cap screw|shaft collar|Thumb-knob|screw eye|stainless rod/.test(l.key))).toBe(false);
-    // a fastener that stays in place needs at least half a pack (and is then priced by whole packs), or has no pack
+    // any other pack-priced fastener needs at least half a pack (and is then priced by whole packs), or has no pack
     for (const l of fast) {
       if (l.packQty === undefined) continue;
       expect(isBulkQty({ usd: l.packUsd! / l.packQty, unit: 'ea', source: '', basis: l.basis, packQty: l.packQty, packUsd: l.packUsd }, l.needed!), l.key).toBe(false);
@@ -404,16 +404,14 @@ describe('bulk parts (Eric, 2026-10-12)', () => {
 
   it('uses the pack price: the line costs the packs, not the pieces', () => {
     for (const l of bulk.filter((q) => q.packQty !== undefined && q.packQty !== 1)) expect(l.extUsd, l.key).toBeGreaterThan((l.needed! * l.unitUsd) / l.packQty! - 1e-9);
-    expect(b.bulkUsd).toBeCloseTo(b.sections.find((s) => s.id === 'bulk')!.subtotalUsd, 2);
   });
 
-  it('prices a fastener Bolt Depot sells by the piece per piece, in place, when that is no dearer than the bag (it leaves the bulk section)', () => {
+  it('prices a fastener Bolt Depot sells by the piece per piece when that is no dearer than the bag', () => {
     const screws = allFasteners().filter((l) => /wood screw/.test(l.key) && l.basis === 'quoted'); // the lengths the research read
     expect(screws.length).toBeGreaterThanOrEqual(2);
     for (const l of screws) {
       expect(l.packQty, l.key).toBeUndefined(); // by the piece
       expect(l.unit, l.key).toBe('ea');
-      expect(l.section, l.key).not.toBe('Bulk parts (shop stock)');
       expect(l.notes, l.key).toMatch(/Bought by the piece|not found/);
     }
     expect(bulk.some((l) => /fender washer|lock nut/.test(l.key))).toBe(false);
@@ -422,7 +420,7 @@ describe('bulk parts (Eric, 2026-10-12)', () => {
 
 describe('exterior material notes (Eric, 2026-10-12)', () => {
   it('states a material requirement on every fastener and metal hardware line', () => {
-    const lines = [...secLines('fasteners'), ...secLines('bulk').filter((l) => l.packQty !== 1 && !/glass-tape|sandpaper/.test(l.key)), ...secLines('touches').filter((l) => !/hook-and-loop/.test(l.key))];
+    const lines = [...secLines('fasteners'), ...secLines('touches').filter((l) => !/hook-and-loop/.test(l.key))];
     for (const l of lines.filter((q) => /^(316|Domino|Heat-set|Nylon|Button|Flanged)/.test(q.key))) expect(l.materialNote, l.key).toBeTruthy();
     for (const l of secLines('purchased').filter((q) => /hinge|latch|pin|chain|snap|clip|kingpin|steer|scupper|drain|stay|bridle-sleeve/.test(q.key))) expect(l.materialNote, l.key).toBeTruthy();
     expect(secLines('fasteners').find((l) => /hex bolt 3\/8-16 x 3-1\/4/.test(l.key))!.materialNote).toMatch(/316 stainless REQUIRED.*tannins/);

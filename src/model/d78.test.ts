@@ -1,6 +1,6 @@
 /**
- * D-78 (Eric): the brake knees can be REMOVABLE WITH TOOLS as an optional setting (`kneeMount`). The four 3/8" bolts, the backer and the backing plate are the same in both settings; the
- * knee is fitted dry (no epoxy against the rail) and comes off with its strap and the flap kit, with a ratchet and wrench. The default (knees stay on) is unchanged.
+ * D-78 (Eric): the brake knees are REMOVABLE WITH TOOLS by default (`kneeMount`, 2026-10-19), with knees that stay on (bolted, glued) as the option. The four 3/8" bolts, the backer and the
+ * backing plate are the same in both settings; the removable knee is fitted dry (no epoxy against the rail) and comes off with its strap and the flap kit, with a ratchet and wrench.
  */
 import { describe, expect, it } from 'vitest';
 import { buildModel } from '.';
@@ -15,16 +15,16 @@ import { noFabViolations } from './no-fab';
 import { configParts } from '../truck/fit';
 import type { Part } from './types';
 
-const fixed = defaultParams();
-const removable: Params = { ...fixed, kneeMount: KNEE_MOUNT.removable };
+const removable: Params = defaultParams();
+const fixed: Params = { ...removable, kneeMount: KNEE_MOUNT.fixed };
 const empty = { rider: 'none', cargo: false } as const;
 const view = (p: Params, v: Parameters<typeof buildModel>[1] = {}) => buildModel(p, { ...empty, ...v });
 const ids = (p: Params, v: Parameters<typeof buildModel>[1] = {}) => view(p, v).map((x) => x.id);
 const KNEES = ['brake-knee-L', 'brake-knee-R', 'brake-strap-L', 'brake-strap-R'];
 
 describe('D-78 the setting', () => {
-  it('defaults to the knees staying on; the option labels are the ones the Advanced panel shows', () => {
-    expect(fixed.kneeMount).toBe(KNEE_MOUNT.fixed);
+  it('defaults to removable knees; the option labels are the ones the Advanced panel shows', () => {
+    expect(removable.kneeMount).toBe(KNEE_MOUNT.removable);
     expect(PARAM_DEFS.kneeMount.options!.map((o) => o.label)).toEqual(['Knees stay on (bolted, glued)', 'Removable knees (bolts, ratchet)']);
     expect(PARAM_DEFS.kneeMount.ref).toBe('D-78');
     expect(PARAM_DEFS.kneeMount.note).toBeTruthy();

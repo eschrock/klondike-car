@@ -4,7 +4,7 @@
  * the nesting sheet, the cut list, the price), the weather mapping, the rod, and the numbers at the defaults.
  */
 import { describe, expect, it } from 'vitest';
-import { PARAM_DEFS, THIN_SHEET, WEATHER_SPEC, defaultParams, derived, thinSheet, thinSheetKey, validateParams, type Params } from './params';
+import { KNEE_MOUNT, PARAM_DEFS, THIN_SHEET, WEATHER_SPEC, defaultParams, derived, thinSheet, thinSheetKey, validateParams, type Params } from './params';
 import { buildModel } from './model';
 import { computeLayout } from './model/layout';
 import { totalMass } from './model/mass';
@@ -390,9 +390,12 @@ describe('the numbers at the defaults (weatherSpec Standard: 6 mm Baltic birch, 
     expect(sw.green).toMatchObject({ loLb: 50, hiLb: 210, openLow: true, openHigh: false }); // D-83: 220 lb (230 with the 4 mm okoume) before the 2 in clamp plates added groove bearing area
     expect(riderSweep(withMat(OKOUME)).green).toMatchObject({ loLb: 50, hiLb: 210 });
     const cap = cargoCapacity(defaults);
-    expect(cap.capacityLb).toBe(285); // D-85: 285 (the 0.7 lb heavier sled); D-83: 254 before the 2 in clamp plates (the groove bearing limited it)
+    expect(cap.capacityLb).toBe(276); // D-78 removable knees (the default): the dry knee's brake-mount row limits it
     expect(cap.comfortableLb).toBe(231); // D-85: 232 before (0.7 lb heavier sled)
-    expect(cap.limiter!.id).toBe('rear-beam-seat'); // was 'bearing-groove'
+    expect(cap.limiter!.id).toBe('brake-mount');
+    const glued = cargoCapacity({ ...defaults, kneeMount: KNEE_MOUNT.fixed });
+    expect(glued.capacityLb).toBe(285); // D-85: 285 (the 0.7 lb heavier sled); D-83: 254 before the 2 in clamp plates (the groove bearing limited it)
+    expect(glued.limiter!.id).toBe('rear-beam-seat'); // was 'bearing-groove'
     const cs = runChecks(defaults, { includeTruck: false });
     expect(cs.filter((c) => c.status === 'fail')).toEqual([]);
     expect(cs.find((c) => c.id === 'axle-stress')!.util!).toBeCloseTo(0.787, 2);

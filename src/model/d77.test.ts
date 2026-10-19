@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { buildModel } from '.';
-import { defaultParams, type Params } from '../params';
+import { KNEE_MOUNT, defaultParams, type Params } from '../params';
 import { makeCtx, stainless } from './build-utils';
 import { brakeGeometry, PIN_STICKOUT_IN, PIVOT_HOLE_CLEAR_IN } from './brake-layout';
 import { buildBrakeAt } from './brake';
@@ -13,7 +13,8 @@ import { METAL_FABS, noFabViolations } from './no-fab';
 import { runChecks } from '../analysis/index';
 import type { Mat4, Part, Vec3 } from './types';
 
-const p = defaultParams();
+// The glued knees (the D-78 option): the strap stays on and the glued-knee brake-mount row; the removable knees (the default) are tested in d78.test.ts.
+const p: Params = { ...defaultParams(), kneeMount: KNEE_MOUNT.fixed };
 const parts = buildModel(p);
 const get = (id: string, ps: Part[] = parts): Part => ps.find((x) => x.id === id)!;
 const ctx = makeCtx(p);
