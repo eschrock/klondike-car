@@ -748,10 +748,16 @@ export class Viewer {
     sc.updateProjectionMatrix();
   }
 
+  /** The app is in the dark theme (a snapshot draws in the light theme whatever the app shows). */
+  private isDark(): boolean {
+    return !this.forceLight && document.documentElement.getAttribute('data-theme') === 'dark';
+  }
+  private forceLight = false;
+
   /** The 3D background is a CSS gradient on the canvas host (see `.viewer-canvas`); here only the grid / shadow follow the theme. */
   private applyTheme(): void {
     this.touch();
-    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const dark = this.isDark();
     this.scene.background = null;
     const gm = this.gridMat as THREE.LineBasicMaterial | undefined;
     if (gm) {
@@ -778,7 +784,7 @@ export class Viewer {
     const sled = parts.filter((p) => !p.payload && p.group !== 'reference' && lookOf(p) !== 'rope'); // the rope is not drawn (owner, round 3)
     if (!sled.length) return;
     const bb = worldAABB(sled);
-    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const dark = this.isDark();
     const mat = new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false, opacity: dark ? 0.8 : 0.5, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
     const blob = (cx: number, cy: number, w: number, h: number) => {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
@@ -1136,39 +1142,127 @@ export class Viewer {
       for (const m of this.partsGroup.children) if (m.visible) addCorners(pb.setFromObject(m));
       if (!corners.length) addCorners(b);
     }
-    const target = sphere.center.clone();
-    let dist = sphere.radius / Math.sin(THREE.MathUtils.degToRad(this.camera.fov) / 2);
-    this.camera.up.set(0, 0, 1);
-    // Fit the box's projection (not its bounding sphere) to FILL of the canvas: re-center on the projected extents, then
-    // rescale the distance, a few times (perspective makes it not exactly linear).
-    const ndc = new THREE.Vector3();
-    const right = new THREE.Vector3();
-    const up = new THREE.Vector3();
-    const tanV = Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2);
-    for (let it = 0; it < 6; it++) {
-      this.camera.position.copy(target).addScaledVector(dir, dist);
-      this.camera.lookAt(target);
-      this.camera.updateMatrixWorld(true);
-      this.camera.updateProjectionMatrix();
-      let [x0, x1, y0, y1] = [Infinity, -Infinity, Infinity, -Infinity];
-      for (const c of corners) {
-        ndc.copy(c).project(this.camera);
-        x0 = Math.min(x0, ndc.x); x1 = Math.max(x1, ndc.x); y0 = Math.min(y0, ndc.y); y1 = Math.max(y1, ndc.y);
-      }
-      const ex = (x1 - x0) / 2, ey = (y1 - y0) / 2;
-      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-      right.setFromMatrixColumn(this.camera.matrixWorld, 0);
-      up.setFromMatrixColumn(this.camera.matrixWorld, 1);
-      // NDC offset -> world offset at the target's depth.
-      target.addScaledVector(right, cx * dist * tanV * this.camera.aspect).addScaledVector(up, cy * dist * tanV);
-      dist *= Math.max(ex, ey) / Viewer.FILL;
-      dist = Math.max(dist, 1);
-    }
-    this.camera.position.copy(target).addScaledVector(dir, dist);
+    const target = Viewer.fitCamera(this.camera, sphere, dir, corners, Viewer.FILL);
     this.controls.target.copy(target);
     this.camera.lookAt(target);
     this.controls.update();
     this.renderNow();
+  }
+
+  /**
+   * Point `cam` along `dir` at the corners so their projection (not their bounding sphere) fills `fill` of the frame: re-center on the projected
+   * extents, then rescale the distance, a few times (perspective makes it not exactly linear). Leaves the camera placed; returns the look-at point.
+   */
+  private static fitCamera(cam: THREE.PerspectiveCamera, sphere: THREE.Sphere, dir: THREE.Vector3, corners: THREE.Vector3[], fill: number): THREE.Vector3 {
+    const target = sphere.center.clone();
+    let dist = sphere.radius / Math.sin(THREE.MathUtils.degToRad(cam.fov) / 2);
+    cam.up.set(0, 0, 1);
+    const ndc = new THREE.Vector3();
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3();
+    const tanV = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2);
+    for (let it = 0; it < 6; it++) {
+      cam.position.copy(target).addScaledVector(dir, dist);
+      cam.lookAt(target);
+      cam.updateMatrixWorld(true);
+      cam.updateProjectionMatrix();
+      let [x0, x1, y0, y1] = [Infinity, -Infinity, Infinity, -Infinity];
+      for (const c of corners) {
+        ndc.copy(c).project(cam);
+        x0 = Math.min(x0, ndc.x); x1 = Math.max(x1, ndc.x); y0 = Math.min(y0, ndc.y); y1 = Math.max(y1, ndc.y);
+      }
+      const ex = (x1 - x0) / 2, ey = (y1 - y0) / 2;
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+      right.setFromMatrixColumn(cam.matrixWorld, 0);
+      up.setFromMatrixColumn(cam.matrixWorld, 1);
+      // NDC offset -> world offset at the target's depth.
+      target.addScaledVector(right, cx * dist * tanV * cam.aspect).addScaledVector(up, cy * dist * tanV);
+      dist *= Math.max(ex, ey) / fill;
+      dist = Math.max(dist, 1);
+    }
+    cam.position.copy(target).addScaledVector(dir, dist);
+    cam.lookAt(target);
+    return target;
+  }
+
+  /**
+   * A still picture of `parts` for the briefing book: the Iso view, `w` × `h` pixels, light theme, white background, as a JPEG data URL. Drawn
+   * with its own meshes and camera, so nothing on screen (the parts, camera, highlight, explode, section, truck or sim) changes; all of it is put
+   * back before the next paint.
+   */
+  snapshot(parts: Part[], w: number, h: number, dirName: ViewName = 'iso'): string {
+    const group = new THREE.Group();
+    group.matrixAutoUpdate = false;
+    for (const part of parts) {
+      if (isShopAid(part)) continue;
+      const built = buildPart(part);
+      if (!built) continue;
+      const mesh = new THREE.Mesh(built.geometry, built.material);
+      mesh.castShadow = built.look !== 'mannequin' || part.id === 'cargo';
+      mesh.receiveShadow = true;
+      mesh.matrixAutoUpdate = false;
+      mesh.matrix.fromArray(part.transform);
+      const plyGeo = built.geometry.userData.plyLines as THREE.BufferGeometry | undefined;
+      if (plyGeo) mesh.add(new THREE.LineSegments(plyGeo, PLY_LINE_MAT));
+      if (built.edges) mesh.add(new THREE.LineSegments(built.edges, EDGE_MAT));
+      group.add(mesh);
+    }
+    // Hide what the screen shows; draw the snapshot group alone.
+    const shown = [this.partsGroup, this.truckGroup, this.simGroup, this.overlay].map((g) => [g, g.visible] as const);
+    for (const [g] of shown) g.visible = false;
+    const grid = this.envObjects.find((o) => o instanceof THREE.GridHelper);
+    const gridWas = grid?.visible ?? false;
+    if (grid) grid.visible = false;
+    const clip = this.renderer.clippingPlanes;
+    this.renderer.clippingPlanes = [];
+    const sun = { dir: this.sunDir.clone(), center: this.sunCenter.clone(), radius: this.sunRadius };
+    const ratio = this.renderer.getPixelRatio();
+    const size = this.renderer.getSize(new THREE.Vector2());
+    const clear = { color: this.renderer.getClearColor(new THREE.Color()), alpha: this.renderer.getClearAlpha() };
+    this.forceLight = true;
+    this.applyTheme();
+    this.rebuildContactShadows(parts);
+    this.scene.add(group);
+    try {
+      this.scene.updateMatrixWorld(true);
+      const corners: THREE.Vector3[] = [];
+      const box = new THREE.Box3();
+      const pb = new THREE.Box3();
+      for (const m of group.children) {
+        pb.setFromObject(m);
+        box.union(pb);
+        for (const x of [pb.min.x, pb.max.x]) for (const y of [pb.min.y, pb.max.y]) for (const z of [pb.min.z, pb.max.z]) corners.push(new THREE.Vector3(x, y, z));
+      }
+      const sphere = box.getBoundingSphere(new THREE.Sphere());
+      this.sunDir.set(-10, -90, 150).normalize();
+      this.placeSun(sphere.center, Math.max(sphere.radius, 20));
+      const cam = new THREE.PerspectiveCamera(this.camera.fov, w / h, 1, 5000);
+      Viewer.fitCamera(cam, sphere, new THREE.Vector3(...VIEW_DIRS[dirName]).normalize(), corners, 0.9);
+      this.renderer.setPixelRatio(1);
+      this.renderer.setSize(w, h, false);
+      this.renderer.setClearColor(0xffffff, 1);
+      this.renderer.render(this.scene, cam);
+      return this.renderer.domElement.toDataURL('image/jpeg', 0.9);
+    } finally {
+      this.scene.remove(group);
+      for (const m of group.children) {
+        const mesh = m as THREE.Mesh;
+        if (!mesh.geometry?.userData.shared) mesh.geometry?.dispose();
+        for (const c of mesh.children) (c as THREE.LineSegments).geometry?.dispose();
+      }
+      for (const [g, v] of shown) g.visible = v;
+      if (grid) grid.visible = gridWas;
+      this.renderer.clippingPlanes = clip;
+      this.renderer.setClearColor(clear.color, clear.alpha);
+      this.renderer.setPixelRatio(ratio);
+      this.renderer.setSize(size.x, size.y, false);
+      this.sunDir.copy(sun.dir);
+      this.placeSun(sun.center, sun.radius);
+      this.forceLight = false;
+      this.applyTheme();
+      this.rebuildContactShadows(this.lastParts);
+      this.renderNow();
+    }
   }
 
   /** Bed (without the big ground plane) plus the sled. */

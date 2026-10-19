@@ -465,19 +465,22 @@ describe('build review round 2: brake knees before the underside finish (MUST-A)
   const get = (id: string) => steps.find((s) => s.id === id)!;
   const knees = get('brake-knees');
 
-  it('glues and bolts the knees while the hull is inverted, before the underside is finished and before the flip', () => {
+  it('fits the knees (dry by default, glued in the option) while the hull is inverted, before the underside is finished and before the flip', () => {
     expect(idx('brake-knees')).toBeGreaterThan(idx('front-beam'));
     expect(idx('brake-knees')).toBeLessThan(idx('finish-under'));
     expect(idx('brake-knees')).toBeLessThan(idx('flip'));
     expect(knees.view).toBe('under');
     const t = knees.instructions.join(' ');
-    expect(t).toMatch(/glue will not bond to varnish/);
+    expect(t).toMatch(/The knees go on dry/); // removable knees, the default (D-78)
+    const fx = { ...p, kneeMount: KNEE_MOUNT.fixed };
+    const fxSteps = assemblySteps(buildModel(fx), fx);
+    expect(fxSteps.find((s) => s.id === 'brake-knees')!.instructions.join(' ')).toMatch(/glue will not bond to varnish/);
+    expect(fxSteps.find((s) => s.id === 'finish-under')!.instructions.join(' ')).toMatch(/brake knees/); // glued knees are finished in place with the underside
     expect(t).toMatch(/nylock nuts/);
     expect(t).toMatch(/hull is inverted/);
     expect(t).toMatch(/one-knee test/);
     expect(t).not.toMatch(/stay bolted on for finishing/);
     expect(t).not.toMatch(/the other three knees/);
-    expect(get('finish-under').instructions.join(' ')).toMatch(/brake knees/);
     // The one-knee verify item is a "before cutting" gate: it is done in step 0, ahead of the knee step.
     expect(verifyChecklist(parts, p).find((v) => v.id === 'brake-knee')!.when).toBe('before cutting');
     expect(idx('verify')).toBeLessThan(idx('brake-knees'));
@@ -710,7 +713,7 @@ describe('instruction style (Eric 2026-10-12: short steps, names not ids, fracti
       ['rear-beam', /axle groove/, /from the rear face/],
       ['rear-beam', /Drill the beam/, /from the left end/],
       ['front-beam', /Drill and groove/, /Kingpin hole: [^.]*from the left end/],
-      ['brake-knees', /Bolt each knee/, /from the top end/],
+      ['brake-knees', /Drill each knee leg/, /from the top end/], // removable knees (the default): the holes are drilled before the dry fit
       ['dry-fit', /rail-end mortises/, /from the top edge/],
       ['dry-fit', /screw pilots/, /from the rear end \(the finished end/],
       ['seat-blocks', /latch hole/, /from the rear edge/],

@@ -323,7 +323,8 @@ describe('removed', () => {
     expect(removed.map((p) => p.id)).toEqual(full.filter((p) => !p.removable).map((p) => p.id));
     const gone = full.filter((p) => p.removable).map((p) => p.id);
     expect(gone).toEqual(expect.arrayContaining(['seat-back-pad', 'seat-pin-L', 'brake-flap-L', 'brake-pivot-pin-R', 'brake-chock-L', 'front-light', 'rear-light', 'lamp-clip', 'rear-lamp-clip']));
-    for (const id of ['bridle', 'bridle-tongue', 'bridle-sleeve', 'sign-L', 'sign-R', 'handle-bar', 'handle-post-L', 'handle-post-R', 'brake-knee-L', 'brake-backer-L']) expect(removed.some((p) => p.id === id), `${id} stays`).toBe(true);
+    for (const id of ['bridle', 'bridle-tongue', 'bridle-sleeve', 'sign-L', 'sign-R', 'handle-bar', 'handle-post-L', 'handle-post-R', 'brake-backer-L']) expect(removed.some((p) => p.id === id), `${id} stays`).toBe(true);
+    expect(gone).toContain('brake-knee-L'); // D-78: removable knees (the default) come off in Transport mode; glued knees stay (d78.test.ts)
     for (const id of ['beam-F', 'kingpin', 'king-beam', 'king-thrust', 'steer-eye-L', 'steer-anchor-L', 'axle-FL', 'wheel-FL', 'wheel-FR', 'bow-bulkhead', 'deck', 'transom-rear']) expect(removed.some((p) => p.id === id), id).toBe(true);
     expect(gone.some((id) => /^sign/.test(id))).toBe(false); // Eric, D-65: the signs are NOT removable ("that seems excessive")
     // the tongue stays on (D-65): Transport mode still reaches tongueTieAheadIn past the bow tip

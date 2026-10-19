@@ -133,7 +133,7 @@ describe('real sled (D-6, D-23, D-54)', () => {
   it("Transport mode (the 'removed' configuration, TRANSPORT_VIEW, D-65) keeps the oak tongue, its sleeve, the rope, the signs and the parked handle, and takes off the flap kit, the lights, the chocks and the seat pad; the front axle stays", () => {
     const inst = configParts('installed', build(p)).map((x) => x.id);
     const removed = configParts('removed', build(p)).map((x) => x.id);
-    for (const id of ['bridle', 'bridle-sleeve', 'bridle-tongue', 'sign-L', 'sign-R', 'handle-bar', 'handle-post-L', 'brake-knee-L', 'brake-backer-R', 'beam-F', 'kingpin', 'king-beam', 'steer-chain-L', 'axle-FL', 'wheel-FL']) expect(removed, id).toContain(id);
+    for (const id of ['bridle', 'bridle-sleeve', 'bridle-tongue', 'sign-L', 'sign-R', 'handle-bar', 'handle-post-L', 'brake-backer-R', 'beam-F', 'kingpin', 'king-beam', 'steer-chain-L', 'axle-FL', 'wheel-FL']) expect(removed, id).toContain(id);
     const gone = inst.filter((id) => !removed.includes(id));
     for (const id of ['brake-flap-L', 'brake-pivot-pin-R', 'brake-cord-L', 'brake-chock-L', 'front-light', 'rear-light', 'lamp-clip', 'rear-lamp-clip', 'seat-back-pad']) expect(gone, id).toContain(id);
     expect(gone.some((id) => /^(bridle|sign|handle)/.test(id))).toBe(false);

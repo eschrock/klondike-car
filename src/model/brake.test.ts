@@ -4,7 +4,7 @@
  * parameter extremes (the flaps follow the wheels, never a typed track).
  */
 import { describe, expect, it } from 'vitest';
-import { PARAM_DEFS, defaultParams, sanitizeParams, validateParams, type Params } from '../params';
+import { KNEE_MOUNT, PARAM_DEFS, defaultParams, sanitizeParams, validateParams, type Params } from '../params';
 import { makeCtx } from './build-utils';
 import { atPose, brakeGeometry, buildBrake, buildBrakeAt } from './brake';
 import { buildModel } from './index';
@@ -13,7 +13,8 @@ import { partsOverlap, worldAABB } from './bounds';
 import { SIGN_X_MAX_IN } from './body';
 import type { Part } from './types';
 
-const defaults = defaultParams();
+// The glued knees (the D-78 option): these tests are about the flap kit and the knees that stay; the removable knees (the default) are tested in d78.test.ts.
+const defaults = { ...defaultParams(), kneeMount: KNEE_MOUNT.fixed };
 const RAD = Math.PI / 180;
 const geomOf = (p: Params) => { const c = makeCtx(p); return { c, g: brakeGeometry(c.p, c.L) }; };
 const cross = (r: [number, number], f: [number, number]) => r[1] * f[0] - r[0] * f[1];
@@ -283,7 +284,7 @@ describe('step brake over the parameter extremes and old links', () => {
   it('old links with the D-55 drag-bar keys still load: the unknown keys are dropped and the sled builds like the defaults', () => {
     const old = { brakePedalReachIn: 9, brakePivotAboveShoeIn: 1.5, brakeBeamSizeIn: 2, brakeLatchPinDiameterIn: 0.375, brakeToeGuardHeightIn: 4, brakeSpringForceLbf: 9, brakeLinedShoeWidthIn: 2.5 };
     const s = sanitizeParams(old as unknown as Partial<Params>);
-    expect(s).toEqual(defaults);
+    expect(s).toEqual(defaultParams());
     for (const k of Object.keys(old)) expect(Object.keys(PARAM_DEFS), k).not.toContain(k);
   });
   it('the validator accepts the defaults', () => {

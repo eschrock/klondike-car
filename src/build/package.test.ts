@@ -202,7 +202,7 @@ describe('build book', () => {
   });
 });
 
-describe('build book: laminations, links, bulk parts and finishing touches', () => {
+describe('build book: laminations, links, pack-priced parts and finishing touches', () => {
   const html = (pkg.files.find((f) => f.name === 'build-book.html')!.data) as string;
   const bom = pkg.data.bom;
 
@@ -222,13 +222,12 @@ describe('build book: laminations, links, bulk parts and finishing touches', () 
     expect(html).toContain(esc(bom.sections.find((s) => s.id === 'fasteners')!.notes![0]));
   });
 
-  it('shows the bulk and touches sections with their subtotals, and the totals as build + bulk + touches', () => {
-    expect(html).toContain('Bulk parts (shop stock)');
+  it('shows the touches section with its subtotals, no bulk section, and the totals as build + touches', () => {
+    expect(html).not.toContain('Bulk parts');
     expect(html).toContain('Finishing touches subtotal');
-    expect(html).toContain('Bulk parts (shop stock) subtotal');
     expect(html).toContain(`Lights subtotal`);
     expect(html).toContain(esc(bom.totalsText));
-    expect(bom.totalsText).toBe(`Build ${usd(bom.coreUsd)} + bulk parts ${usd(bom.bulkUsd)} + finishing touches ${usd(bom.touchesUsd)} = ${usd(bom.totalUsd)}, excluding shipping and tax`);
+    expect(bom.totalsText).toBe(`Build ${usd(bom.coreUsd)} + finishing touches ${usd(bom.touchesUsd)} = ${usd(bom.totalUsd)}, excluding shipping and tax`);
     expect(html).toContain(esc(bom.shippingNote)); // the shipping orders are named where the total shows (no number invented)
     expect(html).toMatch(/Grand total \$[\d,.]+ \(excluding shipping and tax\)/);
     expect(html).toMatch(/need [\d.]+, \d+ packs? of \d+ at \$/);
@@ -238,7 +237,7 @@ describe('build book: laminations, links, bulk parts and finishing touches', () 
     const csv = pkg.files.find((f) => f.name === 'bom.csv')!.data as string;
     expect(csv).toContain(bom.totalsText);
     expect(csv).toContain('Finishing touches');
-    expect(csv).toContain('Bulk parts (shop stock)');
+    expect(csv).not.toContain('Bulk parts');
     expect(csv.split('\r\n')[0]).toContain('URL');
   });
 });

@@ -17,11 +17,10 @@
  * cost of the sled can be read with and without them. `touchGroupOfPart` says which parts belong, and every fastener or consumable that exists for one of them (the lamp-clip inserts and
  * screws, the hook-and-loop strips, the lash-plate screws) follows its part.
  *
- * Bulk parts (Eric, 2026-10-12): an item sold in packs much larger than the sled needs (screws, nuts, washers, inserts, T-nuts, Dominos, glass tape, sandpaper, cotter pins, plugs)
- * is priced by the PACK in its own section, even when it is used in the core build: "I would keep the rest and use them in my shop (and might already have them)". The rule is
- * `isBulkQty`: the build needs under `BULK_SHARE` of the smallest pack (`Price.packQty`), plus the explicit `BULK_ALWAYS` list. Bolts and anything bought one at a time stay in place.
- * Finishing-touches lines keep their own section whatever their pack size (so dropping the lights drops their cost), priced by the pack too.
- * `Bom.coreUsd + Bom.bulkUsd + Bom.touchesUsd = Bom.totalUsd`.
+ * Pack-priced parts: an item sold in packs much larger than the sled needs (screws, nuts, washers, inserts, T-nuts, Dominos, cotter pins, plugs) is priced by the whole PACK in
+ * its own section (Fasteners, or the touches for a touches fastener), with a note that the rest may already be in the shop (`isBulkQty`: the build needs under `BULK_SHARE` of the
+ * smallest pack). There is no separate bulk section any more (Eric, 2026-10-19: with the cost pass it held one $5 line). Sandpaper is a Consumables line.
+ * `Bom.coreUsd + Bom.touchesUsd = Bom.totalUsd`.
  *
  * Every fastener and hardware line carries a `materialNote` (exterior use: what it must be made of, by where it lives).
  */
@@ -75,7 +74,7 @@ export interface BomLine {
   /** Finishing-touches lines only: which group the line belongs to. */
   group?: TouchGroup;
   /**
-   * Priced by the pack (Bulk parts section, or a pack-priced line of the touches): `needed` is the quantity the build uses, `packQty` the pack size, `packs` the packs to buy and `packUsd` the cost of one pack.
+   * Priced by the pack (a pack-priced fastener, or a pack-priced line of the touches): `needed` is the quantity the build uses, `packQty` the pack size, `packs` the packs to buy and `packUsd` the cost of one pack.
    * `qty` is then the packs to buy and `unit` says "pack of N", so `extUsd = qty x unitUsd` still holds; `unitUsd` is the pack price.
    */
   needed?: number;
@@ -90,11 +89,9 @@ export interface BomLine {
   materialNote?: string;
 }
 
-/** A line is bulk when the build needs less than this share of the smallest pack. */
+/** A pack-priced line gets the "you may already have these" note when the build needs less than this share of the smallest pack. */
 export const BULK_SHARE = 0.5;
-/** Listed in the bulk section whatever the share (the lump-sum items): keys of the consumable lines. */
-export const BULK_ALWAYS: ReadonlySet<string> = new Set(['sandpaper']);
-/** True when `qty` pieces are under `BULK_SHARE` of the price's smallest pack (a price without a pack is never bulk). */
+/** True when `qty` pieces are under `BULK_SHARE` of the price's smallest pack (a price without a pack is never bulk): the line gets the "you may already have these" note. */
 export const isBulkQty = (price: Price, qty: number): boolean => !!price.packQty && !!price.packUsd && qty < BULK_SHARE * price.packQty;
 
 /**
@@ -172,14 +169,16 @@ export function touchGroupOfPart(x: Part | undefined): TouchGroup | undefined {
 /** Parts bought and priced as a line of their own in the touches section: the side ribs are NOT (they are cut from the oak offcuts and priced in Lumber). */
 export const TOUCH_PRICED_PARTS: ReadonlySet<string> = new Set(['front-light', 'rear-light', 'lamp-clip', 'rear-lamp-clip', 'seat-cushion', 'seat-back-pad', 'reflector', 'lash-point']);
 
-/** Id and title of the section that holds the touches, and of the section for pack-priced shop stock. */
+/** The Fasteners section note on pack-priced lines and shop stock. */
+export const FASTENER_PACK_NOTE = 'Some lines are sold in packs much larger than the sled needs, so they are priced by the whole pack; you may already have these in the shop, so keep the rest for the next project. The Dominos are shop stock you already own: listed at $0 so they are not forgotten.';
+
+/** Id and title of the section that holds the touches. */
 export const TOUCHES_SECTION = { id: 'touches', title: 'Finishing touches' } as const;
-export const BULK_SECTION = { id: 'bulk', title: 'Bulk parts (shop stock)' } as const;
 
 export interface BomGroupTotal { id: TouchGroup; title: string; subtotalUsd: number; estimateUsd: number }
 
 export interface BomSection {
-  id: 'lumber' | 'plywood' | 'metal' | 'purchased' | 'fasteners' | 'consumables' | 'bulk' | 'touches';
+  id: 'lumber' | 'plywood' | 'metal' | 'purchased' | 'fasteners' | 'consumables' | 'touches';
   title: string;
   lines: BomLine[];
   subtotalUsd: number;
@@ -203,10 +202,9 @@ export interface WeatherCompare {
   extremeUsd: number;
   /** extremeUsd - standardUsd: what Extreme weather adds. */
   deltaUsd: number;
-  /** Extreme minus Standard for each section, by section id ('lumber', 'plywood', 'metal', 'purchased', 'fasteners', 'consumables', 'bulk', 'touches'). */
+  /** Extreme minus Standard for each section, by section id ('lumber', 'plywood', 'metal', 'purchased', 'fasteners', 'consumables', 'touches'). */
   deltaBySection: Record<string, number>;
   deltaCoreUsd: number;
-  deltaBulkUsd: number;
   deltaTouchesUsd: number;
   /** Empty-sled mass (lb) under each spec, and Extreme minus Standard (the thin sheet is the only part of the weather spec the model reads). */
   standardLb: number;
@@ -228,18 +226,15 @@ export interface Bom {
   estimateUsd: number;
   /** estimateUsd / totalUsd. */
   estimateShare: number;
-  /** The core sections (lumber to consumables), the bulk-parts section and the touches section: `coreUsd + bulkUsd + touchesUsd = totalUsd`. */
+  /** The core sections (lumber to consumables) and the touches section: `coreUsd + touchesUsd = totalUsd`. */
   coreUsd: number;
-  bulkUsd: number;
   touchesUsd: number;
   /** The estimated part of each, and its share (0 to 1) of that subtotal. */
   coreEstimateUsd: number;
-  bulkEstimateUsd: number;
   touchesEstimateUsd: number;
   coreEstimateShare: number;
-  bulkEstimateShare: number;
   touchesEstimateShare: number;
-  /** "Build $2,100.00 + bulk parts $190.00 + finishing touches $240.00 = $2,530.00, excluding shipping and tax" */
+  /** "Build $2,100.00 + finishing touches $240.00 = $2,340.00, excluding shipping and tax" */
   totalsText: string;
   /** The vendors on this BOM that ship the order (so freight is extra), in `SHIPPING_VENDORS` order. Empty when none is on the list. */
   shippingVendors: string[];
@@ -315,9 +310,9 @@ function section(id: BomSection['id'], title: string, lines: BomLine[], extra: P
 export const usdText = (v: number): string => `${v < 0 ? '-' : ''}$${Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 /** The text every total carries: shipping and sales tax are not in any price. */
 export const SHIPPING_TAX_PHRASE = 'excluding shipping and tax';
-/** "Build $X + bulk parts $B + finishing touches $Y = $Z, excluding shipping and tax". */
-export const totalsLine = (core: number, bulk: number, touches: number, total: number): string =>
-  `Build ${usdText(core)} + bulk parts ${usdText(bulk)} + finishing touches ${usdText(touches)} = ${usdText(total)}, ${SHIPPING_TAX_PHRASE}`;
+/** "Build $X + finishing touches $Y = $Z, excluding shipping and tax". */
+export const totalsLine = (core: number, touches: number, total: number): string =>
+  `Build ${usdText(core)} + finishing touches ${usdText(touches)} = ${usdText(total)}, ${SHIPPING_TAX_PHRASE}`;
 /**
  * Online or mail-order sellers on the BOM whose orders ship (freight is extra, and no shipping figure was read for any of them). Bicycle Warehouse ships unless the lights are bought in
  * its store; the others have no walk-in counter in Atlanta. Local pickups (Peach State Lumber, Harbor Freight, Home Depot, Ace, Rockler) are not listed.
@@ -775,7 +770,7 @@ export function bom(parts: Part[], p: Params, opts: BomOptions = {}): Bom {
     configurable: true,
     get(): WeatherCompare {
       if (cache) return cache;
-      if (opts.noCompare) return (cache = { computed: false, activeSpec: b.spec, standardUsd: b.spec === 'standard' ? b.totalUsd : NaN, extremeUsd: b.spec === 'extreme' ? b.totalUsd : NaN, deltaUsd: 0, deltaBySection: {}, deltaCoreUsd: 0, deltaBulkUsd: 0, deltaTouchesUsd: 0, standardLb: NaN, extremeLb: NaN, deltaLb: 0, thinSheetStandard: '', thinSheetExtreme: '' });
+      if (opts.noCompare) return (cache = { computed: false, activeSpec: b.spec, standardUsd: b.spec === 'standard' ? b.totalUsd : NaN, extremeUsd: b.spec === 'extreme' ? b.totalUsd : NaN, deltaUsd: 0, deltaBySection: {}, deltaCoreUsd: 0, deltaTouchesUsd: 0, standardLb: NaN, extremeLb: NaN, deltaLb: 0, thinSheetStandard: '', thinSheetExtreme: '' });
       const otherP: Params = { ...p, weatherSpec: b.spec === 'standard' ? WEATHER_SPEC.extreme : WEATHER_SPEC.standard };
       const sameSheet = thinSheet(otherP).key === thinSheet(p).key;
       const otherParts = sameSheet ? parts : buildModel(otherP, EMPTY_VIEW);
@@ -787,7 +782,7 @@ export function bom(parts: Part[], p: Params, opts: BomOptions = {}): Bom {
       for (const sec of ext.sections) deltaBySection[sec.id] = money(sec.subtotalUsd - (std.sections.find((q) => q.id === sec.id)?.subtotalUsd ?? 0));
       return (cache = {
         computed: true, activeSpec: b.spec, standardUsd: std.totalUsd, extremeUsd: ext.totalUsd, deltaUsd: money(ext.totalUsd - std.totalUsd), deltaBySection,
-        deltaCoreUsd: money(ext.coreUsd - std.coreUsd), deltaBulkUsd: money(ext.bulkUsd - std.bulkUsd), deltaTouchesUsd: money(ext.touchesUsd - std.touchesUsd),
+        deltaCoreUsd: money(ext.coreUsd - std.coreUsd), deltaTouchesUsd: money(ext.touchesUsd - std.touchesUsd),
         standardLb: stdLb, extremeLb: extLb, deltaLb: extLb - stdLb, thinSheetStandard: thinSheet({ ...p, weatherSpec: WEATHER_SPEC.standard }).name, thinSheetExtreme: thinSheet({ ...p, weatherSpec: WEATHER_SPEC.extreme }).name,
       });
     },
@@ -979,10 +974,9 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     else noteLines.push(line('Consumables', item.key, x.items[0].label, x.items[0].qty, item.price!, { vendor: item.price!.source, notes: joinNotes(item.price!.url ? `Price: ${item.price!.note}.` : undefined, x.note) }));
   }
   const familyOrder = (l: string): number => (/^Domino/.test(l) ? 7 : /insert/i.test(l) ? 4 : /bolt|cap screw/.test(l) ? 1 : /nut/.test(l) ? 2 : /washer/.test(l) ? 3 : /Thumb/.test(l) ? 4 : /collar|cotter|plug|rod/.test(l) ? 6 : 0);
-  const bulkLines: BomLine[] = [];
   /**
-   * One fastener line. An item Bolt Depot sells by the piece (`Price.eachUsd`) is priced per piece, in place, when that is no dearer than the whole packs; otherwise pack-priced: bulk
-   * section (or the touches section for a touches fastener) when the build needs under half a pack, else whole packs in place.
+   * One fastener line, in Fasteners (or the touches section for a touches fastener). An item Bolt Depot sells by the piece (`Price.eachUsd`) is priced per piece when that is no
+   * dearer than the whole packs; otherwise by the whole pack, with the "you may already have these" note when the build needs under half a pack.
    */
   const fastenerLine = (label: string, qty: number, group?: TouchGroup): BomLine => {
     const price = fastenerPrice(label, spec);
@@ -991,15 +985,15 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     const description = isDomino ? `${label}, beech Domino (shop stock${std ? '' : ', epoxied in'})` : label;
     const extra: Partial<BomLine> = { vendor: price.url ? price.source : isDomino ? 'Festool dealer' : 'McMaster-Carr / Fastenal', materialNote: fastenerMaterialNote(label, [...(fastOn.get(label) ?? [])], spec), ...(group ? { group } : {}) };
     const sectionTitle = group ? TOUCHES_SECTION.title : 'Fasteners';
-    // Shop stock (D-79): a $0 line in the bulk section (or the touches section), so it is listed and not bought.
-    if (price.basis === 'owned') return line(group ? sectionTitle : BULK_SECTION.title, label, description, qty, price, extra);
+    // Shop stock (D-79): a $0 line, so it is listed and not bought.
+    if (price.basis === 'owned') return line(sectionTitle, label, description, qty, price, extra);
     const packCost = price.packQty && price.packUsd ? Math.max(1, Math.ceil(qty / price.packQty - 1e-9)) * price.packUsd : Infinity;
     if (price.eachUsd !== undefined && qty * price.eachUsd <= packCost + 1e-9) {
       const { packQty: _q, packUsd: _u, packLabel: _l, ...rest } = price;
       const single: Price = { ...rest, usd: price.eachUsd, note: `${price.note ?? ''} Bought by the piece: ${qty} x ${usdText(price.eachUsd)}${packCost < Infinity ? ` against ${usdText(packCost)} for the bag` : ''}.`.trim() };
       return line(sectionTitle, label, description, qty, single, { ...extra, notes: single.note });
     }
-    if (isBulkQty(price, qty)) return packLine(group ? sectionTitle : BULK_SECTION.title, label, description, qty, price, extra);
+    if (isBulkQty(price, qty)) return packLine(sectionTitle, label, description, qty, price, extra);
     // Sold in packs and the build needs half a pack or more: still whole packs (the real purchase), in place.
     if (price.packQty && price.packUsd) return packLine(sectionTitle, label, description, qty, price, extra, false);
     return line(sectionTitle, label, description, qty, price, { ...extra, ...(price.note ? { notes: price.note } : {}) });
@@ -1011,8 +1005,7 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     if (l.notes) l.notes = restate(l.notes);
     if (l.alternatives) l.alternatives = l.alternatives.map((a) => (a.note ? { ...a, note: restate(a.note) } : a));
   }
-  const fasteners: BomLine[] = fastenerLines.filter((l) => l.section === 'Fasteners');
-  bulkLines.push(...fastenerLines.filter((l) => l.section !== 'Fasteners'));
+  const fasteners: BomLine[] = fastenerLines;
   const touchFasteners: BomLine[] = [];
   for (const { label, group, qty } of [...touchFast.values()].sort((a, b) => familyOrder(a.label) - familyOrder(b.label) || a.label.localeCompare(b.label))) {
     touchFasteners.push(fastenerLine(label, qty, group));
@@ -1121,8 +1114,7 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     consumables.push(line('Consumables', k.key === 'paint-marker' ? 'paint-marker' : `${k.key}-${bl.unit}`, desc, bl.qty, price, { vendor: price.source, notes: joinNotes(price.url ? `Price: ${price.note}.` : undefined, bl.note) }));
   }
   // Sandpaper and the supplies lot are shop stock (D-79): $0 lines so they are not forgotten.
-  if (BULK_ALWAYS.has('sandpaper')) bulkLines.push(line(BULK_SECTION.title, 'sandpaper', 'Sandpaper, lump sum', 1, FINISH_PRICE.sandpaper, { vendor: FINISH_PRICE.sandpaper.source }));
-  else consumables.push(line('Consumables', 'sandpaper', 'Sandpaper, lump sum', 1, FINISH_PRICE.sandpaper, { vendor: FINISH_PRICE.sandpaper.source }));
+  consumables.push(line('Consumables', 'sandpaper', 'Sandpaper, lump sum', 1, FINISH_PRICE.sandpaper, { vendor: FINISH_PRICE.sandpaper.source }));
   consumables.push(line('Consumables', 'supplies', 'Brushes, rollers, cups, gloves, solvent', 1, FINISH_PRICE.supplies, { vendor: FINISH_PRICE.supplies.source }));
 
   // Finishing touches, after the core sections: by group (lights, seat comfort, reflectors, tie-downs), the groups in a fixed order.
@@ -1142,15 +1134,10 @@ function bomForSpec(parts: Part[], p: Params): Bom {
     section('plywood', 'Plywood', plywood),
     section('metal', 'Metal stock', metal),
     section('purchased', 'Purchased parts', purchased),
-    section('fasteners', 'Fasteners', fasteners, { notes: [std ? FASTENER_MATERIAL_NOTE_STANDARD : FASTENER_MATERIAL_NOTE] }),
+    section('fasteners', 'Fasteners', fasteners, { notes: [std ? FASTENER_MATERIAL_NOTE_STANDARD : FASTENER_MATERIAL_NOTE, FASTENER_PACK_NOTE] }),
     section('consumables', 'Consumables', consumables),
   ];
-  const bulk = section(BULK_SECTION.id, BULK_SECTION.title, bulkLines, {
-    notes: [
-      'Sold in packs much larger than the sled needs, so each line is priced by the whole pack. You may already have these in the shop; keep the rest for the next project. The Dominos and the sandpaper are shop stock Eric already owns: they are listed at $0 so they are not forgotten. Packs and prices are from the price research (2026-10-12 and 2026-10-14) where a line shows a vendor link; the rest are estimates. Material requirements per line are in the Material column; the reason is in the Fasteners note.',
-    ],
-  });
-  const sections: BomSection[] = [...core, bulk, touches];
+  const sections: BomSection[] = [...core, touches];
   // Safety net: the BOM is printed in the book, so no decision id (D-71), report tag (S7) or part key (brake-knee) may be left in its running text (some of it comes from the model's own part notes).
   const keyWords = shopKeys(parts);
   for (const sec of sections) {
@@ -1165,11 +1152,10 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   }
   const coreUsd = money(core.reduce((a, s) => a + s.subtotalUsd, 0));
   const coreEstimateUsd = money(core.reduce((a, s) => a + s.estimateUsd, 0));
-  const bulkUsd = bulk.subtotalUsd, bulkEstimateUsd = bulk.estimateUsd;
   const touchesUsd = touches.subtotalUsd, touchesEstimateUsd = touches.estimateUsd;
-  const totalUsd = money(coreUsd + bulkUsd + touchesUsd);
-  const estimateUsd = money(coreEstimateUsd + bulkEstimateUsd + touchesEstimateUsd);
-  const totalsText = totalsLine(coreUsd, bulkUsd, touchesUsd, totalUsd);
+  const totalUsd = money(coreUsd + touchesUsd);
+  const estimateUsd = money(coreEstimateUsd + touchesEstimateUsd);
+  const totalsText = totalsLine(coreUsd, touchesUsd, totalUsd);
   const lineVendors = sections.flatMap((x) => x.lines).map((l) => l.vendor ?? '');
   const shippingVendors = SHIPPING_VENDORS.filter((v) => lineVendors.some((x) => v.match.test(x))).map((v) => v.name);
   const shippingNote = shippingNoteText(shippingVendors);
@@ -1185,15 +1171,14 @@ function bomForSpec(parts: Part[], p: Params): Bom {
   }
   const share = (e: number, t: number): number => (t ? e / t : 0);
   rows.push(['Total', '', 'Build (core sections)', '', '', '', coreUsd.toFixed(2), '', '', `${(100 * share(coreEstimateUsd, coreUsd)).toFixed(0)}% estimates`]);
-  rows.push(['Total', '', 'Bulk parts (shop stock)', '', '', '', bulkUsd.toFixed(2), '', '', `${(100 * share(bulkEstimateUsd, bulkUsd)).toFixed(0)}% estimates`]);
   rows.push(['Total', '', 'Finishing touches', '', '', '', touchesUsd.toFixed(2), '', '', `${(100 * share(touchesEstimateUsd, touchesUsd)).toFixed(0)}% estimates`]);
   rows.push(['Total', '', 'Grand total', '', '', '', totalUsd.toFixed(2), '', '', `${totalsText}; ${(100 * share(estimateUsd, totalUsd)).toFixed(0)}% estimates`]);
   rows.push(['Total', '', 'Shipping and tax', '', '', '', '', '', '', shippingNote]);
   rows.push(['Total', '', 'Weather spec', '', '', '', '', '', '', `${std ? 'Standard (garage-kept)' : 'Extreme weather (stored outside, near salt)'}; thin sheet: ${thin.name}`]);
 
   return {
-    spec, thinSheetName: thin.name, sections, totalUsd, estimateUsd, estimateShare: share(estimateUsd, totalUsd), coreUsd, bulkUsd, touchesUsd, coreEstimateUsd, bulkEstimateUsd, touchesEstimateUsd,
-    coreEstimateShare: share(coreEstimateUsd, coreUsd), bulkEstimateShare: share(bulkEstimateUsd, bulkUsd), touchesEstimateShare: share(touchesEstimateUsd, touchesUsd), totalsText, shippingVendors, shippingNote, jointCounts, unpriced: [...new Set(unpriced)], decisions,
+    spec, thinSheetName: thin.name, sections, totalUsd, estimateUsd, estimateShare: share(estimateUsd, totalUsd), coreUsd, touchesUsd, coreEstimateUsd, touchesEstimateUsd,
+    coreEstimateShare: share(coreEstimateUsd, coreUsd), touchesEstimateShare: share(touchesEstimateUsd, touchesUsd), totalsText, shippingVendors, shippingNote, jointCounts, unpriced: [...new Set(unpriced)], decisions,
     consumables: { epoxyFlOz, finishEpoxyFlOz, closeEpoxyFlOz, glueEpoxyFlOz: glueEpoxyTotal, resinFlOz, sealedFt2, oakFt2, plyFt2, glueJoints, tapeFt }, unresolved, wholeBoardsExtraUsd: 0, lumberAllowanceUsd: money(lumberAllowanceUsd), lumberAltUsd: money(lumberAltUsd), csv: toCsv(rows),
   } as Bom; // `weatherCompare` is added by `bom` (a lazy getter)
 }

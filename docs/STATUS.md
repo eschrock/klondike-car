@@ -4,8 +4,9 @@ Where the design stands (2026-10-14). The sled itself is in [DESIGN.md](../DESIG
 
 ## Now
 - The design, analysis and build outputs are complete and deployed to GitHub Pages on every push to `main` once the tests pass.
-- **Cost pass done (D-79 to D-83, 2026-10-14).** Standard BOM **$1,377** (was $2,303), Extreme **$2,271** (was $3,119), excluding shipping and tax; estimates are 3.5% of the Standard total. Standard empty mass **122.1 lb**, 54 engineering rows with no failure (turn radius marginal at 0.97), riders safe **50 to 230 lb**, green **50 to 210 lb** (the grab-board row, D-84), cargo capacity **286 lb**. The Extreme spec's 6 mm okoume passes the side-web row (0.44).
-- Optional **removable brake knees** (D-78): same empty mass; +$34 in the BOM (tool pouch and anti-seize, estimates).
+- **Cost pass done (D-79 to D-83, 2026-10-14).** With glued knees: Standard BOM **$1,377** (was $2,303), Extreme **$2,271** (was $3,119), excluding shipping and tax (removable knees, now the default, are in the next item); estimates are 3.5% of the Standard total. Standard empty mass **122.1 lb**, 54 engineering rows with no failure (turn radius marginal at 0.97), riders safe **50 to 230 lb**, green **50 to 210 lb** (the grab-board row, D-84), cargo capacity **286 lb**. The Extreme spec's 6 mm okoume passes the side-web row (0.44).
+- **Removable brake knees are the default** (D-78, 2026-10-19; glued knees are the option): same empty mass; Standard BOM **$1,411**, Extreme **$2,309** (+$34: the ratchet-and-wrench pouch and anti-seize, estimates); cargo capacity **277 lb** (the dry knee's brake-mount row; 286 lb glued), rider ranges unchanged. The BOM has no separate bulk section any more: pack-priced parts sit in Fasteners and sandpaper in Consumables.
+- **Briefing book** for the troop committee (Build mode, Download briefing book; `?briefing` after the app address previews it): purpose, two pictures, cost by group with the donated lumber and plywood subtotaled, and a troop budget on the rest.
 - Waiting on Eric: the open choices below, measured Tacoma bed dimensions (Q-1), and the yard calls in the open items.
 
 ## Open items and parked ideas

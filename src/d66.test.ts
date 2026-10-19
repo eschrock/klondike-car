@@ -98,7 +98,7 @@ describe('D-66 the numbers that moved', () => {
     const cap = cargoCapacity(defaults);
     expect(cap.capacityLb!).toBeGreaterThanOrEqual(200);
     expect(cap.capacityLb!).toBeLessThan(300); // 254 lb with the solid rod (223 lb with the D-71 tube, 274 lb at 3/4 in)
-    expect(cap.limiter!.id).toBe('rear-beam-seat'); // D-83: the 2 in clamp plates raise the groove bearing, so the rear beam seat limits; D-71 solid rod: bearing-groove (the tube's axle-stress limited it); the tip row no longer limits (it did at 226 lb with the 40 deg limit)
+    expect(cap.limiter!.id).toBe('brake-mount'); // D-78 removable knees (the default): the dry knee limits; glued knees: 'rear-beam-seat'. D-83: the 2 in clamp plates raise the groove bearing, so the rear beam seat limits; D-71 solid rod: bearing-groove (the tube's axle-stress limited it); the tip row no longer limits (it did at 226 lb with the 40 deg limit)
     expect(cap.statusAtPayload).not.toBe('fail');
     expect(cap.cargoFailsAtPayload).toEqual([]);
   });

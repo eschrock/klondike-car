@@ -3,13 +3,14 @@
  * model options, so the picture and the fit agree. The signs and the oak tongue are NOT removable (Eric).
  */
 import { describe, expect, it } from 'vitest';
-import { defaultParams } from '../params';
+import { KNEE_MOUNT, defaultParams } from '../params';
 import { buildModel } from './index';
 import { configParts } from '../truck/fit';
 import { BRAKE_KIT_RE, TRANSPORT_VIEW, isBrakeKit, isChockKit, isLightKit } from './removable';
 import { totalMass } from './mass';
 
-const p = defaultParams();
+// The glued knees (the D-78 option): these tests are about the flap kit and the knees that stay; the removable knees (the default) are tested in d78.test.ts.
+const p = { ...defaultParams(), kneeMount: KNEE_MOUNT.fixed };
 const ids = (v: Parameters<typeof buildModel>[1]) => buildModel(p, { rider: 'none', cargo: false, ...v }).map((x) => x.id);
 const all = ids({});
 

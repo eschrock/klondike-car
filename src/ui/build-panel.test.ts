@@ -296,7 +296,7 @@ describe('part chips (Eric 2026-10-12)', () => {
 
   it('pinFocus keeps the pinned part on screen even when its step comes later', () => {
     const steps = d.steps;
-    const last = steps[steps.length - 1];
+    const last = [...steps].reverse().find((s) => s.partIds.length)!; // the last step that adds parts (the removable-knee refit step adds none)
     const id = last.partIds[0];
     const early = steps.find((s) => s.n > 0 && s.partIds.length)!;
     const f = stepFocus(steps, early.n, true)!;

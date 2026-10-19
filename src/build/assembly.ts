@@ -1817,7 +1817,7 @@ const TEMPLATES: Template[] = [
             rm ? 'Check each plate is bedded flush in its recess and its 4 holes line up before the bolts go in.' : 'Check each plate lies flush in its recess and its 4 holes line up before the bolts go in.',
             rm ? `No glue on the leg. Hold each nut with the wrench from inside the frame (the nuts face up on the backing plate) and turn the bolt with the ratchet and the ${sock}" socket: ${kneeTighten(c.p)}. Go a little at a time, bolt to bolt in turn.` : 'Glue on the leg against the rail and chine outer face; clamp, bolt, wipe the squeeze-out.',
           ], ['rail-L', 'rail-R']),
-          ...(rm ? [I('Mark each knee to its side with tape (L or R, and the bolt order), so it goes back where it came from.')] : [I('Leave the knees 24 h before the wheel dry fit (next step) loads them.')]),
+          ...(rm ? [I('Mark each knee to its side with tape (L or R, and which hole each bolt came out of), so it goes back where it came from.')] : [I('Leave the knees 24 h before the wheel dry fit (next step) loads them.')]),
         ],
         checks: rm
           ? ['Knee tops level with each other', 'Knee clears the tire front by the designed margin (check at the wheel dry fit)', 'Each knee seats flat on the rail and the chine band with no gap', 'Every nylock on and tightened to snug plus a quarter turn; the bolt holes sealed']
