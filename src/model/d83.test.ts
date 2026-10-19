@@ -53,7 +53,7 @@ describe('D-80: the thin sheet follows the weather (6 mm)', () => {
       for (const id of ['side-web', 'side-lateral']) {
         const c = cs.find((q) => q.id === id)!;
         expect(c.status, `${name} ${id}`).toBe('pass');
-        expect(c.util!, `${name} ${id}`).toBeLessThan(0.7);
+        expect(c.util!, `${name} ${id}`).toBeLessThan(0.75); // D-85: the Extreme side-lateral row reads 0.71 (0.68 before; the box rib sits farther aft)
       }
     }
   });

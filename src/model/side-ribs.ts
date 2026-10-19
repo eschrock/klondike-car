@@ -1,19 +1,20 @@
 /**
  * Side ribs and the tie-downs on them (D-76; docs/studies/side-stiffness-study.md, option E with option D at the rear station).
  *
- * Three oak ribs per side stand on the inside face of the sandwich side, glued to the web between the inner chine and gunwale bands and to the
+ * Three oak ribs per side (four with the rear rib, D-85) stand on the inside face of the sandwich side, glued to the web between the inner chine and gunwale bands and to the
  * inner bands, and stand `sideRibDepthIn` proud of the inner band faces. Each widens at the top to a head `sideRibHeadLengthIn` long, as tall as the
  * gunwale band and cut to the sheer, and the head carries a bolt-on cargo D-ring (D-83: a 2-hole strap bracket), through-bolted with two 1/4-20 button-head
  * bolts (head, inner band, web, outer band; a fender washer outside, a nylock nut on the bracket inside). The bases tie the side to the structure:
  *   1. the box rib (E1): an oak spacer epoxied between it and the storage box side, near the box's fore corner (the box is its base, study option D);
+ *   (D-85: a fourth, the rear rib, stands beside the flag tube with the same spacer. The box rib moved aft to match. The sign's four knobs screw into these two ribs.)
  *   2. the mid rib (E2): a knee on the joist nearest `sideRibMidXIn`, screwed down through the deck into it;
  *   3. the bow post (E3): a knee on the member nearest `sideRibFrontXIn` (the king beam at the defaults; the chain joist is the fallback, a verify item).
  * Between the bands the rib's back sits on a filler of band strip (it fills the band thickness down to the web), so the rib blank is one 3/4 in board.
  * They replace the six screwed lash doublers (D-41, D-47). Everything here is bandsawn from 4/4 offcuts and epoxied in after the deck is in.
  */
-import { STORAGE_LOCATION, WEATHER_SPEC } from '../params';
-import { STEP, box, frac16 as frac, SIDES, stainless, dRingMat, type Ctx } from './build-utils';
-import { extPart, frameMat } from './body';
+import { STORAGE_LOCATION, WEATHER_SPEC, thinSheet } from '../params';
+import { STEP, box, frac16 as frac, SIDES, SIGN_PROUD_IN, stainless, dRingMat, insertMat, INSERT_DRILL_IN, type Ctx } from './build-utils';
+import { extPart, frameMat, signBackerPlan, signKnobPlan, signPlacement } from './body';
 import { transformPoint } from './bounds';
 import { joistId } from './frame';
 import { innerHalfWidth, sideSlopeAt, sideTopAt, type Layout } from './layout';
@@ -51,8 +52,8 @@ const KNEE_CBORE_DIA_IN = 0.375;
 export type RibKind = 'box' | 'knee';
 
 export interface RibStation {
-  /** 1 = box rib (E1), 2 = mid rib (E2), 3 = bow post (E3). */
-  n: 1 | 2 | 3;
+  /** 1 = box rib (E1), 2 = mid rib (E2), 3 = bow post (E3), 4 = rear rib (E0, D-85: beside the flag tube, behind the sign's rear knobs). */
+  n: 1 | 2 | 3 | 4;
   kind: RibKind;
   x: number;
   /** The member under the knee (joist id or 'king-beam') and its fore-aft thickness; null for the box rib. */
@@ -112,10 +113,10 @@ function boxBeside(p: Params, L: Layout, x: number): boolean {
   return x > g.x0 + 1 && x < g.x1 && innerHalfWidth(L, x) - p.sideRibDepthIn - g.hw > 0.25;
 }
 
-/** The three rib stations (D-76). The box rib falls back to a knee on the nearest joist when there is no rear box beside it (an under-seat box). */
+/** The rib stations (D-76, D-85): box, mid, bow post, and the rear rib when a rear box stands beside it. The box rib falls back to a knee on the nearest joist when there is no rear box beside it (an under-seat box). */
 export function sideRibStations(p: Params, L: Layout): RibStation[] {
   const g = storageGeometry(p, L);
-  const make = (n: 1 | 2 | 3, kind: RibKind, x: number, member: string | null, memberT: number, memberX: number | null = null): RibStation => ({
+  const make = (n: 1 | 2 | 3 | 4, kind: RibKind, x: number, member: string | null, memberT: number, memberX: number | null = null): RibStation => ({
     n, kind, x, member, memberT, memberX, top: sideTopAt(L, x), h: sideTopAt(L, x) - L.deckTop, yIn: innerHalfWidth(L, x), sideT: L.side,
     dTurn: (L.turnIn(x + 0.25) - L.turnIn(x - 0.25)) / 0.5, slope: sideSlopeAt(L, x),
   });
@@ -132,6 +133,9 @@ export function sideRibStations(p: Params, L: Layout): RibStation[] {
   out.push(make(2, 'knee', kneeRibX(p, L, m2.x, m2.t), m2.id, m2.t, m2.x));
   const m3 = nearestMember(L, p.sideRibFrontXIn);
   out.push(make(3, 'knee', kneeRibX(p, L, m3.x, m3.t), m3.id, m3.t, m3.x));
+  // D-85: the rear rib, a box rib with the same spacer tie, a box-aft-end inset ahead of the flag tube's blocks. Last in the list so the other three keep their indexes; none in an under-seat design.
+  const xr = g.x0 + p.sideRibRearInsetIn;
+  if (boxBeside(p, L, xr) && x1 - xr >= p.sideRibHeadLengthIn + 0.25) out.push(make(4, 'box', xr, null, 0)); // heads at least 1/4 in apart (a short box)
   return out;
 }
 
@@ -169,10 +173,21 @@ export function kneeScrews(p: Params, L: Layout) {
 /** A framing member in shop words: 'joist-5' -> 'joist 5', 'king-beam' -> 'the king beam'. */
 const memberText = (id: string | null): string => (id === 'king-beam' ? 'the king beam' : id ? id.replace('-', ' ') : 'the deck');
 
-const RIB_PART_NO: Record<1 | 2 | 3, string> = { 1: 'side-rib-box', 2: 'side-rib', 3: 'side-rib-bow' };
-const RIB_NAME: Record<1 | 2 | 3, string> = { 1: 'box rib', 2: 'mid rib', 3: 'bow post' };
+const RIB_PART_NO: Record<1 | 2 | 3 | 4, string> = { 1: 'side-rib-box', 2: 'side-rib', 3: 'side-rib-bow', 4: 'side-rib-rear' };
+const RIB_NAME: Record<1 | 2 | 3 | 4, string> = { 1: 'box rib', 2: 'mid rib', 3: 'bow post', 4: 'rear rib' };
 /** The role of each station in a part name: "Rib knee, bow post, left" (so the cut list and the drawings group and read by role and side). */
-const RIB_ROLE: Record<1 | 2 | 3, string> = { 1: 'box', 2: 'mid', 3: 'bow post' };
+const RIB_ROLE: Record<1 | 2 | 3 | 4, string> = { 1: 'box', 2: 'mid', 3: 'bow post', 4: 'rear' };
+
+/** D-85: true when the sign's knobs screw into the box rib and the rear rib (a rear box beside both); otherwise the sign keeps its own two backing strips (an under-seat design). */
+export function signKnobsInRibs(p: Params, L: Layout): boolean {
+  const st = sideRibStations(p, L);
+  return st.some((q) => q.n === 1 && q.kind === 'box') && st.some((q) => q.n === 4);
+}
+
+/** D-85: the sign backing strips go when the knobs are in the ribs. Called on the whole part list after the body and the ribs are built. */
+export function dropSignBackers(p: Params, L: Layout, parts: Part[]): Part[] {
+  return signKnobsInRibs(p, L) ? parts.filter((x) => !x.id.startsWith('sign-backer-')) : parts;
+}
 
 export function buildSideRibs(ctx: Ctx): Part[] {
   const { p, L } = ctx;
@@ -181,7 +196,7 @@ export function buildSideRibs(ctx: Ctx): Part[] {
   const w = p.sideRibWidthIn, dep = p.sideRibDepthIn, hl = p.sideRibHeadLengthIn, band = L.sideBand;
   const bolt = lashBoltLength(p);
   const ks = kneeScrews(p, L);
-  const nRings = Math.max(0, Math.min(3, Math.round(p.lashPointsPerSide)));
+  const nRings = Math.max(0, Math.min(4, Math.round(p.lashPointsPerSide)));
   const zChineTop = L.chineBot + L.chineH;
   for (const { s, tag } of SIDES) {
     for (const st of stations) {
@@ -212,9 +227,9 @@ export function buildSideRibs(ctx: Ctx): Part[] {
       for (let i = 0; i < outline.length; i++) { const [a1, b1] = outline[i], [a2, b2] = outline[(i + 1) % outline.length]; backArea += a1 * b2 - a2 * b1; }
       const finishCredit = -(Math.abs(backArea) / 2 / 144) * p.finishLbPerFt2;
       const holeAt: Vec3[] = [-1, 1].map((a): Vec3 => [a * LASH_HOLE_DX_IN, topAt(0) - L.railBand / 2, 0]);
-      const hasRing = st.n === 2 ? nRings >= 1 : st.n === 1 ? nRings >= 2 : nRings >= 3;
+      const hasRing = st.n === 2 ? nRings >= 1 : st.n === 1 ? nRings >= 2 : st.n === 3 ? nRings >= 3 : nRings >= 4;
       const baseText = st.kind === 'box'
-        ? 'Its base is the storage box: the box tie spacer is epoxied between its inner face and the box side near the fore corner (study option D).'
+        ? `Its base is the storage box: the box tie spacer is epoxied between its inner face and the box side${st.n === 4 ? ' near the aft corner, just ahead of the flag tube blocks' : ' near the fore corner (study option D)'}.${signKnobsInRibs(p, L) ? ' It also carries two of the sign\'s four knob inserts (D-85): bore them from its back, through the filler, with the web as the template, at the sign-fitting step.' : ''}`
         : `A knee is glued to its inner face and to the deck and screwed down through the deck into ${memberText(st.member)}.`;
       const rib = extPart(ctx, {
         id: ribId, partNo: RIB_PART_NO[st.n], name: `Side rib, ${RIB_ROLE[st.n]}, ${s > 0 ? 'left' : 'right'}`, group: 'body', mat: 'oak', step: STEP.seatStorage, grain: 'y', fab: 'bandsaw',
@@ -232,9 +247,9 @@ export function buildSideRibs(ctx: Ctx): Part[] {
       if (st.kind === 'box') {
         const tg = boxTieGeometry(p, L, st);
         const tie = box(ctx, {
-          id: `box-tie-${tag}`, partNo: 'box-tie', name: `Box tie spacer, ${s > 0 ? 'left' : 'right'}`, group: 'body', mat: 'oak', step: STEP.seatStorage, grain: 'z', fab: 'bandsaw',
+          id: `box-tie-${tag}${st.n === 4 ? '4' : ''}`, partNo: 'box-tie', name: `Box tie spacer, ${st.n === 4 ? 'rear, ' : ''}${s > 0 ? 'left' : 'right'}`, group: 'body', mat: 'oak', step: STEP.seatStorage, grain: 'z', fab: 'bandsaw',
           size: [p.boxTieWidthIn, tg.yRib - tg.yBox, tg.z1 - tg.z0], center: [st.x, s * ((tg.yRib + tg.yBox) / 2), (tg.z0 + tg.z1) / 2],
-          notes: `D-76 (study option D): an oak spacer ${frac(p.boxTieWidthIn)}" x ${frac(tg.yRib - tg.yBox)}" x ${frac(tg.z1 - tg.z0)}" (grain up) filling the gap between the box rib and the storage box side, ${frac(tg.z1 - L.deckTop)}" above the deck at its top: 1/8" under the coaming, so it is glued to the box side and never to the lid frame, which moves. Epoxy both faces when the box goes in (thickened epoxy takes up the fit). It makes the box the rib's base: a push on the gunwale here goes into the box's fore corner, in the plane of the box end.`,
+          notes: `D-76 (study option D): an oak spacer ${frac(p.boxTieWidthIn)}" x ${frac(tg.yRib - tg.yBox)}" x ${frac(tg.z1 - tg.z0)}" (grain up) filling the gap between the box rib and the storage box side, ${frac(tg.z1 - L.deckTop)}" above the deck at its top: 1/8" under the coaming, so it is glued to the box side and never to the lid frame, which moves. Epoxy both faces when the box goes in (thickened epoxy takes up the fit). It makes the box the rib's base: a push on the gunwale here goes into the box's fore corner, in the plane of the box end.${st.n === 4 ? ' (The rear rib\'s spacer does the same at the aft end, in the plane of the aft box end.)' : ''}`,
           joints: [
             { type: 'glue', to: `storage-side-${tag}`, count: 1, at: [[0, 0, 0]], size: `${frac(p.boxTieWidthIn)}" x ${frac(tg.z1 - tg.z0)}" faces, thickened epoxy`, note: 'both faces: to the box side and to the box rib' },
           ],
@@ -300,6 +315,7 @@ export function buildSideRibs(ctx: Ctx): Part[] {
 export function addSideRibJoints(ctx: Ctx, parts: Part[]): void {
   const { p, L } = ctx;
   const byId = new Map(parts.map((x) => [x.id, x]));
+  addSignKnobJoints(ctx, byId);
   for (const { tag } of SIDES) {
     for (const st of sideRibStations(p, L)) {
       const ribId = `side-rib-${tag}${st.n}`;
@@ -321,4 +337,30 @@ export function addSideRibJoints(ctx: Ctx, parts: Part[]): void {
 function localOf(m: number[], q: Vec3): Vec3 {
   const d = [q[0] - m[12], q[1] - m[13], q[2] - m[14]];
   return [0, 1, 2].map((c) => (d[0] * m[c * 4] + d[1] * m[c * 4 + 1] + d[2] * m[c * 4 + 2]) / (m[c * 4] ** 2 + m[c * 4 + 1] ** 2 + m[c * 4 + 2] ** 2)) as Vec3;
+}
+
+/**
+ * D-85: the sign's four knobs screw through the thin web into threaded inserts in the rear rib (the two rear knobs) and the box rib (the two front ones), at the ribs' own x. The insert is bored from
+ * the back of the rib through its band-strip filler, so its mouth is on the rib's back face (against the filler, which lies against the web). (With no rear box the sign keeps its backing strips and joinery.ts writes these joints.)
+ */
+function addSignKnobJoints(ctx: Ctx, byId: Map<string, Part>): void {
+  const { p, L } = ctx;
+  if (!signKnobsInRibs(p, L)) return;
+  const st = sideRibStations(p, L);
+  const colRear = st.find((q) => q.n === 4)!.x, colFront = st.find((q) => q.n === 1)!.x;
+  const sg = signPlacement(ctx), { dz } = signBackerPlan(ctx), kn = signKnobPlan(ctx);
+  const sizeA = `#10-32 × ${kn.lenIn} in thumb-knob screw through a 7/32 clearance hole (0.219) in the sign, a ${kn.standoffIn.toFixed(3)}" oak standoff disc (epoxied to the sign back) and the ${thinSheet(p).nominal} web: ${kn.engagedIn.toFixed(2)}" into the insert, tip ${kn.tipShortIn.toFixed(2)}" short of the back of the band-strip filler and rib`;
+  const sizeB = `#10-32 × 5/16 ${insertMat(p)} threaded insert (epoxied) in a blind ${frac(INSERT_DRILL_IN)} in hole in the oak rib, bored from its back through the band-strip filler`;
+  for (const { s, tag } of SIDES) {
+    const sign = byId.get(`sign-${tag}`);
+    if (!sign) continue;
+    for (const [col, ribN] of [[colRear, 4], [colFront, 1]] as const) {
+      const rib = byId.get(`side-rib-${tag}${ribN}`);
+      if (!rib) continue;
+      const world: Vec3[] = [-dz, dz].map((dzi): Vec3 => [col, s * (L.hwC + L.side + SIGN_PROUD_IN + thinSheet(p).thicknessIn / 2), sg.zc + dzi]);
+      const mouth: Vec3[] = world.map((q): Vec3 => [q[0], s * st.find((r) => r.n === ribN)!.yIn, q[2]]);
+      (sign.joints ??= []).push({ type: 'knob', to: rib.id, count: 2, size: sizeA, at: world.map((q) => localOf(sign.transform, q)), note: 'Sign comes off for transport (D-9). The screw goes through the web into the oak rib; nothing grips the thin ply alone (D-62, D-85).' });
+      (rib.joints ??= []).push({ type: 'threaded-insert', to: sign.id, count: 2, size: sizeB, at: mouth.map((q) => localOf(rib.transform, q)), note: 'Sign comes off for transport (D-9). The screw goes through the web into the oak rib; nothing grips the thin ply alone (D-62, D-85).' });
+    }
+  }
 }
