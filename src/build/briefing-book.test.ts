@@ -3,7 +3,7 @@ import { buildModel } from '../model';
 import { TRANSPORT_VIEW } from '../model/removable';
 import { defaultParams } from '../params';
 import { bom } from './bom';
-import { SECTION_BLURB, briefingBookHtml } from './briefing-book';
+import { DONOR, SECTION_BLURB, briefingBookHtml } from './briefing-book';
 import { usd } from '../ui/build-helpers';
 
 const p = defaultParams();
@@ -25,11 +25,14 @@ describe('briefing book', () => {
   it('subtotals the donated wood and asks for a budget on the rest only', () => {
     const wood = b.sections.filter((s) => s.id === 'lumber' || s.id === 'plywood').reduce((a, s) => a + s.subtotalUsd, 0);
     const troop = b.totalUsd - wood;
-    expect(html).toContain(`donated by the builder</td><td class="num">${usd(wood, false)}`);
+    expect(html).toContain(`donated by ${DONOR}</td><td class="num">${usd(wood, false)}`);
     expect(html).toContain(`Parts the troop buys</td><td class="num">${usd(troop, false)}`);
     const budget = Math.ceil((troop * 1.15) / 50) * 50;
     expect(html).toContain(`troop budget of <strong>${usd(budget, false)}</strong>`);
     expect(budget).toBeLessThan(b.totalUsd);
+  });
+  it('fills in every placeholder (no raw ${...} in the page)', () => {
+    expect(html).not.toContain('${');
   });
   it('has no bulk-parts group, and says the brake brackets unbolt (removable knees, the default)', () => {
     expect(html).not.toMatch(/bulk/i);
