@@ -29,7 +29,7 @@ A **Klondike Derby sled on wheels** for Boy Scout Troop 455: a solid, wide, reus
 - **Weight.** Eric is weight-sensitive. Nothing gets heavier to pass a check unless the lightest option was shown first. Empty mass is reported, not gated.
 - **Typical riders** are 80 to 150 lb. Helmets are recommended. Getting in and out must be quick (seven stations). The structural payload is the goal rider plus 25 lb of gear.
 - **Cost.** Eric is cost-sensitive too. Show the cheapest credible option first; separate quoted prices from estimates.
-- **The shop.** Full woodshop, bandsaw that resaws 6" at most, Festool Domino DF 500 (4 to 10 mm tenons; no DF 700 XL), Shaper Origin (handheld CNC; flat parts are cut from SVG files), a CNC router, a laser cutter and 3D printers (ASA for light clips). **No welding, no lathe.**
+- **The shop.** Full woodshop, bandsaw that resaws 6" at most, Festool Domino DF 500 (4 to 10 mm tenons; no DF 700 XL), Shaper Origin (handheld CNC; flat parts are cut from SVG files), a CNC router, an XTool S1 laser with the conveyor (1/4" wood sheet, pieces up to 18-1/2" × 118"; D-85) and 3D printers (ASA for light clips). **No welding, no lathe.**
 - **No-fabrication rule for metal.** Every metal part is bought ready-made, or stock cut on a metal bandsaw and drilled on a drill press. No bending, welding, tapping, machining or countersinking. A test enforces it (D-77).
 - **Materials.** White oak for solid parts; plywood only as captured or sandwiched panels, with no exposed plywood edges; stainless or galvanized fasteners; threaded inserts for anything removable.
 - **Truck fit.** It rides in a 2007 Toyota Tacoma short bed with the tailgate down, loaded by two people (no ramps). The bed numbers are estimates until measured; every one is a parameter. Parts that are removable for transport come off without tools.
@@ -137,7 +137,7 @@ src/analysis/            runChecks(params) -> engineering rows; riderSweep; carg
                          them (and the truck fit) in two Web Workers (client.ts, analysis.worker.ts) so the page never waits
 src/sim/                 Rapier rigid-body sim of the sled (qualitative)
 src/truck/               truck-bed fit check
-src/build/               build outputs: cut list, nesting, BOM and prices, Shaper SVGs, forms, drawings, assembly, finishing, verify, zip
+src/build/               build outputs: cut list, nesting, BOM and prices, Shaper and laser SVGs, forms, drawings, assembly, finishing, verify, zip
 src/viewer/              three.js viewer: materials, textures, joinery cuts, mannequin
 src/ui/                  panels: params, analysis, sim, Simple view, Build mode
 ```
@@ -155,14 +155,15 @@ Everything is a pure function of the parameters.
 | Section | What it gives you |
 |---|---|
 | Verify | the checks to make on real parts before ordering (wheel hub, sheet thickness, axle steel, and so on); with removable knees, a refit check (flat seat, a slip of paper at the joint, the backing plate in its recess, no washer pressed into the oak, bolts after the first outing, the chock cord eye, wobble) |
-| Cut list | the actual cuts (an edge-glued panel is its boards, then the glue-up), rough sizes rounded up to 1/8", laminate allowances, board yields, a bandsaw resaw check |
+| Cut list | the actual cuts (an edge-glued panel is its boards, then the glue-up), rough sizes rounded up to 1/8", laminate allowances, board yields, a bandsaw resaw check; each plywood row says whether the laser can cut it |
 | Nesting | plywood layouts on 4' × 8' sheets; oak board feet |
 | BOM | priced lines with vendor links, quoted vs estimated, Standard vs Extreme; the price research is in docs/price-research/price-research-2026-10.md and docs/price-research/price-research-standard-2026-10.md |
 | Shaper | SVG files for every flat part (outside, inside, pocket, guide conventions) |
+| Laser | full-size SVGs for the XTool S1 (D-85): the thin parts that fit the bed and every 1/4" template and pattern, with red cuts and blue scores; the rail form's counter-form is here |
 | Forms and drawings | glue-up forms and templates (tiled to Letter pages), and a dimensioned drawing of every non-Shaper part |
 | Assembly | numbered steps with sub-bullets, part chips with dimensions and Show in 3D, and a 3D step-through; with removable knees the knee step fits the knees dry, they are finished on the bench and bolted on at the hang step, and a last step takes them off and puts them back |
 | Finishing | the schedule for the chosen weather spec |
-| Downloads | one zip: Shaper SVGs, forms, drawings, nesting, STLs for the lamp clips, cutlist.csv, bom.csv, a build book (printable HTML) and a README |
+| Downloads | one zip: Shaper SVGs, laser SVGs, forms, drawings, nesting, STLs for the lamp clips, cutlist.csv, bom.csv, a build book (printable HTML) and a README |
 
 Build text follows Eric's shop-readability rules: fractions, no internal names, every notch, hole and mortise located from a named edge, short steps with sub-bullets.
 

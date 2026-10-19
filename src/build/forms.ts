@@ -19,12 +19,13 @@ import type { Part, Vec2 } from '../model/types';
 import { flatPattern } from './flat';
 import { brakeOf, cutListFor } from './part-drawings';
 import { analyzeShaperPart } from './shaper-svg';
+import { LASER_MAX_WIDTH_IN, clipShape, emptyShape, fitToBed, type LaserItem, type LaserShape } from './laser-svg';
 import {
   ANNOTATION_ATTRS, checkSquareEls, circleD, dimensionEls, esc, fmt, frac, guideEl, hash6, pathEl, polyD, rectLoop, svgDocument, textEl, type Xf,
 } from './svg-util';
 
 /** Process constants (shop practice, not design numbers). */
-/** Thickness (in) of the hardboard / MDF the templates and ramp ribs are cut from. */
+/** Thickness (in) of the hardboard / MDF the templates and ramp ribs are cut from. Templates are cut on the laser (D-85), where 1/4 in Baltic birch plywood cuts cleaner than hardboard and lasts longer. */
 export const TEMPLATE_STOCK_IN = 0.25;
 export const RIB_STOCK_IN = 0.75;
 /** The margin the mirror-ramp cap has beyond the web edge on each side (in): the outer ribs stand 3/8 in past the web edge, so the cap just covers them. */
@@ -47,7 +48,12 @@ const CROWN_BAND_IN = 2;
 /** Building the forms (shop practice): MDF layer thickness, the plywood base, the hardboard caul, the screw spacing in a layer stack and the room on the base in front of a form face (in). */
 export const FORM_LAYER_IN = 0.75;
 export const FORM_BASE_IN = 0.75;
-export const CAUL_IN = 0.25;
+/** Thickness of the stiff wall left behind the face of the counter-form (in): it spreads the clamp pressure between the stations. */
+export const COUNTER_WALL_IN = 2;
+/** Room left in the counter-form channel beyond the strips' thickness (in): packing tape on both faces, the glue line and the squeeze-out. */
+export const COUNTER_CLEARANCE_IN = 1 / 32;
+/** Guide hole through a laser-cut template for a 1/8 in drill (in): 9/64. */
+const GUIDE_HOLE_IN = 9 / 64;
 const STACK_SCREW_IN = 6;
 /** The rail form stands this much taller than the rail is deep, so the strips never ride over its top (in). */
 const FORM_OVERHEIGHT_IN = 0.5;
@@ -90,6 +96,20 @@ export interface FormDrawing {
   notes: string[];
   /** How to build the form or template, step by step. */
   build: FormBuildStep[];
+  /** What the XTool S1 laser cuts for this drawing (D-85), or absent when nothing here is laser work. */
+  laser?: FormLaser[];
+}
+
+/** The laser work in a form drawing: the 1/4 in pieces (templates, patterns), as shapes in inches, ready to lay out on the bed. */
+export interface FormLaser {
+  /** `side-template`, `crown-templates` ...: the laser file's name stem. */
+  id: string;
+  title: string;
+  material: string;
+  thicknessIn: number;
+  items: LaserItem[];
+  /** Plain-word notes for the file (which layers, which face up, what the seam is). */
+  notes: string[];
 }
 
 /** A small section sketch (not to scale) drawn in the title block: its size (in) and a draw function given its lower-left corner in sheet coordinates (y up). */
@@ -108,6 +128,7 @@ interface Plan {
   subtitle: string[];
   build: FormBuildStep[];
   sketch?: Sketch;
+  laser?: FormLaser[];
 }
 
 /** Wrap a line of text to about `chars` characters. */
@@ -156,7 +177,7 @@ function finishDrawing(plan: Plan, p: Params, date?: string): FormDrawing {
   const body = plan.draw(place) + sketch + `<g id="titleblock" ${ANNOTATION_ATTRS}>${tb.join('')}</g>`;
   const desc = [plan.title, ...plan.subtitle, ...plan.notes, 'HOW TO BUILD IT:', ...plan.build.flatMap((st, i) => [`${i + 1}. ${st.step}`, ...(st.sub ?? []).map((x, k) => `   ${String.fromCharCode(97 + k)}) ${x}`)])].join('\n');
   const svg = svgDocument({ widthIn: W, heightIn: H, title: `${plan.title} (1:1)`, desc, body });
-  return { id: plan.id, title: plan.title, fileName: `${plan.id}.svg`, svg, widthIn: W, heightIn: H, dims: plan.dims, notes: plan.notes, build: plan.build };
+  return { id: plan.id, title: plan.title, fileName: `${plan.id}.svg`, svg, widthIn: W, heightIn: H, dims: plan.dims, notes: plan.notes, build: plan.build, ...(plan.laser ? { laser: plan.laser } : {}) };
 }
 
 /** A rectangle (sketch inches, lower-left x, y, width, height) as a guide path at `at`, scaled by `k`. */
@@ -169,6 +190,8 @@ const skLabel = (at: Vec2, k: number, sheet: Xf, pt: Vec2, tx: Vec2, text: strin
 });
 
 // ── Shared pieces ──
+/** A shape with score lines added (the marks the laser draws on a template). */
+const withScore = (s: LaserShape, lines: Vec2[][]): LaserShape => ({ ...s, score: [...s.score, ...lines] });
 const outsideCut = (loop: Vec2[], place: Xf, depth: number, label: string): string => pathEl({ cutType: 'outside', d: polyD(loop, place), depthIn: depth + BREAKTHROUGH_IN, label });
 const label = (place: Xf, at: Vec2, text: string, size = 0.18, anchor: 'start' | 'middle' | 'end' = 'start'): string => textEl(place(at), text, size, { anchor, guide: true });
 const dimTo = (place: Xf, a: Vec2, b: Vec2, text: string, off = 0.6): string => dimensionEls(a, b, text, place, off);
@@ -231,6 +254,30 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   const rampBlock = hasRamp ? RIB_BASE_IN + rampH + GAP : 0;
   const mirrorBlock = hasRamp ? RIB_BASE_IN + rampH + GAP : 0;
   const w = f.widthIn, h = templateH + rampBlock + mirrorBlock + 0.8;
+  // The LASER pieces (D-85): the web outline with the layout lines scored on it. The web is cut in bands that butt on the bench only if it is wider than the bed (and across the S start when there is a ramp: the
+  // rear piece lies under the flat part, the front piece is the ramp's neighbor).
+  const uS0 = uOf(xR0);
+  const tplLines: Vec2[][] = [sheer, gunBot, [[0, chineTop], [w, chineTop]], [[uOf(L.xSideStart), innerChineBot], [w, innerChineBot]]];
+  const tplMarks: Array<{ c: Vec2; dia: number }> = [];
+  for (let i = 0; i < nCleat; i++) {
+    const { p: q, n } = atArc(sheer, i * cleatStep);
+    const nn: Vec2 = n[1] >= 0 ? n : [-n[0], -n[1]];
+    const tip: Vec2 = [q[0] + nn[0] * 0.6, q[1] + nn[1] * 0.6];
+    tplLines.push([q, tip]);
+    tplMarks.push({ c: tip, dia: 0.19 });
+  }
+  if (hasRamp) for (const x of [xR1, xRe]) tplLines.push([[uOf(x), 0], [uOf(x), templateH]]);
+  const tplShape: LaserShape = { ...emptyShape('web-template', 'Web template', f.outer), score: tplLines, marks: tplMarks };
+  const rearBands = hasRamp ? fitToBed(clipShape(tplShape, 'u', uS0, 'lo', 'web-template-rear', 'Web template, rear piece')) : [];
+  const underItems: LaserItem[] = rearBands.map((shape): LaserItem => ({ shape: { ...shape, id: shape.id.replace('web-template', 'web-template-under'), label: shape.label.replace('Web template', 'Web template, under layer'), score: [], marks: [] }, qty: 1 }));
+  const tplItems: LaserItem[] = hasRamp
+    ? [
+        ...rearBands.map((shape): LaserItem => ({ shape, qty: 1 })),
+        ...fitToBed(clipShape(tplShape, 'u', uS0, 'hi', 'web-template-front', 'Web template, front piece')).map((shape): LaserItem => ({ shape, qty: 1 })),
+      ]
+    : fitToBed(tplShape).map((shape): LaserItem => ({ shape, qty: 1 }));
+  const banded = tplItems.some((it) => /-(lower|upper)$/.test(it.shape.id));
+  const tplPieces = tplItems.reduce((n, it) => n + it.qty, 0) + underItems.length;
   const dims: FormDim[] = [
     lenDim('web-length', 'Web flat length (development)', f.widthIn),
     lenDim('web-height', 'Web height at the rear', f.heightIn),
@@ -269,11 +316,11 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   const build: FormBuildStep[] = [
     { step: `BENCH TOP: a flat sheet of 3/4" plywood or MDF at least ${frac(f.widthIn + 2 * BASE_END_IN)} × ${frac(f.heightIn + 2 * BASE_END_IN)} (the web is ${frac(f.widthIn)} × ${frac(f.heightIn)}). It is sacrificial: the cleats and ribs are screwed into it.${hasRamp ? ' The mirror ramp (the MIRROR RAMP item below) takes a second one the same size.' : ''}` },
     {
-      step: `TEMPLATE: cut ONE piece of ${frac(TEMPLATE_STOCK_IN)} hardboard to the web's flat outline (the outer line of this drawing), on the Shaper or bandsawn outside the line and sanded to it.`,
+      step: `TEMPLATE (laser): the web's flat outline (the outer line of this drawing) in ${frac(TEMPLATE_STOCK_IN)} plywood, cut on the laser as ${tplPieces} pieces${hasRamp ? ' (two files: the template, and the under layer of the rear piece)' : ''}. ${banded ? `The web is ${frac(f.heightIn)} tall at the rear, wider than the bed, so the file cuts it in bands that butt on the bench.` : `The web is ${frac(f.heightIn)} tall at the rear, which the bed takes.`}`,
       sub: [
-        'Mark on it the sheer (cleat line), the gunwale band lower edge, the chine band top, the inner chine band bottom and the S stations.',
-        ...(hasRamp ? [`Cut it off square at the "S starts" line, ${frac(uOf(xR0))} from the rear end. The rear piece lies under the flat part of the web; the ramp takes the front piece's place. Keep the front piece to mark the web.`, `The ramp cap puts its low end ${frac(webLowIn)} above the bench, ${frac(RIB_BASE_IN)} above the template. Glue a second layer of ${frac(TEMPLATE_STOCK_IN)} hardboard, cut to the same outline, under the rear piece so the web runs onto the ramp with no step.`] : []),
-        'Screw the template to the bench with #8 × 3/4" flat-heads about every 12", heads flush.',
+        'The laser scores the sheer (cleat line), the gunwale band lower edge, the chine band top, the inner chine band bottom, the S end, the bow end of the bands and a tick for each cleat.',
+        ...(hasRamp ? [`The file cuts it square at the "S starts" line, ${frac(uS0)} from the rear end. The rear piece lies under the flat part of the web; the ramp takes the front piece's place. Keep the front piece to mark the web.`, `The ramp cap puts its low end ${frac(webLowIn)} above the bench, ${frac(RIB_BASE_IN)} above the template. Glue a second rear piece (its own laser file) under the first so the web runs onto the ramp with no step.`] : []),
+        `${banded ? 'Butt the bands tight on the bench, matching the scored lines across the seam, and screw' : 'Screw'} the pieces down with #8 × 3/4" flat-heads about every 12", heads flush.`,
       ],
     },
     {
@@ -328,6 +375,20 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   } : undefined;
   return {
     id: 'side-form', title: 'Sandwich side: cleat-line template and S-ramp', w, h, dims, notes, build, ...(sketch ? { sketch } : {}),
+    laser: [
+      {
+        id: 'side-template', title: 'Sandwich side: web template', material: '1/4" Baltic birch plywood', thicknessIn: TEMPLATE_STOCK_IN, items: tplItems,
+        notes: [
+          `The web is ${inch(f.widthIn)} × ${inch(f.heightIn)}; the bed is ${inch(LASER_MAX_WIDTH_IN)} wide.${banded ? ' The template is cut in bands that butt on the bench.' : ''}${hasRamp ? ' It is cut in a rear piece and a front piece, square at the S start.' : ''}`,
+          'Score lines: sheer (cleat line), gunwale band lower edge, chine band top, inner chine band bottom, S end, bow end of the bands; a tick and circle for each cleat, from the rear to the bow.',
+          'The ramp caps and the mirror-ramp cap are plain rectangles from the drawing: saw them. The ribs are 3/4 in MDF: bandsaw or Shaper.',
+        ],
+      },
+      ...(hasRamp ? [{
+        id: 'side-template-under-layer', title: 'Sandwich side: web template, under layer of the rear piece', material: '1/4" Baltic birch plywood', thicknessIn: TEMPLATE_STOCK_IN, items: underItems,
+        notes: ['The second layer of the rear piece, glued under the first so the web runs onto the ramp with no step. A separate job, so each run stays about 5 ft long.'],
+      }] : []),
+    ],
     subtitle: [`Web ${inch(f.widthIn)} × ${inch(f.heightIn)}; ${nCleat} cleats ${inch(cleatStep)} apart; ${hasRamp ? `S-ramp rise ${inch(rampH)}, with a mirror ramp for the second face` : 'no ramp'}.`],
     draw: (place) => {
       const v0 = rampBlock + mirrorBlock; // the template sits above the ramp drawings
@@ -385,6 +446,17 @@ function railFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   const lengthIn = xEnd - xStart;
   const body: Vec2[] = [[0, 0], [lengthIn, 0], ...[...face].reverse()];
   const clamps = Math.ceil((xEnd - L.taper.x0) / CLEAT_SPACING_IN) + 1;
+  // The COUNTER-FORM (clamping block, D-85): the reverse image of the form. Its face is the form face moved out along the normal by the thickness of the glued strips, so the pack lies in a
+  // channel of exactly its own thickness; its back is straight and parallel to the form's back, so every clamp is square to both backs and presses straight across, wherever it stands.
+  const pack = plies * strip;
+  const inner: Vec2[] = face.map((q, i) => {
+    const a = face[Math.max(0, i - 1)], b = face[Math.min(face.length - 1, i + 1)];
+    const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+    return [q[0] - (dy / l) * (pack + COUNTER_CLEARANCE_IN), q[1] + (dx / l) * (pack + COUNTER_CLEARANCE_IN)] as Vec2; // the left normal (up, away from the body)
+  });
+  const vTop = Math.max(...inner.map((q) => q[1])) + COUNTER_WALL_IN;
+  const counter: Vec2[] = [...inner, [inner[inner.length - 1][0], vTop], [inner[0][0], vTop]];
+  const counterGap = 2.2;
   const [sb0, sb1] = SPRINGBACK_RANGE;
   const dims: FormDim[] = [
     lenDim('form-length', 'Form length', lengthIn),
@@ -394,13 +466,18 @@ function railFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
     lenDim('springback-low', 'Spring-back allowance, low end (noted, not applied)', turn * sb0),
     lenDim('springback-high', 'Spring-back allowance, high end (noted, not applied)', turn * sb1),
     countDim('clamps', 'Clamp stations', clamps, 'clamp station'),
+    lenDim('counter-width', 'Counter-form width (form back to its straight clamping back)', vTop),
+    lenDim('counter-wall', 'Counter-form wall behind the face (least)', COUNTER_WALL_IN),
   ];
-  const w = lengthIn, h = face.reduce((m, q) => Math.max(m, q[1]), 0) + 1.5;
+  const formH = face.reduce((m, q) => Math.max(m, q[1]), 0) + 1.5;
+  const w = lengthIn, h = formH + counterGap + vTop + 0.4;
+  const stationXs: number[] = [L.taper.x0, L.taper.x1, ...Array.from({ length: clamps }, (_, i) => Math.min(xEnd, L.taper.x0 + i * ((xEnd - L.taper.x0) / Math.max(1, clamps - 1))))];
   const stations: number[] = [];
   for (let s = 0; s <= lengthIn + 1e-9; s += OFFSET_STEP_IN * 2) stations.push(s);
   const tableText = stations.filter((s) => xStart + s >= L.taper.x0 - 1e-6 && xStart + s <= L.taper.x1 + OFFSET_STEP_IN * 2).map((s) => `${frac(s)}: ${frac(yOut(xStart) - yOut(xStart + s))}`).join(';  ');
   const notes = [
     `Form face = the rails' outer face (the chine, gunwale and rail outer faces are one curve). One form serves both rails; bend the second one the other way up. Each rail is ${plies} strips, ${inch(strip)} × ${inch(rail.stock?.w ?? 0)}, glued face to face with all ${clamps} clamp stations (${frac(CLEAT_SPACING_IN)} apart) loaded.`,
+    `The counter-form below the form is its reverse image: its face is the form face moved out ${inch(pack + COUNTER_CLEARANCE_IN)} (the ${plies} strips glued together plus tape and glue line), its back is straight. The clamps close the form back on the counter-form back, both straight and parallel, so every clamp presses square across instead of at an angle to the curve.`,
     `Spring-back is not built in: thin dry strips spring back about ${Math.round(sb0 * 100)}% to ${Math.round(sb1 * 100)}% of the turn-in (${inch(turn * sb0)} to ${inch(turn * sb1)} at the bow). Bend a dry strip first and, if it opens, shim the form face out by that much. Once glued, the rail holds its shape.`,
     `Tightest plan radius ${inch(L.taper.minRadiusIn)} on a ${inch(strip)} strip (radius ÷ thickness = ${fmt(Math.round(L.taper.minRadiusIn / Math.max(strip, 1e-6)))}). The S runs from ${inch(L.taper.x0)} to ${inch(L.taper.x1)}, parallel to the bulkhead after that. The rail is ${inch(xEnd - Math.min(...rail.geometry.profile.map((q) => q[0])))} long and only the last ${inch(xEnd - L.taper.x0)} is curved. Offsets from the straight line behind the S (station from the form start : offset): ${tableText}.`,
   ];
@@ -415,25 +492,37 @@ function railFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   const stripCut = cutListFor(parts, p).cuts.find((c) => c.piece === 'strip' && c.ids.includes(rail.id));
   const stripL = stripCut?.rough.l ?? rail.rough?.l ?? rail.stock?.l ?? lengthIn;
   const hang = Math.max(0, stripL - lengthIn);
-  const pack = plies * strip;
-  const span = deepest + pack + CAUL_IN + 1;
-  const clampCap = Math.ceil((span + 2) / 6) * 6;
+  const clampCap = Math.ceil((vTop + 2) / 6) * 6;
   const build: FormBuildStep[] = [
     {
-      step: `LAYERS: the form is a stack of ${nLayers} layers of ${frac(FORM_LAYER_IN)} MDF, ${frac(stackH)} tall: ${frac(stackH - railW)} taller than the ${frac(railW)} rail, so the strips never ride over it.`,
+      step: `PATTERNS (laser): two ${frac(TEMPLATE_STOCK_IN)} plywood patterns from the laser file for this drawing, the FORM (${frac(lengthIn)} × ${frac(deepest)}, the outline above) and the COUNTER-FORM (${frac(lengthIn)} × ${frac(vTop)}, the outline below).`,
       sub: [
-        `First layer (the master): cut it to the outline of this drawing (straight back, square ends, the face curve on top), on the Shaper or bandsawn outside the line. Fair the face to the line with a long sanding block: every bump in the face prints into the rail.`,
-        `Every other layer: bandsawn 1/16" proud and flush-trimmed to the master with a pattern bit.`,
+        `Each carries scored tick marks at the S start, the S end and the ${clamps} clamp stations, so the clamps land in the same places on both.`,
+        `Check each against the drawing (or the tiled print) before using it: every bump in a pattern prints into every layer and then into the rail.`,
       ],
     },
-    { step: `BASE: 3/4" plywood ${frac(baseL)} × ${frac(baseW)}. Screw the stack to it from below (#8 × 1-5/8" every ${frac(STACK_SCREW_IN)}), its straight back on the base's back edge and ${frac(BASE_END_IN)} in from each end. That leaves ${frac(BASE_FRONT_IN)} of base in front of the deepest part of the face for the strips, the caul and the clamp jaws.` },
-    { step: `STRAIGHT RUN: cut the strips ${frac(stripL)} long (the cut list's rough length); only the last ${frac(curved)} is curved. The form starts ${frac(RAIL_FORM_LEAD_IN)} ahead of the S, so about ${frac(hang)} of each strip hangs off its rear end. Screw a straight 3/4" × ${frac(stackH)} fence to the bench, in line with the lead-in face, to hold that part straight.` },
-    { step: `CAUL: a strip of ${frac(CAUL_IN)} hardboard ${frac(railW + 0.5)} wide × ${frac(curved + RAIL_FORM_LEAD_IN)} long, between the clamps and the strips, so the pressure is even between the stations.` },
-    { step: 'TAPE: packing tape over the form face and the caul face, so the epoxy cannot glue the rail to the form.' },
-    { step: `SPRING-BACK: none is built in. Dry-clamp one strip first; if the bow end opens more than ${frac(turn * sb0)} when released, glue 1/8" hardboard shims to the face over the curve (feathered out at the S start) and try again.` },
     {
-      step: `CLAMP: ${clamps} bar or pipe clamps of ${clampCap}" capacity or more (the pack is about ${frac(span)} across), one at each station ${frac(CLEAT_SPACING_IN)} apart from the S start (the circles on the rail form drawing), from the back of the form to the caul, plus 2 or 3 on the straight lead-in.`,
-      sub: [`Roll epoxy on both mating faces of the ${plies} strips (${frac(strip)} × ${frac(railW)}), butter one face with thickened epoxy, and stand them on edge on the base against the face, the caul outside.`, 'Clamp the straight lead-in first, then work station by station toward the bow end, closing each gap before the next.', 'Leave it clamped for the full cure, 24 h at 60 °F or warmer, before unclamping: a bent strip springs back if it comes off early. Bend the second rail on the same form, the other way up.'],
+      step: `LAYERS: the form is a stack of ${nLayers} layers of ${frac(FORM_LAYER_IN)} MDF, ${frac(stackH)} tall: ${frac(stackH - railW)} taller than the ${frac(railW)} rail, so the strips never ride over it. The counter-form is a second stack of ${nLayers}, the same height.`,
+      sub: [
+        `Each layer: bandsaw it 1/16" proud of the pattern, stick the pattern on with double-sided tape and flush-trim with a pattern bit. The form layers follow the FORM pattern, the counter-form layers the COUNTER-FORM pattern.`,
+        `Glue and screw each stack together, edges flush, and fair its face to the line with a long sanding block.`,
+      ],
+    },
+    { step: `BASE: 3/4" plywood ${frac(baseL)} × ${frac(baseW)}. Screw the form stack to it from below (#8 × 1-5/8" every ${frac(STACK_SCREW_IN)}), its straight back on the base's back edge and ${frac(BASE_END_IN)} in from each end. That leaves ${frac(BASE_FRONT_IN)} of base in front of the deepest part of the face for the strips and the counter-form. The counter-form stands loose on the base; screw a scrap stop to the base behind its rear end so it cannot walk.` },
+    { step: `STRAIGHT RUN: cut the strips ${frac(stripL)} long (the cut list's rough length); only the last ${frac(curved)} is curved. The form starts ${frac(RAIL_FORM_LEAD_IN)} ahead of the S, so about ${frac(hang)} of each strip hangs off its rear end. Screw a straight 3/4" × ${frac(stackH)} fence to the bench, in line with the lead-in face, to hold that part straight.` },
+    {
+      step: `COUNTER-FORM: the reverse image of the form, the clamping block. Its face is the form face moved out ${frac(pack + COUNTER_CLEARANCE_IN)}: the ${plies} strips glued together (${frac(pack)}) plus ${frac(COUNTER_CLEARANCE_IN)} for the tape and the glue line. Its back is straight and parallel to the form's back.`,
+      sub: [
+        `Every clamp then closes the two straight backs on each other, square, instead of pressing at an angle on a curve.`,
+        `Screw a stop block to the base against each end of the counter-form, so it cannot creep along the slope of the S while the clamps tighten.`,
+        `Dry-fit it with the strips in place before any glue: the channel should be snug and even from end to end, with no gap you can slide a feeler under and no place where the counter-form rides on the strips.`,
+      ],
+    },
+    { step: 'TAPE: packing tape over the form face and the counter-form face, so the epoxy cannot glue the rail to either.' },
+    { step: `SPRING-BACK: none is built in. Dry-clamp one strip first; if the bow end opens more than ${frac(turn * sb0)} when released, re-cut both patterns with the faces moved that far and try again; the channel must keep its width.` },
+    {
+      step: `CLAMP: ${clamps} bar or pipe clamps of ${clampCap}" capacity or more (the form back to the counter-form back is ${frac(vTop)}), one at each station ${frac(CLEAT_SPACING_IN)} apart from the S start (the scored ticks on both patterns), square across from the form back to the counter-form back, plus 2 or 3 on the straight lead-in.`,
+      sub: [`Roll epoxy on both mating faces of the ${plies} strips (${frac(strip)} × ${frac(railW)}), butter one face with thickened epoxy, and stand them on edge on the base against the form face, the counter-form outside.`, 'Bend the glued strips onto the form face with the counter-form set on and every clamp snug but loose, then tighten the clamps together, the straight lead-in first and the bow end last. The counter-form only seats once the strips are fully bent.', 'Leave it clamped for the full cure, 24 h at 60 °F or warmer, before unclamping: a bent strip springs back if it comes off early. Bend the second rail on the same form, the other way up.'],
     },
   ];
   const sketch: Sketch = {
@@ -445,11 +534,11 @@ function railFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
       for (let i = 0; i < nLayers; i++) paths.push(skRect(at, k, sheet, 0, yb + i * FORM_LAYER_IN, deepest, FORM_LAYER_IN));
       const y0 = yb + (stackH - railW) / 2;
       for (let i = 0; i < plies; i++) paths.push(skRect(at, k, sheet, deepest + i * strip, y0, strip, railW));
-      paths.push(skRect(at, k, sheet, deepest + pack, y0 - 0.25, CAUL_IN, railW + 0.5));
-      const cx1 = deepest + pack + CAUL_IN;
+      for (let i = 0; i < nLayers; i++) paths.push(skRect(at, k, sheet, deepest + pack, yb + i * FORM_LAYER_IN, COUNTER_WALL_IN, FORM_LAYER_IN));
+      const cx1 = deepest + pack + COUNTER_WALL_IN;
       paths.push(skRect(at, k, sheet, -0.6, top + 0.3, cx1 + 1.4, 0.3), skRect(at, k, sheet, -0.6, yb + stackH / 2, 0.35, top + 0.3 - (yb + stackH / 2)), skRect(at, k, sheet, cx1, yb + stackH / 2, 0.35, top + 0.3 - (yb + stackH / 2)));
       const lx = baseW + 0.3;
-      for (const [pt, tx, t] of [[[deepest / 2, yb + FORM_LAYER_IN * 1.5], [lx, yb + stackH - 0.6], `${nLayers} layers of ${frac(FORM_LAYER_IN)} MDF, glued + screwed`], [[baseW - 0.5, FORM_BASE_IN / 2], [lx, -0.2], `base, 3/4" ply, ${frac(baseL)} × ${frac(baseW)}`], [[deepest + strip / 2, y0 + railW * 0.3], [lx, yb + 0.7], `${plies} oak strips ${frac(strip)} × ${frac(railW)}`], [[cx1 - CAUL_IN / 2, y0 + railW * 0.8], [lx, yb + stackH - 0.05], `caul, ${frac(CAUL_IN)} hardboard, taped`], [[cx1 + 0.6, top + 0.45], [lx, top + 0.6], `bar clamp every ${frac(CLEAT_SPACING_IN)}`]] as Array<[Vec2, Vec2, string]>) {
+      for (const [pt, tx, t] of [[[deepest / 2, yb + FORM_LAYER_IN * 1.5], [lx, yb + stackH - 0.6], `${nLayers} layers of ${frac(FORM_LAYER_IN)} MDF, glued + screwed`], [[baseW - 0.5, FORM_BASE_IN / 2], [lx, -0.2], `base, 3/4" ply, ${frac(baseL)} × ${frac(baseW)}`], [[deepest + strip / 2, y0 + railW * 0.3], [lx, yb + 0.7], `${plies} oak strips ${frac(strip)} × ${frac(railW)}`], [[cx1 - COUNTER_WALL_IN / 2, yb + FORM_LAYER_IN * 1.5], [lx, yb + stackH - 0.05], `counter-form, ${nLayers} layers, face = form face + ${frac(pack)}`], [[cx1 + 0.6, top + 0.45], [lx, top + 0.6], `bar clamp every ${frac(CLEAT_SPACING_IN)}`]] as Array<[Vec2, Vec2, string]>) {
         const l = skLabel(at, k, sheet, pt, tx, t); paths.push(l.path); labels.push(l.label);
       }
       return { paths: paths.join(''), labels: labels.join('') };
@@ -458,21 +547,39 @@ function railFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   return {
     id: 'rail-form', title: 'Rail bending form (plan, left rail)', w, h, dims, notes, build, sketch,
     subtitle: [`Form ${inch(lengthIn)} long; face offset ${inch(turn)} at the bow; ${plies} strips of ${inch(strip)} per rail.`],
+    laser: [{
+      id: 'rail-form', title: 'Rail bending form: form pattern and counter-form pattern', material: '1/4" Baltic birch plywood', thicknessIn: TEMPLATE_STOCK_IN,
+      items: [
+        { shape: withScore(emptyShape('form-pattern', 'Form pattern', body), stationXs.map((x): Vec2[] => { const v = yOut(x) - yMin + FORM_DEPTH_IN; return [[x - xStart, v], [x - xStart, v - 1]]; })), qty: 1 },
+        { shape: withScore(emptyShape('counter-form-pattern', 'Counter-form pattern', counter), stationXs.map((x): Vec2[] => [[x - xStart, vTop], [x - xStart, vTop - 1]])), qty: 1 },
+      ].flatMap((it) => fitToBed(it.shape).map((shape): LaserItem => ({ shape, qty: it.qty }))),
+      notes: [
+        `Form pattern: the form outline, ${inch(lengthIn)} long, straight back at the bottom edge and the face curve on top; scored ticks mark the S start, the S end and the clamp stations just under the face.`,
+        `Counter-form pattern: the face is the form face moved out ${inch(pack + COUNTER_CLEARANCE_IN)} (the strips' thickness plus tape and glue line); the back is straight. Its ticks sit just under the straight back.`,
+        'Use each pattern as the flush-trim guide for every layer of its stack; either face up.',
+      ],
+    }],
     draw: (place) => {
-      const out: string[] = [`<g id="form">${outsideCut(body, place, RIB_STOCK_IN, 'rail form body')}</g>`];
+      const F: Xf = ([u, v]) => place([u, v + vTop + counterGap]);
+      const out: string[] = [`<g id="form">${outsideCut(body, F, RIB_STOCK_IN, 'rail form body')}</g>`];
+      out.push(`<g id="counterform">${outsideCut(counter, place, RIB_STOCK_IN, 'counter-form body (reverse image of the form)')}</g>`);
       const g: string[] = [];
-      g.push(guideEl(polyD(face, place, false), { label: 'form face' }));
+      g.push(guideEl(polyD(face, F, false), { label: 'form face' }));
+      g.push(guideEl(polyD(inner, place, false), { label: 'counter-form face (form face moved out by the strips)' }));
       const sx = (x: number) => x - xStart;
-      for (const [x, tt] of [[L.taper.x0, 'S starts'], [L.taper.x1, 'S ends']] as const) g.push(guideEl(polyD([[sx(x), 0], [sx(x), h]], place, false), { dashed: true }), label(place, [sx(x) + 0.1, h - 0.2], `${tt} (station ${inch(sx(x))})`, 0.16));
+      for (const [x, tt] of [[L.taper.x0, 'S starts'], [L.taper.x1, 'S ends']] as const) g.push(guideEl(polyD([[sx(x), 0], [sx(x), formH]], F, false), { dashed: true }), label(F, [sx(x) + 0.1, formH - 0.2], `${tt} (station ${inch(sx(x))})`, 0.16));
       for (let i = 0; i < clamps; i++) {
         const x = Math.min(xEnd, L.taper.x0 + i * ((xEnd - L.taper.x0) / (clamps - 1)));
         const q: Vec2 = [sx(x), yOut(x) - yMin + FORM_DEPTH_IN];
-        g.push(guideEl(polyD([q, [q[0], q[1] + 0.5]], place, false)), guideEl(circleD([q[0], q[1] + 0.7], 0.19, place)));
+        g.push(guideEl(polyD([q, [q[0], q[1] + 0.5]], F, false)), guideEl(circleD([q[0], q[1] + 0.7], 0.19, F)));
+        g.push(guideEl(polyD([[q[0], vTop], [q[0], vTop - 1]], place, false)));
       }
-      g.push(dimTo(place, [0, 0], [lengthIn, 0], `form length ${inch(lengthIn)}`, -0.6));
-      g.push(dimTo(place, [lengthIn, face[face.length - 1][1]], [lengthIn, FORM_DEPTH_IN], `turn-in ${inch(turn)}`, 0.7));
-      g.push(dimTo(place, [lengthIn, 0], [lengthIn, FORM_DEPTH_IN], `${inch(FORM_DEPTH_IN)}`, -1.4));
-      g.push(label(place, [0, h - 0.3], 'FORM FACE (bend the strips against this curve; face = rail outer face)', 0.2));
+      g.push(dimTo(F, [0, 0], [lengthIn, 0], `form length ${inch(lengthIn)}`, -0.6));
+      g.push(dimTo(F, [lengthIn, face[face.length - 1][1]], [lengthIn, FORM_DEPTH_IN], `turn-in ${inch(turn)}`, 0.7));
+      g.push(dimTo(F, [lengthIn, 0], [lengthIn, FORM_DEPTH_IN], `${inch(FORM_DEPTH_IN)}`, -1.4));
+      g.push(label(F, [0, formH - 0.3], 'FORM FACE (bend the strips against this curve; face = rail outer face)', 0.2));
+      g.push(dimTo(place, [0, inner[0][1]], [0, vTop], `wall ${inch(vTop - inner[0][1])}`, -0.7), dimTo(place, [lengthIn, inner[inner.length - 1][1]], [lengthIn, vTop], `thickness at the bow end ${inch(vTop - inner[inner.length - 1][1])}`, 0.7));
+      g.push(label(place, [0, vTop + 0.35], `COUNTER-FORM (reverse image): face = form face + ${inch(pack)}; back straight. With the strips between, its back stands ${inch(vTop)} from the form back; the clamps close the two backs on each other.`, 0.2));
       out.push(`<g id="guides" ${ANNOTATION_ATTRS}>${g.join('')}</g>`);
       return out.join('');
     },
@@ -517,8 +624,8 @@ function crownPlan(parts: Part[], p: Params, L: Layout): Plan | null {
     `Bulkhead crown template: the top edge of the bow bulkhead, ${inch(2 * b.halfW)} wide, with ${inch(CROWN_BAND_IN)} of template band under the curve. Set it on the oak blank flush to the corner-height line, trace, and bandsaw. The Shaper cuts the bulkhead itself; this is the check and the fallback.`,
   ];
   const build: FormBuildStep[] = [
-    { step: `Cut TWO templates from ${frac(TEMPLATE_STOCK_IN)} hardboard, one piece each: the handlebow (upper outline, ${frac(barW)} × ${frac(barH)}) and the bow bulkhead crown (lower outline, ${frac(2 * b.halfW)} wide). Shaper (the outlines are outside cuts), or bandsaw outside the line and sand to it with a long block.` },
-    { step: 'Mark the post stations and the post-top height line on the handlebow template, and the corner-height line on the bulkhead template.' },
+    { step: `TEMPLATES (laser): cut TWO templates in ${frac(TEMPLATE_STOCK_IN)} plywood from the laser file for this drawing, one piece each: the handlebow (upper outline, ${frac(barW)} × ${frac(barH)}) and the bow bulkhead crown (lower outline, ${frac(2 * b.halfW)} wide).` },
+    { step: 'The laser scores the post stations and the post-top height line on the handlebow template, and the corner-height line on the bulkhead template.' },
     {
       step: `HANDLEBOW: a tracing and routing pattern for the ${frac(sec)} board.`,
       sub: ['Stick the template to the board with double-sided tape, the arc laid along the grain; trace both arcs and the post stations.', 'Bandsaw 1/16" outside the lines.', `Flush-trim to the template with a top-bearing pattern bit; the bow is ${frac(sec)} thick, so finish from the other face with a bottom-bearing flush-trim bit riding the trimmed edge.`],
@@ -528,6 +635,14 @@ function crownPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   ];
   return {
     id: 'crown-templates', title: 'Crown templates: handlebow and bow bulkhead', w, h, dims, notes, build,
+    laser: [{
+      id: 'crown-templates', title: 'Crown templates: handlebow and bow bulkhead', material: '1/4" Baltic birch plywood', thicknessIn: TEMPLATE_STOCK_IN,
+      items: [
+        { shape: withScore(emptyShape('handlebow-template', 'Handlebow template', barFlat.outer), [[[postU, 0], [postU, barH]], [[postU2, 0], [postU2, barH]], [[0, barH - bw.crownIn], [barW, barH - bw.crownIn]]]), qty: 1 },
+        { shape: withScore(emptyShape('bulkhead-crown-template', 'Bow bulkhead crown template', bulkPoly), [[[0, bulkH - crown], [2 * b.halfW, bulkH - crown]]]), qty: 1 },
+      ],
+      notes: ['Handlebow: scored post stations either side of the center line and the post-top height line.', 'Bulkhead crown: scored corner-height line; set it flush to that line on the oak blank.'],
+    }],
     subtitle: [`Handlebow crown ${inch(bw.crownIn)}, radius ${inch(bw.radiusIn)}; bulkhead crown ${inch(crown)}, ${inch(2 * b.halfW)} wide.`],
     draw: (place) => {
       const B: Xf = ([u, v]) => place([u, v]);
@@ -574,9 +689,9 @@ function flapPlan(parts: Part[], p: Params): Plan | null {
     `Left flap shown; the right flap is the mirror image (the screw eye on the end face is inboard). Round over all edges after trimming.`,
   ];
   const build: FormBuildStep[] = [
-    { step: `Cut ONE template from ${frac(TEMPLATE_STOCK_IN)} hardboard to the outline at offset 0 (${frac(f.widthIn)} × ${frac(f.heightIn)}): the bit's bearing rides its edge. Shaper, or bandsaw outside the line and sand to it.` },
-    { step: `Drill the ${marks.length} guide holes through it at the marks (1/8" bit) and mark the pivot cross-hole line on its edge.` },
-    { step: `Optional: glue a second layer of ${frac(TEMPLATE_STOCK_IN)} hardboard under it and flush-trim it to the first, so a bearing up to 1/2" long has a full edge to ride.` },
+    { step: `TEMPLATE (laser): cut ONE template in ${frac(TEMPLATE_STOCK_IN)} plywood from the laser file for this drawing, to the outline at offset 0 (${frac(f.widthIn)} × ${frac(f.heightIn)}): the bit's bearing rides its edge.` },
+    { step: `The laser cuts the ${marks.length} guide holes (${frac(GUIDE_HOLE_IN)}, for a 1/8" bit) at the marks and scores the pivot cross-hole line.` },
+    { step: `Optional: glue a second layer of ${frac(TEMPLATE_STOCK_IN)} plywood under it and flush-trim it to the first, so a bearing up to 1/2" long has a full edge to ride.` },
     {
       step: `USE: rough the ${frac(f.thicknessIn)} oak blank 1/16" proud on the bandsaw, stick the template on with double-sided tape, drill the pilots through the guide holes, then flush-trim with a pattern bit.`,
       sub: ['For the right flap flip the template over (mirror image): the screw eye goes inboard on both.', 'Round over all edges after trimming. No base, braces or clamps: this is a routing template.'],
@@ -584,6 +699,19 @@ function flapPlan(parts: Part[], p: Params): Plan | null {
   ];
   return {
     id: 'brake-flap-template', title: 'Brake flap router template (left flap)', w, h, dims, notes, build,
+    laser: [{
+      id: 'brake-flap-template', title: 'Brake flap router template (left flap)', material: '1/4" Baltic birch plywood', thicknessIn: TEMPLATE_STOCK_IN,
+      items: [{
+        shape: {
+          ...emptyShape('brake-flap-template', 'Brake flap template', f.outer),
+          circles: [...marks.flatMap((m) => (m.k === 'drill' ? [{ c: m.c, dia: GUIDE_HOLE_IN }] : [])), ...cuts.flatMap((i) => (i.k === 'cutHole' ? [{ c: i.c, dia: i.dia }] : []))],
+          holes: cuts.flatMap((i) => (i.k === 'cutLoop' ? [i.loop] : [])),
+          score: crossLines.map((l) => l.pts),
+        },
+        qty: 1,
+      }],
+      notes: [`Left flap shown; for the right flap turn the template over. ${marks.length} guide holes of ${inch(GUIDE_HOLE_IN)} are cut through; the dashed pivot cross-hole line is scored.`],
+    }],
     subtitle: [`Outline offset 0; ${inch(f.widthIn)} x ${inch(f.heightIn)}; ${marks.length} drill guide holes.`],
     draw: (place) => {
       const T: Xf = ([u, v]) => place([u, v + 0.3]);
@@ -632,9 +760,9 @@ function kneePlan(parts: Part[], p: Params): Plan | null {
     'Left knee shown; the right knee is the mirror image. Flip the template over for it.',
   ];
   const build: FormBuildStep[] = [
-    { step: `Cut ONE template from ${frac(TEMPLATE_STOCK_IN)} hardboard to the outline at offset 0 (${frac(wIn)} wide × ${frac(hIn)} tall): the bit's bearing rides its edge. Shaper, or bandsaw outside the line and sand to it.` },
-    { step: 'Scribe the pocket rectangle, the pivot pin line and the bolt rows on its edge from this drawing, so they can be carried onto the block.' },
-    { step: `Optional: glue a second layer of ${frac(TEMPLATE_STOCK_IN)} hardboard under it and flush-trim it to the first, so a bearing up to 1/2" long has a full edge to ride.` },
+    { step: `TEMPLATE (laser): cut ONE template in ${frac(TEMPLATE_STOCK_IN)} plywood from the laser file for this drawing, to the outline at offset 0 (${frac(wIn)} wide × ${frac(hIn)} tall): the bit's bearing rides its edge.` },
+    { step: 'The laser scores the pocket rectangle, the pivot pin line and the bolt rows, so they can be carried onto the block.' },
+    { step: `Optional: glue a second layer of ${frac(TEMPLATE_STOCK_IN)} plywood under it and flush-trim it to the first, so a bearing up to 1/2" long has a full edge to ride.` },
     {
       step: `USE: bandsaw the laminated block (${inch(thick)} thick) 1/16" proud of the line, stick the template on its REAR face with double-sided tape, and flush-trim with a pattern bit.`,
       sub: ['If your bit cuts less than the block is thick, trim half the thickness, flip the block and the template over, and trim the other half from the other face.', 'For the right knee flip the template over (mirror image). No base, braces or clamps: this is a routing template.'],
@@ -642,6 +770,18 @@ function kneePlan(parts: Part[], p: Params): Plan | null {
   ];
   return {
     id: 'brake-knee-template', title: 'Brake knee router template (left knee)', w: wIn, h: hIn + 0.6, dims, notes, build,
+    laser: [{
+      id: 'brake-knee-template', title: 'Brake knee router template (left knee)', material: '1/4" Baltic birch plywood', thicknessIn: TEMPLATE_STOCK_IN,
+      items: [{
+        shape: withScore(emptyShape('brake-knee-template', 'Brake knee template', outline), [
+          rectLoop(pocketU[0], pocketV[0], pocketU[1], pocketV[1]).concat([[pocketU[0], pocketV[0]]]),
+          [[0, pinV], [legU[0], pinV]],
+          ...rowsV.map((v): Vec2[] => [[legU[0], v], [legU[1], v]]),
+        ]),
+        qty: 1,
+      }],
+      notes: ['Left knee shown, seen from the REAR face; for the right knee turn the template over. Scored: the pocket rectangle, the pivot pin hole line and the bolt rows.'],
+    }],
     subtitle: [`Outline offset 0; ${inch(wIn)} wide × ${inch(hIn)} tall; for a ${inch(thick)} thick cross-laminated block.`],
     draw: (place) => {
       const T: Xf = ([u, v]) => place([u, v + 0.3]);

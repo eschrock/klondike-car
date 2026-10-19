@@ -6,6 +6,7 @@ Where the design stands (2026-10-14). The sled itself is in [DESIGN.md](../DESIG
 - The design, analysis and build outputs are complete and deployed to GitHub Pages on every push to `main` once the tests pass.
 - **Cost pass done (D-79 to D-83, 2026-10-14).** Standard BOM **$1,377** (was $2,303), Extreme **$2,271** (was $3,119), excluding shipping and tax; estimates are 3.5% of the Standard total. Standard empty mass **122.1 lb**, 54 engineering rows with no failure (turn radius marginal at 0.97), riders safe **50 to 230 lb**, green **50 to 210 lb** (the grab-board row, D-84), cargo capacity **286 lb**. The Extreme spec's 6 mm okoume passes the side-web row (0.44).
 - Optional **removable brake knees** (D-78): same empty mass; +$34 in the BOM (tool pouch and anti-seize, estimates).
+- **Laser files (D-85, 2026-10-19).** The XTool S1 files, the cut-list laser flag and the rail form's counter-form are in. Laser parts: side webs, signs, storage sides, ends and lid; all the templates. The 12 mm deck and seat back stay on the Shaper. Limits are the maker's specs (18-1/2" × 118", 1/4" cut-through): the 59-1/2" web needs the extension rails (the basic set is 39"). Verify them and the first cut against the printed drawing.
 - Waiting on Eric: the open choices below, measured Tacoma bed dimensions (Q-1), and the yard calls in the open items.
 
 ## Open items and parked ideas

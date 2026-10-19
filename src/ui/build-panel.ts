@@ -8,7 +8,7 @@
 import type { Dims, Part } from '../model/types';
 import { WEATHER_SPEC, type Params, type ParamKey } from '../params';
 import type { BomLine, BomSection, WeatherCompare } from '../build/bom';
-import { BuildData, CSV_MIME, SHAPER_CONVENTIONS, SHAPER_NOTES, SVG_MIME, drawingFileName, zipName, zipPackage } from '../build/package';
+import { BuildData, CSV_MIME, LASER_CONVENTIONS, LASER_NOTES, SHAPER_CONVENTIONS, SHAPER_NOTES, SVG_MIME, drawingFileName, zipName, zipPackage } from '../build/package';
 import { FROM_TEXT, fabText } from '../build/cutlist';
 import { paramLabels } from '../build/verify';
 import { tilePlan } from '../build/forms';
@@ -57,6 +57,7 @@ const SECTIONS = [
   { id: 'nesting', label: 'Nesting', title: 'Nesting and board feet' },
   { id: 'bom', label: 'BOM', title: 'Bill of materials' },
   { id: 'shaper', label: 'Shaper', title: 'Shaper Origin files' },
+  { id: 'laser', label: 'Laser', title: 'Laser files (XTool S1)' },
   { id: 'forms', label: 'Forms', title: 'Forms and templates' },
   { id: 'drawings', label: 'Drawings', title: 'Part drawings' },
   { id: 'assembly', label: 'Assembly', title: 'Assembly steps' },
@@ -542,10 +543,10 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
     out.push(h('h3', { class: 'bp-group' }, 'Plywood'));
     for (const g of c.sheets) {
       out.push(h('h4', { class: 'bp-sub' }, `${g.label} (${g.pieces} pieces)`));
-      out.push(table('bp-cuts', ['Part', 'Qty', 'Final T × W × L', 'Grain', 'Fabrication', 'Step'], g.rows.map((r) => [
+      out.push(table('bp-cuts', ['Part', 'Qty', 'Final T × W × L', 'Grain', 'Fabrication', 'Laser', 'Step'], g.rows.map((r) => [
         partCell(r.ids[0], r.name, r.note),
-        String(r.qty), dimsCell(r.final), r.grainWord ?? '–', fabText(r.fab), stepList(r.assemblySteps),
-      ]), `Plywood ${g.label}`, { num: [1], nowrap: [3], qty: 1, key: 2, cols: [26, 5, 22, 12, 25, 10] }));
+        String(r.qty), dimsCell(r.final), r.grainWord ?? '–', fabText(r.fab), h('span', { class: r.laser.ok ? 'bp-laser-yes' : 'bp-laser-no', title: r.laser.text }, r.laser.ok ? 'Laser: yes' : r.laser.text.replace(/^no: /, 'No: ')), stepList(r.assemblySteps),
+      ]), `Plywood ${g.label}`, { num: [1], nowrap: [3], qty: 1, key: 2, cols: [24, 5, 20, 11, 20, 14, 6] }));
     }
     out.push(h('h3', { class: 'bp-group' }, 'Metal stock (cut on the metal bandsaw and drill)'));
     out.push(table('bp-cuts', ['Part', 'Qty', 'Section', 'Cut length', 'Step'], c.metal.map((r) => [
@@ -774,6 +775,31 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
     return out;
   }
 
+  function renderLaser(d: BuildData): Node[] {
+    const files = d.laser;
+    const out: Node[] = [];
+    out.push(h('div', { class: 'bp-intro' },
+      h('div', {}, h('h3', { class: 'bp-group' }, 'How to read the files'),
+        h('ul', { class: 'bp-legend', 'aria-label': 'Laser conventions' }, ...LASER_CONVENTIONS.map((c) => h('li', {}, h('span', { class: 'bp-swatch', style: `background:${c.color}`, 'aria-hidden': 'true' }), h('span', {}, h('strong', {}, c.name), `: ${c.meaning}`)))),
+        note(`${files.length} files, full size, SVG only. Pieces are laid out along the conveyor; the cut list says which sheet parts the laser can cut.`)),
+      h('details', { class: 'bp-card' }, h('summary', {}, `Laser notes (${LASER_NOTES.length})`), h('ul', { class: 'bp-plain muted small' }, ...LASER_NOTES.map((x) => h('li', {}, x))))));
+    const cards: Node[] = [];
+    for (const f of files) {
+      cards.push(h('article', { class: 'bp-file', 'aria-label': f.fileName },
+        svgBox(previewSvg(f.svg, `${f.title} laser file preview`).replace(/stroke-width="1"/g, `stroke-width="${Math.max(1, Math.round(f.widthIn * 96 / 250))}"`)),
+        h('div', { class: 'bp-file-head' }, h('strong', {}, f.title), h('span', { class: 'muted small' }, `laser/${f.fileName}`)),
+        h('dl', { class: 'bp-facts' },
+          h('dt', {}, 'Material'), h('dd', {}, `${f.material}`),
+          h('dt', {}, 'File size'), h('dd', {}, `${fracDim(f.widthIn)} × ${fracDim(f.heightIn)} in`),
+          h('dt', {}, 'Cut'), h('dd', {}, f.kind === 'part' ? (f.qty > 1 ? `${f.qty} (${f.source.join(', ')})` : '1') : `${f.pieces.length} piece${f.pieces.length === 1 ? '' : 's'}`),
+          h('dt', {}, 'Bed'), h('dd', { class: f.fits ? 'bp-laser-yes' : 'bp-laser-no' }, f.fits ? 'fits' : f.verdict.text)),
+        h('ul', { class: 'bp-plain small' }, ...f.notes.map((x) => h('li', {}, x))),
+        h('div', { class: 'bp-actions' }, btn('Download SVG', () => download(f.fileName, SVG_MIME, f.svg), `Save ${f.fileName}`))));
+    }
+    out.push(h('div', { class: 'bp-grid' }, ...cards));
+    return out;
+  }
+
   function renderForms(d: BuildData): Node[] {
     const out: Node[] = [note('Full-size (1:1) drawings with dimensions and a 1 inch check square. "Print tiled" splits them onto Letter pages with alignment marks; in the print dialog choose scale 100% (not "fit to page"), margins none, and measure the check square on every page.', 'muted small bp-prose')];
     const cards: Node[] = [];
@@ -791,7 +817,8 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
             h('dt', {}, 'Print'), h('dd', {}, `${pages} Letter page${pages === 1 ? '' : 's'} (${plan.cols} × ${plan.rows})`)),
           h('div', { class: 'bp-actions' },
             btn('Download full-size SVG', () => download(f.fileName, SVG_MIME, f.svg), `Save ${f.fileName}`),
-            btn('Print tiled (Letter)', () => printTiles(tiles.pages), 'Print this drawing on Letter pages at true scale'))),
+            btn('Print tiled (Letter)', () => printTiles(tiles.pages), 'Print this drawing on Letter pages at true scale')),
+          ...(f.laser?.length ? [h('p', { class: 'small' }, h('strong', {}, 'Laser: '), `${f.laser.map((l) => `laser/${l.id}.svg`).join(', ')} (see the Laser tab)`)] : [])),
         h('div', { class: 'bp-form-body' },
           ...(steps.length
             ? [h('h4', { class: 'bp-sub' }, 'How to make it'),
@@ -987,7 +1014,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
   }
 
   const RENDER: Record<SectionId, (d: BuildData) => Node[]> = {
-    verify: renderVerify, cutlist: renderCutlist, nesting: renderNesting, bom: renderBom, shaper: renderShaper,
+    verify: renderVerify, cutlist: renderCutlist, nesting: renderNesting, bom: renderBom, shaper: renderShaper, laser: renderLaser,
     forms: renderForms, drawings: renderDrawings, assembly: renderAssembly, finishing: renderFinishing, downloads: renderDownloads,
   };
 

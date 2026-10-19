@@ -11,13 +11,15 @@ import { cutList, stepMapOf, type CutList } from './cutlist';
 import { nestPlywood, oakBoardFeet, type NestResult, type OakPlan } from './nesting';
 import { bom, type Bom } from './bom';
 import { SHAPER_MAX_DEPTH_IN, shaperFiles, type ShaperFile } from './shaper-svg';
+import { laserFiles, type LaserFile } from './laser';
+import { LASER_CUT, LASER_MAX_LENGTH_IN, LASER_MAX_THICKNESS_IN, LASER_MAX_WIDTH_IN, LASER_SCORE } from './laser-svg';
 import { formDrawings, tileForLetter, type FormDrawing } from './forms';
 import { lampClipStls } from './stl';
 import { assemblySteps, type BuildStep } from './assembly';
 import { partDrawings, type PartDrawingSheet } from './part-drawings';
 import { finishingSchedule, type FinishSchedule } from './finishing';
 import { verifyChecklist, type VerifyCheck } from './verify';
-import { hash6 } from './svg-util';
+import { frac, hash6 } from './svg-util';
 import { zipStore } from './zip';
 import { buildBookHtml } from './build-book';
 import { SPEC_NAME, sheetSvg, weatherLine } from '../ui/build-helpers';
@@ -76,6 +78,22 @@ export const SHAPER_NOTES: string[] = [
   'Check the 1:1 scale before cutting: a file is exactly as large as its part (width and height in inches).',
 ];
 
+/** The XTool S1 file conventions (D-85). One copy, used by the README, the Laser section and the build book. */
+export const LASER_CONVENTIONS: { color: string; name: string; meaning: string }[] = [
+  { color: LASER_CUT, name: 'Red stroke', meaning: 'cut through (holes and inner loops first, the outline last)' },
+  { color: LASER_SCORE, name: 'Blue stroke', meaning: 'score or mark: a light pass for station lines, drill marks and lettering; not cut through' },
+];
+
+/** Notes Eric needs next to the laser files (also in the README). */
+export const LASER_NOTES: string[] = [
+  "Every file is full size and in real inches: its width and height are its true size, and the pieces are laid out along the conveyor (the long side is the X axis). Import it in XCS and check the size XCS shows against the file's size in the list before cutting.",
+  `Limits used to flag the cut list and to decide which files exist: pieces up to ${frac(LASER_MAX_WIDTH_IN)} wide and ${frac(LASER_MAX_LENGTH_IN)} long (the S1 conveyor's processing area; the basic 39 in rail set is too short for the 59-1/2 in web and rail patterns, so fit the extension rails) and ${frac(LASER_MAX_THICKNESS_IN)} thick (the machine holds material to 0.55 in, but 1/4 in is the cut-through figure used here). Both are constants in laser-svg.ts: VERIFY them on your machine, change them if they are wrong, and the flags and files follow.`,
+  'Give the red strokes your cut setting for the sheet (test it on a scrap of the same plywood first) and the blue strokes a light score setting. In XCS set the inner shapes to cut before the outline (the files list them first, but XCS orders its own paths), so a piece cannot shift as it drops free.',
+  'The outlines are drawn exactly as the part is, with no kerf offset. A diode kerf is a fraction of a millimeter; the templates need about 1/32 in, so none is allowed for. Check the first template against the printed drawing.',
+  'Templates are cut in 1/4 in Baltic birch plywood rather than hardboard. A piece wider than the bed would be cut in bands that butt on the bench.',
+  'Where the laser can only do part of a job (dados, mortises, blind holes, glue-footprint lines) the file notes say so: the Shaper file still has those.',
+];
+
 /** Lazy, cached outputs of one design. Each getter computes on first use. `timings` records the milliseconds of each stage that ran. */
 export class BuildData {
   readonly timings: Record<string, number> = {};
@@ -103,6 +121,7 @@ export class BuildData {
   get oak(): OakPlan { return this.memo('oak', () => oakBoardFeet(this.parts, this.p)); }
   get bom(): Bom { return this.memo('bom', () => bom(this.parts, this.p)); }
   get shaper(): ShaperFile[] { return this.memo('shaper', () => shaperFiles(this.parts, this.p)); }
+  get laser(): LaserFile[] { return this.memo('laser', () => laserFiles(this.parts, this.p, this.shaper, this.forms)); }
   get forms(): FormDrawing[] { return this.memo('forms', () => formDrawings(this.parts, this.p, { date: this.opts.date })); }
   /** Letter tiles of every form drawing. */
   get tiles(): FormTiles[] {
@@ -138,6 +157,7 @@ export class BuildData {
       const files: PackageFile[] = [];
       for (const s of this.shaper) files.push({ name: `shaper/${s.fileName}`, mime: SVG_MIME, data: s.svg });
       for (const f of this.forms) files.push({ name: `forms/${f.fileName}`, mime: SVG_MIME, data: f.svg });
+      for (const l of this.laser) files.push({ name: `laser/${l.fileName}`, mime: SVG_MIME, data: l.svg });
       for (const sh of this.partDrawings) files.push({ name: drawingFileName(sh), mime: SVG_MIME, data: sh.svg });
       for (const t of this.tiles) t.pages.forEach((svg, i) => files.push({ name: `forms/tiled/${t.id}-${tileLabel(i, t.pages.length, svg)}.svg`, mime: SVG_MIME, data: svg }));
       for (const s of this.stls) files.push({ name: `stl/${s.fileName}`, mime: STL_MIME, data: s.stl });
@@ -186,6 +206,12 @@ function readme(d: BuildData, others: string[]): string {
   lines.push('------------------------------------');
   for (const c of SHAPER_CONVENTIONS) lines.push(`  ${c.name}: ${c.meaning}`);
   for (const n of SHAPER_NOTES) lines.push(`  - ${n}`);
+  lines.push('');
+  lines.push('XTool S1 laser files (laser/*.svg, SVG only, full size)');
+  lines.push('-------------------------------------------------------');
+  for (const c of LASER_CONVENTIONS) lines.push(`  ${c.name}: ${c.meaning}`);
+  for (const n of LASER_NOTES) lines.push(`  - ${n}`);
+  for (const f of d.laser) lines.push(`  laser/${f.fileName}: ${f.title}${f.fits ? '' : ` (${f.verdict.text})`}`);
   lines.push('');
   lines.push('Printing the full-size forms');
   lines.push('----------------------------');
