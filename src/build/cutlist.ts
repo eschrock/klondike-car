@@ -426,7 +426,7 @@ export interface SheetRow {
   grain?: string;
   grainWord?: string;
   fab: string;
-  /** Can the XTool S1 laser cut it (D-85)? `text` is "yes" or why not. */
+  /** Can the XTool S1 laser cut it (D-86)? `text` is "yes" or why not. */
   laser: LaserVerdict;
   /** MODEL step; see `OakRow.step`. */
   step: number;
@@ -936,7 +936,7 @@ function shaperNetNote(x: Part, stock: Dims): { net: number; note: string } | nu
   return { net, note: `the Shaper file cuts it to ${finalFrac(net)}; start from a ${roughFrac(stock.l)} blank (+${roughFrac(stock.l - net)} trim)` };
 }
 
-/** Can the XTool S1 laser cut this sheet part (D-85)? Judged on its flat pattern: thickness, material and the short side against the bed. */
+/** Can the XTool S1 laser cut this sheet part (D-86)? Judged on its flat pattern: thickness, material and the short side against the bed. */
 function laserOf(x: Part): LaserVerdict {
   const f = flatPattern(x);
   return f ? laserVerdict({ thicknessIn: f.thicknessIn, material: x.material, widthIn: f.widthIn, heightIn: f.heightIn }) : { ok: false, text: 'no: not a flat part' };
@@ -1216,8 +1216,8 @@ const sortCuts = (cuts: Cut[]): Cut[] => {
 
 /** One filler behind a side rib (D-76): a piece of band strip, `widthIn` wide, glued to the web between the inner chine and gunwale bands so the rib's back sits flat. */
 export interface RibFiller {
-  /** Rib station (1 box rib, 2 mid rib, 3 bow post), and its role in words. */
-  n: 1 | 2 | 3;
+  /** Rib station (1 box rib, 2 mid rib, 3 bow post, 4 rear rib), and its role in words. */
+  n: 1 | 2 | 3 | 4;
   role: string;
   /** Fillers of this station (one per side). */
   count: number;
@@ -1233,7 +1233,7 @@ export function ribFillers(parts: ReadonlyArray<Pick<Part, 'id'>>, p: Params): R
   if (!ribs.length) return [];
   const L = computeLayout(p);
   const zChineTop = L.chineBot + L.chineH;
-  const roles: Record<number, string> = { 1: 'box rib', 2: 'mid rib', 3: 'bow post' };
+  const roles: Record<number, string> = { 1: 'box rib', 2: 'mid rib', 3: 'bow post', 4: 'rear rib' };
   return sideRibStations(p, L).map((st) => {
     const foot = st.kind === 'box' ? boxTieGeometry(p, L, st).z0 : L.deckTop;
     return {

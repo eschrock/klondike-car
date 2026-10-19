@@ -13,7 +13,7 @@ const data = new BuildData(parts, p);
 const files = data.laser;
 const byId = (id: string) => files.find((f) => f.id === id)!;
 
-describe('laser verdict (D-85)', () => {
+describe('laser verdict (D-86)', () => {
   const v = (o: Partial<Parameters<typeof laserVerdict>[0]>) => laserVerdict({ thicknessIn: 0.236, material: '6 mm Baltic birch plywood', widthIn: 12, heightIn: 40, ...o });
   it('passes 6 mm Baltic birch that fits the bed, whichever way round', () => {
     expect(v({}).ok).toBe(true);

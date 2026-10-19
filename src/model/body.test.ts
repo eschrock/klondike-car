@@ -4,7 +4,7 @@
  * params, not read back from the builder.
  */
 import { describe, expect, it } from 'vitest';
-import { bowBulkhead, bowTurnInAt, defaultParams, sideHeightAt, thinSheet, validateParams, WEATHER_SPEC, type Params } from '../params';
+import { bowBulkhead, bowTurnInAt, defaultParams, sideHeightAt, STORAGE_LOCATION, thinSheet, validateParams, WEATHER_SPEC, type Params } from '../params';
 import { buildModel } from './index';
 import { computeLayout, innerHalfWidth, outerHalfWidth, sideHeightAtX, sideSlopeAt, sideTopAt, webTopAt } from './layout';
 import { bowHold, bulkheadOutline, liftBarStressPsi, liftSlot, scupperSites, signPlacement, SIGN_X_MAX_IN } from './body';
@@ -385,8 +385,10 @@ describe('signs (D-57): the Troop 455 sign is back on the tall rear part of each
     expect(defaults.showSideSigns).toBe(1);
     const signs = parts.filter((x) => /^sign/.test(x.id));
     expect(signs.filter((x) => !/backer/.test(x.id)).map((x) => x.id).sort()).toEqual(['sign-L', 'sign-R']);
-    expect(signs.filter((x) => /backer/.test(x.id)).map((x) => x.id).sort()).toEqual(['sign-backer-L1', 'sign-backer-L2', 'sign-backer-R1', 'sign-backer-R2']); // D-62: oak backing strips inside the 4 mm web
-    for (const x of signs.filter((q) => /backer/.test(q.id))) { expect(x.group).toBe('body'); expect(x.material).toBe('white oak'); expect(x.removable).toBeFalsy(); }
+    expect(signs.filter((x) => /backer/.test(x.id))).toHaveLength(0); // D-85: the knobs go into the box rib and the rear rib, so no backing strips
+    const under = buildModel({ ...defaults, storageLocation: STORAGE_LOCATION.underSeat });
+    expect(under.filter((x) => /^sign-backer/.test(x.id)).map((x) => x.id).sort()).toEqual(['sign-backer-L1', 'sign-backer-L2', 'sign-backer-R1', 'sign-backer-R2']); // D-62: with no rear box, oak backing strips inside the 4 mm web
+    for (const x of under.filter((q) => /^sign-backer/.test(q.id))) { expect(x.group).toBe('body'); expect(x.material).toBe('white oak'); expect(x.removable).toBeFalsy(); }
     for (const s of signs.filter((x) => !/backer/.test(x.id))) {
       expect(s.removable).toBeFalsy(); // Eric, D-65: taking the signs off for the truck "seems excessive"
       expect(s.group).toBe('body');
@@ -397,7 +399,7 @@ describe('signs (D-57): the Troop 455 sign is back on the tall rear part of each
       expect(s.joints!.some((j) => j.type === 'knob')).toBe(true);
     }
     expect(buildModel(defaults, { removed: true }).filter((x) => /^sign-[LR]$/.test(x.id))).toHaveLength(2); // D-65: the signs are on in Transport mode
-    expect(buildModel(defaults, { removed: true }).filter((x) => /^sign-backer/.test(x.id))).toHaveLength(4); // the backing strips are glued in the side and stay
+    expect(buildModel(defaults, { removed: true }).filter((x) => /^side-rib-[LR][14]$/.test(x.id))).toHaveLength(4); // the ribs that take the sign's knobs are glued in the side and stay
     expect(buildModel({ ...defaults, showSideSigns: 0 }).some((x) => /^sign/.test(x.id))).toBe(false);
   });
   it('is 15 x 6 in at most, starts just ahead of the transom, stops at x = 6 (clear of the wheel brake mount), is LEVEL (3c-5, not tilted to the sheer) and stays under the gunwale line at its forward end and over the chine', () => {
@@ -423,7 +425,7 @@ describe('signs (D-57): the Troop 455 sign is back on the tall rear part of each
     expect(l.min[0]).toBeCloseTo(r.min[0], 9);
     const m = buildModel({ ...defaults, showSideSigns: 0 });
     for (const x of m.filter((q) => q.id !== 'hardware')) expect(get(parts, x.id).massLb, x.id).toBeCloseTo(x.massLb, 9);
-    expect(parts.length).toBe(m.length + 2 + 4); // the two signs and their four oak backing strips
+    expect(parts.length).toBe(m.length + 2); // the two signs (D-85: no backing strips, the ribs take the knobs)
   });
 });
 

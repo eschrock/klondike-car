@@ -1,5 +1,5 @@
 /**
- * XTool S1 laser files (D-85): one SVG per laser job, full size, for XCS. Plain TS, no three.js. Pure functions of `(parts, params)`.
+ * XTool S1 laser files (D-86): one SVG per laser job, full size, for XCS. Plain TS, no three.js. Pure functions of `(parts, params)`.
  *
  * Two kinds of job:
  *  - a PART the laser can cut (thin sheet that fits the bed): the Shaper Origin file's outline, round holes and inner loops as cuts, drill marks and lettering as scored marks. Dados and pockets are not

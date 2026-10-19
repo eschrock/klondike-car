@@ -1,5 +1,5 @@
 /**
- * XTool S1 laser files (D-85): geometry helpers, the bed-fit rule and the SVG writer. Plain TS, no DOM, no three.js; a leaf module (svg-util only), so `cutlist.ts` and `forms.ts` can use it.
+ * XTool S1 laser files (D-86): geometry helpers, the bed-fit rule and the SVG writer. Plain TS, no DOM, no three.js; a leaf module (svg-util only), so `cutlist.ts` and `forms.ts` can use it.
  *
  * The files are full size and in real inches: width and height carry the unit ("59.5in"), and the viewBox is in 96 dpi pixels (1 in = 96 units), the scale XCS and every other importer assumes, so a
  * file imports at its true size whichever reading an importer takes. Colors follow the usual laser convention:

@@ -78,7 +78,7 @@ export const SHAPER_NOTES: string[] = [
   'Check the 1:1 scale before cutting: a file is exactly as large as its part (width and height in inches).',
 ];
 
-/** The XTool S1 file conventions (D-85). One copy, used by the README, the Laser section and the build book. */
+/** The XTool S1 file conventions (D-86). One copy, used by the README, the Laser section and the build book. */
 export const LASER_CONVENTIONS: { color: string; name: string; meaning: string }[] = [
   { color: LASER_CUT, name: 'Red stroke', meaning: 'cut through (holes and inner loops first, the outline last)' },
   { color: LASER_SCORE, name: 'Blue stroke', meaning: 'score or mark: a light pass for station lines, drill marks and lettering; not cut through' },

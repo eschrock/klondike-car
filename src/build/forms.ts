@@ -25,7 +25,7 @@ import {
 } from './svg-util';
 
 /** Process constants (shop practice, not design numbers). */
-/** Thickness (in) of the hardboard / MDF the templates and ramp ribs are cut from. Templates are cut on the laser (D-85), where 1/4 in Baltic birch plywood cuts cleaner than hardboard and lasts longer. */
+/** Thickness (in) of the hardboard / MDF the templates and ramp ribs are cut from. Templates are cut on the laser (D-86), where 1/4 in Baltic birch plywood cuts cleaner than hardboard and lasts longer. */
 export const TEMPLATE_STOCK_IN = 0.25;
 export const RIB_STOCK_IN = 0.75;
 /** The margin the mirror-ramp cap has beyond the web edge on each side (in): the outer ribs stand 3/8 in past the web edge, so the cap just covers them. */
@@ -96,7 +96,7 @@ export interface FormDrawing {
   notes: string[];
   /** How to build the form or template, step by step. */
   build: FormBuildStep[];
-  /** What the XTool S1 laser cuts for this drawing (D-85), or absent when nothing here is laser work. */
+  /** What the XTool S1 laser cuts for this drawing (D-86), or absent when nothing here is laser work. */
   laser?: FormLaser[];
 }
 
@@ -254,7 +254,7 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   const rampBlock = hasRamp ? RIB_BASE_IN + rampH + GAP : 0;
   const mirrorBlock = hasRamp ? RIB_BASE_IN + rampH + GAP : 0;
   const w = f.widthIn, h = templateH + rampBlock + mirrorBlock + 0.8;
-  // The LASER pieces (D-85): the web outline with the layout lines scored on it. The web is cut in bands that butt on the bench only if it is wider than the bed (and across the S start when there is a ramp: the
+  // The LASER pieces (D-86): the web outline with the layout lines scored on it. The web is cut in bands that butt on the bench only if it is wider than the bed (and across the S start when there is a ramp: the
   // rear piece lies under the flat part, the front piece is the ramp's neighbor).
   const uS0 = uOf(xR0);
   const tplLines: Vec2[][] = [sheer, gunBot, [[0, chineTop], [w, chineTop]], [[uOf(L.xSideStart), innerChineBot], [w, innerChineBot]]];
@@ -446,7 +446,7 @@ function railFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   const lengthIn = xEnd - xStart;
   const body: Vec2[] = [[0, 0], [lengthIn, 0], ...[...face].reverse()];
   const clamps = Math.ceil((xEnd - L.taper.x0) / CLEAT_SPACING_IN) + 1;
-  // The COUNTER-FORM (clamping block, D-85): the reverse image of the form. Its face is the form face moved out along the normal by the thickness of the glued strips, so the pack lies in a
+  // The COUNTER-FORM (clamping block, D-86): the reverse image of the form. Its face is the form face moved out along the normal by the thickness of the glued strips, so the pack lies in a
   // channel of exactly its own thickness; its back is straight and parallel to the form's back, so every clamp is square to both backs and presses straight across, wherever it stands.
   const pack = plies * strip;
   const inner: Vec2[] = face.map((q, i) => {

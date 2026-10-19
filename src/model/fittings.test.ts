@@ -195,9 +195,9 @@ describe('storage box', () => {
     // The same box with its own 1/4" floor panel loses 0.25 × 14.5 × 26.5 = 96.0625 in³ of height.
     expect(interiorOf({ ...g, deckFloor: false, floorZ: 9.25 }).totalIn3).toBeCloseTo(2260.875 - 96.0625, 9);
   });
-  it('lash points (D-76, D-83): 6, one on the head of each side rib, through-bolted with 2 1/4-20 button-head bolts; no lash doublers', () => {
+  it('lash points (D-76, D-83, D-85): 8, one on the head of each side rib, through-bolted with 2 1/4-20 button-head bolts; no lash doublers', () => {
     const lash = parts.filter((x) => x.id.startsWith('lash-'));
-    expect(lash).toHaveLength(6);
+    expect(lash).toHaveLength(8);
     expect(lash.filter((x) => x.id.startsWith('lash-L'))).toHaveLength(defaults.lashPointsPerSide);
     expect(parts.some((x) => x.id.startsWith('doubler-lash'))).toBe(false);
     const xs = sideRibStations(defaults, L).map((st) => st.x);

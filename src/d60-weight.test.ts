@@ -105,7 +105,7 @@ describe('mass (target about 120 lb; 144.4 at 3c-5, 143.0 with the cleats gone)'
   it('the empty sled is 119.9 lb: the D-60 package gave 120.6 (the study predicted 120.7), 14 in sockets +0.46 = 121.1, the D-62 build fixes +0.1, D-64 the tail light clip -0.15, D-65 the pull-pin brake (shorter flaps, no hinges) -0.97; the package still saves about 20 lb against the PRE_D60 numbers rebuilt with the D-62 sandwich sides, bridle and clamps', () => {
     expect(totalMass(parts)).toBeGreaterThan(118.75); // D-76: 119.3 lb (the side ribs, +0.96); D-74: 118.3 lb (the 2-1/8 in laminated beams, knees and chocks: -1.3 lb); was above 119.4
     expect(totalMass(parts)).toBeLessThan(120.95); // D-77: 120.31 lb (the pivot straps and the knee roofs, +0.87)
-    expect(totalMass(partsPre)).toBeCloseTo(138.7, 0); // D-83: 138.7 (the EVA pads are lighter than the baseline's old foam and vinyl cover in this baseline too: -1.0 lb); D-77: 139.7 (the straps and knee roofs are in this baseline too); D-76: 138.8 (the ribs are in this baseline too); // D-74: 137.8 (the baseline takes the 2-1/8 in laminated parts too: -1.8 lb); 139.6 before D-74; 141.2 before D-65 (the pull-pin brake is lighter in this baseline too); the study's B0 was 143.0; the D-62 changes (sandwich sides, no shackle, frameless seat back, ...) are in this baseline too
+    expect(totalMass(partsPre)).toBeCloseTo(139.8, 0); // D-85: 139.8 (the rear ribs and rings, the box rib moved, no sign strips: +0.74 lb on the new defaults); D-83: 138.7 (the EVA pads are lighter than the baseline's old foam and vinyl cover in this baseline too: -1.0 lb); D-77: 139.7 (the straps and knee roofs are in this baseline too); D-76: 138.8 (the ribs are in this baseline too); // D-74: 137.8 (the baseline takes the 2-1/8 in laminated parts too: -1.8 lb); 139.6 before D-74; 141.2 before D-65 (the pull-pin brake is lighter in this baseline too); the study's B0 was 143.0; the D-62 changes (sandwich sides, no shackle, frameless seat back, ...) are in this baseline too
     expect(totalMass(partsPre) - totalMass(parts)).toBeGreaterThan(19.2); // D-83: 19.29 (the lighter EVA seat pads and the 2 in clamp plates); D-77: 19.37; D-75: 19.47 (the square tongue seat trims the baseline's deeper tongue a little more)
     expect(totalMass(partsPre) - totalMass(parts)).toBeLessThan(21);
   });
@@ -185,7 +185,7 @@ describe('the analysis after the package (the study predicted: safe 50-250+, gre
   });
   it('rows above 0.9: the fit facts (park-hold, lash-points count, seat-stow 0.94) and turn-radius 0.98; nothing else (D-67: tip-straight, 0.95 on the cargo case at the 40 deg limit, is down to 0.84 at 35 deg)', () => {
     const above = cs.filter((c) => Math.max(c.util ?? 0, c.utilCargo ?? 0) > 0.9 && c.status !== 'info').map((c) => c.id).sort();
-    expect(above).toEqual(['lash-points', 'park-hold', 'seat-stow', 'side-web', 'turn-radius']); // D-76: side-web (okoume across its face grain) 2.0 // D-62: front-beam cargo fell from 0.94 to 0.88 with the wider outer front clamp plate
+    expect(above).toEqual(['park-hold', 'seat-stow', 'side-web', 'turn-radius']); // D-85: lash-points (the ring count) is no longer above 0.9 with 8 rings; // D-76: side-web (okoume across its face grain) 2.0 // D-62: front-beam cargo fell from 0.94 to 0.88 with the wider outer front clamp plate
     const u = (id: string) => cs.find((c) => c.id === id)!;
     expect(u('front-beam').utilCargo!).toBeLessThan(0.9);
     expect(u('tip-straight').util!).toBeLessThan(0.9);

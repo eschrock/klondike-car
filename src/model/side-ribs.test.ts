@@ -6,11 +6,12 @@
 import { describe, expect, it } from 'vitest';
 import { PARAM_DEFS, defaultParams, type Params } from '../params';
 import { buildModel } from './index';
-import { computeLayout } from './layout';
+import { computeLayout, sideTopAt } from './layout';
 import { partsOverlap, worldAABB } from './bounds';
 import { storageGeometry } from './storage';
 import { boxTieGeometry, kneeScrewDriftLimitIn, kneeScrews, lashBoltLength, ribWasherSpan, sideRibStations, KNEE_MIN_WOOD_IN } from './side-ribs';
 import { transformPoint } from './bounds';
+import { signPlacement } from './body';
 import { screwFitOk } from './rear-mount';
 import type { Part } from './types';
 
@@ -23,10 +24,13 @@ const ours = (x: Part) => /^(side-rib|box-tie|lash-)/.test(x.id);
 
 describe('stations (D-76)', () => {
   const st = sideRibStations(p, L);
-  it('box rib 1.4 in behind the box fore end (x = 5.56), mid rib on joist 5 (27.6), bow post on the king beam (44)', () => {
-    expect(st.map((s) => s.kind)).toEqual(['box', 'knee', 'knee']);
-    expect(st[0].x).toBeCloseTo(storageGeometry(p, L).x1 - 1.4, 9);
-    expect(st[0].x).toBeCloseTo(5.56, 2); // D-83: 5.56 (5.59 before the 1-1/2 in seat pads moved the seat back and the box end)
+  it('box rib 4 in behind the box fore end (x = 3.0, under the sign\'s front knobs), mid rib on joist 5 (27.6), bow post on the king beam (44), rear rib 3.25 in ahead of the box aft end (x = -5.5)', () => {
+    expect(st.map((s) => s.kind)).toEqual(['box', 'knee', 'knee', 'box']);
+    expect(st.map((s) => s.n)).toEqual([1, 2, 3, 4]);
+    expect(st[0].x).toBeCloseTo(storageGeometry(p, L).x1 - 4, 9);
+    expect(st[0].x).toBeCloseTo(2.96, 1); // D-85
+    expect(st[3].x).toBeCloseTo(storageGeometry(p, L).x0 + 3.25, 9);
+    expect(st[3].x).toBeCloseTo(-5.5, 1);
     expect(st[1].member).toBe('joist-5');
     expect(st[1].memberX).toBeCloseTo(27.64, 2);
     expect(st[1].x).toBeCloseTo(27.99, 2); // the rib stands 0.35 in ahead of joist 5 so the knee's two screws land on its centerline (the side is turned 10.7 degrees there)
@@ -60,11 +64,11 @@ describe('stations (D-76)', () => {
 });
 
 describe('parts (D-76)', () => {
-  it('6 ribs, 4 knees, 2 box ties and 6 D-rings; the lash doublers are gone', () => {
-    expect(parts.filter((x) => /^side-rib-[LR]\d$/.test(x.id))).toHaveLength(6);
+  it('8 ribs, 4 knees, 4 box ties and 8 D-rings; the lash doublers are gone', () => {
+    expect(parts.filter((x) => /^side-rib-[LR]\d$/.test(x.id))).toHaveLength(8);
     expect(parts.filter((x) => /^side-rib-knee-/.test(x.id))).toHaveLength(4);
-    expect(parts.filter((x) => /^box-tie-/.test(x.id))).toHaveLength(2);
-    expect(parts.filter((x) => /^lash-/.test(x.id))).toHaveLength(6);
+    expect(parts.filter((x) => /^box-tie-/.test(x.id))).toHaveLength(4);
+    expect(parts.filter((x) => /^lash-/.test(x.id))).toHaveLength(8);
     expect(parts.some((x) => /^doubler-lash/.test(x.id))).toBe(false);
     for (const x of parts.filter((q) => /^(side-rib|box-tie)/.test(q.id))) {
       expect(x.material, x.id).toBe('white oak');
@@ -74,12 +78,13 @@ describe('parts (D-76)', () => {
     expect(get('side-rib-L1').partNo).toBe('side-rib-box');
     expect(get('side-rib-R2').partNo).toBe('side-rib');
     expect(get('side-rib-L3').partNo).toBe('side-rib-bow');
+    expect(get('side-rib-L4').partNo).toBe('side-rib-rear');
   });
   it('the head top is flush with the gunwale top and the head is the band tall; the box rib starts at its spacer, the others at the deck', () => {
     for (const tag of ['L', 'R']) for (const st of sideRibStations(p, L)) {
       const b = worldAABB(get(`side-rib-${tag}${st.n}`));
       expect(b.max[2]).toBeGreaterThanOrEqual(st.top - 1e-6);
-      expect(b.max[2]).toBeLessThan(st.top + 0.3); // the sheer rises up to 0.26 in over the aft half of the 2 in head (14 degrees at the box rib)
+      expect(b.max[2]).toBeLessThan(st.top + 0.35); // the sheer rises up to 0.33 in over the aft half of the 2 in head (the steeper rear rib, D-85)
       expect(b.min[2]).toBeCloseTo(st.kind === 'box' ? boxTieGeometry(p, L, st).z0 : L.deckTop, 6);
       expect(Math.abs(get(`side-rib-${tag}${st.n}`).transform[13])).toBeCloseTo(st.yIn, 9); // its back on the inner band face at the station (the frame origin)
     }
@@ -207,19 +212,41 @@ describe('clearances (D-76)', () => {
   });
 });
 
+describe('rear rib and the sign (D-85)', () => {
+  it('the box rib\'s fender washers clear the level sign\'s top edge, and the rear rib stands clear of the flag tube blocks', () => {
+    const sg = signPlacement({ p, L });
+    const signTop = sg.zc + sg.height / 2;
+    const st = sideRibStations(p, L)[0];
+    const [x0, x1] = ribWasherSpan(st);
+    const lowest = Math.min(sideTopAt(L, x0 + 0.375), sideTopAt(L, x1 - 0.375)) - L.railBand / 2 - 0.375; // washer center is half a band under the sheer, radius 3/8
+    expect(lowest - 0.375 + 0.375 - signTop).toBeGreaterThan(0.05);
+    const rear = worldAABB(get('side-rib-L4'));
+    expect(worldAABB(get('flag-block-top')).max[0]).toBeLessThan(rear.min[0] - 0.1);
+    expect(worldAABB(get('flag-block-bottom')).max[0]).toBeLessThan(rear.min[0] - 0.1);
+  });
+  it('the sign\'s knobs are in the ribs: two inserts a rib, at the ribs\' own x', () => {
+    for (const n of [1, 4]) expect(get(`side-rib-L${n}`).joints!.filter((j) => j.type === 'threaded-insert' && j.to === 'sign-L').reduce((a, j) => a + j.count, 0)).toBe(2);
+    expect(parts.some((x) => x.id.startsWith('sign-backer'))).toBe(false);
+  });
+  it('a short box drops the rear rib rather than overlapping the box rib', () => {
+    const q = { ...p, sideRibBoxInsetIn: 6.5, sideRibRearInsetIn: 7 } as Params;
+    expect(sideRibStations(q, computeLayout(q)).map((x) => x.n)).toEqual(expect.not.arrayContaining([4]));
+  });
+});
+
 describe('mass (D-76)', () => {
-  it('ribs, knees and ties about 1.2 lb for the sled; the empty sled is 0.96 lb heavier than with the six lash doublers', () => {
+  it('ribs, knees and ties about 1.8 lb for the sled (D-85: the rear ribs and their ties add about 0.55 lb; the four sign backing strips, about 0.2 lb, are gone)', () => {
     const wood = parts.filter((x) => /^(side-rib|box-tie)/.test(x.id)).reduce((a, x) => a + x.massLb, 0);
-    expect(wood).toBeGreaterThan(1.1);
-    expect(wood).toBeLessThan(1.25);
+    expect(wood).toBeGreaterThan(1.7);
+    expect(wood).toBeLessThan(1.85);
   });
 });
 
 describe('params (D-76)', () => {
-  it('the bow station is a verify item; the doubler param is retired; the D-rings per side stay 3', () => {
+  it('the bow station is a verify item; the doubler param is retired; the D-rings per side are 4 (D-85)', () => {
     expect(PARAM_DEFS.sideRibFrontXIn.status).toBe('verify');
     expect(PARAM_DEFS.sideRibFrontXIn.note).toMatch(/booted rider/);
     expect('lashDoublerThickIn' in PARAM_DEFS).toBe(false);
-    expect(p.lashPointsPerSide).toBe(3);
+    expect(p.lashPointsPerSide).toBe(4);
   });
 });

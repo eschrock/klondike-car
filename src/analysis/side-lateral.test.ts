@@ -61,13 +61,13 @@ describe('the solver', () => {
 describe('the side-lateral row (D-76)', () => {
   const s = sideLateral(ctx);
   const row = runChecks(ctx.p, { includeTruck: false }).find((c) => c.id === 'side-lateral')!;
-  it('a 50 lbf push moves the gunwale about 0.1 in at worst with the ribs (under the 1/8 in "feels solid" mark), 0.26 to 0.39 in without them', () => {
+  it('a 50 lbf push moves the gunwale about 0.12 in at worst (0.100 before D-85) with the ribs (under the 1/8 in "feels solid" mark), 0.26 to 0.39 in without them', () => {
     expect(s.push.wPinned).toBeLessThan(FEEL_LIMIT_IN);
     expect(s.push.wPinned).toBeGreaterThan(0.06); // this model counts no torsion: more conservative than the study's 0.061
     expect(s.push.wFixed).toBeLessThanOrEqual(s.push.wPinned + 1e-9);
     expect(s.push.noRibsPinned).toBeGreaterThan(0.3);
     expect(s.push.noRibsFixed).toBeGreaterThan(0.2);
-    expect(s.push.noRibsPinned / s.push.wPinned).toBeGreaterThan(3);
+    expect(s.push.noRibsPinned / s.push.wPinned).toBeGreaterThan(2.5); // D-85: 2.76 (3.9 before: the box rib sits 4 in farther aft)
   });
   it('passes; the knee toe screws or the rating rib bending govern, about 0.65 (0.78 before D-83: the D-ring rating is 233 lbf now, not 300)', () => {
     expect(row.status).toBe('pass');

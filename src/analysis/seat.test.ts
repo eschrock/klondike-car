@@ -91,7 +91,7 @@ describe('seatChecks', () => {
     expect(byId['storage-lid-open'].status).not.toBe('fail');
   });
   it('lash points: 6 at the defaults', () => {
-    expect(byId['lash-points'].value).toBe(6);
+    expect(byId['lash-points'].value).toBe(8); // D-85: four a side
     expect(byId['lash-points'].status).not.toBe('fail');
   });
   it('lash-load by hand (D-83): 233 lbf at 45° on a D-ring bracket through-bolted to a rib head with 2 1/4-20 button-head bolts', () => {
