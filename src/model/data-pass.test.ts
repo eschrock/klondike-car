@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { buildModel } from '.';
 import { computeLayout } from './layout';
 import { defaultParams, WEATHER_SPEC } from '../params';
+import { sideRibStations } from './side-ribs';
 import { toLocal } from './joinery';
 import { planLamination } from '../build/cutlist';
 import { worldAABB } from './bounds';
@@ -123,14 +124,14 @@ describe('brake shoe', () => {
   });
 });
 
-describe('sign backer', () => {
-  it('has its insert mouths on its own outboard face (against the web), not 0.58 in outside it', () => {
-    for (const tag of ['L', 'R']) for (const n of [1, 2]) {
-      const bk = get(`sign-backer-${tag}${n}`);
-      const j = bk.joints!.find((q) => q.type === 'threaded-insert')!;
+describe('sign knob ribs (D-85)', () => {
+  it('have their insert mouths on their own back face (against the band-strip filler and the web), not outside it', () => {
+    for (const tag of ['L', 'R']) for (const n of [4, 1]) {
+      const rib = get(`side-rib-${tag}${n}`);
+      const j = rib.joints!.find((q) => q.type === 'threaded-insert')!;
       for (const a of j.at!) {
-        const w = toModel(bk.transform, a);
-        expect(Math.abs(w[1])).toBeCloseTo(L.hwC + L.sideBand, 6);
+        const w = toModel(rib.transform, a);
+        expect(Math.abs(w[1])).toBeCloseTo(sideRibStations(p, L)[n === 4 ? 3 : 0].yIn, 6);
       }
     }
   });

@@ -2009,7 +2009,7 @@ const TEMPLATES: Template[] = [
       const sts = sideRibStations(p, L);
       const eighth = (v: number): string => fin(Math.round(v * 8) / 8);
       const fromTransom = (x: number): string => eighth(x - L.xRear);
-      const name: Record<number, string> = { 1: 'Box rib', 2: 'Mid rib', 3: 'Bow post' };
+      const name: Record<number, string> = { 1: 'Box rib', 2: 'Mid rib', 3: 'Bow post', 4: 'Rear rib' };
       const pair = (n: number): string => tl([`side-rib-L${n}`, `side-rib-R${n}`]);
       const kneePair = (n: number): string => tl([`side-rib-knee-L${n}`, `side-rib-knee-R${n}`]);
       const knees = sts.filter((st) => st.kind === 'knee');
@@ -2064,7 +2064,7 @@ const TEMPLATES: Template[] = [
           ]),
           I('Glue a band-strip filler to the web at each rib, between the inner chine band and the inner gunwale band.', [
             `Each is ${fin(fillerW)} wide, cut from a spare band strip (the same thickness as the bands, grain up) to fit the gap. Lengths: ${listS(sts.map((st) => `about ${roughFrac(filler(st))} at the ${name[st.n].toLowerCase()}`))}.`,
-            `Centered on each rib station, which is measured from the transom's outer face: ${listS(sts.map((st) => `${name[st.n].toLowerCase()} ${fromTransom(st.x)}`))}. The same on both sides.`,
+            `Centered on each rib station, which is measured from the transom's outer face: ${listS([...sts].sort((a, b) => a.x - b.x).map((st) => `${name[st.n].toLowerCase()} ${fromTransom(st.x)}`))}. The same on both sides.`,
             'Epoxy to the web; the filler face must end flush with the band faces (check with a straightedge).',
           ]),
           I('Epoxy each rib to the inner bands and its filler, full face.', [
@@ -2172,8 +2172,8 @@ const TEMPLATES: Template[] = [
             const L2 = computeLayout(c.p), st = sideRibStations(c.p, L2)[0];
             const g = boxTieGeometry(c.p, L2, st);
             const ties = c.mine.filter((x) => /^box-tie-/.test(x.id)).map((x) => x.id);
-            return I(`Epoxy a box tie between each box rib and the box side: ${tl(ties)}.`, [
-              `Each tie is centered on its rib, ${fin(c.p.sideRibBoxInsetIn)} behind the front end of the box, ${fin(g.z0 - L2.deckTop)} to ${fin(g.z1 - L2.deckTop)} above the deck, grain up.`,
+            return I(`Epoxy a box tie between each box or rear rib and the box side: ${tl(ties)}.`, [
+              `Each tie is centered on its rib: the box ribs ${fin(c.p.sideRibBoxInsetIn)} behind the front end of the box, the rear ribs ${fin(c.p.sideRibRearInsetIn)} ahead of its aft end. ${fin(g.z0 - L2.deckTop)} to ${fin(g.z1 - L2.deckTop)} above the deck, grain up.`,
               'Tap each tie into the gap from above on thickened epoxy, on both faces: to the box side and to the rib. The epoxy takes up the fit.',
               'The top stands 1/8" under the coaming, so the tie is never glued to the lid frame, which moves.',
             ]);

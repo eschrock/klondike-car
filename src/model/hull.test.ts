@@ -4,7 +4,7 @@
  * Expected numbers are re-derived by hand from the params (deck 8, ply 0.472, side 0.625, rear 14 in, bow 4 in, rear face at x = -9.25).
  */
 import { describe, expect, it } from 'vitest';
-import { defaultParams, derived, thinSheet, validateParams, type Params } from '../params';
+import { defaultParams, derived, STORAGE_LOCATION, thinSheet, validateParams, type Params } from '../params';
 import { buildModel } from './index';
 import { computeLayout } from './layout';
 import { liftBarStressPsi, liftSlot, scupperSites } from './body';
@@ -92,7 +92,7 @@ describe('no exposed plywood edges (acceptance, D-35)', () => {
     expect(web.edges).toBe('captured'); // the full-height panel: the rear end in the transom dado, the front end in the bulkhead's dado, top and bottom covered by the oak bands glued on both faces (D-62)
     expect(web.joints!.filter((j) => j.type === 'dado').map((j) => j.to).sort()).toEqual(['bow-bulkhead', 'transom-rear']);
     expect(web.joints!.filter((j) => j.type === 'glue' && /^side-[LR]-/.test(j.to)).map((j) => j.to).sort()).toEqual(['side-L-chine', 'side-L-chine-in', 'side-L-gunwale', 'side-L-gunwale-in']);
-    expect(web.joints!.filter((j) => j.type === 'glue' && /^side-rib-/.test(j.to)).map((j) => j.to).sort()).toEqual(['side-rib-L1', 'side-rib-L2', 'side-rib-L3']); // D-76: the ribs glued to its inside face
+    expect(web.joints!.filter((j) => j.type === 'glue' && /^side-rib-/.test(j.to)).map((j) => j.to).sort()).toEqual(['side-rib-L1', 'side-rib-L2', 'side-rib-L3', 'side-rib-L4']); // D-76, D-85: the ribs glued to its inside face
     const deck = get(parts, 'deck');
     // D-52/D-57: one deck, in the chine rabbets all the way along, in a dado in the rear transom and in a dado in the bow bulkhead.
     expect(deck.joints!.filter((j) => j.type === 'rabbet').map((j) => j.to).sort()).toEqual(['side-L-chine-in', 'side-R-chine-in']); // the gap under the inner chine band
@@ -377,19 +377,23 @@ describe('joinery: structured joints', () => {
       .reduce((m, x) => m + (x.joints ?? []).reduce((a, j) => a + j.count, 0), 0);
     expect(both).toBeGreaterThan(s.total);
   });
-  it('the signs hang on knobs into threaded inserts in OAK BACKING STRIPS inside the 4 mm web, never into the ply alone (D-62); on by default (D-57); not a removable part (D-65)', () => {
+  it('the signs hang on knobs into threaded inserts in the box rib and the rear rib inside the 4 mm web (D-85; backing strips only in an under-seat design), never into the ply alone (D-62); on by default (D-57); not a removable part (D-65)', () => {
     expect(parts.some((x) => x.id.startsWith('sign-'))).toBe(true);
     const ps = parts;
     const sign = get(ps, 'sign-L');
     expect(sign.removable).toBeFalsy();
     expect(sign.joints!.filter((j) => j.type === 'knob').reduce((m, j) => m + j.count, 0)).toBe(4);
     expect(sign.joints!.every((j) => !/web/.test(j.to))).toBe(true); // no joint to the ply web: the knobs go into the strips
-    for (const k of [1, 2]) {
-      const bk = get(ps, `sign-backer-L${k}`);
-      expect(bk.material).toBe('white oak');
-      expect(bk.joints!.filter((j) => j.type === 'threaded-insert' && j.to === 'sign-L').reduce((m, j) => m + j.count, 0)).toBe(2);
-      expect(bk.joints!.some((j) => j.type === 'glue' && /^side-L-web/.test(j.to))).toBe(true);
+    expect(ps.some((x) => x.id.startsWith('sign-backer'))).toBe(false); // D-85: the ribs take the knobs
+    for (const k of [4, 1]) {
+      const rib = get(ps, `side-rib-L${k}`);
+      expect(rib.material).toBe('white oak');
+      expect(rib.joints!.filter((j) => j.type === 'threaded-insert' && j.to === 'sign-L').reduce((m, j) => m + j.count, 0)).toBe(2);
+      expect(rib.joints!.some((j) => j.type === 'glue' && /^side-L-web/.test(j.to))).toBe(true);
     }
+    // an under-seat design has no rear box, so the sign keeps its two backing strips
+    const under = buildModel({ ...defaults, storageLocation: STORAGE_LOCATION.underSeat });
+    for (const k of [1, 2]) expect(get(under, `sign-backer-L${k}`).joints!.filter((j) => j.type === 'threaded-insert' && j.to === 'sign-L').reduce((m, j) => m + j.count, 0)).toBe(2);
     // nothing in the model screws into a side web
     for (const x of ps) for (const j of x.joints ?? []) if (/^side-[LR]-web/.test(j.to)) expect(['screw', 'knob', 'threaded-insert', 'bolt'], `${x.id} -> ${j.to}`).not.toContain(j.type);
   });

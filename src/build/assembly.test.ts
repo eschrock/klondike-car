@@ -973,9 +973,9 @@ describe('D-76: side ribs, knees and box ties (tie-down bases)', () => {
       expect(ids.indexOf('side-ribs')).toBeGreaterThan(ids.indexOf('flip'));
       expect(ids.indexOf('side-ribs')).toBeLessThan(ids.indexOf('storage-box'));
       const mine = get('side-ribs').partIds;
-      expect(mine.filter((i) => /^side-rib-[LR]\d$/.test(i)).length).toBe(6);
+      expect(mine.filter((i) => /^side-rib-[LR]\d$/.test(i)).length).toBe(8);
       expect(mine.filter((i) => /^side-rib-knee-/.test(i)).length).toBe(4);
-      expect(get('storage-box').partIds.filter((i) => /^box-tie-/.test(i)).length).toBe(2);
+      expect(get('storage-box').partIds.filter((i) => /^box-tie-/.test(i)).length).toBe(4);
       expect(ids).not.toContain('step-5'); // no generated fallback step for them
     });
     it(`${name}: the rib step gives stations from the transom, the filler, the knee screws and the counterbores`, () => {
@@ -985,7 +985,7 @@ describe('D-76: side ribs, knees and box ties (tie-down bases)', () => {
       // the stations come from the model (the mid rib stands forward of its crossmember where the side is turned in)
       const L = computeLayout(pStdOrExt(name));
       const at = sideRibStations(pStdOrExt(name), L).map((st) => finalFrac(Math.round((st.x - L.xRear) * 8) / 8));
-      expect(t).toContain(`box rib ${at[0]}, mid rib ${at[1]} and bow post ${at[2]}`);
+      expect(t).toContain(`rear rib ${at[3]}, box rib ${at[0]}, mid rib ${at[1]} and bow post ${at[2]}`);
       expect(t).toMatch(/2 stainless #8 × 2-1\/2" screws/); // D-82: every wood screw is a #8
       expect(t).toMatch(/11\/16" and 1-13\/32" from the outboard edge/);
       expect(t).toMatch(/Counterbore each from the sloped face first, 3\/8" wide, leaving 1\/2" of oak/);
@@ -1011,7 +1011,7 @@ describe('D-76: side ribs, knees and box ties (tie-down bases)', () => {
       expect(t).toMatch(/spare band strip \(the same thickness as the bands/);
       // the filler lengths are the cut list's, rounded up to 1/8" the way its rough sizes are
       const fl = ribFillers(msr, ppp);
-      expect(t).toContain(`about ${roughFrac(fl[1].lengthIn)} at the mid rib and about ${roughFrac(fl[2].lengthIn)} at the bow post`);
+      expect(t).toContain(`about ${roughFrac(fl[1].lengthIn)} at the mid rib, about ${roughFrac(fl[2].lengthIn)} at the bow post and about ${roughFrac(fl[3].lengthIn)} at the rear rib`);
       expect(t).toMatch(/sit a booted rider in the bare hull and confirm the bow-post station/);
       expect(t).not.toMatch(/\d\.\d{2,}/);
       expect(t).not.toMatch(/doubler/i);
@@ -1019,7 +1019,7 @@ describe('D-76: side ribs, knees and box ties (tie-down bases)', () => {
     });
     it(`${name}: the box tie is glued at the box install, never to the lid frame; the D-ring brackets are bolted at the final fit with the bracket as the template`, () => {
       const box = txt(get('storage-box'));
-      expect(box).toMatch(/box tie between each box rib and the box side/);
+      expect(box).toMatch(/box tie between each box or rear rib and the box side/);
       expect(box).toMatch(/never glued to the lid frame/);
       // D-ring and grab-board holes are drilled at the rib step, before any finish, with the bracket as the template and a scrap block outside; the final fit only bolts
       const rib = txt(get('side-holes'));

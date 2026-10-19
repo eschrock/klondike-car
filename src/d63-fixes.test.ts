@@ -207,8 +207,7 @@ describe('S4: the sign standoff and knob screws', () => {
     expect(j.size).toMatch(/#10-32 × 0\.875 in thumb-knob screw/);
     expect(j.size).toMatch(/standoff disc/);
     expect(get('sign-L').notes).toMatch(/standoff discs/);
-    expect(get('sign-backer-L1').notes).toMatch(/0\.875 in long/);
-    expect(get('sign-backer-L1').notes).not.toMatch(/1 in long/);
+    expect(j.size).not.toMatch(/× 1 in thumb-knob/);
   });
 });
 

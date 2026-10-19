@@ -1207,8 +1207,8 @@ const sortCuts = (cuts: Cut[]): Cut[] => {
 
 /** One filler behind a side rib (D-76): a piece of band strip, `widthIn` wide, glued to the web between the inner chine and gunwale bands so the rib's back sits flat. */
 export interface RibFiller {
-  /** Rib station (1 box rib, 2 mid rib, 3 bow post), and its role in words. */
-  n: 1 | 2 | 3;
+  /** Rib station (1 box rib, 2 mid rib, 3 bow post, 4 rear rib), and its role in words. */
+  n: 1 | 2 | 3 | 4;
   role: string;
   /** Fillers of this station (one per side). */
   count: number;
@@ -1224,7 +1224,7 @@ export function ribFillers(parts: ReadonlyArray<Pick<Part, 'id'>>, p: Params): R
   if (!ribs.length) return [];
   const L = computeLayout(p);
   const zChineTop = L.chineBot + L.chineH;
-  const roles: Record<number, string> = { 1: 'box rib', 2: 'mid rib', 3: 'bow post' };
+  const roles: Record<number, string> = { 1: 'box rib', 2: 'mid rib', 3: 'bow post', 4: 'rear rib' };
   return sideRibStations(p, L).map((st) => {
     const foot = st.kind === 'box' ? boxTieGeometry(p, L, st).z0 : L.deckTop;
     return {
