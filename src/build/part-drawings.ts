@@ -696,7 +696,7 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
     let size = `${dia ? `${drill(dia)} ` : ''}${word}, ${depth}`;
     const cb = new RegExp(String.raw`counterbore the head ${NUM}"?\s*(?:in\s*)?up the \w+ from its (underside|top)\s*\(${NUM}"?\s*(?:in\s*)?bit\)`).exec(r.text);
     let cbore: { dia: number; depth: number } | undefined;
-    if (cb && part.partNo === 'rail') { cbore = { dia: num(cb[3]), depth: num(cb[1]) }; size += `, with a ${drill(cbore.dia)} × ${frac(cbore.depth)} counterbore from the ${cb[2] === 'underside' ? words.side[1][0] : words.side[1][1]}`; notes.push('Plug each counterbore after the screw is in: a 3/8" oak plug cut with a plug cutter from offcuts (or a 3/8" dowel), glued in and trimmed flush.'); }
+    if (cb && part.partNo === 'rail') { cbore = { dia: num(cb[3]), depth: num(cb[1]) }; size += `, with a ${drill(cbore.dia)} × ${frac(cbore.depth)} counterbore from the ${cb[2] === 'underside' ? words.side[1][0] : words.side[1][1]}`; notes.push(`Plug each counterbore after the screw is in: a ${frac(cbore.dia)} oak plug cut with a plug cutter from offcuts (or a ${frac(cbore.dia)} dowel), glued in and trimmed flush.`); }
     // D-83: the side drain holes are located from ONE datum, the inner face of the rear transom (the web's rear end sits in its dado, the bands start at the face).
     const trFace = byId.get('transom-rear');
     const uShift = /drain hole/.test(t) && /^side-/.test(part.id) && trFace ? worldAABB(part).min[0] - worldAABB(trFace).max[0] : undefined;
@@ -1942,6 +1942,13 @@ export interface PartDims {
   grain: string;
   /** The key features, one short line each. */
   features: string[];
+}
+
+/** The mortise boxes of a part (Dominos, loose-tenon and tenon mortises), in its board frame, one per mortise: for the test that no two mortises in one part meet. */
+export function mortiseBoxes(part: Part, parts: Part[], p: Params): Array<{ key: string; lo: Vec3; hi: Vec3 }> {
+  const a = analyze(part, parts.includes(part) ? parts : [...parts, part], p);
+  if (!a) return [];
+  return a.feats.flatMap((f) => (f.k === 'region' && f.kind === 'mortise' ? f.boxes.map(([lo, hi]) => ({ key: f.key, lo, hi })) : []));
 }
 
 /** A short summary of a part for a popover: final T × W × L as fractions, the board, the grain and the key features. Pass `parts` and `p` to include inbound, passing-bolt and rod features. */

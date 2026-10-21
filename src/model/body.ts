@@ -16,6 +16,9 @@ import { compose } from './mat4';
 import { STORAGE_LOCATION, thinSheet, WEATHER_SPEC } from '../params';
 import type { Dims, EdgeCondition, Mat4, Part, PartGroup, Vec2, Vec3 } from './types';
 
+/** Shop clearance: the rear transom backers stop this far in from the inner band's face, so a band end standing a hair proud does not hold the transom off (round 2 fix). */
+export const TRANSOM_BACKER_BAND_CLEAR_IN = 1 / 16;
+
 /** Cosmetic sampling of the curved outlines (D-44): transom crown, rounded corners; the sloped sides and the curl. */
 const CROWN_SEGMENTS = 16;
 const CORNER_SEGMENTS = 6;
@@ -407,16 +410,18 @@ export function buildBody(ctx: Ctx): Part[] {
       notes: `${tT}" oak, glued up from two boards (no board is ${(w0 * 2).toFixed(0)}" wide; keep the glue line clear of the slot), as tall as the rear side of the sheer (${p.sideHeightRearIn}" above the deck, D-54, D-57). Lift hand-hold ${rs.lengthIn}" × ${p.liftSlotHeightIn}" (gloved hand), ${rs.barIn}" of oak above it; routed 3/8" roundovers both faces. The top edge is a ${p.transomCrownIn}" crown (arc) with ${p.transomCornerRadiusIn}" rounded corners (D-44). Deck dado ${dd}" deep × ${(L.ply + ds).toFixed(3)}" (deck + ${ds}" clearance) on the front face, run out at each end into the dados for the side panels (one continuous pocket at each corner, D-35, D-37); those web dados start at the chine and run out through the top edge (open at the top, so no thin wall is left at the rounded corner); the dados are vented with ${p.ventHoleIn}" holes through the transom (4 holes: bung or epoxy-fill them after the glue-up). `
         + `THE TRANSOM IS CLOSED FIRST (M4, 3c S1; the bulkhead follows with a second batch): it slides in X onto the deck edge, both web ends (in their dados) and the rail tenons, and the chine and gunwale band ends butt against it with an epoxy fillet (a 0.234" band takes no Domino) in one glue-up of about a dozen joints (use 120-minute slow epoxy, rehearse twice); the corner backers and the handle-socket holes are done on the bench first.`,
     }));
-    // Backers behind the handle sockets (build review S13, D-43): the bolts pull on them from the outside.
+    // Backers behind the handle sockets (build review S13, D-43): the bolts pull on them from the outside. Their outer edge stands TRANSOM_BACKER_BAND_CLEAR_IN in from the inner band's
+    // face (round 2 fix: flush, the band end and the backer edge met in one line and the backer could not slide past a proud band).
     const hg = handleGeometry(p, L);
     const bkT = p.blockingThickIn;
+    const bkGlue = p.weatherSpec === WEATHER_SPEC.extreme ? 'epoxy' : 'Titebond III'; // D-73
     for (const { s, tag } of SIDES) {
-      const yHi = L.hwC, yLo = Math.max(0.5, hg.yPost - hg.socketY / 2 - 0.5);
+      const yHi = L.hwC - TRANSOM_BACKER_BAND_CLEAR_IN, yLo = Math.max(0.5, hg.yPost - hg.socketY / 2 - 0.5);
       const bz0 = Math.max(L.deckTop + 0.5, hg.zBot - 0.5), bz1 = hg.zTop;
       parts.push(box(ctx, {
         id: `transom-backer-${tag}`, partNo: 'transom-backer', name: `Rear transom backer ${tag}`, group: 'body', mat: 'oak', step: HULL_STEP.transom, grain: 'z',
         ...span([rearTx, rearTx + bkT], [s * yLo, s * yHi].sort((x, y) => x - y) as [number, number], [bz0, bz1]),
-        notes: `${bkT}" oak backer glued (epoxy, full face) to the INSIDE of the rear transom behind the push-handle socket: the socket bolts (1/4-20 button-head screws into ${stainless(p)} T-nuts set in it, no nuts behind the box) pull on ${tT + bkT}" of oak instead of ${tT}". Glue it on the bench before the transom goes on; a rear storage box starts ${bkT}" farther forward (Layout.rearLane).`,
+        notes: `${bkT}" oak backer glued (${bkGlue}, full face) to the INSIDE of the rear transom behind the push-handle socket: the socket bolts (1/4-20 button-head screws into ${stainless(p)} T-nuts set in it, no nuts behind the box) pull on ${tT + bkT}" of oak instead of ${tT}". Glue it on the bench before the transom goes on; a rear storage box starts ${bkT}" farther forward (Layout.rearLane).`,
       }));
     }
   }

@@ -181,8 +181,8 @@ describe('part drawings', () => {
     const rail = sheets.find((x) => x.partNo === 'rail')!;
     const c = rail.features.find((f) => f.kind === 'hole' && /counterbore/.test(f.text))!;
     // D-81, D-82: no Dominos in the chine tie; the rail takes the #8 screws in every gap, 7 counterbored and 1 shallow-zone hole at the bow
-    expect(c.text).toMatch(/^7 holes, 11\/64" clearance, through, with a 3\/8" × 1" counterbore from the BOTTOM edge\./); // a #8 flat head is about 11/32" across: the bore is 3/8" (not 5/16")
-    expect(texts(rail.svg).join(' ')).toMatch(/3\/8" oak plug cut with a plug cutter from offcuts \(or a 3\/8" dowel\)/);
+    expect(c.text).toMatch(/^7 holes, 11\/64" clearance, through, with a 1\/4" × 1" counterbore from the BOTTOM edge\./); // D-91: a #8 trim head is about 7/32" across: a 1/4" bore leaves about 3/32" of wall at the hull's outside
+    expect(texts(rail.svg).join(' ')).toMatch(/1\/4" oak plug cut with a plug cutter from offcuts \(or a 1\/4" dowel\)/);
     expect(c.purpose).toMatch(/^for the #8 × 2-1\/2" screws to the left chine/);
     expect(rail.features.filter((f) => f.kind === 'hole' && /left chine/.test(f.purpose ?? '')).reduce((n, f) => n + f.count, 0)).toBe(8);
     expect(rail.features.some((f) => /chine/.test(f.purpose ?? '') && f.kind === 'mortise')).toBe(false);

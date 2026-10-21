@@ -106,6 +106,12 @@ function column(F: Fig, x: number, anchor: 'start' | 'end', items: Array<{ at: V
   }
 }
 
+/** A rectangle cut off at its left end (u0): filled, outlined on the other three sides only, so a break line can stand at u0. */
+function openLeft(V: View, u0: number, u1: number, v0: number, v1: number, st: Style): void {
+  V.rect(u0, u1, v0, v1, { ...st, stroke: undefined });
+  V.poly([[u0, v0], [u1, v0], [u1, v1], [u0, v1]], { stroke: st.stroke, width: st.width, dash: st.dash }, false);
+}
+
 /** The lowest edge of a part's (x, z) profile at x (a rail's bottom, with its notches and its step). */
 function profileBottomAt(part: Part | undefined, x: number): number | null {
   const g = part?.geometry;
@@ -163,7 +169,9 @@ function rearPlan(c: FigCtx, G: Gear, F: Fig, box: { x: number; y: number; w: nu
   const kneeStyle = focus === 'knees' ? mine('oak') : ghost();
   for (const t of ['L', 'R']) {
     B(bx(c, `brake-backer-${t}`), focus === 'knees' ? ghost({ dash: undefined, fill: MAT.oak.fill, stroke: MAT.oak.stroke }) : ghost());
-    B(bx(c, `brake-backplate-${t}`), focus === 'knees' ? mat('steel') : ghost());
+    const pb = bx(c, `brake-backplate-${t}`);
+    // drawn at least 3 px thick so the stainless shows at plan scale (it is 1/8" thick, on the backer's inside face)
+    if (pb) { const tMin = 3 / V.k, mid = pb.y1 > 0 ? pb.y0 : pb.y1; B({ ...pb, y0: pb.y1 > 0 ? mid : mid - tMin, y1: pb.y1 > 0 ? mid + tMin : mid }, focus === 'knees' ? mat('steel', { width: 1 }) : ghost()); }
   }
   // the beam and what is on its far (grooved) face
   const beamStyle = focus === 'beam' ? mine('oak') : mat('oak', { opacity: 0.55 });
@@ -342,7 +350,7 @@ const kingpinSection: FigFn = (c) => {
   // deck, king beam with its nut slot and bore, the tongue (later)
   V.rect(u0, u1, deck.z0, deck.z1, ghost());
   V.rect(kb.x0, kb.x1, kb.z0, kb.z1, ghost({ dash: undefined }));
-  const slot = kingNutSlot(p, G.L), ceil = slot.ceil, floor = slot.floor, wt = washerThick(kd);
+  const slot = kingNutSlot(p, G.L), ceil = slot.ceil, floor = slot.floor;
   V.rect(slot.x0, slot.x1, floor, ceil, { fill: '#ffffff', stroke: '#a9a9a9', width: 1 });
   if (tongue) V.rect(tongue.x0, u1, tongue.z0, tongue.z1, { stroke: MUTED, width: 1.2, dash: '6 4' });
   // the disc (this step) with two of its three screws, counterbored from the disc face
@@ -351,9 +359,16 @@ const kingpinSection: FigFn = (c) => {
   const rS = scr.length ? Math.hypot(scr[0][0], scr[0][1]) : (disc.x1 - disc.x0) * 0.3; // the screws sit on a circle about the bolt (the disc's own joint)
   const cb = /(\S+)" wide × (\S+)" deep counterbore/.exec(c.by('king-thrust')?.joints?.find((j) => j.type === 'screw')?.size ?? '');
   const cbW = cb ? parseFrac(cb[1]) : 3 * kd / 5, cbD = cb ? parseFrac(cb[2]) : (disc.z1 - disc.z0) / 2;
-  for (const k of [-1, 1]) {
-    V.rect(kx + k * rS - cbW / 2, kx + k * rS + cbW / 2, disc.z0, disc.z0 + cbD, { fill: '#ffffff', stroke: UHMW.stroke, width: 1 });
-    F.screw(V.at(kx + k * rS, disc.z0 + cbD), V.at(kx + k * rS, disc.z0 + cbD + 1.0), true, ACCENT);
+  // the screws from the disc's own joint: the one in the cut (straight aft) drawn solid, the two beside the slot (behind the cut) dashed
+  const pts = scr.length ? scr : [[-rS, 0, 0]];
+  let sAft = kx - rS;
+  for (const q of pts) {
+    const sx = kx + q[0];
+    if (Math.abs(q[1]) < 0.2) {
+      sAft = sx;
+      V.rect(sx - cbW / 2, sx + cbW / 2, disc.z0, disc.z0 + cbD, { fill: '#ffffff', stroke: UHMW.stroke, width: 1 });
+      F.screw(V.at(sx, disc.z0 + cbD), V.at(sx, disc.z0 + cbD + 1.0), true, ACCENT);
+    } else V.rect(sx - 0.08, sx + 0.08, disc.z0 + cbD, disc.z0 + cbD + 1.0, { stroke: ACCENT, width: 1, dash: '3 2' });
   }
   // the beam and the bolt: head and plate washer under the beam, washer and nylock nut in the slot
   V.rect(beam.x0, beam.x1, beam.z0, beam.z1, mine('oak'));
@@ -361,9 +376,9 @@ const kingpinSection: FigFn = (c) => {
   V.rect(kx - kd / 2, kx + kd / 2, pin.z0, ceil, plainMine({ width: 1.2 }));
   V.rect(kx - 1.6 * kd, kx + 1.6 * kd, beam.z0 - head * 0.3, beam.z0, plainMine({ width: 1.2 }));
   V.rect(kx - 0.75 * kd, kx + 0.75 * kd, pin.z0, beam.z0 - head * 0.3, plainMine({ width: 1.2 }));
-  V.rect(kx - slot.washerOd / 2, kx + slot.washerOd / 2, floor, floor + wt, plainMine({ width: 1.2 }));
-  V.rect(kx - 0.75 * kd, kx + 0.75 * kd, floor + wt, floor + wt + slot.nutH, plainMine({ width: 1.2 }));
-  V.rect(kx - kd / 2, kx + kd / 2, floor + wt, ceil, { stroke: PLAIN.stroke, width: 1, dash: '3 2' }); // the bolt runs on through the nut
+  const nz0 = floor + (slot.h - slot.nutH) / 3; // the nut where the backed-off bolt leaves it, a little off the slot floor
+  V.rect(kx - slot.nutAf / 2, kx + slot.nutAf / 2, nz0, nz0 + slot.nutH, plainMine({ width: 1.2 }));
+  V.rect(kx - kd / 2, kx + kd / 2, nz0, ceil, { stroke: PLAIN.stroke, width: 1, dash: '3 2' }); // the bolt runs on through the nut
   // it swings: a turning arrow round the bolt, above the head
   const hc = V.at(kx, pin.z0 - 0.12);
   F.raw(`<path d="M${hc[0] - 34},${hc[1] - 4} A34 9 0 1 0 ${hc[0] + 30},${hc[1] - 9}" fill="none" stroke="${ACCENT}" stroke-width="2"/>`);
@@ -379,9 +394,9 @@ const kingpinSection: FigFn = (c) => {
   ], { top: 60 });
   column(F, rx, 'start', [
     ...(tongue ? [{ at: V.at(u1 - 0.3, tongue.z0 + 0.2), text: ['pulling tongue (dashed:', 'it goes on after the flip)'] }] : []),
-    { at: V.at(kx + rS, disc.z0 + 0.8), text: ['one of 3 flat-head screws holding', 'the disc to the king beam, its', 'head down in a counterbore'] },
-    { at: V.at(kx + 0.75 * kd, floor + wt + slot.nutH / 2), text: ['nylock nut and washer in the', 'slot: snug, then back off a', 'quarter turn so the beam swings'] },
-    { at: V.at(kb.x1 - 0.1, floor + 0.05), text: [`the slot, ${f16(slot.w)} wide × ${f16(slot.h)} tall,`, 'is open at the front face'] },
+    { at: V.at(sAft, disc.z0 + cbD + 0.75), text: ['3 flat-head screws hold the disc:', 'one straight aft (shown), two at', '120° from it (dashed), heads', 'down in counterbores'] },
+    { at: V.at(kx + slot.nutAf / 2, floor + slot.h / 2), text: ['nylock nut, no washer: the slot\'s', 'walls hold it. Turn the bolt from', 'its head: snug, then back it off', 'a quarter turn'] },
+    { at: V.at(kb.x1 - 0.1, floor + 0.05), text: [`the slot, ${f32(slot.w)} wide × ${f16(slot.h)} tall,`, 'is open at the front face'] },
   ], { top: 60 });
   F.text([V.at(u0, 0)[0], V.at(0, v1)[1] + 20], 'rear', { size: 12, color: MUTED });
   F.text([V.at(u1, 0)[0], V.at(0, v1)[1] + 20], 'bow', { size: 12, color: MUTED, anchor: 'end' });
@@ -390,7 +405,7 @@ const kingpinSection: FigFn = (c) => {
   return {
     id: 'front-kingpin',
     title: 'The kingpin stack',
-    caption: `Cut fore and aft through the kingpin bolt, the way up you see it with the hull upside down. The plastic thrust disc is screwed to the king beam (built with the frame) and stays there; the front axle beam lies on it and turns under it. The bolt goes up through the beam, the disc and the king beam, and its nylock nut sits in the slot cut into the king beam's front face. Snug the nut, then back it off a quarter turn: the bolt only locates the beam, so the beam must swing freely through the full lock.`,
+    caption: `Cut fore and aft through the kingpin bolt, the way up you see it with the hull upside down. The plastic thrust disc is screwed to the king beam (built with the frame) and stays there; the front axle beam lies on it and turns under it. The bolt goes through the beam, the disc and the king beam (down through them as the hull lies now), and its nylock nut sits in the slot cut into the king beam's front face, with no washer: the slot is only a little wider than the nut's flats, so it holds the nut while you turn the bolt from its head. Snug it, then back it off a quarter turn: the bolt only locates the beam, which swings on its shank through the full lock. The disc's three screws keep clear of the slot: one straight aft, two at 120° from it.`,
     svg: F.svg('The kingpin stack in section: beam, thrust disc, king beam, bolt and nut'),
   };
 };
@@ -505,21 +520,21 @@ const frontSection: FigFn = (c) => {
   if (!G || !beam || !disc || !kb || !pin || !deck || !stub || !p1 || !p2 || !pad) return null;
   const { L, rs } = G;
   const p = c.p, x = (beam.x0 + beam.x1) / 2, rodR = p.axleDiameterIn / 2, top = beam.z1;
-  const F = new Fig(760, 380);
+  const F = new Fig(760, 420);
   F.heading('The front beam\'s left end, cut along the axle (hull upside down)');
   const u0 = Math.min(p2.y0, stub.y0) - 1.6, u1 = stub.y1 + 0.4, v0 = beam.z0 - 0.3, v1 = deck.z1 + 0.6;
-  const V = view(F, { u0, u1, v0, v1 }, { x: 175, y: 62, w: 400, h: 200 }, true);
+  const V = view(F, { u0, u1, v0, v1 }, { x: 190, y: 70, w: 390, h: 220 }, true);
   const ti = L.turnIn(x);
   const railY0 = rs.railYIn - ti, railY1 = railY0 + rs.railT, railBot = profileBottomAt(c.by('rail-L'), x) ?? pad.z1 + 0.1;
   const deckEdge = L.hwC - ti + L.deckEdge;
-  V.rect(u0, deckEdge, deck.z0, deck.z1, ghost());
+  openLeft(V, u0, deckEdge, deck.z0, deck.z1, ghost());
   V.rect(L.hwC - ti, L.hwC - ti + L.side, L.railTop, v1, ghost());
   V.rect(railY0, railY1, railBot, L.railTop, ghost({ dash: undefined }));
-  V.rect(u0, kb.y1, kb.z0, kb.z1, ghost({ dash: undefined }));
+  openLeft(V, u0, kb.y1, kb.z0, kb.z1, ghost({ dash: undefined }));
   const hr = kingHeadRelief(p, L);
   if (hr) V.rect(hr.yIn, Math.min(hr.yOut, kb.y1), kb.z0 - 0.01, kb.z0 + hr.depth, { fill: '#ffffff', stroke: '#a9a9a9', width: 1 });
   // the beam, the stub in its groove, the plates and the pad on the stub
-  V.rect(u0, beam.y1, beam.z0, top, mine('oak'));
+  openLeft(V, u0, beam.y1, beam.z0, top, mine('oak'));
   V.rect(stub.y0, stub.y1, top + p.axleProudIn - 2 * rodR, top + p.axleProudIn, plainMine());
   V.rect(stub.y0, beam.y1, beam.z0, top, { stroke: ACCENT, width: 1.8 });
   const bd = p.uboltRodDiameterIn;
@@ -552,14 +567,13 @@ const frontSection: FigFn = (c) => {
     ...(eye ? [{ at: V.at((eye.y0 + eye.y1) / 2 - 0.15, (eye.z0 + eye.z1) / 2), text: ['eye-bolt hole,', 'fore and aft'] }] : []),
     { at: V.at(u0 + 0.5, beam.z0 + 1.3), text: ['front axle', 'beam'] },
     ...(hr ? [{ at: V.at((hr.yIn + Math.min(hr.yOut, kb.y1)) / 2, kb.z0 + hr.depth / 2), text: ['relief in the king beam,', `${f16(hr.depth)} deep: the heads`, 'swing under it'] }] : []),
-    { at: V.at(u0 + 0.5, (kb.z0 + kb.z1) / 2 + 0.3), text: ['king beam', '(built)'] },
-    { at: V.at(u0 + 0.5, (deck.z0 + deck.z1) / 2), text: 'deck' },
-  ], { top: 66 });
+    { at: V.at(u0 + 0.5, (kb.z0 + kb.z1) / 2 + 0.3), text: ['king beam and', 'deck (built)'] },
+  ], { top: 66, gap: 10 });
   const bl = V.at(0, v1)[1] + 22;
-  F.label(V.at(p2.y0 + 0.15, p2.z1 - 0.05), [V.at(p2.y0, 0)[0] - 30, bl], ['inner clamp plate', 'and its bolt heads'], { anchor: 'end', size: 12.5 });
+  F.label(V.at(p2.y1 - 0.15, p2.z1 - 0.05), [V.at(p2.y1, 0)[0] + 2, bl + 44], ['inner clamp plate', 'and its bolt heads'], { anchor: 'start', size: 12.5 });
   F.label(V.at((railY0 + railY1) / 2, (railBot + L.railTop) / 2), [V.at(railY1, 0)[0] + 12, bl], 'rail', { anchor: 'start', size: 12.5 });
-  F.label(V.at((pad.y0 + pad.y1) / 2 + 0.6, pad.z1), [V.at(pad.y1, 0)[0] + 30, bl + 22], ['roll pad (plastic) on the stub:', 'a small gap under the rail,', 'set with tape'], { anchor: 'start', size: 12.5 });
-  legend(F, ['oak', 'steel', PLAIN, UHMW, 'ghost'], [16, 370]);
+  F.label(V.at((pad.y0 + pad.y1) / 2 + 0.6, pad.z1), [V.at(pad.y1, 0)[0] + 30, bl + 22], ['roll pad (plastic) on the stub;', 'tape shims under it only if its', 'gap to the rail is too big'], { anchor: 'start', size: 12.5 });
+  legend(F, ['oak', 'steel', PLAIN, UHMW, 'ghost'], [16, 410]);
   F.note('Section, not to scale');
   return {
     id: 'front-beam-section',
@@ -642,15 +656,15 @@ const kneesWhere: FigFn = (c) => {
   ], { top: 380 });
   const backed = (at: Vec2, t: string): void => { F.rect(at[0] - 3, at[1] - 13, t.length * 6.7 + 6, 17, { fill: '#ffffff', opacity: 0.9 }); };
   if (bk) backed([W.at(-7, 0)[0], W.at(0, bk.x1 + 3.4)[1]], 'oak backer inside the rail');
-  if (pl) backed([W.at(-7, 0)[0], W.at(0, (bk?.x1 ?? 0) + 1.7)[1]], 'steel backing plate: the nuts go on it');
+  if (pl) backed([W.at(-7, 0)[0], W.at(0, (bk?.x1 ?? 0) + 1.7)[1]], 'stainless backing plate: the nuts go on it');
   if (bk) F.label(W.at(-bk.y0 - 0.1, bk.x1 - 0.2), [W.at(-7, 0)[0], W.at(0, bk.x1 + 3.4)[1]], 'oak backer inside the rail', { anchor: 'start', size: 12.5 });
-  if (pl && bk) F.label(W.at(-pl.y0, (pl.x0 + pl.x1) / 2), [W.at(-7, 0)[0], W.at(0, bk.x1 + 1.7)[1]], 'steel backing plate: the nuts go on it', { anchor: 'start', size: 12.5 });
+  if (pl && bk) F.label(W.at(-pl.y0, (pl.x0 + pl.x1) / 2), [W.at(-7, 0)[0], W.at(0, bk.x1 + 1.7)[1]], 'stainless backing plate: the nuts go on it', { anchor: 'start', size: 12.5 });
   const yb = W.at(0, L.xRear - 0.6)[1];
   F.text([W.at(L.hwC + L.side, 0)[0], yb + 18], 'sled\'s LEFT side', { size: 12.5, weight: 'bold', color: MUTED, anchor: 'middle' });
   F.text([W.at(-(L.hwC + L.side), 0)[0], yb + 18], 'sled\'s RIGHT side', { size: 12.5, weight: 'bold', color: MUTED, anchor: 'middle' });
   F.arrow([30, 470], [30, 420], MUTED, 2);
   F.text([30, 488], 'bow', { size: 12, color: MUTED, anchor: 'middle' });
-  legend(F, ['oak', 'steel', PLAIN, 'rubber', 'ghost'], [16, 680]);
+  legend(F, ['oak', 'steel', PLAIN, 'ghost'], [16, 680]);
   F.note('Side view and plan, each to its own scale');
   return {
     id: 'brake-knees-where',
@@ -696,6 +710,7 @@ const kneeSection: FigFn = (c) => {
     { at: V.at(bk.y0 + 0.35, bk.z1 - 0.3), text: ['oak backer, glued to', 'the rail at the frame step'] },
     { at: V.at(u0 + 0.3, (deck.z0 + deck.z1) / 2), text: 'deck' },
     { at: V.at((web0 + web1) / 2, v1 - 1.5), text: ['hull side (its bottom', 'band rests on the rail)'] },
+    ...(chOut ? [{ at: V.at((web1 + L.hwC + L.side) / 2, (chOut.z0 + chOut.z1) / 2), text: ['outer bottom band: the knee', 'bears on it and the rail only'] }] : []),
   ], { top: 66 });
   column(F, rx, 'start', [
     { at: V.at(yHead + 0.2, g.bolts.zs[0]), text: [`${g.bolts.count} bolts, ${f16(bd)}, with a washer`, 'under each head on the', 'knee\'s outer face'] },
@@ -746,7 +761,7 @@ const wheelOnAxle: FigFn = (c) => {
   V.rect(u0, rod.y1, r - rodR, r + rodR, plain());
   // the wheel (this step): the tire beyond the rim, the rim and the hub on the rod
   for (const [a, b] of [[v0, r - rimR], [r + rimR, v1]] as Array<[number, number]>) V.rect(wheel.y0, wheel.y1, a, b, mine('rubber'));
-  V.rect(hub0, hub1, r - rimR, r + rimR, { fill: '#d5dade', stroke: HUB.stroke, width: 1 });
+  V.rect(hub0, hub1, r - rimR, r + rimR, plain({ fill: '#c9cfd5' }));
   V.rect(hub0, hub1, r - rodR - 0.4, r + rodR + 0.4, { fill: HUB.fill, stroke: ACCENT, width: 1.6 });
   V.rect(u0, rod.y1, r - rodR, r + rodR, plain());
   // washer, collar, cotter pin

@@ -117,8 +117,8 @@ describe('forms and templates', () => {
     const steps = byId('side-form').build.flatMap((b) => [b.step, ...(b.sub ?? [])]);
     const caps = steps.filter((t) => /^Cap: /.test(t));
     expect(caps).toHaveLength(2);
-    expect(caps[0]).toContain(`× ${frac(web.heightIn + 1)}, a plain rectangle`);
-    expect(caps[1]).toContain(`× ${frac(web.heightIn + 3)}, a plain rectangle 1-1/2" wider than the web each side`);
+    expect(caps[0]).toContain(`× ${frac(web.heightIn + 1)}, a plain rectangle centered on the ribs, running 2" past the web's bow end`);
+    expect(caps[1]).toContain(`× ${frac(web.heightIn + 3)}, a plain rectangle, running 2" past the web's bow end, 1-1/2" wider than the web each side`);
     expect(steps.join(' ')).not.toMatch(/web's outline plus|second template/);
   });
 

@@ -140,7 +140,7 @@ describe('sign knob ribs (D-85)', () => {
 describe('storage lid frame', () => {
   it('joins its corners with a loose tenon that leaves at least the Domino wall minimum of wood beyond the mortise ends', () => {
     const side = get('storage-rim-side-L');
-    for (const j of side.joints!) {
+    for (const j of side.joints!.filter((q) => q.to !== 'storage-lid-stay')) { // D-89: the lid support's arm-end screws also land in the left side
       expect(j.type).toBe('mortise-tenon');
       expect(j.size).toMatch(/loose tenon \(both parts mortised\)/);
       const m = /(\d+)\/(\d+)" of wood left/.exec(j.size!)!;

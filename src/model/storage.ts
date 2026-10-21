@@ -14,10 +14,12 @@ import { STEP, box, cylinder, frac16 as frac, span, SIDES, type Ctx, stainless }
 import { localBounds, worldAABB } from './bounds';
 import { type Layout } from './layout';
 import { seatBackSupport } from './seat';
+import { profilePart } from './profile';
 import type { Joint, Part, Vec3 } from './types';
 
 // ── Hardware and detail dimensions (estimates, D-41) ──
-const HINGE_MASS_LB = 0.15;
+/** D-89 (round 2): a 2-1/2" x 1-1/2" (open) butt hinge, 3/4" leaves, so the lid leaf fits the 3/4" lid frame face; lighter than the old 2-3/4" one. */
+const HINGE_MASS_LB = 0.1;
 const LATCH_MASS_LB = 0.15;
 const CATCH_MASS_LB = 0.03;
 const DRAIN_MASS_LB = 0.03;
@@ -39,7 +41,9 @@ const HINGE_BACKER_IN = 1.25;
 /** A butt hinge leaf (the model's 316 hinges). */
 const LEAF_IN = 1 / 16;
 const HINGE_W_IN = 2.5;
-const HINGE_H_IN = 2.7;
+const HINGE_H_IN = 1.5;
+/** Depth of the lid panel's rabbet in the frame (the joint text's "1/4 deep"): the corner mortises stay below its floor. */
+const LID_RABBET_IN = 0.25;
 
 export interface StorageGeometry {
   x0: number;
@@ -346,7 +350,8 @@ export function buildStorage(ctx: Ctx): Part[] {
     legend: { text: 'DO NOT STEP', face: 'top', process: 'CNC V-carve or laser engrave, then fill with black epoxy or paint', letterHeightIn: 1.5, depthIn: 0.03 },
     notes: 'Ply lid panel captured in the oak frame; the frame underside seals on the gasket. The top face is engraved DO NOT STEP (D-58, Eric 2026-10-11): the lid is a seat-cushion box lid, not a step, and is NOT strengthened for a standing adult; the rest-load check leaves it out for that reason.' }));
   const rz: [number, number] = [zTop - pl - rimT, zTop];
-  const zMid = (rz[0] + rz[1]) / 2;
+  // Round 2: the corner mortise is centered low enough to stay 1/16 in under the rabbet floor (centered on the frame it broke into the rabbet wall).
+  const zMid = Math.min((rz[0] + rz[1]) / 2, rz[1] - LID_RABBET_IN - tenT / 2 - 1 / 16);
   const cornerPts = (xs: number, ys: number): { side: Vec3; end: Vec3 } => ({ side: [xs, ys, zMid], end: [xs, ys, zMid] });
   for (const [tag, y] of [['L', hw - rimW / 2], ['R', -(hw - rimW / 2)]] as const) {
     const sideP = box(ctx, { ...common, id: `storage-rim-side-${tag}`, partNo: 'storage-rim-side', name: `Storage lid frame side ${tag}`, mat: 'oak', grain: 'x',
@@ -368,8 +373,8 @@ export function buildStorage(ctx: Ctx): Part[] {
     const bx = x0 + rimW + (inner * n) / (nBatten + 1);
     parts.push(box(ctx, { ...common, id: `storage-lid-batten-${n}`, partNo: 'storage-lid-batten', name: `Storage lid batten ${n}`, mat: 'oak', grain: 'y',
       ...span([bx - BATTEN_X_IN / 2, bx + BATTEN_X_IN / 2], [-(hw - rimW), hw - rimW], [zTop - pl - rimT, zTop - pl]),
-      joints: [{ type: 'glue', to: 'storage-lid', count: 1, note: 'thickened epoxy + 4 stainless screws from the top, countersunk flush and filled with epoxy (the 6 mm panel has no room for a plug)' }, { type: 'glue', to: 'storage-rim-side-L', count: 1, note: 'end butted to the frame side, thickened epoxy (no dado)' }, { type: 'glue', to: 'storage-rim-side-R', count: 1, note: 'end butted to the frame side, thickened epoxy (no dado)' }],
-      notes: 'Stiffens the lid panel against sagging under a light cooler or a hand (the thin panel alone would sag): cut to the clear span between the frame sides, glued to the panel\'s underside (lid face down, weighted) and butted to the frame sides with thickened epoxy; 4 stainless screws from the top, countersunk flush and filled, clamp it while the epoxy cures. The lid is engraved DO NOT STEP and is not a step (D-58); the lid-load row sizes the battens for the rated lid load (D-53).' }));
+      joints: [{ type: 'glue', to: 'storage-lid', count: 1, note: 'thickened epoxy, the lid face down on a flat bench and weighted for 24 h (no screws: nothing goes through the thin panel)' }, { type: 'glue', to: 'storage-rim-side-L', count: 1, note: 'end butted to the frame side, thickened epoxy (no dado)' }, { type: 'glue', to: 'storage-rim-side-R', count: 1, note: 'end butted to the frame side, thickened epoxy (no dado)' }],
+      notes: 'Stiffens the lid panel against sagging under a light cooler or a hand (the thin panel alone would sag): cut to the clear span between the frame sides, glued to the panel\'s underside (lid face down, weighted) and butted to the frame sides with thickened epoxy, the lid face down and weighted for 24 h (no screws through the thin panel). The lid is engraved DO NOT STEP and is not a step (D-58); the lid-load row sizes the battens for the rated lid load (D-53).' }));
   }
 
   // ── Gasket: closed-cell bulb strip on the wall tops, under the frame ──
@@ -390,27 +395,39 @@ export function buildStorage(ctx: Ctx): Part[] {
   const outY = sup.W / 2 + 0.75 + HINGE_W_IN / 2;
   const inY = sup.W / 2 - sup.fw - 0.75 - HINGE_W_IN / 2;
   const hingeY = !sup.rear || outY <= hw - HINGE_W_IN / 2 - 0.25 ? Math.min(outY, hw - HINGE_W_IN / 2 - 0.25) : Math.max(inY, HINGE_W_IN / 2);
-  const hz1 = zTop - 0.3;
+  // D-89 (round 2): the knuckle sits on the joint line between the coaming (with its gasket) and the lid frame, above the crest strip's top, so the lid leaf lies on the lid frame's fore face
+  // and nothing stands in front of it; the box leaf lies on the fore coaming and the wall top, its screws through the coaming into the backer behind it.
+  const zKnuckle = zTop - pl - rimT;
   const rear = p.storageLocation === STORAGE_LOCATION.rearOverAxle;
   const zGunTop = L.deckTop + L.sideRear;
-  // D-72: the hinge leaves take the standard screws: #8 x 5/8 into the lid frame end (rimW deep), #8 x 1-1/4 through the end panel into the 1-1/4 in backer.
+  // D-72: the hinge leaves take the standard screws: #8 x 5/8 into the lid frame end (rimW deep), #8 x 1-1/4 through the fore coaming into the backer (its top reaches the coaming top, notched under the coaming's inboard lip).
   const hingeRimFit = pickWoodScrew(8, LEAF_IN, rimW);
-  const hingeBackFit = pickWoodScrew(8, LEAF_IN + pl, HINGE_BACKER_IN);
+  const backerUnderCoaming = HINGE_BACKER_IN - (coamW - pl);
+  const hingeBackFit = pickWoodScrew(8, LEAF_IN + coamW, backerUnderCoaming);
   for (const { s: sg, tag } of SIDES) {
     parts.push(box(ctx, { ...common, id: `storage-hinge-${tag}`, partNo: 'storage-hinge', name: `Lid hinge ${tag}`, mat: 'fixed', massLb: HINGE_MASS_LB,
-      kind: 'purchased', material: `${stainless(p)} butt hinge`, fab: 'buy', step: STEP.seatStorage, ...span([x1, x1 + 0.12], [sg * hingeY - HINGE_W_IN / 2, sg * hingeY + HINGE_W_IN / 2], [hz1 - HINGE_H_IN, hz1]),
-      sourcing: { vendor: `McMaster-Carr (${stainless(p)} surface-mount butt hinge, 2½" × 2¾")`, costUsd: 14 },
-      joints: [{ type: 'screw', to: 'storage-rim-end-fore', count: 3, diaIn: SCREW_DIA_IN[8], fit: hingeRimFit, size: `${screwText(hingeRimFit)} stainless, into the lid frame end` }, { type: 'screw', to: `storage-hinge-backer-${tag}`, count: 3, diaIn: SCREW_DIA_IN[8], fit: hingeBackFit, size: `${screwText(hingeBackFit)} stainless, through the end panel into the ${HINGE_BACKER_IN}" backer (S5)` }],
-      notes: 'Barrel along the fore-top edge: the lid swings up and aft and the seat back (when fitted) stops it near 75° (D-41); the stay holds it open (S5).' }));
-    parts.push(box(ctx, { ...common, id: `storage-hinge-backer-${tag}`, partNo: 'storage-hinge-backer', name: `Hinge backer ${tag}`, mat: 'oak', grain: 'y',
-      ...span([x1 - pl - HINGE_BACKER_IN, x1 - pl], [sg * hingeY - HINGE_W_IN / 2, sg * hingeY + HINGE_W_IN / 2], [zPlyTop - 1.5, zPlyTop]),
-      joints: [{ type: 'glue', to: 'storage-end-fore', count: 1, note: 'epoxy to the inside of the end panel' }],
-      notes: `Gives the hinge screws something to bite (the ${screwText(hingeBackFit)} screw engages ${(hingeBackFit.lenIn - hingeBackFit.gripIn).toFixed(2)}" of oak past the ${Math.round(pl * 25.4)} mm ply and the leaf; the backer is ${HINGE_BACKER_IN}" thick so the tip stays inside it, D-72); stops under the coaming.` }));
+      kind: 'purchased', material: `${stainless(p)} butt hinge`, fab: 'buy', step: STEP.seatStorage, ...span([x1, x1 + 0.12], [sg * hingeY - HINGE_W_IN / 2, sg * hingeY + HINGE_W_IN / 2], [zKnuckle - HINGE_H_IN / 2, zKnuckle + HINGE_H_IN / 2]),
+      sourcing: { vendor: `McMaster-Carr (${stainless(p)} surface-mount butt hinge, 2½" × 1½" open, ¾" leaves)`, costUsd: 9 },
+      joints: [{ type: 'screw', to: 'storage-rim-end-fore', count: 3, diaIn: SCREW_DIA_IN[8], fit: hingeRimFit, size: `${screwText(hingeRimFit)} stainless, into the lid frame end` }, { type: 'screw', to: `storage-hinge-backer-${tag}`, count: 3, diaIn: SCREW_DIA_IN[8], fit: hingeBackFit, size: `${screwText(hingeBackFit)} stainless, through the fore coaming into the backer (S5)` }],
+      notes: 'D-89: the knuckle on the joint line between the coaming and the lid frame, the lid leaf on the lid frame\'s 3/4" fore face, the box leaf on the fore coaming and the wall top (the crest strip covers it below the knuckle; nothing may stand in front of the lid leaf). The lid swings up about its fore edge; flip the seat back forward first, because upright it stands just in front of the hinge edge. The stay holds it open (S5).' }));
+    // An L in side view: against the fore wall below the ply top, and up to the coaming top behind the coaming's inboard lip (round 2: the hinge screws now go through the coaming into it).
+    // It stays clear of the side coaming and of the aft coaming (a narrow or short box): its width along the fore wall is clipped to the space between the side coamings.
+    const bxa = Math.max(x1 - pl - HINGE_BACKER_IN, x0 + coamW + 0.05), bxw = x1 - pl, bxc = x1 - coamW, bzb = zPlyTop - 1.5;
+    const byHi = Math.min(hingeY + HINGE_W_IN / 2, hw - coamW), byLo = Math.max(hingeY - HINGE_W_IN / 2, -(hw - coamW));
+    const bW = Math.max(0.5, byHi - byLo);
+    parts.push(profilePart(ctx, { ...common, id: `storage-hinge-backer-${tag}`, partNo: 'storage-hinge-backer', name: `Hinge backer ${tag}`, mat: 'oak', grain: 'z', fab: 'bandsaw',
+      outline: [[bxa, bzb], [bxw, bzb], [bxw, zPlyTop], [bxc, zPlyTop], [bxc, zWallTop], [bxa, zWallTop]], depth: bW, basis: 'xz', origin: [0, sg > 0 ? byHi : -byLo, 0],
+      stock: { t: bxw - bxa, w: bW, l: zWallTop - bzb },
+      joints: [{ type: 'glue', to: 'storage-end-fore', count: 1, note: 'epoxy to the inside of the end panel and the underside of the coaming lip' }],
+      notes: `Glued to the inside of the ${Math.round(pl * 25.4)} mm ply fore wall. Gives the hinge screws something to bite: the ${screwText(hingeBackFit)} screw passes the leaf and the ${frac(coamW)}" fore coaming and engages ${(hingeBackFit.lenIn - hingeBackFit.gripIn).toFixed(2)}" of oak in the backer (D-72). Its top is flush with the coaming top; a ${frac(coamW - pl)}" × ${frac(zWallTop - zPlyTop)}" notch at its top front fits under the coaming's inboard lip.` }));
     // Latch block (S5): oak under each latch so the #8 screws are not in a thin ply end or a face-grain skin.
     // Latch: on the inside face of the rear transom above the lid (rear box), else on the aft end's outer face; hooks a catch on the lid frame.
     // Latches sit at 8.5" off center, clear of the rear lamp clip in the hand-hold (|y| < 2.25, D-64) on the same transom.
     const ly = sg * Math.min(hw - 3, 8.5);
-    const blockZ: [number, number] = rear ? [zTop + 0.3, Math.max(zTop + 0.8, Math.min(zTop + 1.7, zGunTop))] : [zPlyTop - 1.4, zPlyTop];
+    // D-89 (round 2): the block's top at the lid frame's underside, so the latch body sits below the lid top and its hook reaches up over the lid's aft edge to the catch on the lid top
+    // (with the body above the lid, closing the latch lifted the lid).
+    const blockH = Math.min(1.4, Math.max(0.5, zGunTop - zTop));
+    const blockZ: [number, number] = rear ? [zKnuckle - blockH, zKnuckle] : [zPlyTop - 1.4, zPlyTop];
     // D-72: a block behind the end panel is 1-1/4 in thick so the standard #8 x 1-1/4 latch screw stays inside it; the rear block (on the transom, 0.375 in + the transom) takes the #8 x 5/8.
     const blockT = rear ? LATCH_BLOCK_IN : 1.25;
     const latchFit = rear ? pickWoodScrew(8, LEAF_IN, LATCH_BLOCK_IN + L.transom) : pickWoodScrew(8, LEAF_IN + pl, blockT);
@@ -423,7 +440,7 @@ export function buildStorage(ctx: Ctx): Part[] {
       ...span(blockX, [ly - LATCH_BLOCK_W_IN / 2, ly + LATCH_BLOCK_W_IN / 2], blockZ),
       joints: [{ type: 'glue', to: rear ? 'transom-rear' : 'storage-end-aft', count: 1, note: rear ? 'epoxy to the inside face of the rear transom' : 'epoxy to the inside of the aft end panel' },
         { type: 'screw', to: `storage-latch-${tag}`, count: 2, diaIn: SCREW_DIA_IN[8], fit: latchFit, size: rear ? `${screwText(latchFit)} stainless, into the block and the transom behind it` : `${screwText(latchFit)} stainless, through the end panel into the block` }],
-      notes: rear ? `Oak block ${LATCH_BLOCK_IN}" thick on the transom's inner face: the ${screwText(latchFit)} screws bite ${(latchFit.lenIn - latchFit.gripIn).toFixed(2)}" (the block, then the transom it is glued to; end grain avoided: block grain is vertical) instead of a bare transom face. It is glued to the transom, ${frac(x0 - blockX[1])}" clear of the lid frame's aft end; the lid hinges on its fore edge, so its aft edge swings up and forward, away from the block (S5).` : 'Oak block behind the 6 mm aft end for the latch screws (S5).' }));
+      notes: rear ? `Oak block ${LATCH_BLOCK_IN}" thick on the transom's inner face: the ${screwText(latchFit)} screws bite ${(latchFit.lenIn - latchFit.gripIn).toFixed(2)}" (the block, then the transom it is glued to; end grain avoided: block grain is vertical) instead of a bare transom face. It is glued to the transom, ${frac(x0 - blockX[1])}" clear of the lid frame's aft face, its top at the lid frame's underside: the latch body on it sits below the lid top and the hook reaches up over the lid's aft edge to the catch on the lid top, so closing it pulls the lid down onto the gasket (D-89). The lid hinges on its fore edge, so its aft edge swings up and forward, away from the block (S5).` : 'Oak block behind the 6 mm aft end for the latch screws (S5).' }));
     const latchBox = rear
       ? span([blockX[1], blockX[1] + 0.35], [ly - 0.6, ly + 0.6], [blockZ[0] + 0.1, blockZ[1] - 0.05])
       : span([x0 - 0.35, x0], [ly - 0.6, ly + 0.6], [zTop - 2.5, zTop - 1.2]);
@@ -435,7 +452,7 @@ export function buildStorage(ctx: Ctx): Part[] {
       sourcing: { vendor: `McMaster-Carr (${stainless(p)} draw latch)`, costUsd: 9 },
       joints: [{ type: 'screw', to: blockId, count: 2, diaIn: SCREW_DIA_IN[8], fit: latchFit, size: `${screwText(latchFit)} stainless` }],
       notes: rear
-        ? 'On the oak block on the inside face of the rear transom, hooking a catch on the lid frame. Engagement in the block is about 1/2" (a #8 with a 3/8" pilot in white oak face grain holds about 100 lbf per screw, ~200 lbf per latch) against a gasket and slam load of about 20 lbf per latch, so about 10x margin (D-41).'
+        ? 'On the oak block on the inside face of the rear transom, its body below the lid top, its hook reaching up over the lid\'s aft edge to the catch on the lid frame top (D-89). Engagement in the block is about 1/2" (a #8 with a 3/8" pilot in white oak face grain holds about 100 lbf per screw, ~200 lbf per latch) against a gasket and slam load of about 20 lbf per latch, so about 10x margin (D-41).'
         : 'On the aft end (over the oak block inside it), hooking a catch on the lid frame.' }));
     parts.push(box(ctx, { ...common, id: `storage-catch-${tag}`, partNo: 'storage-catch', name: `Latch catch ${tag}`, mat: 'fixed', massLb: CATCH_MASS_LB, kind: 'purchased',
       material: `${stainless(p)} catch plate`, fab: 'buy', step: STEP.finish, ...catchBox,
@@ -458,29 +475,47 @@ export function buildStorage(ctx: Ctx): Part[] {
   // (oak, so the screws bite) holds it at any angle.
   const extreme = p.weatherSpec === WEATHER_SPEC.extreme;
   const STAY_SIZE_FULL = extreme ? STAY_SIZE_EXTREME : STAY_SIZE_STD;
-  // The arm never runs past the inside of the aft end panel (a short box just gets a shorter arm in the model; the notes say to verify the real part fits).
-  const STAY_SIZE = [Math.max(0.5, Math.min(STAY_SIZE_FULL[0], x1 - pl - (x0 + pl))), STAY_SIZE_FULL[1], STAY_SIZE_FULL[2]] as const;
-  const stayY0 = hingeY - HINGE_W_IN / 2 - STAY_SIZE[1];
-  const stayBackFit = pickWoodScrew(8, LEAF_IN, HINGE_W_IN); // into the 2.5 in wide side face of the backer
-  const stayRimFit = pickWoodScrew(8, LEAF_IN, rimW);
+  // D-89 (round 2, fixed): the stay works in a vertical plane beside the LEFT side wall. Its base screws to a small oak block glued inside the left wall at the fore end (its inboard face
+  // flush with the lid frame side's inboard face), its arm end to the inboard face of the left lid-frame side, about 4 in aft: the 3/4 in oak frame side takes the #8 x 5/8 in every thin-sheet
+  // variant (a batten plus a 3 mm panel was too thin: the screw came through the lid top). The frame end is on the hinge line, so nothing mounts there.
+  const STAY_ENDS_APART_IN = 4; // the folded stay's two mounts, about this far apart (verify the real stay)
+  const blockT = Math.max(0.375, rimW - pl), blockL = 2.5, blockH = 1.5;
+  const yWallIn = hw - pl, yFace = yWallIn - blockT; // the block's inboard face, flush with the frame side's inboard face (hw - rimW) at the defaults
+  const backerYmax = Math.min(hingeY + HINGE_W_IN / 2, hw - coamW);
+  const blockX1 = backerYmax < yFace - 0.05 ? x1 - pl : x1 - pl - HINGE_BACKER_IN - 0.25; // beside the left hinge backer, or aft of it when the backer reaches the side
+  const blockX0 = Math.max(x0 + pl + 0.25, blockX1 - blockL);
+  const blockFit = pickWoodScrew(8, LEAF_IN, blockT + pl); // the block and the box side it is glued to
+  parts.push(box(ctx, { ...common, id: 'storage-stay-block', partNo: 'storage-stay-block', name: 'Lid support block', mat: 'oak', grain: 'x',
+    ...span([blockX0, blockX1], [yFace, yWallIn], [zPlyTop - blockH, zPlyTop]),
+    joints: [{ type: 'glue', to: 'storage-side-L', count: 1, note: 'thickened epoxy to the inside of the left box side, under the coaming lip' }],
+    notes: `Oak block ${frac(blockT)}" × ${frac(blockH)}" × ${frac(blockX1 - blockX0)}" inside the left box side at the fore end, its top under the coaming: the lid support's base screws into it (D-89).` }));
+  const armX = Math.max(x0 + rimW + 0.5, (blockX0 + blockX1) / 2 - STAY_ENDS_APART_IN);
+  const STAY_SIZE = [Math.max(0.5, Math.min(STAY_SIZE_FULL[0], blockX1 - armX + 0.3)), STAY_SIZE_FULL[1], STAY_SIZE_FULL[2]] as const;
+  const stayY1 = Math.min(hw - rimW, yFace), stayY0 = stayY1 - STAY_SIZE[1];
+  const armTo = 'storage-rim-side-L';
+  const stayRimFit = pickWoodScrew(8, LEAF_IN, rimW); // across the frame side, into its inboard face
   const stay = box(ctx, { ...common, id: 'storage-lid-stay', name: extreme ? 'Lid friction stay' : 'Lid support', mat: 'fixed', massLb: extreme ? STAY_MASS_EXTREME_LB : STAY_MASS_STD_LB, kind: 'purchased', material: extreme ? `${stainless(p)} friction stay` : 'plated steel lid support (Rockler 6" quiet-action)',
-    fab: 'buy', step: STEP.finish, ...span([x1 - pl - STAY_SIZE[0], x1 - pl], [stayY0, stayY0 + STAY_SIZE[1]], [zPlyTop - STAY_SIZE[2], zPlyTop]),
+    fab: 'buy', step: STEP.finish, ...span([blockX1 - STAY_SIZE[0], blockX1], [stayY0, stayY1], [zPlyTop - STAY_SIZE[2], zPlyTop]),
     sourcing: extreme ? { vendor: `McMaster-Carr (${stainless(p)} friction lid stay / hold-open brace, 2" fold)`, costUsd: 18 } : { vendor: 'Rockler (quiet-action lid support, 6", plated steel; sold as a pair, #39529)', costUsd: 5 },
-    joints: [{ type: 'screw', to: 'storage-hinge-backer-L', count: 2, diaIn: SCREW_DIA_IN[8], fit: stayBackFit, size: `${screwText(stayBackFit)} stainless, into the side grain of the ${HINGE_BACKER_IN}" backer`, note: 'the stay pivot' }, { type: 'screw', to: 'storage-rim-end-fore', count: 2, diaIn: SCREW_DIA_IN[8], fit: stayRimFit, size: `${screwText(stayRimFit)} stainless`, note: 'the stay arm end, on the lid frame' }],
+    joints: [{ type: 'screw', to: 'storage-stay-block', count: 2, diaIn: SCREW_DIA_IN[8], fit: blockFit, size: `${screwText(blockFit)} stainless, into the oak block on the left box side`, note: 'the stay base' }, { type: 'screw', to: armTo, count: 2, diaIn: SCREW_DIA_IN[8], fit: stayRimFit, size: `${screwText(stayRimFit)} stainless`, note: 'the stay arm end, into the inboard face of the left lid frame side' }],
     notes: extreme
-      ? 'Holds the lid at any angle so a gust or a scout cannot close it on fingers (S5). Folds flat against the backer when the lid is shut.'
-      : 'D-83: a Rockler 6" quiet-action lid support (plated steel, the damped arm folds flat; the second of the pair is a spare), mounted INSIDE the box on the side of the left hinge backer with its arm end screwed up under the lid frame. It holds the lid open so a gust or a scout cannot close it on fingers (S5). VERIFY the real bracket holes and arm length against the packed items; plated steel is fine garage-kept, the Extreme spec keeps the stainless stay (D-83).' });
-  // The stay folds flat on the ply top, so its arm end is the gasket and coaming gap (zRimBot - zPlyTop) below the lid frame. The arm-end screws go UP into the underside of the fore lid-frame end (they are
-  // driven with the lid open), straight above the folded arm end. Each part records its own end of the joint on its own face, so every point lies in its part (D-75 geometry audit).
+      ? 'Holds the lid at any angle so a gust or a scout cannot close it on fingers (S5). Its base on the oak block inside the left box side, its arm end on the inboard face of the left lid frame side (D-89).'
+      : 'D-83: a Rockler 6" quiet-action lid support (plated steel, the damped arm folds flat; the second of the pair is a spare), mounted INSIDE the box beside the left side wall: its base on the oak block glued inside the wall at the fore end, its arm end on the inboard face of the left lid frame side about 4" aft (D-89). It holds the lid open so a gust or a scout cannot close it on fingers (S5). VERIFY the real bracket holes and arm length against the packed items; plated steel is fine garage-kept, the Extreme spec keeps the stainless stay (D-83).' });
+  // Each part records its own end of each joint on its own face, so every point lies in its part (D-75 geometry audit).
   {
-    // The two arm-end screws go in a line ACROSS the lid frame end (2/5 in apart), centered on the frame piece's width: a #8 pilot then keeps (rimW - 1/8)/2 of oak each side, 5/16 in at the default
-    // 3/4 in piece (at least 3/16 in is wanted). In line along the arm they would sit 1/8 in and 3/8 in from the faces: a 1/16 in wall.
-    const yS = stayY0 + STAY_SIZE[1] / 2, zRimBot = zTop - pl - rimT, xc = x1 - rimW / 2;
-    const wpts = [-0.2, 0.2].map((dy): Vec3 => [xc, yS + dy, 0]);
-    const rimFore = parts.find((q) => q.id === 'storage-rim-end-fore')!;
-    const armJoint = stay.joints!.find((j) => j.to === 'storage-rim-end-fore')!;
-    armJoint.at = wpts.map((w) => localPoint(stay.transform, [w[0], w[1], zPlyTop]));
-    (rimFore.joints ??= []).push({ ...armJoint, to: 'storage-lid-stay', at: wpts.map((w) => localPoint(rimFore.transform, [w[0], w[1], zRimBot])), note: `the stay arm end, screwed up into the underside of the lid frame end, straight above the folded arm end (${frac(zRimBot - zPlyTop)}" higher: the gasket and coaming gap)` });
+    const baseJ = stay.joints!.find((j) => j.to === 'storage-stay-block')!;
+    const blk = parts.find((q) => q.id === 'storage-stay-block')!;
+    const bx = (blockX0 + blockX1) / 2, bz = zPlyTop - STAY_SIZE[2] / 2;
+    const bpts = [-0.4, 0.4].map((dx): Vec3 => [bx + dx, yFace, bz]);
+    baseJ.at = bpts.map((w) => localPoint(stay.transform, [w[0], stayY1, w[2]]));
+    (blk.joints ??= []).push({ ...baseJ, to: 'storage-lid-stay', at: bpts.map((w) => localPoint(blk.transform, w)), note: 'the stay base, screwed into the block\'s inboard face' });
+    // the arm-end screws go across the frame side into its inboard face, in a line along it, centered between its bottom face and the rabbet floor
+    const zRimBot = zTop - pl - rimT, zArm = (zRimBot + (zTop - LID_RABBET_IN)) / 2;
+    const apts = [-0.2, 0.2].map((dx): Vec3 => [armX + dx, hw - rimW, zArm]);
+    const host = parts.find((q) => q.id === armTo)!;
+    const armJoint = stay.joints!.find((j) => j.to === armTo)!;
+    armJoint.at = apts.map((w) => localPoint(stay.transform, [w[0], stayY1, zPlyTop]));
+    (host.joints ??= []).push({ ...armJoint, to: 'storage-lid-stay', at: apts.map((w) => localPoint(host.transform, w)), note: 'the stay arm end, screwed across into the inboard face of the frame side' });
   }
   parts.push(stay);
 

@@ -85,7 +85,8 @@ const formSetup: FigFn = (c) => {
   F.sub([16, 52], 'A. From above');
   const top = benchPlan(F, g, { x: 40, y: 64, w: 680, h: 200 }, false);
   const c3 = top.cleat(Math.floor(g.nCleat * 0.3));
-  F.label(c3, [c3[0] - 30, 86], `${g.nCleat} cleats on edge, ${frac(g.cleatStep, 16)} apart, set against the dry web`, { anchor: 'start' });
+  F.label(c3, [c3[0] - 30, 62], `${g.nCleat} cleats on edge, ${frac(g.cleatStep, 16)} apart, set against the dry web`, { anchor: 'start' });
+  F.label(top.stop(0), [20, 250], ['end stop (one at', 'each end of the band)'], { anchor: 'start', size: 12 });
   F.label(top.at([u0 * 0.35, H * 0.4]), [70, 298], ['template: the web\'s outline in 1/4" plywood (2 layers),', 'screwed flat; the web lies on it, inside face up'], { anchor: 'start' });
   if (g.hasRamp) {
     const capMid = top.at([(u0 + uE) / 2, -0.5]);
@@ -202,7 +203,7 @@ function clampSection(cure: 1 | 2): FigFn {
     // what the web lies on: the 2-layer template (cure 1) or the mirror-ramp cap (cure 2), in two windows
     for (const [a, b] of [[0, win], [H - win, H + cap + 0.3]] as Array<[number, number]>) {
       if (cure === 1) { F.rect(X(a), yBench - lift, (b - a) * k, lift / 2, mat('template')); F.rect(X(a), yBench - lift / 2, (b - a) * k, lift / 2, mat('template')); }
-      else F.rect(X(a) - (a === 0 ? 20 : 0), yBench - lift, (b - a) * k + 20, lift, mat('hardboard'));
+      else F.rect(X(a) - (a === 0 ? 20 : 0), yBench - lift, (b - a) * k + (a === 0 ? 20 : 0.75 * k + 40), lift, mat('hardboard'));
     }
     // the web, in two windows, with break marks
     F.rect(X(0), yWebTop, win * k, yWebBot - yWebTop, mat('web'));
@@ -212,7 +213,7 @@ function clampSection(cure: 1 | 2): FigFn {
     // cure 2: the cured inner bands under the web, and the backing strip under its bottom edge where the inner chine band stops short
     if (cure === 2) {
       F.rect(X(g.innerChineBot), yWebBot, (g.chineTop - g.innerChineBot) * k, band * tk, mat('oak'));
-      F.rect(X(H - gunH + cap), yWebBot, (gunH - cap) * k, band * tk, mat('oak'));
+      F.rect(X(H + cap - gunH), yWebBot, gunH * k, band * tk, mat('oak'));
       F.rect(X(0), yWebBot, g.innerChineBot * k - 2, band * tk, mat('oak', { stroke: ACCENT, width: 1.5, dash: '4 3' }));
     }
     // the bands this cure glues, on top; the gunwale band stands 1/8" past the web's top edge, against the cleat
@@ -222,7 +223,9 @@ function clampSection(cure: 1 | 2): FigFn {
     F.rect(X(H + cap - gunH), yBandTop, gunH * k, yWebTop - yBandTop, mat('oak', { stroke: ACCENT, width: 2 }));
     // the cleat, on edge, against the band's top edge (drawn short: it is 1-1/2" tall)
     const xC = X(H + cap) + 1, cleatW = 0.75 * k;
-    F.rect(xC, yBandTop - 30, cleatW, yBench - (yBandTop - 30), mat('oak', { stroke: '#6b4a1f' }));
+    // the cleat stands on the bench beside the template (cure 1) or on the mirror-ramp cap, which runs past the web (cure 2)
+    const cleatFoot = cure === 1 ? yBench : yBench - lift;
+    F.rect(xC, yBandTop - 30, cleatW, cleatFoot - (yBandTop - 30), mat('oak', { stroke: '#6b4a1f' }));
     // the bags of sand on a plastic sheet
     const bag = (x: number, wPx: number): void => {
       F.line([x - wPx / 2 - 6, yBandTop - 1], [x + wPx / 2 + 6, yBandTop - 1], { stroke: '#7a8a99', width: 1.5 });
@@ -234,9 +237,9 @@ function clampSection(cure: 1 | 2): FigFn {
     const side = cure === 1 ? 'inner' : 'outer';
     F.label([X(H + cap - gunH / 2) - 30, yBandTop + 6], [X(H - win) - 10, 70], [`${side} gunwale band, ${frac(band, 16)} × ${frac(gunH, 16)}:`, `1/8" past the web, tight to the cleat`], { anchor: 'end', size: 12 });
     F.label([X((chineLo + g.chineTop) / 2) + 18, yBandTop + 6], [xA + 30, 110], [`${side} chine band, ${frac(band, 16)} × ${frac(chineW, 16)}`, cure === 1 ? 'stops short of the bottom edge' : 'flush with the bottom edge'], { anchor: 'start', size: 12 });
-    F.label([xC + cleatW / 2, yBandTop - 20], [xC + 4, 70], ['cleat, on edge', `(${f8(CLEAT_TALL_IN)} tall)`], { anchor: 'start', size: 12 });
+    F.label([xC + cleatW / 2, yBandTop - 20], [xC + 4, 70], cure === 1 ? ['cleat, on edge', `(${f8(CLEAT_TALL_IN)} tall)`] : ['cleat, on edge, on', 'the cap over a rib'], { anchor: 'start', size: 12 });
     F.label([X(H + cap - gunH / 2), yBandTop - 30], [X(H - win) - 10, 150], [`bag of sand on a plastic sheet,`, `every ${f8(SANDBAG_SPACING_IN)} along each band`], { anchor: 'end', size: 12 });
-    F.label([X(0.5), (yWebTop + yWebBot) / 2], [xA - 20, yBench + 62], 'web (thin plywood)', { anchor: 'start', size: 12 });
+    F.label([X(win * 0.75), (yWebTop + yWebBot) / 2], [X(win * 0.75) - 10, yBench + 62], 'web (thin plywood)', { anchor: 'start', size: 12 });
     F.label([X(H - win) + 10, yBench - lift / 2], [X(H - win) - 10, yBench + 62], cure === 1 ? 'template, 2 layers (at the bow end: the S-ramp cap)' : 'mirror-ramp cap', { anchor: 'start', size: 12 });
     if (cure === 1) {
       F.dim([X(0), yWebTop - 3], [X(chineLo), yWebTop - 3], frac(chineLo, 16), -10, { size: 11.5 });
@@ -253,7 +256,7 @@ function clampSection(cure: 1 | 2): FigFn {
       id: `side-section-cure${cure}`,
       title: cure === 1 ? 'Cure 1: the inner bands' : 'Cure 2: the outer bands',
       caption: cure === 1
-        ? `Looking along the web, cut across (the middle of the web is left out). The web lies inside face up on the template with its top edge against the cleats. The two inner bands are epoxied on top: the gunwale band tight to the cleats, the chine band stopping ${frac(chineLo, 16)} short of the bottom edge to leave the slot the deck edge slides into later. Bags of sand on a plastic sheet press the bands down: no clamp can reach under a web lying on a screwed-down template.`
+        ? `Looking along the web, cut across (the middle of the web is left out). The web lies inside face up on the template with its top edge 1/8" short of the cleats. The two inner bands are epoxied on top: the gunwale band tight to the cleats, the chine band stopping ${frac(chineLo, 16)} short of the bottom edge to leave the slot the deck edge slides into later. Bags of sand on a plastic sheet press the bands down: no clamp can reach under a web lying on a screwed-down template.`
         : 'The web is turned over onto the mirror ramp, outside face up, resting on its cured inner bands. A strip of band offcut under its bottom edge fills the gap where the inner chine band stops short, so the outer chine band has something to press on. The outer gunwale band goes against the cleats, and the outer chine band runs flush with the bottom edge (it sits on the rail). The same bags as cure 1, on the bands only.',
       svg: F.svg(cure === 1 ? 'Cure 1: section across the web, inner bands on top, weighted with bags of sand' : 'Cure 2: section across the web, outer bands on top, weighted with bags of sand'),
     };
@@ -309,18 +312,18 @@ const finishedSection: FigFn = (c) => {
  * The first bench top from above, drawn into `box`: the template (the web's outline; turned over along its length for the right side when `right`), the
  * S-ramp's plain cap with its ribs dashed, and the cleats on edge along the sheer. Returns the frame and a cleat's position for labels.
  */
-function benchPlan(F: Fig, g: SideFormGeometry, box: { x: number; y: number; w: number; h: number }, right: boolean): { at: (p: Vec2) => Vec2; cleat: (i: number) => Vec2 } {
+function benchPlan(F: Fig, g: SideFormGeometry, box: { x: number; y: number; w: number; h: number }, right: boolean): { at: (p: Vec2) => Vec2; cleat: (i: number) => Vec2; stop: (i: 0 | 1) => Vec2 } {
   const w = g.f.widthIn, H = g.f.heightIn;
   const u0 = g.hasRamp ? g.uOf(g.xR0) : w, uE = g.hasRamp ? g.uOf(g.xRe) : w;
   const V = (v: number): number => (right ? H - v : v);
-  const fr = fit({ minX: -3, minY: -2.5, maxX: w + 3, maxY: g.templateH + 2.5 }, box);
+  const fr = fit({ minX: -4, minY: -2.5, maxX: w + 4, maxY: g.templateH + 2.5 }, box);
   const at = ([u, v]: Vec2): Vec2 => fr.at([u, V(v)]);
   const T = (q: Vec2[]): Vec2[] => q.map(at);
-  F.poly([fr.at([-3, -2.5]), fr.at([w + 3, -2.5]), fr.at([w + 3, g.templateH + 2.5]), fr.at([-3, g.templateH + 2.5])], mat('bench'));
+  F.poly([fr.at([-4, -2.5]), fr.at([w + 4, -2.5]), fr.at([w + 4, g.templateH + 2.5]), fr.at([-4, g.templateH + 2.5])], mat('bench'));
   F.poly(T(g.hasRamp ? [[0, 0], [u0, 0], ...g.sheer.filter(([u]) => u <= u0).reverse(), [0, g.sheer[0][1]]] : g.f.outer), mat('template'));
   if (g.hasRamp) {
-    F.poly([fr.at([u0, -0.5]), fr.at([uE, -0.5]), fr.at([uE, H + 0.5]), fr.at([u0, H + 0.5])], mat('hardboard', { opacity: 0.85 }));
-    for (let i = 0; i < g.ribs; i++) F.line(fr.at([u0 + 0.3, i * g.ribPitch]), fr.at([uE, i * g.ribPitch]), { stroke: '#f4ead8', width: 1, dash: '6 4' });
+    F.poly([fr.at([u0, -0.5]), fr.at([w + 2, -0.5]), fr.at([w + 2, H + 0.5]), fr.at([u0, H + 0.5])], mat('hardboard', { opacity: 0.85 }));
+    for (let i = 0; i < g.ribs; i++) { const v = Math.min(H - 0.15, Math.max(0.15, i * g.ribPitch)); F.line(fr.at([u0 + 0.3, v]), fr.at([uE - 0.3, v]), { stroke: '#f4ead8', width: 1.2, dash: '6 4' }); }
   }
   F.poly(T(g.f.outer), { stroke: INK, width: 1.4 });
   const arc = (i: number): { p: Vec2; n: Vec2 } => {
@@ -340,7 +343,11 @@ function benchPlan(F: Fig, g: SideFormGeometry, box: { x: number; y: number; w: 
     const a: Vec2 = [q[0] - tx[0] * CLEAT_L / 2, q[1] - tx[1] * CLEAT_L / 2], b: Vec2 = [q[0] + tx[0] * CLEAT_L / 2, q[1] + tx[1] * CLEAT_L / 2];
     F.poly(T([a, b, [b[0] + n[0] * CLEAT_T, b[1] + n[1] * CLEAT_T], [a[0] + n[0] * CLEAT_T, a[1] + n[1] * CLEAT_T]]), mat('oak', { stroke: '#6b4a1f' }));
   }
-  return { at, cleat: (i: number) => { const { p: q, n } = arc(i); return at([q[0] + n[0] * CLEAT_T / 2, q[1] + n[1] * CLEAT_T / 2]); } };
+  // the end stops: a block against the gunwale band's lower edge just past each end of the web (the band is left long there)
+  const gb = (u: number): number => { const k = g.gunBot.reduce((b, q, i) => (Math.abs(q[0] - u) < Math.abs(g.gunBot[b][0] - u) ? i : b), 0); return g.gunBot[k][1]; };
+  const stops: Array<[number, number, number]> = [[-0.2 - CLEAT_L, -0.2, gb(0)], [w + 0.2, w + 0.2 + CLEAT_L, gb(w)]];
+  for (const [ua, ub, v] of stops) F.poly(T([[ua, v], [ub, v], [ub, v - CLEAT_T], [ua, v - CLEAT_T]]), mat('oak', { stroke: ACCENT, width: 1.4 }));
+  return { at, cleat: (i: number) => { const { p: q, n } = arc(i); return at([q[0] + n[0] * CLEAT_T / 2, q[1] + n[1] * CLEAT_T / 2]); }, stop: (i: 0 | 1) => at([(stops[i][0] + stops[i][1]) / 2, stops[i][2] - CLEAT_T / 2]) };
 }
 
 /** The right side on the same first bench: the template's rear piece turned over along its length, the cleats re-set; the ramp does not move. */

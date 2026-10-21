@@ -155,7 +155,9 @@ export function buildRunningGear(ctx: Ctx): Part[] {
     const under = p.axleBeamPosition === AXLE_BEAM_POSITION.underslung;
     const plate = { x: p.clampPlateLengthIn, y: p.clampPlateWidthIn, z: p.clampPlateThickIn };
     const legOffset = rodR + p.clampLegGapIn;
-    const yEdge = Math.min(b.len / 2 - 0.25, ax.track / 2 - p.tireWidthIn / 2);
+    // D-88: the plate's outboard edge 1/4" in from the beam end, as the front outer plates: its inboard edge then clears the hanger's outer face and its bolt heads stand
+    // outboard of the rail's outer face, clear of the rail (aligned with the tire's inner face, the inboard edge touched the hanger and the heads ran 1/32" under the rail).
+    const yEdge = b.len / 2 - 0.25;
     const yc = yEdge - plate.y / 2;
     {
       // REAR clamp plates (build review r2 MUST-4 / S13, eng N-10; D-62): 316 stainless flat bar cut to size (1/4 x 1.75 x 2-1/4 in, D-71), two 3/8 in 316 bolts through the plate and the beam either

@@ -172,8 +172,8 @@ describe('verify checklist', () => {
     expect(by('axle-rod').title).toMatch(/1045 or cold-drawn/);
     expect(by('axle-rod').title).toMatch(/not hot-rolled A36/);
     expect(by('axle-rod').pass).toContain('70 ksi');
-    expect(by('axle-rod').pass).toMatch(/the rear axle passes with about 20 % to spare with 70 ksi steel/); // plain words, not "the row is 0.79"
-    expect(by('axle-rod').pass).toMatch(/1018 cold-drawn at 54 ksi it is right at its limit/);
+    expect(by('axle-rod').pass).toMatch(/the rear axle passes with about 30 % to spare with 70 ksi steel/); // D-88: the rear plates moved out, a shorter overhang // plain words, not "the row is 0.79"
+    expect(by('axle-rod').pass).toMatch(/1018 cold-drawn at 54 ksi it passes with about 10 % to spare/);
     expect(by('axle-rod').pass).toMatch(/hot-rolled A36 at 36 ksi it fails by about/);
     expect(by('axle-rod').pass).not.toMatch(/\b0\.\d\d\b/);
     const tube = verifyChecklist(buildModel({ ...p, ...PRE_D72 }), { ...p, ...PRE_D72 }).find((c) => c.id === 'axle-tube')!;

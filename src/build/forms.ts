@@ -38,6 +38,13 @@ const MIRROR_CAP_MARGIN_IN = 1.5;
 /** The sheer cleats stand on edge (in tall), so a band on a ramp cannot ride over them. */
 export const CLEAT_TALL_IN = 1.5;
 /**
+ * The gunwale band is cut this much long at each end of the web, and an end stop (a cleat-sized block) bears on its lower edge just past each end: the
+ * sheer is concave on the cleat side, so a bent band pushes its middle into the cleats and its ends swing away; the stops hold the ends. The ramp caps
+ * run this much past the web's bow end so the bow stop stands on the cap.
+ */
+const BAND_END_LONG_IN = 1;
+const CAP_PAST_BOW_IN = 2;
+/**
  * Hold-down for the side glue-ups (shop practice): no clamp can get a jaw under a web lying on a template screwed to a bench top, so the bands are weighted
  * with bags of sand: a small bag every `SANDBAG_SPACING_IN` along each band, and `S_BAGS` bigger bags across the web on the S to hold it hard on the ramp.
  */
@@ -357,54 +364,59 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   const build: FormBuildStep[] = [
     { step: `BENCH TOP: a flat sheet of 3/4" plywood or MDF at least ${frac(f.widthIn + 2 * BASE_END_IN)} × ${frac(f.heightIn + 2 * BASE_END_IN)} (the web is ${frac(f.widthIn)} × ${frac(f.heightIn)}). It is sacrificial: the cleats and ribs are screwed into it.${hasRamp ? ' The mirror ramp (the MIRROR RAMP item below) takes a second one the same size.' : ''}` },
     {
-      step: `TEMPLATE (laser): the web's flat outline (the outer line of this drawing) in ${frac(TEMPLATE_STOCK_IN)} plywood, cut on the laser as ${tplPieces} pieces${hasRamp ? ' (two files: the template, and the under layer of the rear piece)' : ''}. ${banded ? `The web is ${frac(f.heightIn)} tall at the rear, wider than the bed, so the file cuts it in bands that butt on the bench.` : `The web is ${frac(f.heightIn)} tall at the rear, which the bed takes.`}`,
+      step: `TEMPLATE (laser): the web's flat outline (the outer line of this drawing) in ${frac(TEMPLATE_STOCK_IN)} plywood, cut on the laser as ${tplPieces} pieces${hasRamp ? `: the rear piece, its under layer (glued below it, so the template is ${frac(2 * TEMPLATE_STOCK_IN)} thick, level with the ramp cap's low end), and the front piece (kept only to mark the web)` : ''}. ${banded ? `The web is ${frac(f.heightIn)} tall at the rear, wider than the bed, so the file cuts it in bands that butt on the bench.` : `The web is ${frac(f.heightIn)} tall at the rear; it fits the laser bed.`}`,
       sub: [
         'The laser scores the sheer (cleat line), the gunwale band lower edge, the chine band top, the inner chine band bottom, the S end, the bow end of the bands and a tick for each cleat.',
-        ...(hasRamp ? [`The file cuts it square at the "S starts" line, ${frac(uS0)} from the rear end. The rear piece lies under the flat part of the web; the ramp takes the front piece's place. Keep the front piece to mark the web.`, `The ramp cap puts its low end ${frac(webLowIn)} above the bench, ${frac(RIB_BASE_IN)} above the template. Glue a second rear piece (its own laser file) under the first so the web runs onto the ramp with no step.`] : []),
+        ...(hasRamp ? [`The file cuts it square at the "S starts" line, ${frac(uS0)} from the rear end. The rear piece lies under the flat part of the web; the ramp takes the front piece's place.`, `Glue the under layer (its own laser file) below the rear piece: the ramp cap's low end stands ${frac(webLowIn)} above the bench, so the web runs onto the ramp with no step.`] : []),
         `${banded ? 'Butt the bands tight on the bench, matching the scored lines across the seam, and screw' : 'Screw'} the pieces down with #8 × 3/4" flat-heads about every 12", heads flush.`,
-      ],
-    },
-    {
-      step: `CLEATS on the sheer line: ${2 * nCleat} blocks of 3/4" plywood or oak, 3/4" × ${frac(CLEAT_TALL_IN)} × 3" long, ${nCleat} for each bench top, about ${frac(cleatStep)} apart along the sheer (the ticks on the template, numbered 1 to ${nCleat} on this drawing).`,
-      sub: [
-        `Stand each on edge, ${frac(CLEAT_TALL_IN)} tall, so the band cannot ride over it, even where the web is up on a ramp. No spacers.`,
-        `Set them against a dry web, not against the scored line: lay the web on, hold a 1/8" hardboard scrap against its top edge (the gunwale bands stand 1/8" above the web), and screw each cleat against the scrap with two #8 × 2-1/2" screws: into the bench beside the template, or, where the web is on a ramp, down through the cap into a rib (glue a 3/4" block under the cap first where no rib is under the cleat).`,
-        'Cover the cleat faces with packing tape.',
       ],
     },
     ...(hasRamp ? [{
       step: `S-RAMP (first face): cut ${ribs} ribs from ${frac(RIB_STOCK_IN)} MDF to the first rib profile at the bottom of this drawing: ${frac(rampLen)} long, ${frac(RIB_BASE_IN)} tall at the low (rear) end and ${frac(RIB_BASE_IN + rampH)} at the high (bow) end.`,
       sub: [
-        `Stand the ribs on edge on the bench, along the web's length, ${frac(ribPitch)} apart center to center across the web's full ${frac(f.heightIn)} at the rear (the right web's bow end lies on the other half of the bench); the low ends butt the template at the S start.`,
+        `Stand the ribs on edge on the bench, along the web's length, ${frac(ribPitch)} apart center to center across the web's full ${frac(f.heightIn)} at the rear so the cap carries the left web's bow end on one half and the right web's on the other; the low ends butt the template at the S start.`,
         'Fix each rib with two glue blocks (3/4" × 3/4" × 3"), screwed to the bench and the rib, one each side.',
-        `Cap: ${frac(TEMPLATE_STOCK_IN)} hardboard ${frac(rampLen)} × ${frac(capW)}, a plain rectangle centered on the ribs, glued and bradded to the rib tops. Tape it.`,
+        `Before the cap goes on: lay a dry web on the ribs, both ways round (the left web and the right web's outline), mark where its top edge crosses the ribs, and glue a 3/4" × 3/4" × 3" block against the side of a rib, flush with the rib tops, wherever a cleat will stand with no rib under it.`,
+        `Cap: ${frac(TEMPLATE_STOCK_IN)} hardboard ${frac(rampLen + (f.widthIn - uOf(xRe)) + CAP_PAST_BOW_IN)} × ${frac(capW)}, a plain rectangle centered on the ribs, running ${frac(CAP_PAST_BOW_IN)} past the web's bow end (the end stop stands there), glued and bradded to the rib tops. Tape it.`,
       ],
     }, {
       step: `MIRROR RAMP (second face): the first cure leaves the web with its S, so turned over its bow end hangs ${frac(rampH)} lower than its rear end. Build the ramp upside down: high at the rear, falling to the bench at the bow end.`,
       sub: [
         `Cut ${mirrorRibs} ribs from ${frac(RIB_STOCK_IN)} MDF to the mirror rib profile (the lowest on this drawing): ${frac(mirrorLen)} long, ${frac(RIB_BASE_IN + rampH)} tall from the rear end to the S start, then falling through the S to ${frac(RIB_BASE_IN)} tall at the bow end.`,
-        `Stand them on edge on the second bench top, spread evenly ${frac(mirrorPitch)} apart center to center, the outer ribs under the cap's edges, with two glue blocks each as for the first ramp.`,
-        `Cap: ${frac(TEMPLATE_STOCK_IN)} hardboard ${frac(mirrorLen)} × ${frac(mCapW)}, a plain rectangle ${frac(MIRROR_CAP_MARGIN_IN)} wider than the web each side, so a cleat can stand on it along either side's sheer. Glue and brad it to the rib tops. Tape it. The web's underside now sits ${frac(webHighIn)} above the bench at the rear and ${frac(webLowIn)} at the bow end.`,
-        `Set this bench's own ${nCleat} cleats against the dry web turned outside face up, as for the first bench.`,
+        `Stand them on edge on the second bench top, spread evenly, about ${frac(mirrorPitch)} apart center to center, the outer ribs under the cap's edges, with two glue blocks each as for the first ramp.`,
+        `Before the cap goes on: lay a dry web on the ribs, both ways round (the left web and the right web's outline), mark where its top edge crosses the ribs, and glue a 3/4" × 3/4" × 3" block against the side of a rib, flush with the rib tops, wherever a cleat will stand with no rib under it.`,
+        `Cap: ${frac(TEMPLATE_STOCK_IN)} hardboard ${frac(mirrorLen + (f.widthIn - uOf(xRe)) + CAP_PAST_BOW_IN)} × ${frac(mCapW)}, a plain rectangle, running ${frac(CAP_PAST_BOW_IN)} past the web's bow end, ${frac(MIRROR_CAP_MARGIN_IN)} wider than the web each side, so a cleat can stand on it along either side's sheer. Glue and brad it to the rib tops. Tape it. The web's underside now sits ${frac(webHighIn)} above the bench at the rear and ${frac(webLowIn)} at the bow end.`,
       ],
-    }, {
+    }] : []),
+    {
+      step: `CLEATS on the sheer line: ${2 * nCleat} blocks of 3/4" plywood or oak, 3/4" × ${frac(CLEAT_TALL_IN)} × 3" long, ${nCleat} for each bench top, about ${frac(cleatStep)} apart along the sheer (the ticks on the template, numbered 1 to ${nCleat} on this drawing).`,
+      sub: [
+        `Stand each on edge, ${frac(CLEAT_TALL_IN)} tall, so the band cannot ride over it, even where the web is up on a ramp. No spacers.`,
+        `Set them against a dry web, not against the scored line: lay the web on (on a ramp, hold it down with the bags of sand), hold a 1/8" hardboard scrap against its top edge (the gunwale bands stand 1/8" above the web), and screw each cleat against the scrap with two #8 × 2-1/2" screws: into the bench beside the template, or, where the web is on a ramp, down through the cap into the rib or block under it.`,
+        ...(hasRamp ? ['On the first bench the dry web lies inside face up; on the mirror ramp, outside face up (turned over along its length).'] : []),
+        `END STOPS, 4 more blocks the same size, two a bench: cut each gunwale band ${frac(BAND_END_LONG_IN)} long at each end of the web, and screw a block against the band's lower edge just past each end of the web (at the bow end, on the cap). The sheer curves away from the cleats at its ends, so a bent band pushes its middle into the cleats and its ends swing away: the stops hold the ends.`,
+        'Cover the cleat and stop faces with packing tape.',
+      ],
+    },
+    ...(hasRamp ? [{
       step: 'RIGHT SIDE: the forms are set for the left side; the right side is its mirror image. Nothing under the web moves; only the template\'s rear piece and the cleats change hands.',
       sub: [
         'When the left web comes off the S-ramp, unscrew the template\'s rear piece (both layers), turn it over along its length in the same place (rear end still at the rear, its S-start end still against the ramp, its straight bottom edge now along the far side) and screw it back: it is now the right web\'s outline.',
-        'Set that bench\'s cleats again against the dry right web, inside face up.',
+        'Set that bench\'s cleats and end stops again against the dry right web, inside face up.',
+        'The scored lines are now face down: pencil the band lines on the new top face from this drawing.',
         'When the left web comes off the mirror ramp, set the mirror ramp\'s cleats again against the right web, outside face up.',
       ],
     }] : []),
     { step: 'TAPE: packing tape over the template wherever a band lies (the epoxy squeezes out at the band edges).' },
     {
-      step: `GLUE-UP, one face per cure, held down with bags of sand: no clamp can get a jaw under a web lying on the template. Face one${hasRamp ? ', on the S-ramp' : ''}: lay the web on the template INSIDE face up, its top edge against the cleats${hasRamp ? ' (the ramp lifts the bow end toward the inside, which is the turn-in)' : ''}, and epoxy the inner chine band (${inChine}) and the inner gunwale band (${inGun}) to it, the gunwale band tight against the cleats. Leave the deck gap: the inner chine band stops short of the web bottom.`,
+      step: `GLUE-UP, one face per cure, held down with bags of sand: no clamp can get a jaw under a web lying on the template. Face one${hasRamp ? ', on the S-ramp' : ''}: lay the web on the template INSIDE face up, its top edge 1/8" off the cleats (the hardboard scrap as a gauge)${hasRamp ? ' (the ramp lifts the bow end toward the inside, which is the turn-in)' : ''}, and epoxy the inner chine band (${inChine}) and the inner gunwale band (${inGun}) to it, the gunwale band tight against the cleats. Leave the deck gap: the inner chine band stops short of the web bottom.`,
       sub: [
         `A sheet of plastic (a cut-open trash bag) over the wet bands, then a ${SANDBAG_LB} lb bag of sand about every ${frac(SANDBAG_SPACING_IN)} along each band (${2 * bagsPerBand} bags).`,
         ...(hasRamp ? [`Lay ${S_BAGS} bags of ${S_BAG_LB} lb across the web on the S: two where it starts to rise, two on the level bow end. The web must lie hard on the ramp from the S start to the bow end: check from the side with a flashlight.`] : []),
         `Bags: play sand in doubled freezer bags, about ${sandLb} lb in all.`,
-        `No spring-back allowance: the cleats hold the sheer${hasRamp ? ' and the ramp holds the S' : ''} until the epoxy cures (24 h).`,
+        `No spring-back allowance: the cleats hold the sheer${hasRamp ? ' and the ramp holds the S' : ''} until the epoxy cures (24 h). Off the form the side springs back a little; the frame pulls it home at the dry fit.`,
         hasRamp
-          ? `Face two: turn the web over along its length onto the MIRROR ramp (never the same ramp: the cured web would have to bend back ${frac(2 * rampH)}), rear end still at the rear, outside face up, its top edge against the cleats. Lay a ${backing} on the cap under the web's bottom edge, where the inner chine band stops short, so the outer chine band has something under it. Glue the outer chine band (${outChine}) and the outer gunwale band (${outGun}) the same way, bags along the bands only (the web keeps its S now). Two cures per side.`
+          ? `Face two: turn the web over along its length onto the MIRROR ramp (never the same ramp: the cured web would have to bend back ${frac(2 * rampH)}), rear end still at the rear, outside face up, its top edge 1/8" off this bench's cleats. Lay a ${backing} on the cap under the web's bottom edge, where the inner chine band stops short, so the outer chine band has something under it. Glue the outer chine band (${outChine}) and the outer gunwale band (${outGun}) the same way, bags along the bands only (the web keeps its S now). Two cures per side.`
           : `Face two: turn the web over onto the same template and glue the outer chine band (${outChine}) and the outer gunwale band (${outGun}) the same way, with a ${backing} under the web's bottom edge. Two cures per side.`,
         hasRamp ? 'Then the right side, on the same two benches (RIGHT SIDE, above).' : 'Build the right side the same way, the template turned over.',
       ],
@@ -561,7 +573,7 @@ function railFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
       ],
     },
     { step: `BASE: 3/4" plywood ${frac(baseL)} × ${frac(baseW)}. Screw the form stack to it from below (#8 × 1-5/8" every ${frac(STACK_SCREW_IN)}), its straight back on the base's back edge and ${frac(BASE_END_IN)} in from each end. That leaves ${frac(BASE_FRONT_IN)} of base in front of the deepest part of the face for the strips and the counter-form. The counter-form stands loose on the base, held from walking by a stop block at each end (COUNTER-FORM, below).` },
-    { step: `STRAIGHT RUN: only the last ${frac(curved)} of each strip is curved. The form face runs straight for ${frac(RAIL_FORM_LEAD_IN)} behind the S (the lead-in), and about ${frac(hang)} of each strip hangs off the form's rear end. Screw a ${frac(FORM_BASE_IN)} plywood strip, about ${frac(Math.ceil(hang))} long and as wide as the base, to the bench against the base's rear end, so the overhang lies level with the base; screw a straight 3/4" × ${frac(stackH)} fence to that strip, in line with the lead-in face, to hold the overhang straight.` },
+    { step: `STRAIGHT RUN: only the last ${frac(curved)} of each strip is curved. The form face runs straight for ${frac(RAIL_FORM_LEAD_IN)} behind the S (the lead-in), and about ${frac(hang)} of each strip hangs off the form's rear end. Make a ${frac(FORM_BASE_IN)} plywood strip, about ${frac(Math.ceil(hang))} long and as wide as the base, so the overhang lies level with the base, and a straight 3/4" × ${frac(stackH)} fence about ${frac(Math.ceil(hang) + BASE_END_IN)} long, to reach from the form's rear end over the base and the strip. Screw the fence to the strip from below, in line with the lead-in face, before the strip is screwed to the bench against the base's rear end; the fence holds the overhang straight.` },
     {
       step: `COUNTER-FORM: the reverse image of the form, the clamping block. Its face is the form face moved out ${frac(pack + COUNTER_CLEARANCE_IN)}: the ${plies} strips glued together (${frac(pack)}) plus ${frac(COUNTER_CLEARANCE_IN)} for the tape and the glue line. Its back is straight and parallel to the form's back.`,
       sub: [
@@ -571,7 +583,7 @@ function railFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
       ],
     },
     { step: 'TAPE: packing tape over the form face and the counter-form face, so the epoxy cannot glue the rail to either.' },
-    { step: `SPRING-BACK: none is built in. Dry-clamp one strip first; if the bow end opens more than ${frac(turn * sb0)} when released, re-cut both patterns with the faces moved that far and try again; the channel must keep its width.` },
+    { step: `SPRING-BACK: none is built in, and a dry strip cannot show it. Glue 2 spare rail strips on the form as a test rail (the rails step's method), release it after 24 h and measure the bow end against the form: up to ${frac(turn * sb1, 8)} is pulled home by the crossmembers at the dry fit; more than that, re-cut both patterns with the faces moved that far further into the bend; the channel must keep its width.` },
     {
       step: `CLAMP: ${clamps + 2} or ${clamps + 3} bar or pipe clamps of ${clampCap}" capacity or more: one at each of the ${clamps} scored ticks on both patterns, about ${frac((xEnd - L.taper.x0) / Math.max(1, clamps - 1))} apart from the S start to the bow end, plus 2 or 3 on the straight lead-in (the straight part of the form face, behind the S). Each closes square across, from the form back to the counter-form back (${frac(vTop)} apart).`,
       sub: [`Roll epoxy on both mating faces of the ${plies} strips (${frac(strip)} × ${frac(railW)}), butter one face with thickened epoxy, and stand them on edge on the base against the form face, the counter-form outside.`, `On the overhang, set a straight ${frac(FORM_LAYER_IN)} × ${frac(railW)} caul on the outer strip and hold caul, strips and fence with ${Math.ceil(hang / OVERHANG_CLAMP_IN)} to ${Math.ceil(hang / OVERHANG_CLAMP_IN) + 2} large spring clamps over the top, about every ${frac(OVERHANG_CLAMP_IN)}.`, 'Bend the glued strips onto the form face with the counter-form set on and every clamp snug but loose, then tighten the clamps together, the straight lead-in first and the bow end last. The counter-form only seats once the strips are fully bent.', 'Leave it clamped for the full cure, 24 h at 60 °F or warmer, before unclamping: a bent strip springs back if it comes off early. Bend the second rail on the same form, the other way up.'],

@@ -101,6 +101,8 @@ interface RailForm {
   fenceT?: number; fenceH?: number; leadClamps?: string;
   /** The plywood strip under the overhang (length), and the spring clamps on the overhang: their count text ("4 to 6") and spacing. */
   supportL?: number; springText?: string; springEvery?: number;
+  /** The fence's length (from the form's rear end over the base and the strip), and the rough strip as cut (width, length). */
+  fenceL?: number; stripRoughW?: number; stripRoughL?: number;
   turn: number;
 }
 
@@ -127,7 +129,8 @@ function railForm(c: FigCtx): RailForm | null {
   const base = new RegExp(`BASE: [^.]*?plywood (${FR})" × (${FR})"`).exec(text);
   const lay = new RegExp(`stack of (\\d+) layers of (${FR})" MDF, (${FR})" tall`).exec(text);
   const baseL = base ? parseFr(base[1]) : undefined, baseW = base ? parseFr(base[2]) : undefined;
-  const stripL = c.cut().cuts.find((q) => q.piece === 'strip' && q.ids.includes(rail.id))?.rough.l;
+  const stripCut = c.cut().cuts.find((q) => q.piece === 'strip' && q.ids.includes(rail.id));
+  const stripL = stripCut?.rough.l;
   const hang = grab(new RegExp(`about (${FR})" of each strip hangs off`), text) ?? Math.max(0, (stripL ?? lengthIn) - lengthIn);
   const cure = /(\d+) h at (\d+) °F/.exec(text);
   const fence = new RegExp(`straight (${FR})" × (${FR})" fence`).exec(text);
@@ -140,6 +143,7 @@ function railForm(c: FigCtx): RailForm | null {
     deepest: Math.max(...face.map((q) => q[1])),
     baseL, baseW, baseEnd: baseL !== undefined ? Math.max(0, (baseL - lengthIn) / 2) : 0,
     nLayers: lay ? Number(lay[1]) : undefined, layerT: lay ? parseFr(lay[2]) : undefined, stackH: lay ? parseFr(lay[3]) : undefined,
+    fenceL: grab(new RegExp(`fence about (${FR})" long`), text), stripRoughW: stripCut?.rough.w, stripRoughL: stripL,
     hang, cureH: cure ? Number(cure[1]) : undefined, cureF: cure ? Number(cure[2]) : undefined,
     fenceT: fence ? parseFr(fence[1]) : undefined, fenceH: fence ? parseFr(fence[2]) : undefined, leadClamps: lead?.[1],
     supportL: grab(new RegExp(`plywood strip, about (${FR})" long`), text), springText: spring?.[1], springEvery: spring ? parseFr(spring[2]) : undefined,
@@ -165,7 +169,8 @@ function drawFormPlan(F: Fig, g: RailForm, box: { x: number; y: number; w: numbe
   const fT = g.fenceT ?? 0.75;
   // the plywood strip on the bench under the overhang, against the base's rear end, as wide as the base
   if (g.supportL !== undefined && g.baseW !== undefined) F.poly(P([[-g.baseEnd - g.supportL, 0], [-g.baseEnd, 0], [-g.baseEnd, g.baseW], [-g.baseEnd - g.supportL, g.baseW]]), mode === 'build' ? mat('deck', { stroke: ACCENT, width: 1.4 }) : mat('ghost', { dash: '4 3' }));
-  F.poly(P([[-g.hang, v0 - fT], [-g.baseEnd - 0.2, v0 - fT], [-g.baseEnd - 0.2, v0], [-g.hang, v0]]), mode === 'build' ? { ...FENCE_STYLE, stroke: ACCENT, width: 1.4 } : mat('ghost', { stroke: '#8a8a8a' }));
+  const fenceEnd = g.fenceL !== undefined ? -g.fenceL : -g.hang;
+  F.poly(P([[fenceEnd, v0 - fT], [0, v0 - fT], [0, v0], [fenceEnd, v0]]), mode === 'build' ? { ...FENCE_STYLE, stroke: ACCENT, width: 1.4 } : mat('ghost', { stroke: '#8a8a8a' }));
   // form body
   F.poly(P([[0, 0], [g.lengthIn, 0], ...[...g.face].reverse()]), jig);
   // the strips: along the fence, then the form face
@@ -543,6 +548,7 @@ const railsOnFrame: FigFn = (c) => {
   const yRow1 = Y(-yMax) + 30, yRow2 = yRow1 + 28;
   F.label([X(r0 + 3), Y(-hw0)], [X(r0) - 6, yRow2], 'right rail: the same blank as the left one, turned over (top edge up on both)', { anchor: 'start', size: 12 });
   const ctr = (id: string): number | undefined => { const x = c.by(id); if (!x) return undefined; const b = planPoly(x); return b.reduce((a, q) => a + q[0], 0) / b.length; };
+  if (g.stripRoughL !== undefined) F.text([X(r0) - 6, yRow2 + 22], `each rail: ${g.plies} strips ${f8(g.stripRoughL)} long, trimmed to about ${f8(rl.stock?.l ?? r1 - r0)} at the dry fit`, { size: 12, color: MUTED });
   const cxB = ctr('beam-R');
   if (cxB !== undefined) F.label([X(cxB), Y(-yMax * 0.8)], [X(cxB) + 16, yRow1], 'rear axle beam: sits in a notch in each rail', { anchor: 'start', size: 12 });
   const cxJ = ctr('joist-3');
@@ -556,7 +562,7 @@ const railsOnFrame: FigFn = (c) => {
   return {
     id: 'rail-form-purpose',
     title: 'What the rail form is for',
-    caption: `The two rails are the bottom of the hull frame: the crossmembers and the beams join them, and the sides stand on them. Each rail is straight for most of its length, then curves in by ${f8(g.turn)} toward the bow (the S), following the sides. To get that curve with the grain running along it, each rail is ${g.plies} strips of ${f16(g.strip)} (${f16(g.railW)} deep, about ${f8(rl.stock?.l ?? r1 - r0)} long) bent round a form and glued in [[step:rails]]; once the epoxy cures, the rail keeps the curve. This step builds that form and proves it with a dry strip. One form makes both rails: they come off it identical, and one becomes the left rail by turning it over.`,
+    caption: `The two rails are the bottom of the hull frame: the crossmembers and the beams join them, and the sides stand on them. Each rail is straight for most of its length, then curves in by ${f8(g.turn)} toward the bow (the S), following the sides. To get that curve with the grain running along it, each rail is ${g.plies} strips of ${f16(g.strip)}${g.stripRoughL !== undefined ? `, ${f8(g.stripRoughL)} long (the rail is trimmed to about ${f8(rl.stock?.l ?? r1 - r0)}, ${f16(g.railW)} deep),` : ` (${f16(g.railW)} deep, about ${f8(rl.stock?.l ?? r1 - r0)} long)`} bent round a form and glued in [[step:rails]]; once the epoxy cures, the rail keeps the curve. This step builds that form and proves it with a dry strip. One form makes both rails: they come off it identical, and one becomes the left rail by turning it over.`,
     svg: F.svg('What the rail form makes: the two rails, highlighted on the hull frame from above'),
   };
 };
@@ -580,14 +586,14 @@ const railFormSetup: FigFn = (c) => {
   const vMid = (u: number): number => vAt(g.face, u);
   const base = g.baseW ?? g.vTop + 2;
   const yAbove1 = yA - 56, yAbove2 = yA - 24, yBelow1 = yA + base * k + 34, yBelow2 = yBelow1 + 34;
-  F.label(at(-g.hang * 0.6, g.face[0][1] - (g.fenceT ?? 0.75) / 2), [at(-g.hang, 0)[0], yAbove1], [`${g.fenceT !== undefined ? `${f16(g.fenceT)} ` : ''}scrap fence, screwed to the bench: it holds`, `the ${f8(g.hang)} that hangs off straight`], { size: 12, anchor: 'start' });
+  F.label(at(-g.hang * 0.6, g.face[0][1] - (g.fenceT ?? 0.75) / 2), [at(-g.hang, 0)[0], yAbove1], [`${g.fenceT !== undefined ? `${f16(g.fenceT)} ` : ''}scrap fence${g.fenceL !== undefined ? `, about ${f8(g.fenceL)} long` : ''}, screwed to the plywood strip:`, `it holds the ${f8(g.hang)} that hangs off straight`], { size: 12, anchor: 'start' });
   F.label(at(g.sStart, -0.4), [at(g.sStart, 0)[0] - 6, yAbove2], 'S starts (dashed)', { size: 12, anchor: 'end', color: ACCENT });
   F.label(at(g.sEnd, -0.4), [at(g.sEnd, 0)[0] - 6, yAbove2], 'S ends', { size: 12, anchor: 'end', color: ACCENT });
   F.label(at(g.lengthIn * 0.5, vMid(g.lengthIn * 0.5) * 0.35), [at(g.lengthIn * 0.47, 0)[0], yAbove1], [`form: ${g.nLayers !== undefined ? `${g.nLayers} layers of ${f16(g.layerT ?? 0)} MDF` : 'MDF layers'}, ${f8(g.lengthIn)} long,`, 'screwed to the base from below'], { size: 12, anchor: 'start' });
   const sTick = g.stations[g.stations.length - 2];
   F.label(at(sTick, vMid(sTick) - 0.8), [at(g.sEnd, 0)[0] + 16, yAbove2], `${g.clamps} clamp ticks (blue)`, { size: 12, anchor: 'start', color: CLAMP_BLUE });
-  F.label(at(-g.baseEnd / 2, g.face[0][1] + g.railT / 2), [at(-g.baseEnd / 2, 0)[0] - 3, yBelow1], [`${g.plies} oak strips on edge, ${f16(g.strip)} × ${f16(g.railW)},`, 'dry, for the bend test'], { size: 12, anchor: 'start' });
-  if (g.supportL !== undefined && g.baseW !== undefined) F.text(at(-g.baseEnd - g.supportL / 2, g.baseW * 0.72), [`${f16(FORM_BASE_IN)} plywood strip under the overhang,`, `about ${f8(g.supportL)} long, screwed to the bench`], { size: 12, anchor: 'middle' });
+  F.label(at(-g.baseEnd / 2, g.face[0][1] + g.railT / 2), [at(-g.baseEnd / 2, 0)[0] - 3, yBelow1], [`${g.plies} oak strips on edge, ${f16(g.strip)} × ${f16(g.stripRoughW ?? g.railW)}`, `(planed to ${f16(g.railW)} after the glue-up), dry`], { size: 12, anchor: 'start' });
+  if (g.supportL !== undefined && g.baseW !== undefined) F.text(at(-g.baseEnd - g.supportL / 2, g.baseW * 0.7), [`${f16(FORM_BASE_IN)} plywood strip under`, `the overhang, about ${f8(g.supportL)} long,`, 'screwed to the bench'], { size: 11.5, anchor: 'middle' });
   const cu = g.lengthIn * 0.55;
   F.label(at(cu, (vAt(g.counterFace, cu) + g.vTop) / 2), [at(cu, 0)[0] - 20, yBelow2], ['counter-form: the mirror of the form,', 'loose on the base, straight back'], { size: 12, anchor: 'end' });
   if (g.baseEnd > 0) F.label(at(g.lengthIn + g.baseEnd * 0.3, (vAt(g.counterFace, g.lengthIn) + g.vTop) / 2), [at(g.lengthIn + g.baseEnd, 0)[0], yBelow1], 'stop blocks at both ends', { size: 12, anchor: 'end' });
@@ -635,7 +641,7 @@ const railFormSetup: FigFn = (c) => {
 const railGlueUp: FigFn = (c) => {
   const g = railForm(c);
   if (!g) return null;
-  const F = new Fig(760, 630);
+  const F = new Fig(760, 664);
   F.heading(`Gluing one rail: ${g.plies} strips between the form and the counter-form`);
   F.sub([16, 52], 'A. From above: tighten the clamps in this order, lead-in first, bow end last');
   const { at } = drawFormPlan(F, g, { x: 20, y: 136, w: 720 }, 'glue');
@@ -687,7 +693,7 @@ const railGlueUp: FigFn = (c) => {
   const lx = S(g.railT + show + 1.6, 0)[0];
   F.label(S(g.strip * (g.plies - 1), g.railW * 0.75), [lx, sy + 40], ['epoxy rolled on both', 'mating faces'], { size: 12, anchor: 'start' });
   F.label(S(g.railT + 0.04, stackH - 0.3), [lx, sy + 84], ['packing tape on both', 'faces (purple)'], { size: 12, anchor: 'start' });
-  F.label(S(g.strip / 2, g.railW * 0.3), [lx, sy + 128], `strips, ${f16(g.strip)} × ${f16(g.railW)}`, { size: 12, anchor: 'start' });
+  F.label(S(g.strip / 2, g.railW * 0.3), [lx, sy + 128], [`strips, ${f16(g.strip)} × ${f16(g.stripRoughW ?? g.railW)}`, `(planed to ${f16(g.railW)} later)`], { size: 12, anchor: 'start' });
   F.text(S(-show / 2, stackH + 0.25), 'form', { size: 12, anchor: 'middle', color: MUTED });
   F.text(S(g.railT + show / 2, stackH + 0.25), 'counter-form', { size: 12, anchor: 'middle', color: MUTED });
   F.text([S(-show, 0)[0] - 4, yb + 26], 'clamp pressure from back to back (blue arrows)', { size: 11.5, color: CLAMP_BLUE });
@@ -699,6 +705,7 @@ const railGlueUp: FigFn = (c) => {
     'Roll epoxy on both mating faces; butter one with thickened epoxy.',
     'Stand the pair on edge on the base, against the form face.',
     'Set the counter-form on; every clamp snug but loose.',
+    `On the overhang: a caul on the outer strip and ${g.springText ?? 'several'} spring clamps over caul, strips and fence.`,
     `Tighten the clamps together: the lead-in first (${lead.length > 1 ? `1-${lead.length}` : '1'}), then station by station to the bow end.`,
     g.cureH !== undefined ? `Leave it clamped ${g.cureH} h at ${g.cureF ?? ''} °F or warmer before it comes off.` : 'Leave it clamped for the full cure before it comes off.',
   ];
@@ -756,14 +763,15 @@ const finishedRail: FigFn = (c) => {
   // bottom edge (depth from the top edge) along the rail
   const deepAt = (s: number): number => (s <= stepPts[0][0] ? W : s >= stepPts[1][0] ? stepPts[1][1] : W + ((stepPts[1][1] - W) * (s - stepPts[0][0])) / (stepPts[1][0] - stepPts[0][0]));
   const F = new Fig(760, 500);
-  F.heading('The finished rail (left rail; the right rail is its mirror image)');
+  F.heading('The finished rail (the left one)');
+  F.text([16, 44], 'The right rail is the same blank turned over, so its cuts mirror these.', { size: 12, color: MUTED });
   const extra = 1.2;
   const kx = 690 / (Lr + 2 * extra);
   const x0 = 35 + extra * kx;
   const X = (s: number): number => x0 + s * kx;
   // A. top edge
   const kt = kx * 3.2, yt = 150;
-  F.sub([16, 54], 'A. The top edge, from above (thickness drawn 3 times, the bow curve shown straight)');
+  F.sub([16, 66], 'A. The top edge, from above (thickness drawn 3 times, the bow curve shown straight)');
   const Yt = (off: number): number => yt - off * kt; // inboard face at the bottom
   F.rect(X(-extra), Yt(T), extra * kx, T * kt, mat('ghost', { dash: '4 3' }));
   F.rect(X(Lr), Yt(T), extra * kx, T * kt, mat('ghost', { dash: '4 3' }));

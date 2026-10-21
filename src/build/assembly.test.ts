@@ -10,6 +10,7 @@ import { cutList, ribFillers } from './cutlist';
 import { formDrawings } from './forms';
 import { computeLayout } from '../model/layout';
 import { sideRibStations } from '../model/side-ribs';
+import { RAIL_CHINE_HEAD_DIA_IN } from '../model/joinery';
 import { assemblySteps, cumulativeParts, EARLY_STEP_IDS, hasGlueJoint, isEarlyBrakePart, isHangPart, jointTally, PART_TOKEN_RE, renderInstrText, socketScrewText, stepParts, stopBlockPilots, type BuildStep, type Instr } from './assembly';
 import { finalFrac, roughFrac } from './units';
 import { flatPattern } from './flat';
@@ -155,8 +156,8 @@ describe('assembly steps', () => {
   it('build instructions from the joints and the params', () => {
     const get = (id: string) => steps.find((s) => s.id === id)!;
     // D-81, D-82: the chine tie has NO Dominos. The screw counts come from the rail's joint list: 8 a rail, #8 × 2-1/2", up through the rail into the side sandwich in every gap.
-    expect(get('rails').instructions.join(' ')).toContain('Drill the screw holes in the top edge of each rail: 8 holes, 11/64" clearance');
-    expect(get('lower').instructions.join(' ')).toMatch(/8 screws a side, #8 × 2-1\/2" flat-heads, evenly spaced/);
+    expect(get('rails').instructions.join(' ')).toContain('8 holes a rail, straight through from the bottom edge to the top edge, 11/64" clearance');
+    expect(get('lower').instructions.join(' ')).toMatch(/8 screws a side, #8 × 2-1\/2" trim-heads, evenly spaced/);
     expect(get('lower').instructions.join(' ')).toMatch(/7\/16" bearing face/); // outer band 0.2075 + web 0.236, to the nearest 1/32
     const okSteps = assemblySteps(buildModel({ ...p, ...PRE_D72 }, undefined), { ...p, ...PRE_D72 });
     expect(okSteps.find((s) => s.id === 'lower')!.instructions.join(' ')).toMatch(/8 screws a side, #8 × 2-1\/2"/);
@@ -171,7 +172,7 @@ describe('assembly steps', () => {
   it('count a joint listed on both mating parts once', () => {
     const ids = new Set(['rail-L', 'rail-R']);
     const t = jointTally(parts, ids, 'domino', (j) => (/^5×30/.test(j.size ?? '') ? '5×30' : /^6×40/.test(j.size ?? '') ? '6×40' : 'other'));
-    expect(t.get('5×30')).toBe(14); // the crossmember and king beam Dominos (7 a rail); the chine tie has none now (D-81)
+    expect(t.get('5×30')).toBe(12); // the crossmember and king beam Dominos (6 a rail: the last crossmember is glued to the bulkhead, its rail mortise met the bulkhead mortise); the chine tie has none (D-81)
     expect(t.get('6×40')).toBe(2); // the rail ends into the bow bulkhead: 6×40 now, not the 8×50 (D-81)
     expect(t.has('other')).toBe(false);
   });
@@ -249,7 +250,7 @@ describe('build review round 1: finish after hardware (MUST-1)', () => {
     // round 1 fix: the rear axle and its plates go on for good with the beam (the hold-down angles pin the axle), only the front gear comes off
     expect(get('rear-beam').instructions.join(' ')).toMatch(/stay on from here, through the finish/);
     for (const id of ['axle-R', 'clamp-RL1', 'clamp-RR1']) expect(get('rear-beam').partIds, id).toContain(id);
-    expect(get('front-beam').instructions.join(' ')).toMatch(/FIT AND DRILL, then take off/);
+    expect(get('front-beam').instructions.join(' ')).toMatch(/they come off again after the wheel dry fit/);
     const gf = get('gear-fit');
     expect(gf.kind).toBe('process');
     expect(gf.instructions.join(' ')).toMatch(/OFF and bag/);
@@ -351,9 +352,9 @@ describe('D-81, D-82: the chine tie is an epoxy bed and screws, no Dominos (repl
     expect(t).toMatch(/Spread a bed of epoxy thickened with fumed silica[^\n]*bearing face of both sides/);
     expect(t).toMatch(/Lower the unit onto the sides, alone/);
     expect(t).not.toMatch(/two people|second person/i);
-    expect(t).toMatch(/Screw each rail to its side in every gap: 8 screws a side, #8 × 2-1\/2" flat-heads, evenly spaced \(about 6-1\/2" apart\)/);
+    expect(t).toMatch(/Screw each rail to its side in every gap: 8 screws a side, #8 × 2-1\/2" trim-heads, evenly spaced \(about 6-1\/2" apart\)/);
     expect(t).toMatch(/11\/64" clearance hole through the rail and a 1\/8" pilot in the side/);
-    expect(t).toMatch(/3\/8" counterbores 1" deep in the rail's bottom edge/);
+    expect(t).toMatch(/1\/4" counterbores 1" deep in the rail's bottom edge/);
     expect(t).toMatch(/Clamp the side to the rail between the screws\.[\s\S]*Small bar clamps[^\n]*caul/);
     // the pilots drilled at the dry fit register the side; the deck slot is filled last; the pot-life budget is stated
     expect(t).toMatch(/each screw registers the side/);
@@ -394,9 +395,9 @@ describe('build review round 1: forms and resaw numbers come from their sources 
       const build = (forms.find((d) => d.id === id) as unknown as { build?: Array<{ step: string }> }).build ?? [];
       const making = build.filter((b) => !/^(CLAMP|GLUE-UP|SPRING-BACK)/.test(b.step));
       if (stepId === 'side-forms') {
-        // one item per piece of the jig, then the dry run
-        expect(step.items.length, id).toBe(making.length + 1);
-        expect(step.items.map((q) => q.text.split(':')[0])).toEqual([...making.map((q) => q.step.split(':')[0]), 'Dry-run a web on the form before any glue goes on.']);
+        // one item per piece of the jig, then the dry run and the band bend test
+        expect(step.items.length, id).toBe(making.length + 2);
+        expect(step.items.map((q) => q.text.split(':')[0])).toEqual([...making.map((q) => q.step.split(':')[0]), 'Dry-run a web on the form before any glue goes on.', 'Bend-test a spare band strip on the form before any glue goes on.']);
       } else {
         const item = step.items.find((q) => q.text.includes(word))!;
         expect(item, id).toBeTruthy();
@@ -717,7 +718,7 @@ describe('instruction style (Eric 2026-10-12: short steps, names not ids, fracti
     const cases: Array<[string, RegExp, RegExp]> = [
       ['rails', /beam notch/, /wide × [\d\-/]+" deep in the bottom edge, starting [\d\-/]+" from the rear end/],
       ['rails', /bow step/, /from the rear end/],
-      ['rails', /screw holes in the top edge/, /from the rear end[^.]*from the inboard face/], // D-81: the drawing's positions of the chine screws
+      ['rails', /Drill the screw holes BEFORE the bow step/, /from the rear end[^.]*from the inboard face/], // D-81: the drawing's positions of the chine screws
       ['rails', /crossmembers and the king beam/, /from the rear end/],
       ['hangers', /beam notch/, /from the rear edge/],
       ['hangers', /Domino mortise/, /from the rear edge/],
@@ -805,7 +806,7 @@ describe('readability round 2 (steps)', () => {
     });
 
     it(`${name}: features with several positions give every one`, () => {
-      expect(text('rear-beam')).toMatch(/Clamp-plate bolts, both ends:[^\n]*1-1\/2" and 26" from the left end/); // D-83: 2 in wide plates, so the bolt rows sit a little further out
+      expect(text('rear-beam')).toMatch(/Clamp-plate bolts, both ends:[^\n]*1-1\/4" and 26-1\/4" from the left end/); // D-88: the rear plates 1/4" in from the beam ends, as the front outer plates // D-83: 2 in wide plates, so the bolt rows sit a little further out
       expect(text('rear-beam')).toMatch(/Hold-down bolts, both ends:[^\n]*4-3\/16" and 23-5\/16" from the left end/);
       const fb = text('front-beam');
       expect(fb).toMatch(/Clamp-plate bolts, 4 plates:[^\n]*1-1\/4", 6-3\/4", 20-3\/4" and 26-1\/4" from the left end/);
@@ -833,7 +834,7 @@ describe('readability round 2 (steps)', () => {
       expect(text('seal')).not.toMatch(/Extreme setting|stored outside\) uses/);
       const fr = text('frame');
       expect(fr).not.toMatch(/as a template/);
-      expect(fr).toMatch(/knee-bolt holes[^\n]*from the rear end[^\n]*from the top edge/);
+      expect(fr).toMatch(/knee-bolt holes[^\n]*from the finished rear end[^\n]*from the bottom edge/);
       expect(text('sides-outer')).toMatch(/MIRROR ramp/);
       for (const s of list) expect(allText(s), s.id).not.toMatch(/same template and ramp|same ramp\b(?!:)/);
     });
@@ -860,7 +861,7 @@ describe('build readability round 3: one recipe for the knee, one set of numbers
     expect(mill).toMatch(/grain upright \/ across the sled \/ upright/);
     expect(mill).toMatch(/Layers 1 and 3 \(grain upright\): ONE piece, 4-1\/8" wide across its grain \u00d7 11-5\/8" long/);
     expect(mill).toMatch(/Layer 2 \(grain across the sled\): edge-glue 2 boards first, 5-5\/8" and 4-3\/4" wide \u00d7 5-3\/4" long/);
-    expect(mill).toMatch(/Only the center layer is edge-glued: its joint is 5-1\/4" up from the bottom edge of the finished knee \(3\/4" above the shoulder\)/);
+    expect(mill).toMatch(/Only the center layer is edge-glued: its joint is 5-1\/4" up from the bottom edge of the finished knee, clear of the bolt holes/);
     expect(mill).toContain(`Mill the cured block to ${g.finalText.replace(/ across$/, ' across the sled').replace(/ \u00d7 /g, ', ')}`);
     // the layer sizes are the cut list's, not computed here
     for (const c of cl.cuts.filter((q) => q.piece === 'layer' && q.ids.includes('brake-knee-L'))) {
@@ -873,7 +874,7 @@ describe('build readability round 3: one recipe for the knee, one set of numbers
 
   it('D-77: step 1 cuts the pocket as a notch in the rear and center layers before the glue-up, and says where', () => {
     const mill = stepText('mill');
-    expect(mill).toMatch(/Cut the flap pocket in the rear layer \(layer 1\) and the center layer \(layer 2\) BEFORE the glue-up: a 1-3\/8"-wide notch in from the outboard edge, 7" to 8-3\/4" up from the bottom edge of the finished knee/); // 6-31\/32" is a layout number: said to 1\/16"
+    expect(mill).toMatch(/Cut the flap pocket in the rear layer \(layer 1\) and the center layer \(layer 2\) BEFORE the glue-up: a notch 1-3\/8" deep in from the outboard edge, 7" to 8-3\/4" up from the bottom edge of the finished knee/); // 6-31\/32" is a layout number: said to 1\/16"
     expect(mill).toMatch(/Leave the front layer whole: the pocket is recessed about 1\/4" into it after the glue-up/);
     expect(mill).not.toMatch(/outboard ear|two ears/);
   });
@@ -895,7 +896,7 @@ describe('build readability round 3: one recipe for the knee, one set of numbers
     expect(t).toMatch(/Then the pin hole: \u00d813\/32"/);
     expect(t).toMatch(/Each strap takes 4 \u00d7 #8 \u00d7 1-1\/4" stainless pan-head wood screws: 2 in the roof above the pocket and 2 in the floor under it/);
     expect(t).toMatch(/Drill 1\/8" pilots 1-3\/16" deep/);
-    expect(t).toMatch(/Clamp the tongue and block in the knee's pocket, then drill the pin hole in one pass with one 13\/32" bit: through the strap's hole, the block and the tongue, and 1" blind into the inboard wall of the pocket/);
+    expect(t).toMatch(/Clamp the tongue and block in the knee's pocket, the mark centered in the strap's hole, then drill the pin hole in one pass with one 13\/32" bit: through the strap's hole, the block and the tongue, and 1" blind into the inboard wall of the pocket/);
     expect(t).toMatch(/hitch-pin clip in its cross hole, outboard of the strap/);
     expect(t).toMatch(/clip off \(it sits outboard of the strap\)/);
     expect(steps.find((s) => s.id === 'brake-flaps')!.partIds).toEqual(expect.arrayContaining(['brake-strap-L', 'brake-strap-R']));
@@ -953,7 +954,8 @@ describe('build readability round 3: one recipe for the knee, one set of numbers
     expect(formText).not.toMatch(/\(step 5\)/);
     expect(formText).toContain('(the MIRROR RAMP item below)');
     const side = forms.find((d) => d.id === 'side-form')!;
-    expect(side.build[4].step).toMatch(/^MIRROR RAMP/); // item 5 of the side form really is the mirror ramp
+    expect(side.build[3].step).toMatch(/^MIRROR RAMP/); // item 4 of the side form really is the mirror ramp (the cleats follow both ramps)
+    expect(side.build[4].step).toMatch(/^CLEATS/);
     expect(all).not.toMatch(/mirror ramp \(step 5\)/i);
   });
 
@@ -1035,7 +1037,7 @@ describe('D-76: side ribs, knees and box ties (tie-down bases)', () => {
     it(`${name}: the box tie is glued at the box install, never to the lid frame; the D-ring brackets are bolted at the final fit with the bracket as the template`, () => {
       const box = txt(get('storage-box'));
       expect(box).toMatch(/box tie between each box or rear rib and the box side/);
-      expect(box).toMatch(/never glued to the lid frame/);
+      expect(box).toMatch(/Its top stands 1\/8" below the top of the plywood wall, clear of the coaming/);
       // D-ring and grab-board holes are drilled at the rib step, before any finish, with the bracket as the template and a scrap block outside; the final fit only bolts
       const rib = txt(get('side-holes'));
       expect(get('side-holes').title).toBe('Drill the D-ring holes and fit the grab boards (before the finish)');
@@ -1073,7 +1075,7 @@ describe('D-79..D-83: the cost-pass build text', () => {
     const outer = stepText(std, 'sides-outer');
     expect(outer).toMatch(/Drill the drain holes once the cure is hard: 2 in each side, 3\/8", straight through the inner band, the web and the outer band/);
     // ONE datum: the inner face of the rear transom (the web end sits 1/4" inside the transom dado), the same as the band drawing
-    expect(outer).toMatch(/Mark the inner face of the rear transom on each sandwich first: 1\/4" in from the rear end of the web/);
+    expect(outer).toMatch(/Mark the transom line on each side first: a square line 1\/4" in from the rear end of the web/);
     expect(outer).toMatch(/Centers 3\/8" and 58" forward of that line, measured along the bottom edge[^\n]*, 23\/32" up from the web's bottom edge/); // the numbers of the band and web drawings
     expect(outer).toMatch(/backer board behind the exit/);
     expect(outer).toMatch(/Brush epoxy into each bore/);
@@ -1129,11 +1131,11 @@ describe('D-79..D-83: the cost-pass build text', () => {
   it('Standard fits a 6" lid support (Extreme the friction stay) with located pilots and mounts it at the final fit', () => {
     const lid = stepText(std, 'storage-lid');
     expect(lid).toMatch(/Fit and drill the 6" lid support, then take it off/);
-    expect(lid).toMatch(/Its base on the left hinge backer: 2 holes, 1\/8" pilot, 5\/8" deep, in the inboard end: 5\/16" and 15\/16" from the rear face, 1-1\/4" from the bottom face/);
-    expect(lid).toMatch(/Its arm end on the lid frame's fore end piece \(the hinge edge\): 2 holes, 1\/8" pilot, 5\/8" deep, in the bottom face:/);
+    expect(lid).toMatch(/Its base on the support block: 2 holes, 1\/8" pilot, 5\/8" deep, in the inboard face:/); // D-89: a small oak block inside the left box side
+    // D-89 (round 2): the arm end is on the inboard face of the left lid frame side, well away from the hinge line
+    expect(lid).toMatch(/Its arm end on the left lid frame side: 2 holes, 1\/8" pilot, 5\/8" deep, in the inboard face:/);
     expect(stepText(std, 'final-fit')).toMatch(/Lid support: the 6" support/);
     expect(lid).toMatch(/Screws: #8 × 5\/8" at the base and #8 × 5\/8" at the arm end, each in a 1\/8" pilot/);
-    expect(lid).toMatch(/each pilot keeps 5\/16" of oak on both sides/); // at least 3/16" of wood around the pilot
     expect(partsStd.find((x) => x.id === 'storage-lid-stay')!.name).toBe('Lid support'); // the id stays, the Standard name is the product's
     expect(parts.find((x) => x.id === 'storage-lid-stay')!.name).toBe('Lid friction stay');
     expect(stepText(ext, 'final-fit')).toMatch(/Lid stay: the stainless friction stay/);
@@ -1231,12 +1233,13 @@ describe('D-79..D-83: the cost-pass build text', () => {
     }
   });
 
-  it('the rail-to-chine screws seat in 3/8" counterbores (a #8 flat head is about 11/32"), plugged with a 3/8" oak plug; the forward holes are countersunk; one direction (straight down, hull inverted)', () => {
+  it('the rail-to-chine screws are trim-heads in 1/4" counterbores (D-91: about 3/32" of wall at the hull\'s outside), plugged with 1/4" oak plugs; the forward hole is countersunk; drilled before the bow step; one direction (straight down, hull inverted)', () => {
     const rails = stepText(std, 'rails');
-    expect(rails).toMatch(/Counterbore the first 7 from the bottom edge up the rail: a 3\/8" bit, 1" deep/);
-    expect(rails).not.toMatch(/5\/16" bit/);
-    expect(rails).toMatch(/3\/8" oak plug from a plug cutter on offcuts \(or a 3\/8" dowel\), glued in and trimmed flush/);
-    expect(rails).toMatch(/The last \(forward\) hole gets a countersink from the bottom edge instead of a bore/);
+    expect(rails).toMatch(/Counterbore first: holes 1 to 7, a 1\/4" brad-point or Forstner bit, 1" deep measured from the bottom edge/);
+    expect(rails).not.toMatch(/3\/8" bit|5\/16" bit/);
+    expect(rails).toMatch(/1\/4" oak plugs from a plug cutter on offcuts \(or a 1\/4" dowel\), glued in and trimmed flush/);
+    expect(rails).toMatch(/The last \(forward\) hole has no bore/);
+    expect(rails.indexOf('Drill the screw holes')).toBeLessThan(rails.indexOf('Cut the bow step'));
     const dry = stepText(std, 'dry-fit'), lower = stepText(std, 'lower');
     expect(dry).toMatch(/drill straight down into the bottom edge of the side/);
     expect(lower).toMatch(/straight down through the rail/);
@@ -1244,8 +1247,9 @@ describe('D-79..D-83: the cost-pass build text', () => {
     const rail = partsStd.find((x) => x.id === 'rail-L')!.joints!.filter((j) => j.type === 'screw' && /chine/.test(j.to));
     const deep = rail.find((j) => /counterbore the head/.test(j.size!))!;
     const bit = /\((\d+)\/(\d+)" bit\)/.exec(deep.size!)!;
-    expect(Number(bit[1]) / Number(bit[2])).toBeGreaterThanOrEqual(3 / 8 - 1e-9);
-    expect(rail.find((j) => /no counterbore needed/.test(j.size!))!.size).toMatch(/countersink the head flush/);
+    expect(Number(bit[1]) / Number(bit[2])).toBeGreaterThanOrEqual(RAIL_CHINE_HEAD_DIA_IN); // the trim head fits the bore
+    expect(deep.size).toMatch(/trim-head wood screws/);
+    expect(rail.find((j) => /no counterbore needed/.test(j.size!))!.size).toMatch(/trim head sink flush/);
   });
 
   it('the layers of an edge-glued laminate are unequal and mirrored, so the seams of neighboring layers sit at least 1-1/2" apart (bridle tongue, bow bulkhead); the edge-glue block comes before the lamination', () => {
@@ -1278,8 +1282,7 @@ describe('D-79..D-83: the cost-pass build text', () => {
     expect(fit).toMatch(/3\/4" fender washer under each head/);
     expect(fit).toMatch(/no washer under them \(one fender washer a bolt, under the head\)/);
     const rear = stepText(std, 'rear-beam');
-    expect(rear).toMatch(/Drilling stainless: center-punch every mark, use a cobalt bit/);
-    expect(rear).toMatch(/SLOW/);
+    expect(rear).toMatch(/Drill stainless as in step \d+/); // the how-to is printed once, in the frame step (the knee backing plates are the first stainless drilled)
     expect(rear).toMatch(/cutting oil/);
   });
 
@@ -1372,14 +1375,13 @@ describe('final review fixes (steps): sizes from the model, one sequence per hol
       expect(tr).toMatch(/Drill the 4 vent holes \(1\/8"\) through the (rear )?transom, into the dados/);
       expect(tr).toMatch(/One each side, [\d\-/]+" off the centerline and [\d\-/]+" up from the transom's bottom edge/);
       expect(txt('lower')).toMatch(/about 6-1\/2" apart/);
-      expect(txt('lower')).toMatch(/Plug each counterbore with a glued oak plug/);
+      expect(txt('lower')).toMatch(/After the cure, glue an oak plug into each counterbore and pare it flush/);
       expect(txt('finish-under')).toContain(pp.weatherSpec === 1 ? `done in step ${at('seal')}` : `both were coated in step ${at('seal')}`);
     });
 
     it(`${name}: the torque wrench is listed only where the build has a torque to set`, () => {
       expect(get('rear-beam').tools).not.toContain('torque wrench');
-      if (pp.kneeMount === KNEE_MOUNT.removable) expect(get('hang').tools).toContain('torque wrench');
-      else expect(get('hang').tools).not.toContain('torque wrench');
+      expect(get('hang').tools).not.toContain('torque wrench'); // D-88: every bolt goes snug plus a quarter turn
     });
   }
 
@@ -1397,7 +1399,7 @@ describe('final review fixes (steps): sizes from the model, one sequence per hol
     expect(t('brake-flaps')).toMatch(/The eye goes in at the hang step, with a drop of epoxy in the pilot/);
     expect(t('hang')).toMatch(/Fit each shoe to its tire with the wheel on/);
     expect(t('hang')).toMatch(/angle the wrench handle down and inboard/);
-    expect(t('brake-knee-off')).toMatch(/put a bottom rear bolt through the knee and the rail/);
+    expect(t('brake-knee-off')).toMatch(/put a bottom rear bolt, with its washer, through the knee and the rail/);
     expect(t('brake-knee-off')).toMatch(/Angle the wrench handle down and inboard/);
   });
 });

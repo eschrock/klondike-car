@@ -148,7 +148,13 @@ const hangerOnRail: FigFn = (c) => {
   if (B) rectIn(F, fa, [B.min[0], B.min[2]], [B.max[0], B.max[2]], ghost());
   F.poly(clipU(prof, xEnd).map(fa.at), mat('oak'));
   breakV(F, fa.at([xEnd, 0])[0], fa.at([0, R.max[2]])[1], fa.at([0, R.min[2]])[1]);
-  const hp: Vec2[] = [[H.min[0], H.min[2]], [nx0, H.min[2]], [nx0, hangNotchTop], [nx1, hangNotchTop], [nx1, H.min[2]], [H.max[0], H.min[2]], [H.max[0], H.max[2]], [H.min[0], H.max[2]]];
+  // the small relief in the hanger's notch ceiling over the axle rod (from the hanger's own cut record)
+  const relJ = hg.joints?.find((j) => j.type === 'hole' && j.to === 'axle-R' && j.cut);
+  const rlo = relJ?.cut?.lo ? transformPoint(hg.transform, relJ.cut.lo) : undefined, rhi = relJ?.cut?.hi ? transformPoint(hg.transform, relJ.cut.hi) : undefined;
+  const rel = rlo && rhi ? { x0: Math.min(rlo[0], rhi[0]), x1: Math.max(rlo[0], rhi[0]), z1: Math.max(rlo[2], rhi[2]) } : undefined;
+  const relSize = c.drawings().find((d) => d.partIds.includes('axle-hanger-L'))?.features.find((q) => (q.to ?? []).includes('axle-R'))?.size?.split(' opening')[0];
+  const ceil: Vec2[] = rel ? [[nx0, hangNotchTop], [rel.x0, hangNotchTop], [rel.x0, rel.z1], [rel.x1, rel.z1], [rel.x1, hangNotchTop], [nx1, hangNotchTop]] : [[nx0, hangNotchTop], [nx1, hangNotchTop]];
+  const hp: Vec2[] = [[H.min[0], H.min[2]], [nx0, H.min[2]], ...ceil, [nx1, H.min[2]], [H.max[0], H.min[2]], [H.max[0], H.max[2]], [H.min[0], H.max[2]]];
   F.poly(hp.map(fa.at), accent('oak', { fill: '#efd9a8' }));
   // the rail's own notch, behind the hanger (hidden), in line with it
   F.poly(([[nx0, H.min[2] + 0.02], [nx0, railNotchTop], [nx1, railNotchTop], [nx1, H.min[2] + 0.02]] as Vec2[]).map(fa.at), { stroke: MAT.oak.stroke, width: 1.3, dash: '3 3' }, false);
@@ -162,9 +168,11 @@ const hangerOnRail: FigFn = (c) => {
   F.label(fa.at([nx1 - 0.2, hangNotchTop]), [xr, bot + 20], ['notch in the hanger, in line', 'with the rail\'s'], T12);
   F.label(fa.at([nx0 + 0.25, railNotchTop]), [xr, top + 62], ['rail notch (dashed, behind): cut', 'higher, to clear the axle clamp plate'], T12);
   F.dim(fa.at([nx0, H.min[2]]), fa.at([nx1, H.min[2]]), frac(nx1 - nx0, 32), 34);
+  F.dim(fa.at([H.min[0], H.min[2]]), fa.at([nx0, H.min[2]]), frac(nx0 - H.min[0], 32), 34);
+  if (rel) F.label(fa.at([(rel.x0 + rel.x1) / 2, rel.z1]), [fa.at([H.min[0], 0])[0] - 10, bot + 30], [`relief${relSize ? ` ${relSize}` : ''}:`, 'clears the axle rod'], { ...T12, anchor: 'end' });
   F.dim(fa.at([nx1, H.min[2]]), fa.at([nx1, hangNotchTop]), frac(hangNotchTop - H.min[2], 32), 0, { flat: true });
   if (B) F.label(fa.at([B.max[0] - 0.3, B.min[2] + 0.3]), [xr, bot + 62], ['rear axle beam (later):', 'it sits in the notches'], { ...T12, color: MUTED });
-  if (dom) F.label(fa.at([dom[0], dom[2] - 0.38]), [fa.at([dom[0], 0])[0] - 8, bot + 40], ['Domino mortise for crossmember 1,', 'cut in the hanger now'], { ...T12, anchor: 'end' });
+  if (dom) F.label(fa.at([dom[0] - 0.1, dom[2] - 0.2]), [fa.at([H.min[0], 0])[0] - 10, top + 56], ['Domino mortise for crossmember 1,', 'cut in the hanger now'], { ...T12, anchor: 'end' });
   if (dom) F.dim(fa.at([dom[0] - 0.45, R.max[2]]), fa.at([dom[0] - 0.45, dom[2]]), f16(R.max[2] - dom[2]), 0, { flat: true, anchor: 'end' });
   F.dim(fa.at([R.min[0], R.max[2]]), fa.at([H.min[0], R.max[2]]), f16(H.min[0] - R.min[0]), -14);
   F.dim(fa.at([bolts[0][0], R.max[2]]), fa.at([bolts[0][0], bolts[0][1]]), f16(R.max[2] - bolts[0][1]), 0, { flat: true, anchor: 'end' });
@@ -401,7 +409,7 @@ const dryFitEnd: FigFn = (c) => {
   F.label(Q((S.yo + S.yWi) / 2, L.chineBot + 0.06), [br, Q(0, L.chineBot)[1] + 4], ['the rail sits on the edge of', 'the outer band and the web'], T12);
   F.label(Q((S.yo + S.yWo) / 2, S.chineTop - 0.3), [br, Q(0, S.chineTop - 0.3)[1] + 4], 'outer chine band', T12);
   F.label(Q((S.yWo + S.yWi) / 2, S.chineTop + 0.25), [br, Q(0, S.chineTop + 0.25)[1] + 4], 'web', T12);
-  F.label(Q(yDeck - 0.35, (L.deckBot + L.deckTop) / 2), [bl, Q(0, L.deckTop)[1] - 10], ['deck edge, beside the web', '(the inner band is under', 'it on the finished sled)'], T12);
+  F.label(Q(yDeck - 0.35, (L.deckBot + L.deckTop) / 2), [bl, Q(0, L.deckTop)[1] - 10], ['deck edge, beside the web,', 'under the inner band (the', 'band lies below it now,', 'upside down)'], T12);
   F.label(Q((S.yWi + S.yi) / 2, (S.innerChineBot + S.chineTop) / 2), [bl, Q(0, S.chineTop)[1] - 4], 'inner chine band', T12);
   const zg = (L.deckBot + L.deckTop) / 2;
   F.line(Q(yDeck, zg), Q(S.yWi, zg), { stroke: DIM, width: 1.4 });
@@ -428,7 +436,7 @@ const dryFitCradles: FigFn = (c) => {
   const web0 = W.min[0];
   const zFloor = L.chineBot + ch.edgeIn;
   const zPost = zFloor - ch.postIn;
-  const F = new Fig(760, 440);
+  const F = new Fig(760, 460);
   F.heading('The four cradles, seen from the side (hull upside down)');
   const fr = fit({ minX: W.min[0] - 4, minY: -zFloor - 0.3, maxX: W.max[0] + 1, maxY: -(L.railTop - c.p.railDepthIn) + 0.6 }, { x: 40, y: 74, w: 680, h: 250 });
   const P = (x: number, z: number): Vec2 => fr.at([x, -z]);
@@ -442,7 +450,8 @@ const dryFitCradles: FigFn = (c) => {
   F.poly(rp.map(([x, z]) => P(x, z)), mat('oak'));
   for (const q of cr) F.poly([P(q.x - plateW / 2, zPost), P(q.x + plateW / 2, zPost), P(q.x + plateW / 2, zFloor), P(q.x - plateW / 2, zFloor)], accent('mdf', { opacity: 0.85 }));
   // the level of the sides' bottom edges
-  F.line(P(W.min[0] - 3.5, L.chineBot), P(W.max[0] + 0.8, L.chineBot), { stroke: DIM, width: 1, dash: '6 3' });
+  F.line(P(W.min[0] - 3.5, L.chineBot), P(W.min[0] - 0.3, L.chineBot), { stroke: DIM, width: 1, dash: '6 3' });
+  F.line(P(W.max[0] + 0.3, L.chineBot), P(W.max[0] + 0.9, L.chineBot), { stroke: DIM, width: 1, dash: '6 3' });
   F.dim(P(W.min[0] - 2.5, zFloor), P(W.min[0] - 2.5, L.chineBot), f16(ch.edgeIn), 0, { flat: true, anchor: 'end' });
   for (const [i, q] of cr.entries()) {
     const x = P(q.x, 0)[0], zN = L.chineBot + q.heightIn;
@@ -454,13 +463,13 @@ const dryFitCradles: FigFn = (c) => {
   }
   const xm = (W.min[0] + W.max[0]) * 0.36;
   F.label(P(xm, L.railTop - c.p.railDepthIn / 2), [P(xm, 0)[0] - 10, 64], 'rail of the frame and deck unit, on the side\'s bottom edge (on top now)', { ...T12, anchor: 'start' });
-  const xg = W.min[0] + (W.max[0] - W.min[0]) * 0.2;
-  F.label(P(xg, sideTopAt(L, xg) - 0.3), [P(xg, 0)[0] + 90, P(0, sideTopAt(L, xg))[1] + 6], 'the sheer (the side\'s top edge) hangs down into the slots', { ...T12, anchor: 'start' });
-  F.text([P(cr[1].x, 0)[0] + 24, P(0, L.chineBot)[1] - 7], 'dashed: the sides\' bottom edges, all level', { size: 11.5, color: DIM });
+  const xs2 = (cr[1].x + cr[2].x) / 2;
+  F.label(P(xs2, sideTopAt(L, xs2) - 0.3), [P(cr[1].x, 0)[0] + 16, P(0, sideTopAt(L, xs2))[1] - 46], ['the sheer (the side\'s top', 'edge) hangs into the slots'], { ...T12, anchor: 'start' });
+  F.text([16, F.h - 30], 'Blue dashed line: the sides\' bottom edges, all level.', { size: 11.5, color: DIM });
   F.text([P(W.min[0], 0)[0], P(0, L.chineBot)[1] - 46], 'rear end', { size: 11.5, color: MUTED });
   F.text([P(W.max[0], 0)[0], P(0, L.chineBot)[1] - 46], 'bow end', { size: 11.5, color: MUTED, anchor: 'end' });
-  F.legend(['oak', 'web', 'mdf'], [16, 430]);
-  F.text([340, 430], 'MDF: the cradle post in front of the side', { size: 11.5, color: MUTED });
+  F.legend(['oak', 'web', 'mdf'], [16, 450]);
+  F.text([340, 450], 'MDF: the cradle post in front of the side', { size: 11.5, color: MUTED });
   F.note('Side view, to scale');
   return {
     id: 'dry-fit-cradles',
@@ -553,7 +562,7 @@ const dryFitPilots: FigFn = (c) => {
   }
   const yTop = fb.at([0, yMax])[1] - 6;
   if (stations.length === screws.length) screws.forEach((q, i) => F.text([fb.at([q[0], 0])[0], yTop - (i % 2 ? 0 : 16)], stations[i], { size: 11.5, anchor: 'middle', color: ACCENT }));
-  F.text([16, yTop - 34], 'hole centers from the rear end of the rail, measured along it:', { size: 11.5, color: ACCENT });
+  F.text([16, yTop - 34], 'hole centers from the finished rear end of the rail, measured along it:', { size: 11.5, color: ACCENT });
   const yBot = fb.at([0, -yMax])[1];
   const p0 = fb.at([cr[0].x, -(cr[0].plateWidthIn / 2 - 0.4)]);
   F.label(p0, [p0[0] + 8, yBot + 22], `cradle posts, ${f16(ch.postIn)} tall, outside each side: leave the cradles where they are until the glue-up`, { ...T12, anchor: 'start' });

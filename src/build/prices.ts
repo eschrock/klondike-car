@@ -230,7 +230,7 @@ export const PURCHASED_PRICE: PurchasedPriceEntry[] = [
       gap(found(34, 'ea', 'Uline', 'https://www.uline.com/Product/Detail/H-5454/Casters-and-Wheels/Uline-Flat-Free-Pneumatic-Wheel-300-lb-Capacity-10', 'Uline H-5454 flat-free pneumatic wheel 10 x 3-1/2", 5/8" bore, 2-1/4" steel offset hub (the hub length is listed), 300 lb, 3.41 lb'), 'flat-free: a stiffer tire than the 30 psi pneumatic tire the design assumes, and 0.4 lb a wheel heavier; $24 more a wheel'),
     ], WHEEL_DECISION) },
   { match: /^king-thrust$/, price: found(15.88, 'ea', 'eBay seller (Florida)', 'https://www.ebay.com/itm/143055583417', 'natural UHMW 1/2" sheet, 6" x 12" option (a 3" disc is cut from it); the listing may price one size only', true) },
-  { match: /^kingpin$/, price: foundCP(5, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Product-Details?product=678', '5/8" kingpin set: 5/8-11 x 6 hex bolt, zinc grade 8 yellow $4.14 (#678) + 5/8-11 zinc nylon-insert lock nut $0.56 (#2628) + 2 SAE flat washers $0.30 (#4273) = $5.00') },
+  { match: /^kingpin$/, price: foundCP(4.85, 'ea', BOLT_DEPOT, 'https://boltdepot.com/Product-Details?product=678', '5/8" kingpin set: 5/8-11 x 6 hex bolt, zinc grade 8 yellow $4.14 (#678) + 5/8-11 zinc nylon-insert lock nut $0.56 (#2628) + 1 SAE flat washer $0.15 (#4273; none under the nut, D-88) = $4.85') },
   { match: /^roll-pad$/, price: notFound(est(2, 'ea', MCM, 'UHMW 1/4" sheet offcut (no US price found, only an import listing at about $44 before duty)')) },
   { match: /^bridle-sleeve$/, price: foundCP(13.59, 'ea', 'Zoro (Bunting EBCB101612)', 'https://www.zoro.com/bunting-bearings-sleeve-bearing-58-id-1-od-1-12l-ebcb101612/i/G5910390/', 'cast bronze sleeve bearing 5/8" ID x 1" OD x 1-1/2" (plain cast bronze, not the oil-embedded SAE 841 the model names: that size is not priced online, McMaster-Carr hides it; the cast sleeve is fine for a bridle that turns slowly, oil it)', true) },
   // Extreme weather: 316 eye bolts are the base; the galvanized ones are the Standard spec's base (PURCHASED_PRICE_STANDARD) and the cheaper alternative here.
@@ -252,6 +252,8 @@ export const PURCHASED_PRICE: PurchasedPriceEntry[] = [
   // D-79: the bungee is bought by the foot (a short length, not a 100 ft roll); the stop cord and the wheel-chock cords are paracord from the shop (NOTE_ITEMS 'brake-stop-cord' and the entry below).
   { match: /^brake-cord$/, override: true, price: { ...foundCP(0.19, 'ft', 'Knot & Rope Supply', 'https://www.knotandrope.com/products/1-4-shock-cord-500-spool', '1/4" shock cord, white or black, sold by the foot ($0.19/ft; shipping extra, so batch it with another order; Home Depot T-W Evans 100 ft is $18.60). The 10.99 in bungee is under a foot a side: buy 2 ft for both'), perPart: 10.99 / 12 } },
   { match: /^brake-chock-cord$/, override: true, price: owned('ea', 'paracord for the 30 in wheel-chock cords (a 100 ft roll was priced at $34)') },
+  // D-89 (round 2): the brake stop cord is a short paracord down-tie from the flap eye to a low eye on the transom, cut from the troop's paracord.
+  { match: /^brake-stop-cord$/, override: true, price: owned('ea', 'paracord for the brake stop cords (3/16 in, about 6 in each with the knots)') },
   { match: /^handle-pin$/, price: est(5, 'ea', MCM, 'clevis pin and lynch pin') },
   { match: /^(lamp-clip|rear-lamp-clip)$/, price: notFound(est(3, 'ea', 'Printed in-house (ASA)', 'about 0.2 lb of filament, no support (no US price for ASA filament found, only UK/EU listings)')) },
   { match: /^front-light$/, override: true, price: withAlts(
@@ -281,8 +283,8 @@ export const PURCHASED_MODEL_COST_NOTE: ModelCostNote[] = [
   // No source behind these two model costs: estimates until a quote is read.
   { match: /^brake-foot-tread$/, estimate: true, note: 'ESTIMATE, no source: the model\'s $3 a tread for a ribbed rubber stair-tread or neoprene sheet offcut; not in any price research' },
   { match: /^flag-tube$/, estimate: true, note: 'ESTIMATE, no source: the model\'s $4 for a 1" schedule 40 PVC tube cut to length (a 10 ft stick of 1" PVC is the usual sale; ask for a cut piece); not in any price research' },
-  { match: /^storage-hinge$/, note: `model cost kept: the 2-1/2" x 2-3/4" 316 hinge was not found in the ${RESEARCH_DATE} research`, alternatives: [
-    gap(found(13.545, 'ea', 'Freeport Marine', 'https://www.freeportmarine.com/products/seachoice-2-316-stainless-steel-butt-hinges.oembed', 'Seachoice 33911 2" x 2" 316 butt hinges, $27.09 a pair, shown as half each', true), 'the hinge is 2" x 2", not 2-1/2" x 2-3/4"; needs a size decision')] },
+  { match: /^storage-hinge$/, note: `ESTIMATE, model cost: the 2-1/2" x 1-1/2" (open, 3/4" leaves, D-89) 316 hinge was not found in the ${RESEARCH_DATE} research`, alternatives: [
+    gap(found(13.545, 'ea', 'Freeport Marine', 'https://www.freeportmarine.com/products/seachoice-2-316-stainless-steel-butt-hinges.oembed', 'Seachoice 33911 2" x 2" 316 butt hinges, $27.09 a pair, shown as half each', true), 'the hinge is 2" x 2" (1" leaves), not 2-1/2" x 1-1/2": its leaf is taller than the 3/4" lid frame face')] },
   { match: /^storage-latch$/, note: `model cost kept: no 316 draw latch with catch found in the ${RESEARCH_DATE} research (only turn-button and toggle latches)` },
   { match: /^storage-lid-stay$/, note: `model cost kept: no 316 friction lid stay found in the ${RESEARCH_DATE} research`, alternatives: [
     gap(found(26.4, 'ea', 'Sugatsune', 'https://www.sugatsune.com/s-s-stay-s-93l', 'Sugatsune S-93L stainless friction lid stay, 66 lb (S-91R is 31.30, 88 lb)', true), '304 stainless, not 316')] },
@@ -351,6 +353,8 @@ export const FASTENER_PRICE: Array<{ match: RegExp; price: Price }> = [
   { match: woodScrewLabel(8, '1'), price: bdScrew(BD_SCREW_8, 8, '1', 26.98, ' ($0.42 each)', 0.42) },
   { match: woodScrewLabel(8, '1-1/4'), price: bdScrew(BD_SCREW_8, 8, '1-1/4', 33.95, ' ($0.53 each)', 0.53) },
   // D-77: the four pan-head #8 x 1-1/4 screws of each brake pivot strap (8 in all). The research read the flat-head listing only; the pan head is priced the same until quoted.
+  // D-91: the rail-to-chine screws are #8 x 2-1/2 TRIM-HEAD (a small head, so a 1/4" counterbore leaves wall at the hull's outside). Not in the research: an estimate, about the flat-head estimate.
+  { match: /^316 trim-head wood screw #8 x 2-1\/2"$/, price: notFound(withEach(packed(100, 75, 'ea', FAST, 'ESTIMATE: 316 stainless trim-head wood screw #8 x 2-1/2" (square or Torx drive, about a 7/32" head), for the rail-to-chine tie; quote before ordering (trim heads are sold by deck and siding suppliers in 305 and 316)'), 0.75)) },
   { match: /^316 pan-head wood screw #8 x 1-1\/4"$/, price: notFound(withEach(packed(100, 33.95, 'ea', BOLT_DEPOT, 'ESTIMATE: 316 Phillips pan-head wood screw #8 x 1-1/4" for the brake pivot straps (the strap is not countersunk), priced as the flat-head screw of the same size ($33.95 per 100, $0.53 each); quote the pan head before ordering'), 0.53)) },
   { match: woodScrewLabel(10, '1'), price: bdScrew(BD_SCREW_10, 10, '1', 31.9, ' ($0.45 each)', 0.45) },
   { match: woodScrewLabel(10, '1-1/4'), price: bdScrew(BD_SCREW_10, 10, '1-1/4', 36.71, ' ($0.51 each)', 0.51) },
@@ -420,7 +424,7 @@ export const NOTE_PRICE: Record<string, Price> = {
   toolPouch: est(30, 'ea', 'Hardware store', 'a small tool pouch with a 3/8" drive ratchet, a 9/16" socket and a 9/16" combination wrench (a basic set; you may already own one)'),
   antiSeize: foundCP(3.97, 'ea', 'Walmart (Permatex 81343)', 'https://www.walmart.com/ip/19868891', 'Permatex anti-seize lubricant, 1 oz tube (Ace $6.99): a small tube for the stainless knee-bolt threads, which gall without it', true),
   // D-79: the troop's paracord (the stop cord of each brake; the chock cords are in PURCHASED_PRICE).
-  paracord: owned('ea', 'paracord for the brake stop cords (3/16 in, about 9 in each)'),
+  paracord: owned('ea', 'paracord for the brake stop cords (3/16 in, about 6 in each with the knots)'),
 };
 /**
  * Glass tape, 2" wide, by the yard (D-79): U.S. Composites 8.7 oz glass cloth tape, $0.70 a yard [F] (50 yd roll $21.75; Fiberglass Supply $0.99 a yard [S]; West 729-10 10 ft roll $14.88).
@@ -493,6 +497,8 @@ export const FASTENER_PRICE_STANDARD: Array<{ match: RegExp; price: Price }> = [
   { match: stdScrewLabel(8, '5/8'), price: bd18(3958, 'ea', `${STD_SCREW_NOTE} #8 x 5/8" (#3958)`, 0.22, 100, 14.01) },
   { match: stdScrewLabel(8, '1-1/4'), price: bd18(3961, 'ea', `${STD_SCREW_NOTE} #8 x 1-1/4" (#3961)`, 0.29, 100, 18.29, '316 is 0.48 / 34.63 per 100') },
   // D-77: the pan-head #8 x 1-1/4 screws of the two brake pivot straps (8). Bolt Depot sells no pan-head WOOD screw: the Type A self-tapping pan head (coarse thread) works in hardwood with a pilot hole.
+  // D-91: the rail-to-chine trim-head screws in 18-8 / 305: an estimate (trim heads run about the price of a flat head of the same size).
+  { match: /^18-8 trim-head wood screw #8 x 2-1\/2"$/, price: notFound(withEach(packed(100, 40, 'ea', FAST, 'ESTIMATE: 18-8 (305) stainless trim-head wood screw #8 x 2-1/2" (square or Torx drive, about a 7/32" head), for the rail-to-chine tie; quote before ordering'), 0.4)) },
   { match: /^18-8 pan-head wood screw #8 x 1-1\/4"$/, price: withAlts(foundCP(0.12, 'ea', BOLT_DEPOT, `${BD_PRODUCT}2312`, '18-8 Phillips pan-head self-tapping (Type A) screw #8 x 1-1/4" (#2312), $0.12 each: a sheet-metal screw with a coarse thread, not a true wood screw; drill a pilot hole in the oak'),
     [foundCP(0.29, 'ea', BOLT_DEPOT, `${BD_PRODUCT}3961`, '18-8 Phillips flat-head WOOD screw #8 x 1-1/4" (#3961), $0.29 each: a true wood screw but a flat head (the strap is not countersunk); the slotted round head (#3876) is also $0.29')]) },
   // D-82: no 18-8 #6 x 2-1/2 exists, so the rail-to-chine and rib-knee screws are #8 x 2-1/2, piloted.
@@ -583,7 +589,7 @@ export const PURCHASED_PRICE_STANDARD: StdPurchasedEntry[] = [
     foundCP(6.495, 'ea', 'Ace Hardware', 'https://www.acehardware.com/departments/hardware/door-hardware/door-hinges/5006016', 'Ace 2" stainless narrow tight-pin hinge, pack of 2 at $12.99, shown as half each. A narrow utility hinge: check its leaf width and screw holes against the three-insert pattern before buying. The grade is not stated: check the package for 304', true),
     [foundCP(11.005, 'ea', 'MarineEngine.com (Sea-Dog)', 'https://www.marineengine.com/boat-accessories/hardware/201582-1', 'Sea-Dog 201582-1 stainless butt hinge 2" x 2", described as 304 stamped stainless, pack of 2 at $22.01, shown as half each (fasteners not included)', true)]) },
   { match: /^storage-hinge$/, override: true, price: withAlts(
-    foundCP(2.735, 'ea', 'Home Depot (Everbilt)', 'https://homedepot.com/p/Everbilt-2-1-2-in-Stainless-Steel-Non-Removable-Pin-Narrow-Utility-Hinge-2-Pack-29207/314151807', 'Everbilt 2-1/2" stainless non-removable-pin narrow utility hinge (29207), 2-pack at $5.47, shown as half each. A narrow utility hinge, not a mortise hinge, and the grade is not stated: check the package for 304. The model asks for 2-1/2" x 2-3/4": check the leaf against the lid frame', true),
+    foundCP(2.735, 'ea', 'Home Depot (Everbilt)', 'https://homedepot.com/p/Everbilt-2-1-2-in-Stainless-Steel-Non-Removable-Pin-Narrow-Utility-Hinge-2-Pack-29207/314151807', 'Everbilt 2-1/2" stainless non-removable-pin narrow utility hinge (29207), 2-pack at $5.47, shown as half each. A narrow utility hinge, not a mortise hinge, and the grade is not stated: check the package for 304. D-89: the model asks for 2-1/2" x 1-1/2" open (3/4" leaves), which this narrow hinge is about: check the leaf against the 3/4" lid frame face', true),
     [{ ...est(9.21, 'ea', 'MarineEngine.com (Seachoice)', `Seachoice 34911 butt hinge, leaf 1-5/8" x 2-1/2", described as 304, "fast pin" type, pack of 2 at $18.42, shown as half each (nearest size)`, 'https://www.marineengine.com/boat-accessories/hardware/34911') }]) },
   // D-83: the Frost King EPDM D-profile weatherstrip, one 17 ft roll for all four gasket lines (shown as a quarter each: 2.1725 x 4 = 8.69).
   { match: /^storage-gasket-side$/, override: true, price: foundCP(2.17, 'ea', 'Home Depot (Frost King)', 'https://www.homedepot.com/p/100145681', 'Frost King V25WA white EPDM D-section self-stick weatherseal, 5/16" x 1/4" x 17 ft, $8.69 for the roll; ONE roll covers all four gasket lines (the default lid needs about 70 in, 5-3/4 ft, of the 17 ft: two sides and two ends), shown as a quarter each. A D-section gives less compression than a bulb: check the lid gap', true) },

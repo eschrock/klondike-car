@@ -637,7 +637,7 @@ describe('price research applied (2026-10-12)', () => {
   });
 
   it('keeps the model\'s own cost where the research found no qualifying price, and replaces it where it did', () => {
-    expect(line('storage-hinge').unitUsd).toBe(14); // model cost kept, the 2" hinge is a spec gap
+    expect(line('storage-hinge').unitUsd).toBe(9); // model cost kept (D-89: the 2-1/2" x 1-1/2" open hinge, $9 estimate), the 2" hinge is a spec gap
     expect(line('storage-hinge').notes).toMatch(/not found in the 2026-10-12 research/);
     expect(line('lash-point').unitUsd).toBe(8); // D-83: the Extreme ring is a 316 2-hole bolt-on D-ring, an estimate
     expect(line('lash-point').basis).toBe('estimate');

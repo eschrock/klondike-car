@@ -78,7 +78,7 @@ describe('the two specs', () => {
     for (const w of [WEATHER_SPEC.standard, WEATHER_SPEC.extreme]) for (const m of [THIN_SHEET.followWeather, THIN_SHEET.whiteOakPly, THIN_SHEET.okoumeMarine, THIN_SHEET.balticBirch3mm, THIN_SHEET.balticBirch6mm]) {
       const p: Params = { ...defaultParams(), weatherSpec: w, thinSheetMaterial: m };
       const b = bom(buildModel(p), p, { noCompare: true });
-      const sizes = new Set(lines(b).filter((l) => /wood screw/.test(l.key) && !/^(Heat|Thumb)/.test(l.key)).map((l) => l.key.replace(/^(316|18-8) /, '').replace(/^pan-head /, ''))); // D-77: the strap's pan-head #8 x 1-1/4 is a head style of the second size, not a fourth size
+      const sizes = new Set(lines(b).filter((l) => /wood screw/.test(l.key) && !/^(Heat|Thumb)/.test(l.key)).map((l) => l.key.replace(/^(316|18-8) /, '').replace(/^(pan|trim)-head /, ''))); // D-91: the rail-to-chine trim-head #8 x 2-1/2 is a head style of the third size; D-77: the strap's pan-head #8 x 1-1/4 is a head style of the second size, not a fourth size
       expect([...sizes].sort(), `weather ${w}, sheet ${m}`).toEqual(['wood screw #8 x 1-1/4"', 'wood screw #8 x 2-1/2"', 'wood screw #8 x 5/8"']); // D-82: every wood screw is a #8
     }
   });
@@ -171,7 +171,7 @@ describe('Bolt Depot by the piece', () => {
     expect(ins.notes).toMatch(/NO 18-8 or zinc #10-32 screw-in insert/);
     // the #8 x 2-1/2 that replaced the #6 is a real quoted screw (D-82)
     const eight = lines(bStd).find((l) => l.key === '18-8 wood screw #8 x 2-1/2"')!;
-    expect([eight.basis, eight.unitUsd, eight.qty]).toEqual(['quoted', 0.6, 24]);
+    expect([eight.basis, eight.unitUsd, eight.qty]).toEqual(['quoted', 0.6, 8]); // D-91: the 16 rail-to-chine screws are trim-head now, a line of their own; the rib knees keep 8
   });
 });
 

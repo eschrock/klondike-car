@@ -410,6 +410,7 @@ describe('detail quality', () => {
 
 describe('no unintended overlaps for the seat, storage and fittings', () => {
   const ALLOW: Array<[RegExp, RegExp]> = [
+    [/^storage-hinge-backer-[LR]$/, /^storage-coaming-end-fore$/], // D-89: the backer is notched under the fore coaming's inboard lip (an L; this test boxes it)
     [/^seat-(wedge-[LR]|crest-strip)$/, /^seat-(back-(stile|pad|panel)|knob|wedge)-?[LR]?$/],
     [/^seat-hinge-[LR]$/, /^(seat-wedge-[LR]|seat-back-(stile|rail|panel))/], // the knuckle at the foot of the back is part of the joint
     [/^seat-pin-[LR]$/, /^(seat-back-stile|seat-back-panel|seat-wedge)-?[LR]?$/], // the pin passes through the panel into the stop block

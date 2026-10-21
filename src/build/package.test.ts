@@ -297,7 +297,8 @@ describe('readability round 2: the book reads in the shop', () => {
     expect(pkg.data.cutList.resaw.length).toBeGreaterThan(0);
     for (const pool of pkg.data.cutList.resaw) {
       expect(html, pool.board).toContain(esc(pool.laneCountText));
-      expect(stepText, pool.board).toContain(pool.laneCountText);
+      // step 1 words the lanes its own way (which width is for what, which lane is the spare); the lane count is the same
+      expect(stepText, pool.board).toContain(`${pool.ripLanes} lanes`);
     }
   });
 

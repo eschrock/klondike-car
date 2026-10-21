@@ -174,13 +174,13 @@ export function buildPivot(ctx: Ctx): Part[] {
     const boltOrder = `${inchesText(Math.ceil((len + 0.45 + 0.1 + 0.64) * 2 - 1e-9) / 2)} (stock length)`;
     const shank = cylinder(ctx, {
       id: 'kingpin', partNo: 'kingpin', name: 'Kingpin bolt (grade 8)', group: 'front-end', center: [kx, 0, zHead + len / 2], axis: 'z', radius: kd / 2, length: len, mat: 'steel',
-      kind: 'purchased', material: 'SAE grade 8 hex bolt, zinc-yellow, with plate washers', body: 'front-axle', fab: 'buy', step: STEP.gear,
+      kind: 'purchased', material: 'SAE grade 8 hex bolt, zinc-yellow, with a plate washer', body: 'front-axle', fab: 'buy', step: STEP.gear,
       massLb: steelLb(Math.PI * (kd / 2) ** 2 * len) + 0.2,
-      sourcing: { vendor: `McMaster-Carr (grade 8 hex bolt ${frac(kd)}" × ${boltOrder} (stack ${f2(len + 0.45)}" = beam ${f2(b.depth)}" + disc ${f2(p.kingThrustThickIn)}" + king beam ${f2(L.king.depth)}" + head washer, nut washer and nylock nut; catalog lengths come in 1/2" steps above 3": buy the stock length, it is used as bought (D-77 no-fabrication rule)), full-thread or ${f2(len - 2.5)}" shank; 2 grade 8 flat washers (one under the head, one under the nut), nylock nut; Loctite on the head washer)` },
+      sourcing: { vendor: `McMaster-Carr (grade 8 hex bolt ${frac(kd)}" × ${boltOrder} (stack ${f2(len + 0.45)}" = beam ${f2(b.depth)}" + disc ${f2(p.kingThrustThickIn)}" + king beam ${f2(L.king.depth)}" + head washer and nylock nut; catalog lengths come in 1/2" steps above 3": buy the stock length, it is used as bought (D-77 no-fabrication rule)), full-thread or ${f2(len - 2.5)}" shank; 1 grade 8 flat washer (under the head; the nut sits in its slot with no washer, D-88), nylock nut; Loctite on the head washer)` },
       joints: [
         { type: 'bolt', to: 'beam-F', count: 1, diaIn: kd, size: `${frac(kd)}" grade 8 kingpin through the beam, head and plate washer under the beam`, at: [[0, 0, 0]], note: 'the beam turns on the bolt; the head washer clamps the bolt to the beam' },
       ],
-      notes: `Kingpin (D-56): one ${frac(kd)}" SAE grade 8 bolt, head down under the axle beam with a plate washer, up through the beam, the UHMW disc and the king beam, nylock nut and washer in the slot at the top of the king beam (snug, then backed off a quarter turn so the axle swings freely). It locates the axle: it carries the pull of the bridle, the sideways loads and the rebound. The vertical load goes through the thrust disc and the roll of a one-wheel bump through the roll pads (D-58), not the bolt.`,
+      notes: `Kingpin (D-56): one ${frac(kd)}" SAE grade 8 bolt, head down under the axle beam with a plate washer, up through the beam, the UHMW disc and the king beam, nylock nut held by its flats in the slot at the top of the king beam, no washer (D-88): turn the bolt from its head until snug, then back it off a quarter turn so the axle swings freely. It locates the axle: it carries the pull of the bridle, the sideways loads and the rebound. The vertical load goes through the thrust disc and the roll of a one-wheel bump through the roll pads (D-58), not the bolt.`,
     });
     parts.push(shank);
   }

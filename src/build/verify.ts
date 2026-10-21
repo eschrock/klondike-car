@@ -650,7 +650,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
         it('Take one knee off and put it back with the ratchet and wrench, as the assembly step "Take the brake knees off and put them back" says.', [
           'Do it on the finished sled, with the flap on the knee.',
           `Time it: about 5 minutes a side, longer the first time.`,
-          `Tighten each bolt snug, then a quarter turn (about ${p.kneeBoltTightenLbIn} in-lb; the quarter turn past snug is the spec, the torque only a check) and no more.`,
+          `Tighten each bolt snug, then a quarter turn (the quarter turn past snug is the spec; with an inch-pound torque wrench it reads about ${p.kneeBoltTightenLbIn} in-lb, a check only) and no more.`,
         ]),
         it('Look along the joint after the refit.', [
           'Seat a straightedge along the knee leg: it must sit flat on the rail and on the chine band.',

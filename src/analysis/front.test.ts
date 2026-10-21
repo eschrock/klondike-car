@@ -237,7 +237,7 @@ describe('kingpin (grade 8)', () => {
 
 describe('king-bearing (UHMW disc, roll pads, the oak under them)', () => {
   const al = { perp: (1070 * 0.67) / 2 };
-  const nutA = (Math.PI / 4) * ((2.2 * 0.625) ** 2 - (0.625 + 1 / 16) ** 2);
+  const nutA = (Math.sqrt(3) / 2) * (1.5 * 0.625) ** 2 - (Math.PI / 4) * (0.625 + 1 / 16) ** 2; // D-88: the nut's own hex face, no washer (the slot holds the nut)
   it('static front axle on the disc: 167.5 lb over the 6.14 in2 the disc touches = 27 psi vs the 1000 psi allowable; the mean pressure with the 3 mph strike is N / A', () => {
     expect(det('king-bearing', 'static front axle').value).toBeCloseTo(hw.axle / A_DISC, 2);
     expect(det('king-bearing', 'static front axle').limit).toBe(1000);
@@ -257,7 +257,7 @@ describe('king-bearing (UHMW disc, roll pads, the oak under them)', () => {
     // the pad on the beam top uses its full 2 x 3 in
     expect(det('king-bearing', 'NORMAL, one wheel: the pad on the axle beam top').value).toBeCloseTo(sh.P / 6, 6);
     // the pad force is less than the axle load, so no nut hold-down is needed
-    expect(det('king-bearing', 'NORMAL: nut washer').value).toBe(0);
+    expect(det('king-bearing', 'NORMAL: kingpin nut bearing').value).toBe(0);
     // the pad force and the pressure both scale with the roll moment: kq = the worst over the swing of cos(a) / (y A)
     expect(sh.pressure / sh.P).toBeGreaterThan(1 / 6 - 1e-9);
   });
@@ -267,7 +267,7 @@ describe('king-bearing (UHMW disc, roll pads, the oak under them)', () => {
     expect(det('king-bearing', 'HARD 2" hit, one wheel: pressure of the pad on the rail').value).toBeCloseTo(sh.pressure, 6);
     expect(det('king-bearing', 'HARD 2" hit, one wheel: pressure of the pad on the rail').limit).toBeCloseTo(2 * al.perp, 6);
     expect(sh.hold).toBeGreaterThan(0);
-    expect(det('king-bearing', 'HARD: nut washer').value).toBeCloseTo(sh.hold / nutA, 6);
+    expect(det('king-bearing', 'HARD: kingpin nut bearing').value).toBeCloseTo(sh.hold / nutA, 6);
   });
   it('steering effort: the UHMW disc friction (mu 0.25) at the static load is about 4 lbf at the shackle, under 10% of the 150 lbf pull', () => {
     const d = det('king-bearing', 'steering effort');

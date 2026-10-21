@@ -160,7 +160,11 @@ describe('D-83: lid support, seat pads, D-rings, clamp plates, lights', () => {
     expect(a.sourcing!.vendor).toMatch(/Rockler/);
     expect(a.massLb).toBeCloseTo(0.15, 9);
     const bb = worldAABB(a);
-    expect(bb.max[0] - bb.min[0]).toBeGreaterThan(5);
+    // D-89 (round 2): the base and the arm end stand about 4 in apart beside the left side wall, not on the frame end at the hinge line
+    expect(bb.max[0] - bb.min[0]).toBeGreaterThan(3);
+    expect(bb.max[0] - bb.min[0]).toBeLessThanOrEqual(6 + 1e-9);
+    expect(a.joints!.some((j) => j.type === 'screw' && j.to === 'storage-rim-side-L')).toBe(true); // D-89: the arm end on the left lid frame side, the base on its block
+    expect(a.joints!.some((j) => j.type === 'screw' && j.to === 'storage-stay-block')).toBe(true);
     expect(b.material).toMatch(/316 stainless friction stay/);
     expect(b.massLb).toBeCloseTo(0.12, 9);
     expect(runChecks(std, { includeTruck: false }).find((c) => c.id === 'storage-pack')!.status).toBe('pass');

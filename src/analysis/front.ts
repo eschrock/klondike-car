@@ -38,8 +38,6 @@ export const UHMW_MU = 0.25;
 export const STEER_FRICTION_FRAC_MAX = 0.1;
 /** Largest running gap (in) between a roll pad and the rail (assumed): more lets the axle roll before the pad bears. */
 export const PAD_GAP_MAX_IN = 0.125;
-/** Outside diameter of the flat washer under the kingpin nut, as a multiple of the bolt diameter (an SAE flat washer is about 2.2 d). */
-const NUT_WASHER_OD_X = 2.2;
 
 // ── washer contact: the roll couple on the thrust washer ────────────────────────────────────────────────────────
 
@@ -304,8 +302,9 @@ export function kingBearingCheck(ctx: Ctx): AnalysisCheck {
   const pad = rollPadPatch(ctx);
   const allow = p.steerBearingAllowPsi;
   const kd = p.kingpinDiaIn;
-  const nutOd = NUT_WASHER_OD_X * kd;
-  const nutA = (Math.PI / 4) * (nutOd * nutOd - (kd + 1 / 16) ** 2);
+  // D-88: no washer under the kingpin nut (the slot's walls hold it): it bears on the oak with its own hex face, the width across the flats.
+  const nutAf = kingNutSlot(p, L).nutAf;
+  const nutA = (Math.sqrt(3) / 2) * nutAf * nutAf - (Math.PI / 4) * (kd + 1 / 16) ** 2;
   const ld = tieLoad(ctx);
   const pitchArm = L.tongue.holeX - L.king.x;
   const gap = rollPadGap(ctx);
@@ -330,8 +329,8 @@ export function kingBearingCheck(ctx: Ctx): AnalysisCheck {
       detail('HARD 2" hit, one wheel: pressure of the pad on the rail underside (no wood safety factor)', rh.pressure, 'psi', al.oakPerp * p.woodSafetyFactor, '<='),
       detail('NORMAL, one wheel: the pad on the axle beam top (its full area, oak perpendicular)', rn.P / padA, 'psi', al.oakPerp, '<='),
       detail('HARD, one wheel: the pad on the axle beam top (no wood safety factor)', rh.P / padA, 'psi', al.oakPerp * p.woodSafetyFactor, '<='),
-      detail('NORMAL: nut washer bearing on the oak slot ceiling if the pad cannot hold the whole roll (oak perpendicular)', nutN, 'psi', al.oakPerp, '<='),
-      detail('HARD: nut washer bearing on the oak slot ceiling (no wood safety factor)', nutH, 'psi', al.oakPerp * p.woodSafetyFactor, '<='),
+      detail('NORMAL: kingpin nut bearing on the oak slot floor if the pad cannot hold the whole roll (oak perpendicular)', nutN, 'psi', al.oakPerp, '<='),
+      detail('HARD: kingpin nut bearing on the oak slot floor (no wood safety factor)', nutH, 'psi', al.oakPerp * p.woodSafetyFactor, '<='),
       detail('tow pull (x overload) with its vertical part: mean pressure on the oak under the disc (the nose-up couple is on the kingpin, see the kingpin row)', towP, 'psi', al.oakPerp, '<='),
       detail('running gap between a pad top and the rail bottom (not too tight: the axle must swing free)', gap, 'in', p.rollPadGapMinIn, '>='),
       detail('running gap between a pad top and the rail bottom (not too loose: the pad must catch the roll)', gap, 'in', PAD_GAP_MAX_IN, '<='),

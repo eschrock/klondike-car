@@ -136,7 +136,7 @@ const ribStations: FigFn = (c) => {
   const yDeck = fr.at([0, L.deckBot])[1];
   if (box1) {
     const tg = boxTieGeometry(p, L, box1);
-    F.label(fr.at([box1.x + p.boxTieWidthIn / 2, (tg.z0 + tg.z1) / 2]), [236, yDeck + 20], ['box and rear ribs stop short of', 'the deck: their base is a box tie,', 'glued in later with the storage', 'box (dotted)'], { size: 12, anchor: 'start' });
+    F.label(fr.at([box1.x + p.boxTieWidthIn / 2, (tg.z0 + tg.z1) / 2]), [236, yDeck + 20], ['box and rear ribs stop short of', 'the deck: a box tie, glued beside', 'the lower end against the storage', 'box (dotted), carries them'], { size: 12, anchor: 'start' });
   }
   if (mid && mid.member) {
     const kh = Math.min(p.sideRibKneeHeightIn, mid.h - L.railBand - 0.25);
@@ -444,6 +444,8 @@ const storageBox: FigFn = (c) => {
     const lb = box(c, `storage-latch-block-${tag}`);
     if (lb) R(lb.min[0], lb.min[1], lb.max[0], lb.max[1], acc('oak', { width: 1.4 }));
   }
+  const stb = box(c, 'storage-stay-block');
+  if (stb) R(stb.min[0], stb.min[1], stb.max[0], stb.max[1], acc('oak', { width: 1.4 }));
   const drains = storageDrainSites(p, L);
   for (const d of drains) F.circle(pl.at([d.x, d.y]), 3.5, { fill: '#ffffff', stroke: INK, width: 1.2 });
   // labels
@@ -452,14 +454,14 @@ const storageBox: FigFn = (c) => {
   if (b4) F.label(pl.at([b4.x, (g.hw + b4.yIn - dep) / 2]), [lx, 92], 'box tie at the rear rib', { size: 12 });
   if (b1) F.label(pl.at([b1.x, (g.hw + b1.yIn - dep) / 2]), [rx, 92], 'box tie at the box rib', { size: 12 });
   const lbL = box(c, 'storage-latch-block-L');
-  if (lbL) F.label(pl.at([(lbL.min[0] + lbL.max[0]) / 2, (lbL.min[1] + lbL.max[1]) / 2]), [lx, 150], ['latch blocks on the inside of', 'the transom, above the box'], { size: 12 });
+  if (lbL) F.label(pl.at([(lbL.min[0] + lbL.max[0]) / 2, (lbL.min[1] + lbL.max[1]) / 2]), [lx, 150], ['latch blocks on the inside of the', 'transom, level with the lid frame'], { size: 12 });
   F.text([pl.at([L.xRear, 0])[0] - 6, pl.at([0, 0])[1] + 4], 'transom', { size: 11.5, color: MUTED, anchor: 'end' });
   if (drains[1]) {
     F.label(pl.at([drains[1].x, drains[1].y]), [lx, 300], ['drain holes: the floor falls', `about ${f8(0.125)} toward each`], { size: 12 });
     if (drains[0]) { const d0 = pl.at([drains[0].x, drains[0].y]); F.line(d0, [lx + 3, 296], { stroke: MUTED, width: 1 }); F.circle(d0, 2.4, { fill: MUTED }); }
   }
   const hbL = box(c, 'storage-hinge-backer-L');
-  if (hbL) F.label(pl.at([(hbL.min[0] + hbL.max[0]) / 2, (hbL.min[1] + hbL.max[1]) / 2]), [rx, 168], ['hinge backers inside the fore end', '(the lid hinges screw into them)'], { size: 12 });
+  if (hbL) F.label(pl.at([(hbL.min[0] + hbL.max[0]) / 2, (hbL.min[1] + hbL.max[1]) / 2]), [rx, 168], ['hinge backers inside the fore end (the lid', 'hinges screw into them); the lid support', 'block inside the left side, near it'], { size: 12 });
   F.label(pl.at([g.x1 - cw / 2, -g.hw * 0.85]), [rx, 250], [`oak coaming, ${f8(g.coamW)} × ${f8(g.coamT)}, on the`, 'wall tops: the lid and its gasket', 'sit on oak, never on a ply edge'], { size: 12 });
   if (b1) F.label(pl.at([b1.x + hl / 2 - 0.1, -(b1.yIn - dep / 2)]), [rx, 340], 'rib (glued in [[step:side-ribs]])', { size: 12, color: MUTED });
   F.text([pl.at([g.x1, 0])[0] + 8, pl.at([0, 0])[1] + 4], 'bow →', { size: 11.5, color: MUTED });
@@ -568,13 +570,13 @@ const storageLid: FigFn = (c) => {
   R(x0 + rw - rab, -hw + rw - rab, x1 - rw + rab, hw - rw + rab, { stroke: MUTED, width: 0.8, dash: '1 3' });
   const lx = 322;
   F.label(pf.at([(x0 + x1) / 2 + 2, hw - rw / 2]), [lx, 96], `frame sides: ${f8(rw)} oak, the full length of the lid`, { size: 12 });
-  F.label(pf.at([x1 - rw / 2, hw - rw]), [lx, 136], ['a small loose tenon at each corner (dotted),', 'in mortises in the frame sides'], { size: 12 });
+  F.label(pf.at([x1 - rw / 2, hw - rw]), [lx, 136], ['a small loose tenon at each corner (dotted),', 'in mortises in both pieces'], { size: 12 });
   F.label(pf.at([x1 - rw / 2, hw * 0.3]), [lx, 196], 'frame ends, between the sides', { size: 12 });
   F.label(pf.at([(x0 + x1) / 2 - 2.5, hw * 0.1]), [lx, 236], 'panel, its edge in a rabbet all round', { size: 12 });
   if (battens.length) { const bb = worldAABB(battens[battens.length - 1]); F.label(pf.at([(bb.min[0] + bb.max[0]) / 2, -hw * 0.45]), [lx, 296], [`${battens.length} battens under the panel, glued to it,`, 'their ends butted to the frame sides'], { size: 12 }); }
   F.text([pf.at([x0, 0])[0], pf.at([0, -hw])[1] + 18], 'aft end', { size: 11.5, color: MUTED });
   F.text([pf.at([x1, 0])[0], pf.at([0, -hw])[1] + 18], 'fore end (hinges)', { size: 11.5, color: MUTED, anchor: 'end' });
-  F.text([lx, 352], ['Order: 1 cut the joints, 2 seal the panel,', '3 glue the frame round it, 4 glue and', 'screw the battens (lid face down).'], { size: 12, color: ACCENT, weight: 'bold' });
+  F.text([lx, 352], ['Order: 1 cut the joints, 2 seal the panel,', '3 glue the frame round it, 4 glue the', 'battens, lid face down, weighted 24 h.'], { size: 12, color: ACCENT, weight: 'bold' });
 
   // ── B. section at a batten, the left frame side
   F.sub([16, 416], 'B. Cut across at a batten, at the left edge, looking forward');
@@ -593,14 +595,11 @@ const storageLid: FigFn = (c) => {
   S(yA, g.zTop - g.pl, hw - rw + rab, g.zTop, { fill: THIN_PLY.fill, stroke: ACCENT, width: 1.6 });
   S(yA, zLidBot, hw - rw, zBatTop, acc('oak'));
   breakLine(F, at(yA, zLidBot - 0.05), at(yA, g.zTop + 0.05));
-  const ys = hw - rw - 1.1;
-  F.screw(at(ys, g.zTop), at(ys, zLidBot + 0.08), true);
   const xl = 236, xr = 552;
   F.label(at(hw - rw / 2 + 0.1, g.zTop - 0.15), [xl, 446], 'frame side', { size: 12 });
   F.label(at(hw - rw + rab / 2, g.zTop - g.pl / 2), [xl, 482], ['panel edge in the rabbet', `(${f8(rab)} × ${f8(rab)}), glued`], { size: 12 });
   F.label(at(hw - rw - 0.05, (zLidBot + zBatTop) / 2), [xl, 540], ['batten end butted to the', 'frame side, thickened epoxy'], { size: 12 });
   F.label(at(hw - g.pl / 2, g.zWallTop + g.gasket / 2), [xl, 596], 'gasket on the coaming', { size: 12, color: MUTED });
-  F.label(at(ys, g.zTop), [xr, 446], ['stainless screw from the top,', 'countersunk flush, epoxy-filled'], { size: 12 });
   F.label(at(yA + 0.45, g.zTop - g.pl / 2), [xr, 500], 'panel (thin plywood)', { size: 12 });
   F.label(at(yA + 0.45, (zLidBot + zBatTop) / 2), [xr, 548], 'batten, glued to the panel', { size: 12 });
   legend(F, ['oak', THIN_PLY, 'rubber', 'steel', 'ghost']);
@@ -608,7 +607,7 @@ const storageLid: FigFn = (c) => {
   return {
     id: 'storage-lid',
     title: 'The storage lid',
-    caption: `The lid is a thin plywood panel held in an oak frame: the panel's edge sits in a rabbet along the top inside edge of all four frame pieces, and the corners are joined with small loose tenons. ${battens.length} oak battens under the panel stop it sagging under a cushion or a light load; they are glued under the panel and butted to the frame sides, and screwed through the panel from the top while the epoxy cures. The frame's underside is what seals on the gasket and the coaming of the box from [[step:storage-box]].`,
+    caption: `The lid is a thin plywood panel held in an oak frame: the panel's edge sits in a rabbet along the top inside edge of all four frame pieces, and the corners are joined with small loose tenons. ${battens.length} oak battens under the panel stop it sagging under a cushion or a light load; they are glued under the panel with thickened epoxy, the lid face down and weighted, and butted to the frame sides; no screws go through the thin panel. The frame corners are glued with the tenons and the panel is bedded in thickened epoxy. The frame's underside is what seals on the gasket and the coaming of the box from [[step:storage-box]].`,
     svg: F.svg('The storage lid from above and cut across at a batten'),
   };
 };
@@ -674,7 +673,7 @@ const seatBlocks: FigFn = (c) => {
   F.label(fr.at(pin(depth * 0.5, PIN_R_IN)), [xr, fr.at([0, mouth[1] + 1])[1]], [`${f8(2 * PIN_R_IN)} latch hole (dashed): mark it now,`, 'drill it later through the seat back\'s', `pin hole, square to the face (${Math.round(sb.a * DEG)}° tilt)`], { size: 12 });
   if (cs) F.label(fr.at([(cs.min[0] + qa[0]) / 2, (cs.min[2] + qa[1]) / 2]), [xr, fr.at([0, qa[1]])[1] - 14], ['crest strip, between the two', 'blocks (dashed: behind this one)'], { size: 12 });
   if (cs) F.label(fr.at([(g.x1 + cs.min[0]) / 2, cs.min[2] + 0.3]), [xl, fr.at([0, cs.min[2] - 0.2])[1] + 4], `a ${f8(cs.min[0] - g.x1)} bed of thickened epoxy`, { size: 12 });
-  if (lh) F.label(fr.at([lh.max[0], lh.min[2] + 0.2]), [xl, fr.at([0, lh.min[2]])[1] + 26], ['lid hinge box leaf (dashed, behind', 'the block), screwed on for good', 'in the lid step'], { size: 12 });
+  if (lh) F.label(fr.at([lh.max[0], lh.min[2] + 0.2]), [xl, fr.at([0, L.deckTop + 3.6])[1]], ['lid hinge box leaf (dashed: inboard', 'of the block), under the crest strip', 'below the knuckle; on for good'], { size: 12 });
   F.label(fr.at([g.x1 - g.pl / 2, L.deckTop + 1.2]), [xl, fr.at([0, L.deckTop + 1.6])[1]], 'box fore end', { size: 12, color: MUTED });
   F.label(fr.at([(wx0 + wx1) / 2 + 0.2, L.deckBot + 0.3]), [xl, fr.at([0, L.deckBot])[1] + 40], ['2 screws up from UNDER the deck,', 'countersunk (none from above)'], { size: 12 });
   F.label(fr.at(corner(t / 2, topC * 0.75)), [xr, fr.at([0, g.zTop])[1] - 8], 'the seat back leans here (next step)', { size: 12, color: MUTED });
@@ -828,6 +827,9 @@ const brakeKit: FigFn = (c) => {
   // the return cord from the flap's end eye to the transom eye
   const E = g.bungee.Erel, A: Vec2 = [g.bungee.A[0], g.bungee.A[2]];
   F.line(fa.at(E), fa.at(A), { stroke: '#7c3aed', width: 2.2 });
+  const Sx: Vec2 = [g.stop.S[0], g.stop.S[2]];
+  F.line(fa.at(E), fa.at(Sx), { stroke: '#0f766e', width: 2 });
+  F.circle(fa.at(Sx), 3, { fill: '#0f766e' });
   F.circle(fa.at(A), 3, { fill: '#7c3aed' });
   // the chock, parked on its cord
   F.poly(g.chock.poly.map((q) => fa.at(q as Vec2)), mat('oak', { width: 1 }));
@@ -844,14 +846,15 @@ const brakeKit: FigFn = (c) => {
   F.label(fa.at([(g.knee.x0 + g.knee.x1) / 2, g.knee.zBot + 2]), [xr, yOf(g.knee.zBot + 2)], ['knee (made in [[step:brake-knees]];', 'on the bench now)'], { size: 12, color: MUTED });
   F.label(fa.at([g.chock.xBack - 0.6, 0.5]), [xr, yOf(0.5) + 4], 'wheel chock on its cord', { size: 12, color: MUTED });
   const flapMid = rel(over(g.board.s1 * 0.45));
-  F.label(fa.at(flapMid), [fa.at(flapMid)[0] - 60, yOf(g.knee.zTop + 3.4)], `flap, ${f8(g.board.thick)} oak`, { size: 12, anchor: 'start' });
+  F.label(fa.at(flapMid), [fa.at(flapMid)[0] + 20, yOf(g.knee.zTop + 3.4)], `flap, ${f8(g.board.thick)} oak`, { size: 12, anchor: 'start' });
   const shoeTop = rel(g.shoe.outline[2] as V2);
   F.label(fa.at([shoeTop[0] - 0.3, shoeTop[1] - 0.2]), [fa.at(shoeTop)[0] + 40, yOf(g.knee.zTop + 1.6)], 'shoe block, cut to the tire', { size: 12 });
   const padPt = rel(g.pad.bot[1]);
   F.label(fa.at(padPt), [fa.at(padPt)[0] - 50, yOf(g.O[1] + 1.4)], [`rubber pad, ${f8(p.brakePadGapIn)} off`, 'the tire when released'], { size: 12, anchor: 'end' });
-  F.label(fa.at([(E[0] + A[0]) / 2, (E[1] + A[1]) / 2 + 2]), [fa.at([A[0], 0])[0] + 40, 80], 'return cord to an eye on the transom: it lifts the flap', { size: 12 });
+  F.label(fa.at([(E[0] + A[0]) / 2, (E[1] + A[1]) / 2 + 2]), [fa.at([A[0], 0])[0] + 40, 80], 'shock cord to a high eye on the transom: it lifts the flap', { size: 12 });
   F.text([fa.at(g.O)[0], fa.at(g.O)[1] + 4], 'rear tire', { size: 11.5, anchor: 'middle', color: MUTED });
   if (tr) F.label(fa.at([tr.min[0] + 0.2, g.rail.zb + 1.5]), [fa.at([tr.min[0], 0])[0] - 8, yOf(g.rail.zb) + 18], 'transom', { size: 12, color: MUTED });
+  if (tr) F.label(fa.at([(E[0] + g.stop.S[0]) / 2, (E[1] + g.stop.S[2]) / 2]), [fa.at([tr.max[0], 0])[0] + 14, 128], ['stop cord to a low eye,', 'slack when you step'], { size: 12, anchor: 'start' });
   F.label(fa.at([xs1 - 0.3, (g.rail.zb + g.rail.zt) / 2]), [xr, yOf(g.rail.zb) + 18], 'hull rail', { size: 12, color: MUTED });
   const shx = xs1 - 0.5, shz = Math.min(zTopA, sideTopAt(L, shx));
   F.label(fa.at([shx, shz]), [fa.at([xs1, 0])[0] + 12, yOf(shz) + 4], 'top edge of the hull side (dashed)', { size: 12, color: MUTED });
@@ -892,7 +895,7 @@ const brakeKit: FigFn = (c) => {
   return {
     id: 'brake-kit',
     title: 'The brake flap kit',
-    caption: `Each brake is a lever over a rear tire: an oak flap pivots on a pin in the knee ahead of the tire and reaches back to a foot tread at the transom. Stepping on the tread swings the shoe and its rubber pad down onto the tire; the return cord to the transom lifts it off again (${f8(p.brakePadGapIn)} clear when released). The flap's tongue sits in a pocket in the knee, open at the back and at the outside; a stainless strap screwed across the open side carries the outer end of the pin, and the inner end sits in a blind hole, so the pin is held on both sides of the flap. Pull the clip and the pin and the flap lifts off in seconds.`,
+    caption: `Each brake is a lever over a rear tire: an oak flap pivots on a pin in the knee ahead of the tire and reaches back to a foot tread at the transom. Stepping on the tread swings the shoe and its rubber pad down onto the tire; the shock cord to a high eye on the transom lifts it off again, and a stop cord down to a low eye holds it there, ${f8(p.brakePadGapIn)} clear of the tire; the stop cord goes slack when you step. The flap's tongue sits in a pocket in the knee, open at the back and at the outside; a stainless strap screwed across the open side carries the outer end of the pin, and the inner end sits in a blind hole, so the pin is held on both sides of the flap. Pull the clip and the pin and the flap lifts off in seconds.`,
     svg: F.svg('The brake flap kit: side view over the tire, and a section across the knee at the pivot pin'),
   };
 };
@@ -944,7 +947,7 @@ const handleFig: FigFn = (c) => {
   // labels A
   const xr = 250;
   F.label(fa.at([h.xBar + 0.3, bar1 - 0.3]), [xr, yOf(bar1)], ['handlebow, pinned and glued to', 'both posts: the handle is one U'], { size: 12 });
-  F.label(fa.at([h.xBar, h.zPin + d]), [xr, yOf(h.zPin + d) - 4], [`upper hole, ${f16(h.zPin + d - h.zFoot)} up the post: to park,`, `the U sinks ${f8(d)} with the pin in it`], { size: 12 });
+  F.label(fa.at([h.xBar, h.zPin + d]), [xr, yOf(h.zPin + d) - 4], [`upper hole, ${f16(h.zPin + d - h.zFoot)} up the post: to park,`, `the U sinks ${f16(d)} with the pin in it`], { size: 12 });
   F.label(fa.at([h.postX[1], (h.zTop + postTop) / 2 + 1]), [xr, yOf((h.zTop + postTop) / 2 + 1) + 14], 'post (oak), a slip fit in the socket', { size: 12 });
   F.label(fa.at([h.postX[1] - 0.3, bar0 - d]), [xr, yOf(bar0 - d) + 18], 'parked bow, just over the transom', { size: 12, color: MUTED });
   F.label(fa.at([h.xBar, h.zPin]), [xr, yOf(h.zPin) + 22], [`${f16(p.handlePinDiameterIn)} clevis pin through both socket`, `walls and the post's lower hole,`, `${f16(h.zPin - h.zFoot)} up the post: to ride`], { size: 12 });
@@ -993,7 +996,7 @@ const handleFig: FigFn = (c) => {
   return {
     id: 'handle-u',
     title: 'The push handle and its sockets',
-    caption: `The handle is one removable U: two oak posts with the handlebow pinned and glued across their tops. Each post slides into an aluminum socket on the outside of the transom and is held by a clevis pin through both socket walls and the post; a second hole higher up the post lets the U sink ${f8(d)} to park the bow low over the transom. Each socket is held by two screws from inside its bore into T-nuts set in the oak backer behind the transom, so no wrench has to reach behind the storage box; an access hole in the socket's rear wall passes the screw and the hex key. This step fits and drills the sockets and makes the U; the sockets go on for good at the hang step.`,
+    caption: `The handle is one removable U: two oak posts with the handlebow pinned and glued across their tops. Each post slides into an aluminum socket on the outside of the transom and is held by a clevis pin through both socket walls and the post; a second hole higher up the post lets the U sink ${f16(d)} to park the bow low over the transom. Each socket is held by two screws from inside its bore into T-nuts set in the oak backer behind the transom, so no wrench has to reach behind the storage box; an access hole in the socket's rear wall passes the screw and the hex key. This step fits and drills the sockets and makes the U; the sockets go on for good at the hang step.`,
     svg: F.svg('The push handle on the transom, riding and parked, with a detail of a socket screw and its T-nut'),
   };
 };
