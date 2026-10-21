@@ -5,6 +5,7 @@
  * file imports at its true size whichever reading an importer takes. Colors follow the usual laser convention:
  *   red   #FF0000  cut through (holes and inner loops are listed first, the outline last: cut them in that order)
  *   blue  #0000FF  score / mark (a light pass: station lines, drill marks, lettering). Not cut through.
+ *   black #000000  the edge of a blank sawn elsewhere, to line it up for an engrave-only job. Not output.
  * Strokes only, no fills, no text (a laser would engrave a filled glyph); names live in <title> and <desc>.
  */
 import type { Vec2 } from '../model/types';
@@ -18,6 +19,8 @@ export const LASER_MAX_LENGTH_IN = 118;
 export const LASER_MAX_THICKNESS_IN = 0.26;
 export const LASER_CUT = '#FF0000';
 export const LASER_SCORE = '#0000FF';
+/** An outline drawn only to line the piece up (an engrave-only job on a sawn blank): set its layer to not output. */
+export const LASER_FRAME = '#000000';
 /** Space left around and between pieces on a laser sheet (in). */
 export const LASER_GAP_IN = 0.25;
 /** A band is cut this much under the bed width (in), so the piece clears the bed edge. */
@@ -61,8 +64,9 @@ function fmtFrac(v: number, den = 8): string {
 export interface LaserShape {
   id: string;
   label: string;
-  /** Outline, cut through. */
+  /** Outline, cut through (or, with `frameOnly`, drawn in black to line up a blank that was sawn: not output). */
   outer: Vec2[];
+  frameOnly?: boolean;
   /** Inner loops, cut through. */
   holes: Vec2[][];
   /** Round holes, cut through. */
@@ -256,8 +260,8 @@ export function laserSvg(doc: LaserDoc): LaserSvg {
     return `M${px(x - r)},${px(y)}a${px(r)},${px(r)} 0 1,0 ${px(dia)},0a${px(r)},${px(r)} 0 1,0 ${px(-dia)},0Z`;
   };
   const path = (color: string) => (id: string, dd: string, _label: string): string => `<path id="${esc(id)}" d="${dd}" fill="none" stroke="${color}" stroke-width="1"/>`;
-  const scorePath = path(LASER_SCORE), cutPath = path(LASER_CUT);
-  const score: string[] = [], inner: string[] = [], outer: string[] = [];
+  const scorePath = path(LASER_SCORE), cutPath = path(LASER_CUT), framePath = path(LASER_FRAME);
+  const score: string[] = [], inner: string[] = [], outer: string[] = [], frame: string[] = [];
   lay.placed.forEach((pl) => {
     const f = at(pl), s = pl.shape;
     s.score.forEach((l, i) => {
@@ -270,7 +274,8 @@ export function laserSvg(doc: LaserDoc): LaserSvg {
     });
     s.circles.forEach((c, i) => inner.push(cutPath(`${s.id}-hole-${i + 1}`, circle(c.c, c.dia, f), `${s.label}: hole ${fmt(c.dia)} in`)));
     s.holes.forEach((h, i) => inner.push(cutPath(`${s.id}-loop-${i + 1}`, d(h, f, true), `${s.label}: inner cut`)));
-    outer.push(cutPath(`${s.id}-outline`, d(s.outer, f, true), `${s.label}: outline`));
+    if (s.frameOnly) frame.push(framePath(`${s.id}-frame`, d(s.outer, f, true), `${s.label}: edge of the sawn blank (line-up only)`));
+    else outer.push(cutPath(`${s.id}-outline`, d(s.outer, f, true), `${s.label}: outline`));
   });
   const W = lay.widthIn;
   const svg =
@@ -280,6 +285,7 @@ export function laserSvg(doc: LaserDoc): LaserSvg {
     `<g id="score">${score.join('')}</g>\n` +
     `<g id="cut-inside">${inner.join('')}</g>\n` +
     `<g id="cut-outline">${outer.join('')}</g>\n` +
+    (frame.length ? `<g id="frame">${frame.join('')}</g>\n` : '') +
     `</svg>\n`;
   return {
     svg, widthIn: W, heightIn: H,

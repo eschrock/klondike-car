@@ -31,11 +31,12 @@ describe('the cut list flags the laser parts', () => {
   const rows = data.cutList.sheets.flatMap((g) => g.rows);
   it('says yes for the thin panels that fit and why not for the rest', () => {
     const by = (n: RegExp) => rows.find((r) => n.test(r.name))!;
-    expect(by(/Side sign/).laser.ok).toBe(true);
-    expect(by(/Storage box side/).laser.ok).toBe(true);
-    expect(by(/Storage box end/).laser.ok).toBe(true);
+    // D-86: plain rectangles are sawn; the lid is sawn and only its lettering is lasered.
+    expect(by(/Side sign/).laser.text).toMatch(/^no: sawn/);
+    expect(by(/Storage box side/).laser.text).toMatch(/^no: sawn/);
+    expect(by(/Storage box end/).laser.text).toMatch(/^no: sawn/);
     expect(by(/Side panel \(web\)/).laser.ok).toBe(true);
-    expect(by(/Storage lid/).laser.ok).toBe(true);
+    expect(by(/Storage lid/).laser.text).toMatch(/^lettering only/);
     expect(by(/Deck/).laser.text).toMatch(/thicker than/);
   });
   it('writes it into the CSV', () => {
@@ -45,7 +46,7 @@ describe('the cut list flags the laser parts', () => {
   });
   it('agrees with the laser files: a file is flagged fitting exactly when its cut-list rows say yes', () => {
     for (const f of files.filter((x) => x.kind === 'part')) {
-      const row = rows.find((r) => r.partNo === f.id)!;
+      const row = rows.find((r) => r.partNo === f.id || `${r.partNo}-lettering` === f.id)!;
       expect(row.laser.ok, f.id).toBe(f.fits);
     }
   });
@@ -53,15 +54,18 @@ describe('the cut list flags the laser parts', () => {
 
 describe('laser part files', () => {
   it('exist for the thin parts that fit, and none for the 12 mm sheets', () => {
-    expect(byId('sign').fits).toBe(true);
-    expect(byId('storage-side').fits).toBe(true);
     expect(byId('side-web').fits).toBe(true);
+    for (const no of ['sign', 'storage-side', 'storage-end', 'storage-lid']) expect(files.find((f) => f.id === no), no).toBeUndefined(); // sawn (D-86)
+    const lettering = byId('storage-lid-lettering');
+    expect(lettering.svg).toMatch(/id="storage-lid-frame" d="[^"]*" fill="none" stroke="#000000"/);
+    expect(lettering.svg).not.toMatch(/stroke="#FF0000"/);
+    expect(lettering.svg.match(/stroke="#0000FF"/g)!.length).toBeGreaterThan(5);
     expect(files.find((f) => f.id === 'deck')).toBeUndefined();
   });
 
   it('keep the part at full size, long side along X, copies laid out', () => {
-    const f = byId('storage-end');
-    const flat = flatPattern(parts.find((x) => x.partNo === 'storage-end')!)!;
+    const f = byId('side-web');
+    const flat = flatPattern(parts.find((x) => x.partNo === 'side-web')!)!;
     const big = Math.max(flat.widthIn, flat.heightIn), small = Math.min(flat.widthIn, flat.heightIn);
     expect(f.pieces.length).toBe(f.qty);
     for (const q of f.pieces) { expect(q.widthIn).toBeCloseTo(big, 2); expect(q.heightIn).toBeCloseTo(small, 2); }
@@ -78,7 +82,7 @@ describe('every laser file is an importable, full-size SVG', () => {
       expect(+m![1]).toBeCloseTo(f.widthIn, 3);
       expect(f.svg).not.toMatch(/<text/);
       expect(f.svg).not.toMatch(/fill="(?!none)/);
-      expect(f.svg).toMatch(/id="[^"]*-outline" d="[^"]*" fill="none" stroke="#FF0000"/);
+      expect(f.svg).toMatch(/id="[^"]*-(outline|frame)" d="[^"]*" fill="none" stroke="#(FF0000|000000)"/);
       // inner cuts come before the outline in the file (cut order), scores first
       expect(f.svg.indexOf('id="score"')).toBeLessThan(f.svg.indexOf('id="cut-inside"'));
       expect(f.svg.indexOf('id="cut-inside"')).toBeLessThan(f.svg.indexOf('id="cut-outline"'));

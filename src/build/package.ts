@@ -12,7 +12,7 @@ import { nestPlywood, oakBoardFeet, type NestResult, type OakPlan } from './nest
 import { bom, type Bom } from './bom';
 import { SHAPER_MAX_DEPTH_IN, shaperFiles, type ShaperFile } from './shaper-svg';
 import { laserFiles, type LaserFile } from './laser';
-import { LASER_CUT, LASER_MAX_LENGTH_IN, LASER_MAX_THICKNESS_IN, LASER_MAX_WIDTH_IN, LASER_SCORE } from './laser-svg';
+import { LASER_CUT, LASER_MAX_LENGTH_IN, LASER_MAX_THICKNESS_IN, LASER_MAX_WIDTH_IN, LASER_SCORE, LASER_FRAME } from './laser-svg';
 import { formDrawings, tileForLetter, type FormDrawing } from './forms';
 import { lampClipStls } from './stl';
 import { assemblySteps, type BuildStep } from './assembly';
@@ -82,6 +82,7 @@ export const SHAPER_NOTES: string[] = [
 export const LASER_CONVENTIONS: { color: string; name: string; meaning: string }[] = [
   { color: LASER_CUT, name: 'Red stroke', meaning: 'cut through (holes and inner loops first, the outline last)' },
   { color: LASER_SCORE, name: 'Blue stroke', meaning: 'score or mark: a light pass for station lines, drill marks and lettering; not cut through' },
+  { color: LASER_FRAME, name: 'Black stroke', meaning: 'the edge of a blank sawn on the table saw, to line it up for an engrave-only job (the lid lettering); set it to not output' },
 ];
 
 /** Notes Eric needs next to the laser files (also in the README). */
@@ -92,6 +93,7 @@ export const LASER_NOTES: string[] = [
   'The outlines are drawn exactly as the part is, with no kerf offset. A diode kerf is a fraction of a millimeter; the templates need about 1/32 in, so none is allowed for. Check the first template against the printed drawing.',
   'Templates are cut in 1/4 in Baltic birch plywood rather than hardboard. A piece wider than the bed would be cut in bands that butt on the bench.',
   'Where the laser can only do part of a job (dados, mortises, blind holes, glue-footprint lines) the file notes say so: the Shaper file still has those.',
+  'Plain rectangles (the signs, the storage box sides and ends, the lid panel) are sawn on the table saw, not lasered: less time and smoke. Their holes are on the part drawings; the lid gets a lettering-only file.',
 ];
 
 /** Lazy, cached outputs of one design. Each getter computes on first use. `timings` records the milliseconds of each stage that ran. */

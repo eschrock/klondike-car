@@ -4,7 +4,7 @@ import { defaultParams } from '../params';
 import { flatPattern } from './flat';
 
 const parts = buildModel(defaultParams());
-const shaper = parts.filter((x) => x.fab === 'shaper-origin');
+const shaper = parts.filter((x) => x.fab === 'shaper-origin' || (x.kind === 'sheet' && x.fab === 'table-saw'));
 
 describe('flatPattern', () => {
   it('gives every Shaper part a closed outline at its stock thickness', () => {

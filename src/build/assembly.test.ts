@@ -1126,7 +1126,7 @@ describe('D-79..D-83: the cost-pass build text', () => {
     const sched = finishingSchedule(buildModel({ ...p }), p);
     const n = (id: string): number => sched.steps.find((q) => q.id === id)!.n;
     expect(stepText(ext, 'seal')).toContain(`Finishing, steps ${n('stain')}-${n('epoxy')}`);
-    expect(stepText(ext, 'storage-lid')).toMatch(/DO NOT STEP in the finishing schedule \(step 5\)/);
+    expect(stepText(ext, 'storage-lid')).toMatch(/lettering is filled in the finishing schedule \(step 5\)/);
     expect(n('engrave')).toBe(5);
   });
 

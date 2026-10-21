@@ -960,14 +960,14 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
   const s5: FinishStep = step({
     n: 5,
     id: 'engrave',
-    title: `Engrave ${legend ? `"${legend.text}"` : 'DO NOT STEP'} on the storage lid (before the ${topcoat})`,
+    title: `Fill the ${legend ? `"${legend.text}"` : 'DO NOT STEP'} lettering on the storage lid (before the ${topcoat})`,
     items: [
       legend
-        ? it(`Engrave "${legend.text}" on the storage lid, ${legend.face} face.`, [`${frac32(legend.letterHeightIn)} letters, ${frac64(legend.depthIn)} deep.`, 'Shaper Origin with a V-bit: the legend is on the lid\'s Shaper file.'])
-        : it('Engrave the legend on the storage lid, top face.', ['Shaper Origin with a V-bit: the legend is on the lid\'s Shaper file.']),
+        ? it(`The "${legend.text}" letters (${frac32(legend.letterHeightIn)} tall, ${legend.face} face) were lasered on the bare panel before it was sealed (the storage lid step).`, [`The laser scores them about ${frac64(legend.depthIn)} deep: the ${thin.name} face veneer is thin, so set the score on an offcut first and stop in the face veneer.`])
+        : it('The legend was lasered on the bare panel before it was sealed (the storage lid step).'),
       extreme
-        ? it('Cut it after the epoxy seal has cured and been sanded, and before any varnish.', ['The V-groove then cuts through sealed ply and leaves clean edges.'])
-        : it('Cut it after the final sanding, and before any urethane.', [`The lid top is not epoxy-coated in the Standard spec; the ${thin.name} face veneer is thin, so check the depth on the offcut first.`]),
+        ? it('Fill them after the epoxy seal has cured and been sanded, and before any varnish.')
+        : it('Fill them after the final sanding, and before any urethane.'),
       it('Fill the grooves.', ['A black oil-based paint marker, worked into the grooves (or black-tinted epoxy: pigment in leftover epoxy).', 'Wipe the overrun off the face at once; sand flush at 220 when hard. An epoxy fill seals the bare groove walls.']),
       it('The letters read from a standing position; the lid is for a cushion to sit on, not a step.'),
     ],

@@ -938,6 +938,8 @@ function shaperNetNote(x: Part, stock: Dims): { net: number; note: string } | nu
 
 /** Can the XTool S1 laser cut this sheet part (D-86)? Judged on its flat pattern: thickness, material and the short side against the bed. */
 function laserOf(x: Part): LaserVerdict {
+  // Plain rectangles are sawn, not lasered (D-86); a sawn part with lettering gets an engrave-only laser job.
+  if (x.fab !== 'shaper-origin') return x.legend ? { ok: true, text: 'lettering only (the blank is sawn)' } : { ok: false, text: 'no: sawn (a plain rectangle)' };
   const f = flatPattern(x);
   return f ? laserVerdict({ thicknessIn: f.thicknessIn, material: x.material, widthIn: f.widthIn, heightIn: f.heightIn }) : { ok: false, text: 'no: not a flat part' };
 }

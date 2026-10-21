@@ -443,7 +443,7 @@ export function buildBody(ctx: Ctx): Part[] {
     const sg = signPlacement(ctx);
     for (const { s, tag } of SIDES) {
       const sign = box(ctx, {
-        id: `sign-${tag}`, partNo: 'sign', name: `Side sign ${tag}`, group: 'body', mat: 'ply', thin: true, edges: 'edged', step: STEP.finish, fab: 'shaper-origin',
+        id: `sign-${tag}`, partNo: 'sign', name: `Side sign ${tag}`, group: 'body', mat: 'ply', thin: true, edges: 'edged', step: STEP.finish, fab: 'table-saw',
         size: [sg.length, pl, sg.height], center: [sg.xc, s * (L.hwC + L.side + SIGN_PROUD_IN + pl / 2), sg.zc], // 1/16 in proud of the band faces
       });
       sign.massLb += edgeBandLb(ctx, 2 * (sg.length + sg.height), pl);

@@ -155,11 +155,11 @@ Everything is a pure function of the parameters.
 | Section | What it gives you |
 |---|---|
 | Verify | the checks to make on real parts before ordering (wheel hub, sheet thickness, axle steel, and so on); with removable knees, a refit check (flat seat, a slip of paper at the joint, the backing plate in its recess, no washer pressed into the oak, bolts after the first outing, the chock cord eye, wobble) |
-| Cut list | the actual cuts (an edge-glued panel is its boards, then the glue-up), rough sizes rounded up to 1/8", laminate allowances, board yields, a bandsaw resaw check; each plywood row says whether the laser can cut it |
+| Cut list | the actual cuts (an edge-glued panel is its boards, then the glue-up), rough sizes rounded up to 1/8", laminate allowances, board yields, a bandsaw resaw check; each plywood row says whether the laser cuts it (plain rectangles are sawn) |
 | Nesting | plywood layouts on 4' × 8' sheets; oak board feet |
 | BOM | priced lines with vendor links, quoted vs estimated, Standard vs Extreme; the price research is in docs/price-research/price-research-2026-10.md and docs/price-research/price-research-standard-2026-10.md |
 | Shaper | SVG files for every flat part (outside, inside, pocket, guide conventions) |
-| Laser | full-size SVGs for the XTool S1 (D-86): the thin parts that fit the bed and every 1/4" template and pattern, with red cuts and blue scores; the rail form's counter-form is here |
+| Laser | full-size SVGs for the XTool S1 (D-86): the shaped thin parts that fit the bed (the webs), the lid's lettering (engrave only) and every 1/4" template and pattern, with red cuts and blue scores (plain rectangles are sawn); the rail form's counter-form is here |
 | Forms and drawings | glue-up forms and templates (tiled to Letter pages), and a dimensioned drawing of every non-Shaper part |
 | Assembly | numbered steps with sub-bullets, part chips with dimensions and Show in 3D, and a 3D step-through; labeled sketches on the steps that are hard to picture (the forms, the side cures, the joints), and a "What this is for" line on the jig steps, whose 3D view highlights the parts the jig makes; with removable knees the knee step fits the knees dry, they are finished on the bench and bolted on at the hang step, and a last step takes them off and puts them back |
 | Finishing | the schedule for the chosen weather spec |

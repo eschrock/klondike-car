@@ -5,7 +5,9 @@ import { SHAPER_MAX_DEPTH_IN, analyzeShaperPart, grainWords, shaperCutDepth, sha
 import { flatPattern } from './flat';
 
 const p = defaultParams();
-const parts = buildModel(p);
+// D-86: the signs, storage walls and lid panel are sawn by default; they go back on the Shaper here so its drill marks, mirror sharing and engraving stay covered.
+const SAWN_RECT = /^(sign-[LR]|storage-(side-[LR]|end-(aft|fore)|lid))$/;
+const parts = buildModel(p).map((x) => (SAWN_RECT.test(x.id) ? { ...x, fab: 'shaper-origin' as const } : x));
 const files = shaperFiles(parts, p);
 const shaperParts = parts.filter((x) => x.fab === 'shaper-origin');
 const fileOf = (id: string) => files.find((f) => f.partIds.includes(id))!;

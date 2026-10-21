@@ -372,13 +372,13 @@ export function buildStorage(ctx: Ctx): Part[] {
   }
   const deckJoint = (): Joint[] => g.deckFloor ? [{ type: 'glue', to: deckId, count: 1, size: '3/8" epoxy fillet inside, 2" glass tape', note: 'wall bottom edge stands on the epoxy-sealed deck: fillet inside, bead outside, so no ply edge is exposed and the deck is the box floor' }] : [];
   for (const [tag, y] of [['L', hw - pl / 2], ['R', -(hw - pl / 2)]] as const) {
-    parts.push(box(ctx, { ...common, id: `storage-side-${tag}`, partNo: 'storage-side', name: `Storage box side ${tag}`, mat: 'ply', thin: true, edges: 'captured', fab: 'shaper-origin',
+    parts.push(box(ctx, { ...common, id: `storage-side-${tag}`, partNo: 'storage-side', name: `Storage box side ${tag}`, mat: 'ply', thin: true, edges: 'captured', fab: 'table-saw',
       ...span([x0, x1], [y - pl / 2, y + pl / 2], [zBot, zPlyTop]),
       joints: [miter('storage-end-aft'), miter('storage-end-fore'), ...deckJoint(), { type: 'glue', to: `storage-coaming-side-${tag}`, count: 1, note: 'oak coaming caps the wall top, epoxy' }],
       notes: 'Wall top is capped by the oak coaming so no ply edge is exposed under the gasket (S4).' }));
   }
   for (const [tag, xa, xb] of [['aft', x0, x0 + pl], ['fore', x1 - pl, x1]] as const) {
-    parts.push(box(ctx, { ...common, id: `storage-end-${tag}`, partNo: 'storage-end', name: `Storage box ${tag} end`, mat: 'ply', thin: true, edges: 'captured', fab: 'shaper-origin',
+    parts.push(box(ctx, { ...common, id: `storage-end-${tag}`, partNo: 'storage-end', name: `Storage box ${tag} end`, mat: 'ply', thin: true, edges: 'captured', fab: 'table-saw',
       ...span([xa, xb], [-yIn, yIn], [zBot, zPlyTop]),
       joints: [miter('storage-side-L'), miter('storage-side-R'), ...deckJoint(), { type: 'glue', to: `storage-coaming-end-${tag}`, count: 1, note: 'oak coaming caps the wall top, epoxy' }] }));
   }
@@ -398,7 +398,7 @@ export function buildStorage(ctx: Ctx): Part[] {
   }
 
   // ── Lid: oak frame (rim) capturing the ply panel, two battens under the panel ──
-  parts.push(box(ctx, { ...common, id: 'storage-lid', name: 'Storage lid panel', mat: 'ply', thin: true, edges: 'captured', fab: 'shaper-origin',
+  parts.push(box(ctx, { ...common, id: 'storage-lid', name: 'Storage lid panel', mat: 'ply', thin: true, edges: 'captured', fab: 'table-saw',
     ...span([x0 + rimW, lidX1 - rimW], [-(hw - rimW), hw - rimW], [zTop - pl, zTop]),
     stock: { t: pl, w: 2 * (hw - rimW) + 0.5, l: lidX1 - x0 - 2 * rimW + 0.5 },
     joints: ['storage-rim-side-L', 'storage-rim-side-R', 'storage-rim-end-aft', 'storage-rim-end-fore'].map((to): Joint => ({

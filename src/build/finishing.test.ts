@@ -179,7 +179,7 @@ describe('finishing schedule', () => {
     const s = sched.steps[4];
     expect(lid.legend?.text).toBe('DO NOT STEP');
     expect(s.title).toContain('DO NOT STEP');
-    expect(s.instructions.join(' ')).toContain(`${finalFrac(lid.legend!.letterHeightIn)} letters`);
+    expect(s.instructions.join(' ')).toContain(`letters (${finalFrac(lid.legend!.letterHeightIn)} tall`);
     expect(s.instructions.join(' ')).toMatch(/storage lid/);
     expect(s.instructions.join(' ')).not.toMatch(/storage-lid/);
   });

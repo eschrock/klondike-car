@@ -1101,6 +1101,14 @@ const TEMPLATES: Template[] = [
               'The seat back comes from the deck offcut.',
             ], ['side-L-web', 'side-R-web'])
             : I('Side webs: one piece each from a full 4\' × 8\' sheet.'),
+          ...(() => {
+            const sawn = c.parts.filter((x) => x.kind === 'sheet' && x.fab === 'table-saw' && x.stock && x.stock.t < 0.3 && x.id !== 'storage-lid');
+            return sawn.length ? [I(`Saw the plain rectangles on the table saw (no Shaper or laser): ${tl(sawn.map((x) => x.id))}.`, [
+              'Rip and crosscut each to its cut-list size, the best face up for the table saw\'s clean side.',
+              sawn.some((x) => /^sign-/.test(x.id)) ? 'Signs: tape the two together and drill the four knob holes through both at once, from their part drawing.' : false,
+              sawn.some((x) => /^storage-(side|end)-/.test(x.id)) ? 'The storage box walls get their 45° corner bevels at the storage box step.' : false,
+            ], sawn.map((x) => x.id))] : [];
+          })(),
           I('Print the templates: handlebow arc, bulkhead crown, brake flap and knee (Forms section).', ['Check the 1" square on each printout before cutting.']),
           I('Cut the dados, hand-holds and Domino / tenon mortises as each step calls for them.', [
             'Web-end dados run out through the top edge; the deck dado runs into them at each corner as one pocket.',
@@ -2570,13 +2578,16 @@ const TEMPLATES: Template[] = [
               ? `${dadoSpans.length} batten dados, ${dadoDeep ?? '1/4'}" deep, in the inboard face of each frame side, starting ${listS(dadoSpans.map(([a]) => fin(a)))} from the rear end${dadoWide}${dadoDown ? `, ${dadoDown} below the top face` : ''}.`
               : false,
           ], frame),
+          I('Saw the {{storage-lid}} panel on the table saw to its cut-list size (the size includes the 1/4" tongue that sits in the rabbet all round).', c.by('storage-lid')?.legend ? [
+            `Then laser the ${c.by('storage-lid')!.legend!.text} lettering on its top face from the lettering-only laser file, before it is sealed: lay the panel on the bed, line it up on the black outline with the framing preview, and score the letters only.`,
+          ] : []),
           I('Seal the {{storage-lid}} with epoxy, both faces and every edge, and let it cure.'),
           I(`Glue the frame square around the panel, all in thickened epoxy: on the corner tenons and bedding the panel edge in its rabbet.`, ['Clamp it square while the corners set.']),
           I(`Glue the ${plural(battens.length, 'batten')} under the panel with thickened epoxy, the lid face down on a flat bench and weighted for 24 h.`, [
             battenAt.length ? `Centers ${list(battenAt)} from the rear end of the frame, square across; each cut to fit between the frame sides and butted to them in the epoxy.` : false,
             'No screws: nothing goes through the thin panel. The battens keep it from sagging.',
           ], battens),
-          I(`The lid is engraved DO NOT STEP in the finishing schedule (step ${stepNo(c, 'engrave')}), before the topcoat.`, ['It is a lid to sit a cushion on, not a step.']),
+          I(`The lettering is filled in the finishing schedule (step ${stepNo(c, 'engrave')}), before the topcoat.`, ['It is a lid to sit a cushion on, not a step.']),
           ...(!hingeB ? [I('The lid lifts off: an under-seat box has no hinges (the seat cushion sits on its lid).')] : []),
           ...(!hingeB ? [] : [I(`Fit the lid on its 2 stainless butt hinges${hingeKind ? ` (${hingeKind})` : ''}, lying flat on top across the joint between the strip and the lid${hingeB ? `, centered ${fin((hingeB.min[1] + hingeB.max[1]) / 2)} either side of the centerline` : ''}.`, [
             'Set the lid on the box with a 1/8" spacer between its front face and the strip, so the gap is even: the gasket fills it later.',
