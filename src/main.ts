@@ -140,7 +140,7 @@ viewer.addToolbarControl(transportCb);
 // Removable brake knees (D-78): the same setting as the Advanced "Brake knees" parameter, here beside Transport mode so it is easy to find. A design setting, not a view toggle: it changes the BOM and the build steps too.
 const kneeCb = checkbox('Removable knees', 'Make the brake knees removable with a ratchet and wrench (D-78): the knees and straps then come off with the brake flaps in Transport mode, and the build steps and BOM change to match. The knee itself is the same bolted knee. Same as the Brake knees setting in the Advanced panel.', store.get().kneeMount === KNEE_MOUNT.removable, (v) => {
   store.set('kneeMount', v ? KNEE_MOUNT.removable : KNEE_MOUNT.fixed);
-});
+}, 'adv-only'); // removable is the default, so Simple does not need the switch
 const kneeInput = kneeCb.querySelector('input') as HTMLInputElement;
 viewer.addToolbarControl(kneeCb);
 // Cargo mode (D-53, D-57): the seat back flips flat onto the deck and the two cushions lie in the storage box. View only; with "Show rider & cargo" on, the payload block shows on the bed.
@@ -274,7 +274,7 @@ const render = () => {
     viewer.setTruck(null);
     syncToggles();
     if (!sim?.active) {
-      const all = build(p, transport ? { ...effectiveView(), steerDeg: 0 } : view); // the transport config has the axle turned straight
+      const all = build(p, effectiveView()); // Transport mode keeps the steering preview (view.steerDeg)
       const shown = stepFocus?.visibleIds ? new Set(stepFocus.visibleIds) : null;
       viewer.update(shown ? all.filter((x) => shown.has(x.id)) : all);
       if (stepFocus?.reframe) { // a new step: frame what is shown from the step's camera (once: later renders keep the user's orbit)
