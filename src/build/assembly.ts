@@ -46,6 +46,7 @@ import { oakBoardFeet, type OakPlan } from './nesting';
 import { brakeOf, partDrawings, SCREW_CLEAR, SCREW_PILOT, type DrawingFeature, type PartDrawingSheet } from './part-drawings';
 import { finalFrac, fractionText, nearest32, nearestTo, roughFrac } from './units';
 import { GRIP_BOLT_ROWS_IN, INSERT_DRILL_IN, latchGeometry, PIN_R_IN } from '../model/seat';
+import { lidOpenAngleDeg } from '../model/storage';
 import { STOP_EYE_ABOVE_DECK_IN } from '../model/brake-layout';
 import { SQUASH_TEST_PSI, verifyChecklist, verifyGroups } from './verify';
 import { stepFigures } from './figures';
@@ -1006,7 +1007,7 @@ const TEMPLATES: Template[] = [
             `A glued-up piece (laminated layers, edge-glued boards, bent strips) is ${fin(c.p.laminateWidthAllowanceIn)} wider and ${fin(c.p.laminateLengthAllowanceIn)} longer, because it comes out of the clamps askew.`,
             face.length ? `A glued block loses at least ${fin(c.p.laminationCleanupIn)} of thickness to jointing and planing after the glue-up.` : false,
             `A board gives less than its name: 4/4 planes to ${fin(c.p.boardYield44In)}, 5/4 to ${fin(c.p.boardYield54In)}.`,
-            'The lumber list has only 4/4 and 5/4 white oak. Anything thicker (the tongue, the king beam, the crossmember at the chain, the bow bulkhead, the stop blocks, the hinge backers, the handlebow) is glued up from layers of stock boards, next.',
+            'The lumber list has only 4/4 and 5/4 white oak. Anything thicker (the tongue, the king beam, the crossmember at the chain, the bow bulkhead, the stop blocks, the handlebow) is glued up from layers of stock boards, next.',
             'Sticker what is not used today and keep it at 6-9 % moisture.',
           ]),
           ...(edgeShown.length
@@ -1451,7 +1452,7 @@ const TEMPLATES: Template[] = [
             : []),
           I('Bore the {{king-beam}} for the kingpin, and cut the nut slot, before the deck goes on.', [
             kingBore ? `${fin(c.p.kingpinDiaIn)} hole, square on the drill press: ${whereOf(kingBore)}.` : `${fin(c.p.kingpinDiaIn)} hole, square on the drill press: ${SEE}.`,
-            ((ks) => `Nut slot from the front face: ${fin(ks.w)} wide × ${fin(ks.h)} tall, about ${fin(ks.x1 - ks.x0)} deep from the front face (${fin(computeLayout(c.p).king.x - ks.x0)} past the bore's center), its top ${fin(KING_NUT_BELOW_DECK_IN)} below the top face, centered on the bore. Its walls hold the nylock nut by its flats (no washer), so the bolt is turned from its head.`)(kingNutSlot(c.p, computeLayout(c.p))),
+            ((ks) => `Nut slot from the front face: ${fin(ks.w)} wide × ${fin(ks.h)} tall, about ${fin(ks.x1 - ks.x0)} deep from the front face (${fin(computeLayout(c.p).king.x - ks.x0)} past the bore's center), its top ${fin(KING_NUT_BELOW_DECK_IN)} below the top face, centered on the bore. Its walls hold the kingpin's thin nylock (jam) nut by its flats (no washer), so the bolt is turned from its head.`)(kingNutSlot(c.p, computeLayout(c.p))),
             ...featsAll(c, 'king-beam', 'groove', /clamp-plate bolt heads/).slice(0, 1).map((q) => `Two reliefs across the bottom face, the full fore-aft length, ${wideDeep(q) ? `${wideDeep(q)![0]} wide × ${wideDeep(q)![1]} deep` : SEE}: ${featsAll(c, 'king-beam', 'groove', /clamp-plate bolt heads/).map((r) => lc(r.positions?.[0] ?? '').replace(/, the full height$/, '')).join(' and ')}. They clear the front clamp-plate bolt heads as the axle swings.`),
           ]),
           ...((an) => (an.length ? [I(`Drill the chain-anchor holes in {{joist-6}} (the chain crossmember) on the drill press now, before the glue-up: they cannot be drilled square once it is in. Fore-aft, one near each end: ${holesText(an) ?? SEE}.`, ['The anchor eye bolts and the check chains go on at [[step:hang]].'])] : []))(featsAll(c, 'joist-6', 'hole', (q) => (q.to ?? []).some((t) => /^steer-anchor/.test(t)))),
@@ -1986,7 +1987,7 @@ const TEMPLATES: Template[] = [
           ], ['clamp-FL1', 'clamp-FL2', 'clamp-FR1', 'clamp-FR2', 'steer-eye-L', 'steer-eye-R']),
           I(`Hang the beam on the {{kingpin}} as one piece: a ${fin(c.p.kingpinDiaIn)}${pinLen ? ` × ${pinLen}"` : ''} grade 8 bolt, its head and SAE flat washer on the beam's bottom face (facing up now).`, [
             'The bolt goes down through the beam, the disc and the king beam as the hull lies now (up through them on the finished sled).',
-            `Slide the nylock nut into the slot in the king beam (${fin(slot.w)} wide × ${fin(slot.h)} tall, open at its front face; no washer): the slot's walls hold it by its flats. Turn the bolt from its head until snug, then back it off a quarter turn so the beam swings freely on the shank.`,
+            `Slide the thin nylock (jam) nut into the slot in the king beam (${fin(slot.w)} wide × ${fin(slot.h)} tall, open at its front face; no washer): the slot's walls hold it by its flats. Turn the bolt from its head until snug, then back it off a quarter turn so the beam swings freely on the shank.`,
             `Swing the beam to full lock both ways: the roll pads pass under the rails with a running gap of 1/32" to 1/8"${padGap !== undefined ? ` (about ${fin(padGap)} as built)` : ''}${relief ? ', and the inner plates\' bolt heads pass under the reliefs in the king beam' : ''}.`,
             'The beam, disc and kingpin stay on for the finish (mask the head and the slot).',
           ]),
@@ -2441,10 +2442,10 @@ const TEMPLATES: Template[] = [
   },
   {
     id: 'storage-box',
-    title: 'Storage box: walls, coaming, hinge backers, turn-button blocks',
+    title: 'Storage box: walls, coaming, turn-button blocks',
     kind: 'build',
     steps: [STEP.seatStorage],
-    match: /^(storage-(side|end|coaming|hinge-backer|turn-block)-|storage-(side|end)-|storage-stay-block$|box-tie-)/,
+    match: /^(storage-(side|end|coaming|turn-block)-|storage-(side|end)-|box-tie-)/,
     view: 'iso',
     why: 'Dry storage for gear, and the base that braces the rear and box ribs.',
     tools: ['table saw (45° bevels)', 'tape', 'glass tape', 'epoxy pumps', 'router'],
@@ -2452,22 +2453,20 @@ const TEMPLATES: Template[] = [
     build: (c) => {
       const walls = c.mine.filter((x) => /^storage-(side|end)-/.test(x.id)).map((x) => x.id);
       const coam = c.mine.filter((x) => /coaming/.test(x.id)).map((x) => x.id);
-      const hb = c.mine.filter((x) => /hinge-backer/.test(x.id)).map((x) => x.id);
       const lb = c.mine.filter((x) => /turn-block/.test(x.id)).map((x) => x.id);
       const drains = drainHoles(c.parts, c.p);
       const dia = drains?.box ? fin(drains.box.diaIn) : fin(c.p.storageDrainDiaIn);
-      // Where the box goes, from the model: the aft wall off the transom, the side walls off the box ribs, the outside size; the hinge backers and turn-button blocks from their own bounds.
+      // Where the box goes, from the model: the aft wall off the transom, the side walls off the box ribs, the outside size; the turn-button blocks from their own bounds.
       const Lb = computeLayout(c.p);
       const sideW = c.by('storage-side-L'), endW = c.by('storage-end-aft');
       const sb = sideW ? worldAABB(sideW) : null, eb = endW ? worldAABB(endW) : null;
       const ribIn = sideRibStations(c.p, Lb).find((st) => st.kind === 'box');
       const where = sb && eb ? `Where it goes: the aft wall ${fin(eb.min[0] - Lb.xRear)} forward of the transom's outer face, each side wall ${fin(ribIn ? ribIn.yIn - c.p.sideRibDepthIn - sb.max[1] : 0)} inboard of the box ribs' inner faces, centered on the sled. Outside it is ${fin(sb.max[0] - sb.min[0])} long, ${fin(2 * sb.max[1])} wide and ${fin(sb.max[2] - sb.min[2])} tall (the coaming adds ${fin(c.p.storageCoamingThickIn)}).` : false;
-      const hbB = c.by('storage-hinge-backer-L') ? worldAABB(c.by('storage-hinge-backer-L')!) : null;
       const lbB = c.by('storage-turn-block-L') ? worldAABB(c.by('storage-turn-block-L')!) : null;
       const coamS = c.by('storage-coaming-side-L') ? worldAABB(c.by('storage-coaming-side-L')!) : null;
       const coamTop = c.by('storage-coaming-side-L') ? worldAABB(c.by('storage-coaming-side-L')!).max[2] : 0;
       return {
-        goal: 'Build the storage box on the deck: walls, coaming, hinge backers and the turn-button blocks.',
+        goal: 'Build the storage box on the deck: walls, coaming and the turn-button blocks.',
         items: [
           // A drain through the deck was drilled and sealed with the hull inverted (the dry-fit step); only a raised box's own floor panel is drilled here.
           ...(drains?.box && drains.box.host !== 'deck' ? [I(`Before the walls go on, drill the ${drains.box.count} box drain holes through the floor panel of the box: ${dia}, straight down.`, [
@@ -2497,13 +2496,8 @@ const TEMPLATES: Template[] = [
               'Its top stands 1/8" below the top of the plywood wall, clear of the coaming.',
             ]);
           })()] : []),
-          I(`Glue the hinge backers inside the fore wall with thickened epoxy, before the coaming: ${tl(hb)}.`, [hbB ? `Centered ${fin((hbB.min[1] + hbB.max[1]) / 2)} either side of the centerline, against the fore wall, their tops level with where the coaming top will be; the notch in each top front corner (backer drawing) fits under the coaming's inboard lip.` : false]),
-          ...(c.by('storage-stay-block') ? [(() => {
-            const sbB = worldAABB(c.by('storage-stay-block')!), sideB = c.by('storage-side-L') ? worldAABB(c.by('storage-side-L')!) : null;
-            return I('Glue the {{storage-stay-block}} inside the left box side with thickened epoxy: the lid support\'s base screws into it later.', [sideB ? `Its fore end against the inside of the fore wall (${fin(sideB.max[0] - sbB.max[0])} from its outside), its top level with the top of the plywood wall (under the coaming lip), grain along the box.` : false]);
-          })()] : []),
           I('Glue the oak coaming to the wall tops with thickened epoxy, butt corners; brush epoxy on the plywood edges first so they are sealed.', [
-            sb && coamS ? `Its outside face flush with the wall's outside face, overhanging about ${fin(sb.min[1] - coamS.min[1])} inside: the lip the hinge backers and the support block fit under.` : false,
+            sb && coamS ? `Its outside face flush with the wall's outside face, overhanging about ${fin(sb.min[1] - coamS.min[1])} inside: the ledge the gasket and the lid frame sit on.` : false,
             'Clamp it with cauls.', 'Round the inboard top edge 1/8".', 'The gasket and lid sit on oak, never on a ply edge.'], coam),
           ...(lb.length ? [I(`Glue the turn-button blocks to the inside face of the transom with thickened epoxy, grain across the sled (the pivot screw then bites side grain): ${tl(lb)}.`, [lbB ? `Each fills the ${fin(lbB.max[0] - lbB.min[0])} lane between the transom and the box's aft wall, centered ${fin((lbB.min[1] + lbB.max[1]) / 2)} either side of the centerline, ${fin(lbB.max[2] - lbB.min[2])} tall, its top ${fin(lbB.max[2] - coamTop)} above the coaming top: level with the lid top, so the turn-button pivots on it (final fit).` : false])] : []),
         ],
@@ -2513,12 +2507,12 @@ const TEMPLATES: Template[] = [
   },
   {
     id: 'storage-lid',
-    title: 'Storage lid: frame, panel and battens',
+    title: 'Storage lid: fixed strip, frame, panel and battens',
     kind: 'build',
     steps: [STEP.seatStorage],
-    match: /^storage-(lid|rim)/,
+    match: /^storage-(lid|rim|strip)/,
     view: 'iso',
-    tools: ['router (mortises, rabbet)', 'epoxy pumps', 'clamps', 'drill'],
+    tools: ['table saw (the strip groove)', 'router (mortises, rabbet)', 'epoxy pumps', 'clamps', 'drill', '1/8" spacer'],
     hardener: '556',
     build: (c) => {
       const frame = c.mine.filter((x) => /^storage-rim-/.test(x.id)).map((x) => x.id);
@@ -2531,14 +2525,6 @@ const TEMPLATES: Template[] = [
       const dadoDown = dado?.positions ? /(?:^|, )((?:\d+(?:-\d+\/\d+)?|\d+\/\d+)" to (?:\d+(?:-\d+\/\d+)?|\d+\/\d+)") from the top face/.exec(dado.positions.join('; '))?.[1] : undefined;
       const dadoDeep = /^(\S+)" deep/.exec(dado?.size ?? '')?.[1];
       const w0 = dadoSpans[0] ? dadoSpans[0][1] - dadoSpans[0][0] : 0;
-      const stayPart = c.by('storage-lid-stay');
-      const stayBacker = feat(c, 'storage-stay-block', 'hole', (q) => (q.to ?? []).includes('storage-lid-stay'));
-      // D-89: the stay's arm end is on the inboard face of the left lid frame side (its host from the stay's own joint), not on the frame end at the hinge line
-      const stayHost = c.by('storage-lid-stay')?.joints?.find((q) => q.type === 'screw' && !/stay-block/.test(q.to))?.to ?? 'storage-rim-side-L';
-      const stayLid = feat(c, stayHost, 'hole', (q) => (q.to ?? []).includes('storage-lid-stay'));
-      const stayHostName = /rim-side-L/.test(stayHost) ? 'the left lid frame side' : 'the lid frame';
-      const stayWord = isStandard(c.p) ? '6" lid support' : 'friction stay';
-      const stayName = isStandard(c.p) ? 'lid support' : 'friction stay';
       const dadoWide = dadoSpans.length && dadoSpans.every(([a, b]) => Math.abs(b - a - w0) < 0.01) ? `, each ${fin(w0)} wide` : '';
       // The battens' centers from the rear end of the frame side (the frame side starts at the box's aft end), and the hinges across the fore edge, from the model.
       const sideRim = c.by('storage-rim-side-L');
@@ -2554,14 +2540,26 @@ const TEMPLATES: Template[] = [
       const mortUp = mortTop ? rimT - parseFrac(mortTop[1]) : 0;
       const mortGap = mortTop && mortW && rabbetDeep ? parseFrac(mortTop[1]) - parseFrac(mortW[1]) / 2 - parseFrac(rabbetDeep[1]) : 0;
       const mortWhere = mortTop ? `${fin(mortUp)} up from the bottom face` : '';
-      // The lid support's arm end from the hinge axis, from its pilots in the frame side.
-      const stayX = stayLid?.positions ? [...(new RegExp(`((?:(?:${FR})"(?:,? and |, ))*(?:${FR})") from the rear end`).exec(stayLid.positions.join('; '))?.[1] ?? '').matchAll(new RegExp(`(${FR})"`, 'g'))].map((m) => parseFrac(m[1])) : [];
-      const hingeAxis = c.by('storage-hinge-L') ? (worldAABB(c.by('storage-hinge-L')!).min[0] + worldAABB(c.by('storage-hinge-L')!).max[0]) / 2 : 0;
-      const stayAft = stayX.length ? hingeAxis - (rim0 + stayX.reduce((a, v) => a + v, 0) / stayX.length) : 0;
+      // D-89: the fixed strip, its groove and end blocks, and how far the lid opens onto the upright seat back, from the model.
+      const strip = c.by('storage-strip'), stripB = strip ? worldAABB(strip) : null;
+      const stripEnd = c.by('storage-strip-end-L') ? worldAABB(c.by('storage-strip-end-L')!) : null;
+      const boxSide = c.by('storage-side-L') ? worldAABB(c.by('storage-side-L')!) : null;
+      const openDeg = Math.round(lidOpenAngleDeg(c.p, computeLayout(c.p)));
+      const rimFore = c.by('storage-rim-end-fore') ? worldAABB(c.by('storage-rim-end-fore')!) : null;
       const hingeKind = /surface-mount butt hinge, ([^)]*)\)/.exec(c.by('storage-hinge-L')?.sourcing?.vendor ?? '')?.[1]?.replace(/(\d)½/g, '$1-1/2').replace(/(\d)¾/g, '$1-3/4').replace(/½/g, '1/2').replace(/¾/g, '3/4');
       return {
-        goal: 'Make the oak lid frame, set the panel in it, and fit the hinges.',
+        goal: 'Glue the fixed oak strip across the front of the box top, then make the lid (an oak frame round a thin panel) and fit its hinges on the strip.',
         items: [
+          ...(strip && stripB ? [I(`Make the {{storage-strip}}: one oak board ${fin(stripB.max[2] - stripB.min[2])} thick, ${fin(stripB.max[0] - stripB.min[0])} wide and ${fin(stripB.max[1] - stripB.min[1])} long, the grain along its length (across the sled).`, [
+            stripEnd ? `Groove its underside end to end on the table saw (several passes): ${fin(stripEnd.max[2] - stripEnd.min[2])} deep, from ${fin(stripEnd.min[0] - stripB.min[0])} to ${fin(stripEnd.max[0] - stripB.min[0])} from its aft edge. That leaves a ${fin(stripEnd.min[0] - stripB.min[0])} hinge leg at the aft edge and a ${fin(stripB.max[0] - stripEnd.max[0])} leg at the front.` : false,
+            stripEnd ? `Glue an oak end block into each end of the groove (${tl(c.mine.filter((x) => /^storage-strip-end-/.test(x.id)).map((x) => x.id))}), ${fin(stripEnd.max[0] - stripEnd.min[0])} × ${fin(stripEnd.max[1] - stripEnd.min[1])} × ${fin(stripEnd.max[2] - stripEnd.min[2])}: there the strip sits on the side coamings, and the box stays closed at its sides.` : false,
+            'Ease the top aft edge 1/16" (the hinge knuckles bed down on it), seal it all round with epoxy, and let it cure.',
+          ], c.mine.filter((x) => /^storage-strip/.test(x.id)).map((x) => x.id))] : []),
+          ...(strip && stripB ? [I('Glue the strip across the front of the box top with thickened epoxy, on the coaming.', [
+            `Its front face flush with the box's front end, its ends flush with the box sides; its aft face ${boxSide ? fin(stripB.min[0] - boxSide.min[0]) : SEE} from the box's aft end outside.`,
+            'Its front leg sits on the fore coaming, its hinge leg and end blocks on the side coamings. Clamp it with cauls and wipe the squeeze-out.',
+            'Its top is level with the lid top: the lid shuts 1/8" behind it, on the gasket.',
+          ])] : []),
           I('Cut the lid frame joints.', [
             `Corners: blind loose tenons${mortSize ? `, ${mortSize}` : ''}, a mortise in both pieces.`,
             `In the inboard face of each frame side: centered ${mortAt.length ? `at ${list(mortAt)} from the rear end` : SEE}${mortWhere ? `, ${mortWhere}` : ''}.`,
@@ -2579,23 +2577,17 @@ const TEMPLATES: Template[] = [
             'No screws: nothing goes through the thin panel. The battens keep it from sagging.',
           ], battens),
           I(`The lid is engraved DO NOT STEP in the finishing schedule (step ${stepNo(c, 'engrave')}), before the topcoat.`, ['It is a lid to sit a cushion on, not a step.']),
-          I(`Hang the lid on its 2 stainless butt hinges${hingeKind ? ` (${hingeKind})` : ''} on the fore edge${hingeB ? `, centered ${fin((hingeB.min[1] + hingeB.max[1]) / 2)} either side of the centerline` : ''}, the knuckle on the joint line between the coaming and the lid frame.`, [
-            'First seal the outside of the box\'s fore wall and coaming where the box leaves sit (epoxy, cured).',
-            `Box leaves: ${screwOf(c, 'storage-hinge-L', /hinge-backer/)} through the fore coaming into the backers. They go on for good now: the crest strip is bedded over them, below the knuckles, in the next step. Mask them for the finish.`,
-            `Lid leaves: pilots for ${screwOf(c, 'storage-hinge-L', /rim-end-fore/)} into the fore end of the lid frame. Screw them on to check the fit, then take the lid off its leaves for the finish.`,
-            'The gasket goes in at the final fit.',
-            'The lid opens with the seat back flipped forward: upright, the back leans aft over the lid\'s front edge.',
-          ], ['storage-hinge-L', 'storage-hinge-R']),
-          ...(stayPart ? [I(`Fit and drill the ${stayWord}, then take it off.`, [
-            `The ${stayName} is a ready-made hold-open arm that lives inside the box beside the left side wall and holds the lid open: its base on the oak block inside the left side (glued in the box step), its arm end on the inboard face of ${stayHostName}${stayAft > 0 ? `, about ${fin(Math.round(stayAft * 4) / 4)} aft of the hinge` : ''}.`,
-            `Screws: ${screwOf(c, 'storage-lid-stay', /stay-block/)} at the base and ${screwOf(c, 'storage-lid-stay', new RegExp(`^${stayHost}$`))} at the arm end, each in a 1/8" pilot.`,
-            stayBacker?.positions?.length ? `Its base on the support block: ${stayBacker.count} holes, ${stayBacker.size}, in the ${lc(stayBacker.face ?? 'inboard face')}: ${stayBacker.positions.map(lc).join('; ')}.` : `Pilots in the support block: ${SEE}.`,
-            stayLid?.positions?.length ? `Its arm end on ${stayHostName}: ${stayLid.count} holes, ${stayLid.size}, in the ${lc(stayLid.face ?? 'inboard face')}: ${stayLid.positions.map(lc).join('; ')}.` : `Pilots in ${stayHostName}: ${SEE}.`,
-            'Check the real bracket and arm against these pilots before drilling (Verify); move a pilot to suit the real holes if it differs.',
-            `The ${stayName} goes on after the finish (final fit).`,
-          ], ['storage-lid-stay'])] : []),
+          ...(!hingeB ? [I('The lid lifts off: an under-seat box has no hinges (the seat cushion sits on its lid).')] : []),
+          ...(!hingeB ? [] : [I(`Fit the lid on its 2 stainless butt hinges${hingeKind ? ` (${hingeKind})` : ''}, lying flat on top across the joint between the strip and the lid${hingeB ? `, centered ${fin((hingeB.min[1] + hingeB.max[1]) / 2)} either side of the centerline` : ''}.`, [
+            'Set the lid on the box with a 1/8" spacer between its front face and the strip, so the gap is even: the gasket fills it later.',
+            `Ease the top front edge of the lid frame 1/16", like the strip's, and center each knuckle over the gap.`,
+            `Pilots for ${screwOf(c, 'storage-hinge-L', /^storage-strip$/)} down into the strip's hinge leg and ${screwOf(c, 'storage-hinge-L', /rim-end-fore/)} down into the lid frame's front end${rimFore ? ` (${fin(rimFore.max[0] - rimFore.min[0])} wide)` : ''}, at the hinge holes.`,
+            `Screw them on to check the fit: the lid swings up and back about the knuckles${openDeg < 180 ? `, past upright, and rests on the upright seat back at about ${openDeg}°` : ''}.`,
+            'With the seat back upright, the lid opens past upright and rests on it. With the back flipped flat, open it only with a hand on it: it would fold right over onto the strip.',
+            'Then take the hinges off for the finish; they go on for good at the hang step. The gasket goes in at the final fit.',
+          ], ['storage-hinge-L', 'storage-hinge-R'])]),
         ],
-        checks: ['Lid flat and square; sits on the coaming without rocking', 'Panel flush with the frame'],
+        checks: ['Lid flat and square; sits on the coaming without rocking', 'Panel flush with the frame', 'Strip top level with the lid top, an even 1/8" gap between them', 'The lid opens past upright and leans on the upright seat back'],
       };
     },
   },
@@ -2621,10 +2613,8 @@ const TEMPLATES: Template[] = [
       const cutPts = cut ? (cut.positions ?? []).flatMap((t) => [...t.matchAll(new RegExp(`(${FR})" from the rear edge, (${FR})" from the bottom end`, 'g'))].map((m) => [m[1], m[2]])) : [];
       const wb = c.by('seat-wedge-L') ? worldAABB(c.by('seat-wedge-L')!) : null;
       const wedgeScrew = c.by('seat-wedge-L')?.joints?.find((q) => q.type === 'screw' && q.fit);
-      // The crest strip: its size (the cut list stock) and where its top stands against the lid hinge knuckles (D-89: below them, so nothing sits in front of the lid leaves).
-      const crest = c.by('seat-crest-strip'), crestB = crest ? worldAABB(crest) : null;
-      const lidHinge = c.by('storage-hinge-L') ? worldAABB(c.by('storage-hinge-L')!) : null;
-      const knuckleZ = lidHinge ? (lidHinge.min[2] + lidHinge.max[2]) / 2 : undefined;
+      // The crest strip: its size (the cut list stock). D-89: the lid hinges are on top of the box now, so it beds straight on the box end.
+      const crest = c.by('seat-crest-strip');
       // The crest strip's wedge profile, from its drawing: thick at the bottom edge, thin at the top, the sloped face in plane with the blocks' faces.
       const crestCut = feat(c, 'seat-crest-strip', 'outline', (q) => q.angleDeg !== undefined);
       const crestPts = crestCut ? (crestCut.positions ?? []).flatMap((t) => [...t.matchAll(new RegExp(`(${FR})" from the rear face, (${FR})" from the bottom edge`, 'g'))].map((m) => m[1])) : [];
@@ -2647,13 +2637,12 @@ const TEMPLATES: Template[] = [
             `Glue: spread thickened epoxy, set the block, and at once drive the ${wedgeScrew?.fit ? `${pilots ? pilots.perBlock : 2} × ${screwText(wedgeScrew.fit)}" stainless flat-heads` : 'screws'} from the UNDERSIDE with a stubby driver, countersunk.`,
             'No screw goes in from above.',
           ]),
-          I('Bed the {{seat-crest-strip}} over the box end and the box leaves of the lid hinges (screwed on for good in the lid step).', [
+          I('Bed the {{seat-crest-strip}} on the box end, between the two blocks.', [
             crest?.stock ? `The strip is ${fin(crest.stock.l)} long and ${fin(crest.stock.w)} tall, cut to the same slope as the blocks' faces; it runs between the two blocks, each end butted to a block.` : 'The strip runs between the two blocks, each end butted to a block.',
-            crestB && knuckleZ !== undefined ? `Its top stands ${fin(knuckleZ - crestB.max[2])} below the hinge knuckles: nothing may sit in front of the lid leaves.` : 'Stop the strip\'s top below the hinge knuckles: nothing may sit in front of the lid leaves.',
             crestPts.length >= 2 ? `Rip it to a wedge first (bandsaw, then plane to the line): ${crestPts[0]}" thick at the bottom edge, ${crestPts[1]}" at the top, the back face square, so its sloped front face lies in plane with the blocks' faces.` : 'Rip it to a wedge first, so its sloped front face lies in plane with the blocks\' faces (strip drawing).',
-            'A 1/8" layer of thickened epoxy over the box end and the box leaves.',
+            'Thickened epoxy on its back face and the box end.',
             'Set it with a straightedge laid across both blocks\' faces: the strip\'s face touches the straightedge all along.',
-            'Clamp it with a caul from the front. The strip now covers the box leaves and their screws for good.',
+            'Clamp it with a caul from the front and wipe the squeeze-out.',
           ]),
         ],
         checks: ['Crest strip straight along its span', 'Blocks mirror each other; solid oak behind each latch hole'],
@@ -2967,7 +2956,7 @@ const TEMPLATES: Template[] = [
           ], ids(/^(steer-|bridle$)/)),
           I('Hinges, pins and pads.', [
             `Seat hinges: #10-32 × 3/8 from the front face of the seat back, through the leaf into the inserts, ${screwOf(c, 'seat-hinge-L', /hinge-backer/)} through the deck into the backer pads.`,
-            `Lid hinges: ${screwOf(c, 'storage-hinge-L', /rim-end-fore/)} into the lid frame, ${screwOf(c, 'storage-hinge-L', /hinge-backer/)} into the backers.`,
+            c.by('storage-hinge-L') ? `Lid hinges, flat on top across the joint: ${screwOf(c, 'storage-hinge-L', /^storage-strip$/)} into the fixed strip, ${screwOf(c, 'storage-hinge-L', /rim-end-fore/)} into the lid frame, on the pilots drilled at the lid step.` : false,
             'Detent pins on lanyards; the seat cushion and the back pad on their hook-and-loop strips.',
           ], ids(/^(seat-|storage-hinge)/)),
           I(`Handle: ${plural(n(/^handle-socket/), 'socket')} ${socketBed(c.p)} on the transom.`, [
@@ -3006,7 +2995,6 @@ const TEMPLATES: Template[] = [
     build: (c) => {
       const rest = c.mine.filter((x) => x.id !== 'hardware');
       const ids = (re: RegExp): string[] => rest.filter((x) => re.test(x.id)).map((x) => x.id);
-      const stay = c.parts.find((x) => x.id === 'storage-lid-stay');
       const nipples = c.parts.some((x) => /^storage-drain-/.test(x.id));
       // The D-rings are drilled at the side-holes step (so no hole is drilled through a finished face); here they are only bolted on. The grab boards were fitted for good at that step.
       const every = (re: RegExp): string[] => c.parts.filter((x) => re.test(x.id)).map((x) => x.id);
@@ -3016,8 +3004,7 @@ const TEMPLATES: Template[] = [
         items: [
           I(`Hang the signs (${tl(ids(/^sign-[LR]$/))}): 4 thumb-knob screws each (${knobText(c)}).`, ['Through the 3/16" holes, the standoff discs (epoxied to the sign back) and the web, into the inserts.']),
           I('Storage hardware.', [
-            'Gaskets: continuous EPDM bulb, spliced at one corner.',
-            stay ? (isStandard(c.p) ? 'Lid support: the 6" support, its base on the lid support block inside the left side of the box and its arm end on the inboard face of the left lid frame side, on the pilots drilled at the lid. It folds flat when the lid shuts.' : 'Lid stay: the stainless friction stay, its base on the lid support block inside the left side of the box and its arm end on the inboard face of the left lid frame side, on the pilots drilled at the lid. It folds flat when the lid shuts.') : false,
+            'Gasket: one continuous EPDM strip along the side and aft coaming tops under the lid frame, then up the fixed strip\'s aft face across the front, its top 1/8" below the lid top; splice it at one corner.',
             ...(c.by('storage-turn-button-L') ? [(() => {
               const tb = worldAABB(c.by('storage-turn-button-L')!), aftRail = c.by('storage-rim-end-aft') ? worldAABB(c.by('storage-rim-end-aft')!).min[0] : tb.max[0];
               return `Turn-buttons (${tl(ids(/^storage-turn-button-/))}): cut each from an oak offcut, ${fin(tb.max[2] - tb.min[2])} × ${fin(tb.max[1] - tb.min[1])} × ${fin(tb.max[0] - tb.min[0])}, and plane a slight cam (about 1/32") on the underside of the end that swings over the lid, so turning it on pulls the lid down onto the gasket. Drill a 3/16" clearance hole through it, centered over its block, and a 1/8" pilot into the block; one ${screwOf(c, 'storage-turn-button-L', /turn-block/)} down through the button and a nylon washer, snug so it turns stiffly. Turned along the sled it reaches ${fin(tb.max[0] - aftRail)} over the lid frame's aft rail; turned across, it clears the lid.`;
@@ -3035,7 +3022,7 @@ const TEMPLATES: Template[] = [
           I('Lights and reflectors.', ['Lamp clips snap into the bulkhead and transom hand-holds; heat-set M4 / M3 inserts.', 'The clips must be printed to the real lights, so measure the lights first and fit each clip before the inserts go in (Verify).', 'Reflectors on the gunwale outer face: wipe clean, press 60 s.'], ids(/^(lamp-clip|rear-lamp-clip|front-light|rear-light|reflector-)/)),
           I('Count the pooled fasteners against the parts list: every fastener 316 stainless.', [], ['hardware']),
         ],
-        checks: [`Load test: ${c.p.lashLoadLbf} lbf pull at ${c.p.lashPullAngleDeg}° on one D-ring (its working load); hang the sled by the bowline`, 'Grab boards solid; signs stay on and do not rattle', `Lid closes on the gasket with no gap; the ${isStandard(c.p) ? 'lid support' : 'stay'} holds`],
+        checks: [`Load test: ${c.p.lashLoadLbf} lbf pull at ${c.p.lashPullAngleDeg}° on one D-ring (its working load); hang the sled by the bowline`, 'Grab boards solid; signs stay on and do not rattle', 'Lid closes on the gasket with no gap; it opens past upright and rests on the upright seat back'],
       };
     },
   },

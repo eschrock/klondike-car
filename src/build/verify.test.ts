@@ -14,7 +14,7 @@ describe('verify checklist', () => {
     expect(list.map((c) => c.id)).toEqual([
       'tire-squash', 'wheel', 'axle-rod', 'steering-parts', 'bridle', 'sign-knobs', 'strip-bend',
       'oak-supplier', 'deck-sheet', 'web-bend', 'd-ring', 'eva-pads', 'hinges-304', // before ordering (D-79, D-80, D-83: the cost-pass sourcing and bought-hardware checks)
-      'seat-back', 'brake-knee', 'grab-reach', 'lamp-clip', 'ply-thickness', 'lid-support', 'other-params', // before cutting
+      'seat-back', 'brake-knee', 'grab-reach', 'lamp-clip', 'ply-thickness', 'other-params', // before cutting
       'bow-rib-clearance', 'brake-strap', 'brake-knee-refit', // at assembly (the refit check: removable knees, the default)
     ]);
     expect(list.map((c) => c.n)).toEqual(list.map((_, i) => i + 1));
@@ -133,10 +133,10 @@ describe('verify checklist', () => {
     expect(c.whatToDo).toMatch(/Planet Bike Spok/);
   });
 
-  it('under the Extreme spec the Standard-only lid support check is not listed (the stainless stay needs no new check)', () => {
+  it('no lid support check under either spec (D-89: the lid has no stay; it rests on the seat back)', () => {
     const ext = { ...p, weatherSpec: 1 };
     expect(verifyChecklist(buildModel(ext), ext).some((c) => c.id === 'lid-support')).toBe(false);
-    expect(list.some((c) => c.id === 'lid-support')).toBe(true);
+    expect(list.some((c) => c.id === 'lid-support')).toBe(false);
   });
 
   it('lists only part ids that are in the built model', () => {

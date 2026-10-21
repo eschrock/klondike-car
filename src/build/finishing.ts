@@ -354,7 +354,7 @@ export const SHOW_RULES: ReadonlyArray<{ re: RegExp; show: number | 'web'; why: 
   { re: /^side-[LR]-(chine|gunwale|gunwale-in)$/, show: 1, why: 'outer chine band and the gunwale bands' },
   { re: /^bow-bulkhead$/, show: 1, why: 'bow end and the rider\'s foot brace' },
   { re: /^transom-rear$/, show: 0.5, why: 'outside shows, the inside faces the hull and the box' },
-  { re: /^(transom-backer|sign-backer|seat-hinge-backer|storage-hinge-backer|storage-turn-block|storage-stay-block|flag-block|brake-backer|brake-pivot-block|brake-knee)/, show: 0, why: 'backer or block behind something else' },
+  { re: /^(transom-backer|sign-backer|seat-hinge-backer|storage-turn-block|storage-strip-end|flag-block|brake-backer|brake-pivot-block|brake-knee)/, show: 0, why: 'backer or block behind something else' },
   { re: /^storage-turn-button-/, show: 1, why: 'the lid turn-buttons on the transom: in view and handled' },
   { re: /^side-rib-/, show: 1, why: 'side ribs and their knees stand inside the hull above the deck: the rider and the cargo see the inner face and edges (the glued back is credited off)' },
   { re: /^box-tie-/, show: 0, why: 'oak spacer between a rib and the storage box side: out of sight' },
@@ -367,6 +367,7 @@ export const SHOW_RULES: ReadonlyArray<{ re: RegExp; show: number | 'web'; why: 
   { re: /^storage-(side|end)-/, show: 0.5, why: 'box panel: outside shows, inside is hidden' },
   { re: /^storage-lid$/, show: 0.5, why: 'top shows, underside is hidden' },
   { re: /^storage-lid-batten/, show: 0, why: 'under the lid' },
+  { re: /^storage-strip$/, show: 0.5, why: 'the fixed strip in front of the lid (D-89): top and fore face show, the underside and its groove are inside the box' },
   { re: /^storage-coaming/, show: 0.5, why: 'trim on the box rim' },
   { re: /^storage-rim/, show: 0, why: 'rim under the lid' },
   { re: /^brake-(flap|shoe|chock)/, show: 1, why: 'exposed and worn' },
@@ -483,7 +484,7 @@ export function standardAdhesive(kind: GlueKind, a: string, b: string, text: str
  * D-92: the joints glued in the same session as an epoxy joint, so they take epoxy too:
  * - the frame glue-up: the crossmember and king-beam Dominos into the rails and the hangers, made with the deck bonded on in epoxy;
  * - the two closing glue-ups: every joint into the rear transom or the bow bulkhead (tenons, Dominos, web dados), made with the epoxy deck dado and band-end fillets;
- * - the storage box: the coaming and the hinge backers, glued with its filleted corners and ties; the lid frame's tenons, glued round a panel bedded in epoxy;
+ * - the storage box: the coaming and the fixed strip with its end blocks, glued with its filleted corners and ties; the lid frame's tenons, glued round a panel bedded in epoxy;
  * - the seat-back stop blocks and the crest strip butted to them, one glue-up in thickened epoxy; the grab-board strip and cap on the band, bedded in epoxy.
  */
 function sharesEpoxyGlueUp(a: string, b: string): boolean {
@@ -493,7 +494,7 @@ function sharesEpoxyGlueUp(a: string, b: string): boolean {
   if (has(/^rail-[LR]$/) && has(/^(joist-\d+|king-beam)$/)) return true;
   if (has(/^axle-hanger-[LR]$/) && has(/^joist-\d+$/)) return true;
   if (has(/^storage-coaming-/)) return true;
-  if (has(/^storage-hinge-backer-/) && has(/^storage-end-/)) return true;
+  if (has(/^storage-strip(-end-[LR])?$/)) return true;
   if (has(/^storage-rim-/) && !has(/^storage-lid-batten-/)) return true;
   if (has(/^seat-crest-strip$/) || has(/^seat-wedge-[LR]$/)) return true; // the stop blocks and the crest strip, one epoxy glue-up
   if (has(/^seat-grip-(backing|cap)-/)) return true;

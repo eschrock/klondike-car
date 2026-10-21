@@ -154,19 +154,8 @@ describe('D-83: drains', () => {
 });
 
 describe('D-83: lid support, seat pads, D-rings, clamp plates, lights', () => {
-  it('the lid stay is a Rockler 6 in plated-steel support (Standard) and the stainless friction stay (Extreme), clear of the packed items', () => {
-    const a = get(buildModel(std), 'storage-lid-stay'), b = get(buildModel(ext), 'storage-lid-stay');
-    expect(a.material).toMatch(/plated steel lid support \(Rockler 6"/);
-    expect(a.sourcing!.vendor).toMatch(/Rockler/);
-    expect(a.massLb).toBeCloseTo(0.15, 9);
-    const bb = worldAABB(a);
-    // D-89 (round 2): the base and the arm end stand about 4 in apart beside the left side wall, not on the frame end at the hinge line
-    expect(bb.max[0] - bb.min[0]).toBeGreaterThan(3);
-    expect(bb.max[0] - bb.min[0]).toBeLessThanOrEqual(6 + 1e-9);
-    expect(a.joints!.some((j) => j.type === 'screw' && j.to === 'storage-rim-side-L')).toBe(true); // D-89: the arm end on the left lid frame side, the base on its block
-    expect(a.joints!.some((j) => j.type === 'screw' && j.to === 'storage-stay-block')).toBe(true);
-    expect(b.material).toMatch(/316 stainless friction stay/);
-    expect(b.massLb).toBeCloseTo(0.12, 9);
+  it('no lid stay under either spec (D-89: the lid rests on the upright seat back); the box still packs', () => {
+    for (const q of [std, ext]) expect(buildModel(q).some((x) => /^storage-(lid-stay|stay-block)$/.test(x.id))).toBe(false);
     expect(runChecks(std, { includeTruck: false }).find((c) => c.id === 'storage-pack')!.status).toBe('pass');
   });
   it('the seat is EVA kneeling pads 1-1/2 in thick, no cover: about 1 lb per 11 x 18 pad', () => {

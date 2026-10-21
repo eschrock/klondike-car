@@ -815,7 +815,7 @@ describe('readability round 2 (steps)', () => {
       expect(fb).toMatch(/Clamp-plate bolts, 4 plates:[^\n]*1-1\/4", 6-3\/4", 20-3\/4" and 26-1\/4" from the left end/);
       expect(fb).toMatch(/Eye-bolt holes[^\n]*5-3\/4" and 21-3\/4" from the left end/);
       expect(fb).toMatch(/pilots, both pads:[^\n]*4" and 23-1\/2" from the left end/);
-      expect(text('storage-lid')).toMatch(/Centers 4-5\/16", 7-27\/32" and 11-13\/32" from the rear end of the frame[^\n]*butted to them/); // the battens butt the frame sides (no dados)
+      expect(text('storage-lid')).toMatch(/Centers 3-17\/32", 6-9\/32" and 9-1\/16" from the rear end of the frame[^\n]*butted to them/); // the battens butt the frame sides (no dados); D-89: the shorter lid behind the fixed strip
       expect(text('transom')).toMatch(/Both sockets: centered 9-3\/8" either side of the centerline/);
     });
 
@@ -1126,22 +1126,21 @@ describe('D-79..D-83: the cost-pass build text', () => {
     const sched = finishingSchedule(buildModel({ ...p }), p);
     const n = (id: string): number => sched.steps.find((q) => q.id === id)!.n;
     expect(stepText(ext, 'seal')).toContain(`Finishing, steps ${n('stain')}-${n('epoxy')}`);
-    expect(stepText(ext, 'storage-lid')).toMatch(/Fit and drill the friction stay/);
     expect(stepText(ext, 'storage-lid')).toMatch(/DO NOT STEP in the finishing schedule \(step 5\)/);
     expect(n('engrave')).toBe(5);
   });
 
-  it('Standard fits a 6" lid support (Extreme the friction stay) with located pilots and mounts it at the final fit', () => {
-    const lid = stepText(std, 'storage-lid');
-    expect(lid).toMatch(/Fit and drill the 6" lid support, then take it off/);
-    expect(lid).toMatch(/Its base on the support block: 2 holes, 1\/8" pilot, 5\/8" deep, in the inboard face:/); // D-89: a small oak block inside the left box side
-    // D-89 (round 2): the arm end is on the inboard face of the left lid frame side, well away from the hinge line
-    expect(lid).toMatch(/Its arm end on the left lid frame side: 2 holes, 1\/8" pilot, 5\/8" deep, in the inboard face:/);
-    expect(stepText(std, 'final-fit')).toMatch(/Lid support: the 6" support/);
-    expect(lid).toMatch(/Screws: #8 × 5\/8" at the base and #8 × 5\/8" at the arm end, each in a 1\/8" pilot/);
-    expect(partsStd.find((x) => x.id === 'storage-lid-stay')!.name).toBe('Lid support'); // the id stays, the Standard name is the product's
-    expect(parts.find((x) => x.id === 'storage-lid-stay')!.name).toBe('Lid friction stay');
-    expect(stepText(ext, 'final-fit')).toMatch(/Lid stay: the stainless friction stay/);
+  it('D-89: the lid is hinged on a fixed strip, opens past upright onto the seat back, and has no stay under either spec', () => {
+    for (const steps of [std, ext]) {
+      const lid = stepText(steps, 'storage-lid');
+      expect(lid).toMatch(/Make the storage box fixed strip: one oak board/);
+      expect(lid).toMatch(/lying flat on top across the joint between the strip and the lid/);
+      expect(lid).toMatch(/With the seat back upright, the lid opens past upright and rests on it\. With the back flipped flat, open it only with a hand on it/);
+      expect(lid).toMatch(/rests on the upright seat back at about (9[5-9]|100)°/);
+      expect(`${lid} ${stepText(steps, 'final-fit')} ${stepText(steps, 'storage-box')}`).not.toMatch(/lid support|friction stay|hinge backer/i);
+    }
+    expect(partsStd.some((x) => x.id === 'storage-lid-stay')).toBe(false);
+    expect(parts.some((x) => x.id === 'storage-lid-stay')).toBe(false);
   });
 
   it('the seat pads: three EVA kneeling pads (cushion = one pad + a strip, back pad = the third), no vinyl cover, hook-and-loop strips located, no Dual Lock', () => {
@@ -1197,7 +1196,7 @@ describe('D-79..D-83: the cost-pass build text', () => {
         expect(mill.toLowerCase(), `${id} (${name})`).toContain(name.replace(/\s*\(.*\)\s*$/, '').toLowerCase().replace(/^./, (c) => c));
       }
       // the parts that used 6/4 and 8/4 boards are among them, and the board-yield line only offers what is bought
-      for (const id of ['bridle-tongue', 'king-beam', 'joist-6', 'bow-bulkhead', 'seat-wedge-L', 'storage-hinge-backer-L', 'handle-bar']) expect(lam.some((g) => g.ids.includes(id)), id).toBe(true);
+      for (const id of ['bridle-tongue', 'king-beam', 'joist-6', 'bow-bulkhead', 'seat-wedge-L', 'handle-bar']) expect(lam.some((g) => g.ids.includes(id)), id).toBe(true);
       expect(mill).toMatch(/4\/4 planes to 3\/4", 5\/4 to 1"\./);
       expect(mill).not.toMatch(/6\/4 to|8\/4 to/);
       expect(mill).toMatch(/The lumber list has only 4\/4 and 5\/4 white oak/);

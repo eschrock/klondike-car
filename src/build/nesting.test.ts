@@ -207,7 +207,7 @@ describe('oakBoardFeet: face-laminated parts (D-70)', () => {
 
   it('buys no 6/4, 8/4 or 12/4 (D-79): the axle beams, brake knees and chocks take their layers from the 4/4 boards (D-74: 3 x 3/4), and the thick blocks from 4/4 and 5/4', () => {
     expect(oak.thicknesses.map((t) => t.board)).toEqual(['4/4', '5/4']);
-    expect(oak.laminated.map((q) => q.id).sort()).toEqual(['beam-F', 'beam-R', 'bow-bulkhead', 'brake-chock-L', 'brake-chock-R', 'brake-knee-L', 'brake-knee-R', 'bridle-tongue', 'handle-bar', 'joist-6', 'king-beam', 'seat-wedge-L', 'seat-wedge-R', 'storage-hinge-backer-L', 'storage-hinge-backer-R']);
+    expect(oak.laminated.map((q) => q.id).sort()).toEqual(['beam-F', 'beam-R', 'bow-bulkhead', 'brake-chock-L', 'brake-chock-R', 'brake-knee-L', 'brake-knee-R', 'bridle-tongue', 'handle-bar', 'joist-6', 'king-beam', 'seat-wedge-L', 'seat-wedge-R']); // D-89: no lid hinge backers
     const layerCuts = oak.thicknesses.flatMap((t) => t.boards.flatMap((b) => b.lanes.flatMap((l) => l.cuts.map((c) => ({ c, board: t.board })))))
       .filter((q) => q.c.layer !== undefined);
     // every part 3 layers of 4/4 (D-74); knees 1 + 2 + 1 pieces (the upright layers are one piece each); chocks 3 layers x 1 piece (a 3.5" wide chock fits a board)

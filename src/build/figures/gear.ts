@@ -395,7 +395,7 @@ const kingpinSection: FigFn = (c) => {
   column(F, rx, 'start', [
     ...(tongue ? [{ at: V.at(u1 - 0.3, tongue.z0 + 0.2), text: ['pulling tongue (dashed:', 'it goes on after the flip)'] }] : []),
     { at: V.at(sAft, disc.z0 + cbD + 0.75), text: ['3 flat-head screws hold the disc,', 'heads down in counterbores: one', 'straight aft (shown); two at 120°', 'from it, either side of the slot'] },
-    { at: V.at(kx + slot.nutAf / 2, floor + slot.h / 2), text: ['nylock nut, no washer: the slot\'s', 'walls hold it. Turn the bolt from', 'its head: snug, then back it off', 'a quarter turn'] },
+    { at: V.at(kx + slot.nutAf / 2, floor + slot.h / 2), text: ['thin nylock (jam) nut, no washer:', 'the slot\'s walls hold it. Turn the', 'bolt from its head: snug, then', 'back it off a quarter turn'] },
     { at: V.at(kb.x1 - 0.1, floor + 0.05), text: [`the slot, ${f32(slot.w)} wide × ${f16(slot.h)} tall,`, 'is open at the front face'] },
   ], { top: 60 });
   F.text([V.at(u0, 0)[0], V.at(0, v1)[1] + 20], 'rear', { size: 12, color: MUTED });
@@ -405,7 +405,7 @@ const kingpinSection: FigFn = (c) => {
   return {
     id: 'front-kingpin',
     title: 'The kingpin stack',
-    caption: `Cut fore and aft through the kingpin bolt, the way up you see it with the hull upside down. The plastic thrust disc is screwed to the king beam (built with the frame) and stays there; the front axle beam lies on it and turns under it. The bolt goes through the beam, the disc and the king beam (down through them as the hull lies now), and its nylock nut sits in the slot cut into the king beam's front face, with no washer: the slot is only a little wider than the nut's flats, so it holds the nut while you turn the bolt from its head. Snug it, then back it off a quarter turn: the bolt only locates the beam, which swings on its shank through the full lock. The disc's three screws keep clear of the slot: one straight aft, two at 120° from it.`,
+    caption: `Cut fore and aft through the kingpin bolt, the way up you see it with the hull upside down. The plastic thrust disc is screwed to the king beam (built with the frame) and stays there; the front axle beam lies on it and turns under it. The bolt goes through the beam, the disc and the king beam (down through them as the hull lies now), and its thin nylock (jam) nut sits in the slot cut into the king beam's front face, with no washer: the slot is only a little wider than the nut's flats, so it holds the nut while you turn the bolt from its head. Snug it, then back it off a quarter turn: the bolt only locates the beam, which swings on its shank through the full lock. The disc's three screws keep clear of the slot: one straight aft, two at 120° from it.`,
     svg: F.svg('The kingpin stack in section: beam, thrust disc, king beam, bolt and nut'),
   };
 };

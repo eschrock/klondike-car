@@ -112,8 +112,9 @@ describe('the fit of the cushions (seat-stow, D-57)', () => {
     expect(g.hw).toBeCloseTo(L.hwC - defaults.storageSideClearIn, 9);
     expect(plan.interior.x0).toBeCloseTo(g.x0 + g.pl, 9);
     expect(plan.interior.y1).toBeCloseTo(g.hw - g.pl, 9);
-    expect(plan.interior.zCeil).toBeCloseTo(g.zTop - g.pl - g.rimT, 9);
-    expect(worldAABB(get(installed, 'storage-lid-batten-1')).min[2]).toBeCloseTo(plan.interior.zCeil, 6);
+    expect(plan.interior.zCeil).toBeCloseTo(Math.min(g.zTop - g.pl - g.rimT, g.zWallTop), 9); // D-89: the fixed strip's legs come down to the coaming top
+    expect(worldAABB(get(installed, 'storage-lid-batten-1')).min[2]).toBeGreaterThanOrEqual(plan.interior.zCeil - 1e-6);
+    expect(worldAABB(get(installed, 'storage-strip')).min[2]).toBeCloseTo(plan.interior.zCeil, 6);
   });
   it('the box holds the cushions OR the 10 Essentials, not both: free volume after the cushions is under what the Essentials need', () => {
     expect(plan.cushionsIn3).toBeGreaterThan(500);

@@ -86,7 +86,7 @@ describe('the two specs', () => {
   it('the hardware-into-thin-stock screws are #8 x 5/8 (the third D-72 size), not a fourth', () => {
     const bat = lines(bExt).filter((l) => /wood screw #8 x 5\/8"/.test(l.key));
     expect(bat.length).toBe(1);
-    expect(bat[0].qty).toBeGreaterThanOrEqual(10); // 6 lid hinge leaves and 4 lid support (D-89)
+    expect(bat[0].qty).toBeGreaterThanOrEqual(12); // the two lid hinges, 3 into the lid frame and 3 into the fixed strip each (D-89)
     expect(lines(bStd).some((l) => /wood screw #6 x (3\/8|1\/2|5\/8)"/.test(l.key))).toBe(false);
   });
 });
@@ -177,12 +177,11 @@ describe('Bolt Depot by the piece', () => {
 
 describe('Standard hardware', () => {
   const byKey = (k: string): BomLine => lines(bStd).find((l) => l.key === k)!;
-  it('prices the 304 hinges and stay, the zinc collars and D-rings, the galvanized eye bolts and chain from the Standard research', () => {
+  it('prices the 304 hinges (no lid stay, D-89), the zinc collars and D-rings, the galvanized eye bolts and chain from the Standard research', () => {
     expect(byKey('seat-hinge').extUsd).toBeCloseTo(12.99, 2); // D-83: Ace 2" stainless pair (check the package for 304)
     expect(byKey('seat-hinge').notes).toMatch(/check the package for 304/);
     expect(lines(bStd).some((l) => /^storage-(latch|catch)/.test(l.key))).toBe(false); // D-89: oak turn-buttons from offcuts, no latches
-    expect(byKey('storage-lid-stay').unitUsd).toBe(9.99); // D-83: Rockler 6" lid support pair (plated steel); the Sugatsune S-93L stays an alternative
-    expect(byKey('storage-lid-stay').alternatives![0].usd).toBe(26.4);
+    expect(lines(bStd).some((l) => l.key === 'storage-lid-stay')).toBe(false); // D-89: the lid rests on the upright seat back
     expect(byKey('storage-hinge').extUsd).toBeCloseTo(5.47, 2); // D-83: Everbilt 2-1/2" stainless pair
     expect(byKey('storage-hinge').notes).toMatch(/check the package for 304/);
     const gaskets = lines(bStd).filter((l) => /^storage-gasket/.test(l.key));
@@ -536,10 +535,8 @@ describe('cost critic round 2: Standard metal, notes, shipping and tax', () => {
     else expect(e.notes).not.toMatch(/Thin margin/);
   });
 
-  it('stale text is gone: no wip path in prices, the Rockler item number, no Sipo in the Standard Domino note, hook-and-loop key', () => {
+  it('stale text is gone: no wip path in prices, no Sipo in the Standard Domino note, hook-and-loop key', () => {
     const k = (b: Bom, key: string): BomLine | undefined => lines(b).find((l) => l.key === key);
-    expect(k(bStd, 'storage-lid-stay')!.notes).toMatch(/item 39529/);
-    expect(k(bStd, 'storage-lid-stay')!.description).toBe(stdParts.find((x) => x.id === 'storage-lid-stay')!.name.replace(/\b316\b/, '304')); // the BOM follows the part name
     const dom = lines(bStd).filter((l) => /^Domino/.test(l.key));
     expect(dom.length).toBeGreaterThan(0);
     for (const l of dom) expect(`${l.notes} ${l.description}`, l.key).not.toMatch(/sipo/i);

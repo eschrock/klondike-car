@@ -8,7 +8,7 @@
  * chine bears on the rail top and is Domino-tied and epoxied to it every `chineTieSpacingIn`.
  */
 import { AXLE_BEAM_POSITION } from '../params';
-import { beamSeat, HEAD_HEIGHT_D, localPoint, MIN_THREADS_PAST_NUT, nutHeight, railSection } from './rear-mount';
+import { beamSeat, HEAD_HEIGHT_D, localPoint, MIN_THREADS_PAST_NUT, railSection } from './rear-mount';
 import type { Layout } from './layout';
 import type { Params } from '../params';
 import { IN3_PER_FT3, STEP, box, roughOf, span, SIDES, woodMassLb, type Ctx, stainless } from './build-utils';
@@ -20,8 +20,11 @@ import type { Part, Vec2, Vec3 } from './types';
 /** The kingpin nut's slot in the king beam has its ceiling this far under the deck (the bolt tip stands this far below the king beam's top, D-56). */
 export const KING_NUT_BELOW_DECK_IN = 7 / 16;
 
-/** A nylon-insert lock nut is about this many bolt diameters tall at 1/2" and up (ASME B18.16.6: the 5/8-11 nut is 0.687" tall); `nutHeight` under-reads it there. */
-const NYLOCK_HEIGHT_D = 1.1;
+/**
+ * The kingpin's nut is a THIN nylon-insert lock nut (a nylock jam nut, D-88): about this many bolt diameters tall (the 5/8-11 one is about 29/64"; check the real nut, the slot
+ * keeps 1/16" above and below it). The full nylock (0.687") needed a 1"-tall slot, which left only about 5/16" of king beam bore below it for the kingpin to bear in.
+ */
+const NYLOCK_JAM_HEIGHT_D = 0.725;
 /** Room left round a nut and washer in a slot or a relief, and over a bolt head (in). */
 const SLOT_CLEAR_IN = 1 / 16;
 const HEAD_CLEAR_IN = 1 / 8;
@@ -30,19 +33,20 @@ const down16 = (v: number): number => Math.floor(v * 16 + 1e-9) / 16;
 const tpi = (d: number): number => (d <= 0.25 ? 20 : d <= 0.3125 ? 18 : d <= 0.375 ? 16 : d <= 0.5 ? 13 : 11);
 
 /**
- * The kingpin nut slot in the king beam (D-88): cut in from the front face at the top, the nut's width across the flats plus 1/32" wide, so its walls hold the nylock nut while the
+ * The kingpin nut slot in the king beam (D-88): cut in from the front face at the top, the nut's width across the flats plus 1/32" wide, so its walls hold the thin nylock (jam) nut while the
  * bolt is turned from its head (the beam swings on the shank, not the nut); no washer under the nut. Tall enough for the nut and the bolt's threads past it with 1/16" room above and
- * below (1" for the 5/8" kingpin), its ceiling `KING_NUT_BELOW_DECK_IN` under the deck. x0..x1 fore-aft (x1 the front face). `nutAf` is the nut's width across the flats.
+ * below (3/4" for the 5/8" kingpin), its ceiling `KING_NUT_BELOW_DECK_IN` under the deck. x0..x1 fore-aft (x1 the front face). `nutAf` is the nut's width across the flats.
  */
-export function kingNutSlot(p: Pick<Params, 'kingpinDiaIn'>, L: Pick<Layout, 'king'>): { w: number; h: number; ceil: number; floor: number; x0: number; x1: number; nutH: number; nutAf: number } {
+export function kingNutSlot(p: Pick<Params, 'kingpinDiaIn'>, L: Pick<Layout, 'king'>): { w: number; h: number; ceil: number; floor: number; x0: number; x1: number; nutH: number; nutAf: number; boreBelow: number } {
   const kd = p.kingpinDiaIn, k = L.king;
-  const nutH = Math.max(nutHeight(kd), NYLOCK_HEIGHT_D * kd), nutAf = 1.5 * kd;
+  const nutH = NYLOCK_JAM_HEIGHT_D * kd, nutAf = 1.5 * kd;
   const w = nutAf + 1 / 32;
   const h = up16(nutH + MIN_THREADS_PAST_NUT / tpi(kd) + 2 * SLOT_CLEAR_IN);
   const ceil = k.top - KING_NUT_BELOW_DECK_IN;
   // the walls hold the nut by its flats, so its corners point fore and aft: the slot runs past the bore's center by half the nut's width across the corners, plus 1/32" (D-88)
   const back = nutAf / Math.sqrt(3) + 1 / 32;
-  return { w, h, ceil, floor: ceil - h, x0: k.x - back, x1: k.x + k.len / 2, nutH, nutAf };
+  // boreBelow: the length of king beam bore below the slot, where the kingpin bears (the bolt tip stops under the slot ceiling, so none above it)
+  return { w, h, ceil, floor: ceil - h, x0: k.x - back, x1: k.x + k.len / 2, nutH, nutAf, boreBelow: ceil - h - k.bot };
 }
 
 /**
@@ -190,7 +194,7 @@ export function buildFrame(ctx: Ctx): Part[] {
         type: 'hole', to: 'kingpin', count: 1,
         size: `slot ${f2(slotW)}" wide (across) × ${f2(slotH)}" tall × ${f2(slotX1 - slotX0)}" deep (fore-aft), cut in from the front face and centered on the kingpin bore; its ceiling leaves ${f2(KING_NUT_BELOW_DECK_IN)}" of oak under the deck`,
         at: [localPoint(kb.transform, [slotX1, 0, (slotFloor + slotCeil) / 2])],
-        cut: { kind: 'slot', lo: localPoint(kb.transform, [slotX0, -slotW / 2, slotFloor]), hi: localPoint(kb.transform, [slotX1, slotW / 2, slotCeil]), what: 'to hold the kingpin nylock nut (its walls stop it turning)' },
+        cut: { kind: 'slot', lo: localPoint(kb.transform, [slotX0, -slotW / 2, slotFloor]), hi: localPoint(kb.transform, [slotX1, slotW / 2, slotCeil]), what: 'to hold the kingpin\'s thin nylock (jam) nut (its walls stop it turning)' },
       }];
       kb.massLb -= (slotW * slotH * (slotX1 - slotX0) / IN3_PER_FT3) * p.oakDensityPcf;
       const hr = kingHeadRelief(p, L);
@@ -205,7 +209,7 @@ export function buildFrame(ctx: Ctx): Part[] {
         }
         kb.massLb -= (2 * (hr.yOut - hr.yIn) * hr.depth * k.len / IN3_PER_FT3) * p.oakDensityPcf;
       }
-      kb.notes = `The front load path (D-56): an oak crossmember ${f2(k.len)}" fore-aft × ${f2(k.depth)}" deep between the rails at the kingpin, bonded to the deck underside and Domino-tied and epoxied to the rails. The ${f2(p.kingpinDiaIn)}" kingpin bolt is bored through its center; a slot cut from the front face (${f2(slotW)}" wide × ${f2(slotH)}" tall, at the TOP of the king beam: its ceiling is ${f2(KING_NUT_BELOW_DECK_IN)}" under the deck; build 3c S5 made the two descriptions agree) holds the nylock nut by its flats (no washer), so the bolt is turned from its head; the axle beam swings on the shank (D-88). The UHMW thrust disc is screwed to its underside and the top of the axle beam turns under it (D-58); the clamp plates on the beam top pass under the king beam with 1/8 in to spare.`;
+      kb.notes = `The front load path (D-56): an oak crossmember ${f2(k.len)}" fore-aft × ${f2(k.depth)}" deep between the rails at the kingpin, bonded to the deck underside and Domino-tied and epoxied to the rails. The ${f2(p.kingpinDiaIn)}" kingpin bolt is bored through its center; a slot cut from the front face (${f2(slotW)}" wide × ${f2(slotH)}" tall, at the TOP of the king beam: its ceiling is ${f2(KING_NUT_BELOW_DECK_IN)}" under the deck; build 3c S5 made the two descriptions agree) holds the thin nylock (jam) nut by its flats (no washer), so the bolt is turned from its head; the axle beam swings on the shank (D-88). The UHMW thrust disc is screwed to its underside and the top of the axle beam turns under it (D-58); the clamp plates on the beam top pass under the king beam with 1/8 in to spare.`;
       parts.push(kb);
       return;
     }

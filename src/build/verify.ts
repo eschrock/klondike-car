@@ -622,22 +622,6 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       when: 'before ordering',
       refs: ['D-73', 'D-83'],
     },
-    ...(parts.some((x) => x.id === 'storage-lid-stay' && /plated/.test(x.material))
-      ? [{
-        id: 'lid-support',
-        title: 'Lid support: bracket holes and arm length',
-        how: [
-          it('Open the package of the 6" lid support.', ['Measure the base bracket and the arm-end bracket: the screw holes (size and spacing) and the arm length, open and folded.']),
-          it('Hold it in the box on the left hinge backer and check the lid.', ['The arm folds flat when the lid is shut, and holds the lid open at about 75°.']),
-        ],
-        passList: ['The two brackets take #8 × 5/8" screws at the pilots the drawings give (or the pilots move to suit the bracket).', 'The lid stays open at its stop, and closes on the gasket with no gap.'],
-        ifFails: 'Move the pilots to the real holes before they are drilled, or use the stainless friction stay.',
-        partIds: ids(parts, /^(storage-lid-stay|storage-hinge-backer-L)$/),
-        paramKeys: [],
-        when: 'before cutting' as VerifyWhen,
-        refs: ['D-83'],
-      }]
-      : []),
   ];
 
   // Removable knees: the check on the first refit (the ratchet and wrench setting).

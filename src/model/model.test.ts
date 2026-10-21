@@ -60,7 +60,7 @@ const SOLID: PartGroup[] = ['frame', 'body', 'front-end', 'running-gear', 'seat'
  */
 const KNOWN_OFF_DEFAULT: RegExp[] = [
   // Found when the Phase 3c-3a variants were swept (src/model/storage.ts, handle.ts, lighting.ts are other agents' files; reported, not patched):
-  /^storage-end-aft x storage-lid-stay:/, // seatXMin: the shortest rear box the validator allows is too short for its lid stay and rims
+  /^storage-rim-end-(aft|fore) x storage-(strip|gasket-end-fore|turn-block-[LR]):/, // seatXMin: the shortest rear box the validator allows is too short for a lid behind the fixed strip (D-89; it was too short for the old lid stay)
   /^storage-lid x storage-rim-end-(aft|fore):/,
   /^storage-rim-end-aft x storage-rim-end-fore:/,
   /^handle-(socket|pin)-[LR] x handle-bar:/, // deck 17+ in / rear side 22 in: the handlebow sits at a fixed height above the rear transom's fittings

@@ -268,15 +268,18 @@ export function kingpinCheck(ctx: Ctx): AnalysisCheck {
     const sH = vm(p.pullForceLbf + h.H, armWheel, rh.hold);
     // hole bearing (bolt in an oak hole, perpendicular to grain, the bolt's shear on the member depth): the king beam and the axle beam
     const al = allowables(ctx);
-    const bearN = (p.pullForceLbf + n.H) / (kd * L.king.depth), bearH = (p.pullForceLbf + h.H) / (kd * L.king.depth);
+    // D-88: the king beam bore the bolt bears in is only the part BELOW the nut slot (the bolt tip stops under the slot ceiling); dowel bearing across the grain (the king beam's grain runs across the sled)
+    const bore = Math.max(0.05, kingNutSlot(p, L).boreBelow);
+    const bearN = (p.pullForceLbf + n.H) / (kd * bore), bearH = (p.pullForceLbf + h.H) / (kd * bore), bearKingTow = ld.Th / (kd * bore);
     const bearBeamN = (p.pullForceLbf + n.H) / (kd * L.beamF.depth), bearBeamH = (p.pullForceLbf + h.H) / (kd * L.beamF.depth);
     const bearBeamTow = ld.Th / (kd * L.beamF.depth);
     const ds: Detail[] = [
       detail('tow pull at the tie (x overload): bolt shear + bending + nut tension, von Mises (grade 8 yield / SF)', sTow.vm, 'psi', allowN, '<='),
       detail('NORMAL 1" bump at walking pace (+ the design pull): shear + bending + roll-couple tension, von Mises', sN.vm, 'psi', allowN, '<='),
       detail('HARD 2" hit (+ the design pull): shear + bending + roll-couple tension, von Mises (grade 8 ultimate / fail-safe factor)', sH.vm, 'psi', allowH, '<='),
-      detail('NORMAL: bolt bearing in the oak king beam hole (dowel bearing)', bearN, 'psi', al.oakDowel, '<='),
-      detail('HARD: bolt bearing in the oak king beam hole (no wood safety factor)', bearH, 'psi', al.oakDowel * p.woodSafetyFactor, '<='),
+      detail('tow pull at the tie (x overload): bolt bearing in the king beam bore below the nut slot (dowel bearing across the grain)', bearKingTow, 'psi', al.oakDowel, '<='),
+      detail('NORMAL: bolt bearing in the king beam bore below the nut slot (dowel bearing across the grain)', bearN, 'psi', al.oakDowel, '<='),
+      detail('HARD: bolt bearing in the king beam bore below the nut slot (no wood safety factor)', bearH, 'psi', al.oakDowel * p.woodSafetyFactor, '<='),
       detail('tow pull at the tie (x overload): bolt bearing in the oak axle beam hole', bearBeamTow, 'psi', al.oakDowel, '<='),
       detail('tow pull tilt (the nose-up couple on the bolt through the beam hole): hole edge bearing in the oak axle beam', bearTilt, 'psi', al.oakDowel, '<='),
       detail('NORMAL: bolt bearing in the oak axle beam hole', bearBeamN, 'psi', al.oakDowel, '<='),
@@ -287,7 +290,8 @@ export function kingpinCheck(ctx: Ctx): AnalysisCheck {
       + `TOW: ${f(p.pullForceLbf)} lbf x ${p.bridleTieOverloadFactor} = ${f(ld.T)} lbf at the tie, ${f(ld.Th)} lbf horizontal through the bolt in shear (bending over ${f(armTow, 2)}", from the middle of the ${f(L.tongue.z1 - L.tongue.z0, 2)}" oak tongue and beam to the middle of the ${f(L.king.depth, 2)}" king beam) and ${f(ld.Tv)} lbf up at ${f(pitchArm, 1)}" ahead of the pin: a nose-up couple ${f(Mtilt)} lb.in that the bolt resists with the edges of the beam hole (${f(bearTilt, 0)} psi on the hole edges) and bends it (the larger of this couple and the shear moment over the king beam arm): sigma ${f(sTow.sig, 0)}, tau ${f(sTow.tau, 0)}, von Mises ${f(sTow.vm, 0)} psi (the disc edge shares part of it, not counted). `
       + `${bumpText(n.strike, 'Front 1" bump', p)}: fore-aft ${f(n.H)} lbf + design pull ${f(p.pullForceLbf)} = ${f(p.pullForceLbf + n.H)} lbf shear (arm ${f(armWheel, 2)}" from the axle line to the king beam middle); roll moment ${f(n.roll)} lb.in goes to the pad (${f(rn.P)} lbf), kingpin tension ${f(rn.hold)} lbf = ${f(rn.hold / At, 0)} psi; von Mises ${f(sN.vm, 0)} psi. `
       + `${kindText('hard')}: ${bumpText(h.strike, 'Front hard hit', p)}; shear ${f(p.pullForceLbf + h.H)} lbf, roll moment ${f(h.roll)} lb.in (pad ${f(rh.P)} lbf), tension ${f(rh.hold)} lbf: von Mises ${f(sH.vm, 0)} psi. `
-      + `Hole bearing ${f(bearN, 0)} / ${f(bearH, 0)} psi in the king beam and ${f(bearBeamN, 0)} / ${f(bearBeamH, 0)} psi in the ${f(L.beamF.depth, 2)}" axle beam (tow ${f(bearBeamTow, 0)}).`;
+      + `King beam bore: the bolt bears only in the ${f(bore, 3)}" of bore below the nut slot (${f(kd, 3)}" x ${f(bore, 3)}" = ${f(kd * bore, 3)} in2), tow ${f(ld.Th)} lbf: ${f(bearKingTow, 0)} psi vs ${f(al.oakDowel, 0)} (oak dowel bearing across the grain, ${p.oakDowelBearingPsi} x C_M ${p.wetServiceFactorStrength} / ${p.woodSafetyFactor}). `
+      + `Hole bearing ${f(bearN, 0)} / ${f(bearH, 0)} psi in the king beam bore and ${f(bearBeamN, 0)} / ${f(bearBeamH, 0)} psi in the ${f(L.beamF.depth, 2)}" axle beam (tow ${f(bearBeamTow, 0)}).`;
     return governing(ds, how);
   };
   return dualCheck({ id: 'kingpin', label: 'Kingpin bolt (grade 8): tow pull, bump shear and roll tension', group: 'Structure', refs: ['D-56', 'D-47', 'D-55', 'D-58'], primary: 'goal', ...evalBoth(ctx, ev) });

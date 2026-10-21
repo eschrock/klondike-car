@@ -179,6 +179,19 @@ describe('roll pads and the thrust disc (D-58)', () => {
 
 describe('kingpin (grade 8)', () => {
   const c = byId('kingpin');
+  it('D-88: the bolt bears only in the king beam bore BELOW the nut slot (the thin nylock slot is 3/4" tall, its ceiling 7/16" under the deck): tow Th / (5/8 x bore), dowel bearing across the grain', () => {
+    const bore = 7.528 - 7 / 16 - 3 / 4 - KING_BOT;
+    const ld = tieLoad(ctx);
+    const d = det('kingpin', 'tow pull at the tie (x overload): bolt bearing in the king beam bore');
+    expect(rel(d.value, ld.Th / (0.625 * bore))).toBeLessThan(1e-6);
+    expect(d.limit).toBe(det('kingpin', 'bolt bearing in the oak axle beam hole').limit); // the same oak dowel-bearing allowable as the axle beam hole
+    expect(det('kingpin', 'NORMAL: bolt bearing in the king beam bore').value).toBeCloseTo((150 + normal.H) / (0.625 * bore), 6);
+    // at the defaults: about 9/16" of bore, about 806 psi against 1,700 (a full nylock's 1" slot left about 5/16" and about 1,490 psi)
+    const dflt = runChecks(defaultParams()).find((q) => q.id === 'kingpin')!.details!.find((q) => q.name.includes('tow pull at the tie (x overload): bolt bearing in the king beam bore'))!;
+    expect(dflt.value).toBeGreaterThan(780);
+    expect(dflt.value).toBeLessThan(830);
+    expect(dflt.util).toBeLessThan(0.5);
+  });
   const Z = (Math.PI * 0.625 ** 3) / 32, As = (Math.PI * 0.625 ** 2) / 4;
   const kingMid = KING_BOT + KING_D / 2;
   const vm = (S: number, arm: number, T: number) => {
@@ -225,8 +238,9 @@ describe('kingpin (grade 8)', () => {
     expect(c.status).toBe('pass');
     expect(c.statusCargo).toBe('pass');
     expect(c.util!).toBeCloseTo(0.86, 1); // 0.855 at D-74 (2-1/8 in beam: the couple acts on a shallower king beam); 0.77 before
-    expect(det('kingpin', 'NORMAL: bolt bearing in the oak king beam').value).toBeCloseTo((150 + normal.H) / (0.625 * KING_D), 6);
-    expect(det('kingpin', 'NORMAL: bolt bearing in the oak king beam').limit).toBeCloseTo((4000 * 0.85) / 2, 6);
+    // D-88: the bearing length is the bore below the nut slot, not the whole king beam depth
+    expect(det('kingpin', 'NORMAL: bolt bearing in the king beam bore').value).toBeCloseTo((150 + normal.H) / (0.625 * (7.528 - 7 / 16 - 3 / 4 - KING_BOT)), 6);
+    expect(det('kingpin', 'NORMAL: bolt bearing in the king beam bore').limit).toBeCloseTo((4000 * 0.85) / 2, 6);
     const gov = c.details!.reduce((a, b) => (b.util > a.util ? b : a));
     expect(gov.name).toMatch(/tow pull tilt/);
   });
@@ -439,7 +453,7 @@ describe('steer-stops (the check chains, D-58)', () => {
 describe('king-beam (the oak crossmember at the kingpin)', () => {
   const Lspan = 2 * (ctx.L.steer.railYIn - ctx.L.turnIn(44 + 1.5)); // span between the rail inner faces at the king beam, which follow the bow turn-in
   const wA = 1.5 - 0.3125; // each half of the 3 in beam beside the 5/8 bolt hole
-  const slotH = 1; // nut slot cut from the front face, 1 in tall (round 1: washer + 5/8 nylock + threads past it + 1/16, to 1/16)
+  const slotH = 0.75; // nut slot cut from the front face, 3/4 in tall (D-88: the 5/8 thin nylock, 1-1/2 threads past it, 1/16 above and below, to 1/16)
   // net section at the nut slot: rear part full depth, front part only below the slot
   const rects = [{ w: wA, h: KING_D }, { w: wA, h: KING_D - slotH }];
   const Anet = rects.reduce((s, q) => s + q.w * q.h, 0);

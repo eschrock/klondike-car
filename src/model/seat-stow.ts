@@ -120,7 +120,7 @@ export function seatStowPlan(p: Params, L: Layout, parts: Part[]): StowPlan {
   const clear = p.seatStowClearIn;
   const interior = {
     x0: g.x0 + g.pl, x1: g.x1 - g.pl, y0: -(g.hw - g.pl), y1: g.hw - g.pl, zFloor: g.floorZ, zRest: g.floorZ + BOX_FILLET_IN,
-    zCeil: g.zTop - g.pl - g.rimT,
+    zCeil: Math.min(g.zTop - g.pl - g.rimT, g.zWallTop), // D-89: the fixed strip's legs reach down to the coaming top
   };
   const M = backFlipMove(p, L);
   const empty: StowPlan = {

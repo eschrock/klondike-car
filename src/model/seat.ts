@@ -45,8 +45,8 @@ export const HINGE_BACKER_THICK_IN = 1;
 export const HINGE_LEAF_THICK_IN = 1 / 16;
 /** Oak that must be left behind the bottom of a blind latch hole (the stop block against the box end, the backer under the deck), in. */
 export const LATCH_HOLE_WALL_MIN_IN = 0.25;
-/** The lid hinges (storage.ts) stand this far proud of the box end; the crest strip is bedded 0.01 in off them. */
-const LID_HINGE_STANDOFF_IN = 0.12;
+/** D-89: the lid hinges are on top of the box now, so the crest strip beds straight on the box end in a thin glue line of thickened epoxy. */
+const CREST_BED_IN = 1 / 32;
 /** The panel must keep at least this much back veneer behind a threaded-insert blind hole (D-63). */
 export const INSERT_VENEER_MIN_IN = 0.125;
 /** Height (along the back) of the full-width oak crest strip the frameless seat back leans on (D-62). */
@@ -255,7 +255,7 @@ export function seatBackSupport(p: Params, L: Layout): SeatBackSupport {
   const st = L.storage;
   const boxZTop = Math.max(st.zTop, st.zBot + 3 * thinSheet(p).thicknessIn + p.storageLidRimThickIn + p.storageGasketIn, rear ? st.zBot + MIN_REAR_BOX_H_IN : 0);
   const faceXAt = (z: number) => xf((z - s.Pr[2]) / c2z);
-  const boxX1 = rear ? Math.min(Math.max(st.x0 + 0.5, st.x1), faceXAt(boxZTop) - 0.15) : st.x1; // 0.15 in off the leaning panel: the lid hinges stand 0.12 in proud of the box end and the frameless panel (D-62) now passes over them
+  const boxX1 = rear ? Math.min(Math.max(st.x0 + 0.5, st.x1), faceXAt(boxZTop) - 0.15) : st.x1; // 0.15 in off the leaning panel (D-62), which passes over the fixed strip at the fore end of the box top (D-89)
   // The hinge is the stile's front foot (c2 = 0 along the back); the latch pin sits `seatBackLatchHeightIn` up.
   const c2B = 0;
   let c2A = SEAT_POST_HEIGHT_IN;
@@ -535,9 +535,8 @@ export function buildSeat(ctx: Ctx): Part[] {
   }
 
   // Crest strip (D-62, D-63): the bare panel needs a continuous line to lean on; a thin full-width oak strip between the two stop blocks, the top slice of the same wedge, bedded on the box end.
-  // D-63 (build 3c-8): it now spans the WHOLE gap between the blocks (13.5 in, it was a 6.7 in center piece). The lid hinges (storage.ts: 2.5 in leaves, 3/4 in inboard of the stop blocks) stand
-  // LID_HINGE_STANDOFF_IN proud of the same box end at the same height, so the strip's glue face is held that far off the end: a 1/8 in bed of thickened epoxy over the box end and the hinge leaves
-  // (the leaves are screwed on before the strip goes on). The panel still leans on the same sloped crest line.
+  // D-63 (build 3c-8): it now spans the WHOLE gap between the blocks (13.5 in, it was a 6.7 in center piece). D-89: nothing else is on the box end now (the lid hinges are on top
+  // of the box), so the strip beds on the box end in a thin glue line. The panel still leans on the same sloped crest line.
   {
     const yIn = sup.stileY - fw / 2; // half width of the strip: out to the inner faces of the stop blocks
     if (yIn > 0.5) {
@@ -545,7 +544,7 @@ export function buildSeat(ctx: Ctx): Part[] {
       const zAt = (c2: number) => s.Pr[2] + c2z * c2;
       const xAt = (c2: number) => s.Pr[0] + c2x * c2;
       const c2lo = Math.max(0, sup.c2A - CREST_STRIP_IN);
-      const xAft = sup.rear ? sup.xv + LID_HINGE_STANDOFF_IN + 0.01 : sup.xv; // clear of the lid hinge leaves on a box end
+      const xAft = sup.rear ? sup.xv + CREST_BED_IN : sup.xv; // a thin bed of thickened epoxy on a box end
       const outline: Vec2[] = [[xAft, zAt(c2lo)], [xAt(c2lo), zAt(c2lo)], [xAt(sup.c2A), zAt(sup.c2A)], [xAft, zAt(sup.c2A)]];
       parts.push(profilePart(ctx, {
         id: 'seat-crest-strip', partNo: 'seat-crest-strip', name: 'Seat back crest strip', group: 'seat', mat: 'oak', outline, depth: 2 * yIn, basis: 'xz', origin: [0, yIn, 0], grain: 'z', step: STEP.seatStorage, // local z (the extrusion depth) runs across the sled: grain across, along the 13.5 in strip
@@ -553,9 +552,9 @@ export function buildSeat(ctx: Ctx): Part[] {
         stock: { t: Math.max(0.25, xAt(sup.c2A) - xAft), w: CREST_STRIP_IN, l: 2 * yIn }, explode: [0, 0, -1],
         joints: [
           { type: 'glue', to: 'seat-wedge-L', count: 1, note: 'epoxy, end to end with the stop block' }, { type: 'glue', to: 'seat-wedge-R', count: 1, note: 'epoxy, end to end with the stop block' },
-          ...(sup.rear ? [{ type: 'glue' as const, to: 'storage-end-fore', count: 1, note: `epoxy bed (thickened, about ${LID_HINGE_STANDOFF_IN + 0.01} in thick over the lid-hinge leaves) to the box end across the whole width (the rider's push goes into the box through it)` }] : []),
+          ...(sup.rear ? [{ type: 'glue' as const, to: 'storage-end-fore', count: 1, note: 'thickened epoxy to the box end across the whole width (the rider\'s push goes into the box through it)' }] : []),
         ],
-        notes: `D-62, D-63: the bare 12 mm seat-back panel leans on this ${(2 * yIn).toFixed(1)}" × ${CREST_STRIP_IN}" oak strip, which is the top slice of the stop-block wedge continued between the two blocks, so the panel is supported along the whole crest line and bends only as a strip above it (without it the panel would span ${(2 * sup.stileY).toFixed(1)}" between the blocks and overstress). It spans the full ${(2 * yIn).toFixed(1)}" gap between the blocks (13.5 in at the defaults; buy 6/4 stock ${CREST_STRIP_IN}" wide, a 15 in board), end to end with each block. ${sup.rear ? `On a box end the box leaves of the lid hinges (${LID_HINGE_STANDOFF_IN} in proud) are in its way: screw the hinges on first, then bed the strip in a ${(LID_HINGE_STANDOFF_IN + 0.01).toFixed(2)}" layer of thickened epoxy over the box end and the box leaves, its top below the hinge knuckles so nothing stands in front of the lid leaves (D-89; the strip's sloped crest face is where the panel leans, unchanged), clamp it with a caul from the front. ` : ''}Glued to the box end and to the blocks.`,
+        notes: `D-62, D-63: the bare 12 mm seat-back panel leans on this ${(2 * yIn).toFixed(1)}" × ${CREST_STRIP_IN}" oak strip, which is the top slice of the stop-block wedge continued between the two blocks, so the panel is supported along the whole crest line and bends only as a strip above it (without it the panel would span ${(2 * sup.stileY).toFixed(1)}" between the blocks and overstress). It spans the full ${(2 * yIn).toFixed(1)}" gap between the blocks (13.5 in at the defaults; buy 6/4 stock ${CREST_STRIP_IN}" wide, a 15 in board), end to end with each block. ${sup.rear ? 'On a box end it beds straight on the end in thickened epoxy (D-89: the lid hinges are on top of the box), clamped with a caul from the front. ' : ''}Glued to the box end and to the blocks.`,
       }));
     }
   }

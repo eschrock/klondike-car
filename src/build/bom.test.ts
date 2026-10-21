@@ -219,7 +219,7 @@ describe('bom', () => {
     expect(qtyOf(f, /Button plug 5\/8"/)).toBe(4);
     expect(qtyOf(f, /Nylon washer for 1\/4"/)).toBe(4);
     expect(qtyOf(f, /wood screw #6 x 1\/2"/)).toBe(0); // the lid battens use the standard #8 x 5/8 now (D-72: three wood-screw sizes, no fourth)
-    expect(qtyOf(f, /wood screw #8 x 5\/8"/)).toBe(6 + 4); // the hardware-into-thin-stock screws: 6 lid hinge leaves and 4 lid support (D-89: the battens are glued, no screws; turn-buttons, no latches)
+    expect(qtyOf(f, /wood screw #8 x 5\/8"/)).toBe(6 + 6); // the hardware-into-thin-stock screws: the two lid hinges, 3 into the lid frame and 3 into the fixed strip each (D-89: no lid stay; the battens are glued, no screws; turn-buttons, no latches)
     expect(qtyOf(c, /^hook-and-loop$/)).toBeGreaterThanOrEqual(1);
     expect(qtyOf(c, /^edge-banding$/)).toBeGreaterThanOrEqual(1);
     expect(qtyOf(c, /^sealant$/)).toBeGreaterThanOrEqual(1);
@@ -619,9 +619,9 @@ describe('price research applied (2026-10-12)', () => {
 
   it('prices the screws, washers and nuts by the piece where Bolt Depot sells them singly and cheaper than the bag, and the Dominos by their packs', () => {
     const s8 = line('316 wood screw #8 x 1-1/4"');
-    expect([s8.qty, s8.unitUsd, s8.packQty]).toEqual([39, 0.53, undefined]); // D-72: every general-purpose screw is the #8 x 1-1/4 (17 before; +2 the lid turn-button pivots, D-89); 39 x 0.53 = 20.67 is under the $33.95 bag of 100
-    expect(s8.extUsd).toBeCloseTo(39 * 0.53, 2);
-    // D-77: the two brake pivot straps take 4 PAN-HEAD #8 x 1-1/4 each, a line of their own (the flat-head line stays 39); priced as the flat-head screw until quoted
+    expect([s8.qty, s8.unitUsd, s8.packQty]).toEqual([33, 0.53, undefined]); // D-72: every general-purpose screw is the #8 x 1-1/4 (17 before; D-89: +2 the lid turn-button pivots, -6 the lid hinges now take #8 x 5/8 into the fixed strip); 33 x 0.53 = 17.49 is under the $33.95 bag of 100
+    expect(s8.extUsd).toBeCloseTo(33 * 0.53, 2);
+    // D-77: the two brake pivot straps take 4 PAN-HEAD #8 x 1-1/4 each, a line of their own (the flat-head line stays 33); priced as the flat-head screw until quoted
     const pan = line('316 pan-head wood screw #8 x 1-1/4"');
     expect([pan.qty, pan.unitUsd]).toEqual([8, 0.53]); // 316 pan-head wood screws: still the flat-head price, not found
     expect(pan.basis).toBe('estimate');
