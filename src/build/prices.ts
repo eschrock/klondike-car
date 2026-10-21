@@ -280,6 +280,7 @@ export interface ModelCostNote { match: RegExp; note: string; alternatives?: Pri
 export const PURCHASED_MODEL_COST_NOTE: ModelCostNote[] = [
   // No source behind these two model costs: estimates until a quote is read.
   { match: /^brake-foot-tread$/, estimate: true, note: 'ESTIMATE, no source: the model\'s $3 a tread for a ribbed rubber stair-tread or neoprene sheet offcut; not in any price research' },
+  { match: /^storage-bumper$/, estimate: true, note: 'ESTIMATE, no source: the model\'s $2 a bumper, half of a hardware-store pack of clear 1/2" self-stick rubber bumpers (about $4; check one is about 1/8" tall, the two hinge leaves folded together); not in any price research' },
   { match: /^flag-tube$/, estimate: true, note: 'ESTIMATE, no source: the model\'s $4 for a 1" schedule 40 PVC tube cut to length (a 10 ft stick of 1" PVC is the usual sale; ask for a cut piece); not in any price research' },
   { match: /^storage-hinge$/, note: `ESTIMATE, model cost: the 2-1/2" x 1-1/2" (open, 3/4" leaves, D-89) 316 hinge was not found in the ${RESEARCH_DATE} research`, alternatives: [
     gap(found(13.545, 'ea', 'Freeport Marine', 'https://www.freeportmarine.com/products/seachoice-2-316-stainless-steel-butt-hinges.oembed', 'Seachoice 33911 2" x 2" 316 butt hinges, $27.09 a pair, shown as half each', true), 'the hinge is 2" x 2" (1" leaves), not 2-1/2" x 1-1/2": its leaf is wider than the 3/4" lid frame end it lies on (D-89)')] },

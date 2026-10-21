@@ -631,7 +631,12 @@ const storageLid: FigFn = (c) => {
     F.circle(cf.at(pin), 3.5, mat('steel'));
     const xl3 = 238, xr3 = 566;
     F.label(cf.at([(rot[2][0] + rot[3][0]) / 2, (rot[2][1] + rot[3][1]) / 2 - 1]), [xl3, 690], ['the lid, open: it leans past upright', 'onto the seat back and stays there'], { size: 12 });
-    F.label(cf.at(pt(sb.t / 2, sb.H * 0.75)), [xr3, 720], ['seat back, upright', '(flip it forward and the lid', 'would fold right over: open', 'it with a hand on it then)'], { size: 12, color: MUTED });
+    F.label(cf.at(pt(sb.t / 2, sb.H * 0.75)), [xr3, 716], 'seat back, upright', { size: 12, color: MUTED });
+    const bump = box(c, 'storage-bumper-L');
+    if (bump) {
+      C(bump.min[0], g.zTop, bump.max[0], g.zTop + (bump.max[2] - bump.min[2]), mat('rubber'));
+      F.label(cf.at([(bump.min[0] + bump.max[0]) / 2, g.zTop + 0.06]), [xr3, 764], ['rubber bumpers: with the back', 'flipped flat, the lid folds', 'right over and lies on them', '(lower it by hand)'], { size: 12 });
+    }
     F.label(cf.at(pin), [xr3, 840], ['hinge pins, on top across the', 'joint between strip and lid'], { size: 12 });
     if (strip) F.label(cf.at([(xh + x1) / 2, (g.zWallTop + g.zTop) / 2]), [xr3, 888], 'fixed strip', { size: 12 });
     F.label(cf.at([(x0 + lx1) / 2, g.zTop]), [xl3, 880], 'the lid, shut (dashed)', { size: 12, color: MUTED });
@@ -642,7 +647,7 @@ const storageLid: FigFn = (c) => {
   return {
     id: 'storage-lid',
     title: 'The storage lid',
-    caption: `A fixed oak strip is glued across the front of the box top first; the lid is hinged on its aft edge, so the lid is shorter than the box and swings up and back past upright, to rest on the upright seat back (about ${Math.round(openDeg)}°): no lid stay. The lid is a thin plywood panel held in an oak frame: the panel's edge sits in a rabbet along the top inside edge of all four frame pieces, and the corners are joined with small loose tenons. ${battens.length} oak battens under the panel stop it sagging under a cushion or a light load; they are glued under the panel with thickened epoxy, the lid face down and weighted, and butted to the frame sides; no screws go through the thin panel. The frame's underside seals on the gasket on the coaming of the box from [[step:storage-box]], and its front face on the gasket on the strip's aft face. The two hinges lie flat on top across the joint.`,
+    caption: `A fixed oak strip is glued across the front of the box top first; the lid is hinged on its aft edge, so the lid is shorter than the box and swings up and back past upright, to rest on the upright seat back (about ${Math.round(openDeg)}°): no lid stay. The lid is a thin plywood panel held in an oak frame: the panel's edge sits in a rabbet along the top inside edge of all four frame pieces, and the corners are joined with small loose tenons. ${battens.length} oak battens under the panel stop it sagging under a cushion or a light load; they are glued under the panel with thickened epoxy, the lid face down and weighted, and butted to the frame sides; no screws go through the thin panel. The frame's underside seals on the gasket on the coaming of the box from [[step:storage-box]], and its front face on the gasket on the strip's aft face. The two hinges lie flat on top across the joint. With the seat back flipped flat the lid folds right over and lies open on the strip, on two 1/8" rubber bumpers near its front edge: lower it by hand, and don't lean on its far edge, which reaches well past the strip.`,
     svg: F.svg('The storage lid from above, cut across at a batten, and from the side opening onto the seat back'),
   };
 };

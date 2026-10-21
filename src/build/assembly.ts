@@ -2583,7 +2583,7 @@ const TEMPLATES: Template[] = [
             `Ease the top front edge of the lid frame 1/16", like the strip's, and center each knuckle over the gap.`,
             `Pilots for ${screwOf(c, 'storage-hinge-L', /^storage-strip$/)} down into the strip's hinge leg and ${screwOf(c, 'storage-hinge-L', /rim-end-fore/)} down into the lid frame's front end${rimFore ? ` (${fin(rimFore.max[0] - rimFore.min[0])} wide)` : ''}, at the hinge holes.`,
             `Screw them on to check the fit: the lid swings up and back about the knuckles${openDeg < 180 ? `, past upright, and rests on the upright seat back at about ${openDeg}°` : ''}.`,
-            'With the seat back upright, the lid opens past upright and rests on it. With the back flipped flat, open it only with a hand on it: it would fold right over onto the strip.',
+            'With the seat back upright, the lid opens past upright and rests on it. With the back flipped flat, it folds right over and lies open on the strip, on two rubber bumpers fitted at [[step:final-fit]]: lower it by hand, and do not lean on its far edge.',
             'Then take the hinges off for the finish; they go on for good at the hang step. The gasket goes in at the final fit.',
           ], ['storage-hinge-L', 'storage-hinge-R'])]),
         ],
@@ -3009,6 +3009,10 @@ const TEMPLATES: Template[] = [
               const tb = worldAABB(c.by('storage-turn-button-L')!), aftRail = c.by('storage-rim-end-aft') ? worldAABB(c.by('storage-rim-end-aft')!).min[0] : tb.max[0];
               return `Turn-buttons (${tl(ids(/^storage-turn-button-/))}): cut each from an oak offcut, ${fin(tb.max[2] - tb.min[2])} × ${fin(tb.max[1] - tb.min[1])} × ${fin(tb.max[0] - tb.min[0])}, and plane a slight cam (about 1/32") on the underside of the end that swings over the lid, so turning it on pulls the lid down onto the gasket. Drill a 3/16" clearance hole through it, centered over its block, and a 1/8" pilot into the block; one ${screwOf(c, 'storage-turn-button-L', /turn-block/)} down through the button and a nylon washer, snug so it turns stiffly. Turned along the sled it reaches ${fin(tb.max[0] - aftRail)} over the lid frame's aft rail; turned across, it clears the lid.`;
             })()] : []),
+            ...(c.by('storage-bumper-L') ? [(() => {
+              const bp = worldAABB(c.by('storage-bumper-L')!), st = c.by('storage-strip') ? worldAABB(c.by('storage-strip')!) : null;
+              return `Lid bumpers (${tl(ids(/^storage-bumper-/))}): two ${fin(bp.max[0] - bp.min[0])} self-stick rubber bumpers, ${fin(bp.max[2] - bp.min[2])} tall, on the strip top${st ? `, centered ${fin(st.max[0] - (bp.min[0] + bp.max[0]) / 2)} from its front edge and ${fin(st.max[1] - (bp.min[1] + bp.max[1]) / 2)} in from each end (over the lid frame sides)` : ''}. Wipe the finish clean first. With the seat back flipped flat the lid folds right over onto them: they are as tall as the two hinge leaves folded together, so the lid lies on the strip, not on the hinges.`;
+            })()] : []),
             nipples ? 'Aft drain nipples, epoxied in.' : 'The box drain holes and the side drain holes were drilled and sealed earlier: check each is clear.',
             ...(isRemovable(c.p) ? [`Keep the tool pouch (${fin(c.p.toolPouchLengthIn)} × ${fin(c.p.toolPouchWidthIn)} × ${fin(c.p.toolPouchHeightIn)}: ratchet, socket and wrench) with the spare lock nuts and the anti-seize. It rides in the box for cargo use; it is for taking the brake knees off at the truck or in the garage.`] : []),
           ], ids(/^storage-/)),
@@ -3022,7 +3026,7 @@ const TEMPLATES: Template[] = [
           I('Lights and reflectors.', ['Lamp clips snap into the bulkhead and transom hand-holds; heat-set M4 / M3 inserts.', 'The clips must be printed to the real lights, so measure the lights first and fit each clip before the inserts go in (Verify).', 'Reflectors on the gunwale outer face: wipe clean, press 60 s.'], ids(/^(lamp-clip|rear-lamp-clip|front-light|rear-light|reflector-)/)),
           I('Count the pooled fasteners against the parts list: every fastener 316 stainless.', [], ['hardware']),
         ],
-        checks: [`Load test: ${c.p.lashLoadLbf} lbf pull at ${c.p.lashPullAngleDeg}° on one D-ring (its working load); hang the sled by the bowline`, 'Grab boards solid; signs stay on and do not rattle', 'Lid closes on the gasket with no gap; it opens past upright and rests on the upright seat back'],
+        checks: [`Load test: ${c.p.lashLoadLbf} lbf pull at ${c.p.lashPullAngleDeg}° on one D-ring (its working load); hang the sled by the bowline`, 'Grab boards solid; signs stay on and do not rattle', 'Lid closes on the gasket with no gap; it opens past upright and rests on the upright seat back', 'With the seat back flipped flat, the lid folded right over lies on both bumpers'],
       };
     },
   },

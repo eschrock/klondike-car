@@ -40,6 +40,11 @@ const HINGE_PIN_ABOVE_IN = 1 / 16;
 export const LID_SWING_CLEAR_IN = 0.125;
 /** A butt hinge leaf (the model's 316 hinges). */
 const LEAF_IN = 1 / 16;
+/** D-89: a stick-on rubber bumper on the strip top, as tall as the two hinge leaves stacked when the hinge folds shut, so the lid folded right over (seat back flat) lies on it and the strip, not on the hinges. */
+const BUMPER_DIA_IN = 0.5;
+const BUMPER_H_IN = 2 * LEAF_IN;
+const BUMPER_SET_IN = 0.5;
+const BUMPER_MASS_LB = 0.002;
 const HINGE_W_IN = 2.5;
 const HINGE_H_IN = 1.5;
 /** Depth of the lid panel's rabbet in the frame (the joint text's "1/4 deep"): the corner mortises stay below its floor. */
@@ -485,7 +490,14 @@ export function buildStorage(ctx: Ctx): Part[] {
       kind: 'purchased', material: `${stainless(p)} butt hinge`, fab: 'buy', step: STEP.seatStorage, ...span([hingeMid - HINGE_H_IN / 2, hingeMid + HINGE_H_IN / 2], [sg * hingeY - HINGE_W_IN / 2, sg * hingeY + HINGE_W_IN / 2], [zTop, zTop + 2 * HINGE_PIN_ABOVE_IN]),
       sourcing: { vendor: `McMaster-Carr (${stainless(p)} surface-mount butt hinge, 2½" × 1½" open, ¾" leaves)`, costUsd: 9 },
       joints: [{ type: 'screw', to: 'storage-rim-end-fore', count: 3, diaIn: SCREW_DIA_IN[8], fit: hingeRimFit, size: `${screwText(hingeRimFit)} stainless, down into the top of the lid frame's fore end` }, { type: 'screw', to: 'storage-strip', count: 3, diaIn: SCREW_DIA_IN[8], fit: hingeStripFit, size: `${screwText(hingeStripFit)} stainless, down into the top of the strip's hinge leg` }],
-      notes: 'D-89: lies flat on top of the joint between the fixed strip and the lid, the knuckle over the gasket gap (ease both top edges at the joint so it beds down). The lid swings up and aft about it, past upright, and rests on the upright seat back; with the back flipped flat it would fold right over onto the strip, so open it with a hand on it then.' }));
+      notes: 'D-89: lies flat on top of the joint between the fixed strip and the lid, the knuckle over the gasket gap (ease both top edges at the joint so it beds down). The lid swings up and aft about it, past upright, and rests on the upright seat back; with the back flipped flat it folds right over and lies open on the strip\'s bumpers.' }));
+    // D-89: with the back flipped flat the lid folds right over; folded shut the two leaves hold it a leaf stack above the strip, so a bumper that tall near the strip's fore
+    // edge, under each lid frame side, takes the lid's weight on the strip instead of prying on the 3/4" leaves.
+    if (rear) parts.push(cylinder(ctx, { ...common, id: `storage-bumper-${tag}`, partNo: 'storage-bumper', name: `Lid rest bumper ${tag}`, mat: 'fixed', massLb: BUMPER_MASS_LB,
+      kind: 'purchased', material: 'self-stick rubber bumper', fab: 'buy', step: STEP.finish, axis: 'z', radius: BUMPER_DIA_IN / 2, length: BUMPER_H_IN,
+      center: [x1 - BUMPER_SET_IN, sg * (hw - rimW / 2), zTop + BUMPER_H_IN / 2],
+      sourcing: { vendor: `Clear self-stick rubber bumper, ${frac(BUMPER_DIA_IN)}" round × ${frac(BUMPER_H_IN)}" tall (a hardware-store pack of them, about $4; two used)`, costUsd: 2 },
+      notes: `Stuck on the strip top, its center ${frac(BUMPER_SET_IN)}" in from the strip's front edge and over the lid frame side. With the seat back flipped flat the lid folds right over and lies open on the two bumpers: as tall as the two hinge leaves folded together, so the strip carries the lid, not the hinges (D-89).` }));
     // D-89 (round 3): an oak TURN-BUTTON per side instead of a draw latch (the latch had 1/32 in for its lever in a closed 3/4 in well under the transom). Each button pivots on one
     // #8 screw (a nylon washer under the head) driven down into the top of an oak block whose top is level with the lid top: on a rear box the block fills the rear lane between
     // the transom and the aft wall, glued to the transom's inner face. Turned along the sled, the button reaches over the lid

@@ -1135,7 +1135,8 @@ describe('D-79..D-83: the cost-pass build text', () => {
       const lid = stepText(steps, 'storage-lid');
       expect(lid).toMatch(/Make the storage box fixed strip: one oak board/);
       expect(lid).toMatch(/lying flat on top across the joint between the strip and the lid/);
-      expect(lid).toMatch(/With the seat back upright, the lid opens past upright and rests on it\. With the back flipped flat, open it only with a hand on it/);
+      expect(lid).toMatch(/With the seat back upright, the lid opens past upright and rests on it\. With the back flipped flat, it folds right over and lies open on the strip, on two rubber bumpers/);
+      expect(stepText(steps, 'final-fit')).toMatch(/Lid bumpers \(.*\): two 1\/2" self-stick rubber bumpers, 1\/8" tall, on the strip top/);
       expect(lid).toMatch(/rests on the upright seat back at about (9[5-9]|100)°/);
       expect(`${lid} ${stepText(steps, 'final-fit')} ${stepText(steps, 'storage-box')}`).not.toMatch(/lid support|friction stay|hinge backer/i);
     }

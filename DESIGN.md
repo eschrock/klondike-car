@@ -75,7 +75,7 @@ Two people lift it by the rear transom slot and the bow bulkhead hand-hold (the 
 | Thin sheet (follows the spec, D-80) | 6 mm Baltic birch | 6 mm okoume |
 | Drains | drilled holes | stainless nipples |
 | Empty mass | 122.1 lb | 120.3 lb |
-| BOM total (no shipping or tax) | **$1,409** | **$2,298** |
+| BOM total (no shipping or tax) | **$1,413** | **$2,302** |
 
 ### Brake knees (`kneeMount`, D-78)
 Default **Removable knees (bolts, ratchet)** (a checkbox in the viewer toolbar beside Transport mode, and the Brake knees dropdown in Advanced): the knee is fitted dry and held by four 3/8" bolts. The option **Knees stay on (bolted, glued)** keeps the same four bolts, washers, nylock nuts and backer, and epoxies the knee to the rail and chine band:
@@ -92,7 +92,7 @@ Default **Removable knees (bolts, ratchet)** (a checkbox in the viewer toolbar b
 | Time | flap off in about 15 s a side | knee and flap off in about 5 minutes a side (longer the first time), lying beside the sled and reaching in under the deck between the two crossmembers just ahead of the rear wheel |
 | Empty mass | 122.7 lb | 122.7 lb (identical); Transport mode drops 4.0 lb more in the viewer (2 knees and 2 straps 3.2 lb, their 8 bolt sets about 0.8 lb); the mass and lift rows count only the 3.2 lb |
 | Storage packing | 0.87 / 0.88 (Standard / Extreme) | the same in race mode; the pouch lies in the cargo-mode layer (floor-area fill 0.11 to 0.17) |
-| BOM | $1,375 / $2,260 | $1,409 / $2,298: +$33.97 Standard (the ratchet-and-wrench pouch and anti-seize, estimates; you may already own them) |
+| BOM | $1,379 / $2,264 | $1,413 / $2,302: +$33.97 Standard (the ratchet-and-wrench pouch and anti-seize, estimates; you may already own them) |
 
 The analysis is the same in both settings except `brake-mount` (and `brake-abuse`, which reuses it): the glued knee never counted glue or friction, but its uniform dowel bearing treated knee, rail and backer as one unit. For a dry knee the row adds the NDS single-shear yield-mode check of the worst bolt between the 1-3/4" leg and the 1-3/8" of rail and backer left by the plate recess, across the grain: Z' about 296 lbf (mode II, with C_M 0.70 wet, C_D 1.6 for the stomp as an impact, C_g 0.85) against a worst bolt of about 256 lbf, **0.87**, which governs the row and passes. Because that pass leans on C_D 1.6, a second detail holds the knee to a sustained hold at C_D 1.0: **0.69**. The NDS spacing and edge minimums are not met, so the yield-mode value is an estimate (tear-out and splitting are checked separately). Why not pins or clamped inserts: [docs/studies/removable-knee.md](docs/studies/removable-knee.md).
 
@@ -123,7 +123,7 @@ Sheets are always full 4' × 8' (D-68). Solid parts that need more thickness tha
 - **Resting load.** A 250 lb adult sitting or standing on one foot anywhere on the deck passes (capacity 348 lb).
 - **Stability.** Straight tip 45° against a 35° limit; full-lock tip the same; slides before it tips (0.78 of limit).
 - **Sides.** A 50 lbf push moves a gunwale about 0.12" (under the 1/8" "feels solid" mark; reported, not judged).
-- **Cost.** BOM **$1,409** Standard ($2,298 Extreme), excluding shipping and tax; about 6.4% of the Standard total is estimates (the $30 ratchet-and-wrench pouch for the removable knees is most of it), the rest quoted from listings ([docs/price-research/price-research-cost-pass-2026-10.md](docs/price-research/price-research-cost-pass-2026-10.md) and the earlier files). Owned shop stock (beech Dominos, sandpaper, supplies, Titebond III, mineral spirits, contact cement, paracord) is listed at $0 (D-79).
+- **Cost.** BOM **$1,413** Standard ($2,302 Extreme), excluding shipping and tax; about 6.7% of the Standard total is estimates (the $30 ratchet-and-wrench pouch for the removable knees is most of it), the rest quoted from listings ([docs/price-research/price-research-cost-pass-2026-10.md](docs/price-research/price-research-cost-pass-2026-10.md) and the earlier files). Owned shop stock (beech Dominos, sandpaper, supplies, Titebond III, mineral spirits, contact cement, paracord) is listed at $0 (D-79).
 - **Materials by section (Standard BOM).** Lumber $435 (Peach State 4/4 and 5/4 only), plywood $139, metal $107, purchased parts $287, fasteners $147, consumables $165, finishing touches $138. Parts sold in packs far larger than the sled needs are priced by the whole pack in their own section (there is no separate bulk section).
 
 ## 6. How the app is organized

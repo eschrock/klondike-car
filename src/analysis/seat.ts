@@ -241,7 +241,7 @@ export function lidOpenCheck(ctx: Ctx): AnalysisCheck {
     sense: '>=',
     refs: ['D-89', 'D-41'],
     how: back
-      ? `The lid is hinged on the aft edge of a fixed ${ctx.p.storageLidStripIn}" oak strip across the front of the box top, the hinges flat on top, so it swings up and back past upright and leans on the upright seat back (${ctx.p.seatBackAngleDeg}° recline) at ${f(ang, 0)}° (${f(ang - 90, 1)}° past upright; 1/8" clear of the back until it leans there): no stay needed. The limit is 2° past upright, so the lid stays open by itself. With the back flipped flat it would fold over onto the strip, so open it with a hand on it then.`
+      ? `The lid is hinged on the aft edge of a fixed ${ctx.p.storageLidStripIn}" oak strip across the front of the box top, the hinges flat on top, so it swings up and back past upright and leans on the upright seat back (${ctx.p.seatBackAngleDeg}° recline) at ${f(ang, 0)}° (${f(ang - 90, 1)}° past upright; 1/8" clear of the back until it leans there): no stay needed. The limit is 2° past upright, so the lid stays open by itself. With the back flipped flat it folds right over and lies open on the strip, on two rubber bumpers as tall as the folded hinge leaves, so the strip carries it, not the hinges: lower it by hand, and do not lean on its far edge, which reaches well past the strip.`
       : 'No seat back stands over this box: the lid opens fully.',
   });
 }
