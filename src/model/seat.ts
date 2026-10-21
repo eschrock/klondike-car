@@ -515,7 +515,7 @@ export function buildSeat(ctx: Ctx): Part[] {
   const wedgeFit = pickWoodScrew(8, L.ply, zA - sup.zb); // the clamping screws cross the deck and bite the block
   for (const { s: sg, tag } of SIDES) {
     const j: Joint[] = [{ type: 'glue', to: 'deck', count: 1, note: 'epoxy to the deck (and screwed from below)' },
-      { type: 'screw', to: 'deck', count: 2, diaIn: SCREW_DIA_IN[8], fit: wedgeFit, size: `2 × ${screwText(wedgeFit)} ${stainless(p)} flat-head screws up from below through the deck and ${f2(wedgeFit.lenIn - wedgeFit.gripIn)} in into the block`, note: 'clamping screws for the epoxy bed; countersink the heads in the deck underside' }];
+      { type: 'screw', to: 'deck', count: 2, diaIn: SCREW_DIA_IN[8], fit: wedgeFit, size: `2 × ${screwText(wedgeFit)} ${stainless(p)} flat-head screws up from below through the deck and ${f2(wedgeFit.lenIn - wedgeFit.gripIn)} in into the block`, note: 'clamping screws for the epoxy bed; countersink the heads in the deck underside. Drilled from below with the hull inverted, measured from the transom (not in the deck\'s Shaper file)' }];
     if (sup.rear) j.push({ type: 'glue', to: 'storage-end-fore', count: 1, note: 'epoxy to the box end; the push of the rider goes into the box through it' });
     j.push({ type: 'pin', to: `seat-pin-${tag}`, count: 1, diaIn: 2 * PIN_R_IN, size: `3/8" blind hole ${f4(lg.upHoleIn)}" deep (upright latch), with a 1/16" annular detent groove ${f4(lg.upGrooveIn)}" from the mouth`, note: `drilled square to the back's rear face ${pinZ.toFixed(2)}" up from the hinge axis; the block is ${lg.blockIn.toFixed(2)}" thick along the hole there, so ${f4(lg.upLeftIn)}" of oak is left behind it (set from the block outline, never into the box end); a ball-lock pin does not retain in a blind hole (build 3c S4)` });
     parts.push(profilePart(ctx, {
@@ -549,12 +549,13 @@ export function buildSeat(ctx: Ctx): Part[] {
       parts.push(profilePart(ctx, {
         id: 'seat-crest-strip', partNo: 'seat-crest-strip', name: 'Seat back crest strip', group: 'seat', mat: 'oak', outline, depth: 2 * yIn, basis: 'xz', origin: [0, yIn, 0], grain: 'z', step: STEP.seatStorage, // local z (the extrusion depth) runs across the sled: grain across, along the 13.5 in strip
        
-        stock: { t: Math.max(0.25, xAt(sup.c2A) - xAft), w: CREST_STRIP_IN, l: 2 * yIn }, explode: [0, 0, -1],
+        // The blank is the WHOLE wedge: as thick as its bottom edge (the thick end; the panel leans back, so the top edge is the thin one), as tall as the sloped face.
+        stock: { t: Math.max(0.25, ...outline.map((q) => q[0] - xAft)), w: CREST_STRIP_IN, l: 2 * yIn }, explode: [0, 0, -1],
         joints: [
           { type: 'glue', to: 'seat-wedge-L', count: 1, note: 'epoxy, end to end with the stop block' }, { type: 'glue', to: 'seat-wedge-R', count: 1, note: 'epoxy, end to end with the stop block' },
           ...(sup.rear ? [{ type: 'glue' as const, to: 'storage-end-fore', count: 1, note: 'thickened epoxy to the box end across the whole width (the rider\'s push goes into the box through it)' }] : []),
         ],
-        notes: `D-62, D-63: the bare 12 mm seat-back panel leans on this ${(2 * yIn).toFixed(1)}" × ${CREST_STRIP_IN}" oak strip, which is the top slice of the stop-block wedge continued between the two blocks, so the panel is supported along the whole crest line and bends only as a strip above it (without it the panel would span ${(2 * sup.stileY).toFixed(1)}" between the blocks and overstress). It spans the full ${(2 * yIn).toFixed(1)}" gap between the blocks (13.5 in at the defaults; buy 6/4 stock ${CREST_STRIP_IN}" wide, a 15 in board), end to end with each block. ${sup.rear ? 'On a box end it beds straight on the end in thickened epoxy (D-89: the lid hinges are on top of the box), clamped with a caul from the front. ' : ''}Glued to the box end and to the blocks.`,
+        notes: `D-62, D-63: the bare 12 mm seat-back panel leans on this ${(2 * yIn).toFixed(1)}" × ${CREST_STRIP_IN}" oak strip, which is the top slice of the stop-block wedge continued between the two blocks, so the panel is supported along the whole crest line and bends only as a strip above it (without it the panel would span ${(2 * sup.stileY).toFixed(1)}" between the blocks and overstress). It spans the full ${(2 * yIn).toFixed(1)}" gap between the blocks (13.5 in at the defaults), ripped to a wedge ${(Math.max(...outline.map((q) => q[0])) - xAft).toFixed(2)}" thick at the bottom edge and ${Math.max(0, xAt(sup.c2A) - xAft).toFixed(2)}" at the top, from the board the cut list names, end to end with each block. ${sup.rear ? 'On a box end it beds straight on the end in thickened epoxy (D-89: the lid hinges are on top of the box), clamped with a caul from the front. ' : ''}Glued to the box end and to the blocks.`,
       }));
     }
   }
@@ -608,13 +609,13 @@ export function buildSeat(ctx: Ctx): Part[] {
         outline: [W(bu0, sn0), W(bu1, sn0), W(bu1, sn1), W(bu0, sn1)], depth: GRIP_BACKING_T_IN, basis: 'xz', origin: [0, sg > 0 ? yOut + GRIP_BACKING_T_IN : yOut, 0], step: STEP.finish, fab: 'bandsaw',
         joints: [
           { type: 'glue', to: `side-${tag}-gunwale`, count: 1, size: 'epoxied to the outer face of the outer gunwale band', note: 'spreads the five screw heads over the band' },
-          { type: 'glue', to: `seat-grip-cap-${tag}`, count: 1, size: 'epoxied into the pocket on the back of the oak cap', note: 'the strip and the cap are one piece when bedded on the band' },
+          { type: 'glue', to: `seat-grip-cap-${tag}`, count: 1, size: 'covered by the oak cap, which is glued on over the strip and the screw heads after the screws are set (its back is recessed for them)', note: 'the cap goes on last and hides the strip' },
           // the screw holes, one on each screw line of the board (local frame = model x, z; mid-thickness)
-          { type: 'hole', to: `side-${tag}-gunwale`, count: bolts.length, diaIn: GRIP_BOLT_DIA_IN + 1 / 32, size: `${bolts.length} holes 9/32" (a clearance for the 1/4" screws) through the strip, on the screw lines of the grab board; drill them with the board clamped on, one bit through every layer`,
+          { type: 'hole', to: `side-${tag}-gunwale`, count: bolts.length, diaIn: GRIP_BOLT_DIA_IN + 1 / 32, size: `${bolts.length} holes 9/32" (a clearance for the 1/4" screws) through the strip, on the screw lines of the grab board, drilled on the drill press from its drawing (stainless: a cobalt bit and cutting oil); the sandwich is drilled through the board's own holes`,
             at: bolts.map(([bu, bn]): Vec3 => { const w = W(bu, bn); return [w[0], w[1], GRIP_BACKING_T_IN / 2]; }) },
         ],
         sourcing: { vendor: `McMaster-Carr or Speedy Metals (${stainless(p)} flat bar ${frac(GRIP_BACKING_T_IN)}" × ${frac(GRIP_BACKING_H_IN)}", a ${frac(sLen)}" piece, cut square on the metal bandsaw and deburred; cut and drill only)` },
-        notes: `Backing strip for the ${GRIP_BOLTS} grab-board screw heads: ${stainless(p)} flat bar ${frac(GRIP_BACKING_T_IN)}" × ${frac(GRIP_BACKING_H_IN)}" × ${frac(sLen)}" that goes on the outside of the outer gunwale band, under the oak cap. It spreads the pull of the screw heads over the band, which is too thin to take them. Cut it square on the metal bandsaw and deburr the cut edges (cut and drill only, no bending or filing to shape). Drill it with the board clamped on, one bit through all the layers. It is epoxied to the band, and the oak cap is glued over it.`,
+        notes: `Backing strip for the ${GRIP_BOLTS} grab-board screw heads: ${stainless(p)} flat bar ${frac(GRIP_BACKING_T_IN)}" × ${frac(GRIP_BACKING_H_IN)}" × ${frac(sLen)}" that goes on the outside of the outer gunwale band, under the oak cap. It spreads the pull of the screw heads over the band, which is too thin to take them. Cut it square on the metal bandsaw and deburr the cut edges (cut and drill only, no bending or filing to shape). Drill its holes on the drill press from its drawing; the side is drilled through the grab board's own holes, and the strip lines up on them. It is epoxied to the band, and the oak cap is glued over it after the screws are set.`,
       });
       strip.kind = 'metal';
       strip.stock = { t: GRIP_BACKING_T_IN, w: GRIP_BACKING_H_IN, l: sLen }; // the cut list reads the flat-bar stock from here, not from the sourcing text
@@ -665,7 +666,7 @@ export function addGripBandJoints(L: Layout, parts: Part[]): void {
     const hj = strip?.joints?.find((j) => j.to === outer?.id && j.type === 'hole');
     if (strip && outer && hj?.at) {
       const at = hj.at.map((l): Vec3 => { const w = worldPt(strip, l); return localPoint(outer.transform, [w[0], sg * (L.hwC + L.side - L.turnIn(w[0]) - L.sideBand / 2), w[2]]); });
-      (outer.joints ??= []).push({ ...hj, to: strip.id, at });
+      (outer.joints ??= []).push({ ...hj, to: strip.id, at, size: `${hj.count} holes 9/32" (a clearance for the 1/4" screws) through the outer band, on the screw lines of the grab board: drilled through the board's own holes with the rest of the sandwich` });
     }
   }
 }

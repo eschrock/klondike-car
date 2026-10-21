@@ -251,6 +251,7 @@ function fastenerKind(j: { type: string; size?: string; note?: string }): Fasten
   if (/screw eye/.test(text) && /(aft|front|rear|outer) face of the/.test(text) && !/end face/.test(text)) return 'pilot';
   if (/screw eye|end face/.test(text)) return 'endface';
   if (/snap detent/.test(text)) return 'none';
+  if (/not in the (?:[a-z]+'s )?shaper file/.test(text)) return 'none'; // drilled in place (through the mating part) or from a layout at the bench: a file mark would only be a second, competing position
   if (j.type === 'threaded-insert' || /threaded insert|heat-set insert/.test(text)) return 'blind';
   if (/(down|up) through the .{0,40}?into/.test(text)) return 'pilot';
   if (j.type === 'pin' && /clevis/.test(text) && !/clearance hole/.test(text)) return 'cross';
@@ -425,6 +426,12 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
       const m = new RegExp(String.raw`${NUM}"?\s*(?:316\s*)?(?:nipple|drain hole)`).exec(text);
       const dia = j.diaIn ?? (m ? parseInches(m[1]) : 0.375);
       const got = pts.map(resolve).filter((x): x is NonNullable<typeof x> => x !== null);
+      // The thin web is cut on the Shaper before the glue-up, so its file CUTS the drain holes; they then guide the bit through the bands. An oak band's file never carries them.
+      if (part.kind === 'sheet' && j.type === 'hole') { // (the Extreme spec's scupper nipples are drilled through the glued sandwich: no file cut)
+        for (const g of got) items.push({ k: 'cutHole', c: g.uv, dia });
+        if (got.length) holeFeature(j, got.map((g) => g.uv), dia, undefined, 'hole', `hole Ø${fmt(dia)} through, inside cut (the drain hole: it guides the bit through the bands after the glue-up)`);
+        continue;
+      }
       for (const g of got) items.push({ k: 'drill', c: g.uv, dia, label: `drain Ø${fmt(dia)} after glue-up` });
       if (got.length) holeFeature(j, got.map((g) => g.uv), dia, undefined, 'drill', `Drain hole Ø${fmt(dia)}, drill through the glued-up sandwich (inner band, web, outer band)`);
       continue;
@@ -480,6 +487,8 @@ export function analyzeShaperPart(part: Part, all: Part[], p: Params): PartDrawi
     for (const j of q.joints ?? []) {
       if (j.to !== part.id || !j.at?.length || !j.size || !['bolt', 'screw', 'pin', 'knob', 'hole'].includes(j.type)) continue;
       if ((part.joints ?? []).some((own) => own.to === q.id && own.type === j.type)) continue;
+      // A drain hole another layer of the sandwich records at the same place: this part's own drain joint already draws it (one hole, one mark).
+      if (/drain hole/.test(j.size) && (part.joints ?? []).some((own) => own.type === 'hole' && /drain hole/.test(own.size ?? ''))) continue;
       const kindF = fastenerKind(j);
       if (kindF === 'none' || kindF === 'cross' || kindF === 'endface') continue;
       const qm = q.transform;

@@ -353,8 +353,8 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       id: 'brake-knee',
       title: 'Brake: pin, flap tongue and tire clearance on the first knee',
       how: [
-        it('Cut ONE knee blank first, before cutting the other knee and the flaps.', [
-          'At the "Brake knees" assembly step, shape the first knee and try its pocket with a scrap block the size of the flap tongue with its pivot block on: it must slide in with a little play all round. Cut the other knee only when it does.',
+        it('At the "Brake knees" assembly step, shape ONE knee first, before cutting the other knee.', [
+          'Shape it and try its pocket with a scrap block the size of the flap tongue with its pivot block on: it must slide in with a little play all round. Cut the other knee only when it does.',
           `The full test comes at the "Brake flaps" step: screw the stainless strap on, drill the pin hole through its hole, and use the real ${fr(p.brakePivotPinDiaIn)}" clevis pin, the hitch-pin clip and the flap tongue with its pivot block clamped in the pocket.`,
           p.kneeMount === KNEE_MOUNT.removable
             ? 'The removable knees come off after the wheel dry fit anyway, so a knee that fails the full test is taken off and remade.'
@@ -372,23 +372,8 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       ifFails: `Adjust the pocket width or the pin-hole height on the real knee before cutting the rest; enter the measured friction in the design (${lbl('brakeChockMu')}, ${lbl('brakeChockMuFouled')}; the park-hold row uses the lower).`,
       partIds: ids(parts, /^(brake-knee|brake-flap|brake-pivot|brake-chock|brake-pad|brake-shoe)/),
       paramKeys: verifyKeys(['brakeChockMu', 'brakeChockMuFouled']),
-      when: 'before cutting',
+      when: 'at assembly',
       refs: ['D-57', 'D-65'],
-    },
-    {
-      id: 'grab-reach',
-      title: 'Grab board: can a scout reach the hand hole?',
-      how: [
-        it('Cut a cardboard board the size of the grab board (Shaper pattern, hole cut out) and tape it in place on one gunwale.', [`The hole's center is ${fr(p.grabHoleAheadOfHpointIn, 8)}" ahead of the hip point, which is ${fr(p.seatBehindHpointIn, 8)}" ahead of the rear edge of the seat cushion, and ${fr(p.grabBoardFootIn + p.grabHoleHeightIn / 2, 16)}" above the gunwale top.`]),
-        it('Sit the smallest and the biggest scout in the sled, gloved, with the seat pad on and the seat back up.', ['Let the arm hang, then bring the forearm up and forward to the hole.']),
-        it('Watch where the hand lands and how the wrist and elbow sit.'),
-      ],
-      passList: ['The gloved hand finds the hole without reaching or folding the arm back.', 'The elbow stays bent, never locked or behind the hip.', 'The knuckles clear the gunwale top and the thigh.'],
-      ifFails: `Slide the hole fore or aft (${lbl('grabHoleAheadOfHpointIn')}: forward for long arms, back for short ones; the flat board cannot go much farther forward than it is, where the sides start to turn in) or change the oak under the hole (${lbl('grabBoardFootIn')}), then re-run the checks.`,
-      partIds: ids(parts, /^seat-grip-[LR]$/),
-      paramKeys: [],
-      when: 'before cutting',
-      refs: ['D-84', 'D-57'],
     },
     {
       id: 'bow-rib-clearance',
@@ -411,6 +396,21 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       paramKeys: verifyKeys(['sideRibFrontXIn']),
       when: 'at assembly',
       refs: ['D-76'],
+    },
+    {
+      id: 'grab-reach',
+      title: 'Grab board: can a scout reach the hand hole?',
+      how: [
+        it('At the step that drills the D-ring holes and fits the grab boards, before anything is drilled for them: cut a cardboard board the size of the grab board (its pattern, hole cut out) and tape it in place on one gunwale.', [`The hole's center is ${fr(p.grabHoleAheadOfHpointIn, 8)}" ahead of the hip point, which is ${fr(p.seatBehindHpointIn, 8)}" ahead of the rear edge of the seat cushion, and ${fr(p.grabBoardFootIn + p.grabHoleHeightIn / 2, 16)}" above the gunwale top.`]),
+        it('Sit the smallest and the biggest scout in the sled, gloved, on the seat pad (or two of its kneeling pads at the seat\'s place), with the seat back panel held upright at its hinge line.', ['Let the arm hang, then bring the forearm up and forward to the hole.']),
+        it('Watch where the hand lands and how the wrist and elbow sit.'),
+      ],
+      passList: ['The gloved hand finds the hole without reaching or folding the arm back.', 'The elbow stays bent, never locked or behind the hip.', 'The knuckles clear the gunwale top and the thigh.'],
+      ifFails: `Slide the hole fore or aft (${lbl('grabHoleAheadOfHpointIn')}: forward for long arms, back for short ones; the flat board cannot go much farther forward than it is, where the sides start to turn in) or change the oak under the hole (${lbl('grabBoardFootIn')}), then re-run the checks and cut the oak boards from the new file (a board already cut is cut again).`,
+      partIds: ids(parts, /^seat-grip-[LR]$/),
+      paramKeys: [],
+      when: 'at assembly',
+      refs: ['D-84', 'D-57'],
     },
     {
       id: 'brake-strap',

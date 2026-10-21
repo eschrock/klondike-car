@@ -314,6 +314,11 @@ const defs = {
     default: 0.5, min: 0.375, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-62, build 3c M4',
     note: 'D-62: nothing is screwed into the 4 mm web (a tee-nut in 0.157 in ply has 0.1 in of bite, and a 1 in screw poked into the cabin). Each side sign hangs on two vertical oak backing strips glued on the INSIDE of the web between the chine and gunwale bands, each with two #10-32 threaded inserts (3/8 long) for the knobs. The strips stand this far inboard of the web (0.27 in proud of the inner band faces), at the sign knob stations behind the box. D-63: the knob screw length is derived from this thickness and the 0.234 in sign standoff (7/8 in at the default: sign + standoff disc + web = 0.55 in, 0.33 in into the insert, 1/8 in of wood left behind its tip).',
   },
+  signStandoffDiscDiaIn: {
+    label: 'Sign standoff disc diameter (oak)', group: 'body', unit: 'in',
+    default: 0.75, min: 0.5, max: 1.25, step: 0.125, status: 'assumed', ref: 'D-63',
+    note: 'The four oak discs epoxied to the back of each sign, one around each knob hole, fill the gap between the sign and the web (the band thickness plus the 1/16 in the sign stands proud of the bands), so the sign cannot flex or be levered across an air gap. 3/4 in is a stock plug cutter (on the drill press, then released from the board on the bandsaw) and bears on about 0.4 sq in of web around the 7/32 in screw hole.',
+  },
   sideKickLbf: {
     label: 'Side web lean / kick load', group: 'loads', unit: 'lbf',
     default: 50, min: 20, max: 150, step: 5, status: 'assumed', ref: 'D-62, eng 3c N-1',

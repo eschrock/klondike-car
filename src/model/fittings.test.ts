@@ -37,7 +37,7 @@ describe('seat', () => {
     for (const id of ['seat-back-panel', 'seat-crest-strip', 'seat-wedge-L', 'seat-wedge-R', 'seat-hinge-L', 'seat-hinge-R', 'seat-cushion'])
       expect(removed.has(id), id).toBe(true);
     expect(removed.has('seat-back-pad')).toBe(false);
-    expect(removed.has('seat-pin-L')).toBe(false); // the pins ride on their lanyards
+    expect(removed.has('seat-pin-L')).toBe(true); // the quick-release pins stay in for the truck, holding the flat back down (motion audit 2026-10-21; they ride on their lanyards)
   });
   it('the frameless 12 mm panel (D-62) is hinged at its foot by inserts in its front face, has a latch pin hole at each station, and the matching blind hole is in the stop block behind it', () => {
     const panel = byId.get('seat-back-panel')!;
@@ -186,7 +186,7 @@ describe('storage box', () => {
     // lx = 15 − 2·0.25 = 14.5, w = 27 − 0.5 = 26.5, h = 14 − 9 = 5 (floor = deck, no floor panel): base 14.5 × 26.5 × 5 = 1,921.25 in³.
     // Coaming zone: ledge = 0.5 − 0.25 = 0.25 each side: 14 × 26 × 0.375 = 136.5. Lid zone: lip = 1 − 0.25 = 0.75: 13 × 25 × (0.5 + 0.125) = 203.125.
     const g: StorageGeometry = { x0: 0, x1: 15, hw: 13.5, zBot: 9, zTop: 15.2, zWallTop: 14.375, zPlyTop: 14, coamT: 0.375, coamW: 0.5, deckFloor: true,
-      pl: 0.25, rimW: 1, rimT: 0.5, gasket: 0.125, floorZ: 9, lidUnderZ: 14.95, xh: 15.125, lidX1: 15 }; // the lid zone runs from x0 to the lid's fore face (D-89)
+      pl: 0.25, rimW: 1, rimT: 0.5, gasket: 0.125, floorZ: 9, lidUnderZ: 14.95, xh: 15.125, lidX0: 0, lidX1: 15 }; // the lid zone runs from the lid's aft face (here flush with x0) to its fore face (D-89)
     const i = interiorOf(g);
     expect(i.lx).toBeCloseTo(14.5, 9);
     expect(i.w).toBeCloseTo(26.5, 9);
@@ -430,7 +430,7 @@ describe('no unintended overlaps for the seat, storage and fittings', () => {
     [/^seat-hinge-[LR]$/, /^(seat-wedge-[LR]|seat-back-(stile|rail|panel))/], // the knuckle at the foot of the back is part of the joint
     [/^seat-pin-[LR]$/, /^(seat-back-stile|seat-back-panel|seat-wedge)-?[LR]?$/], // the pin passes through the panel into the stop block
     [/^flag-block-/, /^(flag-tube|side-)/], // the blocks hold the tube against the side
-    [/^seat-grip-backing-[LR]$/, /^seat-grip-cap-[LR]$/], // D-84: the strip is epoxied into the pocket on the back of the oak cap (the pocket is not cut out of the model)
+    [/^seat-grip-backing-[LR]$/, /^seat-grip-cap-[LR]$/], // D-84: the strip sits in the pocket on the back of the oak cap (the cap is glued on over it) (the pocket is not cut out of the model)
   ];
   // FINDING: a seat back of 22 in or wider (the param allows up to 26) makes the stile backers overlap the box walls (0.11 in) in the 22 in box interior; validateParams has no check for it.
   const variants: Record<string, Partial<Params>> = {

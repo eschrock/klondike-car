@@ -384,12 +384,13 @@ describe('signs (D-57): the Troop 455 sign is back on the tall rear part of each
   it('on by default: two ply blanks banded in oak, outside the side stack, hung on thumb-knob screws; NOT removable (D-65: they stay on for transport)', () => {
     expect(defaults.showSideSigns).toBe(1);
     const signs = parts.filter((x) => /^sign/.test(x.id));
-    expect(signs.filter((x) => !/backer/.test(x.id)).map((x) => x.id).sort()).toEqual(['sign-L', 'sign-R']);
+    expect(signs.filter((x) => !/backer|standoff/.test(x.id)).map((x) => x.id).sort()).toEqual(['sign-L', 'sign-R']);
+    expect(signs.filter((x) => /^sign-standoff-/.test(x.id))).toHaveLength(8); // D-63: an oak standoff disc behind each knob screw, a part so it reaches the cut list
     expect(signs.filter((x) => /backer/.test(x.id))).toHaveLength(0); // D-85: the knobs go into the box rib and the rear rib, so no backing strips
     const under = buildModel({ ...defaults, storageLocation: STORAGE_LOCATION.underSeat });
     expect(under.filter((x) => /^sign-backer/.test(x.id)).map((x) => x.id).sort()).toEqual(['sign-backer-L1', 'sign-backer-L2', 'sign-backer-R1', 'sign-backer-R2']); // D-62: with no rear box, oak backing strips inside the 4 mm web
     for (const x of under.filter((q) => /^sign-backer/.test(q.id))) { expect(x.group).toBe('body'); expect(x.material).toBe('white oak'); expect(x.removable).toBeFalsy(); }
-    for (const s of signs.filter((x) => !/backer/.test(x.id))) {
+    for (const s of signs.filter((x) => !/backer|standoff/.test(x.id))) {
       expect(s.removable).toBeFalsy(); // Eric, D-65: taking the signs off for the truck "seems excessive"
       expect(s.group).toBe('body');
       expect(s.notes).toMatch(/STAYS ON for transport/);
@@ -425,7 +426,7 @@ describe('signs (D-57): the Troop 455 sign is back on the tall rear part of each
     expect(l.min[0]).toBeCloseTo(r.min[0], 9);
     const m = buildModel({ ...defaults, showSideSigns: 0 });
     for (const x of m.filter((q) => q.id !== 'hardware')) expect(get(parts, x.id).massLb, x.id).toBeCloseTo(x.massLb, 9);
-    expect(parts.length).toBe(m.length + 2); // the two signs (D-85: no backing strips, the ribs take the knobs)
+    expect(parts.length).toBe(m.length + 2 + 8); // the two signs and their eight standoff discs (D-85: no backing strips, the ribs take the knobs)
   });
 });
 

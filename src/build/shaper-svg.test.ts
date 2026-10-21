@@ -326,23 +326,24 @@ describe('Shaper SVG files', () => {
     expect(n).toBeGreaterThan(3);
   });
 
-  it('puts the flat-position seat-pin clearance holes in the deck, and (Standard spec, D-83) the two 3/8 in box drain holes beside them', () => {
+  it('cuts the two 3/8 in box drain holes in the deck (Standard spec, D-83), and nothing that is drilled in place: the flat-position seat-pin holes (through the panel\'s own holes) and the stop-block screws (from below)', () => {
     const deck = fileOf('deck');
-    const pin = deck.features.filter((x) => x.kind === 'hole' && x.joint === 'pin');
-    expect(pin.reduce((n, x) => n + x.count, 0)).toBe(2);
-    for (const x of pin) expect(x.diaIn).toBeCloseTo(13 / 32, 4);
+    expect(deck.features.filter((x) => (x.kind === 'hole' || x.kind === 'drill') && x.joint === 'pin')).toEqual([]);
+    expect(deck.features.filter((x) => /^seat-wedge-/.test(x.to ?? ''))).toEqual([]);
+    expect(deck.features.some((x) => x.kind === 'note' && /seat-pin-L/.test(String(x.to ?? '')))).toBe(true); // a note in the file, not a cut
     const drain = deck.features.filter((x) => x.kind === 'hole' && x.joint === 'hole');
     expect(drain.reduce((n, x) => n + x.count, 0)).toBe(2);
     for (const x of drain) expect(x.diaIn).toBeCloseTo(3 / 8, 4); // exactly the drain size, not a bolt clearance
     const holes = paths(deck.svg).filter((t) => attr(t, 'shaper:cutType') === 'inside');
-    expect(holes.length).toBe(4);
+    expect(holes.length).toBe(2);
   });
 
-  it('D-83: the side drains are drilled after glue-up, marked on the web as 3/8 in drill guides (no cut), and the Extreme spec keeps the nipple drill marks', () => {
+  it('D-83: the web\'s file CUTS the two 3/8 in side drains once (they guide the bit through the bands after the glue-up; no second drill mark), and the Extreme spec keeps the nipple drill marks', () => {
     const web = fileOf('side-L-web');
     const drains = web.features.filter((x) => /drain/i.test(x.label));
     expect(drains.reduce((n, x) => n + x.count, 0)).toBe(2);
-    for (const x of drains) { expect(x.diaIn).toBeCloseTo(3 / 8, 4); expect(x.label).toMatch(/glued-up sandwich/); }
+    for (const x of drains) { expect(x.diaIn).toBeCloseTo(3 / 8, 4); expect(x.kind).toBe('hole'); expect(x.label).toMatch(/inside cut/); }
+    expect(web.features.filter((x) => x.kind === 'drill')).toEqual([]);
     const ext = { ...p, weatherSpec: 1 };
     const w2 = shaperFiles(buildModel(ext), ext).find((f) => f.partIds.includes('side-L-web'))!;
     expect(w2.features.filter((x) => /drain/i.test(x.label)).reduce((n, x) => n + x.count, 0)).toBe(2);

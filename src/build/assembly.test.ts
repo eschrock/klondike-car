@@ -495,8 +495,8 @@ describe('build review round 2: brake knees before the underside finish (MUST-A)
     expect(t).toMatch(/one-knee test/);
     expect(t).not.toMatch(/stay bolted on for finishing/);
     expect(t).not.toMatch(/the other three knees/);
-    // The one-knee verify item is a "before cutting" gate: it is done in step 0, ahead of the knee step.
-    expect(verifyChecklist(parts, p).find((v) => v.id === 'brake-knee')!.when).toBe('before cutting');
+    // The one-knee verify item needs a knee: it is done at the knee step (listed in step 0 with the other at-assembly checks).
+    expect(verifyChecklist(parts, p).find((v) => v.id === 'brake-knee')!.when).toBe('at assembly');
     expect(idx('verify')).toBeLessThan(idx('brake-knees'));
   });
 
@@ -815,7 +815,7 @@ describe('readability round 2 (steps)', () => {
       expect(fb).toMatch(/Clamp-plate bolts, 4 plates:[^\n]*1-1\/4", 6-3\/4", 20-3\/4" and 26-1\/4" from the left end/);
       expect(fb).toMatch(/Eye-bolt holes[^\n]*5-3\/4" and 21-3\/4" from the left end/);
       expect(fb).toMatch(/pilots, both pads:[^\n]*4" and 23-1\/2" from the left end/);
-      expect(text('storage-lid')).toMatch(/Centers 3-17\/32", 6-9\/32" and 9-1\/16" from the rear end of the frame[^\n]*butted to them/); // the battens butt the frame sides (no dados); D-89: the shorter lid behind the fixed strip
+      expect(text('storage-lid')).toMatch(/Centers 3-1\/2", 6-7\/32" and 8-31\/32" from the rear end of the frame[^\n]*butted to them/); // the battens butt the frame sides (no dados); D-89: the shorter lid behind the fixed strip
       expect(text('transom')).toMatch(/Both sockets: centered 9-3\/8" either side of the centerline/);
     });
 
@@ -962,15 +962,26 @@ describe('build readability round 3: one recipe for the knee, one set of numbers
     expect(all).not.toMatch(/mirror ramp \(step 5\)/i);
   });
 
-  it('step 6 puts the plate recess under the brake knee backers, not after the seat-hinge backers', () => {
+  it('step 6 puts the plate recess under the brake knee backers; the seat-hinge backers go on only after the deck is located on the dry frame', () => {
     const lines = stepText('frame').split('\n');
     const recess = lines.findIndex((l) => /cut the plate recess/.test(l));
     const brake = lines.findIndex((l) => /prepare the brake knee backers and glue them/.test(l));
+    const dry = lines.findIndex((l) => /Dry-fit the rails/.test(l));
+    const deck = lines.findIndex((l) => /lay the .* on the dry frame and check the frame against it/.test(l));
     const hinge = lines.findIndex((l) => /seat-hinge backers/.test(l));
     expect(recess).toBeGreaterThan(brake);
-    expect(brake).toBeGreaterThan(hinge);
     expect(lines[recess]).toMatch(/inboard face of each brake knee backer/);
-    expect(lines.slice(hinge + 1, brake).join('\n')).not.toMatch(/recess/);
+    expect(deck).toBeGreaterThan(dry);
+    expect(hinge).toBeGreaterThan(deck);
+    expect(lines.slice(hinge).join('\n')).toMatch(/line of the rear face of .* marked at the dry fit/);
+    // the deck check: its ends on the rails' finished-end marks, its edge set in from the rails' outer faces, the rail spacing and diagonals (numbers from the model)
+    const t = lines.slice(deck, hinge).join('\n');
+    expect(t).toMatch(/rear edge stands 1\/4" behind the finished-end marks on both rails/);
+    expect(t).toMatch(/deck edge sits in from the rail's outer face by 1\/2" at every station/);
+    expect(t).toMatch(/Rail spacing over the outer faces: 24" at the finished rear ends and 18-1\/2" at the bow-end marks/);
+    expect(t).toMatch(/Diagonals from the finished-end marks equal within 1\/16"/);
+    expect(t).toMatch(/Never trim the deck/);
+    expect(stepText('frame')).toMatch(/Set the deck down on its ticks from the dry fit/);
   });
 
   it('prints a brake-knee template that the steps ask for and the forms have', () => {
@@ -1028,7 +1039,7 @@ describe('D-76: side ribs, knees and box ties (tie-down bases)', () => {
       expect(t).not.toMatch(/locator|centerline [\d\-/]+" from the transom/);
       expect(t).not.toMatch(/Drive them while the epoxy is wet/);
       expect(t).not.toMatch(/\bjoist\b/i);
-      expect(t).toMatch(/spare band strip \(the same thickness as the bands/);
+      expect(t).toMatch(/the offcut of a band strip \(each strip leaves about [\d\-/]+" of its board; the same thickness as the bands/); // the spares stay for the bend test
       // the filler lengths are the cut list's, rounded up to 1/8" the way its rough sizes are
       const fl = ribFillers(msr, ppp);
       expect(t).toContain(`about ${roughFrac(fl[1].lengthIn)} at the mid rib, about ${roughFrac(fl[2].lengthIn)} at the bow post and about ${roughFrac(fl[3].lengthIn)} at the rear rib`);
@@ -1050,7 +1061,15 @@ describe('D-76: side ribs, knees and box ties (tie-down bases)', () => {
       expect(rib).toMatch(/through the bracket, the head, the inner band, the web and the outer band in one pass/);
       expect(rib).toMatch(/scrap block on the outside of the side behind the holes, to stop tear-out/);
       expect(rib).toMatch(/Brush epoxy into each hole[^\n]*run the bit through again/);
-      expect(rib).toMatch(/Grab boards:[\s\S]*Drill the stainless strips first, on the drill press[\s\S]*drill dry through the strip's holes, the outer band, the web, the inner band and the board/);
+      // the board's own holes (cut with it on the Shaper) are the template: the side is drilled through them, the board never again; the reach check comes first
+      expect(rib).toMatch(/Grab boards:[\s\S]*reach check[\s\S]*Drill the stainless strips first, on the drill press[\s\S]*Its five holes were cut with it[^\n]*Drill dry from the inside through them, the inner band, the web and the outer band[^\n]*Do not drill the board again/);
+      // the sign: knob holes through the web and inserts in the ribs, the sign as the template, before the finish; the final fit only hangs it
+      expect(rib).toMatch(/Sign knob holes and inserts: 4 a side, through the web into the rib behind it, with the sign as the drill template/);
+      expect(rib).toMatch(/Each pair of holes must land on a rib's shaft: 4-1\/2" \(the rear rib\) and 13" \(the box rib\) from the transom's outer face/);
+      expect(rib).toMatch(/Bore each spot 5\/16", square to the side, 5\/8" deep from the web's outer face/);
+      expect(rib).toMatch(/#10-32 × 5\/16" [^\n]*threaded insert on epoxy/);
+      expect(rib).toMatch(/Make 8 standoff discs, one per hole/);
+      expect(txt(get('final-fit'))).toMatch(/Through the 7\/32" holes, the standoff discs \(epoxied to the sign back\) and the web, into the inserts set at step \d+/);
       const fit = txt(get('final-fit'));
       expect(fit).not.toMatch(/Drill all \d holes|drill all the layers/i);
       expect(fit).toContain(`drilled at step ${list.map((q) => q.id).indexOf('side-holes')}, before the finish`);
@@ -1076,18 +1095,22 @@ describe('D-79..D-83: the cost-pass build text', () => {
 
   it('Standard: the drain holes are drilled and sealed (sides and box floor), at located centers; Extreme still fits the nipples', () => {
     const outer = stepText(std, 'sides-outer');
-    expect(outer).toMatch(/Drill the drain holes once the cure is hard: 2 in each side, 3\/8", straight through the inner band, the web and the outer band/);
+    // the web's Shaper file cuts the drain holes in the web: they guide the bit through the inner band before cure 2, then through the outer band after it; no second hole in the web
+    expect(outer).toMatch(/Before the web goes on the mirror ramp: drill the inner band through the web's own drain holes \(3\/8", cut with the web\)/);
+    expect(outer).toMatch(/Drill the drain holes on through the outer band once the cure is hard: 2 in each side, 3\/8", from the inside, through the holes already in the web and the inner band/);
     // ONE datum: the inner face of the rear transom (the web end sits 1/4" inside the transom dado), the same as the band drawing
-    expect(outer).toMatch(/Mark the transom line on each side first: a square line 1\/4" in from the rear end of the web/);
-    expect(outer).toMatch(/Centers 3\/8" and 58" forward of that line, measured along the bottom edge[^\n]*, 23\/32" up from the web's bottom edge/); // the numbers of the band and web drawings
-    expect(outer).toMatch(/backer board behind the exit/);
+    expect(outer).toMatch(/3\/8" and 58" forward of the transom line \(a square line 1\/4" in from the rear end of the web\), 23\/32" up from the web's bottom edge/); // the numbers of the band and web drawings
+    expect(outer).toMatch(/backer block on the outside of the outer band/);
+    expect(outer).not.toMatch(/Drill the drain holes once the cure is hard/);
     expect(outer).toMatch(/Brush epoxy into each bore/);
     expect(outer).not.toMatch(/nipple|scupper/i);
     // the box drains are drilled and sealed with the hull inverted (with the stop-block pilots), and the underside finish step checks them; the box step only fairs the floor
     const gear = stepText(std, 'gear-fit');
-    expect(gear).toMatch(/Drill the 2 box drain holes through the deck now, hull still inverted: 3\/8", down through the deck from its underside \(facing up now\)/);
+    // the deck's Shaper file cuts the box drains: the gear-fit step only checks and seals them, it never drills a second hole
+    expect(gear).toMatch(/Seal the 2 box drain holes now, hull still inverted\. They were cut with the deck \(its Shaper file\): do not drill them again/);
+    expect(gear).not.toMatch(/Drill the 2 box drain holes/);
     expect(gear).toMatch(/storage box's rear corners will be [^\n]*forward of the transom's outer face, [^\n]*either side of the centerline/);
-    expect(gear).toMatch(/Seal each bore now: tape the top-face mouth, brush epoxy/);
+    expect(gear).toMatch(/Tape the top-face mouth, brush epoxy up each bore/);
     expect(std.find((s) => s.id === 'gear-fit')!.checks.join(' ')).toMatch(/box drain holes drilled, sealed and open/);
     expect(std.find((s) => s.id === 'finish-under')!.checks.join(' ')).toMatch(/box drain holes are open and their bores sealed/);
     expect(stepText(std, 'finish-under')).toMatch(/Keep the drain holes open/);

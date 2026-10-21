@@ -25,10 +25,22 @@ const DRAIN_MASS_LB = 0.03;
 const GASKET_LB_PER_IN = 0.002;
 /** The 3/8" epoxy fillet in every inside corner of the box (flat things stowed in it ride on it, not in the corner). */
 export const BOX_FILLET_IN = 0.375;
-/** D-89 (round 3): the lid turn-buttons and their blocks (the draw latches are gone): button thickness, width and reach over the lid rail, the block's width and height, and the nylon washer under the pivot screw's head. */
+/**
+ * D-89 (round 3): the lid turn-buttons and their blocks (the draw latches are gone): button thickness, width and reach over the lid rail, the block's width and height, and the nylon
+ * washer under the pivot screw's head. The pivot is at the middle of the 3/4" lane between the transom and the box, so the button is 5/8" wide and its aft end is rounded on half
+ * its width about the pivot: it swings 1/16" clear of the transom at every angle (a square 3/4" end ran its corners 0.155" into the transom at 45 degrees, motion audit 2026-10-21).
+ */
 const TURN_BUTTON_T_IN = 0.5;
-const TURN_BUTTON_W_IN = 0.75;
-const TURN_BUTTON_REACH_IN = 0.5;
+const TURN_BUTTON_W_IN = 0.625;
+const TURN_BUTTON_REACH_IN = 0.4375;
+/** Segments in the button's rounded end (a half circle). */
+const TURN_BUTTON_ARC_N = 12;
+/**
+ * D-89: the lid frame's aft face stands this far forward of the box's aft wall face, so it is off the transom backers and the turn-button blocks the wall stands against: the hinge
+ * pin sits 3/4" above the lid's underside, so the lid's lower aft corner swings about 1/32" AFT as the lid starts to open (motion audit 2026-10-21: flush, it ran 0.025" into them).
+ * The aft gasket moves in with it and still lies on the 1/2" aft coaming, under the 3/4" aft rail.
+ */
+export const LID_AFT_GAP_IN = 0.125;
 const TURN_BLOCK_W_IN = 1.5;
 const TURN_BLOCK_H_IN = 1.5;
 const NYLON_WASHER_IN = 1 / 16;
@@ -71,8 +83,9 @@ export interface StorageGeometry {
   /** Interior floor and lid-underside heights. */
   floorZ: number;
   lidUnderZ: number;
-  /** D-89: the fixed strip across the fore end of the box top runs from `xh` (its aft face, the hinge side) to x1; the lid runs from x0 to `lidX1`, a gasket's width aft of it. */
+  /** D-89: the fixed strip across the fore end of the box top runs from `xh` (its aft face, the hinge side) to x1; the lid runs from `lidX0` (`LID_AFT_GAP_IN` ahead of the box's aft face x0) to `lidX1`, a gasket's width aft of the strip. */
   xh: number;
+  lidX0: number;
   lidX1: number;
 }
 
@@ -97,7 +110,7 @@ export function storageGeometry(p: Params, L: Layout): StorageGeometry {
     x0, x1, hw: st.hw, zBot: st.zBot, zTop,
     zWallTop, zPlyTop: zWallTop - coamT, coamT, coamW: p.storageCoamingWidthIn, deckFloor,
     pl, rimW, rimT, gasket, floorZ: deckFloor ? st.zBot : st.zBot + pl, lidUnderZ: zTop - pl,
-    xh, lidX1: xh - gasket,
+    xh, lidX0: x0 + LID_AFT_GAP_IN, lidX1: xh - gasket,
   };
 }
 
@@ -135,7 +148,7 @@ export function lidOpenAngleDeg(p: Params, L: Layout): number {
   const panel = [at(0, 0), at(sup.t, 0), at(sup.t, sup.H), at(0, sup.H)];
   const pin: [number, number] = [(g.lidX1 + g.xh) / 2, g.zTop + HINGE_PIN_ABOVE_IN];
   const zLidBot = g.zTop - g.pl - g.rimT;
-  const lid: Array<[number, number]> = [[g.x0, zLidBot], [g.lidX1, zLidBot], [g.lidX1, g.zTop], [g.x0, g.zTop]];
+  const lid: Array<[number, number]> = [[g.lidX0, zLidBot], [g.lidX1, zLidBot], [g.lidX1, g.zTop], [g.lidX0, g.zTop]];
   for (let d = 0; d <= 180; d += 0.25) {
     const th = (d * Math.PI) / 180, c = Math.cos(th), sn = Math.sin(th);
     const rot = lid.map(([x, z]): [number, number] => { const dx = x - pin[0], dz = z - pin[1]; return [pin[0] + dx * c + dz * sn, pin[1] - dx * sn + dz * c]; });
@@ -255,7 +268,7 @@ export function interiorOf(g: StorageGeometry): Interior {
   const ledge = Math.max(0, g.coamW - g.pl);
   const lip = Math.max(0, g.rimW - g.pl);
   const capIn3 = Math.max(0, lx - 2 * ledge) * Math.max(0, w - 2 * ledge) * g.coamT
-    + Math.max(0, g.lidX1 - g.x0 - 2 * g.rimW) * Math.max(0, w - 2 * lip) * (g.rimT + g.gasket); // D-89: the lid zone stops at the lid's fore frame (the fixed strip's groove is not counted)
+    + Math.max(0, g.lidX1 - g.lidX0 - 2 * g.rimW) * Math.max(0, w - 2 * lip) * (g.rimT + g.gasket); // D-89: the lid zone runs inside the lid frame, from its aft end (set in LID_AFT_GAP_IN) to its fore end (the fixed strip's groove is not counted)
   return { lx, w, h, capIn3, totalIn3: lx * w * h + capIn3 };
 }
 
@@ -342,7 +355,7 @@ export function packEssentials(interior: Interior, kit: readonly KitItem[] = ESS
 export function buildStorage(ctx: Ctx): Part[] {
   const { p, L } = ctx;
   const g = storageGeometry(p, L);
-  const { x0, x1, hw, pl, rimW, rimT, zBot, zTop, zWallTop, zPlyTop, coamW, xh, lidX1 } = g;
+  const { x0, x1, hw, pl, rimW, rimT, zBot, zTop, zWallTop, zPlyTop, coamW, xh, lidX0, lidX1 } = g;
   const sup = seatBackSupport(p, L);
   const common = { group: 'storage', step: STEP.seatStorage } as const;
   const parts: Part[] = [];
@@ -399,13 +412,13 @@ export function buildStorage(ctx: Ctx): Part[] {
 
   // ── Lid: oak frame (rim) capturing the ply panel, two battens under the panel ──
   parts.push(box(ctx, { ...common, id: 'storage-lid', name: 'Storage lid panel', mat: 'ply', thin: true, edges: 'captured', fab: 'table-saw',
-    ...span([x0 + rimW, lidX1 - rimW], [-(hw - rimW), hw - rimW], [zTop - pl, zTop]),
-    stock: { t: pl, w: 2 * (hw - rimW) + 0.5, l: lidX1 - x0 - 2 * rimW + 0.5 },
+    ...span([lidX0 + rimW, lidX1 - rimW], [-(hw - rimW), hw - rimW], [zTop - pl, zTop]),
+    stock: { t: pl, w: 2 * (hw - rimW) + 0.5, l: lidX1 - lidX0 - 2 * rimW + 0.5 },
     joints: ['storage-rim-side-L', 'storage-rim-side-R', 'storage-rim-end-aft', 'storage-rim-end-fore'].map((to): Joint => ({
       type: 'rabbet', to, count: 1, size: '1/4 deep × 1/4', note: 'panel captured in the frame (cut size includes the tongue); epoxy-sealed',
     })),
     // D-89: the letters shrink to fit a shorter lid (11 letters at 3/4 of their height each, 1/2 in margin), never over 1-1/2 in
-    legend: { text: 'DO NOT STEP', face: 'top', process: 'CNC V-carve or laser engrave, then fill with black epoxy or paint', letterHeightIn: Math.max(0.5, Math.min(1.5, Math.floor(((lidX1 - x0 - 2 * rimW - 0.5) / (11 * 0.75)) * 8) / 8)), depthIn: 0.03 },
+    legend: { text: 'DO NOT STEP', face: 'top', process: 'CNC V-carve or laser engrave, then fill with black epoxy or paint', letterHeightIn: Math.max(0.5, Math.min(1.5, Math.floor(((lidX1 - lidX0 - 2 * rimW - 0.5) / (11 * 0.75)) * 8) / 8)), depthIn: 0.03 },
     notes: 'Ply lid panel captured in the oak frame; the frame underside seals on the gasket. The top face is engraved DO NOT STEP (D-58, Eric 2026-10-11): the lid is a seat-cushion box lid, not a step, and is NOT strengthened for a standing adult; the rest-load check leaves it out for that reason.' }));
   const rz: [number, number] = [zTop - pl - rimT, zTop];
   // Round 2: the corner mortise is centered low enough to stay 1/16 in under the rabbet floor (centered on the frame it broke into the rabbet wall).
@@ -413,23 +426,24 @@ export function buildStorage(ctx: Ctx): Part[] {
   const cornerPts = (xs: number, ys: number): { side: Vec3; end: Vec3 } => ({ side: [xs, ys, zMid], end: [xs, ys, zMid] });
   for (const [tag, y] of [['L', hw - rimW / 2], ['R', -(hw - rimW / 2)]] as const) {
     const sideP = box(ctx, { ...common, id: `storage-rim-side-${tag}`, partNo: 'storage-rim-side', name: `Storage lid frame side ${tag}`, mat: 'oak', grain: 'x',
-      ...span([x0, lidX1], [y - rimW / 2, y + rimW / 2], rz) });
+      ...span([lidX0, lidX1], [y - rimW / 2, y + rimW / 2], rz) });
     const yFace = Math.sign(y) * (hw - rimW); // the side's inner face
-    sideP.joints = (['aft', 'fore'] as const).map((e) => lidTenon(`storage-rim-end-${e}`, [localPoint(sideP.transform, cornerPts(e === 'aft' ? x0 + rimW / 2 : lidX1 - rimW / 2, yFace).side)], 'the mortise is in the inner face of this side'));
+    sideP.joints = (['aft', 'fore'] as const).map((e) => lidTenon(`storage-rim-end-${e}`, [localPoint(sideP.transform, cornerPts(e === 'aft' ? lidX0 + rimW / 2 : lidX1 - rimW / 2, yFace).side)], 'the mortise is in the inner face of this side'));
     parts.push(sideP);
   }
-  for (const [tag, xa, xb] of [['aft', x0, x0 + rimW], ['fore', lidX1 - rimW, lidX1]] as const) {
+  for (const [tag, xa, xb] of [['aft', lidX0, lidX0 + rimW], ['fore', lidX1 - rimW, lidX1]] as const) {
     const endP = box(ctx, { ...common, id: `storage-rim-end-${tag}`, partNo: 'storage-rim-end', name: `Storage lid frame ${tag} end`, mat: 'oak', grain: 'y',
-      ...span([xa, xb], [-(hw - rimW), hw - rimW], rz) });
+      ...span([xa, xb], [-(hw - rimW), hw - rimW], rz),
+      ...(tag === 'aft' ? { notes: `D-89: the lid frame is ${frac(LID_AFT_GAP_IN)}" shorter than the box at its aft end, so this end's aft face stands ${frac(LID_AFT_GAP_IN)}" forward of the box's aft wall face, off the transom backers and the turn-button blocks the wall stands against: the hinge pin is above the lid, so this end's lower corner swings about 1/32" aft as the lid starts to open, and flush it would rub them. The aft gasket is set in to match, still under this end.` } : {}) });
     endP.joints = (['L', 'R'] as const).map((sd) => lidTenon(`storage-rim-side-${sd}`, [localPoint(endP.transform, cornerPts((xa + xb) / 2, (sd === 'L' ? 1 : -1) * (hw - rimW)).end)], 'the mortise is in the end grain of this piece'));
     parts.push(endP);
   }
-  const inner = lidX1 - x0 - 2 * rimW;
+  const inner = lidX1 - lidX0 - 2 * rimW;
   // D-53: three battens once the lid is long enough, so three sit under the rated item's footprint and the lid carries a light cooler (lid-load row).
   // D-89: the shorter lid behind the fixed strip keeps all three (two would each take half the item and fail the lid-load row).
   const nBatten = inner >= 9 ? 3 : inner >= 6 ? 2 : inner >= 4 ? 1 : 0;
   for (let n = 1; n <= nBatten; n++) {
-    const bx = x0 + rimW + (inner * n) / (nBatten + 1);
+    const bx = lidX0 + rimW + (inner * n) / (nBatten + 1);
     parts.push(box(ctx, { ...common, id: `storage-lid-batten-${n}`, partNo: 'storage-lid-batten', name: `Storage lid batten ${n}`, mat: 'oak', grain: 'y',
       ...span([bx - BATTEN_X_IN / 2, bx + BATTEN_X_IN / 2], [-(hw - rimW), hw - rimW], [zTop - pl - rimT, zTop - pl]),
       joints: [{ type: 'glue', to: 'storage-lid', count: 1, note: 'thickened epoxy, the lid face down on a flat bench and weighted for 24 h (no screws: nothing goes through the thin panel)' }, { type: 'glue', to: 'storage-rim-side-L', count: 1, note: 'end butted to the frame side, thickened epoxy (no dado)' }, { type: 'glue', to: 'storage-rim-side-R', count: 1, note: 'end butted to the frame side, thickened epoxy (no dado)' }],
@@ -442,10 +456,11 @@ export function buildStorage(ctx: Ctx): Part[] {
     sourcing: { vendor: 'McMaster-Carr (EPDM bulb gasket, adhesive back)', costUsd: 12 } } as const;
   for (const [tag, y] of [['L', hw - pl / 2], ['R', -(hw - pl / 2)]] as const) {
     parts.push(box(ctx, { ...gasketSpec, id: `storage-gasket-side-${tag}`, partNo: 'storage-gasket-side', name: `Lid gasket side ${tag}`,
-      massLb: GASKET_LB_PER_IN * (lidX1 - x0), ...span([x0, lidX1], [y - pl / 2, y + pl / 2], gz), notes: 'Compresses 25% under the frame; no gap at the miters (continuous strip, spliced at a corner).' }));
+      massLb: GASKET_LB_PER_IN * (lidX1 - lidX0), ...span([lidX0, lidX1], [y - pl / 2, y + pl / 2], gz), notes: 'Compresses 25% under the frame; no gap at the miters (continuous strip, spliced at a corner).' }));
   }
   parts.push(box(ctx, { ...gasketSpec, id: 'storage-gasket-end-aft', partNo: 'storage-gasket-end', name: 'Lid gasket aft end',
-    massLb: GASKET_LB_PER_IN * 2 * yIn, ...span([x0, x0 + pl], [-yIn, yIn], gz) }));
+    massLb: GASKET_LB_PER_IN * 2 * yIn, ...span([lidX0, lidX0 + pl], [-yIn, yIn], gz),
+    notes: `On the aft coaming, its aft edge ${frac(LID_AFT_GAP_IN)}" in from the box's aft face, so it lies under the lid frame's aft end, which is set in by the same amount (D-89).` }));
   // D-89: across the front the gasket stands on the fixed strip's aft face, between it and the lid frame's fore face (the lid closes onto it about the hinge pin above).
   parts.push(box(ctx, { ...gasketSpec, id: 'storage-gasket-end-fore', partNo: 'storage-gasket-end', name: 'Lid gasket fore end (on the strip)',
     massLb: GASKET_LB_PER_IN * 2 * hw, ...span([lidX1, xh], [-hw, hw], [gz[1], zTop - 0.125]),
@@ -515,11 +530,17 @@ export function buildStorage(ctx: Ctx): Part[] {
       ...span(blockX, [ly - TURN_BLOCK_W_IN / 2, ly + TURN_BLOCK_W_IN / 2], blockZ),
       joints: [{ type: 'glue', to: 'transom-rear', count: 1, note: 'thickened epoxy to the inside face of the rear transom (it fills the lane behind the box)' }],
       notes: `Oak block ${frac(blockX[1] - blockX[0])}" × ${frac(TURN_BLOCK_W_IN)}" × ${frac(TURN_BLOCK_H_IN)}" (grain across the sled, so the pivot screw bites side grain), its top level with the lid top: the turn-button's pivot screw goes down into it (D-89).` }));
-    parts.push(box(ctx, { ...common, id: `storage-turn-button-${tag}`, partNo: 'storage-turn-button', name: `Lid turn-button ${tag}`, mat: 'oak', grain: 'x', step: STEP.finish, fab: 'bandsaw',
-      ...span([blockX[0], x0 + TURN_BUTTON_REACH_IN], [ly - TURN_BUTTON_W_IN / 2, ly + TURN_BUTTON_W_IN / 2], [zTop, zTop + TURN_BUTTON_T_IN]),
-      joints: [{ type: 'screw', to: blockId, count: 1, diaIn: SCREW_DIA_IN[8], fit: buttonFit, at: [[xc - (blockX[0] + x0 + TURN_BUTTON_REACH_IN) / 2, 0, -TURN_BUTTON_T_IN / 2]], // on the button's underside, the block top
+    // The button (plan): from its rounded aft end, a half circle of radius r about the pivot (the block's center), forward to TURN_BUTTON_REACH_IN over the lid frame's aft rail.
+    const r = TURN_BUTTON_W_IN / 2, xEnd = lidX0 + TURN_BUTTON_REACH_IN, btnLen = xEnd - (xc - r);
+    const outline: Array<[number, number]> = [[xEnd, ly - r], [xEnd, ly + r], [xc, ly + r]];
+    for (let i = 1; i < TURN_BUTTON_ARC_N; i++) { const a = Math.PI / 2 + (Math.PI * i) / TURN_BUTTON_ARC_N; outline.push([xc + r * Math.cos(a), ly + r * Math.sin(a)]); }
+    outline.push([xc, ly - r]);
+    parts.push(profilePart(ctx, { ...common, id: `storage-turn-button-${tag}`, partNo: 'storage-turn-button', name: `Lid turn-button ${tag}`, mat: 'oak', grain: 'x', step: STEP.finish, fab: 'bandsaw',
+      outline, depth: TURN_BUTTON_T_IN, basis: 'xy', origin: [0, 0, zTop], explode: [0, 0, 1],
+      stock: { t: TURN_BUTTON_T_IN, w: TURN_BUTTON_W_IN, l: btnLen },
+      joints: [{ type: 'screw', to: blockId, count: 1, diaIn: SCREW_DIA_IN[8], fit: buttonFit, at: [[xc, ly, 0]], // on the button's underside, the block top
         size: `${screwText(buttonFit)} stainless, the pivot: down through the button and a nylon washer into the block (snug, so the button turns stiffly)` }],
-      notes: `Oak turn-button ${frac(TURN_BUTTON_T_IN)}" × ${frac(TURN_BUTTON_W_IN)}" × ${frac(x0 + TURN_BUTTON_REACH_IN - blockX[0])}", from an offcut, pivoting on one #8 screw over the block. Turned along the sled it reaches ${frac(TURN_BUTTON_REACH_IN)}" over the lid frame's aft rail; plane a slight cam (about 1/32") on its underside so turning it pulls the lid down onto the gasket. Turned across the sled it clears the lid (D-89).` }));
+      notes: `Oak turn-button ${frac(TURN_BUTTON_T_IN)}" × ${frac(TURN_BUTTON_W_IN)}" × ${frac(btnLen)}", from an offcut, pivoting on one #8 screw over the block. The pivot hole is ${frac(r)}" from the aft end, on the center line of the button, and the aft end is rounded to a ${frac(r)}" radius about it (a half circle), so the button swings ${frac(xc - r - blockX[0])}" clear of the transom at every angle. Turned along the sled it reaches ${frac(xEnd - lidX0)}" over the lid frame's aft rail; plane a slight cam (about 1/32") on its underside so turning it pulls the lid down onto the gasket. Turned across the sled it stands ${frac(lidX0 - (xc + r))}" clear of the lid (D-89).` }));
     }
     // Drains: Extreme: a stainless nipple flange at the aft corner; the hole goes through the deck (and the floor panel when the box has one). Standard (D-83): the bare epoxy-lined hole, recorded as a hole joint (joinery.ts).
     if (p.weatherSpec === WEATHER_SPEC.extreme) {

@@ -5,6 +5,7 @@
  */
 import type { Params } from '../params';
 import { partCentroid } from '../model/bounds';
+import { offForTransport } from '../model/removable';
 import type { Part, Vec3 } from '../model/types';
 import type { LoadKind } from './types';
 
@@ -33,7 +34,7 @@ export interface LoadModel {
    * against the box, and against the nose end of the full-width run); a row reports the worse. Empty when cargo is not evaluated (the rider sweeps skip it).
    */
   cargoCases: CaseData[];
-  /** Empty mass of the removable parts (transport configuration, D-9). */
+  /** Empty mass of the parts that come off for the truck (`offForTransport`; transport configuration, D-9). */
   removableLb: number;
   /** Mass per part group for the empty sled. */
   emptyMassLb: number;
@@ -47,7 +48,7 @@ function sumParts(parts: Part[]) {
     if (x.payload || x.group === 'reference') continue;
     const c = x.cgIn ?? partCentroid(x);
     m += x.massLb; mx += x.massLb * c[0]; my += x.massLb * c[1]; mz += x.massLb * c[2];
-    if (x.removable) removable += x.massLb;
+    if (offForTransport(x)) removable += x.massLb; // what comes off for the truck: the seat-back latch pins stay in
   }
   return { m, mx, my, mz, removable };
 }

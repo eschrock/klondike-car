@@ -14,7 +14,9 @@
  */
 import { STORAGE_LOCATION, WEATHER_SPEC, thinSheet } from '../params';
 import { STEP, box, frac16 as frac, SIDES, SIGN_PROUD_IN, stainless, dRingMat, insertMat, INSERT_DRILL_IN, type Ctx } from './build-utils';
-import { extPart, frameMat, signBackerPlan, signKnobPlan, signPlacement } from './body';
+/** A drill size to the nearest 1/64 in (the D-ring holes are 17/64 in: a 1/4-20 clearance), no inch mark. */
+const frac64 = (x: number): string => { const n = Math.round(x * 64); let num = n % 64, den = 64; const whole = Math.floor(n / 64); while (num > 0 && num % 2 === 0) { num /= 2; den /= 2; } return num === 0 ? `${whole}` : whole > 0 ? `${whole}-${num}/${den}` : `${num}/${den}`; };
+import { extPart, frameMat, SIGN_INSERT_LEN_IN, signBackerPlan, signKnobPlan, signPlacement } from './body';
 import { transformPoint } from './bounds';
 import { joistId } from './frame';
 import { innerHalfWidth, sideSlopeAt, sideTopAt, type Layout } from './layout';
@@ -226,7 +228,9 @@ export function buildSideRibs(ctx: Ctx): Part[] {
       let backArea = 0;
       for (let i = 0; i < outline.length; i++) { const [a1, b1] = outline[i], [a2, b2] = outline[(i + 1) % outline.length]; backArea += a1 * b2 - a2 * b1; }
       const finishCredit = -(Math.abs(backArea) / 2 / 144) * p.finishLbPerFt2;
-      const holeAt: Vec3[] = [-1, 1].map((a): Vec3 => [a * LASH_HOLE_DX_IN, topAt(0) - L.railBand / 2, 0]);
+      // The D-ring bracket lies along the gunwale (it is tilted to the sheer, below), and it is the drilling template: its two holes follow the sheer slope, not the level.
+      const sheerPhi = Math.atan2(topAt(0.5) - topAt(-0.5), 1);
+      const holeAt: Vec3[] = [-1, 1].map((a): Vec3 => [a * LASH_HOLE_DX_IN * Math.cos(sheerPhi), topAt(0) - L.railBand / 2 + a * LASH_HOLE_DX_IN * Math.sin(sheerPhi), 0]);
       const hasRing = st.n === 2 ? nRings >= 1 : st.n === 1 ? nRings >= 2 : st.n === 3 ? nRings >= 3 : nRings >= 4;
       const baseText = st.kind === 'box'
         ? `Its base is the storage box: the box tie spacer is epoxied between its inner face and the box side${st.n === 4 ? ' near the aft corner, just ahead of the flag tube blocks' : ' near the fore corner (study option D)'}.${signKnobsInRibs(p, L) ? ' It also carries two of the sign\'s four knob inserts (D-85): bore them from its back, through the filler, with the web as the template, at the sign-fitting step.' : ''}`
@@ -240,7 +244,7 @@ export function buildSideRibs(ctx: Ctx): Part[] {
         { type: 'glue', to: `side-${tag}-web`, count: 1, at: [[0, (zFoot + st.top) / 2, 0]], size: `${frac(w)}" back face, epoxy`, note: `epoxy, full face: the head to the inner gunwale band${st.kind === 'box' ? '' : ', the foot to the inner chine band (and a fillet to the deck)'}, and between the bands to a ${frac(band)}" filler of band strip glued to the web first` },
       ];
       if (st.kind === 'knee') rib.joints.push({ type: 'glue', to: `side-rib-knee-${tag}${st.n}`, count: 1, at: [[0, L.deckTop + Math.min(p.sideRibKneeHeightIn, st.h - L.railBand - 0.25) / 2, dep]], size: `${frac(Math.min(p.sideRibKneeHeightIn, st.h - L.railBand - 0.25))}" x ${frac(w)}" knee face, epoxy` });
-      if (hasRing) rib.joints.push({ type: 'hole', to: `lash-${tag}${st.n}`, count: LASH_BOLTS, size: `${frac(LASH_BOLT_DIA_IN + 1 / 64)}" (1/4-20 clearance) through the head, the inner band, the web and the outer band`, at: holeAt.map((q) => [q[0], q[1], dep / 2] as Vec3), note: 'drilled at the rib-fitting step (before the finish), with the D-ring bracket clamped on as the template, square to the side; seal the bores with epoxy before the finish. The bracket is bolted on later, at the hardware step' });
+      if (hasRing) rib.joints.push({ type: 'hole', to: `lash-${tag}${st.n}`, count: LASH_BOLTS, size: `${frac64(LASH_BOLT_DIA_IN + 1 / 64)}" (1/4-20 clearance) through the head, the inner band, the web and the outer band`, at: holeAt.map((q) => [q[0], q[1], dep / 2] as Vec3), note: 'drilled at the rib-fitting step (before the finish), with the D-ring bracket clamped on as the template, square to the side; seal the bores with epoxy before the finish. The bracket is bolted on later, at the hardware step' });
       parts.push(rib);
 
       // ── The base: the box tie, or a knee on the member under it ──
@@ -340,8 +344,9 @@ function localOf(m: number[], q: Vec3): Vec3 {
 }
 
 /**
- * D-85: the sign's four knobs screw through the thin web into threaded inserts in the rear rib (the two rear knobs) and the box rib (the two front ones), at the ribs' own x. The insert is bored from
- * the back of the rib through its band-strip filler, so its mouth is on the rib's back face (against the filler, which lies against the web). (With no rear box the sign keeps its backing strips and joinery.ts writes these joints.)
+ * D-85: the sign's four knobs screw through the thin web into threaded inserts in the rear rib (the two rear knobs) and the box rib (the two front ones), at the ribs' own x. The insert hole is bored
+ * from OUTSIDE, through the web, into the band-strip filler and the rib behind it, and the insert's top sits flush with the web's INSIDE face: its threads are all in oak (filler and rib, glued),
+ * and the knob screw engages it over `signKnobPlan().engagedIn` (about 0.27 in, 8 threads of #10-32). (With no rear box the sign keeps its backing strips and joinery.ts writes these joints.)
  */
 function addSignKnobJoints(ctx: Ctx, byId: Map<string, Part>): void {
   const { p, L } = ctx;
@@ -349,8 +354,9 @@ function addSignKnobJoints(ctx: Ctx, byId: Map<string, Part>): void {
   const st = sideRibStations(p, L);
   const colRear = st.find((q) => q.n === 4)!.x, colFront = st.find((q) => q.n === 1)!.x;
   const sg = signPlacement(ctx), { dz } = signBackerPlan(ctx), kn = signKnobPlan(ctx);
-  const sizeA = `#10-32 × ${kn.lenIn} in thumb-knob screw through a 7/32 clearance hole (0.219) in the sign, a ${kn.standoffIn.toFixed(3)}" oak standoff disc (epoxied to the sign back) and the ${thinSheet(p).nominal} web: ${kn.engagedIn.toFixed(2)}" into the insert, tip ${kn.tipShortIn.toFixed(2)}" short of the back of the band-strip filler and rib`;
-  const sizeB = `#10-32 × 5/16 ${insertMat(p)} threaded insert (epoxied) in a blind ${frac(INSERT_DRILL_IN)} in hole in the oak rib, bored from its back through the band-strip filler`;
+  const ribDepth = (rib: Part): number => (rib.geometry.type === 'extrusion' ? rib.geometry.depth : 0.75);
+  const sizeA = (rib: Part) => `#10-32 × ${kn.lenIn} in thumb-knob screw through a 7/32 clearance hole (0.219) in the sign, a ${kn.standoffIn.toFixed(3)}" oak standoff disc (epoxied to the sign back) and the ${thinSheet(p).nominal} web: ${kn.engagedIn.toFixed(2)}" into the insert, tip ${(L.sideBand + ribDepth(rib) - kn.engagedIn).toFixed(2)}" short of the back of the rib`;
+  const sizeB = `#10-32 × 5/16 ${insertMat(p)} threaded insert (epoxied) in a blind ${frac(INSERT_DRILL_IN)} in hole bored from outside through the web into the band-strip filler and the oak rib, the insert's top flush with the web's inside face (its threads all in oak), so the hole runs ${frac(Math.max(1 / 16, SIGN_INSERT_LEN_IN + 1 / 16 - L.sideBand))}" deep in the rib behind the filler`;
   for (const { s, tag } of SIDES) {
     const sign = byId.get(`sign-${tag}`);
     if (!sign) continue;
@@ -358,8 +364,8 @@ function addSignKnobJoints(ctx: Ctx, byId: Map<string, Part>): void {
       const rib = byId.get(`side-rib-${tag}${ribN}`);
       if (!rib) continue;
       const world: Vec3[] = [-dz, dz].map((dzi): Vec3 => [col, s * (L.hwC + L.side + SIGN_PROUD_IN + thinSheet(p).thicknessIn / 2), sg.zc + dzi]);
-      const mouth: Vec3[] = world.map((q): Vec3 => [q[0], s * st.find((r) => r.n === ribN)!.yIn, q[2]]);
-      (sign.joints ??= []).push({ type: 'knob', to: rib.id, count: 2, size: sizeA, at: world.map((q) => localOf(sign.transform, q)), note: 'Sign comes off for transport (D-9). The screw goes through the web into the oak rib; nothing grips the thin ply alone (D-62, D-85).' });
+      const mouth: Vec3[] = world.map((q): Vec3 => [q[0], s * (st.find((r) => r.n === ribN)!.yIn + L.sideBand), q[2]]); // the web's inside face: the rib's back face plus the band-strip filler
+      (sign.joints ??= []).push({ type: 'knob', to: rib.id, count: 2, size: sizeA(rib), at: world.map((q) => localOf(sign.transform, q)), note: 'Sign comes off for transport (D-9). The screw goes through the web into the oak rib; nothing grips the thin ply alone (D-62, D-85).' });
       (rib.joints ??= []).push({ type: 'threaded-insert', to: sign.id, count: 2, size: sizeB, at: mouth.map((q) => localOf(rib.transform, q)), note: 'Sign comes off for transport (D-9). The screw goes through the web into the oak rib; nothing grips the thin ply alone (D-62, D-85).' });
     }
   }

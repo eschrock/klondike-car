@@ -102,7 +102,7 @@ export function addFlatPinDeckHoles(p: Params, L: Layout, parts: Part[]): void {
     const local: Vec3 = [h.center[0] - m[12], h.center[1] - m[13], L.deckBot + L.ply / 2 - m[14]]; // the deck transform is a pure translation (compose([0, 0, deckBot]))
     (deck.joints ??= []).push({
       type: 'pin', to: `seat-pin-${h.tag}`, count: 1, diaIn: 2 * PIN_R_IN, size: '13/32 clearance hole through the 12 mm deck for the flat-position latch pin (the pin ends in the blind hole in the backer pad under the deck)', at: [local],
-      note: 'Bored square to the face; epoxy-seal the bore. Drill it with the backer pad glued on, one bit through the deck and into the pad (stop at the pad hole depth).',
+      note: 'Drilled in place with the seat back flipped flat, through the panel\'s own pin hole, one bit through the deck and into the backer pad glued under it (stop at the pad hole depth), so the three holes line up (not in the deck\'s Shaper file); epoxy-seal the bore.',
     });
   }
 }

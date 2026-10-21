@@ -261,6 +261,22 @@ export function partsOverlap(a: Part, b: Part): number {
   return worst;
 }
 
+/**
+ * Clearance (in) between two parts over their tight box lists: the largest separating-axis gap between any pair of their boxes, so > 0 is a gap at least that wide and
+ * ≤ 0 is an interpenetration that deep. Unlike `partsOverlap`, it never returns the axis-aligned bounding-box gap as the answer (that early exit is only a lower bound on
+ * the gap, far too small for a rotated or curved part: a steered tire reads 0.05" from the rail by its bounding boxes and 0.86" by its tight boxes). Parts whose bounding
+ * boxes are more than `far` apart return that bounding-box gap without the box-by-box test. Use it for motion sweeps (moving lids, buttons, flaps) and tool envelopes.
+ */
+export function partsClearance(a: Part, b: Part, far = 3): number {
+  const ba = cachedAABB(a), bb = cachedAABB(b);
+  let gap = -Infinity;
+  for (let k = 0; k < 3; k++) gap = Math.max(gap, ba.min[k] - bb.max[k], bb.min[k] - ba.max[k]);
+  if (gap > far) return gap;
+  let worst = -Infinity;
+  for (const x of partOBBs(a)) for (const y of partOBBs(b)) worst = Math.max(worst, obbOverlap(x, y));
+  return -worst;
+}
+
 /** World-space centroid of the part's bounding box (fallback CG). */
 export function partCentroid(part: Part): Vec3 {
   return partOBB(part).center;

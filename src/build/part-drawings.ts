@@ -367,7 +367,11 @@ function solidOf(part: Part, p: Params, boxAxis: Ax | null): Solid | null {
     const ic: Ax = boxAxis ?? ([0, 1, 2].sort((a, b) => s[a] - s[b])[0] as Ax);
     const [ia, ib] = ([0, 1, 2] as Ax[]).filter((i) => i !== ic) as [Ax, Ax];
     const out: Vec2[] = [[-s[ia] / 2, -s[ib] / 2], [s[ia] / 2, -s[ib] / 2], [s[ia] / 2, s[ib] / 2], [-s[ia] / 2, s[ib] / 2]];
-    return { board: prismBoard(m, out, ia, ib, ic, -s[ic] / 2, s[ic] / 2), extraNotes: [] };
+    // A crossmember in the bow taper is cut to its long point and scribed to the bent rails (frame.ts): the box is the short point, so say so.
+    const longest = Math.max(...s);
+    const scribe = part.kind === 'lumber' && part.stock && part.stock.l > longest + 1 / 32
+      ? [`Drawn at its short point (${frac(longest)}, the front face). Cut it to the final length above, the long point at the rear face, and scribe each end to its bent rail at the dry fit. The positions below are from the drawn ends: on the rear face each end of the cut piece stands ${frac((part.stock.l - longest) / 2)} farther out, so lay them out from the center line.`] : [];
+    return { board: prismBoard(m, out, ia, ib, ic, -s[ic] / 2, s[ic] / 2), extraNotes: scribe };
   }
   if (g.type === 'cylinder') {
     // A rod: side view, length along u, the diameter up.
@@ -657,6 +661,8 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
       if (dm) blind = num(dm[1]);
     }
     if (role === 'insert') { const il = new RegExp(String.raw`[×x]\s*${NUM}"?\s*(?:(?:316|18-8 \(304\)|zinc-plated)\s+)?(?:stainless\s+)?threaded insert`).exec(r.text); if (il) blind = num(il[1]) + 0.0625; }
+    // A sign-knob insert whose mouth is at the web's inside face (D-85): the hole starts in the band-strip filler, so the rib itself is bored only the rest of the way.
+    if (role === 'insert') { const ir = new RegExp(String.raw`${NUM}"?\s*(?:in\s*)?deep in the rib behind the filler`).exec(r.text); if (ir && /^side-rib-/.test(part.id)) blind = num(ir[1]); }
     if (role === 'eye') depthWords = "as deep as the screw eye's thread";
     // The rib knees' screw pilots are drilled straight up through the member and the deck at the wheel fit (so the deck shows them), not blind.
     if (j.type === 'screw' && role === 'pilot' && /^side-rib-knee-/.test(r.to)) { blind = undefined; depthWords = 'through, drilled up through the member and the deck at the wheel fit'; }
@@ -1550,7 +1556,8 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
         groups = placeGroups(shown, ax, a).map(fixDatum);
         where = `In the ${f.faceWord ?? w.side[ax][hiSide ? 1 : 0]}: ${groups.join('; ')}`;
         // A round rod has no face, height or thickness to measure from: a cross hole is drilled through the diameter, and its place is the distance from a named end (the nearer end too, when that is the other one).
-        if (b.rod) where = `Drilled straight through the rod, across its diameter, at ${listOf(f.pts.map((q) => `${frac(q[0])} from the ${w.side[0][0]}${q[0] > ext[0] / 2 ? ` (${frac(ext[0] - q[0])} from the ${w.side[0][1]})` : ''}`))}`;
+        if (b.rod && part.geometry.type === 'cylinder' && part.geometry.length < 2 * part.geometry.radius) where = 'Through the center of the disc, square to its faces';
+        else if (b.rod) where = `Drilled straight through the rod, across its diameter, at ${listOf(f.pts.map((q) => `${frac(q[0])} from the ${w.side[0][0]}${q[0] > ext[0] / 2 ? ` (${frac(ext[0] - q[0])} from the ${w.side[0][1]})` : ''}`))}`;
         const vName = ax === 2 ? 'main' : ax === 1 ? edgeView(hiSide) : endView(hiSide);
         for (const q of f.pts) {
           if (vName) {
@@ -1625,7 +1632,7 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
   const tallBlock = !!part.stock && isTallBlock(part, part.stock);
   const hl: Array<{ t: string; size: number; bold?: boolean; fill?: string }> = [{ t: title ?? part.name, size: 0.2, bold: true }];
   const hw = (t: string, size: number, o: { bold?: boolean; fill?: string } = {}) => { for (const l of wrap(t, Math.floor(chars * 0.105 / size))) hl.push({ t: l, size, ...o }); };
-  hw(`qty ${qty}   scale ${scaleText(s)}${rows > 1 ? ` (in ${rows} rows)` : ''}   final ${b.rod ? `${frac(b.rod.dia)} dia × ${frac(ext[0])}` : finalText(part, cl, dims)}${b.rod || tallBlock ? '' : ` (T × W × L${b.developed ? ', L along the curve' : ''})`}   ${part.material}`, 0.12);
+  hw(`qty ${qty}   scale ${scaleText(s)}${rows > 1 ? ` (in ${rows} rows)` : ''}   final ${b.rod ? `${frac(b.rod.dia)} dia × ${frac(part.geometry.type === 'cylinder' ? part.geometry.length : ext[0])}` : finalText(part, cl, dims)}${b.rod || tallBlock ? '' : ` (T × W × L${b.developed ? ', L along the curve' : ''})`}   ${part.material}`, 0.12);
   hw(`Stock: ${boardText(part, cl)}`, 0.105);
   hw(`Grain: ${grainWords}.`, 0.105, { fill: DIM });
   hw(b.rod ? `Datums: lengths from the ${w.side[0][0]}. Fractions to 1/32", drills to 1/64".` : `Datums: lengths from the ${w.side[0][0]}, heights from the ${w.side[1][a.vref]}, across from the ${w.side[2][1]}. Fractions to 1/32", drills to 1/64".`, 0.105, { fill: DIM });
@@ -1750,7 +1757,8 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
   // ── Feature table ──
   const rowsSvg: string[] = [txt(M, ty, 'FEATURES (letters on the drawing; positions from the datums above)', 0.12, { bold: true })];
   ty += 0.2;
-  if (!feats.length) { rowsSvg.push(txt(M + 0.25, ty, b.rod ? 'None: cut to length, square the ends and break the edges (a light chamfer).' : 'None: a plain board, cut to the final size above.', 0.105)); ty += 0.2; }
+  if (!feats.length) { rowsSvg.push(txt(M + 0.25, ty, b.rod ? 'None: cut to length, square the ends and break the edges (a light chamfer).' : 'None: a plain board, cut to the final size above.', 0.105));
+  if (b.rod && part.kind === 'lumber' && part.geometry.type === 'cylinder' && part.geometry.length < 2 * part.geometry.radius) { rowsSvg.push(txt(M + 0.25, ty, `A disc: cut it with a ${frac(2 * part.geometry.radius)} plug cutter on the drill press, then release it on the bandsaw to ${frac(part.geometry.length)} thick.`, 0.105)); ty += 0.2; } ty += 0.2; }
   for (const f of feats) {
     rowsSvg.push(txt(M, ty, f.label, 0.11, { bold: true, fill: FEAT }));
     for (const l of wrap(f.text, chars)) { rowsSvg.push(txt(M + 0.25, ty, l, 0.105)); ty += 0.15; }

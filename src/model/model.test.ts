@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PARAM_DEFS, defaultParams, resolveParams, sanitizeParams, thinSheet, validateParams, WEATHER_SPEC, type ParamKey, type Params } from '../params';
 import { buildModel } from './index';
+import { offForTransport } from './removable';
 import { decodeHash } from '../state';
 import { computeLayout } from './layout';
 import { partsOverlap, worldAABB } from './bounds';
@@ -21,7 +22,7 @@ const ALLOW: Allow[] = [
   { a: /^axle-/, b: /^(wheel-|beam-)/, why: 'axle passes through the hub bore and lies in a groove in the beam (D-10, D-15)' },
   { a: /^beam-/, b: /^wheel-/, why: 'tire OBB is a conservative box; the beam ends sit inside the rim, 1/8" short of the hub face' },
   { a: /^(axle-R[LR]?|beam-R)$/, b: /^axle-hanger-[LR]$/, why: 'the hanger is notched up from its bottom to straddle the beam and bear on its top (D-48 seat, moved to the hanger at D-54); the sweep has no notch geometry' },
-  { a: /^seat-grip-backing-[LR]$/, b: /^seat-grip-cap-[LR]$/, why: 'D-84: the strip is epoxied into the pocket on the back of the oak cap; the cap is modeled as a solid plate and the pocket is not cut out of it' },
+  { a: /^seat-grip-backing-[LR]$/, b: /^seat-grip-cap-[LR]$/, why: 'D-84: the strip sits in the pocket on the back of the oak cap, glued on over it; the cap is modeled as a solid plate and the pocket is not cut out of it' },
   // ---- brake and handle
   { a: /^brake-(pad|shoe)-/, b: /^wheel-R[LR]$/, why: 'the rubber pad presses on the tread and the shoe block sits on it; the tire OBB bands are a superset of the round tire (D-57)' },
   { a: /^brake-chock-[LR]$/, b: /^wheel-R[LR]$/, why: 'the chock ramp is tangent to the tire and its toe slides under the tread; the tire bands are a superset of the round tire (D-57)' },
@@ -317,12 +318,13 @@ describe('masses', () => {
 });
 
 describe('removed', () => {
-  it('drops exactly the removable parts (D-65: the seat back pad and pins, the chocks, the lights and the brake flap kit; NOT the handle, parked in Transport mode, and NOT the signs); the front axle, king beam, stops and wheels stay', () => {
+  it('drops exactly the removable parts that come off for the truck (D-65: the seat back pad, the chocks, the lights and the brake flap kit; NOT the handle, parked in Transport mode, and NOT the signs); the front axle, king beam, stops and wheels stay', () => {
     const full = buildModel(defaults);
     const removed = buildModel(defaults, { removed: true });
-    expect(removed.map((p) => p.id)).toEqual(full.filter((p) => !p.removable).map((p) => p.id));
-    const gone = full.filter((p) => p.removable).map((p) => p.id);
-    expect(gone).toEqual(expect.arrayContaining(['seat-back-pad', 'seat-pin-L', 'brake-flap-L', 'brake-pivot-pin-R', 'brake-chock-L', 'front-light', 'rear-light', 'lamp-clip', 'rear-lamp-clip']));
+    expect(removed.map((p) => p.id)).toEqual(full.filter((p) => !offForTransport(p)).map((p) => p.id));
+    const gone = full.filter((p) => offForTransport(p)).map((p) => p.id);
+    expect(removed.some((p) => p.id === 'seat-pin-L' && p.removable)).toBe(true); // quick-release, but they stay in for the truck and hold the flat back (motion audit 2026-10-21)
+    expect(gone).toEqual(expect.arrayContaining(['seat-back-pad', 'brake-flap-L', 'brake-pivot-pin-R', 'brake-chock-L', 'front-light', 'rear-light', 'lamp-clip', 'rear-lamp-clip']));
     for (const id of ['bridle', 'bridle-tongue', 'bridle-sleeve', 'sign-L', 'sign-R', 'handle-bar', 'handle-post-L', 'handle-post-R', 'brake-backer-L']) expect(removed.some((p) => p.id === id), `${id} stays`).toBe(true);
     expect(gone).toContain('brake-knee-L'); // D-78: removable knees (the default) come off in Transport mode; glued knees stay (d78.test.ts)
     for (const id of ['beam-F', 'kingpin', 'king-beam', 'king-thrust', 'steer-eye-L', 'steer-anchor-L', 'axle-FL', 'wheel-FL', 'wheel-FR', 'bow-bulkhead', 'deck', 'transom-rear']) expect(removed.some((p) => p.id === id), id).toBe(true);

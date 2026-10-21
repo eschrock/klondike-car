@@ -14,7 +14,7 @@
 import type { Params } from '../params';
 import { computeLayout, outerHalfWidth, samples, sideTopAt, type Layout } from '../model/layout';
 import { bowGeometry } from '../model/handle';
-import { transomTopOutline } from '../model/body';
+import { GUNWALE_END_LONG_IN, transomTopOutline } from '../model/body';
 import type { Part, Vec2 } from '../model/types';
 import { flatPattern } from './flat';
 import { epoxyTimeFactor } from './finishing';
@@ -43,7 +43,7 @@ export const CLEAT_TALL_IN = 1.5;
  * sheer is concave on the cleat side, so a bent band pushes its middle into the cleats and its ends swing away; the stops hold the ends. The ramp caps
  * run this much past the web's bow end so the bow stop stands on the cap.
  */
-const BAND_END_LONG_IN = 1;
+const BAND_END_LONG_IN = GUNWALE_END_LONG_IN; // the model's number: the rough gunwale strip is cut long enough for it (body.ts sideBandLengths)
 const CAP_PAST_BOW_IN = 2;
 /** Edge stops along the web's straight bottom edge, a bench: about one every 12 in (shop practice). */
 const EDGE_STOP_SPACING_IN = 12;
