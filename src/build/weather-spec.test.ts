@@ -66,9 +66,9 @@ describe('the two specs', () => {
     expect(bStd.consumables.glueEpoxyFlOz).toBeLessThan(bExt.consumables.glueEpoxyFlOz);
     expect(bStd.consumables.sealedFt2).toBe(0);
     expect(bExt.consumables.sealedFt2).toBeGreaterThan(30);
-    // the Titebond joints are the general ones: Dominos, dados, tenons; the epoxy ones the laminations, fillets, deck and bedding
+    // the Titebond joints are the wood-to-wood glue-ups (D-92: one glue per glue-up): the hangers and backers, the edge-glued panels; the epoxy ones the laminations, fillets, deck, bedding and every joint glued with them
     const sStd = finishingSchedule(stdParts, std);
-    expect(sStd.glue.titebondJoints).toBeGreaterThan(50);
+    expect(sStd.glue.titebondJoints).toBeGreaterThan(15);
     expect(sStd.glue.titebondFlOz).toBeGreaterThan(0);
     expect(sStd.glue.titebondFlOz).toBeLessThanOrEqual(TITEBOND_BOTTLES[1].flOz);
     expect(finishingSchedule(extParts, ext).glue.titebondJoints).toBe(0);
@@ -375,17 +375,22 @@ describe('finishing schedule by spec', () => {
 });
 
 describe('the adhesive of each glue joint', () => {
-  it('Standard: epoxy for the bent laminations, the deck, the fillets and the thickened bedding; Titebond for the rest', () => {
+  it('Standard: epoxy for the bent laminations, the deck, the fillets and the thickened bedding, and every joint glued in the same glue-up (D-92); Titebond for the wood-to-wood glue-ups', () => {
     expect(standardAdhesive('lamination', 'rail-L', 'rail-L', '')).toBe('epoxy');
     expect(standardAdhesive('lamination', 'side-L-chine', 'side-L-web', 'thickened epoxy')).toBe('epoxy');
     expect(standardAdhesive('lamination', 'deck', 'joist-2', '')).toBe('epoxy');
     expect(standardAdhesive('dado', 'deck', 'transom-rear', '')).toBe('epoxy');
     expect(standardAdhesive('fillet', 'storage-end-aft', 'storage-side-L', 'tape')).toBe('epoxy');
     expect(standardAdhesive('small', 'scupper-rear-L', 'side-L-chine', '3/8" nipple bedded in epoxy')).toBe('epoxy');
-    expect(standardAdhesive('domino', 'joist-2', 'rail-L', 'epoxy')).toBe('titebond');
-    expect(standardAdhesive('dado', 'bow-bulkhead', 'side-L-web', '')).toBe('titebond');
-    expect(standardAdhesive('tenon', 'rail-L', 'transom-rear', '')).toBe('titebond');
+    // D-92: glued in the same session as the deck, the deck dado or the band fillets
+    expect(standardAdhesive('domino', 'joist-2', 'rail-L', 'epoxy')).toBe('epoxy');
+    expect(standardAdhesive('dado', 'bow-bulkhead', 'side-L-web', '')).toBe('epoxy');
+    expect(standardAdhesive('tenon', 'rail-L', 'transom-rear', '')).toBe('epoxy');
+    expect(standardAdhesive('tenon', 'storage-rim-end-aft', 'storage-rim-side-L', '')).toBe('epoxy');
+    // the wood-to-wood glue-ups stay Titebond
     expect(standardAdhesive('lamination', 'axle-hanger-L', 'rail-L', 'side-grain face, epoxy')).toBe('titebond');
+    expect(standardAdhesive('lamination', 'transom-backer-L', 'transom-rear', '')).toBe('titebond');
+    expect(standardAdhesive('lamination', 'brake-backer-L', 'rail-L', '')).toBe('titebond');
   });
 
   it('Standard epoxy joints plus Titebond joints cover every joint once; the D-70 face laminations are epoxy', () => {
@@ -398,7 +403,7 @@ describe('the adhesive of each glue joint', () => {
     for (const g of lam) expect(g.standard).toBe('epoxy');
     expect(glueEpoxyFlOz(stdParts)).toBeLessThan(glueEpoxyFlOz(stdParts, undefined, ext)); // without `p` no D-70 lines
     const t = glueTitebond(stdParts, std);
-    expect(t.flOz).toBeGreaterThan(5);
+    expect(t.flOz).toBeGreaterThan(1); // D-92 moved the frame, closing and box glue-ups to epoxy
     expect(glueTitebond(extParts, ext)).toEqual({ flOz: 0, joints: 0 });
   });
 });

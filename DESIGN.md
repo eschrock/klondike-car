@@ -69,7 +69,7 @@ Two people lift it by the rear transom slot and the bow bulkhead hand-hold (the 
 | Meant for | garage-kept, used a few times a year, wet at worst at a rainy derby | stored outside or near salt |
 | Stainless | 304 (18-8) | 316 throughout |
 | Collars, inserts, D-rings, eye bolts and chain | zinc-plated or hot-dip galvanized | 316 |
-| Glue | Titebond III | epoxy everywhere |
+| Glue | Titebond III where a glue-up is wood-to-wood throughout; epoxy where any joint in it needs epoxy (D-92) | epoxy everywhere |
 | Dominos | beech (shop stock) | beech, epoxied in |
 | Finish | exterior spar urethane; epoxy only where needed | marine varnish over epoxy, gallon epoxy kit |
 | Thin sheet (follows the spec, D-80) | 6 mm Baltic birch | 6 mm okoume |

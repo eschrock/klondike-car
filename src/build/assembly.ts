@@ -450,7 +450,7 @@ export function glueCard(p: Params): Instr {
   const std = isStandard(p);
   const E = EPOXY_SYSTEM;
   return I('GLUE CARD (read once; not a step): each glue step below has one line that points back here.', [
-    I(std ? 'Which glue: Titebond III for Dominos, dados, tenons and plain glue joints; epoxy for the laminations, the deck, fillets and tape, and thickened bedding.' : 'Which glue: epoxy for every glue joint (Extreme weather).'),
+    I(std ? 'Which glue: one glue per glue-up. Epoxy for the laminations, the deck, fillets and tape, thickened bedding, and every other joint glued in the same session as one of those; Titebond III for the glue-ups that are wood-to-wood throughout (the hangers and backers, the edge-glued panels). Each step says which.' : 'Which glue: epoxy for every glue joint (Extreme weather).'),
     ...(std
       ? [I('Titebond III:', [
         'Thin coat on both faces; open time about 10 min, so have the clamps set out.',
@@ -1214,7 +1214,7 @@ const TEMPLATES: Template[] = [
         items: [
           std
             ? I('Weather spec: Standard (garage-kept, wet at most at a rainy derby).', [
-              'Glue: Titebond III for the Dominos, dados, tenons and plain glue joints.',
+              'Glue: one glue per glue-up. Titebond III for the wood-to-wood glue-ups (the hangers and backers, the edge-glued panels); epoxy for everything else.',
               'Epoxy only for the bent and face laminations, the deck to the frame and its dados, the fillets and tape, and thickened bedding.',
               'Topcoat: exterior spar urethane.',
               '(Extreme weather, stored outside: epoxy for every glue joint and a marine topcoat.)',
@@ -1460,7 +1460,7 @@ const TEMPLATES: Template[] = [
             joistCut ? 'The {{joist-1}} ends go into the hanger mortises, not the rails.' : false,
             `In the bow taper the ends meet the bent rails at up to ${f(angle, 0)}°: the cut-list lengths are the long point, so scribe each end to its rail now (pencil from the rail, then bandsaw or miter).`,
           ], crossIds),
-          I(`Glue-up: Domino the crossmembers to the rails with ${std ? 'Titebond III' : 'epoxy'} (in the mortises, on the Dominos and on the end grain), then bond the {{deck}} (its underside sealed in [[step:seal]]) on top with thickened epoxy.`, [
+          I(`Glue-up, all in thickened epoxy (one glue for one glue-up): Domino the crossmembers to the rails (in the mortises, on the Dominos and on the end grain), then bond the {{deck}} (its underside sealed in [[step:seal]]) on top with thickened epoxy.`, [
             `Thickened epoxy (${EPOXY_SYSTEM.thickener}, glue card) on every top face: rails, crossmembers and king beam${brakeBackers.length ? ', and the top edge of each brake knee backer' : ''}.`,
             `Weight the deck down; it bonds full length to the rail and crossmember tops${brakeBackers.length ? ' and to the backers' : ''}.`,
             'The rails stay long (they are trimmed at the dry fit). The deck is already cut to shape: it narrows toward the bow with the sides.',
@@ -1800,14 +1800,14 @@ const TEMPLATES: Template[] = [
             ])]
             : []),
           I(`Glue the backers (3/4" oak) full-face to the inside of the transom with ${tbGlue}, at their dry-fit places: ${tl(backers)}.`, ['Clamp them with a caul and leave them overnight.']),
-          ...(tm ? [I(`Make ${nTenon} loose tenons from rounded-edge tenon stock, ${tm[1]}" × ${tm[2]}" × just under ${fin(2 * parseFrac(tm[3]))} long, and glue one into each rail's rear end first (${tbGlue}), half its length standing out.`)] : []),
+          ...(tm ? [I(`Make ${nTenon} loose tenons from rounded-edge tenon stock, ${tm[1]}" × ${tm[2]}" × just under ${fin(2 * parseFrac(tm[3]))} long, and glue one into each rail's rear end first (thickened epoxy), half its length standing out.`)] : []),
           I('Close ONE end first: the transom.', [
             'The transom is pushed straight on: the deck edge, the web ends and the rail tenons all enter at once. The four band ends of each side butt against its face (no Dominos).',
             `${plural(bands, 'glue joint')} and ${plural(count(c, 'mortise-tenon'), 'mortise-and-tenon')} in one glue-up.`,
             `Two pipe clamps along the length, from a caul across the transom to a caul across the bow, bearing on a ${fin(2 * standOut)} block on each rail end so it clears the deck and web ends that stand ${fin(standOut)} out (the bulkhead is not on yet).`,
           ]),
           I('Rehearse twice, then glue in small batches.', [
-            std ? 'Titebond III in the web dados and on the tenons; thickened epoxy in the deck dado and on the band ends.' : 'Epoxy in every dado, on the tenons and on the band ends.',
+            'Thickened epoxy in every joint of this glue-up: the dados, the tenons and the band ends (one glue for one glue-up).',
             `Epoxy (glue card), mixed in SMALL batches in a wide shallow container: the pot life is ${EPOXY_SYSTEM.potMin[0]}-${EPOXY_SYSTEM.potMin[1]} min, so do the fillets and the dado fills in the sequence you rehearsed, one batch at a time. You can do it alone.`,
             ...(vents.places.length ? ['Glue shows at the vent holes when the dados are full: fill them flush with thickened epoxy after the cure.'] : []),
             'Once the transom is home, fillet the inside corners with thickened epoxy.',
@@ -1828,7 +1828,6 @@ const TEMPLATES: Template[] = [
     tools: ['pipe clamps (2)', 'cauls', 'epoxy pumps'],
     hardener: '556',
     build: (c) => {
-      const std = isStandard(c.p);
       const dj = c.by('rail-L')?.joints?.find((j) => j.type === 'domino' && j.to === 'bow-bulkhead');
       return {
         goal: 'Close the bow with the bulkhead, the rider\'s foot brace.',
@@ -1840,7 +1839,7 @@ const TEMPLATES: Template[] = [
           ]),
           I('Rehearse once with the clamps, then glue it once the transom glue has gelled (epoxy hard to a fingernail).', [
             'Take the transom clamps off (its epoxy has gelled); the bulkhead clamps, transom caul to bulkhead caul, hold both ends now.',
-            std ? 'Titebond III on the Dominos and in the web dados; a second, fresh small batch of thickened epoxy in the deck dado and on the band ends.' : 'A second, fresh small batch of epoxy: in the dados, on the Dominos and on the band ends.',
+            'A second, fresh small batch of thickened epoxy: in the dados, on the Dominos and on the band ends (one glue for one glue-up).',
             'Wide shallow container; you can mix and place it alone.',
             'Push it straight back onto the bow end. Two pipe clamps along the length, from a caul across the bulkhead to the caul across the transom.',
             'Once it is clamped home, fillet the inside corners with thickened epoxy.',
@@ -2574,7 +2573,7 @@ const TEMPLATES: Template[] = [
               : false,
           ], frame),
           I('Seal the {{storage-lid}} with epoxy, both faces and every edge, and let it cure.'),
-          I(`Glue the frame square around the panel: ${isStandard(c.p) ? 'Titebond III' : 'epoxy'} on the corner tenons, thickened epoxy bedding the panel edge in its rabbet.`, ['Clamp it square while the corners set.']),
+          I(`Glue the frame square around the panel, all in thickened epoxy: on the corner tenons and bedding the panel edge in its rabbet.`, ['Clamp it square while the corners set.']),
           I(`Glue the ${plural(battens.length, 'batten')} under the panel with thickened epoxy, the lid face down on a flat bench and weighted for 24 h.`, [
             battenAt.length ? `Centers ${list(battenAt)} from the rear end of the frame, square across; each cut to fit between the frame sides and butted to them in the epoxy.` : false,
             'No screws: nothing goes through the thin panel. The battens keep it from sagging.',
