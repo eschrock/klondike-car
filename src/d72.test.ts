@@ -362,7 +362,7 @@ describe('D-71: the solid 5/8 in rod (Eric)', () => {
     const steps = assemblySteps(parts, defaults);
     const text = steps.flatMap((s) => s.instructions).join(' ');
     expect(text).toMatch(/5\/8" wide × 19\/32" deep, so the 5\/8" rod stands 1\/32" proud/);
-    expect(text).toMatch(/shimmed 1\/32" off the beam/);
+    expect(text).toMatch(/bearing on the stub \(1\/32" above the beam face\)/); // the roll pad sits on the proud stub (assembly review round 1); it was "shimmed 1/32 off the beam"
     expect(text).toMatch(/5\/8" bore on the 5\/8" rod/);
     expect(text).not.toMatch(/0\.63" bore/);
     expect(text).not.toMatch(/DOM tube/);
@@ -373,14 +373,14 @@ describe('D-71: the solid 5/8 in rod (Eric)', () => {
 describe('the numbers at the defaults (weatherSpec Standard: 6 mm Baltic birch, the solid rod, the 3 wood-screw sizes)', () => {
   it('empty mass 122.08 lb (D-84, D-80/D-83: the 6 mm Baltic sides, box and lid and the 2 in clamp plates, less the lighter EVA seat pads and lights; 121.09 lb with the 1/4 in white oak ply at D-77, +0.87 lb the pivot straps and knee roofs; D-76: +0.96 lb the side ribs; 115.95 lb at D-71)', () => {
     const m = totalMass(buildModel(defaults, { rider: 'none', cargo: false }));
-    expect(m).toBeCloseTo(122.805, 2); // D-85: +0.725 lb (the rear ribs, rings and ties, the box rib moved, no sign strips); 122.080 before. Older note: // D-84: +0.32 lb (the 1/8 in grab-board strip and the oak caps, one screw and washer fewer); was 121.617; merged with the final review of the build outputs (121.639 before: 13/32 knee holes, 7/8 narrow washers and the rib-knee shift)
+    expect(m).toBeCloseTo(122.794, 2); // assembly review round 1: -0.011 lb (the bigger kingpin nut slot and the king-beam reliefs for the plate bolt heads); 122.805 before. D-85: +0.725 lb (the rear ribs, rings and ties, the box rib moved, no sign strips); 122.080 before. Older note: // D-84: +0.32 lb (the 1/8 in grab-board strip and the oak caps, one screw and washer fewer); was 121.617; merged with the final review of the build outputs (121.639 before: 13/32 knee holes, 7/8 narrow washers and the rib-knee shift)
     const oak = totalMass(buildModel({ ...defaults, thinSheetMaterial: OAK }, { rider: 'none', cargo: false }));
     expect(oak).toBeCloseTo(121.48, 1);
     expect(m - oak).toBeCloseTo(1.33, 1); // the 6 mm Baltic over the 1/4 in white oak ply
     const ok = totalMass(buildModel({ ...defaults, thinSheetMaterial: OKOUME }, { rider: 'none', cargo: false }));
-    expect(ok).toBeCloseTo(120.712, 2); // D-80: the 6 mm okoume (Extreme)
+    expect(ok).toBeCloseTo(120.701, 2); // D-80: the 6 mm okoume (Extreme); 120.712 before the assembly review's king-beam slot and reliefs (-0.011)
     const tubeOk = totalMass(buildModel({ ...defaults, ...PRE_D72 }, { rider: 'none', cargo: false }));
-    expect(tubeOk).toBeCloseTo(116.813, 2); // D-85: +0.75 lb; // the D-71 tube and the 4 mm okoume (PRE_D72)
+    expect(tubeOk).toBeCloseTo(116.802, 2); // assembly review round 1: -0.011 (king-beam slot and reliefs); D-85: +0.75 lb; // the D-71 tube and the 4 mm okoume (PRE_D72)
     const rodOk4 = totalMass(buildModel({ ...defaults, ...PRE_D72, axleWallIn: 0 }, { rider: 'none', cargo: false }));
     expect(rodOk4 - tubeOk).toBeCloseTo(1.88, 1); // the rod over the tube
   });

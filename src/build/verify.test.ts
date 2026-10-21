@@ -197,9 +197,10 @@ describe('verify checklist', () => {
     const knee = list.find((c) => c.id === 'brake-knee')!;
     expect(knee.whatToDo).toMatch(/before cutting the other knee/);
     expect(knee.whatToDo).not.toMatch(/three knees/);
-    expect(knee.whatToDo).toMatch(/BEFORE the knees are bolted on/); // removable knees (the default)
+    expect(knee.whatToDo).toMatch(/try its pocket with a scrap block/); // removable knees (the default): a pocket test at the knee step, the full test at the flap step (assembly review round 1)
+    expect(knee.whatToDo).toMatch(/full test comes at the "Brake flaps" step/);
     const fx = { ...p, kneeMount: KNEE_MOUNT.fixed };
-    expect(verifyChecklist(buildModel(fx), fx).find((c) => c.id === 'brake-knee')!.whatToDo).toMatch(/BEFORE the knees are glued/);
+    expect(verifyChecklist(buildModel(fx), fx).find((c) => c.id === 'brake-knee')!.whatToDo).toMatch(/full test must come first: make the test knee, strap and flap tongue before the knees are glued on/);
     const bend = list.find((c) => c.id === 'strip-bend')!;
     expect(bend.whatToDo).toMatch(/FIRST board of each strip pool/);
     expect(bend.whatToDo).toMatch(/planned SPARE strips/);

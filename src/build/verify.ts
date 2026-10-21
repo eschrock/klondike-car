@@ -354,10 +354,11 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       title: 'Brake: pin, flap tongue and tire clearance on the first knee',
       how: [
         it('Cut ONE knee blank first, before cutting the other knee and the flaps.', [
-          `Notch the pocket in the layers, glue the test knee up and recess the pocket; screw the stainless strap on and drill the pin hole through its hole. Use the real ${fr(p.brakePivotPinDiaIn)}" clevis pin, the hitch-pin clip and a flap tongue with its pivot block clamped in the pocket.`,
+          'At the "Brake knees" assembly step, shape the first knee and try its pocket with a scrap block the size of the flap tongue with its pivot block on: it must slide in with a little play all round. Cut the other knee only when it does.',
+          `The full test comes at the "Brake flaps" step: screw the stainless strap on, drill the pin hole through its hole, and use the real ${fr(p.brakePivotPinDiaIn)}" clevis pin, the hitch-pin clip and the flap tongue with its pivot block clamped in the pocket.`,
           p.kneeMount === KNEE_MOUNT.removable
-            ? 'This test comes BEFORE the knees are bolted on: the knees go on first, while the hull is inverted (assembly step "Brake knees").'
-            : 'This test comes BEFORE the knees are glued: the knees go on first, while the hull is inverted (assembly step "Brake knees").',
+            ? 'The removable knees come off after the wheel dry fit anyway, so a knee that fails the full test is taken off and remade.'
+            : 'With glued knees the full test must come first: make the test knee, strap and flap tongue before the knees are glued on.',
         ]),
         it(`Check the pocket clearance (${fr(p.brakePivotSlotClearIn)}" a side), the pin through the strap and into the blind hole, the flap swing and the pad gap to the tire.`),
         it('Drag-test a chock: pull a weighted chock across packed dirt or gravel with a scale, dry and wet.'),

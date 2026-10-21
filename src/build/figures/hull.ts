@@ -10,7 +10,7 @@ import { worldAABB, transformPoint, type Bounds } from '../../model/bounds';
 import { computeLayout, outerHalfWidth, samples, sideTopAt, type Layout } from '../../model/layout';
 import { beamSeat } from '../../model/rear-mount';
 import type { Part, Vec2, Vec3 } from '../../model/types';
-import { cradleStations, chineTie, transomVents } from '../assembly';
+import { cradleHeights, cradleStations, chineTie, CRADLE_POST_W_IN, transomVents } from '../assembly';
 import { frac } from '../svg-util';
 import { ACCENT, DIM, Fig, fit, INK, MAT, mat, MUTED, type FigCtx, type FigFn, type Frame, type Style, type TextOpts } from './kit';
 
@@ -158,12 +158,16 @@ const hangerOnRail: FigFn = (c) => {
   const xr = fa.at([xEnd, 0])[0] + 24;
   F.label(fa.at([xEnd - 1.2, R.max[2] - 0.5]), [xr, top - 52], 'rail (laminated in the last step)', T12);
   F.label(fa.at([H.max[0] - 0.7, R.max[2] - 0.35]), [xr, top - 16], ['rear axle hanger, glued on', '(side grain to side grain)'], T12);
-  F.label(fa.at([bolts[1][0], bolts[1][1]]), [xr, top + 40], [`${bolts.length} bolt holes, drilled`, 'through both at once'], T12);
-  F.label(fa.at([nx1 - 0.2, hangNotchTop]), [xr, bot + 2], ['notch in the hanger, in line', 'with the rail\'s (dashed, behind)'], T12);
-  if (B) F.label(fa.at([B.max[0] - 0.3, B.min[2] + 0.3]), [xr, fa.at([0, B.min[2]])[1] + 14], ['rear axle beam (later):', 'it sits in the notches'], { ...T12, color: MUTED });
-  if (dom) F.label(fa.at([dom[0], dom[2] - 0.2]), [60, bot + 40], ['Domino mortise for crossmember 1,', 'cut in the hanger now'], { ...T12, anchor: 'start' });
+  F.label(fa.at([bolts[1][0], bolts[1][1]]), [xr, top + 26], [`${bolts.length} bolt holes, drilled`, 'through both at once'], T12);
+  F.label(fa.at([nx1 - 0.2, hangNotchTop]), [xr, bot + 20], ['notch in the hanger, in line', 'with the rail\'s'], T12);
+  F.label(fa.at([nx0 + 0.25, railNotchTop]), [xr, top + 62], ['rail notch (dashed, behind): cut', 'higher, to clear the axle clamp plate'], T12);
+  F.dim(fa.at([nx0, H.min[2]]), fa.at([nx1, H.min[2]]), frac(nx1 - nx0, 32), 34);
+  F.dim(fa.at([nx1, H.min[2]]), fa.at([nx1, hangNotchTop]), frac(hangNotchTop - H.min[2], 32), 0, { flat: true });
+  if (B) F.label(fa.at([B.max[0] - 0.3, B.min[2] + 0.3]), [xr, bot + 62], ['rear axle beam (later):', 'it sits in the notches'], { ...T12, color: MUTED });
+  if (dom) F.label(fa.at([dom[0], dom[2] - 0.38]), [fa.at([dom[0], 0])[0] - 8, bot + 40], ['Domino mortise for crossmember 1,', 'cut in the hanger now'], { ...T12, anchor: 'end' });
+  if (dom) F.dim(fa.at([dom[0] - 0.45, R.max[2]]), fa.at([dom[0] - 0.45, dom[2]]), f16(R.max[2] - dom[2]), 0, { flat: true, anchor: 'end' });
   F.dim(fa.at([R.min[0], R.max[2]]), fa.at([H.min[0], R.max[2]]), f16(H.min[0] - R.min[0]), -14);
-  F.dim(fa.at([H.min[0] - 0.35, R.max[2]]), fa.at([H.min[0] - 0.35, bolts[0][1]]), f16(R.max[2] - bolts[0][1]), 0, { flat: true, anchor: 'end' });
+  F.dim(fa.at([bolts[0][0], R.max[2]]), fa.at([bolts[0][0], bolts[0][1]]), f16(R.max[2] - bolts[0][1]), 0, { flat: true, anchor: 'end' });
   F.text([fa.at([R.min[0], 0])[0], top - 42], 'finished rear end', { size: 11.5, color: MUTED });
   F.line(fa.at([R.min[0], R.max[2] + 0.05]), [fa.at([R.min[0], 0])[0], top - 38], { stroke: MUTED, width: 0.8 });
 
@@ -180,12 +184,13 @@ const hangerOnRail: FigFn = (c) => {
   for (const [x] of bolts) F.line(fb.at([x, H.min[1] - 0.15]), fb.at([x, yRo + 0.15]), { stroke: MAT.steel.stroke, width: 1.4, dash: '3 2' });
   F.clamp(fb.at([H.min[0] + 0.5, 0])[0], fb.at([0, yRo])[1], fb.at([0, H.min[1]])[1], 'left', 20);
   F.clamp(fb.at([H.max[0] - 0.5, 0])[0], fb.at([0, yRo])[1], fb.at([0, H.min[1]])[1], 'right', 20);
-  F.label(fb.at([R.min[0] + 3, (yRi + yRo) / 2]), [60, fb.at([0, yRo])[1] - 26], 'rail', { ...T12, anchor: 'start' });
+  F.label(fb.at([R.min[0] + 3, yRo]), [fb.at([R.min[0] + 3, 0])[0] - 30, fb.at([0, yRo])[1] - 22], 'rail', { ...T12, anchor: 'end' });
   F.label(fb.at([H.max[0] - 1.6, H.min[1] + 0.2]), [xr, 470], ['hanger, clamped on', 'while the glue sets'], T12);
   F.label(fb.at([bolts[1][0], yRi + 0.1]), [xr, 512], 'bolt holes through both', T12);
   if (J1) F.label(fb.at([J1.max[0], yC + 1]), [xr, 540], ['crossmember 1 (next step)', 'ends in the hanger'], { ...T12, color: MUTED });
   if (B) F.label(fb.at([B.max[0], yC + 0.6]), [xr, 582], 'the rear axle beam passes under', { ...T12, color: MUTED });
-  F.legend(['oak', 'ghost', 'clamp'], [16, 600]);
+  F.legend(['oak', 'clamp'], [16, 600]);
+  F.text([210, 600], 'gray dashed: comes later', { size: 11.5, color: MUTED });
   F.note('Not to scale between views');
   return {
     id: 'hanger-on-rail',
@@ -202,7 +207,7 @@ const framePlan: FigFn = (c) => {
   const R = bbOf(c, 'rail-L'), deck = c.by('deck');
   if (!R || !deck || deck.geometry.type !== 'extrusion') return null;
   const L = computeLayout(c.p);
-  const F = new Fig(760, 480);
+  const F = new Fig(760, 510);
   F.heading('The frame from above, with the deck lifted off (its outline dashed)');
   const D = worldAABB(deck);
   const fr = fit({ minX: D.min[0] - 0.3, minY: -D.max[1] - 0.6, maxX: D.max[0] + 0.3, maxY: D.max[1] + 0.6 }, { x: 140, y: 104, w: 550, h: 260 }, 1, 'center');
@@ -230,23 +235,23 @@ const framePlan: FigFn = (c) => {
   const yMid = fr.at([0, 0])[1];
   F.text([fr.at([D.min[0], 0])[0] - 8, yMid - 30], 'rear', { size: 12, anchor: 'end', color: MUTED });
   F.text([fr.at([D.max[0], 0])[0] + 8, yMid + 4], 'bow', { size: 12, color: MUTED });
-  F.label(fr.at([D.min[0], -2]), [16, yMid + 4], ['deck outline', '(dashed): it is', 'bonded on top', 'of every part'], { ...T12, anchor: 'start', color: ACCENT });
+  F.label(fr.at([D.min[0], -2]), [fr.at([D.min[0], 0])[0] - 12, yMid + 4], ['deck outline', '(dashed): it is', 'bonded on top', 'of every part'], { ...T12, anchor: 'end', color: ACCENT });
   // labels below the plan
   const yl = fr.at([0, -D.max[1]])[1] + 34;
   const hgR = bbOf(c, 'axle-hanger-R'), bkR = bbOf(c, 'brake-backer-R'), shR = bbOf(c, 'seat-hinge-backer-R');
-  if (hgR) F.label(fr.at([(hgR.min[0] + hgR.max[0]) / 2, hgR.min[1] + 0.2]), [130, yl], ['rear axle hangers', '(last step)'], { ...T12, anchor: 'start' });
-  if (bkR) F.label(fr.at([(bkR.min[0] + bkR.max[0]) / 2, bkR.min[1] + 0.2]), [262, yl], ['brake knee backers and', 'their stainless plates'], { ...T12, anchor: 'start' });
-  if (shR) F.label(fr.at([(shR.min[0] + shR.max[0]) / 2, (shR.min[1] + shR.max[1]) / 2]), [425, yl], ['seat-back hinge backers (dashed):', 'under the deck, against crossmember 3'], { ...T12, anchor: 'start' });
+  if (hgR) { const t = fr.at([(hgR.min[0] + hgR.max[0]) / 2, hgR.min[1] + 0.2]); F.label(t, [t[0] - 4, yl], ['rear axle hangers', '(last step)'], { ...T12, anchor: 'end' }); }
+  if (bkR) { const t = fr.at([(bkR.min[0] + bkR.max[0]) / 2, bkR.min[1] + 0.2]); F.label(t, [t[0] + 6, yl + 52], ['brake knee backers and', 'their stainless plates'], { ...T12, anchor: 'start' }); }
+  if (shR) F.label(fr.at([(shR.min[0] + shR.max[0]) / 2, (shR.min[1] + shR.max[1]) / 2]), [fr.at([(shR.min[0] + shR.max[0]) / 2, 0])[0] + 6, yl], ['seat-back hinge backers (dashed): glued', 'under the deck, where crossmember 3 lands'], { ...T12, anchor: 'start' });
   const xr = R.max[0] - 3;
-  F.label(fr.at([xr, -(yRo - L.turnIn(xr) - c.p.railThicknessIn / 2)]), [654, yl + 48], ['rails, bent in', 'toward the bow'], { ...T12, anchor: 'start' });
-  if (king) F.label(fr.at([L.king.x, -(king.b.max[1] - 1.5)]), [620, yl + 54], 'king beam, bored for the kingpin', { ...T12, anchor: 'end' });
-  F.legend(['oak', 'steel'], [16, 470]);
-  F.text([260, 470], 'orange outline: added in this step', { size: 11.5, color: ACCENT });
+  F.label(fr.at([xr, -(yRo - L.turnIn(xr) - c.p.railThicknessIn / 2)]), [654, yl], ['rails, bent in', 'toward the bow'], { ...T12, anchor: 'start' });
+  if (king) F.label(fr.at([L.king.x, -(king.b.max[1] - 1.5)]), [fr.at([L.king.x, 0])[0] - 4, yl + 52], ['king beam (in place of', 'crossmember 7), bored', 'for the kingpin'], { ...T12, anchor: 'end' });
+  F.legend(['oak'], [16, 500]);
+  F.text([140, 500], 'orange outline: added in this step', { size: 11.5, color: ACCENT });
   F.note('Plan from above, to scale');
   return {
     id: 'frame-plan',
     title: 'The frame from above',
-    caption: 'The frame and deck unit seen from above with the deck lifted off; its outline is dashed. The rails and the rear axle hangers come from the last two steps. This step adds the crossmembers (numbered from the rear as the steps name them; the king beam sits between 6 and 8), the brake knee backers with their stainless plates and the two seat-back hinge backers, then bonds the deck on top of all of it. Glue it up on a flat bench: in [[step:dry-fit]] the whole unit is turned over and lowered into the sides.',
+    caption: 'The frame and deck unit seen from above with the deck lifted off; its outline is dashed. The rails and the rear axle hangers come from the last two steps. This step adds the crossmembers (numbered from the rear as the steps name them; the king beam takes the place of crossmember 7), the brake knee backers with their stainless plates and the two seat-back hinge backers, then bonds the deck on top of all of it. Glue it up on a flat bench: in [[step:dry-fit]] the whole unit is turned over and lowered into the sides.',
     svg: F.svg('The frame from above, with the deck outline dashed and the crossmembers numbered'),
   };
 };
@@ -313,62 +318,72 @@ const frameSection: FigFn = (c) => {
 
 // ───────────────────────────── dry fit ─────────────────────────────
 
-/** Drawing constants for the cradle plates (never printed): the plate below the deepest notch, and how far its middle stays under the deck. */
-const CRADLE_BASE_IN = 1.25;
-const CRADLE_DECK_CLEAR_IN = 0.5;
-/** Drawing constants for the alignment blocks: width, and how far they stand above the side's edge. */
-const BLOCK_W_IN = 0.9;
-const BLOCK_UP_IN = 1.5;
+/** One station cradle's plate in the hull's (y, z) section, upside down: the floor, the two posts, the slots the sides stand in, the cut-down middle (model z). */
+interface CradleGeom { zFloor: number; zPost: number; zMid: number; zEdge: number; poly: Array<[number, number]>; slotOut: number; slotIn: number; half: number }
+function cradleGeom(L: Layout, q: ReturnType<typeof cradleStations>[number], h: ReturnType<typeof cradleHeights>): CradleGeom {
+  const zFloor = L.chineBot + h.edgeIn; // the sides' bottom edges stand edgeIn above the floor
+  const zPost = zFloor - h.postIn, zMid = zFloor - h.middleIn, zSlot = zFloor - q.slotFloorIn;
+  const yo = q.widthIn / 2, half = q.plateWidthIn / 2, extra = (q.slotWidthIn - L.side) / 2;
+  const slotOut = yo + extra, slotIn = yo - L.side - extra;
+  const poly: Array<[number, number]> = [[-half, zFloor], [half, zFloor], [half, zPost], [slotOut, zPost], [slotOut, zSlot], [slotIn, zSlot], [slotIn, zMid], [-slotIn, zMid], [-slotIn, zSlot], [-slotOut, zSlot], [-slotOut, zPost], [-half, zPost]];
+  return { zFloor, zPost, zMid, zEdge: L.chineBot, poly, slotOut, slotIn, half };
+}
 
-/** End view (section across the hull at the rear cradle): the sides upside down in the cradle's notches, the frame and deck unit lowered in upside down. */
+/** End view (section across the hull at the rear cradle): the sides upside down in the cradle's slots, the frame and deck unit lowered in between the posts. */
 const dryFitEnd: FigFn = (c) => {
   const cr = cradleStations(c.p);
   const R = bbOf(c, 'rail-L');
   if (!cr.length || !R) return null;
   const L = computeLayout(c.p);
+  const ch = cradleHeights(c.p);
   const st = cr[0];
+  const g = cradleGeom(L, st, ch);
   const S = sideLayers(c, L, st.x);
-  const hMax = sideTopAt(L, L.xSideStart) - L.chineBot;
-  const zFloor = L.chineBot + hMax + CRADLE_BASE_IN;
-  const zPlateTop = L.deckTop + CRADLE_DECK_CLEAR_IN;
   const yRo = S.yo, yRi = yRo - c.p.railThicknessIn;
   const yDeck = S.yi + L.deckEdge;
   const J = c.parts.filter((q) => /^joist-\d+$/.test(q.id)).map((q) => worldAABB(q)).filter((b) => b.min[0] > st.x).sort((a, b) => a.min[0] - b.min[0])[0];
-  const zN = L.chineBot + st.heightIn;
-  const F = new Fig(760, 840);
+  const ab = { minX: -g.half - 0.2, minY: -g.zFloor - 0.1, maxX: g.half + 0.2, maxY: -(R.min[2] - 3.3) };
+  const hA = Math.min(380, (368 / (ab.maxX - ab.minX)) * (ab.maxY - ab.minY));
+  const by0 = Math.round(66 + hA + 40);
+  const F = new Fig(760, by0 + 400);
   F.heading('Dry fit: the sides upside down in a cradle, the frame and deck unit dropped in');
-  F.sub([16, 52], 'A. Section across the hull at cradle 1 (an end cradle), looking forward');
-  const fa = fit({ minX: -(yRo + BLOCK_W_IN + 0.2), minY: -zFloor - 0.1, maxX: yRo + BLOCK_W_IN + 0.2, maxY: -(R.min[2] - 2.4) }, { x: 196, y: 70, w: 368, h: 340 });
+  F.sub([16, 52], 'A. Section across the hull at cradle 1, looking forward');
+  const fa = fit(ab, { x: 196, y: 66, w: 368, h: hA });
   const P = (y: number, z: number): Vec2 => fa.at([y, -z]);
   const RC = (y0: number, z0: number, y1: number, z1: number, s: Style): void => { F.poly([P(y0, z0), P(y1, z0), P(y1, z1), P(y0, z1)], s); };
-  F.line(P(-(yRo + BLOCK_W_IN + 0.2), zFloor), P(yRo + BLOCK_W_IN + 0.2, zFloor), { stroke: INK, width: 1.4 });
-  F.poly([P(-yRo, zFloor), P(yRo, zFloor), P(yRo, zN), P(S.yi, zN), P(S.yi, zPlateTop), P(-S.yi, zPlateTop), P(-S.yi, zN), P(-yRo, zN)], accent('mdf'));
+  F.line(P(-g.half - 0.2, g.zFloor), P(g.half + 0.2, g.zFloor), { stroke: INK, width: 1.4 });
+  F.poly(g.poly.map(([y, z]) => P(y, z)), accent('mdf'));
   for (const s of [1, -1] as const) {
     drawSide(F, P, L, S, S.sheer, s, true);
-    RC(s * yRo, L.chineBot - BLOCK_UP_IN, s * (yRo + BLOCK_W_IN), zN + 1.0, mat('bench', { stroke: ACCENT, width: 1.4 }));
     RC(s * yRo, R.min[2], s * yRi, R.max[2], mat('oak'));
   }
   RC(-yDeck, L.deckBot, yDeck, L.deckTop, mat('deck'));
   if (J) RC(-yRi, J.min[2], yRi, J.max[2], ghost());
-  const aTop = P(0, R.min[2] - 2.2)[1], aBot = P(0, R.min[2] - 0.2)[1];
-  F.arrow([P(-8.5, 0)[0], aTop], [P(-8.5, 0)[0], aBot], ACCENT, 2.6);
-  F.arrow([P(8.5, 0)[0], aTop], [P(8.5, 0)[0], aBot], ACCENT, 2.6);
-  F.text([P(0, 0)[0], aTop + 16], 'turned over, lowered in dry', { size: 12, anchor: 'middle', color: ACCENT });
-  // left labels
-  const xl = 184, xr = 590;
-  F.label(P(-(yRo + BLOCK_W_IN / 2), L.chineBot - BLOCK_UP_IN + 0.2), [xl, P(0, R.min[2])[1] - 26], ['alignment block (on', 'the end cradles only)'], T12);
-  F.label(P(-(yRo + yRi) / 2, R.min[2] + 0.6), [xl, P(0, L.chineBot)[1] + 22], ['rail, on the side\'s', 'edge (now on top)'], T12);
-  F.label(P(-(S.yWo + S.yWi) / 2, (S.chineTop + S.gunBot) / 2), [xl, P(0, (S.chineTop + S.gunBot) / 2)[1]], ['side, upside down:', 'its top edge (the', 'sheer) is down here'], T12);
-  F.label(P(-S.yi - 2, (zN + zFloor) / 2), [xl, P(0, zFloor)[1] - 8], ['cradle: 3/4" MDF,', 'notched at each corner'], T12);
-  // right labels
-  if (J) F.label(P(yRi - 2, (J.min[2] + J.max[2]) / 2), [xr, P(0, J.min[2])[1] - 4], 'crossmember, beyond', { ...T12, color: MUTED });
-  F.label(P(yDeck - 2.5, (L.deckBot + L.deckTop) / 2), [xr, P(0, L.deckTop)[1] + 22], 'deck (underneath now)', T12);
-  F.dim(P(yRo + BLOCK_W_IN, L.chineBot), P(yRo + BLOCK_W_IN, zN), f16(st.heightIn), -12, { flat: true });
-  F.text([P(yRo + BLOCK_W_IN, 0)[0] + 18, P(0, (L.chineBot + zN) / 2)[1] + 22], ['side height', 'at this cradle'], { size: 11.5, color: DIM });
-  F.dim(P(-yRo, zFloor), P(yRo, zFloor), `${f16(st.widthIn)} outside`, -14);
+  // the hull's outside width, over the rails
+  const zW = R.min[2] - 1.0;
+  F.dim(P(-yRo, zW), P(yRo, zW), `${f16(st.widthIn)} outside (the hull)`, 0);
+  for (const s of [1, -1]) F.line(P(s * yRo, R.min[2] - 0.1), P(s * yRo, zW - 0.2), { stroke: DIM, width: 0.8, dash: '2 2' });
+  const aTop = P(0, R.min[2] - 3.1)[1], aBot = P(0, R.min[2] - 1.9)[1];
+  F.arrow([P(-9, 0)[0], aTop], [P(-9, 0)[0], aBot], ACCENT, 2.6);
+  F.arrow([P(9, 0)[0], aTop], [P(9, 0)[0], aBot], ACCENT, 2.6);
+  F.text([P(0, 0)[0], aTop + 14], 'lowered in dry, between the posts', { size: 12, anchor: 'middle', color: ACCENT });
+  // heights from the floor (left: post top and slot floor; right: the sides' edges and the cut-down middle)
+  const yF = P(0, g.zFloor)[1];
+  F.dim([P(-g.half, 0)[0] - 14, yF], [P(-g.half, 0)[0] - 14, P(0, g.zPost)[1]], f16(ch.postIn), 0, { flat: true, anchor: 'end' });
+  F.dim([P(-g.slotOut, 0)[0] + 4, yF], [P(-g.slotOut, 0)[0] + 4, P(0, S.sheer)[1]], f16(st.slotFloorIn), 0, { flat: true });
+  F.dim([P(g.half, 0)[0] + 14, yF], [P(g.half, 0)[0] + 14, P(0, L.chineBot)[1]], f16(ch.edgeIn), 0, { flat: true });
+  F.dim([P(0, 0)[0], yF], [P(0, 0)[0], P(0, g.zMid)[1]], f16(ch.middleIn), 0, { flat: true });
+  const xl = 150, xr = 616;
+  F.label(P(-(g.half + g.slotOut) / 2, L.chineBot + 1.2), [xl, P(0, L.chineBot + 1.2)[1] + 4], ['post (one outside', 'each slot)'], T12);
+  F.label(P(-(yRo + yRi) / 2, R.min[2] + 0.6), [xl, P(0, R.min[2])[1] - 6], ['rail, on the side\'s', 'edge (on top now)'], T12);
+  F.label(P(-(S.yWo + S.yWi) / 2, (S.chineTop + S.gunBot) / 2), [xl, P(0, (S.chineTop + S.gunBot) / 2)[1]], ['side, upside down', 'in its slot: its top', 'edge (the sheer)', 'sits on the slot floor'], T12);
+  F.label(P(-g.slotIn - 2.5, g.zMid + 0.4), [xl, P(0, g.zFloor)[1] - 40], ['cradle: a 3/4" MDF plate,', 'cut down between', 'the slots'], T12);
+  if (J) F.label(P(yRi - 2, (J.min[2] + J.max[2]) / 2), [xr, P(0, J.min[2])[1] - 4], ['crossmember,', 'beyond'], { ...T12, color: MUTED });
+  F.label(P(yDeck - 2.5, (L.deckBot + L.deckTop) / 2), [xr, P(0, L.deckTop)[1] + 30], ['deck (under the', 'rails now)'], T12);
+  F.text([P(g.half, 0)[0] + 20, P(0, L.chineBot)[1] + 64], ['the sides\'', 'bottom edges'], { size: 11.5, color: DIM });
+  F.text([P(0, 0)[0] + 6, P(0, g.zMid)[1] - 8], 'middle cut down', { size: 11.5, color: DIM });
 
   // B. The corner, much larger
-  const by0 = 446;
   F.rect(150, by0, 460, 360, { stroke: MUTED, width: 0.8 });
   F.sub([160, by0 + 22], 'B. One corner, larger (upside down)');
   const fb = fit({ minX: yRo - 1.1, minY: -(S.chineTop + 0.45), maxX: yRo + 0.3, maxY: -(R.max[2] - 0.9) }, { x: 300, y: by0 + 40, w: 160, h: 300 }, 1, 'center');
@@ -386,165 +401,170 @@ const dryFitEnd: FigFn = (c) => {
   F.label(Q((S.yo + S.yWi) / 2, L.chineBot + 0.06), [br, Q(0, L.chineBot)[1] + 4], ['the rail sits on the edge of', 'the outer band and the web'], T12);
   F.label(Q((S.yo + S.yWo) / 2, S.chineTop - 0.3), [br, Q(0, S.chineTop - 0.3)[1] + 4], 'outer chine band', T12);
   F.label(Q((S.yWo + S.yWi) / 2, S.chineTop + 0.25), [br, Q(0, S.chineTop + 0.25)[1] + 4], 'web', T12);
-  F.label(Q(yDeck - 0.35, (L.deckBot + L.deckTop) / 2), [bl, Q(0, L.deckTop)[1] - 10], ['deck edge, in the gap', 'beside the inner band'], T12);
+  F.label(Q(yDeck - 0.35, (L.deckBot + L.deckTop) / 2), [bl, Q(0, L.deckTop)[1] - 10], ['deck edge, beside the web', '(the inner band is under', 'it on the finished sled)'], T12);
   F.label(Q((S.yWi + S.yi) / 2, (S.innerChineBot + S.chineTop) / 2), [bl, Q(0, S.chineTop)[1] - 4], 'inner chine band', T12);
   const zg = (L.deckBot + L.deckTop) / 2;
   F.line(Q(yDeck, zg), Q(S.yWi, zg), { stroke: DIM, width: 1.4 });
   F.label(Q((yDeck + S.yWi) / 2, zg), [br, Q(0, zg)[1] + 40], `${f16(c.p.deckSideClearIn)} gap to the web, each side`, { ...T12, color: DIM });
-  F.legend(['oak', 'web', 'deck', 'mdf'], [16, 830]);
-  F.text([450, 830], 'gray: alignment blocks', { size: 11.5, color: MUTED });
+  F.legend(['oak', 'web', 'deck', 'mdf'], [16, F.h - 10]);
   F.note('Section, upside down');
   return {
     id: 'dry-fit-end',
     title: 'Dry fit: the inverted sides on a cradle',
-    caption: `From here to [[step:flip]] the hull is built upside down. Each MDF cradle has a notch at each top corner, as wide as the side is thick and as deep as the side is tall at that cradle (${f16(st.heightIn)} at cradle 1); the sides stand in the notches top edge down, so their bottom edges come out level and facing up. The frame and deck unit is turned over and lowered in dry: each rail lands on the edge of the outer band and the web, and the deck edge drops into the gap beside the inner chine band (view B). The cradle is cut down between the notches so it never touches the deck; the two end cradles also carry the alignment blocks.`,
+    caption: `From here to [[step:flip]] the hull is built upside down. Each MDF cradle is a plate ${f16(2 * CRADLE_POST_W_IN)} wider than the hull, with a slot near each end and a post outside each slot. The side's top edge (the sheer) drops into the slot, and every slot floor is set so the sides' bottom edges come out level, ${f16(ch.edgeIn)} from the floor (at cradle 1 the side is ${f16(st.heightIn)} tall, so the slot floor is ${f16(st.slotFloorIn)} up). The plate is cut down between the slots to ${f16(ch.middleIn)}, clear of the inner chine band and the deck. The frame and deck unit is turned over and lowered in dry between the posts: each rail lands on the edge of the outer band and the web, and the deck edge goes in beside the web (view B).`,
     svg: F.svg('Dry fit: section across the inverted hull at a station cradle, and one corner larger'),
   };
 };
 
-/** Side view: the four cradles under the inverted side at their stations, the side height at each. */
+/** Side view: the four cradles under the inverted side at their stations, the side height at each, the level of the sides' bottom edges. */
 const dryFitCradles: FigFn = (c) => {
   const cr = cradleStations(c.p);
   const web = c.by('side-L-web'), rail = c.by('rail-L');
   const wp = profileOf(web), rp = profileOf(rail);
   if (!cr.length || !web || !wp || !rp) return null;
   const L = computeLayout(c.p);
+  const ch = cradleHeights(c.p);
   const W = worldAABB(web);
   const web0 = W.min[0];
-  const hMax = sideTopAt(L, L.xSideStart) - L.chineBot;
-  const zFloor = L.chineBot + hMax + CRADLE_BASE_IN;
-  const zPlateTop = L.deckTop + CRADLE_DECK_CLEAR_IN;
-  const F = new Fig(760, 420);
+  const zFloor = L.chineBot + ch.edgeIn;
+  const zPost = zFloor - ch.postIn;
+  const F = new Fig(760, 440);
   F.heading('The four cradles, seen from the side (hull upside down)');
-  const fr = fit({ minX: W.min[0] - 1, minY: -zFloor - 0.3, maxX: W.max[0] + 1, maxY: -(L.railTop - c.p.railDepthIn) + 0.6 }, { x: 50, y: 74, w: 660, h: 250 });
+  const fr = fit({ minX: W.min[0] - 4, minY: -zFloor - 0.3, maxX: W.max[0] + 1, maxY: -(L.railTop - c.p.railDepthIn) + 0.6 }, { x: 40, y: 74, w: 680, h: 250 });
   const P = (x: number, z: number): Vec2 => fr.at([x, -z]);
-  F.line(P(W.min[0] - 1, zFloor), P(W.max[0] + 1, zFloor), { stroke: INK, width: 1.4 });
+  F.line(P(W.min[0] - 4, zFloor), P(W.max[0] + 1, zFloor), { stroke: INK, width: 1.4 });
   const plateW = Math.max(0.75, 7 / fr.kx);
-  for (const q of cr) {
-    const zN = L.chineBot + q.heightIn;
-    F.poly([P(q.x - plateW / 2, zN), P(q.x + plateW / 2, zN), P(q.x + plateW / 2, zFloor), P(q.x - plateW / 2, zFloor)], accent('mdf'));
-  }
+  // each cradle's near post (in front of the side), from the floor to the post top
   F.poly(wp.map(([x, z]) => P(x, z)), mat('web'));
   const cb = profileOf(c.by('side-L-chine')), gb = profileOf(c.by('side-L-gunwale'));
   if (cb) F.poly(cb.map(([x, z]) => P(x, z)), mat('oak'));
   if (gb) F.poly(gb.map(([x, z]) => P(x, z)), mat('oak'));
   F.poly(rp.map(([x, z]) => P(x, z)), mat('oak'));
-  // the plate behind the side, dashed
-  for (const q of cr) {
-    const zN = L.chineBot + q.heightIn;
-    F.poly([P(q.x - plateW / 2, zPlateTop), P(q.x + plateW / 2, zPlateTop), P(q.x + plateW / 2, zN), P(q.x - plateW / 2, zN)], { stroke: ACCENT, width: 1, dash: '3 3' }, false);
-  }
+  for (const q of cr) F.poly([P(q.x - plateW / 2, zPost), P(q.x + plateW / 2, zPost), P(q.x + plateW / 2, zFloor), P(q.x - plateW / 2, zFloor)], accent('mdf', { opacity: 0.85 }));
+  // the level of the sides' bottom edges
+  F.line(P(W.min[0] - 3.5, L.chineBot), P(W.max[0] + 0.8, L.chineBot), { stroke: DIM, width: 1, dash: '6 3' });
+  F.dim(P(W.min[0] - 2.5, zFloor), P(W.min[0] - 2.5, L.chineBot), f16(ch.edgeIn), 0, { flat: true, anchor: 'end' });
   for (const [i, q] of cr.entries()) {
     const x = P(q.x, 0)[0], zN = L.chineBot + q.heightIn;
-    F.dim(P(q.x + plateW / 2 + 0.4, L.chineBot), P(q.x + plateW / 2 + 0.4, zN), '', 0);
+    F.dim(P(q.x + plateW / 2 + 0.6, L.chineBot), P(q.x + plateW / 2 + 0.6, zN), '', 0);
     F.text([x, P(0, zFloor)[1] + 18], `Cradle ${i + 1}`, { size: 12, anchor: 'middle', weight: 'bold' });
     F.text([x, P(0, zFloor)[1] + 34], `${f8(q.x - web0)} from the rear end`, { size: 11.5, anchor: 'middle' });
-    F.text([x, P(0, zFloor)[1] + 50], `side ${f16(q.heightIn)} tall here`, { size: 11.5, anchor: 'middle', color: DIM });
+    F.text([x, P(0, zFloor)[1] + 50], `side height here: ${f16(q.heightIn)}`, { size: 11.5, anchor: 'middle', color: DIM });
+    F.text([x, P(0, zFloor)[1] + 66], `(sets the slot floor: ${f16(q.slotFloorIn)})`, { size: 11.5, anchor: 'middle', color: DIM });
   }
   const xm = (W.min[0] + W.max[0]) * 0.36;
-  F.label(P(xm, L.railTop - c.p.railDepthIn / 2), [P(xm, 0)[0] - 10, 64], 'rail of the frame and deck unit, on the side\'s bottom edge (now on top)', { ...T12, anchor: 'start' });
+  F.label(P(xm, L.railTop - c.p.railDepthIn / 2), [P(xm, 0)[0] - 10, 64], 'rail of the frame and deck unit, on the side\'s bottom edge (on top now)', { ...T12, anchor: 'start' });
   const xg = W.min[0] + (W.max[0] - W.min[0]) * 0.2;
-  F.label(P(xg, sideTopAt(L, xg) - 0.3), [P(xg, 0)[0] + 90, P(0, sideTopAt(L, xg))[1] + 6], 'the sheer (the side\'s top edge) hangs down into the cradles', { ...T12, anchor: 'start' });
-  F.text([P(W.min[0], 0)[0], P(0, L.chineBot)[1] - 38], 'rear end', { size: 11.5, color: MUTED });
-  F.text([P(W.max[0], 0)[0], P(0, L.chineBot)[1] - 38], 'bow end', { size: 11.5, color: MUTED, anchor: 'end' });
-  F.legend(['oak', 'web', 'mdf'], [16, 410]);
-  F.text([340, 410], 'dashed: the cradle plate behind the side', { size: 11.5, color: MUTED });
+  F.label(P(xg, sideTopAt(L, xg) - 0.3), [P(xg, 0)[0] + 90, P(0, sideTopAt(L, xg))[1] + 6], 'the sheer (the side\'s top edge) hangs down into the slots', { ...T12, anchor: 'start' });
+  F.text([P(cr[1].x, 0)[0] + 24, P(0, L.chineBot)[1] - 7], 'dashed: the sides\' bottom edges, all level', { size: 11.5, color: DIM });
+  F.text([P(W.min[0], 0)[0], P(0, L.chineBot)[1] - 46], 'rear end', { size: 11.5, color: MUTED });
+  F.text([P(W.max[0], 0)[0], P(0, L.chineBot)[1] - 46], 'bow end', { size: 11.5, color: MUTED, anchor: 'end' });
+  F.legend(['oak', 'web', 'mdf'], [16, 430]);
+  F.text([340, 430], 'MDF: the cradle post in front of the side', { size: 11.5, color: MUTED });
   F.note('Side view, to scale');
   return {
     id: 'dry-fit-cradles',
     title: 'The cradles under the inverted side',
-    caption: 'The side is upside down, so its curved top edge (the sheer) hangs down and its straight bottom edge is on top, level. Each cradle\'s corner notch is as deep as the side is tall at that station, which is why the notches get shallower toward the bow; with every plate the same height, the bottom edges of both sides come out level for the frame and deck unit. Set each cradle at its distance from the rear end of the sides, measured along the floor.',
+    caption: `The side is upside down, so its curved top edge (the sheer) hangs down into the cradle slots and its straight bottom edge is on top. Every slot floor is set at ${f16(ch.edgeIn)} less the side's height at that cradle, which is why the slots get shallower toward the bow: the bottom edges of both sides then come out level, ${f16(ch.edgeIn)} from the floor, for the frame and deck unit. Set each cradle at its distance from the rear end of the sides, measured along the floor.`,
     svg: F.svg('The four station cradles under the inverted side, seen from the side'),
   };
 };
 
-/** Drilling the screw pilots through the rail's clearance holes into the side's edge (section), and where the holes and the alignment blocks are (plan). */
+/** Drilling the screw pilots through the rail's clearance holes into the side's edge (a counterbored hole and the forward one, in section), and where the holes are (plan). */
 const dryFitPilots: FigFn = (c) => {
   const rail = c.by('rail-L'), R = rail ? worldAABB(rail) : undefined;
   const tie = chineTie(c.parts);
   if (!rail || !R || !tie.perRail) return null;
   const L = computeLayout(c.p);
   const cr = cradleStations(c.p);
+  const ch = cradleHeights(c.p);
   const screws = jointPts(rail, (j) => j.type === 'screw' && /chine/.test(j.to)).sort((a, b) => a[0] - b[0]);
   const cb = railCounterbore(rail);
   const cbOk = Number.isFinite(cb.depth) && Number.isFinite(cb.dia);
-  const pilotFeat = c.drawings().find((s) => s.partIds.includes('side-L-chine'))?.features.find((q) => q.kind === 'hole' && (q.to ?? []).some((t) => /^rail-/.test(t)));
-  const pilotDepthTxt = /,\s*([\d\-/]+")\s*deep/.exec(pilotFeat?.size ?? '')?.[1];
-  const pilotDepth = pilotDepthTxt ? parseInchText(pilotDepthTxt) : 0.625;
+  const pilotFeats = c.drawings().find((s) => s.partIds.includes('side-L-chine'))?.features.filter((q) => q.kind === 'hole' && (q.to ?? []).some((t) => /^rail-/.test(t))) ?? [];
+  const depthOf = (q: { size?: string } | undefined): string | undefined => /,\s*([\d\-/]+")\s*deep/.exec(q?.size ?? '')?.[1];
+  const deepAft = depthOf(pilotFeats.find((q) => q.count > 1)) ?? depthOf(pilotFeats[0]);
+  const deepFwd = depthOf(pilotFeats.find((q) => q.count === 1));
   const clrTxt = /^([\d/]+")\s*clearance/.exec(c.drawings().find((s) => s.partIds.includes('rail-L'))?.features.find((q) => q.kind === 'hole' && (q.to ?? []).some((t) => /chine/.test(t)))?.size ?? '')?.[1];
   const clr = clrTxt ? parseInchText(clrTxt) : 11 / 64;
   const stations = railHoleStations(c);
-  const x0 = screws[0]?.[0] ?? 0;
-  const S = sideLayers(c, L, x0);
-  const ys = screws[0]?.[1] ?? (S.yo - L.sideBand);
-  const yRo = S.yo, yRi = yRo - c.p.railThicknessIn;
-  const F = new Fig(760, 720);
+  const railDepthAt = (x: number): number => (x > L.railStepX ? L.railDepthF : c.p.railDepthIn);
+  const F = new Fig(760, 760);
   F.heading('Drilling the screw pilots through the rail holes (hull upside down)');
-  F.sub([16, 52], 'A. Section at one screw hole');
-  const zCut = L.deckTop + 0.9;
-  const bitTop = R.min[2] - 1.5;
-  const fa = fit({ minX: yRi - 1.0, minY: -(zCut + 0.05), maxX: yRo + 0.5, maxY: -(bitTop - 0.4) }, { x: 230, y: 70, w: 200, h: 330 }, 1, 'center');
-  const P = (y: number, z: number): Vec2 => fa.at([y, -z]);
-  const RC = (y0: number, z0: number, y1: number, z1: number, s: Style): void => { F.poly([P(y0, z0), P(y1, z0), P(y1, z1), P(y0, z1)], s); };
-  drawSide(F, P, L, S, zCut);
-  RC(yRi - 1.0, L.deckBot, S.yi + L.deckEdge, L.deckTop, mat('deck'));
-  breakH(F, P(0, zCut)[1], P(S.yi, 0)[0], P(S.yo, 0)[0]);
-  breakV(F, P(yRi - 1.0, 0)[0], P(0, L.deckBot)[1], P(0, L.deckTop)[1]);
-  RC(yRo, R.min[2], yRi, R.max[2], mat('oak'));
-  if (cbOk) RC(ys - cb.dia / 2, R.min[2], ys + cb.dia / 2, R.min[2] + cb.depth, { fill: '#fff', stroke: INK, width: 1 });
-  RC(ys - clr / 2, R.min[2] + (cbOk ? cb.depth : 0), ys + clr / 2, R.max[2], { fill: '#fff', stroke: INK, width: 0.8 });
-  RC(ys - 1 / 16, L.chineBot, ys + 1 / 16, L.chineBot + pilotDepth, { fill: '#fff', stroke: ACCENT, width: 1, dash: '2 2' });
-  F.poly([P(ys - 1 / 16, bitTop), P(ys + 1 / 16, bitTop), P(ys + 1 / 16, L.chineBot + pilotDepth - 0.06), P(ys, L.chineBot + pilotDepth), P(ys - 1 / 16, L.chineBot + pilotDepth - 0.06)], mat('steel', { stroke: MAT.steel.stroke, width: 1 }));
-  F.rect(P(ys - 0.35, 0)[0], P(0, bitTop)[1] - 18, P(ys + 0.35, 0)[0] - P(ys - 0.35, 0)[0], 18, mat('steel'), 2);
-  const zFlag = R.min[2] - 0.02;
-  F.poly([P(ys + 1 / 16, zFlag - 0.12), P(ys + 0.4, zFlag - 0.2), P(ys + 0.4, zFlag - 0.04), P(ys + 1 / 16, zFlag)], { fill: '#2f9e44', stroke: '#1b6e2e', width: 1 });
-  F.arrow([P(ys, 0)[0] - 30, P(0, bitTop)[1] - 4], [P(ys, 0)[0] - 30, P(0, bitTop)[1] + 44], ACCENT, 2.4);
-  const xr = 470, xl = 214;
-  F.label(P(ys + 0.35, zFlag - 0.13), [xr, P(0, zFlag)[1] - 24], ['tape flag: stop when it', 'touches the rail'], T12);
-  if (cbOk) F.label(P(ys + cb.dia / 2, R.min[2] + cb.depth * 0.6), [xr, P(0, R.min[2] + cb.depth * 0.6)[1] + 14], [`counterbore, ${f16(cb.depth)} deep`, '(drilled with the rail)'], T12);
-  F.label(P(ys + clr / 2, R.min[2] + 2.0), [xr, P(0, R.min[2] + 2.0)[1] + 4], [`${clrTxt ?? frac(clr, 64)} clearance hole`, 'through the rail'], T12);
-  F.label(P(ys + 1 / 16, L.chineBot + pilotDepth * 0.6), [xr, P(0, L.chineBot + pilotDepth)[1] + 30], [`1/8" pilot, ${pilotDepthTxt ?? f16(pilotDepth)} deep, on the glue`, 'line of the outer band and web'], T12);
-  F.label(P(yRi + 0.1, R.min[2] + 1.4), [xl, P(0, R.min[2] + 1.4)[1]], ['rail (its bottom', 'edge faces up)'], T12);
-  F.label(P(yRi - 0.6, (L.deckBot + L.deckTop) / 2), [xl, P(0, L.deckTop)[1] + 30], 'deck', T12);
-  F.label(P(S.yi + 0.09, zCut - 0.15), [xl, P(0, zCut)[1] + 12], 'side', T12);
-  F.text([P(ys, 0)[0] - 40, P(0, bitTop)[1] - 4], '1/8" bit', { size: 12, anchor: 'end' });
 
-  // B. Plan: where the holes are, and the alignment blocks at the end cradles
-  F.sub([16, 440], `B. From above: ${tie.perRail} holes in each rail, alignment blocks at the end cradles`);
+  /** One hole in section, the 1/8" x 6" bit in it at full depth and its tape flag on the rail's face. */
+  const section = (q: Vec3, pilotTxt: string | undefined, box: { x: number; w: number }, title: string, lx: number, rx: number, aft: boolean): void => {
+    const pd = pilotTxt ? parseInchText(pilotTxt) : 0.625;
+    const S = sideLayers(c, L, q[0]);
+    const ys = q[1], yRo = S.yo, yRi = yRo - c.p.railThicknessIn;
+    const rd = railDepthAt(q[0]), zRb = L.railTop - rd;
+    const zCut = L.deckTop + 0.9, bitTop = L.railTop - c.p.railDepthIn - 1.4;
+    F.sub([box.x - 90, 52], title);
+    const fa = fit({ minX: yRi - 0.9, minY: -(zCut + 0.05), maxX: yRo + 0.3, maxY: -(bitTop - 0.4) }, { x: box.x, y: 70, w: box.w, h: 330 }, 1, 'center');
+    const P = (y: number, z: number): Vec2 => fa.at([y, -z]);
+    const RC = (y0: number, z0: number, y1: number, z1: number, s: Style): void => { F.poly([P(y0, z0), P(y1, z0), P(y1, z1), P(y0, z1)], s); };
+    drawSide(F, P, L, S, zCut);
+    RC(yRi - 0.9, L.deckBot, S.yi + L.deckEdge, L.deckTop, mat('deck'));
+    breakH(F, P(0, zCut)[1], P(S.yi, 0)[0], P(S.yo, 0)[0]);
+    breakV(F, P(yRi - 0.9, 0)[0], P(0, L.deckBot)[1], P(0, L.deckTop)[1]);
+    RC(yRo, zRb, yRi, L.railTop, mat('oak'));
+    if (aft && cbOk) RC(ys - cb.dia / 2, zRb, ys + cb.dia / 2, zRb + cb.depth, { fill: '#fff', stroke: INK, width: 1 });
+    if (!aft) F.poly([P(ys - 0.17, zRb), P(ys + 0.17, zRb), P(ys + clr / 2, zRb + 0.15), P(ys - clr / 2, zRb + 0.15)], { fill: '#fff', stroke: INK, width: 1 });
+    RC(ys - clr / 2, zRb + (aft && cbOk ? cb.depth : 0.15), ys + clr / 2, L.railTop, { fill: '#fff', stroke: INK, width: 0.8 });
+    RC(ys - 1 / 16, L.chineBot, ys + 1 / 16, L.chineBot + pd, { fill: '#fff', stroke: ACCENT, width: 1, dash: '2 2' });
+    F.poly([P(ys - 1 / 16, bitTop), P(ys + 1 / 16, bitTop), P(ys + 1 / 16, L.chineBot + pd - 0.06), P(ys, L.chineBot + pd), P(ys - 1 / 16, L.chineBot + pd - 0.06)], mat('steel', { stroke: MAT.steel.stroke, width: 1 }));
+    F.rect(P(ys - 0.3, 0)[0], P(0, bitTop)[1] - 16, P(ys + 0.3, 0)[0] - P(ys - 0.3, 0)[0], 16, mat('steel'), 2);
+    // the flag, wider than the counterbore, resting on the rail's face
+    const fw = aft && cbOk ? cb.dia / 2 + 0.15 : 0.35;
+    F.rect(P(ys - fw, 0)[0], P(0, zRb)[1] - 7, P(ys + fw, 0)[0] - P(ys - fw, 0)[0], 6, { fill: '#2f9e44', stroke: '#1b6e2e', width: 1 });
+    F.dim(P(ys - fw - 0.12, zRb), P(ys - fw - 0.12, L.chineBot + pd), f16(rd + pd), 0, { flat: true, anchor: 'end' });
+    F.arrow([P(ys, 0)[0] + 22, P(0, bitTop)[1] - 4], [P(ys, 0)[0] + 22, P(0, bitTop)[1] + 40], ACCENT, 2.4);
+    F.label(P(ys + fw, zRb - 0.08), [rx, P(0, zRb)[1] - 30], ['tape flag: it stops', 'on the rail\'s face'], T12);
+    F.label(P(yRo - 0.05, (zRb + L.railTop) / 2), [rx, P(0, (zRb + L.railTop) / 2)[1] + 4], aft ? [`rail, ${f16(rd)} deep;`, cbOk ? `${f16(cb.dia)} counterbore` : 'counterbored'] : [`rail, only ${f16(rd)}`, 'deep: countersunk'], T12);
+    F.label(P(ys + 1 / 16, L.chineBot + pd * 0.6), [rx, P(0, L.chineBot + pd)[1] - 6], [`pilot ${pilotTxt ?? f16(pd)} deep,`, 'on the glue line of', 'outer band and web'], T12);
+    F.text([P(ys - fw - 0.12, 0)[0] - 6, P(0, (zRb + L.chineBot + pd) / 2)[1] - 30], ['flag to', 'the tip:'], { size: 11.5, anchor: 'end', color: DIM });
+    F.label(P(yRi - 0.5, (L.deckBot + L.deckTop) / 2), [lx, P(0, L.deckTop)[1] + 34], 'deck', T12);
+    F.label(P(S.yi + 0.09, zCut - 0.15), [lx, P(0, zCut)[1] + 12], 'side', T12);
+  };
+  const aftQ = screws[0], fwdQ = screws.find((q) => q[0] > L.railStepX);
+  if (aftQ) section(aftQ, deepAft, { x: 110, w: 130 }, `A. One of the ${screws.filter((q) => q[0] <= L.railStepX).length} counterbored holes`, 100, 256, true);
+  if (fwdQ) section(fwdQ, deepFwd, { x: 490, w: 130 }, 'B. The forward hole', 480, 636, false);
+  F.text([16, 436], `The bit: 1/8" × 6" (an aircraft bit). Each pilot sits under its clearance hole (${clrTxt ?? frac(clr, 64)}) in the rail; the tape flag sets its depth.`, { size: 12 });
+
+  // C. Plan: where the holes are, and the cradle posts that hold the sides
+  F.sub([16, 470], `C. From above: ${tie.perRail} holes in each rail; the cradle posts hold the sides`);
   const W = bbOf(c, 'side-L-web');
   const xa = W ? W.min[0] : R.min[0], xb = W ? W.max[0] : R.max[0];
-  const yMax = L.hwC + L.side + BLOCK_W_IN + 0.2;
-  const fb = fit({ minX: xa - 1, minY: -yMax, maxX: xb + 1, maxY: yMax }, { x: 60, y: 506, w: 640, h: 160 }, 1, 'center');
+  const yMax = (cr[0]?.plateWidthIn ?? 2 * (L.hwC + L.side)) / 2 + 0.2;
+  const fb = fit({ minX: xa - 1, minY: -yMax, maxX: xb + 1, maxY: yMax }, { x: 60, y: 540, w: 640, h: 170 }, 1, 'center');
   const xs = samples(xa, xb, 80), rx = samples(R.min[0], R.max[0], 80);
+  // the cradle plates (seen from above: a thin strip each, the posts at the ends)
+  for (const q of cr) {
+    const half = q.plateWidthIn / 2, yo = q.widthIn / 2;
+    rectIn(F, fb, [q.x - 0.375, -half], [q.x + 0.375, half], mat('mdf', { opacity: 0.6 }));
+    for (const s of [1, -1]) rectIn(F, fb, [q.x - 0.375, s * yo], [q.x + 0.375, s * half], accent('mdf', { width: 1.2 }));
+  }
   // the hull is turned over about its length, so the left side is at the bottom of this view
   for (const s of [1, -1] as const) {
     const Y = (y: number): number => -s * y;
     F.poly([...xs.map((x): Vec2 => [x, Y(L.hwC + L.side - L.turnIn(x))]), ...[...xs].reverse().map((x): Vec2 => [x, Y(L.hwC - L.turnIn(x))])].map(fb.at), mat('web'));
     F.poly([...rx.map((x): Vec2 => [x, Y(L.hwC + L.side - L.turnIn(x))]), ...[...rx].reverse().map((x): Vec2 => [x, Y(L.hwC + L.side - c.p.railThicknessIn - L.turnIn(x))])].map(fb.at), mat('oak'));
     for (const q of screws) F.circle(fb.at([q[0], Y(q[1])]), 2.6, { fill: '#fff', stroke: ACCENT, width: 1.4 });
-    for (const q of [cr[0], cr[cr.length - 1]]) {
-      const yo = outerHalfWidth(L, q.x);
-      rectIn(F, fb, [q.x - 0.9, Y(yo)], [q.x + 0.9, Y(yo + BLOCK_W_IN)], mat('bench', { stroke: ACCENT, width: 1.4 }));
-    }
   }
-  for (const q of cr) {
-    const yo = outerHalfWidth(L, q.x);
-    F.line(fb.at([q.x, -yo]), fb.at([q.x, yo]), { stroke: MAT.mdf.stroke, width: 1.4, dash: '5 3' });
-  }
-  const yTop = fb.at([0, L.hwC + L.side + BLOCK_W_IN])[1] - 8;
+  const yTop = fb.at([0, yMax])[1] - 6;
   if (stations.length === screws.length) screws.forEach((q, i) => F.text([fb.at([q[0], 0])[0], yTop - (i % 2 ? 0 : 16)], stations[i], { size: 11.5, anchor: 'middle', color: ACCENT }));
-  F.text([16, yTop - 36], 'hole centers from the rear end of the rail, measured along it:', { size: 11.5, color: ACCENT });
+  F.text([16, yTop - 34], 'hole centers from the rear end of the rail, measured along it:', { size: 11.5, color: ACCENT });
   const yBot = fb.at([0, -yMax])[1];
-  F.label(fb.at([cr[0].x, -(outerHalfWidth(L, cr[0].x) + BLOCK_W_IN / 2)]), [90, yBot + 24], 'alignment blocks, clamped to the end cradles, snug to the outside of the sides', { ...T12, anchor: 'start' });
-  F.label(fb.at([cr[1].x, 0]), [fb.at([cr[1].x, 0])[0] + 30, fb.at([0, 0])[1] + 4], 'cradles (dashed)', { ...T12, anchor: 'start', color: MUTED });
+  const p0 = fb.at([cr[0].x, -(cr[0].plateWidthIn / 2 - 0.4)]);
+  F.label(p0, [p0[0] + 8, yBot + 22], `cradle posts, ${f16(ch.postIn)} tall, outside each side: leave the cradles where they are until the glue-up`, { ...T12, anchor: 'start' });
   F.text([fb.at([xa, 0])[0] - 6, fb.at([0, 0])[1] + 4], 'rear', { size: 11.5, anchor: 'end', color: MUTED });
   F.text([fb.at([xb, 0])[0] + 6, fb.at([0, 0])[1] + 4], 'bow', { size: 11.5, color: MUTED });
-  F.legend(['oak', 'web', 'deck', 'steel'], [16, 712]);
-  F.note('Two views, each to its own scale');
+  F.legend(['oak', 'web', 'deck', 'steel', 'mdf'], [16, 752]);
+  F.note('Each view to its own scale');
   return {
     id: 'dry-fit-pilots',
     title: 'Drilling the screw pilots',
-    caption: `With the unit sitting dry in the sides, each clearance hole in the rail guides a 1/8" bit straight down into the side's edge, so every pilot lands on the glue line between the outer band and the web, right under its hole. A tape flag on the bit stops each pilot at its depth (${pilotDepthTxt ?? f16(pilotDepth)} for most of them) so none breaks out through a face. View B shows the ${tie.perRail} holes in each rail and the alignment blocks on the two end cradles: they stay clamped there, so in [[step:lower]] the sides go back exactly where the pilots were drilled.`,
+    caption: `With the unit sitting dry in the sides, each clearance hole in the rail guides a 1/8" × 6" aircraft bit straight down into the side's edge, so every pilot lands on the glue line between the outer band and the web, right under its hole. A tape flag wider than the counterbore stops on the rail's face and sets the depth: ${f16(c.p.railDepthIn + (deepAft ? parseInchText(deepAft) : 0))} from the tip for the counterbored holes${fwdQ && deepFwd ? `, ${f16(L.railDepthF + parseInchText(deepFwd))} for the forward one, where the rail is shallow and the pilot is ${deepFwd} deep` : ''}. View C shows the ${tie.perRail} holes in each rail and the cradle posts: leave the cradles in place, so in [[step:lower]] the sides go back exactly where the pilots were drilled.`,
     svg: F.svg('Drilling the screw pilots through the rail holes into the side edge, in section and from above'),
   };
 };
@@ -602,7 +622,7 @@ const lowerJoint: FigFn = (c) => {
   F.line([b1[0] - 10, b1[1] + 5], [bx((S.yo + S.yWi) / 2), P(0, L.chineBot)[1]], { stroke: MUTED, width: 1 });
   F.badge(b1, 1);
   F.badge([xA - 20, P(0, R.min[2] - 0.6)[1]], 2);
-  if (lenIn) F.badge([bx(ys) - 22, P(0, zHead + lenIn * 0.5)[1]], 3);
+  if (lenIn) { const b3: Vec2 = [bx(ys) - 26, P(0, zHead + lenIn * 0.3)[1]]; F.line([b3[0] + 10, b3[1]], [bx(ys) - 2, b3[1]], { stroke: MUTED, width: 1 }); F.badge(b3, 3); }
   if (cbOk) F.badge([bx(ys) - 24, P(0, R.min[2] + 0.45)[1]], 4);
   F.badge([bx(yRo + caulW) + 34, P(0, R.min[2] - 0.75)[1]], 5);
   const b6: Vec2 = [bx(S.yi) - 26, P(0, S.chineTop)[1]];
@@ -611,12 +631,12 @@ const lowerJoint: FigFn = (c) => {
   // the numbered sequence, at the right
   const tx = 440;
   const rows: Array<[number, string[]]> = [
-    [1, ['A bed of thickened epoxy (peanut butter)', `along the ${f16(bed)} bearing edge of both`, 'sides: the outer band and the web.']],
-    [2, ['Lower the unit onto the alignment blocks,', 'then down: each rail hole over its pilot.']],
+    [1, ['A bed of thickened epoxy (peanut butter)', `along the ${f16(bed)} bearing edge of both`, 'sides (the outer band and the web), and', 'the same on both deck edges.']],
+    [2, ['Lower the unit straight down between the', 'cradle posts, each rail hole over its pilot.']],
     [3, [`${tie.screw} screws straight down through`, `the rail into the pilots, ${tie.perRail} a side.`, 'Middle first, out to the ends; snug only.']],
     [4, [cbOk ? `A glued oak plug in each ${f16(cb.dia)}` : 'A glued oak plug in each', 'counterbore, trimmed flush with the rail.']],
     [5, ['Bar clamps between the screws: one jaw on', 'the rail\'s inside face, one on a straight', 'caul across the rail and the outer band.']],
-    [6, ['Last, from a second small batch: fill the', 'deck slot beside the inner band.']],
+    [6, ['Last, from a second small batch: top up', 'the slot between the deck edge and the', 'web from both open hull ends.']],
   ];
   let ty = 84;
   for (const [n, t] of rows) {
@@ -624,7 +644,7 @@ const lowerJoint: FigFn = (c) => {
     F.text([tx + 18, ty], t, { size: 12 });
     ty += 15 * t.length + 24;
   }
-  F.label(P(yRo - 0.08, R.min[2] + 0.9), [bx(yRo + caulW) + 20, P(0, R.min[2] + 0.9)[1] + 4], 'rail', { ...T12, anchor: 'start' });
+  F.label(P(yRi + 0.12, R.min[2] + 1.5), [bx(yRi) - 44, P(0, R.min[2] + 1.5)[1] + 4], 'rail', { ...T12, anchor: 'end' });
   F.label(P(S.yo - 0.05, S.chineTop + 0.2), [bx(yRo + caulW) + 20, P(0, zCut)[1] - 4], 'side', { ...T12, anchor: 'start' });
   F.label(P(yRo + caulW / 2, zc1 - 0.25), [bx(yRo + caulW) + 20, P(0, zc1)[1] - 22], 'caul', { ...T12, anchor: 'start' });
   F.label(P(yRi - 1.0, (L.deckBot + L.deckTop) / 2), [P(yRi - 1.4, 0)[0] + 4, P(0, L.deckTop)[1] + 46], 'deck', { ...T12, anchor: 'start' });
@@ -633,14 +653,14 @@ const lowerJoint: FigFn = (c) => {
   return {
     id: 'lower-joint',
     title: 'The rail-to-side joint, in order',
-    caption: `A cut across the left rail and side at one screw, upside down as it is glued. The frame and deck unit goes down onto a bed of thickened epoxy on the edges of both sides, and the ${tie.perRail} screws a side pull each side onto its rail at the pilots drilled in [[step:dry-fit]]; the clamps and cauls between the screws keep the outer faces flush until the epoxy cures. The deck slot is filled last, from a second small batch, so the first batch is not used up while you drive screws.`,
+    caption: `A cut across the left rail and side at one screw, upside down as it is glued. The frame and deck unit goes straight down between the cradle posts onto a bed of thickened epoxy on the edges of both sides, and the ${tie.perRail} screws a side pull each side onto its rail at the pilots drilled in [[step:dry-fit]]; the clamps and cauls between the screws keep the outer faces flush until the epoxy cures. The deck edges are buttered from the same batch, so the slot between each deck edge and its web (closed in by the rail) fills as the unit goes down; a second small batch tops it up from the open hull ends.`,
     svg: F.svg('The rail-to-side joint at one screw, with the order of the glue-up'),
   };
 };
 
 // ───────────────────────────── transom and bulkhead ─────────────────────────────
 
-/** How an end closes: the closing part's inner face (upside down, as fitted) with what goes into it, and a cut through one corner as it slides on. */
+/** How an end closes: the closing part's inner face (upside down, as fitted) with what goes into it, and a cut through one corner as it is pushed on. */
 function endClose(which: 'transom' | 'bulkhead'): FigFn {
   return (c) => {
     const rear = which === 'transom';
@@ -677,7 +697,7 @@ function endClose(which: 'transom' | 'bulkhead'): FigFn {
     const fa = fit(ab, { x: 210, y: 92, w: 340, h: ka * (ab.maxY - ab.minY) }, 1, 'center');
     const by0 = Math.round(92 + ka * (ab.maxY - ab.minY) + (hold && !backers.length ? 56 : 40));
     const F = new Fig(760, by0 + 330 + 40);
-    F.heading(rear ? 'Closing the rear: what the transom slides onto (hull upside down)' : 'Closing the bow: what the bulkhead slides onto (hull upside down)');
+    F.heading(rear ? 'Closing the rear: what the transom is pushed onto (hull upside down)' : 'Closing the bow: what the bulkhead is pushed onto (hull upside down)');
     F.sub([16, 52], `A. The ${name}'s inside face, upside down as it goes on`);
     const A = (u: number, v: number): Vec2 => fa.at([u, -v]);
     const RA = (u0: number, v0: number, u1: number, v1: number, s: Style): void => { F.poly([A(u0, v0), A(u1, v0), A(u1, v1), A(u0, v1)], s); };
@@ -712,10 +732,16 @@ function endClose(which: 'transom' | 'bulkhead'): FigFn {
     const yA = (v: number): number => A(0, v)[1];
     F.label(A(-(yRo + yRi) / 2, rz0 + 0.2), [xl, yA(rz0) - 14], 'rail end (dashed)', { ...T12, color: MUTED });
     if (railPts[0]) F.label(A(-railPts[0][0], railPts[0][1]), [xl, yA(railPts[0][1]) + 16], railJ?.type === 'domino' ? ['Domino mortise', 'for the rail end'] : ['mortise for the loose', 'tenon in the rail end'], T12);
-    if (rear && vents.places[0]) F.label(A(-vents.places[0].off, vMin + vents.places[0].up), [xl, yA(vMin + vents.places[0].up) + 4], ['vent hole: epoxy', 'shows here when', 'the dado is full'], T12);
+    if (rear && vents.places[0]) F.label(A(-vents.places[0].off, vMin + vents.places[0].up), [xl, yA(vMin + vents.places[0].up) + 4], ['vent holes, 2 a side:', 'glue shows here when', 'the dados are full'], T12);
+    // the handle-socket screw holes, drilled through transom and backer; the T-nuts sit in the backers
+    const sock = c.by('handle-socket-L');
+    const sockPts = rear && sock ? jointPts(sock, (j) => j.type === 'bolt' && j.to === 'transom-rear').map((q) => [q[1], q[2]] as Vec2) : [];
+    for (const [u, v] of sockPts) for (const s of [1, -1]) { F.circle(A(s * u, v), 5.5, { fill: '#fff', stroke: MAT.steel.stroke, width: 1.6 }); F.circle(A(s * u, v), 2.2, { fill: MAT.steel.stroke }); }
+    const sTop = sockPts.slice().sort((a, b) => a[1] - b[1])[0];
+    if (sTop) F.label(A(sTop[0] + 0.15, sTop[1]), [xr, yA(sTop[1]) + 4], ['handle-socket screw holes;', 'T-nuts in the backers'], T12);
     F.label(A(-(S.yo + S.yWo) / 2, (S.gunBot + S.sheer) / 2), [xl, yA(S.sheer) + 24], ['band ends butt the', 'face here (dark)'], T12);
     F.label(A(webU * 0.55, L.deckBot + deckDadoH / 2), [xr, yA(rz0) - 14], ['deck dado: the deck', `edge goes ${f16(into)} in`], T12);
-    F.label(A(webU, (L.chineBot + S.sheer) / 2 + (rear ? 0 : 0.6)), [xr, yA((L.chineBot + S.sheer) / 2) + 20], ['web dado, open at the', 'edge: the web end', 'slides in from there'], T12);
+    F.label(A(webU, (L.chineBot + S.sheer) / 2 + (rear ? 0 : 0.6)), [xr, yA((L.chineBot + S.sheer) / 2) + 20], ['web dado, open at the', 'edge: the web end', 'goes in from there'], T12);
     if (backers[0]) F.label(A(backers[0].min[1] * Math.sign(backers[0].min[1]) - 0.3, (backers[0].min[2] + backers[0].max[2]) / 2 + 3), [xr, yA(vMax) - 10], ['backers, glued on', 'the day before'], T12);
     else if (hold) F.label(A(0, Math.max(...hold.map((q) => q[1]))), [A(0, 0)[0], yA(vMax) + 30], 'lift hand-hold: keep epoxy out of it', { ...T12, anchor: 'middle' });
     F.text([A(0, 0)[0], yA(Math.min(vMin, rz0)) - 8], 'bottom edge (up, for now)', { size: 11.5, anchor: 'middle', color: MUTED });
@@ -760,11 +786,11 @@ function endClose(which: 'transom' | 'bulkhead'): FigFn {
       [B(webEnd - dir * 0.08, (S.yWo + S.yWi) / 2), ['web: reaches', `${f16(into)} into its dado`], {}],
       [B(xFace - dir * 1.0, (S.yi + S.yWi) / 2), ['inner band: its end', 'butts the face too'], {}],
       ...(!rear ? [[B(xFace - dir * 0.07, S.yi - 0.07), ['epoxy fillet in the', 'inside corner, after'], {}] as [Vec2, string[], TextOpts]] : []),
-      [B(xFace - dir * 1.2, uIn + 0.25), ['deck and its dado:', 'one level down (dashed)'], { color: MUTED }],
+      [B(xFace - dir * 1.2, uIn + 0.25), ['deck and its dado: under', 'this cut (dashed)'], { color: MUTED }],
     ];
     hullRows.forEach(([tg, txt, o], i) => F.label(tg, [hullX, r0 + i * step], txt, { ...T12, ...o, anchor: ha }));
     F.label(B((floor0 + xPart0) / 2, dy1 - 0.02), [partX, r0], ['web dado,', `${f16(into)} deep`], { ...T12, anchor: pa });
-    F.label(B((xPart0 + xPart1) / 2, S.yo - 0.1), [partX, r0 + step], [`the ${name} slides`, 'on (arrow)'], { ...T12, anchor: pa });
+    F.label(B((xPart0 + xPart1) / 2, S.yo - 0.1), [partX, r0 + step], [`the ${name} is pushed`, 'straight on (arrow)'], { ...T12, anchor: pa });
     if (bL) F.label(B(xPart0 - dir * 0.35, uIn + 0.3), [partX, r0 + 3 * step], ['backer, already', 'glued to it'], { ...T12, anchor: pa });
     F.legend(['oak', 'web', 'deck', 'epoxy', 'ghost'], [16, F.h - 10]);
     F.note('Two views, each to its own scale');
@@ -773,9 +799,9 @@ function endClose(which: 'transom' | 'bulkhead'): FigFn {
       id: rear ? 'transom-close' : 'bulkhead-close',
       title: rear ? 'How the transom goes on' : 'How the bulkhead goes on',
       caption: rear
-        ? `View A is the transom's inside face, drawn upside down as it goes onto the inverted hull: the deck dado runs across it and turns into the two web dados, which run out through the edge so the transom can slide on. View B cuts through one corner: the web reaches ${f16(into)} into its dado and the deck edge the same into the deck dado, while the four band ends of each side stop at the face and butt in thickened epoxy. ${nRail} into the mortises, and the vent holes let air and epoxy out as it slides home: when epoxy shows at them, the dados are full.`
-        : `The bulkhead closes the bow the way the transom closed the rear, once the transom epoxy has gelled. View A is its inside (rear) face, upside down: the deck dado and the two web dados that run out through the edge, the Domino mortises for the rail ends, and the band ends that butt against it. View B cuts through one corner: the web and the deck reach ${f16(into)} into their dados, and the inside corners get a fillet of thickened epoxy. Its rear face is the rider's foot brace, so it must sit square and fully home.`,
-      svg: F.svg(rear ? 'The transom inside face and one corner as it slides on' : 'The bulkhead inside face and one corner as it slides on'),
+        ? `View A is the transom's inside face, drawn upside down as it goes onto the inverted hull: the deck dado runs across it and turns into the two web dados, which run out through the edge (they are routed through). View B cuts through one corner: the web reaches ${f16(into)} into its dado and the deck edge the same into the deck dado, while the four band ends of each side stop at the face and butt in thickened epoxy. ${nRail} into the mortises, and the vent holes, 2 a side, let air and glue out as it is pushed home: when glue shows at them, the dados are full. The round holes are the handle-socket screw holes, with their T-nuts in the backers.`
+        : `The bulkhead closes the bow the way the transom closed the rear, once the transom epoxy has gelled. View A is its inside (rear) face, upside down: the deck dado and the two web dados that run out through the edge (routed through), the Domino mortises for the rail ends, and the band ends that butt against it. View B cuts through one corner: the web and the deck reach ${f16(into)} into their dados, and the inside corners get a fillet of thickened epoxy. Its rear face is the rider's foot brace, so it must sit square and fully home.`,
+      svg: F.svg(rear ? 'The transom inside face and one corner as it is pushed on' : 'The bulkhead inside face and one corner as it is pushed on'),
     };
   };
 }

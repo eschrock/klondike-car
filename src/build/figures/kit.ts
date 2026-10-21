@@ -14,7 +14,7 @@ import type { FormDrawing } from '../forms';
 import type { PartDrawingSheet } from '../part-drawings';
 import { esc, fmt } from '../svg-util';
 
-/** One figure of a step. `caption` may use `[[step:id]]` (the step's number in this book), resolved by `assemblySteps`. */
+/** One figure of a step. `caption` and the figure's text may use `[[step:id]]` (the step's number in this book), resolved by `assemblySteps`. */
 export interface StepFigure {
   id: string;
   title: string;
@@ -185,16 +185,23 @@ export class Fig {
   }
 
   /**
-   * A callout: a dot on the thing, a thin leader, and the text at `at` (lines). The leader ends at the text's near side, so text to the left of
-   * the target is right-aligned.
+   * A callout: a dot on the thing, a thin leader, and the text at `at` (lines). The leader ends at the side of the text block nearest the target (its
+   * width is estimated from the character count), so it never crosses the words. Text to the left of the target is right-aligned unless `anchor` says.
    */
   label(target: Vec2, at: Vec2, s: string | string[], o: TextOpts = {}): this {
+    const lines = Array.isArray(s) ? s : [s];
     const anchor = o.anchor ?? (at[0] < target[0] - 4 ? 'end' : 'start');
-    const size = o.size ?? 13;
-    const end: Vec2 = [at[0] + (anchor === 'end' ? 3 : anchor === 'start' ? -3 : 0), at[1] - size * 0.35];
+    const size = o.size ?? 13, lead = (o.lead ?? 1.25) * size;
+    const tw = Math.max(...lines.map((t) => t.length)) * size * 0.55;
+    const x0 = anchor === 'start' ? at[0] : anchor === 'end' ? at[0] - tw : at[0] - tw / 2, x1 = x0 + tw;
+    const yTop = at[1] - size * 0.85, yBot = at[1] + lead * (lines.length - 1) + size * 0.25;
+    let end: Vec2;
+    if (target[0] < x0 - 2) end = [x0 - 3, Math.min(Math.max(target[1], yTop + size * 0.4), at[1] - size * 0.35)];
+    else if (target[0] > x1 + 2) end = [x1 + 3, Math.min(Math.max(target[1], yTop + size * 0.4), at[1] - size * 0.35)];
+    else end = [Math.min(Math.max(target[0], x0), x1), target[1] < yTop ? yTop - 2 : yBot + 2];
     this.line(target, end, { stroke: MUTED, width: 1 });
     this.circle(target, 2.4, { fill: MUTED });
-    return this.text(at, s, { ...o, anchor });
+    return this.text(at, lines, { ...o, anchor });
   }
 
   /**
@@ -289,8 +296,8 @@ export class Fig {
     return this;
   }
 
-  /** "Not to scale" (or a scale note) in the bottom right. */
-  note(s = 'Not to scale'): this { return this.text([this.w - 14, this.h - 12], s, { size: 11, anchor: 'end', color: MUTED, italic: true }); }
+  /** "Not to scale" (or a scale note) in the bottom right, or the top right when the legend needs the bottom row. */
+  note(s = 'Not to scale', where: 'bottom' | 'top' = 'bottom'): this { return this.text([this.w - 14, where === 'top' ? 24 : this.h - 12], s, { size: 11, anchor: 'end', color: MUTED, italic: true }); }
 
   /** The SVG document. `title` is its accessible name. */
   svg(title: string): string {

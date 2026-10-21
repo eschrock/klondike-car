@@ -8,7 +8,9 @@
  * chine bears on the rail top and is Domino-tied and epoxied to it every `chineTieSpacingIn`.
  */
 import { AXLE_BEAM_POSITION } from '../params';
-import { beamSeat, localPoint, nutHeight, railSection, washerThick } from './rear-mount';
+import { beamSeat, HEAD_HEIGHT_D, localPoint, MIN_THREADS_PAST_NUT, nutHeight, railSection, washerThick } from './rear-mount';
+import type { Layout } from './layout';
+import type { Params } from '../params';
 import { IN3_PER_FT3, STEP, box, roughOf, span, SIDES, woodMassLb, type Ctx, stainless } from './build-utils';
 import { customPart } from './mesh-utils';
 import { planWallGeometry } from './plan-wall';
@@ -16,7 +18,49 @@ import { brakeGeometry } from './brake-layout';
 import type { Part, Vec2, Vec3 } from './types';
 
 /** The kingpin nut's slot in the king beam has its ceiling this far under the deck (the bolt tip stands this far below the king beam's top, D-56). */
-export const KING_NUT_BELOW_DECK_IN = 0.45;
+export const KING_NUT_BELOW_DECK_IN = 7 / 16;
+
+/** A nylon-insert lock nut is about this many bolt diameters tall at 1/2" and up (ASME B18.16.6: the 5/8-11 nut is 0.687" tall); `nutHeight` under-reads it there. */
+const NYLOCK_HEIGHT_D = 1.1;
+/** An SAE flat washer's outside diameter in bolt diameters (5/8": 1-5/16"). */
+const SAE_WASHER_OD_D = 2.1;
+/** Room left round a nut and washer in a slot or a relief, and over a bolt head (in). */
+const SLOT_CLEAR_IN = 1 / 16;
+const HEAD_CLEAR_IN = 1 / 8;
+const up16 = (v: number): number => Math.ceil(v * 16 - 1e-9) / 16;
+const down16 = (v: number): number => Math.floor(v * 16 + 1e-9) / 16;
+const tpi = (d: number): number => (d <= 0.25 ? 20 : d <= 0.3125 ? 18 : d <= 0.375 ? 16 : d <= 0.5 ? 13 : 11);
+
+/**
+ * The kingpin nut slot in the king beam (round 1 fix): cut in from the front face at the top, wide enough for the washer and for the nut's corners to turn with the bolt as the
+ * axle swings, tall enough for the washer, the nylock nut and the bolt's threads past it, its ceiling `KING_NUT_BELOW_DECK_IN` under the deck. x0..x1 fore-aft (x1 the front face).
+ */
+export function kingNutSlot(p: Pick<Params, 'kingpinDiaIn'>, L: Pick<Layout, 'king'>): { w: number; h: number; ceil: number; floor: number; x0: number; x1: number; nutH: number; washerOd: number } {
+  const kd = p.kingpinDiaIn, k = L.king;
+  const nutH = Math.max(nutHeight(kd), NYLOCK_HEIGHT_D * kd), washerOd = SAE_WASHER_OD_D * kd;
+  const w = up16(Math.max(washerOd, (1.5 * kd * 2) / Math.sqrt(3)) + SLOT_CLEAR_IN);
+  const h = up16(washerThick(kd) + nutH + MIN_THREADS_PAST_NUT / tpi(kd) + SLOT_CLEAR_IN);
+  const ceil = k.top - KING_NUT_BELOW_DECK_IN;
+  return { w, h, ceil, floor: ceil - h, x0: k.x - w / 2, x1: k.x + k.len / 2, nutH, washerOd };
+}
+
+/**
+ * The reliefs under the king beam for the inner front clamp-plate bolt heads (round 1 fix): the heads stand on the plates and sweep an arc about the kingpin as the axle swings,
+ * so each end of the king beam's underside is relieved across its full fore-aft length, over the band of |y| the heads sweep under it, `HEAD_CLEAR_IN` clear of them.
+ * `yIn`..`yOut` is that band (|y|), `depth` the relief. Null when the heads clear the king beam already.
+ */
+export function kingHeadRelief(p: Params, L: Layout): { yIn: number; yOut: number; depth: number } | null {
+  const b = L.beamF, k = L.king, bd = p.uboltRodDiameterIn;
+  const yst = b.len / 2 - p.frontStubLenIn + 0.25 + p.clampPlateWidthIn / 2; // the inner plate's center (pivot.ts)
+  const leg = p.axleDiameterIn / 2 + p.clampLegGapIn;
+  const headTop = b.top + p.axleProudIn + p.clampPlateThickIn + HEAD_HEIGHT_D * bd;
+  const depth = up16(headTop + HEAD_CLEAR_IN - k.bot);
+  if (depth <= 0) return null;
+  const r = Math.hypot(leg, yst), rc = (1.5 * bd) / Math.sqrt(3); // the bolt's distance from the kingpin, the head's half-width across the corners
+  const half = k.len / 2;
+  const yIn = down16(Math.sqrt(Math.max(0, (r - rc) ** 2 - half ** 2)) - SLOT_CLEAR_IN), yOut = up16(r + rc + SLOT_CLEAR_IN);
+  return { yIn, yOut, depth };
+}
 
 /** Part id of the joist at index i of `L.joistX` (the king beam is the one at the kingpin). */
 export const joistId = (L: { joistX: number[]; king: { x: number } }, i: number): string => (L.joistX[i] === L.king.x ? 'king-beam' : `joist-${i + 1}`);
@@ -109,8 +153,14 @@ export function buildFrame(ctx: Ctx): Part[] {
         ...span([hx0, hx1], s > 0 ? [yIn, yOut] : [-yOut, -yIn], [rsa.zBot, rsa.zSolidTop]),
       });
       hg.massLb -= notchLb;
+      // The axle rod stands axleProudIn above the beam top, under the notch ceiling: a shallow relief in the ceiling clears it, so the ceiling bears on the beam either side (round 1 fix).
+      const rw = up16(p.axleDiameterIn + SLOT_CLEAR_IN), rd = up16(p.axleProudIn + 1 / 32);
       hg.joints = [
         { type: 'dado', to: a.beamId, count: 1, size: `${f2(sa.x1 - sa.x0)}" wide × ${f2(sa.depth)}" deep notch up from the hanger bottom (beam ${f2(a.beam.thick)}" + ${f2(p.beamNotchClearIn)}" each side), ceiling bears on the beam top`, at: [localPoint(hg.transform, [a.beam.x, (yOut + yIn) / 2 * s, sa.zBot + sa.depth / 2])], note: 'the beam passes under the rail and the hanger sits on it; bandsaw + chisel, corners relieved with a 1/4" radius' },
+        {
+          type: 'hole', to: 'axle-R', count: 1, size: `relief ${f2(rw)}" wide × ${f2(rd)}" deep in the notch ceiling, centered on the notch, through the thickness`,
+          cut: { kind: 'slot', lo: localPoint(hg.transform, [a.beam.x - rw / 2, s > 0 ? yIn : -yOut, sa.zTop]), hi: localPoint(hg.transform, [a.beam.x + rw / 2, s > 0 ? yOut : -yIn, sa.zTop + rd]), what: 'clears the axle rod, which stands proud of the beam top' },
+        },
       ];
       hg.notes = `${a.label} axle hanger (D-54): ${f2(p.axleHangerWidthIn)}" × ${f2(rsa.t)}" oak, vertical grain, from the rail top (${f2(rsa.zSolidTop)}") down to ${f2(rsa.zBot)}", glued and bolted to the INSIDE face of the rail. The bottom is notched ${f2(sa.x1 - sa.x0)}" × ${f2(sa.depth)}" so it straddles the axle beam and bears on its top (D-48 seat); ${f2(sa.remain)}" of oak is left above the notch. The ${stainless(p)} hold-down angle lies against its inner face.`;
       parts.push(hg);
@@ -132,8 +182,9 @@ export function buildFrame(ctx: Ctx): Part[] {
         ...span([k.x - k.len / 2, k.x + k.len / 2], [-half, half], [k.bot, k.top]),
       });
       // The nut slot (cut from the front face): wide enough for the nylock nut and washer to turn with the axle, tall enough for both, its ceiling KING_NUT_BELOW_DECK_IN under the deck.
-      const kd = p.kingpinDiaIn, slotW = 1.6 * kd, slotCeil = k.top - KING_NUT_BELOW_DECK_IN, slotH = nutHeight(kd) + washerThick(kd), slotFloor = slotCeil - slotH;
-      const slotX0 = k.x - slotW / 2, slotX1 = k.x + k.len / 2;
+      const ks = kingNutSlot(p, L);
+      const slotW = ks.w, slotCeil = ks.ceil, slotH = ks.h, slotFloor = ks.floor;
+      const slotX0 = ks.x0, slotX1 = ks.x1;
       kb.joints = [{
         type: 'hole', to: 'kingpin', count: 1,
         size: `slot ${f2(slotW)}" wide (across) × ${f2(slotH)}" tall × ${f2(slotX1 - slotX0)}" deep (fore-aft), cut in from the front face and centered on the kingpin bore; its ceiling leaves ${f2(KING_NUT_BELOW_DECK_IN)}" of oak under the deck`,
@@ -141,6 +192,18 @@ export function buildFrame(ctx: Ctx): Part[] {
         cut: { kind: 'slot', lo: localPoint(kb.transform, [slotX0, -slotW / 2, slotFloor]), hi: localPoint(kb.transform, [slotX1, slotW / 2, slotCeil]), what: 'to hold the kingpin nylock nut and washer' },
       }];
       kb.massLb -= (slotW * slotH * (slotX1 - slotX0) / IN3_PER_FT3) * p.oakDensityPcf;
+      const hr = kingHeadRelief(p, L);
+      if (hr) {
+        for (const { s: sg } of SIDES) {
+          kb.joints.push({
+            // Recorded against the kingpin, the pivot the heads swing about (the plates carry no joint to the king beam, and a hole joint on them would draw a hole).
+            type: 'hole', to: 'kingpin', count: 1,
+            size: `relief ${f2(hr.yOut - hr.yIn)}" wide × ${f2(hr.depth)}" deep across the underside, the full ${f2(k.len)}" fore-aft, ${f2(hr.yIn)}" to ${f2(hr.yOut)}" from the center line`,
+            cut: { kind: 'relief', lo: localPoint(kb.transform, [k.x - k.len / 2, sg > 0 ? hr.yIn : -hr.yOut, k.bot]), hi: localPoint(kb.transform, [k.x + k.len / 2, sg > 0 ? hr.yOut : -hr.yIn, k.bot + hr.depth]), what: 'clears the inner clamp-plate bolt heads as the axle swings' },
+          });
+        }
+        kb.massLb -= (2 * (hr.yOut - hr.yIn) * hr.depth * k.len / IN3_PER_FT3) * p.oakDensityPcf;
+      }
       kb.notes = `The front load path (D-56): an oak crossmember ${f2(k.len)}" fore-aft × ${f2(k.depth)}" deep between the rails at the kingpin, bonded to the deck underside and Domino-tied and epoxied to the rails. The ${f2(p.kingpinDiaIn)}" kingpin bolt is bored through its center; a slot cut from the front face (${f2(slotW)}" wide × ${f2(slotH)}" tall, at the TOP of the king beam: its ceiling is ${f2(KING_NUT_BELOW_DECK_IN)}" under the deck; build 3c S5 made the two descriptions agree) captures the nylock nut and its washer so they can swing with the axle. The UHMW thrust disc is screwed to its underside and the top of the axle beam turns under it (D-58); the clamp plates on the beam top pass under the king beam with 1/8 in to spare.`;
       parts.push(kb);
       return;

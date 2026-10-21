@@ -40,7 +40,7 @@ export function cotterHoleJoint(p: Params, s: 1 | -1, length: number, wheelId: s
   };
 }
 
-/** The hold-down angle's bolts (D-48, D-72): the stock lengths of the two beam bolts down through the flat leg and the beam, and of the two rail bolts through the upright leg, the hanger and the rail. */
+/** The hold-down angle's bolts (D-48, D-72): the stock lengths of the two beam bolts up through the beam and the flat leg, and of the two rail bolts through the upright leg, the hanger and the rail. */
 export function holdDownBolts(p: Params, L: Ctx['L']): { dia: number; beamLenIn: number; railLenIn: number } | null {
   const seat = beamSeat(p, L);
   if (!seat) return null;
@@ -138,7 +138,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
         });
         beamRailJoints.push({
           type: 'bolt', to: `beam-hold-down-${tag}`, count: seatInfo.hd.beamBolts.length, diaIn: seatInfo.hd.boltD,
-          size: `${f2(seatInfo.hd.boltD)}" × ${inchesText(boltLength(seatInfo.hd.t + b.depth, seatInfo.hd.boltD))} ${stainless(p)} hex bolts down through the angle's horizontal leg and the beam, nylock nuts and fender washers under the beam`,
+          size: `${f2(seatInfo.hd.boltD)}" × ${inchesText(boltLength(seatInfo.hd.t + b.depth, seatInfo.hd.boltD))} ${stainless(p)} hex bolts up through the beam and the angle's horizontal leg (put in from the beam's bottom face while the hull is upside down): a fender washer under each head on the beam (one washer a bolt), nylock nuts on the angle`,
           at: seatInfo.hd.beamBolts.map(([x, y]): Vec3 => [x - b.x, s * y, seatInfo.hd.zBeam - (b.top + b.bot) / 2]),
           note: 'either side of the axle rod',
         });
@@ -199,7 +199,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
         geometry: { type: 'extrusion', outline: profile, depth: w }, transform: m, body: 'chassis', massLb: mass, fab: 'drill-tap', step: STEP.gear,
         explode: unitVec([0, -s, 0.5]), stock: { t: hd.t, w: hd.leg, l: w },
         sourcing: { vendor: `McMaster-Carr (${stainless(p)} angle ${f2(hd.leg)}" × ${f2(hd.leg)}" × ${f2(hd.t)}": cut ${f2(w)}" long on the bandsaw, drill 2 × ${f2(bd + 0.03)}" in the upright leg and 2 × ${f2(bd + 0.03)}" in the flat leg; 4 × ${stainless(p)} hex bolts ${f2(bd)}", nylock nuts, fender washers)` },
-        notes: `Holds the rear axle beam to the axle hanger (D-54, build review r2 MUST-4): the upright leg lies on the hanger's inner face (z ${f2(hd.zBeam)}" to ${f2(hd.zTop)}"), two ${f2(bd)}" bolts through the hanger and the rail (D-72); the flat leg lies on the beam top (it also keeps the rod in its groove), two ${f2(bd)}" bolts down through the beam either side of the rod. Stays clear of the straddling deck crossmembers (${f2(w)}" wide, centered on the beam). Rebound, side load and the rail's tendency to walk off the beam are carried here; the vertical load bears on the notch ceiling instead.`,
+        notes: `Holds the rear axle beam to the axle hanger (D-54, build review r2 MUST-4): the upright leg lies on the hanger's inner face (z ${f2(hd.zBeam)}" to ${f2(hd.zTop)}"), two ${f2(bd)}" bolts through the hanger and the rail (D-72); the flat leg lies across the beam top and bears on the rod, which stands proud of it (so it keeps the rod in its groove), two ${f2(bd)}" bolts up through the beam either side of the rod, nylock nuts on the flat leg. Stays clear of the straddling deck crossmembers (${f2(w)}" wide, centered on the beam). Rebound, side load and the rail's tendency to walk off the beam are carried here; the vertical load bears on the notch ceiling instead (its relief clears the rod).`,
         joints: [],
       };
       part.joints!.push({
@@ -207,7 +207,7 @@ export function buildRunningGear(ctx: Ctx): Part[] {
         at: hd.railBolts.map(([x, z]) => localPoint(part.transform, [x, s * (rs.yIn - hd.t / 2), z])),
       });
       part.joints!.push({
-        type: 'bolt', to: 'beam-R', count: 2, diaIn: bd, size: `${f2(bd)}" × ${inchesText(boltLength(hd.t + L.beamR.depth, bd))} ${stainless(p)} hex bolts down through the flat leg and the beam`,
+        type: 'bolt', to: 'beam-R', count: 2, diaIn: bd, size: `${f2(bd)}" × ${inchesText(boltLength(hd.t + L.beamR.depth, bd))} ${stainless(p)} hex bolts up through the beam and the flat leg: a fender washer under each head on the beam (one washer a bolt), nylock nuts on the flat leg`,
         at: hd.beamBolts.map(([x, y]) => localPoint(part.transform, [x, s * y, hd.zBeam + hd.t / 2])),
       });
       parts.push(part);

@@ -13,6 +13,7 @@
 import { axleGrooveDepthIn } from '../params';
 import { worldAABB } from '../model/bounds';
 import { tongueOutline } from '../model/pivot';
+import { kingNutSlot } from '../model/frame';
 import { uncTensileArea } from './nds';
 import { rectSection } from './beams';
 import { axleHoleDetails, axleHoleText, axleSection, axleUltimate, axleWhat, axleYield, type AxleLoads } from './axle';
@@ -571,7 +572,7 @@ export function steerStopsCheck(ctx: Ctx): AnalysisCheck {
 export function kingNetSection(ctx: Ctx) {
   const { p, L } = ctx;
   const len = L.king.len, D = L.king.depth, kd = p.kingpinDiaIn;
-  const slotH = Math.min(D - 0.1, kd * 1.2);
+  const slotH = Math.min(D - 0.1, kingNutSlot(p, L).h); // the slot the model cuts (the nut, its washer and the threads past it)
   const wA = Math.max(0.05, len / 2 - kd / 2), wB = wA;
   const rects = [
     { w: wA, h: D, z0: 0 }, // rear part, full depth

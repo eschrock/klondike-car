@@ -151,7 +151,7 @@ describe('the rail form counter-form (the reverse image)', () => {
   it('is built in the steps in place of the old caul, and the clamp span uses its back', () => {
     const t = fd.build.flatMap((s) => [s.step, ...(s.sub ?? [])]).join(' ');
     expect(t).toMatch(/COUNTER-FORM: the reverse image/);
-    expect(t).toMatch(/square across from the form back to the counter-form back/);
+    expect(t).toMatch(/closes square across, from the form back to the counter-form back/);
     expect(t).not.toMatch(/CAUL/);
   });
 

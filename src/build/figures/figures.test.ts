@@ -74,7 +74,7 @@ describe('assembly step figures', () => {
     expect(side.why).toContain(`step ${outer}`);
     expect(side.forIds).toEqual(expect.arrayContaining(['side-L-web', 'side-R-web', 'side-L-gunwale-in', 'side-R-chine']));
     expect(side.partIds).toEqual([]);
-    expect(side.figures.map((f) => f.id)).toEqual(['sides-purpose', 'side-form-setup', 'side-two-ramps']);
+    expect(side.figures.map((f) => f.id)).toEqual(['sides-purpose', 'side-form-setup', 'side-two-ramps', 'side-right-side']);
   });
 
   it('the side-form figures quote the form drawing: cleat count and spacing, ramp rise', () => {
@@ -82,7 +82,7 @@ describe('assembly step figures', () => {
     const dim = (k: string): number => form.dims.find((q) => q.key === k)!.valueIn;
     const setup = figureTexts(side.figures.find((f) => f.id === 'side-form-setup')!.svg).join(' ');
     expect(setup).toContain(`${dim('cleat-count')} cleats`);
-    expect(setup).toContain(frac(dim('cleat-spacing'), 8));
+    expect(setup).toContain(frac(dim('cleat-spacing'), 16));
     expect(setup).toContain(frac(dim('ramp-rise'), 8));
   });
 

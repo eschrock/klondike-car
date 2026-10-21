@@ -64,13 +64,13 @@ describe.each([['Standard', WEATHER_SPEC.standard], ['Extreme', WEATHER_SPEC.ext
     expect(knees.tools).toContain('3/8" drive ratchet and 9/16" socket');
     expect(t).toMatch(/easiest to reach now, while the hull is inverted/);
     // one way to drill the knee: on the drill press from its layout (a chuck cannot reach the top row through the rail), offered up with all four bolts, never the rail's holes opened
-    expect(t).toMatch(/Drill each knee leg on the drill press, from its layout/);
+    expect(t).toMatch(/drill each knee leg on the drill press, from its layout/);
     expect(t).not.toMatch(/transfer drill|marked from the rail drawing/);
-    expect(t).toMatch(/Offer the knee up to the rail with all 4 bolts through it: its rear face [\d\-/]+" from the rail's rear end/);
+    expect(t).toMatch(/Offer the knee up to the rail with all 4 bolts through it: its rear face [\d\-/]+" from the rail's finished rear end/);
     expect(t).toMatch(/If a bolt binds, open that knee hole a hair with the drill\. Never open the rail's holes/);
     expect(t).toMatch(/Hold each nut with the wrench from inside the frame/);
     expect(t).toMatch(/seal the bolt holes/);
-    expect(t.indexOf('Drill each knee leg on the drill press')).toBeLessThan(t.indexOf('seal the bolt holes'));
+    expect(t.indexOf('drill each knee leg on the drill press')).toBeLessThan(t.indexOf('seal the bolt holes'));
     expect(t).toMatch(/No glue on the leg/);
     expect(t).not.toMatch(/Seal the two faces/);
     expect(at('gear-fit')).toBeGreaterThan(at('brake-knees'));

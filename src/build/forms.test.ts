@@ -112,13 +112,14 @@ describe('forms and templates', () => {
     expect(wellFormed(t.svg)).toBeNull();
   });
 
-  it('cuts the mirror-ramp cap to the web outline plus a margin, not wider than the web needs', () => {
+  it('cuts both ramp caps as plain rectangles that carry either hand of web: the S-ramp cap the web plus 1/2" a side, the mirror cap 1-1/2" a side for the cleats', () => {
     const web = flatPattern(parts.find((x) => x.id === 'side-L-web')!)!;
     const steps = byId('side-form').build.flatMap((b) => [b.step, ...(b.sub ?? [])]);
-    const cap = steps.find((t) => /^Cap: .*second template/.test(t))!;
-    expect(cap).toContain(`${frac(web.heightIn + 1)} wide at the rear`);
-    expect(cap).toContain(`the web's ${frac(web.heightIn)} plus 1/2" each side`);
-    expect(cap).not.toContain('16-3/32');
+    const caps = steps.filter((t) => /^Cap: /.test(t));
+    expect(caps).toHaveLength(2);
+    expect(caps[0]).toContain(`× ${frac(web.heightIn + 1)}, a plain rectangle`);
+    expect(caps[1]).toContain(`× ${frac(web.heightIn + 3)}, a plain rectangle 1-1/2" wider than the web each side`);
+    expect(steps.join(' ')).not.toMatch(/web's outline plus|second template/);
   });
 
   it('cuts the brake-flap template at offset 0 with its drill holes', () => {
@@ -319,7 +320,7 @@ describe('how to build the forms (Eric 2026-10-12)', () => {
     expect(t).not.toMatch(/CAUL/);
     expect(t).toMatch(/packing tape/);
     expect(t).toMatch(/SPRING-BACK: none is built in/);
-    expect(t).toContain(`CLAMP: ${dim('rail-form', 'clamps')} bar or pipe clamps`);
+    expect(t).toContain(`CLAMP: ${dim('rail-form', 'clamps') + 2} or ${dim('rail-form', 'clamps') + 3} bar or pipe clamps`);
     expect(t).toMatch(/2 strips \(3\/8" × 3"\)/);
     expect(byId('rail-form').svg).toContain('<g id="sketch">');
   });
@@ -327,12 +328,19 @@ describe('how to build the forms (Eric 2026-10-12)', () => {
   it('says how to build the side form: the template, the cleats at their spacing, the ramp ribs and cap, tape and clamps', () => {
     const t = all('side-form');
     expect(t).toMatch(/TEMPLATE \(laser\): the web's flat outline/);
-    expect(t).toContain(`CLEATS on the sheer line: ${dim('side-form', 'cleat-count')} blocks`);
+    expect(t).toContain(`CLEATS on the sheer line: ${2 * dim('side-form', 'cleat-count')} blocks`);
+    expect(t).toContain(`${dim('side-form', 'cleat-count')} for each bench top`);
+    expect(t).toMatch(/Stand each on edge/);
+    expect(t).toMatch(/Set them against a dry web/);
     expect(t).toContain(`S-RAMP (first face): cut ${dim('side-form', 'ramp-ribs')} ribs from 3/4" MDF`);
     expect(t).toContain(`MIRROR RAMP (second face)`);
     expect(t).toMatch(/Cap: 1\/4" hardboard/);
     expect(t).toMatch(/packing tape/);
-    expect(t).toMatch(/spring clamps/);
+    expect(t).not.toMatch(/spring clamps|C-clamps|spacer \(plywood scraps/);
+    expect(t).toMatch(/held down with bags of sand/);
+    // the forms are handed: the right side is made on the same benches with the template's rear piece turned over and the cleats re-set
+    expect(t).toMatch(/RIGHT SIDE: the forms are set for the left side/);
+    expect(t).toMatch(/turn it over along its length/);
   });
 
   it('says the templates are tracing / routing patterns, not bending forms', () => {
@@ -384,13 +392,14 @@ describe('forms read plainly (readability round 2)', () => {
     expect(all).toContain(`${n} layers of 3/4" MDF, ${frac(n * 0.75)} tall`);
   });
 
-  it('cuts the rail strips to the cut list\'s rough length and says how much hangs off the form', () => {
+  it('says how much of the cut list\'s rough strip hangs off the form, and supports it level with the base (the strip length is the mill step\'s)', () => {
     const d = byId('rail-form');
     const strip = cutListFor(parts, p).cuts.find((c) => c.piece === 'strip' && c.ids.includes('rail-L'))!;
     const form = d.dims.find((x) => x.key === 'form-length')!.valueIn;
     const step = d.build.find((s) => s.step.startsWith('STRAIGHT RUN'))!.step;
-    expect(step).toContain(`cut the strips ${frac(strip.rough.l)} long`);
+    expect(step).not.toContain('cut the strips');
     expect(step).toContain(`about ${frac(strip.rough.l - form)} of each strip hangs off`);
+    expect(step).toContain(`plywood strip, about ${frac(Math.ceil(strip.rough.l - form))} long`);
   });
 
   it('defines the mirror ramp: a second set of ribs for the flipped web, with its own profile on the drawing, and never "the same ramp"', () => {
@@ -403,16 +412,21 @@ describe('forms read plainly (readability round 2)', () => {
     expect(d.svg).toContain('id="mirrorramp"');
     expect(d.dims.some((x) => x.key === 'mirror-ribs' && x.kind === 'count')).toBe(true);
     // the glue-up step flips onto the mirror ramp, and nothing says the second face goes on the same ramp
-    expect(d.build.find((s) => s.step.startsWith('GLUE-UP'))!.sub!.join(' ')).toMatch(/flip the web over onto the MIRROR ramp/);
+    expect(d.build.find((s) => s.step.startsWith('GLUE-UP'))!.sub!.join(' ')).toMatch(/turn the web over along its length onto the MIRROR ramp/);
     expect(all).not.toMatch(/same template and ramp|on the same ramp/);
   });
 
   it('gives the ramp ribs one spacing, the same in the notes, the steps and the sketch', () => {
     const all = textsOf(byId('side-form')).join('\n');
-    const by = new Map<string, Set<string>>();
-    for (const m of all.matchAll(/(\d+) ribs(?: of 3\/4" MDF)?,? ?(?:3\/4" MDF, )?(\d[\d/-]*)" apart/g)) { if (!by.has(m[1])) by.set(m[1], new Set()); by.get(m[1])!.add(m[2]); }
-    expect(by.size).toBeGreaterThan(0);
-    for (const [n, set] of by) expect(set.size, `${n} ribs`).toBe(1);
+    // the S-ramp spacing: in the S-ramp note, the S-RAMP step and the sketch; the mirror spacing: in its note and its step
+    const d = byId('side-form');
+    const sStep = d.build.find((s) => s.step.startsWith('S-RAMP'))!, mStep = d.build.find((s) => s.step.startsWith('MIRROR RAMP'))!;
+    const sp = (t: string): string[] => [...t.matchAll(/(\d[\d/-]*)" apart/g)].map((m) => m[1]);
+    const sNote = d.notes.find((t) => t.startsWith('S-ramp'))!, mNote = d.notes.find((t) => t.startsWith('Mirror ramp'))!;
+    const sSet = new Set([...sp(sNote), ...sp((sStep.sub ?? []).join(' ')), ...[...all.matchAll(/ribs, 3\/4" MDF, (\d[\d/-]*)" apart/g)].map((m) => m[1])]);
+    const mSet = new Set([...sp(mNote), ...sp((mStep.sub ?? []).join(' '))]);
+    expect(sSet.size).toBe(1);
+    expect(mSet.size).toBe(1);
     expect(all).not.toMatch(/about 4-1\/2" apart/);
   });
 

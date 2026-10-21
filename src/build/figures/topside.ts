@@ -8,14 +8,17 @@ import { computeLayout, sideTopAt, type Layout } from '../../model/layout';
 import { worldAABB, type Bounds } from '../../model/bounds';
 import type { Vec2 } from '../../model/types';
 import { boxTieGeometry, kneeScrews, KNEE_SCREW_SEAT_IN, sideRibStations, type RibStation } from '../../model/side-ribs';
-import { BOX_FILLET_IN, LATCH_BLOCK_IN, storageDrainSites, storageGeometry } from '../../model/storage';
+import { BOX_FILLET_IN, storageDrainSites, storageGeometry } from '../../model/storage';
 import {
   GRIP_BACKING_H_IN, GRIP_BACKING_T_IN, GRIP_BOLT_COLS, GRIP_BOLT_DIA_IN, GRIP_BOLT_ROWS_IN, GRIP_CAP_HEAD_DEPTH_IN, GRIP_CAP_HEAD_DIA_IN, GRIP_CAP_T_IN,
   GRIP_WASHER_LOW_OD_IN, GRIP_WASHER_OD_IN, HINGE_R_IN, PIN_HEAD_IN, PIN_LEN_IN, PIN_R_IN, gripFrame, seatBackSupport,
 } from '../../model/seat';
 import { atPose, brakeGeometry, type V2 } from '../../model/brake-layout';
-import { handleGeometry, POST_RELIEF, SOCKET_ACCESS_HOLE_IN, SOCKET_SCREW_HEAD_IN } from '../../model/handle';
+import { handleGeometry, SOCKET_ACCESS_HOLE_IN, SOCKET_SCREW_HEAD_IN } from '../../model/handle';
 import { frac } from '../svg-util';
+import { ribFillers } from '../cutlist';
+import { roughFrac } from '../units';
+import { transformPoint } from '../../model/bounds';
 import { ACCENT, DIM, Fig, fit, INK, MAT, mat, MUTED, type FigCtx, type FigFn, type Frame, type MatName, type Style } from './kit';
 
 const f8 = (v: number): string => frac(v, 8);
@@ -31,6 +34,8 @@ const THIN_PLY = { fill: MAT.web.fill, stroke: MAT.web.stroke, label: 'thin plyw
 const SEAT_PLY = { fill: MAT.deck.fill, stroke: MAT.deck.stroke, label: '12 mm plywood' };
 const ALU = { fill: '#dfe3e8', stroke: '#6b7480', label: 'aluminum (anodized)' };
 const FOAM = { fill: '#cfe3d4', stroke: '#5f8a6a', label: 'foam pad' };
+/** The brake's pivot block: oak, a lighter fill than the flap so the two layers read apart. */
+const BLOCK: Style = { fill: '#f7ead0', stroke: ACCENT, width: 1.4 };
 type Swatch = { fill: string; stroke: string; label: string };
 
 /** A rectangle given by two corners in a frame's model units. */
@@ -131,11 +136,17 @@ const ribStations: FigFn = (c) => {
   const yDeck = fr.at([0, L.deckBot])[1];
   if (box1) {
     const tg = boxTieGeometry(p, L, box1);
-    F.label(fr.at([box1.x + p.boxTieWidthIn / 2, (tg.z0 + tg.z1) / 2]), [236, yDeck + 20], ['box ribs stop short of the deck:', 'their base is a box tie, glued in', 'later with the storage box (dotted)'], { size: 12, anchor: 'start' });
+    F.label(fr.at([box1.x + p.boxTieWidthIn / 2, (tg.z0 + tg.z1) / 2]), [236, yDeck + 20], ['box and rear ribs stop short of', 'the deck: their base is a box tie,', 'glued in later with the storage', 'box (dotted)'], { size: 12, anchor: 'start' });
   }
   if (mid && mid.member) {
     const kh = Math.min(p.sideRibKneeHeightIn, mid.h - L.railBand - 0.25);
-    F.label(fr.at([mid.x + w / 2 + 0.1, L.deckTop + kh * 0.6]), [560, 140], ['knee on the deck, screwed', 'down into the member under it'], { size: 12, anchor: 'start' });
+    const kt = fr.at([mid.x + w / 2 + 0.1, L.deckTop + kh * 0.6]);
+    F.label(kt, [kt[0] + 16, kt[1] - 8], 'knee, seen edge-on', { size: 11.5, anchor: 'start' });
+    if (bow) {
+      const khB = Math.min(p.sideRibKneeHeightIn, bow.h - L.railBand - 0.25);
+      const bt = fr.at([bow.x + w / 2 + 0.1, L.deckTop + khB * 0.6]);
+      F.label(bt, [bt[0] + 14, bt[1] - 6], 'knee', { size: 11.5, anchor: 'start' });
+    }
     const mb = members.get(mid.member);
     if (mb) F.label(fr.at([mb.max[0], (mb.min[2] + mb.max[2]) / 2]), [fr.at([mid.x, 0])[0] + 30, yDeck + 60], 'the crossmember below', { size: 12, color: MUTED });
   }
@@ -144,10 +155,19 @@ const ribStations: FigFn = (c) => {
     if (mb) F.label(fr.at([mb.max[0], (mb.min[2] + mb.max[2]) / 2]), [fr.at([mb.max[0], 0])[0] - 10, yDeck + 80], 'king beam', { size: 12, color: MUTED });
   }
   if (hasBox) F.text(fr.at([g.x0 + 0.4, L.web.z0 + 0.3]), 'storage box (built later)', { size: 11.5, color: MUTED });
+  // the grab board (fitted in the next step), dashed, so the rib layout reads against it
+  if (c.by('seat-grip-L')) {
+    const gf = gripFrame(p, L);
+    const corners: Vec2[] = [gf.W(gf.uRear(gf.nBot), gf.nBot), gf.W(gf.uFront(gf.nBot), gf.nBot), gf.W(gf.uFront(gf.nTop), gf.nTop), gf.W(gf.uRear(gf.nTop), gf.nTop)];
+    polyIn(F, fr, corners, { stroke: '#8f8a80', width: 1.2, dash: '5 4' });
+    const tc = fr.at([(corners[2][0] + corners[3][0]) / 2, Math.max(corners[2][1], corners[3][1])]);
+    F.text([tc[0], tc[1] - 6], 'grab board (next step)', { size: 11.5, color: MUTED, anchor: 'middle' });
+  }
   if (tr) F.text([fr.at([tr.min[0], 0])[0], fr.at([0, tr.max[2]])[1] - 6], 'transom', { size: 11.5, color: MUTED });
   if (bh) F.text([fr.at([bh.max[0], 0])[0] + 12, fr.at([0, bh.min[2]])[1]], 'bow bulkhead', { size: 11.5, color: MUTED, rotate: -90 });
   const gx = (L.xSideStart + L.xSideEnd) * 0.5;
-  F.label(fr.at([gx, top(gx) - L.railBand / 2]), [fr.at([gx, 0])[0] + 10, 84], 'inner gunwale band', { size: 12 });
+  const gbx = mid ? mid.x - 2.5 : gx;
+  F.label(fr.at([gbx, top(gbx) - L.railBand / 2]), [fr.at([gbx, 0])[0] + 10, 84], 'inner gunwale band', { size: 12 });
   const cx = box1 && mid ? box1.x + (mid.x - box1.x) * 0.6 : gx;
   F.label(fr.at([cx, (zChineInBot + L.web.z0) / 2]), [fr.at([cx, 0])[0] - 30, fr.at([0, L.web.z0])[1] - 10], 'inner chine band', { size: 12, anchor: 'end' });
 
@@ -192,7 +212,7 @@ const ribSection: FigFn = (c) => {
   const mb = box(c, st.member as string);
   const zMemBot = mb?.min[2] ?? L.deckBot - p.crossmemberDepthIn;
   const yKneeEnd = yIn - dep - kl;
-  const F = new Fig(760, 500);
+  const F = new Fig(760, 556);
   F.heading('Cut across the side at the mid rib, looking forward (left side)');
   F.text([16, 46], 'Glue in this order: 1 the filler, 2 the rib, 3 the knee, then its screws.', { size: 12, color: ACCENT, weight: 'bold' });
   // h = -y: outboard to the left, inboard to the right
@@ -237,7 +257,7 @@ const ribSection: FigFn = (c) => {
   if (rb) F.label(at(yOut - railW / 2, zLo + 0.8), [xL, 396], 'rail (under the side)', { size: 12, color: MUTED });
   F.label(at(yIn + band / 2, top - 0.15), [xR, 64], 'inner gunwale band', { size: 12 });
   F.label(at(yIn - dep / 2, gb + 0.6), [xR, 110], [`rib, ${f8(dep)} thick: epoxy full face`, 'to the bands and the filler'], { size: 12 });
-  F.label(at(yIn + band / 2, (L.web.z0 + gb) / 2 - 0.4), [xR, 186], [`band-strip filler, ${f8(gb - L.web.z0)} long here,`, 'glued to the web first'], { size: 12 });
+  F.label(at(yIn + band / 2, (L.web.z0 + gb) / 2 - 0.4), [xR, 186], [`band-strip filler, about ${roughFrac(ribFillers(c.parts, p).find((q) => q.n === st.n)?.lengthIn ?? gb - L.web.z0)}`, 'long here, glued to the web first'], { size: 12 });
   F.label(at(yIn - dep - kl * 0.3, L.deckTop + kh * 0.45), [xR, 248], [`knee, ${f8(kl)} along the deck and ${f8(kh)} up`, 'the rib: epoxy to the rib and the deck'], { size: 12 });
   F.label(at(yKneeEnd - 0.8, L.deckTop - L.ply / 2), [xR, 318], 'deck', { size: 12, color: MUTED });
   const sy = yIn - dep - ks.d[1];
@@ -249,6 +269,16 @@ const ribSection: FigFn = (c) => {
   F.badge(at(yIn - dep - kl * 0.18, L.deckTop + kh * 0.18), 3);
   F.text([at(yOut, 0)[0], at(0, zLo)[1] + 18], '← outside', { size: 11.5, color: MUTED, anchor: 'end' });
   F.text([at(yKneeEnd - 1.4, 0)[0], at(0, zLo)[1] + 18], 'inside of the sled →', { size: 11.5, color: MUTED, anchor: 'end' });
+  // the plan angle: drawn square to the side, which here runs off the sled's centerline; the knee's screws drift aft onto the crossmember
+  const turn = Math.round(Math.atan(st.dTurn) * DEG);
+  const knee = c.by(`side-rib-knee-L${st.n}`), kj = knee?.joints?.find((q) => q.type === 'screw' && q.at?.length);
+  const kx = knee && kj?.at ? kj.at.reduce((a, q) => a + transformPoint(knee.transform, q)[0], 0) / kj.at.length : st.x;
+  const drift = st.x - kx;
+  F.text([16, 470], [
+    `Drawn square to the side.${turn >= 2 ? ` Here the side runs about ${turn}° off the sled's centerline (seen from above),` : ''}`,
+    Math.abs(drift) >= 1 / 16 ? `and the knee stands square to it, so its foot angles back and its screws land ${f8(Math.abs(drift))} ${drift > 0 ? 'aft' : 'forward'}` : 'Its screws land on the centerline of the member under it.',
+    Math.abs(drift) >= 1 / 16 ? 'of the rib center, on the crossmember\'s centerline.' : '',
+  ], { size: 12, color: MUTED });
   legend(F, ['web', 'oak', 'deck', 'epoxy', 'steel', 'ghost']);
   F.note('To scale');
   return {
@@ -297,7 +327,8 @@ const grabBoardStack: FigFn = (c) => {
   const wT = 0.09;
   rows.forEach((rr, i) => {
     const od = i === 0 ? GRIP_WASHER_OD_IN : GRIP_WASHER_LOW_OD_IN;
-    R(yIn - bt - wT, -rr - od / 2, yIn - bt, -rr + od / 2, mat('steel'));
+    // the two rows are in different columns (staggered): the lower row's washer is behind the cut, dashed
+    R(yIn - bt - wT, -rr - od / 2, yIn - bt, -rr + od / 2, i === 0 ? mat('steel') : { stroke: MAT.steel.stroke, width: 1, dash: '3 2' });
     F.bolt(at(yOut + GRIP_BACKING_T_IN, -rr), at(yIn - bt - wT, -rr));
   });
   // labels: outside on the left, inside on the right
@@ -308,7 +339,7 @@ const grabBoardStack: FigFn = (c) => {
   F.label(at(yOut - band / 2, nBot + 0.12), [xL, 452], ['outer gunwale', 'band'], { size: 12 });
   F.label(at(yIn - bt / 2, gf.nTop - 0.5), [xR, 130], ['grab board,', `${f8(bt)} oak`], { size: 12 });
   F.label(at(yIn - bt / 2, gf.foot + gf.hh * 0.7), [xR, 200], ['hand hole', '(beyond the cut)'], { size: 12, color: MUTED });
-  F.label(at(yIn - bt - wT - 0.16, -r0 + 0.15), [xR, 300], ['nylock nut and', 'fender washer'], { size: 12 });
+  F.label(at(yIn - bt - wT - 0.16, -r0 + 0.15), [xR, 300], ['nylock nut and a fender', 'washer on each screw', '(lower one dashed)'], { size: 12 });
   F.label(at(yIn + band / 2, nBot + 0.1), [xR, 410], ['inner gunwale', 'band'], { size: 12 });
   F.label(at(yIn + band + webT / 2, nBreak + 0.3), [xR, 456], 'web', { size: 12 });
   F.text([at(yOut, 0)[0], at(0, nBreak)[1] + 62], '← outside', { size: 11.5, color: MUTED, anchor: 'end' });
@@ -319,20 +350,21 @@ const grabBoardStack: FigFn = (c) => {
   F.sub([410, 52], 'B. The order, one board at a time');
   const hole = frac(GRIP_BOLT_DIA_IN + 1 / 32, 64);
   const steps: Array<[string[], Parameters<typeof thumb>[3]]> = [
-    [['Drill. Clamp the board and the strip', `in place; one ${hole} bit through all`, 'five layers, square to the side.'], { board: true, strip: true, drill: true }],
+    [['Drill the strip alone on the drill press', `(${hole}, cobalt bit, cutting oil); deburr`, 'and wipe it clean with acetone.'], { stripOnly: true }],
+    [['Drill the wood dry: clamp the board and', 'the strip in place, the strip as the', 'template, one bit through every layer.'], { board: true, strip: true, drill: true }],
     [['Seal. Take it apart. Brush epoxy into', 'the web holes, onto the board back', 'and the band face under it.'], { seal: true }],
     [['Strip. Epoxy it to the outer band, a', 'rod through each hole while it cures.'], { strip: true, hot: 'strip' }],
     [['Bolt. Set the board; screws in from', 'outside, washers and nuts inside.', 'Tighten every nut: no access later.'], { board: true, strip: true, bolts: true, hot: 'bolts' }],
     [['Cap. Epoxy the oak cap over the strip', 'and the heads; clamp it with a caul.'], { board: true, strip: true, bolts: true, cap: true, hot: 'cap' }],
   ];
   steps.forEach(([t, o], i) => {
-    const y = 84 + i * 96;
+    const y = 84 + i * 80;
     F.badge([424, y + 14], i + 1);
     thumb(F, sx, y, o);
     F.text([510, y + 12], t, { size: 12 });
   });
   legend(F, ['oak', 'web', 'steel', 'epoxy']);
-  F.note('Section, to scale; both screw rows drawn in one cut');
+  F.note('Section, to scale; both screw rows in one cut');
   return {
     id: 'grab-board-stack',
     title: 'How a grab board is fastened',
@@ -342,12 +374,19 @@ const grabBoardStack: FigFn = (c) => {
 };
 
 /** A small schematic stack for the sequence: the gunwale bands and web, and what is on them at that stage. */
-function thumb(F: Fig, x: number, y: number, o: { board?: boolean; strip?: boolean; bolts?: boolean; cap?: boolean; drill?: boolean; seal?: boolean; hot?: 'strip' | 'bolts' | 'cap' }): void {
+function thumb(F: Fig, x: number, y: number, o: { board?: boolean; strip?: boolean; stripOnly?: boolean; bolts?: boolean; cap?: boolean; drill?: boolean; seal?: boolean; hot?: 'strip' | 'bolts' | 'cap' }): void {
   // x grows inboard; 7 px per eighth, roughly
   const top = y, bot = y + 40;
   const cap = 0, strip = 11, oBand = 14, web = 19, iBand = 25, board = 30, end = 42;
   const X = (v: number): number => x + v;
   const st = (m: MatName, hot: boolean): Style => (hot ? acc(m, { width: 1.5 }) : mat(m, { width: 1 }));
+  if (o.stripOnly) {
+    // the strip on its own, on the drill press table, drilled down through
+    F.rect(X(4), top + 30, 40, 4, acc('steel', { width: 1.2 }));
+    F.rect(X(-2), top + 34, 52, 5, mat('bench', { width: 1 }));
+    for (const xx of [14, 34]) F.arrow([X(xx), top - 6], [X(xx), top + 26], ACCENT, 1.6);
+    return;
+  }
   if (o.cap) F.rect(X(cap), top, oBand - cap, 26, st('oak', o.hot === 'cap'));
   if (o.strip) F.rect(X(strip), top + 4, 3, 18, st('steel', o.hot === 'strip'));
   F.rect(X(oBand), top, web - oBand, 26, mat('oak', { width: 1 }));
@@ -403,7 +442,7 @@ const storageBox: FigFn = (c) => {
     const hb = box(c, `storage-hinge-backer-${tag}`);
     if (hb) R(hb.min[0], hb.min[1], hb.max[0], hb.max[1], acc('oak', { width: 1.4 }));
     const lb = box(c, `storage-latch-block-${tag}`);
-    if (lb) R(L.xRear + L.transom, lb.min[1], L.xRear + L.transom + LATCH_BLOCK_IN, lb.max[1], acc('oak', { width: 1.4 }));
+    if (lb) R(lb.min[0], lb.min[1], lb.max[0], lb.max[1], acc('oak', { width: 1.4 }));
   }
   const drains = storageDrainSites(p, L);
   for (const d of drains) F.circle(pl.at([d.x, d.y]), 3.5, { fill: '#ffffff', stroke: INK, width: 1.2 });
@@ -413,15 +452,19 @@ const storageBox: FigFn = (c) => {
   if (b4) F.label(pl.at([b4.x, (g.hw + b4.yIn - dep) / 2]), [lx, 92], 'box tie at the rear rib', { size: 12 });
   if (b1) F.label(pl.at([b1.x, (g.hw + b1.yIn - dep) / 2]), [rx, 92], 'box tie at the box rib', { size: 12 });
   const lbL = box(c, 'storage-latch-block-L');
-  if (lbL) F.label(pl.at([L.xRear + L.transom + LATCH_BLOCK_IN / 2, (lbL.min[1] + lbL.max[1]) / 2]), [lx, 150], ['latch blocks on the inside of', 'the transom, above the box'], { size: 12 });
+  if (lbL) F.label(pl.at([(lbL.min[0] + lbL.max[0]) / 2, (lbL.min[1] + lbL.max[1]) / 2]), [lx, 150], ['latch blocks on the inside of', 'the transom, above the box'], { size: 12 });
   F.text([pl.at([L.xRear, 0])[0] - 6, pl.at([0, 0])[1] + 4], 'transom', { size: 11.5, color: MUTED, anchor: 'end' });
-  if (drains[1]) F.label(pl.at([drains[1].x, drains[1].y]), [lx, 300], ['drain holes: the floor falls', `about ${f8(0.125)} toward each`], { size: 12 });
+  if (drains[1]) {
+    F.label(pl.at([drains[1].x, drains[1].y]), [lx, 300], ['drain holes: the floor falls', `about ${f8(0.125)} toward each`], { size: 12 });
+    if (drains[0]) { const d0 = pl.at([drains[0].x, drains[0].y]); F.line(d0, [lx + 3, 296], { stroke: MUTED, width: 1 }); F.circle(d0, 2.4, { fill: MUTED }); }
+  }
   const hbL = box(c, 'storage-hinge-backer-L');
   if (hbL) F.label(pl.at([(hbL.min[0] + hbL.max[0]) / 2, (hbL.min[1] + hbL.max[1]) / 2]), [rx, 168], ['hinge backers inside the fore end', '(the lid hinges screw into them)'], { size: 12 });
   F.label(pl.at([g.x1 - cw / 2, -g.hw * 0.85]), [rx, 250], [`oak coaming, ${f8(g.coamW)} × ${f8(g.coamT)}, on the`, 'wall tops: the lid and its gasket', 'sit on oak, never on a ply edge'], { size: 12 });
-  if (b1) F.label(pl.at([b1.x + hl / 2 - 0.1, -(b1.yIn - dep / 2)]), [rx, 340], 'rib (glued in the last step)', { size: 12, color: MUTED });
+  if (b1) F.label(pl.at([b1.x + hl / 2 - 0.1, -(b1.yIn - dep / 2)]), [rx, 340], 'rib (glued in [[step:side-ribs]])', { size: 12, color: MUTED });
   F.text([pl.at([g.x1, 0])[0] + 8, pl.at([0, 0])[1] + 4], 'bow →', { size: 11.5, color: MUTED });
-  F.text([pl.at([(g.x0 + g.x1) / 2, 0])[0], pl.at([0, 0])[1] + 4], ['the deck is', 'the box floor'], { size: 11.5, color: MUTED, anchor: 'middle' });
+  F.text([pl.at([(g.x0 + g.x1) / 2, 0])[0], pl.at([0, 0])[1] - 30], ['the deck is', 'the box floor'], { size: 11.5, color: MUTED, anchor: 'middle' });
+  F.text([pl.at([(g.x0 + g.x1) / 2, 0])[0], pl.at([0, 0])[1] + 12], [`outside ${frac(g.x1 - g.x0, 32)} × ${frac(2 * g.hw, 32)}`, `aft wall ${frac(g.x0 - L.xRear, 32)} ahead of`, 'the transom\'s outer face'], { size: 12, anchor: 'middle' });
 
   // ── B. section across the box at the box rib (left half, looking forward)
   const st = b1 ?? stations[0];
@@ -457,7 +500,7 @@ const storageBox: FigFn = (c) => {
     const xl = 186, xr = 378;
     F.label(at(yIn - dep / 2, zCut - 0.5), [xl, 440], 'rib', { size: 12, color: MUTED });
     const gap = g.zPlyTop - tg.z1;
-    F.label(at(yIn - dep - 0.05, (tg.z1 + g.zPlyTop) / 2), [xl, 478], [`${f8(gap)} gap: the tie is never`, 'glued to the lid frame'], { size: 12 });
+    F.label(at(yIn - dep - 0.05, (tg.z1 + g.zPlyTop) / 2), [xl, 478], [`its top ${f8(gap)} below the`, 'top of the plywood wall'], { size: 12 });
     F.label(at((g.hw + yIn - dep) / 2, (tg.z0 + tg.z1) / 2), [xl, 540], ['box tie: thickened epoxy', 'on both faces'], { size: 12 });
     F.label(at(yIn + band + webT / 2, L.web.z0 + 0.6), [xl, 600], 'side', { size: 12, color: MUTED });
     F.label(at(yIn - 1, (L.deckBot + L.deckTop) / 2), [xl, 650], 'deck', { size: 12, color: MUTED });
@@ -505,7 +548,6 @@ const storageLid: FigFn = (c) => {
   if (!lid) return null;
   const rw = g.rimW, hw = g.hw, x0 = g.x0, x1 = g.x1;
   const rab = lid.stock ? Math.max(0, (lid.stock.w - 2 * (hw - rw)) / 2) : 0.25;
-  const letIn = 0.25; // the batten dados' depth on the frame drawing
   const F = new Fig(760, 640);
   F.heading('The lid: an oak frame round a thin plywood panel, with battens under it');
   // ── A. plan
@@ -519,7 +561,7 @@ const storageLid: FigFn = (c) => {
   R(x1 - rw, -hw + rw, x1, hw - rw, acc('oak'));
   for (const b of battens) {
     const bb = worldAABB(b);
-    R(bb.min[0], -(hw - rw) - letIn, bb.max[0], hw - rw + letIn, { stroke: ACCENT, width: 1.4, dash: '5 3' });
+    R(bb.min[0], bb.min[1], bb.max[0], bb.max[1], { stroke: ACCENT, width: 1.4, dash: '5 3' });
   }
   for (const xc of [x0 + rw / 2, x1 - rw / 2]) for (const s of [1, -1]) R(xc - 3 / 16, s * (hw - rw) - 3 / 8, xc + 3 / 16, s * (hw - rw) + 3 / 8, { stroke: INK, width: 1, dash: '2 2' });
   // the panel's edge in its rabbet
@@ -529,11 +571,10 @@ const storageLid: FigFn = (c) => {
   F.label(pf.at([x1 - rw / 2, hw - rw]), [lx, 136], ['a small loose tenon at each corner (dotted),', 'in mortises in the frame sides'], { size: 12 });
   F.label(pf.at([x1 - rw / 2, hw * 0.3]), [lx, 196], 'frame ends, between the sides', { size: 12 });
   F.label(pf.at([(x0 + x1) / 2 - 2.5, hw * 0.1]), [lx, 236], 'panel, its edge in a rabbet all round', { size: 12 });
-  if (battens.length) { const bb = worldAABB(battens[battens.length - 1]); F.label(pf.at([(bb.min[0] + bb.max[0]) / 2, -hw * 0.45]), [lx, 296], [`${battens.length} battens under the panel, their ends let`, `${f8(letIn)} into dados in the frame sides`], { size: 12 }); }
+  if (battens.length) { const bb = worldAABB(battens[battens.length - 1]); F.label(pf.at([(bb.min[0] + bb.max[0]) / 2, -hw * 0.45]), [lx, 296], [`${battens.length} battens under the panel, glued to it,`, 'their ends butted to the frame sides'], { size: 12 }); }
   F.text([pf.at([x0, 0])[0], pf.at([0, -hw])[1] + 18], 'aft end', { size: 11.5, color: MUTED });
   F.text([pf.at([x1, 0])[0], pf.at([0, -hw])[1] + 18], 'fore end (hinges)', { size: 11.5, color: MUTED, anchor: 'end' });
-  F.text([lx, 360], 'Order: 1 cut the joints, 2 glue the frame round the panel,', { size: 12, color: ACCENT, weight: 'bold' });
-  F.text([lx, 376], '3 let in the battens, glue and screw them.', { size: 12, color: ACCENT, weight: 'bold' });
+  F.text([lx, 352], ['Order: 1 cut the joints, 2 seal the panel,', '3 glue the frame round it, 4 glue and', 'screw the battens (lid face down).'], { size: 12, color: ACCENT, weight: 'bold' });
 
   // ── B. section at a batten, the left frame side
   F.sub([16, 416], 'B. Cut across at a batten, at the left edge, looking forward');
@@ -546,31 +587,28 @@ const storageLid: FigFn = (c) => {
   S(hw - g.pl, zA, hw, g.zPlyTop, GHOST);
   S(hw - g.coamW, g.zPlyTop, hw, g.zWallTop, GHOST);
   S(hw - g.pl, g.zWallTop, hw, g.zWallTop + g.gasket, mat('rubber'));
-  const zLidBot = g.zTop - g.pl - g.rimT, zDadoTop = g.zTop - g.pl;
-  // frame side: its rabbet at the top inside edge and the dado for the batten end below it
-  polyIn(F, sf, [[H(hw), zLidBot], [H(hw - rw + letIn), zLidBot], [H(hw - rw + letIn), zDadoTop], [H(hw - rw + rab), zDadoTop], [H(hw - rw + rab), g.zTop], [H(hw), g.zTop]], acc('oak'));
+  const zLidBot = g.zTop - g.pl - g.rimT, zBatTop = g.zTop - g.pl;
+  // frame side: full section with the rabbet notch at its top inside edge; the batten butts its inside face
+  polyIn(F, sf, [[H(hw), zLidBot], [H(hw - rw), zLidBot], [H(hw - rw), g.zTop - rab], [H(hw - rw + rab), g.zTop - rab], [H(hw - rw + rab), g.zTop], [H(hw), g.zTop]], acc('oak'));
   S(yA, g.zTop - g.pl, hw - rw + rab, g.zTop, { fill: THIN_PLY.fill, stroke: ACCENT, width: 1.6 });
-  S(yA, zLidBot, hw - rw + letIn, zDadoTop, acc('oak'));
+  S(yA, zLidBot, hw - rw, zBatTop, acc('oak'));
   breakLine(F, at(yA, zLidBot - 0.05), at(yA, g.zTop + 0.05));
-  // the frame's inside face, dotted through the panel and batten ends
-  F.line(at(hw - rw, zLidBot), at(hw - rw, g.zTop), { stroke: INK, width: 1, dash: '2 3' });
   const ys = hw - rw - 1.1;
   F.screw(at(ys, g.zTop), at(ys, zLidBot + 0.08), true);
   const xl = 236, xr = 552;
   F.label(at(hw - rw / 2 + 0.1, g.zTop - 0.15), [xl, 446], 'frame side', { size: 12 });
-  F.label(at(hw - rw + rab / 2, g.zTop - g.pl / 2), [xl, 482], ['panel edge in the rabbet', `(${f8(rab)} deep), glued`], { size: 12 });
-  F.label(at(hw - rw + letIn / 2, (zLidBot + zDadoTop) / 2), [xl, 540], ['batten end in its dado', `(${f8(letIn)} into the frame side)`], { size: 12 });
+  F.label(at(hw - rw + rab / 2, g.zTop - g.pl / 2), [xl, 482], ['panel edge in the rabbet', `(${f8(rab)} × ${f8(rab)}), glued`], { size: 12 });
+  F.label(at(hw - rw - 0.05, (zLidBot + zBatTop) / 2), [xl, 540], ['batten end butted to the', 'frame side, thickened epoxy'], { size: 12 });
   F.label(at(hw - g.pl / 2, g.zWallTop + g.gasket / 2), [xl, 596], 'gasket on the coaming', { size: 12, color: MUTED });
-  F.label(at(ys, g.zTop), [xr, 446], ['stainless screw from the top,', 'its head plugged'], { size: 12 });
+  F.label(at(ys, g.zTop), [xr, 446], ['stainless screw from the top,', 'countersunk flush, epoxy-filled'], { size: 12 });
   F.label(at(yA + 0.45, g.zTop - g.pl / 2), [xr, 500], 'panel (thin plywood)', { size: 12 });
-  F.label(at(yA + 0.45, (zLidBot + zDadoTop) / 2), [xr, 548], 'batten, glued to the panel', { size: 12 });
-  F.text([at(hw - rw, 0)[0] + 4, at(0, zLidBot)[1] + 14], 'inside face of the frame', { size: 11.5, color: MUTED });
+  F.label(at(yA + 0.45, (zLidBot + zBatTop) / 2), [xr, 548], 'batten, glued to the panel', { size: 12 });
   legend(F, ['oak', THIN_PLY, 'rubber', 'steel', 'ghost']);
   F.note('A and B each to scale');
   return {
     id: 'storage-lid',
     title: 'The storage lid',
-    caption: `The lid is a thin plywood panel held in an oak frame: the panel's edge sits in a rabbet along the top inside edge of all four frame pieces, and the corners are joined with small loose tenons. ${battens.length} oak battens under the panel stop it sagging under a cushion or a light load; their ends are let into dados in the frame sides, and they are glued and screwed to the panel from the top. The frame's underside is what seals on the gasket and the coaming of the box from [[step:storage-box]].`,
+    caption: `The lid is a thin plywood panel held in an oak frame: the panel's edge sits in a rabbet along the top inside edge of all four frame pieces, and the corners are joined with small loose tenons. ${battens.length} oak battens under the panel stop it sagging under a cushion or a light load; they are glued under the panel and butted to the frame sides, and screwed through the panel from the top while the epoxy cures. The frame's underside is what seals on the gasket and the coaming of the box from [[step:storage-box]].`,
     svg: F.svg('The storage lid from above and cut across at a batten'),
   };
 };
@@ -588,7 +626,7 @@ const seatBlocks: FigFn = (c) => {
   const col0: Vec2 = [s.col0[0], s.col0[2]], col2: Vec2 = [s.col2[0], s.col2[2]], Pr: Vec2 = [s.Pr[0], s.Pr[2]];
   const F = new Fig(760, 470);
   F.heading('A seat-back stop block on the box end, seen from the side (bow to the right)');
-  F.text([16, 46], 'Order: 1 shape and drill the block, 2 glue it on, screws from below, 3 bed the crest strip.', { size: 12, color: ACCENT, weight: 'bold' });
+  F.text([16, 46], 'Order: 1 shape the block, mark its latch hole, 2 glue it on, screws from below, 3 bed the crest strip.', { size: 12, color: ACCENT, weight: 'bold' });
   const xMin = g.x1 - 1.6, xMax = s.P[0] + 1.4;
   const fr = fit({ minX: xMin, minY: L.deckBot - 1.4, maxX: xMax, maxY: g.zTop + 0.5 }, { x: 230, y: 50, w: 300, h: 380 }, 1, 'center');
   const R = (a: number, b: number, c2: number, d: number, st: Style): void => rectIn(F, fr, a, b, c2, d, st);
@@ -600,14 +638,17 @@ const seatBlocks: FigFn = (c) => {
   const hb = box(c, 'storage-hinge-backer-L');
   if (hb) R(hb.min[0], hb.min[2], hb.max[0], hb.max[2], GHOST);
   const lh = box(c, 'storage-hinge-L');
-  if (lh) R(lh.min[0], lh.min[2], lh.max[0], lh.max[2], mat('steel'));
+  // the box leaf of the lid hinge (its lower half), screwed on for good in the lid step; its knuckle at the top
+  const leafTop = lh ? (lh.min[2] + lh.max[2]) / 2 : 0;
+  if (lh) { R(lh.min[0], lh.min[2], lh.max[0], leafTop, mat('steel')); F.circle(fr.at([lh.max[0], leafTop]), 3, mat('steel')); }
   // the seat back that will lean here (next step), dashed
   const H = sb.H, t = sb.t;
   const corner = (a: number, b: number): Vec2 => [Pr[0] + col0[0] * a + col2[0] * b, Pr[1] + col0[1] * a + col2[1] * b];
   const topC = Math.min(H, (g.zTop + 0.4 - Pr[1]) / col2[1]);
   polyIn(F, fr, [corner(0, 0), corner(t, 0), corner(t, topC), corner(0, topC)], { stroke: '#a9a9a9', width: 1.2, dash: '5 4' });
-  // the block (this step) and the crest strip (between the blocks)
+  // the block (this step) and the crest strip (between the blocks); the hinge leaf is behind the block here, dashed
   polyIn(F, fr, sb.wedge, acc('oak'));
+  if (lh) R(lh.min[0], lh.min[2], lh.max[0], leafTop, { stroke: MAT.steel.stroke, width: 1.2, dash: '3 2' });
   const cs = box(c, 'seat-crest-strip');
   const [, , qa, qd] = sb.wedge;
   const faceX = (z: number): number => sb.wedge[1][0] + ((qa[0] - sb.wedge[1][0]) * (z - sb.wedge[1][1])) / (qa[1] - sb.wedge[1][1]);
@@ -621,7 +662,7 @@ const seatBlocks: FigFn = (c) => {
   const depth = PIN_LEN_IN - t;
   const into: Vec2 = [-col0[0], -col0[1]];
   const pin = (a: number, b: number): Vec2 => [mouth[0] + into[0] * a + col2[0] * b, mouth[1] + into[1] * a + col2[1] * b];
-  polyIn(F, fr, [pin(0, -PIN_R_IN), pin(depth, -PIN_R_IN), pin(depth, PIN_R_IN), pin(0, PIN_R_IN)], { fill: '#ffffff', stroke: INK, width: 1.2 });
+  polyIn(F, fr, [pin(0, -PIN_R_IN), pin(depth, -PIN_R_IN), pin(depth, PIN_R_IN), pin(0, PIN_R_IN)], { stroke: INK, width: 1.2, dash: '3 2' });
   // screws up from under the deck
   const wx0 = sb.wedge[0][0], wx1 = sb.wedge[1][0];
   for (const f of [0.25, 0.75]) { const x = wx0 + (wx1 - wx0) * f; F.screw(fr.at([x, L.deckBot]), fr.at([x, L.deckBot + 1.25]), true); }
@@ -630,11 +671,11 @@ const seatBlocks: FigFn = (c) => {
   const ang = Math.round(90 - sb.a * DEG);
   F.label(fr.at([(sb.wedge[0][0] + faceX(L.deckTop + 2)) / 2, L.deckTop + 1]), [xr, fr.at([0, L.deckTop + 1.6])[1]], ['stop block: glued to the deck', 'and the box end'], { size: 12 });
   F.label(fr.at([faceX(L.deckTop + 4), L.deckTop + 4]), [xr, fr.at([0, L.deckTop + 4.6])[1]], `sloped face ${ang}° from level`, { size: 12 });
-  F.label(fr.at(pin(depth * 0.5, PIN_R_IN)), [xr, fr.at([0, mouth[1] + 1])[1]], [`${f8(2 * PIN_R_IN)} latch hole, square to the`, `sloped face (tilted ${Math.round(sb.a * DEG)}°)`], { size: 12 });
+  F.label(fr.at(pin(depth * 0.5, PIN_R_IN)), [xr, fr.at([0, mouth[1] + 1])[1]], [`${f8(2 * PIN_R_IN)} latch hole (dashed): mark it now,`, 'drill it later through the seat back\'s', `pin hole, square to the face (${Math.round(sb.a * DEG)}° tilt)`], { size: 12 });
   if (cs) F.label(fr.at([(cs.min[0] + qa[0]) / 2, (cs.min[2] + qa[1]) / 2]), [xr, fr.at([0, qa[1]])[1] - 14], ['crest strip, between the two', 'blocks (dashed: behind this one)'], { size: 12 });
   if (cs) F.label(fr.at([(g.x1 + cs.min[0]) / 2, cs.min[2] + 0.3]), [xl, fr.at([0, cs.min[2] - 0.2])[1] + 4], `a ${f8(cs.min[0] - g.x1)} bed of thickened epoxy`, { size: 12 });
-  if (lh) F.label(fr.at([(lh.min[0] + lh.max[0]) / 2, lh.min[2] + 0.2]), [xl, fr.at([0, lh.min[2]])[1] + 26], ['lid hinge leaf, taped over:', 'a spacer, lifted out after'], { size: 12 });
-  F.label(fr.at([g.x1 - g.pl / 2, L.deckTop + 2]), [xl, fr.at([0, L.deckTop + 2])[1]], 'box fore end', { size: 12, color: MUTED });
+  if (lh) F.label(fr.at([lh.max[0], lh.min[2] + 0.2]), [xl, fr.at([0, lh.min[2]])[1] + 26], ['lid hinge box leaf (dashed, behind', 'the block), screwed on for good', 'in the lid step'], { size: 12 });
+  F.label(fr.at([g.x1 - g.pl / 2, L.deckTop + 1.2]), [xl, fr.at([0, L.deckTop + 1.6])[1]], 'box fore end', { size: 12, color: MUTED });
   F.label(fr.at([(wx0 + wx1) / 2 + 0.2, L.deckBot + 0.3]), [xl, fr.at([0, L.deckBot])[1] + 40], ['2 screws up from UNDER the deck,', 'countersunk (none from above)'], { size: 12 });
   F.label(fr.at(corner(t / 2, topC * 0.75)), [xr, fr.at([0, g.zTop])[1] - 8], 'the seat back leans here (next step)', { size: 12, color: MUTED });
   F.text([fr.at([xMax, 0])[0] - 4, fr.at([0, L.deckBot])[1] + 16], 'deck', { size: 11.5, color: MUTED, anchor: 'end' });
@@ -646,7 +687,7 @@ const seatBlocks: FigFn = (c) => {
   return {
     id: 'seat-stop-block',
     title: 'A seat-back stop block',
-    caption: `The seat back does not stand up by itself: it leans back onto two oak stop blocks glued to the deck against the box end, one each side, and onto the crest strip between them. Each block's front face is cut to the lean of the back (${ang}° from level), and its latch hole is drilled square to that face before gluing, so the latch pin in [[step:seat-back]] goes straight in. The blocks are clamped by two screws driven up from under the deck (nothing shows on top). The crest strip is bedded over the box end with the lid-hinge leaves taped on as spacers, so it keeps a recess for them.`,
+    caption: `The seat back does not stand up by itself: it leans back onto two oak stop blocks glued to the deck against the box end, one each side, and onto the crest strip between them. Each block's front face is cut to the lean of the back (${ang}° from level), and its latch hole is only marked now: it is drilled in [[step:seat-back]] through the seat back's own pin hole, so the two line up. The blocks are clamped by two screws driven up from under the deck (nothing shows on top). The crest strip is bedded over the box end and the box leaves of the lid hinges, which were screwed on for good in [[step:storage-lid]].`,
     svg: F.svg('A seat-back stop block on the box end, seen from the side, with its latch hole and the crest strip'),
   };
 };
@@ -685,7 +726,7 @@ const seatBackPositions: FigFn = (c) => {
   // B. flat
   const flat = panel.map(flip);
   const xB0 = g.x1 - 1.8, xB1 = Math.max(...flat.map((q) => q[0])) + 1.2, zB1 = L.deckTop + 6.5;
-  F.sub([470, 52], 'B. Flat (lower right), pinned to the backer');
+  F.sub([470, 52], 'B. Flipped flat, front face down (lower right)');
   const fb = fit({ minX: xB0, minY: zA0, maxX: xB1, maxY: zB1 }, { x: 446, y: 214, w: k * (xB1 - xB0), h: k * (zB1 - zA0) }, 1, 'bottom');
   const ctx = (fr: Frame, x0: number, x1: number): void => {
     rectIn(F, fr, x0, L.deckBot, x1, L.deckTop, mat('deck', { opacity: 0.8 }));
@@ -702,7 +743,11 @@ const seatBackPositions: FigFn = (c) => {
   };
   // panel A
   ctx(fa, xA0, xA1);
-  if (cushion) rectIn(F, fa, cushion.min[0], cushion.min[2], xA1, cushion.max[2], { fill: FOAM.fill, stroke: FOAM.stroke, width: 1, dash: '4 3' });
+  if (cushion) {
+    rectIn(F, fa, cushion.min[0], cushion.min[2], xA1, cushion.max[2], { fill: FOAM.fill, stroke: FOAM.stroke, width: 1, dash: '4 3' });
+    const cc = fa.at([(Math.max(cushion.min[0], P[0] + 1.6) + xA1) / 2, (cushion.min[2] + cushion.max[2]) / 2]);
+    F.text([cc[0], cc[1] + 4], 'cushion', { size: 11.5, color: '#3f6b4a', anchor: 'middle' });
+  }
   if (pad) polyIn(F, fa, [onBack(t, 2.2), onBack(t + padThick, 2.2), onBack(t + padThick, H - 0.4), onBack(t, H - 0.4)], { fill: FOAM.fill, stroke: FOAM.stroke, width: 1, dash: '4 3' });
   polyIn(F, fa, panel, { fill: SEAT_PLY.fill, stroke: ACCENT, width: 1.8 });
   hinge(fa, onBack(t, 1.1), [P[0] + 1.1, L.deckTop]);
@@ -774,7 +819,7 @@ const brakeKit: FigFn = (c) => {
   const over = (sA: number, extra = 0): V2 => { const q = under(sA); return [q[0] + g.v[0] * (g.board.thick + extra), q[1] + g.v[1] * (g.board.thick + extra)]; };
   F.poly([under(g.board.s0), under(g.board.s1), over(g.board.s1), over(g.board.s0)].map(rel).map(fa.at), acc('oak'));
   const b0 = g.board.s0, b1 = g.board.s0 + g.plan.blockLen;
-  F.poly([over(b0), over(b1), over(b1, g.plan.blockT), over(b0, g.plan.blockT)].map(rel).map(fa.at), acc('oak', { width: 1.4 }));
+  F.poly([over(b0), over(b1), over(b1, g.plan.blockT), over(b0, g.plan.blockT)].map(rel).map(fa.at), BLOCK);
   F.poly(g.shoe.outline.map(rel).map(fa.at), acc('oak', { width: 1.4 }));
   F.poly([...g.pad.top, ...[...g.pad.bot].reverse()].map(rel).map(fa.at), mat('rubber'));
   const tread = box(c, 'brake-foot-tread-R');
@@ -796,7 +841,7 @@ const brakeKit: FigFn = (c) => {
   const yOf = (z: number): number => fa.at([0, z])[1];
   F.label(fa.at([g.strap.x1 - 0.2, g.strap.z1 - 0.3]), [xr, yOf(g.strap.z1) - 6], 'stainless strap, 4 screws', { size: 12 });
   F.label(fa.at(g.H), [xr, yOf(g.H[1]) + 10], 'pivot pin', { size: 12 });
-  F.label(fa.at([(g.knee.x0 + g.knee.x1) / 2, g.knee.zBot + 2]), [xr, yOf(g.knee.zBot + 2)], ['knee (bolted to the rail', 'in an earlier step)'], { size: 12, color: MUTED });
+  F.label(fa.at([(g.knee.x0 + g.knee.x1) / 2, g.knee.zBot + 2]), [xr, yOf(g.knee.zBot + 2)], ['knee (made in [[step:brake-knees]];', 'on the bench now)'], { size: 12, color: MUTED });
   F.label(fa.at([g.chock.xBack - 0.6, 0.5]), [xr, yOf(0.5) + 4], 'wheel chock on its cord', { size: 12, color: MUTED });
   const flapMid = rel(over(g.board.s1 * 0.45));
   F.label(fa.at(flapMid), [fa.at(flapMid)[0] - 60, yOf(g.knee.zTop + 3.4)], `flap, ${f8(g.board.thick)} oak`, { size: 12, anchor: 'start' });
@@ -806,7 +851,10 @@ const brakeKit: FigFn = (c) => {
   F.label(fa.at(padPt), [fa.at(padPt)[0] - 50, yOf(g.O[1] + 1.4)], [`rubber pad, ${f8(p.brakePadGapIn)} off`, 'the tire when released'], { size: 12, anchor: 'end' });
   F.label(fa.at([(E[0] + A[0]) / 2, (E[1] + A[1]) / 2 + 2]), [fa.at([A[0], 0])[0] + 40, 80], 'return cord to an eye on the transom: it lifts the flap', { size: 12 });
   F.text([fa.at(g.O)[0], fa.at(g.O)[1] + 4], 'rear tire', { size: 11.5, anchor: 'middle', color: MUTED });
-  if (tr) F.text([fa.at([tr.min[0], 0])[0] - 4, yOf(g.rail.zb) + 4], 'transom', { size: 11.5, anchor: 'end', color: MUTED });
+  if (tr) F.label(fa.at([tr.min[0] + 0.2, g.rail.zb + 1.5]), [fa.at([tr.min[0], 0])[0] - 8, yOf(g.rail.zb) + 18], 'transom', { size: 12, color: MUTED });
+  F.label(fa.at([xs1 - 0.3, (g.rail.zb + g.rail.zt) / 2]), [xr, yOf(g.rail.zb) + 18], 'hull rail', { size: 12, color: MUTED });
+  const shx = xs1 - 0.5, shz = Math.min(zTopA, sideTopAt(L, shx));
+  F.label(fa.at([shx, shz]), [fa.at([xs1, 0])[0] + 12, yOf(shz) + 4], 'top edge of the hull side (dashed)', { size: 12, color: MUTED });
 
   // ── B. section across the knee at the pin, looking forward (right side: outboard to the right)
   F.sub([16, 438], 'B. Cut across the knee at the pin, looking forward');
@@ -824,7 +872,8 @@ const brakeKit: FigFn = (c) => {
   S(pv.ySlot[0], pv.zPocketBot, kn.yOut, pv.zPocketTop, { fill: '#ffffff', stroke: MAT.oak.stroke, width: 1 });
   // the tongue and the pivot block
   S(pv.yTongue[0], pv.zTongueBot, pv.yTongue[1], pv.zTongueBot + g.board.thick, acc('oak'));
-  S(pv.yTongue[0], pv.zTongueBot + g.board.thick, pv.yTongue[1], pv.zTongueTop, acc('oak', { width: 1.4 }));
+  S(pv.yTongue[0], pv.zTongueBot + g.board.thick, pv.yTongue[1], pv.zTongueTop, BLOCK);
+  { const a = fb.at([pv.yTongue[0], pv.zTongueTop]), b = fb.at([pv.yTongue[1], pv.zTongueBot + g.board.thick]); F.hatch(a[0], a[1], b[0] - a[0], b[1] - a[1], MAT.oak.stroke, 5); }
   S(sp.y0, sp.z0, sp.y1, sp.z1, acc('steel'));
   // the pin: blind in the inboard wall, through the tongue stack and the strap, the clip outboard
   S(pinIn, g.H[1] - pv.dia / 2, pinOut, g.H[1] + pv.dia / 2, acc('steel', { width: 1.2 }));
@@ -863,7 +912,7 @@ const handleFig: FigFn = (c) => {
   const F = new Fig(760, 580);
   F.heading('The push handle on the transom, seen from the side (bow to the right)');
   // ── A. the whole handle
-  F.sub([16, 52], 'A. Riding (solid); parked (dashed)');
+  F.sub([16, 52], 'A. In use (solid); parked (dashed)');
   const zTopA = (bar?.max[2] ?? h.zPostTop + 1) + 0.6;
   const fa = fit({ minX: sx0 - 2.4, minY: tr.min[2] - 0.6, maxX: bx1 + 2.6, maxY: zTopA }, { x: 120, y: 70, w: 110, h: 470 }, 1, 'center');
   const R = (a: number, b: number, c2: number, d: number, s: Style): void => rectIn(F, fa, a, b, c2, d, s);
@@ -895,16 +944,16 @@ const handleFig: FigFn = (c) => {
   // labels A
   const xr = 250;
   F.label(fa.at([h.xBar + 0.3, bar1 - 0.3]), [xr, yOf(bar1)], ['handlebow, pinned and glued to', 'both posts: the handle is one U'], { size: 12 });
-  F.label(fa.at([h.xBar, h.zPin + d]), [xr, yOf(h.zPin + d) - 4], ['second hole, for parking: the U', `sinks ${f8(d)} with the pin in it`], { size: 12 });
+  F.label(fa.at([h.xBar, h.zPin + d]), [xr, yOf(h.zPin + d) - 4], [`upper hole, ${f16(h.zPin + d - h.zFoot)} up the post: to park,`, `the U sinks ${f8(d)} with the pin in it`], { size: 12 });
   F.label(fa.at([h.postX[1], (h.zTop + postTop) / 2 + 1]), [xr, yOf((h.zTop + postTop) / 2 + 1) + 14], 'post (oak), a slip fit in the socket', { size: 12 });
   F.label(fa.at([h.postX[1] - 0.3, bar0 - d]), [xr, yOf(bar0 - d) + 18], 'parked bow, just over the transom', { size: 12, color: MUTED });
-  F.label(fa.at([h.xBar, h.zPin]), [xr, yOf(h.zPin) + 22], [`${f16(p.handlePinDiameterIn)} clevis pin through both`, 'socket walls and the post'], { size: 12 });
+  F.label(fa.at([h.xBar, h.zPin]), [xr, yOf(h.zPin) + 22], [`${f16(p.handlePinDiameterIn)} clevis pin through both socket`, `walls and the post's lower hole,`, `${f16(h.zPin - h.zFoot)} up the post: to ride`], { size: 12 });
   F.label(fa.at([sx0 + 0.2, (h.zBot + h.zPin) / 2 - 3]), [xr, yOf((h.zBot + h.zPin) / 2) + 20], ['aluminum socket on the outside', 'of the transom (fitted, then off)'], { size: 12 });
   if (bk) F.label(fa.at([(bk.min[0] + bk.max[0]) / 2, bk.min[2] + 2.2]), [xr, yOf(bk.min[2] + 2.2) + 2], 'oak backer inside the transom', { size: 12, color: MUTED });
   F.label(fa.at([(sx1 + bx1) / 2, screwsZ[0]]), [xr, yOf(screwsZ[0]) + 52], ['2 screws a socket into', 'T-nuts in the backer (detail B)'], { size: 12 });
 
   // ── B. section at the lower socket screw
-  F.sub([500, 52], 'B. Detail at a socket screw');
+  F.sub([500, 52], 'B. A socket screw, the post out');
   const z0 = screwsZ[0];
   const fb = fit({ minX: sx0 - 0.15, minY: z0 - 1.1, maxX: bx1 + 0.3, maxY: z0 + 1.1 }, { x: 510, y: 80, w: 230, h: 170 }, 1, 'center');
   const S = (a: number, b: number, c2: number, dd: number, s: Style): void => rectIn(F, fb, a, b, c2, dd, s);
@@ -913,9 +962,7 @@ const handleFig: FigFn = (c) => {
   S(sx1 - w, z0 - 1.1, sx1, z0 + 1.1, { fill: ALU.fill, stroke: ACCENT, width: 1.4 });
   S(sx0, z0 - 1.1, sx0 + w, z0 + 1.1, { fill: ALU.fill, stroke: ACCENT, width: 1.4 });
   S(sx0, z0 - SOCKET_ACCESS_HOLE_IN / 2, sx0 + w, z0 + SOCKET_ACCESS_HOLE_IN / 2, { fill: '#ffffff', stroke: ALU.stroke, width: 1 });
-  // the post in the bore, its relief groove opposite the heads
-  const pf = h.postX[1];
-  polyIn(F, fb, [[h.postX[0], z0 - 1.1], [pf, z0 - 1.1], [pf, z0 - POST_RELIEF.widthIn / 2], [pf - POST_RELIEF.depthIn, z0 - POST_RELIEF.widthIn / 2], [pf - POST_RELIEF.depthIn, z0 + POST_RELIEF.widthIn / 2], [pf, z0 + POST_RELIEF.widthIn / 2], [pf, z0 + 1.1], [h.postX[0], z0 + 1.1]], mat('oak'));
+  // the post is out of the socket while the screws go in (its relief groove clears the heads when it slides back in)
   // T-nut: barrel in the backer, flange flush with its inside face
   S(bx1 - 0.06, z0 - 0.4, bx1, z0 + 0.4, acc('steel', { width: 1 }));
   S(bx1 - 0.45, z0 - 0.17, bx1 - 0.06, z0 + 0.17, acc('steel', { width: 1 }));
@@ -924,12 +971,12 @@ const handleFig: FigFn = (c) => {
   S(headX - washT, z0 - 0.25, headX, z0 + 0.25, { fill: '#f5f5f0', stroke: MUTED, width: 0.8 });
   S(headX - washT - headH, z0 - SOCKET_SCREW_HEAD_IN / 2, headX - washT, z0 + SOCKET_SCREW_HEAD_IN / 2, acc('steel', { width: 1 }));
   S(headX, z0 - 0.125, bx1 - 0.1, z0 + 0.125, acc('steel', { width: 1 }));
-  F.arrow(fb.at([sx0 - 0.12, z0 + 0.75]), fb.at([sx0 + w + 0.12, z0 + 0.1]), ACCENT, 1.8);
+  F.arrow(fb.at([sx0 - 0.14, z0]), fb.at([headX - washT - headH - 0.04, z0]), ACCENT, 1.8);
   // lettered callouts under the detail, keyed in a list below it
   const yB = fb.at([0, z0 - 1.1])[1] + 22;
   const keys: Array<[Vec2, string, string[]]> = [
     [fb.at([sx0 + w / 2, z0 - SOCKET_ACCESS_HOLE_IN / 2 + 0.05]), 'a', [`${f8(SOCKET_ACCESS_HOLE_IN)} access hole in the socket's`, 'rear wall: the screw and the hex', 'key go in through it']],
-    [fb.at([headX - washT - headH / 2, z0 - SOCKET_SCREW_HEAD_IN / 2 + 0.03]), 'b', ['button head inside the bore, a', 'nylon washer under it; the post\'s', 'relief groove clears it']],
+    [fb.at([headX - washT - headH / 2, z0 - SOCKET_SCREW_HEAD_IN / 2 + 0.03]), 'b', ['button head inside the bore, a', 'nylon washer under it (the post\'s', 'relief groove clears it)']],
     [fb.at([bx1 - 0.03, z0 - 0.38]), 'c', ['T-nut set in the backer, its', 'flange flush with the backer\'s', 'inside face']],
   ];
   keys.forEach(([tgt, k, t], i) => {

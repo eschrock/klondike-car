@@ -439,7 +439,7 @@ describe('steer-stops (the check chains, D-58)', () => {
 describe('king-beam (the oak crossmember at the kingpin)', () => {
   const Lspan = 2 * (ctx.L.steer.railYIn - ctx.L.turnIn(44 + 1.5)); // span between the rail inner faces at the king beam, which follow the bow turn-in
   const wA = 1.5 - 0.3125; // each half of the 3 in beam beside the 5/8 bolt hole
-  const slotH = 1.2 * 0.625; // nut slot cut from the front face, 0.75 in tall
+  const slotH = 1; // nut slot cut from the front face, 1 in tall (round 1: washer + 5/8 nylock + threads past it + 1/16, to 1/16)
   // net section at the nut slot: rear part full depth, front part only below the slot
   const rects = [{ w: wA, h: KING_D }, { w: wA, h: KING_D - slotH }];
   const Anet = rects.reduce((s, q) => s + q.w * q.h, 0);
@@ -448,9 +448,9 @@ describe('king-beam (the oak crossmember at the kingpin)', () => {
   const cNet = Math.max(zbar, KING_D - zbar);
   const Igross = (3 * KING_D ** 3) / 12;
   const sBend = (M: number) => Math.max((M * cNet) / Inet, (M * (KING_D / 2)) / Igross);
-  it('net section at the nut slot by hand: area ' + (2 * 1.1875 * 1.5905 - 1.1875 * 0.75).toFixed(3) + ' in2, the 3 in beam is 1.5905 in deep over the 9/16 in disc, I computed from the two rectangles', () => {
+  it('net section at the nut slot by hand: area ' + (2 * 1.1875 * 1.5905 - 1.1875 * slotH).toFixed(3) + ' in2, the 3 in beam is 1.5905 in deep over the 9/16 in disc, I computed from the two rectangles', () => {
     expect(KING_D).toBeCloseTo(1.5905, 4);
-    expect(Anet).toBeCloseTo(2 * 1.1875 * KING_D - 1.1875 * 0.75, 9);
+    expect(Anet).toBeCloseTo(2 * 1.1875 * KING_D - 1.1875 * slotH, 9);
     expect(Inet).toBeLessThan(Igross);
     expect(Lspan).toBeGreaterThan(19);
     expect(Lspan).toBeLessThan(22);

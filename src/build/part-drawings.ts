@@ -303,6 +303,7 @@ function cylinderNear(parts: Part[], self: Part, q: Vec3, tol: number): Vec3 | n
 function textAxis(text: string): Vec3 | null {
   const t = text.toLowerCase().replace(/[\d/]+"?\s+from the (top|bottom)\b/g, ' '); // "13/32" from the top" is a distance, not a drilling direction
   if (/fore-aft/.test(t)) return [1, 0, 0];
+  if (/across the sled/.test(t)) return [0, 1, 0];
   if (/\b(down|up) (through|from)|straight down|from below|from the top|up from below|vertical/.test(t)) return [0, 0, 1];
   return null;
 }
@@ -950,7 +951,7 @@ function addPassingBolts(part: Part, parts: Part[], b: Board, feats: Feat[], byI
       if (feats.some((f) => f.k === 'hole' && f.joint !== 'passing' && f.to.includes(q.id))) continue;
       if (feats.some((f) => f.k === 'hole' && Math.abs(f.dia - dia) < 1 / 64 && pts.every((q2) => f.pts.some((e) => samePerp(e, q2, f.axis))))) continue;
       // a pin of another part that ends in a hole this part already has for it (the seat-back latch pin in the stop block)
-      if (j.type === 'pin' && feats.some((f) => f.k === 'hole' && f.to.includes(j.to) && pts.every((q2) => f.pts.some((e) => Math.hypot(e[0] - q2[0], e[1] - q2[1], e[2] - q2[2]) < 0.75)))) continue;
+      if (j.type === 'pin' && feats.some((f) => f.k === 'hole' && f.to.includes(j.to) && pts.every((q2) => f.pts.some((e) => Math.hypot(e[0] - q2[0], e[1] - q2[1], e[2] - q2[2]) < 1)))) continue; // 1 in: the recorded point is the hole's mouth, the crossing's is mid-way along the pin
       const ofQ = humanName(q.name), ofMate = humanName(mate.name);
       const noun = fastenerNoun(j, text);
       const size = isTnut ? `${drill(dia)} for the T-nut barrel (check it against your T-nut), through` : `${drill(dia)} clearance, through`;

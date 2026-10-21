@@ -240,8 +240,9 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
       const railD = p.railDepthIn, xs = L.railStepX, run = p.railStepRunIn;
       const depthAt = (x: number): number => (x <= xs - run ? railD : x >= xs ? L.railDepthF : railD + ((L.railDepthF - railD) * (x - (xs - run))) / run);
       const screwPts = Array.from({ length: Math.max(0, n - 1) }, (_, i) => i).map((i) => { // every gap (D-81): even spacing, they locate the side
-        const a = pts[i], b = pts[i + 1];
-        return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, cBot] as Vec3;
+        // On the curve, not on the chord between two stations: the averaged y of two stations in the S fell up to 0.15" off the bearing edge (round-1 engineering review).
+        const xm = (pts[i][0] + pts[i + 1][0]) / 2;
+        return [xm, s * (hwAt(xm) + webFace + flat / 2), cBot] as Vec3;
       });
       // D-72, D-82: ONE screw length for every rail depth (#8 x 2-1/2, the shortest standard #8 that bites RAIL_CHINE_BITE_IN where the rail is shallowest). Where the rail is deeper than the
       // screw can reach, the head is counterbored up the rail from its underside, so the tip still lands RAIL_CHINE_BITE_IN in the chine (the counterbore is plugged).

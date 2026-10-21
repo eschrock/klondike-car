@@ -4,7 +4,7 @@
  */
 import { computeLayout, samples } from '../../model/layout';
 import type { Vec2 } from '../../model/types';
-import { CLEAT_SPACING_IN, sideFormGeometry, type SideFormGeometry } from '../forms';
+import { CLEAT_TALL_IN, SANDBAG_SPACING_IN, sideFormGeometry, type SideFormGeometry } from '../forms';
 import { frac } from '../svg-util';
 import { ACCENT, boundsOf, Fig, fit, INK, mat, MUTED, type FigCtx, type FigFn, type StepFigure } from './kit';
 
@@ -53,7 +53,7 @@ const sidesPurpose: FigFn = (c) => {
   F.poly(S([[0, 0], [w, 0], [w, g.chineTop], [0, g.chineTop]]), mat('oak'));
   const mid = Math.floor(g.sheer.length * 0.45);
   F.label(side.at([g.sheer[mid][0], (g.sheer[mid][1] + g.gunBot[mid][1]) / 2]), [300, 276], 'gunwale band: oak, one on each face (its top edge is the sheer)', { anchor: 'start' });
-  F.label(side.at([w * 0.3, g.chineTop * 0.5]), [90, 458], 'chine band: oak, one on each face (it sits on the rail)', { anchor: 'start' });
+  F.label(side.at([w * 0.3, g.chineTop * 0.5]), [90, 458], 'chine band: oak, one on each face (the outer one sits on the rail)', { anchor: 'start' });
   F.label(side.at([w * 0.62, g.chineTop + (g.gunBot[Math.floor(g.gunBot.length * 0.62)][1] - g.chineTop) / 2]), [500, 458], 'web: one sheet of thin plywood', { anchor: 'start' });
   if (g.hasRamp) {
     const u0 = g.uOf(g.xR0);
@@ -67,7 +67,7 @@ const sidesPurpose: FigFn = (c) => {
   return {
     id: 'sides-purpose',
     title: 'What the side forms are for',
-    caption: `Each side of the hull is a sandwich: a thin plywood web with an oak band glued along its top and its bottom on BOTH faces (four bands a side). The side bends two ways at once: the top band follows the curved top edge (the sheer), and the front ${f8(g.uOf(g.xRe) - g.uOf(g.xR0))} of the side turns in toward the center (the S). Thin plywood will not hold either bend by itself, so the bands are glued on while a form holds the web bent; once the epoxy cures, the side keeps its shape. The forms in this step do that holding in [[step:sides-inner]] and [[step:sides-outer]]. They are shop jigs, not parts of the sled: once both sides are glued up, they are scrap.`,
+    caption: `A, from above: the front ${f8(g.uOf(g.xRe) - g.uOf(g.xR0))} of each side curves in ${f8(g.rampH)}. B, one side laid flat: the web is cut to its final outline, and the bands follow its edges. Lying flat on the form, the curve-in of view A becomes a lift of the bow end: that is what the S-ramp does.`,
     svg: F.svg('What the side forms are for: the two sides of the hull, from above and laid flat'),
   };
 };
@@ -83,44 +83,14 @@ const formSetup: FigFn = (c) => {
 
   // (a) From above.
   F.sub([16, 52], 'A. From above');
-  const top = fit({ minX: -3, minY: -3, maxX: w + 3, maxY: g.templateH + 4 }, { x: 40, y: 64, w: 680, h: 200 });
-  const T = (q: Vec2[]): Vec2[] => q.map(top.at);
-  F.poly(T([[-3, -3], [w + 3, -3], [w + 3, g.templateH + 4], [-3, g.templateH + 4]]), mat('bench'));
-  // the template under the flat part of the web, the ramp cap under the bent part
-  const clip = (q: Vec2[], lo: number, hi: number): Vec2[] => q.filter(([u]) => u >= lo - 1e-6 && u <= hi + 1e-6);
-  F.poly(T(g.f.outer), mat('template'));
+  const top = benchPlan(F, g, { x: 40, y: 64, w: 680, h: 200 }, false);
+  const c3 = top.cleat(Math.floor(g.nCleat * 0.3));
+  F.label(c3, [c3[0] - 30, 86], `${g.nCleat} cleats on edge, ${frac(g.cleatStep, 16)} apart, set against the dry web`, { anchor: 'start' });
+  F.label(top.at([u0 * 0.35, H * 0.4]), [70, 298], ['template: the web\'s outline in 1/4" plywood (2 layers),', 'screwed flat; the web lies on it, inside face up'], { anchor: 'start' });
   if (g.hasRamp) {
-    const capTop = clip(g.sheer, u0, w);
-    F.poly(T([[u0, -0.6], [w, -0.6], [w, (capTop.at(-1)?.[1] ?? H) + 0.6], ...[...capTop].reverse().map(([u, v]): Vec2 => [u, v + 0.6]), [u0, (capTop[0]?.[1] ?? H) + 0.6]]), mat('hardboard', { opacity: 0.85 }));
-    for (let i = 0; i < g.ribs; i++) {
-      const y = 0.25 + i * g.ribPitch;
-      F.line(top.at([u0 + 0.3, y]), top.at([uE, y]), { stroke: '#f4ead8', width: 1, dash: '6 4' });
-    }
-    const capMid = top.at([(u0 + uE) / 2, -0.6]);
-    F.label([capMid[0], capMid[1] - 6], [730, 300], [`S-ramp: ${g.ribs} MDF ribs (dashed)`, 'under a hardboard cap; it lifts', `the bow end ${f8(g.rampH)}`], { anchor: 'end' });
+    const capMid = top.at([(u0 + uE) / 2, -0.5]);
+    F.label([capMid[0], capMid[1] - 6], [730, 300], [`S-ramp: ${g.ribs} MDF ribs (dashed) under a`, 'plain hardboard cap; it lifts', `the bow end ${f8(g.rampH)}`], { anchor: 'end' });
   }
-  // the web on it, drawn as a light outline
-  F.poly(T(g.f.outer), { stroke: INK, width: 1.4, dash: '1 0' });
-  // cleats on the high side of the sheer
-  const arc = (i: number): { p: Vec2; n: Vec2 } => {
-    const s = i * g.cleatStep;
-    let acc = 0;
-    for (let k = 1; k < g.sheer.length; k++) {
-      const a = g.sheer[k - 1], b = g.sheer[k], d = Math.hypot(b[0] - a[0], b[1] - a[1]);
-      if (acc + d >= s || k === g.sheer.length - 1) { const t = d ? Math.min(1, (s - acc) / d) : 0; const nx = -(b[1] - a[1]) / (d || 1), ny = (b[0] - a[0]) / (d || 1); return { p: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], n: ny >= 0 ? [nx, ny] : [-nx, -ny] }; }
-      acc += d;
-    }
-    return { p: g.sheer[0], n: [0, 1] };
-  };
-  for (let i = 0; i < g.nCleat; i++) {
-    const { p: q, n } = arc(i);
-    const tx: Vec2 = [n[1], -n[0]];
-    const a: Vec2 = [q[0] - tx[0] * 1.5, q[1] - tx[1] * 1.5], b: Vec2 = [q[0] + tx[0] * 1.5, q[1] + tx[1] * 1.5];
-    F.poly(T([a, b, [b[0] + n[0] * 1.5, b[1] + n[1] * 1.5], [a[0] + n[0] * 1.5, a[1] + n[1] * 1.5]]), mat('oak', { stroke: '#6b4a1f' }));
-  }
-  const c3 = arc(Math.floor(g.nCleat * 0.3)).p;
-  F.label(top.at([c3[0], c3[1] + 1.6]), [top.at([c3[0], 0])[0] - 30, 86], `${g.nCleat} cleats screwed to the bench, ${f8(g.cleatStep)} apart, on the sheer line`, { anchor: 'start' });
-  F.label(top.at([u0 * 0.35, H * 0.4]), [70, 298], ['template: the web\'s outline in 1/4" plywood,', 'screwed flat; the web lies on it, inside face up'], { anchor: 'start' });
 
   // (b) From the side (heights stretched): the web runs flat, then up the ramp.
   F.sub([16, 350], 'B. From the side (heights stretched 4 times): the bow end of the web rides up the ramp');
@@ -146,7 +116,7 @@ const formSetup: FigFn = (c) => {
   return {
     id: 'side-form-setup',
     title: 'The side form for the first face',
-    caption: `One bench top carries the whole form. The template is the web's outline, screwed flat; the cleats stand along its curved top edge (the sheer) and stop the gunwale band from straightening while the glue cures (a bent oak strip pushes back hard). At the bow end the template gives way to the S-ramp, which lifts the front of the web ${f8(g.rampH)}: lying flat, that lift is the same bend as the S seen from above. The second bench top carries the mirror ramp for the second face (next figure).`,
+    caption: `One bench top carries the whole form. The template is the web's outline, screwed flat; the cleats stand on edge along its curved top edge (the sheer) and stop the gunwale band from straightening while the glue cures (a bent oak strip pushes back hard). At the bow end the template gives way to the S-ramp, which lifts the front of the web ${f8(g.rampH)}: lying flat, that lift is the same bend as the S seen from above. The ramp's cap is a plain rectangle across the web's full height, so the right side can use it too (two figures on). The second bench top carries the mirror ramp for the second face (next figure).`,
     svg: F.svg('The side form set up for the first face, from above and from the side'),
   };
 };
@@ -204,93 +174,94 @@ const twoRamps: FigFn = (c) => {
 };
 
 /**
- * 4/5. A section across the web at a clamp: which bands go on in this cure, the cleat at the sheer, the deck gap under the inner chine band. The middle
- * of the web is broken out, so its two edges show at a readable scale; thicknesses are drawn 3 times their real size. `cure` 1 is the inside face
- * (S-ramp), 2 the outside face (mirror ramp).
+ * 4/5. A section across the web where a bag of sand sits on each band: which bands go on in this cure, the cleat at the sheer, the deck gap under the inner
+ * chine band, and (cure 2) the backing strip under the web's bottom edge. The middle of the web is broken out, so its two edges show at a readable scale;
+ * thicknesses are drawn 3 times their real size. `cure` 1 is the inside face (S-ramp bench), 2 the outside face (mirror ramp).
  */
 function clampSection(cure: 1 | 2): FigFn {
   return (c) => {
     const g = geom(c);
     if (!g) return null;
     const L = computeLayout(c.p);
-    const F = new Fig(760, 470);
-    F.heading(cure === 1 ? 'Cure 1: section across the web at one clamp (inside face up)' : 'Cure 2: section across the web at one clamp (outside face up)');
+    const F = new Fig(760, 480);
+    F.heading(cure === 1 ? 'Cure 1: section across the web (inside face up)' : 'Cure 2: section across the web (outside face up)');
     const stockOf = (id: string): { t: number; w: number } | undefined => c.by(id)?.stock;
     const band = stockOf('side-L-chine-in')?.t ?? L.sideBand;
     const webT = stockOf('side-L-web')?.t ?? Math.max(0.12, L.side - 2 * L.sideBand);
     const gunH = stockOf(cure === 1 ? 'side-L-gunwale-in' : 'side-L-gunwale')?.w ?? L.railBand;
-    const H = g.f.heightIn;
-    // The two windows: the bottom edge (v from 0 to `win`) and the top edge (v from H - win to H), side by side with a break between.
+    const H = g.f.heightIn, cap = L.webCap;
+    // The two windows: the bottom edge (v from 0 to `win`) and the top edge (v from H - win to H + the band's overhang), side by side with a break between.
     const win = Math.max(g.chineTop, gunH) + 1.5;
-    const k = 62, tk = k * 3, gap = 70, xA = 150, yBench = 330;
+    const k = 62, tk = k * 3, gap = 70, xA = 150, yBench = 340;
     const X = (v: number): number => (v <= win + 1e-9 ? xA + v * k : xA + win * k + gap + (v - (H - win)) * k);
-    const lift = TEMPLATE_PX;
+    const lift = 2 * TEMPLATE_PX;
     const yWebBot = yBench - lift - (cure === 2 ? band * tk : 0), yWebTop = yWebBot - webT * tk, yBandTop = yWebTop - band * tk;
     const xR = X(H);
-    // bench top: it runs past the web on both sides; the clamps bite under it
-    const benchL = xA - BENCH_MARGIN_PX, benchR = xR + BENCH_MARGIN_PX + 20;
-    F.rect(benchL, yBench, benchR - benchL, 20, mat('bench'));
-    F.text([benchL + 8, yBench + 15], 'bench top', { size: 11.5, color: MUTED });
-    // what the web lies on: the template (cure 1) or the mirror-ramp cap (cure 2), in two windows
-    const under = cure === 1 ? mat('template') : mat('hardboard');
-    F.rect(X(0), yBench - lift, win * k, lift, under);
-    F.rect(X(H - win), yBench - lift, win * k, lift, under);
+    F.rect(xA - 50, yBench, X(H + cap) + 90 - (xA - 50), 20, mat('bench'));
+    F.text([xA - 42, yBench + 15], 'bench top', { size: 11.5, color: MUTED });
+    // what the web lies on: the 2-layer template (cure 1) or the mirror-ramp cap (cure 2), in two windows
+    for (const [a, b] of [[0, win], [H - win, H + cap + 0.3]] as Array<[number, number]>) {
+      if (cure === 1) { F.rect(X(a), yBench - lift, (b - a) * k, lift / 2, mat('template')); F.rect(X(a), yBench - lift / 2, (b - a) * k, lift / 2, mat('template')); }
+      else F.rect(X(a) - (a === 0 ? 20 : 0), yBench - lift, (b - a) * k + 20, lift, mat('hardboard'));
+    }
     // the web, in two windows, with break marks
     F.rect(X(0), yWebTop, win * k, yWebBot - yWebTop, mat('web'));
     F.rect(X(H - win), yWebTop, win * k, yWebBot - yWebTop, mat('web'));
     for (const x of [X(win), X(H - win)]) F.path(`M${x},${yWebTop - 30} l-5,10 l10,8 l-5,10 L${x},${yBench + 28}`, { stroke: MUTED, width: 1, dash: '3 3' });
     F.text([(X(win) + X(H - win)) / 2, yBench - 22], ['middle of', 'web left out'], { size: 11, anchor: 'middle', color: MUTED, italic: true });
-    // cure 2: the cured inner bands under the web
+    // cure 2: the cured inner bands under the web, and the backing strip under its bottom edge where the inner chine band stops short
     if (cure === 2) {
       F.rect(X(g.innerChineBot), yWebBot, (g.chineTop - g.innerChineBot) * k, band * tk, mat('oak'));
-      F.rect(X(H - gunH), yWebBot, gunH * k, band * tk, mat('oak'));
+      F.rect(X(H - gunH + cap), yWebBot, (gunH - cap) * k, band * tk, mat('oak'));
+      F.rect(X(0), yWebBot, g.innerChineBot * k - 2, band * tk, mat('oak', { stroke: ACCENT, width: 1.5, dash: '4 3' }));
     }
-    // the bands this cure glues, on top
+    // the bands this cure glues, on top; the gunwale band stands 1/8" past the web's top edge, against the cleat
     const chineLo = cure === 1 ? g.innerChineBot : 0;
     const chineW = cure === 1 ? (stockOf('side-L-chine-in')?.w ?? g.chineTop - chineLo) : (stockOf('side-L-chine')?.w ?? g.chineTop);
     F.rect(X(chineLo), yBandTop, (g.chineTop - chineLo) * k, yWebTop - yBandTop, mat('oak', { stroke: ACCENT, width: 2 }));
-    F.rect(X(H - gunH), yBandTop, gunH * k, yWebTop - yBandTop, mat('oak', { stroke: ACCENT, width: 2 }));
-    // the cleat beyond the sheer edge (between two clamps, so drawn behind them)
-    const cleatW = 0.75 * k;
-    F.rect(xR + 3, yBandTop - 14, cleatW, yBench - (yBandTop - 14), mat('oak', { stroke: '#6b4a1f' }));
-    // clamps: deep-throat C-clamps that reach round the edge of the bench top
-    const clampAt = (x: number, from: 'left' | 'right', reach: number): void => { F.clamp(x, yBandTop, yBench + 20, from, reach); };
-    clampAt(X((chineLo + g.chineTop) / 2), 'left', X((chineLo + g.chineTop) / 2) - benchL + 14);
-    clampAt(X(H - gunH / 2), 'right', benchR - X(H - gunH / 2) + 14);
+    F.rect(X(H + cap - gunH), yBandTop, gunH * k, yWebTop - yBandTop, mat('oak', { stroke: ACCENT, width: 2 }));
+    // the cleat, on edge, against the band's top edge (drawn short: it is 1-1/2" tall)
+    const xC = X(H + cap) + 1, cleatW = 0.75 * k;
+    F.rect(xC, yBandTop - 30, cleatW, yBench - (yBandTop - 30), mat('oak', { stroke: '#6b4a1f' }));
+    // the bags of sand on a plastic sheet
+    const bag = (x: number, wPx: number): void => {
+      F.line([x - wPx / 2 - 6, yBandTop - 1], [x + wPx / 2 + 6, yBandTop - 1], { stroke: '#7a8a99', width: 1.5 });
+      F.path(`M${x - wPx / 2},${yBandTop - 2} C${x - wPx / 2 - 6},${yBandTop - 40} ${x + wPx / 2 + 6},${yBandTop - 40} ${x + wPx / 2},${yBandTop - 2} Z`, { fill: '#d8c9a3', stroke: '#8a7a55', width: 1.2 });
+    };
+    bag(X((chineLo + g.chineTop) / 2), Math.max(60, (g.chineTop - chineLo) * k + 10));
+    bag(X(H + cap - gunH / 2), Math.max(70, gunH * k));
     // labels
     const side = cure === 1 ? 'inner' : 'outer';
-    F.label([X(H - gunH / 2) - 18, yBandTop + 4], [X(H - win) - 8, 66], [`${side} gunwale band, ${frac(band, 16)} × ${frac(gunH, 16)},`, 'tight against the cleats'], { anchor: 'end', size: 12 });
-    F.label([X((chineLo + g.chineTop) / 2) + 14, yBandTop + 4], [xA + 40, 106], [`${side} chine band, ${frac(band, 16)} × ${frac(chineW, 16)}`, cure === 1 ? 'stops short of the bottom edge' : 'flush with the bottom edge'], { anchor: 'start', size: 12 });
-    F.label([xR + 3 + cleatW / 2, yBandTop - 6], [xR + 20, yBandTop - 116], ['cleat (sheer line);', 'on a spacer where the', 'web is up on the ramp'], { anchor: 'start', size: 12 });
+    F.label([X(H + cap - gunH / 2) - 30, yBandTop + 6], [X(H - win) - 10, 70], [`${side} gunwale band, ${frac(band, 16)} × ${frac(gunH, 16)}:`, `1/8" past the web, tight to the cleat`], { anchor: 'end', size: 12 });
+    F.label([X((chineLo + g.chineTop) / 2) + 18, yBandTop + 6], [xA + 30, 110], [`${side} chine band, ${frac(band, 16)} × ${frac(chineW, 16)}`, cure === 1 ? 'stops short of the bottom edge' : 'flush with the bottom edge'], { anchor: 'start', size: 12 });
+    F.label([xC + cleatW / 2, yBandTop - 20], [xC + 4, 70], ['cleat, on edge', `(${f8(CLEAT_TALL_IN)} tall)`], { anchor: 'start', size: 12 });
+    F.label([X(H + cap - gunH / 2), yBandTop - 30], [X(H - win) - 10, 150], [`bag of sand on a plastic sheet,`, `every ${f8(SANDBAG_SPACING_IN)} along each band`], { anchor: 'end', size: 12 });
     F.label([X(0.5), (yWebTop + yWebBot) / 2], [xA - 20, yBench + 62], 'web (thin plywood)', { anchor: 'start', size: 12 });
-    F.label([X(H - win) + 10, yBench - lift / 2], [X(H - win) - 10, yBench + 62], cure === 1 ? 'template (on the bow end: the S-ramp cap)' : 'mirror-ramp cap', { anchor: 'start', size: 12 });
+    F.label([X(H - win) + 10, yBench - lift / 2], [X(H - win) - 10, yBench + 62], cure === 1 ? 'template, 2 layers (at the bow end: the S-ramp cap)' : 'mirror-ramp cap', { anchor: 'start', size: 12 });
     if (cure === 1) {
       F.dim([X(0), yWebTop - 3], [X(chineLo), yWebTop - 3], frac(chineLo, 16), -10, { size: 11.5 });
-      F.label([X(chineLo / 2), yWebTop - 30], [20, 176], ['deck gap: the deck edge', 'slides in here later'], { anchor: 'start', size: 12 });
+      F.label([X(chineLo / 2), yWebTop - 30], [20, 196], ['deck gap: the deck edge', 'slides in here later'], { anchor: 'start', size: 12 });
     } else {
-      F.label([X(H - gunH / 2) + 20, yWebBot + band * tk / 2], [(X(win) + X(H - win)) / 2, yBandTop - 44], ['cure-1 inner bands,', 'now underneath'], { anchor: 'middle', size: 12 });
+      F.label([X(H - gunH / 2), yWebBot + band * tk / 2], [X(H - win) - 10, yBench + 92], 'cure-1 inner bands, now underneath', { anchor: 'start', size: 12 });
+      F.label([X(g.innerChineBot / 2), yWebBot + band * tk / 2], [20, 236], ['backing strip (a band', 'offcut) under the web\'s edge'], { anchor: 'start', size: 12 });
     }
     F.text([X(0), yBench + 40], 'bottom edge', { size: 11, color: MUTED });
     F.text([xR, yBench + 40], 'top edge (sheer)', { size: 11, color: MUTED, anchor: 'end' });
-    F.text([380, yBench + 100], `Clamps every ${f8(CLEAT_SPACING_IN)} along each band, between the cleats`, { size: 12, color: MAT_CLAMP, anchor: 'middle' });
-    F.legend(['bench', cure === 1 ? 'template' : 'hardboard', 'web', 'oak'], [16, 462]);
-    F.note('Section, thicknesses 3 times');
+    F.legend(['bench', cure === 1 ? 'template' : 'hardboard', 'web', 'oak'], [16, 472]);
+    F.note('Section, thicknesses 3 times', 'top');
     return {
       id: `side-section-cure${cure}`,
       title: cure === 1 ? 'Cure 1: the inner bands' : 'Cure 2: the outer bands',
       caption: cure === 1
-        ? `Looking along the web, cut across at one clamp (the middle of the web is left out). The web lies inside face up with its top edge (the sheer) against the cleats. The two inner bands are epoxied on top: the gunwale band tight to the cleats, the chine band stopping ${frac(chineLo, 16)} short of the bottom edge to leave the slot the deck edge slides into later. Clamp each band about every ${f8(CLEAT_SPACING_IN)}. The clamps reach round the edge of the bench top, so set the bench top on sawhorses (or let it overhang the bench) where they go.`
-        : 'The web is turned over onto the mirror ramp, outside face up, resting on its cured inner bands. The outer gunwale band goes against the cleats as before, and the outer chine band runs flush with the bottom edge (it sits on the rail). Same clamps, same spacing as cure 1.',
-      svg: F.svg(cure === 1 ? 'Cure 1: section across the web at one clamp, inner bands on top' : 'Cure 2: section across the web at one clamp, outer bands on top'),
+        ? `Looking along the web, cut across (the middle of the web is left out). The web lies inside face up on the template with its top edge against the cleats. The two inner bands are epoxied on top: the gunwale band tight to the cleats, the chine band stopping ${frac(chineLo, 16)} short of the bottom edge to leave the slot the deck edge slides into later. Bags of sand on a plastic sheet press the bands down: no clamp can reach under a web lying on a screwed-down template.`
+        : 'The web is turned over onto the mirror ramp, outside face up, resting on its cured inner bands. A strip of band offcut under its bottom edge fills the gap where the inner chine band stops short, so the outer chine band has something to press on. The outer gunwale band goes against the cleats, and the outer chine band runs flush with the bottom edge (it sits on the rail). The same bags as cure 1, on the bands only.',
+      svg: F.svg(cure === 1 ? 'Cure 1: section across the web, inner bands on top, weighted with bags of sand' : 'Cure 2: section across the web, outer bands on top, weighted with bags of sand'),
     };
   };
 }
 
-/** The template (or ramp cap) under the web in the clamp sections (px). */
+/** The template layer (or ramp cap) under the web in the cure sections (px). */
 const TEMPLATE_PX = 16;
-/** How far the bench top runs past the web in the clamp sections (px; it is about 3" in the shop). */
-const BENCH_MARGIN_PX = 56;
-const MAT_CLAMP = '#2563eb';
 
 /** The finished side in section: four bands and the web, where the deck edge and the rail go. */
 const finishedSection: FigFn = (c) => {
@@ -334,8 +305,72 @@ const finishedSection: FigFn = (c) => {
   };
 };
 
+/**
+ * The first bench top from above, drawn into `box`: the template (the web's outline; turned over along its length for the right side when `right`), the
+ * S-ramp's plain cap with its ribs dashed, and the cleats on edge along the sheer. Returns the frame and a cleat's position for labels.
+ */
+function benchPlan(F: Fig, g: SideFormGeometry, box: { x: number; y: number; w: number; h: number }, right: boolean): { at: (p: Vec2) => Vec2; cleat: (i: number) => Vec2 } {
+  const w = g.f.widthIn, H = g.f.heightIn;
+  const u0 = g.hasRamp ? g.uOf(g.xR0) : w, uE = g.hasRamp ? g.uOf(g.xRe) : w;
+  const V = (v: number): number => (right ? H - v : v);
+  const fr = fit({ minX: -3, minY: -2.5, maxX: w + 3, maxY: g.templateH + 2.5 }, box);
+  const at = ([u, v]: Vec2): Vec2 => fr.at([u, V(v)]);
+  const T = (q: Vec2[]): Vec2[] => q.map(at);
+  F.poly([fr.at([-3, -2.5]), fr.at([w + 3, -2.5]), fr.at([w + 3, g.templateH + 2.5]), fr.at([-3, g.templateH + 2.5])], mat('bench'));
+  F.poly(T(g.hasRamp ? [[0, 0], [u0, 0], ...g.sheer.filter(([u]) => u <= u0).reverse(), [0, g.sheer[0][1]]] : g.f.outer), mat('template'));
+  if (g.hasRamp) {
+    F.poly([fr.at([u0, -0.5]), fr.at([uE, -0.5]), fr.at([uE, H + 0.5]), fr.at([u0, H + 0.5])], mat('hardboard', { opacity: 0.85 }));
+    for (let i = 0; i < g.ribs; i++) F.line(fr.at([u0 + 0.3, i * g.ribPitch]), fr.at([uE, i * g.ribPitch]), { stroke: '#f4ead8', width: 1, dash: '6 4' });
+  }
+  F.poly(T(g.f.outer), { stroke: INK, width: 1.4 });
+  const arc = (i: number): { p: Vec2; n: Vec2 } => {
+    const s = i * g.cleatStep;
+    let acc = 0;
+    for (let k = 1; k < g.sheer.length; k++) {
+      const a = g.sheer[k - 1], b = g.sheer[k], d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (acc + d >= s || k === g.sheer.length - 1) { const t = d ? Math.min(1, (s - acc) / d) : 0; const nx = -(b[1] - a[1]) / (d || 1), ny = (b[0] - a[0]) / (d || 1); return { p: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], n: ny >= 0 ? [nx, ny] : [-nx, -ny] }; }
+      acc += d;
+    }
+    return { p: g.sheer[0], n: [0, 1] };
+  };
+  const CLEAT_T = 0.75, CLEAT_L = 3;
+  for (let i = 0; i < g.nCleat; i++) {
+    const { p: q, n } = arc(i);
+    const tx: Vec2 = [n[1], -n[0]];
+    const a: Vec2 = [q[0] - tx[0] * CLEAT_L / 2, q[1] - tx[1] * CLEAT_L / 2], b: Vec2 = [q[0] + tx[0] * CLEAT_L / 2, q[1] + tx[1] * CLEAT_L / 2];
+    F.poly(T([a, b, [b[0] + n[0] * CLEAT_T, b[1] + n[1] * CLEAT_T], [a[0] + n[0] * CLEAT_T, a[1] + n[1] * CLEAT_T]]), mat('oak', { stroke: '#6b4a1f' }));
+  }
+  return { at, cleat: (i: number) => { const { p: q, n } = arc(i); return at([q[0] + n[0] * CLEAT_T / 2, q[1] + n[1] * CLEAT_T / 2]); } };
+}
+
+/** The right side on the same first bench: the template's rear piece turned over along its length, the cleats re-set; the ramp does not move. */
+const rightSide: FigFn = (c) => {
+  const g = geom(c);
+  if (!g || !g.hasRamp) return null;
+  const F = new Fig(760, 500);
+  F.heading('The right side on the same bench: turn the template over, re-set the cleats');
+  F.badge([28, 60], 1);
+  F.sub([46, 64], 'Left side (as built): inside face up, top edge at the far side');
+  const a = benchPlan(F, g, { x: 60, y: 76, w: 640, h: 150 }, false);
+  F.badge([28, 262], 2);
+  F.sub([46, 266], 'Right side: the rear piece of the template turned over in place; the cleats moved to the new top edge');
+  const b = benchPlan(F, g, { x: 60, y: 278, w: 640, h: 150 }, true);
+  const u0 = g.uOf(g.xR0), uE = g.uOf(g.xRe);
+  F.label(a.at([(u0 + uE) / 2, -0.5]), [720, 250], 'S-ramp: stays put (its cap covers both)', { anchor: 'end', size: 12 });
+  F.label(b.cleat(Math.floor(g.nCleat * 0.5)), [720, 448], 'cleats re-set against the dry right web', { anchor: 'end', size: 12 });
+  F.text([40, 470], 'The mirror ramp is re-set the same way: only its cleats move.', { size: 12, color: MUTED });
+  F.legend(['bench', 'template', 'hardboard', 'oak'], [16, 492]);
+  F.note();
+  return {
+    id: 'side-right-side',
+    title: 'The right side on the same forms',
+    caption: 'The forms are cut for the left side, and the right side is its mirror image. When the left web moves on to the mirror ramp, unscrew the template\'s rear piece, turn it over along its length in the same place, and screw it back: it is now the right web\'s outline. Re-set that bench\'s cleats against the dry right web. Nothing under the web moves: both ramp caps are plain rectangles that carry either side.',
+    svg: F.svg('The right side on the same bench: the template turned over and the cleats re-set'),
+  };
+};
+
 export const SIDE_FIGURES: Record<string, FigFn[]> = {
-  'side-forms': [sidesPurpose, formSetup, twoRamps],
+  'side-forms': [sidesPurpose, formSetup, twoRamps, rightSide],
   'sides-inner': [clampSection(1)],
   'sides-outer': [clampSection(2), finishedSection],
 };

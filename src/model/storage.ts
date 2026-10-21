@@ -368,8 +368,8 @@ export function buildStorage(ctx: Ctx): Part[] {
     const bx = x0 + rimW + (inner * n) / (nBatten + 1);
     parts.push(box(ctx, { ...common, id: `storage-lid-batten-${n}`, partNo: 'storage-lid-batten', name: `Storage lid batten ${n}`, mat: 'oak', grain: 'y',
       ...span([bx - BATTEN_X_IN / 2, bx + BATTEN_X_IN / 2], [-(hw - rimW), hw - rimW], [zTop - pl - rimT, zTop - pl]),
-      joints: [{ type: 'glue', to: 'storage-lid', count: 1, note: 'epoxy + 4 stainless screws from the top (plugged)' }, { type: 'dado', to: 'storage-rim-side-L', count: 1, size: '1/4 deep', note: 'ends let into the frame sides' }, { type: 'dado', to: 'storage-rim-side-R', count: 1, size: '1/4 deep' }],
-      notes: 'Stiffen the lid panel against sagging under a light cooler or a hand (a 25" × 13" ply panel alone would sag); the lid is engraved DO NOT STEP and is not a step (D-58); the lid-load row sizes the battens for the rated lid load (D-53).' }));
+      joints: [{ type: 'glue', to: 'storage-lid', count: 1, note: 'thickened epoxy + 4 stainless screws from the top, countersunk flush and filled with epoxy (the 6 mm panel has no room for a plug)' }, { type: 'glue', to: 'storage-rim-side-L', count: 1, note: 'end butted to the frame side, thickened epoxy (no dado)' }, { type: 'glue', to: 'storage-rim-side-R', count: 1, note: 'end butted to the frame side, thickened epoxy (no dado)' }],
+      notes: 'Stiffens the lid panel against sagging under a light cooler or a hand (the thin panel alone would sag): cut to the clear span between the frame sides, glued to the panel\'s underside (lid face down, weighted) and butted to the frame sides with thickened epoxy; 4 stainless screws from the top, countersunk flush and filled, clamp it while the epoxy cures. The lid is engraved DO NOT STEP and is not a step (D-58); the lid-load row sizes the battens for the rated lid load (D-53).' }));
   }
 
   // ── Gasket: closed-cell bulb strip on the wall tops, under the frame ──
@@ -414,19 +414,21 @@ export function buildStorage(ctx: Ctx): Part[] {
     // D-72: a block behind the end panel is 1-1/4 in thick so the standard #8 x 1-1/4 latch screw stays inside it; the rear block (on the transom, 0.375 in + the transom) takes the #8 x 5/8.
     const blockT = rear ? LATCH_BLOCK_IN : 1.25;
     const latchFit = rear ? pickWoodScrew(8, LEAF_IN, LATCH_BLOCK_IN + L.transom) : pickWoodScrew(8, LEAF_IN + pl, blockT);
-    const blockX: [number, number] = rear ? [x0, x0 + LATCH_BLOCK_IN] : [x0 + pl, x0 + pl + blockT];
+    // Rear box: against the transom's inner face (the rear lane between the transom and the aft wall is open there), so it is clear of the lid frame's aft end.
+    const xTi = L.xRear + L.transom;
+    const blockX: [number, number] = rear ? [xTi, xTi + LATCH_BLOCK_IN] : [x0 + pl, x0 + pl + blockT];
     const catchFit = pickWoodScrew(8, LEAF_IN, rimW); // the catch plate on the lid frame end
     const blockId = `storage-latch-block-${tag}`;
     parts.push(box(ctx, { ...common, id: blockId, partNo: 'storage-latch-block', name: `Latch block ${tag}`, mat: 'oak', grain: 'z',
       ...span(blockX, [ly - LATCH_BLOCK_W_IN / 2, ly + LATCH_BLOCK_W_IN / 2], blockZ),
       joints: [{ type: 'glue', to: rear ? 'transom-rear' : 'storage-end-aft', count: 1, note: rear ? 'epoxy to the inside face of the rear transom' : 'epoxy to the inside of the aft end panel' },
         { type: 'screw', to: `storage-latch-${tag}`, count: 2, diaIn: SCREW_DIA_IN[8], fit: latchFit, size: rear ? `${screwText(latchFit)} stainless, into the block and the transom behind it` : `${screwText(latchFit)} stainless, through the end panel into the block` }],
-      notes: rear ? `Oak block ${LATCH_BLOCK_IN}" thick on the transom's inner face: the ${screwText(latchFit)} screws bite ${(latchFit.lenIn - latchFit.gripIn).toFixed(2)}" (the block, then the transom it is glued to; end grain avoided: block grain is vertical) instead of a bare transom face. The lid's aft edge swings up and away from the transom, so the block is never in its path (S5).` : 'Oak block behind the 6 mm aft end for the latch screws (S5).' }));
+      notes: rear ? `Oak block ${LATCH_BLOCK_IN}" thick on the transom's inner face: the ${screwText(latchFit)} screws bite ${(latchFit.lenIn - latchFit.gripIn).toFixed(2)}" (the block, then the transom it is glued to; end grain avoided: block grain is vertical) instead of a bare transom face. It is glued to the transom, ${frac(x0 - blockX[1])}" clear of the lid frame's aft end; the lid hinges on its fore edge, so its aft edge swings up and forward, away from the block (S5).` : 'Oak block behind the 6 mm aft end for the latch screws (S5).' }));
     const latchBox = rear
-      ? span([x0 + LATCH_BLOCK_IN, x0 + LATCH_BLOCK_IN + 0.35], [ly - 0.6, ly + 0.6], [blockZ[0] + 0.1, blockZ[1] - 0.05])
+      ? span([blockX[1], blockX[1] + 0.35], [ly - 0.6, ly + 0.6], [blockZ[0] + 0.1, blockZ[1] - 0.05])
       : span([x0 - 0.35, x0], [ly - 0.6, ly + 0.6], [zTop - 2.5, zTop - 1.2]);
     const catchBox = rear
-      ? span([x0 + 0.5, x0 + 0.95], [ly - 0.6, ly + 0.6], [zTop, zTop + 0.12])
+      ? span([x0 + 0.1, x0 + 0.55], [ly - 0.6, ly + 0.6], [zTop, zTop + 0.12])
       : span([x0 - 0.12, x0], [ly - 0.6, ly + 0.6], [zTop - 0.8, zTop - 0.1]);
     parts.push(box(ctx, { ...common, id: `storage-latch-${tag}`, partNo: 'storage-latch', name: `Lid latch ${tag}`, mat: 'fixed', massLb: LATCH_MASS_LB, kind: 'purchased',
       material: `${stainless(p)} over-center draw latch`, fab: 'buy', step: STEP.finish, ...latchBox,
