@@ -1,5 +1,5 @@
 /**
- * Moving and removable parts swept through their travel (motion audit 2026-10-21). The static overlap tests only see each part where it is drawn; these move the storage lid
+ * Moving and removable parts swept through their travel (D-93). The static overlap tests only see each part where it is drawn; these move the storage lid
  * through its whole swing (seat back upright and flat), turn the lid turn-buttons about their pivot screws, and check what the transport configuration keeps on. Clearances
  * are measured with `partsClearance` (tight boxes), never the bounding-box gap.
  */
@@ -8,7 +8,7 @@ import { defaultParams } from '../params';
 import { buildModel } from './index';
 import { computeLayout } from './layout';
 import { partsClearance, transformPoint, worldAABB } from './bounds';
-import { LID_AFT_GAP_IN, lidOpenAngleDeg, storageGeometry } from './storage';
+import { lidOpenAngleDeg, storageGeometry } from './storage';
 import { flatPinHoles } from './seat-stow';
 import { multiply, rotationY, rotationZ, translation } from './mat4';
 import { offForTransport, TRANSPORT_VIEW } from './removable';
@@ -63,16 +63,16 @@ function lidSweep(parts: Part[], toDeg: number, skip: (id: string, deg: number) 
 }
 const tight = (w: Map<string, { c: number; deg: number }>) => [...w].filter(([, v]) => v.c < RUN_IN).map(([k, v]) => `${k}: ${v.c.toFixed(3)}" at ${v.deg} deg`);
 
-describe('storage lid swing in 3D (D-89, motion audit)', () => {
+describe('storage lid swing in 3D (D-89, D-93)', () => {
   // The lid seals on its gaskets: soft bulb strips it presses when shut and leaves slowly near the hinge (the fore one is on the strip's face, a gasket's width from the pin),
   // so they are not obstacles. At the end of the swing it lies on the strip's bumpers (seat back flat) or leans on the seat back (1/8" off it, lidOpenAngleDeg).
   const shutContact = (id: string, _deg: number) => /^storage-gasket-/.test(id);
-  it('the lid frame stands LID_AFT_GAP_IN off the box\'s aft face (the transom backers and turn-button blocks), and the aft gasket moved in with it, under the aft rail', () => {
+  it('the lid frame stands storageLidAftGapIn off the box\'s aft face (the transom backers and turn-button blocks), and the aft gasket moved in with it, under the aft rail', () => {
     const parts = buildModel(defaults);
     const get = (id: string) => worldAABB(parts.find((x) => x.id === id)!);
-    expect(get('storage-rim-end-aft').min[0]).toBeCloseTo(g.x0 + LID_AFT_GAP_IN, 9);
+    expect(get('storage-rim-end-aft').min[0]).toBeCloseTo(g.x0 + defaults.storageLidAftGapIn, 9);
     expect(get('storage-rim-side-L').min[0]).toBeCloseTo(g.lidX0, 9);
-    for (const id of ['transom-backer-L', 'storage-turn-block-L']) expect(get('storage-rim-end-aft').min[0] - get(id).max[0], id).toBeGreaterThanOrEqual(LID_AFT_GAP_IN - 1e-9);
+    for (const id of ['transom-backer-L', 'storage-turn-block-L']) expect(get('storage-rim-end-aft').min[0] - get(id).max[0], id).toBeGreaterThanOrEqual(defaults.storageLidAftGapIn - 1e-9);
     const gk = get('storage-gasket-end-aft'), rim = get('storage-rim-end-aft'), coam = get('storage-coaming-end-aft');
     expect(gk.min[0]).toBeGreaterThanOrEqual(rim.min[0] - 1e-9); // under the aft rail
     expect(gk.max[0]).toBeLessThanOrEqual(rim.max[0] + 1e-9);
@@ -100,7 +100,7 @@ describe('storage lid swing in 3D (D-89, motion audit)', () => {
   });
 });
 
-describe('lid turn-buttons turning (D-89, motion audit)', () => {
+describe('lid turn-buttons turning (D-89, D-93)', () => {
   const parts = buildModel(defaults);
   const transom = parts.find((x) => x.id === 'transom-rear')!;
   const xTransom = worldAABB(transom).max[0]; // its inner face
@@ -138,7 +138,7 @@ describe('lid turn-buttons turning (D-89, motion audit)', () => {
   });
 });
 
-describe('transport configuration keeps the seat-back latch pins (motion audit)', () => {
+describe('transport configuration keeps the seat-back latch pins (D-93)', () => {
   it('the pins are quick-release (removable) but stay in for the truck, through the flat back into the deck; the transport mass counts them', () => {
     const t = buildModel(defaults, TRANSPORT_VIEW);
     const holes = flatPinHoles(defaults, L);

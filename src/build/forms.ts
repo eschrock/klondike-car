@@ -14,7 +14,7 @@
 import type { Params } from '../params';
 import { computeLayout, outerHalfWidth, samples, sideTopAt, type Layout } from '../model/layout';
 import { bowGeometry } from '../model/handle';
-import { GUNWALE_END_LONG_IN, transomTopOutline } from '../model/body';
+import { transomTopOutline } from '../model/body';
 import type { Part, Vec2 } from '../model/types';
 import { flatPattern } from './flat';
 import { epoxyTimeFactor } from './finishing';
@@ -38,12 +38,7 @@ const CAP_MARGIN_IN = 0.5;
 const MIRROR_CAP_MARGIN_IN = 1.5;
 /** The sheer cleats stand on edge (in tall), so a band on a ramp cannot ride over them. */
 export const CLEAT_TALL_IN = 1.5;
-/**
- * The gunwale band is cut this much long at each end of the web, and an end stop (a cleat-sized block) bears on its lower edge just past each end: the
- * sheer is concave on the cleat side, so a bent band pushes its middle into the cleats and its ends swing away; the stops hold the ends. The ramp caps
- * run this much past the web's bow end so the bow stop stands on the cap.
- */
-const BAND_END_LONG_IN = GUNWALE_END_LONG_IN; // the model's number: the rough gunwale strip is cut long enough for it (body.ts sideBandLengths)
+/** The ramp caps run this much past the web's bow end so the bow end stop stands on the cap. (How far the gunwale band stands past each web end is `gunwaleEndLongIn`, D-93.) */
 const CAP_PAST_BOW_IN = 2;
 /** Edge stops along the web's straight bottom edge, a bench: about one every 12 in (shop practice). */
 const EDGE_STOP_SPACING_IN = 12;
@@ -402,7 +397,7 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
         `Stand each on edge, ${frac(CLEAT_TALL_IN)} tall, so the band cannot ride over it, even where the web is up on a ramp. No spacers.`,
         `Set them against a dry web, not against the scored line: lay the web on (on a ramp, hold it down with the bags of sand used for gluing), hold a 1/8" hardboard scrap against its top edge (the gunwale bands stand 1/8" above the web), and screw each cleat against the scrap: two #8 × 2" screws into the bench beside the template (a 2-1/2" would come out its underside), or, where the web is on a ramp, two #8 × 2-1/2" down through the cap into the rib or block under it, piloted 1/8" (MDF edges split).`,
         ...(hasRamp ? ['On the first bench the dry web lies inside face up; on the mirror ramp, outside face up (turned over along its length).'] : []),
-        `END STOPS, 4 more blocks the same size, two a bench: cut each gunwale band ${frac(BAND_END_LONG_IN)} long at each end of the web, and screw a block against the band's lower edge just past each end of the web (at the bow end, on the cap). The sheer curves away from the cleats at its ends, so a bent band pushes its middle into the cleats and its ends swing away: the stops hold the ends.`,
+        `END STOPS, 4 more blocks the same size, two a bench: cut each gunwale band ${frac(p.gunwaleEndLongIn)} long at each end of the web, and screw a block against the band's lower edge just past each end of the web (at the bow end, on the cap). The sheer curves away from the cleats at its ends, so a bent band pushes its middle into the cleats and its ends swing away: the stops hold the ends.`,
         `EDGE STOPS, ${EDGE_STOPS} more blocks a bench: screw them against the web's straight bottom edge about every 12" along it. They fix the web across the form, and in the second cure the outer chine band is pushed against them, so it ends flush with the web (it is the face that sits on the rail).`,
         'Cover the cleat and stop faces with packing tape.',
       ],

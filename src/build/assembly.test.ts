@@ -1039,7 +1039,7 @@ describe('D-76: side ribs, knees and box ties (tie-down bases)', () => {
       expect(t).not.toMatch(/locator|centerline [\d\-/]+" from the transom/);
       expect(t).not.toMatch(/Drive them while the epoxy is wet/);
       expect(t).not.toMatch(/\bjoist\b/i);
-      expect(t).toMatch(/the offcut of a band strip \(each strip leaves about [\d\-/]+" of its board; the same thickness as the bands/); // the spares stay for the bend test
+      expect(t).toMatch(/the tail of a band strip \(each strip comes off its board about [\d\-/]+" longer than it needs: leave the tail on until the strip is planed[^;]*; the same thickness as the bands/); // the spares stay for the bend test
       // the filler lengths are the cut list's, rounded up to 1/8" the way its rough sizes are
       const fl = ribFillers(msr, ppp);
       expect(t).toContain(`about ${roughFrac(fl[1].lengthIn)} at the mid rib, about ${roughFrac(fl[2].lengthIn)} at the bow post and about ${roughFrac(fl[3].lengthIn)} at the rear rib`);
@@ -1068,7 +1068,7 @@ describe('D-76: side ribs, knees and box ties (tie-down bases)', () => {
       expect(rib).toMatch(/Each pair of holes must land on a rib's shaft: 4-1\/2" \(the rear rib\) and 13" \(the box rib\) from the transom's outer face/);
       expect(rib).toMatch(/Bore each spot 5\/16", square to the side, 5\/8" deep from the web's outer face/);
       expect(rib).toMatch(/#10-32 × 5\/16" [^\n]*threaded insert on epoxy/);
-      expect(rib).toMatch(/Make 8 standoff discs, one per hole/);
+      expect(rib).toMatch(/Make 8 oak standoff discs, one per hole/);
       expect(txt(get('final-fit'))).toMatch(/Through the 7\/32" holes, the standoff discs \(epoxied to the sign back\) and the web, into the inserts set at step \d+/);
       const fit = txt(get('final-fit'));
       expect(fit).not.toMatch(/Drill all \d holes|drill all the layers/i);
@@ -1111,7 +1111,7 @@ describe('D-79..D-83: the cost-pass build text', () => {
     expect(gear).not.toMatch(/Drill the 2 box drain holes/);
     expect(gear).toMatch(/storage box's rear corners will be [^\n]*forward of the transom's outer face, [^\n]*either side of the centerline/);
     expect(gear).toMatch(/Tape the top-face mouth, brush epoxy up each bore/);
-    expect(std.find((s) => s.id === 'gear-fit')!.checks.join(' ')).toMatch(/box drain holes drilled, sealed and open/);
+    expect(std.find((s) => s.id === 'gear-fit')!.checks.join(' ')).toMatch(/box drain holes sealed and open/); // cut with the deck's file: not drilled again
     expect(std.find((s) => s.id === 'finish-under')!.checks.join(' ')).toMatch(/box drain holes are open and their bores sealed/);
     expect(stepText(std, 'finish-under')).toMatch(/Keep the drain holes open/);
     const box = stepText(std, 'storage-box');
@@ -1134,13 +1134,13 @@ describe('D-79..D-83: the cost-pass build text', () => {
     // every line that mentions a stain says there is none
     const mentions = [...t.matchAll(/[^\n]*\bstain(?:ed|ing)?\b[^\n]*/gi)].map((m) => m[0]);
     for (const line of mentions) expect(line, line).toMatch(/no stain|No stain|stain-free/i);
-    expect(std.find((s) => s.id === 'finish')!.title).toBe('Finish: epoxy, engrave, topcoat');
+    expect(std.find((s) => s.id === 'finish')!.title).toBe('Finish: epoxy, lettering check, topcoat');
     expect(std.find((s) => s.id === 'finish')!.instructions.join('\n')).toMatch(/3\. Raise the grain \(no stain\)/);
     expect(stepText(std, 'finish-under')).toMatch(/raise the grain once\. No stain/);
     expect(stepText(std, 'seal')).not.toMatch(/Finishing, steps 3-4/);
     expect(stepText(std, 'seal')).toMatch(/clear urethane/);
     // Extreme keeps the stain, and cites steps 3 and 4 of its own schedule
-    expect(ext.find((s) => s.id === 'finish')!.title).toBe('Finish: stain, epoxy, engrave, topcoat');
+    expect(ext.find((s) => s.id === 'finish')!.title).toBe('Finish: stain, epoxy, lettering check, topcoat');
     expect(stepText(ext, 'seal')).toMatch(/Finishing, steps 3-4/);
     expect(stepText(ext, 'finish-under')).toMatch(/stain the show faces/);
   });
@@ -1149,7 +1149,7 @@ describe('D-79..D-83: the cost-pass build text', () => {
     const sched = finishingSchedule(buildModel({ ...p }), p);
     const n = (id: string): number => sched.steps.find((q) => q.id === id)!.n;
     expect(stepText(ext, 'seal')).toContain(`Finishing, steps ${n('stain')}-${n('epoxy')}`);
-    expect(stepText(ext, 'storage-lid')).toMatch(/lettering is filled in the finishing schedule \(step 5\)/);
+    expect(stepText(ext, 'storage-lid')).toMatch(/finishing schedule only checks the lettering's fill \(step 5\)/);
     expect(n('engrave')).toBe(5);
   });
 
@@ -1388,7 +1388,7 @@ describe('final review fixes (steps): sizes from the model, one sequence per hol
       }
       expect(gear).toMatch(/Drill the rib-knee screw pilots now, straight through the crossmember and the deck/);
       expect(gear).toMatch(/Left end means the sled's left side/);
-      expect(gear).toMatch(/On (crossmember 5|joist 5): Left knee: one [\d\-/]+" from the left end, [\d\-/]+" from the rear face; one [\d\-/]+" from the left end, [\d\-/]+" from the rear face\. Right knee:/i);
+      expect(gear).toMatch(/On (crossmember 5|joist 5): Left knee: one [\d\-/]+" toward the left end from the center line, [\d\-/]+" from the rear face; one [\d\-/]+" toward the left end from the center line, [\d\-/]+" from the rear face\. Right knee:/i); // D-93: a scribed crossmember is measured from its center line
       expect(gear).toMatch(/On king beam: Left knee: one [\d\-/]+" and [\d\-/]+" from the left end, [\d\-/]+" from the rear edge/);
       expect(gear).toMatch(/Use a 1\/8" × 6" aircraft bit, square to the deck, with a square block clamped on the deck beside each hole as a drill guide: a jobber bit's flutes are too short/);
       expect(gear.indexOf('stop-block screw pilot')).toBeLessThan(gear.indexOf('Drill the rib-knee screw pilots'));

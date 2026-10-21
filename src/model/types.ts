@@ -191,7 +191,7 @@ export interface Part {
    */
   finish?: Finish;
   /** Lettering cut into a face (D-58: the storage lid is engraved DO NOT STEP). Data for the CNC file and, later, the viewer; no geometry. */
-  legend?: { text: string; face: 'top'; process: string; letterHeightIn: number; depthIn: number };
+  legend?: { text: string; face: 'top'; process: string; letterHeightIn: number; depthIn: number; /** Width of the scored line (in): the laser scores each stroke as passes side by side. Absent = one pass. */ lineIn?: number };
   notes?: string;
 }
 

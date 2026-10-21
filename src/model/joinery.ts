@@ -9,7 +9,8 @@
  */
 import { joistId } from './frame';
 import { thinSheet, WEATHER_SPEC, type Params } from '../params';
-import { SIDES, type Ctx, stainless, insertMat, INSERT_DRILL_IN } from './build-utils';
+import { frac64, SIDES, type Ctx, stainless, insertMat, INSERT_DRILL_IN } from './build-utils';
+export { frac64 };
 import { sideTopAt } from './layout';
 import { SCUPPER_BELOW_SURFACE_IN, scupperSites, signBackerPlan, signKnobPlan } from './body';
 import { worldAABB } from './bounds';
@@ -97,16 +98,6 @@ export function frac(x: number): string {
   const n = Math.round(x * 16);
   const whole = Math.floor(n / 16);
   let num = n % 16, den = 16;
-  while (num > 0 && num % 2 === 0) { num /= 2; den /= 2; }
-  if (num === 0) return `${whole}`;
-  return whole > 0 ? `${whole}-${num}/${den}` : `${num}/${den}`;
-}
-
-/** Nearest 1/64" (a small clearance: the 0.04" deck slop is 3/64", which `frac` would round up to 1/16). */
-export function frac64(x: number): string {
-  const n = Math.round(x * 64);
-  const whole = Math.floor(n / 64);
-  let num = n % 64, den = 64;
   while (num > 0 && num % 2 === 0) { num /= 2; den /= 2; }
   if (num === 0) return `${whole}`;
   return whole > 0 ? `${whole}-${num}/${den}` : `${num}/${den}`;
@@ -414,7 +405,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
       const bk = backers[i % 2 === 0 ? 0 : 1] ?? backers[0]; // the points go left-lower, right-lower, left-upper, right-upper: even = the left strip
       if (bk) add({
         a: sign.id, b: bk, typeA: 'knob', typeB: 'threaded-insert',
-        size: `#10-32 × ${kn.lenIn} in thumb-knob screw through a 7/32 clearance hole (0.219) in the sign, a ${kn.standoffIn.toFixed(3)}" oak standoff disc (epoxied to the sign back) and the ${thinSheet(p).nominal} web: ${kn.engagedIn.toFixed(2)}" into the insert, tip ${kn.tipShortIn.toFixed(2)}" short of the back of the strip`, sizeB: `#10-32 × 5/16 ${insertMat(p)} threaded insert (epoxied) in a blind ${frac(INSERT_DRILL_IN)} in hole in the oak backing strip inside the web`,
+        size: `#10-32 × ${kn.lenIn} in thumb-knob screw through a 7/32 clearance hole in the sign, a ${frac64(kn.standoffIn)}" oak standoff disc (epoxied to the sign back) and the ${thinSheet(p).nominal} web: ${frac64(kn.engagedIn)}" into the insert, tip ${frac64(kn.tipShortIn)}" short of the back of the strip`, sizeB: `#10-32 × 5/16 ${insertMat(p)} threaded insert (epoxied) in a blind ${frac(INSERT_DRILL_IN)} in hole in the oak backing strip inside the web`,
         pts: [pt], ptsB: [[pt[0], Math.sign(pt[1]) * (hw + bandT), pt[2]]], // the insert's mouth is on the backer's outboard face, against the web
         noteA: 'Sign comes off for transport (D-9). The screw goes through the web into the oak backing strip; nothing grips the thin ply alone (build 3c M4).',
       });

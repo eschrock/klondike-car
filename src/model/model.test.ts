@@ -323,7 +323,7 @@ describe('removed', () => {
     const removed = buildModel(defaults, { removed: true });
     expect(removed.map((p) => p.id)).toEqual(full.filter((p) => !offForTransport(p)).map((p) => p.id));
     const gone = full.filter((p) => offForTransport(p)).map((p) => p.id);
-    expect(removed.some((p) => p.id === 'seat-pin-L' && p.removable)).toBe(true); // quick-release, but they stay in for the truck and hold the flat back (motion audit 2026-10-21)
+    expect(removed.some((p) => p.id === 'seat-pin-L' && p.removable)).toBe(true); // quick-release, but they stay in for the truck and hold the flat back (D-93)
     expect(gone).toEqual(expect.arrayContaining(['seat-back-pad', 'brake-flap-L', 'brake-pivot-pin-R', 'brake-chock-L', 'front-light', 'rear-light', 'lamp-clip', 'rear-lamp-clip']));
     for (const id of ['bridle', 'bridle-tongue', 'bridle-sleeve', 'sign-L', 'sign-R', 'handle-bar', 'handle-post-L', 'handle-post-R', 'brake-backer-L']) expect(removed.some((p) => p.id === id), `${id} stays`).toBe(true);
     expect(gone).toContain('brake-knee-L'); // D-78: removable knees (the default) come off in Transport mode; glued knees stay (d78.test.ts)

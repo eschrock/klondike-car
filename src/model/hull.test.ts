@@ -211,7 +211,7 @@ describe('the plan-curved sheer sides (D-54, D-57)', () => {
         expect(b.max[0]).toBeCloseTo(xe, 6);
         expect(get(parts, `side-${tag}-${m}`).geometry.type).toBe('mesh'); // plan-curved walls (D-57)
       }
-      // Phase 4 fit audit: the chine strip is cut as long as the plan S it is bent to (like the rail), a little over the x extent
+      // D-93: the chine strip is cut as long as the plan S it is bent to (like the rail), a little over the x extent
       expect(get(parts, `side-${tag}-chine`).stock!.l).toBeCloseTo(sideBandLengths(L, defaults).chineIn, 6);
       expect(get(parts, `side-${tag}-chine`).stock!.l).toBeGreaterThan(xe - xs + 0.2);
     }
@@ -548,10 +548,10 @@ describe('round 2 hull (build M2-M8, D-43)', () => {
 
   it('rough length gets its allowance (M8; Eric 2026-10-12): +1 in plain, +2 in for a bent strip, and 1/8" in t', () => {
     const c = get(parts, 'side-L-chine');
-    expect(c.stock!.l).toBeCloseTo(sideBandLengths(L, p).chineIn, 6); // the developed plan S (Phase 4 fit audit), not the x extent
+    expect(c.stock!.l).toBeCloseTo(sideBandLengths(L, p).chineIn, 6); // the developed plan S (D-93), not the x extent
     expect(c.rough!.l).toBeCloseTo(c.stock!.l + p.laminateLengthAllowanceIn, 6); // a bent strip: the laminate allowance (Eric 2026-10-12)
     expect(c.rough!.t).toBeCloseTo(L.sideBand + p.millingAllowanceIn, 6); // a strip, not a 5/8 block (S2)
-    // The gunwale bands are cut longer still: their rough strip stands 1 in past each web end for the side form's end stops (Phase 4 fit audit, body.ts sideBandLengths).
+    // The gunwale bands are cut longer still: their rough strip stands 1 in past each web end for the side form's end stops (D-93, body.ts sideBandLengths).
     expect(get(parts, 'side-L-gunwale').rough!.l).toBeCloseTo(sideBandLengths(L, p).gunwaleRoughIn, 6);
     for (const x of parts.filter((q) => q.rough && q.stock && (q.group === 'body' || q.group === 'frame') && !/-gunwale/.test(q.id))) expect(x.rough!.l - x.stock!.l, x.id).toBeCloseTo(x.kind === 'bentlam' || x.plies !== undefined ? p.laminateLengthAllowanceIn : p.roughLengthAllowanceIn, 6);
   });

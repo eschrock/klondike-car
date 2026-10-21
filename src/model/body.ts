@@ -6,7 +6,7 @@
  * (`plan-wall.ts`): constant thickness, centerline at the hull's plan curve (`Layout.turnIn`). The deck is ONE flat sheet that ends in a dado in the bow bulkhead. Joint
  * records are added in joinery.ts after all parts exist.
  */
-import { SIGN_PROUD_IN, HULL_STEP, STEP, box, cylinder, roughOf, span, SIDES, IN3_PER_FT3, woodMassLb, type Ctx, stainless } from './build-utils';
+import { SIGN_PROUD_IN, HULL_STEP, STEP, box, cylinder, frac64, roughOf, span, SIDES, IN3_PER_FT3, woodMassLb, type Ctx, stainless } from './build-utils';
 import { handleGeometry } from './handle';
 import { transformPoint } from './bounds';
 import { innerHalfWidth, samples, sideSlopeAt, sideTopAt, type Layout } from './layout';
@@ -270,22 +270,17 @@ export function bulkheadOutline(ctx: Pick<Ctx, 'p' | 'L'>): { outline: Vec2[]; h
   return { outline: ccw([[b.halfW, b.bot], ...topR, [-b.halfW, b.bot]]), halfW: b.halfW };
 }
 
-/**
- * The gunwale band is cut this much long at each end of the WEB (which itself stands the deck-capture depth past each band end), and an end stop bears on it there while it cures
- * (the side form's END STOPS). The rough strip carries it (see `sideBandLengths`).
- */
-export const GUNWALE_END_LONG_IN = 1;
 
 /**
- * Developed (straight-strip) lengths of the sandwich bands, from the transom's inner face to the bulkhead's rear face (Phase 4 fit audit):
+ * Developed (straight-strip) lengths of the sandwich bands, from the transom's inner face to the bulkhead's rear face (D-93):
  *   chine   : the plan S along the band's own plane (like the rail, frame.ts), `chineIn`;
  *   gunwale : the band is bent in plan (the S) AND on edge (the sheer), so it is measured in the developed web plane (u = plan arc, v = z). `topIn` is its top edge;
  *             `centerIn` is its centerline, the length of the straight strip (an edge-bent strip keeps its centerline length; the top edge is the inside of the
  *             concave sheer and ends up shorter by half the width times the turn of the sheer);
- *   `gunwaleRoughIn`: the strip's rough length, at least the centerline plus the laminate allowance, and long enough to stand `GUNWALE_END_LONG_IN` past each
+ *   `gunwaleRoughIn`: the strip's rough length, at least the centerline plus the laminate allowance, and long enough to stand `gunwaleEndLongIn` past each
  *             web end (the web runs the deck-capture depth past each band end in x, a little more along the sloped sheer at the rear).
  */
-export function sideBandLengths(L: Layout, p: { laminateLengthAllowanceIn: number; deckCaptureDepthIn: number }): { chineIn: number; topIn: number; centerIn: number; gunwaleRoughIn: number } {
+export function sideBandLengths(L: Layout, p: { laminateLengthAllowanceIn: number; deckCaptureDepthIn: number; gunwaleEndLongIn: number }): { chineIn: number; topIn: number; centerIn: number; gunwaleRoughIn: number } {
   const x0 = L.xSideStart, x1 = L.xSideEnd, n = 2000;
   const xs = Array.from({ length: n + 1 }, (_, i) => x0 + ((x1 - x0) * i) / n);
   // The plan S is straight at both ends, so every band (inner or outer, offset in y from the web) has the same plan length.
@@ -300,7 +295,7 @@ export function sideBandLengths(L: Layout, p: { laminateLengthAllowanceIn: numbe
   const cosAt = (i: number, j: number): number => Math.abs(u[j] - u[i]) / (Math.hypot(u[j] - u[i], v[j] - v[i]) || 1);
   const dd = p.deckCaptureDepthIn;
   const webPast = dd / Math.max(0.5, cosAt(0, 1)) + dd / Math.max(0.5, cosAt(n - 1, n));
-  const gunwaleRoughIn = Math.max(centerIn + p.laminateLengthAllowanceIn, centerIn + webPast + 2 * GUNWALE_END_LONG_IN);
+  const gunwaleRoughIn = Math.max(centerIn + p.laminateLengthAllowanceIn, centerIn + webPast + 2 * p.gunwaleEndLongIn);
   return { chineIn: u[n], topIn, centerIn, gunwaleRoughIn };
 }
 
@@ -361,7 +356,7 @@ export function buildBody(ctx: Ctx): Part[] {
   const finishCredit = (areaIn2: number) => -(areaIn2 / 144) * p.finishLbPerFt2; // a glued face is not finished
   const topEdge = (x: number) => sideTopAt(L, x);
   const gunOutline = slopedOutline(L, x0s, x1s, (x) => topEdge(x) - L.railBand, topEdge);
-  // Developed lengths of the bands (Phase 4 fit audit): the chine along the plan S, the gunwale along its centerline in the developed web plane (plan S and sheer together).
+  // Developed lengths of the bands (D-93): the chine along the plan S, the gunwale along its centerline in the developed web plane (plan S and sheer together).
   const bandLen = sideBandLengths(L, p);
   const sheerLen = bandLen.centerIn, chineLen = bandLen.chineIn;
   const slope0 = (sideSlopeAt(L, x0s + 0.1) * 180) / Math.PI; // (sideSlopeAt clamps at the end, which halves the slope exactly at the transom)
@@ -396,7 +391,7 @@ export function buildBody(ctx: Ctx): Part[] {
       return {
         id: outer ? `${id}-gunwale` : `${id}-gunwale-in`, partNo: outer ? 'side-gunwale-out' : 'side-gunwale-in', name: `${nm} gunwale band (${outer ? 'outer' : 'inner'})`, group: 'body' as const, mat: 'oak' as const, step: HULL_STEP.sides, grain: 'x' as const, fab: 'bentlam' as const, kind: 'bentlam' as const,
         center: cxy(outer ? ycOut : ycIn, (topEdge(x0s) + topEdge(x1s)) / 2), outline: gunOutline, depth: bandT, transform: compose([0, 0, 0]), planYc: outer ? ycOut : ycIn, grainFollowsTop: true, stock, extraLb: finishCredit(area),
-        notes: `${outer ? 'OUTER' : 'INNER'} gunwale band of the sandwich side (D-61, D-62): a ${bandT.toFixed(3)}" × ${L.railBand}" × ${sheerLen.toFixed(1)}" oak STRIP (not a 12 in wide bandsawn blank: that wasted 87% of the board and put the grain 19 degrees across the sheer), glued full-face to the ${outer ? 'outside' : 'inside'} of the ${mmOf(pl)} mm web along the top. Its top is a ${p.sheerCurveIn === 0 ? 'straight line' : `concave sweep (a ${p.sheerCurveIn}" sag below the straight line at mid-length)`} from ${p.sideHeightRearIn}" above the deck at the rear transom to ${L.sideH.toFixed(2)}" at x = ${x1s.toFixed(1)}", where it ends at the bow bulkhead; the slope is ${slope0.toFixed(1)}° at the rear transom (${slopeMid.toFixed(1)}° at mid-length). The strip is bent ON EDGE to that sweep (a radius of about 170", under 0.5% strain) and across its thickness to the plan S together with the web, so the grain FOLLOWS the sheer; the top is trimmed flush with the web cap (the web stops ${L.webCap}" under the top and the gap is filled with thickened epoxy). The strip is ${bandLen.gunwaleRoughIn.toFixed(1)}" ROUGH (${sheerLen.toFixed(1)}" along its centerline, the sheer and the plan S together, + ${GUNWALE_END_LONG_IN}" past each end of the web for the end stops), so a 5 ft board does NOT make it: buy 6 ft (or longer) white oak, or scarf (8:1) two pieces, or butt them only in the middle third of the length (never in the first 4" behind the transom, under the grab boards, the lash-point doublers or the sign knob stations), staggered at least 12" from the joint in the other band of the same face. ${bendNote}Left long and cut to the measured length (S1). ${SIDE_ASSEMBLY_NOTE}`,
+        notes: `${outer ? 'OUTER' : 'INNER'} gunwale band of the sandwich side (D-61, D-62): a ${bandT.toFixed(3)}" × ${L.railBand}" × ${sheerLen.toFixed(1)}" oak STRIP (not a 12 in wide bandsawn blank: that wasted 87% of the board and put the grain 19 degrees across the sheer), glued full-face to the ${outer ? 'outside' : 'inside'} of the ${mmOf(pl)} mm web along the top. Its top is a ${p.sheerCurveIn === 0 ? 'straight line' : `concave sweep (a ${p.sheerCurveIn}" sag below the straight line at mid-length)`} from ${p.sideHeightRearIn}" above the deck at the rear transom to ${L.sideH.toFixed(2)}" at x = ${x1s.toFixed(1)}", where it ends at the bow bulkhead; the slope is ${slope0.toFixed(1)}° at the rear transom (${slopeMid.toFixed(1)}° at mid-length). The strip is bent ON EDGE to that sweep (a radius of about 170", under 0.5% strain) and across its thickness to the plan S together with the web, so the grain FOLLOWS the sheer; the top is trimmed flush with the web cap (the web stops ${L.webCap}" under the top and the gap is filled with thickened epoxy). The strip is ${bandLen.gunwaleRoughIn.toFixed(1)}" ROUGH (${sheerLen.toFixed(1)}" along its centerline, the sheer and the plan S together, + ${p.gunwaleEndLongIn}" past each end of the web for the end stops), so a 5 ft board does NOT make it: buy 6 ft (or longer) white oak, or scarf (8:1) two pieces, or butt them only in the middle third of the length (never in the first 4" behind the transom, under the grab boards, the lash-point doublers or the sign knob stations), staggered at least 12" from the joint in the other band of the same face. ${bendNote}Left long and cut to the measured length (S1). ${SIDE_ASSEMBLY_NOTE}`,
       };
     };
     for (const outer of [true, false]) {
@@ -482,7 +477,7 @@ export function buildBody(ctx: Ctx): Part[] {
         size: [sg.length, pl, sg.height], center: [sg.xc, s * (L.hwC + L.side + SIGN_PROUD_IN + pl / 2), sg.zc], // 1/16 in proud of the band faces
       });
       sign.massLb += edgeBandLb(ctx, 2 * (sg.length + sg.height), pl);
-      sign.notes = `D-57: the sign is back, on the outside of the tall rear part of the side (${sg.length.toFixed(1)}" × ${sg.height.toFixed(1)}", level, not tilted to follow the sheer (3c-5), its top edge ${sg.topMargin}" under the gunwale line at its forward end). ${mmOf(pl)} mm ply blank, all four edges banded with oak, a plain RECTANGLE (the Shaper file is a rectangle; the viewer paints the Troop 455 artwork on it with signTexture. A rounded-oval outline would be a new outline: ask Eric). The file and the cut list are the PLY blank; the 1/16 in oak banding adds to it; hung on four thumb-knob screws (#10-32 x ${signKnobPlan(ctx).lenIn} in) that go through four ${signKnobPlan(ctx).standoffIn.toFixed(3)}" standoff discs epoxied to its back (oak, or 5/16 in nylon spacers) and the thin web into threaded inserts in ${p.storageLocation === STORAGE_LOCATION.rearOverAxle ? 'the box rib and the rear rib of that side (D-85: two knobs in each)' : 'two oak backing strips glued inside it'} (nothing is screwed into the ply alone, D-62), so it CAN come off for repairs, but it STAYS ON for transport (D-65, Eric: taking the signs off "seems excessive"; it is not a removable part). Cut the blank on the Shaper Origin (D-61). It stays clear of the rear wheel and of the brake knees.`;
+      sign.notes = `D-57: the sign is back, on the outside of the tall rear part of the side (${sg.length.toFixed(1)}" × ${sg.height.toFixed(1)}", level, not tilted to follow the sheer (3c-5), its top edge ${sg.topMargin}" under the gunwale line at its forward end). ${mmOf(pl)} mm ply blank, all four edges banded with oak, a plain RECTANGLE (the Shaper file is a rectangle; the viewer paints the Troop 455 artwork on it with signTexture. A rounded-oval outline would be a new outline: ask Eric). The file and the cut list are the PLY blank; the 1/16 in oak banding adds to it; hung on four thumb-knob screws (#10-32 x ${signKnobPlan(ctx).lenIn} in) that go through four ${frac64(signKnobPlan(ctx).standoffIn)}" standoff discs epoxied to its back (oak, or 5/16 in nylon spacers) and the thin web into threaded inserts in ${p.storageLocation === STORAGE_LOCATION.rearOverAxle ? 'the box rib and the rear rib of that side (D-85: two knobs in each)' : 'two oak backing strips glued inside it'} (nothing is screwed into the ply alone, D-62), so it CAN come off for repairs, but it STAYS ON for transport (D-65, Eric: taking the signs off "seems excessive"; it is not a removable part). Cut the blank on the Shaper Origin (D-61). It stays clear of the rear wheel and of the brake knees.`;
       parts.push(sign);
       // Two oak backing strips glued inside the web, one per knob pair (build 3c M4): the sign screws through the thin web into threaded inserts in them.
       const bk = signBackerPlan(ctx);
@@ -493,7 +488,7 @@ export function buildBody(ctx: Ctx): Part[] {
         parts.push(box(ctx, {
           id: `sign-backer-${tag}${i + 1}`, partNo: 'sign-backer', name: `Sign backing strip ${tag}${i + 1}`, group: 'body', mat: 'oak', grain: 'z', step: HULL_STEP.sides,
           ...span([bx - bk.w / 2, bx + bk.w / 2], s > 0 ? [yInnerFace - bk.t, yInnerFace] : [-yInnerFace, -yInnerFace + bk.t], [bk.zc - bk.h / 2, bk.zc + bk.h / 2]),
-          notes: `Oak backing strip for the sign (D-62, build 3c M4): ${bk.t}" × ${bk.w}" × ${bk.h.toFixed(1)}", grain vertical, epoxied to the INSIDE of the thin web in the free panel between the chine and gunwale bands (its top is ${bk.clearTop.toFixed(2)}" under the inner gunwale band). Two #10-32 × 3/8 stainless threaded inserts, epoxied ${(2 * bk.dz).toFixed(1)}" apart, take the sign's thumb-knob screws (${kn.lenIn} in long: ${kn.stackIn.toFixed(2)}" through the sign, the ${kn.standoffIn.toFixed(3)}" standoff disc and the web, ${kn.engagedIn.toFixed(2)}" into the insert, the tip ${kn.tipShortIn.toFixed(2)}" short of the back of the strip, D-63). Glue it on the bench with the side assembly. Keep the sign at x ≥ ${(sg.xc - sg.length / 2).toFixed(1)}", clear of the flag tube blocks.`,
+          notes: `Oak backing strip for the sign (D-62, build 3c M4): ${bk.t}" × ${bk.w}" × ${bk.h.toFixed(1)}", grain vertical, epoxied to the INSIDE of the thin web in the free panel between the chine and gunwale bands (its top is ${bk.clearTop.toFixed(2)}" under the inner gunwale band). Two #10-32 × 3/8 stainless threaded inserts, epoxied ${(2 * bk.dz).toFixed(1)}" apart, take the sign's thumb-knob screws (${kn.lenIn} in long: ${frac64(kn.stackIn)}" through the sign, the ${frac64(kn.standoffIn)}" standoff disc and the web, ${frac64(kn.engagedIn)}" into the insert, the tip ${frac64(kn.tipShortIn)}" short of the back of the strip, D-63). Glue it on the bench with the side assembly. Keep the sign at x ≥ ${(sg.xc - sg.length / 2).toFixed(1)}", clear of the flag tube blocks.`,
         }));
       });
     }
@@ -602,17 +597,17 @@ export function addSignStandoffs(ctx: Ctx, parts: Part[]): void {
         axis: 'y', radius: dia / 2, length: kn.standoffIn, center: [q[0], s * (yInner - kn.standoffIn / 2), q[2]],
         stock: { t: kn.standoffIn, w: dia, l: dia },
         ...(sign.removable ? { removable: true } : {}),
-        notes: `D-63: an oak standoff disc, ${kn.standoffIn.toFixed(3)}" thick (the gap between the sign and the web) and ${dia.toFixed(2)}" across (a plug cutter on the drill press, released on the bandsaw), drilled 7/32" at the center for the knob screw. Epoxied to the back of the sign, so the sign bears on the web and cannot flex or be levered across an air gap.`,
+        notes: `D-63, D-93: an oak standoff disc, ${frac64(kn.standoffIn)}" thick (the gap between the sign and the web: plane the strip to the measured gap) and ${frac64(dia)}" across, cut with a hole saw from both faces of the strip; the saw's 1/4" pilot drill makes the center hole for the knob screw. Epoxied to the back of the sign, so the sign bears on the web and cannot flex or be levered across an air gap.`,
       });
       d.grain = 'x'; // face grain across the disc (a plug cut from the face of a board)
-      d.massLb = ((Math.PI * (p.signStandoffDiscDiaIn / 2) ** 2 * kn.standoffIn) / IN3_PER_FT3) * p.oakDensityPcf; // glued between the sign and the web: no finish on it
+      d.massLb = ((Math.PI * (dia / 2) ** 2 * kn.standoffIn) / IN3_PER_FT3) * p.oakDensityPcf; // glued between the sign and the web: no finish on it
       d.explode = sign.explode;
       // Glued to the sign back: the joint on both parts, at the disc's face against the sign (each part's own frame).
       const face: Vec3 = [q[0], s * yInner, q[2]];
       const note = 'epoxied to the back of the sign over its knob hole, lined up on a waxed screw through both (D-63)';
       d.joints = [
         { type: 'glue', to: sign.id, count: 1, size: 'thickened epoxy, full face', at: [toLocalOf(d.transform, face)], note },
-        { type: 'hole', to: sign.id, count: 1, diaIn: 7 / 32, size: '7/32 clearance hole (0.219) through the center, for the #10-32 thumb-knob screw', at: [[0, 0, 0]], note: 'drilled on the drill press before it is glued on, then lined up on the sign\'s own knob hole (not in the sign\'s Shaper file)' },
+        { type: 'hole', to: sign.id, count: 1, diaIn: 0.25, size: '1/4 clearance hole through the center, for the #10-32 thumb-knob screw (the hole saw\'s pilot drill makes it)', at: [[0, 0, 0]], note: 'lined up on the sign\'s own knob hole when it is glued on (not in the sign\'s Shaper file)' },
       ];
       (sign.joints ??= []).push({ type: 'glue', to: id, count: 1, size: 'thickened epoxy, full face', at: [toLocalOf(sign.transform, face)], note });
       parts.push(d);

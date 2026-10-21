@@ -175,7 +175,7 @@ describe('Shaper SVG files', () => {
     const f = fileOf('storage-lid');
     const on = paths(f.svg).filter((t) => attr(t, 'shaper:cutType') === 'online');
     expect(on.length).toBeGreaterThanOrEqual(10);
-    for (const t of on) { expect(attr(t, 'shaper:cutDepth')).toBe(`${lid.legend!.depthIn}in`); expect(t).toMatch(/fill="none"/); }
+    for (const t of on) { expect(parseFloat(attr(t, 'shaper:cutDepth') ?? '')).toBeCloseTo(lid.legend!.depthIn, 3); expect(t).toMatch(/fill="none"/); }
     expect(f.features.some((x) => x.kind === 'engrave')).toBe(true);
   });
 

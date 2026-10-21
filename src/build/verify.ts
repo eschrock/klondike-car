@@ -406,7 +406,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
         it('Watch where the hand lands and how the wrist and elbow sit.'),
       ],
       passList: ['The gloved hand finds the hole without reaching or folding the arm back.', 'The elbow stays bent, never locked or behind the hip.', 'The knuckles clear the gunwale top and the thigh.'],
-      ifFails: `Slide the hole fore or aft (${lbl('grabHoleAheadOfHpointIn')}: forward for long arms, back for short ones; the flat board cannot go much farther forward than it is, where the sides start to turn in) or change the oak under the hole (${lbl('grabBoardFootIn')}), then re-run the checks and cut the oak boards from the new file (a board already cut is cut again).`,
+      ifFails: `Slide the hole fore or aft (${lbl('grabHoleAheadOfHpointIn')}: forward for long arms, back for short ones; the flat board cannot go much farther forward than it is, where the sides start to turn in) or change the oak under the hole (${lbl('grabBoardFootIn')}), then re-run the checks. The oak boards and caps are cut from the file only after it passes.`,
       partIds: ids(parts, /^seat-grip-[LR]$/),
       paramKeys: [],
       when: 'at assembly',

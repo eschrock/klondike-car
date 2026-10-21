@@ -176,7 +176,7 @@ describe('the glue-up posture and the strip lengths', () => {
       expect(h, `x ${x.toFixed(1)}`).toBeLessThan(7); // D-66: the taper starts where the free web is 6.8 in tall and ends where it is 5 in
     }
   });
-  it('the gunwale strip note gives the 62.9 in rough length (centerline + 1 in past each web end, Phase 4 fit audit) and says a 5 ft board does not make it; the chine note does too', () => {
+  it('the gunwale strip note gives the 62.9 in rough length (centerline + 1 in past each web end, D-93) and says a 5 ft board does not make it; the chine note does too', () => {
     const g = get('side-L-gunwale');
     expect(g.rough!.l).toBeCloseTo(62.9, 1);
     expect(g.notes).toMatch(/62.9" ROUGH/);

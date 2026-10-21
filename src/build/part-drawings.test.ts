@@ -121,7 +121,7 @@ describe('part drawings', () => {
 
   it('states datums in plain words, never x / y / z', () => {
     for (const s of sheets) {
-      expect(s.svg).toMatch(/Datums: lengths from the (REAR|FRONT|LEFT|RIGHT|TOP|BOTTOM|INBOARD|OUTBOARD)/);
+      expect(s.svg).toMatch(/Datums: lengths from the (REAR|FRONT|LEFT|RIGHT|TOP|BOTTOM|INBOARD|OUTBOARD|CENTER LINE)/);
       for (const f of s.features) expect(/\b[xyz] ?=/.test(f.text), `${s.partId}: ${f.text.slice(0, 80)}`).toBe(false);
     }
   });
@@ -399,7 +399,7 @@ describe('D-76: the side rib, knee and box tie drawings', () => {
     expect(holes.count).toBe(2);
     expect(holes.text).toMatch(/17\/64" clearance/);
     expect(holes.purpose).toMatch(/1\/4-20 bolts/);
-    expect(holes.text).toMatch(/3\/8" from the REAR edge, [^;]*; 1-5\/8" from the REAR edge/); // the bracket follows the sheer (Phase 4 fit audit): each hole has its own height
+    expect(holes.text).toMatch(/3\/8" from the REAR edge, [^;]*; 1-5\/8" from the REAR edge/); // the bracket follows the sheer (D-93): each hole has its own height
     expect(d.features.some((f) => /Sloped edge: a straight cut, 7° from level/.test(f.text))).toBe(true);
     expect(d.svg).toMatch(/final fit|D-ring holes/);
     expect(d.svg).toMatch(/two D-ring holes/);

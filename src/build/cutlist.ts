@@ -1248,7 +1248,7 @@ export function ribFillers(parts: ReadonlyArray<Pick<Part, 'id'>>, p: Params): R
 
 /**
  * The rib fillers as rows of the cuts table. They are band strip: each filler is the band's own plies glued face to face (the band thickness), cut to fit its gap, so a station's row is
- * `count x plies` pieces. They come from the OFFCUTS of the band strips (each strip is shorter than its board) when the longest filler fits the shortest offcut, so the pool's spare strips stay
+ * `count x plies` pieces. They come from the TAILS of the band strips (each strip is shorter than its board; the tail stays on until the strip is planed) when the longest filler fits the shortest offcut, so the pool's spare strips stay
  * for the bend test; otherwise from a spare strip (`ribFillerSource`). Sizes follow the strip allowances; the length is "about" because the filler is fitted to the gap.
  */
 export function ribFillerSource(pools: readonly ResawPool[], fillers: readonly RibFiller[], p: Params): { fromOffcut: boolean; offcutIn: number; text: string; source: string; aside?: string } {
@@ -1257,8 +1257,8 @@ export function ribFillerSource(pools: readonly ResawPool[], fillers: readonly R
   const offcutIn = pool && strips.length ? pool.boardLengthIn - Math.max(...strips.map((x) => x.lengthIn)) - p.resawKerfIn : 0;
   const longest = Math.max(0, ...fillers.map((f) => roughUp8(f.lengthIn + 1 / 8)));
   const fromOffcut = strips.length >= fillers.reduce((a, f) => a + f.count, 0) && longest <= offcutIn + 1e-9;
-  const source = fromOffcut ? 'the offcut of a band strip' : 'a spare band strip';
-  const aside = fromOffcut ? `each strip leaves about ${fractionText(Math.floor(offcutIn * 8) / 8, 8)}" of its board` : undefined;
+  const source = fromOffcut ? 'the tail of a band strip' : 'a spare band strip';
+  const aside = fromOffcut ? `each strip comes off its board about ${fractionText(Math.floor(offcutIn * 8) / 8, 8)}" longer than it needs: leave the tail on until the strip is planed, since a short offcut cannot go through the planer, then cut it off` : undefined;
   return { fromOffcut, offcutIn, source, ...(aside ? { aside } : {}), text: aside ? `${source} (${aside})` : source };
 }
 
@@ -1273,7 +1273,7 @@ function ribFillerCuts(plans: OakPartPlan[], pools: ResawPool[], p: Params): Cut
     const roughExact: Dims = { t: band.pieces[0].roughExact.t, w: f.widthIn + p.laminateWidthAllowanceIn, l: f.lengthIn + 1 / 8 }; // cut to fit its gap: a hair over, not the allowance of a bent part
     const rough: Dims = { t: band.pieces[0].rough.t, w: roughUp8(roughExact.w), l: roughUp8(roughExact.l) };
     return {
-      partId: `rib-filler-${f.n}`, ids: [], qty: f.count * plies, partNo: 'side-rib-filler', name: `Rib filler, ${f.role}`, label: `Rib filler, ${f.role} (${src.fromOffcut ? 'band strip offcut' : 'spare band strip'})`,
+      partId: `rib-filler-${f.n}`, ids: [], qty: f.count * plies, partNo: 'side-rib-filler', name: `Rib filler, ${f.role}`, label: `Rib filler, ${f.role} (${src.fromOffcut ? 'band strip tail' : 'spare band strip'})`,
       piece: 'strip', index: i + 1, of: 3, board: pool?.board ?? band.pieces[0].board, rough, roughExact, roughText: roughDimsText(rough),
       note: `from ${src.text}, grain up the web${plies > 1 ? `, ${plies} layers glued face to face` : ''}, planed to ${finalFrac(band.stock.t * plies)} thick like the bands; ${f.count} of them, one per side; cut each to fit its gap, about ${fractionText(roughUp8(f.lengthIn), 8)}" long`,
     };

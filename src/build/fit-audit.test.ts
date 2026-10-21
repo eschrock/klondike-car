@@ -1,5 +1,5 @@
 /**
- * Fit audit (Phase 4, before the lumber is cut): the cut list must be long, wide and thick enough for what the model asks of every part.
+ * Cut-list fit (D-93): the cut list must be long, wide and thick enough for what the model asks of every part.
  *   1. a straight part's final size covers its own geometry (the seat-back crest strip was cut to its thin edge, not its wedge);
  *   2. a bent part (plan-curved wall, sheer band) is cut as long as its developed length, not its x extent;
  *   3. a crossmember in the bow taper is listed at its long point, so it can be scribed to the bent rails;
@@ -7,7 +7,6 @@
  */
 import { describe, expect, it } from 'vitest';
 import { buildModel } from '../model';
-import { GUNWALE_END_LONG_IN } from '../model/body';
 import { localBounds } from '../model/bounds';
 import { defaultParams, KNEE_MOUNT, WEATHER_SPEC, type Params } from '../params';
 import type { Part } from '../model/types';
@@ -44,7 +43,7 @@ function topEdge(x: Part & { geometry: { positions: number[]; profile: [number, 
 const pathLen = (pts: Array<[number, number, number]>, withZ: boolean): number =>
   pts.reduce((a, q, i) => (i ? a + Math.hypot(q[0] - pts[i - 1][0], q[1] - pts[i - 1][1], withZ ? q[2] - pts[i - 1][2] : 0) : 0), 0);
 
-describe('fit audit 1: a straight part is cut big enough for its geometry', () => {
+describe('D-93 fit 1: a straight part is cut big enough for its geometry', () => {
   for (const { tag, parts } of MODELS) {
     it(`${tag}: sorted final T x W x L (T times the plies of a laminate) covers the sorted extents of every box, extrusion and solid mesh`, () => {
       const short: string[] = [];
@@ -60,7 +59,7 @@ describe('fit audit 1: a straight part is cut big enough for its geometry', () =
   }
 });
 
-describe('fit audit 2: a bent part is cut as long as its developed length', () => {
+describe('D-93 fit 2: a bent part is cut as long as its developed length', () => {
   for (const { tag, parts } of MODELS) {
     it(`${tag}: every plan-curved wall's final length covers its developed top edge (plan S, and the sheer for a band that follows it), and its thickness the wall`, () => {
       const walls = built(parts).filter(planWall);
@@ -87,7 +86,7 @@ describe('fit audit 2: a bent part is cut as long as its developed length', () =
   }
 });
 
-describe('fit audit 3: a crossmember in the bow taper is listed at its long point', () => {
+describe('D-93 fit 3: a crossmember in the bow taper is listed at its long point', () => {
   for (const { tag, parts } of MODELS) {
     it(`${tag}: every crossmember that butts the rails is at least as long as the rails are apart at its rear AND its front face`, () => {
       const rail = parts.find((q) => q.id === 'rail-L')!;
@@ -116,9 +115,9 @@ describe('fit audit 3: a crossmember in the bow taper is listed at its long poin
   }
 });
 
-describe('fit audit 4: the rough strip carries the overhang the steps ask for', () => {
+describe('D-93 fit 4: the rough strip carries the overhang the steps ask for', () => {
   for (const { tag, p, parts } of MODELS) {
-    it(`${tag}: the gunwale strip reaches ${GUNWALE_END_LONG_IN}" past each web end; the rail strip is glued 1/2" long at each end; the chine strip reaches the web ends`, () => {
+    it(`${tag}: the gunwale strip reaches ${p.gunwaleEndLongIn}" past each web end; the rail strip is glued 1/2" long at each end; the chine strip reaches the web ends`, () => {
       const cl = cutList(parts, p);
       const roughOf = (partNo: string): number => cl.strips.find((r) => r.partNo === partNo)!.rough.l;
       const get = (id: string): Part => parts.find((q) => q.id === id)!;
@@ -130,7 +129,7 @@ describe('fit audit 4: the rough strip carries the overhang the steps ask for', 
         const cosAt = (i: number, j: number): number => Math.hypot(e[j][0] - e[i][0], e[j][1] - e[i][1]) / Math.hypot(e[j][0] - e[i][0], e[j][1] - e[i][1], e[j][2] - e[i][2]);
         const webPast = (e[0][0] - web.min[0]) / cosAt(0, 1) + (web.max[0] - e[n][0]) / cosAt(n - 1, n);
         expect(webPast).toBeGreaterThan(0.4); // the web stands 1/4" past each band end, into the dados
-        expect(roughOf(g.partNo!), id).toBeGreaterThanOrEqual(g.stock!.l + webPast + 2 * GUNWALE_END_LONG_IN - 1e-6);
+        expect(roughOf(g.partNo!), id).toBeGreaterThanOrEqual(g.stock!.l + webPast + 2 * p.gunwaleEndLongIn - 1e-6);
       }
       expect(roughOf('rail')).toBeGreaterThanOrEqual(get('rail-L').stock!.l + 2 * 0.5 - 1e-6);
       for (const partNo of ['side-chine-out', 'side-chine-in']) expect(roughOf(partNo), partNo).toBeGreaterThanOrEqual(get('side-L-web').stock!.l - 1e-6);

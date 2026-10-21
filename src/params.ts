@@ -516,6 +516,26 @@ const defs = {
     label: 'Storage lid oak rim thickness', group: 'body', unit: 'in',
     default: 0.5, min: 0.375, max: 1, step: 0.125, status: 'assumed', ref: 'D-19',
   },
+  storageLidAftGapIn: {
+    label: 'Storage lid aft gap (lid frame to the box\'s aft face)', group: 'body', unit: 'in',
+    default: 0.125, min: 0.0625, max: 0.25, step: 0.03125, status: 'locked', ref: 'D-89, D-93',
+    note: 'The lid frame stops this far forward of the box\'s aft wall face. The hinge pin sits 3/4 in above the lid\'s underside, so the lid\'s lower aft corner swings about 1/32 in AFT as it starts to open; flush, it rubbed the transom backers and the turn-button blocks. The aft gasket moves in with it and still lies on the aft coaming.',
+  },
+  turnButtonWidthIn: {
+    label: 'Lid turn-button width (its aft end is rounded on half of it)', group: 'body', unit: 'in',
+    default: 0.625, min: 0.5, max: 0.75, step: 0.0625, status: 'locked', ref: 'D-89, D-93',
+    note: 'The button pivots at the middle of the 3/4 in lane between the transom and the box. Its aft end is a half circle of half this width about the pivot, so it swings 1/16 in clear of the transom at every angle; a square 3/4 in end ran its corners into the transom when turned.',
+  },
+  storageLegendDepthIn: {
+    label: 'Lid lettering depth (laser score)', group: 'body', unit: 'in',
+    default: 0.03125, min: 0.015625, max: 0.0625, step: 0.015625, status: 'assumed', ref: 'D-58, D-93',
+    note: 'The DO NOT STEP letters are scored just through the face veneer of the thin sheet and into the first glue line, which reads dark: 6 mm Baltic birch has a face veneer of about 1/40 in, so about 1/32 in. Set the laser\'s power and passes on an offcut until the letters are dark, then fill them and sand flush before the panel is sealed.',
+  },
+  storageLegendLineIn: {
+    label: 'Lid lettering line width (laser passes side by side)', group: 'body', unit: 'in',
+    default: 0.0625, min: 0.015625, max: 0.125, step: 0.015625, status: 'assumed', ref: 'D-58, D-93',
+    note: 'A single laser pass scores a hairline that does not read from a standing position. The lettering file scores each single-stroke letter as several passes 1/64 in apart, side by side, so the filled line is about this wide (1/16 in on 1-1/2 in letters reads from 5 ft).',
+  },
   // Workstream D (D-41): weatherproofing and lash points.
   storageGasketIn: {
     label: 'Storage lid gasket thickness (uncompressed)', group: 'body', unit: 'in',
@@ -551,6 +571,16 @@ const defs = {
     label: 'Flag tube outside diameter', group: 'body', unit: 'in',
     default: 1.315, min: 1, max: 2, step: 0.005, status: 'assumed', ref: 'D-57',
     note: '1 in schedule 40 PVC is 1.315 in OD (0.133 in wall).',
+  },
+  flagBlockWidthIn: {
+    label: 'Flag tube block width (across the sled)', group: 'body', unit: 'in',
+    default: 1.25, min: 1, max: 1.5, step: 0.0625, status: 'locked', ref: 'D-57, D-93',
+    note: 'The two oak blocks that hold the flag tube against the side are this wide across the sled, so the top one stands about 0.2 in off the swing of the storage lid\'s side rail (it was 1.4 in and missed it by 0.05 in). The tube stands a little proud of the block\'s inboard face.',
+  },
+  flagBlockCradleIn: {
+    label: 'Flag tube block cradle depth', group: 'body', unit: 'in',
+    default: 0.25, min: 0.125, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-57, D-93',
+    note: 'Each flag block has a round cradle this deep for the tube (the tube is epoxied in it, no screws into its wall, D-72); shallow enough to stay inside the block.',
   },
   lashPointsPerSide: {
     label: 'Lash points (D-rings) per side', group: 'body', unit: '',
@@ -747,6 +777,11 @@ const defs = {
     label: 'Grab board oak above the hole', group: 'seat', unit: 'in',
     default: 1.25, min: 0.75, max: 2, step: 0.25, status: 'assumed', ref: 'D-57',
     note: 'The bar of oak the fingers wrap; the row checks its bending.',
+  },
+  gripBoltClearIn: {
+    label: 'Grab-board screw clearance hole', group: 'seat', unit: 'in',
+    default: 0.28125, min: 0.265625, max: 0.3125, step: 0.015625, status: 'locked', ref: 'D-84',
+    note: 'One drill size for the whole grab-board stack (board, inner band, web, outer band, stainless strip): 9/32 in, the free-fit clearance for the 1/4 in screws. The bores are lined with epoxy and the bit is run through again once it cures, so the screws slide in after the seal; a 17/64 in close fit would bind.',
   },
   grabBoardFootIn: {
     label: 'Grab board oak between the gunwale top and the hole', group: 'seat', unit: 'in',
@@ -1794,6 +1829,11 @@ const defs = {
     label: 'Rough-stock width allowance (laminated / edge-glued / bent pieces)', group: 'stock', unit: 'in',
     default: 0.375, min: 0.25, max: 1, step: 0.0625, status: 'assumed',
     note: 'Eric 2026-10-12: a piece that is face-laminated (D-70 layers), edge-glued (the panel boards) or bent-laminated (the resaw strips for the rails and bands) is cut 3/8 in wider than its share of the finished width. Glued pieces end up slightly askew and have to be jointed and planed true after the glue-up; 1/8 in was too little. Rounded UP to the next 1/8 in for the cut list.',
+  },
+  gunwaleEndLongIn: {
+    label: 'Gunwale band overhang past each web end (for the end stops)', group: 'stock', unit: 'in',
+    default: 1, min: 0.5, max: 2, step: 0.25, status: 'assumed', ref: 'D-87, D-93',
+    note: 'Each gunwale band is left this long past each end of its web while it cures on the side form, so an end stop can bear on its lower edge (the bent band pushes its middle into the cleats and its ends swing away). The rough strip is cut long enough for it (it is longer than the 2 in laminate allowance gives).',
   },
   laminateLengthAllowanceIn: {
     label: 'Rough-stock length allowance (laminated / edge-glued / bent pieces)', group: 'stock', unit: 'in',

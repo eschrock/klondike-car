@@ -179,7 +179,17 @@ function dirWord(d: Vec3, yCenter: number): string {
   return d[1] > 0 ? 'LEFT' : 'RIGHT';
 }
 
-interface Words { side: [[string, string], [string, string], [string, string]] }
+interface Words {
+  side: [[string, string], [string, string], [string, string]];
+  /** A member whose ends are scribed to a curve (a crossmember in the bow taper, cut to its long point): lengths are measured from the CENTER LINE at this u, never from an end. */
+  center?: number;
+}
+/** A length along u in words: from the end at u = 0, or (a scribed member) either side of the center line. */
+function alongU(u: number, w: Words): { val: string; datum: string } {
+  if (w.center === undefined) return { val: frac(u), datum: `from the ${w.side[0][0]}` };
+  const d = u - w.center;
+  return Math.abs(d) < 1 / 64 ? { val: '', datum: 'on the center line' } : { val: frac(Math.abs(d)), datum: `${d < 0 ? 'toward the ' + w.side[0][0] : 'toward the ' + w.side[0][1]} from the center line` };
+}
 /** side[axis][0] = the face at 0, side[axis][1] = the face at the max: "REAR end", "TOP edge", "INBOARD face". */
 function wordsOf(b: Board, yCenter: number): Words {
   const ext = [b.U, b.V, b.N];
@@ -370,7 +380,7 @@ function solidOf(part: Part, p: Params, boxAxis: Ax | null): Solid | null {
     // A crossmember in the bow taper is cut to its long point and scribed to the bent rails (frame.ts): the box is the short point, so say so.
     const longest = Math.max(...s);
     const scribe = part.kind === 'lumber' && part.stock && part.stock.l > longest + 1 / 32
-      ? [`Drawn at its short point (${frac(longest)}, the front face). Cut it to the final length above, the long point at the rear face, and scribe each end to its bent rail at the dry fit. The positions below are from the drawn ends: on the rear face each end of the cut piece stands ${frac((part.stock.l - longest) / 2)} farther out, so lay them out from the center line.`] : [];
+      ? [`Drawn at its short point (${frac(longest)}, the front face). Cut it to the final length above, the long point at the rear face, and scribe each end to its bent rail at the dry fit. The positions below are measured from the center line, so they hold whatever the scribe takes off the ends.`] : [];
     return { board: prismBoard(m, out, ia, ib, ic, -s[ic] / 2, s[ic] / 2), extraNotes: scribe };
   }
   if (g.type === 'cylinder') {
@@ -574,6 +584,8 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
   const b = solid.board;
   const bb = worldAABB(part), yCenter = (bb.min[1] + bb.max[1]) / 2;
   const words = wordsOf(b, yCenter);
+  // A box cut longer than it is drawn (a crossmember in the bow taper: listed at its long point, the ends scribed to the rails) is dimensioned from its center line.
+  if (part.geometry.type === 'box' && part.kind === 'lumber' && part.stock && part.stock.l > Math.max(...part.geometry.size) + 1 / 32) words.center = b.U / 2;
   const fr = boardFrame(part, b);
   const feats: Feat[] = [];
   const notes: string[] = [...solid.extraNotes];
@@ -855,18 +867,22 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
 
   // ── F1: outline features (notches, steps, angled and curved ends) ──
   if (part.kind === 'bentlam') {
-    notes.push(`Cut as a straight strip ${frac(part.stock?.t ?? b.N)} × ${frac(part.stock?.w ?? b.V)} × ${frac(part.stock?.l ?? b.U)}, left long and trimmed at the dry fit. The view is the strip as it sits on the side, measured along the curve.`);
+    notes.push(`Cut as a straight strip ${frac(part.stock?.t ?? b.N)} × ${frac(part.stock?.w ?? b.V)} × ${frac(part.stock?.l ?? b.U)}, left long and trimmed at the dry fit. The view is the band as it sits on the side, drawn along the plan curve (${frac(b.U)}); ${part.geometry.type === 'mesh' && part.geometry.grainFollowsTop ? `the straight strip is longer, ${frac(part.stock?.l ?? b.U)}, because it also follows the sheer: that is its developed length along its centerline` : 'the straight strip is the developed length along it'}.`);
     if (feats.some((f) => f.k !== 'note')) notes.push('Cut the holes and mortises after the side is glued up, with the mating part in place where the joint needs it.');
   } else {
     const ang = part.geometry.type === 'extrusion' ? angleSection(b.main, b) : null;
-    feats.push(...(ang ? [ang] : outlineFeatures(b.main, b, words, vrefOf(b.main, b))));
+    // A profile extruded along its grain (the crest strip): the main view is its cross-section, so a sloped side of the outline is a bevel rip along the whole length, not a sloped end.
+    const crossSection = !!part.grain && dominant(b.dirToBoard(unitAx({ x: 0, y: 1, z: 2 }[part.grain] as Ax)).map(Math.abs) as Vec3) === 2 && EXT(b)[2] >= Math.max(EXT(b)[0], EXT(b)[1]);
+    const outl = ang ? [ang] : outlineFeatures(b.main, b, words, vrefOf(b.main, b));
+    if (crossSection) for (const o of outl) if (/^Sloped (edge|end):/.test(o.text)) { o.text = o.text.replace(/^Sloped (edge|end):/, `Bevel rip along the whole ${frac(EXT(b)[2])} length:`); o.title = 'Bevel rip'; }
+    feats.push(...outl);
   }
   // D-77: the pivot strap is bought as flat bar: cut and drill only.
   if (part.partNo === 'brake-strap') notes.push('Cut from the flat bar on the metal bandsaw and deburr the cut edges; drill on the drill press. Cut, deburr and drill only. Drill the screw holes first; the knee\'s pin hole is drilled through this pin hole after the strap is screwed on.');
   // D-76: the side ribs, their knees and the box tie spacers.
   if (/^side-rib(-box|-bow)?$/.test(part.partNo ?? '')) {
     notes.push('A T-shaped rib: a narrow shaft and a head as tall as the gunwale band, the top of the head cut to the sheer (the slope is dimensioned at both ends). The drawn face is the one that faces into the sled; the back face is glued to the bands and the filler.');
-    if ((part.joints ?? []).some((q) => q.type === 'hole' && /template/.test(q.note ?? ''))) notes.push('Do not drill the two D-ring holes on the bench: they are drilled at the final fit, through the head and the side together, with the D-ring bracket as the template. The positions here check the bracket (measure the real bracket first).');
+    if ((part.joints ?? []).some((q) => q.type === 'hole' && /template/.test(q.note ?? ''))) notes.push('Do not drill the two D-ring holes on the bench: they are drilled at the D-ring and sign step, through the head and the side together, with the D-ring bracket as the template. The positions here check the bracket (measure the real bracket first).');
   }
   if (part.partNo === 'box-tie') notes.push('A plain stick that fills the gap between the box rib and the box side. Measure that gap at the dry fit and cut the stick a hair short of it: thickened epoxy takes up the rest. Its top stands 1/8" under the box coaming, so it is never glued to the lid frame.');
   if (part.partNo === 'side-rib-knee') notes.push('A right-triangle knee: the tall leg is glued to the face of the rib and the foot to the deck. Drill the screw holes straight down from the sloped face, with the counterbore first, so the screw head leaves the stated oak under it.');
@@ -955,7 +971,7 @@ function addPassingBolts(part: Part, parts: Part[], b: Board, feats: Feat[], byI
       const dia = namedC && j.type === 'bolt' && !isTnut ? num(namedC[1]) : isTnut ? d0 + 1 / 16 : j.type === 'pin' ? clearanceDia({ type: 'pin', size: '', diaIn: d0 }) : clearanceDia({ type: 'bolt', size: j.size, diaIn: d0 });
       // This part already records its own hole for that bolt's part (the D-ring bearing plate's 3/16" holes for the lash point's screws): a second set from the screws' crossing, a hair off, is the same holes twice.
       if (feats.some((f) => f.k === 'hole' && f.joint !== 'passing' && f.to.includes(q.id))) continue;
-      if (feats.some((f) => f.k === 'hole' && Math.abs(f.dia - dia) < 1 / 64 && pts.every((q2) => f.pts.some((e) => samePerp(e, q2, f.axis))))) continue;
+      if (feats.some((f) => f.k === 'hole' && pts.every((q2) => f.pts.some((e) => samePerp(e, q2, f.axis))))) continue; // the same holes, whatever size the other part's text implies (one size a stack: the stack test)
       // a pin of another part that ends in a hole this part already has for it (the seat-back latch pin in the stop block)
       if (j.type === 'pin' && feats.some((f) => f.k === 'hole' && f.to.includes(j.to) && pts.every((q2) => f.pts.some((e) => Math.hypot(e[0] - q2[0], e[1] - q2[1], e[2] - q2[2]) < 1)))) continue; // 1 in: the recorded point is the hole's mouth, the crossing's is mid-way along the pin
       const ofQ = humanName(q.name), ofMate = humanName(mate.name);
@@ -1022,7 +1038,8 @@ function posUV(q: Vec2, b: Board, w: Words, vref: 0 | 1): string {
   return `${uText(q[0], b, w)}, ${vText(q[1], b, w, vref)}`;
 }
 function uText(u: number, _b: Board, w: Words): string {
-  return `${frac(u)} from the ${w.side[0][0]}`;
+  const a = alongU(u, w);
+  return a.val ? `${a.val} ${a.datum}` : a.datum;
 }
 function vText(v: number, b: Board, w: Words, vref: 0 | 1): string {
   return `${frac(vref ? b.V - v : v)} from the ${w.side[1][vref]}`;
@@ -1268,7 +1285,7 @@ const letterOf = (i: number): string => (i < LETTERS.length ? LETTERS[i] : `${LE
 /** The value and datum of one coordinate of a point: `{ val: '3-1/4"', datum: 'from the REAR end' }`; a centered thickness has no value. */
 function coordParts(q: Vec3, k: Ax, a: Analysis): { val: string; datum: string } {
   const { board: b, words: w } = a;
-  if (k === 0) return { val: frac(q[0]), datum: `from the ${w.side[0][0]}` };
+  if (k === 0) return alongU(q[0], w);
   if (k === 1) return { val: frac(a.vref ? b.V - q[1] : q[1]), datum: `from the ${w.side[1][a.vref]}` };
   return Math.abs(q[2] - b.N / 2) < 0.02 ? { val: '', datum: 'centered across the thickness' } : { val: frac(b.N - q[2]), datum: `from the ${w.side[2][1]}` };
 }
@@ -1514,7 +1531,9 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
   const grainAx = (lgAxes?.[0] ?? part.grain) && !b.rod ? dominant(b.dirToBoard(unitAx({ x: 0, y: 1, z: 2 }[(lgAxes?.[0] ?? part.grain) as 'x' | 'y' | 'z'] as Ax)).map(Math.abs) as Vec3) : null;
   // The grain word is the cut list's (L is the stock length, W its width), so the drawing and the cut list agree; the view direction and the drawn size follow in brackets.
   const gWord = grainInWords(part);
-  const grainWords = crossLine ? crossLine : grainAx === null ? (part.kind === 'metal' ? 'n/a (metal)' : part.kind === 'purchased' ? 'n/a' : 'not specified')
+  const discGrain = b.rod && part.kind === 'lumber' && part.geometry.type === 'cylinder' && part.geometry.length < 2 * part.geometry.radius;
+  const grainWords = crossLine ? crossLine : discGrain ? 'across the disc, in its faces (cut from the face of a board)' : grainAx === null ? (part.kind === 'metal' ? 'n/a (metal)' : part.kind === 'purchased' ? 'n/a' : 'not specified')
+    : grainAx === 2 && ext[2] >= Math.max(ext[0], ext[1]) ? `along the ${frac(ext[2])} length (the main view is the cross-section)`
     : grainAx === 2 ? `through the thickness (${w.side[2][1]} to ${w.side[2][0]})`
       : `${gWord && !/vertical/.test(gWord) ? gWord : `along the ${grainAx === 0 ? 'length' : 'height'}`} (the ${b.developed && grainAx === 0 ? 'length along the curve' : `${frac(ext[grainAx])} side`}, ${grainAx === 0 ? 'horizontal' : 'vertical'} in the main view)`;
 
@@ -1635,7 +1654,7 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
   hw(`qty ${qty}   scale ${scaleText(s)}${rows > 1 ? ` (in ${rows} rows)` : ''}   final ${b.rod ? `${frac(b.rod.dia)} dia × ${frac(part.geometry.type === 'cylinder' ? part.geometry.length : ext[0])}` : finalText(part, cl, dims)}${b.rod || tallBlock ? '' : ` (T × W × L${b.developed ? ', L along the curve' : ''})`}   ${part.material}`, 0.12);
   hw(`Stock: ${boardText(part, cl)}`, 0.105);
   hw(`Grain: ${grainWords}.`, 0.105, { fill: DIM });
-  hw(b.rod ? `Datums: lengths from the ${w.side[0][0]}. Fractions to 1/32", drills to 1/64".` : `Datums: lengths from the ${w.side[0][0]}, heights from the ${w.side[1][a.vref]}, across from the ${w.side[2][1]}. Fractions to 1/32", drills to 1/64".`, 0.105, { fill: DIM });
+  hw(b.rod ? `Datums: lengths from the ${w.side[0][0]}. Fractions to 1/32", drills to 1/64".` : `Datums: lengths from the ${w.center !== undefined ? 'CENTER LINE (the ends are scribed)' : w.side[0][0]}, heights from the ${w.side[1][a.vref]}, across from the ${w.side[2][1]}. Fractions to 1/32", drills to 1/64".`, 0.105, { fill: DIM });
   if (makeNote) hw(makeNote, 0.12, { bold: true, fill: FEAT });
   const head: string[] = [];
   let hy = M + 0.05;
@@ -1757,8 +1776,12 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
   // ── Feature table ──
   const rowsSvg: string[] = [txt(M, ty, 'FEATURES (letters on the drawing; positions from the datums above)', 0.12, { bold: true })];
   ty += 0.2;
-  if (!feats.length) { rowsSvg.push(txt(M + 0.25, ty, b.rod ? 'None: cut to length, square the ends and break the edges (a light chamfer).' : 'None: a plain board, cut to the final size above.', 0.105));
-  if (b.rod && part.kind === 'lumber' && part.geometry.type === 'cylinder' && part.geometry.length < 2 * part.geometry.radius) { rowsSvg.push(txt(M + 0.25, ty, `A disc: cut it with a ${frac(2 * part.geometry.radius)} plug cutter on the drill press, then release it on the bandsaw to ${frac(part.geometry.length)} thick.`, 0.105)); ty += 0.2; } ty += 0.2; }
+  const disc = b.rod && part.kind === 'lumber' && part.geometry.type === 'cylinder' && part.geometry.length < 2 * part.geometry.radius;
+  if (disc && part.geometry.type === 'cylinder') {
+    for (const l of wrap(`A disc: plane a strip to the thickness above, then cut each disc with a hole saw about 1/8" larger than the disc, so its plug comes out ${frac(2 * part.geometry.radius)} across (check it on a scrap), from both faces of the strip. The saw's 1/4" pilot drill makes the center hole.`, chars)) { rowsSvg.push(txt(M + 0.25, ty, l, 0.105)); ty += 0.15; }
+    ty += 0.05;
+  }
+  if (!feats.length) { rowsSvg.push(txt(M + 0.25, ty, b.rod ? 'None: cut to length, square the ends and break the edges (a light chamfer).' : 'None: a plain board, cut to the final size above.', 0.105)); ty += 0.2; }
   for (const f of feats) {
     rowsSvg.push(txt(M, ty, f.label, 0.11, { bold: true, fill: FEAT }));
     for (const l of wrap(f.text, chars)) { rowsSvg.push(txt(M + 0.25, ty, l, 0.105)); ty += 0.15; }

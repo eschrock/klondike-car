@@ -646,6 +646,6 @@ describe('review round: names, the tall knee block, the rib fillers', () => {
     expect(f.map((c) => c.name)).toEqual(expect.arrayContaining(['Rib filler, box rib', 'Rib filler, mid rib', 'Rib filler, bow post', 'Rib filler, rear rib']));
     expect(ribFillers(dm, dp)).toHaveLength(4);
     expect(f.reduce((a, c) => a + c.qty, 0)).toBe(8);
-    for (const c of f) { expect(c.ids).toEqual([]); expect(c.note).toMatch(/offcut of a band strip/); expect(c.roughExact.l).toBeLessThanOrEqual(ribFillerSource(dc.resaw, ribFillers(dm, dp), dp).offcutIn); }
+    for (const c of f) { expect(c.ids).toEqual([]); expect(c.note).toMatch(/tail of a band strip/); expect(c.roughExact.l).toBeLessThanOrEqual(ribFillerSource(dc.resaw, ribFillers(dm, dp), dp).offcutIn); }
   });
 });

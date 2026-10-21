@@ -107,7 +107,7 @@ describe('the storage lid (DO NOT STEP, D-58)', () => {
     expect(lid.legend).toBeDefined();
     expect(lid.legend!.text).toBe('DO NOT STEP');
     expect(lid.legend!.face).toBe('top');
-    expect(lid.legend!.process).toMatch(/CNC|engrave/i);
+    expect(lid.legend!.process).toMatch(/laser score/i); // D-93: scored, filled and sanded before the seal
     expect(lid.legend!.letterHeightIn).toBeGreaterThan(1);
     expect(lid.notes).toMatch(/DO NOT STEP/);
     expect(lid.notes).toMatch(/NOT strengthened/);

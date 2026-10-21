@@ -184,7 +184,7 @@ export function buildFrame(ctx: Ctx): Part[] {
     // and the model box stops there; the REAR face is the long point, and the end is scribed to the rail between the two. The cut list (stock.l) is the long point.
     const half = rY0 - L.turnIn(x + halfT / 2) - cutBack;
     const halfLong = rY0 - L.turnIn(x - halfT / 2) - cutBack;
-    const scribed = halfLong - half > 1e-4;
+    const scribed = 2 * (halfLong - half) > 1 / 64; // under 1/64 over the length (crossmember 4, barely into the taper) the end is simply square
     const scribeNote = scribed ? `In the bow taper its ends are scribed to the bent rails: ${frac32(2 * halfLong)}" long at the rear face (the long point, the cut-list length), ${frac32(2 * half)}" at the front face. ` : '';
     if (isKing) {
       const k = L.king;

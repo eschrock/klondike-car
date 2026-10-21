@@ -13,9 +13,7 @@
  * They replace the six screwed lash doublers (D-41, D-47). Everything here is bandsawn from 4/4 offcuts and epoxied in after the deck is in.
  */
 import { STORAGE_LOCATION, WEATHER_SPEC, thinSheet } from '../params';
-import { STEP, box, frac16 as frac, SIDES, SIGN_PROUD_IN, stainless, dRingMat, insertMat, INSERT_DRILL_IN, type Ctx } from './build-utils';
-/** A drill size to the nearest 1/64 in (the D-ring holes are 17/64 in: a 1/4-20 clearance), no inch mark. */
-const frac64 = (x: number): string => { const n = Math.round(x * 64); let num = n % 64, den = 64; const whole = Math.floor(n / 64); while (num > 0 && num % 2 === 0) { num /= 2; den /= 2; } return num === 0 ? `${whole}` : whole > 0 ? `${whole}-${num}/${den}` : `${num}/${den}`; };
+import { STEP, box, frac16 as frac, frac64, SIDES, SIGN_PROUD_IN, stainless, dRingMat, insertMat, INSERT_DRILL_IN, type Ctx } from './build-utils';
 import { extPart, frameMat, SIGN_INSERT_LEN_IN, signBackerPlan, signKnobPlan, signPlacement } from './body';
 import { transformPoint } from './bounds';
 import { joistId } from './frame';
@@ -233,7 +231,7 @@ export function buildSideRibs(ctx: Ctx): Part[] {
       const holeAt: Vec3[] = [-1, 1].map((a): Vec3 => [a * LASH_HOLE_DX_IN * Math.cos(sheerPhi), topAt(0) - L.railBand / 2 + a * LASH_HOLE_DX_IN * Math.sin(sheerPhi), 0]);
       const hasRing = st.n === 2 ? nRings >= 1 : st.n === 1 ? nRings >= 2 : st.n === 3 ? nRings >= 3 : nRings >= 4;
       const baseText = st.kind === 'box'
-        ? `Its base is the storage box: the box tie spacer is epoxied between its inner face and the box side${st.n === 4 ? ' near the aft corner, just ahead of the flag tube blocks' : ' near the fore corner (study option D)'}.${signKnobsInRibs(p, L) ? ' It also carries two of the sign\'s four knob inserts (D-85): bore them from its back, through the filler, with the web as the template, at the sign-fitting step.' : ''}`
+        ? `Its base is the storage box: the box tie spacer is epoxied between its inner face and the box side${st.n === 4 ? ' near the aft corner, just ahead of the flag tube blocks' : ' near the fore corner (study option D)'}.${signKnobsInRibs(p, L) ? ' It also carries two of the sign\'s four knob inserts (D-85): they are bored from OUTSIDE, through the web and the band-strip filler into the rib, with the sign as the template, at the D-ring and sign step; the insert\'s top is flush with the web\'s inside face.' : ''}`
         : `A knee is glued to its inner face and to the deck and screwed down through the deck into ${memberText(st.member)}.`;
       const rib = extPart(ctx, {
         id: ribId, partNo: RIB_PART_NO[st.n], name: `Side rib, ${RIB_ROLE[st.n]}, ${s > 0 ? 'left' : 'right'}`, group: 'body', mat: 'oak', step: STEP.seatStorage, grain: 'y', fab: 'bandsaw',
@@ -355,7 +353,7 @@ function addSignKnobJoints(ctx: Ctx, byId: Map<string, Part>): void {
   const colRear = st.find((q) => q.n === 4)!.x, colFront = st.find((q) => q.n === 1)!.x;
   const sg = signPlacement(ctx), { dz } = signBackerPlan(ctx), kn = signKnobPlan(ctx);
   const ribDepth = (rib: Part): number => (rib.geometry.type === 'extrusion' ? rib.geometry.depth : 0.75);
-  const sizeA = (rib: Part) => `#10-32 × ${kn.lenIn} in thumb-knob screw through a 7/32 clearance hole (0.219) in the sign, a ${kn.standoffIn.toFixed(3)}" oak standoff disc (epoxied to the sign back) and the ${thinSheet(p).nominal} web: ${kn.engagedIn.toFixed(2)}" into the insert, tip ${(L.sideBand + ribDepth(rib) - kn.engagedIn).toFixed(2)}" short of the back of the rib`;
+  const sizeA = (rib: Part) => `#10-32 × ${kn.lenIn} in thumb-knob screw through a 7/32 clearance hole in the sign, a ${frac64(kn.standoffIn)}" oak standoff disc (epoxied to the sign back) and the ${thinSheet(p).nominal} web: ${frac64(kn.engagedIn)}" into the insert, tip ${frac64(L.sideBand + ribDepth(rib) - kn.engagedIn)}" short of the back of the rib`;
   const sizeB = `#10-32 × 5/16 ${insertMat(p)} threaded insert (epoxied) in a blind ${frac(INSERT_DRILL_IN)} in hole bored from outside through the web into the band-strip filler and the oak rib, the insert's top flush with the web's inside face (its threads all in oak), so the hole runs ${frac(Math.max(1 / 16, SIGN_INSERT_LEN_IN + 1 / 16 - L.sideBand))}" deep in the rib behind the filler`;
   for (const { s, tag } of SIDES) {
     const sign = byId.get(`sign-${tag}`);
