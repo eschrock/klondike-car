@@ -25,7 +25,7 @@ import { brakeGeometry } from '../model/brake';
 import { computeLayout } from '../model/layout';
 import { flatPattern } from './flat';
 import { clearanceDia } from './shaper-svg';
-import { crossGrainWords, cutList, groupedName, edgeJointUp, grainInWords, isTallBlock, type CutList } from './cutlist';
+import { crossGrainWords, cutList, discStrip, groupedName, edgeJointUp, grainInWords, isTallBlock, type CutList } from './cutlist';
 import { defaultParams } from '../params';
 import { finalDimsText } from './units';
 import { esc, fmt, frac, hash6, parseInches, pointInPoly } from './svg-util';
@@ -880,9 +880,10 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
   // D-77: the pivot strap is bought as flat bar: cut and drill only.
   if (part.partNo === 'brake-strap') notes.push('Cut from the flat bar on the metal bandsaw and deburr the cut edges; drill on the drill press. Cut, deburr and drill only. Drill the screw holes first; the knee\'s pin hole is drilled through this pin hole after the strap is screwed on.');
   // D-76: the side ribs, their knees and the box tie spacers.
-  if (/^side-rib(-box|-bow)?$/.test(part.partNo ?? '')) {
+  if (/^side-rib(-box|-bow|-rear)?$/.test(part.partNo ?? '')) {
     notes.push('A T-shaped rib: a narrow shaft and a head as tall as the gunwale band, the top of the head cut to the sheer (the slope is dimensioned at both ends). The drawn face is the one that faces into the sled; the back face is glued to the bands and the filler.');
     if ((part.joints ?? []).some((q) => q.type === 'hole' && /template/.test(q.note ?? ''))) notes.push('Do not drill the two D-ring holes on the bench: they are drilled at the D-ring and sign step, through the head and the side together, with the D-ring bracket as the template. The positions here check the bracket (measure the real bracket first).');
+    if ((part.joints ?? []).some((q) => q.type === 'threaded-insert' && /^sign-/.test(q.to))) notes.push('Do not drill the two sign insert holes on the bench: they are bored from outside, through the web, the band-strip filler and the rib together, at the D-ring and sign step, with the sign as the template. The positions here check them.');
   }
   if (part.partNo === 'box-tie') notes.push('A plain stick that fills the gap between the box rib and the box side. Measure that gap at the dry fit and cut the stick a hair short of it: thickened epoxy takes up the rest. Its top stands 1/8" under the box coaming, so it is never glued to the lid frame.');
   if (part.partNo === 'side-rib-knee') notes.push('A right-triangle knee: the tall leg is glued to the face of the rib and the foot to the deck. Drill the screw holes straight down from the sloped face, with the counterbore first, so the screw head leaves the stated oak under it.');
@@ -1350,6 +1351,12 @@ function placePairs(pts: Vec3[], ax: Ax, a: Analysis): string {
   const ks = ([0, 1, 2] as Ax[]).filter((k) => k !== ax);
   const sorted = [...pts].sort((x, y) => x[ks[0]] - y[ks[0]]);
   const c0 = coordParts(sorted[0], ks[0], a), c1 = coordParts(sorted[0], ks[1], a);
+  // A datum that is not one end (the center line of a scribed member: "toward the LEFT end from the center line") cannot head a column: each point says its own.
+  const own = (q: Vec3): string => ks.map((k) => { const c = coordParts(q, k, a); return c.val ? `${c.val} ${c.datum}` : c.datum; }).join(', ');
+  const same = sorted.every((q) => coordParts(q, ks[0], a).datum === c0.datum);
+  if (same && c0.val && !/^from the /.test(c0.datum) && (!c1.val || /^from the /.test(c1.datum))) // one side of a center line: "toward the LEFT end from the center line / the REAR face: 9-9/32" / 3/8", ..."
+    return `${c0.datum} / the ${c1.val ? c1.datum.replace(/^from the /, '') : 'centered across the thickness'}: ${sorted.map((q) => `${coordParts(q, ks[0], a).val} / ${coordParts(q, ks[1], a).val || 'centered'}`).join(', ')}`;
+  if (!/^from the /.test(c0.datum) || (c1.val && !/^from the /.test(c1.datum))) return sorted.map(own).join('; ');
   return `from the ${c0.datum.replace(/^from the /, '')} / the ${c1.val ? c1.datum.replace(/^from the /, '') : 'centered across the thickness'}: ${sorted.map((q) => `${coordParts(q, ks[0], a).val} / ${coordParts(q, ks[1], a).val || 'centered'}`).join(', ')}`;
 }
 
@@ -1722,13 +1729,15 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
       eb.forEach((q, i) => { const pt = (ev === 'top' ? topMap : botMap)(q.at); const by = ev === 'top' ? yTop - 0.1 : yBot + nW + 0.14; out.push(line([ex[i], by + (ev === 'top' ? 0.085 : -0.085)], pt, FEAT, 0.006), balloon([ex[i], by], q.letter)); });
     }
     // u ordinates (vertical labels, from the u datum)
-    const uVals = uniq(uMarks.map((m2) => m2.u).filter((u) => u >= -0.01 && u <= ext[0] + 0.01 && inWin(u)));
+    // A scribed member's ordinates run both ways from its center line (CL), like its feature table.
+    const uVals = uniq([...uMarks.map((m2) => m2.u), ...(w.center !== undefined ? [w.center] : [])].filter((u) => u >= -0.01 && u <= ext[0] + 0.01 && inWin(u)));
     const uPos = spread(uVals.map(X), 0.125);
     out.push(line([X(Math.max(ua, 0)), yOrd + 0.08], [X(Math.min(ub, ext[0])), yOrd + 0.08], DIM, 0.008));
     uVals.forEach((u, i) => {
       const x = X(u);
       out.push(line([x, yMain + mainH + 0.015], [x, yOrd + 0.08], DIM, 0.005), line([x, yOrd + 0.08], [uPos[i], yOrd + 0.18], DIM, 0.005));
-      out.push(txt(uPos[i] + 0.034, yOrd + 0.22, u < 1e-6 ? `0 ${w.side[0][0].split(' ')[0]}` : frac(u), 0.095, { rot: 90, fill: DIM }));
+      const uLabel = w.center !== undefined ? (Math.abs(u - w.center) < 1 / 64 ? 'CL' : frac(Math.abs(u - w.center))) : u < 1e-6 ? `0 ${w.side[0][0].split(' ')[0]}` : frac(u);
+      out.push(txt(uPos[i] + 0.034, yOrd + 0.22, uLabel, 0.095, { rot: 90, fill: DIM }));
     });
     // v ordinates (from the v datum), to the left of the main view
     const vVals = uniq(vMarks.filter((v) => v >= -0.01 && v <= ext[1] + 0.01).map((v) => (a.vref ? ext[1] - v : v)), 1 / 32);
@@ -1778,7 +1787,7 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
   ty += 0.2;
   const disc = b.rod && part.kind === 'lumber' && part.geometry.type === 'cylinder' && part.geometry.length < 2 * part.geometry.radius;
   if (disc && part.geometry.type === 'cylinder') {
-    for (const l of wrap(`A disc: plane a strip to the thickness above, then cut each disc with a hole saw about 1/8" larger than the disc, so its plug comes out ${frac(2 * part.geometry.radius)} across (check it on a scrap), from both faces of the strip. The saw's 1/4" pilot drill makes the center hole.`, chars)) { rowsSvg.push(txt(M + 0.25, ty, l, 0.105)); ty += 0.15; }
+    for (const l of wrap(`A disc: plane a strip to the thickness above, then cut each disc with a ${frac(discStrip(1, 2 * part.geometry.radius).sawIn)} hole saw (its plug comes out about ${frac(2 * part.geometry.radius)} across; check it on a scrap), from both faces of the strip. The saw's 1/4" pilot drill makes the center hole.`, chars)) { rowsSvg.push(txt(M + 0.25, ty, l, 0.105)); ty += 0.15; }
     ty += 0.05;
   }
   if (!feats.length) { rowsSvg.push(txt(M + 0.25, ty, b.rod ? 'None: cut to length, square the ends and break the edges (a light chamfer).' : 'None: a plain board, cut to the final size above.', 0.105)); ty += 0.2; }

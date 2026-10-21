@@ -5,7 +5,7 @@
  */
 import { ribWasherSpan, sideRibStations } from './side-ribs';
 import { STORAGE_LOCATION, WEATHER_SPEC } from '../params';
-import { STEP, box, cylinder, frac16, span, SIDES, type Ctx, stainless, insertMat } from './build-utils';
+import { STEP, box, cylinder, frac16, SIDES, type Ctx, stainless, insertMat } from './build-utils';
 import { SIGN_X_MAX_IN, liftSlot } from './body';
 import { sideSlopeAt, sideTopAt } from './layout';
 import { profilePart } from './profile';
@@ -138,9 +138,17 @@ export function buildLighting(ctx: Ctx): Part[] {
       ],
       notes: `D-57 (replaces the printed socket on the bow): a plain ${id.toFixed(2)}" ID tube ${len.toFixed(1)}" long standing on the deck in the left rear corner, against the front of the handle-socket backer and the inside of the side, its top flush with the gunwale top (z ${zTop.toFixed(2)}"). A ${FLAG_DRAIN_HOLE_IN}" drain hole is drilled through the wall just above the deck so water cannot stand in it (it runs out through the rear scupper). The flag staff (a ${(id - 0.05).toFixed(2)}" dowel) drops in; ${len.toFixed(0)}" of socket holds it.`,
     }));
-    const blk = (id: string, name: string, z0: number, to: string, note: string) => box(ctx, {
+    // The block in plan: its aft face carries a round cradle, the tube's own curve, flagBlockCradleIn deep at the middle (D-57, D-93); the tube nests in it.
+    const r = od / 2, cr = Math.min(p.flagBlockCradleIn, r - 0.05);
+    const xa = xc + r - cr, xb = xa + FLAG_BLOCK.t, yLo = yIn - p.flagBlockWidthIn;
+    const dy = Math.sqrt(Math.max(0, r * r - (r - cr) ** 2)); // half the cradle's width on the aft face
+    const y0 = Math.max(yLo + 0.05, yTube - dy), y1 = Math.min(yIn - 0.05, yTube + dy);
+    const arc: Vec2[] = Array.from({ length: 13 }, (_, i): Vec2 => { const y = y1 - ((y1 - y0) * i) / 12; return [Math.max(xa, xc + Math.sqrt(Math.max(0, r * r - (y - yTube) ** 2))), y]; });
+    const plan: Vec2[] = [[xa, yLo], [xb, yLo], [xb, yIn], [xa, yIn], ...arc];
+    const blk = (id: string, name: string, z0: number, to: string, note: string) => profilePart(ctx, {
       ...common, id, partNo: 'flag-block', name, mat: 'oak', grain: 'z', step: STEP.finish,
-      ...span([xc + od / 2, xc + od / 2 + FLAG_BLOCK.t], [yIn - p.flagBlockWidthIn, yIn], [z0, z0 + FLAG_BLOCK.h]), // D-93: narrow enough to stay off the box wall and the lid's swing
+      outline: plan, depth: FLAG_BLOCK.h, basis: 'xy', origin: [0, 0, z0], explode: unit(0, 1, 0.3), // D-93: narrow enough to stay off the box wall and the lid's swing
+      stock: { t: FLAG_BLOCK.t, w: p.flagBlockWidthIn, l: FLAG_BLOCK.h },
       joints: [{ type: 'glue', to, count: 1, size: 'thickened epoxy, full face', note }, { type: 'glue', to: 'flag-tube', count: 1, size: 'thickened epoxy (or 3M 5200) in the cradle', note: 'D-72: no screws into the tube wall (the tips would run into the staff bore)' }],
       notes: `Oak holding block (D-57, D-62): ${frac16(FLAG_BLOCK.t)}" × ${frac16(p.flagBlockWidthIn)}" × ${frac16(FLAG_BLOCK.h)}" with a ${frac16(p.flagBlockCradleIn)}"-deep round cradle for the tube in its aft face (the tube's own curve, sawn or rasped to fit), EPOXIED to the inner oak band of the sandwich side (no screws into the side: the thin web holds no screw, build 3c M4; D-72: no screws into the tube either, the tube is bonded into the relief) so it clamps the tube against the transom backer. Two blocks (top and bottom) hold a 14" tube; the tube stays put without them clipped to anything else.`,
     });

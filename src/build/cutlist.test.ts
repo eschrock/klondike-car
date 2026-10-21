@@ -507,7 +507,8 @@ describe('actual cuts (Eric 2026-10-12: the cut list lists the cuts, not the glu
     const oakIds = dparts.filter((x) => isBuilt(x) && /oak/i.test(x.material) && (x.kind === 'lumber' || x.kind === 'bentlam')).map((x) => x.id).sort();
     const own = dcl.cuts.filter((c) => c.partNo !== 'side-rib-filler'); // the rib fillers are band-strip offcuts, not model parts (see below)
     expect([...new Set(own.flatMap((c) => c.ids))].sort()).toEqual(oakIds);
-    expect(own.every((c) => c.partId === c.ids[0] && c.qty === c.ids.length && c.rough.t > 0 && c.rough.w > 0 && c.rough.l > 0)).toBe(true);
+    // a strip that several discs are cut from is one cut for all their ids (D-93)
+    expect(own.every((c) => c.partId === c.ids[0] && (c.qty === c.ids.length || (c.qty === 1 && /one strip for all/.test(c.label))) && c.rough.t > 0 && c.rough.w > 0 && c.rough.l > 0)).toBe(true);
     expect(dcl.cuts.some((c) => c.piece === 'solid')).toBe(true);
   });
 

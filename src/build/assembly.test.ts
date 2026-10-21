@@ -1068,7 +1068,7 @@ describe('D-76: side ribs, knees and box ties (tie-down bases)', () => {
       expect(rib).toMatch(/Each pair of holes must land on a rib's shaft: 4-1\/2" \(the rear rib\) and 13" \(the box rib\) from the transom's outer face/);
       expect(rib).toMatch(/Bore each spot 5\/16", square to the side, 5\/8" deep from the web's outer face/);
       expect(rib).toMatch(/#10-32 × 5\/16" [^\n]*threaded insert on epoxy/);
-      expect(rib).toMatch(/Make 8 oak standoff discs, one per hole/);
+      expect(rib).toMatch(/First the 8 oak standoff discs, one per hole/);
       expect(txt(get('final-fit'))).toMatch(/Through the 7\/32" holes, the standoff discs \(epoxied to the sign back\) and the web, into the inserts set at step \d+/);
       const fit = txt(get('final-fit'));
       expect(fit).not.toMatch(/Drill all \d holes|drill all the layers/i);

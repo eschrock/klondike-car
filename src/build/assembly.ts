@@ -38,7 +38,7 @@ import { KING_NUT_BELOW_DECK_IN, kingHeadRelief, kingNutSlot } from '../model/fr
 import { TONGUE_SHOULDER_FILLET_IN, tongueSeatHalfWidth } from '../model/pivot';
 import { boxTieGeometry, kneeScrews, lashBoltLength, sideRibStations, KNEE_SCREW_SEAT_IN, LASH_BOLT_DIA_IN, LASH_HOLE_DX_IN, LASH_BOLTS, LASH_WASHER } from '../model/side-ribs';
 import { localBounds, transformPoint, worldAABB } from '../model/bounds';
-import { BOARD_THICKNESSES, cutList, edgeJointUp, LAMINATION_SEAM_OFFSET_IN, resawUsableIn, ribFillers, ribFillerSource, type CutList, type GlueUp, type ResawPool } from './cutlist';
+import { BOARD_THICKNESSES, cutList, discStrip, edgeJointUp, LAMINATION_SEAM_OFFSET_IN, resawUsableIn, ribFillers, ribFillerSource, type CutList, type GlueUp, type ResawPool } from './cutlist';
 import { EPOXY_SYSTEM, epoxyTimeFactor, finishingSchedule, glueJointEstimates } from './finishing';
 import { flatPattern } from './flat';
 import { analyzeShaperPart, type ShaperFeature } from './shaper-svg';
@@ -2555,7 +2555,7 @@ const TEMPLATES: Template[] = [
         return {
           perSign: knobs.reduce((a, j) => a + j.count, 0),
           clear: clear ? `${clear}"` : '7/32"',
-          standoff: Number.isFinite(standoff) ? fractionText(nearestTo(standoff, 1 / 64), 64) : undefined,
+          standoff: Number.isFinite(standoff) ? fractionText(Math.ceil(standoff * 64 - 1e-6) / 64, 64) : undefined, // rounded UP: a disc a hair thick keeps the sign off the band
           discDia: disc?.stock?.w,
           insert: insM ? `${insM[1]} × ${insM[2]}" ${insM[3]}` : '#10-32 × 5/16" threaded insert',
           mouthDown,
@@ -2577,17 +2577,17 @@ const TEMPLATES: Template[] = [
             'Number each bracket to its rib. They are bolted on after the finish (final fit step).',
           ], lashIds)] : []),
           ...(signKnob ? [I(`Sign knob holes and inserts: ${signKnob.perSign} a side, through the web into the rib behind it, with the sign as the drill template (${tl(signIds)}).`, [
-            `Hold each sign on the outside of its side, flat on the web: its rear end ${signKnob.rear} forward of the transom's outer face, its bottom edge ${signKnob.up} above the deck. Tape it there.`,
+            I(`First the ${signKnob.perSign * signIds.length} oak standoff discs, one per hole (cut list: sign standoff discs, one strip for all).`, [
+              `Plane the strip to the band thickness plus 1/16" (${signKnob.standoff ?? '17/64'}" at the defaults): the gap between the web and the back of the sign, which stands 1/16" proud of the bands. Do not measure it with the sign held flat: its upper front corner lies over the outer gunwale band.`,
+              `Cut each disc from the strip with a ${fractionText(discStrip(signKnob.perSign * signIds.length, signKnob.discDia ?? 0.75).sawIn, 8)}" hole saw (its plug comes out about ${signKnob.discDia ? fin(signKnob.discDia) : '3/4"'} across), working from both faces. Its 1/4" pilot drill makes the center hole, which clears the #10 knob screw.`,
+              'Cut two more from the strip\'s end as spacers for the next item.',
+            ]),
+            `Hold each sign on the outside of its side on the two spacers (one near each end, clear of the hole places), so it stands where the discs will hold it: its rear end ${signKnob.rear} forward of the transom's outer face, its bottom edge ${signKnob.up} above the deck. Tape it there.`,
             `Each pair of holes must land on a rib's shaft: ${listS(signKnob.ribs)} from the transom's outer face. Check from the inside before drilling; if a pair is off, slide the sign along the side, never move a hole.`,
             `Spot each hole through the sign with a ${signKnob.clear} bit, just into the web, then take the sign off.`,
             `Bore each spot ${fin(INSERT_DRILL_IN)}, square to the side, ${fin(signKnob.bore)} deep from the web's outer face (a stop on the bit): through the web and into the band-strip filler and the rib behind it.`,
             `Brush epoxy into each bore to seal the web's plies, then turn in a ${signKnob.insert} on epoxy with a hex key until its top is ${fin(signKnob.mouthDown)} below the web's outer face${Math.abs(signKnob.mouthDown - thinSheet(p).thicknessIn) < 1 / 64 ? ' (the web\'s thickness: flush with its inside face)' : ''}: its threads are in the oak, never in the plywood.`,
-            `Make ${signKnob.perSign * signIds.length} oak standoff discs, one per hole (cut list: sign standoff discs).`,
-            I('Measure the gap they fill: hold the sign in place on the side and measure from the web to the back of the sign at each hole', [
-              `About ${signKnob.standoff ?? 'the band thickness plus 1/16'}" at the defaults (the band's thickness plus the 1/16" the sign stands proud of the bands). Plane an oak strip to the measured gap.`,
-              `Cut each disc from the strip with a hole saw whose plug comes out ${signKnob.discDia ? fin(signKnob.discDia) : '3/4"'} across (try the saw on a scrap; a saw about 1/8" bigger), working from both faces. Its 1/4" pilot drill makes the center hole, which clears the #10 knob screw.`,
-              'Epoxy one to the back of the sign over each hole, lined up on a waxed screw through both.',
-            ]),
+            'Epoxy one disc to the back of each sign over each hole, lined up on a waxed screw through both.',
             'Once the epoxy has cured, run each knob screw in by hand to check it. The signs are finished on the bench and hung at the final fit.',
           ], [...signIds, ...signKnob.ribIds, ...c.parts.filter((x) => /^sign-standoff-/.test(x.id)).map((x) => x.id)])] : []),
           ...(gripIds.length ? [I(`Grab boards: ${tl(gripIds)}, with their strips and caps (${tl(gripBack)}). They go on for good now, before the finish.`, [
@@ -2682,7 +2682,7 @@ const TEMPLATES: Template[] = [
     steps: [STEP.seatStorage],
     match: /^storage-(lid|rim|strip)/,
     view: 'iso',
-    tools: ['table saw (the strip groove)', 'router (mortises, rabbet)', 'epoxy pumps', 'clamps', 'drill', '1/8" spacer'],
+    tools: ['table saw (the strip groove)', 'router (mortises, rabbet)', 'laser (the lettering)', 'masking tape', 'sanding block', 'epoxy pumps', 'clamps', 'drill', '1/8" spacer'],
     hardener: '556',
     build: (c) => {
       const frame = c.mine.filter((x) => /^storage-rim-/.test(x.id)).map((x) => x.id);
@@ -2743,9 +2743,10 @@ const TEMPLATES: Template[] = [
           I('Saw the {{storage-lid}} on the table saw to its cut-list size (the size includes the 1/4" tongue that sits in the rabbet all round).'),
           ...((lg) => (lg ? [I(`Letter the panel's top face ${lg.text}, all before it is sealed.`, [
             `Test first: score the lettering file on an offcut of the same sheet. Raise the power or add passes until the letters come out dark, just through the face veneer into the first glue line (about ${fractionText(lg.depthIn, 64)}" deep); the face veneer is thinner than that, so it is the glue line that reads.`,
+            'Mask the lettering area with low-tack masking tape first, smoothed down hard: the laser scores through the tape, and the tape keeps the fill off the bare birch (thin epoxy wicks into its grain and leaves a grey halo).',
             'Laser: lay the panel on the bed, line it up on the black outline with the framing preview, and run the lettering file (the letters only; each stroke is several passes side by side, so the line reads from a standing position).',
-            'Fill: work black epoxy (pigment in a little mixed epoxy) or an oil-based black paint marker into the letters; wipe the overrun off the face at once.',
-            'When it is hard (24 h), sand the face flush with a block at 220 grit, lightly: do not go through the face veneer.',
+            'Fill: work black epoxy (pigment in a little mixed epoxy, thickened a little so it does not run) or an oil-based black paint marker into the letters, over the tape.',
+            'Peel the tape while the fill is still soft; when it is hard (24 h), sand the face flush with a block at 220 grit, lightly: do not go through the face veneer.',
           ])] : []))(c.by('storage-lid')?.legend),
           I('Seal the {{storage-lid}} with epoxy, both faces and every edge, and let it cure.'),
           I(`Glue the frame square around the panel, all in thickened epoxy: on the corner tenons and bedding the panel edge in its rabbet.`, ['Clamp it square while the corners set.']),

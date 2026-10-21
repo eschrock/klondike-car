@@ -1209,7 +1209,39 @@ function cutsOf(plans: OakPartPlan[], pools: ResawPool[], p: Params): Cut[] {
       });
     }
   }
-  return sortCuts([...map.values(), ...ribFillerCuts(plans, pools, p)]);
+  return sortCuts([...discStripCuts([...map.values()], plans, p), ...ribFillerCuts(plans, pools, p)]);
+}
+
+/** An oak disc (a cylinder thinner than it is wide: the sign standoff discs, D-93): cut with a hole saw from one planed strip, never from blanks of its own. */
+export const isDisc = (x: Pick<Part, 'geometry' | 'kind'>): boolean => x.kind === 'lumber' && x.geometry.type === 'cylinder' && x.geometry.length < 2 * x.geometry.radius;
+/**
+ * The strip a set of `n` discs `dia` across is cut from with a hole saw: the saw is about 1/8 in larger than the plug it leaves (rounded up to 1/8), the strip is the saw plus 3/16 in
+ * each side wide (the saw needs wood to hold), and the cuts are a saw plus 1/4 in apart with 1/2 in at each end.
+ */
+export function discStrip(n: number, dia: number): { sawIn: number; widthIn: number; lengthIn: number } {
+  const sawIn = roughUp8(dia + 1 / 8);
+  return { sawIn, widthIn: roughUp8(sawIn + 3 / 8), lengthIn: roughUp8(n * (sawIn + 1 / 4) + 1) };
+}
+/** Spare discs cut from the same strip to hold the part off its face while its holes are spotted (the sign, D-93). */
+export const DISC_SPACERS = 2;
+/** The disc rows of the cuts table merged into one strip per disc part number. */
+function discStripCuts(cuts: Cut[], plans: OakPartPlan[], p: Params): Cut[] {
+  const discNos = new Set(plans.filter((pl) => isDisc(pl.part)).map((pl) => pl.partNo));
+  if (!discNos.size) return cuts;
+  const out = cuts.filter((c) => !discNos.has(c.partNo));
+  for (const no of discNos) {
+    const mine = cuts.filter((c) => c.partNo === no);
+    const pl = plans.find((q) => q.partNo === no)!;
+    const n = mine.reduce((a, c) => a + c.qty, 0);
+    const st = discStrip(n + DISC_SPACERS, pl.stock.w);
+    const roughExact: Dims = { t: pl.stock.t + p.millingAllowanceIn, w: st.widthIn, l: st.lengthIn };
+    const rough: Dims = { t: roughUp8(roughExact.t), w: st.widthIn, l: st.lengthIn };
+    out.push({
+      ...mine[0], ids: mine.flatMap((c) => c.ids), qty: 1, label: `${mine[0].name}s, one strip for all ${n} and ${DISC_SPACERS} spacers`, rough, roughExact, roughText: roughDimsText(rough),
+      note: `plane it to ${fractionText(Math.ceil(pl.stock.t * 64 - 1e-6) / 64, 64)}" (the disc thickness: the band thickness plus 1/16"), then cut the ${n} discs and the ${DISC_SPACERS} spacers (they hold the sign off the web while its holes are spotted) from it with a ${fractionText(st.sawIn, 8)}" hole saw from both faces; the saw's pilot drill makes each center hole`,
+    });
+  }
+  return out;
 }
 
 const sortCuts = (cuts: Cut[]): Cut[] => {

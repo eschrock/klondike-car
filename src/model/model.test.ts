@@ -18,6 +18,7 @@ interface Allow {
 }
 /** Intended contacts (kept short and justified; real clashes are fixed in the geometry instead). */
 const ALLOW: Allow[] = [
+  { a: /^flag-block-/, b: /^flag-tube$/, why: 'D-93: the tube nests in the round cradle in the block\'s aft face (the block\'s box covers the cradle)' },
   // ---- rear running gear
   { a: /^axle-/, b: /^(wheel-|beam-)/, why: 'axle passes through the hub bore and lies in a groove in the beam (D-10, D-15)' },
   { a: /^beam-/, b: /^wheel-/, why: 'tire OBB is a conservative box; the beam ends sit inside the rim, 1/8" short of the hub face' },

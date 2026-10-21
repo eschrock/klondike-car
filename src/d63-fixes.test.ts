@@ -220,7 +220,7 @@ describe('S7: the crest strip spans the gap between the blocks', () => {
     expect(strip.min[1]).toBeCloseTo(wr.max[1], 6);
     const hinge = worldAABB(get('storage-hinge-L'));
     expect(strip.min[0]).toBeGreaterThan(hinge.max[0]); // bedded off the leaves, not through them
-    expect(get('seat-crest-strip').notes).toMatch(/13\.5" gap|13\.5 in at the defaults/);
+    expect(get('seat-crest-strip').notes).toMatch(/13-1\/2" gap/);
     expect(get('seat-back-panel').notes).toMatch(/whole 13\.5 in between the blocks/);
   });
 });

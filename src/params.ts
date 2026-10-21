@@ -534,7 +534,7 @@ const defs = {
   storageLegendLineIn: {
     label: 'Lid lettering line width (laser passes side by side)', group: 'body', unit: 'in',
     default: 0.0625, min: 0.015625, max: 0.125, step: 0.015625, status: 'assumed', ref: 'D-58, D-93',
-    note: 'A single laser pass scores a hairline that does not read from a standing position. The lettering file scores each single-stroke letter as several passes 1/64 in apart, side by side, so the filled line is about this wide (1/16 in on 1-1/2 in letters reads from 5 ft).',
+    note: 'A single laser pass scores a hairline that does not read from a standing position. The lettering file scores each single-stroke letter as several passes 1/64 in apart, side by side, so the filled line is about this wide (1/16 in on the 1-1/4 in letters the lid has at the defaults reads from 5 ft).',
   },
   // Workstream D (D-41): weatherproofing and lash points.
   storageGasketIn: {
