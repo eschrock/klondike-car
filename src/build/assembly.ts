@@ -46,6 +46,8 @@ import { brakeOf, partDrawings, SCREW_PILOT, type DrawingFeature, type PartDrawi
 import { finalFrac, fractionText, nearest32, nearestTo, roughFrac } from './units';
 import { GRIP_BOLT_ROWS_IN } from '../model/seat';
 import { verifyChecklist, verifyGroups } from './verify';
+import { stepFigures } from './figures';
+import type { StepFigure } from './figures/kit';
 
 export type StepKind = 'prep' | 'build' | 'process';
 /** '556' is the hardener of the epoxy the BOM buys (`EPOXY_SYSTEM`); the West System entries stay for the Cure type's other users. */
@@ -159,6 +161,12 @@ export interface BuildStep extends AssemblyStep {
   /** Epoxy used by the step (a step with several glue-ups lists the one that sets the schedule). */
   cure?: Cure;
   view: StepView;
+  /** "What this is for": what the step makes and where it is used, for a step whose purpose is not plain from its parts (forms, milling). */
+  why?: string;
+  /** Labeled sketches of what the step makes or does (`figures/`). */
+  figures: StepFigure[];
+  /** A preparation step: the parts it makes or serves (a form's parts), highlighted in the finished sled. Empty for a build step (its `partIds` are highlighted). */
+  forIds: string[];
 }
 
 export interface StepCtx {
@@ -210,6 +218,10 @@ interface Template {
   /** The glue line, when the step glues with something other than epoxy / Titebond (sealant, contact cement). */
   glueLine?: string;
   build: (c: StepCtx) => Built;
+  /** "What this is for" (may use `[[step:id]]`): see `BuildStep.why`. */
+  why?: string | ((c: StepCtx) => string | undefined);
+  /** A preparation step: the parts it makes or serves, by id (see `BuildStep.forIds`). */
+  forParts?: RegExp;
   /** A different title for a setting of the design (the brake knees step, D-78). */
   retitle?: (p: Params) => string | undefined;
   /** A different glue line for a setting of the design (the handle sockets are bedded in epoxy under the Standard spec, D-83). */
@@ -1037,6 +1049,8 @@ const TEMPLATES: Template[] = [
     kind: 'prep',
     steps: [0],
     view: 'top',
+    why: 'A shop jig, not a sled part. The two rails are the long oak beams under the deck that the whole hull is built on; their front ends curve in to follow the bow. Each rail is glued up from thin strips bent around this form in [[step:rails]]; the form is scrap after that. The highlighted parts in the 3D view are the rails.',
+    forParts: /^rail-[LR]$/,
     tools: ['Shaper Origin or bandsaw', 'router with a pattern bit', 'drill press', '3/4" MDF and plywood', 'packing tape'],
     build: (c) => {
       const rail = c.parts.find((x) => x.id === 'rail-L');
@@ -1078,10 +1092,12 @@ const TEMPLATES: Template[] = [
   },
   {
     id: 'side-forms',
-    title: 'Build the side forms: template, cleats and the two ramps',
+    title: 'Build the side forms (shop jigs for gluing up the sides)',
     kind: 'prep',
     steps: [0],
     view: 'side',
+    why: 'Shop jigs, not sled parts. Each side of the hull is a thin plywood web with oak bands glued on both faces, and it is bent two ways: along its curved top edge and, at the front, in toward the center. These forms hold a web bent while its bands cure, in [[step:sides-inner]] (inside face) and [[step:sides-outer]] (outside face). Throw them away after that. The highlighted parts in the 3D view are what they make.',
+    forParts: /^side-[LR]-(web|chine|chine-in|gunwale|gunwale-in)$/,
     tools: ['Shaper Origin or bandsaw', 'drill and driver', '3/4" MDF and plywood', '1/4" hardboard', 'packing tape'],
     build: (c) => {
       const sideForm = c.forms().find((d) => d.id === 'side-form');
@@ -1090,15 +1106,19 @@ const TEMPLATES: Template[] = [
       const rampLen = dim('ramp-length');
       const ribs = dim('ramp-ribs');
       const make = formMaking(formBuild(sideForm));
+      // The form drawing's own build list, one item per piece of the jig (bench tops, template, cleats, the two ramps, tape), so each reads on its own.
+      const pieces: Instr[] = make.length
+        ? make
+        : rise !== undefined && rampLen !== undefined
+          ? [
+            I(`S-ramp (side form drawing): rise ${fin(rise)}, ${fin(rampLen)} long from the start of the S to the bow end, ${f(ribs ?? 0, 0)} MDF ribs under a 1/4" hardboard cap.`, [`Ribs of ${fin(RIB_STOCK_IN)} MDF, about 4-1/2" apart.`]),
+            I('Build the MIRROR ramp for the second web face: never the same ramp, the cured web would have to bend back.'),
+          ]
+          : [I('Build the side form (side form drawing): a flat template with the sheer cleats. No S-ramp: the sides are not turned in at this design.', ['The webs glue up flat.'])];
       return {
-        goal: 'Build the template, the cleats and the two ramps that hold a web bent while its bands cure.',
+        goal: 'Build the jigs that hold each side web bent while its oak bands are glued on: a template with cleats along its top edge, and two ramps for the bend at the bow.',
         items: [
-          rise !== undefined && rampLen !== undefined
-            ? I(`Build the S-ramp for the sides (side form drawing): rise ${fin(rise)}, ${fin(rampLen)} long from the start of the S to the bow end, ${f(ribs ?? 0, 0)} MDF ribs under a 1/4" hardboard cap.`, make.length ? make : [
-              `Ribs of ${fin(RIB_STOCK_IN)} MDF, about 4-1/2" apart.`,
-              'Build the MIRROR ramp for the second web face: never the same ramp, the cured web would have to bend back.',
-            ])
-            : I('Build the side form (side form drawing): a flat template with the sheer cleats. No S-ramp: the sides are not turned in at this design.', make.length ? make : ['The webs glue up flat.']),
+          ...pieces,
           I('Dry-run a web on the form before any glue goes on.', [
             'Lay a dry web on the template, then on each ramp, with its sheer line against the cleats.',
             'It must lie on the ramp with no step at the start of the S and no cleat that rocks: fix the ramp or the spacers now.',
@@ -1190,7 +1210,7 @@ const TEMPLATES: Template[] = [
         glue: { epoxy: true, titebond: false },
         items: [
           I(`Glue ${plural(rail?.plies ?? 2, 'strip')} per rail on the rail form: ${tl(ids)}.`, [
-            `Epoxy lightly thickened with ${EPOXY_SYSTEM.thickener} (glue card). The form face and the caul wear the packing tape put on when the form was built: renew it if it is torn.`,
+            `Epoxy lightly thickened with ${EPOXY_SYSTEM.thickener} (glue card). The form face and the counter-form face wear the packing tape put on when the form was built: renew it if it is torn.`,
             ...(clampItem
               ? [I(`${clampItem.text.replace(/^CLAMP:\s*/, 'Clamps: ')}`, clampItem.sub ?? [])]
               : [`Clamp at every station: about ${clamps !== undefined ? f(clamps, 0) : '15'} clamps per rail (rail form drawing). Only the bow end is curved.`]),
@@ -1518,6 +1538,8 @@ const TEMPLATES: Template[] = [
       const tieHoles = featsAll(c, 'rail-L', 'hole', (q) => (q.to ?? []).some((t) => /chine/.test(t)));
       const cbore = /counterbore the head ([\d.\-\/]+"?) up the rail/.exec(railScrew?.size ?? '')?.[1];
       const cbDia = /\(([\d\/-]+")\s*bit\)/.exec(railScrew?.size ?? '')?.[1];
+      // the screws whose heads are countersunk, not counterbored (the rail is shallow ahead of the step)
+      const fwdScrews = tieHoles.filter((q) => !/counterbore/.test(q.size ?? '')).reduce((n, q) => n + q.count, 0);
       const bed = fin((c.by('side-L-chine')?.stock?.t ?? 0.234) + (c.by('side-L-web')?.stock?.t ?? 0.157));
       const pilotText = tieHoles.length ? `an ${/^(\S+") clearance/.exec(tieHoles[0].size ?? '')?.[1] ?? '11/64"'} clearance hole through the rail and a ${fin(SCREW_PILOT[8])} pilot in the side` : 'the clearance and pilot holes on the drawings';
       return {
@@ -1539,7 +1561,7 @@ const TEMPLATES: Template[] = [
           I(`Screw each rail to its side in every gap: ${tie.perRail} screws a side, ${tie.screw} flat-heads, evenly spaced${tie.spacingIn ? ` (about ${fin(Math.round(tie.spacingIn * 4) / 4)} apart)` : ''}.`, [
             `Each screw has ${pilotText}. Because the pilots were drilled through the rail holes at the dry fit, each screw registers the side: it finds its pilot and draws the side onto the rail where the dry fit put it.`,
             'They go straight down through the rail (the hull is inverted) into the sandwich.',
-            ...(cbore ? [`The aft heads sit in ${cbDia ?? 'the'} counterbores ${/"$/.test(cbore) ? cbore : `${fin(Number(cbore))}`} up the rail; the forward screws are countersunk flush. Plug each counterbore with a glued oak plug, flush with the rail's bottom edge, once the screws are in.`] : []),
+            ...(cbore ? [`The aft heads sit in ${cbDia ?? 'the'} counterbores ${/"$/.test(cbore) ? cbore : `${fin(Number(cbore))}`} up the rail; ${fwdScrews === 1 ? 'the forward screw is' : `the ${fwdScrews} forward screws are`} countersunk flush. Plug each counterbore with a glued oak plug, flush with the rail's bottom edge, once the screws are in.`] : []),
             'Drive them from the middle of the rail out toward the ends, snug, so the side pulls onto the rail without a gap. Do not overdrive: the edge is only the width of the outer band and the web.',
           ], ['rail-L', 'rail-R']),
           I('Clamp the side to the rail between the screws.', [
@@ -2829,6 +2851,9 @@ export function assemblySteps(parts: Part[], p: Params): BuildStep[] {
     const use: GlueUse = built.glue ?? found ?? { epoxy: true, titebond: false };
     const cure = t.hardener && use.epoxy ? HARDENERS[t.hardener] : undefined;
     const clampCure = t.hardener ? (t.reglue?.(p) ?? t.glueLine ?? glueLine(t.hardener, use, cardStep, t.coat)) : undefined;
+    const why = typeof t.why === 'function' ? t.why(ctx) : t.why;
+    const figures = stepFigures(t.id, ctx).map((fg) => ({ ...fg, caption: fix(fg.caption) }));
+    const forIds = t.forParts ? real.filter((x) => t.forParts!.test(x.id)).map((x) => x.id) : [];
     const step: BuildStep = {
       n,
       id: t.id,
@@ -2842,6 +2867,9 @@ export function assemblySteps(parts: Part[], p: Params): BuildStep[] {
       checks: built.checks.map((x) => renderInstrText(fix(known(x)), nameOf)),
       tools: t.retools?.(p) ?? t.tools,
       view: t.view,
+      ...(why ? { why: fix(why) } : {}),
+      figures,
+      forIds,
       ...(cure ? { cure: { hardener: cure.hardener, potMin: cure.potMin, clampHours: cure.clampHours, fullHours: cure.fullHours } } : {}),
       ...(clampCure ? { clampCure } : {}),
     };

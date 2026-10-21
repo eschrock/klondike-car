@@ -137,7 +137,7 @@ src/analysis/            runChecks(params) -> engineering rows; riderSweep; carg
                          them (and the truck fit) in two Web Workers (client.ts, analysis.worker.ts) so the page never waits
 src/sim/                 Rapier rigid-body sim of the sled (qualitative)
 src/truck/               truck-bed fit check
-src/build/               build outputs: cut list, nesting, BOM and prices, Shaper and laser SVGs, forms, drawings, assembly, finishing, verify, zip
+src/build/               build outputs: cut list, nesting, BOM and prices, Shaper and laser SVGs, forms, drawings, assembly (and its step sketches in figures/), finishing, verify, zip
 src/viewer/              three.js viewer: materials, textures, joinery cuts, mannequin
 src/ui/                  panels: params, analysis, sim, Simple view, Build mode
 ```
@@ -161,7 +161,7 @@ Everything is a pure function of the parameters.
 | Shaper | SVG files for every flat part (outside, inside, pocket, guide conventions) |
 | Laser | full-size SVGs for the XTool S1 (D-86): the thin parts that fit the bed and every 1/4" template and pattern, with red cuts and blue scores; the rail form's counter-form is here |
 | Forms and drawings | glue-up forms and templates (tiled to Letter pages), and a dimensioned drawing of every non-Shaper part |
-| Assembly | numbered steps with sub-bullets, part chips with dimensions and Show in 3D, and a 3D step-through; with removable knees the knee step fits the knees dry, they are finished on the bench and bolted on at the hang step, and a last step takes them off and puts them back |
+| Assembly | numbered steps with sub-bullets, part chips with dimensions and Show in 3D, and a 3D step-through; labeled sketches on the steps that are hard to picture (the forms, the side cures, the joints), and a "What this is for" line on the jig steps, whose 3D view highlights the parts the jig makes; with removable knees the knee step fits the knees dry, they are finished on the bench and bolted on at the hang step, and a last step takes them off and puts them back |
 | Finishing | the schedule for the chosen weather spec |
 | Downloads | one zip: Shaper SVGs, laser SVGs, forms, drawings, nesting, STLs for the lamp clips, cutlist.csv, bom.csv, a build book (printable HTML) and a README |
 | Briefing book | a short printable handout for the troop committee (Download briefing book, beside the build book; `?briefing` after the app address shows it in place of the app): what the sled is for and its other uses, two pictures from the 3D view (ready to roll, and Transport mode), the BOM by section in plain words, a subtotal of the lumber and plywood (donated by the builder), the parts the troop buys, the total, and a troop budget: the bought parts plus 15% for shipping, tax and price changes. The prose is in `src/build/briefing-book.ts`; the numbers come from the model and the BOM. Not in the zip (its pictures need the 3D view) |

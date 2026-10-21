@@ -905,6 +905,8 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
       const out: Node[] = [
         h('h3', { class: 'bp-step-title' }, `${s.n}. ${s.title}`, s.kind === 'build' ? '' : h('span', { class: 'bp-kind' }, s.kind)),
         ...(s.goal ? [h('p', { class: 'bp-goal' }, ...ui.text(s.goal))] : []),
+        ...(s.why ? [h('p', { class: 'bp-why' }, h('strong', {}, 'What this is for: '), ...ui.text(s.why))] : []),
+        ...(s.figures.length ? [figureNodes(s, forPrint)] : []),
         ids.length
           ? h('p', { class: 'small bp-step-parts' }, h('strong', {}, `Parts (${ids.length}): `), ui.chips(ids, forPrint ? ids.length : 8))
           : h('p', { class: 'muted small' }, 'No parts installed in this step.'),
@@ -916,6 +918,16 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
       if (s.tools.length) out.push(h('p', { class: 'muted small' }, h('strong', {}, 'Tools: '), s.tools.join(', ')));
       return out;
     };
+
+    /** The step's sketches: on screen each opens large in the drawing dialog; on paper they print inline. */
+    const figureNodes = (s: BuildStep, forPrint: boolean): Node =>
+      h('div', { class: 'bp-figs' }, ...(forPrint ? [] : [h('p', { class: 'muted small bp-fig-hint' }, s.figures.length > 1 ? 'Click a picture to open it large.' : 'Click the picture to open it large.')]), ...s.figures.map((f) => {
+        const markup = previewSvg(f.svg, f.title);
+        const view = (): DrawingView => ({ title: f.title, sub: f.caption, markup, fileName: `step-${s.n}-${f.id}.svg`, svg: f.svg });
+        const img = forPrint ? svgBox(markup, 'bp-fig-img') : h('button', { type: 'button', class: 'bp-fig-btn', 'aria-label': `Open the figure ${f.title} large` }, svgBox(markup, 'bp-fig-img'));
+        if (!forPrint) img.addEventListener('click', () => ui.openDrawing(view(), img as HTMLElement));
+        return h('figure', { class: 'bp-fig' }, img, h('figcaption', { class: 'small' }, h('strong', {}, `${f.title}. `), f.caption));
+      }));
 
     /** Prev / Next / a jump: if the new step's title is above the visible part of its scroller (#build-main wide, the window narrow), bring it to the top, under the pinned bars. */
     const showStepTop = () => {
@@ -939,13 +951,17 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
       (prev as HTMLButtonElement).disabled = i === 0;
       (next as HTMLButtonElement).disabled = i === steps.length - 1;
       if (!pinOnly || drawnStep !== s.n) { ui.closeAll(); detail.replaceChildren(...detailNodes(s, false)); drawnStep = s.n; }
+      // A step with sketches gets a wider text column (wide layout), so the sketches can be read without opening them.
+      if (s.figures.length) document.getElementById('app')?.setAttribute('data-step-figs', ''); else document.getElementById('app')?.removeAttribute('data-step-figs');
       const f = stepFocus(steps, s.n, reframe);
       const pinned = pin;
       viewNote.replaceChildren(pinned
         ? h('span', {}, `Showing ${pinned.ids.map((id) => partById(id)?.name ?? id).join(', ')} in the 3D viewer (use Explode if it is hidden inside other parts). `)
         : f?.visibleIds
           ? `The 3D viewer shows steps 0 to ${s.n}${s.partIds.length ? '; this step’s parts are highlighted' : ' (nothing new to install in this step)'}. Camera: ${s.view}.`
-          : 'Preparation: nothing is installed yet, so the 3D viewer shows the finished sled for reference.');
+          : s.forIds.length
+            ? 'Preparation: nothing is installed yet. The 3D viewer shows the finished sled, with the parts this step is for highlighted.'
+            : 'Preparation: nothing is installed yet, so the 3D viewer shows the finished sled for reference.');
       if (pinned) {
         const clear = btn('Back to this step’s parts', () => { pin = null; update(true, true); }, 'Highlight the parts this step installs again', 'bp-linkbtn');
         viewNote.append(clear);

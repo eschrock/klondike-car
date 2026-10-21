@@ -262,7 +262,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
         const biteText = Math.abs(biteHi - biteLo) < 0.005 ? frac(biteHi) : `${frac(biteLo)}" to ${frac(biteHi)}`;
         add({
           a: `rail-${tag}`, b: `side-${tag}-chine`, typeA: 'screw',
-          size: `${screwText(fit)} ${stainless(p)} flat-head wood screws up through the rail (${depthText} here: ${where}; ${cbText}), ${biteText}" into the chine sandwich edge; PILOT (D-82): an 11/64" clearance hole through the rail, then a 1/8" pilot ${frac(biteHi + 1 / 16)}" deep into the chine edge (the threaded part of a #8 in white oak); countersink, and keep them on the centerline of the ${frac(flat)}" edge (a #8 leaves ${((flat - 0.164) / 2).toFixed(2)}" a side; verify on a test piece that the edge does not split)`,
+          size: `${screwText(fit)} ${stainless(p)} flat-head wood screws up through the rail (${depthText} here: ${where}; ${cbText}), ${biteText}" into the chine sandwich edge; PILOT (D-82): an 11/64" clearance hole through the rail, then a 1/8" pilot ${frac(biteHi + 1 / 8)}" deep into the chine edge (1/8" past the screw tip, as the drawings give it) (the threaded part of a #8 in white oak); countersink, and keep them on the centerline of the ${frac(flat)}" edge (a #8 leaves ${((flat - 0.164) / 2).toFixed(2)}" a side; verify on a test piece that the edge does not split)`,
           pts: qs, noteA: `Every gap between the tie stations, at even spacing; rail ${depthText}.`, fit,
         });
       }

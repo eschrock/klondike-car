@@ -30,7 +30,7 @@ describe('assembly steps', () => {
       'Mill the oak and resaw the strips',
       'Cut the Shaper parts',
       'Build the rail form',
-      'Build the side forms: template, cleats and the two ramps',
+      'Build the side forms (shop jigs for gluing up the sides)',
     ]);
     expect(steps.slice(0, 6).map((s) => s.id)).toEqual(['verify', 'mill', 'shaper', 'rail-form', 'side-forms', 'seal']);
     expect(steps.map((s) => s.n)).toEqual(steps.map((_, i) => i));
@@ -382,17 +382,24 @@ describe('build review round 1: forms and resaw numbers come from their sources 
   const every = steps.flatMap((s) => [s.title, ...s.instructions, ...s.checks, ...s.tools]).join('\n');
 
   it('quotes the S-ramp and the rail form from forms.ts, and presents the forms\' own steps for making them (the glue-up belongs to the glue steps)', () => {
-    expect(sideForms).toContain(`rise ${finalFrac(dim('side-form', 'ramp-rise'))}`);
-    expect(sideForms).toContain(`${finalFrac(dim('side-form', 'ramp-length'))} long from the start of the S`);
-    expect(sideForms).toContain(`${dim('side-form', 'ramp-ribs')} MDF ribs`);
+    // the side forms are the form drawing's own build list, one item per piece of the jig
+    expect(sideForms).toContain(`hangs ${finalFrac(dim('side-form', 'ramp-rise'))} lower`);
+    expect(sideForms).toContain(`${finalFrac(dim('side-form', 'ramp-length'))} long`);
+    expect(sideForms).toContain(`cut ${dim('side-form', 'ramp-ribs')} ribs from 3/4" MDF`);
     expect(railForm).toContain(`${finalFrac(dim('rail-form', 'form-length'))} long`);
     for (const [stepId, id, word] of [['rail-form', 'rail-form', 'rail form'], ['side-forms', 'side-form', 'S-ramp']] as const) {
       const step = steps.find((s) => s.id === stepId)!;
       const build = (forms.find((d) => d.id === id) as unknown as { build?: Array<{ step: string }> }).build ?? [];
       const making = build.filter((b) => !/^(CLAMP|GLUE-UP|SPRING-BACK)/.test(b.step));
-      const item = step.items.find((q) => q.text.includes(word))!;
-      expect(item, id).toBeTruthy();
-      if (build.length) expect(item.sub!.length, id).toBe(making.length);
+      if (stepId === 'side-forms') {
+        // one item per piece of the jig, then the dry run
+        expect(step.items.length, id).toBe(making.length + 1);
+        expect(step.items.map((q) => q.text.split(':')[0])).toEqual([...making.map((q) => q.step.split(':')[0]), 'Dry-run a web on the form before any glue goes on.']);
+      } else {
+        const item = step.items.find((q) => q.text.includes(word))!;
+        expect(item, id).toBeTruthy();
+        if (build.length) expect(item.sub!.length, id).toBe(making.length);
+      }
       // the form steps hold no glue-up: clamping, curing and the glue are in the rails and side steps
       expect(step.instructions.join(' '), id).not.toMatch(/GLUE-UP|CLAMP:|Cure 24 h|epoxy the inner chine band/i);
     }

@@ -216,7 +216,11 @@ function atArc(pts: Vec2[], s: number): { p: Vec2; n: Vec2 } {
 }
 
 // ── (a) The sandwich side: cleat-line template and the S-ramp ──
-function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
+/**
+ * The side form's geometry, shared by the form drawing and the assembly-step figures (`figures/sides.ts`): the web's flat pattern, the lines on it (u along the web from its rear end,
+ * v up from its bottom edge), the cleats, and the two ramp profiles. Null when the model has no side web.
+ */
+export function sideFormGeometry(parts: Part[], p: Params, L: Layout = computeLayout(p)) {
   const web = parts.find((x) => x.id === 'side-L-web');
   const f = web && flatPattern(web);
   if (!web || !f) return null;
@@ -250,6 +254,20 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
   const mirrorLen = uOf(xRe);
   const webLowIn = RIB_BASE_IN + TEMPLATE_STOCK_IN; // the web's underside above the bench where the ramp starts (rising ramp) or where it ends (mirror ramp)
   const webHighIn = webLowIn + rampH;
+  return {
+    web, f, uOf, sheer, gunBot, chineTop, innerChineBot, sheerLen, nCleat, cleatStep, templateH,
+    hasRamp, xR0, xR1, xRe, rampXs, rampProfile, rampH, webTallAtBow, ribs, ribPitch, mirrorRibs, mirrorPitch, mirrorProfile, mirrorLen, webLowIn, webHighIn,
+  };
+}
+export type SideFormGeometry = NonNullable<ReturnType<typeof sideFormGeometry>>;
+
+function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
+  const g = sideFormGeometry(parts, p, L);
+  if (!g) return null;
+  const {
+    f, uOf, sheer, gunBot, chineTop, innerChineBot, sheerLen, nCleat, cleatStep, templateH,
+    hasRamp, xR0, xR1, xRe, rampProfile, rampH, webTallAtBow, ribs, ribPitch, mirrorRibs, mirrorPitch, mirrorProfile, mirrorLen, webLowIn, webHighIn,
+  } = g;
   const GAP = 1.6;
   const rampBlock = hasRamp ? RIB_BASE_IN + rampH + GAP : 0;
   const mirrorBlock = hasRamp ? RIB_BASE_IN + rampH + GAP : 0;
@@ -508,7 +526,7 @@ function railFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
         `Glue and screw each stack together, edges flush, and fair its face to the line with a long sanding block.`,
       ],
     },
-    { step: `BASE: 3/4" plywood ${frac(baseL)} × ${frac(baseW)}. Screw the form stack to it from below (#8 × 1-5/8" every ${frac(STACK_SCREW_IN)}), its straight back on the base's back edge and ${frac(BASE_END_IN)} in from each end. That leaves ${frac(BASE_FRONT_IN)} of base in front of the deepest part of the face for the strips and the counter-form. The counter-form stands loose on the base; screw a scrap stop to the base behind its rear end so it cannot walk.` },
+    { step: `BASE: 3/4" plywood ${frac(baseL)} × ${frac(baseW)}. Screw the form stack to it from below (#8 × 1-5/8" every ${frac(STACK_SCREW_IN)}), its straight back on the base's back edge and ${frac(BASE_END_IN)} in from each end. That leaves ${frac(BASE_FRONT_IN)} of base in front of the deepest part of the face for the strips and the counter-form. The counter-form stands loose on the base, held from walking by a stop block at each end (COUNTER-FORM, below).` },
     { step: `STRAIGHT RUN: cut the strips ${frac(stripL)} long (the cut list's rough length); only the last ${frac(curved)} is curved. The form starts ${frac(RAIL_FORM_LEAD_IN)} ahead of the S, so about ${frac(hang)} of each strip hangs off its rear end. Screw a straight 3/4" × ${frac(stackH)} fence to the bench, in line with the lead-in face, to hold that part straight.` },
     {
       step: `COUNTER-FORM: the reverse image of the form, the clamping block. Its face is the form face moved out ${frac(pack + COUNTER_CLEARANCE_IN)}: the ${plies} strips glued together (${frac(pack)}) plus ${frac(COUNTER_CLEARANCE_IN)} for the tape and the glue line. Its back is straight and parallel to the form's back.`,
@@ -521,7 +539,7 @@ function railFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
     { step: 'TAPE: packing tape over the form face and the counter-form face, so the epoxy cannot glue the rail to either.' },
     { step: `SPRING-BACK: none is built in. Dry-clamp one strip first; if the bow end opens more than ${frac(turn * sb0)} when released, re-cut both patterns with the faces moved that far and try again; the channel must keep its width.` },
     {
-      step: `CLAMP: ${clamps} bar or pipe clamps of ${clampCap}" capacity or more (the form back to the counter-form back is ${frac(vTop)}), one at each station ${frac(CLEAT_SPACING_IN)} apart from the S start (the scored ticks on both patterns), square across from the form back to the counter-form back, plus 2 or 3 on the straight lead-in.`,
+      step: `CLAMP: ${clamps} bar or pipe clamps of ${clampCap}" capacity or more (the form back to the counter-form back is ${frac(vTop)}), one at each of the ${clamps} scored ticks on both patterns, about ${frac((xEnd - L.taper.x0) / Math.max(1, clamps - 1))} apart from the S start to the bow end, square across from the form back to the counter-form back, plus 2 or 3 on the straight lead-in.`,
       sub: [`Roll epoxy on both mating faces of the ${plies} strips (${frac(strip)} × ${frac(railW)}), butter one face with thickened epoxy, and stand them on edge on the base against the form face, the counter-form outside.`, 'Bend the glued strips onto the form face with the counter-form set on and every clamp snug but loose, then tighten the clamps together, the straight lead-in first and the bow end last. The counter-form only seats once the strips are fully bent.', 'Leave it clamped for the full cure, 24 h at 60 °F or warmer, before unclamping: a bent strip springs back if it comes off early. Bend the second rail on the same form, the other way up.'],
     },
   ];

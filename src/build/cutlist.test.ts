@@ -545,7 +545,7 @@ describe('bandsaw capacity (Eric 2026-10-12: my bandsaw has 6" capacity)', () =>
   it('says so in the text: the resaw height against the saw, and which board to rip the lanes from first', () => {
     const rail = dcl.resaw.find((r) => Math.abs(r.roughT - 0.5) < 1e-6)!;
     expect(rail.resawHeightText).toBe('resaw height 3-3/8" (your bandsaw: 6")');
-    expect(rail.ripText).toBe(`rip the lanes from a ${rail.boardWidthIn}"-wide board first`);
+    expect(rail.ripText).toBe(rail.boards > 1 ? `rip the lanes from ${rail.boards} boards, each ${rail.boardWidthIn}" wide, first` : `rip the lanes from a ${rail.boardWidthIn}"-wide board first`);
     expect(rail.text).toContain(rail.ripText[0].toUpperCase() + rail.ripText.slice(1));
     expect(rail.text).toContain(rail.resawHeightText);
   });
