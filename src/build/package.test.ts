@@ -147,7 +147,8 @@ describe('build book', () => {
     const anchors = [...html.matchAll(/<a href="(https?:[^"]+)"([^>]*)>/g)];
     expect(anchors.length).toBeGreaterThan(0);
     for (const a of anchors) { expect(vendor.has(a[1]), a[1]).toBe(true); expect(a[2]).toContain('target="_blank"'); expect(a[2]).toContain('rel="noopener"'); }
-    expect((html.match(/<svg\b/g) ?? []).length).toBe(pkg.data.nest.sheets.length);
+    // the SVGs are the nesting sheets and the assembly step figures
+    expect((html.match(/<svg\b/g) ?? []).length).toBe(pkg.data.nest.sheets.length + pkg.data.steps.reduce((n, s) => n + s.figures.length, 0));
     expect(new TextEncoder().encode(html).length).toBeLessThan(4_000_000);
   });
 
@@ -296,7 +297,8 @@ describe('readability round 2: the book reads in the shop', () => {
     expect(pkg.data.cutList.resaw.length).toBeGreaterThan(0);
     for (const pool of pkg.data.cutList.resaw) {
       expect(html, pool.board).toContain(esc(pool.laneCountText));
-      expect(stepText, pool.board).toContain(pool.laneCountText);
+      // step 1 words the lanes its own way (which width is for what, which lane is the spare); the lane count is the same
+      expect(stepText, pool.board).toContain(`${pool.ripLanes} lanes`);
     }
   });
 

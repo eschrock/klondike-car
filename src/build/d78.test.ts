@@ -36,7 +36,7 @@ describe.each([['Standard', WEATHER_SPEC.standard], ['Extreme', WEATHER_SPEC.ext
     expect(step.goal).toMatch(/About 5 minutes a side; the first time takes longer/);
     expect(t).toMatch(/Hang the knee on one bolt first/);
     expect(t).toMatch(/one person/);
-    expect(t).toMatch(/snug, then a quarter turn \(about 35 in-lb\)/);
+    expect(t).toMatch(/snug, then a quarter turn; more crushes the washers and the oak/);
     expect(t).toMatch(/anti-seize/);
     expect(t).toMatch(/dry/);
     expect(t).toMatch(/after the first outing/);
@@ -60,17 +60,17 @@ describe.each([['Standard', WEATHER_SPEC.standard], ['Extreme', WEATHER_SPEC.ext
     const txt = (id: string) => sR[at(id)].instructions.join('\n');
     const knees = sR.find((s) => s.id === 'brake-knees')!;
     const t = knees.instructions.join('\n');
-    expect(knees.title).toBe('Brake knees (and backers), fitted dry while the hull is inverted');
+    expect(knees.title).toBe('Brake knees, fitted dry while the hull is inverted');
     expect(knees.tools).toContain('3/8" drive ratchet and 9/16" socket');
     expect(t).toMatch(/easiest to reach now, while the hull is inverted/);
     // one way to drill the knee: on the drill press from its layout (a chuck cannot reach the top row through the rail), offered up with all four bolts, never the rail's holes opened
-    expect(t).toMatch(/Drill each knee leg on the drill press, from its layout/);
+    expect(t).toMatch(/drill each knee leg on the drill press, from its layout/);
     expect(t).not.toMatch(/transfer drill|marked from the rail drawing/);
-    expect(t).toMatch(/Offer the knee up to the rail with all 4 bolts through it: its rear face [\d\-/]+" from the rail's rear end/);
+    expect(t).toMatch(/Offer the knee up to the rail with all 4 bolts through it: its rear face [\d\-/]+" from the rail's finished rear end/);
     expect(t).toMatch(/If a bolt binds, open that knee hole a hair with the drill\. Never open the rail's holes/);
     expect(t).toMatch(/Hold each nut with the wrench from inside the frame/);
     expect(t).toMatch(/seal the bolt holes/);
-    expect(t.indexOf('Drill each knee leg on the drill press')).toBeLessThan(t.indexOf('seal the bolt holes'));
+    expect(t.indexOf('drill each knee leg on the drill press')).toBeLessThan(t.indexOf('seal the bolt holes'));
     expect(t).toMatch(/No glue on the leg/);
     expect(t).not.toMatch(/Seal the two faces/);
     expect(at('gear-fit')).toBeGreaterThan(at('brake-knees'));
@@ -87,7 +87,7 @@ describe.each([['Standard', WEATHER_SPEC.standard], ['Extreme', WEATHER_SPEC.ext
     expect(txt('frame')).toMatch(/Pass 4 waxed 3\/8" bolts through the rail, backer and plate holes from the outside, each with a waxed nut on the plate and a waxed caul block/);
     expect(txt('frame')).toMatch(/Snug the nuts just enough to seat the plate flush/);
     expect(txt('hang')).toMatch(/Screw each strap back on its knee, 4 screws with a drop of epoxy in each pilot/);
-    expect(txt('hang')).toMatch(/put a bottom rear bolt through the knee and the rail/);
+    expect(txt('hang')).toMatch(/put a bottom rear bolt, with its washer, through the knee, the rail and the backer/);
     expect(txt('finish')).toMatch(/Take the strap off each knee/);
     expect(sF.find((x) => x.id === 'frame')!.instructions.join('\n')).not.toMatch(/Bed each plate/);
     expect(textOf(sR)).not.toMatch(/epoxy[^.\n]*\b(knee|leg)\b[^.\n]*\bagainst the rail|glue[^.\n]*\bleg\b[^.\n]*\bagainst the rail/i);
@@ -153,7 +153,7 @@ describe.each([['Standard', WEATHER_SPEC.standard], ['Extreme', WEATHER_SPEC.ext
     expect(t).toMatch(/does not enter the joint line/);
     expect(t).toMatch(/backing plate is still in its recess/);
     expect(t).toMatch(/No washer is pressed into the oak/);
-    expect(t).toMatch(/snug, then a quarter turn \(about 35 in-lb; the quarter turn past snug is the spec/);
+    expect(t).toMatch(/snug, then a quarter turn \(the quarter turn past snug is the spec; with an inch-pound torque wrench it reads about 35 in-lb/);
     expect(t).toMatch(/tight after the first outing/);
     expect(t).toMatch(/chock cord/);
     expect(t).not.toMatch(/clip/i);

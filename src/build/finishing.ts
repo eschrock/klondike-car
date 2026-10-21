@@ -11,7 +11,7 @@
  *   EXTREME: ONE saturation coat of the 635 epoxy (`EPOXY_SYSTEM`, 2:1) on all the plywood (show and hidden) and on the oak end grain; marine spar varnish, 3 coats on the show faces, 2 on the
  *   hidden ones, over the oak and the epoxy, bought in quarts (an open can skins over); epoxy for every glue joint.
  *   STANDARD (the default): epoxy only on the plywood edges that are not captured, the oak end grain and the deck underside (water pools there); exterior spar urethane
- *   (Minwax Helmsman class), 3 coats show, 2 hidden; Titebond III for the Dominos, dados, tenons and general glue joints, epoxy only where it earns its keep
+ *   (Minwax Helmsman class), 3 coats show, 2 hidden; Titebond III for the wood-to-wood glue-ups, epoxy where any joint in a glue-up needs it (D-92)
  *   (`standardAdhesive`: the bent laminations, the deck to the frame, the deck slot gap-fill, the fillets and tape, the thickened bedding, the D-70 face laminations).
  * Stain and conditioner (EXTREME only, D-83: the Standard spec is clear urethane over the bare wood, and its step 3 is the grain-raising pass): show faces only, one coat. White oak plywood takes the SAME
  * stain as the solid oak (no conditioner or gel); okoume and Baltic birch blotch and take a conditioner and a gel stain. ONE epoxy system (`EPOXY_SYSTEM`) for the glue-ups, the seal coat and the two long closes.
@@ -354,7 +354,8 @@ export const SHOW_RULES: ReadonlyArray<{ re: RegExp; show: number | 'web'; why: 
   { re: /^side-[LR]-(chine|gunwale|gunwale-in)$/, show: 1, why: 'outer chine band and the gunwale bands' },
   { re: /^bow-bulkhead$/, show: 1, why: 'bow end and the rider\'s foot brace' },
   { re: /^transom-rear$/, show: 0.5, why: 'outside shows, the inside faces the hull and the box' },
-  { re: /^(transom-backer|sign-backer|seat-hinge-backer|storage-hinge-backer|storage-latch-block|flag-block|brake-backer|brake-pivot-block|brake-knee)/, show: 0, why: 'backer or block behind something else' },
+  { re: /^(transom-backer|sign-backer|seat-hinge-backer|storage-turn-block|storage-strip-end|flag-block|brake-backer|brake-pivot-block|brake-knee)/, show: 0, why: 'backer or block behind something else' },
+  { re: /^storage-turn-button-/, show: 1, why: 'the lid turn-buttons on the transom: in view and handled' },
   { re: /^side-rib-/, show: 1, why: 'side ribs and their knees stand inside the hull above the deck: the rider and the cargo see the inner face and edges (the glued back is credited off)' },
   { re: /^box-tie-/, show: 0, why: 'oak spacer between a rib and the storage box side: out of sight' },
   { re: /^sign-[LR]$/, show: 0.5, why: 'plate on the web: front shows, back is hidden' },
@@ -366,6 +367,7 @@ export const SHOW_RULES: ReadonlyArray<{ re: RegExp; show: number | 'web'; why: 
   { re: /^storage-(side|end)-/, show: 0.5, why: 'box panel: outside shows, inside is hidden' },
   { re: /^storage-lid$/, show: 0.5, why: 'top shows, underside is hidden' },
   { re: /^storage-lid-batten/, show: 0, why: 'under the lid' },
+  { re: /^storage-strip$/, show: 0.5, why: 'the fixed strip in front of the lid (D-89): top and fore face show, the underside and its groove are inside the box' },
   { re: /^storage-coaming/, show: 0.5, why: 'trim on the box rim' },
   { re: /^storage-rim/, show: 0, why: 'rim under the lid' },
   { re: /^brake-(flap|shoe|chock)/, show: 1, why: 'exposed and worn' },
@@ -464,15 +466,39 @@ const isWebId = (id: string): boolean => /^side-[LR]-web$/.test(id);
  * laminations (the rails' own plies and the sandwich bands on the webs), the D-70 face laminations (their own lines, `d70`), the deck to the frame, the deck slot gap-fill (the deck dados
  * into the transom and the bulkhead), the tie-down ribs, knees and box ties (D-76), the fillets and tape (the box and the band ends against the transom and bulkhead) and the thickened bedding (a nipple bedded in epoxy, a
  * thickened-epoxy bed or block). A `text` that says "thickened" is bedding.
+ * D-92: no glue-up mixes the two glues. A joint made in the same glue-up as an epoxy joint is epoxy too (`sharesEpoxyGlueUp`); Titebond III is left only for glue-ups that are
+ * wood-to-wood throughout (the hangers and backers on the rails, the seat-hinge backers, the transom backers, the edge-glued panels).
  */
 export function standardAdhesive(kind: GlueKind, a: string, b: string, text: string): Adhesive {
   if (a === b) return 'epoxy'; // the glue lines inside a laminated (bent) part
+  if (sharesEpoxyGlueUp(a, b)) return 'epoxy';
   if (kind === 'fillet') return 'epoxy';
   if (/^(side-rib|box-tie)/.test(a) || /^(side-rib|box-tie)/.test(b)) return 'epoxy'; // the tie-down bases (D-76: ribs, knees, box ties) carry 300 lbf strap loads: epoxy under both specs
   if (kind === 'lamination' && ((isBandId(a) && isWebId(b)) || (isBandId(b) && isWebId(a)))) return 'epoxy'; // the sandwich bands
   if ((a === 'deck' || b === 'deck') && (kind === 'lamination' || kind === 'dado')) return 'epoxy'; // deck to the frame; the deck slot gap-fill
   if ((kind === 'small' || kind === 'lamination') && /thickened|bedded|nipple|tape/i.test(text)) return 'epoxy'; // thickened bedding
   return 'titebond';
+}
+
+/**
+ * D-92: the joints glued in the same session as an epoxy joint, so they take epoxy too:
+ * - the frame glue-up: the crossmember and king-beam Dominos into the rails and the hangers, made with the deck bonded on in epoxy;
+ * - the two closing glue-ups: every joint into the rear transom or the bow bulkhead (tenons, Dominos, web dados), made with the epoxy deck dado and band-end fillets;
+ * - the storage box: the coaming and the fixed strip with its end blocks, glued with its filleted corners and ties; the lid frame's tenons, glued round a panel bedded in epoxy;
+ * - the seat-back stop blocks and the crest strip butted to them, one glue-up in thickened epoxy; the grab-board strip and cap on the band, bedded in epoxy.
+ */
+function sharesEpoxyGlueUp(a: string, b: string): boolean {
+  const ids = [a, b];
+  const has = (re: RegExp): boolean => ids.some((id) => re.test(id));
+  if (has(/^(transom-rear|bow-bulkhead)$/) && !has(/^transom-backer-/)) return true;
+  if (has(/^rail-[LR]$/) && has(/^(joist-\d+|king-beam)$/)) return true;
+  if (has(/^axle-hanger-[LR]$/) && has(/^joist-\d+$/)) return true;
+  if (has(/^storage-coaming-/)) return true;
+  if (has(/^storage-strip(-end-[LR])?$/)) return true;
+  if (has(/^storage-rim-/) && !has(/^storage-lid-batten-/)) return true;
+  if (has(/^seat-crest-strip$/) || has(/^seat-wedge-[LR]$/)) return true; // the stop blocks and the crest strip, one epoxy glue-up
+  if (has(/^seat-grip-(backing|cap)-/)) return true;
+  return false;
 }
 
 export interface GlueJointEstimate {
@@ -1030,7 +1056,7 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
     supplies: [],
     closeEpoxyFlOz: 0,
     epoxy,
-    glue: { titebondFlOz, titebondJoints: tb.joints, epoxyEdgeFt2: plyEdgeFt2, deckUnderFt2, adhesiveRule: extreme ? 'Epoxy for every glue joint (Extreme weather spec).' : 'Titebond III for the Dominos, dados, tenons and general glue joints; epoxy for the bent laminations, the glued-up thick parts, the deck to the frame, the deck slot gap-fill, the fillets and tape and the thickened bedding (Standard weather spec).' },
+    glue: { titebondFlOz, titebondJoints: tb.joints, epoxyEdgeFt2: plyEdgeFt2, deckUnderFt2, adhesiveRule: extreme ? 'Epoxy for every glue joint (Extreme weather spec).' : 'One glue per glue-up: epoxy for the bent laminations, the glued-up thick parts, the deck to the frame, the deck slot gap-fill, the fillets and tape, the thickened bedding and every joint glued in the same session as one of those; Titebond III for the glue-ups that are wood-to-wood throughout (Standard weather spec).' },
     assumptions: [
       `Weather spec: ${extreme ? 'EXTREME (stored outside, near salt or exposed regularly): epoxy for every glue joint, a saturation coat on all the plywood, marine spar varnish.' : 'STANDARD (garage-kept, used a few times a year, wet at most at a rainy derby): Titebond III for the general joints, epoxy only where it earns its keep, an epoxy coat on edges, end grain and the deck underside only, exterior spar urethane.'} Thin sheet: ${thin.name}.`,
       `Areas are net of the glued faces (each lamination contact comes off both parts): ${f(areas.gross.totalFt2, 0)} ft² gross - ${f(areas.glued.totalFt2, 1)} ft² glued = ${f(areas.totalFt2, 0)} ft²; ${f(areas.show.totalFt2, 0)} ft² show and ${f(areas.hidden.totalFt2, 0)} ft² hidden, by part.`,

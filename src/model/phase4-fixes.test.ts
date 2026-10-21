@@ -173,7 +173,6 @@ describe('grain is a LOCAL axis (types.ts)', () => {
   const SECOND_LONGEST_OK: Record<string, string> = {
     'axle-hanger': 'vertical grain on purpose: the hanger is a vertical strap (D-54)',
     'seat-hinge-backer': 'a 3.47 x 3 pad, nearly square: grain across the sled so the pin hole bites side grain',
-    'storage-latch-block': 'vertical grain on purpose: no end grain under the latch screws (S5)',
     'brake-knee': 'grain along the outrigger arm (across the sled), the load path (D-65)',
   };
   const graded = parts.filter((x) => x.grain && ['lumber', 'bentlam', 'sheet'].includes(x.kind));

@@ -17,15 +17,20 @@ import { pickWoodScrew, screwMinBite, screwText } from './rear-mount';
 
 /** Bite of a rail-to-chine screw into the chine sandwich edge (outer band + web) after it has crossed the rail (in). */
 export const RAIL_CHINE_BITE_IN = 0.5;
+/** A crossmember whose front face is closer than this to the bow bulkhead's rear face is glued to it and to the rails, with no rail Domino (round-2 engineering review: mortise clash). */
+const BULKHEAD_SNUG_IN = 0.25;
 /** D-75: the counterbore for each #8 flat-head screw that holds the UHMW thrust disc to the king beam (from the disc's sliding face): diameter and depth (in). */
 export const THRUST_SCREW_CBORE_DIA_IN = 0.375;
 export const THRUST_SCREW_CBORE_DEEP_IN = 0.25;
 /**
- * D-72, D-82: the one rail-to-chine screw length (#8 x 2-1/2), and the bit that counterbores its head where the rail is deeper than that. The bit is 3/8" (like the thrust disc's seat):
- * a #8 flat head is about 0.32 to 0.34" across, so a 5/16" bore would not take it. The bore is plugged with a 3/8" oak plug (a plug cutter on offcuts, or a 3/8" dowel).
+ * D-72, D-82, D-91: the one rail-to-chine screw length (#8 x 2-1/2, TRIM-HEAD), and the bit that counterbores its head where the rail is deeper than that. The screw sits 0.215" in from the
+ * hull's outside face (the middle of the side's bearing edge), so a 3/8" bore for a flat head left only 1/32" of wall there; a #8 trim head is about 7/32" across and goes in a 1/4" bore,
+ * which leaves about 3/32". The bore is plugged with a 1/4" oak plug (a plug cutter on offcuts, or a 1/4" dowel).
  */
 export const RAIL_CHINE_SCREW_IN = 2.5;
-export const RAIL_CHINE_PLUG_DIA_IN = 3 / 8;
+export const RAIL_CHINE_PLUG_DIA_IN = 1 / 4;
+/** D-91: the head of a #8 trim-head screw (in), about 7/32". */
+export const RAIL_CHINE_HEAD_DIA_IN = 7 / 32;
 import type { Joint, JointType, Mat4, Part, ScrewFit, Vec3 } from './types';
 
 // ── Festool Domino catalog (nominal mm, thickness × length) ──
@@ -240,8 +245,9 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
       const railD = p.railDepthIn, xs = L.railStepX, run = p.railStepRunIn;
       const depthAt = (x: number): number => (x <= xs - run ? railD : x >= xs ? L.railDepthF : railD + ((L.railDepthF - railD) * (x - (xs - run))) / run);
       const screwPts = Array.from({ length: Math.max(0, n - 1) }, (_, i) => i).map((i) => { // every gap (D-81): even spacing, they locate the side
-        const a = pts[i], b = pts[i + 1];
-        return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, cBot] as Vec3;
+        // On the curve, not on the chord between two stations: the averaged y of two stations in the S fell up to 0.15" off the bearing edge (round-1 engineering review).
+        const xm = (pts[i][0] + pts[i + 1][0]) / 2;
+        return [xm, s * (hwAt(xm) + webFace + flat / 2), cBot] as Vec3;
       });
       // D-72, D-82: ONE screw length for every rail depth (#8 x 2-1/2, the shortest standard #8 that bites RAIL_CHINE_BITE_IN where the rail is shallowest). Where the rail is deeper than the
       // screw can reach, the head is counterbored up the rail from its underside, so the tip still lands RAIL_CHINE_BITE_IN in the chine (the counterbore is plugged).
@@ -255,14 +261,14 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
         const cbs = qs.map((q) => cbAt(q[0])), cbLo = Math.min(...cbs), cbHi = Math.max(...cbs);
         const depthText = Math.abs(dHi - dLo) < 0.005 ? `${frac(dHi)}" deep` : `${frac(dLo)}" to ${frac(dHi)}" deep`;
         const where = zone === 'deep' ? 'behind the step' : zone === 'shallow' ? 'ahead of the step' : 'on the sloped step';
-        const cbText = cbHi <= 0.005 ? `no counterbore needed (the rail is shallow here, and the tip bites more than the minimum): countersink the head flush with a #8 countersink bit from the rail's underside` : `counterbore the head ${Math.abs(cbHi - cbLo) < 0.005 ? frac(cbHi) : `${frac(cbLo)}" to ${frac(cbHi)}`}" up the rail from its underside (${frac(RAIL_CHINE_PLUG_DIA_IN)}" bit), a #8 flat head is about 11/32" across so the bore is ${frac(RAIL_CHINE_PLUG_DIA_IN)}"; then plug it with a ${frac(RAIL_CHINE_PLUG_DIA_IN)}" oak plug (a plug cutter on offcuts, or a ${frac(RAIL_CHINE_PLUG_DIA_IN)}" dowel), glued in and trimmed flush`;
+        const cbText = cbHi <= 0.005 ? `no counterbore needed (the rail is shallow here, and the tip bites more than the minimum): a light countersink from the rail's underside lets the small trim head sink flush` : `counterbore the head ${Math.abs(cbHi - cbLo) < 0.005 ? frac(cbHi) : `${frac(cbLo)}" to ${frac(cbHi)}`}" up the rail from its underside (${frac(RAIL_CHINE_PLUG_DIA_IN)}" bit), a #8 trim head is about ${frac(RAIL_CHINE_HEAD_DIA_IN)}" across so the bore is ${frac(RAIL_CHINE_PLUG_DIA_IN)}"; then plug it with a ${frac(RAIL_CHINE_PLUG_DIA_IN)}" oak plug (a plug cutter on offcuts, or a ${frac(RAIL_CHINE_PLUG_DIA_IN)}" dowel), glued in and trimmed flush`;
         const fits = qs.map((q): ScrewFit => ({ gauge: 8, lenIn: SCREW_LEN, gripIn: depthAt(q[0]) - cbAt(q[0]), receivingIn: L.chineH, minBiteIn: screwMinBite(L.chineH) }));
         const fit = fits.reduce((a, b) => (b.lenIn - b.gripIn < a.lenIn - a.gripIn ? b : a));
         const biteLo = SCREW_LEN - Math.max(...fits.map((q) => q.gripIn)), biteHi = SCREW_LEN - Math.min(...fits.map((q) => q.gripIn));
         const biteText = Math.abs(biteHi - biteLo) < 0.005 ? frac(biteHi) : `${frac(biteLo)}" to ${frac(biteHi)}`;
         add({
           a: `rail-${tag}`, b: `side-${tag}-chine`, typeA: 'screw',
-          size: `${screwText(fit)} ${stainless(p)} flat-head wood screws up through the rail (${depthText} here: ${where}; ${cbText}), ${biteText}" into the chine sandwich edge; PILOT (D-82): an 11/64" clearance hole through the rail, then a 1/8" pilot ${frac(biteHi + 1 / 16)}" deep into the chine edge (the threaded part of a #8 in white oak); countersink, and keep them on the centerline of the ${frac(flat)}" edge (a #8 leaves ${((flat - 0.164) / 2).toFixed(2)}" a side; verify on a test piece that the edge does not split)`,
+          size: `${screwText(fit)} ${stainless(p)} trim-head wood screws up through the rail (${depthText} here: ${where}; ${cbText}), ${biteText}" into the chine sandwich edge; PILOT (D-82): an 11/64" clearance hole through the rail, then a 1/8" pilot ${frac(biteHi + 1 / 8)}" deep into the chine edge (1/8" past the screw tip, as the drawings give it) (the threaded part of a #8 in white oak); keep them on the centerline of the ${frac(flat)}" edge (a #8 leaves ${((flat - 0.164) / 2).toFixed(2)}" a side; verify on a test piece that the edge does not split)`,
           pts: qs, noteA: `Every gap between the tie stations, at even spacing; rail ${depthText}.`, fit,
         });
       }
@@ -272,7 +278,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
   // ── Axle hangers (D-54): glued and bolted to the inside of each rail, both ends of the joint recorded ──
   for (const { s, tag } of SIDES) for (const [pre, bx] of [['axle-hanger', L.beamR.x]] as const) {
     const hy = s * (hw + L.side - railT / 2 - p.axleHangerThickIn / 2);
-    add({ a: `${pre}-${tag}`, b: `rail-${tag}`, typeA: 'glue', size: `${(p.axleHangerWidthIn).toFixed(2)}" × ${p.railDepthIn.toFixed(2)}" side-grain face, epoxy`, pts: [[bx, hy, L.railTop - p.railDepthIn / 2]], noteA: 'Long-grain hanger to the rail inner face: the bolts carry the vertical load, the glue keeps the faces together.' });
+    add({ a: `${pre}-${tag}`, b: `rail-${tag}`, typeA: 'glue', size: `${(p.axleHangerWidthIn).toFixed(2)}" × ${p.railDepthIn.toFixed(2)}" side-grain face, ${p.weatherSpec === WEATHER_SPEC.extreme ? 'epoxy' : 'Titebond III'}` /* D-73 glue rule */, pts: [[bx, hy, L.railTop - p.railDepthIn / 2]], noteA: 'Long-grain hanger to the rail inner face: the bolts carry the vertical load, the glue keeps the faces together.' });
     // The hanger's two bolts are the hold-down angle's upright bolts (D-72): one bolt per position through the leg, the hanger and the rail. They are recorded ONCE, on the angle (running-gear.ts),
     // so the fastener count is right; the hanger and rail drawings find them there (an inbound joint, and a bolt that passes through the rail).
   }
@@ -309,8 +315,18 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
       const hangerPre = Math.abs(e.x - L.beamR.x) < p.axleHangerWidthIn / 2 + L.joistT / 2 ? 'axle-hanger' : null;
       const hangerHere = !!hangerPre && has(`${hangerPre}-${tag}`);
       const hostId = hangerHere ? `${hangerPre}-${tag}` : `rail-${tag}`;
+      // A crossmember tight behind the bow bulkhead (the last one, a hair behind its rear face) takes no Domino in the rail: that mortise would meet the rail's own
+      // end mortise into the bulkhead (round-2 engineering review). Its ends are glued to the rails and its front face is bedded on the bulkhead's rear face (below).
+      const atBulkhead = !hangerHere && L.railEnd - (e.x + e.thick / 2) < BULKHEAD_SNUG_IN;
+      if (atBulkhead) {
+        add({ a: e.j.id, b: hostId, typeA: 'glue', size: 'thickened epoxy, butt joint (no Domino: the rail end carries the bulkhead mortise here)', pts: [[e.x, s * (s > 0 ? e.yMax : -e.yMin), e.zc]], noteA: 'End of the crossmember against the rail face, glued; it is held by the bulkhead and the deck.' });
+        continue;
+      }
       const ej = endJoint(p, e.thick, hangerHere ? p.axleHangerThickIn : railT, jD);
-      add({ a: e.j.id, b: hostId, typeA: ej.type, size: ej.size, pts: [[e.x, s * (s > 0 ? e.yMax : -e.yMin), e.zc]], noteA: 'End of the crossmember into the member face; epoxy.' });
+      add({ a: e.j.id, b: hostId, typeA: ej.type, size: ej.size, pts: [[e.x, s * (s > 0 ? e.yMax : -e.yMin), e.zc]], noteA: `End of the crossmember into the member face; ${p.weatherSpec === WEATHER_SPEC.extreme ? 'epoxy' : 'Titebond III'} (D-73).` });
+    }
+    if (L.railEnd - (e.x + e.thick / 2) < BULKHEAD_SNUG_IN && has('bow-bulkhead')) {
+      add({ a: e.j.id, b: 'bow-bulkhead', typeA: 'glue', size: `thickened epoxy, bedding its front face on the bulkhead's rear face (a ${frac(Math.max(0, L.railEnd - (e.x + e.thick / 2)))} gap)`, pts: [[L.railEnd, 0, e.zc]], noteA: 'Front face of the last crossmember bedded on the bow bulkhead\'s rear face in thickened epoxy, filling the gap; the deck glued on top and the bulkhead\'s deck dado hold it.' });
     }
     add({ a: e.j.id, b: 'deck', typeA: 'glue', size: 'thickened epoxy, full length', pts: [[e.x, 0, e.zc + jD / 2]], noteA: 'Deck bonded to the crossmember top.' });
   });
@@ -320,12 +336,13 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     if (kb) {
       // Three screws on a circle between the bore and the rim (the BOM counts the joint's points: it was one, build review MUST-11); each passes through the disc and 3/4 in into the king beam.
       const rScrew = (p.kingThrustOdIn / 4) + (p.kingpinDiaIn / 4) + 0.015;
-      const thrustScrews: Vec3[] = [90, 210, 330].map((deg): Vec3 => [L.king.x + rScrew * Math.cos((deg * Math.PI) / 180), rScrew * Math.sin((deg * Math.PI) / 180), L.king.bot]);
+      // D-88: one screw straight aft and two at 120 deg either side of it, so none lands in the kingpin nut slot, which runs forward from the bore at the top of the king beam.
+      const thrustScrews: Vec3[] = [180, 60, 300].map((deg): Vec3 => [L.king.x + rScrew * Math.cos((deg * Math.PI) / 180), rScrew * Math.sin((deg * Math.PI) / 180), L.king.bot]);
       // D-75 (review MUST-15f): the counterbore is sized: the #8 flat head (about 0.32 in) in a 3/8 in hole, 1/4 in deep from the disc's sliding face, so the head sits below the face and
       // the screw grips only the 1/4 in of UHMW left above it.
       const thrustFit = pickWoodScrew(8, Math.max(0.0625, p.kingThrustThickIn - THRUST_SCREW_CBORE_DEEP_IN), kb.stock?.t ?? L.king.top - L.king.bot);
       add({ a: 'king-beam', b: 'king-thrust', typeA: 'screw', size: `3 × ${screwText(thrustFit)} ${stainless(p)} flat-head screws (each in a ${frac(THRUST_SCREW_CBORE_DIA_IN)}" wide × ${frac(THRUST_SCREW_CBORE_DEEP_IN)}" deep counterbore from the disc's sliding face, ${frac(rScrew)} in from the kingpin axis) holding the UHMW disc to the king beam`, fit: thrustFit, pts: thrustScrews, noteA: 'Keeps the disc with the king beam; the axle beam turns under it (D-58).' });
-      add({ a: 'king-beam', b: 'kingpin', typeA: 'hole', typeB: 'pin', size: `${frac(p.kingpinDiaIn)}" bore (snug bushing fit) through the king beam, nylock nut and washer captured in a slot cut from the front face`, sizeB: `${frac(p.kingpinDiaIn)}" bolt turns in the bore; the nut only stops the axle dropping away (rebound)`, pts: [[L.king.x, 0, (L.king.bot + L.king.top) / 2]], noteA: 'Bored square to the face on the drill press; the nut slot is cut from the front before the deck goes on.' });
+      add({ a: 'king-beam', b: 'kingpin', typeA: 'hole', typeB: 'pin', size: `${frac(p.kingpinDiaIn)}" bore (snug bushing fit) through the king beam, thin nylock (jam) nut held by its flats in a slot cut from the front face (no washer)`, sizeB: `${frac(p.kingpinDiaIn)}" bolt turns in the bore; the nut only stops the axle dropping away (rebound)`, pts: [[L.king.x, 0, (L.king.bot + L.king.top) / 2]], noteA: 'Bored square to the face on the drill press; the nut slot is cut from the front before the deck goes on.' });
     }
     for (const { s, tag } of SIDES) {
       const [ax, ay, az] = L.chain.anchor;
@@ -336,12 +353,12 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
   }
   void deck;
 
-  // ── Rear transom backers (S13): epoxy to the transom, the socket and bracket bolts pass through both ──
+  // ── Rear transom backers (S13): glued to the transom (D-73 glue rule), the handle-socket screws pass through both into T-nuts ──
   for (const { s, tag } of SIDES) {
     const bk = byId.get(`transom-backer-${tag}`);
     if (!bk) continue;
     const bb = worldAABB(bk);
-    add({ a: bk.id, b: 'transom-rear', typeA: 'glue', size: 'epoxy, full face; the socket / bracket carriage bolts pass through both', pts: [[bb.min[0], (bb.min[1] + bb.max[1]) / 2, (bb.min[2] + bb.max[2]) / 2]], noteA: 'Glue on the bench before the transom goes on.' });
+    add({ a: bk.id, b: 'transom-rear', typeA: 'glue', size: `${p.weatherSpec === WEATHER_SPEC.extreme ? 'epoxy' : 'Titebond III'}, full face (D-73); the handle-socket screws pass through both into T-nuts set in the backer`, pts: [[bb.min[0], (bb.min[1] + bb.max[1]) / 2, (bb.min[2] + bb.max[2]) / 2]], noteA: 'Glue on the bench before the transom goes on.' });
     void s;
   }
 

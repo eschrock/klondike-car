@@ -32,7 +32,7 @@ const ALLOW: Allow[] = [
   // ---- front pivot and the bridle (D-56). Decided per pair in pivot.test.ts as well; every entry is a contact, not a clash.
   { a: /^axle-F[LR]$/, b: /^(beam-F|wheel-F[LR])$/, why: 'the stub axle lies in a groove in the top of the beam end and passes through the hub bore (D-56; as at the rear)' },
   { a: /^beam-F$/, b: /^wheel-F[LR]$/, why: 'tire OBB is a conservative box; the beam ends sit inside the rim, 1/8" short of the hub face' },
-  { a: /^wheel-F[LR]$/, b: /^clamp-F[LR]\d$/, why: 'D-60: the 3-1/2 in tire OBB is 1.2 in wider than the 2.28 in hub, so the outer clamp plate (on the beam top beside the hub, a few inches above the axle line where the real wheel is the hub and the rim well) reaches the OBB\'s inner band by 0.24 in; the OBB over-covers the round tire (the same conservatism as beam x wheel)' },
+  { a: /^wheel-[FR][LR]$/, b: /^clamp-[FR][LR]\d$/, why: 'D-60 (and D-88 for the rear plates, now 1/4" in from the beam end like the front outer plates): the 3-1/2 in tire OBB is 1.2 in wider than the 2.28 in hub, so the outer clamp plate (on the beam top beside the hub, a few inches above the axle line where the real wheel is the hub and the rim well) reaches the OBB\'s inner band by 0.24 in; the OBB over-covers the round tire (the same conservatism as beam x wheel)' },
   { a: /^kingpin$/, b: /^(beam-F|bridle-tongue|king-thrust|king-beam)$/, why: 'the kingpin bolt passes through bored holes in the axle beam, the tongue plate, the thrust washer bore and the king beam (the parts are boxes without the hole)' },
   { a: /^(beam-F|king-beam|joist-\d+)$/, b: /^steer-(eye|anchor)-[LR]$/, why: 'the forged eye bolt passes through a drilled hole in the member (D-58)' },
   { a: /^steer-(eye|anchor)-[LR]$/, b: /^steer-chain-[LR]$/, why: 'the chain hangs on the eye by a quick link; the chain is drawn straight between the eye rings (D-58)' },
@@ -60,7 +60,7 @@ const SOLID: PartGroup[] = ['frame', 'body', 'front-end', 'running-gear', 'seat'
  */
 const KNOWN_OFF_DEFAULT: RegExp[] = [
   // Found when the Phase 3c-3a variants were swept (src/model/storage.ts, handle.ts, lighting.ts are other agents' files; reported, not patched):
-  /^storage-end-aft x storage-lid-stay:/, // seatXMin: the shortest rear box the validator allows is too short for its lid stay and rims
+  /^storage-rim-end-(aft|fore) x storage-(strip|gasket-end-fore|turn-block-[LR]):/, // seatXMin: the shortest rear box the validator allows is too short for a lid behind the fixed strip (D-89; it was too short for the old lid stay)
   /^storage-lid x storage-rim-end-(aft|fore):/,
   /^storage-rim-end-aft x storage-rim-end-fore:/,
   /^handle-(socket|pin)-[LR] x handle-bar:/, // deck 17+ in / rear side 22 in: the handlebow sits at a fixed height above the rear transom's fittings
@@ -73,7 +73,7 @@ const KNOWN_OFF_DEFAULT: RegExp[] = [
   /^(axle-R|beam-R) x joist-1:/,
   /^beam-hold-down-[LR] x joist-1:/, // 3c-5: with the joists at 8.5 in the first joist no longer falls on the rear hanger at the defaults; in a variant where it does (kingBeam5, the fuzz) its end meets the hold-down angle's upright leg by 3/16 in (it was an ALLOW entry)
   /^beam-hold-down-[LR] x deck:/, // overslung rear beam at a low deck (D-56): validateParams only asks deck >= beam top + ply
-  /^wheel-F[LR] x clamp-F[LR]\d:/, // a tire wider than the hub: the tire OBB over-covers the stub clamp plate next to the hub (the same OBB conservatism as beam x wheel in ALLOW, seen only with tireWidthIn > hubLengthIn + ~1)
+  /^wheel-[FR][LR] x clamp-[FR][LR]\d:/, // a tire wider than the hub: the tire OBB over-covers the stub clamp plate next to the hub (the same OBB conservatism as beam x wheel in ALLOW, seen only with tireWidthIn > hubLengthIn + ~1)
   /^clamp-F[LR]\d x joist-[678]:/, // front beam at a joist (wheelbase / king beam length combos): the clamp plates on the beam top reach the joist underside
   /^(beam-F|clamp-F[LR]\d|axle-F[LR]) x rail-[LR]:/, // lock >= 30 deg: the beam's trailing corner passes the rail step within 0.2 in, and the 1.46 in slab cover of the 45 degree ramp over-reports (the exact swept check is in pivot.test.ts)
   /^steer-chain-[LR] x (king-beam|clamp-F[LR]\d|bridle-tongue|beam-F|axle-F[LR]|roll-pad-[LR]|king-thrust):/, // chain geometry off the defaults (a different deck height, beam position, wheelbase or lock): the straight chain between the eye rings meets the king beam or something on the beam; the steer-clear row measures the taut chain (D-58)
@@ -233,7 +233,7 @@ const EXPECTED_GROUP_LB: Record<string, number> = {
   'running-gear': 18.6, 'front-end': 16.3, frame: 13.4, body: 36.1, seat: 8.4, storage: 7.0, removable: 2.4, lighting: 1.5, // D-83: lighting 1.4 lb with the 0.19 lb and 0.06 lb lights (2.0 before); D-60 (26.4, 21.2, 13.3, 43.8, 10.3, 8.4, 3.7, 1.9 before)
 };
 /** Groups with a wide band [low, high] (lb): the brake and the fastener remainder. */
-const WIDE_GROUP_LB: Record<string, [number, number]> = { brake: [4, 14], hardware: [2.5, 6.5] };
+const WIDE_GROUP_LB: Record<string, [number, number]> = { brake: [4, 14], hardware: [2.5, 6.8] }; // the D-85 D-rings and the D-91 trim-head screws brought it to 6.5
 describe('masses', () => {
   const parts = buildModel(defaults);
   it('every part has finite mass; every non-payload part is positive', () => {

@@ -589,9 +589,9 @@ export function brakeReturn(ctx: Ctx): AnalysisCheck {
   const lift = wt > 1e-6 ? bg.mRel / wt : 99;
   const tMax = bg.tApp;
   const brk = p.brakeCordBreakLbf / p.brakeCordSafetyFactor;
-  const leverE = Math.max(0.5, g.H[0] - bg.Erel[0]);
-  const stopV = Math.max(0, bg.mRel - wt) / leverE; // vertical force the stop cord holds at rest
-  const stopT = stopV / Math.max(0.2, bg.fRel[1] / bg.tRel);
+  // the stop cord (round 2: a down-tie from the flap eye to a low eye on the transom) takes the bungee's surplus torque at rest, at its own moment arm about the pin
+  const stopT = Math.max(0, bg.mRel - wt) / Math.max(0.5, g.stop.arm);
+  const stopSlack = g.stop.lenRel - g.stop.lenApp;
   const pen = L.transom + p.blockingThickIn - 0.1;
   const wEye = screwWithdrawal(p, 0.19, pen);
   const wFlapEye = 0.5 * screwWithdrawal(p, 0.19, 1); // D-65: the flap eye is a #10 screw eye 1 in long in the flap's rear END face: end-grain withdrawal is taken as half the side-grain value
@@ -600,11 +600,12 @@ export function brakeReturn(ctx: Ctx): AnalysisCheck {
     detail('bungee torque over the weight torque of the flap group, released', lift, '×', p.brakeReturnLiftMargin, '>='),
     detail('bungee tension, applied (cord breaking strength / safety factor)', tMax, 'lbf', brk, '<='),
     detail('stop cord tension at rest (breaking strength / safety factor)', stopT, 'lbf', brk, '<='),
+    detail('stop cord goes slack when the tread is pressed (its released length less its applied length)', stopSlack, 'in', 0.1, '>='),
     detail('transom eye screw, withdrawal at the applied tension (NDS, wet)', tMax * (bg.fApp[1] / bg.tApp), 'lbf', wEye, '<='),
     detail('flap eye screw (end grain), withdrawal: the x part of the cord pull at the applied tension (NDS, wet, half value)', tMax * (Math.abs(bg.fApp[0]) / bg.tApp), 'lbf', wFlapEye, '<='),
     detail('flap eye screw (end grain), lateral: the cord pull across the screw (half value)', tMax, 'lbf', latFlapEye, '<='),
   ];
-  const how = `Return set per flap: a ${f(bg.lenRel)}" shock cord from an eye in the flap's rear end to an eye in the rear transom's aft face (${f(p.brakeBungeeAnchorBelowTopIn, 1)}" below the top, over the backer), with a stop cord of the same length. Released tension ${f(bg.tRel, 1)} lbf, ${f(bg.rate, 1)} lbf/in, ${f(bg.tApp, 2)} lbf at the applied pose (cord ${f(bg.lenApp)}"); torque about the pin ${f(bg.mRel, 1)} lbf·in released against the weight torque of the flap, shoe block and pad ${f(wt, 1)} lbf·in = ${f(lift, 2)}× (limit ≥ ${f(p.brakeReturnLiftMargin, 1)}): the stop cord takes the difference (${f(stopT, 2)} lbf) and holds the ${f(p.brakePadGapIn, 3)}" pad gap. Cords: ${p.brakeCordBreakLbf} lbf breaking strength / ${p.brakeCordSafetyFactor} = ${f(brk, 0)} lbf. Eye screws #10 into ${f(pen, 2)}" of the transom and its backer (${f(wEye)} lbf) and a 1" screw eye in the flap's rear end face (${f(wFlapEye)} lbf withdrawal, ${f(latFlapEye)} lbf lateral, end grain at half value).`;
+  const how = `Return set per flap: a ${f(bg.lenRel)}" shock cord from an eye in the flap's rear end to an eye in the rear transom's aft face (${f(p.brakeBungeeAnchorBelowTopIn, 1)}" below the top, over the backer), with a stop cord tied down from the same flap eye to a low eye on the transom (${f(g.stop.lenRel)}" released, ${f(g.stop.lenApp)}" applied, so it goes slack when the tread is pressed). Released tension ${f(bg.tRel, 1)} lbf, ${f(bg.rate, 1)} lbf/in, ${f(bg.tApp, 2)} lbf at the applied pose (cord ${f(bg.lenApp)}"); torque about the pin ${f(bg.mRel, 1)} lbf·in released against the weight torque of the flap, shoe block and pad ${f(wt, 1)} lbf·in = ${f(lift, 2)}× (limit ≥ ${f(p.brakeReturnLiftMargin, 1)}): the stop cord takes the difference (${f(stopT, 2)} lbf) and holds the ${f(p.brakePadGapIn, 3)}" pad gap. Cords: ${p.brakeCordBreakLbf} lbf breaking strength / ${p.brakeCordSafetyFactor} = ${f(brk, 0)} lbf. Eye screws #10 into ${f(pen, 2)}" of the transom and its backer (${f(wEye)} lbf) and a 1" screw eye in the flap's rear end face (${f(wFlapEye)} lbf withdrawal, ${f(latFlapEye)} lbf lateral, end grain at half value).`;
   const gv = governing(ds, how);
   return singleCheck({
     id: 'brake-return', label: 'Flap return bungee, stop cord and eyes', group: 'Structure', refs: ['D-57'],

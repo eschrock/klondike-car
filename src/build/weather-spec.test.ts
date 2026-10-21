@@ -66,9 +66,9 @@ describe('the two specs', () => {
     expect(bStd.consumables.glueEpoxyFlOz).toBeLessThan(bExt.consumables.glueEpoxyFlOz);
     expect(bStd.consumables.sealedFt2).toBe(0);
     expect(bExt.consumables.sealedFt2).toBeGreaterThan(30);
-    // the Titebond joints are the general ones: Dominos, dados, tenons; the epoxy ones the laminations, fillets, deck and bedding
+    // the Titebond joints are the wood-to-wood glue-ups (D-92: one glue per glue-up): the hangers and backers, the edge-glued panels; the epoxy ones the laminations, fillets, deck, bedding and every joint glued with them
     const sStd = finishingSchedule(stdParts, std);
-    expect(sStd.glue.titebondJoints).toBeGreaterThan(50);
+    expect(sStd.glue.titebondJoints).toBeGreaterThan(15);
     expect(sStd.glue.titebondFlOz).toBeGreaterThan(0);
     expect(sStd.glue.titebondFlOz).toBeLessThanOrEqual(TITEBOND_BOTTLES[1].flOz);
     expect(finishingSchedule(extParts, ext).glue.titebondJoints).toBe(0);
@@ -78,15 +78,15 @@ describe('the two specs', () => {
     for (const w of [WEATHER_SPEC.standard, WEATHER_SPEC.extreme]) for (const m of [THIN_SHEET.followWeather, THIN_SHEET.whiteOakPly, THIN_SHEET.okoumeMarine, THIN_SHEET.balticBirch3mm, THIN_SHEET.balticBirch6mm]) {
       const p: Params = { ...defaultParams(), weatherSpec: w, thinSheetMaterial: m };
       const b = bom(buildModel(p), p, { noCompare: true });
-      const sizes = new Set(lines(b).filter((l) => /wood screw/.test(l.key) && !/^(Heat|Thumb)/.test(l.key)).map((l) => l.key.replace(/^(316|18-8) /, '').replace(/^pan-head /, ''))); // D-77: the strap's pan-head #8 x 1-1/4 is a head style of the second size, not a fourth size
+      const sizes = new Set(lines(b).filter((l) => /wood screw/.test(l.key) && !/^(Heat|Thumb)/.test(l.key)).map((l) => l.key.replace(/^(316|18-8) /, '').replace(/^(pan|trim)-head /, ''))); // D-91: the rail-to-chine trim-head #8 x 2-1/2 is a head style of the third size; D-77: the strap's pan-head #8 x 1-1/4 is a head style of the second size, not a fourth size
       expect([...sizes].sort(), `weather ${w}, sheet ${m}`).toEqual(['wood screw #8 x 1-1/4"', 'wood screw #8 x 2-1/2"', 'wood screw #8 x 5/8"']); // D-82: every wood screw is a #8
     }
   });
 
-  it('the lid-batten screws are #8 x 5/8 (the third D-72 size), not a fourth', () => {
+  it('the hardware-into-thin-stock screws are #8 x 5/8 (the third D-72 size), not a fourth', () => {
     const bat = lines(bExt).filter((l) => /wood screw #8 x 5\/8"/.test(l.key));
     expect(bat.length).toBe(1);
-    expect(bat[0].qty).toBeGreaterThanOrEqual(12);
+    expect(bat[0].qty).toBeGreaterThanOrEqual(12); // the two lid hinges, 3 into the lid frame and 3 into the fixed strip each (D-89)
     expect(lines(bStd).some((l) => /wood screw #6 x (3\/8|1\/2|5\/8)"/.test(l.key))).toBe(false);
   });
 });
@@ -171,18 +171,17 @@ describe('Bolt Depot by the piece', () => {
     expect(ins.notes).toMatch(/NO 18-8 or zinc #10-32 screw-in insert/);
     // the #8 x 2-1/2 that replaced the #6 is a real quoted screw (D-82)
     const eight = lines(bStd).find((l) => l.key === '18-8 wood screw #8 x 2-1/2"')!;
-    expect([eight.basis, eight.unitUsd, eight.qty]).toEqual(['quoted', 0.6, 24]);
+    expect([eight.basis, eight.unitUsd, eight.qty]).toEqual(['quoted', 0.6, 8]); // D-91: the 16 rail-to-chine screws are trim-head now, a line of their own; the rib knees keep 8
   });
 });
 
 describe('Standard hardware', () => {
   const byKey = (k: string): BomLine => lines(bStd).find((l) => l.key === k)!;
-  it('prices the 304 hinges, latch and stay, the zinc collars and D-rings, the galvanized eye bolts and chain from the Standard research', () => {
+  it('prices the 304 hinges (no lid stay, D-89), the zinc collars and D-rings, the galvanized eye bolts and chain from the Standard research', () => {
     expect(byKey('seat-hinge').extUsd).toBeCloseTo(12.99, 2); // D-83: Ace 2" stainless pair (check the package for 304)
     expect(byKey('seat-hinge').notes).toMatch(/check the package for 304/);
-    expect(byKey('storage-latch').unitUsd).toBeCloseTo(4.895, 3); // Walmart 304 2-pack 9.79
-    expect(byKey('storage-lid-stay').unitUsd).toBe(9.99); // D-83: Rockler 6" lid support pair (plated steel); the Sugatsune S-93L stays an alternative
-    expect(byKey('storage-lid-stay').alternatives![0].usd).toBe(26.4);
+    expect(lines(bStd).some((l) => /^storage-(latch|catch)/.test(l.key))).toBe(false); // D-89: oak turn-buttons from offcuts, no latches
+    expect(lines(bStd).some((l) => l.key === 'storage-lid-stay')).toBe(false); // D-89: the lid rests on the upright seat back
     expect(byKey('storage-hinge').extUsd).toBeCloseTo(5.47, 2); // D-83: Everbilt 2-1/2" stainless pair
     expect(byKey('storage-hinge').notes).toMatch(/check the package for 304/);
     const gaskets = lines(bStd).filter((l) => /^storage-gasket/.test(l.key));
@@ -375,17 +374,22 @@ describe('finishing schedule by spec', () => {
 });
 
 describe('the adhesive of each glue joint', () => {
-  it('Standard: epoxy for the bent laminations, the deck, the fillets and the thickened bedding; Titebond for the rest', () => {
+  it('Standard: epoxy for the bent laminations, the deck, the fillets and the thickened bedding, and every joint glued in the same glue-up (D-92); Titebond for the wood-to-wood glue-ups', () => {
     expect(standardAdhesive('lamination', 'rail-L', 'rail-L', '')).toBe('epoxy');
     expect(standardAdhesive('lamination', 'side-L-chine', 'side-L-web', 'thickened epoxy')).toBe('epoxy');
     expect(standardAdhesive('lamination', 'deck', 'joist-2', '')).toBe('epoxy');
     expect(standardAdhesive('dado', 'deck', 'transom-rear', '')).toBe('epoxy');
     expect(standardAdhesive('fillet', 'storage-end-aft', 'storage-side-L', 'tape')).toBe('epoxy');
     expect(standardAdhesive('small', 'scupper-rear-L', 'side-L-chine', '3/8" nipple bedded in epoxy')).toBe('epoxy');
-    expect(standardAdhesive('domino', 'joist-2', 'rail-L', 'epoxy')).toBe('titebond');
-    expect(standardAdhesive('dado', 'bow-bulkhead', 'side-L-web', '')).toBe('titebond');
-    expect(standardAdhesive('tenon', 'rail-L', 'transom-rear', '')).toBe('titebond');
+    // D-92: glued in the same session as the deck, the deck dado or the band fillets
+    expect(standardAdhesive('domino', 'joist-2', 'rail-L', 'epoxy')).toBe('epoxy');
+    expect(standardAdhesive('dado', 'bow-bulkhead', 'side-L-web', '')).toBe('epoxy');
+    expect(standardAdhesive('tenon', 'rail-L', 'transom-rear', '')).toBe('epoxy');
+    expect(standardAdhesive('tenon', 'storage-rim-end-aft', 'storage-rim-side-L', '')).toBe('epoxy');
+    // the wood-to-wood glue-ups stay Titebond
     expect(standardAdhesive('lamination', 'axle-hanger-L', 'rail-L', 'side-grain face, epoxy')).toBe('titebond');
+    expect(standardAdhesive('lamination', 'transom-backer-L', 'transom-rear', '')).toBe('titebond');
+    expect(standardAdhesive('lamination', 'brake-backer-L', 'rail-L', '')).toBe('titebond');
   });
 
   it('Standard epoxy joints plus Titebond joints cover every joint once; the D-70 face laminations are epoxy', () => {
@@ -398,7 +402,7 @@ describe('the adhesive of each glue joint', () => {
     for (const g of lam) expect(g.standard).toBe('epoxy');
     expect(glueEpoxyFlOz(stdParts)).toBeLessThan(glueEpoxyFlOz(stdParts, undefined, ext)); // without `p` no D-70 lines
     const t = glueTitebond(stdParts, std);
-    expect(t.flOz).toBeGreaterThan(5);
+    expect(t.flOz).toBeGreaterThan(1); // D-92 moved the frame, closing and box glue-ups to epoxy
     expect(glueTitebond(extParts, ext)).toEqual({ flOz: 0, joints: 0 });
   });
 });
@@ -516,13 +520,11 @@ describe('cost critic round 2: Standard metal, notes, shipping and tax', () => {
     expect(book).toContain('These orders ship, so freight is extra');
   });
 
-  it('prices that have no source behind them are estimates; the latch catch comes with the latch', () => {
+  it('prices that have no source behind them are estimates', () => {
     for (const b of [bStd, bExt]) {
       const by = (k: string): BomLine => lines(b).find((l) => l.key === k)!;
       expect(by('brake-foot-tread').basis).toBe('estimate');
       expect(by('flag-tube').basis).toBe('estimate');
-      expect(by('storage-catch').extUsd).toBe(0);
-      expect(by('storage-catch').notes).toMatch(/comes with the latch/);
     }
   });
 
@@ -533,10 +535,8 @@ describe('cost critic round 2: Standard metal, notes, shipping and tax', () => {
     else expect(e.notes).not.toMatch(/Thin margin/);
   });
 
-  it('stale text is gone: no wip path in prices, the Rockler item number, no Sipo in the Standard Domino note, hook-and-loop key', () => {
+  it('stale text is gone: no wip path in prices, no Sipo in the Standard Domino note, hook-and-loop key', () => {
     const k = (b: Bom, key: string): BomLine | undefined => lines(b).find((l) => l.key === key);
-    expect(k(bStd, 'storage-lid-stay')!.notes).toMatch(/item 39529/);
-    expect(k(bStd, 'storage-lid-stay')!.description).toBe(stdParts.find((x) => x.id === 'storage-lid-stay')!.name.replace(/\b316\b/, '304')); // the BOM follows the part name
     const dom = lines(bStd).filter((l) => /^Domino/.test(l.key));
     expect(dom.length).toBeGreaterThan(0);
     for (const l of dom) expect(`${l.notes} ${l.description}`, l.key).not.toMatch(/sipo/i);

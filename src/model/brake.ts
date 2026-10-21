@@ -14,7 +14,7 @@
  */
 import { KNEE_MOUNT } from '../params';
 import { STEP, box, cylinder, SIDES, unitDir, woodMassLb, type Ctx, stainless, stainlessName } from './build-utils';
-import { atPose, brakeGeometry, EYE_LIFT_IN, PIN_STICKOUT_IN, dot2, flapLocalX, flapOutline, hull2, PIVOT_SCREW_WOOD_IN, pivotBlockScrewPoints, polyArea, rot2, sub, type BrakeGeom, type V2 } from './brake-layout';
+import { atPose, brakeGeometry, EYE_LIFT_IN, PIN_STICKOUT_IN, dot2, flapLocalX, flapOutline, hull2, PIVOT_SCREW_WOOD_IN, pivotBlockScrewPoints, STOP_EYE_ABOVE_DECK_IN, polyArea, rot2, sub, type BrakeGeom, type V2 } from './brake-layout';
 import { buildHandle } from './handle';
 import { multiply, rotationY, translation } from './mat4';
 import { basisMatrix, profilePart } from './profile';
@@ -232,7 +232,7 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
           { ...screw(`brake-flap-${tag}`, nBS, `${nBS} x ${screwText(blockFit)}" ${stainless(p)} flat-head screws down through the block into the tongue`, undefined, blockFit), at: blockScrews.map(([x, y]): Vec3 => [x - xBlockMid, y, pl.blockT / 2]) },
           { type: 'pin', to: `brake-pivot-pin-${tag}`, count: 1, diaIn: p.brakePivotPinDiaIn, size: `${f2(p.brakePivotPinDiaIn)}" clevis pin hole across, ${f2(g.plan.hPin)}" below the flap top surface` },
         ],
-        notes: `White oak block ${f2(sB - sA)}" x ${f2(pl.wTongue)}" x ${f2(pl.blockT)}" (a scrap of 5/8" stock), on top of the flap tongue from its nose to the start of the flare. It deepens the tongue to ${f2(b.thick + pl.blockT)}" so the ${f2(p.brakePivotPinDiaIn)}" pin hole has ${f2(g.pivot.edgeTongueUp)}" of oak above and ${f2(g.pivot.edgeTongueDown)}" below it. Glue and screw it on, then drill the pin hole through block and tongue together with the knee clamped to them. The block enters the slot in the knee with the tongue; its top is flush with the knee top. ${REMOVE_NOTE}`,
+        notes: `White oak block ${f2(sB - sA)}" x ${f2(pl.wTongue)}" x ${f2(pl.blockT)}" (a scrap of 5/8" stock), on top of the flap tongue from its nose to the start of the flare. It deepens the tongue to ${f2(b.thick + pl.blockT)}" so the ${f2(p.brakePivotPinDiaIn)}" pin hole has ${f2(g.pivot.edgeTongueUp)}" of oak above and ${f2(g.pivot.edgeTongueDown)}" below it. Glue and screw it on, then drill the pin hole through block and tongue together with the knee clamped to them. The block enters the pocket in the knee with the tongue and stays under the pocket's oak roof (${f2(g.pivot.zPocketTop - g.pivot.zTongueTop)}" clear of it, so the flap can swing). ${REMOVE_NOTE}`,
         sourcing: { vendor: `Shop-cut white oak, ${f2(pl.blockT)}" x ${f2(pl.wTongue)}" x ${f2(sB - sA)}"` },
       }));
     }
@@ -301,23 +301,44 @@ export function buildBrakeAt(ctx: Ctx, s: number, movingOnly = false): Part[] {
       add1(part);
     }
 
-    // ── The return cord set: shock cord and its stop cord, from the flap eye to an eye screw in the rear transom ──
+    // ── The return cord set: the shock cord from the flap eye up to an eye in the rear transom, and the stop cord (round 2) down from the same flap eye to a low eye on the transom ──
     {
       const bg = g.bungee;
       const E = at(bg.E);
       const a: Vec3 = [E[0], sgn * Y.eye, E[1]];
       const b: Vec3 = [bg.A[0], sgn * bg.A[1], bg.A[2]];
       const returnCord = cordPart(ctx, {
-        id: `brake-cord-${tag}`, partNo: 'brake-cord', name: `Brake return bungee and stop cord ${tag}`, a, b, radius: 0.125, material: '1/4" shock cord (polyester sheath) with a 3/16" polyester stop cord',
+        id: `brake-cord-${tag}`, partNo: 'brake-cord', name: `Brake return bungee ${tag}`, a, b, radius: 0.125, material: '1/4" shock cord (polyester sheath)',
         joints: [eye(`brake-flap-${tag}`, 1, `#10 ${stainless(p)} screw eye in the rear end face of the flap, inboard`), eye('transom-rear', 1, `#10 ${stainless(p)} screw eye in the aft face of the rear transom, near its outer corner (a backer lies behind it), the snap hook clips to it`)],
         explode: [-0.5, sgn * 0.5, 1], removable: true,
-        sourcing: { vendor: `McMaster-Carr (1/4" shock cord with polyester sheath, ${f2(bg.lenRel + 2)}" cut, whipped ends tied to the eyes; 3/16" polyester braid for the stop cord, ${f2(bg.lenRel)}" between the eyes; two #10 ${stainless(p)} screw eyes)` },
-        notes: `The bungee pulls the flap up with ${f2(bg.tRel)} lbf released (the stop cord, tied taut at the released length ${f2(bg.lenRel)}" between the eyes, sets the lift and holds the pad ${f2(p.brakePadGapIn)}" off the tread), stretching to ${f2(bg.tApp)} lbf when the flap is down (${f2(bg.rate)} lbf per inch). The flap eye is a screw eye in the rear END face of the flap, ${f2(0.8)}" in from its inboard edge; its ring reaches ${f2(Math.abs(bg.E[0] - g.xEnd))}" behind the flap end (${f2(Math.abs(bg.E[0] - L.xRear))}" ${bg.E[0] < L.xRear ? 'behind' : 'ahead of'} the transom face), which lets the cord clear the hull's rear corner; the transom eye is ${f2(p.brakeBungeeAnchorBelowTopIn)}" below the transom top and ${f2(p.brakeBungeeAnchorInsetIn)}" in from the side's outer face (clear of the handle sockets and of the sign zone on the sides, D-57). The cord is a wear item: replace it when it goes slack. D-65: a stainless SNAP HOOK on the transom end (the end by the handle sockets) clips to the transom eye, so the cord unhooks in a second and goes off with the flap; the other end stays tied to the flap eye. ${REMOVE_NOTE}`,
+        sourcing: { vendor: `McMaster-Carr (1/4" shock cord with polyester sheath, ${f2(bg.lenRel + 2)}" cut, whipped ends tied to the eyes; two #10 ${stainless(p)} screw eyes)` },
+        notes: `The bungee pulls the flap up with ${f2(bg.tRel)} lbf released (the stop cord, a down-tie from the same flap eye to a low eye on the transom, holds it there with the pad ${f2(p.brakePadGapIn)}" off the tread), stretching to ${f2(bg.tApp)} lbf when the flap is down (${f2(bg.rate)} lbf per inch). The flap eye is a screw eye in the rear END face of the flap, ${f2(0.8)}" in from its inboard edge; its ring reaches ${f2(Math.abs(bg.E[0] - g.xEnd))}" behind the flap end (${f2(Math.abs(bg.E[0] - L.xRear))}" ${bg.E[0] < L.xRear ? 'behind' : 'ahead of'} the transom face), which lets the cord clear the hull's rear corner; the transom eye is ${f2(p.brakeBungeeAnchorBelowTopIn)}" below the transom top and ${f2(p.brakeBungeeAnchorInsetIn)}" in from the side's outer face (clear of the handle sockets and of the sign zone on the sides, D-57). The cord is a wear item: replace it when it goes slack. D-65: a stainless SNAP HOOK on the transom end (the end by the handle sockets) clips to the transom eye, so the cord unhooks in a second and goes off with the flap; the other end stays tied to the flap eye. ${REMOVE_NOTE}`,
       });
       const hl = (returnCord.geometry as { length: number }).length / 2; // the cord's local +z runs from the flap eye to the transom eye
       returnCord.joints![0].at = [[0, 0, -hl]];
       returnCord.joints![1].at = [[0, 0, hl]];
       add1(returnCord);
+      // The stop cord (round 2): it ran in parallel with the shock cord and blocked the brake. Now a 3/16" down-tie from the flap eye to a low #10 eye on the transom's aft face
+      // (over its backer), tied taut at the released pose; the flap eye moves down and toward it when the tread is pressed, so it goes slack (brakeGeometry checks it).
+      const sg = g.stop;
+      const S: Vec3 = [sg.S[0], sgn * sg.S[1], sg.S[2]];
+      const stopCord = cordPart(ctx, {
+        id: `brake-stop-${tag}`, partNo: 'brake-stop-cord', name: `Brake stop cord ${tag}`, a, b: S, radius: 0.09375, material: '3/16" polyester cord (paracord)',
+        joints: [eye('transom-rear', 1, `#10 ${stainless(p)} screw eye low in the aft face of the rear transom, over its backer, ${f2(STOP_EYE_ABOVE_DECK_IN)}" above the deck top: the stop cord's snap hook clips to it`)],
+        explode: [-0.5, sgn * 0.5, 0.6], removable: true,
+        sourcing: { vendor: `Shop paracord (3/16" polyester), ${f2(sg.lenRel)}" between the eyes; one #10 ${stainless(p)} screw eye` },
+        notes: `A down-tie that stops the shock cord: tied to the flap's rear eye with the bungee, and clipped by a snap hook to a low eye on the transom, ${f2(sg.lenRel)}" between the eyes, taut with the pad ${f2(p.brakePadGapIn)}" off the tire. Stepping on the tread moves the flap eye ${f2(sg.lenRel - sg.lenApp)}" closer to the low eye, so the cord goes slack and never resists the brake. ${REMOVE_NOTE}`,
+      });
+      const hs = (stopCord.geometry as { length: number }).length / 2;
+      stopCord.joints![0].at = [[0, 0, hs]];
+      add1(stopCord);
+      if (!movingOnly) add1(box(ctx, {
+        id: `brake-stop-snap-${tag}`, partNo: 'brake-snap', name: `Brake stop cord snap hook ${tag} (${stainlessName(p)})`, group: 'brake', mat: 'fixed', kind: 'purchased', step: STEP.brake, fab: 'buy', removable: true,
+        massLb: SNAP_LB, material: `${stainless(p)} snap hook, about 1-1/4" overall`, size: SNAP_SIZE_IN, center: [S[0], S[1], S[2] + SNAP_SIZE_IN[2] / 2 - 0.15], explode: [-1, 0, 0.2],
+        joints: [{ type: 'pin', to: 'transom-rear', count: 1, note: 'clips to the low #10 stainless screw eye in the aft face of the rear transom' }],
+        sourcing: { vendor: `McMaster-Carr (${stainless(p)} steel snap hook, about 1-1/4" long, tied into the stop cord end)`, costUsd: 3 },
+        notes: `Stainless snap hook tied into the transom end of the stop cord. Unclip it with the return cord to take the flap off. ${REMOVE_NOTE}`,
+      }));
       // the snap hook at the transom end (it stays put with the transom eye, so it is not part of the swept moving group)
       if (!movingOnly) add1(box(ctx, {
         id: `brake-snap-${tag}`, partNo: 'brake-snap', name: `Brake cord snap hook ${tag} (${stainlessName(p)})`, group: 'brake', mat: 'fixed', kind: 'purchased', step: STEP.brake, fab: 'buy', removable: true,
@@ -510,8 +531,8 @@ export function buildBrake(ctx: Ctx): Part[] {
 export function addTransomEyeJoints(parts: Part[]): void {
   const tr = parts.find((x) => x.id === 'transom-rear');
   if (!tr) return;
-  for (const { tag } of SIDES) {
-    const cord = parts.find((x) => x.id === `brake-cord-${tag}`), snap = parts.find((x) => x.id === `brake-snap-${tag}`);
+  for (const { tag } of SIDES) for (const [cordId, snapId] of [[`brake-cord-${tag}`, `brake-snap-${tag}`], [`brake-stop-${tag}`, `brake-stop-snap-${tag}`]]) {
+    const cord = parts.find((x) => x.id === cordId), snap = parts.find((x) => x.id === snapId);
     const cj = cord?.joints?.find((j) => j.to === 'transom-rear');
     if (!cord || !cj?.at?.length) continue;
     const m = cord.transform, l = cj.at[0];

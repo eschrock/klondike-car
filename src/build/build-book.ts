@@ -38,6 +38,12 @@ tr { break-inside: avoid; }
 ul.checks { list-style: none; padding-left: 0; margin: 3pt 0; }
 ul.checks li { margin: 2pt 0; }
 .check, .step { break-inside: avoid; border-top: 1px solid var(--rule); padding-top: 6pt; margin-top: 8pt; }
+.step:has(figure) { break-inside: auto; }
+.step h3 { break-after: avoid; }
+figure.fig { break-inside: avoid; margin: 6pt 0 8pt; }
+figure.fig svg { display: block; width: 100%; height: auto; border: 1px solid var(--rule); }
+figure.fig figcaption { margin-top: 2pt; }
+.why { border-left: 3px solid var(--accent); padding: 2pt 7pt; margin: 4pt 0; }
 .kind { font-size: 8.5pt; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-left: 6pt; font-weight: 400; }
 .cure { background: var(--tint); border-left: 3px solid var(--accent); padding: 3pt 7pt; margin: 5pt 0; }
 ol.instr { margin: 4pt 0 4pt 16pt; padding-left: 8pt; }
@@ -300,6 +306,8 @@ function assemblySection(d: BuildData): string {
     out.push(`<div class="step" id="step-${s.n}"><h3>${s.n}. ${esc(s.title)}${s.kind === 'build' ? '' : `<span class="kind">${esc(s.kind)}</span>`}</h3>`);
     out.push(listing.length ? `<p class="small"><strong>Parts (${listing.length}):</strong> ${esc(listing.join(', '))}</p>` : '<p class="small muted">No parts installed in this step.</p>');
     if (s.goal) out.push(`<p class="goal">${esc(s.goal)}</p>`);
+    if (s.why) out.push(`<p class="why"><strong>What this is for:</strong> ${esc(s.why)}</p>`);
+    for (const f of s.figures ?? []) out.push(`<figure class="fig">${f.svg.replace(/<\?xml[^?]*\?>/, '').replace(/\swidth="[^"]*"\sheight="[^"]*"/, ' width="100%"')}<figcaption class="small"><strong>${esc(f.title)}.</strong> ${esc(f.caption)}</figcaption></figure>`);
     out.push(s.items?.length ? instrList(s.items, link) : `<ol class="instr">${s.instructions.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>`);
     if (s.clampCure) out.push(`<p class="cure"><strong>Glue, clamp and cure:</strong> ${esc(s.clampCure)}</p>`);
     else if (s.cure) out.push(`<p class="cure"><strong>Cure:</strong> ${esc(cureLine(s.cure))}</p>`);

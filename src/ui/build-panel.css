@@ -42,6 +42,7 @@
     grid-template-columns: 208px clamp(340px, 32vw, 520px) minmax(0, 1fr);
     grid-template-areas: 'top top top' 'back back back' 'rail main viewer';
   }
+  #app[data-mode='build'][data-build-section='assembly'][data-step-figs] { grid-template-columns: 208px clamp(380px, 46vw, 780px) minmax(0, 1fr); }
   #app[data-mode='build'] #build-rail { grid-area: rail; overflow-y: auto; border-bottom: 0; border-right: 1px solid var(--border); padding: 14px 10px 16px; }
   #app[data-mode='build'] #build-main { grid-area: main; overflow-y: auto; padding: 18px 28px 40px; --bp-pad-top: 18px; }
   #app[data-mode='build'][data-build-section='assembly'] #build-main { padding: 14px 18px 32px; --bp-pad-top: 14px; }
@@ -312,7 +313,10 @@
   .bp-scroll.is-fit thead th { position: static; }
   .bp-table { width: 100%; }
   .bp-table th, .bp-table td { padding: 4px 8px; }
-  .bp-table tr, .bp-file, .bp-check, .bp-step-print, .bp-finstep, .bp-total, .bp-card { break-inside: avoid; }
+  .bp-table tr, .bp-file, .bp-check, .bp-finstep, .bp-total, .bp-card, .bp-fig { break-inside: avoid; }
+  .bp-step-print:not(:has(.bp-fig)) { break-inside: avoid; }
+  .bp-step-print .bp-step-title { break-after: avoid; }
+  .bp-fig-img { border-color: #999; }
   .bp-grid, .bp-grid-forms, .bp-grid-fin { grid-template-columns: 1fr 1fr; }
   .bp-intro { grid-template-columns: 1fr; }
   .bp-step-print { padding: 0 0 10px; margin: 0 0 10px; border-bottom: 1px solid #999; }
@@ -426,6 +430,14 @@
 
 /* Steps: a short goal, then numbered actions with plain bullets under them. */
 .bp-goal { margin: 0 0 8px; font-size: 14.5px; font-weight: 500; }
+.bp-why { margin: 0 0 10px; padding: 6px 9px; font-size: 13.5px; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); border-radius: 0 6px 6px 0; }
+.bp-figs { display: grid; gap: 12px; margin: 4px 0 12px; }
+.bp-fig-hint { margin: 0 0 -4px; }
+.bp-fig { margin: 0; }
+.bp-fig figcaption { margin-top: 4px; line-height: 1.4; }
+.bp-fig-img { background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 4px; color: #000; }
+.bp-fig-btn { display: block; width: 100%; padding: 0; border: 0; background: transparent; cursor: zoom-in; text-align: left; }
+.bp-fig-btn:focus-visible .bp-fig-img { outline: 2px solid var(--accent); outline-offset: 2px; }
 .bp-instr { margin: 6px 0; padding-left: 22px; }
 .bp-instr > li { margin: 7px 0; padding-left: 2px; }
 .bp-instr > li::marker { color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }

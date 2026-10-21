@@ -527,6 +527,11 @@ const defs = {
     default: 0.5, min: 0.375, max: 1, step: 0.125, status: 'assumed', ref: 'D-41',
     note: 'Flush with the outside of the wall; the inboard overhang past the ply wall is a ledge that the gasket also sits on.',
   },
+  storageLidStripIn: {
+    label: 'Storage box fixed strip across the front of the box top (fore-aft)', group: 'body', unit: 'in',
+    default: 3, min: 1.5, max: 5, step: 0.25, status: 'assumed', ref: 'D-89',
+    note: 'D-89: a fixed oak strip across the fore end of the box top carries the lid hinges on its aft edge, so the lid is shorter and opens past upright to rest on the upright seat back (the build check holds it at 95 to 100 degrees). Wider opens the lid further but leaves less of a lid.',
+  },
   storageDrainDiaIn: {
     label: 'Storage box drain hole diameter', group: 'body', unit: 'in',
     default: 0.375, min: 0.25, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-41',
@@ -1911,7 +1916,7 @@ const defs = {
       { value: WEATHER_SPEC.standard, label: 'Standard (garage-kept)' },
       { value: WEATHER_SPEC.extreme, label: 'Extreme weather' },
     ],
-    note: 'D-73. Standard: garage-kept, used a few times a year, gets wet at most at a rainy derby (Eric, 2026-10-12). Extreme weather: stored outside or near salt. The model reads this for the thin-sheet material ("follow the weather setting": Standard is 6 mm Baltic birch, Extreme is 6 mm okoume marine, D-80), for the drains (Standard: drilled 3/8 in holes with an epoxy-lined bore; Extreme: stainless nipples, D-83) and for the lid support (Standard: plated steel; Extreme: stainless friction stay, D-83). The fasteners, glue and finish that follow the weather spec are chosen in the BOM and finishing schedule: Standard is clear (no stain, urethane); Extreme keeps its stain, epoxy saturation coat and marine varnish (D-83).',
+    note: 'D-73. Standard: garage-kept, used a few times a year, gets wet at most at a rainy derby (Eric, 2026-10-12). Extreme weather: stored outside or near salt. The model reads this for the thin-sheet material ("follow the weather setting": Standard is 6 mm Baltic birch, Extreme is 6 mm okoume marine, D-80), for the drains (Standard: drilled 3/8 in holes with an epoxy-lined bore; Extreme: stainless nipples, D-83). The fasteners, glue and finish that follow the weather spec are chosen in the BOM and finishing schedule: Standard is clear (no stain, urethane); Extreme keeps its stain, epoxy saturation coat and marine varnish (D-83).',
   },
   thinSheetMaterial: {
     label: 'Thin-sheet material (webs, box, lid, signs)', group: 'materials', unit: '',

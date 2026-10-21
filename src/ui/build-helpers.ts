@@ -263,7 +263,8 @@ export function stepFocus(steps: BuildStep[], n: number, reframe: boolean): Step
   const s = steps.find((x) => x.n === n);
   if (!s) return null;
   const visible = cumulativeParts(steps, n);
-  return { n, visibleIds: visible.length ? visible : null, highlightIds: stepParts(steps, n), view: s.view, reframe };
+  // A preparation step highlights the parts it is for (a form's parts) in the finished sled.
+  return { n, visibleIds: visible.length ? visible : null, highlightIds: s.partIds.length ? stepParts(steps, n) : (s.forIds ?? []), view: s.view, reframe };
 }
 
 /** The viewer camera for a step: every step view, including `under` (hull inverted, for the running gear), is a viewer view. */

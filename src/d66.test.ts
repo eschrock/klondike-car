@@ -135,8 +135,8 @@ describe('D-66 the numbers that moved', () => {
   it('rear and brake: the rear clamp plate (11-1/4 to 13-1/4 in, 2 in wide since D-83) runs under the outer part of the rail, whose relief notch is cut over it; the brake rows pass, brake-clear still 0.22 in', () => {
     const rail = buildModel(defaults).find((x) => x.id === 'rail-L')!;
     const plate = worldAABB(buildModel(defaults).find((x) => x.id === 'clamp-RL1')!);
-    expect(plate.min[1]).toBeCloseTo(11.25, 6); // D-83: 2 in wide (was 11.5, 1.75 in wide)
-    expect(plate.max[1]).toBeCloseTo(13.25, 6);
+    expect(plate.min[1]).toBeCloseTo(11.5, 6); // D-88: the outboard edge 1/4 in in from the beam end, clear of the hanger (11-1/4 to 13-1/4 before); D-83: 2 in wide
+    expect(plate.max[1]).toBeCloseTo(13.5, 6);
     expect(rail).toBeDefined();
     for (const id of ['brake-slow', 'brake-ratio', 'brake-clear', 'brake-flap', 'brake-pivot', 'brake-mount', 'brake-return', 'brake-abuse', 'bearing-groove', 'rear-beam-seat']) expect(row(id).status, id).toBe('pass');
     expect(row('axle-stress').status).toBe('pass'); // D-71 solid rod: 0.79 at the 200 lb goal rider (0.925, marginal, on the 5/8 in tube); 150 lb is a pass

@@ -354,10 +354,11 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       title: 'Brake: pin, flap tongue and tire clearance on the first knee',
       how: [
         it('Cut ONE knee blank first, before cutting the other knee and the flaps.', [
-          `Notch the pocket in the layers, glue the test knee up and recess the pocket; screw the stainless strap on and drill the pin hole through its hole. Use the real ${fr(p.brakePivotPinDiaIn)}" clevis pin, the hitch-pin clip and a flap tongue with its pivot block clamped in the pocket.`,
+          'At the "Brake knees" assembly step, shape the first knee and try its pocket with a scrap block the size of the flap tongue with its pivot block on: it must slide in with a little play all round. Cut the other knee only when it does.',
+          `The full test comes at the "Brake flaps" step: screw the stainless strap on, drill the pin hole through its hole, and use the real ${fr(p.brakePivotPinDiaIn)}" clevis pin, the hitch-pin clip and the flap tongue with its pivot block clamped in the pocket.`,
           p.kneeMount === KNEE_MOUNT.removable
-            ? 'This test comes BEFORE the knees are bolted on: the knees go on first, while the hull is inverted (assembly step "Brake knees").'
-            : 'This test comes BEFORE the knees are glued: the knees go on first, while the hull is inverted (assembly step "Brake knees").',
+            ? 'The removable knees come off after the wheel dry fit anyway, so a knee that fails the full test is taken off and remade.'
+            : 'With glued knees the full test must come first: make the test knee, strap and flap tongue before the knees are glued on.',
         ]),
         it(`Check the pocket clearance (${fr(p.brakePivotSlotClearIn)}" a side), the pin through the strap and into the blind hole, the flap swing and the pad gap to the tire.`),
         it('Drag-test a chock: pull a weighted chock across packed dirt or gravel with a scale, dry and wet.'),
@@ -621,22 +622,6 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       when: 'before ordering',
       refs: ['D-73', 'D-83'],
     },
-    ...(parts.some((x) => x.id === 'storage-lid-stay' && /plated/.test(x.material))
-      ? [{
-        id: 'lid-support',
-        title: 'Lid support: bracket holes and arm length',
-        how: [
-          it('Open the package of the 6" lid support.', ['Measure the base bracket and the arm-end bracket: the screw holes (size and spacing) and the arm length, open and folded.']),
-          it('Hold it in the box on the left hinge backer and check the lid.', ['The arm folds flat when the lid is shut, and holds the lid open at about 75°.']),
-        ],
-        passList: ['The two brackets take #8 × 5/8" screws at the pilots the drawings give (or the pilots move to suit the bracket).', 'The lid stays open at its stop, and closes on the gasket with no gap.'],
-        ifFails: 'Move the pilots to the real holes before they are drilled, or use the stainless friction stay.',
-        partIds: ids(parts, /^(storage-lid-stay|storage-hinge-backer-L)$/),
-        paramKeys: [],
-        when: 'before cutting' as VerifyWhen,
-        refs: ['D-83'],
-      }]
-      : []),
   ];
 
   // Removable knees: the check on the first refit (the ratchet and wrench setting).
@@ -649,7 +634,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
         it('Take one knee off and put it back with the ratchet and wrench, as the assembly step "Take the brake knees off and put them back" says.', [
           'Do it on the finished sled, with the flap on the knee.',
           `Time it: about 5 minutes a side, longer the first time.`,
-          `Tighten each bolt snug, then a quarter turn (about ${p.kneeBoltTightenLbIn} in-lb; the quarter turn past snug is the spec, the torque only a check) and no more.`,
+          `Tighten each bolt snug, then a quarter turn (the quarter turn past snug is the spec; with an inch-pound torque wrench it reads about ${p.kneeBoltTightenLbIn} in-lb, a check only) and no more.`,
         ]),
         it('Look along the joint after the refit.', [
           'Seat a straightedge along the knee leg: it must sit flat on the rail and on the chine band.',

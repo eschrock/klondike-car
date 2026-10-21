@@ -108,17 +108,18 @@ describe('axle-stress and front-stub rows', () => {
   const cs = runChecks(defaults, { includeTruck: false });
   const cr = runChecks(solid, { includeTruck: false });
   const row = (rs: ReturnType<typeof runChecks>, id: string) => rs.find((c) => c.id === id)!;
-  it('D-71: nothing fails at the defaults (axle-stress is marginal at the 200 lb goal rider, 0.943; front-stub passes with room) and the tube is stiffer-limited than the rod by the section ratio', () => {
+  it('D-71, D-88: nothing fails at the defaults (axle-stress passes at the 200 lb goal rider, 0.809; front-stub passes with room) and the tube is stiffer-limited than the rod by the section ratio', () => {
     expect(row(cs, 'front-stub').status).toBe('pass');
     expect(row(cs, 'front-stub').util!).toBeLessThan(0.7);
     expect(row(cs, 'front-stub').utilCargo!).toBeLessThan(0.8);
     // the 5/8 in axle: the goal rider (200 lb) takes the tube above the 0.9 yellow line but under 1 (a 0.095 in wall is 1.03: a fail)
-    expect(row(cs, 'axle-stress').status).toBe('marginal');
-    expect(row(cs, 'axle-stress').util!).toBeGreaterThan(0.9);
-    expect(row(cs, 'axle-stress').util!).toBeLessThan(1);
+    // D-88: the rear clamp plates moved out to 1/4" from the beam ends (as the front outer plates), so the overhang to the wheel is shorter: the goal rider passes with room
+    expect(row(cs, 'axle-stress').status).toBe('pass');
+    expect(row(cs, 'axle-stress').util!).toBeGreaterThan(0.7);
+    expect(row(cs, 'axle-stress').util!).toBeLessThan(0.9);
     expect(row(cs, 'axle-stress').cases!.operating!.status).toBe('pass'); // the 150 lb required rider passes (D-1)
     expect(row(cs, 'axle-stress').utilCargo!).toBeLessThan(1);
-    expect(row(cs, 'axle-stress').util!).toBeCloseTo(0.943, 2);
+    expect(row(cs, 'axle-stress').util!).toBeCloseTo(0.809, 2); // D-88: 0.943 with the rear plates against the tire's inner face
     expect(row(cs, 'front-stub').util!).toBeCloseTo(0.522, 2);
     // bending stress on the same load goes with 1/S: the bending detail of the tube is S_rod / S_tube = 1.17 times the rod's
     const bend = (rs: ReturnType<typeof runChecks>) => row(rs, 'axle-stress').details!.find((d) => /NORMAL 1" rear bump/.test(d.name))!;

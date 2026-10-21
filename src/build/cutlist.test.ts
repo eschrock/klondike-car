@@ -270,8 +270,8 @@ describe('face lamination (D-70: no 12/4)', () => {
   const lam = rows.filter((r) => r.lamination);
 
   it('laminates every part thicker than a 5/4 board finishes to (D-79: 6/4 and 8/4 are not bought): the axle beams, brake knees and chocks, and the thick blocks that used 6/4 and 8/4', () => {
-    expect(lam.map((r) => r.partNo).sort()).toEqual(['beam-F', 'beam-R', 'bow-bulkhead', 'brake-chock', 'brake-knee', 'bridle-tongue', 'chain-joist', 'handle-bar', 'king-beam', 'seat-wedge', 'storage-hinge-backer']);
-    expect(cl.oak.find((g) => g.board === 'laminated')!.title).toMatch(/^Face-laminated parts \(15 pieces/);
+    expect(lam.map((r) => r.partNo).sort()).toEqual(['beam-F', 'beam-R', 'bow-bulkhead', 'brake-chock', 'brake-knee', 'bridle-tongue', 'chain-joist', 'handle-bar', 'king-beam', 'seat-wedge']); // D-89: the lid hinge backers are gone (the hinges lie on the fixed strip)
+    expect(cl.oak.find((g) => g.board === 'laminated')!.title).toMatch(/^Face-laminated parts \(13 pieces/); // D-89: 15 with the two lid hinge backers
     expect(cl.oak.some((g) => g.board === '12/4')).toBe(false);
   });
 
@@ -293,7 +293,7 @@ describe('face lamination (D-70: no 12/4)', () => {
   });
 
   it('every lamination: layers minus the cleanup hold the final thickness, every layer fits its board, on the 1/16 grid, and no odd fractions appear', () => {
-    expect(lam.length).toBe(11);
+    expect(lam.length).toBe(10); // D-89: the lid hinge backers are gone
     for (const r of lam) {
       const l = r.lamination!;
       expect(l.layers.reduce((a, q) => a + q.roughT, 0) - p.laminationCleanupIn, r.partNo).toBeGreaterThanOrEqual(r.stock.t - 1e-9);
@@ -545,7 +545,7 @@ describe('bandsaw capacity (Eric 2026-10-12: my bandsaw has 6" capacity)', () =>
   it('says so in the text: the resaw height against the saw, and which board to rip the lanes from first', () => {
     const rail = dcl.resaw.find((r) => Math.abs(r.roughT - 0.5) < 1e-6)!;
     expect(rail.resawHeightText).toBe('resaw height 3-3/8" (your bandsaw: 6")');
-    expect(rail.ripText).toBe(`rip the lanes from a ${rail.boardWidthIn}"-wide board first`);
+    expect(rail.ripText).toBe(rail.boards > 1 ? `rip the lanes from ${rail.boards} boards, each ${rail.boardWidthIn}" wide, first` : `rip the lanes from a ${rail.boardWidthIn}"-wide board first`);
     expect(rail.text).toContain(rail.ripText[0].toUpperCase() + rail.ripText.slice(1));
     expect(rail.text).toContain(rail.resawHeightText);
   });

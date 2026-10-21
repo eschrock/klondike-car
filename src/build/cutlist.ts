@@ -408,7 +408,7 @@ export interface ResawPool {
   laneCountText: string;
   /** `resaw height 1-5/8" (your bandsaw: 6")`. */
   resawHeightText: string;
-  /** `rip the lanes from a 9"-wide board first`. */
+  /** `rip the lanes from a 9"-wide board first`, or `from 2 boards, each 7" wide, first`. */
   ripText: string;
   /** The sentence for the bench: rip, then resaw, with the height against the capacity. */
   text: string;
@@ -886,7 +886,7 @@ export function planResaw(parts: Part[], p: Params, plans?: OakPartPlan[]): Resa
     const cap = p.bandsawResawCapacityIn;
     const withinCapacity = resawHeightIn <= cap + 1e-9;
     const resawHeightText = `resaw height ${roughFrac(resawHeightIn)} (your bandsaw: ${fractionText(cap, 8)}")`;
-    const ripText = `rip the lanes from a ${fractionText(c.widthIn, 8)}"-wide board first`;
+    const ripText = c.boards > 1 ? `rip the lanes from ${c.boards} boards, each ${fractionText(c.widthIn, 8)}" wide, first` : `rip the lanes from a ${fractionText(c.widthIn, 8)}"-wide board first`;
     const spares = c.slots - items.length;
     const lc = laneCount(c.lanes, c.k, spares);
     pools.push({

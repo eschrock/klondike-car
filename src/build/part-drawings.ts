@@ -303,6 +303,7 @@ function cylinderNear(parts: Part[], self: Part, q: Vec3, tol: number): Vec3 | n
 function textAxis(text: string): Vec3 | null {
   const t = text.toLowerCase().replace(/[\d/]+"?\s+from the (top|bottom)\b/g, ' '); // "13/32" from the top" is a distance, not a drilling direction
   if (/fore-aft/.test(t)) return [1, 0, 0];
+  if (/across the sled/.test(t)) return [0, 1, 0];
   if (/\b(down|up) (through|from)|straight down|from below|from the top|up from below|vertical/.test(t)) return [0, 0, 1];
   return null;
 }
@@ -695,7 +696,7 @@ function analyze(part: Part, parts: Part[], p: Params): Analysis | null {
     let size = `${dia ? `${drill(dia)} ` : ''}${word}, ${depth}`;
     const cb = new RegExp(String.raw`counterbore the head ${NUM}"?\s*(?:in\s*)?up the \w+ from its (underside|top)\s*\(${NUM}"?\s*(?:in\s*)?bit\)`).exec(r.text);
     let cbore: { dia: number; depth: number } | undefined;
-    if (cb && part.partNo === 'rail') { cbore = { dia: num(cb[3]), depth: num(cb[1]) }; size += `, with a ${drill(cbore.dia)} × ${frac(cbore.depth)} counterbore from the ${cb[2] === 'underside' ? words.side[1][0] : words.side[1][1]}`; notes.push('Plug each counterbore after the screw is in: a 3/8" oak plug cut with a plug cutter from offcuts (or a 3/8" dowel), glued in and trimmed flush.'); }
+    if (cb && part.partNo === 'rail') { cbore = { dia: num(cb[3]), depth: num(cb[1]) }; size += `, with a ${drill(cbore.dia)} × ${frac(cbore.depth)} counterbore from the ${cb[2] === 'underside' ? words.side[1][0] : words.side[1][1]}`; notes.push(`Plug each counterbore after the screw is in: a ${frac(cbore.dia)} oak plug cut with a plug cutter from offcuts (or a ${frac(cbore.dia)} dowel), glued in and trimmed flush.`); }
     // D-83: the side drain holes are located from ONE datum, the inner face of the rear transom (the web's rear end sits in its dado, the bands start at the face).
     const trFace = byId.get('transom-rear');
     const uShift = /drain hole/.test(t) && /^side-/.test(part.id) && trFace ? worldAABB(part).min[0] - worldAABB(trFace).max[0] : undefined;
@@ -950,7 +951,7 @@ function addPassingBolts(part: Part, parts: Part[], b: Board, feats: Feat[], byI
       if (feats.some((f) => f.k === 'hole' && f.joint !== 'passing' && f.to.includes(q.id))) continue;
       if (feats.some((f) => f.k === 'hole' && Math.abs(f.dia - dia) < 1 / 64 && pts.every((q2) => f.pts.some((e) => samePerp(e, q2, f.axis))))) continue;
       // a pin of another part that ends in a hole this part already has for it (the seat-back latch pin in the stop block)
-      if (j.type === 'pin' && feats.some((f) => f.k === 'hole' && f.to.includes(j.to) && pts.every((q2) => f.pts.some((e) => Math.hypot(e[0] - q2[0], e[1] - q2[1], e[2] - q2[2]) < 0.75)))) continue;
+      if (j.type === 'pin' && feats.some((f) => f.k === 'hole' && f.to.includes(j.to) && pts.every((q2) => f.pts.some((e) => Math.hypot(e[0] - q2[0], e[1] - q2[1], e[2] - q2[2]) < 1)))) continue; // 1 in: the recorded point is the hole's mouth, the crossing's is mid-way along the pin
       const ofQ = humanName(q.name), ofMate = humanName(mate.name);
       const noun = fastenerNoun(j, text);
       const size = isTnut ? `${drill(dia)} for the T-nut barrel (check it against your T-nut), through` : `${drill(dia)} clearance, through`;
@@ -1941,6 +1942,13 @@ export interface PartDims {
   grain: string;
   /** The key features, one short line each. */
   features: string[];
+}
+
+/** The mortise boxes of a part (Dominos, loose-tenon and tenon mortises), in its board frame, one per mortise: for the test that no two mortises in one part meet. */
+export function mortiseBoxes(part: Part, parts: Part[], p: Params): Array<{ key: string; lo: Vec3; hi: Vec3 }> {
+  const a = analyze(part, parts.includes(part) ? parts : [...parts, part], p);
+  if (!a) return [];
+  return a.feats.flatMap((f) => (f.k === 'region' && f.kind === 'mortise' ? f.boxes.map(([lo, hi]) => ({ key: f.key, lo, hi })) : []));
 }
 
 /** A short summary of a part for a popover: final T × W × L as fractions, the board, the grain and the key features. Pass `parts` and `p` to include inbound, passing-bolt and rod features. */

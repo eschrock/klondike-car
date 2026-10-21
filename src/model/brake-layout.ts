@@ -32,6 +32,9 @@ export const SHOULDER_CLEAR_IN = 0.5;
 export const EYE_LIFT_IN = 0.35;
 /** The bungee eye is a screw eye in the flap's rear END face, this far in from the flap's inboard edge (in): a fabrication rule. Its ring reaches EYE_LIFT_IN behind the end, which lets the cord clear the hull's rear corner. */
 export const EYE_INSET_IN = 0.8;
+/** The stop cord's low eye on the rear transom's aft face sits this far above the deck top, over the transom backer and below the flap eye's lowest (applied) point, so the
+ *  down-tie is taut released and goes slack when the tread is pressed (round 2 fix: it was in parallel with the shock cord and blocked the brake): a fabrication rule. */
+export const STOP_EYE_ABOVE_DECK_IN = 1;
 /** Corner radii of the Shaper-cut flap outline (in): the foot end and the pivot tongue's nose. */
 export const FLAP_REAR_CORNER_IN = 0.5;
 export const FLAP_NOSE_CORNER_IN = 0.25;
@@ -217,6 +220,8 @@ export interface BrakeGeom {
   strap: { t: number; w: number; len: number; x0: number; x1: number; z0: number; z1: number; y0: number; y1: number; pinHole: number; screwDia: number; screwHole: number; xs: number[]; zs: number[]; count: number };
   /** Bungee: eye on the flap (surface point, applied), transom anchor (x, y, z), cord lengths released / applied (3-D), cord tension released / applied, and the moment arm data. */
   bungee: { sEye: number; E: V2; Erel: V2; A: [number, number, number]; lenRel: number; lenApp: number; tRel: number; tApp: number; rate: number; fRel: V2; fApp: V2; mRel: number; mApp: number };
+  /** The stop cord: a down-tie from the flap eye to a low eye on the transom's aft face (S), taut at the released pose (lenRel), slack when applied (lenApp < lenRel); and the moment arm (in) of its pull about the pin, released. */
+  stop: { S: [number, number, number]; lenRel: number; lenApp: number; arm: number };
   /** Outrigger (knee), plan outline in (y, z) for the left side, x range, leg, arm; the rail, the backer and the bolt pattern. */
   knee: { x0: number; x1: number; poly: V2[]; legT: number; armT: number; zLeg: number; zArmBot: number; zTop: number; zBot: number; yOut: number; area: number;
     /** D-75: the face-glued layers, rear to front, with their grain. */
@@ -345,6 +350,12 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
   // moment about the pin at each pose (cord force on the flap; applied-pose frame for E, released-pose frame for Erel — each about its own pin position, which is fixed)
   const mRel = momentY(sub(Erel, H), fRel), mApp = momentY(sub(E, H), fApp);
   const bungee = { sEye, E, Erel, A, lenRel, lenApp, tRel, tApp, rate, fRel, fApp, mRel, mApp };
+  // ── Stop cord (round 2): a down-tie from the same flap eye to a low eye on the transom; it holds the flap down against the shock cord at the released pose and goes slack as the flap goes down ──
+  const S: [number, number, number] = [L.xRear - EYE_LIFT_IN, y.anchor, L.deckTop + STOP_EYE_ABOVE_DECK_IN];
+  const lenS = (e: V2) => Math.hypot(S[0] - e[0], S[1] - y.eye, S[2] - e[1]);
+  const sRelLen = lenS(Erel);
+  const sDir: V2 = [(S[0] - Erel[0]) / sRelLen, (S[2] - Erel[1]) / sRelLen];
+  const stop = { S, lenRel: sRelLen, lenApp: lenS(E), arm: Math.abs(momentY(sub(Erel, H), sDir)) };
 
   // ── Mount: knee on the hull's outer face over the rail, bolted through the rail into the backer ──
   const zt = L.railTop;
@@ -445,11 +456,12 @@ export function brakeGeometry(p: Params, L: Layout): BrakeGeom {
   if (!why && !(ratioCrit > 0)) why = 'no lever ratio';
   if (!why && !(H[0] > r + 0.2)) why = 'the pivot pin is not ahead of the tire';
   if (!why && !(xEnd < H[0] - 4)) why = 'the flap is too short';
+  if (!why && !(stop.lenApp < stop.lenRel)) why = 'the stop cord would not go slack when the tread is pressed';
   const ok = !why;
   return {
     ok, why, r, O, y, alpha, delta, C, n, t, pad: { w: padW, thick: tp, length: p.brakePadLengthIn, top, bot },
     sigma, u, v, c, H, xh, P, F, xEnd, board, plan, shoe, theta, footDrop, aF, mN, mT, ratioFwd, ratioRev, ratioCrit, critical: ratioFwd <= ratioRev ? 'forward' : 'reverse',
-    pivot, strap, bungee, knee, rail, backer, bolts, chock,
+    pivot, strap, bungee, stop, knee, rail, backer, bolts, chock,
   };
 }
 

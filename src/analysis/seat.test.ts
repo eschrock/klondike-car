@@ -84,11 +84,12 @@ describe('seatChecks', () => {
     const small = seatChecks(ctxFor({ storageVolumeIn3: 1000 })).find((q) => q.id === 'storage-pack')!;
     expect(small.status).toBe('fail');
   });
-  it('lid opening: the leaning back stops the lid near 90° minus the recline', () => {
-    expect(lidOpenAngleDeg(ctx)).toBeGreaterThan(70);
-    expect(lidOpenAngleDeg(ctx)).toBeLessThanOrEqual(90 - ctx.p.seatBackAngleDeg + 2);
-    expect(lidOpenAngleDeg(ctxFor({ seatBackAngleDeg: 0 }))).toBe(90);
-    expect(byId['storage-lid-open'].status).not.toBe('fail');
+  it('lid opening (D-89): hinged on the fixed strip, the lid opens past upright and leans on the upright seat back', () => {
+    expect(lidOpenAngleDeg(ctx)).toBeGreaterThanOrEqual(95);
+    expect(lidOpenAngleDeg(ctx)).toBeLessThanOrEqual(100);
+    expect(lidOpenAngleDeg(ctxFor({ seatBackAngleDeg: 0 }))).toBeGreaterThan(lidOpenAngleDeg(ctx)); // an upright back stands further forward of the lid
+    expect(lidOpenAngleDeg(ctxFor({ storageLidStripIn: 2 }))).toBeLessThan(lidOpenAngleDeg(ctx)); // a narrower strip, a longer lid: it meets the back sooner
+    expect(byId['storage-lid-open'].status).toBe('pass');
   });
   it('lash points: 6 at the defaults', () => {
     expect(byId['lash-points'].value).toBe(8); // D-85: four a side

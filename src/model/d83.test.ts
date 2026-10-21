@@ -154,15 +154,8 @@ describe('D-83: drains', () => {
 });
 
 describe('D-83: lid support, seat pads, D-rings, clamp plates, lights', () => {
-  it('the lid stay is a Rockler 6 in plated-steel support (Standard) and the stainless friction stay (Extreme), clear of the packed items', () => {
-    const a = get(buildModel(std), 'storage-lid-stay'), b = get(buildModel(ext), 'storage-lid-stay');
-    expect(a.material).toMatch(/plated steel lid support \(Rockler 6"/);
-    expect(a.sourcing!.vendor).toMatch(/Rockler/);
-    expect(a.massLb).toBeCloseTo(0.15, 9);
-    const bb = worldAABB(a);
-    expect(bb.max[0] - bb.min[0]).toBeGreaterThan(5);
-    expect(b.material).toMatch(/316 stainless friction stay/);
-    expect(b.massLb).toBeCloseTo(0.12, 9);
+  it('no lid stay under either spec (D-89: the lid rests on the upright seat back); the box still packs', () => {
+    for (const q of [std, ext]) expect(buildModel(q).some((x) => /^storage-(lid-stay|stay-block)$/.test(x.id))).toBe(false);
     expect(runChecks(std, { includeTruck: false }).find((c) => c.id === 'storage-pack')!.status).toBe('pass');
   });
   it('the seat is EVA kneeling pads 1-1/2 in thick, no cover: about 1 lb per 11 x 18 pad', () => {

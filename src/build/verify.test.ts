@@ -14,7 +14,7 @@ describe('verify checklist', () => {
     expect(list.map((c) => c.id)).toEqual([
       'tire-squash', 'wheel', 'axle-rod', 'steering-parts', 'bridle', 'sign-knobs', 'strip-bend',
       'oak-supplier', 'deck-sheet', 'web-bend', 'd-ring', 'eva-pads', 'hinges-304', // before ordering (D-79, D-80, D-83: the cost-pass sourcing and bought-hardware checks)
-      'seat-back', 'brake-knee', 'grab-reach', 'lamp-clip', 'ply-thickness', 'lid-support', 'other-params', // before cutting
+      'seat-back', 'brake-knee', 'grab-reach', 'lamp-clip', 'ply-thickness', 'other-params', // before cutting
       'bow-rib-clearance', 'brake-strap', 'brake-knee-refit', // at assembly (the refit check: removable knees, the default)
     ]);
     expect(list.map((c) => c.n)).toEqual(list.map((_, i) => i + 1));
@@ -133,10 +133,10 @@ describe('verify checklist', () => {
     expect(c.whatToDo).toMatch(/Planet Bike Spok/);
   });
 
-  it('under the Extreme spec the Standard-only lid support check is not listed (the stainless stay needs no new check)', () => {
+  it('no lid support check under either spec (D-89: the lid has no stay; it rests on the seat back)', () => {
     const ext = { ...p, weatherSpec: 1 };
     expect(verifyChecklist(buildModel(ext), ext).some((c) => c.id === 'lid-support')).toBe(false);
-    expect(list.some((c) => c.id === 'lid-support')).toBe(true);
+    expect(list.some((c) => c.id === 'lid-support')).toBe(false);
   });
 
   it('lists only part ids that are in the built model', () => {
@@ -172,8 +172,8 @@ describe('verify checklist', () => {
     expect(by('axle-rod').title).toMatch(/1045 or cold-drawn/);
     expect(by('axle-rod').title).toMatch(/not hot-rolled A36/);
     expect(by('axle-rod').pass).toContain('70 ksi');
-    expect(by('axle-rod').pass).toMatch(/the rear axle passes with about 20 % to spare with 70 ksi steel/); // plain words, not "the row is 0.79"
-    expect(by('axle-rod').pass).toMatch(/1018 cold-drawn at 54 ksi it is right at its limit/);
+    expect(by('axle-rod').pass).toMatch(/the rear axle passes with about 30 % to spare with 70 ksi steel/); // D-88: the rear plates moved out, a shorter overhang // plain words, not "the row is 0.79"
+    expect(by('axle-rod').pass).toMatch(/1018 cold-drawn at 54 ksi it passes with about 10 % to spare/);
     expect(by('axle-rod').pass).toMatch(/hot-rolled A36 at 36 ksi it fails by about/);
     expect(by('axle-rod').pass).not.toMatch(/\b0\.\d\d\b/);
     const tube = verifyChecklist(buildModel({ ...p, ...PRE_D72 }), { ...p, ...PRE_D72 }).find((c) => c.id === 'axle-tube')!;
@@ -197,9 +197,10 @@ describe('verify checklist', () => {
     const knee = list.find((c) => c.id === 'brake-knee')!;
     expect(knee.whatToDo).toMatch(/before cutting the other knee/);
     expect(knee.whatToDo).not.toMatch(/three knees/);
-    expect(knee.whatToDo).toMatch(/BEFORE the knees are bolted on/); // removable knees (the default)
+    expect(knee.whatToDo).toMatch(/try its pocket with a scrap block/); // removable knees (the default): a pocket test at the knee step, the full test at the flap step (assembly review round 1)
+    expect(knee.whatToDo).toMatch(/full test comes at the "Brake flaps" step/);
     const fx = { ...p, kneeMount: KNEE_MOUNT.fixed };
-    expect(verifyChecklist(buildModel(fx), fx).find((c) => c.id === 'brake-knee')!.whatToDo).toMatch(/BEFORE the knees are glued/);
+    expect(verifyChecklist(buildModel(fx), fx).find((c) => c.id === 'brake-knee')!.whatToDo).toMatch(/full test must come first: make the test knee, strap and flap tongue before the knees are glued on/);
     const bend = list.find((c) => c.id === 'strip-bend')!;
     expect(bend.whatToDo).toMatch(/FIRST board of each strip pool/);
     expect(bend.whatToDo).toMatch(/planned SPARE strips/);

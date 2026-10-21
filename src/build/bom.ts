@@ -484,7 +484,9 @@ function screwItems(part: Part, j: Joint, byId: PartMap, mat: FastMat): Fastener
   if (ins) return [{ label: `${mat.ss} machine screw #${ins[1]}-${ins[2]} x ${lenText(ins[3])}"`, qty: n }];
   const w = new RegExp(String.raw`#(\d+)\s*[x×]\s*${LEN}`).exec(size);
   // D-77: the pivot strap's screws are PAN-HEAD (the strap is not countersunk): their own line, not the flat-head one.
-  if (w) return [{ label: `${mat.ss} ${/pan-head/i.test(size) ? 'pan-head ' : ''}wood screw #${w[1]} x ${lenText(w[2])}"`, qty: n }];
+  // D-91: the rail-to-chine screws are TRIM-HEAD (a small head in a 1/4" counterbore): their own line too.
+  // D-89: the lid turn-buttons pivot on a wood screw with a nylon washer under its head.
+  if (w) return [{ label: `${mat.ss} ${/pan-head/i.test(size) ? 'pan-head ' : /trim-head/i.test(size) ? 'trim-head ' : ''}wood screw #${w[1]} x ${lenText(w[2])}"`, qty: n }, ...(/nylon washer/i.test(size) ? [{ label: `Nylon washer for #${w[1]} screw`, qty: n }] : [])];
   const g = /#(\d+)/.exec(size);
   if (!g) return [{ label: `${mat.ss} screw (size per joint note)`, qty: n }];
   const gl = GENERIC_LEN.exec(size);
@@ -719,15 +721,6 @@ export const NOTE_ITEMS: NoteItem[] = [
       const knees = byIds(built, ['brake-knee-L', 'brake-knee-R']).filter((x) => x.removable);
       if (!knees.length) return null;
       return { items: [{ label: `${matOf(spec ?? 'extreme').ss} nylon-insert lock nut 3/8-16`, qty: KNEE_SPARE_NUTS }], note: `${KNEE_SPARE_NUTS} spare lock nuts for the knee bolts: the nylon wears, so fit new nuts after about five removals` };
-    },
-  },
-  {
-    key: 'brake-stop-cord', section: 'purchased', price: NOTE_PRICE.paracord, partIds: ['brake-cord-L', 'brake-cord-R'], noteRef: 'brake cord notes and vendor text: "3/16" polyester braid for the stop cord"',
-    expand(built) {
-      const cords = byIds(built, ['brake-cord-L', 'brake-cord-R']).filter((x) => /stop cord/i.test(`${x.name} ${x.material ?? ''} ${x.sourcing?.vendor ?? ''}`));
-      if (!cords.length) return null;
-      const between = Number(/(\d+(?:\.\d+)?)"\s*between the eyes/.exec(cords[0].sourcing?.vendor ?? '')?.[1] ?? 0);
-      return { items: [{ label: `Paracord stop cord, 3/16"${between ? `, about ${fracIn(Math.ceil(between * 8 + 16) / 8)}" each with the knots` : ''}`, qty: cords.length }], note: `${cords.length} stop cords tied taut between the flap eye and the transom eye, cut from the paracord already in the shop` };
     },
   },
   {

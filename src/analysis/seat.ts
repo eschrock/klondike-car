@@ -14,7 +14,7 @@
  * M = w·(H − A)²/2.
  */
 import { GRIP_BACKING_H_IN, GRIP_BACKING_T_IN, GRIP_BOLT_COLS, GRIP_BOLT_DIA_IN, GRIP_WASHER_OD_IN, GRIP_WASHER_LOW_OD_IN, gripBolts, GRIP_BOLT_ROWS_IN, GRIP_BOLTS, LATCH_HOLE_WALL_MIN_IN, latchGeometry, seatBackSupport } from '../model/seat';
-import { storageGeometry, storageInterior, boxGear, packEssentials, ESSENTIALS } from '../model/storage';
+import { storageInterior, boxGear, packEssentials, ESSENTIALS, lidOpenAngleDeg as lidSwingDeg } from '../model/storage';
 import { LASH_BOLTS, LASH_BOLT_AR_IN2, LASH_BOLT_AT_IN2, LASH_BOLT_DIA_IN, LASH_WASHER, lashBoltLength, sideRibStations } from '../model/side-ribs';
 import { sideLateral } from './side-lateral';
 import type { Ctx } from './context';
@@ -223,36 +223,26 @@ export function storagePackCheck(ctx: Ctx): AnalysisCheck {
   });
 }
 
-/** Angle (deg) the lid opens about the fore-edge hinge before the leaning seat back stops it; 90 with no lean. */
+/** D-89: how far the lid opens about its hinges (on top, across the joint with the fixed strip) before it comes 1/8 in from the upright seat back (model/storage). */
 export function lidOpenAngleDeg(ctx: Ctx): number {
-  const { p, L } = ctx;
-  const g = storageGeometry(p, L);
-  const a = (p.seatBackAngleDeg * Math.PI) / 180;
-  const len = g.x1 - g.x0;
-  const hinge = 0.3; // hinge axis below the lid top
-  if (a <= 0 || p.storageLocation !== 0) return 90;
-  const k = Math.tan(a);
-  for (let d = 0; d <= 90; d += 0.1) {
-    const th = (d * Math.PI) / 180;
-    // Worst point along the lid is the free end (s = len) once the coefficient goes negative.
-    const lhs = len * Math.cos(th) - (len * Math.sin(th) - hinge) * k;
-    if (lhs <= 0) return d;
-  }
-  return 90;
+  return lidSwingDeg(ctx.p, ctx.L);
 }
 
 export function lidOpenCheck(ctx: Ctx): AnalysisCheck {
   const ang = lidOpenAngleDeg(ctx);
+  const back = ang < 180;
   return singleCheck({
     id: 'storage-lid-open',
-    label: 'Lid opening with the seat back fitted',
+    label: 'Lid opens past upright with the seat back upright (degrees past upright)',
     group: 'Structure',
-    value: ang,
+    value: ang - 90,
     unit: '°',
-    limit: 60,
+    limit: 2,
     sense: '>=',
-    refs: ['D-41', 'D-9'],
-    how: `Hinges on the fore edge, so the lid swings up and aft; the seat back (${ctx.p.seatBackAngleDeg}° recline) leans over the lid and stops it at ${f(ang, 0)}° (limit 60° to reach the kit). With the back removed (no tools) the lid opens to 100°+ on a stay.`,
+    refs: ['D-89', 'D-41'],
+    how: back
+      ? `The lid is hinged on the aft edge of a fixed ${ctx.p.storageLidStripIn}" oak strip across the front of the box top, the hinges flat on top, so it swings up and back past upright and leans on the upright seat back (${ctx.p.seatBackAngleDeg}° recline) at ${f(ang, 0)}° (${f(ang - 90, 1)}° past upright; 1/8" clear of the back until it leans there): no stay needed. The limit is 2° past upright, so the lid stays open by itself. With the back flipped flat it folds right over and lies open on the strip, on two rubber bumpers as tall as the folded hinge leaves, so the strip carries it, not the hinges: lower it by hand, and do not lean on its far edge, which reaches well past the strip.`
+      : 'No seat back stands over this box: the lid opens fully.',
   });
 }
 

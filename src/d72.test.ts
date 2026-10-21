@@ -76,16 +76,12 @@ describe('D-72: three wood-screw sizes, every screw inside its stack with its bi
     expect(screwFitOk(pickWoodScrew(8, 0.27, 1))).toBe(false);
     expect(pickWoodScrew(8, 0.125, 1.5, 0.875).lenIn).toBe(1.25); // the lash plate: the lash-load row counts 0.875 in of thread
   });
-  it('hardware into thin stock is #8 x 5/8; the hinge backer is 1-1/4 in so the hinge screw cannot poke into the box; the flag tube takes no screws', () => {
+  it('hardware into thin stock is #8 x 5/8: the lid hinges into the lid frame and the fixed strip (D-89); the flag tube takes no screws', () => {
     const parts = buildModel(defaults);
     const get = (id: string) => parts.find((x) => x.id === id)!;
-    const bk = worldAABB(get('storage-hinge-backer-L'));
-    expect(bk.max[0] - bk.min[0]).toBeCloseTo(1.25, 6);
     expect(get('storage-hinge-L').joints!.find((j) => j.to === 'storage-rim-end-fore')!.size).toMatch(/^#8 × 5\/8 /);
-    expect(get('storage-hinge-L').joints!.find((j) => /hinge-backer/.test(j.to))!.size).toMatch(/^#8 × 1-1\/4 /);
-    expect(get('storage-latch-L').joints![0].size).toMatch(/^#8 × 5\/8 /);
-    expect(get('storage-catch-L').joints![0].size).toMatch(/^#8 × 5\/8 /);
-    expect(get('storage-lid-stay').joints!.every((j) => /^#8 × 5\/8 /.test(j.size!))).toBe(true);
+    expect(get('storage-hinge-L').joints!.find((j) => j.to === 'storage-strip')!.size).toMatch(/^#8 × 5\/8 /);
+    expect(get('storage-turn-button-L').joints![0].size).toMatch(/^#8 × 1-1\/4 /);
     expect(get('flag-tube').joints!.some((j) => j.type === 'screw')).toBe(false);
     expect(get('flag-block-top').joints!.some((j) => j.type === 'screw')).toBe(false);
     // the brake: pivot block, shoe and pad all take the #8 x 1-1/4 (the old #10 x 2 shoe screw ran 0.37 in through the 7/8 in flap)
@@ -291,14 +287,14 @@ describe('D-73: the thin-sheet material and the weather spec', () => {
       const thin = parts.filter((x) => x.kind === 'sheet' && x.stock && x.stock.t < 0.3).reduce((a, x) => a + x.massLb, 0);
       return { total: totalMass(parts), thin, web: runChecks(p, { includeTruck: false }).find((c) => c.id === 'side-web')!.util! };
     });
-    expect(rows[0].total).toBeCloseTo(122.8, 1); // D-85: +0.72 lb (the rear ribs, rings and ties, less the sign strips); 122.08 before
-    expect(rows[1].total).toBeCloseTo(121.47, 1); // D-77: 121.09 with the old seat pads and 1.75 in plates
-    expect(rows[2].total).toBeCloseTo(120.71, 1); // the 6 mm okoume (118.28 for the 4 mm before D-80)
-    expect(rows[3].total).toBeCloseTo(118.7, 1);
-    expect(rows[0].thin).toBeCloseTo(11.70, 1);
-    expect(rows[1].thin).toBeCloseTo(10.16, 1);
-    expect(rows[2].thin).toBeCloseTo(9.60, 1);
-    expect(rows[3].thin).toBeCloseTo(6.64, 1);
+    expect(rows[0].total).toBeCloseTo(122.68, 1); // 122.59 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); 122.94 before the storage turn-buttons (D-89, round 3); assembly review rounds 1-2 (D-88 to D-91): +0.14 lb; D-85: +0.72 lb (the rear ribs, rings and ties, less the sign strips); 122.08 before
+    expect(rows[1].total).toBeCloseTo(121.40, 1); // 121.28 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); 121.63 before the storage turn-buttons (D-89, round 3); 121.47 before the assembly review (D-88 to D-91); D-77: 121.09 with the old seat pads and 1.75 in plates
+    expect(rows[2].total).toBeCloseTo(120.70, 1); // 120.5 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); 120.85 before the storage turn-buttons (D-89, round 3); 120.71 before the assembly review (D-88 to D-91); the 6 mm okoume (118.28 for the 4 mm before D-80)
+    expect(rows[3].total).toBeCloseTo(118.95, 1); // 118.55 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); +0.014 lb: the 3/4 in thin-nylock kingpin slot keeps oak (D-88); 118.9 before the storage turn-buttons (D-89, round 3); 118.7 before the assembly review (D-88 to D-91)
+    expect(rows[0].thin).toBeCloseTo(11.30, 1); // 11.7 before the fixed lid strip (D-89) and the kingpin jam nut (D-88)
+    expect(rows[1].thin).toBeCloseTo(9.81, 1); // 10.16 before the fixed lid strip (D-89) and the kingpin jam nut (D-88)
+    expect(rows[2].thin).toBeCloseTo(9.30, 1); // 9.6 before the fixed lid strip (D-89) and the kingpin jam nut (D-88)
+    expect(rows[3].thin).toBeCloseTo(6.38, 1); // 6.64 before the fixed lid strip (D-89) and the kingpin jam nut (D-88)
     // D-76: the web row reads the across-grain strength (the face grain runs along the side). D-80: the 6 mm 5-ply sheets pass with room (the 4 mm okoume was 2.01 and the 3 mm Baltic is still 4.84)
     expect(rows[0].web).toBeCloseTo(0.33, 2);
     expect(rows[1].web).toBeCloseTo(0.61, 2);
@@ -362,7 +358,7 @@ describe('D-71: the solid 5/8 in rod (Eric)', () => {
     const steps = assemblySteps(parts, defaults);
     const text = steps.flatMap((s) => s.instructions).join(' ');
     expect(text).toMatch(/5\/8" wide × 19\/32" deep, so the 5\/8" rod stands 1\/32" proud/);
-    expect(text).toMatch(/shimmed 1\/32" off the beam/);
+    expect(text).toMatch(/bearing on the stub \(1\/32" above the beam face\)/); // the roll pad sits on the proud stub (assembly review round 1); it was "shimmed 1/32 off the beam"
     expect(text).toMatch(/5\/8" bore on the 5\/8" rod/);
     expect(text).not.toMatch(/0\.63" bore/);
     expect(text).not.toMatch(/DOM tube/);
@@ -373,14 +369,14 @@ describe('D-71: the solid 5/8 in rod (Eric)', () => {
 describe('the numbers at the defaults (weatherSpec Standard: 6 mm Baltic birch, the solid rod, the 3 wood-screw sizes)', () => {
   it('empty mass 122.08 lb (D-84, D-80/D-83: the 6 mm Baltic sides, box and lid and the 2 in clamp plates, less the lighter EVA seat pads and lights; 121.09 lb with the 1/4 in white oak ply at D-77, +0.87 lb the pivot straps and knee roofs; D-76: +0.96 lb the side ribs; 115.95 lb at D-71)', () => {
     const m = totalMass(buildModel(defaults, { rider: 'none', cargo: false }));
-    expect(m).toBeCloseTo(122.805, 2); // D-85: +0.725 lb (the rear ribs, rings and ties, the box rib moved, no sign strips); 122.080 before. Older note: // D-84: +0.32 lb (the 1/8 in grab-board strip and the oak caps, one screw and washer fewer); was 121.617; merged with the final review of the build outputs (121.639 before: 13/32 knee holes, 7/8 narrow washers and the rib-knee shift)
+    expect(m).toBeCloseTo(122.682, 2); // 122.606 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); D-88 final: +0.014 lb, the kingpin slot 3/4 in tall for the thin nylock (jam) nut keeps oak; 122.592 before that; 122.942 before the storage turn-buttons (D-89, round 3); assembly review round 2: +0.148 lb (the narrower kingpin nut slot keeps more oak, the brake down-ties and snap hooks, the lid-support block, less the lighter lid hinges); round 1: -0.011 lb (the bigger kingpin nut slot and the king-beam reliefs for the plate bolt heads); 122.805 before. D-85: +0.725 lb (the rear ribs, rings and ties, the box rib moved, no sign strips); 122.080 before. Older note: // D-84: +0.32 lb (the 1/8 in grab-board strip and the oak caps, one screw and washer fewer); was 121.617; merged with the final review of the build outputs (121.639 before: 13/32 knee holes, 7/8 narrow washers and the rib-knee shift)
     const oak = totalMass(buildModel({ ...defaults, thinSheetMaterial: OAK }, { rider: 'none', cargo: false }));
-    expect(oak).toBeCloseTo(121.48, 1);
+    expect(oak).toBeCloseTo(121.40, 1); // 121.28 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); 121.63 before the storage turn-buttons (D-89, round 3); 121.48 before the assembly review (D-88 to D-91)
     expect(m - oak).toBeCloseTo(1.33, 1); // the 6 mm Baltic over the 1/4 in white oak ply
     const ok = totalMass(buildModel({ ...defaults, thinSheetMaterial: OKOUME }, { rider: 'none', cargo: false }));
-    expect(ok).toBeCloseTo(120.712, 2); // D-80: the 6 mm okoume (Extreme)
+    expect(ok).toBeCloseTo(120.659, 2); // 120.513 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); D-88 final: +0.014 lb (the 3/4 in thin-nylock kingpin slot keeps oak); 120.499 before; 120.849 before the storage turn-buttons (D-89, round 3); 120.701 before the assembly review (D-88 to D-91); D-80: the 6 mm okoume (Extreme); 120.712 before the assembly review's king-beam slot and reliefs (-0.011)
     const tubeOk = totalMass(buildModel({ ...defaults, ...PRE_D72 }, { rider: 'none', cargo: false }));
-    expect(tubeOk).toBeCloseTo(116.813, 2); // D-85: +0.75 lb; // the D-71 tube and the 4 mm okoume (PRE_D72)
+    expect(tubeOk).toBeCloseTo(116.901, 2); // 116.618 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); D-88 final: +0.014 lb (the 3/4 in kingpin slot); 116.604 before; 116.954 before the storage turn-buttons (D-89, round 3); 116.802 before the assembly review (D-88 to D-91); assembly review round 1: -0.011 (king-beam slot and reliefs); D-85: +0.75 lb; // the D-71 tube and the 4 mm okoume (PRE_D72)
     const rodOk4 = totalMass(buildModel({ ...defaults, ...PRE_D72, axleWallIn: 0 }, { rider: 'none', cargo: false }));
     expect(rodOk4 - tubeOk).toBeCloseTo(1.88, 1); // the rod over the tube
   });
@@ -390,7 +386,7 @@ describe('the numbers at the defaults (weatherSpec Standard: 6 mm Baltic birch, 
     expect(sw.green).toMatchObject({ loLb: 50, hiLb: 210, openLow: true, openHigh: false }); // D-83: 220 lb (230 with the 4 mm okoume) before the 2 in clamp plates added groove bearing area
     expect(riderSweep(withMat(OKOUME)).green).toMatchObject({ loLb: 50, hiLb: 210 });
     const cap = cargoCapacity(defaults);
-    expect(cap.capacityLb).toBe(276); // D-78 removable knees (the default): the dry knee's brake-mount row limits it
+    expect(cap.capacityLb).toBe(276); // 277 before the fixed lid strip (D-89) and the kingpin jam nut (D-88); 276 before the storage turn-buttons (D-89: 0.35 lb lighter); D-78 removable knees (the default): the dry knee's brake-mount row limits it
     expect(cap.comfortableLb).toBe(231); // D-85: 232 before (0.7 lb heavier sled)
     expect(cap.limiter!.id).toBe('brake-mount');
     const glued = cargoCapacity({ ...defaults, kneeMount: KNEE_MOUNT.fixed });
@@ -398,7 +394,7 @@ describe('the numbers at the defaults (weatherSpec Standard: 6 mm Baltic birch, 
     expect(glued.limiter!.id).toBe('rear-beam-seat'); // was 'bearing-groove'
     const cs = runChecks(defaults, { includeTruck: false });
     expect(cs.filter((c) => c.status === 'fail')).toEqual([]);
-    expect(cs.find((c) => c.id === 'axle-stress')!.util!).toBeCloseTo(0.787, 2);
+    expect(cs.find((c) => c.id === 'axle-stress')!.util!).toBeCloseTo(0.676, 2); // D-88: the rear clamp plates 1/4 in further out (0.787 before)
   });
   it('the chine-to-rail tie has NO Dominos in either spec (D-81): a thickened-epoxy bed along the whole bearing face plus a screw in every gap', () => {
     for (const p of [defaults, withMat(OKOUME), { ...defaults, weatherSpec: WEATHER_SPEC.extreme } as Params]) {

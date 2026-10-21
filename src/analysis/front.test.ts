@@ -179,6 +179,19 @@ describe('roll pads and the thrust disc (D-58)', () => {
 
 describe('kingpin (grade 8)', () => {
   const c = byId('kingpin');
+  it('D-88: the bolt bears only in the king beam bore BELOW the nut slot (the thin nylock slot is 3/4" tall, its ceiling 7/16" under the deck): tow Th / (5/8 x bore), dowel bearing across the grain', () => {
+    const bore = 7.528 - 7 / 16 - 3 / 4 - KING_BOT;
+    const ld = tieLoad(ctx);
+    const d = det('kingpin', 'tow pull at the tie (x overload): bolt bearing in the king beam bore');
+    expect(rel(d.value, ld.Th / (0.625 * bore))).toBeLessThan(1e-6);
+    expect(d.limit).toBe(det('kingpin', 'bolt bearing in the oak axle beam hole').limit); // the same oak dowel-bearing allowable as the axle beam hole
+    expect(det('kingpin', 'NORMAL: bolt bearing in the king beam bore').value).toBeCloseTo((150 + normal.H) / (0.625 * bore), 6);
+    // at the defaults: about 9/16" of bore, about 806 psi against 1,700 (a full nylock's 1" slot left about 5/16" and about 1,490 psi)
+    const dflt = runChecks(defaultParams()).find((q) => q.id === 'kingpin')!.details!.find((q) => q.name.includes('tow pull at the tie (x overload): bolt bearing in the king beam bore'))!;
+    expect(dflt.value).toBeGreaterThan(780);
+    expect(dflt.value).toBeLessThan(830);
+    expect(dflt.util).toBeLessThan(0.5);
+  });
   const Z = (Math.PI * 0.625 ** 3) / 32, As = (Math.PI * 0.625 ** 2) / 4;
   const kingMid = KING_BOT + KING_D / 2;
   const vm = (S: number, arm: number, T: number) => {
@@ -225,8 +238,9 @@ describe('kingpin (grade 8)', () => {
     expect(c.status).toBe('pass');
     expect(c.statusCargo).toBe('pass');
     expect(c.util!).toBeCloseTo(0.86, 1); // 0.855 at D-74 (2-1/8 in beam: the couple acts on a shallower king beam); 0.77 before
-    expect(det('kingpin', 'NORMAL: bolt bearing in the oak king beam').value).toBeCloseTo((150 + normal.H) / (0.625 * KING_D), 6);
-    expect(det('kingpin', 'NORMAL: bolt bearing in the oak king beam').limit).toBeCloseTo((4000 * 0.85) / 2, 6);
+    // D-88: the bearing length is the bore below the nut slot, not the whole king beam depth
+    expect(det('kingpin', 'NORMAL: bolt bearing in the king beam bore').value).toBeCloseTo((150 + normal.H) / (0.625 * (7.528 - 7 / 16 - 3 / 4 - KING_BOT)), 6);
+    expect(det('kingpin', 'NORMAL: bolt bearing in the king beam bore').limit).toBeCloseTo((4000 * 0.85) / 2, 6);
     const gov = c.details!.reduce((a, b) => (b.util > a.util ? b : a));
     expect(gov.name).toMatch(/tow pull tilt/);
   });
@@ -237,7 +251,7 @@ describe('kingpin (grade 8)', () => {
 
 describe('king-bearing (UHMW disc, roll pads, the oak under them)', () => {
   const al = { perp: (1070 * 0.67) / 2 };
-  const nutA = (Math.PI / 4) * ((2.2 * 0.625) ** 2 - (0.625 + 1 / 16) ** 2);
+  const nutA = (Math.sqrt(3) / 2) * (1.5 * 0.625) ** 2 - (Math.PI / 4) * (0.625 + 1 / 16) ** 2; // D-88: the nut's own hex face, no washer (the slot holds the nut)
   it('static front axle on the disc: 167.5 lb over the 6.14 in2 the disc touches = 27 psi vs the 1000 psi allowable; the mean pressure with the 3 mph strike is N / A', () => {
     expect(det('king-bearing', 'static front axle').value).toBeCloseTo(hw.axle / A_DISC, 2);
     expect(det('king-bearing', 'static front axle').limit).toBe(1000);
@@ -257,7 +271,7 @@ describe('king-bearing (UHMW disc, roll pads, the oak under them)', () => {
     // the pad on the beam top uses its full 2 x 3 in
     expect(det('king-bearing', 'NORMAL, one wheel: the pad on the axle beam top').value).toBeCloseTo(sh.P / 6, 6);
     // the pad force is less than the axle load, so no nut hold-down is needed
-    expect(det('king-bearing', 'NORMAL: nut washer').value).toBe(0);
+    expect(det('king-bearing', 'NORMAL: kingpin nut bearing').value).toBe(0);
     // the pad force and the pressure both scale with the roll moment: kq = the worst over the swing of cos(a) / (y A)
     expect(sh.pressure / sh.P).toBeGreaterThan(1 / 6 - 1e-9);
   });
@@ -267,7 +281,7 @@ describe('king-bearing (UHMW disc, roll pads, the oak under them)', () => {
     expect(det('king-bearing', 'HARD 2" hit, one wheel: pressure of the pad on the rail').value).toBeCloseTo(sh.pressure, 6);
     expect(det('king-bearing', 'HARD 2" hit, one wheel: pressure of the pad on the rail').limit).toBeCloseTo(2 * al.perp, 6);
     expect(sh.hold).toBeGreaterThan(0);
-    expect(det('king-bearing', 'HARD: nut washer').value).toBeCloseTo(sh.hold / nutA, 6);
+    expect(det('king-bearing', 'HARD: kingpin nut bearing').value).toBeCloseTo(sh.hold / nutA, 6);
   });
   it('steering effort: the UHMW disc friction (mu 0.25) at the static load is about 4 lbf at the shackle, under 10% of the 150 lbf pull', () => {
     const d = det('king-bearing', 'steering effort');
@@ -439,7 +453,7 @@ describe('steer-stops (the check chains, D-58)', () => {
 describe('king-beam (the oak crossmember at the kingpin)', () => {
   const Lspan = 2 * (ctx.L.steer.railYIn - ctx.L.turnIn(44 + 1.5)); // span between the rail inner faces at the king beam, which follow the bow turn-in
   const wA = 1.5 - 0.3125; // each half of the 3 in beam beside the 5/8 bolt hole
-  const slotH = 1.2 * 0.625; // nut slot cut from the front face, 0.75 in tall
+  const slotH = 0.75; // nut slot cut from the front face, 3/4 in tall (D-88: the 5/8 thin nylock, 1-1/2 threads past it, 1/16 above and below, to 1/16)
   // net section at the nut slot: rear part full depth, front part only below the slot
   const rects = [{ w: wA, h: KING_D }, { w: wA, h: KING_D - slotH }];
   const Anet = rects.reduce((s, q) => s + q.w * q.h, 0);
@@ -448,9 +462,9 @@ describe('king-beam (the oak crossmember at the kingpin)', () => {
   const cNet = Math.max(zbar, KING_D - zbar);
   const Igross = (3 * KING_D ** 3) / 12;
   const sBend = (M: number) => Math.max((M * cNet) / Inet, (M * (KING_D / 2)) / Igross);
-  it('net section at the nut slot by hand: area ' + (2 * 1.1875 * 1.5905 - 1.1875 * 0.75).toFixed(3) + ' in2, the 3 in beam is 1.5905 in deep over the 9/16 in disc, I computed from the two rectangles', () => {
+  it('net section at the nut slot by hand: area ' + (2 * 1.1875 * 1.5905 - 1.1875 * slotH).toFixed(3) + ' in2, the 3 in beam is 1.5905 in deep over the 9/16 in disc, I computed from the two rectangles', () => {
     expect(KING_D).toBeCloseTo(1.5905, 4);
-    expect(Anet).toBeCloseTo(2 * 1.1875 * KING_D - 1.1875 * 0.75, 9);
+    expect(Anet).toBeCloseTo(2 * 1.1875 * KING_D - 1.1875 * slotH, 9);
     expect(Inet).toBeLessThan(Igross);
     expect(Lspan).toBeGreaterThan(19);
     expect(Lspan).toBeLessThan(22);
