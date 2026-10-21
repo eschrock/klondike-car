@@ -4,7 +4,7 @@
  * Sizes come from the cut list (resaw pools, layer cuts, glue-ups), the rail form drawing (dims and build text), the rail part drawing (located
  * features) and the layout; shapes that are only schematic say so in the note.
  */
-import { partOBB } from '../../model/bounds';
+import { partOBB, worldAABB } from '../../model/bounds';
 import { hull2 } from '../../model/brake-layout';
 import { computeLayout, outerHalfWidth, samples, type Layout } from '../../model/layout';
 import type { Part, Vec2 } from '../../model/types';
@@ -96,7 +96,8 @@ interface RailForm {
   baseL?: number; baseW?: number; baseEnd: number;
   nLayers?: number; layerT?: number; stackH?: number;
   hang: number;
-  cureH?: number; cureF?: number;
+  /** The clamp time as the form drawing words it ("24 h at 70 °F or 36 h at 60 °F"), and how far the strips stand past the form's bow end (in). */
+  cureText?: string; bowExtra: number;
   /** The bench fence (thick × tall) and the lead-in clamp count text ("2 or 3"), from the form drawing's build text. */
   fenceT?: number; fenceH?: number; leadClamps?: string;
   /** The plywood strip under the overhang (length), and the spring clamps on the overhang: their count text ("4 to 6") and spacing. */
@@ -132,7 +133,8 @@ function railForm(c: FigCtx): RailForm | null {
   const stripCut = c.cut().cuts.find((q) => q.piece === 'strip' && q.ids.includes(rail.id));
   const stripL = stripCut?.rough.l;
   const hang = grab(new RegExp(`about (${FR})" of each strip hangs off`), text) ?? Math.max(0, (stripL ?? lengthIn) - lengthIn);
-  const cure = /(\d+) h at (\d+) °F/.exec(text);
+  const cure = /Leave it clamped for the full cure, (\d+ h at \d+ °F or \d+ h at \d+ °F)/.exec(text);
+  const bowX = grab(new RegExp(`bow end about (${FR})" past the form's bow end`), text);
   const fence = new RegExp(`straight (${FR})" × (${FR})" fence`).exec(text);
   const lead = /plus (\d+ or \d+) on the straight lead-in/.exec(text);
   const spring = new RegExp(`with (\\d+ to \\d+) large spring clamps over the top, about every (${FR})"`).exec(text);
@@ -144,7 +146,7 @@ function railForm(c: FigCtx): RailForm | null {
     baseL, baseW, baseEnd: baseL !== undefined ? Math.max(0, (baseL - lengthIn) / 2) : 0,
     nLayers: lay ? Number(lay[1]) : undefined, layerT: lay ? parseFr(lay[2]) : undefined, stackH: lay ? parseFr(lay[3]) : undefined,
     fenceL: grab(new RegExp(`fence about (${FR})" long`), text), stripRoughW: stripCut?.rough.w, stripRoughL: stripL,
-    hang, cureH: cure ? Number(cure[1]) : undefined, cureF: cure ? Number(cure[2]) : undefined,
+    hang, cureText: cure?.[1], bowExtra: bowX ?? 0,
     fenceT: fence ? parseFr(fence[1]) : undefined, fenceH: fence ? parseFr(fence[2]) : undefined, leadClamps: lead?.[1],
     supportL: grab(new RegExp(`plywood strip, about (${FR})" long`), text), springText: spring?.[1], springEvery: spring ? parseFr(spring[2]) : undefined,
     turn: L.taper.turnIn,
@@ -175,8 +177,10 @@ function drawFormPlan(F: Fig, g: RailForm, box: { x: number; y: number; w: numbe
   F.poly(P([[0, 0], [g.lengthIn, 0], ...[...g.face].reverse()]), jig);
   // the strips: along the fence, then the form face
   const outerStrip = offsetLine(g.face, g.railT);
-  F.poly(P([[-g.hang, v0], ...g.face, ...[...outerStrip].reverse(), [-g.hang, v0 + g.railT]]), stripStyle);
-  if (g.plies > 1) for (let i = 1; i < g.plies; i++) { const mid = offsetLine(g.face, g.strip * i); F.poly(P([[-g.hang, v0 + g.strip * i], ...mid]), { stroke: MAT.oak.stroke, width: 0.8 }, false); }
+  // the strips stand bowExtra past the form's bow end, where the face runs straight
+  const ext = (q: Vec2[]): Vec2[] => (g.bowExtra > 0 ? [...q, [q[q.length - 1][0] + g.bowExtra, q[q.length - 1][1]]] : q);
+  F.poly(P([[-g.hang, v0], ...ext(g.face), ...[...ext(outerStrip)].reverse(), [-g.hang, v0 + g.railT]]), stripStyle);
+  if (g.plies > 1) for (let i = 1; i < g.plies; i++) { const mid = offsetLine(g.face, g.strip * i); F.poly(P([[-g.hang, v0 + g.strip * i], ...ext(mid)]), { stroke: MAT.oak.stroke, width: 0.8 }, false); }
   // counter-form
   const cf = g.counterFace;
   F.poly(P([...cf, [cf[cf.length - 1][0], g.vTop], [cf[0][0], g.vTop]]), counterJig);
@@ -477,6 +481,7 @@ const kneeLamination: FigFn = (c) => {
   const kb = 17, BX = 230, by0 = Math.min(R[0].z0, R[1].z0);
   const BY = top + 30 + (Math.max(R[0].z1, R[1].z1) - by0 + 0.6) * kb;
   const pB = (y: number, z: number): Vec2 => [BX - (y - yc) * kb, BY - (z - by0) * kb];
+  F.poly(outline(2).map(([y, z]) => pB(y, z)), { fill: '#d2b27a', stroke: MAT.oak.stroke, width: 1 });
   F.poly(outline(1).map(([y, z]) => pB(y, z)), mat('oak', { opacity: 0.55 }));
   F.poly(outline(0).map(([y, z]) => pB(y, z)), mat('oak'));
   F.poly(kn.poly.map(([y, z]) => pB(y, z)), { stroke: MUTED, width: 1.2, dash: '2 3' });
@@ -503,7 +508,7 @@ const kneeLamination: FigFn = (c) => {
   F.label(pB(R[1].y0 - 0.2, (zJoint ?? zc) + 1.6), [tx, top + 96], ['layer 2 shows at the sides: it is wider', 'and shorter than the upright layers'], { size: 12, anchor: 'start' });
   if (zJoint !== undefined) F.label(pB(R[1].y0 - 0.15, zJoint), [tx, top + 146], ['its edge-glue joint (dashed),', 'clear of the bolt holes in the leg'], { size: 12, anchor: 'start' });
   F.label(pB(yIn + 1, (zB + kn.zLeg) / 2), [tx, top + 196], ['the knee shape (dotted): sawn later,', 'leg at the bottom, the pocket in the arm'], { size: 12, anchor: 'start' });
-  legendOf(F, [OAK_KEY, { s: mat('oak', { opacity: 0.55 }), label: 'center layer, behind' }], [16, F.h - 12]);
+  legendOf(F, [OAK_KEY, { s: mat('oak', { opacity: 0.55 }), label: 'center layer, behind' }, { s: { fill: '#d2b27a', stroke: MAT.oak.stroke, width: 1 }, label: 'front layer, seen through the pocket' }], [16, F.h - 12]);
   F.note('A: exploded, not to scale. B: to scale');
   return {
     id: 'mill-knee',
@@ -612,7 +617,8 @@ const railFormSetup: FigFn = (c) => {
     F.poly([S(0, i * layerT), S(vFace, i * layerT), S(vFace, (i + 1) * layerT), S(0, (i + 1) * layerT)], mat('mdf'));
     F.poly([S(vC, i * layerT), S(g.vTop, i * layerT), S(g.vTop, (i + 1) * layerT), S(vC, (i + 1) * layerT)], COUNTER_STYLE);
   }
-  for (let i = 0; i < g.plies; i++) F.poly([S(vFace + i * g.strip, 0), S(vFace + (i + 1) * g.strip, 0), S(vFace + (i + 1) * g.strip, g.railW), S(vFace + i * g.strip, g.railW)], mat('oak'));
+  const sW = g.stripRoughW ?? g.railW;
+  for (let i = 0; i < g.plies; i++) F.poly([S(vFace + i * g.strip, 0), S(vFace + (i + 1) * g.strip, 0), S(vFace + (i + 1) * g.strip, sW), S(vFace + i * g.strip, sW)], mat('oak'));
   const cz = stackH + 0.5;
   F.rect(S(-0.6, 0)[0], S(0, cz + 0.3)[1], (g.vTop + 1.2) * ks, 0.3 * ks, mat('clamp'));
   F.rect(S(-0.6, 0)[0], S(0, cz + 0.3)[1], 0.4 * ks, (cz + 0.3 - stackH / 2) * ks, mat('clamp'));
@@ -622,7 +628,7 @@ const railFormSetup: FigFn = (c) => {
   const lx = sx + (bw + 0.8) * ks;
   F.label(S(g.vTop * 0.8, cz + 0.15), [lx, sy + 18], `clamp: closes the two straight backs, ${frac(g.vTop)} apart`, { size: 12, anchor: 'start', color: CLAMP_BLUE });
   F.label(S(g.vTop - 0.5, stackH - 0.4), [lx, sy + 46], `counter-form: ${nL} layers, its face ${frac(g.railT + COUNTER_CLEARANCE_IN)} off the form face`, { size: 12, anchor: 'start' });
-  F.label(S(vFace + g.railT / 2, g.railW - 0.3), [lx, sy + 74], `strips stand on the base; the form is ${f16(stackH - g.railW)} taller`, { size: 12, anchor: 'start' });
+  F.label(S(vFace + g.railT / 2, sW - 0.3), [lx, sy + 74], `${f16(sW)} strips stand on the base; the form is ${f16(stackH - sW)} taller`, { size: 12, anchor: 'start' });
   F.label(S(vFace * 0.6, stackH * 0.3), [lx, sy + 102], `form: ${nL} layers of ${f16(layerT)} MDF, ${f16(stackH)} tall`, { size: 12, anchor: 'start' });
   F.label(S(bw - 0.6, -layerT / 2), [lx, sy + 130], 'base', { size: 12, anchor: 'start' });
   legendOf(F, [{ s: mat('mdf'), label: 'MDF (form)' }, { s: COUNTER_STYLE, label: 'MDF (counter-form)' }, { s: mat('deck'), label: `${f16(FORM_BASE_IN)} plywood (base)` }, OAK_KEY, { s: FENCE_STYLE, label: 'scrap fence' }, { s: mat('clamp'), label: MAT.clamp.label }], [16, F.h - 32]);
@@ -703,11 +709,11 @@ const railGlueUp: FigFn = (c) => {
   F.sub([cx, sy], 'C. In order');
   const steps = [
     'Roll epoxy on both mating faces; butter one with thickened epoxy.',
-    'Stand the pair on edge on the base, against the form face.',
+    `Stand the pair on edge on the base, against the form face${g.bowExtra > 0 ? `, the bow ends ${f16(g.bowExtra)} past the form's bow end` : ''}.`,
     'Set the counter-form on; every clamp snug but loose.',
     `On the overhang: a caul on the outer strip and ${g.springText ?? 'several'} spring clamps over caul, strips and fence.`,
     `Tighten the clamps together: the lead-in first (${lead.length > 1 ? `1-${lead.length}` : '1'}), then station by station to the bow end.`,
-    g.cureH !== undefined ? `Leave it clamped ${g.cureH} h at ${g.cureF ?? ''} °F or warmer before it comes off.` : 'Leave it clamped for the full cure before it comes off.',
+    g.cureText ? `Leave it clamped ${g.cureText} before it comes off.` : 'Leave it clamped for the full cure before it comes off.',
   ];
   let yy = sy + 30;
   const wrap = (s: string, n: number): string[] => { const out: string[] = []; let line = ''; for (const w of s.split(' ')) { if ((line + ' ' + w).trim().length > n) { out.push(line.trim()); line = w; } else line += ' ' + w; } if (line.trim()) out.push(line.trim()); return out; };
@@ -778,9 +784,9 @@ const finishedRail: FigFn = (c) => {
   F.rect(X(0), Yt(T), Lr * kx, T * kt, mat('oak', { stroke: ACCENT, width: 1.6 }));
   for (const h of holes) F.circle([X(h.s), Yt(h.off)], 3, { fill: '#fff', stroke: INK, width: 1.2 });
   F.text([X(0), Yt(0) + 15], 'inboard face', { size: 11.5, color: MUTED });
-  F.text([X(Lr), Yt(T) - 6], 'outboard face', { size: 11.5, color: MUTED, anchor: 'end' });
+  F.text([X(0), Yt(T) - 6], 'outboard face', { size: 11.5, color: MUTED });
   const h0 = holes[0];
-  if (h0) F.label([X(h0.s), Yt(h0.off)], [X(h0.s) + 30, 84], [`${holes.length} screw holes${holeDia ? `, ${frac(holeDia, 64)}` : ''}, straight down through the rail,`, `for the screws up into the side (positions: this step's list)`], { size: 12, anchor: 'start' });
+  if (h0) F.label([X(h0.s), Yt(h0.off)], [X(h0.s) + 30, 84], [`${holes.length} screw holes${holeDia ? `, ${frac(holeDia, 64)}` : ''},`, 'straight through the rail', '(positions: this step\'s list)'], { size: 12, anchor: 'start' });
   // B. inboard face
   const kz = kx * 1.9, yz = 210;
   F.sub([16, yz - 12], 'B. The inboard face (depth drawn about 2 times)');
@@ -803,10 +809,17 @@ const finishedRail: FigFn = (c) => {
   F.label([X((stepPts[0][0] + stepPts[1][0]) / 2), Z((W + stepPts[1][1]) / 2)], [X(Lr) + 4, 352], [`bow step: a ${step.angleDeg}° ramp at ${f16(stepPts[0][0])},`, `then ${f16(stepPts[1][1])} deep to the bow end`], { size: 12, anchor: 'end' });
   const bored = holes.filter((h) => h.bored);
   if (bored.length && cbDia !== undefined && cbDeep !== undefined) { const b = bored[Math.min(5, bored.length - 1)]; F.label([X(b.s) + (cbDia * kx) / 2, Z(W - cbDeep / 2)], [X(b.s) - 26, 404], `${bored.length} counterbored ${f16(cbDia)} × ${f16(cbDeep)} from below (dashed)`, { size: 12, anchor: 'start' }); }
-  if (domS.length && domDown !== undefined) { const s = domS[Math.min(2, domS.length - 1)]; F.label([X(s), Z(domDown)], [X(s) + 30, 186], `${domS.length} Domino mortises${domSize ? ` (${domSize})` : ''}, ${f16(domDown)} down from the top edge`, { size: 12, anchor: 'start' }); }
+  // the S mark: the form's S-start tick, squared across the rail before it comes off the form; the finished ends are measured from it
+  const sBack = computeLayout(c.p).taper.x0 - worldAABB(rail).min[0];
+  if (sBack > 0 && sBack < Lr) {
+    F.line([X(sBack), Yt(T) - 6], [X(sBack), Yt(0) + 4], { stroke: ACCENT, width: 1.6, dash: '5 3' });
+    F.line([X(sBack), Z(0) - 4], [X(sBack), Z(W) + 4], { stroke: ACCENT, width: 1.6, dash: '5 3' });
+    F.label([X(sBack), Yt(T) - 6], [X(sBack) + 90, 84], ['S mark (the form\'s S-start tick):', `${f16(sBack)} from the finished rear end,`, `${f16(Lr - sBack)} from the finished bow end`], { size: 12, anchor: 'start', color: ACCENT });
+  }
+  if (domS.length && domDown !== undefined) { const s = domS[Math.min(3, domS.length - 1)]; F.label([X(s), Z(domDown)], [745, 186], `${domS.length} Domino mortises${domSize ? ` (${domSize})` : ''}, ${f16(domDown)} down from the top edge`, { size: 12, anchor: 'end' }); }
   F.text([X(0), Z(W) + 18], 'rear end', { size: 11.5, color: MUTED });
   F.text([X(Lr), Z(0) - 6], 'bow end', { size: 11.5, color: MUTED, anchor: 'end' });
-  F.label([X(-extra / 2), Z(W)], [20, 440], 'measure every position from the finished rear end, not the sawn end', { size: 12, anchor: 'start' });
+  F.label([X(-extra / 2), Z(W)], [20, 440], 'measure every position from the finished rear end, along the rail (a tape that follows the curve)', { size: 12, anchor: 'start' });
   F.text([X(Lr * 0.55), Z(0) - 6], 'top edge', { size: 11.5, color: MUTED });
   F.text([X(Lr * 0.3), Z(W) + 18], 'bottom edge', { size: 11.5, color: MUTED });
   legendOf(F, [OAK_KEY, { s: mat('ghost', { dash: '4 3' }), label: 'extra length, trimmed at the dry fit' }, { s: { stroke: INK, width: 1, dash: '3 2' }, label: 'dashed: screw holes and counterbores' }], [16, 470]);

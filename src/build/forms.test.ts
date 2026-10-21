@@ -321,7 +321,7 @@ describe('how to build the forms (Eric 2026-10-12)', () => {
     expect(t).toMatch(/packing tape/);
     expect(t).toMatch(/SPRING-BACK: none is built in/);
     expect(t).toContain(`CLAMP: ${dim('rail-form', 'clamps') + 2} or ${dim('rail-form', 'clamps') + 3} bar or pipe clamps`);
-    expect(t).toMatch(/2 strips \(3\/8" × 3"\)/);
+    expect(t).toMatch(/2 strips \(3\/8" × 3-3\/8"\)/); // the strips as cut: planed to the 3" rail depth after the glue-up
     expect(byId('rail-form').svg).toContain('<g id="sketch">');
   });
 
@@ -339,7 +339,7 @@ describe('how to build the forms (Eric 2026-10-12)', () => {
     expect(t).not.toMatch(/spring clamps|C-clamps|spacer \(plywood scraps/);
     expect(t).toMatch(/held down with bags of sand/);
     // the forms are handed: the right side is made on the same benches with the template's rear piece turned over and the cleats re-set
-    expect(t).toMatch(/RIGHT SIDE: the forms are set for the left side/);
+    expect(t).toMatch(/RIGHT SIDE \(later, when the sides are glued\): the forms are set for the left side/);
     expect(t).toMatch(/turn it over along its length/);
   });
 
@@ -392,14 +392,19 @@ describe('forms read plainly (readability round 2)', () => {
     expect(all).toContain(`${n} layers of 3/4" MDF, ${frac(n * 0.75)} tall`);
   });
 
-  it('says how much of the cut list\'s rough strip hangs off the form, and supports it level with the base (the strip length is the mill step\'s)', () => {
+  it('sets the strips past the form\'s bow end, says how much of the rough strip hangs off the rear end, and supports it level with the base (round-3 B1)', () => {
     const d = byId('rail-form');
     const strip = cutListFor(parts, p).cuts.find((c) => c.piece === 'strip' && c.ids.includes('rail-L'))!;
-    const form = d.dims.find((x) => x.key === 'form-length')!.valueIn;
+    const dimOf = (k: string): number => d.dims.find((x) => x.key === k)!.valueIn;
+    const form = dimOf('form-length'), bow = dimOf('bow-extra'), hang = dimOf('overhang');
     const step = d.build.find((s) => s.step.startsWith('STRAIGHT RUN'))!.step;
     expect(step).not.toContain('cut the strips');
-    expect(step).toContain(`about ${frac(strip.rough.l - form)} of each strip hangs off`);
-    expect(step).toContain(`plywood strip, about ${frac(Math.ceil(strip.rough.l - form))} long`);
+    expect(step).toContain(`bow end about ${frac(bow)} past the form's bow end`);
+    // the strip is the bow allowance, the form (along its curved face, a little longer than its straight length) and the overhang
+    expect(strip.rough.l - bow - hang).toBeGreaterThan(form - 1e-6);
+    expect(strip.rough.l - bow - hang).toBeLessThan(form + 0.5);
+    expect(step).toContain(`about ${frac(hang)} of each strip hangs off`);
+    expect(step).toContain(`plywood strip, about ${frac(Math.ceil(hang))} long`);
   });
 
   it('defines the mirror ramp: a second set of ribs for the flipped web, with its own profile on the drawing, and never "the same ramp"', () => {

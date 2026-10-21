@@ -226,6 +226,10 @@ function clampSection(cure: 1 | 2): FigFn {
     // the cleat stands on the bench beside the template (cure 1) or on the mirror-ramp cap, which runs past the web (cure 2)
     const cleatFoot = cure === 1 ? yBench : yBench - lift;
     F.rect(xC, yBandTop - 30, cleatW, cleatFoot - (yBandTop - 30), mat('oak', { stroke: '#6b4a1f' }));
+    // the edge stop against the web's straight bottom edge (it fixes the web across the form; in cure 2 the outer chine band is pushed against it)
+    const stopW = 0.75 * k * 0.6;
+    F.rect(X(0) - stopW - 2, yBandTop - 10, stopW, (cure === 1 ? yBench : yBench - lift) - (yBandTop - 10), mat('oak', { stroke: '#6b4a1f' }));
+    F.label([X(0) - stopW / 2 - 2, yBandTop - 4], [X(0) - stopW - 10, yBandTop - 40], 'edge stop', { anchor: 'end', size: 12 });
     // the bags of sand on a plastic sheet
     const bag = (x: number, wPx: number): void => {
       F.line([x - wPx / 2 - 6, yBandTop - 1], [x + wPx / 2 + 6, yBandTop - 1], { stroke: '#7a8a99', width: 1.5 });
@@ -246,7 +250,7 @@ function clampSection(cure: 1 | 2): FigFn {
       F.label([X(chineLo / 2), yWebTop - 30], [20, 196], ['deck gap: the deck edge', 'slides in here later'], { anchor: 'start', size: 12 });
     } else {
       F.label([X(H - gunH / 2), yWebBot + band * tk / 2], [X(H - win) - 10, yBench + 92], 'cure-1 inner bands, now underneath', { anchor: 'start', size: 12 });
-      F.label([X(g.innerChineBot / 2), yWebBot + band * tk / 2], [20, 236], ['backing strip (a band', 'offcut) under the web\'s edge'], { anchor: 'start', size: 12 });
+      F.label([X(g.innerChineBot / 2), yWebBot + band * tk / 2], [20, yBench + 96], ['backing strip (a band offcut)', 'under the web\'s edge'], { anchor: 'start', size: 12 });
     }
     F.text([X(0), yBench + 40], 'bottom edge', { size: 11, color: MUTED });
     F.text([xR, yBench + 40], 'top edge (sheer)', { size: 11, color: MUTED, anchor: 'end' });

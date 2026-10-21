@@ -40,7 +40,9 @@ export function kingNutSlot(p: Pick<Params, 'kingpinDiaIn'>, L: Pick<Layout, 'ki
   const w = nutAf + 1 / 32;
   const h = up16(nutH + MIN_THREADS_PAST_NUT / tpi(kd) + 2 * SLOT_CLEAR_IN);
   const ceil = k.top - KING_NUT_BELOW_DECK_IN;
-  return { w, h, ceil, floor: ceil - h, x0: k.x - w / 2, x1: k.x + k.len / 2, nutH, nutAf };
+  // the walls hold the nut by its flats, so its corners point fore and aft: the slot runs past the bore's center by half the nut's width across the corners, plus 1/32" (D-88)
+  const back = nutAf / Math.sqrt(3) + 1 / 32;
+  return { w, h, ceil, floor: ceil - h, x0: k.x - back, x1: k.x + k.len / 2, nutH, nutAf };
 }
 
 /**

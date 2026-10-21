@@ -46,7 +46,7 @@ A **Klondike Derby sled on wheels** for Boy Scout Troop 455: a solid, wide, reus
 | Wheels | 10" pneumatic, 4 of them, wheelbase 44", both tracks 30" |
 | Deck height | 8" |
 | Side height | 4" at the bow rising in a concave sweep to 14" at the rear |
-| Empty mass (Standard spec) | **122.9 lb** (113.7 lb in Transport mode with the removable knees off, 56.9 lb per person for the two-person lift; 116.9 lb and 58.5 lb with knees that stay on) |
+| Empty mass (Standard spec) | **122.6 lb** (113.3 lb in Transport mode with the removable knees off, 56.7 lb per person for the two-person lift; 116.5 lb and 58.3 lb with knees that stay on) |
 
 ### Construction
 - **Body.** The two sides are sandwiches: a thin plywood web with oak bands glued on both faces at the top (gunwale) and bottom (chine). No grooves. The bow bulkhead is a shaped oak board that is the foot brace and a hand-hold. A 12 mm okoume deck rides on oak rails and 8-1/2" joists. The rear transom is 1/2" oak. Four oak **ribs** per side stand on the inside face of the web (rear, box, mid and bow-post stations). Their heads carry the eight D-ring tie-downs (zinc-plated steel Standard, 316 stainless Extreme), through-bolted on two bolts each (D-83), and they stiffen the sides sideways (D-76).
@@ -75,7 +75,7 @@ Two people lift it by the rear transom slot and the bow bulkhead hand-hold (the 
 | Thin sheet (follows the spec, D-80) | 6 mm Baltic birch | 6 mm okoume |
 | Drains, lid stay | drilled holes, plated lid support | stainless nipples, stainless friction stay |
 | Empty mass | 122.1 lb | 120.3 lb |
-| BOM total (no shipping or tax) | **$1,419** | **$2,327** |
+| BOM total (no shipping or tax) | **$1,408** | **$2,306** |
 
 ### Brake knees (`kneeMount`, D-78)
 Default **Removable knees (bolts, ratchet)** (a checkbox in the viewer toolbar beside Transport mode, and the Brake knees dropdown in Advanced): the knee is fitted dry and held by four 3/8" bolts. The option **Knees stay on (bolted, glued)** keeps the same four bolts, washers, nylock nuts and backer, and epoxies the knee to the rail and chine band:
@@ -90,9 +90,9 @@ Default **Removable knees (bolts, ratchet)** (a checkbox in the viewer toolbar b
 | Tools | none | a 3/8" drive ratchet, 9/16" socket and 9/16" wrench in a 9" × 3" × 2" pouch (a tool, not sled mass; in the box in cargo mode only), eight spare lock nuts, anti-seize |
 | Tightening | snug | snug, then a quarter turn (about 35 in-lb; the quarter turn is the spec, more crushes the 7/8" washers and the oak); check snug before each outing, retighten after the first |
 | Time | flap off in about 15 s a side | knee and flap off in about 5 minutes a side (longer the first time), lying beside the sled and reaching in under the deck between the two crossmembers just ahead of the rear wheel |
-| Empty mass | 122.9 lb | 122.9 lb (identical); Transport mode drops 4.0 lb more in the viewer (2 knees and 2 straps 3.2 lb, their 8 bolt sets about 0.8 lb); the mass and lift rows count only the 3.2 lb |
+| Empty mass | 122.6 lb | 122.6 lb (identical); Transport mode drops 4.0 lb more in the viewer (2 knees and 2 straps 3.2 lb, their 8 bolt sets about 0.8 lb); the mass and lift rows count only the 3.2 lb |
 | Storage packing | 0.87 / 0.88 (Standard / Extreme) | the same in race mode; the pouch lies in the cargo-mode layer (floor-area fill 0.11 to 0.17) |
-| BOM | $1,385 / $2,289 | $1,419 / $2,327: +$33.97 Standard (the ratchet-and-wrench pouch and anti-seize, estimates; you may already own them) |
+| BOM | $1,374 / $2,268 | $1,408 / $2,306: +$33.97 Standard (the ratchet-and-wrench pouch and anti-seize, estimates; you may already own them) |
 
 The analysis is the same in both settings except `brake-mount` (and `brake-abuse`, which reuses it): the glued knee never counted glue or friction, but its uniform dowel bearing treated knee, rail and backer as one unit. For a dry knee the row adds the NDS single-shear yield-mode check of the worst bolt between the 1-3/4" leg and the 1-3/8" of rail and backer left by the plate recess, across the grain: Z' about 296 lbf (mode II, with C_M 0.70 wet, C_D 1.6 for the stomp as an impact, C_g 0.85) against a worst bolt of about 256 lbf, **0.87**, which governs the row and passes. Because that pass leans on C_D 1.6, a second detail holds the knee to a sustained hold at C_D 1.0: **0.69**. The NDS spacing and edge minimums are not met, so the yield-mode value is an estimate (tear-out and splitting are checked separately). Why not pins or clamped inserts: [docs/studies/removable-knee.md](docs/studies/removable-knee.md).
 
@@ -119,11 +119,11 @@ Sheets are always full 4' × 8' (D-68). Solid parts that need more thickness tha
 - **Mass** 122.1 lb empty: white oak 57.4 lb, plywood 27.3 lb, wheels 12 lb, axles 5 lb, hardware, fasteners and everything else about 21 lb.
 - **Checks.** 54 engineering rows, **none fail**. One is marginal: turning radius (0.97 of its limit). The tightest passes: seat stowage 0.95, park-hold 0.88, storage packing 0.87, kingpin 0.86.
 - **Rider range.** Safe (nothing fails) **50 to 230 lb**; green (nothing marginal) **50 to 210 lb** (the grab-board row sets both ends, D-84; the brake-mount row also sets 210 with removable knees). The 150 lb rider is a plain pass; the 200 lb goal rider is green.
-- **Cargo.** The 200 lb payload passes. Capacity is **276 lb** (the dry removable knee's brake-mount row; 285 lb with glued knees, where the rear beam under the seat sets it); comfortable (still green) to **231 lb** (the rear beam under the seat).
+- **Cargo.** The 200 lb payload passes. Capacity is **277 lb** (the dry removable knee's brake-mount row; 285 lb with glued knees, where the rear beam under the seat sets it); comfortable (still green) to **231 lb** (the rear beam under the seat).
 - **Resting load.** A 250 lb adult sitting or standing on one foot anywhere on the deck passes (capacity 348 lb).
 - **Stability.** Straight tip 45° against a 35° limit; full-lock tip the same; slides before it tips (0.78 of limit).
 - **Sides.** A 50 lbf push moves a gunwale about 0.12" (under the 1/8" "feels solid" mark; reported, not judged).
-- **Cost.** BOM **$1,419** Standard ($2,327 Extreme), excluding shipping and tax; about 6.1% of the Standard total is estimates (the $30 ratchet-and-wrench pouch for the removable knees is most of it), the rest quoted from listings ([docs/price-research/price-research-cost-pass-2026-10.md](docs/price-research/price-research-cost-pass-2026-10.md) and the earlier files). Owned shop stock (beech Dominos, sandpaper, supplies, Titebond III, mineral spirits, contact cement, paracord) is listed at $0 (D-79).
+- **Cost.** BOM **$1,408** Standard ($2,306 Extreme), excluding shipping and tax; about 6.4% of the Standard total is estimates (the $30 ratchet-and-wrench pouch for the removable knees is most of it), the rest quoted from listings ([docs/price-research/price-research-cost-pass-2026-10.md](docs/price-research/price-research-cost-pass-2026-10.md) and the earlier files). Owned shop stock (beech Dominos, sandpaper, supplies, Titebond III, mineral spirits, contact cement, paracord) is listed at $0 (D-79).
 - **Materials by section (Standard BOM).** Lumber $435 (Peach State 4/4 and 5/4 only), plywood $139, metal $107, purchased parts $287, fasteners $147, consumables $165, finishing touches $138. Parts sold in packs far larger than the sled needs are priced by the whole pack in their own section (there is no separate bulk section).
 
 ## 6. How the app is organized

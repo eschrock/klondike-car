@@ -87,7 +87,7 @@ describe.each([['Standard', WEATHER_SPEC.standard], ['Extreme', WEATHER_SPEC.ext
     expect(txt('frame')).toMatch(/Pass 4 waxed 3\/8" bolts through the rail, backer and plate holes from the outside, each with a waxed nut on the plate and a waxed caul block/);
     expect(txt('frame')).toMatch(/Snug the nuts just enough to seat the plate flush/);
     expect(txt('hang')).toMatch(/Screw each strap back on its knee, 4 screws with a drop of epoxy in each pilot/);
-    expect(txt('hang')).toMatch(/put a bottom rear bolt, with its washer, through the knee and the rail/);
+    expect(txt('hang')).toMatch(/put a bottom rear bolt, with its washer, through the knee, the rail and the backer/);
     expect(txt('finish')).toMatch(/Take the strap off each knee/);
     expect(sF.find((x) => x.id === 'frame')!.instructions.join('\n')).not.toMatch(/Bed each plate/);
     expect(textOf(sR)).not.toMatch(/epoxy[^.\n]*\b(knee|leg)\b[^.\n]*\bagainst the rail|glue[^.\n]*\bleg\b[^.\n]*\bagainst the rail/i);

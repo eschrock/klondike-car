@@ -48,7 +48,7 @@ const tonguePlan: FigFn = (c) => {
   const taperY = (u: number): number => { const e = outline.filter(([x, y]) => y < 0 && x > headL + 0.1 && x < 2 * headL + 0.1).sort((a, b) => a[0] - b[0]); if (e.length < 2) return -(hw + sw) / 2; const [a, b] = [e[0], e[e.length - 1]]; return a[1] + ((b[1] - a[1]) * (u - a[0])) / ((b[0] - a[0]) || 1); };
   F.label(fr.at([headL * 1.5, taperY(headL * 1.5) + 0.12]), [470, 352], [`a ${f16(headL)} taper, then the`, `${f16(stemW)} stem to the tip`], { anchor: 'start' });
   if (boltY.length) F.label(fr.at([headL - 0.4, Math.min(...boltY)]), [470, 268], ['2 carriage bolts, fore-aft through', 'the head and the whole beam;', 'nylock nuts on the beam\'s rear face'], { anchor: 'start' });
-  F.label(fr.at([sleeveX, sw + 0.3]), [470, 184], [`bronze sleeve in a ${f16(dia)} hole`, 'across the stem (the rope', 'runs through it, later)'], { anchor: 'start' });
+  F.label(fr.at([sleeveX, sw + 0.3]), [470, 184], [`bronze sleeve in a ${f16(dia)} hole`, 'across the stem (the rope', 'runs through it, later;', 'one leg shown)'], { anchor: 'start' });
   F.label(fr.at([-beamT / 2, -yMax + 1]), [30, 404], 'front axle beam (cut short here); it swings on the kingpin (circle)', { anchor: 'start' });
   F.text([fr.at([len + 3, 0])[0], 72], 'forward, the pull →', { size: 12, color: MUTED, anchor: 'end' });
   F.legend(['oak', 'ghost', 'steel'], [16, 432]);

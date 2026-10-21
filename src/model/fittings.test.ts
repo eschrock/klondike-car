@@ -119,10 +119,11 @@ describe('storage box', () => {
     expect(packEssentials({ ...i, h: 2 }).unplaced.length).toBeGreaterThan(0);
     expect(ESSENTIALS.length).toBeGreaterThanOrEqual(7);
   });
-  it('weatherproofing: gasket on the wall tops, two hinges, two latches; two drain nipples under the Extreme spec only (D-83)', () => {
+  it('weatherproofing: gasket on the wall tops, two hinges, two turn-buttons (D-89); two drain nipples under the Extreme spec only (D-83)', () => {
     expect(parts.filter((x) => x.id.startsWith('storage-gasket-'))).toHaveLength(4);
     expect(parts.filter((x) => /^storage-hinge-[LR]$/.test(x.id))).toHaveLength(2);
-    expect(parts.filter((x) => /^storage-latch-[LR]$/.test(x.id))).toHaveLength(2);
+    expect(parts.filter((x) => /^storage-turn-button-[LR]$/.test(x.id))).toHaveLength(2);
+    expect(parts.some((x) => /^storage-(latch|catch)/.test(x.id))).toBe(false);
     expect(parts.filter((x) => /^storage-drain-[LR]$/.test(x.id))).toHaveLength(0);
     expect(buildModel({ ...defaults, weatherSpec: 1 }).filter((x) => /^storage-drain-[LR]$/.test(x.id))).toHaveLength(2);
     // Gasket sits exactly between the oak coaming on the wall top and the lid frame underside (S4: never on a ply edge).
@@ -258,22 +259,29 @@ describe('round 2 joinery (build M1): every Domino fits its member', () => {
   });
 });
 
-describe('round 2 fittings: latch blocks, stay, stainless', () => {
+describe('round 2 fittings: turn-button blocks, stay, stainless', () => {
   it('foot brace (D-57, D-60): the bulkhead face is the only brace; the drop-in block and its slot cleats are gone', () => {
     const L = computeLayout(defaults);
     expect(byId.has('foot-stop')).toBe(false);
     expect(defaults.seatXIn + defaults.riderLegReachIn).toBeCloseTo(L.bulkhead.x0, 9);
     expect(parts.some((x) => /^foot-(slot|block)/.test(x.id))).toBe(false);
   });
-  it('hinge screws are #8 × 1-1/4 into a 1-1/4 in backer (D-72); each latch has an oak block; a friction stay holds the lid', () => {
+  it('hinge screws are #8 × 1-1/4 into a 1-1/4 in backer (D-72); each turn-button pivots on an oak block on the transom (D-89); a friction stay holds the lid', () => {
     for (const tag of ['L', 'R']) {
       const h = byId.get(`storage-hinge-${tag}`)!;
       expect(h.joints!.find((j) => j.to === `storage-hinge-backer-${tag}`)!.size).toMatch(/#8 × 1-1\/4 stainless/);
       const bk = worldAABB(byId.get(`storage-hinge-backer-${tag}`)!);
       expect(bk.max[0] - bk.min[0]).toBeCloseTo(1.25, 6);
-      const blk = byId.get(`storage-latch-block-${tag}`)!;
+      const blk = byId.get(`storage-turn-block-${tag}`)!;
       expect(blk.material).toBe('white oak');
-      expect(byId.get(`storage-latch-${tag}`)!.joints![0].to).toBe(blk.id);
+      expect(blk.joints![0].to).toBe('transom-rear');
+      const btn = byId.get(`storage-turn-button-${tag}`)!;
+      expect(btn.joints![0].to).toBe(blk.id);
+      expect(btn.joints![0].size).toMatch(/^#8 × 1-1\/4 .*nylon washer/);
+      // Its underside is level with the lid top, and it reaches over the lid frame's aft rail.
+      const bb = worldAABB(btn), lid = worldAABB(byId.get('storage-rim-end-aft')!);
+      expect(bb.min[2]).toBeCloseTo(lid.max[2], 6);
+      expect(bb.max[0]).toBeGreaterThan(lid.min[0] + 0.25);
     }
     expect(byId.get('storage-lid-stay')!.sourcing?.vendor).toMatch(/Rockler/); // D-83: Standard is a plated-steel Rockler 6 in lid support; the Extreme spec keeps the stainless friction stay
     expect(byId.get('storage-lid-stay')!.material).toMatch(/plated steel/);

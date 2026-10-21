@@ -298,7 +298,8 @@ describe('build review round 1: rail end mortises (MUST-3)', () => {
     expect(text).toMatch(/flush-cut saw/);
     expect(dry.tools).toContain('flush-cut (Japanese) saw');
     expect(text.indexOf('Trim the rails')).toBeGreaterThan(-1);
-    expect(text.indexOf('rail-end mortises')).toBeGreaterThan(text.indexOf('Trim the rails'));
+    expect(text.indexOf('cut the rail-end mortises in the trimmed ends')).toBeGreaterThan(-1);
+    expect(text.indexOf('Trim the rails')).toBeGreaterThan(text.indexOf('cut the rail-end mortises in the trimmed ends')); // the mortise item opens with the rail trim, on the horses
     expect(text).not.toMatch(/table saw or bandsaw/);
     expect(dry.tools).not.toContain('table saw or bandsaw');
     // Joint types are read from the model (D-69: Dominos into the bulkhead).
@@ -341,7 +342,9 @@ describe('D-81, D-82: the chine tie is an epoxy bed and screws, no Dominos (repl
     expect(t).toMatch(/7 pilots: 1\/8" pilot, 5\/8" deep/);
     expect(t).toMatch(/1 pilot: 1\/8" pilot, 3\/4" deep/);
     expect(t).toMatch(/glue line between the outer band and the web/);
-    expect(dry.instructions.findIndex((l) => /Trim the rails/.test(l))).toBeLessThan(dry.instructions.findIndex((l) => /screw pilots/.test(l)));
+    // the rail ends are marked in place before the pilots, then sawn on the horses after them (round 3: no saw beside the web edge)
+    expect(dry.instructions.findIndex((l) => /Mark each rail end flush with the band ends/.test(l))).toBeLessThan(dry.instructions.findIndex((l) => /screw pilots/.test(l)));
+    expect(dry.instructions.findIndex((l) => /Trim the rails/.test(l))).toBeGreaterThan(dry.instructions.findIndex((l) => /screw pilots/.test(l)));
     expect(dry.tools).toContain('drill');
     expect(idx('sides-outer')).toBeLessThan(idx('dry-fit'));
     expect(idx('dry-fit')).toBeLessThan(idx('lower'));
@@ -440,7 +443,7 @@ describe('build review round 1: forms and resaw numbers come from their sources 
     const mill = steps.find((s) => s.id === 'mill')!.instructions.join(' ');
     expect(mill).toMatch(/Face-laminate the thick parts before anything is notched, bored or slotted/);
     const lam = steps.find((s) => s.id === 'mill')!.items.find((q) => /Face-laminate/.test(q.text))!;
-    const lamIds = (lam.sub ?? []).flatMap((q) => q.parts ?? []);
+    const lamIds = (lam.sub ?? []).flatMap((q) => [...(q.parts ?? []), ...(q.sub ?? []).flatMap((x) => x.parts ?? [])]); // the blocks are listed under one sub-item, after the generic steps (round 3)
     for (const id of ['beam-F', 'beam-R', 'brake-knee-L', 'brake-chock-L']) expect(lamIds, id).toContain(id);
     expect(mill).toContain('3 layers: 3 \u00d7 3/4" from 4/4, glue up, then mill the block to 2-1/8"'); // D-74 (Eric 2026-10-13): the beams, knees and chocks are all 3 \u00d7 3/4" from 4/4
     expect(mill).toMatch(/Mill the cured block to its final size/);
@@ -726,7 +729,7 @@ describe('instruction style (Eric 2026-10-12: short steps, names not ids, fracti
       ['rear-beam', /axle groove/, /from the rear face/],
       ['rear-beam', /Drill the beam/, /from the left end/],
       ['front-beam', /Drill and groove/, /Kingpin hole: [^.]*from the left end/],
-      ['brake-knees', /drill each knee leg/, /from the top end/], // removable knees (the default): the holes are drilled before the dry fit
+      ['brake-knees', /drill each knee leg/, /up from the bottom end/], // removable knees (the default): the holes are drilled before the dry fit
       ['dry-fit', /rail-end mortises/, /from the top edge/],
       ['dry-fit', /screw pilots/, /from the rear end \(the finished end/],
       ['seat-blocks', /latch hole/, /from the rear edge/],
@@ -1082,7 +1085,7 @@ describe('D-79..D-83: the cost-pass build text', () => {
     expect(outer).not.toMatch(/nipple|scupper/i);
     // the box drains are drilled and sealed with the hull inverted (with the stop-block pilots), and the underside finish step checks them; the box step only fairs the floor
     const gear = stepText(std, 'gear-fit');
-    expect(gear).toMatch(/Drill the 2 box drain holes through the deck now, hull still inverted: 3\/8", straight up through the deck from below/);
+    expect(gear).toMatch(/Drill the 2 box drain holes through the deck now, hull still inverted: 3\/8", down through the deck from its underside \(facing up now\)/);
     expect(gear).toMatch(/storage box's rear corners will be [^\n]*forward of the transom's outer face, [^\n]*either side of the centerline/);
     expect(gear).toMatch(/Seal each bore now: tape the top-face mouth, brush epoxy/);
     expect(std.find((s) => s.id === 'gear-fit')!.checks.join(' ')).toMatch(/box drain holes drilled, sealed and open/);
@@ -1168,7 +1171,7 @@ describe('D-79..D-83: the cost-pass build text', () => {
 
   it('Standard beds the handle sockets in thickened epoxy (Extreme: epoxy or polysulfide sealant)', () => {
     expect(stepText(std, 'hang')).toMatch(/Handle: 2 sockets bedded in thickened epoxy on the transom/);
-    expect(stepText(std, 'handle')).toMatch(/At the hang step: bedded in thickened epoxy,/);
+    expect(stepText(std, 'handle')).toMatch(/At the hang step: the socket bedded on the transom in thickened epoxy,/);
     expect(stepText(std, 'handle') + stepText(std, 'hang')).not.toMatch(/polysulfide|sealant/i); // the grab-board backing strips keep their own bedding line
     expect(std.find((s) => s.id === 'hang')!.clampCure).not.toMatch(/Sealant/);
     expect(stepText(ext, 'hang')).toMatch(/bedded in epoxy or polysulfide sealant/);
@@ -1327,7 +1330,7 @@ describe('final review fixes (steps): sizes from the model, one sequence per hol
       expect(rails).toMatch(/packing tape/);
       expect(rails).toMatch(/Clamps: 10 or 11 bar or pipe clamps of 12" capacity or more: one at each of the 8 scored ticks/);
       // a bent lamination stays on the form for the top of the glue card's clamp time (24 h at 60 °F or warmer), not the flat glue-up clamp time
-      expect(rails).toMatch(/Leave each rail clamped for 24 h at 60 °F or warmer[^\n]*before it comes off the form/);
+      expect(rails).toMatch(/Leave each rail clamped for 24 h at 70 °F, 36 h at 60 °F[^\n]*before it comes off the form/); // round 3: the 60 °F time agrees with the glue card's temperature factor
       expect(rails).not.toMatch(/Leave it clamped|wax paper/);
       expect(txt('side-forms')).not.toMatch(/Clamp each band|spring clamps/);
       expect(txt('sides-inner')).toMatch(/a 5 lb bag of sand about every 6" along each band/);
@@ -1364,7 +1367,7 @@ describe('final review fixes (steps): sizes from the model, one sequence per hol
       expect(gear).toMatch(/Left end means the sled's left side/);
       expect(gear).toMatch(/On (crossmember 5|joist 5): Left knee: one [\d\-/]+" from the left end, [\d\-/]+" from the rear face; one [\d\-/]+" from the left end, [\d\-/]+" from the rear face\. Right knee:/i);
       expect(gear).toMatch(/On king beam: Left knee: one [\d\-/]+" and [\d\-/]+" from the left end, [\d\-/]+" from the rear edge/);
-      expect(gear).toMatch(/Use a 1\/8" × 6" aircraft bit, square to the deck: a jobber bit's flutes are too short/);
+      expect(gear).toMatch(/Use a 1\/8" × 6" aircraft bit, square to the deck, with a square block clamped on the deck beside each hole as a drill guide: a jobber bit's flutes are too short/);
       expect(gear.indexOf('stop-block screw pilot')).toBeLessThan(gear.indexOf('Drill the rib-knee screw pilots'));
       expect(gear).not.toMatch(/locator|1\/16" holes/);
       expect(txt('side-ribs')).toMatch(/the screw pilots in the deck/);
@@ -1399,7 +1402,7 @@ describe('final review fixes (steps): sizes from the model, one sequence per hol
     expect(t('brake-flaps')).toMatch(/The eye goes in at the hang step, with a drop of epoxy in the pilot/);
     expect(t('hang')).toMatch(/Fit each shoe to its tire with the wheel on/);
     expect(t('hang')).toMatch(/angle the wrench handle down and inboard/);
-    expect(t('brake-knee-off')).toMatch(/put a bottom rear bolt, with its washer, through the knee and the rail/);
+    expect(t('brake-knee-off')).toMatch(/put a bottom rear bolt, with its washer, through the knee, the rail and the backer/);
     expect(t('brake-knee-off')).toMatch(/Angle the wrench handle down and inboard/);
   });
 });

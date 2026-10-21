@@ -147,7 +147,7 @@ export function screwLength(grip: number, embed: number): number {
 }
 
 /**
- * The wood screws the whole sled uses (D-72, Eric: "reduce the variety of screws"): three sizes in 316 stainless. #8 x 5/8 is for hardware into thin stock (latches, catches, the stay,
+ * The wood screws the whole sled uses (D-72, Eric: "reduce the variety of screws"): three sizes in 316 stainless. #8 x 5/8 is for hardware into thin stock (the stay,
  * hinge leaves into the lid frame), #8 x 1-1/4 for everything else, and #8 x 2-1/2 for the piloted rail-to-chine and rib-knee screws (D-82: no stainless #6 that long exists, so every wood screw is a #8; pilot the long one). A joint picks the
  * SHORTEST standard length that gives its bite without poking through its receiving member.
  */

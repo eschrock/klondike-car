@@ -20,15 +20,17 @@ import type { Joint, Part, Vec3 } from './types';
 // ── Hardware and detail dimensions (estimates, D-41) ──
 /** D-89 (round 2): a 2-1/2" x 1-1/2" (open) butt hinge, 3/4" leaves, so the lid leaf fits the 3/4" lid frame face; lighter than the old 2-3/4" one. */
 const HINGE_MASS_LB = 0.1;
-const LATCH_MASS_LB = 0.15;
-const CATCH_MASS_LB = 0.03;
 const DRAIN_MASS_LB = 0.03;
 const GASKET_LB_PER_IN = 0.002;
 /** The 3/8" epoxy fillet in every inside corner of the box (flat things stowed in it ride on it, not in the corner). */
 export const BOX_FILLET_IN = 0.375;
-/** Oak block under each lid latch (#8 screws need more than the thin end ply or a thin transom): thickness, and width across. */
-export const LATCH_BLOCK_IN = 0.375;
-const LATCH_BLOCK_W_IN = 2;
+/** D-89 (round 3): the lid turn-buttons and their blocks (the draw latches are gone): button thickness, width and reach over the lid rail, the block's width and height, and the nylon washer under the pivot screw's head. */
+const TURN_BUTTON_T_IN = 0.5;
+const TURN_BUTTON_W_IN = 0.75;
+const TURN_BUTTON_REACH_IN = 0.5;
+const TURN_BLOCK_W_IN = 1.5;
+const TURN_BLOCK_H_IN = 1.5;
+const NYLON_WASHER_IN = 1 / 16;
 /** Lid hold-open stay, size (folded) and mass. Extreme: the stainless friction stay (2 in fold). Standard (D-83): a Rockler 6 in quiet-action lid support, plated steel, the arm folds flat. */
 const STAY_SIZE_EXTREME = [2, 0.6, 0.5] as const;
 const STAY_MASS_EXTREME_LB = 0.12;
@@ -399,7 +401,6 @@ export function buildStorage(ctx: Ctx): Part[] {
   // and nothing stands in front of it; the box leaf lies on the fore coaming and the wall top, its screws through the coaming into the backer behind it.
   const zKnuckle = zTop - pl - rimT;
   const rear = p.storageLocation === STORAGE_LOCATION.rearOverAxle;
-  const zGunTop = L.deckTop + L.sideRear;
   // D-72: the hinge leaves take the standard screws: #8 x 5/8 into the lid frame end (rimW deep), #8 x 1-1/4 through the fore coaming into the backer (its top reaches the coaming top, notched under the coaming's inboard lip).
   const hingeRimFit = pickWoodScrew(8, LEAF_IN, rimW);
   const backerUnderCoaming = HINGE_BACKER_IN - (coamW - pl);
@@ -420,44 +421,29 @@ export function buildStorage(ctx: Ctx): Part[] {
       stock: { t: bxw - bxa, w: bW, l: zWallTop - bzb },
       joints: [{ type: 'glue', to: 'storage-end-fore', count: 1, note: 'epoxy to the inside of the end panel and the underside of the coaming lip' }],
       notes: `Glued to the inside of the ${Math.round(pl * 25.4)} mm ply fore wall. Gives the hinge screws something to bite: the ${screwText(hingeBackFit)} screw passes the leaf and the ${frac(coamW)}" fore coaming and engages ${(hingeBackFit.lenIn - hingeBackFit.gripIn).toFixed(2)}" of oak in the backer (D-72). Its top is flush with the coaming top; a ${frac(coamW - pl)}" × ${frac(zWallTop - zPlyTop)}" notch at its top front fits under the coaming's inboard lip.` }));
-    // Latch block (S5): oak under each latch so the #8 screws are not in a thin ply end or a face-grain skin.
-    // Latch: on the inside face of the rear transom above the lid (rear box), else on the aft end's outer face; hooks a catch on the lid frame.
-    // Latches sit at 8.5" off center, clear of the rear lamp clip in the hand-hold (|y| < 2.25, D-64) on the same transom.
+    // D-89 (round 3): an oak TURN-BUTTON per side instead of a draw latch (the latch had 1/32 in for its lever in a closed 3/4 in well under the transom). Each button pivots on one
+    // #8 screw (a nylon washer under the head) driven down into the top of an oak block whose top is level with the lid top: on a rear box the block fills the rear lane between
+    // the transom and the aft wall, glued to the transom's inner face. Turned along the sled, the button reaches over the lid
+    // frame's aft rail; a slight cam on its underside pulls the lid down onto the gasket. Turned across, it clears the lid. (Rear box only.)
+    // Buttons sit at 8.5" off center, clear of the rear lamp clip in the hand-hold (|y| < 2.25, D-64) on the same transom.
+    if (rear) { // an under-seat box has the seat cushion and back on and around its lid: no turn-buttons there (the cushion holds the lid; a known gap, D-89)
     const ly = sg * Math.min(hw - 3, 8.5);
-    // D-89 (round 2): the block's top at the lid frame's underside, so the latch body sits below the lid top and its hook reaches up over the lid's aft edge to the catch on the lid top
-    // (with the body above the lid, closing the latch lifted the lid).
-    const blockH = Math.min(1.4, Math.max(0.5, zGunTop - zTop));
-    const blockZ: [number, number] = rear ? [zKnuckle - blockH, zKnuckle] : [zPlyTop - 1.4, zPlyTop];
-    // D-72: a block behind the end panel is 1-1/4 in thick so the standard #8 x 1-1/4 latch screw stays inside it; the rear block (on the transom, 0.375 in + the transom) takes the #8 x 5/8.
-    const blockT = rear ? LATCH_BLOCK_IN : 1.25;
-    const latchFit = rear ? pickWoodScrew(8, LEAF_IN, LATCH_BLOCK_IN + L.transom) : pickWoodScrew(8, LEAF_IN + pl, blockT);
-    // Rear box: against the transom's inner face (the rear lane between the transom and the aft wall is open there), so it is clear of the lid frame's aft end.
     const xTi = L.xRear + L.transom;
-    const blockX: [number, number] = rear ? [xTi, xTi + LATCH_BLOCK_IN] : [x0 + pl, x0 + pl + blockT];
-    const catchFit = pickWoodScrew(8, LEAF_IN, rimW); // the catch plate on the lid frame end
-    const blockId = `storage-latch-block-${tag}`;
-    parts.push(box(ctx, { ...common, id: blockId, partNo: 'storage-latch-block', name: `Latch block ${tag}`, mat: 'oak', grain: 'z',
-      ...span(blockX, [ly - LATCH_BLOCK_W_IN / 2, ly + LATCH_BLOCK_W_IN / 2], blockZ),
-      joints: [{ type: 'glue', to: rear ? 'transom-rear' : 'storage-end-aft', count: 1, note: rear ? 'epoxy to the inside face of the rear transom' : 'epoxy to the inside of the aft end panel' },
-        { type: 'screw', to: `storage-latch-${tag}`, count: 2, diaIn: SCREW_DIA_IN[8], fit: latchFit, size: rear ? `${screwText(latchFit)} stainless, into the block and the transom behind it` : `${screwText(latchFit)} stainless, through the end panel into the block` }],
-      notes: rear ? `Oak block ${LATCH_BLOCK_IN}" thick on the transom's inner face: the ${screwText(latchFit)} screws bite ${(latchFit.lenIn - latchFit.gripIn).toFixed(2)}" (the block, then the transom it is glued to; end grain avoided: block grain is vertical) instead of a bare transom face. It is glued to the transom, ${frac(x0 - blockX[1])}" clear of the lid frame's aft face, its top at the lid frame's underside: the latch body on it sits below the lid top and the hook reaches up over the lid's aft edge to the catch on the lid top, so closing it pulls the lid down onto the gasket (D-89). The lid hinges on its fore edge, so its aft edge swings up and forward, away from the block (S5).` : 'Oak block behind the 6 mm aft end for the latch screws (S5).' }));
-    const latchBox = rear
-      ? span([blockX[1], blockX[1] + 0.35], [ly - 0.6, ly + 0.6], [blockZ[0] + 0.1, blockZ[1] - 0.05])
-      : span([x0 - 0.35, x0], [ly - 0.6, ly + 0.6], [zTop - 2.5, zTop - 1.2]);
-    const catchBox = rear
-      ? span([x0 + 0.1, x0 + 0.55], [ly - 0.6, ly + 0.6], [zTop, zTop + 0.12])
-      : span([x0 - 0.12, x0], [ly - 0.6, ly + 0.6], [zTop - 0.8, zTop - 0.1]);
-    parts.push(box(ctx, { ...common, id: `storage-latch-${tag}`, partNo: 'storage-latch', name: `Lid latch ${tag}`, mat: 'fixed', massLb: LATCH_MASS_LB, kind: 'purchased',
-      material: `${stainless(p)} over-center draw latch`, fab: 'buy', step: STEP.finish, ...latchBox,
-      sourcing: { vendor: `McMaster-Carr (${stainless(p)} draw latch)`, costUsd: 9 },
-      joints: [{ type: 'screw', to: blockId, count: 2, diaIn: SCREW_DIA_IN[8], fit: latchFit, size: `${screwText(latchFit)} stainless` }],
-      notes: rear
-        ? 'On the oak block on the inside face of the rear transom, its body below the lid top, its hook reaching up over the lid\'s aft edge to the catch on the lid frame top (D-89). Engagement in the block is about 1/2" (a #8 with a 3/8" pilot in white oak face grain holds about 100 lbf per screw, ~200 lbf per latch) against a gasket and slam load of about 20 lbf per latch, so about 10x margin (D-41).'
-        : 'On the aft end (over the oak block inside it), hooking a catch on the lid frame.' }));
-    parts.push(box(ctx, { ...common, id: `storage-catch-${tag}`, partNo: 'storage-catch', name: `Latch catch ${tag}`, mat: 'fixed', massLb: CATCH_MASS_LB, kind: 'purchased',
-      material: `${stainless(p)} catch plate`, fab: 'buy', step: STEP.finish, ...catchBox,
-      sourcing: { vendor: `McMaster-Carr (${stainless(p)} draw-latch catch; supplied with the latch)`, costUsd: 0 },
-      joints: [{ type: 'screw', to: 'storage-rim-end-aft', count: 2, diaIn: SCREW_DIA_IN[8], fit: catchFit, size: `${screwText(catchFit)} stainless` }] }));
+    const blockX: [number, number] = [xTi, x0];
+    const blockZ: [number, number] = [zTop - TURN_BLOCK_H_IN, zTop];
+    const buttonFit = pickWoodScrew(8, TURN_BUTTON_T_IN + NYLON_WASHER_IN, blockZ[1] - blockZ[0]);
+    const blockId = `storage-turn-block-${tag}`;
+    const xc = (blockX[0] + blockX[1]) / 2;
+    parts.push(box(ctx, { ...common, id: blockId, partNo: 'storage-turn-block', name: `Turn-button block ${tag}`, mat: 'oak', grain: 'y',
+      ...span(blockX, [ly - TURN_BLOCK_W_IN / 2, ly + TURN_BLOCK_W_IN / 2], blockZ),
+      joints: [{ type: 'glue', to: 'transom-rear', count: 1, note: 'thickened epoxy to the inside face of the rear transom (it fills the lane behind the box)' }],
+      notes: `Oak block ${frac(blockX[1] - blockX[0])}" × ${frac(TURN_BLOCK_W_IN)}" × ${frac(TURN_BLOCK_H_IN)}" (grain across the sled, so the pivot screw bites side grain), its top level with the lid top: the turn-button's pivot screw goes down into it (D-89).` }));
+    parts.push(box(ctx, { ...common, id: `storage-turn-button-${tag}`, partNo: 'storage-turn-button', name: `Lid turn-button ${tag}`, mat: 'oak', grain: 'x', step: STEP.finish, fab: 'bandsaw',
+      ...span([blockX[0], x0 + TURN_BUTTON_REACH_IN], [ly - TURN_BUTTON_W_IN / 2, ly + TURN_BUTTON_W_IN / 2], [zTop, zTop + TURN_BUTTON_T_IN]),
+      joints: [{ type: 'screw', to: blockId, count: 1, diaIn: SCREW_DIA_IN[8], fit: buttonFit, at: [[xc - (blockX[0] + x0 + TURN_BUTTON_REACH_IN) / 2, 0, -TURN_BUTTON_T_IN / 2]], // on the button's underside, the block top
+        size: `${screwText(buttonFit)} stainless, the pivot: down through the button and a nylon washer into the block (snug, so the button turns stiffly)` }],
+      notes: `Oak turn-button ${frac(TURN_BUTTON_T_IN)}" × ${frac(TURN_BUTTON_W_IN)}" × ${frac(x0 + TURN_BUTTON_REACH_IN - blockX[0])}", from an offcut, pivoting on one #8 screw over the block. Turned along the sled it reaches ${frac(TURN_BUTTON_REACH_IN)}" over the lid frame's aft rail; plane a slight cam (about 1/32") on its underside so turning it pulls the lid down onto the gasket. Turned across the sled it clears the lid (D-89).` }));
+    }
     // Drains: Extreme: a stainless nipple flange at the aft corner; the hole goes through the deck (and the floor panel when the box has one). Standard (D-83): the bare epoxy-lined hole, recorded as a hole joint (joinery.ts).
     if (p.weatherSpec === WEATHER_SPEC.extreme) {
       const r = p.storageDrainDiaIn / 2 + 0.125;

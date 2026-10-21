@@ -466,6 +466,8 @@ const dryFitCradles: FigFn = (c) => {
   const xs2 = (cr[1].x + cr[2].x) / 2;
   F.label(P(xs2, sideTopAt(L, xs2) - 0.3), [P(cr[1].x, 0)[0] + 16, P(0, sideTopAt(L, xs2))[1] - 46], ['the sheer (the side\'s top', 'edge) hangs into the slots'], { ...T12, anchor: 'start' });
   F.text([16, F.h - 30], 'Blue dashed line: the sides\' bottom edges, all level.', { size: 11.5, color: DIM });
+  const xc = cr[0].x + (cr[1].x - cr[0].x) * 0.35;
+  F.label(P(xc, L.chineBot + L.railBand * 0.5), [P(xc, 0)[0] + 6, P(0, L.chineBot + L.railBand)[1] + 34], ['outer chine band', '(the side\'s bottom', 'edge, on top now)'], { ...T12, anchor: 'start' });
   F.text([P(W.min[0], 0)[0], P(0, L.chineBot)[1] - 46], 'rear end', { size: 11.5, color: MUTED });
   F.text([P(W.max[0], 0)[0], P(0, L.chineBot)[1] - 46], 'bow end', { size: 11.5, color: MUTED, anchor: 'end' });
   F.legend(['oak', 'web', 'mdf'], [16, 450]);
@@ -781,8 +783,9 @@ function endClose(which: 'transom' | 'bulkhead'): FigFn {
     F.poly(outline.map(([x, y]) => B(x, y)), mat('oak', { stroke: ACCENT, width: 2 }));
     breakH(F, B(0, uIn)[1], B(xPart0, 0)[0], B(xPart1, 0)[0]);
     const bL = backers.find((b) => b.min[1] > 0);
-    if (bL) RB(xPart0, uIn, xPart0 - dir * (bL.max[0] - bL.min[0]), Math.min(bL.max[1], S.yi), mat('oak', { fill: '#dcc08a', stroke: ACCENT, width: 1.4 }));
-    if (!rear) F.poly([B(xFace, S.yi), B(xFace - dir * 0.22, S.yi), B(xFace, S.yi - 0.22)], { fill: MAT.epoxy.fill, stroke: '#9a6b00', width: 1 });
+    // The cut is through the chine band, below the backer's bottom end (on the finished sled), so the backer shows dashed and the inside corner takes its fillet.
+    if (bL) RB(xPart0, uIn, xPart0 - dir * (bL.max[0] - bL.min[0]), Math.min(bL.max[1], S.yi), { stroke: ACCENT, width: 1.2, dash: '4 3' });
+    F.poly([B(xFace, S.yi), B(xFace - dir * 0.22, S.yi), B(xFace, S.yi - 0.22)], { fill: MAT.epoxy.fill, stroke: '#9a6b00', width: 1 });
     const ay = B(0, S.yo)[1] - 14;
     F.arrow([B(xPart1, 0)[0], ay], [B(xPart0, 0)[0] + dir * 4, ay], ACCENT, 2.6);
     // labels: the hull's on its side of the panel, the closing part's on the other
@@ -794,13 +797,13 @@ function endClose(which: 'transom' | 'bulkhead'): FigFn {
       [B(xFace - dir * 1.0, (S.yo + S.yWo) / 2), ['outer band: its end', 'butts the face'], {}],
       [B(webEnd - dir * 0.08, (S.yWo + S.yWi) / 2), ['web: reaches', `${f16(into)} into its dado`], {}],
       [B(xFace - dir * 1.0, (S.yi + S.yWi) / 2), ['inner band: its end', 'butts the face too'], {}],
-      ...(!rear ? [[B(xFace - dir * 0.07, S.yi - 0.07), ['epoxy fillet in the', 'inside corner, after'], {}] as [Vec2, string[], TextOpts]] : []),
+      [B(xFace - dir * 0.07, S.yi - 0.07), ['epoxy fillet in the', 'inside corner, after'], {}],
       [B(xFace - dir * 1.2, uIn + 0.25), ['deck and its dado: under', 'this cut (dashed)'], { color: MUTED }],
     ];
     hullRows.forEach(([tg, txt, o], i) => F.label(tg, [hullX, r0 + i * step], txt, { ...T12, ...o, anchor: ha }));
     F.label(B((floor0 + xPart0) / 2, dy1 - 0.02), [partX, r0], ['web dado,', `${f16(into)} deep`], { ...T12, anchor: pa });
     F.label(B((xPart0 + xPart1) / 2, S.yo - 0.1), [partX, r0 + step], [`the ${name} is pushed`, 'straight on (arrow)'], { ...T12, anchor: pa });
-    if (bL) F.label(B(xPart0 - dir * 0.35, uIn + 0.3), [partX, r0 + 3 * step], ['backer, already', 'glued to it'], { ...T12, anchor: pa });
+    if (bL) F.label(B(xPart0 - dir * 0.35, uIn + 0.3), [partX, r0 + 3 * step], ['backer, glued to it:', 'above this cut (dashed)'], { ...T12, anchor: pa });
     F.legend(['oak', 'web', 'deck', 'epoxy', 'ghost'], [16, F.h - 10]);
     F.note('Two views, each to its own scale');
     const nRail = railJ?.type === 'domino' ? 'The Dominos in the rail ends go' : 'The loose tenons in the rail ends go';
@@ -808,7 +811,7 @@ function endClose(which: 'transom' | 'bulkhead'): FigFn {
       id: rear ? 'transom-close' : 'bulkhead-close',
       title: rear ? 'How the transom goes on' : 'How the bulkhead goes on',
       caption: rear
-        ? `View A is the transom's inside face, drawn upside down as it goes onto the inverted hull: the deck dado runs across it and turns into the two web dados, which run out through the edge (they are routed through). View B cuts through one corner: the web reaches ${f16(into)} into its dado and the deck edge the same into the deck dado, while the four band ends of each side stop at the face and butt in thickened epoxy. ${nRail} into the mortises, and the vent holes, 2 a side, let air and glue out as it is pushed home: when glue shows at them, the dados are full. The round holes are the handle-socket screw holes, with their T-nuts in the backers.`
+        ? `View A is the transom's inside face, drawn upside down as it goes onto the inverted hull: the deck dado runs across it and turns into the two web dados, which run out through the edge (they are routed through). View B cuts through one corner: the web reaches ${f16(into)} into its dado and the deck edge the same into the deck dado, while the four band ends of each side stop at the face and butt in thickened epoxy; once it is home, the inside corners get a fillet of thickened epoxy. ${nRail} into the mortises, and the vent holes, 2 a side, let air and glue out as it is pushed home: when glue shows at them, the dados are full. The round holes are the handle-socket screw holes, with their T-nuts in the backers.`
         : `The bulkhead closes the bow the way the transom closed the rear, once the transom epoxy has gelled. View A is its inside (rear) face, upside down: the deck dado and the two web dados that run out through the edge (routed through), the Domino mortises for the rail ends, and the band ends that butt against it. View B cuts through one corner: the web and the deck reach ${f16(into)} into their dados, and the inside corners get a fillet of thickened epoxy. Its rear face is the rider's foot brace, so it must sit square and fully home.`,
       svg: F.svg(rear ? 'The transom inside face and one corner as it is pushed on' : 'The bulkhead inside face and one corner as it is pushed on'),
     };

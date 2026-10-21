@@ -485,7 +485,8 @@ function screwItems(part: Part, j: Joint, byId: PartMap, mat: FastMat): Fastener
   const w = new RegExp(String.raw`#(\d+)\s*[x×]\s*${LEN}`).exec(size);
   // D-77: the pivot strap's screws are PAN-HEAD (the strap is not countersunk): their own line, not the flat-head one.
   // D-91: the rail-to-chine screws are TRIM-HEAD (a small head in a 1/4" counterbore): their own line too.
-  if (w) return [{ label: `${mat.ss} ${/pan-head/i.test(size) ? 'pan-head ' : /trim-head/i.test(size) ? 'trim-head ' : ''}wood screw #${w[1]} x ${lenText(w[2])}"`, qty: n }];
+  // D-89: the lid turn-buttons pivot on a wood screw with a nylon washer under its head.
+  if (w) return [{ label: `${mat.ss} ${/pan-head/i.test(size) ? 'pan-head ' : /trim-head/i.test(size) ? 'trim-head ' : ''}wood screw #${w[1]} x ${lenText(w[2])}"`, qty: n }, ...(/nylon washer/i.test(size) ? [{ label: `Nylon washer for #${w[1]} screw`, qty: n }] : [])];
   const g = /#(\d+)/.exec(size);
   if (!g) return [{ label: `${mat.ss} screw (size per joint note)`, qty: n }];
   const gl = GENERIC_LEN.exec(size);

@@ -406,7 +406,7 @@ function thumb(F: Fig, x: number, y: number, o: { board?: boolean; strip?: boole
 
 // ─────────────────────────────── storage-box ───────────────────────────────
 
-/** 4. The box on the deck: plan with the ties, backers and latch blocks; a section at the box rib; a corner detail. */
+/** 4. The box on the deck: plan with the ties, backers and turn-button blocks; a section at the box rib; a corner detail. */
 const storageBox: FigFn = (c) => {
   const p = c.p;
   const L = computeLayout(p);
@@ -433,7 +433,7 @@ const storageBox: FigFn = (c) => {
   R(g.x0, -g.hw, g.x1, -g.hw + cw, acc('oak', { width: 1.4 }));
   R(g.x0, -g.hw + cw, g.x0 + cw, g.hw - cw, acc('oak', { width: 1.4 }));
   R(g.x1 - cw, -g.hw + cw, g.x1, g.hw - cw, acc('oak', { width: 1.4 }));
-  // box ties, hinge backers, latch blocks (on the transom), drains
+  // box ties, hinge backers, turn-button blocks (on the transom), drains
   for (const st of stations) {
     const tg = boxTieGeometry(p, L, st);
     for (const s of [1, -1]) R(st.x - p.boxTieWidthIn / 2, s * tg.yBox, st.x + p.boxTieWidthIn / 2, s * tg.yRib, acc('oak', { width: 1.4 }));
@@ -441,7 +441,7 @@ const storageBox: FigFn = (c) => {
   for (const tag of ['L', 'R']) {
     const hb = box(c, `storage-hinge-backer-${tag}`);
     if (hb) R(hb.min[0], hb.min[1], hb.max[0], hb.max[1], acc('oak', { width: 1.4 }));
-    const lb = box(c, `storage-latch-block-${tag}`);
+    const lb = box(c, `storage-turn-block-${tag}`);
     if (lb) R(lb.min[0], lb.min[1], lb.max[0], lb.max[1], acc('oak', { width: 1.4 }));
   }
   const stb = box(c, 'storage-stay-block');
@@ -453,8 +453,8 @@ const storageBox: FigFn = (c) => {
   const b1 = stations.find((s) => s.n === 1), b4 = stations.find((s) => s.n === 4);
   if (b4) F.label(pl.at([b4.x, (g.hw + b4.yIn - dep) / 2]), [lx, 92], 'box tie at the rear rib', { size: 12 });
   if (b1) F.label(pl.at([b1.x, (g.hw + b1.yIn - dep) / 2]), [rx, 92], 'box tie at the box rib', { size: 12 });
-  const lbL = box(c, 'storage-latch-block-L');
-  if (lbL) F.label(pl.at([(lbL.min[0] + lbL.max[0]) / 2, (lbL.min[1] + lbL.max[1]) / 2]), [lx, 150], ['latch blocks on the inside of the', 'transom, level with the lid frame'], { size: 12 });
+  const lbL = box(c, 'storage-turn-block-L');
+  if (lbL) F.label(pl.at([(lbL.min[0] + lbL.max[0]) / 2, (lbL.min[1] + lbL.max[1]) / 2]), [lx, 150], ['turn-button blocks on the inside of', 'the transom, their tops level with', 'the lid top (the buttons go on last)'], { size: 12 });
   F.text([pl.at([L.xRear, 0])[0] - 6, pl.at([0, 0])[1] + 4], 'transom', { size: 11.5, color: MUTED, anchor: 'end' });
   if (drains[1]) {
     F.label(pl.at([drains[1].x, drains[1].y]), [lx, 300], ['drain holes: the floor falls', `about ${f8(0.125)} toward each`], { size: 12 });
@@ -526,14 +526,14 @@ const storageBox: FigFn = (c) => {
     F.poly(tape.map(cf.at), { stroke: '#2563eb', width: 2 }, false);
     F.label(cf.at([t + fi * 0.3, t + fi * 0.3]), [660, 470], [`${f8(fi)} epoxy`, 'fillet in each', 'inside corner'], { size: 12 });
     F.label(cf.at([t + 0.9, t + 0.04]), [660, 540], ['2" glass tape', 'over it', '(no spline)'], { size: 12, color: '#2563eb' });
-    F.label(cf.at([t / 2, t / 2]), [540, 624], ['walls: edges beveled 45°,', 'taped outside, folded up'], { size: 12, anchor: 'start' });
+    F.label(cf.at([t / 2, t / 2]), [540, 624], ['walls: edges beveled 45°, taped', 'outside, epoxy in the V, folded up'], { size: 12, anchor: 'start' });
   }
   legend(F, ['oak', THIN_PLY, 'deck', 'epoxy', 'ghost']);
   F.note('Each view to its own scale');
   return {
     id: 'storage-box',
     title: 'The storage box',
-    caption: `The box has no bottom of its own: its four thin plywood walls stand on the sealed deck, which is the floor, with a fillet inside and a bead outside so no plywood edge is left bare. An oak coaming caps the walls so the lid and its gasket sit on oak. The box ties fill the gap between the box side and the rear and box ribs from [[step:side-ribs]]: they make the box the base of those ribs, so a push on the gunwale there goes into the box. The hinge backers inside the fore end take the lid hinge screws, and the latch blocks go on the transom for the lid latches.`,
+    caption: `The box has no bottom of its own: its four thin plywood walls stand on the sealed deck, which is the floor, with a fillet inside and a bead outside so no plywood edge is left bare. An oak coaming caps the walls so the lid and its gasket sit on oak. The box ties fill the gap between the box side and the rear and box ribs from [[step:side-ribs]]: they make the box the base of those ribs, so a push on the gunwale there goes into the box. The hinge backers inside the fore end take the lid hinge screws, and the two turn-button blocks go on the transom: at the final fit an oak button pivots on each and swings over the lid's aft edge to hold it shut.`,
     svg: F.svg('The storage box on the deck: plan, a section at the box rib and a corner detail'),
   };
 };
@@ -568,11 +568,18 @@ const storageLid: FigFn = (c) => {
   for (const xc of [x0 + rw / 2, x1 - rw / 2]) for (const s of [1, -1]) R(xc - 3 / 16, s * (hw - rw) - 3 / 8, xc + 3 / 16, s * (hw - rw) + 3 / 8, { stroke: INK, width: 1, dash: '2 2' });
   // the panel's edge in its rabbet
   R(x0 + rw - rab, -hw + rw - rab, x1 - rw + rab, hw - rw + rab, { stroke: MUTED, width: 0.8, dash: '1 3' });
+  // the two hinges on the fore edge, and the lid support arm (folded, under the left frame side)
+  const hinges = ['L', 'R'].map((t) => box(c, `storage-hinge-${t}`)).filter((b): b is NonNullable<typeof b> => !!b);
+  for (const hb of hinges) R(hb.min[0], hb.min[1], hb.max[0] + 0.12, hb.max[1], mat('steel'));
+  const stay = box(c, 'storage-lid-stay');
+  if (stay) R(stay.min[0], stay.min[1], stay.max[0], stay.max[1], { fill: MAT.steel.fill, stroke: MAT.steel.stroke, width: 1.2, dash: '4 2', opacity: 0.7 });
   const lx = 322;
   F.label(pf.at([(x0 + x1) / 2 + 2, hw - rw / 2]), [lx, 96], `frame sides: ${f8(rw)} oak, the full length of the lid`, { size: 12 });
   F.label(pf.at([x1 - rw / 2, hw - rw]), [lx, 136], ['a small loose tenon at each corner (dotted),', 'in mortises in both pieces'], { size: 12 });
-  F.label(pf.at([x1 - rw / 2, hw * 0.3]), [lx, 196], 'frame ends, between the sides', { size: 12 });
+  F.label(pf.at([x1 - rw / 2, hw * 0.3]), [lx, 206], 'frame ends, between the sides', { size: 12 });
   F.label(pf.at([(x0 + x1) / 2 - 2.5, hw * 0.1]), [lx, 236], 'panel, its edge in a rabbet all round', { size: 12 });
+  if (hinges[0]) F.label(pf.at([hinges[0].max[0], (hinges[0].min[1] + hinges[0].max[1]) / 2]), [lx, 178], '2 butt hinges on the fore edge', { size: 12 });
+  if (stay) F.label(pf.at([(stay.min[0] + stay.max[0]) / 2, (stay.min[1] + stay.max[1]) / 2]), [lx, 266], 'lid support arm, folded, under the left side', { size: 12 });
   if (battens.length) { const bb = worldAABB(battens[battens.length - 1]); F.label(pf.at([(bb.min[0] + bb.max[0]) / 2, -hw * 0.45]), [lx, 296], [`${battens.length} battens under the panel, glued to it,`, 'their ends butted to the frame sides'], { size: 12 }); }
   F.text([pf.at([x0, 0])[0], pf.at([0, -hw])[1] + 18], 'aft end', { size: 11.5, color: MUTED });
   F.text([pf.at([x1, 0])[0], pf.at([0, -hw])[1] + 18], 'fore end (hinges)', { size: 11.5, color: MUTED, anchor: 'end' });
@@ -607,7 +614,7 @@ const storageLid: FigFn = (c) => {
   return {
     id: 'storage-lid',
     title: 'The storage lid',
-    caption: `The lid is a thin plywood panel held in an oak frame: the panel's edge sits in a rabbet along the top inside edge of all four frame pieces, and the corners are joined with small loose tenons. ${battens.length} oak battens under the panel stop it sagging under a cushion or a light load; they are glued under the panel with thickened epoxy, the lid face down and weighted, and butted to the frame sides; no screws go through the thin panel. The frame corners are glued with the tenons and the panel is bedded in thickened epoxy. The frame's underside is what seals on the gasket and the coaming of the box from [[step:storage-box]].`,
+    caption: `The lid is a thin plywood panel held in an oak frame: the panel's edge sits in a rabbet along the top inside edge of all four frame pieces, and the corners are joined with small loose tenons. ${battens.length} oak battens under the panel stop it sagging under a cushion or a light load; they are glued under the panel with thickened epoxy, the lid face down and weighted, and butted to the frame sides; no screws go through the thin panel. The frame corners are glued with the tenons and the panel is bedded in thickened epoxy. The frame's underside is what seals on the gasket and the coaming of the box from [[step:storage-box]]. The two hinges go on the fore edge, and the lid support's arm end on the inboard face of the left frame side: it folds flat beside the box wall when the lid shuts.`,
     svg: F.svg('The storage lid from above and cut across at a batten'),
   };
 };
@@ -671,10 +678,12 @@ const seatBlocks: FigFn = (c) => {
   F.label(fr.at([(sb.wedge[0][0] + faceX(L.deckTop + 2)) / 2, L.deckTop + 1]), [xr, fr.at([0, L.deckTop + 1.6])[1]], ['stop block: glued to the deck', 'and the box end'], { size: 12 });
   F.label(fr.at([faceX(L.deckTop + 4), L.deckTop + 4]), [xr, fr.at([0, L.deckTop + 4.6])[1]], `sloped face ${ang}° from level`, { size: 12 });
   F.label(fr.at(pin(depth * 0.5, PIN_R_IN)), [xr, fr.at([0, mouth[1] + 1])[1]], [`${f8(2 * PIN_R_IN)} latch hole (dashed): mark it now,`, 'drill it later through the seat back\'s', `pin hole, square to the face (${Math.round(sb.a * DEG)}° tilt)`], { size: 12 });
-  if (cs) F.label(fr.at([(cs.min[0] + qa[0]) / 2, (cs.min[2] + qa[1]) / 2]), [xr, fr.at([0, qa[1]])[1] - 14], ['crest strip, between the two', 'blocks (dashed: behind this one)'], { size: 12 });
+  if (cs) F.label(fr.at([(cs.min[0] + qa[0]) / 2, (cs.min[2] + qa[1]) / 2]), [xr, fr.at([0, qa[1]])[1] - 14], ['crest strip, ripped to a wedge in line', 'with the block faces; between the two', 'blocks (dashed: behind this one)'], { size: 12 });
   if (cs) F.label(fr.at([(g.x1 + cs.min[0]) / 2, cs.min[2] + 0.3]), [xl, fr.at([0, cs.min[2] - 0.2])[1] + 4], `a ${f8(cs.min[0] - g.x1)} bed of thickened epoxy`, { size: 12 });
   if (lh) F.label(fr.at([lh.max[0], lh.min[2] + 0.2]), [xl, fr.at([0, L.deckTop + 3.6])[1]], ['lid hinge box leaf (dashed: inboard', 'of the block), under the crest strip', 'below the knuckle; on for good'], { size: 12 });
   F.label(fr.at([g.x1 - g.pl / 2, L.deckTop + 1.2]), [xl, fr.at([0, L.deckTop + 1.6])[1]], 'box fore end', { size: 12, color: MUTED });
+  F.label(fr.at([xMin + 0.5, (g.lidUnderZ - g.rimT + g.zTop) / 2]), [xl, fr.at([0, g.zTop])[1] - 6], 'storage lid (shut)', { size: 12, color: MUTED });
+  F.label(fr.at([g.x1 - g.coamW / 2, (g.zPlyTop + g.zWallTop) / 2]), [xl, fr.at([0, (g.zPlyTop + g.zWallTop) / 2])[1] + 6], 'oak coaming on the box wall', { size: 12, color: MUTED });
   F.label(fr.at([(wx0 + wx1) / 2 + 0.2, L.deckBot + 0.3]), [xl, fr.at([0, L.deckBot])[1] + 40], ['2 screws up from UNDER the deck,', 'countersunk (none from above)'], { size: 12 });
   F.label(fr.at(corner(t / 2, topC * 0.75)), [xr, fr.at([0, g.zTop])[1] - 8], 'the seat back leans here (next step)', { size: 12, color: MUTED });
   F.text([fr.at([xMax, 0])[0] - 4, fr.at([0, L.deckBot])[1] + 16], 'deck', { size: 11.5, color: MUTED, anchor: 'end' });
@@ -780,7 +789,7 @@ const seatBackPositions: FigFn = (c) => {
   return {
     id: 'seat-back-positions',
     title: 'The seat back, upright and flat',
-    caption: `The seat back hangs on two butt hinges at its front bottom edge: one leaf on the panel's front face (screwed into inserts), the other on the deck, screwed through into an oak backer pad underneath. Upright, it leans on the stop blocks and the crest strip from [[step:seat-blocks]], and a spring-detent pin each side goes through the panel into the block's latch hole. For cargo the pad comes off, the back flips forward ${Math.round(phi * DEG)}° onto the deck, and the same pins go through the same holes and the deck into the backer pads. This step makes the panel and fits everything dry; the hardware goes on for good after the finish.`,
+    caption: `The seat back hangs on two butt hinges at its front bottom edge: one leaf on the panel's front face (screwed into inserts), the other on the deck, screwed through into an oak backer pad underneath. Upright, it leans on the stop blocks and the crest strip from [[step:seat-blocks]], and a spring-detent pin each side goes through the panel into the block's latch hole. For cargo the cushion and pad come off, the back flips forward ${Math.round(phi * DEG)}° onto the deck, and the same pins go through the same holes and the deck into the backer pads. This step makes the panel and fits everything dry; the hardware goes on for good after the finish.`,
     svg: F.svg('The seat back upright on its stop blocks and flipped flat on the deck, with its hinges and pins'),
   };
 };

@@ -13,8 +13,8 @@ import { axleGrooveDepthIn, WEATHER_SPEC } from '../params';
 import { STEP, box, cylinder, roughOf, span, SIDES, type Ctx, stainless, eyeBoltMat } from './build-utils';
 import { customPart } from './mesh-utils';
 import { compose, translation } from './mat4';
-import { boltLength, CARRIAGE_STOCK_IN, EYE_BOLT_STOCK_IN, inchesText, pickWoodScrew, SCREW_DIA_IN, screwText, stockBoltFit } from './rear-mount';
-import { joistId, KING_NUT_BELOW_DECK_IN } from './frame';
+import { boltLength, CARRIAGE_STOCK_IN, EYE_BOLT_STOCK_IN, inchesText, MIN_THREADS_PAST_NUT, pickWoodScrew, SCREW_DIA_IN, screwText, stockBoltFit, washerThick } from './rear-mount';
+import { joistId, kingNutSlot } from './frame';
 import { axleMaterial, axleSourcing, axleStockNote } from './axle-stock';
 import { cotterHoleJoint } from './running-gear';
 import type { Part, Vec2 } from './types';
@@ -166,21 +166,28 @@ export function buildPivot(ctx: Ctx): Part[] {
     }));
   }
 
-  // ── Kingpin bolt: grade 8, head and plate washer under the beam, nut in a slot at the top of the king beam ──
+  // ── Kingpin bolt: grade 8, head and SAE flat washer under the beam, nut in a slot at the top of the king beam ──
   {
     const zHead = b.bot - 0.45;
-    const zNutTop = L.king.top - KING_NUT_BELOW_DECK_IN;
+    // D-88: order the bolt from its own stack. Under the head: the flat washer, the beam, the disc and the king beam up into the nut slot. The tip must stay under the slot ceiling,
+    // so the longest stock length (1/2" steps above 3") that fits under it; it must also reach the nylock nut on the slot floor and 1-1/2 threads past it.
+    const slot = kingNutSlot(p, L);
+    const wHead = washerThick(kd);
+    const fitIn = slot.ceil - (b.bot - wHead); // shank room from under the head to the slot ceiling
+    const stockIn = Math.floor(fitIn * 2 + 1e-9) / 2;
+    const needIn = slot.floor + slot.nutH + MIN_THREADS_PAST_NUT / 11 - (b.bot - wHead);
+    const zNutTop = b.bot - wHead + stockIn; // the bolt's tip
     const len = zNutTop - zHead;
-    const boltOrder = `${inchesText(Math.ceil((len + 0.45 + 0.1 + 0.64) * 2 - 1e-9) / 2)} (stock length)`;
+    const boltOrder = `${inchesText(stockIn)} (stock length)`;
     const shank = cylinder(ctx, {
       id: 'kingpin', partNo: 'kingpin', name: 'Kingpin bolt (grade 8)', group: 'front-end', center: [kx, 0, zHead + len / 2], axis: 'z', radius: kd / 2, length: len, mat: 'steel',
-      kind: 'purchased', material: 'SAE grade 8 hex bolt, zinc-yellow, with a plate washer', body: 'front-axle', fab: 'buy', step: STEP.gear,
+      kind: 'purchased', material: 'SAE grade 8 hex bolt, zinc-yellow, with an SAE flat washer', body: 'front-axle', fab: 'buy', step: STEP.gear,
       massLb: steelLb(Math.PI * (kd / 2) ** 2 * len) + 0.2,
-      sourcing: { vendor: `McMaster-Carr (grade 8 hex bolt ${frac(kd)}" × ${boltOrder} (stack ${f2(len + 0.45)}" = beam ${f2(b.depth)}" + disc ${f2(p.kingThrustThickIn)}" + king beam ${f2(L.king.depth)}" + head washer and nylock nut; catalog lengths come in 1/2" steps above 3": buy the stock length, it is used as bought (D-77 no-fabrication rule)), full-thread or ${f2(len - 2.5)}" shank; 1 grade 8 flat washer (under the head; the nut sits in its slot with no washer, D-88), nylock nut; Loctite on the head washer)` },
+      sourcing: { vendor: `McMaster-Carr (grade 8 hex bolt ${frac(kd)}" × ${boltOrder} (the longest stock length that stays under the nut slot's ceiling: ${f2(fitIn)}" from under the head to the ceiling = flat washer + beam ${f2(b.depth)}" + disc ${f2(p.kingThrustThickIn)}" + king beam up to the ceiling; it needs ${f2(needIn)}" to reach 1-1/2 threads past the nylock nut on the slot floor; catalog lengths come in 1/2" steps above 3": buy the stock length, it is used as bought (D-77 no-fabrication rule)), full-thread or ${f2(len - 2.5)}" shank; 1 grade 8 flat washer (under the head; the nut sits in its slot with no washer, D-88), nylock nut; Loctite on the head washer)` },
       joints: [
-        { type: 'bolt', to: 'beam-F', count: 1, diaIn: kd, size: `${frac(kd)}" grade 8 kingpin through the beam, head and plate washer under the beam`, at: [[0, 0, 0]], note: 'the beam turns on the bolt; the head washer clamps the bolt to the beam' },
+        { type: 'bolt', to: 'beam-F', count: 1, diaIn: kd, size: `${frac(kd)}" grade 8 kingpin through the beam, head and SAE flat washer under the beam`, at: [[0, 0, 0]], note: 'the beam turns on the bolt; the head washer clamps the bolt to the beam' },
       ],
-      notes: `Kingpin (D-56): one ${frac(kd)}" SAE grade 8 bolt, head down under the axle beam with a plate washer, up through the beam, the UHMW disc and the king beam, nylock nut held by its flats in the slot at the top of the king beam, no washer (D-88): turn the bolt from its head until snug, then back it off a quarter turn so the axle swings freely. It locates the axle: it carries the pull of the bridle, the sideways loads and the rebound. The vertical load goes through the thrust disc and the roll of a one-wheel bump through the roll pads (D-58), not the bolt.`,
+      notes: `Kingpin (D-56): one ${frac(kd)}" SAE grade 8 bolt, head down under the axle beam with an SAE flat washer, up through the beam, the UHMW disc and the king beam, nylock nut held by its flats in the slot at the top of the king beam, no washer (D-88): turn the bolt from its head until snug, then back it off a quarter turn so the axle swings freely. It locates the axle: it carries the pull of the bridle, the sideways loads and the rebound. The vertical load goes through the thrust disc and the roll of a one-wheel bump through the roll pads (D-58), not the bolt.`,
     });
     parts.push(shank);
   }

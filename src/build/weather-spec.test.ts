@@ -83,10 +83,10 @@ describe('the two specs', () => {
     }
   });
 
-  it('the lid-batten screws are #8 x 5/8 (the third D-72 size), not a fourth', () => {
+  it('the hardware-into-thin-stock screws are #8 x 5/8 (the third D-72 size), not a fourth', () => {
     const bat = lines(bExt).filter((l) => /wood screw #8 x 5\/8"/.test(l.key));
     expect(bat.length).toBe(1);
-    expect(bat[0].qty).toBeGreaterThanOrEqual(12);
+    expect(bat[0].qty).toBeGreaterThanOrEqual(10); // 6 lid hinge leaves and 4 lid support (D-89)
     expect(lines(bStd).some((l) => /wood screw #6 x (3\/8|1\/2|5\/8)"/.test(l.key))).toBe(false);
   });
 });
@@ -177,10 +177,10 @@ describe('Bolt Depot by the piece', () => {
 
 describe('Standard hardware', () => {
   const byKey = (k: string): BomLine => lines(bStd).find((l) => l.key === k)!;
-  it('prices the 304 hinges, latch and stay, the zinc collars and D-rings, the galvanized eye bolts and chain from the Standard research', () => {
+  it('prices the 304 hinges and stay, the zinc collars and D-rings, the galvanized eye bolts and chain from the Standard research', () => {
     expect(byKey('seat-hinge').extUsd).toBeCloseTo(12.99, 2); // D-83: Ace 2" stainless pair (check the package for 304)
     expect(byKey('seat-hinge').notes).toMatch(/check the package for 304/);
-    expect(byKey('storage-latch').unitUsd).toBeCloseTo(4.895, 3); // Walmart 304 2-pack 9.79
+    expect(lines(bStd).some((l) => /^storage-(latch|catch)/.test(l.key))).toBe(false); // D-89: oak turn-buttons from offcuts, no latches
     expect(byKey('storage-lid-stay').unitUsd).toBe(9.99); // D-83: Rockler 6" lid support pair (plated steel); the Sugatsune S-93L stays an alternative
     expect(byKey('storage-lid-stay').alternatives![0].usd).toBe(26.4);
     expect(byKey('storage-hinge').extUsd).toBeCloseTo(5.47, 2); // D-83: Everbilt 2-1/2" stainless pair
@@ -516,13 +516,11 @@ describe('cost critic round 2: Standard metal, notes, shipping and tax', () => {
     expect(book).toContain('These orders ship, so freight is extra');
   });
 
-  it('prices that have no source behind them are estimates; the latch catch comes with the latch', () => {
+  it('prices that have no source behind them are estimates', () => {
     for (const b of [bStd, bExt]) {
       const by = (k: string): BomLine => lines(b).find((l) => l.key === k)!;
       expect(by('brake-foot-tread').basis).toBe('estimate');
       expect(by('flag-tube').basis).toBe('estimate');
-      expect(by('storage-catch').extUsd).toBe(0);
-      expect(by('storage-catch').notes).toMatch(/comes with the latch/);
     }
   });
 
