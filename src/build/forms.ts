@@ -19,6 +19,7 @@ import { transomTopOutline } from '../model/body';
 import type { Part, Vec2 } from '../model/types';
 import { flatPattern } from './flat';
 import { epoxyTimeFactor } from './finishing';
+import { fractionText } from './units';
 import { brakeOf, cutListFor } from './part-drawings';
 import { analyzeShaperPart } from './shaper-svg';
 import { LASER_MAX_WIDTH_IN, clipShape, emptyShape, fitToBed, type LaserItem, type LaserShape } from './laser-svg';
@@ -374,6 +375,7 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
         'The laser scores the sheer (cleat line), the gunwale band lower edge, the chine band top, the inner chine band bottom, the S end, the bow end of the bands and a tick for each cleat.',
         ...(hasRamp ? [`The file cuts it square at the "S starts" line, ${frac(uS0)} from the rear end. The rear piece lies under the flat part of the web; the ramp takes the front piece's place.`, `Glue the under layer (its own laser file) below the rear piece: the ramp cap's low end stands ${frac(webLowIn)} above the bench, so the web runs onto the ramp with no step.`] : []),
         `${banded ? 'Butt the bands tight on the bench, matching the scored lines across the seam, and screw' : 'Screw'} the pieces down with ${hasRamp ? '#8 × 1" flat-heads about every 12", heads flush (the rear piece is 2 layers, 1/2" thick)' : '#8 × 3/4" flat-heads about every 12", heads flush'}.`,
+        'Tape: packing tape over the template wherever a band lies (the epoxy squeezes out at the band edges).',
       ],
     },
     ...(hasRamp ? [{
@@ -413,7 +415,6 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
         'When the left web comes off the mirror ramp, set the mirror ramp\'s cleats, end stops and edge stops again against the right web, outside face up.',
       ],
     }] : []),
-    { step: 'TAPE: packing tape over the template wherever a band lies (the epoxy squeezes out at the band edges).' },
     {
       step: `GLUE-UP, one face per cure, held down with bags of sand: no clamp can get a jaw under a web lying on the template. Face one${hasRamp ? ', on the S-ramp' : ''}: lay the web on the template INSIDE face up, its top edge 1/8" off the cleats (the hardboard scrap as a gauge)${hasRamp ? ' (the ramp lifts the bow end toward the inside, which is the turn-in)' : ''}, and epoxy the inner chine band (${inChine}) and the inner gunwale band (${inGun}) to it, the gunwale band tight against the cleats. Leave the deck gap: the inner chine band stops short of the web bottom.`,
       sub: [
@@ -880,8 +881,10 @@ function kneePlan(parts: Part[], p: Params): Plan | null {
 export const END_TEMPLATE_MARGIN_IN = 0.75;
 /** Play of a tenon or Domino slot in the end template, a side (in): about the dados' own play, so a tenon that enters its slot enters the real mortise. */
 export const END_TEMPLATE_SLOT_CLEAR_IN = 1 / 64;
-/** A 6 mm Domino's slot in the template (in): its 6 mm thickness across the rail, its 20 mm width up and down, both with the slot play. */
-const DOMINO_SLOT_IN: Vec2 = [0.25, 0.875];
+/** A 6 mm Domino tenon's section (in): its 6 mm thickness across the rail, its 20 mm width up and down. The template slot adds the slot play all round. */
+const DOMINO_SLOT_IN: Vec2 = [6 / 25.4, 20 / 25.4];
+/** A play or clearance to the nearest 1/64 in, as the shop reads it (the template's 1/64 in play would print as 1/32 at the drawings' usual 1/32). */
+const inch64 = (v: number): string => `${fractionText(Math.round(v * 64) / 64, 64)}"`;
 
 interface EndTemplate { id: string; label: string; partId: string; outer: Vec2[]; part: Vec2[]; slots: Vec2[][]; score: Vec2[][]; marks: Array<{ c: Vec2; dia: number }>; w: number; h: number; slotText: string[] }
 
@@ -932,7 +935,7 @@ function endTemplatesPlan(parts: Part[], p: Params): Plan | null {
   const dims: FormDim[] = ts.flatMap((t) => [lenDim(`${t.id}-width`, `${t.label}: width`, t.w), lenDim(`${t.id}-height`, `${t.label}: height`, t.h), countDim(`${t.id}-slots`, `${t.label}: slots cut through`, t.slots.length, 'slot')]);
   const notes = [
     `Fit-check templates, not routing templates: each is the end's outline grown ${inch(M)} all round, with its web dados, deck dado and rail mortises (and at the bow the two Domino places) cut right through as slots, and the end's own outline scored on it.`,
-    `The tenon and Domino slots are ${inch(END_TEMPLATE_SLOT_CLEAR_IN)} over a side, about the play of the dados: a template that goes on by hand means the oak end, cut from the same file, goes on too.`,
+    `The tenon and Domino slots are ${inch64(END_TEMPLATE_SLOT_CLEAR_IN)} over a side, about the play of the dados (the laser's kerf adds a hair): a template that goes on by hand is the first check; the oak end's dry fit is the last.`,
     'Push each straight onto its end of the built hull, by hand, with dry tenons and Dominos in the rail ends. If a slot binds, measure how far it is off and move that dado or mortise in the file, then cut a new template: plywood is cheap, the glued oak panels are not.',
   ];
   const build: FormBuildStep[] = [

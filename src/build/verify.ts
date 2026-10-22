@@ -540,7 +540,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       : []),
     {
       id: 'ply-thickness',
-      title: 'Plywood thickness: measure before any dado is cut',
+      title: 'Plywood thickness: measured at the deck step and the side-form step',
       how: [
         it(`Measure the ${thin.nominal} ${thin.key === 1 ? 'white oak plywood' : thin.key === 3 || thin.key === 4 ? 'Baltic birch' : 'okoume'} and the 12 mm okoume deck sheet with calipers, at six or more points on the edges.`, [
           thin.key === 1 ? 'Nominal 1/4" white oak plywood runs about 7/32", and the veneer face varies.' : '',
@@ -556,8 +556,11 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
         ...(thin.key === 4 ? [it('Ask what glue the sheet carries (interior or exterior).', ['The sled is garage-kept and every face and edge is sealed, so an interior glue line is acceptable; ask anyway.'])] : []),
         ...(thin.key === 3 ? [it('Confirm the sheet size: probably 5 × 5 ft (60 × 60 in); the 59-5/8" side web blank only just fits.')] : []),
       ],
-      passList: [`The ${thin.nominal} sheet measures ${fr(thin.thicknessIn, 64)}" or less and the 12 mm sheet ${fr(p.deckPlyIn, 64)}" or less: each, plus a seal coat of a few thousandths, still slides into its dado with a little to spare (about 1/32").`],
-      ifFails: `Enter the measured thickness (plus the seal coat) in the design (${lbl(thinKey)}, ${lbl('deckPlyIn')}), re-run the checks and regenerate the Shaper files BEFORE a dado is cut: a thick sheet in a nominal dado cannot be fixed afterwards.`,
+      passList: [
+        `The ${thin.nominal} sheet: within ${fr(p.grooveSlopIn / 2, 64)}" of ${fr(thin.thicknessIn, 64)}", the files fit it as they are. Up to 1/32" off, enter what you measured. Under ${fr(thin.thicknessIn - 1 / 32, 64)}" or over ${fr(thin.thicknessIn + 1 / 32, 64)}", return the sheet.`,
+        `The 12 mm sheet: within ${fr(p.deckSlopIn / 2, 64)}" of ${fr(p.deckPlyIn, 64)}", the files fit it as they are. Between 7/16" and 1/2", enter what you measured. Under 7/16" or over 1/2", return the sheet.`,
+      ],
+      ifFails: `Enter the measured thickness (plus the seal coat) in the design, in Advanced mode, parameters panel (${lbl(thinKey)}, ${lbl('deckPlyIn')}); re-run the checks and re-export the Shaper files BEFORE a dado is cut: a thick sheet in a nominal dado cannot be fixed afterwards.`,
       partIds: ids(parts, /^(deck|side-[LR]-web|transom-rear|bow-bulkhead)$/),
       // the sheet this design uses and the deck ply: the two values the fail text tells you to enter (not the other thin sheets' thicknesses)
       paramKeys: [thinKey, 'deckPlyIn'],

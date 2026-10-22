@@ -760,7 +760,7 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
     id: 'offcut-tests',
     title: 'Test on offcuts',
     items: [
-      it('Do this BEFORE any show face is sealed or coated (assembly step "Seal the dados, edges and hidden faces").', [
+      it('Do this BEFORE any show face is sealed or coated (assembly step "Seal the deck underside and the open plywood edges").', [
         `Cut two 12" × 12" test panels from the real offcuts: ${plyNames.join(', ')}.`,
         'Sand them to the final grit (step 2).',
       ]),

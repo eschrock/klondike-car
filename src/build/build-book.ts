@@ -7,10 +7,10 @@
  * Plain TS, no DOM. Every string that came from the model goes through `esc`.
  */
 import { SHIPPING_TAX_PHRASE } from './bom';
-import { FROM_TEXT, fabText, pieceText } from './cutlist';
+import { FROM_TEXT, fabText, pieceText, stepsLabel } from './cutlist';
 import { fractionText, roughFrac } from './units';
 import { paramLabels } from './verify';
-import { PART_TOKEN_RE, partLabel, tokensIn, type Instr } from './assembly';
+import { glueCard, PART_TOKEN_RE, partLabel, tokensIn, type Instr } from './assembly';
 import { LASER_CONVENTIONS, LASER_NOTES, SHAPER_CONVENTIONS, SHAPER_NOTES, type BuildData } from './package';
 import { SPEC_NAME, cureLine, dims3, esc, featureSummary, fracDim, fracInch, fracInch64, groupByWhen, groupCutsByBoard, lbDelta, maxDepth, pct, sheetSvg, usd, weatherLine } from '../ui/build-helpers';
 
@@ -159,7 +159,7 @@ function verifySection(d: BuildData): string {
 
 function cutlistSection(d: BuildData): string {
   const c = d.cutList;
-  const out: string[] = ['<p class="muted small">Three steps: saw the CUTS from the boards (rough sizes round up to 1/8"), GLUE UP the panels and blocks, then MILL each part to its FINISHED size. Sizes are thickness × width × length in inches. Step is the number of the assembly step (section 6) that installs the part.</p>'];
+  const out: string[] = ['<p class="muted small">Three steps: saw the CUTS from the boards (rough sizes round up to 1/8"), GLUE UP the panels and blocks, then MILL each part to its FINISHED size. Sizes are thickness × width × length in inches. Step is the number of the assembly step (section 6) that fits the part; "cut 13 · fit 14" means it is cut to its final size at step 13 and fitted at step 14.</p>'];
   const seen = new Set<string>();
   if (c.warnings.length) out.push(`<p class="small"><strong>Data warnings:</strong></p>${ul(c.warnings.map(esc), 'small')}`);
 
@@ -194,19 +194,19 @@ function cutlistSection(d: BuildData): string {
 
   out.push('<h3>3. Finished parts: mill to these sizes</h3>');
   out.push(table([['Part'], ['Qty', 'num'], ['Final T × W × L'], ['From'], ['Board'], ['Grain'], ['Fabrication'], ['Step', 'num']], c.finished.map((f) => [
-    td(`${anchors(f.ids, seen)}${esc(f.name)}`), td(f.qty, 'num'), td(esc(f.finalText)), td(esc(FROM_TEXT[f.from] ?? f.from)), td(esc(f.board)), td(esc(f.grainWord ?? '')), td(esc(fabText(f.fab))), td(f.assemblySteps.join(', '), 'num'),
+    td(`${anchors(f.ids, seen)}${esc(f.name)}`), td(f.qty, 'num'), td(esc(f.finalText)), td(esc(FROM_TEXT[f.from] ?? f.from)), td(esc(f.board)), td(esc(f.grainWord ?? '')), td(esc(fabText(f.fab))), td(esc(stepsLabel(f)), 'num'),
   ])));
 
   out.push('<h3>Plywood</h3>');
   for (const g of c.sheets) {
     out.push(`<h4>${esc(g.label)} <span class="muted">· ${g.pieces} pieces</span></h4>`);
     out.push(table([['Part'], ['Qty', 'num'], ['Final T × W × L'], ['Grain'], ['Fabrication'], ['Laser'], ['Step', 'num']], g.rows.map((r) => [
-      td(`${anchors(r.ids, seen)}${esc(r.name)}${r.note ? `<div class="small"><strong>${esc(r.note)}</strong></div>` : ''}`), td(r.qty, 'num'), td(dims3(r.final)), td(esc(r.grainWord ?? '')), td(esc(fabText(r.fab))), td(esc(r.laser.text)), td(r.assemblySteps.join(', '), 'num'),
+      td(`${anchors(r.ids, seen)}${esc(r.name)}${r.note ? `<div class="small"><strong>${esc(r.note)}</strong></div>` : ''}`), td(r.qty, 'num'), td(dims3(r.final)), td(esc(r.grainWord ?? '')), td(esc(fabText(r.fab))), td(esc(r.laser.text)), td(esc(stepsLabel(r)), 'num'),
     ])));
   }
   out.push('<h3>Metal stock</h3>');
   out.push(table([['Part'], ['Qty', 'num'], ['Stock'], ['Cut length', 'num'], ['Step', 'num']], c.metal.map((r) => [
-    td(`${anchors(r.ids, seen)}${esc(r.name)}`), td(r.qty, 'num'), td(esc(r.section)), td(fracInch(r.cutLengthIn), 'num'), td(r.assemblySteps.join(', '), 'num'),
+    td(`${anchors(r.ids, seen)}${esc(r.name)}`), td(r.qty, 'num'), td(esc(r.section)), td(fracInch(r.cutLengthIn), 'num'), td(esc(stepsLabel(r)), 'num'),
   ])));
   return out.join('');
 }
@@ -301,6 +301,9 @@ function assemblySection(d: BuildData): string {
   const nameOf = new Map(d.parts.map((x) => [x.id, x.name]));
   const link = partLinker(d);
   const out: string[] = ['<p class="muted small">Do the steps in order. Cure blocks give the epoxy pot life, clamp time and full-cure time; in a cold shop allow longer. Tick each check before you move on.</p>'];
+  // The glue card: one box before the steps; every glue step's cure line points back to it.
+  const card = glueCard(d.p);
+  out.push(`<div class="step glue-card" id="glue-card"><h3>Glue card</h3><p class="small">${esc(card.text.replace(/^GLUE CARD\s*/, ''))}</p>${instrList(card.sub ?? [], link)}</div>`);
   for (const s of d.steps) {
     const listing = s.partIds.map((id) => nameOf.get(id) ?? id);
     out.push(`<div class="step" id="step-${s.n}"><h3>${s.n}. ${esc(s.title)}${s.kind === 'build' ? '' : `<span class="kind">${esc(s.kind)}</span>`}</h3>`);

@@ -228,8 +228,19 @@ const CUT_KEY = 'cut:';
  */
 const cutWith = (id: string): string | undefined => { const m = /^dring-plate-(.+)$/.exec(id); return m ? `side-rib-${m[1]}` : undefined; };
 const stepsOf = (ids: string[], m?: ReadonlyMap<string, number>): number[] =>
-  m ? [...new Set(ids.flatMap((i) => [m.get(i), m.get(`${CUT_KEY}${i}`), (() => { const w = cutWith(i); return w ? m.get(w) : undefined; })()]).filter((v): v is number => v !== undefined))].sort((a, b) => a - b) : [];
-const stepText = (n: number[]): string => n.join(', ');
+  m ? [...new Set(ids.flatMap((i) => [m.get(i), (() => { const w = cutWith(i); return w ? m.get(w) : undefined; })()]).filter((v): v is number => v !== undefined))].sort((a, b) => a - b) : [];
+/** D-94: the assembly steps that cut the pieces to their final size, when that is not the step that fits them (empty otherwise). */
+const cutStepsOf = (ids: string[], m?: ReadonlyMap<string, number>): number[] => {
+  if (!m) return [];
+  const cut = [...new Set(ids.map((i) => m.get(`${CUT_KEY}${i}`)).filter((v): v is number => v !== undefined))].sort((a, b) => a - b);
+  const fit = stepsOf(ids, m);
+  return cut.length && cut.join() !== fit.join() ? cut : [];
+};
+/** The step column: "cut 13 · fit 14" when a part is cut to size at another step than the one that fits it (D-94), else the fitting step(s). */
+export function stepsLabel(r: { assemblySteps: number[]; cutSteps?: number[] }): string {
+  const fit = r.assemblySteps.join(', ');
+  return r.cutSteps?.length ? `cut ${r.cutSteps.join(', ')} · fit ${fit || '–'}` : fit;
+}
 
 /** Put a T x W x L into ascending-thickness order when the model gave a long or wide "thickness" (seat-crest-strip has T 13.5 in), and say so. */
 function sanitize(d: Dims, warnings: string[], what: string): Dims {
@@ -303,6 +314,8 @@ export interface OakRow {
   step: number;
   /** ASSEMBLY step numbers (0 to 29: the numbers in the build book) of the pieces, when the caller passed the step list. */
   assemblySteps: number[];
+  /** D-94: the steps that cut the pieces to final size, when not the fitting step (see `stepsLabel`). */
+  cutSteps?: number[];
   /** Sizing notes for the bench (a Shaper file cuts net, the blank is longer). For a laminated part: "face-laminated: 3 x 3/4" from 4/4 ...". */
   note?: string;
   plies?: number;
@@ -434,6 +447,8 @@ export interface SheetRow {
   /** MODEL step; see `OakRow.step`. */
   step: number;
   assemblySteps: number[];
+  /** D-94: the steps that cut the pieces to final size, when not the fitting step (see `stepsLabel`). */
+  cutSteps?: number[];
   /** E.g. "the Shaper file cuts it to 59-1/2"; start from a 59-5/8" blank (+1/8" trim)". */
   note?: string;
 }
@@ -462,6 +477,8 @@ export interface MetalRow {
   fab: string;
   step: number;
   assemblySteps: number[];
+  /** D-94: the steps that cut the pieces to final size, when not the fitting step (see `stepsLabel`). */
+  cutSteps?: number[];
   warnings: string[];
 }
 
@@ -556,6 +573,8 @@ export interface FinishedPart {
   grainWord?: string;
   fab: string;
   assemblySteps: number[];
+  /** D-94: the steps that cut the pieces to final size, when not the fitting step (see `stepsLabel`). */
+  cutSteps?: number[];
 }
 
 // ── Solid oak ─────────────────────────────────────────────────────────────────
@@ -701,12 +720,12 @@ function oakRows(plans: OakPartPlan[], stepOf?: ReadonlyMap<string, number>): Oa
     const x = pl.part;
     const key = `${pl.partNo}|${rowKeyDims(pl.block)}|${pl.board}`;
     const row = map.get(key);
-    if (row) { row.qty += 1; row.ids.push(x.id); row.step = Math.min(row.step, x.step); row.assemblySteps = stepsOf(row.ids, stepOf); continue; }
+    if (row) { row.qty += 1; row.ids.push(x.id); row.step = Math.min(row.step, x.step); row.assemblySteps = stepsOf(row.ids, stepOf); row.cutSteps = cutStepsOf(row.ids, stepOf); continue; }
     const gw = grainInWords(x);
     map.set(key, {
       partNo: pl.partNo, name: names.get(identityOf(pl)) ?? x.name, qty: 1, ids: [x.id], stock: pl.stock, rough: pl.block, roughExact: pl.blockExact, edgeBoards: pl.edgeN, board: pl.board, grain: x.grain,
       ...(isTallBlock(x, pl.stock) ? { tall: true } : {}),
-      ...(gw ? { grainWord: gw } : {}), fab: x.fab, step: x.step, assemblySteps: stepsOf([x.id], stepOf),
+      ...(gw ? { grainWord: gw } : {}), fab: x.fab, step: x.step, assemblySteps: stepsOf([x.id], stepOf), cutSteps: cutStepsOf([x.id], stepOf),
       ...(x.plies !== undefined ? { plies: x.plies } : {}), ...(pl.lamination ? { lamination: pl.lamination, note: laminationNote(pl.lamination, pl.pieces) } : {}),
       layerPieces: [], warnings: pl.warnings,
     });
@@ -959,12 +978,12 @@ function sheetGroups(parts: Part[], warnings: string[], stepOf?: ReadonlyMap<str
     g.pieces += 1;
     const key = `${partKey(x)}|${dimKey(stock)}`;
     const row = g.rows.find((r) => `${r.partNo}|${dimKey(r.stock)}` === key);
-    if (row) { row.qty += 1; row.ids.push(x.id); row.step = Math.min(row.step, x.step); row.assemblySteps = stepsOf(row.ids, stepOf); members.get(row)!.push(x.name); }
+    if (row) { row.qty += 1; row.ids.push(x.id); row.step = Math.min(row.step, x.step); row.assemblySteps = stepsOf(row.ids, stepOf); row.cutSteps = cutStepsOf(row.ids, stepOf); members.get(row)!.push(x.name); }
     else {
       const gw = grainInWords(x);
       const net = shaperNetNote(x, stock);
       const note = net?.note;
-      const nr: SheetRow = { partNo: partKey(x), name: x.name, qty: 1, ids: [x.id], stock, final: net ? { ...stock, l: net.net } : stock, grain: x.grain, ...(gw ? { grainWord: gw } : {}), fab: x.fab, laser: laserOf(x), step: x.step, assemblySteps: stepsOf([x.id], stepOf), ...(note ? { note } : {}) };
+      const nr: SheetRow = { partNo: partKey(x), name: x.name, qty: 1, ids: [x.id], stock, final: net ? { ...stock, l: net.net } : stock, grain: x.grain, ...(gw ? { grainWord: gw } : {}), fab: x.fab, laser: laserOf(x), step: x.step, assemblySteps: stepsOf([x.id], stepOf), cutSteps: cutStepsOf([x.id], stepOf), ...(note ? { note } : {}) };
       members.set(nr, [x.name]);
       g.rows.push(nr);
     }
@@ -1028,8 +1047,8 @@ function metalRows(parts: Part[], warnings: string[], stepOf?: ReadonlyMap<strin
     const section = metalSection(x, family, d);
     const key = `${partKey(x)}|${dimKey(d)}`;
     const row = map.get(key);
-    if (row) { row.qty += 1; row.ids.push(x.id); row.step = Math.min(row.step, x.step); row.assemblySteps = stepsOf(row.ids, stepOf); members.get(row)!.push(x.name); continue; }
-    const nr: MetalRow = { partNo: partKey(x), name: x.name, qty: 1, ids: [x.id], family, section, material: x.material, cutLengthIn: d.l, stock: d, fab: x.fab, step: x.step, assemblySteps: stepsOf([x.id], stepOf), warnings: w };
+    if (row) { row.qty += 1; row.ids.push(x.id); row.step = Math.min(row.step, x.step); row.assemblySteps = stepsOf(row.ids, stepOf); row.cutSteps = cutStepsOf(row.ids, stepOf); members.get(row)!.push(x.name); continue; }
+    const nr: MetalRow = { partNo: partKey(x), name: x.name, qty: 1, ids: [x.id], family, section, material: x.material, cutLengthIn: d.l, stock: d, fab: x.fab, step: x.step, assemblySteps: stepsOf([x.id], stepOf), cutSteps: cutStepsOf([x.id], stepOf), warnings: w };
     members.set(nr, [x.name]);
     map.set(key, nr);
   }
@@ -1094,15 +1113,15 @@ export function cutList(parts: Part[], p: Params, stepOf?: ReadonlyMap<string, n
     ]),
     finished: toCsv([
       ['Part', 'Qty', 'Final T x W x L (in)', 'From', 'Board', 'Grain', 'Fabrication', 'Assembly step'],
-      ...finished.map((f) => [f.name, f.qty, f.finalText, FROM_TEXT[f.from], f.board, f.grainWord, fabText(f.fab), stepText(f.assemblySteps)]),
+      ...finished.map((f) => [f.name, f.qty, f.finalText, FROM_TEXT[f.from], f.board, f.grainWord, fabText(f.fab), stepsLabel(f)]),
     ]),
     sheets: toCsv([
       ['Sheet', 'Part', 'Qty', 'Final T x W x L (in)', 'Grain', 'Fabrication', 'Laser', 'Assembly step', 'Note'],
-      ...sheets.flatMap((g) => g.rows.map((r) => [g.label, r.name, r.qty, finalDimsText(r.final), r.grainWord, fabText(r.fab), r.laser.text, stepText(r.assemblySteps), r.note])),
+      ...sheets.flatMap((g) => g.rows.map((r) => [g.label, r.name, r.qty, finalDimsText(r.final), r.grainWord, fabText(r.fab), r.laser.text, stepsLabel(r), r.note])),
     ]),
     metal: toCsv([
       ['Stock', 'Part', 'Qty', 'Cut length (in)', 'Fabrication', 'Assembly step'],
-      ...metal.map((r) => [r.section, r.name, r.qty, fractionText(nearest32(r.cutLengthIn), 32), fabText(r.fab), stepText(r.assemblySteps)]),
+      ...metal.map((r) => [r.section, r.name, r.qty, fractionText(nearest32(r.cutLengthIn), 32), fabText(r.fab), stepsLabel(r)]),
     ]),
   };
   return { oak, layers, strips, resaw: pools, sheets, metal, warnings: [...new Set(warnings)], cuts, glueUps, finished, csv };
@@ -1379,7 +1398,7 @@ function finishedOf(oak: OakGroup[]): FinishedPart[] {
       const from: FinishedPart['from'] = g.board === 'resawn' ? 'strips' : r.edgeBoards > 1 || r.lamination ? 'glue-up' : 'board';
       out.push({
         partNo: r.partNo, name: r.name, qty: r.qty, ids: r.ids, final, finalText: sizeText(final, false, r.tall), from, board: r.board,
-        ...(r.grainWord ? { grainWord: r.grainWord } : {}), fab: r.fab, assemblySteps: r.assemblySteps,
+        ...(r.grainWord ? { grainWord: r.grainWord } : {}), fab: r.fab, assemblySteps: r.assemblySteps, cutSteps: r.cutSteps,
       });
     }
   }
