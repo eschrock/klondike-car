@@ -214,18 +214,21 @@ export function crossGrainWords(x: Part): string | undefined {
 }
 
 /** Assembly step numbers (`BuildStep.n`) of each part id, from the step list (structural type: `cutlist.ts` cannot import `assembly.ts`, which imports it). */
-export function stepMapOf(steps: ReadonlyArray<{ n: number; partIds: readonly string[] }>): Map<string, number> {
+export function stepMapOf(steps: ReadonlyArray<{ n: number; partIds: readonly string[]; cutIds?: readonly string[] }>): Map<string, number> {
   const m = new Map<string, number>();
   for (const s of steps) for (const id of s.partIds) if (!m.has(id)) m.set(id, s.n);
+  // D-94: the step that cuts a part to its final size, when it is not the one that installs it (the deck, the webs, the transom and bulkhead ...), under a `cut:` key.
+  for (const s of steps) for (const id of s.cutIds ?? []) if (!m.has(`${CUT_KEY}${id}`)) m.set(`${CUT_KEY}${id}`, s.n);
   return m;
 }
+const CUT_KEY = 'cut:';
 /**
  * Parts that are cut and drilled at another part's step than the one that names them: the D-ring bearing plate is cut from flat bar and drilled with the D-ring plate as the template at the
  * rib-fitting step (the plate's rib is `side-rib-<side><n>`), and bolted on at the hardware step. Both steps are listed.
  */
 const cutWith = (id: string): string | undefined => { const m = /^dring-plate-(.+)$/.exec(id); return m ? `side-rib-${m[1]}` : undefined; };
 const stepsOf = (ids: string[], m?: ReadonlyMap<string, number>): number[] =>
-  m ? [...new Set(ids.flatMap((i) => [m.get(i), (() => { const w = cutWith(i); return w ? m.get(w) : undefined; })()]).filter((v): v is number => v !== undefined))].sort((a, b) => a - b) : [];
+  m ? [...new Set(ids.flatMap((i) => [m.get(i), m.get(`${CUT_KEY}${i}`), (() => { const w = cutWith(i); return w ? m.get(w) : undefined; })()]).filter((v): v is number => v !== undefined))].sort((a, b) => a - b) : [];
 const stepText = (n: number[]): string => n.join(', ');
 
 /** Put a T x W x L into ascending-thickness order when the model gave a long or wide "thickness" (seat-crest-strip has T 13.5 in), and say so. */

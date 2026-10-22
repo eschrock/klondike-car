@@ -14,6 +14,7 @@ import { axleGrooveDepthIn } from '../params';
 import { worldAABB } from '../model/bounds';
 import { tongueOutline } from '../model/pivot';
 import { kingNutSlot } from '../model/frame';
+import { chainKeeper, chainSweep } from '../model/chain-keeper';
 import { uncTensileArea } from './nds';
 import { rectSection } from './beams';
 import { axleHoleDetails, axleHoleText, axleSection, axleUltimate, axleWhat, axleYield, type AxleLoads } from './axle';
@@ -722,6 +723,8 @@ export function steerClear(ctx: Ctx): AnalysisCheck {
   const gapJoist = jointBot - L.tongue.z1;
   const gapDisc = L.beamF.top - L.tongue.z1;
   const tireClear = L.steer.clearAtLock;
+  // D-56: the slack chain's bight (each chain is only taut at its own lock), with the keeper cord and, for the text, without it
+  const keepSw = chainSweep(p, L, true), bareSw = chainSweep(p, L, false), kp = chainKeeper(p, L);
   const ds: Detail[] = [
     detail('tire to the side of the body at full lock (both directions)', tireClear, 'in', p.steerClearIn, '>='),
     detail('axle beam top to the underside of the shallow rails', gapBeamRail, 'in', PART_CLEAR_IN, '>='),
@@ -729,11 +732,14 @@ export function steerClear(ctx: Ctx): AnalysisCheck {
     detail('tongue top to the end joist underside', gapJoist, 'in', PART_CLEAR_IN, '>='),
     detail('tongue top to the thrust disc (the disc lies on the beam top, the tongue head turns under it)', gapDisc, 'in', PART_CLEAR_IN, '>='),
     detail('taut steering chain to everything else at full lock (3D, less the chain width)', gapChain, 'in', PART_CLEAR_IN, '>='),
+    detail('slack steering chain, the lowest point of its bight over the lock range (held up by its keeper cord, D-56)', keepSw.lowZ, 'in', p.minGroundClearanceIn, '>='),
+    detail('keeper cord stretch with the chain taut at its lock, where the cord is longest (the chain still sets the lock)', Math.max(keepSw.maxStretch, kp.lockIn / kp.freeIn - 1), '', p.steerKeeperMaxStretch, '<='),
   ];
   const g = governing(ds, '');
   const how = `Tire: inner corner clearance to the body side at ${f(p.steerLockDeg, 0)}° lock = (track/2 - tire/2) cos(lock) - r sin(lock) - body/2 = ${f(tireClear, 2)}" (needs ${f(p.steerClearIn, 2)}"; same both ways; minimum track ${f(L.steer.minTrack, 2)}", D-58). `
     + `Beam: top ${f(L.beamF.top, 3)}" vs the rails' shallow underside ${f(railBot, 3)}" (${f(L.railDepthF, 3)}" deep ahead of x = ${f(L.railStepX, 1)}"): ${f(gapBeamRail, 3)}". Clamp plates: tops ${f(plateTop, 3)}", the king beam bottom ${f(L.king.bot, 4)}": ${f(gapKing, 3)}" (the plate bolt heads stand above the plate tops: check them against the king beam and the joists; no plate passes under the end joist within the lock). Oak tongue top ${f(L.tongue.z1, 4)}" vs the end joist underside ${f(jointBot, 3)}": ${f(gapJoist, 3)}", and ${f(gapDisc, 3)}" below the thrust disc (which lies on the beam top). `
     + `The taut steering chain (${f(cg.len, 2)}" between the eye rings, ${f(chainGeom(ctx).lever, 2)}" lever) passes ${f(gapChain, 2)}" from the nearest other part (${chainAt}); it lies behind the king beam, so the tongue, the disc, the plates and the pads are far from it. `
+    + `Each chain is only taut at its own lock; elsewhere it hangs slack (up to ${f(L.chain.lenIn - Math.hypot(L.chain.anchor[0] - L.steer.beamEyeAt(-L.steer.lock)[0], L.chain.anchor[1] - L.steer.beamEyeAt(-L.steer.lock)[1], L.chain.anchor[2] - L.steer.beamEyeAt(-L.steer.lock)[2]), 2)}" at the opposite lock), and alone its bight would hang ${f(bareSw.lowZ, 2)}" off the ground at ${f(bareSw.atDeg, 1)}° (a uniform chain between the eye rings). D-56: one 1/8" shock cord (${f(kp.freeIn, 2)}" between its knots, ${f(p.steerKeeperCordLbf, 1)} lbf at 100% stretch, assumed) runs through a screw eye under the deck at x ${f(kp.eye[0], 2)}", ${f(Math.abs(kp.eye[1]), 2)}" off center, its ends knotted to the links ${f(kp.linksFromBeamIn[0], 2)}" and ${f(kp.linksFromBeamIn[1], 2)}" from the beam eye: with it the lowest point over the lock range is ${f(keepSw.lowZ, 2)}" (at ${f(keepSw.atDeg, 1)}°; each piece of chain between the eye rings and the tied links hangs as a catenary, the links where the cord's pull, the chain's weight and its length balance; about ±0.1" for the model), and the cord is longest with the chain taut at its lock: ${f(kp.lockIn, 2)}" from link to link through the eye, a ${f(100 * (kp.lockIn / kp.freeIn - 1), 0)}% stretch (it pulls about ${f(p.steerKeeperCordLbf * (kp.lockIn / kp.freeIn - 1), 1)} lbf then), so the chain still sets the lock. `
     + `The axle turns freely to the lock because nothing else is in its swing (the roll pads and the clamp plates pass under the rails and the king beam, the tongue head under the end joist); the chains, not blocks, set the lock. Assumed minimum running gap ${f(PART_CLEAR_IN, 3)}" for steel past wood. Ground clearance (info): the axle beam bottom is ${f(L.beamF.bot, 3)}" off the ground, but the kingpin head and its plate washer hang about 0.45" below it, ${f(L.beamF.bot - 0.45, 3)}" up (under the ${f(p.minGroundClearanceIn, 1)}" rule; the model test exempts them).`;
   return singleCheck({
     id: 'steer-clear', label: 'Steering clearances at full lock (tires, plates, tongue, chains)', group: 'Steering', refs: ['D-56', 'D-58'],

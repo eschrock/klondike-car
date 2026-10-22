@@ -1146,6 +1146,36 @@ const defs = {
     default: 7.8, min: 4, max: 11, step: 0.2, status: 'assumed', ref: 'D-58, D-66',
     note: 'D-66: 7.8 in (was 8.4): the chain joist stands where the bow taper has drawn the rail inner face in to about 9.1 in, and the 2 in washer needs 1.15 in of that. The eye bolt goes fore-aft through the chain joist (the crossmember just behind the king beam), the eye standing out of its front face, a little below mid depth; the 2 in washer and nut on its rear face must clear the rail. Behind the king beam the chain can run low, under it, to the beam end.',
   },
+  steerKeeperAheadIn: {
+    label: 'Chain keeper eye ahead of the chain crossmember', group: 'steering', unit: 'in',
+    default: 3.25, min: 1, max: 6, step: 0.25, status: 'assumed', ref: 'D-56',
+    note: 'D-56: a short shock cord through a small screw eye in the underside of the deck, its two ends knotted to two links of each steering check chain, lifts the slack bight (it hung about 2" off the ground straight ahead, 1.3" at the opposite lock). The eye sits this far ahead of the chain crossmember\'s front face, midway across between the chain\'s two eyes: aft of where the axle beam\'s trailing face swings at the lock, so the cord never lies over the beam. No crossmember stands there, so it goes into the 12 mm deck (a short-thread eye: the tip stays inside the deck).',
+  },
+  steerKeeperLinkFrac: {
+    label: 'Chain keeper: the near link one cord end ties to (fraction of the chain from the beam eye)', group: 'steering', unit: '',
+    default: 0.25, min: 0.1, max: 0.5, step: 0.05, status: 'assumed', ref: 'D-56',
+    note: 'One end of the keeper cord is knotted to the link this fraction of the chain length from the beam-eye end (the beam eye is the low end of the chain), the other end to the far link (steerKeeperFarLinkFrac). One cord end on one link, at the middle or anywhere else, left a piece of the chain sagging to about 3.2" or lower at the opposite lock.',
+  },
+  steerKeeperFarLinkFrac: {
+    label: 'Chain keeper: the far link the other cord end ties to (fraction of the chain from the beam eye)', group: 'steering', unit: '',
+    default: 0.6, min: 0.3, max: 0.9, step: 0.05, status: 'assumed', ref: 'D-56',
+    note: 'The cord runs from the near link up through the screw eye and down to this link, so it holds up the long piece toward the anchor as well; it slides through the eye, so both legs pull alike.',
+  },
+  steerKeeperStretchAtLock: {
+    label: 'Chain keeper cord stretch when its chain is taut at the lock', group: 'steering', unit: '',
+    default: 0.75, min: 0.3, max: 1, step: 0.05, status: 'assumed', ref: 'D-56',
+    note: 'Sets the cord\'s free length: its length from one tied link through the eye to the other with the chain taut at its lock, over 1 + this. The cord must stretch that far so the chain still reaches its full length and sets the lock; shock cord is sold as stretching about 100% (steerKeeperMaxStretch).',
+  },
+  steerKeeperMaxStretch: {
+    label: 'Chain keeper cord: largest stretch allowed', group: 'factors', unit: '',
+    default: 1, min: 0.5, max: 1.5, step: 0.05, status: 'verify', ref: 'D-56',
+    note: '1/8" shock cord (bungee) is commonly sold as stretching about 100% of its length; check the label. The steer-clear row holds the cord\'s stretch over the lock range to this.',
+  },
+  steerKeeperCordLbf: {
+    label: 'Chain keeper cord: pull at 100% stretch', group: 'steering', unit: 'lbf',
+    default: 4, min: 1, max: 16, step: 0.5, status: 'assumed', ref: 'D-56',
+    note: 'A 1/8" shock cord pulls about this much stretched to twice its length (estimate; a 1/4" cord is about four times as stiff). It only has to hold up a few ounces of chain: the low point barely moves between 1 and 16 lbf.',
+  },
   chainJoistThickIn: {
     label: 'Chain joist thickness (the crossmember behind the king beam)', group: 'steering', unit: 'in',
     default: 1.25, min: 0.75, max: 2, step: 0.25, status: 'assumed', ref: 'D-58, D-60',

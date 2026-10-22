@@ -38,6 +38,7 @@ const ALLOW: Allow[] = [
   { a: /^kingpin$/, b: /^(beam-F|bridle-tongue|king-thrust|king-beam)$/, why: 'the kingpin bolt passes through bored holes in the axle beam, the tongue plate, the thrust washer bore and the king beam (the parts are boxes without the hole)' },
   { a: /^(beam-F|king-beam|joist-\d+)$/, b: /^steer-(eye|anchor)-[LR]$/, why: 'the forged eye bolt passes through a drilled hole in the member (D-58)' },
   { a: /^steer-(eye|anchor)-[LR]$/, b: /^steer-chain-[LR]$/, why: 'the chain hangs on the eye by a quick link; the chain is drawn straight between the eye rings (D-58)' },
+  { a: /^steer-keeper-[LR]$/, b: /^steer-chain-[LR]$/, why: 'D-56: the keeper cord\'s two ends are knotted through two links of the chain' },
   { a: /^scupper-/, b: /^side-[LR]-(chine|chine-in|web)$/, why: 'the drain nipple passes through the chine sandwich: inner band, web and outer band (D-57, D-62)' },
   { a: /^bridle-sleeve$/, b: /^bridle-tongue$/, why: 'the sleeve bearing lies in the hole across the tongue stem; the bridle rope runs through its bore (D-58, D-62)' },
   { a: /^bow-bulkhead$/, b: /^(deck|side-[LR]-web)$/, why: 'the deck edge and the web ends sit in dados in the bulkhead\'s rear face (D-57)' },
@@ -91,6 +92,7 @@ const KNOWN_OFF_DEFAULT: RegExp[] = [
   /^rail-[LR] x king-beam:/, // wheelbase 52 and rear overhang 14: the king beam end meets the rail that curves in with the bow turn-in by 0.05 in
   /^(clamp-F[LR]\d|king-beam) x roll-pad-[LR]:/, // a short stub (clamp plates inboard of the pad) or a thick disc: the roll pad meets a plate or the king beam; validateParams warns about the pad position
   /^clamp-F[LR]\d x king-thrust:/, // a long stub: the inner clamp plate reaches under the disc
+  /^(steer-keeper-[LR] x (king-beam|beam-F|roll-pad-[LR]|rail-[LR]|joist-\d+|steer-eye-[LR]|clamp-F[LR]\d)|(king-beam|beam-F|roll-pad-[LR]|rail-[LR]|joist-\d+|steer-eye-[LR]|clamp-F[LR]\d) x steer-keeper-[LR]):/, // D-56 (reported): off the defaults (a deep deck, a wide lock, an overslung beam, a narrow body) the keeper cord, drawn as a V to two links of the STRAIGHT chain, meets the king beam, the axle beam or a rail; its eye sits a fixed distance ahead of the chain crossmember
   /^steer-chain-[LR] x rail-[LR]:/, // a narrow body (20 in): the rails are inboard of the beam eye, so the chain climbs through the rail band to its anchor; the anchor eye pulls in with the body but the beam eye does not
   /^seat-hinge-backer-[LR] x brake-back(er|plate)-[LR]:/, // a narrow body (3c-4b, reported); D-75: the backing plate is let into the brake backer, so it meets the seat backer where the backer does
   /^rail-[LR] x joist-\d+:/, // a long bow turn-in (turn25): the rail curves in by 0.06 in over the joist end (3c-4b, reported)
@@ -158,7 +160,7 @@ describe('buildModel structure', () => {
       if (turning(a)) {
         // the part turned about the vertical axis through the kingpin (L.king.x, 0): a point on the kingpin axis would stay put
         expect(moved || (Math.abs(a.transform[12] - L.king.x) < 1e-9 && Math.abs(a.transform[13]) < 1e-9), a.id).toBe(true);
-      } else if (/^steer-chain-/.test(a.id)) expect(moved, a.id).toBe(true); // the chain is drawn between the turning beam eye and the fixed anchor (D-58)
+      } else if (/^steer-(chain|keeper)-/.test(a.id)) expect(moved, a.id).toBe(true); // the chain is drawn between the turning beam eye and the fixed anchor (D-58), its keeper cord to two of its links (D-56)
       else expect(moved, a.id).toBe(false);
     }
     for (const id of ['king-beam', 'king-thrust', 'steer-anchor-L', 'deck', 'rail-L', 'wheel-RL', 'beam-R']) expect(at.find((x) => x.id === id)!.transform, id).toEqual(neutral.find((x) => x.id === id)!.transform);
@@ -274,10 +276,10 @@ describe('masses', () => {
     expect(rows.steering).toBeUndefined();
     expect(rows.casters).toBeUndefined(); // the casters are gone (D-56); the front axle is the 'front-end' group
   });
-  it('the front-end group (D-56, D-58) is the axle beam, its two stubs and four bridge clamp plates (D-62), the kingpin, thrust disc, roll pads, king beam, oak tongue with its sleeve, rope and the two steering chains with their four eye bolts; 10-25 lb', () => {
+  it('the front-end group (D-56, D-58) is the axle beam, its two stubs and four bridge clamp plates (D-62), the kingpin, thrust disc, roll pads, king beam, oak tongue with its sleeve, rope and the two steering chains with their four eye bolts and their keeper cords (D-56); 10-25 lb', () => {
     const c = parts.filter((x) => x.group === 'front-end');
     const m = c.reduce((a, x) => a + x.massLb, 0);
-    const ids = ['beam-F', 'axle-FL', 'axle-FR', ...['L', 'R'].flatMap((t) => [1, 2].map((k) => `clamp-F${t}${k}`)), 'kingpin', 'king-thrust', 'king-beam', 'bridle-tongue', 'bridle-sleeve', 'bridle', 'roll-pad-L', 'roll-pad-R', 'steer-eye-L', 'steer-eye-R', 'steer-anchor-L', 'steer-anchor-R', 'steer-chain-L', 'steer-chain-R'];
+    const ids = ['beam-F', 'axle-FL', 'axle-FR', ...['L', 'R'].flatMap((t) => [1, 2].map((k) => `clamp-F${t}${k}`)), 'kingpin', 'king-thrust', 'king-beam', 'bridle-tongue', 'bridle-sleeve', 'bridle', 'roll-pad-L', 'roll-pad-R', 'steer-eye-L', 'steer-eye-R', 'steer-anchor-L', 'steer-anchor-R', 'steer-chain-L', 'steer-chain-R', 'steer-keeper-L', 'steer-keeper-R'];
     expect(c.map((x) => x.id).sort()).toEqual([...ids].sort());
     expect(m).toBeGreaterThan(10);
     expect(m).toBeLessThan(25);

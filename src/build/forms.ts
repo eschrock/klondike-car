@@ -5,7 +5,8 @@
  * square. The outline of the thing to cut is an outside cut (black) so Shaper Origin can cut it; the dimension layer is guides (blue). Nothing here is hand-entered: curves and stations come
  * from the layout, the parts' meshes and the params. The revision stamp is a hash of the params state (never the wall clock), unless the caller passes `opts.date`.
  *
- * Drawings (ids): 'side-form' (a: the cleat-line template and the S-ramp), 'rail-form' (b), 'crown-templates' (c: handlebow and bow bulkhead), 'brake-flap-template' (d), 'brake-knee-template' (e).
+ * Drawings (ids): 'side-form' (a: the cleat-line template and the S-ramp), 'rail-form' (b), 'crown-templates' (c: handlebow and bow bulkhead), 'brake-flap-template' (d), 'brake-knee-template' (e),
+ * 'end-templates' (f: plywood copies of the transom and the bow bulkhead, tried on the built hull before the oak is cut, D-94).
  *
  * Each drawing also says how to BUILD the form (Eric 2026-10-12: "am I cutting out two pieces of plywood in that shape?"): `FormDrawing.build` is an ordered list of steps (material and
  * thickness, how many layers or pieces cut to which line, how they stack and fasten, the base, the braces, ribs or cleats and their spacing, the tape, the spring-back, the clamping), every
@@ -22,8 +23,9 @@ import { brakeOf, cutListFor } from './part-drawings';
 import { analyzeShaperPart } from './shaper-svg';
 import { LASER_MAX_WIDTH_IN, clipShape, emptyShape, fitToBed, type LaserItem, type LaserShape } from './laser-svg';
 import {
-  ANNOTATION_ATTRS, checkSquareEls, circleD, dimensionEls, esc, fmt, frac, guideEl, hash6, pathEl, polyD, rectLoop, svgDocument, textEl, type Xf,
+  ANNOTATION_ATTRS, bbox, checkSquareEls, circleD, dimensionEls, esc, fmt, frac, guideEl, hash6, pathEl, polyD, rectLoop, svgDocument, textEl, type Xf,
 } from './svg-util';
+import { transformPoint, worldAABB } from '../model/bounds';
 
 /** Process constants (shop practice, not design numbers). */
 /** Thickness (in) of the hardboard / MDF the templates and ramp ribs are cut from. Templates are cut on the laser (D-86), where 1/4 in Baltic birch plywood cuts cleaner than hardboard and lasts longer. */
@@ -873,10 +875,105 @@ function kneePlan(parts: Part[], p: Params): Plan | null {
   };
 }
 
+// ── (f) The end templates: the transom and the bow bulkhead in 1/4 in plywood, tried on the hull before the oak is cut (D-94) ──
+/** The end templates are the end's outline grown this much all round (in), so the dados that run out through the end's top edge stay closed slots and the template is one piece. */
+export const END_TEMPLATE_MARGIN_IN = 0.75;
+/** Play of a tenon or Domino slot in the end template, a side (in): about the dados' own play, so a tenon that enters its slot enters the real mortise. */
+export const END_TEMPLATE_SLOT_CLEAR_IN = 1 / 64;
+/** A 6 mm Domino's slot in the template (in): its 6 mm thickness across the rail, its 20 mm width up and down, both with the slot play. */
+const DOMINO_SLOT_IN: Vec2 = [0.25, 0.875];
+
+interface EndTemplate { id: string; label: string; partId: string; outer: Vec2[]; part: Vec2[]; slots: Vec2[][]; score: Vec2[][]; marks: Array<{ c: Vec2; dia: number }>; w: number; h: number; slotText: string[] }
+
+function endTemplate(parts: Part[], p: Params, partId: string, id: string, label: string): EndTemplate | null {
+  const part = parts.find((x) => x.id === partId);
+  const d = part && analyzeShaperPart(part, parts, p);
+  if (!part || !d) return null;
+  const f = d.f, b = bbox(f.outer), M = END_TEMPLATE_MARGIN_IN, c = END_TEMPLATE_SLOT_CLEAR_IN;
+  const shift = ([u, v]: Vec2): Vec2 => [u - b.u0 + M, v - b.v0 + M];
+  const grow = (loop: Vec2[], by: number): Vec2[] => { const q = bbox(loop); return rectLoop(q.u0 - by, q.v0 - by, q.u1 + by, q.v1 + by); };
+  const pockets = d.items.filter((i): i is Extract<typeof i, { k: 'pocket' }> => i.k === 'pocket');
+  const slotText: string[] = [];
+  const slots: Vec2[][] = pockets.map((pk) => {
+    const isMortise = /^mortise/.test(pk.label);
+    if (isMortise) slotText.push(pk.label.replace(/^mortise-tenon for /, 'rail mortise '));
+    return (isMortise ? grow(pk.loop, c) : pk.loop).map(shift);
+  });
+  // A Domino joint is an edge joint (not in the Shaper file): its slot comes from the rail's own joint, in the same pattern coordinates as the dados (the left web's dado tells which way u runs).
+  const ab = worldAABB(part);
+  const W = b.u1 - b.u0;
+  const webL = pockets.find((pk) => /side-L-web/.test(pk.label));
+  const sgn = webL ? (bbox(webL.loop).u0 > W / 2 ? 1 : -1) : 1;
+  for (const r of parts.filter((x) => /^rail-[LR]$/.test(x.id))) {
+    for (const j of (r.joints ?? []).filter((q) => q.type === 'domino' && q.to === partId)) {
+      for (const a of j.at ?? []) {
+        const w = transformPoint(r.transform, a);
+        const uc = W / 2 + sgn * w[1], vc = w[2] - ab.min[2];
+        slots.push(rectLoop(uc - DOMINO_SLOT_IN[0] / 2 - c, vc - DOMINO_SLOT_IN[1] / 2 - c, uc + DOMINO_SLOT_IN[0] / 2 + c, vc + DOMINO_SLOT_IN[1] / 2 + c).map(shift));
+        slotText.push(`Domino place for ${r.id}`);
+      }
+    }
+  }
+  const close = (l: Vec2[]): Vec2[] => [...l, l[0]];
+  const score: Vec2[][] = [close(f.outer.map(shift)), ...d.items.flatMap((i) => (i.k === 'cutLoop' ? [close(i.loop.map(shift))] : []))];
+  const marks = d.items.flatMap((i) => (i.k === 'drill' || i.k === 'cutHole' ? [{ c: shift(i.c), dia: Math.max(i.dia, 0.19) }] : []));
+  const outer = rectLoop(0, 0, W + 2 * M, b.v1 - b.v0 + 2 * M);
+  return { id, label, partId, outer, part: f.outer.map(shift), slots, score, marks, w: W + 2 * M, h: b.v1 - b.v0 + 2 * M, slotText };
+}
+
+function endTemplatesPlan(parts: Part[], p: Params): Plan | null {
+  const tr = endTemplate(parts, p, 'transom-rear', 'transom-template', 'Rear transom template');
+  const bh = endTemplate(parts, p, 'bow-bulkhead', 'bulkhead-template', 'Bow bulkhead template');
+  const ts = [tr, bh].filter((x): x is EndTemplate => x !== null);
+  if (!ts.length) return null;
+  const GAP = 1.2;
+  const w = Math.max(...ts.map((t) => t.w)), h = ts.reduce((a, t) => a + t.h, 0) + GAP * (ts.length - 1) + 0.6;
+  const M = END_TEMPLATE_MARGIN_IN;
+  const dims: FormDim[] = ts.flatMap((t) => [lenDim(`${t.id}-width`, `${t.label}: width`, t.w), lenDim(`${t.id}-height`, `${t.label}: height`, t.h), countDim(`${t.id}-slots`, `${t.label}: slots cut through`, t.slots.length, 'slot')]);
+  const notes = [
+    `Fit-check templates, not routing templates: each is the end's outline grown ${inch(M)} all round, with its web dados, deck dado and rail mortises (and at the bow the two Domino places) cut right through as slots, and the end's own outline scored on it.`,
+    `The tenon and Domino slots are ${inch(END_TEMPLATE_SLOT_CLEAR_IN)} over a side, about the play of the dados: a template that goes on by hand means the oak end, cut from the same file, goes on too.`,
+    'Push each straight onto its end of the built hull, by hand, with dry tenons and Dominos in the rail ends. If a slot binds, measure how far it is off and move that dado or mortise in the file, then cut a new template: plywood is cheap, the glued oak panels are not.',
+  ];
+  const build: FormBuildStep[] = [
+    { step: `TEMPLATES (laser): cut ${ts.length === 2 ? 'TWO templates' : 'the template'} in ${frac(TEMPLATE_STOCK_IN)} plywood from the laser file for this drawing, one piece each: ${ts.map((t) => `the ${t.label.toLowerCase()} (${frac(t.w)} × ${frac(t.h)})`).join(' and ')}.` },
+    { step: `The laser cuts the dados and the rail mortises right through as slots (${ts.reduce((a, t) => a + t.slots.length, 0)} in all), and scores each end's outline, its hand hole and its drilled holes.` },
+    {
+      step: 'USE (at the ends step, after the hull is glued): push each template straight onto its end of the hull by hand.',
+      sub: ['Dry loose tenons in the rail rear mortises and dry Dominos in the bow ones first, half standing out.', 'Every web end, the deck end and every tenon must come through its slot; the template must lie flat on all the band ends, and the scored outline\'s sides lie on the outer bands\' faces.', 'Then lay the bulkhead template on the cut bulkhead, its slots over the dados, and mark the two Domino mortises through it.'],
+    },
+    { step: 'No base, braces, clamps or spring-back: these are fit-check templates.' },
+  ];
+  const yOf = (i: number): number => ts.slice(0, i).reduce((a, t) => a + t.h + GAP, 0);
+  return {
+    id: 'end-templates', title: 'End templates: rear transom and bow bulkhead', w, h, dims, notes, build,
+    laser: [{
+      id: 'end-templates', title: 'End templates: rear transom and bow bulkhead', material: '1/4" Baltic birch plywood', thicknessIn: TEMPLATE_STOCK_IN,
+      items: ts.map((t) => ({ shape: { ...emptyShape(t.id, t.label, t.outer), holes: t.slots, score: t.score, marks: t.marks }, qty: 1 })),
+      notes: ['Slots (red) are cut through: the web dados, the deck dado, the rail mortises and the bulkhead\'s Domino places. The end\'s own outline, hand hole and holes are scored (blue).'],
+    }],
+    subtitle: [`Each end's outline grown ${inch(M)} all round; dados and mortises cut through; ${ts.map((t) => `${t.label.toLowerCase()} ${inch(t.w)} × ${inch(t.h)}`).join(', ')}.`],
+    draw: (place) => {
+      const out: string[] = [];
+      const g: string[] = [];
+      ts.forEach((t, i) => {
+        const T: Xf = ([u, v]) => place([u, v + yOf(i)]);
+        out.push(`<g id="${t.id}">${outsideCut(t.outer, T, TEMPLATE_STOCK_IN, `${t.label} (outline)`)}${t.slots.map((sl) => pathEl({ cutType: 'inside', d: polyD(sl, T), depthIn: TEMPLATE_STOCK_IN + BREAKTHROUGH_IN })).join('')}</g>`);
+        g.push(guideEl(polyD(t.part, T), { dashed: true, label: `${t.label}: the end's outline (scored)` }));
+        for (const m of t.marks) g.push(guideEl(circleD(m.c, m.dia, T)));
+        g.push(label(T, [0, t.h + 0.2], `${t.label.toUpperCase()} (scored dashed line: the end itself)`, 0.2));
+        g.push(dimTo(T, [0, 0], [t.w, 0], `width ${inch(t.w)}`, -0.5), dimTo(T, [t.w, 0], [t.w, t.h], `height ${inch(t.h)}`, 0.5));
+      });
+      out.push(`<g id="guides" ${ANNOTATION_ATTRS}>${g.join('')}</g>`);
+      return out.join('');
+    },
+  };
+}
+
 /** Every form and template drawing for the current model. `opts.date` is shown beside the design revision (the caller's choice; the wall clock is never read here). */
 export function formDrawings(parts: Part[], p: Params, opts: { date?: string } = {}): FormDrawing[] {
   const L = computeLayout(p);
-  const plans = [sideFormPlan(parts, p, L), railFormPlan(parts, p, L), crownPlan(parts, p, L), flapPlan(parts, p), kneePlan(parts, p)];
+  const plans = [sideFormPlan(parts, p, L), railFormPlan(parts, p, L), crownPlan(parts, p, L), flapPlan(parts, p), kneePlan(parts, p), endTemplatesPlan(parts, p)];
   return plans.filter((x): x is Plan => x !== null).map((x) => finishDrawing(x, p, opts.date));
 }
 

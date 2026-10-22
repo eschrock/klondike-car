@@ -15,6 +15,7 @@ import { buildBridle } from './bridle';
 import { buildPivot } from './pivot';
 import { multiply, rotationZ, translation } from './mat4';
 import { addStorageDrainHoles, buildStorage } from './storage';
+import { addKeeperDeckJoints } from './chain-keeper';
 import { addSideRibJoints, buildSideRibs, dropSignBackers } from './side-ribs';
 import type { Part } from './types';
 
@@ -67,6 +68,7 @@ function buildModelUncached(input: Params, view: ViewState): Part[] {
   addGripBandJoints(ctx.L, parts); // the gunwale bands' own ends of the grab-board screws and their backing-strip holes
   addTransomEyeJoints(parts); // the transom's own end of the return-cord eye and snap-hook joints (the ring stands off its face)
   addFlatPinDeckHoles(ctx.p, ctx.L, parts); // the flat-position seat-pin clearance holes through the deck
+  addKeeperDeckJoints(ctx.p, ctx.L, parts); // D-56: the deck's end of the steering chain keepers' screw eyes
   applySteerPose(ctx, parts); // the front axle turned about the kingpin (D-56); after the joinery so every joint location stays in the part's own frame
   if (ctx.view.seat === 'stowed') applySeatStow(ctx.p, ctx.L, parts); // cargo mode (D-53): the seat kit lies flat in the storage box
   const v = ctx.view;

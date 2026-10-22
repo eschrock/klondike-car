@@ -11,7 +11,7 @@ import { formDrawings } from './forms';
 import { computeLayout } from '../model/layout';
 import { sideRibStations } from '../model/side-ribs';
 import { RAIL_CHINE_HEAD_DIA_IN } from '../model/joinery';
-import { assemblySteps, cumulativeParts, EARLY_STEP_IDS, hasGlueJoint, isEarlyBrakePart, isHangPart, jointTally, PART_TOKEN_RE, renderInstrText, socketScrewText, stepParts, stopBlockPilots, type BuildStep, type Instr } from './assembly';
+import { assemblySteps, cumulativeParts, EARLY_STEP_IDS, hasGlueJoint, isEarlyBrakePart, isHangPart, isShopCut, jointTally, PART_TOKEN_RE, renderInstrText, socketScrewText, stepParts, stopBlockPilots, type BuildStep, type Instr } from './assembly';
 import { finalFrac, roughFrac } from './units';
 import { flatPattern } from './flat';
 import { verifyChecklist } from './verify';
@@ -25,15 +25,15 @@ const steps = assemblySteps(parts, p);
 const VIEWS = ['iso', 'top', 'side', 'front', 'under'];
 
 describe('assembly steps', () => {
-  it('begin with the preparation steps, which install nothing: the Shaper parts, then each form on its own', () => {
+  it('begin with the preparation steps, which install nothing: the deck first (the reference, D-94), then each form on its own', () => {
     expect(steps.slice(0, 5).map((s) => s.title)).toEqual([
       'Verify before ordering',
       'Mill the oak and resaw the strips',
-      'Cut the Shaper parts',
+      'Cut the deck and the seat back first',
       'Build the rail form',
       'Build the side forms (shop jigs for gluing up the sides)',
     ]);
-    expect(steps.slice(0, 6).map((s) => s.id)).toEqual(['verify', 'mill', 'shaper', 'rail-form', 'side-forms', 'seal']);
+    expect(steps.slice(0, 6).map((s) => s.id)).toEqual(['verify', 'mill', 'cut-deck', 'rail-form', 'side-forms', 'seal']);
     expect(steps.map((s) => s.n)).toEqual(steps.map((_, i) => i));
     for (const s of steps.filter((x) => x.kind === 'prep')) {
       expect(s.partIds, s.id).toEqual([]);
@@ -163,8 +163,8 @@ describe('assembly steps', () => {
     expect(okSteps.find((s) => s.id === 'lower')!.instructions.join(' ')).toMatch(/8 screws a side, #8 × 2-1\/2"/);
     expect(okSteps.find((s) => s.id === 'lower')!.instructions.join(' ')).not.toMatch(/Domino/);
     expect(get('dry-fit').instructions.join(' ')).toContain(`${finalFrac(p.deckSideClearIn)} a side`);
-    expect(get('shaper').instructions.join(' ')).toMatch(/ONE piece from a full 4' × 8' sheet/);
-    expect(get('shaper').instructions.join(' ')).not.toMatch(/scarf/i);
+    expect(get('side-forms').instructions.join(' ')).toMatch(/ONE piece from a full 4' × 8' sheet/); // D-94: the webs are cut at the side forms, once the forms are proved
+    expect(get('side-forms').instructions.join(' ')).not.toMatch(/scarf/i);
     expect(get('gear-fit').instructions.join(' ')).toMatch(/5\/8" bore on the 5\/8" rod/); // D-71/D-72: fractions, and the solid rod Eric chose
     expect(get('gear-fit').instructions.join(' ')).not.toMatch(/0\.63"/);
   });
@@ -398,9 +398,9 @@ describe('build review round 1: forms and resaw numbers come from their sources 
       const build = (forms.find((d) => d.id === id) as unknown as { build?: Array<{ step: string }> }).build ?? [];
       const making = build.filter((b) => !/^(CLAMP|GLUE-UP|SPRING-BACK)/.test(b.step));
       if (stepId === 'side-forms') {
-        // one item per piece of the jig, then the dry run and the band bend test
-        expect(step.items.length, id).toBe(making.length + 2);
-        expect(step.items.map((q) => q.text.split(':')[0])).toEqual([...making.map((q) => q.step.split(':')[0]), 'Dry-run a web on the form before any glue goes on.', 'Bend-test a spare band strip on the form before any glue goes on.']);
+        // D-94: the hardboard test web, one item per piece of the jig, the check before the webs are cut (and their cut), then the dry run with the band bend test
+        expect(step.items.length, id).toBe(making.length + 3);
+        expect(step.items.map((q) => q.text.split(':')[0])).toEqual(['Cut a test web first', ...making.map((q) => q.step.split(':')[0]), 'Before you cut the webs, prove the forms with the test web and measure the deck\'s edge and the web sheet; then cut each web as ONE piece from a full 4\' × 8\' sheet, from its Shaper file.', 'Dry-run the real webs on the form, then bend-test a spare band strip on it, before any glue goes on.']);
       } else {
         const item = step.items.find((q) => q.text.includes(word))!;
         expect(item, id).toBeTruthy();
@@ -595,9 +595,9 @@ describe('build review round 2: web length, socket screws, hang support, stop-bl
   const net = +flatPattern(web)!.widthIn.toFixed(2);
   const blank = +web.stock!.l.toFixed(2);
 
-  it('says the Shaper file cuts net and the blank is the stock, in step 2 and at the dry fit (numbers from the model)', () => {
+  it('says the Shaper file cuts net and the blank is the stock, at the side forms (where the webs are cut, D-94) and at the dry fit (numbers from the model)', () => {
     expect(blank).toBeGreaterThan(net);
-    const shaper = get('shaper').instructions.join(' ');
+    const shaper = get('side-forms').instructions.join(' ');
     expect(shaper).toContain(`cuts the flat development net, ${finalFrac(net)} long`);
     expect(shaper).toContain(`Start from a ${roughFrac(blank)} blank`);
     expect(shaper).toMatch(/cut net from the file/);
@@ -939,7 +939,7 @@ describe('build readability round 3: one recipe for the knee, one set of numbers
     const blank = roughFrac(row.stock.l), net = finalFrac(row.final.l);
     expect(blank).toBe('59-5/8"');
     expect(net).toBe('59-1/2"');
-    const shaper = stepText('shaper');
+    const shaper = stepText('side-forms');
     expect(shaper).toContain(`Start from a ${blank} blank (cut list)`);
     expect(shaper).toContain(`net, ${net} long`);
     expect(row.note).toContain(`cuts it to ${net}`);
@@ -985,7 +985,7 @@ describe('build readability round 3: one recipe for the knee, one set of numbers
   });
 
   it('prints a brake-knee template that the steps ask for and the forms have', () => {
-    expect(stepText('shaper')).toMatch(/brake flap and knee/);
+    expect(stepText('brake-knees')).toMatch(/knee router template \(Forms section\)/);
     const t = formDrawings(parts, p).find((d) => d.id === 'brake-knee-template')!;
     expect(t).toBeTruthy();
     expect(t.title).toMatch(/Brake knee router template/);
@@ -1229,10 +1229,10 @@ describe('D-79..D-83: the cost-pass build text', () => {
     }
   });
 
-  it('the shaper step says to measure the real 6 mm sheet before the dados; the thin sheet is named for the spec (no leftover 1/4 in white oak ply or 4 mm okoume wording)', () => {
-    expect(stepText(std, 'shaper')).toMatch(/6 mm Baltic birch: left side panel/);
-    expect(stepText(std, 'shaper')).toMatch(/Measure the real 1\/4 in \(6 mm\) sheet and the 12 mm sheet first \(Verify\)/);
-    expect(stepText(ext, 'shaper')).toMatch(/6 mm okoume: left side panel/);
+  it('the deck and web steps measure the real sheets before anything is cut from them; the thin sheet is named for the spec (no leftover 1/4 in white oak ply or 4 mm okoume wording)', () => {
+    expect(stepText(std, 'cut-deck')).toMatch(/Before you cut: measure the 12 mm sheet/);
+    expect(stepText(std, 'side-forms')).toMatch(/The web sheet \(6 mm Baltic birch\): count the plies at an edge and measure it/);
+    expect(stepText(ext, 'side-forms')).toMatch(/The web sheet \(6 mm okoume\): count the plies/);
     for (const list of [std, ext]) expect(everything(list)).not.toMatch(/white oak ply|4 mm okoume|3 mm Baltic/i);
   });
 
@@ -1418,14 +1418,96 @@ describe('final review fixes (steps): sizes from the model, one sequence per hol
     expect(t('brake-flaps')).toContain(`see step ${l.findIndex((q) => q.id === 'brake-knee-off')} (`);
     expect(t('brake-flaps')).toMatch(/inboard wall of the pocket/);
     expect(t('brake-flaps')).not.toMatch(/\bear\b|With removable knees|outboard face/);
-    expect(t('shaper')).toMatch(/Or, without the Shaper, the brake flaps only: bandsaw each 1\/16" outside the line and flush-trim it with a pattern bit on the flap router template/);
-    expect(t('brake-flaps')).toMatch(/Take the flaps cut in step 2 /);
-    expect(t('shaper')).toMatch(/The other Shaper parts need the Shaper/);
+    // D-94: the flaps are cut at their own step, after the template check on the knee and the tire
+    expect(t('brake-flaps')).toMatch(/Or, without the Shaper: bandsaw each 1\/16" outside the line and flush-trim it with a pattern bit on the flap router template/);
+    expect(t('brake-flaps')).toContain(`Before you cut the two flaps, brake flap L and brake flap R: the flap template passed its check on the knee and the tire at step ${l.findIndex((q) => q.id === 'gear-fit')}`);
     expect(t('brake-flaps')).not.toMatch(/Cut the flaps on the Shaper|No Shaper/);
     expect(t('brake-flaps')).toMatch(/The eye goes in at the hang step, with a drop of epoxy in the pilot/);
     expect(t('hang')).toMatch(/Fit each shoe to its tire with the wheel on/);
     expect(t('hang')).toMatch(/angle the wrench handle down and inboard/);
     expect(t('brake-knee-off')).toMatch(/put a bottom rear bolt, with its washer, through the knee, the rail and the backer/);
     expect(t('brake-knee-off')).toMatch(/Angle the wrench handle down and inboard/);
+  });
+});
+
+describe('D-94: every shop-cut part is cut to its final size in exactly one step, after the work it fits against', () => {
+  const variants: Array<[string, Params]> = [
+    ['standard', p],
+    ['extreme', { ...p, weatherSpec: 1 } as Params],
+    ['knees stay on', { ...p, kneeMount: KNEE_MOUNT.fixed }],
+    ['pre-D72 okoume', { ...p, ...PRE_D72 }],
+  ];
+  /** The parts an item (and its sub-items) names. */
+  const named = (items: Instr[]): Set<string> => { const out = new Set<string>(); const walk = (xs: Instr[]): void => { for (const it of xs) { for (const id of it.parts ?? []) out.add(id); if (it.sub) walk(it.sub); } }; walk(items); return out; };
+  for (const [name, pp] of variants) {
+    it(`${name}: each Shaper / table-saw part is cut once, at or before the step that installs it, and no other step tells you to cut it`, () => {
+      const ps = buildModel(pp);
+      const list = assemblySteps(ps, pp);
+      const idx = (id: string): number => list.findIndex((q) => q.id === id);
+      const shop = ps.filter((x) => x.group !== 'reference' && x.kind !== 'reference' && !x.payload && isShopCut(x));
+      expect(shop.length).toBeGreaterThan(40);
+      for (const x of shop) {
+        const at = list.filter((q) => q.cutIds.includes(x.id));
+        expect(at.length, `${x.id} cut in ${at.map((q) => q.id).join(', ')}`).toBe(1);
+        const cutIdx = at[0].n;
+        const inst = list.findIndex((q) => q.partIds.includes(x.id));
+        expect(inst, `${x.id} installed`).toBeGreaterThanOrEqual(0);
+        expect(cutIdx, `${x.id}: cut at ${at[0].id}, installed at ${list[inst].id}`).toBeLessThanOrEqual(inst);
+        // the cut step names the part, and no earlier step has an item that cuts or saws it
+        expect(named(at[0].items).has(x.id) || at[0].partIds.includes(x.id), `${x.id} named in ${at[0].id}`).toBe(true);
+        for (const q of list.slice(0, cutIdx)) {
+          const cutting = q.items.filter((it) => /^(Cut|Saw|Shape)\b/.test(it.text) && (it.parts ?? []).includes(x.id));
+          expect(cutting.map((it) => it.text), `${x.id} is cut early at ${q.id}`).toEqual([]);
+        }
+      }
+      // a step that cuts parts to fit built work comes after that work, and opens its cut with a "Before you cut" check
+      for (const q of list.filter((r) => r.cutAfter)) {
+        expect(idx(q.cutAfter!), `${q.id} after ${q.cutAfter}`).toBeGreaterThanOrEqual(0);
+        expect(idx(q.cutAfter!), `${q.id} after ${q.cutAfter}`).toBeLessThan(q.n);
+        const first = q.items.findIndex((it) => /^Before you cut/.test(it.text));
+        expect(first, `${q.id} has a Before you cut check`).toBeGreaterThanOrEqual(0);
+        const cutsAt = q.items.findIndex((it, k) => k > first && /^(Cut|Saw)\b/.test(it.text));
+        if (cutsAt >= 0) expect(first).toBeLessThan(cutsAt);
+      }
+    });
+  }
+
+  it('the reordered parts land where the rule puts them (the deck first; webs at the side forms; the ends after the hull; flaps after the wheel dry fit; signs and grab boards after the ribs; the box and lid to the hull)', () => {
+    const at = (id: string): string => steps.find((q) => q.cutIds.includes(id))!.id;
+    const idx = (id: string): number => steps.findIndex((q) => q.id === id);
+    const stepText = (id: string): string => steps.find((q) => q.id === id)!.instructions.join('\n');
+    expect(at('deck')).toBe('cut-deck');
+    expect(at('seat-back-panel')).toBe('cut-deck');
+    expect(idx('cut-deck')).toBe(idx('mill') + 1);
+    for (const id of ['side-L-web', 'side-R-web']) expect(at(id)).toBe('side-forms');
+    for (const id of ['transom-rear', 'bow-bulkhead']) expect(at(id)).toBe('ends');
+    expect(idx('ends')).toBe(idx('lower') + 1);
+    expect(idx('ends')).toBeLessThan(idx('transom'));
+    for (const id of ['brake-flap-L', 'brake-flap-R']) expect(at(id)).toBe('brake-flaps');
+    expect(idx('gear-fit')).toBeLessThan(idx('brake-flaps'));
+    for (const id of ['sign-L', 'sign-R', 'seat-grip-L', 'seat-grip-R', 'seat-grip-cap-L', 'seat-grip-cap-R']) expect(at(id)).toBe('side-holes');
+    for (const id of ['storage-side-L', 'storage-end-aft']) expect(at(id)).toBe('storage-box');
+    expect(at('storage-lid')).toBe('storage-lid');
+    // the old cut-everything-first step is gone
+    expect(steps.some((q) => q.id === 'shaper')).toBe(false);
+    // the seal step no longer checks dados that do not exist yet; the ends step does, once they are cut
+    expect(stepText('seal')).not.toMatch(/enters its dado/);
+    expect(stepText('ends')).toMatch(/Check the sealed deck enters its dados/);
+    // the ends step: the template check with numbers from the model, then the oak, then BOTH ends dry before any epoxy
+    const ends = stepText('ends');
+    expect(ends).toMatch(/Before you cut: try the end templates on the hull/);
+    expect(ends).toMatch(/24" over the outer bands at the rear and 18-1\/2" at the bow, within 1\/32"/);
+    expect(ends).toMatch(/the tenons sit 11-5\/8" either side of the centerline and 5\/8" below the deck's underside at the rear; the Dominos 8-7\/8" either side of the centerline and 15\/16" below the deck's underside at the bow/);
+    expect(ends).toMatch(/Dry-fit BOTH ends, with no glue, before any epoxy is mixed/);
+    expect(ends.indexOf('Before you cut')).toBeLessThan(ends.indexOf('Cut the rear transom on the Shaper'));
+    // the webs: a hardboard test web proves the forms, and the deck's edge is measured, before the sheet is cut
+    const sf = stepText('side-forms');
+    expect(sf).toMatch(/Cut a test web first: one left web in 1\/8" hardboard, on the laser/);
+    expect(sf).toMatch(/Measure the deck's edge along its curve with a flexible steel tape, from its rear corner to its bow corner, on both sides: 59-1\/2"/);
+    // the flap template is tried on the knee and the tire while both are on
+    expect(stepText('gear-fit')).toMatch(/Try the brake flap template on each knee and tire now, while both are on/);
+    expect(stepText('gear-fit')).toMatch(/5\/8" behind the axle's center, within 1\/4"/);
+    // the transom panel and the bulkhead block are left rough at the mill step
+    expect(stepText('mill')).toMatch(/Rear transom and bow bulkhead: planed to thickness, but left at the rough size: they are cut to the hull at step \d+/);
   });
 });

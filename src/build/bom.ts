@@ -136,6 +136,7 @@ const METAL_SPEC = /stainless|316|steel|bronze|zinc|galvanized|grade \d|hinge|ch
 /** The material note of a purchased hardware part (hinges, latches, pins, chain, eye bolts...), from the model's own spec; undefined for rope, foam, rubber, plastic, lights and other non-metal parts. */
 export function hardwareMaterialNote(x: Part, spec: SpecName = 'extreme'): string | undefined {
   const m = x.material ?? '';
+  if (x.kind === 'purchased' && /shock cord/i.test(m)) return `Polyester-sheathed shock cord: the sheath keeps sun and wet off the rubber strands (the model spec: ${m}).`; // D-56: the chain keepers, and the brake bungees
   if (x.kind !== 'purchased' || !METAL_SPEC.test(m)) return undefined;
   if (spec === 'standard') {
     if (/316|stainless/i.test(m)) return `304 / 18-8 stainless is right for the Standard spec (garage-kept); the model says "${m}" for the Extreme spec, which uses 316.`;

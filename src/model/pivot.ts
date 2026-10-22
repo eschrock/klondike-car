@@ -17,6 +17,7 @@ import { boltLength, CARRIAGE_STOCK_IN, EYE_BOLT_STOCK_IN, inchesText, MIN_THREA
 import { joistId, kingNutSlot } from './frame';
 import { axleMaterial, axleSourcing, axleStockNote } from './axle-stock';
 import { cotterHoleJoint } from './running-gear';
+import { chainKeeper, KEEPER_CORD_LB_PER_IN } from './chain-keeper';
 import type { Part, Vec2 } from './types';
 
 const f2 = (v: number) => (Math.round(v * 100) / 100).toString();
@@ -272,6 +273,7 @@ export function buildPivot(ctx: Ctx): Part[] {
     const beamX0 = L.king.x - b.thick / 2 - stand - 0.35, beamX1 = L.king.x + b.thick / 2 + 0.65;
     const ancX0 = L.chain.joistX - L.chain.joistT / 2 - 0.65, ancX1 = ax + 0.35;
     const bEye0 = L.steer.beamEyeAt(0);
+    const keeper = chainKeeper(p, L); // D-56: the keeper cords that hold the chains' slack up
     const slack0 = L.chain.lenIn - Math.hypot(L.chain.anchor[0] - bEye0[0], L.chain.anchor[1] - bEye0[1], L.chain.anchor[2] - bEye0[2]);
     const along = (x0: number, x1: number, y: number, z: number) => compose([(x0 + x1) / 2, y, z], { y: Math.PI / 2 });
     // D-72: stock shoulder eye bolts (3/8-16, measured under the shoulder). The beam bolt crosses the 2-1/2 in beam, a 2 in fender washer and the nylock nut; the anchor crosses the joist and two washers (one under the shoulder).
@@ -309,10 +311,39 @@ export function buildPivot(ctx: Ctx): Part[] {
         id: `steer-chain-${tag}`, partNo: 'steer-chain', name: `Steering check chain ${side}`, group: 'front-end', kind: 'purchased', material: p.weatherSpec === WEATHER_SPEC.extreme ? '316 stainless chain' : 'galvanized grade 43 chain',
         geometry: { type: 'box', size: [dl, p.steerChainDiaIn * 1.5, p.steerChainDiaIn * 1.5] }, transform: [ux[0], ux[1], ux[2], 0, uy[0], uy[1], uy[2], 0, uz[0], uz[1], uz[2], 0, cx, cy, cz, 1],
         massLb: (chainLbFt * (L.chain.lenIn + 2)) / 12, body: 'chassis', fab: 'buy', step: STEP.spindles, explode: [-0.5, s * 0.5, -0.5],
-        joints: [{ type: 'pin', to: `steer-eye-${tag}`, count: 1, size: 'quick link to the beam eye', at: [[-dl / 2, 0, 0]] }, { type: 'pin', to: `steer-anchor-${tag}`, count: 1, size: 'quick link to the anchor eye', at: [[dl / 2, 0, 0]] }],
+        joints: [{ type: 'pin', to: `steer-eye-${tag}`, count: 1, size: 'quick link to the beam eye', at: [[-dl / 2, 0, 0]] }, { type: 'pin', to: `steer-anchor-${tag}`, count: 1, size: 'quick link to the anchor eye', at: [[dl / 2, 0, 0]] }, { type: 'pin', to: `steer-keeper-${tag}`, count: 2, size: `two links (${f2(keeper.linksFromBeamIn[0])}" and ${f2(keeper.linksFromBeamIn[1])}" from the beam eye ring) take the keeper cord's knots (D-56)`, at: keeper.linksFromBeamIn.map((l) => [-dl / 2 + (l / L.chain.lenIn) * dl, 0, 0] as [number, number, number]) }],
         sourcing: { vendor: `McMaster-Carr (${frac(p.steerChainDiaIn)}" ${p.weatherSpec === WEATHER_SPEC.extreme ? '316 stainless' : 'galvanized grade 43'} chain, ${f2(L.chain.lenIn + 2)}" cut, a quick link to each eye; rated ${f2(p.steerChainWllLb)} lb). Length: ${f2(L.chain.lenIn)}" between the eye rings so it goes taut exactly at the ${f2(p.steerLockDeg)}° lock (adjust at the quick link); drawn straight here with the axle straight, in the sled it hangs in a slack bight` },
-        notes: `Steering check chain (D-58): from the beam eye (behind the trailing face of the axle beam) back, under the king beam, to the anchor eye (on the front of the chain crossmember behind the king beam), ${f2(L.chain.lenIn)}" between the eye rings. With the axle straight it hangs ${f2(slack0)}" slack; turning ${tag === 'R' ? 'left' : 'right'} to the ${f2(p.steerLockDeg)}° lock takes up the slack and stops the axle, the other chain slackens. It passes under the king beam (clear of it by the steer-clear row), clear of the tongue, the disc and the clamp plates. Replaces the oak stop blocks (they could not carry the hard-hit torque, D-58).`,
+        notes: `Steering check chain (D-58): from the beam eye (behind the trailing face of the axle beam) back, under the king beam, to the anchor eye (on the front of the chain crossmember behind the king beam), ${f2(L.chain.lenIn)}" between the eye rings. With the axle straight it hangs ${f2(slack0)}" slack; turning ${tag === 'R' ? 'left' : 'right'} to the ${f2(p.steerLockDeg)}° lock takes up the slack and stops the axle, the other chain slackens. It passes under the king beam (clear of it by the steer-clear row), clear of the tongue, the disc and the clamp plates. Replaces the oak stop blocks (they could not carry the hard-hit torque, D-58). A keeper cord (steer-keeper-${tag}) holds its slack bight up off the ground (D-56).`,
       }));
+      // D-56: the keeper cord: one 1/8" shock cord through a screw eye under the deck, its ends knotted to two links of the chain (a V); drawn to those links' shares of the straight chain shown.
+      {
+        const E: [number, number, number] = [keeper.eye[0], s * Math.abs(keeper.eye[1]), keeper.eye[2]];
+        const at = (f: number): [number, number, number] => [bx + dx * f, by + dy * f, bz + dz * f];
+        const [P1, P2] = keeper.linksFromBeamIn.map((l) => at(l / L.chain.lenIn));
+        const vsub = (u: number[], v: number[]): [number, number, number] => [u[0] - v[0], u[1] - v[1], u[2] - v[2]];
+        const unit = (u: number[]): [number, number, number] => { const n = Math.hypot(u[0], u[1], u[2]) || 1; return [u[0] / n, u[1] / n, u[2] / n]; };
+        const cross = (u: number[], v: number[]): [number, number, number] => [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+        const dot = (u: number[], v: number[]) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+        // local frame: x along the chord between the two links, y normal to the V's plane, z = x × y; the path (local x, z) runs link, eye, link
+        const ex = unit(vsub(P2, P1));
+        const nrm = cross(vsub(P1, E), vsub(P2, E));
+        const ey = Math.hypot(nrm[0], nrm[1], nrm[2]) > 1e-9 ? unit(nrm) : unit(cross(ex, [0, 0, 1]));
+        const ez = cross(ex, ey);
+        const path: Vec2[] = [P1, E, P2].map((q) => [dot(vsub(q, E), ex), dot(vsub(q, E), ez)] as Vec2);
+        const cordD = 0.125;
+        const [n1, n2] = keeper.linksFromBeamIn;
+        parts.push(mk({
+          id: `steer-keeper-${tag}`, partNo: 'chain-keeper-cord', name: `Steering chain keeper cord ${side}`, group: 'front-end', kind: 'purchased', material: '1/8" shock cord (polyester sheath)',
+          geometry: { type: 'sweep', path, width: cordD, thickness: cordD, plies: 1 }, transform: [ex[0], ex[1], ex[2], 0, ey[0], ey[1], ey[2], 0, ez[0], ez[1], ez[2], 0, E[0], E[1], E[2], 1],
+          massLb: KEEPER_CORD_LB_PER_IN * keeper.cutIn, body: 'chassis', fab: 'buy', step: STEP.spindles, explode: [0, s * 0.3, 1],
+          joints: [
+            { type: 'screw', to: 'deck', count: 1, diaIn: SCREW_DIA_IN[10], at: [[0, 0, 0]], size: `#10 ${stainless(p)} screw eye with no more than 3/8" of thread, into the underside of the 12 mm deck (the tip stays inside the deck; not in the deck's Shaper file: set at the fit, ${f2(keeper.eye[0] - (L.chain.joistX + L.chain.joistT / 2))}" ahead of the chain crossmember's front face and ${f2(Math.abs(keeper.eye[1]))}" ${side} of the center line)` },
+            { type: 'pin', to: `steer-chain-${tag}`, count: 2, at: [[path[0][0], 0, path[0][1]], [path[2][0], 0, path[2][1]]], size: `the cord's ends knotted through the chain links ${f2(n1)}" and ${f2(n2)}" from the beam eye ring` },
+          ],
+          sourcing: { vendor: `1/8" shock cord (bungee), ${f2(keeper.cutIn)}" cut a side (${f2(keeper.freeIn)}" between the knots), from a hardware-store foot; one small #10 ${stainless(p)} screw eye a side (3/8" thread)`, costUsd: 0.15 },
+          notes: `Keeper cord (D-56): the ${side} steering chain hangs ${f2(slack0)}" slack with the axle straight and up to ${f2(L.chain.lenIn - Math.hypot(L.chain.anchor[0] - L.steer.beamEyeAt(-L.steer.lock)[0], L.chain.anchor[1] - L.steer.beamEyeAt(-L.steer.lock)[1], L.chain.anchor[2] - L.steer.beamEyeAt(-L.steer.lock)[2]))}" at the opposite lock, and its bight hung under the 3" ground clearance. One 1/8" shock cord, ${f2(keeper.cutIn)}" cut (${f2(keeper.freeIn)}" between the knots), runs up through a small screw eye in the underside of the deck, ${f2(keeper.eye[0] - (L.chain.joistX + L.chain.joistT / 2))}" ahead of the chain crossmember and ${f2(Math.abs(keeper.eye[1]))}" off the center line (aft of where the axle beam swings, so the cord never lies over it); one end is knotted to the chain link ${f2(n1)}" from the beam eye ring, the other to the link ${f2(n2)}" from it. With the chain taut at its lock the cord stretches to ${f2(keeper.lockIn)}" (${Math.round(p.steerKeeperStretchAtLock * 100)}%), so the chain still sets the lock. The steer-clear row checks the chain's lowest point over the lock range.`,
+        }));
+      }
     }
   }
 

@@ -432,7 +432,7 @@ describe('signs (D-57): the Troop 455 sign is back on the tall rear part of each
 
 describe('what is gone with the old hull, the Ackermann front end and the swivel casters', () => {
   it('no part id starts with side-cabin, side-nose, rail-cabin, rail-nose, guard-, transom-front, tongue, kp-, spindle, caster-, tip-swivel, bow-block, front-hanger- (or any other removed steering part)', () => {
-    const gone = /^(side-cabin|side-nose|rail-cabin|rail-nose|guard-|transom-front|tongue|kp-|spindle|tie-rod|drag-link|bellcrank|steer-(?!rope-|eye-|anchor-|chain-)|stringer|girder|front-beam|turntable|bolster|eyebolt-|caster-|tip-swivel|bow-block|front-hanger-)/;
+    const gone = /^(side-cabin|side-nose|rail-cabin|rail-nose|guard-|transom-front|tongue|kp-|spindle|tie-rod|drag-link|bellcrank|steer-(?!rope-|eye-|anchor-|chain-|keeper-)|stringer|girder|front-beam|turntable|bolster|eyebolt-|caster-|tip-swivel|bow-block|front-hanger-)/;
     expect(parts.filter((x) => gone.test(x.id)).map((x) => x.id)).toEqual([]);
     for (const v of [{ steerDeg: 15 }, { removed: true }, { rider: 'goal' as const }]) expect(buildModel(defaults, v).filter((x) => gone.test(x.id)).map((x) => x.id)).toEqual([]);
   });
