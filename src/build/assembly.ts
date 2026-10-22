@@ -205,8 +205,8 @@ export interface StepCtx {
 const HANG_RE = /^(wheel-|axle-F[LR]$|clamp-F|roll-pad-|steer-(eye|anchor|chain|keeper)-|bridle$|seat-(hinge|pin|cushion|back-pad)|storage-hinge-[LR]$|handle-(socket|pin)-|brake-(pivot-pin|pivot-clip|cord|snap|pad|foot-tread|chock-cord))/;
 export const isHangPart = (x: Part): boolean => (x.kind === 'purchased' || x.kind === 'metal' || x.kind === 'printed') && HANG_RE.test(x.id);
 
-/** Steps whose parts have a later model step than the step's position (the brake knees and backers: `STEP.brake`, but glued and bolted while the hull is inverted, before the underside finish). */
-export const EARLY_STEP_IDS: ReadonlySet<string> = new Set(['brake-knees']);
+/** Steps whose parts have a later model step than the step's position: the brake knees (`STEP.brake`, but fitted while the hull is inverted, before the underside finish) and the grab boards (`STEP.finish`, but bolted on for good before the finish, D-94). */
+export const EARLY_STEP_IDS: ReadonlySet<string> = new Set(['brake-knees', 'side-holes']);
 const EARLY_RE = /^brake-(backer|knee)-[LR]$/;
 export const isEarlyBrakePart = (x: Part): boolean => EARLY_RE.test(x.id);
 
@@ -1060,7 +1060,7 @@ function dryFitData(c: StepCtx) {
   return { L, web, tie, pilots, pilotXs, net, webBox, web0, cradles, ch, tMort, bMort, bandBox, railBox, deckBox, into, railIn, deckFinal, cb, flagText };
 }
 
-const TEMPLATES: Template[] = [
+const TEMPLATES_1: Template[] = [
   // ---------------- preparation (no parts in the model) ----------------
   {
     id: 'verify',
@@ -1217,7 +1217,7 @@ const TEMPLATES: Template[] = [
             dk && wRear !== undefined && wBow !== undefined ? `Check it at once: ${fin(dk.max[0] - dk.min[0])} long on the centerline, ${fin64(2 * wRear)} wide at the rear end and ${fin64(2 * wBow)} at the bow end, within 1/32". A deck that is off is cut again: everything after this is checked against it.` : false,
             'Keep it flat on the bench, stickered and weighted, until it is sealed: the frame is set to it.',
           ], ['deck']),
-          ...(panel ? [I('Cut the {{seat-back-panel}} from the deck offcut, from its file (nesting drawing).', ['It fits nothing built yet (it hangs on hinges on the deck much later), so it is cut with its sheet.'])] : []),
+          ...(panel ? [I('Cut the {{seat-back-panel}} from the same sheet\'s offcut, from its file (nesting drawing).', ['It fits nothing built yet (it hangs on hinges on the deck much later), so it is cut with its sheet.'])] : []),
         ],
         checks: ['12 mm sheet measured and the thickness entered in the design', 'Deck length and end widths within 1/32" of the file', 'Deck stored flat'],
       };
@@ -1307,7 +1307,7 @@ const TEMPLATES: Template[] = [
         items: [
           ...(web ? [I('Cut a test web first: one left web in 1/8" hardboard, on the laser (the side web\'s laser file, one copy).', [
             'It stands in for the real web while the forms are built: wherever the form steps below say "a dry web", use the test web (turned over, it is the right web). It bends near enough like the web to set the ramps and the cleats.',
-            'The real webs are cut once the forms are proved and the deck\'s edge is measured (below), so a form that is wrong costs hardboard, not a sheet of the web plywood.',
+            'The real webs wait until the forms are proved and the deck\'s edge is measured (below), so a form that is wrong costs hardboard, not a sheet of the web plywood.',
           ])] : []),
           ...pieces,
           ...(web ? [
@@ -1481,6 +1481,12 @@ const TEMPLATES: Template[] = [
         goal: 'Notch the rear axle hangers, glue them to the rails and drill their bolt holes, before the frame glue-up.',
         items: [
           I(`Cut the two hangers to their cut-list size: ${tl(ids)}.`, ['They are sized to the rail and the rear axle beam on the drawing, not to built work, so they need no check.']),
+          ...((): Instr[] => {
+            const ax = c.by('axle-R'), rl = c.by('rail-L');
+            if (!ax || !rl) return [];
+            const axX = (worldAABB(ax).min[0] + worldAABB(ax).max[0]) / 2, r0 = worldAABB(rl).min[0], bk = brakeOf(c.p);
+            return [I(`Check the brake knee's place against the axle notch now, before its bolt holes are drilled at [[step:frame-parts]].`, [`The knee's rear face goes ${fin(bk.knee.x0 - r0)} from the rail's finished rear end: ${fin(bk.knee.x0 - axX)} ahead of the center of the axle notch (${fin(axX - r0)} from that end), which leaves ${fin(bk.knee.x0 - (bk.O[0] + bk.r))} to the front of a ${fin(2 * bk.r)} tire. If the notch is not where it should be, the knee moves with it: find out why before going on.`], ['rail-L', 'rail-R'])];
+          })(),
           I(`Cut the beam notch in the bottom edge of each hanger: ${tl(ids)}.`, [notchText(notch) ? `${notchText(notch)}.` : `Notch for the rear beam: ${SEE}.`, `Bandsaw and chisel${radius ? `, ${radius} radius in the corners` : ''}.`, ((r) => (r?.cut?.lo && r.cut.hi ? `Then chisel a relief in the notch ceiling, ${fin(Math.abs(r.cut.hi[0] - r.cut.lo[0]))} wide × ${fin(Math.abs(r.cut.hi[2] - r.cut.lo[2]))} deep, centered on the notch's width, through the thickness: the axle ${axleWord(c.p)} stands a little above the beam there, and the relief lets the ceiling bear on the beam.` : false))(c.by('axle-hanger-L')?.joints?.find((q) => q.cut && /^axle-R/.test(q.to)))]),
           I('Cut the Domino mortise for {{joist-1}} in each hanger now (5×30).', [domWhere ? `${cap(domWhere)}.` : SEE_ITEM, 'The crossmember ends engage them in the frame glue-up.']),
           I(`Glue each hanger to its rail's inboard face, rails flat on the bench${hangerAt}.`, [
@@ -1498,6 +1504,18 @@ const TEMPLATES: Template[] = [
     },
   },
   {
+    id: 'frame-parts',
+    title: 'Prepare the frame parts (the day before): knee backers and plates',
+    kind: 'build',
+    steps: [STEP.frame],
+    match: /^brake-(backer|backplate)-[LR]$/,
+    view: 'top',
+    why: 'The brake knees bolt through each rail into an oak backer, with the nuts on a stainless plate set in the backer. They go on the rails now, the day before the frame glue-up, because the deck closes over them.',
+    tools: ['router with a fence', 'chisel', 'metal bandsaw', 'drill press', 'cobalt bits', 'clamps', 'epoxy pumps'],
+    hardener: '556',
+    build: (c) => frameStep(c, 'parts'),
+  },
+  {
     id: 'frame',
     title: 'Frame and deck as one unit',
     kind: 'build',
@@ -1508,7 +1526,16 @@ const TEMPLATES: Template[] = [
     why: 'The frame and deck are the floor of the sled: the rider sits on the deck, the crossmembers under it carry the load across to the two rails, and the king beam carries the front axle\'s pivot. Built flat on the bench as one unit, it is turned over and lowered into the sides later.',
     tools: ['Domino', 'drill press', 'clamps', 'sandbags or vacuum bag', 'epoxy pumps', 'square'],
     hardener: '556',
-    build: (c) => {
+    build: (c) => frameStep(c, 'frame'),
+  },
+];
+
+/**
+ * The frame (D-94 split): the parts prepared the day before (the brake knee backers and their plates) and the frame itself (the crossmembers cut to the rails set to the deck,
+ * the dry fit, the deck check, the glue-up) share their numbers, so both steps are built here and each takes its own items.
+ */
+function frameStep(c0: StepCtx, which: 'parts' | 'frame'): Built {
+      const c: StepCtx = { ...c0, mine: c0.parts.filter((x) => (x.step === STEP.frame || x.step === HULL_STEP.deck) && x.group !== 'reference' && !x.payload) };
       const brakeBackers = c.mine.filter((x) => /^brake-backer-[LR]$/.test(x.id));
       const brakePlates = c.mine.filter((x) => /^brake-backplate-[LR]$/.test(x.id));
       const plateRecess = feat(c, 'brake-backer-L', 'groove', /recess/);
@@ -1569,26 +1596,22 @@ const TEMPLATES: Template[] = [
       const kneeRows = railBox ? [...new Set(kneePts.map((q) => +(q[2] - railBox.min[2]).toFixed(4)))].sort((a, b) => a - b) : [];
       const kneeWhere = kneeCols.length && kneeRows.length ? `in the inboard face: ${kneeCols.length} columns × ${kneeRows.length} rows: ${kneeCols.map(fin).join(' and ')} from the finished rear end, ${kneeRows.map(fin).join(' and ')} up from the bottom edge` : undefined;
       const crossIds = c.mine.filter((x) => /^(joist-|king-beam)/.test(x.id)).map((x) => x.id);
-      // D-94: the length of each crossmember between the rails' inboard faces at its center (the rails set to the deck), and of the one between the hangers.
-      const railT = railL?.stock ? railL.stock.t * (railL.plies ?? 1) : 0.75;
+      // D-94: each crossmember's length from its own geometry: the long point (its cut-list length) and, in the bow taper, its short point (its front face, where the rails close in).
+      // A tapered one is measured and cut at its long point (its rear face, where the rails are farther apart), then scribed shorter at the front: never cut to the center gap.
       const hangerB = c.by('axle-hanger-L') ? worldAABB(c.by('axle-hanger-L')!) : undefined;
       const crossLen = crossIds.map((id) => {
-        const b = worldAABB(c.by(id)!), xc = (b.min[0] + b.max[0]) / 2;
-        const between = hangerB && b.max[0] > hangerB.min[0] && b.min[0] < hangerB.max[0] ? 2 * hangerB.min[1] : 2 * (outerHalfWidth(computeLayout(c.p), xc) - railT);
-        return { id, len: between, hanger: !!(hangerB && b.max[0] > hangerB.min[0] && b.min[0] < hangerB.max[0]) };
+        const x = c.by(id)!, b = worldAABB(x);
+        const long = x.stock?.l ?? b.max[1] - b.min[1], short = b.max[1] - b.min[1];
+        return { id, long, short, taper: long - short > 1 / 64, hanger: !!(hangerB && b.max[0] > hangerB.min[0] && b.min[0] < hangerB.max[0]) };
       });
+      const straightLen = crossLen.filter((q) => !q.taper && !q.hanger), taperLen = crossLen.filter((q) => q.taper), hangerLen = crossLen.filter((q) => q.hanger);
       const insetRear = dkBox && railBox ? outerHalfWidth(computeLayout(c.p), railBox.min[0] + 1) - (deckEdgeAt(railBox.min[0] + 1) ?? 0) : undefined;
-      const backerIds = [...brakeBackers.map((x) => x.id), ...hinge];
-      return {
-        goal: 'Glue the crossmembers between the rails and bond the deck on top, as one flat unit.',
-        items: [
-          I('Before you cut the crossmembers to length: set the rails to the deck and measure between them.', [
-            `Lay the {{deck}} face down on the bench (the hardboard deck first, if you made one). Stand both rails on it upside down, top edge on the deck, each outer face ${insetRear !== undefined ? fin(insetRear) : '1/2"'} outside the deck's edge (a combination square set to that), the finished-end marks ${deckFit ? fin(deckFit.behind) : '1/4"'} in from the deck's rear edge. Clamp a straight scrap to the deck against each rail's inboard face to hold it there.`,
-            `Measure between the rails' inboard faces at each crossmember's mortises: ${listS(crossLen.filter((q) => !q.hanger).map((q) => `{{${q.id}}} ${fin(q.len)}`))}${crossLen.some((q) => q.hanger) ? `; ${listS(crossLen.filter((q) => q.hanger).map((q) => `{{${q.id}}} ${fin(q.len)} between the hangers`))}` : ''}. Within 1/32" of these is right; outside that, find out why (a rail sprung at the bow) before cutting.`,
-            I('Then cut each crossmember to the length you measured, not the cut list: the rails follow the deck. In the bow taper, scribe its ends to the rails (dry fit, below).', [], crossIds),
-            backerIds.length ? I(`The backers are cut to their cut-list size: ${tl(backerIds)}. They carry the knee-bolt and hinge layouts on the drawing, not built work, so they need no check.`, [], backerIds) : false,
-          ], ['deck']),
-          ...(brakeBackers.length
+      if (which === 'parts') {
+        return {
+          goal: 'The day before the frame glue-up: cut the brake knee backers, recess and glue them to the rails, and make and bed the stainless backing plates.',
+          items: [
+            ...(brakeBackers.length ? [I(`Cut the brake knee backers to their cut-list size: ${tl(brakeBackers.map((x) => x.id))}.`, ['They carry the knee-bolt layout on the drawing, not built work, so they need no check.'], brakeBackers.map((x) => x.id))] : [I('No brake knee backers in this model.')]),
+            ...(brakeBackers.length
             ? [
             I(`The day before the deck glue-up: prepare the brake knee backers and glue them to the rail inboard faces: ${tl(brakeBackers.map((x) => x.id))}.`, [
               I('First, on the bench: cut the plate recess in the inboard face of each brake knee backer, before it is glued.', [
@@ -1600,7 +1623,6 @@ const TEMPLATES: Template[] = [
                 'Side grain to side grain; clamp it on until the glue sets.',
                 'Glue it to the rail only. It bonds to the deck underside at the deck glue-up, below.',
               ]),
-              cutBack.length ? `${tl(cutBack)} ${cutBack.length === 1 ? 'meets' : 'meet'} a backer: cut ${cutBack.length === 1 ? 'its' : 'their'} ends back ${fin(bkThick)} so ${cutBack.length === 1 ? 'it butts' : 'they butt'} the backer's face.` : false,
               brakePlates.length ? false : `Drill the ${kb.count} knee-bolt holes (${boltD} bolts) through rail and backer together, from the rail drawing, measured from the finished rear end: ${kneeHoles ? holeText(kneeHoles) : SEE}.`,
               brakePlates.length ? false : 'The same holes on the right rail, mirrored.',
             ], brakeBackers.map((x) => x.id)),
@@ -1621,6 +1643,22 @@ const TEMPLATES: Template[] = [
               ], brakePlates.map((x) => x.id))] : [])]
               : [])]
             : []),
+          ],
+          checks: ['Each backer glued flush with the rail top, its rear end on its mark', ...(brakePlates.length ? ['Each plate flush in its recess, its 4 holes lined up with the rail holes'] : [])],
+        };
+      }
+      return {
+        goal: 'Glue the crossmembers between the rails and bond the deck on top, as one flat unit.',
+        items: [
+          I('Before you cut the crossmembers to length: set the rails to the deck and measure between them.', [
+            `Lay the {{deck}} face down on the bench (the hardboard deck first, if you made one). Stand both rails on it upside down, top edge on the deck, each outer face ${insetRear !== undefined ? fin(insetRear) : '1/2"'} outside the deck's edge (a combination square set to that), the finished-end marks ${deckFit ? fin(deckFit.behind) : '1/4"'} in from the deck's rear edge. Clamp a straight scrap to the deck against each rail's inboard face to hold it there.`,
+            `Measure between the rails' inboard faces at each crossmember's mortises: ${listS(straightLen.map((q) => `{{${q.id}}} ${fin(q.long)}`))}${hangerLen.length ? `; ${listS(hangerLen.map((q) => `{{${q.id}}} ${fin(q.long)} between the hangers`))}` : ''}.`,
+            taperLen.length ? `In the bow taper the rails close in, so measure at each crossmember's rear face (half its thickness behind its mortise centers), where they are farthest apart: its long point. ${listS(taperLen.map((q) => `{{${q.id}}} ${fin(q.long)}`))}.` : false,
+            'Within 1/32" of these is right; outside that, find out why (a rail sprung at the bow) before cutting.',
+            I(`Then cut each crossmember to the length you measured, not the cut list: the rails follow the deck.${taperLen.length ? ' Cut a tapered one to its long point, square; its ends are scribed to the rails at the dry fit below.' : ''}`, [], crossIds),
+            cutBack.length ? I(`${tl(cutBack)} ${cutBack.length === 1 ? 'meets' : 'meet'} a brake knee backer: cut ${cutBack.length === 1 ? 'its' : 'their'} ends back ${fin(bkThick)} so ${cutBack.length === 1 ? 'it butts' : 'they butt'} the backer's face.`, [], cutBack) : false,
+            hinge.length ? I(`The seat-hinge backers are cut to their cut-list size: ${tl(hinge)}. They carry the hinge layout on the drawing, not built work, so they need no check.`, [], hinge) : false,
+          ], ['deck']),
           I('Bore the {{king-beam}} for the kingpin, and cut the nut slot, before the deck goes on.', [
             kingBore ? `${fin(c.p.kingpinDiaIn)} hole, square on the drill press: ${whereOf(kingBore)}.` : `${fin(c.p.kingpinDiaIn)} hole, square on the drill press: ${SEE}.`,
             ((ks) => `Nut slot from the front face: ${fin(ks.w)} wide × ${fin(ks.h)} tall, about ${fin(ks.x1 - ks.x0)} deep from the front face (${fin(computeLayout(c.p).king.x - ks.x0)} past the bore's center), its top ${fin(KING_NUT_BELOW_DECK_IN)} below the top face, centered on the bore. Its walls hold the kingpin's thin nylock (jam) nut by its flats (no washer), so the bolt is turned from its head.`)(kingNutSlot(c.p, computeLayout(c.p))),
@@ -1630,7 +1668,7 @@ const TEMPLATES: Template[] = [
           I('Dry-fit the rails (still 1/2" long at both ends), the crossmembers and the king beam on Dominos.', [
             joistDom?.positions?.length ? `Crossmember Dominos (5×30), at both ends of each crossmember: ${joistDom.positions.join('; ')}.` : 'Crossmember Dominos (5×30) at both ends of each crossmember.',
             joistCut ? 'The {{joist-1}} ends go into the hanger mortises, not the rails.' : false,
-            `In the bow taper the ends meet the bent rails at up to ${f(angle, 0)}°: the cut-list lengths are the long point, so scribe each end to its rail now (pencil from the rail, then bandsaw or miter).`,
+            taperLen.length ? `In the bow taper the ends meet the bent rails at up to ${f(angle, 0)}°: each tapered crossmember was cut to its long point above, so scribe each end to its rail now (pencil from the rail, then bandsaw or miter). Its front face comes out shorter: ${listS(taperLen.map((q) => `{{${q.id}}} ${fin(q.short)}`))}.` : false,
           ], crossIds),
           I('Before any glue: lay the {{deck}} on the dry frame and check the frame against it. The deck already follows the sides\' line, so the frame is set to the deck, never the deck trimmed to the frame.', [
             deckFit ? `Ends: the deck's rear edge stands ${fin(deckFit.behind)} behind the finished-end marks on both rails, and its bow edge ${fin(deckFit.ahead)} past the bow-end marks. Slide the deck until the rear edge is right on both rails (within 1/32").` : 'Ends: set the deck\'s rear edge from the deck drawing against the finished-end marks on the rails.',
@@ -1650,8 +1688,9 @@ const TEMPLATES: Template[] = [
         ],
         checks: ['Frame square: diagonals equal within 1/16"', 'Deck on the dry frame: its rear edge on the rails\' marks and its edge an even distance in from both rails\' outer faces, within 1/32", before any glue', 'Deck flat under a straightedge (no twist or rocking)', 'Squeeze-out cleaned off the deck edge before it hardens (the edge must slide into the sides at the dry fit)'],
       };
-    },
-  },
+}
+
+const TEMPLATES_2: Template[] = [
 
   // ---------------- 4.2: sides ----------------
   {
@@ -1856,8 +1895,8 @@ const TEMPLATES: Template[] = [
             `Make each tape flag wider than ${cb ? `the ${cb}" counterbore` : 'the counterbore'}, so it stops on the rail's face: then no pilot comes out through the face of the web or the outer band.`,
             'The rail holes put each pilot on the centerline of the edge, on the glue line between the outer band and the web; the outer chine band drawing lists every pilot.',
             'These pilots are what registers the side at the glue-up: each screw finds its pilot and draws the side onto the rail.',
-            'Lift the unit out onto horses, brush the pilots clear, and mark each rail beside its side.',
           ], ['rail-L', 'rail-R', 'side-L-chine', 'side-R-chine'])] : []),
+          I('Lift the unit out onto padded horses.', ['Brush the pilots clear, and mark each rail beside its side (L, R), so it goes back the same way.']),
           I('On the horses: trim the rails, then cut the rail-end mortises in the trimmed ends.', [
             'Trim the rails (left 1/2" long): saw to the marks with a flush-cut saw against a clamped square block, then pare to the line.',
             `Transom end: ${mortiseSize(tMort) ? `${mortiseSize(tMort)} loose-tenon mortise` : endJoint(c, 'rail-L', 'transom-rear')}${fromTop(tMort) ? `, centered ${fromTop(tMort)}` : ''}.`,
@@ -1969,11 +2008,13 @@ const TEMPLATES: Template[] = [
             `Push a dry loose tenon into each rail's rear mortise and a dry ${dj ? `${dominoKey(dj)} ` : ''}Domino into each bow mortise, half of each standing out.`,
             `Rear: push the transom template straight on by hand. Both web ends, the deck end and both tenons must come through their slots (the web and deck ends stand ${fin(standOut)} past the band and rail ends), and the template must lie flat on all eight band ends: no gap a 1/32" feeler enters.`,
             'Bow: the same with the bulkhead template, its face on the pencil line from the dry fit.',
-            wRear !== undefined && wBow !== undefined ? `Measure at each end, at the deck and at the gunwale: ${fin(wRear)} over the outer bands at the rear and ${fin(wBow)} at the bow, within 1/32" overall (the dados have about ${fin(spare)} to spare a side). The scored outline's sides lie on the outer bands' faces.` : false,
+            wRear !== undefined && wBow !== undefined ? `Measure at each end, at the deck and at the gunwale: ${fin(wRear)} over the outer bands at the rear and ${fin(wBow)} at the bow, within 1/32" overall (the dados have about ${fin(spare)} to spare a side). The scored outline's sides lie on the outer bands' faces. A hull 1/32" wider than the template at one end is more than its dados can take: use the fallback below.` : false,
             'Each web end stands square to the deck, within 1/32" over its height: the hull is inverted, so hold the square\'s stock up against the deck\'s top face (facing down now) at the open end, its blade along the web end.',
             at(tJ) && at(bJ) ? `Rail ends: the tenons sit ${at(tJ)} at the rear; the Dominos ${at(bJ)} at the bow.` : false,
             'The laser\'s kerf leaves the template slots a hair looser than the Shaper\'s dados: a template that goes on is the first check, the oak dry fit (below) is the last.',
-            'If a slot binds or the template stands off a band end: find out why first (a band end not square, epoxy squeeze-out on a web end, a side sprung at the top). If the hull itself is off, enter what you measured in the design (as for the Verify measurements: the body width if both sides are out the same), re-export the transom and bulkhead files and cut a new template; if only one side is out, offset that dado on the Shaper by the measured amount. A moved dado leaves the end standing proud of the band: plane its edge flush after the glue-up.',
+            'If a slot binds or the template stands off a band end: find out why first (a band end not square, epoxy squeeze-out on a web end, a side sprung at the top).',
+            'If the hull itself is off by up to 1/16" a side: cut the end from its file as it is, then widen that dado toward the web on the Shaper by the amount you measured (the Shaper\'s offset widens both walls, so it widens, it does not move); thickened epoxy fills the extra at the glue-up.',
+            'If it is off by more than 1/16" a side: make a COPY of the design, enter the hull width you measured in the copy, export only the transom and bulkhead files from it, and cut a new template from the copy to prove them. Keep the original design for everything else. An end cut wider than its band ends is planed flush after the glue-up.',
           ], ['transom-rear', 'bow-bulkhead']),
           ...(tr ? [I(`Cut the {{transom-rear}} on the Shaper from its file, from the edge-glued panel (planed to ${thick(tr.stock?.t ?? 0.5)} at [[step:mill]]).`, [
             'The file cuts the outline, both web dados (open at the top edge), the deck dado running into them, the two rail mortises, the hand hole and the socket screw holes. The vent holes and the cord-eye pilots are only marked: they are drilled at the transom step.',
@@ -2043,7 +2084,7 @@ const TEMPLATES: Template[] = [
             backerAt,
             place ? `Both sockets: centered ${fin(place.off)} either side of the centerline (the outer edge ${fin(place.inset)} in from the transom's side edge), the bottom end ${fin(place.up)} up from the transom's bottom edge.` : false,
             fileCutHole(c, 'transom-rear', (q) => /^handle-socket-/.test(q.to ?? ''))
-              ? `The transom's socket screw holes were cut with it (its Shaper file): hold a socket there to check they line up with its holes, then drill on through the backer from the transom's holes${sockClr ? `, ${sockClr}" clearance` : ''}, using them as the guide. Do not drill the transom again.`
+              ? `The transom's socket screw holes came with it (its Shaper file): hold a socket there to check they line up with its holes, then drill on through the backer from the transom's holes${sockClr ? `, ${sockClr}" clearance` : ''}, using them as the guide. Do not drill the transom again.`
               : `Hold a socket there and drill through its screw holes${sockClr ? `: ${sockClr}" clearance through transom and backer together` : ''}.`,
             barrel ? `Then open each backer hole to ${barrel}" from the backer's inside face, for the T-nut barrel.` : false,
             sockAt.length ? `On the socket the holes are ${list(sockAt)} up from its bottom end${sockEdge ? `, ${sockEdge}" from its outboard edge` : ''}.` : false,
@@ -2308,7 +2349,7 @@ const TEMPLATES: Template[] = [
             'Slide one wheel onto an end of the rear axle rod (on since [[step:rear-beam]]).',
             kneeRear ? `Mark the knee's rear face on each rail: ${kneeRear} from the rail's finished rear end, square across its outer face.` : false,
             `From the front of the tire to that mark: ${fin(pkn.x0 - (bgk.O[0] + bgk.r))}, within 1/8".`,
-            'If it is off, stop and find out why (the rail\'s end mark, the axle in its notches) before any knee is cut: the bolt holes through the rail and backer are already drilled, so moving the knee means new holes.',
+            'If the gap is short, re-measure from the finished-end mark first (not the sawn rail end, 1/2" farther back), then check the axle sits down in both notches. If it is still off by more than 1/8", stop before any knee is cut: the bolt holes through the rail and backer are already drilled, so moving the knee means new holes, and the flap template check at the next step decides whether the flap can take the difference instead.',
           ]),
           I('Cut the knee and flap router templates on the laser (Forms section), about 10 minutes.', ['The knee template is used now; the flap template is tried on the knee and the tire at [[step:gear-fit]] and cuts the flaps at [[step:brake-flaps]].']),
           backers.length
@@ -2387,7 +2428,7 @@ const TEMPLATES: Template[] = [
           I('Check the running gear is all on and snug: the rear axle and its plates, the front stub axles, their plates and the roll pads. If anything came off, refit it from its tagged bag.'),
           I(`Put the ${plural(wheels.length, 'wheel')} on the axles.`, [`${fin(c.p.wheelBoreIn)} bore on the ${fin(c.p.axleDiameterIn)} ${axleWord(c.p)}, sealed bearings.`, `Washer and collar against the hub, cotter pin through the cross hole ${fin(c.p.axleCrossHoleFromEndIn)} in from the ${axleWord(c.p)} end.`], wheels.map((x) => x.id)),
           I(`Check the track: ${fin(c.p.frontTrackIn)} front, ${fin(c.p.rearTrackIn)} rear.`, [`Inflate each tire to ${SQUASH_TEST_PSI} psi, the pressure of the tire squash test in [[step:verify]].`]),
-          I('Spin each wheel.', ['No rub on the beam end, the clamp plates or the brake knee.', `Measure the knee-to-tire margin now, wheels on${isRemovable(c.p) ? '' : ' and knees cured'}: about ${fin(brakeOf(c.p).knee.x0 - (brakeOf(c.p).O[0] + brakeOf(c.p).r))} from the front of each rear tire to its knee's rear face.`, `End float: no more than the ${fin(c.p.frontTrackIn / 2 - c.p.hubLengthIn / 2 - computeLayout(c.p).beamF.len / 2)} gap between the hub and the beam end.`]),
+          I('Spin each wheel.', ['No rub on the beam end, the clamp plates or the brake knee.', `Re-check the knee-to-tire margin (first checked at [[step:brake-knees]]), wheels on${isRemovable(c.p) ? '' : ' and knees cured'}: about ${fin(brakeOf(c.p).knee.x0 - (brakeOf(c.p).O[0] + brakeOf(c.p).r))} from the front of each rear tire to its knee's rear face.`, `End float: no more than the ${fin(c.p.frontTrackIn / 2 - c.p.hubLengthIn / 2 - computeLayout(c.p).beamF.len / 2)} gap between the hub and the beam end.`]),
           ...(flapFit ? [I('Try the brake flap template on each knee and tire now, while both are on: the flaps are made to it at [[step:brake-flaps]].', [
             'The brake flap router template (Forms section, 1/4" plywood on the laser). Hold it level over the tire at the flap\'s height, its pivot end resting on the floor of the knee\'s pocket and its scored pivot line over the knee\'s pin line.',
             `The midpoint of its two shoe-screw holes sits over the top of the tire: ${fin(flapFit.shoeBehind)} behind the axle's center, within 1/4" (the shoe is fitted to the tire later).`,
@@ -2453,7 +2494,7 @@ const TEMPLATES: Template[] = [
             ])]
             : []),
           ...(boxDrain ? [(fileCutHole(c, boxDrain.host, (q) => q.joint === 'hole' && diaNear(q, boxDrain.diaIn))
-            ? I(`Seal the ${boxDrain.count} box drain holes with the hull still inverted. They were cut with the deck (its Shaper file): do not drill them again.`, [
+            ? I(`Seal the ${boxDrain.count} box drain holes with the hull still inverted. They came with the deck (its Shaper file): do not drill them again.`, [
               `Check they are where the storage box's rear corners will be ([[step:storage-box]]): ${list(boxDrain.xs)} forward of the transom's outer face, ${list(boxDrain.offCenter)} either side of the centerline.`,
               'Tape the top-face mouth, brush epoxy up each bore with a small brush or a pipe cleaner (epoxy on the walls, not a plug), and let it cure.',
               `Run a ${fin(boxDrain.diaIn)} bit through again if the epoxy narrowed the hole, so no cut plywood edge is left bare and the hole is open.`,
@@ -2705,7 +2746,9 @@ const TEMPLATES: Template[] = [
     id: 'side-holes',
     title: 'Drill the D-ring holes and fit the grab boards (before the finish)',
     kind: 'process',
-    steps: [STEP.seatStorage],
+    // The grab boards, their caps and strips are bolted on for good here (the nuts cannot be reached once the caps are on), so this step installs them.
+    steps: [STEP.seatStorage, STEP.finish],
+    match: /^seat-grip-(cap-|backing-)?[LR]$/,
     // D-94: the signs and the grab boards are cut here, to the ribs and the gunwale as built and after the reach check.
     cuts: /^(sign-[LR]|seat-grip-(cap-)?[LR])$/,
     cutAfter: 'side-ribs',
@@ -2760,7 +2803,7 @@ const TEMPLATES: Template[] = [
           mouthDown,
           bore: Math.ceil((mouthDown + insLen + 1 / 16) * 16 - 1e-9) / 16,
           rear: near16(sb.min[0] - L.xRear), up: near16(sb.min[2] - L.deckTop),
-          ribs: ribAt.map((r) => `${fin(r.x)} (${/4$/.test(r.id) ? 'the rear rib' : /1$/.test(r.id) ? 'the box rib' : 'its rib'})`),
+          ribs: ribAt.map((r) => `${fin(Math.round(r.x * 8) / 8)} (${/4$/.test(r.id) ? 'the rear rib' : /1$/.test(r.id) ? 'the box rib' : 'its rib'})`), // to 1/8", as the rib stations are set
           ribIds: c.parts.filter((x) => /^side-rib-[LR]\d$/.test(x.id) && (x.joints ?? []).some((j) => j.type === 'threaded-insert' && /^sign-/.test(j.to))).map((x) => x.id),
         };
       })() : undefined;
@@ -2779,7 +2822,7 @@ const TEMPLATES: Template[] = [
         goal: 'Drill the D-ring holes through the sides now, and fit the grab boards for good, while every face is bare.',
         items: [
           I('Before you cut the signs and the grab boards: wait until the ribs and knees have cured (the next day), then measure the ribs and the gunwale as built.', [
-            signKnob ? `Rib shaft centers, from the transom's outer face, on both sides: ${listS(signKnob.ribs)}, within 1/8".${ribGap !== undefined ? ` The sign's two pairs of knob holes are ${fin(ribGap)} apart on its drawing (the rib spacing). Set the spacing now, before the signs are drilled: drill them to the spacing you measure if it differs. After that, slide a sign along the side to its ribs, never move a hole.` : ''}` : false,
+            signKnob ? `Rib shaft centers, from the transom's outer face, on both sides: ${listS(signKnob.ribs)} (the stations they were set at), within 1/8".${ribGap !== undefined ? ` The sign's two pairs of knob holes are about ${fin(Math.round(ribGap * 8) / 8)} apart (${fin(ribGap)} on its drawing): the rib spacing. Measure your rib spacing center to center now, before the signs are drilled; if it differs by more than 1/16", lay the two signs out with the hole pairs that far apart instead (mark the centers with a square from the sign's rear end) and drill them on the drill press. After that, slide a sign along the side to its ribs, never move a hole.` : ''}` : false,
             gripIds.length ? `The grab-board reach check (Verify, grab board): tape the cardboard board in place and sit the smallest and the biggest scout on the seat pads laid at the seat's place. It passes when ${reachPass}. If it fails, move the hole in the design (Advanced: ${PARAM_DEFS.grabHoleAheadOfHpointIn.label.toLowerCase()}), re-export the grab board files and try again. Cut nothing for the grab boards until it passes.` : false,
             gripIds.length && gripPlace ? `A straightedge on the inner gunwale band where each board goes, from ${gripPlace.from} to ${gripPlace.to} from the transom's outer face, held on the band at the board's rear end.${gripTurn ? ` The side turns in toward the bow there: the gap under the straightedge at the front end of the board's lap is about ${fin(gripTurn.d)} by design. Measure yours: the back of the board's front end is planed to it.` : ' The band is straight there: a gap over 1/32" means a side sprang in; plane the back of the board to the band.'}` : false,
           ]),
@@ -2791,7 +2834,7 @@ const TEMPLATES: Template[] = [
             'Number each bracket to its rib. They are bolted on after the finish (final fit step).',
           ], lashIds)] : []),
           ...(signKnob ? [I(`Sign knob holes and inserts: ${signKnob.perSign} a side, through the web into the rib behind it, with the sign as the drill template (${tl(signIds)}).`, [
-            I('Saw the two signs on the table saw to their cut-list size, the best face up for the saw\'s clean side.', ['Tape them together and drill the four knob holes through both at once, at the spacing set above.'], signIds),
+            I('Saw the two signs on the table saw to their cut-list size, the best face up for the saw\'s clean side.', ['Tape them together and drill the four knob holes through both at once on the drill press, from the sign drawing or at the spacing you measured above.'], signIds),
             I(`Then the ${signKnob.perSign * signIds.length} oak standoff discs, one per hole (cut list: sign standoff discs, one strip for all).`, [
               `Plane the strip to the band thickness plus 1/16" (${signKnob.standoff ?? '17/64'}" at the defaults): the gap between the web and the back of the sign, which stands 1/16" proud of the bands. Do not measure it with the sign held flat: its upper front corner lies over the outer gunwale band.`,
               I(`Cut each disc from the strip with a ${fractionText(discStrip(signKnob.perSign * signIds.length, signKnob.discDia ?? 0.75).sawIn, 8)}" hole saw (its plug comes out about ${signKnob.discDia ? fin(signKnob.discDia) : '3/4"'} across), working from both faces. Its 1/4" pilot drill makes the center hole, which clears the #10 knob screw.`, [], c.parts.filter((x) => /^sign-standoff-/.test(x.id)).map((x) => x.id)),
@@ -2813,7 +2856,7 @@ const TEMPLATES: Template[] = [
             ], [...gripIds, ...gripBack]),
             I(`Drill the stainless strips on the drill press: the five ${gripBit} holes on the strip drawing, three in an upper row ${fractionText(GRIP_BOLT_ROWS_IN[0], 16)}" below the gunwale top and two in a lower row ${fractionText(GRIP_BOLT_ROWS_IN[1], 16)}" below it, between the upper ones.`, ['Use a cobalt bit and cutting oil, deburr, then wipe off the oil with acetone.'], gripBack.filter((id) => /backing/.test(id))),
             boardHole
-              ? I(`Drill the side through each board's own holes: clamp the board in place; its five holes were cut with it (its Shaper file, ${boardBit}) and they are the template.`, [`Drill dry from the inside through them, the inner band, the web and the outer band with a ${boardBit} bit, square to the side, a scrap block clamped outside against tear-out.`, 'Do not drill the board again. Mark the strip and board to their side.'], gripIds)
+              ? I(`Drill the side through each board's own holes: clamp the board in place; its five holes came with it (its Shaper file, ${boardBit}) and they are the template.`, [`Drill dry from the inside through them, the inner band, the web and the outer band with a ${boardBit} bit, square to the side, a scrap block clamped outside against tear-out.`, 'Do not drill the board again. Mark the strip and board to their side.'], gripIds)
               : I(`Drill the side: clamp each board in place and its strip on the outside face as the template.`, [`Drill dry through the strip's holes, the outer band, the web, the inner band and the board with the same ${gripBit} bit, square to the side.`, 'Mark the strip and board to their side.'], gripIds),
             I('Seal: take everything apart and brush epoxy into the holes in the web, onto the back of each board and onto the band face under it.', ['Leave the outer band face bare where the strip and cap will sit, so the glue bites.', `Let the seal coat cure (the board is bolted to a cured face, not glued), then run the ${gripBit} bit through every hole again, so the screws slide in.`], gripIds),
             I('Epoxy each strip to the outer band, its holes over the holes in the side.', ['Push a waxed 1/4" bolt through each hole while it cures, so they pull out.'], gripBack.filter((id) => /backing/.test(id))),
@@ -3092,7 +3135,7 @@ const TEMPLATES: Template[] = [
             'Leave them for the full cure before the first load.',
           ]),
           panelPinCut
-            ? I('The latch-pin holes were cut with the panel (its Shaper file): do not drill them again.', [`Check them: ${panelClear ? `${panelClear}"` : '13/32"'} clearance, 7-3/8" either side of the center, 2" up from the hinge axis.`, 'Line them with epoxy.'])
+            ? I('The latch-pin holes came with the panel (its Shaper file): do not drill them again.', [`Check them: ${panelClear ? `${panelClear}"` : '13/32"'} clearance, 7-3/8" either side of the center, 2" up from the hinge axis.`, 'Line them with epoxy.'])
             : I('Bore the latch-pin holes in the panel.', [`${panelClear ? `${panelClear}"` : '13/32"'} clearance, square, 7-3/8" either side of the center, 2" up from the hinge axis.`, 'Line them with epoxy.']),
           I('FIT AND DRILL now, hang later: the 2" butt hinges.', [
             '#10-32 × 3/8" screws go in from the FRONT (forward) face, through the leaf, into the inserts. The hinge leaf, the inserts and the screws are all on that one face; nothing is drilled from the back face.',
@@ -3483,6 +3526,8 @@ const TEMPLATES: Template[] = [
   },
 ];
 
+const TEMPLATES: Template[] = [...TEMPLATES_1, ...TEMPLATES_2];
+
 /** How the handle sockets are bedded on the transom (D-83): thickened epoxy under the Standard spec, epoxy or polysulfide sealant under the Extreme spec. */
 const socketBed = (p: Params): string => (isStandard(p) ? 'bedded in thickened epoxy' : 'bedded in epoxy or polysulfide sealant');
 
@@ -3705,12 +3750,18 @@ const CUT_VERB_RE = /\b(cut|cuts|saw|bandsaw|shape|rip|scribe|trim|crosscut)\b/i
 const FEATURE_RE = /\b(mortises?|grooves?|notch(es)?|holes?|pilots?|recess(es)?|slots?|dados?|reliefs?|counterbores?|rabbets?|bevels?|pockets?|tenons?|plugs?|threads?|joints?)\b/i;
 /** True when an item's text says to cut the part itself: a cutting verb (not the words "cut list"), and no feature word (a mortise, a hole) before the first part named in it. */
 export function cutsPart(text: string): boolean {
-  if (/^Before you cut\b/.test(text)) return false; // the check names the work it measures, not what it cuts
-  const t = text.replace(/\bcut[- ]list\b/gi, '').replace(/\bhole saw\b/gi, 'saw');
-  if (!CUT_VERB_RE.test(t)) return false;
-  // the object of the cut: the text up to the first part named, or the first clause
-  const head = t.split(/\{\{|[(:;]|\. /)[0];
-  return !FEATURE_RE.test(head);
+  const object = cutObject(text);
+  return object !== undefined && !FEATURE_RE.test(object);
+}
+/**
+ * The object of an item's cutting verb (D-94): the words after the first cutting verb, to the end of its clause, part tokens as "PART"; undefined when the text has no cutting verb
+ * (or is a "Before you cut" check, which names the work it measures, not what it cuts). A feature word there ("Cut the beam notch", "Cut the {{transom}} hand hole") means a feature is cut.
+ */
+export function cutObject(text: string): string | undefined {
+  if (/^Before you cut\b/.test(text)) return undefined;
+  const t = text.replace(/\bcut[- ]list\b/gi, '').replace(/\bhole saw\b/gi, 'saw').replace(/\{\{[^{}]*\}\}/g, 'PART');
+  const m = CUT_VERB_RE.exec(t);
+  return m ? t.slice(m.index + m[0].length).split(/[(:;,]|\. /)[0] : undefined;
 }
 /** The items, at any depth, that cut part `id` to its final size or shape (D-94). */
 export function cuttingItems(items: Instr[], id: string): Instr[] {
