@@ -2742,7 +2742,7 @@ const TEMPLATES: Template[] = [
           ], frame),
           I('Saw the {{storage-lid}} on the table saw to its cut-list size (the size includes the 1/4" tongue that sits in the rabbet all round).'),
           ...((lg) => (lg ? [I(`Letter the panel's top face ${lg.text}, all before it is sealed.`, [
-            `Test first: score the lettering file on an offcut of the same sheet. Raise the power or add passes until the letters come out dark, just through the face veneer into the first glue line (about ${fractionText(lg.depthIn, 64)}" deep); the face veneer is thinner than that, so it is the glue line that reads.`,
+            `Test first: mask an offcut of the same sheet with the same tape and score the lettering file through it. Raise the power or add passes until the letters come out dark, just through the face veneer into the first glue line (about ${fractionText(lg.depthIn, 64)}" deep); the face veneer is thinner than that, so it is the glue line that reads.`,
             'Mask the lettering area with low-tack masking tape first, smoothed down hard: the laser scores through the tape, and the tape keeps the fill off the bare birch (thin epoxy wicks into its grain and leaves a grey halo).',
             'Laser: lay the panel on the bed, line it up on the black outline with the framing preview, and run the lettering file (the letters only; each stroke is several passes side by side, so the line reads from a standing position).',
             'Fill: work black epoxy (pigment in a little mixed epoxy, thickened a little so it does not run) or an oil-based black paint marker into the letters, over the tape.',

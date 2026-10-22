@@ -607,7 +607,7 @@ export function addSignStandoffs(ctx: Ctx, parts: Part[]): void {
       const note = 'epoxied to the back of the sign over its knob hole, lined up on a waxed screw through both (D-63)';
       d.joints = [
         { type: 'glue', to: sign.id, count: 1, size: 'thickened epoxy, full face', at: [toLocalOf(d.transform, face)], note },
-        { type: 'hole', to: sign.id, count: 1, diaIn: 0.25, size: '1/4 clearance hole through the center, for the #10-32 thumb-knob screw (the hole saw\'s pilot drill makes it)', at: [[0, 0, 0]], note: 'lined up on the sign\'s own knob hole when it is glued on (not in the sign\'s Shaper file)' },
+        { type: 'hole', to: id, count: 1, diaIn: 0.25, size: '1/4 clearance hole through the center, for the #10-32 thumb-knob screw (the hole saw\'s pilot drill makes it)', at: [[0, 0, 0]], note: 'lined up on the sign\'s own knob hole when it is glued on (not in the sign\'s Shaper file)' },
       ];
       (sign.joints ??= []).push({ type: 'glue', to: id, count: 1, size: 'thickened epoxy, full face', at: [toLocalOf(sign.transform, face)], note });
       parts.push(d);

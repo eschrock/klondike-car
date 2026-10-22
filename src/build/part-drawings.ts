@@ -1787,7 +1787,7 @@ function renderSheet(a: Analysis, qty: number, makeNote: string, p: Params, cl: 
   ty += 0.2;
   const disc = b.rod && part.kind === 'lumber' && part.geometry.type === 'cylinder' && part.geometry.length < 2 * part.geometry.radius;
   if (disc && part.geometry.type === 'cylinder') {
-    for (const l of wrap(`A disc: plane a strip to the thickness above, then cut each disc with a ${frac(discStrip(1, 2 * part.geometry.radius).sawIn)} hole saw (its plug comes out about ${frac(2 * part.geometry.radius)} across; check it on a scrap), from both faces of the strip. The saw's 1/4" pilot drill makes the center hole.`, chars)) { rowsSvg.push(txt(M + 0.25, ty, l, 0.105)); ty += 0.15; }
+    for (const l of wrap(`Make it: plane a strip to the thickness above, then cut each disc with a ${frac(discStrip(1, 2 * part.geometry.radius).sawIn)} hole saw (its plug comes out about ${frac(2 * part.geometry.radius)} across; check it on a scrap), from both faces of the strip. The saw's 1/4" pilot drill makes the center hole.`, chars)) { rowsSvg.push(txt(M + 0.25, ty, l, 0.105)); ty += 0.15; }
     ty += 0.05;
   }
   if (!feats.length) { rowsSvg.push(txt(M + 0.25, ty, b.rod ? 'None: cut to length, square the ends and break the edges (a light chamfer).' : 'None: a plain board, cut to the final size above.', 0.105)); ty += 0.2; }

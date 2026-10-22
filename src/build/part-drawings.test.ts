@@ -429,3 +429,19 @@ describe('the bridle tongue drawing agrees with its own offsets table and with t
     expect(holes.text).toMatch(/through \(3" deep\)/);
   });
 });
+
+describe('no drawing lists the same hole twice (D-93)', () => {
+  it('a hole position appears once per drawing: the sign shows its 4 knob holes once, and both signs are identical', () => {
+    for (const s of sheets) {
+      const seen = new Map<string, string>();
+      for (const f of (s.features ?? []).filter((x) => x.kind === 'hole' && !/access hole/.test(x.text))) for (const pos of f.positions ?? []) {
+        const key = `${f.face}|${pos}`;
+        expect(seen.has(key), `${s.partNo}: ${f.label} repeats ${seen.get(key)} at ${pos}`).toBe(false);
+        seen.set(key, f.label);
+      }
+    }
+    const sign = sheets.find((s) => s.partNo === 'sign')!;
+    expect(sign.features.filter((x) => x.kind === 'hole').reduce((n, f) => n + f.count, 0)).toBe(4);
+    expect(sign.makeNote).toMatch(/MAKE 2 identical/);
+  });
+});
