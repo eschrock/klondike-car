@@ -14,6 +14,7 @@ import { analyzeShaperPart, type ShaperFile } from './shaper-svg';
 import type { FormDrawing } from './forms';
 import { LASER_MAX_WIDTH_IN, emptyShape, laserSvg, laserVerdict, rotateShape, type LaserItem, type LaserShape, type LaserVerdict } from './laser-svg';
 import { frac } from './svg-util';
+import { fractionText } from './units';
 
 export interface LaserFile {
   /** `side-web`, `rail-form` ... */
@@ -40,7 +41,7 @@ export interface LaserFile {
   source: string[];
 }
 
-const DESC_HEAD = 'XTool S1 laser file. Full size: width and height are real inches. Red = cut through (in XCS set the inner shapes to cut first), blue = score / mark (not cut through). No fills, no text.';
+const DESC_HEAD = 'XTool S1 laser file. Full size: width and height are real inches. Red = cut through (in XCS set the inner shapes to cut first), blue = score / mark (not cut through), black = the edge of a sawn blank, to line it up (not output). No fills, no text.';
 
 /** The part files: every Shaper-file part the laser can cut (or could, if the bed were wider). */
 function partFiles(parts: Part[], p: Params, shaper: ShaperFile[]): LaserFile[] {
@@ -98,6 +99,58 @@ function partFiles(parts: Part[], p: Params, shaper: ShaperFile[]): LaserFile[] 
   return out;
 }
 
+/** Spacing of the side-by-side score passes that make a lettering line wider than one laser pass (in). */
+const LETTER_PASS_IN = 1 / 64;
+/** Each stroke as passes offset to either side of it, LETTER_PASS_IN apart, spanning `lineIn` (one pass when `lineIn` is under two spacings). */
+export function widenStrokes(strokes: Vec2[][], lineIn: number): Vec2[][] {
+  const m = Math.floor(lineIn / 2 / LETTER_PASS_IN + 1e-9);
+  if (m < 1) return strokes;
+  const out: Vec2[][] = [];
+  for (const s of strokes) {
+    const nrm = s.map((_, i): Vec2 => {
+      const a = s[Math.max(0, i - 1)], b = s[Math.min(s.length - 1, i + 1)];
+      const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1;
+      return [-dy / L, dx / L];
+    });
+    for (let k = -m; k <= m; k++) out.push(s.map((q, i): Vec2 => [q[0] + nrm[i][0] * k * LETTER_PASS_IN, q[1] + nrm[i][1] * k * LETTER_PASS_IN]));
+  }
+  return out;
+}
+
+/**
+ * Engrave-only jobs: a rectangle sawn on the table saw that carries lettering (the storage lid's DO NOT STEP). The laser only scores the lettering; the blank's edge is drawn in
+ * black, not output, to line the sawn blank up on the bed.
+ */
+function engraveFiles(parts: Part[], p: Params): LaserFile[] {
+  const out: LaserFile[] = [];
+  const seen = new Set<string>();
+  for (const part of parts) {
+    const no = part.partNo ?? part.id;
+    if (part.fab === 'shaper-origin' || !part.legend || seen.has(no)) continue;
+    const d = analyzeShaperPart(part, parts, p);
+    if (!d?.engrave) continue;
+    seen.add(no);
+    const f = d.f, e = d.engrave;
+    const verdict = laserVerdict({ thicknessIn: 0, material: part.material, widthIn: f.widthIn, heightIn: f.heightIn });
+    let u0 = Infinity, v0 = Infinity, u1 = -Infinity, v1 = -Infinity;
+    for (const [u, v] of e.strokes.flat()) { u0 = Math.min(u0, u); v0 = Math.min(v0, v); u1 = Math.max(u1, u); v1 = Math.max(v1, v); }
+    const cx = (u0 + u1) / 2, cy = (v0 + v1) / 2;
+    const lineIn = part.legend?.lineIn ?? 0;
+    const score = widenStrokes(e.strokes.map((s) => s.map(([x, y]): Vec2 => [f.widthIn / 2 + (x - cx), f.heightIn / 2 + (y - cy)])), lineIn);
+    let shape: LaserShape = { ...emptyShape(no, part.name, d.f.outer.map((q): Vec2 => [d.mirror ? f.widthIn - q[0] : q[0], q[1]])), score, frameOnly: true };
+    const passes = Math.max(1, 2 * Math.floor(lineIn / 2 / LETTER_PASS_IN + 1e-9) + 1);
+    const notes = [`Lettering "${e.text}" only, centered on the blank: each stroke is ${passes > 1 ? `${passes} score passes ${fractionText(LETTER_PASS_IN, 64)}" apart, side by side, so the filled line is about ${fractionText(lineIn, 64)}" wide and reads from a standing position` : 'one score pass'}. Set the power and passes on an offcut first: the letters must come out dark, just through the face veneer (about ${fractionText(e.depthIn, 64)}" deep).`,
+      `The blank is sawn on the table saw: lay it on the bed and line it up to the black outline with the framing preview (set the black layer to not output).`];
+    if (f.heightIn > f.widthIn) { shape = rotateShape(shape); notes.push('Turned a quarter turn so the long side runs along the conveyor.'); }
+    const doc = laserSvg({ title: `${part.name} (${no}), lettering, laser`, desc: [DESC_HEAD, `${part.material}. Engrave only.`, ...notes].join('\n'), items: [{ shape, qty: 1 }] });
+    out.push({
+      id: `${no}-lettering`, kind: 'part', title: `${part.name}: lettering`, fileName: `${no}-lettering.svg`, material: part.material, thicknessIn: f.thicknessIn, qty: 1,
+      widthIn: doc.widthIn, heightIn: doc.heightIn, pieces: doc.pieces, fits: verdict.ok, verdict, notes, svg: doc.svg, source: [part.id],
+    });
+  }
+  return out;
+}
+
 /** The form and template files, from the drawings' laser pieces. */
 function formFiles(forms: FormDrawing[]): LaserFile[] {
   const out: LaserFile[] = [];
@@ -116,5 +169,5 @@ function formFiles(forms: FormDrawing[]): LaserFile[] {
 
 /** Every laser job for the design: parts first, then the forms and templates. */
 export function laserFiles(parts: Part[], p: Params, shaper: ShaperFile[], forms: FormDrawing[]): LaserFile[] {
-  return [...partFiles(parts, p, shaper), ...formFiles(forms)];
+  return [...partFiles(parts, p, shaper), ...engraveFiles(parts, p), ...formFiles(forms)];
 }

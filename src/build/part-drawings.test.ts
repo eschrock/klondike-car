@@ -121,7 +121,7 @@ describe('part drawings', () => {
 
   it('states datums in plain words, never x / y / z', () => {
     for (const s of sheets) {
-      expect(s.svg).toMatch(/Datums: lengths from the (REAR|FRONT|LEFT|RIGHT|TOP|BOTTOM|INBOARD|OUTBOARD)/);
+      expect(s.svg).toMatch(/Datums: lengths from the (REAR|FRONT|LEFT|RIGHT|TOP|BOTTOM|INBOARD|OUTBOARD|CENTER LINE)/);
       for (const f of s.features) expect(/\b[xyz] ?=/.test(f.text), `${s.partId}: ${f.text.slice(0, 80)}`).toBe(false);
     }
   });
@@ -277,7 +277,8 @@ describe('part drawings read their sizes from the cut list (readability round 2)
     expect(head(knee.svg)).not.toContain(`${fin.finalText} (T × W × L`);
     for (const s of sheets) {
       const f = cl.finished.find((q) => q.ids.includes(s.partId));
-      if (f && f.partNo !== 'brake-knee') expect(head(s.svg), s.partId).toContain(`final ${f.finalText} (T × W × L`);
+      if (f && f.partNo !== 'brake-knee' && f.partNo !== 'sign-standoff') expect(head(s.svg), s.partId).toContain(`final ${f.finalText} (T × W × L`);
+      if (f && f.partNo === 'sign-standoff') expect(head(s.svg), s.partId).toMatch(/final 3\/4(&quot;|")? dia × 1\/4/); // a disc reads as a diameter and a thickness
     }
     const d = partDims(parts.find((x) => x.id === 'brake-knee-L')!, parts, p);
     expect(d.size).toBe(fin.finalText);
@@ -398,7 +399,7 @@ describe('D-76: the side rib, knee and box tie drawings', () => {
     expect(holes.count).toBe(2);
     expect(holes.text).toMatch(/17\/64" clearance/);
     expect(holes.purpose).toMatch(/1\/4-20 bolts/);
-    expect(holes.text).toMatch(/3\/8" and 1-5\/8" from the REAR edge/);
+    expect(holes.text).toMatch(/3\/8" from the REAR edge, [^;]*; 1-5\/8" from the REAR edge/); // the bracket follows the sheer (D-93): each hole has its own height
     expect(d.features.some((f) => /Sloped edge: a straight cut, 7° from level/.test(f.text))).toBe(true);
     expect(d.svg).toMatch(/final fit|D-ring holes/);
     expect(d.svg).toMatch(/two D-ring holes/);
@@ -426,5 +427,21 @@ describe('the bridle tongue drawing agrees with its own offsets table and with t
   it('gives the depth of the bolt holes the step gives (3" through the head)', () => {
     const holes = t.features.find((f) => f.kind === 'hole' && /25\/64/.test(f.text))!;
     expect(holes.text).toMatch(/through \(3" deep\)/);
+  });
+});
+
+describe('no drawing lists the same hole twice (D-93)', () => {
+  it('a hole position appears once per drawing: the sign shows its 4 knob holes once, and both signs are identical', () => {
+    for (const s of sheets) {
+      const seen = new Map<string, string>();
+      for (const f of (s.features ?? []).filter((x) => x.kind === 'hole' && !/access hole/.test(x.text))) for (const pos of f.positions ?? []) {
+        const key = `${f.face}|${pos}`;
+        expect(seen.has(key), `${s.partNo}: ${f.label} repeats ${seen.get(key)} at ${pos}`).toBe(false);
+        seen.set(key, f.label);
+      }
+    }
+    const sign = sheets.find((s) => s.partNo === 'sign')!;
+    expect(sign.features.filter((x) => x.kind === 'hole').reduce((n, f) => n + f.count, 0)).toBe(4);
+    expect(sign.makeNote).toMatch(/MAKE 2 identical/);
   });
 });

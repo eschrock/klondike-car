@@ -81,13 +81,14 @@ describe.each([['Standard', WEATHER_SPEC.standard], ['Extreme', WEATHER_SPEC.ext
     expect(txt('finish')).toMatch(/No finish may run onto the rail/);
     expect(sR.find((x) => x.id === 'finish')!.items.some((i) => (i.parts ?? []).includes('brake-knee-L'))).toBe(true);
     expect(txt('hang')).toMatch(/Brake knees, from the bench/);
-    expect(txt('hang')).toMatch(/Hang the knee on one bolt first/);
-    expect(txt('frame')).toMatch(/Bed each plate in thickened epoxy in its recess/);
-    expect(txt('frame')).toMatch(/sand its back and edges with 80 grit, wipe it with acetone, and bed it within the hour/);
-    expect(txt('frame')).toMatch(/Pass 4 waxed 3\/8" bolts through the rail, backer and plate holes from the outside, each with a waxed nut on the plate and a waxed caul block/);
-    expect(txt('frame')).toMatch(/Snug the nuts just enough to seat the plate flush/);
+    expect(txt('hang')).toMatch(/REFIT: dry, on its bolts, hung on one bolt first/); // the full refit text lives in the knee-off step
+    expect(txt('brake-knee-off')).toMatch(/Hang the knee on one bolt first/);
+    expect(txt('frame-parts')).toMatch(/Bed each plate in thickened epoxy in its recess/);
+    expect(txt('frame-parts')).toMatch(/sand its back and edges with 80 grit, wipe it with acetone, and bed it within the hour/);
+    expect(txt('frame-parts')).toMatch(/Pass 4 waxed 3\/8" bolts through the rail, backer and plate holes from the outside, each with a waxed nut on the plate and a waxed caul block/);
+    expect(txt('frame-parts')).toMatch(/Snug the nuts just enough to seat the plate flush/);
     expect(txt('hang')).toMatch(/Screw each strap back on its knee, 4 screws with a drop of epoxy in each pilot/);
-    expect(txt('hang')).toMatch(/put a bottom rear bolt, with its washer, through the knee, the rail and the backer/);
+    expect(txt('brake-knee-off')).toMatch(/put a bottom rear bolt, with its washer, through the knee, the rail and the backer/);
     expect(txt('finish')).toMatch(/Take the strap off each knee/);
     expect(sF.find((x) => x.id === 'frame')!.instructions.join('\n')).not.toMatch(/Bed each plate/);
     expect(textOf(sR)).not.toMatch(/epoxy[^.\n]*\b(knee|leg)\b[^.\n]*\bagainst the rail|glue[^.\n]*\bleg\b[^.\n]*\bagainst the rail/i);

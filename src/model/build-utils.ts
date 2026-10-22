@@ -147,6 +147,16 @@ export function frac16(x: number): string {
   return whole > 0 ? `${whole}-${num}/${den}` : `${num}/${den}`;
 }
 
+/** Nearest 1/64" (a drill size or a small clearance: 17/64, 3/64; `frac16` would round them to 1/16). */
+export function frac64(x: number): string {
+  const n = Math.round(x * 64);
+  const whole = Math.floor(n / 64);
+  let num = n % 64, den = 64;
+  while (num > 0 && num % 2 === 0) { num /= 2; den /= 2; }
+  if (num === 0) return `${whole}`;
+  return whole > 0 ? `${whole}-${num}/${den}` : `${num}/${den}`;
+}
+
 export const IN3_PER_FT3 = 1728;
 export const IN2_PER_FT2 = 144;
 

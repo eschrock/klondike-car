@@ -32,8 +32,39 @@ function wellFormed(xml: string): string | null {
 }
 
 describe('forms and templates', () => {
-  it('draws the side form, rail form, crown templates and brake-flap template', () => {
-    expect(drawings.map((d) => d.id)).toEqual(['side-form', 'rail-form', 'crown-templates', 'brake-flap-template', 'brake-knee-template']);
+  it('draws the side form, rail form, crown templates, brake-flap and knee templates, and the end templates', () => {
+    expect(drawings.map((d) => d.id)).toEqual(['side-form', 'rail-form', 'crown-templates', 'brake-flap-template', 'brake-knee-template', 'end-templates']);
+  });
+
+  it('D-94: the end templates copy the transom and the bulkhead with every dado and rail mortise cut through, grown to stay one piece, and fit the laser bed', () => {
+    const d = byId('end-templates');
+    const job = d.laser![0];
+    expect(job.thicknessIn).toBeCloseTo(0.25, 6);
+    const [tr, bh] = job.items.map((i) => i.shape);
+    expect(tr.id).toBe('transom-template');
+    expect(bh.id).toBe('bulkhead-template');
+    const box = (loop: Array<[number, number]>) => ({ u0: Math.min(...loop.map((q) => q[0])), u1: Math.max(...loop.map((q) => q[0])), v0: Math.min(...loop.map((q) => q[1])), v1: Math.max(...loop.map((q) => q[1])) });
+    for (const [shape, id] of [[tr, 'transom-rear'], [bh, 'bow-bulkhead']] as const) {
+      const f = flatPattern(parts.find((x) => x.id === id)!)!;
+      const ob = box(shape.outer as Array<[number, number]>);
+      // the end's outline grown 3/4" all round, and its short side fits the 18-1/2" bed
+      expect(ob.u1 - ob.u0).toBeCloseTo(f.widthIn + 1.5, 3);
+      expect(ob.v1 - ob.v0).toBeCloseTo(f.heightIn + 1.5, 3);
+      expect(Math.min(ob.u1 - ob.u0, ob.v1 - ob.v0)).toBeLessThanOrEqual(18.5);
+      // every slot lies inside the template (closed, so the template is one piece)
+      for (const sl of shape.holes) { const b = box(sl as Array<[number, number]>); expect(b.u0).toBeGreaterThan(ob.u0); expect(b.u1).toBeLessThan(ob.u1); expect(b.v0).toBeGreaterThan(ob.v0); expect(b.v1).toBeLessThan(ob.v1); }
+      // the end's own outline is scored
+      expect(shape.score.length).toBeGreaterThan(0);
+    }
+    // transom: 2 web dados, the deck dado and 2 rail mortises; bulkhead: 3 dados and 2 Domino places
+    expect(tr.holes.length).toBe(5);
+    expect(bh.holes.length).toBe(5);
+    // the bulkhead's Domino slots sit on the rail ends' Dominos: 8-7/8" either side of the center, 15/16" below the rail top (from the rail's joint)
+    const W = flatPattern(parts.find((x) => x.id === 'bow-bulkhead')!)!.widthIn;
+    const doms = bh.holes.map((h) => box(h as Array<[number, number]>)).filter((b) => b.u1 - b.u0 < 0.3 && b.v1 - b.v0 > 0.8 && b.v1 - b.v0 < 1);
+    expect(doms.length).toBe(2);
+    for (const b of doms) expect(Math.abs((b.u0 + b.u1) / 2 - 0.75 - W / 2)).toBeCloseTo(8.875, 2);
+    expect(d.build.map((q) => q.step).join(' ')).toMatch(/USE \(at the ends step, after the hull is glued\)/);
   });
 
   it('is well-formed, in real inches, with a title block, a 1 in check square and a cuttable outline', () => {

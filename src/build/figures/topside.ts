@@ -351,7 +351,7 @@ const grabBoardStack: FigFn = (c) => {
   const hole = frac(GRIP_BOLT_DIA_IN + 1 / 32, 64);
   const steps: Array<[string[], Parameters<typeof thumb>[3]]> = [
     [['Drill the strip alone on the drill press', `(${hole}, cobalt bit, cutting oil); deburr`, 'and wipe it clean with acetone.'], { stripOnly: true }],
-    [['Drill the wood dry: clamp the board and', 'the strip in place, the strip as the', 'template, one bit through every layer.'], { board: true, strip: true, drill: true }],
+    [['Drill the side dry: clamp the board in', 'place; its own holes are the template,', 'one bit through the bands and the web.'], { board: true, drill: true }],
     [['Seal. Take it apart. Brush epoxy into', 'the web holes, onto the board back', 'and the band face under it.'], { seal: true }],
     [['Strip. Epoxy it to the outer band, a', 'rod through each hole while it cures.'], { strip: true, hot: 'strip' }],
     [['Bolt. Set the board; screws in from', 'outside, washers and nuts inside.', 'Tighten every nut: no access later.'], { board: true, strip: true, bolts: true, hot: 'bolts' }],
@@ -542,7 +542,7 @@ const storageLid: FigFn = (c) => {
   const lid = c.by('storage-lid');
   const battens = c.parts.filter((q) => /^storage-lid-batten-\d+$/.test(q.id));
   if (!lid) return null;
-  const rw = g.rimW, hw = g.hw, x0 = g.x0, x1 = g.x1, lx1 = g.lidX1, xh = g.xh;
+  const rw = g.rimW, hw = g.hw, x0 = g.x0, x1 = g.x1, lx0 = g.lidX0, lx1 = g.lidX1, xh = g.xh; // the box runs from x0, the lid from lx0 (set in from the box's aft face, D-89)
   const rab = lid.stock ? Math.max(0, (lid.stock.w - 2 * (hw - rw)) / 2) : 0.25;
   const strip = box(c, 'storage-strip'), stripEnd = box(c, 'storage-strip-end-L');
   const F = new Fig(760, 990);
@@ -551,18 +551,18 @@ const storageLid: FigFn = (c) => {
   F.sub([16, 52], 'A. From above (the battens and the strip\'s groove are underneath, dashed)');
   const pf = fit({ minX: x0 - 0.3, minY: -hw - 0.3, maxX: x1 + 0.3, maxY: hw + 0.3 }, { x: 40, y: 70, w: 270, h: 300 }, 1, 'center');
   const R = (a: number, b: number, c2: number, d: number, s: Style): void => rectIn(F, pf, a, b, c2, d, s);
-  R(x0 + rw, -hw + rw, lx1 - rw, hw - rw, { fill: THIN_PLY.fill, stroke: ACCENT, width: 1.4 });
-  R(x0, hw - rw, lx1, hw, acc('oak'));
-  R(x0, -hw, lx1, -hw + rw, acc('oak'));
-  R(x0, -hw + rw, x0 + rw, hw - rw, acc('oak'));
+  R(lx0 + rw, -hw + rw, lx1 - rw, hw - rw, { fill: THIN_PLY.fill, stroke: ACCENT, width: 1.4 });
+  R(lx0, hw - rw, lx1, hw, acc('oak'));
+  R(lx0, -hw, lx1, -hw + rw, acc('oak'));
+  R(lx0, -hw + rw, lx0 + rw, hw - rw, acc('oak'));
   R(lx1 - rw, -hw + rw, lx1, hw - rw, acc('oak'));
   for (const b of battens) {
     const bb = worldAABB(b);
     R(bb.min[0], bb.min[1], bb.max[0], bb.max[1], { stroke: ACCENT, width: 1.4, dash: '5 3' });
   }
-  for (const xc of [x0 + rw / 2, lx1 - rw / 2]) for (const s of [1, -1]) R(xc - 3 / 16, s * (hw - rw) - 3 / 8, xc + 3 / 16, s * (hw - rw) + 3 / 8, { stroke: INK, width: 1, dash: '2 2' });
+  for (const xc of [lx0 + rw / 2, lx1 - rw / 2]) for (const s of [1, -1]) R(xc - 3 / 16, s * (hw - rw) - 3 / 8, xc + 3 / 16, s * (hw - rw) + 3 / 8, { stroke: INK, width: 1, dash: '2 2' });
   // the panel's edge in its rabbet
-  R(x0 + rw - rab, -hw + rw - rab, lx1 - rw + rab, hw - rw + rab, { stroke: MUTED, width: 0.8, dash: '1 3' });
+  R(lx0 + rw - rab, -hw + rw - rab, lx1 - rw + rab, hw - rw + rab, { stroke: MUTED, width: 0.8, dash: '1 3' });
   // the fixed strip (glued on the box), its groove underneath and the end blocks in it; the gasket gap; the two hinges flat on top across the joint
   if (strip) {
     R(xh, -hw, x1, hw, mat('oak'));
@@ -572,14 +572,14 @@ const storageLid: FigFn = (c) => {
   const hinges = ['L', 'R'].map((t) => box(c, `storage-hinge-${t}`)).filter((b): b is NonNullable<typeof b> => !!b);
   for (const hb of hinges) R(hb.min[0], hb.min[1], hb.max[0], hb.max[1], mat('steel'));
   const lx = 330;
-  F.label(pf.at([(x0 + lx1) / 2 + 1.5, hw - rw / 2]), [lx, 96], `frame sides: ${f8(rw)} oak, the full length of the lid`, { size: 12 });
+  F.label(pf.at([(lx0 + lx1) / 2 + 1.5, hw - rw / 2]), [lx, 96], `frame sides: ${f8(rw)} oak, the full length of the lid`, { size: 12 });
   F.label(pf.at([lx1 - rw / 2, hw - rw]), [lx, 128], ['a small loose tenon at each corner (dotted),', 'in mortises in both pieces'], { size: 12 });
   F.label(pf.at([lx1 - rw / 2, -hw * 0.75]), [lx, 168], 'frame ends, between the sides', { size: 12 });
-  F.label(pf.at([(x0 + lx1) / 2 - 2.5, hw * 0.1]), [lx, 198], 'panel, its edge in a rabbet all round', { size: 12 });
+  F.label(pf.at([(lx0 + lx1) / 2 - 2.5, hw * 0.1]), [lx, 198], 'panel, its edge in a rabbet all round', { size: 12 });
   if (battens.length) { const bb = worldAABB(battens[battens.length - 1]); F.label(pf.at([(bb.min[0] + bb.max[0]) / 2, -hw * 0.45]), [lx, 228], [`${battens.length} battens under the panel, glued to it,`, 'their ends butted to the frame sides'], { size: 12 }); }
   if (hinges[0]) F.label(pf.at([(hinges[0].min[0] + hinges[0].max[0]) / 2, (hinges[0].min[1] + hinges[0].max[1]) / 2]), [lx, 270], ['2 butt hinges flat on top, across the joint', `between the lid and the strip (${f8(xh - lx1)} gap, the gasket)`], { size: 12 });
   if (strip) F.label(pf.at([(xh + x1) / 2 + 0.6, -hw * 0.2]), [lx, 312], [`fixed oak strip, ${frac(x1 - xh, 16)} wide, glued on the box's`, 'coaming; grooved underneath (dashed), end blocks', 'in the groove where it sits on the side coamings'], { size: 12 });
-  F.text([pf.at([x0, 0])[0], pf.at([0, -hw])[1] + 18], 'aft end', { size: 11.5, color: MUTED });
+  F.text([pf.at([lx0, 0])[0], pf.at([0, -hw])[1] + 18], 'aft end', { size: 11.5, color: MUTED });
   F.text([pf.at([x1, 0])[0], pf.at([0, -hw])[1] + 18], 'fore end of the box', { size: 11.5, color: MUTED, anchor: 'end' });
   F.text([lx, 376], ['Order: 1 make and glue on the strip, 2 cut the', 'joints, 3 seal the panel, 4 glue the frame round', 'it, 5 glue the battens, lid face down, weighted.'], { size: 12, color: ACCENT, weight: 'bold' });
 
@@ -615,7 +615,7 @@ const storageLid: FigFn = (c) => {
   if (sb.rear) {
     const s = L.seat;
     const pt = (a: number, b: number): Vec2 => [s.Pr[0] + s.col0[0] * a + s.col2[0] * b, s.Pr[2] + s.col0[2] * a + s.col2[2] * b];
-    const zMax = Math.max(pt(0, sb.H)[1], g.zTop + (lx1 - x0)) + 0.5;
+    const zMax = Math.max(pt(0, sb.H)[1], g.zTop + (lx1 - lx0)) + 0.5;
     const cf = fit({ minX: L.xRear - 0.5, minY: L.deckTop - 0.6, maxX: Math.max(x1, pt(sb.t, 0)[0]) + 1.2, maxY: zMax }, { x: 250, y: 660, w: 300, h: 290 }, 1, 'center');
     const C = (a: number, b: number, c2: number, d: number, st: Style): void => rectIn(F, cf, a, b, c2, d, st);
     C(L.xRear - 0.5, L.deckTop - 0.47, Math.max(x1, pt(sb.t, 0)[0]) + 1.2, L.deckTop, mat('deck', { opacity: 0.8 }));
@@ -623,7 +623,7 @@ const storageLid: FigFn = (c) => {
     if (strip) polyIn(F, cf, [[xh, g.zWallTop], [x1, g.zWallTop], [x1, g.zTop], [xh, g.zTop]], acc('oak'));
     polyIn(F, cf, [pt(0, 0), pt(sb.t, 0), pt(sb.t, sb.H), pt(0, sb.H)], { ...GHOST, dash: '5 3' });
     const pin: Vec2 = [(lx1 + xh) / 2, g.zTop + 1 / 16];
-    const lidPoly: Vec2[] = [[x0, zLidBot], [lx1, zLidBot], [lx1, g.zTop], [x0, g.zTop]];
+    const lidPoly: Vec2[] = [[lx0, zLidBot], [lx1, zLidBot], [lx1, g.zTop], [lx0, g.zTop]];
     polyIn(F, cf, lidPoly, { stroke: MUTED, width: 1, dash: '3 3' });
     const th = (openDeg * Math.PI) / 180, co = Math.cos(th), sn = Math.sin(th);
     const rot = lidPoly.map(([x, z]): Vec2 => { const dx = x - pin[0], dz = z - pin[1]; return [pin[0] + dx * co + dz * sn, pin[1] - dx * sn + dz * co]; });
@@ -639,7 +639,7 @@ const storageLid: FigFn = (c) => {
     }
     F.label(cf.at(pin), [xr3, 840], ['hinge pins, on top across the', 'joint between strip and lid'], { size: 12 });
     if (strip) F.label(cf.at([(xh + x1) / 2, (g.zWallTop + g.zTop) / 2]), [xr3, 888], 'fixed strip', { size: 12 });
-    F.label(cf.at([(x0 + lx1) / 2, g.zTop]), [xl3, 880], 'the lid, shut (dashed)', { size: 12, color: MUTED });
+    F.label(cf.at([(lx0 + lx1) / 2, g.zTop]), [xl3, 880], 'the lid, shut (dashed)', { size: 12, color: MUTED });
     F.label(cf.at([x0 + 1, (L.deckTop + g.zWallTop) / 2]), [xl3, 920], 'box (already built)', { size: 12, color: MUTED });
   }
   legend(F, ['oak', THIN_PLY, 'rubber', 'steel', 'ghost']);

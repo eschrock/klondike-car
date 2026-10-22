@@ -8,6 +8,7 @@
  */
 import { KNEE_MOUNT, thinSheet } from '../params';
 import { worldAABB } from '../model/bounds';
+import { offForTransport } from '../model/removable';
 import { bowHold, liftBarStressPsi, liftSlot } from '../model/body';
 import { innerHalfWidth, sideTopAt } from '../model/layout';
 import type { Part } from '../model/types';
@@ -27,11 +28,11 @@ export function liftShares(massLb: number, xCg: number, xRear: number, xFront: n
   return { rear, front: massLb - rear };
 }
 
-/** Transport configuration (removable parts off): mass and CG x of the carried sled. */
+/** Transport configuration (the parts that come off for the truck, `offForTransport`): mass and CG x of the carried sled. */
 export function transportMassCg(parts: Part[]): { massLb: number; xCg: number } {
   let m = 0, mx = 0;
   for (const x of parts) {
-    if (x.payload || x.group === 'reference' || x.removable) continue;
+    if (x.payload || x.group === 'reference' || offForTransport(x)) continue; // the seat-back latch pins stay in for the truck
     const bb = worldAABB(x);
     const cx = x.cgIn ? x.cgIn[0] : (bb.min[0] + bb.max[0]) / 2;
     m += x.massLb;
@@ -63,7 +64,7 @@ export function liftCheck(ctx: Ctx): AnalysisCheck {
   const tauF = (1.5 * (Pf / 2)) / (bh.thickIn * bh.barIn);
   rows.push(detail('front (bow bulkhead) hand-hold bar bending', sigmaF, 'psi', al.oakBend, '<='));
   rows.push(detail('front (bow bulkhead) hand-hold bar shear', tauF, 'psi', al.oakShear, '<='));
-  const how = `Transport mass ${f(massLb)} lb (Transport mode: the removable brakes, lights, chocks and seat pad off${p.kneeMount === KNEE_MOUNT.removable ? ', and the brake knees with their straps (removable knees, D-78)' : ''}; the tongue, signs and the parked handle on), CG ${f(xCg)}" ahead of the rear axle. Rear lifter's hands on the rear bar at x = ${f(xr, 2)}", front lifter's hands in the hand-hold through the bow bulkhead at x = ${f(xf, 2)}" (D-57, D-58: the nose is lifted by the body, not the tongue). Both lamps pop out of their hand-holds before the lift (the front lamp clip in the bow bulkhead, the rear one in the transom, D-64), so each lifter's hand has the whole slot. The rear lifter takes M·(x_f − x_cg)/(x_f − x_r) = ${f(sh.rear)} lb (${f((100 * sh.rear) / massLb, 0)}%), the front lifter ${f(sh.front)} lb. `
+  const how = `Transport mass ${f(massLb)} lb (Transport mode: the removable brakes, lights, chocks and seat pad off${p.kneeMount === KNEE_MOUNT.removable ? ', and the brake knees with their straps (removable knees, D-78)' : ''}; the tongue, signs, the parked handle and the seat-back latch pins, which hold the flat back down, on), CG ${f(xCg)}" ahead of the rear axle. Rear lifter's hands on the rear bar at x = ${f(xr, 2)}", front lifter's hands in the hand-hold through the bow bulkhead at x = ${f(xf, 2)}" (D-57, D-58: the nose is lifted by the body, not the tongue). Both lamps pop out of their hand-holds before the lift (the front lamp clip in the bow bulkhead, the rear one in the transom, D-64), so each lifter's hand has the whole slot. The rear lifter takes M·(x_f − x_cg)/(x_f − x_r) = ${f(sh.rear)} lb (${f((100 * sh.rear) / massLb, 0)}%), the front lifter ${f(sh.front)} lb. `
     + `Rear: ${f(P)} lbf on one hand (share × ${p.dynamicFactor}); bar ${f(s.thickIn, 2)}" × ${f(s.barIn, 2)}" over a ${f(s.lengthIn, 1)}" slot: M = P·L/4 = ${f(P * s.lengthIn / 4)} lb·in, σ = ${f(sigma, 0)} psi (≤ ${f(al.oakBend, 0)}), τ = 1.5·(P/2)/(t·h) = ${f(tau, 0)} psi (≤ ${f(al.oakShear, 0)}). `
     + `Front: ${f(Pf)} lbf on one hand; bulkhead ${f(bh.thickIn, 2)}" thick with ${f(bh.barIn, 2)}" of oak above the ${f(bh.lengthIn, 1)}" hand-hold (the crown at the center): M = P·L/4 = ${f(Pf * bh.lengthIn / 4)} lb·in, σ = ${f(sigmaF, 0)} psi (≤ ${f(al.oakBend, 0)}), τ = ${f(tauF, 0)} psi (≤ ${f(al.oakShear, 0)}).`;
   const g = governing(rows, how);

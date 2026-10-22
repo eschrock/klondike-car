@@ -374,7 +374,7 @@ describe('the steering check chains and the swept pose (D-58)', () => {
       expect(tip[0]).toBeCloseTo(kx + r * Math.cos(deg * RAD), 9);
       expect(tip[1]).toBeCloseTo(r * Math.sin(deg * RAD), 9);
       // and nothing of the chassis moves (the chains are drawn between the turning eye and the fixed anchor, so they follow the beam eye)
-      for (const x of m.filter((q) => !q.payload && !turning(q) && !/^steer-chain-/.test(q.id))) expect(x.transform, x.id).toEqual(get(parts, x.id).transform);
+      for (const x of m.filter((q) => !q.payload && !turning(q) && !/^steer-(chain|keeper)-/.test(q.id))) expect(x.transform, x.id).toEqual(get(parts, x.id).transform);
     }
     // a steer past the lock is clamped to it
     const over = buildModel(defaults, { steerDeg: 90 });

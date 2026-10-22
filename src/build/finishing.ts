@@ -354,7 +354,7 @@ export const SHOW_RULES: ReadonlyArray<{ re: RegExp; show: number | 'web'; why: 
   { re: /^side-[LR]-(chine|gunwale|gunwale-in)$/, show: 1, why: 'outer chine band and the gunwale bands' },
   { re: /^bow-bulkhead$/, show: 1, why: 'bow end and the rider\'s foot brace' },
   { re: /^transom-rear$/, show: 0.5, why: 'outside shows, the inside faces the hull and the box' },
-  { re: /^(transom-backer|sign-backer|seat-hinge-backer|storage-turn-block|storage-strip-end|flag-block|brake-backer|brake-pivot-block|brake-knee)/, show: 0, why: 'backer or block behind something else' },
+  { re: /^(transom-backer|sign-backer|sign-standoff|seat-hinge-backer|storage-turn-block|storage-strip-end|flag-block|brake-backer|brake-pivot-block|brake-knee)/, show: 0, why: 'backer or block behind something else' },
   { re: /^storage-turn-button-/, show: 1, why: 'the lid turn-buttons on the transom: in view and handled' },
   { re: /^side-rib-/, show: 1, why: 'side ribs and their knees stand inside the hull above the deck: the rider and the cargo see the inner face and edges (the glued back is credited off)' },
   { re: /^box-tie-/, show: 0, why: 'oak spacer between a rib and the storage box side: out of sight' },
@@ -698,11 +698,11 @@ export function urethaneContainers(qt: number): Array<{ unit: 'gal' | 'qt'; qty:
   return [...(gal ? [{ unit: 'gal' as const, qty: gal, qt: gal * 4 }] : []), ...(rest ? [{ unit: 'qt' as const, qty: rest, qt: rest }] : [])];
 }
 
-/** Face veneer depth the engraving must stay inside, by thin sheet (the legend depth is a model number; this is the sheet's own limit). */
+/** The face veneer the lettering is scored through, by thin sheet (the score goes just into the first glue line, which reads dark; the depth is the `storageLegendDepthIn` param). */
 const VENEER_TEXT: Record<string, string> = {
-  okoume: 'the face veneer of the 6 mm okoume ply (about 1/32")',
+  okoume: 'the face veneer of the 6 mm okoume ply (about 1/32" or a little less)',
   oakPly: 'the face veneer of the 1/4" white oak plywood (hardwood-veneer faces are thin, 1/64" to 1/32")',
-  birch: 'the face veneer of the Baltic birch (about 1/64" to 1/32")',
+  birch: 'the face veneer of the Baltic birch (about 1/40", thinner than 1/32")',
 };
 
 /** An instruction with plain sub-items (falsy ones dropped). */
@@ -760,7 +760,7 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
     id: 'offcut-tests',
     title: 'Test on offcuts',
     items: [
-      it('Do this BEFORE any show face is sealed or coated (assembly step "Seal the dados, edges and hidden faces").', [
+      it('Do this BEFORE any show face is sealed or coated (assembly step "Seal the deck underside and the open plywood edges").', [
         `Cut two 12" × 12" test panels from the real offcuts: ${plyNames.join(', ')}.`,
         'Sand them to the final grit (step 2).',
       ]),
@@ -786,11 +786,11 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
           'Coat the show faces only after a panel passes.',
         ]),
       legend
-        ? it(`Engrave the legend on the ${thin.name} lid offcut.`, [
-          `${frac32(legend.letterHeightIn)} letters, ${frac64(legend.depthIn)} deep: the depth must stay inside ${VENEER_TEXT[thinClass]}.`,
-          'If the veneer shows through, go to 1/64".',
+        ? it(`Letter a ${thin.name} lid offcut the way the lid is lettered (the storage lid step).`, [
+          `${frac32(legend.letterHeightIn)} letters from the lettering file, scored until they are dark, about ${frac64(legend.depthIn)} deep: just through ${VENEER_TEXT[thinClass]} into the first glue line.`,
+          'Fill them, sand flush at 220, then take the offcut through the seal and the topcoat with the other panels: the fill must not lift, bleed or go grey.',
         ])
-        : it('Engrave a test legend on the lid offcut.'),
+        : it('Letter a test legend on the lid offcut.'),
       it('Pick the products and sheen from the panels; write them on the panel back and keep it by the finishing bench.'),
     ],
     products: [],
@@ -956,28 +956,28 @@ export function finishingSchedule(parts: Part[], p: Params): FinishSchedule {
     winter: epoxyWinter,
   });
 
-  // ---- 5. engrave
+  // ---- 5. engrave: the lettering is scored, filled and sanded flush at the storage lid step, before the seal (D-58, D-93); here it is only checked before the topcoat.
   const s5: FinishStep = step({
     n: 5,
     id: 'engrave',
-    title: `Engrave ${legend ? `"${legend.text}"` : 'DO NOT STEP'} on the storage lid (before the ${topcoat})`,
+    title: `Check the ${legend ? `"${legend.text}"` : 'DO NOT STEP'} lettering on the storage lid (before the ${topcoat})`,
     items: [
       legend
-        ? it(`Engrave "${legend.text}" on the storage lid, ${legend.face} face.`, [`${frac32(legend.letterHeightIn)} letters, ${frac64(legend.depthIn)} deep.`, 'Shaper Origin with a V-bit: the legend is on the lid\'s Shaper file.'])
-        : it('Engrave the legend on the storage lid, top face.', ['Shaper Origin with a V-bit: the legend is on the lid\'s Shaper file.']),
+        ? it(`The "${legend.text}" letters (${frac32(legend.letterHeightIn)} tall, ${legend.face} face) were scored, filled and sanded flush at the storage lid step, before the panel was sealed.`)
+        : it('The legend was lettered at the storage lid step, before the panel was sealed.'),
+      it('Check every letter: filled, dark and flush, with no fill smeared on the face around it.', ['Touch up a thin spot with the black paint marker and let it dry 24 h.']),
       extreme
-        ? it('Cut it after the epoxy seal has cured and been sanded, and before any varnish.', ['The V-groove then cuts through sealed ply and leaves clean edges.'])
-        : it('Cut it after the final sanding, and before any urethane.', [`The lid top is not epoxy-coated in the Standard spec; the ${thin.name} face veneer is thin, so check the depth on the offcut first.`]),
-      it('Fill the grooves.', ['A black oil-based paint marker, worked into the grooves (or black-tinted epoxy: pigment in leftover epoxy).', 'Wipe the overrun off the face at once; sand flush at 220 when hard. An epoxy fill seals the bare groove walls.']),
+        ? it('Do it after the epoxy seal has cured and been sanded, and before any varnish.')
+        : it('Do it after the final sanding, and before any urethane.'),
       it('The letters read from a standing position; the lid is for a cushion to sit on, not a step.'),
     ],
     products: [
-      { name: 'Black oil-based paint marker, or black pigment epoxy (from the epoxy stock)', areaFt2: 0.1, coats: 1, coverageFt2PerQt: 0, qtNeeded: ENGRAVE_FILL_PT / 2 },
+      { name: 'Black oil-based paint marker, for touch-ups', areaFt2: 0.1, coats: 1, coverageFt2PerQt: 0, qtNeeded: ENGRAVE_FILL_PT / 2 },
     ],
     coats: 1,
     recoat: '-',
-    cure: 'Epoxy fill: 24 h at 70 °F before sanding flush; paint marker: 24 h.',
-    winter: 'Fill and sand the grooves in a warm area; epoxy fill below 55 °F stays soft and clogs the sandpaper.',
+    cure: 'Paint marker: 24 h before the topcoat.',
+    winter: 'Touch up in a warm area: the marker dries slowly below 55 °F.',
   });
 
   // ---- 6. topcoat: 3 coats on the show faces, 2 on the hidden ones. EXTREME: marine spar varnish. STANDARD: exterior spar urethane (Minwax Helmsman class, about 100 ft² a quart).

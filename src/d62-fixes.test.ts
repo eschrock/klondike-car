@@ -151,8 +151,9 @@ describe('M3 / S11 / materials', () => {
     expect(get('brake-knee-L').notes).not.toMatch(/BEVELED/);
     expect(row('brake-pivot').util!).toBeLessThan(0.9);
   });
-  it('the flat parts go to the Shaper Origin: deck, webs, grab boards, bulkhead, box panels, sign blanks, brake flaps, the seat-back panel', () => {
-    for (const id of ['deck', 'side-L-web', 'seat-grip-L', 'bow-bulkhead', 'storage-end-fore', 'storage-lid', 'sign-L', 'brake-flap-L', 'seat-back-panel']) expect(get(id).fab, id).toBe('shaper-origin');
+  it('the shaped flat parts go to the Shaper Origin: deck, webs, grab boards, bulkhead, brake flaps, the seat-back panel; the plain rectangles are sawn (D-86)', () => {
+    for (const id of ['deck', 'side-L-web', 'seat-grip-L', 'bow-bulkhead', 'brake-flap-L', 'seat-back-panel']) expect(get(id).fab, id).toBe('shaper-origin');
+    for (const id of ['storage-end-fore', 'storage-side-L', 'storage-lid', 'sign-L']) expect(get(id).fab, id).toBe('table-saw');
     expect(parts.filter((x) => x.fab === 'cnc')).toEqual([]);
   });
   it('the sheet goods name their sources and the Baltic birch fallback, the solid-oak stocks and the finishing stack', () => {

@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultParams, validateParams, type Params } from '../params';
 import { buildModel } from './index';
+import { offForTransport } from './removable';
 import { bedLengthAtWidth, cargoBed } from './bed';
 import { partsOverlap, worldAABB } from './bounds';
 import { bowGeometry, bowUnderZ, handleGeometry, parkDrop } from './handle';
@@ -203,9 +204,10 @@ describe('the flat (stowed) view state', () => {
   it('nothing in the flat pose interpenetrates the box, the deck, the hinges or the stop blocks (tolerance 0.05 in)', () => {
     expect(overlaps(stowed)).toEqual([]);
   });
-  it('transport configuration: the cushion and pad come off (the cushion stays), the back frame stays on the sled', () => {
+  it('transport configuration: the pad comes off (the cushion stays), the back frame and its latch pins stay on the sled (the pins hold it flat in the truck)', () => {
     const removed = new Set(buildModel(defaults, { removed: true, seat: 'stowed' }).map((x) => x.id));
-    for (const x of kit) expect(removed.has(x.id), x.id).toBe(!x.removable);
+    for (const x of kit) expect(removed.has(x.id), x.id).toBe(!offForTransport(x));
+    expect(removed.has('seat-pin-L') && removed.has('seat-pin-R')).toBe(true);
   });
   it('applySeatStow is idempotent about the plan: the plan from the installed parts is the source of truth', () => {
     const copy = buildModel(defaults, { rider: 'none', cargo: false });

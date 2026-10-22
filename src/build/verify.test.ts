@@ -14,8 +14,8 @@ describe('verify checklist', () => {
     expect(list.map((c) => c.id)).toEqual([
       'tire-squash', 'wheel', 'axle-rod', 'steering-parts', 'bridle', 'sign-knobs', 'strip-bend',
       'oak-supplier', 'deck-sheet', 'web-bend', 'd-ring', 'eva-pads', 'hinges-304', // before ordering (D-79, D-80, D-83: the cost-pass sourcing and bought-hardware checks)
-      'seat-back', 'brake-knee', 'grab-reach', 'lamp-clip', 'ply-thickness', 'other-params', // before cutting
-      'bow-rib-clearance', 'brake-strap', 'brake-knee-refit', // at assembly (the refit check: removable knees, the default)
+      'seat-back', 'lamp-clip', 'ply-thickness', 'other-params', // before cutting
+      'brake-knee', 'bow-rib-clearance', 'grab-reach', 'brake-strap', 'brake-knee-refit', // at assembly, in build order: the first knee needs the knee step, the reach check a built hull (the refit check: removable knees, the default)
     ]);
     expect(list.map((c) => c.n)).toEqual(list.map((_, i) => i + 1));
     expect(new Set(list.map((c) => c.id)).size).toBe(list.length);
@@ -190,7 +190,9 @@ describe('verify checklist', () => {
 
   it('gates ordering on the purchased parts and cutting on the shop-made ones', () => {
     for (const id of ['tire-squash', 'wheel', 'axle-rod', 'steering-parts', 'bridle', 'sign-knobs']) expect(list.find((c) => c.id === id)!.when, id).toBe('before ordering');
-    for (const id of ['seat-back', 'brake-knee', 'lamp-clip']) expect(list.find((c) => c.id === id)!.when, id).toBe('before cutting');
+    for (const id of ['seat-back', 'lamp-clip']) expect(list.find((c) => c.id === id)!.when, id).toBe('before cutting');
+    // the first-knee test and the grab-board reach need built parts (a knee, a hull and a seat): they are done at their steps, not before the first cut
+    for (const id of ['brake-knee', 'grab-reach']) expect(list.find((c) => c.id === id)!.when, id).toBe('at assembly');
   });
 
   it('round 2: the one-knee test says "the other knee" and comes before the knees are glued; the strip bend test uses the planned spares', () => {

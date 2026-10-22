@@ -821,7 +821,8 @@ function endClose(which: 'transom' | 'bulkhead'): FigFn {
 export const HULL_FIGURES: Record<string, FigFn[]> = {
   hangers: [hangerOnRail],
   frame: [framePlan, frameSection],
-  'dry-fit': [dryFitEnd, dryFitCradles, dryFitPilots],
+  'dry-fit': [dryFitEnd, dryFitCradles],
+  'rail-ends': [dryFitPilots],
   lower: [lowerJoint],
   transom: [endClose('transom')],
   bulkhead: [endClose('bulkhead')],

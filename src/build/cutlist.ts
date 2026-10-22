@@ -214,11 +214,14 @@ export function crossGrainWords(x: Part): string | undefined {
 }
 
 /** Assembly step numbers (`BuildStep.n`) of each part id, from the step list (structural type: `cutlist.ts` cannot import `assembly.ts`, which imports it). */
-export function stepMapOf(steps: ReadonlyArray<{ n: number; partIds: readonly string[] }>): Map<string, number> {
+export function stepMapOf(steps: ReadonlyArray<{ n: number; partIds: readonly string[]; cutIds?: readonly string[] }>): Map<string, number> {
   const m = new Map<string, number>();
   for (const s of steps) for (const id of s.partIds) if (!m.has(id)) m.set(id, s.n);
+  // D-94: the step that cuts a part to its final size, when it is not the one that installs it (the deck, the webs, the transom and bulkhead ...), under a `cut:` key.
+  for (const s of steps) for (const id of s.cutIds ?? []) if (!m.has(`${CUT_KEY}${id}`)) m.set(`${CUT_KEY}${id}`, s.n);
   return m;
 }
+const CUT_KEY = 'cut:';
 /**
  * Parts that are cut and drilled at another part's step than the one that names them: the D-ring bearing plate is cut from flat bar and drilled with the D-ring plate as the template at the
  * rib-fitting step (the plate's rib is `side-rib-<side><n>`), and bolted on at the hardware step. Both steps are listed.
@@ -226,7 +229,18 @@ export function stepMapOf(steps: ReadonlyArray<{ n: number; partIds: readonly st
 const cutWith = (id: string): string | undefined => { const m = /^dring-plate-(.+)$/.exec(id); return m ? `side-rib-${m[1]}` : undefined; };
 const stepsOf = (ids: string[], m?: ReadonlyMap<string, number>): number[] =>
   m ? [...new Set(ids.flatMap((i) => [m.get(i), (() => { const w = cutWith(i); return w ? m.get(w) : undefined; })()]).filter((v): v is number => v !== undefined))].sort((a, b) => a - b) : [];
-const stepText = (n: number[]): string => n.join(', ');
+/** D-94: the assembly steps that cut the pieces to their final size, when that is not the step that fits them (empty otherwise). */
+const cutStepsOf = (ids: string[], m?: ReadonlyMap<string, number>): number[] => {
+  if (!m) return [];
+  const cut = [...new Set(ids.map((i) => m.get(`${CUT_KEY}${i}`)).filter((v): v is number => v !== undefined))].sort((a, b) => a - b);
+  const fit = stepsOf(ids, m);
+  return cut.length && cut.join() !== fit.join() ? cut : [];
+};
+/** The step column: "cut 13 · fit 14" when a part is cut to size at another step than the one that fits it (D-94), else the fitting step(s). */
+export function stepsLabel(r: { assemblySteps: number[]; cutSteps?: number[] }): string {
+  const fit = r.assemblySteps.join(', ');
+  return r.cutSteps?.length ? `cut ${r.cutSteps.join(', ')} · fit ${fit || '–'}` : fit;
+}
 
 /** Put a T x W x L into ascending-thickness order when the model gave a long or wide "thickness" (seat-crest-strip has T 13.5 in), and say so. */
 function sanitize(d: Dims, warnings: string[], what: string): Dims {
@@ -300,6 +314,8 @@ export interface OakRow {
   step: number;
   /** ASSEMBLY step numbers (0 to 29: the numbers in the build book) of the pieces, when the caller passed the step list. */
   assemblySteps: number[];
+  /** D-94: the steps that cut the pieces to final size, when not the fitting step (see `stepsLabel`). */
+  cutSteps?: number[];
   /** Sizing notes for the bench (a Shaper file cuts net, the blank is longer). For a laminated part: "face-laminated: 3 x 3/4" from 4/4 ...". */
   note?: string;
   plies?: number;
@@ -431,6 +447,8 @@ export interface SheetRow {
   /** MODEL step; see `OakRow.step`. */
   step: number;
   assemblySteps: number[];
+  /** D-94: the steps that cut the pieces to final size, when not the fitting step (see `stepsLabel`). */
+  cutSteps?: number[];
   /** E.g. "the Shaper file cuts it to 59-1/2"; start from a 59-5/8" blank (+1/8" trim)". */
   note?: string;
 }
@@ -459,6 +477,8 @@ export interface MetalRow {
   fab: string;
   step: number;
   assemblySteps: number[];
+  /** D-94: the steps that cut the pieces to final size, when not the fitting step (see `stepsLabel`). */
+  cutSteps?: number[];
   warnings: string[];
 }
 
@@ -553,6 +573,8 @@ export interface FinishedPart {
   grainWord?: string;
   fab: string;
   assemblySteps: number[];
+  /** D-94: the steps that cut the pieces to final size, when not the fitting step (see `stepsLabel`). */
+  cutSteps?: number[];
 }
 
 // ── Solid oak ─────────────────────────────────────────────────────────────────
@@ -623,7 +645,8 @@ export function planOakPart(x: Part, p: Params, warnings: string[] = []): OakPar
   });
   if (isStripPart(x)) {
     const plies = x.plies ?? 1;
-    const { rough, roughExact } = mk({ t: tExact, w: stock.w + p.laminateWidthAllowanceIn, l: stock.l + p.laminateLengthAllowanceIn }, null);
+    // The model may ask for a longer strip than the allowance gives (the gunwale band stands past the web ends for the form's end stops): `Part.rough` is then the longer length.
+    const { rough, roughExact } = mk({ t: tExact, w: stock.w + p.laminateWidthAllowanceIn, l: Math.max(stock.l + p.laminateLengthAllowanceIn, x.rough?.l ?? 0) }, null);
     const pieces: PlannedPiece[] = [...Array(plies)].map((_, i) => ({ piece: 'strip' as const, index: i + 1, of: plies, board: 'resawn', rough, roughExact }));
     return { part: x, partNo, stock, strip: true, board: 'resawn', edgeN: 1, pieces, block: rough, blockExact: roughExact, warnings: w };
   }
@@ -697,12 +720,12 @@ function oakRows(plans: OakPartPlan[], stepOf?: ReadonlyMap<string, number>): Oa
     const x = pl.part;
     const key = `${pl.partNo}|${rowKeyDims(pl.block)}|${pl.board}`;
     const row = map.get(key);
-    if (row) { row.qty += 1; row.ids.push(x.id); row.step = Math.min(row.step, x.step); row.assemblySteps = stepsOf(row.ids, stepOf); continue; }
+    if (row) { row.qty += 1; row.ids.push(x.id); row.step = Math.min(row.step, x.step); row.assemblySteps = stepsOf(row.ids, stepOf); row.cutSteps = cutStepsOf(row.ids, stepOf); continue; }
     const gw = grainInWords(x);
     map.set(key, {
       partNo: pl.partNo, name: names.get(identityOf(pl)) ?? x.name, qty: 1, ids: [x.id], stock: pl.stock, rough: pl.block, roughExact: pl.blockExact, edgeBoards: pl.edgeN, board: pl.board, grain: x.grain,
       ...(isTallBlock(x, pl.stock) ? { tall: true } : {}),
-      ...(gw ? { grainWord: gw } : {}), fab: x.fab, step: x.step, assemblySteps: stepsOf([x.id], stepOf),
+      ...(gw ? { grainWord: gw } : {}), fab: x.fab, step: x.step, assemblySteps: stepsOf([x.id], stepOf), cutSteps: cutStepsOf([x.id], stepOf),
       ...(x.plies !== undefined ? { plies: x.plies } : {}), ...(pl.lamination ? { lamination: pl.lamination, note: laminationNote(pl.lamination, pl.pieces) } : {}),
       layerPieces: [], warnings: pl.warnings,
     });
@@ -938,6 +961,8 @@ function shaperNetNote(x: Part, stock: Dims): { net: number; note: string } | nu
 
 /** Can the XTool S1 laser cut this sheet part (D-86)? Judged on its flat pattern: thickness, material and the short side against the bed. */
 function laserOf(x: Part): LaserVerdict {
+  // Plain rectangles are sawn, not lasered (D-86); a sawn part with lettering gets an engrave-only laser job.
+  if (x.fab !== 'shaper-origin') return x.legend ? { ok: true, text: 'lettering only (the blank is sawn)' } : { ok: false, text: 'no: sawn (a plain rectangle)' };
   const f = flatPattern(x);
   return f ? laserVerdict({ thicknessIn: f.thicknessIn, material: x.material, widthIn: f.widthIn, heightIn: f.heightIn }) : { ok: false, text: 'no: not a flat part' };
 }
@@ -953,12 +978,12 @@ function sheetGroups(parts: Part[], warnings: string[], stepOf?: ReadonlyMap<str
     g.pieces += 1;
     const key = `${partKey(x)}|${dimKey(stock)}`;
     const row = g.rows.find((r) => `${r.partNo}|${dimKey(r.stock)}` === key);
-    if (row) { row.qty += 1; row.ids.push(x.id); row.step = Math.min(row.step, x.step); row.assemblySteps = stepsOf(row.ids, stepOf); members.get(row)!.push(x.name); }
+    if (row) { row.qty += 1; row.ids.push(x.id); row.step = Math.min(row.step, x.step); row.assemblySteps = stepsOf(row.ids, stepOf); row.cutSteps = cutStepsOf(row.ids, stepOf); members.get(row)!.push(x.name); }
     else {
       const gw = grainInWords(x);
       const net = shaperNetNote(x, stock);
       const note = net?.note;
-      const nr: SheetRow = { partNo: partKey(x), name: x.name, qty: 1, ids: [x.id], stock, final: net ? { ...stock, l: net.net } : stock, grain: x.grain, ...(gw ? { grainWord: gw } : {}), fab: x.fab, laser: laserOf(x), step: x.step, assemblySteps: stepsOf([x.id], stepOf), ...(note ? { note } : {}) };
+      const nr: SheetRow = { partNo: partKey(x), name: x.name, qty: 1, ids: [x.id], stock, final: net ? { ...stock, l: net.net } : stock, grain: x.grain, ...(gw ? { grainWord: gw } : {}), fab: x.fab, laser: laserOf(x), step: x.step, assemblySteps: stepsOf([x.id], stepOf), cutSteps: cutStepsOf([x.id], stepOf), ...(note ? { note } : {}) };
       members.set(nr, [x.name]);
       g.rows.push(nr);
     }
@@ -1022,8 +1047,8 @@ function metalRows(parts: Part[], warnings: string[], stepOf?: ReadonlyMap<strin
     const section = metalSection(x, family, d);
     const key = `${partKey(x)}|${dimKey(d)}`;
     const row = map.get(key);
-    if (row) { row.qty += 1; row.ids.push(x.id); row.step = Math.min(row.step, x.step); row.assemblySteps = stepsOf(row.ids, stepOf); members.get(row)!.push(x.name); continue; }
-    const nr: MetalRow = { partNo: partKey(x), name: x.name, qty: 1, ids: [x.id], family, section, material: x.material, cutLengthIn: d.l, stock: d, fab: x.fab, step: x.step, assemblySteps: stepsOf([x.id], stepOf), warnings: w };
+    if (row) { row.qty += 1; row.ids.push(x.id); row.step = Math.min(row.step, x.step); row.assemblySteps = stepsOf(row.ids, stepOf); row.cutSteps = cutStepsOf(row.ids, stepOf); members.get(row)!.push(x.name); continue; }
+    const nr: MetalRow = { partNo: partKey(x), name: x.name, qty: 1, ids: [x.id], family, section, material: x.material, cutLengthIn: d.l, stock: d, fab: x.fab, step: x.step, assemblySteps: stepsOf([x.id], stepOf), cutSteps: cutStepsOf([x.id], stepOf), warnings: w };
     members.set(nr, [x.name]);
     map.set(key, nr);
   }
@@ -1088,15 +1113,15 @@ export function cutList(parts: Part[], p: Params, stepOf?: ReadonlyMap<string, n
     ]),
     finished: toCsv([
       ['Part', 'Qty', 'Final T x W x L (in)', 'From', 'Board', 'Grain', 'Fabrication', 'Assembly step'],
-      ...finished.map((f) => [f.name, f.qty, f.finalText, FROM_TEXT[f.from], f.board, f.grainWord, fabText(f.fab), stepText(f.assemblySteps)]),
+      ...finished.map((f) => [f.name, f.qty, f.finalText, FROM_TEXT[f.from], f.board, f.grainWord, fabText(f.fab), stepsLabel(f)]),
     ]),
     sheets: toCsv([
       ['Sheet', 'Part', 'Qty', 'Final T x W x L (in)', 'Grain', 'Fabrication', 'Laser', 'Assembly step', 'Note'],
-      ...sheets.flatMap((g) => g.rows.map((r) => [g.label, r.name, r.qty, finalDimsText(r.final), r.grainWord, fabText(r.fab), r.laser.text, stepText(r.assemblySteps), r.note])),
+      ...sheets.flatMap((g) => g.rows.map((r) => [g.label, r.name, r.qty, finalDimsText(r.final), r.grainWord, fabText(r.fab), r.laser.text, stepsLabel(r), r.note])),
     ]),
     metal: toCsv([
       ['Stock', 'Part', 'Qty', 'Cut length (in)', 'Fabrication', 'Assembly step'],
-      ...metal.map((r) => [r.section, r.name, r.qty, fractionText(nearest32(r.cutLengthIn), 32), fabText(r.fab), stepText(r.assemblySteps)]),
+      ...metal.map((r) => [r.section, r.name, r.qty, fractionText(nearest32(r.cutLengthIn), 32), fabText(r.fab), stepsLabel(r)]),
     ]),
   };
   return { oak, layers, strips, resaw: pools, sheets, metal, warnings: [...new Set(warnings)], cuts, glueUps, finished, csv };
@@ -1206,7 +1231,39 @@ function cutsOf(plans: OakPartPlan[], pools: ResawPool[], p: Params): Cut[] {
       });
     }
   }
-  return sortCuts([...map.values(), ...ribFillerCuts(plans, pools, p)]);
+  return sortCuts([...discStripCuts([...map.values()], plans, p), ...ribFillerCuts(plans, pools, p)]);
+}
+
+/** An oak disc (a cylinder thinner than it is wide: the sign standoff discs, D-93): cut with a hole saw from one planed strip, never from blanks of its own. */
+export const isDisc = (x: Pick<Part, 'geometry' | 'kind'>): boolean => x.kind === 'lumber' && x.geometry.type === 'cylinder' && x.geometry.length < 2 * x.geometry.radius;
+/**
+ * The strip a set of `n` discs `dia` across is cut from with a hole saw: the saw is about 1/8 in larger than the plug it leaves (rounded up to 1/8), the strip is the saw plus 3/16 in
+ * each side wide (the saw needs wood to hold), and the cuts are a saw plus 1/4 in apart with 1/2 in at each end.
+ */
+export function discStrip(n: number, dia: number): { sawIn: number; widthIn: number; lengthIn: number } {
+  const sawIn = roughUp8(dia + 1 / 8);
+  return { sawIn, widthIn: roughUp8(sawIn + 3 / 8), lengthIn: roughUp8(n * (sawIn + 1 / 4) + 1) };
+}
+/** Spare discs cut from the same strip to hold the part off its face while its holes are spotted (the sign, D-93). */
+export const DISC_SPACERS = 2;
+/** The disc rows of the cuts table merged into one strip per disc part number. */
+function discStripCuts(cuts: Cut[], plans: OakPartPlan[], p: Params): Cut[] {
+  const discNos = new Set(plans.filter((pl) => isDisc(pl.part)).map((pl) => pl.partNo));
+  if (!discNos.size) return cuts;
+  const out = cuts.filter((c) => !discNos.has(c.partNo));
+  for (const no of discNos) {
+    const mine = cuts.filter((c) => c.partNo === no);
+    const pl = plans.find((q) => q.partNo === no)!;
+    const n = mine.reduce((a, c) => a + c.qty, 0);
+    const st = discStrip(n + DISC_SPACERS, pl.stock.w);
+    const roughExact: Dims = { t: pl.stock.t + p.millingAllowanceIn, w: st.widthIn, l: st.lengthIn };
+    const rough: Dims = { t: roughUp8(roughExact.t), w: st.widthIn, l: st.lengthIn };
+    out.push({
+      ...mine[0], ids: mine.flatMap((c) => c.ids), qty: 1, label: `${mine[0].name}s, one strip for all ${n} and ${DISC_SPACERS} spacers`, rough, roughExact, roughText: roughDimsText(rough),
+      note: `plane it to ${fractionText(Math.ceil(pl.stock.t * 64 - 1e-6) / 64, 64)}" (the disc thickness: the band thickness plus 1/16"), then cut the ${n} discs and the ${DISC_SPACERS} spacers (they hold the sign off the web while its holes are spotted) from it with a ${fractionText(st.sawIn, 8)}" hole saw from both faces; the saw's pilot drill makes each center hole`,
+    });
+  }
+  return out;
 }
 
 const sortCuts = (cuts: Cut[]): Cut[] => {
@@ -1244,21 +1301,35 @@ export function ribFillers(parts: ReadonlyArray<Pick<Part, 'id'>>, p: Params): R
 }
 
 /**
- * The rib fillers as rows of the cuts table. They are spare band strips (the strip purchase carries spares): each filler is the band's own plies glued face to face (the band thickness),
- * cut to fit its gap, so a station's row is `count x plies` pieces. Sizes follow the strip allowances; the length is "about" because the filler is fitted to the gap.
+ * The rib fillers as rows of the cuts table. They are band strip: each filler is the band's own plies glued face to face (the band thickness), cut to fit its gap, so a station's row is
+ * `count x plies` pieces. They come from the TAILS of the band strips (each strip is shorter than its board; the tail stays on until the strip is planed) when the longest filler fits the shortest offcut, so the pool's spare strips stay
+ * for the bend test; otherwise from a spare strip (`ribFillerSource`). Sizes follow the strip allowances; the length is "about" because the filler is fitted to the gap.
  */
+export function ribFillerSource(pools: readonly ResawPool[], fillers: readonly RibFiller[], p: Params): { fromOffcut: boolean; offcutIn: number; text: string; source: string; aside?: string } {
+  const pool = pools.find((q) => q.laneStrips.flat().some((x) => /^side-(gunwale|chine)/.test(x.partNo)));
+  const strips = pool ? pool.laneStrips.flat().filter((x) => /^side-(gunwale|chine)/.test(x.partNo)) : [];
+  const offcutIn = pool && strips.length ? pool.boardLengthIn - Math.max(...strips.map((x) => x.lengthIn)) - p.resawKerfIn : 0;
+  const longest = Math.max(0, ...fillers.map((f) => roughUp8(f.lengthIn + 1 / 8)));
+  const fromOffcut = strips.length >= fillers.reduce((a, f) => a + f.count, 0) && longest <= offcutIn + 1e-9;
+  const source = fromOffcut ? 'the tail of a band strip' : 'a spare band strip';
+  const aside = fromOffcut ? `each strip comes off its board about ${fractionText(Math.floor(offcutIn * 8) / 8, 8)}" longer than it needs: leave the tail on until the strip is planed, since a short offcut cannot go through the planer, then cut it off` : undefined;
+  return { fromOffcut, offcutIn, source, ...(aside ? { aside } : {}), text: aside ? `${source} (${aside})` : source };
+}
+
 function ribFillerCuts(plans: OakPartPlan[], pools: ResawPool[], p: Params): Cut[] {
   const band = plans.find((q) => q.strip && /^side-[LR]-gunwale-in$/.test(q.part.id));
   if (!band) return [];
   const plies = band.pieces.length;
   const pool = pools.find((q) => Math.abs(q.roughT - r3(band.pieces[0].rough.t)) < 1e-6);
-  return ribFillers(plans.map((q) => q.part), p).map((f, i): Cut => {
+  const fillers = ribFillers(plans.map((q) => q.part), p);
+  const src = ribFillerSource(pools, fillers, p);
+  return fillers.map((f, i): Cut => {
     const roughExact: Dims = { t: band.pieces[0].roughExact.t, w: f.widthIn + p.laminateWidthAllowanceIn, l: f.lengthIn + 1 / 8 }; // cut to fit its gap: a hair over, not the allowance of a bent part
     const rough: Dims = { t: band.pieces[0].rough.t, w: roughUp8(roughExact.w), l: roughUp8(roughExact.l) };
     return {
-      partId: `rib-filler-${f.n}`, ids: [], qty: f.count * plies, partNo: 'side-rib-filler', name: `Rib filler, ${f.role}`, label: `Rib filler, ${f.role} (spare band strip)`,
+      partId: `rib-filler-${f.n}`, ids: [], qty: f.count * plies, partNo: 'side-rib-filler', name: `Rib filler, ${f.role}`, label: `Rib filler, ${f.role} (${src.fromOffcut ? 'band strip tail' : 'spare band strip'})`,
       piece: 'strip', index: i + 1, of: 3, board: pool?.board ?? band.pieces[0].board, rough, roughExact, roughText: roughDimsText(rough),
-      note: `a spare band strip, grain up the web${plies > 1 ? `, ${plies} layers glued face to face` : ''}, planed to ${finalFrac(band.stock.t * plies)} thick like the bands; ${f.count} of them, one per side; cut each to fit its gap, about ${fractionText(roughUp8(f.lengthIn), 8)}" long`,
+      note: `from ${src.text}, grain up the web${plies > 1 ? `, ${plies} layers glued face to face` : ''}, planed to ${finalFrac(band.stock.t * plies)} thick like the bands; ${f.count} of them, one per side; cut each to fit its gap, about ${fractionText(roughUp8(f.lengthIn), 8)}" long`,
     };
   });
 }
@@ -1327,7 +1398,7 @@ function finishedOf(oak: OakGroup[]): FinishedPart[] {
       const from: FinishedPart['from'] = g.board === 'resawn' ? 'strips' : r.edgeBoards > 1 || r.lamination ? 'glue-up' : 'board';
       out.push({
         partNo: r.partNo, name: r.name, qty: r.qty, ids: r.ids, final, finalText: sizeText(final, false, r.tall), from, board: r.board,
-        ...(r.grainWord ? { grainWord: r.grainWord } : {}), fab: r.fab, assemblySteps: r.assemblySteps,
+        ...(r.grainWord ? { grainWord: r.grainWord } : {}), fab: r.fab, assemblySteps: r.assemblySteps, cutSteps: r.cutSteps,
       });
     }
   }

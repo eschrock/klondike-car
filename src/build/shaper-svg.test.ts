@@ -5,7 +5,9 @@ import { SHAPER_MAX_DEPTH_IN, analyzeShaperPart, grainWords, shaperCutDepth, sha
 import { flatPattern } from './flat';
 
 const p = defaultParams();
-const parts = buildModel(p);
+// D-86: the signs, storage walls and lid panel are sawn by default; they go back on the Shaper here so its drill marks, mirror sharing and engraving stay covered.
+const SAWN_RECT = /^(sign-[LR]|storage-(side-[LR]|end-(aft|fore)|lid))$/;
+const parts = buildModel(p).map((x) => (SAWN_RECT.test(x.id) ? { ...x, fab: 'shaper-origin' as const } : x));
 const files = shaperFiles(parts, p);
 const shaperParts = parts.filter((x) => x.fab === 'shaper-origin');
 const fileOf = (id: string) => files.find((f) => f.partIds.includes(id))!;
@@ -173,7 +175,7 @@ describe('Shaper SVG files', () => {
     const f = fileOf('storage-lid');
     const on = paths(f.svg).filter((t) => attr(t, 'shaper:cutType') === 'online');
     expect(on.length).toBeGreaterThanOrEqual(10);
-    for (const t of on) { expect(attr(t, 'shaper:cutDepth')).toBe(`${lid.legend!.depthIn}in`); expect(t).toMatch(/fill="none"/); }
+    for (const t of on) { expect(parseFloat(attr(t, 'shaper:cutDepth') ?? '')).toBeCloseTo(lid.legend!.depthIn, 3); expect(t).toMatch(/fill="none"/); }
     expect(f.features.some((x) => x.kind === 'engrave')).toBe(true);
   });
 
@@ -324,23 +326,24 @@ describe('Shaper SVG files', () => {
     expect(n).toBeGreaterThan(3);
   });
 
-  it('puts the flat-position seat-pin clearance holes in the deck, and (Standard spec, D-83) the two 3/8 in box drain holes beside them', () => {
+  it('cuts the two 3/8 in box drain holes in the deck (Standard spec, D-83), and nothing that is drilled in place: the flat-position seat-pin holes (through the panel\'s own holes) and the stop-block screws (from below)', () => {
     const deck = fileOf('deck');
-    const pin = deck.features.filter((x) => x.kind === 'hole' && x.joint === 'pin');
-    expect(pin.reduce((n, x) => n + x.count, 0)).toBe(2);
-    for (const x of pin) expect(x.diaIn).toBeCloseTo(13 / 32, 4);
+    expect(deck.features.filter((x) => (x.kind === 'hole' || x.kind === 'drill') && x.joint === 'pin')).toEqual([]);
+    expect(deck.features.filter((x) => /^seat-wedge-/.test(x.to ?? ''))).toEqual([]);
+    expect(deck.features.some((x) => x.kind === 'note' && /seat-pin-L/.test(String(x.to ?? '')))).toBe(true); // a note in the file, not a cut
     const drain = deck.features.filter((x) => x.kind === 'hole' && x.joint === 'hole');
     expect(drain.reduce((n, x) => n + x.count, 0)).toBe(2);
     for (const x of drain) expect(x.diaIn).toBeCloseTo(3 / 8, 4); // exactly the drain size, not a bolt clearance
     const holes = paths(deck.svg).filter((t) => attr(t, 'shaper:cutType') === 'inside');
-    expect(holes.length).toBe(4);
+    expect(holes.length).toBe(2);
   });
 
-  it('D-83: the side drains are drilled after glue-up, marked on the web as 3/8 in drill guides (no cut), and the Extreme spec keeps the nipple drill marks', () => {
+  it('D-83: the web\'s file CUTS the two 3/8 in side drains once (they guide the bit through the bands after the glue-up; no second drill mark), and the Extreme spec keeps the nipple drill marks', () => {
     const web = fileOf('side-L-web');
     const drains = web.features.filter((x) => /drain/i.test(x.label));
     expect(drains.reduce((n, x) => n + x.count, 0)).toBe(2);
-    for (const x of drains) { expect(x.diaIn).toBeCloseTo(3 / 8, 4); expect(x.label).toMatch(/glued-up sandwich/); }
+    for (const x of drains) { expect(x.diaIn).toBeCloseTo(3 / 8, 4); expect(x.kind).toBe('hole'); expect(x.label).toMatch(/inside cut/); }
+    expect(web.features.filter((x) => x.kind === 'drill')).toEqual([]);
     const ext = { ...p, weatherSpec: 1 };
     const w2 = shaperFiles(buildModel(ext), ext).find((f) => f.partIds.includes('side-L-web'))!;
     expect(w2.features.filter((x) => /drain/i.test(x.label)).reduce((n, x) => n + x.count, 0)).toBe(2);

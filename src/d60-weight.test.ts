@@ -180,11 +180,11 @@ describe('the analysis after the package (the study predicted: safe 50-250+, gre
       expect(c.statusGoal, c.id).not.toBe('fail');
       expect(c.statusCargo ?? 'pass', c.id).not.toBe('fail');
     }
-    expect(cs.filter((c) => c.statusOperating === 'marginal' || c.statusGoal === 'marginal').map((c) => c.id)).toEqual(['turn-radius']);
+    expect(cs.filter((c) => c.statusOperating === 'marginal' || c.statusGoal === 'marginal').map((c) => c.id)).toEqual(['turn-radius', 'steer-clear']); // D-56: in this older geometry (PRE_D66 chain eyes) the keeper-held chain bight is 3.12 in against 3 in (3.57 at the defaults)
   });
   it('rows above 0.9: the fit facts (park-hold, lash-points count, seat-stow 0.94) and turn-radius 0.98; nothing else (D-67: tip-straight, 0.95 on the cargo case at the 40 deg limit, is down to 0.84 at 35 deg)', () => {
     const above = cs.filter((c) => Math.max(c.util ?? 0, c.utilCargo ?? 0) > 0.9 && c.status !== 'info').map((c) => c.id).sort();
-    expect(above).toEqual(['park-hold', 'seat-stow', 'side-web', 'turn-radius']); // D-85: lash-points (the ring count) is no longer above 0.9 with 8 rings; // D-76: side-web (okoume across its face grain) 2.0 // D-62: front-beam cargo fell from 0.94 to 0.88 with the wider outer front clamp plate
+    expect(above).toEqual(['park-hold', 'seat-stow', 'side-web', 'steer-clear', 'turn-radius']); // D-56: steer-clear 0.96 here, the keeper-held chain bight in this older chain geometry (0.84 at the defaults) // D-85: lash-points (the ring count) is no longer above 0.9 with 8 rings; // D-76: side-web (okoume across its face grain) 2.0 // D-62: front-beam cargo fell from 0.94 to 0.88 with the wider outer front clamp plate
     const u = (id: string) => cs.find((c) => c.id === id)!;
     expect(u('front-beam').utilCargo!).toBeLessThan(0.9);
     expect(u('tip-straight').util!).toBeLessThan(0.9);

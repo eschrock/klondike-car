@@ -5,7 +5,8 @@
  * square. The outline of the thing to cut is an outside cut (black) so Shaper Origin can cut it; the dimension layer is guides (blue). Nothing here is hand-entered: curves and stations come
  * from the layout, the parts' meshes and the params. The revision stamp is a hash of the params state (never the wall clock), unless the caller passes `opts.date`.
  *
- * Drawings (ids): 'side-form' (a: the cleat-line template and the S-ramp), 'rail-form' (b), 'crown-templates' (c: handlebow and bow bulkhead), 'brake-flap-template' (d), 'brake-knee-template' (e).
+ * Drawings (ids): 'side-form' (a: the cleat-line template and the S-ramp), 'rail-form' (b), 'crown-templates' (c: handlebow and bow bulkhead), 'brake-flap-template' (d), 'brake-knee-template' (e),
+ * 'end-templates' (f: plywood copies of the transom and the bow bulkhead, tried on the built hull before the oak is cut, D-94).
  *
  * Each drawing also says how to BUILD the form (Eric 2026-10-12: "am I cutting out two pieces of plywood in that shape?"): `FormDrawing.build` is an ordered list of steps (material and
  * thickness, how many layers or pieces cut to which line, how they stack and fasten, the base, the braces, ribs or cleats and their spacing, the tape, the spring-back, the clamping), every
@@ -18,12 +19,14 @@ import { transomTopOutline } from '../model/body';
 import type { Part, Vec2 } from '../model/types';
 import { flatPattern } from './flat';
 import { epoxyTimeFactor } from './finishing';
+import { fractionText } from './units';
 import { brakeOf, cutListFor } from './part-drawings';
 import { analyzeShaperPart } from './shaper-svg';
 import { LASER_MAX_WIDTH_IN, clipShape, emptyShape, fitToBed, type LaserItem, type LaserShape } from './laser-svg';
 import {
-  ANNOTATION_ATTRS, checkSquareEls, circleD, dimensionEls, esc, fmt, frac, guideEl, hash6, pathEl, polyD, rectLoop, svgDocument, textEl, type Xf,
+  ANNOTATION_ATTRS, bbox, checkSquareEls, circleD, dimensionEls, esc, fmt, frac, guideEl, hash6, pathEl, polyD, rectLoop, svgDocument, textEl, type Xf,
 } from './svg-util';
+import { transformPoint, worldAABB } from '../model/bounds';
 
 /** Process constants (shop practice, not design numbers). */
 /** Thickness (in) of the hardboard / MDF the templates and ramp ribs are cut from. Templates are cut on the laser (D-86), where 1/4 in Baltic birch plywood cuts cleaner than hardboard and lasts longer. */
@@ -38,12 +41,7 @@ const CAP_MARGIN_IN = 0.5;
 const MIRROR_CAP_MARGIN_IN = 1.5;
 /** The sheer cleats stand on edge (in tall), so a band on a ramp cannot ride over them. */
 export const CLEAT_TALL_IN = 1.5;
-/**
- * The gunwale band is cut this much long at each end of the web, and an end stop (a cleat-sized block) bears on its lower edge just past each end: the
- * sheer is concave on the cleat side, so a bent band pushes its middle into the cleats and its ends swing away; the stops hold the ends. The ramp caps
- * run this much past the web's bow end so the bow stop stands on the cap.
- */
-const BAND_END_LONG_IN = 1;
+/** The ramp caps run this much past the web's bow end so the bow end stop stands on the cap. (How far the gunwale band stands past each web end is `gunwaleEndLongIn`, D-93.) */
 const CAP_PAST_BOW_IN = 2;
 /** Edge stops along the web's straight bottom edge, a bench: about one every 12 in (shop practice). */
 const EDGE_STOP_SPACING_IN = 12;
@@ -377,6 +375,7 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
         'The laser scores the sheer (cleat line), the gunwale band lower edge, the chine band top, the inner chine band bottom, the S end, the bow end of the bands and a tick for each cleat.',
         ...(hasRamp ? [`The file cuts it square at the "S starts" line, ${frac(uS0)} from the rear end. The rear piece lies under the flat part of the web; the ramp takes the front piece's place.`, `Glue the under layer (its own laser file) below the rear piece: the ramp cap's low end stands ${frac(webLowIn)} above the bench, so the web runs onto the ramp with no step.`] : []),
         `${banded ? 'Butt the bands tight on the bench, matching the scored lines across the seam, and screw' : 'Screw'} the pieces down with ${hasRamp ? '#8 × 1" flat-heads about every 12", heads flush (the rear piece is 2 layers, 1/2" thick)' : '#8 × 3/4" flat-heads about every 12", heads flush'}.`,
+        'Tape: packing tape over the template wherever a band lies (the epoxy squeezes out at the band edges).',
       ],
     },
     ...(hasRamp ? [{
@@ -402,7 +401,7 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
         `Stand each on edge, ${frac(CLEAT_TALL_IN)} tall, so the band cannot ride over it, even where the web is up on a ramp. No spacers.`,
         `Set them against a dry web, not against the scored line: lay the web on (on a ramp, hold it down with the bags of sand used for gluing), hold a 1/8" hardboard scrap against its top edge (the gunwale bands stand 1/8" above the web), and screw each cleat against the scrap: two #8 × 2" screws into the bench beside the template (a 2-1/2" would come out its underside), or, where the web is on a ramp, two #8 × 2-1/2" down through the cap into the rib or block under it, piloted 1/8" (MDF edges split).`,
         ...(hasRamp ? ['On the first bench the dry web lies inside face up; on the mirror ramp, outside face up (turned over along its length).'] : []),
-        `END STOPS, 4 more blocks the same size, two a bench: cut each gunwale band ${frac(BAND_END_LONG_IN)} long at each end of the web, and screw a block against the band's lower edge just past each end of the web (at the bow end, on the cap). The sheer curves away from the cleats at its ends, so a bent band pushes its middle into the cleats and its ends swing away: the stops hold the ends.`,
+        `END STOPS, 4 more blocks the same size, two a bench: cut each gunwale band ${frac(p.gunwaleEndLongIn)} long at each end of the web, and screw a block against the band's lower edge just past each end of the web (at the bow end, on the cap). The sheer curves away from the cleats at its ends, so a bent band pushes its middle into the cleats and its ends swing away: the stops hold the ends.`,
         `EDGE STOPS, ${EDGE_STOPS} more blocks a bench: screw them against the web's straight bottom edge about every 12" along it. They fix the web across the form, and in the second cure the outer chine band is pushed against them, so it ends flush with the web (it is the face that sits on the rail).`,
         'Cover the cleat and stop faces with packing tape.',
       ],
@@ -416,7 +415,6 @@ function sideFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
         'When the left web comes off the mirror ramp, set the mirror ramp\'s cleats, end stops and edge stops again against the right web, outside face up.',
       ],
     }] : []),
-    { step: 'TAPE: packing tape over the template wherever a band lies (the epoxy squeezes out at the band edges).' },
     {
       step: `GLUE-UP, one face per cure, held down with bags of sand: no clamp can get a jaw under a web lying on the template. Face one${hasRamp ? ', on the S-ramp' : ''}: lay the web on the template INSIDE face up, its top edge 1/8" off the cleats (the hardboard scrap as a gauge)${hasRamp ? ' (the ramp lifts the bow end toward the inside, which is the turn-in)' : ''}, and epoxy the inner chine band (${inChine}) and the inner gunwale band (${inGun}) to it, the gunwale band tight against the cleats. Leave the deck gap: the inner chine band stops short of the web bottom.`,
       sub: [
@@ -878,10 +876,107 @@ function kneePlan(parts: Part[], p: Params): Plan | null {
   };
 }
 
+// ── (f) The end templates: the transom and the bow bulkhead in 1/4 in plywood, tried on the hull before the oak is cut (D-94) ──
+/** The end templates are the end's outline grown this much all round (in), so the dados that run out through the end's top edge stay closed slots and the template is one piece. */
+export const END_TEMPLATE_MARGIN_IN = 0.75;
+/** Play of a tenon or Domino slot in the end template, a side (in): about the dados' own play, so a tenon that enters its slot enters the real mortise. */
+export const END_TEMPLATE_SLOT_CLEAR_IN = 1 / 64;
+/** A 6 mm Domino tenon's section (in): its 6 mm thickness across the rail, its 20 mm width up and down. The template slot adds the slot play all round. */
+const DOMINO_SLOT_IN: Vec2 = [6 / 25.4, 20 / 25.4];
+/** A play or clearance to the nearest 1/64 in, as the shop reads it (the template's 1/64 in play would print as 1/32 at the drawings' usual 1/32). */
+const inch64 = (v: number): string => `${fractionText(Math.round(v * 64) / 64, 64)}"`;
+
+interface EndTemplate { id: string; label: string; partId: string; outer: Vec2[]; part: Vec2[]; slots: Vec2[][]; score: Vec2[][]; marks: Array<{ c: Vec2; dia: number }>; w: number; h: number; slotText: string[] }
+
+function endTemplate(parts: Part[], p: Params, partId: string, id: string, label: string): EndTemplate | null {
+  const part = parts.find((x) => x.id === partId);
+  const d = part && analyzeShaperPart(part, parts, p);
+  if (!part || !d) return null;
+  const f = d.f, b = bbox(f.outer), M = END_TEMPLATE_MARGIN_IN, c = END_TEMPLATE_SLOT_CLEAR_IN;
+  const shift = ([u, v]: Vec2): Vec2 => [u - b.u0 + M, v - b.v0 + M];
+  const grow = (loop: Vec2[], by: number): Vec2[] => { const q = bbox(loop); return rectLoop(q.u0 - by, q.v0 - by, q.u1 + by, q.v1 + by); };
+  const pockets = d.items.filter((i): i is Extract<typeof i, { k: 'pocket' }> => i.k === 'pocket');
+  const slotText: string[] = [];
+  const slots: Vec2[][] = pockets.map((pk) => {
+    const isMortise = /^mortise/.test(pk.label);
+    if (isMortise) slotText.push(pk.label.replace(/^mortise-tenon for /, 'rail mortise '));
+    return (isMortise ? grow(pk.loop, c) : pk.loop).map(shift);
+  });
+  // A Domino joint is an edge joint (not in the Shaper file): its slot comes from the rail's own joint, in the same pattern coordinates as the dados (the left web's dado tells which way u runs).
+  const ab = worldAABB(part);
+  const W = b.u1 - b.u0;
+  const webL = pockets.find((pk) => /side-L-web/.test(pk.label));
+  const sgn = webL ? (bbox(webL.loop).u0 > W / 2 ? 1 : -1) : 1;
+  for (const r of parts.filter((x) => /^rail-[LR]$/.test(x.id))) {
+    for (const j of (r.joints ?? []).filter((q) => q.type === 'domino' && q.to === partId)) {
+      for (const a of j.at ?? []) {
+        const w = transformPoint(r.transform, a);
+        const uc = W / 2 + sgn * w[1], vc = w[2] - ab.min[2];
+        slots.push(rectLoop(uc - DOMINO_SLOT_IN[0] / 2 - c, vc - DOMINO_SLOT_IN[1] / 2 - c, uc + DOMINO_SLOT_IN[0] / 2 + c, vc + DOMINO_SLOT_IN[1] / 2 + c).map(shift));
+        slotText.push(`Domino place for ${r.id}`);
+      }
+    }
+  }
+  const close = (l: Vec2[]): Vec2[] => [...l, l[0]];
+  const score: Vec2[][] = [close(f.outer.map(shift)), ...d.items.flatMap((i) => (i.k === 'cutLoop' ? [close(i.loop.map(shift))] : []))];
+  const marks = d.items.flatMap((i) => (i.k === 'drill' || i.k === 'cutHole' ? [{ c: shift(i.c), dia: Math.max(i.dia, 0.19) }] : []));
+  const outer = rectLoop(0, 0, W + 2 * M, b.v1 - b.v0 + 2 * M);
+  return { id, label, partId, outer, part: f.outer.map(shift), slots, score, marks, w: W + 2 * M, h: b.v1 - b.v0 + 2 * M, slotText };
+}
+
+function endTemplatesPlan(parts: Part[], p: Params): Plan | null {
+  const tr = endTemplate(parts, p, 'transom-rear', 'transom-template', 'Rear transom template');
+  const bh = endTemplate(parts, p, 'bow-bulkhead', 'bulkhead-template', 'Bow bulkhead template');
+  const ts = [tr, bh].filter((x): x is EndTemplate => x !== null);
+  if (!ts.length) return null;
+  const GAP = 1.2;
+  const w = Math.max(...ts.map((t) => t.w)), h = ts.reduce((a, t) => a + t.h, 0) + GAP * (ts.length - 1) + 0.6;
+  const M = END_TEMPLATE_MARGIN_IN;
+  const dims: FormDim[] = ts.flatMap((t) => [lenDim(`${t.id}-width`, `${t.label}: width`, t.w), lenDim(`${t.id}-height`, `${t.label}: height`, t.h), countDim(`${t.id}-slots`, `${t.label}: slots cut through`, t.slots.length, 'slot')]);
+  const notes = [
+    `Fit-check templates, not routing templates: each is the end's outline grown ${inch(M)} all round, with its web dados, deck dado and rail mortises (and at the bow the two Domino places) cut right through as slots, and the end's own outline scored on it.`,
+    `The tenon and Domino slots are ${inch64(END_TEMPLATE_SLOT_CLEAR_IN)} over a side, about the play of the dados (the laser's kerf adds a hair): a template that goes on by hand is the first check; the oak end's dry fit is the last.`,
+    'Push each straight onto its end of the built hull, by hand, with dry tenons and Dominos in the rail ends. If a slot binds, measure how far it is off and move that dado or mortise in the file, then cut a new template: plywood is cheap, the glued oak panels are not.',
+  ];
+  const build: FormBuildStep[] = [
+    { step: `TEMPLATES (laser): cut ${ts.length === 2 ? 'TWO templates' : 'the template'} in ${frac(TEMPLATE_STOCK_IN)} plywood from the laser file for this drawing, one piece each: ${ts.map((t) => `the ${t.label.toLowerCase()} (${frac(t.w)} × ${frac(t.h)})`).join(' and ')}.` },
+    { step: `The laser cuts the dados and the rail mortises right through as slots (${ts.reduce((a, t) => a + t.slots.length, 0)} in all), and scores each end's outline, its hand hole and its drilled holes.` },
+    {
+      step: 'USE (at the ends step, after the hull is glued): push each template straight onto its end of the hull by hand.',
+      sub: ['Dry loose tenons in the rail rear mortises and dry Dominos in the bow ones first, half standing out.', 'Every web end, the deck end and every tenon must come through its slot; the template must lie flat on all the band ends, and the scored outline\'s sides lie on the outer bands\' faces.', 'Then lay the bulkhead template on the cut bulkhead, its slots over the dados, and mark the two Domino mortises through it.'],
+    },
+    { step: 'No base, braces, clamps or spring-back: these are fit-check templates.' },
+  ];
+  const yOf = (i: number): number => ts.slice(0, i).reduce((a, t) => a + t.h + GAP, 0);
+  return {
+    id: 'end-templates', title: 'End templates: rear transom and bow bulkhead', w, h, dims, notes, build,
+    laser: [{
+      id: 'end-templates', title: 'End templates: rear transom and bow bulkhead', material: '1/4" Baltic birch plywood', thicknessIn: TEMPLATE_STOCK_IN,
+      items: ts.map((t) => ({ shape: { ...emptyShape(t.id, t.label, t.outer), holes: t.slots, score: t.score, marks: t.marks }, qty: 1 })),
+      notes: ['Slots (red) are cut through: the web dados, the deck dado, the rail mortises and the bulkhead\'s Domino places. The end\'s own outline, hand hole and holes are scored (blue).'],
+    }],
+    subtitle: [`Each end's outline grown ${inch(M)} all round; dados and mortises cut through; ${ts.map((t) => `${t.label.toLowerCase()} ${inch(t.w)} × ${inch(t.h)}`).join(', ')}.`],
+    draw: (place) => {
+      const out: string[] = [];
+      const g: string[] = [];
+      ts.forEach((t, i) => {
+        const T: Xf = ([u, v]) => place([u, v + yOf(i)]);
+        out.push(`<g id="${t.id}">${outsideCut(t.outer, T, TEMPLATE_STOCK_IN, `${t.label} (outline)`)}${t.slots.map((sl) => pathEl({ cutType: 'inside', d: polyD(sl, T), depthIn: TEMPLATE_STOCK_IN + BREAKTHROUGH_IN })).join('')}</g>`);
+        g.push(guideEl(polyD(t.part, T), { dashed: true, label: `${t.label}: the end's outline (scored)` }));
+        for (const m of t.marks) g.push(guideEl(circleD(m.c, m.dia, T)));
+        g.push(label(T, [0, t.h + 0.2], `${t.label.toUpperCase()} (scored dashed line: the end itself)`, 0.2));
+        g.push(dimTo(T, [0, 0], [t.w, 0], `width ${inch(t.w)}`, -0.5), dimTo(T, [t.w, 0], [t.w, t.h], `height ${inch(t.h)}`, 0.5));
+      });
+      out.push(`<g id="guides" ${ANNOTATION_ATTRS}>${g.join('')}</g>`);
+      return out.join('');
+    },
+  };
+}
+
 /** Every form and template drawing for the current model. `opts.date` is shown beside the design revision (the caller's choice; the wall clock is never read here). */
 export function formDrawings(parts: Part[], p: Params, opts: { date?: string } = {}): FormDrawing[] {
   const L = computeLayout(p);
-  const plans = [sideFormPlan(parts, p, L), railFormPlan(parts, p, L), crownPlan(parts, p, L), flapPlan(parts, p), kneePlan(parts, p)];
+  const plans = [sideFormPlan(parts, p, L), railFormPlan(parts, p, L), crownPlan(parts, p, L), flapPlan(parts, p), kneePlan(parts, p), endTemplatesPlan(parts, p)];
   return plans.filter((x): x is Plan => x !== null).map((x) => finishDrawing(x, p, opts.date));
 }
 

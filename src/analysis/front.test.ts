@@ -9,8 +9,9 @@
  * defaults (34 1/2 in front, 32 in rear, 200 lb cargo) are covered in track-d58.test.ts.
  */
 import { describe, expect, it } from 'vitest';
-import { defaultParams, resolveParams, type Params } from '../params';
+import { defaultParams, resolveParams, tireSweepInnerEdge, type Params } from '../params';
 import { buildModel } from '../model';
+import { computeLayout } from '../model/layout';
 import { makeContext, type Ctx } from './context';
 import { runChecks, type AnalysisCheck } from './index';
 import { washerContact, frontLoad, stopContact, polyGap, rollPadPatch, rollPadGap, discOf, chainGeom, eyeAngleFactor, EYE_ULT_MULT, CHAIN_ULT_MULT } from './front';
@@ -19,6 +20,7 @@ import { bumpStrike } from './bump';
 import { wheelLoads } from './structure';
 import { uncTensileArea } from './nds';
 import { PRE_D71, PRE_D60, PRE_D66 } from '../test-fixtures';
+import { catenaryLowZ, chainHang, chainKeeper, chainSweep } from '../model/chain-keeper';
 
 const RAD = Math.PI / 180;
 const defaults = { ...defaultParams(), ...PRE_D71, ...PRE_D66, ...PRE_D60, frontTrackIn: 35.5, rearTrackIn: 35.5, axleHangerThickIn: 0.75, cargoPayloadLb: 250 }; // the 3c-3 hand-calc fixture (35.5 in tracks, 250 lb cargo); D-58 narrowed the tracks, cargo is 200 lb; the new defaults are in the rows below and track-d58.test.ts
@@ -533,14 +535,80 @@ describe('steer-clear (clearances at full lock)', () => {
     expect(polyGap(sq(0), sq(3))).toBeCloseTo(2, 12);
     expect(polyGap(sq(0), sq(0.5))).toBe(0);
   });
-  it('D-58: the row PASSES at the defaults (the least gap is 3/16 in against the 1/8 in running gap); it failed at 1/16 in under the 1/4 in disc; it is rider independent', () => {
-    expect(c.status).toBe('pass');
-    expect(c.value).toBeCloseTo(0.1875, 4);
-    expect(c.limit).toBeCloseTo(0.125, 9);
+  it('D-58: the gaps pass in this fixture (the least is 3/16 in against the 1/8 in running gap; it failed at 1/16 in under the 1/4 in disc); D-56: the slack chain\'s bight, held up by its keeper cord, governs here at about 3.1 in against the 3 in ground clearance (marginal: the old 35.5 in track hangs the chain lower; at the defaults it is 3.57 in, a pass, checked below); it is rider independent', () => {
+    expect(c.status).toBe('marginal');
+    const gaps = c.details!.filter((d) => d.unit === 'in' && Math.abs(d.limit - 0.125) < 1e-9);
+    expect(Math.min(...gaps.map((d) => d.value))).toBeCloseTo(0.1875, 4);
+    const bight = det('steer-clear', 'slack steering chain');
+    expect(c.value).toBeCloseTo(bight.value, 9);
+    expect(c.limit).toBe(3);
+    expect(bight.value).toBeGreaterThan(3);
+    expect(bight.value).toBeLessThan(3.3);
     expect(c.cases).toBeUndefined();
     expect(c.group).toBe('Steering');
     // a thinner disc leaves the plates less room under the king beam: 3/8 in leaves only 1/16 in
     const lo = runChecks({ ...defaults, kingThrustThickIn: 0.375 }, { includeTruck: false }).find((x) => x.id === 'steer-clear')!;
     expect(lo.value).toBeLessThan(c.value!);
+  });
+});
+
+describe('D-56: the steering chain keepers', () => {
+  const p0 = defaultParams();
+  const L0 = computeLayout(p0);
+  const row = runChecks(p0, { includeTruck: false }).find((x) => x.id === 'steer-clear')!;
+  it('at the defaults the bare chain\'s bight would hang 1.28 in off the ground at the opposite lock (under the 3 in rule); with the keeper cord its lowest point over the lock range is 3.57 in and the row passes', () => {
+    expect(chainSweep(p0, L0, false).lowZ).toBeCloseTo(1.28, 2);
+    const kept = chainSweep(p0, L0, true);
+    expect(kept.lowZ).toBeGreaterThan(p0.minGroundClearanceIn * 1.1); // a clear pass, not marginal
+    expect(kept.lowZ).toBeCloseTo(3.57, 1);
+    const d = row.details!.find((x) => x.name.includes('slack steering chain'))!;
+    expect(d.value).toBeCloseTo(kept.lowZ, 9);
+    expect(d.limit).toBe(p0.minGroundClearanceIn);
+    expect(row.status).toBe('pass');
+  });
+  it('the cord is longest with the chain taut at its lock, stretched 75% (under the 100% a shock cord takes), so the chain still sets the lock; the sweep never stretches it further', () => {
+    const k = chainKeeper(p0, L0);
+    expect(k.lockIn / k.freeIn - 1).toBeCloseTo(p0.steerKeeperStretchAtLock, 9);
+    expect(chainSweep(p0, L0, true).maxStretch).toBeLessThanOrEqual(p0.steerKeeperStretchAtLock + 1e-6);
+    const d = row.details!.find((x) => x.name.includes('keeper cord stretch'))!;
+    expect(d.value).toBeCloseTo(0.75, 6);
+    expect(d.limit).toBe(p0.steerKeeperMaxStretch);
+  });
+  it('the low point barely depends on the cord\'s assumed stiffness (1 to 16 lbf at 100%): it stays above 3 in', () => {
+    for (const lbf of [1, 16]) expect(chainSweep({ ...p0, steerKeeperCordLbf: lbf }, L0, true).lowZ, `${lbf} lbf`).toBeGreaterThan(p0.minGroundClearanceIn);
+  });
+  it('the solved chain keeps its length: no piece between the eye rings and the tied links is longer than it is, at any angle', () => {
+    const k = chainKeeper(p0, L0);
+    const [l1, l2] = k.linksFromBeamIn;
+    const n = (a: number[], b: number[]) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    for (let deg = -p0.steerLockDeg; deg <= p0.steerLockDeg; deg += 2.5) {
+      const a = (deg * Math.PI) / 180, B = L0.steer.beamEyeAt(a), A = L0.chain.anchor;
+      const [M1, M2] = chainHang(p0, L0, a).links;
+      expect(n(B, M1), `${deg}`).toBeLessThanOrEqual(l1 + 0.02);
+      expect(n(M1, M2), `${deg}`).toBeLessThanOrEqual(l2 - l1 + 0.02);
+      expect(n(M2, A), `${deg}`).toBeLessThanOrEqual(L0.chain.lenIn - l2 + 0.02);
+    }
+  });
+  it('the cord (from the eye to each solved link) keeps 1/2 in from the swinging axle beam with its clamp plates, bolt heads and roll pads at every angle, and the eye is well inside the front tires\' sweep', () => {
+    const k = chainKeeper(p0, L0);
+    const zTop = L0.beamF.top + p0.axleProudIn + p0.clampPlateThickIn + 0.25; // the plate tops plus a bolt head
+    const gap = (P: number[], a: number): number => {
+      const dx = P[0] - L0.king.x, dy = P[1];
+      const u = dx * Math.cos(a) + dy * Math.sin(a), v = -dx * Math.sin(a) + dy * Math.cos(a);
+      return Math.hypot(Math.max(0, Math.abs(u) - L0.beamF.thick / 2), Math.max(0, Math.abs(v) - L0.beamF.len / 2), Math.max(0, L0.beamF.bot - P[2], P[2] - zTop));
+    };
+    let least = Infinity;
+    for (let deg = -p0.steerLockDeg; deg <= p0.steerLockDeg; deg += 1) {
+      const a = (deg * Math.PI) / 180;
+      for (const M of chainHang(p0, L0, a).links) for (let t = 0; t <= 1.0001; t += 0.05) least = Math.min(least, gap([k.eye[0] + (M[0] - k.eye[0]) * t, k.eye[1] + (M[1] - k.eye[1]) * t, k.eye[2] + (M[2] - k.eye[2]) * t], a));
+    }
+    expect(least).toBeGreaterThan(0.5);
+    expect(tireSweepInnerEdge(p0)(k.eye[0]) - Math.abs(k.eye[1])).toBeGreaterThan(2); // Infinity where no tire reaches that x
+    expect(L0.deckBot - k.eye[2]).toBeCloseTo(0.3, 9); // the ring hangs just under the deck, above the rails' shallow bottom and the beam
+  });
+  it('catenaryLowZ by hand: a chain twice the span between two level points sags; a taut one does not; a straight-down loop hangs half its slack', () => {
+    expect(catenaryLowZ([0, 0, 5], [4, 0, 5], 4)).toBeCloseTo(5, 9);
+    expect(catenaryLowZ([0, 0, 5], [4, 0, 5], 8)).toBeLessThan(5 - 1.5);
+    expect(catenaryLowZ([0, 0, 5], [0, 0, 5], 4)).toBeCloseTo(3, 9);
   });
 });

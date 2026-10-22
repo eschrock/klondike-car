@@ -9,7 +9,8 @@
  */
 import { joistId } from './frame';
 import { thinSheet, WEATHER_SPEC, type Params } from '../params';
-import { SIDES, type Ctx, stainless, insertMat, INSERT_DRILL_IN } from './build-utils';
+import { frac64, SIDES, type Ctx, stainless, insertMat, INSERT_DRILL_IN } from './build-utils';
+export { frac64 };
 import { sideTopAt } from './layout';
 import { SCUPPER_BELOW_SURFACE_IN, scupperSites, signBackerPlan, signKnobPlan } from './body';
 import { worldAABB } from './bounds';
@@ -196,7 +197,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     for (const [bandId, what, yf, zf] of bandPairs) for (const [w, xw] of [[web1, xm]] as [string, number][])
       add({ a: bandId, b: w, typeA: 'glue', size: glueSize, pts: [[xw, yf, zf]], noteA: `Glued full-face to the web and bent with it on the plan form (the ${what} of the sandwich).`, noteB: `Oak band glued on this face (${what}).` });
     // The deck edge rises into the gap under the inner chine band, against the web.
-    add({ a: `${id}-chine-in`, b: deck, typeA: 'rabbet', size: `${frac(ddS)}" × ${rabbetZ.toFixed(3)}" gap under the inner chine band (deck + ${frac(ds)}" clearance, thickened epoxy fills it; no routing); the deck edge is cut ${frac(p.deckSideClearIn)}" short of the web on each side (D-63), the slot is filled with thickened epoxy`, pts: [[xj, s * (hw + ddS / 2), L.deckBot + L.ply / 2]], noteB: 'Edge of the deck, in the gap against the web.' });
+    add({ a: `${id}-chine-in`, b: deck, typeA: 'rabbet', size: `${frac(ddS)}" × ${rabbetZ.toFixed(3)}" gap under the inner chine band (deck + ${frac64(ds)}" clearance, thickened epoxy fills it; no routing); the deck edge is cut ${frac(p.deckSideClearIn)}" short of the web on each side (D-63), the slot is filled with thickened epoxy`, pts: [[xj, s * (hw + ddS / 2), L.deckBot + L.ply / 2]], noteB: 'Edge of the deck, in the gap against the web.' });
     // Web end into a dado in the transom (full web height now). The dado runs from the chine up and OUT through the top edge: the web top is within about 0.02 in of the rounded top corner, so a
     // stopped dado would leave a wall thinner than 1/8 in (it poked through by 0.015 in); open at the top it is one simple cut with no relief needed on the web (Phase 4 finding).
     add({ a: 'transom-rear', b: web1, typeA: 'dado', size: `${(pl + p.grooveSlopIn).toFixed(3)}" × ${frac(dd)}" dado up from the chine and out through the top edge (open at the top: no thin wall at the rounded corner; the epoxy fillet fills the run-out), ${frac(p.ventHoleIn)}" vent hole through the transom mid-height`, pts: [[rearTx - dd / 2, s * (hw + L.side / 2), webZMid(rearTx)]], noteA: 'Vented: the transom slides on last, so air and epoxy must escape (hydraulic lock, M4).', noteB: 'End of the web, captured (rear); it enters the dado with the transom\'s slide in X. The deck dado runs into this dado at the corner.' });
@@ -221,8 +222,8 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
   }
 
   // ── Deck: rear transom dado, bow bulkhead dado, glued to the frame ──
-  add({ a: 'transom-rear', b: deck, typeA: 'dado', size: `${rabbetH(L.deckTop, bot).toFixed(3)}" × ${frac(dd)}" dado across the front face (deck + ${frac(ds)}" clearance), run out at each end into the web dados (one continuous pocket at each corner, no thin wall between them), ${frac(p.ventHoleIn)}" vent holes through the transom at both ends`, pts: [[rearTx - dd / 2, 0, L.deckBot + L.ply / 2]], noteB: 'Rear edge of the deck, captured; the dado joins the web dados at both corners.' });
-  add({ a: 'bow-bulkhead', b: deck, typeA: 'dado', size: `${rabbetH(L.deckTop, bot).toFixed(3)}" × ${frac(dd)}" dado across the rear face (deck + ${frac(ds)}" clearance), run out at each end into the web dados (one continuous pocket at each corner, no thin wall between them)`, pts: [[L.xFlatEnd + dd / 2, 0, L.deckBot + L.ply / 2]], noteB: 'Front edge of the deck, captured (the dado joins the web dados at both corners); the foot load pulls the bulkhead off it, so the dado glue line is part of the foot-stop row.' });
+  add({ a: 'transom-rear', b: deck, typeA: 'dado', size: `${rabbetH(L.deckTop, bot).toFixed(3)}" × ${frac(dd)}" dado across the front face (deck + ${frac64(ds)}" clearance), run out at each end into the web dados (one continuous pocket at each corner, no thin wall between them), ${frac(p.ventHoleIn)}" vent holes through the transom at both ends`, pts: [[rearTx - dd / 2, 0, L.deckBot + L.ply / 2]], noteB: 'Rear edge of the deck, captured; the dado joins the web dados at both corners.' });
+  add({ a: 'bow-bulkhead', b: deck, typeA: 'dado', size: `${rabbetH(L.deckTop, bot).toFixed(3)}" × ${frac(dd)}" dado across the rear face (deck + ${frac64(ds)}" clearance), run out at each end into the web dados (one continuous pocket at each corner, no thin wall between them)`, pts: [[L.xFlatEnd + dd / 2, 0, L.deckBot + L.ply / 2]], noteB: 'Front edge of the deck, captured (the dado joins the web dados at both corners); the foot load pulls the bulkhead off it, so the dado glue line is part of the foot-stop row.' });
   for (const { s, tag } of SIDES) {
     add({ a: `rail-${tag}`, b: deck, typeA: 'glue', size: 'thickened epoxy, full face (the rail top is flush with the deck underside)', pts: [[(rearTx + L.railEnd) / 2, s * (hwAt((rearTx + L.railEnd) / 2) + L.side - railT / 2), L.railTop]], noteA: 'Deck bonded to the rail top (and the crossmember tops); weights or vacuum bag.' });
     // Side-to-frame tie (build review M6, D-43, D-81): the chine bears on the rail; a thickened-epoxy bed on the bearing face plus piloted screws up through the rail at even spacing.
@@ -323,7 +324,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
         continue;
       }
       const ej = endJoint(p, e.thick, hangerHere ? p.axleHangerThickIn : railT, jD);
-      add({ a: e.j.id, b: hostId, typeA: ej.type, size: ej.size, pts: [[e.x, s * (s > 0 ? e.yMax : -e.yMin), e.zc]], noteA: `End of the crossmember into the member face; ${p.weatherSpec === WEATHER_SPEC.extreme ? 'epoxy' : 'Titebond III'} (D-73).` });
+      add({ a: e.j.id, b: hostId, typeA: ej.type, size: ej.size, pts: [[e.x, s * (s > 0 ? e.yMax : -e.yMin), e.zc]], noteA: 'End of the crossmember into the member face; thickened epoxy, in the frame glue-up with the deck (D-92: one glue per glue-up).' });
     }
     if (L.railEnd - (e.x + e.thick / 2) < BULKHEAD_SNUG_IN && has('bow-bulkhead')) {
       add({ a: e.j.id, b: 'bow-bulkhead', typeA: 'glue', size: `thickened epoxy, bedding its front face on the bulkhead's rear face (a ${frac(Math.max(0, L.railEnd - (e.x + e.thick / 2)))} gap)`, pts: [[L.railEnd, 0, e.zc]], noteA: 'Front face of the last crossmember bedded on the bow bulkhead\'s rear face in thickened epoxy, filling the gap; the deck glued on top and the bulkhead\'s deck dado hold it.' });
@@ -404,7 +405,7 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
       const bk = backers[i % 2 === 0 ? 0 : 1] ?? backers[0]; // the points go left-lower, right-lower, left-upper, right-upper: even = the left strip
       if (bk) add({
         a: sign.id, b: bk, typeA: 'knob', typeB: 'threaded-insert',
-        size: `#10-32 × ${kn.lenIn} in thumb-knob screw through a 7/32 clearance hole (0.219) in the sign, a ${kn.standoffIn.toFixed(3)}" oak standoff disc (epoxied to the sign back) and the ${thinSheet(p).nominal} web: ${kn.engagedIn.toFixed(2)}" into the insert, tip ${kn.tipShortIn.toFixed(2)}" short of the back of the strip`, sizeB: `#10-32 × 5/16 ${insertMat(p)} threaded insert (epoxied) in a blind ${frac(INSERT_DRILL_IN)} in hole in the oak backing strip inside the web`,
+        size: `#10-32 × ${kn.lenIn} in thumb-knob screw through a 7/32 clearance hole in the sign, a ${frac64(kn.standoffIn)}" oak standoff disc (epoxied to the sign back) and the ${thinSheet(p).nominal} web: ${frac64(kn.engagedIn)}" into the insert, tip ${frac64(kn.tipShortIn)}" short of the back of the strip`, sizeB: `#10-32 × 5/16 ${insertMat(p)} threaded insert (epoxied) in a blind ${frac(INSERT_DRILL_IN)} in hole in the oak backing strip inside the web`,
         pts: [pt], ptsB: [[pt[0], Math.sign(pt[1]) * (hw + bandT), pt[2]]], // the insert's mouth is on the backer's outboard face, against the web
         noteA: 'Sign comes off for transport (D-9). The screw goes through the web into the oak backing strip; nothing grips the thin ply alone (build 3c M4).',
       });

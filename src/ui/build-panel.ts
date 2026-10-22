@@ -9,10 +9,10 @@ import type { Dims, Part } from '../model/types';
 import { WEATHER_SPEC, type Params, type ParamKey } from '../params';
 import type { BomLine, BomSection, WeatherCompare } from '../build/bom';
 import { BuildData, CSV_MIME, LASER_CONVENTIONS, LASER_NOTES, SHAPER_CONVENTIONS, SHAPER_NOTES, SVG_MIME, drawingFileName, zipName, zipPackage } from '../build/package';
-import { FROM_TEXT, fabText } from '../build/cutlist';
+import { FROM_TEXT, fabText, stepsLabel } from '../build/cutlist';
 import { paramLabels } from '../build/verify';
 import { tilePlan } from '../build/forms';
-import { partLabel, type BuildStep } from '../build/assembly';
+import { glueCard, partLabel, type BuildStep } from '../build/assembly';
 import { drawnParts, partDims, type PartDims, type PartDrawingSheet } from '../build/part-drawings';
 import { roughFrac } from '../build/units';
 import { h } from './dom';
@@ -179,7 +179,7 @@ const altNode = (a: AltLike): Node => {
 /** A first sentence of a material note that warns (plated steel, a wrong type): shown inline even when the note differs from the shared one. */
 const MATERIAL_WARN = /check the listing|\bNOT\b(?! priced)/;
 const cap = (t: string): string => t.charAt(0).toUpperCase() + t.slice(1);
-const stepList = (n: number[]): string => (n.length ? n.join(', ') : '–');
+const stepList = (r: { assemblySteps: number[]; cutSteps?: number[] }): string => (r.assemblySteps.length || r.cutSteps?.length ? stepsLabel(r) : '–');
 
 const note = (text: string, cls = 'muted small') => h('p', { class: cls }, text);
 
@@ -497,7 +497,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
   function renderCutlist(d: BuildData): Node[] {
     const c = d.cutList;
     const out: Node[] = [h('div', { class: 'bp-actions' }, csvButton('Download CSV', 'cutlist.csv', () => d.cutlistCsv))];
-    out.push(note('Three steps: saw the CUTS from the boards (rough sizes round up to 1/8"), GLUE UP the panels and blocks, then MILL each part to its FINISHED size. Part names open a card with its sizes and a view in 3D.', 'muted small bp-prose'));
+    out.push(note('Three steps: saw the CUTS from the boards (rough sizes round up to 1/8"), GLUE UP the panels and blocks, then MILL each part to its FINISHED size. Part names open a card with its sizes and a view in 3D. Step is the assembly step that fits the part; "cut 13 · fit 14" means it is cut to its final size at step 13 and fitted at step 14.', 'muted small bp-prose'));
     if (c.warnings.length) {
       out.push(h('details', { class: 'bp-warn' }, h('summary', {}, `${c.warnings.length} data warning${c.warnings.length === 1 ? '' : 's'}`), h('ul', {}, ...c.warnings.map((w) => h('li', {}, w)))));
     }
@@ -540,7 +540,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
     out.push(h('h3', { class: 'bp-group' }, '3. Finished parts: mill to these sizes'));
     out.push(table('bp-cuts', ['Part', 'Qty', 'Final T × W × L', 'From', 'Board', 'Grain', 'Fabrication', 'Step'], c.finished.map((f) => [
       ui.chip(f.ids[0], f.name),
-      String(f.qty), h('span', { class: 'bp-d' }, f.finalText), FROM_TEXT[f.from] ?? f.from, f.board, f.grainWord ?? '–', fabText(f.fab), stepList(f.assemblySteps),
+      String(f.qty), h('span', { class: 'bp-d' }, f.finalText), FROM_TEXT[f.from] ?? f.from, f.board, f.grainWord ?? '–', fabText(f.fab), stepList(f),
     ]), 'Finished parts', { num: [1], nowrap: [3, 4, 5], qty: 1, key: 2, cols: [24, 5, 20, 10, 7, 12, 14, 8] }));
 
     // Plywood and metal: the rest of the cut list.
@@ -549,12 +549,12 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
       out.push(h('h4', { class: 'bp-sub' }, `${g.label} (${g.pieces} pieces)`));
       out.push(table('bp-cuts', ['Part', 'Qty', 'Final T × W × L', 'Grain', 'Fabrication', 'Laser', 'Step'], g.rows.map((r) => [
         partCell(r.ids[0], r.name, r.note),
-        String(r.qty), dimsCell(r.final), r.grainWord ?? '–', fabText(r.fab), h('span', { class: r.laser.ok ? 'bp-laser-yes' : 'bp-laser-no', title: r.laser.text }, r.laser.ok ? 'Laser: yes' : r.laser.text.replace(/^no: /, 'No: ')), stepList(r.assemblySteps),
+        String(r.qty), dimsCell(r.final), r.grainWord ?? '–', fabText(r.fab), h('span', { class: r.laser.ok ? 'bp-laser-yes' : 'bp-laser-no', title: r.laser.text }, r.laser.ok ? 'Laser: yes' : r.laser.text.replace(/^no: /, 'No: ')), stepList(r),
       ]), `Plywood ${g.label}`, { num: [1], nowrap: [3], qty: 1, key: 2, cols: [24, 5, 20, 11, 20, 14, 6] }));
     }
     out.push(h('h3', { class: 'bp-group' }, 'Metal stock (cut on the metal bandsaw and drill)'));
     out.push(table('bp-cuts', ['Part', 'Qty', 'Section', 'Cut length', 'Step'], c.metal.map((r) => [
-      partCell(r.ids[0], r.name), String(r.qty), r.section, fracInch(r.cutLengthIn), stepList(r.assemblySteps),
+      partCell(r.ids[0], r.name), String(r.qty), r.section, fracInch(r.cutLengthIn), stepList(r),
     ]), 'Metal stock', { num: [1], qty: 1, key: 3, cols: [26, 5, 22, 22, 25] }));
     return out;
   }
@@ -978,8 +978,12 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
     stepUpdate = update;
     stepMove = (delta) => go(steps[Math.max(0, Math.min(steps.length - 1, stepIdx() + delta))].n);
 
+    // The glue card: one labeled box before the steps (each glue step's cure line points back to it).
+    const card = glueCard(d.p);
+    const cardBox = h('details', { class: 'bp-gluecard' }, h('summary', {}, 'Glue card (read once, before the first glue-up)'), ui.instrList(card.sub ?? []));
     return [
       note('Step through the build; the 3D viewer shows the sled as built up to the current step. Leaving this section restores the full model.', 'muted small bp-screen-only'),
+      cardBox,
       h('div', { class: 'bp-screen-only' },
         h('div', { class: 'bp-stepnav' }, prev, counter, next),
         viewNote,

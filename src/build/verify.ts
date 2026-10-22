@@ -353,8 +353,8 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       id: 'brake-knee',
       title: 'Brake: pin, flap tongue and tire clearance on the first knee',
       how: [
-        it('Cut ONE knee blank first, before cutting the other knee and the flaps.', [
-          'At the "Brake knees" assembly step, shape the first knee and try its pocket with a scrap block the size of the flap tongue with its pivot block on: it must slide in with a little play all round. Cut the other knee only when it does.',
+        it('At the "Brake knees" assembly step, shape ONE knee first, before cutting the other knee.', [
+          'Shape it and try its pocket with a scrap block the size of the flap tongue with its pivot block on: it must slide in with a little play all round. Cut the other knee only when it does.',
           `The full test comes at the "Brake flaps" step: screw the stainless strap on, drill the pin hole through its hole, and use the real ${fr(p.brakePivotPinDiaIn)}" clevis pin, the hitch-pin clip and the flap tongue with its pivot block clamped in the pocket.`,
           p.kneeMount === KNEE_MOUNT.removable
             ? 'The removable knees come off after the wheel dry fit anyway, so a knee that fails the full test is taken off and remade.'
@@ -372,23 +372,8 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       ifFails: `Adjust the pocket width or the pin-hole height on the real knee before cutting the rest; enter the measured friction in the design (${lbl('brakeChockMu')}, ${lbl('brakeChockMuFouled')}; the park-hold row uses the lower).`,
       partIds: ids(parts, /^(brake-knee|brake-flap|brake-pivot|brake-chock|brake-pad|brake-shoe)/),
       paramKeys: verifyKeys(['brakeChockMu', 'brakeChockMuFouled']),
-      when: 'before cutting',
+      when: 'at assembly',
       refs: ['D-57', 'D-65'],
-    },
-    {
-      id: 'grab-reach',
-      title: 'Grab board: can a scout reach the hand hole?',
-      how: [
-        it('Cut a cardboard board the size of the grab board (Shaper pattern, hole cut out) and tape it in place on one gunwale.', [`The hole's center is ${fr(p.grabHoleAheadOfHpointIn, 8)}" ahead of the hip point, which is ${fr(p.seatBehindHpointIn, 8)}" ahead of the rear edge of the seat cushion, and ${fr(p.grabBoardFootIn + p.grabHoleHeightIn / 2, 16)}" above the gunwale top.`]),
-        it('Sit the smallest and the biggest scout in the sled, gloved, with the seat pad on and the seat back up.', ['Let the arm hang, then bring the forearm up and forward to the hole.']),
-        it('Watch where the hand lands and how the wrist and elbow sit.'),
-      ],
-      passList: ['The gloved hand finds the hole without reaching or folding the arm back.', 'The elbow stays bent, never locked or behind the hip.', 'The knuckles clear the gunwale top and the thigh.'],
-      ifFails: `Slide the hole fore or aft (${lbl('grabHoleAheadOfHpointIn')}: forward for long arms, back for short ones; the flat board cannot go much farther forward than it is, where the sides start to turn in) or change the oak under the hole (${lbl('grabBoardFootIn')}), then re-run the checks.`,
-      partIds: ids(parts, /^seat-grip-[LR]$/),
-      paramKeys: [],
-      when: 'before cutting',
-      refs: ['D-84', 'D-57'],
     },
     {
       id: 'bow-rib-clearance',
@@ -411,6 +396,21 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       paramKeys: verifyKeys(['sideRibFrontXIn']),
       when: 'at assembly',
       refs: ['D-76'],
+    },
+    {
+      id: 'grab-reach',
+      title: 'Grab board: can a scout reach the hand hole?',
+      how: [
+        it('At the step that drills the D-ring holes and fits the grab boards, before anything is drilled for them: cut a cardboard board the size of the grab board (its pattern, hole cut out) and tape it in place on one gunwale.', [`The hole's center is ${fr(p.grabHoleAheadOfHpointIn, 8)}" ahead of the hip point, which is ${fr(p.seatBehindHpointIn, 8)}" ahead of the rear edge of the seat cushion, and ${fr(p.grabBoardFootIn + p.grabHoleHeightIn / 2, 16)}" above the gunwale top.`]),
+        it('Sit the smallest and the biggest scout in the sled, gloved, on the seat pad (or two of its kneeling pads at the seat\'s place), with the seat back panel held upright at its hinge line.', ['Let the arm hang, then bring the forearm up and forward to the hole.']),
+        it('Watch where the hand lands and how the wrist and elbow sit.'),
+      ],
+      passList: ['The gloved hand finds the hole without reaching or folding the arm back.', 'The elbow stays bent, never locked or behind the hip.', 'The knuckles clear the gunwale top and the thigh.'],
+      ifFails: `Slide the hole fore or aft (${lbl('grabHoleAheadOfHpointIn')}: forward for long arms, back for short ones; the flat board cannot go much farther forward than it is, where the sides start to turn in) or change the oak under the hole (${lbl('grabBoardFootIn')}), then re-run the checks. The oak boards and caps are cut from the file only after it passes.`,
+      partIds: ids(parts, /^seat-grip-[LR]$/),
+      paramKeys: [],
+      when: 'at assembly',
+      refs: ['D-84', 'D-57'],
     },
     {
       id: 'brake-strap',
@@ -540,7 +540,7 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
       : []),
     {
       id: 'ply-thickness',
-      title: 'Plywood thickness: measure before any dado is cut',
+      title: 'Plywood thickness: measured at the deck step and the side-form step',
       how: [
         it(`Measure the ${thin.nominal} ${thin.key === 1 ? 'white oak plywood' : thin.key === 3 || thin.key === 4 ? 'Baltic birch' : 'okoume'} and the 12 mm okoume deck sheet with calipers, at six or more points on the edges.`, [
           thin.key === 1 ? 'Nominal 1/4" white oak plywood runs about 7/32", and the veneer face varies.' : '',
@@ -556,8 +556,11 @@ export function verifyChecklist(parts: Part[], p: Params): VerifyCheck[] {
         ...(thin.key === 4 ? [it('Ask what glue the sheet carries (interior or exterior).', ['The sled is garage-kept and every face and edge is sealed, so an interior glue line is acceptable; ask anyway.'])] : []),
         ...(thin.key === 3 ? [it('Confirm the sheet size: probably 5 × 5 ft (60 × 60 in); the 59-5/8" side web blank only just fits.')] : []),
       ],
-      passList: [`The ${thin.nominal} sheet measures ${fr(thin.thicknessIn, 64)}" or less and the 12 mm sheet ${fr(p.deckPlyIn, 64)}" or less: each, plus a seal coat of a few thousandths, still slides into its dado with a little to spare (about 1/32").`],
-      ifFails: `Enter the measured thickness (plus the seal coat) in the design (${lbl(thinKey)}, ${lbl('deckPlyIn')}), re-run the checks and regenerate the Shaper files BEFORE a dado is cut: a thick sheet in a nominal dado cannot be fixed afterwards.`,
+      passList: [
+        `The ${thin.nominal} sheet: within ${fr(p.grooveSlopIn / 2, 64)}" of ${fr(thin.thicknessIn, 64)}", the files fit it as they are. Up to 1/32" off, enter what you measured. Under ${fr(thin.thicknessIn - 1 / 32, 64)}" or over ${fr(thin.thicknessIn + 1 / 32, 64)}", return the sheet.`,
+        `The 12 mm sheet: within ${fr(p.deckSlopIn / 2, 64)}" of ${fr(p.deckPlyIn, 64)}", the files fit it as they are. Between 7/16" and 1/2", enter what you measured. Under 7/16" or over 1/2", return the sheet.`,
+      ],
+      ifFails: `Enter the measured thickness (plus the seal coat) in the design, in Advanced mode, parameters panel (${lbl(thinKey)}, ${lbl('deckPlyIn')}); re-run the checks and re-export the Shaper files BEFORE a dado is cut: a thick sheet in a nominal dado cannot be fixed afterwards.`,
       partIds: ids(parts, /^(deck|side-[LR]-web|transom-rear|bow-bulkhead)$/),
       // the sheet this design uses and the deck ply: the two values the fail text tells you to enter (not the other thin sheets' thicknesses)
       paramKeys: [thinKey, 'deckPlyIn'],

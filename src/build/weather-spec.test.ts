@@ -7,7 +7,7 @@ import { buildModel } from '../model';
 import { totalMass } from '../model/mass';
 import { THIN_SHEET, WEATHER_SPEC, defaultParams, thinSheet, type Params } from '../params';
 import { bom, type Bom, type BomLine } from './bom';
-import { assemblySteps, standardText } from './assembly';
+import { assemblySteps, flattenInstr, glueCard, standardText } from './assembly';
 import { buildBookHtml } from './build-book';
 import { URETHANE_COVERAGE, VARNISH_COVERAGE, finishAreas, finishMaterial, finishingSchedule, glueEpoxyFlOz, glueJointEstimates, glueTitebond, standardAdhesive, urethaneContainers } from './finishing';
 import { BuildData } from './package';
@@ -446,7 +446,7 @@ describe('assembly text', () => {
     expect(t).toMatch(/urethane/);
     const glue = sStd.filter((s) => s.kind === 'build' && s.clampCure);
     expect(glue.length).toBeGreaterThan(8);
-    expect(sStd.find((s) => s.id === 'mill')!.instructions.join(' ')).toMatch(/GLUE CARD[\s\S]*Titebond III/);
+    expect(flattenInstr([glueCard(std)], stdParts).join(' ')).toMatch(/GLUE CARD[\s\S]*Titebond III/); // the glue card is one box before the steps
     for (const s of glue.filter((q) => !['hang', 'final-fit'].includes(q.id))) expect(s.clampCure, s.id).toMatch(/glue card/); // hang and final-fit use sealant and bedding
     expect(glue.some((s) => /Titebond III/.test(s.clampCure!))).toBe(true);
     expect(glue.some((s) => !/Titebond/.test(s.clampCure!))).toBe(true); // a step with no Titebond joint says nothing about Titebond
@@ -454,7 +454,7 @@ describe('assembly text', () => {
     expect(textOf(sExt)).toMatch(/\b316\b/);
     expect(textOf(sExt)).toMatch(/varnish/i);
     expect(textOf(sExt)).not.toMatch(/Titebond/);
-    expect(sExt.find((s) => s.id === 'seal')!.instructions.join(' ')).toMatch(/ONLY the dados/);
+    expect(sExt.find((s) => s.id === 'seal')!.instructions.join(' ')).toMatch(/ONLY the deck underside and edges/);
   });
 
   it('rewrites 316 and varnish words', () => {

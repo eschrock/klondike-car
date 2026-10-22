@@ -137,7 +137,7 @@ export function buildFrame(ctx: Ctx): Part[] {
       });
     }
     rail.plies = 2;
-    rail.notes += ` CUT LIST (build 3c S2): ${f2(railT / 2)}" × ${f2(railD + p.laminateWidthAllowanceIn)}" × ${f2(developed + p.laminateLengthAllowanceIn)}" strips, TWO per rail (resaw from 4/4 and plane; strips this thin and ${f2(railD)}" wide need a planer sled or a drum sander), plus 25% spares; only the last ${f2(L.railEnd - L.taper.x0)}" is curved.`;
+    rail.notes += ` CUT LIST (build 3c S2): ${f2(railT / 2)}" × ${f2(railD + p.laminateWidthAllowanceIn)}" × ${f2(developed + p.laminateLengthAllowanceIn)}" strips, TWO per rail, resawn from the board the cut list's resaw plan names (it buys the spare strips too) and planed (strips this thin and ${f2(railD)}" wide need a planer sled or a drum sander); only the last ${f2(L.railEnd - L.taper.x0)}" is curved.`;
     parts.push(rail);
   }
 
@@ -179,12 +179,19 @@ export function buildFrame(ctx: Ctx): Part[] {
     const bkr = brakeGeometry(p, L).backer; // the step brake's oak backers on the rail inner faces (D-57): a joist that meets one is cut back to its inner face
     const meetsBacker = x + L.joistT / 2 > bkr.x0 && x - L.joistT / 2 < bkr.x1;
     const halfT = x === L.king.x ? L.king.len : x === L.chain.joistX ? L.chain.joistT : L.joistT; // the chain joist is thicker than the others (D-58)
-    const half = rY0 - L.turnIn(x + halfT / 2) - (meetsHanger ? p.axleHangerThickIn : 0) - (meetsBacker && !meetsHanger ? bkr.t : 0);
+    const cutBack = (meetsHanger ? p.axleHangerThickIn : 0) + (meetsBacker && !meetsHanger ? bkr.t : 0);
+    // `halfT` is the member's fore-aft thickness. In the bow taper the rail's inner face comes in toward the bow, so a square-ended box reaches the rail at its FRONT face (the short point)
+    // and the model box stops there; the REAR face is the long point, and the end is scribed to the rail between the two. The cut list (stock.l) is the long point.
+    const half = rY0 - L.turnIn(x + halfT / 2) - cutBack;
+    const halfLong = rY0 - L.turnIn(x - halfT / 2) - cutBack;
+    const scribed = 2 * (halfLong - half) > 1 / 64; // under 1/64 over the length (crossmember 4, barely into the taper) the end is simply square
+    const scribeNote = scribed ? `In the bow taper its ends are scribed to the bent rails: ${frac32(2 * halfLong)}" long at the rear face (the long point, the cut-list length), ${frac32(2 * half)}" at the front face. ` : '';
     if (isKing) {
       const k = L.king;
       const kb = box(ctx, {
         id: 'king-beam', partNo: 'king-beam', name: 'King beam (kingpin crossmember)', group: 'front-end', mat: 'oak', step: STEP.frame, grain: 'y',
         ...span([k.x - k.len / 2, k.x + k.len / 2], [-half, half], [k.bot, k.top]),
+        ...(scribed ? { stock: { t: k.top - k.bot, w: k.len, l: 2 * halfLong } } : {}),
       });
       // The nut slot (cut from the front face, D-88): its walls hold the nylock nut (no washer), its ceiling KING_NUT_BELOW_DECK_IN under the deck.
       const ks = kingNutSlot(p, L);
@@ -209,7 +216,7 @@ export function buildFrame(ctx: Ctx): Part[] {
         }
         kb.massLb -= (2 * (hr.yOut - hr.yIn) * hr.depth * k.len / IN3_PER_FT3) * p.oakDensityPcf;
       }
-      kb.notes = `The front load path (D-56): an oak crossmember ${f2(k.len)}" fore-aft × ${f2(k.depth)}" deep between the rails at the kingpin, bonded to the deck underside and Domino-tied and epoxied to the rails. The ${f2(p.kingpinDiaIn)}" kingpin bolt is bored through its center; a slot cut from the front face (${f2(slotW)}" wide × ${f2(slotH)}" tall, at the TOP of the king beam: its ceiling is ${f2(KING_NUT_BELOW_DECK_IN)}" under the deck; build 3c S5 made the two descriptions agree) holds the thin nylock (jam) nut by its flats (no washer), so the bolt is turned from its head; the axle beam swings on the shank (D-88). The UHMW thrust disc is screwed to its underside and the top of the axle beam turns under it (D-58); the clamp plates on the beam top pass under the king beam with 1/8 in to spare.`;
+      kb.notes = `The front load path (D-56): an oak crossmember ${f2(k.len)}" fore-aft × ${f2(k.depth)}" deep between the rails at the kingpin, bonded to the deck underside and Domino-tied and epoxied to the rails. The ${f2(p.kingpinDiaIn)}" kingpin bolt is bored through its center; a slot cut from the front face (${f2(slotW)}" wide × ${f2(slotH)}" tall, at the TOP of the king beam: its ceiling is ${f2(KING_NUT_BELOW_DECK_IN)}" under the deck; build 3c S5 made the two descriptions agree) holds the thin nylock (jam) nut by its flats (no washer), so the bolt is turned from its head; the axle beam swings on the shank (D-88). The UHMW thrust disc is screwed to its underside and the top of the axle beam turns under it (D-58); the clamp plates on the beam top pass under the king beam with 1/8 in to spare.${scribed ? ` ${scribeNote.trim()}` : ''}`;
       parts.push(kb);
       return;
     }
@@ -218,9 +225,10 @@ export function buildFrame(ctx: Ctx): Part[] {
     parts.push(box(ctx, {
       id: joistId(L, i), partNo: isChain ? 'chain-joist' : 'joist', name: `Crossmember ${i + 1}`, group: 'frame', mat: 'oak', step: STEP.frame, grain: 'y',
       ...span([x - jt / 2, x + jt / 2], [-half, half], [L.deckBot - jD, L.deckBot]),
+      ...(scribed ? { stock: ((d) => ({ t: d[0], w: d[1], l: 2 * halfLong }))([jt, jD].sort((a, b) => a - b)) } : {}),
       ...(x === L.joistX[L.joistX.length - 1] ? { notes: 'The last crossmember, under the scarf of the deck to the bow bulkhead (D-54, D-57).' } : {}),
-      ...(isChain ? { notes: `The chain crossmember (D-58): ${f2(jt)}" thick (the others are ${f2(L.joistT)}") because the two steering check chains are anchored to it, ${f2(Math.abs(L.chain.anchor[1]))}" either side of the center line, by forged eye bolts through it (the eyes stand out of the front face, the 2" washers and nuts are on the rear face). The chain pull is plan bending toward the rails. ` } : {}),
-      ...(meetsHanger || meetsBacker ? { notes: `${meetsHanger ? `Cut back ${f2(p.axleHangerThickIn)}" at each end to clear an axle hanger. ` : ''}${meetsBacker && !meetsHanger ? `Cut back ${f2(bkr.t)}" at each end to clear the brake knee backers (D-57). ` : ''}` } : {}),
+      ...(isChain ? { notes: `The chain crossmember (D-58): ${f2(jt)}" thick (the others are ${f2(L.joistT)}") because the two steering check chains are anchored to it, ${f2(Math.abs(L.chain.anchor[1]))}" either side of the center line, by forged eye bolts through it (the eyes stand out of the front face, the 2" washers and nuts are on the rear face). The chain pull is plan bending toward the rails. ${scribeNote}` } : scribed ? { notes: scribeNote.trim() } : {}),
+      ...(meetsHanger || meetsBacker ? { notes: `${meetsHanger ? `Cut back ${f2(p.axleHangerThickIn)}" at each end to clear an axle hanger. ` : ''}${meetsBacker && !meetsHanger ? `Cut back ${f2(bkr.t)}" at each end to clear the brake knee backers (D-57). ` : ''}${scribeNote}` } : {}),
     }));
   });
 

@@ -314,6 +314,11 @@ const defs = {
     default: 0.5, min: 0.375, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-62, build 3c M4',
     note: 'D-62: nothing is screwed into the 4 mm web (a tee-nut in 0.157 in ply has 0.1 in of bite, and a 1 in screw poked into the cabin). Each side sign hangs on two vertical oak backing strips glued on the INSIDE of the web between the chine and gunwale bands, each with two #10-32 threaded inserts (3/8 long) for the knobs. The strips stand this far inboard of the web (0.27 in proud of the inner band faces), at the sign knob stations behind the box. D-63: the knob screw length is derived from this thickness and the 0.234 in sign standoff (7/8 in at the default: sign + standoff disc + web = 0.55 in, 0.33 in into the insert, 1/8 in of wood left behind its tip).',
   },
+  signStandoffDiscDiaIn: {
+    label: 'Sign standoff disc diameter (oak)', group: 'body', unit: 'in',
+    default: 0.75, min: 0.5, max: 1.25, step: 0.125, status: 'assumed', ref: 'D-63',
+    note: 'The four oak discs epoxied to the back of each sign, one around each knob hole, fill the gap between the sign and the web (the band thickness plus the 1/16 in the sign stands proud of the bands), so the sign cannot flex or be levered across an air gap. 3/4 in is a stock plug cutter (on the drill press, then released from the board on the bandsaw) and bears on about 0.4 sq in of web around the 7/32 in screw hole.',
+  },
   sideKickLbf: {
     label: 'Side web lean / kick load', group: 'loads', unit: 'lbf',
     default: 50, min: 20, max: 150, step: 5, status: 'assumed', ref: 'D-62, eng 3c N-1',
@@ -511,6 +516,26 @@ const defs = {
     label: 'Storage lid oak rim thickness', group: 'body', unit: 'in',
     default: 0.5, min: 0.375, max: 1, step: 0.125, status: 'assumed', ref: 'D-19',
   },
+  storageLidAftGapIn: {
+    label: 'Storage lid aft gap (lid frame to the box\'s aft face)', group: 'body', unit: 'in',
+    default: 0.125, min: 0.0625, max: 0.25, step: 0.03125, status: 'locked', ref: 'D-89, D-93',
+    note: 'The lid frame stops this far forward of the box\'s aft wall face. The hinge pin sits 3/4 in above the lid\'s underside, so the lid\'s lower aft corner swings about 1/32 in AFT as it starts to open; flush, it rubbed the transom backers and the turn-button blocks. The aft gasket moves in with it and still lies on the aft coaming.',
+  },
+  turnButtonWidthIn: {
+    label: 'Lid turn-button width (its aft end is rounded on half of it)', group: 'body', unit: 'in',
+    default: 0.625, min: 0.5, max: 0.75, step: 0.0625, status: 'locked', ref: 'D-89, D-93',
+    note: 'The button pivots at the middle of the 3/4 in lane between the transom and the box. Its aft end is a half circle of half this width about the pivot, so it swings 1/16 in clear of the transom at every angle; a square 3/4 in end ran its corners into the transom when turned.',
+  },
+  storageLegendDepthIn: {
+    label: 'Lid lettering depth (laser score)', group: 'body', unit: 'in',
+    default: 0.03125, min: 0.015625, max: 0.0625, step: 0.015625, status: 'assumed', ref: 'D-58, D-93',
+    note: 'The DO NOT STEP letters are scored just through the face veneer of the thin sheet and into the first glue line, which reads dark: 6 mm Baltic birch has a face veneer of about 1/40 in, so about 1/32 in. Set the laser\'s power and passes on an offcut until the letters are dark, then fill them and sand flush before the panel is sealed.',
+  },
+  storageLegendLineIn: {
+    label: 'Lid lettering line width (laser passes side by side)', group: 'body', unit: 'in',
+    default: 0.0625, min: 0.015625, max: 0.125, step: 0.015625, status: 'assumed', ref: 'D-58, D-93',
+    note: 'A single laser pass scores a hairline that does not read from a standing position. The lettering file scores each single-stroke letter as several passes 1/64 in apart, side by side, so the filled line is about this wide (1/16 in on the 1-1/4 in letters the lid has at the defaults reads from 5 ft).',
+  },
   // Workstream D (D-41): weatherproofing and lash points.
   storageGasketIn: {
     label: 'Storage lid gasket thickness (uncompressed)', group: 'body', unit: 'in',
@@ -546,6 +571,16 @@ const defs = {
     label: 'Flag tube outside diameter', group: 'body', unit: 'in',
     default: 1.315, min: 1, max: 2, step: 0.005, status: 'assumed', ref: 'D-57',
     note: '1 in schedule 40 PVC is 1.315 in OD (0.133 in wall).',
+  },
+  flagBlockWidthIn: {
+    label: 'Flag tube block width (across the sled)', group: 'body', unit: 'in',
+    default: 1.25, min: 1, max: 1.5, step: 0.0625, status: 'locked', ref: 'D-57, D-93',
+    note: 'The two oak blocks that hold the flag tube against the side are this wide across the sled, so the top one stands about 0.2 in off the swing of the storage lid\'s side rail (it was 1.4 in and missed it by 0.05 in). The tube stands a little proud of the block\'s inboard face.',
+  },
+  flagBlockCradleIn: {
+    label: 'Flag tube block cradle depth', group: 'body', unit: 'in',
+    default: 0.25, min: 0.125, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-57, D-93',
+    note: 'Each flag block has a round cradle this deep for the tube (the tube is epoxied in it, no screws into its wall, D-72); shallow enough to stay inside the block.',
   },
   lashPointsPerSide: {
     label: 'Lash points (D-rings) per side', group: 'body', unit: '',
@@ -742,6 +777,11 @@ const defs = {
     label: 'Grab board oak above the hole', group: 'seat', unit: 'in',
     default: 1.25, min: 0.75, max: 2, step: 0.25, status: 'assumed', ref: 'D-57',
     note: 'The bar of oak the fingers wrap; the row checks its bending.',
+  },
+  gripBoltClearIn: {
+    label: 'Grab-board screw clearance hole', group: 'seat', unit: 'in',
+    default: 0.28125, min: 0.265625, max: 0.3125, step: 0.015625, status: 'locked', ref: 'D-84',
+    note: 'One drill size for the whole grab-board stack (board, inner band, web, outer band, stainless strip): 9/32 in, the free-fit clearance for the 1/4 in screws. The bores are lined with epoxy and the bit is run through again once it cures, so the screws slide in after the seal; a 17/64 in close fit would bind.',
   },
   grabBoardFootIn: {
     label: 'Grab board oak between the gunwale top and the hole', group: 'seat', unit: 'in',
@@ -1105,6 +1145,36 @@ const defs = {
     label: 'Steering stop chain: eye in the chain joist, distance from the center line', group: 'steering', unit: 'in',
     default: 7.8, min: 4, max: 11, step: 0.2, status: 'assumed', ref: 'D-58, D-66',
     note: 'D-66: 7.8 in (was 8.4): the chain joist stands where the bow taper has drawn the rail inner face in to about 9.1 in, and the 2 in washer needs 1.15 in of that. The eye bolt goes fore-aft through the chain joist (the crossmember just behind the king beam), the eye standing out of its front face, a little below mid depth; the 2 in washer and nut on its rear face must clear the rail. Behind the king beam the chain can run low, under it, to the beam end.',
+  },
+  steerKeeperAheadIn: {
+    label: 'Chain keeper eye ahead of the chain crossmember', group: 'steering', unit: 'in',
+    default: 3.25, min: 1, max: 6, step: 0.25, status: 'assumed', ref: 'D-56',
+    note: 'D-56: a short shock cord through a small screw eye in the underside of the deck, its two ends knotted to two links of each steering check chain, lifts the slack bight (it hung about 2" off the ground straight ahead, 1.3" at the opposite lock). The eye sits this far ahead of the chain crossmember\'s front face, midway across between the chain\'s two eyes: aft of where the axle beam\'s trailing face swings at the lock, so the cord never lies over the beam. No crossmember stands there, so it goes into the 12 mm deck (a short-thread eye: the tip stays inside the deck).',
+  },
+  steerKeeperLinkFrac: {
+    label: 'Chain keeper: the near link one cord end ties to (fraction of the chain from the beam eye)', group: 'steering', unit: '',
+    default: 0.25, min: 0.1, max: 0.5, step: 0.05, status: 'assumed', ref: 'D-56',
+    note: 'One end of the keeper cord is knotted to the link this fraction of the chain length from the beam-eye end (the beam eye is the low end of the chain), the other end to the far link (steerKeeperFarLinkFrac). One cord end on one link, at the middle or anywhere else, left a piece of the chain sagging to about 3.2" or lower at the opposite lock.',
+  },
+  steerKeeperFarLinkFrac: {
+    label: 'Chain keeper: the far link the other cord end ties to (fraction of the chain from the beam eye)', group: 'steering', unit: '',
+    default: 0.6, min: 0.3, max: 0.9, step: 0.05, status: 'assumed', ref: 'D-56',
+    note: 'The cord runs from the near link up through the screw eye and down to this link, so it holds up the long piece toward the anchor as well; it slides through the eye, so both legs pull alike.',
+  },
+  steerKeeperStretchAtLock: {
+    label: 'Chain keeper cord stretch when its chain is taut at the lock', group: 'steering', unit: '',
+    default: 0.75, min: 0.3, max: 1, step: 0.05, status: 'assumed', ref: 'D-56',
+    note: 'Sets the cord\'s free length: its length from one tied link through the eye to the other with the chain taut at its lock, over 1 + this. The cord must stretch that far so the chain still reaches its full length and sets the lock; shock cord is sold as stretching about 100% (steerKeeperMaxStretch).',
+  },
+  steerKeeperMaxStretch: {
+    label: 'Chain keeper cord: largest stretch allowed', group: 'factors', unit: '',
+    default: 1, min: 0.5, max: 1.5, step: 0.05, status: 'verify', ref: 'D-56',
+    note: '1/8" shock cord (bungee) is commonly sold as stretching about 100% of its length; check the label. The steer-clear row holds the cord\'s stretch over the lock range to this.',
+  },
+  steerKeeperCordLbf: {
+    label: 'Chain keeper cord: pull at 100% stretch', group: 'steering', unit: 'lbf',
+    default: 4, min: 1, max: 16, step: 0.5, status: 'assumed', ref: 'D-56',
+    note: 'A 1/8" shock cord pulls about this much stretched to twice its length (estimate; a 1/4" cord is about four times as stiff). It only has to hold up a few ounces of chain: the low point barely moves between 1 and 16 lbf.',
   },
   chainJoistThickIn: {
     label: 'Chain joist thickness (the crossmember behind the king beam)', group: 'steering', unit: 'in',
@@ -1789,6 +1859,11 @@ const defs = {
     label: 'Rough-stock width allowance (laminated / edge-glued / bent pieces)', group: 'stock', unit: 'in',
     default: 0.375, min: 0.25, max: 1, step: 0.0625, status: 'assumed',
     note: 'Eric 2026-10-12: a piece that is face-laminated (D-70 layers), edge-glued (the panel boards) or bent-laminated (the resaw strips for the rails and bands) is cut 3/8 in wider than its share of the finished width. Glued pieces end up slightly askew and have to be jointed and planed true after the glue-up; 1/8 in was too little. Rounded UP to the next 1/8 in for the cut list.',
+  },
+  gunwaleEndLongIn: {
+    label: 'Gunwale band overhang past each web end (for the end stops)', group: 'stock', unit: 'in',
+    default: 1, min: 0.5, max: 2, step: 0.25, status: 'assumed', ref: 'D-87, D-93',
+    note: 'Each gunwale band is left this long past each end of its web while it cures on the side form, so an end stop can bear on its lower edge (the bent band pushes its middle into the cleats and its ends swing away). The rough strip is cut long enough for it (it is longer than the 2 in laminate allowance gives).',
   },
   laminateLengthAllowanceIn: {
     label: 'Rough-stock length allowance (laminated / edge-glued / bent pieces)', group: 'stock', unit: 'in',

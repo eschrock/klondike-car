@@ -125,13 +125,13 @@ describe('brake shoe', () => {
 });
 
 describe('sign knob ribs (D-85)', () => {
-  it('have their insert mouths on their own back face (against the band-strip filler and the web), not outside it', () => {
+  it('have their insert mouths at the web\'s inside face (through the band-strip filler into the rib), so the knob engages the insert over its full 0.27 in', () => {
     for (const tag of ['L', 'R']) for (const n of [4, 1]) {
       const rib = get(`side-rib-${tag}${n}`);
       const j = rib.joints!.find((q) => q.type === 'threaded-insert')!;
       for (const a of j.at!) {
         const w = toModel(rib.transform, a);
-        expect(Math.abs(w[1])).toBeCloseTo(sideRibStations(p, L)[n === 4 ? 3 : 0].yIn, 6);
+        expect(Math.abs(w[1])).toBeCloseTo(sideRibStations(p, L)[n === 4 ? 3 : 0].yIn + L.sideBand, 6);
       }
     }
   });

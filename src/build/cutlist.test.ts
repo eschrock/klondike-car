@@ -4,7 +4,7 @@ import { defaultParams } from '../params';
 import { PRE_D72 } from '../test-fixtures';
 import { isOakStocked } from './prices';
 import { assemblySteps } from './assembly';
-import { BOARD_THICKNESSES, MAX_LAMINATION_LAYERS, boardFinishedIn, finalFrac, roughFrac, RESAW_BOARD_WIDTHS_IN, RESAW_MIN_SPARES, boardByNominal, boardForThickness, cutList, fabText, glueUpName, groupedName, isBuilt, ribFillers, sizeText, laminationText, makeLanes, packLanes, planLamination, stepMapOf, resawUsableIn, spareSlots, stripsPerBoard, toCsv } from './cutlist';
+import { BOARD_THICKNESSES, MAX_LAMINATION_LAYERS, boardFinishedIn, finalFrac, roughFrac, RESAW_BOARD_WIDTHS_IN, RESAW_MIN_SPARES, boardByNominal, boardForThickness, cutList, fabText, glueUpName, groupedName, isBuilt, ribFillers, ribFillerSource, sizeText, laminationText, makeLanes, packLanes, planLamination, stepMapOf, resawUsableIn, spareSlots, stripsPerBoard, toCsv } from './cutlist';
 
 // D-72/D-73: this file's resaw and sheet numbers (0.234 in bands in 0.359 -> 3/8 in rough pools, the 4 mm sheet, the tube) are the 4 mm okoume design: PRE_D72. The white oak / rod cut list is in d72.test.ts.
 const p = { ...defaultParams(), ...PRE_D72 };
@@ -505,9 +505,10 @@ describe('actual cuts (Eric 2026-10-12: the cut list lists the cuts, not the glu
 
   it('accounts for every oak part exactly once: ids in cuts equal the oak parts, and every piece has a rough size', () => {
     const oakIds = dparts.filter((x) => isBuilt(x) && /oak/i.test(x.material) && (x.kind === 'lumber' || x.kind === 'bentlam')).map((x) => x.id).sort();
-    const own = dcl.cuts.filter((c) => c.partNo !== 'side-rib-filler'); // the rib fillers are spare band strips, not model parts (see below)
+    const own = dcl.cuts.filter((c) => c.partNo !== 'side-rib-filler'); // the rib fillers are band-strip offcuts, not model parts (see below)
     expect([...new Set(own.flatMap((c) => c.ids))].sort()).toEqual(oakIds);
-    expect(own.every((c) => c.partId === c.ids[0] && c.qty === c.ids.length && c.rough.t > 0 && c.rough.w > 0 && c.rough.l > 0)).toBe(true);
+    // a strip that several discs are cut from is one cut for all their ids (D-93)
+    expect(own.every((c) => c.partId === c.ids[0] && (c.qty === c.ids.length || (c.qty === 1 && /one strip for all/.test(c.label))) && c.rough.t > 0 && c.rough.w > 0 && c.rough.l > 0)).toBe(true);
     expect(dcl.cuts.some((c) => c.piece === 'solid')).toBe(true);
   });
 
@@ -641,11 +642,11 @@ describe('review round: names, the tall knee block, the rib fillers', () => {
     expect(sizeText({ t: 1, w: 2, l: 3 }, false)).toBe('1 \u00d7 2 \u00d7 3'); // every other part stays T x W x L
   });
 
-  it('lists the eight rib fillers (spare band strips) in the cuts', () => {
+  it('lists the eight rib fillers (band strip offcuts, so the spare strips stay for the bend test) in the cuts', () => {
     const f = dc.cuts.filter((c) => c.partNo === 'side-rib-filler');
     expect(f.map((c) => c.name)).toEqual(expect.arrayContaining(['Rib filler, box rib', 'Rib filler, mid rib', 'Rib filler, bow post', 'Rib filler, rear rib']));
     expect(ribFillers(dm, dp)).toHaveLength(4);
     expect(f.reduce((a, c) => a + c.qty, 0)).toBe(8);
-    for (const c of f) { expect(c.ids).toEqual([]); expect(c.note).toMatch(/spare band strip/); }
+    for (const c of f) { expect(c.ids).toEqual([]); expect(c.note).toMatch(/tail of a band strip/); expect(c.roughExact.l).toBeLessThanOrEqual(ribFillerSource(dc.resaw, ribFillers(dm, dp), dp).offcutIn); }
   });
 });
