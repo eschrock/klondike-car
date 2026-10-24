@@ -147,8 +147,8 @@ describe('build book', () => {
     const anchors = [...html.matchAll(/<a href="(https?:[^"]+)"([^>]*)>/g)];
     expect(anchors.length).toBeGreaterThan(0);
     for (const a of anchors) { expect(vendor.has(a[1]), a[1]).toBe(true); expect(a[2]).toContain('target="_blank"'); expect(a[2]).toContain('rel="noopener"'); }
-    // the SVGs are the nesting sheets, the assembly step figures, the forms (shrunk) and the part drawings
-    expect((html.match(/<svg\b/g) ?? []).length).toBe(pkg.data.nest.sheets.length + pkg.data.steps.reduce((n, s) => n + s.figures.length, 0) + pkg.data.forms.length + pkg.data.partDrawings.length);
+    // the SVGs are the nesting sheets, the assembly step figures and the part drawings (a form is its files and stock list, built from its own pages)
+    expect((html.match(/<svg\b/g) ?? []).length).toBe(pkg.data.nest.sheets.length + pkg.data.steps.reduce((n, s) => n + s.figures.length, 0) + pkg.data.partDrawings.filter((sh) => sh.features.length > 0).length);
     expect(new TextEncoder().encode(html).length).toBeLessThan(4_000_000);
   });
 
@@ -161,7 +161,8 @@ describe('build book', () => {
       expect(html, `step ${s.n} goal`).toContain(esc(s.goal));
       // Each item and sub-item, with its part tokens as links to the cut list: the text between the tokens is in the book as written.
       const walk = (items: typeof s.items): string[] => items.flatMap((q) => [q.text, ...walk(q.sub ?? [])]);
-      for (const t of walk(s.items)) for (const piece of t.split(/\{\{[^{}]+\}\}/).map((x) => x.trim()).filter((x) => x.length > 3)) expect(html, `step ${s.n} item`).toContain(esc(piece));
+      // (step 0 points at the Verify section on paper instead of repeating its checks)
+      if (s.id !== 'verify') for (const t of walk(s.items)) for (const piece of t.split(/\{\{[^{}]+\}\}/).map((x) => x.trim()).filter((x) => x.length > 3)) expect(html, `step ${s.n} item`).toContain(esc(piece));
     }
     // A part with a drawing links to it (with its "[Dn]" number for paper); every in-page link has its target.
     expect(html).toMatch(/<a class="part" href="#drawing-\d+">rail L<\/a> <span class="dref">\[D\d+\]<\/span>/);
@@ -268,7 +269,7 @@ describe('readability round 2: the book reads in the shop', () => {
       expect(t.replace(/shaper:cutDepth/g, ''), id).not.toMatch(/\b[a-z]+(?:[A-Z][a-z0-9]+)+\b/); // (shaper:cutDepth is the attribute the Shaper reads)
     }
     expect(sectionText('verify')).not.toMatch(/Params:|Guards:/);
-    expect(sectionText('verify')).toContain('Design values this confirms:');
+    expect(sectionText('verify')).not.toContain('Design values this confirms:'); // on paper the check is what to do; the design values are in the app
     expect(sectionText('verify')).toContain('"Wheel hub length"'); // a design value by its parameters-panel label
   });
 

@@ -1076,7 +1076,7 @@ describe('D-76: side ribs, knees and box ties (tie-down bases)', () => {
       const fit = txt(get('final-fit'));
       expect(fit).not.toMatch(/Drill all \d holes|drill all the layers/i);
       expect(fit).toContain(`drilled at step ${list.map((q) => q.id).indexOf('side-holes')}, before the finish`);
-      expect(fit).toMatch(/2 1\/4-20 × 2" (?:stainless )?button-head bolts each, pushed in from OUTSIDE with a 3\/4" fender washer/);
+      expect(fit).toMatch(/two 1\/4-20 × 2" (?:stainless )?button-head bolts each, pushed in from OUTSIDE with a 3\/4" fender washer/);
       expect(fit).toMatch(/Nylock nuts on the bracket/);
       expect(rib).toMatch(/Check its two holes first \(Verify\)/);
       expect(fit).toContain(`${p.lashLoadLbf} lbf pull at ${p.lashPullAngleDeg}°`);

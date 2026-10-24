@@ -165,7 +165,7 @@ export function addStorageDrainHoles(ctx: Ctx, parts: Part[]): void {
     (host.joints ??= []).push({ // a hole in this part alone, so `to` is the part itself (no mating part)
       type: 'hole', to: host.id, count: 1, diaIn: p.storageDrainDiaIn, at: [localPoint(host.transform, [site.x, site.y, site.z])],
       size: `${frac(p.storageDrainDiaIn)}" drain hole through ${site.hostId === 'deck' ? 'the deck (the box floor)' : 'the box floor panel'} at the aft ${site.tag === 'L' ? 'left' : 'right'} corner of the box; the bore is sealed with epoxy`,
-      note: 'D-83: drilled up through the deck from below while the hull is inverted (before the box goes on); seal the bore with epoxy, and fair the floor to fall about 1/8" toward each drain with epoxy thickened with fumed silica or wood flour. The Extreme spec fits a stainless nipple here instead.',
+      note: 'D-83: on the deck it is cut with the deck (its Shaper file), never drilled again; a box floor panel is drilled. Seal the bore with epoxy from below while the hull is inverted (before the box goes on), and fair the floor to fall about 1/8" toward each drain with epoxy thickened with fumed silica or wood flour. The Extreme spec fits a stainless nipple here instead.',
     });
   }
 }

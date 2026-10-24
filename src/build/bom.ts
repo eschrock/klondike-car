@@ -554,6 +554,20 @@ function boltItems(part: Part, j: Joint, byId: PartMap, mat: FastMat): FastenerI
   const oneWasher = /one washer a bolt/i.test(size); // the D-ring bolts (D-83): a washer under the head only, the nylock bears on the bracket
   const out: FastenerItem[] = [{ label, qty: n }, nut, washer(tnut ? (nylon ? 0 : 1) : type === 'carriage bolt' || nylon || nutSideOnly || oneWasher ? 1 : 2)];
   if (out[2].qty === 0) out.splice(2, 1);
+  // The joint names its washer's outside diameter: buy that size, not the default fender washer. One OD for every bolt ("a 3/4" fender washer under the head", the D-rings),
+  // or one per row ("a fender washer ...: 1-1/2" under the upper three, 7/8" under the lower two", the grab boards).
+  const OD = String.raw`(\d+-\d+\/\d+|\d+\/\d+|\d+)"`;
+  const rows = new RegExp(String.raw`fender washer[^;]*?:\s*${OD} under the upper (\w+),\s*${OD} under the lower (\w+)`, 'i').exec(size);
+  const single = new RegExp(String.raw`${OD}\s*(?:OD\s+)?fender washer`, 'i').exec(size);
+  const w = out.findIndex((q) => /fender washer/.test(q.label));
+  if (w >= 0 && rows) {
+    const word = (t: string): number => ({ one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 } as Record<string, number>)[t.toLowerCase()] ?? Number(t);
+    const up = word(rows[2]), low = word(rows[4]);
+    if (up + low > 0 && n % (up + low) === 0) {
+      const k = n / (up + low), per = 1; // one washer a bolt, on the nut side: the head bears on the strip
+      out.splice(w, 1, { label: `${mat.ss} fender washer ${d}" (${rows[1]}" OD)`, qty: per * up * k }, { label: `${mat.ss} fender washer ${d}" (${rows[3]}" OD)`, qty: per * low * k });
+    }
+  } else if (w >= 0 && single) out[w] = { ...out[w], label: `${out[w].label} (${single[1]}" OD)` };
   if (nylon) out.push({ label: `Nylon washer for ${d}" screw`, qty: n });
   if (/button plugs?/i.test(size)) { const bp = /(\d\/\d+)\s*in\b[^,;]*?button plugs?/i.exec(size); out.push({ label: `Button plug ${bp ? bp[1] : '5/8'}" black nylon`, qty: n }); }
   return out;

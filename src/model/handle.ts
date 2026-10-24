@@ -12,6 +12,7 @@ import { STEP, box, cylinder, span, SIDES, IN3_PER_FT3, type Ctx, stainless } fr
 import type { Layout } from './layout';
 import { inchesText, localPoint, washerThick } from './rear-mount';
 import { multiply, translation } from './mat4';
+import { frac } from './joinery';
 import { transformPoint } from './bounds';
 import { profilePart } from './profile';
 import type { Part, Vec2, Vec3 } from './types';
@@ -224,7 +225,7 @@ export function buildHandle(ctx: Ctx): Part[] {
         { type: 'hole', to: `handle-socket-${tag}`, count: 1, size: `relief groove ${POST_RELIEF.widthIn}" wide × ${POST_RELIEF.depthIn}" deep, ${f2(Math.max(0, p.handleSocketDepthIn - 0.5))}" long from the foot, down the middle of the transom-side face`,
           at: [[y, h.zFoot + Math.max(0, p.handleSocketDepthIn - 0.5) / 2, p.handlePostThickIn - POST_RELIEF.depthIn / 2]],
           cut: { kind: 'relief', lo: [y - POST_RELIEF.widthIn / 2, h.zFoot, p.handlePostThickIn - POST_RELIEF.depthIn], hi: [y + POST_RELIEF.widthIn / 2, h.zFoot + Math.max(0, p.handleSocketDepthIn - 0.5), p.handlePostThickIn], what: 'to clear the two socket screw heads' } },
-        { type: 'pin', to: 'handle-bar', count: 1, diaIn: 0.375, size: `3/8" × 2-1/4" ${stainless(p)} rod (or an oak dowel) epoxied into a stopped 3/8" hole 1-1/2" deep in the post top and 3/4" deep in the bow underside`, note: 'permanent: the posts and the bow come out of the sockets as one U' },
+        { type: 'pin', to: 'handle-bar', count: 1, diaIn: p.handleBowPinDiaIn, size: `${frac(p.handleBowPinDiaIn)}" × 2-1/4" ${stainless(p)} rod (or an oak dowel) epoxied into a stopped ${frac(p.handleBowPinDiaIn)}" hole 1-1/2" deep in the post top and 3/4" deep in the bow underside`, note: 'permanent: the posts and the bow come out of the sockets as one U' },
         { type: 'glue', to: 'handle-bar', count: 1, size: 'epoxy on the post top and the pin' },
       ],
       notes: `Planed ${f2(p.handlePostThickIn)}" × ${f2(p.handlePostWidthIn)}" from 3/4" × 1-1/4" stock (D-60; a 5/4 board makes both uprights and the bow) so it slides in the socket (inside ${f2(h.socketX - 2 * w)}" × ${f2(h.socketY - 2 * w)}", build review r2 S7). The top is sawn to the handlebow's ${h.bow.postSlopeDeg.toFixed(1)}° slope (${f2(under(yi))}" inner edge, ${f2(under(yo))}" outer edge) so the bow sits flat on it. Lifts straight out of the socket once the clevis pin is out (D-9); the bow is epoxied to the two uprights, so the handle comes off as ONE U (no wing nut inside the aluminum socket). RELIEF GROOVE (build 3c M5): the two socket screw heads stand ${f2(0.14 + 0.06)}" proud of the bore wall on the transom side, so cut a ${POST_RELIEF.widthIn}" wide × ${POST_RELIEF.depthIn}" deep groove down the middle of the post's FRONT (transom-side) face from the foot up past the parked pin hole (${f2(p.handleSocketDepthIn - 0.5)}" of it enters the socket when parked) on the table saw or router table; without it the heads bind the post. The groove is on the tension face of the hold-back bend: the handle-sockets row uses the notched section.`,
@@ -255,7 +256,7 @@ export function buildHandle(ctx: Ctx): Part[] {
       : `Straight handlebow (crown 0): a ${sec}" thick white-oak bar bandsawn from one board, ends eased over, pinned and epoxied to the tops of the two uprights.`,
     sourcing: { vendor: `One 5/4 white-oak board at least ${(zHi - zLo + 0.25 + bw.crownIn + (bw.zPost - bw.zEnd)).toFixed(1)}" wide (a 5/4 × 6 board, 5-1/4" actual, not a 3" or 4" board: the crowned bow is ${(zHi - zLo).toFixed(1)}" from its lowest end to its highest edge and needs its sweep on top of that to follow the grain), about ${Math.ceil((2 * bw.yEnd + 2) / 12)} ft long, straight-grained`, costUsd: 14 },
   });
-  bar.joints = SIDES.map(({ s: sg, tag }) => ({ type: 'pin' as const, to: `handle-post-${tag}`, count: 1, diaIn: 0.375, size: `3/8" × 2-1/4" ${stainless(p)} rod epoxied, blind hole 3/4" deep in the bow, drilled square to the post-top cut`, at: [localPoint(bar.transform, [h.xBar, sg * h.yPost, bw.zPost - sec / 2 + 0.375])] }));
+  bar.joints = SIDES.map(({ s: sg, tag }) => ({ type: 'pin' as const, to: `handle-post-${tag}`, count: 1, diaIn: p.handleBowPinDiaIn, size: `${frac(p.handleBowPinDiaIn)}" × 2-1/4" ${stainless(p)} rod epoxied, blind hole 3/4" deep in the bow, drilled square to the post-top cut`, at: [localPoint(bar.transform, [h.xBar, sg * h.yPost, bw.zPost - sec / 2 + 0.375])] }));
   parts.push(bar);
   // The parked position (D-57): the posts and the bow sink `parkDropIn` deeper into the sockets (the second pin hole); the sockets and pins stay.
   if (ctx.view.handle === 'parked' && h.parkDropIn > 1e-6) {

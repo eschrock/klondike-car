@@ -110,13 +110,18 @@ export interface EndJoint {
   widthIn: number;
 }
 
+/** Oak left behind a loose-tenon mortise in its host (in): a fabrication rule, so a slip of the router or a panel planed thin cannot break through the face. */
+const TENON_WALL_IN = 0.25;
+
 /** Joint for the end of a `stockIn`-thick piece into a `hostIn`-thick host over `bandIn` of face: Domino if it fits, else a loose tenon (both parts mortised: CNC or router; shop-made tenon stock). Not an integral CNC tenon (build review S2). */
 export function endJoint(p: Params, stockIn: number, hostIn: number, bandIn: number): EndJoint {
   const d = chooseDomino(p, { stockIn, hostIn, widthIn: bandIn });
   if (d) return { type: 'domino', size: `${d.name} (${d.tool})`, widthIn: d.wMm / MM };
   const w = Math.max(0.25, Math.min(STUB_MAX_WIDTH_IN, bandIn - 0.2));
   const t = Math.max(0.125, Math.round((stockIn / 3) * 16) / 16);
-  return { type: 'mortise-tenon', size: `${frac(t)} × ${frac(w)} × ${frac(p.tenonDepthIn)} deep loose tenon (both parts mortised; rounded-edge tenon stock)`, widthIn: w };
+  // Keep TENON_WALL_IN of oak behind the mortise in the host (a 1/2" transom with a 3/8" mortise left 1/8" behind its show face): a shallower mortise, never a thinner wall.
+  const depth = Math.max(0.125, Math.min(p.tenonDepthIn, Math.floor((hostIn - TENON_WALL_IN) * 16 + 1e-9) / 16));
+  return { type: 'mortise-tenon', size: `${frac(t)} × ${frac(w)} × ${frac(depth)} deep loose tenon (both parts mortised; rounded-edge tenon stock)`, widthIn: w };
 }
 
 // ── Frames ──

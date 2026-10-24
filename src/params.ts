@@ -362,7 +362,7 @@ const defs = {
   scupperDiaIn: {
     label: 'Deck scupper (drain hole) diameter', group: 'body', unit: 'in',
     default: 0.375, min: 0.25, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-43',
-    note: 'Epoxy-lined holes through the chines at the rear corners and just behind the bow curl, each with a stainless nipple so no cut ply edge is exposed.',
+    note: 'Drain holes through the sides at deck level, at the rear corners and just behind the bow bulkhead, each bore sealed with epoxy so no cut ply edge is exposed; only the Extreme spec fits a stainless nipple in each (D-83).',
   },
   ventHoleIn: {
     label: 'Dado vent hole diameter', group: 'body', unit: 'in',
@@ -882,7 +882,7 @@ const defs = {
   axleCrossHoleFromEndIn: {
     label: 'Axle cross hole: center from the axle end', group: 'wheels', unit: 'in',
     default: 0.375, min: 0.25, max: 0.75, step: 0.0625, status: 'assumed', ref: 'D-60',
-    note: 'D-60: with 1 in of axle beyond the hub (axleEndExtraIn) this leaves 5/8 in for the collar and washer. The edge distance (this less half the hole) should be about 1.5 hole diameters or more.',
+    note: 'D-60: with 1 in of axle beyond the hub (axleEndExtraIn) this leaves 5/8 in to the hole center, 0.547 in to its near edge: room for the 1/2 in collar alone, so no washer goes between the hub and the collar. The edge distance (this less half the hole) should be about 1.5 hole diameters or more.',
   },
   axleStyle: {
     label: 'Axle style', group: 'wheels', unit: '',
@@ -1344,6 +1344,11 @@ const defs = {
     label: 'Push-handle retaining pin diameter', group: 'brake', unit: 'in',
     default: 0.3125, min: 0.1875, max: 0.5, step: 0.0625, status: 'assumed', ref: 'D-39',
     note: 'Clevis (or hitch) pin through both socket walls and the upright; a cotter or lynch pin keeps it in (D-9).',
+  },
+  handleBowPinDiaIn: {
+    label: 'Handlebow pin diameter (stainless rod into each post top)', group: 'brake', unit: 'in',
+    default: 0.25, min: 0.1875, max: 0.375, step: 0.0625, status: 'assumed', ref: 'D-57',
+    note: 'Build book review 2026-10-24: a 3/8 in pin in the 11/16 in post left 5/32 in walls, easy to drill out of and to split; 1/4 in leaves 7/32 in. The pin only locates the bow on the post top (the epoxied post-top joint and the U carry the push); a 1/4 in 304 rod shears at about 1,400 lb.',
   },
   handleHoldbackLbf: {
     label: 'Hold-back pull on the push handle', group: 'brake', unit: 'lbf',
@@ -2735,7 +2740,7 @@ export function validateParams(input: Params): ParamIssue[] {
   if (p.tireType === TIRE_TYPE.flatFree && p.bumpWheelRateLbIn < 1000)
     warn(['tireType', 'bumpWheelRateLbIn'], `Flat-free tires change the bump rate, not just the mass: the bump model still assumes ${p.bumpWheelRateLbIn} lb/in, a pneumatic tire. Measure the squash of the actual tire (load / squash) and set Effective wheel radial stiffness before trusting the structure rows (a foam tire can be 2,000 lb/in or more).`);
   if (p.axleCrossHoleFromEndIn - p.axleCrossHoleDiaIn / 2 < 1.5 * p.axleCrossHoleDiaIn - 1e-6 || p.axleEndExtraIn - p.axleCrossHoleFromEndIn < 0.5)
-    warn(['axleCrossHoleFromEndIn', 'axleCrossHoleDiaIn', 'axleEndExtraIn'], 'The cotter-pin cross hole is too close to the axle end (want an end distance of 1.5 hole diameters or more) or leaves less than 1/2" for the collar and washer.');
+    warn(['axleCrossHoleFromEndIn', 'axleCrossHoleDiaIn', 'axleEndExtraIn'], 'The cotter-pin cross hole is too close to the axle end (want an end distance of 1.5 hole diameters or more) or leaves less than 1/2" for the collar.');
   // E1 (3c-7): the riding pin hole must have wood below it. At a 12 in socket the hole sat 0.19 in above the post foot (the pin retained nothing).
   {
     const hi = handleInsertion(p);

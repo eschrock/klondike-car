@@ -25,7 +25,7 @@ const frac32 = (x: number): string => { let n = Math.round(x * 32), d = 32; whil
 
 /**
  * The cotter cross hole near the outboard end of an axle rod (D-60, D-71): the rear through rod and each front stub carry one per wheel. It sits `axleCrossHoleFromEndIn` in from the
- * rod's end, which is `axleEndExtraIn - axleCrossHoleFromEndIn` beyond the hub (the collar and washer lie between), drilled vertically across the rod (its axis in the bending plane: the
+ * rod's end, which is `axleEndExtraIn - axleCrossHoleFromEndIn` beyond the hub (the collar lies between, with no washer), drilled vertically across the rod (its axis in the bending plane: the
  * worst orientation, which the axle-stress row assumes). A cylinder's own axis is its local z, and local z runs toward -y here, so the outboard end of the `s` side is at local z = -s L / 2.
  * `s` is +1 for the left end, -1 for the right; `length` the rod's length; `wheelId` the wheel whose collar the pin holds.
  */
@@ -34,7 +34,7 @@ export function cotterHoleJoint(p: Params, s: 1 | -1, length: number, wheelId: s
   const beyondHub = p.axleEndExtraIn - from;
   return {
     type: 'hole', to: wheelId, count: 1, diaIn: p.axleCrossHoleDiaIn,
-    size: `${frac32(p.axleCrossHoleDiaIn)}" hole across the rod, drilled vertically, ${frac16(from)}" in from the outboard end (${frac16(beyondHub)}" beyond the hub: room for the collar and washer, ${frac16(p.axleEndExtraIn)}" of rod stands out) for the cotter pin`,
+    size: `${frac32(p.axleCrossHoleDiaIn)}" hole across the rod, drilled vertically, ${frac16(from)}" in from the outboard end (${frac16(beyondHub)}" beyond the hub: room for the 1/2" collar alone, no washer, ${frac16(p.axleEndExtraIn)}" of rod stands out) for the cotter pin`,
     at: [[0, 0, -s * (length / 2 - from)]],
     note: `the pin keeps the collar on; the hole is ${frac16(from - p.axleCrossHoleDiaIn / 2)}" from the end to its edge (the axle-stress row checks the net section, the pin bearing and the tear-out)`,
   };

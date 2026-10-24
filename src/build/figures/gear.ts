@@ -827,7 +827,7 @@ const wheelOnAxle: FigFn = (c) => {
   return {
     id: 'gear-fit-wheel',
     title: 'A wheel on its axle end',
-    caption: `Each wheel slides onto its axle end, just clear of the beam end; then a washer and a collar go on against the hub, and a cotter pin through the cross hole ${f16(p.axleCrossHoleFromEndIn)} from the end keeps them there. This dry fit proves the track, the spin and the clearances while the hull is still upside down. Then the wheels and the front gear come off and are bagged by side, because the underside is finished next, in [[step:finish-under]]; the beams, the rear ${aw} and its plates, the hold-down angles, the kingpin${has(/^brake-backer/) ? ', the knee backers and their plates' : ''} stay on (mask the metal).`,
+    caption: `Each wheel slides onto its axle end, just clear of the beam end; then a collar goes on against the hub, and a cotter pin through the cross hole ${f16(p.axleCrossHoleFromEndIn)} from the end keeps them there. This dry fit proves the track, the spin and the clearances while the hull is still upside down. Then the wheels and the front gear come off and are bagged by side, because the underside is finished next, in [[step:finish-under]]; the beams, the rear ${aw} and its plates, the hold-down angles, the kingpin${has(/^brake-backer/) ? ', the knee backers and their plates' : ''} stay on (mask the metal).`,
     svg: F.svg('A wheel on its axle end: washer, collar and cotter pin, and the list of what comes off after the dry fit'),
   };
 };

@@ -910,6 +910,7 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
         h('h3', { class: 'bp-step-title' }, `${s.n}. ${s.title}`, s.kind === 'build' ? '' : h('span', { class: 'bp-kind' }, s.kind)),
         ...(s.goal ? [h('p', { class: 'bp-goal' }, ...ui.text(s.goal))] : []),
         ...(s.why ? [h('p', { class: 'bp-why' }, h('strong', {}, 'What this is for: '), ...ui.text(s.why))] : []),
+        ...(s.plan ? [h('p', { class: 'bp-why' }, h('strong', {}, 'Plan the days: '), s.plan)] : []),
         ...(s.figures.length ? [figureNodes(s, forPrint)] : []),
         ids.length
           ? h('p', { class: 'small bp-step-parts' }, h('strong', {}, `Parts (${ids.length}): `), ui.chips(ids, forPrint ? ids.length : 8))

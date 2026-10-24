@@ -125,7 +125,7 @@ describe('Shaper SVG files', () => {
     const pk = t.items.filter((i) => i.k === 'pocket');
     expect(pk.length).toBe(5); // two web dados, the deck dado, two mortises
     const depths = pk.map((i) => (i.k === 'pocket' ? i.depth : 0)).sort();
-    expect(depths).toEqual([0.25, 0.25, 0.25, 0.375, 0.375]);
+    expect(depths).toEqual([0.25, 0.25, 0.25, 0.25, 0.25]); // the rail-tenon mortises keep 1/4" of oak behind them in the 1/2" transom
     const b = analyzeShaperPart(parts.find((x) => x.id === 'bow-bulkhead')!, parts, p)!;
     expect(b.mirror).toBe(true); // the bulkhead's pockets are in its rear face
     expect(t.mirror).toBe(false);
