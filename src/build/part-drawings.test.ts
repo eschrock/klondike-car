@@ -258,15 +258,15 @@ describe('part drawings read their sizes from the cut list (readability round 2)
     }
   });
 
-  it('says the rail strips are resawn from the board the cut list uses (5/4 now: 8/4 is not bought, D-79), not 4/4', () => {
+  it('says the rail strips are resawn from the board the cut list uses (8/4 now that it is bought, D-95), not 4/4', () => {
     const rail = sheets.find((s) => s.partNo === 'rail')!;
     const strip = cl.cuts.find((c) => c.ids.includes('rail-L') && c.piece === 'strip')!;
-    expect(strip.board).toBe('5/4');
+    expect(strip.board).toBe('8/4');
     expect(head(rail.svg)).toContain(`2 strips, each ${strip.roughText} rough`);
-    expect(head(rail.svg)).toContain('resawn from 5/4');
+    expect(head(rail.svg)).toContain('resawn from 8/4');
     expect(head(rail.svg)).not.toMatch(/from 4\/4/);
-    expect(head(rail.svg)).not.toMatch(/from 8\/4/);
-    expect(partDims(parts.find((x) => x.id === 'rail-L')!, parts, p).board).toContain('resawn from 5/4');
+    expect(head(rail.svg)).not.toMatch(/from 5\/4/);
+    expect(partDims(parts.find((x) => x.id === 'rail-L')!, parts, p).board).toContain('resawn from 8/4');
   });
 
   it('uses the cut list\'s sizes for the final size: T × W × L for a board, thick × tall × across for the brake knee block, a diameter for a rod', () => {

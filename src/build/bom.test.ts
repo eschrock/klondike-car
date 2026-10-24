@@ -93,14 +93,18 @@ describe('bom', () => {
     for (const l of b.sections.find((x) => x.id === 'lumber')!.lines) expect(l.basis, l.key).toBe(OAK_PRICE_PER_BF[l.key].basis);
   });
 
-  it('prices the thin sheet by its priceKey (this file runs the 4 mm okoume: Aircraft Spruce $121.75) and the 12 mm deck sheet at The Wood Yard, and the oak as 4/4 and 5/4 only (D-79, D-80)', () => {
+  it('prices the thin sheet by its priceKey (this file runs the 4 mm okoume: Aircraft Spruce $121.75) and the 12 mm deck sheet at The Wood Yard, and the oak as 4/4, 5/4 and 8/4 (D-79, D-80, D-95)', () => {
     const ply = b.sections.find((s) => s.id === 'plywood')!.lines;
     expect(ply.map((l) => l.qty)).toEqual([1, 1]);
     expect(ply.map((l) => l.key)).toEqual(['okoume-4mm', '12 mm']);
     expect(ply[0].unitUsd).toBe(PLYWOOD_PRICE['okoume-4mm'].usd);
     expect(ply.map((l) => l.vendor)).toEqual(['Aircraft Spruce', 'The Wood Yard']);
     const lumber = b.sections.find((s) => s.id === 'lumber')!.lines.map((l) => l.key);
-    expect(lumber).toEqual(['4/4', '5/4']); // Peach State has no 6/4 and 8/4 is not bought: the thick parts are face-laminated from 4/4 and 5/4 (D-70, D-79)
+    expect(lumber).toEqual(['4/4', '5/4', '8/4']); // Peach State has no 6/4; 8/4 is bought for the solid blocks, and the 2-1/8" parts are face-laminated from 4/4 (D-70, D-79, D-95)
+  });
+
+  it('leads each lumber note with the linear feet by whole-inch width, then the 6, 8 or 10 ft boards it is priced on', () => {
+    for (const l of b.sections.find((x) => x.id === 'lumber')!.lines) expect(l.notes, l.key).toMatch(/^By width: (\d+" wide: [\d.]+ ft in all, longest piece [\d.]+ ft(; )?)+ \(widths rounded up to a whole inch; a wider board rips down; yards sell random lengths, so buy boards at least as long as the longest piece that add up to the total\)\. Priced as 6, 8 or 10 ft boards, an estimate: /);
   });
 
   it('prices the oak as the whole boards to buy (nesting.ts), not net x 1.3', () => {
@@ -681,7 +685,7 @@ describe('bom text for the book', () => {
 
   it('reads the laminated parts by their names, and keeps the part key out of the CSV item column', () => {
     const lumber = secLines('lumber').map((l) => l.notes ?? '').join(' ');
-    expect(lumber).toMatch(/face-laminated parts \(.*rear axle beam.*wheel chock.*: /); // D-79: with only 4/4 and 5/4 bought, every part thicker than 1" is laminated
+    expect(lumber).toMatch(/face-laminated parts \(.*rear axle beam.*wheel chock.*: /); // D-95: only the parts over 1-3/4" are laminated
     const items = b.csv.split('\n').slice(1).map((r) => r.split(',')[1]);
     expect(items).not.toContain('king-thrust');
     expect(items).toContain('4/4');

@@ -1120,8 +1120,8 @@ const TEMPLATES_1: Template[] = [
             `The rule: a plain part is ${fin(allow)} thicker, ${fin(c.p.roughWidthAllowanceIn)} wider and ${fin(c.p.roughLengthAllowanceIn)} longer than finished.`,
             `A glued-up piece (laminated layers, edge-glued boards, bent strips) is ${fin(c.p.laminateWidthAllowanceIn)} wider and ${fin(c.p.laminateLengthAllowanceIn)} longer, because it comes out of the clamps askew.`,
             face.length ? `A glued block loses at least ${fin(c.p.laminationCleanupIn)} of thickness to jointing and planing after the glue-up.` : false,
-            `A board gives less than its name: 4/4 planes to ${fin(c.p.boardYield44In)}, 5/4 to ${fin(c.p.boardYield54In)}.`,
-            'The lumber list has only 4/4 and 5/4 white oak. Anything thicker (the tongue, the king beam, the crossmember at the chain, the bow bulkhead, the stop blocks, the handlebow) is glued up from layers of stock boards, next.',
+            `A board gives less than its name: 4/4 planes to ${fin(c.p.boardYield44In)}, 5/4 to ${fin(c.p.boardYield54In)}, 8/4 to ${fin(c.p.boardYield84In)}.`,
+            'The lumber list has 4/4, 5/4 and 8/4 white oak. Anything thicker than an 8/4 board planes to (the axle beams, the brake knees and the chocks) is glued up from layers of 4/4, next.',
             'Sticker what is not used today and keep it at 6-9 % moisture.',
           ]),
           ...(edgeShown.length

@@ -24,9 +24,10 @@ describe('board thickness map', () => {
     expect(boardForThickness(0.7501 + 0.0625)!.nominal).toBe('5/4'); // a 7/8" part needs 5/4: 4/4 gives 3/4"
     expect(boardForThickness(0.875)!.nominal).toBe('5/4');
     expect(boardForThickness(1)!.nominal).toBe('5/4');
-    expect(boardForThickness(1.25)).toBeNull(); // 6/4 is not on Peach State's list and 8/4 is not bought: thicker than 5/4 means face-laminated (D-70)
-    expect(boardForThickness(1.746)).toBeNull(); // the king beam: two 5/4 layers
-    expect(boardForThickness(1.76)).toBeNull();
+    expect(boardForThickness(1.25)!.nominal).toBe('8/4'); // 6/4 is not on Peach State's list: a part over 1" comes from 8/4 (D-95)
+    expect(boardForThickness(1.746)!.nominal).toBe('8/4'); // the king beam: one 8/4 board
+    expect(boardForThickness(1.75)!.nominal).toBe('8/4');
+    expect(boardForThickness(1.76)).toBeNull(); // 8/4 finishes to 1-3/4": thicker means face-laminated (D-70)
     expect(boardForThickness(2.25)).toBeNull();
     expect(boardForThickness(9)).toBeNull();
   });
@@ -269,9 +270,9 @@ describe('face lamination (D-70: no 12/4)', () => {
   const rows = cl.oak.flatMap((g) => g.rows);
   const lam = rows.filter((r) => r.lamination);
 
-  it('laminates every part thicker than a 5/4 board finishes to (D-79: 6/4 and 8/4 are not bought): the axle beams, brake knees and chocks, and the thick blocks that used 6/4 and 8/4', () => {
-    expect(lam.map((r) => r.partNo).sort()).toEqual(['beam-F', 'beam-R', 'bow-bulkhead', 'brake-chock', 'brake-knee', 'bridle-tongue', 'chain-joist', 'handle-bar', 'king-beam', 'seat-wedge']); // D-89: the lid hinge backers are gone (the hinges lie on the fixed strip)
-    expect(cl.oak.find((g) => g.board === 'laminated')!.title).toMatch(/^Face-laminated parts \(13 pieces/); // D-89: 15 with the two lid hinge backers
+  it('laminates only the parts thicker than an 8/4 board finishes to (D-95): the axle beams, brake knees and chocks', () => {
+    expect(lam.map((r) => r.partNo).sort()).toEqual(['beam-F', 'beam-R', 'brake-chock', 'brake-knee']);
+    expect(cl.oak.find((g) => g.board === 'laminated')!.title).toMatch(/^Face-laminated parts \(6 pieces/);
     expect(cl.oak.some((g) => g.board === '12/4')).toBe(false);
   });
 
@@ -293,7 +294,7 @@ describe('face lamination (D-70: no 12/4)', () => {
   });
 
   it('every lamination: layers minus the cleanup hold the final thickness, every layer fits its board, on the 1/16 grid, and no odd fractions appear', () => {
-    expect(lam.length).toBe(10); // D-89: the lid hinge backers are gone
+    expect(lam.length).toBe(4); // D-95: only the parts over 1-3/4"
     for (const r of lam) {
       const l = r.lamination!;
       expect(l.layers.reduce((a, q) => a + q.roughT, 0) - p.laminationCleanupIn, r.partNo).toBeGreaterThanOrEqual(r.stock.t - 1e-9);
@@ -343,11 +344,12 @@ describe('face lamination (D-70: no 12/4)', () => {
     expect(t2125.text).toBe('3 layers: 3 \u00d7 3/4" from 4/4, glue up, then mill the block to 2-1/8"');
     // one 32nd over that needs a thicker mix
     expect(planLamination(2.126, undefined, p)!.roughT - p.laminationCleanupIn).toBeGreaterThanOrEqual(2.126);
-    // only 4/4 and 5/4 are stocked (D-79): 5/4 + 4/4 + 4/4 ($29) beats four 4/4 layers ($33) and 5/4 + 5/4 + 4/4 ($33.25)
-    expect(planLamination(2.25, undefined, p)!.layers.map((q) => q.board)).toEqual(['5/4', '4/4', '4/4']);
-    expect(planLamination(2.25, undefined, { ...p, boardYield54In: 0.75 })!.layers.map((q) => q.board)).toEqual(['4/4', '4/4', '4/4', '4/4']); // 5/4 no better than 4/4: four 3/4 layers, 3 - 1/8 = 2-7/8
-    // mixed boards: 5/4 + 4/4 for 1-1/2
-    const mixed = planLamination(1.5, undefined, p)!;
+    // 4/4, 5/4 and 8/4 are stocked (D-95): the cheapest valid mix for 2-1/4 per ft2 of face
+    expect(planLamination(2.25, undefined, p)!.layers.map((q) => q.board)).toEqual(['8/4', '4/4']);
+    expect(planLamination(2.25, undefined, { ...p, boardYield54In: 0.75, boardYield84In: 0.75 })!.layers.map((q) => q.board)).toEqual(['4/4', '4/4', '4/4', '4/4']); // 5/4 and 8/4 no better than 4/4: four 3/4 layers, 3 - 1/8 = 2-7/8
+    // 1-1/2 is one 8/4 board now (D-95); with 8/4 finishing to only 1" it is mixed boards: 5/4 + 4/4
+    expect(planLamination(1.5, undefined, p)).toBeNull();
+    const mixed = planLamination(1.5, undefined, { ...p, boardYield84In: 1 })!;
     expect(mixed.layers.map((q) => q.board)).toEqual(['5/4', '4/4']);
     expect(mixed.text).toBe('2 layers: 1" from 5/4 + 3/4" from 4/4, glue up, then mill the block to 1-1/2"');
     // a part a stocked board finishes to is not laminated
@@ -357,7 +359,7 @@ describe('face lamination (D-70: no 12/4)', () => {
     const fat = planLamination(2.125, undefined, { ...p, laminationCleanupIn: 0.25 })!;
     expect(fat.roughT - 0.25).toBeGreaterThanOrEqual(2.125 - 1e-9);
     expect(fat.cleanupIn).toBe(0.25);
-    expect(fat.layers.map((q) => q.board)).toEqual(['5/4', '4/4', '4/4']); // 3 x 3/4 - 1/4 = 2 is too thin
+    expect(fat.layers.map((q) => q.board)).toEqual(['8/4', '4/4']); // 3 x 3/4 - 1/4 = 2 is too thin; 1-3/4 + 3/4 - 1/4 holds it (D-95)
     expect(laminationText([{ board: '4/4', roughT: 0.75, finalT: 0.75 }, { board: '4/4', roughT: 0.75, finalT: 0.75 }])).toBe('2 layers: 2 \u00d7 3/4" from 4/4');
     expect(laminationText([{ board: '8/4', roughT: 1.75, finalT: 1.75 }, { board: '4/4', roughT: 0.75, finalT: 0.75 }], 2.25)).toBe('2 layers: 1-3/4" from 8/4 + 3/4" from 4/4, glue up, then mill the block to 2-1/4"'); // the text helper still reads any board mix
   });
@@ -431,8 +433,8 @@ describe('rough allowances (Eric 2026-10-12)', () => {
       for (const r of g.rows) { expect(r.stock.t, r.partNo).toBeLessThanOrEqual(g.finishedIn + 1e-9); expect(r.rough.t, r.partNo).toBeLessThanOrEqual(g.nominalIn + 1e-9); }
     }
     const king = dcl.cuts.find((c) => c.partNo === 'king-beam')!;
-    expect(king.board).toBe('5/4'); // D-79: no 8/4 is bought; the 1.746 in king beam is two 5/4 layers, each planed to 1"
-    expect(king.rough.t).toBeLessThanOrEqual(boardByNominal('5/4').nominalIn + 1e-9);
+    expect(king.board).toBe('8/4'); // D-95: the 1.746 in king beam is one 8/4 board
+    expect(king.rough.t).toBeLessThanOrEqual(boardByNominal('8/4').nominalIn + 1e-9);
   });
 
   it('does not change the mass: the mass reads stock, never rough', () => {
@@ -581,7 +583,7 @@ describe('readability round 2: one lane count for the steps, the book and the cu
 
 describe('glue-up and layer-cut labels never say the kind twice (cost pass round 2)', () => {
   it('a name that ends in "block" is not given a second one; the layer cuts use the same base name', () => {
-    const pp = defaultParams();
+    const pp = { ...defaultParams(), boardYield84In: 1 }; // 8/4 finishing to only 1" (D-95 off in effect) puts the thin blocks back to layers
     const cl = cutList(buildModel(pp), pp);
     for (const g of cl.glueUps) expect(g.label, g.label).not.toMatch(/\b(\w+) \1$/i);
     expect(cl.glueUps.map((g) => g.label)).toContain('Seat back stop block');
@@ -590,7 +592,7 @@ describe('glue-up and layer-cut labels never say the kind twice (cost pass round
     expect(glueUpName('Rear transom', false)).toBe('Rear transom panel');
   });
   it('the edge-glued layers of a laminate are unequal and mirrored: neighboring seams sit at least 1-1/2" apart', () => {
-    const pp = defaultParams();
+    const pp = { ...defaultParams(), boardYield84In: 1 }; // as above: the wide blocks are layered again
     const cl = cutList(buildModel(pp), pp);
     for (const id of ['bridle-tongue', 'bow-bulkhead']) {
       const first = (layer: number): number => cl.cuts.filter((c) => c.piece === 'layer' && c.ids.includes(id) && c.layer === layer).sort((a, b) => a.index - b.index)[0].roughExact.w;
