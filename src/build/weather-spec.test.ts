@@ -272,7 +272,7 @@ describe('the thin-sheet line is priced by priceKey (D-80)', () => {
 });
 
 describe('the cost pass totals (D-79 to D-83)', () => {
-  it('Standard costs about $1,400 to $1,500 and mostly quoted; Extreme about $2,300; the shop stock adds nothing to the estimate', () => {
+  it('Standard costs about $1,500 and mostly quoted; Extreme about $2,400; the shop stock adds nothing to the estimate', () => {
     expect(bStd.totalUsd).toBeGreaterThan(1350);
     expect(bStd.totalUsd).toBeLessThan(1560);
     expect(bExt.totalUsd).toBeGreaterThan(2000);
@@ -280,9 +280,9 @@ describe('the cost pass totals (D-79 to D-83)', () => {
     expect(bStd.estimateShare).toBeLessThan(0.15);
     expect(bStd.unpriced).toEqual([]);
     expect(bExt.unpriced).toEqual([]);
-    // the lumber is Peach State's 4/4 and 5/4 only
+    // the lumber is Peach State's 4/4, 5/4 and 8/4 (D-95)
     const lum = bStd.sections.find((x) => x.id === 'lumber')!.lines;
-    expect(lum.map((l) => [l.key, l.unitUsd, l.basis])).toEqual([['4/4', 8.25, 'quoted'], ['5/4', 10, 'quoted']]);
+    expect(lum.map((l) => [l.key, l.unitUsd, l.basis])).toEqual([['4/4', 8.25, 'quoted'], ['5/4', 10, 'quoted'], ['8/4', 12.5, 'quoted']]);
     // the 2:1 U.S. Composites kit with its pumps and the fumed silica by the quart
     expect(lines(bStd).find((l) => l.key === 'silica')!.unit).toBe('qt');
     expect(lines(bStd).find((l) => l.key === 'epoxy-pumps')!.unitUsd).toBe(8.5);
