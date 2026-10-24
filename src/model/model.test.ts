@@ -50,6 +50,7 @@ const ALLOW: Allow[] = [
   // ---- body: captured joints and sloped members
   { a: /^deck$/, b: /^(side-[LR]-(chine|chine-in|web)|transom-rear)$/, why: 'the deck edge rises into the gap under the inner chine band, against the web, and sits in the transom dado (D-35, D-45, D-62)' },
   { a: /^side-[LR]-web$/, b: /^(side-[LR]-(chine|chine-in|gunwale|gunwale-in)|transom-rear)$/, why: 'the oak bands are glued to the faces of the web (the sandwich, D-62; the plan-curved slab boxes meet along the S) and the web ends enter the transom stopped dados (D-35)' },
+  { a: /^side-[LR]-gunwale-cap$/, b: /^side-[LR]-web$/, why: '(2026-10-24: gunwale cap strip) the cap sits on the web\'s top edge in the same plane; that edge follows the sheer, so the 1-1/2 in slab boxes of the two parts overlap by the rise of the sheer over one slab (about 1/8 in); against the bands it is clean' },
   { a: /^side-rib-[LR]\d$/, b: /^side-[LR]-(chine-in|gunwale-in|web)$/, why: 'D-76: the rib\'s back is glued to the inner bands (and to a band-strip filler on the web); in the bow taper the plan-curved band slab boxes (1-1/2 in long) stand proud of the curved face the rib meets' },
   { a: /^seat-(wedge-[LR]|crest-strip)$/, b: /^seat-(back-(stile|pad|panel)|knob|wedge)-?[LR]?$/, why: 'oak wedge/post is a trapezoid extrusion whose sloped face is the stile\'s rear face; its OBB is the bounding box' },
 ];

@@ -4,7 +4,7 @@ import { buildModel } from '../model';
 import { defaultParams } from '../params';
 import { BuildData, buildPackage, zipName, zipPackage } from './package';
 import { crc32 } from './zip';
-import { BOOK_SECTIONS } from './build-book';
+import { BOOK_SECTIONS, buildBookHtml } from './build-book';
 import { esc, usd } from '../ui/build-helpers';
 
 const p = defaultParams();
@@ -155,7 +155,7 @@ describe('build book', () => {
   it('contains every assembly step title, with its clamp and cure text and its checks', () => {
     expect(pkg.data.steps.length).toBeGreaterThan(20);
     for (const s of pkg.data.steps) {
-      if (s.id === 'verify') { expect(html).toContain(`<a href="#verify">${esc(s.title)}</a>`); continue; } // step 0 is its index row; the Verify section is the step
+      if (s.id === 'verify') { expect(html).toContain(`<a href="#verify">${s.n}. ${esc(s.title)}</a>`); continue; } // step 0 is its index row; the Verify section is the step
       expect(html, `step ${s.n}`).toContain(`Step ${s.n}.</span> ${esc(s.title)}`);
       if (s.clampCure) expect(html, `step ${s.n} clampCure`).toContain(esc(s.clampCure));
       for (const c of s.checks) expect(html, `step ${s.n} check`).toContain(esc(c.replace(/:\s*passed$/i, ''))); // a check is a to-do (an empty box), never "passed"
@@ -168,6 +168,26 @@ describe('build book', () => {
     // A part with a drawing links to it (with its "[Dn]" number for paper); every in-page link has its target.
     expect(html).toMatch(/<a class="part" href="#drawing-\d+">rail L<\/a> <span class="dref">\[D\d+\]<\/span>/);
     for (const m of html.matchAll(/href="#([^"]+)"/g)) expect(html, m[1]).toContain(`id="${m[1]}"`);
+  });
+
+  it('opens on a title page (title and, from the app, a picture), a blank back and a checklist of the sections with every step (Eric 2026-10-24)', () => {
+    expect(html).toMatch(/<section class="title-page"><h1>Troop 455 Klondike Derby sled<\/h1><p class="subtitle">Build book<\/p><\/section><div class="blank-page"/);
+    const toc = /<nav aria-label="Contents" class="toc-check">([\s\S]*?)<\/nav>/.exec(html)![1];
+    expect((toc.match(/\u2610/g) ?? []).length).toBe(BOOK_SECTIONS.length + pkg.data.steps.length);
+    const withPic = new BuildData(pkg.data.parts, pkg.data.p, { date });
+    withPic.setCover('data:image/png;base64,iVBORw0KGgo=');
+    expect(buildBookHtml(withPic)).toContain('<img class="cover" src="data:image/png;base64,iVBORw0KGgo="');
+    withPic.setCover('javascript:alert(1)');
+    expect(buildBookHtml(withPic)).not.toContain('<img class="cover"');
+  });
+
+  it('puts a box on every task: each top-level step item and each cut-list row, never on a sub-bullet', () => {
+    const step = /<div class="step" id="step-9">([\s\S]*?)<div class="step" id="step-10">/.exec(html)![1];
+    const items = /<ol class="instr">([\s\S]*)<\/ol>/.exec(step)![1];
+    expect(items).toMatch(/^<li><span class="box"/);
+    expect(items).not.toMatch(/<ul><li><span class="box"/);
+    const cuts = /<h3>1\. Cuts: saw these from the boards<\/h3>([\s\S]*?)<h3>2\. Glue-ups/.exec(html)![1];
+    expect((cuts.match(/<td class="box-cell">/g) ?? []).length).toBe(pkg.data.cutList.cuts.length);
   });
 
   it('contains every Shaper file name', () => {

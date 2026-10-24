@@ -441,7 +441,7 @@ describe('what is gone with the old hull, the Ackermann front end and the swivel
   });
   it('each side is a sandwich (D-61, D-62): one web with an oak band on each face at the chine and at the gunwale, ids side-L-* and side-R-* (the outer bands keep the plain ids)', () => {
     expect(parts.filter((x) => x.id.startsWith('side-') && !x.id.startsWith('side-rib-')).map((x) => x.id).sort()).toEqual(
-      ['side-L-chine', 'side-L-chine-in', 'side-L-gunwale', 'side-L-gunwale-in', 'side-L-web', 'side-R-chine', 'side-R-chine-in', 'side-R-gunwale', 'side-R-gunwale-in', 'side-R-web'],
+      ['side-L-chine', 'side-L-chine-in', 'side-L-gunwale', 'side-L-gunwale-cap', 'side-L-gunwale-in', 'side-L-web', 'side-R-chine', 'side-R-chine-in', 'side-R-gunwale', 'side-R-gunwale-cap', 'side-R-gunwale-in', 'side-R-web'], // (2026-10-24: gunwale cap strip) the oak cap in the slot over each web
     );
     expect(parts.filter((x) => x.id.startsWith('rail-')).map((x) => x.id).sort()).toEqual(['rail-L', 'rail-R']);
     expect(parts.filter((x) => x.id.startsWith('transom-')).map((x) => x.id).sort()).toEqual(['transom-backer-L1', 'transom-backer-L2', 'transom-backer-R1', 'transom-backer-R2', 'transom-rear']);

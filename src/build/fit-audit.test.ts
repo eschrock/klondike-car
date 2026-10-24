@@ -70,7 +70,9 @@ describe('D-93 fit 2: a bent part is cut as long as its developed length', () =>
         const dev = pathLen(edge, !!x.geometry.grainFollowsTop);
         if (x.stock!.l < dev - TOL) short.push(`${x.id}: final length ${x.stock!.l.toFixed(3)} < developed ${dev.toFixed(3)}`);
         const t = (x.geometry as { thickness?: number }).thickness ?? 0;
-        if (x.stock!.t * (x.plies ?? 1) < t - 1e-6) short.push(`${x.id}: final thickness ${(x.stock!.t * (x.plies ?? 1)).toFixed(3)} < wall ${t.toFixed(3)}`);
+        // (2026-10-24: gunwale cap strip) the cap is 1/8" tall and as wide as the web: its stock width, not its thickness, spans the wall.
+        const across = /-gunwale-cap$/.test(x.id) ? x.stock!.w : x.stock!.t * (x.plies ?? 1);
+        if (across < t - 1e-6) short.push(`${x.id}: final thickness ${across.toFixed(3)} < wall ${t.toFixed(3)}`);
       }
       expect(short).toEqual([]);
     });

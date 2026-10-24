@@ -352,6 +352,7 @@ export const SHOW_RULES: ReadonlyArray<{ re: RegExp; show: number | 'web'; why: 
   { re: /^side-[LR]-web$/, show: 'web', why: 'outer face shows; the inner face is hidden below the deck level, shows above it' },
   { re: /^side-[LR]-chine-in$/, show: 0, why: 'inner chine band, under the deck inside the hull' },
   { re: /^side-[LR]-(chine|gunwale|gunwale-in)$/, show: 1, why: 'outer chine band and the gunwale bands' },
+  { re: /^side-[LR]-gunwale-cap$/, show: 1, why: 'gunwale cap strip: its top is the middle of the rail (its sides and bottom are glued in the slot)' },
   { re: /^bow-bulkhead$/, show: 1, why: 'bow end and the rider\'s foot brace' },
   { re: /^transom-rear$/, show: 0.5, why: 'outside shows, the inside faces the hull and the box' },
   { re: /^(transom-backer|sign-backer|sign-standoff|seat-hinge-backer|storage-turn-block|storage-strip-end|flag-block|brake-backer|brake-pivot-block|brake-knee)/, show: 0, why: 'backer or block behind something else' },

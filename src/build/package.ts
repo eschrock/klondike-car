@@ -103,8 +103,18 @@ export class BuildData {
   /** Short hash of the params (same stamp as the form title blocks). */
   readonly revision: string;
 
+  /** A picture of the sled for the build book's title page (a PNG data URL from the app's 3D view); no picture when absent (headless). Not part of the revision. */
+  cover?: string;
+
   constructor(readonly parts: Part[], readonly p: Params, readonly opts: PackageOptions = {}) {
     this.revision = hash6(JSON.stringify(p));
+  }
+
+  /** Set the title-page picture; the book (and the zip's file list) is rebuilt with it on next use. */
+  setCover(url: string | undefined): void {
+    if (url === this.cover) return;
+    this.cover = url;
+    this.cache.delete('files');
   }
 
   private memo<T>(key: string, f: () => T): T {

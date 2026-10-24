@@ -38,7 +38,7 @@ import { KING_NUT_BELOW_DECK_IN, kingHeadRelief, kingNutSlot } from '../model/fr
 import { TONGUE_SHOULDER_FILLET_IN, tongueSeatHalfWidth } from '../model/pivot';
 import { boxTieGeometry, kneeScrews, lashBoltLength, sideRibStations, KNEE_SCREW_SEAT_IN, LASH_BOLT_DIA_IN, LASH_HOLE_DX_IN, LASH_BOLTS, LASH_WASHER } from '../model/side-ribs';
 import { localBounds, transformPoint, worldAABB } from '../model/bounds';
-import { BOARD_THICKNESSES, cutList, discStrip, edgeJointUp, LAMINATION_SEAM_OFFSET_IN, resawUsableIn, ribFillers, ribFillerSource, type CutList, type GlueUp, type ResawPool } from './cutlist';
+import { BOARD_THICKNESSES, capStripSource, cutList, discStrip, isCapStrip, edgeJointUp, LAMINATION_SEAM_OFFSET_IN, resawUsableIn, ribFillers, ribFillerSource, type CutList, type GlueUp, type ResawPool } from './cutlist';
 import { EPOXY_SYSTEM, epoxyTimeFactor, finishingSchedule, glueJointEstimates } from './finishing';
 import { flatPattern } from './flat';
 import { analyzeShaperPart, type ShaperFeature } from './shaper-svg';
@@ -1096,7 +1096,7 @@ const TEMPLATES_1: Template[] = [
     tools: ['jointer', 'planer', 'table saw', 'bandsaw', 'planer sled or drum sander', 'moisture meter', 'cauls and clamps (panel glue-ups)'],
     hardener: '556',
     build: (c) => {
-      const bands = c.parts.filter((x) => x.kind === 'bentlam' && !x.plies);
+      const bands = c.parts.filter((x) => x.kind === 'bentlam' && !x.plies && !isCapStrip(x)); // the gunwale cap strips are ripped from a spare band strip later (sides-outer), not resawn here
       const rails = c.parts.filter((x) => x.plies && x.plies > 1);
       const band = bands[0];
       const rail = rails[0];
@@ -1777,7 +1777,7 @@ const TEMPLATES_2: Template[] = [
     retitle: (p) => (isStandard(p) ? undefined : 'Side sandwiches, cure 2: outer bands and scuppers'),
     kind: 'build',
     steps: [HULL_STEP.sides],
-    match: /^(side-[LR]-(chine|gunwale)|scupper-.*)$/,
+    match: /^(side-[LR]-(chine|gunwale|gunwale-cap)|scupper-.*)$/,
     view: 'side',
     why: 'The second glue-up closes each side into its finished band, web, band sandwich: it stands on the rail and carries the load. The drain holes let water off the deck at the foot of each side.',
     tools: ['mirror ramp', 'cleats and screws', 'bags of sand and a plastic sheet', 'epoxy pumps', 'drill'],
@@ -1795,8 +1795,12 @@ const TEMPLATES_2: Template[] = [
       const bandSize = (id: string): string => { const st = c.by(id)?.stock; return st ? `${thick(st.t)} × ${fin(st.w)}` : ''; };
       // The web's Shaper file already cuts the drain holes through the web: they guide the bit through the bands, so no second hole is drilled in the web.
       const webDrainCut = !scup.length && drains?.side ? fileCutHole(c, 'side-L-web', (q) => q.joint === 'hole' && diaNear(q, drains.diaIn)) : undefined;
+      // The gunwale cap strip (2026-10-24): fills the slot over the web between the two gunwale bands once they have cured.
+      const capL = c.by('side-L-gunwale-cap');
+      const capCut = capL ? c.cut().cuts.find((q) => q.ids.includes(capL.id)) : undefined;
+      const capSrc = capCut ? capStripSource(c.cut().resaw, capCut.rough.l) : undefined;
       return {
-        goal: scup.length ? 'Glue the outer bands and fit the scuppers in each side.' : 'Glue the outer bands and drill the drain holes in each side.',
+        goal: `Glue the outer bands${capCut ? ', cap the top edge of the web' : ''} and ${scup.length ? 'fit the scuppers in' : 'drill the drain holes in'} each side.`,
         glue: { epoxy: true, titebond: false },
         items: [
           ...(webDrainCut ? [I(`Before the web goes on the mirror ramp: drill the inner band through the web's own drain holes (${dia}, made with the web).`, [
@@ -1817,7 +1821,12 @@ const TEMPLATES_2: Template[] = [
             `The gunwale band bends on edge to the sheer and across its thickness to the S, both at once; leave it ${fin(c.p.gunwaleEndLongIn)} past each web end and set the end stops against it.`,
           ], ['side-L-chine', 'side-L-gunwale', 'side-R-chine', 'side-R-gunwale']),
           I('Weight the bands with the same bags as cure 1, along the bands only: the web keeps its S now.'),
-          I('Once this cure is hard, fill the gap along the top: the web stops 1/8" under the top of the gunwale bands.', ['Thickened epoxy, then trim flush, so no plywood edge shows.']),
+          ...(capCut && capL ? [I(`Once this cure is hard, fit a cap strip in the slot along the top: the web stops ${fin(computeLayout(c.p).webCap)} under the top of the gunwale bands, leaving a slot as wide as the web.`, [
+            `Make the two cap strips (cut list): plane ${capSrc!.fromSpare ? 'a spare band strip (no longer needed now that every band is on)' : 'an offcut of a 4/4 board'} to the slot width, a dry slip fit, then rip ${fin(capCut.rough.t)} sticks from it, one per side, as long as the gunwale bands.`,
+            'Dry-fit each one the full length: it bends by hand to the sheer and the S, and stands a little proud of the band tops.',
+            'Bed it in thickened epoxy (a bead along the slot), press it down onto the web\'s top edge, and tape it every 6" or weight it with the bags.',
+            'Once the epoxy is hard, plane and sand it flush with the band tops, so no plywood edge shows. Leave its ends long with the bands.',
+          ], ['side-L-gunwale-cap', 'side-R-gunwale-cap'])] : []),
           scup.length
             ? I(`Drill the scuppers: ${plural(scup.length, 'hole')}, ${dia}, through inner band, web and outer band.`, [
               scupX.length ? `${list(scupX)} forward of the web's rear end, the lower edge just above the deck level.` : 'Rear and bow, the lower edge just above the deck level.',
@@ -1839,7 +1848,7 @@ const TEMPLATES_2: Template[] = [
               : I('No drain holes in this model.'),
           I('Leave the bands long: they are cut to length at the dry fit, with the small trim of the webs.'),
         ],
-        checks: ['Four bands per side bonded; the bands end the same distance from the web ends, at the bow and at the rear', 'Both sides mirror images within 1/16"', ...(scup.length ? [] : [`The ${dia} drain holes clear and sealed, square to the side`])],
+        checks: ['Four bands per side bonded; the bands end the same distance from the web ends, at the bow and at the rear', 'Both sides mirror images within 1/16"', ...(capCut ? ['Cap strips planed flush with the band tops: no plywood edge shows along the top'] : []), ...(scup.length ? [] : [`The ${dia} drain holes clear and sealed, square to the side`])],
       };
     },
   },

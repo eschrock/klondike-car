@@ -39,6 +39,8 @@ export interface BuildPanelOptions {
   onSection?(id: string): void;
   /** The shareable design link for the README. */
   getLink?(): string;
+  /** A picture of the sled for the build book's title page (a PNG data URL from the 3D view), made when the book or the zip is opened. */
+  getCover?(): string | undefined;
   /** Set one design parameter (the BOM's weather toggle sets `weatherSpec`). */
   setParam?(key: ParamKey, value: number): void;
   /** Save the briefing book for the troop committee as an HTML file (it needs the 3D viewer for its pictures, so the app makes it). */
@@ -358,8 +360,10 @@ export function mountBuildPanel(hosts: BuildPanelHosts, opts: BuildPanelOptions)
   const withData = (fn: (d: BuildData) => void): void => {
     if (refreshData() && data) fn(data);
   };
-  const saveZip = (d: BuildData): void => download(zipName(d), 'application/zip', zipPackage(d));
+  const withCover = (d: BuildData): void => { try { d.setCover(opts.getCover?.()); } catch { /* no picture: the title page still prints */ } };
+  const saveZip = (d: BuildData): void => { withCover(d); download(zipName(d), 'application/zip', zipPackage(d)); };
   const openBook = (d: BuildData): void => {
+    withCover(d);
     const book = d.files.find((f) => f.name === 'build-book.html');
     if (!book) return;
     const url = URL.createObjectURL(new Blob([book.data as BlobPart], { type: 'text/html' }));

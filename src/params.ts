@@ -347,7 +347,7 @@ const defs = {
   sideWebCapIn: {
     label: 'Side web stops short of the gunwale top', group: 'body', unit: 'in',
     default: 0.125, min: 0, max: 0.25, step: 0.0625, status: 'assumed', ref: 'D-61, D-62',
-    note: 'D-61 sandwich sides: the 4 mm web runs the full height of the side between an oak band on each face at the chine and at the gunwale (no grooves). It stops this far under the top of the gunwale bands, and the gap is filled flush with thickened epoxy (or a 1/8 in oak cap strip), so no ply edge shows on the rail.',
+    note: 'D-61 sandwich sides: the 4 mm web runs the full height of the side between an oak band on each face at the chine and at the gunwale (no grooves). It stops this far under the top of the gunwale bands, leaving a slot the web\'s thickness wide; an oak cap strip (one per side, the full length of the bands, ripped from a spare band strip) is bedded in it in thickened epoxy after the outer bands cure and planed flush with the band tops, so no ply edge shows on the rail (2026-10-24, Eric). At 0 there is no slot and no cap strip.',
   },
   grooveSlopIn: {
     label: 'Dado / groove width over the ply thickness', group: 'body', unit: 'in',

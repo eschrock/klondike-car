@@ -201,6 +201,8 @@ export function applyJoinery(ctx: Ctx, parts: Part[]): void {
     ];
     for (const [bandId, what, yf, zf] of bandPairs) for (const [w, xw] of [[web1, xm]] as [string, number][])
       add({ a: bandId, b: w, typeA: 'glue', size: glueSize, pts: [[xw, yf, zf]], noteA: `Glued full-face to the web and bent with it on the plan form (the ${what} of the sandwich).`, noteB: `Oak band glued on this face (${what}).` });
+    // The gunwale cap strip (2026-10-24) is bedded on the web's top edge, between the two gunwale bands, after the outer bands cure.
+    if (L.webCap > 1e-9) add({ a: `${id}-gunwale-cap`, b: web1, typeA: 'glue', size: 'thickened epoxy bed, on the web\'s top edge and against both gunwale bands, full length', pts: [[xm, s * (hw + L.side / 2), topAt(xm) - L.webCap]], noteA: 'Bedded in thickened epoxy in the slot over the web, between the two gunwale bands; planed flush with the band tops after the cure.', noteB: 'Oak cap strip bedded on this top edge.' });
     // The deck edge rises into the gap under the inner chine band, against the web.
     add({ a: `${id}-chine-in`, b: deck, typeA: 'rabbet', size: `${frac(ddS)}" × ${rabbetZ.toFixed(3)}" gap under the inner chine band (deck + ${frac64(ds)}" clearance, thickened epoxy fills it; no routing); the deck edge is cut ${frac(p.deckSideClearIn)}" short of the web on each side (D-63), the slot is filled with thickened epoxy`, pts: [[xj, s * (hw + ddS / 2), L.deckBot + L.ply / 2]], noteB: 'Edge of the deck, in the gap against the web.' });
     // Web end into a dado in the transom (full web height now). The dado runs from the chine up and OUT through the top edge: the web top is within about 0.02 in of the rounded top corner, so a
