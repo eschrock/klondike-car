@@ -428,7 +428,8 @@ describe('forms read plainly (readability round 2)', () => {
     const strip = cutListFor(parts, p).cuts.find((c) => c.piece === 'strip' && c.ids.includes('rail-L'))!;
     const dimOf = (k: string): number => d.dims.find((x) => x.key === k)!.valueIn;
     const form = dimOf('form-length'), bow = dimOf('bow-extra'), hang = dimOf('overhang');
-    const step = d.build.find((s) => s.step.startsWith('STRAIGHT RUN'))!.step;
+    const run = d.build.find((s) => s.step.startsWith('STRAIGHT RUN'))!;
+    const step = [run.step, ...(run.sub ?? [])].join(' ');
     expect(step).not.toContain('cut the strips');
     expect(step).toContain(`bow end about ${frac(bow)} past the form's bow end`);
     // the strip is the bow allowance, the form (along its curved face, a little longer than its straight length) and the overhang

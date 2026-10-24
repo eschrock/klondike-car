@@ -10,7 +10,7 @@ import type { Vec2 } from '../../model/types';
 import { boxTieGeometry, kneeScrews, KNEE_SCREW_SEAT_IN, sideRibStations, type RibStation } from '../../model/side-ribs';
 import { BOX_FILLET_IN, lidOpenAngleDeg, storageDrainSites, storageGeometry } from '../../model/storage';
 import {
-  GRIP_BACKING_H_IN, GRIP_BACKING_T_IN, GRIP_BOLT_COLS, GRIP_BOLT_DIA_IN, GRIP_BOLT_ROWS_IN, GRIP_CAP_HEAD_DEPTH_IN, GRIP_CAP_HEAD_DIA_IN, GRIP_CAP_T_IN,
+  GRIP_BACKING_H_IN, GRIP_BACKING_T_IN, GRIP_BOLT_DIA_IN, GRIP_BOLT_ROWS_IN, GRIP_CAP_HEAD_DEPTH_IN, GRIP_CAP_HEAD_DIA_IN, GRIP_CAP_T_IN,
   GRIP_WASHER_LOW_OD_IN, GRIP_WASHER_OD_IN, HINGE_R_IN, PIN_HEAD_IN, PIN_LEN_IN, PIN_R_IN, gripFrame, seatBackSupport,
 } from '../../model/seat';
 import { atPose, brakeGeometry, type V2 } from '../../model/brake-layout';
@@ -191,7 +191,7 @@ const ribStations: FigFn = (c) => {
   return {
     id: 'rib-stations',
     title: 'Where the side ribs go',
-    caption: `The inside face of the left side, seen from the middle of the hull, with the ribs this step glues on (orange): ${ribs} from the outside face of the transom, the same on the right side. Each rib's head laps the inner gunwale band, its top cut to the sheer, and the D-ring brackets bolt to the heads later. The mid rib and the bow post stand on the deck on a knee screwed down into the member under them; the two ribs beside the storage box stop short of the deck, because their base is the box tie glued in with the box in [[step:storage-box]].`,
+    caption: `The inside face of the left side, seen from the middle of the hull, with this step's ribs in orange: ${ribs} from the outside face of the transom, the same on the right side.`,
     svg: F.svg('Where the side ribs go: the inside face of the left side with the four rib stations'),
   };
 };
@@ -284,7 +284,7 @@ const ribSection: FigFn = (c) => {
   return {
     id: 'rib-section',
     title: 'The mid rib, cut across',
-    caption: `The side is a sandwich: a thin plywood web with an oak band on each face at the top (gunwale) and at the bottom (chine). Between the two inner bands the web is bare, so a strip of spare band stock (the filler) is glued to it first, flush with the band faces; the rib's back then lies flat on band, filler, band and is epoxied full face. The knee is glued to the rib and the deck, and its two screws go down through the deck into the crossmember under it, which ties the top of the side to the frame. The bow post is built the same way over the king beam; the two box ribs have no knee.`,
+    caption: `The mid rib cut across: a plywood web with an oak band on each face at top and bottom, the filler between the inner bands, then the rib, and the knee with its screws into the crossmember.`,
     svg: F.svg('The mid rib cut across: web, bands, filler, rib, knee and its screws into the crossmember'),
   };
 };
@@ -368,7 +368,7 @@ const grabBoardStack: FigFn = (c) => {
   return {
     id: 'grab-board-stack',
     title: 'How a grab board is fastened',
-    caption: `Each grab board laps the inside of the gunwale and is through-bolted: five ${f8(GRIP_BOLT_DIA_IN)} screws (${GRIP_BOLT_COLS} in an upper row, ${GRIP_BOLT_COLS - 1} in a lower row between them) pass the board, both bands, the web and a stainless strip on the outside, with a nylock nut and a fender washer on the board (${f8(GRIP_WASHER_OD_IN)} under the upper row, ${f8(GRIP_WASHER_LOW_OD_IN)} under the lower). The thin outer band could not take a hard pull on the screw heads alone, so the strip spreads it, and the oak cap then covers the strip and the heads for good. Every nut has to be tight before the cap goes on. The D-ring holes in the rib heads are drilled in this step too, with each bracket as the template.`,
+    caption: `A grab board cut across at a screw: the screw passes the board, both bands and the web into a stainless strip on the outside, with the nut and washer on the board. The oak cap covers the strip and the heads.`,
     svg: F.svg('A grab board cut across at its screws, and the five-step order: drill, seal, strip, bolt, cap'),
   };
 };
@@ -527,7 +527,7 @@ const storageBox: FigFn = (c) => {
   return {
     id: 'storage-box',
     title: 'The storage box',
-    caption: `The box has no bottom of its own: its four thin plywood walls stand on the sealed deck, which is the floor, with a fillet inside and a bead outside so no plywood edge is left bare. An oak coaming caps the walls so the lid and its gasket sit on oak. The box ties fill the gap between the box side and the rear and box ribs from [[step:side-ribs]]: they make the box the base of those ribs, so a push on the gunwale there goes into the box. The two turn-button blocks go on the transom: at the final fit an oak button pivots on each and swings over the lid's aft edge to hold it shut.`,
+    caption: `The storage box on the deck: plan, a section at the box rib and a corner detail. The walls stand on the deck, which is the floor; the box ties fill the gap between the box side and the ribs.`,
     svg: F.svg('The storage box on the deck: plan, a section at the box rib and a corner detail'),
   };
 };
@@ -647,7 +647,7 @@ const storageLid: FigFn = (c) => {
   return {
     id: 'storage-lid',
     title: 'The storage lid',
-    caption: `A fixed oak strip is glued across the front of the box top first; the lid is hinged on its aft edge, so the lid is shorter than the box and swings up and back past upright, to rest on the upright seat back (about ${Math.round(openDeg)}°): no lid stay. The lid is a thin plywood panel held in an oak frame: the panel's edge sits in a rabbet along the top inside edge of all four frame pieces, and the corners are joined with small loose tenons. ${battens.length} oak battens under the panel stop it sagging under a cushion or a light load; they are glued under the panel with thickened epoxy, the lid face down and weighted, and butted to the frame sides; no screws go through the thin panel. The frame's underside seals on the gasket on the coaming of the box from [[step:storage-box]], and its front face on the gasket on the strip's aft face. The two hinges lie flat on top across the joint. With the seat back flipped flat the lid folds right over and lies open on the strip, on two 1/8" rubber bumpers near its front edge: lower it by hand, and don't lean on its far edge, which reaches well past the strip.`,
+    caption: `The lid from above, cut across at a batten, and from the side as it opens: it is hinged at its front edge, on the fixed strip, and swings up and forward to rest on the upright seat back at about ${Math.round(openDeg)}°, so it needs no stay.`,
     svg: F.svg('The storage lid from above, cut across at a batten, and from the side opening onto the seat back'),
   };
 };
@@ -721,7 +721,7 @@ const seatBlocks: FigFn = (c) => {
   return {
     id: 'seat-stop-block',
     title: 'A seat-back stop block',
-    caption: `The seat back does not stand up by itself: it leans back onto two oak stop blocks glued to the deck against the box end, one each side, and onto the crest strip between them. Each block's front face is cut to the lean of the back (${ang}° from level), and its latch hole is only marked now: it is drilled in [[step:seat-back]] through the seat back's own pin hole, so the two line up. The blocks are clamped by two screws driven up from under the deck (nothing shows on top). The crest strip is bedded on the box end in thickened epoxy, under the fixed strip at the front of the box top from [[step:storage-lid]].`,
+    caption: `A seat-back stop block on the box end, seen from the side: its front face is cut to the lean of the back (${ang}° from level), and the crest strip sits on the box end between the blocks.`,
     svg: F.svg('A seat-back stop block on the box end, seen from the side, with its latch hole and the crest strip'),
   };
 };
@@ -815,7 +815,7 @@ const seatBackPositions: FigFn = (c) => {
   return {
     id: 'seat-back-positions',
     title: 'The seat back, upright and flat',
-    caption: `The seat back hangs on two butt hinges at its front bottom edge: one leaf on the panel's front face (screwed into inserts), the other on the deck, screwed through into an oak backer pad underneath. Upright, it leans on the stop blocks and the crest strip from [[step:seat-blocks]], and a spring-detent pin each side goes through the panel into the block's latch hole. For cargo the cushion and pad come off, the back flips forward ${Math.round(phi * DEG)}° onto the deck, and the same pins go through the same holes and the deck into the backer pads. This step makes the panel and fits everything dry; the hardware goes on for good after the finish.`,
+    caption: `The seat back upright on its stop blocks and flipped forward ${Math.round(phi * DEG)}° onto the deck, with the hinges at its front bottom edge. The same pins hold it in both positions.`,
     svg: F.svg('The seat back upright on its stop blocks and flipped flat on the deck, with its hinges and pins'),
   };
 };
@@ -930,7 +930,7 @@ const brakeKit: FigFn = (c) => {
   return {
     id: 'brake-kit',
     title: 'The brake flap kit',
-    caption: `Each brake is a lever over a rear tire: an oak flap pivots on a pin in the knee ahead of the tire and reaches back to a foot tread at the transom. Stepping on the tread swings the shoe and its rubber pad down onto the tire; the shock cord to a high eye on the transom lifts it off again, and a stop cord down to a low eye holds it there, ${f8(p.brakePadGapIn)} clear of the tire; the stop cord goes slack when you step. The flap's tongue sits in a pocket in the knee, open at the back and at the outside; a stainless strap screwed across the open side carries the outer end of the pin, and the inner end sits in a blind hole, so the pin is held on both sides of the flap. Pull the clip and the pin and the flap lifts off in seconds.`,
+    caption: `A side view over the tire, and a section across the knee at the pivot pin. The stop cord holds the pad ${f8(p.brakePadGapIn)} clear of the tire; stepping on the tread slackens it.`,
     svg: F.svg('The brake flap kit: side view over the tire, and a section across the knee at the pivot pin'),
   };
 };
@@ -1031,7 +1031,7 @@ const handleFig: FigFn = (c) => {
   return {
     id: 'handle-u',
     title: 'The push handle and its sockets',
-    caption: `The handle is one removable U: two oak posts with the handlebow pinned and glued across their tops. Each post slides into an aluminum socket on the outside of the transom and is held by a clevis pin through both socket walls and the post; a second hole higher up the post lets the U sink ${f16(d)} to park the bow low over the transom. Each socket is held by two screws from inside its bore into T-nuts set in the oak backer behind the transom, so no wrench has to reach behind the storage box; an access hole in the socket's rear wall passes the screw and the hex key. This step fits and drills the sockets and makes the U; the sockets go on for good at the hang step.`,
+    caption: `The push handle on the transom, riding and parked, with a detail of a socket screw and its T-nut. Parked, the U sinks ${f16(d)} so the bow lies low over the transom.`,
     svg: F.svg('The push handle on the transom, riding and parked, with a detail of a socket screw and its T-nut'),
   };
 };

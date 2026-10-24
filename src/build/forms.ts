@@ -619,7 +619,15 @@ function railFormPlan(parts: Part[], p: Params, L: Layout): Plan | null {
       ],
     },
     { step: `BASE: 3/4" plywood ${frac(baseL)} × ${frac(baseW)}. Screw the form stack to it from below (#8 × 1-5/8" every ${frac(STACK_SCREW_IN)}), its straight back on the base's back edge and ${frac(BASE_END_IN)} in from each end. That leaves ${frac(BASE_FRONT_IN)} of base in front of the deepest part of the face for the strips and the counter-form. The counter-form stands loose on the base, held from walking by a stop block at each end (COUNTER-FORM, below).` },
-    { step: `STRAIGHT RUN: set each strip pair with its bow end about ${frac(RAIL_BOW_EXTRA_IN)} past the form's bow end: the form face is straight for its last ${frac(bowStraight)}, so the counter-form holds the strips there, and the rail keeps its trim allowance at the bow. The S is ${frac(curved - bowStraight)} long; the form face runs straight for ${frac(RAIL_FORM_LEAD_IN)} behind it (the lead-in), and about ${frac(hang)} of each strip hangs off the form's rear end. Make a ${frac(FORM_BASE_IN)} plywood strip, about ${frac(Math.ceil(hang))} long and as wide as the base, so the overhang lies level with the base, and a straight 3/4" × ${frac(stackH)} fence about ${frac(Math.ceil(hang) + BASE_END_IN)} long, to reach from the form's rear end over the base and the strip. Screw the fence to the strip from below, in line with the lead-in face, before the strip is screwed to the bench against the base's rear end; the fence holds the overhang straight.` },
+    {
+      step: `STRAIGHT RUN: a fence that holds the strips' rear overhang straight, level with the base.`,
+      sub: [
+        `Make a ${frac(FORM_BASE_IN)} plywood strip, about ${frac(Math.ceil(hang))} long and as wide as the base, and a straight 3/4" × ${frac(stackH)} fence about ${frac(Math.ceil(hang) + BASE_END_IN)} long.`,
+        'Screw the fence to the strip from below, in line with the lead-in face; then screw the strip to the bench against the base\'s rear end.',
+        `When gluing, set each strip pair with its bow end about ${frac(RAIL_BOW_EXTRA_IN)} past the form's bow end (the last ${frac(bowStraight)} of the form face is straight, so the rail keeps its trim allowance); about ${frac(hang)} of each strip hangs off the form's rear end, onto the fence.`,
+        `For reference: the S is ${frac(curved - bowStraight)} long, with ${frac(RAIL_FORM_LEAD_IN)} of straight lead-in behind it.`,
+      ],
+    },
     {
       step: `COUNTER-FORM: the reverse image of the form, the clamping block. Its face is the form face moved out ${frac(pack + COUNTER_CLEARANCE_IN)}: the ${plies} strips glued together (${frac(pack)}) plus ${frac(COUNTER_CLEARANCE_IN)} for the tape and the glue line. Its back is straight and parallel to the form's back.`,
       sub: [

@@ -67,7 +67,7 @@ const sidesPurpose: FigFn = (c) => {
   return {
     id: 'sides-purpose',
     title: 'What the side forms are for',
-    caption: `A, from above: the front ${f8(g.uOf(g.xRe) - g.uOf(g.xR0))} of each side curves in ${f8(g.rampH)}. B, one side laid flat: the web is cut to its final outline, and the bands follow its edges. Lying flat on the form, the curve-in of view A becomes a lift of the bow end: that is what the S-ramp does.`,
+    caption: `A, from above: the front ${f8(g.uOf(g.xRe) - g.uOf(g.xR0))} of each side curves in ${f8(g.rampH)}. B, one side laid flat: that curve-in becomes a lift of the bow end.`,
     svg: F.svg('What the side forms are for: the two sides of the hull, from above and laid flat'),
   };
 };
@@ -117,7 +117,7 @@ const formSetup: FigFn = (c) => {
   return {
     id: 'side-form-setup',
     title: 'The side form for the first face',
-    caption: `One bench top carries the whole form. The template is the web's outline, screwed flat; the cleats stand on edge along its curved top edge (the sheer) and stop the gunwale band from straightening while the glue cures (a bent oak strip pushes back hard). At the bow end the template gives way to the S-ramp, which lifts the front of the web ${f8(g.rampH)}: lying flat, that lift is the same bend as the S seen from above. The ramp's cap is a plain rectangle across the web's full height, so the right side can use it too (two figures on). The second bench top carries the mirror ramp for the second face (next figure).`,
+    caption: `The setup for the first face, from above and from the side: the cleats stand on edge along the web's curved top edge, and the S-ramp lifts the bow end of the web ${f8(g.rampH)}.`,
     svg: F.svg('The side form set up for the first face, from above and from the side'),
   };
 };
@@ -169,7 +169,7 @@ const twoRamps: FigFn = (c) => {
   return {
     id: 'side-two-ramps',
     title: 'Why there are two ramps',
-    caption: `After the first cure the web keeps its S: the inner bands lock it in. Turned over for the second face, its bow end now hangs ${f8(g.rampH)} LOWER than its rear end, so it cannot go back on the S-ramp (it would have to bend ${f8(2 * g.rampH)} the wrong way). The mirror ramp is the S-ramp upside down: high under the flat part, falling through the S to the bench at the bow end. Build both before the first glue-up: one on each bench top.`,
+    caption: `After the first cure the web keeps its S, so turned over its bow end hangs ${f8(g.rampH)} lower than its rear end. The mirror ramp is the S-ramp upside down.`,
     svg: F.svg('Why there are two ramps: the first face on the S-ramp, the second face on the mirror ramp'),
   };
 };
@@ -260,8 +260,8 @@ function clampSection(cure: 1 | 2): FigFn {
       id: `side-section-cure${cure}`,
       title: cure === 1 ? 'Cure 1: the inner bands' : 'Cure 2: the outer bands',
       caption: cure === 1
-        ? `Looking along the web, cut across (the middle of the web is left out). The web lies inside face up on the template with its top edge 1/8" short of the cleats. The two inner bands are epoxied on top: the gunwale band tight to the cleats, the chine band stopping ${frac(chineLo, 16)} short of the bottom edge to leave the slot the deck edge slides into later. Bags of sand on a plastic sheet press the bands down: no clamp can reach under a web lying on a screwed-down template.`
-        : 'The web is turned over onto the mirror ramp, outside face up, resting on its cured inner bands. A strip of band offcut under its bottom edge fills the gap where the inner chine band stops short, so the outer chine band has something to press on. The outer gunwale band goes against the cleats, and the outer chine band runs flush with the bottom edge (it sits on the rail). The same bags as cure 1, on the bands only.',
+        ? `Looking along the web, cut across, with the middle of the web left out. The inner chine band stops ${frac(chineLo, 16)} short of the bottom edge, leaving the slot for the deck edge.`
+        : 'The web is turned over, outside face up, resting on its cured inner bands. A band offcut under its bottom edge fills the gap where the inner chine band stops short.',
       svg: F.svg(cure === 1 ? 'Cure 1: section across the web, inner bands on top, weighted with bags of sand' : 'Cure 2: section across the web, outer bands on top, weighted with bags of sand'),
     };
   };
@@ -307,7 +307,7 @@ const finishedSection: FigFn = (c) => {
   return {
     id: 'side-section-finished',
     title: 'The finished side at its bottom edge',
-    caption: 'After both cures, each side is band, web, band at its top and bottom edges. At the bottom the inner chine band stops short of the edge, leaving the slot the deck edge rises into when the frame goes in ([[step:dry-fit]] and [[step:lower]]). The outer band and the web edge sit on the rail, and screws come up through the rail into them.',
+    caption: `The finished side cut across at its bottom edge: the inner chine band stops short, leaving the slot the deck edge rises into. The outer band and the web edge sit on the rail.`,
     svg: F.svg('The finished side at its bottom edge, cut across'),
   };
 };
@@ -375,7 +375,7 @@ const rightSide: FigFn = (c) => {
   return {
     id: 'side-right-side',
     title: 'The right side on the same forms',
-    caption: 'The forms are cut for the left side, and the right side is its mirror image. When the left web moves on to the mirror ramp, unscrew the template\'s rear piece, turn it over along its length in the same place, and screw it back: it is now the right web\'s outline. Re-set that bench\'s cleats against the dry right web. Nothing under the web moves: both ramp caps are plain rectangles that carry either side.',
+    caption: `The forms are cut for the left side; the right side is its mirror image. Turn the template's rear piece over in the same place and it becomes the right web's outline.`,
     svg: F.svg('The right side on the same bench: the template turned over and the cleats re-set'),
   };
 };

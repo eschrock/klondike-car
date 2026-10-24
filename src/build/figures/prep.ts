@@ -307,11 +307,10 @@ const resawStrips: FigFn = (c) => {
   F.rect(130, F.h - 20, 14, 10, mat('oak')).hatch(130, F.h - 20, 14, 10, MAT.oak.stroke, 4);
   F.text([149, F.h - 10], 'waste (offcut)', { size: 11.5, color: MUTED });
   F.note('End views, all to one scale');
-  const band = pools[0];
   return {
     id: 'mill-resaw',
     title: 'Resawing the strips',
-    caption: `The thin strips for the bent parts come out of ordinary boards. Rip each board into lanes as wide as the strips plus the planing allowance, stand one lane on edge and resaw it through its thickness into ${band.stripsPerBoard} slabs, then plane or drum-sand each slab to its strip thickness. The bandsaw only has to cut as high as one lane is wide, never the whole board. The lanes marked spare give the strips for the bend tests in [[step:rail-form]].`,
+    caption: `A board ripped into lanes, one lane stood on edge and resawn into slabs, a slab planed to a strip. The lanes marked spare give the strips for the bend tests in [[step:rail-form]].`,
     svg: F.svg('Resawing the bending strips: the boards ripped into lanes, one lane resawn on edge into slabs, a slab planed to a strip'),
   };
 };
@@ -331,7 +330,6 @@ const laminatedBlock: FigFn = (c) => {
   const layers = [...Array(g.layers)].map((_, i) => cuts.filter((q) => q.layer === i + 1).sort((a, b) => a.index - b.index));
   if (layers.some((l) => l.length < 2)) return null;
   const name = plainName(c.by(g.partId)?.name ?? g.label);
-  const others = gs.filter((q) => q !== g).map((q) => plainName(c.by(q.partId)?.name ?? q.label));
   const F = new Fig(760, 420);
   F.heading(`A face-laminated block: the ${name}, seen end on`);
   const k = 26, gap = 22;
@@ -391,7 +389,7 @@ const laminatedBlock: FigFn = (c) => {
   return {
     id: 'mill-laminate',
     title: 'A thick block glued up from layers',
-    caption: `A part thicker than the boards is glued up from layers. Where a layer is wider than one board, it is edge-glued first from 2 boards of unequal width; with every board 1 edge kept on the same side, the seams of the layers land ${seams.length >= 2 ? f8(Math.abs(seams[0] - seams[1])) : ''} apart and never over each other. The cured block is jointed and planed to its finished size before anything is cut into it.${others.length ? ` The ${others.join(' and the ')} ${others.length === 1 ? 'is' : 'are'} made the same way.` : ''} Most other thick blocks are one board wide, so they are just layers face to face${hasCross ? '; the brake knee is cross-laminated (next figure)' : ''}.`,
+    caption: `The layers are edge-glued from boards of unequal width and stacked with their seams ${seams.length >= 2 ? f8(Math.abs(seams[0] - seams[1])) : ''} apart, never over each other.${hasCross ? ' The brake knee is cross-laminated (next figure).' : ''}`,
     svg: F.svg(`A face-laminated block: the ${name}, its layers edge-glued with offset seams, glued face to face, then milled to size`),
   };
 };
@@ -513,7 +511,7 @@ const kneeLamination: FigFn = (c) => {
   return {
     id: 'mill-knee',
     title: 'The cross-laminated brake knee',
-    caption: `Each brake knee is a block of 3 layers glued face to face with the grain crossed, like plywood: the rear and front layers run upright, so the bolted leg cannot split off along the grain, and the center layer runs across the sled. Only the center layer is edge-glued from 2 boards. The pocket that later holds the brake flap's tongue is notched into the rear and center layers before the glue-up, measured from the finished edges marked on each oversize layer; the front layer stays whole. The block is milled to size here and sawn to the knee shape in [[step:brake-knees]].`,
+    caption: `The 3 layers apart with their grain, and the glued block from behind. The rear and front layers run upright and the center layer across the sled; the pocket notch is in the rear and center layers only.`,
     svg: F.svg('The cross-laminated brake knee: the 3 layers apart with their grain and the pocket notch, and the glued block from behind'),
   };
 };
@@ -567,7 +565,7 @@ const railsOnFrame: FigFn = (c) => {
   return {
     id: 'rail-form-purpose',
     title: 'What the rail form is for',
-    caption: `The two rails are the bottom of the hull frame: the crossmembers and the beams join them, and the sides stand on them. Each rail is straight for most of its length, then curves in by ${f8(g.turn)} toward the bow (the S), following the sides. To get that curve with the grain running along it, each rail is ${g.plies} strips of ${f16(g.strip)}${g.stripRoughL !== undefined ? `, ${f8(g.stripRoughL)} long (the rail is trimmed to about ${f8(rl.stock?.l ?? r1 - r0)}, ${f16(g.railW)} deep),` : ` (${f16(g.railW)} deep, about ${f8(rl.stock?.l ?? r1 - r0)} long)`} bent round a form and glued in [[step:rails]]; once the epoxy cures, the rail keeps the curve. This step builds that form and proves it with a dry strip. One form makes both rails: they come off it identical, and one becomes the left rail by turning it over.`,
+    caption: `The two rails, highlighted on the hull frame from above. Each curves in toward the bow and is bent round one form; the form makes both rails, and turning a rail over makes the left one.`,
     svg: F.svg('What the rail form makes: the two rails, highlighted on the hull frame from above'),
   };
 };
@@ -636,7 +634,7 @@ const railFormSetup: FigFn = (c) => {
   return {
     id: 'rail-form-setup',
     title: 'The rail form on its base',
-    caption: `The form is a stack of MDF layers whose curved face is the outside of the rail; the counter-form is its mirror image, standing loose on the same base with the strips between them. Both have straight backs, so every clamp squeezes straight across from back to back at the scored ticks, even on the curve. Only the bow end is curved: the long straight rear part of the strips hangs off the form and lies against a fence on the bench. Dry-fit a strip pair before any glue: the channel must be snug from end to end.`,
+    caption: `The rail form on its base from above, with the counter-form standing loose beside it and the strips between them. Only the bow end is curved; the straight rear part lies against the fence.`,
     svg: F.svg('The rail form on its base from above, with the counter-form, the strips, the fence and the clamp ticks, and a section across it at the bow end'),
   };
 };
@@ -728,7 +726,7 @@ const railGlueUp: FigFn = (c) => {
   return {
     id: 'rail-glue-up',
     title: 'Gluing a rail on the form',
-    caption: `The ${g.plies} strips are glued to each other, not to the jig: the packing tape on the form and counter-form faces sees to that. Set every clamp snug but loose first, then tighten them from the straight lead-in toward the bow end; the counter-form only seats once the strips are fully bent. On the straight overhang a caul and spring clamps hold the strips against the fence, so that part of the glue line is pressed too. One rail per cure: the two come off identical, and one becomes the left rail by turning it over.`,
+    caption: `The clamp order from above, with a close-up at one clamp. The strips glue to each other, not to the taped form and counter-form.`,
     svg: F.svg('Gluing one rail: the clamp order from above, a close-up at one clamp, and the actions in order'),
   };
 };
@@ -827,7 +825,7 @@ const finishedRail: FigFn = (c) => {
   return {
     id: 'rail-finished',
     title: 'The finished rail and its cuts',
-    caption: `Out of the clamps, each rail is planed flush on its edges and marked at its finished ends; it stays long at both ends until the dry fit trims it, so every position is measured from the finished rear end. The notch in the bottom edge takes the rear axle beam; the bow step makes the rail shallower where the front axle swings under it; the screw holes take the screws that tie the side down onto the rail; the Domino mortises take the crossmembers and the king beam. The end mortises are cut later, in [[step:rail-ends]].`,
+    caption: `The finished rail seen from its top edge and from its inboard face. Every position is measured from the finished rear end; the rail stays long at both ends until the dry fit trims it.`,
     svg: F.svg('The finished rail from its top edge and its inboard face: the beam notch, the bow step, the screw holes and the Domino mortises'),
   };
 };

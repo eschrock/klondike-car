@@ -155,6 +155,7 @@ describe('build book', () => {
   it('contains every assembly step title, with its clamp and cure text and its checks', () => {
     expect(pkg.data.steps.length).toBeGreaterThan(20);
     for (const s of pkg.data.steps) {
+      if (s.id === 'verify') { expect(html).toContain(`<a href="#verify">${esc(s.title)}</a>`); continue; } // step 0 is its index row; the Verify section is the step
       expect(html, `step ${s.n}`).toContain(`Step ${s.n}.</span> ${esc(s.title)}`);
       if (s.clampCure) expect(html, `step ${s.n} clampCure`).toContain(esc(s.clampCure));
       for (const c of s.checks) expect(html, `step ${s.n} check`).toContain(esc(c.replace(/:\s*passed$/i, ''))); // a check is a to-do (an empty box), never "passed"
@@ -257,8 +258,8 @@ describe('readability round 2: the book reads in the shop', () => {
     expect(bookText).not.toMatch(/:\s*passed\b/); // ("the test panel passed" in the finishing text is a sentence, not a check)
     expect(bookText).toContain('\u2610');
     expect((html.match(/\u2610/g) ?? []).length).toBeGreaterThanOrEqual(pkg.data.verify.length);
-    const step0 = pkg.data.steps[0];
-    for (const c of step0.checks) expect(html).toContain(`\u2610</span>${esc(c.replace(/:\s*passed$/i, ''))}`);
+    const step1 = pkg.data.steps[1]; // (step 0 is its index row on paper: the Verify section holds its checks)
+    for (const c of step1.checks) expect(html).toContain(`\u2610</span>${esc(c.replace(/:\s*passed$/i, ''))}`);
   });
 
   it('has no D-number, no Q-number and no parameter name (camelCase) in the sections it generates', () => {

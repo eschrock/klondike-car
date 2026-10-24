@@ -10,7 +10,7 @@ import { worldAABB, transformPoint, type Bounds } from '../../model/bounds';
 import { computeLayout, outerHalfWidth, samples, sideTopAt, type Layout } from '../../model/layout';
 import { beamSeat } from '../../model/rear-mount';
 import type { Part, Vec2, Vec3 } from '../../model/types';
-import { cradleHeights, cradleStations, chineTie, CRADLE_POST_W_IN, transomVents } from '../assembly';
+import { cradleHeights, cradleStations, chineTie, transomVents } from '../assembly';
 import { frac } from '../svg-util';
 import { ACCENT, DIM, Fig, fit, INK, MAT, mat, MUTED, type FigCtx, type FigFn, type Frame, type Style, type TextOpts } from './kit';
 
@@ -203,7 +203,7 @@ const hangerOnRail: FigFn = (c) => {
   return {
     id: 'hanger-on-rail',
     title: 'The rear axle hanger on its rail',
-    caption: 'View A looks at the inside face of the left rail near its rear end, view B looks down on it. The hanger is glued to the inside face of the rail with its notch in line with the rail\'s, so the rear axle beam later sits in both notches. Drill the two bolt holes through hanger and rail together while the clamps hold them, so the hold-down bolts of [[step:rear-beam]] pass straight through. The Domino mortise near the hanger\'s rear edge takes the end of crossmember 1 in [[step:frame]]. The right rail is the mirror image.',
+    caption: `View A looks at the inside face of the left rail near its rear end, view B looks down on it. The hanger's notch lines up with the rail's. The right rail is the mirror image.`,
     svg: F.svg('The rear axle hanger glued to the inside face of the rail, from the side and from above'),
   };
 };
@@ -259,7 +259,7 @@ const framePlan: FigFn = (c) => {
   return {
     id: 'frame-plan',
     title: 'The frame from above',
-    caption: 'The frame and deck unit seen from above with the deck lifted off; its outline is dashed. The rails and the rear axle hangers come from the last two steps. This step adds the crossmembers (numbered from the rear as the steps name them; the king beam takes the place of crossmember 7), the brake knee backers with their stainless plates and the two seat-back hinge backers, then bonds the deck on top of all of it. Glue it up on a flat bench: in [[step:dry-fit]] the whole unit is turned over and lowered into the sides.',
+    caption: `The frame and deck unit seen from above with the deck lifted off; its outline is dashed. The crossmembers are numbered from the rear.`,
     svg: F.svg('The frame from above, with the deck outline dashed and the crossmembers numbered'),
   };
 };
@@ -319,7 +319,7 @@ const frameSection: FigFn = (c) => {
   return {
     id: 'frame-section',
     title: 'The frame at a brake knee backer',
-    caption: 'A cut across the left side of the frame at the first column of knee-bolt holes, looking forward. The backer is glued to the inside face of the rail, its top edge flush with the rail top; its stainless plate sits flush in the recess in its inside face, bedded in thickened epoxy so it stays put when the knee bolts come out later. The deck bonds to the rail top, the backer\'s top edge and every crossmember top in one glue-up. Its edge stops over the rail: in [[step:lower]] the side stands on the outer part of the rail, beside the deck edge.',
+    caption: `A cut across the left side of the frame at the first column of knee-bolt holes, looking forward. The deck bonds to the rail top and the backer's top edge, and its edge stops over the rail.`,
     svg: F.svg('Section across the frame at a brake knee backer'),
   };
 };
@@ -419,7 +419,7 @@ const dryFitEnd: FigFn = (c) => {
   return {
     id: 'dry-fit-end',
     title: 'Dry fit: the inverted sides on a cradle',
-    caption: `From here to [[step:flip]] the hull is built upside down. Each MDF cradle is a plate ${f16(2 * CRADLE_POST_W_IN)} wider than the hull, with a slot near each end and a post outside each slot. The side's top edge (the sheer) drops into the slot, and every slot floor is set so the sides' bottom edges come out level, ${f16(ch.edgeIn)} from the floor (at cradle 1 the side is ${f16(st.heightIn)} tall, so the slot floor is ${f16(st.slotFloorIn)} up). The plate is cut down between the slots to ${f16(ch.middleIn)}, clear of the inner chine band and the deck. The frame and deck unit is turned over and lowered in dry between the posts: each rail lands on the edge of the outer band and the web, and the deck edge goes in beside the web (view B).`,
+    caption: `Dry fit: a section across the inverted hull at a station cradle, with one corner enlarged in view B. Each rail lands on the outer band and the web, and the deck edge goes in beside the web.`,
     svg: F.svg('Dry fit: section across the inverted hull at a station cradle, and one corner larger'),
   };
 };
@@ -476,7 +476,7 @@ const dryFitCradles: FigFn = (c) => {
   return {
     id: 'dry-fit-cradles',
     title: 'The cradles under the inverted side',
-    caption: `The side is upside down, so its curved top edge (the sheer) hangs down into the cradle slots and its straight bottom edge is on top. Every slot floor is set at ${f16(ch.edgeIn)} less the side's height at that cradle, which is why the slots get shallower toward the bow: the bottom edges of both sides then come out level, ${f16(ch.edgeIn)} from the floor, for the frame and deck unit. Set each cradle at its distance from the rear end of the sides, measured along the floor.`,
+    caption: `The side is upside down, so its curved top edge (the sheer) hangs down into the cradle slots and its straight bottom edge is on top. The slots get shallower toward the bow, so both bottom edges come out level.`,
     svg: F.svg('The four station cradles under the inverted side, seen from the side'),
   };
 };
@@ -575,7 +575,7 @@ const dryFitPilots: FigFn = (c) => {
   return {
     id: 'dry-fit-pilots',
     title: 'Drilling the screw pilots',
-    caption: `With the unit sitting dry in the sides, each clearance hole in the rail guides a 1/8" × 6" aircraft bit straight down into the side's edge, so every pilot lands on the glue line between the outer band and the web, right under its hole. A tape flag wider than the counterbore stops on the rail's face and sets the depth: ${f16(c.p.railDepthIn + (deepAft ? parseInchText(deepAft) : 0))} from the tip for the counterbored holes${fwdQ && deepFwd ? `, ${f16(L.railDepthF + parseInchText(deepFwd))} for the forward one, where the rail is shallow and the pilot is ${deepFwd} deep` : ''}. View C shows the ${tie.perRail} holes in each rail and the cradle posts: leave the cradles in place, so in [[step:lower]] the sides go back exactly where the pilots were drilled.`,
+    caption: `A section through one rail hole with the unit sitting dry in the sides: the bit goes down through the hole onto the glue line between the outer band and the web. View C shows the holes along each rail.`,
     svg: F.svg('Drilling the screw pilots through the rail holes into the side edge, in section and from above'),
   };
 };
@@ -664,7 +664,7 @@ const lowerJoint: FigFn = (c) => {
   return {
     id: 'lower-joint',
     title: 'The rail-to-side joint, in order',
-    caption: `A cut across the left rail and side at one screw, upside down as it is glued. The frame and deck unit goes straight down between the cradle posts onto a bed of thickened epoxy on the edges of both sides, and the ${tie.perRail} screws a side pull each side onto its rail at the pilots drilled in [[step:rail-ends]]; the clamps and cauls between the screws keep the outer faces flush until the epoxy cures. The deck edges are buttered from the same batch, so the slot between each deck edge and its web (closed in by the rail) fills as the unit goes down; a second small batch tops it up from the open hull ends.`,
+    caption: `A cut across the left rail and side at one screw, upside down as it is glued. The unit goes straight down between the cradle posts onto thickened epoxy on the side edges, and the screws pull each side onto its rail.`,
     svg: F.svg('The rail-to-side joint at one screw, with the order of the glue-up'),
   };
 };
@@ -806,13 +806,12 @@ function endClose(which: 'transom' | 'bulkhead'): FigFn {
     if (bL) F.label(B(xPart0 - dir * 0.35, uIn + 0.3), [partX, r0 + 3 * step], ['backer, glued to it:', 'above this cut (dashed)'], { ...T12, anchor: pa });
     F.legend(['oak', 'web', 'deck', 'epoxy', 'ghost'], [16, F.h - 10]);
     F.note('Two views, each to its own scale');
-    const nRail = railJ?.type === 'domino' ? 'The Dominos in the rail ends go' : 'The loose tenons in the rail ends go';
     return {
       id: rear ? 'transom-close' : 'bulkhead-close',
       title: rear ? 'How the transom goes on' : 'How the bulkhead goes on',
       caption: rear
-        ? `View A is the transom's inside face, drawn upside down as it goes onto the inverted hull: the deck dado runs across it and turns into the two web dados, which run out through the edge (they are routed through). View B cuts through one corner: the web reaches ${f16(into)} into its dado and the deck edge the same into the deck dado, while the four band ends of each side stop at the face and butt in thickened epoxy; once it is home, the inside corners get a fillet of thickened epoxy. ${nRail} into the mortises, and the vent holes, 2 a side, let air and glue out as it is pushed home: when glue shows at them, the dados are full. The round holes are the handle-socket screw holes, with their T-nuts in the backers.`
-        : `The bulkhead closes the bow the way the transom closed the rear, once the transom epoxy has gelled. View A is its inside (rear) face, upside down: the deck dado and the two web dados that run out through the edge (routed through), the Domino mortises for the rail ends, and the band ends that butt against it. View B cuts through one corner: the web and the deck reach ${f16(into)} into their dados, and the inside corners get a fillet of thickened epoxy. Its rear face is the rider's foot brace, so it must sit square and fully home.`,
+        ? `View A is the transom's inside face, drawn upside down as it goes onto the inverted hull. View B cuts through one corner, where the web and the deck edge reach into their dados.`
+        : `View A is the bulkhead's inside (rear) face, upside down. View B cuts through one corner, where the web and the deck reach into their dados.`,
       svg: F.svg(rear ? 'The transom inside face and one corner as it is pushed on' : 'The bulkhead inside face and one corner as it is pushed on'),
     };
   };

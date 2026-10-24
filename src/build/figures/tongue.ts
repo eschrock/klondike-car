@@ -56,7 +56,7 @@ const tonguePlan: FigFn = (c) => {
   return {
     id: 'tongue-plan',
     title: 'The tongue on the front beam',
-    caption: `Seen from above. The tongue is a flat oak T, ${f16(tg.stock.t)} thick: its wide head sits against the front face of the front axle beam, and two carriage bolts run straight back through the head and the whole beam. The bridle rope goes through the bronze sleeve near the tip, so the pull steers the front beam about its kingpin. The tongue stays on for good and is finished in place.`,
+    caption: `Seen from above. The tongue is a flat oak T, ${f16(tg.stock.t)} thick, its wide head against the front face of the front axle beam; the bridle rope goes through the sleeve near the tip.`,
     svg: F.svg('The bridle tongue from above, bolted to the front axle beam'),
   };
 };

@@ -30,7 +30,7 @@ const ACCESS_HOLE_IN = 0.625;
 export const SOCKET_SCREW_HEAD_IN = 0.44;
 export const SOCKET_SCREW_WASHER_IN = 0.5;
 export const SOCKET_ACCESS_HOLE_IN = ACCESS_HOLE_IN;
-export const POST_RELIEF = { widthIn: 0.5, depthIn: 0.1875 } as const;
+export const POST_RELIEF = { widthIn: 0.5625, depthIn: 0.21875 } as const; // 9/16 x 7/32 (build book review 2026-10-24): the 1/2" nylon washer under each socket screw head clears it across and in depth
 
 /** 1/4-20 socket screw: threads per inch, and the least engagement in the T-nut barrel (4 full threads, 0.2 in). */
 export const SOCKET_SCREW_TPI = 20;

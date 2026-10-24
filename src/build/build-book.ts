@@ -88,7 +88,10 @@ a.part { color: inherit; text-decoration: underline dotted; }
   .drawing { break-inside: avoid; border-top: 1px solid var(--rule); padding-top: 4pt; }
   .check { break-inside: auto; }
   .check h4 { break-after: avoid; }
-  #assembly, #forms, #drawings, #boards { break-before: page; }
+  #assembly, #boards { break-before: page; }
+  #assembly .step, .form { break-inside: auto; }
+  h2, h3, h4 { break-after: avoid; }
+  .screen-only { display: none; }
   #finishing .step { break-inside: auto; }
   #finishing .step h4 { break-after: avoid; }
   a, a.part { text-decoration: none; }
@@ -97,7 +100,7 @@ a.part { color: inherit; text-decoration: underline dotted; }
   #assembly .step { border-top: 2px solid var(--ink); }
   #assembly .step > h3 { break-after: avoid; }
   .why, .cure, .goal { break-inside: avoid; }
-  .form { break-inside: avoid; }
+  .form h3 { break-after: avoid; }
 }
 `;
 
@@ -174,11 +177,13 @@ function instrText(t: string, link: PartLink): string {
   return out + esc(t.slice(last));
 }
 /** The items as a numbered list with nested sub-bullets; parts an item names in plain words (not as tokens) follow it in small type, up to four. */
-function instrList(items: Instr[], link: PartLink, top = true): string {
+function instrList(items: Instr[], link: PartLink, top = true, seen?: Set<string>): string {
   const li = (it: Instr): string => {
-    const extra = (it.parts ?? []).filter((id) => !tokensIn(it.text).includes(id));
+    // A part named in plain words is echoed in small type once per step (`seen`), not after every item that touches it.
+    const extra = (it.parts ?? []).filter((id) => !tokensIn(it.text).includes(id) && !(seen?.has(id)));
+    for (const id of [...extra, ...tokensIn(it.text)]) seen?.add(id);
     const also = extra.length && extra.length <= 4 ? ` <span class="also">(${extra.map((id) => link(id)).join(', ')})</span>` : '';
-    return `<li>${instrText(it.text, link)}${also}${it.sub?.length ? instrList(it.sub, link, false) : ''}</li>`;
+    return `<li>${instrText(it.text, link)}${also}${it.sub?.length ? instrList(it.sub, link, false, seen) : ''}</li>`;
   };
   return top ? `<ol class="instr">${items.map(li).join('')}</ol>` : `<ul>${items.map(li).join('')}</ul>`;
 }
@@ -210,11 +215,11 @@ function startSection(d: BuildData): string {
   const out: string[] = [];
   const forms = d.forms.map((f) => {
     const t = d.tiles.find((x) => x.id === f.id);
-    return `<li><strong>${esc(f.title)}</strong>: <code>forms/tiled/${esc(f.id)}-*.svg</code>, ${t?.pages.length ?? 0} Letter pages${f.laser?.length ? ` (the laser cuts the pattern itself: ${f.laser.map((l) => `<code>laser/${esc(l.id)}.svg</code>`).join(', ')}; check them with a tape against the key dimensions in section ${secNo('forms')}${f.id === 'side-form' ? '; print these tiles: the 3/4" MDF ramp ribs are traced from them' : '; the tiles need not be printed'})` : ''}.</li>`;
+    return `<li>${esc(f.title)}: ${f.id === 'side-form' ? `<strong>print its ${t?.pages.length ?? 0} tiled pages</strong> (the 3/4" MDF ramp ribs are traced from them)` : f.laser?.length ? 'laser-cut; no printing' : `${t?.pages.length ?? 0} tiled pages`}.</li>`;
   });
   out.push('<h3>1. Before the first cut, now that the lumber is home</h3>');
   out.push(`<ol class="instr">
-<li>Let the oak and plywood sit in the shop a week, stickered, then check the oak with a moisture meter: 6% to 10% is ready.</li>
+<li>Let the oak and plywood sit in the shop a week, stickered, then check the oak with a moisture meter: 6% to 9% is ready.</li>
 <li>Do the "Before cutting" checks in section ${secNo('verify')}: above all, caliper both plywood sheets and count the plies of the 6 mm sheet, and bend a test strip.</li>
 <li>If a measured number differs from the design (the plywood thickness most of all: the dado widths and the Shaper and laser files follow it), change it in the app and download a fresh build package before you cut anything. The revision at the foot of every page tells two printouts apart.</li>
 <li>The board plan in section ${secNo('boards')} is an example layout for boards of the sizes it lists. Your boards will differ: lay the cuts in section ${secNo('cutlist')} out on the boards you have, longest and widest first.</li>
@@ -224,13 +229,13 @@ function startSection(d: BuildData): string {
   out.push('<h3>2. What else to print, and what to load</h3>');
   out.push(`<ul>
 <li><strong>This book.</strong> The part drawings (section ${secNo('drawings')}) locate every notch, hole and mortise of the hand-made parts. The parts cut on the Shaper or the laser (the deck, the webs, the transom, the bulkhead, the seat back, the grab boards and caps, the flaps) have their features in their files instead; the app shows each one dimensioned.</li>
-<li><strong>The full-size forms</strong> (from the build package zip): only the side form's tiles need printing, on Letter at 100% scale (never "fit to page"); measure the 1" check square on every page. What each one is for and how to build it is in section ${secNo('forms')}.<ul>${forms.join('')}</ul></li>
+<li><strong>The full-size forms</strong> (from the build package zip; files, stock and key sizes in section ${secNo('forms')}). Print tiles on Letter at 100% scale (never "fit to page") and measure the 1" check square on every page; check each laser-cut pattern with a tape against its key dimensions.<ul>${forms.join('')}</ul></li>
 <li><strong>Machine files, not printed:</strong> <code>shaper/</code> for the Shaper Origin (section ${secNo('shaper')}), <code>laser/</code> for the XTool S1 (section ${secNo('laser')}), <code>stl/</code> for the 3D-printed lamp clips (print in ASA).</li>
 </ul>`);
   out.push('<h3>3. How the book cross-references</h3>');
   out.push(`<ul>
 <li>The step index at the start of section ${secNo('assembly')} is the checklist of every step.</li>
-<li>To print less: the box above the contents on the first page leaves sections out (the shopping lists are at the back; with the lumber bought, the bill of materials is only needed for the hardware).</li>
+<li class="screen-only">To print less: the box above the contents on the first page leaves sections out (the shopping lists are at the back; with the lumber bought, the bill of materials is only needed for the hardware).</li>
 <li>A part name followed by a drawing number, like <span class="dref">[D12]</span>, has a dimensioned drawing under that number in section ${secNo('drawings')}. The drawings are in build order.</li>
 <li>Sizes are in the cut list (section ${secNo('cutlist')}); each part's row there names the steps that cut and fit it. The finishing steps are numbered F1, F2 ... in section ${secNo('finishing')}.</li>
 </ul>`);
@@ -259,7 +264,9 @@ function formsSection(d: BuildData): string {
   return out.join('');
 }
 
-/** Every dimensioned part drawing, D1 ... in build order, one per page. */
+/** A part drawing taller than this (in) is shrunk to fit the printed page (`.drawing` max-height): it says so. */
+const TALL_SHEET_IN = 9;
+/** Every dimensioned part drawing, D1 ... in build order. */
 function drawingsSection(d: BuildData): string {
   const { order, stepOf } = drawingNumbers(d);
   const plain = d.partDrawings.filter((sh) => sh.features.length === 0).map((sh) => sh.name).sort();
@@ -267,9 +274,10 @@ function drawingsSection(d: BuildData): string {
   out.push(`<p class="muted small"> Identical pieces share a drawing; a left/right pair that differs only by a mirror shares one (MAKE 2). Balloon letters match the feature list on each drawing. The dimensions are what count: the drawings are scaled to fit the page.</p>`);
   order.forEach((sh, i) => {
     const st = stepOf.get(i + 1);
-    out.push(`<div class="drawing" id="drawing-${i + 1}"><h3>D${i + 1}. ${esc(sh.name)} <span class="muted small">· make ${sh.qty}${st !== undefined && Number.isFinite(st) ? ` · step ${st}` : ''}</span></h3>${sh.makeNote ? `<p class="small"><strong>${esc(sh.makeNote)}</strong></p>` : ''}`);
+    out.push(`<div class="drawing" id="drawing-${i + 1}"><h3>D${i + 1}. ${esc(sh.name)} <span class="muted small">· make ${sh.qty}${st !== undefined && Number.isFinite(st) ? ` · step ${st}` : ''}</span></h3>`);
     // At its true size: a sheet is drawn to fit the 7-1/2" page width, so it prints 1:1 with its text at the size it was drawn (a sheet taller than the page is scaled to fit).
-    out.push(`<figure class="fig">${sh.svg.replace(/<\?xml[^?]*\?>/, '').replace(/\swidth="[^"]*"\sheight="[^"]*"/, ` style="width:${sh.widthIn.toFixed(3)}in"`)}</figure></div>`);
+    const tall = sh.heightIn > TALL_SHEET_IN ? `<p class="muted small">Shrunk to fit the page (the sheet is ${fracDim(sh.heightIn)} tall): open it in the app's Drawings tab to read it full size.</p>` : '';
+    out.push(`<figure class="fig">${sh.svg.replace(/<\?xml[^?]*\?>/, '').replace(/\swidth="[^"]*"\sheight="[^"]*"/, ` style="width:${sh.widthIn.toFixed(3)}in"`)}</figure>${tall}</div>`);
   });
   return out.join('');
 }
@@ -299,11 +307,12 @@ function cutlistSection(d: BuildData): string {
   for (const g of groupCutsByBoard(c.cuts)) {
     const pieces = g.cuts.reduce((a, x) => a + x.qty, 0);
     out.push(`<h4>${esc(g.board)} boards <span class="muted">· ${pieces} piece${pieces === 1 ? '' : 's'}</span></h4>`);
-    let lastNote = '';
+    const noteFrom = new Map<string, string>();
     out.push(table([['Cut'], ['Qty', 'num'], ['Rough T × W × L'], ['Piece'], ['Step', 'num'], ['Note']], g.cuts.map((x) => {
       const note = x.note ?? '';
-      const shown = note && note === lastNote ? 'As above.' : note;
-      lastNote = note;
+      const first = noteFrom.get(note);
+      const shown = note && first ? `Same note as ${first}.` : note;
+      if (note && !first) noteFrom.set(note, x.label);
       const fin = finishedOf.get(x.partId);
       return [
         td(`${esc(x.label)}${x.glueUp ? `<div class="muted small">glued into the ${esc(x.glueUp)}</div>` : ''}`), td(x.qty, 'num'), td(esc(x.roughText), 'dims'), td(esc(pieceText(x)), 'piece'), td(fin ? esc(stepsLabel(fin)) : '', 'num'), td(esc(shown)),
@@ -412,12 +421,14 @@ function bomSection(d: BuildData): string {
     ]));
   }
   out.push(`<p class="muted small">${esc(b.totalsText)}. ${pct(b.estimateShare)} of the total is an estimate (${usd(b.estimateUsd)}), the rest quoted by the model or by a vendor list, or $0 shop stock you already own (marked "shop stock"; keep them on the list so you do not forget them). Prices are 2026 US retail guesses until you get quotes; the research notes behind each line are in the app's BOM and in bom.csv. Small parts sold in big packs (screws, nuts, washers, inserts, plugs) are priced by the whole pack: you may already have them in the shop. The finishing touches (lights, seat cushions, reflectors, tie-downs) are priced as their own section so you can build with or without them.</p>`);
+  const matSeen = new Set<string>();
   const lineRow = (l: BuildData['bom']['sections'][number]['lines'][number]): string[] => [
     // On paper: what to buy and where. The price research (notes, alternatives, material notes) stays in the app's BOM and bom.csv.
-    td(`${esc(l.description)}${l.vendor || l.url ? `<div class="muted small">${esc(l.vendor ?? '')}${l.url ? ` · ${link(l.url)}` : ''}</div>` : ''}${l.materialNote ? `<div class="small"><strong>Material:</strong> ${esc(l.materialNote)}</div>` : ''}`),
+    td(`${esc(l.description)}${l.vendor || l.url ? `<div class="muted small">${esc(l.vendor ?? '')}${l.url ? ` · ${link(l.url)}` : ''}</div>` : ''}${l.materialNote && !matSeen.has(l.materialNote) && matSeen.add(l.materialNote) ? `<div class="small"><strong>Material:</strong> ${esc(l.materialNote)}</div>` : ''}`),
     td(`${l.qty % 1 ? l.qty.toFixed(2) : l.qty} ${esc(l.unit)}${l.packs !== undefined ? `<div class="muted small">need ${num(l.needed ?? 0, 2)}, ${l.packs} pack${l.packs === 1 ? '' : 's'} of ${num(l.packQty ?? 0, 2)} at ${usd(l.packUsd ?? 0)}</div>` : ''}`, 'num'), td(usd(l.unitUsd), 'num'), td(`${usd(l.extUsd)}${l.basis === 'estimate' ? ' est.' : l.basis === 'owned' ? ' shop stock' : ''}`, 'num'),
   ];
   for (const s of b.sections) {
+    matSeen.clear(); // a material note prints once per section, on its first line
     out.push(`<h3>${esc(s.title)} <span class="muted">· ${usd(s.subtotalUsd)}</span></h3>`);
     const rows: string[][] = [];
     if (s.groups) {
@@ -448,8 +459,9 @@ function assemblySection(d: BuildData): string {
   const card = glueCard(d.p);
   out.push(`<div class="step glue-card" id="glue-card"><h3>Glue card</h3><p class="small">${esc(card.text.replace(/^GLUE CARD\s*/, ''))}</p>${instrList(card.sub ?? [], link)}</div>`);
   out.push('<h3>Step index</h3><p class="muted small">Every step in order; tick each one when it is done.</p>');
-  out.push(table([['Step', 'num'], ['Title'], ['Done']], d.steps.map((s) => [td(`<strong>${s.n}</strong>`, 'num'), td(`<a href="#step-${s.n}">${esc(s.title)}</a>`), td(box(), 'box-cell')]), 'index'));
+  out.push(table([['Step', 'num'], ['Title'], ['Done']], d.steps.map((s) => [td(`<strong>${s.n}</strong>`, 'num'), td(s.id === 'verify' ? `<a href="#verify">${esc(s.title)}</a> <span class="muted small">(section ${secNo('verify')})</span>` : `<a href="#step-${s.n}">${esc(s.title)}</a>`), td(box(), 'box-cell')]), 'index'));
   for (const s of d.steps) {
+    if (s.id === 'verify') continue; // step 0 is its index row and the Verify section (section 2)
     const listing = s.partIds.map((id) => nameOf.get(id) ?? id);
     out.push(`<div class="step" id="step-${s.n}"><h3><span class="no">Step ${s.n}.</span> ${esc(s.title)}${s.kind === 'build' ? '' : `<span class="kind">${esc(s.kind)}</span>`}</h3>`);
     if (listing.length > 8) out.push(`<p class="small"><strong>Parts (${listing.length}):</strong></p><ul class="parts small">${listing.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`);
@@ -460,8 +472,7 @@ function assemblySection(d: BuildData): string {
     if (s.plan) out.push(`<p class="cure"><strong>Plan the days:</strong> ${esc(s.plan)}</p>`);
     if (s.tools.length) out.push(`<p class="small"><strong>You will need:</strong> ${esc(s.tools.join(', '))}</p>`);
     for (const f of s.figures ?? []) out.push(`<figure class="fig">${f.svg.replace(/<\?xml[^?]*\?>/, '').replace(/\swidth="[^"]*"\sheight="[^"]*"/, ' width="100%"')}<figcaption class="small"><strong>${esc(f.title)}.</strong> ${esc(f.caption)}</figcaption></figure>`);
-    if (s.id === 'verify') out.push(`<p>Do the checks in section ${secNo('verify')}, in its three groups: before ordering, before cutting, and during the build at the step each names. Enter every measured value in the design and re-run the checks before going on.</p>`);
-    else out.push(s.items?.length ? instrList(s.items, link) : `<ol class="instr">${s.instructions.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>`);
+    out.push(s.items?.length ? instrList(s.items, link, true, new Set()) : `<ol class="instr">${s.instructions.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>`);
     if (s.clampCure) out.push(`<p class="cure"><strong>Glue, clamp and cure:</strong> ${esc(s.clampCure)}</p>`);
     else if (s.cure) out.push(`<p class="cure"><strong>Cure:</strong> ${esc(cureLine(s.cure))}</p>`);
     if (s.checks.length) out.push(`<p class="small"><strong>Check before moving on</strong></p><ul class="checks">${s.checks.map((c) => `<li>${box()}${esc(c.replace(/:\s*passed$/i, ''))}</li>`).join('')}</ul>`);
@@ -538,7 +549,7 @@ export function buildBookHtml(d: BuildData): string {
   out.push(`<p class="muted">Generated ${esc(d.opts.date ?? '(date not given)')} · design revision <strong>${esc(d.revision)}</strong>${d.opts.link ? ` · ${esc(d.opts.link)}` : ''}</p>`);
   const cmp = d.bom.weatherCompare;
   out.push(`<p><strong>Weather spec: ${esc(SPEC_NAME[d.bom.spec])}</strong> (${d.bom.spec === 'standard' ? 'garage-kept, used a few times a year, wet at most at a rainy derby' : 'stored outside, near salt, or exposed regularly'}). Thin sheet: ${esc(d.bom.thinSheetName)}.${cmp.computed ? ` ${esc(weatherLine(cmp).replace(/^Weather spec: [^.]*\. /, ''))}` : ''}</p>`);
-  out.push('<p class="small">Every number here was generated from the design on screen at that moment. If you change a design number, download again. Print this file from your browser (Letter, margins default, scale 100%, background graphics on) or save it as a PDF. The step index at the start of the assembly section is a checklist of every step. The full-size forms and the machine files are separate files in the same zip: section 1 lists what to print.</p>');
+  out.push('<p class="small">Every number here was generated from the design on screen at that moment. If you change a design number, download again. <span class="screen-only">Print this file from your browser (Letter, margins default, scale 100%, background graphics on) or save it as a PDF.</span> The full-size forms and the machine files are separate files in the same zip: section 1 lists what to print.</p>');
   out.push(`<div class="print-pick"><strong>Leave out of the printout</strong> (tick, then print; this box does not print): ${BOOK_SECTIONS.filter(([id]) => SKIPPABLE.has(id)).map(([id, t]) => `<label><input type="checkbox" id="skip-${id}"${id === 'boards' ? ' checked' : ''}> ${esc(t)}</label>`).join(' ')}</div>`);
   out.push(`<nav aria-label="Contents"><ol>${BOOK_SECTIONS.map(([id, t]) => `<li><a href="#${id}">${esc(t)}</a></li>`).join('')}</ol></nav></header>`);
   BOOK_SECTIONS.forEach(([id, title], i) => out.push(`<section class="page" id="${id}"><h2>${i + 1}. ${esc(title)}</h2>${body[id]}</section>`));

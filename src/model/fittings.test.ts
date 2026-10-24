@@ -170,9 +170,9 @@ describe('storage box', () => {
     expect(L.storage.zTop - L.storage.zBot).toBeLessThanOrEqual(defaults.sideHeightRearIn + defaults.storageOverSideIn + 1e-9);
     expect(L.storage.zTop - L.storage.zBot).toBeGreaterThan(defaults.sideHeightBowIn);
   });
-  it('wall corners are tape-and-fold (no spline) and the wall tops are capped with oak coaming (no exposed ply edge)', () => {
+  it('wall corners are butt corners as the walls are sized, filleted and taped inside (no spline), and the wall tops are capped with oak coaming', () => {
     for (const id of ['storage-side-L', 'storage-end-aft']) {
-      const miters = byId.get(id)!.joints!.filter((j) => /tape-and-fold/.test(j.size ?? ''));
+      const miters = byId.get(id)!.joints!.filter((j) => /butt corner/.test(j.size ?? ''));
       expect(miters.length, id).toBe(2);
       for (const j of byId.get(id)!.joints!) expect(j.size ?? '', id).not.toMatch(/spline/);
     }
